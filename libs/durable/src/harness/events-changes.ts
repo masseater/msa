@@ -1,4 +1,4 @@
-import type { Op } from "@msa/chord/delta";
+import type deltaTypes from "@msa/chord/delta.types";
 import { Function } from "effect";
 
 import type eventsChangesTypes from "./events-changes.types.ts";
@@ -53,14 +53,15 @@ const collect: typesModule.Dual2<
   },
 );
 
-const quiet: typesModule.Dual2<readonly Op[], eventsChangesTypes.Changes, boolean> = Function.dual(
-  2,
-  (viewOps: readonly Op[], changes: eventsChangesTypes.Changes): boolean =>
-    viewOps.length === 0 &&
-    changes.entries.length === 0 &&
-    changes.tasks.size === 0 &&
-    changes.submissions.length === 0,
-);
+const quiet: typesModule.Dual2<readonly deltaTypes.Op[], eventsChangesTypes.Changes, boolean> =
+  Function.dual(
+    2,
+    (viewOps: readonly deltaTypes.Op[], changes: eventsChangesTypes.Changes): boolean =>
+      viewOps.length === 0 &&
+      changes.entries.length === 0 &&
+      changes.tasks.size === 0 &&
+      changes.submissions.length === 0,
+  );
 
 const eventsChanges = {
   collect,

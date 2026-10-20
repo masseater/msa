@@ -1,7 +1,7 @@
-import type { JsonValue } from "../json.ts";
-import type { Op, Path, Seg } from "./ops.ts";
+import type jsonTypes from "../json.types.ts";
+import type opsTypes from "./ops.types.ts";
 
-export const jsonCost = (value: JsonValue): number => {
+const jsonCost = (value: jsonTypes.JsonValue): number => {
   if (value === null) return 4;
   if (typeof value === "string") return value.length + 2;
   if (typeof value === "number") return String(value).length;
@@ -20,10 +20,10 @@ export const jsonCost = (value: JsonValue): number => {
   return cost;
 };
 
-const pathCost = (path: Path): number => {
+const pathCost = (path: opsTypes.Path): number => {
   let cost = 2;
   for (let index = 0; index < path.length; index++) {
-    const segment: Seg = path[index]!;
+    const segment: opsTypes.Seg = path[index]!;
     cost +=
       (typeof segment === "string" ? segment.length + 2 : String(segment).length) +
       (index === 0 ? 0 : 1);
@@ -31,7 +31,7 @@ const pathCost = (path: Path): number => {
   return cost;
 };
 
-export const operationCost = (operation: Op): number => {
+const operationCost = (operation: opsTypes.Op): number => {
   switch (operation[0]) {
     case "r":
       return 6 + jsonCost(operation[1]);
@@ -55,3 +55,10 @@ export const operationCost = (operation: Op): number => {
       return 7 + pathCost(operation[1]) + jsonCost(operation[2]);
   }
 };
+
+const diffCost = {
+  jsonCost,
+  operationCost,
+};
+
+export default diffCost;

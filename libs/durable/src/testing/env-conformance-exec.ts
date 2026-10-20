@@ -1,10 +1,12 @@
-import { withAbortSignal } from "@msa/chord/context";
+import contextModule from "@msa/chord/context";
 import { Effect, Exit, Scope } from "effect";
 
 import envModule from "../env/index.ts";
 import type envTypes from "../env/index.types.ts";
 import envConformanceSupport from "./env-conformance-support.ts";
 import type envConformanceSupportTypes from "./env-conformance-support.types.ts";
+
+const { withAbortSignal } = contextModule;
 
 const { codeOf, context, encoder, execCollect, value } = envConformanceSupport;
 const { getOrThrow } = envModule;

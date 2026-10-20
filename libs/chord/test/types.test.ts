@@ -2,16 +2,10 @@ import { Effect } from "effect";
 import { Type } from "typebox";
 import { describe, expectTypeOf, it } from "vite-plus/test";
 
-import {
-  type Ctx,
-  type Host,
-  type Readable,
-  type Ref,
-  hostNamed,
-  local,
-  method,
-  remote,
-} from "../src/index.ts";
+import chord from "../src/index.ts";
+import type chordTypes from "../src/index.types.ts";
+
+const { hostNamed, local, method, remote } = chord;
 
 const Doc = remote("t.e8-types-doc", {
   host: hostNamed("server"),
@@ -35,19 +29,19 @@ const Local = local("t.e8-types-local", {
 });
 
 const stateMembersAreTOtherVariants = (): void => {
-  const check = (host: Host, ctx: Ctx) =>
+  const check = (host: chordTypes.Host, ctx: chordTypes.Ctx) =>
     Effect.runPromise(
       Effect.gen(function* () {
         const doc = yield* Effect.promise(() => host.get(Doc, {}));
-        expectTypeOf(doc.text).toEqualTypeOf<Readable<string>>();
+        expectTypeOf(doc.text).toEqualTypeOf<chordTypes.Readable<string>>();
         expectTypeOf(doc).not.toHaveProperty("edit");
         if (doc.variant === "editor") expectTypeOf(doc.edit).toBeFunction();
         const single = yield* Effect.promise(() => ctx.get(Single, {}));
         expectTypeOf(single.n.value).toEqualTypeOf<number>();
         expectTypeOf(single.bump).toBeFunction();
         const held = host.hold(Local, {});
-        expectTypeOf(held.n).toEqualTypeOf<Readable<number>>();
-        expectTypeOf(host.get(Single, {})).toEqualTypeOf<Promise<Ref<typeof Single>>>();
+        expectTypeOf(held.n).toEqualTypeOf<chordTypes.Readable<number>>();
+        expectTypeOf(host.get(Single, {})).toEqualTypeOf<Promise<chordTypes.Ref<typeof Single>>>();
       }),
     );
   expectTypeOf(check).toBeFunction();

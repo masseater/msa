@@ -1,4 +1,4 @@
-import type { Context, JsonValue } from "@msa/chord";
+import type chordTypes from "@msa/chord/index.types";
 import { Effect } from "effect";
 
 import SessionImpl from "../session/session.ts";
@@ -32,7 +32,7 @@ class HarnessImpl<Tool extends typesModule.ToolRegistration>
   constructor(
     rawStorage: typesModule.Storage,
     options: typesModule.HarnessOptions<Tool>,
-    context: Context,
+    context: chordTypes.Context,
   ) {
     const clock = harnessClock(options);
     super(rawStorage, clock.now, () => options.settings?.documentRetentionMs);
@@ -54,17 +54,20 @@ class HarnessImpl<Tool extends typesModule.ToolRegistration>
   resolveAgent(
     id: typesModule.ConversationId,
     snapshot: typesModule.RegistrySnapshot<Tool> | undefined,
-    context: Context,
+    context: chordTypes.Context,
   ): Promise<typesModule.Agent<Tool>> {
     const query = { options: this.#options, report: this.#wired.report, session: this };
     return Effect.runPromise(conversationAgent(query, id, snapshot, context));
   }
 
-  buildEnv(id: typesModule.ConversationId, context: Context): Promise<harnessImplTypes.BuiltEnv> {
+  buildEnv(
+    id: typesModule.ConversationId,
+    context: chordTypes.Context,
+  ): Promise<harnessImplTypes.BuiltEnv> {
     return Effect.runPromise(buildEnv(this, this.#options, id, context));
   }
 
-  openTasks(context: Context): Promise<void> {
+  openTasks(context: chordTypes.Context): Promise<void> {
     return this.#wired.tasks.open(context);
   }
 
@@ -75,10 +78,10 @@ class HarnessImpl<Tool extends typesModule.ToolRegistration>
 
   getTask<R>(
     id: typesModule.TaskId<R>,
-    context: Context,
-  ): Promise<typesModule.TaskRecord<JsonValue, JsonValue, R> | undefined> {
+    context: chordTypes.Context,
+  ): Promise<typesModule.TaskRecord<chordTypes.JsonValue, chordTypes.JsonValue, R> | undefined> {
     return this.readOnLine(() => this.storage.task(id, context)) as Promise<
-      typesModule.TaskRecord<JsonValue, JsonValue, R> | undefined
+      typesModule.TaskRecord<chordTypes.JsonValue, chordTypes.JsonValue, R> | undefined
     >;
   }
 
@@ -86,7 +89,7 @@ class HarnessImpl<Tool extends typesModule.ToolRegistration>
     return this.#wired.tasks.indexSizes;
   }
 
-  inspect(context: Context): Promise<typesModule.HarnessInspection> {
+  inspect(context: chordTypes.Context): Promise<typesModule.HarnessInspection> {
     const query = { session: this, storage: this.storage };
     const snapshot = this.#options.registry.snapshot();
     return Effect.runPromise(inspectHarness(query, this.#wired.tasks, snapshot, context));
@@ -94,47 +97,50 @@ class HarnessImpl<Tool extends typesModule.ToolRegistration>
 
   submission(
     id: typesModule.SubmissionId,
-    context: Context,
+    context: chordTypes.Context,
   ): Promise<typesModule.Submission | undefined> {
     return this.#wired.submissions.get(id, context);
   }
 
   abortSubmission(
     id: typesModule.SubmissionId,
-    context: Context,
+    context: chordTypes.Context,
     conversationId?: typesModule.ConversationId,
   ): Promise<"aborted" | "already_placed" | "settled" | "not_found"> {
     return this.#wired.submissions.abort(id, context, conversationId);
   }
 
-  abortTask(id: typesModule.TaskId, context: Context): Promise<"marked" | "terminal"> {
+  abortTask(id: typesModule.TaskId, context: chordTypes.Context): Promise<"marked" | "terminal"> {
     return this.#wired.tasks.abort(id, context);
   }
 
-  waitForTask<R>(id: typesModule.TaskId<R>, context: Context): Promise<typesModule.SettledTask<R>> {
+  waitForTask<R>(
+    id: typesModule.TaskId<R>,
+    context: chordTypes.Context,
+  ): Promise<typesModule.SettledTask<R>> {
     this.#wired.tasks.resume();
     return this.#wired.tasks.waitForTask(id, context) as Promise<typesModule.SettledTask<R>>;
   }
 
-  waitForIdle(context: Context): Promise<void> {
+  waitForIdle(context: chordTypes.Context): Promise<void> {
     this.#wired.tasks.resume();
     return this.#wired.tasks.waitForIdle(undefined, context);
   }
 
-  usage(context: Context): ReturnType<typesModule.Harness["usage"]> {
+  usage(context: chordTypes.Context): ReturnType<typesModule.Harness["usage"]> {
     return Effect.runPromise(totalUsage({ session: this, storage: this.storage }, context));
   }
 
-  taskGraph(context: Context): ReturnType<typesModule.Harness["taskGraph"]> {
+  taskGraph(context: chordTypes.Context): ReturnType<typesModule.Harness["taskGraph"]> {
     return this.#wired.taskGraph.state(context);
   }
 
-  watchTaskGraph(context: Context): ReturnType<typesModule.Harness["watchTaskGraph"]> {
+  watchTaskGraph(context: chordTypes.Context): ReturnType<typesModule.Harness["watchTaskGraph"]> {
     return this.#wired.taskGraph.watch(context);
   }
 
   root(
-    context: Context,
+    context: chordTypes.Context,
     options?: {
       readonly agent?: typesModule.AgentChange;
       readonly init?: typesModule.ConversationInit;
@@ -145,7 +151,7 @@ class HarnessImpl<Tool extends typesModule.ToolRegistration>
 
   conversation(
     id: typesModule.ConversationId,
-    context: Context,
+    context: chordTypes.Context,
   ): Promise<typesModule.Conversation | undefined> {
     return Effect.runPromise(
       Effect.map(
@@ -161,7 +167,7 @@ class HarnessImpl<Tool extends typesModule.ToolRegistration>
 
   createConversation(
     options: typesModule.ConversationCreateOptions,
-    context: Context,
+    context: chordTypes.Context,
   ): Promise<typesModule.Conversation> {
     return this.#create({ kind: "independent", ownership: options.ownership }, options, context);
   }
@@ -177,7 +183,7 @@ class HarnessImpl<Tool extends typesModule.ToolRegistration>
   #create(
     target: CreateArgs<Tool>[0],
     options: CreateArgs<Tool>[1],
-    context: Context,
+    context: chordTypes.Context,
   ): Promise<typesModule.Conversation> {
     return Effect.runPromise(
       Effect.map(

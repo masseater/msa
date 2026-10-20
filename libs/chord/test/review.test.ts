@@ -4,17 +4,12 @@ import { Effect } from "effect";
 import { Type } from "typebox";
 import { describe, it } from "vite-plus/test";
 
-import {
-  type Facet,
-  createHost,
-  hostNamed,
-  isChordError,
-  local,
-  method,
-  remote,
-} from "../src/index.ts";
+import chord from "../src/index.ts";
+import type chordTypes from "../src/index.types.ts";
 import review from "./fixtures/review.ts";
 import timing from "./fixtures/timing.ts";
+
+const { createHost, hostNamed, isChordError, local, method, remote } = chord;
 
 const { Item, emitter } = review;
 const { ticks } = timing;
@@ -26,7 +21,7 @@ const case1AFailingListenerSubscriptionFails = Effect.gen(function* () {
     b: emitter<number>({ failSubscribe: true }),
     c: emitter<number>(),
   };
-  const facet = (version: string, listen: boolean): Facet => ({
+  const facet = (version: string, listen: boolean): chordTypes.Facet => ({
     name: "item",
     setup: (api) =>
       api.serve(Item, ({ id }, _principal, self) => {
@@ -146,7 +141,7 @@ const reentrantObserversCallingAnotherObjectDuring = Effect.gen(function* () {
     members: { version: method(undefined, Type.String()) },
     version: 1,
   });
-  const facet = (version: string): Facet => ({
+  const facet = (version: string): chordTypes.Facet => ({
     name: "pair",
     setup: (api) => {
       api.serve(Item, () => ({ version: () => version }));

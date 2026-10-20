@@ -4,10 +4,12 @@ import { type Context, Effect } from "effect";
 import { Type } from "typebox";
 import { describe, it } from "vite-plus/test";
 
-import {
-  type Ctx,
-  type Facet,
-  type FacetApi,
+import chord from "../src/index.ts";
+import type chordTypes from "../src/index.types.ts";
+import requests from "./fixtures/requests.ts";
+import timing from "./fixtures/timing.ts";
+
+const {
   createHost,
   defineFacet,
   defineRegistry,
@@ -16,9 +18,7 @@ import {
   memoryLinkPair,
   method,
   remote,
-} from "../src/index.ts";
-import requests from "./fixtures/requests.ts";
-import timing from "./fixtures/timing.ts";
+} = chord;
 
 const { View, until } = requests;
 const { tick } = timing;
@@ -88,8 +88,8 @@ const Reader = local("t.reader", {
 });
 
 const capturingConfigFacet =
-  (captured: FacetApi[]) =>
-  (value: string): Facet => ({
+  (captured: chordTypes.FacetApi[]) =>
+  (value: string): chordTypes.Facet => ({
     name: "config",
     ...defineFacet((api) => {
       captured.push(api);
@@ -102,12 +102,15 @@ const capturingConfigFacet =
         { lifetime: "host" },
       );
       api.serve(Reader, () => ({
-        read: (ctx: Ctx) => api.registry(Config).get("greeting", ctx) ?? "",
+        read: (ctx: chordTypes.Ctx) => api.registry(Config).get("greeting", ctx) ?? "",
       }));
     }),
   });
 
-const readThrough = (api: FacetApi, services: Context.Context<never>): Effect.Effect<string> =>
+const readThrough = (
+  api: chordTypes.FacetApi,
+  services: Context.Context<never>,
+): Effect.Effect<string> =>
   Effect.promise(() =>
     api.root((ctx) =>
       Effect.runPromiseWith(services)(
@@ -121,7 +124,7 @@ const readThrough = (api: FacetApi, services: Context.Context<never>): Effect.Ef
 
 const case2FacetsReachTheirOwnHost = Effect.gen(function* () {
   const services = yield* Effect.context<never>();
-  const captured: FacetApi[] = [];
+  const captured: chordTypes.FacetApi[] = [];
   const facet = capturingConfigFacet(captured);
   const host = createHost({ name: "worker", onError: () => {}, self: { kind: "host" } });
   host.install(facet("v1"));
@@ -153,7 +156,7 @@ const case3AListenerKeepsItsSubscription = Effect.gen(function* () {
       };
     },
   };
-  const facet = (tag: string): Facet => ({
+  const facet = (tag: string): chordTypes.Facet => ({
     name: "watcher",
     setup: (api) =>
       api.serve(Watcher, (_input, _principal, self) => {
@@ -190,7 +193,7 @@ const case3AChangedSelectResubscribes = Effect.gen(function* () {
       return () => {};
     },
   };
-  const facet = (selectText: boolean): Facet => ({
+  const facet = (selectText: boolean): chordTypes.Facet => ({
     name: "watcher2",
     setup: (api) =>
       api.serve(Watcher, (_input, _principal, self) => {

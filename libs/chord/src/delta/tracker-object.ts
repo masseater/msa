@@ -1,35 +1,25 @@
 import { dual } from "effect/Function";
 
-import {
-  nodeBase,
-  nodeParent,
-  releaseStoredValue,
-  replaceStoredValue,
-  storedValue,
-  storeValue,
-} from "./tracker-context.ts";
-import { createPieceNode } from "./tracker-pieces.ts";
-import type {
-  ArrayOverlay,
-  InsertSource,
-  JsonValue,
-  OverlayNode,
-  Stored,
-  StoredRef,
-} from "./tracker-types.ts";
+import trackerContext from "./tracker-context.ts";
+import trackerPieces from "./tracker-pieces.ts";
+import type trackerTypesModule from "./tracker-types.types.ts";
 
-function hasObjectWriteImpl(node: OverlayNode, key: string): boolean {
+function hasObjectWriteImpl(node: trackerTypesModule.OverlayNode, key: string): boolean {
   return node.writeKey === key || (node.writes?.has(key) ?? false);
 }
 
-function setObjectWriteImpl(node: OverlayNode, key: string, value: Stored): void {
+function setObjectWriteImpl(
+  node: trackerTypesModule.OverlayNode,
+  key: string,
+  value: trackerTypesModule.Stored,
+): void {
   if (node.writes !== undefined) {
     const reference = node.writes.get(key);
     node.writes.set(
       key,
       reference === undefined
-        ? storeValue(node.context, value)
-        : replaceStoredValue(node.context, reference, value),
+        ? trackerContext.storeValue(node.context, value)
+        : trackerContext.replaceStoredValue(node.context, reference, value),
     );
     return;
   }
@@ -37,34 +27,34 @@ function setObjectWriteImpl(node: OverlayNode, key: string, value: Stored): void
     node.writeKey = key;
     node.writeValue =
       node.writeValue === undefined
-        ? storeValue(node.context, value)
-        : replaceStoredValue(node.context, node.writeValue, value);
+        ? trackerContext.storeValue(node.context, value)
+        : trackerContext.replaceStoredValue(node.context, node.writeValue, value);
     return;
   }
   node.writes = new Map();
   node.writes.set(node.writeKey, node.writeValue!);
-  node.writes.set(key, storeValue(node.context, value));
+  node.writes.set(key, trackerContext.storeValue(node.context, value));
   node.writeKey = undefined;
   node.writeValue = undefined;
 }
 
-function deleteObjectWriteImpl(node: OverlayNode, key: string): void {
+function deleteObjectWriteImpl(node: trackerTypesModule.OverlayNode, key: string): void {
   if (node.writeKey === key) {
     node.writeKey = undefined;
-    releaseStoredValue(node.context, node.writeValue!);
+    trackerContext.releaseStoredValue(node.context, node.writeValue!);
     node.writeValue = undefined;
   } else {
     const reference = node.writes?.get(key);
-    if (reference !== undefined) releaseStoredValue(node.context, reference);
+    if (reference !== undefined) trackerContext.releaseStoredValue(node.context, reference);
     node.writes?.delete(key);
   }
 }
 
-function isObjectDeletedImpl(node: OverlayNode, key: string): boolean {
+function isObjectDeletedImpl(node: trackerTypesModule.OverlayNode, key: string): boolean {
   return node.deleteKey === key || (node.deletes?.has(key) ?? false);
 }
 
-function setObjectDeletionImpl(node: OverlayNode, key: string): void {
+function setObjectDeletionImpl(node: trackerTypesModule.OverlayNode, key: string): void {
   if (node.deletes !== undefined) {
     node.deletes.add(key);
     return;
@@ -79,71 +69,80 @@ function setObjectDeletionImpl(node: OverlayNode, key: string): void {
   node.deleteKey = undefined;
 }
 
-function deleteObjectDeletionImpl(node: OverlayNode, key: string): void {
+function deleteObjectDeletionImpl(node: trackerTypesModule.OverlayNode, key: string): void {
   if (node.deleteKey === key) node.deleteKey = undefined;
   else node.deletes?.delete(key);
 }
 
-function objectHasImpl(node: OverlayNode, key: string): boolean {
+function objectHasImpl(node: trackerTypesModule.OverlayNode, key: string): boolean {
   if (isObjectDeletedImpl(node, key)) return false;
-  return hasObjectWriteImpl(node, key) || Object.hasOwn(nodeBase(node), key);
+  return hasObjectWriteImpl(node, key) || Object.hasOwn(trackerContext.nodeBase(node), key);
 }
 
-function objectValueImpl(node: OverlayNode, key: string): Stored {
-  if (node.writeKey === key) return storedValue(node.context, node.writeValue!);
+function objectValueImpl(
+  node: trackerTypesModule.OverlayNode,
+  key: string,
+): trackerTypesModule.Stored {
+  if (node.writeKey === key) return trackerContext.storedValue(node.context, node.writeValue!);
   const reference = node.writes?.get(key);
-  if (reference !== undefined) return storedValue(node.context, reference);
-  return (nodeBase(node) as Record<string, JsonValue>)[key]!;
+  if (reference !== undefined) return trackerContext.storedValue(node.context, reference);
+  return (trackerContext.nodeBase(node) as Record<string, trackerTypesModule.JsonValue>)[key]!;
 }
 
-export function markDirty(node: OverlayNode): void {
+function markDirty(node: trackerTypesModule.OverlayNode): void {
   if (node.dirty === true) return;
   node.dirty = true;
   node.context.dirty.push(node);
-  for (let parent = nodeParent(node); parent !== undefined; parent = nodeParent(parent))
+  for (
+    let parent = trackerContext.nodeParent(node);
+    parent !== undefined;
+    parent = trackerContext.nodeParent(parent)
+  )
     parent.subtreeDirty = true;
 }
 
-export function arrayOverlay(node: OverlayNode): ArrayOverlay {
+function arrayOverlay(node: trackerTypesModule.OverlayNode): trackerTypesModule.ArrayOverlay {
   if (node.array !== undefined) return node.array;
-  const base = nodeBase(node) as JsonValue[];
-  const overlay: ArrayOverlay = {
-    root: undefined,
-    pieces: undefined,
-    baseOverrides: undefined,
-    insertOverrides: undefined,
-    structural: false,
-    generation: 0,
-    plan: undefined,
-    seed: 0x9e3779b9,
-    locatedOffset: 0,
+  const base = trackerContext.nodeBase(node) as trackerTypesModule.JsonValue[];
+  const overlay: trackerTypesModule.ArrayOverlay = {
     baseLocations: undefined,
+    baseOverrides: undefined,
+    generation: 0,
     insertLocations: undefined,
+    insertOverrides: undefined,
+    locatedOffset: 0,
+    pieces: undefined,
+    plan: undefined,
+    root: undefined,
+    seed: 0x9e3779b9,
+    structural: false,
   };
   if (base.length > 0)
-    overlay.root = createPieceNode(overlay, {
+    overlay.root = trackerPieces.createPieceNode(overlay, {
       kind: "base",
-      start: 0,
       length: base.length,
+      start: 0,
       step: 1,
     });
   node.array = overlay;
   return overlay;
 }
 
-export function baseOverridesForWrite(overlay: ArrayOverlay): Map<number, StoredRef> {
+function baseOverridesForWrite(
+  overlay: trackerTypesModule.ArrayOverlay,
+): Map<number, trackerTypesModule.StoredRef> {
   if (overlay.baseOverrides === undefined) overlay.baseOverrides = new Map();
   return overlay.baseOverrides;
 }
 
-export function insertOverridesForWrite(
-  overlay: ArrayOverlay,
-): Map<InsertSource, Map<number, StoredRef>> {
+function insertOverridesForWrite(
+  overlay: trackerTypesModule.ArrayOverlay,
+): Map<trackerTypesModule.InsertSource, Map<number, trackerTypesModule.StoredRef>> {
   if (overlay.insertOverrides === undefined) overlay.insertOverrides = new Map();
   return overlay.insertOverrides;
 }
 
-export function nextPiecePriority(overlay: ArrayOverlay): number {
+function nextPiecePriority(overlay: trackerTypesModule.ArrayOverlay): number {
   let value = overlay.seed;
   value ^= value << 13;
   value ^= value >>> 17;
@@ -152,42 +151,60 @@ export function nextPiecePriority(overlay: ArrayOverlay): number {
   return overlay.seed;
 }
 
-export const hasObjectWrite: {
-  (key: string): (node: OverlayNode) => boolean;
-  (node: OverlayNode, key: string): boolean;
+const hasObjectWrite: {
+  (key: string): (node: trackerTypesModule.OverlayNode) => boolean;
+  (node: trackerTypesModule.OverlayNode, key: string): boolean;
 } = dual(2, hasObjectWriteImpl);
 
-export const deleteObjectWrite: {
-  (key: string): (node: OverlayNode) => void;
-  (node: OverlayNode, key: string): void;
+const deleteObjectWrite: {
+  (key: string): (node: trackerTypesModule.OverlayNode) => void;
+  (node: trackerTypesModule.OverlayNode, key: string): void;
 } = dual(2, deleteObjectWriteImpl);
 
-export const objectHas: {
-  (key: string): (node: OverlayNode) => boolean;
-  (node: OverlayNode, key: string): boolean;
+const objectHas: {
+  (key: string): (node: trackerTypesModule.OverlayNode) => boolean;
+  (node: trackerTypesModule.OverlayNode, key: string): boolean;
 } = dual(2, objectHasImpl);
 
-export const setObjectWrite: {
-  (key: string, value: Stored): (node: OverlayNode) => void;
-  (node: OverlayNode, key: string, value: Stored): void;
+const setObjectWrite: {
+  (key: string, value: trackerTypesModule.Stored): (node: trackerTypesModule.OverlayNode) => void;
+  (node: trackerTypesModule.OverlayNode, key: string, value: trackerTypesModule.Stored): void;
 } = dual(3, setObjectWriteImpl);
 
-export const isObjectDeleted: {
-  (key: string): (node: OverlayNode) => boolean;
-  (node: OverlayNode, key: string): boolean;
+const isObjectDeleted: {
+  (key: string): (node: trackerTypesModule.OverlayNode) => boolean;
+  (node: trackerTypesModule.OverlayNode, key: string): boolean;
 } = dual(2, isObjectDeletedImpl);
 
-export const setObjectDeletion: {
-  (key: string): (node: OverlayNode) => void;
-  (node: OverlayNode, key: string): void;
+const setObjectDeletion: {
+  (key: string): (node: trackerTypesModule.OverlayNode) => void;
+  (node: trackerTypesModule.OverlayNode, key: string): void;
 } = dual(2, setObjectDeletionImpl);
 
-export const deleteObjectDeletion: {
-  (key: string): (node: OverlayNode) => void;
-  (node: OverlayNode, key: string): void;
+const deleteObjectDeletion: {
+  (key: string): (node: trackerTypesModule.OverlayNode) => void;
+  (node: trackerTypesModule.OverlayNode, key: string): void;
 } = dual(2, deleteObjectDeletionImpl);
 
-export const objectValue: {
-  (key: string): (node: OverlayNode) => Stored;
-  (node: OverlayNode, key: string): Stored;
+const objectValue: {
+  (key: string): (node: trackerTypesModule.OverlayNode) => trackerTypesModule.Stored;
+  (node: trackerTypesModule.OverlayNode, key: string): trackerTypesModule.Stored;
 } = dual(2, objectValueImpl);
+
+const trackerObject = {
+  arrayOverlay,
+  baseOverridesForWrite,
+  deleteObjectDeletion,
+  deleteObjectWrite,
+  hasObjectWrite,
+  insertOverridesForWrite,
+  isObjectDeleted,
+  markDirty,
+  nextPiecePriority,
+  objectHas,
+  objectValue,
+  setObjectDeletion,
+  setObjectWrite,
+};
+
+export default trackerObject;

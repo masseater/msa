@@ -1,11 +1,13 @@
 import type { Usage } from "@msa/ai";
-import type { Draft, JsonRepresentation } from "@msa/chord";
-import { copyJson } from "@msa/chord/json";
+import type chordTypes from "@msa/chord/index.types";
+import json from "@msa/chord/json";
 import { Effect, Function } from "effect";
 
 import documents from "../documents.ts";
 import type typesModule from "./types.types.ts";
 import type usageTypes from "./usage.types.ts";
+
+const { copyJson } = json;
 
 const { defineDoc } = documents;
 
@@ -38,14 +40,16 @@ const recordUsage: typesModule.Dual5<
     const totals = (yield* Effect.promise(() => tx.doc(UsageDoc, conversationId)))[bucket];
     const total = Object.hasOwn(totals, key) ? totals[key] : undefined;
     if (total === undefined)
-      totals[key] = copyJson(usage, { omitUndefinedProperties: true }) as JsonRepresentation<Usage>;
+      totals[key] = copyJson(usage, {
+        omitUndefinedProperties: true,
+      }) as chordTypes.JsonRepresentation<Usage>;
     else addUsage(total, usage);
   }),
 );
 
-const addUsage: typesModule.Dual2<Draft<Usage> | Usage, Usage, void> = Function.dual(
+const addUsage: typesModule.Dual2<chordTypes.Draft<Usage> | Usage, Usage, void> = Function.dual(
   2,
-  (total: Draft<Usage> | Usage, usage: Usage): void => {
+  (total: chordTypes.Draft<Usage> | Usage, usage: Usage): void => {
     total.input += usage.input;
     total.output += usage.output;
     total.cacheRead += usage.cacheRead;

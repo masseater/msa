@@ -1,4 +1,4 @@
-import type { Context } from "@msa/chord";
+import type chordTypes from "@msa/chord/index.types";
 import type durableTypes from "@msa/durable/index.types";
 import { Effect } from "effect";
 import { afterAll, describe, expect, it } from "vite-plus/test";
@@ -43,7 +43,7 @@ const passesRetainedWindow = Effect.gen(function* () {
     override exec(
       _command: string | readonly string[],
       options: envTypes.ShellExecOptions | undefined,
-      context: Context,
+      context: chordTypes.Context,
     ): Promise<envTypes.Result<envTypes.ShellExecResult, envTypes.ExecutionError>> {
       received = options?.window;
       options?.onOutput?.("tail\n", context, { skipped, stream: "stdout" });

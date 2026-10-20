@@ -1,4 +1,4 @@
-import type { Context } from "@msa/chord";
+import type chordTypes from "@msa/chord/index.types";
 import { Effect, Function } from "effect";
 
 import bridge from "./bridge.ts";
@@ -12,14 +12,14 @@ const { LiveDoc, endRun } = liveModule;
 const failModelError: typesModule.Dual3<
   generationTypesModule.GenerationRuntime,
   string,
-  Context,
+  chordTypes.Context,
   Effect.Effect<void>
 > = Function.dual(
   3,
   Effect.fnUntraced(function* (
     runtime: generationTypesModule.GenerationRuntime,
     text: string,
-    context: Context,
+    context: chordTypes.Context,
   ) {
     yield* commitTask(
       runtime,
@@ -47,14 +47,14 @@ const failModelError: typesModule.Dual3<
 const failNoModel: typesModule.Dual3<
   generationTypesModule.GenerationRuntime,
   typesModule.ModelRef | undefined,
-  Context,
+  chordTypes.Context,
   Effect.Effect<void>
 > = Function.dual(
   3,
   Effect.fnUntraced(function* (
     runtime: generationTypesModule.GenerationRuntime,
     ref: typesModule.ModelRef | undefined,
-    context: Context,
+    context: chordTypes.Context,
   ) {
     const message =
       ref === undefined

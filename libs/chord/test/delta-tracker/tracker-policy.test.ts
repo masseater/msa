@@ -1,7 +1,9 @@
 import { describe, expect, it } from "vite-plus/test";
 
-import { decoder, encoder, track } from "../../src/delta/index.ts";
+import delta from "../../src/delta/index.ts";
 import trackerModule from "../fixtures/tracker.ts";
+
+const { decoder, encoder, track } = delta;
 
 const { clone, replay, settle } = trackerModule;
 

@@ -4,20 +4,17 @@ import { Effect } from "effect";
 import { Type } from "typebox";
 import { describe, it } from "vite-plus/test";
 
-import { HostImpl } from "../src/host.ts";
-import {
-  type Ctx,
-  type Frame,
-  type Link,
-  createHost,
-  hostFamily,
-  memoryLinkPair,
-  method,
-  remote,
-} from "../src/index.ts";
+import type hostTypes from "../src/host.types.ts";
+import type chordTypes from "../src/index.types.ts";
 import counting from "./fixtures/counting.ts";
 import type countingTypes from "./fixtures/counting.types.ts";
 import flowUnits from "./fixtures/flow-units.ts";
+import flowUnitsKit from "./flow-units-kit.ts";
+
+const { host: hostModule, src: chord } = flowUnitsKit;
+
+const { createHost, hostFamily, memoryLinkPair, method, remote } = chord;
+const { HostImpl } = hostModule;
 
 const { CountingLink, stateFrames } = counting;
 const { Blob, client, serveBlob, until } = flowUnits;
@@ -60,14 +57,14 @@ const aLinkThatReportsNoSizes = Effect.gen(function* () {
   const server = createHost({ name: "server", onError: () => {}, self: { kind: "host" } });
   serveBlob(server, () => 1);
   const [down, up] = memoryLinkPair();
-  const unsized: Link = {
+  const unsized: chordTypes.Link = {
     close: (reason) => down.close(reason),
     get closed() {
       return down.closed;
     },
     onClose: (handler) => down.onClose(handler),
     receive: (handler) => down.receive(handler),
-    send: (frame: Frame) => {
+    send: (frame: chordTypes.Frame) => {
       down.send(frame);
       return undefined;
     },
@@ -136,11 +133,11 @@ const Counter = remote("t.e8-relayed", {
   version: 1,
 });
 
-const serveRelayedCounter = (created: HostImpl): void => {
+const serveRelayedCounter = (created: hostTypes.HostImpl): void => {
   created.serve(Counter, (_input, _principal, self) => {
     const n = self.state("n", Type.Number(), 0);
     return {
-      add: (delta: number, ctx: Ctx) => {
+      add: (delta: number, ctx: chordTypes.Ctx) => {
         n.replace(ctx, n.value + delta);
       },
       n,
@@ -151,7 +148,7 @@ const serveRelayedCounter = (created: HostImpl): void => {
 
 function cluster() {
   const server = createHost({ name: "server", onError: () => {}, self: { kind: "host" } });
-  let worker: HostImpl | undefined;
+  let worker: hostTypes.HostImpl | undefined;
   let toWorker: countingTypes.CountingLink | undefined;
   server.route("session:", {
     authorize: () => true,
@@ -192,7 +189,7 @@ function cluster() {
   };
   const served = () => [...(worker?.upstream?.served.values() ?? [])];
   const relayed = () =>
-    [...(server as HostImpl).connections]
+    [...(server as hostTypes.HostImpl).connections]
       .filter((connection) => connection.peer.kind === "host")
       .reduce((sum, connection) => sum + connection.relayedRefs.size, 0);
   return { browser, relayed, served, server, toWorker: () => toWorker! };

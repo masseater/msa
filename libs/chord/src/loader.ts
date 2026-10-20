@@ -3,7 +3,7 @@ import { pathToFileURL } from "node:url";
 
 import { Effect } from "effect";
 
-import type { Facet, FacetDefinition, FacetLoader } from "./host-types.ts";
+import type hostTypesModule from "./host-types.types.ts";
 
 const PARAM = "chord2-reload";
 
@@ -34,12 +34,12 @@ const toUrl = (module: string | URL): URL =>
     ? new URL(module.href)
     : new URL(module.startsWith("file:") ? module : pathToFileURL(module).href);
 
-const loadFacet = (url: URL, version: string): Effect.Effect<Facet> =>
+const loadFacet = (url: URL, version: string): Effect.Effect<hostTypesModule.Facet> =>
   Effect.gen(function* () {
     const name = url.href;
     url.searchParams.set(PARAM, version);
     const loaded = yield* Effect.promise(
-      () => import(url.href) as Promise<{ default?: FacetDefinition }>,
+      () => import(url.href) as Promise<{ default?: hostTypesModule.FacetDefinition }>,
     );
     const definition = loaded.default;
     if (definition === undefined || typeof definition.setup !== "function") {
@@ -48,7 +48,7 @@ const loadFacet = (url: URL, version: string): Effect.Effect<Facet> =>
     return { name, setup: definition.setup, uses: definition.uses };
   });
 
-export const nodeLoader: FacetLoader = (modules) =>
+const nodeLoader: hostTypesModule.FacetLoader = (modules) =>
   Effect.runPromise(
     Effect.gen(function* () {
       hook();
@@ -63,3 +63,9 @@ export const nodeLoader: FacetLoader = (modules) =>
       return yield* Effect.forEach(urls, (url) => loadFacet(url, version));
     }),
   );
+
+const loader = {
+  nodeLoader,
+};
+
+export default loader;

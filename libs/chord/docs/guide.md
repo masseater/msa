@@ -36,7 +36,9 @@ Chord builds applications out of **objects** that live in several processes (a s
 ## Quick start
 
 ```ts
-import { createHost, method, remote } from "@msa/chord";
+import chord from "@msa/chord";
+
+const { createHost, method, remote } = chord;
 import { Type } from "typebox";
 
 // contract.ts: shared by provider and consumers
@@ -628,7 +630,9 @@ plugins/chat/
 
 ```ts
 // plugins/chat/worker.ts
-import { defineFacet } from "@msa/chord";
+import chord from "@msa/chord";
+
+const { defineFacet } = chord;
 
 import { Chat, Conversation } from "./contract.ts";
 

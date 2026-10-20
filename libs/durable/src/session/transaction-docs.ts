@@ -1,6 +1,6 @@
-import type { Draft, JsonValue } from "@msa/chord";
-import { track as trackValue } from "@msa/chord/delta/tracker";
-import { copyJson } from "@msa/chord/json";
+import trackerModule from "@msa/chord/delta/tracker";
+import type chordTypes from "@msa/chord/index.types";
+import json from "@msa/chord/json";
 import { Effect, Function } from "effect";
 
 import documentsModule from "../documents.ts";
@@ -9,6 +9,9 @@ import type dualTypes from "../dual.ts";
 import type typesModule from "../types.types.ts";
 import transactionState from "./transaction-state.ts";
 import type transactionTypesModule from "./transaction-types.types.ts";
+
+const { copyJson } = json;
+const { track: trackValue } = trackerModule;
 
 const { assertOpen, assertTaskDocumentsOpen, currentTask, mintId, requireConversation, track } =
   transactionState;
@@ -35,7 +38,7 @@ const adoptLoaded = (
   entry: transactionTypesModule.DocumentEntry,
   definition: documentsTypes.AnyDocDefinition,
   loaded: transactionTypesModule.LoadedDocument,
-): Draft<typesModule.JsonObject> => {
+): chordTypes.Draft<typesModule.JsonObject> => {
   checkRecordScope(definition, loaded.record);
   checkRecordVersion(definition, loaded.record, loaded.storedVersion);
   entry.target = { document: loaded, kind: "loaded" };
@@ -46,7 +49,7 @@ const adoptLoaded = (
 const acquire = Effect.fnUntraced(function* (
   state: transactionTypesModule.TxState,
   entry: transactionTypesModule.DocumentEntry,
-  seed: JsonValue | undefined,
+  seed: chordTypes.JsonValue | undefined,
   skipLoad: boolean,
 ) {
   const definition = entry.definition!;
@@ -132,7 +135,7 @@ const reuseLatest = (
   state: transactionTypesModule.TxState,
   latest: transactionTypesModule.DocumentEntry | undefined,
   definition: documentsTypes.AnyDocDefinition,
-): Promise<Draft<typesModule.JsonObject>> | undefined => {
+): Promise<chordTypes.Draft<typesModule.JsonObject>> | undefined => {
   if (latest === undefined || latest.retireOnCommit) return undefined;
   if (latest.draftPromise !== undefined) return latest.draftPromise;
   if (latest.target?.kind !== "fork-copy") return undefined;
@@ -147,14 +150,14 @@ const openDoc: dualTypes.Dual3<
   transactionTypesModule.TxState,
   documentsTypes.AnyDocToken,
   readonly unknown[],
-  Promise<Draft<typesModule.JsonObject>>
+  Promise<chordTypes.Draft<typesModule.JsonObject>>
 > = Function.dual(
   3,
   (
     state: transactionTypesModule.TxState,
     token: documentsTypes.AnyDocToken,
     args: readonly unknown[],
-  ): Promise<Draft<typesModule.JsonObject>> => {
+  ): Promise<chordTypes.Draft<typesModule.JsonObject>> => {
     try {
       assertOpen(state);
       const definition = token.definition;

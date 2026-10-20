@@ -1,5 +1,5 @@
-import type { JsonValue } from "@msa/chord";
-import { copyJson } from "@msa/chord/json";
+import type chordTypes from "@msa/chord/index.types";
+import json from "@msa/chord/json";
 import { Function } from "effect";
 
 import type documentsTypes from "./documents.types.ts";
@@ -7,9 +7,11 @@ import type dualTypes from "./dual.ts";
 import ids from "./ids.ts";
 import type typesModule from "./types.types.ts";
 
+const { copyJson } = json;
+
 const { idFromNumber } = ids;
 
-type FamilyInput<T extends typesModule.JsonObject, I extends JsonValue> = Omit<
+type FamilyInput<T extends typesModule.JsonObject, I extends chordTypes.JsonValue> = Omit<
   typesModule.CommonDocDefinition<T>,
   "initial"
 > & {
@@ -36,19 +38,19 @@ function defineDoc<T extends typesModule.JsonObject>(
   return { definition };
 }
 
-function defineDocFamily<T extends typesModule.JsonObject, I extends JsonValue>(
+function defineDocFamily<T extends typesModule.JsonObject, I extends chordTypes.JsonValue>(
   definition: FamilyInput<T, I> & { readonly scope: "session" },
 ): typesModule.SessionDocFamilyToken<T, I>;
-function defineDocFamily<T extends typesModule.JsonObject, I extends JsonValue>(
+function defineDocFamily<T extends typesModule.JsonObject, I extends chordTypes.JsonValue>(
   definition: FamilyInput<T, I> & typesModule.LatestConversationSemantics,
 ): typesModule.ConversationDocFamilyToken<T, I>;
-function defineDocFamily<T extends typesModule.JsonObject, I extends JsonValue>(
+function defineDocFamily<T extends typesModule.JsonObject, I extends chordTypes.JsonValue>(
   definition: FamilyInput<T, I> & typesModule.RewindableConversationSemantics,
 ): typesModule.RewindableConversationDocFamilyToken<T, I>;
-function defineDocFamily<T extends typesModule.JsonObject, I extends JsonValue>(
+function defineDocFamily<T extends typesModule.JsonObject, I extends chordTypes.JsonValue>(
   definition: FamilyInput<T, I> & { readonly scope: "task" },
 ): typesModule.TaskDocFamilyToken<T, I>;
-function defineDocFamily<T extends typesModule.JsonObject, I extends JsonValue>(
+function defineDocFamily<T extends typesModule.JsonObject, I extends chordTypes.JsonValue>(
   definition: typesModule.DocFamilyDefinition<T, I>,
 ): typesModule.DocFamilyToken<T, I, typesModule.DocFamilyDefinition<T, I>> {
   validateDefinition(definition);

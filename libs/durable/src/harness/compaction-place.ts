@@ -1,4 +1,4 @@
-import type { Context, Draft } from "@msa/chord";
+import type chordTypes from "@msa/chord/index.types";
 import { Effect, Function } from "effect";
 
 import entries from "../entries.ts";
@@ -20,7 +20,7 @@ type Current = compactionTypesModule.CompactionTask;
 const placeSummary: typesModule.Dual4<
   typesModule.Tx,
   compactionTypesModule.CompactionRuntime,
-  { readonly current: Current; readonly live: Draft<liveTypes.LiveState> },
+  { readonly current: Current; readonly live: chordTypes.Draft<liveTypes.LiveState> },
   { readonly firstKept: typesModule.EntryId; readonly summary: string },
   Effect.Effect<compactionTypesModule.CompactionNext>
 > = Function.dual(
@@ -28,7 +28,7 @@ const placeSummary: typesModule.Dual4<
   Effect.fnUntraced(function* (
     tx: typesModule.Tx,
     runtime: compactionTypesModule.CompactionRuntime,
-    state: { readonly current: Current; readonly live: Draft<liveTypes.LiveState> },
+    state: { readonly current: Current; readonly live: chordTypes.Draft<liveTypes.LiveState> },
     summary: { readonly firstKept: typesModule.EntryId; readonly summary: string },
   ) {
     const { current, live } = state;
@@ -64,7 +64,7 @@ const place: typesModule.Dual4<
   compactionTypesModule.CompactionRuntime,
   typesModule.EntryId,
   string,
-  Context,
+  chordTypes.Context,
   Effect.Effect<void>
 > = Function.dual(
   4,
@@ -72,7 +72,7 @@ const place: typesModule.Dual4<
     runtime: compactionTypesModule.CompactionRuntime,
     firstKept: typesModule.EntryId,
     summary: string,
-    context: Context,
+    context: chordTypes.Context,
   ) {
     yield* commitTask(
       runtime,
@@ -88,7 +88,10 @@ const place: typesModule.Dual4<
 
 const complete: Dual2Context = Function.dual(
   2,
-  Effect.fnUntraced(function* (runtime: compactionTypesModule.CompactionRuntime, context: Context) {
+  Effect.fnUntraced(function* (
+    runtime: compactionTypesModule.CompactionRuntime,
+    context: chordTypes.Context,
+  ) {
     yield* commitTask(
       runtime,
       (tx: typesModule.Tx): Effect.Effect<compactionTypesModule.CompactionNext> =>
@@ -104,7 +107,10 @@ const complete: Dual2Context = Function.dual(
 
 const abortCompaction: Dual2Context = Function.dual(
   2,
-  Effect.fnUntraced(function* (runtime: compactionTypesModule.CompactionRuntime, context: Context) {
+  Effect.fnUntraced(function* (
+    runtime: compactionTypesModule.CompactionRuntime,
+    context: chordTypes.Context,
+  ) {
     yield* commitTask(
       runtime,
       (tx: typesModule.Tx): Effect.Effect<compactionTypesModule.CompactionNext> =>
@@ -119,21 +125,26 @@ const abortCompaction: Dual2Context = Function.dual(
 );
 
 type Dual2Context = {
-  (context: Context): (runtime: compactionTypesModule.CompactionRuntime) => Effect.Effect<void>;
-  (runtime: compactionTypesModule.CompactionRuntime, context: Context): Effect.Effect<void>;
+  (
+    context: chordTypes.Context,
+  ): (runtime: compactionTypesModule.CompactionRuntime) => Effect.Effect<void>;
+  (
+    runtime: compactionTypesModule.CompactionRuntime,
+    context: chordTypes.Context,
+  ): Effect.Effect<void>;
 };
 
 const failNoModel: typesModule.Dual3<
   compactionTypesModule.CompactionRuntime,
   { readonly provider: string; readonly modelId: string } | undefined,
-  Context,
+  chordTypes.Context,
   Effect.Effect<void>
 > = Function.dual(
   3,
   Effect.fnUntraced(function* (
     runtime: compactionTypesModule.CompactionRuntime,
     ref: { readonly provider: string; readonly modelId: string } | undefined,
-    context: Context,
+    context: chordTypes.Context,
   ) {
     const message =
       ref === undefined

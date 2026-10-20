@@ -1,16 +1,17 @@
-import type { Host, memoryLinkPair } from "../../src/index.ts";
+import type chord from "../../src/index.ts";
+import type chordTypes from "../../src/index.types.ts";
 
 declare namespace linkTypes {
   interface Cluster {
-    readonly server: Host;
-    readonly workers: Map<string, Host>;
+    readonly server: chordTypes.Host;
+    readonly workers: Map<string, chordTypes.Host>;
     readonly log: string[];
     browser(
       principal: unknown,
       options?: { restamp?: (principal: unknown) => unknown | undefined },
     ): {
-      host: Host;
-      up: ReturnType<typeof memoryLinkPair>[1];
+      host: chordTypes.Host;
+      up: ReturnType<typeof chord.memoryLinkPair>[1];
       reconnect(): void;
     };
     allow: (principal: unknown, host: string) => boolean;

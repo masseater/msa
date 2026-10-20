@@ -1,9 +1,13 @@
-import type { JsonValue } from "@msa/chord";
+import type chordTypes from "@msa/chord/index.types";
 
 import type typesModule from "../../types.types.ts";
 
 declare namespace stateTypes {
-  type StoredTask = typesModule.TaskRecord<JsonValue, JsonValue, JsonValue>;
+  type StoredTask = typesModule.TaskRecord<
+    chordTypes.JsonValue,
+    chordTypes.JsonValue,
+    chordTypes.JsonValue
+  >;
 
   type TaskStatus = StoredTask["state"]["status"];
 

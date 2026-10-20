@@ -1,4 +1,4 @@
-import type { JsonValue } from "@msa/chord";
+import type chordTypes from "@msa/chord/index.types";
 import { Effect } from "effect";
 import { afterEach, describe, expect, it } from "vite-plus/test";
 
@@ -44,7 +44,7 @@ const sidecarsBeforeReclamation = Effect.fn("sidecarsBeforeReclamation")(functio
   const directory = yield* tempDirectory();
   const storage = yield* openStorage(directory);
   yield* createRoot(storage);
-  const taskId = yield* awaited(storage.mintId<typesModule.TaskId<JsonValue>>());
+  const taskId = yield* awaited(storage.mintId<typesModule.TaskId<chordTypes.JsonValue>>());
   const documentId = yield* awaited(storage.mintId<typesModule.DocumentId>());
   yield* awaited(storage.commit([{ type: "task", value: pendingTask(taskId) }], context));
   yield* awaited(
@@ -131,7 +131,7 @@ const ordersMultipleLive = Effect.gen(function* () {
   const directory = yield* tempDirectory();
   const storage = yield* openStorage(directory);
   yield* createRoot(storage);
-  const taskId = yield* awaited(storage.mintId<typesModule.TaskId<JsonValue>>());
+  const taskId = yield* awaited(storage.mintId<typesModule.TaskId<chordTypes.JsonValue>>());
   yield* awaited(
     storage.commit(
       [
@@ -152,7 +152,7 @@ const removesCompletePlus = Effect.gen(function* () {
   const env = new InstrumentedEnv({ cwd: directory });
   const storage = yield* openStorage(directory, env);
   yield* createRoot(storage);
-  const taskId = yield* awaited(storage.mintId<typesModule.TaskId<JsonValue>>());
+  const taskId = yield* awaited(storage.mintId<typesModule.TaskId<chordTypes.JsonValue>>());
   env.fail({ call: 1, mode: "short", operation: "append" });
   yield* awaited(
     expect(
@@ -197,7 +197,7 @@ const serializesCompleteCandidate = Effect.gen(function* () {
             type: "entry",
             value: {
               conversationId: ROOT_CONVERSATION_ID,
-              data: 1n as unknown as JsonValue,
+              data: 1n as unknown as chordTypes.JsonValue,
               id,
               kind: "bad",
             },

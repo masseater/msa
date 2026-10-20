@@ -1,4 +1,4 @@
-import type { Context } from "@msa/chord";
+import type chordTypes from "@msa/chord/index.types";
 import type memoryTypes from "@msa/durable/storage/memory.types";
 import { Effect } from "effect";
 import { describe, expect, it } from "vite-plus/test";
@@ -35,7 +35,7 @@ const closesBackendOnly = Effect.gen(function* () {
         }),
       );
     }
-    override close(closeContext: Context): Promise<void> {
+    override close(closeContext: chordTypes.Context): Promise<void> {
       pages.push("close");
       return Promise.resolve(super.close(closeContext));
     }

@@ -1,6 +1,6 @@
 import type { AssistantMessage } from "@msa/ai";
-import type { Draft } from "@msa/chord";
-import { copyJson } from "@msa/chord/json";
+import type chordTypes from "@msa/chord/index.types";
+import json from "@msa/chord/json";
 import { Effect, Function } from "effect";
 
 import entries from "../entries.ts";
@@ -9,6 +9,8 @@ import generationModule from "./generation.ts";
 import type liveTypes from "./live.types.ts";
 import type typesModule from "./types.types.ts";
 import usageModule from "./usage.ts";
+
+const { copyJson } = json;
 
 const { recordUsage } = usageModule;
 const { AssistantEntry } = entries;
@@ -39,14 +41,14 @@ const appendAssistant: typesModule.Dual3<
 
 const convertPartial: typesModule.Dual3<
   typesModule.Tx,
-  Draft<liveTypes.LiveState>,
+  chordTypes.Draft<liveTypes.LiveState>,
   typesModule.ConversationId,
   Effect.Effect<void>
 > = Function.dual(
   3,
   Effect.fnUntraced(function* (
     tx: typesModule.Tx,
-    live: Draft<liveTypes.LiveState>,
+    live: chordTypes.Draft<liveTypes.LiveState>,
     conversationId: typesModule.ConversationId,
   ) {
     const partial = live.generation?.message;
@@ -73,7 +75,7 @@ const createGeneration: typesModule.Dual2<
 const startRun: typesModule.Dual4<
   typesModule.Tx,
   typesModule.ConversationId,
-  Draft<liveTypes.LiveState>,
+  chordTypes.Draft<liveTypes.LiveState>,
   typesModule.SubmissionId[],
   Effect.Effect<void>
 > = Function.dual(
@@ -81,7 +83,7 @@ const startRun: typesModule.Dual4<
   Effect.fnUntraced(function* (
     tx: typesModule.Tx,
     conversationId: typesModule.ConversationId,
-    live: Draft<liveTypes.LiveState>,
+    live: chordTypes.Draft<liveTypes.LiveState>,
     inputs: typesModule.SubmissionId[],
   ) {
     live.run = { inputs, taskId: yield* createGeneration(tx, conversationId) };
@@ -89,13 +91,17 @@ const startRun: typesModule.Dual4<
 );
 
 const handOver: typesModule.Dual3<
-  Draft<liveTypes.LiveState>,
+  chordTypes.Draft<liveTypes.LiveState>,
   typesModule.TaskId,
   typesModule.TaskId,
   void
 > = Function.dual(
   3,
-  (live: Draft<liveTypes.LiveState>, from: typesModule.TaskId, to: typesModule.TaskId): void => {
+  (
+    live: chordTypes.Draft<liveTypes.LiveState>,
+    from: typesModule.TaskId,
+    to: typesModule.TaskId,
+  ): void => {
     if (live.run?.taskId === from) live.run.taskId = to;
   },
 );

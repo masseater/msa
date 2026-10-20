@@ -6,8 +6,11 @@ import { Clock, type Context, Effect } from "effect";
 import { Type } from "typebox";
 import { describe, it } from "vite-plus/test";
 
-import { type Facet, createHost, defineRegistry, local, method } from "../src/index.ts";
+import chord from "../src/index.ts";
+import type chordTypes from "../src/index.types.ts";
 import timing from "./fixtures/timing.ts";
+
+const { createHost, defineRegistry, local, method } = chord;
 
 const { abortOf } = timing;
 
@@ -52,7 +55,7 @@ const RELOADS = 6;
 const aReferenceHeldAcrossReloadsKeeps = Effect.gen(function* () {
   const generations = tracker();
   const host = createHost({ onError: () => {}, self: { kind: "host" } });
-  const facet = (generation: number): Facet => {
+  const facet = (generation: number): chordTypes.Facet => {
     const sentinel = generations.track(generation, { generation });
     return {
       name: "store",
@@ -78,7 +81,7 @@ const aLifetimeHostObjectWithState = Effect.gen(function* () {
   const services = yield* Effect.context<never>();
   const generations = tracker();
   const host = createHost({ onError: () => {}, self: { kind: "host" } });
-  const facet = (generation: number): Facet => {
+  const facet = (generation: number): chordTypes.Facet => {
     const sentinel = generations.track(generation, { generation });
     return {
       name: "store",
@@ -120,8 +123,8 @@ const aLifetimeHostObjectWithState = Effect.gen(function* () {
 const abortingStoreFacet = (
   generations: ReturnType<typeof tracker>,
   services: Context.Context<never>,
-): ((generation: number) => Facet) => {
-  const facet = (generation: number): Facet => {
+): ((generation: number) => chordTypes.Facet) => {
+  const facet = (generation: number): chordTypes.Facet => {
     const sentinel = generations.track(generation, { generation });
     return {
       name: "store",

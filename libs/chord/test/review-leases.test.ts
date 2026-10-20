@@ -4,19 +4,13 @@ import { type Context, Effect } from "effect";
 import { Type } from "typebox";
 import { describe, it } from "vite-plus/test";
 
-import {
-  type Facet,
-  type Host,
-  type Ref,
-  createHost,
-  defineRegistry,
-  isChordError,
-  local,
-  method,
-} from "../src/index.ts";
+import chord from "../src/index.ts";
+import type chordTypes from "../src/index.types.ts";
 import review from "./fixtures/review.ts";
 import timing from "./fixtures/timing.ts";
 import type timingTypes from "./fixtures/timing.types.ts";
+
+const { createHost, defineRegistry, isChordError, local, method } = chord;
 
 const { emitter } = review;
 const { latch, tick, ticks } = timing;
@@ -28,7 +22,7 @@ const Worker = local("t.busy", {
 });
 
 const serveBusyWorker = (
-  host: Host,
+  host: chordTypes.Host,
   log: string[],
   gate: () => timingTypes.Latch,
   services: Context.Context<never>,
@@ -126,7 +120,7 @@ const Store = local("t.store", {
   version: 1,
 });
 
-const migratedStore: Facet = {
+const migratedStore: chordTypes.Facet = {
   name: "store",
   setup: (api) =>
     api.serve(Store, (_input, _principal, self) => ({
@@ -178,7 +172,7 @@ const case4ARunningListenerHoldsA = Effect.gen(function* () {
 const case6ReleasingTheLastHoldWhile = Effect.gen(function* () {
   const host = createHost({ onError: () => {}, self: { kind: "host" } });
   const log: string[] = [];
-  let ref: Ref<typeof Store> | undefined;
+  let ref: chordTypes.Ref<typeof Store> | undefined;
   let runs = 0;
   host.serve(Store, (_input, _principal, self) => {
     runs++;

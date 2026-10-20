@@ -1,4 +1,4 @@
-import type { Context } from "@msa/chord";
+import type chordTypes from "@msa/chord/index.types";
 import { Effect } from "effect";
 import { expectTypeOf, it } from "vite-plus/test";
 
@@ -11,13 +11,13 @@ const { defineExtension, defineTask, hook } = durable;
 
 const { awaited } = effectSupport;
 
-declare const callContext: Context;
+declare const callContext: chordTypes.Context;
 
 type Hooks = {
   beforeStep(
     step: number,
     api: durableTypes.HookApi,
-    context: Context,
+    context: chordTypes.Context,
   ): { readonly skip: boolean } | undefined;
 };
 type Checkpoint = { phase: "plan"; steps: number } | { phase: "run"; step: number };

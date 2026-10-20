@@ -1,37 +1,38 @@
 import { Effect } from "effect";
 
-import { type AnyContract, type InputOf, placedOn, placementText, type Ref } from "./contract.ts";
-import type { RefCore } from "./core.ts";
-import { ChordError } from "./errors.ts";
-import { HostRemote } from "./host-remote.ts";
-import {
-  type AnyServe,
-  type Facet,
-  type FacetApi,
-  isFacet,
-  type LoadOptions,
-  type PluginRef,
-  type Serve,
-} from "./host-types.ts";
-import { hostLifetime, makeService, type Service } from "./service.ts";
-import { awaitReady } from "./signal.ts";
-import type { GetOptions } from "./types.ts";
+import type contractTypes from "./contract.types.ts";
+import type coreTypes from "./core.types.ts";
+import hostFacetsKit from "./host-facets-kit.ts";
+import hostTypes from "./host-types.ts";
+import type hostTypesModule from "./host-types.types.ts";
+import serviceModule from "./service.ts";
+import type serviceTypes from "./service.types.ts";
+import signalModule from "./signal.ts";
+import type typesModule from "./types.types.ts";
 
-export abstract class HostFacets extends HostRemote {
+const { contract: contractModule, errors: errorsModule, HostRemote } = hostFacetsKit;
+
+const { hostLifetime, makeService } = serviceModule;
+const { isFacet } = hostTypes;
+const { ChordError } = errorsModule;
+const { placedOn, placementText } = contractModule;
+const { awaitReady } = signalModule;
+
+export default abstract class HostFacets extends HostRemote {
   readonly #facetRuns = new Map<string, AbortController>();
 
-  readonly serve: Serve = ((type, factory, options = {}) => {
+  readonly serve: hostTypesModule.Serve = ((type, factory, options = {}) => {
     if (this.reloading)
       throw new Error("host.serve during a reload; serve from a facet passed to reload()");
     this.serveInto(this.current.services, makeService(type, factory, options, ""));
     if (options.lifetime === "host") this.startHostObject(this.current.services.get(type.name)!);
-  }) satisfies AnyServe as Serve;
+  }) satisfies hostTypesModule.AnyServe as hostTypesModule.Serve;
 
-  install(facet: Facet, options: LoadOptions = {}): Promise<void> {
+  install(facet: hostTypesModule.Facet, options: hostTypesModule.LoadOptions = {}): Promise<void> {
     if (this.reloading) throw new Error("host.install during a reload");
     if (this.facets.has(facet.name))
       throw new Error(`facet ${facet.name} is already installed; use reload()`);
-    const added: Service[] = [];
+    const added: serviceTypes.Service[] = [];
     const run = new AbortController();
     try {
       facet.setup(
@@ -40,7 +41,7 @@ export abstract class HostFacets extends HostRemote {
             const service = makeService(type, factory, setupOptions, facet.name);
             this.serveInto(this.current.services, service);
             added.push(service);
-          }) satisfies AnyServe as Serve,
+          }) satisfies hostTypesModule.AnyServe as hostTypesModule.Serve,
           run.signal,
         ),
       );
@@ -54,7 +55,10 @@ export abstract class HostFacets extends HostRemote {
     return options.awaitHostObjects === false ? Promise.resolve() : this.#hostObjectsReady(refs);
   }
 
-  load(plugins: readonly PluginRef[], options: LoadOptions = {}): Promise<void> {
+  load(
+    plugins: readonly hostTypesModule.PluginRef[],
+    options: hostTypesModule.LoadOptions = {},
+  ): Promise<void> {
     return Effect.runPromise(
       Effect.gen({ self: this }, function* () {
         const facets = yield* this.resolve(plugins);
@@ -69,13 +73,13 @@ export abstract class HostFacets extends HostRemote {
     return this.#hostObjectsReady(this.hostObjects.values());
   }
 
-  #hostObjectsReady(refs: Iterable<RefCore>): Promise<void> {
+  #hostObjectsReady(refs: Iterable<coreTypes.RefCore>): Promise<void> {
     const ready = Promise.all([...refs].map((ref) => ref.ready)).then(() => undefined);
     ready.catch(() => {});
     return ready;
   }
 
-  resolve(plugins: readonly PluginRef[]): Effect.Effect<Facet[]> {
+  resolve(plugins: readonly hostTypesModule.PluginRef[]): Effect.Effect<hostTypesModule.Facet[]> {
     return Effect.gen({ self: this }, function* () {
       const modules = plugins.filter((ref): ref is string | URL => !isFacet(ref));
       const loader = this.options.loader;
@@ -92,12 +96,12 @@ export abstract class HostFacets extends HostRemote {
     });
   }
 
-  facetApi(serve: Serve, signal: AbortSignal): FacetApi {
+  facetApi(serve: hostTypesModule.Serve, signal: AbortSignal): hostTypesModule.FacetApi {
     return {
-      serve,
       name: this.name,
-      root: (fn, options) => this.root(fn, options),
       registry: (registry) => this.registry(registry),
+      root: (fn, options) => this.root(fn, options),
+      serve,
       signal,
     };
   }
@@ -114,7 +118,7 @@ export abstract class HostFacets extends HostRemote {
     for (const name of [...this.#facetRuns.keys()]) this.facetRunChanged(name, undefined);
   }
 
-  serveInto(services: Map<string, Service>, service: Service): void {
+  serveInto(services: Map<string, serviceTypes.Service>, service: serviceTypes.Service): void {
     if (services.has(service.contract.name))
       throw new Error(`${service.contract.name} is already served`);
     const placement = service.contract.description.host;
@@ -126,11 +130,11 @@ export abstract class HostFacets extends HostRemote {
     services.set(service.contract.name, service);
   }
 
-  get<C extends AnyContract>(
+  get<C extends contractTypes.AnyContract>(
     type: C,
-    input: InputOf<C>,
-    options?: GetOptions & { readonly signal?: AbortSignal },
-  ): Promise<Ref<C>> {
+    input: contractTypes.InputOf<C>,
+    options?: typesModule.GetOptions & { readonly signal?: AbortSignal },
+  ): Promise<contractTypes.Ref<C>> {
     return Effect.runPromise(
       Effect.suspend(() => {
         const ref = this.acquire(type, input, options, "external");
@@ -138,7 +142,7 @@ export abstract class HostFacets extends HostRemote {
           ref,
           options?.signal === undefined ? [] : [options.signal],
           this.readyTimeout,
-        ).pipe(Effect.as(ref.proxy as Ref<C>));
+        ).pipe(Effect.as(ref.proxy as contractTypes.Ref<C>));
       }),
     );
   }

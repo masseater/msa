@@ -1,6 +1,8 @@
 import { Type } from "typebox";
 
-import { hostNamed, method, remote } from "../../src/index.ts";
+import chord from "../../src/index.ts";
+
+const { hostNamed, method, remote } = chord;
 
 const Echo = remote("t.echo", {
   host: hostNamed("w1"),

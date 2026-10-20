@@ -1,98 +1,23 @@
 import { dual } from "effect/Function";
-import type { Static, TSchema } from "typebox";
+import type { TSchema } from "typebox";
 
-import { type Cell, isSource, type Sources, type SourceValues } from "./cell.ts";
-import {
-  type Accepts,
-  type AnyContract,
-  type ImplementationOf,
-  type InputOf,
-  LOCAL_VARIANT,
-  type LocalContract,
-  type MemberDescription,
-  type Ref,
-} from "./contract.ts";
-import type { EventOf, Resource, ResourceDeclaration, Subscribable, ValueOf } from "./declare.ts";
-import { invalid } from "./errors.ts";
-import type { Registry } from "./registry.ts";
-import { normalize } from "./schema.ts";
-import type { Ctx, Exposed, GetOptions, Readable } from "./types.ts";
+import cell from "./cell.ts";
+import contractModule from "./contract.ts";
+import type contractTypes from "./contract.types.ts";
+import errorsModule from "./errors.ts";
+import schemaModule from "./schema.ts";
+import type serviceTypes from "./service.types.ts";
+import type typesModule from "./types.types.ts";
 
-export type ServeOptions = ReferencedServeOptions | HostServeOptions;
+const { normalize } = schemaModule;
+const { isSource } = cell;
+const { LOCAL_VARIANT } = contractModule;
+const { invalid } = errorsModule;
 
-export interface ReferencedServeOptions {
-  readonly lifetime?: "referenced";
-  readonly linger?: number;
-  readonly accepts?: Accepts;
-}
-
-export interface HostServeOptions {
-  readonly lifetime: "host";
-  readonly linger?: undefined;
-  readonly accepts?: Accepts;
-}
-
-export type ServeOptionsFor<C extends AnyContract> = C extends LocalContract
-  ? Record<never, never> extends InputOf<C>
-    ? ServeOptions
-    : ReferencedServeOptions
-  : ReferencedServeOptions;
-
-export type Lifetime = "referenced" | "host";
-
-export type Factory<C extends AnyContract, P = unknown> = (
-  input: InputOf<C>,
-  principal: P,
-  self: Self<P>,
-) => ImplementationOf<C, P>;
-type AnyFactory = (input: unknown, principal: unknown, self: Self) => unknown;
-
-export interface Service {
-  readonly contract: AnyContract;
-  readonly factory: AnyFactory;
-  readonly options: ServeOptions;
-  readonly facet: string;
-}
-
-export interface StateOptions<T> {
-  readonly version?: number;
-  readonly migrate?: (old: unknown, from: number) => T;
-}
-
-export interface StateInit<T, P = unknown> {
-  readonly init: (ctx: Ctx<P>) => T | Promise<T>;
-}
-
-export interface Self<P = unknown> {
-  state<S extends TSchema>(
-    name: string,
-    schema: S,
-    initial: Static<S> | StateInit<Static<S>, P>,
-    options?: StateOptions<Static<S>>,
-  ): Cell<Static<S>>;
-  get<C extends AnyContract>(type: C, input: InputOf<C>, options?: GetOptions<P>): Ref<C>;
-  resource<T>(name: string, declaration: ResourceDeclaration<T>): Resource<T>;
-  on<S>(
-    name: string,
-    source: S,
-    handler: (event: EventOf<S>, ctx: Ctx<P>) => void | Promise<void>,
-  ): void;
-  on<S, E>(
-    name: string,
-    source: S,
-    select: (value: ValueOf<S>) => Subscribable<E>,
-    handler: (event: E, ctx: Ctx<P>) => void | Promise<void>,
-  ): void;
-  task(fn: (ctx: Ctx<P>) => Promise<void>): void;
-  derive<const S extends Sources, T>(
-    sources: S,
-    fn: (...values: SourceValues<S>) => T,
-  ): Readable<T>;
-  register<V>(registry: Registry<V>, entries: Readonly<Record<string, V>>): void;
-  expose<T>(resource: Resource<T>): Exposed<T>;
-}
-
-function checkLifetime(contract: AnyContract, options: ServeOptions): void {
+function checkLifetime(
+  contract: contractTypes.AnyContract,
+  options: serviceTypes.ServeOptions,
+): void {
   const lifetime = options.lifetime ?? "referenced";
   if (lifetime !== "referenced" && lifetime !== "host")
     throw new TypeError(`${contract.name}: unknown lifetime ${String(lifetime)}`);
@@ -114,61 +39,65 @@ function checkLifetime(contract: AnyContract, options: ServeOptions): void {
   }
 }
 
-export const makeService: {
-  <C extends AnyContract>(
-    factory: Factory<C>,
-    options: ServeOptions,
+const makeService: {
+  <C extends contractTypes.AnyContract>(
+    factory: serviceTypes.Factory<C>,
+    options: serviceTypes.ServeOptions,
     facet: string,
-  ): (contract: C) => Service;
-  <C extends AnyContract>(
+  ): (contract: C) => serviceTypes.Service;
+  <C extends contractTypes.AnyContract>(
     contract: C,
-    factory: Factory<C>,
-    options: ServeOptions,
+    factory: serviceTypes.Factory<C>,
+    options: serviceTypes.ServeOptions,
     facet: string,
-  ): Service;
+  ): serviceTypes.Service;
 } = dual(
   4,
-  <C extends AnyContract>(
+  <C extends contractTypes.AnyContract>(
     contract: C,
-    factory: Factory<C>,
-    options: ServeOptions,
+    factory: serviceTypes.Factory<C>,
+    options: serviceTypes.ServeOptions,
     facet: string,
-  ): Service => {
+  ): serviceTypes.Service => {
     checkLifetime(contract, options);
     return {
       contract,
-      factory: factory as unknown as AnyFactory,
-      options: options as ServeOptions,
       facet,
+      factory: factory as unknown as serviceTypes.AnyFactory,
+      options: options as serviceTypes.ServeOptions,
     };
   },
 );
 
-export const hostLifetime = (service: Service): boolean => service.options.lifetime === "host";
+const hostLifetime = (service: serviceTypes.Service): boolean =>
+  service.options.lifetime === "host";
 
-export const variantOf = (implementation: Record<string, unknown>): string | undefined =>
+const variantOf = (implementation: Record<string, unknown>): string | undefined =>
   typeof implementation["variant"] === "string" ? implementation["variant"] : undefined;
 
-export const isReadableLike = (value: unknown): boolean =>
+const isReadableLike = (value: unknown): boolean =>
   value !== null &&
   typeof value === "object" &&
-  typeof (value as Readable<unknown>).events === "function" &&
-  typeof (value as Readable<unknown>).subscribe === "function";
+  typeof (value as typesModule.Readable<unknown>).events === "function" &&
+  typeof (value as typesModule.Readable<unknown>).subscribe === "function";
 
-export const isStateLike = (value: unknown): boolean => isSource(value) || isReadableLike(value);
+const isStateLike = (value: unknown): boolean => isSource(value) || isReadableLike(value);
 
-export const memberSchemas: {
+const memberSchemas: {
   (
     implementation: Record<string, unknown>,
-  ): (service: Service) => Map<Readable<unknown>, TSchema[]>;
-  (service: Service, implementation: Record<string, unknown>): Map<Readable<unknown>, TSchema[]>;
+  ): (service: serviceTypes.Service) => Map<typesModule.Readable<unknown>, TSchema[]>;
+  (
+    service: serviceTypes.Service,
+    implementation: Record<string, unknown>,
+  ): Map<typesModule.Readable<unknown>, TSchema[]>;
 } = dual(
   2,
   (
-    service: Service,
+    service: serviceTypes.Service,
     implementation: Record<string, unknown>,
-  ): Map<Readable<unknown>, TSchema[]> => {
-    const schemas = new Map<Readable<unknown>, TSchema[]>();
+  ): Map<typesModule.Readable<unknown>, TSchema[]> => {
+    const schemas = new Map<typesModule.Readable<unknown>, TSchema[]>();
     const contract = service.contract;
     if (contract.scope !== "remote") return schemas;
     const members = contract.description.variants[variantOf(implementation) ?? ""] ?? {};
@@ -182,10 +111,10 @@ export const memberSchemas: {
 );
 
 function declaredMembers(
-  contract: AnyContract,
+  contract: contractTypes.AnyContract,
   implementation: Record<string, unknown>,
   fail: (message: string) => never,
-): Readonly<Record<string, MemberDescription>> {
+): Readonly<Record<string, contractTypes.MemberDescription>> {
   if (contract.scope !== "remote") return contract.description.variants[LOCAL_VARIANT] ?? {};
   const variant = implementation["variant"];
   if (typeof variant !== "string" || contract.description.variants[variant] === undefined)
@@ -197,10 +126,10 @@ function declaredMembers(
   return members;
 }
 
-export const validateImplementation: {
-  (implementation: Record<string, unknown>): (service: Service) => void;
-  (service: Service, implementation: Record<string, unknown>): void;
-} = dual(2, (service: Service, implementation: Record<string, unknown>): void => {
+const validateImplementation: {
+  (implementation: Record<string, unknown>): (service: serviceTypes.Service) => void;
+  (service: serviceTypes.Service, implementation: Record<string, unknown>): void;
+} = dual(2, (service: serviceTypes.Service, implementation: Record<string, unknown>): void => {
   const contract = service.contract;
   const fail = (message: string): never => {
     throw invalid("implementation", `${contract.name}: ${message}`);
@@ -218,3 +147,15 @@ export const validateImplementation: {
     if (description.kind === "opaque" && value === undefined) fail(`${name} is missing`);
   }
 });
+
+const serviceModule = {
+  hostLifetime,
+  isReadableLike,
+  isStateLike,
+  makeService,
+  memberSchemas,
+  validateImplementation,
+  variantOf,
+};
+
+export default serviceModule;

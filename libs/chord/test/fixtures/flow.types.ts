@@ -1,9 +1,9 @@
-import type { Host } from "../../src/index.ts";
+import type chordTypes from "../../src/index.types.ts";
 import type flow from "./flow.ts";
 
 declare namespace flowTypes {
   interface FlowClient {
-    readonly host: Host;
+    readonly host: chordTypes.Host;
     readonly gate: AckGate;
   }
 

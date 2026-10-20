@@ -1,6 +1,6 @@
 import type { Api, AssistantMessage, Message, Model, SimpleStreamOptions } from "@msa/ai";
-import type { Context, Draft, JsonValue } from "@msa/chord";
-import { copyJson } from "@msa/chord/json";
+import type chordTypes from "@msa/chord/index.types";
+import jsonModule from "@msa/chord/json";
 import { Cause, Effect, Fiber } from "effect";
 
 import bridge from "./bridge.ts";
@@ -8,6 +8,8 @@ import type generationTypesModule from "./generation-types.types.ts";
 import json from "./json.ts";
 import liveModule from "./live.ts";
 import provider from "./provider.ts";
+
+const { copyJson } = jsonModule;
 
 const { commitTask, eachHook, hookResult } = bridge;
 const { LiveDoc } = liveModule;
@@ -23,7 +25,7 @@ const storePartial = Effect.fnUntraced(function* (
   runtime: generationTypesModule.GenerationRuntime,
   attempt: number,
   partial: AssistantMessage,
-  context: Context,
+  context: chordTypes.Context,
 ) {
   const message = copyJson(partial, { omitUndefinedProperties: true });
   yield* commitTask(
@@ -32,7 +34,11 @@ const storePartial = Effect.fnUntraced(function* (
       Effect.gen(function* () {
         const live = yield* Effect.promise(() => tx.doc(LiveDoc, runtime.conversationId));
         live.generation ??= { attempt };
-        assignJson(live.generation as Draft<Record<string, JsonValue>>, "message", message);
+        assignJson(
+          live.generation as chordTypes.Draft<Record<string, chordTypes.JsonValue>>,
+          "message",
+          message,
+        );
         return undefined;
       }),
     context,
@@ -43,7 +49,7 @@ const flushPartials = Effect.fnUntraced(function* (
   runtime: generationTypesModule.GenerationRuntime,
   partials: Partials,
   attempt: number,
-  context: Context,
+  context: chordTypes.Context,
 ) {
   const interval = runtime.settings.progress.partialIntervalMs;
   while (!partials.stopped) {
@@ -87,7 +93,7 @@ const streamResponse = Effect.fnUntraced(function* (
   messages: readonly Message[],
   options: SimpleStreamOptions,
   attempt: number,
-  context: Context,
+  context: chordTypes.Context,
 ) {
   const partials: Partials = { pending: undefined, stopped: false };
   const flushing = yield* Effect.forkChild(flushPartials(runtime, partials, attempt, context));
@@ -103,7 +109,7 @@ const streamResponse = Effect.fnUntraced(function* (
 const replaceMessages = Effect.fnUntraced(function* (
   runtime: generationTypesModule.GenerationRuntime,
   initial: GenerationRuntimeMessages,
-  context: Context,
+  context: chordTypes.Context,
 ) {
   let messages = initial;
   yield* eachHook(runtime.hooks, "beforeRequest", (hook) =>
@@ -131,7 +137,7 @@ const requestOptions = Effect.fnUntraced(function* (
     generationTypesModule.GenerationCheckpoint,
     { phase: "request" }
   >["thinkingLevel"],
-  context: Context,
+  context: chordTypes.Context,
 ) {
   return {
     ...streamOptions,

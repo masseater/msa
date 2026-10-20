@@ -159,7 +159,7 @@ context; changing the cell updates its readers and its derived count together.
 ```ts
 /** The store's factory; `options` versions its rows (section 9). */
 const todoStore =
-  (options?: StateOptions<Static<typeof Rows>>): Factory<typeof TodoStore> =>
+  (options?: chordTypes.StateOptions<Static<typeof Rows>>): chordTypes.Factory<typeof TodoStore> =>
   ({ list }, _principal, self) => {
     const rows = self.state("rows", Rows, [], options);
     const openCount = self.derive([rows], (todos) => todos.filter((todo) => !todo.done).length);
@@ -383,7 +383,7 @@ type Principal = "owner" | "guest" | "server";
 <!-- example:05-serve -->
 
 ```ts
-function serveViews(api: Pick<Host<Principal>, "serve">): void {
+function serveViews(api: Pick<chordTypes.Host<Principal>, "serve">): void {
   api.serve(Todos, ({ list }, principal, self) => {
     if (list !== "family") throw forbidden("This list is not shared");
     const store = self.get(TodoStore, { list });
@@ -636,14 +636,14 @@ default lifetime, `"referenced"`, are still created only when referenced.
 ```ts
 const plugins = Effect.gen(function* () {
   onTestFinished(() => host.close());
-  const Actions = defineRegistry<(ctx: Ctx) => Promise<number>>("tutorial.actions");
+  const Actions = defineRegistry<(ctx: chordTypes.Ctx) => Promise<number>>("tutorial.actions");
   const Menu = local("tutorial.menu", { input: Type.Object({}), version: 1 });
   let click: (() => Promise<number>) | undefined;
-  const storeFacet: Facet = {
+  const storeFacet: chordTypes.Facet = {
     name: "todo-store",
     ...defineFacet((api) => api.serve(TodoStore, todoFactory)),
   };
-  const menuFacet: Facet = {
+  const menuFacet: chordTypes.Facet = {
     name: "todo-menu",
     ...defineFacet(
       (api) => {
@@ -717,7 +717,7 @@ old root sees; application methods should not pause like this.
 <!-- example:09-facet -->
 
 ```ts
-const facet = (label: string): Facet => ({
+const facet = (label: string): chordTypes.Facet => ({
   name: "todos",
   setup: (api) =>
     api.serve(TodoStore, (input, principal, self) => ({
@@ -750,7 +750,7 @@ The first step reloads compatible code:
 <!-- example:09-compatible -->
 
 ```ts
-const compatibleReload = (host: Host, todos: Ref<typeof TodoStore>) =>
+const compatibleReload = (host: chordTypes.Host, todos: chordTypes.Ref<typeof TodoStore>) =>
   Effect.gen(function* () {
     const entered = Promise.withResolvers<void>();
     const resume = Promise.withResolvers<void>();
@@ -788,7 +788,7 @@ The second step reloads with a migration:
 <!-- example:09-migrate -->
 
 ```ts
-const migrateRows = (host: Host, todos: Ref<typeof TodoStore>) =>
+const migrateRows = (host: chordTypes.Host, todos: chordTypes.Ref<typeof TodoStore>) =>
   Effect.gen(function* () {
     const events: string[] = [];
     const stopEvents = todos.rows.events((event) => events.push(event.type));
@@ -857,7 +857,7 @@ The third step reloads the renamed provider with its adapter:
 <!-- example:09-adapter -->
 
 ```ts
-const renameWithAdapter = (host: Host, todos: Ref<typeof TodoStore>) =>
+const renameWithAdapter = (host: chordTypes.Host, todos: chordTypes.Ref<typeof TodoStore>) =>
   Effect.gen(function* () {
     yield* Effect.promise(() =>
       host.reload([
@@ -917,9 +917,9 @@ const fakeProvider = Effect.gen(function* () {
   onTestFinished(() => host.close());
   const host = createHost<Principal>({ dev: true, name: "server", self: "server" });
   const received: string[] = [];
-  const fake: Facet = {
+  const fake: chordTypes.Facet = {
     name: "fake-store",
-    ...defineFacet((api: FacetApi) => {
+    ...defineFacet((api: chordTypes.FacetApi) => {
       api.serve(TodoStore, (input, principal, self) => ({
         ...todoFactory(input, principal, self),
         add: ({ text }) => {
@@ -1028,18 +1028,8 @@ runs each section.
 ```ts
 import { type Static, Type } from "typebox";
 
-import {
-  type Factory,
-  type Host,
-  type StateOptions,
-  forbidden,
-  hostNamed,
-  invalid,
-  local,
-  method,
-  opaque,
-  remote,
-} from "../../src/index.ts";
+import chord from "../../src/index.ts";
+import type chordTypes from "../../src/index.types.ts";
 ```
 
 The sections in `test/tutorial.test.ts` (1 to 6) import:
@@ -1052,9 +1042,11 @@ import assert from "node:assert/strict";
 import { Effect } from "effect";
 import { expectTypeOf, it, onTestFinished } from "vite-plus/test";
 
-import { createHost, isChordError, memoryLinkPair } from "../src/index.ts";
+import chord from "../src/index.ts";
 import tutorial from "./fixtures/tutorial.ts";
 import type tutorialTypes from "./fixtures/tutorial.types.ts";
+
+const { createHost, isChordError, memoryLinkPair } = chord;
 
 const { Database, SavedTodos, TodoLabel, TodoStore, Todos, serveViews, todoStore } = tutorial;
 
@@ -1072,21 +1064,12 @@ import { Effect } from "effect";
 import { type Static, Type } from "typebox";
 import { it, onTestFinished } from "vite-plus/test";
 
-import {
-  type Ctx,
-  type Facet,
-  type FacetApi,
-  type Host,
-  type Ref,
-  createHost,
-  defineFacet,
-  defineRegistry,
-  isChordError,
-  local,
-  method,
-} from "../src/index.ts";
+import chord from "../src/index.ts";
+import type chordTypes from "../src/index.types.ts";
 import tutorial from "./fixtures/tutorial.ts";
 import type tutorialTypes from "./fixtures/tutorial.types.ts";
+
+const { createHost, defineFacet, defineRegistry, isChordError, local, method } = chord;
 
 const { Rows, TodoStore, Todos, serveViews, todoStore } = tutorial;
 

@@ -1,5 +1,5 @@
 import { Type } from "@msa/ai";
-import type { JsonValue } from "@msa/chord";
+import type chordTypes from "@msa/chord/index.types";
 import durable from "@msa/durable";
 import harnessModule from "@msa/durable/harness";
 import type durableTypes from "@msa/durable/index.types";
@@ -162,7 +162,7 @@ const keepsStructuredOutputStep1 = Effect.gen(function* () {
   addHooks(setup.registry, ToolTask, {
     afterTool: (hookCall, result) =>
       hookCall.name === "other"
-        ? { ...result, structuredOutput: { count: "broken" } as unknown as JsonValue }
+        ? { ...result, structuredOutput: { count: "broken" } as unknown as chordTypes.JsonValue }
         : hookCall.name === "probe"
           ? result
           : { ...result, output: [{ text: "rewritten", type: "text" }] },

@@ -1,4 +1,4 @@
-import type { Context } from "@msa/chord";
+import type chordTypes from "@msa/chord/index.types";
 import durable from "@msa/durable";
 import harnessModule from "@msa/durable/harness";
 import { Effect } from "effect";
@@ -116,7 +116,7 @@ const failsStorageCannot = Effect.gen(function* () {
 
   const closeError = new Error("close failed");
   class FailingClose extends ControlledStorage {
-    override close(closeContext: Context): Promise<void> {
+    override close(closeContext: chordTypes.Context): Promise<void> {
       const superClose = super.close.bind(this);
       return runPromise(
         Effect.gen(function* () {

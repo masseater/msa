@@ -1,6 +1,6 @@
 import type { AssistantMessage } from "@msa/ai";
 import { isRetryableAssistantError, retryDelayMs } from "@msa/ai/utils/retry";
-import type { Context } from "@msa/chord";
+import type chordTypes from "@msa/chord/index.types";
 import { Effect } from "effect";
 
 import bridge from "./bridge.ts";
@@ -17,7 +17,7 @@ const deferPoll = Effect.fnUntraced(function* (
   runtime: generationTypesModule.GenerationRuntime,
   request: generationTypesModule.GenerationRequest,
   message: AssistantMessage & { deferred: NonNullable<AssistantMessage["deferred"]> },
-  context: Context,
+  context: chordTypes.Context,
 ) {
   const { attempt, compacted, model: ref, cutoff } = request;
   const handle = message.deferred;
@@ -51,7 +51,7 @@ const settleModelError = Effect.fnUntraced(function* (
   request: generationTypesModule.GenerationRequest,
   message: AssistantMessage,
   overflow: boolean,
-  context: Context,
+  context: chordTypes.Context,
 ) {
   const { attempt, compacted } = request;
   const policy = runtime.settings.retry;

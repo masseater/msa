@@ -1,4 +1,4 @@
-import type { Context } from "@msa/chord";
+import type chordTypes from "@msa/chord/index.types";
 import { Cause, Effect } from "effect";
 
 import FileError from "../file-error.ts";
@@ -59,7 +59,7 @@ export default class NodeDirReader implements typesModule.DirReader {
 
   next(
     maxEntries: number,
-    context: Context,
+    context: chordTypes.Context,
   ): Promise<resultTypes.Result<DirBatch, nodeDirReaderTypes.FileError>> {
     const aborted = abortResult<DirBatch>(context.abortSignal, this.#path);
     if (aborted !== undefined) return Promise.resolve(aborted);
@@ -75,7 +75,7 @@ export default class NodeDirReader implements typesModule.DirReader {
 
   #fill(
     maxEntries: number,
-    context: Context,
+    context: chordTypes.Context,
   ): Effect.Effect<resultTypes.Result<DirBatch, nodeDirReaderTypes.FileError>> {
     return Effect.gen({ self: this }, function* () {
       const entries: typesModule.FileInfo[] = [];
@@ -99,7 +99,7 @@ export default class NodeDirReader implements typesModule.DirReader {
     });
   }
 
-  close(_context: Context): Promise<void> {
+  close(_context: chordTypes.Context): Promise<void> {
     if (this.#closed) return Promise.resolve();
     this.#closed = true;
     return this.#dir.close().catch(() => undefined);

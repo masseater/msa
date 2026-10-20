@@ -1,7 +1,6 @@
-import type { LinkOptions, Overflow, StateFrame } from "./connection-types.ts";
-import type { Link } from "./link.ts";
-import type { HostTimers } from "./timers.ts";
-import type { Frame } from "./wire.ts";
+import type connectionFlowTypes from "./connection-flow.types.ts";
+import type connectionTypesModule from "./connection-types.types.ts";
+import type wireTypes from "./wire.types.ts";
 
 const DEFAULT_WINDOW = 256 * 1024;
 const PENDING_WINDOWS = 4;
@@ -10,11 +9,11 @@ type StateSlot = {
   readonly kind: "state";
   readonly hold: number;
   readonly m: string;
-  base: StateFrame | undefined;
+  base: connectionTypesModule.StateFrame | undefined;
   ops: (readonly unknown[])[];
   size: number;
   lazy: boolean;
-  readonly overflow: Overflow;
+  readonly overflow: connectionTypesModule.Overflow;
 };
 
 type Slot =
@@ -24,15 +23,8 @@ type Slot =
 const stateKey = (hold: number, m: string): string => `s${hold}\u0000${m}`;
 const unitKey = (hold: number): string => `u${hold}`;
 
-export interface FlowOwner {
-  readonly link: Link;
-  readonly open: boolean;
-  readonly timers: HostTimers;
-  violation(reason: string): void;
-}
-
-export class ConnectionFlow {
-  readonly #owner: FlowOwner;
+export default class ConnectionFlow {
+  readonly #owner: connectionFlowTypes.FlowOwner;
   readonly #window: number;
   readonly #pendingCap: number;
   #peerAcks: boolean | undefined;
@@ -45,7 +37,7 @@ export class ConnectionFlow {
   #received = 0;
   #ackTimer: (() => void) | undefined;
 
-  constructor(owner: FlowOwner, options: LinkOptions) {
+  constructor(owner: connectionFlowTypes.FlowOwner, options: connectionTypesModule.LinkOptions) {
     this.#owner = owner;
     this.#window = options.window ?? DEFAULT_WINDOW;
     this.#pendingCap = options.pendingCap ?? this.#window * PENDING_WINDOWS;
@@ -60,7 +52,7 @@ export class ConnectionFlow {
     }
   }
 
-  send(frame: Frame): void {
+  send(frame: wireTypes.Frame): void {
     const size = this.#owner.link.send(frame) ?? 0;
     if (this.#peerAcks === false) return;
     this.#sent += 1;
@@ -68,7 +60,10 @@ export class ConnectionFlow {
     this.#unackedBytes += size;
   }
 
-  sendState(frame: StateFrame, overflow: Overflow): void {
+  sendState(
+    frame: connectionTypesModule.StateFrame,
+    overflow: connectionTypesModule.Overflow,
+  ): void {
     const key = stateKey(frame.hold, frame.m);
     let slot = this.#pending.get(key);
     if (slot === undefined && !this.#full) {
@@ -78,14 +73,14 @@ export class ConnectionFlow {
     if (slot?.kind === "unit") return;
     if (slot === undefined) {
       slot = {
-        kind: "state",
-        hold: frame.hold,
-        m: frame.m,
         base: undefined,
-        ops: [],
-        size: 0,
+        hold: frame.hold,
+        kind: "state",
         lazy: false,
+        m: frame.m,
+        ops: [],
         overflow,
+        size: 0,
       };
       this.#pending.set(key, slot);
     }
@@ -133,14 +128,14 @@ export class ConnectionFlow {
     if (slot?.kind === "unit") return;
     if (slot === undefined) {
       this.#pending.set(key, {
-        kind: "state",
-        hold,
-        m,
         base: undefined,
-        ops: [],
-        size: 0,
+        hold,
+        kind: "state",
         lazy: true,
+        m,
+        ops: [],
         overflow: { resend },
+        size: 0,
       });
     } else {
       this.#pendingBytes -= slot.size;
@@ -154,7 +149,7 @@ export class ConnectionFlow {
 
   queueUnit(hold: number, flush: () => void): void {
     const key = unitKey(hold);
-    if (!this.#pending.has(key)) this.#pending.set(key, { kind: "unit", hold, flush });
+    if (!this.#pending.has(key)) this.#pending.set(key, { flush, hold, kind: "unit" });
     this.#flush();
   }
 
@@ -178,7 +173,7 @@ export class ConnectionFlow {
   }
 
   get waiting(): { readonly slots: number; readonly bytes: number } {
-    return { slots: this.#pending.size, bytes: this.#pendingBytes };
+    return { bytes: this.#pendingBytes, slots: this.#pending.size };
   }
 
   get #full(): boolean {
@@ -214,7 +209,7 @@ export class ConnectionFlow {
       }
       if (slot.base !== undefined) this.send(slot.base);
       if (slot.ops.length > 0)
-        this.send({ t: "state", hold: slot.hold, m: slot.m, as: "ops", ops: slot.ops });
+        this.send({ as: "ops", hold: slot.hold, m: slot.m, ops: slot.ops, t: "state" });
     }
   }
 
@@ -222,7 +217,7 @@ export class ConnectionFlow {
     if (this.#peerAcks !== true || this.#ackTimer !== undefined || !this.#owner.open) return;
     this.#ackTimer = this.#owner.timers.after(0, () => {
       this.#ackTimer = undefined;
-      this.#owner.link.send({ t: "ack", n: this.#received });
+      this.#owner.link.send({ n: this.#received, t: "ack" });
     });
   }
 

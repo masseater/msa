@@ -1,4 +1,4 @@
-import type { Context } from "@msa/chord";
+import type chordTypes from "@msa/chord/index.types";
 import durable from "@msa/durable";
 import type durableTypes from "@msa/durable/index.types";
 import { Effect } from "effect";
@@ -31,7 +31,10 @@ const Child = oneStep("test.child", (_task, runtime, ctx) =>
   runtime.commit(() => completed(null), ctx).then(() => undefined),
 );
 
-const checkMemos = Effect.fn("checkMemos")(function* (runtime: MemoRuntime, ctx: Context) {
+const checkMemos = Effect.fn("checkMemos")(function* (
+  runtime: MemoRuntime,
+  ctx: chordTypes.Context,
+) {
   expect(yield* awaited(runtime.memo("choice", ctx))).toBeUndefined();
   const winners = yield* awaited(
     Promise.all([runtime.memo("choice", "a", ctx), runtime.memo("choice", "b", ctx)]),

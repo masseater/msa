@@ -1,6 +1,6 @@
 import type { AssistantMessage, ToolCall } from "@msa/ai";
 import { isContextOverflow } from "@msa/ai/utils/overflow";
-import type { Context } from "@msa/chord";
+import type chordTypes from "@msa/chord/index.types";
 import { Effect } from "effect";
 
 import generationAnswer from "./generation-answer.ts";
@@ -8,11 +8,12 @@ import generationOverflow from "./generation-overflow.ts";
 import generationRetry from "./generation-retry.ts";
 import generationTools from "./generation-tools.ts";
 import type generationTypesModule from "./generation-types.types.ts";
+
 const classify = Effect.fnUntraced(function* (
   runtime: generationTypesModule.GenerationRuntime,
   request: generationTypesModule.GenerationRequest,
   message: AssistantMessage,
-  context: Context,
+  context: chordTypes.Context,
 ) {
   runtime.signal.throwIfAborted();
   if (message.stopReason === "deferred" && message.deferred !== undefined)

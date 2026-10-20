@@ -1,5 +1,5 @@
-import type { AttachedReplicatedState, Context, Draft, JsonValue } from "@msa/chord";
-import type { Op } from "@msa/chord/delta";
+import type deltaTypes from "@msa/chord/delta.types";
+import type chordTypes from "@msa/chord/index.types";
 
 import type documentsTypes from "./documents.types.ts";
 import type idsTypes from "./ids.types.ts";
@@ -11,13 +11,16 @@ declare namespace sessionTypes {
   interface Tx {
     conversation(id: idsTypes.ConversationId): Promise<recordsTypes.ConversationRecord | undefined>;
     entry(id: idsTypes.EntryId): Promise<recordsTypes.EntryRecord | undefined>;
-    entry<D extends JsonValue>(
+    entry<D extends chordTypes.JsonValue>(
       token: recordsTypes.Entry<D>,
       id: idsTypes.EntryId,
     ): Promise<recordsTypes.TypedEntry<D> | undefined>;
     task(
       id: idsTypes.TaskId,
-    ): Promise<tasksTypes.TaskRecord<JsonValue, JsonValue, JsonValue> | undefined>;
+    ): Promise<
+      | tasksTypes.TaskRecord<chordTypes.JsonValue, chordTypes.JsonValue, chordTypes.JsonValue>
+      | undefined
+    >;
     scanConversations(
       query: storageTypes.ConversationQuery,
       limit: number,
@@ -36,7 +39,10 @@ declare namespace sessionTypes {
       limit: number,
       cursor?: storageTypes.Cursor,
     ): Promise<
-      storageTypes.Page<tasksTypes.TaskRecord<JsonValue, JsonValue, JsonValue>, storageTypes.Cursor>
+      storageTypes.Page<
+        tasksTypes.TaskRecord<chordTypes.JsonValue, chordTypes.JsonValue, chordTypes.JsonValue>,
+        storageTypes.Cursor
+      >
     >;
     submissionByRequest(
       conversationId: idsTypes.ConversationId,
@@ -55,7 +61,7 @@ declare namespace sessionTypes {
       conversationId: idsTypes.ConversationId,
       value: recordsTypes.EntryDraft,
     ): Promise<recordsTypes.EntryRecord>;
-    appendEntry<D extends JsonValue>(
+    appendEntry<D extends chordTypes.JsonValue>(
       token: recordsTypes.Entry<D>,
       conversationId: idsTypes.ConversationId,
       value: recordsTypes.TypedEntryDraft<NoInfer<D>>,
@@ -72,32 +78,34 @@ declare namespace sessionTypes {
     ): void;
     placeSubmission(id: idsTypes.SubmissionId, entry: idsTypes.EntryId): void;
 
-    doc<T extends idsTypes.JsonObject>(token: documentsTypes.SessionDocToken<T>): Promise<Draft<T>>;
+    doc<T extends idsTypes.JsonObject>(
+      token: documentsTypes.SessionDocToken<T>,
+    ): Promise<chordTypes.Draft<T>>;
     doc<T extends idsTypes.JsonObject>(
       token: documentsTypes.ConversationDocToken<T>,
       conversationId: idsTypes.ConversationId,
-    ): Promise<Draft<T>>;
+    ): Promise<chordTypes.Draft<T>>;
     doc<T extends idsTypes.JsonObject>(
       token: documentsTypes.TaskDocToken<T>,
       taskId: idsTypes.TaskId,
-    ): Promise<Draft<T>>;
-    doc<T extends idsTypes.JsonObject, I extends JsonValue>(
+    ): Promise<chordTypes.Draft<T>>;
+    doc<T extends idsTypes.JsonObject, I extends chordTypes.JsonValue>(
       token: documentsTypes.SessionDocFamilyToken<T, I>,
       key: string,
       seed: I,
-    ): Promise<Draft<T>>;
-    doc<T extends idsTypes.JsonObject, I extends JsonValue>(
+    ): Promise<chordTypes.Draft<T>>;
+    doc<T extends idsTypes.JsonObject, I extends chordTypes.JsonValue>(
       token: documentsTypes.ConversationDocFamilyToken<T, I>,
       conversationId: idsTypes.ConversationId,
       key: string,
       seed: I,
-    ): Promise<Draft<T>>;
-    doc<T extends idsTypes.JsonObject, I extends JsonValue>(
+    ): Promise<chordTypes.Draft<T>>;
+    doc<T extends idsTypes.JsonObject, I extends chordTypes.JsonValue>(
       token: documentsTypes.TaskDocFamilyToken<T, I>,
       taskId: idsTypes.TaskId,
       key: string,
       seed: I,
-    ): Promise<Draft<T>>;
+    ): Promise<chordTypes.Draft<T>>;
 
     retireDoc<T extends idsTypes.JsonObject>(
       token: documentsTypes.SessionDocToken<T>,
@@ -110,23 +118,24 @@ declare namespace sessionTypes {
       token: documentsTypes.TaskDocToken<T>,
       taskId: idsTypes.TaskId,
     ): Promise<void>;
-    retireDoc<T extends idsTypes.JsonObject, I extends JsonValue>(
+    retireDoc<T extends idsTypes.JsonObject, I extends chordTypes.JsonValue>(
       token: documentsTypes.SessionDocFamilyToken<T, I>,
       key: string,
     ): Promise<void>;
-    retireDoc<T extends idsTypes.JsonObject, I extends JsonValue>(
+    retireDoc<T extends idsTypes.JsonObject, I extends chordTypes.JsonValue>(
       token: documentsTypes.ConversationDocFamilyToken<T, I>,
       conversationId: idsTypes.ConversationId,
       key: string,
     ): Promise<void>;
-    retireDoc<T extends idsTypes.JsonObject, I extends JsonValue>(
+    retireDoc<T extends idsTypes.JsonObject, I extends chordTypes.JsonValue>(
       token: documentsTypes.TaskDocFamilyToken<T, I>,
       taskId: idsTypes.TaskId,
       key: string,
     ): Promise<void>;
   }
 
-  type DocumentState<T extends idsTypes.JsonObject> = AttachedReplicatedState<Readonly<T> | null>;
+  type DocumentState<T extends idsTypes.JsonObject> =
+    chordTypes.AttachedReplicatedState<Readonly<T> | null>;
 
   type WatchEnd =
     | { readonly reason: "stopped" | "cancelled" | "session_closed" | "retired" }
@@ -135,7 +144,13 @@ declare namespace sessionTypes {
 
   interface WatchHandle<T> {
     readonly value: T;
-    start(listener: (value: T, ops: readonly Op[], context: Context) => Promise<void>): void;
+    start(
+      listener: (
+        value: T,
+        ops: readonly deltaTypes.Op[],
+        context: chordTypes.Context,
+      ) => Promise<void>,
+    ): void;
     stop(): Promise<WatchEnd>;
     readonly closed: Promise<WatchEnd>;
   }
@@ -147,34 +162,34 @@ declare namespace sessionTypes {
   interface DocumentObserver {
     watchDoc<T extends idsTypes.JsonObject>(
       token: documentsTypes.SessionDocToken<T>,
-      context: Context,
+      context: chordTypes.Context,
     ): Promise<DocumentWatch<T> | undefined>;
     watchDoc<T extends idsTypes.JsonObject>(
       token: documentsTypes.ConversationDocToken<T>,
       conversationId: idsTypes.ConversationId,
-      context: Context,
+      context: chordTypes.Context,
     ): Promise<DocumentWatch<T> | undefined>;
     watchDoc<T extends idsTypes.JsonObject>(
       token: documentsTypes.TaskDocToken<T>,
       taskId: idsTypes.TaskId,
-      context: Context,
+      context: chordTypes.Context,
     ): Promise<DocumentWatch<T> | undefined>;
-    watchDoc<T extends idsTypes.JsonObject, I extends JsonValue>(
+    watchDoc<T extends idsTypes.JsonObject, I extends chordTypes.JsonValue>(
       token: documentsTypes.SessionDocFamilyToken<T, I>,
       key: string,
-      context: Context,
+      context: chordTypes.Context,
     ): Promise<DocumentWatch<T> | undefined>;
-    watchDoc<T extends idsTypes.JsonObject, I extends JsonValue>(
+    watchDoc<T extends idsTypes.JsonObject, I extends chordTypes.JsonValue>(
       token: documentsTypes.ConversationDocFamilyToken<T, I>,
       conversationId: idsTypes.ConversationId,
       key: string,
-      context: Context,
+      context: chordTypes.Context,
     ): Promise<DocumentWatch<T> | undefined>;
-    watchDoc<T extends idsTypes.JsonObject, I extends JsonValue>(
+    watchDoc<T extends idsTypes.JsonObject, I extends chordTypes.JsonValue>(
       token: documentsTypes.TaskDocFamilyToken<T, I>,
       taskId: idsTypes.TaskId,
       key: string,
-      context: Context,
+      context: chordTypes.Context,
     ): Promise<DocumentWatch<T> | undefined>;
   }
 
@@ -183,90 +198,90 @@ declare namespace sessionTypes {
     | { readonly reason: "failed"; readonly error: unknown };
 
   interface Session extends DocumentObserver {
-    commit<T>(change: (tx: Tx) => T | Promise<T>, context: Context): Promise<T>;
-    close(context: Context): Promise<void>;
+    commit<T>(change: (tx: Tx) => T | Promise<T>, context: chordTypes.Context): Promise<T>;
+    close(context: chordTypes.Context): Promise<void>;
     readonly closed: Promise<SessionEnd>;
     subscribeCommits(
-      listener: (publication: storageTypes.CommitPublication, context: Context) => void,
+      listener: (publication: storageTypes.CommitPublication, context: chordTypes.Context) => void,
     ): () => void;
     subscribeClose(listener: () => void): () => void;
 
     snapshot<T extends idsTypes.JsonObject>(
       token: documentsTypes.SessionDocToken<T>,
-      context: Context,
+      context: chordTypes.Context,
     ): Promise<Readonly<T> | undefined>;
     snapshot<T extends idsTypes.JsonObject>(
       token: documentsTypes.ConversationDocToken<T>,
       conversationId: idsTypes.ConversationId,
-      context: Context,
+      context: chordTypes.Context,
     ): Promise<Readonly<T> | undefined>;
     snapshot<T extends idsTypes.JsonObject>(
       token: documentsTypes.TaskDocToken<T>,
       taskId: idsTypes.TaskId,
-      context: Context,
+      context: chordTypes.Context,
     ): Promise<Readonly<T> | undefined>;
-    snapshot<T extends idsTypes.JsonObject, I extends JsonValue>(
+    snapshot<T extends idsTypes.JsonObject, I extends chordTypes.JsonValue>(
       token: documentsTypes.SessionDocFamilyToken<T, I>,
       key: string,
-      context: Context,
+      context: chordTypes.Context,
     ): Promise<Readonly<T> | undefined>;
-    snapshot<T extends idsTypes.JsonObject, I extends JsonValue>(
+    snapshot<T extends idsTypes.JsonObject, I extends chordTypes.JsonValue>(
       token: documentsTypes.ConversationDocFamilyToken<T, I>,
       conversationId: idsTypes.ConversationId,
       key: string,
-      context: Context,
+      context: chordTypes.Context,
     ): Promise<Readonly<T> | undefined>;
-    snapshot<T extends idsTypes.JsonObject, I extends JsonValue>(
+    snapshot<T extends idsTypes.JsonObject, I extends chordTypes.JsonValue>(
       token: documentsTypes.TaskDocFamilyToken<T, I>,
       taskId: idsTypes.TaskId,
       key: string,
-      context: Context,
+      context: chordTypes.Context,
     ): Promise<Readonly<T> | undefined>;
 
     documentState<T extends idsTypes.JsonObject>(
       token: documentsTypes.SessionDocToken<T>,
-      context: Context,
+      context: chordTypes.Context,
     ): Promise<DocumentState<T> | undefined>;
     documentState<T extends idsTypes.JsonObject>(
       token: documentsTypes.ConversationDocToken<T>,
       conversationId: idsTypes.ConversationId,
-      context: Context,
+      context: chordTypes.Context,
     ): Promise<DocumentState<T> | undefined>;
     documentState<T extends idsTypes.JsonObject>(
       token: documentsTypes.TaskDocToken<T>,
       taskId: idsTypes.TaskId,
-      context: Context,
+      context: chordTypes.Context,
     ): Promise<DocumentState<T> | undefined>;
-    documentState<T extends idsTypes.JsonObject, I extends JsonValue>(
+    documentState<T extends idsTypes.JsonObject, I extends chordTypes.JsonValue>(
       token: documentsTypes.SessionDocFamilyToken<T, I>,
       key: string,
-      context: Context,
+      context: chordTypes.Context,
     ): Promise<DocumentState<T> | undefined>;
-    documentState<T extends idsTypes.JsonObject, I extends JsonValue>(
+    documentState<T extends idsTypes.JsonObject, I extends chordTypes.JsonValue>(
       token: documentsTypes.ConversationDocFamilyToken<T, I>,
       conversationId: idsTypes.ConversationId,
       key: string,
-      context: Context,
+      context: chordTypes.Context,
     ): Promise<DocumentState<T> | undefined>;
-    documentState<T extends idsTypes.JsonObject, I extends JsonValue>(
+    documentState<T extends idsTypes.JsonObject, I extends chordTypes.JsonValue>(
       token: documentsTypes.TaskDocFamilyToken<T, I>,
       taskId: idsTypes.TaskId,
       key: string,
-      context: Context,
+      context: chordTypes.Context,
     ): Promise<DocumentState<T> | undefined>;
 
     snapshotAsOf<T extends idsTypes.JsonObject>(
       token: documentsTypes.RewindableConversationDocToken<T>,
       conversationId: idsTypes.ConversationId,
       at: idsTypes.EntryId,
-      context: Context,
+      context: chordTypes.Context,
     ): Promise<Readonly<T> | undefined>;
-    snapshotAsOf<T extends idsTypes.JsonObject, I extends JsonValue>(
+    snapshotAsOf<T extends idsTypes.JsonObject, I extends chordTypes.JsonValue>(
       token: documentsTypes.RewindableConversationDocFamilyToken<T, I>,
       conversationId: idsTypes.ConversationId,
       key: string,
       at: idsTypes.EntryId,
-      context: Context,
+      context: chordTypes.Context,
     ): Promise<Readonly<T> | undefined>;
   }
 }

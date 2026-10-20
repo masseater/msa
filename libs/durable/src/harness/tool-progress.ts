@@ -1,14 +1,20 @@
-import { type Context, type JsonValue, copyJson } from "@msa/chord";
-import { overlap } from "@msa/chord/delta/overlap";
-import { Progress } from "@msa/chord/progress";
+import chord from "@msa/chord";
+import overlapModule from "@msa/chord/delta/overlap";
+import type chordTypes from "@msa/chord/index.types";
+import progressModule from "@msa/chord/progress";
+import type progressTypes from "@msa/chord/progress.types";
 import { Effect, Function } from "effect";
 
-import truncate from "../truncate.ts";
-import bridge from "./bridge.ts";
-import json from "./json.ts";
 import liveModule from "./live.ts";
+import toolProgressKit from "./tool-progress-kit.ts";
 import type toolTypesModule from "./tool-types.types.ts";
 import type typesModule from "./types.types.ts";
+
+const { bridge, json, truncate } = toolProgressKit;
+
+const { overlap } = overlapModule;
+const { Progress } = progressModule;
+const { copyJson } = chord;
 
 const { utf8ByteLength } = truncate;
 const { LiveDoc, toolSlot } = liveModule;
@@ -17,7 +23,7 @@ const { commitTask } = bridge;
 
 type Written = {
   text: string;
-  details: JsonValue | undefined;
+  details: chordTypes.JsonValue | undefined;
   diagnostics: number;
 };
 
@@ -64,7 +70,11 @@ const writeSlot = (
     if (snapshot.droppedBytes > 0) slot.droppedBytes = snapshot.droppedBytes;
     if (snapshot.droppedLines > 0) slot.droppedLines = snapshot.droppedLines;
     if (input.detailsChanged && current.details !== undefined)
-      assignJson(slot as unknown as Record<string, JsonValue>, "details", current.details);
+      assignJson(
+        slot as unknown as Record<string, chordTypes.JsonValue>,
+        "details",
+        current.details,
+      );
     if (input.added.length > 0) {
       slot.diagnostics ??= [];
       for (const diagnostic of input.added) slot.diagnostics.push(diagnostic);
@@ -76,7 +86,7 @@ const publish = Effect.fnUntraced(function* (
   runtime: toolTypesModule.ToolRuntime,
   reported: toolTypesModule.Reported,
   written: Written,
-  context: Context,
+  context: chordTypes.Context,
 ) {
   const snapshot = reported.output.snapshot();
   const current: Written = {
@@ -102,16 +112,16 @@ const publishProgress: typesModule.Dual4<
   toolTypesModule.ToolRuntime,
   toolTypesModule.Reported,
   boolean,
-  Context,
-  Progress
+  chordTypes.Context,
+  progressTypes.Progress
 > = Function.dual(
   4,
   (
     runtime: toolTypesModule.ToolRuntime,
     reported: toolTypesModule.Reported,
     enabled: boolean,
-    context: Context,
-  ): Progress => {
+    context: chordTypes.Context,
+  ): progressTypes.Progress => {
     const written: Written = { details: undefined, diagnostics: 0, text: "" };
     return new Progress(
       () =>

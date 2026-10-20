@@ -1,4 +1,4 @@
-import type { Context } from "@msa/chord";
+import type chordTypes from "@msa/chord/index.types";
 import envModule from "@msa/durable/env";
 import type envTypes from "@msa/durable/env.types";
 import { Cause, Effect, Exit } from "effect";
@@ -24,7 +24,7 @@ interface ExecRequest {
   readonly connection: connectionTypes.Connection;
   readonly command: string | readonly string[];
   readonly options: envTypes.ShellExecOptions | undefined;
-  readonly context: Context;
+  readonly context: chordTypes.Context;
   readonly cwd: string;
   readonly env: Record<string, string>;
   readonly inheritEnv: boolean;

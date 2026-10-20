@@ -1,13 +1,21 @@
 import { Cause, Duration, Effect, Exit } from "effect";
 
-import { hydrationOf, unhydrated } from "./cell.ts";
-import type { RefCore } from "./core.ts";
-import type { Decls, Run } from "./decls.ts";
-import { ChordError, invalid, runAll } from "./errors.ts";
-import type { ObjectImpl } from "./object.ts";
-import { ResourceImpl } from "./resource.ts";
-import { SelfImpl } from "./self.ts";
-import { type Service, validateImplementation } from "./service.ts";
+import activationKit from "./activation-kit.ts";
+import type coreTypes from "./core.types.ts";
+import type declsTypes from "./decls.types.ts";
+import type objectTypes from "./object.types.ts";
+import resourceModule from "./resource.ts";
+import type resourceTypes from "./resource.types.ts";
+import SelfImpl from "./self.ts";
+import serviceModule from "./service.ts";
+import type serviceTypes from "./service.types.ts";
+
+const { cell: cellModule, errors: errorsModule } = activationKit;
+
+const { ChordError, invalid, runAll } = errorsModule;
+const { validateImplementation } = serviceModule;
+const { ResourceImpl } = resourceModule;
+const { hydrationOf, unhydrated } = cellModule;
 
 const settleAll = (effects: readonly Effect.Effect<unknown>[]): Effect.Effect<void> =>
   Effect.gen(function* () {
@@ -16,15 +24,15 @@ const settleAll = (effects: readonly Effect.Effect<unknown>[]): Effect.Effect<vo
     if (failure !== undefined) yield* failure;
   });
 
-export class ObjectActivation {
-  readonly openOrder: ResourceImpl[] = [];
-  readonly #object: ObjectImpl;
+export default class ObjectActivation {
+  readonly openOrder: resourceTypes.ResourceImpl[] = [];
+  readonly #object: objectTypes.ObjectImpl;
 
-  constructor(object: ObjectImpl) {
+  constructor(object: objectTypes.ObjectImpl) {
     this.#object = object;
   }
 
-  run(service: Service, previous: Decls | undefined): Run {
+  run(service: serviceTypes.Service, previous: declsTypes.Decls | undefined): declsTypes.Run {
     const object = this.#object;
     const self = new SelfImpl(object, previous);
     object.pending.add(self.run(undefined).decls);
@@ -50,7 +58,7 @@ export class ObjectActivation {
     return run;
   }
 
-  #discard(run: Run): void {
+  #discard(run: declsTypes.Run): void {
     const object = this.#object;
     object.pending.delete(run.decls);
     Effect.runFork(
@@ -79,13 +87,15 @@ export class ObjectActivation {
   }
 
   open(
-    resources: readonly ResourceImpl[],
-    refs: readonly RefCore[],
+    resources: readonly resourceTypes.ResourceImpl[],
+    refs: readonly coreTypes.RefCore[],
     signal: AbortSignal,
   ): Effect.Effect<void> {
     return Effect.gen({ self: this }, function* () {
-      const opening = new Map<ResourceImpl, Effect.Effect<void>>();
-      const openDep = (dep: RefCore | ResourceImpl): Effect.Effect<unknown> =>
+      const opening = new Map<resourceTypes.ResourceImpl, Effect.Effect<void>>();
+      const openDep = (
+        dep: coreTypes.RefCore | resourceTypes.ResourceImpl,
+      ): Effect.Effect<unknown> =>
         dep instanceof ResourceImpl
           ? Effect.suspend(() => opening.get(dep) ?? Effect.void)
           : Effect.promise(() => dep.ready);
@@ -102,7 +112,7 @@ export class ObjectActivation {
     });
   }
 
-  waitHydrated(run: Run): Effect.Effect<void> {
+  waitHydrated(run: declsTypes.Run): Effect.Effect<void> {
     const address = this.#object.address;
     const exposed = Object.entries(run.implementation ?? {});
     const pending = unhydrated([...run.created.derives, ...exposed.map(([, value]) => value)]);
@@ -120,7 +130,7 @@ export class ObjectActivation {
     ).pipe(Effect.asVoid);
   }
 
-  initCells(run: Run, signal: AbortSignal): Effect.Effect<void> {
+  initCells(run: declsTypes.Run, signal: AbortSignal): Effect.Effect<void> {
     const host = this.#object.host;
     if (run.created.inits.length === 0) return Effect.void;
     return settleAll(
@@ -136,7 +146,7 @@ export class ObjectActivation {
     );
   }
 
-  unwind(run: Run): Effect.Effect<void> {
+  unwind(run: declsTypes.Run): Effect.Effect<void> {
     return Effect.suspend(() => {
       for (const derived of run.created.derives) derived.detach();
       const resources = [...run.created.resources].sort(

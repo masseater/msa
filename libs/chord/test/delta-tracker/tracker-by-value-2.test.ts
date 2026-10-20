@@ -2,8 +2,10 @@ import { isProxy } from "node:util/types";
 
 import { describe, expect, it } from "vite-plus/test";
 
-import { track } from "../../src/delta/index.ts";
+import delta from "../../src/delta/index.ts";
 import trackerModule from "../fixtures/tracker.ts";
+
+const { track } = delta;
 
 const { clone, replay } = trackerModule;
 

@@ -1,5 +1,5 @@
 import type { Message, SimpleStreamOptions } from "@msa/ai";
-import type { Context } from "@msa/chord";
+import type chordTypes from "@msa/chord/index.types";
 import { Effect, Function } from "effect";
 
 import compactionPlace from "./compaction-place.ts";
@@ -43,7 +43,7 @@ const withoutDeferred = (
 const summaryOptions = Effect.fnUntraced(function* (
   runtime: compactionTypesModule.CompactionRuntime,
   request: compactionTypesModule.SummaryRequest,
-  context: Context,
+  context: chordTypes.Context,
 ) {
   const { thinkingLevel, streamOptions, maxTokens } = request;
   const options: SimpleStreamOptions = {
@@ -61,7 +61,7 @@ const summarizePhase: typesModule.Dual4<
   compactionTypesModule.CompactionRuntime,
   compactionTypesModule.SummaryRequest,
   compactionTypesModule.CompactionInput,
-  Context,
+  chordTypes.Context,
   Effect.Effect<void>
 > = Function.dual(
   4,
@@ -69,7 +69,7 @@ const summarizePhase: typesModule.Dual4<
     runtime: compactionTypesModule.CompactionRuntime,
     request: compactionTypesModule.SummaryRequest,
     input: compactionTypesModule.CompactionInput,
-    context: Context,
+    context: chordTypes.Context,
   ) {
     const { model: ref, tail, firstKept } = request;
     const model = runtime.models.getModel(ref.provider, ref.modelId);

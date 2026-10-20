@@ -1,4 +1,4 @@
-import { BACKGROUND_CONTEXT } from "@msa/chord/context";
+import contextModule from "@msa/chord/context";
 import envModule from "@msa/durable/env";
 import { Effect } from "effect";
 import { afterAll, describe, expect, it } from "vite-plus/test";
@@ -9,6 +9,8 @@ import remoteInfo from "../src/remote-info.ts";
 import daemon from "./daemon.ts";
 import platformModule from "./platform.ts";
 import remoteEnvironments from "./remote-environment.ts";
+
+const { BACKGROUND_CONTEXT } = contextModule;
 
 const { getOrThrow } = envModule;
 

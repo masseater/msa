@@ -1,7 +1,7 @@
 import { homedir } from "node:os";
 import { pathToFileURL } from "node:url";
 
-import { BACKGROUND_CONTEXT } from "@msa/chord/context";
+import contextModule from "@msa/chord/context";
 import { Effect } from "effect";
 import { afterEach, describe, expect, it } from "vite-plus/test";
 
@@ -11,9 +11,9 @@ import effectSupport from "./effect-support.ts";
 import envNodeSupport from "./env-node-support.ts";
 import platformSupport from "./platform-support.ts";
 
+const { BACKGROUND_CONTEXT } = contextModule;
 const { NodeExecutionEnv } = node;
 const { FileError, getOrThrow } = envModule;
-
 const { awaited } = effectSupport;
 const { cleanUpEnvTests, createTempDir, tempDirs } = envNodeSupport;
 const { joinPath, makeSymlink, pathExists, realPath } = platformSupport;

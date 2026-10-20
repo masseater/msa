@@ -3,14 +3,11 @@ import assert from "node:assert/strict";
 import { Effect } from "effect";
 import { describe, it } from "vite-plus/test";
 
-import {
-  type Frame,
-  type Link,
-  PROTOCOL_VERSION,
-  createHost,
-  memoryLinkPair,
-} from "../src/index.ts";
+import chord from "../src/index.ts";
+import type chordTypes from "../src/index.types.ts";
 import flow from "./fixtures/flow.ts";
+
+const { PROTOCOL_VERSION, createHost, memoryLinkPair } = chord;
 
 const { Counter, WorkerCounter, client, serveCounter, stateFrames, until } = flow;
 
@@ -90,7 +87,7 @@ const dropsWhatWaitsForAReference = Effect.gen(function* () {
 const coalescesRelayedStateForTheOrigin = Effect.gen(function* () {
   const services = yield* Effect.context<never>();
   const server = createHost({ name: "server", onError: () => {}, self: { kind: "host" } });
-  const toWorker: Frame[] = [];
+  const toWorker: chordTypes.Frame[] = [];
   server.route("w", {
     authorize: () => true,
     principal: (name) => ({ host: name }),
@@ -112,11 +109,11 @@ const coalescesRelayedStateForTheOrigin = Effect.gen(function* () {
             },
             onClose: (handler) => down.onClose(handler),
             receive: (handler) => down.receive(handler),
-            send: (frame: Frame) => {
+            send: (frame: chordTypes.Frame) => {
               toWorker.push(frame);
               return down.send(frame);
             },
-          } satisfies Link;
+          } satisfies chordTypes.Link;
         }),
       ),
   });
@@ -143,7 +140,7 @@ const neitherWindowsNorAcknowledgesAPeer = Effect.gen(function* () {
   serveCounter(server);
   const [down, raw] = memoryLinkPair();
   server.accept(down, { principal: { user: "u" }, window: 1 });
-  const frames: Frame[] = [];
+  const frames: chordTypes.Frame[] = [];
   raw.receive((frame) => frames.push(frame));
   raw.send({
     codeVersion: 0,
@@ -158,7 +155,7 @@ const neitherWindowsNorAcknowledgesAPeer = Effect.gen(function* () {
   yield* Effect.sleep(5);
   assert.equal(stateFrames(frames).length, 6, "the snapshot and one frame per change");
   assert.ok(!frames.some((frame) => frame.t === "ack"));
-  assert.equal((frames[0] as Extract<Frame, { t: "hello" }>).acks, true);
+  assert.equal((frames[0] as Extract<chordTypes.Frame, { t: "hello" }>).acks, true);
   yield* Effect.promise(() => server.close());
 });
 

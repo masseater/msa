@@ -1,32 +1,31 @@
 import { dual } from "effect/Function";
 
-import type { JsonValue } from "../json.ts";
-import { jsonCost, operationCost } from "./diff-cost.ts";
-import {
-  emitOperation,
-  emitSet,
-  emitString,
-  equalJson,
-  isContainer,
-  overflowed,
-  permutation,
-} from "./diff-emit.ts";
-import {
-  type ArrayMatch,
+import type jsonTypes from "../json.types.ts";
+import diffCost from "./diff-cost.ts";
+import diffEmit from "./diff-emit.ts";
+import diffMatch from "./diff-match.ts";
+import type diffMatchTypes from "./diff-match.types.ts";
+import opsModule from "./ops.ts";
+import type opsTypes from "./ops.types.ts";
+
+const {
+  MAX_SEMANTIC_CELLS,
   identityAnchors,
   identitySubsequence,
   lcsMatches,
-  MAX_SEMANTIC_CELLS,
   sameValue,
   semanticallyAligned,
-} from "./diff-match.ts";
-import { type NonEmptyPath, type Op, type Path, RESERVED_SEGMENTS } from "./ops.ts";
+} = diffMatch;
+const { emitOperation, emitSet, emitString, equalJson, isContainer, overflowed, permutation } =
+  diffEmit;
+const { RESERVED_SEGMENTS } = opsModule;
+const { jsonCost, operationCost } = diffCost;
 
 interface Region {
-  readonly before: JsonValue[];
-  readonly after: JsonValue[];
-  readonly path: Path;
-  readonly operations: Op[];
+  readonly before: jsonTypes.JsonValue[];
+  readonly after: jsonTypes.JsonValue[];
+  readonly path: opsTypes.Path;
+  readonly operations: opsTypes.Op[];
   beforeStart: number;
   beforeEnd: number;
   afterStart: number;
@@ -55,8 +54,8 @@ const trimEqualEnds = (region: Region): void => {
   }
 };
 
-const positionalMatches = (region: Region): ArrayMatch[] => {
-  const matches: ArrayMatch[] = [];
+const positionalMatches = (region: Region): diffMatchTypes.ArrayMatch[] => {
+  const matches: diffMatchTypes.ArrayMatch[] = [];
   const count = region.beforeEnd - region.beforeStart;
   for (let offset = 0; offset < count; offset++) {
     if (
@@ -71,7 +70,7 @@ const positionalMatches = (region: Region): ArrayMatch[] => {
   return matches;
 };
 
-const semanticMatches = (region: Region): readonly ArrayMatch[] | undefined => {
+const semanticMatches = (region: Region): readonly diffMatchTypes.ArrayMatch[] | undefined => {
   const semantic = lcsMatches(
     region.before.slice(region.beforeStart, region.beforeEnd),
     region.after.slice(region.afterStart, region.afterEnd),
@@ -84,7 +83,7 @@ const semanticMatches = (region: Region): readonly ArrayMatch[] | undefined => {
   );
 };
 
-const matchesOf = (region: Region): readonly ArrayMatch[] | undefined => {
+const matchesOf = (region: Region): readonly diffMatchTypes.ArrayMatch[] | undefined => {
   const { beforeStart, beforeEnd, afterStart, afterEnd, before, after } = region;
   if (beforeEnd - beforeStart === afterEnd - afterStart) {
     const positional = positionalMatches(region);
@@ -115,7 +114,7 @@ const spliceRest = (region: Region): void => {
   ]);
 };
 
-function processArrayMatches(region: Region, matches: readonly ArrayMatch[]): void {
+function processArrayMatches(region: Region, matches: readonly diffMatchTypes.ArrayMatch[]): void {
   const { before, after, path, operations } = region;
   let beforeAt = region.beforeStart;
   let afterAt = region.afterStart;
@@ -124,10 +123,10 @@ function processArrayMatches(region: Region, matches: readonly ArrayMatch[]): vo
     if (overflowed(operations)) return;
     diffArrayRegion({
       ...region,
-      beforeStart: beforeAt,
-      beforeEnd: beforeMatch,
-      afterStart: afterAt,
       afterEnd: afterMatch,
+      afterStart: afterAt,
+      beforeEnd: beforeMatch,
+      beforeStart: beforeAt,
       outputStart: outputAt,
     });
     outputAt += afterMatch - afterAt;
@@ -141,8 +140,8 @@ function processArrayMatches(region: Region, matches: readonly ArrayMatch[]): vo
   if (overflowed(operations)) return;
   diffArrayRegion({
     ...region,
-    beforeStart: beforeAt,
     afterStart: afterAt,
+    beforeStart: beforeAt,
     outputStart: outputAt,
   });
 }
@@ -174,7 +173,12 @@ function diffArrayRegion(region: Region): void {
   spliceRest(region);
 }
 
-const diffArray = (before: JsonValue[], after: JsonValue[], path: Path, operations: Op[]): void => {
+const diffArray = (
+  before: jsonTypes.JsonValue[],
+  after: jsonTypes.JsonValue[],
+  path: opsTypes.Path,
+  operations: opsTypes.Op[],
+): void => {
   if (before === after || equalJson(before, after)) return;
   if (
     before.length === after.length &&
@@ -189,23 +193,23 @@ const diffArray = (before: JsonValue[], after: JsonValue[], path: Path, operatio
     }
   }
   diffArrayRegion({
-    before,
     after,
-    path,
-    operations,
-    beforeStart: 0,
-    beforeEnd: before.length,
-    afterStart: 0,
     afterEnd: after.length,
+    afterStart: 0,
+    before,
+    beforeEnd: before.length,
+    beforeStart: 0,
+    operations,
     outputStart: 0,
+    path,
   });
 };
 
 const diffObject = (
-  before: Record<string, JsonValue>,
-  after: Record<string, JsonValue>,
-  path: Path,
-  operations: Op[],
+  before: Record<string, jsonTypes.JsonValue>,
+  after: Record<string, jsonTypes.JsonValue>,
+  path: opsTypes.Path,
+  operations: opsTypes.Op[],
 ): void => {
   const beforeKeys = Object.keys(before);
   const afterKeys = Object.keys(after);
@@ -222,14 +226,19 @@ const diffObject = (
   for (const key of beforeKeys) {
     if (overflowed(operations)) return;
     if (!Object.hasOwn(after, key))
-      emitOperation(operations, ["d", [...path, key] as unknown as NonEmptyPath]);
+      emitOperation(operations, ["d", [...path, key] as unknown as opsTypes.NonEmptyPath]);
   }
 };
 
-const diffValue = (before: JsonValue, after: JsonValue, path: Path, operations: Op[]): void => {
+const diffValue = (
+  before: jsonTypes.JsonValue,
+  after: jsonTypes.JsonValue,
+  path: opsTypes.Path,
+  operations: opsTypes.Op[],
+): void => {
   if (before === after || overflowed(operations)) return;
   if (typeof before === "string" && typeof after === "string" && path.length > 0) {
-    emitString(before, after, path as NonEmptyPath, operations);
+    emitString(before, after, path as opsTypes.NonEmptyPath, operations);
     return;
   }
   if (Array.isArray(before) && Array.isArray(after)) {
@@ -248,8 +257,8 @@ const diffValue = (before: JsonValue, after: JsonValue, path: Path, operations: 
   emitSet(path, after, operations);
 };
 
-function revisionOps(before: JsonValue, after: JsonValue): Op[] {
-  const operations: Op[] = [];
+function revisionOps(before: jsonTypes.JsonValue, after: jsonTypes.JsonValue): opsTypes.Op[] {
+  const operations: opsTypes.Op[] = [];
   diffValue(before, after, [], operations);
   if (overflowed(operations)) return [["r", after]];
   if (operations.length === 0 || operations[0]?.[0] === "r") return operations;
@@ -260,7 +269,13 @@ function revisionOps(before: JsonValue, after: JsonValue): Op[] {
   return deltaCost >= snapshotCost ? [["r", after]] : operations;
 }
 
-export const diffRevisions: {
-  (after: JsonValue): (before: JsonValue) => Op[];
-  (before: JsonValue, after: JsonValue): Op[];
+const diffRevisions: {
+  (after: jsonTypes.JsonValue): (before: jsonTypes.JsonValue) => opsTypes.Op[];
+  (before: jsonTypes.JsonValue, after: jsonTypes.JsonValue): opsTypes.Op[];
 } = dual(2, revisionOps);
+
+const diff = {
+  diffRevisions,
+};
+
+export default diff;

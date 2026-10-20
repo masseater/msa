@@ -1,8 +1,10 @@
 import { Clock, Effect } from "effect";
 import { afterEach, describe, expect, it, vi } from "vite-plus/test";
 
-import { Progress } from "../src/progress.ts";
+import progressModule from "../src/progress.ts";
 import timing from "./fixtures/timing.ts";
+
+const { Progress } = progressModule;
 
 const { latch } = timing;
 

@@ -1,5 +1,5 @@
-import type { Op } from "@msa/chord/delta";
-import { apply } from "@msa/chord/delta/apply";
+import type deltaTypes from "@msa/chord/delta.types";
+import applyModule from "@msa/chord/delta/apply";
 import { Effect, Function } from "effect";
 
 import errors from "../../errors.ts";
@@ -9,6 +9,8 @@ import codec from "./codec.ts";
 import type codecTypes from "./codec.types.ts";
 import type databaseTypes from "./database.ts";
 import scans from "./scans.ts";
+
+const { apply } = applyModule;
 
 const { recordById } = scans;
 const { addressKey, addressParts, isAliveAt, isCurrentOnly, parseJson } = codec;
@@ -78,7 +80,10 @@ const materializeDocument: {
       if (revision.kind !== "delta" || revision.version !== base.version) {
         throw new Error(`Document ${id} crosses a stored version boundary without a base`);
       }
-      value = apply(value, parseJson<readonly Op[]>(revision.content)) as typesModule.JsonObject;
+      value = apply(
+        value,
+        parseJson<readonly deltaTypes.Op[]>(revision.content),
+      ) as typesModule.JsonObject;
     }
     return { deltasSinceBase: tail.length, record, value, version: base.version };
   }),

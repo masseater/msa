@@ -1,17 +1,22 @@
 import { Agent, streamProxy } from "@msa/agent-core";
-import { createAssistantMessageEventStream, Type } from "@msa/ai";
-import { complete, getModel, getProviders, streamSimple } from "@msa/ai/compat";
-import { createHost, memoryLinkPair, replicatedState } from "@msa/chord";
+import { Type, createAssistantMessageEventStream } from "@msa/ai";
+import { complete, getModels, getProviders, streamSimple } from "@msa/ai/compat";
+import chord from "@msa/chord";
 
-const model = getModel("openai", "gpt-5.5");
+const { createHost, memoryLinkPair, replicatedState } = chord;
+
+const model = getModels("openai").find((candidate) => candidate.api === "openai-responses");
 const schema = Type.Object({ prompt: Type.String() });
 const stream = createAssistantMessageEventStream();
 
-const agent = new Agent({ initialState: { model }, streamFn: streamSimple });
-agent.steer({ role: "user", content: [{ type: "text", text: "queued" }], timestamp: 0 });
+const agent = new Agent({
+  initialState: model === undefined ? {} : { model },
+  streamFn: streamSimple,
+});
+agent.steer({ content: [{ text: "queued", type: "text" }], role: "user", timestamp: 0 });
 
-export const liveBindings = [
-  model.id,
+const liveBindings = [
+  model?.id,
   getProviders().length,
   typeof complete,
   schema.type,
@@ -22,3 +27,5 @@ export const liveBindings = [
   typeof memoryLinkPair,
   replicatedState({ browser: true }).value.browser,
 ];
+
+export default liveBindings;

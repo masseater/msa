@@ -1,5 +1,5 @@
-import type { Context, JsonValue } from "@msa/chord";
-import { copyJson } from "@msa/chord/json";
+import type chordTypes from "@msa/chord/index.types";
+import json from "@msa/chord/json";
 
 import promiseTryModule from "../promise-try.ts";
 import unrefTimer from "../unref-timer.ts";
@@ -9,6 +9,8 @@ import type schedulerStateTypes from "./scheduler-state.types.ts";
 import schedulerTypes from "./scheduler-types.ts";
 import type schedulerTypesModule from "./scheduler-types.types.ts";
 import util from "./util.ts";
+
+const { copyJson } = json;
 
 const { startUnrefTimer } = unrefTimer;
 
@@ -29,7 +31,7 @@ export default class SchedulerState {
   readonly invocations = new Map<schedulerTypesModule.TaskId, schedulerTypesModule.Invocation>();
   readonly taskWaiters = new Waiters<
     schedulerTypesModule.TaskId,
-    schedulerTypesModule.SettledTask<JsonValue>
+    schedulerTypesModule.SettledTask<chordTypes.JsonValue>
   >();
   readonly idleWaiters = new Waiters<schedulerTypesModule.ConversationId | undefined, void>();
   readonly failedMigrations = new Map<
@@ -214,7 +216,7 @@ export default class SchedulerState {
       tx: schedulerTypesModule.Transaction,
       current: schedulerTypesModule.ErasedRunningTask,
     ) => T | Promise<T>,
-    context: Context,
+    context: chordTypes.Context,
   ): Promise<T> {
     if (invocation.ended) return Promise.reject(endedError(invocation));
     return this.options.session.commitWith(
@@ -240,7 +242,7 @@ export default class SchedulerState {
 
   waitForIdle(
     conversationId: schedulerTypesModule.ConversationId | undefined,
-    context: Context,
+    context: chordTypes.Context,
   ): Promise<void> {
     if (this.closing) return Promise.reject(closedError(this.options.session));
     if (this.graph.idle(conversationId)) return Promise.resolve();

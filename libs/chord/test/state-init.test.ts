@@ -4,10 +4,13 @@ import { type Context, Effect } from "effect";
 import { Type } from "typebox";
 import { describe, it } from "vite-plus/test";
 
-import { type Ctx, type Host, createHost, isChordError, local, method } from "../src/index.ts";
+import chord from "../src/index.ts";
+import type chordTypes from "../src/index.types.ts";
 import stateNotes from "./fixtures/state-notes.ts";
 import timing from "./fixtures/timing.ts";
 import type timingTypes from "./fixtures/timing.types.ts";
+
+const { createHost, isChordError, local, method } = chord;
 
 const { Notes, NotesSchema } = stateNotes;
 const { latch, pollUntil, tick } = timing;
@@ -15,7 +18,7 @@ const { latch, pollUntil, tick } = timing;
 const until = (check: () => boolean) => pollUntil(check, 200, tick);
 
 const serveLoadingNotes = (
-  host: Host,
+  host: chordTypes.Host,
   loaded: timingTypes.Latch<string[]>,
   log: string[],
   services: Context.Context<never>,
@@ -143,7 +146,7 @@ const initRunsInARootIt = Effect.gen(function* () {
   host.serve(Source, () => ({ all: () => ["from source"] }));
   host.serve(Notes, (_input, _principal, self) => {
     const notes = self.state("notes", NotesSchema, {
-      init: (ctx: Ctx) =>
+      init: (ctx: chordTypes.Ctx) =>
         Effect.runPromiseWith(services)(
           Effect.gen(function* () {
             const remote = yield* Effect.promise(() => ctx.get(Source, {}));

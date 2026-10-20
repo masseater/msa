@@ -1,8 +1,10 @@
 import { describe, expect, it } from "vite-plus/test";
 
-import { applyImmutable, diffRevisions } from "../src/delta/index.ts";
-import type { JsonValue } from "../src/json.ts";
+import delta from "../src/delta/index.ts";
+import type jsonTypes from "../src/json.types.ts";
 import expectDiff from "./fixtures/state-diff.ts";
+
+const { applyImmutable, diffRevisions } = delta;
 
 const keepsFortyThousandRowSparseEdits = (): void => {
   const values = Array.from({ length: 40_000 }, (_, value) => ({ stable: { value }, value }));
@@ -55,8 +57,8 @@ const encodesFiveHundredUnshiftsWithoutSnapshotting = (): void => {
 };
 
 const boundsWideObjectOperationEmissionWith = (): void => {
-  const before: Record<string, JsonValue> = {};
-  const after: Record<string, JsonValue> = {};
+  const before: Record<string, jsonTypes.JsonValue> = {};
+  const after: Record<string, jsonTypes.JsonValue> = {};
   for (let index = 0; index < 20_000; index++) {
     before[`field${index}`] = 0;
     after[`field${index}`] = 1;

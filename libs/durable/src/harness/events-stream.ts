@@ -1,5 +1,5 @@
 import type { AssistantMessage } from "@msa/ai";
-import type { Op } from "@msa/chord/delta";
+import type deltaTypes from "@msa/chord/delta.types";
 import { Function } from "effect";
 
 import eventsMessages from "./events-messages.ts";
@@ -27,13 +27,13 @@ const partials: typesModule.Dual2<
 
 const streamEvents: typesModule.Dual2<
   eventsStreamTypes.Generations,
-  readonly Op[],
+  readonly deltaTypes.Op[],
   eventsTypesModule.AgentEvent[]
 > = Function.dual(
   2,
   (
     generations: eventsStreamTypes.Generations,
-    viewOps: readonly Op[],
+    viewOps: readonly deltaTypes.Op[],
   ): eventsTypesModule.AgentEvent[] => {
     const { partial, partialBefore } = generations;
     if (partial === undefined) return [];

@@ -1,9 +1,12 @@
 import { Effect } from "effect";
 import { Type } from "typebox";
 
-import { type Ctx, type Facet, createHost, local, method } from "../../src/index.ts";
+import chord from "../../src/index.ts";
+import type chordTypes from "../../src/index.types.ts";
 import type reloadTypes from "./reload.types.ts";
 import timing from "./timing.ts";
+
+const { createHost, local, method } = chord;
 
 const { tick } = timing;
 
@@ -17,7 +20,7 @@ const Greeter = local("t.greeter", {
 
 const CountV1 = Type.Object({ n: Type.Number() });
 
-function greeterFacet(spec: reloadTypes.GreeterSpec): Facet {
+function greeterFacet(spec: reloadTypes.GreeterSpec): chordTypes.Facet {
   return {
     name: "greeter",
     setup: (api) =>
@@ -33,7 +36,7 @@ function greeterFacet(spec: reloadTypes.GreeterSpec): Facet {
           );
           return {
             count,
-            greet: (name: string, ctx: Ctx) => {
+            greet: (name: string, ctx: chordTypes.Ctx) => {
               count.change(ctx, (draft) => {
                 const bump =
                   spec.bump ??

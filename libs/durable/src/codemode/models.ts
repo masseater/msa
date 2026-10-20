@@ -1,5 +1,5 @@
 import type { AnyModel, ModelType, ModelTypeMap, Models, Usage } from "@msa/ai";
-import type { Context, JsonValue } from "@msa/chord";
+import type chordTypes from "@msa/chord/index.types";
 import { Effect } from "effect";
 import { Type } from "typebox";
 
@@ -54,17 +54,17 @@ function toProvider(value: unknown): string | undefined {
   return value;
 }
 
-function toModelInfo(model: AnyModel): JsonValue {
+function toModelInfo(model: AnyModel): chordTypes.JsonValue {
   const info: Record<string, unknown> = { ...model };
   delete info["headers"];
-  return JSON.parse(JSON.stringify(info)) as JsonValue;
+  return JSON.parse(JSON.stringify(info)) as chordTypes.JsonValue;
 }
 
 const catalogCall = Effect.fnUntraced(function* (
   name: string,
   args: unknown,
   models: Models,
-  context: Context,
+  context: chordTypes.Context,
 ) {
   const list = Array.isArray(args) ? args : [];
   const [type, provider, id] = list;
@@ -138,7 +138,7 @@ function modelResult(
         type: "text" as const,
       },
     ],
-    structuredOutput: JSON.parse(JSON.stringify(value)) as JsonValue,
+    structuredOutput: JSON.parse(JSON.stringify(value)) as chordTypes.JsonValue,
     ...(ok ? {} : { isError: true }),
     ...(result.usage === undefined ? {} : { usage: result.usage }),
   };

@@ -1,5 +1,5 @@
 import { Type, fauxAssistantMessage, fauxText } from "@msa/ai";
-import type { JsonValue } from "@msa/chord";
+import type chordTypes from "@msa/chord/index.types";
 import durable from "@msa/durable";
 import memory from "@msa/durable/storage/memory";
 import { Effect } from "effect";
@@ -152,7 +152,7 @@ const holdsFaultedToolStep1 = Effect.gen(function* () {
                 callContext,
               ),
             );
-            return { details: { fn: (() => 1) as unknown as JsonValue }, output: [] };
+            return { details: { fn: (() => 1) as unknown as chordTypes.JsonValue }, output: [] };
           }),
         ),
       name: "broken",

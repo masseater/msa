@@ -1,4 +1,4 @@
-import { BACKGROUND_CONTEXT } from "@msa/chord/context";
+import contextModule from "@msa/chord/context";
 import envModule2 from "@msa/durable/env";
 import { Effect } from "effect";
 import { describe, expect, it } from "vite-plus/test";
@@ -9,6 +9,8 @@ import daemon from "./daemon.ts";
 import platform from "./platform.ts";
 import sshdModule from "./sshd.ts";
 import type sshdTypes from "./sshd.types.ts";
+
+const { BACKGROUND_CONTEXT } = contextModule;
 
 const { getOrThrow } = envModule2;
 

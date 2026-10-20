@@ -4,7 +4,9 @@ import { Effect } from "effect";
 import { Type } from "typebox";
 import { describe, it } from "vite-plus/test";
 
-import { createHost, forbidden, isChordError, local } from "../src/index.ts";
+import chord from "../src/index.ts";
+
+const { createHost, forbidden, isChordError, local } = chord;
 
 const unexpectedError = (error: unknown) => assert.fail(String(error));
 const Eager = local("ready.eager", { input: Type.Object({}), version: 1 });

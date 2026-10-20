@@ -1,36 +1,29 @@
 import { dual } from "effect/Function";
 
-import { entryValueAt } from "./tracker-array-pieces.ts";
-import { cloneStored } from "./tracker-clone.ts";
-import { nodeBase, storedValue } from "./tracker-context.ts";
-import { regionContaining } from "./tracker-emit-dense.ts";
-import { emitChangedValue } from "./tracker-emit.ts";
-import { arrayOverlay } from "./tracker-object.ts";
-import { findEntryIndex } from "./tracker-paths.ts";
-import { locatePiece, piecesOf } from "./tracker-pieces.ts";
-import {
-  type ArrayPlan,
-  type DenseRegion,
-  type InsertPiece,
-  type JsonValue,
-  MAX_DELTA_OPERATIONS,
-  type NonEmptyPath,
-  type Op,
-  type OverlayNode,
-  type Path,
-  type Piece,
-} from "./tracker-types.ts";
+import trackerArrayPieces from "./tracker-array-pieces.ts";
+import trackerClone from "./tracker-clone.ts";
+import trackerContext from "./tracker-context.ts";
+import trackerEmitArrayKit from "./tracker-emit-array-kit.ts";
+import trackerObject from "./tracker-object.ts";
+import trackerPaths from "./tracker-paths.ts";
+import trackerPieces from "./tracker-pieces.ts";
+import trackerTypes from "./tracker-types.ts";
+import type trackerTypesModule from "./tracker-types.types.ts";
+const { MAX_DELTA_OPERATIONS } = trackerTypes;
 
-function buildArrayPlan(node: OverlayNode): ArrayPlan {
-  const overlay = arrayOverlay(node);
+function buildArrayPlan(node: trackerTypesModule.OverlayNode): trackerTypesModule.ArrayPlan {
+  const overlay = trackerObject.arrayOverlay(node);
   if (overlay.plan !== undefined) return overlay.plan;
-  const base = nodeBase(node) as JsonValue[];
-  const pieces = piecesOf(overlay);
+  const base = trackerContext.nodeBase(node) as trackerTypesModule.JsonValue[];
+  const pieces = trackerPieces.piecesOf(overlay);
   overlay.plan = orderedArrayPlan(base.length, pieces) ?? elementArrayPlan(base.length, pieces);
   return overlay.plan;
 }
 
-function orderedArrayPlan(baseLength: number, pieces: readonly Piece[]): ArrayPlan | undefined {
+function orderedArrayPlan(
+  baseLength: number,
+  pieces: readonly trackerTypesModule.Piece[],
+): trackerTypesModule.ArrayPlan | undefined {
   const ranges: number[] = [];
   for (const piece of pieces) {
     if (piece.kind !== "base" || piece.length === 0) continue;
@@ -45,10 +38,13 @@ function orderedArrayPlan(baseLength: number, pieces: readonly Piece[]): ArrayPl
     if (end > start) removeRuns.push(start, end - start);
     if (index >= 0) end = ranges[index]!;
   }
-  return { removeRuns, permutation: undefined, insertRuns: insertRunsOf(pieces) };
+  return { insertRuns: insertRunsOf(pieces), permutation: undefined, removeRuns };
 }
 
-function elementArrayPlan(baseLength: number, pieces: readonly Piece[]): ArrayPlan {
+function elementArrayPlan(
+  baseLength: number,
+  pieces: readonly trackerTypesModule.Piece[],
+): trackerTypesModule.ArrayPlan {
   const retained = new Uint8Array(baseLength);
   const targetBase: number[] = [];
   for (const piece of pieces) {
@@ -78,10 +74,10 @@ function elementArrayPlan(baseLength: number, pieces: readonly Piece[]): ArrayPl
     const positions = new Map(retainedBase.map((value, index) => [value, index]));
     permutation = targetBase.map((value) => positions.get(value)!);
   }
-  return { removeRuns, permutation, insertRuns: insertRunsOf(pieces) };
+  return { insertRuns: insertRunsOf(pieces), permutation, removeRuns };
 }
 
-function insertRunsOf(pieces: readonly Piece[]): number[] {
+function insertRunsOf(pieces: readonly trackerTypesModule.Piece[]): number[] {
   const insertRuns: number[] = [];
   let logicalIndex = 0;
   for (let pieceIndex = 0; pieceIndex < pieces.length;) {
@@ -105,20 +101,24 @@ function insertRunsOf(pieces: readonly Piece[]): number[] {
   return insertRuns;
 }
 
-function rangeLength(pieces: readonly Piece[], start: number, end: number): number {
+function rangeLength(
+  pieces: readonly trackerTypesModule.Piece[],
+  start: number,
+  end: number,
+): number {
   let length = 0;
   for (let index = start; index < end; index++) length += pieces[index]!.length;
   return length;
 }
 
 function emitArrayOperationsImpl(
-  node: OverlayNode,
-  path: Path,
-  operations: Op[],
-  denseRegions: readonly DenseRegion[] | undefined,
+  node: trackerTypesModule.OverlayNode,
+  path: trackerTypesModule.Path,
+  operations: trackerTypesModule.Op[],
+  denseRegions: readonly trackerTypesModule.DenseRegion[] | undefined,
 ): void {
-  const overlay = arrayOverlay(node);
-  const base = nodeBase(node) as JsonValue[];
+  const overlay = trackerObject.arrayOverlay(node);
+  const base = trackerContext.nodeBase(node) as trackerTypesModule.JsonValue[];
   if (denseRegions !== undefined) {
     for (const region of denseRegions) {
       if (operations.length > MAX_DELTA_OPERATIONS) return;
@@ -128,70 +128,94 @@ function emitArrayOperationsImpl(
   if (overlay.structural) emitStructuralArrayOperations(node, path, operations);
   for (const [baseIndex, valueIndex] of overlay.baseOverrides ?? []) {
     if (operations.length > MAX_DELTA_OPERATIONS) return;
-    const index = findEntryIndex(overlay, 1, baseIndex, undefined);
+    const index = trackerPaths.findEntryIndex(overlay, 1, baseIndex, undefined);
     if (
       index === undefined ||
-      (denseRegions !== undefined && regionContaining(denseRegions, index))
+      (denseRegions !== undefined &&
+        trackerEmitArrayKit.trackerEmitDense.regionContaining(denseRegions, index))
     )
       continue;
-    emitChangedValue(
+    trackerEmitArrayKit.trackerEmit.emitChangedValue(
       operations,
-      [...path, index] as unknown as NonEmptyPath,
+      [...path, index] as unknown as trackerTypesModule.NonEmptyPath,
       base[baseIndex],
-      cloneStored(storedValue(node.context, valueIndex), node.context),
+      trackerClone.cloneStored(trackerContext.storedValue(node.context, valueIndex), node.context),
     );
   }
 }
 
-function emitStructuralArrayOperations(node: OverlayNode, path: Path, operations: Op[]): void {
-  const overlay = arrayOverlay(node);
+function emitStructuralArrayOperations(
+  node: trackerTypesModule.OverlayNode,
+  path: trackerTypesModule.Path,
+  operations: trackerTypesModule.Op[],
+): void {
+  const overlay = trackerObject.arrayOverlay(node);
   const plan = buildArrayPlan(node);
   for (let index = 0; index < plan.removeRuns.length; index += 2) {
     if (operations.length > MAX_DELTA_OPERATIONS) return;
     operations.push(["p", path, plan.removeRuns[index]!, plan.removeRuns[index + 1]!, []]);
   }
   if (plan.permutation !== undefined) operations.push(["m", path, plan.permutation]);
-  const pieces = piecesOf(overlay);
+  const pieces = trackerPieces.piecesOf(overlay);
   for (let run = 0; run < plan.insertRuns.length; run += 3) {
     if (operations.length > MAX_DELTA_OPERATIONS) return;
     const logicalIndex = plan.insertRuns[run]!;
-    const items: JsonValue[] = [];
+    const items: trackerTypesModule.JsonValue[] = [];
     for (
       let pieceIndex = plan.insertRuns[run + 1]!;
       pieceIndex < plan.insertRuns[run + 2]!;
       pieceIndex++
     ) {
-      const piece = pieces[pieceIndex]! as InsertPiece;
+      const piece = pieces[pieceIndex]! as trackerTypesModule.InsertPiece;
       for (let offset = 0; offset < piece.length; offset++) {
         const sourceIndex = piece.start + piece.step * offset;
-        items.push(cloneStored(entryValueAt(node, piece, sourceIndex), node.context));
+        items.push(
+          trackerClone.cloneStored(
+            trackerArrayPieces.entryValueAt(node, piece, sourceIndex),
+            node.context,
+          ),
+        );
       }
     }
     operations.push(["p", path, logicalIndex, 0, items]);
   }
 }
 
-function cloneArrayRegion(node: OverlayNode, region: DenseRegion): JsonValue[] {
-  const overlay = arrayOverlay(node);
-  const result: JsonValue[] = [];
+function cloneArrayRegion(
+  node: trackerTypesModule.OverlayNode,
+  region: trackerTypesModule.DenseRegion,
+): trackerTypesModule.JsonValue[] {
+  const overlay = trackerObject.arrayOverlay(node);
+  const result: trackerTypesModule.JsonValue[] = [];
   for (let index = region.start; index < region.start + region.length; index++) {
-    const piece = locatePiece(overlay, index);
+    const piece = trackerPieces.locatePiece(overlay, index);
     const sourceIndex = piece.start + piece.step * overlay.locatedOffset;
-    result.push(cloneStored(entryValueAt(node, piece, sourceIndex), node.context));
+    result.push(
+      trackerClone.cloneStored(
+        trackerArrayPieces.entryValueAt(node, piece, sourceIndex),
+        node.context,
+      ),
+    );
   }
   return result;
 }
 
-export const emitArrayOperations: {
+const emitArrayOperations: {
   (
-    path: Path,
-    operations: Op[],
-    denseRegions: readonly DenseRegion[] | undefined,
-  ): (node: OverlayNode) => void;
+    path: trackerTypesModule.Path,
+    operations: trackerTypesModule.Op[],
+    denseRegions: readonly trackerTypesModule.DenseRegion[] | undefined,
+  ): (node: trackerTypesModule.OverlayNode) => void;
   (
-    node: OverlayNode,
-    path: Path,
-    operations: Op[],
-    denseRegions: readonly DenseRegion[] | undefined,
+    node: trackerTypesModule.OverlayNode,
+    path: trackerTypesModule.Path,
+    operations: trackerTypesModule.Op[],
+    denseRegions: readonly trackerTypesModule.DenseRegion[] | undefined,
   ): void;
 } = dual(4, emitArrayOperationsImpl);
+
+const trackerEmitArray = {
+  emitArrayOperations,
+};
+
+export default trackerEmitArray;

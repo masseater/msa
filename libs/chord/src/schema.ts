@@ -2,7 +2,10 @@ import { dual } from "effect/Function";
 import type { TSchema } from "typebox";
 import { Value } from "typebox/value";
 
-import { type ChordErrorReason, invalid } from "./errors.ts";
+import errorsModule from "./errors.ts";
+import type errorsTypes from "./errors.types.ts";
+
+const { invalid } = errorsModule;
 
 type Schema = { readonly [key: string]: unknown };
 
@@ -13,7 +16,7 @@ const asSchema = (schema: unknown): Schema =>
       ? { not: {} }
       : {};
 
-export function canonicalJson(value: unknown): string {
+function canonicalJson(value: unknown): string {
   if (value === null || typeof value !== "object") return JSON.stringify(value) ?? "null";
   if (Array.isArray(value)) return `[${value.map((item) => canonicalJson(item)).join(",")}]`;
   const keys = Object.keys(value)
@@ -22,7 +25,7 @@ export function canonicalJson(value: unknown): string {
   return `{${keys.map((key) => `${JSON.stringify(key)}:${canonicalJson((value as Record<string, unknown>)[key])}`).join(",")}}`;
 }
 
-export function hash64(text: string): string {
+function hash64(text: string): string {
   let a = 0x811c9dc5;
   let b = 0x01000193 ^ 0x5bd1e995;
   for (let index = 0; index < text.length; index++) {
@@ -33,12 +36,17 @@ export function hash64(text: string): string {
   return (a >>> 0).toString(16).padStart(8, "0") + (b >>> 0).toString(16).padStart(8, "0");
 }
 
-export const deepEqual: {
+const deepEqual: {
   (b: unknown): (a: unknown) => boolean;
   (a: unknown, b: unknown): boolean;
 } = dual(2, (a: unknown, b: unknown): boolean => a === b || canonicalJson(a) === canonicalJson(b));
 
-function checkValid(reason: ChordErrorReason, what: string, schema: TSchema, value: unknown): void {
+function checkValid(
+  reason: errorsTypes.ChordErrorReason,
+  what: string,
+  schema: TSchema,
+  value: unknown,
+): void {
   if (Value.Check(schema, value)) return;
   const errors = [...Value.Errors(schema, value)].slice(0, 3);
   const summary = errors.map((error) => `${error.instancePath || "/"} ${error.message}`).join("; ");
@@ -51,19 +59,19 @@ function normalized(schema: TSchema, value: unknown, what: string): unknown {
   return clean;
 }
 
-export const canonicalIdentity: {
+const canonicalIdentity: {
   (value: unknown): (schema: TSchema) => string;
   (schema: TSchema, value: unknown): string;
 } = dual(2, (schema: TSchema, value: unknown): string =>
   canonicalJson(stripDefaults(asSchema(schema), value)),
 );
 
-export const assertValid: {
-  (what: string, schema: TSchema, value: unknown): (reason: ChordErrorReason) => void;
-  (reason: ChordErrorReason, what: string, schema: TSchema, value: unknown): void;
+const assertValid: {
+  (what: string, schema: TSchema, value: unknown): (reason: errorsTypes.ChordErrorReason) => void;
+  (reason: errorsTypes.ChordErrorReason, what: string, schema: TSchema, value: unknown): void;
 } = dual(4, checkValid);
 
-export const normalize: {
+const normalize: {
   (value: unknown, what: string): (schema: TSchema) => unknown;
   (schema: TSchema, value: unknown, what: string): unknown;
 } = dual(3, normalized);
@@ -241,7 +249,19 @@ function functionFits(sub: Schema, sup: Schema): boolean {
   return fits(sub["returnType"], sup["returnType"]);
 }
 
-export const fits: {
+const fits: {
   (supSchema: unknown): (subSchema: unknown) => boolean;
   (subSchema: unknown, supSchema: unknown): boolean;
 } = dual(2, schemaFits);
+
+const schemaModule = {
+  assertValid,
+  canonicalIdentity,
+  canonicalJson,
+  deepEqual,
+  fits,
+  hash64,
+  normalize,
+};
+
+export default schemaModule;

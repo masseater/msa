@@ -1,19 +1,20 @@
-import type { JsonValue } from "@msa/chord";
-import { type Op, applyImmutable } from "@msa/chord/delta";
+import delta from "@msa/chord/delta";
+import type deltaTypes from "@msa/chord/delta.types";
+import type chordTypes from "@msa/chord/index.types";
 import durable from "@msa/durable";
 import type durableTypes from "@msa/durable/index.types";
 import memory from "@msa/durable/storage/memory";
 import { Effect } from "effect";
 import { describe, expect, it } from "vite-plus/test";
 
-import nodeModule from "../src/storage/sqlite/node.ts";
-import harnessTaskGraphSupport from "./harness-task-graph-support.ts";
+import harnessTaskGraphKit from "./harness-task-graph-kit.ts";
 import support from "./support.ts";
 
+const { harnessTaskGraphSupport, node: nodeModule } = harnessTaskGraphKit;
+const { applyImmutable } = delta;
 const { defineTask } = durable;
 const { openNodeSqliteStorage } = nodeModule;
 const { MemoryStorage } = memory;
-
 const { family, statuses } = harnessTaskGraphSupport;
 const {
   aborted,
@@ -262,8 +263,10 @@ const buildsCommittedTasks = Effect.gen(function* () {
   ]);
   expect(watch.value.tasks[String(background)]!.background).toBe(true);
 
-  const mirror: { replica: JsonValue } = { replica: watch.value as unknown as JsonValue };
-  const frames: (readonly Op[])[] = [];
+  const mirror: { replica: chordTypes.JsonValue } = {
+    replica: watch.value as unknown as chordTypes.JsonValue,
+  };
+  const frames: (readonly deltaTypes.Op[])[] = [];
   watch.start((value, ops) => {
     mirror.replica = applyImmutable(mirror.replica, ops);
     expect(mirror.replica).toEqual(value);

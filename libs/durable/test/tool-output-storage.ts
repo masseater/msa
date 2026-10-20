@@ -1,4 +1,4 @@
-import { BACKGROUND_CONTEXT as context } from "@msa/chord/context";
+import contextModule from "@msa/chord/context";
 import { Effect } from "effect";
 import { dual } from "effect/Function";
 
@@ -9,6 +9,8 @@ import node from "../src/storage/sqlite/node.ts";
 import effectSupport from "./effect-support.ts";
 import platformSupport from "./platform-support.ts";
 import type toolOutputStorageTypes from "./tool-output-storage.types.ts";
+
+const { BACKGROUND_CONTEXT: context } = contextModule;
 
 const { MemoryStorage } = memory;
 const { openNodeSqliteStorage } = node;

@@ -33,35 +33,70 @@
       "types": "./dist/index.d.ts",
       "import": "./dist/index.js"
     },
+    "./index.types": {
+      "source": "./src/index.types.ts",
+      "types": "./dist/index.types.d.ts",
+      "import": "./dist/index.types.js"
+    },
     "./context": {
       "source": "./src/context/index.ts",
       "types": "./dist/context/index.d.ts",
       "import": "./dist/context/index.js"
+    },
+    "./context.types": {
+      "source": "./src/context/index.types.ts",
+      "types": "./dist/context/index.types.d.ts",
+      "import": "./dist/context/index.types.js"
     },
     "./json": {
       "source": "./src/json.ts",
       "types": "./dist/json.d.ts",
       "import": "./dist/json.js"
     },
+    "./json.types": {
+      "source": "./src/json.types.ts",
+      "types": "./dist/json.types.d.ts",
+      "import": "./dist/json.types.js"
+    },
     "./state": {
       "source": "./src/state.ts",
       "types": "./dist/state.d.ts",
       "import": "./dist/state.js"
+    },
+    "./state.types": {
+      "source": "./src/state.types.ts",
+      "types": "./dist/state.types.d.ts",
+      "import": "./dist/state.types.js"
     },
     "./output": {
       "source": "./src/output.ts",
       "types": "./dist/output.d.ts",
       "import": "./dist/output.js"
     },
+    "./output.types": {
+      "source": "./src/output.types.ts",
+      "types": "./dist/output.types.d.ts",
+      "import": "./dist/output.types.js"
+    },
     "./progress": {
       "source": "./src/progress.ts",
       "types": "./dist/progress.d.ts",
       "import": "./dist/progress.js"
     },
+    "./progress.types": {
+      "source": "./src/progress.types.ts",
+      "types": "./dist/progress.types.d.ts",
+      "import": "./dist/progress.types.js"
+    },
     "./delta": {
       "source": "./src/delta/index.ts",
       "types": "./dist/delta/index.d.ts",
       "import": "./dist/delta/index.js"
+    },
+    "./delta.types": {
+      "source": "./src/delta/index.types.ts",
+      "types": "./dist/delta/index.types.d.ts",
+      "import": "./dist/delta/index.types.js"
     },
     "./delta/apply": {
       "source": "./src/delta/apply.ts",
@@ -78,10 +113,20 @@
       "types": "./dist/delta/tracker.d.ts",
       "import": "./dist/delta/tracker.js"
     },
+    "./delta/tracker.types": {
+      "source": "./src/delta/tracker.types.ts",
+      "types": "./dist/delta/tracker.types.d.ts",
+      "import": "./dist/delta/tracker.types.js"
+    },
     "./node": {
       "source": "./src/node.ts",
       "types": "./dist/node.d.ts",
       "import": "./dist/node.js"
+    },
+    "./node.types": {
+      "source": "./src/node.types.ts",
+      "types": "./dist/node.types.d.ts",
+      "import": "./dist/node.types.js"
     },
     "./package.json": "./package.json"
   },

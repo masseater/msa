@@ -1,5 +1,5 @@
-import type { Context, JsonValue } from "@msa/chord";
-import { awaitWithContext } from "@msa/chord/context";
+import contextModule from "@msa/chord/context";
+import type chordTypes from "@msa/chord/index.types";
 import { Cause, Duration, Effect, Exit } from "effect";
 
 import promiseTryModule from "../promise-try.ts";
@@ -9,6 +9,8 @@ import schedulerKit from "./scheduler-kit.ts";
 import type schedulerRuntimeReadsTypes from "./scheduler-runtime-reads.types.ts";
 import schedulerTypes from "./scheduler-types.ts";
 import type schedulerTypesModule from "./scheduler-types.types.ts";
+
+const { awaitWithContext } = contextModule;
 
 const { schedulerFinalize, schedulerRecords, schedulerRuntimeReads } = schedulerKit;
 
@@ -24,7 +26,10 @@ type RuntimeInput = schedulerRuntimeReadsTypes.RuntimeParts & {
   readonly phase: schedulerTypesModule.Phase;
 };
 
-type NextState = schedulerTypesModule.NextTaskState<schedulerTypesModule.Checkpoint, JsonValue>;
+type NextState = schedulerTypesModule.NextTaskState<
+  schedulerTypesModule.Checkpoint,
+  chordTypes.JsonValue
+>;
 
 const isPromiseLike = <T>(value: T | PromiseLike<T>): value is PromiseLike<T> =>
   typeof (value as { then?: unknown } | undefined)?.then === "function";
@@ -76,7 +81,7 @@ const aborted = (signal: AbortSignal): Effect.Effect<never> =>
 const sleepUntil = Effect.fnUntraced(function* (
   { state, invocation }: schedulerRuntimeReadsTypes.RuntimeParts,
   until: number,
-  context: Context,
+  context: chordTypes.Context,
 ) {
   if (invocation.ended) throw endedError(invocation);
   const signals = [invocation.controller.signal];
@@ -119,7 +124,7 @@ const memo = (input: RuntimeInput) =>
         promiseTry(() => memoOf(state.graph.live.get(invocation.taskId), name)),
       );
     }
-    const candidate = rest[0] as JsonValue;
+    const candidate = rest[0] as chordTypes.JsonValue;
     return state.gated(
       invocation,
       (tx, current) => {
@@ -131,7 +136,7 @@ const memo = (input: RuntimeInput) =>
         } as schedulerTypesModule.AnyTaskRecord);
         return candidate;
       },
-      rest[1] as Context,
+      rest[1] as chordTypes.Context,
     );
   }) as schedulerTypesModule.ErasedRuntime["memo"];
 
@@ -140,7 +145,7 @@ const runtimeWrites = (input: RuntimeInput) => {
   return {
     commit: (
       change: Parameters<schedulerTypesModule.ErasedRuntime["commit"]>[0],
-      context: Context,
+      context: chordTypes.Context,
     ): Promise<void> =>
       state.gated(
         invocation,
@@ -155,7 +160,7 @@ const runtimeWrites = (input: RuntimeInput) => {
         context,
       ),
     memo: memo(input),
-    sleep: (until: number, context: Context) =>
+    sleep: (until: number, context: chordTypes.Context) =>
       Effect.runPromise(sleepUntil(input, until, context)),
     watchDoc: ((...args: readonly unknown[]) =>
       Effect.runPromise(watchDoc(input, args))) as schedulerTypesModule.ErasedRuntime["watchDoc"],
@@ -187,7 +192,7 @@ const buildRuntime = (input: RuntimeInput): schedulerTypesModule.ErasedRuntime =
       return settings();
     },
     signal: invocation.controller.signal,
-    taskId: invocation.taskId as schedulerTypesModule.TaskId<JsonValue>,
+    taskId: invocation.taskId as schedulerTypesModule.TaskId<chordTypes.JsonValue>,
     ...runtimeWrites(input),
     ...runtimeReads(input),
     now: () => {

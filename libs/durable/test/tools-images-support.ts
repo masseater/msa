@@ -1,5 +1,5 @@
 import type { Model } from "@msa/ai";
-import { BACKGROUND_CONTEXT as context } from "@msa/chord/context";
+import contextModule from "@msa/chord/context";
 import type durableTypes from "@msa/durable/index.types";
 import { Effect, Random } from "effect";
 import { expect } from "vite-plus/test";
@@ -9,6 +9,8 @@ import node from "../src/env/node.ts";
 import readModule from "../src/tools/read.ts";
 import support from "./support.ts";
 import type toolsImagesSupportTypes from "./tools-images-support.types.ts";
+
+const { BACKGROUND_CONTEXT: context } = contextModule;
 
 const { createReadTool } = readModule;
 const { NodeExecutionEnv } = node;

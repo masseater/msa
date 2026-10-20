@@ -1,6 +1,8 @@
 import { describe, expect, it } from "vite-plus/test";
 
-import { apply, track } from "../src/delta/index.ts";
+import delta from "../src/delta/index.ts";
+
+const { apply, track } = delta;
 
 const takesImmutableOwnershipOfTheImported = (): void => {
   const input = {

@@ -1,4 +1,4 @@
-import type { Context } from "@msa/chord";
+import type chordTypes from "@msa/chord/index.types";
 
 import type typesModule from "../types.types.ts";
 import type unrefTimerTypes from "../unref-timer.types.ts";
@@ -6,7 +6,10 @@ import type transactionTypesModule from "./transaction-types.types.ts";
 import type transactionTypes from "./transaction.types.ts";
 
 declare namespace sessionStateTypes {
-  type CommitListener = (publication: typesModule.CommitPublication, context: Context) => void;
+  type CommitListener = (
+    publication: typesModule.CommitPublication,
+    context: chordTypes.Context,
+  ) => void;
 
   type SessionHooks = {
     report(error: unknown): void;

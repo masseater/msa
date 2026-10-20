@@ -1,6 +1,8 @@
 import { describe, expect, test } from "vite-plus/test";
 
-import { copyJson, isJsonValue } from "../src/index.ts";
+import chord from "../src/index.ts";
+
+const { copyJson, isJsonValue } = chord;
 
 const checksStrictJsonWithoutNormalizingIt = (): void => {
   expect(isJsonValue({ nested: [1, true, null] })).toBe(true);

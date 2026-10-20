@@ -1,4 +1,4 @@
-import type { Context } from "@msa/chord";
+import type chordTypes from "@msa/chord/index.types";
 import type { Effect } from "effect";
 
 import type executionErrorTypes from "../execution-error.types.ts";
@@ -19,7 +19,7 @@ declare namespace nodeExecTypes {
     readonly target: ExecTarget;
     readonly command: string | readonly string[];
     readonly options: typesModule.ShellExecOptions | undefined;
-    readonly context: Context;
+    readonly context: chordTypes.Context;
   }
 
   type ExecutionError = executionErrorTypes.ExecutionError;

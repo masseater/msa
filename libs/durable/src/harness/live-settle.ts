@@ -1,4 +1,4 @@
-import type { JsonValue } from "@msa/chord";
+import type chordTypes from "@msa/chord/index.types";
 import { Effect, Function } from "effect";
 
 import type transactionTypes from "../session/transaction.types.ts";
@@ -17,7 +17,7 @@ const COMPACTION_TASK_KIND = "msa.compaction";
 
 const settleToolOutcome = Effect.fnUntraced(function* (
   tx: transactionTypes.Transaction,
-  record: typesModule.TaskRecord<JsonValue, JsonValue, JsonValue>,
+  record: typesModule.TaskRecord<chordTypes.JsonValue, chordTypes.JsonValue, chordTypes.JsonValue>,
 ) {
   const live = yield* Effect.promise(() => tx.doc(LiveDoc, record.conversationId));
   const slot = toolSlot(live, record.id);
@@ -27,7 +27,7 @@ const settleToolOutcome = Effect.fnUntraced(function* (
 
 const settleRunOutcome = Effect.fnUntraced(function* (
   tx: transactionTypes.Transaction,
-  record: typesModule.TaskRecord<JsonValue, JsonValue, JsonValue>,
+  record: typesModule.TaskRecord<chordTypes.JsonValue, chordTypes.JsonValue, chordTypes.JsonValue>,
   outcome: schedulerTypes.SchedulerOutcome,
 ) {
   const live = yield* Effect.promise(() => tx.doc(LiveDoc, record.conversationId));
@@ -45,14 +45,18 @@ const settleRunOutcome = Effect.fnUntraced(function* (
 
 const settleSchedulerOutcome: typesModule.Dual3<
   transactionTypes.Transaction,
-  typesModule.TaskRecord<JsonValue, JsonValue, JsonValue>,
+  typesModule.TaskRecord<chordTypes.JsonValue, chordTypes.JsonValue, chordTypes.JsonValue>,
   schedulerTypes.SchedulerOutcome,
   Effect.Effect<void>
 > = Function.dual(
   3,
   Effect.fnUntraced(function* (
     tx: transactionTypes.Transaction,
-    record: typesModule.TaskRecord<JsonValue, JsonValue, JsonValue>,
+    record: typesModule.TaskRecord<
+      chordTypes.JsonValue,
+      chordTypes.JsonValue,
+      chordTypes.JsonValue
+    >,
     outcome: schedulerTypes.SchedulerOutcome,
   ) {
     if (record.kind === TOOL_TASK_KIND) return yield* settleToolOutcome(tx, record);

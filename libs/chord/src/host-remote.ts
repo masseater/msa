@@ -1,25 +1,32 @@
 import { Cause, Effect } from "effect";
 
-import type { Connection, RelayRef } from "./connection.ts";
-import { type AnyContract, contractFromDescription, resolveHost } from "./contract.ts";
-import type { RefCore, RefOwner } from "./core.ts";
-import { ChordError, invalid } from "./errors.ts";
-import { HostObjects } from "./host-objects.ts";
-import type { Route } from "./host-types.ts";
-import { RemoteBinding, RemoteRef } from "./remote-ref.ts";
-import type { GetOptions } from "./types.ts";
+import type connectionModule from "./connection.ts";
+import type connectionTypes from "./connection.types.ts";
+import type contractTypes from "./contract.types.ts";
+import type coreTypes from "./core.types.ts";
+import type errorsTypes from "./errors.types.ts";
+import hostRemoteKit from "./host-remote-kit.ts";
+import type hostTypesModule from "./host-types.types.ts";
+import type remoteRefTypes from "./remote-ref.types.ts";
+import type typesModule from "./types.types.ts";
 
-export abstract class HostRemote extends HostObjects {
-  readonly bindings = new Map<string, RemoteBinding>();
-  readonly #lingering = new Map<string, RemoteBinding>();
-  readonly #routes = new Map<string, Route>();
+const { contract: contractModule, errors: errorsModule, HostObjects, remoteRef } = hostRemoteKit;
+
+const { RemoteBinding, RemoteRef } = remoteRef;
+const { ChordError, invalid } = errorsModule;
+const { contractFromDescription, resolveHost } = contractModule;
+
+export default abstract class HostRemote extends HostObjects {
+  readonly bindings = new Map<string, remoteRefTypes.RemoteBinding>();
+  readonly #lingering = new Map<string, remoteRefTypes.RemoteBinding>();
+  readonly #routes = new Map<string, hostTypesModule.Route>();
 
   protected abstract addConnection(
-    link: Awaited<ReturnType<Route["resolve"]>>,
-    config: ConstructorParameters<typeof Connection>[2],
-  ): Connection;
+    link: Awaited<ReturnType<hostTypesModule.Route["resolve"]>>,
+    config: ConstructorParameters<typeof connectionModule.Connection>[2],
+  ): connectionTypes.Connection;
 
-  bindingIdle(binding: RemoteBinding): void {
+  bindingIdle(binding: remoteRefTypes.RemoteBinding): void {
     const types = this.options.linger?.types ?? {};
     const cap = this.options.linger?.cap ?? 4;
     const ms = Object.hasOwn(types, binding.contract.name) ? types[binding.contract.name]! : 0;
@@ -35,7 +42,7 @@ export abstract class HostRemote extends HostObjects {
     }
   }
 
-  forgetBinding(binding: RemoteBinding): void {
+  forgetBinding(binding: remoteRefTypes.RemoteBinding): void {
     if (this.bindings.get(binding.key) === binding) this.bindings.delete(binding.key);
     if (this.#lingering.get(binding.key) === binding) this.#lingering.delete(binding.key);
   }
@@ -44,7 +51,7 @@ export abstract class HostRemote extends HostObjects {
     for (const binding of [...this.#lingering.values()]) binding.close();
   }
 
-  route(prefix: string, route: Route): void {
+  route(prefix: string, route: hostTypesModule.Route): void {
     if (typeof route.principal !== "function")
       throw new TypeError(
         `route ${prefix} needs \`principal\`: what the routed hosts act as when they call back`,
@@ -52,7 +59,7 @@ export abstract class HostRemote extends HostObjects {
     this.#routes.set(prefix, route);
   }
 
-  #childNamed(name: string): Connection | undefined {
+  #childNamed(name: string): connectionTypes.Connection | undefined {
     return [...this.connections].find(
       (connection) =>
         connection.open &&
@@ -63,12 +70,12 @@ export abstract class HostRemote extends HostObjects {
   }
 
   protected acquireRemote(
-    type: AnyContract,
+    type: contractTypes.AnyContract,
     at: string,
     input: unknown,
-    options: GetOptions | undefined,
-    owner: RefOwner,
-  ): RefCore {
+    options: typesModule.GetOptions | undefined,
+    owner: coreTypes.RefOwner,
+  ): coreTypes.RefCore {
     const principal =
       options?.principal === undefined || this.isSelf(options.principal)
         ? undefined
@@ -77,7 +84,7 @@ export abstract class HostRemote extends HostObjects {
     let binding = this.bindings.get(key);
     const fresh = binding === undefined || binding.ended;
     if (binding === undefined || binding.ended) {
-      binding = new RemoteBinding(this, { key, contract: type, at, input, principal });
+      binding = new RemoteBinding(this, { at, contract: type, input, key, principal });
       this.bindings.set(key, binding);
     }
     const ref = new RemoteRef(binding, owner, options?.state !== false);
@@ -87,15 +94,15 @@ export abstract class HostRemote extends HostObjects {
     return ref;
   }
 
-  #hold(binding: RemoteBinding): void {
-    const bindWhenSynced = (connection: Effect.Effect<Connection>): void => {
+  #hold(binding: remoteRefTypes.RemoteBinding): void {
+    const bindWhenSynced = (connection: Effect.Effect<connectionTypes.Connection>): void => {
       Effect.runFork(
         connection.pipe(
           Effect.matchCause({
+            onFailure: (cause) => binding.gone(Cause.squash(cause)),
             onSuccess: (target) => {
               if (!binding.ended && binding.hold === undefined) target.hold(binding, false);
             },
-            onFailure: (cause) => binding.gone(Cause.squash(cause)),
           }),
         ),
       );
@@ -115,8 +122,8 @@ export abstract class HostRemote extends HostObjects {
     else bindWhenSynced(this.#resolve(route, binding.at, binding.principal ?? this.principal));
   }
 
-  #routeFor(hostName: string): Route | undefined {
-    let best: [string, Route] | undefined;
+  #routeFor(hostName: string): hostTypesModule.Route | undefined {
+    let best: [string, hostTypesModule.Route] | undefined;
     for (const entry of this.#routes) {
       if (hostName.startsWith(entry[0]) && (best === undefined || entry[0].length > best[0].length))
         best = entry;
@@ -125,14 +132,14 @@ export abstract class HostRemote extends HostObjects {
   }
 
   #resolve(
-    route: Route,
+    route: hostTypesModule.Route,
     hostName: string,
     principal: unknown,
     still: () => boolean = () => true,
-  ): Effect.Effect<Connection> {
-    const refuse = (): ChordError =>
+  ): Effect.Effect<connectionTypes.Connection> {
+    const refuse = (): errorsTypes.ChordError =>
       new ChordError("forbidden", `${hostName} refused for this principal`);
-    const revoked = (): ChordError =>
+    const revoked = (): errorsTypes.ChordError =>
       new ChordError("gone", "principal invalidated while resolving");
     const authorized = Effect.promise(() => Promise.resolve(route.authorize(principal, hostName)));
     return Effect.gen({ self: this }, function* () {
@@ -144,9 +151,9 @@ export abstract class HostRemote extends HostObjects {
       if (!still()) throw revoked();
       let connection = [...this.connections].find((candidate) => candidate.link === link);
       connection ??= this.addConnection(link, {
-        role: "downstream",
-        principal: route.principal(hostName),
         peer: { kind: "host", name: hostName },
+        principal: route.principal(hostName),
+        role: "downstream",
       });
       yield* connection.whenSynced();
       if (!still()) throw revoked();
@@ -154,7 +161,7 @@ export abstract class HostRemote extends HostObjects {
     });
   }
 
-  relay(relay: RelayRef): Effect.Effect<void> {
+  relay(relay: connectionTypes.RelayRef): Effect.Effect<void> {
     return Effect.gen({ self: this }, function* () {
       const at = relay.frame.at;
       const placement = contractFromDescription(relay.frame.token).description.host;

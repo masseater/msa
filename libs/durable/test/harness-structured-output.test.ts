@@ -1,5 +1,5 @@
 import { Type } from "@msa/ai";
-import type { JsonValue } from "@msa/chord";
+import type chordTypes from "@msa/chord/index.types";
 import durable from "@msa/durable";
 import harnessModule from "@msa/durable/harness";
 import type durableTypes from "@msa/durable/index.types";
@@ -52,7 +52,7 @@ const probingStructuredTools = Effect.fn("probingStructuredTools")(function* () 
 const givesCallersSchema = Effect.gen(function* () {
   const text = { text: "one", type: "text" as const };
   const image = { data: "AAAA", mimeType: "image/png", type: "image" as const };
-  const cases: [output: (typeof text | typeof image)[], value: JsonValue][] = [
+  const cases: [output: (typeof text | typeof image)[], value: chordTypes.JsonValue][] = [
     [[text], "one"],
     [[image], image],
     [[], ""],
@@ -107,14 +107,14 @@ describe("structured output", () => {
 
 const storesExactlyWhat = Effect.gen(function* () {
   const { received, harness, root } = yield* probingStructuredTools();
-  const stored: JsonValue[] = [];
+  const stored: chordTypes.JsonValue[] = [];
   harness.subscribeCommits((publication) => {
     for (const change of publication.changes) {
       if (change.type !== "document" || change.record.kind !== NestedCallDoc.definition.kind)
         continue;
       const result = (change.value as durableTypes.NestedCallState | null)?.result;
       if (result !== undefined && change.ops.length > 0)
-        stored.push(result as unknown as JsonValue);
+        stored.push(result as unknown as chordTypes.JsonValue);
     }
   });
   const stream = yield* awaited(watchEvents(harness, root.id, context));

@@ -1,41 +1,43 @@
 import { dual } from "effect/Function";
 
-import { overlap } from "./overlap.ts";
-import { cloneNode, cloneStored } from "./tracker-clone.ts";
-import { nodeBase, nodeParent, storedValue } from "./tracker-context.ts";
-import { denseRegionsOf, emissionPlan, emitPlanned } from "./tracker-emit-plan.ts";
-import { objectValue } from "./tracker-object.ts";
-import { equalTrustedJson, isContainer, resolvePath } from "./tracker-paths.ts";
-import {
-  type JsonValue,
-  MAX_DELTA_OPERATIONS,
-  MAX_SIMPLE_OBJECT_NODES,
-  type NonEmptyPath,
-  type Op,
-  type OverlayContext,
-  type OverlayNode,
-  type Path,
-  RESERVED_SEGMENTS,
-  type Stored,
-} from "./tracker-types.ts";
+import overlapModule from "./overlap.ts";
+import trackerClone from "./tracker-clone.ts";
+import trackerContext from "./tracker-context.ts";
+import trackerEmitPlan from "./tracker-emit-plan.ts";
+import trackerObject from "./tracker-object.ts";
+import trackerPaths from "./tracker-paths.ts";
+import trackerTypes from "./tracker-types.ts";
+import type trackerTypesModule from "./tracker-types.types.ts";
+const { MAX_DELTA_OPERATIONS, MAX_SIMPLE_OBJECT_NODES, RESERVED_SEGMENTS } = trackerTypes;
+const { overlap } = overlapModule;
 
-export function emitOperations(context: OverlayContext): Op[] {
+function emitOperations(context: trackerTypesModule.OverlayContext): trackerTypesModule.Op[] {
   const simple = emitSimpleObjectOperations(context);
   if (simple !== undefined) return simple;
-  const denseRegions = denseRegionsOf(context);
-  const plan = emissionPlan(context, denseRegions);
-  return emitPlanned(context, plan, denseRegions);
+  const denseRegions = trackerEmitPlan.denseRegionsOf(context);
+  const plan = trackerEmitPlan.emissionPlan(context, denseRegions);
+  return trackerEmitPlan.emitPlanned(context, plan, denseRegions);
 }
 
-function emitSimpleObjectOperations(context: OverlayContext): Op[] | undefined {
-  const nodes: OverlayNode[] = [];
+function emitSimpleObjectOperations(
+  context: trackerTypesModule.OverlayContext,
+): trackerTypesModule.Op[] | undefined {
+  const nodes: trackerTypesModule.OverlayNode[] = [];
   for (const node of context.dirty) {
-    if (Array.isArray(nodeBase(node)) || hasReservedMutation(node) || hasPlacementAncestor(node))
+    if (
+      Array.isArray(trackerContext.nodeBase(node)) ||
+      hasReservedMutation(node) ||
+      hasPlacementAncestor(node)
+    )
       return undefined;
-    for (let parent = nodeParent(node); parent !== undefined; parent = nodeParent(parent)) {
-      if (Array.isArray(nodeBase(parent))) return undefined;
+    for (
+      let parent = trackerContext.nodeParent(node);
+      parent !== undefined;
+      parent = trackerContext.nodeParent(parent)
+    ) {
+      if (Array.isArray(trackerContext.nodeBase(parent))) return undefined;
     }
-    const path = resolvePath(node);
+    const path = trackerPaths.resolvePath(node);
     if (path === undefined) continue;
     for (const segment of path) {
       if (typeof segment === "string" && RESERVED_SEGMENTS.has(segment)) return undefined;
@@ -53,18 +55,19 @@ function emitSimpleObjectOperations(context: OverlayContext): Op[] | undefined {
     }
     nodes[at] = node;
   }
-  const operations: Op[] = [];
+  const operations: trackerTypesModule.Op[] = [];
   let canMaterializeDirectly = true;
   for (const node of nodes) {
     if (emitObjectOperationsImpl(node, node.preparedPath!, operations))
       canMaterializeDirectly = false;
-    if (operations.length > MAX_DELTA_OPERATIONS) return [["r", cloneNode(context.root!)]];
+    if (operations.length > MAX_DELTA_OPERATIONS)
+      return [["r", trackerClone.cloneNode(context.root!)]];
   }
   context.simpleObjectMaterialization = canMaterializeDirectly;
   return operations;
 }
 
-export function hasReservedMutation(node: OverlayNode): boolean {
+function hasReservedMutation(node: trackerTypesModule.OverlayNode): boolean {
   if (node.writeKey !== undefined && RESERVED_SEGMENTS.has(node.writeKey)) return true;
   if (node.deleteKey !== undefined && RESERVED_SEGMENTS.has(node.deleteKey)) return true;
   if (node.writes !== undefined) {
@@ -76,45 +79,56 @@ export function hasReservedMutation(node: OverlayNode): boolean {
   return false;
 }
 
-function hasFoldedAncestorImpl(node: OverlayNode, folded: ReadonlySet<OverlayNode>): boolean {
-  for (let parent = nodeParent(node); parent !== undefined; parent = nodeParent(parent))
+function hasFoldedAncestorImpl(
+  node: trackerTypesModule.OverlayNode,
+  folded: ReadonlySet<trackerTypesModule.OverlayNode>,
+): boolean {
+  for (
+    let parent = trackerContext.nodeParent(node);
+    parent !== undefined;
+    parent = trackerContext.nodeParent(parent)
+  )
     if (folded.has(parent)) return true;
   return false;
 }
 
-export function hasPlacementAncestor(node: OverlayNode): boolean {
+function hasPlacementAncestor(node: trackerTypesModule.OverlayNode): boolean {
   for (
-    let current: OverlayNode | undefined = node;
+    let current: trackerTypesModule.OverlayNode | undefined = node;
     current !== undefined;
-    current = nodeParent(current)
+    current = trackerContext.nodeParent(current)
   ) {
-    if (nodeParent(current) !== undefined && current.parentPlacement) return true;
+    if (trackerContext.nodeParent(current) !== undefined && current.parentPlacement) return true;
   }
   return false;
 }
 
 function emitObjectWrite(
-  node: OverlayNode,
-  path: Path,
-  operations: Op[],
+  node: trackerTypesModule.OverlayNode,
+  path: trackerTypesModule.Path,
+  operations: trackerTypesModule.Op[],
   key: string,
-  value: Stored,
+  value: trackerTypesModule.Stored,
 ): boolean {
-  const nextPath = [...path, key] as unknown as NonEmptyPath;
+  const nextPath = [...path, key] as unknown as trackerTypesModule.NonEmptyPath;
   const before =
-    node.readded?.has(key) === true || !Object.hasOwn(nodeBase(node), key)
+    node.readded?.has(key) === true || !Object.hasOwn(trackerContext.nodeBase(node), key)
       ? undefined
-      : (nodeBase(node) as Record<string, JsonValue>)[key];
-  const after = cloneStored(value, node.context);
+      : (trackerContext.nodeBase(node) as Record<string, trackerTypesModule.JsonValue>)[key];
+  const after = trackerClone.cloneStored(value, node.context);
   const emitted = emitChangedValueImpl(operations, nextPath, before, after);
-  return isContainer(before) && isContainer(after) && !emitted;
+  return trackerPaths.isContainer(before) && trackerPaths.isContainer(after) && !emitted;
 }
 
-function emitObjectOperationsImpl(node: OverlayNode, path: Path, operations: Op[]): boolean {
+function emitObjectOperationsImpl(
+  node: trackerTypesModule.OverlayNode,
+  path: trackerTypesModule.Path,
+  operations: trackerTypesModule.Op[],
+): boolean {
   if (node.readded !== undefined) {
     for (const key of node.readded) {
-      if (Object.hasOwn(nodeBase(node), key))
-        operations.push(["d", [...path, key] as unknown as NonEmptyPath]);
+      if (Object.hasOwn(trackerContext.nodeBase(node), key))
+        operations.push(["d", [...path, key] as unknown as trackerTypesModule.NonEmptyPath]);
     }
   }
   let normalizedContainerWrite = false;
@@ -124,36 +138,52 @@ function emitObjectOperationsImpl(node: OverlayNode, path: Path, operations: Op[
       path,
       operations,
       node.writeKey,
-      objectValue(node, node.writeKey),
+      trackerObject.objectValue(node, node.writeKey),
     );
   if (node.writes !== undefined) {
     for (const [key, valueIndex] of node.writes) {
       if (operations.length > MAX_DELTA_OPERATIONS) return normalizedContainerWrite;
-      if (emitObjectWrite(node, path, operations, key, storedValue(node.context, valueIndex)))
+      if (
+        emitObjectWrite(
+          node,
+          path,
+          operations,
+          key,
+          trackerContext.storedValue(node.context, valueIndex),
+        )
+      )
         normalizedContainerWrite = true;
     }
   }
-  if (node.deleteKey !== undefined && Object.hasOwn(nodeBase(node), node.deleteKey)) {
-    operations.push(["d", [...path, node.deleteKey] as unknown as NonEmptyPath]);
+  if (
+    node.deleteKey !== undefined &&
+    Object.hasOwn(trackerContext.nodeBase(node), node.deleteKey)
+  ) {
+    operations.push(["d", [...path, node.deleteKey] as unknown as trackerTypesModule.NonEmptyPath]);
   }
   if (node.deletes !== undefined) {
     for (const key of node.deletes) {
       if (operations.length > MAX_DELTA_OPERATIONS) return normalizedContainerWrite;
-      if (Object.hasOwn(nodeBase(node), key))
-        operations.push(["d", [...path, key] as unknown as NonEmptyPath]);
+      if (Object.hasOwn(trackerContext.nodeBase(node), key))
+        operations.push(["d", [...path, key] as unknown as trackerTypesModule.NonEmptyPath]);
     }
   }
   return normalizedContainerWrite;
 }
 
 function emitChangedValueImpl(
-  operations: Op[],
-  path: NonEmptyPath,
-  before: JsonValue | undefined,
-  after: JsonValue,
+  operations: trackerTypesModule.Op[],
+  path: trackerTypesModule.NonEmptyPath,
+  before: trackerTypesModule.JsonValue | undefined,
+  after: trackerTypesModule.JsonValue,
 ): boolean {
-  if (!isContainer(after) && before === after) return false;
-  if (isContainer(before) && isContainer(after) && equalTrustedJson(before, after)) return false;
+  if (!trackerPaths.isContainer(after) && before === after) return false;
+  if (
+    trackerPaths.isContainer(before) &&
+    trackerPaths.isContainer(after) &&
+    trackerPaths.equalTrustedJson(before, after)
+  )
+    return false;
   if (typeof before === "string" && typeof after === "string") {
     if (after.length > before.length && after.slice(0, before.length) === before) {
       operations.push(["a", path, after.slice(before.length)]);
@@ -170,31 +200,71 @@ function emitChangedValueImpl(
   return true;
 }
 
-function emitSetImpl(operations: Op[], path: Path, value: JsonValue): void {
+function emitSetImpl(
+  operations: trackerTypesModule.Op[],
+  path: trackerTypesModule.Path,
+  value: trackerTypesModule.JsonValue,
+): void {
   if (path.length === 0) operations.push(["r", value]);
-  else operations.push(["s", path as NonEmptyPath, value]);
+  else operations.push(["s", path as trackerTypesModule.NonEmptyPath, value]);
 }
 
-export const emitSet: {
-  (path: Path, value: JsonValue): (operations: Op[]) => void;
-  (operations: Op[], path: Path, value: JsonValue): void;
+const emitSet: {
+  (
+    path: trackerTypesModule.Path,
+    value: trackerTypesModule.JsonValue,
+  ): (operations: trackerTypesModule.Op[]) => void;
+  (
+    operations: trackerTypesModule.Op[],
+    path: trackerTypesModule.Path,
+    value: trackerTypesModule.JsonValue,
+  ): void;
 } = dual(3, emitSetImpl);
 
-export const emitChangedValue: {
+const emitChangedValue: {
   (
-    path: NonEmptyPath,
-    before: JsonValue | undefined,
-    after: JsonValue,
-  ): (operations: Op[]) => boolean;
-  (operations: Op[], path: NonEmptyPath, before: JsonValue | undefined, after: JsonValue): boolean;
+    path: trackerTypesModule.NonEmptyPath,
+    before: trackerTypesModule.JsonValue | undefined,
+    after: trackerTypesModule.JsonValue,
+  ): (operations: trackerTypesModule.Op[]) => boolean;
+  (
+    operations: trackerTypesModule.Op[],
+    path: trackerTypesModule.NonEmptyPath,
+    before: trackerTypesModule.JsonValue | undefined,
+    after: trackerTypesModule.JsonValue,
+  ): boolean;
 } = dual(4, emitChangedValueImpl);
 
-export const hasFoldedAncestor: {
-  (folded: ReadonlySet<OverlayNode>): (node: OverlayNode) => boolean;
-  (node: OverlayNode, folded: ReadonlySet<OverlayNode>): boolean;
+const hasFoldedAncestor: {
+  (
+    folded: ReadonlySet<trackerTypesModule.OverlayNode>,
+  ): (node: trackerTypesModule.OverlayNode) => boolean;
+  (
+    node: trackerTypesModule.OverlayNode,
+    folded: ReadonlySet<trackerTypesModule.OverlayNode>,
+  ): boolean;
 } = dual(2, hasFoldedAncestorImpl);
 
-export const emitObjectOperations: {
-  (path: Path, operations: Op[]): (node: OverlayNode) => boolean;
-  (node: OverlayNode, path: Path, operations: Op[]): boolean;
+const emitObjectOperations: {
+  (
+    path: trackerTypesModule.Path,
+    operations: trackerTypesModule.Op[],
+  ): (node: trackerTypesModule.OverlayNode) => boolean;
+  (
+    node: trackerTypesModule.OverlayNode,
+    path: trackerTypesModule.Path,
+    operations: trackerTypesModule.Op[],
+  ): boolean;
 } = dual(3, emitObjectOperationsImpl);
+
+const trackerEmit = {
+  emitChangedValue,
+  emitObjectOperations,
+  emitOperations,
+  emitSet,
+  hasFoldedAncestor,
+  hasPlacementAncestor,
+  hasReservedMutation,
+};
+
+export default trackerEmit;

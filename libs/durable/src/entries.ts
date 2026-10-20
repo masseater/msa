@@ -1,9 +1,9 @@
-import type { JsonValue } from "@msa/chord";
+import type chordTypes from "@msa/chord/index.types";
 
 import type typesModuleModule from "./harness/types.types.ts";
 import type typesModule from "./types.types.ts";
 
-function defineEntry<D extends JsonValue = never>(kind: string): typesModule.Entry<D> {
+function defineEntry<D extends chordTypes.JsonValue = never>(kind: string): typesModule.Entry<D> {
   if (typeof kind !== "string" || kind.length === 0)
     throw new TypeError("Entry kind must be a non-empty string");
   return {

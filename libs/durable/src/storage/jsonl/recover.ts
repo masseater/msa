@@ -1,4 +1,4 @@
-import type { Context } from "@msa/chord";
+import type chordTypes from "@msa/chord/index.types";
 import { Effect, Function } from "effect";
 
 import type memoryTypes from "../memory.types.ts";
@@ -15,19 +15,19 @@ const { reclaimSidecars } = filesModule;
 const recoverJsonl: {
   (
     memory: memoryTypes.MemoryStorage,
-    context: Context,
+    context: chordTypes.Context,
   ): (files: filesTypes.JsonlFiles) => Effect.Effect<recoverScanTypes.MainAnalysis>;
   (
     files: filesTypes.JsonlFiles,
     memory: memoryTypes.MemoryStorage,
-    context: Context,
+    context: chordTypes.Context,
   ): Effect.Effect<recoverScanTypes.MainAnalysis>;
 } = Function.dual(
   3,
   Effect.fnUntraced(function* (
     files: filesTypes.JsonlFiles,
     memory: memoryTypes.MemoryStorage,
-    context: Context,
+    context: chordTypes.Context,
   ) {
     const main = yield* readMain(files, context);
     const index = yield* readSidecars(files, context);

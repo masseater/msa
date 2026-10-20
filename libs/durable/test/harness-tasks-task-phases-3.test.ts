@@ -1,4 +1,4 @@
-import type { Context } from "@msa/chord";
+import type chordTypes from "@msa/chord/index.types";
 import durable from "@msa/durable";
 import { Effect } from "effect";
 import { describe, expect, it } from "vite-plus/test";
@@ -29,7 +29,7 @@ function watcherTask() {
     captured?: harnessTasksSupportTypes.StepRuntime<null>;
     watchClosed?: Promise<unknown>;
     absent: unknown;
-    handlerContext?: Context;
+    handlerContext?: chordTypes.Context;
   } = { absent: "unset" };
   const delivered: string[] = [];
   const Absent = defineDoc<{ text: string }>({
@@ -122,7 +122,7 @@ const RuntimeNotes = defineDoc<{ text: string }>({
 
 const readThroughRuntime = Effect.fn("readThroughRuntime")(function* (
   runtime: harnessTasksSupportTypes.StepRuntime<null>,
-  ctx: Context,
+  ctx: chordTypes.Context,
 ) {
   const id = runtime.conversationId;
   const [first, second] = [...(yield* awaited(runtime.context(id, ctx))).entries].map(

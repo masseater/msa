@@ -1,13 +1,16 @@
-import type { Context, JsonValue } from "@msa/chord";
-import { withoutAbortSignal } from "@msa/chord/context";
-import type { NonEmptyPath, Op, Path } from "@msa/chord/delta";
-import { applyImmutable } from "@msa/chord/delta/apply";
+import contextModule from "@msa/chord/context";
+import type deltaTypes from "@msa/chord/delta.types";
+import applyModule from "@msa/chord/delta/apply";
+import type chordTypes from "@msa/chord/index.types";
 import { Function } from "effect";
 
 import sessionState from "../session/session-state.ts";
 import type typesModule from "./types.types.ts";
 import viewMount from "./view-mount.ts";
 import type viewMountTypes from "./view-mount.types.ts";
+
+const { withoutAbortSignal } = contextModule;
+const { applyImmutable } = applyModule;
 
 const { contained } = sessionState;
 const { MOUNTED_KINDS } = viewMount;
@@ -16,7 +19,7 @@ const advance: typesModule.Dual5<
   typesModule.ConversationId,
   viewMountTypes.Mount,
   typesModule.CommitPublication,
-  Context,
+  chordTypes.Context,
   (error: unknown) => void,
   void
 > = Function.dual(
@@ -25,11 +28,11 @@ const advance: typesModule.Dual5<
     id: typesModule.ConversationId,
     mount: viewMountTypes.Mount,
     publication: typesModule.CommitPublication,
-    context: Context,
+    context: chordTypes.Context,
     report: (error: unknown) => void,
   ): void => {
-    const docOps: Op[] = [];
-    const entryOps: Op[] = [];
+    const docOps: deltaTypes.Op[] = [];
+    const entryOps: deltaTypes.Op[] = [];
     const list: EntryList = { entries: mount.value.entries, owned: false };
     for (const change of publication.changes) {
       if (change.type === "entry" && change.value.conversationId === id) {
@@ -60,8 +63,12 @@ const advance: typesModule.Dual5<
 
 type EntryList = { entries: readonly typesModule.EntryRecord[]; owned: boolean };
 
-function addEntry(list: EntryList, entry: typesModule.EntryRecord, entryOps: Op[]): void {
-  const value = entry as unknown as JsonValue;
+function addEntry(
+  list: EntryList,
+  entry: typesModule.EntryRecord,
+  entryOps: deltaTypes.Op[],
+): void {
+  const value = entry as unknown as chordTypes.JsonValue;
   if (entry.head === undefined) {
     entryOps.push(["p", ["entries"], list.entries.length, 0, [value]]);
     const entries = list.owned ? (list.entries as typesModule.EntryRecord[]) : list.entries.slice();
@@ -83,11 +90,11 @@ function addEntry(list: EntryList, entry: typesModule.EntryRecord, entryOps: Op[
 function applyDocument(
   mount: viewMountTypes.Mount,
   change: Extract<typesModule.CommitPublication["changes"][number], { type: "document" }>,
-  docOps: Op[],
+  docOps: deltaTypes.Op[],
 ): void {
   const kind = change.record.kind;
   if (!MOUNTED_KINDS.has(kind) || change.record.key !== undefined) return;
-  const path: NonEmptyPath = ["docs", kind];
+  const path: deltaTypes.NonEmptyPath = ["docs", kind];
   const mounted = mount.docs.get(kind);
   if (change.value === null) {
     if (mounted?.id !== change.record.id) return;
@@ -101,8 +108,9 @@ function applyDocument(
   }
 }
 
-function prefixed(op: Op, prefix: NonEmptyPath): Op {
-  const at = (path: Path): NonEmptyPath => [...prefix, ...path] as unknown as NonEmptyPath;
+function prefixed(op: deltaTypes.Op, prefix: deltaTypes.NonEmptyPath): deltaTypes.Op {
+  const at = (path: deltaTypes.Path): deltaTypes.NonEmptyPath =>
+    [...prefix, ...path] as unknown as deltaTypes.NonEmptyPath;
   switch (op[0]) {
     case "r":
       return ["s", prefix, op[1]];

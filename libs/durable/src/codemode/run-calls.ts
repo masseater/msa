@@ -1,4 +1,4 @@
-import type { JsonValue } from "@msa/chord";
+import type chordTypes from "@msa/chord/index.types";
 import type { CodemodeHostCall, CodemodeOutcome } from "@msa/codemode/portable";
 import { Cause, Effect, Exit, Semaphore } from "effect";
 
@@ -61,7 +61,7 @@ const globalValue = (host: runCallsTypes.CallHost, call: CodemodeHostCall) => {
     return catalogCall(call.name, call.args, host.api.models, host.context);
   const global = host.options.globals?.find((candidate) => candidate.name === call.name);
   if (global === undefined) return undefined;
-  return Effect.promise((): Promise<JsonValue | undefined> =>
+  return Effect.promise((): Promise<chordTypes.JsonValue | undefined> =>
     global.execute(call.args, host.api, host.context),
   );
 };

@@ -1,10 +1,12 @@
-import type { Context } from "@msa/chord";
-import { BACKGROUND_CONTEXT, withAbortSignal } from "@msa/chord/context";
+import contextModule from "@msa/chord/context";
+import type chordTypes from "@msa/chord/index.types";
 import { Clock, Effect, Schema } from "effect";
 
 import envModule from "../env/index.ts";
 import type envTypes from "../env/index.types.ts";
 import type envConformanceSupportTypes from "./env-conformance-support.types.ts";
+
+const { BACKGROUND_CONTEXT, withAbortSignal } = contextModule;
 
 const { getOrThrow } = envModule;
 
@@ -14,7 +16,7 @@ const encoder = new TextEncoder();
 
 const watchTimeoutMs = 30_000;
 
-const abortedContext = (): Context => {
+const abortedContext = (): chordTypes.Context => {
   const controller = new AbortController();
   controller.abort();
   return withAbortSignal(controller.signal, BACKGROUND_CONTEXT);

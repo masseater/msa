@@ -4,17 +4,10 @@ import { Effect } from "effect";
 import { Type } from "typebox";
 import { describe, it } from "vite-plus/test";
 
-import {
-  type Ctx,
-  type Host,
-  createHost,
-  hostNamed,
-  isChordError,
-  local,
-  memoryLinkPair,
-  method,
-  remote,
-} from "../src/index.ts";
+import chord from "../src/index.ts";
+import type chordTypes from "../src/index.types.ts";
+
+const { createHost, hostNamed, isChordError, local, memoryLinkPair, method, remote } = chord;
 
 const Source = remote("t.e8-source", {
   host: hostNamed("w"),
@@ -30,11 +23,11 @@ const Forward = remote("t.e8-forward", {
   version: 1,
 });
 
-function serveSource(host: Host): void {
+function serveSource(host: chordTypes.Host): void {
   host.serve(Source, (_input, _principal, self) => {
     const v = self.state("v", Type.String(), "from the worker");
     return {
-      set: (text: string, ctx: Ctx) => {
+      set: (text: string, ctx: chordTypes.Ctx) => {
         v.replace(ctx, text);
       },
       v,

@@ -4,16 +4,12 @@ import { Effect } from "effect";
 import { Type } from "typebox";
 import { describe, it } from "vite-plus/test";
 
-import {
-  type Ctx,
-  type Facet,
-  type StateEvent,
-  isChordError,
-  local,
-  method,
-} from "../src/index.ts";
+import chord from "../src/index.ts";
+import type chordTypes from "../src/index.types.ts";
 import reloadModule from "./fixtures/reload.ts";
 import timing from "./fixtures/timing.ts";
+
+const { isChordError, local, method } = chord;
 
 const { Greeter, greeterFacet, quiet, until } = reloadModule;
 const { latch, tick } = timing;
@@ -55,7 +51,7 @@ const prepareRunsInRecordingModeWrites = Effect.gen(function* () {
   const a = host.hold(Greeter, { id: "a" });
   const b = host.hold(Greeter, { id: "b" });
   yield* Effect.promise(() => Promise.all([a.ready, b.ready]));
-  let captured: Ctx | undefined;
+  let captured: chordTypes.Ctx | undefined;
   yield* Effect.promise(() =>
     host.root((ctx) => {
       captured = ctx;
@@ -123,7 +119,7 @@ const stateBumpGateMigrateOldFromversion = Effect.gen(function* () {
   const ref = host.hold(Greeter, {});
   yield* Effect.promise(() => ref.greet("a"));
   yield* Effect.promise(() => ref.greet("a"));
-  const events: StateEvent<unknown>[] = [];
+  const events: chordTypes.StateEvent<unknown>[] = [];
   ref.count.events((event) => events.push(event));
   const go = latch();
   const late = host.root((ctx) =>
@@ -170,7 +166,7 @@ const versionsArePerCellARaised = Effect.gen(function* () {
     version: 1,
   });
   const migrated: string[] = [];
-  const facet = (version: number): Facet => ({
+  const facet = (version: number): chordTypes.Facet => ({
     name: "pair",
     setup: (api) =>
       api.serve(Pair, (_input, _principal, self) => {

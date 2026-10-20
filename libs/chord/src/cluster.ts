@@ -1,18 +1,14 @@
 import { Cause, Effect, Exit, Fiber } from "effect";
 import { dual } from "effect/Function";
 
-import type { Connection } from "./connection.ts";
-import { ChordError } from "./errors.ts";
-import type { HostLinks } from "./host-links.ts";
-import {
-  beginReload,
-  endReload,
-  type Reload,
-  type ReloadOptions,
-  type ReloadReport,
-  type ReloadRequest,
-  reloadError,
-} from "./reload.ts";
+import type connectionTypes from "./connection.types.ts";
+import errorsModule from "./errors.ts";
+import type hostLinksTypes from "./host-links.types.ts";
+import reloadModule from "./reload.ts";
+import type reloadTypes from "./reload.types.ts";
+
+const { ChordError } = errorsModule;
+const { beginReload, endReload, reloadError } = reloadModule;
 
 let reloadSeq = 0;
 
@@ -21,7 +17,10 @@ const nextReloadId = (): number => {
   return reloadSeq;
 };
 
-const modulesFor = (remote: ReloadOptions["remote"], hostName: string | undefined): string[] => {
+const modulesFor = (
+  remote: reloadTypes.ReloadOptions["remote"],
+  hostName: string | undefined,
+): string[] => {
   let best: [string, readonly string[]] | undefined;
   for (const entry of Object.entries(remote ?? {})) {
     if (
@@ -33,11 +32,15 @@ const modulesFor = (remote: ReloadOptions["remote"], hostName: string | undefine
   return [...(best?.[1] ?? [])];
 };
 
-const awaitVote = (connection: Connection, id: number, deadline: number): Effect.Effect<unknown> =>
+const awaitVote = (
+  connection: connectionTypes.Connection,
+  id: number,
+  deadline: number,
+): Effect.Effect<unknown> =>
   Effect.callback<unknown>((resume) => {
     connection.votes.set(id, {
-      resolve: (value) => resume(Effect.succeed(value)),
       reject: (error) => resume(Effect.die(error)),
+      resolve: (value) => resume(Effect.succeed(value)),
     });
   }).pipe(
     Effect.timeoutOrElse({
@@ -55,22 +58,25 @@ const awaitVote = (connection: Connection, id: number, deadline: number): Effect
     }),
   );
 
-type Vote = readonly [string, ReloadReport | undefined];
+type Vote = readonly [string, reloadTypes.ReloadReport | undefined];
 
 interface Ballot {
   readonly id: number;
   readonly codeVersion: number;
   readonly deadline: number;
-  readonly options: ReloadOptions;
+  readonly options: reloadTypes.ReloadOptions;
 }
 
-const requestVote = (connection: Connection, ballot: Ballot): Effect.Effect<Fiber.Fiber<Vote>> =>
+const requestVote = (
+  connection: connectionTypes.Connection,
+  ballot: Ballot,
+): Effect.Effect<Fiber.Fiber<Vote>> =>
   Effect.gen(function* () {
     const { id, options } = ballot;
     const name = connection.name ?? "child";
     const vote = yield* Effect.forkChild(
       awaitVote(connection, id, ballot.deadline).pipe(
-        Effect.map((report): Vote => [name, report as ReloadReport | undefined]),
+        Effect.map((report): Vote => [name, report as reloadTypes.ReloadReport | undefined]),
         Effect.catchCause((cause) => {
           const failure = reloadError(Cause.squash(cause));
           return Effect.die(
@@ -84,21 +90,23 @@ const requestVote = (connection: Connection, ballot: Ballot): Effect.Effect<Fibe
       { startImmediately: true },
     );
     connection.send({
-      t: "prepare",
-      reload: id,
       codeVersion: ballot.codeVersion,
-      plugins: modulesFor(options.remote, name),
       options: {
         remove: modulesFor(options.remoteRemove, name),
         ...(options.gateDeadline === undefined ? {} : { gateDeadline: options.gateDeadline }),
         ...(options.retireDeadline === undefined ? {} : { retireDeadline: options.retireDeadline }),
       },
+      plugins: modulesFor(options.remote, name),
+      reload: id,
+      t: "prepare",
     });
     return vote;
   });
 
-const childReports = (exits: readonly Exit.Exit<Vote>[]): Record<string, ReloadReport> => {
-  const children: Record<string, ReloadReport> = {};
+const childReports = (
+  exits: readonly Exit.Exit<Vote>[],
+): Record<string, reloadTypes.ReloadReport> => {
+  const children: Record<string, reloadTypes.ReloadReport> = {};
   for (const exit of exits) {
     if (Exit.isSuccess(exit) && exit.value[1] !== undefined)
       children[exit.value[0]] = exit.value[1];
@@ -107,11 +115,11 @@ const childReports = (exits: readonly Exit.Exit<Vote>[]): Record<string, ReloadR
 };
 
 const voteRound = (
-  host: HostLinks,
-  reload: Reload,
-  participants: readonly Connection[],
+  host: hostLinksTypes.HostLinks,
+  reload: reloadTypes.Reload,
+  participants: readonly connectionTypes.Connection[],
   ballot: Ballot,
-): Effect.Effect<ReloadReport> =>
+): Effect.Effect<reloadTypes.ReloadReport> =>
   Effect.gen(function* () {
     const votes = yield* Effect.forEach(participants, (connection) =>
       requestVote(connection, ballot),
@@ -139,14 +147,14 @@ const voteRound = (
     if (failed !== undefined) {
       for (const connection of participants) {
         connection.votes.delete(ballot.id);
-        connection.send({ t: "abort", reload: ballot.id });
+        connection.send({ reload: ballot.id, t: "abort" });
       }
       if (local) yield* reload.rollback();
       return yield* Effect.die(Cause.squash(failed.cause));
     }
     const report = reload.commit(() => {
       for (const connection of participants) {
-        connection.send({ t: "commit", reload: ballot.id });
+        connection.send({ reload: ballot.id, t: "commit" });
         connection.peerCodeVersion = ballot.codeVersion;
       }
     });
@@ -154,73 +162,92 @@ const voteRound = (
     return { ...report, children: childReports(voteExits) };
   });
 
-export const runClusterReload: {
-  (request: ReloadRequest): (host: HostLinks) => Effect.Effect<ReloadReport>;
-  (host: HostLinks, request: ReloadRequest): Effect.Effect<ReloadReport>;
-} = dual(2, (host: HostLinks, request: ReloadRequest): Effect.Effect<ReloadReport> =>
-  Effect.gen(function* () {
-    const { options } = request;
-    const synced = [...host.connections].filter(
-      (connection) =>
-        connection.role === "downstream" &&
-        connection.peer.kind === "host" &&
-        connection.open &&
-        connection.synced,
-    );
-    const codeVersion = host.peekNextCodeVersion();
-    const reload = yield* beginReload(host, { ...request, codeVersion });
-    return yield* Effect.gen(function* () {
-      yield* reload.waitForRetirement();
-      const participants = synced.filter((connection) => connection.open);
-      const deadline =
-        options.voteDeadline ??
-        (options.gateDeadline ?? 5000) + (options.retireDeadline ?? 5000) + 5000;
-      return yield* voteRound(host, reload, participants, {
-        id: nextReloadId(),
-        codeVersion,
-        deadline,
-        options,
-      });
-    }).pipe(Effect.ensuring(Effect.sync(() => endReload(host))));
-  }),
+const runClusterReload: {
+  (
+    request: reloadTypes.ReloadRequest,
+  ): (host: hostLinksTypes.HostLinks) => Effect.Effect<reloadTypes.ReloadReport>;
+  (
+    host: hostLinksTypes.HostLinks,
+    request: reloadTypes.ReloadRequest,
+  ): Effect.Effect<reloadTypes.ReloadReport>;
+} = dual(
+  2,
+  (
+    host: hostLinksTypes.HostLinks,
+    request: reloadTypes.ReloadRequest,
+  ): Effect.Effect<reloadTypes.ReloadReport> =>
+    Effect.gen(function* () {
+      const { options } = request;
+      const synced = [...host.connections].filter(
+        (connection) =>
+          connection.role === "downstream" &&
+          connection.peer.kind === "host" &&
+          connection.open &&
+          connection.synced,
+      );
+      const codeVersion = host.peekNextCodeVersion();
+      const reload = yield* beginReload(host, { ...request, codeVersion });
+      return yield* Effect.gen(function* () {
+        yield* reload.waitForRetirement();
+        const participants = synced.filter((connection) => connection.open);
+        const deadline =
+          options.voteDeadline ??
+          (options.gateDeadline ?? 5000) + (options.retireDeadline ?? 5000) + 5000;
+        return yield* voteRound(host, reload, participants, {
+          codeVersion,
+          deadline,
+          id: nextReloadId(),
+          options,
+        });
+      }).pipe(Effect.ensuring(Effect.sync(() => endReload(host))));
+    }),
 );
 
-export const reconcileChild: {
-  (connection: Connection): (host: HostLinks) => Effect.Effect<void>;
-  (host: HostLinks, connection: Connection): Effect.Effect<void>;
-} = dual(2, (host: HostLinks, connection: Connection): Effect.Effect<void> =>
-  Effect.gen(function* () {
-    for (;;) {
-      if (!connection.open) return;
-      if (host.reloading) {
-        yield* host.whenReloadEnded();
-        continue;
-      }
-      const codeVersion = host.current.id;
-      if (connection.peerCodeVersion === codeVersion) {
-        connection.markSynced(codeVersion);
+const reconcileChild: {
+  (connection: connectionTypes.Connection): (host: hostLinksTypes.HostLinks) => Effect.Effect<void>;
+  (host: hostLinksTypes.HostLinks, connection: connectionTypes.Connection): Effect.Effect<void>;
+} = dual(
+  2,
+  (host: hostLinksTypes.HostLinks, connection: connectionTypes.Connection): Effect.Effect<void> =>
+    Effect.gen(function* () {
+      for (;;) {
+        if (!connection.open) return;
+        if (host.reloading) {
+          yield* host.whenReloadEnded();
+          continue;
+        }
+        const codeVersion = host.current.id;
+        if (connection.peerCodeVersion === codeVersion) {
+          connection.markSynced(codeVersion);
+          host.announceRetired(connection);
+          return;
+        }
         host.announceRetired(connection);
-        return;
+        const id = nextReloadId();
+        const vote = yield* Effect.forkChild(awaitVote(connection, id, 30_000), {
+          startImmediately: true,
+        });
+        connection.send({
+          codeVersion,
+          options: { remove: modulesFor(host.remoteRemoved, connection.name) },
+          plugins: modulesFor(host.remoteModules, connection.name),
+          reload: id,
+          t: "prepare",
+        });
+        yield* Fiber.join(vote);
+        if (host.current.id !== codeVersion) {
+          connection.send({ reload: id, t: "abort" });
+          continue;
+        }
+        connection.send({ reload: id, t: "commit" });
+        connection.peerCodeVersion = codeVersion;
       }
-      host.announceRetired(connection);
-      const id = nextReloadId();
-      const vote = yield* Effect.forkChild(awaitVote(connection, id, 30_000), {
-        startImmediately: true,
-      });
-      connection.send({
-        t: "prepare",
-        reload: id,
-        codeVersion,
-        plugins: modulesFor(host.remoteModules, connection.name),
-        options: { remove: modulesFor(host.remoteRemoved, connection.name) },
-      });
-      yield* Fiber.join(vote);
-      if (host.current.id !== codeVersion) {
-        connection.send({ t: "abort", reload: id });
-        continue;
-      }
-      connection.send({ t: "commit", reload: id });
-      connection.peerCodeVersion = codeVersion;
-    }
-  }),
+    }),
 );
+
+const cluster = {
+  reconcileChild,
+  runClusterReload,
+};
+
+export default cluster;

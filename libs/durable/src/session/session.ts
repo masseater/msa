@@ -1,4 +1,4 @@
-import type { Context, JsonValue } from "@msa/chord";
+import type chordTypes from "@msa/chord/index.types";
 import { Effect } from "effect";
 
 import type typesModule from "../types.types.ts";
@@ -71,7 +71,10 @@ export default class SessionImpl implements typesModule.Session {
     return this.#state.storage;
   }
 
-  commit<T>(change: (tx: typesModule.Tx) => T | Promise<T>, context: Context): Promise<T> {
+  commit<T>(
+    change: (tx: typesModule.Tx) => T | Promise<T>,
+    context: chordTypes.Context,
+  ): Promise<T> {
     return this.commitWith(change, context);
   }
 
@@ -81,7 +84,7 @@ export default class SessionImpl implements typesModule.Session {
 
   commitWith<T>(
     change: (tx: sessionTypes.Transaction) => T | Promise<T>,
-    context: Context,
+    context: chordTypes.Context,
     scope?: sessionTypes.TransactionScope,
   ): Promise<T> {
     return commitOnLine(this.#state, this.#host, change, context, scope);
@@ -94,7 +97,7 @@ export default class SessionImpl implements typesModule.Session {
   conversationDocumentOnLine(
     token: typesModule.ConversationDocToken<typesModule.JsonObject>,
     conversationId: typesModule.ConversationId,
-    context: Context,
+    context: chordTypes.Context,
   ): Promise<DocumentOnLine> {
     const args = [conversationId, context] as const;
     return Effect.runPromise(conversationDocumentOnLine(this.#state, token, args));
@@ -102,34 +105,34 @@ export default class SessionImpl implements typesModule.Session {
 
   snapshot<T extends typesModule.JsonObject>(
     token: typesModule.SessionDocToken<T>,
-    context: Context,
+    context: chordTypes.Context,
   ): Promise<Readonly<T> | undefined>;
   snapshot<T extends typesModule.JsonObject>(
     token: typesModule.ConversationDocToken<T>,
     conversationId: typesModule.ConversationId,
-    context: Context,
+    context: chordTypes.Context,
   ): Promise<Readonly<T> | undefined>;
   snapshot<T extends typesModule.JsonObject>(
     token: typesModule.TaskDocToken<T>,
     taskId: typesModule.TaskId,
-    context: Context,
+    context: chordTypes.Context,
   ): Promise<Readonly<T> | undefined>;
-  snapshot<T extends typesModule.JsonObject, I extends JsonValue>(
+  snapshot<T extends typesModule.JsonObject, I extends chordTypes.JsonValue>(
     token: typesModule.SessionDocFamilyToken<T, I>,
     key: string,
-    context: Context,
+    context: chordTypes.Context,
   ): Promise<Readonly<T> | undefined>;
-  snapshot<T extends typesModule.JsonObject, I extends JsonValue>(
+  snapshot<T extends typesModule.JsonObject, I extends chordTypes.JsonValue>(
     token: typesModule.ConversationDocFamilyToken<T, I>,
     conversationId: typesModule.ConversationId,
     key: string,
-    context: Context,
+    context: chordTypes.Context,
   ): Promise<Readonly<T> | undefined>;
-  snapshot<T extends typesModule.JsonObject, I extends JsonValue>(
+  snapshot<T extends typesModule.JsonObject, I extends chordTypes.JsonValue>(
     token: typesModule.TaskDocFamilyToken<T, I>,
     taskId: typesModule.TaskId,
     key: string,
-    context: Context,
+    context: chordTypes.Context,
   ): Promise<Readonly<T> | undefined>;
   snapshot(
     token: sessionTypes.AnyDocToken,
@@ -140,34 +143,34 @@ export default class SessionImpl implements typesModule.Session {
 
   documentState<T extends typesModule.JsonObject>(
     token: typesModule.SessionDocToken<T>,
-    context: Context,
+    context: chordTypes.Context,
   ): Promise<typesModule.DocumentState<T> | undefined>;
   documentState<T extends typesModule.JsonObject>(
     token: typesModule.ConversationDocToken<T>,
     conversationId: typesModule.ConversationId,
-    context: Context,
+    context: chordTypes.Context,
   ): Promise<typesModule.DocumentState<T> | undefined>;
   documentState<T extends typesModule.JsonObject>(
     token: typesModule.TaskDocToken<T>,
     taskId: typesModule.TaskId,
-    context: Context,
+    context: chordTypes.Context,
   ): Promise<typesModule.DocumentState<T> | undefined>;
-  documentState<T extends typesModule.JsonObject, I extends JsonValue>(
+  documentState<T extends typesModule.JsonObject, I extends chordTypes.JsonValue>(
     token: typesModule.SessionDocFamilyToken<T, I>,
     key: string,
-    context: Context,
+    context: chordTypes.Context,
   ): Promise<typesModule.DocumentState<T> | undefined>;
-  documentState<T extends typesModule.JsonObject, I extends JsonValue>(
+  documentState<T extends typesModule.JsonObject, I extends chordTypes.JsonValue>(
     token: typesModule.ConversationDocFamilyToken<T, I>,
     conversationId: typesModule.ConversationId,
     key: string,
-    context: Context,
+    context: chordTypes.Context,
   ): Promise<typesModule.DocumentState<T> | undefined>;
-  documentState<T extends typesModule.JsonObject, I extends JsonValue>(
+  documentState<T extends typesModule.JsonObject, I extends chordTypes.JsonValue>(
     token: typesModule.TaskDocFamilyToken<T, I>,
     taskId: typesModule.TaskId,
     key: string,
-    context: Context,
+    context: chordTypes.Context,
   ): Promise<typesModule.DocumentState<T> | undefined>;
   documentState(
     token: sessionTypes.AnyDocToken,
@@ -178,34 +181,34 @@ export default class SessionImpl implements typesModule.Session {
 
   watchDoc<T extends typesModule.JsonObject>(
     token: typesModule.SessionDocToken<T>,
-    context: Context,
+    context: chordTypes.Context,
   ): Promise<typesModule.DocumentWatch<T> | undefined>;
   watchDoc<T extends typesModule.JsonObject>(
     token: typesModule.ConversationDocToken<T>,
     conversationId: typesModule.ConversationId,
-    context: Context,
+    context: chordTypes.Context,
   ): Promise<typesModule.DocumentWatch<T> | undefined>;
   watchDoc<T extends typesModule.JsonObject>(
     token: typesModule.TaskDocToken<T>,
     taskId: typesModule.TaskId,
-    context: Context,
+    context: chordTypes.Context,
   ): Promise<typesModule.DocumentWatch<T> | undefined>;
-  watchDoc<T extends typesModule.JsonObject, I extends JsonValue>(
+  watchDoc<T extends typesModule.JsonObject, I extends chordTypes.JsonValue>(
     token: typesModule.SessionDocFamilyToken<T, I>,
     key: string,
-    context: Context,
+    context: chordTypes.Context,
   ): Promise<typesModule.DocumentWatch<T> | undefined>;
-  watchDoc<T extends typesModule.JsonObject, I extends JsonValue>(
+  watchDoc<T extends typesModule.JsonObject, I extends chordTypes.JsonValue>(
     token: typesModule.ConversationDocFamilyToken<T, I>,
     conversationId: typesModule.ConversationId,
     key: string,
-    context: Context,
+    context: chordTypes.Context,
   ): Promise<typesModule.DocumentWatch<T> | undefined>;
-  watchDoc<T extends typesModule.JsonObject, I extends JsonValue>(
+  watchDoc<T extends typesModule.JsonObject, I extends chordTypes.JsonValue>(
     token: typesModule.TaskDocFamilyToken<T, I>,
     taskId: typesModule.TaskId,
     key: string,
-    context: Context,
+    context: chordTypes.Context,
   ): Promise<typesModule.DocumentWatch<T> | undefined>;
   watchDoc(
     token: sessionTypes.AnyDocToken,
@@ -218,14 +221,14 @@ export default class SessionImpl implements typesModule.Session {
     token: typesModule.RewindableConversationDocToken<T>,
     conversationId: typesModule.ConversationId,
     at: typesModule.EntryId,
-    context: Context,
+    context: chordTypes.Context,
   ): Promise<Readonly<T> | undefined>;
-  snapshotAsOf<T extends typesModule.JsonObject, I extends JsonValue>(
+  snapshotAsOf<T extends typesModule.JsonObject, I extends chordTypes.JsonValue>(
     token: typesModule.RewindableConversationDocFamilyToken<T, I>,
     conversationId: typesModule.ConversationId,
     key: string,
     at: typesModule.EntryId,
-    context: Context,
+    context: chordTypes.Context,
   ): Promise<Readonly<T> | undefined>;
   snapshotAsOf(
     token: sessionTypes.AnyDocToken,
@@ -234,7 +237,7 @@ export default class SessionImpl implements typesModule.Session {
     return Effect.runPromise(snapshotAsOf(this.#state, token, args));
   }
 
-  close(context: Context): Promise<void> {
+  close(context: chordTypes.Context): Promise<void> {
     return closeSession(this.#state, context);
   }
 
@@ -252,14 +255,14 @@ export default class SessionImpl implements typesModule.Session {
   }
 
   subscribeCommits(
-    listener: (publication: typesModule.CommitPublication, context: Context) => void,
+    listener: (publication: typesModule.CommitPublication, context: chordTypes.Context) => void,
   ): () => void {
     assertUsable(this.#state);
     return addListener(this.#state.commitListeners, listener);
   }
 
   observeCommits(
-    listener: (publication: typesModule.CommitPublication, context: Context) => void,
+    listener: (publication: typesModule.CommitPublication, context: chordTypes.Context) => void,
   ): () => void {
     assertUsable(this.#state);
     return addListener(this.#state.internalListeners, listener);

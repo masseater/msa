@@ -2,20 +2,10 @@ import { Effect } from "effect";
 import { dual } from "effect/Function";
 import { Type } from "typebox";
 
-import {
-  type Ctx,
-  type Facet,
-  type FacetLoader,
-  type Frame,
-  type Link,
-  type Self,
-  createHost,
-  hostFamily,
-  hostNamed,
-  memoryLinkPair,
-  method,
-  remote,
-} from "../../src/index.ts";
+import chord from "../../src/index.ts";
+import type chordTypes from "../../src/index.types.ts";
+
+const { createHost, hostFamily, hostNamed, memoryLinkPair, method, remote } = chord;
 
 const Greeter = remote("t.greeter", {
   host: hostFamily("session:", "session"),
@@ -50,11 +40,11 @@ const ServerGreeter = remote("t.server-greeter", {
 
 type GreeterOptions = { fail?: boolean; stateVersion?: number };
 
-function greeterFacetImpl(greeting: string, options: GreeterOptions = {}): Facet {
+function greeterFacetImpl(greeting: string, options: GreeterOptions = {}): chordTypes.Facet {
   return {
     name: "greeter",
     setup: (api) => {
-      const greeter = (self: Self) => {
+      const greeter = (self: chordTypes.Self) => {
         if (options.fail === true) throw new Error("worker factory fails");
         const count = self.state(
           "count",
@@ -64,7 +54,7 @@ function greeterFacetImpl(greeting: string, options: GreeterOptions = {}): Facet
         );
         return {
           count,
-          greet: (name: string, ctx: Ctx) => {
+          greet: (name: string, ctx: chordTypes.Ctx) => {
             count.change(ctx, (draft) => {
               draft.n += 1;
             });
@@ -80,7 +70,10 @@ function greeterFacetImpl(greeting: string, options: GreeterOptions = {}): Facet
   };
 }
 
-function droppingImpl(link: Link, drop: (frame: Frame) => boolean): Link {
+function droppingImpl(
+  link: chordTypes.Link,
+  drop: (frame: chordTypes.Frame) => boolean,
+): chordTypes.Link {
   return {
     close: (reason) => link.close(reason),
     get closed() {
@@ -100,8 +93,8 @@ const Ping = remote("t.cluster-ping", {
 });
 
 function setup() {
-  const modules = new Map<string, Facet>([["greeter", greeterFacet("v1")]]);
-  const loader: FacetLoader = (names) =>
+  const modules = new Map<string, chordTypes.Facet>([["greeter", greeterFacet("v1")]]);
+  const loader: chordTypes.FacetLoader = (names) =>
     Effect.runPromise(Effect.sync(() => names.map((name) => modules.get(String(name))!)));
   const server = createHost({ name: "server", onError: () => {}, self: { kind: "host" } });
   const [down, up] = memoryLinkPair();
@@ -118,13 +111,13 @@ function setup() {
 }
 
 const greeterFacet: {
-  (options?: GreeterOptions): (greeting: string) => Facet;
-  (greeting: string, options?: GreeterOptions): Facet;
+  (options?: GreeterOptions): (greeting: string) => chordTypes.Facet;
+  (greeting: string, options?: GreeterOptions): chordTypes.Facet;
 } = dual((args: IArguments) => typeof args[0] === "string", greeterFacetImpl);
 
 const dropping: {
-  (drop: (frame: Frame) => boolean): (link: Link) => Link;
-  (link: Link, drop: (frame: Frame) => boolean): Link;
+  (drop: (frame: chordTypes.Frame) => boolean): (link: chordTypes.Link) => chordTypes.Link;
+  (link: chordTypes.Link, drop: (frame: chordTypes.Frame) => boolean): chordTypes.Link;
 } = dual(2, droppingImpl);
 
 const cluster = {

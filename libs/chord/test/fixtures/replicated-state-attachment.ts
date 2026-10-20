@@ -1,13 +1,10 @@
-import type {
-  ReplicatedStateSourceAttachment,
-  ReplicatedStateSourceFrame,
-} from "../../src/index.ts";
+import type chordTypes from "../../src/index.types.ts";
 
-class TestSourceAttachment<T> implements ReplicatedStateSourceAttachment<T> {
+class TestSourceAttachment<T> implements chordTypes.ReplicatedStateSourceAttachment<T> {
   readonly snapshot: { readonly value: T; readonly cursor: number };
   readonly #onDispose: () => void;
-  readonly #buffer: ReplicatedStateSourceFrame<T>[] = [];
-  #listener: ((frame: ReplicatedStateSourceFrame<T>) => void) | undefined;
+  readonly #buffer: chordTypes.ReplicatedStateSourceFrame<T>[] = [];
+  #listener: ((frame: chordTypes.ReplicatedStateSourceFrame<T>) => void) | undefined;
   #activated = false;
   #disposed = false;
 
@@ -16,14 +13,14 @@ class TestSourceAttachment<T> implements ReplicatedStateSourceAttachment<T> {
     this.#onDispose = onDispose;
   }
 
-  activate(listener: (frame: ReplicatedStateSourceFrame<T>) => void): void {
+  activate(listener: (frame: chordTypes.ReplicatedStateSourceFrame<T>) => void): void {
     if (this.#activated) throw new Error("attachment is already active");
     this.#activated = true;
     this.#listener = listener;
     for (const frame of this.#buffer.splice(0)) listener(frame);
   }
 
-  publish(frame: ReplicatedStateSourceFrame<T>): void {
+  publish(frame: chordTypes.ReplicatedStateSourceFrame<T>): void {
     if (this.#disposed) return;
     if (this.#listener === undefined) this.#buffer.push(frame);
     else this.#listener(frame);

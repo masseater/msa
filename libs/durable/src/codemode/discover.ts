@@ -1,4 +1,4 @@
-import type { JsonValue } from "@msa/chord";
+import type chordTypes from "@msa/chord/index.types";
 import { type CodemodeHostCall, toCodemodeIdentifier } from "@msa/codemode/portable";
 import { Function } from "effect";
 
@@ -15,7 +15,10 @@ type Namespace = runDocsTypes.Start["namespaces"][number];
 const matchesNamespace = (namespace: Namespace, query: string): boolean =>
   namespace.name === query || toCodemodeIdentifier(namespace.name) === toCodemodeIdentifier(query);
 
-function describeNamespace(namespaces: readonly Namespace[], name: unknown): JsonValue | undefined {
+function describeNamespace(
+  namespaces: readonly Namespace[],
+  name: unknown,
+): chordTypes.JsonValue | undefined {
   if (typeof name !== "string") throw new Error("describeNamespace() expects a namespace name");
   const namespace = namespaces.find((candidate) => matchesNamespace(candidate, name));
   if (namespace === undefined) return undefined;
@@ -43,7 +46,7 @@ function searchTools(
   namespaces: readonly Namespace[],
   tools: readonly runDocsTypes.DeclaredTool[],
   args: readonly unknown[],
-): JsonValue {
+): chordTypes.JsonValue {
   const [query, options] = args as [unknown, { limit?: unknown; namespace?: unknown } | undefined];
   if (typeof query !== "string") throw new Error("searchTools() expects a query string");
   const { limit, namespace } = searchOptions(options);
@@ -66,8 +69,13 @@ function searchTools(
   });
 }
 
-const discover: dualTypes.Dual2<runDocsTypes.Start, CodemodeHostCall, JsonValue | undefined> =
-  Function.dual(2, (start: runDocsTypes.Start, call: CodemodeHostCall): JsonValue | undefined => {
+const discover: dualTypes.Dual2<
+  runDocsTypes.Start,
+  CodemodeHostCall,
+  chordTypes.JsonValue | undefined
+> = Function.dual(
+  2,
+  (start: runDocsTypes.Start, call: CodemodeHostCall): chordTypes.JsonValue | undefined => {
     const args = Array.isArray(call.args) ? call.args : [];
     const tools = start.tools.filter((tool) => tool.hidden !== true);
     if (call.name === "describeTool") {
@@ -77,7 +85,8 @@ const discover: dualTypes.Dual2<runDocsTypes.Start, CodemodeHostCall, JsonValue 
     }
     if (call.name === "describeNamespace") return describeNamespace(start.namespaces, args[0]);
     return searchTools(start.namespaces, tools, args);
-  });
+  },
+);
 
 const discoverModule = {
   discover,

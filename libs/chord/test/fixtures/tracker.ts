@@ -3,11 +3,14 @@ import { isProxy } from "node:util/types";
 import { dual } from "effect/Function";
 import { expect } from "vite-plus/test";
 
-import { type Draft, type Op, type Tracker, apply } from "../../src/delta/index.ts";
+import delta from "../../src/delta/index.ts";
+import type deltaTypes from "../../src/delta/index.types.ts";
+
+const { apply } = delta;
 
 const clone = <T>(value: T): T => JSON.parse(JSON.stringify(value)) as T;
 
-function replayImpl<T>(base: T, operations: readonly Op[]): T {
+function replayImpl<T>(base: T, operations: readonly deltaTypes.Op[]): T {
   return apply(clone(base), clone(operations));
 }
 
@@ -29,7 +32,10 @@ function expectAliasFree(value: unknown): void {
   visit(value, "$root");
 }
 
-function settleImpl<T extends object>(tracker: Tracker<T>, mutate: (draft: Draft<T>) => void): T {
+function settleImpl<T extends object>(
+  tracker: deltaTypes.Tracker<T>,
+  mutate: (draft: deltaTypes.Draft<T>) => void,
+): T {
   const baseRoot = tracker.value;
   const base = clone(baseRoot);
   const change = tracker.beginChange();
@@ -47,15 +53,15 @@ function settleImpl<T extends object>(tracker: Tracker<T>, mutate: (draft: Draft
 }
 
 const replay: {
-  (operations: readonly Op[]): <T>(base: T) => T;
-  <T>(base: T, operations: readonly Op[]): T;
+  (operations: readonly deltaTypes.Op[]): <T>(base: T) => T;
+  <T>(base: T, operations: readonly deltaTypes.Op[]): T;
 } = dual(2, replayImpl);
 
-type Mutation<T extends object> = (draft: Draft<T>) => void;
+type Mutation<T extends object> = (draft: deltaTypes.Draft<T>) => void;
 
 const settle: {
-  <T extends object>(mutate: Mutation<T>): (tracker: Tracker<T>) => T;
-  <T extends object>(tracker: Tracker<T>, mutate: Mutation<T>): T;
+  <T extends object>(mutate: Mutation<T>): (tracker: deltaTypes.Tracker<T>) => T;
+  <T extends object>(tracker: deltaTypes.Tracker<T>, mutate: Mutation<T>): T;
 } = dual(2, settleImpl);
 
 const trackerModule = {

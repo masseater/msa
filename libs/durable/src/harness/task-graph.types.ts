@@ -1,4 +1,4 @@
-import type { JsonValue } from "@msa/chord";
+import type chordTypes from "@msa/chord/index.types";
 
 import type sessionTypes from "../session/session.types.ts";
 import type TaskGraphViewClass from "./task-graph.ts";
@@ -15,7 +15,7 @@ declare namespace taskGraphTypes {
       }
     | {
         readonly status: "completing";
-        readonly outcome: typesModule.TaskOutcome<JsonValue>["status"];
+        readonly outcome: typesModule.TaskOutcome<chordTypes.JsonValue>["status"];
       };
 
   type TaskGraphNode = {

@@ -1,4 +1,4 @@
-import { BACKGROUND_CONTEXT } from "@msa/chord/context";
+import contextModule from "@msa/chord/context";
 import { Effect } from "effect";
 import { afterAll, describe, expect, it } from "vite-plus/test";
 
@@ -6,6 +6,8 @@ import envModule from "../src/env/index.ts";
 import toolsModule from "../src/tools/index.ts";
 import effectSupport from "./effect-support.ts";
 import toolsSupport from "./tools-support.ts";
+
+const { BACKGROUND_CONTEXT } = contextModule;
 
 const { createBashTool } = toolsModule;
 const { getOrThrow } = envModule;

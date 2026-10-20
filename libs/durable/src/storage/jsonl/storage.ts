@@ -1,4 +1,4 @@
-import type { Context } from "@msa/chord";
+import type chordTypes from "@msa/chord/index.types";
 import { Effect } from "effect";
 
 import type typesModule from "../../types.types.ts";
@@ -31,7 +31,7 @@ export default class JsonlStorage implements typesModule.Storage {
   static open(
     directory: string,
     fs: storageTypes.FileSystem,
-    context: Context,
+    context: chordTypes.Context,
     options: storageTypes.JsonlStorageOptions = {},
   ): Promise<JsonlStorage> {
     return Effect.runPromise(
@@ -44,7 +44,10 @@ export default class JsonlStorage implements typesModule.Storage {
     );
   }
 
-  commit(writes: readonly typesModule.StorageWrite[], context: Context): Promise<typesModule.Seq> {
+  commit(
+    writes: readonly typesModule.StorageWrite[],
+    context: chordTypes.Context,
+  ): Promise<typesModule.Seq> {
     return Effect.runPromise(
       Effect.suspend(() => {
         this.assertUsable();
@@ -57,7 +60,7 @@ export default class JsonlStorage implements typesModule.Storage {
     return this.delegate(() => this.store.mintId<I>());
   }
 
-  conversation(id: typesModule.ConversationId, context: Context) {
+  conversation(id: typesModule.ConversationId, context: chordTypes.Context) {
     return this.delegate(() => this.store.conversation(id, context));
   }
 
@@ -65,21 +68,24 @@ export default class JsonlStorage implements typesModule.Storage {
     query: typesModule.ConversationQuery,
     limit: number,
     cursor: typesModule.Cursor | undefined,
-    context: Context,
+    context: chordTypes.Context,
   ) {
     return this.delegate(() => this.store.scanConversations(query, limit, cursor, context));
   }
 
-  entry(id: typesModule.EntryId, context: Context): ReturnType<typesModule.Storage["entry"]>;
+  entry(
+    id: typesModule.EntryId,
+    context: chordTypes.Context,
+  ): ReturnType<typesModule.Storage["entry"]>;
   entry(
     conversationId: typesModule.ConversationId,
     id: typesModule.EntryId,
-    context: Context,
+    context: chordTypes.Context,
   ): ReturnType<typesModule.Storage["entry"]>;
   entry(
     idOrConversationId: typesModule.EntryId | typesModule.ConversationId,
-    idOrContext: typesModule.EntryId | Context,
-    context?: Context,
+    idOrContext: typesModule.EntryId | chordTypes.Context,
+    context?: chordTypes.Context,
   ) {
     return this.delegate(() => forwardEntry(this.store, idOrConversationId, idOrContext, context));
   }
@@ -87,7 +93,7 @@ export default class JsonlStorage implements typesModule.Storage {
   findLatestHeadMarker(
     conversationId: typesModule.ConversationId,
     atOrBeforeEntryId: typesModule.EntryId | undefined,
-    context: Context,
+    context: chordTypes.Context,
   ) {
     return this.delegate(() =>
       this.store.findLatestHeadMarker(conversationId, atOrBeforeEntryId, context),
@@ -98,12 +104,12 @@ export default class JsonlStorage implements typesModule.Storage {
     query: typesModule.EntryQuery,
     limit: number,
     cursor: typesModule.Cursor | undefined,
-    context: Context,
+    context: chordTypes.Context,
   ) {
     return this.delegate(() => this.store.scanEntries(query, limit, cursor, context));
   }
 
-  task(id: typesModule.TaskId, context: Context) {
+  task(id: typesModule.TaskId, context: chordTypes.Context) {
     return this.delegate(() => this.store.task(id, context));
   }
 
@@ -111,12 +117,12 @@ export default class JsonlStorage implements typesModule.Storage {
     query: typesModule.TaskQuery,
     limit: number,
     cursor: typesModule.Cursor | undefined,
-    context: Context,
+    context: chordTypes.Context,
   ) {
     return this.delegate(() => this.store.scanTasks(query, limit, cursor, context));
   }
 
-  submission(id: typesModule.SubmissionId, context: Context) {
+  submission(id: typesModule.SubmissionId, context: chordTypes.Context) {
     return this.delegate(() => this.store.submission(id, context));
   }
 
@@ -124,7 +130,7 @@ export default class JsonlStorage implements typesModule.Storage {
     query: typesModule.SubmissionQuery,
     limit: number,
     cursor: typesModule.Cursor | undefined,
-    context: Context,
+    context: chordTypes.Context,
   ) {
     return this.delegate(() => this.store.scanSubmissions(query, limit, cursor, context));
   }
@@ -132,7 +138,7 @@ export default class JsonlStorage implements typesModule.Storage {
   submissionByRequest(
     conversationId: typesModule.ConversationId,
     requestId: string,
-    context: Context,
+    context: chordTypes.Context,
   ) {
     return this.delegate(() => this.store.submissionByRequest(conversationId, requestId, context));
   }
@@ -140,12 +146,12 @@ export default class JsonlStorage implements typesModule.Storage {
   findDocument(
     address: typesModule.DocumentAddress,
     at: typesModule.DocumentPoint,
-    context: Context,
+    context: chordTypes.Context,
   ) {
     return this.delegate(() => this.store.findDocument(address, at, context));
   }
 
-  document(id: typesModule.DocumentId, at: typesModule.DocumentPoint, context: Context) {
+  document(id: typesModule.DocumentId, at: typesModule.DocumentPoint, context: chordTypes.Context) {
     return this.delegate(() => this.store.document(id, at, context));
   }
 
@@ -153,12 +159,12 @@ export default class JsonlStorage implements typesModule.Storage {
     query: typesModule.DocumentQuery,
     limit: number,
     cursor: typesModule.Cursor | undefined,
-    context: Context,
+    context: chordTypes.Context,
   ) {
     return this.delegate(() => this.store.scanDocuments(query, limit, cursor, context));
   }
 
-  close(context: Context): Promise<void> {
+  close(context: chordTypes.Context): Promise<void> {
     return Effect.runPromise(
       Effect.suspend(() => {
         if (this.closed) return Effect.void;
@@ -170,7 +176,7 @@ export default class JsonlStorage implements typesModule.Storage {
 
   private commitEffect(
     writes: readonly typesModule.StorageWrite[],
-    context: Context,
+    context: chordTypes.Context,
   ): Effect.Effect<typesModule.Seq> {
     return Effect.gen({ self: this }, function* () {
       const prepared = this.memory.prepareCommit(writes);
@@ -198,7 +204,7 @@ export default class JsonlStorage implements typesModule.Storage {
     });
   }
 
-  private recover(context: Context): Effect.Effect<void> {
+  private recover(context: chordTypes.Context): Effect.Effect<void> {
     return Effect.gen({ self: this }, function* () {
       const analysis = yield* recoverJsonl(this.files, this.memory, context);
       for (const id of analysis.currentOnlyDocuments) this.currentOnlyDocuments.add(id);

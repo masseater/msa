@@ -4,17 +4,12 @@ import { Effect } from "effect";
 import { Type } from "typebox";
 import { describe, it } from "vite-plus/test";
 
-import {
-  type Frame,
-  PROTOCOL_VERSION,
-  createHost,
-  hostNamed,
-  memoryLinkPair,
-  method,
-  remote,
-} from "../src/index.ts";
+import chord from "../src/index.ts";
+import type chordTypes from "../src/index.types.ts";
 import linkModule from "./fixtures/link.ts";
 import timing from "./fixtures/timing.ts";
+
+const { PROTOCOL_VERSION, createHost, hostNamed, memoryLinkPair, method, remote } = chord;
 
 const { Counter, serveCounter } = linkModule;
 const { tick } = timing;
@@ -48,7 +43,7 @@ const travelWithoutArgsAndWithoutA = Effect.gen(function* () {
   }));
   const [down, up] = memoryLinkPair();
   server.accept(down, { principal: { guest: "g" } });
-  const sent: Frame[] = [];
+  const sent: chordTypes.Frame[] = [];
   const send = up.send.bind(up);
   up.send = (frame) => {
     sent.push(frame);
@@ -99,7 +94,7 @@ const aPeerWithoutAProtocolVersion = Effect.gen(function* () {
     onProtocolMismatch: accepted.onProtocolMismatch,
     principal: { guest: "g" },
   });
-  const frames: Frame[] = [];
+  const frames: chordTypes.Frame[] = [];
   let closed: string | undefined;
   raw.receive((frame) => frames.push(frame));
   raw.onClose((reason) => {

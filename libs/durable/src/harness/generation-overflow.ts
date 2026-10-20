@@ -1,5 +1,5 @@
 import type { AssistantMessage } from "@msa/ai";
-import type { Context } from "@msa/chord";
+import type chordTypes from "@msa/chord/index.types";
 import { Effect } from "effect";
 
 import bridge from "./bridge.ts";
@@ -8,13 +8,14 @@ import generationRun from "./generation-run.ts";
 import type generationTypesModule from "./generation-types.types.ts";
 import liveModule from "./live.ts";
 import type typesModule from "./types.types.ts";
+
 const { commitTask } = bridge;
 const { LiveDoc } = liveModule;
 const compactOverflow = Effect.fnUntraced(function* (
   runtime: generationTypesModule.GenerationRuntime,
   request: generationTypesModule.GenerationRequest,
   message: AssistantMessage,
-  context: Context,
+  context: chordTypes.Context,
 ) {
   const { conversationId } = runtime;
   const policy = runtime.settings.compaction;

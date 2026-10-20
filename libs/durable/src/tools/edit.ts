@@ -1,4 +1,4 @@
-import type { Context } from "@msa/chord";
+import type chordTypes from "@msa/chord/index.types";
 import { Effect } from "effect";
 import { Type } from "typebox";
 
@@ -104,7 +104,7 @@ function editAccessError(path: string, error: editTypes.FileError): Error {
   return new Error(`Could not edit file: ${path}. Error code: ${error.code}.`, { cause: error });
 }
 
-const throwIfAborted = (context: Context): void => {
+const throwIfAborted = (context: chordTypes.Context): void => {
   if (context.abortSignal?.aborted === true) throw new Error("Operation aborted");
 };
 

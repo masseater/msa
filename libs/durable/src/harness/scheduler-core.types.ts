@@ -1,5 +1,5 @@
 import type { Models } from "@msa/ai";
-import type { Context, JsonValue } from "@msa/chord";
+import type chordTypes from "@msa/chord/index.types";
 
 import type envTypes from "../env/index.types.ts";
 import type sessionTypes from "../session/session.types.ts";
@@ -7,15 +7,33 @@ import type transactionTypes from "../session/transaction.types.ts";
 import type typesModule from "./types.types.ts";
 
 declare namespace schedulerCoreTypes {
-  type AnyTaskRecord = typesModule.TaskRecord<JsonValue, JsonValue, JsonValue>;
+  type AnyTaskRecord = typesModule.TaskRecord<
+    chordTypes.JsonValue,
+    chordTypes.JsonValue,
+    chordTypes.JsonValue
+  >;
   type RunnableTaskRecord = Extract<
     AnyTaskRecord,
     { readonly state: { readonly status: "pending" | "running" | "waiting" } }
   >;
   type Checkpoint = { readonly phase: string };
-  type ErasedDefinition = typesModule.TaskDefinition<JsonValue, Checkpoint, JsonValue, object>;
-  type ErasedRuntime = typesModule.TaskRuntime<JsonValue, Checkpoint, JsonValue, object>;
-  type ErasedRunningTask = typesModule.RunningTask<JsonValue, Checkpoint, JsonValue>;
+  type ErasedDefinition = typesModule.TaskDefinition<
+    chordTypes.JsonValue,
+    Checkpoint,
+    chordTypes.JsonValue,
+    object
+  >;
+  type ErasedRuntime = typesModule.TaskRuntime<
+    chordTypes.JsonValue,
+    Checkpoint,
+    chordTypes.JsonValue,
+    object
+  >;
+  type ErasedRunningTask = typesModule.RunningTask<
+    chordTypes.JsonValue,
+    Checkpoint,
+    chordTypes.JsonValue
+  >;
   type BlockedReason = "missing_task" | "task_too_old" | "migration_failed";
   type Resolution =
     | {
@@ -32,7 +50,7 @@ declare namespace schedulerCoreTypes {
     readonly conversationId: typesModule.ConversationId;
     readonly mode: "run" | "abort";
     readonly controller: AbortController;
-    readonly context: Context;
+    readonly context: chordTypes.Context;
     readonly watches: Set<typesModule.DocumentWatch<typesModule.JsonObject>>;
     ended: boolean;
     readonly done: Promise<void>;
@@ -55,7 +73,7 @@ declare namespace schedulerCoreTypes {
   };
   type Decision = boolean | { readonly fault: unknown };
   type SchedulerOutcome = Extract<
-    typesModule.TaskOutcome<JsonValue>,
+    typesModule.TaskOutcome<chordTypes.JsonValue>,
     { readonly status: "faulted" | "orphaned" }
   >;
   type InvocationBinding = { readonly signal: AbortSignal; check(): void };
@@ -92,12 +110,12 @@ declare namespace schedulerCoreTypes {
     readonly agent: (
       conversationId: typesModule.ConversationId,
       snapshot: typesModule.RegistrySnapshot,
-      context: Context,
+      context: chordTypes.Context,
     ) => Promise<typesModule.Agent>;
     readonly settings: () => typesModule.Settings;
     readonly env: (
       conversationId: typesModule.ConversationId,
-      context: Context,
+      context: chordTypes.Context,
     ) => Promise<envTypes.ExecutionEnv | undefined>;
     readonly now: () => number;
     readonly report: (error: unknown) => void;
@@ -113,9 +131,9 @@ declare namespace schedulerCoreTypes {
     readonly conversation: (
       id: typesModule.ConversationId,
       binding: InvocationBinding,
-      context: Context,
+      context: chordTypes.Context,
     ) => Promise<typesModule.ConversationHandle | undefined>;
-    readonly context: Context;
+    readonly context: chordTypes.Context;
   };
 }
 

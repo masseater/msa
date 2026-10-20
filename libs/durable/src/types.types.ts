@@ -1,4 +1,4 @@
-import type { JsonValue } from "@msa/chord";
+import type chordTypes from "@msa/chord/index.types";
 
 import type dualTypes from "./dual.ts";
 import type documentsTypes from "./types/documents.types.ts";
@@ -47,7 +47,7 @@ declare namespace typesModule {
 
   type DocFamilyDefinition<
     T extends idsTypes.JsonObject,
-    I extends JsonValue,
+    I extends chordTypes.JsonValue,
   > = documentsTypes.DocFamilyDefinition<T, I>;
 
   type DocToken<
@@ -57,7 +57,7 @@ declare namespace typesModule {
 
   type DocFamilyToken<
     T extends idsTypes.JsonObject,
-    I extends JsonValue,
+    I extends chordTypes.JsonValue,
     D extends DocFamilyDefinition<T, I>,
   > = documentsTypes.DocFamilyToken<T, I, D>;
 
@@ -72,22 +72,22 @@ declare namespace typesModule {
 
   type SessionDocFamilyToken<
     T extends idsTypes.JsonObject,
-    I extends JsonValue,
+    I extends chordTypes.JsonValue,
   > = documentsTypes.SessionDocFamilyToken<T, I>;
 
   type ConversationDocFamilyToken<
     T extends idsTypes.JsonObject,
-    I extends JsonValue,
+    I extends chordTypes.JsonValue,
   > = documentsTypes.ConversationDocFamilyToken<T, I>;
 
   type RewindableConversationDocFamilyToken<
     T extends idsTypes.JsonObject,
-    I extends JsonValue,
+    I extends chordTypes.JsonValue,
   > = documentsTypes.RewindableConversationDocFamilyToken<T, I>;
 
   type TaskDocFamilyToken<
     T extends idsTypes.JsonObject,
-    I extends JsonValue,
+    I extends chordTypes.JsonValue,
   > = documentsTypes.TaskDocFamilyToken<T, I>;
 
   type DocumentRecord = documentsTypes.DocumentRecord;
@@ -116,11 +116,11 @@ declare namespace typesModule {
 
   type EntryDraft = recordsTypes.EntryDraft;
 
-  type TypedEntry<D extends JsonValue> = recordsTypes.TypedEntry<D>;
+  type TypedEntry<D extends chordTypes.JsonValue> = recordsTypes.TypedEntry<D>;
 
-  type TypedEntryDraft<D extends JsonValue> = recordsTypes.TypedEntryDraft<D>;
+  type TypedEntryDraft<D extends chordTypes.JsonValue> = recordsTypes.TypedEntryDraft<D>;
 
-  type Entry<D extends JsonValue = never> = recordsTypes.Entry<D>;
+  type Entry<D extends chordTypes.JsonValue = never> = recordsTypes.Entry<D>;
 
   type SubmissionRecord = recordsTypes.SubmissionRecord;
 

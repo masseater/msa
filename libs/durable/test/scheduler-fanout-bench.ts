@@ -1,7 +1,7 @@
 import * as NodeRuntime from "@effect/platform-node/NodeRuntime";
 import { createModels } from "@msa/ai/models";
 import { fauxAssistantMessage, fauxProvider, fauxText, fauxToolCall } from "@msa/ai/providers/faux";
-import { BACKGROUND_CONTEXT as context } from "@msa/chord/context";
+import contextModule from "@msa/chord/context";
 import { Console, Effect } from "effect";
 import { Type } from "typebox";
 
@@ -9,6 +9,8 @@ import harnessModule from "../src/harness/index.ts";
 import durable from "../src/index.ts";
 import memory from "../src/storage/memory.ts";
 import effectSupport from "./effect-support.ts";
+
+const { BACKGROUND_CONTEXT: context } = contextModule;
 
 const { Harness, createRegistry } = harnessModule;
 const { ToolResultEntry, defineExtension, defineTool } = durable;

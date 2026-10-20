@@ -1,39 +1,35 @@
 import { dual } from "effect/Function";
 
-import { nodeBase, nodeParent, storedValue } from "./tracker-context.ts";
-import { arrayOverlay } from "./tracker-object.ts";
-import { resolvePath } from "./tracker-paths.ts";
-import type {
-  DenseCandidates,
-  DenseRegion,
-  JsonValue,
-  OverlayContext,
-  OverlayNode,
-  Path,
-} from "./tracker-types.ts";
+import trackerContext from "./tracker-context.ts";
+import trackerObject from "./tracker-object.ts";
+import trackerPaths from "./tracker-paths.ts";
+import type trackerTypesModule from "./tracker-types.types.ts";
+let locatedDenseArray: trackerTypesModule.OverlayNode | undefined;
 
-let locatedDenseArray: OverlayNode | undefined;
-
-export const clearDenseArray = (): void => {
+const clearDenseArray = (): void => {
   locatedDenseArray = undefined;
 };
 
-export const forgetDenseArray = (context: OverlayContext): void => {
+const forgetDenseArray = (context: trackerTypesModule.OverlayContext): void => {
   if (locatedDenseArray?.context === context) locatedDenseArray = undefined;
 };
-function locateDenseArrayPosition(node: OverlayNode): boolean {
+function locateDenseArrayPosition(node: trackerTypesModule.OverlayNode): boolean {
   let child = node;
-  for (let parent = nodeParent(child); parent !== undefined; parent = nodeParent(child)) {
-    if (Array.isArray(nodeBase(parent))) {
-      const overlay = arrayOverlay(parent);
+  for (
+    let parent = trackerContext.nodeParent(child);
+    parent !== undefined;
+    parent = trackerContext.nodeParent(child)
+  ) {
+    if (Array.isArray(trackerContext.nodeBase(parent))) {
+      const overlay = trackerObject.arrayOverlay(parent);
       if (child.parentKind !== 1 || overlay.structural) return false;
       const sourceIndex = child.parentKey as number;
       const valueIndex = overlay.baseOverrides?.get(sourceIndex);
       const current =
         valueIndex === undefined
-          ? (nodeBase(parent) as JsonValue[])[sourceIndex]
-          : storedValue(parent.context, valueIndex);
-      if (current !== nodeBase(child)) return false;
+          ? (trackerContext.nodeBase(parent) as trackerTypesModule.JsonValue[])[sourceIndex]
+          : trackerContext.storedValue(parent.context, valueIndex);
+      if (current !== trackerContext.nodeBase(child)) return false;
       locatedDenseArray = parent;
       locatedDenseIndex = sourceIndex;
       return true;
@@ -44,14 +40,21 @@ function locateDenseArrayPosition(node: OverlayNode): boolean {
 }
 
 function hasCoveringDenseRegionImpl(
-  node: OverlayNode,
-  path: Path,
-  denseRegions: ReadonlyMap<OverlayNode, readonly DenseRegion[]>,
+  node: trackerTypesModule.OverlayNode,
+  path: trackerTypesModule.Path,
+  denseRegions: ReadonlyMap<
+    trackerTypesModule.OverlayNode,
+    readonly trackerTypesModule.DenseRegion[]
+  >,
 ): boolean {
-  for (let parent = nodeParent(node); parent !== undefined; parent = nodeParent(parent)) {
+  for (
+    let parent = trackerContext.nodeParent(node);
+    parent !== undefined;
+    parent = trackerContext.nodeParent(parent)
+  ) {
     const regions = denseRegions.get(parent);
     if (regions === undefined) continue;
-    const parentPath = resolvePath(parent);
+    const parentPath = trackerPaths.resolvePath(parent);
     if (parentPath === undefined || path.length <= parentPath.length) continue;
     let matches = true;
     for (let index = 0; index < parentPath.length; index++) {
@@ -67,7 +70,10 @@ function hasCoveringDenseRegionImpl(
   return false;
 }
 
-function addDenseCandidateImpl(candidates: DenseCandidates, index: number): void {
+function addDenseCandidateImpl(
+  candidates: trackerTypesModule.DenseCandidates,
+  index: number,
+): void {
   if (candidates.bits !== undefined) {
     candidates.bits[index] = 1;
     return;
@@ -80,25 +86,28 @@ function addDenseCandidateImpl(candidates: DenseCandidates, index: number): void
 }
 
 function recordDenseArrayPositionImpl(
-  node: OverlayNode,
-  groups: Map<OverlayNode, DenseCandidates>,
+  node: trackerTypesModule.OverlayNode,
+  groups: Map<trackerTypesModule.OverlayNode, trackerTypesModule.DenseCandidates>,
 ): void {
   if (!locateDenseArrayPosition(node)) return;
   let candidates = groups.get(locatedDenseArray!);
   if (candidates === undefined) {
     candidates = {
-      indices: [],
       bits: undefined,
-      length: (nodeBase(locatedDenseArray!) as JsonValue[]).length,
+      indices: [],
+      length: (trackerContext.nodeBase(locatedDenseArray!) as trackerTypesModule.JsonValue[])
+        .length,
     };
     groups.set(locatedDenseArray!, candidates);
   }
   addDenseCandidateImpl(candidates, locatedDenseIndex);
 }
 
-export function buildDenseRegions(candidates: DenseCandidates): DenseRegion[] {
+function buildDenseRegions(
+  candidates: trackerTypesModule.DenseCandidates,
+): trackerTypesModule.DenseRegion[] {
   if (candidates.bits === undefined) return [];
-  const regions: DenseRegion[] = [];
+  const regions: trackerTypesModule.DenseRegion[] = [];
   const bits = candidates.bits;
   for (let at = 0; at < bits.length;) {
     while (at < bits.length && bits[at] === 0) at += 1;
@@ -116,41 +125,67 @@ export function buildDenseRegions(candidates: DenseCandidates): DenseRegion[] {
       at += 1;
     }
     const length = end - start + 1;
-    if (count >= 256 && count * 2 >= length) regions.push({ start, length });
+    if (count >= 256 && count * 2 >= length) regions.push({ length, start });
   }
   return regions;
 }
 
-function regionContainingImpl(regions: readonly DenseRegion[], index: number): boolean {
+function regionContainingImpl(
+  regions: readonly trackerTypesModule.DenseRegion[],
+  index: number,
+): boolean {
   for (const region of regions)
     if (index >= region.start && index < region.start + region.length) return true;
   return false;
 }
 
-export const regionContaining: {
-  (index: number): (regions: readonly DenseRegion[]) => boolean;
-  (regions: readonly DenseRegion[], index: number): boolean;
+const regionContaining: {
+  (index: number): (regions: readonly trackerTypesModule.DenseRegion[]) => boolean;
+  (regions: readonly trackerTypesModule.DenseRegion[], index: number): boolean;
 } = dual(2, regionContainingImpl);
 
-export const hasCoveringDenseRegion: {
+const hasCoveringDenseRegion: {
   (
-    path: Path,
-    denseRegions: ReadonlyMap<OverlayNode, readonly DenseRegion[]>,
-  ): (node: OverlayNode) => boolean;
+    path: trackerTypesModule.Path,
+    denseRegions: ReadonlyMap<
+      trackerTypesModule.OverlayNode,
+      readonly trackerTypesModule.DenseRegion[]
+    >,
+  ): (node: trackerTypesModule.OverlayNode) => boolean;
   (
-    node: OverlayNode,
-    path: Path,
-    denseRegions: ReadonlyMap<OverlayNode, readonly DenseRegion[]>,
+    node: trackerTypesModule.OverlayNode,
+    path: trackerTypesModule.Path,
+    denseRegions: ReadonlyMap<
+      trackerTypesModule.OverlayNode,
+      readonly trackerTypesModule.DenseRegion[]
+    >,
   ): boolean;
 } = dual(3, hasCoveringDenseRegionImpl);
 
-export const recordDenseArrayPosition: {
-  (groups: Map<OverlayNode, DenseCandidates>): (node: OverlayNode) => void;
-  (node: OverlayNode, groups: Map<OverlayNode, DenseCandidates>): void;
+const recordDenseArrayPosition: {
+  (
+    groups: Map<trackerTypesModule.OverlayNode, trackerTypesModule.DenseCandidates>,
+  ): (node: trackerTypesModule.OverlayNode) => void;
+  (
+    node: trackerTypesModule.OverlayNode,
+    groups: Map<trackerTypesModule.OverlayNode, trackerTypesModule.DenseCandidates>,
+  ): void;
 } = dual(2, recordDenseArrayPositionImpl);
 
-export const addDenseCandidate: {
-  (index: number): (candidates: DenseCandidates) => void;
-  (candidates: DenseCandidates, index: number): void;
+const addDenseCandidate: {
+  (index: number): (candidates: trackerTypesModule.DenseCandidates) => void;
+  (candidates: trackerTypesModule.DenseCandidates, index: number): void;
 } = dual(2, addDenseCandidateImpl);
 let locatedDenseIndex = 0;
+
+const trackerEmitDense = {
+  addDenseCandidate,
+  buildDenseRegions,
+  clearDenseArray,
+  forgetDenseArray,
+  hasCoveringDenseRegion,
+  recordDenseArrayPosition,
+  regionContaining,
+};
+
+export default trackerEmitDense;

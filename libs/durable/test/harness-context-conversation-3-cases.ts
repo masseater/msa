@@ -1,4 +1,4 @@
-import type { Context } from "@msa/chord";
+import type chordTypes from "@msa/chord/index.types";
 import type durableTypes from "@msa/durable/index.types";
 import { Effect } from "effect";
 import { dual } from "effect/Function";
@@ -112,7 +112,7 @@ function randomDraft(
 function appendRandomImpl(
   t: harnessContextConversation3CasesTypes.RandomTranscript,
   runtime: harnessContextSupportTypes.RunRuntime,
-  taskContext: Context,
+  taskContext: chordTypes.Context,
   conversationId: durableTypes.Conversation["id"],
 ) {
   return runtime.commit(
@@ -133,13 +133,13 @@ function appendRandomImpl(
 const appendRandom: {
   (
     runtime: harnessContextSupportTypes.RunRuntime,
-    taskContext: Context,
+    taskContext: chordTypes.Context,
     conversationId: durableTypes.Conversation["id"],
   ): (t: harnessContextConversation3CasesTypes.RandomTranscript) => Promise<void>;
   (
     t: harnessContextConversation3CasesTypes.RandomTranscript,
     runtime: harnessContextSupportTypes.RunRuntime,
-    taskContext: Context,
+    taskContext: chordTypes.Context,
     conversationId: durableTypes.Conversation["id"],
   ): Promise<void>;
 } = dual(4, appendRandomImpl);

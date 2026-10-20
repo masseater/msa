@@ -1,4 +1,4 @@
-import { BACKGROUND_CONTEXT } from "@msa/chord/context";
+import contextModule from "@msa/chord/context";
 import testing from "@msa/durable/testing";
 import { Console, Effect } from "effect";
 
@@ -9,6 +9,8 @@ import effectSupport from "./effect-support.ts";
 import platformSupport from "./platform-support.ts";
 import diskFootprint from "./storage-disk-footprint.ts";
 import type storageMemoryWorkerTypes from "./storage-memory-worker.types.ts";
+
+const { BACKGROUND_CONTEXT } = contextModule;
 
 const { MemoryStorage } = memory;
 const { openNodeSqliteStorage } = node;

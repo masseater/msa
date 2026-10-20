@@ -1,4 +1,4 @@
-import { BACKGROUND_CONTEXT as context } from "@msa/chord/context";
+import contextModule from "@msa/chord/context";
 import { Effect } from "effect";
 import { dual } from "effect/Function";
 
@@ -7,6 +7,8 @@ import nodeModule from "../src/storage/jsonl/node.ts";
 import node from "../src/storage/sqlite/node.ts";
 import type benchSupportTypes from "./bench-support.types.ts";
 import platformSupport from "./platform-support.ts";
+
+const { BACKGROUND_CONTEXT: context } = contextModule;
 
 const { openNodeSqliteStorage } = node;
 const { openNodeJsonlStorage } = nodeModule;

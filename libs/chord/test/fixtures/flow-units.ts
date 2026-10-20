@@ -2,18 +2,13 @@ import { Effect } from "effect";
 import { dual } from "effect/Function";
 import { Type } from "typebox";
 
-import { HostImpl } from "../../src/host.ts";
-import {
-  type Ctx,
-  type Host,
-  createHost,
-  hostNamed,
-  memoryLinkPair,
-  method,
-  remote,
-} from "../../src/index.ts";
+import type hostTypes from "../../src/host.types.ts";
+import chord from "../../src/index.ts";
+import type chordTypes from "../../src/index.types.ts";
 import counting from "./counting.ts";
 import timing from "./timing.ts";
+
+const { createHost, hostNamed, memoryLinkPair, method, remote } = chord;
 
 const { CountingLink } = counting;
 const { pollUntil } = timing;
@@ -35,13 +30,13 @@ const Blob = remote("t.e8-blob", {
 const linesImpl = (kib: number, tag: string): string[] =>
   Array.from({ length: kib }, (_, i) => `${tag}${i}:${"x".repeat(1000)}`);
 
-function serveBlobImpl(host: Host, size: (name: string) => number): void {
+function serveBlobImpl(host: chordTypes.Host, size: (name: string) => number): void {
   host.serve(Blob, ({ name }, _principal, self) => {
     const state = self.state("lines", Type.Array(Type.String()), lines(size(name), name));
     return {
       lines: state,
       ping: () => "pong",
-      push: (line: string, ctx: Ctx) => {
+      push: (line: string, ctx: chordTypes.Ctx) => {
         state.change(ctx, (draft) => {
           draft.push(line);
         });
@@ -51,7 +46,7 @@ function serveBlobImpl(host: Host, size: (name: string) => number): void {
   });
 }
 
-function clientImpl(server: Host, window: number, pendingCap?: number) {
+function clientImpl(server: chordTypes.Host, window: number, pendingCap?: number) {
   const [down, up] = memoryLinkPair();
   server.accept(down, {
     principal: { user: "u" },
@@ -67,7 +62,9 @@ function clientImpl(server: Host, window: number, pendingCap?: number) {
     upstream: { link, principal: { kind: "server" } },
   });
   const connection = () =>
-    [...(server as HostImpl).connections].find((candidate) => candidate.role === "downstream")!;
+    [...(server as hostTypes.HostImpl).connections].find(
+      (candidate) => candidate.role === "downstream",
+    )!;
   return { connection, host, link };
 }
 
@@ -77,15 +74,15 @@ const lines: {
 } = dual(2, linesImpl);
 
 const serveBlob: {
-  (size: (name: string) => number): (host: Host) => void;
-  (host: Host, size: (name: string) => number): void;
+  (size: (name: string) => number): (host: chordTypes.Host) => void;
+  (host: chordTypes.Host, size: (name: string) => number): void;
 } = dual(2, serveBlobImpl);
 
 type Client = ReturnType<typeof clientImpl>;
 
 const client: {
-  (window: number, pendingCap?: number): (server: Host) => Client;
-  (server: Host, window: number, pendingCap?: number): Client;
+  (window: number, pendingCap?: number): (server: chordTypes.Host) => Client;
+  (server: chordTypes.Host, window: number, pendingCap?: number): Client;
 } = dual((args: IArguments) => typeof args[0] === "object", clientImpl);
 
 const flowUnits = {

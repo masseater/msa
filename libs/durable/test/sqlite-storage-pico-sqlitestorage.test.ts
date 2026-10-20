@@ -1,6 +1,6 @@
 import { DatabaseSync } from "node:sqlite";
 
-import type { JsonValue } from "@msa/chord";
+import type chordTypes from "@msa/chord/index.types";
 import { Effect } from "effect";
 import { afterEach, describe, expect, it } from "vite-plus/test";
 
@@ -86,7 +86,9 @@ const rollsSqlRows = Effect.gen(function* () {
   const { storage, path } = yield* createSqliteStorage();
   yield* awaited(createRoot(storage));
   const transientId = yield* awaited(storage.mintId<typesModule.EntryId>());
-  const transientTaskId = yield* awaited(storage.mintId<typesModule.TaskId<JsonValue>>());
+  const transientTaskId = yield* awaited(
+    storage.mintId<typesModule.TaskId<chordTypes.JsonValue>>(),
+  );
   const circular: { self?: unknown } = {};
   circular.self = circular;
   yield* awaited(
@@ -98,7 +100,7 @@ const rollsSqlRows = Effect.gen(function* () {
             type: "task",
             value: {
               ...pendingTask(transientTaskId),
-              input: circular as unknown as JsonValue,
+              input: circular as unknown as chordTypes.JsonValue,
             },
           },
         ],

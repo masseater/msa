@@ -1,7 +1,10 @@
 import { Effect } from "effect";
 import { describe, expect, it, vi } from "vite-plus/test";
 
-import {
+import contextModule from "../src/context/index.ts";
+import timing from "./fixtures/timing.ts";
+
+const {
   BACKGROUND_CONTEXT,
   TODO_CONTEXT,
   awaitWithContext,
@@ -10,8 +13,7 @@ import {
   withCancel,
   withContextValue,
   withoutAbortSignal,
-} from "../src/context/index.ts";
-import timing from "./fixtures/timing.ts";
+} = contextModule;
 
 const { latch } = timing;
 

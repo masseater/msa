@@ -1,4 +1,4 @@
-import type { Context } from "@msa/chord";
+import type chordTypes from "@msa/chord/index.types";
 
 import type sessionTypes from "../session/session.types.ts";
 import type schedulerTypes from "./scheduler.types.ts";
@@ -26,7 +26,7 @@ declare namespace harnessHostTypes {
     resolveAgent(
       id: typesModule.ConversationId,
       snapshot: typesModule.RegistrySnapshot<Tool> | undefined,
-      context: Context,
+      context: chordTypes.Context,
     ): Promise<typesModule.Agent<Tool>>;
   };
 
@@ -40,7 +40,7 @@ declare namespace harnessHostTypes {
     create(
       target: CreateTarget,
       options: CreateOptions,
-      context: Context,
+      context: chordTypes.Context,
     ): Promise<typesModule.Conversation>;
   };
 }

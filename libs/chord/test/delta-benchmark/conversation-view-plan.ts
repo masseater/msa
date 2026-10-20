@@ -1,4 +1,4 @@
-import type { Draft } from "../../src/delta/draft.ts";
+import type draftTypes from "../../src/delta/draft.ts";
 import conversationViewContent from "./conversation-view-content.ts";
 import type conversationViewPlanTypes from "./conversation-view-plan.types.ts";
 import type conversationViewTypes from "./conversation-view-types.types.ts";
@@ -7,10 +7,11 @@ const { payloadText } = conversationViewContent;
 
 const on = <T>(
   key: conversationViewTypes.DocumentKey,
-  mutate: (doc: Draft<T>) => void,
+  mutate: (doc: draftTypes.Draft<T>) => void,
 ): conversationViewTypes.DocMutation => ({
   key,
-  mutate: (draft: conversationViewTypes.JsonDraft) => mutate(draft as unknown as Draft<T>),
+  mutate: (draft: conversationViewTypes.JsonDraft) =>
+    mutate(draft as unknown as draftTypes.Draft<T>),
 });
 
 const streamChunk = (index: number): conversationViewTypes.DocMutation[] => [

@@ -1,4 +1,4 @@
-import type { Context } from "@msa/chord";
+import type chordTypes from "@msa/chord/index.types";
 
 import type submissionsTypes from "./submissions.types.ts";
 import type typesModule from "./types.types.ts";
@@ -12,15 +12,15 @@ export default class SubmissionHandle implements typesModule.Submission {
     this.#submissions = submissions;
   }
 
-  status(context: Context): Promise<typesModule.SubmissionRecord> {
+  status(context: chordTypes.Context): Promise<typesModule.SubmissionRecord> {
     return this.#submissions.status(this.id, context);
   }
 
-  wait(context: Context): Promise<typesModule.SettledSubmissionRecord> {
+  wait(context: chordTypes.Context): Promise<typesModule.SettledSubmissionRecord> {
     return this.#submissions.wait(this.id, context);
   }
 
-  abort(context: Context): Promise<submissionsTypes.AbortResult> {
+  abort(context: chordTypes.Context): Promise<submissionsTypes.AbortResult> {
     return this.#submissions.abortHandle(this.id, context);
   }
 }

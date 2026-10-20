@@ -1,16 +1,13 @@
 import { DateTime } from "effect";
 import { describe, expect, it } from "vite-plus/test";
 
-import {
-  type JsonValue,
-  type WireOp,
-  apply,
-  assertValidOp,
-  assertValidWireOp,
-  decoder,
-  track,
-} from "../src/delta/index.ts";
+import delta from "../src/delta/index.ts";
+import type deltaTypes from "../src/delta/index.types.ts";
 import prototypes from "./fixtures/prototypes.ts";
+
+const { apply, decoder, track } = delta;
+const assertValidOp: typeof delta.assertValidOp = delta.assertValidOp;
+const assertValidWireOp: typeof delta.assertValidWireOp = delta.assertValidWireOp;
 
 const { trappedArray, trappedObject } = prototypes;
 
@@ -22,7 +19,7 @@ const rejectsConstructorWalksAndForbiddenInterned = (): void => {
   const wire = [
     ["#", 0, ["__proto__", "w"]],
     ["s", 0, true],
-  ] as unknown as WireOp[];
+  ] as unknown as deltaTypes.WireOp[];
   expect(() => decoder().decode(wire)).toThrow();
 };
 
@@ -32,7 +29,7 @@ const doesNotRunInheritedSetters = (): void => {
 };
 
 const allowsReservedNamesInsideValuesWithout = (): void => {
-  const value = JSON.parse('{"__proto__":{"z":1}}') as JsonValue;
+  const value = JSON.parse('{"__proto__":{"z":1}}') as deltaTypes.JsonValue;
   const out = apply({}, [["s", ["value"], value]]);
   expect(Object.hasOwn((out as { value: object }).value, "__proto__")).toBe(true);
   expect(({} as Record<string, unknown>)["z"]).toBeUndefined();
@@ -91,8 +88,8 @@ const allowsExplicitGrowthValuesAndRejects = (): void => {
 };
 
 const appliesLargeSplicePayloadsWithoutSpreading = (): void => {
-  const items = Array<JsonValue>(300_000).fill(null);
-  const result = apply({ values: [] as JsonValue[] }, [["p", ["values"], 0, 0, items]]);
+  const items = Array<deltaTypes.JsonValue>(300_000).fill(null);
+  const result = apply({ values: [] as deltaTypes.JsonValue[] }, [["p", ["values"], 0, 0, items]]);
   expect(result.values).toHaveLength(items.length);
 };
 

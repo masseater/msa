@@ -1,4 +1,4 @@
-import type { Context } from "@msa/chord";
+import type chordTypes from "@msa/chord/index.types";
 import type { Static } from "typebox";
 
 import type typesModule from "../harness/types.types.ts";
@@ -21,7 +21,7 @@ declare namespace bashTypes {
   type BashPrepare = (
     execution: BashExecution,
     api: typesModule.ToolExecutionApi,
-    context: Context,
+    context: chordTypes.Context,
   ) => void | Promise<void>;
 
   interface BashToolOptions {

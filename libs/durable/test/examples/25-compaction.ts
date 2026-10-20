@@ -2,12 +2,14 @@ import * as NodeRuntime from "@effect/platform-node/NodeRuntime";
 import type { AssistantMessage, Message, TranscriptContext } from "@msa/ai";
 import { createModels } from "@msa/ai/models";
 import { fauxAssistantMessage, fauxProvider } from "@msa/ai/providers/faux";
-import { BACKGROUND_CONTEXT } from "@msa/chord/context";
+import contextModule from "@msa/chord/context";
 import { Console, Effect } from "effect";
 
 import type durableTypes from "../../src/index.types.ts";
 import durableKit from "../durable-kit.ts";
 import effectSupport from "../effect-support.ts";
+
+const { BACKGROUND_CONTEXT } = contextModule;
 
 const { durable, harness: harnessModule, memory } = durableKit;
 

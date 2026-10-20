@@ -1,6 +1,6 @@
 import type { ToolCall } from "@msa/ai";
-import type { Context, Draft, JsonValue } from "@msa/chord";
-import { copyJson } from "@msa/chord/json";
+import type chordTypes from "@msa/chord/index.types";
+import json from "@msa/chord/json";
 import { Effect } from "effect";
 
 import liveKit from "./live-kit.ts";
@@ -9,6 +9,8 @@ import type toolNestedTypes from "./tool-nested.types.ts";
 import toolTypes from "./tool-types.ts";
 import tool from "./tool.ts";
 import type typesModule from "./types.types.ts";
+
+const { copyJson } = json;
 
 const { bridge, live: liveModule } = liveKit;
 
@@ -28,7 +30,7 @@ const reuseExisting = Effect.fnUntraced(function* (
   const same =
     input?.kind === "nested" &&
     input.call.name === name &&
-    jsonEqual(input.call.arguments as JsonValue, call.arguments as JsonValue);
+    jsonEqual(input.call.arguments as chordTypes.JsonValue, call.arguments as chordTypes.JsonValue);
   if (!same)
     return yield* Effect.die(
       new Error(`Nested call ${call.id} was already made with another tool or other arguments`),
@@ -72,7 +74,7 @@ const createNested = Effect.fnUntraced(function* (
     status: "pending",
     taskId: created,
   };
-  live.nestedTools.push(slot as Draft<toolNestedTypes.NestedToolSlot>);
+  live.nestedTools.push(slot as chordTypes.Draft<toolNestedTypes.NestedToolSlot>);
   return created;
 });
 
@@ -82,7 +84,7 @@ const startNestedCall = Effect.fnUntraced(function* (
   name: string,
   args: typesModule.JsonObject,
   options: toolNestedTypes.NestedOptions,
-  context: Context,
+  context: chordTypes.Context,
 ) {
   const call: ToolCall = {
     arguments: copyJson(args, { omitUndefinedProperties: true }) as typesModule.JsonObject,

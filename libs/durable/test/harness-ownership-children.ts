@@ -1,4 +1,4 @@
-import type { Context } from "@msa/chord";
+import type chordTypes from "@msa/chord/index.types";
 import durable from "@msa/durable";
 import type durableTypes from "@msa/durable/index.types";
 import { Effect } from "effect";
@@ -11,7 +11,7 @@ const { awaited } = effectSupport;
 
 const spawnFauxChild = Effect.fn("spawnFauxChild")(function* (
   api: durableTypes.ToolExecutionApi,
-  callContext: Context,
+  callContext: chordTypes.Context,
 ) {
   return yield* awaited(
     api.commit(
@@ -30,7 +30,7 @@ const spawnFauxChild = Effect.fn("spawnFauxChild")(function* (
 
 const reuseFauxChild = Effect.fn("reuseFauxChild")(function* (
   api: durableTypes.ToolExecutionApi,
-  callContext: Context,
+  callContext: chordTypes.Context,
 ) {
   const runPromise = Effect.runPromiseWith(yield* Effect.context<never>());
   return yield* awaited(

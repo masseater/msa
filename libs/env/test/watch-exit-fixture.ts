@@ -1,8 +1,10 @@
-import { BACKGROUND_CONTEXT } from "@msa/chord/context";
+import contextModule from "@msa/chord/context";
 import { Effect } from "effect";
 
 import connectionModule from "../src/connection.ts";
 import RemoteExecutionEnv from "../src/remote-env.ts";
+
+const { BACKGROUND_CONTEXT } = contextModule;
 
 const { Connection } = connectionModule;
 

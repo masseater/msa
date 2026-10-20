@@ -1,14 +1,19 @@
 import type { ImageContent, TextContent, ToolCall, ToolResultMessage } from "@msa/ai";
-import type { JsonValue } from "@msa/chord";
-import { copyJson } from "@msa/chord/json";
-import { type OutputLimits, boundOutput } from "@msa/chord/output";
+import type chordTypes from "@msa/chord/index.types";
+import json from "@msa/chord/json";
+import outputModule from "@msa/chord/output";
+import type outputTypes from "@msa/chord/output.types";
 import { Effect, Function } from "effect";
 
-import entries from "../entries.ts";
 import type liveTypes from "./live.types.ts";
+import toolResultKit from "./tool-result-kit.ts";
 import type toolTypesModule from "./tool-types.types.ts";
 import type typesModule from "./types.types.ts";
-import usageModule from "./usage.ts";
+
+const { entries, usage: usageModule } = toolResultKit;
+
+const { boundOutput } = outputModule;
+const { copyJson } = json;
 
 const { recordUsage } = usageModule;
 const { ToolResultEntry } = entries;
@@ -98,13 +103,13 @@ function renderDiagnostics(diagnostics: readonly typesModule.ToolDiagnostic[]): 
 
 const boundContent: typesModule.Dual2<
   toolTypesModule.Content,
-  OutputLimits,
+  outputTypes.OutputLimits,
   { content: toolTypesModule.Content; droppedBytes: number; droppedLines: number }
 > = Function.dual(
   2,
   (
     content: toolTypesModule.Content,
-    limits: OutputLimits,
+    limits: outputTypes.OutputLimits,
   ): { content: toolTypesModule.Content; droppedBytes: number; droppedLines: number } => {
     const texts = content.filter((item): item is TextContent => item.type === "text");
     const bounded = boundOutput(texts.map((item) => item.text).join(""), limits);
@@ -207,7 +212,7 @@ const nestedResult: typesModule.Dual3<
       taskId,
       usage: result.usage,
     };
-    return copyJson(nested as unknown as JsonValue, {
+    return copyJson(nested as unknown as chordTypes.JsonValue, {
       omitUndefinedProperties: true,
     }) as unknown as typesModule.NestedToolExecutionResult;
   },

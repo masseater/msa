@@ -3,9 +3,11 @@ import { performance } from "node:perf_hooks";
 
 import { dual } from "effect/Function";
 
-import type { Draft } from "../../src/delta/draft.ts";
-import { applyImmutable, track } from "../../src/delta/index.ts";
+import type draftTypes from "../../src/delta/draft.ts";
+import delta from "../../src/delta/index.ts";
 import type benchmarkWorkerModelTypes from "./benchmark-worker-model.types.ts";
+
+const { applyImmutable, track } = delta;
 
 const MiB = 1024 * 1024;
 const MODES = new Set<benchmarkWorkerModelTypes.Mode>(["tracker"]);
@@ -61,7 +63,9 @@ function cloneTrusted<T>(value: T): T {
 }
 
 function sum(
-  document: benchmarkWorkerModelTypes.Document | Draft<benchmarkWorkerModelTypes.Document>,
+  document:
+    | benchmarkWorkerModelTypes.Document
+    | draftTypes.Draft<benchmarkWorkerModelTypes.Document>,
 ): number {
   let checksum = 0;
   for (let index = 0; index < document.rows.length; index++)
@@ -70,7 +74,7 @@ function sum(
 }
 
 const mutateDraft = (
-  state: Draft<benchmarkWorkerModelTypes.Document>,
+  state: draftTypes.Draft<benchmarkWorkerModelTypes.Document>,
   run: benchmarkWorkerModelTypes.MutationRun,
 ): number => {
   const { scenario, size, queueOperations } = run;

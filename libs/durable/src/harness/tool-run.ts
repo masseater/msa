@@ -1,5 +1,5 @@
-import type { Context } from "@msa/chord";
-import { OutputBuffer } from "@msa/chord/output";
+import type chordTypes from "@msa/chord/index.types";
+import outputModule from "@msa/chord/output";
 import { Cause, Effect } from "effect";
 
 import toolApi from "./tool-api.ts";
@@ -9,6 +9,8 @@ import toolProgress from "./tool-progress.ts";
 import toolSettle from "./tool-settle.ts";
 import type toolTypesModule from "./tool-types.types.ts";
 import type typesModule from "./types.types.ts";
+
+const { OutputBuffer } = outputModule;
 
 const { execute, limitsOf } = toolExecute;
 const { publishProgress } = toolProgress;
@@ -21,7 +23,7 @@ const run = Effect.fnUntraced(function* (
   call: typesModule.ToolHookCall,
   tool: typesModule.ToolRegistration,
   args: typesModule.JsonObject,
-  context: Context,
+  context: chordTypes.Context,
 ) {
   const limits = limitsOf(tool);
   const reported: toolTypesModule.Reported = {

@@ -4,9 +4,12 @@ import { Effect } from "effect";
 import { Type } from "typebox";
 import { describe, it } from "vite-plus/test";
 
-import { type Facet, isChordError, local, method } from "../src/index.ts";
+import chord from "../src/index.ts";
+import type chordTypes from "../src/index.types.ts";
 import hostModule from "./fixtures/host.ts";
 import timing from "./fixtures/timing.ts";
+
+const { isChordError, local, method } = chord;
 
 const { Counter, quiet, serveCounter, until } = hostModule;
 const { tick } = timing;
@@ -145,7 +148,7 @@ const aListenerOnStateGetsThe = Effect.gen(function* () {
     version: 1,
   });
   const seen: number[] = [];
-  const facet = (label: string): Facet => ({
+  const facet = (label: string): chordTypes.Facet => ({
     name: "doubled",
     setup: (api) =>
       api.serve(

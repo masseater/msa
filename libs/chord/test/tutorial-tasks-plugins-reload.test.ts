@@ -4,21 +4,12 @@ import { Effect } from "effect";
 import { type Static, Type } from "typebox";
 import { it, onTestFinished } from "vite-plus/test";
 
-import {
-  type Ctx,
-  type Facet,
-  type FacetApi,
-  type Host,
-  type Ref,
-  createHost,
-  defineFacet,
-  defineRegistry,
-  isChordError,
-  local,
-  method,
-} from "../src/index.ts";
+import chord from "../src/index.ts";
+import type chordTypes from "../src/index.types.ts";
 import tutorial from "./fixtures/tutorial.ts";
 import type tutorialTypes from "./fixtures/tutorial.types.ts";
+
+const { createHost, defineFacet, defineRegistry, isChordError, local, method } = chord;
 
 const { Rows, TodoStore, Todos, serveViews, todoStore } = tutorial;
 
@@ -65,14 +56,14 @@ const listenersAndTasks = Effect.gen(function* () {
 
 const plugins = Effect.gen(function* () {
   onTestFinished(() => host.close());
-  const Actions = defineRegistry<(ctx: Ctx) => Promise<number>>("tutorial.actions");
+  const Actions = defineRegistry<(ctx: chordTypes.Ctx) => Promise<number>>("tutorial.actions");
   const Menu = local("tutorial.menu", { input: Type.Object({}), version: 1 });
   let click: (() => Promise<number>) | undefined;
-  const storeFacet: Facet = {
+  const storeFacet: chordTypes.Facet = {
     name: "todo-store",
     ...defineFacet((api) => api.serve(TodoStore, todoFactory)),
   };
-  const menuFacet: Facet = {
+  const menuFacet: chordTypes.Facet = {
     name: "todo-menu",
     ...defineFacet(
       (api) => {
@@ -100,7 +91,7 @@ const plugins = Effect.gen(function* () {
   assert.equal(host.registry(Actions).table().size, 1);
 });
 
-const facet = (label: string): Facet => ({
+const facet = (label: string): chordTypes.Facet => ({
   name: "todos",
   setup: (api) =>
     api.serve(TodoStore, (input, principal, self) => ({
@@ -109,7 +100,7 @@ const facet = (label: string): Facet => ({
     })),
 });
 
-const compatibleReload = (host: Host, todos: Ref<typeof TodoStore>) =>
+const compatibleReload = (host: chordTypes.Host, todos: chordTypes.Ref<typeof TodoStore>) =>
   Effect.gen(function* () {
     const entered = Promise.withResolvers<void>();
     const resume = Promise.withResolvers<void>();
@@ -128,7 +119,7 @@ const compatibleReload = (host: Host, todos: Ref<typeof TodoStore>) =>
     assert.equal(todos.rows.value?.[0]?.text, "Buy milk");
   });
 
-const migrateRows = (host: Host, todos: Ref<typeof TodoStore>) =>
+const migrateRows = (host: chordTypes.Host, todos: chordTypes.Ref<typeof TodoStore>) =>
   Effect.gen(function* () {
     const events: string[] = [];
     const stopEvents = todos.rows.events((event) => events.push(event.type));
@@ -165,7 +156,7 @@ const RenamedStore = local("tutorial.todos", {
   version: 2,
 });
 
-const renameWithAdapter = (host: Host, todos: Ref<typeof TodoStore>) =>
+const renameWithAdapter = (host: chordTypes.Host, todos: chordTypes.Ref<typeof TodoStore>) =>
   Effect.gen(function* () {
     yield* Effect.promise(() =>
       host.reload([
@@ -212,9 +203,9 @@ const fakeProvider = Effect.gen(function* () {
   onTestFinished(() => host.close());
   const host = createHost<Principal>({ dev: true, name: "server", self: "server" });
   const received: string[] = [];
-  const fake: Facet = {
+  const fake: chordTypes.Facet = {
     name: "fake-store",
-    ...defineFacet((api: FacetApi) => {
+    ...defineFacet((api: chordTypes.FacetApi) => {
       api.serve(TodoStore, (input, principal, self) => ({
         ...todoFactory(input, principal, self),
         add: ({ text }) => {

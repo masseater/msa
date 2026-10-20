@@ -4,18 +4,13 @@ import { Effect } from "effect";
 import { Type } from "typebox";
 import { describe, it } from "vite-plus/test";
 
-import {
-  type Frame,
-  PROTOCOL_VERSION,
-  createHost,
-  hostNamed,
-  isChordError,
-  memoryLinkPair,
-  method,
-  remote,
-} from "../src/index.ts";
+import chord from "../src/index.ts";
+import type chordTypes from "../src/index.types.ts";
 import linkModule from "./fixtures/link.ts";
 import timing from "./fixtures/timing.ts";
+
+const { PROTOCOL_VERSION, createHost, hostNamed, isChordError, memoryLinkPair, method, remote } =
+  chord;
 
 const { Counter, SessionCounter, cluster, serveCounter, serverWithWorker } = linkModule;
 const { tick } = timing;
@@ -39,7 +34,7 @@ const ignoresPayloadPrincipalsFromClientsAnd = Effect.gen(function* () {
   const guest = { guest: "g1" };
   const [down, raw] = memoryLinkPair();
   c.server.accept(down, { principal: guest });
-  const frames: Frame[] = [];
+  const frames: chordTypes.Frame[] = [];
   raw.receive((frame) => frames.push(frame));
   raw.send({
     codeVersion: 0,
@@ -64,7 +59,7 @@ const ignoresPayloadPrincipalsFromClientsAnd = Effect.gen(function* () {
 
   const { server, down: _down, up } = serverWithWorker("w9");
   serveCounter(server);
-  const childFrames: Frame[] = [];
+  const childFrames: chordTypes.Frame[] = [];
   up.receive((frame) => childFrames.push(frame));
   up.send({
     at: "server",

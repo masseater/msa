@@ -1,4 +1,4 @@
-import type { Context } from "@msa/chord";
+import type chordTypes from "@msa/chord/index.types";
 import type { CodemodeResult, CodemodeRun } from "@msa/codemode/portable";
 import type { CodemodeSourceOptions } from "@msa/codemode/source";
 import { Cause, Effect, Exit } from "effect";
@@ -29,7 +29,7 @@ const abortOf = (signal: AbortSignal | undefined): Effect.Effect<void> =>
 
 class CodemodeRunner {
   private readonly options: runDocsTypes.CodemodeToolOptions;
-  private readonly context: Context;
+  private readonly context: chordTypes.Context;
   private readonly host: runCallsTypes.CallHost;
   private readonly opened: runJournalTypes.Resumed;
   private readonly journal: runJournalTypes.RunJournal;
@@ -42,7 +42,7 @@ class CodemodeRunner {
   constructor(
     options: runDocsTypes.CodemodeToolOptions,
     api: typesModule.ToolExecutionApi,
-    context: Context,
+    context: chordTypes.Context,
     opened: runJournalTypes.Resumed,
   ) {
     this.options = options;
@@ -205,7 +205,7 @@ class CodemodeRunner {
 const runCodemode = Effect.fnUntraced(function* (
   options: runDocsTypes.CodemodeToolOptions,
   api: typesModule.ToolExecutionApi,
-  context: Context,
+  context: chordTypes.Context,
   source: { readonly code: string; readonly options: CodemodeSourceOptions },
 ) {
   const opened = yield* openRun(options, source.options, api, context);

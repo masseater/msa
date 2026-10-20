@@ -2,8 +2,11 @@ import assert from "node:assert/strict";
 
 import { Effect } from "effect";
 
-import { type Tracker, track } from "../../src/delta/index.ts";
+import delta from "../../src/delta/index.ts";
+import type deltaTypes from "../../src/delta/index.types.ts";
 import timing from "./timing.ts";
+
+const { track } = delta;
 
 const { tick } = timing;
 
@@ -23,7 +26,7 @@ const collect = (ref: WeakRef<object>): Effect.Effect<void> =>
   });
 
 function abortedPayload(
-  tracker: Tracker<{ payload: { rows: { value: number }[] } | null }>,
+  tracker: deltaTypes.Tracker<{ payload: { rows: { value: number }[] } | null }>,
 ): WeakRef<object> {
   const change = tracker.beginChange();
   change.state.payload = { rows: Array.from({ length: 50_000 }, (_, value) => ({ value })) };
@@ -33,7 +36,7 @@ function abortedPayload(
 }
 
 function unadoptedPrepared(
-  tracker: Tracker<{ payload: { rows: { value: number }[] } | null }>,
+  tracker: deltaTypes.Tracker<{ payload: { rows: { value: number }[] } | null }>,
 ): WeakRef<object> {
   const change = tracker.beginChange();
   change.state.payload = { rows: Array.from({ length: 50_000 }, (_, value) => ({ value })) };
@@ -42,7 +45,7 @@ function unadoptedPrepared(
 }
 
 function draftProxies(
-  tracker: Tracker<{ payload: { rows: { value: number }[] } | null }>,
+  tracker: deltaTypes.Tracker<{ payload: { rows: { value: number }[] } | null }>,
 ): WeakRef<object> {
   const change = tracker.beginChange();
   change.state.payload = { rows: [{ value: 1 }] };

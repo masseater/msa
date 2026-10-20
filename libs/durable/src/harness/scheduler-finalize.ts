@@ -1,4 +1,4 @@
-import type { JsonValue } from "@msa/chord";
+import type chordTypes from "@msa/chord/index.types";
 import { Effect, Function } from "effect";
 
 import stepModule from "../step.ts";
@@ -216,7 +216,7 @@ const validateWait = Effect.fnUntraced(function* (
   invocation: schedulerTypesModule.Invocation,
   current: schedulerTypesModule.ErasedRunningTask,
   next: Extract<
-    schedulerTypesModule.NextTaskState<schedulerTypesModule.Checkpoint, JsonValue>,
+    schedulerTypesModule.NextTaskState<schedulerTypesModule.Checkpoint, chordTypes.JsonValue>,
     { status: "waiting" }
   >,
 ) {
@@ -237,7 +237,7 @@ const settleState = (
   state: schedulerStateTypes.SchedulerState,
   tx: schedulerTypesModule.Transaction,
   current: schedulerTypesModule.ErasedRunningTask,
-  next: schedulerTypesModule.NextTaskState<schedulerTypesModule.Checkpoint, JsonValue>,
+  next: schedulerTypesModule.NextTaskState<schedulerTypesModule.Checkpoint, chordTypes.JsonValue>,
 ): void => {
   if (next.status === "terminal" && state.graph.hasOwnedLive(current.id, overlayOf(tx))) {
     tx.setTask(withState(current, { outcome: next.outcome, status: "completing" }));
@@ -263,7 +263,7 @@ const commitState: schedulerTypesModule.Dual5<
   schedulerTypesModule.Transaction,
   schedulerTypesModule.Invocation,
   schedulerTypesModule.ErasedRunningTask,
-  schedulerTypesModule.NextTaskState<schedulerTypesModule.Checkpoint, JsonValue>,
+  schedulerTypesModule.NextTaskState<schedulerTypesModule.Checkpoint, chordTypes.JsonValue>,
   Effect.Effect<void>
 > = Function.dual(
   5,
@@ -272,7 +272,7 @@ const commitState: schedulerTypesModule.Dual5<
     tx: schedulerTypesModule.Transaction,
     invocation: schedulerTypesModule.Invocation,
     current: schedulerTypesModule.ErasedRunningTask,
-    next: schedulerTypesModule.NextTaskState<schedulerTypesModule.Checkpoint, JsonValue>,
+    next: schedulerTypesModule.NextTaskState<schedulerTypesModule.Checkpoint, chordTypes.JsonValue>,
   ): Effect.Effect<void> => {
     const ready =
       next.status === "waiting"

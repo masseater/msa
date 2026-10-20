@@ -4,8 +4,11 @@ import { Effect } from "effect";
 import { Type } from "typebox";
 import { describe, it } from "vite-plus/test";
 
-import { type Facet, createHost } from "../src/index.ts";
+import chord from "../src/index.ts";
+import type chordTypes from "../src/index.types.ts";
 import stateNotes from "./fixtures/state-notes.ts";
+
+const { createHost } = chord;
 
 const { Notes, NotesSchema } = stateNotes;
 
@@ -13,7 +16,7 @@ const reloadFacet = (spec: {
   readonly inits: string[];
   readonly extra?: () => string[];
   readonly countVersion?: number;
-}): Facet => ({
+}): chordTypes.Facet => ({
   name: "notes",
   setup: (api) =>
     api.serve(Notes, (_input, _principal, self) => {

@@ -1,4 +1,4 @@
-import type { Context } from "@msa/chord";
+import type chordTypes from "@msa/chord/index.types";
 import durable from "@msa/durable";
 import type durableTypes from "@msa/durable/index.types";
 import sessionModule from "@msa/durable/session";
@@ -55,25 +55,25 @@ function checkHistoricalReads(
   expectTypeOf<
     typeSupportTypes.CallableWith<
       AsOf,
-      [typeof LatestDoc, durableTypes.ConversationId, durableTypes.EntryId, Context]
+      [typeof LatestDoc, durableTypes.ConversationId, durableTypes.EntryId, chordTypes.Context]
     >
   >().toEqualTypeOf<false>();
   expectTypeOf<
     typeSupportTypes.CallableWith<
       AsOf,
-      [typeof SessionDoc, durableTypes.ConversationId, durableTypes.EntryId, Context]
+      [typeof SessionDoc, durableTypes.ConversationId, durableTypes.EntryId, chordTypes.Context]
     >
   >().toEqualTypeOf<false>();
   expectTypeOf<
     typeSupportTypes.CallableWith<
       AsOf,
-      [typeof TaskDoc, durableTypes.TaskId, durableTypes.EntryId, Context]
+      [typeof TaskDoc, durableTypes.TaskId, durableTypes.EntryId, chordTypes.Context]
     >
   >().toEqualTypeOf<false>();
   expectTypeOf<
     typeSupportTypes.CallableWith<
       AsOf,
-      [typeof RewindableDoc, durableTypes.ConversationId, durableTypes.EntryId, Context]
+      [typeof RewindableDoc, durableTypes.ConversationId, durableTypes.EntryId, chordTypes.Context]
     >
   >().toEqualTypeOf<true>();
   void [conversationId, taskId, at];
@@ -103,7 +103,7 @@ function checkStatesAndWatches(
   expectTypeOf<
     typeSupportTypes.CallableWith<
       typeof session.watchDoc,
-      [typeof SessionDoc, durableTypes.ConversationId, Context]
+      [typeof SessionDoc, durableTypes.ConversationId, chordTypes.Context]
     >
   >().toEqualTypeOf<false>();
 }
@@ -194,7 +194,7 @@ const typesEveryOwner = Effect.gen(function* () {
   expectTypeOf<
     typeSupportTypes.CallableWith<
       typeof session.snapshot,
-      [typeof SessionFamily, string, number, Context]
+      [typeof SessionFamily, string, number, chordTypes.Context]
     >
   >().toEqualTypeOf<false>();
   yield* Effect.exit(

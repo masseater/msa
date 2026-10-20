@@ -1,14 +1,11 @@
-export interface ContextKey<T> {
-  readonly token: symbol;
-  readonly valueType?: (value: T) => T;
-}
+import type typesModule from "./types.types.ts";
 
-export interface Context {
-  readonly abortSignal: AbortSignal | undefined;
-  value<T>(key: ContextKey<T>): T | undefined;
-  toString(): string;
-}
-
-export const ABORT_SIGNAL_CONTEXT_KEY: ContextKey<AbortSignal | undefined> = Object.freeze({
+const ABORT_SIGNAL_CONTEXT_KEY: typesModule.ContextKey<AbortSignal | undefined> = Object.freeze({
   token: Symbol("chord.abortSignal"),
 });
+
+const types = {
+  ABORT_SIGNAL_CONTEXT_KEY,
+};
+
+export default types;

@@ -1,11 +1,12 @@
 import type { Message } from "@msa/ai";
-import type { Context } from "@msa/chord";
+import type chordTypes from "@msa/chord/index.types";
 import { Effect, Function } from "effect";
 
 import compaction from "./compaction.ts";
 import type generationThresholdTypes from "./generation-threshold.types.ts";
 import type generationTypesModule from "./generation-types.types.ts";
 import type typesModule from "./types.types.ts";
+
 const thresholdCompaction: typesModule.Dual4<
   typesModule.ContextView,
   readonly { readonly model?: readonly Message[] }[],
@@ -56,7 +57,7 @@ const compactionFailure = (
 const compactedFailure = Effect.fnUntraced(function* (
   runtime: generationTypesModule.GenerationRuntime,
   checkpoint: Extract<generationTypesModule.GenerationCheckpoint, { phase: "prepare" }>,
-  context: Context,
+  context: chordTypes.Context,
 ) {
   const { compacted, overflow, threshold } = checkpoint;
   if (compacted === undefined) return undefined;

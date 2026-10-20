@@ -1,4 +1,4 @@
-import type { Context } from "@msa/chord";
+import type chordTypes from "@msa/chord/index.types";
 import { Effect } from "effect";
 import { afterEach, describe, expect, it } from "vite-plus/test";
 
@@ -46,7 +46,7 @@ class ReopeningStorage implements typesModule.Storage {
 
   commit(
     writes: readonly typesModule.StorageWrite[],
-    commitContext: Context,
+    commitContext: chordTypes.Context,
   ): Promise<typesModule.Seq> {
     return Effect.runPromise(
       Effect.gen({ self: this }, function* () {
@@ -82,21 +82,24 @@ class ReopeningStorage implements typesModule.Storage {
     cursor,
     readContext,
   ) => this.current.scanConversations(query, limit, cursor, readContext);
-  entry(id: typesModule.EntryId, readContext: Context): ReturnType<typesModule.Storage["entry"]>;
+  entry(
+    id: typesModule.EntryId,
+    readContext: chordTypes.Context,
+  ): ReturnType<typesModule.Storage["entry"]>;
   entry(
     conversationId: typesModule.ConversationId,
     id: typesModule.EntryId,
-    readContext: Context,
+    readContext: chordTypes.Context,
   ): ReturnType<typesModule.Storage["entry"]>;
   entry(
     idOrConversationId: typesModule.EntryId | typesModule.ConversationId,
-    idOrContext: typesModule.EntryId | Context,
-    readContext?: Context,
+    idOrContext: typesModule.EntryId | chordTypes.Context,
+    readContext?: chordTypes.Context,
   ) {
     if (readContext === undefined) {
       return this.current.entry(
         idFromNumber<typesModule.EntryId>(idOrConversationId),
-        idOrContext as Context,
+        idOrContext as chordTypes.Context,
       );
     }
     if (typeof idOrContext !== "number")
@@ -133,7 +136,7 @@ class ReopeningStorage implements typesModule.Storage {
   scanDocuments: typesModule.Storage["scanDocuments"] = (query, limit, cursor, readContext) =>
     this.current.scanDocuments(query, limit, cursor, readContext);
 
-  close(closeContext: Context): Promise<void> {
+  close(closeContext: chordTypes.Context): Promise<void> {
     return Effect.runPromise(
       Effect.gen({ self: this }, function* () {
         if (this.closed) return;

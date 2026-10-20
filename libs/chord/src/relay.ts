@@ -1,32 +1,36 @@
 import { Effect } from "effect";
 
-import type { StateFrame } from "./connection-types.ts";
-import type { Connection } from "./connection.ts";
-import { ChordError } from "./errors.ts";
-import type { RelayCall } from "./relay-call.ts";
-import { type Frame, toWireError } from "./wire.ts";
+import type connectionTypesModule from "./connection-types.types.ts";
+import type connectionTypes from "./connection.types.ts";
+import errorsModule from "./errors.ts";
+import type relayCallTypes from "./relay-call.types.ts";
+import wire from "./wire.ts";
+import type wireTypes from "./wire.types.ts";
 
-type Waiter = (outcome: Effect.Effect<Connection>) => void;
+const { ChordError } = errorsModule;
+const { toWireError } = wire;
 
-export class RelayRef {
-  readonly origin: Connection;
-  readonly frame: Extract<Frame, { t: "hold" }>;
+type Waiter = (outcome: Effect.Effect<connectionTypes.Connection>) => void;
+
+export default class RelayRef {
+  readonly origin: connectionTypes.Connection;
+  readonly frame: Extract<wireTypes.Frame, { t: "hold" }>;
   readonly principal: unknown;
   readonly originTag: string | undefined;
   readonly generation: number;
-  down: Connection | undefined;
+  down: connectionTypes.Connection | undefined;
   downId = 0;
   closed = false;
   stateWanted: boolean;
   urgent: Set<string> | undefined;
   #shaped = false;
   readonly awaiting = new Set<string>();
-  readonly calls = new Map<number, RelayCall>();
+  readonly calls = new Map<number, relayCallTypes.RelayCall>();
   readonly #waiters = new Set<Waiter>();
 
   constructor(
-    origin: Connection,
-    frame: Extract<Frame, { t: "hold" }>,
+    origin: connectionTypes.Connection,
+    frame: Extract<wireTypes.Frame, { t: "hold" }>,
     principal: unknown,
     originTag: string | undefined,
   ) {
@@ -50,30 +54,30 @@ export class RelayRef {
     return !this.closed && this.origin.open && this.origin.generation === this.generation;
   }
 
-  ready(): Effect.Effect<Connection> {
+  ready(): Effect.Effect<connectionTypes.Connection> {
     return Effect.suspend(() => {
       if (this.closed) return Effect.die(new ChordError("gone", "relayed hold closed"));
       if (this.down !== undefined) return Effect.succeed(this.down);
-      return Effect.callback<Connection>((resume) => {
+      return Effect.callback<connectionTypes.Connection>((resume) => {
         this.#waiters.add(resume);
         return Effect.sync(() => this.#waiters.delete(resume));
       });
     });
   }
 
-  open(down: Connection): void {
+  open(down: connectionTypes.Connection): void {
     if (this.closed) return;
     this.down = down;
     this.downId = down.nextId();
     down.relayedRefs.set(this.downId, this);
     const { at, token, input } = this.frame;
     down.send({
-      t: "hold",
-      id: this.downId,
       at,
-      token,
+      id: this.downId,
       input,
       principal: this.principal,
+      t: "hold",
+      token,
       ...(this.originTag === undefined ? {} : { origin: this.originTag }),
       ...(this.stateWanted ? {} : { state: false as const }),
       ...(this.frame.again === true ? { again: true as const } : {}),
@@ -89,16 +93,16 @@ export class RelayRef {
       this.origin.flow.dropHoldState(this.originId);
       this.awaiting.clear();
     }
-    this.down?.send({ t: wanted ? "sub" : "unsub", hold: this.downId });
+    this.down?.send({ hold: this.downId, t: wanted ? "sub" : "unsub" });
   }
 
   resync(m: string): void {
     if (this.closed) return;
     this.awaiting.add(m);
-    this.down?.send({ t: "resync", hold: this.downId, m });
+    this.down?.send({ hold: this.downId, m, t: "resync" });
   }
 
-  shape(frame: Extract<Frame, { t: "shape" }>): void {
+  shape(frame: Extract<wireTypes.Frame, { t: "shape" }>): void {
     if (this.closed) return;
     if (!this.#shaped) {
       this.#shaped = true;
@@ -107,14 +111,14 @@ export class RelayRef {
     this.origin.send({ ...frame, id: this.originId });
   }
 
-  state(frame: StateFrame): void {
+  state(frame: connectionTypesModule.StateFrame): void {
     if (this.closed) return;
     const m = frame.m;
     if (this.awaiting.has(m)) {
       if (frame.as === "ops") return;
       this.awaiting.delete(m);
     }
-    const out: StateFrame = { ...frame, hold: this.originId };
+    const out: connectionTypesModule.StateFrame = { ...frame, hold: this.originId };
     if (this.urgent?.delete(m) === true) {
       this.origin.send(out);
       return;
@@ -134,11 +138,11 @@ export class RelayRef {
       this.origin.served.delete(this.originId);
     if (this.down !== undefined) {
       this.down.relayedRefs.delete(this.downId);
-      if (options.releaseDown) this.down.send({ t: "release", id: this.downId });
+      if (options.releaseDown) this.down.send({ id: this.downId, t: "release" });
     }
     for (const waiter of this.#waiters) waiter(Effect.die(error));
     this.#waiters.clear();
     if (options.notify)
-      this.origin.send({ t: "gone", id: this.originId, error: toWireError(error) });
+      this.origin.send({ error: toWireError(error), id: this.originId, t: "gone" });
   }
 }

@@ -1,4 +1,4 @@
-import type { Context } from "@msa/chord";
+import type chordTypes from "@msa/chord/index.types";
 import type { Static } from "typebox";
 
 import type envTypes from "../env/index.types.ts";
@@ -14,7 +14,7 @@ declare namespace editTypes {
     readonly env: ReturnType<typeof envModule.requireEnv>;
     readonly path: string;
     readonly absolutePath: string;
-    readonly context: Context;
+    readonly context: chordTypes.Context;
   };
 
   type EditToolDetails = editDisplayTypes.EditToolDetails;

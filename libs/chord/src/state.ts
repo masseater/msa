@@ -1,45 +1,43 @@
 import { dual } from "effect/Function";
 
-import { attachReplicatedStateSource } from "./state-attached.ts";
-import { MutableReplicatedStateImpl } from "./state-mutable.ts";
-import type {
-  AttachedReplicatedState,
-  MutableReplicatedState,
-  ReplicatedStateSource,
-  ReplicatedStateSourceOptions,
-} from "./state-types.ts";
+import stateAttached from "./state-attached.ts";
+import MutableReplicatedStateImpl from "./state-mutable.ts";
+import type stateTypesModule from "./state-types.ts";
 
-export type {
-  AttachedReplicatedState,
-  MutableReplicatedState,
-  ReplicatedState,
-  ReplicatedStateDelivery,
-  ReplicatedStateSource,
-  ReplicatedStateSourceAttachment,
-  ReplicatedStateSourceFrame,
-  ReplicatedStateSourceOptions,
-} from "./state-types.ts";
+const { attachReplicatedStateSource } = stateAttached;
 
 function stateReplicated(
-  initialOrSource: object | ReplicatedStateSource<unknown>,
-  options?: ReplicatedStateSourceOptions,
-): MutableReplicatedState<object> | AttachedReplicatedState<unknown> {
+  initialOrSource: object | stateTypesModule.ReplicatedStateSource<unknown>,
+  options?: stateTypesModule.ReplicatedStateSourceOptions,
+):
+  | stateTypesModule.MutableReplicatedState<object>
+  | stateTypesModule.AttachedReplicatedState<unknown> {
   if (isReplicatedStateSource(initialOrSource))
     return attachReplicatedStateSource(initialOrSource, options ?? {});
   return new MutableReplicatedStateImpl(initialOrSource);
 }
 
-function isReplicatedStateSource(value: object): value is ReplicatedStateSource<unknown> {
+function isReplicatedStateSource(
+  value: object,
+): value is stateTypesModule.ReplicatedStateSource<unknown> {
   return typeof (value as { readonly attach?: unknown }).attach === "function";
 }
 
-export const replicatedState: {
+const replicatedState: {
   <T>(
-    source: ReplicatedStateSource<T>,
-    options?: ReplicatedStateSourceOptions,
-  ): AttachedReplicatedState<T>;
-  <T extends object>(initial: T): MutableReplicatedState<T>;
+    source: stateTypesModule.ReplicatedStateSource<T>,
+    options?: stateTypesModule.ReplicatedStateSourceOptions,
+  ): stateTypesModule.AttachedReplicatedState<T>;
+  <T extends object>(initial: T): stateTypesModule.MutableReplicatedState<T>;
   (
-    options?: ReplicatedStateSourceOptions,
-  ): <T>(source: ReplicatedStateSource<T>) => AttachedReplicatedState<T>;
+    options?: stateTypesModule.ReplicatedStateSourceOptions,
+  ): <T>(
+    source: stateTypesModule.ReplicatedStateSource<T>,
+  ) => stateTypesModule.AttachedReplicatedState<T>;
 } = dual((args) => args.length >= 1, stateReplicated);
+
+const state = {
+  replicatedState,
+};
+
+export default state;

@@ -1,4 +1,4 @@
-import type { Context } from "@msa/chord";
+import type chordTypes from "@msa/chord/index.types";
 import { Effect } from "effect";
 
 import bridge from "./bridge.ts";
@@ -16,7 +16,7 @@ const { failNoModel } = generationFail;
 const retryPhase = Effect.fnUntraced(function* (
   task: generationTypesModule.PhaseTask<"retry">,
   runtime: generationTypesModule.GenerationRuntime,
-  context: Context,
+  context: chordTypes.Context,
 ) {
   const { attempt, compacted, until } = task.state.checkpoint;
   yield* Effect.promise(() => runtime.sleep(until, context));
@@ -42,7 +42,7 @@ const retryPhase = Effect.fnUntraced(function* (
 const pollPhase = Effect.fnUntraced(function* (
   task: generationTypesModule.PhaseTask<"poll">,
   runtime: generationTypesModule.GenerationRuntime,
-  context: Context,
+  context: chordTypes.Context,
 ) {
   const { attempt, compacted, model: ref, cutoff, handle, pollAt } = task.state.checkpoint;
   const model = runtime.models.getModel(ref.provider, ref.modelId);
@@ -62,7 +62,7 @@ const pollPhase = Effect.fnUntraced(function* (
 const toolsPhase = Effect.fnUntraced(function* (
   task: generationTypesModule.PhaseTask<"tools">,
   runtime: generationTypesModule.GenerationRuntime,
-  context: Context,
+  context: chordTypes.Context,
 ) {
   const { assistant, tools, pending } = task.state.checkpoint;
   const [next, ...rest] = pending;

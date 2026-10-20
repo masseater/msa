@@ -1,14 +1,18 @@
-import { type Context, type JsonValue, copyJson } from "@msa/chord";
+import chord from "@msa/chord";
+import type chordTypes from "@msa/chord/index.types";
 import type { CodemodeResult } from "@msa/codemode/portable";
 import { Effect } from "effect";
 
-import clockModule from "../clock.ts";
 import type typesModule from "../harness/types.types.ts";
-import outputFilesModule from "./output-files.ts";
 import outputModule from "./output.ts";
 import runDocs from "./run-docs.ts";
 import type runDocsTypes from "./run-docs.types.ts";
+import runPersistKit from "./run-persist-kit.ts";
 import type runPersistTypes from "./run-persist.types.ts";
+
+const { clock: clockModule, outputFiles: outputFilesModule } = runPersistKit;
+
+const { copyJson } = chord;
 
 const { CodemodeJournalDoc, CodemodeRunDoc, CodemodeStoreDoc, OUTPUT_LIMITS, commitWith } = runDocs;
 const { formatResult } = outputModule;
@@ -17,16 +21,16 @@ const { outputFiles } = outputFilesModule;
 
 const decideRun = Effect.fnUntraced(function* (
   api: typesModule.ToolExecutionApi,
-  context: Context,
+  context: chordTypes.Context,
   decided: typesModule.ToolExecutionResult,
   details: runPersistTypes.CodemodeToolDetails,
 ) {
-  const result = { ...decided, details: details as unknown as JsonValue };
+  const result = { ...decided, details: details as unknown as chordTypes.JsonValue };
   yield* commitWith(api, context, (tx) =>
     Effect.map(
       Effect.promise(() => tx.doc(CodemodeRunDoc, api.taskId)),
       (run) => {
-        run.result ??= copyJson(result as unknown as JsonValue, {
+        run.result ??= copyJson(result as unknown as chordTypes.JsonValue, {
           omitUndefinedProperties: true,
         }) as runPersistTypes.JsonObject;
       },
@@ -44,7 +48,7 @@ const storeWrites = (result: CodemodeResult) => {
 
 const completeRun = Effect.fnUntraced(function* (
   api: typesModule.ToolExecutionApi,
-  context: Context,
+  context: chordTypes.Context,
   start: runDocsTypes.Start,
   outcome: { readonly result: CodemodeResult; readonly generatedImages: number },
   details: runPersistTypes.CodemodeToolDetails,
@@ -64,7 +68,7 @@ const completeRun = Effect.fnUntraced(function* (
       ...(formatted.fullOutputPath === undefined
         ? {}
         : { fullOutputPath: formatted.fullOutputPath }),
-    } as unknown as JsonValue,
+    } as unknown as chordTypes.JsonValue,
     isError: !result.ok,
     output: formatted.content,
   };
@@ -73,14 +77,14 @@ const completeRun = Effect.fnUntraced(function* (
     Effect.gen(function* () {
       const run = yield* Effect.promise(() => tx.doc(CodemodeRunDoc, api.taskId));
       if (run.result !== undefined) return run.result as typesModule.ToolExecutionResult;
-      run.result = copyJson(tool as unknown as JsonValue, {
+      run.result = copyJson(tool as unknown as chordTypes.JsonValue, {
         omitUndefinedProperties: true,
       }) as runPersistTypes.JsonObject;
       if (writes !== undefined) {
         const store = yield* Effect.promise(() => tx.doc(CodemodeStoreDoc, api.conversationId));
         for (const key of writes.delete) delete store.values[key];
         for (const [key, value] of Object.entries(writes.set))
-          store.values[key] = value as JsonValue;
+          store.values[key] = value as chordTypes.JsonValue;
       }
       return tool;
     }),
@@ -89,7 +93,7 @@ const completeRun = Effect.fnUntraced(function* (
 
 const appendJournal = Effect.fnUntraced(function* (
   api: typesModule.ToolExecutionApi,
-  context: Context,
+  context: chordTypes.Context,
   acks: readonly (readonly [number, number])[],
   batch: readonly runDocsTypes.Settled[],
 ) {
@@ -111,7 +115,7 @@ const appendJournal = Effect.fnUntraced(function* (
             ...(item.global === undefined ? {} : { global: item.global }),
           };
           journal.entries.push(
-            copyJson(entry as unknown as JsonValue, {
+            copyJson(entry as unknown as chordTypes.JsonValue, {
               omitUndefinedProperties: true,
             }) as unknown as runDocsTypes.JournalEntry,
           );
@@ -122,7 +126,7 @@ const appendJournal = Effect.fnUntraced(function* (
 });
 
 const recordFingerprint = Effect.fnUntraced(function* (
-  host: { readonly api: typesModule.ToolExecutionApi; readonly context: Context },
+  host: { readonly api: typesModule.ToolExecutionApi; readonly context: chordTypes.Context },
   fingerprint: string,
 ) {
   const { api, context } = host;

@@ -1,5 +1,5 @@
 import type { Message } from "@msa/ai";
-import type { JsonValue } from "@msa/chord";
+import type chordTypes from "@msa/chord/index.types";
 
 import type idsTypes from "./ids.types.ts";
 
@@ -38,24 +38,24 @@ declare namespace recordsTypes {
     readonly conversationId: idsTypes.ConversationId;
     readonly kind: string;
     readonly model?: readonly Message[];
-    readonly data?: JsonValue;
+    readonly data?: chordTypes.JsonValue;
     readonly head?: idsTypes.EntryId;
     readonly edits?: readonly ContextEdit[];
     readonly byTaskId?: idsTypes.TaskId;
   };
 
   type EntryDraft = Omit<EntryRecord, "id" | "conversationId" | "byTaskId" | "head" | "data"> & {
-    readonly data?: JsonValue | undefined;
+    readonly data?: chordTypes.JsonValue | undefined;
     readonly head?: idsTypes.EntryId | "self";
   };
 
-  type TypedEntry<D extends JsonValue> = Omit<EntryRecord, "data"> &
+  type TypedEntry<D extends chordTypes.JsonValue> = Omit<EntryRecord, "data"> &
     ([D] extends [never] ? { readonly data?: never } : { readonly data: D });
 
-  type TypedEntryDraft<D extends JsonValue> = Omit<EntryDraft, "kind" | "data"> &
+  type TypedEntryDraft<D extends chordTypes.JsonValue> = Omit<EntryDraft, "kind" | "data"> &
     ([D] extends [never] ? { readonly data?: never } : { readonly data: D });
 
-  interface Entry<D extends JsonValue = never> {
+  interface Entry<D extends chordTypes.JsonValue = never> {
     readonly kind: string;
     is(entry: EntryRecord | undefined): entry is TypedEntry<D>;
   }
@@ -96,7 +96,7 @@ declare namespace recordsTypes {
               readonly entry?: idsTypes.EntryId;
               readonly answer?: never;
               readonly reason: string;
-              readonly detail?: JsonValue;
+              readonly detail?: chordTypes.JsonValue;
             }
         ))
     | (SubmissionRecordBase & {
@@ -121,13 +121,17 @@ declare namespace recordsTypes {
               readonly entry?: never;
               readonly answer?: never;
               readonly reason: string;
-              readonly detail?: JsonValue;
+              readonly detail?: chordTypes.JsonValue;
             }
         ));
 
   type SubmissionSettlement =
     | { readonly status: "done"; readonly answer: idsTypes.EntryId }
-    | { readonly status: "unanswered"; readonly reason: string; readonly detail?: JsonValue };
+    | {
+        readonly status: "unanswered";
+        readonly reason: string;
+        readonly detail?: chordTypes.JsonValue;
+      };
 
   type SubmissionCreate = SubmissionRecord extends infer Record
     ? Record extends SubmissionRecord

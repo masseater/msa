@@ -1,4 +1,4 @@
-import type { JsonValue } from "@msa/chord";
+import type chordTypes from "@msa/chord/index.types";
 import { Effect } from "effect";
 
 import type typesModule from "../types.types.ts";
@@ -66,7 +66,7 @@ const seedAddresses = Effect.fnUntraced(function* (storage: typesModule.Storage)
   const firstId = yield* mint<typesModule.DocumentId>(storage);
   const secondId = yield* mint<typesModule.DocumentId>(storage);
   const conversationId = yield* mint<typesModule.DocumentId>(storage);
-  const taskId = yield* mint<typesModule.TaskId<JsonValue>>(storage);
+  const taskId = yield* mint<typesModule.TaskId<chordTypes.JsonValue>>(storage);
   const taskSingletonId = yield* mint<typesModule.DocumentId>(storage);
   const taskFamilyId = yield* mint<typesModule.DocumentId>(storage);
   const taskOtherKindId = yield* mint<typesModule.DocumentId>(storage);

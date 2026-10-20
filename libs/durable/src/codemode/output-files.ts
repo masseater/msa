@@ -1,4 +1,4 @@
-import type { Context } from "@msa/chord";
+import type chordTypes from "@msa/chord/index.types";
 import { Effect, Function } from "effect";
 
 import type dualTypes from "../dual.ts";
@@ -13,7 +13,7 @@ const { errorMessage } = errors;
 
 const outputDir = Effect.fnUntraced(function* (
   api: typesModule.ToolExecutionApi,
-  context: Context,
+  context: chordTypes.Context,
   env: envTypes.ExecutionEnv,
 ) {
   const recorded = yield* commitWith(api, context, (tx) =>
@@ -38,7 +38,7 @@ const outputDir = Effect.fnUntraced(function* (
 
 const outputFilesOf = (
   api: typesModule.ToolExecutionApi,
-  context: Context,
+  context: chordTypes.Context,
 ): outputTypes.OutputFile => {
   const env = api.env;
   let directory: Promise<string> | undefined;
@@ -56,8 +56,11 @@ const outputFilesOf = (
   };
 };
 
-const outputFiles: dualTypes.Dual2<typesModule.ToolExecutionApi, Context, outputTypes.OutputFile> =
-  Function.dual(2, outputFilesOf);
+const outputFiles: dualTypes.Dual2<
+  typesModule.ToolExecutionApi,
+  chordTypes.Context,
+  outputTypes.OutputFile
+> = Function.dual(2, outputFilesOf);
 
 const outputFilesModule = {
   outputFiles,

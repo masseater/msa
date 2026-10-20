@@ -1,5 +1,5 @@
 import type { AssistantMessage, Message, Models, ToolCall } from "@msa/ai";
-import type { Context, JsonValue } from "@msa/chord";
+import type chordTypes from "@msa/chord/index.types";
 
 import type typesModule from "../types.types.ts";
 import type typesToolsTypes from "./types-tools.ts";
@@ -10,8 +10,15 @@ declare namespace typesHooksTypes {
     readonly taskId: typesModule.TaskId;
     readonly conversationId: typesModule.ConversationId;
     readonly models: Models;
-    memo<T extends JsonValue>(name: string, context: Context): Promise<T | undefined>;
-    memo<T extends JsonValue>(name: string, candidate: T, context: Context): Promise<T>;
+    memo<T extends chordTypes.JsonValue>(
+      name: string,
+      context: chordTypes.Context,
+    ): Promise<T | undefined>;
+    memo<T extends chordTypes.JsonValue>(
+      name: string,
+      candidate: T,
+      context: chordTypes.Context,
+    ): Promise<T>;
   }
 
   type HookResult<T> = T | undefined | Promise<T | undefined>;
@@ -20,19 +27,23 @@ declare namespace typesHooksTypes {
     beforeRequest(
       request: { readonly messages: readonly Message[] },
       api: HookApi,
-      context: Context,
+      context: chordTypes.Context,
     ): HookResult<{ readonly messages: readonly Message[] }>;
-    afterResponse(message: AssistantMessage, api: HookApi, context: Context): void | Promise<void>;
+    afterResponse(
+      message: AssistantMessage,
+      api: HookApi,
+      context: chordTypes.Context,
+    ): void | Promise<void>;
     onYield(
       answer: AssistantMessage,
       api: HookApi,
-      context: Context,
+      context: chordTypes.Context,
     ): HookResult<{ readonly continue: typesModuleModule.UserInput }>;
     afterTools(
       assistant: typesModule.EntryId,
       results: readonly typesModule.EntryId[],
       api: HookApi,
-      context: Context,
+      context: chordTypes.Context,
     ): void | Promise<void>;
   }
 
@@ -44,13 +55,13 @@ declare namespace typesHooksTypes {
     beforeTool(
       call: ToolHookCall,
       api: HookApi,
-      context: Context,
+      context: chordTypes.Context,
     ): HookResult<{ readonly arguments?: typesModule.JsonObject; readonly block?: string }>;
     afterTool(
       call: ToolHookCall,
       result: typesToolsTypes.ToolExecutionResult,
       api: HookApi,
-      context: Context,
+      context: chordTypes.Context,
     ): HookResult<typesToolsTypes.ToolExecutionResult>;
   }
 
@@ -64,7 +75,7 @@ declare namespace typesHooksTypes {
         readonly instructions?: string;
       },
       api: HookApi,
-      context: Context,
+      context: chordTypes.Context,
     ): HookResult<{ readonly decline: true } | { readonly summary: string }>;
   }
 }

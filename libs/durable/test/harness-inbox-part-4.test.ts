@@ -1,4 +1,4 @@
-import type { Op } from "@msa/chord/delta";
+import type deltaTypes from "@msa/chord/delta.types";
 import durable from "@msa/durable";
 import memory from "@msa/durable/storage/memory";
 import { Effect } from "effect";
@@ -78,7 +78,7 @@ const withdrawsMiddleItem = Effect.gen(function* () {
   const items = [];
   for (const text of ["x", "y", "z"])
     items.push(yield* awaited(root.submit({ content: text, type: "input" }, context)));
-  const ops: Op[][] = [];
+  const ops: deltaTypes.Op[][] = [];
   harness.subscribeCommits((publication) => {
     for (const change of documentChanges(publication)) {
       if (change.record.kind === "msa.inbox" && change.ops.length > 0) ops.push([...change.ops]);

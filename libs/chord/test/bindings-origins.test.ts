@@ -4,22 +4,17 @@ import { Effect } from "effect";
 import { Type } from "typebox";
 import { describe, it } from "vite-plus/test";
 
-import { HostImpl } from "../src/host.ts";
-import {
-  type Ctx,
-  type Frame,
-  type Link,
-  PROTOCOL_VERSION,
-  createHost,
-  hostFamily,
-  memoryLinkPair,
-  method,
-  remote,
-} from "../src/index.ts";
-import bindings from "./fixtures/bindings.ts";
+import type hostTypes from "../src/host.types.ts";
+import type chordTypes from "../src/index.types.ts";
+import bindingsOriginsKit from "./bindings-origins-kit.ts";
 import counting from "./fixtures/counting.ts";
 import type countingTypes from "./fixtures/counting.types.ts";
 import timing from "./fixtures/timing.ts";
+
+const { bindings, host: hostModule, src: chord } = bindingsOriginsKit;
+
+const { PROTOCOL_VERSION, createHost, hostFamily, memoryLinkPair, method, remote } = chord;
+const { HostImpl } = hostModule;
 
 const { Notes, setup, until } = bindings;
 const { CountingLink } = counting;
@@ -32,11 +27,11 @@ const Counter = remote("t.e8-counter", {
   version: 1,
 });
 
-const serveSessionCounter = (created: HostImpl): void => {
+const serveSessionCounter = (created: hostTypes.HostImpl): void => {
   created.serve(Counter, (_input, _principal, self) => {
     const n = self.state("n", Type.Number(), 0);
     return {
-      add: (delta: number, ctx: Ctx) => {
+      add: (delta: number, ctx: chordTypes.Ctx) => {
         n.replace(ctx, n.value + delta);
       },
       n,
@@ -47,7 +42,7 @@ const serveSessionCounter = (created: HostImpl): void => {
 
 function cluster() {
   const server = createHost({ name: "server", onError: () => {}, self: { kind: "host" } });
-  let worker: HostImpl | undefined;
+  let worker: hostTypes.HostImpl | undefined;
   let toWorker: countingTypes.CountingLink | undefined;
   server.route("session:", {
     authorize: () => true,
@@ -99,7 +94,7 @@ const aRelayedHoldCarriesItsClient = Effect.gen(function* () {
   yield* Effect.promise(() => own.ready);
   const holds = c
     .sentToWorker()
-    .filter((frame): frame is Extract<Frame, { t: "hold" }> => frame.t === "hold");
+    .filter((frame): frame is Extract<chordTypes.Frame, { t: "hold" }> => frame.t === "hold");
   assert.equal(holds.length, 3);
   const relayed = holds.filter((frame) => frame.origin !== undefined);
   assert.equal(relayed.length, 2);
@@ -164,7 +159,7 @@ const aVersion3PeerIsRefused = Effect.gen(function* () {
   const [down, raw] = memoryLinkPair();
   server.accept(down, { principal: { user: "old" } });
   const closed = latch<string>();
-  (raw as Link).onClose(closed.open);
+  (raw as chordTypes.Link).onClose(closed.open);
   raw.receive(() => {});
   raw.send({ codeVersion: 0, kind: "client", name: "old", protocol: 3, t: "hello" });
   assert.equal(yield* closed.wait, `protocol-version ${PROTOCOL_VERSION}`);

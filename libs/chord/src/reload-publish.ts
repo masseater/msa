@@ -1,26 +1,32 @@
 import { Cause, Effect } from "effect";
 
-import { bind } from "./contract.ts";
-import { ChordError } from "./errors.ts";
-import type { CodeVersionState } from "./host-types.ts";
-import type { ObjectImpl } from "./object.ts";
-import { RefImpl } from "./ref.ts";
-import type { Candidate, ReloadReport } from "./reload-candidate.ts";
-import type { Reload } from "./reload.ts";
-import { hostLifetime, type Service } from "./service.ts";
+import contractModule from "./contract.ts";
+import errorsModule from "./errors.ts";
+import type hostTypesModule from "./host-types.types.ts";
+import type objectTypes from "./object.types.ts";
+import RefImpl from "./ref.ts";
+import type reloadCandidateTypes from "./reload-candidate.types.ts";
+import type reloadTypes from "./reload.types.ts";
+import serviceModule from "./service.ts";
+import type serviceTypes from "./service.types.ts";
 
-export class ReloadPublish {
-  readonly #reload: Reload;
+const { ChordError } = errorsModule;
+const { hostLifetime } = serviceModule;
 
-  constructor(reload: Reload) {
+const { bind } = contractModule;
+
+export default class ReloadPublish {
+  readonly #reload: reloadTypes.Reload;
+
+  constructor(reload: reloadTypes.Reload) {
     this.#reload = reload;
   }
 
-  publish(): ReloadReport {
+  publish(): reloadCandidateTypes.ReloadReport {
     const reload = this.#reload;
     const host = reload.host;
     const previous = host.current;
-    const next: CodeVersionState = host.pending!;
+    const next: hostTypesModule.CodeVersionState = host.pending!;
     host.pending = undefined;
     host.codeVersions.set(next.id, next);
     host.previous = previous;
@@ -38,12 +44,12 @@ export class ReloadPublish {
     host.gating = undefined;
     for (const [name, service] of reload.services) this.#hostObject(name, service);
     return {
-      codeVersion: next.id,
-      previous: previous.id,
       changed: [...reload.changed],
-      removed: [...reload.removed],
-      prepared,
+      codeVersion: next.id,
       gated: reload.gated.map(({ object }) => object.address),
+      prepared,
+      previous: previous.id,
+      removed: [...reload.removed],
     };
   }
 
@@ -101,7 +107,7 @@ export class ReloadPublish {
     for (const name of reload.removed) host.hostObjects.delete(name);
   }
 
-  #hostObject(name: string, service: Service): void {
+  #hostObject(name: string, service: serviceTypes.Service): void {
     const reload = this.#reload;
     const host = reload.host;
     if (
@@ -118,7 +124,7 @@ export class ReloadPublish {
     }
   }
 
-  #install(candidate: Candidate, codeVersion: number): void {
+  #install(candidate: reloadCandidateTypes.Candidate, codeVersion: number): void {
     const reload = this.#reload;
     const { object, run, service } = candidate;
     const gated = candidate.reasons.length > 0;
@@ -133,9 +139,9 @@ export class ReloadPublish {
     for (const [resource, declaration] of run.decls.adopted) resource.adopt(declaration);
     object.implementations.set(codeVersion, {
       codeVersion,
-      service,
-      implementation: run.implementation,
       decls: run.decls,
+      implementation: run.implementation,
+      service,
     });
     if (gated) {
       object.minCodeVersion = codeVersion;
@@ -157,7 +163,7 @@ export class ReloadPublish {
     this.#rebind(object, service);
   }
 
-  #rebind(object: ObjectImpl, service: Service): void {
+  #rebind(object: objectTypes.ObjectImpl, service: serviceTypes.Service): void {
     const host = this.#reload.host;
     const pinned = host.hostObjects.get(object.typeName);
     if (pinned?.object === object && pinned.contract.fingerprint !== service.contract.fingerprint) {

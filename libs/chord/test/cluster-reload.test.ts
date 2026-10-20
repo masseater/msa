@@ -4,9 +4,12 @@ import { Clock, type Context, Effect } from "effect";
 import { Type } from "typebox";
 import { describe, it, onTestFinished } from "vite-plus/test";
 
-import { type Facet, type Host, createHost, isChordError, memoryLinkPair } from "../src/index.ts";
+import chord from "../src/index.ts";
+import type chordTypes from "../src/index.types.ts";
 import cluster from "./fixtures/cluster.ts";
 import timing from "./fixtures/timing.ts";
+
+const { createHost, isChordError, memoryLinkPair } = chord;
 
 const { Greeter, greeterFacet, setup } = cluster;
 const { latch, tick } = timing;
@@ -19,7 +22,7 @@ const anAbortWhileAWorkerIs = Effect.gen(function* () {
   yield* Effect.promise(() => greeter.greet("a"));
   const log: string[] = [];
   const go = latch();
-  const slow: Facet = {
+  const slow: chordTypes.Facet = {
     name: "greeter",
     setup: (api) =>
       api.serve(Greeter, (_input, _principal, self) => {
@@ -57,7 +60,7 @@ const anAbortWhileAWorkerIs = Effect.gen(function* () {
 
 const aChildThatSaysHelloWhile = Effect.gen(function* () {
   const services = yield* Effect.context<never>();
-  const modules = new Map<string, Facet>([["greeter", greeterFacet("v1")]]);
+  const modules = new Map<string, chordTypes.Facet>([["greeter", greeterFacet("v1")]]);
   const loading = latch();
   const server = createHost({
     loader: (names) =>
@@ -128,10 +131,10 @@ const aChildKeepsThePreviousCode = Effect.gen(function* () {
 
 const aChildReconciledAfterItsParent = Effect.gen(function* () {
   const services = yield* Effect.context<never>();
-  const modules = new Map<string, Facet>([["greeter", greeterFacet("v1")]]);
+  const modules = new Map<string, chordTypes.Facet>([["greeter", greeterFacet("v1")]]);
   const server = createHost({ name: "server", onError: () => {}, self: { kind: "host" } });
   onTestFinished(() => server.close());
-  const plugin = (): Facet => ({ name: "server-plugin", setup: () => {} });
+  const plugin = (): chordTypes.Facet => ({ name: "server-plugin", setup: () => {} });
   server.install(plugin());
   yield* Effect.promise(() => server.reload([plugin()]));
   yield* Effect.promise(() => server.reload([plugin()]));
@@ -162,13 +165,13 @@ const aChildReconciledAfterItsParent = Effect.gen(function* () {
 });
 
 interface BlockedWorker {
-  readonly worker: Host;
+  readonly worker: chordTypes.Host;
   readonly releaseLoading: () => void;
 }
 
 const blockedWorker = (
-  server: Host,
-  modules: Map<string, Facet>,
+  server: chordTypes.Host,
+  modules: Map<string, chordTypes.Facet>,
   services: Context.Context<never>,
 ): BlockedWorker => {
   const workerLoading = latch();
@@ -201,7 +204,7 @@ const blockedWorker = (
 
 const aReconciliationRunningWhenAReload = Effect.gen(function* () {
   const services = yield* Effect.context<never>();
-  const modules = new Map<string, Facet>([["greeter", greeterFacet("v1")]]);
+  const modules = new Map<string, chordTypes.Facet>([["greeter", greeterFacet("v1")]]);
   const serverLoading = latch();
   let blockServer = false;
   const server = createHost({

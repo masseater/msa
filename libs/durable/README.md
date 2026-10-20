@@ -55,7 +55,9 @@ npm install @msa/durable @msa/ai @msa/chord
 ```typescript
 import { createModels } from "@msa/ai/models";
 import { openaiProvider } from "@msa/ai/providers/openai";
-import { BACKGROUND_CONTEXT } from "@msa/chord/context";
+import context from "@msa/chord/context";
+
+const { BACKGROUND_CONTEXT } = context;
 import { AssistantEntry } from "@msa/durable";
 import { createRegistry, Harness } from "@msa/durable/harness";
 import { MemoryStorage } from "@msa/durable/storage/memory";

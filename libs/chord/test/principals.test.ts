@@ -4,23 +4,10 @@ import { Effect } from "effect";
 import { Type } from "typebox";
 import { describe, expectTypeOf, it } from "vite-plus/test";
 
-import {
-  type ConnectOptions,
-  type Ctx,
-  type FacetApi,
-  type GetOptions,
-  type Host,
-  type HostOptions,
-  type PrincipalMatch,
-  type Route,
-  createHost,
-  defineFacet,
-  hostNamed,
-  local,
-  memoryLinkPair,
-  method,
-  remote,
-} from "../src/index.ts";
+import chord from "../src/index.ts";
+import type chordTypes from "../src/index.types.ts";
+
+const { createHost, defineFacet, hostNamed, local, memoryLinkPair, method, remote } = chord;
 
 type KeysOf<U> = U extends (...args: never[]) => unknown
   ? never
@@ -47,7 +34,7 @@ const factoriesMethodsAndContextsSeeThe = Effect.gen(function* () {
   const services = yield* Effect.context<never>();
   const host = createHost<Principal>({ principalKey, self: { kind: "host" } });
   const facet = defineFacet<Principal>((api) => {
-    const plain: FacetApi = api;
+    const plain: chordTypes.FacetApi = api;
     void plain;
     api.serve(Who, (_input, principal, self) => {
       const created = principal.kind === "guest" ? `guest ${principal.id}` : principal.kind;
@@ -70,22 +57,24 @@ const factoriesMethodsAndContextsSeeThe = Effect.gen(function* () {
     ),
     "guest g1, called by host",
   );
-  const untyped: Host = host;
+  const untyped: chordTypes.Host = host;
   void untyped;
   yield* Effect.promise(() =>
     host.root((ctx) =>
       Effect.runPromiseWith(services)(
         Effect.sync(() => {
-          const plain: Ctx = ctx;
+          const plain: chordTypes.Ctx = ctx;
           void plain;
         }),
       ),
     ),
   );
-  expectTypeOf<{ principal: { kind: "stranger" } }>().not.toExtend<GetOptions<Principal>>();
+  expectTypeOf<{ principal: { kind: "stranger" } }>().not.toExtend<
+    chordTypes.GetOptions<Principal>
+  >();
   Reflect.apply(host.hold, host, [Who, {}, { principal: { kind: "stranger" } }]);
-  expectTypeOf<"id">().toExtend<KeysOf<PrincipalMatch<Principal>>>();
-  expectTypeOf<"name">().not.toExtend<KeysOf<PrincipalMatch<Principal>>>();
+  expectTypeOf<"id">().toExtend<KeysOf<chordTypes.PrincipalMatch<Principal>>>();
+  expectTypeOf<"name">().not.toExtend<KeysOf<chordTypes.PrincipalMatch<Principal>>>();
   void Promise.resolve(
     Reflect.apply(host.invalidatePrincipal, host, [{ kind: "guest", name: "g1" }]),
   ).catch(() => {});
@@ -154,13 +143,13 @@ const aChildSParentActsAs = Effect.gen(function* () {
 });
 
 const refusesAHostAParentLink = (): void => {
-  expectTypeOf<{ name: "x" }>().not.toExtend<HostOptions>();
+  expectTypeOf<{ name: "x" }>().not.toExtend<chordTypes.HostOptions>();
   assert.throws(() => Reflect.apply(createHost, undefined, [{ name: "x" }]), /needs `self`/u);
   const host = createHost({ self: "host" });
   const [, up] = memoryLinkPair();
-  expectTypeOf<Record<never, never>>().not.toExtend<ConnectOptions>();
+  expectTypeOf<Record<never, never>>().not.toExtend<chordTypes.ConnectOptions>();
   assert.throws(() => Reflect.apply(host.connect, host, [up, {}]), /connect needs `principal`/u);
-  expectTypeOf<Omit<Route, "principal">>().not.toExtend<Route>();
+  expectTypeOf<Omit<chordTypes.Route, "principal">>().not.toExtend<chordTypes.Route>();
   assert.throws(
     () =>
       Reflect.apply(host.route, host, [

@@ -1,4 +1,4 @@
-import type { Context } from "@msa/chord";
+import type chordTypes from "@msa/chord/index.types";
 import { Effect } from "effect";
 
 import envModule from "../src/env/index.ts";
@@ -21,7 +21,7 @@ const programsEnv = Effect.fn("programsEnv")(function* (
     override exec(
       command: string | readonly string[],
       options: envTypes.ShellExecOptions | undefined,
-      context: Context,
+      context: chordTypes.Context,
     ): Promise<envTypes.Result<envTypes.ShellExecResult, envTypes.ExecutionError>> {
       commands.push(command);
       if (typeof command === "string" || !installed.includes(command[0]!)) {

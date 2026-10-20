@@ -10,7 +10,7 @@ import {
   fauxToolCall,
 } from "@msa/ai";
 import { openaiProvider } from "@msa/ai/providers/openai";
-import type { Context } from "@msa/chord";
+import type chordTypes from "@msa/chord/index.types";
 import durable from "@msa/durable";
 import harnessModule from "@msa/durable/harness";
 import type durableTypes from "@msa/durable/index.types";
@@ -30,7 +30,7 @@ const context = BACKGROUND_CONTEXT;
 const answerText = Effect.fn("answerText")(function* (
   api: durableTypes.ToolExecutionApi,
   answer: durableTypes.EntryId,
-  callContext: Context,
+  callContext: chordTypes.Context,
 ) {
   const entry = yield* awaited(api.commit((tx) => tx.entry(AssistantEntry, answer), callContext));
   const message = entry?.model?.[0] as AssistantMessage;

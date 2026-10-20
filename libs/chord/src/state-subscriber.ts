@@ -1,20 +1,22 @@
-import { isPromiseLike, reportErrorAsync, toError } from "./state-report.ts";
-import type { StateDelivery, StateListener } from "./state-types.ts";
+import stateReport from "./state-report.ts";
+import type stateTypesModule from "./state-types.ts";
 
-export class StateSubscriber<T> {
-  readonly #listener: StateListener<T>;
+const { isPromiseLike, reportErrorAsync, toError } = stateReport;
+
+export default class StateSubscriber<T> {
+  readonly #listener: stateTypesModule.StateListener<T>;
   readonly #reportError: (error: Error) => void;
-  readonly #pending: StateDelivery<T>[] = [];
+  readonly #pending: stateTypesModule.StateDelivery<T>[] = [];
   #running = false;
   #started = false;
   #closed = false;
 
-  constructor(listener: StateListener<T>, reportError: (error: Error) => void) {
+  constructor(listener: stateTypesModule.StateListener<T>, reportError: (error: Error) => void) {
     this.#listener = listener;
     this.#reportError = reportError;
   }
 
-  push(frame: StateDelivery<T>): void {
+  push(frame: stateTypesModule.StateDelivery<T>): void {
     if (this.#closed) return;
     if (this.#pending.length === 100) {
       const hydration = this.#started ? undefined : this.#pending[0];

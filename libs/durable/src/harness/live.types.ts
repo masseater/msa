@@ -1,5 +1,5 @@
 import type { AssistantMessage, Usage } from "@msa/ai";
-import type { JsonRepresentation, JsonValue } from "@msa/chord";
+import type chordTypes from "@msa/chord/index.types";
 
 import type typesModule from "./types.types.ts";
 
@@ -11,7 +11,7 @@ declare namespace liveTypes {
     output?: string;
     droppedBytes?: number;
     droppedLines?: number;
-    details?: JsonValue;
+    details?: chordTypes.JsonValue;
     diagnostics?: typesModule.ToolDiagnostic[];
   };
 
@@ -31,7 +31,7 @@ declare namespace liveTypes {
   type NestedToolSummary = {
     isError: boolean;
     durationMs?: number;
-    usage?: JsonRepresentation<Usage>;
+    usage?: chordTypes.JsonRepresentation<Usage>;
     error?: string;
   };
 
@@ -53,7 +53,7 @@ declare namespace liveTypes {
     run?: { taskId: typesModule.TaskId; inputs: typesModule.SubmissionId[] };
     generation?: {
       attempt: number;
-      message?: JsonRepresentation<AssistantMessage>;
+      message?: chordTypes.JsonRepresentation<AssistantMessage>;
       retry?: { at: number; error: string };
       deferred?: { pollAt: number };
     };

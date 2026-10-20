@@ -4,20 +4,12 @@ import { type Context, Effect } from "effect";
 import { Type } from "typebox";
 import { describe, it } from "vite-plus/test";
 
-import {
-  type Facet,
-  type FacetLoader,
-  type Host,
-  createHost,
-  hostNamed,
-  local,
-  memoryLinkPair,
-  method,
-  opaque,
-  remote,
-} from "../src/index.ts";
+import chord from "../src/index.ts";
+import type chordTypes from "../src/index.types.ts";
 import requests from "./fixtures/requests.ts";
 import timing from "./fixtures/timing.ts";
+
+const { createHost, hostNamed, local, memoryLinkPair, method, opaque, remote } = chord;
 
 const { until } = requests;
 const { tick } = timing;
@@ -30,7 +22,7 @@ const case7AClusterReloadReportsWhat = Effect.gen(function* () {
     variants: { main: { methods: { greet: method(Type.String(), Type.String()) } } },
     version: 1,
   });
-  const greeter = (text: string): Facet => ({
+  const greeter = (text: string): chordTypes.Facet => ({
     name: "greeter",
     setup: (api) =>
       api.serve(Greeter, () => ({
@@ -39,7 +31,7 @@ const case7AClusterReloadReportsWhat = Effect.gen(function* () {
       })),
   });
   const modules = new Map([["greeter", greeter("v1")]]);
-  const loader: FacetLoader = (names) =>
+  const loader: chordTypes.FacetLoader = (names) =>
     Effect.runPromiseWith(services)(
       Effect.sync(() => names.map((name) => modules.get(String(name))!)),
     );
@@ -171,7 +163,11 @@ const Proc = local("t.proc", {
 
 const Chat = local("t.chat10", { input: Type.Object({}), version: 1 });
 
-const serveClosingChat = (worker: Host, log: string[], services: Context.Context<never>): void => {
+const serveClosingChat = (
+  worker: chordTypes.Host,
+  log: string[],
+  services: Context.Context<never>,
+): void => {
   worker.serve(Chat, (_input, _principal, self) => {
     const proc = self.get(Proc, {});
     const upstream = self.get(Remote, {});

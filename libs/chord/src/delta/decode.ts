@@ -1,34 +1,34 @@
-import type { JsonValue } from "../json.ts";
-import type { NonEmptyPath, Op, Path, PathRef, WireOp } from "./ops.ts";
-import { PathError } from "./path-error.ts";
-import { assertSafePath } from "./validate.ts";
-import { assertValidWireOp } from "./wire-ops.ts";
+import type jsonTypes from "../json.types.ts";
+import type decodeTypes from "./decode.types.ts";
+import type opsTypes from "./ops.types.ts";
+import PathError from "./path-error.ts";
+import validate from "./validate.ts";
+import wireOps from "./wire-ops.ts";
 
-export interface Decoder {
-  decode(wire: readonly unknown[]): Op[];
-}
+const assertValidWireOp: typeof wireOps.assertValidWireOp = wireOps.assertValidWireOp;
+const { assertSafePath } = validate;
 
-type WirePathOp = Exclude<WireOp, { 0: "r" | "#" }>;
+type WirePathOp = Exclude<opsTypes.WireOp, { 0: "r" | "#" }>;
 
 const isShort = (op: WirePathOp): boolean =>
   (op[0] === "d" && op.length === 1) ||
   (op[0] !== "d" && op[0] !== "p" && op.length === 2) ||
   (op[0] === "p" && op.length === 4);
 
-const decoded = (op: WirePathOp, path: Path, short: boolean): Op => {
+const decoded = (op: WirePathOp, path: opsTypes.Path, short: boolean): opsTypes.Op => {
   switch (op[0]) {
     case "s":
-      return ["s", path as NonEmptyPath, (short ? op[1] : op[2]) as JsonValue];
+      return ["s", path as opsTypes.NonEmptyPath, (short ? op[1] : op[2]) as jsonTypes.JsonValue];
     case "d":
-      return ["d", path as NonEmptyPath];
+      return ["d", path as opsTypes.NonEmptyPath];
     case "a":
-      return ["a", path as NonEmptyPath, (short ? op[1] : op[2]) as string];
+      return ["a", path as opsTypes.NonEmptyPath, (short ? op[1] : op[2]) as string];
     case "t":
-      return ["t", path as NonEmptyPath, (short ? op[1] : op[2]) as number];
+      return ["t", path as opsTypes.NonEmptyPath, (short ? op[1] : op[2]) as number];
     case "p": {
       const [index, removed, items] = short
-        ? [op[1] as number, op[2] as number, op[3] as JsonValue[]]
-        : [op[2] as number, op[3] as number, op[4] as JsonValue[]];
+        ? [op[1] as number, op[2] as number, op[3] as jsonTypes.JsonValue[]]
+        : [op[2] as number, op[3] as number, op[4] as jsonTypes.JsonValue[]];
       return ["p", path, index, removed, items];
     }
     case "m":
@@ -36,13 +36,13 @@ const decoded = (op: WirePathOp, path: Path, short: boolean): Op => {
   }
 };
 
-export function decoder(): Decoder {
-  const paths = new Map<number, Path>();
+function decoder(): decodeTypes.Decoder {
+  const paths = new Map<number, opsTypes.Path>();
 
   return {
     decode(wire) {
-      let previous: Path | undefined;
-      const out: Op[] = [];
+      let previous: opsTypes.Path | undefined;
+      const out: opsTypes.Op[] = [];
       for (const op of wire) {
         assertValidWireOp(op);
         if (op[0] === "#") {
@@ -57,12 +57,12 @@ export function decoder(): Decoder {
           continue;
         }
         const short = isShort(op);
-        let path: Path;
+        let path: opsTypes.Path;
         if (short) {
           if (previous === undefined) throw new PathError([]);
           path = previous;
         } else {
-          const ref = op[1] as PathRef;
+          const ref = op[1] as opsTypes.PathRef;
           if (typeof ref === "number") {
             const resolved = paths.get(ref);
             if (resolved === undefined) throw new PathError(ref);
@@ -77,3 +77,9 @@ export function decoder(): Decoder {
     },
   };
 }
+
+const decodeModule = {
+  decoder,
+};
+
+export default decodeModule;

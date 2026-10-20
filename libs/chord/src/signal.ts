@@ -1,10 +1,13 @@
 import { Cause, Duration, Effect } from "effect";
 import { dual } from "effect/Function";
 
-import type { RefCore } from "./core.ts";
-import { ChordError } from "./errors.ts";
+import type coreTypes from "./core.types.ts";
+import errorsModule from "./errors.ts";
+import type errorsTypes from "./errors.types.ts";
 
-export function linkedSignal(sources: readonly AbortSignal[]): {
+const { ChordError } = errorsModule;
+
+function linkedSignal(sources: readonly AbortSignal[]): {
   readonly signal: AbortSignal;
   release(): void;
 } {
@@ -26,10 +29,10 @@ export function linkedSignal(sources: readonly AbortSignal[]): {
     source.addEventListener("abort", forward, { once: true });
     detach.push(() => source.removeEventListener("abort", forward));
   }
-  return { signal: controller.signal, release };
+  return { release, signal: controller.signal };
 }
 
-const callAborted = (signal: AbortSignal): ChordError =>
+const callAborted = (signal: AbortSignal): errorsTypes.ChordError =>
   new ChordError("aborted", "call aborted", { cause: signal.reason });
 
 const abortedBy = (signal: AbortSignal): Effect.Effect<never> =>
@@ -39,7 +42,7 @@ const abortedBy = (signal: AbortSignal): Effect.Effect<never> =>
     return Effect.sync(() => signal.removeEventListener("abort", onAbort));
   });
 
-export const raceSignal: {
+const raceSignal: {
   (signal: AbortSignal): <T>(effect: Effect.Effect<T>) => Effect.Effect<T>;
   <T>(effect: Effect.Effect<T>, signal: AbortSignal): Effect.Effect<T>;
 } = dual(2, <T>(effect: Effect.Effect<T>, signal: AbortSignal): Effect.Effect<T> =>
@@ -48,7 +51,7 @@ export const raceSignal: {
   ),
 );
 
-const readyTimeout = (ref: RefCore, ms: number): Effect.Effect<never> =>
+const readyTimeout = (ref: coreTypes.RefCore, ms: number): Effect.Effect<never> =>
   Number.isFinite(ms)
     ? Effect.flatMap(Effect.sleep(Duration.millis(ms)), () =>
         Effect.die(
@@ -59,27 +62,37 @@ const readyTimeout = (ref: RefCore, ms: number): Effect.Effect<never> =>
       )
     : Effect.never;
 
-export const awaitReady: {
-  (signals: readonly AbortSignal[], ms: number): (ref: RefCore) => Effect.Effect<void>;
-  (ref: RefCore, signals: readonly AbortSignal[], ms: number): Effect.Effect<void>;
-} = dual(3, (ref: RefCore, signals: readonly AbortSignal[], ms: number): Effect.Effect<void> =>
-  Effect.acquireUseRelease(
-    Effect.sync(() => linkedSignal(signals)),
-    (linked) =>
-      Effect.raceFirst(
-        raceSignal(
-          Effect.promise(() => ref.ready),
-          linked.signal,
+const awaitReady: {
+  (signals: readonly AbortSignal[], ms: number): (ref: coreTypes.RefCore) => Effect.Effect<void>;
+  (ref: coreTypes.RefCore, signals: readonly AbortSignal[], ms: number): Effect.Effect<void>;
+} = dual(
+  3,
+  (ref: coreTypes.RefCore, signals: readonly AbortSignal[], ms: number): Effect.Effect<void> =>
+    Effect.acquireUseRelease(
+      Effect.sync(() => linkedSignal(signals)),
+      (linked) =>
+        Effect.raceFirst(
+          raceSignal(
+            Effect.promise(() => ref.ready),
+            linked.signal,
+          ),
+          readyTimeout(ref, ms),
+        ).pipe(
+          Effect.catchCause((cause) =>
+            Effect.suspend(() => {
+              ref.release();
+              return Effect.die(Cause.squash(cause));
+            }),
+          ),
         ),
-        readyTimeout(ref, ms),
-      ).pipe(
-        Effect.catchCause((cause) =>
-          Effect.suspend(() => {
-            ref.release();
-            return Effect.die(Cause.squash(cause));
-          }),
-        ),
-      ),
-    (linked) => Effect.sync(linked.release),
-  ),
+      (linked) => Effect.sync(linked.release),
+    ),
 );
+
+const signalModule = {
+  awaitReady,
+  linkedSignal,
+  raceSignal,
+};
+
+export default signalModule;

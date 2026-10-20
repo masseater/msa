@@ -1,4 +1,4 @@
-import type { Context } from "@msa/chord";
+import type chordTypes from "@msa/chord/index.types";
 import type { Semaphore } from "effect";
 
 import type typesModule from "../harness/types.types.ts";
@@ -9,7 +9,7 @@ declare namespace runCallsTypes {
   type CallHost = {
     readonly options: runDocsTypes.CodemodeToolOptions;
     readonly api: typesModule.ToolExecutionApi;
-    readonly context: Context;
+    readonly context: chordTypes.Context;
     readonly start: runDocsTypes.Start;
     readonly rows: callRowsTypes.CallRows;
     readonly modelSlots: Semaphore.Semaphore;

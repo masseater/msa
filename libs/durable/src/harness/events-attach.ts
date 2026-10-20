@@ -1,4 +1,4 @@
-import type { Context } from "@msa/chord";
+import type chordTypes from "@msa/chord/index.types";
 import { Effect } from "effect";
 
 import observation from "../session/observation.ts";
@@ -21,7 +21,7 @@ const COMPLETING_PAGE_SIZE = 100;
 const heldTasks = Effect.fnUntraced(function* (
   storage: typesModule.Storage,
   conversationId: typesModule.ConversationId,
-  context: Context,
+  context: chordTypes.Context,
 ) {
   const query = { conversationId, kind: "msa.generation", status: "completing" } as const;
   const completing = yield* scanAll((cursor) =>
@@ -33,7 +33,7 @@ const heldTasks = Effect.fnUntraced(function* (
 const attachEvents = Effect.fnUntraced(function* (
   views: viewTypes.ConversationViews,
   conversationId: typesModule.ConversationId,
-  context: Context,
+  context: chordTypes.Context,
 ) {
   const readHeld = yield* toPromise(heldTasks);
   let attached: eventsAttachTypes.Attached | undefined;
@@ -60,7 +60,7 @@ const attachEvents = Effect.fnUntraced(function* (
         after: viewTypes.ConversationView,
         ops: Parameters<typeof translate>[2],
         publication: Parameters<typeof translate>[3],
-        commitContext: Context,
+        commitContext: chordTypes.Context,
       ) => {
         current = after;
         const events = translate(conversationId, { after, before }, ops, publication, held);

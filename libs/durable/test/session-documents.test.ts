@@ -1,4 +1,4 @@
-import type { Draft } from "@msa/chord";
+import type chordTypes from "@msa/chord/index.types";
 import { Effect } from "effect";
 import { describe, expect, it } from "vite-plus/test";
 
@@ -155,8 +155,11 @@ const copiesAssignedValues = Effect.gen(function* () {
           Effect.gen(function* () {
             const live = yield* awaited(tx.doc(LiveDoc, conversationId));
             live.other = value;
-            (live as Draft<sessionDocumentsSupportTypes.Live> & { copy?: { label: string } }).copy =
-              value;
+            (
+              live as chordTypes.Draft<sessionDocumentsSupportTypes.Live> & {
+                copy?: { label: string };
+              }
+            ).copy = value;
             value.label = "mutated";
           }),
         ),

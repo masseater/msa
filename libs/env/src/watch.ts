@@ -1,4 +1,4 @@
-import type { Context } from "@msa/chord";
+import type chordTypes from "@msa/chord/index.types";
 import env from "@msa/durable/env";
 import type envTypes from "@msa/durable/env.types";
 import { Cause, Deferred, Effect, Exit } from "effect";
@@ -58,7 +58,7 @@ export default class RemoteWatcher implements envTypes.FileWatcher {
     return this.#mode;
   }
 
-  close(_context: Context): Promise<void> {
+  close(_context: chordTypes.Context): Promise<void> {
     if (this.#closed) return Promise.resolve();
     this.#closed = true;
     this.#wake?.();

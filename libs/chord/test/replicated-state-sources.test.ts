@@ -1,9 +1,12 @@
 import { describe, expect, it } from "vite-plus/test";
 
-import { BACKGROUND_CONTEXT } from "../src/context/index.ts";
-import { replicatedState } from "../src/index.ts";
+import contextModule from "../src/context/index.ts";
+import chord from "../src/index.ts";
 import TestSource from "./fixtures/replicated-state.ts";
 import type replicatedStateTypes from "./fixtures/replicated-state.types.ts";
+
+const { replicatedState } = chord;
+const { BACKGROUND_CONTEXT } = contextModule;
 
 const capturesBeforeActivationAndDrainsQueued = (): void => {
   const initial = Object.freeze({ value: 0 });

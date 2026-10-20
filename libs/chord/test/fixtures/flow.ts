@@ -2,36 +2,29 @@ import { Effect } from "effect";
 import { dual } from "effect/Function";
 import { Type } from "typebox";
 
-import {
-  type Ctx,
-  type Frame,
-  type Host,
-  type Link,
-  createHost,
-  hostNamed,
-  memoryLinkPair,
-  method,
-  remote,
-} from "../../src/index.ts";
+import chord from "../../src/index.ts";
+import type chordTypes from "../../src/index.types.ts";
 import type flowTypes from "./flow.types.ts";
 import timing from "./timing.ts";
+
+const { createHost, hostNamed, memoryLinkPair, method, remote } = chord;
 
 const { latch, pollUntil } = timing;
 
 const until = (check: () => boolean): Effect.Effect<void> => pollUntil(check, 200, Effect.sleep(2));
 
-class AckGate implements Link {
-  readonly inner: Link;
-  readonly received: Frame[] = [];
+class AckGate implements chordTypes.Link {
+  readonly inner: chordTypes.Link;
+  readonly received: chordTypes.Frame[] = [];
   paused = false;
-  #held: Frame | undefined;
-  constructor(inner: Link) {
+  #held: chordTypes.Frame | undefined;
+  constructor(inner: chordTypes.Link) {
     this.inner = inner;
   }
   get closed(): boolean {
     return this.inner.closed;
   }
-  send(frame: Frame): number | undefined {
+  send(frame: chordTypes.Frame): number | undefined {
     if (frame.t === "ack" && this.paused) {
       this.#held = frame;
       return 0;
@@ -43,7 +36,7 @@ class AckGate implements Link {
     if (this.#held !== undefined) this.inner.send(this.#held);
     this.#held = undefined;
   }
-  receive(handler: (frame: Frame) => void): void {
+  receive(handler: (frame: chordTypes.Frame) => void): void {
     this.inner.receive((frame) => {
       this.received.push(frame);
       handler(frame);
@@ -91,11 +84,11 @@ const releaseWaiting = (): void => {
   waits.release();
 };
 
-function serveCounterImpl(host: Host, type = Counter): void {
+function serveCounterImpl(host: chordTypes.Host, type = Counter): void {
   host.serve(type, (_input, _principal, self) => {
     const count = self.state("count", Type.Object({ n: Type.Number() }), { n: 0 });
     return {
-      add: (delta: number, ctx: Ctx) => {
+      add: (delta: number, ctx: chordTypes.Ctx) => {
         count.change(ctx, (draft) => {
           draft.n += delta;
         });
@@ -108,7 +101,7 @@ function serveCounterImpl(host: Host, type = Counter): void {
   });
 }
 
-function clientImpl(server: Host, window: number): flowTypes.FlowClient {
+function clientImpl(server: chordTypes.Host, window: number): flowTypes.FlowClient {
   const [down, up] = memoryLinkPair();
   server.accept(down, { principal: { user: "u" }, window });
   const gate = new AckGate(up);
@@ -122,20 +115,20 @@ function clientImpl(server: Host, window: number): flowTypes.FlowClient {
   return { gate, host };
 }
 
-const stateFrames = (frames: readonly Frame[]) =>
-  frames.filter((frame): frame is Extract<Frame, { t: "state" }> => frame.t === "state");
+const stateFrames = (frames: readonly chordTypes.Frame[]) =>
+  frames.filter((frame): frame is Extract<chordTypes.Frame, { t: "state" }> => frame.t === "state");
 
-const isHost = (value: unknown): value is Host =>
+const isHost = (value: unknown): value is chordTypes.Host =>
   typeof (value as { serve?: unknown } | undefined)?.serve === "function";
 
 const serveCounter: {
-  (type?: typeof Counter): (host: Host) => void;
-  (host: Host, type?: typeof Counter): void;
+  (type?: typeof Counter): (host: chordTypes.Host) => void;
+  (host: chordTypes.Host, type?: typeof Counter): void;
 } = dual((args: IArguments) => isHost(args[0]), serveCounterImpl);
 
 const client: {
-  (window: number): (server: Host) => flowTypes.FlowClient;
-  (server: Host, window: number): flowTypes.FlowClient;
+  (window: number): (server: chordTypes.Host) => flowTypes.FlowClient;
+  (server: chordTypes.Host, window: number): flowTypes.FlowClient;
 } = dual(2, clientImpl);
 
 const flow = {

@@ -12,19 +12,14 @@ import {
 } from "effect";
 import { ChildProcess, type ChildProcessSpawner } from "effect/process";
 
-import { StreamChannel } from "./ipc-channel.ts";
-import { ipcLink } from "./link.ts";
-import {
-  CHANNEL_FDS,
-  type ControlMessage,
-  controlOf,
-  type Driver,
-  type Exit,
-  type ForkDriverOptions,
-  ignoreSendError,
-  type Instance,
-  LOCK_ENV,
-} from "./manager-types.ts";
+import StreamChannel from "./ipc-channel.ts";
+import type ipcChannelTypes from "./ipc-channel.types.ts";
+import linkModule from "./link.ts";
+import managerTypes from "./manager-types.ts";
+import type managerTypesModule from "./manager-types.types.ts";
+
+const { CHANNEL_FDS, LOCK_ENV, controlOf, ignoreSendError } = managerTypes;
+const { ipcLink } = linkModule;
 
 const runtime = ManagedRuntime.make(
   Layer.provideMerge(
@@ -34,9 +29,11 @@ const runtime = ManagedRuntime.make(
 );
 
 type Handle = ChildProcessSpawner.ChildProcessHandle;
-type OutputTap = NonNullable<ForkDriverOptions["onOutput"]>;
+type OutputTap = NonNullable<managerTypesModule.ForkDriverOptions["onOutput"]>;
 
-function childEnv(options: ForkDriverOptions): Record<string, string | undefined> {
+function childEnv(
+  options: managerTypesModule.ForkDriverOptions,
+): Record<string, string | undefined> {
   const env: Record<string, string | undefined> = { ...process.env };
   delete env[LOCK_ENV];
   Object.assign(env, options.env);
@@ -44,23 +41,23 @@ function childEnv(options: ForkDriverOptions): Record<string, string | undefined
   return env;
 }
 
-const childCommand = (options: ForkDriverOptions) => {
+const childCommand = (options: managerTypesModule.ForkDriverOptions) => {
   const output = options.onOutput === undefined ? "inherit" : "pipe";
   return ChildProcess.make(
     process.execPath,
     [...(options.execArgv ?? []), options.entry, ...(options.args ?? [])],
     {
-      env: childEnv(options),
-      extendEnv: false,
-      detached: true,
-      killSignal: "SIGKILL",
-      stdin: "ignore",
-      stdout: output,
-      stderr: output,
       additionalFds: {
         [`fd${CHANNEL_FDS.toChild}` as const]: { type: "input" },
         [`fd${CHANNEL_FDS.toParent}` as const]: { type: "output" },
       },
+      detached: true,
+      env: childEnv(options),
+      extendEnv: false,
+      killSignal: "SIGKILL",
+      stderr: output,
+      stdin: "ignore",
+      stdout: output,
     },
   );
 };
@@ -85,17 +82,19 @@ const signalOf = (error: unknown): string =>
     "signal"
   ] ?? String(error);
 
-const exitOf = (handle: Handle): Effect.Effect<Exit> =>
+const exitOf = (handle: Handle): Effect.Effect<managerTypesModule.Exit> =>
   handle.exitCode.pipe(
-    Effect.map((code): Exit => ({ code, signal: null })),
-    Effect.catch((error) => Effect.succeed<Exit>({ code: null, signal: signalOf(error) })),
+    Effect.map((code): managerTypesModule.Exit => ({ code, signal: null })),
+    Effect.catch((error) =>
+      Effect.succeed<managerTypesModule.Exit>({ code: null, signal: signalOf(error) }),
+    ),
   );
 
 function controlListeners(
-  channel: StreamChannel,
-  options: ForkDriverOptions,
-): Set<(message: ControlMessage) => void> {
-  const listeners = new Set<(message: ControlMessage) => void>();
+  channel: ipcChannelTypes.StreamChannel,
+  options: managerTypesModule.ForkDriverOptions,
+): Set<(message: managerTypesModule.ControlMessage) => void> {
+  const listeners = new Set<(message: managerTypesModule.ControlMessage) => void>();
   channel.on("message", (message) => {
     options.onMessage?.(message);
     const control = controlOf(message);
@@ -104,28 +103,32 @@ function controlListeners(
   return listeners;
 }
 
-function instanceOf(handle: Handle, channel: StreamChannel, options: ForkDriverOptions) {
+function instanceOf(
+  handle: Handle,
+  channel: ipcChannelTypes.StreamChannel,
+  options: managerTypesModule.ForkDriverOptions,
+) {
   const listeners = controlListeners(channel, options);
-  const send = (message: ControlMessage): void => {
+  const send = (message: managerTypesModule.ControlMessage): void => {
     if (channel.connected) channel.send({ chord2control: message }, ignoreSendError);
   };
   if (options.init !== undefined) send({ type: "init", value: options.init });
-  return (exited: Promise<Exit>): Instance => ({
-    pid: handle.pid,
-    link: ipcLink(channel),
+  return (exited: Promise<managerTypesModule.Exit>): managerTypesModule.Instance => ({
     exited,
-    send,
     killTree: () => {
       Effect.runFork(Effect.ignore(handle.kill({ killSignal: "SIGKILL" })));
     },
+    link: ipcLink(channel),
     onControl: (listener) => listeners.add(listener),
+    pid: handle.pid,
+    send,
   });
 }
 
-type Started = (exited: Promise<Exit>) => Instance;
+type Started = (exited: Promise<managerTypesModule.Exit>) => managerTypesModule.Instance;
 
 const runChild = (
-  options: ForkDriverOptions,
+  options: managerTypesModule.ForkDriverOptions,
   started: Deferred.Deferred<Started, PlatformError.PlatformError>,
 ) =>
   Effect.scoped(
@@ -142,9 +145,9 @@ const runChild = (
     }),
   );
 
-const spawnInstance = Effect.fn(function* (options: ForkDriverOptions) {
+const spawnInstance = Effect.fn(function* (options: managerTypesModule.ForkDriverOptions) {
   const started = yield* Deferred.make<Started, PlatformError.PlatformError>();
-  const exited = yield* Deferred.make<Exit>();
+  const exited = yield* Deferred.make<managerTypesModule.Exit>();
   yield* Effect.forkDetach(
     runtime.contextEffect.pipe(
       Effect.flatMap((context) => Effect.provideContext(runChild(options, started), context)),
@@ -158,7 +161,7 @@ const spawnInstance = Effect.fn(function* (options: ForkDriverOptions) {
   return [yield* Deferred.await(started), exited] as const;
 });
 
-export function forkDriver(options: ForkDriverOptions): Driver {
+function forkDriver(options: managerTypesModule.ForkDriverOptions): managerTypesModule.Driver {
   return {
     spawn: () =>
       Effect.runPromise(Effect.orDie(spawnInstance(options))).then(([instance, exited]) =>
@@ -166,3 +169,9 @@ export function forkDriver(options: ForkDriverOptions): Driver {
       ),
   };
 }
+
+const managerFork = {
+  forkDriver,
+};
+
+export default managerFork;

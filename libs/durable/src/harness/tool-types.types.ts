@@ -1,6 +1,6 @@
 import type { ImageContent, TextContent, ToolCall } from "@msa/ai";
-import type { JsonRepresentation, JsonValue } from "@msa/chord";
-import type { OutputBuffer, OutputLimits } from "@msa/chord/output";
+import type chordTypes from "@msa/chord/index.types";
+import type outputTypes from "@msa/chord/output.types";
 
 import type typesModule from "./types.types.ts";
 
@@ -26,7 +26,7 @@ declare namespace toolTypesModule {
 
   type NestedCallState = {
     taskId?: typesModule.TaskId<ToolTaskResult>;
-    result?: JsonRepresentation<typesModule.NestedToolExecutionResult>;
+    result?: chordTypes.JsonRepresentation<typesModule.NestedToolExecutionResult>;
   };
 
   type ToolRuntime = typesModule.TaskRuntime<
@@ -39,10 +39,10 @@ declare namespace toolTypesModule {
   type Content = (TextContent | ImageContent)[];
 
   type Reported = {
-    readonly output: OutputBuffer;
-    readonly limits: OutputLimits;
+    readonly output: outputTypes.OutputBuffer;
+    readonly limits: outputTypes.OutputLimits;
     readonly diagnostics: typesModule.ToolDiagnostic[];
-    details: JsonValue | undefined;
+    details: chordTypes.JsonValue | undefined;
   };
 
   type Ending =

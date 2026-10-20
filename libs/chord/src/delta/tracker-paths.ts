@@ -1,29 +1,18 @@
 import { dual } from "effect/Function";
 
-import { entryValueAt } from "./tracker-array-pieces.ts";
-import { assertReadable, nodeBase, nodeParent } from "./tracker-context.ts";
-import { forgetDenseArray } from "./tracker-emit-dense.ts";
-import { emitOperations } from "./tracker-emit.ts";
-import { arrayOverlay, objectHas, objectValue } from "./tracker-object.ts";
-import { locatePiece, piecesOf } from "./tracker-pieces.ts";
-import {
-  type ArrayOverlay,
-  type Container,
-  type InsertSource,
-  type JsonValue,
-  NODE,
-  type Op,
-  type OverlayContext,
-  type OverlayNode,
-  type ParentKind,
-  type Path,
-  type PieceLocation,
-  RELEASED,
-} from "./tracker-types.ts";
+import trackerArrayPieces from "./tracker-array-pieces.ts";
+import trackerContext from "./tracker-context.ts";
+import trackerEmitDense from "./tracker-emit-dense.ts";
+import trackerEmit from "./tracker-emit.ts";
+import trackerObject from "./tracker-object.ts";
+import trackerPieces from "./tracker-pieces.ts";
+import trackerTypes from "./tracker-types.ts";
+import type trackerTypesModule from "./tracker-types.types.ts";
+const { NODE, RELEASED } = trackerTypes;
 
-export function resolvePath(node: OverlayNode): Path | undefined {
+function resolvePath(node: trackerTypesModule.OverlayNode): trackerTypesModule.Path | undefined {
   if (node.preparedPath !== undefined) return node.preparedPath;
-  const parent = nodeParent(node);
+  const parent = trackerContext.nodeParent(node);
   if (parent === undefined) {
     node.preparedPath = [];
     return node.preparedPath;
@@ -32,11 +21,15 @@ export function resolvePath(node: OverlayNode): Path | undefined {
   if (parentPath === undefined) return undefined;
   if (node.parentKind === 0) {
     const key = node.parentKey as string;
-    if (!objectHas(parent, key) || objectValue(parent, key) !== nodeBase(node)) return undefined;
+    if (
+      !trackerObject.objectHas(parent, key) ||
+      trackerObject.objectValue(parent, key) !== trackerContext.nodeBase(node)
+    )
+      return undefined;
     node.preparedPath = [...parentPath, key];
     return node.preparedPath;
   }
-  const overlay = arrayOverlay(parent);
+  const overlay = trackerObject.arrayOverlay(parent);
   const index = findEntryIndexImpl(
     overlay,
     node.parentKind,
@@ -44,24 +37,28 @@ export function resolvePath(node: OverlayNode): Path | undefined {
     node.parentSource,
   );
   if (index === undefined) return undefined;
-  const piece = locatePiece(overlay, index);
-  if (entryValueAt(parent, piece, node.parentKey as number) !== nodeBase(node)) return undefined;
+  const piece = trackerPieces.locatePiece(overlay, index);
+  if (
+    trackerArrayPieces.entryValueAt(parent, piece, node.parentKey as number) !==
+    trackerContext.nodeBase(node)
+  )
+    return undefined;
   node.preparedPath = [...parentPath, index];
   return node.preparedPath;
 }
 
-function ensurePieceLocations(overlay: ArrayOverlay): void {
+function ensurePieceLocations(overlay: trackerTypesModule.ArrayOverlay): void {
   if (overlay.baseLocations !== undefined) return;
   overlay.baseLocations = [];
   overlay.insertLocations = new Map();
   let logicalStart = 0;
-  for (const piece of piecesOf(overlay)) {
+  for (const piece of trackerPieces.piecesOf(overlay)) {
     const last = piece.start + piece.step * (piece.length - 1);
     const location = {
-      piece,
       logicalStart,
-      minimum: Math.min(piece.start, last),
       maximum: Math.max(piece.start, last),
+      minimum: Math.min(piece.start, last),
+      piece,
     };
     if (piece.kind === "base") overlay.baseLocations.push(location);
     else {
@@ -74,17 +71,19 @@ function ensurePieceLocations(overlay: ArrayOverlay): void {
     }
     logicalStart += piece.length;
   }
-  const byMinimum = (left: PieceLocation, right: PieceLocation): number =>
-    left.minimum - right.minimum;
+  const byMinimum = (
+    left: trackerTypesModule.PieceLocation,
+    right: trackerTypesModule.PieceLocation,
+  ): number => left.minimum - right.minimum;
   overlay.baseLocations.sort(byMinimum);
   for (const locations of overlay.insertLocations.values()) locations.sort(byMinimum);
 }
 
 function findEntryIndexImpl(
-  overlay: ArrayOverlay,
-  kind: ParentKind,
+  overlay: trackerTypesModule.ArrayOverlay,
+  kind: trackerTypesModule.ParentKind,
   sourceIndex: number,
-  source: InsertSource | undefined,
+  source: trackerTypesModule.InsertSource | undefined,
 ): number | undefined {
   if (kind === 1 && !overlay.structural) return sourceIndex;
   ensurePieceLocations(overlay);
@@ -103,31 +102,37 @@ function findEntryIndexImpl(
   return offset >= 0 && offset < location.piece.length ? location.logicalStart + offset : undefined;
 }
 
-export function ensureOperations(context: OverlayContext): Op[] {
+function ensureOperations(context: trackerTypesModule.OverlayContext): trackerTypesModule.Op[] {
   if (context.ops !== undefined) return context.ops;
-  assertReadable(context);
+  trackerContext.assertReadable(context);
   if (context.replacement) {
     const base = context.tracker.deref()?.replacementBase(context);
     context.replacementNoop =
       base !== undefined &&
-      equalTrustedJsonImpl(base as unknown as JsonValue, nodeBase(context.root!) as JsonValue);
-    context.ops = context.replacementNoop ? [] : [["r", nodeBase(context.root!)]];
-  } else context.ops = emitOperations(context);
+      equalTrustedJsonImpl(
+        base as unknown as trackerTypesModule.JsonValue,
+        trackerContext.nodeBase(context.root!) as trackerTypesModule.JsonValue,
+      );
+    context.ops = context.replacementNoop ? [] : [["r", trackerContext.nodeBase(context.root!)]];
+  } else context.ops = trackerEmit.emitOperations(context);
   return context.ops;
 }
 
-function equalTrustedJsonImpl(left: JsonValue, right: JsonValue): boolean {
+function equalTrustedJsonImpl(
+  left: trackerTypesModule.JsonValue,
+  right: trackerTypesModule.JsonValue,
+): boolean {
   if (left === right) return true;
   if (!isContainer(left) || !isContainer(right) || Array.isArray(left) !== Array.isArray(right))
     return false;
   if (Array.isArray(left)) {
-    const other = right as JsonValue[];
+    const other = right as trackerTypesModule.JsonValue[];
     if (left.length !== other.length) return false;
     for (let index = 0; index < left.length; index++)
       if (!equalTrustedJsonImpl(left[index]!, other[index]!)) return false;
     return true;
   }
-  const other = right as Record<string, JsonValue>;
+  const other = right as Record<string, trackerTypesModule.JsonValue>;
   const keys = Object.keys(left);
   if (keys.length !== Object.keys(other).length) return false;
   for (const key of keys)
@@ -135,7 +140,7 @@ function equalTrustedJsonImpl(left: JsonValue, right: JsonValue): boolean {
   return true;
 }
 
-export function abortContext(context: OverlayContext): void {
+function abortContext(context: trackerTypesModule.OverlayContext): void {
   if (
     context.status.value === "aborted" ||
     context.status.value === "consumed" ||
@@ -146,9 +151,9 @@ export function abortContext(context: OverlayContext): void {
   clearContext(context);
 }
 
-export function releaseOverlayReferences(context: OverlayContext): void {
+function releaseOverlayReferences(context: trackerTypesModule.OverlayContext): void {
   context.tracker.deref()?.releaseContext(context);
-  forgetDenseArray(context);
+  trackerEmitDense.forgetDenseArray(context);
   context.overlayReleased = true;
   context.dirty.length = 0;
   context.nodes.length = 0;
@@ -160,9 +165,9 @@ export function releaseOverlayReferences(context: OverlayContext): void {
   context.baseValue = undefined;
 }
 
-export function clearContext(context: OverlayContext): void {
+function clearContext(context: trackerTypesModule.OverlayContext): void {
   context.tracker.deref()?.releaseContext(context);
-  forgetDenseArray(context);
+  trackerEmitDense.forgetDenseArray(context);
   for (const node of context.nodes) {
     if (Array.isArray(node.target)) node.target.length = 0;
     Reflect.deleteProperty(node.target, NODE);
@@ -201,25 +206,38 @@ export function clearContext(context: OverlayContext): void {
   context.overlayReleased = true;
 }
 
-export function isContainer(value: unknown): value is Container {
+function isContainer(value: unknown): value is trackerTypesModule.Container {
   return value !== null && typeof value === "object";
 }
 
-export const findEntryIndex: {
+const findEntryIndex: {
   (
-    kind: ParentKind,
+    kind: trackerTypesModule.ParentKind,
     sourceIndex: number,
-    source: InsertSource | undefined,
-  ): (overlay: ArrayOverlay) => number | undefined;
+    source: trackerTypesModule.InsertSource | undefined,
+  ): (overlay: trackerTypesModule.ArrayOverlay) => number | undefined;
   (
-    overlay: ArrayOverlay,
-    kind: ParentKind,
+    overlay: trackerTypesModule.ArrayOverlay,
+    kind: trackerTypesModule.ParentKind,
     sourceIndex: number,
-    source: InsertSource | undefined,
+    source: trackerTypesModule.InsertSource | undefined,
   ): number | undefined;
 } = dual(4, findEntryIndexImpl);
 
-export const equalTrustedJson: {
-  (right: JsonValue): (left: JsonValue) => boolean;
-  (left: JsonValue, right: JsonValue): boolean;
+const equalTrustedJson: {
+  (right: trackerTypesModule.JsonValue): (left: trackerTypesModule.JsonValue) => boolean;
+  (left: trackerTypesModule.JsonValue, right: trackerTypesModule.JsonValue): boolean;
 } = dual(2, equalTrustedJsonImpl);
+
+const trackerPaths = {
+  abortContext,
+  clearContext,
+  ensureOperations,
+  equalTrustedJson,
+  findEntryIndex,
+  isContainer,
+  releaseOverlayReferences,
+  resolvePath,
+};
+
+export default trackerPaths;

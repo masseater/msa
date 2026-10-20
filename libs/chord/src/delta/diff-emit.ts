@@ -1,14 +1,16 @@
 import { dual } from "effect/Function";
 
-import type { JsonValue } from "../json.ts";
-import type { NonEmptyPath, Op, Path } from "./ops.ts";
-import { overlap } from "./overlap.ts";
+import type jsonTypes from "../json.types.ts";
+import type opsTypes from "./ops.types.ts";
+import overlapModule from "./overlap.ts";
+
+const { overlap } = overlapModule;
 
 const DEFAULT_OVERLAP_SCAN = 65_536;
 const MAX_DELTA_OPERATIONS = 4_096;
-const overflowedBatches = new WeakSet<Op[]>();
+const overflowedBatches = new WeakSet<opsTypes.Op[]>();
 
-const operationEmitted = (operations: Op[], operation: Op): void => {
+const operationEmitted = (operations: opsTypes.Op[], operation: opsTypes.Op): void => {
   if (overflowedBatches.has(operations)) return;
   if (operations.length >= MAX_DELTA_OPERATIONS) {
     overflowedBatches.add(operations);
@@ -17,27 +19,33 @@ const operationEmitted = (operations: Op[], operation: Op): void => {
   operations.push(operation);
 };
 
-export const isContainer = (value: JsonValue): value is JsonValue[] | Record<string, JsonValue> =>
+const isContainer = (
+  value: jsonTypes.JsonValue,
+): value is jsonTypes.JsonValue[] | Record<string, jsonTypes.JsonValue> =>
   value !== null && typeof value === "object";
 
-const setEmitted = (path: Path, value: JsonValue, operations: Op[]): void => {
+const setEmitted = (
+  path: opsTypes.Path,
+  value: jsonTypes.JsonValue,
+  operations: opsTypes.Op[],
+): void => {
   if (path.length === 0) emitOperation(operations, ["r", value]);
-  else emitOperation(operations, ["s", path as NonEmptyPath, value]);
+  else emitOperation(operations, ["s", path as opsTypes.NonEmptyPath, value]);
 };
 
-const jsonEqual = (left: JsonValue, right: JsonValue): boolean => {
+const jsonEqual = (left: jsonTypes.JsonValue, right: jsonTypes.JsonValue): boolean => {
   if (left === right) return true;
   if (!isContainer(left) || !isContainer(right) || Array.isArray(left) !== Array.isArray(right))
     return false;
   if (Array.isArray(left)) {
-    const other = right as JsonValue[];
+    const other = right as jsonTypes.JsonValue[];
     if (left.length !== other.length) return false;
     for (let index = 0; index < left.length; index++) {
       if (!equalJson(left[index]!, other[index]!)) return false;
     }
     return true;
   }
-  const other = right as Record<string, JsonValue>;
+  const other = right as Record<string, jsonTypes.JsonValue>;
   const keys = Object.keys(left);
   if (keys.length !== Object.keys(other).length) return false;
   for (const key of keys) {
@@ -47,11 +55,11 @@ const jsonEqual = (left: JsonValue, right: JsonValue): boolean => {
 };
 
 const permutationOf = (
-  before: readonly JsonValue[],
-  after: readonly JsonValue[],
+  before: readonly jsonTypes.JsonValue[],
+  after: readonly jsonTypes.JsonValue[],
 ): number[] | undefined => {
   if (before.length !== after.length) return undefined;
-  const positions = new Map<JsonValue, { indices: number[]; used: number }>();
+  const positions = new Map<jsonTypes.JsonValue, { indices: number[]; used: number }>();
   for (let index = 0; index < before.length; index++) {
     const value = before[index]!;
     const entry = positions.get(value);
@@ -70,8 +78,8 @@ const permutationOf = (
 const stringEmitted = (
   before: string,
   after: string,
-  path: NonEmptyPath,
-  operations: Op[],
+  path: opsTypes.NonEmptyPath,
+  operations: opsTypes.Op[],
 ): void => {
   if (before === after) return;
   if (after.length > before.length && after.slice(0, before.length) === before) {
@@ -86,33 +94,51 @@ const stringEmitted = (
   emitOperation(operations, ["t", path, before.length - shared]);
   if (after.length > shared) emitOperation(operations, ["a", path, after.slice(shared)]);
 };
-export const overflowed = (operations: Op[]): boolean => overflowedBatches.has(operations);
+const overflowed = (operations: opsTypes.Op[]): boolean => overflowedBatches.has(operations);
 
-export const markOverflowed = (operations: Op[]): void => {
+const markOverflowed = (operations: opsTypes.Op[]): void => {
   overflowedBatches.add(operations);
 };
 
-export const emitOperation: {
-  (operation: Op): (operations: Op[]) => void;
-  (operations: Op[], operation: Op): void;
+const emitOperation: {
+  (operation: opsTypes.Op): (operations: opsTypes.Op[]) => void;
+  (operations: opsTypes.Op[], operation: opsTypes.Op): void;
 } = dual(2, operationEmitted);
 
-export const emitSet: {
-  (value: JsonValue, operations: Op[]): (path: Path) => void;
-  (path: Path, value: JsonValue, operations: Op[]): void;
+const emitSet: {
+  (value: jsonTypes.JsonValue, operations: opsTypes.Op[]): (path: opsTypes.Path) => void;
+  (path: opsTypes.Path, value: jsonTypes.JsonValue, operations: opsTypes.Op[]): void;
 } = dual(3, setEmitted);
 
-export const equalJson: {
-  (right: JsonValue): (left: JsonValue) => boolean;
-  (left: JsonValue, right: JsonValue): boolean;
+const equalJson: {
+  (right: jsonTypes.JsonValue): (left: jsonTypes.JsonValue) => boolean;
+  (left: jsonTypes.JsonValue, right: jsonTypes.JsonValue): boolean;
 } = dual(2, jsonEqual);
 
-export const permutation: {
-  (after: readonly JsonValue[]): (before: readonly JsonValue[]) => number[] | undefined;
-  (before: readonly JsonValue[], after: readonly JsonValue[]): number[] | undefined;
+const permutation: {
+  (
+    after: readonly jsonTypes.JsonValue[],
+  ): (before: readonly jsonTypes.JsonValue[]) => number[] | undefined;
+  (
+    before: readonly jsonTypes.JsonValue[],
+    after: readonly jsonTypes.JsonValue[],
+  ): number[] | undefined;
 } = dual(2, permutationOf);
 
-export const emitString: {
-  (after: string, path: NonEmptyPath, operations: Op[]): (before: string) => void;
-  (before: string, after: string, path: NonEmptyPath, operations: Op[]): void;
+const emitString: {
+  (after: string, path: opsTypes.NonEmptyPath, operations: opsTypes.Op[]): (before: string) => void;
+  (before: string, after: string, path: opsTypes.NonEmptyPath, operations: opsTypes.Op[]): void;
 } = dual(4, stringEmitted);
+
+const diffEmit = {
+  emitOperation,
+  emitSet,
+  emitString,
+  equalJson,
+  isContainer,
+  markOverflowed,
+  overflowed,
+  permutation,
+};
+
+export default diffEmit;

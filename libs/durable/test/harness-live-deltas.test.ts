@@ -1,5 +1,5 @@
 import { Type, fauxAssistantMessage, fauxText, fauxToolCall } from "@msa/ai";
-import type { Op } from "@msa/chord/delta";
+import type deltaTypes from "@msa/chord/delta.types";
 import durable from "@msa/durable";
 import memory from "@msa/durable/storage/memory";
 import { Effect } from "effect";
@@ -14,7 +14,7 @@ const { MemoryStorage } = memory;
 const { OUTPUT, drive, live } = harnessLiveDeltasSupport;
 const { addTool, awaited, chatSetup, context, documentChanges, openChat } = support;
 
-function isOutput(op: Op): boolean {
+function isOutput(op: deltaTypes.Op): boolean {
   return JSON.stringify(op[1]) === JSON.stringify(OUTPUT);
 }
 
@@ -34,7 +34,7 @@ const singleToolChat = Effect.fn("singleToolChat")(function* () {
     fauxAssistantMessage([fauxText("done")]),
   ]);
   const { harness, root } = yield* openChat(new MemoryStorage(), setup);
-  const commits: Op[][] = [];
+  const commits: deltaTypes.Op[][] = [];
   harness.subscribeCommits((publication) => {
     for (const change of documentChanges(publication)) {
       if (change.record.kind === "msa.live" && change.ops.length > 0) commits.push([...change.ops]);

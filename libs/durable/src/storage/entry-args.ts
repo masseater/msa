@@ -1,4 +1,4 @@
-import type { Context } from "@msa/chord";
+import type chordTypes from "@msa/chord/index.types";
 import { Function } from "effect";
 
 import errors from "../errors.ts";
@@ -13,27 +13,27 @@ type EntryResult = ReturnType<typesModule.Storage["entry"]>;
 const forwardEntry: {
   (
     idOrConversationId: typesModule.EntryId | typesModule.ConversationId,
-    idOrContext: typesModule.EntryId | Context,
-    context: Context | undefined,
+    idOrContext: typesModule.EntryId | chordTypes.Context,
+    context: chordTypes.Context | undefined,
   ): (store: typesModule.Storage) => EntryResult;
   (
     store: typesModule.Storage,
     idOrConversationId: typesModule.EntryId | typesModule.ConversationId,
-    idOrContext: typesModule.EntryId | Context,
-    context: Context | undefined,
+    idOrContext: typesModule.EntryId | chordTypes.Context,
+    context: chordTypes.Context | undefined,
   ): EntryResult;
 } = Function.dual(
   4,
   (
     store: typesModule.Storage,
     idOrConversationId: typesModule.EntryId | typesModule.ConversationId,
-    idOrContext: typesModule.EntryId | Context,
-    context: Context | undefined,
+    idOrContext: typesModule.EntryId | chordTypes.Context,
+    context: chordTypes.Context | undefined,
   ): EntryResult => {
     if (context === undefined)
       return store.entry(
         idFromNumber<typesModule.EntryId>(idOrConversationId),
-        idOrContext as Context,
+        idOrContext as chordTypes.Context,
       );
     if (typeof idOrContext !== "number")
       throw new StorageRequestError("Storage.entry() requires an entry ID");

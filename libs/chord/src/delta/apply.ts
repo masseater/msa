@@ -1,40 +1,54 @@
 import { dual } from "effect/Function";
 
-import type { JsonValue } from "../json.ts";
-import { isObj, type Op, type Path, RESERVED_SEGMENTS, type Seg } from "./ops.ts";
-import { PathError } from "./path-error.ts";
-import { UnsafePathError } from "./unsafe-path-error.ts";
-import { assertSafePath, assertValidOp } from "./validate.ts";
+import type jsonTypes from "../json.types.ts";
+import opsModule from "./ops.ts";
+import type opsTypes from "./ops.types.ts";
+import PathError from "./path-error.ts";
+import UnsafePathError from "./unsafe-path-error.ts";
+import validate from "./validate.ts";
+
+const { RESERVED_SEGMENTS, isObj } = opsModule;
+
+const { assertSafePath } = validate;
+const assertValidOp: typeof validate.assertValidOp = validate.assertValidOp;
 
 const SPLICE_CHUNK = 10_000;
 
-const write = (parent: Record<Seg, JsonValue>, key: Seg, value: JsonValue): void => {
+const write = (
+  parent: Record<opsTypes.Seg, jsonTypes.JsonValue>,
+  key: opsTypes.Seg,
+  value: jsonTypes.JsonValue,
+): void => {
   Object.defineProperty(parent, key, {
+    configurable: true,
+    enumerable: true,
     value,
     writable: true,
-    enumerable: true,
-    configurable: true,
   });
 };
 
-function resolveValue(root: JsonValue, path: Path): JsonValue {
-  let node: JsonValue = root;
+function resolveValue(root: jsonTypes.JsonValue, path: opsTypes.Path): jsonTypes.JsonValue {
+  let node: jsonTypes.JsonValue = root;
   for (const seg of path) {
     if (!isObj(node)) throw new PathError(path);
     if (Array.isArray(node) && typeof seg !== "number") throw new UnsafePathError(seg);
     if (!Object.hasOwn(node, seg as PropertyKey)) throw new PathError(path);
-    node = (node as Record<Seg, JsonValue>)[seg]!;
+    node = (node as Record<opsTypes.Seg, jsonTypes.JsonValue>)[seg]!;
   }
   return node;
 }
 
-function resolve(root: JsonValue, path: Path): JsonValue {
+function resolve(root: jsonTypes.JsonValue, path: opsTypes.Path): jsonTypes.JsonValue {
   const node = resolveValue(root, path);
   if (!isObj(node)) throw new PathError(path);
   return node;
 }
 
-function applySplice(root: JsonValue, path: Path, op: Extract<Op, { 0: "p" }>): void {
+function applySplice(
+  root: jsonTypes.JsonValue,
+  path: opsTypes.Path,
+  op: Extract<opsTypes.Op, { 0: "p" }>,
+): void {
   const spliced = path.length === 0 ? root : resolve(root, path);
   if (!Array.isArray(spliced)) throw new PathError(path);
   spliced.splice(op[2], op[3]);
@@ -43,7 +57,7 @@ function applySplice(root: JsonValue, path: Path, op: Extract<Op, { 0: "p" }>): 
   }
 }
 
-function applyMove(root: JsonValue, path: Path, order: readonly number[]): void {
+function applyMove(root: jsonTypes.JsonValue, path: opsTypes.Path, order: readonly number[]): void {
   const moved = path.length === 0 ? root : resolve(root, path);
   if (!Array.isArray(moved) || moved.length !== order.length) throw new PathError(path);
   const previous = moved.slice();
@@ -51,11 +65,11 @@ function applyMove(root: JsonValue, path: Path, order: readonly number[]): void 
 }
 
 function applyLeaf(
-  root: JsonValue,
-  path: Path,
-  op: Extract<Op, { 0: "s" | "d" | "a" | "t" }>,
+  root: jsonTypes.JsonValue,
+  path: opsTypes.Path,
+  op: Extract<opsTypes.Op, { 0: "s" | "d" | "a" | "t" }>,
 ): void {
-  const parent = resolve(root, path.slice(0, -1)) as Record<Seg, JsonValue>;
+  const parent = resolve(root, path.slice(0, -1)) as Record<opsTypes.Seg, jsonTypes.JsonValue>;
   const key = path[path.length - 1]!;
   if (Array.isArray(parent)) {
     if (typeof key !== "number") throw new UnsafePathError(key);
@@ -69,7 +83,7 @@ function applyLeaf(
     case "d":
       if (Array.isArray(parent)) {
         if (typeof key !== "number" || key >= parent.length) throw new PathError(path);
-        (parent as unknown as JsonValue[]).splice(key, 1);
+        (parent as unknown as jsonTypes.JsonValue[]).splice(key, 1);
       } else delete parent[key];
       return;
     case "a":
@@ -82,8 +96,8 @@ function applyLeaf(
   }
 }
 
-function applyOps<T>(target: T | undefined, ops: readonly Op[]): T {
-  let root = target as unknown as JsonValue;
+function applyOps<T>(target: T | undefined, ops: readonly opsTypes.Op[]): T {
+  let root = target as unknown as jsonTypes.JsonValue;
   for (const op of ops) {
     assertValidOp(op);
     if (op[0] === "r") {
@@ -100,20 +114,20 @@ function applyOps<T>(target: T | undefined, ops: readonly Op[]): T {
 }
 
 function appendCopy(
-  root: JsonValue,
-  op: Extract<Op, { 0: "p" }>,
+  root: jsonTypes.JsonValue,
+  op: Extract<opsTypes.Op, { 0: "p" }>,
   owned: WeakSet<object>,
-): JsonValue | undefined {
+): jsonTypes.JsonValue | undefined {
   const [, path, index, deleteCount, items] = op;
   if (deleteCount !== 0) return undefined;
-  let target: JsonValue = root;
+  let target: jsonTypes.JsonValue = root;
   for (const segment of path) {
     const valid =
       typeof segment === "string"
         ? !RESERVED_SEGMENTS.has(segment) && isObj(target) && !Array.isArray(target)
         : Number.isInteger(segment) && segment >= 0 && Array.isArray(target);
     if (!valid || !Object.hasOwn(target as object, segment)) return undefined;
-    target = (target as Record<Seg, JsonValue>)[segment]!;
+    target = (target as Record<opsTypes.Seg, jsonTypes.JsonValue>)[segment]!;
   }
   if (!Array.isArray(target) || owned.has(target) || index !== target.length) return undefined;
   const appended = target.concat(items);
@@ -122,29 +136,37 @@ function appendCopy(
   const parentPath = path.slice(0, -1);
   const copiedRoot = copyContainers(root, parentPath, owned);
   write(
-    resolve(copiedRoot, parentPath) as Record<Seg, JsonValue>,
+    resolve(copiedRoot, parentPath) as Record<opsTypes.Seg, jsonTypes.JsonValue>,
     path[path.length - 1]!,
     appended,
   );
   return copiedRoot;
 }
 
-function copyNode(value: JsonValue, path: Path): JsonValue[] | Record<string, JsonValue> {
+function copyNode(
+  value: jsonTypes.JsonValue,
+  path: opsTypes.Path,
+): jsonTypes.JsonValue[] | Record<string, jsonTypes.JsonValue> {
   if (Array.isArray(value)) return value.slice();
   if (!isObj(value)) throw new PathError(path);
   const result = Object.create(
     Object.getPrototypeOf(value) === null ? null : Object.prototype,
-  ) as Record<string, JsonValue>;
+  ) as Record<string, jsonTypes.JsonValue>;
   for (const key of Object.keys(value)) {
-    write(result, key, (value as Record<string, JsonValue>)[key]!);
+    write(result, key, (value as Record<string, jsonTypes.JsonValue>)[key]!);
   }
   return result;
 }
 
-function copyContainers(root: JsonValue, path: Path, owned: WeakSet<object>): JsonValue {
+function copyContainers(
+  root: jsonTypes.JsonValue,
+  path: opsTypes.Path,
+  owned: WeakSet<object>,
+): jsonTypes.JsonValue {
   if (!isObj(root)) throw new PathError(path);
-  let copiedRoot: JsonValue[] | Record<string, JsonValue>;
-  if (owned.has(root)) copiedRoot = root as JsonValue[] | Record<string, JsonValue>;
+  let copiedRoot: jsonTypes.JsonValue[] | Record<string, jsonTypes.JsonValue>;
+  if (owned.has(root))
+    copiedRoot = root as jsonTypes.JsonValue[] | Record<string, jsonTypes.JsonValue>;
   else {
     copiedRoot = copyNode(root, path);
     owned.add(copiedRoot);
@@ -154,22 +176,25 @@ function copyContainers(root: JsonValue, path: Path, owned: WeakSet<object>): Js
     if (!Object.hasOwn(destination, segment)) throw new PathError(path);
     if (Array.isArray(destination) && typeof segment !== "number")
       throw new UnsafePathError(segment);
-    const child = (destination as Record<Seg, JsonValue>)[segment]!;
+    const child = (destination as Record<opsTypes.Seg, jsonTypes.JsonValue>)[segment]!;
     if (!isObj(child)) throw new PathError(path);
     if (owned.has(child)) {
-      destination = child as JsonValue[] | Record<string, JsonValue>;
+      destination = child as jsonTypes.JsonValue[] | Record<string, jsonTypes.JsonValue>;
       continue;
     }
     const copiedChild = copyNode(child, path);
-    write(destination as Record<Seg, JsonValue>, segment, copiedChild);
+    write(destination as Record<opsTypes.Seg, jsonTypes.JsonValue>, segment, copiedChild);
     owned.add(copiedChild);
     destination = copiedChild;
   }
   return copiedRoot;
 }
 
-function appliedImmutableBatches<T>(target: T | undefined, batches: Iterable<readonly Op[]>): T {
-  let root = target as unknown as JsonValue;
+function appliedImmutableBatches<T>(
+  target: T | undefined,
+  batches: Iterable<readonly opsTypes.Op[]>,
+): T {
+  let root = target as unknown as jsonTypes.JsonValue;
   const owned = new WeakSet<object>();
   for (const ops of batches) {
     for (const op of ops) {
@@ -196,19 +221,27 @@ function appliedImmutableBatches<T>(target: T | undefined, batches: Iterable<rea
   return root as unknown as T;
 }
 
-export const apply: {
-  (ops: readonly Op[]): <T>(target: T | undefined) => T;
-  <T>(target: T | undefined, ops: readonly Op[]): T;
+const apply: {
+  (ops: readonly opsTypes.Op[]): <T>(target: T | undefined) => T;
+  <T>(target: T | undefined, ops: readonly opsTypes.Op[]): T;
 } = dual(2, applyOps);
 
-export const applyImmutable: {
-  (ops: readonly Op[]): <T>(target: T | undefined) => T;
-  <T>(target: T | undefined, ops: readonly Op[]): T;
-} = dual(2, <T>(target: T | undefined, ops: readonly Op[]): T =>
+const applyImmutable: {
+  (ops: readonly opsTypes.Op[]): <T>(target: T | undefined) => T;
+  <T>(target: T | undefined, ops: readonly opsTypes.Op[]): T;
+} = dual(2, <T>(target: T | undefined, ops: readonly opsTypes.Op[]): T =>
   appliedImmutableBatches(target, [ops]),
 );
 
-export const applyImmutableBatches: {
-  (batches: Iterable<readonly Op[]>): <T>(target: T | undefined) => T;
-  <T>(target: T | undefined, batches: Iterable<readonly Op[]>): T;
+const applyImmutableBatches: {
+  (batches: Iterable<readonly opsTypes.Op[]>): <T>(target: T | undefined) => T;
+  <T>(target: T | undefined, batches: Iterable<readonly opsTypes.Op[]>): T;
 } = dual(2, appliedImmutableBatches);
+
+const applyModule = {
+  apply,
+  applyImmutable,
+  applyImmutableBatches,
+};
+
+export default applyModule;

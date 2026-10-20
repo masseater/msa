@@ -29,7 +29,9 @@ Contracts are runtime values described with [TypeBox](https://github.com/sinclai
 ## Quick start
 
 ```ts
-import { createHost, hostNamed, method, remote } from "@msa/chord";
+import chord from "@msa/chord";
+
+const { createHost, hostNamed, method, remote } = chord;
 import { Type } from "typebox";
 
 // contract.ts: shared by provider and consumers
@@ -77,7 +79,9 @@ await host.root(async (ctx) => {
 Import the standalone transactional tracker from `@msa/chord/delta`:
 
 ```ts
-import { applyImmutable, track } from "@msa/chord/delta";
+import delta from "@msa/chord/delta";
+
+const { applyImmutable, track } = delta;
 
 const tracker = track({ output: "", count: 0 });
 const change = tracker.beginChange();
@@ -108,7 +112,9 @@ standalone observable value, independent of hosts; Durable uses it for document,
 view, and task-graph states:
 
 ```ts
-import { replicatedState } from "@msa/chord";
+import chord from "@msa/chord";
+
+const { replicatedState } = chord;
 
 const initial = { output: "", count: 0 };
 const status = replicatedState(initial); // transfers ownership of initial

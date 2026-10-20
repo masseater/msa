@@ -1,14 +1,17 @@
 import { dual } from "effect/Function";
 
-import { type OutputLimits, boundOutput } from "../../src/output.ts";
+import output from "../../src/output.ts";
+import type outputTypes from "../../src/output.types.ts";
 
-const headImpl = (maxLines: number, maxBytes: number): OutputLimits => ({
+const { boundOutput } = output;
+
+const headImpl = (maxLines: number, maxBytes: number): outputTypes.OutputLimits => ({
   maxBytes,
   maxLines,
   retain: "head",
 });
 
-const tailImpl = (maxLines: number, maxBytes: number): OutputLimits => ({
+const tailImpl = (maxLines: number, maxBytes: number): outputTypes.OutputLimits => ({
   maxBytes,
   maxLines,
   retain: "tail",
@@ -57,19 +60,19 @@ function sampledByteLimits(input: string): number[] {
   return [...new Set(candidates.filter((value) => value >= 0))].sort((a, b) => a - b);
 }
 
-function boundImpl(text: string, limits: OutputLimits) {
+function boundImpl(text: string, limits: outputTypes.OutputLimits) {
   const { text: kept, droppedBytes, droppedLines } = boundOutput(text, limits);
   return { droppedBytes, droppedLines, kept };
 }
 
 const head: {
-  (maxBytes: number): (maxLines: number) => OutputLimits;
-  (maxLines: number, maxBytes: number): OutputLimits;
+  (maxBytes: number): (maxLines: number) => outputTypes.OutputLimits;
+  (maxLines: number, maxBytes: number): outputTypes.OutputLimits;
 } = dual(2, headImpl);
 
 const tail: {
-  (maxBytes: number): (maxLines: number) => OutputLimits;
-  (maxLines: number, maxBytes: number): OutputLimits;
+  (maxBytes: number): (maxLines: number) => outputTypes.OutputLimits;
+  (maxLines: number, maxBytes: number): outputTypes.OutputLimits;
 } = dual(2, tailImpl);
 
 const bufferTail: {
@@ -85,8 +88,8 @@ const assertMatchesBufferTail: {
 type Bounded = ReturnType<typeof boundImpl>;
 
 const bound: {
-  (limits: OutputLimits): (text: string) => Bounded;
-  (text: string, limits: OutputLimits): Bounded;
+  (limits: outputTypes.OutputLimits): (text: string) => Bounded;
+  (text: string, limits: outputTypes.OutputLimits): Bounded;
 } = dual(2, boundImpl);
 
 const outputModule = {

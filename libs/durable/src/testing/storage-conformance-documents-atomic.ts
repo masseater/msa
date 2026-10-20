@@ -1,4 +1,4 @@
-import type { JsonValue } from "@msa/chord";
+import type chordTypes from "@msa/chord/index.types";
 import { Effect } from "effect";
 
 import type typesModule from "../types.types.ts";
@@ -75,7 +75,7 @@ const lifecycleFailures: storageConformanceSupportTypes.StorageCaseSpec = {
 
 const seedAtomic = Effect.fnUntraced(function* (storage: typesModule.Storage) {
   const rootId = yield* createRoot(storage);
-  const taskId = yield* mint<typesModule.TaskId<JsonValue>>(storage);
+  const taskId = yield* mint<typesModule.TaskId<chordTypes.JsonValue>>(storage);
   const submissionId = yield* mint<typesModule.SubmissionId>(storage);
   const documentId = yield* mint<typesModule.DocumentId>(storage);
   const task = pendingTask(taskId, rootId);

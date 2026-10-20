@@ -1,15 +1,25 @@
-import type { Feed, ServedLocal, StateFrame } from "./connection-types.ts";
-import type { Connection } from "./connection.ts";
-import { contractFromDescription, LOCAL_VARIANT, resolveHost } from "./contract.ts";
-import { encoder } from "./delta/index.ts";
-import { ChordError, invalid } from "./errors.ts";
-import { RefImpl } from "./ref.ts";
-import { assertValid } from "./schema.ts";
-import { variantOf } from "./service.ts";
-import type { Readable, Shape, StateEvent } from "./types.ts";
-import { type Frame, toWireError } from "./wire.ts";
+import type connectionTypesModule from "./connection-types.types.ts";
+import type connectionTypes from "./connection.types.ts";
+import RefImpl from "./ref.ts";
+import type refTypes from "./ref.types.ts";
+import schemaModule from "./schema.ts";
+import servedKit from "./served-kit.ts";
+import serviceModule from "./service.ts";
+import type typesModule from "./types.types.ts";
+import wire from "./wire.ts";
+import type wireTypes from "./wire.types.ts";
 
-const validateSnapshot = (ref: RefImpl, member: string, value: unknown): void => {
+const { contract: contractModule, delta, errors: errorsModule } = servedKit;
+
+const { variantOf } = serviceModule;
+const { LOCAL_VARIANT, contractFromDescription, resolveHost } = contractModule;
+const { assertValid } = schemaModule;
+const { ChordError, invalid } = errorsModule;
+const { toWireError } = wire;
+
+const { encoder } = delta;
+
+const validateSnapshot = (ref: refTypes.RefImpl, member: string, value: unknown): void => {
   if (value === undefined) return;
   const installed = ref.object.currentInstalled();
   if (installed === undefined) return;
@@ -30,51 +40,51 @@ const clientError = (error: unknown): unknown =>
     ? new ChordError("upgrade_required", error.message, { cause: error })
     : error;
 
-type HoldFrame = Extract<Frame, { t: "hold" }>;
+type HoldFrame = Extract<wireTypes.Frame, { t: "hold" }>;
 
-export class ServedHolds {
-  readonly #connection: Connection;
+export default class ServedHolds {
+  readonly #connection: connectionTypes.Connection;
 
-  constructor(connection: Connection) {
+  constructor(connection: connectionTypes.Connection) {
     this.#connection = connection;
   }
 
   hold(frame: HoldFrame, principal: unknown, origin: string | undefined): void {
     const connection = this.#connection;
     const client = origin !== undefined;
-    let ref: RefImpl;
+    let ref: refTypes.RefImpl;
     try {
       ref = this.#acquire(frame, principal, client);
     } catch (error) {
       connection.send({
-        t: "gone",
-        id: frame.id,
         error: toWireError(client ? clientError(error) : error),
+        id: frame.id,
+        t: "gone",
       });
       return;
     }
-    const served: ServedLocal = {
-      kind: "local",
-      id: frame.id,
-      ref,
-      principal,
-      origin,
-      wantsState: frame.state !== false,
+    const served: connectionTypesModule.ServedLocal = {
       again: frame.again === true,
-      unitSent: false,
       feeds: new Map(),
+      id: frame.id,
+      kind: "local",
+      origin,
+      principal,
+      ref,
+      unitSent: false,
+      wantsState: frame.state !== false,
     };
     connection.served.set(frame.id, served);
     ref.onShape(() => this.#unit(served));
     ref.goneListeners.add((error) => {
       if (connection.served.get(frame.id) !== served) return;
       this.drop(frame.id, false);
-      connection.send({ t: "gone", id: frame.id, error: toWireError(error) });
+      connection.send({ error: toWireError(error), id: frame.id, t: "gone" });
     });
     if (ref.status === "live") this.#unit(served);
   }
 
-  #acquire(frame: HoldFrame, principal: unknown, client: boolean): RefImpl {
+  #acquire(frame: HoldFrame, principal: unknown, client: boolean): refTypes.RefImpl {
     const host = this.#connection.host;
     const token = contractFromDescription(frame.token);
     if (token.scope !== "remote")
@@ -92,11 +102,11 @@ export class ServedHolds {
     return acquired;
   }
 
-  #stateMembers(ref: RefImpl, shape: Shape): string[] {
+  #stateMembers(ref: refTypes.RefImpl, shape: typesModule.Shape): string[] {
     return shape.members.filter((name) => ref.describe(shape.variant, name)?.kind === "state");
   }
 
-  #unit(served: ServedLocal): void {
+  #unit(served: connectionTypesModule.ServedLocal): void {
     const connection = this.#connection;
     if (connection.served.get(served.id) !== served) return;
     const shape = served.ref.shape;
@@ -113,7 +123,7 @@ export class ServedHolds {
     else connection.flow.queueUnit(served.id, () => this.#sendUnit(served));
   }
 
-  #sendUnit(served: ServedLocal): void {
+  #sendUnit(served: connectionTypesModule.ServedLocal): void {
     const connection = this.#connection;
     connection.flow.unitSent(served.id);
     if (connection.served.get(served.id) !== served) return;
@@ -122,8 +132,8 @@ export class ServedHolds {
     served.unitSent = true;
     const members = served.wantsState ? this.#stateMembers(served.ref, shape) : [];
     const listed = members.filter((name) => !served.feeds.has(name));
-    const snaps: StateFrame[] = [];
-    const attached: (readonly [string, Feed])[] = [];
+    const snaps: connectionTypesModule.StateFrame[] = [];
+    const attached: (readonly [string, connectionTypesModule.Feed])[] = [];
     for (const name of listed) {
       const attachment = this.#attach(served, name);
       if (attachment === undefined) continue;
@@ -131,57 +141,80 @@ export class ServedHolds {
       attached.push([name, attachment.feed]);
     }
     connection.send({
-      t: "shape",
-      id: served.id,
-      ...(shape.variant === undefined ? {} : { variant: shape.variant }),
-      members: shape.members,
       contract: shape.contract,
+      id: served.id,
+      members: shape.members,
       state: snaps.map((frame) => frame.m),
+      t: "shape",
+      ...(shape.variant === undefined ? {} : { variant: shape.variant }),
     });
     for (const frame of snaps) connection.send(frame);
     for (const [name, feed] of attached) this.#replay(served, name, feed);
   }
 
   #attach(
-    served: ServedLocal,
+    served: connectionTypesModule.ServedLocal,
     name: string,
     as: "snap" | "reset" = "snap",
-  ): { readonly frame: StateFrame; readonly feed: Feed } | undefined {
-    const readable = served.ref.member(name) as Readable<unknown> | undefined;
+  ):
+    | {
+        readonly frame: connectionTypesModule.StateFrame;
+        readonly feed: connectionTypesModule.Feed;
+      }
+    | undefined {
+    const readable = served.ref.member(name) as typesModule.Readable<unknown> | undefined;
     if (readable === undefined || typeof readable.events !== "function") return undefined;
-    const feed: Feed = { unsubscribe: () => {}, encoder: encoder(), buffer: [] };
-    let first: StateEvent<unknown> | undefined;
+    const feed: connectionTypesModule.Feed = {
+      buffer: [],
+      encoder: encoder(),
+      unsubscribe: () => {},
+    };
+    let first: typesModule.StateEvent<unknown> | undefined;
     feed.unsubscribe = readable.events((event) => {
       if (first === undefined) first = event;
       else if (feed.buffer === undefined) this.#feedEvent(served, name, feed, event);
       else feed.buffer.push(event);
     });
     served.feeds.set(name, feed);
-    return { frame: this.#snapshot(served, name, as, first?.value), feed };
+    return { feed, frame: this.#snapshot(served, name, as, first?.value) };
   }
 
-  #replay(served: ServedLocal, name: string, feed: Feed): void {
+  #replay(
+    served: connectionTypesModule.ServedLocal,
+    name: string,
+    feed: connectionTypesModule.Feed,
+  ): void {
     const buffered = feed.buffer ?? [];
     feed.buffer = undefined;
     for (const event of buffered) this.#feedEvent(served, name, feed, event);
   }
 
-  #snapshot(served: ServedLocal, name: string, as: "snap" | "reset", value: unknown): StateFrame {
+  #snapshot(
+    served: connectionTypesModule.ServedLocal,
+    name: string,
+    as: "snap" | "reset",
+    value: unknown,
+  ): connectionTypesModule.StateFrame {
     try {
       validateSnapshot(served.ref, name, value);
     } catch (error) {
-      return { t: "state", hold: served.id, m: name, as: "error", error: toWireError(error) };
+      return { as: "error", error: toWireError(error), hold: served.id, m: name, t: "state" };
     }
-    return { t: "state", hold: served.id, m: name, as, ...(value === undefined ? {} : { value }) };
+    return { as, hold: served.id, m: name, t: "state", ...(value === undefined ? {} : { value }) };
   }
 
-  #feedEvent(served: ServedLocal, name: string, feed: Feed, event: StateEvent<unknown>): void {
+  #feedEvent(
+    served: connectionTypesModule.ServedLocal,
+    name: string,
+    feed: connectionTypesModule.Feed,
+    event: typesModule.StateEvent<unknown>,
+  ): void {
     if (served.feeds.get(name) !== feed) return;
     const flow = this.#connection.flow;
     const overflow = { resend: () => this.#resend(served, name) };
     if (event.type === "ops") {
       flow.sendState(
-        { t: "state", hold: served.id, m: name, as: "ops", ops: feed.encoder.encode(event.ops) },
+        { as: "ops", hold: served.id, m: name, ops: feed.encoder.encode(event.ops), t: "state" },
         overflow,
       );
       return;
@@ -190,7 +223,7 @@ export class ServedHolds {
     flow.sendState(this.#snapshot(served, name, "reset", event.value), overflow);
   }
 
-  #resend(served: ServedLocal, name: string): void {
+  #resend(served: connectionTypesModule.ServedLocal, name: string): void {
     const feed = served.feeds.get(name);
     if (feed === undefined || this.#connection.served.get(served.id) !== served) return;
     feed.unsubscribe();
@@ -237,8 +270,8 @@ export class ServedHolds {
     connection.served.delete(id);
     if (served.kind === "relay") {
       served.relay.close(new ChordError("released", "relayed hold released"), {
-        releaseDown: release,
         notify: false,
+        releaseDown: release,
       });
       return;
     }

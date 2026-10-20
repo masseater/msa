@@ -1,7 +1,7 @@
 import * as NodeRuntime from "@effect/platform-node/NodeRuntime";
 import { Type } from "@msa/ai";
 import { createModels } from "@msa/ai/models";
-import { BACKGROUND_CONTEXT } from "@msa/chord/context";
+import contextModule from "@msa/chord/context";
 import { Console, Effect } from "effect";
 
 import harnessModule from "../../src/harness/index.ts";
@@ -9,6 +9,8 @@ import durable from "../../src/index.ts";
 import type durableTypes from "../../src/index.types.ts";
 import memory from "../../src/storage/memory.ts";
 import effectSupport from "../effect-support.ts";
+
+const { BACKGROUND_CONTEXT } = contextModule;
 
 const { AgentDoc, defineExtension, defineTool, section } = durable;
 const { Harness, createRegistry } = harnessModule;

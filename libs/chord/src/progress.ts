@@ -1,10 +1,12 @@
 import { Clock, Effect, Fiber } from "effect";
 
-export const PROGRESS_BYTES_PER_SECOND = 100 * 1024;
+import type progressTypes from "./progress.types.ts";
+
+const PROGRESS_BYTES_PER_SECOND = 100 * 1024;
 
 const now = (): number => Effect.runSync(Clock.currentTimeMillis);
 
-export class Progress {
+class Progress implements progressTypes.Progress {
   readonly #write: () => Promise<number>;
   readonly #onError: (error: unknown) => void;
   readonly #minIntervalMs: number;
@@ -90,3 +92,10 @@ export class Progress {
       });
   }
 }
+
+const progress = {
+  PROGRESS_BYTES_PER_SECOND,
+  Progress,
+};
+
+export default progress;

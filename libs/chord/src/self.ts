@@ -1,37 +1,43 @@
 import type { Static, TSchema } from "typebox";
 
-import { Cell, Derived, type Sources, type SourceValues } from "./cell.ts";
-import type { AnyContract, InputOf, Ref } from "./contract.ts";
-import { Decls, isStateInit, type Run } from "./decls.ts";
-import { invalid } from "./errors.ts";
-import type { ObjectImpl } from "./object.ts";
-import type { Registry } from "./registry.ts";
-import {
-  declareResource,
-  exposeResource,
-  type ListenerDecl,
-  type Resource,
-  type ResourceDeclaration,
-} from "./self-resources.ts";
-import type { Self, StateInit, StateOptions } from "./service.ts";
-import type { Ctx, Exposed, GetOptions, Readable } from "./types.ts";
+import type cellTypes from "./cell.types.ts";
+import type contractTypes from "./contract.types.ts";
+import type declsTypes from "./decls.types.ts";
+import type objectTypes from "./object.types.ts";
+import type registryTypes from "./registry.types.ts";
+import selfKit from "./self-kit.ts";
+import type selfResourcesTypes from "./self-resources.types.ts";
+import type serviceTypes from "./service.types.ts";
+import type typesModule from "./types.types.ts";
 
-export class SelfImpl implements Self {
-  readonly #object: ObjectImpl;
-  readonly #previous: Decls | undefined;
+const { cell: cellModule, decls: declsModule, errors: errorsModule, selfResources } = selfKit;
+
+const { Decls, isStateInit } = declsModule;
+const { invalid } = errorsModule;
+const { Cell, Derived } = cellModule;
+const { declareResource, exposeResource } = selfResources;
+
+export default class SelfImpl implements serviceTypes.Self {
+  readonly #object: objectTypes.ObjectImpl;
+  readonly #previous: declsTypes.Decls | undefined;
   readonly #decls = new Decls();
-  readonly #created: Run["created"] = { refs: [], resources: [], derives: [], inits: [] };
+  readonly #created: declsTypes.Run["created"] = {
+    derives: [],
+    inits: [],
+    refs: [],
+    resources: [],
+  };
 
-  constructor(object: ObjectImpl, previous: Decls | undefined) {
+  constructor(object: objectTypes.ObjectImpl, previous: declsTypes.Decls | undefined) {
     this.#object = object;
     this.#previous = previous;
   }
 
-  run(implementation: unknown): Run {
+  run(implementation: unknown): declsTypes.Run {
     return {
-      implementation: implementation as Record<string, unknown>,
-      decls: this.#decls,
       created: this.#created,
+      decls: this.#decls,
+      implementation: implementation as Record<string, unknown>,
     };
   }
 
@@ -44,9 +50,9 @@ export class SelfImpl implements Self {
   state<S extends TSchema>(
     name: string,
     schema: S,
-    initial: Static<S> | StateInit<Static<S>>,
-    options: StateOptions<Static<S>> = {},
-  ): Cell<Static<S>> {
+    initial: Static<S> | serviceTypes.StateInit<Static<S>>,
+    options: serviceTypes.StateOptions<Static<S>> = {},
+  ): cellTypes.Cell<Static<S>> {
     this.#unique(this.#decls.cells, "state", name);
     const version = options.version ?? 1;
     if (!Number.isInteger(version) || version < 1)
@@ -71,10 +77,14 @@ export class SelfImpl implements Self {
     this.#decls.cellSchemas.set(name, schema);
     this.#decls.cellVersions.set(name, version);
     if (options.migrate !== undefined) this.#decls.cellMigrations.set(name, options.migrate);
-    return cell as Cell<Static<S>>;
+    return cell as cellTypes.Cell<Static<S>>;
   }
 
-  get<C extends AnyContract>(type: C, input: InputOf<C>, options?: GetOptions): Ref<C> {
+  get<C extends contractTypes.AnyContract>(
+    type: C,
+    input: contractTypes.InputOf<C>,
+    options?: typesModule.GetOptions,
+  ): contractTypes.Ref<C> {
     const host = this.#object.host;
     const candidate = this.#previous !== undefined;
     const address = host.addressOf(type, input, options?.principal ?? host.principal, candidate);
@@ -86,7 +96,7 @@ export class SelfImpl implements Self {
           `${this.#object.typeName}: ${type.name} held twice with different contracts`,
         );
       }
-      return declared.proxy as Ref<C>;
+      return declared.proxy as contractTypes.Ref<C>;
     }
     const existing = this.#previous?.refs.get(address);
     if (
@@ -96,22 +106,25 @@ export class SelfImpl implements Self {
       existing.status !== "released"
     ) {
       this.#decls.refs.set(address, existing);
-      return existing.proxy as Ref<C>;
+      return existing.proxy as contractTypes.Ref<C>;
     }
     const ref = host.acquire(type, input, options, "object", this.#object, candidate);
     this.#decls.refs.set(address, ref);
     this.#created.refs.push(ref);
-    return ref.proxy as Ref<C>;
+    return ref.proxy as contractTypes.Ref<C>;
   }
 
-  resource<T>(name: string, declaration: ResourceDeclaration<T>): Resource<T> {
+  resource<T>(
+    name: string,
+    declaration: selfResourcesTypes.ResourceDeclaration<T>,
+  ): selfResourcesTypes.Resource<T> {
     this.#unique(this.#decls.resources, "resource", name);
     return declareResource(
       {
-        decls: this.#decls,
         created: this.#created,
-        previous: this.#previous,
+        decls: this.#decls,
         host: this.#object.host,
+        previous: this.#previous,
       },
       name,
       declaration,
@@ -126,21 +139,21 @@ export class SelfImpl implements Self {
     if (select !== undefined && typeof select !== "function")
       throw new TypeError(`listener ${name}: select must be a function`);
     this.#decls.listeners.set(name, {
+      fn: fn as selfResourcesTypes.ListenerDecl["fn"],
+      select: select as selfResourcesTypes.ListenerDecl["select"],
       source,
-      select: select as ListenerDecl["select"],
-      fn: fn as ListenerDecl["fn"],
     });
   }
 
-  task(fn: (ctx: Ctx) => Promise<void>): void {
+  task(fn: (ctx: typesModule.Ctx) => Promise<void>): void {
     if (typeof fn !== "function") throw new TypeError("a task must be a function");
     this.#decls.tasks.set(`#${this.#decls.tasks.size}`, fn);
   }
 
-  derive<const S extends Sources, T>(
+  derive<const S extends cellTypes.Sources, T>(
     sources: S,
-    fn: (...values: SourceValues<S>) => T,
-  ): Readable<T> {
+    fn: (...values: cellTypes.SourceValues<S>) => T,
+  ): typesModule.Readable<T> {
     if (typeof fn !== "function") throw new TypeError("a derivation needs a function");
     const host = this.#object.host;
     const key = `#${this.#decls.derives.size}`;
@@ -150,14 +163,14 @@ export class SelfImpl implements Self {
     });
     this.#created.derives.push(derived);
     this.#decls.derives.set(key, derived);
-    return derived as unknown as Readable<T>;
+    return derived as unknown as typesModule.Readable<T>;
   }
 
-  expose<T>(resource: Resource<T>): Exposed<T> {
+  expose<T>(resource: selfResourcesTypes.Resource<T>): typesModule.Exposed<T> {
     return exposeResource(this.#decls, resource);
   }
 
-  register<V>(registry: Registry<V>, entries: Readonly<Record<string, V>>): void {
+  register<V>(registry: registryTypes.Registry<V>, entries: Readonly<Record<string, V>>): void {
     if (!this.#object.hostLifetime)
       throw invalid(
         "not_host_lifetime",
@@ -166,7 +179,11 @@ export class SelfImpl implements Self {
     for (const [key, value] of Object.entries(entries)) {
       const id = `${registry.name}\u0000${key}`;
       this.#unique(this.#decls.registrations, "register", id);
-      this.#decls.registrations.set(id, { registry: registry as Registry<unknown>, key, value });
+      this.#decls.registrations.set(id, {
+        key,
+        registry: registry as registryTypes.Registry<unknown>,
+        value,
+      });
     }
   }
 }

@@ -1,5 +1,5 @@
-import type { Context, Draft, JsonRepresentation, JsonValue } from "@msa/chord";
-import { copyJson } from "@msa/chord/json";
+import type chordTypes from "@msa/chord/index.types";
+import json from "@msa/chord/json";
 import { Effect } from "effect";
 
 import bridge from "./bridge.ts";
@@ -9,6 +9,8 @@ import toolTypes from "./tool-types.ts";
 import type toolTypesModule from "./tool-types.types.ts";
 import type typesModule from "./types.types.ts";
 import usageModule from "./usage.ts";
+
+const { copyJson } = json;
 
 const { LiveDoc, finishSlot, removeNestedSlots, toolSlot } = liveModule;
 const { MADE_NESTED_CALLS, NestedCallDoc, TOOL_TASK_NAME } = toolTypes;
@@ -20,7 +22,7 @@ type SlotOf = ReturnType<typeof toolSlot>;
 
 const abortNested = Effect.fnUntraced(function* (
   runtime: toolTypesModule.ToolRuntime,
-  context: Context,
+  context: chordTypes.Context,
 ) {
   const owned = yield* Effect.promise(() => runtime.ownedTasks(context));
   const nestedIds = owned
@@ -62,8 +64,8 @@ const settleNested = Effect.fnUntraced(function* (
     return yield* Effect.die(
       new Error(`Nested call ${outcome.call.id} is not in its caller's index`),
     );
-  stored.result = nested as unknown as Draft<
-    JsonRepresentation<typesModule.NestedToolExecutionResult>
+  stored.result = nested as unknown as chordTypes.Draft<
+    chordTypes.JsonRepresentation<typesModule.NestedToolExecutionResult>
   >;
   const slot = state.slot;
   if (slot !== undefined && "parentTaskId" in slot) {
@@ -96,7 +98,7 @@ const settleModelCall = Effect.fnUntraced(function* (
     outcome.result.control === undefined || outcome.ending.status !== "completed"
       ? {}
       : {
-          control: copyJson(outcome.result.control as JsonValue, {
+          control: copyJson(outcome.result.control as chordTypes.JsonValue, {
             omitUndefinedProperties: true,
           }) as typesModule.ToolControl,
         };
@@ -120,7 +122,7 @@ const settle = Effect.fnUntraced(function* (
   call: typesModule.ToolHookCall,
   ending: toolTypesModule.Ending,
   build: (slot: SlotOf) => typesModule.ToolExecutionResult,
-  context: Context,
+  context: chordTypes.Context,
   durationMs?: number,
 ) {
   const madeNested = yield* abortNested(runtime, context);

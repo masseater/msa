@@ -1,9 +1,12 @@
 import { dual } from "effect/Function";
 
-import { type NonEmptyPath, type Op, type Path, track } from "../../src/delta/index.ts";
+import delta from "../../src/delta/index.ts";
+import type deltaTypes from "../../src/delta/index.types.ts";
 import type conversationViewContentTypes from "./conversation-view-content.types.ts";
 import type conversationViewModelTypes from "./conversation-view-model.types.ts";
 import type conversationViewTypes from "./conversation-view-types.types.ts";
+
+const { track } = delta;
 
 const payloadText: {
   (seed: number): (length: number) => string;
@@ -110,18 +113,18 @@ function createTracker<T extends object>(value: T): conversationViewTypes.Tracke
   return track(value) as unknown as conversationViewTypes.TrackerLike<T>;
 }
 
-const prefixOperation = (prefix: Path, operation: Op): Op => {
-  if (operation[0] === "r") return ["s", prefix as NonEmptyPath, operation[1]];
+const prefixOperation = (prefix: deltaTypes.Path, operation: deltaTypes.Op): deltaTypes.Op => {
+  if (operation[0] === "r") return ["s", prefix as deltaTypes.NonEmptyPath, operation[1]];
   const path = [...prefix, ...operation[1]];
   switch (operation[0]) {
     case "s":
-      return ["s", path as unknown as NonEmptyPath, operation[2]];
+      return ["s", path as unknown as deltaTypes.NonEmptyPath, operation[2]];
     case "d":
-      return ["d", path as unknown as NonEmptyPath];
+      return ["d", path as unknown as deltaTypes.NonEmptyPath];
     case "a":
-      return ["a", path as unknown as NonEmptyPath, operation[2]];
+      return ["a", path as unknown as deltaTypes.NonEmptyPath, operation[2]];
     case "t":
-      return ["t", path as unknown as NonEmptyPath, operation[2]];
+      return ["t", path as unknown as deltaTypes.NonEmptyPath, operation[2]];
     case "p":
       return ["p", path, operation[2], operation[3], operation[4]];
     case "m":
@@ -132,12 +135,20 @@ const prefixOperation = (prefix: Path, operation: Op): Op => {
 };
 
 const prefixDocumentOperations: {
-  (operations: readonly Op[]): (key: conversationViewTypes.MountedKey) => Op[];
-  (key: conversationViewTypes.MountedKey, operations: readonly Op[]): Op[];
-} = dual(2, (key: conversationViewTypes.MountedKey, operations: readonly Op[]): Op[] => {
-  const prefix: Path = ["docs", key];
-  return operations.map((operation) => prefixOperation(prefix, operation));
-});
+  (
+    operations: readonly deltaTypes.Op[],
+  ): (key: conversationViewTypes.MountedKey) => deltaTypes.Op[];
+  (key: conversationViewTypes.MountedKey, operations: readonly deltaTypes.Op[]): deltaTypes.Op[];
+} = dual(
+  2,
+  (
+    key: conversationViewTypes.MountedKey,
+    operations: readonly deltaTypes.Op[],
+  ): deltaTypes.Op[] => {
+    const prefix: deltaTypes.Path = ["docs", key];
+    return operations.map((operation) => prefixOperation(prefix, operation));
+  },
+);
 
 const commonEntryPrefix: {
   (

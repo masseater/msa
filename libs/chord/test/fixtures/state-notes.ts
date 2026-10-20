@@ -1,6 +1,8 @@
 import { Type } from "typebox";
 
-import { local, method } from "../../src/index.ts";
+import chord from "../../src/index.ts";
+
+const { local, method } = chord;
 
 const Notes = local("t.notes", {
   input: Type.Object({}),

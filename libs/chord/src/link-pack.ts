@@ -2,24 +2,18 @@ import type * as Zlib from "node:zlib";
 
 import { dual } from "effect/Function";
 
-import type { Frame } from "./wire.ts";
+import Packed from "./packed.ts";
+import type wireTypes from "./wire.types.ts";
 
-export const PACK_THRESHOLD = 64 * 1024;
+const PACK_THRESHOLD = 64 * 1024;
 
 const zlib: typeof Zlib | undefined = (
   globalThis as { process?: { getBuiltinModule?(id: "node:zlib"): typeof Zlib } }
 ).process?.getBuiltinModule?.("node:zlib");
 
-export const zlibAvailable = zlib !== undefined;
+const zlibAvailable = zlib !== undefined;
 
-export class Packed {
-  readonly bytes: Uint8Array;
-  constructor(bytes: Uint8Array) {
-    this.bytes = bytes;
-  }
-}
-
-export function unpack(value: unknown): unknown {
+function unpack(value: unknown): unknown {
   if (!(value instanceof Packed)) return value;
   if (zlib === undefined) throw new TypeError("packed payload without zlib");
   return JSON.parse(zlib.inflateRawSync(value.bytes).toString("utf8"));
@@ -28,14 +22,14 @@ export function unpack(value: unknown): unknown {
 type PayloadField = "args" | "value";
 const PAYLOAD_FIELDS: ReadonlySet<string> = new Set<PayloadField>(["args", "value"]);
 
-function payloadField(frame: Frame): PayloadField | undefined {
+function payloadField(frame: wireTypes.Frame): PayloadField | undefined {
   if (frame.t === "call") return frame.args === undefined ? undefined : "args";
   if (frame.t === "result" || frame.t === "state")
     return frame.value === undefined ? undefined : "value";
   return undefined;
 }
 
-function envelopeOf(frame: Frame, field: PayloadField): Record<string, unknown> {
+function envelopeOf(frame: wireTypes.Frame, field: PayloadField): Record<string, unknown> {
   const envelope: Record<string, unknown> = { ...frame };
   delete envelope[field];
   return envelope;
@@ -48,7 +42,7 @@ function packedBytes(value: unknown, compress: boolean, json?: string): Uint8Arr
   return zlib.deflateRawSync(json, { level: 1 });
 }
 
-function packObjectImpl(frame: Frame, compress: boolean): unknown {
+function packObjectImpl(frame: wireTypes.Frame, compress: boolean): unknown {
   const field = payloadField(frame);
   if (field === undefined) return frame;
   const value = (frame as Record<string, unknown>)[field];
@@ -64,7 +58,7 @@ function packObjectImpl(frame: Frame, compress: boolean): unknown {
   };
 }
 
-export function unpackObject(message: unknown): unknown {
+function unpackObject(message: unknown): unknown {
   if (message === null || typeof message !== "object" || !("z" in message)) return message;
   const { z, ...rest } = message as { z: unknown } & Record<string, unknown>;
   if (!Array.isArray(z) || !PAYLOAD_FIELDS.has(z[0]) || typeof z[1] !== "string")
@@ -75,7 +69,7 @@ export function unpackObject(message: unknown): unknown {
 const encoder = new TextEncoder();
 const decoder = new TextDecoder();
 
-function packMessageImpl(frame: Frame, compress: boolean): string | Uint8Array {
+function packMessageImpl(frame: wireTypes.Frame, compress: boolean): string | Uint8Array {
   const field = payloadField(frame);
   if (field === undefined) return JSON.stringify(frame);
   const value = (frame as Record<string, unknown>)[field];
@@ -94,17 +88,17 @@ function packMessageImpl(frame: Frame, compress: boolean): string | Uint8Array {
   return message;
 }
 
-export const packObject: {
-  (compress: boolean): (frame: Frame) => unknown;
-  (frame: Frame, compress: boolean): unknown;
+const packObject: {
+  (compress: boolean): (frame: wireTypes.Frame) => unknown;
+  (frame: wireTypes.Frame, compress: boolean): unknown;
 } = dual(2, packObjectImpl);
 
-export const packMessage: {
-  (compress: boolean): (frame: Frame) => string | Uint8Array;
-  (frame: Frame, compress: boolean): string | Uint8Array;
+const packMessage: {
+  (compress: boolean): (frame: wireTypes.Frame) => string | Uint8Array;
+  (frame: wireTypes.Frame, compress: boolean): string | Uint8Array;
 } = dual(2, packMessageImpl);
 
-export function splitMessage(data: Uint8Array): {
+function splitMessage(data: Uint8Array): {
   envelope: Record<string, unknown>;
   field: PayloadField;
   bytes: Uint8Array;
@@ -115,26 +109,42 @@ export function splitMessage(data: Uint8Array): {
   const { z: field, ...rest } = envelope as { z?: unknown } & Record<string, unknown>;
   if (typeof field !== "string" || !PAYLOAD_FIELDS.has(field))
     throw new TypeError("bad packed payload");
-  return { envelope: rest, field: field as PayloadField, bytes: data.slice(4 + length) };
+  return { bytes: data.slice(4 + length), envelope: rest, field: field as PayloadField };
 }
 
-export function inflateMessage(data: Uint8Array): string {
+function inflateMessage(data: Uint8Array): string {
   if (zlib === undefined) throw new TypeError("inflateMessage needs zlib");
   const { envelope, field, bytes } = splitMessage(data);
   const head = JSON.stringify(envelope);
   return `${head.slice(0, -1)},${JSON.stringify(field)}:${zlib.inflateRawSync(bytes).toString("utf8")}}`;
 }
 
-export function inflate(bytes: Uint8Array): Promise<unknown> {
+function inflate(bytes: Uint8Array): Promise<unknown> {
   const stream = new Blob([bytes as Uint8Array<ArrayBuffer>])
     .stream()
     .pipeThrough(new DecompressionStream("deflate-raw"));
   return new Response(stream).text().then((text) => JSON.parse(text) as unknown);
 }
 
-export function parseFrame(data: string): Frame {
-  const frame = unpackObject(JSON.parse(data)) as Frame;
+function parseFrame(data: string): wireTypes.Frame {
+  const frame = unpackObject(JSON.parse(data)) as wireTypes.Frame;
   if (frame === null || typeof frame !== "object" || typeof frame.t !== "string")
     throw new TypeError("not a frame");
   return frame;
 }
+
+const linkPack = {
+  PACK_THRESHOLD,
+  Packed,
+  inflate,
+  inflateMessage,
+  packMessage,
+  packObject,
+  parseFrame,
+  splitMessage,
+  unpack,
+  unpackObject,
+  zlibAvailable,
+};
+
+export default linkPack;

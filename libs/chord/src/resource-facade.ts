@@ -1,16 +1,20 @@
-import { notReady } from "./cell.ts";
-import type { HostCore } from "./core.ts";
-import type { Resource } from "./declare.ts";
-import { facades, type ResourceImpl } from "./resource.ts";
+import cell from "./cell.ts";
+import type coreTypes from "./core.types.ts";
+import type declareTypes from "./declare.ts";
+import resourceModule from "./resource.ts";
+import type resourceTypes from "./resource.types.ts";
 
-export class ResourceFacade<T> implements Resource<T> {
-  readonly #resource: ResourceImpl<T>;
-  readonly #host: HostCore;
+const { facades } = resourceModule;
+const { notReady } = cell;
 
-  constructor(resource: ResourceImpl<T>, host: HostCore) {
+export default class ResourceFacade<T> implements declareTypes.Resource<T> {
+  readonly #resource: resourceTypes.ResourceImpl<T>;
+  readonly #host: coreTypes.HostCore;
+
+  constructor(resource: resourceTypes.ResourceImpl<T>, host: coreTypes.HostCore) {
     this.#resource = resource;
     this.#host = host;
-    facades.set(this, resource as ResourceImpl);
+    facades.set(this, resource as resourceTypes.ResourceImpl);
   }
 
   get key(): string {

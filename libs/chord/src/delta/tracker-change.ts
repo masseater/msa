@@ -1,39 +1,39 @@
-import type { Draft } from "./draft.ts";
-import { assertWritable, materializePrepared } from "./tracker-context.ts";
-import { emitOperations } from "./tracker-emit.ts";
-import { abortContext, clearContext } from "./tracker-paths.ts";
-import type { Change, OverlayContext, Prepared, StatusCell } from "./tracker-types.ts";
+import type draftTypes from "./draft.ts";
+import trackerContext from "./tracker-context.ts";
+import trackerEmit from "./tracker-emit.ts";
+import trackerPaths from "./tracker-paths.ts";
+import type trackerTypesModule from "./tracker-types.types.ts";
 
-export class ChangeImpl<T extends object> implements Change<T> {
-  #context: OverlayContext | undefined;
-  #preparedStatus: StatusCell | undefined;
+export default class ChangeImpl<T extends object> implements trackerTypesModule.Change<T> {
+  #context: trackerTypesModule.OverlayContext | undefined;
+  #preparedStatus: trackerTypesModule.StatusCell | undefined;
   #settled = false;
 
-  constructor(context: OverlayContext) {
+  constructor(context: trackerTypesModule.OverlayContext) {
     this.#context = context;
   }
 
-  get state(): Draft<T> {
+  get state(): draftTypes.Draft<T> {
     const state = this.#context?.root?.proxy;
     if (state === undefined) throw new TypeError("Cannot use a settled overlay");
-    return state as Draft<T>;
+    return state as draftTypes.Draft<T>;
   }
 
-  prepare(): Prepared<T> {
+  prepare(): trackerTypesModule.Prepared<T> {
     if (this.#settled) throw new Error("Change has already been settled");
     const context = this.#context!;
-    assertWritable(context);
+    trackerContext.assertWritable(context);
     context.status.value = "prepared";
     try {
       if (!context.replacement)
-        context.ops = context.dirty.length === 0 ? [] : emitOperations(context);
-      const prepared = materializePrepared<T>(context);
+        context.ops = context.dirty.length === 0 ? [] : trackerEmit.emitOperations(context);
+      const prepared = trackerContext.materializePrepared<T>(context);
       this.#preparedStatus = context.status;
       this.#settled = true;
       return prepared;
     } catch (error) {
       context.status.value = "aborted";
-      clearContext(context);
+      trackerPaths.clearContext(context);
       this.#settled = true;
       throw error;
     } finally {
@@ -48,7 +48,7 @@ export class ChangeImpl<T extends object> implements Change<T> {
       return;
     }
     this.#settled = true;
-    abortContext(this.#context!);
+    trackerPaths.abortContext(this.#context!);
     this.#context = undefined;
   }
 }

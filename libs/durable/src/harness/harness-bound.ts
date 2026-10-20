@@ -1,5 +1,5 @@
-import type { Context } from "@msa/chord";
-import { withAbortSignal } from "@msa/chord/context";
+import contextModule from "@msa/chord/context";
+import type chordTypes from "@msa/chord/index.types";
 import { Function } from "effect";
 
 import clockModule from "../clock.ts";
@@ -8,6 +8,8 @@ import sessionState from "../session/session-state.ts";
 import type schedulerTypes from "./scheduler.types.ts";
 import type submissionsTypes from "./submissions.types.ts";
 import type typesModule from "./types.types.ts";
+
+const { withAbortSignal } = contextModule;
 
 const { currentTimeMillis } = clockModule;
 const { contained } = sessionState;
@@ -65,10 +67,11 @@ const boundConversation: {
     submissions: submissionsTypes.Submissions,
     tasks: schedulerTypes.TaskScheduler,
   ): typesModule.ConversationHandle => {
-    const bind = (context: Context): Context => withAbortSignal(binding.signal, context);
+    const bind = (context: chordTypes.Context): chordTypes.Context =>
+      withAbortSignal(binding.signal, context);
     const bound =
-      <T>(operation: (context: Context) => Promise<T>) =>
-      (context: Context): Promise<T> =>
+      <T>(operation: (context: chordTypes.Context) => Promise<T>) =>
+      (context: chordTypes.Context): Promise<T> =>
         promiseTry(() => {
           binding.check();
           return operation(bind(context));

@@ -1,12 +1,16 @@
-import type { Context, Draft, JsonValue } from "@msa/chord";
-import type { Change, Prepared, Tracker } from "@msa/chord/delta";
+import type deltaTypes from "@msa/chord/delta.types";
+import type chordTypes from "@msa/chord/index.types";
 
 import type documentsTypes from "../documents.types.ts";
 import type typesModule from "../types.types.ts";
 import type transactionTypes from "./transaction.types.ts";
 
 declare namespace transactionTypesModule {
-  type AnyTaskRecord = typesModule.TaskRecord<JsonValue, JsonValue, JsonValue>;
+  type AnyTaskRecord = typesModule.TaskRecord<
+    chordTypes.JsonValue,
+    chordTypes.JsonValue,
+    chordTypes.JsonValue
+  >;
 
   type SubmissionChange =
     | typesModule.SubmissionSettlement
@@ -18,7 +22,7 @@ declare namespace transactionTypesModule {
     storedVersion: number;
     readonly valueVersion: number;
     deltasSinceBase: number;
-    readonly tracker: Tracker<typesModule.JsonObject>;
+    readonly tracker: deltaTypes.Tracker<typesModule.JsonObject>;
   };
 
   interface TransactionHost {
@@ -29,7 +33,7 @@ declare namespace transactionTypesModule {
       definition: documentsTypes.AnyDocDefinition,
       addressId: string,
       address: typesModule.DocumentAddress,
-      context: Context,
+      context: chordTypes.Context,
     ): Promise<LoadedDocument | undefined>;
     install(document: LoadedDocument): void;
     evict(addressId: string, recordId: typesModule.DocumentId): void;
@@ -62,7 +66,7 @@ declare namespace transactionTypesModule {
         readonly kind: "created";
         readonly record: typesModule.DocumentCreate;
         readonly version: number;
-        readonly tracker: Tracker<typesModule.JsonObject>;
+        readonly tracker: deltaTypes.Tracker<typesModule.JsonObject>;
       }
     | ForkCopyTarget
     | { readonly kind: "retire-only"; readonly record: typesModule.DocumentRecord };
@@ -71,10 +75,10 @@ declare namespace transactionTypesModule {
     readonly addressId: string;
     readonly address: typesModule.DocumentAddress;
     definition?: documentsTypes.AnyDocDefinition;
-    draftPromise?: Promise<Draft<typesModule.JsonObject>>;
+    draftPromise?: Promise<chordTypes.Draft<typesModule.JsonObject>>;
     target?: DocumentTarget;
-    change?: Change<typesModule.JsonObject>;
-    prepared?: Prepared<typesModule.JsonObject>;
+    change?: deltaTypes.Change<typesModule.JsonObject>;
+    prepared?: deltaTypes.Prepared<typesModule.JsonObject>;
     retireOnCommit: boolean;
   };
 
@@ -87,8 +91,8 @@ declare namespace transactionTypesModule {
       { readonly type: "document.create" | "document.copy" | "document.change" }
     >;
     readonly change?: {
-      readonly tracker: Tracker<typesModule.JsonObject>;
-      readonly prepared: Prepared<typesModule.JsonObject>;
+      readonly tracker: deltaTypes.Tracker<typesModule.JsonObject>;
+      readonly prepared: deltaTypes.Prepared<typesModule.JsonObject>;
       readonly version: number;
       readonly loaded?: LoadedDocument;
       readonly definition?: documentsTypes.AnyDocDefinition;
@@ -99,7 +103,7 @@ declare namespace transactionTypesModule {
   type TxState = {
     readonly self: transactionTypes.Transaction;
     readonly host: TransactionHost;
-    readonly context: Context;
+    readonly context: chordTypes.Context;
     readonly scope: TransactionScope;
     readonly pendingOperations: Set<Promise<unknown>>;
     sealed: boolean;

@@ -1,4 +1,4 @@
-import type { Draft } from "@msa/chord";
+import type chordTypes from "@msa/chord/index.types";
 import durable from "@msa/durable";
 import type durableTypes from "@msa/durable/index.types";
 import { Effect } from "effect";
@@ -66,18 +66,24 @@ function checkTxOverloads(
 ): Promise<void> {
   return Effect.runPromise(
     Effect.gen(function* () {
-      expectTypeOf(yield* awaited(tx.doc(SessionDoc))).toEqualTypeOf<Draft<State>>();
-      expectTypeOf(yield* awaited(tx.doc(LatestDoc, conversationId))).toEqualTypeOf<Draft<State>>();
-      expectTypeOf(yield* awaited(tx.doc(RewindableDoc, conversationId))).toEqualTypeOf<
-        Draft<State>
+      expectTypeOf(yield* awaited(tx.doc(SessionDoc))).toEqualTypeOf<chordTypes.Draft<State>>();
+      expectTypeOf(yield* awaited(tx.doc(LatestDoc, conversationId))).toEqualTypeOf<
+        chordTypes.Draft<State>
       >();
-      expectTypeOf(yield* awaited(tx.doc(TaskDoc, taskId))).toEqualTypeOf<Draft<State>>();
-      expectTypeOf(yield* awaited(tx.doc(SessionFamily, "k", 1))).toEqualTypeOf<Draft<State>>();
+      expectTypeOf(yield* awaited(tx.doc(RewindableDoc, conversationId))).toEqualTypeOf<
+        chordTypes.Draft<State>
+      >();
+      expectTypeOf(yield* awaited(tx.doc(TaskDoc, taskId))).toEqualTypeOf<
+        chordTypes.Draft<State>
+      >();
+      expectTypeOf(yield* awaited(tx.doc(SessionFamily, "k", 1))).toEqualTypeOf<
+        chordTypes.Draft<State>
+      >();
       expectTypeOf(
         yield* awaited(tx.doc(ConversationFamily, conversationId, "k", 1)),
-      ).toEqualTypeOf<Draft<State>>();
+      ).toEqualTypeOf<chordTypes.Draft<State>>();
       expectTypeOf(yield* awaited(tx.doc(TaskFamily, taskId, "k", 1))).toEqualTypeOf<
-        Draft<State>
+        chordTypes.Draft<State>
       >();
       yield* awaited(tx.retireDoc(SessionDoc));
       yield* awaited(tx.retireDoc(LatestDoc, conversationId));

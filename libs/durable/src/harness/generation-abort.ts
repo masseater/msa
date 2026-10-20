@@ -1,5 +1,5 @@
 import type { ToolCall } from "@msa/ai";
-import type { Context } from "@msa/chord";
+import type chordTypes from "@msa/chord/index.types";
 import { Cause, Effect } from "effect";
 
 import entries from "../entries.ts";
@@ -25,7 +25,7 @@ const readCalls = Effect.fnUntraced(function* (
   runtime: generationTypesModule.GenerationRuntime,
   assistant: typesModule.EntryId,
   callIds: readonly string[],
-  context: Context,
+  context: chordTypes.Context,
 ) {
   const entry = yield* Effect.promise(() => runtime.entry(AssistantEntry, assistant, context));
   const message = entry?.model?.[0];
@@ -53,7 +53,7 @@ const cancelDeferred = Effect.fnUntraced(function* (
 const abortGeneration = Effect.fnUntraced(function* (
   task: AbortTask,
   runtime: generationTypesModule.GenerationRuntime,
-  context: Context,
+  context: chordTypes.Context,
 ) {
   const checkpoint = task.state.checkpoint;
   if (checkpoint.phase === "poll") yield* cancelDeferred(runtime, checkpoint);

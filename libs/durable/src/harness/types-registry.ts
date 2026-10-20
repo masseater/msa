@@ -1,5 +1,5 @@
 import type { ModelThinkingLevel } from "@msa/ai";
-import type { Context } from "@msa/chord";
+import type chordTypes from "@msa/chord/index.types";
 
 import type envTypes from "../env/index.types.ts";
 import type typesModule from "../types.types.ts";
@@ -23,7 +23,7 @@ declare namespace typesRegistryTypes {
     readonly key: string;
     render(
       input: PromptInput<Tool>,
-      context: Context,
+      context: chordTypes.Context,
     ): string | undefined | Promise<string | undefined>;
     readonly tag?: boolean;
   };

@@ -1,4 +1,4 @@
-import type { JsonValue } from "../../src/delta/index.ts";
+import type deltaTypes from "../../src/delta/index.types.ts";
 import type prototypesTypes from "./prototypes.types.ts";
 
 const throwingSetter = (message: string): PropertyDescriptor => ({
@@ -16,20 +16,20 @@ const trappedObject = (): prototypesTypes.JsonRecord =>
     Object.create(Object.prototype, { trap: throwingSetter("inherited setter ran") }),
   ) as prototypesTypes.JsonRecord;
 
-const trappedArray = (values: readonly JsonValue[]): JsonValue[] =>
+const trappedArray = (values: readonly deltaTypes.JsonValue[]): deltaTypes.JsonValue[] =>
   Object.setPrototypeOf(
     [...values],
     Object.create(Array.prototype, { 0: throwingSetter("inherited array setter ran") }),
-  ) as JsonValue[];
+  ) as deltaTypes.JsonValue[];
 
 class TrapSetter {
-  [key: string]: JsonValue;
+  [key: string]: deltaTypes.JsonValue;
 
-  get trap(): JsonValue {
+  get trap(): deltaTypes.JsonValue {
     return null;
   }
 
-  set trap(_value: JsonValue) {
+  set trap(_value: deltaTypes.JsonValue) {
     throw new Error("inherited setter ran");
   }
 }

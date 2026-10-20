@@ -1,6 +1,6 @@
 import { Duration, Effect, Fiber, FiberSet, Scope } from "effect";
 
-export class HostTimers {
+export default class HostTimers {
   readonly #fibers: FiberSet.FiberSet<void>;
 
   constructor(scope: Scope.Scope) {

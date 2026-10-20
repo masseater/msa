@@ -3,12 +3,15 @@ import { performance } from "node:perf_hooks";
 
 import { Effect } from "effect";
 
-import { applyImmutable } from "../../src/delta/index.ts";
-import { sha256Hex } from "../../src/platform.ts";
+import delta from "../../src/delta/index.ts";
+import platform from "../../src/platform.ts";
 import benchmarkWorkerModel from "./benchmark-worker-model.ts";
 import ConversationViewState from "./conversation-view-state.ts";
 import conversationViewTypes from "./conversation-view-types.ts";
 import type conversationViewModuleTypes from "./conversation-view-types.types.ts";
+
+const { sha256Hex } = platform;
+const { applyImmutable } = delta;
 
 const { cloneTrusted } = benchmarkWorkerModel;
 const { DOCUMENT_WATCH_KEYS } = conversationViewTypes;

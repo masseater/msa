@@ -1,5 +1,5 @@
-import type { Context } from "@msa/chord";
-import { withoutAbortSignal } from "@msa/chord/context";
+import contextModule from "@msa/chord/context";
+import type chordTypes from "@msa/chord/index.types";
 import { Cause, Effect, Exit, Function } from "effect";
 
 import documentsModule from "../documents.ts";
@@ -9,6 +9,8 @@ import sessionDocuments from "./session-documents.ts";
 import sessionState from "./session-state.ts";
 import type transactionTypesModule from "./transaction-types.types.ts";
 import Transaction from "./transaction.ts";
+
+const { withoutAbortSignal } = contextModule;
 
 const { dropDocument, loadDocument, sweepDocuments, touchDocument } = sessionDocuments;
 const { assertHealthy, assertUsable, contained, enqueue } = sessionState;
@@ -40,7 +42,7 @@ const createTransactionHost = (
 const publish = (
   state: sessionCommitTypes.SessionState,
   publication: typesModule.CommitPublication,
-  context: Context,
+  context: chordTypes.Context,
 ): void => {
   for (const listener of [...state.internalListeners]) {
     contained(
@@ -63,7 +65,7 @@ const publishCommit = (
     readonly writes: readonly typesModule.StorageWrite[];
     readonly documents: readonly typesModule.DocumentCommitChange[];
   },
-  context: Context,
+  context: chordTypes.Context,
 ): void => {
   if (state.commitListeners.size === 0 && state.internalListeners.size === 0) return;
   const changes: typesModule.CommitChange[] = [];
@@ -112,7 +114,7 @@ const runCommit = Effect.fnUntraced(function* <T>(
   state: sessionCommitTypes.SessionState,
   host: transactionTypesModule.TransactionHost,
   change: (tx: sessionCommitTypes.Transaction) => T | Promise<T>,
-  context: Context,
+  context: chordTypes.Context,
   scope: transactionTypesModule.TransactionScope | undefined,
 ) {
   assertHealthy(state);
@@ -147,14 +149,14 @@ const commitOnLine: {
   <T>(
     host: transactionTypesModule.TransactionHost,
     change: (tx: sessionCommitTypes.Transaction) => T | Promise<T>,
-    context: Context,
+    context: chordTypes.Context,
     scope: transactionTypesModule.TransactionScope | undefined,
   ): (state: sessionCommitTypes.SessionState) => Promise<T>;
   <T>(
     state: sessionCommitTypes.SessionState,
     host: transactionTypesModule.TransactionHost,
     change: (tx: sessionCommitTypes.Transaction) => T | Promise<T>,
-    context: Context,
+    context: chordTypes.Context,
     scope: transactionTypesModule.TransactionScope | undefined,
   ): Promise<T>;
 } = Function.dual(
@@ -163,7 +165,7 @@ const commitOnLine: {
     state: sessionCommitTypes.SessionState,
     host: transactionTypesModule.TransactionHost,
     change: (tx: sessionCommitTypes.Transaction) => T | Promise<T>,
-    context: Context,
+    context: chordTypes.Context,
     scope: transactionTypesModule.TransactionScope | undefined,
   ): Promise<T> => {
     try {

@@ -1,10 +1,5 @@
-import type {
-  Context,
-  ReplicatedStateSource,
-  ReplicatedStateSourceAttachment,
-  ReplicatedStateSourceFrame,
-} from "@msa/chord";
-import type { Op } from "@msa/chord/delta";
+import type deltaTypes from "@msa/chord/delta.types";
+import type chordTypes from "@msa/chord/index.types";
 
 import type committedStateSourceTypes from "./committed-state-source.types.ts";
 import SessionSourceAttachment from "./source-attachment.ts";
@@ -12,7 +7,7 @@ import type sourceAttachmentTypes from "./source-attachment.types.ts";
 
 export default class CommittedStateSource<
   T = committedStateSourceTypes.ObservedDocumentValue,
-> implements ReplicatedStateSource<T> {
+> implements chordTypes.ReplicatedStateSource<T> {
   readonly #attachments = new Set<sourceAttachmentTypes.SessionSourceAttachment<T>>();
   #release: (() => void) | undefined;
   #value: T | undefined;
@@ -25,7 +20,7 @@ export default class CommittedStateSource<
     this.#release = release;
   }
 
-  attach(): ReplicatedStateSourceAttachment<T> {
+  attach(): chordTypes.ReplicatedStateSourceAttachment<T> {
     if (this.#closed) throw new Error("State source is closed");
     const attachment = new SessionSourceAttachment(
       { cursor: this.#cursor, value: this.#value as T },
@@ -38,12 +33,12 @@ export default class CommittedStateSource<
     return attachment;
   }
 
-  advance(value: T, ops: readonly Op[], context: Context): void {
+  advance(value: T, ops: readonly deltaTypes.Op[], context: chordTypes.Context): void {
     if (this.#closed || this.#retired) return;
     this.#value = value;
     this.#cursor += 1;
     if (value === null) this.#retired = true;
-    const frame: ReplicatedStateSourceFrame<T> = {
+    const frame: chordTypes.ReplicatedStateSourceFrame<T> = {
       context,
       cursor: this.#cursor,
       ops,

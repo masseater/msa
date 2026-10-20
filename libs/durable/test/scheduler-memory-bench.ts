@@ -1,6 +1,6 @@
 import * as NodeRuntime from "@effect/platform-node/NodeRuntime";
 import { createModels } from "@msa/ai/models";
-import { BACKGROUND_CONTEXT as context } from "@msa/chord/context";
+import contextModule from "@msa/chord/context";
 import { Console, Effect } from "effect";
 
 import harnessModuleModule from "../src/harness/harness.ts";
@@ -9,6 +9,8 @@ import type durableTypes from "../src/index.types.ts";
 import durableKit from "./durable-kit.ts";
 import retainedBytes from "./heap-retained.ts";
 import support from "./support.ts";
+
+const { BACKGROUND_CONTEXT: context } = contextModule;
 
 const { durable, harness: harnessModule, sqliteNode: node } = durableKit;
 

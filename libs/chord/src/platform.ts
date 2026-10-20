@@ -4,6 +4,8 @@ import * as NodePath from "@effect/platform-node/NodePath";
 import { Crypto, Effect, FileSystem, Layer, ManagedRuntime, Option, Path } from "effect";
 import { Hex } from "effect/encoding";
 
+import type platformTypes from "./platform.types.ts";
+
 const layer = Layer.mergeAll(NodeFileSystem.layer, NodePath.layer, NodeCrypto.layer);
 
 const runtime = ManagedRuntime.make(layer);
@@ -18,38 +20,43 @@ const onPlatform = <A>(
     ),
   );
 
-export interface EntryInfo {
-  readonly directory: boolean;
-  readonly uid: number | undefined;
-  readonly mode: number;
-}
-
-export const sha256Hex = (text: string): Effect.Effect<string> =>
+const sha256Hex = (text: string): Effect.Effect<string> =>
   onPlatform(
     Crypto.Crypto.use((crypto) => crypto.digest("SHA-256", new TextEncoder().encode(text))),
   ).pipe(Effect.map(Hex.encode));
 
-export const joinPath = (...segments: readonly string[]): Effect.Effect<string> =>
+const joinPath = (...segments: readonly string[]): Effect.Effect<string> =>
   onPlatform(Path.Path.use((path) => Effect.succeed(path.join(...segments))));
 
-export const removeForce = (path: string): Effect.Effect<void> =>
+const removeForce = (path: string): Effect.Effect<void> =>
   onPlatform(FileSystem.FileSystem.use((fs) => fs.remove(path, { force: true })));
 
-export const makePrivateDirectory = (path: string): Effect.Effect<void> =>
+const makePrivateDirectory = (path: string): Effect.Effect<void> =>
   onPlatform(
     FileSystem.FileSystem.use((fs) => fs.makeDirectory(path, { mode: 0o700, recursive: true })),
   );
 
-export const isSymbolicLink = (path: string): Effect.Effect<boolean> =>
+const isSymbolicLink = (path: string): Effect.Effect<boolean> =>
   onPlatform(
     FileSystem.FileSystem.use((fs) => Effect.map(Effect.option(fs.readLink(path)), Option.isSome)),
   );
 
-export const entryInfo = (path: string): Effect.Effect<EntryInfo> =>
+const entryInfo = (path: string): Effect.Effect<platformTypes.EntryInfo> =>
   onPlatform(FileSystem.FileSystem.use((fs) => fs.stat(path))).pipe(
     Effect.map((info) => ({
       directory: info.type === "Directory",
-      uid: Option.getOrUndefined(info.uid),
       mode: info.mode,
+      uid: Option.getOrUndefined(info.uid),
     })),
   );
+
+const platform = {
+  entryInfo,
+  isSymbolicLink,
+  joinPath,
+  makePrivateDirectory,
+  removeForce,
+  sha256Hex,
+};
+
+export default platform;

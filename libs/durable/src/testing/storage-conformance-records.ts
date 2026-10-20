@@ -1,4 +1,4 @@
-import type { JsonValue } from "@msa/chord";
+import type chordTypes from "@msa/chord/index.types";
 import { Effect } from "effect";
 
 import idsModule from "../ids.ts";
@@ -33,7 +33,7 @@ const committedMixed = Effect.fnUntraced(function* (
 ) {
   const rootId = yield* createRoot(storage);
   const entryId = yield* mint<typesModule.EntryId>(storage);
-  const taskId = yield* mint<typesModule.TaskId<JsonValue>>(storage);
+  const taskId = yield* mint<typesModule.TaskId<chordTypes.JsonValue>>(storage);
   const submissionId = yield* mint<typesModule.SubmissionId>(storage);
   const task = pendingTask(taskId, rootId);
   const input: typesModule.SubmissionRecord = {
@@ -100,7 +100,7 @@ const atomicMixed: storageConformanceSupportTypes.StorageCaseSpec = {
 
 type DetachedIds = {
   readonly entryId: typesModule.EntryId;
-  readonly taskId: typesModule.TaskId<JsonValue>;
+  readonly taskId: typesModule.TaskId<chordTypes.JsonValue>;
   readonly submissionId: typesModule.SubmissionId;
 };
 
@@ -141,7 +141,7 @@ const detachedRecords: storageConformanceSupportTypes.StorageCaseSpec = {
     Effect.gen(function* () {
       const rootId = yield* createRoot(storage);
       const entryId = yield* mint<typesModule.EntryId>(storage);
-      const taskId = yield* mint<typesModule.TaskId<JsonValue>>(storage);
+      const taskId = yield* mint<typesModule.TaskId<chordTypes.JsonValue>>(storage);
       const submissionId = yield* mint<typesModule.SubmissionId>(storage);
       const ids: DetachedIds = { entryId, submissionId, taskId };
       const entryData = { nested: [1, 2] };
@@ -181,14 +181,15 @@ const prototypeKeys: storageConformanceSupportTypes.StorageCaseSpec = {
       const entryId = yield* mint<typesModule.EntryId>(storage);
       const data = (yield* parseJson(
         '{"__proto__":{"polluted":false},"constructor":{"label":"stored"},"toString":"value"}',
-      )) as Record<string, JsonValue>;
+      )) as Record<string, chordTypes.JsonValue>;
       yield* commit(storage, [{ type: "entry", value: entry(entryId, rootId, "note", { data }) }]);
 
-      (Reflect.get(data, "__proto__") as Record<string, JsonValue>)["polluted"] = true;
-      (Reflect.get(data, "constructor") as Record<string, JsonValue>)["label"] = "mutated";
+      (Reflect.get(data, "__proto__") as Record<string, chordTypes.JsonValue>)["polluted"] = true;
+      (Reflect.get(data, "constructor") as Record<string, chordTypes.JsonValue>)["label"] =
+        "mutated";
       const firstRead = (yield* io(() => storage.entry(entryId, context)))!.entry.data as Record<
         string,
-        JsonValue
+        chordTypes.JsonValue
       >;
       expect(Object.getPrototypeOf(firstRead)).toBe(Object.prototype);
       expect(Object.hasOwn(firstRead, "__proto__")).toBe(true);
@@ -197,10 +198,11 @@ const prototypeKeys: storageConformanceSupportTypes.StorageCaseSpec = {
       expect(Reflect.get(firstRead, "toString")).toBe("value");
       expect(({} as { polluted?: boolean }).polluted).toBeUndefined();
 
-      (Reflect.get(firstRead, "__proto__") as Record<string, JsonValue>)["polluted"] = true;
+      (Reflect.get(firstRead, "__proto__") as Record<string, chordTypes.JsonValue>)["polluted"] =
+        true;
       const secondRead = (yield* io(() => storage.entry(entryId, context)))!.entry.data as Record<
         string,
-        JsonValue
+        chordTypes.JsonValue
       >;
       expect(Reflect.get(secondRead, "__proto__")).toEqual({ polluted: false });
       expect(Reflect.get(secondRead, "constructor")).toEqual({ label: "stored" });
@@ -222,7 +224,7 @@ const globalIds: storageConformanceSupportTypes.StorageCaseSpec = {
             {
               type: "task",
               value: pendingTask(
-                idFromNumber<typesModule.TaskId<JsonValue>>(explicitEntryId),
+                idFromNumber<typesModule.TaskId<chordTypes.JsonValue>>(explicitEntryId),
                 rootId,
               ),
             },

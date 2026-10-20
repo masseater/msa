@@ -1,4 +1,4 @@
-import type { Context } from "@msa/chord";
+import type chordTypes from "@msa/chord/index.types";
 import { Effect } from "effect";
 
 import type envTypes from "../env/index.types.ts";
@@ -19,7 +19,7 @@ const attemptRead = Effect.fnUntraced(function* (
   source: readTextTypes.BinarySource,
   request: readContentTypes.ReadRequest,
   api: typesModule.ToolExecutionApi,
-  context: Context,
+  context: chordTypes.Context,
 ) {
   const { path, offset, limit, images } = request;
   for (let attempt = 0; ; attempt++) {
@@ -44,7 +44,7 @@ const readContent = Effect.fnUntraced(function* (
   absolutePath: string,
   request: readContentTypes.ReadRequest,
   api: typesModule.ToolExecutionApi,
-  context: Context,
+  context: chordTypes.Context,
 ) {
   const reader = getOrThrow(
     yield* Effect.promise(() => env.openBinaryReader(absolutePath, undefined, context)),

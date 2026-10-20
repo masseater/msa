@@ -1,12 +1,12 @@
 import { Data } from "effect";
 
-import type { Seg } from "./ops.ts";
+import type opsTypes from "./ops.types.ts";
 
-export class UnsafePathError extends Data.TaggedError("UnsafePathError")<{
-  readonly segment: Seg;
+export default class UnsafePathError extends Data.TaggedError("UnsafePathError")<{
+  readonly segment: opsTypes.Seg;
   readonly message: string;
 }> {
-  constructor(segment: Seg) {
-    super({ segment, message: `unsafe path segment: ${String(segment)}` });
+  constructor(segment: opsTypes.Seg) {
+    super({ message: `unsafe path segment: ${String(segment)}`, segment });
   }
 }

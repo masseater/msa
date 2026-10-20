@@ -4,9 +4,11 @@ import { Effect } from "effect";
 import { Type } from "typebox";
 import { describe, it } from "vite-plus/test";
 
-import { isChordError, local } from "../src/index.ts";
+import chord from "../src/index.ts";
 import hostModule from "./fixtures/host.ts";
 import timing from "./fixtures/timing.ts";
+
+const { isChordError, local } = chord;
 
 const { Counter, quiet, serveCounter } = hostModule;
 const { latch, tick } = timing;

@@ -1,11 +1,11 @@
-import type { JsonValue } from "@msa/chord";
+import type chordTypes from "@msa/chord/index.types";
 
 declare const idBrand: unique symbol;
 
 declare const seqBrand: unique symbol;
 
 declare namespace idsTypes {
-  type JsonObject = { [key: string]: JsonValue };
+  type JsonObject = { [key: string]: chordTypes.JsonValue };
 
   type Id<Kind extends string, Type = unknown> = number & {
     readonly [idBrand]: {

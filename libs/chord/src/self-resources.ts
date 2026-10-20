@@ -1,24 +1,18 @@
 import { dual } from "effect/Function";
 
-import type { HostCore } from "./core.ts";
-import { refOf } from "./core.ts";
-import type { Resource, ResourceDeclaration } from "./declare.ts";
-import type { Decls, Run } from "./decls.ts";
-import { ExposedImpl } from "./exposed.ts";
-import { ResourceFacade } from "./resource-facade.ts";
-import { ResourceImpl, resourceOf } from "./resource.ts";
-import type { Exposed } from "./types.ts";
+import core from "./core.ts";
+import type declareTypes from "./declare.ts";
+import type declsTypes from "./decls.types.ts";
+import ExposedImpl from "./exposed.ts";
+import ResourceFacade from "./resource-facade.ts";
+import resourceModule from "./resource.ts";
+import type selfResourcesTypes from "./self-resources.types.ts";
+import type typesModule from "./types.types.ts";
 
-export type { ListenerDecl, Resource, ResourceDeclaration } from "./declare.ts";
+const { refOf } = core;
+const { ResourceImpl, resourceOf } = resourceModule;
 
-export interface ResourceScope {
-  readonly decls: Decls;
-  readonly created: Run["created"];
-  readonly previous: Decls | undefined;
-  readonly host: HostCore;
-}
-
-const resolveDeps = (name: string, declaration: ResourceDeclaration<unknown>) =>
+const resolveDeps = (name: string, declaration: declareTypes.ResourceDeclaration<unknown>) =>
   (declaration.deps ?? []).map((dep) => {
     const resolved = refOf(dep) ?? resourceOf(dep);
     if (resolved === undefined) {
@@ -28,13 +22,13 @@ const resolveDeps = (name: string, declaration: ResourceDeclaration<unknown>) =>
   });
 
 function resourceDeclared<T>(
-  scope: ResourceScope,
+  scope: selfResourcesTypes.ResourceScope,
   name: string,
-  declaration: ResourceDeclaration<T>,
-): Resource<T> {
+  declaration: declareTypes.ResourceDeclaration<T>,
+): declareTypes.Resource<T> {
   if (!Number.isInteger(declaration.version))
     throw new TypeError(`resource ${name}: version must be an integer`);
-  const deps = resolveDeps(name, declaration as ResourceDeclaration<unknown>);
+  const deps = resolveDeps(name, declaration as declareTypes.ResourceDeclaration<unknown>);
   const existing = scope.previous?.resources.get(name);
   const kept =
     existing !== undefined &&
@@ -44,27 +38,45 @@ function resourceDeclared<T>(
     existing.deps.every((dep, index) => dep === deps[index]);
   const resource = kept
     ? existing
-    : new ResourceImpl(name, declaration as ResourceDeclaration<unknown>, deps);
-  if (kept) scope.decls.adopted.set(existing, declaration as ResourceDeclaration<unknown>);
+    : new ResourceImpl(name, declaration as declareTypes.ResourceDeclaration<unknown>, deps);
+  if (kept)
+    scope.decls.adopted.set(existing, declaration as declareTypes.ResourceDeclaration<unknown>);
   else scope.created.resources.push(resource);
   scope.decls.resources.set(name, resource);
-  return new ResourceFacade(resource, scope.host) as unknown as Resource<T>;
+  return new ResourceFacade(resource, scope.host) as unknown as declareTypes.Resource<T>;
 }
 
-function resourceExposed<T>(decls: Decls, resource: Resource<T>): Exposed<T> {
+function resourceExposed<T>(
+  decls: declsTypes.Decls,
+  resource: declareTypes.Resource<T>,
+): typesModule.Exposed<T> {
   const resolved = resourceOf(resource);
   if (resolved === undefined || ![...decls.resources.values()].includes(resolved)) {
     throw new TypeError("expose takes a resource declared by this object");
   }
-  return new ExposedImpl(resolved) as unknown as Exposed<T>;
+  return new ExposedImpl(resolved) as unknown as typesModule.Exposed<T>;
 }
 
-export const declareResource: {
-  <T>(name: string, declaration: ResourceDeclaration<T>): (scope: ResourceScope) => Resource<T>;
-  <T>(scope: ResourceScope, name: string, declaration: ResourceDeclaration<T>): Resource<T>;
+const declareResource: {
+  <T>(
+    name: string,
+    declaration: declareTypes.ResourceDeclaration<T>,
+  ): (scope: selfResourcesTypes.ResourceScope) => declareTypes.Resource<T>;
+  <T>(
+    scope: selfResourcesTypes.ResourceScope,
+    name: string,
+    declaration: declareTypes.ResourceDeclaration<T>,
+  ): declareTypes.Resource<T>;
 } = dual(3, resourceDeclared);
 
-export const exposeResource: {
-  <T>(resource: Resource<T>): (decls: Decls) => Exposed<T>;
-  <T>(decls: Decls, resource: Resource<T>): Exposed<T>;
+const exposeResource: {
+  <T>(resource: declareTypes.Resource<T>): (decls: declsTypes.Decls) => typesModule.Exposed<T>;
+  <T>(decls: declsTypes.Decls, resource: declareTypes.Resource<T>): typesModule.Exposed<T>;
 } = dual(2, resourceExposed);
+
+const selfResources = {
+  declareResource,
+  exposeResource,
+};
+
+export default selfResources;

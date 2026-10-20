@@ -1,4 +1,4 @@
-import { withAbortSignal } from "@msa/chord/context";
+import contextModule from "@msa/chord/context";
 import durable from "@msa/durable";
 import type durableTypes from "@msa/durable/index.types";
 import memory from "@msa/durable/storage/memory";
@@ -8,6 +8,8 @@ import { afterEach, describe, expect, it } from "vite-plus/test";
 import node from "../src/storage/sqlite/node.ts";
 import harnessNestedToolsSupport from "./harness-nested-tools-support.ts";
 import support from "./support.ts";
+
+const { withAbortSignal } = contextModule;
 
 const { MemoryStorage } = memory;
 const { LiveDoc } = durable;

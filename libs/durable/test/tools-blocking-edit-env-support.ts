@@ -1,11 +1,13 @@
-import type { Context } from "@msa/chord";
-import { BACKGROUND_CONTEXT } from "@msa/chord/context";
+import contextModule from "@msa/chord/context";
+import type chordTypes from "@msa/chord/index.types";
 import { Effect } from "effect";
 
 import type envTypes from "../src/env/index.types.ts";
 import node from "../src/env/node.ts";
 import effectSupport from "./effect-support.ts";
 import toolsSupport from "./tools-support.ts";
+
+const { BACKGROUND_CONTEXT } = contextModule;
 
 const { NodeExecutionEnv } = node;
 
@@ -21,7 +23,7 @@ class BlockingEditExecutionEnv extends NodeExecutionEnv {
   override writeFile(
     path: string,
     content: string | Uint8Array,
-    context: Context,
+    context: chordTypes.Context,
   ): Promise<envTypes.Result<void, envTypes.FileError>> {
     const superWriteFile = super.writeFile.bind(this);
     return Effect.runPromise(

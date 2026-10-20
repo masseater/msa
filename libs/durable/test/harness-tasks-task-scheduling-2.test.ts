@@ -1,4 +1,4 @@
-import type { Context } from "@msa/chord";
+import type chordTypes from "@msa/chord/index.types";
 import type durableTypes from "@msa/durable/index.types";
 import { Effect } from "effect";
 import { describe, expect, it } from "vite-plus/test";
@@ -61,7 +61,7 @@ const abortsWaitingWorkStep1 = Effect.gen(function* () {
   const wait = (
     _task: unknown,
     runtime: harnessTasksSupportTypes.StepRuntime<null>,
-    ctx: Context,
+    ctx: chordTypes.Context,
   ): Promise<void> =>
     runPromise(
       Effect.gen(function* () {

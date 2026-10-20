@@ -1,4 +1,4 @@
-import type { Context } from "@msa/chord";
+import type chordTypes from "@msa/chord/index.types";
 import { Effect } from "effect";
 
 import entries from "../entries.ts";
@@ -26,7 +26,7 @@ const readControls = Effect.fnUntraced(function* (
   runtime: generationFinishTypes.GenerationRuntime,
   assistant: typesModule.EntryId,
   tools: readonly generationFinishTypes.ToolTaskId[],
-  context: Context,
+  context: chordTypes.Context,
 ) {
   const controls = new Map<typesModule.TaskId, typesModule.ToolControl | undefined>();
   const outcomes = yield* Effect.promise(() => runtime.outcomes(tools, context));
@@ -110,7 +110,7 @@ const finishToolRound = Effect.fnUntraced(function* (
   runtime: generationFinishTypes.GenerationRuntime,
   assistant: typesModule.EntryId,
   tools: readonly generationFinishTypes.ToolTaskId[],
-  context: Context,
+  context: chordTypes.Context,
 ) {
   const { conversationId } = runtime;
   const controls = yield* readControls(runtime, assistant, tools, context);

@@ -6,12 +6,14 @@ import {
   fauxProvider,
   fauxToolCall,
 } from "@msa/ai";
-import { BACKGROUND_CONTEXT } from "@msa/chord/context";
+import contextModule from "@msa/chord/context";
 import type durableTypes from "@msa/durable/index.types";
 import { Console, Effect } from "effect";
 
 import durableKit from "../durable-kit.ts";
 import support from "../support.ts";
+
+const { BACKGROUND_CONTEXT } = contextModule;
 
 const { durable, envNode: node, harness: harnessModule, memory, tools: toolsModule } = durableKit;
 

@@ -1,4 +1,4 @@
-import { withAbortSignal } from "@msa/chord/context";
+import contextModule from "@msa/chord/context";
 import { Cause, Effect, Exit } from "effect";
 
 import stepModule from "../step.ts";
@@ -9,6 +9,8 @@ import schedulerRecords from "./scheduler-records.ts";
 import schedulerRun from "./scheduler-run.ts";
 import type schedulerStateTypes from "./scheduler-state.types.ts";
 import type schedulerTypesModule from "./scheduler-types.types.ts";
+
+const { withAbortSignal } = contextModule;
 
 const { erased, missingMigration, parentOf, withAbortMark, withState } = schedulerRecords;
 const { terminate } = schedulerFinalize;

@@ -1,4 +1,4 @@
-import { withoutAbortSignal } from "@msa/chord/context";
+import contextModule from "@msa/chord/context";
 import { Effect } from "effect";
 
 import harnessBound from "./harness-bound.ts";
@@ -8,6 +8,8 @@ import liveSettle from "./live-settle.ts";
 import TaskScheduler from "./scheduler.ts";
 import type schedulerTypes from "./scheduler.types.ts";
 import type typesModule from "./types.types.ts";
+
+const { withoutAbortSignal } = contextModule;
 
 const { boundConversation } = harnessBound;
 

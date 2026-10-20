@@ -1,9 +1,9 @@
-import type { Context, ReplicatedState } from "../../src/index.ts";
+import type chordTypes from "../../src/index.types.ts";
 
 declare namespace replicatedStateDeliveryTypes {
   interface DeliveryFixture {
-    readonly state: ReplicatedState<Value>;
-    readonly publish: (value: Value, context: Context) => void;
+    readonly state: chordTypes.ReplicatedState<Value>;
+    readonly publish: (value: Value, context: chordTypes.Context) => void;
   }
 
   type Value = { value: number };

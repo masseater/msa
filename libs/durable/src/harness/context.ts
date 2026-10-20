@@ -1,4 +1,4 @@
-import type { Context } from "@msa/chord";
+import type chordTypes from "@msa/chord/index.types";
 import { Effect, Function } from "effect";
 
 import ids from "../ids.ts";
@@ -18,7 +18,7 @@ const { toPromise } = bridge;
 const captureContextBounds: typesModule.Dual4<
   typesModule.Storage,
   typesModule.ConversationId,
-  Context,
+  chordTypes.Context,
   typesModule.EntryId | undefined,
   Effect.Effect<contextRangeTypes.ContextBounds | undefined>
 > = Function.dual(
@@ -26,7 +26,7 @@ const captureContextBounds: typesModule.Dual4<
   Effect.fnUntraced(function* (
     storage: typesModule.Storage,
     conversationId: typesModule.ConversationId,
-    context: Context,
+    context: chordTypes.Context,
     at: typesModule.EntryId | undefined,
   ) {
     let tail: typesModule.EntryId;
@@ -58,7 +58,7 @@ const rangeFrom = Effect.fnUntraced(function* (
   bounds: contextRangeTypes.ContextBounds,
   state: {
     readonly previous: contextRangeTypes.ContextRange | undefined;
-    readonly context: Context;
+    readonly context: chordTypes.Context;
   },
 ) {
   const { previous, context } = state;
@@ -86,7 +86,7 @@ const readContextFrom: {
   (
     storage: typesModule.Storage,
     conversationId: typesModule.ConversationId,
-    context: Context,
+    context: chordTypes.Context,
     at: typesModule.EntryId | undefined,
     previous: contextRangeTypes.ContextRange | undefined,
   ): (session: sessionTypes.SessionImpl) => Effect.Effect<{
@@ -97,7 +97,7 @@ const readContextFrom: {
     session: sessionTypes.SessionImpl,
     storage: typesModule.Storage,
     conversationId: typesModule.ConversationId,
-    context: Context,
+    context: chordTypes.Context,
     at: typesModule.EntryId | undefined,
     previous: contextRangeTypes.ContextRange | undefined,
   ): Effect.Effect<{
@@ -110,7 +110,7 @@ const readContextFrom: {
     session: sessionTypes.SessionImpl,
     storage: typesModule.Storage,
     conversationId: typesModule.ConversationId,
-    context: Context,
+    context: chordTypes.Context,
     at: typesModule.EntryId | undefined,
     previous: contextRangeTypes.ContextRange | undefined,
   ) {
@@ -138,14 +138,14 @@ const readContext: {
   (
     storage: typesModule.Storage,
     conversationId: typesModule.ConversationId,
-    context: Context,
+    context: chordTypes.Context,
     at?: typesModule.EntryId,
   ): (session: sessionTypes.SessionImpl) => Effect.Effect<typesModule.ContextView>;
   (
     session: sessionTypes.SessionImpl,
     storage: typesModule.Storage,
     conversationId: typesModule.ConversationId,
-    context: Context,
+    context: chordTypes.Context,
     at?: typesModule.EntryId,
   ): Effect.Effect<typesModule.ContextView>;
 } = Function.dual(
@@ -154,7 +154,7 @@ const readContext: {
     session: sessionTypes.SessionImpl,
     storage: typesModule.Storage,
     conversationId: typesModule.ConversationId,
-    context: Context,
+    context: chordTypes.Context,
     at?: typesModule.EntryId,
   ) {
     const capture = yield* toPromise(() =>
@@ -169,7 +169,7 @@ const deriveContext: typesModule.Dual4<
   typesModule.Storage,
   typesModule.ConversationId,
   contextRangeTypes.ContextBounds | undefined,
-  Context,
+  chordTypes.Context,
   Effect.Effect<typesModule.ContextView>
 > = Function.dual(
   4,
@@ -177,7 +177,7 @@ const deriveContext: typesModule.Dual4<
     storage: typesModule.Storage,
     conversationId: typesModule.ConversationId,
     bounds: contextRangeTypes.ContextBounds | undefined,
-    context: Context,
+    context: chordTypes.Context,
   ) {
     if (bounds === undefined) return emptyView();
     const entries = yield* scanRange(storage, conversationId, rangeQuery(bounds), context);
@@ -189,7 +189,7 @@ const activeEntries: typesModule.Dual4<
   typesModule.Storage,
   typesModule.ConversationId,
   contextRangeTypes.ContextBounds | undefined,
-  Context,
+  chordTypes.Context,
   Effect.Effect<readonly typesModule.EntryRecord[]>
 > = Function.dual(
   4,
@@ -197,7 +197,7 @@ const activeEntries: typesModule.Dual4<
     storage: typesModule.Storage,
     conversationId: typesModule.ConversationId,
     bounds: contextRangeTypes.ContextBounds | undefined,
-    context: Context,
+    context: chordTypes.Context,
   ) {
     if (bounds === undefined) return [];
     const entries = yield* scanRange(storage, conversationId, rangeQuery(bounds), context);

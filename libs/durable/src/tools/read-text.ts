@@ -1,5 +1,5 @@
-import type { Context } from "@msa/chord";
-import { characterEnd } from "@msa/chord/output";
+import type chordTypes from "@msa/chord/index.types";
+import outputModule from "@msa/chord/output";
 import { Effect, Function } from "effect";
 
 import decodeModule from "../env/decode.ts";
@@ -9,6 +9,8 @@ import type typesModule from "../harness/types.types.ts";
 import truncate from "../truncate.ts";
 import type truncateTypes from "../truncate.types.ts";
 import type readTextTypes from "./read-text.types.ts";
+
+const { characterEnd } = outputModule;
 
 const { rangeDecoder, startsWithBom } = decodeModule;
 const { DEFAULT_MAX_BYTES, DEFAULT_MAX_LINES, formatSize, truncateHeadOf, utf8ByteLength } =
@@ -180,11 +182,11 @@ const readText = Effect.fnUntraced(function* (
 
 const binarySource: readTextTypes.Dual2<
   envTypes.BinaryReader,
-  Context,
+  chordTypes.Context,
   readTextTypes.BinarySource
 > = Function.dual(
   2,
-  (reader: envTypes.BinaryReader, context: Context): readTextTypes.BinarySource => ({
+  (reader: envTypes.BinaryReader, context: chordTypes.Context): readTextTypes.BinarySource => ({
     close: Effect.promise(() => reader.close(context)),
     info: Effect.map(
       Effect.promise(() => reader.info(context)),

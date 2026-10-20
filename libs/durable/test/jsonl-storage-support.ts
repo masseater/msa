@@ -1,4 +1,4 @@
-import { BACKGROUND_CONTEXT } from "@msa/chord/context";
+import contextModule from "@msa/chord/context";
 import { Effect } from "effect";
 import { dual } from "effect/Function";
 
@@ -9,6 +9,8 @@ import types from "../src/types.ts";
 import type typesModule from "../src/types.types.ts";
 import type jsonlStorageSupportTypes from "./jsonl-storage-support.types.ts";
 import testSupport from "./support.ts";
+
+const { BACKGROUND_CONTEXT } = contextModule;
 
 const { NodeExecutionEnv } = node;
 const { JsonlStorage } = jsonl;

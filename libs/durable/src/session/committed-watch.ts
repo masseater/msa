@@ -1,11 +1,13 @@
-import type { Context, JsonValue } from "@msa/chord";
-import { withoutAbortSignal } from "@msa/chord/context";
-import type { Op } from "@msa/chord/delta";
+import contextModule from "@msa/chord/context";
+import type deltaTypes from "@msa/chord/delta.types";
+import type chordTypes from "@msa/chord/index.types";
 import { Cause, Effect, Exit } from "effect";
 
 import errors from "../errors.ts";
 import type typesModule from "../types.types.ts";
 import type committedStateSourceTypes from "./committed-state-source.types.ts";
+
+const { withoutAbortSignal } = contextModule;
 
 const { errorMessage } = errors;
 
@@ -13,8 +15,8 @@ const MAX_PENDING_WATCH_FRAMES = 100;
 
 type WatchFrame<T> = {
   readonly value: T;
-  readonly ops: readonly Op[];
-  readonly context: Context;
+  readonly ops: readonly deltaTypes.Op[];
+  readonly context: chordTypes.Context;
 };
 
 export default class CommittedWatch<
@@ -26,7 +28,9 @@ export default class CommittedWatch<
   readonly #closed = Promise.withResolvers<typesModule.WatchEnd>();
   readonly #pending: WatchFrame<T>[] = [];
   #value: T;
-  #listener: ((value: T, ops: readonly Op[], context: Context) => Promise<void>) | undefined;
+  #listener:
+    | ((value: T, ops: readonly deltaTypes.Op[], context: chordTypes.Context) => Promise<void>)
+    | undefined;
   #started = false;
   #scheduled = false;
   #running = false;
@@ -50,7 +54,13 @@ export default class CommittedWatch<
     return this.#closed.promise;
   }
 
-  start(listener: (value: T, ops: readonly Op[], context: Context) => Promise<void>): void {
+  start(
+    listener: (
+      value: T,
+      ops: readonly deltaTypes.Op[],
+      context: chordTypes.Context,
+    ) => Promise<void>,
+  ): void {
     if (this.#started) throw new Error("Watch is already started");
     if (this.#end !== undefined) throw new Error("Watch is stopped");
     this.#started = true;
@@ -85,13 +95,17 @@ export default class CommittedWatch<
     );
   }
 
-  advance(value: T, ops: readonly Op[], context: Context): void {
+  advance(value: T, ops: readonly deltaTypes.Op[], context: chordTypes.Context): void {
     if (this.#end !== undefined || this.#retired) return;
     if (value === null) this.#retired = true;
     if (this.#pending.length >= MAX_PENDING_WATCH_FRAMES) {
       this.#pending.length = 0;
       const replacement = this.#replace?.() ?? value;
-      this.#pending.push({ context, ops: [["r", replacement as JsonValue]], value: replacement });
+      this.#pending.push({
+        context,
+        ops: [["r", replacement as chordTypes.JsonValue]],
+        value: replacement,
+      });
     } else {
       this.#pending.push({ context, ops, value });
     }

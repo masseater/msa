@@ -1,4 +1,4 @@
-import type { JsonValue } from "@msa/chord";
+import type chordTypes from "@msa/chord/index.types";
 import { Function } from "effect";
 
 import schedulerRecords from "./scheduler-records.ts";
@@ -56,7 +56,10 @@ const observeTask = (
   if (record.state.status === "terminal") {
     state.failedMigrations.delete(record.id);
     graph.failFastChecks.delete(record.id);
-    state.taskWaiters.resolve(record.id, record as schedulerTypesModule.SettledTask<JsonValue>);
+    state.taskWaiters.resolve(
+      record.id,
+      record as schedulerTypesModule.SettledTask<chordTypes.JsonValue>,
+    );
     state.wake.reconcile();
     return;
   }

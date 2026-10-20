@@ -1,5 +1,5 @@
-import type { Context } from "@msa/chord";
-import { track } from "@msa/chord/delta/tracker";
+import trackerModule from "@msa/chord/delta/tracker";
+import type chordTypes from "@msa/chord/index.types";
 import { Effect, Function } from "effect";
 
 import documentsModule from "../documents.ts";
@@ -9,6 +9,8 @@ import unrefTimer from "../unref-timer.ts";
 import type sessionDocumentsTypes from "./session-documents.types.ts";
 import sessionState from "./session-state.ts";
 import type sessionStateTypes from "./session-state.types.ts";
+
+const { track } = trackerModule;
 
 const { startUnrefTimer } = unrefTimer;
 
@@ -141,7 +143,7 @@ const loadDocument: dualTypes.Dual5<
   sessionDocumentsTypes.AnyDocDefinition,
   string,
   typesModule.DocumentAddress,
-  Context,
+  chordTypes.Context,
   Effect.Effect<sessionDocumentsTypes.LoadedDocument | undefined>
 > = Function.dual(
   5,
@@ -150,7 +152,7 @@ const loadDocument: dualTypes.Dual5<
     definition: sessionDocumentsTypes.AnyDocDefinition,
     addressId: string,
     address: typesModule.DocumentAddress,
-    context: Context,
+    context: chordTypes.Context,
   ) {
     const cached = state.documents.get(addressId);
     if (cached?.valueVersion === definition.version) {

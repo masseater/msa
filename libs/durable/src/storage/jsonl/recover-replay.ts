@@ -1,4 +1,4 @@
-import type { Context } from "@msa/chord";
+import type chordTypes from "@msa/chord/index.types";
 import { Effect, Function } from "effect";
 
 import ids from "../../ids.ts";
@@ -211,7 +211,7 @@ const settleSidecar = Effect.fnUntraced(function* (
   file: string,
   parsed: formatTypes.ParsedFile<formatTypes.SidecarRecord>,
   confirmed: ReadonlySet<string>,
-  context: Context,
+  context: chordTypes.Context,
 ) {
   const unconfirmedAt = unconfirmedStart(file, parsed, confirmed);
   if (unconfirmedAt !== undefined) {
@@ -230,14 +230,14 @@ const settleSidecars: {
     index: recoverScanTypes.SidecarIndex,
     analysis: recoverScanTypes.MainAnalysis,
     confirmed: ReadonlySet<string>,
-    context: Context,
+    context: chordTypes.Context,
   ): (files: recoverReplayTypes.JsonlFiles) => Effect.Effect<ReadonlyMap<string, string>>;
   (
     files: recoverReplayTypes.JsonlFiles,
     index: recoverScanTypes.SidecarIndex,
     analysis: recoverScanTypes.MainAnalysis,
     confirmed: ReadonlySet<string>,
-    context: Context,
+    context: chordTypes.Context,
   ): Effect.Effect<ReadonlyMap<string, string>>;
 } = Function.dual(
   5,
@@ -246,7 +246,7 @@ const settleSidecars: {
     index: recoverScanTypes.SidecarIndex,
     analysis: recoverScanTypes.MainAnalysis,
     confirmed: ReadonlySet<string>,
-    context: Context,
+    context: chordTypes.Context,
   ) {
     const reclamations = new Map<string, string>();
     for (const [file, parsed] of index.parsedFiles) {

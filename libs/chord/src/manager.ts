@@ -1,27 +1,13 @@
 import { Clock, Effect, Fiber, Option, Semaphore } from "effect";
 
-import { ChordError } from "./errors.ts";
-import type {
-  ControlMessage,
-  HostManager,
-  HostManagerOptions,
-  Instance,
-  Liveness,
-} from "./manager-types.ts";
+import errorsModule from "./errors.ts";
+import type errorsTypes from "./errors.types.ts";
+import managerChild from "./manager-child.ts";
+import managerFork from "./manager-fork.ts";
+import managerLock from "./manager-lock.ts";
+import type managerTypesModule from "./manager-types.types.ts";
 
-export { childControl, parentChannel } from "./manager-child.ts";
-export { forkDriver } from "./manager-fork.ts";
-export { processLock } from "./manager-lock.ts";
-export type {
-  ControlMessage,
-  Driver,
-  Exit,
-  ForkDriverOptions,
-  HostManager,
-  HostManagerOptions,
-  Instance,
-  Liveness,
-} from "./manager-types.ts";
+const { ChordError } = errorsModule;
 
 interface Report {
   readonly activeCalls: number;
@@ -29,13 +15,13 @@ interface Report {
   readonly durableTasks: number;
 }
 
-const NO_WORK: Report = { activeCalls: 0, viewers: 0, durableTasks: 0 };
+const NO_WORK: Report = { activeCalls: 0, durableTasks: 0, viewers: 0 };
 
 interface ManagerState {
-  readonly options: HostManagerOptions;
+  readonly options: managerTypesModule.HostManagerOptions;
   readonly lock: Semaphore.Semaphore;
-  status: HostManager["status"];
-  instance: Instance | undefined;
+  status: managerTypesModule.HostManager["status"];
+  instance: managerTypesModule.Instance | undefined;
   report: Report;
   idleSince: number | undefined;
   booting: boolean;
@@ -47,7 +33,7 @@ const now = (): number => Effect.runSync(Clock.currentTimeMillis);
 const working = (report: Report): boolean =>
   report.activeCalls + report.viewers + report.durableTasks > 0;
 
-const livenessOf = (state: ManagerState): Liveness => ({
+const livenessOf = (state: ManagerState): managerTypesModule.Liveness => ({
   booting: state.booting,
   ...state.report,
   idleFor: state.idleSince === undefined ? 0 : now() - state.idleSince,
@@ -89,18 +75,24 @@ const doStop = (state: ManagerState): Effect.Effect<void> =>
     );
   });
 
-function updateReport(state: ManagerState, message: ControlMessage & { type: "status" }): void {
+function updateReport(
+  state: ManagerState,
+  message: managerTypesModule.ControlMessage & { type: "status" },
+): void {
   state.report = {
     activeCalls: message.activeCalls ?? 0,
-    viewers: message.viewers ?? 0,
     durableTasks: message.durableTasks ?? 0,
+    viewers: message.viewers ?? 0,
   };
   if (working(state.report)) state.idleSince = undefined;
   else state.idleSince ??= now();
 }
 
-const readySignal = (state: ManagerState, current: Instance): Effect.Effect<void, ChordError> =>
-  Effect.callback<void, ChordError>((resume) => {
+const readySignal = (
+  state: ManagerState,
+  current: managerTypesModule.Instance,
+): Effect.Effect<void, errorsTypes.ChordError> =>
+  Effect.callback<void, errorsTypes.ChordError>((resume) => {
     void current.exited.then((exit) =>
       resume(
         Effect.fail(
@@ -122,7 +114,10 @@ const readySignal = (state: ManagerState, current: Instance): Effect.Effect<void
     });
   });
 
-const awaitReady = (state: ManagerState, current: Instance): Effect.Effect<void> =>
+const awaitReady = (
+  state: ManagerState,
+  current: managerTypesModule.Instance,
+): Effect.Effect<void> =>
   readySignal(state, current).pipe(
     Effect.timeoutOrElse({
       duration: state.options.readyTimeout ?? 30_000,
@@ -137,7 +132,7 @@ const awaitReady = (state: ManagerState, current: Instance): Effect.Effect<void>
     Effect.orDie,
   );
 
-function watchExit(state: ManagerState, current: Instance): void {
+function watchExit(state: ManagerState, current: managerTypesModule.Instance): void {
   Effect.runFork(
     Effect.map(
       Effect.promise(() => current.exited),
@@ -172,7 +167,7 @@ function finishStart(state: ManagerState): void {
   startKeepAlive(state);
 }
 
-function spawn(state: ManagerState): Effect.Effect<Instance> {
+function spawn(state: ManagerState): Effect.Effect<managerTypesModule.Instance> {
   return Effect.promise(() => state.options.driver.spawn()).pipe(
     Effect.tapDefect(() =>
       Effect.sync(() => {
@@ -183,7 +178,7 @@ function spawn(state: ManagerState): Effect.Effect<Instance> {
   );
 }
 
-const doStart = (state: ManagerState): Effect.Effect<Instance> =>
+const doStart = (state: ManagerState): Effect.Effect<managerTypesModule.Instance> =>
   Effect.suspend(() => {
     if (state.instance !== undefined && state.status === "running")
       return Effect.succeed(state.instance);
@@ -202,29 +197,41 @@ const doStart = (state: ManagerState): Effect.Effect<Instance> =>
     });
   });
 
-export function createHostManager(options: HostManagerOptions): HostManager {
+function createHostManager(
+  options: managerTypesModule.HostManagerOptions,
+): managerTypesModule.HostManager {
   const state: ManagerState = {
-    options,
-    lock: Semaphore.makeUnsafe(1),
-    status: "stopped",
-    instance: undefined,
-    report: NO_WORK,
-    idleSince: undefined,
     booting: false,
+    idleSince: undefined,
+    instance: undefined,
     keepAlive: undefined,
+    lock: Semaphore.makeUnsafe(1),
+    options,
+    report: NO_WORK,
+    status: "stopped",
   };
   return {
-    get status() {
-      return state.status;
-    },
     get instance() {
       return state.instance;
     },
     get liveness() {
       return livenessOf(state);
     },
-    start: () => serialized(state, doStart(state)),
-    stop: () => serialized(state, doStop(state)),
     replace: () => serialized(state, Effect.andThen(doStop(state), doStart(state))),
+    start: () => serialized(state, doStart(state)),
+    get status() {
+      return state.status;
+    },
+    stop: () => serialized(state, doStop(state)),
   };
 }
+
+const manager = {
+  childControl: managerChild.childControl,
+  createHostManager,
+  forkDriver: managerFork.forkDriver,
+  parentChannel: managerChild.parentChannel,
+  processLock: managerLock.processLock,
+};
+
+export default manager;

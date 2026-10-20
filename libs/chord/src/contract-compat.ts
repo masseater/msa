@@ -1,16 +1,17 @@
 import { dual } from "effect/Function";
 
-import {
-  type Accepts,
-  type Adapter,
-  type AnyContract,
-  type Description,
-  placementText,
-} from "./contract.ts";
-import { ChordError } from "./errors.ts";
-import { canonicalJson, fits } from "./schema.ts";
+import contractModule from "./contract.ts";
+import type contractTypes from "./contract.types.ts";
+import errorsModule from "./errors.ts";
+import schemaModule from "./schema.ts";
 
-function coverageGap(provider: Description, consumer: Description): string | undefined {
+const { canonicalJson, fits } = schemaModule;
+const { ChordError } = errorsModule;
+
+function coverageGap(
+  provider: contractTypes.Description,
+  consumer: contractTypes.Description,
+): string | undefined {
   if (provider.name !== consumer.name || provider.scope !== consumer.scope) return "different type";
   if (!samePlacement(provider, consumer)) return "host";
   if (!fits(consumer.input, provider.input)) return "input";
@@ -49,16 +50,16 @@ function coverageGap(provider: Description, consumer: Description): string | und
   return undefined;
 }
 
-const samePlacement = (a: Description, b: Description): boolean =>
+const samePlacement = (a: contractTypes.Description, b: contractTypes.Description): boolean =>
   canonicalJson(a.host ?? null) === canonicalJson(b.host ?? null);
-const placementOf = (description: Description): string =>
-  description.host === undefined ? "(local)" : placementText(description.host);
+const placementOf = (description: contractTypes.Description): string =>
+  description.host === undefined ? "(local)" : contractModule.placementText(description.host);
 
 function adapterFor(
-  provider: AnyContract,
-  accepts: Accepts | undefined,
-  consumer: AnyContract,
-): Adapter | undefined {
+  provider: contractTypes.AnyContract,
+  accepts: contractTypes.Accepts | undefined,
+  consumer: contractTypes.AnyContract,
+): contractTypes.Adapter | undefined {
   if (provider.fingerprint === consumer.fingerprint) return undefined;
   if (!samePlacement(provider.description, consumer.description)) {
     throw new ChordError(
@@ -84,7 +85,7 @@ function adapterFor(
   return adapter;
 }
 
-function hasNoArgs(contract: AnyContract, name: string): boolean {
+function hasNoArgs(contract: contractTypes.AnyContract, name: string): boolean {
   for (const members of Object.values(contract.description.variants)) {
     const member = members[name];
     if (member?.kind === "method") return member.args === undefined;
@@ -92,20 +93,34 @@ function hasNoArgs(contract: AnyContract, name: string): boolean {
   return false;
 }
 
-export const coverage: {
-  (consumer: Description): (provider: Description) => string | undefined;
-  (provider: Description, consumer: Description): string | undefined;
+const coverage: {
+  (
+    consumer: contractTypes.Description,
+  ): (provider: contractTypes.Description) => string | undefined;
+  (provider: contractTypes.Description, consumer: contractTypes.Description): string | undefined;
 } = dual(2, coverageGap);
 
-export const bind: {
+const bind: {
   (
-    accepts: Accepts | undefined,
-    consumer: AnyContract,
-  ): (provider: AnyContract) => Adapter | undefined;
-  (provider: AnyContract, accepts: Accepts | undefined, consumer: AnyContract): Adapter | undefined;
+    accepts: contractTypes.Accepts | undefined,
+    consumer: contractTypes.AnyContract,
+  ): (provider: contractTypes.AnyContract) => contractTypes.Adapter | undefined;
+  (
+    provider: contractTypes.AnyContract,
+    accepts: contractTypes.Accepts | undefined,
+    consumer: contractTypes.AnyContract,
+  ): contractTypes.Adapter | undefined;
 } = dual(3, adapterFor);
 
-export const takesNoArgs: {
-  (name: string): (contract: AnyContract) => boolean;
-  (contract: AnyContract, name: string): boolean;
+const takesNoArgs: {
+  (name: string): (contract: contractTypes.AnyContract) => boolean;
+  (contract: contractTypes.AnyContract, name: string): boolean;
 } = dual(2, hasNoArgs);
+
+const contractCompat = {
+  bind,
+  coverage,
+  takesNoArgs,
+};
+
+export default contractCompat;

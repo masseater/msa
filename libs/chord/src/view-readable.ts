@@ -1,15 +1,18 @@
-import { HYDRATION, type Hydration } from "./cell.ts";
-import type { RemoteRef } from "./remote-ref.ts";
-import type { Readable, StateEvent } from "./types.ts";
+import cell from "./cell.ts";
+import type cellTypes from "./cell.types.ts";
+import type remoteRefTypes from "./remote-ref.types.ts";
+import type typesModule from "./types.types.ts";
 
-export class ViewReadable implements Readable<unknown> {
-  readonly view: RemoteRef;
+const { HYDRATION } = cell;
+
+export default class ViewReadable implements typesModule.Readable<unknown> {
+  readonly view: remoteRefTypes.RemoteRef;
   readonly #name: string;
   readonly #values = new Set<(value: unknown) => void>();
-  readonly #events = new Set<(event: StateEvent<unknown>) => void>();
-  readonly #unseen = new Set<(event: StateEvent<unknown>) => void>();
+  readonly #events = new Set<(event: typesModule.StateEvent<unknown>) => void>();
+  readonly #unseen = new Set<(event: typesModule.StateEvent<unknown>) => void>();
 
-  constructor(view: RemoteRef, name: string) {
+  constructor(view: remoteRefTypes.RemoteRef, name: string) {
     this.view = view;
     this.#name = name;
   }
@@ -19,7 +22,7 @@ export class ViewReadable implements Readable<unknown> {
     return this.view.binding.read(this.#name);
   }
 
-  get [HYDRATION](): Hydration | undefined {
+  get [HYDRATION](): cellTypes.Hydration | undefined {
     const binding = this.view.binding;
     if (binding.hydrated) return undefined;
     return { hydrated: false, whenHydrated: () => binding.whenHydrated() };
@@ -33,7 +36,7 @@ export class ViewReadable implements Readable<unknown> {
     return () => this.#remove(this.#values, listener);
   }
 
-  events(listener: (event: StateEvent<unknown>) => void): () => void {
+  events(listener: (event: typesModule.StateEvent<unknown>) => void): () => void {
     this.#events.add(listener);
     this.#attach();
     if (this.#readable()) {
@@ -46,7 +49,7 @@ export class ViewReadable implements Readable<unknown> {
     };
   }
 
-  deliver(event: StateEvent<unknown>): void {
+  deliver(event: typesModule.StateEvent<unknown>): void {
     for (const listener of [...this.#events]) {
       if (!this.#unseen.delete(listener)) this.#safe(() => listener(event));
       else if (event.type !== "ops")

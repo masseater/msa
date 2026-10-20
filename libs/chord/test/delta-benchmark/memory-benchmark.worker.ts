@@ -2,10 +2,13 @@ import { PerformanceObserver, performance } from "node:perf_hooks";
 
 import { Console, Effect, Schema } from "effect";
 
-import type { Draft } from "../../src/delta/draft.ts";
-import { type Op, track } from "../../src/delta/index.ts";
+import type draftTypes from "../../src/delta/draft.ts";
+import delta from "../../src/delta/index.ts";
+import type deltaTypes from "../../src/delta/index.types.ts";
 import benchmark from "../fixtures/benchmark.ts";
 import timing from "../fixtures/timing.ts";
+
+const { track } = delta;
 
 const { collectGarbage } = benchmark;
 const { ticks } = timing;
@@ -16,8 +19,8 @@ type Mode = "tracker";
 type Scenario = "idle-control" | "sparse-burst" | "staggered-revisions" | "lagging-watches";
 type Row = { id: number; value: number; payload: string };
 type Document = { rows: Row[] };
-type PreparedLike = { readonly value: Document; readonly ops: readonly Op[] };
-type ChangeLike = { readonly state: Draft<Document>; prepare(): PreparedLike };
+type PreparedLike = { readonly value: Document; readonly ops: readonly deltaTypes.Op[] };
+type ChangeLike = { readonly state: draftTypes.Draft<Document>; prepare(): PreparedLike };
 type TrackerLike = {
   readonly value: Document;
   beginChange(): ChangeLike;

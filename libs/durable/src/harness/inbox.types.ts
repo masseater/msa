@@ -1,4 +1,4 @@
-import type { Draft, JsonRepresentation } from "@msa/chord";
+import type chordTypes from "@msa/chord/index.types";
 
 import type typesModule from "./types.types.ts";
 
@@ -7,8 +7,8 @@ declare namespace inboxTypes {
     | {
         id: typesModule.SubmissionId;
         mode: "steer" | "followUp";
-        content: JsonRepresentation<typesModule.UserInput>;
-        entry?: JsonRepresentation<typesModule.InputEntry>;
+        content: chordTypes.JsonRepresentation<typesModule.UserInput>;
+        entry?: chordTypes.JsonRepresentation<typesModule.InputEntry>;
       }
     | { id: typesModule.SubmissionId; mode: "write"; entry: typesModule.JsonObject };
 
@@ -18,7 +18,7 @@ declare namespace inboxTypes {
 
   type Boundary = {
     readonly conversationId: typesModule.ConversationId;
-    readonly inbox: Draft<InboxState>;
+    readonly inbox: chordTypes.Draft<InboxState>;
     readonly steeringMode: typesModule.QueueMode;
     readonly followUpMode: typesModule.QueueMode;
     head: typesModule.EntryId | undefined;

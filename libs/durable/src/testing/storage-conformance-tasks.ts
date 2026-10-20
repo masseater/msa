@@ -1,4 +1,4 @@
-import type { JsonValue } from "@msa/chord";
+import type chordTypes from "@msa/chord/index.types";
 import { Effect } from "effect";
 
 import type typesModule from "../types.types.ts";
@@ -9,9 +9,9 @@ const { commit, context, createRoot, io, mint, pendingTask } = storageConformanc
 
 const seedTasks = Effect.fnUntraced(function* (storage: typesModule.Storage) {
   const rootId = yield* createRoot(storage);
-  const firstId = yield* mint<typesModule.TaskId<JsonValue>>(storage);
-  const secondId = yield* mint<typesModule.TaskId<JsonValue>>(storage);
-  const thirdId = yield* mint<typesModule.TaskId<JsonValue>>(storage);
+  const firstId = yield* mint<typesModule.TaskId<chordTypes.JsonValue>>(storage);
+  const secondId = yield* mint<typesModule.TaskId<chordTypes.JsonValue>>(storage);
+  const thirdId = yield* mint<typesModule.TaskId<chordTypes.JsonValue>>(storage);
   const first = {
     ...pendingTask(firstId, rootId),
     memos: { winner: "first" },
@@ -78,9 +78,9 @@ const taskRecords: storageConformanceSupportTypes.StorageCaseSpec = {
 
 const seedWaitingTasks = Effect.fnUntraced(function* (storage: typesModule.Storage) {
   const rootId = yield* createRoot(storage);
-  const ownerId = yield* mint<typesModule.TaskId<JsonValue>>(storage);
-  const waitingId = yield* mint<typesModule.TaskId<JsonValue>>(storage);
-  const completingId = yield* mint<typesModule.TaskId<JsonValue>>(storage);
+  const ownerId = yield* mint<typesModule.TaskId<chordTypes.JsonValue>>(storage);
+  const waitingId = yield* mint<typesModule.TaskId<chordTypes.JsonValue>>(storage);
+  const completingId = yield* mint<typesModule.TaskId<chordTypes.JsonValue>>(storage);
   const owner = pendingTask(ownerId, rootId);
   const waiting: storageConformanceSupportTypes.StoredTask = {
     ...pendingTask(waitingId, rootId),

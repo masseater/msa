@@ -1,4 +1,4 @@
-import type { Draft } from "@msa/chord";
+import type chordTypes from "@msa/chord/index.types";
 import { Function } from "effect";
 
 import documents from "../documents.ts";
@@ -22,7 +22,7 @@ const LiveDoc = defineDoc<liveTypes.LiveState>({
 
 const endRun: typesModule.Dual4<
   typesModule.Tx,
-  Draft<liveTypes.LiveState>,
+  chordTypes.Draft<liveTypes.LiveState>,
   typesModule.TaskId,
   typesModule.SubmissionSettlement,
   void
@@ -30,7 +30,7 @@ const endRun: typesModule.Dual4<
   4,
   (
     tx: typesModule.Tx,
-    live: Draft<liveTypes.LiveState>,
+    live: chordTypes.Draft<liveTypes.LiveState>,
     taskId: typesModule.TaskId,
     settlement: typesModule.SubmissionSettlement,
   ): void => {
@@ -45,50 +45,57 @@ const endRun: typesModule.Dual4<
 );
 
 const addCompactionStatus: typesModule.Dual2<
-  Draft<liveTypes.LiveState>,
+  chordTypes.Draft<liveTypes.LiveState>,
   liveTypes.CompactionStatus,
   void
 > = Function.dual(
   2,
-  (live: Draft<liveTypes.LiveState>, status: liveTypes.CompactionStatus): void => {
+  (live: chordTypes.Draft<liveTypes.LiveState>, status: liveTypes.CompactionStatus): void => {
     live.compactions ??= [];
     live.compactions.push(status);
   },
 );
 
 const compactionStatus: typesModule.Dual2<
-  Draft<liveTypes.LiveState>,
+  chordTypes.Draft<liveTypes.LiveState>,
   typesModule.TaskId,
-  Draft<liveTypes.CompactionStatus> | undefined
+  chordTypes.Draft<liveTypes.CompactionStatus> | undefined
 > = Function.dual(
   2,
   (
-    live: Draft<liveTypes.LiveState>,
+    live: chordTypes.Draft<liveTypes.LiveState>,
     taskId: typesModule.TaskId,
-  ): Draft<liveTypes.CompactionStatus> | undefined =>
+  ): chordTypes.Draft<liveTypes.CompactionStatus> | undefined =>
     live.compactions?.find((status) => status.taskId === taskId),
 );
 
 const removeCompactionStatus: typesModule.Dual2<
-  Draft<liveTypes.LiveState>,
+  chordTypes.Draft<liveTypes.LiveState>,
   typesModule.TaskId,
   void
-> = Function.dual(2, (live: Draft<liveTypes.LiveState>, taskId: typesModule.TaskId): void => {
-  const statuses = live.compactions;
-  if (statuses === undefined) return;
-  const index = statuses.findIndex((status) => status.taskId === taskId);
-  if (index >= 0) statuses.splice(index, 1);
-  if (statuses.length === 0) delete live.compactions;
-});
+> = Function.dual(
+  2,
+  (live: chordTypes.Draft<liveTypes.LiveState>, taskId: typesModule.TaskId): void => {
+    const statuses = live.compactions;
+    if (statuses === undefined) return;
+    const index = statuses.findIndex((status) => status.taskId === taskId);
+    if (index >= 0) statuses.splice(index, 1);
+    if (statuses.length === 0) delete live.compactions;
+  },
+);
 
 const failCompactionStatus: typesModule.Dual3<
-  Draft<liveTypes.LiveState>,
+  chordTypes.Draft<liveTypes.LiveState>,
   typesModule.TaskId,
   string,
   void
 > = Function.dual(
   3,
-  (live: Draft<liveTypes.LiveState>, taskId: typesModule.TaskId, error: string): void => {
+  (
+    live: chordTypes.Draft<liveTypes.LiveState>,
+    taskId: typesModule.TaskId,
+    error: string,
+  ): void => {
     const status = compactionStatus(live, taskId);
     if (status !== undefined)
       live.compactionFailure = { error, reason: status.reason, taskId: status.taskId };
@@ -97,9 +104,9 @@ const failCompactionStatus: typesModule.Dual3<
 );
 
 const findNestedSlot = (
-  nested: Draft<liveTypes.NestedToolSlot[]>,
+  nested: chordTypes.Draft<liveTypes.NestedToolSlot[]>,
   taskId: typesModule.TaskId,
-): Draft<liveTypes.NestedToolSlot> | undefined => {
+): chordTypes.Draft<liveTypes.NestedToolSlot> | undefined => {
   let low = 0;
   let high = nested.length - 1;
   while (low <= high) {
@@ -113,42 +120,45 @@ const findNestedSlot = (
 };
 
 const toolSlot: typesModule.Dual2<
-  Draft<liveTypes.LiveState>,
+  chordTypes.Draft<liveTypes.LiveState>,
   typesModule.TaskId,
-  Draft<liveTypes.ToolSlot | liveTypes.NestedToolSlot> | undefined
+  chordTypes.Draft<liveTypes.ToolSlot | liveTypes.NestedToolSlot> | undefined
 > = Function.dual(
   2,
   (
-    live: Draft<liveTypes.LiveState>,
+    live: chordTypes.Draft<liveTypes.LiveState>,
     taskId: typesModule.TaskId,
-  ): Draft<liveTypes.ToolSlot | liveTypes.NestedToolSlot> | undefined => {
+  ): chordTypes.Draft<liveTypes.ToolSlot | liveTypes.NestedToolSlot> | undefined => {
     const slot = live.tools?.find((each) => each.taskId === taskId);
     if (slot !== undefined || live.nestedTools === undefined) return slot;
     return findNestedSlot(live.nestedTools, taskId);
   },
 );
 
-function finishSlot(slot: Draft<liveTypes.ToolSlot | liveTypes.NestedToolSlot>): void {
+function finishSlot(slot: chordTypes.Draft<liveTypes.ToolSlot | liveTypes.NestedToolSlot>): void {
   slot.status = "done";
   clearProgress(slot);
 }
 
 const removeNestedSlots: typesModule.Dual2<
-  Draft<liveTypes.LiveState>,
+  chordTypes.Draft<liveTypes.LiveState>,
   typesModule.TaskId,
   void
-> = Function.dual(2, (live: Draft<liveTypes.LiveState>, taskId: typesModule.TaskId): void => {
-  const nested = live.nestedTools;
-  if (nested === undefined) return;
-  const removed = new Set<typesModule.TaskId>([taskId]);
-  for (const slot of nested) if (removed.has(slot.parentTaskId)) removed.add(slot.taskId);
-  for (let index = nested.length - 1; index >= 0; index--) {
-    if (removed.has(nested[index]!.parentTaskId)) nested.splice(index, 1);
-  }
-  if (nested.length === 0) delete live.nestedTools;
-});
+> = Function.dual(
+  2,
+  (live: chordTypes.Draft<liveTypes.LiveState>, taskId: typesModule.TaskId): void => {
+    const nested = live.nestedTools;
+    if (nested === undefined) return;
+    const removed = new Set<typesModule.TaskId>([taskId]);
+    for (const slot of nested) if (removed.has(slot.parentTaskId)) removed.add(slot.taskId);
+    for (let index = nested.length - 1; index >= 0; index--) {
+      if (removed.has(nested[index]!.parentTaskId)) nested.splice(index, 1);
+    }
+    if (nested.length === 0) delete live.nestedTools;
+  },
+);
 
-function clearProgress(slot: Draft<liveTypes.SlotProgress>): void {
+function clearProgress(slot: chordTypes.Draft<liveTypes.SlotProgress>): void {
   delete slot.output;
   delete slot.droppedBytes;
   delete slot.droppedLines;

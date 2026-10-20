@@ -1,7 +1,9 @@
-import { utf8ByteLength } from "@msa/chord/output";
+import outputModule from "@msa/chord/output";
 import * as Function from "effect/Function";
 
 import type truncateTypes from "./truncate.types.ts";
+
+const { utf8ByteLength } = outputModule;
 
 const DEFAULT_MAX_LINES = 2000;
 const DEFAULT_MAX_BYTES = 50 * 1024;

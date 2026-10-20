@@ -1,4 +1,4 @@
-import type { Context } from "@msa/chord";
+import type chordTypes from "@msa/chord/index.types";
 import { Effect, Function } from "effect";
 
 import type bridgeTypes from "./bridge.types.ts";
@@ -22,19 +22,19 @@ const runPromised =
 const commitTask: {
   <I, S, R>(
     change: bridgeTypes.TaskChange<I, S, R>,
-    context: Context,
+    context: chordTypes.Context,
   ): <H extends object>(runtime: typesModule.TaskRuntime<I, S, R, H>) => Effect.Effect<void>;
   <I, S, R, H extends object>(
     runtime: typesModule.TaskRuntime<I, S, R, H>,
     change: bridgeTypes.TaskChange<I, S, R>,
-    context: Context,
+    context: chordTypes.Context,
   ): Effect.Effect<void>;
 } = Function.dual(
   3,
   Effect.fnUntraced(function* <I, S, R, H extends object>(
     runtime: typesModule.TaskRuntime<I, S, R, H>,
     change: bridgeTypes.TaskChange<I, S, R>,
-    context: Context,
+    context: chordTypes.Context,
   ) {
     const run = yield* toPromise(change);
     yield* Effect.promise(() => runtime.commit(run, context));

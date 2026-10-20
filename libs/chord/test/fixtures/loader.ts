@@ -4,9 +4,12 @@ import { fileURLToPath } from "node:url";
 import { Effect } from "effect";
 import { Type } from "typebox";
 
-import { createHost, local, method } from "../../src/index.ts";
-import { nodeLoader } from "../../src/loader.ts";
+import chordModule from "../../src/index.ts";
+import loaderModule from "../../src/loader.ts";
 import platform from "./platform.ts";
+
+const { createHost, local, method } = chordModule;
+const { nodeLoader } = loaderModule;
 
 const { makeDirectory, removeAll, writeText } = platform;
 
@@ -22,7 +25,8 @@ const Hello = local("t.hello", {
 
 const facetSource = `
 import { Type } from "typebox";
-import { defineFacet, local, method } from ${JSON.stringify(chord)};
+import chord from ${JSON.stringify(chord)};
+const { defineFacet, local, method } = chord;
 import { greeting } from "./greeting.ts";
 
 const Hello = local("t.hello", {
@@ -37,7 +41,7 @@ export default defineFacet((host) => {
 `;
 
 const chordSpecifier = JSON.stringify(chord);
-const stateFacetSource = `import { defineFacet } from ${chordSpecifier};\nimport { state } from "./state.ts";\nexport const own = state;\nexport default defineFacet(() => {});\n`;
+const stateFacetSource = `import chord from ${chordSpecifier};\nconst { defineFacet } = chord;\nimport { state } from "./state.ts";\nexport const own = state;\nexport default defineFacet(() => {});\n`;
 
 const writeGreeting = (text: string) =>
   writeText(`${dir}greeting.ts`, `export const greeting = ${JSON.stringify(text)};\n`);
@@ -67,7 +71,7 @@ const reloadsWithFreshImports = Effect.gen(function* () {
   yield* writeText(`${plugins}b/facet.ts`, stateFacetSource);
   yield* writeText(
     `${plugins}a/facet.ts`,
-    `import { Type } from "typebox";\nimport { defineFacet, local, method } from ${chordSpecifier};\nimport { state } from "../b/state.ts";\n` +
+    `import { Type } from "typebox";\nimport chord from ${chordSpecifier};\nconst { defineFacet, local, method } = chord;\nimport { state } from "../b/state.ts";\n` +
       `const Shared = local("t.shared", { version: 1, input: Type.Object({}), members: { same: method(undefined, Type.Boolean()) } });\n` +
       `export default defineFacet((host) => host.serve(Shared, () => ({ same: async () => (await import(new URL("../b/facet.ts", import.meta.url).href)).own === state })));\n`,
   );

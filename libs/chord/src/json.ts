@@ -1,40 +1,15 @@
 import { dual } from "effect/Function";
 
-export type JsonValue =
-  | null
-  | boolean
-  | number
-  | string
-  | JsonValue[]
-  | { [key: string]: JsonValue };
-
-type IsAny<T> = 0 extends 1 & T ? true : false;
-
-export type JsonRepresentation<T> =
-  IsAny<T> extends true
-    ? JsonValue
-    : unknown extends T
-      ? JsonValue
-      : T extends null | boolean | number | string
-        ? T
-        : T extends readonly (infer TItem)[]
-          ? JsonRepresentation<TItem>[]
-          : T extends object
-            ? { [TKey in keyof T]: JsonRepresentation<T[TKey]> }
-            : never;
+import type jsonTypes from "./json.types.ts";
 
 const DATA_DESCRIPTOR: PropertyDescriptor = {
+  configurable: true,
+  enumerable: true,
   value: undefined,
   writable: true,
-  enumerable: true,
-  configurable: true,
 };
 
-export type CopyJsonOptions = {
-  readonly omitUndefinedProperties?: boolean;
-};
-
-function copied(value: unknown, options?: CopyJsonOptions): JsonValue {
+function copied(value: unknown, options?: jsonTypes.CopyJsonOptions): jsonTypes.JsonValue {
   return copy(value, undefined, options?.omitUndefinedProperties === true);
 }
 
@@ -42,7 +17,7 @@ function copy(
   value: unknown,
   ancestors: Set<object> | undefined,
   omitUndefinedProperties: boolean,
-): JsonValue {
+): jsonTypes.JsonValue {
   if (value === null || typeof value === "string" || typeof value === "boolean") return value;
   if (typeof value === "number") {
     if (Number.isFinite(value)) return value;
@@ -66,14 +41,14 @@ function copyArray(
   value: unknown[],
   active: Set<object>,
   omitUndefinedProperties: boolean,
-): JsonValue {
+): jsonTypes.JsonValue {
   if (
     Object.getPrototypeOf(value) !== Array.prototype ||
     Reflect.ownKeys(value).length !== value.length + 1
   ) {
     throw new TypeError("Value must contain strict JSON dense plain arrays");
   }
-  const result = new Array<JsonValue>(value.length);
+  const result = new Array<jsonTypes.JsonValue>(value.length);
   for (let index = 0; index < value.length; index++) {
     const descriptor = Object.getOwnPropertyDescriptor(value, index);
     if (descriptor === undefined || descriptor.enumerable !== true || !("value" in descriptor)) {
@@ -88,12 +63,12 @@ function copyObject(
   value: object,
   active: Set<object>,
   omitUndefinedProperties: boolean,
-): JsonValue {
+): jsonTypes.JsonValue {
   const prototype = Object.getPrototypeOf(value);
   if (prototype !== Object.prototype && prototype !== null) {
     throw new TypeError("Value must contain strict JSON plain objects or arrays");
   }
-  const result = Object.create(prototype) as Record<string, JsonValue>;
+  const result = Object.create(prototype) as Record<string, jsonTypes.JsonValue>;
   for (const key of Reflect.ownKeys(value)) {
     if (typeof key === "symbol")
       throw new TypeError("Value contains a symbol key and is not strict JSON");
@@ -107,13 +82,13 @@ function copyObject(
   return result;
 }
 
-function defineData(target: object, key: PropertyKey, value: JsonValue): void {
+function defineData(target: object, key: PropertyKey, value: jsonTypes.JsonValue): void {
   DATA_DESCRIPTOR.value = value;
   Object.defineProperty(target, key, DATA_DESCRIPTOR);
   DATA_DESCRIPTOR.value = undefined;
 }
 
-export function isJsonValue(value: unknown): value is JsonValue {
+function isJsonValue(value: unknown): value is jsonTypes.JsonValue {
   return check(value, new Set<object>());
 }
 
@@ -166,7 +141,14 @@ function check(value: unknown, ancestors: Set<object>): boolean {
   }
 }
 
-export const copyJson: {
-  (options?: CopyJsonOptions): (value: unknown) => JsonValue;
-  (value: unknown, options?: CopyJsonOptions): JsonValue;
+const copyJson: {
+  (options?: jsonTypes.CopyJsonOptions): (value: unknown) => jsonTypes.JsonValue;
+  (value: unknown, options?: jsonTypes.CopyJsonOptions): jsonTypes.JsonValue;
 } = dual((args) => args.length >= 1, copied);
+
+const json = {
+  copyJson,
+  isJsonValue,
+};
+
+export default json;

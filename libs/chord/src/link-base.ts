@@ -1,16 +1,9 @@
-import type { Frame } from "./wire.ts";
+import type linkBaseTypes from "./link-base.types.ts";
+import type wireTypes from "./wire.types.ts";
 
-export interface Link {
-  readonly closed: boolean;
-  send(frame: Frame): number | undefined;
-  receive(handler: (frame: Frame) => void): void;
-  onClose(handler: (reason: string) => void): void;
-  close(reason?: string): void;
-}
-
-export abstract class BaseLink implements Link {
-  #handler: ((frame: Frame) => void) | undefined;
-  #queue: Frame[] = [];
+export default abstract class BaseLink implements linkBaseTypes.Link {
+  #handler: ((frame: wireTypes.Frame) => void) | undefined;
+  #queue: wireTypes.Frame[] = [];
   readonly #closeHandlers = new Set<(reason: string) => void>();
   #closed = false;
   #decoding: Promise<void> | undefined;
@@ -19,15 +12,15 @@ export abstract class BaseLink implements Link {
     return this.#closed;
   }
 
-  protected abstract transmit(frame: Frame): number | undefined;
+  protected abstract transmit(frame: wireTypes.Frame): number | undefined;
   protected abstract shutdown(): void;
 
-  send(frame: Frame): number | undefined {
+  send(frame: wireTypes.Frame): number | undefined {
     if (this.#closed) return undefined;
     return this.transmit(frame);
   }
 
-  receive(handler: (frame: Frame) => void): void {
+  receive(handler: (frame: wireTypes.Frame) => void): void {
     this.#handler = handler;
     for (const frame of this.#queue.splice(0)) handler(frame);
   }
@@ -40,17 +33,17 @@ export abstract class BaseLink implements Link {
   close(reason = "closed"): void {
     if (this.#closed) return;
     try {
-      this.transmit({ t: "bye", reason });
+      this.transmit({ reason, t: "bye" });
     } catch {}
     this.ended(reason);
   }
 
-  protected deliver(frame: Frame): void {
+  protected deliver(frame: wireTypes.Frame): void {
     if (this.#decoding === undefined) this.#deliverNow(frame);
     else this.deliverLater(Promise.resolve(frame));
   }
 
-  protected deliverLater(frame: Promise<Frame>): void {
+  protected deliverLater(frame: Promise<wireTypes.Frame>): void {
     const next = (this.#decoding ?? Promise.resolve())
       .then(() => frame)
       .then(
@@ -63,7 +56,7 @@ export abstract class BaseLink implements Link {
     this.#decoding = next;
   }
 
-  #deliverNow(frame: Frame): void {
+  #deliverNow(frame: wireTypes.Frame): void {
     if (this.#closed) return;
     if (frame.t === "bye") {
       this.ended(frame.reason ?? "peer closed");

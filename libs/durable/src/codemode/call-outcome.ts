@@ -1,5 +1,5 @@
 import type { TextContent } from "@msa/ai";
-import type { JsonValue } from "@msa/chord";
+import type chordTypes from "@msa/chord/index.types";
 import type { CodemodeHostCall, CodemodeOutcome } from "@msa/codemode/portable";
 import { Function } from "effect";
 
@@ -15,7 +15,7 @@ const { errorMessage } = errorsModule;
 const isText = (item: unknown): item is TextContent =>
   typeof item === "object" && item !== null && (item as TextContent).type === "text";
 
-function textOf(value: JsonValue | undefined): string {
+function textOf(value: chordTypes.JsonValue | undefined): string {
   if (typeof value === "string") return value;
   if (!Array.isArray(value)) return "";
   return value.flatMap((item) => (isText(item) ? [item.text] : [])).join("\n");

@@ -1,4 +1,4 @@
-import type { Context } from "@msa/chord";
+import type chordTypes from "@msa/chord/index.types";
 import type envTypes from "@msa/durable/env.types";
 import type { Effect } from "effect";
 
@@ -14,7 +14,7 @@ declare namespace fileOpTypes {
   interface PathRequest {
     readonly target: RemoteTarget;
     readonly path: string;
-    readonly context: Context;
+    readonly context: chordTypes.Context;
   }
 
   interface FileOp<T> extends PathRequest {

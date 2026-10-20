@@ -2,9 +2,12 @@ import assert from "node:assert/strict";
 
 import { Console, Effect } from "effect";
 
-import { type Tracker, track } from "../../src/delta/index.ts";
+import delta from "../../src/delta/index.ts";
+import type deltaTypes from "../../src/delta/index.types.ts";
 import largeProxyScenarios from "../fixtures/retention-scenarios.ts";
 import retentionModule from "../fixtures/retention.ts";
+
+const { track } = delta;
 
 const {
   abortedPayload,
@@ -17,7 +20,7 @@ const {
   unadoptedPrepared,
 } = retentionModule;
 
-type NullPayload = Tracker<{ payload: { rows: { value: number }[] } | null }>;
+type NullPayload = deltaTypes.Tracker<{ payload: { rows: { value: number }[] } | null }>;
 
 const releasedFromNullPayload = (make: (tracker: NullPayload) => WeakRef<object>) =>
   Effect.gen(function* () {

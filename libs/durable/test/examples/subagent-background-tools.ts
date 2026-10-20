@@ -1,5 +1,5 @@
 import { type AssistantMessage, Type } from "@msa/ai";
-import type { Context } from "@msa/chord";
+import type chordTypes from "@msa/chord/index.types";
 import { Effect } from "effect";
 
 import durable from "../../src/index.ts";
@@ -140,7 +140,7 @@ const statusLines = Effect.fn("statusLines")(function* (
   api: durableTypes.ToolExecutionApi,
   agents: Readonly<Record<string, Subagent>>,
   name: string | undefined,
-  callContext: Context,
+  callContext: chordTypes.Context,
 ) {
   const names = name === undefined ? Object.keys(agents) : [name];
   const lines: string[] = [];

@@ -1,4 +1,4 @@
-import { BACKGROUND_CONTEXT } from "@msa/chord/context";
+import contextModule from "@msa/chord/context";
 import testing from "@msa/durable/testing";
 import { Effect } from "effect";
 import { describe, expect, it } from "vite-plus/test";
@@ -8,6 +8,8 @@ import memory from "../src/storage/memory.ts";
 import types from "../src/types.ts";
 import type typesModule from "../src/types.types.ts";
 import effectSupport from "./effect-support.ts";
+
+const { BACKGROUND_CONTEXT } = contextModule;
 
 const { registerStorageConformance } = testing;
 const { MemoryStorage } = memory;

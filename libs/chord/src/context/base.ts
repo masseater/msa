@@ -1,8 +1,10 @@
-import type { Context, ContextKey } from "./types.ts";
-import { ABORT_SIGNAL_CONTEXT_KEY } from "./types.ts";
+import types from "./types.ts";
+import type typesModule from "./types.types.ts";
 
-export abstract class BaseContext implements Context {
-  abstract value<T>(key: ContextKey<T>): T | undefined;
+const { ABORT_SIGNAL_CONTEXT_KEY } = types;
+
+export default abstract class BaseContext implements typesModule.Context {
+  abstract value<T>(key: typesModule.ContextKey<T>): T | undefined;
   abstract toString(): string;
 
   get abortSignal(): AbortSignal | undefined {

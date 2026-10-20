@@ -1,7 +1,10 @@
 import { DateTime } from "effect";
 import { describe, expect, it } from "vite-plus/test";
 
-import { type Draft, type JsonValue, applyImmutable, track } from "../src/delta/index.ts";
+import delta from "../src/delta/index.ts";
+import type deltaTypes from "../src/delta/index.types.ts";
+
+const { applyImmutable, track } = delta;
 
 const copiesOnlyChangedBranches = (): void => {
   const tracker = track({
@@ -75,27 +78,37 @@ const dropsWritesThroughDetachedChildReferences = (): void => {
   const change = tracker.beginChange();
   const child = change.state.child;
   const shifted = change.state.items.shift();
-  delete (change.state as { child?: Draft<{ value: string }>; items: Draft<{ value: string }[]> })
-    .child;
+  delete (
+    change.state as {
+      child?: deltaTypes.Draft<{ value: string }>;
+      items: deltaTypes.Draft<{ value: string }[]>;
+    }
+  ).child;
   child.value = "detached child";
   if (shifted !== undefined) shifted.value = "detached item";
   expect(change.prepare().value).toEqual({ items: [{ value: "kept" }] });
 };
 
 const rejectsNonStrictJsonPlacementsWithout = (): void => {
-  const tracker = track({ number: 0, payload: null as JsonValue, values: [1, 2] as JsonValue[] });
+  const tracker = track({
+    number: 0,
+    payload: null as deltaTypes.JsonValue,
+    values: [1, 2] as deltaTypes.JsonValue[],
+  });
   const change = tracker.beginChange();
   expect(() => {
-    change.state.values[0] = undefined as unknown as JsonValue;
+    change.state.values[0] = undefined as unknown as deltaTypes.JsonValue;
   }).toThrow(/strict JSON/u);
-  expect(() => change.state.values.push({ nested: undefined } as unknown as JsonValue)).toThrow(
-    /strict JSON/u,
-  );
+  expect(() =>
+    change.state.values.push({ nested: undefined } as unknown as deltaTypes.JsonValue),
+  ).toThrow(/strict JSON/u);
   expect(() => {
     change.state.number = Number.NaN;
   }).toThrow(/strict JSON/u);
   expect(() => {
-    change.state.payload = DateTime.toDateUtc(DateTime.nowUnsafe()) as unknown as JsonValue;
+    change.state.payload = DateTime.toDateUtc(
+      DateTime.nowUnsafe(),
+    ) as unknown as deltaTypes.JsonValue;
   }).toThrow(/plain objects/u);
   expect(change.state).toEqual(tracker.value);
   change.abort();

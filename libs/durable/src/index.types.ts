@@ -1,5 +1,5 @@
 import type { TSchema } from "@msa/ai";
-import type { JsonValue } from "@msa/chord";
+import type chordTypes from "@msa/chord/index.types";
 
 import type errorsTypes from "./errors/index.types.ts";
 import type harnessApiTypes from "./harness/api.types.ts";
@@ -97,16 +97,16 @@ declare namespace durableTypes {
   type TaskInspection = typesModule.TaskInspection;
   type ToolControl = typesModule.ToolControl;
   type ToolDiagnostic = typesModule.ToolDiagnostic;
-  type ToolExecutionApi<TDetails extends JsonValue = JsonValue> =
+  type ToolExecutionApi<TDetails extends chordTypes.JsonValue = chordTypes.JsonValue> =
     harnessApiTypes.ToolExecutionApi<TDetails>;
   type ToolExecutionMode = typesModule.ToolExecutionMode;
-  type ToolExecutionResult<TDetails extends JsonValue = JsonValue> =
+  type ToolExecutionResult<TDetails extends chordTypes.JsonValue = chordTypes.JsonValue> =
     harnessApiTypes.ToolExecutionResult<TDetails>;
   type ToolHookCall = typesModule.ToolHookCall;
   type ToolHooks = typesModule.ToolHooks;
   type ToolRegistration<
     TParameters extends TSchema = TSchema,
-    TDetails extends JsonValue = JsonValue,
+    TDetails extends chordTypes.JsonValue = chordTypes.JsonValue,
   > = harnessApiTypes.ToolRegistration<TParameters, TDetails>;
   type UserInput = typesModule.UserInput;
   type Wrap<Tool extends harnessApiTypes.ToolRegistration = harnessApiTypes.ToolRegistration> =
@@ -120,7 +120,7 @@ declare namespace durableTypes {
   type ContextEdit = typesModule.ContextEdit;
   type ConversationDocFamilyToken<
     T extends typesModule.JsonObject,
-    I extends JsonValue,
+    I extends chordTypes.JsonValue,
   > = typesModule.ConversationDocFamilyToken<T, I>;
   type ConversationDocToken<T extends typesModule.JsonObject> = typesModule.ConversationDocToken<T>;
   type ConversationId = typesModule.ConversationId;
@@ -131,11 +131,11 @@ declare namespace durableTypes {
   type DocDefinition<T extends typesModule.JsonObject> = typesModule.DocDefinition<T>;
   type DocFamilyDefinition<
     T extends typesModule.JsonObject,
-    I extends JsonValue,
+    I extends chordTypes.JsonValue,
   > = typesModule.DocFamilyDefinition<T, I>;
   type DocFamilyToken<
     T extends typesModule.JsonObject,
-    I extends JsonValue,
+    I extends chordTypes.JsonValue,
     D extends DocFamilyDefinition<T, I>,
   > = typesModule.DocFamilyToken<T, I, D>;
   type DocToken<
@@ -156,7 +156,7 @@ declare namespace durableTypes {
   type DocumentSemantics = typesModule.DocumentSemantics;
   type DocumentState<T extends typesModule.JsonObject> = typesModule.DocumentState<T>;
   type DocumentWatch<T extends typesModule.JsonObject> = typesModule.DocumentWatch<T>;
-  type Entry<D extends JsonValue = never> = recordsTypes.Entry<D>;
+  type Entry<D extends chordTypes.JsonValue = never> = recordsTypes.Entry<D>;
   type EntryDraft = typesModule.EntryDraft;
   type EntryId = typesModule.EntryId;
   type EntryQuery = typesModule.EntryQuery;
@@ -171,7 +171,7 @@ declare namespace durableTypes {
   type PhaseHandler<I, P, S, R, H extends object> = typesModule.PhaseHandler<I, P, S, R, H>;
   type RewindableConversationDocFamilyToken<
     T extends typesModule.JsonObject,
-    I extends JsonValue,
+    I extends chordTypes.JsonValue,
   > = typesModule.RewindableConversationDocFamilyToken<T, I>;
   type RewindableConversationDocToken<T extends typesModule.JsonObject> =
     typesModule.RewindableConversationDocToken<T>;
@@ -182,7 +182,7 @@ declare namespace durableTypes {
   type Session = typesModule.Session;
   type SessionDocFamilyToken<
     T extends typesModule.JsonObject,
-    I extends JsonValue,
+    I extends chordTypes.JsonValue,
   > = typesModule.SessionDocFamilyToken<T, I>;
   type SessionDocToken<T extends typesModule.JsonObject> = typesModule.SessionDocToken<T>;
   type SessionEnd = typesModule.SessionEnd;
@@ -204,7 +204,7 @@ declare namespace durableTypes {
   > = typesModule.TaskDefinition<I, S, R, H>;
   type TaskDocFamilyToken<
     T extends typesModule.JsonObject,
-    I extends JsonValue,
+    I extends chordTypes.JsonValue,
   > = typesModule.TaskDocFamilyToken<T, I>;
   type TaskDocToken<T extends typesModule.JsonObject> = typesModule.TaskDocToken<T>;
   type TaskId<Result = unknown> = idsTypes.TaskId<Result>;
@@ -217,8 +217,8 @@ declare namespace durableTypes {
   type TaskRuntime<I, S, R, H extends object> = typesModule.TaskRuntime<I, S, R, H>;
   type TaskState<S, R> = typesModule.TaskState<S, R>;
   type Tx = typesModule.Tx;
-  type TypedEntry<D extends JsonValue> = typesModule.TypedEntry<D>;
-  type TypedEntryDraft<D extends JsonValue> = typesModule.TypedEntryDraft<D>;
+  type TypedEntry<D extends chordTypes.JsonValue> = typesModule.TypedEntry<D>;
+  type TypedEntryDraft<D extends chordTypes.JsonValue> = typesModule.TypedEntryDraft<D>;
   type WatchEnd = typesModule.WatchEnd;
   type WatchHandle<T> = typesModule.WatchHandle<T>;
   type Harness = harnessPublicTypes.Harness;

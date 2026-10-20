@@ -1,5 +1,5 @@
-import { withoutAbortSignal } from "@msa/chord/context";
-import { replicatedState } from "@msa/chord/state";
+import contextModule from "@msa/chord/context";
+import stateModule from "@msa/chord/state";
 import { Effect, Function } from "effect";
 
 import type typesModule from "../types.types.ts";
@@ -9,6 +9,9 @@ import sessionDocuments from "./session-documents.ts";
 import type sessionObserveTypes from "./session-observe.types.ts";
 import sessionReads from "./session-reads.ts";
 import sessionState from "./session-state.ts";
+
+const { withoutAbortSignal } = contextModule;
+const { replicatedState } = stateModule;
 
 const { CommittedStateSource, CommittedWatch } = observation;
 const { addListener, assertUsable, enqueueHealthy } = sessionState;

@@ -1,11 +1,9 @@
 import { describe, expect, it } from "vite-plus/test";
 
-import {
-  type BoundedOutput,
-  OutputBuffer,
-  type OutputLimits,
-  type OutputSkip,
-} from "../src/output.ts";
+import output from "../src/output.ts";
+import type outputTypes from "../src/output.types.ts";
+
+const { OutputBuffer } = output;
 
 function random(seed: number): () => number {
   let state = seed >>> 0;
@@ -44,13 +42,13 @@ function randomChunk(next: () => number): string {
   return text;
 }
 
-function measure(text: string): OutputSkip {
+function measure(text: string): outputTypes.OutputSkip {
   let newlines = 0;
   for (const character of text) if (character === "\n") newlines++;
   return { bytes: Buffer.byteLength(text, "utf8"), endsWithNewline: text.endsWith("\n"), newlines };
 }
 
-function legalCuts(text: string, limits: OutputLimits): number[] {
+function legalCuts(text: string, limits: outputTypes.OutputLimits): number[] {
   let { bytes, newlines } = measure(text);
   const cuts: number[] = [];
   let offset = 0;
@@ -66,7 +64,7 @@ function legalCuts(text: string, limits: OutputLimits): number[] {
 
 function checkSeed(seed: number): void {
   const next = random(seed);
-  const limits: OutputLimits = {
+  const limits: outputTypes.OutputLimits = {
     maxBytes: 1 + Math.floor(next() * 40),
     maxLines: 1 + Math.floor(next() * 5),
     retain: "tail",
@@ -75,8 +73,8 @@ function checkSeed(seed: number): void {
   const skipping = new OutputBuffer(limits);
   let pending = "";
   let skips = 0;
-  const delivered: BoundedOutput[] = [];
-  const expected: BoundedOutput[] = [];
+  const delivered: outputTypes.BoundedOutput[] = [];
+  const expected: outputTypes.BoundedOutput[] = [];
   const flush = (): void => {
     if (pending === "") return;
     const cuts = legalCuts(pending, limits);
@@ -113,7 +111,7 @@ describe("OutputBuffer skipped output", () => {
   it("keeps the same tail whenever progress snapshots happen", () => {
     for (let seed = 1; seed <= 3000; seed++) {
       const next = random(seed);
-      const limits: OutputLimits = {
+      const limits: outputTypes.OutputLimits = {
         maxBytes: 1 + Math.floor(next() * 40),
         maxLines: 1 + Math.floor(next() * 5),
         retain: "tail",
@@ -136,7 +134,7 @@ describe("OutputBuffer skipped output", () => {
   });
 
   it("counts skipped bytes, lines and the final newline exactly", () => {
-    const limits: OutputLimits = { maxBytes: 1000, maxLines: 2, retain: "tail" };
+    const limits: outputTypes.OutputLimits = { maxBytes: 1000, maxLines: 2, retain: "tail" };
     const full = new OutputBuffer(limits);
     const skipping = new OutputBuffer(limits);
     const omitted = "one\ntwo\nthr";

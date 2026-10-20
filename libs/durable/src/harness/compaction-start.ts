@@ -1,4 +1,4 @@
-import type { Context } from "@msa/chord";
+import type chordTypes from "@msa/chord/index.types";
 import { Effect, Function } from "effect";
 
 import bridge from "./bridge.ts";
@@ -8,6 +8,7 @@ import type compactionTypesModule from "./compaction-types.ts";
 import compactionModule from "./compaction.ts";
 import liveModule from "./live.ts";
 import type typesModule from "./types.types.ts";
+
 const { LiveDoc, addCompactionStatus } = liveModule;
 const { commitTask, eachHook, hookResult } = bridge;
 const { selectCut, summarizedMessages } = compactionSelect;
@@ -58,7 +59,7 @@ type CompactionRequest = Parameters<NonNullable<typesModule.CompactionHooks["bef
 const askHooks = Effect.fnUntraced(function* (
   runtime: compactionTypesModule.CompactionRuntime,
   compaction: CompactionRequest,
-  context: Context,
+  context: chordTypes.Context,
 ) {
   let decision: Decision;
   yield* eachHook(runtime.hooks, "beforeCompact", (hook) =>
@@ -89,14 +90,14 @@ const latestEntryId = (
 const selectPhase: typesModule.Dual3<
   compactionTypesModule.CompactionRuntime,
   compactionTypesModule.CompactionInput,
-  Context,
+  chordTypes.Context,
   Effect.Effect<void>
 > = Function.dual(
   3,
   Effect.fnUntraced(function* (
     runtime: compactionTypesModule.CompactionRuntime,
     input: compactionTypesModule.CompactionInput,
-    context: Context,
+    context: chordTypes.Context,
   ) {
     const { conversationId } = runtime;
     const agent = yield* Effect.promise(() => runtime.agent(context));

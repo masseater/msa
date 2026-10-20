@@ -4,17 +4,12 @@ import { Effect } from "effect";
 import { Type } from "typebox";
 import { describe, it } from "vite-plus/test";
 
-import {
-  type Ctx,
-  createHost,
-  defineRegistry,
-  forbidden,
-  isChordError,
-  local,
-  method,
-} from "../src/index.ts";
+import chord from "../src/index.ts";
+import type chordTypes from "../src/index.types.ts";
 import hostModule from "./fixtures/host.ts";
 import timing from "./fixtures/timing.ts";
+
+const { createHost, defineRegistry, forbidden, isChordError, local, method } = chord;
 
 const { quiet } = hostModule;
 const { tick } = timing;
@@ -112,7 +107,7 @@ const ctxGetActsAsTheRoot = Effect.gen(function* () {
   host.serve(Front, (_input, principal) => {
     seen.push(principal);
     return {
-      relay: (ctx: Ctx) =>
+      relay: (ctx: chordTypes.Ctx) =>
         Effect.runPromiseWith(services)(
           Effect.gen(function* () {
             const peer = yield* Effect.promise(() => ctx.get(Who, {}));
@@ -171,7 +166,7 @@ const referenceStateMembersAreSourcesFor = Effect.gen(function* () {
     const n = self.state("n", Type.Number(), 1);
     return {
       n,
-      set: (value: number, ctx: Ctx) => {
+      set: (value: number, ctx: chordTypes.Ctx) => {
         n.replace(ctx, value);
       },
     };

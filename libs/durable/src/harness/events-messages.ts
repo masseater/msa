@@ -1,5 +1,5 @@
 import type { AssistantMessage } from "@msa/ai";
-import type { Op, Path } from "@msa/chord/delta";
+import type deltaTypes from "@msa/chord/delta.types";
 import { Function } from "effect";
 
 import type eventsTypesModule from "./events-types.ts";
@@ -8,16 +8,19 @@ import type typesModule from "./types.types.ts";
 const PARTIAL_PATH = ["docs", "msa.live", "generation", "message"];
 
 const messageChanges: typesModule.Dual2<
-  readonly Op[],
+  readonly deltaTypes.Op[],
   AssistantMessage,
   eventsTypesModule.MessageChange[]
 > = Function.dual(
   2,
-  (viewOps: readonly Op[], message: AssistantMessage): eventsTypesModule.MessageChange[] => {
+  (
+    viewOps: readonly deltaTypes.Op[],
+    message: AssistantMessage,
+  ): eventsTypesModule.MessageChange[] => {
     const changes: eventsTypesModule.MessageChange[] = [];
     const whole = new Set<number>();
     for (const op of viewOps) {
-      const path = op[1] as Path;
+      const path = op[1] as deltaTypes.Path;
       if (!startsWith(path, PARTIAL_PATH)) {
         if (startsWith(PARTIAL_PATH, path)) return [{ message, type: "message" }];
         continue;
@@ -58,11 +61,12 @@ const messageChanges: typesModule.Dual2<
   },
 );
 
-const startsWith: typesModule.Dual2<Path, readonly (string | number)[], boolean> = Function.dual(
-  2,
-  (path: Path, prefix: readonly (string | number)[]): boolean =>
-    prefix.length <= path.length && prefix.every((segment, index) => path[index] === segment),
-);
+const startsWith: typesModule.Dual2<deltaTypes.Path, readonly (string | number)[], boolean> =
+  Function.dual(
+    2,
+    (path: deltaTypes.Path, prefix: readonly (string | number)[]): boolean =>
+      prefix.length <= path.length && prefix.every((segment, index) => path[index] === segment),
+  );
 
 const eventsMessages = {
   messageChanges,

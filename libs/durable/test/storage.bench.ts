@@ -1,4 +1,4 @@
-import { BACKGROUND_CONTEXT } from "@msa/chord/context";
+import contextModule from "@msa/chord/context";
 import testing from "@msa/durable/testing";
 import { Effect } from "effect";
 import { type TestContext, afterAll, describe, expect, test } from "vite-plus/test";
@@ -9,6 +9,8 @@ import node from "../src/storage/sqlite/node.ts";
 import type typesModule from "../src/types.types.ts";
 import effectSupport from "./effect-support.ts";
 import platformSupport from "./platform-support.ts";
+
+const { BACKGROUND_CONTEXT } = contextModule;
 
 const { openNodeSqliteStorage } = node;
 const { openNodeJsonlStorage } = nodeModule;

@@ -1,4 +1,4 @@
-import type { Op } from "@msa/chord/delta";
+import type deltaTypes from "@msa/chord/delta.types";
 import { Function } from "effect";
 
 import eventsChanges from "./events-changes.ts";
@@ -18,7 +18,7 @@ const { compactionEnds, entryEvents, tailEvents, taskEvents } = eventsTail;
 const translate: typesModule.Dual5<
   typesModule.ConversationId,
   eventsTypesModule.Views,
-  readonly Op[],
+  readonly deltaTypes.Op[],
   typesModule.CommitPublication,
   Set<typesModule.TaskId>,
   eventsTypesModule.AgentEvent[]
@@ -27,7 +27,7 @@ const translate: typesModule.Dual5<
   (
     conversationId: typesModule.ConversationId,
     views: eventsTypesModule.Views,
-    viewOps: readonly Op[],
+    viewOps: readonly deltaTypes.Op[],
     publication: typesModule.CommitPublication,
     held: Set<typesModule.TaskId>,
   ): eventsTypesModule.AgentEvent[] => {

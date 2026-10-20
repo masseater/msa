@@ -1,4 +1,4 @@
-import type { Context } from "@msa/chord";
+import type chordTypes from "@msa/chord/index.types";
 import env from "@msa/durable/env";
 import type envTypes from "@msa/durable/env.types";
 import { Effect } from "effect";
@@ -45,7 +45,10 @@ export default class RemoteDirReader implements envTypes.DirReader {
     this.#handle = handle;
   }
 
-  next(maxEntries: number, context: Context): Promise<envTypes.Result<Batch, envTypes.FileError>> {
+  next(
+    maxEntries: number,
+    context: chordTypes.Context,
+  ): Promise<envTypes.Result<Batch, envTypes.FileError>> {
     const path = this.#handle.path;
     const aborted = abortResult<Batch>(context.abortSignal, path);
     if (aborted !== undefined) return Promise.resolve(aborted);
@@ -62,7 +65,7 @@ export default class RemoteDirReader implements envTypes.DirReader {
 
   #read(
     maxEntries: number,
-    context: Context,
+    context: chordTypes.Context,
   ): Effect.Effect<envTypes.Result<Batch, envTypes.FileError>> {
     return Effect.gen({ self: this }, function* () {
       const handle = this.#handle;
@@ -87,7 +90,7 @@ export default class RemoteDirReader implements envTypes.DirReader {
     });
   }
 
-  close(_context: Context): Promise<void> {
+  close(_context: chordTypes.Context): Promise<void> {
     if (this.#closed) return Promise.resolve();
     this.#closed = true;
     return this.#handle.close();

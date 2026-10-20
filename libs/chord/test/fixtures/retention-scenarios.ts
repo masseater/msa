@@ -2,8 +2,10 @@ import assert from "node:assert/strict";
 
 import { Effect } from "effect";
 
-import { track } from "../../src/delta/index.ts";
+import delta from "../../src/delta/index.ts";
 import retention from "./retention.ts";
+
+const { track } = delta;
 
 const { collect, retainedSettledChanges } = retention;
 

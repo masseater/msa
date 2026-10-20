@@ -1,4 +1,4 @@
-import type { JsonValue } from "@msa/chord";
+import type chordTypes from "@msa/chord/index.types";
 import durable from "@msa/durable";
 import harnessModule from "@msa/durable/harness";
 import type durableTypes from "@msa/durable/index.types";
@@ -29,7 +29,7 @@ afterEach(() =>
 
 const storeVersion1 = Effect.fn("storeVersion1")(function* (
   setup: supportTypes.ChatSetup,
-  checkpoint: JsonValue,
+  checkpoint: chordTypes.JsonValue,
 ) {
   const runPromise = Effect.runPromiseWith(yield* Effect.context<never>());
 

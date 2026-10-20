@@ -1,19 +1,16 @@
 import { describe, expect, it } from "vite-plus/test";
 
-import {
-  type JsonValue,
-  type Op,
-  PathError,
-  UnsafePathError,
-  applyImmutable,
-} from "../src/delta/index.ts";
+import delta from "../src/delta/index.ts";
+import type deltaTypes from "../src/delta/index.types.ts";
 import deltaApplyImmutable from "./fixtures/delta-apply-immutable.ts";
+
+const { PathError, UnsafePathError, applyImmutable } = delta;
 
 const { freezeDeep } = deltaApplyImmutable;
 
 const allowsOneImmutableBatchToFan = (): void => {
   const payload = freezeDeep({ nested: { value: 1 } });
-  const operations: readonly Op[] = [
+  const operations: readonly deltaTypes.Op[] = [
     ["s", ["placed"], payload],
     ["s", ["placed", "nested", "value"], 2],
   ];
@@ -52,7 +49,7 @@ const appendsToAnArrayNotYet = (): void => {
   expect(applyImmutable(rootArray, [["p", [], 2, 0, [3]]])).toEqual([1, 2, 3]);
   expect(rootArray).toEqual([1, 2]);
   expect(applyImmutable(rootArray, [["p", [], 2, 0, [[3, 4]]]])).toEqual([1, 2, [3, 4]]);
-  const invalid: [Op, typeof PathError | typeof UnsafePathError][] = [
+  const invalid: [deltaTypes.Op, typeof PathError | typeof UnsafePathError][] = [
     [["p", ["values", "missing"], 0, 0, []], PathError],
     [["p", ["missing"], 0, 0, []], PathError],
     [["p", ["values", 0], 0, 0, []], PathError],
@@ -63,7 +60,7 @@ const appendsToAnArrayNotYet = (): void => {
     [["p", ["list", 1.5], 0, 0, []], UnsafePathError],
     [["p", ["list", 0, "constructor"], 0, 0, []], UnsafePathError],
   ];
-  const document = freezeDeep({ list: [[1]], text: "a", values: [] as JsonValue[] });
+  const document = freezeDeep({ list: [[1]], text: "a", values: [] as deltaTypes.JsonValue[] });
   for (const [op, error] of invalid)
     expect(() => applyImmutable(document, [op]), JSON.stringify(op)).toThrow(error);
   expect(applyImmutable(rootArray, [["p", [], 1, 0, [9]]])).toEqual([1, 9, 2]);
@@ -71,9 +68,9 @@ const appendsToAnArrayNotYet = (): void => {
 
 const copiesAWideObjectOnceRather = (): void => {
   const width = 20_000;
-  const base: Record<string, JsonValue> = {};
+  const base: Record<string, deltaTypes.JsonValue> = {};
   for (let index = 0; index < width; index++) base[`field${index}`] = index;
-  const operations: Op[] = Array.from({ length: 1_000 }, (_, index): Op => [
+  const operations: deltaTypes.Op[] = Array.from({ length: 1_000 }, (_, index): deltaTypes.Op => [
     "s",
     [`field${index}`],
     -index,
@@ -84,7 +81,7 @@ const copiesAWideObjectOnceRather = (): void => {
     shallowCopies++;
     return originalKeys(value);
   }) as typeof Object.keys;
-  let result: Record<string, JsonValue>;
+  let result: Record<string, deltaTypes.JsonValue>;
   try {
     result = applyImmutable(base, operations);
   } finally {

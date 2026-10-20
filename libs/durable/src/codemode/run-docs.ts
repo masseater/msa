@@ -1,4 +1,4 @@
-import type { Context, JsonValue } from "@msa/chord";
+import type chordTypes from "@msa/chord/index.types";
 import { Effect } from "effect";
 
 import documents from "../documents.ts";
@@ -39,7 +39,7 @@ const CodemodeJournalDoc = defineDoc<JournalState>({
   version: 1,
 });
 
-const CodemodeStoreDoc = defineDoc<{ values: Record<string, JsonValue> }>({
+const CodemodeStoreDoc = defineDoc<{ values: Record<string, chordTypes.JsonValue> }>({
   fork: "asOf",
   history: "rewindable",
   initial: () => ({ values: {} }),
@@ -50,7 +50,7 @@ const CodemodeStoreDoc = defineDoc<{ values: Record<string, JsonValue> }>({
 
 const commitWith = Effect.fnUntraced(function* <T>(
   api: typesModule.ToolExecutionApi,
-  context: Context,
+  context: chordTypes.Context,
   change: (tx: typesModuleModule.Tx) => Effect.Effect<T>,
 ) {
   const run = Effect.runPromiseWith(yield* Effect.context());

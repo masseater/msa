@@ -1,21 +1,24 @@
 import { Effect } from "effect";
 
-import type { AnyContract, InputOf, Ref } from "./contract.ts";
-import type { HostCore, RefCore } from "./core.ts";
-import { ChordError, invalid } from "./errors.ts";
-import type { ObjectImpl } from "./object.ts";
-import type { RemoteHost } from "./remote-types.ts";
-import { awaitReady, linkedSignal } from "./signal.ts";
-import type { Ctx, GetOptions } from "./types.ts";
+import type contractTypes from "./contract.types.ts";
+import type coreTypes from "./core.types.ts";
+import errorsModule from "./errors.ts";
+import type objectTypes from "./object.types.ts";
+import type remoteTypesModule from "./remote-types.ts";
+import signalModule from "./signal.ts";
+import type typesModule from "./types.types.ts";
 
-export class CtxImpl implements Ctx {
-  readonly host: HostCore;
+const { ChordError, invalid } = errorsModule;
+const { awaitReady, linkedSignal } = signalModule;
+
+export default class CtxImpl implements typesModule.Ctx {
+  readonly host: coreTypes.HostCore;
   readonly signal: AbortSignal;
   readonly rootId: string;
   readonly codeVersion: number;
   readonly principal: unknown;
   readonly holder: boolean;
-  readonly #refs: RefCore[] = [];
+  readonly #refs: coreTypes.RefCore[] = [];
   readonly #release: () => void;
   readonly #closing = new AbortController();
   #closed = false;
@@ -24,7 +27,7 @@ export class CtxImpl implements Ctx {
     return this.#closed;
   }
 
-  check(host: HostCore | RemoteHost): void {
+  check(host: coreTypes.HostCore | remoteTypesModule.RemoteHost): void {
     if (this.host !== host) throw invalid("foreign_ctx", "ctx belongs to another host");
     if (this.#closed)
       throw new ChordError("aborted", "ctx expired: its call already settled", {
@@ -39,7 +42,7 @@ export class CtxImpl implements Ctx {
   }
 
   constructor(
-    host: HostCore,
+    host: coreTypes.HostCore,
     fields: {
       signals: readonly AbortSignal[];
       rootId: string;
@@ -58,7 +61,11 @@ export class CtxImpl implements Ctx {
     this.holder = fields.holder ?? false;
   }
 
-  get<C extends AnyContract>(type: C, input: InputOf<C>, options?: GetOptions): Promise<Ref<C>> {
+  get<C extends contractTypes.AnyContract>(
+    type: C,
+    input: contractTypes.InputOf<C>,
+    options?: typesModule.GetOptions,
+  ): Promise<contractTypes.Ref<C>> {
     return Effect.runPromise(
       Effect.gen({ self: this }, function* () {
         this.check(this.host);
@@ -70,17 +77,17 @@ export class CtxImpl implements Ctx {
         );
         this.#refs.push(ref);
         yield* awaitReady(ref, [this.signal, this.#closing.signal], this.host.readyTimeout);
-        return ref.proxy as Ref<C>;
+        return ref.proxy as contractTypes.Ref<C>;
       }),
     );
   }
 
-  child(object: ObjectImpl): CtxImpl {
+  child(object: objectTypes.ObjectImpl): CtxImpl {
     return new CtxImpl(this.host, {
-      signals: [this.signal, object.callAbort.signal],
-      rootId: this.rootId,
       codeVersion: this.codeVersion,
       principal: this.host.principal,
+      rootId: this.rootId,
+      signals: [this.signal, object.callAbort.signal],
     });
   }
 

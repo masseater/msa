@@ -1,4 +1,4 @@
-import type { Op, Path } from "@msa/chord/delta";
+import type deltaTypes from "@msa/chord/delta.types";
 import { Function } from "effect";
 
 import eventsMessages from "./events-messages.ts";
@@ -36,14 +36,14 @@ function callOf(slot: Slot): eventsTypesModule.ToolEventCall {
 type Appended = { readonly trimStart: number; readonly append: string; readonly set: boolean };
 
 const appendedOutput = (
-  viewOps: readonly Op[],
+  viewOps: readonly deltaTypes.Op[],
   outputPath: readonly (string | number)[],
 ): Appended => {
   let trimStart = 0;
   let append = "";
   let set = false;
   for (const op of viewOps) {
-    if (!startsWith(op[1] as Path, outputPath)) continue;
+    if (!startsWith(op[1] as deltaTypes.Path, outputPath)) continue;
     if (op[0] === "t") trimStart += op[2];
     else if (op[0] === "a") append += op[2];
     else set = true;
@@ -65,7 +65,7 @@ const outputUpdate = (
 };
 
 const toolUpdate: typesModule.Dual4<
-  readonly Op[],
+  readonly deltaTypes.Op[],
   readonly ["tools" | "nestedTools", number],
   Slot,
   Slot,
@@ -73,7 +73,7 @@ const toolUpdate: typesModule.Dual4<
 > = Function.dual(
   4,
   (
-    viewOps: readonly Op[],
+    viewOps: readonly deltaTypes.Op[],
     at: readonly ["tools" | "nestedTools", number],
     slot: Slot,
     previous: Slot,

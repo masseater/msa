@@ -1,4 +1,4 @@
-import type { Context, JsonValue } from "@msa/chord";
+import type chordTypes from "@msa/chord/index.types";
 import { Effect } from "effect";
 
 import type schedulerIndexTypes from "./scheduler-index.types.ts";
@@ -26,7 +26,7 @@ export default class TaskScheduler {
     this.#state = state;
   }
 
-  open(context: Context): Promise<void> {
+  open(context: chordTypes.Context): Promise<void> {
     return Effect.runPromise(openScheduler(this.#state, context));
   }
 
@@ -41,7 +41,7 @@ export default class TaskScheduler {
 
   abort(
     id: schedulerTypesModule.TaskId,
-    context: Context,
+    context: chordTypes.Context,
     keepRestart = false,
   ): Promise<"marked" | "terminal"> {
     return Effect.runPromise(abortTask(this.#state, id, context, keepRestart));
@@ -49,14 +49,14 @@ export default class TaskScheduler {
 
   waitForTask(
     id: schedulerTypesModule.TaskId,
-    context: Context,
-  ): Promise<schedulerTypesModule.SettledTask<JsonValue>> {
+    context: chordTypes.Context,
+  ): Promise<schedulerTypesModule.SettledTask<chordTypes.JsonValue>> {
     return Effect.runPromise(waitForTask(this.#state, id, context));
   }
 
   waitForIdle(
     conversationId: schedulerTypesModule.ConversationId | undefined,
-    context: Context,
+    context: chordTypes.Context,
   ): Promise<void> {
     return this.#state.waitForIdle(conversationId, context);
   }
@@ -64,7 +64,7 @@ export default class TaskScheduler {
   abortConversation(
     conversationId: schedulerTypesModule.ConversationId,
     background: boolean,
-    context: Context,
+    context: chordTypes.Context,
   ): Promise<void> {
     return Effect.runPromise(abortConversation(this.#state, conversationId, background, context));
   }

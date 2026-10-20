@@ -4,9 +4,11 @@ import { Effect } from "effect";
 import { Type } from "typebox";
 import { describe, it } from "vite-plus/test";
 
-import { createHost, hostNamed, memoryLinkPair, remote } from "../src/index.ts";
+import chord from "../src/index.ts";
 import linksReview from "./fixtures/links-review.ts";
 import timing from "./fixtures/timing.ts";
+
+const { createHost, hostNamed, memoryLinkPair, remote } = chord;
 
 const { Counter, cluster, internals, until } = linksReview;
 const { latch } = timing;

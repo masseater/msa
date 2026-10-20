@@ -1,4 +1,4 @@
-import { BACKGROUND_CONTEXT, withAbortSignal } from "@msa/chord/context";
+import contextModule from "@msa/chord/context";
 import { Effect } from "effect";
 import { afterAll, describe, expect, it } from "vite-plus/test";
 
@@ -9,6 +9,8 @@ import support from "./support.ts";
 import BlockingEditExecutionEnv from "./tools-blocking-edit-env-support.ts";
 import SlowReadExecutionEnv from "./tools-slow-read-env-support.ts";
 import toolsSupport from "./tools-support.ts";
+
+const { BACKGROUND_CONTEXT, withAbortSignal } = contextModule;
 
 const { getOrThrow } = envModule;
 const { createEditTool, createWriteTool } = toolsModule;

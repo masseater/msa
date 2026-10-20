@@ -1,5 +1,5 @@
 import type { AssistantMessage, Models, ToolCall } from "@msa/ai";
-import type { Context } from "@msa/chord";
+import type chordTypes from "@msa/chord/index.types";
 import type durable from "@msa/durable";
 import type durableTypes from "@msa/durable/index.types";
 
@@ -14,7 +14,7 @@ declare namespace specUsageNamesTypes {
   }
 
   type SpecNames = {
-    readonly context: Context;
+    readonly context: chordTypes.Context;
     readonly storage: durableTypes.Storage;
     readonly models: Models;
     readonly session: durableTypes.Session;
@@ -26,7 +26,7 @@ declare namespace specUsageNamesTypes {
     readonly name: string;
     readonly localEnv: (cwd: string) => envTypes.ExecutionEnv;
     readonly containers: {
-      env(image: string, cwd: string, context: Context): Promise<envTypes.ExecutionEnv>;
+      env(image: string, cwd: string, context: chordTypes.Context): Promise<envTypes.ExecutionEnv>;
     };
     readonly renderAgentsMd: () => string | undefined;
     readonly renderSkills: () => string | undefined;
@@ -35,13 +35,13 @@ declare namespace specUsageNamesTypes {
     readonly requestSecondPass: (
       answer: AssistantMessage,
       api: durableTypes.HookApi,
-      context: Context,
+      context: chordTypes.Context,
     ) => Promise<{ readonly continue: durableTypes.UserInput } | undefined>;
     readonly metrics: { record(name: string, ms: number): void };
     readonly answerText: (
       api: durableTypes.ToolExecutionApi,
       entry: durableTypes.EntryId,
-      context: Context,
+      context: chordTypes.Context,
     ) => Promise<string>;
     readonly payments: {
       charge(key: string): Promise<{ id: string }>;

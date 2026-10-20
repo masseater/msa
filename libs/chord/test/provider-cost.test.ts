@@ -4,9 +4,12 @@ import { Effect } from "effect";
 import { Type } from "typebox";
 import { describe, it, vi } from "vite-plus/test";
 
-import type * as delta from "../src/delta/index.ts";
-import { type Ctx, createHost, hostNamed, memoryLinkPair, method, remote } from "../src/index.ts";
+import type deltaModule from "../src/delta/index.ts";
+import chord from "../src/index.ts";
+import type chordTypes from "../src/index.types.ts";
 import counting from "./fixtures/counting.ts";
+
+const { createHost, hostNamed, memoryLinkPair, method, remote } = chord;
 
 const { CountingLink, stateFrames } = counting;
 
@@ -15,18 +18,24 @@ const counts = vi.hoisted(() => ({ encoders: 0, encodes: 0 }));
 vi.mock("../src/delta/index.ts", (importOriginal) =>
   Effect.runPromise(
     Effect.gen(function* () {
-      const original = yield* Effect.promise(() => importOriginal<typeof delta>());
+      const original = yield* Effect.promise(() =>
+        importOriginal<{ readonly default: typeof deltaModule }>(),
+      );
+      const kit = original.default;
       return {
         ...original,
-        encoder: () => {
-          counts.encoders++;
-          const inner = original.encoder();
-          return {
-            encode: (ops: Parameters<typeof inner.encode>[0]) => {
-              counts.encodes++;
-              return inner.encode(ops);
-            },
-          };
+        default: {
+          ...kit,
+          encoder: () => {
+            counts.encoders++;
+            const inner = kit.encoder();
+            return {
+              encode: (ops: Parameters<typeof inner.encode>[0]) => {
+                counts.encodes++;
+                return inner.encode(ops);
+              },
+            };
+          },
         },
       };
     }),
@@ -47,7 +56,7 @@ const oneChangeToKClientsK = Effect.gen(function* () {
   server.serve(List, (_input, _principal, self) => {
     const items = self.state("items", Type.Array(Type.String()), []);
     return {
-      add: (text: string, ctx: Ctx) => {
+      add: (text: string, ctx: chordTypes.Ctx) => {
         items.change(ctx, (draft) => {
           draft.push(text);
         });

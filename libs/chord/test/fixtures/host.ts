@@ -2,8 +2,11 @@ import { Effect } from "effect";
 import { dual } from "effect/Function";
 import { Type } from "typebox";
 
-import { type Host, createHost, local, method } from "../../src/index.ts";
+import chord from "../../src/index.ts";
+import type chordTypes from "../../src/index.types.ts";
 import timing from "./timing.ts";
+
+const { createHost, local, method } = chord;
 
 const { pollUntil, tick } = timing;
 
@@ -21,7 +24,11 @@ const Counter = local("t.counter", {
   version: 1,
 });
 
-function serveCounterImpl(host: Host, log: string[] = [], options: { linger?: number } = {}) {
+function serveCounterImpl(
+  host: chordTypes.Host,
+  log: string[] = [],
+  options: { linger?: number } = {},
+) {
   host.serve(
     Counter,
     ({ name }, _principal, self) => {
@@ -55,12 +62,12 @@ function serveCounterImpl(host: Host, log: string[] = [], options: { linger?: nu
   );
 }
 
-const isHost = (value: unknown): value is Host =>
+const isHost = (value: unknown): value is chordTypes.Host =>
   typeof (value as { serve?: unknown } | undefined)?.serve === "function";
 
 const serveCounter: {
-  (log?: string[], options?: { linger?: number }): (host: Host) => void;
-  (host: Host, log?: string[], options?: { linger?: number }): void;
+  (log?: string[], options?: { linger?: number }): (host: chordTypes.Host) => void;
+  (host: chordTypes.Host, log?: string[], options?: { linger?: number }): void;
 } = dual((args: IArguments) => isHost(args[0]), serveCounterImpl);
 
 const hostModule = {

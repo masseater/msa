@@ -1,4 +1,4 @@
-import type { Context } from "@msa/chord";
+import type chordTypes from "@msa/chord/index.types";
 import env from "@msa/durable/env";
 import type envTypes from "@msa/durable/env.types";
 import { Effect } from "effect";
@@ -43,7 +43,7 @@ function requestListing(
   connection: connectionTypes.Connection,
   path: string,
   options: envTypes.ListFilesOptions | undefined,
-  context: Context,
+  context: chordTypes.Context,
 ): Effect.Effect<envTypes.Result<envTypes.FileListing, envTypes.FileError>> {
   return Effect.gen(function* () {
     const info = yield* Effect.promise(() => connection.info());
@@ -80,7 +80,7 @@ const listFilesEffect = (
   connection: connectionTypes.Connection,
   path: string,
   options: envTypes.ListFilesOptions | undefined,
-  context: Context,
+  context: chordTypes.Context,
 ): Effect.Effect<envTypes.Result<envTypes.FileListing, envTypes.FileError>> => {
   const invalid = invalidLimit(options, path);
   if (invalid !== undefined) return Effect.succeed(invalid);
@@ -93,7 +93,7 @@ const listFilesOver: {
   (
     path: string,
     options: envTypes.ListFilesOptions | undefined,
-    context: Context,
+    context: chordTypes.Context,
   ): (
     connection: connectionTypes.Connection,
   ) => Promise<envTypes.Result<envTypes.FileListing, envTypes.FileError>>;
@@ -101,7 +101,7 @@ const listFilesOver: {
     connection: connectionTypes.Connection,
     path: string,
     options: envTypes.ListFilesOptions | undefined,
-    context: Context,
+    context: chordTypes.Context,
   ): Promise<envTypes.Result<envTypes.FileListing, envTypes.FileError>>;
 } = dual(
   4,
@@ -109,7 +109,7 @@ const listFilesOver: {
     connection: connectionTypes.Connection,
     path: string,
     options: envTypes.ListFilesOptions | undefined,
-    context: Context,
+    context: chordTypes.Context,
   ): Promise<envTypes.Result<envTypes.FileListing, envTypes.FileError>> =>
     Effect.runPromise(listFilesEffect(connection, path, options, context)),
 );

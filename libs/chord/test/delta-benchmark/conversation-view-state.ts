@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import { performance } from "node:perf_hooks";
 
-import type { JsonValue } from "../../src/delta/index.ts";
+import type deltaTypes from "../../src/delta/index.types.ts";
 import benchmarkWorkerModel from "./benchmark-worker-model.ts";
 import conversationViewContent from "./conversation-view-content.ts";
 import initialDocuments from "./conversation-view-documents.ts";
@@ -148,7 +148,7 @@ class ConversationViewState {
     this.phaseSamples.resetClone.push(performance.now() - cloneStart);
     const frame: conversationViewModuleTypes.DeltaFrame = {
       kind: "delta",
-      ops: [["r", resetValue as unknown as JsonValue]],
+      ops: [["r", resetValue as unknown as deltaTypes.JsonValue]],
       sequence,
     };
     this.retainQueuedFrame(watch, frame);

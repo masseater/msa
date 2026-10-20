@@ -1,6 +1,6 @@
 import * as NodeRuntime from "@effect/platform-node/NodeRuntime";
 import { createModels } from "@msa/ai/models";
-import { BACKGROUND_CONTEXT as context } from "@msa/chord/context";
+import contextModule from "@msa/chord/context";
 import { Console, Effect } from "effect";
 
 import harnessModule from "../src/harness/index.ts";
@@ -9,6 +9,8 @@ import node from "../src/storage/sqlite/node.ts";
 import retainedBytes from "./heap-retained.ts";
 import type sessionDocumentCacheBenchTypes from "./session-document-cache-bench.types.ts";
 import support from "./support.ts";
+
+const { BACKGROUND_CONTEXT: context } = contextModule;
 
 const { LiveDoc, UsageDoc, defineExtension, defineTask } = durable;
 const { openNodeSqliteStorage } = node;

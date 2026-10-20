@@ -1,4 +1,4 @@
-import type { JsonValue } from "@msa/chord";
+import type chordTypes from "@msa/chord/index.types";
 import type durableTypes from "@msa/durable/index.types";
 
 declare namespace sessionTablesSupportTypes {
@@ -8,7 +8,11 @@ declare namespace sessionTablesSupportTypes {
 
   type Notes = { text: string };
 
-  type AnyTask = durableTypes.TaskRecord<JsonValue, JsonValue, JsonValue>;
+  type AnyTask = durableTypes.TaskRecord<
+    chordTypes.JsonValue,
+    chordTypes.JsonValue,
+    chordTypes.JsonValue
+  >;
 }
 
 export type { sessionTablesSupportTypes as default };

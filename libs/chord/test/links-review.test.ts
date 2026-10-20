@@ -4,19 +4,13 @@ import { Effect } from "effect";
 import { Type } from "typebox";
 import { describe, it } from "vite-plus/test";
 
-import {
-  type Ctx,
-  type Facet,
-  PROTOCOL_VERSION,
-  createHost,
-  hostNamed,
-  isChordError,
-  memoryLinkPair,
-  method,
-  remote,
-} from "../src/index.ts";
+import chord from "../src/index.ts";
+import type chordTypes from "../src/index.types.ts";
 import linksReview from "./fixtures/links-review.ts";
 import timing from "./fixtures/timing.ts";
+
+const { PROTOCOL_VERSION, createHost, hostNamed, isChordError, memoryLinkPair, method, remote } =
+  chord;
 
 const { Counter, cluster, until } = linksReview;
 const { latch } = timing;
@@ -41,12 +35,12 @@ const Echo = remote("t.echo", {
   version: 1,
 });
 
-const rootEchoFacet = (version: number): Facet => ({
+const rootEchoFacet = (version: number): chordTypes.Facet => ({
   name: "echo",
   setup: (api) =>
     api.serve(Echo, (_input, _principal, self) => {
       self.state("n", Type.Number(), 0, { version });
-      return { root: (ctx: Ctx) => ctx.rootId, variant: "main" };
+      return { root: (ctx: chordTypes.Ctx) => ctx.rootId, variant: "main" };
     }),
 });
 

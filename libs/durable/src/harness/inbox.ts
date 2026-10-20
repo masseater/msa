@@ -1,11 +1,13 @@
-import type { Draft, JsonRepresentation } from "@msa/chord";
-import { copyJson } from "@msa/chord/json";
+import type chordTypes from "@msa/chord/index.types";
+import json from "@msa/chord/json";
 import { Effect, Function } from "effect";
 
 import documents from "../documents.ts";
 import entries from "../entries.ts";
 import type inboxTypes from "./inbox.types.ts";
 import type typesModule from "./types.types.ts";
+
+const { copyJson } = json;
 
 const { defineDoc } = documents;
 const { UserEntry } = entries;
@@ -45,7 +47,7 @@ const prepareBoundary: typesModule.Dual3<
 );
 
 const pickIndexes = (
-  items: readonly Draft<inboxTypes.InboxItem>[],
+  items: readonly chordTypes.Draft<inboxTypes.InboxItem>[],
   mode: "steer" | "followUp",
   queueMode: typesModule.QueueMode,
 ): number[] => {
@@ -56,9 +58,9 @@ const pickIndexes = (
 const applyWrite = Effect.fnUntraced(function* (
   tx: typesModule.Tx,
   boundary: inboxTypes.Boundary,
-  item: Draft<Extract<inboxTypes.InboxItem, { mode: "write" }>>,
+  item: chordTypes.Draft<Extract<inboxTypes.InboxItem, { mode: "write" }>>,
 ) {
-  const draft = item.entry as Draft<typesModule.EntryDraft>;
+  const draft = item.entry as chordTypes.Draft<typesModule.EntryDraft>;
   if (isStale(boundary, draft)) {
     tx.settleSubmission(item.id, { reason: "stale", status: "unanswered" });
     return;
@@ -71,7 +73,7 @@ const applyWrite = Effect.fnUntraced(function* (
 const applyUser = Effect.fnUntraced(function* (
   tx: typesModule.Tx,
   conversationId: typesModule.ConversationId,
-  item: Draft<Extract<inboxTypes.InboxItem, { mode: "steer" | "followUp" }>>,
+  item: chordTypes.Draft<Extract<inboxTypes.InboxItem, { mode: "steer" | "followUp" }>>,
   now: number,
 ) {
   const entry = yield* appendInput(
@@ -115,7 +117,7 @@ const applyBoundary: typesModule.Dual4<
         applyWrite(
           tx,
           boundary,
-          items[index] as Draft<Extract<inboxTypes.InboxItem, { mode: "write" }>>,
+          items[index] as chordTypes.Draft<Extract<inboxTypes.InboxItem, { mode: "write" }>>,
         ),
       { discard: true },
     );
@@ -123,7 +125,9 @@ const applyBoundary: typesModule.Dual4<
       applyUser(
         tx,
         conversationId,
-        items[index] as Draft<Extract<inboxTypes.InboxItem, { mode: "steer" | "followUp" }>>,
+        items[index] as chordTypes.Draft<
+          Extract<inboxTypes.InboxItem, { mode: "steer" | "followUp" }>
+        >,
         now,
       ),
     );
@@ -161,11 +165,11 @@ const appendInput: typesModule.Dual5<
 function pickInputEntry({
   kind,
   data,
-}: typesModule.InputEntry): JsonRepresentation<typesModule.InputEntry> {
+}: typesModule.InputEntry): chordTypes.JsonRepresentation<typesModule.InputEntry> {
   const picked = data === undefined ? { kind } : { data, kind };
   return copyJson(picked, {
     omitUndefinedProperties: true,
-  }) as JsonRepresentation<typesModule.InputEntry>;
+  }) as chordTypes.JsonRepresentation<typesModule.InputEntry>;
 }
 
 function isDisplayOnly(entry: typesModule.EntryDraft): boolean {

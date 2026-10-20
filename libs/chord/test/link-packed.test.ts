@@ -4,10 +4,14 @@ import { Effect } from "effect";
 import { Type } from "typebox";
 import { describe, it } from "vite-plus/test";
 
-import { type Frame, type IpcChannel, createHost, ipcLink, memoryLinkPair } from "../src/index.ts";
-import { Packed, unpack } from "../src/link.ts";
+import chord from "../src/index.ts";
+import type chordTypes from "../src/index.types.ts";
+import linkModule2 from "../src/link.ts";
 import linkModule from "./fixtures/link.ts";
 import timing from "./fixtures/timing.ts";
+
+const { createHost, ipcLink, memoryLinkPair } = chord;
+const { Packed, unpack } = linkModule2;
 
 const { Big, large } = linkModule;
 const { tick } = timing;
@@ -54,7 +58,7 @@ const largeArgsResultsAndSnapshotsCross = Effect.gen(function* () {
 
 const onlyPayloadsAboveTheThresholdAre = Effect.gen(function* () {
   const [a, b] = memoryLinkPair();
-  const frames: Frame[] = [];
+  const frames: chordTypes.Frame[] = [];
   b.receive((frame) => frames.push(frame));
   a.send({ id: 1, t: "result", value: large("v") });
   a.send({ id: 2, t: "result", value: ["small"] });
@@ -69,7 +73,7 @@ const onlyPayloadsAboveTheThresholdAre = Effect.gen(function* () {
   assert.deepEqual(unpack(snap.value), large("s"));
 
   const [c, d] = memoryLinkPair();
-  const forwarded: Frame[] = [];
+  const forwarded: chordTypes.Frame[] = [];
   d.receive((frame) => forwarded.push(frame));
   c.send({ ...packed, id: 9 });
   for (let i = 0; i < 50 && forwarded.length < 1; i++) yield* tick;
@@ -88,7 +92,7 @@ describe("links: packed payloads", () => {
 
 const aWriteThatFailsAfterThe = Effect.gen(function* () {
   const sent: unknown[] = [];
-  const channel: IpcChannel = {
+  const channel: chordTypes.IpcChannel = {
     connected: true,
     off: () => undefined,
     on: () => undefined,

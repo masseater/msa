@@ -1,5 +1,5 @@
-import type { Context } from "@msa/chord";
-import { withCancel } from "@msa/chord/context";
+import contextModule from "@msa/chord/context";
+import type chordTypes from "@msa/chord/index.types";
 import { Effect } from "effect";
 import { describe, expect, it } from "vite-plus/test";
 
@@ -7,6 +7,8 @@ import effectSupport from "./effect-support.ts";
 import sessionSupport from "./session-support.ts";
 import sessionWatchesSupport from "./session-watches-support.ts";
 import type sessionWatchesSupportTypes from "./session-watches-support.types.ts";
+
+const { withCancel } = contextModule;
 
 const { awaited } = effectSupport;
 const { context, flush } = sessionSupport;
@@ -164,7 +166,7 @@ const cancelsFutureDelivery = Effect.gen(function* () {
   const watch = (yield* awaited(session.watchDoc(StateDoc, child.context)))!;
   const entered = deferred();
   const release = deferred();
-  let deliveryContext: Context | undefined;
+  let deliveryContext: chordTypes.Context | undefined;
   watch.start((_value, _ops, delivered) =>
     runPromise(
       Effect.gen(function* () {

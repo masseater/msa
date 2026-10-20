@@ -1,45 +1,14 @@
-import type { Cell } from "./cell.ts";
-import type { StagedListeners } from "./core.ts";
-import type { Run } from "./decls.ts";
-import { isChordError } from "./errors.ts";
-import type { ObjectImpl } from "./object.ts";
-import type { ResourceImpl } from "./resource.ts";
-import { assertValid } from "./schema.ts";
-import { memberSchemas, type Service } from "./service.ts";
-import type { Readable } from "./types.ts";
+import errorsModule from "./errors.ts";
+import type reloadCandidateTypes from "./reload-candidate.types.ts";
+import schemaModule from "./schema.ts";
+import serviceModule from "./service.ts";
+import type typesModule from "./types.types.ts";
 
-export interface ReloadOptions {
-  readonly remove?: readonly string[];
-  readonly gateDeadline?: number;
-  readonly retireDeadline?: number;
-  readonly remote?: Readonly<Record<string, readonly string[]>>;
-  readonly remoteRemove?: Readonly<Record<string, readonly string[]>>;
-  readonly voteDeadline?: number;
-}
+const { isChordError } = errorsModule;
+const { memberSchemas } = serviceModule;
+const { assertValid } = schemaModule;
 
-export interface ReloadReport {
-  readonly codeVersion: number;
-  readonly previous: number;
-  readonly changed: readonly string[];
-  readonly removed: readonly string[];
-  readonly prepared: readonly string[];
-  readonly gated: readonly string[];
-  readonly children?: Readonly<Record<string, ReloadReport>>;
-}
-
-export interface Candidate {
-  readonly object: ObjectImpl;
-  readonly service: Service;
-  readonly run: Run;
-  readonly reasons: string[];
-  readonly atGate: ResourceImpl[];
-  readonly replaced: ResourceImpl[];
-  readonly migrated: Map<Cell<unknown>, unknown>;
-  derived: Map<unknown, unknown>;
-  staged: StagedListeners | undefined;
-}
-
-const candidateValue = (source: Readable<unknown>): unknown => {
+const candidateValue = (source: typesModule.Readable<unknown>): unknown => {
   try {
     return source.value;
   } catch (error) {
@@ -48,7 +17,7 @@ const candidateValue = (source: Readable<unknown>): unknown => {
   }
 };
 
-export const dryRun = (candidate: Candidate): void => {
+const dryRun = (candidate: reloadCandidateTypes.Candidate): void => {
   const { run, migrated, service, object } = candidate;
   const exposed = memberSchemas(service, run.implementation);
   for (const [cell, value] of migrated) {
@@ -67,3 +36,9 @@ export const dryRun = (candidate: Candidate): void => {
   }
   candidate.derived = values;
 };
+
+const reloadCandidate = {
+  dryRun,
+};
+
+export default reloadCandidate;

@@ -4,17 +4,12 @@ import { Effect } from "effect";
 import { Type } from "typebox";
 import { describe, expectTypeOf, it } from "vite-plus/test";
 
-import {
-  type Host,
-  createHost,
-  hostNamed,
-  isChordError,
-  memoryLinkPair,
-  method,
-  remote,
-} from "../src/index.ts";
+import chord from "../src/index.ts";
+import type chordTypes from "../src/index.types.ts";
 import bindings from "./fixtures/bindings.ts";
 import counting from "./fixtures/counting.ts";
+
+const { createHost, hostNamed, isChordError, memoryLinkPair, method, remote } = chord;
 
 const { Notes, setup, until } = bindings;
 const { stateFrames } = counting;
@@ -45,7 +40,7 @@ const Matrix = remote("t.e8-matrix", {
   version: 1,
 });
 
-function serveMatrix(host: Host): void {
+function serveMatrix(host: chordTypes.Host): void {
   host.serve(Matrix, ({ variant }, _principal, self) => {
     if (variant === "bare") return { ping: () => "pong", variant: "bare" };
     if (variant === "broken") {

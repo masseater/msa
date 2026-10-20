@@ -1,4 +1,4 @@
-import type { Context } from "@msa/chord";
+import type chordTypes from "@msa/chord/index.types";
 import durable from "@msa/durable";
 import harnessModule from "@msa/durable/harness";
 import type durableTypes from "@msa/durable/index.types";
@@ -82,7 +82,7 @@ const replayUnsafeBatchStep1 = Effect.fn("replayUnsafeBatchStep1")(function* () 
     }),
   );
   addHooks(setup.registry, ToolTask, {
-    beforeTool: (hookCall, _api, hookContext: Context) => {
+    beforeTool: (hookCall, _api, hookContext: chordTypes.Context) => {
       if (hookCall.name !== "gated") return Promise.resolve(undefined);
       gated.resolve();
       return Promise.resolve(aborted(hookContext.abortSignal!));

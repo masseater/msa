@@ -1,8 +1,11 @@
 import { describe, expect, it, vi } from "vite-plus/test";
 
-import { BACKGROUND_CONTEXT } from "../src/context/index.ts";
-import type { Draft } from "../src/delta/index.ts";
-import { replicatedState } from "../src/index.ts";
+import contextModule from "../src/context/index.ts";
+import type deltaTypes from "../src/delta/index.types.ts";
+import chord from "../src/index.ts";
+
+const { replicatedState } = chord;
+const { BACKGROUND_CONTEXT } = contextModule;
 
 const publishesOneImmutableStructurallySharedRevision = (): void => {
   const initial = { changed: { value: 1 }, retained: { value: 2 } };
@@ -25,7 +28,7 @@ const publishesOneImmutableStructurallySharedRevision = (): void => {
 const rollsBackCallbackFailuresAndRevokes = (): void => {
   const state = replicatedState({ nested: { value: 1 } });
   const previous = state.value;
-  let escaped: Draft<{ value: number }> | undefined;
+  let escaped: deltaTypes.Draft<{ value: number }> | undefined;
   expect(() =>
     state.change(BACKGROUND_CONTEXT, (draft) => {
       escaped = draft.nested;
@@ -41,10 +44,10 @@ const rejectsPromiselikeCallbacksAndAbortsTheir = (): void => {
   const state = replicatedState({ value: 0 });
   const previous = state.value;
   expect(() =>
-    state.change(BACKGROUND_CONTEXT, ((draft: Draft<{ value: number }>) => {
+    state.change(BACKGROUND_CONTEXT, ((draft: deltaTypes.Draft<{ value: number }>) => {
       draft.value = 1;
       return Promise.resolve();
-    }) as (draft: Draft<{ value: number }>) => void),
+    }) as (draft: deltaTypes.Draft<{ value: number }>) => void),
   ).toThrow(/synchronous/u);
   expect(state.value).toBe(previous);
 };

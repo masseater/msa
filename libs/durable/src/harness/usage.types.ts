@@ -1,10 +1,10 @@
 import type { Usage } from "@msa/ai";
-import type { JsonRepresentation } from "@msa/chord";
+import type chordTypes from "@msa/chord/index.types";
 
 declare namespace usageTypes {
   type UsageState = {
-    models: Record<string, JsonRepresentation<Usage>>;
-    tools: Record<string, JsonRepresentation<Usage>>;
+    models: Record<string, chordTypes.JsonRepresentation<Usage>>;
+    tools: Record<string, chordTypes.JsonRepresentation<Usage>>;
   };
 }
 

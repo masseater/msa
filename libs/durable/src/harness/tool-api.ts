@@ -1,14 +1,20 @@
-import { type Context, awaitWithContext } from "@msa/chord/context";
-import { type JsonValue, copyJson } from "@msa/chord/json";
-import { PROGRESS_BYTES_PER_SECOND, type Progress } from "@msa/chord/progress";
+import contextModule from "@msa/chord/context";
+import type chordTypes from "@msa/chord/index.types";
+import json from "@msa/chord/json";
+import progressModule from "@msa/chord/progress";
+import type progressTypes from "@msa/chord/progress.types";
 import { Effect } from "effect";
 
 import toolApiKit from "./tool-api-kit.ts";
 import type toolApiTypes from "./tool-api.types.ts";
-import toolTypes from "./tool-types.ts";
 import type toolTypesModule from "./tool-types.types.ts";
 import type typesModule from "./types.types.ts";
-const { NestedCallDoc } = toolTypes;
+
+const { PROGRESS_BYTES_PER_SECOND } = progressModule;
+const { copyJson } = json;
+const { awaitWithContext } = contextModule;
+
+const { NestedCallDoc } = toolApiKit.toolTypes;
 const { fallbackResult } = toolApiKit.toolResult;
 const { checkKey } = toolApiKit.toolCall;
 const { startNestedCall } = toolApiKit.toolNested;
@@ -25,7 +31,7 @@ type ApiInput = {
   readonly runtime: toolTypesModule.ToolRuntime;
   readonly call: typesModule.ToolHookCall;
   readonly reported: toolTypesModule.Reported;
-  readonly progress: Progress;
+  readonly progress: progressTypes.Progress;
   readonly state: toolApiTypes.ApiState;
   readonly resumes: boolean;
 };
@@ -45,7 +51,7 @@ const readNested = Effect.fnUntraced(function* (
   id: typesModule.TaskId<toolTypesModule.ToolTaskResult>,
   name: string,
   key: string,
-  context: Context,
+  context: chordTypes.Context,
 ) {
   const settled = yield* Effect.promise(() => runtime.waitForTask(id, context));
   const stored = (yield* Effect.promise(() =>
@@ -54,7 +60,7 @@ const readNested = Effect.fnUntraced(function* (
   return stored === undefined
     ? fallbackResult(id, name, settled.state.outcome)
     : (copyJson(
-        stored as unknown as JsonValue,
+        stored as unknown as chordTypes.JsonValue,
       ) as unknown as typesModule.NestedToolExecutionResult);
 });
 
@@ -63,7 +69,7 @@ const nestedCall = (
   name: string,
   args: typesModule.JsonObject,
   options: { readonly key?: string; readonly progress?: boolean },
-  context: Context,
+  context: chordTypes.Context,
 ): Promise<typesModule.NestedToolExecutionResult> => {
   const { runtime, state, call } = input;
   const key = options.key ?? String(++state.sequence);
@@ -93,7 +99,7 @@ const nestedCall = (
 const commitCapturing = <T>(
   runtime: toolTypesModule.ToolRuntime,
   change: (tx: typesModule.Tx) => T | Promise<T>,
-  context: Context,
+  context: chordTypes.Context,
 ): Promise<T> => {
   const captured: { value?: T } = {};
   const run = (tx: typesModule.Tx): Promise<undefined> =>
@@ -119,7 +125,7 @@ type Live = () => void;
 const outputApi = (input: ApiInput, assertLive: Live) => {
   const { reported, progress } = input;
   return {
-    details: (value: JsonValue, detailsContext: Context) =>
+    details: (value: chordTypes.JsonValue, detailsContext: chordTypes.Context) =>
       Effect.runPromise(
         Effect.flatMap(
           Effect.sync(() => {
@@ -156,14 +162,14 @@ const taskApi = (input: ApiInput) => {
   return {
     commit: <T>(
       change: (tx: typesModule.Tx) => T | Promise<T>,
-      commitContext: Context,
+      commitContext: chordTypes.Context,
     ): Promise<T> => commitCapturing(runtime, change, commitContext),
     conversation: runtime.conversation,
     createTask: <I, S extends { phase: string }, R, H extends object>(
       task: typesModule.Task<I, S, R, H>,
       taskInput: I,
       options: Omit<typesModule.TaskOptions, "conversationId">,
-      taskContext: Context,
+      taskContext: chordTypes.Context,
     ): Promise<typesModule.TaskId<R>> => {
       const child =
         options.ownership.kind === "task" && !input.resumes

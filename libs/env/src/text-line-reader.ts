@@ -1,4 +1,4 @@
-import type { Context } from "@msa/chord";
+import type chordTypes from "@msa/chord/index.types";
 import env from "@msa/durable/env";
 import type envTypes from "@msa/durable/env.types";
 import { Effect } from "effect";
@@ -26,7 +26,7 @@ export default class RemoteTextLineReader implements envTypes.TextLineReader {
     this.#handle = handle;
   }
 
-  readLine(context: Context): Promise<LineResult> {
+  readLine(context: chordTypes.Context): Promise<LineResult> {
     const path = this.#handle.path;
     const aborted = abortResult<envTypes.TextLine | undefined>(context.abortSignal, path);
     if (aborted !== undefined) return Promise.resolve(aborted);
@@ -50,7 +50,7 @@ export default class RemoteTextLineReader implements envTypes.TextLineReader {
     return ok({ terminated: false, text });
   }
 
-  #next(context: Context): Effect.Effect<LineResult> {
+  #next(context: chordTypes.Context): Effect.Effect<LineResult> {
     return Effect.gen({ self: this }, function* () {
       for (;;) {
         const line = this.#take();
@@ -72,7 +72,7 @@ export default class RemoteTextLineReader implements envTypes.TextLineReader {
     });
   }
 
-  close(_context: Context): Promise<void> {
+  close(_context: chordTypes.Context): Promise<void> {
     if (this.#closed) return Promise.resolve();
     this.#closed = true;
     this.#buffered = "";

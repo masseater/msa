@@ -1,4 +1,4 @@
-import type { Context } from "@msa/chord";
+import type chordTypes from "@msa/chord/index.types";
 import { Effect } from "effect";
 
 import bridge from "./bridge.ts";
@@ -17,7 +17,7 @@ const { replaceMessages, requestOptions, streamResponse } = generationStream;
 const requestPhase = Effect.fnUntraced(function* (
   task: generationTypesModule.PhaseTask<"request">,
   runtime: generationTypesModule.GenerationRuntime,
-  context: Context,
+  context: chordTypes.Context,
 ) {
   const {
     attempt,

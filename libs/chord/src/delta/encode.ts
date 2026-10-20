@@ -1,13 +1,12 @@
-import type { NonEmptyPath, Op, PathRef, WireOp } from "./ops.ts";
-import { pathKey } from "./ops.ts";
+import type encodeTypes from "./encode.types.ts";
+import opsModule from "./ops.ts";
+import type opsTypes from "./ops.types.ts";
 
-export interface Encoder {
-  encode(ops: readonly Op[]): WireOp[];
-}
+const { pathKey } = opsModule;
 
-type PathOp = Exclude<Op, { 0: "r" }>;
+type PathOp = Exclude<opsTypes.Op, { 0: "r" }>;
 
-const shortOp = (op: PathOp): WireOp => {
+const shortOp = (op: PathOp): opsTypes.WireOp => {
   switch (op[0]) {
     case "s":
       return ["s", op[2]];
@@ -24,16 +23,16 @@ const shortOp = (op: PathOp): WireOp => {
   }
 };
 
-const longOp = (op: PathOp, ref: PathRef): WireOp => {
+const longOp = (op: PathOp, ref: opsTypes.PathRef): opsTypes.WireOp => {
   switch (op[0]) {
     case "s":
-      return ["s", ref as PathRef<NonEmptyPath>, op[2]];
+      return ["s", ref as opsTypes.PathRef<opsTypes.NonEmptyPath>, op[2]];
     case "d":
-      return ["d", ref as PathRef<NonEmptyPath>];
+      return ["d", ref as opsTypes.PathRef<opsTypes.NonEmptyPath>];
     case "a":
-      return ["a", ref as PathRef<NonEmptyPath>, op[2]];
+      return ["a", ref as opsTypes.PathRef<opsTypes.NonEmptyPath>, op[2]];
     case "t":
-      return ["t", ref as PathRef<NonEmptyPath>, op[2]];
+      return ["t", ref as opsTypes.PathRef<opsTypes.NonEmptyPath>, op[2]];
     case "p":
       return ["p", ref, op[2], op[3], op[4]];
     case "m":
@@ -41,13 +40,13 @@ const longOp = (op: PathOp, ref: PathRef): WireOp => {
   }
 };
 
-export function encoder(): Encoder {
+function encoder(): encodeTypes.Encoder {
   const seen = new Set<string>();
   const ids = new Map<string, number>();
   let nextId = 0;
   let previous: string | undefined;
 
-  const reference = (op: PathOp, key: string, out: WireOp[]): PathRef => {
+  const reference = (op: PathOp, key: string, out: opsTypes.WireOp[]): opsTypes.PathRef => {
     const existing = ids.get(key);
     if (existing !== undefined) return existing;
     if (seen.has(key)) {
@@ -64,7 +63,7 @@ export function encoder(): Encoder {
   return {
     encode(ops) {
       previous = undefined;
-      const out: WireOp[] = [];
+      const out: opsTypes.WireOp[] = [];
       for (const op of ops) {
         if (op[0] === "r") {
           out.push(op);
@@ -86,3 +85,9 @@ export function encoder(): Encoder {
     },
   };
 }
+
+const encodeModule = {
+  encoder,
+};
+
+export default encodeModule;

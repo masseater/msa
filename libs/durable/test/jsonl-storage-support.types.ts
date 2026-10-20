@@ -1,4 +1,4 @@
-import type { Context as ContextSource, JsonValue as JsonValueSource } from "@msa/chord";
+import type chordTypes from "@msa/chord/index.types";
 
 import type envTypes from "../src/env/index.types.ts";
 import type jsonlTypes from "../src/storage/jsonl/index.types.ts";
@@ -6,11 +6,15 @@ import type typesModule from "../src/types.types.ts";
 import type jsonlStorageSupport from "./jsonl-storage-support.ts";
 
 declare namespace jsonlStorageSupportTypes {
-  type Context = ContextSource;
+  type Context = chordTypes.Context;
 
-  type JsonValue = JsonValueSource;
+  type JsonValue = chordTypes.JsonValue;
 
-  type StoredTask = typesModule.TaskRecord<JsonValueSource, JsonValueSource, JsonValueSource>;
+  type StoredTask = typesModule.TaskRecord<
+    chordTypes.JsonValue,
+    chordTypes.JsonValue,
+    chordTypes.JsonValue
+  >;
 
   type Failure = {
     readonly operation: "append" | "flush" | "write" | "rename" | "remove";

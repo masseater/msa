@@ -1,8 +1,8 @@
-import type { Op as OpSource } from "@msa/chord/delta";
+import type deltaTypes from "@msa/chord/delta.types";
 import type durableTypes from "@msa/durable/index.types";
 
 declare namespace harnessLiveDeltasSupportTypes {
-  type Op = OpSource;
+  type Op = deltaTypes.Op;
 
   type Action = (api: durableTypes.ToolExecutionApi) => void | Promise<void>;
 }

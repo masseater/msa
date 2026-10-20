@@ -1,4 +1,4 @@
-import type { Context } from "@msa/chord";
+import type chordTypes from "@msa/chord/index.types";
 import { Effect } from "effect";
 import { afterEach, describe, expect, it } from "vite-plus/test";
 
@@ -38,7 +38,11 @@ const writesResultFiles = Effect.gen(function* () {
   const cwd = yield* envDirectory();
   const written = deferred<string>();
   class CrashAfterWrite extends NodeExecutionEnv {
-    override writeFile(path: string, content: string | Uint8Array, callContext: Context) {
+    override writeFile(
+      path: string,
+      content: string | Uint8Array,
+      callContext: chordTypes.Context,
+    ) {
       const superWriteFile = super.writeFile.bind(this);
       return runPromise(
         Effect.gen(function* () {

@@ -1,7 +1,9 @@
 import { describe, expect, it } from "vite-plus/test";
 
-import { OutputBuffer, boundOutput, sanitizeOutput } from "../src/output.ts";
+import outputModule from "../src/output.ts";
 import output from "./fixtures/output.ts";
+
+const { OutputBuffer, boundOutput, sanitizeOutput } = outputModule;
 
 const { assertMatchesBufferTail, bound, head, sampledByteLimits, tail } = output;
 

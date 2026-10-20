@@ -1,25 +1,31 @@
 import { Effect } from "effect";
 
-import { HYDRATION, type Hydration, hydrationOf, notReady } from "./cell.ts";
-import { ChordError } from "./errors.ts";
-import { enqueue } from "./publish.ts";
-import type { RefImpl } from "./ref.ts";
-import { isStateLike, variantOf } from "./service.ts";
-import type { Readable, StateEvent } from "./types.ts";
+import cell from "./cell.ts";
+import type cellTypes from "./cell.types.ts";
+import errorsModule from "./errors.ts";
+import publish from "./publish.ts";
+import type refTypes from "./ref.types.ts";
+import serviceModule from "./service.ts";
+import type typesModule from "./types.types.ts";
+
+const { HYDRATION, hydrationOf, notReady } = cell;
+const { ChordError } = errorsModule;
+const { isStateLike, variantOf } = serviceModule;
+const { enqueue } = publish;
 
 const noop = (): void => {};
 
-export class MemberReadable implements Readable<unknown> {
-  readonly #ref: RefImpl;
+export default class MemberReadable implements typesModule.Readable<unknown> {
+  readonly #ref: refTypes.RefImpl;
   readonly #name: string;
   readonly #values = new Set<(value: unknown) => void>();
-  readonly #events = new Set<(event: StateEvent<unknown>) => void>();
-  readonly #unseen = new Set<(event: StateEvent<unknown>) => void>();
-  #source: Readable<unknown> | undefined;
+  readonly #events = new Set<(event: typesModule.StateEvent<unknown>) => void>();
+  readonly #unseen = new Set<(event: typesModule.StateEvent<unknown>) => void>();
+  #source: typesModule.Readable<unknown> | undefined;
   #upstream = noop;
   #seen: { readonly value: unknown } | undefined;
 
-  constructor(ref: RefImpl, name: string) {
+  constructor(ref: refTypes.RefImpl, name: string) {
     this.#ref = ref;
     this.#name = name;
   }
@@ -40,7 +46,7 @@ export class MemberReadable implements Readable<unknown> {
     return source.value;
   }
 
-  get [HYDRATION](): Hydration | undefined {
+  get [HYDRATION](): cellTypes.Hydration | undefined {
     const ref = this.#ref;
     if (ref.status === "live") return hydrationOf(this.#current());
     return {
@@ -68,7 +74,7 @@ export class MemberReadable implements Readable<unknown> {
     return () => this.#remove(this.#values, listener);
   }
 
-  events(listener: (event: StateEvent<unknown>) => void): () => void {
+  events(listener: (event: typesModule.StateEvent<unknown>) => void): () => void {
     this.#events.add(listener);
     const source = this.#readable();
     if (source === undefined) this.#unseen.add(listener);
@@ -103,7 +109,7 @@ export class MemberReadable implements Readable<unknown> {
       )
         return;
       this.#seen = { value: event.value };
-      const translated: StateEvent<unknown> = isFirst
+      const translated: typesModule.StateEvent<unknown> = isFirst
         ? { type: "reset", value: event.value }
         : event;
       const events = [...this.#events];
@@ -113,7 +119,7 @@ export class MemberReadable implements Readable<unknown> {
       enqueue(() => {
         for (const listener of events) {
           if (!this.#events.has(listener)) continue;
-          const delivered: StateEvent<unknown> = unseen.has(listener)
+          const delivered: typesModule.StateEvent<unknown> = unseen.has(listener)
             ? { type: "snap", value: event.value }
             : translated;
           this.#safe(() => listener(delivered));
@@ -131,14 +137,14 @@ export class MemberReadable implements Readable<unknown> {
     this.bind();
   }
 
-  #current(): Readable<unknown> | undefined {
+  #current(): typesModule.Readable<unknown> | undefined {
     const view = this.#ref.currentView();
     if (view === undefined || !this.#ref.inVariant(view, this.#name)) return undefined;
     const value = view[this.#name];
-    return isStateLike(value) ? (value as Readable<unknown>) : undefined;
+    return isStateLike(value) ? (value as typesModule.Readable<unknown>) : undefined;
   }
 
-  #readable(): Readable<unknown> | undefined {
+  #readable(): typesModule.Readable<unknown> | undefined {
     const source = this.#current();
     return source === undefined || hydrationOf(source)?.hydrated === false ? undefined : source;
   }

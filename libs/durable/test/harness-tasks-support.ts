@@ -1,4 +1,4 @@
-import type { Context } from "@msa/chord";
+import type chordTypes from "@msa/chord/index.types";
 import durable from "@msa/durable";
 import type durableTypes from "@msa/durable/index.types";
 import memory from "@msa/durable/storage/memory";
@@ -22,12 +22,12 @@ function oneStepImpl<R = null>(
   run: (
     task: { readonly id: durableTypes.TaskId<R> },
     runtime: harnessTasksSupportTypes.StepRuntime<R>,
-    context: Context,
+    context: chordTypes.Context,
   ) => Promise<void>,
-  abort: (runtime: harnessTasksSupportTypes.StepRuntime<R>, context: Context) => Promise<void> = (
-    runtime,
-    ctx,
-  ) => runtime.commit(() => abortedWith("test"), ctx),
+  abort: (
+    runtime: harnessTasksSupportTypes.StepRuntime<R>,
+    context: chordTypes.Context,
+  ) => Promise<void> = (runtime, ctx) => runtime.commit(() => abortedWith("test"), ctx),
 ): durableTypes.Task<null, harnessTasksSupportTypes.Step, R, object> {
   return defineTask<null, harnessTasksSupportTypes.Step, R>({
     abort: (_task, runtime, ctx) => abort(runtime, ctx),
@@ -43,18 +43,24 @@ const oneStep: {
     run: (
       task: { readonly id: durableTypes.TaskId<R> },
       runtime: harnessTasksSupportTypes.StepRuntime<R>,
-      context: Context,
+      context: chordTypes.Context,
     ) => Promise<void>,
-    abort?: (runtime: harnessTasksSupportTypes.StepRuntime<R>, context: Context) => Promise<void>,
+    abort?: (
+      runtime: harnessTasksSupportTypes.StepRuntime<R>,
+      context: chordTypes.Context,
+    ) => Promise<void>,
   ): (name: string) => durableTypes.Task<null, harnessTasksSupportTypes.Step, R, object>;
   <R = null>(
     name: string,
     run: (
       task: { readonly id: durableTypes.TaskId<R> },
       runtime: harnessTasksSupportTypes.StepRuntime<R>,
-      context: Context,
+      context: chordTypes.Context,
     ) => Promise<void>,
-    abort?: (runtime: harnessTasksSupportTypes.StepRuntime<R>, context: Context) => Promise<void>,
+    abort?: (
+      runtime: harnessTasksSupportTypes.StepRuntime<R>,
+      context: chordTypes.Context,
+    ) => Promise<void>,
   ): durableTypes.Task<null, harnessTasksSupportTypes.Step, R, object>;
 } = dual((args) => typeof args[0] === "string", oneStepImpl);
 
@@ -119,7 +125,7 @@ const markDurably = Effect.fn("markDurably")(function* (
   return { aborting };
 });
 
-function withSignal(signal: AbortSignal): Context {
+function withSignal(signal: AbortSignal): chordTypes.Context {
   return { ...context, abortSignal: signal };
 }
 

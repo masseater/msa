@@ -1,4 +1,4 @@
-import type { Context } from "@msa/chord";
+import type chordTypes from "@msa/chord/index.types";
 import { Effect } from "effect";
 
 import env from "../src/env/index.ts";
@@ -19,7 +19,7 @@ class TimeoutOutputExecutionEnv extends NodeExecutionEnv {
   override exec(
     _command: string | readonly string[],
     options: envTypes.ShellExecOptions | undefined,
-    context: Context,
+    context: chordTypes.Context,
   ): Promise<envTypes.Result<envTypes.ShellExecResult, envTypes.ExecutionError>> {
     return Effect.runPromise(
       Effect.gen({ self: this }, function* () {

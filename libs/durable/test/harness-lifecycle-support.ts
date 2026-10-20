@@ -1,4 +1,4 @@
-import type { Context } from "@msa/chord";
+import type chordTypes from "@msa/chord/index.types";
 import durable from "@msa/durable";
 import type durableTypes from "@msa/durable/index.types";
 import { Effect } from "effect";
@@ -61,7 +61,7 @@ const start: {
   ): ReturnType<typeof startImpl>;
 } = dual((args) => !("definition" in args[0]), startImpl);
 
-function withSignal(signal: AbortSignal): Context {
+function withSignal(signal: AbortSignal): chordTypes.Context {
   return { ...context, abortSignal: signal };
 }
 

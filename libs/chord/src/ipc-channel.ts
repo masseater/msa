@@ -1,14 +1,14 @@
 import { Effect, Queue, type Scope, type Sink, Stream } from "effect";
 import { Ndjson } from "effect/encoding";
 
-import type { IpcChannel } from "./link-ipc.ts";
+import type linkIpcTypes from "./link-ipc.types.ts";
 
 type Listener = (message: unknown) => void;
 
-export class StreamChannel implements IpcChannel {
+export default class StreamChannel implements linkIpcTypes.IpcChannel {
   #connected = true;
   readonly #outbox = Effect.runSync(Queue.unbounded<unknown>());
-  readonly #listeners = { message: new Set<Listener>(), disconnect: new Set<Listener>() };
+  readonly #listeners = { disconnect: new Set<Listener>(), message: new Set<Listener>() };
 
   get connected(): boolean {
     return this.#connected;

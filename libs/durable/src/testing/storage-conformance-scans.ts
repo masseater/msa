@@ -1,4 +1,4 @@
-import type { JsonValue } from "@msa/chord";
+import type chordTypes from "@msa/chord/index.types";
 import { Effect } from "effect";
 
 import idsModule from "../ids.ts";
@@ -92,15 +92,15 @@ const conversationPages: storageConformanceSupportTypes.StorageCaseSpec = {
 const seedOwners = Effect.fnUntraced(function* (storage: typesModule.Storage) {
   const rootId = yield* createRoot(storage);
   const otherOwnerId = yield* mint<typesModule.ConversationId>(storage);
-  const firstTaskId = yield* mint<typesModule.TaskId<JsonValue>>(storage);
-  const secondTaskId = yield* mint<typesModule.TaskId<JsonValue>>(storage);
+  const firstTaskId = yield* mint<typesModule.TaskId<chordTypes.JsonValue>>(storage);
+  const secondTaskId = yield* mint<typesModule.TaskId<chordTypes.JsonValue>>(storage);
   const firstId = yield* mint<typesModule.ConversationId>(storage);
   const secondId = yield* mint<typesModule.ConversationId>(storage);
   const thirdId = yield* mint<typesModule.ConversationId>(storage);
   const owned = (
     id: typesModule.ConversationId,
     conversationId: typesModule.ConversationId,
-    taskId: typesModule.TaskId<JsonValue>,
+    taskId: typesModule.TaskId<chordTypes.JsonValue>,
   ) => ({ type: "conversation", value: { id, owner: { conversationId, taskId } } }) as const;
   yield* commit(storage, [
     { type: "conversation", value: { id: otherOwnerId } },
@@ -147,11 +147,11 @@ const ownerEdges: storageConformanceSupportTypes.StorageCaseSpec = {
 const seedTables = Effect.fnUntraced(function* (storage: typesModule.Storage) {
   const rootId = yield* createRoot(storage);
   const conversationIds = [rootId];
-  const taskIds: typesModule.TaskId<JsonValue>[] = [];
+  const taskIds: typesModule.TaskId<chordTypes.JsonValue>[] = [];
   const submissionIds: typesModule.SubmissionId[] = [];
   for (let index = 0; index < 3; index += 1) {
     const conversationId = yield* mint<typesModule.ConversationId>(storage);
-    const taskId = yield* mint<typesModule.TaskId<JsonValue>>(storage);
+    const taskId = yield* mint<typesModule.TaskId<chordTypes.JsonValue>>(storage);
     const submissionId = yield* mint<typesModule.SubmissionId>(storage);
     yield* commit(storage, [
       { type: "conversation", value: { id: conversationId } },

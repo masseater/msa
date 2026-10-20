@@ -2,12 +2,12 @@ const queue: (() => void)[] = [];
 let held = 0;
 let draining = false;
 
-export function enqueue(task: () => void): void {
+function enqueue(task: () => void): void {
   queue.push(task);
   drain();
 }
 
-export function holdPublications<T>(fn: () => T): T {
+function holdPublications<T>(fn: () => T): T {
   held++;
   try {
     return fn();
@@ -26,3 +26,10 @@ function drain(): void {
     draining = false;
   }
 }
+
+const publish = {
+  enqueue,
+  holdPublications,
+};
+
+export default publish;

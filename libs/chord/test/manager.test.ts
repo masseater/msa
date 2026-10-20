@@ -5,18 +5,16 @@ import { fileURLToPath } from "node:url";
 import { Effect } from "effect";
 import { describe, it, vi } from "vite-plus/test";
 
-import { createHost, ipcLink, isChordError } from "../src/index.ts";
-import {
-  type ControlMessage,
-  type Driver,
-  type Exit,
-  createHostManager,
-  forkDriver,
-  processLock,
-} from "../src/manager.ts";
+import type managerTypes from "../src/manager.types.ts";
 import Echo from "./fixtures/echo.ts";
 import platform from "./fixtures/platform.ts";
 import timing from "./fixtures/timing.ts";
+import managerKit from "./manager-kit.ts";
+
+const { manager: managerModule, src: chord } = managerKit;
+
+const { createHostManager, forkDriver, processLock } = managerModule;
+const { createHost, ipcLink, isChordError } = chord;
 
 const { makeDirectory, readText, removeAll } = platform;
 const { latch, tick } = timing;
@@ -33,7 +31,7 @@ const alive = (pid: number): boolean => {
   }
 };
 
-const driver = (env: Record<string, string> = {}, lock?: string): Driver =>
+const driver = (env: Record<string, string> = {}, lock?: string): managerTypes.Driver =>
   forkDriver({ entry, env: { HOST_NAME: "w1", ...env }, init: { greeting: "hi" }, lock });
 
 const admitsOneHolderWhenTheTemporary = Effect.gen(function* () {
@@ -104,7 +102,7 @@ const aChildOwnedKernelLockAdmits = Effect.gen(function* () {
   const lock = `chord2-test-${process.pid}-lock`;
   const pids: number[] = [];
   const base = driver({}, lock);
-  const watched: Driver = {
+  const watched: managerTypes.Driver = {
     spawn() {
       for (const pid of pids) assert.ok(!alive(pid), `pid ${pid} still alive`);
       return base.spawn().then((instance) => {
@@ -143,11 +141,11 @@ const aGracefulExitStillTakesThe = Effect.gen(function* () {
 });
 
 const idleforCountsFromTheBusyIdle = Effect.gen(function* () {
-  const listeners = new Set<(message: ControlMessage) => void>();
-  const fake: Driver = {
+  const listeners = new Set<(message: managerTypes.ControlMessage) => void>();
+  const fake: managerTypes.Driver = {
     spawn: () =>
       Promise.resolve({
-        exited: latch<Exit>().promise,
+        exited: latch<managerTypes.Exit>().promise,
         killTree: () => {},
         link: ipcLink({
           connected: false,
@@ -160,7 +158,7 @@ const idleforCountsFromTheBusyIdle = Effect.gen(function* () {
         send: () => {},
       }),
   };
-  const emit = (message: ControlMessage) => {
+  const emit = (message: managerTypes.ControlMessage) => {
     for (const listener of listeners) listener(message);
   };
   const manager = createHostManager({ driver: fake });

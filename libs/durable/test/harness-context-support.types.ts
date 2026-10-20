@@ -1,4 +1,4 @@
-import type { Context as ContextSource } from "@msa/chord";
+import type chordTypes from "@msa/chord/index.types";
 import type harnessModule from "@msa/durable/harness";
 import type harnessTypes from "@msa/durable/harness.types";
 import type durableTypes from "@msa/durable/index.types";
@@ -7,7 +7,7 @@ import type { Effect } from "effect";
 import type harnessContextSupport from "./harness-context-support.ts";
 
 declare namespace harnessContextSupportTypes {
-  type Context = ContextSource;
+  type Context = chordTypes.Context;
 
   type Counting = Effect.Success<ReturnType<typeof harnessContextSupport.countingSetup>>;
 

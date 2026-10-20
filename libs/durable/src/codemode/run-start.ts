@@ -1,14 +1,18 @@
-import { type Context, type JsonValue, copyJson } from "@msa/chord";
+import chord from "@msa/chord";
+import type chordTypes from "@msa/chord/index.types";
 import { toCodemodeIdentifier } from "@msa/codemode/portable";
 import type { CodemodeSourceOptions } from "@msa/codemode/source";
 import { Effect } from "effect";
 
-import clockModule from "../clock.ts";
 import type typesModule from "../harness/types.types.ts";
-import runDocs from "./run-docs.ts";
 import type runDocsTypes from "./run-docs.types.ts";
+import runStartKit from "./run-start-kit.ts";
 import type runStartTypes from "./run-start.types.ts";
 import startKit from "./start-kit.ts";
+
+const { clock: clockModule, runDocs } = runStartKit;
+
+const { copyJson } = chord;
 
 const { describe, models: modelsModule, output: outputModule } = startKit;
 
@@ -78,7 +82,7 @@ const openRun = Effect.fnUntraced(function* (
   options: runDocsTypes.CodemodeToolOptions,
   sourceOptions: CodemodeSourceOptions,
   api: typesModule.ToolExecutionApi,
-  context: Context,
+  context: chordTypes.Context,
 ) {
   const declared = declarationsOf(yield* Effect.promise(() => api.agent(context)), options);
   const now = currentTimeMillis();
@@ -88,7 +92,7 @@ const openRun = Effect.fnUntraced(function* (
       const run = yield* Effect.promise(() => tx.doc(CodemodeRunDoc, api.taskId));
       if (run.result !== undefined) {
         const done: runStartTypes.OpenedRun = {
-          done: copyJson(run.result as JsonValue) as typesModule.ToolExecutionResult,
+          done: copyJson(run.result as chordTypes.JsonValue) as typesModule.ToolExecutionResult,
         };
         return done;
       }
@@ -103,17 +107,22 @@ const openRun = Effect.fnUntraced(function* (
           ...(timeout === undefined ? {} : { deadline: now + timeout }),
           ...declared,
           maxOutputTokens: sourceOptions.maxOutputTokens ?? DEFAULT_MAX_OUTPUT_TOKENS,
-          store: copyJson(store.values as JsonValue) as Record<string, JsonValue>,
+          store: copyJson(store.values as chordTypes.JsonValue) as Record<
+            string,
+            chordTypes.JsonValue
+          >,
         };
       }
       const journal = yield* Effect.promise(() => tx.doc(CodemodeJournalDoc, api.taskId));
       const opened: runStartTypes.OpenedRun = {
         firstIssued: journal.firstIssued,
         journal: copyJson(
-          journal.entries as unknown as JsonValue,
+          journal.entries as unknown as chordTypes.JsonValue,
         ) as unknown as runDocsTypes.JournalEntry[],
         rerun,
-        start: copyJson(run.start as unknown as JsonValue) as unknown as runDocsTypes.Start,
+        start: copyJson(
+          run.start as unknown as chordTypes.JsonValue,
+        ) as unknown as runDocsTypes.Start,
       };
       return opened;
     }),

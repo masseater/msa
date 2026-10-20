@@ -1,17 +1,12 @@
 import { Effect } from "effect";
 import { Type } from "typebox";
 
-import {
-  type Ctx,
-  type Host,
-  createHost,
-  hostNamed,
-  memoryLinkPair,
-  method,
-  remote,
-} from "../../src/index.ts";
+import chord from "../../src/index.ts";
+import type chordTypes from "../../src/index.types.ts";
 import counting from "./counting.ts";
 import timing from "./timing.ts";
+
+const { createHost, hostNamed, memoryLinkPair, method, remote } = chord;
 
 const { CountingLink } = counting;
 const { pollUntil } = timing;
@@ -32,18 +27,18 @@ const Notes = remote("t.e8-notes", {
   version: 1,
 });
 
-function serveNotes(host: Host): void {
+function serveNotes(host: chordTypes.Host): void {
   host.serve(Notes, (_input, _principal, self) => {
     const notes = self.state("notes", NoteSchema, []);
     const title = self.state("title", Type.String(), "untitled");
     return {
-      add: (text: string, ctx: Ctx) => {
+      add: (text: string, ctx: chordTypes.Ctx) => {
         notes.change(ctx, (draft) => {
           draft.push(text);
         });
       },
       notes,
-      rename: (text: string, ctx: Ctx) => {
+      rename: (text: string, ctx: chordTypes.Ctx) => {
         title.replace(ctx, text);
       },
       title,

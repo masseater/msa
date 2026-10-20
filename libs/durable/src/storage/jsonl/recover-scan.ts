@@ -1,4 +1,4 @@
-import type { Context } from "@msa/chord";
+import type chordTypes from "@msa/chord/index.types";
 import { Effect, Function } from "effect";
 
 import type envTypes from "../../env/index.types.ts";
@@ -23,7 +23,10 @@ const {
   sidecarKey,
 } = formatModule;
 
-const readMain = Effect.fnUntraced(function* (files: filesTypes.JsonlFiles, context: Context) {
+const readMain = Effect.fnUntraced(function* (
+  files: filesTypes.JsonlFiles,
+  context: chordTypes.Context,
+) {
   const main = yield* readLines(files.fs, files.mainPath, MAIN_FILE, context, (text, line) =>
     parseMainMarker(text, line),
   );
@@ -40,7 +43,7 @@ const readMain = Effect.fnUntraced(function* (files: filesTypes.JsonlFiles, cont
 const removeReclaimFiles = (
   files: filesTypes.JsonlFiles,
   listed: readonly envTypes.FileInfo[],
-  context: Context,
+  context: chordTypes.Context,
 ) =>
   Effect.forEach(
     listed.filter((info) => info.kind === "file" && isReclaimFileName(info.name)),
@@ -68,7 +71,7 @@ const checkOrder = (
 const readSidecar = Effect.fnUntraced(function* (
   files: filesTypes.JsonlFiles,
   file: string,
-  context: Context,
+  context: chordTypes.Context,
 ) {
   const pathResult = yield* Effect.promise(() =>
     files.fs.joinPath([files.directory, file], context),
@@ -79,7 +82,10 @@ const readSidecar = Effect.fnUntraced(function* (
   );
 });
 
-const readSidecars = Effect.fnUntraced(function* (files: filesTypes.JsonlFiles, context: Context) {
+const readSidecars = Effect.fnUntraced(function* (
+  files: filesTypes.JsonlFiles,
+  context: chordTypes.Context,
+) {
   const listed = yield* Effect.promise(() => files.fs.listDir(files.directory, context));
   if (!listed.ok) throw errorFromFile("directory listing", listed.error);
   yield* removeReclaimFiles(files, listed.value, context);

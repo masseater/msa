@@ -1,6 +1,6 @@
 import { type FSWatcher, watch as fsWatch } from "node:fs";
 
-import type { Context } from "@msa/chord";
+import type chordTypes from "@msa/chord/index.types";
 import { Cause, Effect } from "effect";
 
 import env from "../index.ts";
@@ -95,7 +95,7 @@ export default class NodeFileWatcher implements nodeWatchTypes.FileWatcher {
     return this.#mode;
   }
 
-  close(_context: Context): Promise<void> {
+  close(_context: chordTypes.Context): Promise<void> {
     if (this.#closed) return Promise.resolve();
     this.#stop();
     return this.#running ?? Promise.resolve();

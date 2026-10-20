@@ -6,7 +6,7 @@ import {
   fauxProvider,
   fauxToolCall,
 } from "@msa/ai";
-import { BACKGROUND_CONTEXT } from "@msa/chord/context";
+import contextModule from "@msa/chord/context";
 import durable from "@msa/durable";
 import harnessModule from "@msa/durable/harness";
 import memory from "@msa/durable/storage/memory";
@@ -15,6 +15,8 @@ import { Console, Effect } from "effect";
 import node from "../../src/env/node.ts";
 import toolsModule from "../../src/tools/index.ts";
 import support from "../support.ts";
+
+const { BACKGROUND_CONTEXT } = contextModule;
 
 const { AssistantEntry, defineExtension, hook, section } = durable;
 const { GenerationTask, Harness, createRegistry } = harnessModule;

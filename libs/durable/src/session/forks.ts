@@ -1,4 +1,4 @@
-import type { Context } from "@msa/chord";
+import type chordTypes from "@msa/chord/index.types";
 import { Effect, Function } from "effect";
 
 import documents from "../documents.ts";
@@ -17,7 +17,7 @@ type CopyCollection = {
   readonly childConversationId: typesModule.ConversationId;
   readonly copies: forksTypes.ForkDocumentCopy[];
   readonly copiedAddresses: Set<string>;
-  readonly context: Context;
+  readonly context: chordTypes.Context;
 };
 
 type ConversationScope = Extract<
@@ -92,7 +92,7 @@ const prepareForkDocumentCopies: dualTypes.Dual5<
   typesModule.ConversationId,
   typesModule.EntryId,
   typesModule.ConversationId,
-  Context,
+  chordTypes.Context,
   Effect.Effect<readonly forksTypes.ForkDocumentCopy[]>
 > = Function.dual(
   5,
@@ -101,7 +101,7 @@ const prepareForkDocumentCopies: dualTypes.Dual5<
     parentConversationId: typesModule.ConversationId,
     at: typesModule.EntryId,
     childConversationId: typesModule.ConversationId,
-    context: Context,
+    context: chordTypes.Context,
   ) {
     const entry = yield* Effect.promise(() => storage.entry(parentConversationId, at, context));
     if (entry === undefined)

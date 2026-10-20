@@ -4,9 +4,13 @@ import { Effect } from "effect";
 import { Type } from "typebox";
 import { describe, it } from "vite-plus/test";
 
-import { applyImmutable } from "../src/delta/index.ts";
-import { type Ctx, createHost, local, method } from "../src/index.ts";
+import delta from "../src/delta/index.ts";
+import chord from "../src/index.ts";
+import type chordTypes from "../src/index.types.ts";
 import timing from "./fixtures/timing.ts";
+
+const { createHost, local, method } = chord;
+const { applyImmutable } = delta;
 
 const { abortOf, tick } = timing;
 
@@ -91,7 +95,7 @@ const reEntrantWritesPublishInAdoption = Effect.gen(function* () {
     return {
       d,
       n: nState,
-      set: (value: number, ctx: Ctx) => {
+      set: (value: number, ctx: chordTypes.Ctx) => {
         nState.replace(ctx, value);
       },
     };

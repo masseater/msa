@@ -1,4 +1,4 @@
-import type { Draft } from "@msa/chord";
+import type chordTypes from "@msa/chord/index.types";
 import { Effect } from "effect";
 import { describe, expect, it } from "vite-plus/test";
 
@@ -15,8 +15,8 @@ const revokesEscapedDrafts = Effect.gen(function* () {
   const runPromise = Effect.runPromiseWith(yield* Effect.context<never>());
 
   const { session, conversationId } = yield* setupLive();
-  let escaped: Draft<sessionDocumentsSupportTypes.Live> | undefined;
-  let items: Draft<string[]> | undefined;
+  let escaped: chordTypes.Draft<sessionDocumentsSupportTypes.Live> | undefined;
+  let items: chordTypes.Draft<string[]> | undefined;
   yield* awaited(
     session.commit(
       (tx) =>

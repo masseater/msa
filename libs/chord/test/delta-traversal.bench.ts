@@ -4,11 +4,14 @@ import { fileURLToPath } from "node:url";
 
 import { Console, Effect, Exit } from "effect";
 
-import { track } from "../src/delta/index.ts";
-import { sha256Hex } from "../src/platform.ts";
+import delta from "../src/delta/index.ts";
+import platformModule from "../src/platform.ts";
 import benchmark from "./fixtures/benchmark.ts";
 import platform from "./fixtures/platform.ts";
 import timing from "./fixtures/timing.ts";
+
+const { track } = delta;
+const { sha256Hex } = platformModule;
 
 const { collectGarbage, decodeJson, encodeJson, encodePrettyJson, nowIso } = benchmark;
 const { readText, runNode, writeText } = platform;

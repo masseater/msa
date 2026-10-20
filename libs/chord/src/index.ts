@@ -1,97 +1,51 @@
-export type { Cell } from "./cell.ts";
-export type { AcceptOptions, LinkOptions } from "./connection.ts";
-export type { Context, ContextKey } from "./context/index.ts";
-export {
-  type Accepts,
-  type Adapter,
-  type AnyContract,
-  bind,
-  coverage,
-  type Description,
-  type HostFamily,
-  type HostNamed,
-  hostFamily,
-  hostNamed,
-  type ImplementationOf,
-  type InputOf,
-  type LocalContract,
-  local,
-  method,
-  opaque,
-  type Placement,
-  type PlacementFor,
-  type Ref,
-  type RemoteContract,
-  remote,
-} from "./contract.ts";
-export type { EventOf, Resource, ResourceDeclaration, Subscribable, ValueOf } from "./declare.ts";
-export type { Draft } from "./delta/index.ts";
-export { ChordError, type ChordErrorCode, forbidden, invalid, isChordError } from "./errors.ts";
-export type { ConnectOptions, PrincipalMatch, PrincipalPattern, Route } from "./host-types.ts";
-export { createHost } from "./host.ts";
-export {
-  defineFacet,
-  type Facet,
-  type FacetApi,
-  type FacetDefinition,
-  type FacetLoader,
-  type Host,
-  type HostOptions,
-  type LoadOptions,
-  type PluginRef,
-  type RootOptions,
-} from "./host-types.ts";
-export {
-  type CopyJsonOptions,
-  copyJson,
-  isJsonValue,
-  type JsonRepresentation,
-  type JsonValue,
-} from "./json.ts";
-export {
-  type IpcChannel,
-  inflateMessage,
-  ipcLink,
-  type Link,
-  memoryLinkPair,
-  PACK_THRESHOLD,
-  type WebSocketLike,
-  type WebSocketLinkOptions,
-  webSocketLink,
-} from "./link.ts";
-export type {
-  Factory,
-  HostServeOptions,
-  Lifetime,
-  ReferencedServeOptions,
-  Self,
-  ServeOptions,
-  ServeOptionsFor,
-  StateInit,
-  StateOptions,
-} from "./service.ts";
-export {
-  defineRegistry,
-  type Registry,
-  type RegistryTable,
-  type RegistryView,
-} from "./registry.ts";
-export type { ReloadOptions, ReloadReport } from "./reload.ts";
-export {
-  type AttachedReplicatedState,
-  type MutableReplicatedState,
-  type ReplicatedState,
-  type ReplicatedStateDelivery,
-  type ReplicatedStateSource,
-  type ReplicatedStateSourceAttachment,
-  type ReplicatedStateSourceFrame,
-  type ReplicatedStateSourceOptions,
-  replicatedState,
-} from "./state.ts";
-export type { Ctx, GetOptions, Readable, RefStatus, Shape, StateEvent } from "./types.ts";
-export {
-  acceptWebSockets,
-  type WebSocketAcceptOptions,
-  type WebSocketServerLike,
-} from "./websocket.ts";
-export { type Frame, PROTOCOL_VERSION } from "./wire.ts";
+import indexKit from "./index-kit.ts";
+import json from "./json.ts";
+import linkIpc from "./link-ipc.ts";
+import linkMemory from "./link-memory.ts";
+import linkPack from "./link-pack.ts";
+import linkWebsocket from "./link-websocket.ts";
+import registryModule from "./registry.ts";
+import state from "./state.ts";
+import websocket from "./websocket.ts";
+import wire from "./wire.ts";
+
+const {
+  cell,
+  contract,
+  contractBuild,
+  contractCompat,
+  errors: errorsModule,
+  host,
+  hostTypes,
+} = indexKit;
+
+const chord = {
+  Cell: cell.Cell,
+  ChordError: errorsModule.ChordError,
+  PACK_THRESHOLD: linkPack.PACK_THRESHOLD,
+  PROTOCOL_VERSION: wire.PROTOCOL_VERSION,
+  acceptWebSockets: websocket.acceptWebSockets,
+  bind: contractCompat.bind,
+  copyJson: json.copyJson,
+  coverage: contractCompat.coverage,
+  createHost: host.createHost,
+  defineFacet: hostTypes.defineFacet,
+  defineRegistry: registryModule.defineRegistry,
+  forbidden: errorsModule.forbidden,
+  hostFamily: contract.hostFamily,
+  hostNamed: contract.hostNamed,
+  inflateMessage: linkPack.inflateMessage,
+  invalid: errorsModule.invalid,
+  ipcLink: linkIpc.ipcLink,
+  isChordError: errorsModule.isChordError,
+  isJsonValue: json.isJsonValue,
+  local: contractBuild.local,
+  memoryLinkPair: linkMemory.memoryLinkPair,
+  method: contract.method,
+  opaque: contract.opaque,
+  remote: contractBuild.remote,
+  replicatedState: state.replicatedState,
+  webSocketLink: linkWebsocket.webSocketLink,
+};
+
+export default chord;

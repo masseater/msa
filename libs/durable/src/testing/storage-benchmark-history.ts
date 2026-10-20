@@ -1,10 +1,12 @@
-import { BACKGROUND_CONTEXT } from "@msa/chord/context";
+import contextModule from "@msa/chord/context";
 import { Effect } from "effect";
 
 import types from "../types.ts";
 import type typesModule from "../types.types.ts";
 import rangeModule from "./range.ts";
 import storageBenchmark from "./storage-benchmark.ts";
+
+const { BACKGROUND_CONTEXT } = contextModule;
 
 const { range } = rangeModule;
 

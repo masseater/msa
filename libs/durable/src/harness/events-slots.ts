@@ -1,4 +1,4 @@
-import type { Op } from "@msa/chord/delta";
+import type deltaTypes from "@msa/chord/delta.types";
 import { Function } from "effect";
 
 import type eventsChangesTypes from "./events-changes.types.ts";
@@ -64,11 +64,14 @@ const startedTools: typesModule.Dual2<
 
 const updatedTools: typesModule.Dual2<
   eventsSlotsTypes.Slots,
-  readonly Op[],
+  readonly deltaTypes.Op[],
   eventsTypesModule.AgentEvent[]
 > = Function.dual(
   2,
-  (slots: eventsSlotsTypes.Slots, viewOps: readonly Op[]): eventsTypesModule.AgentEvent[] => {
+  (
+    slots: eventsSlotsTypes.Slots,
+    viewOps: readonly deltaTypes.Op[],
+  ): eventsTypesModule.AgentEvent[] => {
     const events: eventsTypesModule.AgentEvent[] = [];
     for (const [index, slot] of slots.slots.entries()) {
       const previous = slots.slotsBefore.get(slot.callId);

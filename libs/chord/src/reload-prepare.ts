@@ -1,19 +1,32 @@
 import { Effect } from "effect";
 
-import { type AnyContract, bind, coverage } from "./contract.ts";
-import { ChordError, invalid } from "./errors.ts";
-import type { Serve } from "./host-types.ts";
-import type { ObjectImpl } from "./object.ts";
-import { type Candidate, dryRun } from "./reload-candidate.ts";
-import type { Reload } from "./reload.ts";
-import type { ResourceImpl } from "./resource.ts";
-import { assertValid, deepEqual } from "./schema.ts";
-import { type Factory, makeService, type ServeOptions } from "./service.ts";
+import type contractTypes from "./contract.types.ts";
+import type hostTypesModule from "./host-types.types.ts";
+import type objectTypes from "./object.types.ts";
+import type reloadCandidateTypes from "./reload-candidate.types.ts";
+import reloadPrepareKit from "./reload-prepare-kit.ts";
+import type reloadTypes from "./reload.types.ts";
+import type resourceTypes from "./resource.types.ts";
+import serviceModule from "./service.ts";
+import type serviceTypes from "./service.types.ts";
 
-export class ReloadPrepare {
-  readonly #reload: Reload;
+const {
+  contract: contractModule,
+  errors: errorsModule,
+  reloadCandidate,
+  schema: schemaModule,
+} = reloadPrepareKit;
 
-  constructor(reload: Reload) {
+const { makeService } = serviceModule;
+const { bind, coverage } = contractModule;
+const { ChordError, invalid } = errorsModule;
+const { dryRun } = reloadCandidate;
+const { assertValid, deepEqual } = schemaModule;
+
+export default class ReloadPrepare {
+  readonly #reload: reloadTypes.Reload;
+
+  constructor(reload: reloadTypes.Reload) {
     this.#reload = reload;
   }
 
@@ -31,11 +44,15 @@ export class ReloadPrepare {
       reload.facetRuns.set(facet.name, run);
       facet.setup(
         host.facetApi(
-          ((type: AnyContract, factory: Factory<AnyContract>, options: ServeOptions = {}) =>
+          ((
+            type: contractTypes.AnyContract,
+            factory: serviceTypes.Factory<contractTypes.AnyContract>,
+            options: serviceTypes.ServeOptions = {},
+          ) =>
             host.serveInto(
               reload.services,
               makeService(type, factory, options, facet.name),
-            )) as Serve,
+            )) as hostTypesModule.Serve,
           run.signal,
         ),
       );
@@ -44,11 +61,11 @@ export class ReloadPrepare {
       if (current.get(name) !== service) reload.changed.add(name);
     for (const name of current.keys()) if (!reload.services.has(name)) reload.removed.add(name);
     host.pending = {
+      abort: new AbortController(),
       id: host.nextCodeVersionId(reload.codeVersion),
+      roots: new Map(),
       services: reload.services,
       tables: new Map(),
-      roots: new Map(),
-      abort: new AbortController(),
     };
   }
 
@@ -102,14 +119,17 @@ export class ReloadPrepare {
     });
   }
 
-  #prepareObject(object: ObjectImpl): Effect.Effect<void> {
+  #prepareObject(object: objectTypes.ObjectImpl): Effect.Effect<void> {
     return Effect.gen({ self: this }, function* () {
       const reload = this.#reload;
       const candidate = this.#candidate(object);
       const { run } = candidate;
-      const deferred = new Set<ResourceImpl>();
+      const deferred = new Set<resourceTypes.ResourceImpl>();
       for (const resource of run.created.resources) {
-        if (resource.exclusive || resource.deps.some((dep) => deferred.has(dep as ResourceImpl)))
+        if (
+          resource.exclusive ||
+          resource.deps.some((dep) => deferred.has(dep as resourceTypes.ResourceImpl))
+        )
           deferred.add(resource);
       }
       for (const resource of deferred) {
@@ -132,19 +152,19 @@ export class ReloadPrepare {
     });
   }
 
-  #candidate(object: ObjectImpl): Candidate {
+  #candidate(object: objectTypes.ObjectImpl): reloadCandidateTypes.Candidate {
     const reload = this.#reload;
     const service = reload.services.get(object.typeName)!;
     const run = object.activation.run(service, object.decls);
-    const candidate: Candidate = {
-      object,
-      service,
-      run,
-      reasons: [],
+    const candidate: reloadCandidateTypes.Candidate = {
       atGate: [],
-      replaced: [],
-      migrated: new Map(),
       derived: new Map(),
+      migrated: new Map(),
+      object,
+      reasons: [],
+      replaced: [],
+      run,
+      service,
       staged: undefined,
     };
     reload.candidates.set(object, candidate);
@@ -185,7 +205,7 @@ export class ReloadPrepare {
     }
   }
 
-  migrate(candidate: Candidate): void {
+  migrate(candidate: reloadCandidateTypes.Candidate): void {
     const { object, run } = candidate;
     for (const [name, cell] of run.decls.cells) {
       if (object.decls.cells.get(name) !== cell) continue;

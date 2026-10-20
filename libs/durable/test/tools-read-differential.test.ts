@@ -1,5 +1,5 @@
-import { BACKGROUND_CONTEXT } from "@msa/chord/context";
-import { characterEnd } from "@msa/chord/output";
+import contextModule from "@msa/chord/context";
+import outputModule from "@msa/chord/output";
 import { Cause, Effect, Exit } from "effect";
 import { afterAll, describe, expect, it } from "vite-plus/test";
 
@@ -9,6 +9,9 @@ import image from "../src/tools/image.ts";
 import read from "../src/tools/read.ts";
 import durableKit from "./durable-kit.ts";
 import support from "./support.ts";
+
+const { characterEnd } = outputModule;
+const { BACKGROUND_CONTEXT } = contextModule;
 
 const { envNode: node, truncate } = durableKit;
 

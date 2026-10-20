@@ -1,6 +1,9 @@
 import { expect, it } from "vite-plus/test";
 
-import { type Draft, type Op, applyImmutable, track } from "../src/delta/index.ts";
+import delta from "../src/delta/index.ts";
+import type deltaTypes from "../src/delta/index.types.ts";
+
+const { applyImmutable, track } = delta;
 
 type Item = { id: number; text: string; score: number };
 type Document = {
@@ -9,7 +12,7 @@ type Document = {
   meta: { revision: number; label?: string };
 };
 
-type MutableDocument = Document | Draft<Document>;
+type MutableDocument = Document | deltaTypes.Draft<Document>;
 
 const clone = <T>(value: T): T => JSON.parse(JSON.stringify(value)) as T;
 
@@ -111,7 +114,7 @@ it("converges across randomized prepared revisions", () => {
       const change = tracker.beginChange();
       mutate(change.state, choice, value);
       const prepared = change.prepare();
-      const operations = clone(prepared.ops) as readonly Op[];
+      const operations = clone(prepared.ops) as readonly deltaTypes.Op[];
       expect(baseRoot, `prepare base seed ${seed} step ${step} choice ${choice}`).toEqual(base);
       expect(prepared.base).toBe(baseRoot);
       replica = applyImmutable(replica, operations);

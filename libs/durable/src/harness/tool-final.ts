@@ -1,4 +1,4 @@
-import type { Context, JsonValue } from "@msa/chord";
+import type chordTypes from "@msa/chord/index.types";
 import { Effect } from "effect";
 import { Compile } from "typebox/compile";
 
@@ -98,7 +98,7 @@ const nestedStructured = (
 ): typesModule.ToolExecutionResult => {
   if (input.kind !== "nested") return final;
   if (tool.structuredOutputSchema === undefined)
-    return { ...final, structuredOutput: outputValue(bounded.content) as JsonValue };
+    return { ...final, structuredOutput: outputValue(bounded.content) as chordTypes.JsonValue };
   if (
     final.isError === true &&
     final.structuredOutput === undefined &&
@@ -121,7 +121,7 @@ const finalResult = Effect.fnUntraced(function* (
   tool: typesModule.ToolRegistration,
   result: typesModule.ToolExecutionResult,
   reported: toolTypesModule.Reported,
-  context: Context,
+  context: chordTypes.Context,
 ) {
   const harness: typesModule.ToolDiagnostic[] = [];
   const merged = mergeReported(result, reported);

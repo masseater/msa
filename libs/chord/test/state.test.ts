@@ -4,14 +4,11 @@ import { Effect } from "effect";
 import { Type } from "typebox";
 import { describe, it } from "vite-plus/test";
 
-import {
-  type Ctx,
-  type StateEvent,
-  createHost,
-  isChordError,
-  local,
-  method,
-} from "../src/index.ts";
+import chord from "../src/index.ts";
+import type chordTypes from "../src/index.types.ts";
+
+const { createHost, isChordError, local, method } = chord;
+
 const Item = Type.Object({ id: Type.Number(), label: Type.String() });
 const Items = Type.Object({ count: Type.Number(), items: Type.Array(Item) });
 
@@ -33,13 +30,16 @@ function serveList(host: ReturnType<typeof createHost>) {
     return {
       labels,
       list: listState,
-      push: (item: { id: number; label: string }, ctx: Ctx) => {
+      push: (item: { id: number; label: string }, ctx: chordTypes.Ctx) => {
         listState.change(ctx, (draft) => {
           draft.items.push(item);
           draft.count += 1;
         });
       },
-      set: (value: { items: { id: number; label: string }[]; count: number }, ctx: Ctx) => {
+      set: (
+        value: { items: { id: number; label: string }[]; count: number },
+        ctx: chordTypes.Ctx,
+      ) => {
         listState.replace(ctx, value);
       },
     };
@@ -50,8 +50,8 @@ const publishesSnapshotsThenExactOpsDerivations = Effect.gen(function* () {
   const host = createHost({ onError: () => {}, self: { kind: "host" } });
   serveList(host);
   const ref = host.hold(List, {});
-  const events: StateEvent<unknown>[] = [];
-  const labels: StateEvent<unknown>[] = [];
+  const events: chordTypes.StateEvent<unknown>[] = [];
+  const labels: chordTypes.StateEvent<unknown>[] = [];
   ref.list.events((event) => events.push(event));
   ref.labels.events((event) => labels.push(event));
   yield* Effect.promise(() => ref.push({ id: 1, label: "a" }));
@@ -78,7 +78,7 @@ const supportsPrimitiveCellsAndValueReturning = Effect.gen(function* () {
   host.serve(Counter, (_input, _principal, self) => {
     const nState = self.state("n", Type.Number(), 0);
     return {
-      inc: (ctx: Ctx) => {
+      inc: (ctx: chordTypes.Ctx) => {
         nState.change(ctx, (n) => n + 1);
         return nState.value;
       },
@@ -88,7 +88,7 @@ const supportsPrimitiveCellsAndValueReturning = Effect.gen(function* () {
   const ref = host.hold(Counter, {});
   const values: unknown[] = [];
   yield* Effect.promise(() => ref.ready);
-  const events: StateEvent<unknown>[] = [];
+  const events: chordTypes.StateEvent<unknown>[] = [];
   ref.n.events((event) => events.push(event));
   ref.n.subscribe((value) => values.push(value));
   assert.equal(yield* Effect.promise(() => ref.inc()), 1);
@@ -111,7 +111,7 @@ const rejectsAReturnedValueThatDoes = Effect.gen(function* () {
   host.serve(Box, (_input, _principal, self) => {
     const list = self.state("list", Type.Array(Type.Number()), []);
     return {
-      put: (ctx: Ctx) => {
+      put: (ctx: chordTypes.Ctx) => {
         list.change(ctx, (draft) => draft.push(1) as never);
       },
     };
@@ -151,7 +151,7 @@ const validatesInitialValuesAlwaysAndWrites = Effect.gen(function* () {
 const rejectsWritesFromInsideAFactory = Effect.gen(function* () {
   const host = createHost({ onError: () => {}, self: { kind: "host" } });
   const Writer = local("t.writer", { input: Type.Object({}), version: 1 });
-  let captured: Ctx | undefined;
+  let captured: chordTypes.Ctx | undefined;
   yield* Effect.promise(() =>
     host.root((ctx) => {
       captured = ctx;

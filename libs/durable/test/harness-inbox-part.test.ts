@@ -1,5 +1,5 @@
 import { fauxAssistantMessage } from "@msa/ai";
-import type { Op } from "@msa/chord/delta";
+import type deltaTypes from "@msa/chord/delta.types";
 import durable from "@msa/durable";
 import harnessModule from "@msa/durable/harness";
 import memory from "@msa/durable/storage/memory";
@@ -178,7 +178,7 @@ const commitsInboxChanges = Effect.gen(function* () {
   const first = gated(answer("first"));
   setup.faux.setResponses([first.step, answer("second")]);
   const { harness, root } = yield* openChat(new MemoryStorage(), setup);
-  const ops: Op[][] = [];
+  const ops: deltaTypes.Op[][] = [];
   harness.subscribeCommits((publication) => {
     for (const change of documentChanges(publication)) {
       if (change.record.kind === "msa.inbox" && change.ops.length > 0) ops.push([...change.ops]);

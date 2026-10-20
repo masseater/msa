@@ -4,13 +4,12 @@ import { Effect } from "effect";
 import { type Static, Type } from "typebox";
 import { describe, expectTypeOf, it } from "vite-plus/test";
 
-import {
-  type Facet,
-  type Frame,
-  type Host,
-  type Link,
+import chord from "../src/index.ts";
+import type chordTypes from "../src/index.types.ts";
+import timing from "./fixtures/timing.ts";
+
+const {
   PROTOCOL_VERSION,
-  type PlacementFor,
   bind,
   createHost,
   hostFamily,
@@ -19,8 +18,7 @@ import {
   memoryLinkPair,
   method,
   remote,
-} from "../src/index.ts";
-import timing from "./fixtures/timing.ts";
+} = chord;
 
 const { tick } = timing;
 
@@ -41,8 +39,8 @@ const Catalog = remote("t.catalog", {
 function cluster() {
   const server = createHost({ name: "server", onError: () => {}, self: "host" });
   server.serve(Catalog, () => ({ variant: "main", where: () => "server" }));
-  const children = new Map<string, Host>();
-  const links = new Map<string, Link>();
+  const children = new Map<string, chordTypes.Host>();
+  const links = new Map<string, chordTypes.Link>();
   const child = (name: string) => {
     const [down, up] = memoryLinkPair();
     links.set(name, down);
@@ -104,7 +102,7 @@ const serveRefusesATypeTheHost = Effect.gen(function* () {
     () => server.serve(Note, () => ({ variant: "main", where: () => "" })),
     /t\.note is declared for session:<session>, but server serves it/u,
   );
-  const misplaced: Facet = {
+  const misplaced: chordTypes.Facet = {
     name: "misplaced",
     setup: (api) => api.serve(Note, () => ({ variant: "main", where: () => "" })),
   };
@@ -122,12 +120,12 @@ const aHostRefusesAHoldIts = Effect.gen(function* () {
   const services = yield* Effect.context<never>();
   const { server, close } = cluster();
   yield* tick;
-  const holds = (target: string, input: unknown): Promise<Frame | undefined> =>
+  const holds = (target: string, input: unknown): Promise<chordTypes.Frame | undefined> =>
     Effect.runPromiseWith(services)(
       Effect.gen(function* () {
         const [down, raw] = memoryLinkPair();
         server.accept(down, { principal: "guest" });
-        const frames: Frame[] = [];
+        const frames: chordTypes.Frame[] = [];
         raw.receive((frame) => frames.push(frame));
         raw.send({
           codeVersion: 0,
@@ -189,7 +187,7 @@ const placementIsPartOfTheContract = Effect.gen(function* () {
     });
   assert.notEqual(at("server").fingerprint, at("session:S1").fingerprint);
   const host = createHost({ name: "server", onError: () => {}, self: "host" });
-  const facet = (version: number, place: string): Facet => ({
+  const facet = (version: number, place: string): chordTypes.Facet => ({
     name: "moved",
     setup: (api) =>
       api.serve(
@@ -233,7 +231,7 @@ const typesTheFamilySFieldIs = (): void => {
   });
   const variants = { main: {} };
   remote("t.ok", { host: hostFamily("session:", "session"), input, variants, version: 1 });
-  type Allowed = PlacementFor<Static<typeof input>>;
+  type Allowed = chordTypes.PlacementFor<Static<typeof input>>;
   expectTypeOf(hostFamily("session:", "session")).toExtend<Allowed>();
   expectTypeOf(hostFamily("session:", "sesion")).not.toExtend<Allowed>();
   expectTypeOf(hostFamily("session:", "count")).not.toExtend<Allowed>();

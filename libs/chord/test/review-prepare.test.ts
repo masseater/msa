@@ -4,18 +4,12 @@ import { type Context, Effect } from "effect";
 import { Type } from "typebox";
 import { describe, it } from "vite-plus/test";
 
-import {
-  type Ctx,
-  type Facet,
-  createHost,
-  hostNamed,
-  isChordError,
-  local,
-  method,
-  remote,
-} from "../src/index.ts";
+import chord from "../src/index.ts";
+import type chordTypes from "../src/index.types.ts";
 import review from "./fixtures/review.ts";
 import timing from "./fixtures/timing.ts";
+
+const { createHost, hostNamed, isChordError, local, method, remote } = chord;
 
 const { Item } = review;
 const { latch, tick, ticks } = timing;
@@ -30,7 +24,7 @@ const case7ObjectsOfTypesAReload = Effect.gen(function* () {
     setup: (api) => api.serve(Item, () => ({ version: () => "v1" })),
   });
   yield* Effect.promise(() => Promise.all(["a", "b"].map((id) => host.hold(Item, { id }).ready)));
-  const plugins = (fail: boolean): Facet[] => [
+  const plugins = (fail: boolean): chordTypes.Facet[] => [
     {
       name: "fresh",
       setup: (api) =>
@@ -88,7 +82,7 @@ const case8ABreakingProviderChangeAnd = Effect.gen(function* () {
       api.serve(P1, () => ({ get: () => "old", variant: "main" }));
       api.serve(Consumer, (_input, _principal, self) => {
         const provider = self.get(P1, {});
-        return { ask: (ctx: Ctx) => provider.get(ctx) };
+        return { ask: (ctx: chordTypes.Ctx) => provider.get(ctx) };
       });
     },
   });
@@ -102,7 +96,7 @@ const case8ABreakingProviderChangeAnd = Effect.gen(function* () {
           api.serve(P2, () => ({ fetch: () => "new", variant: "main" }));
           api.serve(Consumer, (_input, _principal, self) => {
             const provider = self.get(P2, {});
-            return { ask: (ctx: Ctx) => provider.fetch(ctx) };
+            return { ask: (ctx: chordTypes.Ctx) => provider.fetch(ctx) };
           });
         },
       },
@@ -115,7 +109,7 @@ const Dep = local("t.dep", { input: Type.Object({}), version: 1 });
 
 const retirementFacet =
   (log: string[], services: Context.Context<never>) =>
-  (withDecls: boolean): Facet => ({
+  (withDecls: boolean): chordTypes.Facet => ({
     name: "item",
     setup: (api) => {
       api.serve(Dep, (_input, _principal, self) => {
@@ -181,7 +175,7 @@ const Db = local("t.db", {
 const case7APrepareRerunCannotTouch = Effect.gen(function* () {
   const host = createHost({ onError: () => {}, self: { kind: "host" } });
   const native = { mutated: false };
-  const facet = (touch: boolean): Facet => ({
+  const facet = (touch: boolean): chordTypes.Facet => ({
     name: "db",
     setup: (api) =>
       api.serve(Db, (_input, _principal, self) => {
@@ -205,7 +199,7 @@ const case9ExclusiveResourceAfterCloseFailure = (reopen: "works" | "fails") =>
     const host = createHost({ onError: () => {}, self: { kind: "host" } });
     const log: string[] = [];
     let opens = 0;
-    const facet = (rev: number): Facet => ({
+    const facet = (rev: number): chordTypes.Facet => ({
       name: "db",
       setup: (api) =>
         api.serve(Db, (_input, _principal, self) => {

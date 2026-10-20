@@ -1,10 +1,12 @@
-import type { Draft } from "@msa/chord";
-import { copyJson } from "@msa/chord/json";
+import type chordTypes from "@msa/chord/index.types";
+import json from "@msa/chord/json";
 import { Effect, Function } from "effect";
 
 import documents from "../documents.ts";
 import sessionState from "../session/session-state.ts";
 import type typesModule from "./types.types.ts";
+
+const { copyJson } = json;
 
 const { defineDoc } = documents;
 const { documentRetention } = sessionState;
@@ -86,7 +88,10 @@ const configure: typesModule.Dual3<
   ): Promise<void> => Effect.runPromise(configureDoc(tx, conversationId, change)),
 );
 
-const addModelTools = (state: Draft<typesModule.AgentState>, added: readonly string[]): void => {
+const addModelTools = (
+  state: chordTypes.Draft<typesModule.AgentState>,
+  added: readonly string[],
+): void => {
   const modelTools = state.modelTools;
   if (Array.isArray(modelTools)) {
     for (const name of added) if (!modelTools.includes(name)) modelTools.push(name);
@@ -121,32 +126,39 @@ const addTools: typesModule.Dual3<
   }),
 );
 
-function applyChange(state: Draft<typesModule.AgentState>, change: typesModule.AgentChange): void {
+function namedAddRemove<T extends { readonly name: string }>(
+  value:
+    | readonly T[]
+    | { readonly add?: readonly T[]; readonly remove?: readonly T[] }
+    | null
+    | undefined,
+) {
+  if (value === undefined || value === null) return value;
+  if (isList(value)) return names(value);
+  return {
+    ...(value.add === undefined ? {} : { add: names(value.add) }),
+    ...(value.remove === undefined ? {} : { remove: names(value.remove) }),
+  };
+}
+
+function applyChange(
+  state: chordTypes.Draft<typesModule.AgentState>,
+  change: typesModule.AgentChange,
+): void {
   const set = <K extends keyof typesModule.AgentState>(
     key: K,
     value: typesModule.AgentState[K] | null | undefined,
   ) => {
     if (value === undefined) return;
     if (value === null) delete state[key];
-    else state[key] = value as Draft<typesModule.AgentState>[K];
+    else state[key] = value as chordTypes.Draft<typesModule.AgentState>[K];
   };
   set(
     "model",
     change.model === undefined || change.model === null ? change.model : { ...change.model },
   );
   set("thinkingLevel", change.thinkingLevel);
-  const extensions = change.extensions;
-  set(
-    "extensions",
-    extensions === undefined || extensions === null
-      ? extensions
-      : isList(extensions)
-        ? names(extensions)
-        : {
-            ...(extensions.add === undefined ? {} : { add: names(extensions.add) }),
-            ...(extensions.remove === undefined ? {} : { remove: names(extensions.remove) }),
-          },
-  );
+  set("extensions", namedAddRemove(change.extensions));
   const tools = change.tools;
   set(
     "tools",
@@ -156,18 +168,7 @@ function applyChange(state: Draft<typesModule.AgentState>, change: typesModule.A
         ? names(tools)
         : { remove: names(tools.remove) },
   );
-  const modelTools = change.modelTools;
-  set(
-    "modelTools",
-    modelTools === undefined || modelTools === null
-      ? modelTools
-      : isList(modelTools)
-        ? names(modelTools)
-        : {
-            ...(modelTools.remove === undefined ? {} : { remove: names(modelTools.remove) }),
-            ...(modelTools.add === undefined ? {} : { add: names(modelTools.add) }),
-          },
-  );
+  set("modelTools", namedAddRemove(change.modelTools));
   set("instructions", change.instructions);
   set("cwd", change.cwd);
 }

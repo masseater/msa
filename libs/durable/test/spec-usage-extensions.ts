@@ -1,5 +1,5 @@
 import { Type } from "@msa/ai";
-import type { Context } from "@msa/chord";
+import type chordTypes from "@msa/chord/index.types";
 import harness from "@msa/durable/harness";
 import type durableTypes from "@msa/durable/index.types";
 import { Effect } from "effect";
@@ -129,7 +129,7 @@ function planMode({ writes }: specUsageNamesTypes.SpecNames) {
 
 const childWithout = Effect.fn("childWithout")(function* (
   api: durableTypes.ToolExecutionApi,
-  context: Context,
+  context: chordTypes.Context,
   removed: durableTypes.Extension,
 ) {
   const runPromise = Effect.runPromiseWith(yield* Effect.context<never>());

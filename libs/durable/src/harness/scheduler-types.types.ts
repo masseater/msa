@@ -1,5 +1,5 @@
 import type { TSchema } from "@msa/ai";
-import type { JsonValue } from "@msa/chord";
+import type chordTypes from "@msa/chord/index.types";
 
 import type transactionTypes from "../session/transaction.types.ts";
 import type typesSourceTypes from "../types.types.ts";
@@ -70,16 +70,16 @@ declare namespace schedulerTypesModule {
   type Harness = typesModule.Harness;
   type ToolControl = typesToolsTypes.ToolControl;
   type ToolDiagnostic = typesToolsTypes.ToolDiagnostic;
-  type ToolExecutionResult<TDetails extends JsonValue = JsonValue> =
+  type ToolExecutionResult<TDetails extends chordTypes.JsonValue = chordTypes.JsonValue> =
     typesToolsTypes.ToolExecutionResult<TDetails>;
   type NestedToolExecutionResult = typesToolsTypes.NestedToolExecutionResult;
   type ToolExecutionMode = typesToolsTypes.ToolExecutionMode;
   type QueueMode = typesToolsTypes.QueueMode;
-  type ToolExecutionApi<TDetails extends JsonValue = JsonValue> =
+  type ToolExecutionApi<TDetails extends chordTypes.JsonValue = chordTypes.JsonValue> =
     typesToolsTypes.ToolExecutionApi<TDetails>;
   type ToolRegistration<
     TParameters extends TSchema = TSchema,
-    TDetails extends JsonValue = JsonValue,
+    TDetails extends chordTypes.JsonValue = chordTypes.JsonValue,
   > = typesToolsTypes.ToolRegistration<TParameters, TDetails>;
   type PromptInput<
     Tool extends typesToolsTypes.ToolRegistration = typesToolsTypes.ToolRegistration,
@@ -131,7 +131,7 @@ declare namespace schedulerTypesModule {
   type DocDefinition<T extends typesSourceTypes.JsonObject> = typesSourceTypes.DocDefinition<T>;
   type DocFamilyDefinition<
     T extends typesSourceTypes.JsonObject,
-    I extends JsonValue,
+    I extends chordTypes.JsonValue,
   > = typesSourceTypes.DocFamilyDefinition<T, I>;
   type DocToken<
     T extends typesSourceTypes.JsonObject,
@@ -139,7 +139,7 @@ declare namespace schedulerTypesModule {
   > = typesSourceTypes.DocToken<T, D>;
   type DocFamilyToken<
     T extends typesSourceTypes.JsonObject,
-    I extends JsonValue,
+    I extends chordTypes.JsonValue,
     D extends DocFamilyDefinition<T, I>,
   > = typesSourceTypes.DocFamilyToken<T, I, D>;
   type SessionDocToken<T extends typesSourceTypes.JsonObject> = typesSourceTypes.SessionDocToken<T>;
@@ -150,19 +150,19 @@ declare namespace schedulerTypesModule {
   type TaskDocToken<T extends typesSourceTypes.JsonObject> = typesSourceTypes.TaskDocToken<T>;
   type SessionDocFamilyToken<
     T extends typesSourceTypes.JsonObject,
-    I extends JsonValue,
+    I extends chordTypes.JsonValue,
   > = typesSourceTypes.SessionDocFamilyToken<T, I>;
   type ConversationDocFamilyToken<
     T extends typesSourceTypes.JsonObject,
-    I extends JsonValue,
+    I extends chordTypes.JsonValue,
   > = typesSourceTypes.ConversationDocFamilyToken<T, I>;
   type RewindableConversationDocFamilyToken<
     T extends typesSourceTypes.JsonObject,
-    I extends JsonValue,
+    I extends chordTypes.JsonValue,
   > = typesSourceTypes.RewindableConversationDocFamilyToken<T, I>;
   type TaskDocFamilyToken<
     T extends typesSourceTypes.JsonObject,
-    I extends JsonValue,
+    I extends chordTypes.JsonValue,
   > = typesSourceTypes.TaskDocFamilyToken<T, I>;
   type DocumentRecord = typesSourceTypes.DocumentRecord;
   type DocumentCreate = typesSourceTypes.DocumentCreate;
@@ -177,9 +177,9 @@ declare namespace schedulerTypesModule {
   type ContextEdit = typesSourceTypes.ContextEdit;
   type EntryRecord = typesSourceTypes.EntryRecord;
   type EntryDraft = typesSourceTypes.EntryDraft;
-  type TypedEntry<D extends JsonValue> = typesSourceTypes.TypedEntry<D>;
-  type TypedEntryDraft<D extends JsonValue> = typesSourceTypes.TypedEntryDraft<D>;
-  type Entry<D extends JsonValue = never> = typesSourceTypes.Entry<D>;
+  type TypedEntry<D extends chordTypes.JsonValue> = typesSourceTypes.TypedEntry<D>;
+  type TypedEntryDraft<D extends chordTypes.JsonValue> = typesSourceTypes.TypedEntryDraft<D>;
+  type Entry<D extends chordTypes.JsonValue = never> = typesSourceTypes.Entry<D>;
   type SubmissionRecord = typesSourceTypes.SubmissionRecord;
   type SubmissionSettlement = typesSourceTypes.SubmissionSettlement;
   type SubmissionCreate = typesSourceTypes.SubmissionCreate;

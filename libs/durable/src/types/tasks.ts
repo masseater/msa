@@ -1,5 +1,5 @@
 import type { Models } from "@msa/ai";
-import type { Context, JsonValue } from "@msa/chord";
+import type chordTypes from "@msa/chord/index.types";
 
 import type envTypes from "../env/index.types.ts";
 import type typesModule from "../harness/types.types.ts";
@@ -20,7 +20,7 @@ declare namespace tasksTypes {
   type PhaseHandler<I, P, S, R, H extends object> = (
     task: RunningTask<I, P, R>,
     runtime: TaskRuntime<I, S, R, H>,
-    context: Context,
+    context: chordTypes.Context,
   ) => Promise<void>;
 
   interface HookRunner<H extends object> {
@@ -36,10 +36,10 @@ declare namespace tasksTypes {
     readonly conversationId: idsTypes.ConversationId;
     readonly signal: AbortSignal;
     readonly registry: typesModule.RegistrySnapshot;
-    agent(context: Context): Promise<typesModule.Agent>;
+    agent(context: chordTypes.Context): Promise<typesModule.Agent>;
     readonly settings: typesModule.Settings;
     readonly models: Models;
-    env(context: Context): Promise<envTypes.ExecutionEnv | undefined>;
+    env(context: chordTypes.Context): Promise<envTypes.ExecutionEnv | undefined>;
     readonly hooks: HookRunner<H>;
 
     commit(
@@ -47,36 +47,54 @@ declare namespace tasksTypes {
         tx: sessionTypes.Tx,
         current: RunningTask<I, S, R>,
       ) => NextTaskState<S, R> | undefined | Promise<NextTaskState<S, R> | undefined>,
-      context: Context,
+      context: chordTypes.Context,
     ): Promise<void>;
-    memo<T extends JsonValue>(name: string, context: Context): Promise<T | undefined>;
-    memo<T extends JsonValue>(name: string, candidate: T, context: Context): Promise<T>;
+    memo<T extends chordTypes.JsonValue>(
+      name: string,
+      context: chordTypes.Context,
+    ): Promise<T | undefined>;
+    memo<T extends chordTypes.JsonValue>(
+      name: string,
+      candidate: T,
+      context: chordTypes.Context,
+    ): Promise<T>;
     getTask<T>(
       id: idsTypes.TaskId<T>,
-      context: Context,
-    ): Promise<TaskRecord<JsonValue, JsonValue, T> | undefined>;
-    waitForTask<T>(id: idsTypes.TaskId<T>, context: Context): Promise<typesModule.SettledTask<T>>;
-    abortOwned(id: idsTypes.TaskId, context: Context): Promise<void>;
-    ownedTasks(context: Context): Promise<TaskRecord<JsonValue, JsonValue, JsonValue>[]>;
-    outcomes<T>(ids: readonly idsTypes.TaskId<T>[], context: Context): Promise<TaskOutcome<T>[]>;
+      context: chordTypes.Context,
+    ): Promise<TaskRecord<chordTypes.JsonValue, chordTypes.JsonValue, T> | undefined>;
+    waitForTask<T>(
+      id: idsTypes.TaskId<T>,
+      context: chordTypes.Context,
+    ): Promise<typesModule.SettledTask<T>>;
+    abortOwned(id: idsTypes.TaskId, context: chordTypes.Context): Promise<void>;
+    ownedTasks(
+      context: chordTypes.Context,
+    ): Promise<TaskRecord<chordTypes.JsonValue, chordTypes.JsonValue, chordTypes.JsonValue>[]>;
+    outcomes<T>(
+      ids: readonly idsTypes.TaskId<T>[],
+      context: chordTypes.Context,
+    ): Promise<TaskOutcome<T>[]>;
     conversation(
       id: idsTypes.ConversationId,
-      context: Context,
+      context: chordTypes.Context,
     ): Promise<typesModule.ConversationHandle | undefined>;
-    entry(id: idsTypes.EntryId, context: Context): Promise<recordsTypes.EntryRecord | undefined>;
-    entry<D extends JsonValue>(
+    entry(
+      id: idsTypes.EntryId,
+      context: chordTypes.Context,
+    ): Promise<recordsTypes.EntryRecord | undefined>;
+    entry<D extends chordTypes.JsonValue>(
       token: recordsTypes.Entry<D>,
       id: idsTypes.EntryId,
-      context: Context,
+      context: chordTypes.Context,
     ): Promise<recordsTypes.TypedEntry<D> | undefined>;
     context(
       conversationId: idsTypes.ConversationId,
-      context: Context,
+      context: chordTypes.Context,
       options?: { readonly at?: idsTypes.EntryId },
     ): Promise<typesModule.ContextView>;
     now(): number;
     report(error: unknown): void;
-    sleep(until: number, context: Context): Promise<void>;
+    sleep(until: number, context: chordTypes.Context): Promise<void>;
   }
 
   type TaskDefinition<I, S extends { phase: string }, R, H extends object> = {
@@ -89,11 +107,11 @@ declare namespace tasksTypes {
     abort(
       task: RunningTask<I, S, R>,
       runtime: TaskRuntime<I, S, R, H>,
-      context: Context,
+      context: chordTypes.Context,
     ): Promise<void>;
     migrate?(
-      input: JsonValue,
-      checkpoint: JsonValue,
+      input: chordTypes.JsonValue,
+      checkpoint: chordTypes.JsonValue,
       fromVersion: number,
     ): {
       input: I;
@@ -121,7 +139,7 @@ declare namespace tasksTypes {
 
   type TaskOutcomeError = {
     readonly message: string;
-    readonly detail?: JsonValue;
+    readonly detail?: chordTypes.JsonValue;
   };
 
   type TaskOutcome<R> =
@@ -207,7 +225,7 @@ declare namespace tasksTypes {
             TaskState<S, R>,
             { readonly status: "pending" | "running" | "waiting" }
           >;
-          readonly memos?: Readonly<Record<string, JsonValue>>;
+          readonly memos?: Readonly<Record<string, chordTypes.JsonValue>>;
         }
       | {
           readonly state: Extract<TaskState<S, R>, { readonly status: "completing" | "terminal" }>;

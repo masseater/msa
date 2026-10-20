@@ -5,9 +5,11 @@ import { Type } from "typebox";
 import { describe, it } from "vite-plus/test";
 import { WebSocketServer } from "ws";
 
-import {
-  type Host,
-  type WebSocketLike,
+import chord from "../src/index.ts";
+import type chordTypes from "../src/index.types.ts";
+import timing from "./fixtures/timing.ts";
+
+const {
   acceptWebSockets,
   createHost,
   hostNamed,
@@ -16,8 +18,7 @@ import {
   method,
   remote,
   webSocketLink,
-} from "../src/index.ts";
-import timing from "./fixtures/timing.ts";
+} = chord;
 
 const { latch } = timing;
 
@@ -36,7 +37,7 @@ const Board = remote("t.board", {
 type Principal = (request: { readonly url?: string | undefined }) => unknown;
 
 const withSocketServer = <A>(
-  server: Host,
+  server: chordTypes.Host,
   principal: Principal,
   use: (port: number) => Effect.Effect<A>,
 ): Effect.Effect<A> =>
@@ -55,19 +56,19 @@ const withSocketServer = <A>(
     );
   });
 
-const socketHost = (name: string, socket: WebSocket, client = true): Host =>
+const socketHost = (name: string, socket: WebSocket, client = true): chordTypes.Host =>
   createHost({
     name,
     onError: () => {},
     self: { kind: "host" },
     upstream: {
-      link: webSocketLink(socket as unknown as WebSocketLike),
+      link: webSocketLink(socket as unknown as chordTypes.WebSocketLike),
       principal: { kind: "server" },
     },
     ...(client ? { kind: "client" as const } : {}),
   });
 
-const serveBoard = (server: Host): void => {
+const serveBoard = (server: chordTypes.Host): void => {
   server.serve(Board, (_input, principal, self) => {
     const notes = self.state("notes", Type.Array(Type.String()), []);
     return {

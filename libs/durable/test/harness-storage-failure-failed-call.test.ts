@@ -1,5 +1,5 @@
 import { createModels } from "@msa/ai";
-import type { Context } from "@msa/chord";
+import type chordTypes from "@msa/chord/index.types";
 import durable from "@msa/durable";
 import harnessModule from "@msa/durable/harness";
 import memory from "@msa/durable/storage/memory";
@@ -202,7 +202,7 @@ const doesNotFail = Effect.gen(function* () {
     }
   }
   const { harness, root } = yield* started(new CancelledRead());
-  const cancelling: Context = { ...context, abortSignal: controller.signal };
+  const cancelling: chordTypes.Context = { ...context, abortSignal: controller.signal };
   yield* awaited(expect(root.context(cancelling)).rejects.toBe(cancelled));
   yield* awaited(
     expect(

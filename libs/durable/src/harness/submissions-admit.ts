@@ -1,5 +1,5 @@
-import type { Draft, JsonRepresentation } from "@msa/chord";
-import { copyJson } from "@msa/chord/json";
+import type chordTypes from "@msa/chord/index.types";
+import json from "@msa/chord/json";
 import { Effect, Function } from "effect";
 
 import errors from "../errors.ts";
@@ -9,6 +9,8 @@ import type inboxTypes from "./inbox.types.ts";
 import liveModule from "./live.ts";
 import type liveTypes from "./live.types.ts";
 import type typesModule from "./types.types.ts";
+
+const { copyJson } = json;
 
 const {
   InboxDoc,
@@ -88,7 +90,7 @@ const queueDraft = Effect.fnUntraced(function* (
     inbox.items.push({ entry: value as typesModule.JsonObject, id, mode: "write" });
   else {
     const mode = draft.whenBusy === "steer" ? "steer" : "followUp";
-    const content = value as JsonRepresentation<typesModule.UserInput>;
+    const content = value as chordTypes.JsonRepresentation<typesModule.UserInput>;
     const entry = draft.entry === undefined ? {} : { entry: pickInputEntry(draft.entry) };
     inbox.items.push({ content, id, mode, ...entry });
   }
@@ -102,7 +104,7 @@ const placeInput = Effect.fnUntraced(function* (
     readonly draft: Extract<typesModule.SubmissionDraft, { type: "input" }>;
     readonly requestId: RequestId;
     readonly now: number;
-    readonly live: Draft<liveTypes.LiveState>;
+    readonly live: chordTypes.Draft<liveTypes.LiveState>;
   },
 ) {
   const { draft, requestId, now } = state;

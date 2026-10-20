@@ -1,4 +1,4 @@
-import type { Context } from "@msa/chord";
+import type chordTypes from "@msa/chord/index.types";
 import { Effect, Function } from "effect";
 
 import documentsModule from "../documents.ts";
@@ -25,7 +25,7 @@ const resolveRead: dualTypes.Dual2<
   (token: documentsTypes.AnyDocToken, args: readonly unknown[]): sessionReadsTypes.Resolved => {
     const definition = token.definition;
     const resolved = resolveAddress(definition, args);
-    return { context: args[resolved.nextArgument] as Context, definition, resolved };
+    return { context: args[resolved.nextArgument] as chordTypes.Context, definition, resolved };
   },
 );
 
@@ -56,7 +56,7 @@ const checked: dualTypes.Dual2<
 const conversationDocumentOnLine: dualTypes.Dual3<
   sessionReadsTypes.SessionState,
   documentsTypes.AnyDocToken,
-  readonly [typesModule.ConversationId, Context],
+  readonly [typesModule.ConversationId, chordTypes.Context],
   Effect.Effect<
     | {
         readonly record: sessionReadsTypes.LoadedDocument["record"];
@@ -70,7 +70,7 @@ const conversationDocumentOnLine: dualTypes.Dual3<
   Effect.fnUntraced(function* (
     state: sessionReadsTypes.SessionState,
     token: documentsTypes.AnyDocToken,
-    args: readonly [typesModule.ConversationId, Context],
+    args: readonly [typesModule.ConversationId, chordTypes.Context],
   ) {
     const read = resolveRead(token, args);
     const loaded = yield* loadResolved(state, { ...read, context: args[1] });
@@ -155,7 +155,11 @@ const snapshotAsOf: dualTypes.Dual3<
         throw new TypeError("Session.snapshotAsOf() requires an entry ID");
       }
       const at = idFromNumber<typesModule.EntryId>(atValue);
-      const read = { context: args[resolved.nextArgument + 1] as Context, definition, resolved };
+      const read = {
+        context: args[resolved.nextArgument + 1] as chordTypes.Context,
+        definition,
+        resolved,
+      };
       return Effect.promise(() =>
         enqueueHealthy(state, historicalDocument(state, read, conversationId, at)),
       );

@@ -1,5 +1,5 @@
 import type { AssistantMessage, Message } from "@msa/ai";
-import type { Context } from "@msa/chord";
+import type chordTypes from "@msa/chord/index.types";
 import { Effect, Function } from "effect";
 
 import entriesModule from "../entries.ts";
@@ -150,7 +150,7 @@ const scanRange = Effect.fnUntraced(function* (
   storage: typesModule.Storage,
   conversationId: typesModule.ConversationId,
   range: Omit<typesModule.EntryQuery, "conversationId">,
-  context: Context,
+  context: chordTypes.Context,
 ) {
   const entries = yield* scanAll((cursor) =>
     storage.scanEntries({ conversationId, ...range }, SCAN_PAGE_SIZE, cursor, context),

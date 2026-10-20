@@ -1,14 +1,18 @@
-import { type AttachedReplicatedState, type Context, replicatedState } from "@msa/chord";
+import chord from "@msa/chord";
+import type chordTypes from "@msa/chord/index.types";
 import { Effect } from "effect";
 
-import observation from "../session/observation.ts";
-import sessionState from "../session/session-state.ts";
 import contextModule from "./context.ts";
+import conversationViewsKit from "./conversation-views-kit.ts";
 import util from "./util.ts";
 import viewAdvance from "./view-advance.ts";
 import viewMount from "./view-mount.ts";
 import type viewTypesModule from "./view-types.ts";
 import type viewTypes from "./view.types.ts";
+
+const { observation, sessionState } = conversationViewsKit;
+
+const { replicatedState } = chord;
 
 const { advance } = viewAdvance;
 const { CommittedStateSource, CommittedWatch } = observation;
@@ -52,8 +56,8 @@ export default class ConversationViews {
 
   state(
     id: viewTypes.ConversationId,
-    context: Context,
-  ): Promise<AttachedReplicatedState<viewTypesModule.ConversationView>> {
+    context: chordTypes.Context,
+  ): Promise<chordTypes.AttachedReplicatedState<viewTypesModule.ConversationView>> {
     return Effect.runPromise(
       Effect.gen({ self: this }, function* () {
         const attached = yield* Effect.promise(() =>
@@ -80,7 +84,7 @@ export default class ConversationViews {
 
   watch(
     id: viewTypes.ConversationId,
-    context: Context,
+    context: chordTypes.Context,
   ): Promise<viewTypes.WatchHandle<viewTypesModule.ConversationView>> {
     return Effect.runPromise(
       Effect.gen({ self: this }, function* () {
@@ -112,7 +116,7 @@ export default class ConversationViews {
       release: () => void,
       storage: viewTypes.Storage,
     ) => O | Promise<O>,
-    context: Context,
+    context: chordTypes.Context,
   ): Promise<{ observer: O; detach: () => void }> {
     return this.#session.readOnLine(() => Effect.runPromise(this.#attach(id, create, context)));
   }
@@ -125,7 +129,7 @@ export default class ConversationViews {
       release: () => void,
       storage: viewTypes.Storage,
     ) => O | Promise<O>,
-    context: Context,
+    context: chordTypes.Context,
   ) {
     const existing = this.#mounts.get(id);
     const mount = existing ?? (yield* this.#build(id, context));
@@ -146,7 +150,7 @@ export default class ConversationViews {
   #build = Effect.fnUntraced(function* (
     this: ConversationViews,
     id: viewTypes.ConversationId,
-    context: Context,
+    context: chordTypes.Context,
   ) {
     const conversation = yield* Effect.promise(() => this.#storage.conversation(id, context));
     if (conversation === undefined)

@@ -2,35 +2,23 @@ import { dual } from "effect/Function";
 import type { Static, TSchema } from "typebox";
 import { Value } from "typebox/value";
 
-import {
-  type AnyContract,
-  type Description,
-  type LocalContract,
-  type LocalDef,
-  LOCAL_VARIANT,
-  MEMBER,
-  type MethodSpec,
-  type OpaqueSpec,
-  type Placement,
-  type MemberDescription,
-  type PlacementFor,
-  PlacementSchema,
-  type RemoteContract,
-  type RemoteDef,
-  RESERVED_MEMBERS,
-} from "./contract.ts";
-import { ChordError } from "./errors.ts";
-import { canonicalJson, hash64 } from "./schema.ts";
+import contractModule from "./contract.ts";
+import type contractTypes from "./contract.types.ts";
+import errorsModule from "./errors.ts";
+import schemaModule from "./schema.ts";
+const { canonicalJson, hash64 } = schemaModule;
+const { ChordError } = errorsModule;
 
 function describeMember(
   name: string,
   member: unknown,
   scope: "remote" | "local",
-): MemberDescription {
-  if (RESERVED_MEMBERS.has(name)) throw new TypeError(`member name is reserved: ${name}`);
-  const brand = (member as { [MEMBER]?: string })[MEMBER];
+): contractTypes.MemberDescription {
+  if (contractModule.RESERVED_MEMBERS.has(name))
+    throw new TypeError(`member name is reserved: ${name}`);
+  const brand = (member as { [contractModule.MEMBER]?: string })[contractModule.MEMBER];
   if (brand === "method") {
-    const spec = member as MethodSpec;
+    const spec = member as contractTypes.MethodSpec;
     return {
       kind: "method",
       ...(spec.args === undefined ? {} : { args: spec.args }),
@@ -40,12 +28,12 @@ function describeMember(
   if (brand === "opaque") {
     if (scope === "remote")
       throw new TypeError(`remote contracts cannot expose opaque members: ${name}`);
-    return { kind: "opaque", id: (member as OpaqueSpec).id };
+    return { id: (member as contractTypes.OpaqueSpec).id, kind: "opaque" };
   }
   return { kind: "state", schema: member as TSchema };
 }
 
-function finish<C extends AnyContract>(contract: Omit<C, "fingerprint">): C {
+function finish<C extends contractTypes.AnyContract>(contract: Omit<C, "fingerprint">): C {
   return { ...contract, fingerprint: hash64(canonicalJson(contract.description)) } as C;
 }
 
@@ -55,23 +43,23 @@ function checkHeader(name: string, version: number): void {
     throw new TypeError(`contract version must be a positive integer`);
 }
 
-function remoteContract<const D extends RemoteDef>(
+function remoteContract<const D extends contractTypes.RemoteDef>(
   name: string,
-  def: D & { readonly host: PlacementFor<Static<D["input"]>> },
-): RemoteContract<D> {
+  def: D & { readonly host: contractTypes.PlacementFor<Static<D["input"]>> },
+): contractTypes.RemoteContract<D> {
   checkHeader(name, def.version);
-  const placement = def.host as Placement | undefined;
-  if (placement === undefined || !Value.Check(PlacementSchema, placement))
+  const placement = def.host as contractTypes.Placement | undefined;
+  if (placement === undefined || !Value.Check(contractModule.PlacementSchema, placement))
     throw new TypeError(`remote contract ${name} needs \`host\`: hostNamed(…) or hostFamily(…)`);
-  const host: Placement =
+  const host: contractTypes.Placement =
     "name" in placement
       ? { name: placement.name }
-      : { prefix: placement.prefix, key: placement.key };
-  const variants: Record<string, Record<string, MemberDescription>> = {};
+      : { key: placement.key, prefix: placement.prefix };
+  const variants: Record<string, Record<string, contractTypes.MemberDescription>> = {};
   if (Object.keys(def.variants).length === 0)
     throw new TypeError(`remote contract ${name} has no variants`);
   for (const [kind, variant] of Object.entries(def.variants)) {
-    const members: Record<string, MemberDescription> = {};
+    const members: Record<string, contractTypes.MemberDescription> = {};
     for (const [key, schema] of Object.entries(variant.state ?? {}))
       members[key] = describeMember(key, schema, "remote");
     for (const [key, spec] of Object.entries(variant.methods ?? {})) {
@@ -82,47 +70,52 @@ function remoteContract<const D extends RemoteDef>(
     }
     variants[kind] = members;
   }
-  const description: Description = {
-    name,
-    scope: "remote",
-    version: def.version,
-    input: def.input,
+  const description: contractTypes.Description = {
     host,
-    variants,
-  };
-  return finish<RemoteContract<D>>({
-    scope: "remote",
-    name,
-    version: def.version,
     input: def.input,
+    name,
+    scope: "remote",
+    variants,
+    version: def.version,
+  };
+  return finish<contractTypes.RemoteContract<D>>({
     def,
     description,
+    input: def.input,
+    name,
+    scope: "remote",
+    version: def.version,
   });
 }
 
-function localContract<const D extends LocalDef>(name: string, def: D): LocalContract<D> {
+function localContract<const D extends contractTypes.LocalDef>(
+  name: string,
+  def: D,
+): contractTypes.LocalContract<D> {
   checkHeader(name, def.version);
-  const members: Record<string, MemberDescription> = {};
+  const members: Record<string, contractTypes.MemberDescription> = {};
   for (const [key, member] of Object.entries(def.members ?? {}))
     members[key] = describeMember(key, member, "local");
-  const description: Description = {
+  const description: contractTypes.Description = {
+    input: def.input,
     name,
     scope: "local",
+    variants: { [contractModule.LOCAL_VARIANT]: members },
     version: def.version,
-    input: def.input,
-    variants: { [LOCAL_VARIANT]: members },
   };
-  return finish<LocalContract<D>>({
-    scope: "local",
-    name,
-    version: def.version,
-    input: def.input,
+  return finish<contractTypes.LocalContract<D>>({
     def,
     description,
+    input: def.input,
+    name,
+    scope: "local",
+    version: def.version,
   });
 }
 
-export function contractFromDescription(description: Description): AnyContract {
+function contractFromDescription(
+  description: contractTypes.Description,
+): contractTypes.AnyContract {
   const { name, scope, version, input, host } = description;
   if (
     typeof name !== "string" ||
@@ -133,28 +126,38 @@ export function contractFromDescription(description: Description): AnyContract {
     throw new ChordError("invalid", "malformed contract token", { reason: "token" });
   }
   const base = {
-    name,
-    version,
-    input,
     description,
     fingerprint: hash64(canonicalJson(description)),
+    input,
+    name,
+    version,
   };
   return scope === "remote"
-    ? { ...base, scope, def: { version, input, host: host!, variants: {} } }
-    : { ...base, scope, def: { version, input } };
+    ? { ...base, def: { host: host!, input, variants: {}, version }, scope }
+    : { ...base, def: { input, version }, scope };
 }
 
-export const remote: {
-  <const D extends RemoteDef>(
-    def: D & { readonly host: PlacementFor<Static<D["input"]>> },
-  ): (name: string) => RemoteContract<D>;
-  <const D extends RemoteDef>(
+const remote: {
+  <const D extends contractTypes.RemoteDef>(
+    def: D & { readonly host: contractTypes.PlacementFor<Static<D["input"]>> },
+  ): (name: string) => contractTypes.RemoteContract<D>;
+  <const D extends contractTypes.RemoteDef>(
     name: string,
-    def: D & { readonly host: PlacementFor<Static<D["input"]>> },
-  ): RemoteContract<D>;
+    def: D & { readonly host: contractTypes.PlacementFor<Static<D["input"]>> },
+  ): contractTypes.RemoteContract<D>;
 } = dual(2, remoteContract);
 
-export const local: {
-  <const D extends LocalDef>(def: D): (name: string) => LocalContract<D>;
-  <const D extends LocalDef>(name: string, def: D): LocalContract<D>;
+const local: {
+  <const D extends contractTypes.LocalDef>(
+    def: D,
+  ): (name: string) => contractTypes.LocalContract<D>;
+  <const D extends contractTypes.LocalDef>(name: string, def: D): contractTypes.LocalContract<D>;
 } = dual(2, localContract);
+
+const contractBuild = {
+  contractFromDescription,
+  local,
+  remote,
+};
+
+export default contractBuild;

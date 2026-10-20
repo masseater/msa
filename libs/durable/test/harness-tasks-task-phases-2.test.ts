@@ -1,5 +1,5 @@
-import type { Context } from "@msa/chord";
-import { withCancel } from "@msa/chord/context";
+import contextModule from "@msa/chord/context";
+import type chordTypes from "@msa/chord/index.types";
 import durable from "@msa/durable";
 import type durableTypes from "@msa/durable/index.types";
 import { Effect } from "effect";
@@ -7,6 +7,8 @@ import { describe, expect, it } from "vite-plus/test";
 
 import harnessTasksSupport from "./harness-tasks-support.ts";
 import testSupport from "./support.ts";
+
+const { withCancel } = contextModule;
 
 const { defineTask } = durable;
 
@@ -21,7 +23,7 @@ type PingRuntime = durableTypes.TaskRuntime<null, { phase: string }, null, PingH
 type Seen = { phase: string; pings: string[]; thinking: string; same?: boolean };
 
 const observer = (pings: string[], seen: Seen[]) =>
-  Effect.fn("observe")(function* (runtime: PingRuntime, ctx: Context, phase: string) {
+  Effect.fn("observe")(function* (runtime: PingRuntime, ctx: chordTypes.Context, phase: string) {
     const agent = yield* awaited(runtime.agent(ctx));
     pings.length = 0;
     yield* awaited(runtime.hooks.each("ping", (handler) => handler()));

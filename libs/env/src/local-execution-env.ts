@@ -1,4 +1,4 @@
-import type { Context } from "@msa/chord";
+import type chordTypes from "@msa/chord/index.types";
 import type envTypes from "@msa/durable/env.types";
 import nodeModule from "@msa/durable/env/node";
 import { Effect } from "effect";
@@ -24,7 +24,7 @@ export default class LocalExecutionEnv
   listFiles(
     path: string,
     options: envTypes.ListFilesOptions | undefined,
-    context: Context,
+    context: chordTypes.Context,
   ): Promise<envTypes.Result<envTypes.FileListing, envTypes.FileError>> {
     return Effect.runPromise(
       Effect.gen({ self: this }, function* () {

@@ -1,4 +1,4 @@
-import type { Context } from "@msa/chord";
+import type chordTypes from "@msa/chord/index.types";
 import { Effect } from "effect";
 
 import type sessionTypes from "../session/session.types.ts";
@@ -19,7 +19,7 @@ const SCAN_PAGE_SIZE = 256;
 
 const totalUsage = Effect.fnUntraced(function* (
   { session, storage }: harnessQueriesTypes.QuerySession,
-  context: Context,
+  context: chordTypes.Context,
 ) {
   const scan = yield* toPromise(() =>
     scanAll((cursor) => storage.scanConversations({}, SCAN_PAGE_SIZE, cursor, context)),
@@ -43,14 +43,14 @@ const totalUsage = Effect.fnUntraced(function* (
 const scanSubmissions = (
   storage: typesModule.Storage,
   status: "queued" | "placed",
-  context: Context,
+  context: chordTypes.Context,
 ) => scanAll((cursor) => storage.scanSubmissions({ status }, SCAN_PAGE_SIZE, cursor, context));
 
 const inspectHarness = Effect.fnUntraced(function* (
   { session, storage }: harnessQueriesTypes.QuerySession,
   tasks: harnessQueriesTypes.Wired["tasks"],
   snapshot: typesModule.RegistrySnapshot,
-  context: Context,
+  context: chordTypes.Context,
 ) {
   const read = yield* toPromise(() =>
     Effect.gen(function* () {
@@ -68,7 +68,7 @@ const buildEnv = Effect.fnUntraced(function* <Tool extends typesModule.ToolRegis
   session: sessionTypes.SessionImpl,
   options: typesModule.HarnessOptions<Tool>,
   id: typesModule.ConversationId,
-  context: Context,
+  context: chordTypes.Context,
 ) {
   const build = options.env;
   if (build === undefined) return undefined;
@@ -84,7 +84,7 @@ const conversationAgent = Effect.fnUntraced(function* <Tool extends typesModule.
   query: harnessQueriesTypes.AgentQuery<Tool>,
   id: typesModule.ConversationId,
   snapshot: typesModule.RegistrySnapshot<Tool> | undefined,
-  context: Context,
+  context: chordTypes.Context,
 ) {
   const registry = snapshot ?? query.options.registry.snapshot();
   const settings = resolveSettings(query.options.settings);

@@ -1,4 +1,4 @@
-import { BACKGROUND_CONTEXT, withAbortSignal } from "@msa/chord/context";
+import contextModule from "@msa/chord/context";
 import { Effect } from "effect";
 import { dual } from "effect/Function";
 import { vi } from "vite-plus/test";
@@ -9,6 +9,8 @@ import effectSupport from "./effect-support.ts";
 import type envNodeSupportTypes from "./env-node-support.types.ts";
 import nodeFsPromisesCapture from "./node-fs-promises-capture.ts";
 import platformSupport from "./platform-support.ts";
+
+const { BACKGROUND_CONTEXT, withAbortSignal } = contextModule;
 
 const { awaited } = effectSupport;
 const { openFile } = nodeFsPromisesCapture;

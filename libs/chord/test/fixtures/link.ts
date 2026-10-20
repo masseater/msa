@@ -2,18 +2,11 @@ import { Effect } from "effect";
 import { dual } from "effect/Function";
 import { Type } from "typebox";
 
-import {
-  type Ctx,
-  type Host,
-  type Self,
-  createHost,
-  hostFamily,
-  hostNamed,
-  memoryLinkPair,
-  method,
-  remote,
-} from "../../src/index.ts";
+import chord from "../../src/index.ts";
+import type chordTypes from "../../src/index.types.ts";
 import type linkTypes from "./link.types.ts";
+
+const { createHost, hostFamily, hostNamed, memoryLinkPair, method, remote } = chord;
 
 const counterVariants = {
   main: {
@@ -39,12 +32,12 @@ const SessionCounter = remote("t.session-counter", {
   version: 1,
 });
 
-function serveCounterImpl(host: Host, principals: unknown[] = []): void {
-  const counter = (principal: unknown, self: Self) => {
+function serveCounterImpl(host: chordTypes.Host, principals: unknown[] = []): void {
+  const counter = (principal: unknown, self: chordTypes.Self) => {
     principals.push(principal);
     const count = self.state("count", Type.Object({ n: Type.Number() }), { n: 0 });
     return {
-      add: (delta: number, ctx: Ctx) => {
+      add: (delta: number, ctx: chordTypes.Ctx) => {
         count.change(ctx, (draft) => {
           draft.n += delta;
         });
@@ -80,7 +73,7 @@ function serverWithWorker(workerName = "session:S1") {
 
 const browserOf =
   (
-    server: Host,
+    server: chordTypes.Host,
     options: { pingInterval?: number; pingTimeout?: number },
   ): linkTypes.Cluster["browser"] =>
   (principal, browserOptions = {}) => {
@@ -107,7 +100,7 @@ const browserOf =
     return ref;
   };
 
-const serveSessionCounter = (worker: Host, log: string[]): void => {
+const serveSessionCounter = (worker: chordTypes.Host, log: string[]): void => {
   worker.serve(SessionCounter, (input, principal, self) => {
     self.resource("probe", {
       close: () => void log.push(`close ${input.name}`),
@@ -116,7 +109,7 @@ const serveSessionCounter = (worker: Host, log: string[]): void => {
     });
     const count = self.state("count", Type.Object({ n: Type.Number() }), { n: 0 });
     return {
-      add: (delta: number, ctx: Ctx) => {
+      add: (delta: number, ctx: chordTypes.Ctx) => {
         count.change(ctx, (draft) => {
           draft.n += delta;
         });
@@ -132,7 +125,7 @@ const serveSessionCounter = (worker: Host, log: string[]): void => {
 function cluster(options: { pingInterval?: number; pingTimeout?: number } = {}): linkTypes.Cluster {
   const log: string[] = [];
   const server = createHost({ name: "server", onError: () => {}, self: { kind: "host" } });
-  const workers = new Map<string, Host>();
+  const workers = new Map<string, chordTypes.Host>();
   const state: linkTypes.Cluster = {
     allow: () => true,
     browser: browserOf(server, options),
@@ -178,8 +171,8 @@ const large = (tag: string) =>
   Array.from({ length: 40 }, (_, i) => `${tag}${i}:${"x".repeat(4000)}`);
 
 const serveCounter: {
-  (principals?: unknown[]): (host: Host) => void;
-  (host: Host, principals?: unknown[]): void;
+  (principals?: unknown[]): (host: chordTypes.Host) => void;
+  (host: chordTypes.Host, principals?: unknown[]): void;
 } = dual(
   (args: IArguments) => typeof (args[0] as { serve?: unknown } | undefined)?.serve === "function",
   serveCounterImpl,

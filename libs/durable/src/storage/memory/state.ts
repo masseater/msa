@@ -1,5 +1,5 @@
-import type { JsonValue } from "@msa/chord";
-import type { Op } from "@msa/chord/delta";
+import type deltaTypes from "@msa/chord/delta.types";
+import type chordTypes from "@msa/chord/index.types";
 import { Function } from "effect";
 
 import errors from "../../errors.ts";
@@ -40,13 +40,13 @@ const documentDeltaBatches: {
     version: number,
     revisions: readonly stateTypes.DocumentRevision[],
     start: number,
-  ): (id: typesModule.DocumentId) => Generator<readonly Op[]>;
+  ): (id: typesModule.DocumentId) => Generator<readonly deltaTypes.Op[]>;
   (
     id: typesModule.DocumentId,
     version: number,
     revisions: readonly stateTypes.DocumentRevision[],
     start: number,
-  ): Generator<readonly Op[]>;
+  ): Generator<readonly deltaTypes.Op[]>;
 } = Function.dual(
   4,
   function* (
@@ -54,7 +54,7 @@ const documentDeltaBatches: {
     version: number,
     revisions: readonly stateTypes.DocumentRevision[],
     start: number,
-  ): Generator<readonly Op[]> {
+  ): Generator<readonly deltaTypes.Op[]> {
     for (let index = start; index < revisions.length; index++) {
       const revision = revisions[index]!;
       if (revision.kind !== "delta" || revision.version !== version) {
@@ -96,7 +96,7 @@ const freeze = <T>(value: T): T => {
 };
 
 const cursorId = <I extends typesModule.Id<string>>(
-  cursor: Readonly<Record<string, JsonValue>> | undefined,
+  cursor: Readonly<Record<string, chordTypes.JsonValue>> | undefined,
 ): I | undefined => {
   const after = cursor?.["after"];
   if (after === undefined) return undefined;

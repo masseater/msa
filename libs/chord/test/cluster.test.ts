@@ -3,9 +3,12 @@ import assert from "node:assert/strict";
 import { type Context, Effect } from "effect";
 import { describe, it, onTestFinished } from "vite-plus/test";
 
-import { type Facet, type Host, createHost, isChordError, memoryLinkPair } from "../src/index.ts";
+import chord from "../src/index.ts";
+import type chordTypes from "../src/index.types.ts";
 import cluster from "./fixtures/cluster.ts";
 import timing from "./fixtures/timing.ts";
+
+const { createHost, isChordError, memoryLinkPair } = chord;
 
 const { Greeter, GreeterV2, ServerGreeter, greeterFacet, setup } = cluster;
 const { latch, tick } = timing;
@@ -96,7 +99,7 @@ const aWorkerGateBlockedPastIts = Effect.gen(function* () {
   assert.equal(yield* Effect.promise(() => greeter.greet("x")), "v1 x");
 });
 
-const coldWorkerIsReconciled = (server: Host, services: Context.Context<never>) =>
+const coldWorkerIsReconciled = (server: chordTypes.Host, services: Context.Context<never>) =>
   Effect.gen(function* () {
     const cold = createHost({
       loader: () =>
@@ -123,8 +126,8 @@ const coldWorkerIsReconciled = (server: Host, services: Context.Context<never>) 
   });
 
 const freshWorkerLoadsCurrentCode = (
-  server: Host,
-  modules: Map<string, Facet>,
+  server: chordTypes.Host,
+  modules: Map<string, chordTypes.Facet>,
   services: Context.Context<never>,
 ) =>
   Effect.gen(function* () {

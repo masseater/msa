@@ -1,5 +1,5 @@
-import type { JsonValue } from "@msa/chord";
-import type { Op } from "@msa/chord/delta";
+import type deltaTypes from "@msa/chord/delta.types";
+import type chordTypes from "@msa/chord/index.types";
 
 import type documents from "./documents.ts";
 import type idsTypes from "./ids.types.ts";
@@ -32,12 +32,16 @@ declare namespace documentsTypes {
     readonly version: number;
     initial(): T;
     migrate?(value: idsTypes.JsonObject, fromVersion: number): T;
-    checkpointWhen?(value: Readonly<T>, ops: readonly Op[], info: CheckpointInfo): boolean;
+    checkpointWhen?(
+      value: Readonly<T>,
+      ops: readonly deltaTypes.Op[],
+      info: CheckpointInfo,
+    ): boolean;
   };
 
   type DocDefinition<T extends idsTypes.JsonObject> = CommonDocDefinition<T> & DocumentSemantics;
 
-  type DocFamilyDefinition<T extends idsTypes.JsonObject, I extends JsonValue> = Omit<
+  type DocFamilyDefinition<T extends idsTypes.JsonObject, I extends chordTypes.JsonValue> = Omit<
     CommonDocDefinition<T>,
     "initial"
   > &
@@ -53,7 +57,7 @@ declare namespace documentsTypes {
 
   interface DocFamilyToken<
     T extends idsTypes.JsonObject,
-    I extends JsonValue,
+    I extends chordTypes.JsonValue,
     D extends DocFamilyDefinition<T, I>,
   > {
     readonly definition: D;
@@ -80,15 +84,14 @@ declare namespace documentsTypes {
     CommonDocDefinition<T> & { readonly scope: "task" }
   >;
 
-  type SessionDocFamilyToken<T extends idsTypes.JsonObject, I extends JsonValue> = DocFamilyToken<
-    T,
-    I,
-    DocFamilyDefinition<T, I> & { readonly scope: "session" }
-  >;
+  type SessionDocFamilyToken<
+    T extends idsTypes.JsonObject,
+    I extends chordTypes.JsonValue,
+  > = DocFamilyToken<T, I, DocFamilyDefinition<T, I> & { readonly scope: "session" }>;
 
   type ConversationDocFamilyToken<
     T extends idsTypes.JsonObject,
-    I extends JsonValue,
+    I extends chordTypes.JsonValue,
   > = DocFamilyToken<
     T,
     I,
@@ -97,14 +100,13 @@ declare namespace documentsTypes {
 
   type RewindableConversationDocFamilyToken<
     T extends idsTypes.JsonObject,
-    I extends JsonValue,
+    I extends chordTypes.JsonValue,
   > = DocFamilyToken<T, I, DocFamilyDefinition<T, I> & RewindableConversationSemantics>;
 
-  type TaskDocFamilyToken<T extends idsTypes.JsonObject, I extends JsonValue> = DocFamilyToken<
-    T,
-    I,
-    DocFamilyDefinition<T, I> & { readonly scope: "task" }
-  >;
+  type TaskDocFamilyToken<
+    T extends idsTypes.JsonObject,
+    I extends chordTypes.JsonValue,
+  > = DocFamilyToken<T, I, DocFamilyDefinition<T, I> & { readonly scope: "task" }>;
 
   type DocumentRecord = {
     readonly id: idsTypes.DocumentId;
@@ -169,7 +171,7 @@ declare namespace documentsTypes {
     | {
         readonly version: number;
         readonly kind: "delta";
-        readonly ops: readonly Op[];
+        readonly ops: readonly deltaTypes.Op[];
       };
 
   type DocumentCopySource = {

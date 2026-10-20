@@ -1,9 +1,12 @@
 import { Config, Effect, Option } from "effect";
 
-import { createHost, ipcLink } from "../../src/index.ts";
-import { childControl, parentChannel } from "../../src/manager.ts";
+import chord from "../../src/index.ts";
+import manager from "../../src/manager.ts";
 import Echo from "./echo.ts";
 import platform from "./platform.ts";
+
+const { childControl, parentChannel } = manager;
+const { createHost, ipcLink } = chord;
 
 const { startNode, writeText } = platform;
 

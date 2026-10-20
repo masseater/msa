@@ -1,4 +1,4 @@
-import type { Context } from "@msa/chord";
+import type chordTypes from "@msa/chord/index.types";
 
 import type harnessSchedulerWiringTypes from "./harness-scheduler-wiring.types.ts";
 import type schedulerTypes from "./scheduler.types.ts";
@@ -25,7 +25,7 @@ declare namespace harnessWiringTypes {
     readonly storage: typesModule.Storage;
     readonly options: typesModule.HarnessOptions<Tool>;
     readonly clock: HarnessClock;
-    readonly context: Context;
+    readonly context: chordTypes.Context;
   };
 }
 

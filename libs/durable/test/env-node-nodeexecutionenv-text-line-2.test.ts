@@ -1,4 +1,4 @@
-import { BACKGROUND_CONTEXT, withAbortSignal } from "@msa/chord/context";
+import contextModule from "@msa/chord/context";
 import { Effect } from "effect";
 import { afterEach, describe, expect, it } from "vite-plus/test";
 
@@ -8,6 +8,8 @@ import node from "../src/env/node.ts";
 import effectSupport from "./effect-support.ts";
 import envNodeSupport from "./env-node-support.ts";
 import platformSupport from "./platform-support.ts";
+
+const { BACKGROUND_CONTEXT, withAbortSignal } = contextModule;
 
 const { currentTimeMillis } = clockModule;
 const { NodeExecutionEnv } = node;

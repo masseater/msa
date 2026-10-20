@@ -4,17 +4,12 @@ import { Effect } from "effect";
 import { Type } from "typebox";
 import { describe, it } from "vite-plus/test";
 
-import {
-  type Ctx,
-  type Host,
-  createHost,
-  hostNamed,
-  isChordError,
-  memoryLinkPair,
-  remote,
-} from "../src/index.ts";
+import chord from "../src/index.ts";
+import type chordTypes from "../src/index.types.ts";
 import counting from "./fixtures/counting.ts";
 import timing from "./fixtures/timing.ts";
+
+const { createHost, hostNamed, isChordError, memoryLinkPair, remote } = chord;
 
 const { CountingLink } = counting;
 const { latch, pollUntil } = timing;
@@ -39,7 +34,7 @@ function setup(readyTimeout?: number) {
   const [down, up] = memoryLinkPair();
   server.accept(down, { principal: { user: "u" } });
   const link = new CountingLink(up);
-  const browser: Host = createHost({
+  const browser: chordTypes.Host = createHost({
     kind: "client",
     name: "browser",
     onError: () => {},
@@ -76,7 +71,7 @@ const aCtxGetStillWaitingWhen = Effect.gen(function* () {
   const { server, browser, link, open } = setup();
   let pending: Promise<unknown> | undefined;
   yield* Effect.promise(() =>
-    browser.root((ctx: Ctx) =>
+    browser.root((ctx: chordTypes.Ctx) =>
       Effect.runPromiseWith(services)(
         Effect.sync(() => {
           pending = ctx.get(Slow, {});
@@ -108,7 +103,7 @@ const ctxGetResolvesHydratedTheCall = Effect.gen(function* () {
   const { server, browser, link, open } = setup();
   open();
   const value = yield* Effect.promise(() =>
-    browser.root((ctx: Ctx) =>
+    browser.root((ctx: chordTypes.Ctx) =>
       Effect.runPromiseWith(services)(
         Effect.gen(function* () {
           const slow = yield* Effect.promise(() => ctx.get(Slow, {}));

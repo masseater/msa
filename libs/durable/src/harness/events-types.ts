@@ -1,5 +1,5 @@
 import type { AssistantMessage, Message, Usage } from "@msa/ai";
-import type { Context, JsonValue } from "@msa/chord";
+import type chordTypes from "@msa/chord/index.types";
 
 import type inboxTypes from "./inbox.types.ts";
 import type liveTypes from "./live.types.ts";
@@ -67,7 +67,7 @@ declare namespace eventsTypesModule {
     | ({
         type: "tool_execution_update";
         output?: { trimStart?: number; append?: string } | { set: string };
-        details?: JsonValue;
+        details?: chordTypes.JsonValue;
         diagnostics?: readonly typesModule.ToolDiagnostic[];
       } & ToolEventCall)
     | ({
@@ -107,7 +107,9 @@ declare namespace eventsTypesModule {
 
   interface AgentEventStream {
     readonly snapshot: SnapshotEvent;
-    start(listener: (events: readonly AgentEvent[], context: Context) => Promise<void>): void;
+    start(
+      listener: (events: readonly AgentEvent[], context: chordTypes.Context) => Promise<void>,
+    ): void;
     stop(): Promise<typesModule.WatchEnd>;
     readonly closed: Promise<typesModule.WatchEnd>;
   }

@@ -1,31 +1,34 @@
 import { dual } from "effect/Function";
 
-import { mergePieces } from "./tracker-array-pieces.ts";
-import { nextPiecePriority } from "./tracker-object.ts";
-import type { ArrayOverlay, InsertPiece, Piece, PieceNode } from "./tracker-types.ts";
+import trackerArrayPieces from "./tracker-array-pieces.ts";
+import trackerObject from "./tracker-object.ts";
+import type trackerTypesModule from "./tracker-types.types.ts";
 
-function treeElements(node: PieceNode | undefined): number {
+function treeElements(node: trackerTypesModule.PieceNode | undefined): number {
   return node?.elements ?? 0;
 }
 
-export function updatePieceNode(node: PieceNode): void {
+function updatePieceNode(node: trackerTypesModule.PieceNode): void {
   node.elements = treeElements(node.left) + node.piece.length + treeElements(node.right);
 }
 
-function createPieceNodeImpl(overlay: ArrayOverlay, piece: Piece): PieceNode {
+function createPieceNodeImpl(
+  overlay: trackerTypesModule.ArrayOverlay,
+  piece: trackerTypesModule.Piece,
+): trackerTypesModule.PieceNode {
   return {
-    piece,
-    left: undefined,
-    right: undefined,
-    priority: nextPiecePriority(overlay),
     elements: piece.length,
+    left: undefined,
+    piece,
+    priority: trackerObject.nextPiecePriority(overlay),
+    right: undefined,
   };
 }
 
 function mergePieceTrees(
-  left: PieceNode | undefined,
-  right: PieceNode | undefined,
-): PieceNode | undefined {
+  left: trackerTypesModule.PieceNode | undefined,
+  right: trackerTypesModule.PieceNode | undefined,
+): trackerTypesModule.PieceNode | undefined {
   if (left === undefined) return right;
   if (right === undefined) return left;
   if (left.priority >= right.priority) {
@@ -39,10 +42,10 @@ function mergePieceTrees(
 }
 
 function splitPieceTreeImpl(
-  overlay: ArrayOverlay,
-  root: PieceNode | undefined,
+  overlay: trackerTypesModule.ArrayOverlay,
+  root: trackerTypesModule.PieceNode | undefined,
   index: number,
-): [PieceNode | undefined, PieceNode | undefined] {
+): [trackerTypesModule.PieceNode | undefined, trackerTypesModule.PieceNode | undefined] {
   if (root === undefined) return [undefined, undefined];
   const leftLength = treeElements(root.left);
   if (index < leftLength) {
@@ -74,8 +77,8 @@ function splitPieceTreeImpl(
   const first = { ...root.piece, length: offset };
   const second = {
     ...root.piece,
-    start: root.piece.start + root.piece.step * offset,
     length: root.piece.length - offset,
+    start: root.piece.start + root.piece.step * offset,
   };
   return [
     mergePieceTrees(root.left, createPieceNodeImpl(overlay, first)),
@@ -83,28 +86,29 @@ function splitPieceTreeImpl(
   ];
 }
 
-function leftmostPieceNode(node: PieceNode): PieceNode {
+function leftmostPieceNode(node: trackerTypesModule.PieceNode): trackerTypesModule.PieceNode {
   while (node.left !== undefined) node = node.left;
   return node;
 }
 
-export function rightmostPieceNode(node: PieceNode): PieceNode {
+function rightmostPieceNode(node: trackerTypesModule.PieceNode): trackerTypesModule.PieceNode {
   while (node.right !== undefined) node = node.right;
   return node;
 }
 
-function mergeablePieces(left: Piece, right: Piece): boolean {
+function mergeablePieces(left: trackerTypesModule.Piece, right: trackerTypesModule.Piece): boolean {
   if (left.kind !== right.kind) return false;
-  if (left.kind === "insert" && left.source !== (right as InsertPiece).source) return false;
+  if (left.kind === "insert" && left.source !== (right as trackerTypesModule.InsertPiece).source)
+    return false;
   if (left.length === 1 && right.length === 1) return Math.abs(right.start - left.start) === 1;
   return left.step === right.step && left.start + left.step * left.length === right.start;
 }
 
 function joinNormalizedImpl(
-  overlay: ArrayOverlay,
-  left: PieceNode | undefined,
-  right: PieceNode | undefined,
-): PieceNode | undefined {
+  overlay: trackerTypesModule.ArrayOverlay,
+  left: trackerTypesModule.PieceNode | undefined,
+  right: trackerTypesModule.PieceNode | undefined,
+): trackerTypesModule.PieceNode | undefined {
   if (left === undefined) return right;
   if (right === undefined) return left;
   const leftPiece = rightmostPieceNode(left).piece;
@@ -114,14 +118,14 @@ function joinNormalizedImpl(
   const [, rightRest] = splitPieceTreeImpl(overlay, right, rightPiece.length);
   const step =
     leftPiece.length === 1 ? ((rightPiece.start - leftPiece.start) as 1 | -1) : leftPiece.step;
-  const combined: Piece =
+  const combined: trackerTypesModule.Piece =
     leftPiece.kind === "base"
-      ? { kind: "base", start: leftPiece.start, length: leftPiece.length + rightPiece.length, step }
+      ? { kind: "base", length: leftPiece.length + rightPiece.length, start: leftPiece.start, step }
       : {
           kind: "insert",
+          length: leftPiece.length + rightPiece.length,
           source: leftPiece.source,
           start: leftPiece.start,
-          length: leftPiece.length + rightPiece.length,
           step,
         };
   return joinNormalizedImpl(
@@ -131,14 +135,17 @@ function joinNormalizedImpl(
   );
 }
 
-function flattenPieceTree(node: PieceNode | undefined, output: Piece[]): void {
+function flattenPieceTree(
+  node: trackerTypesModule.PieceNode | undefined,
+  output: trackerTypesModule.Piece[],
+): void {
   if (node === undefined) return;
   flattenPieceTree(node.left, output);
   output.push(node.piece);
   flattenPieceTree(node.right, output);
 }
 
-export function piecesOf(overlay: ArrayOverlay): readonly Piece[] {
+function piecesOf(overlay: trackerTypesModule.ArrayOverlay): readonly trackerTypesModule.Piece[] {
   if (overlay.pieces === undefined) {
     overlay.pieces = [];
     flattenPieceTree(overlay.root, overlay.pieces);
@@ -146,25 +153,34 @@ export function piecesOf(overlay: ArrayOverlay): readonly Piece[] {
   return overlay.pieces;
 }
 
-function treeFromPiecesImpl(overlay: ArrayOverlay, pieces: Piece[]): PieceNode | undefined {
-  mergePieces(pieces);
-  let root: PieceNode | undefined;
+function treeFromPiecesImpl(
+  overlay: trackerTypesModule.ArrayOverlay,
+  pieces: trackerTypesModule.Piece[],
+): trackerTypesModule.PieceNode | undefined {
+  trackerArrayPieces.mergePieces(pieces);
+  let root: trackerTypesModule.PieceNode | undefined;
   for (const piece of pieces) root = mergePieceTrees(root, createPieceNodeImpl(overlay, piece));
   return root;
 }
 
-function replaceAllPiecesImpl(overlay: ArrayOverlay, pieces: Piece[]): void {
+function replaceAllPiecesImpl(
+  overlay: trackerTypesModule.ArrayOverlay,
+  pieces: trackerTypesModule.Piece[],
+): void {
   overlay.root = treeFromPiecesImpl(overlay, pieces);
   overlay.pieces = undefined;
   overlay.baseLocations = undefined;
   overlay.insertLocations = undefined;
 }
 
-export function arrayLength(overlay: ArrayOverlay): number {
+function arrayLength(overlay: trackerTypesModule.ArrayOverlay): number {
   return treeElements(overlay.root);
 }
 
-function locatePieceImpl(overlay: ArrayOverlay, index: number): Piece {
+function locatePieceImpl(
+  overlay: trackerTypesModule.ArrayOverlay,
+  index: number,
+): trackerTypesModule.Piece {
   let node = overlay.root;
   while (node !== undefined) {
     const leftLength = treeElements(node.left);
@@ -180,46 +196,73 @@ function locatePieceImpl(overlay: ArrayOverlay, index: number): Piece {
   throw new RangeError("Array overlay index is out of range");
 }
 
-export const createPieceNode: {
-  (piece: Piece): (overlay: ArrayOverlay) => PieceNode;
-  (overlay: ArrayOverlay, piece: Piece): PieceNode;
+const createPieceNode: {
+  (
+    piece: trackerTypesModule.Piece,
+  ): (overlay: trackerTypesModule.ArrayOverlay) => trackerTypesModule.PieceNode;
+  (
+    overlay: trackerTypesModule.ArrayOverlay,
+    piece: trackerTypesModule.Piece,
+  ): trackerTypesModule.PieceNode;
 } = dual(2, createPieceNodeImpl);
 
-export const replaceAllPieces: {
-  (pieces: Piece[]): (overlay: ArrayOverlay) => void;
-  (overlay: ArrayOverlay, pieces: Piece[]): void;
+const replaceAllPieces: {
+  (pieces: trackerTypesModule.Piece[]): (overlay: trackerTypesModule.ArrayOverlay) => void;
+  (overlay: trackerTypesModule.ArrayOverlay, pieces: trackerTypesModule.Piece[]): void;
 } = dual(2, replaceAllPiecesImpl);
 
-export const splitPieceTree: {
+const splitPieceTree: {
   (
-    root: PieceNode | undefined,
+    root: trackerTypesModule.PieceNode | undefined,
     index: number,
-  ): (overlay: ArrayOverlay) => [PieceNode | undefined, PieceNode | undefined];
+  ): (
+    overlay: trackerTypesModule.ArrayOverlay,
+  ) => [trackerTypesModule.PieceNode | undefined, trackerTypesModule.PieceNode | undefined];
   (
-    overlay: ArrayOverlay,
-    root: PieceNode | undefined,
+    overlay: trackerTypesModule.ArrayOverlay,
+    root: trackerTypesModule.PieceNode | undefined,
     index: number,
-  ): [PieceNode | undefined, PieceNode | undefined];
+  ): [trackerTypesModule.PieceNode | undefined, trackerTypesModule.PieceNode | undefined];
 } = dual(3, splitPieceTreeImpl);
 
-export const locatePiece: {
-  (index: number): (overlay: ArrayOverlay) => Piece;
-  (overlay: ArrayOverlay, index: number): Piece;
+const locatePiece: {
+  (index: number): (overlay: trackerTypesModule.ArrayOverlay) => trackerTypesModule.Piece;
+  (overlay: trackerTypesModule.ArrayOverlay, index: number): trackerTypesModule.Piece;
 } = dual(2, locatePieceImpl);
 
-export const treeFromPieces: {
-  (pieces: Piece[]): (overlay: ArrayOverlay) => PieceNode | undefined;
-  (overlay: ArrayOverlay, pieces: Piece[]): PieceNode | undefined;
+const treeFromPieces: {
+  (
+    pieces: trackerTypesModule.Piece[],
+  ): (overlay: trackerTypesModule.ArrayOverlay) => trackerTypesModule.PieceNode | undefined;
+  (
+    overlay: trackerTypesModule.ArrayOverlay,
+    pieces: trackerTypesModule.Piece[],
+  ): trackerTypesModule.PieceNode | undefined;
 } = dual(2, treeFromPiecesImpl);
 
-export const joinNormalized: {
+const joinNormalized: {
   (
-    left: PieceNode | undefined,
-    right: PieceNode | undefined,
-  ): (overlay: ArrayOverlay) => PieceNode | undefined;
+    left: trackerTypesModule.PieceNode | undefined,
+    right: trackerTypesModule.PieceNode | undefined,
+  ): (overlay: trackerTypesModule.ArrayOverlay) => trackerTypesModule.PieceNode | undefined;
   (
-    overlay: ArrayOverlay,
-    left: PieceNode | undefined,
-    right: PieceNode | undefined,
-  ): PieceNode | undefined;
+    overlay: trackerTypesModule.ArrayOverlay,
+    left: trackerTypesModule.PieceNode | undefined,
+    right: trackerTypesModule.PieceNode | undefined,
+  ): trackerTypesModule.PieceNode | undefined;
 } = dual(3, joinNormalizedImpl);
+
+const trackerPieces = {
+  arrayLength,
+  createPieceNode,
+  joinNormalized,
+  locatePiece,
+  piecesOf,
+  replaceAllPieces,
+  rightmostPieceNode,
+  splitPieceTree,
+  treeFromPieces,
+  updatePieceNode,
+};
+
+export default trackerPieces;

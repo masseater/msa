@@ -1,7 +1,9 @@
 import { Effect } from "effect";
 import { describe, expect, it } from "vite-plus/test";
 
-import { applyImmutable, overlap, track } from "../src/delta/index.ts";
+import delta from "../src/delta/index.ts";
+
+const { applyImmutable, overlap, track } = delta;
 
 const keepsADraftAliveAcrossAwait = Effect.gen(function* () {
   const input = { count: 1, nested: { text: "a" }, values: [1] };

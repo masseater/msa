@@ -1,8 +1,11 @@
 import { DateTime } from "effect";
 import { describe, expect, it } from "vite-plus/test";
 
-import { type Change, type JsonValue, track } from "../../src/delta/index.ts";
+import delta from "../../src/delta/index.ts";
+import type deltaTypes from "../../src/delta/index.types.ts";
 import trackerModule from "../fixtures/tracker.ts";
+
+const { track } = delta;
 
 const { clone, expectAliasFree, replay } = trackerModule;
 
@@ -34,15 +37,15 @@ const clonesPropertyIndexPushUnshiftSplice = (): void => {
   tracker.adopt(prepared);
 };
 
-const rejectsNonPlainContainers = (change: Change<Placements>): void => {
-  const sparse: JsonValue[] = new Array<JsonValue>(1);
+const rejectsNonPlainContainers = (change: deltaTypes.Change<Placements>): void => {
+  const sparse: deltaTypes.JsonValue[] = new Array<deltaTypes.JsonValue>(1);
   expect(() => {
     change.state.payload = sparse;
   }).toThrow(/dense plain arrays/u);
   const cyclic: { self?: unknown } = {};
   cyclic.self = cyclic;
   expect(() => {
-    change.state.payload = cyclic as JsonValue;
+    change.state.payload = cyclic as deltaTypes.JsonValue;
   }).toThrow(/cycles/u);
   let accessorReads = 0;
   const accessor = Object.defineProperty({}, "value", {
@@ -53,20 +56,20 @@ const rejectsNonPlainContainers = (change: Change<Placements>): void => {
     },
   });
   expect(() => {
-    change.state.payload = accessor as JsonValue;
+    change.state.payload = accessor as deltaTypes.JsonValue;
   }).toThrow(/data properties/u);
   expect(accessorReads).toBe(0);
 };
 
 interface Placements {
   optional: string | undefined;
-  payload: JsonValue;
+  payload: deltaTypes.JsonValue;
   number: number;
-  values: JsonValue[];
+  values: deltaTypes.JsonValue[];
 }
 
-const rejectsNonJsonScalars = (change: Change<Placements>): void => {
-  const undefinedValue = undefined as unknown as JsonValue;
+const rejectsNonJsonScalars = (change: deltaTypes.Change<Placements>): void => {
+  const undefinedValue = undefined as unknown as deltaTypes.JsonValue;
 
   expect(() => {
     change.state.values[0] = undefinedValue;
@@ -76,16 +79,16 @@ const rejectsNonJsonScalars = (change: Change<Placements>): void => {
   expect(() => change.state.values.splice(1, 0, undefinedValue)).toThrow(/strict JSON/u);
   expect(() => change.state.values.fill(undefinedValue)).toThrow(/strict JSON/u);
   expect(() => {
-    change.state.payload = { nested: undefined } as unknown as JsonValue;
+    change.state.payload = { nested: undefined } as unknown as deltaTypes.JsonValue;
   }).toThrow(/strict JSON/u);
   expect(() => {
-    change.state.payload = { nested: () => 1 } as unknown as JsonValue;
+    change.state.payload = { nested: () => 1 } as unknown as deltaTypes.JsonValue;
   }).toThrow(/strict JSON/u);
   expect(() => {
-    change.state.payload = { nested: Symbol("invalid") } as unknown as JsonValue;
+    change.state.payload = { nested: Symbol("invalid") } as unknown as deltaTypes.JsonValue;
   }).toThrow(/strict JSON/u);
   expect(() => {
-    change.state.payload = { nested: 1n } as unknown as JsonValue;
+    change.state.payload = { nested: 1n } as unknown as deltaTypes.JsonValue;
   }).toThrow(/strict JSON/u);
   expect(() => {
     change.state.number = Number.NaN;
@@ -94,7 +97,9 @@ const rejectsNonJsonScalars = (change: Change<Placements>): void => {
     change.state.number = Number.POSITIVE_INFINITY;
   }).toThrow(/strict JSON/u);
   expect(() => {
-    change.state.payload = DateTime.toDateUtc(DateTime.nowUnsafe()) as unknown as JsonValue;
+    change.state.payload = DateTime.toDateUtc(
+      DateTime.nowUnsafe(),
+    ) as unknown as deltaTypes.JsonValue;
   }).toThrow(/plain objects/u);
 };
 
@@ -108,7 +113,7 @@ const rejectsNonStrictJsonPlacementsBefore = (): void => {
 
   expect(change.state).toEqual(initial);
   change.state.optional = undefined;
-  const dictionary = Object.create(null) as Record<string, JsonValue>;
+  const dictionary = Object.create(null) as Record<string, deltaTypes.JsonValue>;
   dictionary["valid"] = true;
   change.state.payload = dictionary;
   change.state.values.push({ valid: true });

@@ -1,10 +1,13 @@
 import { Effect } from "effect";
 import { describe, expect, test, vi } from "vite-plus/test";
 
-import { BACKGROUND_CONTEXT } from "../src/context/index.ts";
-import { replicatedState } from "../src/index.ts";
+import contextModule from "../src/context/index.ts";
+import chord from "../src/index.ts";
 import replicatedStateDelivery from "./fixtures/replicated-state-delivery.ts";
 import type replicatedStateDeliveryTypes from "./fixtures/replicated-state-delivery.types.ts";
+
+const { BACKGROUND_CONTEXT } = contextModule;
+const { replicatedState } = chord;
 
 const { deferred, fixture } = replicatedStateDelivery;
 

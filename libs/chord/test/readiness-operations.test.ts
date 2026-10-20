@@ -4,20 +4,11 @@ import { Effect } from "effect";
 import { Type } from "typebox";
 import { describe, it } from "vite-plus/test";
 
-import {
-  type Facet,
-  type FacetApi,
-  type Host,
-  type Registry,
-  createHost,
-  defineRegistry,
-  forbidden,
-  hostNamed,
-  local,
-  memoryLinkPair,
-  remote,
-} from "../src/index.ts";
+import chord from "../src/index.ts";
+import type chordTypes from "../src/index.types.ts";
 import timing from "./fixtures/timing.ts";
+
+const { createHost, defineRegistry, forbidden, hostNamed, local, memoryLinkPair, remote } = chord;
 
 const { latch, tick } = timing;
 
@@ -34,12 +25,15 @@ const Status = remote("ready.status", {
   version: 1,
 });
 
-const apply = (host: Host, operation: Operation, facet: Facet): Promise<void> =>
-  operation === "install" ? host.install(facet) : host.load([facet]);
+const apply = (
+  host: chordTypes.Host,
+  operation: Operation,
+  facet: chordTypes.Facet,
+): Promise<void> => (operation === "install" ? host.install(facet) : host.load([facet]));
 
 interface ActivationProbe {
-  readonly facet: Facet;
-  readonly entries: Registry<string>;
+  readonly facet: chordTypes.Facet;
+  readonly entries: chordTypes.Registry<string>;
   readonly open: () => void;
   readonly lazyRuns: () => number;
 }
@@ -50,7 +44,7 @@ const activationProbe = (): ActivationProbe => {
   let lazyRuns = 0;
   const facet = {
     name: "ready",
-    setup({ serve }: FacetApi) {
+    setup({ serve }: chordTypes.FacetApi) {
       serve(
         Eager,
         (_input, _principal, self) => {
@@ -97,9 +91,9 @@ const awaitsActivationAndRegistration = (operation: Operation) =>
     }).pipe(Effect.ensuring(Effect.promise(() => host.close())));
   });
 
-const failingFacet = (failure: Failure, cause: unknown): Facet => ({
+const failingFacet = (failure: Failure, cause: unknown): chordTypes.Facet => ({
   name: "bad",
-  setup({ serve }: FacetApi) {
+  setup({ serve }: chordTypes.FacetApi) {
     serve(Lazy, () => {
       throw cause;
     });
@@ -141,7 +135,7 @@ const rejectsEagerFailure = (operation: Operation, failure: Failure) =>
   });
 
 interface WorkerProbe {
-  readonly facet: Facet;
+  readonly facet: chordTypes.Facet;
   readonly bootstrap: () => boolean;
   readonly reported: () => boolean;
 }
@@ -151,7 +145,7 @@ const workerProbe = (): WorkerProbe => {
   let reported = false;
   const facet = {
     name: "worker",
-    setup({ serve }: FacetApi) {
+    setup({ serve }: chordTypes.FacetApi) {
       serve(
         Lazy,
         () => {

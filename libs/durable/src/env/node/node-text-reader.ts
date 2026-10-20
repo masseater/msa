@@ -1,4 +1,4 @@
-import type { Context } from "@msa/chord";
+import type chordTypes from "@msa/chord/index.types";
 import { Effect } from "effect";
 
 import FileError from "../file-error.ts";
@@ -30,7 +30,7 @@ export default class NodeTextLineReader implements typesModule.TextLineReader {
     this.#path = path;
   }
 
-  readLine(context: Context): Promise<LineResult> {
+  readLine(context: chordTypes.Context): Promise<LineResult> {
     const aborted = abortResult<typesModule.TextLine | undefined>(context.abortSignal, this.#path);
     if (aborted !== undefined) return Promise.resolve(aborted);
     if (this.#closed) {
@@ -55,7 +55,7 @@ export default class NodeTextLineReader implements typesModule.TextLineReader {
     return ok({ terminated: false, text });
   }
 
-  #nextLine(context: Context): Effect.Effect<LineResult> {
+  #nextLine(context: chordTypes.Context): Effect.Effect<LineResult> {
     return Effect.gen({ self: this }, function* () {
       for (;;) {
         const line = this.#take();
@@ -79,7 +79,7 @@ export default class NodeTextLineReader implements typesModule.TextLineReader {
     });
   }
 
-  close(_context: Context): Promise<void> {
+  close(_context: chordTypes.Context): Promise<void> {
     if (this.#closed) return Promise.resolve();
     this.#closed = true;
     this.#buffered = "";

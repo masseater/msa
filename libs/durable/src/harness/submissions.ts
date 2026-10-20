@@ -1,4 +1,4 @@
-import type { Context } from "@msa/chord";
+import type chordTypes from "@msa/chord/index.types";
 import { Effect } from "effect";
 
 import type transactionTypes from "../session/transaction.types.ts";
@@ -54,7 +54,7 @@ export default class Submissions {
   submit(
     conversationId: typesModule.ConversationId,
     draft: typesModule.SubmissionDraft,
-    context: Context,
+    context: chordTypes.Context,
   ): Promise<typesModule.Submission> {
     this.#resume();
     return Effect.runPromise(
@@ -68,7 +68,10 @@ export default class Submissions {
     );
   }
 
-  get(id: typesModule.SubmissionId, context: Context): Promise<typesModule.Submission | undefined> {
+  get(
+    id: typesModule.SubmissionId,
+    context: chordTypes.Context,
+  ): Promise<typesModule.Submission | undefined> {
     return Effect.runPromise(
       Effect.gen({ self: this }, function* () {
         const record = yield* Effect.promise(() =>
@@ -79,7 +82,10 @@ export default class Submissions {
     );
   }
 
-  status(id: typesModule.SubmissionId, context: Context): Promise<typesModule.SubmissionRecord> {
+  status(
+    id: typesModule.SubmissionId,
+    context: chordTypes.Context,
+  ): Promise<typesModule.SubmissionRecord> {
     return Effect.runPromise(
       Effect.gen({ self: this }, function* () {
         const record = yield* Effect.promise(() =>
@@ -94,7 +100,7 @@ export default class Submissions {
 
   wait(
     id: typesModule.SubmissionId,
-    context: Context,
+    context: chordTypes.Context,
   ): Promise<typesModule.SettledSubmissionRecord> {
     this.#resume();
     return Effect.runPromise(
@@ -108,7 +114,7 @@ export default class Submissions {
 
   abort(
     id: typesModule.SubmissionId,
-    context: Context,
+    context: chordTypes.Context,
     conversationId?: typesModule.ConversationId,
   ): Promise<submissionsTypes.AbortResult | "not_found"> {
     return this.#session.commitWith(
@@ -119,7 +125,7 @@ export default class Submissions {
 
   abortHandle(
     id: typesModule.SubmissionId,
-    context: Context,
+    context: chordTypes.Context,
   ): Promise<submissionsTypes.AbortResult> {
     return Effect.runPromise(
       Effect.gen({ self: this }, function* () {
@@ -156,7 +162,7 @@ export default class Submissions {
   #pending = Effect.fnUntraced(function* (
     this: Submissions,
     id: typesModule.SubmissionId,
-    context: Context,
+    context: chordTypes.Context,
   ) {
     const record = yield* Effect.promise(() => this.#storage.submission(id, context));
     if (record === undefined)

@@ -1,4 +1,4 @@
-import type { Context } from "@msa/chord";
+import type chordTypes from "@msa/chord/index.types";
 import { Deferred, Effect } from "effect";
 
 import ids from "../../ids.ts";
@@ -51,7 +51,10 @@ export default class SqliteStorage implements typesModule.Storage {
     );
   }
 
-  commit(writes: readonly typesModule.StorageWrite[], _context: Context): Promise<typesModule.Seq> {
+  commit(
+    writes: readonly typesModule.StorageWrite[],
+    _context: chordTypes.Context,
+  ): Promise<typesModule.Seq> {
     return this.query(() => {
       const documentActions = prepareDocumentActions(writes);
       const nextId = candidateNextId(this.nextId, writes);
@@ -73,7 +76,7 @@ export default class SqliteStorage implements typesModule.Storage {
 
   conversation(
     id: typesModule.ConversationId,
-    _context: Context,
+    _context: chordTypes.Context,
   ): Promise<typesModule.ConversationRecord | undefined> {
     return this.query(() =>
       recordById<typesModule.ConversationRecord>(this.db, "conversations", id),
@@ -84,21 +87,21 @@ export default class SqliteStorage implements typesModule.Storage {
     query: typesModule.ConversationQuery,
     limit: number,
     cursor: typesModule.Cursor | undefined,
-    _context: Context,
+    _context: chordTypes.Context,
   ): Promise<typesModule.Page<typesModule.ConversationRecord, typesModule.Cursor>> {
     return this.query(() => scanConversationRows(this.db, query, limit, cursor));
   }
 
-  entry(id: typesModule.EntryId, context: Context): Promise<EntryRead | undefined>;
+  entry(id: typesModule.EntryId, context: chordTypes.Context): Promise<EntryRead | undefined>;
   entry(
     conversationId: typesModule.ConversationId,
     id: typesModule.EntryId,
-    context: Context,
+    context: chordTypes.Context,
   ): Promise<EntryRead | undefined>;
   entry(
     idOrConversationId: typesModule.EntryId | typesModule.ConversationId,
-    idOrContext: typesModule.EntryId | Context,
-    context?: Context,
+    idOrContext: typesModule.EntryId | chordTypes.Context,
+    context?: chordTypes.Context,
   ): Promise<EntryRead | undefined> {
     return this.admitRead(readEntry(this.db, idOrConversationId, idOrContext, context));
   }
@@ -106,7 +109,7 @@ export default class SqliteStorage implements typesModule.Storage {
   findLatestHeadMarker(
     conversationId: typesModule.ConversationId,
     atOrBeforeEntryId: typesModule.EntryId | undefined,
-    _context: Context,
+    _context: chordTypes.Context,
   ): Promise<(typesModule.EntryRecord & { readonly head: typesModule.EntryId }) | undefined> {
     return this.admitRead(readLatestHeadMarker(this.db, conversationId, atOrBeforeEntryId));
   }
@@ -115,12 +118,12 @@ export default class SqliteStorage implements typesModule.Storage {
     query: typesModule.EntryQuery,
     limit: number,
     cursor: typesModule.Cursor | undefined,
-    _context: Context,
+    _context: chordTypes.Context,
   ): Promise<typesModule.Page<typesModule.EntryRecord, typesModule.Cursor>> {
     return this.admitRead(readEntries(this.db, query, limit, cursor));
   }
 
-  task(id: typesModule.TaskId, _context: Context): Promise<StoredTask | undefined> {
+  task(id: typesModule.TaskId, _context: chordTypes.Context): Promise<StoredTask | undefined> {
     return this.query(() => recordById<StoredTask>(this.db, "tasks", id));
   }
 
@@ -128,14 +131,14 @@ export default class SqliteStorage implements typesModule.Storage {
     query: typesModule.TaskQuery,
     limit: number,
     cursor: typesModule.Cursor | undefined,
-    _context: Context,
+    _context: chordTypes.Context,
   ): Promise<typesModule.Page<StoredTask, typesModule.Cursor>> {
     return this.query(() => scanTaskRows(this.db, query, limit, cursor));
   }
 
   submission(
     id: typesModule.SubmissionId,
-    _context: Context,
+    _context: chordTypes.Context,
   ): Promise<typesModule.SubmissionRecord | undefined> {
     return this.query(() => recordById<typesModule.SubmissionRecord>(this.db, "submissions", id));
   }
@@ -144,7 +147,7 @@ export default class SqliteStorage implements typesModule.Storage {
     query: typesModule.SubmissionQuery,
     limit: number,
     cursor: typesModule.Cursor | undefined,
-    _context: Context,
+    _context: chordTypes.Context,
   ): Promise<typesModule.Page<typesModule.SubmissionRecord, typesModule.Cursor>> {
     return this.query(() => scanSubmissionRows(this.db, query, limit, cursor));
   }
@@ -152,7 +155,7 @@ export default class SqliteStorage implements typesModule.Storage {
   submissionByRequest(
     conversationId: typesModule.ConversationId,
     requestId: string,
-    _context: Context,
+    _context: chordTypes.Context,
   ): Promise<typesModule.SubmissionRecord | undefined> {
     return this.query(() => submissionByRequestRow(this.db, conversationId, requestId));
   }
@@ -160,7 +163,7 @@ export default class SqliteStorage implements typesModule.Storage {
   findDocument(
     address: typesModule.DocumentAddress,
     at: typesModule.DocumentPoint,
-    _context: Context,
+    _context: chordTypes.Context,
   ): Promise<typesModule.DocumentRecord | undefined> {
     return this.query(() => findDocumentRow(this.db, address, at));
   }
@@ -168,7 +171,7 @@ export default class SqliteStorage implements typesModule.Storage {
   document(
     id: typesModule.DocumentId,
     at: typesModule.DocumentPoint,
-    _context: Context,
+    _context: chordTypes.Context,
   ): Promise<typesModule.StoredDocument | undefined> {
     return this.run(() =>
       Effect.promise(() =>
@@ -183,12 +186,12 @@ export default class SqliteStorage implements typesModule.Storage {
     query: typesModule.DocumentQuery,
     limit: number,
     cursor: typesModule.Cursor | undefined,
-    _context: Context,
+    _context: chordTypes.Context,
   ): Promise<typesModule.Page<typesModule.DocumentRecord, typesModule.Cursor>> {
     return this.query(() => scanDocumentRows(this.db, query, limit, cursor));
   }
 
-  close(_context: Context): Promise<void> {
+  close(_context: chordTypes.Context): Promise<void> {
     if (this.closing === undefined) {
       this.closed = true;
       this.closing = Effect.runPromise(this.closeDatabase());

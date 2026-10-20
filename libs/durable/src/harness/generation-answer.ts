@@ -1,5 +1,5 @@
 import type { AssistantMessage } from "@msa/ai";
-import type { Context } from "@msa/chord";
+import type chordTypes from "@msa/chord/index.types";
 import { Effect } from "effect";
 
 import entries from "../entries.ts";
@@ -18,7 +18,7 @@ const { UserEntry } = entries;
 const askContinuation = Effect.fnUntraced(function* (
   runtime: generationTypesModule.GenerationRuntime,
   message: AssistantMessage,
-  context: Context,
+  context: chordTypes.Context,
 ) {
   let continuation: typesModule.UserInput | undefined;
   yield* eachHook(runtime.hooks, "onYield", (hook) =>
@@ -37,7 +37,7 @@ const askContinuation = Effect.fnUntraced(function* (
 const answer = Effect.fnUntraced(function* (
   runtime: generationTypesModule.GenerationRuntime,
   message: AssistantMessage,
-  context: Context,
+  context: chordTypes.Context,
 ) {
   const continuation = yield* askContinuation(runtime, message, context);
   const { conversationId } = runtime;

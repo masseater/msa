@@ -1,5 +1,5 @@
 import { type Usage } from "@msa/ai";
-import type { JsonValue } from "@msa/chord";
+import type chordTypes from "@msa/chord/index.types";
 import durable from "@msa/durable";
 import harnessModule from "@msa/durable/harness";
 import type durableTypes from "@msa/durable/index.types";
@@ -88,7 +88,9 @@ const givesCallersResult = Effect.gen(function* () {
   const setup = chatSetup();
   addTool(
     setup.registry,
-    tool("echo", () => Promise.resolve({ details: { count: 1n } as unknown as JsonValue })),
+    tool("echo", () =>
+      Promise.resolve({ details: { count: 1n } as unknown as chordTypes.JsonValue }),
+    ),
   );
   let result: durableTypes.NestedToolExecutionResult | undefined;
   addTool(

@@ -1,4 +1,4 @@
-import type { Context } from "@msa/chord";
+import type chordTypes from "@msa/chord/index.types";
 import { Deferred, Effect, Function } from "effect";
 
 import type envTypesModule from "../env/index.types.ts";
@@ -32,7 +32,7 @@ const readVariants = (resolved: string): Set<string> =>
 const resolveToolPath = Effect.fnUntraced(function* (
   env: envTypesModule.ExecutionEnv,
   path: string,
-  context: Context,
+  context: chordTypes.Context,
 ) {
   return getOrThrow(
     yield* Effect.promise(() => env.absolutePath(normalizeToolPath(path), context)),
@@ -42,7 +42,7 @@ const resolveToolPath = Effect.fnUntraced(function* (
 const resolveReadToolPath = Effect.fnUntraced(function* (
   env: envTypesModule.ExecutionEnv,
   path: string,
-  context: Context,
+  context: chordTypes.Context,
 ) {
   const resolved = yield* resolveToolPath(env, path, context);
   for (const variant of readVariants(resolved)) {
@@ -56,7 +56,7 @@ const queues = new Map<string, Deferred.Deferred<void>>();
 const canonical = (
   env: envTypesModule.ExecutionEnv,
   absolutePath: string,
-  context: Context,
+  context: chordTypes.Context,
 ): Effect.Effect<string> =>
   Effect.flatMap(
     Effect.promise(() => env.canonicalPath(absolutePath, context)),
@@ -71,7 +71,7 @@ const canonical = (
 const canonicalMissing = Effect.fnUntraced(function* (
   env: envTypesModule.ExecutionEnv,
   absolutePath: string,
-  context: Context,
+  context: chordTypes.Context,
 ) {
   const parent = getOrThrow(
     yield* Effect.promise(() => env.joinPath([absolutePath, ".."], context)),
@@ -85,7 +85,7 @@ const canonicalMissing = Effect.fnUntraced(function* (
 const mutationKey = Effect.fnUntraced(function* (
   env: envTypesModule.ExecutionEnv,
   path: string,
-  context: Context,
+  context: chordTypes.Context,
 ) {
   const absolutePath = getOrThrow(yield* Effect.promise(() => env.absolutePath(path, context)));
   return `${env.id}\0${yield* canonical(env, absolutePath, context)}`;
@@ -95,7 +95,7 @@ const fileMutation = Effect.fnUntraced(function* <T>(
   env: envTypesModule.ExecutionEnv,
   path: string,
   run: Effect.Effect<T>,
-  context: Context,
+  context: chordTypes.Context,
 ) {
   const key = yield* mutationKey(env, path, context);
   const previous = queues.get(key);
@@ -115,13 +115,13 @@ const withFileMutationQueue: {
   <T>(
     path: string,
     fn: () => Promise<T>,
-    context: Context,
+    context: chordTypes.Context,
   ): (env: envTypesModule.ExecutionEnv) => Promise<T>;
   <T>(
     env: envTypesModule.ExecutionEnv,
     path: string,
     fn: () => Promise<T>,
-    context: Context,
+    context: chordTypes.Context,
   ): Promise<T>;
 } = Function.dual(
   4,
@@ -129,7 +129,7 @@ const withFileMutationQueue: {
     env: envTypesModule.ExecutionEnv,
     path: string,
     fn: () => Promise<T>,
-    context: Context,
+    context: chordTypes.Context,
   ): Promise<T> => Effect.runPromise(fileMutation(env, path, Effect.promise(fn), context)),
 );
 

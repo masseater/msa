@@ -1,4 +1,4 @@
-import { applyImmutable } from "@msa/chord/delta";
+import delta from "@msa/chord/delta";
 import durable from "@msa/durable";
 import type durableTypes from "@msa/durable/index.types";
 import { Effect } from "effect";
@@ -8,6 +8,8 @@ import { expect } from "vite-plus/test";
 import effectSupport from "./effect-support.ts";
 import type harnessViewSupportTypes from "./harness-view-support.types.ts";
 import sessionSupport from "./session-support.ts";
+
+const { applyImmutable } = delta;
 
 const { AgentDoc, InboxDoc, LiveDoc, ProviderDoc, UsageDoc } = durable;
 

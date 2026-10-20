@@ -1,10 +1,12 @@
-import { applyImmutableBatches } from "@msa/chord/delta/apply";
+import applyModule from "@msa/chord/delta/apply";
 import { Function } from "effect";
 
 import errors from "../../errors.ts";
 import type typesModule from "../../types.types.ts";
 import stateModule from "./state.ts";
 import type stateTypes from "./state.types.ts";
+
+const { applyImmutableBatches } = applyModule;
 
 const { documentDeltaBatches, isAliveAt, isCurrentOnly, recordAddressKey } = stateModule;
 const { StorageRequestError } = errors;

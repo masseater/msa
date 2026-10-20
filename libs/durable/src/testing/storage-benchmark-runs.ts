@@ -1,11 +1,13 @@
-import type { JsonValue } from "@msa/chord";
-import { BACKGROUND_CONTEXT } from "@msa/chord/context";
+import contextModule from "@msa/chord/context";
+import type chordTypes from "@msa/chord/index.types";
 
 import types from "../types.ts";
 import type typesModule from "../types.types.ts";
 import type storageBenchmarkRunsTypes from "./storage-benchmark-runs.types.ts";
 import storageBenchmark from "./storage-benchmark.ts";
 import type storageBenchmarkTypes from "./storage-benchmark.types.ts";
+
+const { BACKGROUND_CONTEXT } = contextModule;
 
 const { ROOT_CONVERSATION_ID } = types;
 const { HISTORY_SEGMENT_LENGTH, REPLAY_TAILS, task } = storageBenchmark;
@@ -103,7 +105,7 @@ const commitCount = (
 
 const mixedWrites = (
   entryId: typesModule.EntryId,
-  taskId: typesModule.TaskId<JsonValue>,
+  taskId: typesModule.TaskId<chordTypes.JsonValue>,
   submissionId: typesModule.SubmissionId,
   documentId: typesModule.DocumentId,
 ): readonly typesModule.StorageWrite[] => [
@@ -180,7 +182,7 @@ const STORAGE_WRITE_BENCHMARKS: readonly storageBenchmarkRunsTypes.StorageWriteB
         .mintId<typesModule.EntryId>()
         .then((entryId) =>
           storage
-            .mintId<typesModule.TaskId<JsonValue>>()
+            .mintId<typesModule.TaskId<chordTypes.JsonValue>>()
             .then((taskId) =>
               storage
                 .mintId<typesModule.SubmissionId>()

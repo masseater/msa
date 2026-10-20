@@ -2,8 +2,11 @@ import { isProxy } from "node:util/types";
 
 import { describe, expect, it } from "vite-plus/test";
 
-import { type Draft, track } from "../../src/delta/index.ts";
+import delta from "../../src/delta/index.ts";
+import type deltaTypes from "../../src/delta/index.types.ts";
 import trackerModule from "../fixtures/tracker.ts";
+
+const { track } = delta;
 
 const { clone, expectAliasFree, replay, settle } = trackerModule;
 
@@ -74,7 +77,11 @@ const random =
     value = (value + Math.imul(value ^ (value >>> 7), 61 | value)) ^ value;
     return ((value ^ (value >>> 14)) >>> 0) / 4_294_967_296;
   };
-const mutate = (document: Document | Draft<Document>, choice: number, value: number): void => {
+const mutate = (
+  document: Document | deltaTypes.Draft<Document>,
+  choice: number,
+  value: number,
+): void => {
   const item = (): { id: number; score: number } => ({ id: value, score: value % 7 });
   switch (choice) {
     case 0:
@@ -166,8 +173,8 @@ const ordersManyReverseDepthObjectEdits = (): void => {
   for (let depth = 0; depth < 512; depth++) initial = { next: initial, value: 0 };
   const tracker = track(initial);
   const change = tracker.beginChange();
-  const nodes: Array<Draft<DeepNode>> = [];
-  let node: Draft<DeepNode> | undefined = change.state;
+  const nodes: Array<deltaTypes.Draft<DeepNode>> = [];
+  let node: deltaTypes.Draft<DeepNode> | undefined = change.state;
   while (node !== undefined) {
     nodes.push(node);
     node = node.next;

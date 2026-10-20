@@ -1,4 +1,4 @@
-import type { JsonValue } from "@msa/chord";
+import type chordTypes from "@msa/chord/index.types";
 import { Function } from "effect";
 
 import type sessionTypes from "../session/session.types.ts";
@@ -63,10 +63,13 @@ const overlayOf = (tx: schedulerTypesModule.Transaction): schedulerTypesModule.O
 const memoOf: schedulerTypesModule.Dual2<
   schedulerTypesModule.AnyTaskRecord | undefined,
   string,
-  JsonValue | undefined
+  chordTypes.JsonValue | undefined
 > = Function.dual(
   2,
-  (record: schedulerTypesModule.AnyTaskRecord | undefined, name: string): JsonValue | undefined => {
+  (
+    record: schedulerTypesModule.AnyTaskRecord | undefined,
+    name: string,
+  ): chordTypes.JsonValue | undefined => {
     const memos = record?.memos;
     return memos !== undefined && Object.hasOwn(memos, name) ? memos[name] : undefined;
   },
@@ -108,13 +111,13 @@ const endedError = (invocation: schedulerTypesModule.Invocation): Error =>
 
 const withState: schedulerTypesModule.Dual2<
   schedulerTypesModule.AnyTaskRecord,
-  schedulerTypesModule.TaskState<JsonValue, JsonValue>,
+  schedulerTypesModule.TaskState<chordTypes.JsonValue, chordTypes.JsonValue>,
   schedulerTypesModule.AnyTaskRecord
 > = Function.dual(
   2,
   (
     record: schedulerTypesModule.AnyTaskRecord,
-    state: schedulerTypesModule.TaskState<JsonValue, JsonValue>,
+    state: schedulerTypesModule.TaskState<chordTypes.JsonValue, chordTypes.JsonValue>,
   ): schedulerTypesModule.AnyTaskRecord => {
     if (state.status !== "terminal" && state.status !== "completing")
       return { ...record, state } as schedulerTypesModule.AnyTaskRecord;
@@ -138,8 +141,13 @@ const canReserve: schedulerTypesModule.Dual2<
   },
 );
 
-const jsonEqual: schedulerTypesModule.Dual2<JsonValue | undefined, JsonValue | undefined, boolean> =
-  Function.dual(2, (left: JsonValue | undefined, right: JsonValue | undefined): boolean => {
+const jsonEqual: schedulerTypesModule.Dual2<
+  chordTypes.JsonValue | undefined,
+  chordTypes.JsonValue | undefined,
+  boolean
+> = Function.dual(
+  2,
+  (left: chordTypes.JsonValue | undefined, right: chordTypes.JsonValue | undefined): boolean => {
     if (left === right) return true;
     if (typeof left !== "object" || typeof right !== "object" || left === null || right === null)
       return false;
@@ -151,7 +159,8 @@ const jsonEqual: schedulerTypesModule.Dual2<JsonValue | undefined, JsonValue | u
     const keys = Object.keys(left);
     if (keys.length !== Object.keys(right).length) return false;
     return keys.every((key) => Object.hasOwn(right, key) && jsonEqual(left[key], right[key]));
-  });
+  },
+);
 
 const schedulerRecords = {
   canReserve,

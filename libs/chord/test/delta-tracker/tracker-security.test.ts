@@ -1,9 +1,11 @@
 import { describe, expect, it } from "vite-plus/test";
 
-import { track } from "../../src/delta/index.ts";
+import delta from "../../src/delta/index.ts";
 import prototypes from "../fixtures/prototypes.ts";
 import type prototypesTypes from "../fixtures/prototypes.types.ts";
 import trackerModule from "../fixtures/tracker.ts";
+
+const { track } = delta;
 
 const { TrapSetter, trappedObject } = prototypes;
 const { replay, settle } = trackerModule;

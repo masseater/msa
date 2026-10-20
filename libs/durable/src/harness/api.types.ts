@@ -1,5 +1,5 @@
 import type { TSchema } from "@msa/ai";
-import type { JsonValue } from "@msa/chord";
+import type chordTypes from "@msa/chord/index.types";
 
 import type typesRegistryTypes from "./types-registry.ts";
 import type typesToolsTypes from "./types-tools.ts";
@@ -24,13 +24,13 @@ declare namespace harnessApiTypes {
   type RegistrySnapshot<
     Tool extends typesToolsTypes.ToolRegistration = typesToolsTypes.ToolRegistration,
   > = typesRegistryTypes.RegistrySnapshot<Tool>;
-  type ToolExecutionApi<TDetails extends JsonValue = JsonValue> =
+  type ToolExecutionApi<TDetails extends chordTypes.JsonValue = chordTypes.JsonValue> =
     typesToolsTypes.ToolExecutionApi<TDetails>;
-  type ToolExecutionResult<TDetails extends JsonValue = JsonValue> =
+  type ToolExecutionResult<TDetails extends chordTypes.JsonValue = chordTypes.JsonValue> =
     typesToolsTypes.ToolExecutionResult<TDetails>;
   type ToolRegistration<
     TParameters extends TSchema = TSchema,
-    TDetails extends JsonValue = JsonValue,
+    TDetails extends chordTypes.JsonValue = chordTypes.JsonValue,
   > = typesToolsTypes.ToolRegistration<TParameters, TDetails>;
   type Wrap<Tool extends typesToolsTypes.ToolRegistration = typesToolsTypes.ToolRegistration> =
     typesRegistryTypes.Wrap<Tool>;

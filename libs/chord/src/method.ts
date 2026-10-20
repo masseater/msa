@@ -1,16 +1,22 @@
 import { Value } from "typebox/value";
 
-import { LOCAL_VARIANT, type MemberDescription } from "./contract.ts";
-import type { CtxImpl } from "./ctx.ts";
-import { ChordError } from "./errors.ts";
-import type { ObjectImpl } from "./object.ts";
-import type { RefImpl } from "./ref.ts";
-import { assertValid } from "./schema.ts";
-import { variantOf } from "./service.ts";
+import contractModule from "./contract.ts";
+import type contractTypes from "./contract.types.ts";
+import type ctxTypes from "./ctx.types.ts";
+import errorsModule from "./errors.ts";
+import type objectTypes from "./object.types.ts";
+import type refTypes from "./ref.types.ts";
+import schemaModule from "./schema.ts";
+import serviceModule from "./service.ts";
 
-type MethodDescription = Extract<MemberDescription, { kind: "method" }>;
+const { ChordError } = errorsModule;
+const { variantOf } = serviceModule;
+const { LOCAL_VARIANT } = contractModule;
+const { assertValid } = schemaModule;
 
-export class ResolvedMethod {
+type MethodDescription = Extract<contractTypes.MemberDescription, { kind: "method" }>;
+
+export default class ResolvedMethod {
   readonly fn: (...args: unknown[]) => unknown;
   readonly takesArgs: boolean;
   readonly returns: boolean;
@@ -18,7 +24,12 @@ export class ResolvedMethod {
   readonly #own: MethodDescription["args"];
   readonly #validated: MethodDescription | undefined;
 
-  constructor(object: ObjectImpl, ref: RefImpl, name: string, ctx: CtxImpl) {
+  constructor(
+    object: objectTypes.ObjectImpl,
+    ref: refTypes.RefImpl,
+    name: string,
+    ctx: ctxTypes.CtxImpl,
+  ) {
     const installed = object.implementations.get(ctx.codeVersion);
     if (installed === undefined)
       throw new ChordError(

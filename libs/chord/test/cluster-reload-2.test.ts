@@ -4,28 +4,20 @@ import { Clock, type Context, Effect } from "effect";
 import { Type } from "typebox";
 import { describe, it, onTestFinished } from "vite-plus/test";
 
-import {
-  type Ctx,
-  type Facet,
-  type FacetLoader,
-  type Host,
-  createHost,
-  hostNamed,
-  local,
-  memoryLinkPair,
-  method,
-  remote,
-} from "../src/index.ts";
+import chord from "../src/index.ts";
+import type chordTypes from "../src/index.types.ts";
 import cluster from "./fixtures/cluster.ts";
 import timing from "./fixtures/timing.ts";
 import type timingTypes from "./fixtures/timing.types.ts";
+
+const { createHost, hostNamed, local, memoryLinkPair, method, remote } = chord;
 
 const { Ping, dropping, greeterFacet } = cluster;
 const { latch, tick } = timing;
 
 const aChildBehindWhoseHelloWaits = Effect.gen(function* () {
   const services = yield* Effect.context<never>();
-  const pingFacet: Facet = {
+  const pingFacet: chordTypes.Facet = {
     name: "ping",
     setup: (api) => api.serve(Ping, () => ({ ping: () => "pong", variant: "main" })),
   };
@@ -75,8 +67,8 @@ const aChildBehindWhoseHelloWaits = Effect.gen(function* () {
 
 const aReconnectingChildBehindItsParent = Effect.gen(function* () {
   const services = yield* Effect.context<never>();
-  const modules = new Map<string, Facet>([["greeter", greeterFacet("v1")]]);
-  const loader: FacetLoader = (names) =>
+  const modules = new Map<string, chordTypes.Facet>([["greeter", greeterFacet("v1")]]);
+  const loader: chordTypes.FacetLoader = (names) =>
     Effect.runPromiseWith(services)(
       Effect.sync(() => names.map((name) => modules.get(String(name))!)),
     );
@@ -124,7 +116,7 @@ const Slow = remote("t.cluster-slow", {
 
 const Store = local("t.cluster-store", { input: Type.Object({}), version: 1 });
 
-const connectGuestBrowser = (server: Host): Host => {
+const connectGuestBrowser = (server: chordTypes.Host): chordTypes.Host => {
   const [browserDown, browserUp] = memoryLinkPair();
   server.accept(browserDown, { principal: { guest: "g" } });
   const browser = createHost({
@@ -138,8 +130,8 @@ const connectGuestBrowser = (server: Host): Host => {
   return browser;
 };
 
-const loggingStoreFacet = (log: string[]): ((version: number) => Facet) => {
-  const storeFacet = (version: number): Facet => ({
+const loggingStoreFacet = (log: string[]): ((version: number) => chordTypes.Facet) => {
+  const storeFacet = (version: number): chordTypes.Facet => ({
     name: "store",
     setup: (api) =>
       api.serve(
@@ -159,14 +151,14 @@ const loggingStoreFacet = (log: string[]): ((version: number) => Facet) => {
 };
 
 const serveSlowUntil = (
-  worker: Host,
+  worker: chordTypes.Host,
   log: string[],
   never: timingTypes.Latch,
   services: Context.Context<never>,
 ): void => {
   worker.serve(Slow, () => ({
     variant: "main",
-    wait: (ctx: Ctx) =>
+    wait: (ctx: chordTypes.Ctx) =>
       Effect.runPromiseWith(services)(
         Effect.gen(function* () {
           ctx.signal.addEventListener("abort", () => log.push("worker aborted"));

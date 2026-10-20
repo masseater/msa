@@ -1,7 +1,7 @@
-import { BaseContext } from "./base.ts";
-import type { ContextKey } from "./types.ts";
+import BaseContext from "./base.ts";
+import type typesModule from "./types.types.ts";
 
-export class EmptyContext extends BaseContext {
+export default class EmptyContext extends BaseContext {
   readonly #name: string;
 
   constructor(name: string) {
@@ -9,7 +9,7 @@ export class EmptyContext extends BaseContext {
     this.#name = name;
   }
 
-  value<T>(_key: ContextKey<T>): T | undefined {
+  value<T>(_key: typesModule.ContextKey<T>): T | undefined {
     return undefined;
   }
 

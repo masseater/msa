@@ -1,6 +1,6 @@
 import type { AssistantMessage } from "@msa/ai";
 import { isRetryableAssistantError, retryDelayMs } from "@msa/ai/utils/retry";
-import type { Context } from "@msa/chord";
+import type chordTypes from "@msa/chord/index.types";
 import { Effect, Function } from "effect";
 
 import bridge from "./bridge.ts";
@@ -65,7 +65,7 @@ const settleSummary = Effect.fnUntraced(function* (
   request: compactionTypesModule.SummaryRequest,
   message: AssistantMessage,
   texts: SummaryTexts,
-  context: Context,
+  context: chordTypes.Context,
 ) {
   const policy = runtime.settings.retry;
   const retry =
@@ -80,14 +80,14 @@ const settleSummary = Effect.fnUntraced(function* (
 const retryPhase: typesModule.Dual3<
   compactionTypesModule.CompactionRuntime,
   compactionTypesModule.SummaryRequest & { readonly until: number },
-  Context,
+  chordTypes.Context,
   Effect.Effect<void>
 > = Function.dual(
   3,
   Effect.fnUntraced(function* (
     runtime: compactionTypesModule.CompactionRuntime,
     checkpoint: compactionTypesModule.SummaryRequest & { readonly until: number },
-    context: Context,
+    context: chordTypes.Context,
   ) {
     const { until, ...request } = checkpoint;
     yield* Effect.promise(() => runtime.sleep(until, context));

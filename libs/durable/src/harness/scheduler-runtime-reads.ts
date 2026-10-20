@@ -1,6 +1,6 @@
-import type { Context, JsonValue } from "@msa/chord";
-import { withAbortSignal } from "@msa/chord/context";
-import { copyJson } from "@msa/chord/json";
+import contextModuleModule from "@msa/chord/context";
+import type chordTypes from "@msa/chord/index.types";
+import json from "@msa/chord/json";
 import { Effect } from "effect";
 
 import promiseTryModule from "../promise-try.ts";
@@ -10,6 +10,9 @@ import schedulerRecords from "./scheduler-records.ts";
 import type schedulerRuntimeReadsTypes from "./scheduler-runtime-reads.types.ts";
 import type schedulerTypesModule from "./scheduler-types.types.ts";
 
+const { copyJson } = json;
+const { withAbortSignal } = contextModuleModule;
+
 const { endedError, sessionMethod } = schedulerRecords;
 const { abortTask, waitForTask } = schedulerPublic;
 const { readContextFrom } = contextModule;
@@ -17,7 +20,7 @@ const { promiseTry } = promiseTryModule;
 
 const ownedTasks = (
   { state, invocation }: schedulerRuntimeReadsTypes.RuntimeParts,
-  context: Context,
+  context: chordTypes.Context,
 ): schedulerTypesModule.AnyTaskRecord[] => {
   if (invocation.ended) throw endedError(invocation);
   context.abortSignal?.throwIfAborted();
@@ -30,14 +33,16 @@ const ownedTasks = (
     .sort((a, b) => a.id - b.id)
     .map(
       (record) =>
-        copyJson(record as unknown as JsonValue) as unknown as schedulerTypesModule.AnyTaskRecord,
+        copyJson(
+          record as unknown as chordTypes.JsonValue,
+        ) as unknown as schedulerTypesModule.AnyTaskRecord,
     );
 };
 
 const abortOwned = Effect.fnUntraced(function* (
   { state, invocation }: schedulerRuntimeReadsTypes.RuntimeParts,
   id: schedulerTypesModule.TaskId,
-  context: Context,
+  context: chordTypes.Context,
 ) {
   const bound = withAbortSignal(invocation.controller.signal, context);
   const { session, storage } = state.options;
@@ -53,9 +58,9 @@ const abortOwned = Effect.fnUntraced(function* (
 const outcomes = Effect.fnUntraced(function* (
   state: schedulerRuntimeReadsTypes.SchedulerState,
   ids: readonly schedulerTypesModule.TaskId[],
-  context: Context,
+  context: chordTypes.Context,
 ) {
-  const found: schedulerTypesModule.TaskOutcome<JsonValue>[] = [];
+  const found: schedulerTypesModule.TaskOutcome<chordTypes.JsonValue>[] = [];
   for (const id of ids) {
     const record = yield* Effect.promise(() => state.options.storage.task(id, context));
     const taskState = record?.state;
@@ -69,7 +74,7 @@ const readEntry = Effect.fnUntraced(function* (
   { state, invocation }: schedulerRuntimeReadsTypes.RuntimeParts,
   token: { readonly kind: string } | undefined,
   id: schedulerTypesModule.EntryId,
-  context: Context,
+  context: chordTypes.Context,
 ) {
   const { session, storage } = state.options;
   const found = yield* Effect.promise(() =>
@@ -106,7 +111,7 @@ const keepContext = (
 const readContext = Effect.fnUntraced(function* (
   parts: schedulerRuntimeReadsTypes.RuntimeParts,
   conversationId: schedulerTypesModule.ConversationId,
-  context: Context,
+  context: chordTypes.Context,
   at: schedulerTypesModule.EntryId | undefined,
 ) {
   const { state } = parts;
@@ -126,7 +131,7 @@ const sessionReads = (parts: schedulerRuntimeReadsTypes.RuntimeParts) => {
   const { state, invocation } = parts;
   const { session } = state.options;
   return {
-    getTask: ((id: schedulerTypesModule.TaskId, context: Context) =>
+    getTask: ((id: schedulerTypesModule.TaskId, context: chordTypes.Context) =>
       state.read(invocation, () =>
         session.readOnLine(() => state.options.storage.task(id, context)),
       )) as schedulerTypesModule.ErasedRuntime["getTask"],
@@ -138,7 +143,7 @@ const sessionReads = (parts: schedulerRuntimeReadsTypes.RuntimeParts) => {
       state.read(invocation, () =>
         sessionMethod(session, "snapshotAsOf")(...args),
       )) as schedulerTypesModule.ErasedRuntime["snapshotAsOf"],
-    waitForTask: ((id: schedulerTypesModule.TaskId, context: Context) =>
+    waitForTask: ((id: schedulerTypesModule.TaskId, context: chordTypes.Context) =>
       state.read(invocation, () =>
         Effect.runPromise(
           waitForTask(state, id, withAbortSignal(invocation.controller.signal, context)),
@@ -152,17 +157,17 @@ const runtimeReads = (parts: schedulerRuntimeReadsTypes.RuntimeParts) => {
   const { session } = state.options;
   return {
     ...sessionReads(parts),
-    abortOwned: (id: schedulerTypesModule.TaskId, context: Context) =>
+    abortOwned: (id: schedulerTypesModule.TaskId, context: chordTypes.Context) =>
       state.read(invocation, () => Effect.runPromise(abortOwned(parts, id, context))),
     context: (
       conversationId: schedulerTypesModule.ConversationId,
-      context: Context,
+      context: chordTypes.Context,
       options?: { readonly at?: schedulerTypesModule.EntryId },
     ) =>
       state.read(invocation, () =>
         Effect.runPromise(readContext(parts, conversationId, context, options?.at)),
       ),
-    conversation: (id: schedulerTypesModule.ConversationId, context: Context) =>
+    conversation: (id: schedulerTypesModule.ConversationId, context: chordTypes.Context) =>
       state.read(invocation, () =>
         state.options.conversation(
           id,
@@ -178,19 +183,19 @@ const runtimeReads = (parts: schedulerRuntimeReadsTypes.RuntimeParts) => {
     entry: ((...args: readonly unknown[]) => {
       const [token, id, context] =
         args.length === 2
-          ? [undefined, args[0] as schedulerTypesModule.EntryId, args[1] as Context]
+          ? [undefined, args[0] as schedulerTypesModule.EntryId, args[1] as chordTypes.Context]
           : [
               args[0] as { readonly kind: string },
               args[1] as schedulerTypesModule.EntryId,
-              args[2] as Context,
+              args[2] as chordTypes.Context,
             ];
       return state.read(invocation, () => Effect.runPromise(readEntry(parts, token, id, context)));
     }) as schedulerTypesModule.ErasedRuntime["entry"],
-    outcomes: ((ids: readonly schedulerTypesModule.TaskId[], context: Context) =>
+    outcomes: ((ids: readonly schedulerTypesModule.TaskId[], context: chordTypes.Context) =>
       state.read(invocation, () =>
         session.readOnLine(() => Effect.runPromise(outcomes(state, ids, context))),
       )) as schedulerTypesModule.ErasedRuntime["outcomes"],
-    ownedTasks: (context: Context) =>
+    ownedTasks: (context: chordTypes.Context) =>
       state.read(invocation, () =>
         session.readOnLine(() => promiseTry(() => ownedTasks(parts, context))),
       ),

@@ -4,20 +4,12 @@ import { Effect } from "effect";
 import { Type } from "typebox";
 import { describe, it } from "vite-plus/test";
 
-import {
-  type Ctx,
-  type Facet,
-  type FacetLoader,
-  createHost,
-  hostNamed,
-  isChordError,
-  local,
-  memoryLinkPair,
-  method,
-  remote,
-} from "../src/index.ts";
+import chord from "../src/index.ts";
+import type chordTypes from "../src/index.types.ts";
 import linksReview from "./fixtures/links-review.ts";
 import timing from "./fixtures/timing.ts";
+
+const { createHost, hostNamed, isChordError, local, memoryLinkPair, method, remote } = chord;
 
 const { WatchedLink, internals, until } = linksReview;
 const { latch, tick } = timing;
@@ -28,7 +20,7 @@ const Greeter = remote("t.greeter", {
   variants: { main: { methods: { greet: method(Type.String(), Type.String()) } } },
   version: 1,
 });
-const greeterFacet = (greeting: string): Facet => ({
+const greeterFacet = (greeting: string): chordTypes.Facet => ({
   name: "greeter",
   setup: (api) =>
     api.serve(Greeter, () => ({
@@ -38,8 +30,8 @@ const greeterFacet = (greeting: string): Facet => ({
 });
 
 function setup(options: { slowLoad?: Promise<void> } = {}) {
-  const modules = new Map<string, Facet>([["greeter", greeterFacet("v1")]]);
-  const loader: FacetLoader = (names) =>
+  const modules = new Map<string, chordTypes.Facet>([["greeter", greeterFacet("v1")]]);
+  const loader: chordTypes.FacetLoader = (names) =>
     Effect.runPromise(
       Effect.gen(function* () {
         yield* Effect.promise(() => Promise.resolve(options.slowLoad));
@@ -102,7 +94,7 @@ const case4TasksTheCommitStartsCannot = Effect.gen(function* () {
   yield* tick;
   const results: unknown[] = [];
   const Caller = local("t.caller", { input: Type.Object({}), version: 1 });
-  const callerFacet = (active: boolean): Facet => ({
+  const callerFacet = (active: boolean): chordTypes.Facet => ({
     name: "caller",
     setup: (api) =>
       api.serve(
@@ -170,7 +162,7 @@ const case6AServerRootThatBounces = Effect.gen(function* () {
     variants: { main: { methods: { bounce: method() } } },
     version: 1,
   });
-  const echoFacet = (version: number): Facet => ({
+  const echoFacet = (version: number): chordTypes.Facet => ({
     name: "echo",
     setup: (api) =>
       api.serve(Echo, (_input, _principal, self) => {
@@ -182,7 +174,7 @@ const case6AServerRootThatBounces = Effect.gen(function* () {
   const echo = server.hold(Echo, {}, { principal: { worker: "w" } });
   yield* Effect.promise(() => echo.ready);
   worker.serve(Bouncer, () => ({
-    bounce: (ctx: Ctx) =>
+    bounce: (ctx: chordTypes.Ctx) =>
       Effect.runPromiseWith(services)(
         Effect.gen(function* () {
           const echoRef = yield* Effect.promise(() => ctx.get(Echo, {}));

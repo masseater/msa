@@ -1,6 +1,6 @@
 import type { ToolCall } from "@msa/ai";
 import { validateToolArguments } from "@msa/ai/utils/validation";
-import type { Context, JsonValue } from "@msa/chord";
+import type chordTypes from "@msa/chord/index.types";
 import { Cause, Effect, Exit, Function } from "effect";
 
 import entries from "../entries.ts";
@@ -18,7 +18,7 @@ const resolveTool = Effect.fnUntraced(function* (
   runtime: toolTypesModule.ToolRuntime,
   input: toolTypesModule.ToolTaskInput,
   name: string,
-  context: Context,
+  context: chordTypes.Context,
 ) {
   const agent = yield* Effect.promise(() => runtime.agent(context));
   const tools = input.kind === "model" ? agent.tools : agent.callable;
@@ -28,7 +28,7 @@ const resolveTool = Effect.fnUntraced(function* (
 const readCall = Effect.fnUntraced(function* (
   runtime: toolTypesModule.ToolRuntime,
   input: toolTypesModule.ToolTaskInput,
-  context: Context,
+  context: chordTypes.Context,
 ) {
   if (input.kind === "nested")
     return yield* Effect.succeed<typesModule.ToolHookCall>({
@@ -99,9 +99,8 @@ function checkKey(key: string): void {
   }
 }
 
-const jsonEqual: typesModule.Dual2<JsonValue, JsonValue, boolean> = Function.dual(
-  2,
-  (a: JsonValue, b: JsonValue): boolean => {
+const jsonEqual: typesModule.Dual2<chordTypes.JsonValue, chordTypes.JsonValue, boolean> =
+  Function.dual(2, (a: chordTypes.JsonValue, b: chordTypes.JsonValue): boolean => {
     if (a === b) return true;
     if (typeof a !== "object" || typeof b !== "object" || a === null || b === null) return false;
     if (Array.isArray(a) || Array.isArray(b)) {
@@ -117,14 +116,13 @@ const jsonEqual: typesModule.Dual2<JsonValue, JsonValue, boolean> = Function.dua
       keys.length === Object.keys(b).length &&
       keys.every((key) => Object.hasOwn(b, key) && jsonEqual(a[key]!, b[key]!))
     );
-  },
-);
+  });
 
 const askHooks = Effect.fnUntraced(function* (
   runtime: toolTypesModule.ToolRuntime,
   call: typesModule.ToolHookCall,
   initial: typesModule.JsonObject,
-  context: Context,
+  context: chordTypes.Context,
 ) {
   let args = initial;
   let block: string | undefined;

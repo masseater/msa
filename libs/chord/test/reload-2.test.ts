@@ -4,9 +4,12 @@ import { Effect } from "effect";
 import { Type } from "typebox";
 import { describe, it } from "vite-plus/test";
 
-import { type Ctx, type Facet, isChordError } from "../src/index.ts";
+import chord from "../src/index.ts";
+import type chordTypes from "../src/index.types.ts";
 import reloadModule from "./fixtures/reload.ts";
 import timing from "./fixtures/timing.ts";
+
+const { isChordError } = chord;
 
 const { CountV1, Greeter, greeterFacet, quiet } = reloadModule;
 const { abortOf, latch, tick } = timing;
@@ -15,7 +18,7 @@ const gateDeadlineReloadAbortsReportsBlocking = Effect.gen(function* () {
   const services = yield* Effect.context<never>();
   const host = quiet();
   const log: string[] = [];
-  const facet = (greeting: string, version: number): Facet => ({
+  const facet = (greeting: string, version: number): chordTypes.Facet => ({
     name: "greeter",
     setup: (api) =>
       api.serve(Greeter, (_input, _principal, self) => {
@@ -62,7 +65,7 @@ const gateDeadlineReloadAbortsReportsBlocking = Effect.gen(function* () {
 const exclusiveResourcesAreReplacedAtThe = Effect.gen(function* () {
   const host = quiet();
   const log: string[] = [];
-  const facet = (rev: number): Facet => ({
+  const facet = (rev: number): chordTypes.Facet => ({
     name: "greeter",
     setup: (api) =>
       api.serve(Greeter, (_input, _principal, self) => {
@@ -136,7 +139,7 @@ const forcedRetirementAbortsTheLeftoverRoots = Effect.gen(function* () {
   const host = quiet();
   const log: string[] = [];
   const hold = latch();
-  const facet = (version: number): Facet => ({
+  const facet = (version: number): chordTypes.Facet => ({
     name: "greeter",
     setup: (api) =>
       api.serve(Greeter, (_input, _principal, self) => {
@@ -148,7 +151,7 @@ const forcedRetirementAbortsTheLeftoverRoots = Effect.gen(function* () {
         const count = self.state("count", CountV1, { n: 0 });
         return {
           count,
-          greet: (name: string, ctx: Ctx) =>
+          greet: (name: string, ctx: chordTypes.Ctx) =>
             Effect.runPromiseWith(services)(
               Effect.gen(function* () {
                 if (name === "hold") {
@@ -184,7 +187,7 @@ const forcedRetirementAbortsTheLeftoverRoots = Effect.gen(function* () {
 const aKeptResourceClosesWithThe = Effect.gen(function* () {
   const host = quiet();
   const log: string[] = [];
-  const facet = (label: string): Facet => ({
+  const facet = (label: string): chordTypes.Facet => ({
     name: "greeter",
     setup: (api) =>
       api.serve(Greeter, (_input, _principal, self) => {

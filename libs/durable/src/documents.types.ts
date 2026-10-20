@@ -1,5 +1,5 @@
-import type { JsonValue } from "@msa/chord";
-import type { Op } from "@msa/chord/delta";
+import type deltaTypes from "@msa/chord/delta.types";
+import type chordTypes from "@msa/chord/index.types";
 
 import type typesModule from "./types.types.ts";
 
@@ -8,11 +8,11 @@ declare namespace documentsTypes {
     readonly kind: string;
     readonly version: number;
     readonly family?: true;
-    initial(seed?: JsonValue): typesModule.JsonObject;
+    initial(seed?: chordTypes.JsonValue): typesModule.JsonObject;
     migrate?(value: typesModule.JsonObject, fromVersion: number): typesModule.JsonObject;
     checkpointWhen?(
       value: Readonly<typesModule.JsonObject>,
-      ops: readonly Op[],
+      ops: readonly deltaTypes.Op[],
       info: typesModule.CheckpointInfo,
     ): boolean;
   };

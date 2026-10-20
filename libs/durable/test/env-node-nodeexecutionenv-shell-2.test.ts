@@ -1,4 +1,4 @@
-import { BACKGROUND_CONTEXT } from "@msa/chord/context";
+import contextModule from "@msa/chord/context";
 import { Effect } from "effect";
 import { afterEach, describe, expect, it } from "vite-plus/test";
 
@@ -8,6 +8,8 @@ import type nodeTypes from "../src/env/node.types.ts";
 import effectSupport from "./effect-support.ts";
 import envNodeSupport from "./env-node-support.ts";
 import platformSupport from "./platform-support.ts";
+
+const { BACKGROUND_CONTEXT } = contextModule;
 
 const { NodeExecutionEnv } = node;
 const { getOrThrow } = envModule;

@@ -1,4 +1,4 @@
-import type { Context } from "@msa/chord";
+import type chordTypes from "@msa/chord/index.types";
 
 import type harnessBound from "./harness-bound.ts";
 import type schedulerTypes from "./scheduler.types.ts";
@@ -10,7 +10,7 @@ declare namespace harnessSchedulerWiringTypes {
       resolveAgent(
         id: typesModule.ConversationId,
         snapshot: typesModule.RegistrySnapshot<Tool> | undefined,
-        context: Context,
+        context: chordTypes.Context,
       ): Promise<typesModule.Agent<Tool>>;
       buildEnv: schedulerTypes.TaskSchedulerOptions["env"];
     };
@@ -23,7 +23,7 @@ declare namespace harnessSchedulerWiringTypes {
     readonly now: () => number;
     readonly report: (error: unknown) => void;
     readonly submissions: () => Parameters<typeof harnessBound.boundConversation>[2];
-    readonly context: Context;
+    readonly context: chordTypes.Context;
   };
 }
 

@@ -1,5 +1,5 @@
-import type { Context } from "@msa/chord";
-import { BACKGROUND_CONTEXT, withAbortSignal as withAbortSignalModule } from "@msa/chord/context";
+import contextModule from "@msa/chord/context";
+import type chordTypes from "@msa/chord/index.types";
 import type durableTypes from "@msa/durable/index.types";
 import memory from "@msa/durable/storage/memory";
 import { Effect } from "effect";
@@ -10,13 +10,15 @@ import type sessionTypes from "../src/session/session.types.ts";
 import effectSupport from "./effect-support.ts";
 import type sessionSupportTypes from "./session-support.types.ts";
 
+const { BACKGROUND_CONTEXT, withAbortSignal: withAbortSignalModule } = contextModule;
+
 const { MemoryStorage } = memory;
 
 const { currentTimeMillis } = clockModule;
 
 const { awaited } = effectSupport;
 
-const context: Context = BACKGROUND_CONTEXT;
+const context: chordTypes.Context = BACKGROUND_CONTEXT;
 
 type Deferred = PromiseWithResolvers<void>;
 
@@ -64,7 +66,7 @@ class ControlledStorage extends MemoryStorage {
 
   override commit(
     writes: readonly durableTypes.StorageWrite[],
-    commitContext: Context,
+    commitContext: chordTypes.Context,
   ): Promise<durableTypes.Seq> {
     const superCommit = super.commit.bind(this);
     return Effect.runPromise(
@@ -94,7 +96,7 @@ class ControlledStorage extends MemoryStorage {
   override document(
     id: durableTypes.DocumentId,
     at: durableTypes.DocumentPoint,
-    callContext: Context,
+    callContext: chordTypes.Context,
   ) {
     this.documentReadCount++;
     return super.document(id, at, callContext);
@@ -103,7 +105,7 @@ class ControlledStorage extends MemoryStorage {
   override findDocument(
     address: durableTypes.DocumentAddress,
     at: durableTypes.DocumentPoint,
-    callContext: Context,
+    callContext: chordTypes.Context,
   ): Promise<durableTypes.DocumentRecord | undefined> {
     const superFindDocument = super.findDocument.bind(this);
     return Effect.runPromise(

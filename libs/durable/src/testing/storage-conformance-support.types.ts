@@ -1,10 +1,14 @@
-import type { JsonValue } from "@msa/chord";
+import type chordTypes from "@msa/chord/index.types";
 import type { Effect } from "effect";
 
 import type typesModule from "../types.types.ts";
 
 declare namespace storageConformanceSupportTypes {
-  type StoredTask = typesModule.TaskRecord<JsonValue, JsonValue, JsonValue>;
+  type StoredTask = typesModule.TaskRecord<
+    chordTypes.JsonValue,
+    chordTypes.JsonValue,
+    chordTypes.JsonValue
+  >;
 
   type Identified = { readonly id: number };
 

@@ -1,18 +1,10 @@
 import { type Static, Type } from "typebox";
 
-import {
-  type Factory,
-  type Host,
-  type StateOptions,
-  forbidden,
-  hostNamed,
-  invalid,
-  local,
-  method,
-  opaque,
-  remote,
-} from "../../src/index.ts";
+import chord from "../../src/index.ts";
+import type chordTypes from "../../src/index.types.ts";
 import type tutorialTypes from "./tutorial.types.ts";
+
+const { forbidden, hostNamed, invalid, local, method, opaque, remote } = chord;
 
 const TodoLabel = local("tutorial.todos", {
   input: Type.Object({ list: Type.String() }),
@@ -36,7 +28,7 @@ const TodoStore = local("tutorial.todos", {
 });
 
 const todoStore =
-  (options?: StateOptions<Static<typeof Rows>>): Factory<typeof TodoStore> =>
+  (options?: chordTypes.StateOptions<Static<typeof Rows>>): chordTypes.Factory<typeof TodoStore> =>
   ({ list }, _principal, self) => {
     const rows = self.state("rows", Rows, [], options);
     const openCount = self.derive([rows], (todos) => todos.filter((todo) => !todo.done).length);
@@ -88,7 +80,7 @@ const Todos = remote("tutorial.todo-view", {
 
 type Principal = tutorialTypes.Principal;
 
-function serveViews(api: Pick<Host<Principal>, "serve">): void {
+function serveViews(api: Pick<chordTypes.Host<Principal>, "serve">): void {
   api.serve(Todos, ({ list }, principal, self) => {
     if (list !== "family") throw forbidden("This list is not shared");
     const store = self.get(TodoStore, { list });

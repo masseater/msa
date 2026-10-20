@@ -1,13 +1,11 @@
-import { BACKGROUND_CONTEXT } from "../../src/context/index.ts";
-import type { Op } from "../../src/delta/index.ts";
-import {
-  type Context,
-  type ReplicatedStateSource,
-  type ReplicatedStateSourceAttachment,
-} from "../../src/index.ts";
+import contextModule from "../../src/context/index.ts";
+import type deltaTypes from "../../src/delta/index.types.ts";
+import type chordTypes from "../../src/index.types.ts";
 import TestSourceAttachment from "./replicated-state-attachment.ts";
 
-class TestSource<T> implements ReplicatedStateSource<T> {
+const { BACKGROUND_CONTEXT } = contextModule;
+
+class TestSource<T> implements chordTypes.ReplicatedStateSource<T> {
   readonly attachments = new Set<TestSourceAttachment<T>>();
   onAttach: (() => void) | undefined;
   #value: T;
@@ -18,7 +16,7 @@ class TestSource<T> implements ReplicatedStateSource<T> {
     this.#cursor = cursor;
   }
 
-  attach(): ReplicatedStateSourceAttachment<T> {
+  attach(): chordTypes.ReplicatedStateSourceAttachment<T> {
     const attachment = new TestSourceAttachment(
       Object.freeze({ cursor: this.#cursor, value: this.#value }),
       () => this.attachments.delete(attachment),
@@ -30,8 +28,8 @@ class TestSource<T> implements ReplicatedStateSource<T> {
 
   commit(
     value: T,
-    ops: readonly Op[],
-    context: Context = BACKGROUND_CONTEXT,
+    ops: readonly deltaTypes.Op[],
+    context: chordTypes.Context = BACKGROUND_CONTEXT,
     cursor = this.#cursor + 1,
   ): void {
     this.#value = value;

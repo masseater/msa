@@ -1,4 +1,4 @@
-import type { Context } from "@msa/chord";
+import type chordTypes from "@msa/chord/index.types";
 import { Effect, Function } from "effect";
 
 import errors from "../../errors.ts";
@@ -33,8 +33,8 @@ const visibleFrom = Effect.fnUntraced(function* (
 
 const entryIdOf = (
   idOrConversationId: typesModule.EntryId | typesModule.ConversationId,
-  idOrContext: typesModule.EntryId | Context,
-  context: Context | undefined,
+  idOrContext: typesModule.EntryId | chordTypes.Context,
+  context: chordTypes.Context | undefined,
 ): typesModule.EntryId => {
   if (context === undefined) return idFromNumber<typesModule.EntryId>(idOrConversationId);
   if (typeof idOrContext === "number") return idFromNumber<typesModule.EntryId>(idOrContext);
@@ -44,22 +44,22 @@ const entryIdOf = (
 const readEntry: {
   (
     idOrConversationId: typesModule.EntryId | typesModule.ConversationId,
-    idOrContext: typesModule.EntryId | Context,
-    context: Context | undefined,
+    idOrContext: typesModule.EntryId | chordTypes.Context,
+    context: chordTypes.Context | undefined,
   ): (db: databaseTypes.SqliteExecutor) => Effect.Effect<EntryRead | undefined>;
   (
     db: databaseTypes.SqliteExecutor,
     idOrConversationId: typesModule.EntryId | typesModule.ConversationId,
-    idOrContext: typesModule.EntryId | Context,
-    context: Context | undefined,
+    idOrContext: typesModule.EntryId | chordTypes.Context,
+    context: chordTypes.Context | undefined,
   ): Effect.Effect<EntryRead | undefined>;
 } = Function.dual(
   4,
   Effect.fnUntraced(function* (
     db: databaseTypes.SqliteExecutor,
     idOrConversationId: typesModule.EntryId | typesModule.ConversationId,
-    idOrContext: typesModule.EntryId | Context,
-    context: Context | undefined,
+    idOrContext: typesModule.EntryId | chordTypes.Context,
+    context: chordTypes.Context | undefined,
   ) {
     const id = entryIdOf(idOrConversationId, idOrContext, context);
     const conversation =

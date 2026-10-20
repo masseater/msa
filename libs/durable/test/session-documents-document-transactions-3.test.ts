@@ -1,4 +1,4 @@
-import type { Draft } from "@msa/chord";
+import type chordTypes from "@msa/chord/index.types";
 import { Effect } from "effect";
 import { describe, expect, it } from "vite-plus/test";
 
@@ -90,7 +90,7 @@ const retiresDocumentsCreatesStep1 = Effect.gen(function* () {
   const { session, storage, publications, conversationId } = yield* setupLive();
   yield* flush;
   const oldId = documentChanges(publications.at(-1)!)[0]!.record.id;
-  let replacement: Draft<sessionDocumentsSupportTypes.Live> | undefined;
+  let replacement: chordTypes.Draft<sessionDocumentsSupportTypes.Live> | undefined;
   yield* awaited(
     session.commit(
       (tx) =>

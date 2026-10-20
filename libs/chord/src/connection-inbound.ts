@@ -1,25 +1,33 @@
 import { Cause, Effect } from "effect";
 
-import type { Served } from "./connection-types.ts";
-import type { Connection } from "./connection.ts";
-import type { CtxImpl } from "./ctx.ts";
-import { ChordError } from "./errors.ts";
-import { Packed, unpack } from "./link.ts";
-import { relayCall } from "./relay-call.ts";
-import { RelayRef } from "./relay.ts";
-import type { Ctx } from "./types.ts";
-import { type Frame, fromWireError, PROTOCOL_VERSION, type RootRef, toWireError } from "./wire.ts";
+import connectionInboundKit from "./connection-inbound-kit.ts";
+import type connectionTypesModule from "./connection-types.types.ts";
+import type connectionTypes from "./connection.types.ts";
+import type ctxTypes from "./ctx.types.ts";
+import relayCallModule from "./relay-call.ts";
+import RelayRef from "./relay.ts";
+import type typesModule from "./types.types.ts";
+import wire from "./wire.ts";
+import type wireTypes from "./wire.types.ts";
 
-type CallFrame = Extract<Frame, { t: "call" }>;
+const { errors: errorsModule, link } = connectionInboundKit;
 
-export class Inbound {
-  readonly #connection: Connection;
+const { PROTOCOL_VERSION, fromWireError, toWireError } = wire;
+const { ChordError } = errorsModule;
 
-  constructor(connection: Connection) {
+const { Packed, unpack } = link;
+const { relayCall } = relayCallModule;
+
+type CallFrame = Extract<wireTypes.Frame, { t: "call" }>;
+
+export default class Inbound {
+  readonly #connection: connectionTypes.Connection;
+
+  constructor(connection: connectionTypes.Connection) {
     this.#connection = connection;
   }
 
-  hello(frame: Extract<Frame, { t: "hello" }>): void {
+  hello(frame: Extract<wireTypes.Frame, { t: "hello" }>): void {
     const connection = this.#connection;
     if ((frame.protocol ?? 1) !== PROTOCOL_VERSION) {
       connection.protocolMismatch(frame.protocol ?? 1);
@@ -44,7 +52,7 @@ export class Inbound {
     if (peer.kind === "host") connection.host.peerHello(connection, frame.codeVersion);
   }
 
-  hold(frame: Extract<Frame, { t: "hold" }>): void {
+  hold(frame: Extract<wireTypes.Frame, { t: "hold" }>): void {
     const connection = this.#connection;
     if (connection.served.has(frame.id)) {
       connection.violation(`duplicate hold id ${frame.id}`);
@@ -59,9 +67,9 @@ export class Inbound {
     }
     if (!downstream) {
       connection.send({
-        t: "gone",
-        id: frame.id,
         error: toWireError(new ChordError("unavailable", `${connection.host.name} does not relay`)),
+        id: frame.id,
+        t: "gone",
       });
       return;
     }
@@ -73,7 +81,7 @@ export class Inbound {
         .pipe(
           Effect.catchCause((cause) =>
             Effect.sync(() =>
-              relay.close(Cause.squash(cause), { releaseDown: true, notify: true }),
+              relay.close(Cause.squash(cause), { notify: true, releaseDown: true }),
             ),
           ),
         ),
@@ -92,15 +100,15 @@ export class Inbound {
         `Too many calls in progress on this connection (${connection.maxCalls}); wait for earlier ones to finish`,
         { reason: "too_many_calls" },
       );
-      connection.send({ t: "result", id: frame.id, error: toWireError(error) });
+      connection.send({ error: toWireError(error), id: frame.id, t: "result" });
       return;
     }
     const served = connection.served.get(frame.hold);
     if (served === undefined) {
       connection.send({
-        t: "result",
-        id: frame.id,
         error: toWireError(new ChordError("gone", "unknown hold")),
+        id: frame.id,
+        t: "result",
       });
       return;
     }
@@ -117,31 +125,39 @@ export class Inbound {
         : host.joinRoot(root.rootId, root.codeVersion, run, { ...options, from: connection });
     result
       .then(
-        (value) => connection.send({ t: "result", id: frame.id, value }),
+        (value) => connection.send({ id: frame.id, t: "result", value }),
         (error: unknown) =>
-          connection.send({ t: "result", id: frame.id, error: toWireError(error) }),
+          connection.send({ error: toWireError(error), id: frame.id, t: "result" }),
       )
       .finally(() => connection.incoming.delete(frame.id));
   }
 
-  #runner(served: Served, frame: CallFrame): (ctx: Ctx) => Promise<unknown> {
+  #runner(
+    served: connectionTypesModule.Served,
+    frame: CallFrame,
+  ): (ctx: typesModule.Ctx) => Promise<unknown> {
     const host = this.#connection.host;
     if (served.kind === "local")
       return (ctx) =>
-        served.ref.object.calls.run(served.ref, frame.member, unpack(frame.args), ctx as CtxImpl);
+        served.ref.object.calls.run(
+          served.ref,
+          frame.member,
+          unpack(frame.args),
+          ctx as ctxTypes.CtxImpl,
+        );
     return (ctx) =>
       Effect.runPromise(
         relayCall({
-          relay: served.relay,
           frame,
-          root: { rootId: ctx.rootId, codeVersion: ctx.codeVersion },
-          signal: ctx.signal,
+          relay: served.relay,
+          root: { codeVersion: ctx.codeVersion, rootId: ctx.rootId },
           rootSent: (rootId, down) => host.rootSent(rootId, down),
+          signal: ctx.signal,
         }),
       );
   }
 
-  #admitRoot(root: RootRef | undefined): RootRef | undefined {
+  #admitRoot(root: wireTypes.RootRef | undefined): wireTypes.RootRef | undefined {
     const connection = this.#connection;
     if (
       root === undefined ||
@@ -155,15 +171,15 @@ export class Inbound {
       codeVersion = connection.host.current.id;
       connection.admitted.set(root.rootId, codeVersion);
     }
-    return { rootId: root.rootId, codeVersion };
+    return { codeVersion, rootId: root.rootId };
   }
 
-  holdReply(frame: Extract<Frame, { t: "shape" | "gone" }>): void {
+  holdReply(frame: Extract<wireTypes.Frame, { t: "shape" | "gone" }>): void {
     const connection = this.#connection;
     const relay = connection.relayedRefs.get(frame.id);
     if (relay !== undefined) {
       if (frame.t === "gone")
-        relay.close(fromWireError(frame.error), { releaseDown: false, notify: true });
+        relay.close(fromWireError(frame.error), { notify: true, releaseDown: false });
       else relay.shape(frame);
       return;
     }
@@ -175,12 +191,12 @@ export class Inbound {
       return;
     }
     binding.shaped(
-      { variant: frame.variant, members: frame.members, contract: frame.contract },
+      { contract: frame.contract, members: frame.members, variant: frame.variant },
       frame.state,
     );
   }
 
-  result(frame: Extract<Frame, { t: "result" }>): void {
+  result(frame: Extract<wireTypes.Frame, { t: "result" }>): void {
     const connection = this.#connection;
     const relayed = connection.relayedCalls.get(frame.id);
     if (relayed !== undefined) {
@@ -206,7 +222,7 @@ export class Inbound {
     pending?.resolve(value);
   }
 
-  state(frame: Extract<Frame, { t: "state" }>): void {
+  state(frame: Extract<wireTypes.Frame, { t: "state" }>): void {
     const connection = this.#connection;
     const relay = connection.relayedRefs.get(frame.hold);
     if (relay !== undefined) {

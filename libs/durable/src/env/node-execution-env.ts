@@ -1,4 +1,4 @@
-import type { Context } from "@msa/chord";
+import type chordTypes from "@msa/chord/index.types";
 import { Effect } from "effect";
 
 import env from "./index.ts";
@@ -19,7 +19,7 @@ const { killProcessTree } = nodeProcess;
 const readLines = Effect.fnUntraced(function* (
   reader: envTypes.TextLineReader,
   maxLines: number | undefined,
-  context: Context,
+  context: chordTypes.Context,
 ) {
   const lines: string[] = [];
   for (;;) {
@@ -47,14 +47,14 @@ export default class NodeExecutionEnv implements envTypes.ExecutionEnv {
     this.watchOptions = options.watch ?? {};
   }
 
-  private at(path: string, context: Context): nodeFilesTypes.FileRequest {
+  private at(path: string, context: chordTypes.Context): nodeFilesTypes.FileRequest {
     return { context, path: resolvePath(this.cwd, path) };
   }
 
   watch(
     targets: readonly envTypes.WatchTarget[],
     onChange: (change: envTypes.WatchChange) => void,
-    context: Context,
+    context: chordTypes.Context,
   ): Promise<envTypes.Result<envTypes.FileWatcher, envTypes.FileError>> {
     const aborted = abortResult<envTypes.FileWatcher>(context.abortSignal, undefined);
     if (aborted !== undefined) return Promise.resolve(aborted);
@@ -78,14 +78,14 @@ export default class NodeExecutionEnv implements envTypes.ExecutionEnv {
 
   absolutePath(
     path: string,
-    _context: Context,
+    _context: chordTypes.Context,
   ): Promise<envTypes.Result<string, envTypes.FileError>> {
     return Promise.resolve(ok(resolvePath(this.cwd, path)));
   }
 
   joinPath(
     parts: string[],
-    _context: Context,
+    _context: chordTypes.Context,
   ): Promise<envTypes.Result<string, envTypes.FileError>> {
     return Promise.resolve(ok(joinPaths(...parts)));
   }
@@ -93,7 +93,7 @@ export default class NodeExecutionEnv implements envTypes.ExecutionEnv {
   exec(
     command: string | readonly string[],
     options: envTypes.ShellExecOptions | undefined,
-    context: Context,
+    context: chordTypes.Context,
   ): Promise<envTypes.Result<envTypes.ShellExecResult, envTypes.ExecutionError>> {
     return execute({
       command,
@@ -113,14 +113,14 @@ export default class NodeExecutionEnv implements envTypes.ExecutionEnv {
 
   openTextLineReader(
     path: string,
-    context: Context,
+    context: chordTypes.Context,
   ): Promise<envTypes.Result<envTypes.TextLineReader, envTypes.FileError>> {
     return nodeHandles.openTextLineReader(this.at(path, context));
   }
 
   readTextFile(
     path: string,
-    context: Context,
+    context: chordTypes.Context,
   ): Promise<envTypes.Result<string, envTypes.FileError>> {
     return nodeFiles.readTextFile(this.at(path, context));
   }
@@ -128,7 +128,7 @@ export default class NodeExecutionEnv implements envTypes.ExecutionEnv {
   readTextLines(
     path: string,
     options: { maxLines?: number } | undefined,
-    context: Context,
+    context: chordTypes.Context,
   ): Promise<envTypes.Result<string[], envTypes.FileError>> {
     const maxLines = options?.maxLines;
     if (maxLines !== undefined && maxLines <= 0) return Promise.resolve(ok([]));
@@ -146,7 +146,7 @@ export default class NodeExecutionEnv implements envTypes.ExecutionEnv {
 
   readBinaryFile(
     path: string,
-    context: Context,
+    context: chordTypes.Context,
   ): Promise<envTypes.Result<Uint8Array, envTypes.FileError>> {
     return nodeFiles.readBinaryFile(this.at(path, context));
   }
@@ -154,7 +154,7 @@ export default class NodeExecutionEnv implements envTypes.ExecutionEnv {
   openBinaryReader(
     path: string,
     options: { noFollow?: boolean } | undefined,
-    context: Context,
+    context: chordTypes.Context,
   ): Promise<envTypes.Result<envTypes.BinaryReader, envTypes.FileError>> {
     const noFollow = options?.noFollow === true;
     return nodeHandles.openBinaryReader({ ...this.at(path, context), noFollow });
@@ -163,7 +163,7 @@ export default class NodeExecutionEnv implements envTypes.ExecutionEnv {
   writeFile(
     path: string,
     content: string | Uint8Array,
-    context: Context,
+    context: chordTypes.Context,
   ): Promise<envTypes.Result<void, envTypes.FileError>> {
     return nodeFiles.writeFile({ ...this.at(path, context), content });
   }
@@ -171,7 +171,7 @@ export default class NodeExecutionEnv implements envTypes.ExecutionEnv {
   appendFile(
     path: string,
     content: string | Uint8Array,
-    context: Context,
+    context: chordTypes.Context,
   ): Promise<envTypes.Result<void, envTypes.FileError>> {
     return nodeFiles.appendFile({ ...this.at(path, context), content });
   }
@@ -179,19 +179,22 @@ export default class NodeExecutionEnv implements envTypes.ExecutionEnv {
   truncateFile(
     path: string,
     size: number,
-    context: Context,
+    context: chordTypes.Context,
   ): Promise<envTypes.Result<void, envTypes.FileError>> {
     return nodeFiles.truncateFile({ ...this.at(path, context), size });
   }
 
-  flushFile(path: string, context: Context): Promise<envTypes.Result<void, envTypes.FileError>> {
+  flushFile(
+    path: string,
+    context: chordTypes.Context,
+  ): Promise<envTypes.Result<void, envTypes.FileError>> {
     return nodeHandles.flushFile(this.at(path, context));
   }
 
   renameFile(
     sourcePath: string,
     destinationPath: string,
-    context: Context,
+    context: chordTypes.Context,
   ): Promise<envTypes.Result<void, envTypes.FileError>> {
     const source = resolvePath(this.cwd, sourcePath);
     return nodeFiles.renameFile({ ...this.at(destinationPath, context), source });
@@ -199,33 +202,36 @@ export default class NodeExecutionEnv implements envTypes.ExecutionEnv {
 
   fileInfo(
     path: string,
-    context: Context,
+    context: chordTypes.Context,
   ): Promise<envTypes.Result<envTypes.FileInfo, envTypes.FileError>> {
     return nodeHandles.fileInfo(this.at(path, context));
   }
 
   listDir(
     path: string,
-    context: Context,
+    context: chordTypes.Context,
   ): Promise<envTypes.Result<envTypes.FileInfo[], envTypes.FileError>> {
     return nodeHandles.listDir(this.at(path, context));
   }
 
   openDirReader(
     path: string,
-    context: Context,
+    context: chordTypes.Context,
   ): Promise<envTypes.Result<envTypes.DirReader, envTypes.FileError>> {
     return nodeHandles.openDirReader(this.at(path, context));
   }
 
   canonicalPath(
     path: string,
-    context: Context,
+    context: chordTypes.Context,
   ): Promise<envTypes.Result<string, envTypes.FileError>> {
     return nodeFiles.canonicalPath(this.at(path, context));
   }
 
-  exists(path: string, context: Context): Promise<envTypes.Result<boolean, envTypes.FileError>> {
+  exists(
+    path: string,
+    context: chordTypes.Context,
+  ): Promise<envTypes.Result<boolean, envTypes.FileError>> {
     return this.fileInfo(path, context).then((result) => {
       if (result.ok) return ok(true);
       return result.error.code === "not_found" ? ok(false) : err(result.error);
@@ -235,7 +241,7 @@ export default class NodeExecutionEnv implements envTypes.ExecutionEnv {
   createDir(
     path: string,
     options: { recursive?: boolean } | undefined,
-    context: Context,
+    context: chordTypes.Context,
   ): Promise<envTypes.Result<void, envTypes.FileError>> {
     const recursive = options?.recursive ?? true;
     return nodeFiles.createDir({ ...this.at(path, context), recursive });
@@ -244,7 +250,7 @@ export default class NodeExecutionEnv implements envTypes.ExecutionEnv {
   remove(
     path: string,
     options: { recursive?: boolean; force?: boolean } | undefined,
-    context: Context,
+    context: chordTypes.Context,
   ): Promise<envTypes.Result<void, envTypes.FileError>> {
     const recursive = options?.recursive ?? false;
     const force = options?.force ?? false;
@@ -253,14 +259,14 @@ export default class NodeExecutionEnv implements envTypes.ExecutionEnv {
 
   createTempDir(
     prefix: string | undefined,
-    context: Context,
+    context: chordTypes.Context,
   ): Promise<envTypes.Result<string, envTypes.FileError>> {
     return nodeFiles.createTempDir({ context, prefix: prefix ?? "tmp-" });
   }
 
   createTempFile(
     options: { prefix?: string; suffix?: string } | undefined,
-    context: Context,
+    context: chordTypes.Context,
   ): Promise<envTypes.Result<string, envTypes.FileError>> {
     return this.createTempDir("tmp-", context).then((directory) =>
       directory.ok
@@ -273,7 +279,7 @@ export default class NodeExecutionEnv implements envTypes.ExecutionEnv {
     );
   }
 
-  cleanup(_context: Context): Promise<void> {
+  cleanup(_context: chordTypes.Context): Promise<void> {
     for (const pid of this.activeChildPids) killProcessTree(pid);
     this.activeChildPids.clear();
     return Promise.resolve();

@@ -1,5 +1,5 @@
 import * as NodeServices from "@effect/platform-node/NodeServices";
-import type { Context } from "@msa/chord";
+import type chordTypes from "@msa/chord/index.types";
 import { Effect, FileSystem, ManagedRuntime } from "effect";
 
 import ExecutionError from "../execution-error.ts";
@@ -76,7 +76,7 @@ const executeIn = Effect.fnUntraced(function* (
   target: nodeExecTypes.ExecTarget,
   command: string | readonly string[],
   options: typesModule.ShellExecOptions | undefined,
-  context: Context,
+  context: chordTypes.Context,
 ) {
   if (context.abortSignal?.aborted === true) {
     return err<typesModule.ShellExecResult, nodeExecTypes.ExecutionError>(

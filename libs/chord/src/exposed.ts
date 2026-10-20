@@ -1,8 +1,8 @@
-import type { ResourceImpl } from "./resource.ts";
+import type resourceTypes from "./resource.types.ts";
 
-export class ExposedImpl {
-  readonly resource: ResourceImpl;
-  constructor(resource: ResourceImpl) {
+export default class ExposedImpl {
+  readonly resource: resourceTypes.ResourceImpl;
+  constructor(resource: resourceTypes.ResourceImpl) {
     this.resource = resource;
   }
 }

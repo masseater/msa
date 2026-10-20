@@ -1,16 +1,13 @@
 import { describe, expect, it } from "vite-plus/test";
 
-import {
-  type Op,
-  applyImmutable,
-  assertValidOp,
-  assertValidWireOp,
-  decoder,
-  diffRevisions,
-  encoder,
-} from "../src/delta/index.ts";
-import type { JsonValue } from "../src/json.ts";
+import delta from "../src/delta/index.ts";
+import type deltaTypes from "../src/delta/index.types.ts";
+import type jsonTypes from "../src/json.types.ts";
 import expectDiff from "./fixtures/state-diff.ts";
+
+const { applyImmutable, decoder, diffRevisions, encoder } = delta;
+const assertValidOp: typeof delta.assertValidOp = delta.assertValidOp;
+const assertValidWireOp: typeof delta.assertValidWireOp = delta.assertValidWireOp;
 
 const emitsSetsAndDeletes = (): void => {
   expectDiff({ change: 1, keep: 1, remove: true }, { add: 3, change: 2, keep: 1 }, [
@@ -63,7 +60,7 @@ const normalizesReorderedDistinctDeeplyEqualObjects = (): void => {
 };
 
 const validatesAndEncodesPermutations = (): void => {
-  const operations: Op[] = [
+  const operations: deltaTypes.Op[] = [
     ["m", ["values"], [2, 0, 1]],
     ["m", ["values"], [1, 2, 0]],
   ];
@@ -225,8 +222,8 @@ describe("immutable revision diff", () => {
         values: Object.freeze([retained[0]!, retained[2]!, retained[4]!]),
       });
       const operations = diffRevisions(
-        before as unknown as JsonValue,
-        after as unknown as JsonValue,
+        before as unknown as jsonTypes.JsonValue,
+        after as unknown as jsonTypes.JsonValue,
       );
       expect(operations).toEqual([
         ["p", ["values"], 1, 1, []],

@@ -1,4 +1,4 @@
-import { BACKGROUND_CONTEXT, withAbortSignal } from "@msa/chord/context";
+import contextModule from "@msa/chord/context";
 import envModule from "@msa/durable/env";
 import type envTypes from "@msa/durable/env.types";
 import { Clock, Effect, Exit, Scope } from "effect";
@@ -6,6 +6,8 @@ import { afterAll, describe, expect, it } from "vite-plus/test";
 
 import platform from "./platform.ts";
 import remoteEnvironments from "./remote-environment.ts";
+
+const { BACKGROUND_CONTEXT, withAbortSignal } = contextModule;
 
 const { getOrThrow } = envModule;
 

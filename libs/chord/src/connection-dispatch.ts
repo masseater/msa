@@ -1,31 +1,45 @@
-import { Inbound } from "./connection-inbound.ts";
-import type { Connection } from "./connection.ts";
-import { ChordError } from "./errors.ts";
-import { type Frame, fromWireError } from "./wire.ts";
+import Inbound from "./connection-inbound.ts";
+import type connectionInboundTypes from "./connection-inbound.types.ts";
+import type connectionTypes from "./connection.types.ts";
+import errorsModule from "./errors.ts";
+import wire from "./wire.ts";
+import type wireTypes from "./wire.types.ts";
 
-type ControlFrame = Extract<Frame, { t: "invalidate" | "prepare" | "commit" | "abort" | "retire" }>;
+const { ChordError } = errorsModule;
+const { fromWireError } = wire;
 
-const CONTROL = new Set<Frame["t"]>(["invalidate", "prepare", "commit", "abort", "retire"]);
+type ControlFrame = Extract<
+  wireTypes.Frame,
+  { t: "invalidate" | "prepare" | "commit" | "abort" | "retire" }
+>;
 
-const isControl = (frame: Frame): frame is ControlFrame => CONTROL.has(frame.t);
+const CONTROL = new Set<wireTypes.Frame["t"]>([
+  "invalidate",
+  "prepare",
+  "commit",
+  "abort",
+  "retire",
+]);
 
-export class FrameDispatch {
-  readonly #connection: Connection;
-  readonly #inbound: Inbound;
+const isControl = (frame: wireTypes.Frame): frame is ControlFrame => CONTROL.has(frame.t);
 
-  constructor(connection: Connection) {
+export default class FrameDispatch {
+  readonly #connection: connectionTypes.Connection;
+  readonly #inbound: connectionInboundTypes.Inbound;
+
+  constructor(connection: connectionTypes.Connection) {
     this.#connection = connection;
     this.#inbound = new Inbound(connection);
   }
 
-  frame(frame: Frame): void {
+  frame(frame: wireTypes.Frame): void {
     const connection = this.#connection;
     switch (frame.t) {
       case "hello":
         this.#inbound.hello(frame);
         return;
       case "ping":
-        connection.send({ t: "pong", n: frame.n });
+        connection.send({ n: frame.n, t: "pong" });
         break;
       case "pong":
       case "bye":
@@ -48,7 +62,7 @@ export class FrameDispatch {
     }
   }
 
-  #state(frame: Frame): void {
+  #state(frame: wireTypes.Frame): void {
     const connection = this.#connection;
     switch (frame.t) {
       case "sub":
@@ -91,7 +105,7 @@ export class FrameDispatch {
     else host.onReloadFrame(connection, frame);
   }
 
-  #vote(frame: Extract<Frame, { t: "vote" }>): void {
+  #vote(frame: Extract<wireTypes.Frame, { t: "vote" }>): void {
     const connection = this.#connection;
     if (connection.role !== "downstream" || connection.peer.kind !== "host") {
       connection.violation("vote from a non-participant");

@@ -1,4 +1,4 @@
-import type { JsonValue } from "@msa/chord";
+import type chordTypes from "@msa/chord/index.types";
 
 import type typesModule from "../types.types.ts";
 import type storageBenchmark from "./storage-benchmark.ts";
@@ -11,7 +11,11 @@ declare namespace storageBenchmarkTypes {
     readonly documentCount: number;
   };
 
-  type StoredTask = typesModule.TaskRecord<JsonValue, JsonValue, JsonValue>;
+  type StoredTask = typesModule.TaskRecord<
+    chordTypes.JsonValue,
+    chordTypes.JsonValue,
+    chordTypes.JsonValue
+  >;
 
   type StorageBenchmarkDataset = {
     readonly firstEntryId: typesModule.EntryId;

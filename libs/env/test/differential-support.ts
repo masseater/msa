@@ -1,4 +1,4 @@
-import { BACKGROUND_CONTEXT } from "@msa/chord/context";
+import contextModule from "@msa/chord/context";
 import type envTypes from "@msa/durable/env.types";
 import node from "@msa/durable/env/node";
 import { Effect } from "effect";
@@ -9,6 +9,8 @@ import RemoteExecutionEnv from "../src/remote-env.ts";
 import daemon from "./daemon.ts";
 import type differentialSupportTypes from "./differential-support.types.ts";
 import platform from "./platform.ts";
+
+const { BACKGROUND_CONTEXT } = contextModule;
 
 const { NodeExecutionEnv } = node;
 

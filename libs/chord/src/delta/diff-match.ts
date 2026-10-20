@@ -1,9 +1,10 @@
 import { dual } from "effect/Function";
 
-import type { JsonValue } from "../json.ts";
-import { equalJson, isContainer } from "./diff-emit.ts";
+import type jsonTypes from "../json.types.ts";
+import diffEmit from "./diff-emit.ts";
+import type diffMatchTypes from "./diff-match.types.ts";
 
-export type ArrayMatch = readonly [before: number, after: number];
+const { equalJson, isContainer } = diffEmit;
 
 type MatchCandidate = {
   before: number;
@@ -12,17 +13,17 @@ type MatchCandidate = {
 };
 
 const MAX_IDENTITY_CANDIDATES = 200_000;
-export const MAX_SEMANTIC_CELLS = 65_536;
+const MAX_SEMANTIC_CELLS = 65_536;
 
-const valueSame = (left: JsonValue, right: JsonValue): boolean =>
+const valueSame = (left: jsonTypes.JsonValue, right: jsonTypes.JsonValue): boolean =>
   left === right || equalJson(left, right);
 
 const lcsMatchesOf = (
-  before: readonly JsonValue[],
-  after: readonly JsonValue[],
-  equal: (left: JsonValue, right: JsonValue) => boolean,
+  before: readonly jsonTypes.JsonValue[],
+  after: readonly jsonTypes.JsonValue[],
+  equal: (left: jsonTypes.JsonValue, right: jsonTypes.JsonValue) => boolean,
   maxCells: number,
-): ArrayMatch[] | undefined => {
+): diffMatchTypes.ArrayMatch[] | undefined => {
   if (before.length === 0 || after.length === 0) return [];
   if (before.length * after.length > maxCells) return undefined;
   const width = after.length + 1;
@@ -35,7 +36,7 @@ const lcsMatchesOf = (
         : Math.max(lengths[(left + 1) * width + right]!, lengths[left * width + right + 1]!);
     }
   }
-  const matches: ArrayMatch[] = [];
+  const matches: diffMatchTypes.ArrayMatch[] = [];
   let left = 0;
   let right = 0;
   while (left < before.length && right < after.length) {
@@ -51,7 +52,7 @@ const lcsMatchesOf = (
   return matches;
 };
 
-const alignedSemantically = (left: JsonValue, right: JsonValue): boolean => {
+const alignedSemantically = (left: jsonTypes.JsonValue, right: jsonTypes.JsonValue): boolean => {
   if (sameValue(left, right)) return true;
   if (!isContainer(left) || !isContainer(right) || Array.isArray(left) !== Array.isArray(right))
     return false;
@@ -59,8 +60,8 @@ const alignedSemantically = (left: JsonValue, right: JsonValue): boolean => {
     if (left.length !== right.length) return false;
     return left.some((value, index) => isContainer(value) && value === right[index]);
   }
-  const leftObject = left as Record<string, JsonValue>;
-  const rightObject = right as Record<string, JsonValue>;
+  const leftObject = left as Record<string, jsonTypes.JsonValue>;
+  const rightObject = right as Record<string, jsonTypes.JsonValue>;
   for (const [key, value] of Object.entries(leftObject)) {
     if (isContainer(value) && Object.hasOwn(rightObject, key) && value === rightObject[key])
       return true;
@@ -80,16 +81,16 @@ const lowerBound = (values: readonly number[], value: number): number => {
 };
 
 const subsequenceOfIdentities = (
-  before: readonly JsonValue[],
+  before: readonly jsonTypes.JsonValue[],
   beforeStart: number,
   beforeEnd: number,
-  after: readonly JsonValue[],
+  after: readonly jsonTypes.JsonValue[],
   afterStart: number,
   afterEnd: number,
-): ArrayMatch[] | undefined => {
+): diffMatchTypes.ArrayMatch[] | undefined => {
   const beforeCount = beforeEnd - beforeStart;
   const afterCount = afterEnd - afterStart;
-  const matches: ArrayMatch[] = [];
+  const matches: diffMatchTypes.ArrayMatch[] = [];
   if (afterCount < beforeCount) {
     let beforeIndex = beforeStart;
     for (let afterIndex = afterStart; afterIndex < afterEnd; afterIndex++) {
@@ -112,12 +113,12 @@ const subsequenceOfIdentities = (
 };
 
 const greedyIdentityAnchors = (
-  positions: ReadonlyMap<JsonValue, readonly number[]>,
-  after: readonly JsonValue[],
+  positions: ReadonlyMap<jsonTypes.JsonValue, readonly number[]>,
+  after: readonly jsonTypes.JsonValue[],
   afterStart: number,
   afterEnd: number,
-): ArrayMatch[] => {
-  const matches: ArrayMatch[] = [];
+): diffMatchTypes.ArrayMatch[] => {
+  const matches: diffMatchTypes.ArrayMatch[] = [];
   let previous = -1;
   for (let afterIndex = afterStart; afterIndex < afterEnd; afterIndex++) {
     const candidates = positions.get(after[afterIndex]!);
@@ -132,14 +133,14 @@ const greedyIdentityAnchors = (
 };
 
 const anchorsOfIdentities = (
-  before: readonly JsonValue[],
+  before: readonly jsonTypes.JsonValue[],
   beforeStart: number,
   beforeEnd: number,
-  after: readonly JsonValue[],
+  after: readonly jsonTypes.JsonValue[],
   afterStart: number,
   afterEnd: number,
-): ArrayMatch[] => {
-  const positions = new Map<JsonValue, number[]>();
+): diffMatchTypes.ArrayMatch[] => {
+  const positions = new Map<jsonTypes.JsonValue, number[]>();
   for (let index = beforeStart; index < beforeEnd; index++) {
     const value = before[index]!;
     const existing = positions.get(value);
@@ -159,11 +160,11 @@ const anchorsOfIdentities = (
 };
 
 const patienceMatches = (
-  positions: ReadonlyMap<JsonValue, number[]>,
-  after: readonly JsonValue[],
+  positions: ReadonlyMap<jsonTypes.JsonValue, number[]>,
+  after: readonly jsonTypes.JsonValue[],
   afterStart: number,
   afterEnd: number,
-): ArrayMatch[] => {
+): diffMatchTypes.ArrayMatch[] => {
   const candidates: MatchCandidate[] = [];
   const tails: number[] = [];
   const tailValues: number[] = [];
@@ -175,15 +176,15 @@ const patienceMatches = (
       const at = lowerBound(tailValues, beforeIndex);
       const candidateIndex = candidates.length;
       candidates.push({
-        before: beforeIndex,
         after: afterIndex,
+        before: beforeIndex,
         previous: at === 0 ? -1 : tails[at - 1]!,
       });
       tails[at] = candidateIndex;
       tailValues[at] = beforeIndex;
     }
   }
-  const matches: ArrayMatch[] = [];
+  const matches: diffMatchTypes.ArrayMatch[] = [];
   let candidateIndex = tails[tails.length - 1] ?? -1;
   while (candidateIndex >= 0) {
     const candidate = candidates[candidateIndex]!;
@@ -194,62 +195,73 @@ const patienceMatches = (
   return matches;
 };
 
-export const sameValue: {
-  (right: JsonValue): (left: JsonValue) => boolean;
-  (left: JsonValue, right: JsonValue): boolean;
+const sameValue: {
+  (right: jsonTypes.JsonValue): (left: jsonTypes.JsonValue) => boolean;
+  (left: jsonTypes.JsonValue, right: jsonTypes.JsonValue): boolean;
 } = dual(2, valueSame);
 
-export const lcsMatches: {
+const lcsMatches: {
   (
-    after: readonly JsonValue[],
-    equal: (left: JsonValue, right: JsonValue) => boolean,
+    after: readonly jsonTypes.JsonValue[],
+    equal: (left: jsonTypes.JsonValue, right: jsonTypes.JsonValue) => boolean,
     maxCells: number,
-  ): (before: readonly JsonValue[]) => ArrayMatch[] | undefined;
+  ): (before: readonly jsonTypes.JsonValue[]) => diffMatchTypes.ArrayMatch[] | undefined;
   (
-    before: readonly JsonValue[],
-    after: readonly JsonValue[],
-    equal: (left: JsonValue, right: JsonValue) => boolean,
+    before: readonly jsonTypes.JsonValue[],
+    after: readonly jsonTypes.JsonValue[],
+    equal: (left: jsonTypes.JsonValue, right: jsonTypes.JsonValue) => boolean,
     maxCells: number,
-  ): ArrayMatch[] | undefined;
+  ): diffMatchTypes.ArrayMatch[] | undefined;
 } = dual(4, lcsMatchesOf);
 
-export const semanticallyAligned: {
-  (right: JsonValue): (left: JsonValue) => boolean;
-  (left: JsonValue, right: JsonValue): boolean;
+const semanticallyAligned: {
+  (right: jsonTypes.JsonValue): (left: jsonTypes.JsonValue) => boolean;
+  (left: jsonTypes.JsonValue, right: jsonTypes.JsonValue): boolean;
 } = dual(2, alignedSemantically);
 
-export const identitySubsequence: {
+const identitySubsequence: {
   (
     beforeStart: number,
     beforeEnd: number,
-    after: readonly JsonValue[],
+    after: readonly jsonTypes.JsonValue[],
     afterStart: number,
     afterEnd: number,
-  ): (before: readonly JsonValue[]) => ArrayMatch[] | undefined;
+  ): (before: readonly jsonTypes.JsonValue[]) => diffMatchTypes.ArrayMatch[] | undefined;
   (
-    before: readonly JsonValue[],
+    before: readonly jsonTypes.JsonValue[],
     beforeStart: number,
     beforeEnd: number,
-    after: readonly JsonValue[],
+    after: readonly jsonTypes.JsonValue[],
     afterStart: number,
     afterEnd: number,
-  ): ArrayMatch[] | undefined;
+  ): diffMatchTypes.ArrayMatch[] | undefined;
 } = dual(6, subsequenceOfIdentities);
 
-export const identityAnchors: {
+const identityAnchors: {
   (
     beforeStart: number,
     beforeEnd: number,
-    after: readonly JsonValue[],
+    after: readonly jsonTypes.JsonValue[],
     afterStart: number,
     afterEnd: number,
-  ): (before: readonly JsonValue[]) => ArrayMatch[];
+  ): (before: readonly jsonTypes.JsonValue[]) => diffMatchTypes.ArrayMatch[];
   (
-    before: readonly JsonValue[],
+    before: readonly jsonTypes.JsonValue[],
     beforeStart: number,
     beforeEnd: number,
-    after: readonly JsonValue[],
+    after: readonly jsonTypes.JsonValue[],
     afterStart: number,
     afterEnd: number,
-  ): ArrayMatch[];
+  ): diffMatchTypes.ArrayMatch[];
 } = dual(6, anchorsOfIdentities);
+
+const diffMatch = {
+  MAX_SEMANTIC_CELLS,
+  identityAnchors,
+  identitySubsequence,
+  lcsMatches,
+  sameValue,
+  semanticallyAligned,
+};
+
+export default diffMatch;

@@ -3,8 +3,10 @@ import assert from "node:assert/strict";
 import { Effect } from "effect";
 import { describe, it } from "vite-plus/test";
 
-import { createHost, isChordError, memoryLinkPair } from "../src/index.ts";
+import chord from "../src/index.ts";
 import flow from "./fixtures/flow.ts";
+
+const { createHost, isChordError, memoryLinkPair } = chord;
 
 const { Counter, releaseWaiting, resetWaiting, serveCounter } = flow;
 

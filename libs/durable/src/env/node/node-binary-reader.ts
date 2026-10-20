@@ -1,4 +1,4 @@
-import type { Context } from "@msa/chord";
+import type chordTypes from "@msa/chord/index.types";
 import { Effect, Exit } from "effect";
 
 import FileError from "../file-error.ts";
@@ -43,7 +43,7 @@ export default class NodeBinaryReader implements typesModule.BinaryReader {
   }
 
   #unavailable<T>(
-    context: Context,
+    context: chordTypes.Context,
   ): resultTypes.Result<T, nodeBinaryReaderTypes.FileError> | undefined {
     const aborted = abortResult<T>(context.abortSignal, this.#path);
     if (aborted !== undefined) return aborted;
@@ -64,7 +64,7 @@ export default class NodeBinaryReader implements typesModule.BinaryReader {
   }
 
   info(
-    context: Context,
+    context: chordTypes.Context,
   ): Promise<resultTypes.Result<typesModule.FileInfo, nodeBinaryReaderTypes.FileError>> {
     const unavailable = this.#unavailable<typesModule.FileInfo>(context);
     if (unavailable !== undefined) return Promise.resolve(unavailable);
@@ -79,7 +79,7 @@ export default class NodeBinaryReader implements typesModule.BinaryReader {
   read(
     offset: number,
     length: number,
-    context: Context,
+    context: chordTypes.Context,
   ): Promise<resultTypes.Result<Uint8Array, nodeBinaryReaderTypes.FileError>> {
     const unavailable = this.#unavailable<Uint8Array>(context);
     if (unavailable !== undefined) return Promise.resolve(unavailable);
@@ -100,7 +100,7 @@ export default class NodeBinaryReader implements typesModule.BinaryReader {
   #readRange(
     offset: number,
     length: number,
-    context: Context,
+    context: chordTypes.Context,
   ): Effect.Effect<resultTypes.Result<Uint8Array, nodeBinaryReaderTypes.FileError>> {
     return Effect.gen({ self: this }, function* () {
       const chunks: Uint8Array[] = [];
@@ -120,7 +120,7 @@ export default class NodeBinaryReader implements typesModule.BinaryReader {
 
   scanLines(
     options: { startLine: number; endLine?: number },
-    context: Context,
+    context: chordTypes.Context,
   ): Promise<resultTypes.Result<typesModule.LineScan, nodeBinaryReaderTypes.FileError>> {
     const unavailable = this.#unavailable<typesModule.LineScan>(context);
     if (unavailable !== undefined) return Promise.resolve(unavailable);
@@ -135,7 +135,7 @@ export default class NodeBinaryReader implements typesModule.BinaryReader {
 
   #scan(
     scanner: nodeBinaryReaderTypes.LineScanner,
-    context: Context,
+    context: chordTypes.Context,
   ): Effect.Effect<resultTypes.Result<typesModule.LineScan, nodeBinaryReaderTypes.FileError>> {
     return Effect.gen({ self: this }, function* () {
       const chunk = new Uint8Array(SCAN_CHUNK);
@@ -151,7 +151,7 @@ export default class NodeBinaryReader implements typesModule.BinaryReader {
     });
   }
 
-  close(_context: Context): Promise<void> {
+  close(_context: chordTypes.Context): Promise<void> {
     if (this.#closed) return Promise.resolve();
     this.#closed = true;
     return this.#file.close().catch(() => undefined);

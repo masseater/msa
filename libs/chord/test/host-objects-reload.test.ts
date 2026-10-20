@@ -4,17 +4,14 @@ import { Effect } from "effect";
 import { Type } from "typebox";
 import { onTestFinished, test } from "vite-plus/test";
 
-import { HostImpl } from "../src/host.ts";
-import {
-  type Facet,
-  createHost,
-  isChordError,
-  local,
-  memoryLinkPair,
-  method,
-} from "../src/index.ts";
+import hostModule from "../src/host.ts";
+import chord from "../src/index.ts";
+import type chordTypes from "../src/index.types.ts";
 import hostObjectsReload from "./fixtures/host-objects-reload.ts";
 import timing from "./fixtures/timing.ts";
+
+const { HostImpl } = hostModule;
+const { createHost, isChordError, local, memoryLinkPair, method } = chord;
 
 const { Read, ReadV1, ReadV2, SwitchV1, SwitchV2, SwitchV3, readerV1, readerV2, switchFacets } =
   hostObjectsReload;
@@ -105,7 +102,7 @@ const objectOwnedOldVersionReferencesStill = Effect.gen(function* () {
     members: { read: method(undefined, Type.String()) },
     version: 1,
   });
-  const oldConsumer: Facet = {
+  const oldConsumer: chordTypes.Facet = {
     name: "consumer",
     setup: (api) =>
       api.serve(Consumer, (_input, _principal, self) => {
@@ -113,7 +110,7 @@ const objectOwnedOldVersionReferencesStill = Effect.gen(function* () {
         return { read: (ctx) => reader.read(ctx) };
       }),
   };
-  const newConsumer: Facet = {
+  const newConsumer: chordTypes.Facet = {
     name: "consumer",
     setup: (api) =>
       api.serve(Consumer, (_input, _principal, self) => {
@@ -217,7 +214,7 @@ const aReloadThatChangesAType = Effect.gen(function* () {
   const host = createHost({ onError: () => {}, self: { kind: "host" } });
   const Kept = local("t.lifetime-change", { input: Type.Object({}), version: 1 });
   const log: string[] = [];
-  const facet = (lifetime: "host" | "referenced"): Facet => ({
+  const facet = (lifetime: "host" | "referenced"): chordTypes.Facet => ({
     name: "kept",
     setup: (api) =>
       api.serve(

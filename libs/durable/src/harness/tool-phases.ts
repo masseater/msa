@@ -1,4 +1,5 @@
-import { type Context, type JsonValue, copyJson } from "@msa/chord";
+import chord from "@msa/chord";
+import type chordTypes from "@msa/chord/index.types";
 import { Effect } from "effect";
 
 import bridge from "./bridge.ts";
@@ -7,6 +8,9 @@ import toolPhaseKit from "./tool-phase-kit.ts";
 import toolTypes from "./tool-types.ts";
 import type toolTypesModule from "./tool-types.types.ts";
 import type typesModule from "./types.types.ts";
+
+const { copyJson } = chord;
+
 const { commitTask } = bridge;
 const { LiveDoc, clearProgress, toolSlot } = liveModule;
 const { askHooks, jsonEqual, prepareArguments, readCall, resolveTool, validate } =
@@ -27,7 +31,7 @@ const commitIntent = Effect.fnUntraced(function* (
   input: toolTypesModule.ToolTaskInput,
   tool: typesModule.ToolRegistration,
   final: typesModule.JsonObject,
-  context: Context,
+  context: chordTypes.Context,
 ) {
   yield* commitTask(
     runtime,
@@ -37,7 +41,8 @@ const commitIntent = Effect.fnUntraced(function* (
         const slot = toolSlot(live, runtime.taskId);
         if (slot !== undefined) slot.status = "running";
         const changed =
-          input.kind === "nested" && !jsonEqual(input.call.arguments as JsonValue, final);
+          input.kind === "nested" &&
+          !jsonEqual(input.call.arguments as chordTypes.JsonValue, final);
         if (changed && slot !== undefined && "parentTaskId" in slot) slot.arguments = final;
         return {
           checkpoint: { arguments: final, phase: "execute", replay: tool.replay ?? "unsafe" },
@@ -51,7 +56,7 @@ const commitIntent = Effect.fnUntraced(function* (
 const callPhase = Effect.fnUntraced(function* (
   task: PhaseTask<"call">,
   runtime: toolTypesModule.ToolRuntime,
-  context: Context,
+  context: chordTypes.Context,
 ) {
   const call = yield* readCall(runtime, task.input, context);
   const tool = yield* resolveTool(runtime, task.input, call.name, context);
@@ -95,7 +100,7 @@ const callPhase = Effect.fnUntraced(function* (
 const executePhase = Effect.fnUntraced(function* (
   task: PhaseTask<"execute">,
   runtime: toolTypesModule.ToolRuntime,
-  context: Context,
+  context: chordTypes.Context,
 ) {
   const { arguments: args, replay } = task.state.checkpoint;
   const call = yield* readCall(runtime, task.input, context);
@@ -134,7 +139,7 @@ const abortPhase = Effect.fnUntraced(function* (
     readonly abortReason?: string;
   },
   runtime: toolTypesModule.ToolRuntime,
-  context: Context,
+  context: chordTypes.Context,
 ) {
   const call = yield* readCall(runtime, task.input, context);
   const [code, message] = abortMessage(task, call.name);

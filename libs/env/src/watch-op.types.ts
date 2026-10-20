@@ -1,4 +1,4 @@
-import type { Context } from "@msa/chord";
+import type chordTypes from "@msa/chord/index.types";
 import type envTypes from "@msa/durable/env.types";
 
 import type fileOpTypes from "./file-op.types.ts";
@@ -10,7 +10,7 @@ declare namespace watchOpTypes {
     readonly targets: readonly envTypes.WatchTarget[];
     readonly onChange: (change: envTypes.WatchChange) => void;
     readonly options: watchTypes.RemoteWatchOptions;
-    readonly context: Context;
+    readonly context: chordTypes.Context;
   }
 }
 

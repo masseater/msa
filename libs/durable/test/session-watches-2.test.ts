@@ -1,10 +1,5 @@
-import type { Context } from "@msa/chord";
-import {
-  BACKGROUND_CONTEXT,
-  createContextKey,
-  withAbortSignal,
-  withContextValue,
-} from "@msa/chord/context";
+import contextModule from "@msa/chord/context";
+import type chordTypes from "@msa/chord/index.types";
 import { Effect } from "effect";
 import { describe, expect, it } from "vite-plus/test";
 
@@ -12,6 +7,8 @@ import effectSupport from "./effect-support.ts";
 import sessionSupport from "./session-support.ts";
 import sessionWatchesSupport from "./session-watches-support.ts";
 import type sessionWatchesSupportTypes from "./session-watches-support.types.ts";
+
+const { BACKGROUND_CONTEXT, createContextKey, withAbortSignal, withContextValue } = contextModule;
 
 const { abortController, awaited } = effectSupport;
 const { context, flush } = sessionSupport;
@@ -142,7 +139,7 @@ const preservesCommitContext = Effect.gen(function* () {
   );
   const entered = deferred();
   const release = deferred();
-  let deliveryContext: Context | undefined;
+  let deliveryContext: chordTypes.Context | undefined;
   watch.start((_value, _ops, delivered) =>
     runPromise(
       Effect.gen(function* () {

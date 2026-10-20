@@ -1,4 +1,4 @@
-import type { Context } from "@msa/chord";
+import type chordTypes from "@msa/chord/index.types";
 import { Effect } from "effect";
 
 import entriesModule from "../entries.ts";
@@ -16,7 +16,7 @@ const { LiveDoc } = liveModule;
 const waitForBlockingCompaction = Effect.fnUntraced(function* (
   runtime: generationTypesModule.GenerationRuntime,
   attempt: number,
-  context: Context,
+  context: chordTypes.Context,
 ) {
   yield* commitTask(
     runtime,
@@ -57,7 +57,7 @@ const commitRequest = Effect.fnUntraced(function* (
     "phase" | "cutoff"
   >,
   threshold: "blocking" | "background" | undefined,
-  context: Context,
+  context: chordTypes.Context,
 ) {
   const { conversationId } = runtime;
   yield* commitTask(

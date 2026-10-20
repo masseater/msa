@@ -3,9 +3,12 @@ import assert from "node:assert/strict";
 import { Effect } from "effect";
 import { describe, it } from "vite-plus/test";
 
-import { type StateEvent, isChordError } from "../src/index.ts";
+import chord from "../src/index.ts";
+import type chordTypes from "../src/index.types.ts";
 import link from "./fixtures/link.ts";
 import timing from "./fixtures/timing.ts";
+
+const { isChordError } = chord;
 
 const { Counter, SessionCounter, serveCounter, serverWithWorker } = link;
 const { tick } = timing;
@@ -37,7 +40,7 @@ const stateMembersSnapshotThenDeltaEncoded = Effect.gen(function* () {
   const { server, worker } = serverWithWorker();
   serveCounter(server);
   const counter = worker.hold(Counter, { name: "s" });
-  const events: StateEvent<unknown>[] = [];
+  const events: chordTypes.StateEvent<unknown>[] = [];
   const values: unknown[] = [];
   counter.count.events((event) => events.push(event));
   counter.count.subscribe((value) => values.push(value));

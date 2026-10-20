@@ -1,17 +1,13 @@
-import { ChangeImpl } from "./tracker-change.ts";
-import { createContext, materializePrepared } from "./tracker-context.ts";
-import { clearContext, releaseOverlayReferences } from "./tracker-paths.ts";
-import {
-  type Change,
-  type OverlayContext,
-  PREPARED,
-  type Prepared,
-  type Tracker,
-} from "./tracker-types.ts";
+import ChangeImpl from "./tracker-change.ts";
+import trackerContext from "./tracker-context.ts";
+import trackerPaths from "./tracker-paths.ts";
+import trackerTypes from "./tracker-types.ts";
+import type trackerTypesModule from "./tracker-types.types.ts";
+const { PREPARED } = trackerTypes;
 
-export class TrackerImpl<T extends object> implements Tracker<T> {
+export default class TrackerImpl<T extends object> implements trackerTypesModule.Tracker<T> {
   readonly #owner = {};
-  readonly #contexts = new Set<WeakRef<OverlayContext>>();
+  readonly #contexts = new Set<WeakRef<trackerTypesModule.OverlayContext>>();
   readonly #selfRef: WeakRef<TrackerImpl<object>>;
   #value: T;
   #revision = 0;
@@ -30,8 +26,8 @@ export class TrackerImpl<T extends object> implements Tracker<T> {
     return this.#revision;
   }
 
-  beginChange(): Change<T> {
-    const context = createContext(
+  beginChange(): trackerTypesModule.Change<T> {
+    const context = trackerContext.createContext(
       this.#selfRef,
       this.#owner,
       this.#revision,
@@ -43,8 +39,8 @@ export class TrackerImpl<T extends object> implements Tracker<T> {
     return new ChangeImpl(context);
   }
 
-  prepareReplace(value: T): Prepared<T> {
-    const context = createContext(
+  prepareReplace(value: T): trackerTypesModule.Prepared<T> {
+    const context = trackerContext.createContext(
       this.#selfRef,
       this.#owner,
       this.#revision,
@@ -55,15 +51,15 @@ export class TrackerImpl<T extends object> implements Tracker<T> {
     context.status.value = "prepared";
     this.#register(context);
     try {
-      return materializePrepared<T>(context);
+      return trackerContext.materializePrepared<T>(context);
     } catch (error) {
       context.status.value = "aborted";
-      clearContext(context);
+      trackerPaths.clearContext(context);
       throw error;
     }
   }
 
-  adopt(prepared: Prepared<T>): void {
+  adopt(prepared: trackerTypesModule.Prepared<T>): void {
     const context = PREPARED.get(prepared as object);
     if (context?.owner !== this.#owner)
       throw new Error("Prepared change belongs to a different tracker");
@@ -74,7 +70,7 @@ export class TrackerImpl<T extends object> implements Tracker<T> {
     if (context.status.value !== "prepared") throw new Error("Prepared change is not ready");
     if (context.baseRevision !== this.#revision) {
       context.status.value = "stale";
-      clearContext(context);
+      trackerPaths.clearContext(context);
       throw new Error("Prepared change is stale");
     }
 
@@ -88,12 +84,12 @@ export class TrackerImpl<T extends object> implements Tracker<T> {
     this.#invalidate(context);
   }
 
-  releaseContext(context: OverlayContext): void {
+  releaseContext(context: trackerTypesModule.OverlayContext): void {
     if (context.registryRef !== undefined) this.#contexts.delete(context.registryRef);
     context.registryRef = undefined;
   }
 
-  #register(context: OverlayContext): void {
+  #register(context: trackerTypesModule.OverlayContext): void {
     const reference = new WeakRef(context);
     context.registryRef = reference;
     this.#contexts.add(reference);
@@ -110,19 +106,19 @@ export class TrackerImpl<T extends object> implements Tracker<T> {
     }
   }
 
-  #invalidate(winner: OverlayContext): void {
+  #invalidate(winner: trackerTypesModule.OverlayContext): void {
     for (const reference of this.#contexts) {
       const context = reference.deref();
       if (context === undefined || context === winner) continue;
       if (context.status.value === "open" || context.status.value === "prepared")
         context.status.value = "stale";
-      releaseOverlayReferences(context);
+      trackerPaths.releaseOverlayReferences(context);
     }
     this.#contexts.clear();
     this.#pruneBudget = 256;
   }
 
-  replacementBase(context: OverlayContext): T | undefined {
+  replacementBase(context: trackerTypesModule.OverlayContext): T | undefined {
     return context.baseRevision === this.#revision ? this.#value : undefined;
   }
 }

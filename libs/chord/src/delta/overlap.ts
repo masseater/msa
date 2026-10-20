@@ -17,7 +17,13 @@ function overlapOf(a: string, b: string, scan: number, probe = 64, maxCandidates
   return 0;
 }
 
-export const overlap: {
+const overlap: {
   (b: string, scan: number, probe?: number, maxCandidates?: number): (a: string) => number;
   (a: string, b: string, scan: number, probe?: number, maxCandidates?: number): number;
 } = dual((args) => args.length >= 3, overlapOf);
+
+const overlapModule = {
+  overlap,
+};
+
+export default overlapModule;

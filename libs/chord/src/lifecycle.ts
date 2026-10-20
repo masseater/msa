@@ -1,19 +1,27 @@
 import { Cause, Effect } from "effect";
 import type { TSchema } from "typebox";
 
-import type { RefCore } from "./core.ts";
-import { Decls, type Run } from "./decls.ts";
-import { asChordError, ChordError, runAll } from "./errors.ts";
-import type { ObjectImpl } from "./object.ts";
-import { memberSchemas, type Service } from "./service.ts";
-import type { Readable } from "./types.ts";
+import type coreTypes from "./core.types.ts";
+import type declsTypes from "./decls.types.ts";
+import type errorsTypes from "./errors.types.ts";
+import lifecycleKit from "./lifecycle-kit.ts";
+import type objectTypes from "./object.types.ts";
+import serviceModule from "./service.ts";
+import type serviceTypes from "./service.types.ts";
+import type typesModule from "./types.types.ts";
+
+const { decls: declsModule, errors: errorsModule } = lifecycleKit;
+
+const { ChordError, asChordError, runAll } = errorsModule;
+const { Decls } = declsModule;
+const { memberSchemas } = serviceModule;
 
 const noop = (): void => {};
 
-export class ObjectLifecycle {
-  readonly #object: ObjectImpl;
+export default class ObjectLifecycle {
+  readonly #object: objectTypes.ObjectImpl;
 
-  constructor(object: ObjectImpl) {
+  constructor(object: objectTypes.ObjectImpl) {
     this.#object = object;
   }
 
@@ -21,11 +29,6 @@ export class ObjectLifecycle {
     const object = this.#object;
     return this.#activate(after).pipe(
       Effect.matchCauseEffect({
-        onSuccess: () =>
-          Effect.sync(() => {
-            for (const ref of object.refs) ref.live();
-            object.maybeIdle();
-          }),
         onFailure: (cause) => {
           if (object.status === "activating") object.status = "failed";
           object.host.forget(object);
@@ -33,6 +36,11 @@ export class ObjectLifecycle {
           for (const ref of object.refs) ref.gone(error);
           return Effect.die(error);
         },
+        onSuccess: () =>
+          Effect.sync(() => {
+            for (const ref of object.refs) ref.live();
+            object.maybeIdle();
+          }),
       }),
     );
   }
@@ -59,11 +67,15 @@ export class ObjectLifecycle {
     });
   }
 
-  #abandoned(): ChordError {
+  #abandoned(): errorsTypes.ChordError {
     return new ChordError("aborted", `${this.#object.address} abandoned`);
   }
 
-  #install(run: Run, service: Service, signal: AbortSignal): Effect.Effect<void> {
+  #install(
+    run: declsTypes.Run,
+    service: serviceTypes.Service,
+    signal: AbortSignal,
+  ): Effect.Effect<void> {
     return Effect.gen({ self: this }, function* () {
       const object = this.#object;
       yield* object.activation.open(run.created.resources, run.created.refs, signal);
@@ -78,7 +90,7 @@ export class ObjectLifecycle {
     });
   }
 
-  #commit(run: Run, service: Service): void {
+  #commit(run: declsTypes.Run, service: serviceTypes.Service): void {
     const object = this.#object;
     const host = object.host;
     host.checkRegistrations(object, run.decls);
@@ -87,9 +99,9 @@ export class ObjectLifecycle {
       if (services.get(object.typeName) === service) {
         object.implementations.set(retained, {
           codeVersion: retained,
-          service,
-          implementation: run.implementation,
           decls: run.decls,
+          implementation: run.implementation,
+          service,
         });
       }
     }
@@ -109,7 +121,7 @@ export class ObjectLifecycle {
     }
   }
 
-  #fail(run: Run, error: unknown): Effect.Effect<void> {
+  #fail(run: declsTypes.Run, error: unknown): Effect.Effect<void> {
     return Effect.gen({ self: this }, function* () {
       const object = this.#object;
       object.callAbort.abort(error);
@@ -160,7 +172,7 @@ export class ObjectLifecycle {
     });
   }
 
-  #release(decls: ReadonlySet<Decls>): Effect.Effect<void> {
+  #release(decls: ReadonlySet<declsTypes.Decls>): Effect.Effect<void> {
     return Effect.suspend(() => {
       const object = this.#object;
       const registered =
@@ -168,7 +180,7 @@ export class ObjectLifecycle {
       object.implementations.clear();
       object.decls = new Decls();
       if (registered) object.host.registriesChanged();
-      const refs = new Set<RefCore>();
+      const refs = new Set<coreTypes.RefCore>();
       for (const set of decls) {
         for (const derived of set.derives.values()) derived.detach();
         for (const ref of set.refs.values()) refs.add(ref);
@@ -187,7 +199,7 @@ export class ObjectLifecycle {
 
   refreshSchemas(): void {
     const object = this.#object;
-    const schemas = new Map<Readable<unknown>, TSchema[]>();
+    const schemas = new Map<typesModule.Readable<unknown>, TSchema[]>();
     for (const installed of object.implementations.values()) {
       for (const [source, list] of memberSchemas(installed.service, installed.implementation)) {
         schemas.set(source, [...(schemas.get(source) ?? []), ...list]);

@@ -1,6 +1,6 @@
 import * as NodeRuntime from "@effect/platform-node/NodeRuntime";
 import { createModels } from "@msa/ai/models";
-import { BACKGROUND_CONTEXT } from "@msa/chord/context";
+import contextModule from "@msa/chord/context";
 import { Console, Effect } from "effect";
 
 import clockModule from "../../src/clock.ts";
@@ -9,6 +9,8 @@ import durable from "../../src/index.ts";
 import type durableTypes from "../../src/index.types.ts";
 import nodeModule from "../../src/storage/sqlite/node.ts";
 import testSupport from "../support.ts";
+
+const { BACKGROUND_CONTEXT } = contextModule;
 
 const { defineExtension, defineTask } = durable;
 const { currentTimeMillis } = clockModule;

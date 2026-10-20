@@ -1,4 +1,4 @@
-import type { Context } from "@msa/chord";
+import type chordTypes from "@msa/chord/index.types";
 import type durableTypes from "@msa/durable/index.types";
 import { Effect } from "effect";
 import { afterEach, describe, expect, it, vi } from "vite-plus/test";
@@ -21,7 +21,7 @@ afterEach(() => {
 function checkExtendedReads(
   { root, first, scanned }: harnessContextSupportTypes.Counting,
   runtime: harnessContextSupportTypes.RunRuntime,
-  taskContext: Context,
+  taskContext: chordTypes.Context,
 ): Promise<void> {
   return Effect.runPromise(
     Effect.gen(function* () {

@@ -1,4 +1,4 @@
-import type { Context } from "@msa/chord";
+import type chordTypes from "@msa/chord/index.types";
 import { Effect } from "effect";
 import { Type } from "typebox";
 
@@ -54,7 +54,7 @@ const prepareExecution = Effect.fnUntraced(function* (
   command: string,
   options: { commandPrefix?: string; prepare?: bashTypes.BashPrepare } | undefined,
   api: typesModule.ToolExecutionApi,
-  context: Context,
+  context: chordTypes.Context,
 ) {
   const prefix = options?.commandPrefix;
   const execution: bashTypes.BashExecution = {
@@ -74,7 +74,7 @@ const execFirst = Effect.fnUntraced(function* (
   execution: bashTypes.BashExecution,
   timeout: number | undefined,
   api: typesModule.ToolExecutionApi,
-  context: Context,
+  context: chordTypes.Context,
 ) {
   const env = requireEnv(api);
   let result: ExecResult | undefined;
@@ -104,7 +104,7 @@ function commandResult(
   result: ExecResult,
   timeout: number | undefined,
   api: typesModule.ToolExecutionApi,
-  context: Context,
+  context: chordTypes.Context,
 ): typesModule.ToolExecutionResult {
   const spillPath = result.ok ? result.value.spillPath : result.error.spillPath;
   if (spillPath !== undefined) {

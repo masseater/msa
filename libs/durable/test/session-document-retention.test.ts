@@ -1,4 +1,4 @@
-import type { Context } from "@msa/chord";
+import type chordTypes from "@msa/chord/index.types";
 import type durableTypes from "@msa/durable/index.types";
 import { Effect } from "effect";
 import { describe, expect, it } from "vite-plus/test";
@@ -167,7 +167,10 @@ const writesReloadContinue = Effect.gen(function* () {
   const conversationId = yield* awaited(createConversation(session));
   const writes: durableTypes.StorageWrite[][] = [];
   const commit = storage.commit.bind(storage);
-  storage.commit = (batch: readonly durableTypes.StorageWrite[], commitContext: Context) => {
+  storage.commit = (
+    batch: readonly durableTypes.StorageWrite[],
+    commitContext: chordTypes.Context,
+  ) => {
     writes.push([...batch]);
     return commit(batch, commitContext);
   };

@@ -1,10 +1,12 @@
 import { Effect } from "effect";
 import { describe, expect, test, vi } from "vite-plus/test";
 
-import { BACKGROUND_CONTEXT, withCancel } from "../src/context/index.ts";
-import { type Context, type ReplicatedStateDelivery } from "../src/index.ts";
+import contextModule from "../src/context/index.ts";
+import type chordTypes from "../src/index.types.ts";
 import replicatedStateDelivery from "./fixtures/replicated-state-delivery.ts";
 import type replicatedStateDeliveryTypes from "./fixtures/replicated-state-delivery.types.ts";
+
+const { BACKGROUND_CONTEXT, withCancel } = contextModule;
 
 const { deferred, fixture } = replicatedStateDelivery;
 
@@ -51,8 +53,8 @@ const excludesARunningUpdateFromOverflow = (kind: replicatedStateDeliveryTypes.K
     const context = withCancel(BACKGROUND_CONTEXT).context;
     const received: {
       value: replicatedStateDeliveryTypes.Value;
-      context: Context;
-      delivery: ReplicatedStateDelivery;
+      context: chordTypes.Context;
+      delivery: chordTypes.ReplicatedStateDelivery;
     }[] = [];
     state.subscribe((value, deliveredContext, delivery) => {
       received.push({ context: deliveredContext, delivery, value });

@@ -1,5 +1,5 @@
 import { uuidv7 } from "@msa/ai/utils/uuid";
-import type { Context } from "@msa/chord";
+import type chordTypes from "@msa/chord/index.types";
 import { Effect, Function } from "effect";
 
 import documents from "../documents.ts";
@@ -20,7 +20,7 @@ const ProviderDoc = defineDoc<providerTypes.ProviderState>({
 
 const createSessionId = <I, S, R, H extends object>(
   runtime: typesModule.TaskRuntime<I, S, R, H>,
-  context: Context,
+  context: chordTypes.Context,
 ) =>
   Effect.gen(function* () {
     const services = yield* Effect.context<never>();
@@ -43,19 +43,19 @@ const createSessionId = <I, S, R, H extends object>(
 
 const ensureProviderSessionId: {
   (
-    context: Context,
+    context: chordTypes.Context,
   ): <I, S, R, H extends object>(
     runtime: typesModule.TaskRuntime<I, S, R, H>,
   ) => Effect.Effect<string>;
   <I, S, R, H extends object>(
     runtime: typesModule.TaskRuntime<I, S, R, H>,
-    context: Context,
+    context: chordTypes.Context,
   ): Effect.Effect<string>;
 } = Function.dual(
   2,
   Effect.fnUntraced(function* <I, S, R, H extends object>(
     runtime: typesModule.TaskRuntime<I, S, R, H>,
-    context: Context,
+    context: chordTypes.Context,
   ) {
     const existing = yield* Effect.promise(() =>
       runtime.snapshot(ProviderDoc, runtime.conversationId, context),

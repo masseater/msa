@@ -1,24 +1,22 @@
-import { connect, createServer, type Server } from "node:net";
+import { type Server, connect, createServer } from "node:net";
 import { tmpdir } from "node:os";
 
 import { Effect } from "effect";
 
-import { ChordError } from "./errors.ts";
-import {
-  entryInfo,
-  isSymbolicLink,
-  joinPath,
-  makePrivateDirectory,
-  removeForce,
-  sha256Hex,
-} from "./platform.ts";
+import errorsModule from "./errors.ts";
+import type errorsTypes from "./errors.types.ts";
+import platformModule from "./platform.ts";
+
+const { ChordError } = errorsModule;
+const { entryInfo, isSymbolicLink, joinPath, makePrivateDirectory, removeForce, sha256Hex } =
+  platformModule;
 
 const MAX_SOCKET_PATH_BYTES = 103;
 
 const usesSocketFile = (): boolean =>
   process.platform !== "win32" && process.platform !== "linux" && process.platform !== "android";
 
-const lockDirectoryError = (directory: string): ChordError =>
+const lockDirectoryError = (directory: string): errorsTypes.ChordError =>
   new ChordError(
     "unavailable",
     `lock directory ${directory} must be a directory only its owner can access`,
@@ -94,12 +92,19 @@ const closeServer = (server: Server): Effect.Effect<void> =>
 
 const releaser = (server: Server) => (): Promise<void> => Effect.runPromise(closeServer(server));
 
-export const acquireProcessLock = Effect.fn(function* (name: string) {
+const acquireProcessLock = Effect.fn(function* (name: string) {
   const address = yield* lockAddress(name);
   const server = createServer((socket) => socket.end());
   yield* bind(server, address, name);
   return server;
 });
 
-export const processLock = (name: string): Promise<() => Promise<void>> =>
+const processLock = (name: string): Promise<() => Promise<void>> =>
   Effect.runPromise(acquireProcessLock(name)).then(releaser);
+
+const managerLock = {
+  acquireProcessLock,
+  processLock,
+};
+
+export default managerLock;

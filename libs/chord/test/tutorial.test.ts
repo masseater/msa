@@ -3,9 +3,11 @@ import assert from "node:assert/strict";
 import { Effect } from "effect";
 import { expectTypeOf, it, onTestFinished } from "vite-plus/test";
 
-import { createHost, isChordError, memoryLinkPair } from "../src/index.ts";
+import chord from "../src/index.ts";
 import tutorial from "./fixtures/tutorial.ts";
 import type tutorialTypes from "./fixtures/tutorial.types.ts";
+
+const { createHost, isChordError, memoryLinkPair } = chord;
 
 const { Database, SavedTodos, TodoLabel, TodoStore, Todos, serveViews, todoStore } = tutorial;
 

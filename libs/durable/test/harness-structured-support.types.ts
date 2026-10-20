@@ -1,4 +1,4 @@
-import type { Context } from "@msa/chord";
+import type chordTypes from "@msa/chord/index.types";
 import type durableTypes from "@msa/durable/index.types";
 
 declare namespace harnessStructuredSupportTypes {
@@ -11,9 +11,9 @@ declare namespace harnessStructuredSupportTypes {
   type Next = durableTypes.NextTaskState<NodeCheckpoint, string>;
 
   type Behavior = {
-    run?(runtime: NodeRuntime, ctx: Context): Promise<void>;
-    resume?(runtime: NodeRuntime, ctx: Context, round: number): Promise<void>;
-    abort?(runtime: NodeRuntime, ctx: Context): Promise<void>;
+    run?(runtime: NodeRuntime, ctx: chordTypes.Context): Promise<void>;
+    resume?(runtime: NodeRuntime, ctx: chordTypes.Context, round: number): Promise<void>;
+    abort?(runtime: NodeRuntime, ctx: chordTypes.Context): Promise<void>;
   };
 
   type Ending = "completed" | "failed" | "throw";

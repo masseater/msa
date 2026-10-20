@@ -7,7 +7,7 @@ import {
   fauxText,
   fauxToolCall,
 } from "@msa/ai";
-import type { JsonValue } from "@msa/chord";
+import type chordTypes from "@msa/chord/index.types";
 import durable from "@msa/durable";
 import memory from "@msa/durable/storage/memory";
 import { Effect } from "effect";
@@ -54,7 +54,7 @@ const tool: {
 } = dual((args) => typeof args[0] === "string", toolImpl);
 
 function calls(
-  ...list: readonly (readonly [string, Record<string, JsonValue>, string])[]
+  ...list: readonly (readonly [string, Record<string, chordTypes.JsonValue>, string])[]
 ): AssistantMessage {
   return fauxAssistantMessage(
     list.map(([name, args, id]) => fauxToolCall(name, args, { id })),

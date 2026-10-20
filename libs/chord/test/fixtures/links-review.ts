@@ -1,36 +1,28 @@
 import { type Context, Effect } from "effect";
 import { Type } from "typebox";
 
-import {
-  type Ctx,
-  type Frame,
-  type Host,
-  type Link,
-  PROTOCOL_VERSION,
-  createHost,
-  hostNamed,
-  memoryLinkPair,
-  method,
-  remote,
-} from "../../src/index.ts";
+import chord from "../../src/index.ts";
+import type chordTypes from "../../src/index.types.ts";
 import timing from "./timing.ts";
 import type timingTypes from "./timing.types.ts";
+
+const { PROTOCOL_VERSION, createHost, hostNamed, memoryLinkPair, method, remote } = chord;
 
 const { latch, pollUntil } = timing;
 
 const until = pollUntil(100, Effect.sleep(2));
 
-class WatchedLink implements Link {
-  readonly inner: Link;
-  readonly sent: Frame[] = [];
-  closeOn: ((frame: Frame) => boolean) | undefined;
-  constructor(inner: Link) {
+class WatchedLink implements chordTypes.Link {
+  readonly inner: chordTypes.Link;
+  readonly sent: chordTypes.Frame[] = [];
+  closeOn: ((frame: chordTypes.Frame) => boolean) | undefined;
+  constructor(inner: chordTypes.Link) {
     this.inner = inner;
   }
   get closed(): boolean {
     return this.inner.closed;
   }
-  send(frame: Frame): number | undefined {
+  send(frame: chordTypes.Frame): number | undefined {
     this.sent.push(frame);
     if (this.closeOn?.(frame) === true) {
       this.inner.close("dropped");
@@ -38,7 +30,7 @@ class WatchedLink implements Link {
     }
     return this.inner.send(frame);
   }
-  receive(handler: (frame: Frame) => void): void {
+  receive(handler: (frame: chordTypes.Frame) => void): void {
     this.inner.receive(handler);
   }
   onClose(handler: (reason: string) => void): void {
@@ -66,7 +58,8 @@ const Counter = remote("t.counter", {
 });
 
 const browserOn =
-  (server: Host) => (principal: unknown, restamp?: (p: unknown) => unknown | undefined) => {
+  (server: chordTypes.Host) =>
+  (principal: unknown, restamp?: (p: unknown) => unknown | undefined) => {
     const [down, up] = memoryLinkPair();
     server.accept(down, { principal, ...(restamp === undefined ? {} : { restamp }) });
     return {
@@ -81,10 +74,10 @@ const browserOn =
     };
   };
 
-const rawOn = (server: Host) => (principal: unknown) => {
+const rawOn = (server: chordTypes.Host) => (principal: unknown) => {
   const [down, raw] = memoryLinkPair();
   server.accept(down, { principal });
-  const frames: Frame[] = [];
+  const frames: chordTypes.Frame[] = [];
   raw.receive((frame) => frames.push(frame));
   raw.send({
     codeVersion: 0,
@@ -103,7 +96,7 @@ interface CounterEnv {
   readonly services: Context.Context<never>;
 }
 
-const serveReviewCounter = (worker: Host, env: CounterEnv): void => {
+const serveReviewCounter = (worker: chordTypes.Host, env: CounterEnv): void => {
   const { principals, log, services } = env;
   worker.serve(Counter, (input, principal, self) => {
     principals.push(principal);
@@ -114,14 +107,14 @@ const serveReviewCounter = (worker: Host, env: CounterEnv): void => {
     });
     const count = self.state("count", Type.Object({ n: Type.Number() }), { n: 0 });
     return {
-      add: (delta: number, ctx: Ctx) => {
+      add: (delta: number, ctx: chordTypes.Ctx) => {
         count.change(ctx, (draft) => {
           draft.n += delta;
         });
         return count.value.n;
       },
       count,
-      slow: (ctx: Ctx) =>
+      slow: (ctx: chordTypes.Ctx) =>
         Effect.runPromiseWith(services)(
           Effect.gen(function* () {
             ctx.signal.addEventListener("abort", () => log.push("slow aborted"));
@@ -138,7 +131,7 @@ function cluster() {
   const log: string[] = [];
   const principals: unknown[] = [];
   const server = createHost({ name: "server", onError: () => {}, self: { kind: "host" } });
-  const workers = new Map<string, { host: Host; link: WatchedLink }>();
+  const workers = new Map<string, { host: chordTypes.Host; link: WatchedLink }>();
   const state = {
     browser: browserOn(server),
     log,
@@ -176,7 +169,7 @@ function cluster() {
   return state;
 }
 
-const internals = (host: Host) =>
+const internals = (host: chordTypes.Host) =>
   host as unknown as {
     connections: Set<{
       role: string;

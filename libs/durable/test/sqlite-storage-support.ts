@@ -1,6 +1,6 @@
 import { DatabaseSync } from "node:sqlite";
 
-import type { JsonValue } from "@msa/chord";
+import type chordTypes from "@msa/chord/index.types";
 import { Effect } from "effect";
 import { dual } from "effect/Function";
 
@@ -38,7 +38,7 @@ const createSqliteStorage = Effect.fn("createSqliteStorage")(function* (
 function entryImpl(
   id: typesModule.EntryId,
   conversationId: typesModule.ConversationId,
-  data: JsonValue | undefined,
+  data: chordTypes.JsonValue | undefined,
 ): typesModule.EntryRecord {
   return { conversationId, id, kind: "message", ...(data === undefined ? {} : { data }) };
 }
@@ -46,12 +46,12 @@ function entryImpl(
 const entry: {
   (
     conversationId: typesModule.ConversationId,
-    data: JsonValue | undefined,
+    data: chordTypes.JsonValue | undefined,
   ): (id: typesModule.EntryId) => ReturnType<typeof entryImpl>;
   (
     id: typesModule.EntryId,
     conversationId: typesModule.ConversationId,
-    data: JsonValue | undefined,
+    data: chordTypes.JsonValue | undefined,
   ): ReturnType<typeof entryImpl>;
 } = dual(3, entryImpl);
 
@@ -62,8 +62,8 @@ function createRoot(storage: typesModule.Storage): Promise<typesModule.Seq> {
 }
 
 function pendingTask(
-  id: typesModule.TaskId<JsonValue>,
-): typesModule.TaskRecord<JsonValue, JsonValue, JsonValue> {
+  id: typesModule.TaskId<chordTypes.JsonValue>,
+): typesModule.TaskRecord<chordTypes.JsonValue, chordTypes.JsonValue, chordTypes.JsonValue> {
   return {
     abortRequested: false,
     background: false,

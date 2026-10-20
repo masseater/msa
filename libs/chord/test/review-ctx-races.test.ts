@@ -4,19 +4,13 @@ import { Effect } from "effect";
 import { Type } from "typebox";
 import { describe, it } from "vite-plus/test";
 
-import {
-  type Ctx,
-  createHost,
-  hostNamed,
-  isChordError,
-  local,
-  memoryLinkPair,
-  method,
-  remote,
-} from "../src/index.ts";
+import chord from "../src/index.ts";
+import type chordTypes from "../src/index.types.ts";
 import counting from "./fixtures/counting.ts";
 import review from "./fixtures/review.ts";
 import timing from "./fixtures/timing.ts";
+
+const { createHost, hostNamed, isChordError, local, memoryLinkPair, method, remote } = chord;
 
 const { CountingLink } = counting;
 const { abortController } = review;
@@ -53,7 +47,7 @@ const aRemoteReferenceRefusesAForeign = Effect.gen(function* () {
     codeVersion: 1,
     rootId: "forged",
     signal: abortController().signal,
-  } as unknown as Ctx;
+  } as unknown as chordTypes.Ctx;
   yield* Effect.promise(() =>
     assert.rejects(
       target.hit(forged),

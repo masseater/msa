@@ -1,4 +1,4 @@
-import type { JsonValue } from "@msa/chord";
+import type chordTypes from "@msa/chord/index.types";
 import { Effect } from "effect";
 import { afterEach, describe, expect, it } from "vite-plus/test";
 
@@ -89,7 +89,7 @@ const recoversDocumentRetirement = Effect.fn("recoversDocumentRetirement")(funct
   const env = new InstrumentedEnv({ cwd: directory });
   const storage = yield* openStorage(directory, env);
   yield* createRoot(storage);
-  const taskId = yield* awaited(storage.mintId<typesModule.TaskId<JsonValue>>());
+  const taskId = yield* awaited(storage.mintId<typesModule.TaskId<chordTypes.JsonValue>>());
   const id = yield* awaited(storage.mintId<typesModule.DocumentId>());
   yield* awaited(
     storage.commit(
@@ -245,7 +245,7 @@ const recoversTerminalTask = Effect.fn("recoversTerminalTask")(function* (
   const env = new InstrumentedEnv({ cwd: directory });
   const storage = yield* openStorage(directory, env);
   yield* createRoot(storage);
-  const id = yield* awaited(storage.mintId<typesModule.TaskId<JsonValue>>());
+  const id = yield* awaited(storage.mintId<typesModule.TaskId<chordTypes.JsonValue>>());
   yield* awaited(storage.commit([{ type: "task", value: pendingTask(id) }], context));
   env.fail({ call: 1, mode, operation: "remove" });
   yield* awaited(

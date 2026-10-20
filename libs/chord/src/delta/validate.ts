@@ -1,7 +1,10 @@
-import { type Op, type Path, RESERVED_SEGMENTS } from "./ops.ts";
-import { UnsafePathError } from "./unsafe-path-error.ts";
+import opsModule from "./ops.ts";
+import type opsTypes from "./ops.types.ts";
+import UnsafePathError from "./unsafe-path-error.ts";
 
-export function assertSafePath(path: Path): void {
+const { RESERVED_SEGMENTS } = opsModule;
+
+function assertSafePath(path: opsTypes.Path): void {
   for (const seg of path) {
     if (typeof seg === "string") {
       if (RESERVED_SEGMENTS.has(seg)) throw new UnsafePathError(seg);
@@ -14,10 +17,10 @@ export function assertSafePath(path: Path): void {
 function assertPathArg(p: unknown, nonEmpty = false): void {
   if (!Array.isArray(p)) throw new TypeError("path is not an array");
   if (nonEmpty && p.length === 0) throw new TypeError("path is empty");
-  assertSafePath(p as Path);
+  assertSafePath(p as opsTypes.Path);
 }
 
-export function assertPermutation(value: unknown): asserts value is number[] {
+function assertPermutation(value: unknown): asserts value is number[] {
   if (!Array.isArray(value)) throw new TypeError("m permutation is not an array");
   const seen = new Uint8Array(value.length);
   for (const index of value) {
@@ -28,7 +31,7 @@ export function assertPermutation(value: unknown): asserts value is number[] {
   }
 }
 
-export function assertValidOp(op: unknown): asserts op is Op {
+function assertValidOp(op: unknown): asserts op is opsTypes.Op {
   if (!Array.isArray(op) || op.length === 0) throw new TypeError("op is not a tuple");
   switch (op[0]) {
     case "r":
@@ -67,3 +70,11 @@ export function assertValidOp(op: unknown): asserts op is Op {
       throw new TypeError(`unknown op verb: ${String(op[0])}`);
   }
 }
+
+const validate = {
+  assertPermutation,
+  assertSafePath,
+  assertValidOp,
+};
+
+export default validate;

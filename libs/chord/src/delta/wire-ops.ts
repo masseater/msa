@@ -1,5 +1,8 @@
-import type { Path, WireOp } from "./ops.ts";
-import { assertPermutation, assertSafePath } from "./validate.ts";
+import type opsTypes from "./ops.types.ts";
+import validate from "./validate.ts";
+
+const { assertSafePath } = validate;
+const assertPermutation: typeof validate.assertPermutation = validate.assertPermutation;
 
 const checkRef = (r: unknown): void => {
   if (typeof r === "number") {
@@ -7,7 +10,7 @@ const checkRef = (r: unknown): void => {
     return;
   }
   if (!Array.isArray(r)) throw new TypeError("path is not an array");
-  assertSafePath(r as Path);
+  assertSafePath(r as opsTypes.Path);
 };
 
 const checkRefOnly = (op: readonly unknown[], verb: string, long: number): void => {
@@ -45,10 +48,10 @@ const checkDeclaration = (op: readonly unknown[]): void => {
   ) {
     throw new TypeError("# shape");
   }
-  assertSafePath(op[2] as Path);
+  assertSafePath(op[2] as opsTypes.Path);
 };
 
-export function assertValidWireOp(op: unknown): asserts op is WireOp {
+function assertValidWireOp(op: unknown): asserts op is opsTypes.WireOp {
   if (!Array.isArray(op) || op.length === 0) throw new TypeError("op is not a tuple");
   const [verb] = op as unknown[];
   switch (verb) {
@@ -79,3 +82,9 @@ export function assertValidWireOp(op: unknown): asserts op is WireOp {
       throw new TypeError(`unknown op verb: ${String(verb)}`);
   }
 }
+
+const wireOps = {
+  assertValidWireOp,
+};
+
+export default wireOps;

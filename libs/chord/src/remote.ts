@@ -1,45 +1,53 @@
 import { Deferred, Effect } from "effect";
 
-import type { AnyContract } from "./contract.ts";
-import { applyImmutable, decoder } from "./delta/index.ts";
-import { ChordError } from "./errors.ts";
-import type { RemoteRef } from "./remote-ref.ts";
-import type { MemberState, RemoteChannel, RemoteHost, Settle, StateIn } from "./remote-types.ts";
-import type { Shape, StateEvent } from "./types.ts";
-import type { ViewReadable } from "./view-readable.ts";
-import { fromWireError } from "./wire.ts";
+import type contractTypes from "./contract.types.ts";
+import delta from "./delta/index.ts";
+import errorsModule from "./errors.ts";
+import type remoteRefTypes from "./remote-ref.types.ts";
+import remoteShape from "./remote-shape.ts";
+import type remoteTypesModule from "./remote-types.ts";
+import type typesModule from "./types.types.ts";
+import type viewReadableTypes from "./view-readable.types.ts";
+import wire from "./wire.ts";
 
-export type { RemoteCall, RemoteChannel, RemoteHost } from "./remote-types.ts";
+const { ChordError } = errorsModule;
+const { fromWireError } = wire;
+const { applyImmutable, decoder } = delta;
+const { stateMembers } = remoteShape;
 
-export class RemoteBinding {
-  readonly host: RemoteHost;
+export default class RemoteBinding {
+  readonly host: remoteTypesModule.RemoteHost;
   readonly key: string;
-  readonly contract: AnyContract;
+  readonly contract: contractTypes.AnyContract;
   readonly at: string;
   readonly input: unknown;
   readonly principal: unknown | undefined;
   status: "loading" | "live" | "ended" = "loading";
   error: unknown;
-  shape: Shape | undefined;
+  shape: typesModule.Shape | undefined;
   hydrated = false;
-  hold: { readonly channel: RemoteChannel; readonly id: number } | undefined;
+  hold: { readonly channel: remoteTypesModule.RemoteChannel; readonly id: number } | undefined;
   stateOn = false;
-  readonly views = new Set<RemoteRef>();
-  readonly members = new Map<string, MemberState>();
+  readonly views = new Set<remoteRefTypes.RemoteRef>();
+  readonly members = new Map<string, remoteTypesModule.MemberState>();
   lingerTimer: (() => void) | undefined;
-  readonly #listeners = new Map<string, Set<ViewReadable>>();
+  readonly #listeners = new Map<string, Set<viewReadableTypes.ViewReadable>>();
   #pending:
-    | { shape: Shape; readonly missing: Set<string>; readonly values: Map<string, MemberState> }
+    | {
+        shape: typesModule.Shape;
+        readonly missing: Set<string>;
+        readonly values: Map<string, remoteTypesModule.MemberState>;
+      }
     | undefined;
   #live = Deferred.makeUnsafe<void>();
   #applied = false;
-  readonly #hydrationWaiters = new Set<Settle>();
+  readonly #hydrationWaiters = new Set<remoteTypesModule.Settle>();
 
   constructor(
-    host: RemoteHost,
+    host: remoteTypesModule.RemoteHost,
     fields: {
       key: string;
-      contract: AnyContract;
+      contract: contractTypes.AnyContract;
       at: string;
       input: unknown;
       principal: unknown | undefined;
@@ -71,7 +79,7 @@ export class RemoteBinding {
     return this.#applied;
   }
 
-  addView(view: RemoteRef): void {
+  addView(view: remoteRefTypes.RemoteRef): void {
     this.views.add(view);
     if (this.lingerTimer !== undefined) {
       this.lingerTimer();
@@ -81,7 +89,7 @@ export class RemoteBinding {
     view.update();
   }
 
-  removeView(view: RemoteRef): void {
+  removeView(view: remoteRefTypes.RemoteRef): void {
     if (!this.views.delete(view)) return;
     for (const set of this.#listeners.values())
       for (const readable of set) if (readable.view === view) set.delete(readable);
@@ -106,7 +114,7 @@ export class RemoteBinding {
     for (const view of this.views) view.update();
   }
 
-  listen(name: string, readable: ViewReadable): void {
+  listen(name: string, readable: viewReadableTypes.ViewReadable): void {
     let set = this.#listeners.get(name);
     if (set === undefined) {
       set = new Set();
@@ -115,7 +123,7 @@ export class RemoteBinding {
     set.add(readable);
   }
 
-  unlisten(name: string, readable: ViewReadable): void {
+  unlisten(name: string, readable: viewReadableTypes.ViewReadable): void {
     this.#listeners.get(name)?.delete(readable);
   }
 
@@ -144,8 +152,8 @@ export class RemoteBinding {
     return Effect.runPromise(
       Effect.callback<void>((resume) => {
         this.#hydrationWaiters.add({
-          resolve: () => resume(Effect.void),
           reject: (error) => resume(Effect.die(error)),
+          resolve: () => resume(Effect.void),
         });
       }),
     );
@@ -168,23 +176,23 @@ export class RemoteBinding {
     return this.error ?? new ChordError("released", `reference ${this.key} released`);
   }
 
-  bound(channel: RemoteChannel, id: number): void {
+  bound(channel: remoteTypesModule.RemoteChannel, id: number): void {
     this.hold = { channel, id };
     this.stateOn = this.wantsState;
   }
 
-  shaped(shape: Shape, listed: readonly string[]): void {
+  shaped(shape: typesModule.Shape, listed: readonly string[]): void {
     if (this.ended) return;
     const previous = this.#pending;
     const missing = new Set<string>(listed);
     if (previous !== undefined) for (const name of previous.missing) missing.add(name);
-    const wanted = new Set(this.#stateMembers(shape));
+    const wanted = new Set(stateMembers(this.contract, shape));
     for (const name of [...missing]) if (!wanted.has(name) || !this.stateOn) missing.delete(name);
-    this.#pending = { shape, missing, values: previous?.values ?? new Map() };
+    this.#pending = { missing, shape, values: previous?.values ?? new Map() };
     if (missing.size === 0) this.#apply();
   }
 
-  state(name: string, frame: StateIn): void {
+  state(name: string, frame: remoteTypesModule.StateIn): void {
     if (this.ended) return;
     if (frame.as === "error") {
       const error = fromWireError(frame.error!);
@@ -201,10 +209,10 @@ export class RemoteBinding {
       const ops = target.decoder.decode(frame.ops ?? []);
       target.value = applyImmutable(target.value, ops);
       if (target === this.members.get(name))
-        this.#deliver(name, { type: "ops", ops, value: target.value });
+        this.#deliver(name, { ops, type: "ops", value: target.value });
       return;
     }
-    const fresh: MemberState = { value: frame.value, decoder: decoder() };
+    const fresh: remoteTypesModule.MemberState = { decoder: decoder(), value: frame.value };
     if (pending !== undefined && (pending.missing.has(name) || pending.values.has(name))) {
       pending.values.set(name, fresh);
       pending.missing.delete(name);
@@ -261,19 +269,12 @@ export class RemoteBinding {
     return Deferred.await(this.#live);
   }
 
-  #stateMembers(shape: Shape): string[] {
-    const members =
-      shape.variant === undefined ? undefined : this.contract.description.variants[shape.variant];
-    if (members === undefined) return [];
-    return shape.members.filter((name) => members[name]?.kind === "state");
-  }
-
   #apply(): void {
     const pending = this.#pending;
     if (pending === undefined) return;
     this.#pending = undefined;
     this.shape = pending.shape;
-    const wanted = new Set(this.#stateMembers(pending.shape));
+    const wanted = new Set(stateMembers(this.contract, pending.shape));
     for (const name of [...this.members.keys()]) if (!wanted.has(name)) this.members.delete(name);
     for (const [name, state] of pending.values) if (wanted.has(name)) this.members.set(name, state);
     this.hydrated = this.stateOn && [...wanted].every((name) => this.members.has(name));
@@ -288,7 +289,7 @@ export class RemoteBinding {
     for (const view of [...this.views]) view.shapeChanged();
   }
 
-  #deliver(name: string, event: StateEvent<unknown>): void {
+  #deliver(name: string, event: typesModule.StateEvent<unknown>): void {
     const readables = this.#listeners.get(name);
     if (readables === undefined) return;
     for (const readable of [...readables]) readable.deliver(event);

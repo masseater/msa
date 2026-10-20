@@ -1,25 +1,34 @@
 import { Effect } from "effect";
 
-import { CtxImpl } from "./ctx.ts";
-import { ChordError, invalid } from "./errors.ts";
-import { ResolvedMethod } from "./method.ts";
-import type { ObjectImpl } from "./object.ts";
-import type { RefImpl } from "./ref.ts";
-import { raceSignal } from "./signal.ts";
-import type { Ctx } from "./types.ts";
+import CtxImpl from "./ctx.ts";
+import type ctxTypes from "./ctx.types.ts";
+import errorsModule from "./errors.ts";
+import ResolvedMethod from "./method.ts";
+import type objectTypes from "./object.types.ts";
+import type refTypes from "./ref.types.ts";
+import signalModule from "./signal.ts";
+import type typesModule from "./types.types.ts";
 
-export class ObjectCalls {
-  readonly #object: ObjectImpl;
+const { raceSignal } = signalModule;
+const { ChordError, invalid } = errorsModule;
 
-  constructor(object: ObjectImpl) {
+export default class ObjectCalls {
+  readonly #object: objectTypes.ObjectImpl;
+
+  constructor(object: objectTypes.ObjectImpl) {
     this.#object = object;
   }
 
-  run(ref: RefImpl, name: string, args: unknown, ctx: CtxImpl): Promise<unknown> {
+  run(ref: refTypes.RefImpl, name: string, args: unknown, ctx: ctxTypes.CtxImpl): Promise<unknown> {
     return Effect.runPromise(this.call(ref, name, args, ctx));
   }
 
-  call(ref: RefImpl, name: string, args: unknown, ctx: CtxImpl): Effect.Effect<unknown> {
+  call(
+    ref: refTypes.RefImpl,
+    name: string,
+    args: unknown,
+    ctx: ctxTypes.CtxImpl,
+  ): Effect.Effect<unknown> {
     return Effect.gen({ self: this }, function* () {
       const object = this.#object;
       ctx.check(object.host);
@@ -42,15 +51,15 @@ export class ObjectCalls {
       const result = yield* Effect.promise(() =>
         this.invoke(() =>
           method.takesArgs
-            ? (method.fn as (args: unknown, ctx: Ctx) => unknown)(input, child)
-            : (method.fn as (ctx: Ctx) => unknown)(child),
+            ? (method.fn as (args: unknown, ctx: typesModule.Ctx) => unknown)(input, child)
+            : (method.fn as (ctx: typesModule.Ctx) => unknown)(child),
         ),
       ).pipe(Effect.ensuring(Effect.sync(() => child.close())));
       return method.result(result);
     });
   }
 
-  admit(ctx: Ctx): void {
+  admit(ctx: typesModule.Ctx): void {
     const object = this.#object;
     if (object.host.failed !== undefined) {
       throw new ChordError("unavailable", `${object.host.name} failed and admits no work`, {
@@ -70,14 +79,14 @@ export class ObjectCalls {
     }
   }
 
-  lease(ctx: Ctx): void {
+  lease(ctx: typesModule.Ctx): void {
     const object = this.#object;
     if (object.leases.has(ctx.rootId)) return;
     object.leases.set(ctx.rootId, ctx.codeVersion);
     object.host.touch(ctx.rootId, object);
   }
 
-  readonly guard = (ctx: Ctx): void => {
+  readonly guard = (ctx: typesModule.Ctx): void => {
     const object = this.#object;
     if (object.host.inFactory > 0)
       throw invalid("read_only", "cells cannot be written while a factory runs");

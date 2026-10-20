@@ -1,6 +1,6 @@
 import { DatabaseSync } from "node:sqlite";
 
-import type { Context, JsonValue } from "@msa/chord";
+import type chordTypes from "@msa/chord/index.types";
 import type durableTypes from "@msa/durable/index.types";
 import { Effect } from "effect";
 import { afterEach, describe, expect, it } from "vite-plus/test";
@@ -87,21 +87,24 @@ class ReopeningStorage implements durableTypes.Storage {
     cursor,
     readContext,
   ) => this.current.scanConversations(query, limit, cursor, readContext);
-  entry(id: durableTypes.EntryId, readContext: Context): ReturnType<durableTypes.Storage["entry"]>;
+  entry(
+    id: durableTypes.EntryId,
+    readContext: chordTypes.Context,
+  ): ReturnType<durableTypes.Storage["entry"]>;
   entry(
     conversationId: durableTypes.ConversationId,
     id: durableTypes.EntryId,
-    readContext: Context,
+    readContext: chordTypes.Context,
   ): ReturnType<durableTypes.Storage["entry"]>;
   entry(
     idOrConversationId: durableTypes.EntryId | durableTypes.ConversationId,
-    idOrContext: durableTypes.EntryId | Context,
-    readContext?: Context,
+    idOrContext: durableTypes.EntryId | chordTypes.Context,
+    readContext?: chordTypes.Context,
   ) {
     if (readContext === undefined) {
       return this.current.entry(
         idFromNumber<durableTypes.EntryId>(idOrConversationId),
-        idOrContext as Context,
+        idOrContext as chordTypes.Context,
       );
     }
     if (typeof idOrContext !== "number")
@@ -207,7 +210,9 @@ const persistsRecordsSequence = Effect.gen(function* () {
         [
           {
             type: "task",
-            value: pendingTask(yield* awaited(reopened.mintId<durableTypes.TaskId<JsonValue>>())),
+            value: pendingTask(
+              yield* awaited(reopened.mintId<durableTypes.TaskId<chordTypes.JsonValue>>()),
+            ),
           },
         ],
         context,

@@ -1,4 +1,4 @@
-import type { Context } from "@msa/chord";
+import type chordTypes from "@msa/chord/index.types";
 import env from "@msa/durable/env";
 import type envTypes from "@msa/durable/env.types";
 import { Effect } from "effect";
@@ -32,7 +32,7 @@ export default class RemoteBinaryReader implements envTypes.BinaryReader {
     return this.#handle.path;
   }
 
-  #early<T>(context: Context): envTypes.Result<T, envTypes.FileError> | undefined {
+  #early<T>(context: chordTypes.Context): envTypes.Result<T, envTypes.FileError> | undefined {
     const aborted = abortResult<T>(context.abortSignal, this.#path);
     if (aborted !== undefined) return aborted;
     return this.#closed
@@ -40,7 +40,9 @@ export default class RemoteBinaryReader implements envTypes.BinaryReader {
       : undefined;
   }
 
-  info(context: Context): Promise<envTypes.Result<envTypes.FileInfo, envTypes.FileError>> {
+  info(
+    context: chordTypes.Context,
+  ): Promise<envTypes.Result<envTypes.FileInfo, envTypes.FileError>> {
     const early = this.#early<envTypes.FileInfo>(context);
     if (early !== undefined) return Promise.resolve(early);
     const handle = this.#handle;
@@ -59,7 +61,7 @@ export default class RemoteBinaryReader implements envTypes.BinaryReader {
   read(
     offset: number,
     length: number,
-    context: Context,
+    context: chordTypes.Context,
   ): Promise<envTypes.Result<Uint8Array, envTypes.FileError>> {
     const early = this.#early<Uint8Array>(context);
     if (early !== undefined) return Promise.resolve(early);
@@ -99,7 +101,7 @@ export default class RemoteBinaryReader implements envTypes.BinaryReader {
 
   scanLines(
     options: { startLine: number; endLine?: number },
-    context: Context,
+    context: chordTypes.Context,
   ): Promise<envTypes.Result<envTypes.LineScan, envTypes.FileError>> {
     const early = this.#early<envTypes.LineScan>(context);
     if (early !== undefined) return Promise.resolve(early);
@@ -125,7 +127,7 @@ export default class RemoteBinaryReader implements envTypes.BinaryReader {
     );
   }
 
-  close(_context: Context): Promise<void> {
+  close(_context: chordTypes.Context): Promise<void> {
     if (this.#closed) return Promise.resolve();
     this.#closed = true;
     return this.#handle.close();

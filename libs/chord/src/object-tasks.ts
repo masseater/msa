@@ -1,21 +1,23 @@
 import { Cause, Effect } from "effect";
 
-import { CtxImpl } from "./ctx.ts";
-import { ChordError } from "./errors.ts";
-import type { ObjectImpl } from "./object.ts";
+import CtxImpl from "./ctx.ts";
+import errorsModule from "./errors.ts";
+import type objectTypes from "./object.types.ts";
+
+const { ChordError } = errorsModule;
 
 interface RunningTask {
   readonly controller: AbortController;
   readonly done: Promise<void>;
 }
 
-export class ObjectTasks {
+export default class ObjectTasks {
   readonly stopped = new Set<Promise<void>>();
-  readonly #object: ObjectImpl;
+  readonly #object: objectTypes.ObjectImpl;
   readonly #tasks = new Map<string, RunningTask>();
   #runs = 0;
 
-  constructor(object: ObjectImpl) {
+  constructor(object: objectTypes.ObjectImpl) {
     this.#object = object;
   }
 
@@ -70,11 +72,11 @@ export class ObjectTasks {
     if (fn === undefined) return;
     const controller = new AbortController();
     const ctx = new CtxImpl(object.host, {
-      signals: [controller.signal, object.callAbort.signal],
-      rootId: `task:${object.address}:${key}`,
       codeVersion,
-      principal: object.host.principal,
       holder: true,
+      principal: object.host.principal,
+      rootId: `task:${object.address}:${key}`,
+      signals: [controller.signal, object.callAbort.signal],
     });
     const done = Effect.runPromise(
       Effect.promise(() => Promise.resolve(fn(ctx))).pipe(

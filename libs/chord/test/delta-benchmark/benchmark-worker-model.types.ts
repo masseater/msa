@@ -1,5 +1,5 @@
-import type { Draft } from "../../src/delta/draft.ts";
-import type { Op } from "../../src/delta/index.ts";
+import type draftTypes from "../../src/delta/draft.ts";
+import type deltaTypes from "../../src/delta/index.types.ts";
 
 declare namespace benchmarkWorkerModelTypes {
   type Mode = "tracker";
@@ -27,9 +27,12 @@ declare namespace benchmarkWorkerModelTypes {
 
   type Document = { rows: Row[] };
 
-  type PreparedLike = { readonly value: Readonly<Document>; readonly ops: readonly Op[] };
+  type PreparedLike = {
+    readonly value: Readonly<Document>;
+    readonly ops: readonly deltaTypes.Op[];
+  };
 
-  type ChangeLike = { readonly state: Draft<Document>; prepare(): PreparedLike };
+  type ChangeLike = { readonly state: draftTypes.Draft<Document>; prepare(): PreparedLike };
 
   type TrackerLike = {
     readonly value: Document;
@@ -37,7 +40,7 @@ declare namespace benchmarkWorkerModelTypes {
     adopt(prepared: PreparedLike): void;
   };
 
-  type Frame = { readonly sequence: number; readonly ops: readonly Op[] };
+  type Frame = { readonly sequence: number; readonly ops: readonly deltaTypes.Op[] };
 
   type WatchReplica = {
     value: Document;

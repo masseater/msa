@@ -1,4 +1,4 @@
-import type { Context } from "@msa/chord";
+import type chordTypes from "@msa/chord/index.types";
 import { Effect } from "effect";
 
 import errors from "../errors.ts";
@@ -43,7 +43,10 @@ export default class MemoryStorage implements typesModule.Storage {
   private nextSeq = 1;
   private closed = false;
 
-  commit(writes: readonly typesModule.StorageWrite[], _context: Context): Promise<typesModule.Seq> {
+  commit(
+    writes: readonly typesModule.StorageWrite[],
+    _context: chordTypes.Context,
+  ): Promise<typesModule.Seq> {
     return this.read(() => this.prepareCommit(writes).apply());
   }
 
@@ -101,7 +104,7 @@ export default class MemoryStorage implements typesModule.Storage {
 
   conversation(
     id: typesModule.ConversationId,
-    _context: Context,
+    _context: chordTypes.Context,
   ): Promise<typesModule.ConversationRecord | undefined> {
     return this.read(() => {
       const value = this.state.conversations.get(id);
@@ -113,21 +116,21 @@ export default class MemoryStorage implements typesModule.Storage {
     query: typesModule.ConversationQuery,
     limit: number,
     cursor: typesModule.Cursor | undefined,
-    _context: Context,
+    _context: chordTypes.Context,
   ): Promise<typesModule.Page<typesModule.ConversationRecord, typesModule.Cursor>> {
     return this.read(() => scanConversationIds(this.state, query, limit, cursor));
   }
 
-  entry(id: typesModule.EntryId, context: Context): Promise<EntryRead | undefined>;
+  entry(id: typesModule.EntryId, context: chordTypes.Context): Promise<EntryRead | undefined>;
   entry(
     conversationId: typesModule.ConversationId,
     id: typesModule.EntryId,
-    context: Context,
+    context: chordTypes.Context,
   ): Promise<EntryRead | undefined>;
   entry(
     idOrConversationId: typesModule.EntryId | typesModule.ConversationId,
-    idOrContext: typesModule.EntryId | Context,
-    context?: Context,
+    idOrContext: typesModule.EntryId | chordTypes.Context,
+    context?: chordTypes.Context,
   ): Promise<EntryRead | undefined> {
     return this.read(() => {
       if (context === undefined) {
@@ -149,7 +152,7 @@ export default class MemoryStorage implements typesModule.Storage {
   findLatestHeadMarker(
     conversationId: typesModule.ConversationId,
     atOrBeforeEntryId: typesModule.EntryId | undefined,
-    _context: Context,
+    _context: chordTypes.Context,
   ): Promise<(typesModule.EntryRecord & { readonly head: typesModule.EntryId }) | undefined> {
     return this.read(() => latestHeadMarker(this.state, conversationId, atOrBeforeEntryId));
   }
@@ -158,12 +161,15 @@ export default class MemoryStorage implements typesModule.Storage {
     query: typesModule.EntryQuery,
     limit: number,
     cursor: typesModule.Cursor | undefined,
-    _context: Context,
+    _context: chordTypes.Context,
   ): Promise<typesModule.Page<typesModule.EntryRecord, typesModule.Cursor>> {
     return this.read(() => scanEntryRecords(this.state, query, limit, cursor));
   }
 
-  task(id: typesModule.TaskId, _context: Context): Promise<stateTypes.StoredTask | undefined> {
+  task(
+    id: typesModule.TaskId,
+    _context: chordTypes.Context,
+  ): Promise<stateTypes.StoredTask | undefined> {
     return this.read(() => {
       const value = this.state.tasks.get(id);
       return value === undefined ? undefined : clone(value);
@@ -174,14 +180,14 @@ export default class MemoryStorage implements typesModule.Storage {
     query: typesModule.TaskQuery,
     limit: number,
     cursor: typesModule.Cursor | undefined,
-    _context: Context,
+    _context: chordTypes.Context,
   ): Promise<typesModule.Page<stateTypes.StoredTask, typesModule.Cursor>> {
     return this.read(() => scanTaskRecords(this.state, query, limit, cursor));
   }
 
   submission(
     id: typesModule.SubmissionId,
-    _context: Context,
+    _context: chordTypes.Context,
   ): Promise<typesModule.SubmissionRecord | undefined> {
     return this.read(() => {
       const value = this.state.submissions.get(id);
@@ -193,7 +199,7 @@ export default class MemoryStorage implements typesModule.Storage {
     query: typesModule.SubmissionQuery,
     limit: number,
     cursor: typesModule.Cursor | undefined,
-    _context: Context,
+    _context: chordTypes.Context,
   ): Promise<typesModule.Page<typesModule.SubmissionRecord, typesModule.Cursor>> {
     return this.read(() => scanSubmissionRecords(this.state, query, limit, cursor));
   }
@@ -201,7 +207,7 @@ export default class MemoryStorage implements typesModule.Storage {
   submissionByRequest(
     conversationId: typesModule.ConversationId,
     requestId: string,
-    _context: Context,
+    _context: chordTypes.Context,
   ): Promise<typesModule.SubmissionRecord | undefined> {
     return this.read(() => {
       const id = this.state.submissionIdsByRequest.get(conversationId)?.get(requestId);
@@ -213,7 +219,7 @@ export default class MemoryStorage implements typesModule.Storage {
   findDocument(
     address: typesModule.DocumentAddress,
     at: typesModule.DocumentPoint,
-    _context: Context,
+    _context: chordTypes.Context,
   ): Promise<typesModule.DocumentRecord | undefined> {
     return this.read(() => {
       const index = this.state.documentAddresses.get(addressKey(address));
@@ -233,7 +239,7 @@ export default class MemoryStorage implements typesModule.Storage {
   document(
     id: typesModule.DocumentId,
     at: typesModule.DocumentPoint,
-    _context: Context,
+    _context: chordTypes.Context,
   ): Promise<typesModule.StoredDocument | undefined> {
     return this.read(() => {
       const stored = materializeDocument(this.state, id, at);
@@ -252,12 +258,12 @@ export default class MemoryStorage implements typesModule.Storage {
     query: typesModule.DocumentQuery,
     limit: number,
     cursor: typesModule.Cursor | undefined,
-    _context: Context,
+    _context: chordTypes.Context,
   ): Promise<typesModule.Page<typesModule.DocumentRecord, typesModule.Cursor>> {
     return this.read(() => scanDocumentRecords(this.state, query, limit, cursor));
   }
 
-  close(_context: Context): Promise<void> {
+  close(_context: chordTypes.Context): Promise<void> {
     return Effect.runPromise(
       Effect.sync(() => {
         this.closed = true;

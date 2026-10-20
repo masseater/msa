@@ -5,7 +5,7 @@ import {
   createModels,
   fauxProvider,
 } from "@msa/ai";
-import type { Context } from "@msa/chord";
+import type chordTypes from "@msa/chord/index.types";
 import harnessModule from "@msa/durable/harness";
 import type durableTypes from "@msa/durable/index.types";
 import { Effect } from "effect";
@@ -74,7 +74,7 @@ const openChat = Effect.fn("openChat")(function* (
 
 const allEntries = Effect.fn("allEntries")(function* (
   conversation: durableTypes.Conversation,
-  callContext: Context = context,
+  callContext: chordTypes.Context = context,
 ) {
   const page = yield* awaited(conversation.entries({}, 1000, undefined, callContext));
   return [...page.items].reverse();

@@ -1,5 +1,5 @@
-import type { Context, JsonValue } from "@msa/chord";
-import { BACKGROUND_CONTEXT } from "@msa/chord/context";
+import contextModule from "@msa/chord/context";
+import type chordTypes from "@msa/chord/index.types";
 import type durableTypes from "@msa/durable/index.types";
 import { Cause, Effect, Exit } from "effect";
 import { dual } from "effect/Function";
@@ -9,6 +9,8 @@ import effectSupport from "./effect-support.ts";
 import platformSupport from "./platform-support.ts";
 import type toolsSupportTypes from "./tools-support.types.ts";
 import toolsTimeoutEnvSupport from "./tools-timeout-env-support.ts";
+
+const { BACKGROUND_CONTEXT } = contextModule;
 
 const { NodeExecutionEnv } = node;
 
@@ -52,9 +54,9 @@ function fakeApi(env: toolsSupportTypes.ExecutionEnv | undefined): {
 
 function runImpl(
   tool: durableTypes.ToolRegistration,
-  args: JsonValue,
+  args: chordTypes.JsonValue,
   env: toolsSupportTypes.ExecutionEnv | undefined,
-  context: Context = BACKGROUND_CONTEXT,
+  context: chordTypes.Context = BACKGROUND_CONTEXT,
 ): Promise<
   durableTypes.ToolExecutionResult & { streamed: string[]; reported: durableTypes.ToolDiagnostic[] }
 > {
@@ -72,15 +74,15 @@ function runImpl(
 
 const run: {
   (
-    args: JsonValue,
+    args: chordTypes.JsonValue,
     env: toolsSupportTypes.ExecutionEnv | undefined,
-    context?: Context,
+    context?: chordTypes.Context,
   ): (tool: durableTypes.ToolRegistration) => ReturnType<typeof runImpl>;
   (
     tool: durableTypes.ToolRegistration,
-    args: JsonValue,
+    args: chordTypes.JsonValue,
     env: toolsSupportTypes.ExecutionEnv | undefined,
-    context?: Context,
+    context?: chordTypes.Context,
   ): ReturnType<typeof runImpl>;
 } = dual(
   (args) => typeof args[0] === "object" && args[0] !== null && "execute" in args[0],
@@ -89,7 +91,7 @@ const run: {
 
 const runFailing = Effect.fn("runFailing")(function* (
   tool: durableTypes.ToolRegistration,
-  args: JsonValue,
+  args: chordTypes.JsonValue,
   env: toolsSupportTypes.ExecutionEnv,
 ) {
   const { api, output, diagnostics } = fakeApi(env);
@@ -119,7 +121,7 @@ class BlockingWriteExecutionEnv extends NodeExecutionEnv {
   override writeFile(
     path: string,
     content: string | Uint8Array,
-    context: Context,
+    context: chordTypes.Context,
   ): Promise<toolsSupportTypes.Result<void, toolsSupportTypes.FileError>> {
     const superWriteFile = super.writeFile.bind(this);
     return Effect.runPromise(

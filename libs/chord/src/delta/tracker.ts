@@ -1,5 +1,7 @@
-export type { JsonValue } from "../json.ts";
-export type { Draft } from "./draft.ts";
-export type { Op } from "./ops.ts";
-export { track } from "./tracker-context.ts";
-export type { Change, Prepared, Tracker } from "./tracker-types.ts";
+import trackerContext from "./tracker-context.ts";
+
+const tracker = {
+  track: trackerContext.track,
+};
+
+export default tracker;

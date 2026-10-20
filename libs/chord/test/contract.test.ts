@@ -3,18 +3,12 @@ import assert from "node:assert/strict";
 import { Type } from "typebox";
 import { describe, it } from "vite-plus/test";
 
-import {
-  bind,
-  coverage,
-  hostFamily,
-  hostNamed,
-  isChordError,
-  local,
-  method,
-  opaque,
-  remote,
-} from "../src/index.ts";
-import { canonicalIdentity, fits, normalize } from "../src/schema.ts";
+import chord from "../src/index.ts";
+import schemaModule from "../src/schema.ts";
+
+const { bind, coverage, hostFamily, hostNamed, isChordError, local, method, opaque, remote } =
+  chord;
+const { canonicalIdentity, fits, normalize } = schemaModule;
 
 const View = Type.Object({ text: Type.String() });
 

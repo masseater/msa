@@ -1,31 +1,38 @@
 import { Cause, Effect } from "effect";
 
-import type { Connection } from "./connection.ts";
-import { ChordError } from "./errors.ts";
-import type { HostLinks } from "./host-links.ts";
-import { beginReload, endReload, type Reload } from "./reload.ts";
-import { type Frame, toWireError } from "./wire.ts";
+import type connectionTypes from "./connection.types.ts";
+import errorsModule from "./errors.ts";
+import type errorsTypes from "./errors.types.ts";
+import type hostLinksTypes from "./host-links.types.ts";
+import reloadModule from "./reload.ts";
+import type reloadTypes from "./reload.types.ts";
+import wire from "./wire.ts";
+import type wireTypes from "./wire.types.ts";
+
+const { beginReload, endReload } = reloadModule;
+const { ChordError } = errorsModule;
+const { toWireError } = wire;
 
 interface ChildOperation {
   readonly id: number;
-  reload: Reload | undefined;
+  reload: reloadTypes.Reload | undefined;
   state: "loading" | "preparing" | "prepared";
   cancelled: boolean;
 }
 
-type PrepareFrame = Extract<Frame, { t: "prepare" }>;
+type PrepareFrame = Extract<wireTypes.Frame, { t: "prepare" }>;
 
-export class ChildReloads {
-  readonly #host: HostLinks;
+export default class ChildReloads {
+  readonly #host: hostLinksTypes.HostLinks;
   #operation: ChildOperation | undefined;
 
-  constructor(host: HostLinks) {
+  constructor(host: hostLinksTypes.HostLinks) {
     this.#host = host;
   }
 
   handle(
-    connection: Connection,
-    frame: Extract<Frame, { t: "prepare" | "commit" | "abort" }>,
+    connection: connectionTypes.Connection,
+    frame: Extract<wireTypes.Frame, { t: "prepare" | "commit" | "abort" }>,
   ): void {
     if (frame.t === "prepare") {
       this.#prepare(connection, frame);
@@ -50,19 +57,19 @@ export class ChildReloads {
     if (this.#operation !== undefined) this.#cancel(this.#operation);
   }
 
-  #prepare(connection: Connection, frame: PrepareFrame): void {
+  #prepare(connection: connectionTypes.Connection, frame: PrepareFrame): void {
     if (this.#operation !== undefined) {
       const error = new ChordError("unavailable", "a reload is already running", {
         reason: "reload_running",
       });
-      connection.send({ t: "vote", reload: frame.reload, error: toWireError(error) });
+      connection.send({ error: toWireError(error), reload: frame.reload, t: "vote" });
       return;
     }
     const operation: ChildOperation = {
+      cancelled: false,
       id: frame.reload,
       reload: undefined,
       state: "loading",
-      cancelled: false,
     };
     this.#operation = operation;
     Effect.runFork(this.#run(operation, connection, frame).pipe(Effect.catchCause(this.#report)));
@@ -85,16 +92,16 @@ export class ChildReloads {
 
   #run(
     operation: ChildOperation,
-    connection: Connection,
+    connection: connectionTypes.Connection,
     frame: PrepareFrame,
   ): Effect.Effect<void> {
-    const cancelled = (): ChordError =>
+    const cancelled = (): errorsTypes.ChordError =>
       new ChordError("aborted", "reload aborted by the server", { reason: "aborted" });
     return Effect.gen({ self: this }, function* () {
       const reload = yield* beginReload(this.#host, {
-        plugins: frame.plugins,
-        options: frame.options,
         codeVersion: frame.codeVersion,
+        options: frame.options,
+        plugins: frame.plugins,
       });
       operation.reload = reload;
       if (operation.cancelled) throw cancelled();
@@ -102,7 +109,7 @@ export class ChildReloads {
       yield* reload.prepare();
       if (operation.cancelled) throw cancelled();
       operation.state = "prepared";
-      connection.send({ t: "vote", reload: frame.reload, report: reload.summary() });
+      connection.send({ reload: frame.reload, report: reload.summary(), t: "vote" });
     }).pipe(
       Effect.catchCause((cause) =>
         Effect.gen({ self: this }, function* () {
@@ -113,9 +120,9 @@ export class ChildReloads {
           if (this.#operation === operation) this.#operation = undefined;
           if (!operation.cancelled)
             connection.send({
-              t: "vote",
-              reload: frame.reload,
               error: toWireError(Cause.squash(cause)),
+              reload: frame.reload,
+              t: "vote",
             });
         }),
       ),

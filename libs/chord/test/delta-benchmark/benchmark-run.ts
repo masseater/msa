@@ -3,11 +3,13 @@ import { performance } from "node:perf_hooks";
 
 import { Effect } from "effect";
 
-import { applyImmutable } from "../../src/delta/index.ts";
+import delta from "../../src/delta/index.ts";
 import benchmark from "../fixtures/benchmark.ts";
 import type benchmarkRunTypes from "./benchmark-run.types.ts";
 import benchmarkWorkerModel from "./benchmark-worker-model.ts";
 import type benchmarkWorkerModelTypes from "./benchmark-worker-model.types.ts";
+
+const { applyImmutable } = delta;
 
 const { collectGarbage } = benchmark;
 const { MiB, applyFrame, assertDetached, cloneTrusted } = benchmarkWorkerModel;

@@ -1,15 +1,10 @@
 import { describe, expect, it } from "vite-plus/test";
 
-import {
-  type Op,
-  PathError,
-  UnsafePathError,
-  apply,
-  applyImmutable,
-  applyImmutableBatches,
-  track,
-} from "../src/delta/index.ts";
+import delta from "../src/delta/index.ts";
+import type deltaTypes from "../src/delta/index.types.ts";
 import deltaApplyImmutable from "./fixtures/delta-apply-immutable.ts";
+
+const { PathError, UnsafePathError, apply, applyImmutable, applyImmutableBatches, track } = delta;
 
 const { clone, freezeDeep } = deltaApplyImmutable;
 
@@ -56,7 +51,7 @@ const copiesEachTouchedContainerOnceWhile = (): void => {
     ["s", ["rows", 1, "label"], "edited"],
     ["m", ["rows"], [1, 0, 2]],
     ["s", ["rows", 0, "label"], "moved"],
-  ] satisfies Op[]);
+  ] satisfies deltaTypes.Op[]);
 
   const result = applyImmutable(base, operations);
   const mutableResult = apply(clone(base), clone(operations));
@@ -115,16 +110,16 @@ const sharesOnePrivateCopyOnWrite = (): void => {
     [
       ["s", ["meta", "count"], 1],
       ["p", ["values"], 1, 1, [{ id: 4, value: 4 }]],
-    ] satisfies Op[],
-    [] satisfies Op[],
+    ] satisfies deltaTypes.Op[],
+    [] satisfies deltaTypes.Op[],
     [
       ["m", ["values"], [2, 0, 1]],
       ["s", ["values", 2, "value"], 40],
-    ] satisfies Op[],
+    ] satisfies deltaTypes.Op[],
     [
       ["t", ["text"], 2],
       ["a", ["text"], "!"],
-    ] satisfies Op[],
+    ] satisfies deltaTypes.Op[],
   ];
 
   const [firstBatch, ...laterBatches] = batches;
@@ -151,7 +146,7 @@ const handlesTrackerProducedBatchesAcrossArbitrary = (): void => {
     values: Array.from({ length: 8 }, (_, id) => ({ id, score: 0 })),
   };
   const tracker = track(initial);
-  const batches: Array<readonly Op[]> = [];
+  const batches: Array<readonly deltaTypes.Op[]> = [];
   for (let revision = 1; revision <= 40; revision++) {
     const change = tracker.beginChange();
     change.state.revision = revision;
@@ -189,7 +184,7 @@ const rejectsMalformedPathsWithoutReading = (): void => {
       return {};
     },
   });
-  const malformed: Op[] = [["s", "bad-path", 1] as never];
+  const malformed: deltaTypes.Op[] = [["s", "bad-path", 1] as never];
   expect(() => applyImmutableBatches(target, [malformed])).toThrow(/path/u);
   expect(reads).toBe(0);
 
@@ -203,7 +198,7 @@ const rejectsMalformedPathsWithoutReading = (): void => {
 
 const doesNotExposePartialApplicationWhen = (): void => {
   const base = freezeDeep({ nested: { value: 1 } });
-  const invalidBatches: readonly (readonly Op[])[] = [
+  const invalidBatches: readonly (readonly deltaTypes.Op[])[] = [
     [["s", ["nested", "value"], 2]],
     [["s", ["constructor", "prototype", "polluted"], true]],
   ];
@@ -211,7 +206,7 @@ const doesNotExposePartialApplicationWhen = (): void => {
   expect(base.nested.value).toBe(1);
   expect(({} as { polluted?: boolean }).polluted).toBeUndefined();
 
-  function* throwingBatches(): Generator<readonly Op[]> {
+  function* throwingBatches(): Generator<readonly deltaTypes.Op[]> {
     yield [["s", ["nested", "value"], 3]];
     throw new Error("revision stream failed");
   }
@@ -220,7 +215,7 @@ const doesNotExposePartialApplicationWhen = (): void => {
 
   let advancedPastInvalid = false;
   let iteratorClosed = false;
-  function* invalidOperationBatches(): Generator<readonly Op[]> {
+  function* invalidOperationBatches(): Generator<readonly deltaTypes.Op[]> {
     try {
       yield [["s", ["nested", "value"], 4]];
       yield [["s", ["__proto__", "polluted"], true]];

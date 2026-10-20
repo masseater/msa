@@ -1,5 +1,5 @@
 import type { TSchema } from "@msa/ai";
-import type { Context, JsonValue } from "@msa/chord";
+import type chordTypes from "@msa/chord/index.types";
 import { Function } from "effect";
 
 import type typesModule from "./types.types.ts";
@@ -10,7 +10,10 @@ function defineExtension<Tool extends typesModule.ToolRegistration = typesModule
   return extension;
 }
 
-function defineTool<TParameters extends TSchema, TDetails extends JsonValue = JsonValue>(
+function defineTool<
+  TParameters extends TSchema,
+  TDetails extends chordTypes.JsonValue = chordTypes.JsonValue,
+>(
   tool: typesModule.ToolRegistration<TParameters, TDetails>,
 ): typesModule.ToolRegistration<TParameters, TDetails> {
   return tool;
@@ -20,7 +23,7 @@ type SectionOptions = { readonly tag?: boolean };
 
 type SectionRender<Tool extends typesModule.ToolRegistration> = (
   input: typesModule.PromptInput<Tool>,
-  context: Context,
+  context: chordTypes.Context,
 ) => string | undefined | Promise<string | undefined>;
 
 type Section = {

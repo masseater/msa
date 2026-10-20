@@ -1,4 +1,4 @@
-import type { Draft } from "@msa/chord";
+import type chordTypes from "@msa/chord/index.types";
 import durable from "@msa/durable";
 import { Effect } from "effect";
 
@@ -31,7 +31,7 @@ const createState = Effect.fn("createState")(function* () {
 
 const writeState = Effect.fn("writeState")(function* (
   session: ReturnType<typeof openTestSession>["session"],
-  edit: (state: Draft<sessionWatchesSupportTypes.State>) => void,
+  edit: (state: chordTypes.Draft<sessionWatchesSupportTypes.State>) => void,
 ) {
   yield* awaited(session.commit((tx) => tx.doc(StateDoc).then(edit), context));
 });

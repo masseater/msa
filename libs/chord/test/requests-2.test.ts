@@ -4,23 +4,15 @@ import { Effect } from "effect";
 import { Type } from "typebox";
 import { describe, it } from "vite-plus/test";
 
-import { applyImmutable } from "../src/delta/index.ts";
-import {
-  type Ctx,
-  type Facet,
-  type FacetLoader,
-  type StateEvent,
-  createHost,
-  hostNamed,
-  isChordError,
-  local,
-  memoryLinkPair,
-  method,
-  opaque,
-  remote,
-} from "../src/index.ts";
+import delta from "../src/delta/index.ts";
+import chord from "../src/index.ts";
+import type chordTypes from "../src/index.types.ts";
 import requests from "./fixtures/requests.ts";
 import timing from "./fixtures/timing.ts";
+
+const { createHost, hostNamed, isChordError, local, memoryLinkPair, method, opaque, remote } =
+  chord;
+const { applyImmutable } = delta;
 
 const { until } = requests;
 const { latch, tick } = timing;
@@ -38,20 +30,20 @@ const case4ReplaceDiffsANewRevision = Effect.gen(function* () {
     const doc = self.state("doc", Doc, { entries: ["a", "b"], status: "idle" });
     return {
       doc,
-      set: (value: unknown, ctx: Ctx) => {
+      set: (value: unknown, ctx: chordTypes.Ctx) => {
         doc.replace(ctx, value as never, lastOptions);
       },
     };
   });
   const ref = host.hold(Mirror, {});
   yield* Effect.promise(() => ref.ready);
-  const events: StateEvent<unknown>[] = [];
+  const events: chordTypes.StateEvent<unknown>[] = [];
   let replica: unknown;
   ref.doc.events((event) => {
     replica = event.type === "ops" ? applyImmutable(replica, event.ops) : event.value;
     events.push(event);
   });
-  const opsOf = (event: StateEvent<unknown> | undefined) =>
+  const opsOf = (event: chordTypes.StateEvent<unknown> | undefined) =>
     event?.type === "ops" ? event.ops : [];
   const current = ref.doc.value as { entries: string[]; status: string };
   yield* Effect.promise(() => ref.set({ entries: current.entries, status: "running" }));
@@ -79,11 +71,11 @@ const Echo = remote("t.echo", {
 const case5RootsOfAChildThat = Effect.gen(function* () {
   const services = yield* Effect.context<never>();
   const server = createHost({ name: "server", onError: () => {}, self: { kind: "host" } });
-  const echoFacet: Facet = {
+  const echoFacet: chordTypes.Facet = {
     name: "echo",
     setup: (api) =>
       api.serve(Echo, () => ({
-        codeVersion: (ctx: Ctx) => ctx.codeVersion,
+        codeVersion: (ctx: chordTypes.Ctx) => ctx.codeVersion,
         variant: "main",
       })),
   };
@@ -91,7 +83,8 @@ const case5RootsOfAChildThat = Effect.gen(function* () {
   yield* Effect.promise(() => server.reload([echoFacet]));
   assert.equal(server.codeVersion, 2);
   assert.equal(server.previousCodeVersion, undefined);
-  const loader: FacetLoader = () => Effect.runPromiseWith(services)(Effect.sync(() => []));
+  const loader: chordTypes.FacetLoader = () =>
+    Effect.runPromiseWith(services)(Effect.sync(() => []));
   const worker = createHost({
     loader,
     name: "session:S1",

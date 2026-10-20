@@ -1,4 +1,4 @@
-import type { Op } from "@msa/chord/delta";
+import type deltaTypes from "@msa/chord/delta.types";
 import durable from "@msa/durable";
 import type durableTypes from "@msa/durable/index.types";
 import { Effect } from "effect";
@@ -14,8 +14,9 @@ const { awaited } = effectSupport;
 const { context, documentChanges, flush, openTestSession } = sessionSupport;
 
 function checkpointDocs() {
-  const calls: { value: Readonly<durableTypes.JsonObject>; ops: readonly Op[] }[] = [];
-  const falseCalls: { value: Readonly<durableTypes.JsonObject>; ops: readonly Op[] }[] = [];
+  const calls: { value: Readonly<durableTypes.JsonObject>; ops: readonly deltaTypes.Op[] }[] = [];
+  const falseCalls: { value: Readonly<durableTypes.JsonObject>; ops: readonly deltaTypes.Op[] }[] =
+    [];
   const BaseDoc = defineDoc<{ items: string[] }>({
     checkpointWhen: (value, ops) => {
       calls.push({ ops, value });

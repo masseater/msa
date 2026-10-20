@@ -2,13 +2,15 @@ import * as NodeRuntime from "@effect/platform-node/NodeRuntime";
 import { type ToolResultMessage, Type } from "@msa/ai";
 import { createModels } from "@msa/ai/models";
 import { fauxAssistantMessage, fauxProvider, fauxToolCall } from "@msa/ai/providers/faux";
-import { BACKGROUND_CONTEXT } from "@msa/chord/context";
+import contextModule from "@msa/chord/context";
 import { Console, Effect } from "effect";
 
 import harnessModule from "../../src/harness/index.ts";
 import durable from "../../src/index.ts";
 import node from "../../src/storage/sqlite/node.ts";
 import support from "../support.ts";
+
+const { BACKGROUND_CONTEXT } = contextModule;
 
 const { ToolResultEntry, defineExtension, defineTool } = durable;
 const { Harness, createRegistry } = harnessModule;

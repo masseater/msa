@@ -1,4 +1,4 @@
-import type { Context } from "@msa/chord";
+import type chordTypes from "@msa/chord/index.types";
 import { Effect } from "effect";
 import { describe, expect, it } from "vite-plus/test";
 
@@ -117,7 +117,7 @@ const doesNotStart = Effect.gen(function* () {
   chat.gate.open = deferred();
   const directory = yield* makeTempDir("msa-codemode-models-");
   class SlowTempFiles extends NodeExecutionEnv {
-    override createTempDir(prefix: string | undefined, ctx: Context) {
+    override createTempDir(prefix: string | undefined, ctx: chordTypes.Context) {
       const superCreateTempDir = super.createTempDir.bind(this);
       return runPromise(
         Effect.gen(function* () {

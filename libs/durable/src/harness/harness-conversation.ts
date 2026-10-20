@@ -1,4 +1,4 @@
-import type { AttachedReplicatedState, Context } from "@msa/chord";
+import type chordTypes from "@msa/chord/index.types";
 import { Effect } from "effect";
 
 import entriesModule from "../entries.ts";
@@ -35,24 +35,24 @@ export default class ConversationImpl<Tool extends typesModule.ToolRegistration>
     this.#host = host;
   }
 
-  agent(context: Context): Promise<typesModule.Agent> {
+  agent(context: chordTypes.Context): Promise<typesModule.Agent> {
     return this.#host.harness.resolveAgent(this.id, undefined, context);
   }
 
-  configure(change: typesModule.AgentChange, context: Context): Promise<void> {
+  configure(change: typesModule.AgentChange, context: chordTypes.Context): Promise<void> {
     return this.#host.harness.commitWith((tx) => configure(tx, this.id, change), context);
   }
 
   submit(
     submission: typesModule.SubmissionDraft,
-    context: Context,
+    context: chordTypes.Context,
   ): Promise<typesModule.Submission> {
     return this.#host.submissions.submit(this.id, submission, context);
   }
 
   compact(
     instructions: string | undefined,
-    context: Context,
+    context: chordTypes.Context,
   ): Promise<typesModule.TaskId<typesModule.CompactionResult>> {
     this.#host.tasks.resume();
     const input = {
@@ -65,7 +65,7 @@ export default class ConversationImpl<Tool extends typesModule.ToolRegistration>
     );
   }
 
-  reset(handoff: string | undefined, context: Context): Promise<void> {
+  reset(handoff: string | undefined, context: chordTypes.Context): Promise<void> {
     const model =
       handoff === undefined
         ? {}
@@ -80,12 +80,15 @@ export default class ConversationImpl<Tool extends typesModule.ToolRegistration>
     );
   }
 
-  commit<T>(change: (tx: typesModule.Tx) => T | Promise<T>, context: Context): Promise<T> {
+  commit<T>(
+    change: (tx: typesModule.Tx) => T | Promise<T>,
+    context: chordTypes.Context,
+  ): Promise<T> {
     return this.#host.harness.commitWith(change, context, { conversationId: this.id });
   }
 
   context(
-    context: Context,
+    context: chordTypes.Context,
     options?: { readonly at?: typesModule.EntryId },
   ): Promise<typesModule.ContextView> {
     return Effect.runPromise(
@@ -97,7 +100,7 @@ export default class ConversationImpl<Tool extends typesModule.ToolRegistration>
     query: Omit<typesModule.EntryQuery, "conversationId">,
     limit: number,
     cursor: typesModule.Cursor | undefined,
-    context: Context,
+    context: chordTypes.Context,
   ): Promise<typesModule.Page<typesModule.EntryRecord, typesModule.Cursor>> {
     const bounded = boundedQuery(this.id, query);
     return this.#host.harness.readOnLine(() =>
@@ -108,7 +111,7 @@ export default class ConversationImpl<Tool extends typesModule.ToolRegistration>
   fork(
     at: typesModule.EntryId,
     options: typesModule.ConversationCreateOptions,
-    context: Context,
+    context: chordTypes.Context,
   ): Promise<typesModule.Conversation> {
     return this.#host.create(
       { at, kind: "fork", ownership: options.ownership, parentId: this.id },
@@ -117,21 +120,26 @@ export default class ConversationImpl<Tool extends typesModule.ToolRegistration>
     );
   }
 
-  abort(context: Context, options?: typesModule.ConversationAbortOptions): Promise<void> {
+  abort(
+    context: chordTypes.Context,
+    options?: typesModule.ConversationAbortOptions,
+  ): Promise<void> {
     this.#host.tasks.resume();
     return this.#host.tasks.abortConversation(this.id, options?.background === true, context);
   }
 
-  waitForIdle(context: Context): Promise<void> {
+  waitForIdle(context: chordTypes.Context): Promise<void> {
     this.#host.tasks.resume();
     return this.#host.tasks.waitForIdle(this.id, context);
   }
 
-  viewState(context: Context): Promise<AttachedReplicatedState<viewTypes.ConversationView>> {
+  viewState(
+    context: chordTypes.Context,
+  ): Promise<chordTypes.AttachedReplicatedState<viewTypes.ConversationView>> {
     return this.#host.views.state(this.id, context);
   }
 
-  watch(context: Context): Promise<typesModule.ConversationWatch> {
+  watch(context: chordTypes.Context): Promise<typesModule.ConversationWatch> {
     return this.#host.views.watch(this.id, context);
   }
 }

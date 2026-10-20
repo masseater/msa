@@ -1,9 +1,9 @@
-import type { Context } from "@msa/chord";
+import type chordTypes from "@msa/chord/index.types";
 
 export default class Waiters<K, T> {
   readonly #sets = new Map<K, Set<PromiseWithResolvers<T>>>();
 
-  add(key: K, context: Context): Promise<T> {
+  add(key: K, context: chordTypes.Context): Promise<T> {
     const signal = context.abortSignal;
     if (signal?.aborted === true) return Promise.reject(signal.reason);
     const waiter = Promise.withResolvers<T>();

@@ -1,5 +1,5 @@
 import { Type, createModels, fauxAssistantMessage, fauxText, fauxToolCall } from "@msa/ai";
-import type { Context, JsonValue } from "@msa/chord";
+import type chordTypes from "@msa/chord/index.types";
 import durable from "@msa/durable";
 import harnessModule from "@msa/durable/harness";
 import type durableTypes from "@msa/durable/index.types";
@@ -32,7 +32,7 @@ const {
 
 const seedRunningTask = Effect.fn("seedRunningTask")(function* (storage: durableTypes.Storage) {
   const conversationId = yield* awaited(storage.mintId<durableTypes.ConversationId>());
-  const id = yield* awaited(storage.mintId<durableTypes.TaskId<JsonValue>>());
+  const id = yield* awaited(storage.mintId<durableTypes.TaskId<chordTypes.JsonValue>>());
   const state = { checkpoint: { phase: "run" }, status: "running" } as const;
   const task = {
     background: false,
@@ -78,7 +78,7 @@ const rethrowsOpenError = Effect.gen(function* () {
   const runPromise = Effect.runPromiseWith(yield* Effect.context<never>());
 
   class FailingClose extends ControlledStorage {
-    override close(closeContext: Context): Promise<void> {
+    override close(closeContext: chordTypes.Context): Promise<void> {
       const superClose = super.close.bind(this);
       return runPromise(
         Effect.gen(function* () {

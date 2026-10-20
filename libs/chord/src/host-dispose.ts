@@ -1,30 +1,31 @@
 import { Cause, Effect, Exit } from "effect";
 import { dual } from "effect/Function";
 
-import type { ObjectImpl } from "./object.ts";
-import { deepEqual } from "./schema.ts";
+import type hostDisposeTypes from "./host-dispose.types.ts";
+import type objectTypes from "./object.types.ts";
+import schemaModule from "./schema.ts";
 
-export interface Disposal {
-  readonly objects: readonly ObjectImpl[];
-  readonly reason: unknown;
-  readonly message: string;
-}
+const { deepEqual } = schemaModule;
 
-const heldBy = (object: ObjectImpl): Set<ObjectImpl> => {
-  const result = new Set<ObjectImpl>();
+const heldBy = (object: objectTypes.ObjectImpl): Set<objectTypes.ObjectImpl> => {
+  const result = new Set<objectTypes.ObjectImpl>();
   for (const decls of object.allDecls()) {
     for (const ref of decls.refs.values()) if (ref.object !== undefined) result.add(ref.object);
   }
   return result;
 };
 
-export const disposeHoldersFirst = ({ objects, reason, message }: Disposal): Effect.Effect<void> =>
+const disposeHoldersFirst = ({
+  objects,
+  reason,
+  message,
+}: hostDisposeTypes.Disposal): Effect.Effect<void> =>
   Effect.gen(function* () {
     const remaining = new Set(objects);
     const refs = new Map(objects.map((object) => [object, heldBy(object)] as const));
     const errors: unknown[] = [];
     while (remaining.size > 0) {
-      const heldByRemaining = new Set<ObjectImpl>();
+      const heldByRemaining = new Set<objectTypes.ObjectImpl>();
       for (const object of remaining)
         for (const target of refs.get(object) ?? []) heldByRemaining.add(target);
       let wave = [...remaining].filter((object) => !heldByRemaining.has(object));
@@ -41,7 +42,7 @@ export const disposeHoldersFirst = ({ objects, reason, message }: Disposal): Eff
     if (errors.length > 1) return yield* Effect.die(new AggregateError(errors, message));
   });
 
-export const matchesPattern: {
+const matchesPattern: {
   (principal: unknown): (pattern: Readonly<Record<string, unknown>>) => boolean;
   (pattern: Readonly<Record<string, unknown>>, principal: unknown): boolean;
 } = dual(
@@ -53,3 +54,10 @@ export const matchesPattern: {
       deepEqual((principal as Record<string, unknown>)[key], value),
     ),
 );
+
+const hostDispose = {
+  disposeHoldersFirst,
+  matchesPattern,
+};
+
+export default hostDispose;

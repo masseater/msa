@@ -1,10 +1,12 @@
-import type { ReplicatedStateSourceAttachment, ReplicatedStateSourceFrame } from "@msa/chord";
+import type chordTypes from "@msa/chord/index.types";
 
-export default class SessionSourceAttachment<T> implements ReplicatedStateSourceAttachment<T> {
+export default class SessionSourceAttachment<
+  T,
+> implements chordTypes.ReplicatedStateSourceAttachment<T> {
   readonly snapshot: { readonly value: T; readonly cursor: number };
   #release: (() => void) | undefined;
-  readonly #frames: ReplicatedStateSourceFrame<T>[] = [];
-  #listener: ((frame: ReplicatedStateSourceFrame<T>) => void) | undefined;
+  readonly #frames: chordTypes.ReplicatedStateSourceFrame<T>[] = [];
+  #listener: ((frame: chordTypes.ReplicatedStateSourceFrame<T>) => void) | undefined;
   #activated = false;
   #disposed = false;
   #scheduled = false;
@@ -15,7 +17,7 @@ export default class SessionSourceAttachment<T> implements ReplicatedStateSource
     this.#release = release;
   }
 
-  activate(listener: (frame: ReplicatedStateSourceFrame<T>) => void): void {
+  activate(listener: (frame: chordTypes.ReplicatedStateSourceFrame<T>) => void): void {
     if (this.#activated) throw new Error("State attachment is already active");
     if (this.#disposed) throw new Error("State attachment is disposed");
     this.#activated = true;
@@ -23,7 +25,7 @@ export default class SessionSourceAttachment<T> implements ReplicatedStateSource
     this.#drain();
   }
 
-  publish(frame: ReplicatedStateSourceFrame<T>): void {
+  publish(frame: chordTypes.ReplicatedStateSourceFrame<T>): void {
     if (this.#disposed) return;
     this.#frames.push(frame);
     if (!this.#activated || this.#delivering || this.#scheduled) return;

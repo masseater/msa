@@ -1,4 +1,4 @@
-import type { Context } from "@msa/chord";
+import type chordTypes from "@msa/chord/index.types";
 import { Effect, Function } from "effect";
 
 import eventsAttach from "./events-attach.ts";
@@ -12,7 +12,7 @@ const { attachEvents } = eventsAttach;
 const openStream = Effect.fnUntraced(function* (
   harness: typesModule.Harness,
   conversationId: typesModule.ConversationId,
-  context: Context,
+  context: chordTypes.Context,
 ) {
   const views = conversationViews(harness);
   const { snapshot, watch } = yield* attachEvents(views, conversationId, context);
@@ -34,12 +34,15 @@ const openStream = Effect.fnUntraced(function* (
 const watchEvents: typesModule.Dual3<
   typesModule.Harness,
   typesModule.ConversationId,
-  Context,
+  chordTypes.Context,
   Promise<eventsTypesModule.AgentEventStream>
 > = Function.dual(
   3,
-  (harness: typesModule.Harness, conversationId: typesModule.ConversationId, context: Context) =>
-    Effect.runPromise(openStream(harness, conversationId, context)),
+  (
+    harness: typesModule.Harness,
+    conversationId: typesModule.ConversationId,
+    context: chordTypes.Context,
+  ) => Effect.runPromise(openStream(harness, conversationId, context)),
 );
 
 const eventsModule = {

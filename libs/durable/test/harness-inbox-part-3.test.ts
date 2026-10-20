@@ -4,7 +4,7 @@ import {
   type Usage,
   fauxAssistantMessage,
 } from "@msa/ai";
-import type { Op } from "@msa/chord/delta";
+import type deltaTypes from "@msa/chord/delta.types";
 import type durableTypes from "@msa/durable/index.types";
 import type memoryTypes from "@msa/durable/storage/memory.types";
 import { Effect } from "effect";
@@ -263,7 +263,7 @@ const recordsUsageNumeric = Effect.gen(function* () {
   const setup = chatSetup();
   setup.faux.setResponses([answer("one"), answer("two")]);
   const { harness, root } = yield* openChat(new MemoryStorage(), setup);
-  const commits: { entries: number; ops: readonly Op[] }[] = [];
+  const commits: { entries: number; ops: readonly deltaTypes.Op[] }[] = [];
   harness.subscribeCommits((publication) => {
     for (const change of documentChanges(publication)) {
       if (change.record.kind !== "msa.usage") continue;

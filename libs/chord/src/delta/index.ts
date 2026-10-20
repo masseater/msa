@@ -1,23 +1,33 @@
-export type { JsonValue } from "../json.ts";
-export { apply, applyImmutable, applyImmutableBatches } from "./apply.ts";
-export { type Decoder, decoder } from "./decode.ts";
-export { diffRevisions } from "./diff.ts";
-export type { Draft } from "./draft.ts";
-export { type Encoder, encoder } from "./encode.ts";
-export {
-  isBase,
-  isReplace,
-  type NonEmptyPath,
-  type Op,
-  type Path,
-  type PathRef,
-  RESERVED_SEGMENTS,
-  type Seg,
-  type WireOp,
-} from "./ops.ts";
-export { overlap } from "./overlap.ts";
-export { PathError } from "./path-error.ts";
-export { type Change, type Prepared, type Tracker, track } from "./tracker.ts";
-export { UnsafePathError } from "./unsafe-path-error.ts";
-export { assertSafePath, assertValidOp } from "./validate.ts";
-export { assertValidWireOp } from "./wire-ops.ts";
+import diff from "./diff.ts";
+import encodeModule from "./encode.ts";
+import indexKit from "./index-kit.ts";
+import opsModule from "./ops.ts";
+import overlapModule from "./overlap.ts";
+import PathError from "./path-error.ts";
+import trackerContext from "./tracker-context.ts";
+import UnsafePathError from "./unsafe-path-error.ts";
+import validate from "./validate.ts";
+import wireOps from "./wire-ops.ts";
+
+const { apply: applyModule, decode: decodeModule } = indexKit;
+
+const delta = {
+  PathError: PathError,
+  RESERVED_SEGMENTS: opsModule.RESERVED_SEGMENTS,
+  UnsafePathError: UnsafePathError,
+  apply: applyModule.apply,
+  applyImmutable: applyModule.applyImmutable,
+  applyImmutableBatches: applyModule.applyImmutableBatches,
+  assertSafePath: validate.assertSafePath,
+  assertValidOp: validate.assertValidOp,
+  assertValidWireOp: wireOps.assertValidWireOp,
+  decoder: decodeModule.decoder,
+  diffRevisions: diff.diffRevisions,
+  encoder: encodeModule.encoder,
+  isBase: opsModule.isBase,
+  isReplace: opsModule.isReplace,
+  overlap: overlapModule.overlap,
+  track: trackerContext.track,
+};
+
+export default delta;

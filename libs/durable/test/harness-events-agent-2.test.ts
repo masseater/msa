@@ -1,5 +1,5 @@
 import { Type, fauxAssistantMessage, fauxText, fauxToolCall } from "@msa/ai";
-import type { Draft } from "@msa/chord";
+import type chordTypes from "@msa/chord/index.types";
 import durable from "@msa/durable";
 import harnessModule from "@msa/durable/harness";
 import memory from "@msa/durable/storage/memory";
@@ -33,7 +33,7 @@ const liveChangeSequenceStep1 = Effect.fn("liveChangeSequenceStep1")(function* (
 
   const { harness, root } = yield* openChat(new MemoryStorage(), chatSetup());
   const { stream, batches } = yield* listen(harness, root);
-  const change = (edit: (live: Draft<harnessEventsAgent2TestTypes.LiveState>) => void) =>
+  const change = (edit: (live: chordTypes.Draft<harnessEventsAgent2TestTypes.LiveState>) => void) =>
     root.commit(
       (tx) =>
         runPromise(

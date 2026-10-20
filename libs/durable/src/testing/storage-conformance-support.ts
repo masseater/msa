@@ -1,11 +1,13 @@
-import type { JsonValue } from "@msa/chord";
-import { BACKGROUND_CONTEXT } from "@msa/chord/context";
+import contextModule from "@msa/chord/context";
+import type chordTypes from "@msa/chord/index.types";
 import { Cause, Effect, Exit, Function, Schema } from "effect";
 
 import types from "../types.ts";
 import type typesModule from "../types.types.ts";
 import type storageConformanceSupportTypes from "./storage-conformance-support.types.ts";
 import type typesModuleModule from "./types.ts";
+
+const { BACKGROUND_CONTEXT } = contextModule;
 
 const { ROOT_CONVERSATION_ID } = types;
 
@@ -32,7 +34,7 @@ const createRoot = (storage: typesModule.Storage): Effect.Effect<typesModule.Con
 const isDataFirst = (args: IArguments): boolean => typeof args[1] === "number";
 
 const storedPendingTask = (
-  id: typesModule.TaskId<JsonValue>,
+  id: typesModule.TaskId<chordTypes.JsonValue>,
   conversationId: typesModule.ConversationId,
   phase = "ready",
 ) =>
@@ -53,9 +55,9 @@ const pendingTask: {
   (
     conversationId: typesModule.ConversationId,
     phase?: string,
-  ): (id: typesModule.TaskId<JsonValue>) => PendingTask;
+  ): (id: typesModule.TaskId<chordTypes.JsonValue>) => PendingTask;
   (
-    id: typesModule.TaskId<JsonValue>,
+    id: typesModule.TaskId<chordTypes.JsonValue>,
     conversationId: typesModule.ConversationId,
     phase?: string,
   ): PendingTask;

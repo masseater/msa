@@ -4,21 +4,20 @@ import * as NodeSink from "@effect/platform-node/NodeSink";
 import * as NodeStream from "@effect/platform-node/NodeStream";
 import { Config, Deferred, Effect, Option, Scope } from "effect";
 
-import { ChordError } from "./errors.ts";
-import { StreamChannel } from "./ipc-channel.ts";
-import type { IpcChannel } from "./link-ipc.ts";
-import { acquireProcessLock } from "./manager-lock.ts";
-import {
-  CHANNEL_FDS,
-  type ControlMessage,
-  controlOf,
-  ignoreSendError,
-  LOCK_ENV,
-} from "./manager-types.ts";
+import errorsModule from "./errors.ts";
+import StreamChannel from "./ipc-channel.ts";
+import type linkIpcTypes from "./link-ipc.types.ts";
+import managerLock from "./manager-lock.ts";
+import managerTypes from "./manager-types.ts";
+import type managerTypesModule from "./manager-types.types.ts";
 
-const fatalMessage = (error: unknown): ControlMessage => ({
-  type: "fatal",
+const { ChordError } = errorsModule;
+const { CHANNEL_FDS, LOCK_ENV, controlOf, ignoreSendError } = managerTypes;
+const { acquireProcessLock } = managerLock;
+
+const fatalMessage = (error: unknown): managerTypesModule.ControlMessage => ({
   message: error instanceof Error ? error.message : String(error),
+  type: "fatal",
   ...(error instanceof ChordError && error.reason !== undefined ? { reason: error.reason } : {}),
 });
 
@@ -30,7 +29,7 @@ const lockFromEnvironment = Effect.fn(function* (fatal: (error: unknown) => void
   );
 });
 
-const openParentChannel = (): IpcChannel => {
+const openParentChannel = (): linkIpcTypes.IpcChannel => {
   const channel = new StreamChannel();
   const incoming = NodeStream.fromReadable({
     evaluate: () => new Socket({ fd: CHANNEL_FDS.toChild, readable: true, writable: false }),
@@ -43,14 +42,14 @@ const openParentChannel = (): IpcChannel => {
   return channel;
 };
 
-let parent: IpcChannel | undefined;
+let parent: linkIpcTypes.IpcChannel | undefined;
 
-export const parentChannel = (): IpcChannel => {
+const parentChannel = (): linkIpcTypes.IpcChannel => {
   parent ??= openParentChannel();
   return parent;
 };
 
-export function childControl(channel: IpcChannel = parentChannel()): {
+function childControl(channel: linkIpcTypes.IpcChannel = parentChannel()): {
   readonly init: Promise<unknown>;
   lock(): Promise<void>;
   ready(): void;
@@ -58,7 +57,7 @@ export function childControl(channel: IpcChannel = parentChannel()): {
   report(status: { activeCalls?: number; viewers?: number; durableTasks?: number }): void;
   onShutdown(handler: () => void | Promise<void>): void;
 } {
-  const send = (message: ControlMessage): void => {
+  const send = (message: managerTypesModule.ControlMessage): void => {
     if (channel.connected) channel.send({ chord2control: message }, ignoreSendError);
   };
   const init = Deferred.makeUnsafe<unknown>();
@@ -70,11 +69,18 @@ export function childControl(channel: IpcChannel = parentChannel()): {
   });
   const fatal = (error: unknown): void => send(fatalMessage(error));
   return {
+    fatal,
     init: Effect.runPromise(Deferred.await(init)),
     lock: () => Effect.runPromise(lockFromEnvironment(fatal)),
-    ready: () => send({ type: "ready" }),
-    fatal,
-    report: (status) => send({ type: "status", ...status }),
     onShutdown: (handler) => shutdown.add(handler),
+    ready: () => send({ type: "ready" }),
+    report: (status) => send({ type: "status", ...status }),
   };
 }
+
+const managerChild = {
+  childControl,
+  parentChannel,
+};
+
+export default managerChild;

@@ -4,10 +4,12 @@ import { Effect } from "effect";
 import { Type } from "typebox";
 import { describe, it } from "vite-plus/test";
 
-import { createHost, hostNamed, local, memoryLinkPair, method, remote } from "../src/index.ts";
+import chord from "../src/index.ts";
 import bindings from "./fixtures/bindings.ts";
 import counting from "./fixtures/counting.ts";
 import timing from "./fixtures/timing.ts";
+
+const { createHost, hostNamed, local, memoryLinkPair, method, remote } = chord;
 
 const { NoteSchema, Notes, setup, until } = bindings;
 const { CountingLink, stateFrames } = counting;

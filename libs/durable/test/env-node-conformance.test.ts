@@ -1,4 +1,4 @@
-import { BACKGROUND_CONTEXT } from "@msa/chord/context";
+import contextModule from "@msa/chord/context";
 import { Effect } from "effect";
 import { afterEach, describe, expect, it } from "vite-plus/test";
 
@@ -9,6 +9,8 @@ import node from "../src/env/node.ts";
 import nodeProcess from "../src/env/node/node-process.ts";
 import testing from "../src/testing/index.ts";
 import testSupport from "./support.ts";
+
+const { BACKGROUND_CONTEXT } = contextModule;
 
 const { environmentVariable } = nodeProcess;
 const { registerEnvConformance } = testing;

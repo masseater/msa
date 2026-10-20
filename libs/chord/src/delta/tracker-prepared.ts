@@ -1,13 +1,20 @@
-import { abortContext } from "./tracker-paths.ts";
-import { type Op, type OverlayContext, PREPARED, type Prepared } from "./tracker-types.ts";
+import trackerPaths from "./tracker-paths.ts";
+import trackerTypes from "./tracker-types.ts";
+import type trackerTypesModule from "./tracker-types.types.ts";
 
-export class PreparedImpl<T extends object> implements Prepared<T> {
-  readonly #context: OverlayContext;
+const { PREPARED } = trackerTypes;
+
+export default class PreparedImpl<T extends object> implements trackerTypesModule.Prepared<T> {
+  readonly #context: trackerTypesModule.OverlayContext;
   readonly value: T;
   readonly base: T;
-  readonly ops: readonly Op[];
+  readonly ops: readonly trackerTypesModule.Op[];
 
-  constructor(context: OverlayContext, value: T, operations: readonly Op[]) {
+  constructor(
+    context: trackerTypesModule.OverlayContext,
+    value: T,
+    operations: readonly trackerTypesModule.Op[],
+  ) {
     this.#context = context;
     this.value = value;
     this.base = context.baseValue as T;
@@ -20,6 +27,6 @@ export class PreparedImpl<T extends object> implements Prepared<T> {
   }
 
   abort(): void {
-    abortContext(this.#context);
+    trackerPaths.abortContext(this.#context);
   }
 }

@@ -1,10 +1,12 @@
 import * as NodeRuntime from "@effect/platform-node/NodeRuntime";
-import { BACKGROUND_CONTEXT } from "@msa/chord/context";
+import contextModule from "@msa/chord/context";
 import { Console, Effect } from "effect";
 
 import sessionModule from "../../src/session/index.ts";
 import memory from "../../src/storage/memory.ts";
 import effectSupport from "../effect-support.ts";
+
+const { BACKGROUND_CONTEXT } = contextModule;
 
 const { createSession } = sessionModule;
 const { MemoryStorage } = memory;

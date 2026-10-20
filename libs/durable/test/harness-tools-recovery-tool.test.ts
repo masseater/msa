@@ -1,4 +1,4 @@
-import type { JsonValue } from "@msa/chord";
+import type chordTypes from "@msa/chord/index.types";
 import durable from "@msa/durable";
 import { Effect } from "effect";
 import { afterEach, describe, expect, it } from "vite-plus/test";
@@ -28,7 +28,10 @@ const letsContextDerivation = Effect.gen(function* () {
   addTool(
     setup.registry,
     tool("bad", () =>
-      Promise.resolve({ details: { fn: (() => 1) as unknown as JsonValue }, output: [] }),
+      Promise.resolve({
+        details: { fn: (() => 1) as unknown as chordTypes.JsonValue },
+        output: [],
+      }),
     ),
   );
   const requests: string[] = [];

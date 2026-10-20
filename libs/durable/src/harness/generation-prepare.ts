@@ -1,4 +1,4 @@
-import type { Context } from "@msa/chord";
+import type chordTypes from "@msa/chord/index.types";
 import { Effect } from "effect";
 
 import generationCommit from "./generation-commit.ts";
@@ -18,7 +18,7 @@ type PrepareTask = typesModule.RunningTask<
 const preparePhase = Effect.fnUntraced(function* (
   task: PrepareTask,
   runtime: generationTypesModule.GenerationRuntime,
-  context: Context,
+  context: chordTypes.Context,
 ) {
   const agent = yield* Effect.promise(() => runtime.agent(context));
   const { model, thinkingLevel } = agent;

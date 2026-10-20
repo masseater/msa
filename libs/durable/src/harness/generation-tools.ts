@@ -1,6 +1,6 @@
 import type { AssistantMessage, ToolCall } from "@msa/ai";
 import { getCurrentTools } from "@msa/ai/utils/transcript";
-import type { Context } from "@msa/chord";
+import type chordTypes from "@msa/chord/index.types";
 import { Effect, Function } from "effect";
 
 import bridge from "./bridge.ts";
@@ -82,7 +82,7 @@ const isSequential = Effect.fnUntraced(function* (
   runtime: generationToolsTypes.GenerationRuntime,
   calls: readonly ToolCall[],
   offered: ReadonlySet<string>,
-  context: Context,
+  context: chordTypes.Context,
 ) {
   if (runtime.settings.toolExecution === "sequential") return true;
   const agent = yield* Effect.promise(() => runtime.agent(context));
@@ -98,7 +98,7 @@ const startToolRound = Effect.fnUntraced(function* (
   request: generationToolsTypes.GenerationRequest,
   message: AssistantMessage,
   calls: readonly ToolCall[],
-  context: Context,
+  context: chordTypes.Context,
 ) {
   const { conversationId } = runtime;
   const messages =

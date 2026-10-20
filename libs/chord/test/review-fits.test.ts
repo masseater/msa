@@ -5,8 +5,11 @@ import { Type } from "typebox";
 import { Value } from "typebox/value";
 import { describe, it } from "vite-plus/test";
 
-import { createHost, hostNamed, method, remote } from "../src/index.ts";
-import { fits } from "../src/schema.ts";
+import chord from "../src/index.ts";
+import schemaModule from "../src/schema.ts";
+
+const { fits } = schemaModule;
+const { createHost, hostNamed, method, remote } = chord;
 
 const case11FitsHasNoFalsePositives = (): void => {
   const cases = [

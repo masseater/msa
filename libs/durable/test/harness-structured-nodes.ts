@@ -1,4 +1,4 @@
-import type { Context } from "@msa/chord";
+import type chordTypes from "@msa/chord/index.types";
 import durable from "@msa/durable";
 import type durableTypes from "@msa/durable/index.types";
 import { Effect } from "effect";
@@ -39,7 +39,7 @@ const script: {
 
 function defaultRunImpl(
   runtime: harnessStructuredSupportTypes.NodeRuntime,
-  ctx: Context,
+  ctx: chordTypes.Context,
   name: string,
 ): Promise<void> {
   return Effect.runPromise(
@@ -53,12 +53,12 @@ function defaultRunImpl(
 
 const defaultRun: {
   (
-    ctx: Context,
+    ctx: chordTypes.Context,
     name: string,
   ): (runtime: harnessStructuredSupportTypes.NodeRuntime) => ReturnType<typeof defaultRunImpl>;
   (
     runtime: harnessStructuredSupportTypes.NodeRuntime,
-    ctx: Context,
+    ctx: chordTypes.Context,
     name: string,
   ): ReturnType<typeof defaultRunImpl>;
 } = dual(3, defaultRunImpl);

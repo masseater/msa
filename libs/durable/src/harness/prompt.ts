@@ -1,6 +1,6 @@
 import type { Tool as AiTool, Message, SystemMessage, ToolReference } from "@msa/ai";
 import { declarationsEqual, getCurrentTools, toToolDeclaration } from "@msa/ai/utils/transcript";
-import type { Context } from "@msa/chord";
+import type chordTypes from "@msa/chord/index.types";
 import { Cause, Effect, Exit, Function } from "effect";
 
 import entriesModule from "../entries.ts";
@@ -25,7 +25,7 @@ type RenderRequest<Tool extends typesModule.ToolRegistration> = {
   readonly input: typesModule.PromptInput<Tool>;
   readonly shown: ReadonlyMap<string, string>;
   readonly report: (error: unknown) => void;
-  readonly context: Context;
+  readonly context: chordTypes.Context;
 };
 
 const renderSection = <Tool extends typesModule.ToolRegistration>(
@@ -58,14 +58,14 @@ const renderSections: {
     input: typesModule.PromptInput<Tool>,
     shown: ReadonlyMap<string, string>,
     report: (error: unknown) => void,
-    context: Context,
+    context: chordTypes.Context,
   ): (sections: readonly typesModule.PromptSection<Tool>[]) => Effect.Effect<Map<string, string>>;
   <Tool extends typesModule.ToolRegistration>(
     sections: readonly typesModule.PromptSection<Tool>[],
     input: typesModule.PromptInput<Tool>,
     shown: ReadonlyMap<string, string>,
     report: (error: unknown) => void,
-    context: Context,
+    context: chordTypes.Context,
   ): Effect.Effect<Map<string, string>>;
 } = Function.dual(
   5,
@@ -74,7 +74,7 @@ const renderSections: {
     input: typesModule.PromptInput<Tool>,
     shown: ReadonlyMap<string, string>,
     report: (error: unknown) => void,
-    context: Context,
+    context: chordTypes.Context,
   ) {
     const desired = new Map<string, string>();
     const request = { context, input, report, shown };

@@ -1,4 +1,4 @@
-import type { JsonValue } from "@msa/chord";
+import type chordTypes from "@msa/chord/index.types";
 import durable from "@msa/durable";
 import type durableTypes from "@msa/durable/index.types";
 import { DateTime, Effect } from "effect";
@@ -215,7 +215,7 @@ const rollsBackPreparedStep1 = Effect.gen(function* () {
                 abortRequested: false,
                 background: false,
                 conversationId,
-                id: idFromNumber<durableTypes.TaskId<JsonValue>>(999),
+                id: idFromNumber<durableTypes.TaskId<chordTypes.JsonValue>>(999),
                 input: null,
                 kind: "missing",
                 state: { checkpoint: { phase: "start" }, status: "pending" },

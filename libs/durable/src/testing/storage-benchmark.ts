@@ -1,4 +1,4 @@
-import type { JsonValue } from "@msa/chord";
+import type chordTypes from "@msa/chord/index.types";
 import { Function } from "effect";
 
 import type dualTypes from "../dual.ts";
@@ -41,7 +41,7 @@ function storageBenchmarkPrimaryRecordCount(
 }
 
 const benchmarkTask = (
-  id: typesModule.TaskId<JsonValue>,
+  id: typesModule.TaskId<chordTypes.JsonValue>,
   index: number,
 ): storageBenchmarkTypes.StoredTask => {
   const status = index % 3 === 0 ? "pending" : index % 3 === 1 ? "running" : "terminal";
@@ -61,7 +61,7 @@ const benchmarkTask = (
 };
 
 const task: dualTypes.Dual2<
-  typesModule.TaskId<JsonValue>,
+  typesModule.TaskId<chordTypes.JsonValue>,
   number,
   storageBenchmarkTypes.StoredTask
 > = Function.dual(2, benchmarkTask);

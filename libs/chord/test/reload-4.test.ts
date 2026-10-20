@@ -4,9 +4,12 @@ import { Effect } from "effect";
 import { Type } from "typebox";
 import { describe, it } from "vite-plus/test";
 
-import { type Ctx, type Facet, defineRegistry, isChordError, local, method } from "../src/index.ts";
+import chord from "../src/index.ts";
+import type chordTypes from "../src/index.types.ts";
 import reloadModule from "./fixtures/reload.ts";
 import timing from "./fixtures/timing.ts";
+
+const { defineRegistry, isChordError, local, method } = chord;
 
 const { CountV1, Greeter, greeterFacet, quiet, until } = reloadModule;
 const { latch, tick } = timing;
@@ -16,7 +19,7 @@ const keepsRegistryTablesPerCodeVersion = Effect.gen(function* () {
   const host = quiet();
   const Routes = defineRegistry<string>("t.reload-routes");
   const Router = local("t.router", { input: Type.Object({}), version: 1 });
-  const facet = (value: string): Facet => ({
+  const facet = (value: string): chordTypes.Facet => ({
     name: "router",
     setup: (api) =>
       api.serve(
@@ -65,11 +68,11 @@ const aReloadCanAddAType = Effect.gen(function* () {
     members: { now: method(undefined, Type.Number()) },
     version: 1,
   });
-  const clockFacet: Facet = {
+  const clockFacet: chordTypes.Facet = {
     name: "clock",
     setup: (api) => api.serve(Clock, () => ({ now: () => 42 })),
   };
-  const consumer = (fail: boolean): Facet => ({
+  const consumer = (fail: boolean): chordTypes.Facet => ({
     name: "greeter",
     setup: (api) =>
       api.serve(Greeter, (_input, _principal, self) => {
@@ -78,7 +81,7 @@ const aReloadCanAddAType = Effect.gen(function* () {
         if (fail) throw new Error("consumer fails");
         return {
           count,
-          greet: (name: string, ctx: Ctx) =>
+          greet: (name: string, ctx: chordTypes.Ctx) =>
             Effect.runPromiseWith(services)(
               Effect.gen(function* () {
                 return `${yield* Effect.promise(() => clock.now(ctx))} ${name}`;

@@ -1,4 +1,4 @@
-import type { Context, JsonValue } from "@msa/chord";
+import type chordTypes from "@msa/chord/index.types";
 import { Deferred, Effect } from "effect";
 
 import errors from "../errors.ts";
@@ -10,7 +10,11 @@ const { promiseTry } = promiseTryModule;
 const { SessionFailed, StorageRequestError } = errors;
 
 type EntryRead = { readonly entry: typesModule.EntryRecord; readonly commitSeq: typesModule.Seq };
-type AnyTaskRecord = typesModule.TaskRecord<JsonValue, JsonValue, JsonValue>;
+type AnyTaskRecord = typesModule.TaskRecord<
+  chordTypes.JsonValue,
+  chordTypes.JsonValue,
+  chordTypes.JsonValue
+>;
 
 export default class GuardedStorage implements typesModule.Storage {
   readonly #storage: typesModule.Storage;
@@ -24,7 +28,10 @@ export default class GuardedStorage implements typesModule.Storage {
     this.#latch = latch;
   }
 
-  commit(writes: readonly typesModule.StorageWrite[], context: Context): Promise<typesModule.Seq> {
+  commit(
+    writes: readonly typesModule.StorageWrite[],
+    context: chordTypes.Context,
+  ): Promise<typesModule.Seq> {
     return this.#call(undefined, () => this.#storage.commit(writes, context));
   }
 
@@ -34,7 +41,7 @@ export default class GuardedStorage implements typesModule.Storage {
 
   conversation(
     id: typesModule.ConversationId,
-    context: Context,
+    context: chordTypes.Context,
   ): Promise<typesModule.ConversationRecord | undefined> {
     return this.#call(context, () => this.#storage.conversation(id, context));
   }
@@ -43,26 +50,26 @@ export default class GuardedStorage implements typesModule.Storage {
     query: typesModule.ConversationQuery,
     limit: number,
     cursor: typesModule.Cursor | undefined,
-    context: Context,
+    context: chordTypes.Context,
   ): Promise<typesModule.Page<typesModule.ConversationRecord, typesModule.Cursor>> {
     return this.#call(context, () =>
       this.#storage.scanConversations(query, limit, cursor, context),
     );
   }
 
-  entry(id: typesModule.EntryId, context: Context): Promise<EntryRead | undefined>;
+  entry(id: typesModule.EntryId, context: chordTypes.Context): Promise<EntryRead | undefined>;
   entry(
     conversationId: typesModule.ConversationId,
     id: typesModule.EntryId,
-    context: Context,
+    context: chordTypes.Context,
   ): Promise<EntryRead | undefined>;
   entry(
     first: typesModule.EntryId | typesModule.ConversationId,
-    second: typesModule.EntryId | Context,
-    third?: Context,
+    second: typesModule.EntryId | chordTypes.Context,
+    third?: chordTypes.Context,
   ): Promise<EntryRead | undefined> {
     if (third === undefined) {
-      const context = second as Context;
+      const context = second as chordTypes.Context;
       return this.#call(context, () => this.#storage.entry(first as typesModule.EntryId, context));
     }
     return this.#call(third, () =>
@@ -77,7 +84,7 @@ export default class GuardedStorage implements typesModule.Storage {
   findLatestHeadMarker(
     conversationId: typesModule.ConversationId,
     atOrBeforeEntryId: typesModule.EntryId | undefined,
-    context: Context,
+    context: chordTypes.Context,
   ): Promise<(typesModule.EntryRecord & { readonly head: typesModule.EntryId }) | undefined> {
     return this.#call(context, () =>
       this.#storage.findLatestHeadMarker(conversationId, atOrBeforeEntryId, context),
@@ -88,12 +95,12 @@ export default class GuardedStorage implements typesModule.Storage {
     query: typesModule.EntryQuery,
     limit: number,
     cursor: typesModule.Cursor | undefined,
-    context: Context,
+    context: chordTypes.Context,
   ): Promise<typesModule.Page<typesModule.EntryRecord, typesModule.Cursor>> {
     return this.#call(context, () => this.#storage.scanEntries(query, limit, cursor, context));
   }
 
-  task(id: typesModule.TaskId, context: Context): Promise<AnyTaskRecord | undefined> {
+  task(id: typesModule.TaskId, context: chordTypes.Context): Promise<AnyTaskRecord | undefined> {
     return this.#call(context, () => this.#storage.task(id, context));
   }
 
@@ -101,14 +108,14 @@ export default class GuardedStorage implements typesModule.Storage {
     query: typesModule.TaskQuery,
     limit: number,
     cursor: typesModule.Cursor | undefined,
-    context: Context,
+    context: chordTypes.Context,
   ): Promise<typesModule.Page<AnyTaskRecord, typesModule.Cursor>> {
     return this.#call(context, () => this.#storage.scanTasks(query, limit, cursor, context));
   }
 
   submission(
     id: typesModule.SubmissionId,
-    context: Context,
+    context: chordTypes.Context,
   ): Promise<typesModule.SubmissionRecord | undefined> {
     return this.#call(context, () => this.#storage.submission(id, context));
   }
@@ -117,7 +124,7 @@ export default class GuardedStorage implements typesModule.Storage {
     query: typesModule.SubmissionQuery,
     limit: number,
     cursor: typesModule.Cursor | undefined,
-    context: Context,
+    context: chordTypes.Context,
   ): Promise<typesModule.Page<typesModule.SubmissionRecord, typesModule.Cursor>> {
     return this.#call(context, () => this.#storage.scanSubmissions(query, limit, cursor, context));
   }
@@ -125,7 +132,7 @@ export default class GuardedStorage implements typesModule.Storage {
   submissionByRequest(
     conversationId: typesModule.ConversationId,
     requestId: string,
-    context: Context,
+    context: chordTypes.Context,
   ): Promise<typesModule.SubmissionRecord | undefined> {
     return this.#call(context, () =>
       this.#storage.submissionByRequest(conversationId, requestId, context),
@@ -135,7 +142,7 @@ export default class GuardedStorage implements typesModule.Storage {
   findDocument(
     address: typesModule.DocumentAddress,
     at: typesModule.DocumentPoint,
-    context: Context,
+    context: chordTypes.Context,
   ): Promise<typesModule.DocumentRecord | undefined> {
     return this.#call(context, () => this.#storage.findDocument(address, at, context));
   }
@@ -143,7 +150,7 @@ export default class GuardedStorage implements typesModule.Storage {
   document(
     id: typesModule.DocumentId,
     at: typesModule.DocumentPoint,
-    context: Context,
+    context: chordTypes.Context,
   ): Promise<typesModule.StoredDocument | undefined> {
     return this.#call(context, () => this.#storage.document(id, at, context));
   }
@@ -152,12 +159,12 @@ export default class GuardedStorage implements typesModule.Storage {
     query: typesModule.DocumentQuery,
     limit: number,
     cursor: typesModule.Cursor | undefined,
-    context: Context,
+    context: chordTypes.Context,
   ): Promise<typesModule.Page<typesModule.DocumentRecord, typesModule.Cursor>> {
     return this.#call(context, () => this.#storage.scanDocuments(query, limit, cursor, context));
   }
 
-  close(context: Context): Promise<void> {
+  close(context: chordTypes.Context): Promise<void> {
     this.#closing = true;
     return Effect.runPromise(
       Effect.andThen(
@@ -181,7 +188,7 @@ export default class GuardedStorage implements typesModule.Storage {
     }
   }
 
-  #call<T>(read: Context | undefined, run: () => Promise<T>): Promise<T> {
+  #call<T>(read: chordTypes.Context | undefined, run: () => Promise<T>): Promise<T> {
     try {
       this.#assertHealthy();
       if (this.#closing) throw new Error("Session is closed");
@@ -205,7 +212,7 @@ export default class GuardedStorage implements typesModule.Storage {
     );
   }
 
-  #failed(read: Context | undefined, error: unknown): unknown {
+  #failed(read: chordTypes.Context | undefined, error: unknown): unknown {
     this.#assertHealthy();
     const exempt =
       read !== undefined &&

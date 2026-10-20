@@ -1,50 +1,52 @@
 import { Console, Effect, Random, Scope } from "effect";
 
-import type { Connection } from "./connection.ts";
-import type { HostCore } from "./core.ts";
-import type { Decls } from "./decls.ts";
-import type { CodeVersionState, Facet, HostOptions } from "./host-types.ts";
-import type { ObjectImpl } from "./object.ts";
-import { canonicalJson } from "./schema.ts";
-import type { Service } from "./service.ts";
-import { HostTimers } from "./timers.ts";
-import type { Ctx } from "./types.ts";
+import type connectionTypes from "./connection.types.ts";
+import type coreTypes from "./core.types.ts";
+import type declsTypes from "./decls.types.ts";
+import type hostTypesModule from "./host-types.types.ts";
+import type objectTypes from "./object.types.ts";
+import schemaModule from "./schema.ts";
+import type serviceTypes from "./service.types.ts";
+import HostTimers from "./timers.ts";
+import type typesModule from "./types.types.ts";
+
+const { canonicalJson } = schemaModule;
 
 const randomTag = (): string => Effect.runSync(Random.next).toString(36).slice(2, 8);
 
 const reportToConsole = (error: unknown): void => Effect.runSync(Console.error("chord:", error));
 
-export abstract class HostBase implements HostCore {
+export default abstract class HostBase implements coreTypes.HostCore {
   readonly name: string;
   readonly dev: boolean;
   readonly principal: unknown;
   inFactory = 0;
   failed: unknown;
-  readonly objects = new Map<string, ObjectImpl>();
-  readonly codeVersions = new Map<number, CodeVersionState>();
-  readonly facets = new Map<string, Facet>();
-  readonly hostObjects = new Map<string, ReturnType<HostCore["acquire"]>>();
+  readonly objects = new Map<string, objectTypes.ObjectImpl>();
+  readonly codeVersions = new Map<number, hostTypesModule.CodeVersionState>();
+  readonly facets = new Map<string, hostTypesModule.Facet>();
+  readonly hostObjects = new Map<string, ReturnType<coreTypes.HostCore["acquire"]>>();
   readonly kind: "host" | "client";
-  readonly connections = new Set<Connection>();
-  upstream: Connection | undefined;
+  readonly connections = new Set<connectionTypes.Connection>();
+  upstream: connectionTypes.Connection | undefined;
   remoteModules: Record<string, string[]> = {};
   remoteRemoved: Record<string, string[]> = {};
   readonly incarnation = randomTag();
-  current: CodeVersionState;
-  previous: CodeVersionState | undefined;
-  pending: CodeVersionState | undefined;
+  current: hostTypesModule.CodeVersionState;
+  previous: hostTypesModule.CodeVersionState | undefined;
+  pending: hostTypesModule.CodeVersionState | undefined;
   gating: ReadonlySet<string> | undefined;
   reloading = false;
   readonly taskStopDeadline: number;
   readonly readyTimeout: number;
   readonly scope = Scope.makeUnsafe();
   readonly timers = new HostTimers(this.scope);
-  protected readonly options: HostOptions;
+  protected readonly options: hostTypesModule.HostOptions;
   readonly #principalKey: (principal: unknown) => string;
   readonly #selfKey: string;
   #codeVersionSeq = 1;
 
-  constructor(options: HostOptions) {
+  constructor(options: hostTypesModule.HostOptions) {
     this.options = options;
     this.name = options.name ?? "host";
     this.dev = options.dev ?? false;
@@ -56,25 +58,27 @@ export abstract class HostBase implements HostCore {
     this.taskStopDeadline = options.taskStopDeadline ?? 5000;
     this.readyTimeout = options.readyTimeout ?? 60_000;
     this.current = {
+      abort: new AbortController(),
       id: this.#codeVersionSeq,
+      roots: new Map(),
       services: new Map(),
       tables: new Map(),
-      roots: new Map(),
-      abort: new AbortController(),
     };
     this.codeVersions.set(this.current.id, this.current);
     this.kind = options.kind ?? "host";
   }
 
-  abstract acquire(...args: Parameters<HostCore["acquire"]>): ReturnType<HostCore["acquire"]>;
-  abstract addressOf(...args: Parameters<HostCore["addressOf"]>): string;
-  abstract touch(rootId: string, object: ObjectImpl): void;
-  abstract forget(object: ObjectImpl): void;
-  abstract disposed(object: ObjectImpl): void;
-  abstract checkRegistrations(object: ObjectImpl, decls: Decls): void;
-  abstract registriesChanged(including?: ObjectImpl): void;
+  abstract acquire(
+    ...args: Parameters<coreTypes.HostCore["acquire"]>
+  ): ReturnType<coreTypes.HostCore["acquire"]>;
+  abstract addressOf(...args: Parameters<coreTypes.HostCore["addressOf"]>): string;
+  abstract touch(rootId: string, object: objectTypes.ObjectImpl): void;
+  abstract forget(object: objectTypes.ObjectImpl): void;
+  abstract disposed(object: objectTypes.ObjectImpl): void;
+  abstract checkRegistrations(object: objectTypes.ObjectImpl, decls: declsTypes.Decls): void;
+  abstract registriesChanged(including?: objectTypes.ObjectImpl): void;
   abstract root<T>(
-    fn: (ctx: Ctx) => T | Promise<T>,
+    fn: (ctx: typesModule.Ctx) => T | Promise<T>,
     options?: { codeVersion?: number; signal?: AbortSignal | undefined },
   ): Promise<T>;
 
@@ -123,7 +127,7 @@ export abstract class HostBase implements HostCore {
     return this.codeVersions.has(codeVersion);
   }
 
-  *retainedCodeVersions(): Iterable<readonly [number, ReadonlyMap<string, Service>]> {
+  *retainedCodeVersions(): Iterable<readonly [number, ReadonlyMap<string, serviceTypes.Service>]> {
     for (const [id, state] of this.codeVersions) yield [id, state.services];
     if (this.pending !== undefined) yield [this.pending.id, this.pending.services];
   }
@@ -132,7 +136,7 @@ export abstract class HostBase implements HostCore {
     return this.pending?.id;
   }
 
-  service(typeName: string): Service | undefined {
+  service(typeName: string): serviceTypes.Service | undefined {
     return this.current.services.get(typeName) ?? this.pending?.services.get(typeName);
   }
 }

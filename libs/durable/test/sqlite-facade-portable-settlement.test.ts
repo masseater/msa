@@ -1,4 +1,4 @@
-import { BACKGROUND_CONTEXT } from "@msa/chord/context";
+import contextModule from "@msa/chord/context";
 import { Effect } from "effect";
 import { describe, expect, it } from "vite-plus/test";
 
@@ -9,6 +9,8 @@ import node from "../src/storage/sqlite/node.ts";
 import types from "../src/types.ts";
 import effectSupport from "./effect-support.ts";
 import type sqliteFacadePortableSettlementTestTypes from "./sqlite-facade-portable-settlement.test.types.ts";
+
+const { BACKGROUND_CONTEXT } = contextModule;
 
 const { ROOT_CONVERSATION_ID } = types;
 const { idFromNumber } = ids;

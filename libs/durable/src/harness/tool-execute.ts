@@ -1,5 +1,5 @@
-import type { Context } from "@msa/chord";
-import type { OutputLimits } from "@msa/chord/output";
+import type chordTypes from "@msa/chord/index.types";
+import type outputTypes from "@msa/chord/output.types";
 import { Cause, Effect, Exit } from "effect";
 
 import errors from "../errors.ts";
@@ -14,7 +14,7 @@ const { toolDiagnostic } = toolResult;
 const { errorMessage } = errors;
 const { COMPLETED } = toolTypes;
 
-const limitsOf = (tool: typesModule.ToolRegistration): OutputLimits => ({
+const limitsOf = (tool: typesModule.ToolRegistration): outputTypes.OutputLimits => ({
   maxBytes: tool.outputLimits?.maxBytes ?? DEFAULT_MAX_BYTES,
   maxLines: tool.outputLimits?.maxLines ?? DEFAULT_MAX_LINES,
   retain: tool.outputLimits?.retain ?? "head",
@@ -34,7 +34,7 @@ const invoke = Effect.fnUntraced(function* (
   tool: typesModule.ToolRegistration,
   args: typesModule.JsonObject,
   api: Omit<typesModule.ToolExecutionApi, "env">,
-  context: Context,
+  context: chordTypes.Context,
 ) {
   const env = yield* Effect.promise(() => runtime.env(context));
   const startedAt = performance.now();
@@ -65,7 +65,7 @@ const execute = Effect.fnUntraced(function* (
   tool: typesModule.ToolRegistration,
   args: typesModule.JsonObject,
   api: Omit<typesModule.ToolExecutionApi, "env">,
-  context: Context,
+  context: chordTypes.Context,
 ) {
   const invoked = yield* Effect.exit(invoke(runtime, tool, args, api, context));
   if (Exit.isFailure(invoked)) return failed(runtime, call, Cause.squash(invoked.cause), undefined);

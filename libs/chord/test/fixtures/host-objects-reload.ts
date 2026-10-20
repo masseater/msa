@@ -2,7 +2,10 @@ import assert from "node:assert/strict";
 
 import { Type } from "typebox";
 
-import { type Facet, type Self, defineRegistry, local, method } from "../../src/index.ts";
+import chord from "../../src/index.ts";
+import type chordTypes from "../../src/index.types.ts";
+
+const { defineRegistry, local, method } = chord;
 
 const input = Type.Object({});
 
@@ -37,7 +40,7 @@ const SwitchV3 = local("t.eager-switch", {
 
 const Read = defineRegistry<() => unknown>("t.eager-switch-read");
 
-const watchResource = (log: string[]) => (self: Self) =>
+const watchResource = (log: string[]) => (self: chordTypes.Self) =>
   self.resource("watch", {
     close: () => {
       log.push("close");
@@ -49,7 +52,7 @@ const watchResource = (log: string[]) => (self: Self) =>
     version: 1,
   });
 
-const switchV1 = (declareResource: (self: Self) => void): Facet => ({
+const switchV1 = (declareResource: (self: chordTypes.Self) => void): chordTypes.Facet => ({
   name: "switch",
   setup: (api) =>
     api.serve(
@@ -69,7 +72,10 @@ const switchV1 = (declareResource: (self: Self) => void): Facet => ({
     ),
 });
 
-const switchV2 = (declareResource: (self: Self) => void, valid: boolean): Facet => ({
+const switchV2 = (
+  declareResource: (self: chordTypes.Self) => void,
+  valid: boolean,
+): chordTypes.Facet => ({
   name: "switch",
   setup: (api) =>
     api.serve(
@@ -102,7 +108,7 @@ const switchV2 = (declareResource: (self: Self) => void, valid: boolean): Facet 
     ),
 });
 
-const switchV3 = (declareResource: (self: Self) => void): Facet => ({
+const switchV3 = (declareResource: (self: chordTypes.Self) => void): chordTypes.Facet => ({
   name: "switch",
   setup: (api) =>
     api.serve(
@@ -145,12 +151,12 @@ const ReadV2 = local("t.eager-read", {
   version: 2,
 });
 
-const readerV1: Facet = {
+const readerV1: chordTypes.Facet = {
   name: "read",
   setup: (api) => api.serve(ReadV1, () => ({ read: () => "one" }), { lifetime: "host" }),
 };
 
-const readerV2 = (adapt = false): Facet => ({
+const readerV2 = (adapt = false): chordTypes.Facet => ({
   name: "read",
   setup: (api) =>
     api.serve(ReadV2, () => ({ fetch: () => "two" }), {

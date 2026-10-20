@@ -1,4 +1,4 @@
-import type { JsonValue } from "@msa/chord";
+import type chordTypes from "@msa/chord/index.types";
 import { Effect } from "effect";
 import { afterEach, describe, expect, it } from "vite-plus/test";
 
@@ -92,7 +92,7 @@ const retiredSidecars = Effect.fn("retiredSidecars")(function* () {
   const directory = yield* tempDirectory();
   const storage = yield* openStorage(directory);
   yield* createRoot(storage);
-  const taskId = yield* awaited(storage.mintId<typesModule.TaskId<JsonValue>>());
+  const taskId = yield* awaited(storage.mintId<typesModule.TaskId<chordTypes.JsonValue>>());
   const sessionId = yield* awaited(storage.mintId<typesModule.DocumentId>());
   const latestId = yield* awaited(storage.mintId<typesModule.DocumentId>());
   const taskDocumentId = yield* awaited(storage.mintId<typesModule.DocumentId>());

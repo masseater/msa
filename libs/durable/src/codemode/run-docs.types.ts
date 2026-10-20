@@ -1,4 +1,4 @@
-import type { Context, JsonValue } from "@msa/chord";
+import type chordTypes from "@msa/chord/index.types";
 import type { CodemodeOutcome, CodemodeSandboxBase } from "@msa/codemode/portable";
 
 import type typesModule from "../harness/types.types.ts";
@@ -11,8 +11,8 @@ declare namespace runDocsTypes {
     execute(
       args: unknown,
       api: typesModule.ToolExecutionApi,
-      context: Context,
-    ): Promise<JsonValue | undefined>;
+      context: chordTypes.Context,
+    ): Promise<chordTypes.JsonValue | undefined>;
   };
 
   type CodemodeToolOptions = {
@@ -41,14 +41,14 @@ declare namespace runDocsTypes {
     namespaces: { name: string; description?: string; instructions?: string; tools: string[] }[];
     globals: { name: string; spread: boolean }[];
     maxOutputTokens: number;
-    store: Record<string, JsonValue>;
+    store: Record<string, chordTypes.JsonValue>;
   };
 
   type JournalEntry = {
     id: number;
     at: number;
     issuedAfter?: number;
-    global?: { name: string; args?: JsonValue; outcome: typesModule.JsonObject };
+    global?: { name: string; args?: chordTypes.JsonValue; outcome: typesModule.JsonObject };
   };
 
   type Settled = {

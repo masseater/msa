@@ -1,8 +1,8 @@
-import type { AttachedReplicatedState, Context, JsonValue } from "@msa/chord";
-import { withoutAbortSignal } from "@msa/chord/context";
-import type { Op } from "@msa/chord/delta";
-import { applyImmutable } from "@msa/chord/delta/apply";
-import { replicatedState } from "@msa/chord/state";
+import contextModule from "@msa/chord/context";
+import type deltaTypes from "@msa/chord/delta.types";
+import applyModule from "@msa/chord/delta/apply";
+import type chordTypes from "@msa/chord/index.types";
+import stateModule from "@msa/chord/state";
 import { Effect } from "effect";
 
 import type observationTypes from "../session/observation.types.ts";
@@ -10,13 +10,21 @@ import sessionKit from "./session-kit.ts";
 import type taskGraphTypes from "./task-graph.types.ts";
 import util from "./util.ts";
 
+const { replicatedState } = stateModule;
+const { applyImmutable } = applyModule;
+const { withoutAbortSignal } = contextModule;
+
 const { observation, sessionState } = sessionKit;
 
 const { contained } = sessionState;
 const { CommittedStateSource, CommittedWatch } = observation;
 const { closedError, scanAll } = util;
 
-type AnyTaskRecord = taskGraphTypes.TaskRecord<JsonValue, JsonValue, JsonValue>;
+type AnyTaskRecord = taskGraphTypes.TaskRecord<
+  chordTypes.JsonValue,
+  chordTypes.JsonValue,
+  chordTypes.JsonValue
+>;
 type Observer =
   | observationTypes.CommittedStateSource<taskGraphTypes.TaskGraph>
   | observationTypes.CommittedWatch<taskGraphTypes.TaskGraph>;
@@ -50,7 +58,9 @@ export default class TaskGraphView {
     });
   }
 
-  state(context: Context): Promise<AttachedReplicatedState<taskGraphTypes.TaskGraph>> {
+  state(
+    context: chordTypes.Context,
+  ): Promise<chordTypes.AttachedReplicatedState<taskGraphTypes.TaskGraph>> {
     return Effect.runPromise(
       Effect.gen({ self: this }, function* () {
         const { observer, detach } = yield* this.#attach(
@@ -64,7 +74,7 @@ export default class TaskGraphView {
     );
   }
 
-  watch(context: Context): Promise<taskGraphTypes.TaskGraphWatch> {
+  watch(context: chordTypes.Context): Promise<taskGraphTypes.TaskGraphWatch> {
     return Effect.runPromise(
       Effect.gen({ self: this }, function* () {
         const { observer } = yield* this.#attach(
@@ -87,7 +97,7 @@ export default class TaskGraphView {
 
   #attach<O extends Observer>(
     create: (value: taskGraphTypes.TaskGraph, release: () => void) => O,
-    context: Context,
+    context: chordTypes.Context,
   ): Effect.Effect<{ observer: O; detach: () => void }> {
     return Effect.promise(() =>
       this.#session.readOnLine(() => Effect.runPromise(this.#mountObserver(create, context))),
@@ -96,7 +106,7 @@ export default class TaskGraphView {
 
   #mountObserver<O extends Observer>(
     create: (value: taskGraphTypes.TaskGraph, release: () => void) => O,
-    context: Context,
+    context: chordTypes.Context,
   ): Effect.Effect<{ observer: O; detach: () => void }> {
     return Effect.gen({ self: this }, function* () {
       const mount = this.#mount ?? {
@@ -116,7 +126,7 @@ export default class TaskGraphView {
     });
   }
 
-  #build(context: Context): Effect.Effect<taskGraphTypes.TaskGraph> {
+  #build(context: chordTypes.Context): Effect.Effect<taskGraphTypes.TaskGraph> {
     const storage = this.#storage;
     return Effect.gen(function* () {
       const tasks: Record<string, taskGraphTypes.TaskGraphNode> = {};
@@ -154,10 +164,10 @@ export default class TaskGraphView {
 function advance(
   mount: Mount,
   publication: taskGraphTypes.CommitPublication,
-  context: Context,
+  context: chordTypes.Context,
   report: (error: unknown) => void,
 ): void {
-  const ops: Op[] = [];
+  const ops: deltaTypes.Op[] = [];
   const changed = new Map<string, taskGraphTypes.TaskGraphNode | undefined>();
   const node = (key: string): taskGraphTypes.TaskGraphNode | undefined =>
     changed.has(key) ? changed.get(key) : mount.value.tasks[key];
@@ -174,7 +184,7 @@ function advance(
     }
     const next = nodeOf(record, previous?.conversations ?? []);
     if (previous !== undefined && JSON.stringify(next) === JSON.stringify(previous)) continue;
-    ops.push(["s", ["tasks", key], next as unknown as JsonValue]);
+    ops.push(["s", ["tasks", key], next as unknown as chordTypes.JsonValue]);
     changed.set(key, next);
   }
   const created = new Map<string, taskGraphTypes.ConversationId[]>();
@@ -229,6 +239,6 @@ function stateOf(record: AnyTaskRecord): taskGraphTypes.TaskGraphState {
   }
 }
 
-function phaseOf(checkpoint: JsonValue): string {
+function phaseOf(checkpoint: chordTypes.JsonValue): string {
   return (checkpoint as { readonly phase: string }).phase;
 }

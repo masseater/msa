@@ -1,4 +1,4 @@
-import type { Context } from "@msa/chord";
+import type chordTypes from "@msa/chord/index.types";
 import { Effect } from "effect";
 
 import bridge from "./bridge.ts";
@@ -37,7 +37,7 @@ const openIn = Effect.fnUntraced(function* (
 
 const openScheduler = Effect.fnUntraced(function* (
   state: schedulerStateTypes.SchedulerState,
-  context: Context,
+  context: chordTypes.Context,
 ) {
   const { session, registry } = state.options;
   session.observeCommits((publication) => observePublication(state, publication));

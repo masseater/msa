@@ -1,20 +1,14 @@
 import { describe, expect, it } from "vite-plus/test";
 
-import {
-  type Op,
-  UnsafePathError,
-  type WireOp,
-  apply,
-  applyImmutable,
-  assertValidOp,
-  assertValidWireOp,
-  decoder,
-  encoder,
-  isBase,
-} from "../src/delta/index.ts";
+import delta from "../src/delta/index.ts";
+import type deltaTypes from "../src/delta/index.types.ts";
+
+const { UnsafePathError, apply, applyImmutable, decoder, encoder, isBase } = delta;
+const assertValidOp: typeof delta.assertValidOp = delta.assertValidOp;
+const assertValidWireOp: typeof delta.assertValidWireOp = delta.assertValidWireOp;
 
 const appliesMutableAndImmutableOperations = (): void => {
-  const operations: Op[] = [
+  const operations: deltaTypes.Op[] = [
     ["a", ["text"], "b"],
     ["p", ["values"], 1, 1, [3, 4]],
     ["s", ["nested", "value"], 2],
@@ -33,7 +27,7 @@ const appliesMutableAndImmutableOperations = (): void => {
 };
 
 const supportsRootReplacementRootSpliceAnd = (): void => {
-  const base: Op[] = [["r", [1, 2, 3]]];
+  const base: deltaTypes.Op[] = [["r", [1, 2, 3]]];
   expect(isBase(base)).toBe(true);
   let value = apply<number[]>(undefined, base);
   value = apply(value, [["p", [], 1, 1, [4]]]);
@@ -96,12 +90,12 @@ const internsPathsOmitsAdjacentPathsAnd = (): void => {
   const path = ["nested", "text"] as const;
   const enc = encoder();
   const dec = decoder();
-  const first: Op[] = [
+  const first: deltaTypes.Op[] = [
     ["t", path, 1],
     ["a", path, "x"],
   ];
   expect(dec.decode(enc.encode(first))).toEqual(first);
-  const second: Op[] = [["a", path, "y"]];
+  const second: deltaTypes.Op[] = [["a", path, "y"]];
   const wire = enc.encode(second);
   expect(wire).toEqual([
     ["#", 0, path],
@@ -124,7 +118,7 @@ const rejectsUnresolvedShortFormsAndUnsafe = (): void => {
   const wire = [
     ["#", 0, ["__proto__"]],
     ["s", 0, true],
-  ] as unknown as WireOp[];
+  ] as unknown as deltaTypes.WireOp[];
   expect(() => decoder().decode(wire)).toThrow(UnsafePathError);
 };
 
@@ -153,7 +147,7 @@ const internsOnSecondUseRatherThan = (): void => {
 };
 
 const doesNotCollidePathsContainingNull = (): void => {
-  const operations: Op[] = [
+  const operations: deltaTypes.Op[] = [
     ["s", ["a\u0000b"], 1],
     ["s", ["a", "b"], 2],
   ];
@@ -184,7 +178,7 @@ const makesBatchesAfterABaseSelf = (): void => {
 };
 
 const roundTripsDeterministicMixedOperationStreams = (): void => {
-  const batches: Op[][] = Array.from({ length: 100 }, (_, index) => [
+  const batches: deltaTypes.Op[][] = Array.from({ length: 100 }, (_, index) => [
     ["s", ["rows", index, "value"], index],
     ["a", ["output"], String(index)],
     ["p", ["tail"], index, 0, [index]],
@@ -231,7 +225,7 @@ const doesNotMutateAReplacementPayload = (): void => {
 };
 
 const adoptsAMutableReplacementPayloadRather = (): void => {
-  const batch: Op[] = [["r", { value: 0 }]];
+  const batch: deltaTypes.Op[] = [["r", { value: 0 }]];
   const first = apply<{ value: number }>(undefined, batch);
   const second = apply<{ value: number }>(undefined, batch);
   first.value = 1;

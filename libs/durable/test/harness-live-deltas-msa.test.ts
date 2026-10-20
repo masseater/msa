@@ -1,5 +1,5 @@
 import { Type, fauxAssistantMessage, fauxText, fauxToolCall } from "@msa/ai";
-import type { Op } from "@msa/chord/delta";
+import type deltaTypes from "@msa/chord/delta.types";
 import durable from "@msa/durable";
 import type durableTypes from "@msa/durable/index.types";
 import memory from "@msa/durable/storage/memory";
@@ -74,7 +74,7 @@ const streamsPartialText = Effect.gen(function* () {
   const setup = chatSetup({ tokenSize: { max: 4, min: 4 }, tokensPerSecond: 400 });
   setup.faux.setResponses([fauxAssistantMessage([fauxText("word ".repeat(250))])]);
   const { harness, root } = yield* openChat(new MemoryStorage(), setup);
-  const commits: Op[][] = [];
+  const commits: deltaTypes.Op[][] = [];
   harness.subscribeCommits((publication) => {
     for (const change of documentChanges(publication)) {
       if (change.record.kind === "msa.live" && change.ops.length > 0) commits.push([...change.ops]);
@@ -149,7 +149,7 @@ const startsCallsRequest = Effect.gen(function* () {
     fauxAssistantMessage([fauxText("done")]),
   ]);
   const { harness, root } = yield* openChat(new MemoryStorage(), setup);
-  const commits: Op[][] = [];
+  const commits: deltaTypes.Op[][] = [];
   harness.subscribeCommits((publication) => {
     for (const change of documentChanges(publication)) {
       if (change.record.kind === "msa.live" && change.ops.length > 0) commits.push([...change.ops]);
@@ -237,7 +237,7 @@ const writesAbortedTool = Effect.gen(function* () {
   const taskId = (yield* awaited(live(run.harness)))!.tools![0]!.taskId!;
   const before = run.commits.length;
   yield* awaited(run.harness.abortTask(taskId, context));
-  const isAbortCommit = (ops: readonly Op[]) =>
+  const isAbortCommit = (ops: readonly deltaTypes.Op[]) =>
     ops.some(
       (op) => op[0] === "s" && JSON.stringify(op[1]) === JSON.stringify(["tools", 0, "status"]),
     );

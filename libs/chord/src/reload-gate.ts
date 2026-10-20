@@ -1,14 +1,16 @@
 import { Cause, Effect } from "effect";
 
-import { ChordError } from "./errors.ts";
-import type { Reload } from "./reload.ts";
+import errorsModule from "./errors.ts";
+import type reloadTypes from "./reload.types.ts";
+
+const { ChordError } = errorsModule;
 
 const unaborted = (): AbortSignal => new AbortController().signal;
 
-export class ReloadGate {
-  readonly #reload: Reload;
+export default class ReloadGate {
+  readonly #reload: reloadTypes.Reload;
 
-  constructor(reload: Reload) {
+  constructor(reload: reloadTypes.Reload) {
     this.#reload = reload;
   }
 
@@ -24,7 +26,7 @@ export class ReloadGate {
         ({ object }) =>
           Effect.callback<void>((resume) => {
             const grandfathered = new Set(object.leases.keys());
-            object.gate = { grandfathered, queue: [], drained: () => resume(Effect.void) };
+            object.gate = { drained: () => resume(Effect.void), grandfathered, queue: [] };
             object.tasks.stop();
             if (grandfathered.size === 0) resume(Effect.void);
           }),
@@ -40,7 +42,7 @@ export class ReloadGate {
         throw new ChordError(
           "aborted",
           `gate deadline (${deadline} ms) missed; blocking roots: ${blocking.join(", ")}`,
-          { reason: "gate_deadline", details: { blocking } },
+          { details: { blocking }, reason: "gate_deadline" },
         );
       }
       reload.alive();

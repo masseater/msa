@@ -4,17 +4,12 @@ import { type Context, Effect } from "effect";
 import { Type } from "typebox";
 import { describe, it, onTestFinished, vi } from "vite-plus/test";
 
-import {
-  type Facet,
-  createHost,
-  hostNamed,
-  isChordError,
-  local,
-  method,
-  remote,
-} from "../src/index.ts";
+import chord from "../src/index.ts";
+import type chordTypes from "../src/index.types.ts";
 import reloadModule from "./fixtures/reload.ts";
 import timing from "./fixtures/timing.ts";
+
+const { createHost, hostNamed, isChordError, local, method, remote } = chord;
 
 const { CountV1, Greeter, quiet } = reloadModule;
 const { abortOf, latch, tick } = timing;
@@ -33,7 +28,7 @@ const aTaskThatIgnoresItsAbort = Effect.gen(function* () {
   });
   const log: string[] = [];
   const stuck = latch();
-  const facet = (label: string): Facet => ({
+  const facet = (label: string): chordTypes.Facet => ({
     name: "greeter",
     setup: (api) =>
       api.serve(Greeter, (_input, _principal, self) => {
@@ -71,7 +66,7 @@ const aTaskThatIgnoresItsAbort = Effect.gen(function* () {
 const aFacetSSignalAbortsWhen = Effect.gen(function* () {
   const host = quiet();
   const signals = new Map<string, AbortSignal>();
-  const facet = (label: string, fail = false): Facet => ({
+  const facet = (label: string, fail = false): chordTypes.Facet => ({
     name: "greeter",
     setup: (api) => {
       signals.set(label, api.signal);
@@ -82,7 +77,7 @@ const aFacetSSignalAbortsWhen = Effect.gen(function* () {
       });
     },
   });
-  const other: Facet = {
+  const other: chordTypes.Facet = {
     name: "other",
     setup: (api) => void signals.set("other", api.signal),
   };
@@ -137,14 +132,14 @@ const checksContractsAtReloadForgottenBumps = Effect.gen(function* () {
   const consumer = host.hold(DocV1, {});
   assert.deepEqual(yield* Effect.promise(() => consumer.read()), { text: "v1" });
 
-  const broken: Facet = {
+  const broken: chordTypes.Facet = {
     name: "doc",
     setup: (api) => api.serve(DocBroken, () => ({ read: () => ({ text: 1 }), variant: "main" })),
   };
   yield* Effect.promise(() => assert.rejects(host.reload([broken]), /without a version bump/u));
 
   const fetch = () => ({ body: "v2" });
-  const v2: Facet = {
+  const v2: chordTypes.Facet = {
     name: "doc",
     setup: (api) => api.serve(DocV2, () => ({ fetch, variant: "main" })),
   };
@@ -152,7 +147,7 @@ const checksContractsAtReloadForgottenBumps = Effect.gen(function* () {
     assert.rejects(host.reload([v2]), (error) => isChordError(error, "contract_mismatch")),
   );
 
-  const adapted: Facet = {
+  const adapted: chordTypes.Facet = {
     name: "doc",
     setup: (api) =>
       api.serve(DocV2, () => ({ fetch, variant: "main" }), {
@@ -186,8 +181,8 @@ const summingFacet = (
   events: NumberEvents,
   log: string[],
   services: Context.Context<never>,
-): ((factor: number) => Facet) => {
-  const facet = (factor: number): Facet => ({
+): ((factor: number) => chordTypes.Facet) => {
+  const facet = (factor: number): chordTypes.Facet => ({
     name: "sum",
     setup: (api) =>
       api.serve(Sum, (_input, _principal, self) => {

@@ -1,4 +1,4 @@
-import type { Context } from "@msa/chord";
+import type chordTypes from "@msa/chord/index.types";
 import { Effect } from "effect";
 
 import type envTypes from "../env/index.types.ts";
@@ -88,7 +88,7 @@ const inlineImage = Effect.fnUntraced(function* (
 
 const imageModel = Effect.fnUntraced(function* (
   api: typesModule.ToolExecutionApi,
-  context: Context,
+  context: chordTypes.Context,
 ) {
   const ref = (yield* Effect.promise(() => api.agent(context))).model;
   const model = ref === undefined ? undefined : api.models.getModel(ref.provider, ref.modelId);

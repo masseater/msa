@@ -1,5 +1,5 @@
-import type { Draft } from "../../src/delta/draft.ts";
-import type { JsonValue, Op } from "../../src/delta/index.ts";
+import type draftTypes from "../../src/delta/draft.ts";
+import type deltaTypes from "../../src/delta/index.types.ts";
 import type conversationViewModelTypes from "./conversation-view-model.types.ts";
 import type conversationViewModuleTypes from "./conversation-view-types.ts";
 
@@ -8,7 +8,7 @@ declare namespace conversationViewTypes {
 
   type DocumentKey = MountedKey | "audit";
 
-  type JsonObject = Record<string, JsonValue>;
+  type JsonObject = Record<string, deltaTypes.JsonValue>;
 
   type ConfigDoc = {
     schema: string;
@@ -81,12 +81,12 @@ declare namespace conversationViewTypes {
   type PreparedLike<T extends object> = {
     readonly base: T;
     readonly value: T;
-    readonly ops: readonly Op[];
+    readonly ops: readonly deltaTypes.Op[];
     abort(): void;
   };
 
   type ChangeLike<T extends object> = {
-    readonly state: Draft<T>;
+    readonly state: draftTypes.Draft<T>;
     prepare(): PreparedLike<T>;
     abort(): void;
   };
@@ -100,7 +100,7 @@ declare namespace conversationViewTypes {
   type DeltaFrame = {
     readonly kind: "delta";
     readonly sequence: number;
-    readonly ops: readonly Op[];
+    readonly ops: readonly deltaTypes.Op[];
   };
 
   type WatchType = "conversation" | "document";
@@ -129,7 +129,7 @@ declare namespace conversationViewTypes {
     queueCapacity: number | undefined;
   };
 
-  type JsonDraft = Draft<JsonObject>;
+  type JsonDraft = draftTypes.Draft<JsonObject>;
 
   type DocMutation = {
     readonly key: DocumentKey;

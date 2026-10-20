@@ -1,5 +1,5 @@
-import type { Context, JsonValue } from "@msa/chord";
-import { awaitWithContext } from "@msa/chord/context";
+import contextModule from "@msa/chord/context";
+import type chordTypes from "@msa/chord/index.types";
 import { Effect } from "effect";
 
 import bridge from "./bridge.ts";
@@ -9,6 +9,8 @@ import schedulerRecords from "./scheduler-records.ts";
 import type schedulerStateTypes from "./scheduler-state.types.ts";
 import type schedulerTypesModule from "./scheduler-types.types.ts";
 import util from "./util.ts";
+
+const { awaitWithContext } = contextModule;
 
 const { loadScopes } = schedulerLoad;
 const { terminate } = schedulerFinalize;
@@ -61,7 +63,7 @@ const abortIn = Effect.fnUntraced(function* (
 const abortTask = Effect.fnUntraced(function* (
   state: schedulerStateTypes.SchedulerState,
   id: schedulerTypesModule.TaskId,
-  context: Context,
+  context: chordTypes.Context,
   keepRestart = false,
 ) {
   const { session } = state.options;
@@ -81,7 +83,7 @@ const abortTask = Effect.fnUntraced(function* (
 const waitForTask = Effect.fnUntraced(function* (
   state: schedulerStateTypes.SchedulerState,
   id: schedulerTypesModule.TaskId,
-  context: Context,
+  context: chordTypes.Context,
 ) {
   const { session, storage } = state.options;
   const find = yield* toPromise(() =>
@@ -90,7 +92,9 @@ const waitForTask = Effect.fnUntraced(function* (
       if (state.graph.live.has(id)) return { promise: state.taskWaiters.add(id, context) };
       const record = yield* Effect.promise(() => storage.task(id, context));
       if (record === undefined) throw new Error(`Task ${id} does not exist`);
-      return { promise: Promise.resolve(record as schedulerTypesModule.SettledTask<JsonValue>) };
+      return {
+        promise: Promise.resolve(record as schedulerTypesModule.SettledTask<chordTypes.JsonValue>),
+      };
     }),
   );
   const found = yield* Effect.promise(() => session.readOnLine(find));
@@ -125,7 +129,7 @@ const abortConversation = Effect.fnUntraced(function* (
   state: schedulerStateTypes.SchedulerState,
   conversationId: schedulerTypesModule.ConversationId,
   background: boolean,
-  context: Context,
+  context: chordTypes.Context,
 ) {
   const change = yield* toPromise((tx: schedulerTypesModule.Transaction) =>
     abortConversationIn(state, tx, conversationId, background),

@@ -1,4 +1,4 @@
-import type { Context } from "@msa/chord";
+import type chordTypes from "@msa/chord/index.types";
 import { Effect, Function } from "effect";
 
 import nodeModule from "../../env/node.ts";
@@ -9,19 +9,19 @@ const { NodeExecutionEnv } = nodeModule;
 
 const openNodeJsonlStorage: {
   (
-    context: Context,
+    context: chordTypes.Context,
     options?: storageTypes.JsonlStorageOptions,
   ): (directory: string) => Promise<storageTypes.JsonlStorage>;
   (
     directory: string,
-    context: Context,
+    context: chordTypes.Context,
     options?: storageTypes.JsonlStorageOptions,
   ): Promise<storageTypes.JsonlStorage>;
 } = Function.dual(
   (args: IArguments) => typeof args[0] === "string",
   (
     directory: string,
-    context: Context,
+    context: chordTypes.Context,
     options: storageTypes.JsonlStorageOptions = {},
   ): Promise<storageTypes.JsonlStorage> =>
     Effect.runPromise(

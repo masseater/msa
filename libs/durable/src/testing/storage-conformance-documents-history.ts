@@ -1,4 +1,4 @@
-import type { Op } from "@msa/chord/delta";
+import type deltaTypes from "@msa/chord/delta.types";
 import { Effect } from "effect";
 
 import type typesModule from "../types.types.ts";
@@ -32,7 +32,7 @@ const createAndChange = Effect.fnUntraced(function* (
     },
   ]);
   const appended = ["b"];
-  const ops: Op[] = [
+  const ops: deltaTypes.Op[] = [
     ["p", ["items"], 1, 0, appended],
     ["s", ["nested", "count"], 2],
   ];

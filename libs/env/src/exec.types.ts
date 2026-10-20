@@ -1,4 +1,4 @@
-import type { Context } from "@msa/chord";
+import type chordTypes from "@msa/chord/index.types";
 import type envTypes from "@msa/durable/env.types";
 
 import type fileOpTypes from "./file-op.types.ts";
@@ -8,7 +8,7 @@ declare namespace execTypes {
     readonly target: fileOpTypes.RemoteTarget;
     readonly command: string | readonly string[];
     readonly options: envTypes.ShellExecOptions | undefined;
-    readonly context: Context;
+    readonly context: chordTypes.Context;
     readonly shellEnv: Record<string, string> | undefined;
     readonly shellPath: string | undefined;
     readonly running: Map<number, number>;

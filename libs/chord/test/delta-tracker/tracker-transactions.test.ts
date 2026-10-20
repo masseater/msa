@@ -1,6 +1,8 @@
 import { describe, expect, it } from "vite-plus/test";
 
-import { track } from "../../src/delta/index.ts";
+import delta from "../../src/delta/index.ts";
+
+const { track } = delta;
 
 const keepsAbortedAndStaleMaterializedCandidates = (): void => {
   const tracker = track({ value: 0 });

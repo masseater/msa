@@ -1,5 +1,5 @@
 import type { CacheRetention, Message, Models, Transport, UserMessage } from "@msa/ai";
-import type { AttachedReplicatedState, Context, JsonValue } from "@msa/chord";
+import type chordTypes from "@msa/chord/index.types";
 
 import type envTypes from "../env/index.types.ts";
 import type typesModuleSourceTypes from "../types.types.ts";
@@ -15,7 +15,7 @@ declare namespace typesCoreTypes {
     readonly modelId: string;
   };
   type UserInput = UserMessage["content"];
-  type InputEntry = { readonly kind: string; readonly data?: JsonValue };
+  type InputEntry = { readonly kind: string; readonly data?: chordTypes.JsonValue };
   type SubmissionDraft = {
     readonly requestId?: string;
   } & (
@@ -38,13 +38,17 @@ declare namespace typesCoreTypes {
   };
   interface Submission {
     readonly id: typesModuleSourceTypes.SubmissionId;
-    status(context: Context): Promise<typesModuleSourceTypes.SubmissionRecord>;
-    wait(context: Context): Promise<SettledSubmissionRecord>;
-    abort(context: Context): Promise<"aborted" | "already_placed" | "settled">;
+    status(context: chordTypes.Context): Promise<typesModuleSourceTypes.SubmissionRecord>;
+    wait(context: chordTypes.Context): Promise<SettledSubmissionRecord>;
+    abort(context: chordTypes.Context): Promise<"aborted" | "already_placed" | "settled">;
   }
-  type SettledTask<R> = typesModuleSourceTypes.TaskRecord<JsonValue, JsonValue, R> & {
+  type SettledTask<R> = typesModuleSourceTypes.TaskRecord<
+    chordTypes.JsonValue,
+    chordTypes.JsonValue,
+    R
+  > & {
     readonly state: Extract<
-      typesModuleSourceTypes.TaskState<JsonValue, R>,
+      typesModuleSourceTypes.TaskState<chordTypes.JsonValue, R>,
       { readonly status: "terminal" }
     >;
   };
@@ -66,9 +70,9 @@ declare namespace typesCoreTypes {
     K extends typesModuleSourceTypes.Task<infer _I, infer _S, infer _R, infer H> ? H : never;
   interface ConversationHandle {
     readonly id: typesModuleSourceTypes.ConversationId;
-    submit(submission: InputSubmissionDraft, context: Context): Promise<Submission>;
-    abort(context: Context, options?: ConversationAbortOptions): Promise<void>;
-    waitForIdle(context: Context): Promise<void>;
+    submit(submission: InputSubmissionDraft, context: chordTypes.Context): Promise<Submission>;
+    abort(context: chordTypes.Context, options?: ConversationAbortOptions): Promise<void>;
+    waitForIdle(context: chordTypes.Context): Promise<void>;
   }
   type ConversationInit = (
     tx: typesModuleSourceTypes.Tx,
@@ -147,7 +151,7 @@ declare namespace typesCoreTypes {
     readonly settings?: HarnessSettings;
     readonly env?: (
       target: EnvTarget,
-      context: Context,
+      context: chordTypes.Context,
     ) => envTypes.ExecutionEnv | undefined | Promise<envTypes.ExecutionEnv | undefined>;
     readonly conversationCreated?: (
       tx: typesModuleSourceTypes.Tx,
@@ -157,7 +161,11 @@ declare namespace typesCoreTypes {
     readonly onReport?: (error: unknown) => void;
   };
   type TaskInspection = {
-    readonly record: typesModuleSourceTypes.TaskRecord<JsonValue, JsonValue, JsonValue>;
+    readonly record: typesModuleSourceTypes.TaskRecord<
+      chordTypes.JsonValue,
+      chordTypes.JsonValue,
+      chordTypes.JsonValue
+    >;
     readonly state: TaskInspectionState;
   };
   type TaskInspectionState =
@@ -184,48 +192,50 @@ declare namespace typesCoreTypes {
   interface Conversation {
     readonly id: typesModuleSourceTypes.ConversationId;
 
-    agent(context: Context): Promise<typesRegistryTypes.Agent>;
-    configure(change: typesRegistryTypes.AgentChange, context: Context): Promise<void>;
+    agent(context: chordTypes.Context): Promise<typesRegistryTypes.Agent>;
+    configure(change: typesRegistryTypes.AgentChange, context: chordTypes.Context): Promise<void>;
 
-    submit(submission: SubmissionDraft, context: Context): Promise<Submission>;
-    reset(handoff: string | undefined, context: Context): Promise<void>;
+    submit(submission: SubmissionDraft, context: chordTypes.Context): Promise<Submission>;
+    reset(handoff: string | undefined, context: chordTypes.Context): Promise<void>;
     compact(
       instructions: string | undefined,
-      context: Context,
+      context: chordTypes.Context,
     ): Promise<typesModuleSourceTypes.TaskId<CompactionResult>>;
 
     commit<T>(
       change: (tx: typesModuleSourceTypes.Tx) => T | Promise<T>,
-      context: Context,
+      context: chordTypes.Context,
     ): Promise<T>;
     context(
-      context: Context,
+      context: chordTypes.Context,
       options?: { readonly at?: typesModuleSourceTypes.EntryId },
     ): Promise<ContextView>;
     entries(
       query: Omit<typesModuleSourceTypes.EntryQuery, "conversationId">,
       limit: number,
       cursor: typesModuleSourceTypes.Cursor | undefined,
-      context: Context,
+      context: chordTypes.Context,
     ): Promise<
       typesModuleSourceTypes.Page<typesModuleSourceTypes.EntryRecord, typesModuleSourceTypes.Cursor>
     >;
     fork(
       at: typesModuleSourceTypes.EntryId,
       options: ConversationCreateOptions,
-      context: Context,
+      context: chordTypes.Context,
     ): Promise<Conversation>;
-    abort(context: Context, options?: ConversationAbortOptions): Promise<void>;
-    waitForIdle(context: Context): Promise<void>;
-    viewState(context: Context): Promise<AttachedReplicatedState<viewTypes.ConversationView>>;
-    watch(context: Context): Promise<ConversationWatch>;
+    abort(context: chordTypes.Context, options?: ConversationAbortOptions): Promise<void>;
+    waitForIdle(context: chordTypes.Context): Promise<void>;
+    viewState(
+      context: chordTypes.Context,
+    ): Promise<chordTypes.AttachedReplicatedState<viewTypes.ConversationView>>;
+    watch(context: chordTypes.Context): Promise<ConversationWatch>;
   }
   type ConversationWatch = typesModuleSourceTypes.WatchHandle<viewTypes.ConversationView>;
   interface Harness extends typesModuleSourceTypes.Session {
     resume(): void;
 
     root(
-      context: Context,
+      context: chordTypes.Context,
       options?: {
         readonly agent?: typesRegistryTypes.AgentChange;
         readonly init?: ConversationInit;
@@ -233,30 +243,43 @@ declare namespace typesCoreTypes {
     ): Promise<Conversation>;
     conversation(
       id: typesModuleSourceTypes.ConversationId,
-      context: Context,
+      context: chordTypes.Context,
     ): Promise<Conversation | undefined>;
-    createConversation(options: ConversationCreateOptions, context: Context): Promise<Conversation>;
+    createConversation(
+      options: ConversationCreateOptions,
+      context: chordTypes.Context,
+    ): Promise<Conversation>;
 
     getTask<R>(
       id: typesModuleSourceTypes.TaskId<R>,
-      context: Context,
-    ): Promise<typesModuleSourceTypes.TaskRecord<JsonValue, JsonValue, R> | undefined>;
-    inspect(context: Context): Promise<HarnessInspection>;
+      context: chordTypes.Context,
+    ): Promise<
+      typesModuleSourceTypes.TaskRecord<chordTypes.JsonValue, chordTypes.JsonValue, R> | undefined
+    >;
+    inspect(context: chordTypes.Context): Promise<HarnessInspection>;
     submission(
       id: typesModuleSourceTypes.SubmissionId,
-      context: Context,
+      context: chordTypes.Context,
     ): Promise<Submission | undefined>;
     abortSubmission(
       id: typesModuleSourceTypes.SubmissionId,
-      context: Context,
+      context: chordTypes.Context,
       conversationId?: typesModuleSourceTypes.ConversationId,
     ): Promise<"aborted" | "already_placed" | "settled" | "not_found">;
-    abortTask(id: typesModuleSourceTypes.TaskId, context: Context): Promise<"marked" | "terminal">;
-    waitForTask<R>(id: typesModuleSourceTypes.TaskId<R>, context: Context): Promise<SettledTask<R>>;
-    waitForIdle(context: Context): Promise<void>;
-    usage(context: Context): Promise<usageTypes.UsageState>;
-    taskGraph(context: Context): Promise<AttachedReplicatedState<taskGraphTypes.TaskGraph>>;
-    watchTaskGraph(context: Context): Promise<taskGraphTypes.TaskGraphWatch>;
+    abortTask(
+      id: typesModuleSourceTypes.TaskId,
+      context: chordTypes.Context,
+    ): Promise<"marked" | "terminal">;
+    waitForTask<R>(
+      id: typesModuleSourceTypes.TaskId<R>,
+      context: chordTypes.Context,
+    ): Promise<SettledTask<R>>;
+    waitForIdle(context: chordTypes.Context): Promise<void>;
+    usage(context: chordTypes.Context): Promise<usageTypes.UsageState>;
+    taskGraph(
+      context: chordTypes.Context,
+    ): Promise<chordTypes.AttachedReplicatedState<taskGraphTypes.TaskGraph>>;
+    watchTaskGraph(context: chordTypes.Context): Promise<taskGraphTypes.TaskGraphWatch>;
   }
 }
 

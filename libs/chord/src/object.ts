@@ -1,35 +1,38 @@
 import { Effect } from "effect";
 
-import { ObjectActivation } from "./activation.ts";
-import { ObjectCalls } from "./call.ts";
-import type { Gate, HostCore, Installed, ObjectIdentity, ObjectStatus } from "./core.ts";
-import { Decls } from "./decls.ts";
-import { ObjectLifecycle } from "./lifecycle.ts";
-import { ObjectListeners } from "./object-listeners.ts";
-import { ObjectTasks } from "./object-tasks.ts";
-import type { RefImpl } from "./ref.ts";
+import ObjectActivation from "./activation.ts";
+import ObjectCalls from "./call.ts";
+import type coreTypes from "./core.types.ts";
+import declsModule from "./decls.ts";
+import type declsTypes from "./decls.types.ts";
+import ObjectLifecycle from "./lifecycle.ts";
+import ObjectListeners from "./object-listeners.ts";
+import ObjectTasks from "./object-tasks.ts";
+import type refTypes from "./ref.types.ts";
+
+const { Decls } = declsModule;
 
 const noop = (): void => {};
 
-export class ObjectImpl {
-  readonly host: HostCore;
+export default class ObjectImpl {
+  readonly host: coreTypes.HostCore;
   readonly address: string;
   readonly typeName: string;
   readonly input: unknown;
   readonly principal: unknown;
   readonly hostLifetime: boolean;
-  status: ObjectStatus = "activating";
+  status: coreTypes.ObjectStatus = "activating";
   ready: Promise<void> = Promise.resolve();
-  service: ReturnType<HostCore["service"]>;
+  service: ReturnType<coreTypes.HostCore["service"]>;
   minCodeVersion = 0;
   decls = new Decls();
-  readonly pending = new Set<Decls>();
-  readonly implementations = new Map<number, Installed>();
-  readonly refs = new Set<RefImpl>();
+  readonly pending = new Set<declsTypes.Decls>();
+  readonly implementations = new Map<number, coreTypes.Installed>();
+  readonly refs = new Set<refTypes.RefImpl>();
   readonly leases = new Map<string, number>();
   readonly callAbort = new AbortController();
   readonly activationAbort = new AbortController();
-  gate: Gate | undefined;
+  gate: coreTypes.Gate | undefined;
   deferredRuntime = false;
   readonly invocations = new Set<Promise<unknown>>();
   readonly activation = new ObjectActivation(this);
@@ -40,7 +43,7 @@ export class ObjectImpl {
   #linger: (() => void) | undefined;
   #disposal: Promise<void> | undefined;
 
-  constructor(host: HostCore, identity: ObjectIdentity) {
+  constructor(host: coreTypes.HostCore, identity: coreTypes.ObjectIdentity) {
     this.host = host;
     this.address = identity.address;
     this.typeName = identity.typeName;
@@ -54,15 +57,15 @@ export class ObjectImpl {
     this.ready.catch(noop);
   }
 
-  currentInstalled(): Installed | undefined {
+  currentInstalled(): coreTypes.Installed | undefined {
     return (
       this.implementations.get(this.host.currentCodeVersion()) ??
       [...this.implementations.values()].at(-1)
     );
   }
 
-  allDecls(): Set<Decls> {
-    const result = new Set<Decls>([this.decls, ...this.pending]);
+  allDecls(): Set<declsTypes.Decls> {
+    const result = new Set<declsTypes.Decls>([this.decls, ...this.pending]);
     for (const installed of this.implementations.values()) result.add(installed.decls);
     return result;
   }
@@ -89,12 +92,12 @@ export class ObjectImpl {
       gate.drained();
   }
 
-  addRef(ref: RefImpl): void {
+  addRef(ref: refTypes.RefImpl): void {
     this.refs.add(ref);
     this.clearLinger();
   }
 
-  release(ref: RefImpl): void {
+  release(ref: refTypes.RefImpl): void {
     if (this.refs.delete(ref)) this.maybeIdle();
   }
 

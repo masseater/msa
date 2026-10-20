@@ -4,8 +4,10 @@ import { fileURLToPath } from "node:url";
 import { Effect } from "effect";
 import { describe, it } from "vite-plus/test";
 
-import { createHost } from "../src/index.ts";
+import chord from "../src/index.ts";
 import platform from "./fixtures/platform.ts";
+
+const { createHost } = chord;
 
 const { runNode } = platform;
 

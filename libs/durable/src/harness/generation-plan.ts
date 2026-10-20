@@ -1,4 +1,4 @@
-import type { Context } from "@msa/chord";
+import type chordTypes from "@msa/chord/index.types";
 import { Cause, Effect, Exit } from "effect";
 
 import type envTypes from "../env/index.types.ts";
@@ -11,7 +11,7 @@ import type typesModule from "./types.types.ts";
 const { planSystemEntries, renderSections, replaySections } = prompt;
 const readEnv = Effect.fnUntraced(function* (
   runtime: generationTypesModule.GenerationRuntime,
-  context: Context,
+  context: chordTypes.Context,
 ) {
   const exit = yield* Effect.exit(Effect.promise(() => runtime.env(context)));
   if (Exit.isSuccess(exit)) return exit.value;
@@ -26,7 +26,7 @@ const planPrompt = Effect.fnUntraced(function* (
   agent: typesModule.Agent,
   compacted: boolean,
   contextWindow: number,
-  context: Context,
+  context: chordTypes.Context,
 ) {
   const view = yield* Effect.promise(() => runtime.context(runtime.conversationId, context));
   const shown = replaySections(view.messages);

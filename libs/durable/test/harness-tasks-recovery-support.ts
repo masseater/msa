@@ -1,4 +1,4 @@
-import type { Context, JsonValue } from "@msa/chord";
+import type chordTypes from "@msa/chord/index.types";
 import durable from "@msa/durable";
 import harnessModule from "@msa/durable/harness";
 import type durableTypes from "@msa/durable/index.types";
@@ -51,12 +51,12 @@ function versionedImpl(
   version: number,
   result: string,
   migrate?: (
-    input: JsonValue,
-    checkpoint: JsonValue,
+    input: chordTypes.JsonValue,
+    checkpoint: chordTypes.JsonValue,
     fromVersion: number,
   ) => { input: null; checkpoint: harnessTasksRecoverySupportTypes.Step },
 ) {
-  return defineTask<null, harnessTasksRecoverySupportTypes.Step, JsonValue>({
+  return defineTask<null, harnessTasksRecoverySupportTypes.Step, chordTypes.JsonValue>({
     abort: (_task, runtime, ctx) => runtime.commit(() => abortedWith(result), ctx),
     initial: () => ({ phase: "run" }),
     name: "test.versioned",
@@ -70,8 +70,8 @@ const versioned: {
   (
     result: string,
     migrate?: (
-      input: JsonValue,
-      checkpoint: JsonValue,
+      input: chordTypes.JsonValue,
+      checkpoint: chordTypes.JsonValue,
       fromVersion: number,
     ) => { input: null; checkpoint: harnessTasksRecoverySupportTypes.Step },
   ): (version: number) => ReturnType<typeof versionedImpl>;
@@ -79,8 +79,8 @@ const versioned: {
     version: number,
     result: string,
     migrate?: (
-      input: JsonValue,
-      checkpoint: JsonValue,
+      input: chordTypes.JsonValue,
+      checkpoint: chordTypes.JsonValue,
       fromVersion: number,
     ) => { input: null; checkpoint: harnessTasksRecoverySupportTypes.Step },
   ): ReturnType<typeof versionedImpl>;
@@ -102,7 +102,7 @@ const handoverPhase =
       null,
       object
     >,
-    ctx: Context,
+    ctx: chordTypes.Context,
   ) =>
     Effect.runPromise(
       Effect.gen(function* () {

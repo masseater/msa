@@ -3,12 +3,15 @@ import { performance } from "node:perf_hooks";
 
 import { Effect } from "effect";
 
-import { type JsonValue, type Op, applyImmutable } from "../../src/delta/index.ts";
+import delta from "../../src/delta/index.ts";
+import type deltaTypes from "../../src/delta/index.types.ts";
 import benchmarkWorkerModel from "./benchmark-worker-model.ts";
 import conversationViewContent from "./conversation-view-content.ts";
 import planCommit from "./conversation-view-plan.ts";
 import type conversationViewTypes from "./conversation-view-types.types.ts";
 import ConversationViewWatches from "./conversation-view-watches.ts";
+
+const { applyImmutable } = delta;
 
 const { cloneTrusted } = benchmarkWorkerModel;
 const { commonEntryPrefix, makeEntry, prefixDocumentOperations, resolveActiveLineage } =
@@ -69,7 +72,7 @@ class ConversationViewSession extends ConversationViewWatches {
 
   documentFrames(
     prepared: readonly PreparedChange[],
-    aggregateOps: Op[],
+    aggregateOps: deltaTypes.Op[],
   ): conversationViewTypes.DocumentWatchFrame[] {
     const frames: conversationViewTypes.DocumentWatchFrame[] = [];
     for (const item of prepared) {
@@ -88,7 +91,7 @@ class ConversationViewSession extends ConversationViewWatches {
     return frames;
   }
 
-  entryOperations(aggregateOps: Op[]): void {
+  entryOperations(aggregateOps: deltaTypes.Op[]): void {
     const previousEntries = this.aggregate.entries;
     const nextEntries = resolveActiveLineage(this.records, this.head);
     const common = commonEntryPrefix(previousEntries, nextEntries);
@@ -98,7 +101,7 @@ class ConversationViewSession extends ConversationViewWatches {
       ["entries"],
       common,
       previousEntries.length - common,
-      cloneTrusted(nextEntries.slice(common)) as unknown as JsonValue[],
+      cloneTrusted(nextEntries.slice(common)) as unknown as deltaTypes.JsonValue[],
     ]);
     aggregateOps.push(["s", ["conversation", "head"], this.head]);
   }
@@ -108,7 +111,7 @@ class ConversationViewSession extends ConversationViewWatches {
     prepared: readonly PreparedChange[],
   ): Publication {
     const start = performance.now();
-    const aggregateOps: Op[] = [];
+    const aggregateOps: deltaTypes.Op[] = [];
     const documentFrames = this.documentFrames(prepared, aggregateOps);
     if (plan.entryKind !== undefined) this.entryOperations(aggregateOps);
     let aggregateFrame: conversationViewTypes.DeltaFrame | undefined;

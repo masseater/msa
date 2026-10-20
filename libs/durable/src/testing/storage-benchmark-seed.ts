@@ -1,4 +1,4 @@
-import type { JsonValue } from "@msa/chord";
+import type chordTypes from "@msa/chord/index.types";
 import { Effect, Function } from "effect";
 
 import types from "../types.ts";
@@ -51,7 +51,7 @@ const entry = (storage: typesModule.Storage) => (index: number) =>
   }));
 
 const storedTask = (storage: typesModule.Storage) => (index: number) =>
-  Effect.map(mint<typesModule.TaskId<JsonValue>>(storage), (id) => ({
+  Effect.map(mint<typesModule.TaskId<chordTypes.JsonValue>>(storage), (id) => ({
     id,
     write: { type: "task", value: task(id, index) } satisfies typesModule.StorageWrite,
   }));

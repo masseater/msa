@@ -4,20 +4,12 @@ import { Effect } from "effect";
 import { Type } from "typebox";
 import { describe, expectTypeOf, it } from "vite-plus/test";
 
-import {
-  type Host,
-  type Ref,
-  type ServeOptionsFor,
-  createHost,
-  hostNamed,
-  isChordError,
-  local,
-  method,
-  opaque,
-  remote,
-} from "../src/index.ts";
+import chord from "../src/index.ts";
+import type chordTypes from "../src/index.types.ts";
 import hostModule from "./fixtures/host.ts";
 import timing from "./fixtures/timing.ts";
+
+const { createHost, hostNamed, isChordError, local, method, opaque, remote } = chord;
 
 const { quiet } = hostModule;
 const { abortOf, tick } = timing;
@@ -74,10 +66,14 @@ describe("host: lifetime", () => {
       version: 1,
     });
     const Keyed = local("t.keyed", { input: Type.Object({ id: Type.String() }), version: 1 });
-    expectTypeOf<{ lifetime: "host" }>().not.toExtend<ServeOptionsFor<typeof Remote>>();
-    expectTypeOf<{ lifetime: "host" }>().not.toExtend<ServeOptionsFor<typeof Keyed>>();
-    expectTypeOf<{ lifetime: "host"; linger: 10 }>().not.toExtend<ServeOptionsFor<typeof Store>>();
-    expectTypeOf<{ lifetime: "forever" }>().not.toExtend<ServeOptionsFor<typeof Store>>();
+    expectTypeOf<{ lifetime: "host" }>().not.toExtend<chordTypes.ServeOptionsFor<typeof Remote>>();
+    expectTypeOf<{ lifetime: "host" }>().not.toExtend<chordTypes.ServeOptionsFor<typeof Keyed>>();
+    expectTypeOf<{ lifetime: "host"; linger: 10 }>().not.toExtend<
+      chordTypes.ServeOptionsFor<typeof Store>
+    >();
+    expectTypeOf<{ lifetime: "forever" }>().not.toExtend<
+      chordTypes.ServeOptionsFor<typeof Store>
+    >();
     const refused: [readonly unknown[], RegExp][] = [
       [[Remote, () => ({ variant: "main" }), { lifetime: "host" }], /needs a local type/u],
       [[Keyed, () => ({}), { lifetime: "host" }], /input that accepts \{\}/u],
@@ -151,7 +147,7 @@ const Doc = remote("t.doc", {
   version: 1,
 });
 
-function serveDoc(host: Host, principals: unknown[] = []) {
+function serveDoc(host: chordTypes.Host, principals: unknown[] = []) {
   host.serve(Doc, (_input, principal, self) => {
     principals.push(principal);
     const view = self.state("view", Type.Object({ text: Type.String() }), { text: "" });
@@ -217,7 +213,9 @@ const validatesRemoteArgsAndResultsAt = Effect.gen(function* () {
 const stateMembersAreLateBoundReadables = Effect.gen(function* () {
   const host = quiet();
   serveDoc(host);
-  const editor = host.hold(Doc, { id: "3" }, { principal: { role: "editor" } }) as Ref<typeof Doc>;
+  const editor = host.hold(Doc, { id: "3" }, { principal: { role: "editor" } }) as chordTypes.Ref<
+    typeof Doc
+  >;
   const shapes: unknown[] = [];
   editor.onShape((shape) => shapes.push(shape.variant));
   const events: unknown[] = [];

@@ -1,4 +1,4 @@
-import type { JsonValue } from "@msa/chord";
+import type chordTypes from "@msa/chord/index.types";
 import { Effect } from "effect";
 import { afterEach, describe, expect, it } from "vite-plus/test";
 
@@ -124,7 +124,7 @@ const expectTaskSidecarRemoval = Effect.fn("expectTaskSidecarRemoval")(function*
   { env, storage }: FlushOrderStore,
   fsync: boolean,
 ) {
-  const taskId = yield* awaited(storage.mintId<typesModule.TaskId<JsonValue>>());
+  const taskId = yield* awaited(storage.mintId<typesModule.TaskId<chordTypes.JsonValue>>());
   yield* awaited(storage.commit([{ type: "task", value: pendingTask(taskId) }], context));
   env.clear();
   yield* awaited(storage.commit([{ type: "task", value: terminalTask(taskId) }], context));

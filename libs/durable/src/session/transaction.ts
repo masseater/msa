@@ -1,14 +1,18 @@
-import { type Context, type Draft, type JsonValue, copyJson } from "@msa/chord";
+import chord from "@msa/chord";
+import type chordTypes from "@msa/chord/index.types";
 import { Effect } from "effect";
 
-import types from "../types.ts";
 import type typesModule from "../types.types.ts";
-import transactionAdopt from "./transaction-adopt.ts";
 import transactionAssemble from "./transaction-assemble.ts";
 import transactionDocs from "./transaction-docs.ts";
+import transactionKit from "./transaction-kit.ts";
 import transactionState from "./transaction-state.ts";
 import transactionWrites from "./transaction-writes.ts";
 import type transactionTypes from "./transaction.types.ts";
+
+const { transactionAdopt, types } = transactionKit;
+
+const { copyJson } = chord;
 
 const {
   abortChanges,
@@ -33,7 +37,7 @@ export default class Transaction implements typesModule.Tx {
 
   constructor(
     host: transactionTypes.TransactionHost,
-    context: Context,
+    context: chordTypes.Context,
     scope: transactionTypes.TransactionScope = {},
   ) {
     this.#state = createTxState({ context, host, scope, self: this });
@@ -48,7 +52,7 @@ export default class Transaction implements typesModule.Tx {
   }
 
   entry(id: typesModule.EntryId): Promise<typesModule.EntryRecord | undefined>;
-  entry<D extends JsonValue>(
+  entry<D extends chordTypes.JsonValue>(
     token: typesModule.Entry<D>,
     id: typesModule.EntryId,
   ): Promise<typesModule.TypedEntry<D> | undefined>;
@@ -138,7 +142,7 @@ export default class Transaction implements typesModule.Tx {
     conversationId: typesModule.ConversationId,
     value: typesModule.EntryDraft,
   ): Promise<typesModule.EntryRecord>;
-  appendEntry<D extends JsonValue>(
+  appendEntry<D extends chordTypes.JsonValue>(
     token: typesModule.Entry<D>,
     conversationId: typesModule.ConversationId,
     value: typesModule.TypedEntryDraft<NoInfer<D>>,
@@ -196,36 +200,38 @@ export default class Transaction implements typesModule.Tx {
     return stagedConversations(this.#state);
   }
 
-  doc<T extends typesModule.JsonObject>(token: typesModule.SessionDocToken<T>): Promise<Draft<T>>;
+  doc<T extends typesModule.JsonObject>(
+    token: typesModule.SessionDocToken<T>,
+  ): Promise<chordTypes.Draft<T>>;
   doc<T extends typesModule.JsonObject>(
     token: typesModule.ConversationDocToken<T>,
     conversationId: typesModule.ConversationId,
-  ): Promise<Draft<T>>;
+  ): Promise<chordTypes.Draft<T>>;
   doc<T extends typesModule.JsonObject>(
     token: typesModule.TaskDocToken<T>,
     taskId: typesModule.TaskId,
-  ): Promise<Draft<T>>;
-  doc<T extends typesModule.JsonObject, I extends JsonValue>(
+  ): Promise<chordTypes.Draft<T>>;
+  doc<T extends typesModule.JsonObject, I extends chordTypes.JsonValue>(
     token: typesModule.SessionDocFamilyToken<T, I>,
     key: string,
     seed: I,
-  ): Promise<Draft<T>>;
-  doc<T extends typesModule.JsonObject, I extends JsonValue>(
+  ): Promise<chordTypes.Draft<T>>;
+  doc<T extends typesModule.JsonObject, I extends chordTypes.JsonValue>(
     token: typesModule.ConversationDocFamilyToken<T, I>,
     conversationId: typesModule.ConversationId,
     key: string,
     seed: I,
-  ): Promise<Draft<T>>;
-  doc<T extends typesModule.JsonObject, I extends JsonValue>(
+  ): Promise<chordTypes.Draft<T>>;
+  doc<T extends typesModule.JsonObject, I extends chordTypes.JsonValue>(
     token: typesModule.TaskDocFamilyToken<T, I>,
     taskId: typesModule.TaskId,
     key: string,
     seed: I,
-  ): Promise<Draft<T>>;
+  ): Promise<chordTypes.Draft<T>>;
   doc(
     token: transactionTypes.AnyDocToken,
     ...args: readonly unknown[]
-  ): Promise<Draft<typesModule.JsonObject>> {
+  ): Promise<chordTypes.Draft<typesModule.JsonObject>> {
     return openDoc(this.#state, token, args);
   }
 
@@ -238,16 +244,16 @@ export default class Transaction implements typesModule.Tx {
     token: typesModule.TaskDocToken<T>,
     taskId: typesModule.TaskId,
   ): Promise<void>;
-  retireDoc<T extends typesModule.JsonObject, I extends JsonValue>(
+  retireDoc<T extends typesModule.JsonObject, I extends chordTypes.JsonValue>(
     token: typesModule.SessionDocFamilyToken<T, I>,
     key: string,
   ): Promise<void>;
-  retireDoc<T extends typesModule.JsonObject, I extends JsonValue>(
+  retireDoc<T extends typesModule.JsonObject, I extends chordTypes.JsonValue>(
     token: typesModule.ConversationDocFamilyToken<T, I>,
     conversationId: typesModule.ConversationId,
     key: string,
   ): Promise<void>;
-  retireDoc<T extends typesModule.JsonObject, I extends JsonValue>(
+  retireDoc<T extends typesModule.JsonObject, I extends chordTypes.JsonValue>(
     token: typesModule.TaskDocFamilyToken<T, I>,
     taskId: typesModule.TaskId,
     key: string,

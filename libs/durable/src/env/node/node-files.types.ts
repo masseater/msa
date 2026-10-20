@@ -1,9 +1,9 @@
-import type { Context } from "@msa/chord";
+import type chordTypes from "@msa/chord/index.types";
 
 declare namespace nodeFilesTypes {
   interface FileRequest {
     readonly path: string;
-    readonly context: Context;
+    readonly context: chordTypes.Context;
   }
 
   interface WriteRequest extends FileRequest {
@@ -29,7 +29,7 @@ declare namespace nodeFilesTypes {
 
   interface TempDirRequest {
     readonly prefix: string;
-    readonly context: Context;
+    readonly context: chordTypes.Context;
   }
 
   interface TempFileRequest {

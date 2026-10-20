@@ -4,19 +4,12 @@ import { Effect } from "effect";
 import { Type } from "typebox";
 import { describe, it } from "vite-plus/test";
 
-import {
-  type Ctx,
-  type Facet,
-  type Readable,
-  createHost,
-  hostNamed,
-  isChordError,
-  memoryLinkPair,
-  method,
-  remote,
-} from "../src/index.ts";
+import chord from "../src/index.ts";
+import type chordTypes from "../src/index.types.ts";
 import counting from "./fixtures/counting.ts";
 import timing from "./fixtures/timing.ts";
+
+const { createHost, hostNamed, isChordError, memoryLinkPair, method, remote } = chord;
 
 const { CountingLink, stateFrames } = counting;
 const { pollUntil } = timing;
@@ -34,14 +27,14 @@ const Doc = remote("t.e8-doc", {
   version: 1,
 });
 
-function docFacet(variant: "a" | "b" | "c"): Facet {
+function docFacet(variant: "a" | "b" | "c"): chordTypes.Facet {
   return {
     name: "doc",
     setup: (api) =>
       api.serve(Doc, (_input, _principal, self) => {
         const x = self.state("x", Type.Number(), 1);
         const y = self.state("y", Type.String(), "why");
-        const bump = (ctx: Ctx) => {
+        const bump = (ctx: chordTypes.Ctx) => {
           x.replace(ctx, x.value + 1);
         };
         if (variant === "a") return { bump, variant, x };
@@ -53,8 +46,8 @@ function docFacet(variant: "a" | "b" | "c"): Facet {
 
 type View = {
   readonly variant: string | undefined;
-  readonly x: Readable<number>;
-  readonly y: Readable<string>;
+  readonly x: chordTypes.Readable<number>;
+  readonly y: chordTypes.Readable<string>;
 };
 const view = (ref: object): View => ref as unknown as View;
 
@@ -90,7 +83,7 @@ const aNewVariantSMembersArrive = Effect.gen(function* () {
       const member = Doc.description.variants[shape.variant ?? ""]?.[name];
       if (member?.kind !== "state") continue;
       try {
-        void (view(doc) as unknown as Record<string, Readable<unknown>>)[name]!.value;
+        void (view(doc) as unknown as Record<string, chordTypes.Readable<unknown>>)[name]!.value;
       } catch (error) {
         failures.push(error);
       }

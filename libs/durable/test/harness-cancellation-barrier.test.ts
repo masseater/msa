@@ -1,4 +1,4 @@
-import type { Context } from "@msa/chord";
+import type chordTypes from "@msa/chord/index.types";
 import durable from "@msa/durable";
 import type durableTypes from "@msa/durable/index.types";
 import sessionModule from "@msa/durable/session";
@@ -21,7 +21,7 @@ class HoldMarks extends MemoryStorage {
   target: durableTypes.TaskId | undefined;
   readonly held = deferred();
   readonly release = deferred();
-  override commit(writes: readonly durableTypes.StorageWrite[], commitContext: Context) {
+  override commit(writes: readonly durableTypes.StorageWrite[], commitContext: chordTypes.Context) {
     const superCommit = super.commit.bind(this);
     return Effect.runPromise(
       Effect.gen({ self: this }, function* () {
