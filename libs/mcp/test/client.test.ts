@@ -2,7 +2,9 @@ import { Effect } from "effect";
 import { describe, expect, it } from "vite-plus/test";
 
 import { LATEST_PROTOCOL_VERSION, McpError } from "../src/index.ts";
-import { connect } from "./in-memory-server.ts";
+import inMemoryServer from "./in-memory-server.ts";
+
+const { connect } = inMemoryServer;
 
 const cursorOf = (params: unknown): string | undefined =>
   (params as { cursor?: string } | undefined)?.cursor;
@@ -16,13 +18,13 @@ const initializes = Effect.gen(function* () {
   expect(client.instructions).toBe("Use test tools.");
   expect(server.messages).toEqual([
     {
-      jsonrpc: "2.0",
       id: 1,
+      jsonrpc: "2.0",
       method: "initialize",
       params: {
-        protocolVersion: LATEST_PROTOCOL_VERSION,
         capabilities: {},
         clientInfo: { name: "test-client", version: "2.0.0" },
+        protocolVersion: LATEST_PROTOCOL_VERSION,
       },
     },
     { jsonrpc: "2.0", method: "notifications/initialized" },
@@ -36,29 +38,29 @@ const paginatesTools = Effect.gen(function* () {
     Effect.succeed(
       cursorOf(request.params) === undefined
         ? {
-            tools: [{ name: "search", description: "Search", inputSchema: { type: "object" } }],
             nextCursor: "page-2",
+            tools: [{ description: "Search", inputSchema: { type: "object" }, name: "search" }],
           }
         : {
+            nextCursor: "",
             tools: [
               {
-                name: "read",
-                inputSchema: { type: "object" },
-                outputSchema: { type: "object" },
                 annotations: { readOnlyHint: true },
+                inputSchema: { type: "object" },
+                name: "read",
+                outputSchema: { type: "object" },
               },
             ],
-            nextCursor: "",
           },
     ),
   );
   expect(yield* Effect.promise(() => client.listTools())).toEqual([
-    { name: "search", description: "Search", inputSchema: { type: "object" } },
+    { description: "Search", inputSchema: { type: "object" }, name: "search" },
     {
-      name: "read",
-      inputSchema: { type: "object" },
-      outputSchema: { type: "object" },
       annotations: { readOnlyHint: true },
+      inputSchema: { type: "object" },
+      name: "read",
+      outputSchema: { type: "object" },
     },
   ]);
   yield* Effect.promise(() => client.close());
@@ -69,36 +71,36 @@ const listsResources = Effect.gen(function* () {
   server.setHandler("resources/list", (request) =>
     Effect.succeed(
       cursorOf(request.params) === undefined
-        ? { resources: [{ uri: "file:///a", name: "a", mimeType: "text/plain" }], nextCursor: "2" }
+        ? { nextCursor: "2", resources: [{ mimeType: "text/plain", name: "a", uri: "file:///a" }] }
         : { resources: [{ uri: "file:///b" }] },
     ),
   );
   server.setHandler("resources/templates/list", () =>
     Effect.succeed({
-      resourceTemplates: [{ uriTemplate: "repo://{owner}/{repo}", name: "repo" }],
+      resourceTemplates: [{ name: "repo", uriTemplate: "repo://{owner}/{repo}" }],
     }),
   );
   server.setHandler("resources/read", (request) =>
     Effect.succeed({
-      contents: [{ uri: (request.params as { uri: string }).uri, text: "hello" }],
+      contents: [{ text: "hello", uri: (request.params as { uri: string }).uri }],
     }),
   );
   expect(yield* Effect.promise(() => client.listResources())).toEqual([
-    { uri: "file:///a", name: "a", mimeType: "text/plain" },
-    { uri: "file:///b", name: "file:///b" },
+    { mimeType: "text/plain", name: "a", uri: "file:///a" },
+    { name: "file:///b", uri: "file:///b" },
   ]);
   expect(yield* Effect.promise(() => client.listResourceTemplates())).toEqual([
-    { uriTemplate: "repo://{owner}/{repo}", name: "repo" },
+    { name: "repo", uriTemplate: "repo://{owner}/{repo}" },
   ]);
   expect(yield* Effect.promise(() => client.listResourcesPage())).toEqual({
-    resources: [{ uri: "file:///a", name: "a", mimeType: "text/plain" }],
     nextCursor: "2",
+    resources: [{ mimeType: "text/plain", name: "a", uri: "file:///a" }],
   });
   expect(yield* Effect.promise(() => client.listResourcesPage("2"))).toEqual({
-    resources: [{ uri: "file:///b", name: "file:///b" }],
+    resources: [{ name: "file:///b", uri: "file:///b" }],
   });
   expect(yield* Effect.promise(() => client.readResource("file:///a"))).toEqual({
-    contents: [{ uri: "file:///a", text: "hello" }],
+    contents: [{ text: "hello", uri: "file:///a" }],
   });
   yield* rejectsInvalidResources(client, server);
 });
@@ -128,20 +130,20 @@ const callsTools = Effect.gen(function* () {
     if (params.name === "fail")
       return Effect.fail(new McpError(1234, "tool failed", { retryable: false }));
     return Effect.succeed({
-      content: [{ type: "text", text: "ok" }],
+      content: [{ text: "ok", type: "text" }],
       structuredContent: { count: params.arguments?.["count"] },
     });
   });
   expect(yield* Effect.promise(() => client.callTool("count", { count: 3 }))).toEqual({
-    content: [{ type: "text", text: "ok" }],
+    content: [{ text: "ok", type: "text" }],
     structuredContent: { count: 3 },
   });
   yield* Effect.promise(() =>
     expect(client.callTool("fail")).rejects.toMatchObject({
-      name: "McpError",
       code: 1234,
-      message: "tool failed",
       data: { retryable: false },
+      message: "tool failed",
+      name: "McpError",
     }),
   );
   yield* Effect.promise(() => client.close());

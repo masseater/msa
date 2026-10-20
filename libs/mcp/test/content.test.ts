@@ -5,37 +5,37 @@ import { type ContentBlock, toLlmContent } from "../src/index.ts";
 describe("toLlmContent", () => {
   it("passes text and images through and replaces other blocks with text", () => {
     const blocks: ContentBlock[] = [
-      { type: "text", text: "hello", annotations: { priority: 1 } },
-      { type: "image", data: "aW1n", mimeType: "image/png", _meta: { x: 1 } },
-      { type: "audio", data: "YXVk", mimeType: "audio/wav" },
-      { type: "resource_link", uri: "file:///a.txt", name: "a.txt" },
-      { type: "resource", resource: { uri: "file:///b.txt", text: "inline" } },
-      { type: "resource", resource: { uri: "file:///c.png", mimeType: "image/png", blob: "Yw==" } },
-      { type: "resource", resource: { uri: "file:///d.bin", blob: "ZA==" } },
+      { annotations: { priority: 1 }, text: "hello", type: "text" },
+      { _meta: { x: 1 }, data: "aW1n", mimeType: "image/png", type: "image" },
+      { data: "YXVk", mimeType: "audio/wav", type: "audio" },
+      { name: "a.txt", type: "resource_link", uri: "file:///a.txt" },
+      { resource: { text: "inline", uri: "file:///b.txt" }, type: "resource" },
+      { resource: { blob: "Yw==", mimeType: "image/png", uri: "file:///c.png" }, type: "resource" },
+      { resource: { blob: "ZA==", uri: "file:///d.bin" }, type: "resource" },
     ];
     expect(toLlmContent({ content: blocks })).toEqual([
-      { type: "text", text: "hello" },
-      { type: "image", data: "aW1n", mimeType: "image/png" },
-      { type: "text", text: "[audio audio/wav omitted]" },
-      { type: "text", text: "a.txt: file:///a.txt" },
-      { type: "text", text: "inline" },
-      { type: "image", data: "Yw==", mimeType: "image/png" },
-      { type: "text", text: "[binary resource file:///d.bin (unknown type) omitted]" },
+      { text: "hello", type: "text" },
+      { data: "aW1n", mimeType: "image/png", type: "image" },
+      { text: "[audio audio/wav omitted]", type: "text" },
+      { text: "a.txt: file:///a.txt", type: "text" },
+      { text: "inline", type: "text" },
+      { data: "Yw==", mimeType: "image/png", type: "image" },
+      { text: "[binary resource file:///d.bin (unknown type) omitted]", type: "text" },
     ]);
   });
 
   it("falls back to the structured content as JSON when there are no blocks", () => {
     expect(toLlmContent({ content: [], structuredContent: [1, 2] })).toEqual([
-      { type: "text", text: "[\n  1,\n  2\n]" },
+      { text: "[\n  1,\n  2\n]", type: "text" },
     ]);
     expect(toLlmContent({ content: [], structuredContent: null })).toEqual([
-      { type: "text", text: "null" },
+      { text: "null", type: "text" },
     ]);
     expect(toLlmContent({ content: [], structuredContent: { n: 1 } })).toEqual([
-      { type: "text", text: '{\n  "n": 1\n}' },
+      { text: '{\n  "n": 1\n}', type: "text" },
     ]);
     expect(
-      toLlmContent({ content: [{ type: "text", text: "n=1" }], structuredContent: { n: 1 } }),
-    ).toEqual([{ type: "text", text: "n=1" }]);
+      toLlmContent({ content: [{ text: "n=1", type: "text" }], structuredContent: { n: 1 } }),
+    ).toEqual([{ text: "n=1", type: "text" }]);
   });
 });

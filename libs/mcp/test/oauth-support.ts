@@ -8,10 +8,12 @@ import type {
   OAuthDiscoveryState,
   OAuthTokens,
 } from "../src/oauth/index.ts";
-import { encodeJson } from "./helpers.ts";
-import { MissingVerifierError } from "./missing-verifier-error.ts";
+import helpers from "./helpers.ts";
+import MissingVerifierError from "./missing-verifier-error.ts";
 
-export class TestOAuthProvider implements OAuthClientProvider {
+const { encodeJson } = helpers;
+
+class TestOAuthProvider implements OAuthClientProvider {
   readonly redirectUrl: string;
   readonly clientMetadata;
   client: OAuthClientInformationMixed | undefined;
@@ -23,9 +25,9 @@ export class TestOAuthProvider implements OAuthClientProvider {
   constructor(redirectUrl: string) {
     this.redirectUrl = redirectUrl;
     this.clientMetadata = {
-      redirect_uris: [redirectUrl],
       client_name: "msa-mcp-test",
       grant_types: ["authorization_code", "refresh_token"],
+      redirect_uris: [redirectUrl],
       response_types: ["code"],
       token_endpoint_auth_method: "none",
     };
@@ -81,26 +83,36 @@ export class TestOAuthProvider implements OAuthClientProvider {
   }
 }
 
-export const sendJson: {
+const sendJson: {
   (value: unknown): (status: number) => Effect.Effect<Response, Schema.SchemaError>;
   (status: number, value: unknown): Effect.Effect<Response, Schema.SchemaError>;
 } = dual(2, (status: number, value: unknown) =>
   encodeJson(value).pipe(
     Effect.map(
-      (body) => new Response(body, { status, headers: { "content-type": "application/json" } }),
+      (body) => new Response(body, { headers: { "content-type": "application/json" }, status }),
     ),
   ),
 );
 
-export const endWith = (status: number): Effect.Effect<Response> =>
+const endWith = (status: number): Effect.Effect<Response> =>
   Effect.succeed(new Response(null, { status }));
 
-export const authorizationServerMetadata = (origin: string) => ({
-  issuer: origin,
+const authorizationServerMetadata = (origin: string) => ({
   authorization_endpoint: `${origin}/authorize`,
-  token_endpoint: `${origin}/token`,
+  issuer: origin,
   response_types_supported: ["code"],
+  token_endpoint: `${origin}/token`,
 });
 
-export const originalError = (error: unknown): unknown =>
+const originalError = (error: unknown): unknown =>
   error instanceof McpForeignError ? error.cause : error;
+
+const oauthSupport = {
+  TestOAuthProvider,
+  authorizationServerMetadata,
+  endWith,
+  originalError,
+  sendJson,
+};
+
+export default oauthSupport;

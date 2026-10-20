@@ -20,17 +20,17 @@ function isAlive(pid: number): boolean {
 const connectsAndCapturesStderr = Effect.gen(function* () {
   const stderr: string[] = [];
   const transport = new StdioTransport({
-    command: process.execPath,
     args: [fixture],
+    command: process.execPath,
     onStderr: (chunk) => stderr.push(chunk),
   });
   const client = new McpClient({ name: "stdio-test", version: "1.0.0" });
   yield* Effect.promise(() => client.connect(transport));
   expect(yield* Effect.promise(() => client.listTools())).toEqual([
-    { name: "echo", inputSchema: { type: "object" } },
+    { inputSchema: { type: "object" }, name: "echo" },
   ]);
   expect(yield* Effect.promise(() => client.callTool("echo", { text: "hello" }))).toEqual({
-    content: [{ type: "text", text: "hello" }],
+    content: [{ text: "hello", type: "text" }],
   });
   expect(transport.pid).toBeTypeOf("number");
   yield* Effect.sleep("10 millis");
@@ -52,9 +52,9 @@ const waitForGrandchild = (transport: StdioTransport) =>
 
 const killsStubbornServer = Effect.gen(function* () {
   const transport = new StdioTransport({
-    command: process.execPath,
     args: [stubborn],
     closeTimeoutMs: 100,
+    command: process.execPath,
   });
   const client = new McpClient({ name: "stdio-test", version: "1.0.0" });
   yield* Effect.promise(() => client.connect(transport));

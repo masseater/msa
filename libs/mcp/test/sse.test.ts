@@ -1,7 +1,7 @@
 import { Effect } from "effect";
 import { describe, expect, it } from "vite-plus/test";
 
-import { consumeSseStream, type SseEvent } from "../src/transports/streamable-http.ts";
+import { type SseEvent, consumeSseStream } from "../src/transports/streamable-http.ts";
 
 const encoder = new TextEncoder();
 
@@ -15,7 +15,7 @@ const parsesChunkedEvents = Effect.gen(function* () {
   });
   const events: SseEvent[] = [];
   yield* consumeSseStream(stream, { onEvent: (event) => events.push(event) });
-  expect(events).toEqual([{ id: "7", data: '{"one":\n1}' }]);
+  expect(events).toEqual([{ data: '{"one":\n1}', id: "7" }]);
 });
 
 const rejectsOversizedEvents = Effect.gen(function* () {

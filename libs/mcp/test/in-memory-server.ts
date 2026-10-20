@@ -7,42 +7,35 @@ import {
   McpClient,
   McpError,
 } from "../src/index.ts";
-import { createInMemoryTransportPair, type InMemoryTransport } from "../src/testing/index.ts";
-
-export type TestHandler = (request: JsonRpcRequest) => Effect.Effect<unknown, McpError>;
-
-export interface TestServer {
-  transport: InMemoryTransport;
-  messages: JsonRpcMessage[];
-  setHandler(method: string, handler: TestHandler): void;
-}
+import { type InMemoryTransport, createInMemoryTransportPair } from "../src/testing/index.ts";
+import type inMemoryServerTypes from "./in-memory-server.types.ts";
 
 const respond = (
   transport: InMemoryTransport,
   request: JsonRpcRequest,
-  handler: TestHandler | undefined,
+  handler: inMemoryServerTypes.TestHandler | undefined,
 ): Effect.Effect<void> =>
   (handler === undefined
     ? Effect.fail(new McpError(-32601, `Method not found: ${request.method}`))
     : handler(request)
   ).pipe(
     Effect.flatMap((result) =>
-      Effect.promise(() => transport.send({ jsonrpc: "2.0", id: request.id, result })),
+      Effect.promise(() => transport.send({ id: request.id, jsonrpc: "2.0", result })),
     ),
     Effect.catch((error) =>
       Effect.promise(() =>
         transport.send({
-          jsonrpc: "2.0",
+          error: { code: error.code, data: error.data, message: error.message },
           id: request.id,
-          error: { code: error.code, message: error.message, data: error.data },
+          jsonrpc: "2.0",
         }),
       ),
     ),
   );
 
-export const createServer = Effect.fn("createServer")(function* () {
+const createServer = Effect.fn("createServer")(function* () {
   const pair = createInMemoryTransportPair();
-  const handlers = new Map<string, TestHandler>();
+  const handlers = new Map<string, inMemoryServerTypes.TestHandler>();
   const messages: JsonRpcMessage[] = [];
   const context = yield* Effect.context();
   pair.server.onMessage((message) => {
@@ -55,27 +48,34 @@ export const createServer = Effect.fn("createServer")(function* () {
     });
   });
   yield* Effect.promise(() => pair.server.start());
-  const server: TestServer = {
-    transport: pair.server,
+  const server: inMemoryServerTypes.TestServer = {
     messages,
     setHandler(method, handler) {
       handlers.set(method, handler);
     },
+    transport: pair.server,
   };
   server.setHandler("initialize", () =>
     Effect.succeed({
-      protocolVersion: LATEST_PROTOCOL_VERSION,
       capabilities: { tools: { listChanged: true } },
-      serverInfo: { name: "test-server", version: "1.0.0" },
       instructions: "Use test tools.",
+      protocolVersion: LATEST_PROTOCOL_VERSION,
+      serverInfo: { name: "test-server", version: "1.0.0" },
     }),
   );
   return { clientTransport: pair.client, server };
 });
 
-export const connect = Effect.fn("connect")(function* () {
+const connect = Effect.fn("connect")(function* () {
   const { clientTransport, server } = yield* createServer();
   const client = new McpClient({ name: "test-client", version: "2.0.0" });
   yield* Effect.promise(() => client.connect(clientTransport));
   return { client, server };
 });
+
+const inMemoryServer = {
+  connect,
+  createServer,
+};
+
+export default inMemoryServer;

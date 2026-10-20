@@ -8,11 +8,14 @@ import {
   McpSessionExpiredError,
   StreamableHttpTransport,
 } from "../src/index.ts";
-import { closeServers, encodeJson, openStream, readBody, readMessage } from "./helpers.ts";
-import { protocolHandler, protocolHandlerFor, startServer, toolsCallOnly } from "./http-fixture.ts";
+import helpers from "./helpers.ts";
+import httpFixture from "./http-fixture.ts";
+
+const { closeServers, encodeJson, openStream, readBody, readMessage } = helpers;
+const { protocolHandler, protocolHandlerFor, startServer, toolsCallOnly } = httpFixture;
 
 const eventStream = (body: string | ReadableStream<Uint8Array>) =>
-  new Response(body, { status: 200, headers: { "content-type": "text/event-stream" } });
+  new Response(body, { headers: { "content-type": "text/event-stream" }, status: 200 });
 
 const newClient = () => new McpClient({ name: "http-test", version: "1.0.0" });
 
@@ -26,10 +29,10 @@ const handlesJsonAndSse = Effect.gen(function* () {
   yield* connectTo(client, transport);
   expect(transport.sessionId).toBe("session-1");
   expect(yield* Effect.promise(() => client.listTools())).toEqual([
-    { name: "echo", inputSchema: { type: "object" } },
+    { inputSchema: { type: "object" }, name: "echo" },
   ]);
   expect(yield* Effect.promise(() => client.callTool("echo", { text: "hello" }))).toEqual({
-    content: [{ type: "text", text: "hello" }],
+    content: [{ text: "hello", type: "text" }],
   });
   yield* Effect.promise(() => client.close());
   const listRequest = requests.find((entry) => entry.message?.["method"] === "tools/list");
@@ -44,8 +47,8 @@ const classifiesAuthFailures = Effect.gen(function* () {
     readBody(request).pipe(
       Effect.as(
         new Response("login required", {
-          status: 401,
           headers: { "www-authenticate": 'Bearer resource_metadata="https://example.com/meta"' },
+          status: 401,
         }),
       ),
     ),
@@ -53,9 +56,9 @@ const classifiesAuthFailures = Effect.gen(function* () {
   const client = newClient();
   yield* Effect.promise(() =>
     expect(client.connect(new StreamableHttpTransport({ url }))).rejects.toMatchObject({
+      body: "login required",
       name: "McpAuthRequiredError",
       status: 401,
-      body: "login required",
       wwwAuthenticate: 'Bearer resource_metadata="https://example.com/meta"',
     } satisfies Partial<McpAuthRequiredError>),
   );
@@ -76,13 +79,13 @@ const failsOnlyBrokenStream = Effect.gen(function* () {
   const client = newClient();
   const errors: Error[] = [];
   client.onError((error) => errors.push(error));
-  yield* connectTo(client, new StreamableHttpTransport({ url, openGetStream: false }));
+  yield* connectTo(client, new StreamableHttpTransport({ openGetStream: false, url }));
   const slow = client.callTool("slow");
   yield* Effect.promise(() =>
     expect(client.callTool("broken")).rejects.toThrow("MCP response stream failed"),
   );
   Deferred.doneUnsafe(slowGate, Effect.void);
-  expect(yield* Effect.promise(() => slow)).toEqual({ content: [{ type: "text", text: "hello" }] });
+  expect(yield* Effect.promise(() => slow)).toEqual({ content: [{ text: "hello", type: "text" }] });
   expect(errors).toHaveLength(1);
   yield* Effect.promise(() => client.close());
 });
@@ -112,9 +115,9 @@ const opensGetStreamAfterInit = Effect.gen(function* () {
 const resumesClosedStream = Effect.gen(function* () {
   const resumeHeaders: (string | undefined)[] = [];
   const resumed = yield* encodeJson({
-    jsonrpc: "2.0",
     id: 2,
-    result: { content: [{ type: "text", text: "resumed" }] },
+    jsonrpc: "2.0",
+    result: { content: [{ text: "resumed", type: "text" }] },
   });
   const respondToCall = toolsCallOnly(() => eventStream("id: 1\nretry: 5\ndata:\n\n"));
   const { url } = yield* startServer((request, requests) => {
@@ -129,9 +132,9 @@ const resumesClosedStream = Effect.gen(function* () {
   const client = newClient();
   const errors: Error[] = [];
   client.onError((error) => errors.push(error));
-  yield* connectTo(client, new StreamableHttpTransport({ url, openGetStream: false }));
+  yield* connectTo(client, new StreamableHttpTransport({ openGetStream: false, url }));
   expect(yield* Effect.promise(() => client.callTool("echo"))).toEqual({
-    content: [{ type: "text", text: "resumed" }],
+    content: [{ text: "resumed", type: "text" }],
   });
   expect(resumeHeaders).toEqual(["1"]);
   expect(errors).toEqual([]);
@@ -141,7 +144,7 @@ const resumesClosedStream = Effect.gen(function* () {
 const failsUnansweredStream = Effect.gen(function* () {
   const { url } = yield* startServer(toolsCallOnly(() => eventStream(": nothing here\n\n")));
   const client = newClient();
-  yield* connectTo(client, new StreamableHttpTransport({ url, openGetStream: false }));
+  yield* connectTo(client, new StreamableHttpTransport({ openGetStream: false, url }));
   yield* Effect.promise(() =>
     expect(client.callTool("echo", {}, { timeoutMs: 5_000 })).rejects.toThrow(
       "MCP response stream failed: stream ended without a response",
@@ -173,7 +176,7 @@ const reconnectsGetStream = Effect.gen(function* () {
   client.onNotification("notifications/tools/list_changed", () => {
     if (++changes === 2) Deferred.doneUnsafe(secondChange, Effect.void);
   });
-  yield* connectTo(client, new StreamableHttpTransport({ url, reconnect: { initialDelayMs: 1 } }));
+  yield* connectTo(client, new StreamableHttpTransport({ reconnect: { initialDelayMs: 1 }, url }));
   yield* Deferred.await(secondChange);
   expect(lastEventIds).toEqual([undefined, "g1"]);
   yield* Effect.promise(() => client.close());
@@ -182,7 +185,7 @@ const reconnectsGetStream = Effect.gen(function* () {
 const rejectsAcceptedWithoutResponse = Effect.gen(function* () {
   const { url } = yield* startServer(toolsCallOnly(() => new Response(null, { status: 202 })));
   const client = newClient();
-  yield* connectTo(client, new StreamableHttpTransport({ url, openGetStream: false }));
+  yield* connectTo(client, new StreamableHttpTransport({ openGetStream: false, url }));
   yield* Effect.promise(() =>
     expect(client.callTool("echo")).rejects.toThrow("without a response"),
   );
@@ -207,7 +210,7 @@ const classifiesExpiredSession = Effect.gen(function* () {
     return readBody(request).pipe(Effect.as(new Response("gone", { status: 404 })));
   });
   const client = newClient();
-  yield* connectTo(client, new StreamableHttpTransport({ url, openGetStream: false }));
+  yield* connectTo(client, new StreamableHttpTransport({ openGetStream: false, url }));
   yield* Effect.promise(() =>
     expect(client.listTools()).rejects.toBeInstanceOf(McpSessionExpiredError),
   );

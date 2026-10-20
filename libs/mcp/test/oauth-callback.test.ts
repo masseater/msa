@@ -6,7 +6,7 @@ import {
   OAuthCallbackServer,
   type OAuthCallbackServerOptions,
 } from "../src/oauth/index.ts";
-import { webFetch } from "./web-fetch.ts";
+import webFetch from "./web-fetch.ts";
 
 const withCallback = <A>(
   options: OAuthCallbackServerOptions | undefined,
@@ -69,9 +69,9 @@ const rendersPages = withCallback(
       expect(failure.headers.get("content-type")).toBe("text/html; charset=utf-8");
       yield* Effect.promise(() => expect(denied).rejects.toThrow("Denied"));
       expect(pages.at(-1)).toEqual({
-        ok: false,
-        message: "Authorization failed. You may close this window.",
         details: "Denied",
+        message: "Authorization failed. You may close this window.",
+        ok: false,
       });
       const pending = callback.waitForCallback("s2");
       const success = yield* get(`${callback.redirectUrl}?code=abc&state=s2`);

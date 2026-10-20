@@ -3,10 +3,7 @@ import { Cause, Context, Data, Deferred, Effect, Exit, Layer, Schema, Scope } fr
 import { HttpEffect, HttpServer } from "effect/http";
 import * as NetAddress from "effect/net/NetAddress";
 
-export type HttpHandler = (
-  request: Request,
-  origin: string,
-) => Effect.Effect<Response, Schema.SchemaError>;
+import type helpersTypes from "./helpers.types.ts";
 
 class HttpTestError extends Data.TaggedError("HttpTestError")<{ readonly message: string }> {}
 
@@ -18,25 +15,22 @@ interface Running {
 const running: Running[] = [];
 const openBodies = new Set<AbortController>();
 
-export const readBody = (request: Request): Effect.Effect<string> =>
-  Effect.promise(() => request.text());
+const readBody = (request: Request): Effect.Effect<string> => Effect.promise(() => request.text());
 
 const decodeMessage = Schema.decodeEffect(
   Schema.fromJsonString(Schema.Record(Schema.String, Schema.Unknown)),
 );
 
-export const readMessage = (request: Request) =>
-  readBody(request).pipe(Effect.flatMap(decodeMessage));
+const readMessage = (request: Request) => readBody(request).pipe(Effect.flatMap(decodeMessage));
 
 const encodeJsonString = Schema.encodeEffect(Schema.fromJsonString(Schema.Unknown));
 
-export const encodeJson = (value: unknown): Effect.Effect<string, Schema.SchemaError> =>
+const encodeJson = (value: unknown): Effect.Effect<string, Schema.SchemaError> =>
   encodeJsonString(value);
 
-export const headersOf = (request: Request): Record<string, string> =>
-  Object.fromEntries(request.headers);
+const headersOf = (request: Request): Record<string, string> => Object.fromEntries(request.headers);
 
-export const openStream = (text: string): ReadableStream<Uint8Array> =>
+const openStream = (text: string): ReadableStream<Uint8Array> =>
   new ReadableStream({
     start: (controller) => controller.enqueue(new TextEncoder().encode(text)),
   });
@@ -59,7 +53,11 @@ const tracked = (response: Response): Response => {
 const unavailable = (closing: Deferred.Deferred<void>) =>
   Deferred.await(closing).pipe(Effect.as(new Response(null, { status: 503 })));
 
-const respondWith = (handler: HttpHandler, origin: { value: string }, server: Running) =>
+const respondWith = (
+  handler: helpersTypes.HttpHandler,
+  origin: { value: string },
+  server: Running,
+) =>
   HttpEffect.fromWebHandler((request) =>
     Effect.runPromise(
       handler(request, origin.value).pipe(
@@ -70,7 +68,7 @@ const respondWith = (handler: HttpHandler, origin: { value: string }, server: Ru
     ),
   );
 
-const serveIn = (server: Running, handler: HttpHandler) =>
+const serveIn = (server: Running, handler: helpersTypes.HttpHandler) =>
   Effect.gen(function* () {
     const origin = { value: "" };
     const serving = HttpServer.serve(respondWith(handler, origin, server)).pipe(
@@ -86,13 +84,13 @@ const serveIn = (server: Running, handler: HttpHandler) =>
     return origin.value;
   });
 
-export const listen = Effect.fn("listen")(function* (handler: HttpHandler) {
-  const server: Running = { scope: yield* Scope.make(), closing: Deferred.makeUnsafe<void>() };
+const listen = Effect.fn("listen")(function* (handler: helpersTypes.HttpHandler) {
+  const server: Running = { closing: Deferred.makeUnsafe<void>(), scope: yield* Scope.make() };
   running.push(server);
   return yield* serveIn(server, handler);
 });
 
-export const closeServers: Effect.Effect<void> = Effect.suspend(() => {
+const closeServers: Effect.Effect<void> = Effect.suspend(() => {
   for (const controller of openBodies) controller.abort();
   openBodies.clear();
   const servers = running.splice(0);
@@ -102,3 +100,15 @@ export const closeServers: Effect.Effect<void> = Effect.suspend(() => {
     discard: true,
   });
 });
+
+const helpers = {
+  closeServers,
+  encodeJson,
+  headersOf,
+  listen,
+  openStream,
+  readBody,
+  readMessage,
+};
+
+export default helpers;
