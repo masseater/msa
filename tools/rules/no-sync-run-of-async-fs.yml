@@ -1,7 +1,7 @@
 id: no-sync-run-of-async-fs
 language: typescript
 severity: error
-message: "Effect's FileSystem is asynchronous on Node; runSync throws \"An asynchronous Effect was executed with Effect.runSync\". Yield it inside the caller's Effect or run it with runPromise."
+message: 'Effect''s FileSystem is asynchronous on Node; runSync throws "An asynchronous Effect was executed with Effect.runSync". Yield it inside the caller''s Effect or run it with runPromise.'
 rule:
   kind: call_expression
   all:

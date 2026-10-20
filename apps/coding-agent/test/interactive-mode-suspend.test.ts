@@ -94,10 +94,7 @@ const captureSignalHandlers = () => {
   return { handlers, processOnSpy, processOnceSpy };
 };
 
-const partPart2 = (input: {
-  readonly context: HandleCtrlZThis;
-  readonly ui: FakeUi;
-}) => {
+const partPart2 = (input: { readonly context: HandleCtrlZThis; readonly ui: FakeUi }) => {
   const { context, ui } = input;
 
   vi.useFakeTimers();
