@@ -1,17 +1,12 @@
 import { Effect, ManagedRuntime, Schema } from "effect";
 import { expect, it } from "vite-plus/test";
 
-import {
-  lintPlugins,
-  strictCategories,
-  strictCategoryExclusions,
-  strictCategoryRules,
-} from "../../lint.config.ts";
+import { lintPlugins, strictCategories, strictCategoryRules } from "../../lint.config.ts";
 import { captureProcess, processRunnerLayer } from "../capture-process.ts";
 
 const RuleList = Schema.fromJsonString(
   Schema.Array(
-    Schema.Struct({ scope: Schema.String, value: Schema.String, category: Schema.String }),
+    Schema.Struct({ category: Schema.String, scope: Schema.String, value: Schema.String }),
   ),
 );
 
@@ -28,8 +23,7 @@ const listedRules = Effect.gen(function* () {
   });
   return (yield* Schema.decodeEffect(RuleList)(stdout))
     .filter(isStrictCategoryRule)
-    .map((rule) => `${rule.scope}/${rule.value}`)
-    .filter((name) => !strictCategoryExclusions.includes(name));
+    .map((rule) => `${rule.scope}/${rule.value}`);
 });
 
 const drift = Effect.gen(function* () {

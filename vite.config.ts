@@ -18,33 +18,33 @@ const effectRuleNames = Object.values(effectPresets).flatMap((preset) =>
 const effectRules = asErrors(effectRuleNames);
 
 export const workspaceSourcePaths = {
-  chordIndex: fileURLToPath(new URL("./libs/chord/src/index.ts", import.meta.url)),
+  agentIndex: fileURLToPath(new URL("./libs/agent/src/index.ts", import.meta.url)),
+  aiApi: fileURLToPath(new URL("./libs/ai/src/api", import.meta.url)),
+  aiCompat: fileURLToPath(new URL("./libs/ai/src/compat.ts", import.meta.url)),
+  aiIndex: fileURLToPath(new URL("./libs/ai/src/index.ts", import.meta.url)),
+  aiOAuth: fileURLToPath(new URL("./libs/ai/src/oauth.ts", import.meta.url)),
+  aiProviders: fileURLToPath(new URL("./libs/ai/src/providers", import.meta.url)),
+  aiUtils: fileURLToPath(new URL("./libs/ai/src/utils", import.meta.url)),
   chordContext: fileURLToPath(new URL("./libs/chord/src/context/index.ts", import.meta.url)),
   chordDelta: fileURLToPath(new URL("./libs/chord/src/delta/index.ts", import.meta.url)),
+  chordIndex: fileURLToPath(new URL("./libs/chord/src/index.ts", import.meta.url)),
   chordNode: fileURLToPath(new URL("./libs/chord/src/node.ts", import.meta.url)),
+  codemodeDeclarations: fileURLToPath(
+    new URL("./libs/codemode/src/declarations.ts", import.meta.url),
+  ),
+  codemodeIndex: fileURLToPath(new URL("./libs/codemode/src/index.ts", import.meta.url)),
+  codemodeSource: fileURLToPath(new URL("./libs/codemode/src/source.ts", import.meta.url)),
+  codingAgentIndex: fileURLToPath(new URL("./apps/coding-agent/src/index.ts", import.meta.url)),
+  mcpIndex: fileURLToPath(new URL("./libs/mcp/src/index.ts", import.meta.url)),
+  mcpOAuth: fileURLToPath(new URL("./libs/mcp/src/oauth/index.ts", import.meta.url)),
+  mcpTesting: fileURLToPath(new URL("./libs/mcp/src/testing/index.ts", import.meta.url)),
   telemetryIndex: fileURLToPath(new URL("./libs/telemetry/src/index.ts", import.meta.url)),
   telemetryOtlp: fileURLToPath(new URL("./libs/telemetry/src/otlp.ts", import.meta.url)),
   telemetryTesting: fileURLToPath(
     new URL("./libs/telemetry/src/testing/index.ts", import.meta.url),
   ),
-  mcpIndex: fileURLToPath(new URL("./libs/mcp/src/index.ts", import.meta.url)),
-  mcpOAuth: fileURLToPath(new URL("./libs/mcp/src/oauth/index.ts", import.meta.url)),
-  mcpTesting: fileURLToPath(new URL("./libs/mcp/src/testing/index.ts", import.meta.url)),
-  aiIndex: fileURLToPath(new URL("./libs/ai/src/index.ts", import.meta.url)),
-  aiCompat: fileURLToPath(new URL("./libs/ai/src/compat.ts", import.meta.url)),
-  aiOAuth: fileURLToPath(new URL("./libs/ai/src/oauth.ts", import.meta.url)),
-  aiApi: fileURLToPath(new URL("./libs/ai/src/api", import.meta.url)),
-  aiProviders: fileURLToPath(new URL("./libs/ai/src/providers", import.meta.url)),
-  aiUtils: fileURLToPath(new URL("./libs/ai/src/utils", import.meta.url)),
-  agentIndex: fileURLToPath(new URL("./libs/agent/src/index.ts", import.meta.url)),
-  codemodeIndex: fileURLToPath(new URL("./libs/codemode/src/index.ts", import.meta.url)),
-  codemodeDeclarations: fileURLToPath(
-    new URL("./libs/codemode/src/declarations.ts", import.meta.url),
-  ),
-  codemodeSource: fileURLToPath(new URL("./libs/codemode/src/source.ts", import.meta.url)),
-  codingAgentIndex: fileURLToPath(new URL("./apps/coding-agent/src/index.ts", import.meta.url)),
-  tuiIndex: fileURLToPath(new URL("./libs/tui/src/index.ts", import.meta.url)),
   testingIndex: fileURLToPath(new URL("./libs/testing/src/index.ts", import.meta.url)),
+  tuiIndex: fileURLToPath(new URL("./libs/tui/src/index.ts", import.meta.url)),
 } as const;
 
 export const onGitHubActions = Effect.runSync(
@@ -105,116 +105,69 @@ export const testBaseConfig = {
 };
 
 export default defineConfig({
-  test: {
-    projects: [
-      "{apps,libs}/*/vitest.config.ts",
-      "apps/evals/vitest.test.config.ts",
-      "libs/chord",
-      "libs/telemetry",
-      "tools/vitest.config.ts",
-    ],
-    reporters: onGitHubActions ? ["dot", "github-actions"] : ["dot"],
-  },
-  staged: { "*": "vp check --fix" },
   fmt: {
     ignorePatterns: generated,
     sortImports: true,
     sortPackageJson: true,
   },
   lint: {
-    ignorePatterns: [
-      ...generated,
-      "apps/coding-agent/examples/extensions/gondolin/**",
-      "libs/codemode/examples/**",
-    ],
-    plugins: lintPlugins,
     categories: {
       correctness: "error",
       suspicious: "error",
     },
+    env: { browser: true, builtin: true, node: true },
+    ignorePatterns: generated,
     jsPlugins: [
       { name: "vite-plus", specifier: "vite-plus/oxlint-plugin" },
       { name: "no-comments", specifier: "eslint-plugin-no-comments" },
     ],
-    rules: {
-      "vite-plus/prefer-vite-plus-imports": "error",
-      "eslint/no-control-regex": "error",
-      "eslint/no-duplicate-imports": ["error", { allowSeparateTypeImports: true }],
-      "eslint/no-restricted-imports": ["error", restrictedImports],
-      "eslint/no-undef": "off",
-      "eslint/no-underscore-dangle": "error",
-      "eslint/no-unmodified-loop-condition": "error",
-      "eslint/one-var": ["error", "never"],
-      "eslint/sort-imports": "off",
-      "eslint/sort-keys": "off",
-      "import/no-named-export": "off",
-      "import/prefer-default-export": "off",
-      "node/no-top-level-await": "off",
-      "promise/always-return": "error",
-      "eslint/no-shadow": "error",
-      "no-comments/disallowComments": ["error", { allow: ["oxlint-disable", "eslint-disable"] }],
-      ...asErrors(strictCategoryRules),
-      ...effectRules,
+    options: {
+      denyWarnings: true,
+      reportUnusedDisableDirectives: "error",
+      typeAware: true,
+      typeCheck: true,
     },
     overrides: [
       {
-        files: ["**/test/**", "**/*.test.ts", "**/*.spec.ts", "**/*.bench.ts"],
-        rules: {
-          "eslint/max-lines-per-function": "off",
-        },
-      },
-      {
         files: ["**/*.ts"],
         rules: {
-          "import/extensions": ["error", "ignorePackages", { js: "never", checkTypeImports: true }],
-        },
-      },
-      {
-        files: ["**/test/**", "**/*.test.ts", "**/*.spec.ts", "tools/checks/**"],
-        rules: {
-          "eslint/max-lines-per-function": "off",
-        },
-      },
-      {
-        files: ["tools/**", "lint.config.ts", "syncpack.config.ts", "vite.config.ts"],
-        rules: {
-          "no-comments/disallowComments": [
-            "error",
-            { allow: ["oxlint-disable", "eslint-disable"] },
-          ],
-          "eslint/no-control-regex": "error",
-          "eslint/no-shadow": "error",
-          "eslint/no-underscore-dangle": "error",
-          "eslint/no-unmodified-loop-condition": "error",
-          "promise/always-return": "error",
-          ...asErrors(strictCategoryRules),
-          ...effectRules,
+          "import/extensions": ["error", "ignorePackages", { checkTypeImports: true, js: "never" }],
         },
       },
     ],
-    options: {
-      typeAware: true,
-      typeCheck: true,
-      denyWarnings: true,
-      reportUnusedDisableDirectives: "error",
+    plugins: lintPlugins,
+    rules: {
+      "eslint/no-control-regex": "error",
+      "eslint/no-duplicate-imports": ["error", { allowSeparateTypeImports: true }],
+      "eslint/no-restricted-imports": ["error", restrictedImports],
+      "eslint/no-restricted-properties": [
+        "error",
+        {
+          message: "node の組み込みは Effect の platform 経由で使う",
+          object: "process",
+          property: "getBuiltinModule",
+        },
+      ],
+      "eslint/no-shadow": "error",
+      "eslint/no-undef": "error",
+      "eslint/no-underscore-dangle": "error",
+      "eslint/no-unmodified-loop-condition": "error",
+      "eslint/one-var": ["error", "never"],
+      "eslint/sort-imports": ["error", { ignoreDeclarationSort: true }],
+      "eslint/sort-keys": "error",
+      "import/no-named-export": "error",
+      "import/prefer-default-export": "error",
+      "no-comments/disallowComments": ["error", { allow: ["oxlint-disable", "eslint-disable"] }],
+      "node/no-top-level-await": "error",
+      "promise/always-return": "error",
+      "vite-plus/prefer-vite-plus-imports": "error",
+      ...asErrors(strictCategoryRules),
+      ...effectRules,
     },
   },
   run: {
     tasks: {
-      verify: {
-        command: "vp check",
-        dependsOn: [
-          "syncpack",
-          "actions-lint",
-          "mcp-conformance",
-          "fallow-all",
-          "audit",
-          "test-all",
-        ],
-      },
       "actions-lint": {
-        command:
-          'uvx --from actionlint-py@1.7.12.25 actionlint && uvx zizmor@1.30.1 $(test -n "$CLAUDE_CODE_REMOTE" && echo --no-online-audits) .github && ast-grep scan --rule .github/rules/no-full-history-checkout.yml .github/workflows',
         cache: {
           env: ["CLAUDE_CODE_REMOTE"],
           untrackedEnv: [
@@ -226,47 +179,71 @@ export default defineConfig({
             "SSL_CERT_FILE",
           ],
         },
-      },
-      "mcp-conformance": {
-        command: "node apps/coding-agent/test/mcp-conformance/run.ts",
-        cache: false,
-      },
-      "fallow-all": "vp run -r fallow",
-      syncpack: "syncpack lint",
-      gitleaks: {
         command:
-          'go run github.com/zricethezav/gitleaks/v8@v8.30.1 git --redact --no-banner --log-opts="$(git rev-parse -q --verify "$GITLEAKS_BASE" || echo origin/main)..HEAD"',
-        cache: false,
+          'uvx --from actionlint-py@1.7.12.25 actionlint && uvx zizmor@1.30.1 $(test -n "$CLAUDE_CODE_REMOTE" && echo --no-online-audits) .github && ast-grep scan --rule .github/rules/no-full-history-checkout.yml .github/workflows',
       },
       audit: {
+        cache: false,
         command: "vp pm audit",
-        cache: false,
-      },
-      "daemon-build": {
-        command: "vp run --filter @msa/env build:daemon",
-        cache: false,
       },
       "build-binaries": {
-        command: "node tools/build-binaries.ts",
         cache: false,
+        command: "node tools/build-binaries.ts",
+      },
+      "daemon-build": {
+        cache: false,
+        command: "vp run --filter @msa/env build:daemon",
+      },
+      "fallow-all": "vp run -r fallow",
+      gitleaks: {
+        cache: false,
+        command:
+          'go run github.com/zricethezav/gitleaks/v8@v8.30.1 git --redact --no-banner --log-opts="$(git rev-parse -q --verify "$GITLEAKS_BASE" || echo origin/main)..HEAD"',
       },
       "install-local": {
-        command: "node tools/local-install.ts",
         cache: false,
+        command: "node tools/local-install.ts",
+      },
+      "mcp-conformance": {
+        cache: false,
+        command: "node apps/coding-agent/test/mcp-conformance/run.ts",
       },
       "render-homebrew-formula": {
+        cache: false,
         command: "node tools/render-homebrew-formula.ts",
-        cache: false,
       },
+      syncpack: "syncpack lint",
       test: {
-        command: "vp test run && vp run --no-cache --filter @msa/tui test",
         cache: false,
+        command: "vp test run && vp run --no-cache --filter @msa/tui test",
       },
       "test-all": {
-        command: "bash test.sh",
         cache: false,
+        command: "bash test.sh",
         dependsOn: ["build", "daemon-build"],
       },
+      verify: {
+        command: "vp check",
+        dependsOn: [
+          "syncpack",
+          "actions-lint",
+          "mcp-conformance",
+          "fallow-all",
+          "audit",
+          "test-all",
+        ],
+      },
     },
+  },
+  staged: { "*": "vp check --fix" },
+  test: {
+    projects: [
+      "{apps,libs}/*/vitest.config.ts",
+      "apps/evals/vitest.test.config.ts",
+      "libs/chord",
+      "libs/telemetry",
+      "tools/vitest.config.ts",
+    ],
+    reporters: onGitHubActions ? ["dot", "github-actions"] : ["dot"],
   },
 });

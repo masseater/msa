@@ -43,7 +43,7 @@ const requiredStackEntries = Object.entries(requiredStack).flatMap(([message, mo
 const requiredStackPaths: readonly Readonly<{ name: string; message: string }>[] =
   requiredStackEntries
     .filter(({ module }) => !module.includes("*"))
-    .map(({ message, module }) => ({ name: module, message }));
+    .map(({ message, module }) => ({ message, name: module }));
 
 const requiredStackPatterns: readonly Readonly<{ group: readonly string[]; message: string }>[] =
   requiredStackEntries.map(({ message, module }) => {
@@ -58,8 +58,8 @@ const envImportPaths: readonly Readonly<{
   importNames: readonly string[];
   message: string;
 }>[] = [
-  { name: "node:process", importNames: ["env"], message: ENV_ONLY_VIA_PROCESS_ENV },
-  { name: "process", importNames: ["env"], message: ENV_ONLY_VIA_PROCESS_ENV },
+  { importNames: ["env"], message: ENV_ONLY_VIA_PROCESS_ENV, name: "node:process" },
+  { importNames: ["env"], message: ENV_ONLY_VIA_PROCESS_ENV, name: "process" },
 ];
 
 const restrictedImports = {
@@ -89,7 +89,6 @@ const lintPlugins: NonNullable<OxlintConfig["plugins"]> = [
   "effecttsgo",
 ];
 const strictCategories = ["perf", "pedantic", "nursery"];
-const strictCategoryExclusions = ["eslint/no-undef"];
 
 const strictCategoryRules = [
   "eslint/accessor-pairs",
@@ -119,6 +118,7 @@ const strictCategoryRules = [
   "eslint/no-restricted-exports",
   "eslint/no-self-compare",
   "eslint/no-throw-literal",
+  "eslint/no-undef",
   "eslint/no-unreachable-loop",
   "eslint/no-useless-assignment",
   "eslint/no-useless-call",
@@ -154,6 +154,5 @@ export {
   requiredStack,
   restrictedImports,
   strictCategories,
-  strictCategoryExclusions,
   strictCategoryRules,
 };
