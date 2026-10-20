@@ -118,7 +118,7 @@ const observeFooter = (
     const observations: TuiFooterOutput["observations"] = [];
     for (const [index, { percent }] of CONTEXT_FIXTURES.entries()) {
       oracleSession.agent.state.messages = [createContextMessage(model, percent, now)];
-      if (index === 0) yield* Effect.promise(() => mode.init());
+      if (index === 0) yield* Effect.promise(() => mode.lifecycle.startup.init());
       else terminal.requestResize();
       const renders = yield* terminal.takeRenders();
       if (index === 0) {
@@ -154,7 +154,9 @@ const inspectContextFooter = (
     const disposeRuntime = Effect.promise(() => runtime.dispose());
     return yield* observeFooter(session, oracleSession, model, mode, terminal).pipe(
       Effect.ensuring(
-        Effect.sync(() => mode.stop("resume-hint")).pipe(Effect.ensuring(disposeRuntime)),
+        Effect.sync(() => mode.lifecycle.shutdown.stop("resume-hint")).pipe(
+          Effect.ensuring(disposeRuntime),
+        ),
       ),
     );
   });
