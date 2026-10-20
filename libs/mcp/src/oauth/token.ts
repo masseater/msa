@@ -1,23 +1,22 @@
 import { Effect, Option, Schema } from "effect";
 import { dual } from "effect/Function";
 
-import { fromPromise, fromSync, type McpForeignError } from "../foreign.ts";
-import { isObject } from "../protocol/jsonrpc.ts";
-import { present, secureEndpoint } from "./endpoint.ts";
-import { OAuthError, OAuthFlowError, type OAuthInsecureEndpointError } from "./errors.ts";
-import type { ClientAuthMethod, TokenRequestOptions } from "./flow-types.ts";
-import {
-  type OAuthClientInformation,
-  type OAuthClientInformationMixed,
-  type OAuthTokens,
-  parseOAuthTokens,
-} from "./types.ts";
+import endpoint from "./endpoint.ts";
+import errors from "./errors.ts";
+import type errorsTypes from "./errors.types.ts";
+import type flowTypesModule from "./flow-types.ts";
+import tokenKit from "./token-kit.ts";
+import type tokenTypes from "./token.types.ts";
+import types from "./types.ts";
+import type typesModule from "./types.types.ts";
 
-export type TokenRequestError =
-  | McpForeignError
-  | OAuthError
-  | OAuthFlowError
-  | OAuthInsecureEndpointError;
+const { foreign: foreignModule, jsonrpc: jsonrpcModule } = tokenKit;
+
+const { present, secureEndpoint } = endpoint;
+const { OAuthError, OAuthFlowError } = errors;
+const { isObject } = jsonrpcModule;
+const { fromPromise, fromSync } = foreignModule;
+const { parseOAuthTokens } = types;
 
 const CLIENT_AUTH_METHODS: readonly string[] = [
   "client_secret_basic",
@@ -25,15 +24,15 @@ const CLIENT_AUTH_METHODS: readonly string[] = [
   "none",
 ];
 
-const isClientAuthMethod = (value: string): value is ClientAuthMethod =>
+const isClientAuthMethod = (value: string): value is flowTypesModule.ClientAuthMethod =>
   CLIENT_AUTH_METHODS.includes(value);
 
 const decodeJson = Schema.decodeUnknownOption(Schema.fromJsonString(Schema.Unknown));
 
 function selectClientAuthMethod(
-  information: OAuthClientInformationMixed,
+  information: typesModule.OAuthClientInformationMixed,
   supported: string[],
-): ClientAuthMethod {
+): flowTypesModule.ClientAuthMethod {
   const hinted =
     "token_endpoint_auth_method" in information
       ? information.token_endpoint_auth_method
@@ -54,11 +53,11 @@ function selectClientAuthMethod(
 }
 
 const applyClientAuthentication = (
-  method: ClientAuthMethod,
-  information: OAuthClientInformation,
+  method: flowTypesModule.ClientAuthMethod,
+  information: typesModule.OAuthClientInformation,
   headers: Headers,
   params: URLSearchParams,
-): Effect.Effect<void, OAuthFlowError> =>
+): Effect.Effect<void, errorsTypes.OAuthFlowError> =>
   Effect.suspend(() => {
     const secret = information.client_secret;
     if (method === "client_secret_basic") {
@@ -75,7 +74,7 @@ const applyClientAuthentication = (
     return Effect.void;
   });
 
-const tokenError = (value: unknown): OAuthError | undefined => {
+const tokenError = (value: unknown): errorsTypes.OAuthError | undefined => {
   if (!isObject(value) || typeof value["error"] !== "string") return undefined;
   return new OAuthError(
     value["error"],
@@ -86,7 +85,7 @@ const tokenError = (value: unknown): OAuthError | undefined => {
 
 const tokenRequest = Effect.fn("tokenRequest")(function* (
   authorizationServerUrl: string | URL,
-  options: TokenRequestOptions,
+  options: flowTypesModule.TokenRequestOptions,
   params: URLSearchParams,
 ) {
   const url = yield* secureEndpoint(
@@ -113,7 +112,7 @@ const tokenRequest = Effect.fn("tokenRequest")(function* (
   }
   const fetch = options.fetch ?? globalThis.fetch;
   const response = yield* fromPromise(() =>
-    fetch(url, { method: "POST", headers, body: params, signal: options.signal ?? null }),
+    fetch(url, { body: params, headers, method: "POST", signal: options.signal ?? null }),
   );
   const text = yield* fromPromise(() => response.text());
   const value = Option.getOrUndefined(decodeJson(text));
@@ -124,53 +123,54 @@ const tokenRequest = Effect.fn("tokenRequest")(function* (
   return yield* fromSync(() => parseOAuthTokens(value));
 });
 
-export interface AuthorizationCodeExchange extends TokenRequestOptions {
-  code: string;
-  codeVerifier: string;
-  redirectUrl: string | URL;
-}
-
-export const exchangeAuthorizationCode: {
+const exchangeAuthorizationCode: {
   (
-    options: AuthorizationCodeExchange,
-  ): (authorizationServerUrl: string | URL) => Effect.Effect<OAuthTokens, TokenRequestError>;
+    options: tokenTypes.AuthorizationCodeExchange,
+  ): (
+    authorizationServerUrl: string | URL,
+  ) => Effect.Effect<typesModule.OAuthTokens, tokenTypes.TokenRequestError>;
   (
     authorizationServerUrl: string | URL,
-    options: AuthorizationCodeExchange,
-  ): Effect.Effect<OAuthTokens, TokenRequestError>;
-} = dual(2, (authorizationServerUrl: string | URL, options: AuthorizationCodeExchange) =>
+    options: tokenTypes.AuthorizationCodeExchange,
+  ): Effect.Effect<typesModule.OAuthTokens, tokenTypes.TokenRequestError>;
+} = dual(2, (authorizationServerUrl: string | URL, options: tokenTypes.AuthorizationCodeExchange) =>
   tokenRequest(
     authorizationServerUrl,
     options,
     new URLSearchParams({
-      grant_type: "authorization_code",
       code: options.code,
       code_verifier: options.codeVerifier,
+      grant_type: "authorization_code",
       redirect_uri: String(options.redirectUrl),
     }),
   ),
 );
 
-export interface RefreshRequest extends TokenRequestOptions {
-  refreshToken: string;
-}
-
-export const refreshAuthorization: {
+const refreshAuthorization: {
   (
-    options: RefreshRequest,
-  ): (authorizationServerUrl: string | URL) => Effect.Effect<OAuthTokens, TokenRequestError>;
+    options: tokenTypes.RefreshRequest,
+  ): (
+    authorizationServerUrl: string | URL,
+  ) => Effect.Effect<typesModule.OAuthTokens, tokenTypes.TokenRequestError>;
   (
     authorizationServerUrl: string | URL,
-    options: RefreshRequest,
-  ): Effect.Effect<OAuthTokens, TokenRequestError>;
-} = dual(2, (authorizationServerUrl: string | URL, options: RefreshRequest) =>
+    options: tokenTypes.RefreshRequest,
+  ): Effect.Effect<typesModule.OAuthTokens, tokenTypes.TokenRequestError>;
+} = dual(2, (authorizationServerUrl: string | URL, options: tokenTypes.RefreshRequest) =>
   tokenRequest(
     authorizationServerUrl,
     options,
     new URLSearchParams({ grant_type: "refresh_token", refresh_token: options.refreshToken }),
   ).pipe(
-    Effect.map((tokens): OAuthTokens =>
+    Effect.map((tokens): typesModule.OAuthTokens =>
       Object.assign({ refresh_token: options.refreshToken }, tokens),
     ),
   ),
 );
+
+const token = {
+  exchangeAuthorizationCode,
+  refreshAuthorization,
+};
+
+export default token;

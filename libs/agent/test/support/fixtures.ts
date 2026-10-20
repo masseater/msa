@@ -1,24 +1,12 @@
-import {
-  type AssistantMessage,
-  type AssistantMessageEventStream,
-  type EventStream,
-  type Message,
-  type Model,
-  type TranscriptContext,
-  type UserMessage,
-  createAssistantMessageEventStream,
-} from "@msa/ai";
+import ai from "@msa/ai";
+import type aiTypes from "@msa/ai/index.types";
 import { Effect, Stream } from "effect";
 import { type TSchema, Type } from "typebox";
 
-import type {
-  AgentEvent,
-  AgentMessage,
-  AgentTool,
-  AgentToolCall,
-  AgentToolResult,
-} from "../../src/types.ts";
+import type typesModule from "../../src/types.ts";
 import type fixturesTypes from "./fixtures.types.ts";
+
+const { createAssistantMessageEventStream } = ai;
 
 const createUsage = () => ({
   cacheRead: 0,
@@ -29,7 +17,7 @@ const createUsage = () => ({
   totalTokens: 0,
 });
 
-const createModel = (): Model<"openai-responses"> => ({
+const createModel = (): aiTypes.Model<"openai-responses"> => ({
   api: "openai-responses",
   baseUrl: "https://example.invalid",
   contextWindow: 8192,
@@ -44,7 +32,9 @@ const createModel = (): Model<"openai-responses"> => ({
 
 const now = (): number => Effect.runSync(Effect.clockWith((clock) => clock.currentTimeMillis));
 
-const createAssistantMessage = (content: AssistantMessage["content"]): AssistantMessage => ({
+const createAssistantMessage = (
+  content: aiTypes.AssistantMessage["content"],
+): aiTypes.AssistantMessage => ({
   api: "openai-responses",
   content,
   model: "mock",
@@ -56,38 +46,42 @@ const createAssistantMessage = (content: AssistantMessage["content"]): Assistant
 });
 
 const stoppedWith =
-  (stopReason: AssistantMessage["stopReason"]) =>
-  (message: AssistantMessage): AssistantMessage => ({ ...message, stopReason });
+  (stopReason: aiTypes.AssistantMessage["stopReason"]) =>
+  (message: aiTypes.AssistantMessage): aiTypes.AssistantMessage => ({ ...message, stopReason });
 
-const createUserMessage = (text: string): UserMessage => ({
+const createUserMessage = (text: string): aiTypes.UserMessage => ({
   content: text,
   role: "user",
   timestamp: now(),
 });
 
-const identityConverter = (messages: AgentMessage[]): Message[] =>
+const identityConverter = (messages: typesModule.AgentMessage[]): aiTypes.Message[] =>
   messages.filter(
     (message) =>
       message.role === "system" ||
       message.role === "user" ||
       message.role === "assistant" ||
       message.role === "toolResult",
-  ) as Message[];
+  ) as aiTypes.Message[];
 
-const textMessage = (text: string): AssistantMessage =>
+const textMessage = (text: string): aiTypes.AssistantMessage =>
   createAssistantMessage([{ text, type: "text" }]);
 
-const toolCall = ({ id, name = "echo", args = {} }: fixturesTypes.CallSpec): AgentToolCall => ({
+const toolCall = ({
+  id,
+  name = "echo",
+  args = {},
+}: fixturesTypes.CallSpec): typesModule.AgentToolCall => ({
   arguments: args,
   id,
   name,
   type: "toolCall",
 });
 
-const toolCallMessage = (calls: readonly fixturesTypes.CallSpec[]): AssistantMessage =>
+const toolCallMessage = (calls: readonly fixturesTypes.CallSpec[]): aiTypes.AssistantMessage =>
   stoppedWith("toolUse")(createAssistantMessage(calls.map(toolCall)));
 
-const respond = (message: AssistantMessage): AssistantMessageEventStream => {
+const respond = (message: aiTypes.AssistantMessage): aiTypes.AssistantMessageEventStream => {
   const stream = createAssistantMessageEventStream();
   queueMicrotask(() => {
     if (message.stopReason === "error" || message.stopReason === "aborted") {
@@ -103,9 +97,9 @@ const respond = (message: AssistantMessage): AssistantMessageEventStream => {
   return stream;
 };
 
-const scripted = (...messages: AssistantMessage[]): fixturesTypes.Script => {
+const scripted = (...messages: aiTypes.AssistantMessage[]): fixturesTypes.Script => {
   let calls = 0;
-  const contexts: TranscriptContext[] = [];
+  const contexts: aiTypes.TranscriptContext[] = [];
   return {
     calls: () => calls,
     contexts,
@@ -122,7 +116,7 @@ const echoSchema = Type.Object({ value: Type.String() });
 
 const tool = <T extends TSchema = typeof echoSchema>(
   options: fixturesTypes.EchoOptions<T>,
-): AgentTool<T, any> => ({
+): typesModule.AgentTool<T, any> => ({
   description: `${options.name ?? "Echo"} tool`,
   execute: options.run,
   label: options.name ?? "Echo",
@@ -131,13 +125,13 @@ const tool = <T extends TSchema = typeof echoSchema>(
   ...(options.executionMode === undefined ? {} : { executionMode: options.executionMode }),
 });
 
-const echoResult = (value: string): AgentToolResult<{ value: string }> => ({
+const echoResult = (value: string): typesModule.AgentToolResult<{ value: string }> => ({
   content: [{ text: `echoed: ${value}`, type: "text" }],
   details: { value },
 });
 
 const collect = (
-  stream: EventStream<AgentEvent, AgentMessage[]>,
+  stream: aiTypes.EventStream<typesModule.AgentEvent, typesModule.AgentMessage[]>,
 ): Effect.Effect<fixturesTypes.Collected> =>
   Effect.gen(function* () {
     const events = yield* Stream.runCollect(
@@ -147,7 +141,7 @@ const collect = (
     return { events: [...events], messages };
   });
 
-const toolResultIds = (events: readonly AgentEvent[]): string[] =>
+const toolResultIds = (events: readonly typesModule.AgentEvent[]): string[] =>
   events.flatMap((event) =>
     event.type === "message_end" && event.message.role === "toolResult"
       ? [event.message.toolCallId]

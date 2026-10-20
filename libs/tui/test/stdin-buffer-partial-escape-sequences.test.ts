@@ -3,14 +3,17 @@ import { type TestContext, afterEach, beforeEach, describe, it } from "node:test
 
 import { Effect } from "effect";
 
-import { matchesKey } from "../src/keys.ts";
-import { StdinBuffer } from "../src/stdin-buffer.ts";
+import keys from "../src/keys.ts";
+import StdinBuffer from "../src/stdin-buffer.ts";
+import type stdinBufferTypes from "../src/stdin-buffer.types.ts";
 import stdinBufferHelpers from "./stdin-buffer-helpers.ts";
+
+const { matchesKey } = keys;
 
 const { replies, wait } = stdinBufferHelpers;
 
 describe("StdinBuffer", () => {
-  let buffer: StdinBuffer;
+  let buffer: stdinBufferTypes.StdinBuffer;
   let emittedSequences: string[];
   beforeEach(() => {
     buffer = new StdinBuffer({ timeout: 10 });
@@ -46,7 +49,7 @@ describe("StdinBuffer", () => {
 });
 
 describe("StdinBuffer", () => {
-  let buffer: StdinBuffer;
+  let buffer: stdinBufferTypes.StdinBuffer;
   let emittedSequences: string[];
   beforeEach(() => {
     buffer = new StdinBuffer({ timeout: 10 });
@@ -82,7 +85,7 @@ describe("StdinBuffer", () => {
 });
 
 describe("StdinBuffer", () => {
-  let buffer: StdinBuffer;
+  let buffer: stdinBufferTypes.StdinBuffer;
   let emittedSequences: string[];
   beforeEach(() => {
     buffer = new StdinBuffer({ timeout: 10 });
@@ -113,7 +116,7 @@ describe("StdinBuffer", () => {
 });
 
 describe("StdinBuffer", () => {
-  let buffer: StdinBuffer;
+  let buffer: stdinBufferTypes.StdinBuffer;
   let emittedSequences: string[];
   beforeEach(() => {
     buffer = new StdinBuffer({ timeout: 10 });
@@ -151,7 +154,7 @@ describe("StdinBuffer", () => {
 });
 
 describe("StdinBuffer", () => {
-  let buffer: StdinBuffer;
+  let buffer: stdinBufferTypes.StdinBuffer;
   let emittedSequences: string[];
   beforeEach(() => {
     buffer = new StdinBuffer({ timeout: 10 });
@@ -239,7 +242,7 @@ function recoverLegacyAltInput(t: TestContext, ambiguous: string): void {
 }
 
 function terminalReplyStringsCases1(): void {
-  let buffer: StdinBuffer;
+  let buffer: stdinBufferTypes.StdinBuffer;
   let emittedSequences: string[];
   beforeEach(() => {
     buffer = new StdinBuffer({ timeout: 10 });

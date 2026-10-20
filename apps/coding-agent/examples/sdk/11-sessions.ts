@@ -1,4 +1,4 @@
-import { createAgentSession, SessionManager } from "@msa/coding-agent";
+import { SessionManager, createAgentSession } from "@msa/coding-agent";
 import { Console, Effect } from "effect";
 
 const { session: inMemory } = await createAgentSession({

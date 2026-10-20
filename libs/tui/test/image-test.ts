@@ -1,14 +1,19 @@
 import { Console, Effect } from "effect";
 
-import { Image } from "../src/components/image.ts";
-import { Spacer } from "../src/components/spacer.ts";
-import { Text } from "../src/components/text.ts";
-import { getCapabilities } from "../src/terminal-capabilities.ts";
-import { getImageDimensions } from "../src/terminal-image-size.ts";
-import { ProcessTerminal } from "../src/terminal.ts";
-import type { TUI } from "../src/tui-interface.ts";
-import { TuiMainScreen } from "../src/tui-main-screen.ts";
+import image from "../src/components/image.ts";
+import Spacer from "../src/components/spacer.ts";
+import Text from "../src/components/text.ts";
+import terminalCapabilities from "../src/terminal-capabilities.ts";
+import terminalImageSize from "../src/terminal-image-size.ts";
+import ProcessTerminal from "../src/terminal.ts";
+import type tuiInterfaceTypes from "../src/tui-interface.types.ts";
+import TuiMainScreen from "../src/tui-main-screen.ts";
 import testPlatform from "./test-platform.ts";
+
+const { getCapabilities } = terminalCapabilities;
+const { getImageDimensions } = terminalImageSize;
+
+const { Image } = image;
 
 const { readFileBytes } = testPlatform;
 
@@ -36,7 +41,7 @@ const show = (imageBuffer: Buffer): void => {
   Effect.runSync(Console.log(""));
 
   const terminal = new ProcessTerminal();
-  const tui: TUI = new TuiMainScreen(terminal);
+  const tui: tuiInterfaceTypes.TUI = new TuiMainScreen(terminal);
 
   tui.addChild(new Text("Image Rendering Test", 1, 1));
   tui.addChild(new Spacer(1));

@@ -1,8 +1,10 @@
 import { describe, expect, it } from "vite-plus/test";
 
-import { getModel as getCompatModel, getModels as getCompatModels } from "../src/compat.ts";
-import { getSupportedThinkingLevels } from "../src/models.ts";
-import {
+import compatModule from "../src/compat.ts";
+import modelsModule from "../src/models.ts";
+import allModule from "../src/providers/all.ts";
+
+const {
   builtinModels,
   builtinProviders,
   getAllBuiltinModels,
@@ -13,7 +15,10 @@ import {
   getBuiltinModel,
   getBuiltinModels,
   getBuiltinProviders,
-} from "../src/providers/all.ts";
+} = allModule;
+const { getModel: getCompatModel, getModels: getCompatModels } = compatModule;
+const { getSupportedThinkingLevels } = modelsModule;
+
 const compatFlag = (model: { readonly compat?: object | undefined }, name: string) =>
   (model.compat as Readonly<Record<string, unknown>> | undefined)?.[name] === true;
 

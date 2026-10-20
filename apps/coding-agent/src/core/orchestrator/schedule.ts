@@ -53,8 +53,8 @@ function startPolling(runtime: Runtime, intervalMs: number): Fiber.Fiber<never, 
       Effect.sleep(intervalMs).pipe(
         Effect.andThen(
           Effect.tryPromise({
-            try: () => runtime.exclusive(pollEffect(runtime)),
             catch: orchestratorError,
+            try: () => runtime.exclusive(pollEffect(runtime)),
           }).pipe(Effect.ignore),
         ),
       ),

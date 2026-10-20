@@ -1,9 +1,12 @@
 import assert from "node:assert";
 import { describe, it } from "node:test";
 
-import { Input } from "../src/components/input.ts";
-import { stripTerminalSequences, visibleWidth } from "../src/utils.ts";
+import Input from "../src/components/input.ts";
+import type inputTypes from "../src/components/input.types.ts";
+import utils from "../src/utils.ts";
 import editorHelpers from "./editor-helpers.ts";
+
+const { stripTerminalSequences, visibleWidth } = utils;
 
 const { typeText } = editorHelpers;
 
@@ -75,14 +78,14 @@ describe("Input component", () => {
         "ＡＢＣＤＥＦＧＨＩＪＫＬＭＮＯＰＱＲＳＴＵＶＷＸＹＺ０１２３４５６７８９ａｂｃｄｅｆｇｈｉｊｋｌｍ",
       ];
       const cursorPositions = [
-        { label: "start", move: (_input: Input) => {} },
+        { label: "start", move: (_input: inputTypes.Input) => {} },
         {
           label: "middle",
-          move: (input: Input) => {
+          move: (input: inputTypes.Input) => {
             for (let i = 0; i < 10; i++) input.handleInput("\x1b[C");
           },
         },
-        { label: "end", move: (input: Input) => input.handleInput("\x05") },
+        { label: "end", move: (input: inputTypes.Input) => input.handleInput("\x05") },
       ];
 
       for (const text of cases) {

@@ -1,15 +1,15 @@
 import {
   type ChildProcess,
   type ChildProcessByStdio,
-  execFile,
-  spawn as nodeSpawn,
-  spawnSync as nodeSpawnSync,
   type SpawnOptions,
   type SpawnOptionsWithStdioTuple,
   type SpawnSyncOptionsWithStringEncoding,
   type SpawnSyncReturns,
   type StdioNull,
   type StdioPipe,
+  execFile,
+  spawn as nodeSpawn,
+  spawnSync as nodeSpawnSync,
 } from "node:child_process";
 import type { Readable, Writable } from "node:stream";
 import { promisify } from "node:util";
@@ -17,7 +17,7 @@ import { promisify } from "node:util";
 import crossSpawn from "cross-spawn";
 import { dual } from "effect/Function";
 
-import { schedule, type Scheduled } from "../core/platform.ts";
+import { type Scheduled, schedule } from "../core/platform.ts";
 import { callbackPromise } from "./interop.ts";
 
 export type { ChildProcess };

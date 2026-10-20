@@ -1,5 +1,5 @@
 import * as NodeServices from "@effect/platform-node/NodeServices";
-import { fauxAssistantMessage, fauxToolCall } from "@msa/ai";
+import ai from "@msa/ai";
 import testing from "@msa/testing";
 import { Effect, FileSystem, ManagedRuntime } from "effect";
 import { afterEach, describe, expect, it, vi } from "vite-plus/test";
@@ -7,6 +7,8 @@ import { afterEach, describe, expect, it, vi } from "vite-plus/test";
 import { createMcpToolName } from "../../src/extensions/mcp/tools.ts";
 import agentSessionMcpSupport from "./agent-session-mcp-support.ts";
 import harnessModule from "./harness.ts";
+
+const { fauxAssistantMessage, fauxToolCall } = ai;
 
 const { TINY_PNG_BASE64, declaredToolNames, harnesses, nestedToolNames, setup } =
   agentSessionMcpSupport;

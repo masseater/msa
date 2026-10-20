@@ -1,11 +1,14 @@
 import { Effect } from "effect";
 import { describe, expect, it } from "vite-plus/test";
 
-import { stream as streamOpenAIResponses } from "../src/api/openai-responses.ts";
-import type { Model } from "../src/types.ts";
-import { normalizeContext } from "../src/utils/transcript.ts";
+import openaiResponses from "../src/api/openai-responses.ts";
+import type typesModule from "../src/types.types.ts";
+import transcript from "../src/utils/transcript.ts";
 
-const model: Model<"openai-responses"> = {
+const { normalizeContext } = transcript;
+const { stream: streamOpenAIResponses } = openaiResponses;
+
+const model: typesModule.Model<"openai-responses"> = {
   api: "openai-responses",
   baseUrl: "https://api.openai.com/v1",
   contextWindow: 400000,
@@ -26,7 +29,7 @@ const context = normalizeContext({
 
 const capturePayload = Effect.fn("capturePayload")(function* (
   apiKey: string,
-  requestModel: Model<"openai-responses"> = model,
+  requestModel: typesModule.Model<"openai-responses"> = model,
 ) {
   let payload: Record<string, unknown> | undefined;
   yield* Effect.promise(() =>

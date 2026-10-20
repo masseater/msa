@@ -1,5 +1,5 @@
-import type { AgentTool } from "@msa/agent-core";
-import { fauxAssistantMessage, fauxToolCall } from "@msa/ai";
+import type agentTypes from "@msa/agent-core/index.types";
+import ai from "@msa/ai";
 import testing from "@msa/testing";
 import { Effect } from "effect";
 import { Type } from "typebox";
@@ -8,11 +8,13 @@ import { afterEach, describe, expect, it } from "vite-plus/test";
 import harnessModule from "../harness.ts";
 import type harnessTypes from "../harness.types.ts";
 
+const { fauxAssistantMessage, fauxToolCall } = ai;
+
 const { createHarness, getUserTexts } = harnessModule;
 
 const { gate } = testing;
 
-function createWaitTool(released: Promise<void>): AgentTool {
+function createWaitTool(released: Promise<void>): agentTypes.AgentTool {
   return {
     description: "Wait until released",
     execute: () =>

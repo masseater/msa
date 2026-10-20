@@ -19,7 +19,7 @@ const OUTSIDE_BASE = "Replacement range is outside the base content.";
 function getLineSpans(content: string): LineSpan[] {
   let offset = 0;
   return splitLinesWithEndings(content).map((line) => {
-    const span = { start: offset, end: offset + line.length };
+    const span = { end: offset + line.length, start: offset };
     offset = span.end;
     return span;
   });
@@ -40,7 +40,7 @@ function getReplacementLineRange(lines: LineSpan[], replacement: TextReplacement
     if (line.end >= replacementEnd) break;
     endLine++;
   }
-  return { startLine, endLine: endLine + 1 };
+  return { endLine: endLine + 1, startLine };
 }
 
 export interface ApplyReplacementsInput {
@@ -117,8 +117,8 @@ export function applyReplacementsPreservingUnchangedLines({
     }
     result += applyReplacements({
       content: baseContent.slice(groupStartLine.start, groupEndLine.end),
-      replacements: group.replacements,
       offset: groupStartLine.start,
+      replacements: group.replacements,
     });
     originalLineIndex = group.endLine;
   }

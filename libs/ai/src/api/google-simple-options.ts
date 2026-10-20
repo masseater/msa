@@ -1,31 +1,22 @@
-import { clampThinkingLevel } from "../models.ts";
-import type { Model, SimpleStreamOptions, ThinkingBudgets, TranscriptContext } from "../types.ts";
-import type { GoogleRequestOptions } from "./google-params.ts";
-import {
-  type GoogleApiType,
-  type ResolvedGoogleThinkingLevel,
-  resolveGoogleThinkingLevel,
-  toGoogleThinkingLevel,
-  usesGoogleThinkingLevel,
-} from "./google-thinking.ts";
-import { buildBaseOptions } from "./simple-options.ts";
+import modelsModule from "../models.ts";
+import type googleParamsTypes from "./google-params.types.ts";
+import type googleSimpleOptionsTypes from "./google-simple-options.types.ts";
+import googleThinkingModule from "./google-thinking.ts";
+import type googleThinkingTypes from "./google-thinking.types.ts";
+import simpleOptions from "./simple-options.ts";
 
-export interface GoogleSimpleRequest<T extends GoogleApiType> {
-  readonly model: Model<T>;
-  readonly context: TranscriptContext;
-  readonly options: SimpleStreamOptions | undefined;
-  readonly apiKey: string | undefined;
-  readonly budgetFor: (
-    level: ResolvedGoogleThinkingLevel,
-    customBudgets: ThinkingBudgets | undefined,
-  ) => number;
-}
+const { clampThinkingLevel } = modelsModule;
+const { resolveGoogleThinkingLevel, toGoogleThinkingLevel, usesGoogleThinkingLevel } =
+  googleThinkingModule;
+const { buildBaseOptions } = simpleOptions;
 
-function googleThinking<T extends GoogleApiType>({
+function googleThinking<T extends googleThinkingTypes.GoogleApiType>({
   model,
   options,
   budgetFor,
-}: GoogleSimpleRequest<T>): NonNullable<GoogleRequestOptions["thinking"]> {
+}: googleSimpleOptionsTypes.GoogleSimpleRequest<T>): NonNullable<
+  googleParamsTypes.GoogleRequestOptions["thinking"]
+> {
   if (options?.reasoning === undefined) return { enabled: false };
   const clampedReasoning = clampThinkingLevel(model, options.reasoning);
   if (clampedReasoning === "off") return { enabled: false };
@@ -33,16 +24,22 @@ function googleThinking<T extends GoogleApiType>({
   if (usesGoogleThinkingLevel(model)) {
     return { enabled: true, level: toGoogleThinkingLevel(resolvedLevel) };
   }
-  return { enabled: true, budgetTokens: budgetFor(resolvedLevel, options.thinkingBudgets) };
+  return { budgetTokens: budgetFor(resolvedLevel, options.thinkingBudgets), enabled: true };
 }
 
-export function googleSimpleOptions<T extends GoogleApiType>(
-  request: GoogleSimpleRequest<T>,
-): GoogleRequestOptions {
+function googleSimpleOptions<T extends googleThinkingTypes.GoogleApiType>(
+  request: googleSimpleOptionsTypes.GoogleSimpleRequest<T>,
+): googleParamsTypes.GoogleRequestOptions {
   const { model, context, options, apiKey } = request;
   return {
     ...buildBaseOptions(model, context, options, apiKey),
-    toolChoice: options?.toolChoice,
     thinking: googleThinking(request),
+    toolChoice: options?.toolChoice,
   };
 }
+
+const googleSimpleOptionsModule = {
+  googleSimpleOptions,
+};
+
+export default googleSimpleOptionsModule;

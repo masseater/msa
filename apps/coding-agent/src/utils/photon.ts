@@ -77,9 +77,9 @@ function patchPhotonWasmRead(): () => void {
     mutableFs.readFileSync = patchedReadFileSync;
   } catch {
     Object.defineProperty(fs, "readFileSync", {
+      configurable: true,
       value: patchedReadFileSync,
       writable: true,
-      configurable: true,
     });
   }
 
@@ -88,9 +88,9 @@ function patchPhotonWasmRead(): () => void {
       mutableFs.readFileSync = originalReadFileSync;
     } catch {
       Object.defineProperty(fs, "readFileSync", {
+        configurable: true,
         value: originalReadFileSync,
         writable: true,
-        configurable: true,
       });
     }
   };

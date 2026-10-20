@@ -1,11 +1,14 @@
-import type { Message } from "@msa/ai";
+import type aiTypes from "@msa/ai/index.types";
 import { Effect } from "effect";
 import { describe, expect, it } from "vite-plus/test";
 
-import { agentLoop } from "../src/agent-loop.ts";
-import { setDefaultStreamFn } from "../src/index.ts";
-import type { AgentContext, AgentLoopConfig, AgentMessage } from "../src/types.ts";
+import agentLoopModule from "../src/agent-loop.ts";
+import agent from "../src/index.ts";
+import type typesModule from "../src/types.ts";
 import fixtures from "./support/fixtures.ts";
+
+const { setDefaultStreamFn } = agent;
+const { agentLoop } = agentLoopModule;
 
 const {
   collect,
@@ -21,8 +24,11 @@ const {
 const usesConfiguredDefault = Effect.gen(function* () {
   const script = scripted(textMessage("fallback"));
   setDefaultStreamFn(script.streamFn);
-  const context: AgentContext = { messages: [], tools: [] };
-  const config: AgentLoopConfig = { convertToLlm: identityConverter, model: createModel() };
+  const context: typesModule.AgentContext = { messages: [], tools: [] };
+  const config: typesModule.AgentLoopConfig = {
+    convertToLlm: identityConverter,
+    model: createModel(),
+  };
   const stream = Reflect.apply(agentLoop, undefined, [
     [createUserMessage("Hello")],
     context,
@@ -61,7 +67,7 @@ const emitsAgentMessageEvents = Effect.gen(function* () {
 });
 
 const transcriptOnlyContext = Effect.gen(function* () {
-  const initialSystem: AgentMessage = {
+  const initialSystem: typesModule.AgentMessage = {
     content: "Transcript prompt",
     role: "system",
     timestamp: 1,
@@ -82,8 +88,8 @@ const transcriptOnlyContext = Effect.gen(function* () {
 
 const customMessagesThroughConverter = Effect.gen(function* () {
   const notification = { role: "notification", text: "This is a notification", timestamp: now() };
-  let convertedMessages: Message[] = [];
-  const config: AgentLoopConfig = {
+  let convertedMessages: aiTypes.Message[] = [];
+  const config: typesModule.AgentLoopConfig = {
     convertToLlm: (messages) => {
       convertedMessages = messages
         .filter((message) => (message as { role: string }).role !== "notification")
@@ -92,13 +98,13 @@ const customMessagesThroughConverter = Effect.gen(function* () {
             message.role === "user" ||
             message.role === "assistant" ||
             message.role === "toolResult",
-        ) as Message[];
+        ) as aiTypes.Message[];
       return convertedMessages;
     },
     model: createModel(),
   };
-  const context: AgentContext = {
-    messages: [notification as unknown as AgentMessage],
+  const context: typesModule.AgentContext = {
+    messages: [notification as unknown as typesModule.AgentMessage],
     tools: [],
   };
   const { streamFn } = scripted(textMessage("Response"));
@@ -108,14 +114,14 @@ const customMessagesThroughConverter = Effect.gen(function* () {
 });
 
 const transformsBeforeConverting = Effect.gen(function* () {
-  let transformedMessages: AgentMessage[] = [];
-  let convertedMessages: Message[] = [];
-  const config: AgentLoopConfig = {
+  let transformedMessages: typesModule.AgentMessage[] = [];
+  let convertedMessages: aiTypes.Message[] = [];
+  const config: typesModule.AgentLoopConfig = {
     convertToLlm: (messages) => {
       convertedMessages = messages.filter(
         (message) =>
           message.role === "user" || message.role === "assistant" || message.role === "toolResult",
-      ) as Message[];
+      ) as aiTypes.Message[];
       return convertedMessages;
     },
     model: createModel(),
@@ -124,7 +130,7 @@ const transformsBeforeConverting = Effect.gen(function* () {
       return Promise.resolve(transformedMessages);
     },
   };
-  const context: AgentContext = {
+  const context: typesModule.AgentContext = {
     messages: [
       createUserMessage("old message 1"),
       createAssistantMessage([{ text: "old response 1", type: "text" }]),

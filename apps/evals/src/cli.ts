@@ -3,22 +3,22 @@ import { Console, Data, DateTime, Effect, Schema } from "effect";
 
 import { type EvalCliOptions, parseEvalCli } from "./cli-options.ts";
 import {
-  buildImages,
   type DockerContext,
+  buildImages,
   discoverCases,
   requireEvalAuthFile,
   runTask,
 } from "./docker.ts";
 import {
-  createTaskPlan,
-  type DiscoveredEvalCase,
   DOCUMENTATION_VARIANTS,
+  type DiscoveredEvalCase,
   type EvalTask,
+  createTaskPlan,
   parseDiscoveredCases,
 } from "./plan.ts";
 import { files, pathOperations, randomUuid, sha256Hex } from "./platform.ts";
 import { formatEvalComparisonReport } from "./report-format.ts";
-import { readTaskObservation, erroredObservation } from "./report-read.ts";
+import { erroredObservation, readTaskObservation } from "./report-read.ts";
 import { summarizeEvalObservations } from "./report-summary.ts";
 import type { EvalObservation } from "./report-types.ts";
 
@@ -85,7 +85,7 @@ const discoverVariant = (
   vitestArgs: readonly string[],
 ): Effect.Effect<DiscoveredEvalCase[]> =>
   Effect.gen(function* () {
-    const path = yield* discoverCases({ context: docker, variant, files: evalFiles, vitestArgs });
+    const path = yield* discoverCases({ context: docker, files: evalFiles, variant, vitestArgs });
     return parseDiscoveredCases(yield* decodeJson(yield* files.readFileString(path)));
   });
 
@@ -128,9 +128,9 @@ const runAllTasks = (
         reportPath === undefined
           ? erroredObservation(task)
           : yield* readTaskObservation({
-              task,
-              reportPath,
               artifactDirectory: docker.artifactDirectory,
+              reportPath,
+              task,
             }),
       );
       yield* files.writeFileString(
@@ -153,11 +153,11 @@ const prepareDocker = (
       return yield* Effect.die(new Error("Documentation variants resolved to the same image."));
     }
     return {
-      images,
       artifactDirectory,
       authPath,
-      provider: cli.provider,
+      images,
       model: cli.model,
+      provider: cli.provider,
       runsPerVariant: cli.runsPerVariant,
     };
   });
@@ -177,10 +177,10 @@ const discoverCommonCases = (
       );
     }
     const cases = first.map(({ fullName, evalSet, caseId, file }) => ({
-      fullName,
-      evalSet,
       caseId,
+      evalSet,
       file: normalizeDiscoveredFile(file),
+      fullName,
     }));
     if (cases.length === 0) {
       return yield* Effect.die(new Error("No documentation eval cases matched the selection."));
@@ -214,18 +214,18 @@ const main = Effect.gen(function* () {
   const modelIdentity = `${provider}/${model}`;
   const evalFiles = yield* selectFiles(cli.requestedFiles);
   const artifactDirectory = pathOperations.resolve(packageRoot, ".eval", yield* artifactRunId);
-  const docker = yield* prepareDocker({ ...cli, provider, model }, artifactDirectory);
+  const docker = yield* prepareDocker({ ...cli, model, provider }, artifactDirectory);
   const cases = yield* discoverCommonCases(docker, evalFiles, cli.discoveryArgs);
   const tasks = createTaskPlan(cases, modelIdentity, cli.runsPerVariant);
   const protocolDigest = yield* writeProtocol(
     artifactDirectory,
     {
-      schemaVersion: 1,
+      cases: cases.map(({ evalSet, caseId, file }) => ({ evalSet, caseId, file })),
+      files: evalFiles,
+      images: docker.images,
       model: modelIdentity,
       runsPerVariant: cli.runsPerVariant,
-      images: docker.images,
-      files: evalFiles,
-      cases: cases.map(({ evalSet, caseId, file }) => ({ evalSet, caseId, file })),
+      schemaVersion: 1,
       tasks,
     },
     tasks,

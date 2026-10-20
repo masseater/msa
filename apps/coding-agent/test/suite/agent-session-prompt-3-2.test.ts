@@ -1,5 +1,6 @@
-import type { AgentTool } from "@msa/agent-core";
-import { type Model, fauxAssistantMessage, fauxToolCall } from "@msa/ai";
+import type agentTypes from "@msa/agent-core/index.types";
+import ai from "@msa/ai";
+import type aiTypes from "@msa/ai/index.types";
 import testing from "@msa/testing";
 import { Effect } from "effect";
 import { Type } from "typebox";
@@ -7,6 +8,8 @@ import { afterEach, describe, expect, it, vi } from "vite-plus/test";
 
 import agentSessionPromptSupport from "./agent-session-prompt-support.ts";
 import harnessModule from "./harness.ts";
+
+const { fauxAssistantMessage, fauxToolCall } = ai;
 
 const { harnesses, tempDirs } = agentSessionPromptSupport;
 
@@ -30,7 +33,7 @@ vi.mock("../../src/utils/image-process.ts", () => ({ processImage }));
 const throwsWhenPromptedDuringStreamingWithout = Effect.gen(function* () {
   const runPromise = Effect.runPromiseWith(yield* Effect.context<never>());
   const toolRelease = gate();
-  const waitTool: AgentTool = {
+  const waitTool: agentTypes.AgentTool = {
     description: "Wait for release",
     execute: () =>
       runPromise(
@@ -128,7 +131,7 @@ const throwsWhenPromptedDuringManualCompaction = Effect.gen(function* () {
 const throwsWhenPromptingWithoutAModel = Effect.gen(function* () {
   const harness = yield* Effect.promise(() => createHarness());
   harnesses.push(harness);
-  harness.session.agent.state.model = undefined as unknown as Model<any>;
+  harness.session.agent.state.model = undefined as unknown as aiTypes.Model<any>;
 
   yield* Effect.promise(() =>
     expect(harness.session.prompt("hi")).rejects.toThrow("No model selected."),

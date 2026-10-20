@@ -1,6 +1,6 @@
 import { tmpdir } from "os";
 
-import { getNativeClipboard } from "@msa/tui";
+import tui from "@msa/tui";
 import * as Effect from "effect/Effect";
 import { dual } from "effect/Function";
 
@@ -11,6 +11,8 @@ import { detectSupportedImageMimeType } from "./mime.ts";
 import { readFile, remove } from "./node-fs.ts";
 import { loadPhoton } from "./photon.ts";
 import { isWSL } from "./wsl.ts";
+
+const { getNativeClipboard } = tui;
 
 export type ClipboardImage = {
   bytes: Uint8Array;
@@ -50,7 +52,7 @@ function selectPreferredImageMimeType(mimeTypes: string[]): string | null {
   const normalized = mimeTypes
     .map((t) => t.trim())
     .filter(Boolean)
-    .map((t) => ({ raw: t, base: baseMimeType(t) }));
+    .map((t) => ({ base: baseMimeType(t), raw: t }));
 
   for (const preferred of SUPPORTED_IMAGE_MIME_TYPES) {
     const match = normalized.find((t) => t.base === preferred);
@@ -175,7 +177,7 @@ function readClipboardImageViaPowerShell(): Promise<ClipboardImage | null> {
         return null;
       } finally {
         try {
-          yield* awaited(remove({ path: tmpFile, force: true }));
+          yield* awaited(remove({ force: true, path: tmpFile }));
         } catch {}
       }
     }),

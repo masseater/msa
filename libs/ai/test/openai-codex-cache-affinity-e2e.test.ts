@@ -1,9 +1,11 @@
 import { Clock, Effect } from "effect";
 import { describe, expect, inject, it } from "vite-plus/test";
 
-import { complete } from "../src/compat.ts";
-import type { Context } from "../src/types.ts";
+import compat from "../src/compat.ts";
+import type typesModule from "../src/types.types.ts";
 import modelChoice from "./model-choice.ts";
+
+const { complete } = compat;
 
 const { chooseModel } = modelChoice;
 
@@ -17,7 +19,7 @@ describe("openai-codex cache affinity e2e", () => {
         Effect.gen(function* () {
           const model = chooseModel("openai-codex", "Codex");
           const sessionId = "0195d6e4-4cf9-7f44-a2d8-f8f7f49ee9d3";
-          const context: Context = {
+          const context: typesModule.Context = {
             messages: [
               {
                 content: "Reply with exactly: cache affinity e2e success",

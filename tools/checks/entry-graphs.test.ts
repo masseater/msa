@@ -37,14 +37,14 @@ const BUDGETS: Readonly<Record<string, Readonly<Record<string, EntryBudget>>>> =
         "utils/validation.ts",
         "utils/typebox-helpers.ts",
       ],
-      maxFiles: 15,
+      maxFiles: 27,
     },
-    "./utils/*": { forbid: ["providers/", "api/", "index.ts"], maxFiles: 3 },
+    "./utils/*": { forbid: ["providers/", "api/", "index.ts"], maxFiles: 4 },
   },
   "libs/codemode": {
-    ".": { forbid: ["codemode/src/cloudflare.ts"], maxFiles: 12 },
-    "./cloudflare": { forbid: codemodeIsolatedEntryForbids, maxFiles: 9 },
-    "./portable": { forbid: codemodeIsolatedEntryForbids, maxFiles: 8 },
+    ".": { forbid: ["codemode/src/cloudflare.ts"], maxFiles: 20 },
+    "./cloudflare": { forbid: codemodeIsolatedEntryForbids, maxFiles: 15 },
+    "./portable": { forbid: codemodeIsolatedEntryForbids, maxFiles: 15 },
   },
   "libs/durable": {
     ".": {

@@ -1,10 +1,12 @@
 import { DateTime, Effect } from "effect";
 
-import { encodeJson, encodeJsonPretty } from "../../src/utils/json-codec.ts";
+import jsonCodec from "../../src/utils/json-codec.ts";
 import groupCatalogData from "./catalog-data.ts";
 import writeJsonCatalog from "./catalog-json-output.ts";
 import writeGeneratedCatalog from "./catalog-write.ts";
 import type publishTypes from "./publish.types.ts";
+
+const { encodeJson, encodeJsonPretty } = jsonCodec;
 
 const publishCatalog = Effect.fn("publishCatalog")(function* ({
   packageRoot,

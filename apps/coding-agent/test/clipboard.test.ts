@@ -1,5 +1,5 @@
 import testing from "@msa/testing";
-import type { NativeClipboard } from "@msa/tui";
+import type tuiTypes from "@msa/tui/index.types";
 import { Effect } from "effect";
 import { afterEach, beforeEach, describe, expect, test, vi } from "vite-plus/test";
 
@@ -9,8 +9,8 @@ const { awaited, runTest } = testing;
 
 const mocks = vi.hoisted(() => ({
   clipboard: {
-    getImage: vi.fn<NativeClipboard["getImage"]>(),
-    getText: vi.fn<NativeClipboard["getText"]>(),
+    getImage: vi.fn<tuiTypes.NativeClipboard["getImage"]>(),
+    getText: vi.fn<tuiTypes.NativeClipboard["getText"]>(),
     setText: vi.fn<(text: string) => Promise<void>>(),
   },
   command:
@@ -21,10 +21,10 @@ const mocks = vi.hoisted(() => ({
         options?: { input?: string; timeoutMs?: number },
       ) => Promise<Buffer | undefined>
     >(),
-  getNativeClipboard: vi.fn<() => NativeClipboard | undefined>(),
+  getNativeClipboard: vi.fn<() => tuiTypes.NativeClipboard | undefined>(),
   platform: vi.fn<() => NodeJS.Platform>(),
 }));
-vi.mock("@msa/tui", () => ({ getNativeClipboard: mocks.getNativeClipboard }));
+vi.mock("@msa/tui", () => ({ default: { getNativeClipboard: mocks.getNativeClipboard } }));
 vi.mock("../src/utils/clipboard-command.ts", () => ({ runClipboardCommand: mocks.command }));
 vi.mock("node:os", () =>
   import("node:os").then((actual) => ({

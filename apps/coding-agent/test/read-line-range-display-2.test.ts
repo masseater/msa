@@ -1,5 +1,5 @@
 import testing from "@msa/testing";
-import type { TUI } from "@msa/tui";
+import type tuiTypes from "@msa/tui/index.types";
 import { Effect } from "effect";
 import { afterAll, beforeAll, describe, expect, it } from "vite-plus/test";
 
@@ -24,7 +24,7 @@ const showsStringRangesInTheTuiAndTree = Effect.gen(function* () {
     READ_ARGS,
     {},
     createReadToolDefinition(dirs.temp),
-    { requestRender() {} } as TUI,
+    { requestRender() {} } as tuiTypes.TUI,
     dirs.temp,
   );
   expect(stripAnsi(tool.render(120).join("\n"))).toContain("read notes.txt:25-37");

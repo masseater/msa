@@ -3,21 +3,17 @@ import { afterEach, describe, it } from "node:test";
 
 import { Effect } from "effect";
 
-import {
-  stripEscapeSequences,
-  stripHyperlinkSequences,
-  stripStyleSequences,
-} from "../src/ansi-sequences.ts";
-import {
-  Markdown,
-  type TUI,
-  TuiMainScreen,
-  resetCapabilitiesCache,
-  setCapabilities,
-} from "../src/index.ts";
+import ansiSequences from "../src/ansi-sequences.ts";
+import tuiModule from "../src/index.ts";
+import type tuiTypes from "../src/index.types.ts";
 import markdownHelpers from "./markdown-helpers.ts";
-import { defaultMarkdownTheme } from "./test-themes.ts";
-import { VirtualTerminal } from "./virtual-terminal.ts";
+import testThemes from "./test-themes.ts";
+import virtualTerminal from "./virtual-terminal.ts";
+
+const { Markdown, TuiMainScreen, resetCapabilitiesCache, setCapabilities } = tuiModule;
+const { defaultMarkdownTheme } = testThemes;
+const { VirtualTerminal } = virtualTerminal;
+const { stripEscapeSequences, stripHyperlinkSequences, stripStyleSequences } = ansiSequences;
 
 const { getCell } = markdownHelpers;
 
@@ -33,7 +29,7 @@ describe("Markdown component", () => {
             defaultMarkdownTheme,
           );
           const terminal = new VirtualTerminal(80, 4);
-          const tui: TUI = new TuiMainScreen(terminal);
+          const tui: tuiTypes.TUI = new TuiMainScreen(terminal);
           tui.addChild(markdown);
           tui.start();
           yield* Effect.promise(() => terminal.waitForRender());

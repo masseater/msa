@@ -1,8 +1,10 @@
-import type { AgentMessage } from "@msa/agent-core";
-import { getCurrentSystemMessage } from "@msa/ai";
+import type agentTypes from "@msa/agent-core/index.types";
+import ai from "@msa/ai";
 import { Function as Fn } from "effect";
 
 import type { Extension, ExtensionEvent, UserBashEventResult } from "./types.ts";
+
+const { getCurrentSystemMessage } = ai;
 
 export function isUserBashEventResult(value: unknown): value is UserBashEventResult {
   if (typeof value !== "object" || value === null) return false;
@@ -45,20 +47,31 @@ export const snapshotEventHandlers: {
 } = Fn.dual(2, snapshotEventHandlersImpl);
 
 export const sameMessages: {
-  (right: AgentMessage[]): (left: AgentMessage[]) => boolean;
-  (left: AgentMessage[], right: AgentMessage[]): boolean;
+  (right: agentTypes.AgentMessage[]): (left: agentTypes.AgentMessage[]) => boolean;
+  (left: agentTypes.AgentMessage[], right: agentTypes.AgentMessage[]): boolean;
 } = Fn.dual(
   2,
-  (left: AgentMessage[], right: AgentMessage[]): boolean =>
+  (left: agentTypes.AgentMessage[], right: agentTypes.AgentMessage[]): boolean =>
     left.length === right.length && left.every((message, index) => message === right[index]),
 );
 
 export const restoreSystemMessages: {
-  (visible: AgentMessage[], returned: AgentMessage[]): (current: AgentMessage[]) => AgentMessage[];
-  (current: AgentMessage[], visible: AgentMessage[], returned: AgentMessage[]): AgentMessage[];
+  (
+    visible: agentTypes.AgentMessage[],
+    returned: agentTypes.AgentMessage[],
+  ): (current: agentTypes.AgentMessage[]) => agentTypes.AgentMessage[];
+  (
+    current: agentTypes.AgentMessage[],
+    visible: agentTypes.AgentMessage[],
+    returned: agentTypes.AgentMessage[],
+  ): agentTypes.AgentMessage[];
 } = Fn.dual(
   3,
-  (current: AgentMessage[], visible: AgentMessage[], returned: AgentMessage[]): AgentMessage[] => {
+  (
+    current: agentTypes.AgentMessage[],
+    visible: agentTypes.AgentMessage[],
+    returned: agentTypes.AgentMessage[],
+  ): agentTypes.AgentMessage[] => {
     if (sameMessages(returned, visible)) return current;
     const head = getCurrentSystemMessage(current);
     return head === undefined ? returned : [head, ...returned];

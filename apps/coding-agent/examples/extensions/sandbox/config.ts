@@ -13,6 +13,11 @@ const fsService = runtime.runSync(FileSystem.FileSystem);
 
 const DEFAULT_CONFIG: SandboxConfig = {
   enabled: true,
+  filesystem: {
+    allowWrite: [".", "/tmp"],
+    denyRead: ["~/.ssh", "~/.aws", "~/.gnupg"],
+    denyWrite: [".env", ".env.*", "*.pem", "*.key"],
+  },
   network: {
     allowedDomains: [
       "npmjs.org",
@@ -27,11 +32,6 @@ const DEFAULT_CONFIG: SandboxConfig = {
       "raw.githubusercontent.com",
     ],
     deniedDomains: [],
-  },
-  filesystem: {
-    denyRead: ["~/.ssh", "~/.aws", "~/.gnupg"],
-    allowWrite: [".", "/tmp"],
-    denyWrite: [".env", ".env.*", "*.pem", "*.key"],
   },
 };
 

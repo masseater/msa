@@ -1,6 +1,7 @@
 import { Data, Function } from "effect";
 
-import type { Tool } from "../types.ts";
+import type typesModule from "../types.types.ts";
+import type constrainedSamplingSchemaTypes from "./constrained-sampling-schema.types.ts";
 
 interface JsonSchemaObject {
   [key: string]: unknown;
@@ -12,8 +13,6 @@ interface JsonSchemaObject {
 class UnsupportedStrictJsonSchemaError extends Data.TaggedError(
   "UnsupportedStrictJsonSchemaError",
 )<{ readonly message: string }> {}
-
-export type UnsupportedStrictSchemaKeywordCheck = (key: string, value: unknown) => boolean;
 
 const UNSUPPORTED_STRICT_SCHEMA_KEYS = [
   "$ref",
@@ -63,7 +62,9 @@ function schemaAllowsNull(schema: unknown): boolean {
 
 function assertSupportedKeys(
   schema: JsonSchemaObject,
-  isUnsupportedKeyword: UnsupportedStrictSchemaKeywordCheck | undefined,
+  isUnsupportedKeyword:
+    | constrainedSamplingSchemaTypes.UnsupportedStrictSchemaKeywordCheck
+    | undefined,
 ): void {
   for (const key of UNSUPPORTED_STRICT_SCHEMA_KEYS) {
     if (schema[key] !== undefined) {
@@ -82,7 +83,9 @@ function assertSupportedKeys(
 
 function assertSupportedUnion(
   schema: JsonSchemaObject,
-  isUnsupportedKeyword: UnsupportedStrictSchemaKeywordCheck | undefined,
+  isUnsupportedKeyword:
+    | constrainedSamplingSchemaTypes.UnsupportedStrictSchemaKeywordCheck
+    | undefined,
 ): void {
   if (schema["anyOf"] === undefined) return;
   if (!Array.isArray(schema["anyOf"]) || schema["anyOf"].length === 0) {
@@ -102,7 +105,9 @@ function assertSupportedUnion(
 
 function assertSupportedItems(
   schema: JsonSchemaObject,
-  isUnsupportedKeyword: UnsupportedStrictSchemaKeywordCheck | undefined,
+  isUnsupportedKeyword:
+    | constrainedSamplingSchemaTypes.UnsupportedStrictSchemaKeywordCheck
+    | undefined,
 ): void {
   if (schema["items"] === undefined) return;
   if (Array.isArray(schema["items"])) {
@@ -125,7 +130,9 @@ function readRequiredNames(schema: JsonSchemaObject): ReadonlyArray<string> {
 
 function normalizeObjectSchema(
   schema: JsonSchemaObject,
-  isUnsupportedKeyword: UnsupportedStrictSchemaKeywordCheck | undefined,
+  isUnsupportedKeyword:
+    | constrainedSamplingSchemaTypes.UnsupportedStrictSchemaKeywordCheck
+    | undefined,
 ): void {
   if (schema.properties !== undefined && !isJsonSchemaObject(schema.properties)) {
     throw new UnsupportedStrictJsonSchemaError({
@@ -152,7 +159,7 @@ function normalizeObjectSchema(
 
 function makeJsonSchemaNodeStrict(
   schema: unknown,
-  isUnsupportedKeyword?: UnsupportedStrictSchemaKeywordCheck,
+  isUnsupportedKeyword?: constrainedSamplingSchemaTypes.UnsupportedStrictSchemaKeywordCheck,
 ): void {
   if (!isJsonSchemaObject(schema)) {
     throw new UnsupportedStrictJsonSchemaError({ message: "boolean schemas are unsupported" });
@@ -174,19 +181,19 @@ function makeJsonSchemaNodeStrict(
   normalizeObjectSchema(schema, isUnsupportedKeyword);
 }
 
-export const makeStrictJsonSchema: {
+const makeStrictJsonSchema: {
   (
-    isUnsupportedKeyword?: UnsupportedStrictSchemaKeywordCheck,
-  ): (schema: Tool["parameters"]) => Record<string, unknown>;
+    isUnsupportedKeyword?: constrainedSamplingSchemaTypes.UnsupportedStrictSchemaKeywordCheck,
+  ): (schema: typesModule.Tool["parameters"]) => Record<string, unknown>;
   (
-    schema: Tool["parameters"],
-    isUnsupportedKeyword?: UnsupportedStrictSchemaKeywordCheck,
+    schema: typesModule.Tool["parameters"],
+    isUnsupportedKeyword?: constrainedSamplingSchemaTypes.UnsupportedStrictSchemaKeywordCheck,
   ): Record<string, unknown>;
 } = Function.dual(
   (args) => typeof args[0] === "object" && args[0] !== null,
   function (
-    schema: Tool["parameters"],
-    isUnsupportedKeyword?: UnsupportedStrictSchemaKeywordCheck,
+    schema: typesModule.Tool["parameters"],
+    isUnsupportedKeyword?: constrainedSamplingSchemaTypes.UnsupportedStrictSchemaKeywordCheck,
   ): Record<string, unknown> {
     const cloned: unknown = structuredClone(schema);
     if (!isJsonSchemaObject(cloned)) {
@@ -200,31 +207,34 @@ export const makeStrictJsonSchema: {
   },
 );
 
-export const getJsonSchemaToolParameters: {
-  (strict: boolean | undefined): (tool: Tool) => Tool["parameters"];
-  (tool: Tool, strict: boolean | undefined): Tool["parameters"];
-} = Function.dual(2, function (tool: Tool, strict: boolean | undefined): Tool["parameters"] {
-  return (
-    strict === true ? makeStrictJsonSchema(tool.parameters) : tool.parameters
-  ) as Tool["parameters"];
-});
+const getJsonSchemaToolParameters: {
+  (strict: boolean | undefined): (tool: typesModule.Tool) => typesModule.Tool["parameters"];
+  (tool: typesModule.Tool, strict: boolean | undefined): typesModule.Tool["parameters"];
+} = Function.dual(
+  2,
+  function (tool: typesModule.Tool, strict: boolean | undefined): typesModule.Tool["parameters"] {
+    return (
+      strict === true ? makeStrictJsonSchema(tool.parameters) : tool.parameters
+    ) as typesModule.Tool["parameters"];
+  },
+);
 
-export const resolveJsonSchemaStrictSampling: {
+const resolveJsonSchemaStrictSampling: {
   (
     supportsStrictMode: boolean,
-    isUnsupportedKeyword?: UnsupportedStrictSchemaKeywordCheck,
-  ): (tool: Tool) => boolean | undefined;
+    isUnsupportedKeyword?: constrainedSamplingSchemaTypes.UnsupportedStrictSchemaKeywordCheck,
+  ): (tool: typesModule.Tool) => boolean | undefined;
   (
-    tool: Tool,
+    tool: typesModule.Tool,
     supportsStrictMode: boolean,
-    isUnsupportedKeyword?: UnsupportedStrictSchemaKeywordCheck,
+    isUnsupportedKeyword?: constrainedSamplingSchemaTypes.UnsupportedStrictSchemaKeywordCheck,
   ): boolean | undefined;
 } = Function.dual(
   (args) => typeof args[0] === "object" && args[0] !== null,
   function (
-    tool: Tool,
+    tool: typesModule.Tool,
     supportsStrictMode: boolean,
-    isUnsupportedKeyword?: UnsupportedStrictSchemaKeywordCheck,
+    isUnsupportedKeyword?: constrainedSamplingSchemaTypes.UnsupportedStrictSchemaKeywordCheck,
   ): boolean | undefined {
     const config = tool.constrainedSampling;
     if (config === undefined || config === false || config.type !== "json_schema") return undefined;
@@ -250,3 +260,11 @@ export const resolveJsonSchemaStrictSampling: {
     return undefined;
   },
 );
+
+const constrainedSamplingSchema = {
+  getJsonSchemaToolParameters,
+  makeStrictJsonSchema,
+  resolveJsonSchemaStrictSampling,
+};
+
+export default constrainedSamplingSchema;

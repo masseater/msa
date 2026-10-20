@@ -1,4 +1,4 @@
-import type { AssistantMessage, Message } from "@msa/ai";
+import type aiTypes from "@msa/ai/index.types";
 import { Function } from "effect";
 
 import type typesModule from "./types.types.ts";
@@ -46,7 +46,7 @@ Use this EXACT format:
 
 Keep each section concise. Preserve exact file paths, function names, and error messages.`;
 
-function summaryText(message: AssistantMessage): string | undefined {
+function summaryText(message: aiTypes.AssistantMessage): string | undefined {
   if (
     message.stopReason !== "stop" ||
     message.content.some((content) => content.type === "toolCall")
@@ -59,7 +59,7 @@ function summaryText(message: AssistantMessage): string | undefined {
   return text.length === 0 ? undefined : text;
 }
 
-function summaryFailure(message: AssistantMessage): string {
+function summaryFailure(message: aiTypes.AssistantMessage): string {
   if (message.stopReason === "error" || message.stopReason === "aborted") {
     return `Summarization failed: ${message.errorMessage ?? message.stopReason}`;
   }
@@ -70,13 +70,16 @@ function summaryFailure(message: AssistantMessage): string {
   return "Summarization produced no text";
 }
 
-const summaryPrompt: typesModule.Dual2<readonly Message[], string | undefined, string> =
-  Function.dual(2, (messages: readonly Message[], instructions: string | undefined): string => {
-    const focus = instructions === undefined ? "" : `\n\nAdditional focus: ${instructions}`;
-    return `<conversation>\n${serializeConversation(messages)}\n</conversation>\n\n${SUMMARIZATION_PROMPT}${focus}`;
-  });
+const summaryPrompt: typesModule.Dual2<readonly aiTypes.Message[], string | undefined, string> =
+  Function.dual(
+    2,
+    (messages: readonly aiTypes.Message[], instructions: string | undefined): string => {
+      const focus = instructions === undefined ? "" : `\n\nAdditional focus: ${instructions}`;
+      return `<conversation>\n${serializeConversation(messages)}\n</conversation>\n\n${SUMMARIZATION_PROMPT}${focus}`;
+    },
+  );
 
-function serializeConversation(messages: readonly Message[]): string {
+function serializeConversation(messages: readonly aiTypes.Message[]): string {
   const parts: string[] = [];
   for (const message of messages) {
     if (message.role === "user") {

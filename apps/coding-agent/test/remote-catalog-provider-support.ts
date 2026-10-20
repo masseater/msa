@@ -1,19 +1,15 @@
-import {
-  InMemoryModelsStore,
-  type Model,
-  type ModelsPublication,
-  type Provider,
-  type RefreshModelsContext,
-  createProvider,
-} from "@msa/ai";
+import ai from "@msa/ai";
+import type aiTypes from "@msa/ai/index.types";
 import testing from "@msa/testing";
 import { Effect } from "effect";
+
+const { createProvider } = ai;
 
 const { abortController, awaited, runTest } = testing;
 
 const neverAbortedSignal: AbortSignal = abortController().signal;
 
-function model(id: string): Model<"openai-completions"> {
+function model(id: string): aiTypes.Model<"openai-completions"> {
   return {
     api: "openai-completions" as const,
     baseUrl: "https://example.test/v1",
@@ -28,7 +24,7 @@ function model(id: string): Model<"openai-completions"> {
   };
 }
 
-function builtinProvider(): Provider {
+function builtinProvider(): aiTypes.Provider {
   return createProvider({
     api: {
       stream: () => {
@@ -45,15 +41,15 @@ function builtinProvider(): Provider {
 }
 
 function refreshProvider(
-  provider: Provider,
-  store: InMemoryModelsStore,
-  overrides: Partial<Pick<RefreshModelsContext, "allowNetwork" | "force" | "signal">> = {},
+  provider: aiTypes.Provider,
+  store: aiTypes.InMemoryModelsStore,
+  overrides: Partial<Pick<aiTypes.RefreshModelsContext, "allowNetwork" | "force" | "signal">> = {},
 ): Promise<void> {
   return runTest(
     Effect.gen(function* () {
       const effectRunPromise = Effect.runPromiseWith(yield* Effect.context<never>());
 
-      const publish = (publication: ModelsPublication): Promise<boolean> =>
+      const publish = (publication: aiTypes.ModelsPublication): Promise<boolean> =>
         effectRunPromise(
           Effect.gen(function* () {
             if (publication.persist === null) yield* awaited(store.delete(provider.id));

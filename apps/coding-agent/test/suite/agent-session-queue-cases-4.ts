@@ -1,10 +1,12 @@
-import { fauxAssistantMessage } from "@msa/ai";
+import ai from "@msa/ai";
 import type { ExtensionAPI } from "@msa/coding-agent";
 import { Effect } from "effect";
 import { expect } from "vite-plus/test";
 
 import agentSessionQueueCases1 from "./agent-session-queue-cases-1.ts";
 import harnessModule from "./harness.ts";
+
+const { fauxAssistantMessage } = ai;
 
 const { createHarness, getUserTexts } = harnessModule;
 const { harnesses } = agentSessionQueueCases1;

@@ -1,7 +1,7 @@
 import { Function } from "effect";
 import { type TUnsafe, Type } from "typebox";
 
-export const StringEnum: {
+const StringEnum: {
   <T extends readonly string[]>(options?: {
     description?: string;
     default?: T[number];
@@ -17,10 +17,16 @@ export const StringEnum: {
     options?: { description?: string; default?: T[number] },
   ): TUnsafe<T[number]> {
     return Type.Unsafe<T[number]>({
-      type: "string",
       enum: values as any,
+      type: "string",
       ...(options?.description && { description: options.description }),
       ...(options?.default && { default: options.default }),
     });
   },
 );
+
+const typeboxHelpers = {
+  StringEnum,
+};
+
+export default typeboxHelpers;

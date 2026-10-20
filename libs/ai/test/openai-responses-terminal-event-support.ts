@@ -1,7 +1,9 @@
-import type { AssistantMessage, Model } from "../src/types.ts";
-import { currentTimeMillis } from "../src/utils/clock.ts";
+import type typesModule from "../src/types.types.ts";
+import clock from "../src/utils/clock.ts";
 
-function createModel(): Model<"openai-responses"> {
+const { currentTimeMillis } = clock;
+
+function createModel(): typesModule.Model<"openai-responses"> {
   return {
     api: "openai-responses",
     baseUrl: "https://api.openai.com/v1",
@@ -16,7 +18,7 @@ function createModel(): Model<"openai-responses"> {
   };
 }
 
-function createOutput(model: Model<"openai-responses">): AssistantMessage {
+function createOutput(model: typesModule.Model<"openai-responses">): typesModule.AssistantMessage {
   return {
     api: model.api,
     content: [],

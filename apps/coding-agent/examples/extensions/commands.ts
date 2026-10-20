@@ -31,7 +31,7 @@ export default function commandsExtension(msa: ExtensionAPI) {
     getArgumentCompletions: (prefix) => {
       const sources = ["extension", "prompt", "skill"];
       const filtered = sources.filter((s) => s.startsWith(prefix));
-      return filtered.length > 0 ? filtered.map((s) => ({ value: s, label: s })) : null;
+      return filtered.length > 0 ? filtered.map((s) => ({ label: s, value: s })) : null;
     },
     handler: (args, ctx) =>
       Effect.runPromise(

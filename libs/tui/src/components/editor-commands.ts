@@ -1,31 +1,37 @@
-import type { KeybindingsManager } from "../keybindings.ts";
-import type { EditorAutocomplete } from "./editor-autocomplete.ts";
-import type { EditorDocument } from "./editor-document.ts";
-import { EditorHistory } from "./editor-history.ts";
-import { isShiftEnterSubmit, type KeyCommand, runFirstKeyCommand } from "./editor-keys.ts";
-import { EditorKillCommands } from "./editor-kill.ts";
-import { EditorMotion } from "./editor-motion.ts";
-import { insertPaste } from "./editor-paste.ts";
-import { normalizeEditorText } from "./editor-segments.ts";
+import type keybindingsTypes from "../keybindings.types.ts";
+import type editorAutocompleteTypes from "./editor-autocomplete.types.ts";
+import editorCommandsKit from "./editor-commands-kit.ts";
+import type editorCommandsTypes from "./editor-commands.types.ts";
+import type editorDocumentTypes from "./editor-document.types.ts";
+import type editorHistoryTypes from "./editor-history.types.ts";
+import type editorKeysTypes from "./editor-keys.types.ts";
+import type editorKillTypes from "./editor-kill.types.ts";
+import type editorMotionTypes from "./editor-motion.types.ts";
+import editorSegments from "./editor-segments.ts";
 
-export interface EditorCommandHost {
-  terminalRows(): number;
-  isSubmitDisabled(): boolean;
-  submit(text: string): void;
-}
+const { EditorHistory, editorKeys, EditorKillCommands, EditorMotion, editorPaste } =
+  editorCommandsKit;
 
-export class EditorCommands {
+const { isShiftEnterSubmit, runFirstKeyCommand } = editorKeys;
+const { insertPaste } = editorPaste;
+const { normalizeEditorText } = editorSegments;
+
+export default class EditorCommands {
   layoutWidth = 80;
-  readonly history: EditorHistory;
-  private readonly doc: EditorDocument;
-  private readonly autocomplete: EditorAutocomplete;
-  private readonly motion: EditorMotion;
-  private readonly kills: EditorKillCommands;
-  private readonly host: EditorCommandHost;
-  private readonly bindings: readonly KeyCommand[];
-  private readonly motions: readonly KeyCommand[];
+  readonly history: editorHistoryTypes.EditorHistory;
+  private readonly doc: editorDocumentTypes.EditorDocument;
+  private readonly autocomplete: editorAutocompleteTypes.EditorAutocomplete;
+  private readonly motion: editorMotionTypes.EditorMotion;
+  private readonly kills: editorKillTypes.EditorKillCommands;
+  private readonly host: editorCommandsTypes.EditorCommandHost;
+  private readonly bindings: readonly editorKeysTypes.KeyCommand[];
+  private readonly motions: readonly editorKeysTypes.KeyCommand[];
 
-  constructor(doc: EditorDocument, autocomplete: EditorAutocomplete, host: EditorCommandHost) {
+  constructor(
+    doc: editorDocumentTypes.EditorDocument,
+    autocomplete: editorAutocompleteTypes.EditorAutocomplete,
+    host: editorCommandsTypes.EditorCommandHost,
+  ) {
     this.doc = doc;
     this.autocomplete = autocomplete;
     this.host = host;
@@ -58,11 +64,11 @@ export class EditorCommands {
     ];
   }
 
-  runBinding(data: string, kb: KeybindingsManager): boolean {
+  runBinding(data: string, kb: keybindingsTypes.KeybindingsManager): boolean {
     return runFirstKeyCommand(this.bindings, data, kb);
   }
 
-  runMotion(data: string, kb: KeybindingsManager): boolean {
+  runMotion(data: string, kb: keybindingsTypes.KeybindingsManager): boolean {
     return runFirstKeyCommand(this.motions, data, kb);
   }
 
@@ -121,7 +127,7 @@ export class EditorCommands {
     this.autocomplete.refreshIfOpen();
   }
 
-  newLineOrSubmit(data: string, kb: KeybindingsManager): void {
+  newLineOrSubmit(data: string, kb: keybindingsTypes.KeybindingsManager): void {
     if (this.shouldSubmitOnBackslashEnter(data, kb)) {
       this.backspace();
       this.submit();
@@ -145,7 +151,10 @@ export class EditorCommands {
     return cursorCol > 0 && this.doc.currentLine()[cursorCol - 1] === "\\";
   }
 
-  private shouldSubmitOnBackslashEnter(data: string, kb: KeybindingsManager): boolean {
+  private shouldSubmitOnBackslashEnter(
+    data: string,
+    kb: keybindingsTypes.KeybindingsManager,
+  ): boolean {
     if (this.host.isSubmitDisabled()) return false;
     return isShiftEnterSubmit(data, kb) && this.isAfterBackslash();
   }

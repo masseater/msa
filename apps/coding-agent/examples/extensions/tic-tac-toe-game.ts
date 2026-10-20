@@ -34,19 +34,19 @@ export const AGENT_CURSOR_HOME_COL = 0;
 
 export function createInitialState(): GameState {
   return {
+    agentCursorCol: AGENT_CURSOR_HOME_COL,
+    agentCursorRow: AGENT_CURSOR_HOME_ROW,
+    agentMark: "O",
     board: [
       [" ", " ", " "],
       [" ", " ", " "],
       [" ", " ", " "],
     ],
-    userCursorRow: 1,
-    userCursorCol: 1,
-    agentCursorRow: AGENT_CURSOR_HOME_ROW,
-    agentCursorCol: AGENT_CURSOR_HOME_COL,
-    status: "playing",
-    userMark: "X",
-    agentMark: "O",
     currentTurn: "X",
+    status: "playing",
+    userCursorCol: 1,
+    userCursorRow: 1,
+    userMark: "X",
   };
 }
 
@@ -117,7 +117,7 @@ const WIN_LINES: readonly (readonly [number, number])[][] = [
 ];
 
 const isWinningLine = (board: Cell[][], line: readonly (readonly [number, number])[]): boolean => {
-  const vals = line.map(([r, c]) => getCell({ board, row: r, col: c }));
+  const vals = line.map(([r, c]) => getCell({ board, col: c, row: r }));
   return vals[0] !== " " && vals[0] === vals[1] && vals[1] === vals[2];
 };
 
@@ -132,7 +132,7 @@ export function checkWin(board: Cell[][]): GameStatus {
   const winStart = getWinLine(board)?.[0];
   if (winStart !== undefined) {
     const [r, c] = winStart;
-    return getCell({ board, row: r, col: c }) === "X" ? "win_X" : "win_O";
+    return getCell({ board, col: c, row: r }) === "X" ? "win_X" : "win_O";
   }
   if (board.every((row) => row.every((c) => c !== " "))) {
     return "draw";

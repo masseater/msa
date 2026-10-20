@@ -1,20 +1,20 @@
-import {
-  getCurrentTools,
-  getToolStateChanges,
-  type SystemMessage,
-  type ToolStateChanges,
-  toToolDeclaration,
-} from "@msa/ai";
+import ai from "@msa/ai";
+import type aiTypes from "@msa/ai/index.types";
 
-import { now } from "./call.ts";
-import type { AgentContext, AgentLoopConfig, AgentMessage, ThinkingLevel } from "./types.ts";
+import callModule from "./call.ts";
+import type toolChangesTypes from "./tool-changes.types.ts";
+import type typesModule from "./types.ts";
 
-const NO_CHANGES: ToolStateChanges = { toolsAdded: [], toolsRemoved: [] };
+const { getCurrentTools, getToolStateChanges, toToolDeclaration } = ai;
+
+const { now } = callModule;
+
+const NO_CHANGES: aiTypes.ToolStateChanges = { toolsAdded: [], toolsRemoved: [] };
 
 const withToolChanges = (
-  message: SystemMessage,
-  { toolsAdded, toolsRemoved }: ToolStateChanges,
-): SystemMessage => {
+  message: aiTypes.SystemMessage,
+  { toolsAdded, toolsRemoved }: aiTypes.ToolStateChanges,
+): aiTypes.SystemMessage => {
   const { toolsAdded: _added, toolsRemoved: _removed, ...rest } = message;
   return {
     ...rest,
@@ -23,17 +23,15 @@ const withToolChanges = (
   };
 };
 
-const declaresNothing = (message: SystemMessage): boolean =>
+const declaresNothing = (message: aiTypes.SystemMessage): boolean =>
   (message.toolsAdded?.length ?? 0) === 0 && (message.toolsRemoved?.length ?? 0) === 0;
 
-export interface PendingMessages {
-  readonly context: AgentContext;
-  readonly messages: AgentMessage[];
-}
-
-export const declareToolChanges = ({ context, messages }: PendingMessages): AgentMessage[] => {
+const declareToolChanges = ({
+  context,
+  messages,
+}: toolChangesTypes.PendingMessages): typesModule.AgentMessage[] => {
   const systemIndex = messages.findLastIndex((message) => message.role === "system");
-  const pending = messages[systemIndex] as SystemMessage | undefined;
+  const pending = messages[systemIndex] as aiTypes.SystemMessage | undefined;
   const baseline =
     pending === undefined
       ? messages
@@ -53,32 +51,33 @@ export const declareToolChanges = ({ context, messages }: PendingMessages): Agen
     );
   }
   if (unchanged) return messages;
-  const update = withToolChanges({ role: "system", content: "", timestamp: now() }, changes);
+  const update = withToolChanges({ content: "", role: "system", timestamp: now() }, changes);
   const insertIndex = messages.findIndex((message) => message.role !== "system");
   const index = insertIndex === -1 ? messages.length : insertIndex;
   return [...messages.slice(0, index), update, ...messages.slice(index)];
 };
 
-export interface RequestState {
-  readonly config: AgentLoopConfig;
-  readonly model: AgentLoopConfig["model"];
-  readonly thinkingLevel: ThinkingLevel | undefined;
-}
-
 const nextReasoning = (
-  current: AgentLoopConfig["reasoning"],
-  thinkingLevel: ThinkingLevel | undefined,
-): AgentLoopConfig["reasoning"] => {
+  current: typesModule.AgentLoopConfig["reasoning"],
+  thinkingLevel: typesModule.ThinkingLevel | undefined,
+): typesModule.AgentLoopConfig["reasoning"] => {
   if (thinkingLevel === undefined) return current;
   return thinkingLevel === "off" ? undefined : thinkingLevel;
 };
 
-export const withRequestState = ({
+const withRequestState = ({
   config,
   model,
   thinkingLevel,
-}: RequestState): AgentLoopConfig => {
+}: toolChangesTypes.RequestState): typesModule.AgentLoopConfig => {
   const { reasoning, ...rest } = config;
   const next = nextReasoning(reasoning, thinkingLevel);
   return next === undefined ? { ...rest, model } : { ...rest, model, reasoning: next };
 };
+
+const toolChanges = {
+  declareToolChanges,
+  withRequestState,
+};
+
+export default toolChanges;

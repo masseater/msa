@@ -3,11 +3,15 @@ import { describe, it } from "node:test";
 
 import { Effect } from "effect";
 
-import { Text, TuiAltScreen } from "../src/index.ts";
-import { renderFakeCursor } from "../src/tui-component.ts";
-import { toJson } from "./effect-helpers.ts";
+import tuiModule from "../src/index.ts";
+import tuiComponent from "../src/tui-component.ts";
+import effectHelpers from "./effect-helpers.ts";
 import tuiAltScreenHelpers from "./tui-alt-screen-helpers.ts";
 import RecordingTerminal from "./tui-alt-screen-recording-terminal.ts";
+
+const { Text, TuiAltScreen } = tuiModule;
+const { renderFakeCursor } = tuiComponent;
+const { toJson } = effectHelpers;
 
 const { someWriteSince, writesSince } = tuiAltScreenHelpers;
 

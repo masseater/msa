@@ -1,9 +1,14 @@
-import type { Usage } from "@msa/ai/compat";
+import type compatTypes from "@msa/ai/compat.types";
 import { describe, expect, it } from "vite-plus/test";
 
 import { calculateContextTokens } from "../src/core/compaction/index.ts";
 
-function createMockUsage(input: number, output: number, cacheRead = 0, cacheWrite = 0): Usage {
+function createMockUsage(
+  input: number,
+  output: number,
+  cacheRead = 0,
+  cacheWrite = 0,
+): compatTypes.Usage {
   return {
     cacheRead,
     cacheWrite,

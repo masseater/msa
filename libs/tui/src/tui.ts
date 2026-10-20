@@ -1,25 +1,24 @@
-import { isKeyRelease, matchesKey } from "./keys.ts";
-import type { TerminalColors, TerminalColorScheme } from "./terminal-colors.ts";
-import type { Terminal } from "./terminal-protocol.ts";
-import { TerminalColorQueries, type TerminalColorQueryOptions } from "./tui-color-queries.ts";
-import {
-  applyLineResets,
-  type CursorPosition,
-  extractCursorPosition,
-  resolveFakeCursors,
-} from "./tui-frame-lines.ts";
-import type { TUI, TuiInputListener, TuiMode, TuiStopOptions } from "./tui-interface.ts";
-import { TuiOverlayHost } from "./tui-overlay-host.ts";
-import { RenderScheduler } from "./tui-render-scheduler.ts";
-import {
-  cellSizeQuery,
-  consumeCellSizeResponse,
-  probeCapabilitiesInBackground,
-} from "./tui-terminal-queries.ts";
+import type terminalColorsTypes from "./terminal-colors.types.ts";
+import type terminalProtocolTypes from "./terminal-protocol.types.ts";
+import type tuiColorQueriesTypes from "./tui-color-queries.types.ts";
+import tuiFrameLines from "./tui-frame-lines.ts";
+import type tuiFrameLinesTypes from "./tui-frame-lines.types.ts";
+import type tuiInterfaceTypes from "./tui-interface.types.ts";
+import tuiKit from "./tui-kit.ts";
+import TuiOverlayHost from "./tui-overlay-host.ts";
+import RenderScheduler from "./tui-render-scheduler.ts";
+import tuiTerminalQueries from "./tui-terminal-queries.ts";
 
-export abstract class TuiBase extends TuiOverlayHost implements TUI {
-  abstract readonly mode: TuiMode;
-  private inputListeners = new Set<TuiInputListener>();
+const { keys, TerminalColorQueries } = tuiKit;
+
+const { cellSizeQuery, consumeCellSizeResponse, probeCapabilitiesInBackground } =
+  tuiTerminalQueries;
+const { isKeyRelease, matchesKey } = keys;
+const { applyLineResets, extractCursorPosition, resolveFakeCursors } = tuiFrameLines;
+
+export default abstract class TuiBase extends TuiOverlayHost implements tuiInterfaceTypes.TUI {
+  abstract readonly mode: tuiInterfaceTypes.TuiMode;
+  private inputListeners = new Set<tuiInterfaceTypes.TuiInputListener>();
 
   public onDebug?: () => void;
   private readonly scheduler = new RenderScheduler(
@@ -33,7 +32,11 @@ export abstract class TuiBase extends TuiOverlayHost implements TUI {
   private terminalColorSchemeNotificationsEnabled = false;
   protected readonly logDirectory: string | undefined;
 
-  constructor(terminal: Terminal, showHardwareCursor?: boolean, logDirectory?: string) {
+  constructor(
+    terminal: terminalProtocolTypes.Terminal,
+    showHardwareCursor?: boolean,
+    logDirectory?: string,
+  ) {
     super(terminal);
     this.logDirectory = logDirectory;
     if (showHardwareCursor !== undefined) {
@@ -49,9 +52,9 @@ export abstract class TuiBase extends TuiOverlayHost implements TUI {
 
   protected afterTerminalStart(): void {}
 
-  protected beforeTerminalStop(_options: TuiStopOptions): void {}
+  protected beforeTerminalStop(_options: tuiInterfaceTypes.TuiStopOptions): void {}
 
-  protected afterTerminalStop(_options: TuiStopOptions): void {}
+  protected afterTerminalStop(_options: tuiInterfaceTypes.TuiStopOptions): void {}
 
   get fullRedraws(): number {
     return this.fullRedrawCount;
@@ -99,18 +102,20 @@ export abstract class TuiBase extends TuiOverlayHost implements TUI {
     this.requestRender();
   }
 
-  addInputListener(listener: TuiInputListener): () => void {
+  addInputListener(listener: tuiInterfaceTypes.TuiInputListener): () => void {
     this.inputListeners.add(listener);
     return () => {
       this.inputListeners.delete(listener);
     };
   }
 
-  removeInputListener(listener: TuiInputListener): void {
+  removeInputListener(listener: tuiInterfaceTypes.TuiInputListener): void {
     this.inputListeners.delete(listener);
   }
 
-  onTerminalColorSchemeChange(listener: (scheme: TerminalColorScheme) => void): () => void {
+  onTerminalColorSchemeChange(
+    listener: (scheme: terminalColorsTypes.TerminalColorScheme) => void,
+  ): () => void {
     return this.colorQueries.onSchemeChange(listener);
   }
 
@@ -129,7 +134,7 @@ export abstract class TuiBase extends TuiOverlayHost implements TUI {
     if (query !== "") this.terminal.write(query);
   }
 
-  stop(options: TuiStopOptions = {}): void {
+  stop(options: tuiInterfaceTypes.TuiStopOptions = {}): void {
     this.stopped = true;
     this.scheduler.cancel();
     if (this.terminalColorSchemeNotificationsEnabled) {
@@ -203,9 +208,9 @@ export abstract class TuiBase extends TuiOverlayHost implements TUI {
 
   protected compositeOverlays(lines: string[], termWidth: number, termHeight: number): string[] {
     return this.overlays.composite(lines, {
-      termWidth,
-      termHeight,
       resolveFakeCursors: (overlayLines) => this.resolveFakeCursors(overlayLines),
+      termHeight,
+      termWidth,
     });
   }
 
@@ -213,7 +218,10 @@ export abstract class TuiBase extends TuiOverlayHost implements TUI {
     return applyLineResets(lines);
   }
 
-  protected extractCursorPosition(lines: string[], height: number): CursorPosition | null {
+  protected extractCursorPosition(
+    lines: string[],
+    height: number,
+  ): tuiFrameLinesTypes.CursorPosition | null {
     return extractCursorPosition(lines, height);
   }
 
@@ -221,7 +229,9 @@ export abstract class TuiBase extends TuiOverlayHost implements TUI {
     return resolveFakeCursors(lines, this.showHardwareCursor);
   }
 
-  queryTerminalColors(options: TerminalColorQueryOptions): Promise<TerminalColors> {
+  queryTerminalColors(
+    options: tuiColorQueriesTypes.TerminalColorQueryOptions,
+  ): Promise<terminalColorsTypes.TerminalColors> {
     return this.colorQueries.query(options, (data) => this.terminal.write(data));
   }
 }

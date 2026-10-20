@@ -1,20 +1,24 @@
 import { Effect } from "effect";
 import { describe, expect, it, vi } from "vite-plus/test";
 
-import { createModels, createProvider, getModelType } from "../src/models.ts";
-import {
-  builtinModels,
-  getAllBuiltinModels,
-  getBuiltinClassifierModels,
-} from "../src/providers/all.ts";
-import type { Api, ClassifierApi, ClassifierModel, ClassifierResult, Model } from "../src/types.ts";
-import { currentTimeMillis } from "../src/utils/clock.ts";
-import { AssistantMessageEventStream } from "../src/utils/event-stream.ts";
+import modelsModule from "../src/models.ts";
+import all from "../src/providers/all.ts";
+import type typesModule from "../src/types.types.ts";
+import clock from "../src/utils/clock.ts";
+import eventStream from "../src/utils/event-stream.ts";
 import classifierModelsSupport from "./classifier-models-support.ts";
+
+const { builtinModels, getAllBuiltinModels, getBuiltinClassifierModels } = all;
+const { createModels, createProvider, getModelType } = modelsModule;
+const { AssistantMessageEventStream } = eventStream;
+const { currentTimeMillis } = clock;
 
 const { context } = classifierModelsSupport;
 
-function classifierModel(provider: string, id: string): ClassifierModel<ClassifierApi> {
+function classifierModel(
+  provider: string,
+  id: string,
+): typesModule.ClassifierModel<typesModule.ClassifierApi> {
   return {
     api: "test-classifier",
     baseUrl: "https://example.test/v1",
@@ -28,7 +32,7 @@ function classifierModel(provider: string, id: string): ClassifierModel<Classifi
   };
 }
 
-function chatModel(provider: string, id: string): Model<Api> {
+function chatModel(provider: string, id: string): typesModule.Model<typesModule.Api> {
   return {
     api: "test-chat",
     baseUrl: "https://example.test/v1",
@@ -64,7 +68,7 @@ describe("Models with classifier models", () => {
           auth: { apiKey: { name: "Test", resolve: () => Promise.resolve({ auth: {} }) } },
           classifiers: {
             "test-classifier": {
-              classify: (model): Promise<ClassifierResult> =>
+              classify: (model): Promise<typesModule.ClassifierResult> =>
                 Promise.resolve({
                   answers: { approved: { probability: 0.9, type: "bool" } },
                   api: model.api,
@@ -118,7 +122,10 @@ describe("Models with classifier models", () => {
         );
 
         const result = yield* Effect.promise(() =>
-          models.classify(chat as unknown as ClassifierModel<ClassifierApi>, context),
+          models.classify(
+            chat as unknown as typesModule.ClassifierModel<typesModule.ClassifierApi>,
+            context,
+          ),
         );
         expect(result.stopReason).toBe("error");
         expect(result.errorMessage).toContain("is not a classifier model");
@@ -189,7 +196,7 @@ describe("Models with classifier models", () => {
     Effect.runPromise(
       Effect.gen(function* () {
         const classifier = classifierModel("test", "text-only");
-        const classify = vi.fn((): Promise<ClassifierResult> =>
+        const classify = vi.fn((): Promise<typesModule.ClassifierResult> =>
           Promise.resolve({
             answers: {},
             api: classifier.api,

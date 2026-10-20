@@ -1,28 +1,28 @@
-import type { Api, ImageContent, Model, ModelImageResizeOptions, TextContent } from "@msa/ai";
+import type aiTypes from "@msa/ai/index.types";
 import { Effect } from "effect";
 import { type Static, Type } from "typebox";
 
 import { processImage } from "../../utils/image-process.ts";
-import { fromPromise, ToolFailure } from "../platform/index.ts";
+import { ToolFailure, fromPromise } from "../platform/index.ts";
 import {
   DEFAULT_MAX_BYTES,
   DEFAULT_MAX_LINES,
-  formatSize,
   type TruncationResult,
+  formatSize,
   truncateHead,
 } from "./truncate.ts";
 
 export const readToolSystemPromptContribution = {
-  snippet: "Read file contents",
   guidelines: ["Use read to examine files instead of cat or sed."],
+  snippet: "Read file contents",
 } as const;
 
 export const readSchema = Type.Object({
-  path: Type.String({ description: "Path to the file to read (relative or absolute)" }),
+  limit: Type.Optional(Type.Number({ description: "Maximum number of lines to read" })),
   offset: Type.Optional(
     Type.Number({ description: "Line number to start reading from (1-indexed)" }),
   ),
-  limit: Type.Optional(Type.Number({ description: "Maximum number of lines to read" })),
+  path: Type.String({ description: "Path to the file to read (relative or absolute)" }),
 });
 
 export type ReadToolInput = Static<typeof readSchema>;
@@ -30,10 +30,10 @@ export type ReadToolInput = Static<typeof readSchema>;
 export const readOutputSchema = Type.Union([
   Type.String(),
   Type.Object({
-    type: Type.Literal("image"),
     data: Type.String(),
     mimeType: Type.String(),
     note: Type.String(),
+    type: Type.Literal("image"),
   }),
 ]);
 
@@ -49,15 +49,17 @@ export interface ReadOperations {
   detectImageMimeType?: (absolutePath: string) => Promise<string | null | undefined>;
 }
 
-export function toReadOutput(content: (TextContent | ImageContent)[]): ReadToolOutput {
+export function toReadOutput(
+  content: (aiTypes.TextContent | aiTypes.ImageContent)[],
+): ReadToolOutput {
   const text = content.find((block) => block.type === "text")?.text ?? "";
   const image = content.find((block) => block.type === "image");
   return image === undefined
     ? text
-    : { type: "image", data: image.data, mimeType: image.mimeType, note: text };
+    : { data: image.data, mimeType: image.mimeType, note: text, type: "image" };
 }
 
-function getNonVisionImageNote(model: Model<Api> | undefined): string | undefined {
+function getNonVisionImageNote(model: aiTypes.Model<aiTypes.Api> | undefined): string | undefined {
   if (model === undefined || model.input.includes("image")) {
     return undefined;
   }
@@ -66,7 +68,7 @@ function getNonVisionImageNote(model: Model<Api> | undefined): string | undefine
 
 export interface ReadToolOptions {
   autoResizeImages?: boolean;
-  resizeOptions?: ModelImageResizeOptions;
+  resizeOptions?: aiTypes.ModelImageResizeOptions;
   operations?: ReadOperations;
 }
 
@@ -77,8 +79,8 @@ export interface ImageReadInput {
   absolutePath: string;
   mimeType: string;
   autoResizeImages: boolean;
-  resizeOptions: ModelImageResizeOptions | undefined;
-  model: Model<Api> | undefined;
+  resizeOptions: aiTypes.ModelImageResizeOptions | undefined;
+  model: aiTypes.Model<aiTypes.Api> | undefined;
 }
 
 export const readImageContent = Effect.fn("readImageContent")(function* (input: ImageReadInput) {
@@ -93,12 +95,12 @@ export const readImageContent = Effect.fn("readImageContent")(function* (input: 
   const noteSuffix = note === undefined || note === "" ? "" : `\n${note}`;
   if (!processed.ok) {
     const text = `Read image file [${input.mimeType}]\n${processed.message}${noteSuffix}`;
-    return [{ type: "text" as const, text }];
+    return [{ text, type: "text" as const }];
   }
   const hints = processed.hints.length > 0 ? `\n${processed.hints.join("\n")}` : "";
   return [
-    { type: "text" as const, text: `Read image file [${processed.mimeType}]${hints}${noteSuffix}` },
-    { type: "image" as const, data: processed.data, mimeType: processed.mimeType },
+    { text: `Read image file [${processed.mimeType}]${hints}${noteSuffix}`, type: "text" as const },
+    { data: processed.data, mimeType: processed.mimeType, type: "image" as const },
   ];
 });
 
@@ -134,7 +136,7 @@ export const readTextContent = Effect.fn("readTextContent")(function* (input: Te
       ? allLines.length
       : Math.min(startLine + input.limit, allLines.length);
   const truncation = truncateHead(allLines.slice(startLine, endLine).join("\n"));
-  const content = (text: string) => [{ type: "text" as const, text }];
+  const content = (text: string) => [{ text, type: "text" as const }];
   if (truncation.firstLineExceedsLimit) {
     const firstLineSize = formatSize(Buffer.byteLength(firstLine, "utf-8"));
     const text = `[Line ${startLineDisplay} is ${firstLineSize}, exceeds ${formatSize(DEFAULT_MAX_BYTES)} limit. Use bash: sed -n '${startLineDisplay}p' ${input.path} | head -c ${DEFAULT_MAX_BYTES}]`;
@@ -142,8 +144,8 @@ export const readTextContent = Effect.fn("readTextContent")(function* (input: Te
   }
   if (truncation.truncated) {
     const lines = {
-      start: startLineDisplay,
       end: startLineDisplay + truncation.outputLines - 1,
+      start: startLineDisplay,
       total: allLines.length,
     };
     return {

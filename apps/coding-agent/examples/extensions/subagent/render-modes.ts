@@ -1,6 +1,7 @@
 import type { Theme } from "@msa/coding-agent";
 import { getMarkdownTheme } from "@msa/coding-agent";
-import { Container, Markdown, Spacer, Text } from "@msa/tui";
+import tui from "@msa/tui";
+import type tuiTypes from "@msa/tui/index.types";
 
 import {
   aggregateUsage,
@@ -12,7 +13,9 @@ import {
 import { addToolCalls, renderDisplayItems } from "./render.ts";
 import type { SingleResult } from "./types.ts";
 
-const stepSection = (result: SingleResult, label: string, theme: Theme): Container => {
+const { Container, Markdown, Spacer, Text } = tui;
+
+const stepSection = (result: SingleResult, label: string, theme: Theme): tuiTypes.Container => {
   const container = new Container();
   const icon = result.exitCode === 0 ? theme.fg("success", "✓") : theme.fg("error", "✗");
   const finalOutput = getFinalOutput(result.messages);
@@ -25,7 +28,7 @@ const stepSection = (result: SingleResult, label: string, theme: Theme): Contain
     container.addChild(new Spacer(1));
     container.addChild(new Markdown(finalOutput.trim(), 0, 0, getMarkdownTheme()));
   }
-  const usage = formatUsageStats({ usage: result.usage, model: result.model });
+  const usage = formatUsageStats({ model: result.model, usage: result.usage });
   if (usage.length > 0) container.addChild(new Text(theme.fg("dim", usage), 0, 0));
   return container;
 };
@@ -34,7 +37,7 @@ const renderChainImpl = (
   results: SingleResult[],
   expanded: boolean,
   theme: Theme,
-): Container | Text => {
+): tuiTypes.Container | tuiTypes.Text => {
   const successCount = results.filter((r) => r.exitCode === 0).length;
   const icon = successCount === results.length ? theme.fg("success", "✓") : theme.fg("error", "✗");
   const title =
@@ -52,7 +55,7 @@ const renderChainImpl = (
       text +=
         items.length === 0
           ? `\n${theme.fg("muted", "(no output)")}`
-          : `\n${renderDisplayItems({ items, expanded: false, theme, limit: 5 })}`;
+          : `\n${renderDisplayItems({ expanded: false, items, limit: 5, theme })}`;
     }
     const usage = formatUsageStats({ usage: aggregateUsage(results) });
     if (usage.length > 0) text += `\n\n${theme.fg("dim", `Total: ${usage}`)}`;
@@ -87,7 +90,7 @@ const renderParallelCollapsed = (results: SingleResult[], title: string, theme: 
     if (items.length === 0) {
       text += `\n${theme.fg("muted", result.exitCode === -1 ? "(running...)" : "(no output)")}`;
     } else {
-      text += `\n${renderDisplayItems({ items, expanded: false, theme, limit: 5 })}`;
+      text += `\n${renderDisplayItems({ expanded: false, items, limit: 5, theme })}`;
     }
   }
 
@@ -102,7 +105,7 @@ const renderParallelImpl = (
   results: SingleResult[],
   expanded: boolean,
   theme: Theme,
-): Container | Text => {
+): tuiTypes.Container | tuiTypes.Text => {
   const running = results.filter((r) => r.exitCode === -1).length;
   const successCount = results.filter((r) => r.exitCode !== -1 && !isFailedResult(r)).length;
   const failCount = results.filter((r) => r.exitCode !== -1 && isFailedResult(r)).length;
@@ -138,10 +141,12 @@ export const renderChain = (request: {
   readonly results: SingleResult[];
   readonly expanded: boolean;
   readonly theme: Theme;
-}): Container | Text => renderChainImpl(request.results, request.expanded, request.theme);
+}): tuiTypes.Container | tuiTypes.Text =>
+  renderChainImpl(request.results, request.expanded, request.theme);
 
 export const renderParallel = (request: {
   readonly results: SingleResult[];
   readonly expanded: boolean;
   readonly theme: Theme;
-}): Container | Text => renderParallelImpl(request.results, request.expanded, request.theme);
+}): tuiTypes.Container | tuiTypes.Text =>
+  renderParallelImpl(request.results, request.expanded, request.theme);

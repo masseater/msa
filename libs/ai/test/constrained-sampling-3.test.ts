@@ -2,17 +2,22 @@ import { Effect, Stream } from "effect";
 import type { ResponseStreamEvent } from "openai/resources/responses/responses.js";
 import { describe, expect, it } from "vite-plus/test";
 
-import { processResponsesStream } from "../src/api/openai-responses-stream.ts";
-import type { AssistantMessage, ToolCall } from "../src/types.ts";
-import { currentTimeMillis } from "../src/utils/clock.ts";
-import { AssistantMessageEventStream } from "../src/utils/event-stream.ts";
+import openaiResponsesStream from "../src/api/openai-responses-stream.ts";
+import type typesModule from "../src/types.types.ts";
+import clock from "../src/utils/clock.ts";
+import eventStream from "../src/utils/event-stream.ts";
+import type eventStreamTypes from "../src/utils/event-stream.types.ts";
 import constrainedSamplingSupport from "./constrained-sampling-support.ts";
 import jsonCodec from "./json-codec.ts";
+
+const { currentTimeMillis } = clock;
+const { AssistantMessageEventStream } = eventStream;
+const { processResponsesStream } = openaiResponsesStream;
 
 const { makeModel, makeUsage } = constrainedSamplingSupport;
 const { decodeJson } = jsonCodec;
 
-function makeOutput(): AssistantMessage {
+function makeOutput(): typesModule.AssistantMessage {
   return {
     api: "openai-responses",
     content: [],
@@ -35,11 +40,11 @@ function iterateEvents(events: ResponseStreamEvent[]): AsyncIterable<ResponseStr
   );
 }
 
-function captureToolCallEvents(stream: AssistantMessageEventStream): {
-  starts: ToolCall["arguments"][];
+function captureToolCallEvents(stream: eventStreamTypes.AssistantMessageEventStream): {
+  starts: typesModule.ToolCall["arguments"][];
   deltas: string[];
 } {
-  const starts: ToolCall["arguments"][] = [];
+  const starts: typesModule.ToolCall["arguments"][] = [];
   const deltas: string[] = [];
   const originalPush = stream.push.bind(stream);
   stream.push = (event) => {

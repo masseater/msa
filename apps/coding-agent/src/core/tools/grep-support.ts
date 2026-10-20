@@ -2,16 +2,17 @@ import { Type } from "typebox";
 
 import {
   DEFAULT_MAX_BYTES,
-  formatSize,
   GREP_MAX_LINE_LENGTH,
   type TruncationResult,
+  formatSize,
   truncateHead,
 } from "./truncate.ts";
 
 export const grepSchema = Type.Object({
-  pattern: Type.String({ description: "Search pattern (regex or literal string)" }),
-  path: Type.Optional(
-    Type.String({ description: "Directory or file to search (default: current directory)" }),
+  context: Type.Optional(
+    Type.Number({
+      description: "Number of lines to show before and after each match (default: 0)",
+    }),
   ),
   glob: Type.Optional(
     Type.String({ description: "Filter files by glob pattern, e.g. '*.ts' or '**/*.spec.ts'" }),
@@ -19,19 +20,18 @@ export const grepSchema = Type.Object({
   ignoreCase: Type.Optional(
     Type.Boolean({ description: "Case-insensitive search (default: false)" }),
   ),
+  limit: Type.Optional(
+    Type.Number({ description: "Maximum number of matches to return (default: 100)" }),
+  ),
   literal: Type.Optional(
     Type.Boolean({
       description: "Treat pattern as literal string instead of regex (default: false)",
     }),
   ),
-  context: Type.Optional(
-    Type.Number({
-      description: "Number of lines to show before and after each match (default: 0)",
-    }),
+  path: Type.Optional(
+    Type.String({ description: "Directory or file to search (default: current directory)" }),
   ),
-  limit: Type.Optional(
-    Type.Number({ description: "Maximum number of matches to return (default: 100)" }),
-  ),
+  pattern: Type.String({ description: "Search pattern (regex or literal string)" }),
 });
 
 export const DEFAULT_GREP_LIMIT = 100;
@@ -136,7 +136,7 @@ export function formatGrepOutput(input: GrepOutputInput) {
   const text =
     notices.length > 0 ? `${truncation.content}\n\n[${notices.join(". ")}]` : truncation.content;
   return {
-    content: [{ type: "text" as const, text }],
+    content: [{ text, type: "text" as const }],
     details: Object.keys(details).length > 0 ? details : undefined,
   };
 }

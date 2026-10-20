@@ -1,5 +1,5 @@
-import type { AgentTool } from "@msa/agent-core";
-import { fauxAssistantMessage, fauxToolCall } from "@msa/ai";
+import type agentTypes from "@msa/agent-core/index.types";
+import ai from "@msa/ai";
 import testing from "@msa/testing";
 import { Effect } from "effect";
 import { Type } from "typebox";
@@ -8,6 +8,8 @@ import { afterEach, describe, expect, it } from "vite-plus/test";
 import { createToolDefinitionFromAgentTool } from "../../src/core/tools/tool-definition-wrapper.ts";
 import agentSessionCodemodeSupport from "./agent-session-codemode-support.ts";
 import agentSessionCodemodeSupport2 from "./agent-session-codemode-support2.ts";
+
+const { fauxAssistantMessage, fauxToolCall } = ai;
 
 const { harnesses, setup } = agentSessionCodemodeSupport2;
 
@@ -25,7 +27,7 @@ const { fromJsonText } = testing;
 trackCodemodeWorkers();
 
 const addsTheUsageOfNestedResults = Effect.gen(function* () {
-  const billedTool: AgentTool = {
+  const billedTool: agentTypes.AgentTool = {
     description: "Run a model",
     execute: () =>
       Promise.resolve({

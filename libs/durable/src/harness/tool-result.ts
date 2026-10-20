@@ -1,4 +1,4 @@
-import type { ImageContent, TextContent, ToolCall, ToolResultMessage } from "@msa/ai";
+import type aiTypes from "@msa/ai/index.types";
 import type chordTypes from "@msa/chord/index.types";
 import json from "@msa/chord/json";
 import outputModule from "@msa/chord/output";
@@ -60,7 +60,7 @@ const truncated: typesModule.Dual2<
 const appendToolResult: typesModule.Dual5<
   typesModule.Tx,
   typesModule.ConversationId,
-  ToolCall,
+  aiTypes.ToolCall,
   typesModule.ToolExecutionResult,
   { readonly timestamp: number; readonly durationMs?: number | undefined },
   Effect.Effect<typesModule.TypedEntry<{ diagnostics: typesModule.ToolDiagnostic[] }>>
@@ -69,7 +69,7 @@ const appendToolResult: typesModule.Dual5<
   Effect.fnUntraced(function* (
     tx: typesModule.Tx,
     conversationId: typesModule.ConversationId,
-    call: ToolCall,
+    call: aiTypes.ToolCall,
     result: typesModule.ToolExecutionResult,
     meta: { readonly timestamp: number; readonly durationMs?: number | undefined },
   ) {
@@ -88,7 +88,7 @@ const appendToolResult: typesModule.Dual5<
       isError: result.isError ?? false,
       ...(durationMs === undefined ? {} : { durationMs }),
       timestamp,
-    } as ToolResultMessage;
+    } as aiTypes.ToolResultMessage;
     if (result.usage !== undefined)
       yield* recordUsage(tx, conversationId, "tools", call.name, result.usage);
     return yield* Effect.promise(() =>
@@ -111,7 +111,7 @@ const boundContent: typesModule.Dual2<
     content: toolTypesModule.Content,
     limits: outputTypes.OutputLimits,
   ): { content: toolTypesModule.Content; droppedBytes: number; droppedLines: number } => {
-    const texts = content.filter((item): item is TextContent => item.type === "text");
+    const texts = content.filter((item): item is aiTypes.TextContent => item.type === "text");
     const bounded = boundOutput(texts.map((item) => item.text).join(""), limits);
     if (bounded.droppedBytes === 0) return { content, droppedBytes: 0, droppedLines: 0 };
     const keep = limits.retain === "head" ? texts[0] : texts.at(-1);
@@ -130,7 +130,7 @@ const boundContent: typesModule.Dual2<
 
 function outputValue(
   output: toolTypesModule.Content,
-): string | ImageContent | toolTypesModule.Content {
+): string | aiTypes.ImageContent | toolTypesModule.Content {
   if (output.length === 0) return "";
   if (output.length > 1) return output;
   const [only] = output;

@@ -1,22 +1,25 @@
-import { type TUI, setKeybindings } from "@msa/tui";
+import tui from "@msa/tui";
+import type tuiTypes from "@msa/tui/index.types";
 import { Effect } from "effect";
 import { afterEach, beforeAll, beforeEach, describe, expect, it, vi } from "vite-plus/test";
 
-import type { Model } from "../../../../../libs/ai/src/model-types.ts";
+import type modelTypesModule from "../../../../../libs/ai/src/model-types.ts";
 import { ModelSelectorComponent } from "../../../src/modes/interactive/components/model-selector.ts";
 import { ScopedModelsSelectorComponent } from "../../../src/modes/interactive/components/scoped-models-selector.ts";
 import tuiKit from "../../tui-kit.ts";
 import harnessModule from "../harness.ts";
 import type harnessTypes from "../harness.types.ts";
 
+const { setKeybindings } = tui;
+
 const { KeybindingsManager, initTheme, stripAnsi } = tuiKit;
 
 const { createHarness } = harnessModule;
 
-function createFakeTui(): TUI {
+function createFakeTui(): tuiTypes.TUI {
   return {
     requestRender: () => {},
-  } as unknown as TUI;
+  } as unknown as tuiTypes.TUI;
 }
 
 const harnesses: harnessTypes.Harness[] = [];
@@ -87,9 +90,9 @@ const preservesScopedModelOrderInThe = Effect.gen(function* () {
 });
 
 const preservesScopedModelOrderInTheStep1 = (
-  modelOne: Model<string>,
-  modelTwo: Model<string>,
-  modelThree: Model<string>,
+  modelOne: modelTypesModule.Model<string>,
+  modelTwo: modelTypesModule.Model<string>,
+  modelThree: modelTypesModule.Model<string>,
   selector: ModelSelectorComponent,
 ) =>
   Effect.sync(() => {

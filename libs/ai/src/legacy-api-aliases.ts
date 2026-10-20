@@ -1,29 +1,48 @@
-import { anthropicMessagesApi } from "./api/anthropic-messages.lazy.ts";
-import type { AnthropicOptions } from "./api/anthropic-messages.ts";
-import { googleGenerativeAIApi } from "./api/google-generative-ai.lazy.ts";
-import type { GoogleOptions } from "./api/google-generative-ai.ts";
-import type { SimpleStreamOptions, StreamFunction } from "./types.ts";
-import { modelCall } from "./utils/model-call.ts";
+import anthropicMessagesLazy from "./api/anthropic-messages.lazy.ts";
+import type anthropicMessagesTypes from "./api/anthropic-messages.types.ts";
+import googleGenerativeAiLazy from "./api/google-generative-ai.lazy.ts";
+import type googleGenerativeAiTypes from "./api/google-generative-ai.types.ts";
+import type typesModule from "./types.types.ts";
+import modelCallModule from "./utils/model-call.ts";
+
+const { anthropicMessagesApi } = anthropicMessagesLazy;
+const { googleGenerativeAIApi } = googleGenerativeAiLazy;
+const { modelCall } = modelCallModule;
 
 const anthropicMessagesStreams = anthropicMessagesApi();
 const googleGenerativeAIStreams = googleGenerativeAIApi();
 
-export const streamAnthropic = modelCall(
-  anthropicMessagesStreams.stream as StreamFunction<"anthropic-messages", AnthropicOptions>,
-);
-export const streamSimpleAnthropic = modelCall(
-  anthropicMessagesStreams.streamSimple as StreamFunction<
+const streamAnthropic = modelCall(
+  anthropicMessagesStreams.stream as typesModule.StreamFunction<
     "anthropic-messages",
-    SimpleStreamOptions
+    anthropicMessagesTypes.AnthropicOptions
+  >,
+);
+const streamSimpleAnthropic = modelCall(
+  anthropicMessagesStreams.streamSimple as typesModule.StreamFunction<
+    "anthropic-messages",
+    typesModule.SimpleStreamOptions
   >,
 );
 
-export const streamGoogle = modelCall(
-  googleGenerativeAIStreams.stream as StreamFunction<"google-generative-ai", GoogleOptions>,
-);
-export const streamSimpleGoogle = modelCall(
-  googleGenerativeAIStreams.streamSimple as StreamFunction<
+const streamGoogle = modelCall(
+  googleGenerativeAIStreams.stream as typesModule.StreamFunction<
     "google-generative-ai",
-    SimpleStreamOptions
+    googleGenerativeAiTypes.GoogleOptions
   >,
 );
+const streamSimpleGoogle = modelCall(
+  googleGenerativeAIStreams.streamSimple as typesModule.StreamFunction<
+    "google-generative-ai",
+    typesModule.SimpleStreamOptions
+  >,
+);
+
+const legacyApiAliases = {
+  streamAnthropic,
+  streamGoogle,
+  streamSimpleAnthropic,
+  streamSimpleGoogle,
+};
+
+export default legacyApiAliases;

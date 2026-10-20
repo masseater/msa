@@ -1,16 +1,18 @@
 import { CustomEditor, type ExtensionAPI } from "@msa/coding-agent";
-import { matchesKey, truncateToWidth, visibleWidth } from "@msa/tui";
+import tuiModule from "@msa/tui";
+
+const { matchesKey, truncateToWidth, visibleWidth } = tuiModule;
 
 const NORMAL_KEYS: Record<string, string | null> = {
+  $: "\x05",
+  "0": "\x01",
+  a: null,
   h: "\x1b[D",
+  i: null,
   j: "\x1b[B",
   k: "\x1b[A",
   l: "\x1b[C",
-  "0": "\x01",
-  $: "\x05",
   x: "\x1b[3~",
-  i: null,
-  a: null,
 };
 
 class ModalEditor extends CustomEditor {

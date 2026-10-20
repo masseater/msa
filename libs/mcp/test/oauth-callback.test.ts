@@ -1,16 +1,15 @@
 import { Effect, Exit } from "effect";
 import { describe, expect, it } from "vite-plus/test";
 
-import {
-  type OAuthCallbackPage,
-  OAuthCallbackServer,
-  type OAuthCallbackServerOptions,
-} from "../src/oauth/index.ts";
+import oauth from "../src/oauth/index.ts";
+import type oauthTypes from "../src/oauth/index.types.ts";
 import webFetch from "./web-fetch.ts";
 
+const { OAuthCallbackServer } = oauth;
+
 const withCallback = <A>(
-  options: OAuthCallbackServerOptions | undefined,
-  use: (callback: OAuthCallbackServer) => Effect.Effect<A>,
+  options: oauthTypes.OAuthCallbackServerOptions | undefined,
+  use: (callback: oauthTypes.OAuthCallbackServer) => Effect.Effect<A>,
 ) =>
   Effect.acquireUseRelease(
     Effect.promise(() => OAuthCallbackServer.listen(options)),
@@ -51,7 +50,7 @@ const rejectsOtherPath = withCallback({ extraPaths: ["/callback/server-id"] }, (
   }),
 );
 
-const pages: OAuthCallbackPage[] = [];
+const pages: oauthTypes.OAuthCallbackPage[] = [];
 
 const rendersPages = withCallback(
   {

@@ -1,4 +1,4 @@
-import type { Model } from "@msa/ai";
+import type aiTypes from "@msa/ai/index.types";
 import testing from "@msa/testing";
 import { Effect } from "effect";
 import { describe, expect, test, vi } from "vite-plus/test";
@@ -154,7 +154,7 @@ const addsEveryProviderForAPatternMatching = () =>
 const resolvesBracketedModelIdsAsExactReferences = () =>
   runTest(
     Effect.gen(function* () {
-      const bracketedModel: Model<"anthropic-messages"> = {
+      const bracketedModel: aiTypes.Model<"anthropic-messages"> = {
         api: "anthropic-messages" as const,
         baseUrl: "https://example.invalid",
         contextWindow: 128000,
@@ -182,7 +182,7 @@ const resolvesBracketedModelIdsAsExactReferences = () =>
 const resolvesBracketedModelIdsWithThinkingLevels = () =>
   runTest(
     Effect.gen(function* () {
-      const bracketedModel: Model<"anthropic-messages"> = {
+      const bracketedModel: aiTypes.Model<"anthropic-messages"> = {
         api: "anthropic-messages" as const,
         baseUrl: "https://example.invalid",
         contextWindow: 128000,

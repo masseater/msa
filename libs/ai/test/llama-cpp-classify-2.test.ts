@@ -1,9 +1,11 @@
 import { Effect } from "effect";
 import { describe, expect, it } from "vite-plus/test";
 
-import { classify, labelProbabilities, renderQuestion } from "../src/api/llama-cpp-classify.ts";
-import type { ClassifierContext } from "../src/types.ts";
+import llamaCppClassify from "../src/api/llama-cpp-classify.ts";
+import type typesModule from "../src/types.types.ts";
 import llamaCppClassifySupport from "./llama-cpp-classify-support.ts";
+
+const { classify, labelProbabilities, renderQuestion } = llamaCppClassify;
 
 const { context, fakeServer, model } = llamaCppClassifySupport;
 
@@ -36,7 +38,7 @@ const dividesLabelLogProbabilitiesByThe = () =>
   Effect.runPromise(
     Effect.gen(function* () {
       const server = fakeServer({ next: () => ({ A: -0.1, B: -2.5 }) });
-      const questions: ClassifierContext["questions"] = {
+      const questions: typesModule.ClassifierContext["questions"] = {
         pick: { criteria: { a: "", b: "" }, instructions: "Pick one", type: "choice" },
       };
 
@@ -69,7 +71,7 @@ const rejectsNonPositiveTemperaturesBeforeSending = () =>
 const retriesDeeperReadoutsWhenALabel = () =>
   Effect.runPromise(
     Effect.gen(function* () {
-      const questions: ClassifierContext["questions"] = {
+      const questions: typesModule.ClassifierContext["questions"] = {
         pick: { criteria: { a: "", b: "" }, instructions: "Pick one", type: "choice" },
       };
       const deep = fakeServer({

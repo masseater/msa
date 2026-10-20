@@ -1,6 +1,8 @@
 import type { ExtensionAPI } from "@msa/coding-agent";
-import { Text } from "@msa/tui";
+import tui from "@msa/tui";
 import { Effect } from "effect";
+
+const { Text } = tui;
 
 export default function (msa: ExtensionAPI) {
   msa.registerCommand("tui", {

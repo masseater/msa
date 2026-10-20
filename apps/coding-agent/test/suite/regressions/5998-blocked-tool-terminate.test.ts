@@ -1,5 +1,5 @@
-import type { AgentTool } from "@msa/agent-core";
-import { fauxAssistantMessage, fauxToolCall } from "@msa/ai";
+import type agentTypes from "@msa/agent-core/index.types";
+import ai from "@msa/ai";
 import { Effect } from "effect";
 import { Type } from "typebox";
 import { afterEach, describe, expect, it } from "vite-plus/test";
@@ -7,13 +7,15 @@ import { afterEach, describe, expect, it } from "vite-plus/test";
 import harnessModule from "../harness.ts";
 import type harnessTypes from "../harness.types.ts";
 
+const { fauxAssistantMessage, fauxToolCall } = ai;
+
 const { createHarness, getAssistantTexts } = harnessModule;
 
 const harnesses: harnessTypes.Harness[] = [];
 
 const letsAToolCallHandlerTerminate = Effect.gen(function* () {
   const runPromise = Effect.runPromiseWith(yield* Effect.context<never>());
-  const echoTool: AgentTool = {
+  const echoTool: agentTypes.AgentTool = {
     description: "Echo text back",
     execute: () =>
       runPromise(
@@ -28,7 +30,7 @@ const letsAToolCallHandlerTerminate = Effect.gen(function* () {
   return yield* letsAToolCallHandlerTerminateStep1(echoTool);
 });
 
-const letsAToolCallHandlerTerminateStep1 = (echoTool: AgentTool<any, any>) =>
+const letsAToolCallHandlerTerminateStep1 = (echoTool: agentTypes.AgentTool<any, any>) =>
   Effect.gen(function* () {
     const harness = yield* Effect.promise(() =>
       createHarness({

@@ -1,4 +1,4 @@
-import type { Api, AssistantMessage, Message, Model, SimpleStreamOptions } from "@msa/ai";
+import type aiTypes from "@msa/ai/index.types";
 import type chordTypes from "@msa/chord/index.types";
 import jsonModule from "@msa/chord/json";
 import { Cause, Effect, Fiber } from "effect";
@@ -17,14 +17,14 @@ const { assignJson } = json;
 const { ensureProviderSessionId } = provider;
 
 type Partials = {
-  pending: AssistantMessage | undefined;
+  pending: aiTypes.AssistantMessage | undefined;
   stopped: boolean;
 };
 
 const storePartial = Effect.fnUntraced(function* (
   runtime: generationTypesModule.GenerationRuntime,
   attempt: number,
-  partial: AssistantMessage,
+  partial: aiTypes.AssistantMessage,
   context: chordTypes.Context,
 ) {
   const message = copyJson(partial, { omitUndefinedProperties: true });
@@ -70,9 +70,9 @@ const flushPartials = Effect.fnUntraced(function* (
 
 const consumeEvents = Effect.fnUntraced(function* (
   runtime: generationTypesModule.GenerationRuntime,
-  model: Model<Api>,
-  messages: readonly Message[],
-  options: SimpleStreamOptions,
+  model: aiTypes.Model<aiTypes.Api>,
+  messages: readonly aiTypes.Message[],
+  options: aiTypes.SimpleStreamOptions,
   partials: Partials,
 ) {
   const events = runtime.models.streamSimple(model, { messages: [...messages] }, options);
@@ -89,9 +89,9 @@ const consumeEvents = Effect.fnUntraced(function* (
 
 const streamResponse = Effect.fnUntraced(function* (
   runtime: generationTypesModule.GenerationRuntime,
-  model: Model<Api>,
-  messages: readonly Message[],
-  options: SimpleStreamOptions,
+  model: aiTypes.Model<aiTypes.Api>,
+  messages: readonly aiTypes.Message[],
+  options: aiTypes.SimpleStreamOptions,
   attempt: number,
   context: chordTypes.Context,
 ) {

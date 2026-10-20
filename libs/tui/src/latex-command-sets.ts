@@ -1,4 +1,4 @@
-export const NAMED_OPERATORS = new Set([
+const NAMED_OPERATORS = new Set([
   "arccos",
   "arcsin",
   "arctan",
@@ -33,7 +33,7 @@ export const NAMED_OPERATORS = new Set([
   "tanh",
 ]);
 
-export const LIMIT_OPERATORS = new Set([
+const LIMIT_OPERATORS = new Set([
   "argmax",
   "argmin",
   "inf",
@@ -47,7 +47,7 @@ export const LIMIT_OPERATORS = new Set([
   "sup",
 ]);
 
-export const DISPLAY_LIMIT_SYMBOLS = new Set([
+const DISPLAY_LIMIT_SYMBOLS = new Set([
   "bigcap",
   "bigcup",
   "bigodot",
@@ -66,7 +66,7 @@ export const DISPLAY_LIMIT_SYMBOLS = new Set([
   "sum",
 ]);
 
-export const RELATION_COMMANDS = new Set([
+const RELATION_COMMANDS = new Set([
   "Leftarrow",
   "Leftrightarrow",
   "Longleftarrow",
@@ -157,7 +157,7 @@ export const RELATION_COMMANDS = new Set([
   "vdash",
 ]);
 
-export const SPACING_COMMANDS = new Set([
+const SPACING_COMMANDS = new Set([
   ",",
   ":",
   ";",
@@ -171,15 +171,10 @@ export const SPACING_COMMANDS = new Set([
   "thickspace",
   "thinspace",
 ]);
-export const NEGATIVE_SPACING_COMMANDS = new Set([
-  "!",
-  "negmedspace",
-  "negthickspace",
-  "negthinspace",
-]);
-export const NEGATIVE_SPACE = "\u0000";
-export const FONT_SWITCH_COMMANDS = new Set(["bf", "cal", "it", "rm", "sf", "sl", "tt"]);
-export const IGNORED_COMMANDS = new Set([
+const NEGATIVE_SPACING_COMMANDS = new Set(["!", "negmedspace", "negthickspace", "negthinspace"]);
+const NEGATIVE_SPACE = "\u0000";
+const FONT_SWITCH_COMMANDS = new Set(["bf", "cal", "it", "rm", "sf", "sl", "tt"]);
+const IGNORED_COMMANDS = new Set([
   "displaystyle",
   "limits",
   "nolimits",
@@ -187,7 +182,7 @@ export const IGNORED_COMMANDS = new Set([
   "scriptscriptstyle",
   "textstyle",
 ]);
-export const SIZE_COMMANDS = new Set([
+const SIZE_COMMANDS = new Set([
   "big",
   "Big",
   "bigg",
@@ -201,7 +196,7 @@ export const SIZE_COMMANDS = new Set([
   "biggr",
   "Biggr",
 ]);
-export const PLAIN_WRAPPERS = new Set([
+const PLAIN_WRAPPERS = new Set([
   "emph",
   "mathcal",
   "mathbf",
@@ -233,3 +228,19 @@ export const PLAIN_WRAPPERS = new Set([
   "bm",
   "boldsymbol",
 ]);
+
+const latexCommandSets = {
+  DISPLAY_LIMIT_SYMBOLS,
+  FONT_SWITCH_COMMANDS,
+  IGNORED_COMMANDS,
+  LIMIT_OPERATORS,
+  NAMED_OPERATORS,
+  NEGATIVE_SPACE,
+  NEGATIVE_SPACING_COMMANDS,
+  PLAIN_WRAPPERS,
+  RELATION_COMMANDS,
+  SIZE_COMMANDS,
+  SPACING_COMMANDS,
+};
+
+export default latexCommandSets;

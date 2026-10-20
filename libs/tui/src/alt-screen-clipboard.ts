@@ -1,18 +1,14 @@
 import { Effect } from "effect";
 import { dual } from "effect/Function";
 
+import type altScreenClipboardTypes from "./alt-screen-clipboard.types.ts";
+
 const COPY_ERROR_FLASH_DURATION_MS = 5000;
 
-export interface ClipboardTarget {
-  copySelection: ((text: string) => Promise<boolean | string>) | undefined;
-  write(data: string): void;
-  flash(message: string, durationMs?: number): void;
-}
-
-export const copyToClipboard: {
-  (text: string, target: ClipboardTarget): Promise<boolean>;
-  (target: ClipboardTarget): (text: string) => Promise<boolean>;
-} = dual(2, (text: string, target: ClipboardTarget): Promise<boolean> => {
+const copyToClipboard: {
+  (text: string, target: altScreenClipboardTypes.ClipboardTarget): Promise<boolean>;
+  (target: altScreenClipboardTypes.ClipboardTarget): (text: string) => Promise<boolean>;
+} = dual(2, (text: string, target: altScreenClipboardTypes.ClipboardTarget): Promise<boolean> => {
   const copySelection = target.copySelection;
   if (copySelection === undefined) {
     return Effect.runPromise(
@@ -36,3 +32,9 @@ export const copyToClipboard: {
     ),
   );
 });
+
+const altScreenClipboard = {
+  copyToClipboard,
+};
+
+export default altScreenClipboard;

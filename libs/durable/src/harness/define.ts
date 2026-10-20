@@ -1,4 +1,4 @@
-import type { TSchema } from "@msa/ai";
+import type aiTypes from "@msa/ai/index.types";
 import type chordTypes from "@msa/chord/index.types";
 import { Function } from "effect";
 
@@ -11,7 +11,7 @@ function defineExtension<Tool extends typesModule.ToolRegistration = typesModule
 }
 
 function defineTool<
-  TParameters extends TSchema,
+  TParameters extends aiTypes.TSchema,
   TDetails extends chordTypes.JsonValue = chordTypes.JsonValue,
 >(
   tool: typesModule.ToolRegistration<TParameters, TDetails>,

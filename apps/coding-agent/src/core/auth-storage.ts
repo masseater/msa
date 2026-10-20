@@ -1,6 +1,6 @@
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from "fs";
 
-import type { AuthOperationOptions, Credential, CredentialInfo, CredentialStore } from "@msa/ai";
+import type aiTypes from "@msa/ai/index.types";
 import * as Effect from "effect/Effect";
 import lockfile from "proper-lockfile";
 
@@ -14,7 +14,7 @@ import { dirname, join } from "./platform-node.ts";
 import { nowMs, randomUnit, sleepFor } from "./platform.ts";
 import { isCommandConfigValue, resolveConfigValue } from "./resolve-config-value.ts";
 
-type AuthStorageData = Record<string, Credential>;
+type AuthStorageData = Record<string, aiTypes.Credential>;
 
 const MAX_EPERM_RETRIES = 5;
 
@@ -50,7 +50,7 @@ export interface AuthStorageBackend {
   withLock<T>(fn: (current: string | undefined) => LockResult<T>): T;
   withLockAsync<T>(
     fn: (current: string | undefined) => Promise<LockResult<T>>,
-    options?: AuthOperationOptions,
+    options?: aiTypes.AuthOperationOptions,
   ): Promise<T>;
 }
 
@@ -64,7 +64,7 @@ export class FileAuthStorageBackend implements AuthStorageBackend {
   private ensureParentDir(): void {
     const dir = dirname(this.authPath);
     if (!existsSync(dir)) {
-      mkdirSync(dir, { recursive: true, mode: 0o700 });
+      mkdirSync(dir, { mode: 0o700, recursive: true });
     }
   }
 
@@ -124,10 +124,10 @@ export class FileAuthStorageBackend implements AuthStorageBackend {
         try {
           release = yield* awaited(
             lockfile.lock(this.authPath, {
+              onCompromised,
               realpath: false,
               retries: 0,
               stale: staleMs,
-              onCompromised,
             }),
           );
         } catch (error) {
@@ -153,7 +153,7 @@ export class FileAuthStorageBackend implements AuthStorageBackend {
 
   withLockAsync<T>(
     fn: (current: string | undefined) => Promise<LockResult<T>>,
-    options?: AuthOperationOptions,
+    options?: aiTypes.AuthOperationOptions,
   ): Promise<T> {
     return Effect.runPromise(
       awaitingWith(function* () {
@@ -203,7 +203,7 @@ export class FileAuthStorageBackend implements AuthStorageBackend {
   }
 }
 
-export class ReadOnlyAuthStorage implements CredentialStore {
+export class ReadOnlyAuthStorage implements aiTypes.CredentialStore {
   private readonly authPath: string;
   private data: AuthStorageData | undefined;
 
@@ -258,7 +258,10 @@ export class ReadOnlyAuthStorage implements CredentialStore {
     return this.data;
   }
 
-  read(providerId: string, options?: AuthOperationOptions): Promise<Credential | undefined> {
+  read(
+    providerId: string,
+    options?: aiTypes.AuthOperationOptions,
+  ): Promise<aiTypes.Credential | undefined> {
     return Effect.runPromise(
       Effect.sync(() => {
         options?.signal?.throwIfAborted();
@@ -278,7 +281,7 @@ export class ReadOnlyAuthStorage implements CredentialStore {
     );
   }
 
-  list(options?: AuthOperationOptions): Promise<readonly CredentialInfo[]> {
+  list(options?: aiTypes.AuthOperationOptions): Promise<readonly aiTypes.CredentialInfo[]> {
     return Effect.runPromise(
       Effect.sync(() => {
         options?.signal?.throwIfAborted();
@@ -294,9 +297,9 @@ export class ReadOnlyAuthStorage implements CredentialStore {
 
   modify(
     _providerId: string,
-    _fn: (current: Credential | undefined) => Promise<Credential | undefined>,
-    _options?: AuthOperationOptions,
-  ): Promise<Credential | undefined> {
+    _fn: (current: aiTypes.Credential | undefined) => Promise<aiTypes.Credential | undefined>,
+    _options?: aiTypes.AuthOperationOptions,
+  ): Promise<aiTypes.Credential | undefined> {
     return Effect.runPromise(
       Effect.sync(() => {
         throw new Error("Read-only credential storage cannot modify auth.json");
@@ -304,7 +307,7 @@ export class ReadOnlyAuthStorage implements CredentialStore {
     );
   }
 
-  delete(_providerId: string, _options?: AuthOperationOptions): Promise<void> {
+  delete(_providerId: string, _options?: aiTypes.AuthOperationOptions): Promise<void> {
     return Effect.runPromise(
       Effect.sync(() => {
         throw new Error("Read-only credential storage cannot modify auth.json");
@@ -327,7 +330,7 @@ export class InMemoryAuthStorageBackend implements AuthStorageBackend {
 
   withLockAsync<T>(
     fn: (current: string | undefined) => Promise<LockResult<T>>,
-    options?: AuthOperationOptions,
+    options?: aiTypes.AuthOperationOptions,
   ): Promise<T> {
     const previous = this.asyncChain;
     const operation = (() =>
@@ -348,7 +351,7 @@ export class InMemoryAuthStorageBackend implements AuthStorageBackend {
   }
 }
 
-export class AuthStorage implements CredentialStore {
+export class AuthStorage implements aiTypes.CredentialStore {
   private storage: AuthStorageBackend;
   private authPath: string | undefined;
   private readState: AuthFileReadState;
@@ -381,7 +384,7 @@ export class AuthStorage implements CredentialStore {
 
   static inMemory(data: AuthStorageData = {}): AuthStorage {
     const storage = new InMemoryAuthStorageBackend();
-    storage.withLock(() => ({ result: undefined, next: prettyJson(data) }));
+    storage.withLock(() => ({ next: prettyJson(data), result: undefined }));
     return AuthStorage.fromStorage(storage);
   }
 
@@ -413,7 +416,9 @@ export class AuthStorage implements CredentialStore {
     } catch {}
   }
 
-  private reloadFromStorageAsync(options?: AuthOperationOptions): Effect.Effect<AuthStorageData> {
+  private reloadFromStorageAsync(
+    options?: aiTypes.AuthOperationOptions,
+  ): Effect.Effect<AuthStorageData> {
     return awaitingWith(function* () {
       return yield* awaited(
         this.storage.withLockAsync(
@@ -435,7 +440,7 @@ export class AuthStorage implements CredentialStore {
     }, this);
   }
 
-  private readLatestData(options?: AuthOperationOptions): Effect.Effect<AuthStorageData> {
+  private readLatestData(options?: aiTypes.AuthOperationOptions): Effect.Effect<AuthStorageData> {
     return awaitingWith(function* () {
       options?.signal?.throwIfAborted();
       if (this.authPath === undefined || this.authPath === "") {
@@ -484,7 +489,10 @@ export class AuthStorage implements CredentialStore {
     }, this);
   }
 
-  read(provider: string, options?: AuthOperationOptions): Promise<Credential | undefined> {
+  read(
+    provider: string,
+    options?: aiTypes.AuthOperationOptions,
+  ): Promise<aiTypes.Credential | undefined> {
     return Effect.runPromise(
       awaitingWith(function* () {
         const credential = (yield* performed(this.readLatestData(options)))[provider];
@@ -498,9 +506,9 @@ export class AuthStorage implements CredentialStore {
 
   modify(
     provider: string,
-    fn: (current: Credential | undefined) => Promise<Credential | undefined>,
-    options?: AuthOperationOptions,
-  ): Promise<Credential | undefined> {
+    fn: (current: aiTypes.Credential | undefined) => Promise<aiTypes.Credential | undefined>,
+    options?: aiTypes.AuthOperationOptions,
+  ): Promise<aiTypes.Credential | undefined> {
     return Effect.runPromise(
       awaitingWith(function* () {
         let latestData = this.readState.data;
@@ -523,7 +531,7 @@ export class AuthStorage implements CredentialStore {
 
                   const merged: AuthStorageData = { ...currentData, [provider]: next };
                   latestData = merged;
-                  return { result: next, next: prettyJson(merged) };
+                  return { next: prettyJson(merged), result: next };
                 }, this),
               ),
             options,
@@ -535,7 +543,7 @@ export class AuthStorage implements CredentialStore {
     );
   }
 
-  delete(provider: string, options?: AuthOperationOptions): Promise<void> {
+  delete(provider: string, options?: aiTypes.AuthOperationOptions): Promise<void> {
     return Effect.runPromise(
       awaitingWith(function* () {
         let latestData = this.readState.data;
@@ -547,7 +555,7 @@ export class AuthStorage implements CredentialStore {
                   const currentData = this.parseStorageData(content);
                   delete currentData[provider];
                   latestData = currentData;
-                  return { result: undefined, next: prettyJson(currentData) };
+                  return { next: prettyJson(currentData), result: undefined };
                 }),
               ),
             options,
@@ -558,7 +566,7 @@ export class AuthStorage implements CredentialStore {
     );
   }
 
-  list(options?: AuthOperationOptions): Promise<readonly CredentialInfo[]> {
+  list(options?: aiTypes.AuthOperationOptions): Promise<readonly aiTypes.CredentialInfo[]> {
     return Effect.runPromise(
       awaitingWith(function* () {
         const entries = Object.entries(yield* performed(this.readLatestData(options)));
@@ -572,7 +580,7 @@ export class AuthStorage implements CredentialStore {
 export function readStoredCredential(
   providerId: string,
   authPath: string = join(getAgentDir(), "auth.json"),
-): Credential | undefined {
+): aiTypes.Credential | undefined {
   try {
     const data = JSON.parse(
       stripBom(readFileSync(normalizePath(authPath), "utf-8")),

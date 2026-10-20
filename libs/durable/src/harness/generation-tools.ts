@@ -1,5 +1,5 @@
-import type { AssistantMessage, ToolCall } from "@msa/ai";
-import { getCurrentTools } from "@msa/ai/utils/transcript";
+import type aiTypes from "@msa/ai/index.types";
+import transcript from "@msa/ai/utils/transcript";
 import type chordTypes from "@msa/chord/index.types";
 import { Effect, Function } from "effect";
 
@@ -9,6 +9,8 @@ import type generationToolsTypes from "./generation-tools.types.ts";
 import liveModule from "./live.ts";
 import toolModule from "./tool.ts";
 import type typesModule from "./types.types.ts";
+
+const { getCurrentTools } = transcript;
 
 const { ToolTask, appendToolResult, harnessError } = toolModule;
 const { commitTask } = bridge;
@@ -53,7 +55,7 @@ const placeCall = Effect.fnUntraced(function* (
   runtime: generationToolsTypes.GenerationRuntime,
   round: Round,
   input: {
-    readonly call: ToolCall;
+    readonly call: aiTypes.ToolCall;
     readonly assistant: typesModule.EntryId;
     readonly offered: ReadonlySet<string>;
     readonly sequential: boolean;
@@ -80,7 +82,7 @@ const placeCall = Effect.fnUntraced(function* (
 
 const isSequential = Effect.fnUntraced(function* (
   runtime: generationToolsTypes.GenerationRuntime,
-  calls: readonly ToolCall[],
+  calls: readonly aiTypes.ToolCall[],
   offered: ReadonlySet<string>,
   context: chordTypes.Context,
 ) {
@@ -96,8 +98,8 @@ const isSequential = Effect.fnUntraced(function* (
 const startToolRound = Effect.fnUntraced(function* (
   runtime: generationToolsTypes.GenerationRuntime,
   request: generationToolsTypes.GenerationRequest,
-  message: AssistantMessage,
-  calls: readonly ToolCall[],
+  message: aiTypes.AssistantMessage,
+  calls: readonly aiTypes.ToolCall[],
   context: chordTypes.Context,
 ) {
   const { conversationId } = runtime;

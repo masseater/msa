@@ -1,8 +1,10 @@
 import { Clock, Effect, Stream } from "effect";
 import { describe, expect, it, vi } from "vite-plus/test";
 
-import { streamSimple } from "../src/compat.ts";
+import compatModule from "../src/compat.ts";
 import modelChoice from "./model-choice.ts";
+
+const { streamSimple } = compatModule;
 
 const { chooseModel } = modelChoice;
 

@@ -1,10 +1,13 @@
 import { Effect } from "effect";
 import { describe, expect, it } from "vite-plus/test";
 
-import type { OpenAIResponsesOptions } from "../src/api/openai-responses-config.ts";
-import { stream as streamOpenAIResponses } from "../src/api/openai-responses.ts";
-import type { AssistantMessage, Message, Model, ToolResultMessage } from "../src/types.ts";
-import { normalizeContext } from "../src/utils/transcript.ts";
+import type openaiResponsesConfigTypes from "../src/api/openai-responses-config.types.ts";
+import openaiResponses from "../src/api/openai-responses.ts";
+import type typesModule from "../src/types.types.ts";
+import transcript from "../src/utils/transcript.ts";
+
+const { stream: streamOpenAIResponses } = openaiResponses;
+const { normalizeContext } = transcript;
 
 interface Payload {
   input: Array<Record<string, unknown>>;
@@ -22,7 +25,7 @@ const thinkingLevelMap = {
 } as const;
 
 function openAIModel(
-  compat: Model<"openai-responses">["compat"] = { supportsMidConvoEffort: true },
+  compat: typesModule.Model<"openai-responses">["compat"] = { supportsMidConvoEffort: true },
 ) {
   return {
     api: "openai-responses",
@@ -37,12 +40,12 @@ function openAIModel(
     provider: "openai",
     reasoning: true,
     thinkingLevelMap,
-  } satisfies Model<"openai-responses">;
+  } satisfies typesModule.Model<"openai-responses">;
 }
 
-const user = (text: string): Message => ({ content: text, role: "user", timestamp: 0 });
+const user = (text: string): typesModule.Message => ({ content: text, role: "user", timestamp: 0 });
 
-const toolResult = (callId: string): ToolResultMessage => ({
+const toolResult = (callId: string): typesModule.ToolResultMessage => ({
   content: [{ text: "result", type: "text" }],
   isError: false,
   role: "toolResult",
@@ -79,9 +82,13 @@ function responseEvents(responseId: string, withToolCall: boolean): object[] {
 }
 
 const runOpenAI = Effect.fn("runOpenAI")(function* (
-  messages: Message[],
-  reasoningEffort: OpenAIResponsesOptions["reasoningEffort"],
-  options: { apiKey?: string; model?: Model<"openai-responses">; withToolCall?: boolean } = {},
+  messages: typesModule.Message[],
+  reasoningEffort: openaiResponsesConfigTypes.OpenAIResponsesOptions["reasoningEffort"],
+  options: {
+    apiKey?: string;
+    model?: typesModule.Model<"openai-responses">;
+    withToolCall?: boolean;
+  } = {},
 ) {
   const payload: { value: Payload | undefined } = { value: undefined };
   const fetchMock = (_url: string | URL | Request, init?: RequestInit): Promise<Response> => {
@@ -108,7 +115,7 @@ const runOpenAI = Effect.fn("runOpenAI")(function* (
 const keepsReasoningEffortConstantAndOnly = () =>
   Effect.runPromise(
     Effect.gen(function* () {
-      const history: Message[] = [user("one")];
+      const history: typesModule.Message[] = [user("one")];
       const first = yield* runOpenAI(history, "high");
       history.push(first.message, user("two"));
       const second = yield* runOpenAI(history, "high");
@@ -150,7 +157,7 @@ describe("OpenAI Responses configuration_update", () => {
 const appliesALevelChangeMadeDuring = () =>
   Effect.runPromise(
     Effect.gen(function* () {
-      const history: Message[] = [user("one")];
+      const history: typesModule.Message[] = [user("one")];
       const toolCall = yield* runOpenAI(history, "high", { withToolCall: true });
       history.push(toolCall.message, toolResult("call_1|fc_1"));
       const afterTool = yield* runOpenAI(history, "low");
@@ -192,17 +199,20 @@ const addsItemsOnlyBeforeRepliesRecorded = () =>
     Effect.gen(function* () {
       const unstamped = (yield* runOpenAI([user("one")], "high", { model: openAIModel({}) }))
         .message;
-      const otherProvider: AssistantMessage = {
+      const otherProvider: typesModule.AssistantMessage = {
         ...unstamped,
         provider: "opencode",
         providerThinkingLevel: "high",
       };
-      const otherModel: AssistantMessage = {
+      const otherModel: typesModule.AssistantMessage = {
         ...unstamped,
         model: "gpt-6-sol",
         providerThinkingLevel: "high",
       };
-      const recorded: AssistantMessage = { ...unstamped, providerThinkingLevel: "high" };
+      const recorded: typesModule.AssistantMessage = {
+        ...unstamped,
+        providerThinkingLevel: "high",
+      };
 
       const { payload } = yield* runOpenAI(
         [

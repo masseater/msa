@@ -1,9 +1,11 @@
 import { Effect } from "effect";
 import { describe, expect, it } from "vite-plus/test";
 
-import type { ApiKeyAuth } from "../src/auth/types.ts";
-import { createModels } from "../src/models.ts";
+import type typesModule from "../src/auth/types.ts";
+import modelsModule from "../src/models.ts";
 import modelsRuntimeSupport from "./models-runtime-support.ts";
+
+const { createModels } = modelsModule;
 
 const { testProvider } = modelsRuntimeSupport;
 const passesCallerSignalsToProviderAuth = () => {
@@ -11,7 +13,7 @@ const passesCallerSignalsToProviderAuth = () => {
   return Effect.runPromise(
     Effect.gen(function* () {
       const received: AbortSignal[] = [];
-      const apiKey: ApiKeyAuth = {
+      const apiKey: typesModule.ApiKeyAuth = {
         check: ({ signal }) => {
           received.push(signal);
           return Promise.resolve({ type: "api_key" });

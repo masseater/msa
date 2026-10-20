@@ -1,4 +1,4 @@
-import type { Usage } from "@msa/ai/compat";
+import type compatTypes from "@msa/ai/compat.types";
 import testing from "@msa/testing";
 import { Effect } from "effect";
 import { afterEach, describe, expect, it } from "vite-plus/test";
@@ -16,7 +16,7 @@ const harnesses: harnessTypes.Harness[] = [];
 
 const persistsExtensionProvidedSummaryUsageInSessionPart1 = () =>
   Effect.sync(() => {
-    const usage: Usage = {
+    const usage: compatTypes.Usage = {
       cacheRead: 30,
       cacheWrite: 40,
       cost: { cacheRead: 0.3, cacheWrite: 0.4, input: 0.1, output: 0.2, total: 1 },

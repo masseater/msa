@@ -1,9 +1,13 @@
 import assert from "node:assert";
 import { describe, it } from "node:test";
 
-import { extractSegments, sliceByColumn } from "../src/text-slice.ts";
-import { compositeTuiLine } from "../src/tui-component.ts";
-import { visibleWidth } from "../src/utils.ts";
+import textSlice from "../src/text-slice.ts";
+import tuiComponent from "../src/tui-component.ts";
+import utils from "../src/utils.ts";
+
+const { extractSegments, sliceByColumn } = textSlice;
+const { visibleWidth } = utils;
+const { compositeTuiLine } = tuiComponent;
 
 describe("overlay CJK boundary regression", () => {
   it("excludes a wide grapheme from before when overlay starts inside it", () => {

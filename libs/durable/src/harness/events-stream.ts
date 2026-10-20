@@ -1,4 +1,4 @@
-import type { AssistantMessage } from "@msa/ai";
+import type aiTypes from "@msa/ai/index.types";
 import type deltaTypes from "@msa/chord/delta.types";
 import { Function } from "effect";
 
@@ -20,8 +20,8 @@ const partials: typesModule.Dual2<
     was: eventsSnapshotTypes.Parts,
     now: eventsSnapshotTypes.Parts,
   ): eventsStreamTypes.Generations => ({
-    partial: now.live.generation?.message as AssistantMessage | undefined,
-    partialBefore: was.live.generation?.message as AssistantMessage | undefined,
+    partial: now.live.generation?.message as aiTypes.AssistantMessage | undefined,
+    partialBefore: was.live.generation?.message as aiTypes.AssistantMessage | undefined,
   }),
 );
 

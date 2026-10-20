@@ -1,17 +1,13 @@
-import type { AgentMessage } from "@msa/agent-core";
-import {
-  contentText,
-  getCurrentTools,
-  getInitialSystemMessage,
-  renderSystemMessageUpdate,
-  type Message,
-  type SystemMessage,
-} from "@msa/ai";
+import type agentTypes from "@msa/agent-core/index.types";
+import ai from "@msa/ai";
+import type aiTypes from "@msa/ai/index.types";
 import { Effect } from "effect";
 
 import { estimateTokens } from "./compaction/compaction.ts";
 import { MEMORY_RECALL_MESSAGE_TYPE } from "./memory/memory.ts";
 import { ORCHESTRATOR_PREAMBLE } from "./system-prompt.ts";
+
+const { contentText, getCurrentTools, getInitialSystemMessage, renderSystemMessageUpdate } = ai;
 
 export type ContextPart =
   | "system"
@@ -40,85 +36,93 @@ export interface ContextElement {
 }
 
 export interface ContextBreakdownSource {
-  messages: AgentMessage[];
+  messages: agentTypes.AgentMessage[];
 
-  pending: AgentMessage[];
-  transformContext: ((messages: AgentMessage[]) => Promise<AgentMessage[]>) | undefined;
-  convertToLlm: (messages: AgentMessage[]) => Message[] | Promise<Message[]>;
+  pending: agentTypes.AgentMessage[];
+  transformContext:
+    | ((messages: agentTypes.AgentMessage[]) => Promise<agentTypes.AgentMessage[]>)
+    | undefined;
+  convertToLlm: (
+    messages: agentTypes.AgentMessage[],
+  ) => aiTypes.Message[] | Promise<aiTypes.Message[]>;
 
-  countTokens: (messages: Message[]) => Promise<number | undefined>;
+  countTokens: (messages: aiTypes.Message[]) => Promise<number | undefined>;
 
   usageTokens: number | null;
 
   addingProvider: string | undefined;
 }
 
-const systemOnly = (fields: Omit<SystemMessage, "role" | "content" | "timestamp">): number =>
-  estimateTokens({ role: "system", content: "", timestamp: 0, ...fields });
+const systemOnly = (
+  fields: Omit<aiTypes.SystemMessage, "role" | "content" | "timestamp">,
+): number => estimateTokens({ content: "", role: "system", timestamp: 0, ...fields });
 
-function systemElements(system: SystemMessage): ContextElement[] {
+function systemElements(system: aiTypes.SystemMessage): ContextElement[] {
   const elements: ContextElement[] = [];
   const content = contentText(system.content, "\n");
   if (content.length > 0) {
     elements.push({
-      part: "system",
-      name: "prompt",
       estimate: estimateTokens({ role: "system", content, timestamp: 0 }),
+      name: "prompt",
+      part: "system",
     });
   }
   for (const [name, text] of Object.entries(system.sections ?? {})) {
     if (text === null) continue;
     elements.push({
-      part: "system",
-      name: name === "preamble" && text === ORCHESTRATOR_PREAMBLE ? "orchestrator" : name,
       estimate: systemOnly({ sections: { [name]: text } }),
+      name: name === "preamble" && text === ORCHESTRATOR_PREAMBLE ? "orchestrator" : name,
+      part: "system",
     });
   }
   return elements;
 }
 
-function conversationElement(source: AgentMessage, sent: Message): ContextElement {
+function conversationElement(
+  source: agentTypes.AgentMessage,
+  sent: aiTypes.Message,
+): ContextElement {
   const estimate = estimateTokens(sent);
   switch (source.role) {
     case "user":
     case "assistant":
-      return { part: "conversation", name: source.role, estimate };
+      return { estimate, name: source.role, part: "conversation" };
     case "toolResult":
-      return { part: "toolResults", name: source.toolName, estimate };
+      return { estimate, name: source.toolName, part: "toolResults" };
     case "compactionSummary":
-      return { part: "compaction", name: "summary", estimate };
+      return { estimate, name: "summary", part: "compaction" };
     case "custom":
       return source.customType === MEMORY_RECALL_MESSAGE_TYPE
-        ? { part: "system", name: "memory", estimate }
-        : { part: "other", name: source.customType, estimate };
+        ? { estimate, name: "memory", part: "system" }
+        : { estimate, name: source.customType, part: "other" };
     default:
-      return { part: "other", name: source.role, estimate };
+      return { estimate, name: source.role, part: "other" };
   }
 }
 
 function splitContext(
-  transformed: readonly AgentMessage[],
-  sent: readonly (readonly Message[])[],
+  transformed: readonly agentTypes.AgentMessage[],
+  sent: readonly (readonly aiTypes.Message[])[],
 ): ContextElement[] {
   const llmMessages = sent.flat();
   const elements: ContextElement[] = [];
   const initial = getInitialSystemMessage(llmMessages);
   if (initial) elements.push(...systemElements(initial));
   for (const tool of getCurrentTools(llmMessages)) {
-    elements.push({ part: "tools", name: tool.name, estimate: systemOnly({ toolsAdded: [tool] }) });
+    elements.push({ estimate: systemOnly({ toolsAdded: [tool] }), name: tool.name, part: "tools" });
   }
   transformed.forEach((source, index) => {
     for (const message of sent[index] ?? []) {
       if (message === initial) continue;
       if (message.role === "system") {
         elements.push({
-          part: "system",
-          name: "updates",
           estimate: estimateTokens({
             role: "user",
             content: renderSystemMessageUpdate(message),
             timestamp: 0,
           }),
+          name: "updates",
+          part: "system",
         });
         continue;
       }
@@ -144,7 +148,7 @@ export function apportion(
   total: number,
 ): ContextBreakdownEntry[] {
   const estimated = elements.reduce((sum, element) => sum + element.estimate, 0);
-  if (estimated === 0) return elements.map(({ part, name }) => ({ part, name, tokens: 0 }));
+  if (estimated === 0) return elements.map(({ part, name }) => ({ name, part, tokens: 0 }));
   const shares = elements.map((element) => (element.estimate / estimated) * total);
   const tokens = shares.map(Math.floor);
   const order = shares
@@ -156,7 +160,7 @@ export function apportion(
     tokens[index] = (tokens[index] ?? 0) + 1;
     missing--;
   }
-  return elements.map(({ part, name }, index) => ({ part, name, tokens: tokens[index] ?? 0 }));
+  return elements.map(({ part, name }, index) => ({ name, part, tokens: tokens[index] ?? 0 }));
 }
 
 export const measureContextBreakdown = (
@@ -181,8 +185,6 @@ export const measureContextBreakdown = (
       counted ?? (source.usageTokens === null ? estimated : source.usageTokens + pendingEstimate);
     const added = counted === undefined && source.addingProvider ? tokens - estimated : 0;
     return {
-      method: counted === undefined ? "estimated" : "exact",
-      tokens,
       entries:
         added > 0
           ? [
@@ -190,5 +192,7 @@ export const measureContextBreakdown = (
               { part: "other", name: source.addingProvider!, tokens: added },
             ]
           : apportion(elements, tokens),
+      method: counted === undefined ? "estimated" : "exact",
+      tokens,
     };
   });

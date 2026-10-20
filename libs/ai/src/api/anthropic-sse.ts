@@ -1,8 +1,11 @@
 import type { BetaRawMessageStreamEvent as RawMessageStreamEvent } from "@anthropic-ai/sdk/resources/beta/messages/messages.js";
 import { Effect, Stream } from "effect";
 
-import { toErrorMessage } from "../utils/errors.ts";
-import { parseJsonWithRepair } from "../utils/json-parse.ts";
+import errors from "../utils/errors.ts";
+import jsonParse from "../utils/json-parse.ts";
+
+const { parseJsonWithRepair } = jsonParse;
+const { toErrorMessage } = errors;
 
 interface ServerSentEvent {
   event: string | null;
@@ -31,8 +34,8 @@ function flushSseEvent(state: SseDecoderState): ServerSentEvent | null {
   }
 
   const event: ServerSentEvent = {
-    event: state.event,
     data: state.data.join("\n"),
+    event: state.event,
     raw: [...state.raw],
   };
   state.event = null;
@@ -149,7 +152,7 @@ function iterateSseMessages(
     Stream.concat(chunks),
     Stream.concat(Stream.sync(() => decoder.decode())),
     Stream.mapAccum(
-      (): SseAccumulator => ({ buffer: "", state: { event: null, data: [], raw: [] } }),
+      (): SseAccumulator => ({ buffer: "", state: { data: [], event: null, raw: [] } }),
       consumeSseLines,
       { onHalt: finishSseLines },
     ),
@@ -214,4 +217,9 @@ function describeThrown(error: unknown): string {
   return error instanceof Error ? error.message : JSON.stringify(error);
 }
 
-export { describeThrown, iterateAnthropicEvents };
+const anthropicSse = {
+  describeThrown,
+  iterateAnthropicEvents,
+};
+
+export default anthropicSse;

@@ -2,14 +2,17 @@ import { Effect } from "effect";
 import { Type } from "typebox";
 import { describe, expect, it } from "vite-plus/test";
 
-import { type RunToolCallOptions, runToolCall } from "../src/agent-loop.ts";
-import type { AfterToolCallResult, AgentTool } from "../src/types.ts";
+import agentLoopModule from "../src/agent-loop.ts";
+import type agentLoopTypes from "../src/agent-loop.types.ts";
+import type typesModule from "../src/types.ts";
 import fixtures from "./support/fixtures.ts";
 import type fixturesTypes from "./support/fixtures.types.ts";
 
+const { runToolCall } = agentLoopModule;
+
 const { createAssistantMessage, echoSchema, toolCall } = fixtures;
 
-const echo: AgentTool<typeof echoSchema> = {
+const echo: typesModule.AgentTool<typeof echoSchema> = {
   description: "Echo tool",
   execute: (_toolCallId, params, _signal, onUpdate) => {
     onUpdate?.({ content: [{ text: "partial", type: "text" }], details: {} });
@@ -25,7 +28,7 @@ const echo: AgentTool<typeof echoSchema> = {
   parameters: echoSchema,
 };
 
-const failing: AgentTool = {
+const failing: typesModule.AgentTool = {
   description: "Returns an error result",
   execute: () =>
     Promise.resolve({
@@ -40,10 +43,13 @@ const failing: AgentTool = {
 
 const assistantMessage = createAssistantMessage([]);
 
-const run = (spec: fixturesTypes.CallSpec, options: RunToolCallOptions) =>
+const run = (spec: fixturesTypes.CallSpec, options: agentLoopTypes.RunToolCallOptions) =>
   Effect.promise(() => runToolCall(toolCall(spec), options));
 
-const hookedOptions = (hookCalls: string[], updates: unknown[]): RunToolCallOptions => ({
+const hookedOptions = (
+  hookCalls: string[],
+  updates: unknown[],
+): agentLoopTypes.RunToolCallOptions => ({
   afterToolCall: ({ toolCall: call }) => {
     hookCalls.push(`after ${call.id}`);
     return Promise.resolve(undefined);
@@ -94,7 +100,7 @@ const validatesAndHooks = Effect.gen(function* () {
 
 const redacted = [{ text: "redacted", type: "text" as const }];
 
-const afterResults: AfterToolCallResult[] = [
+const afterResults: typesModule.AfterToolCallResult[] = [
   { content: redacted },
   { structuredContent: { value: "replaced" } },
   { content: redacted, structuredContent: { value: "both" } },

@@ -1,46 +1,23 @@
-import type { ModelCost, ModelCostTier } from "../types.ts";
+import type typesModule from "../types.types.ts";
+import type openrouterApiTypes from "./openrouter-api.types.ts";
 
-export const OPENROUTER_BASE_URL = "https://openrouter.ai/api/v1";
-
-export interface OpenRouterPricing {
-  prompt?: string;
-  completion?: string;
-  input_cache_read?: string;
-  input_cache_write?: string;
-  overrides?: OpenRouterPricingOverride[];
-}
-
-export interface OpenRouterPricingOverride {
-  min_prompt_tokens?: number;
-  utc_start?: number;
-  utc_end?: number;
-  utc_days?: string[];
-  prompt?: string;
-  completion?: string;
-  input_cache_read?: string;
-  input_cache_write?: string;
-}
-
-export interface OpenRouterModel {
-  id: string;
-  context_length?: number | null;
-  top_provider?: { context_length?: number | null; max_completion_tokens?: number | null };
-  pricing?: OpenRouterPricing;
-}
+const OPENROUTER_BASE_URL = "https://openrouter.ai/api/v1";
 
 function perMillion(value: string | undefined, fallback: number): number {
   const perToken = Number.parseFloat(value ?? "");
   return perToken >= 0 ? Number((perToken * 1_000_000).toFixed(6)) : fallback;
 }
 
-export function openRouterCost(pricing: OpenRouterPricing | undefined): ModelCost {
+function openRouterCost(
+  pricing: openrouterApiTypes.OpenRouterPricing | undefined,
+): typesModule.ModelCost {
   const base = {
-    input: perMillion(pricing?.prompt, 0),
-    output: perMillion(pricing?.completion, 0),
     cacheRead: perMillion(pricing?.input_cache_read, 0),
     cacheWrite: perMillion(pricing?.input_cache_write, 0),
+    input: perMillion(pricing?.prompt, 0),
+    output: perMillion(pricing?.completion, 0),
   };
-  const tiers = (pricing?.overrides ?? []).flatMap((override): ModelCostTier[] => {
+  const tiers = (pricing?.overrides ?? []).flatMap((override): typesModule.ModelCostTier[] => {
     if (
       override.min_prompt_tokens === undefined ||
       override.utc_start !== undefined ||
@@ -51,13 +28,20 @@ export function openRouterCost(pricing: OpenRouterPricing | undefined): ModelCos
     }
     return [
       {
-        inputTokensAbove: override.min_prompt_tokens,
-        input: perMillion(override.prompt, base.input),
-        output: perMillion(override.completion, base.output),
         cacheRead: perMillion(override.input_cache_read, base.cacheRead),
         cacheWrite: perMillion(override.input_cache_write, base.cacheWrite),
+        input: perMillion(override.prompt, base.input),
+        inputTokensAbove: override.min_prompt_tokens,
+        output: perMillion(override.completion, base.output),
       },
     ];
   });
   return tiers.length > 0 ? { ...base, tiers } : base;
 }
+
+const openrouterApi = {
+  OPENROUTER_BASE_URL,
+  openRouterCost,
+};
+
+export default openrouterApi;

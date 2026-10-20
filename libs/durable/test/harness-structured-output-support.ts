@@ -1,11 +1,5 @@
-import {
-  type AssistantMessage,
-  type ToolResultMessage,
-  Type,
-  fauxAssistantMessage,
-  fauxText,
-  fauxToolCall,
-} from "@msa/ai";
+import ai from "@msa/ai";
+import type aiTypes from "@msa/ai/index.types";
 import durable from "@msa/durable";
 import type durableTypes from "@msa/durable/index.types";
 import memory from "@msa/durable/storage/memory";
@@ -14,6 +8,8 @@ import { dual } from "effect/Function";
 
 import type chatSupportTypes from "./chat-support.types.ts";
 import testSupport from "./support.ts";
+
+const { Type, fauxAssistantMessage, fauxText, fauxToolCall } = ai;
 
 const { ToolResultEntry, defineTool } = durable;
 const { MemoryStorage } = memory;
@@ -51,7 +47,7 @@ const returning: {
   ): ReturnType<typeof returningImpl>;
 } = dual((args) => typeof args[0] === "string", returningImpl);
 
-function call(name: string): AssistantMessage {
+function call(name: string): aiTypes.AssistantMessage {
   return fauxAssistantMessage([fauxToolCall(name, {}, { id: "c1" })], { stopReason: "toolUse" });
 }
 
@@ -93,7 +89,7 @@ const direct = Effect.fn("direct")(function* (setup: chatSupportTypes.ChatSetup,
   );
   const entry = (yield* allEntries(root)).find((candidate) => ToolResultEntry.is(candidate))!;
   yield* awaited(harness.close(context));
-  return entry.model![0] as ToolResultMessage;
+  return entry.model![0] as aiTypes.ToolResultMessage;
 });
 
 function codes(result: {

@@ -1,27 +1,31 @@
 import type OpenAI from "openai";
 
-import type { CacheRetention, Model } from "../types.ts";
-import { resolveTranscriptTools, type TranscriptContext } from "../utils/transcript.ts";
-import { applyAnthropicCacheControl, getCompatCacheControl } from "./openai-completions-cache.ts";
-import type {
-  OpenAICompletionsOptions,
-  ResolvedOpenAICompletionsCompat,
-} from "./openai-completions-compat.ts";
-import { convertMessages, hasToolHistory } from "./openai-completions-messages.ts";
-import {
-  applyThinkingParams,
-  resolveClampedThinkingBudget,
-  resolveThinkingTokenBudgetField,
-} from "./openai-completions-thinking-params.ts";
-import { convertTools } from "./openai-completions-tools.ts";
-import { clampOpenAIPromptCacheKey } from "./openai-prompt-cache.ts";
-import { resolveSamplingParams } from "./simple-options.ts";
+import type typesModule from "../types.types.ts";
+import type transcriptTypes from "../utils/transcript.types.ts";
+import type openaiCompletionsCompatTypes from "./openai-completions-compat.types.ts";
+import openaiCompletionsMessages from "./openai-completions-messages.ts";
+import openaiCompletionsParamsKit from "./openai-completions-params-kit.ts";
+import type openaiCompletionsParamsTypes from "./openai-completions-params.types.ts";
+import openaiCompletionsThinkingParams from "./openai-completions-thinking-params.ts";
+import openaiCompletionsTools from "./openai-completions-tools.ts";
+import openaiPromptCache from "./openai-prompt-cache.ts";
+
+const { openaiCompletionsCache, simpleOptions, transcript } = openaiCompletionsParamsKit;
+
+const { clampOpenAIPromptCacheKey } = openaiPromptCache;
+const { resolveTranscriptTools } = transcript;
+const { convertTools } = openaiCompletionsTools;
+const { convertMessages, hasToolHistory } = openaiCompletionsMessages;
+const { applyAnthropicCacheControl, getCompatCacheControl } = openaiCompletionsCache;
+const { applyThinkingParams, resolveClampedThinkingBudget, resolveThinkingTokenBudgetField } =
+  openaiCompletionsThinkingParams;
+const { resolveSamplingParams } = simpleOptions;
 
 function resolvePromptCacheKey(
-  model: Model<"openai-completions">,
-  options: OpenAICompletionsOptions | undefined,
-  compat: ResolvedOpenAICompletionsCompat,
-  cacheRetention: CacheRetention,
+  model: typesModule.Model<"openai-completions">,
+  options: openaiCompletionsCompatTypes.OpenAICompletionsOptions | undefined,
+  compat: openaiCompletionsCompatTypes.ResolvedOpenAICompletionsCompat,
+  cacheRetention: typesModule.CacheRetention,
 ): string | undefined {
   const enabled =
     (model.baseUrl.includes("api.openai.com") && cacheRetention !== "none") ||
@@ -31,7 +35,7 @@ function resolvePromptCacheKey(
 
 function applyStreamingOptions(
   params: OpenAI.Chat.Completions.ChatCompletionCreateParamsStreaming,
-  compat: ResolvedOpenAICompletionsCompat,
+  compat: openaiCompletionsCompatTypes.ResolvedOpenAICompletionsCompat,
 ): void {
   if (compat.supportsUsageInStreaming) {
     params.stream_options = { include_usage: true };
@@ -43,8 +47,8 @@ function applyStreamingOptions(
 
 function applyMaxTokens(
   params: OpenAI.Chat.Completions.ChatCompletionCreateParamsStreaming,
-  options: OpenAICompletionsOptions | undefined,
-  compat: ResolvedOpenAICompletionsCompat,
+  options: openaiCompletionsCompatTypes.OpenAICompletionsOptions | undefined,
+  compat: openaiCompletionsCompatTypes.ResolvedOpenAICompletionsCompat,
 ): void {
   const maxTokens = options?.maxTokens;
   if (maxTokens === undefined || maxTokens === 0 || Number.isNaN(maxTokens)) return;
@@ -57,15 +61,15 @@ function applyMaxTokens(
 
 function applyTools(
   params: OpenAI.Chat.Completions.ChatCompletionCreateParamsStreaming,
-  context: TranscriptContext,
-  compat: ResolvedOpenAICompletionsCompat,
+  context: transcriptTypes.TranscriptContext,
+  compat: openaiCompletionsCompatTypes.ResolvedOpenAICompletionsCompat,
 ): void {
   const transcriptTools = resolveTranscriptTools(
     context.messages,
     compat.supportsMidConvoSystemMessages === true && compat.supportsMidConvoToolAdditions === true,
   );
   if (transcriptTools.requestTools.length > 0) {
-    params.tools = convertTools({ tools: transcriptTools.requestTools, compat });
+    params.tools = convertTools({ compat, tools: transcriptTools.requestTools });
   } else if (hasToolHistory(context.messages)) {
     params.tools = [];
   }
@@ -74,9 +78,9 @@ function applyTools(
 interface OptionalParamsInput {
   readonly params: OpenAI.Chat.Completions.ChatCompletionCreateParamsStreaming;
   readonly messages: OpenAI.Chat.Completions.ChatCompletionMessageParam[];
-  readonly context: TranscriptContext;
-  readonly options: OpenAICompletionsOptions | undefined;
-  readonly compat: ResolvedOpenAICompletionsCompat;
+  readonly context: transcriptTypes.TranscriptContext;
+  readonly options: openaiCompletionsCompatTypes.OpenAICompletionsOptions | undefined;
+  readonly compat: openaiCompletionsCompatTypes.ResolvedOpenAICompletionsCompat;
   readonly cacheControl: ReturnType<typeof getCompatCacheControl>;
 }
 
@@ -88,7 +92,7 @@ function applyOptionalParams(input: OptionalParamsInput): void {
   }
   applyTools(params, context, compat);
   if (cacheControl !== undefined) {
-    applyAnthropicCacheControl({ messages, tools: params.tools, cacheControl });
+    applyAnthropicCacheControl({ cacheControl, messages, tools: params.tools });
   }
   if (options?.toolChoice !== undefined) {
     params.tool_choice = options.toolChoice;
@@ -100,40 +104,30 @@ function applyOptionalParams(input: OptionalParamsInput): void {
 
 interface ThinkingParamsInput {
   readonly params: OpenAI.Chat.Completions.ChatCompletionCreateParamsStreaming;
-  readonly model: Model<"openai-completions">;
-  readonly options: OpenAICompletionsOptions | undefined;
-  readonly compat: ResolvedOpenAICompletionsCompat;
+  readonly model: typesModule.Model<"openai-completions">;
+  readonly options: openaiCompletionsCompatTypes.OpenAICompletionsOptions | undefined;
+  readonly compat: openaiCompletionsCompatTypes.ResolvedOpenAICompletionsCompat;
 }
 
 function applyThinking(input: ThinkingParamsInput): void {
   const { params, model, options, compat } = input;
   const thinkingBudget = resolveClampedThinkingBudget({ model, options, params });
-  applyThinkingParams({ params, model, options, compat, thinkingBudget });
+  applyThinkingParams({ compat, model, options, params, thinkingBudget });
   const thinkingTokenBudgetField = resolveThinkingTokenBudgetField(compat);
   if (thinkingTokenBudgetField !== undefined && thinkingBudget !== undefined) {
     Object.assign(params, { [thinkingTokenBudgetField]: thinkingBudget });
   }
 }
-
-interface BuildParamsInput {
-  readonly model: Model<"openai-completions">;
-  readonly context: TranscriptContext;
-  readonly options: OpenAICompletionsOptions | undefined;
-  readonly compat: ResolvedOpenAICompletionsCompat;
-  readonly cacheRetention: CacheRetention;
-  readonly grammarToolInputProperties: ReadonlyMap<string, string>;
-}
-
 function buildParams(
-  input: BuildParamsInput,
+  input: openaiCompletionsParamsTypes.BuildParamsInput,
 ): OpenAI.Chat.Completions.ChatCompletionCreateParamsStreaming {
   const { model, context, options, compat, cacheRetention, grammarToolInputProperties } = input;
   const messages = convertMessages(model, context, compat, { grammarToolInputProperties });
-  const cacheControl = getCompatCacheControl({ compat, cacheRetention });
+  const cacheControl = getCompatCacheControl({ cacheRetention, compat });
   const promptCacheKey = resolvePromptCacheKey(model, options, compat, cacheRetention);
   const params: OpenAI.Chat.Completions.ChatCompletionCreateParamsStreaming = {
-    model: model.id,
     messages,
+    model: model.id,
     stream: true,
     ...(promptCacheKey === undefined ? {} : { prompt_cache_key: promptCacheKey }),
     ...(cacheRetention === "long" && compat.supportsLongCacheRetention
@@ -142,8 +136,8 @@ function buildParams(
   };
 
   applyStreamingOptions(params, compat);
-  applyOptionalParams({ params, messages, context, options, compat, cacheControl });
-  applyThinking({ params, model, options, compat });
+  applyOptionalParams({ cacheControl, compat, context, messages, options, params });
+  applyThinking({ compat, model, options, params });
 
   if (Object.keys(compat.openRouterRouting).length > 0) {
     (params as any).provider = compat.openRouterRouting;
@@ -161,4 +155,8 @@ function buildParams(
   return params;
 }
 
-export { buildParams };
+const openaiCompletionsParams = {
+  buildParams,
+};
+
+export default openaiCompletionsParams;

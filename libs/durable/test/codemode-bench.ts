@@ -1,6 +1,6 @@
 import * as NodeRuntime from "@effect/platform-node/NodeRuntime";
-import { createModels, fauxAssistantMessage, fauxProvider, fauxText, fauxToolCall } from "@msa/ai";
-import { CodemodeSandbox } from "@msa/codemode";
+import ai from "@msa/ai";
+import codemodeModule from "@msa/codemode";
 import durable from "@msa/durable";
 import harnessModule from "@msa/durable/harness";
 import { Console, Effect } from "effect";
@@ -9,6 +9,10 @@ import { Type } from "typebox";
 import codemode from "../src/codemode/codemode.ts";
 import node from "../src/storage/sqlite/node.ts";
 import support from "./support.ts";
+
+const { createModels, fauxAssistantMessage, fauxProvider, fauxText, fauxToolCall } = ai;
+
+const { CodemodeSandbox } = codemodeModule;
 
 const { defineExtension, defineTool } = durable;
 const { Harness, createRegistry } = harnessModule;

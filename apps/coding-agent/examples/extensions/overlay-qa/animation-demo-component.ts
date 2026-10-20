@@ -1,13 +1,15 @@
 import type { Theme } from "@msa/coding-agent";
-import type { TUI } from "@msa/tui";
-import { matchesKey, truncateToWidth } from "@msa/tui";
+import tuiModule from "@msa/tui";
+import type tuiTypes from "@msa/tui/index.types";
 import { Clock, Effect, type Fiber } from "effect";
 
 import { BaseOverlay } from "./base-overlay.ts";
 import { hslToRgb } from "./hsl-to-rgb.ts";
 
+const { matchesKey, truncateToWidth } = tuiModule;
+
 export class AnimationDemoComponent extends BaseOverlay {
-  private tui: TUI;
+  private tui: tuiTypes.TUI;
   private frame = 0;
   private fiber: Fiber.Fiber<never> | undefined;
   private fps = 0;
@@ -15,7 +17,7 @@ export class AnimationDemoComponent extends BaseOverlay {
   private framesSinceLastFps = 0;
   private done: () => void;
 
-  constructor(tui: TUI, theme: Theme, done: () => void) {
+  constructor(tui: tuiTypes.TUI, theme: Theme, done: () => void) {
     super(theme);
     this.tui = tui;
     this.done = done;
@@ -80,7 +82,7 @@ export class AnimationDemoComponent extends BaseOverlay {
     lines.push(border("│") + padLine(` Spinner: ${th.fg("warning", spin!)}`) + border("│"));
 
     const hue = (this.frame * 3) % 360;
-    const rgb = hslToRgb({ h: hue / 360, s: 0.8, l: 0.5 });
+    const rgb = hslToRgb({ h: hue / 360, l: 0.5, s: 0.8 });
     const colorBlock = `\x1b[48;2;${rgb[0]};${rgb[1]};${rgb[2]}m${"  ".repeat(10)}\x1b[0m`;
     lines.push(border("│") + padLine(` Color: ${colorBlock}`) + border("│"));
 

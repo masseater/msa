@@ -1,28 +1,25 @@
 import { GoogleGenAI } from "@google/genai";
 
-import type {
-  Model,
-  ProviderHeaders,
-  SimpleStreamOptions,
-  StreamFunction,
-  ThinkingBudgets,
-  TranscriptContext,
-} from "../types.ts";
-import type { AssistantMessageEventStream } from "../utils/event-stream.ts";
-import { providerHeadersToRecord } from "../utils/headers.ts";
-import { modelCall } from "../utils/model-call.ts";
-import { getMsaUserAgent } from "../utils/user-agent.ts";
-import type { GoogleRequestOptions } from "./google-params.ts";
-import { googleSimpleOptions } from "./google-simple-options.ts";
-import { runGoogleStream } from "./google-stream.ts";
-import type { ResolvedGoogleThinkingLevel } from "./google-thinking.ts";
+import type typesModule from "../types.types.ts";
+import type eventStreamTypes from "../utils/event-stream.types.ts";
+import headersModule from "../utils/headers.ts";
+import modelCallModule from "../utils/model-call.ts";
+import userAgent from "../utils/user-agent.ts";
+import type googleGenerativeAiTypes from "./google-generative-ai.types.ts";
+import googleSimpleOptionsModule from "./google-simple-options.ts";
+import googleStreamModule from "./google-stream.ts";
+import type googleThinkingTypes from "./google-thinking.types.ts";
 
-export interface GoogleOptions extends GoogleRequestOptions {}
+const { providerHeadersToRecord } = headersModule;
+const { getMsaUserAgent } = userAgent;
+const { modelCall } = modelCallModule;
+const { runGoogleStream } = googleStreamModule;
+const { googleSimpleOptions } = googleSimpleOptionsModule;
 
 function createClient(
-  model: Model<"google-generative-ai">,
+  model: typesModule.Model<"google-generative-ai">,
   apiKey: string,
-  optionsHeaders?: ProviderHeaders,
+  optionsHeaders?: typesModule.ProviderHeaders,
 ): GoogleGenAI {
   const httpOptions: { baseUrl?: string; apiVersion?: string; headers?: Record<string, string> } =
     {};
@@ -44,66 +41,100 @@ function createClient(
   });
 }
 
-function requireApiKey(model: Model<"google-generative-ai">, apiKey: string | undefined): string {
+function requireApiKey(
+  model: typesModule.Model<"google-generative-ai">,
+  apiKey: string | undefined,
+): string {
   if (apiKey === undefined || apiKey === "") {
     throw new Error(`No API key for provider: ${model.provider}`);
   }
   return apiKey;
 }
 
-const GEMINI_25_BUDGETS: readonly [string, Record<ResolvedGoogleThinkingLevel, number>][] = [
-  ["2.5-pro", { minimal: 128, low: 2048, medium: 8192, high: 32768 }],
-  ["2.5-flash-lite", { minimal: 512, low: 2048, medium: 8192, high: 24576 }],
-  ["2.5-flash", { minimal: 128, low: 2048, medium: 8192, high: 24576 }],
+const GEMINI_25_BUDGETS: readonly [
+  string,
+  Record<googleThinkingTypes.ResolvedGoogleThinkingLevel, number>,
+][] = [
+  ["2.5-pro", { high: 32768, low: 2048, medium: 8192, minimal: 128 }],
+  ["2.5-flash-lite", { high: 24576, low: 2048, medium: 8192, minimal: 512 }],
+  ["2.5-flash", { high: 24576, low: 2048, medium: 8192, minimal: 128 }],
 ];
 
 const googleBudget =
-  (model: Model<"google-generative-ai">) =>
-  (level: ResolvedGoogleThinkingLevel, customBudgets: ThinkingBudgets | undefined): number => {
+  (model: typesModule.Model<"google-generative-ai">) =>
+  (
+    level: googleThinkingTypes.ResolvedGoogleThinkingLevel,
+    customBudgets: typesModule.ThinkingBudgets | undefined,
+  ): number => {
     const custom = customBudgets?.[level];
     if (custom !== undefined) return custom;
     const match = GEMINI_25_BUDGETS.find(([marker]) => model.id.includes(marker));
     return match === undefined ? -1 : match[1][level];
   };
 
-export const stream = modelCall<
-  Parameters<StreamFunction<"google-generative-ai", GoogleOptions>>[0],
-  Parameters<StreamFunction<"google-generative-ai", GoogleOptions>>[1],
-  NonNullable<Parameters<StreamFunction<"google-generative-ai", GoogleOptions>>[2]>,
-  ReturnType<StreamFunction<"google-generative-ai", GoogleOptions>>
+const stream = modelCall<
+  Parameters<
+    typesModule.StreamFunction<"google-generative-ai", googleGenerativeAiTypes.GoogleOptions>
+  >[0],
+  Parameters<
+    typesModule.StreamFunction<"google-generative-ai", googleGenerativeAiTypes.GoogleOptions>
+  >[1],
+  NonNullable<
+    Parameters<
+      typesModule.StreamFunction<"google-generative-ai", googleGenerativeAiTypes.GoogleOptions>
+    >[2]
+  >,
+  ReturnType<
+    typesModule.StreamFunction<"google-generative-ai", googleGenerativeAiTypes.GoogleOptions>
+  >
 >(
   (
-    model: Model<"google-generative-ai">,
-    context: TranscriptContext,
-    options?: GoogleOptions,
-  ): AssistantMessageEventStream =>
+    model: typesModule.Model<"google-generative-ai">,
+    context: typesModule.TranscriptContext,
+    options?: googleGenerativeAiTypes.GoogleOptions,
+  ): eventStreamTypes.AssistantMessageEventStream =>
     runGoogleStream({
-      model,
-      context,
-      options,
       adapterName: "Google Generative AI",
-      streamName: "Google",
+      context,
       createClient: (requestOptions) =>
         createClient(model, requireApiKey(model, requestOptions?.apiKey), requestOptions?.headers),
+      model,
+      options,
+      streamName: "Google",
     }),
 );
 
-export const streamSimple = modelCall<
-  Parameters<StreamFunction<"google-generative-ai", SimpleStreamOptions>>[0],
-  Parameters<StreamFunction<"google-generative-ai", SimpleStreamOptions>>[1],
-  NonNullable<Parameters<StreamFunction<"google-generative-ai", SimpleStreamOptions>>[2]>,
-  ReturnType<StreamFunction<"google-generative-ai", SimpleStreamOptions>>
+const streamSimple = modelCall<
+  Parameters<
+    typesModule.StreamFunction<"google-generative-ai", typesModule.SimpleStreamOptions>
+  >[0],
+  Parameters<
+    typesModule.StreamFunction<"google-generative-ai", typesModule.SimpleStreamOptions>
+  >[1],
+  NonNullable<
+    Parameters<
+      typesModule.StreamFunction<"google-generative-ai", typesModule.SimpleStreamOptions>
+    >[2]
+  >,
+  ReturnType<typesModule.StreamFunction<"google-generative-ai", typesModule.SimpleStreamOptions>>
 >(
   (
-    model: Model<"google-generative-ai">,
-    context: TranscriptContext,
-    options?: SimpleStreamOptions,
-  ): AssistantMessageEventStream => {
+    model: typesModule.Model<"google-generative-ai">,
+    context: typesModule.TranscriptContext,
+    options?: typesModule.SimpleStreamOptions,
+  ): eventStreamTypes.AssistantMessageEventStream => {
     const apiKey = requireApiKey(model, options?.apiKey);
     return stream(
       model,
       context,
-      googleSimpleOptions({ model, context, options, apiKey, budgetFor: googleBudget(model) }),
+      googleSimpleOptions({ apiKey, budgetFor: googleBudget(model), context, model, options }),
     );
   },
 );
+
+const googleGenerativeAi = {
+  stream,
+  streamSimple,
+};
+
+export default googleGenerativeAi;

@@ -17,16 +17,16 @@ export interface MemoryRow {
 
 export function toRecord(row: MemoryRow): MemoryRecord {
   return {
-    id: row.id,
     content: row.content,
-    kind: row.kind as MemoryKind,
-    scope: row.scope as MemoryScope,
-    project: row.project,
     createdAt: row.created_at,
-    updatedAt: row.updated_at,
-    useCount: row.use_count,
-    lastUsedAt: row.last_used_at,
     embedding: row.embedding === null ? null : decodeVector(row.embedding),
     embeddingModel: row.embedding_model,
+    id: row.id,
+    kind: row.kind as MemoryKind,
+    lastUsedAt: row.last_used_at,
+    project: row.project,
+    scope: row.scope as MemoryScope,
+    updatedAt: row.updated_at,
+    useCount: row.use_count,
   };
 }

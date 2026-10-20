@@ -1,4 +1,4 @@
-import type { AgentMessage } from "@msa/agent-core";
+import type agentTypes from "@msa/agent-core/index.types";
 import { Effect } from "effect";
 import { afterEach, describe, expect, it } from "vite-plus/test";
 
@@ -16,7 +16,7 @@ const harnesses3: harnessTypes.Harness[] = [];
 const runsAfterContextHandlersOnThePart1 = () =>
   Effect.gen(function* () {
     const runPromise = Effect.runPromiseWith(yield* Effect.context<never>());
-    const seen: AgentMessage[][] = [];
+    const seen: agentTypes.AgentMessage[][] = [];
     const harness = yield* Effect.promise(() =>
       createHarness({
         extensionFactories: [

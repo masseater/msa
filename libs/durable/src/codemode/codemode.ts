@@ -1,4 +1,4 @@
-import { CODEMODE_SOURCE_GRAMMAR, parseCodemodeSource } from "@msa/codemode/source";
+import source from "@msa/codemode/source";
 import { Effect } from "effect";
 import { Type } from "typebox";
 
@@ -9,6 +9,8 @@ import modelsModule from "./models.ts";
 import runCall from "./run-call.ts";
 import runDocs from "./run-docs.ts";
 import type runDocsTypes from "./run-docs.types.ts";
+
+const { CODEMODE_SOURCE_GRAMMAR, parseCodemodeSource } = source;
 
 const { defineExtension, defineTool, section } = define;
 const { DEFAULT_CODEMODE_INLINE_BUDGET, codemodeDescription, codemodeSection } = describe;

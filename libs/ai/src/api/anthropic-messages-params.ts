@@ -1,62 +1,64 @@
 import type {
-  BetaCacheControlEphemeral as CacheControlEphemeral,
   BetaTool,
+  BetaCacheControlEphemeral as CacheControlEphemeral,
   MessageCreateParamsStreaming,
 } from "@anthropic-ai/sdk/resources/beta/messages/messages.js";
 
-import type { Message, Model, Tool } from "../types.ts";
-import { getSystemMessageText } from "../utils/text.ts";
-import {
-  getCurrentTools,
-  getInitialSystemMessage,
-  type TranscriptContext,
-} from "../utils/transcript.ts";
-import {
-  DEFERRED_TOOL_PLACEHOLDER,
-  getAnthropicCompat,
-  getCacheControl,
-  type AnthropicEffort,
-} from "./anthropic-messages-compat.ts";
-import {
-  convertMessages,
-  insertThinkingLevelMessages,
-  normalizeToolCallId,
-  type ConvertedAnthropicMessages,
-} from "./anthropic-messages-convert.ts";
-import type { AnthropicOptions } from "./anthropic-messages-options.ts";
-import { applyParamsOptions, buildSystem } from "./anthropic-messages-params-options.ts";
-import { convertTools, getBetaFeatures } from "./anthropic-messages-tools.ts";
-import { transformMessages } from "./transform-messages.ts";
+import type typesModule from "../types.types.ts";
+import type transcriptTypes from "../utils/transcript.types.ts";
+import type anthropicMessagesCompatTypes from "./anthropic-messages-compat.types.ts";
+import type anthropicMessagesConvertTypes from "./anthropic-messages-convert.types.ts";
+import type anthropicMessagesOptionsTypes from "./anthropic-messages-options.ts";
+import anthropicMessagesParamsKit from "./anthropic-messages-params-kit.ts";
+import anthropicMessagesParamsOptions from "./anthropic-messages-params-options.ts";
+import anthropicMessagesTools from "./anthropic-messages-tools.ts";
+import transformMessagesModule from "./transform-messages.ts";
+
+const {
+  anthropicMessagesCompat,
+  anthropicMessagesConvert,
+  text: textModule,
+  transcript,
+} = anthropicMessagesParamsKit;
+
+const { DEFERRED_TOOL_PLACEHOLDER, getAnthropicCompat, getCacheControl } = anthropicMessagesCompat;
+const { convertTools, getBetaFeatures } = anthropicMessagesTools;
+const { getCurrentTools, getInitialSystemMessage } = transcript;
+const { getSystemMessageText } = textModule;
+const { transformMessages } = transformMessagesModule;
+const { convertMessages, insertThinkingLevelMessages, normalizeToolCallId } =
+  anthropicMessagesConvert;
+const { applyParamsOptions, buildSystem } = anthropicMessagesParamsOptions;
 
 type AnthropicCompat = ReturnType<typeof getAnthropicCompat>;
 
 interface BuildParamsState {
-  readonly model: Model<"anthropic-messages">;
-  readonly context: TranscriptContext;
-  readonly options: AnthropicOptions | undefined;
+  readonly model: typesModule.Model<"anthropic-messages">;
+  readonly context: transcriptTypes.TranscriptContext;
+  readonly options: anthropicMessagesOptionsTypes.AnthropicOptions | undefined;
   readonly compat: AnthropicCompat;
   readonly cacheControl: CacheControlEphemeral | undefined;
   readonly initialSystemText: string;
-  readonly initialTools: ReadonlyArray<Tool>;
+  readonly initialTools: ReadonlyArray<typesModule.Tool>;
   readonly nativeToolChanges: boolean;
   readonly thinkingDisabled: boolean;
   readonly effortMessages: boolean;
-  readonly activeEffort: AnthropicEffort;
+  readonly activeEffort: anthropicMessagesCompatTypes.AnthropicEffort;
   readonly disablePreferredStrictTools: boolean;
   hasPreferredStrictTools: boolean;
 }
 
 function convertToolDefinitions(
   state: BuildParamsState,
-  tools: Tool[],
+  tools: typesModule.Tool[],
   toolCacheControl?: CacheControlEphemeral,
 ): BetaTool[] {
   const definitions = convertTools({
-    tools,
-    supportsEagerToolInputStreaming: state.compat.supportsEagerToolInputStreaming,
-    supportsStrictTools: state.compat.supportsStrictTools,
     cacheControl: toolCacheControl,
     disablePreferredStrictTools: state.disablePreferredStrictTools,
+    supportsEagerToolInputStreaming: state.compat.supportsEagerToolInputStreaming,
+    supportsStrictTools: state.compat.supportsStrictTools,
+    tools,
   });
   const hasPreferred = definitions.some((definition, index) => {
     const config = tools[index]?.constrainedSampling;
@@ -106,9 +108,9 @@ function applyThinking(state: BuildParamsState, params: MessageCreateParamsStrea
   }
   if (state.effortMessages) {
     params.thinking = {
-      type: "adaptive",
-      display: options?.thinkingDisplay ?? "summarized",
       block_binding: { prefix_mismatch_behavior: "drop_block" },
+      display: options?.thinkingDisplay ?? "summarized",
+      type: "adaptive",
     };
     params.output_config = { effort: "high" };
     return;
@@ -116,35 +118,35 @@ function applyThinking(state: BuildParamsState, params: MessageCreateParamsStrea
   if (!(model.reasoning && options?.thinkingEnabled === true)) return;
   const display = options.thinkingDisplay ?? "summarized";
   if (model.compat?.forceAdaptiveThinking === true) {
-    params.thinking = { type: "adaptive", display };
+    params.thinking = { display, type: "adaptive" };
     if (options.effort !== undefined) {
       params.output_config = { effort: options.effort };
     }
     return;
   }
   params.thinking = {
-    type: "enabled",
     budget_tokens: options.thinkingBudgetTokens || 1024,
     display,
+    type: "enabled",
   };
 }
 
 interface CreateStateInput {
-  readonly model: Model<"anthropic-messages">;
-  readonly context: TranscriptContext;
-  readonly options: AnthropicOptions | undefined;
+  readonly model: typesModule.Model<"anthropic-messages">;
+  readonly context: transcriptTypes.TranscriptContext;
+  readonly options: anthropicMessagesOptionsTypes.AnthropicOptions | undefined;
   readonly disablePreferredStrictTools: boolean;
 }
 
 function createState(input: CreateStateInput): {
   state: BuildParamsState;
-  conversationMessages: Message[];
+  conversationMessages: typesModule.Message[];
 } {
   const { model, context, options, disablePreferredStrictTools } = input;
   const cacheControl = getCacheControl({
-    model,
     cacheRetention: options?.cacheRetention,
     env: options?.env,
+    model,
   }).cacheControl;
   const compat = getAnthropicCompat(model);
   const initialSystemMessage = getInitialSystemMessage(context.messages);
@@ -162,46 +164,46 @@ function createState(input: CreateStateInput): {
     model.reasoning && options?.thinkingEnabled === false && model.thinkingLevelMap?.off !== null;
   const effortMessages = model.compat?.supportsMidConvoEffort === true && !thinkingDisabled;
   const state: BuildParamsState = {
-    model,
-    context,
-    options,
-    compat,
+    activeEffort: options?.effort ?? "high",
     cacheControl,
+    compat,
+    context,
+    disablePreferredStrictTools,
+    effortMessages,
+    hasPreferredStrictTools: false,
     initialSystemText,
     initialTools,
+    model,
     nativeToolChanges,
+    options,
     thinkingDisabled,
-    effortMessages,
-    activeEffort: options?.effort ?? "high",
-    disablePreferredStrictTools,
-    hasPreferredStrictTools: false,
   };
-  return { state, conversationMessages };
+  return { conversationMessages, state };
 }
 
 function createRequest(
   state: BuildParamsState,
-  converted: ConvertedAnthropicMessages,
+  converted: anthropicMessagesConvertTypes.ConvertedAnthropicMessages,
 ): MessageCreateParamsStreaming {
   const { model, context, options } = state;
   const betaFeatures = getBetaFeatures({
-    model,
     context,
+    model,
     nativeToolChanges: state.nativeToolChanges,
     options,
   });
   const params: MessageCreateParamsStreaming = {
-    model: model.id,
-    messages: state.effortMessages
-      ? insertThinkingLevelMessages({ converted, activeEffort: state.activeEffort })
-      : converted.messages,
     max_tokens: options?.maxTokens ?? model.maxTokens,
+    messages: state.effortMessages
+      ? insertThinkingLevelMessages({ activeEffort: state.activeEffort, converted })
+      : converted.messages,
+    model: model.id,
     stream: true,
     ...(betaFeatures.length > 0 ? { betas: betaFeatures } : {}),
   };
   const system = buildSystem({
-    initialSystemText: state.initialSystemText,
     cacheControl: state.cacheControl,
+    initialSystemText: state.initialSystemText,
   });
   if (system !== undefined) params.system = system;
   if (shouldSendTemperature(state) && options?.temperature !== undefined) {
@@ -214,38 +216,43 @@ function createRequest(
 }
 
 interface BuildParamsInput {
-  readonly model: Model<"anthropic-messages">;
-  readonly context: TranscriptContext;
-  readonly options?: AnthropicOptions | undefined;
+  readonly model: typesModule.Model<"anthropic-messages">;
+  readonly context: transcriptTypes.TranscriptContext;
+  readonly options?: anthropicMessagesOptionsTypes.AnthropicOptions | undefined;
   readonly disablePreferredStrictTools?: boolean | undefined;
 }
 
 function buildParams(input: BuildParamsInput): {
   params: MessageCreateParamsStreaming;
   hasPreferredStrictTools: boolean;
-  providerThinkingLevel: AnthropicEffort | undefined;
+  providerThinkingLevel: anthropicMessagesCompatTypes.AnthropicEffort | undefined;
 } {
   const { model, context, options } = input;
   const { state, conversationMessages } = createState({
-    model,
     context,
-    options,
     disablePreferredStrictTools: input.disablePreferredStrictTools ?? false,
+    model,
+    options,
   });
   const converted = convertMessages({
-    messages: conversationMessages,
-    cacheControl: state.cacheControl,
     allowEmptySignature: state.compat.allowEmptySignature,
-    managedProvider: state.effortMessages ? model.provider : undefined,
+    cacheControl: state.cacheControl,
     convertToolDefinitions: state.nativeToolChanges
       ? (tools) => convertToolDefinitions(state, tools)
       : undefined,
+    managedProvider: state.effortMessages ? model.provider : undefined,
+    messages: conversationMessages,
   });
+  const params = createRequest(state, converted);
   return {
-    params: createRequest(state, converted),
     hasPreferredStrictTools: state.hasPreferredStrictTools,
+    params,
     providerThinkingLevel: state.effortMessages ? state.activeEffort : undefined,
   };
 }
 
-export { buildParams };
+const anthropicMessagesParams = {
+  buildParams,
+};
+
+export default anthropicMessagesParams;

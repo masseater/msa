@@ -1,4 +1,4 @@
-import type { AuthResult } from "@msa/ai";
+import type aiTypes from "@msa/ai/index.types";
 import { Data } from "effect";
 import { dual } from "effect/Function";
 
@@ -26,9 +26,9 @@ export class AuthCommandError extends Data.TaggedError("AuthCommandError")<{
 }
 
 const AUTH_COMMAND_USAGE: Record<AuthCommandKind, string> = {
-  check: `${APP_NAME} auth check --provider <provider> [--json] [--credentials] [--no-refresh]`,
   api_key: `${APP_NAME} auth print-api-key --provider <provider> [--model <model>]`,
   bearer_token: `${APP_NAME} auth print-bearer-token --provider <provider> [--model <model>] [--min-expiry <duration>]`,
+  check: `${APP_NAME} auth check --provider <provider> [--json] [--credentials] [--no-refresh]`,
 };
 
 export function getAuthCommandName(kind: AuthCommandKind): string {
@@ -102,7 +102,7 @@ function parseAuthCommandOptions(
   args: string[],
   kind: AuthCommandKind,
 ): { flags: AuthCommandFlags; minExpiryMs?: number } {
-  const flags: AuthCommandFlags = { args: [], json: false, credentials: false, noRefresh: false };
+  const flags: AuthCommandFlags = { args: [], credentials: false, json: false, noRefresh: false };
   let minExpiryMs: number | undefined;
   for (let index = 2; index < args.length; index++) {
     const arg = args[index];
@@ -142,14 +142,14 @@ function validateAuthCommandArgsImpl(
     if ((provider === undefined || provider === "") && (model === undefined || model === "")) {
       throw new AuthCommandError("Auth checks require --provider <provider> or --model <model>");
     }
-    return { provider, model };
+    return { model, provider };
   }
   if ((provider === undefined || provider === "") && (model === undefined || model === "")) {
     throw new AuthCommandError(
       "Credential printing requires --provider <provider> or --model <model>",
     );
   }
-  return { provider, model };
+  return { model, provider };
 }
 
 export const validateAuthCommandArgs: {
@@ -162,7 +162,7 @@ export const validateAuthCommandArgs: {
   ): (args: Args) => { provider?: string | undefined; model?: string | undefined };
 } = dual((args: IArguments) => args.length >= 2, validateAuthCommandArgsImpl);
 
-export function getAuthCredential(auth: AuthResult | undefined): string | undefined {
+export function getAuthCredential(auth: aiTypes.AuthResult | undefined): string | undefined {
   if (auth?.auth.apiKey !== undefined && auth?.auth.apiKey !== "") return auth.auth.apiKey;
   const authorization = Object.entries(auth?.auth.headers ?? {}).find(
     ([name]) => name.toLowerCase() === "authorization",

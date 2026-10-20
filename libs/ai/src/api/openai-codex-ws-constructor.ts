@@ -1,20 +1,8 @@
-import type { ProviderEnv } from "../types.ts";
-import { resolveHttpProxyUrlForTarget } from "../utils/node-http-proxy.ts";
+import type typesModule from "../types.types.ts";
+import nodeHttpProxy from "../utils/node-http-proxy.ts";
+import type openaiCodexWsConstructorTypes from "./openai-codex-ws-constructor.types.ts";
 
-export type WebSocketEventType = "open" | "message" | "error" | "close";
-export type WebSocketListener = (event: unknown) => void;
-
-export interface WebSocketLike {
-  close(code?: number, reason?: string): void;
-  send(data: string): void;
-  addEventListener(type: WebSocketEventType, listener: WebSocketListener): void;
-  removeEventListener(type: WebSocketEventType, listener: WebSocketListener): void;
-}
-
-export type WebSocketConstructor = new (
-  url: string,
-  protocols?: string | string[] | { headers?: Record<string, string> },
-) => WebSocketLike;
+const { resolveHttpProxyUrlForTarget } = nodeHttpProxy;
 
 type WebSocketInit = Exclude<
   ConstructorParameters<typeof WebSocket>[1],
@@ -26,7 +14,9 @@ const isBun = (): boolean =>
   process.versions?.["bun"] !== undefined &&
   process.versions["bun"] !== "";
 
-function proxiedWebSocket(env: ProviderEnv | undefined): WebSocketConstructor {
+function proxiedWebSocket(
+  env: typesModule.ProviderEnv | undefined,
+): openaiCodexWsConstructorTypes.WebSocketConstructor {
   return class extends WebSocket {
     constructor(url: string | URL, options?: string | string[] | WebSocketInit) {
       const socketOptions: WebSocketInit =
@@ -46,9 +36,11 @@ function proxiedWebSocket(env: ProviderEnv | undefined): WebSocketConstructor {
   };
 }
 
-let cachedWebsocket: WebSocketConstructor | null = null;
+let cachedWebsocket: openaiCodexWsConstructorTypes.WebSocketConstructor | null = null;
 
-export function getWebSocketConstructor(env?: ProviderEnv): WebSocketConstructor | null {
+function getWebSocketConstructor(
+  env?: typesModule.ProviderEnv,
+): openaiCodexWsConstructorTypes.WebSocketConstructor | null {
   if (env === undefined && cachedWebsocket !== null) return cachedWebsocket;
   if (isBun()) {
     const ctor = proxiedWebSocket(env);
@@ -56,5 +48,13 @@ export function getWebSocketConstructor(env?: ProviderEnv): WebSocketConstructor
     return ctor;
   }
   const ctor = (globalThis as { WebSocket?: unknown }).WebSocket;
-  return typeof ctor === "function" ? (ctor as WebSocketConstructor) : null;
+  return typeof ctor === "function"
+    ? (ctor as openaiCodexWsConstructorTypes.WebSocketConstructor)
+    : null;
 }
+
+const openaiCodexWsConstructor = {
+  getWebSocketConstructor,
+};
+
+export default openaiCodexWsConstructor;

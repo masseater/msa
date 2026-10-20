@@ -1,4 +1,4 @@
-import type { AnyModel, Provider } from "@msa/ai";
+import type aiTypes from "@msa/ai/index.types";
 import { minimatch } from "minimatch";
 
 import { isValidThinkingLevel } from "../cli/args.ts";
@@ -77,11 +77,11 @@ function patternMatchesId(pattern: string, modelProvider: string, modelId: strin
 
 export function evaluateModelPolicy(policy: ModelPolicy, model: PolicyModel): ModelPolicyDecision {
   const deniedBy = policy.deny.find((pattern) => modelPolicyPatternMatches(pattern, model));
-  if (deniedBy !== undefined) return { allowed: false, reason: "deny", pattern: deniedBy };
+  if (deniedBy !== undefined) return { allowed: false, pattern: deniedBy, reason: "deny" };
   if (policy.allow.length === 0) return { allowed: true, allowedBy: undefined };
   const allowedBy = policy.allow.find((pattern) => modelPolicyPatternMatches(pattern, model));
   if (allowedBy !== undefined) return { allowed: true, allowedBy };
-  return { allowed: false, reason: "not-allowed", pattern: undefined };
+  return { allowed: false, pattern: undefined, reason: "not-allowed" };
 }
 
 export function isModelAllowed(policy: ModelPolicy, model: PolicyModel): boolean {
@@ -119,9 +119,9 @@ export function hiddenModelsByPolicy<TModel extends PolicyModel>(
   return hidden;
 }
 
-export function withModelPolicy(provider: Provider, policy: ModelPolicy): Provider {
+export function withModelPolicy(provider: aiTypes.Provider, policy: ModelPolicy): aiTypes.Provider {
   if (isPermissiveModelPolicy(policy)) return provider;
-  const visible = <TModel extends AnyModel>(models: readonly TModel[]): TModel[] =>
+  const visible = <TModel extends aiTypes.AnyModel>(models: readonly TModel[]): TModel[] =>
     models.filter((model) => isModelAllowed(policy, model));
   const { getAllModels } = provider;
   return {

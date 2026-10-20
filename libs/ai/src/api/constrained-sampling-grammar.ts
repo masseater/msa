@@ -1,7 +1,10 @@
 import { Function } from "effect";
 
-import type { Tool } from "../types.ts";
-import { toErrorMessage } from "../utils/errors.ts";
+import type typesModule from "../types.types.ts";
+import errors from "../utils/errors.ts";
+import type constrainedSamplingGrammarTypes from "./constrained-sampling-grammar.types.ts";
+
+const { toErrorMessage } = errors;
 
 interface JsonSchemaObject {
   [key: string]: unknown;
@@ -10,19 +13,7 @@ interface JsonSchemaObject {
   required?: unknown;
 }
 
-export interface GrammarConstrainedSampling {
-  format: "lark" | "regex";
-  definition: string;
-  inputProperty: string;
-}
-
-export interface GrammarToolInputJsonBuffer {
-  input: string;
-  started: boolean;
-  closed: boolean;
-}
-
-export const getGrammarToolInput: {
+const getGrammarToolInput: {
   (arguments_: Record<string, unknown>, inputProperty: string): (toolName: string) => string;
   (toolName: string, arguments_: Record<string, unknown>, inputProperty: string): string;
 } = Function.dual(
@@ -38,14 +29,14 @@ export const getGrammarToolInput: {
   },
 );
 
-export const appendGrammarToolInputJsonDelta: {
+const appendGrammarToolInputJsonDelta: {
   (
     inputProperty: string,
     nextInput: string,
     close: boolean,
-  ): (buffer: GrammarToolInputJsonBuffer) => string | undefined;
+  ): (buffer: constrainedSamplingGrammarTypes.GrammarToolInputJsonBuffer) => string | undefined;
   (
-    buffer: GrammarToolInputJsonBuffer,
+    buffer: constrainedSamplingGrammarTypes.GrammarToolInputJsonBuffer,
     inputProperty: string,
     nextInput: string,
     close: boolean,
@@ -53,7 +44,7 @@ export const appendGrammarToolInputJsonDelta: {
 } = Function.dual(
   4,
   function (
-    buffer: GrammarToolInputJsonBuffer,
+    buffer: constrainedSamplingGrammarTypes.GrammarToolInputJsonBuffer,
     inputProperty: string,
     nextInput: string,
     close: boolean,
@@ -89,7 +80,7 @@ export const appendGrammarToolInputJsonDelta: {
   },
 );
 
-function inferGrammarInputProperty(tool: Tool): string {
+function inferGrammarInputProperty(tool: typesModule.Tool): string {
   const schema = tool.parameters as JsonSchemaObject;
   if (schema.type !== "object") {
     throw new Error("grammar constrained sampling requires an object parameter schema");
@@ -114,11 +105,18 @@ function inferGrammarInputProperty(tool: Tool): string {
   return inputProperty;
 }
 
-export const resolveGrammarConstrainedSampling: {
-  (supportsOpenAIGrammarTools: boolean): (tool: Tool) => GrammarConstrainedSampling | undefined;
-  (tool: Tool, supportsOpenAIGrammarTools: boolean): GrammarConstrainedSampling | undefined;
-} = Function.dual(2, function (tool: Tool, supportsOpenAIGrammarTools: boolean):
-  | GrammarConstrainedSampling
+const resolveGrammarConstrainedSampling: {
+  (
+    supportsOpenAIGrammarTools: boolean,
+  ): (
+    tool: typesModule.Tool,
+  ) => constrainedSamplingGrammarTypes.GrammarConstrainedSampling | undefined;
+  (
+    tool: typesModule.Tool,
+    supportsOpenAIGrammarTools: boolean,
+  ): constrainedSamplingGrammarTypes.GrammarConstrainedSampling | undefined;
+} = Function.dual(2, function (tool: typesModule.Tool, supportsOpenAIGrammarTools: boolean):
+  | constrainedSamplingGrammarTypes.GrammarConstrainedSampling
   | undefined {
   const config = tool.constrainedSampling;
   if (config === undefined || config === false || config.type !== "grammar") {
@@ -142,8 +140,8 @@ export const resolveGrammarConstrainedSampling: {
 
   try {
     return {
-      format: hasLarkDefinition ? "lark" : "regex",
       definition: hasLarkDefinition ? larkDefinition : regexDefinition!,
+      format: hasLarkDefinition ? "lark" : "regex",
       inputProperty: inferGrammarInputProperty(tool),
     };
   } catch (error) {
@@ -154,13 +152,18 @@ export const resolveGrammarConstrainedSampling: {
   }
 });
 
-export const createGrammarToolInputProperties: {
-  (supportsOpenAIGrammarTools: boolean): (tools: Tool[] | undefined) => ReadonlyMap<string, string>;
-  (tools: Tool[] | undefined, supportsOpenAIGrammarTools: boolean): ReadonlyMap<string, string>;
+const createGrammarToolInputProperties: {
+  (
+    supportsOpenAIGrammarTools: boolean,
+  ): (tools: typesModule.Tool[] | undefined) => ReadonlyMap<string, string>;
+  (
+    tools: typesModule.Tool[] | undefined,
+    supportsOpenAIGrammarTools: boolean,
+  ): ReadonlyMap<string, string>;
 } = Function.dual(
   2,
   function (
-    tools: Tool[] | undefined,
+    tools: typesModule.Tool[] | undefined,
     supportsOpenAIGrammarTools: boolean,
   ): ReadonlyMap<string, string> {
     const properties = new Map<string, string>();
@@ -173,3 +176,12 @@ export const createGrammarToolInputProperties: {
     return properties;
   },
 );
+
+const constrainedSamplingGrammar = {
+  appendGrammarToolInputJsonDelta,
+  createGrammarToolInputProperties,
+  getGrammarToolInput,
+  resolveGrammarConstrainedSampling,
+};
+
+export default constrainedSamplingGrammar;

@@ -1,7 +1,9 @@
 import assert from "node:assert";
 import { describe, it } from "node:test";
 
-import { Key, matchesKey, parseKey, setKittyProtocolActive } from "../src/keys.ts";
+import keys from "../src/keys.ts";
+
+const { Key, matchesKey, parseKey, setKittyProtocolActive } = keys;
 
 describe("matchesKey", () => {
   describe("Kitty protocol with alternate keys (non-Latin layouts)", () => {

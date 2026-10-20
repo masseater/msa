@@ -1,6 +1,7 @@
 import { Effect, Function } from "effect";
 
-import type { AssistantMessage } from "../types.ts";
+import type typesModule from "../types.types.ts";
+import type retryTypes from "./retry.types.ts";
 
 function buildProviderErrorPattern(patterns: readonly string[]): RegExp {
   return new RegExp(patterns.join("|"), "iu");
@@ -82,47 +83,33 @@ const RETRYABLE_PROVIDER_ERROR_PATTERN = buildProviderErrorPattern([
   "subscription_sharing_user_unavailable",
 ]);
 
-export interface RetryPolicy {
-  enabled: boolean;
-  maxRetries: number;
-  baseDelayMs: number;
-  maxAgentDelayMs?: number;
-}
+const DEFAULT_MAX_AGENT_RETRY_DELAY_MS = 60_000;
 
-export const DEFAULT_MAX_AGENT_RETRY_DELAY_MS = 60_000;
-
-export const retryDelayMs: {
-  (attempt: number): (policy: Pick<RetryPolicy, "baseDelayMs" | "maxAgentDelayMs">) => number;
-  (policy: Pick<RetryPolicy, "baseDelayMs" | "maxAgentDelayMs">, attempt: number): number;
+const retryDelayMs: {
+  (
+    attempt: number,
+  ): (policy: Pick<retryTypes.RetryPolicy, "baseDelayMs" | "maxAgentDelayMs">) => number;
+  (
+    policy: Pick<retryTypes.RetryPolicy, "baseDelayMs" | "maxAgentDelayMs">,
+    attempt: number,
+  ): number;
 } = Function.dual(
   2,
-  (policy: Pick<RetryPolicy, "baseDelayMs" | "maxAgentDelayMs">, attempt: number): number => {
+  (
+    policy: Pick<retryTypes.RetryPolicy, "baseDelayMs" | "maxAgentDelayMs">,
+    attempt: number,
+  ): number => {
     const delay = policy.baseDelayMs * 2 ** Math.max(0, attempt - 1);
     const safeDelay = Number.isSafeInteger(delay) ? delay : Number.MAX_SAFE_INTEGER;
     return Math.min(safeDelay, policy.maxAgentDelayMs ?? DEFAULT_MAX_AGENT_RETRY_DELAY_MS);
   },
 );
 
-export interface RetryCallbacks {
-  onRetryScheduled?: (
-    attempt: number,
-    maxAttempts: number,
-    delayMs: number,
-    errorMessage: string,
-  ) => void | Promise<void>;
-  onRetryAttemptStart?: () => void | Promise<void>;
-  onRetryFinished?: (
-    success: boolean,
-    attempt: number,
-    finalError?: string,
-  ) => void | Promise<void>;
-}
-
 interface RetryRun {
-  readonly produce: () => Promise<AssistantMessage>;
-  readonly policy: RetryPolicy | undefined;
+  readonly produce: () => Promise<typesModule.AssistantMessage>;
+  readonly policy: retryTypes.RetryPolicy | undefined;
   readonly signal: AbortSignal | undefined;
-  readonly callbacks: RetryCallbacks | undefined;
+  readonly callbacks: retryTypes.RetryCallbacks | undefined;
   readonly maxAttempts: number;
 }
 
@@ -152,9 +139,9 @@ const sleepOrAbort = (delayMs: number, signal: AbortSignal | undefined): Effect.
 
 const settle = (
   run: RetryRun,
-  response: AssistantMessage,
+  response: typesModule.AssistantMessage,
   lastRetry: LastRetry | undefined,
-): Effect.Effect<AssistantMessage> => {
+): Effect.Effect<typesModule.AssistantMessage> => {
   if (lastRetry === undefined) return Effect.succeed(response);
   const finished = run.callbacks?.onRetryFinished;
   if (response.stopReason === "aborted")
@@ -170,7 +157,7 @@ const attemptAssistantCall = (
   run: RetryRun,
   attempt: number,
   lastRetry: LastRetry | undefined,
-): Effect.Effect<AssistantMessage> =>
+): Effect.Effect<typesModule.AssistantMessage> =>
   Effect.gen(function* () {
     const response = yield* Effect.promise(() => run.produce());
     if (
@@ -199,34 +186,36 @@ const attemptAssistantCall = (
     return yield* attemptAssistantCall(run, nextAttempt, { attempt: nextAttempt, errorMessage });
   });
 
-export const retryAssistantCall: {
+const retryAssistantCall: {
   (
-    policy: RetryPolicy | undefined,
+    policy: retryTypes.RetryPolicy | undefined,
     signal: AbortSignal | undefined,
-    callbacks?: RetryCallbacks,
-  ): (produce: () => Promise<AssistantMessage>) => Promise<AssistantMessage>;
+    callbacks?: retryTypes.RetryCallbacks,
+  ): (
+    produce: () => Promise<typesModule.AssistantMessage>,
+  ) => Promise<typesModule.AssistantMessage>;
   (
-    produce: () => Promise<AssistantMessage>,
-    policy: RetryPolicy | undefined,
+    produce: () => Promise<typesModule.AssistantMessage>,
+    policy: retryTypes.RetryPolicy | undefined,
     signal: AbortSignal | undefined,
-    callbacks?: RetryCallbacks,
-  ): Promise<AssistantMessage>;
+    callbacks?: retryTypes.RetryCallbacks,
+  ): Promise<typesModule.AssistantMessage>;
 } = Function.dual(
   (args) => typeof args[0] === "function",
   (
-    produce: () => Promise<AssistantMessage>,
-    policy: RetryPolicy | undefined,
+    produce: () => Promise<typesModule.AssistantMessage>,
+    policy: retryTypes.RetryPolicy | undefined,
     signal: AbortSignal | undefined,
-    callbacks?: RetryCallbacks,
-  ): Promise<AssistantMessage> =>
+    callbacks?: retryTypes.RetryCallbacks,
+  ): Promise<typesModule.AssistantMessage> =>
     Effect.runPromise(
       attemptAssistantCall(
         {
-          produce,
-          policy,
-          signal,
           callbacks,
           maxAttempts: policy?.enabled === true ? policy.maxRetries : 0,
+          policy,
+          produce,
+          signal,
         },
         0,
         undefined,
@@ -234,7 +223,7 @@ export const retryAssistantCall: {
     ),
 );
 
-export const isRetryableAssistantError = (message: AssistantMessage): boolean => {
+const isRetryableAssistantError = (message: typesModule.AssistantMessage): boolean => {
   if (
     message.stopReason !== "error" ||
     message.errorMessage === undefined ||
@@ -245,3 +234,12 @@ export const isRetryableAssistantError = (message: AssistantMessage): boolean =>
   if (NON_RETRYABLE_PROVIDER_LIMIT_ERROR_PATTERN.test(errorMessage)) return false;
   return RETRYABLE_PROVIDER_ERROR_PATTERN.test(errorMessage);
 };
+
+const retry = {
+  DEFAULT_MAX_AGENT_RETRY_DELAY_MS,
+  isRetryableAssistantError,
+  retryAssistantCall,
+  retryDelayMs,
+};
+
+export default retry;

@@ -1,35 +1,37 @@
-import { isControlCharacter } from "../ansi-sequences.ts";
-import type { Keybinding } from "../keybinding-definitions.ts";
-import { getKeybindings } from "../keybindings.ts";
-import { decodeKittyPrintable } from "../keys.ts";
-import { sliceByColumn } from "../text-slice.ts";
-import { truncateToWidth } from "../text-truncate.ts";
-import {
-  type Component,
-  CURSOR_MARKER,
-  type Focusable,
-  renderFakeCursor,
-  type TuiMouseEvent,
-  type TuiMouseEventResult,
-} from "../tui-component.ts";
-import { getGraphemeSegmenter, visibleWidth } from "../utils.ts";
-import { InputTextField } from "./input-text-field.ts";
+import type keybindingDefinitionsTypes from "../keybinding-definitions.types.ts";
+import keys from "../keys.ts";
+import textSlice from "../text-slice.ts";
+import textTruncate from "../text-truncate.ts";
+import tuiComponent from "../tui-component.ts";
+import type tuiComponentTypes from "../tui-component.types.ts";
+import utils from "../utils.ts";
+import inputKit from "./input-kit.ts";
+import InputTextField from "./input-text-field.ts";
+import type inputTypes from "./input.types.ts";
+
+const { ansiSequences, keybindings: keybindingsModule } = inputKit;
+
+const { getGraphemeSegmenter, visibleWidth } = utils;
+
+const { getKeybindings } = keybindingsModule;
+const { decodeKittyPrintable } = keys;
+const { isControlCharacter } = ansiSequences;
+const { truncateToWidth } = textTruncate;
+const { CURSOR_MARKER, renderFakeCursor } = tuiComponent;
+const { sliceByColumn } = textSlice;
 
 const segmenter = getGraphemeSegmenter();
 
 interface InputAction {
-  readonly keybinding: Keybinding;
+  readonly keybinding: keybindingDefinitionsTypes.Keybinding;
   readonly data?: string;
   readonly run: () => void;
 }
 
-export interface InputOptions {
-  prompt?: string;
-  placeholder?: string;
-  placeholderStyle?: (text: string) => string;
-}
-
-export class Input extends InputTextField implements Component, Focusable {
+export default class Input
+  extends InputTextField
+  implements tuiComponentTypes.Component, tuiComponentTypes.Focusable
+{
   private readonly prompt: string;
   private readonly placeholder: string;
   private readonly placeholderStyle: (text: string) => string;
@@ -42,7 +44,7 @@ export class Input extends InputTextField implements Component, Focusable {
   private pasteBuffer: string = "";
   private isInPaste: boolean = false;
 
-  constructor(options: InputOptions = {}) {
+  constructor(options: inputTypes.InputOptions = {}) {
     super();
     this.prompt = options.prompt ?? "> ";
     this.placeholder = options.placeholder ?? "";
@@ -79,7 +81,7 @@ export class Input extends InputTextField implements Component, Focusable {
     return [
       { keybinding: "tui.select.cancel", run: () => this.onEscape?.() },
       { keybinding: "tui.editor.undo", run: () => this.undo() },
-      { keybinding: "tui.input.submit", data: "\n", run: () => this.onSubmit?.(this.value) },
+      { data: "\n", keybinding: "tui.input.submit", run: () => this.onSubmit?.(this.value) },
       { keybinding: "tui.editor.deleteCharBackward", run: () => this.handleBackspace() },
       { keybinding: "tui.editor.deleteCharForward", run: () => this.handleForwardDelete() },
       { keybinding: "tui.editor.deleteWordBackward", run: () => this.deleteWordBackwards() },
@@ -131,7 +133,9 @@ export class Input extends InputTextField implements Component, Focusable {
     this.insertPrintable(rest);
   }
 
-  handleMouse(event: TuiMouseEvent): TuiMouseEventResult | undefined {
+  handleMouse(
+    event: tuiComponentTypes.TuiMouseEvent,
+  ): tuiComponentTypes.TuiMouseEventResult | undefined {
     if (event.type !== "press" || event.button !== "left" || event.y !== 0) return undefined;
     const visibleColumn = Math.max(0, event.x - 2);
     const targetColumn = this.renderedStartColumn + visibleColumn;
@@ -146,7 +150,7 @@ export class Input extends InputTextField implements Component, Focusable {
       currentColumn = nextColumn;
     }
     this.lastAction = null;
-    return { handled: true, focus: true };
+    return { focus: true, handled: true };
   }
 
   invalidate(): void {}
@@ -166,12 +170,12 @@ export class Input extends InputTextField implements Component, Focusable {
   private scrollToCursor(availableWidth: number): { visibleText: string; cursorDisplay: number } {
     const totalWidth = visibleWidth(this.value);
     if (totalWidth < availableWidth) {
-      return { visibleText: this.value, cursorDisplay: this.cursor };
+      return { cursorDisplay: this.cursor, visibleText: this.value };
     }
 
     const scrollWidth = this.cursor === this.value.length ? availableWidth - 1 : availableWidth;
     if (scrollWidth <= 0) {
-      return { visibleText: "", cursorDisplay: 0 };
+      return { cursorDisplay: 0, visibleText: "" };
     }
 
     const cursorCol = visibleWidth(this.value.slice(0, this.cursor));
@@ -193,8 +197,8 @@ export class Input extends InputTextField implements Component, Focusable {
       true,
     );
     return {
-      visibleText: sliceByColumn(this.value, startCol, scrollWidth, true),
       cursorDisplay: beforeCursor.length,
+      visibleText: sliceByColumn(this.value, startCol, scrollWidth, true),
     };
   }
 

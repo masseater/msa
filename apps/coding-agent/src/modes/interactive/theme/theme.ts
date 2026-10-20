@@ -1,27 +1,5 @@
 import * as fs from "node:fs";
 
-import type { ThinkingLevel } from "@msa/agent-core";
-import {
-  backgroundAnsi,
-  type Color,
-  colorToHex,
-  colorToOklch,
-  type EditorTheme,
-  foregroundAnsi,
-  getTerminalColorMode,
-  indexedColor,
-  type MarkdownTheme,
-  mixColors,
-  parseColor,
-  type RgbColor,
-  rgbColor,
-  type SelectListTheme,
-  type SettingsListTheme,
-  styleTextWithAnsi,
-  type TerminalColorMode,
-  type TerminalColors,
-  type TextAttributes,
-} from "@msa/tui";
 import chalk from "chalk";
 
 import { getCustomThemesDir, getThemesDir } from "../../../config.ts";
@@ -32,8 +10,8 @@ import { closeWatcher, watchWithErrorHandler } from "../../../utils/fs-watch.ts"
 import { highlight, supportsLanguage } from "../../../utils/syntax-highlight.ts";
 import { stripBom } from "../../../utils/text.ts";
 import {
-  generateSystemThemeColors,
   SYSTEM_THEME_NAME,
+  generateSystemThemeColors,
   terminalAppearance,
 } from "./system-theme.ts";
 import {
@@ -47,21 +25,37 @@ import {
 
 export { SYSTEM_THEME_NAME } from "./system-theme.ts";
 
+import type agentTypes from "@msa/agent-core/index.types";
+import tui from "@msa/tui";
+import type tuiTypes from "@msa/tui/index.types";
 import { dual } from "effect/Function";
 
-import { type Scheduled, schedule } from "../../../core/platform.ts";
+import { schedule, type Scheduled } from "../../../core/platform.ts";
 import { join } from "../../path.ts";
 import type {
   ThemeColorValue as ColorValue,
   ValidatedThemeJson as ThemeJson,
 } from "./theme-schema.ts";
 
+const {
+  backgroundAnsi,
+  colorToHex,
+  colorToOklch,
+  foregroundAnsi,
+  getTerminalColorMode,
+  indexedColor,
+  mixColors,
+  parseColor,
+  rgbColor,
+  styleTextWithAnsi,
+} = tui;
+
 export type { ValidatedThemeJson as ThemeJson } from "./theme-schema.ts";
 export type { ThemeBg, ThemeColor, ThemeToken } from "./theme-tokens.ts";
 
-export interface ThemeStyle extends TextAttributes {
-  fg?: ThemeColor | Color;
-  bg?: ThemeBg | Color;
+export interface ThemeStyle extends tuiTypes.TextAttributes {
+  fg?: ThemeColor | tuiTypes.Color;
+  bg?: ThemeBg | tuiTypes.Color;
 }
 
 export type ThemeJsonValidator = (label: string, json: unknown) => ThemeJson;
@@ -127,11 +121,11 @@ function withThemeTokenFallbacks<Value>(
 
 export type ThemeAppearance = TerminalTheme;
 
-let terminalColors: TerminalColors = {};
+let terminalColors: tuiTypes.TerminalColors = {};
 let terminalColorsPending = false;
 let terminalColorScheme: TerminalTheme | undefined;
 
-export function setTerminalColors(colors: TerminalColors): void {
+export function setTerminalColors(colors: tuiTypes.TerminalColors): void {
   terminalColors = { ...colors };
   terminalColorsPending = false;
 }
@@ -144,18 +138,24 @@ export function markTerminalColorsPending(): void {
   terminalColorsPending = true;
 }
 
-const GUESSED_DEFAULT_COLORS: Record<ThemeAppearance, { foreground: Color; background: Color }> = {
-  dark: { foreground: parseColor("#e5e5e7"), background: parseColor("#000000") },
-  light: { foreground: parseColor("#000000"), background: parseColor("#ffffff") },
+const GUESSED_DEFAULT_COLORS: Record<
+  ThemeAppearance,
+  { foreground: tuiTypes.Color; background: tuiTypes.Color }
+> = {
+  dark: { background: parseColor("#000000"), foreground: parseColor("#e5e5e7") },
+  light: { background: parseColor("#ffffff"), foreground: parseColor("#000000") },
 };
 
-function averageLightness(colors: Color[]): number | undefined {
+function averageLightness(colors: tuiTypes.Color[]): number | undefined {
   const fixed = colors.filter((color) => color.kind !== "indexed" || color.index >= 16);
   if (fixed.length === 0) return undefined;
   return fixed.reduce((sum, color) => sum + colorToOklch(color).l, 0) / fixed.length;
 }
 
-function detectAppearance(foregrounds: Color[], backgrounds: Color[]): ThemeAppearance | undefined {
+function detectAppearance(
+  foregrounds: tuiTypes.Color[],
+  backgrounds: tuiTypes.Color[],
+): ThemeAppearance | undefined {
   const fg = averageLightness(foregrounds);
   const bg = averageLightness(backgrounds);
   if (fg !== undefined && bg !== undefined) return bg < fg ? "dark" : "light";
@@ -168,22 +168,22 @@ export class Theme {
   readonly name?: string | undefined;
   readonly sourcePath?: string | undefined;
   sourceInfo?: SourceInfo | undefined;
-  private mode: TerminalColorMode;
+  private mode: tuiTypes.TerminalColorMode;
   private readonly fgAnsi = new Map<ThemeColor, string>();
   private readonly bgAnsi = new Map<ThemeBg, string>();
-  private readonly concreteColors: Partial<Record<ThemeToken, Color>> = {};
+  private readonly concreteColors: Partial<Record<ThemeToken, tuiTypes.Color>> = {};
   private readonly defaultForegroundTokens: ThemeToken[] = [];
   private readonly defaultBackgroundTokens: ThemeToken[] = [];
   private readonly dimTokens: ReadonlySet<ThemeColor>;
   private readonly ownAppearance: ThemeAppearance | undefined;
   private resolvedColors:
-    | { terminal: TerminalColors; colors: Readonly<Record<ThemeToken, Color>> }
+    | { terminal: tuiTypes.TerminalColors; colors: Readonly<Record<ThemeToken, tuiTypes.Color>> }
     | undefined;
 
   constructor(
     fgColors: Pick<ThemeColorValues<string | number>, ThemeColor>,
     bgColors: Pick<ThemeColorValues<string | number>, ThemeBg>,
-    mode: TerminalColorMode,
+    mode: tuiTypes.TerminalColorMode,
     options: {
       name?: string | undefined;
       sourcePath?: string | undefined;
@@ -200,8 +200,8 @@ export class Theme {
     const { fgColors: foregrounds, bgColors: backgrounds } = splitThemeColors(
       withThemeTokenFallbacks({ ...fgColors, ...bgColors }),
     );
-    const concreteForegrounds: Color[] = [];
-    const concreteBackgrounds: Color[] = [];
+    const concreteForegrounds: tuiTypes.Color[] = [];
+    const concreteBackgrounds: tuiTypes.Color[] = [];
     const addToken = (token: ThemeToken, value: string | number, isBackground: boolean): string => {
       if (value === "") {
         (isBackground ? this.defaultBackgroundTokens : this.defaultForegroundTokens).push(token);
@@ -226,11 +226,11 @@ export class Theme {
     return this.ownAppearance ?? getTerminalTheme();
   }
 
-  get colors(): Readonly<Record<ThemeToken, Color>> {
+  get colors(): Readonly<Record<ThemeToken, tuiTypes.Color>> {
     const terminal = terminalColors;
     if (this.resolvedColors?.terminal !== terminal) {
       const guess = GUESSED_DEFAULT_COLORS[this.appearance];
-      const toColor = (rgb: RgbColor | undefined, fallback: Color) =>
+      const toColor = (rgb: tuiTypes.RgbColor | undefined, fallback: tuiTypes.Color) =>
         rgb === undefined ? fallback : rgbColor(rgb.r, rgb.g, rgb.b);
       const foreground = toColor(terminal.foreground, guess.foreground);
       const background = toColor(terminal.background, guess.background);
@@ -242,8 +242,8 @@ export class Theme {
         if (color !== undefined) colors[token] = mixColors(color, background, 0.4);
       }
       this.resolvedColors = {
+        colors: Object.freeze(colors as Record<ThemeToken, tuiTypes.Color>),
         terminal,
-        colors: Object.freeze(colors as Record<ThemeToken, Color>),
       };
     }
     return this.resolvedColors.colors;
@@ -314,11 +314,11 @@ export class Theme {
     return this.tokenAnsi(this.bgAnsi, color);
   }
 
-  getColorMode(): TerminalColorMode {
+  getColorMode(): tuiTypes.TerminalColorMode {
     return this.mode;
   }
 
-  getThinkingBorderColor(level: ThinkingLevel): (str: string) => string {
+  getThinkingBorderColor(level: agentTypes.ThinkingLevel): (str: string) => string {
     switch (level) {
       case "off":
         return (str: string) => this.fg("thinkingOff", str);
@@ -486,49 +486,53 @@ function splitThemeColors(colors: ResolvedThemeColorValues<string | number>): {
       fgColors[key as ThemeColor] = value;
     }
   }
-  return { fgColors, bgColors };
+  return { bgColors, fgColors };
 }
 
-function createTheme(themeJson: ThemeJson, mode?: TerminalColorMode, sourcePath?: string): Theme {
+function createTheme(
+  themeJson: ThemeJson,
+  mode?: tuiTypes.TerminalColorMode,
+  sourcePath?: string,
+): Theme {
   const colorMode = mode ?? getTerminalColorMode();
   const resolvedColors = withThemeTokenFallbacks(
     resolveThemeColors(themeJson.colors, themeJson.vars),
   );
   const { fgColors, bgColors } = splitThemeColors(resolvedColors);
   return new Theme(fgColors, bgColors, colorMode, {
+    appearance: themeJson.appearance,
     name: themeJson.name,
     sourcePath,
-    appearance: themeJson.appearance,
   });
 }
 
-function createSystemTheme(mode?: TerminalColorMode): Theme {
+function createSystemTheme(mode?: tuiTypes.TerminalColorMode): Theme {
   const generated = generateSystemThemeColors({
     ...terminalColors,
-    saturation: terminalColorsPending ? 0 : 1,
     appearanceHint: getTerminalTheme(),
+    saturation: terminalColorsPending ? 0 : 1,
   });
   const { fgColors, bgColors } = splitThemeColors(withThemeTokenFallbacks(generated.colors));
   return new Theme(fgColors, bgColors, mode ?? getTerminalColorMode(), {
-    name: SYSTEM_THEME_NAME,
     appearance: generated.appearance,
     dim: generated.dim,
+    name: SYSTEM_THEME_NAME,
   });
 }
 
 export const loadThemeFromPath: {
-  (mode?: TerminalColorMode): (themePath: string) => Theme;
-  (themePath: string, mode?: TerminalColorMode): Theme;
+  (mode?: tuiTypes.TerminalColorMode): (themePath: string) => Theme;
+  (themePath: string, mode?: tuiTypes.TerminalColorMode): Theme;
 } = dual(
   (args) => typeof args[0] === "string" && args[0] !== "truecolor" && args[0] !== "256color",
-  (themePath: string, mode?: TerminalColorMode): Theme => {
+  (themePath: string, mode?: tuiTypes.TerminalColorMode): Theme => {
     const content = fs.readFileSync(themePath, "utf-8");
     const themeJson = parseThemeJsonContent(themePath, content);
     return createTheme(themeJson, mode, themePath);
   },
 );
 
-function loadTheme(name: string, mode?: TerminalColorMode): Theme {
+function loadTheme(name: string, mode?: tuiTypes.TerminalColorMode): Theme {
   if (name === SYSTEM_THEME_NAME) return createSystemTheme(mode);
   const registeredTheme = registeredThemes.get(name);
   if (registeredTheme !== undefined) {
@@ -562,7 +566,7 @@ export function parseAutoThemeSetting(
   if (lightTheme === "" || darkTheme === "") {
     return undefined;
   }
-  return { lightTheme, darkTheme };
+  return { darkTheme, lightTheme };
 }
 
 export const resolveThemeSetting: {
@@ -595,14 +599,18 @@ export const detectTerminalTheme: {
   (
     reportedScheme?: TerminalTheme,
     env?: NodeJS.ProcessEnv,
-  ): (colors?: TerminalColors) => TerminalTheme;
-  (colors?: TerminalColors, reportedScheme?: TerminalTheme, env?: NodeJS.ProcessEnv): TerminalTheme;
+  ): (colors?: tuiTypes.TerminalColors) => TerminalTheme;
+  (
+    colors?: tuiTypes.TerminalColors,
+    reportedScheme?: TerminalTheme,
+    env?: NodeJS.ProcessEnv,
+  ): TerminalTheme;
 } = dual(
   (args) =>
     (typeof args[0] === "object" && args[0] !== null) ||
     (args[0] === undefined && typeof args[1] !== "object"),
   (
-    colors: TerminalColors = {},
+    colors: tuiTypes.TerminalColors = {},
     reportedScheme?: TerminalTheme,
     env: NodeJS.ProcessEnv = envSnapshot(),
   ): TerminalTheme => {
@@ -688,8 +696,8 @@ export const setTheme: {
       currentThemeName = SYSTEM_THEME_NAME;
       setGlobalTheme(loadTheme(SYSTEM_THEME_NAME));
       return {
-        success: false,
         error: toErrorMessage(error),
+        success: false,
       };
     }
   },
@@ -836,9 +844,9 @@ export function getThemeExportColors(themeName?: string): {
     };
 
     return {
-      pageBg: resolve(exportSection.pageBg),
       cardBg: resolve(exportSection.cardBg),
       infoBg: resolve(exportSection.infoBg),
+      pageBg: resolve(exportSection.pageBg),
     };
   } catch {
     return {};
@@ -852,32 +860,32 @@ let cachedCliHighlightTheme: CliHighlightTheme | undefined;
 
 function buildCliHighlightTheme(t: Theme): CliHighlightTheme {
   return {
-    keyword: (s: string) => t.fg("syntaxKeyword", s),
+    addition: (s: string) => t.fg("toolDiffAdded", s),
+    attr: (s: string) => t.fg("syntaxVariable", s),
     built_in: (s: string) => t.fg("syntaxType", s),
+    class: (s: string) => t.fg("syntaxType", s),
+    comment: (s: string) => t.fg("syntaxComment", s),
+    deletion: (s: string) => t.fg("toolDiffRemoved", s),
+    doctag: (s: string) => t.fg("syntaxComment", s),
+    emphasis: (s: string) => t.italic(s),
+    function: (s: string) => t.fg("syntaxFunction", s),
+    keyword: (s: string) => t.fg("syntaxKeyword", s),
+    link: (s: string) => t.underline(s),
     literal: (s: string) => t.fg("syntaxNumber", s),
+    meta: (s: string) => t.fg("muted", s),
+    name: (s: string) => t.fg("syntaxKeyword", s),
     number: (s: string) => t.fg("syntaxNumber", s),
+    operator: (s: string) => t.fg("syntaxOperator", s),
+    params: (s: string) => t.fg("syntaxVariable", s),
+    punctuation: (s: string) => t.fg("syntaxPunctuation", s),
     regexp: (s: string) => t.fg("syntaxString", s),
     string: (s: string) => t.fg("syntaxString", s),
-    subst: (s: string) => t.fg("text", s),
-    comment: (s: string) => t.fg("syntaxComment", s),
-    doctag: (s: string) => t.fg("syntaxComment", s),
-    meta: (s: string) => t.fg("muted", s),
-    function: (s: string) => t.fg("syntaxFunction", s),
-    title: (s: string) => t.fg("syntaxFunction", s),
-    class: (s: string) => t.fg("syntaxType", s),
-    type: (s: string) => t.fg("syntaxType", s),
-    tag: (s: string) => t.fg("syntaxPunctuation", s),
-    name: (s: string) => t.fg("syntaxKeyword", s),
-    attr: (s: string) => t.fg("syntaxVariable", s),
-    variable: (s: string) => t.fg("syntaxVariable", s),
-    params: (s: string) => t.fg("syntaxVariable", s),
-    operator: (s: string) => t.fg("syntaxOperator", s),
-    punctuation: (s: string) => t.fg("syntaxPunctuation", s),
-    emphasis: (s: string) => t.italic(s),
     strong: (s: string) => t.bold(s),
-    link: (s: string) => t.underline(s),
-    addition: (s: string) => t.fg("toolDiffAdded", s),
-    deletion: (s: string) => t.fg("toolDiffRemoved", s),
+    subst: (s: string) => t.fg("text", s),
+    tag: (s: string) => t.fg("syntaxPunctuation", s),
+    title: (s: string) => t.fg("syntaxFunction", s),
+    type: (s: string) => t.fg("syntaxType", s),
+    variable: (s: string) => t.fg("syntaxVariable", s),
   };
 }
 
@@ -898,8 +906,8 @@ export const highlightCode: {
     return code.split("\n").map((line) => theme.fg("mdCodeBlock", line));
   }
   const opts = {
-    language: validLang,
     ignoreIllegals: true,
+    language: validLang,
     theme: getCliHighlightTheme(theme),
   };
   try {
@@ -914,85 +922,76 @@ export function getLanguageFromPath(filePath: string): string | undefined {
   if (ext === undefined || ext === "") return undefined;
 
   const extToLang: Record<string, string> = {
-    ts: "typescript",
-    tsx: "typescript",
-    js: "javascript",
-    jsx: "javascript",
-    mjs: "javascript",
-    cjs: "javascript",
-    py: "python",
-    rb: "ruby",
-    rs: "rust",
-    go: "go",
-    java: "java",
-    kt: "kotlin",
-    swift: "swift",
-    c: "c",
-    h: "c",
-    cpp: "cpp",
-    cc: "cpp",
-    cxx: "cpp",
-    hpp: "cpp",
-    cs: "csharp",
-    php: "php",
-    sh: "bash",
     bash: "bash",
-    zsh: "bash",
-    fish: "fish",
-    ps1: "powershell",
-    sql: "sql",
-    html: "html",
-    htm: "html",
-    css: "css",
-    scss: "scss",
-    sass: "sass",
-    less: "less",
-    json: "json",
-    yaml: "yaml",
-    yml: "yaml",
-    toml: "toml",
-    xml: "xml",
-    md: "markdown",
-    markdown: "markdown",
-    dockerfile: "dockerfile",
-    makefile: "makefile",
-    cmake: "cmake",
-    lua: "lua",
-    perl: "perl",
-    r: "r",
-    scala: "scala",
+    c: "c",
+    cc: "cpp",
+    cjs: "javascript",
     clj: "clojure",
+    cmake: "cmake",
+    cpp: "cpp",
+    cs: "csharp",
+    css: "css",
+    cxx: "cpp",
+    dockerfile: "dockerfile",
+    erl: "erlang",
     ex: "elixir",
     exs: "elixir",
-    erl: "erlang",
-    hs: "haskell",
-    ml: "ocaml",
-    vim: "vim",
+    fish: "fish",
+    go: "go",
     graphql: "graphql",
-    proto: "protobuf",
-    tf: "hcl",
+    h: "c",
     hcl: "hcl",
+    hpp: "cpp",
+    hs: "haskell",
+    htm: "html",
+    html: "html",
+    java: "java",
+    js: "javascript",
+    json: "json",
+    jsx: "javascript",
+    kt: "kotlin",
+    less: "less",
+    lua: "lua",
+    makefile: "makefile",
+    markdown: "markdown",
+    md: "markdown",
+    mjs: "javascript",
+    ml: "ocaml",
+    perl: "perl",
+    php: "php",
+    proto: "protobuf",
+    ps1: "powershell",
+    py: "python",
+    r: "r",
+    rb: "ruby",
+    rs: "rust",
+    sass: "sass",
+    scala: "scala",
+    scss: "scss",
+    sh: "bash",
+    sql: "sql",
+    swift: "swift",
+    tf: "hcl",
+    toml: "toml",
+    ts: "typescript",
+    tsx: "typescript",
+    vim: "vim",
+    xml: "xml",
+    yaml: "yaml",
+    yml: "yaml",
+    zsh: "bash",
   };
 
   return extToLang[ext];
 }
 
-export function getMarkdownTheme(): MarkdownTheme {
+export function getMarkdownTheme(): tuiTypes.MarkdownTheme {
   return {
-    heading: (text: string) => theme.fg("mdHeading", text),
-    link: (text: string) => theme.fg("mdLink", text),
-    linkUrl: (text: string) => theme.fg("mdLinkUrl", text),
+    bold: (text: string) => theme.bold(text),
     code: (text: string) => theme.fg("mdCode", text),
     codeBlock: (text: string) => theme.fg("mdCodeBlock", text),
     codeBlockBorder: (text: string) => theme.fg("mdCodeBlockBorder", text),
-    quote: (text: string) => theme.fg("mdQuote", text),
-    quoteBorder: (text: string) => theme.fg("mdQuoteBorder", text),
-    hr: (text: string) => theme.fg("mdHr", text),
-    listBullet: (text: string) => theme.fg("mdListBullet", text),
-    bold: (text: string) => theme.bold(text),
-    italic: (text: string) => theme.italic(text),
-    underline: (text: string) => theme.underline(text),
-    strikethrough: (text: string) => theme.strikethrough(text),
+    heading: (text: string) => theme.fg("mdHeading", text),
     highlightCode: (code: string, lang?: string): string[] => {
       const validLang =
         lang !== undefined && lang !== "" && supportsLanguage(lang) ? lang : undefined;
@@ -1010,33 +1009,42 @@ export function getMarkdownTheme(): MarkdownTheme {
         return code.split("\n").map((line) => theme.fg("mdCodeBlock", line));
       }
     },
+    hr: (text: string) => theme.fg("mdHr", text),
+    italic: (text: string) => theme.italic(text),
+    link: (text: string) => theme.fg("mdLink", text),
+    linkUrl: (text: string) => theme.fg("mdLinkUrl", text),
+    listBullet: (text: string) => theme.fg("mdListBullet", text),
+    quote: (text: string) => theme.fg("mdQuote", text),
+    quoteBorder: (text: string) => theme.fg("mdQuoteBorder", text),
+    strikethrough: (text: string) => theme.strikethrough(text),
+    underline: (text: string) => theme.underline(text),
   };
 }
 
-export function getSelectListTheme(): SelectListTheme {
+export function getSelectListTheme(): tuiTypes.SelectListTheme {
   return {
+    description: (text: string) => theme.fg("muted", text),
+    noMatch: (text: string) => theme.fg("muted", text),
+    scrollInfo: (text: string) => theme.fg("muted", text),
     selectedPrefix: (text: string) => theme.fg("accent", text),
     selectedText: (text: string) => theme.fg("accent", text),
-    description: (text: string) => theme.fg("muted", text),
-    scrollInfo: (text: string) => theme.fg("muted", text),
-    noMatch: (text: string) => theme.fg("muted", text),
   };
 }
 
-export function getEditorTheme(): EditorTheme {
+export function getEditorTheme(): tuiTypes.EditorTheme {
   return {
     borderColor: (text: string) => theme.fg("borderMuted", text),
     selectList: getSelectListTheme(),
   };
 }
 
-export function getSettingsListTheme(): SettingsListTheme {
+export function getSettingsListTheme(): tuiTypes.SettingsListTheme {
   return {
+    cursor: theme.fg("accent", "→ "),
+    description: (text: string) => theme.fg("dim", text),
+    hint: (text: string) => theme.fg("dim", text),
     label: (text: string, selected: boolean) => (selected ? theme.fg("accent", text) : text),
     value: (text: string, selected: boolean) =>
       selected ? theme.fg("accent", text) : theme.fg("muted", text),
-    description: (text: string) => theme.fg("dim", text),
-    cursor: theme.fg("accent", "→ "),
-    hint: (text: string) => theme.fg("dim", text),
   };
 }

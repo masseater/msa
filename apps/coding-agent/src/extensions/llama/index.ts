@@ -4,13 +4,13 @@ import { awaited, awaiting } from "../../core/awaiting.ts";
 import type { ExtensionAPI, ExtensionCommandContext } from "../../core/extensions/types.ts";
 import { toErrorMessage } from "../../utils/errors.ts";
 import {
-  formatBytes,
   LlamaClient,
   type LlamaModelInfo,
+  formatBytes,
   normalizeLlamaServerUrl,
 } from "./client.ts";
-import { findHuggingFaceToken, HuggingFaceClient } from "./huggingface.ts";
-import { createLlamaProvider, LLAMA_PROVIDER_ID } from "./provider.ts";
+import { HuggingFaceClient, findHuggingFaceToken } from "./huggingface.ts";
+import { LLAMA_PROVIDER_ID, createLlamaProvider } from "./provider.ts";
 import { type LlamaUi, runWithProgress, showLlamaUi } from "./ui.ts";
 
 function modelIsLoaded(model: LlamaModelInfo): boolean {
@@ -34,7 +34,7 @@ function parseHuggingFaceModel(value: string): { repository: string; quantizatio
   const colon = value.indexOf(":", value.indexOf("/") + 1);
   return colon < 0
     ? { repository: value }
-    : { repository: value.slice(0, colon), quantization: value.slice(colon + 1) };
+    : { quantization: value.slice(colon + 1), repository: value.slice(0, colon) };
 }
 
 function configuredClient(ctx: ExtensionCommandContext): Promise<LlamaClient | undefined> {
@@ -72,9 +72,10 @@ export default function llamaExtension(msa: ExtensionAPI): void {
         provider.setCatalog(current, client.serverUrl);
         const result = yield* awaited(
           ctx.modelRegistry.refresh({
+            allowNetwork: true,
+
             providers: [LLAMA_PROVIDER_ID],
 
-            allowNetwork: true,
             signal,
           }),
         );
@@ -123,13 +124,13 @@ export default function llamaExtension(msa: ExtensionAPI): void {
         try {
           const result = yield* awaited(
             runWithProgress(ui, {
-              title: "Loading model",
-              model: target.id,
-              initialMessage: "Starting…",
-              cancelTitle: "Stop loading?",
-              cancelMessage: target.id,
-              run: (signal, update) => client.loadAndWait(target.id, update, signal),
               cancel: () => client.unload(target.id),
+              cancelMessage: target.id,
+              cancelTitle: "Stop loading?",
+              initialMessage: "Starting…",
+              model: target.id,
+              run: (signal, update) => client.loadAndWait(target.id, update, signal),
+              title: "Loading model",
             }),
           );
           if (result.cancelled) {
@@ -220,13 +221,13 @@ export default function llamaExtension(msa: ExtensionAPI): void {
             : details.id;
         const result = yield* awaited(
           runWithProgress(ui, {
-            title: "Downloading model",
-            model,
-            initialMessage: "Starting…",
-            cancelTitle: "Stop download?",
-            cancelMessage: model,
-            run: (signal, update) => client.downloadAndWait(model, update, signal),
             cancel: () => client.unload(model),
+            cancelMessage: model,
+            cancelTitle: "Stop download?",
+            initialMessage: "Starting…",
+            model,
+            run: (signal, update) => client.downloadAndWait(model, update, signal),
+            title: "Downloading model",
           }),
         );
         if (result.cancelled) return;

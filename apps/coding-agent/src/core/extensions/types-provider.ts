@@ -1,19 +1,5 @@
-import type {
-  AnyModel,
-  Api,
-  AssistantMessageEventStream,
-  ClassifierApi,
-  ImageApi,
-  Model,
-  OAuthCredentials,
-  OAuthLoginCallbacks,
-  ProviderClassifier,
-  ProviderImages,
-  RefreshModelsContext,
-  SimpleStreamOptions,
-  TranscriptContext,
-} from "@msa/ai";
-import type { KeyId } from "@msa/tui";
+import type aiTypes from "@msa/ai/index.types";
+import type tuiTypes from "@msa/tui/index.types";
 
 import type { SourceInfo } from "../source-info.ts";
 import type { ModelRoute, ModelRouteRequest, VirtualModelDefinition } from "../virtual-models.ts";
@@ -35,26 +21,32 @@ export interface ProviderConfig {
   name?: string;
   baseUrl?: string;
   apiKey?: string;
-  api?: Api;
+  api?: aiTypes.Api;
   streamSimple?: (
-    model: Model<Api>,
-    context: TranscriptContext,
-    options?: SimpleStreamOptions,
-  ) => AssistantMessageEventStream;
-  images?: Partial<Record<ImageApi, ProviderImages>>;
-  classifiers?: Partial<Record<ClassifierApi, ProviderClassifier>>;
+    model: aiTypes.Model<aiTypes.Api>,
+    context: aiTypes.TranscriptContext,
+    options?: aiTypes.SimpleStreamOptions,
+  ) => aiTypes.AssistantMessageEventStream;
+  images?: Partial<Record<aiTypes.ImageApi, aiTypes.ProviderImages>>;
+  classifiers?: Partial<Record<aiTypes.ClassifierApi, aiTypes.ProviderClassifier>>;
   headers?: Record<string, string>;
   authHeader?: boolean;
   models?: ProviderModelConfig[];
-  refreshModels?(context: RefreshModelsContext): Promise<ProviderModelConfig[]>;
+  refreshModels?(context: aiTypes.RefreshModelsContext): Promise<ProviderModelConfig[]>;
   oauth?: {
     name: string;
     isSubscription?: boolean;
     usesCallbackServer?: boolean;
-    login(callbacks: OAuthLoginCallbacks): Promise<OAuthCredentials>;
-    refreshToken(credentials: OAuthCredentials, signal: AbortSignal): Promise<OAuthCredentials>;
-    getApiKey(credentials: OAuthCredentials): string;
-    modifyModels?(models: Model<Api>[], credentials: OAuthCredentials): Model<Api>[];
+    login(callbacks: aiTypes.OAuthLoginCallbacks): Promise<aiTypes.OAuthCredentials>;
+    refreshToken(
+      credentials: aiTypes.OAuthCredentials,
+      signal: AbortSignal,
+    ): Promise<aiTypes.OAuthCredentials>;
+    getApiKey(credentials: aiTypes.OAuthCredentials): string;
+    modifyModels?(
+      models: aiTypes.Model<aiTypes.Api>[],
+      credentials: aiTypes.OAuthCredentials,
+    ): aiTypes.Model<aiTypes.Api>[];
   };
 }
 
@@ -64,32 +56,32 @@ interface ProviderModelConfigBase {
   api?: string;
   baseUrl?: string;
   input: ("text" | "image")[];
-  inputLimits?: NonNullable<AnyModel["inputLimits"]>;
-  cost: AnyModel["cost"];
+  inputLimits?: NonNullable<aiTypes.AnyModel["inputLimits"]>;
+  cost: aiTypes.AnyModel["cost"];
   headers?: Record<string, string>;
 }
 
 export interface ProviderChatModelConfig extends ProviderModelConfigBase {
   type?: "chat";
-  api?: Api;
+  api?: aiTypes.Api;
   reasoning: boolean;
-  thinkingLevelMap?: NonNullable<Model<Api>["thinkingLevelMap"]>;
-  promptCache?: NonNullable<Model<Api>["promptCache"]>;
+  thinkingLevelMap?: NonNullable<aiTypes.Model<aiTypes.Api>["thinkingLevelMap"]>;
+  promptCache?: NonNullable<aiTypes.Model<aiTypes.Api>["promptCache"]>;
   contextWindow: number;
   maxTokens: number;
   samplingParams?: Record<string, unknown>;
-  compat?: Model<Api>["compat"];
+  compat?: aiTypes.Model<aiTypes.Api>["compat"];
 }
 
 export interface ProviderImageModelConfig extends ProviderModelConfigBase {
   type: "image";
-  api?: ImageApi;
+  api?: aiTypes.ImageApi;
   output: ("text" | "image")[];
 }
 
 export interface ProviderClassifierModelConfig extends ProviderModelConfigBase {
   type: "classifier";
-  api?: ClassifierApi;
+  api?: aiTypes.ClassifierApi;
   contextWindow: number;
 }
 
@@ -124,7 +116,7 @@ export interface ExtensionFlag {
 }
 
 export interface ExtensionShortcut {
-  shortcut: KeyId;
+  shortcut: tuiTypes.KeyId;
   description?: string;
   handler: (ctx: ExtensionContext) => Promise<void> | void;
   extensionPath: string;

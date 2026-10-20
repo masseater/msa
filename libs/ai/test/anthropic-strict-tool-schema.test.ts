@@ -2,9 +2,12 @@ import { Clock, Data, Effect } from "effect";
 import { Type } from "typebox";
 import { describe, expect, it } from "vite-plus/test";
 
-import { stream as streamAnthropic } from "../src/api/anthropic-messages.ts";
-import type { Model, Tool } from "../src/types.ts";
-import { normalizeContext } from "../src/utils/transcript.ts";
+import anthropicMessages from "../src/api/anthropic-messages.ts";
+import type typesModule from "../src/types.types.ts";
+import transcript from "../src/utils/transcript.ts";
+
+const { stream: streamAnthropic } = anthropicMessages;
+const { normalizeContext } = transcript;
 
 interface AnthropicToolPayload {
   tools?: Array<{ strict?: boolean; input_schema: Record<string, unknown> }>;
@@ -12,7 +15,7 @@ interface AnthropicToolPayload {
 
 class PayloadCaptured extends Data.TaggedError("PayloadCaptured")<{ readonly message: string }> {}
 
-function createModel(): Model<"anthropic-messages"> {
+function createModel(): typesModule.Model<"anthropic-messages"> {
   return {
     api: "anthropic-messages",
     baseUrl: "http://127.0.0.1:9",
@@ -29,9 +32,9 @@ function createModel(): Model<"anthropic-messages"> {
 }
 
 function createTool(
-  parameters: Tool["parameters"],
-  constrainedSampling?: Tool["constrainedSampling"],
-): Tool {
+  parameters: typesModule.Tool["parameters"],
+  constrainedSampling?: typesModule.Tool["constrainedSampling"],
+): typesModule.Tool {
   return {
     description: "Look up a value",
     name: "lookup",
@@ -42,11 +45,11 @@ function createTool(
   };
 }
 
-function createStrictTool(parameters: Tool["parameters"]): Tool {
+function createStrictTool(parameters: typesModule.Tool["parameters"]): typesModule.Tool {
   return createTool(parameters, { strict: "prefer", type: "json_schema" });
 }
 
-const captureFirstTool = Effect.fn("captureFirstTool")(function* (tool: Tool) {
+const captureFirstTool = Effect.fn("captureFirstTool")(function* (tool: typesModule.Tool) {
   let payload: AnthropicToolPayload | undefined;
   const stream = streamAnthropic(
     createModel(),
@@ -113,7 +116,7 @@ describe("Anthropic strict tool schemas", () => {
   it("sends prefer tools non-strict when they use keywords Anthropic strict mode rejects", () =>
     Effect.runPromise(
       Effect.gen(function* () {
-        const unsupportedParameters: Tool["parameters"][] = [
+        const unsupportedParameters: typesModule.Tool["parameters"][] = [
           Type.Object({ timeoutMs: Type.Optional(Type.Integer({ maximum: 300000, minimum: 1 })) }),
           Type.Object({
             options: Type.Object({ tags: Type.Array(Type.String(), { minItems: 2 }) }),

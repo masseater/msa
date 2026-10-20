@@ -3,21 +3,24 @@ import { performance } from "node:perf_hooks";
 
 import { Console, Effect } from "effect";
 
-import { ScrollView } from "../src/components/scroll-view.ts";
-import { Text } from "../src/components/text.ts";
-import { VStack } from "../src/components/v-stack.ts";
-import { TuiAltScreen } from "../src/tui-alt-screen.ts";
-import { CURSOR_MARKER, type Component, Container } from "../src/tui-component.ts";
+import TuiAltScreen from "../src/tui-alt-screen.ts";
+import type tuiAltScreenTypes from "../src/tui-alt-screen.types.ts";
+import tuiComponent from "../src/tui-component.ts";
+import type tuiComponentTypes from "../src/tui-component.types.ts";
+import renderChurnBenchKit from "./render-churn-bench-kit.ts";
 import renderChurnNullTerminal from "./render-churn-null-terminal.ts";
 import type renderChurnNullTerminalTypes from "./render-churn-null-terminal.types.ts";
 
+const { ScrollView, Text, VStack } = renderChurnBenchKit;
+
+const { CURSOR_MARKER, Container } = tuiComponent;
 const { COLUMNS, NullTerminal, ROWS } = renderChurnNullTerminal;
 
 const WARMUP_FRAMES = 20;
 const FRAMES = 300;
 const SAMPLING_INTERVAL = 4096;
 
-class EditorSim implements Component {
+class EditorSim implements tuiComponentTypes.Component {
   private text = "";
   private cachedText?: string | undefined;
   private cachedWidth?: number | undefined;
@@ -50,7 +53,7 @@ class EditorSim implements Component {
   }
 }
 
-function buildTranscript(): Container {
+function buildTranscript(): tuiComponentTypes.Container {
   const container = new Container();
   for (let i = 0; i < 150; i++) {
     const styled =
@@ -82,7 +85,7 @@ interface ScenarioResult {
 function runScenario(
   session: Session,
   terminal: renderChurnNullTerminalTypes.NullTerminal,
-  tui: TuiAltScreen,
+  tui: tuiAltScreenTypes.TuiAltScreen,
   frame: (index: number) => void,
 ): Effect.Effect<ScenarioResult> {
   return Effect.gen(function* () {

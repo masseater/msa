@@ -1,6 +1,6 @@
-import { McpHttpError } from "./http-error.ts";
+import McpHttpError from "./http-error.ts";
 
-export class McpAuthRequiredError extends McpHttpError {
+export default class McpAuthRequiredError extends McpHttpError {
   override readonly name = "McpAuthRequiredError";
   readonly wwwAuthenticate: string | null;
 

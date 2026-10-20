@@ -1,5 +1,5 @@
-import type { AgentTool, AgentToolCallOutcome } from "@msa/agent-core";
-import type { Model } from "@msa/ai";
+import type agentTypes from "@msa/agent-core/index.types";
+import type aiTypes from "@msa/ai/index.types";
 
 import type { ScopedModel } from "../model-resolver.ts";
 import type { SessionManager } from "../session-manager.ts";
@@ -9,7 +9,7 @@ import type { ExecuteToolOptions, ReplacedSessionContext } from "./types-context
 import type { CompactOptions, ContextUsage } from "./types-ui.ts";
 
 export interface ExtensionContextActions {
-  getModel: () => Model<any> | undefined;
+  getModel: () => aiTypes.Model<any> | undefined;
   getScopedModels: () => readonly ScopedModel[];
   isIdle: () => boolean;
   isProjectTrusted: () => boolean;
@@ -26,8 +26,8 @@ export interface ExtensionContextActions {
     name: string,
     args: unknown,
     options: ExecuteToolOptions,
-  ) => Promise<AgentToolCallOutcome>;
-  getCallableTools?: () => readonly AgentTool[];
+  ) => Promise<agentTypes.AgentToolCallOutcome>;
+  getCallableTools?: () => readonly agentTypes.AgentTool[];
 }
 
 export interface ExtensionCommandContextActions {

@@ -1,4 +1,4 @@
-import { getModel } from "@msa/ai/compat";
+import compat from "@msa/ai/compat";
 import { Effect } from "effect";
 import { afterEach, beforeEach, describe, expect, it } from "vite-plus/test";
 
@@ -9,6 +9,8 @@ import {
 import { SessionManager } from "../../../src/core/session-manager.ts";
 import { SettingsManager } from "../../../src/core/settings-manager.ts";
 import regression3592Support from "./3592-no-builtin-tools-keeps-extension-tools-support.ts";
+
+const { getModel } = compat;
 
 const { cleanupDirs, dirs, prepareDirs } = regression3592Support;
 

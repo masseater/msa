@@ -1,5 +1,5 @@
 import testing from "@msa/testing";
-import { setKeybindings } from "@msa/tui";
+import tui from "@msa/tui";
 import { beforeAll, beforeEach, describe, expect, test } from "vite-plus/test";
 
 import { KeybindingsManager } from "../src/core/keybindings.ts";
@@ -8,6 +8,8 @@ import { TreeSelectorComponent } from "../src/modes/interactive/components/tree-
 import { initTheme } from "../src/modes/interactive/theme/theme.ts";
 import treeSelector3Support from "./tree-selector-3-support.ts";
 import treeSelectorSupport from "./tree-selector-support.ts";
+
+const { setKeybindings } = tui;
 
 const { CTRL_LEFT, CTRL_RIGHT, DOWN, buildBranchingTree } = treeSelector3Support;
 

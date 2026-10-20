@@ -1,6 +1,6 @@
 import * as NodeRuntime from "@effect/platform-node/NodeRuntime";
-import { createModels } from "@msa/ai/models";
-import { fauxAssistantMessage, fauxProvider, fauxText, fauxToolCall } from "@msa/ai/providers/faux";
+import modelsModule from "@msa/ai/models";
+import fauxModule from "@msa/ai/providers/faux";
 import { Console, Effect, Fiber } from "effect";
 
 import harnessModule from "../src/harness/index.ts";
@@ -9,6 +9,9 @@ import benchSupport from "./bench-support.ts";
 import registryFor from "./nested-images-bench-tools.ts";
 import type nestedImagesBenchTypes from "./nested-images-bench.types.ts";
 import support from "./support.ts";
+
+const { fauxAssistantMessage, fauxProvider, fauxText, fauxToolCall } = fauxModule;
+const { createModels } = modelsModule;
 
 const { Harness } = harnessModule;
 const { ToolResultEntry } = durable;

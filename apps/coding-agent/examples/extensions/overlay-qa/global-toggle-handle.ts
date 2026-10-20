@@ -1,9 +1,9 @@
-import type { OverlayHandle } from "@msa/tui";
+import type tuiTypes from "@msa/tui/index.types";
 
-let handle: OverlayHandle | null = null;
+let handle: tuiTypes.OverlayHandle | null = null;
 
-export const getGlobalToggleHandle = (): OverlayHandle | null => handle;
+export const getGlobalToggleHandle = (): tuiTypes.OverlayHandle | null => handle;
 
-export const setGlobalToggleHandle = (next: OverlayHandle | null): void => {
+export const setGlobalToggleHandle = (next: tuiTypes.OverlayHandle | null): void => {
   handle = next;
 };

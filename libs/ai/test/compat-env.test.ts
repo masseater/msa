@@ -1,16 +1,20 @@
 import { Effect } from "effect";
 import { afterEach, describe, expect, it } from "vite-plus/test";
 
-import { complete, registerApiProvider, resetApiProviders } from "../src/compat.ts";
-import type { AssistantMessage, Context, Model } from "../src/types.ts";
-import { currentTimeMillis } from "../src/utils/clock.ts";
-import { AssistantMessageEventStream } from "../src/utils/event-stream.ts";
+import compat from "../src/compat.ts";
+import type typesModule from "../src/types.types.ts";
+import clock from "../src/utils/clock.ts";
+import eventStream from "../src/utils/event-stream.ts";
 
-const context: Context = {
+const { currentTimeMillis } = clock;
+const { complete, registerApiProvider, resetApiProviders } = compat;
+const { AssistantMessageEventStream } = eventStream;
+
+const context: typesModule.Context = {
   messages: [{ content: "hi", role: "user", timestamp: currentTimeMillis() }],
 };
 
-const model: Model<"openai-responses"> = {
+const model: typesModule.Model<"openai-responses"> = {
   api: "openai-responses",
   baseUrl: "https://example.test/v1",
   contextWindow: 128000,
@@ -23,7 +27,7 @@ const model: Model<"openai-responses"> = {
   reasoning: false,
 };
 
-function message(): AssistantMessage {
+function message(): typesModule.AssistantMessage {
   return {
     api: model.api,
     content: [{ text: "ok", type: "text" }],

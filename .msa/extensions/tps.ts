@@ -1,8 +1,8 @@
-import type { AssistantMessage } from "@msa/ai";
+import type aiTypes from "@msa/ai/index.types";
 import type { ExtensionAPI } from "@msa/coding-agent";
 import { Clock, Effect } from "effect";
 
-function isAssistantMessage(message: unknown): message is AssistantMessage {
+function isAssistantMessage(message: unknown): message is aiTypes.AssistantMessage {
   if (typeof message !== "object" || message === null) return false;
   const role = (message as { role?: unknown }).role;
   return role === "assistant";

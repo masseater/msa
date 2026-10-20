@@ -2,21 +2,16 @@ import { Clock, Console, Effect, Random, Stream } from "effect";
 import { Type } from "typebox";
 import { expect } from "vite-plus/test";
 
-import { type AssistantMessageEventStream, complete, stream } from "../src/compat.ts";
-import type {
-  Api,
-  AssistantMessage,
-  AssistantMessageEvent,
-  Context,
-  Model,
-  StreamOptions,
-  Tool,
-  ToolResultMessage,
-} from "../src/types.ts";
-import { StringEnum } from "../src/utils/typebox-helpers.ts";
+import compat from "../src/compat.ts";
+import type compatTypes from "../src/compat.types.ts";
+import type typesModule from "../src/types.types.ts";
+import typeboxHelpers from "../src/utils/typebox-helpers.ts";
 import redCircle from "./red-circle.ts";
 
-type StreamOptionsWithExtras = StreamOptions & Record<string, unknown>;
+const { StringEnum } = typeboxHelpers;
+const { complete, stream } = compat;
+
+type StreamOptionsWithExtras = typesModule.StreamOptions & Record<string, unknown>;
 
 const calculatorSchema = Type.Object({
   a: Type.Number({ description: "First number" }),
@@ -26,13 +21,13 @@ const calculatorSchema = Type.Object({
   }),
 });
 
-const calculatorTool: Tool<typeof calculatorSchema> = {
+const calculatorTool: typesModule.Tool<typeof calculatorSchema> = {
   description: "Perform basic arithmetic operations",
   name: "math_operation",
   parameters: calculatorSchema,
 };
 
-const textOf = (message: AssistantMessage) =>
+const textOf = (message: typesModule.AssistantMessage) =>
   message.content.flatMap((block) => (block.type === "text" ? [block.text] : [])).join("");
 
 const userTurn = (content: string) =>
@@ -42,9 +37,9 @@ const userTurn = (content: string) =>
     timestamp,
   }));
 
-const collect = (s: AssistantMessageEventStream) =>
+const collect = (s: compatTypes.AssistantMessageEventStream) =>
   Effect.gen(function* () {
-    const events: AssistantMessageEvent[] = [];
+    const events: typesModule.AssistantMessageEvent[] = [];
     yield* Stream.fromAsyncIterable(s, (error) => error).pipe(
       Stream.orDie,
       Stream.runForEach((event) => Effect.sync(() => events.push(event))),
@@ -52,9 +47,10 @@ const collect = (s: AssistantMessageEventStream) =>
     return { events, response: yield* Effect.promise(() => s.result()) };
   });
 
-const typesOf = (events: readonly AssistantMessageEvent[]) => events.map((event) => event.type);
+const typesOf = (events: readonly typesModule.AssistantMessageEvent[]) =>
+  events.map((event) => event.type);
 
-const expectReply = (response: AssistantMessage, expected: string) => {
+const expectReply = (response: typesModule.AssistantMessage, expected: string) => {
   expect(response.role).toBe("assistant");
   expect(response.errorMessage).toBeFalsy();
   expect(response.usage.input + response.usage.cacheRead).toBeGreaterThan(0);
@@ -62,12 +58,12 @@ const expectReply = (response: AssistantMessage, expected: string) => {
   expect(textOf(response)).toContain(expected);
 };
 
-const basicTextGeneration = <TApi extends Api>(
-  model: Model<TApi>,
+const basicTextGeneration = <TApi extends typesModule.Api>(
+  model: typesModule.Model<TApi>,
   options?: StreamOptionsWithExtras,
 ) =>
   Effect.gen(function* () {
-    const context: Context = {
+    const context: typesModule.Context = {
       messages: [yield* userTurn("Reply with exactly: 'Hello test successful'")],
       systemPrompt: "You are a helpful assistant. Be concise.",
     };
@@ -80,7 +76,10 @@ const basicTextGeneration = <TApi extends Api>(
     );
   });
 
-const handleToolCall = <TApi extends Api>(model: Model<TApi>, options?: StreamOptionsWithExtras) =>
+const handleToolCall = <TApi extends typesModule.Api>(
+  model: typesModule.Model<TApi>,
+  options?: StreamOptionsWithExtras,
+) =>
   Effect.gen(function* () {
     const { events, response } = yield* collect(
       stream(
@@ -109,7 +108,7 @@ const handleToolCall = <TApi extends Api>(model: Model<TApi>, options?: StreamOp
   });
 
 const expectStreamedBlock = (
-  events: readonly AssistantMessageEvent[],
+  events: readonly typesModule.AssistantMessageEvent[],
   kind: "text" | "thinking",
 ) => {
   const types = typesOf(events);
@@ -120,7 +119,10 @@ const expectStreamedBlock = (
   expect(deltas.join("").length).toBeGreaterThan(0);
 };
 
-const handleStreaming = <TApi extends Api>(model: Model<TApi>, options?: StreamOptionsWithExtras) =>
+const handleStreaming = <TApi extends typesModule.Api>(
+  model: typesModule.Model<TApi>,
+  options?: StreamOptionsWithExtras,
+) =>
   Effect.gen(function* () {
     const { events, response } = yield* collect(
       stream(
@@ -136,7 +138,10 @@ const handleStreaming = <TApi extends Api>(model: Model<TApi>, options?: StreamO
     expect(response.content.some((block) => block.type === "text")).toBe(true);
   });
 
-const handleThinking = <TApi extends Api>(model: Model<TApi>, options?: StreamOptionsWithExtras) =>
+const handleThinking = <TApi extends typesModule.Api>(
+  model: typesModule.Model<TApi>,
+  options?: StreamOptionsWithExtras,
+) =>
   Effect.gen(function* () {
     const addend = yield* Random.nextIntBetween(0, 254);
     const prompt = `Think long and hard about ${addend} + 27. Think step by step. Then output the result.`;
@@ -158,7 +163,10 @@ const calculate = (operation: unknown, a: number, b: number) => {
   return 0;
 };
 
-const answerToolCalls = (message: AssistantMessage, timestamp: number): ToolResultMessage[] =>
+const answerToolCalls = (
+  message: typesModule.AssistantMessage,
+  timestamp: number,
+): typesModule.ToolResultMessage[] =>
   message.content.flatMap((block) => {
     if (block.type !== "toolCall") return [];
     const { a, b, operation } = block.arguments;
@@ -175,9 +183,12 @@ const answerToolCalls = (message: AssistantMessage, timestamp: number): ToolResu
     ];
   });
 
-const multiTurn = <TApi extends Api>(model: Model<TApi>, options?: StreamOptionsWithExtras) =>
+const multiTurn = <TApi extends typesModule.Api>(
+  model: typesModule.Model<TApi>,
+  options?: StreamOptionsWithExtras,
+) =>
   Effect.gen(function* () {
-    const context: Context = {
+    const context: typesModule.Context = {
       messages: [
         yield* userTurn(
           "Think about this briefly, then calculate 42 * 17 and 453 + 434 using the math_operation tool.",
@@ -186,7 +197,7 @@ const multiTurn = <TApi extends Api>(model: Model<TApi>, options?: StreamOptions
       systemPrompt: "You are a helpful assistant that can use tools to answer questions.",
       tools: [calculatorTool],
     };
-    const replies: AssistantMessage[] = [];
+    const replies: typesModule.AssistantMessage[] = [];
     const respond = (turn: number): Effect.Effect<void> =>
       Effect.gen(function* () {
         const response = yield* Effect.promise(() => complete(model, context, options));
@@ -208,7 +219,10 @@ const multiTurn = <TApi extends Api>(model: Model<TApi>, options?: StreamOptions
     expect(text).toContain("887");
   });
 
-const handleImage = <TApi extends Api>(model: Model<TApi>, options?: StreamOptionsWithExtras) =>
+const handleImage = <TApi extends typesModule.Api>(
+  model: typesModule.Model<TApi>,
+  options?: StreamOptionsWithExtras,
+) =>
   Effect.gen(function* () {
     if (!model.input.includes("image")) {
       yield* Console.log(`Skipping image test - model ${model.id} doesn't support images`);

@@ -1,18 +1,15 @@
 import { Function } from "effect";
 
-import { getImagesApiProvider } from "./images-api-registry.ts";
-import { registerBuiltInImagesApiProviders } from "./providers/images/register-builtins.ts";
-import type {
-  AssistantImages,
-  ImageApi,
-  ImageModel,
-  ImagesContext,
-  ProviderImagesOptions,
-} from "./types.ts";
+import imagesApiRegistry from "./images-api-registry.ts";
+import registerBuiltins from "./providers/images/register-builtins.ts";
+import type typesModule from "./types.types.ts";
+
+const { registerBuiltInImagesApiProviders } = registerBuiltins;
+const { getImagesApiProvider } = imagesApiRegistry;
 
 registerBuiltInImagesApiProviders();
 
-function resolveImagesApiProvider(api: ImageApi) {
+function resolveImagesApiProvider(api: typesModule.ImageApi) {
   const provider = getImagesApiProvider(api);
   if (provider === undefined) {
     throw new Error(`No API provider registered for api: ${api}`);
@@ -20,23 +17,23 @@ function resolveImagesApiProvider(api: ImageApi) {
   return provider;
 }
 
-export const generateImages: {
+const generateImages: {
   (
-    context: ImagesContext,
-    options?: ProviderImagesOptions,
-  ): (model: ImageModel<ImageApi>) => Promise<AssistantImages>;
+    context: typesModule.ImagesContext,
+    options?: typesModule.ProviderImagesOptions,
+  ): (model: typesModule.ImageModel<typesModule.ImageApi>) => Promise<typesModule.AssistantImages>;
   (
-    model: ImageModel<ImageApi>,
-    context: ImagesContext,
-    options?: ProviderImagesOptions,
-  ): Promise<AssistantImages>;
+    model: typesModule.ImageModel<typesModule.ImageApi>,
+    context: typesModule.ImagesContext,
+    options?: typesModule.ProviderImagesOptions,
+  ): Promise<typesModule.AssistantImages>;
 } = Function.dual(
   (args) => typeof args[0] === "object" && args[0] !== null && "api" in args[0],
   function (
-    model: ImageModel<ImageApi>,
-    context: ImagesContext,
-    options?: ProviderImagesOptions,
-  ): Promise<AssistantImages> {
+    model: typesModule.ImageModel<typesModule.ImageApi>,
+    context: typesModule.ImagesContext,
+    options?: typesModule.ProviderImagesOptions,
+  ): Promise<typesModule.AssistantImages> {
     try {
       return resolveImagesApiProvider(model.api).generateImages(model, context, options);
     } catch (error) {
@@ -44,3 +41,9 @@ export const generateImages: {
     }
   },
 );
+
+const images = {
+  generateImages,
+};
+
+export default images;

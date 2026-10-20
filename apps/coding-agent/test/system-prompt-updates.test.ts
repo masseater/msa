@@ -1,5 +1,5 @@
-import { fauxAssistantMessage, getCurrentSystemMessage, getSystemMessageText } from "@msa/ai";
-import { getModel } from "@msa/ai/compat";
+import ai from "@msa/ai";
+import compat from "@msa/ai/compat";
 import testing from "@msa/testing";
 import { Effect } from "effect";
 import { describe, expect, test } from "vite-plus/test";
@@ -13,6 +13,9 @@ import {
   diffSystemPromptSections,
 } from "../src/core/system-prompt.ts";
 import harnessModule from "./suite/harness.ts";
+
+const { fauxAssistantMessage, getCurrentSystemMessage, getSystemMessageText } = ai;
+const { getModel } = compat;
 
 const { createHarness } = harnessModule;
 

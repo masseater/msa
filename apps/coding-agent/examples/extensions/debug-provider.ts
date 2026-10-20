@@ -1,6 +1,8 @@
-import { type ExtensionAPI, keyHint, type Theme } from "@msa/coding-agent";
-import { Box, Text } from "@msa/tui";
+import { type ExtensionAPI, type Theme, keyHint } from "@msa/coding-agent";
+import tui from "@msa/tui";
 import { Effect } from "effect";
+
+const { Box, Text } = tui;
 
 const ENTRY_TYPE = "debug-provider-events";
 const STATUS_KEY = "debug-provider";
@@ -56,10 +58,10 @@ const registerCaptureEvents = (msa: ExtensionAPI, state: DebugState): void => {
   msa.on("message_end", (event) => {
     if (event.message.role !== "assistant" || state.activeEvents === undefined) return;
     state.completedEntry = {
-      provider: event.message.provider,
       api: event.message.api,
-      model: event.message.model,
       events: state.activeEvents,
+      model: event.message.model,
+      provider: event.message.provider,
     };
     state.activeEvents = undefined;
   });
@@ -97,9 +99,9 @@ const registerToggleCommand = (msa: ExtensionAPI, state: DebugState): void => {
 
 export default function (msa: ExtensionAPI) {
   const state: DebugState = {
-    enabled: false,
     activeEvents: undefined,
     completedEntry: undefined,
+    enabled: false,
   };
 
   msa.registerEntryRenderer<ProviderDebugEntry>(ENTRY_TYPE, renderDebugEntry);

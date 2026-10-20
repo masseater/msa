@@ -1,5 +1,5 @@
-import type { AgentMessage } from "@msa/agent-core";
-import { fauxAssistantMessage } from "@msa/ai";
+import type agentTypes from "@msa/agent-core/index.types";
+import ai from "@msa/ai";
 import { vi } from "vite-plus/test";
 
 import type { Orchestrator } from "../src/core/orchestrator/orchestrator.ts";
@@ -15,6 +15,8 @@ import {
 } from "../src/modes/interactive/components/tasks-view-helpers.ts";
 import { TasksView } from "../src/modes/interactive/components/tasks-view.ts";
 import { stripAnsi } from "../src/utils/ansi.ts";
+
+const { fauxAssistantMessage } = ai;
 
 function task(id: string, patch: Partial<TaskSnapshot> = {}): TaskSnapshot {
   return {
@@ -136,7 +138,7 @@ const DEFAULT_REPLANS: readonly ReplanView[] = [
 ];
 
 const fakeOrchestrator = (tasks: readonly TaskSnapshot[], snapshot: OrchestratorSnapshot) => {
-  const messages: Record<string, AgentMessage[]> = {
+  const messages: Record<string, agentTypes.AgentMessage[]> = {
     "th-worker": [fauxAssistantMessage("writing a.ts")],
   };
   return {

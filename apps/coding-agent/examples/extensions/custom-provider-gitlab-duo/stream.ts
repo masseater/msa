@@ -1,54 +1,53 @@
-import {
-  type Api,
-  type AssistantMessageEventStream,
-  anthropicMessagesApi,
-  createAssistantMessageEventStream,
-  type Model,
-  openAIResponsesApi,
-  type SimpleStreamOptions,
-  type TranscriptContext,
-} from "@msa/ai/compat";
+import compatModule from "@msa/ai/compat";
+import type compatTypes from "@msa/ai/compat.types";
 import { Clock, Data, Effect, Stream } from "effect";
 import { dual } from "effect/Function";
 
-import { getDirectAccessToken, GitLabAuthError } from "./auth.ts";
+import { GitLabAuthError, getDirectAccessToken } from "./auth.ts";
 import { MODEL_MAP } from "./config.ts";
+
+const { anthropicMessagesApi, createAssistantMessageEventStream, openAIResponsesApi } =
+  compatModule;
 
 class GitLabStreamError extends Data.TaggedError("GitLabStreamError")<{
   readonly message: string;
 }> {}
 
-const errorEvent = (model: Model<Api>, message: string, timestamp: number) => ({
-  type: "error" as const,
-  reason: "error" as const,
+const errorEvent = (
+  model: compatTypes.Model<compatTypes.Api>,
+  message: string,
+  timestamp: number,
+) => ({
   error: {
-    role: "assistant" as const,
-    content: [],
     api: model.api,
-    provider: model.provider,
+    content: [],
+    errorMessage: message,
     model: model.id,
+    provider: model.provider,
+    role: "assistant" as const,
+    stopReason: "error" as const,
+    timestamp,
     usage: {
-      input: 0,
-      output: 0,
       cacheRead: 0,
       cacheWrite: 0,
+      cost: { cacheRead: 0, cacheWrite: 0, input: 0, output: 0, total: 0 },
+      input: 0,
+      output: 0,
       totalTokens: 0,
-      cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0, total: 0 },
     },
-    stopReason: "error" as const,
-    errorMessage: message,
-    timestamp,
   },
+  reason: "error" as const,
+  type: "error" as const,
 });
 
 const openInnerStream = (
   backend: string,
-  modelWithBaseUrl: Model<Api>,
-  context: TranscriptContext,
-  streamOptions: SimpleStreamOptions,
+  modelWithBaseUrl: compatTypes.Model<compatTypes.Api>,
+  context: compatTypes.TranscriptContext,
+  streamOptions: compatTypes.SimpleStreamOptions,
 ) => {
   if (backend === "anthropic") {
-    const anthropicModel = modelWithBaseUrl as Model<"anthropic-messages">;
+    const anthropicModel = modelWithBaseUrl as compatTypes.Model<"anthropic-messages">;
     return anthropicMessagesApi().streamSimple(
       {
         ...anthropicModel,
@@ -59,17 +58,17 @@ const openInnerStream = (
     );
   }
   return openAIResponsesApi().streamSimple(
-    modelWithBaseUrl as Model<"openai-responses">,
+    modelWithBaseUrl as compatTypes.Model<"openai-responses">,
     context,
     streamOptions,
   );
 };
 
 const runStream = (
-  stream: AssistantMessageEventStream,
-  model: Model<Api>,
-  context: TranscriptContext,
-  options: SimpleStreamOptions | undefined,
+  stream: compatTypes.AssistantMessageEventStream,
+  model: compatTypes.Model<compatTypes.Api>,
+  context: compatTypes.TranscriptContext,
+  options: compatTypes.SimpleStreamOptions | undefined,
 ) =>
   Effect.gen(function* () {
     const gitlabAccessToken = options?.apiKey;
@@ -102,10 +101,10 @@ const runStream = (
   });
 
 const streamGitLabDuoImpl = (
-  model: Model<Api>,
-  context: TranscriptContext,
-  options?: SimpleStreamOptions,
-): AssistantMessageEventStream => {
+  model: compatTypes.Model<compatTypes.Api>,
+  context: compatTypes.TranscriptContext,
+  options?: compatTypes.SimpleStreamOptions,
+): compatTypes.AssistantMessageEventStream => {
   const stream = createAssistantMessageEventStream();
 
   Effect.runFork(
@@ -127,12 +126,12 @@ const streamGitLabDuoImpl = (
 
 export const streamGitLabDuo: {
   (
-    model: Model<Api>,
-    context: TranscriptContext,
-    options?: SimpleStreamOptions,
-  ): AssistantMessageEventStream;
+    model: compatTypes.Model<compatTypes.Api>,
+    context: compatTypes.TranscriptContext,
+    options?: compatTypes.SimpleStreamOptions,
+  ): compatTypes.AssistantMessageEventStream;
   (
-    context: TranscriptContext,
-    options?: SimpleStreamOptions,
-  ): (model: Model<Api>) => AssistantMessageEventStream;
+    context: compatTypes.TranscriptContext,
+    options?: compatTypes.SimpleStreamOptions,
+  ): (model: compatTypes.Model<compatTypes.Api>) => compatTypes.AssistantMessageEventStream;
 } = dual((args: IArguments) => args.length >= 2, streamGitLabDuoImpl);

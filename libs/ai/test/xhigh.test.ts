@@ -1,12 +1,16 @@
 import { Effect, Stream } from "effect";
 import { describe, expect, it } from "vite-plus/test";
 
-import { stream } from "../src/compat.ts";
-import type { Context, Model } from "../src/types.ts";
-import { currentTimeMillis } from "../src/utils/clock.ts";
-import { nextRandom } from "../src/utils/random.ts";
+import compatModule from "../src/compat.ts";
+import type typesModule from "../src/types.types.ts";
+import clock from "../src/utils/clock.ts";
+import random from "../src/utils/random.ts";
 import env from "./env.ts";
 import modelChoice from "./model-choice.ts";
+
+const { nextRandom } = random;
+const { currentTimeMillis } = clock;
+const { stream } = compatModule;
 
 const { chooseModel, usesApi } = modelChoice;
 
@@ -22,7 +26,7 @@ const withoutXhigh = () =>
       candidate.thinkingLevelMap?.xhigh === null,
   );
 
-function makeContext(): Context {
+function makeContext(): typesModule.Context {
   return {
     messages: [
       {
@@ -98,7 +102,7 @@ describe.skipIf(envValue("OPENAI_API_KEY") === undefined || envValue("OPENAI_API
           Effect.gen(function* () {
             const { compat: _compat, ...baseModel } = withoutXhigh();
             void _compat;
-            const model: Model<"openai-completions"> = {
+            const model: typesModule.Model<"openai-completions"> = {
               ...baseModel,
               api: "openai-completions",
             };

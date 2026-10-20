@@ -1,11 +1,15 @@
 import { describe, expect, it } from "vite-plus/test";
 
-import { convertMessages } from "../src/api/google-messages.ts";
-import type { AssistantMessage, Context, Model } from "../src/types.ts";
-import { currentTimeMillis } from "../src/utils/clock.ts";
-import { normalizeContext } from "../src/utils/transcript.ts";
+import googleMessages from "../src/api/google-messages.ts";
+import type typesModule from "../src/types.types.ts";
+import clock from "../src/utils/clock.ts";
+import transcript from "../src/utils/transcript.ts";
 
-function makeModel(id = "gemini-3-pro-preview"): Model<"google-generative-ai"> {
+const { currentTimeMillis } = clock;
+const { convertMessages } = googleMessages;
+const { normalizeContext } = transcript;
+
+function makeModel(id = "gemini-3-pro-preview"): typesModule.Model<"google-generative-ai"> {
   return {
     api: "google-generative-ai",
     baseUrl: "https://example.com",
@@ -24,14 +28,14 @@ const VALID_SIG = "AAAAAAAAAAAAAAAAAAAAAA==";
 
 function makeContext(
   model: { api: string; provider: string; id: string },
-  content: AssistantMessage["content"],
-): Context {
+  content: typesModule.AssistantMessage["content"],
+): typesModule.Context {
   const now = currentTimeMillis();
   return {
     messages: [
       { content: "Hi", role: "user", timestamp: now },
       {
-        api: model.api as AssistantMessage["api"],
+        api: model.api as typesModule.AssistantMessage["api"],
         content,
         model: model.id,
         provider: model.provider,

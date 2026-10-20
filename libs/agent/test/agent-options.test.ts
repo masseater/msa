@@ -1,15 +1,20 @@
-import { createAssistantMessageEventStream } from "@msa/ai";
+import ai from "@msa/ai";
 import { Effect } from "effect";
 import { Type } from "typebox";
 import { describe, expect, it } from "vite-plus/test";
 
-import { Agent, type AgentOptions, type AgentTool, type StreamFn } from "../src/index.ts";
+import agentModule from "../src/index.ts";
+import type agentTypes from "../src/index.types.ts";
 import fixtures from "./support/fixtures.ts";
+
+const { createAssistantMessageEventStream } = ai;
+
+const { Agent } = agentModule;
 
 const { createUserMessage, respond, scripted, stoppedWith, textMessage, toolCallMessage } =
   fixtures;
 
-const noop = (text: string): AgentTool => ({
+const noop = (text: string): agentTypes.AgentTool => ({
   description: "Noop tool",
   execute: () => Promise.resolve({ content: [{ text, type: "text" }], details: {} }),
   label: "Noop",
@@ -55,7 +60,7 @@ const forwardsFinishTurn = Effect.gen(function* () {
   expect(roles).toEqual(["system", "user", "assistant", "toolResult"]);
 });
 
-const keepsQueues = (options: Pick<AgentOptions, "finishTurn" | "streamFn">) =>
+const keepsQueues = (options: Pick<agentTypes.AgentOptions, "finishTurn" | "streamFn">) =>
   Effect.gen(function* () {
     const queuedDuringResponse = createUserMessage("steering");
     const followUp = createUserMessage("follow-up");
@@ -73,11 +78,11 @@ const keepsQueues = (options: Pick<AgentOptions, "finishTurn" | "streamFn">) =>
   });
 
 const failingResponse =
-  (stopReason: "error" | "aborted"): StreamFn =>
+  (stopReason: "error" | "aborted"): agentTypes.StreamFn =>
   () =>
     respond({ ...stoppedWith(stopReason)(textMessage(stopReason)), errorMessage: stopReason });
 
-const providerEventStream: StreamFn = (model, _context, options) => {
+const providerEventStream: agentTypes.StreamFn = (model, _context, options) => {
   const stream = createAssistantMessageEventStream();
   queueMicrotask(() => {
     Effect.runFork(

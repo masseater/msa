@@ -1,5 +1,5 @@
-import type { AgentMessage } from "@msa/agent-core";
-import type { TextContent } from "@msa/ai";
+import type agentTypes from "@msa/agent-core/index.types";
+import type aiTypes from "@msa/ai/index.types";
 
 import type { PlanRuntime } from "./state.ts";
 import { isSafeCommand } from "./utils.ts";
@@ -47,12 +47,12 @@ export const guardBash =
 
 export const filterPlanContext =
   (runtime: PlanRuntime) =>
-  (messages: AgentMessage[]): { messages: AgentMessage[] } | undefined => {
+  (messages: agentTypes.AgentMessage[]): { messages: agentTypes.AgentMessage[] } | undefined => {
     if (runtime.enabled) return undefined;
 
     return {
       messages: messages.filter((m) => {
-        const msg = m as AgentMessage & { customType?: string };
+        const msg = m as agentTypes.AgentMessage & { customType?: string };
         if (msg.customType === "plan-mode-context") return false;
         if (msg.role !== "user") return true;
 
@@ -62,7 +62,8 @@ export const filterPlanContext =
         }
         if (Array.isArray(content)) {
           return !content.some(
-            (c) => c.type === "text" && (c as TextContent).text?.includes("[PLAN MODE ACTIVE]"),
+            (c) =>
+              c.type === "text" && (c as aiTypes.TextContent).text?.includes("[PLAN MODE ACTIVE]"),
           );
         }
         return true;
@@ -72,16 +73,16 @@ export const filterPlanContext =
 
 export const planModeContextMessage = () => ({
   message: {
-    customType: "plan-mode-context",
     content: PLAN_MODE_PROMPT,
+    customType: "plan-mode-context",
     display: false,
   },
 });
 
 export const executionContextMessage = (todoList: string) => ({
   message: {
-    customType: "plan-execution-context",
     content: executionPrompt(todoList),
+    customType: "plan-execution-context",
     display: false,
   },
 });

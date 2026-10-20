@@ -1,14 +1,20 @@
 import * as NodeRuntime from "@effect/platform-node/NodeRuntime";
-import { type ToolResultMessage, Type } from "@msa/ai";
-import { createModels } from "@msa/ai/models";
-import { fauxAssistantMessage, fauxProvider, fauxToolCall } from "@msa/ai/providers/faux";
+import ai from "@msa/ai";
+import type aiTypes from "@msa/ai/index.types";
+import modelsModule from "@msa/ai/models";
+import fauxModule from "@msa/ai/providers/faux";
 import contextModule from "@msa/chord/context";
 import { Console, Effect } from "effect";
 
-import harnessModule from "../../src/harness/index.ts";
-import durable from "../../src/index.ts";
 import node from "../../src/storage/sqlite/node.ts";
 import support from "../support.ts";
+import example31ReloadAndRestartKit from "./31-reload-and-restart-kit.ts";
+
+const { harness: harnessModule, src: durable } = example31ReloadAndRestartKit;
+
+const { Type } = ai;
+const { fauxAssistantMessage, fauxProvider, fauxToolCall } = fauxModule;
+const { createModels } = modelsModule;
 
 const { BACKGROUND_CONTEXT } = contextModule;
 
@@ -85,7 +91,7 @@ const mainStep2 = Effect.gen(function* () {
   const lastResult = Effect.fn("lastResult")(function* () {
     const page = yield* awaited(root.entries({}, 10, undefined, context));
     const result = page.items.find((entry) => ToolResultEntry.is(entry))
-      ?.model?.[0] as ToolResultMessage;
+      ?.model?.[0] as aiTypes.ToolResultMessage;
     return result.content.map((part) => (part.type === "text" ? part.text : "")).join("");
   });
 

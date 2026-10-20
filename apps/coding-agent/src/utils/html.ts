@@ -48,7 +48,7 @@ function decodeHtmlEntityAtImpl(html: string, index: number): DecodedHtmlEntity 
     return undefined;
   }
 
-  return { text: decoded, length: semicolonIndex - index + 1 };
+  return { length: semicolonIndex - index + 1, text: decoded };
 }
 
 export const decodeHtmlEntityAt: {

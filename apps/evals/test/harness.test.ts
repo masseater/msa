@@ -15,21 +15,21 @@ describe("resolveModelSelection", () => {
   it("prefers an explicit harness model", () => {
     expect(
       resolveModelSelection(
-        { provider: "anthropic", id: "claude-opus-4-6" },
-        { MSA_PROVIDER: "openai-codex", MSA_MODEL: "gpt-5.6-sol" },
+        { id: "claude-opus-4-6", provider: "anthropic" },
+        { MSA_MODEL: "gpt-5.6-sol", MSA_PROVIDER: "openai-codex" },
       ),
-    ).toEqual({ provider: "anthropic", id: "claude-opus-4-6" });
+    ).toEqual({ id: "claude-opus-4-6", provider: "anthropic" });
   });
 
   it("uses trimmed environment defaults", () => {
     expect(
       resolveModelSelection(undefined, {
-        MSA_PROVIDER: " openai-codex ",
         MSA_MODEL: " gpt-5.6-sol ",
+        MSA_PROVIDER: " openai-codex ",
       }),
     ).toEqual({
-      provider: "openai-codex",
       id: "gpt-5.6-sol",
+      provider: "openai-codex",
     });
   });
 
@@ -83,10 +83,10 @@ describe("documentation system prompt", () => {
     const stripped = excludeMsaDocumentation(prompt);
 
     expect(
-      verifySystemPrompt(stripped, { name: "without_docs", expectedMsaDocumentation: false }),
+      verifySystemPrompt(stripped, { expectedMsaDocumentation: false, name: "without_docs" }),
     ).toBe(stripped);
     expect(() =>
-      verifySystemPrompt(prompt, { name: "without_docs", expectedMsaDocumentation: false }),
+      verifySystemPrompt(prompt, { expectedMsaDocumentation: false, name: "without_docs" }),
     ).toThrow("does not match");
   });
 

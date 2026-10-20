@@ -3,13 +3,19 @@ import { describe, it } from "node:test";
 
 import { Effect } from "effect";
 
-import { type TUI, TuiMainScreen } from "../src/index.ts";
-import { nextTick } from "./effect-helpers.ts";
+import type tuiTypes from "../src/index.types.ts";
 import BoundedWriteTerminal from "./tui-render-bounded-write-terminal.ts";
 import tuiRenderHelpers from "./tui-render-helpers.ts";
 import InputComponent from "./tui-render-input-component.ts";
+import tuiRenderKit from "./tui-render-kit.ts";
 import TestComponent from "./tui-render-test-component.ts";
-import { VirtualTerminal } from "./virtual-terminal.ts";
+import virtualTerminal from "./virtual-terminal.ts";
+
+const { effectHelpers, src: tuiModule } = tuiRenderKit;
+
+const { VirtualTerminal } = virtualTerminal;
+const { TuiMainScreen } = tuiModule;
+const { nextTick } = effectHelpers;
 
 const { MAX_RENDER_WRITE_CHARS } = tuiRenderHelpers;
 
@@ -18,7 +24,7 @@ describe("TUI render scheduling", () => {
     Effect.runPromise(
       Effect.gen(function* () {
         const terminal = new VirtualTerminal(40, 10);
-        const tui: TUI = new TuiMainScreen(terminal);
+        const tui: tuiTypes.TUI = new TuiMainScreen(terminal);
         const component = new InputComponent();
         component.lines = ["initial"];
         tui.addChild(component);

@@ -1,69 +1,63 @@
 import type { RawMessageStreamEvent } from "@anthropic-ai/sdk/resources/messages.js";
-import {
-  type Api,
-  type AssistantMessage,
-  type AssistantMessageEventStream,
-  calculateCost,
-  type Model,
-  type ThinkingContent,
-  type Tool,
-  type ToolCall,
-} from "@msa/ai";
+import ai from "@msa/ai";
+import type aiTypes from "@msa/ai/index.types";
 
 import { fromClaudeCodeName, mapStopReason } from "./convert.ts";
 
+const { calculateCost } = ai;
+
 type Block = (
-  | ThinkingContent
+  | aiTypes.ThinkingContent
   | { type: "text"; text: string }
-  | (ToolCall & { partialJson: string })
+  | (aiTypes.ToolCall & { partialJson: string })
 ) & {
   index: number;
 };
 
 const startBlock = (
-  stream: AssistantMessageEventStream,
-  output: AssistantMessage,
+  stream: aiTypes.AssistantMessageEventStream,
+  output: aiTypes.AssistantMessage,
   event: Extract<RawMessageStreamEvent, { type: "content_block_start" }>,
   isOAuth: boolean,
-  tools: Tool[],
+  tools: aiTypes.Tool[],
 ): void => {
   const block = event.content_block;
   const index = event.index;
 
   if (block.type === "text") {
-    output.content.push({ type: "text", text: "", index } as never);
-    stream.push({ type: "text_start", contentIndex: output.content.length - 1, partial: output });
+    output.content.push({ index, text: "", type: "text" } as never);
+    stream.push({ contentIndex: output.content.length - 1, partial: output, type: "text_start" });
     return;
   }
   if (block.type === "thinking") {
-    output.content.push({ type: "thinking", thinking: "", thinkingSignature: "", index } as never);
+    output.content.push({ index, thinking: "", thinkingSignature: "", type: "thinking" } as never);
     stream.push({
-      type: "thinking_start",
       contentIndex: output.content.length - 1,
       partial: output,
+      type: "thinking_start",
     });
     return;
   }
   if (block.type === "tool_use") {
     output.content.push({
-      type: "toolCall",
-      id: block.id,
-      name: isOAuth ? fromClaudeCodeName({ name: block.name, tools }) : block.name,
       arguments: {},
-      partialJson: "",
+      id: block.id,
       index,
+      name: isOAuth ? fromClaudeCodeName({ name: block.name, tools }) : block.name,
+      partialJson: "",
+      type: "toolCall",
     } as never);
     stream.push({
-      type: "toolcall_start",
       contentIndex: output.content.length - 1,
       partial: output,
+      type: "toolcall_start",
     });
   }
 };
 
 const deltaBlock = (
-  stream: AssistantMessageEventStream,
-  output: AssistantMessage,
+  stream: aiTypes.AssistantMessageEventStream,
+  output: aiTypes.AssistantMessage,
   blocks: Block[],
   event: Extract<RawMessageStreamEvent, { type: "content_block_delta" }>,
 ): void => {
@@ -74,16 +68,16 @@ const deltaBlock = (
   const delta = event.delta;
   if (delta.type === "text_delta" && block.type === "text") {
     block.text += delta.text;
-    stream.push({ type: "text_delta", contentIndex: index, delta: delta.text, partial: output });
+    stream.push({ contentIndex: index, delta: delta.text, partial: output, type: "text_delta" });
     return;
   }
   if (delta.type === "thinking_delta" && block.type === "thinking") {
     block.thinking += delta.thinking;
     stream.push({
-      type: "thinking_delta",
       contentIndex: index,
       delta: delta.thinking,
       partial: output,
+      type: "thinking_delta",
     });
     return;
   }
@@ -95,10 +89,10 @@ const deltaBlock = (
       block.arguments = {};
     }
     stream.push({
-      type: "toolcall_delta",
       contentIndex: index,
       delta: delta.partial_json,
       partial: output,
+      type: "toolcall_delta",
     });
     return;
   }
@@ -108,8 +102,8 @@ const deltaBlock = (
 };
 
 const stopBlock = (
-  stream: AssistantMessageEventStream,
-  output: AssistantMessage,
+  stream: aiTypes.AssistantMessageEventStream,
+  output: aiTypes.AssistantMessage,
   blocks: Block[],
   event: Extract<RawMessageStreamEvent, { type: "content_block_stop" }>,
 ): void => {
@@ -118,15 +112,15 @@ const stopBlock = (
   if (block === undefined) return;
 
   if (block.type === "text") {
-    stream.push({ type: "text_end", contentIndex: index, content: block.text, partial: output });
+    stream.push({ content: block.text, contentIndex: index, partial: output, type: "text_end" });
     return;
   }
   if (block.type === "thinking") {
     stream.push({
-      type: "thinking_end",
-      contentIndex: index,
       content: block.thinking,
+      contentIndex: index,
       partial: output,
+      type: "thinking_end",
     });
     return;
   }
@@ -136,14 +130,14 @@ const stopBlock = (
     } catch {
       block.arguments = {};
     }
-    const toolCall = { ...block } as ToolCall;
-    stream.push({ type: "toolcall_end", contentIndex: index, toolCall, partial: output });
+    const toolCall = { ...block } as aiTypes.ToolCall;
+    stream.push({ contentIndex: index, partial: output, toolCall, type: "toolcall_end" });
   }
 };
 
 const updateUsage = (
-  model: Model<Api>,
-  output: AssistantMessage,
+  model: aiTypes.Model<aiTypes.Api>,
+  output: aiTypes.AssistantMessage,
   usage: {
     input_tokens?: number | null;
     output_tokens?: number | null;
@@ -161,10 +155,10 @@ const updateUsage = (
 };
 
 export const handleEvent = (request: {
-  readonly stream: AssistantMessageEventStream;
-  readonly output: AssistantMessage;
-  readonly model: Model<Api>;
-  readonly tools: Tool[];
+  readonly stream: aiTypes.AssistantMessageEventStream;
+  readonly output: aiTypes.AssistantMessage;
+  readonly model: aiTypes.Model<aiTypes.Api>;
+  readonly tools: aiTypes.Tool[];
   readonly isOAuth: boolean;
   readonly event: RawMessageStreamEvent;
 }): void => {

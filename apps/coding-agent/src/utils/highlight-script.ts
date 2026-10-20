@@ -8,12 +8,12 @@ import ruby from "highlight.js/lib/languages/ruby.js";
 import typescript from "highlight.js/lib/languages/typescript.js";
 
 export const scriptLanguages = {
-  python,
-  ruby,
-  perl,
-  php,
-  lua,
   bash,
   javascript,
+  lua,
+  perl,
+  php,
+  python,
+  ruby,
   typescript,
 };

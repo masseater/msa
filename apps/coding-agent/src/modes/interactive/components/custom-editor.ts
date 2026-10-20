@@ -1,9 +1,12 @@
-import { Editor, type EditorOptions, type EditorTheme, type TUI, visibleWidth } from "@msa/tui";
+import tuiModule from "@msa/tui";
+import type tuiTypes from "@msa/tui/index.types";
 
 import type { AppKeybinding, KeybindingsManager } from "../../../core/keybindings.ts";
 import type { StatusIndicator } from "./status-indicator.ts";
 
-export type CustomEditorOptions = EditorOptions & {
+const { Editor, visibleWidth } = tuiModule;
+
+export type CustomEditorOptions = tuiTypes.EditorOptions & {
   embedWorkingStatus?: boolean;
 };
 
@@ -19,8 +22,8 @@ export class CustomEditor extends Editor {
   public onExtensionShortcut?: ((data: string) => boolean) | undefined;
 
   constructor(
-    tui: TUI,
-    theme: EditorTheme,
+    tui: tuiTypes.TUI,
+    theme: tuiTypes.EditorTheme,
     keybindings: KeybindingsManager,
     options?: CustomEditorOptions,
   ) {

@@ -1,36 +1,38 @@
 import type OpenAI from "openai";
 
-import type { Tool } from "../types.ts";
-import {
+import type typesModule from "../types.types.ts";
+import constrainedSampling from "./constrained-sampling.ts";
+import type openaiCompletionsTypesModule from "./openai-completions-types.types.ts";
+
+const {
   getJsonSchemaToolParameters,
   resolveGrammarConstrainedSampling,
   resolveJsonSchemaStrictSampling,
-} from "./constrained-sampling.ts";
-import type { ResolvedOpenAICompletionsCompat } from "./openai-completions-types.ts";
+} = constrainedSampling;
 
 function toCustomTool(
-  tool: Tool,
+  tool: typesModule.Tool,
   grammar: { format: "lark" | "regex"; definition: string },
 ): OpenAI.Chat.Completions.ChatCompletionCustomTool {
   return {
-    type: "custom",
     custom: {
-      name: tool.name,
       description: tool.description,
       format: {
-        type: "grammar",
         grammar: {
-          syntax: grammar.format,
           definition: grammar.definition,
+          syntax: grammar.format,
         },
+        type: "grammar",
       },
+      name: tool.name,
     },
+    type: "custom",
   };
 }
 
 function convertTools(input: {
-  tools: Tool[];
-  compat: ResolvedOpenAICompletionsCompat;
+  tools: typesModule.Tool[];
+  compat: openaiCompletionsTypesModule.ResolvedOpenAICompletionsCompat;
 }): OpenAI.Chat.Completions.ChatCompletionTool[] {
   const { tools, compat } = input;
   return tools.map((tool) => {
@@ -41,15 +43,19 @@ function convertTools(input: {
 
     const strict = resolveJsonSchemaStrictSampling(tool, compat.supportsStrictMode);
     return {
-      type: "function",
       function: {
-        name: tool.name,
         description: tool.description,
+        name: tool.name,
         parameters: getJsonSchemaToolParameters(tool, strict) as Record<string, unknown>,
         ...(compat.supportsStrictMode && { strict: strict ?? false }),
       },
+      type: "function",
     };
   });
 }
 
-export { convertTools };
+const openaiCompletionsTools = {
+  convertTools,
+};
+
+export default openaiCompletionsTools;

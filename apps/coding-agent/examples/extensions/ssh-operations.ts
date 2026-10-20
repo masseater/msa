@@ -54,7 +54,6 @@ export const createRemoteReadOps = (paths: RemotePaths): ReadOperations => {
   const { remote, remoteCwd, localCwd } = paths;
   const toRemote = (p: string) => p.replace(localCwd, remoteCwd);
   return {
-    readFile: (p) => sshExec(remote, `cat ${JSON.stringify(toRemote(p))}`),
     access: (p) =>
       runSshText({ remote, command: `test -r ${JSON.stringify(toRemote(p))}` }).then(
         () => undefined,
@@ -69,6 +68,7 @@ export const createRemoteReadOps = (paths: RemotePaths): ReadOperations => {
         },
         () => null,
       ),
+    readFile: (p) => sshExec(remote, `cat ${JSON.stringify(toRemote(p))}`),
   };
 };
 
@@ -76,6 +76,10 @@ export const createRemoteWriteOps = (paths: RemotePaths): WriteOperations => {
   const { remote, remoteCwd, localCwd } = paths;
   const toRemote = (p: string) => p.replace(localCwd, remoteCwd);
   return {
+    mkdir: (dir) =>
+      runSshText({ remote, command: `mkdir -p ${JSON.stringify(toRemote(dir))}` }).then(
+        () => undefined,
+      ),
     writeFile: (p, content) => {
       const b64 = Buffer.from(content).toString("base64");
       return runSshText({
@@ -83,17 +87,13 @@ export const createRemoteWriteOps = (paths: RemotePaths): WriteOperations => {
         command: `echo ${JSON.stringify(b64)} | base64 -d > ${JSON.stringify(toRemote(p))}`,
       }).then(() => undefined);
     },
-    mkdir: (dir) =>
-      runSshText({ remote, command: `mkdir -p ${JSON.stringify(toRemote(dir))}` }).then(
-        () => undefined,
-      ),
   };
 };
 
 export const createRemoteEditOps = (paths: RemotePaths): EditOperations => {
   const read = createRemoteReadOps(paths);
   const write = createRemoteWriteOps(paths);
-  return { readFile: read.readFile, access: read.access, writeFile: write.writeFile };
+  return { access: read.access, readFile: read.readFile, writeFile: write.writeFile };
 };
 
 const abortEffect = (signal: AbortSignal): Effect.Effect<never, SshError> =>
@@ -146,7 +146,7 @@ const runRemoteBash = (
 export const createRemoteBashOps = (paths: RemotePaths): BashOperations => ({
   exec: (command, cwd, { onData, signal, timeout }) => {
     const remoteCommand = `cd ${JSON.stringify(cwd.replace(paths.localCwd, paths.remoteCwd))} && ${command}`;
-    const effect = runRemoteBash({ remote: paths.remote, command: remoteCommand }, onData, timeout);
+    const effect = runRemoteBash({ command: remoteCommand, remote: paths.remote }, onData, timeout);
     return runtime.runPromise(
       signal === undefined ? effect : Effect.raceFirst(effect, abortEffect(signal)),
     );

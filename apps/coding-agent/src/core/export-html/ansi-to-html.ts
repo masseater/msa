@@ -58,10 +58,10 @@ interface TextStyle {
 
 function createEmptyStyle(): TextStyle {
   return {
-    fg: null,
     bg: null,
     bold: false,
     dim: false,
+    fg: null,
     italic: false,
     underline: false,
   };
@@ -104,12 +104,6 @@ const SGR_ACTIONS: Record<number, (style: TextStyle) => void> = {
   2: (style) => {
     style.dim = true;
   },
-  3: (style) => {
-    style.italic = true;
-  },
-  4: (style) => {
-    style.underline = true;
-  },
   22: (style) => {
     style.bold = false;
     style.dim = false;
@@ -120,8 +114,14 @@ const SGR_ACTIONS: Record<number, (style: TextStyle) => void> = {
   24: (style) => {
     style.underline = false;
   },
+  3: (style) => {
+    style.italic = true;
+  },
   39: (style) => {
     style.fg = null;
+  },
+  4: (style) => {
+    style.underline = true;
   },
   49: (style) => {
     style.bg = null;

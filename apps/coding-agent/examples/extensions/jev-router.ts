@@ -1,4 +1,4 @@
-import type { Message } from "@msa/ai";
+import type aiTypes from "@msa/ai/index.types";
 import type {
   ExtensionAPI,
   ExtensionContext,
@@ -37,13 +37,13 @@ function routeTo(
   };
 }
 
-function lastUserText(messages: readonly Message[]): string {
+function lastUserText(messages: readonly aiTypes.Message[]): string {
   const content = messages.filter((message) => message.role === "user").at(-1)?.content ?? "";
   if (typeof content === "string") return content;
   return content.flatMap((block) => (block.type === "text" ? [block.text] : [])).join("\n");
 }
 
-function editedThisTurn(messages: readonly Message[]): boolean {
+function editedThisTurn(messages: readonly aiTypes.Message[]): boolean {
   const lastUser = messages.findLastIndex((message) => message.role === "user");
   return messages
     .slice(lastUser + 1)
@@ -66,18 +66,18 @@ const choosePlanningModel = (request: JevRequest, ctx: ExtensionContext) =>
         ctx.modelRegistry.classify(
           jev,
           {
-            state: { prompt: lastUserText(request.messages).slice(0, 16_000) },
             questions: {
               complexity: {
-                type: "choice",
+                criteria: {
+                  complex: "Subtle design, cross-cutting changes, or hard debugging",
+                  standard: "Ordinary features, fixes, reviews, or questions",
+                },
                 instructions:
                   "How demanding is the software engineering work requested in `prompt`?",
-                criteria: {
-                  standard: "Ordinary features, fixes, reviews, or questions",
-                  complex: "Subtle design, cross-cutting changes, or hard debugging",
-                },
+                type: "choice",
               },
             },
+            state: { prompt: lastUserText(request.messages).slice(0, 16_000) },
           },
           { signal: request.signal },
         ),
@@ -91,13 +91,11 @@ const choosePlanningModel = (request: JevRequest, ctx: ExtensionContext) =>
 
 export default function (msa: ExtensionAPI) {
   msa.registerVirtualModel<JevState>({
-    provider: "jev",
-    id: "auto",
-    name: "Auto (Jev)",
-    thinkingLevels: ["low", "medium", "high", "xhigh"],
-
     contextWindow: 272_000,
+    id: "auto",
     maxTokens: 128_000,
+    name: "Auto (Jev)",
+    provider: "jev",
     route: (request, ctx) =>
       Effect.runPromise(
         Effect.gen(function* () {
@@ -114,5 +112,6 @@ export default function (msa: ExtensionAPI) {
           return routeTo(request, ctx, state.model);
         }),
       ),
+    thinkingLevels: ["low", "medium", "high", "xhigh"],
   });
 }

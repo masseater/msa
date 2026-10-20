@@ -52,7 +52,7 @@ function findNearestTrustEntry(data: TrustFile, cwd: string): ProjectTrustStoreE
   while (true) {
     const value = data[currentDir];
     if (value === true || value === false) {
-      return { path: currentDir, decision: value };
+      return { decision: value, path: currentDir };
     }
 
     const parentDir = dirname(currentDir);
@@ -77,21 +77,21 @@ export function getProjectTrustOptions(
   const trustOptions: ProjectTrustOption[] = [
     {
       label: "Trust",
+      savedPath: trustPath,
       trusted: true,
       updates: [{ path: trustPath, decision: true }],
-      savedPath: trustPath,
     },
   ];
   const parentPath = getProjectTrustParentPath(cwd);
   if (parentPath !== undefined) {
     trustOptions.push({
       label: `Trust parent folder (${parentPath})`,
+      savedPath: parentPath,
       trusted: true,
       updates: [
         { path: parentPath, decision: true },
         { path: trustPath, decision: null },
       ],
-      savedPath: parentPath,
     });
   }
   if (options?.includeSessionOnly === true) {
@@ -99,9 +99,9 @@ export function getProjectTrustOptions(
   }
   trustOptions.push({
     label: "Do not trust",
+    savedPath: trustPath,
     trusted: false,
     updates: [{ path: trustPath, decision: false }],
-    savedPath: trustPath,
   });
   if (options?.includeSessionOnly === true) {
     trustOptions.push({ label: "Do not trust (this session only)", trusted: false, updates: [] });
@@ -159,7 +159,7 @@ function acquireTrustLockSync(path: string): () => void {
 
   for (let attempt = 1; attempt <= maxAttempts; attempt++) {
     try {
-      return lockfile.lockSync(trustDir, { realpath: false, lockfilePath: `${path}.lock` });
+      return lockfile.lockSync(trustDir, { lockfilePath: `${path}.lock`, realpath: false });
     } catch (error) {
       const code =
         typeof error === "object" && error !== null && "code" in error
@@ -234,7 +234,7 @@ export class ProjectTrustStore {
   }
 
   set(cwd: string, decision: ProjectTrustDecision): void {
-    this.setMany([{ path: cwd, decision }]);
+    this.setMany([{ decision, path: cwd }]);
   }
 
   setMany(decisions: ProjectTrustUpdate[]): void {

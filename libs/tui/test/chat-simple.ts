@@ -1,22 +1,26 @@
 import chalk from "chalk";
 import { Effect, Random } from "effect";
 
-import { runAfter } from "../src/delay.ts";
-import {
+import delay from "../src/delay.ts";
+import tuiModule from "../src/index.ts";
+import type tuiTypes from "../src/index.types.ts";
+import testThemes from "./test-themes.ts";
+
+const {
   CombinedAutocompleteProvider,
   Editor,
   Loader,
   Markdown,
   ProcessTerminal,
-  type TUI,
   Text,
   TuiMainScreen,
-} from "../src/index.ts";
-import { defaultEditorTheme, defaultMarkdownTheme } from "./test-themes.ts";
+} = tuiModule;
+const { defaultEditorTheme, defaultMarkdownTheme } = testThemes;
+const { runAfter } = delay;
 
 const terminal = new ProcessTerminal();
 
-const tui: TUI = new TuiMainScreen(terminal);
+const tui: tuiTypes.TUI = new TuiMainScreen(terminal);
 
 tui.addChild(
   new Text(
@@ -69,7 +73,7 @@ function runCommand(trimmed: string): boolean {
   return false;
 }
 
-function respond(loader: Loader): void {
+function respond(loader: tuiTypes.Loader): void {
   const children = tui.children;
   tui.removeChild(loader);
   const randomResponse = responses[Math.floor(Effect.runSync(Random.next) * responses.length)];

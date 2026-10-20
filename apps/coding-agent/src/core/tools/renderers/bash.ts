@@ -1,8 +1,9 @@
-import { Container, Spacer, Text } from "@msa/tui";
+import tui from "@msa/tui";
+import type tuiTypes from "@msa/tui/index.types";
 
 import {
-  collapsedOutput,
   SingleLine,
+  collapsedOutput,
 } from "../../../modes/interactive/components/visual-truncate.ts";
 import { theme } from "../../../modes/interactive/theme/theme.ts";
 import type { ToolDefinition, ToolRenderResultOptions } from "../../extensions/types.ts";
@@ -15,6 +16,8 @@ import {
   toolTimerText,
 } from "../render-utils.ts";
 import { DEFAULT_MAX_BYTES, formatSize } from "../truncate.ts";
+
+const { Container, Spacer, Text } = tui;
 
 export const BASH_UPDATE_THROTTLE_MS = 100;
 function formatShellCall(
@@ -73,7 +76,7 @@ function truncationWarnings(details: BashResultDetails): string[] {
 }
 
 function rebuildBashResultRenderComponent(
-  component: Container,
+  component: tuiTypes.Container,
   result: {
     content: Array<{ type: string; text?: string; data?: string; mimeType?: string }>;
     details?: BashToolDetails;
@@ -131,7 +134,8 @@ export function createShellRenderers(
     },
     renderResult(result, options, _theme, context) {
       const timerText = toolTimerText(context, options.isPartial);
-      const component = (context.lastComponent as Container | undefined) ?? new Container();
+      const component =
+        (context.lastComponent as tuiTypes.Container | undefined) ?? new Container();
       rebuildBashResultRenderComponent(
         component,
         result as any,

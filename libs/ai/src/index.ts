@@ -1,43 +1,106 @@
-export type { Static, TSchema } from "typebox";
-export { Type } from "typebox";
+import { Type } from "typebox";
 
-export type {
-  AnthropicEffort,
-  AnthropicOptions,
-  AnthropicThinkingDisplay,
-} from "./api/anthropic-messages.ts";
-export type { GoogleOptions } from "./api/google-generative-ai.ts";
-export type { GoogleApiThinkingLevel, ResolvedGoogleThinkingLevel } from "./api/google-thinking.ts";
-export * from "./api/lazy.ts";
-export type { OpenAICodexResponsesOptions } from "./api/openai-codex-options.ts";
-export type { OpenAICodexWebSocketDebugStats } from "./api/openai-codex-ws-stats.ts";
-export type { OpenAICompletionsOptions } from "./api/openai-completions.ts";
-export type { OpenAIResponsesOptions } from "./api/openai-responses-config.ts";
-export * from "./auth/context.ts";
-export * from "./auth/credential-store.ts";
-export * from "./auth/helpers.ts";
-export * from "./auth/types.ts";
-export type {
-  OAuthAuthInfo,
-  OAuthDeviceCodeInfo,
-  OAuthLoginCallbacks,
-  OAuthPrompt,
-  OAuthSelectOption,
-  OAuthSelectPrompt,
-} from "./compat/extension-oauth-types.ts";
-export * from "./models.ts";
-export * from "./models-store.ts";
-export * from "./providers/faux.ts";
-export * from "./session-resources.ts";
-export * from "./types.ts";
-export * from "./utils/async-event-stream.ts";
-export * from "./utils/diagnostics.ts";
-export * from "./utils/event-stream.ts";
-export * from "./utils/json-parse.ts";
-export * from "./utils/overflow.ts";
-export * from "./utils/retry.ts";
-export { contentText, getSystemMessageText, renderSystemMessageUpdate } from "./utils/text.ts";
-export * from "./utils/transcript.ts";
-export * from "./utils/typebox-helpers.ts";
-export { uuidv7 } from "./utils/uuid.ts";
-export * from "./utils/validation.ts";
+import indexKit from "./index-kit.ts";
+import modelsError from "./utils/models-error.ts";
+import overflow from "./utils/overflow.ts";
+import retry from "./utils/retry.ts";
+import textModule from "./utils/text.ts";
+import transcript from "./utils/transcript.ts";
+import typeboxHelpers from "./utils/typebox-helpers.ts";
+import uuid from "./utils/uuid.ts";
+import validation from "./utils/validation.ts";
+
+const {
+  EventStream,
+  context,
+  credentialStore,
+  diagnostics: diagnosticsModule,
+  eventStream,
+  faux,
+  fauxCore,
+  fauxMessages,
+  helpers,
+  jsonParse,
+  lazy,
+  modelOperations,
+  models: modelsModule,
+  InMemoryModelsStore,
+  sessionResources,
+} = indexKit;
+
+const ai = {
+  AssistantMessageEventStream: eventStream.AssistantMessageEventStream,
+  DEFAULT_MAX_AGENT_RETRY_DELAY_MS: retry.DEFAULT_MAX_AGENT_RETRY_DELAY_MS,
+  EventStream,
+  InMemoryCredentialStore: credentialStore.InMemoryCredentialStore,
+  InMemoryModelsStore,
+  ModelsError: modelsError.ModelsError,
+  StringEnum: typeboxHelpers.StringEnum,
+  Type,
+  appendAssistantMessageDiagnostic: diagnosticsModule.appendAssistantMessageDiagnostic,
+  authEnv: helpers.authEnv,
+  calculateCost: modelsModule.calculateCost,
+  clampThinkingLevel: modelsModule.clampThinkingLevel,
+  cleanupSessionResources: sessionResources.cleanupSessionResources,
+  collapseSystemMessages: transcript.collapseSystemMessages,
+  contentText: textModule.contentText,
+  createAssistantMessageDiagnostic: diagnosticsModule.createAssistantMessageDiagnostic,
+  createAssistantMessageEventStream: eventStream.createAssistantMessageEventStream,
+  createEventChannel: eventStream.createEventChannel,
+  createFauxCore: fauxCore.createFauxCore,
+  createInitialSystemMessage: transcript.createInitialSystemMessage,
+  createModels: modelsModule.createModels,
+  createProvider: modelsModule.createProvider,
+  declarationsEqual: transcript.declarationsEqual,
+  defaultProviderAuthContext: context.defaultProviderAuthContext,
+  envApiKeyAuth: helpers.envApiKeyAuth,
+  extractDiagnosticError: diagnosticsModule.extractDiagnosticError,
+  fauxAssistantMessage: fauxMessages.fauxAssistantMessage,
+  fauxProvider: faux.fauxProvider,
+  fauxText: fauxMessages.fauxText,
+  fauxThinking: fauxMessages.fauxThinking,
+  fauxToolCall: fauxMessages.fauxToolCall,
+  formatThrownValue: diagnosticsModule.formatThrownValue,
+  getCurrentSystemMessage: transcript.getCurrentSystemMessage,
+  getCurrentSystemPrompt: transcript.getCurrentSystemPrompt,
+  getCurrentTools: transcript.getCurrentTools,
+  getDeclaredTools: transcript.getDeclaredTools,
+  getInitialSystemMessage: transcript.getInitialSystemMessage,
+  getModelType: modelOperations.getModelType,
+  getOverflowPatterns: overflow.getOverflowPatterns,
+  getSupportedThinkingLevels: modelsModule.getSupportedThinkingLevels,
+  getSystemMessageText: textModule.getSystemMessageText,
+  getToolStateChanges: transcript.getToolStateChanges,
+  hasApi: modelsModule.hasApi,
+  hasNonAdditiveToolChanges: transcript.hasNonAdditiveToolChanges,
+  hasToolRedefinitions: transcript.hasToolRedefinitions,
+  isContextOverflow: overflow.isContextOverflow,
+  isModelType: modelOperations.isModelType,
+  isRecoverableLength: overflow.isRecoverableLength,
+  isRetryableAssistantError: retry.isRetryableAssistantError,
+  lazyApi: lazy.lazyApi,
+  lazyOAuth: helpers.lazyOAuth,
+  lazyStream: lazy.lazyStream,
+  modelsAreEqual: modelsModule.modelsAreEqual,
+  normalizeContext: transcript.normalizeContext,
+  parseJsonWithRepair: jsonParse.parseJsonWithRepair,
+  parseStreamingJson: jsonParse.parseStreamingJson,
+  parseToolCallArguments: jsonParse.parseToolCallArguments,
+  promptUser: helpers.promptUser,
+  registerSessionResourceCleanup: sessionResources.registerSessionResourceCleanup,
+  renderSystemMessageUpdate: textModule.renderSystemMessageUpdate,
+  repairJson: jsonParse.repairJson,
+  resolveTranscript: transcript.resolveTranscript,
+  resolveTranscriptTools: transcript.resolveTranscriptTools,
+  retryAssistantCall: retry.retryAssistantCall,
+  retryDelayMs: retry.retryDelayMs,
+  runAfterPrevious: credentialStore.runAfterPrevious,
+  throwIfAborted: helpers.throwIfAborted,
+  toToolDeclaration: transcript.toToolDeclaration,
+  uuidv7: uuid.uuidv7,
+  validateToolArguments: validation.validateToolArguments,
+  validateToolCall: validation.validateToolCall,
+  withoutInitialSystemMessage: transcript.withoutInitialSystemMessage,
+};
+
+export default ai;

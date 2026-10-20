@@ -1,6 +1,7 @@
 import * as NodeServices from "@effect/platform-node/NodeServices";
 import testing from "@msa/testing";
-import { type TUI, setKeybindings } from "@msa/tui";
+import tuiModule from "@msa/tui";
+import type tuiTypes from "@msa/tui/index.types";
 import { Effect, FileSystem, ManagedRuntime } from "effect";
 import { afterEach, beforeAll, beforeEach, describe, expect, it } from "vite-plus/test";
 
@@ -8,6 +9,8 @@ import { AuthStorage } from "../../../src/core/auth-storage.ts";
 import { ModelSelectorComponent } from "../../../src/modes/interactive/components/model-selector.ts";
 import modelRuntimeTestUtils from "../../model-runtime-test-utils.ts";
 import tuiKit from "../../tui-kit.ts";
+
+const { setKeybindings } = tuiModule;
 
 const { KeybindingsManager, initTheme, stripAnsi } = tuiKit;
 
@@ -18,7 +21,7 @@ const { gate, joinPath, toJsonText } = testing;
 const runtime = ManagedRuntime.make(NodeServices.layer);
 const fs = runtime.runSync(FileSystem.FileSystem.useSync((service) => service));
 
-function observeRefreshRender(): { tui: TUI; renderedAfterRefresh: Promise<void> } {
+function observeRefreshRender(): { tui: tuiTypes.TUI; renderedAfterRefresh: Promise<void> } {
   let renderCount = 0;
   const renderedAfterRefresh = gate();
   return {
@@ -28,7 +31,7 @@ function observeRefreshRender(): { tui: TUI; renderedAfterRefresh: Promise<void>
         renderCount++;
         if (renderCount === 2) renderedAfterRefresh.release();
       },
-    } as unknown as TUI,
+    } as unknown as tuiTypes.TUI,
   };
 }
 

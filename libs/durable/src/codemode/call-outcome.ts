@@ -1,6 +1,6 @@
-import type { TextContent } from "@msa/ai";
+import type aiTypes from "@msa/ai/index.types";
 import type chordTypes from "@msa/chord/index.types";
-import type { CodemodeHostCall, CodemodeOutcome } from "@msa/codemode/portable";
+import type portableTypes from "@msa/codemode/portable.types";
 import { Function } from "effect";
 
 import type dualTypes from "../dual.ts";
@@ -12,8 +12,8 @@ import modelsModule from "./models.ts";
 const { MODEL_CALLS } = modelsModule;
 const { errorMessage } = errorsModule;
 
-const isText = (item: unknown): item is TextContent =>
-  typeof item === "object" && item !== null && (item as TextContent).type === "text";
+const isText = (item: unknown): item is aiTypes.TextContent =>
+  typeof item === "object" && item !== null && (item as aiTypes.TextContent).type === "text";
 
 function textOf(value: chordTypes.JsonValue | undefined): string {
   if (typeof value === "string") return value;
@@ -27,14 +27,14 @@ const outcomeOf: dualTypes.Dual3<
   string,
   boolean,
   typesModule.NestedToolExecutionResult,
-  CodemodeOutcome
+  portableTypes.CodemodeOutcome
 > = Function.dual(
   3,
   (
     name: string,
     structured: boolean,
     result: typesModule.NestedToolExecutionResult,
-  ): CodemodeOutcome => {
+  ): portableTypes.CodemodeOutcome => {
     const value = structured ? result.structuredOutput : textOf(result.structuredOutput);
     if (result.isError !== true || (structured && value !== undefined)) return { ok: true, value };
     const message = structured ? "" : (value as string);
@@ -50,7 +50,7 @@ const outcomeOf: dualTypes.Dual3<
   },
 );
 
-function asToolCall(call: CodemodeHostCall): CodemodeHostCall {
+function asToolCall(call: portableTypes.CodemodeHostCall): portableTypes.CodemodeHostCall {
   const tool = call.target === "global" ? MODEL_CALLS[call.name] : undefined;
   if (tool === undefined) return call;
   const [model, context] = Array.isArray(call.args) ? call.args : [];
@@ -72,7 +72,7 @@ function countImages(value: unknown): number {
     : 0;
 }
 
-const describeCall = (call: CodemodeHostCall): string =>
+const describeCall = (call: portableTypes.CodemodeHostCall): string =>
   `${call.target === "tool" ? "tools." : ""}${call.name}(${JSON.stringify(call.args) ?? ""})`;
 
 const madeCall: dualTypes.Dual2<string, unknown, string> = Function.dual(
@@ -80,9 +80,9 @@ const madeCall: dualTypes.Dual2<string, unknown, string> = Function.dual(
   (name: string, args: unknown): string => `tools.${name}(${JSON.stringify(args)})`,
 );
 
-const failedCall: dualTypes.Dual2<CodemodeHostCall, unknown, string> = Function.dual(
+const failedCall: dualTypes.Dual2<portableTypes.CodemodeHostCall, unknown, string> = Function.dual(
   2,
-  (call: CodemodeHostCall, error: unknown): string =>
+  (call: portableTypes.CodemodeHostCall, error: unknown): string =>
     `call ${call.id} is ${describeCall(call)}: ${errorMessage(error)}`,
 );
 

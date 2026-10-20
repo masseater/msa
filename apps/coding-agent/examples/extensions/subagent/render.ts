@@ -1,6 +1,7 @@
 import type { Theme } from "@msa/coding-agent";
 import { getMarkdownTheme } from "@msa/coding-agent";
-import { Container, Markdown, Spacer, Text } from "@msa/tui";
+import tui from "@msa/tui";
+import type tuiTypes from "@msa/tui/index.types";
 
 import type { AgentScope } from "./agents.ts";
 import {
@@ -18,6 +19,8 @@ import {
   type SubagentDetails,
 } from "./types.ts";
 
+const { Container, Markdown, Spacer, Text } = tui;
+
 interface RenderCallArgs {
   agent?: string | undefined;
   task?: string | undefined;
@@ -33,7 +36,7 @@ const renderChainCall = (
   chain: { agent: string; task: string }[],
   scope: AgentScope,
   theme: Theme,
-): Text => {
+): tuiTypes.Text => {
   let text =
     theme.fg("toolTitle", theme.bold("subagent ")) +
     theme.fg("accent", `chain (${chain.length} steps)`) +
@@ -56,7 +59,7 @@ const renderParallelCall = (
   tasks: { agent: string; task: string }[],
   scope: AgentScope,
   theme: Theme,
-): Text => {
+): tuiTypes.Text => {
   let text =
     theme.fg("toolTitle", theme.bold("subagent ")) +
     theme.fg("accent", `parallel (${tasks.length} tasks)`) +
@@ -69,7 +72,7 @@ const renderParallelCall = (
   return new Text(text, 0, 0);
 };
 
-const renderSingleCall = (args: RenderCallArgs, scope: AgentScope, theme: Theme): Text => {
+const renderSingleCall = (args: RenderCallArgs, scope: AgentScope, theme: Theme): tuiTypes.Text => {
   const agentName = args.agent || "...";
   const taskPreview =
     args.task !== undefined && args.task.length > 0 ? preview(args.task, 60) : "...";
@@ -84,7 +87,7 @@ const renderSingleCall = (args: RenderCallArgs, scope: AgentScope, theme: Theme)
 export const renderCall = (request: {
   readonly args: RenderCallArgs;
   readonly theme: Theme;
-}): Text => {
+}): tuiTypes.Text => {
   const { args, theme } = request;
   const scope: AgentScope = args.agentScope ?? "user";
   if (args.chain !== undefined && args.chain.length > 0) {
@@ -114,9 +117,9 @@ export const renderDisplayItems = (request: {
       text += `${theme.fg("toolOutput", previewText)}\n`;
     } else {
       const call = formatToolCall({
-        toolName: item.name,
         args: item.args,
         themeFg: (color, value) => theme.fg(color, value),
+        toolName: item.name,
       });
       text += `${theme.fg("muted", "→ ") + call}\n`;
     }
@@ -125,7 +128,7 @@ export const renderDisplayItems = (request: {
 };
 
 export const addToolCalls = (request: {
-  readonly container: Container;
+  readonly container: tuiTypes.Container;
   readonly items: DisplayItem[];
   readonly theme: Theme;
 }): void => {
@@ -133,9 +136,9 @@ export const addToolCalls = (request: {
   for (const item of items) {
     if (item.type !== "toolCall") continue;
     const call = formatToolCall({
-      toolName: item.name,
       args: item.args,
       themeFg: (color, value) => theme.fg(color, value),
+      toolName: item.name,
     });
     container.addChild(new Text(theme.fg("muted", "→ ") + call, 0, 0));
   }
@@ -150,7 +153,7 @@ const resultHeader = (result: SingleResult, theme: Theme): string => {
   return header;
 };
 
-const renderSingleExpanded = (result: SingleResult, theme: Theme): Container => {
+const renderSingleExpanded = (result: SingleResult, theme: Theme): tuiTypes.Container => {
   const container = new Container();
   const items = getDisplayItems(result.messages);
   const finalOutput = getFinalOutput(result.messages);
@@ -179,7 +182,7 @@ const renderSingleExpanded = (result: SingleResult, theme: Theme): Container => 
     }
   }
 
-  const usage = formatUsageStats({ usage: result.usage, model: result.model });
+  const usage = formatUsageStats({ model: result.model, usage: result.usage });
   if (usage.length > 0) {
     container.addChild(new Spacer(1));
     container.addChild(new Text(theme.fg("dim", usage), 0, 0));
@@ -187,7 +190,7 @@ const renderSingleExpanded = (result: SingleResult, theme: Theme): Container => 
   return container;
 };
 
-const renderSingleCollapsed = (result: SingleResult, theme: Theme): Text => {
+const renderSingleCollapsed = (result: SingleResult, theme: Theme): tuiTypes.Text => {
   const items = getDisplayItems(result.messages);
   let text = resultHeader(result, theme);
 
@@ -200,13 +203,13 @@ const renderSingleCollapsed = (result: SingleResult, theme: Theme): Text => {
   } else if (items.length === 0) {
     text += `\n${theme.fg("muted", "(no output)")}`;
   } else {
-    text += `\n${renderDisplayItems({ items, expanded: false, theme, limit: COLLAPSED_ITEM_COUNT })}`;
+    text += `\n${renderDisplayItems({ expanded: false, items, limit: COLLAPSED_ITEM_COUNT, theme })}`;
     if (items.length > COLLAPSED_ITEM_COUNT) {
       text += `\n${theme.fg("muted", "(Ctrl+O to expand)")}`;
     }
   }
 
-  const usage = formatUsageStats({ usage: result.usage, model: result.model });
+  const usage = formatUsageStats({ model: result.model, usage: result.usage });
   if (usage.length > 0) text += `\n${theme.fg("dim", usage)}`;
   return new Text(text, 0, 0);
 };
@@ -231,10 +234,10 @@ export const renderResult = (request: {
     return renderSingle(single, options.expanded, theme);
   }
   if (details.mode === "chain") {
-    return renderChain({ results: details.results, expanded: options.expanded, theme });
+    return renderChain({ expanded: options.expanded, results: details.results, theme });
   }
   if (details.mode === "parallel") {
-    return renderParallel({ results: details.results, expanded: options.expanded, theme });
+    return renderParallel({ expanded: options.expanded, results: details.results, theme });
   }
 
   const content = result.content[0];

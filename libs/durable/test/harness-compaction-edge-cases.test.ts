@@ -1,4 +1,4 @@
-import { fauxAssistantMessage } from "@msa/ai";
+import ai from "@msa/ai";
 import harnessModule from "@msa/durable/harness";
 import type durableTypes from "@msa/durable/index.types";
 import { Effect } from "effect";
@@ -6,6 +6,8 @@ import { afterEach, describe, expect, it } from "vite-plus/test";
 
 import harnessCompactionSupport from "./harness-compaction-support.ts";
 import support from "./support.ts";
+
+const { fauxAssistantMessage } = ai;
 
 const { watchEvents } = harnessModule;
 

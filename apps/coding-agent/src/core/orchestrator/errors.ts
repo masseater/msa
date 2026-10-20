@@ -7,7 +7,7 @@ export class OrchestratorError extends Data.TaggedError("OrchestratorError")<{
 
 export function orchestratorError(error: unknown): OrchestratorError {
   return new OrchestratorError({
-    message: error instanceof Error ? error.message : String(error),
     cause: error,
+    message: error instanceof Error ? error.message : String(error),
   });
 }

@@ -12,11 +12,11 @@ interface ZipEntry {
 
 function dosDateTime(date: Date): { time: number; day: number } {
   return {
-    time: (date.getHours() << 11) | (date.getMinutes() << 5) | (date.getSeconds() >> 1),
     day:
       ((Math.max(1980, date.getFullYear()) - 1980) << 9) |
       ((date.getMonth() + 1) << 5) |
       date.getDate(),
+    time: (date.getHours() << 11) | (date.getMinutes() << 5) | (date.getSeconds() >> 1),
   };
 }
 
@@ -59,8 +59,8 @@ function buildZipEntry(entry: ZipEntry, offset: number, time: number, day: numbe
   central.writeUInt32LE(offset, 42);
 
   return {
-    files: [local, name, compressed],
     directory: [central, name],
+    files: [local, name, compressed],
     size: local.length + name.length + compressed.length,
   };
 }
@@ -89,7 +89,7 @@ function createZipArchive(entries: readonly ZipEntry[]): Buffer {
 }
 
 function writeZipArchiveImpl(filePath: string, entries: readonly ZipEntry[]): Promise<void> {
-  return writeFile({ path: filePath, data: createZipArchive(entries) });
+  return writeFile({ data: createZipArchive(entries), path: filePath });
 }
 
 export const writeZipArchive: {

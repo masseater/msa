@@ -1,13 +1,10 @@
 import { Effect } from "effect";
 
-import type {
-  AutocompleteItem,
-  AutocompleteSuggestions,
-  SlashCommand,
-} from "./autocomplete-types.ts";
-import { fuzzyFilter } from "./fuzzy.ts";
+import type autocompleteCommandsTypes from "./autocomplete-commands.types.ts";
+import type autocompleteTypesModule from "./autocomplete-types.ts";
+import fuzzy from "./fuzzy.ts";
 
-export type CommandEntry = SlashCommand | AutocompleteItem;
+const { fuzzyFilter } = fuzzy;
 
 interface CommandItem {
   name: string;
@@ -15,11 +12,11 @@ interface CommandItem {
   description: string | undefined;
 }
 
-function commandName(command: CommandEntry): string {
+function commandName(command: autocompleteCommandsTypes.CommandEntry): string {
   return "name" in command ? command.name : command.value;
 }
 
-function toCommandItem(command: CommandEntry): CommandItem {
+function toCommandItem(command: autocompleteCommandsTypes.CommandEntry): CommandItem {
   const name = commandName(command);
   const hint =
     "argumentHint" in command && command.argumentHint !== "" ? command.argumentHint : undefined;
@@ -27,9 +24,9 @@ function toCommandItem(command: CommandEntry): CommandItem {
   const fullDesc =
     hint !== undefined && hint !== "" ? (desc === "" ? hint : `${hint} — ${desc}`) : desc;
   return {
-    name,
-    label: name,
     description: fullDesc || undefined,
+    label: name,
+    name,
   };
 }
 
@@ -46,18 +43,16 @@ function matchCommandItems(items: CommandItem[], prefix: string): CommandItem[] 
   return [...bareNameMatches, ...fullNameOnlyMatches];
 }
 
-export interface CommandQuery {
-  commands: readonly CommandEntry[];
-  commandText: string;
-}
-
-export function getCommandNameSuggestions({
+function getCommandNameSuggestions({
   commands,
   commandText,
-}: CommandQuery): AutocompleteSuggestions | null {
+}: autocompleteCommandsTypes.CommandQuery): autocompleteTypesModule.AutocompleteSuggestions | null {
   const filtered = matchCommandItems(commands.map(toCommandItem), commandText.slice(1)).map(
     (item) => {
-      const suggestion: AutocompleteItem = { value: item.name, label: item.label };
+      const suggestion: autocompleteTypesModule.AutocompleteItem = {
+        label: item.label,
+        value: item.name,
+      };
       if (item.description !== undefined && item.description !== "")
         suggestion.description = item.description;
       return suggestion;
@@ -72,10 +67,10 @@ export function getCommandNameSuggestions({
   };
 }
 
-export function getCommandArgumentSuggestions({
+function getCommandArgumentSuggestions({
   commands,
   commandText,
-}: CommandQuery): Effect.Effect<AutocompleteSuggestions | null> {
+}: autocompleteCommandsTypes.CommandQuery): Effect.Effect<autocompleteTypesModule.AutocompleteSuggestions | null> {
   const spaceIndex = commandText.indexOf(" ");
   const name = commandText.slice(1, spaceIndex);
   const argumentText = commandText.slice(spaceIndex + 1);
@@ -98,3 +93,10 @@ export function getCommandArgumentSuggestions({
     ),
   );
 }
+
+const autocompleteCommands = {
+  getCommandArgumentSuggestions,
+  getCommandNameSuggestions,
+};
+
+export default autocompleteCommands;

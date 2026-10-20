@@ -1,9 +1,12 @@
 import { dual } from "effect/Function";
 
-import { overrideEnv } from "../src/env.ts";
-import { setKittyProtocolActive } from "../src/keys.ts";
-import { ProcessTerminal } from "../src/terminal.ts";
+import env from "../src/env.ts";
+import keys from "../src/keys.ts";
+import ProcessTerminal from "../src/terminal.ts";
 import type terminalHelpersTypes from "./terminal-helpers.types.ts";
+
+const { setKittyProtocolActive } = keys;
+const { overrideEnv } = env;
 
 function setupNegotiation(): terminalHelpersTypes.NegotiationHarness {
   const terminal = new ProcessTerminal();

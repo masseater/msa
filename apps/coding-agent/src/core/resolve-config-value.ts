@@ -53,7 +53,7 @@ function parseConfigValueTemplate(config: string): TemplatePart[] {
 
       const name = config.slice(dollarIndex + 2, endIndex);
       if (ENV_VAR_NAME_RE.test(name)) {
-        parts.push({ type: "env", name });
+        parts.push({ name, type: "env" });
       } else {
         appendLiteral(parts, config.slice(dollarIndex, endIndex + 1));
       }
@@ -63,7 +63,7 @@ function parseConfigValueTemplate(config: string): TemplatePart[] {
 
     const match = config.slice(dollarIndex + 1).match(ENV_VAR_NAME_PREFIX_RE);
     if (match !== null) {
-      parts.push({ type: "env", name: match[0] });
+      parts.push({ name: match[0], type: "env" });
       index = dollarIndex + 1 + match[0].length;
       continue;
     }
@@ -77,10 +77,10 @@ function parseConfigValueTemplate(config: string): TemplatePart[] {
 
 function parseConfigValueReference(config: string): ConfigValueReference {
   if (config.startsWith("!")) {
-    return { type: "command", config };
+    return { config, type: "command" };
   }
 
-  return { type: "template", parts: parseConfigValueTemplate(config) };
+  return { parts: parseConfigValueTemplate(config), type: "template" };
 }
 
 function resolveEnvConfigValue(name: string, env?: Record<string, string>): string | undefined {
@@ -161,9 +161,9 @@ function executeWithConfiguredShell(command: string): {
     const result = spawnSync(shell, commandFromStdin ? args : [...args, command], {
       encoding: "utf-8",
       input: commandFromStdin ? command : undefined,
-      timeout: 10000,
-      stdio: [commandFromStdin ? "pipe" : "ignore", "pipe", "ignore"],
       shell: false,
+      stdio: [commandFromStdin ? "pipe" : "ignore", "pipe", "ignore"],
+      timeout: 10000,
       windowsHide: true,
     });
 
@@ -190,8 +190,8 @@ function executeWithDefaultShell(command: string): string | undefined {
   try {
     const output = execSync(command, {
       encoding: "utf-8",
-      timeout: 10000,
       stdio: ["ignore", "pipe", "ignore"],
+      timeout: 10000,
     });
     return output.trim() || undefined;
   } catch {

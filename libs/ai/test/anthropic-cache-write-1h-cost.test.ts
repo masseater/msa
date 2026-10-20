@@ -2,11 +2,15 @@ import type Anthropic from "@anthropic-ai/sdk";
 import { Effect } from "effect";
 import { describe, expect, it } from "vite-plus/test";
 
-import { stream as streamAnthropic } from "../src/api/anthropic-messages.ts";
-import { normalizeContext } from "../src/compat.ts";
-import { currentTimeMillis } from "../src/utils/clock.ts";
+import anthropicMessages from "../src/api/anthropic-messages.ts";
+import compat from "../src/compat.ts";
+import clock from "../src/utils/clock.ts";
 import jsonCodec from "./json-codec.ts";
 import modelChoice from "./model-choice.ts";
+
+const { normalizeContext } = compat;
+const { currentTimeMillis } = clock;
+const { stream: streamAnthropic } = anthropicMessages;
 
 const { chooseModel, usesApi } = modelChoice;
 

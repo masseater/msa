@@ -6,7 +6,7 @@ import { prompts } from "./prompts.ts";
 import { type Runtime, nowMillis } from "./runtime.ts";
 import { snapshots } from "./snapshot.ts";
 import { store } from "./store.ts";
-import type { Note, ThreadRole, Task, TaskView } from "./types.ts";
+import type { Note, Task, TaskView, ThreadRole } from "./types.ts";
 import type { WorkerSession } from "./worker.ts";
 
 interface ThreadPlan {
@@ -89,7 +89,7 @@ function planThread(
     role === "worker"
       ? (task.thinkingLevel ?? defaults.workerThinkingLevel)
       : defaults.reviewThinkingLevel;
-  return { threadId, prompt, model, thinkingLevel, notes };
+  return { model, notes, prompt, thinkingLevel, threadId };
 }
 
 function failThread(
@@ -103,7 +103,7 @@ function failThread(
   store.updateThread(runtime.database, plan.threadId, { status: "failed" }, now);
   store.setTaskStatus(runtime.database, task.id, "failed", now);
   runtime.publish();
-  runtime.options.report(message, { taskId: task.id, role, status: "failed", started: [] });
+  runtime.options.report(message, { role, started: [], status: "failed", taskId: task.id });
 }
 
 function insertRunningThread(
@@ -115,21 +115,21 @@ function insertRunningThread(
 ): void {
   const database = runtime.database;
   store.insertThread(database, {
-    id: plan.threadId,
-    project: runtime.options.project,
-    model: plan.model,
-    thinkingLevel: plan.thinkingLevel ?? runtime.options.defaults().workerThinkingLevel,
-    cwd: task.cwd,
-    status: "running",
-    sessionFile: null,
     createdAt: now,
+    cwd: task.cwd,
+    id: plan.threadId,
+    model: plan.model,
+    project: runtime.options.project,
+    sessionFile: null,
+    status: "running",
+    thinkingLevel: plan.thinkingLevel ?? runtime.options.defaults().workerThinkingLevel,
     updatedAt: now,
   });
   store.insertAssignment(database, {
+    createdAt: now,
+    role,
     taskId: task.id,
     threadId: plan.threadId,
-    role,
-    createdAt: now,
   });
   store.setTaskStatus(database, task.id, "running", now);
   markRead(runtime, plan.notes, plan.threadId, now);
@@ -146,11 +146,12 @@ function openWorker(
     const thinkingLevel = plan.thinkingLevel ?? runtime.options.defaults().workerThinkingLevel;
     yield* Effect.sync(() => insertRunningThread(runtime, plan, task, role, now));
     const telemetry = runtime.telemetry.threadStarted(
-      { threadId: plan.threadId, role, model: plan.model, thinkingLevel },
+      { model: plan.model, role, thinkingLevel, threadId: plan.threadId },
       task,
     );
     const created = yield* Effect.result(
       Effect.tryPromise({
+        catch: orchestratorError,
         try: () =>
           runtime.options.createWorker({
             cwd: task.cwd,
@@ -158,7 +159,6 @@ function openWorker(
             thinkingLevel,
             telemetry,
           }),
-        catch: orchestratorError,
       }),
     );
     if (Result.isFailure(created)) {

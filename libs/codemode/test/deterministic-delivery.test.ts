@@ -1,10 +1,12 @@
 import { Clock, Effect } from "effect";
 import { describe, expect, it } from "vite-plus/test";
 
-import { CodemodeSandbox } from "../src/index.ts";
+import codemode from "../src/index.ts";
 import deterministicSupport from "./deterministic-support.ts";
 import type deterministicSupportTypes from "./deterministic-support.types.ts";
 import support from "./support.ts";
+
+const { CodemodeSandbox } = codemode;
 
 const { BACKENDS, STARTED_AT, remoteDelayingFirst, start, waitFor } = deterministicSupport;
 const { abortController } = support;

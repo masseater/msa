@@ -1,7 +1,7 @@
 import { Effect } from "effect";
 import { describe, expect, it, vi } from "vite-plus/test";
 
-import type { Model, SimpleStreamOptions } from "../src/types.ts";
+import type typesModule from "../src/types.types.ts";
 import openaiCompletionsToolChoiceSupport from "./openai-completions-tool-choice-support.ts";
 
 vi.mock("openai", () =>
@@ -17,7 +17,9 @@ const {
   resetMockStateBeforeEach,
 } = openaiCompletionsToolChoiceSupport;
 
-const providerOnlyToolChoice = { toolChoice: "required" } as unknown as SimpleStreamOptions;
+const providerOnlyToolChoice = {
+  toolChoice: "required",
+} as unknown as typesModule.SimpleStreamOptions;
 
 const forwardsToolChoice = () =>
   Effect.runPromise(
@@ -59,7 +61,7 @@ const omitsStrictWhenDisabled = () =>
     }),
   );
 
-const localModel: Model<"openai-completions"> = {
+const localModel: typesModule.Model<"openai-completions"> = {
   ...localOpenAICompletionsModel,
   id: "local-model",
   name: "Local Model",

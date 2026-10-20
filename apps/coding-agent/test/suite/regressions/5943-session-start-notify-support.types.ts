@@ -1,4 +1,4 @@
-import type { Container } from "@msa/tui";
+import type tuiTypes from "@msa/tui/index.types";
 
 import type { AgentSessionEvent } from "../../../src/core/agent-session.ts";
 
@@ -6,8 +6,8 @@ declare namespace SessionStartNotifySupportTypes {
   type LoadedResourcesResult<T> = { [K in keyof T]: T[K] } & { diagnostics: [] };
 
   type LoadedResourcesContext = {
-    loadedResourcesContainer: Container;
-    chatContainer: Container;
+    loadedResourcesContainer: tuiTypes.Container;
+    chatContainer: tuiTypes.Container;
     options: { verbose?: boolean };
     settingsManager: { getQuietStartup: () => boolean };
     sessionManager: { getCwd: () => string };

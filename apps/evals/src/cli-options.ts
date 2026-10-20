@@ -71,12 +71,12 @@ function readFilterOption(
 
 function parseArguments(args: readonly string[]): ParsedArguments {
   const parsed: ParsedArguments = {
-    provider: undefined,
-    model: undefined,
-    runsText: undefined,
     cliSelectedModel: false,
-    requestedFiles: [],
     discoveryArgs: [],
+    model: undefined,
+    provider: undefined,
+    requestedFiles: [],
+    runsText: undefined,
   };
   const remaining = args[Symbol.iterator]();
   for (let next = remaining.next(); next.done !== true; next = remaining.next()) {
@@ -99,7 +99,7 @@ function selectModel(parsed: ParsedArguments): { provider?: string; model?: stri
     if (provider === undefined || model === undefined) {
       throw new Error("CLI model selection requires both --provider and --model.");
     }
-    return { provider, model };
+    return { model, provider };
   }
   const envProvider = nonEmpty(readEnv("MSA_PROVIDER"));
   const envModel = nonEmpty(readEnv("MSA_MODEL"));
@@ -121,8 +121,8 @@ export function parseEvalCli(args: readonly string[]): EvalCliOptions {
   }
   return {
     ...selectModel(parsed),
-    runsPerVariant,
-    requestedFiles: parsed.requestedFiles,
     discoveryArgs: parsed.discoveryArgs,
+    requestedFiles: parsed.requestedFiles,
+    runsPerVariant,
   };
 }

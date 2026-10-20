@@ -1,10 +1,13 @@
 import type chordTypes from "@msa/chord/index.types";
-import { type CodemodeHostCall, toCodemodeIdentifier } from "@msa/codemode/portable";
+import portable from "@msa/codemode/portable";
+import type portableTypes from "@msa/codemode/portable.types";
 import { Function } from "effect";
 
 import type dualTypes from "../dual.ts";
 import search from "../search.ts";
 import type runDocsTypes from "./run-docs.types.ts";
+
+const { toCodemodeIdentifier } = portable;
 
 const { rankDocuments } = search;
 
@@ -71,11 +74,14 @@ function searchTools(
 
 const discover: dualTypes.Dual2<
   runDocsTypes.Start,
-  CodemodeHostCall,
+  portableTypes.CodemodeHostCall,
   chordTypes.JsonValue | undefined
 > = Function.dual(
   2,
-  (start: runDocsTypes.Start, call: CodemodeHostCall): chordTypes.JsonValue | undefined => {
+  (
+    start: runDocsTypes.Start,
+    call: portableTypes.CodemodeHostCall,
+  ): chordTypes.JsonValue | undefined => {
     const args = Array.isArray(call.args) ? call.args : [];
     const tools = start.tools.filter((tool) => tool.hidden !== true);
     if (call.name === "describeTool") {

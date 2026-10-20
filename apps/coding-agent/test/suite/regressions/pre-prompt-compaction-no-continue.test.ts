@@ -1,11 +1,14 @@
-import { type AssistantMessage, fauxAssistantMessage } from "@msa/ai";
+import ai from "@msa/ai";
+import type aiTypes from "@msa/ai/index.types";
 import testing from "@msa/testing";
 import { Effect } from "effect";
 import { afterEach, describe, expect, it, vi } from "vite-plus/test";
 
-import type { Model } from "../../../../../libs/ai/src/model-types.ts";
+import type modelTypesModule from "../../../../../libs/ai/src/model-types.ts";
 import harnessModule from "../harness.ts";
 import type harnessTypes from "../harness.types.ts";
+
+const { fauxAssistantMessage } = ai;
 
 const { createHarness, getUserTexts } = harnessModule;
 
@@ -59,10 +62,10 @@ const compactsLengthStopOverflowBeforeA = Effect.gen(function* () {
 const compactsLengthStopOverflowBeforeAStep1 = (
   harness: harnessTypes.Harness,
   now: number,
-  model: Model<string>,
+  model: modelTypesModule.Model<string>,
 ) =>
   Effect.gen(function* () {
-    const lengthStopAssistant: AssistantMessage = {
+    const lengthStopAssistant: aiTypes.AssistantMessage = {
       ...fauxAssistantMessage("length-stop assistant response", {
         stopReason: "length",
         timestamp: now - 500,

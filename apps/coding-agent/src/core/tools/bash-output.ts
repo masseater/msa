@@ -1,23 +1,25 @@
-import type { AgentToolResult } from "@msa/agent-core";
-import { Effect } from "effect";
+import type agentTypes from "@msa/agent-core/index.types";
 import type { Fiber } from "effect";
+import { Effect } from "effect";
 
 import {
-  currentTimeMillis,
   type ForeignError,
+  currentTimeMillis,
   fromPromise,
   platformRuntime,
 } from "../platform/index.ts";
 import type { OutputAccumulator, OutputSnapshot } from "./output-accumulator.ts";
 import { BASH_UPDATE_THROTTLE_MS } from "./renderers/bash.ts";
-import { DEFAULT_MAX_BYTES, formatSize, type TruncationResult } from "./truncate.ts";
+import { DEFAULT_MAX_BYTES, type TruncationResult, formatSize } from "./truncate.ts";
 
 export interface BashToolDetails {
   truncation?: TruncationResult | undefined;
   fullOutputPath?: string | undefined;
 }
 
-export type BashUpdateCallback = (partial: AgentToolResult<BashToolDetails | undefined>) => void;
+export type BashUpdateCallback = (
+  partial: agentTypes.AgentToolResult<BashToolDetails | undefined>,
+) => void;
 
 export class BashOutputReporter {
   private acceptingOutput = true;
@@ -61,10 +63,10 @@ export class BashOutputReporter {
   ): { text: string; details: BashToolDetails | undefined } {
     const { truncation } = snapshot;
     const base = snapshot.content === "" ? emptyText : snapshot.content;
-    if (!truncation.truncated) return { text: base, details: undefined };
+    if (!truncation.truncated) return { details: undefined, text: base };
     return {
+      details: { fullOutputPath: snapshot.fullOutputPath, truncation },
       text: base + this.truncationNotice(truncation, snapshot),
-      details: { truncation, fullOutputPath: snapshot.fullOutputPath },
     };
   }
 
@@ -74,10 +76,10 @@ export class BashOutputReporter {
     this.lastUpdateAt = currentTimeMillis();
     const snapshot = this.output.snapshot({ persistIfTruncated: true });
     this.onUpdate({
-      content: [{ type: "text", text: snapshot.content }],
+      content: [{ text: snapshot.content, type: "text" }],
       details: {
-        truncation: snapshot.truncation.truncated ? snapshot.truncation : undefined,
         fullOutputPath: snapshot.fullOutputPath,
+        truncation: snapshot.truncation.truncated ? snapshot.truncation : undefined,
       },
     });
   }

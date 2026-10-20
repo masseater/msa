@@ -1,4 +1,4 @@
-import { fauxAssistantMessage } from "@msa/ai";
+import ai from "@msa/ai";
 import { Effect } from "effect";
 import { afterEach, describe, expect, it, vi } from "vite-plus/test";
 
@@ -9,6 +9,8 @@ import { createMcpExtension } from "../../src/extensions/mcp/index.ts";
 import agentSessionMcpSupport from "./agent-session-mcp-support.ts";
 import harnessModule from "./harness.ts";
 import type harnessTypes from "./harness.types.ts";
+
+const { fauxAssistantMessage } = ai;
 
 const { createFakeServer } = agentSessionMcpSupport;
 

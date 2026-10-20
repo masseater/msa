@@ -1,4 +1,4 @@
-import type { ImageContent, TextContent, ToolCall } from "@msa/ai";
+import type aiTypes from "@msa/ai/index.types";
 import type chordTypes from "@msa/chord/index.types";
 import type outputTypes from "@msa/chord/output.types";
 
@@ -12,7 +12,7 @@ declare namespace toolTypesModule {
         parent: typesModule.TaskId;
         parentCallId: string;
         key: string;
-        call: ToolCall;
+        call: aiTypes.ToolCall;
         progress?: false;
       };
 
@@ -36,7 +36,7 @@ declare namespace toolTypesModule {
     typesModule.ToolHooks
   >;
 
-  type Content = (TextContent | ImageContent)[];
+  type Content = (aiTypes.TextContent | aiTypes.ImageContent)[];
 
   type Reported = {
     readonly output: outputTypes.OutputBuffer;

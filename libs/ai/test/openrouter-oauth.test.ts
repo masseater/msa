@@ -2,10 +2,14 @@ import { Effect } from "effect";
 import { Base64Url } from "effect/encoding";
 import { describe, expect, it } from "vite-plus/test";
 
-import { InMemoryCredentialStore } from "../src/auth/credential-store.ts";
-import { createModels } from "../src/models.ts";
-import { openrouterProvider } from "../src/providers/openrouter.ts";
+import credentialStore from "../src/auth/credential-store.ts";
+import modelsModule from "../src/models.ts";
+import openrouter from "../src/providers/openrouter.ts";
 import openrouterOauthSupport from "./openrouter-oauth-support.ts";
+
+const { openrouterProvider } = openrouter;
+const { InMemoryCredentialStore } = credentialStore;
+const { createModels } = modelsModule;
 
 const {
   callbackUrlOf,

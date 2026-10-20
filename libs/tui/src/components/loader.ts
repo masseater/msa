@@ -1,32 +1,31 @@
-import { type CancelDelay, runEvery } from "../delay.ts";
-import type { TUI } from "../tui-interface.ts";
-import { Text } from "./text.ts";
+import delay from "../delay.ts";
+import type delayTypes from "../delay.types.ts";
+import type tuiInterfaceTypes from "../tui-interface.types.ts";
+import type loaderTypes from "./loader.types.ts";
+import Text from "./text.ts";
 
-export interface LoaderIndicatorOptions {
-  frames?: string[];
-  intervalMs?: number;
-}
+const { runEvery } = delay;
 
 const DEFAULT_FRAMES = ["⠋", "⠙", "⠹", "⠸", "⠼", "⠴", "⠦", "⠧", "⠇", "⠏"];
 const DEFAULT_INTERVAL_MS = 80;
 
-export class Loader extends Text {
+export default class Loader extends Text {
   private frames = [...DEFAULT_FRAMES];
   private intervalMs = DEFAULT_INTERVAL_MS;
   private currentFrame = 0;
-  private cancelAnimation: CancelDelay | null = null;
-  private ui: TUI | null = null;
+  private cancelAnimation: delayTypes.CancelDelay | null = null;
+  private ui: tuiInterfaceTypes.TUI | null = null;
   private renderIndicatorVerbatim = false;
   private spinnerColorFn: (str: string) => string;
   private messageColorFn: (str: string) => string;
   private message: string = "Loading...";
 
   constructor(
-    ui: TUI,
+    ui: tuiInterfaceTypes.TUI,
     spinnerColorFn: (str: string) => string,
     messageColorFn: (str: string) => string,
     message: string = "Loading...",
-    indicator?: LoaderIndicatorOptions,
+    indicator?: loaderTypes.LoaderIndicatorOptions,
   ) {
     super("", 1, 0);
     this.ui = ui;
@@ -62,7 +61,7 @@ export class Loader extends Text {
     this.updateDisplay();
   }
 
-  setIndicator(indicator?: LoaderIndicatorOptions): void {
+  setIndicator(indicator?: loaderTypes.LoaderIndicatorOptions): void {
     this.renderIndicatorVerbatim = indicator !== undefined;
     this.frames = indicator?.frames === undefined ? [...DEFAULT_FRAMES] : [...indicator.frames];
     this.intervalMs =

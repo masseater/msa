@@ -3,7 +3,7 @@ import { Compile } from "typebox/compile";
 import type { TLocalizedValidationError } from "typebox/error";
 import { Value } from "typebox/value";
 
-import type { Tool, ToolCall } from "../types.ts";
+import type typesModule from "../types.types.ts";
 
 type SchemaValidator = ReturnType<typeof Compile>;
 
@@ -31,13 +31,13 @@ const isJsonObject = (value: unknown): value is Record<string, unknown> =>
   typeof value === "object" && value !== null && !Array.isArray(value);
 
 const JSON_TYPE_CHECKS: Readonly<Record<string, (value: unknown) => boolean>> = {
-  number: (value) => typeof value === "number",
-  integer: (value) => typeof value === "number" && Number.isInteger(value),
-  boolean: (value) => typeof value === "boolean",
-  string: (value) => typeof value === "string",
-  null: (value) => value === null,
   array: Array.isArray,
+  boolean: (value) => typeof value === "boolean",
+  integer: (value) => typeof value === "number" && Number.isInteger(value),
+  null: (value) => value === null,
+  number: (value) => typeof value === "number",
   object: isJsonObject,
+  string: (value) => typeof value === "string",
 };
 
 function matchesJsonType(value: unknown, type: string): boolean {
@@ -47,7 +47,7 @@ function matchesJsonType(value: unknown, type: string): boolean {
 function getValidator(schema: object): SchemaValidator {
   const cached = validatorCache.get(schema);
   if (cached !== undefined) return cached;
-  const validator = Compile(schema as Tool["parameters"]);
+  const validator = Compile(schema as typesModule.Tool["parameters"]);
   validatorCache.set(schema, validator);
   return validator;
 }
@@ -70,8 +70,8 @@ function coerceNumeric(value: unknown, accepts: (parsed: number) => boolean): un
   return value;
 }
 
-const BOOLEAN_STRINGS: Readonly<Record<string, boolean>> = { true: true, false: false };
-const BOOLEAN_NUMBERS: Readonly<Record<number, boolean>> = { 1: true, 0: false };
+const BOOLEAN_STRINGS: Readonly<Record<string, boolean>> = { false: false, true: true };
+const BOOLEAN_NUMBERS: Readonly<Record<number, boolean>> = { 0: false, 1: true };
 
 function coerceBoolean(value: unknown): unknown {
   if (value === null) return false;
@@ -91,11 +91,11 @@ function coerceString(value: unknown): unknown {
 }
 
 const PRIMITIVE_COERCIONS: Readonly<Record<string, (value: unknown) => unknown>> = {
-  number: (value) => coerceNumeric(value, Number.isFinite),
-  integer: (value) => coerceNumeric(value, Number.isInteger),
   boolean: coerceBoolean,
-  string: coerceString,
+  integer: (value) => coerceNumeric(value, Number.isInteger),
   null: (value) => (value === "" || value === 0 || value === false ? null : value),
+  number: (value) => coerceNumeric(value, Number.isFinite),
+  string: coerceString,
 };
 
 function coercePrimitiveByType(value: unknown, type: string): unknown {
@@ -208,10 +208,10 @@ function formatValidationPath(error: TLocalizedValidationError): string {
   return path === "" ? requiredProperty : `${path}.${requiredProperty}`;
 }
 
-export const validateToolCall: {
-  (toolCall: ToolCall): (tools: Tool[]) => any;
-  (tools: Tool[], toolCall: ToolCall): any;
-} = Function.dual(2, function (tools: Tool[], toolCall: ToolCall): any {
+const validateToolCall: {
+  (toolCall: typesModule.ToolCall): (tools: typesModule.Tool[]) => any;
+  (tools: typesModule.Tool[], toolCall: typesModule.ToolCall): any;
+} = Function.dual(2, function (tools: typesModule.Tool[], toolCall: typesModule.ToolCall): any {
   const tool = tools.find((t) => t.name === toolCall.name);
   if (tool === undefined) {
     throw new Error(`Tool "${toolCall.name}" not found`);
@@ -219,10 +219,10 @@ export const validateToolCall: {
   return validateToolArguments(tool, toolCall);
 });
 
-export const validateToolArguments: {
-  (toolCall: ToolCall): (tool: Tool) => any;
-  (tool: Tool, toolCall: ToolCall): any;
-} = Function.dual(2, function (tool: Tool, toolCall: ToolCall): any {
+const validateToolArguments: {
+  (toolCall: typesModule.ToolCall): (tool: typesModule.Tool) => any;
+  (tool: typesModule.Tool, toolCall: typesModule.ToolCall): any;
+} = Function.dual(2, function (tool: typesModule.Tool, toolCall: typesModule.ToolCall): any {
   if (toolCall.argumentsError !== undefined && toolCall.argumentsError !== "") {
     throw new Error(`Invalid arguments for tool "${toolCall.name}": ${toolCall.argumentsError}`);
   }
@@ -264,3 +264,10 @@ export const validateToolArguments: {
 
   throw new Error(errorMessage);
 });
+
+const validation = {
+  validateToolArguments,
+  validateToolCall,
+};
+
+export default validation;

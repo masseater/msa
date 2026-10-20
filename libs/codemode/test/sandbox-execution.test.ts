@@ -3,9 +3,11 @@ import vm from "node:vm";
 import { Effect } from "effect";
 import { afterEach, describe, expect, it } from "vite-plus/test";
 
-import { PRELUDE_SOURCE } from "../src/runtime/prelude-source.ts";
+import preludeSource from "../src/runtime/prelude-source.ts";
 import sandboxSupport from "./sandbox-support.ts";
 import support from "./support.ts";
+
+const { PRELUDE_SOURCE } = preludeSource;
 
 const { GIF, JPEG, PNG, WEBP, closeSandboxes, createSandbox, describeBackends, echo } =
   sandboxSupport;

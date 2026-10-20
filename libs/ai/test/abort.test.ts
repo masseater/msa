@@ -1,30 +1,26 @@
 import { Clock, Effect, Exit, Scope, Stream } from "effect";
 import { describe, expect, inject, it } from "vite-plus/test";
 
-import { complete, stream } from "../src/compat.ts";
-import type {
-  Api,
-  AssistantMessageEventStream,
-  Context,
-  Model,
-  StreamOptions,
-} from "../src/types.ts";
+import compatModule from "../src/compat.ts";
+import type typesModule from "../src/types.types.ts";
 import env from "./env.ts";
 import modelChoice from "./model-choice.ts";
 
+const { complete, stream } = compatModule;
+
 const { chooseModel, usesApi } = modelChoice;
 
-type StreamOptionsWithExtras = StreamOptions & Record<string, unknown>;
+type StreamOptionsWithExtras = typesModule.StreamOptions & Record<string, unknown>;
 
 const { envValue } = env;
 
 const openaiCodexToken = inject("storedApiKeys")["openai-codex"];
 
-const testAbortSignal = Effect.fn("testAbortSignal")(function* <TApi extends Api>(
-  llm: Model<TApi>,
+const testAbortSignal = Effect.fn("testAbortSignal")(function* <TApi extends typesModule.Api>(
+  llm: typesModule.Model<TApi>,
   options: StreamOptionsWithExtras = {},
 ) {
-  const context: Context = {
+  const context: typesModule.Context = {
     messages: [
       {
         content: "What is 15 + 27? Think step by step. Then list 50 first names.",
@@ -64,13 +60,13 @@ const testAbortSignal = Effect.fn("testAbortSignal")(function* <TApi extends Api
   yield* testAbortSignalStep1<TApi>(response, context, llm, options);
 });
 
-const testImmediateAbort = Effect.fn("testImmediateAbort")(function* <TApi extends Api>(
-  llm: Model<TApi>,
+const testImmediateAbort = Effect.fn("testImmediateAbort")(function* <TApi extends typesModule.Api>(
+  llm: typesModule.Model<TApi>,
   options: StreamOptionsWithExtras = {},
 ) {
   const signal = AbortSignal.abort();
 
-  const context: Context = {
+  const context: typesModule.Context = {
     messages: [{ content: "Hello", role: "user", timestamp: yield* Clock.currentTimeMillis }],
   };
 
@@ -84,7 +80,7 @@ describe("AI Providers Abort Tests", () => {
     () => {
       const { compat: _compat, ...baseModel } = chooseModel("openai", "direct OpenAI");
       void _compat;
-      const llm: Model<"openai-completions"> = {
+      const llm: typesModule.Model<"openai-completions"> = {
         ...baseModel,
         api: "openai-completions",
       };
@@ -147,10 +143,10 @@ describe("AI Providers Abort Tests", () => {
   });
 });
 
-function* testAbortSignalStep1<TApi extends Api>(
-  response: AssistantMessageEventStream,
-  context: Context,
-  llm: Model<TApi>,
+function* testAbortSignalStep1<TApi extends typesModule.Api>(
+  response: typesModule.AssistantMessageEventStream,
+  context: typesModule.Context,
+  llm: typesModule.Model<TApi>,
   options: StreamOptionsWithExtras,
 ) {
   const msg = yield* Effect.promise(() => response.result());

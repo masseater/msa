@@ -1,6 +1,8 @@
 import { Console, Effect, Fiber, Schema } from "effect";
 
-import { CodemodeSandbox } from "../../src/runtime/host.ts";
+import host from "../../src/runtime/host.ts";
+
+const { CodemodeSandbox } = host;
 
 const how = process.argv[2];
 if (how !== "abort" && how !== "timeout" && how !== "close")

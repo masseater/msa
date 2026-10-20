@@ -1,16 +1,5 @@
-import {
-  type Component,
-  Container,
-  type Focusable,
-  Input,
-  type SelectItem,
-  SelectList,
-  Spacer,
-  Text,
-  type TUI,
-  truncateToWidth,
-  visibleWidth,
-} from "@msa/tui";
+import tuiModule from "@msa/tui";
+import type tuiTypes from "@msa/tui/index.types";
 import { Effect } from "effect";
 import { dual } from "effect/Function";
 
@@ -20,9 +9,11 @@ import type { KeybindingsManager } from "../../core/keybindings.ts";
 import { AuthUrlComponent } from "../../modes/interactive/components/auth-url.ts";
 import { DynamicBorder } from "../../modes/interactive/components/dynamic-border.ts";
 import { keyHint } from "../../modes/interactive/components/keybinding-hints.ts";
-import { getSelectListTheme, type Theme } from "../../modes/interactive/theme/theme.ts";
+import { type Theme, getSelectListTheme } from "../../modes/interactive/theme/theme.ts";
 import { toErrorMessage } from "../../utils/errors.ts";
 import { callbackPromise } from "../../utils/interop.ts";
+
+const { Container, Input, SelectList, Spacer, Text, truncateToWidth, visibleWidth } = tuiModule;
 
 export interface McpMenu {
   title: string;
@@ -30,7 +21,7 @@ export interface McpMenu {
   details?: string | undefined;
 
   error?: string | undefined;
-  items: SelectItem[];
+  items: tuiTypes.SelectItem[];
 
   empty?: string | undefined;
 
@@ -56,7 +47,12 @@ export interface McpUi {
   ): Promise<string | undefined>;
 }
 
-function frame(theme: Theme, title: string, body: Component[], footer?: string): Container {
+function frame(
+  theme: Theme,
+  title: string,
+  body: tuiTypes.Component[],
+  footer?: string,
+): tuiTypes.Container {
   const container = new Container();
   container.addChild(new DynamicBorder((text: string) => theme.fg("accent", text)));
   container.addChild(new Text(theme.fg("accent", theme.bold(title)), 1, 0));
@@ -71,16 +67,16 @@ function frame(theme: Theme, title: string, body: Component[], footer?: string):
 
 const MAX_VISIBLE_ITEMS = 12;
 
-export class McpManagerView implements McpUi, Component, Focusable {
-  private readonly tui: TUI;
+export class McpManagerView implements McpUi, tuiTypes.Component, tuiTypes.Focusable {
+  private readonly tui: tuiTypes.TUI;
   private readonly theme: Theme;
   private readonly keybindings: KeybindingsManager;
-  private content: Container;
+  private content: tuiTypes.Container;
   private inputHandler: ((data: string) => void) | undefined;
-  private inputTarget: Focusable | undefined;
+  private inputTarget: tuiTypes.Focusable | undefined;
   private isFocused = false;
 
-  constructor(tui: TUI, theme: Theme, keybindings: KeybindingsManager) {
+  constructor(tui: tuiTypes.TUI, theme: Theme, keybindings: KeybindingsManager) {
     this.tui = tui;
     this.theme = theme;
     this.keybindings = keybindings;
@@ -97,9 +93,9 @@ export class McpManagerView implements McpUi, Component, Focusable {
   }
 
   private setContent(
-    content: Container,
+    content: tuiTypes.Container,
     inputHandler?: (data: string) => void,
-    inputTarget?: Focusable,
+    inputTarget?: tuiTypes.Focusable,
   ): void {
     if (this.inputTarget !== undefined) this.inputTarget.focused = false;
     this.content = content;
@@ -126,7 +122,7 @@ export class McpManagerView implements McpUi, Component, Focusable {
       const render = () => {
         const menu = build();
         const wanted = selected ?? menu.selected;
-        const body: Component[] = [];
+        const body: tuiTypes.Component[] = [];
         if (menu.details !== undefined && menu.details !== "")
           body.push(new Text(this.theme.fg("muted", menu.details), 1, 0));
         if (menu.error !== undefined && menu.error !== "")
@@ -203,7 +199,7 @@ export class McpManagerView implements McpUi, Component, Focusable {
       signal.addEventListener("abort", onAbort, { once: true });
       const input = new Input();
       const link = new AuthUrlComponent(this.tui, authorizationUrl);
-      const body: Component[] = [
+      const body: tuiTypes.Component[] = [
         new Spacer(1),
         new Text(
           this.theme.fg("muted", "Approve access in your browser. If it did not open, visit:"),

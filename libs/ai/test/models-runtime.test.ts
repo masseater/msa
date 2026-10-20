@@ -1,11 +1,15 @@
 import { Effect } from "effect";
 import { describe, expect, it } from "vite-plus/test";
 
-import { InMemoryCredentialStore } from "../src/auth/credential-store.ts";
-import { calculateCost, createModels, hasApi } from "../src/models.ts";
-import type { Model, Usage } from "../src/types.ts";
-import { currentTimeMillis } from "../src/utils/clock.ts";
+import credentialStore from "../src/auth/credential-store.ts";
+import modelsModule from "../src/models.ts";
+import type typesModule from "../src/types.types.ts";
+import clock from "../src/utils/clock.ts";
 import modelsRuntimeSupport from "./models-runtime-support.ts";
+
+const { InMemoryCredentialStore } = credentialStore;
+const { currentTimeMillis } = clock;
+const { calculateCost, createModels, hasApi } = modelsModule;
 
 const { storeCredential, testModel, testProvider } = modelsRuntimeSupport;
 const enumeratesCredentialMetadataWithoutExposingSecrets = () =>
@@ -44,7 +48,7 @@ const appliesRequestWidePricingTiersAbove = () => {
       },
     ],
   };
-  const createUsage = (cacheWrite: number): Usage => ({
+  const createUsage = (cacheWrite: number): typesModule.Usage => ({
     cacheRead: 72000,
     cacheWrite,
     cost: { cacheRead: 0, cacheWrite: 0, input: 0, output: 0, total: 0 },
@@ -98,7 +102,7 @@ const listsAndFindsModelsPerProvider = () => {
   expect(found && hasApi(found, "openai-completions")).toBe(false);
   expect(found && hasApi(found, "test-api")).toBe(true);
   if (found !== undefined && hasApi(found, "test-api")) {
-    const typed: Model<"test-api"> = found;
+    const typed: typesModule.Model<"test-api"> = found;
     expect(typed.id).toBe("m3");
   }
 

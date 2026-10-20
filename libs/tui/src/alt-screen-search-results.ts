@@ -1,33 +1,16 @@
 import { dual } from "effect/Function";
 
-import type { AltScreenSearchMatch } from "./alt-screen-search.ts";
-import type { ScrollView } from "./components/scroll-view.ts";
-import { getScrollbarGeometry, type LayoutBox } from "./layout.ts";
-import { isImageLine } from "./terminal-image-kitty.ts";
-import { sliceByColumn } from "./text-slice.ts";
-import { extractAnsiCode, visibleWidth } from "./utils.ts";
+import type altScreenSearchResultsTypes from "./alt-screen-search-results.types.ts";
+import type altScreenSearchTypes from "./alt-screen-search.types.ts";
+import layout from "./layout.ts";
+import terminalImageKitty from "./terminal-image-kitty.ts";
+import textSlice from "./text-slice.ts";
+import utils from "./utils.ts";
 
-export type SearchSelectionMode = "query" | "retain" | "next" | "previous";
-
-export interface SearchSelectionState {
-  selectionMode: SearchSelectionMode;
-  anchorRow: number;
-  selectedIndex: number;
-}
-
-export interface SearchHighlightStyles {
-  match: (text: string) => string;
-  current: (text: string) => string;
-}
-
-export interface SearchHighlightRequest {
-  matches: readonly AltScreenSearchMatch[];
-  selectedIndex: number;
-  box: LayoutBox;
-  scrollView: ScrollView;
-  columns: number;
-  styles: SearchHighlightStyles;
-}
+const { extractAnsiCode, visibleWidth } = utils;
+const { getScrollbarGeometry } = layout;
+const { sliceByColumn } = textSlice;
+const { isImageLine } = terminalImageKitty;
 
 interface SearchHighlightRange {
   startCol: number;
@@ -35,17 +18,17 @@ interface SearchHighlightRange {
   current: boolean;
 }
 
-function firstRow(match: AltScreenSearchMatch): number {
+function firstRow(match: altScreenSearchTypes.AltScreenSearchMatch): number {
   return match.segments[0]?.row ?? 0;
 }
 
-function lastRow(match: AltScreenSearchMatch): number {
+function lastRow(match: altScreenSearchTypes.AltScreenSearchMatch): number {
   return match.segments[match.segments.length - 1]?.row ?? -1;
 }
 
 function lowerBound(
-  matches: readonly AltScreenSearchMatch[],
-  isBefore: (match: AltScreenSearchMatch) => boolean,
+  matches: readonly altScreenSearchTypes.AltScreenSearchMatch[],
+  isBefore: (match: altScreenSearchTypes.AltScreenSearchMatch) => boolean,
 ): number {
   let low = 0;
   let high = matches.length;
@@ -57,27 +40,31 @@ function lowerBound(
   return low;
 }
 
-function steppedIndex(state: SearchSelectionState, count: number, exactIndex: number): number {
+function steppedIndex(
+  state: altScreenSearchResultsTypes.SearchSelectionState,
+  count: number,
+  exactIndex: number,
+): number {
   const baseIndex = exactIndex >= 0 ? exactIndex : Math.min(state.selectedIndex, count - 1);
   if (state.selectionMode === "next") return baseIndex < 0 ? 0 : (baseIndex + 1) % count;
   return baseIndex < 0 ? count - 1 : (baseIndex - 1 + count) % count;
 }
 
-export const chooseSearchIndex: {
+const chooseSearchIndex: {
   (
-    state: SearchSelectionState,
-    matches: readonly AltScreenSearchMatch[],
+    state: altScreenSearchResultsTypes.SearchSelectionState,
+    matches: readonly altScreenSearchTypes.AltScreenSearchMatch[],
     exactIndex: number,
   ): number;
   (
-    matches: readonly AltScreenSearchMatch[],
+    matches: readonly altScreenSearchTypes.AltScreenSearchMatch[],
     exactIndex: number,
-  ): (state: SearchSelectionState) => number;
+  ): (state: altScreenSearchResultsTypes.SearchSelectionState) => number;
 } = dual(
   3,
   (
-    state: SearchSelectionState,
-    matches: readonly AltScreenSearchMatch[],
+    state: altScreenSearchResultsTypes.SearchSelectionState,
+    matches: readonly altScreenSearchTypes.AltScreenSearchMatch[],
     exactIndex: number,
   ): number => {
     if (matches.length === 0) return -1;
@@ -118,7 +105,7 @@ function highlightSearchText(text: string, style: (text: string) => string): str
 
 function collectRanges(
   screenLength: number,
-  request: SearchHighlightRequest,
+  request: altScreenSearchResultsTypes.SearchHighlightRequest,
 ): Map<number, SearchHighlightRange[]> {
   const { box, scrollView, matches } = request;
   const scrollbarColumn = getScrollbarGeometry(box)?.column;
@@ -145,7 +132,7 @@ function collectRanges(
       const endCol = Math.min(maxColumn, box.rect.x + segment.endCol);
       if (endCol <= startCol) continue;
       const ranges = rangesByRow.get(row) ?? [];
-      ranges.push({ startCol, endCol, current: matchIndex === request.selectedIndex });
+      ranges.push({ current: matchIndex === request.selectedIndex, endCol, startCol });
       rangesByRow.set(row, ranges);
     }
   }
@@ -155,7 +142,7 @@ function collectRanges(
 function paintRanges(
   line: string,
   ranges: SearchHighlightRange[],
-  styles: SearchHighlightStyles,
+  styles: altScreenSearchResultsTypes.SearchHighlightStyles,
 ): string {
   const lineWidth = visibleWidth(line);
   let result = line;
@@ -172,15 +159,33 @@ function paintRanges(
   return result;
 }
 
-export const highlightSearchMatches: {
-  (screen: readonly string[], request: SearchHighlightRequest): string[];
-  (request: SearchHighlightRequest): (screen: readonly string[]) => string[];
-} = dual(2, (screen: readonly string[], request: SearchHighlightRequest): string[] => {
-  const result = [...screen];
-  for (const [row, ranges] of collectRanges(screen.length, request)) {
-    const line = result[row] ?? "";
-    if (isImageLine(line)) continue;
-    result[row] = paintRanges(line, ranges, request.styles);
-  }
-  return result;
-});
+const highlightSearchMatches: {
+  (
+    screen: readonly string[],
+    request: altScreenSearchResultsTypes.SearchHighlightRequest,
+  ): string[];
+  (
+    request: altScreenSearchResultsTypes.SearchHighlightRequest,
+  ): (screen: readonly string[]) => string[];
+} = dual(
+  2,
+  (
+    screen: readonly string[],
+    request: altScreenSearchResultsTypes.SearchHighlightRequest,
+  ): string[] => {
+    const result = [...screen];
+    for (const [row, ranges] of collectRanges(screen.length, request)) {
+      const line = result[row] ?? "";
+      if (isImageLine(line)) continue;
+      result[row] = paintRanges(line, ranges, request.styles);
+    }
+    return result;
+  },
+);
+
+const altScreenSearchResults = {
+  chooseSearchIndex,
+  highlightSearchMatches,
+};
+
+export default altScreenSearchResults;

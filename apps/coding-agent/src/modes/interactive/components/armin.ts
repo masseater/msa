@@ -1,7 +1,7 @@
-import type { Component, TUI } from "@msa/tui";
+import type tuiTypes from "@msa/tui/index.types";
 import { dual } from "effect/Function";
 
-import { randomUnit, type Scheduled } from "../../../core/platform.ts";
+import { type Scheduled, randomUnit } from "../../../core/platform.ts";
 import { every } from "../../interval.ts";
 import { theme } from "../theme/theme.ts";
 
@@ -70,8 +70,8 @@ function buildFinalGrid(): string[][] {
   return grid;
 }
 
-export class ArminComponent implements Component {
-  private ui: TUI;
+export class ArminComponent implements tuiTypes.Component {
+  private ui: tuiTypes.TUI;
   private interval: Scheduled | null = null;
   private effect: Effect;
   private finalGrid: string[][];
@@ -82,7 +82,7 @@ export class ArminComponent implements Component {
   private gridVersion = 0;
   private cachedVersion = -1;
 
-  constructor(ui: TUI) {
+  constructor(ui: tuiTypes.TUI) {
     this.ui = ui;
     this.effect = EFFECTS[Math.floor(randomUnit() * EFFECTS.length)] ?? "typewriter";
     this.finalGrid = buildFinalGrid();
@@ -135,8 +135,8 @@ export class ArminComponent implements Component {
       case "rain":
         this.effectState = {
           drops: Array.from({ length: WIDTH }, () => ({
-            y: -Math.floor(randomUnit() * DISPLAY_HEIGHT * 2),
             settled: 0,
+            y: -Math.floor(randomUnit() * DISPLAY_HEIGHT * 2),
           })),
         };
         break;
@@ -148,14 +148,14 @@ export class ArminComponent implements Component {
           }
         }
         shuffle(positions);
-        this.effectState = { positions, idx: 0 };
+        this.effectState = { idx: 0, positions };
         break;
       }
       case "crt":
         this.effectState = { expansion: 0 };
         break;
       case "glitch":
-        this.effectState = { phase: 0, glitchFrames: 8 };
+        this.effectState = { glitchFrames: 8, phase: 0 };
         break;
       case "dissolve": {
         this.currentGrid = Array.from({ length: DISPLAY_HEIGHT }, () =>
@@ -171,7 +171,7 @@ export class ArminComponent implements Component {
           }
         }
         shuffle(dissolvePositions);
-        this.effectState = { positions: dissolvePositions, idx: 0 };
+        this.effectState = { idx: 0, positions: dissolvePositions };
         break;
       }
     }

@@ -1,19 +1,18 @@
-import {
-  type AssistantMessage,
-  type Message,
-  type SimpleStreamOptions,
-  fauxAssistantMessage,
-} from "@msa/ai";
+import ai from "@msa/ai";
+import type aiTypes from "@msa/ai/index.types";
 import durable from "@msa/durable";
 import memory from "@msa/durable/storage/memory";
 import { Effect } from "effect";
 import { describe, expect, it } from "vite-plus/test";
 
-import chatSupport from "./chat-support.ts";
 import type chatSupportTypes from "./chat-support.types.ts";
-import effectSupport from "./effect-support.ts";
+import harnessGenerationPartKit from "./harness-generation-part-kit.ts";
 import harnessGenerationSupport from "./harness-generation-support.ts";
 import sessionSupport from "./session-support.ts";
+
+const { chatSupport, effectSupport } = harnessGenerationPartKit;
+
+const { fauxAssistantMessage } = ai;
 
 const { MemoryStorage } = memory;
 const { AssistantEntry, ProviderDoc } = durable;
@@ -62,7 +61,8 @@ const convertsCommittedPartial = Effect.gen(function* () {
   yield* waitFor(
     Effect.gen(function* () {
       return (
-        textOf((yield* awaited(live(harness, root)))?.generation?.message as Message) !== undefined
+        textOf((yield* awaited(live(harness, root)))?.generation?.message as aiTypes.Message) !==
+        undefined
       );
     }),
   );
@@ -74,9 +74,9 @@ const convertsCommittedPartial = Effect.gen(function* () {
   });
   const entries = yield* allEntries(root);
   expect(entries.map((entry) => entry.kind)).toEqual(["msa.user", "msa.assistant"]);
-  const converted = entries[1]!.model![0] as AssistantMessage;
+  const converted = entries[1]!.model![0] as aiTypes.AssistantMessage;
   expect(converted.stopReason).toBe("aborted");
-  expect(textOf(converted)!.startsWith(textOf(partial as Message)!)).toBe(true);
+  expect(textOf(converted)!.startsWith(textOf(partial as aiTypes.Message)!)).toBe(true);
   expect(yield* awaited(live(harness, root))).toEqual({});
   expect((yield* awaited(harness.waitForTask(taskId, context))).state.outcome).toEqual({
     status: "aborted",
@@ -154,7 +154,7 @@ describe("generation", () => {
 
 const forwardsStreamOptions = Effect.gen(function* () {
   const setup = chatSetup();
-  const seen: (SimpleStreamOptions | undefined)[] = [];
+  const seen: (aiTypes.SimpleStreamOptions | undefined)[] = [];
   setup.faux.setResponses([
     (_context, options) => {
       seen.push(options);

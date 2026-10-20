@@ -9,13 +9,8 @@ class InvalidDurationError extends Data.TaggedError("InvalidDurationError")<{
 
 export default function (msa: ExtensionAPI) {
   msa.registerTool({
-    name: "parse_duration",
-    label: "Parse Duration",
     description:
       "Parse a human-readable duration string (e.g., '2 days', '1h', '5m') to milliseconds",
-    parameters: Type.Object({
-      duration: Type.String({ description: "Duration string like '2 days', '1h', '5m'" }),
-    }),
     execute: (_toolCallId, params) =>
       Effect.runPromise(
         Effect.gen(function* () {
@@ -31,5 +26,10 @@ export default function (msa: ExtensionAPI) {
           };
         }),
       ),
+    label: "Parse Duration",
+    name: "parse_duration",
+    parameters: Type.Object({
+      duration: Type.String({ description: "Duration string like '2 days', '1h', '5m'" }),
+    }),
   });
 }

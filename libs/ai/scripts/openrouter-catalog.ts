@@ -1,8 +1,10 @@
 import { Function } from "effect";
 
-import { openRouterCost } from "../src/providers/openrouter-api.ts";
+import openrouterApi from "../src/providers/openrouter-api.ts";
 import type openrouterCatalogTypes from "./openrouter-catalog.types.ts";
 import getOpenRouterThinkingLevelMap from "./openrouter-reasoning-options.ts";
+
+const { openRouterCost } = openrouterApi;
 
 function modalities(values: string[] | undefined): ("text" | "image")[] {
   return Array.from(

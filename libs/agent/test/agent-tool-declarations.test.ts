@@ -1,14 +1,20 @@
-import { type TranscriptContext, getCurrentSystemMessage, toToolDeclaration } from "@msa/ai";
+import ai from "@msa/ai";
+import type aiTypes from "@msa/ai/index.types";
 import { Effect } from "effect";
 import { Type } from "typebox";
 import { describe, expect, it } from "vite-plus/test";
 
-import { Agent, type AgentTool } from "../src/index.ts";
+import agentModule from "../src/index.ts";
+import type agentTypes from "../src/index.types.ts";
 import fixtures from "./support/fixtures.ts";
+
+const { getCurrentSystemMessage, toToolDeclaration } = ai;
+
+const { Agent } = agentModule;
 
 const { respond, textMessage } = fixtures;
 
-const createTool = (name: string): AgentTool => ({
+const createTool = (name: string): agentTypes.AgentTool => ({
   description: `${name} tool`,
   execute: () => Promise.resolve({ content: [{ text: name, type: "text" }], details: {} }),
   label: name,
@@ -16,7 +22,7 @@ const createTool = (name: string): AgentTool => ({
   parameters: Type.Object({}),
 });
 
-const declarations = (context: TranscriptContext): string[] =>
+const declarations = (context: aiTypes.TranscriptContext): string[] =>
   context.messages.flatMap((message) =>
     message.role === "system"
       ? [
@@ -60,7 +66,11 @@ const declaresChanges = Effect.gen(function* () {
 });
 
 const mergesIntoPending = Effect.gen(function* () {
-  const echo: AgentTool = { ...createTool("echo"), description: "Echo input", label: "Echo" };
+  const echo: agentTypes.AgentTool = {
+    ...createTool("echo"),
+    description: "Echo input",
+    label: "Echo",
+  };
   const agent = new Agent({
     initialState: { systemPrompt: "You are helpful." },
     streamFn: (_model, context) => {

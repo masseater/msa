@@ -1,9 +1,12 @@
-import { type CredentialStore, type Provider, createModels } from "@msa/ai";
+import ai from "@msa/ai";
+import type aiTypes from "@msa/ai/index.types";
 import testing from "@msa/testing";
 import { Effect } from "effect";
 import { afterEach, beforeEach, describe, expect, test, vi } from "vite-plus/test";
 
 import { AuthStorage } from "../src/core/auth-storage.ts";
+
+const { createModels } = ai;
 
 const {
   abortController,
@@ -93,7 +96,7 @@ const translatesACredentialStoreRefreshFailureAndPart1 = () =>
       },
     });
     let failNextModify = true;
-    const credentials: CredentialStore = {
+    const credentials: aiTypes.CredentialStore = {
       delete: (id) => base.delete(id),
       list: () => base.list(),
       modify: (id, fn) => {
@@ -113,7 +116,7 @@ const translatesACredentialStoreRefreshFailureAnd = () =>
     Effect.gen(function* () {
       const { credentials, effectRunPromise, providerId } =
         yield* translatesACredentialStoreRefreshFailureAndPart1();
-      const provider: Provider = {
+      const provider: aiTypes.Provider = {
         auth: {
           oauth: {
             login: () =>

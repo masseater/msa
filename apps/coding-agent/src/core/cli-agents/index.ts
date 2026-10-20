@@ -1,9 +1,9 @@
-import type { Provider } from "@msa/ai";
+import type aiTypes from "@msa/ai/index.types";
 
 import { claudeCodeProviders } from "./claude-code.ts";
 import { openCodeProvider } from "./opencode.ts";
 
-export function cliAgentProviders(): Provider[] {
+export function cliAgentProviders(): aiTypes.Provider[] {
   return [openCodeProvider(), ...claudeCodeProviders()];
 }
 

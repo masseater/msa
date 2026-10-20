@@ -5,11 +5,14 @@ import { type TestContext, describe, it } from "node:test";
 
 import { Effect, Fiber } from "effect";
 
-import { runAfter } from "../src/delay.ts";
-import { pathOperations } from "../src/platform.ts";
+import delay from "../src/delay.ts";
+import platform from "../src/platform.ts";
 import nativeClipboardLinuxHelpers from "./native-clipboard-linux-helpers.ts";
 import type nativeClipboardLinuxHelpersTypes from "./native-clipboard-linux-helpers.types.ts";
 import testPlatform from "./test-platform.ts";
+
+const { pathOperations } = platform;
+const { runAfter } = delay;
 
 const {
   withDependencies,

@@ -1,5 +1,5 @@
-import type { AgentTool } from "@msa/agent-core";
-import { fauxAssistantMessage, fauxToolCall } from "@msa/ai";
+import type agentTypes from "@msa/agent-core/index.types";
+import ai from "@msa/ai";
 import testing from "@msa/testing";
 import { Effect } from "effect";
 import { Type } from "typebox";
@@ -9,6 +9,8 @@ import agentSessionCompaction4Support from "./agent-session-compaction-4-support
 import agentSessionCompactionSupport from "./agent-session-compaction-support.ts";
 import harnessModule from "./harness.ts";
 import type harnessTypes from "./harness.types.ts";
+
+const { fauxAssistantMessage, fauxToolCall } = ai;
 
 const { afterEachHook4 } = agentSessionCompaction4Support;
 
@@ -21,7 +23,7 @@ const { gate } = testing;
 const includesSteeringQueuedDuringCompactionInPart1 = () =>
   Effect.gen(function* () {
     const runPromise = Effect.runPromiseWith(yield* Effect.context<never>());
-    const largeTool: AgentTool = {
+    const largeTool: agentTypes.AgentTool = {
       description: "Returns enough content to cross the compaction threshold",
       execute: () =>
         Promise.resolve({
@@ -93,7 +95,7 @@ const includesSteeringQueuedDuringCompactionIn = Effect.gen(function* () {
 });
 
 const doesNotCompactAfterATerminating = Effect.gen(function* () {
-  const terminatingTool: AgentTool = {
+  const terminatingTool: agentTypes.AgentTool = {
     description: "Returns enough content to cross the compaction threshold, then terminates",
     execute: () =>
       Promise.resolve({
@@ -108,7 +110,7 @@ const doesNotCompactAfterATerminating = Effect.gen(function* () {
   return yield* doesNotCompactAfterATerminatingStep1(terminatingTool);
 });
 
-const doesNotCompactAfterATerminatingStep1 = (terminatingTool: AgentTool<any, any>) =>
+const doesNotCompactAfterATerminatingStep1 = (terminatingTool: agentTypes.AgentTool<any, any>) =>
   Effect.gen(function* () {
     const harness = yield* Effect.promise(() =>
       createHarness({

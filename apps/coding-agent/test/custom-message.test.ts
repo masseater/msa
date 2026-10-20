@@ -1,5 +1,5 @@
 import testing from "@msa/testing";
-import { Text } from "@msa/tui";
+import tui from "@msa/tui";
 import { describe, expect, test } from "vite-plus/test";
 
 import type { MessageRenderOptions, MessageRenderer } from "../src/core/extensions/types.ts";
@@ -7,6 +7,8 @@ import type { CustomMessage } from "../src/core/messages.ts";
 import { CustomMessageComponent } from "../src/modes/interactive/components/custom-message.ts";
 import { initTheme } from "../src/modes/interactive/theme/theme.ts";
 import { stripAnsi } from "../src/utils/ansi.ts";
+
+const { Text } = tui;
 
 const { currentTimeMillis } = testing;
 

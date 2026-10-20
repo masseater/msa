@@ -1,46 +1,45 @@
-import { createProvider } from "../models.ts";
-import { createFauxCore } from "./faux-core.ts";
-import type { FauxProviderHandle, RegisterFauxProviderOptions } from "./faux-types.ts";
+import modelsModule from "../models.ts";
+import fauxCore from "./faux-core.ts";
+import fauxMessages from "./faux-messages.ts";
+import type fauxTypesModule from "./faux-types.ts";
 
-export { createFauxCore } from "./faux-core.ts";
-export {
-  type FauxContentBlock,
-  fauxAssistantMessage,
-  fauxText,
-  fauxThinking,
-  fauxToolCall,
-} from "./faux-messages.ts";
-export type {
-  FauxModelDefinition,
-  FauxProviderHandle,
-  FauxProviderRegistration,
-  FauxProviderState,
-  FauxResponseFactory,
-  FauxResponseStep,
-  RegisterFauxProviderOptions,
-} from "./faux-types.ts";
+const { createFauxCore } = fauxCore;
+const { createProvider } = modelsModule;
 
-export function fauxProvider(options: RegisterFauxProviderOptions = {}): FauxProviderHandle {
+function fauxProvider(
+  options: fauxTypesModule.RegisterFauxProviderOptions = {},
+): fauxTypesModule.FauxProviderHandle {
   const core = createFauxCore(options);
   const provider = createProvider({
-    id: core.provider,
-    auth: { apiKey: { name: "Faux", resolve: () => Promise.resolve({ auth: {} }) } },
-    models: core.models,
     api: {
+      cancelDeferred: core.cancelDeferred,
+      fetchDeferred: core.fetchDeferred,
       stream: core.stream,
       streamSimple: core.streamSimple,
-      fetchDeferred: core.fetchDeferred,
-      cancelDeferred: core.cancelDeferred,
     },
+    auth: { apiKey: { name: "Faux", resolve: () => Promise.resolve({ auth: {} }) } },
+    id: core.provider,
+    models: core.models,
   });
   return {
-    provider,
     api: core.api,
-    models: core.models,
-    getModel: core.getModel,
-    state: core.state,
-    setResponses: core.setResponses,
     appendResponses: core.appendResponses,
+    getModel: core.getModel,
     getPendingResponseCount: core.getPendingResponseCount,
+    models: core.models,
+    provider,
+    setResponses: core.setResponses,
+    state: core.state,
   };
 }
+
+const faux = {
+  createFauxCore: fauxCore.createFauxCore,
+  fauxAssistantMessage: fauxMessages.fauxAssistantMessage,
+  fauxProvider,
+  fauxText: fauxMessages.fauxText,
+  fauxThinking: fauxMessages.fauxThinking,
+  fauxToolCall: fauxMessages.fauxToolCall,
+};
+
+export default faux;

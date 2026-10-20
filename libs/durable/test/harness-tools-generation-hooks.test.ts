@@ -1,4 +1,5 @@
-import { type FauxResponseStep, fauxAssistantMessage, fauxText } from "@msa/ai";
+import ai from "@msa/ai";
+import type aiTypes from "@msa/ai/index.types";
 import durable from "@msa/durable";
 import harnessModule from "@msa/durable/harness";
 import type durableTypes from "@msa/durable/index.types";
@@ -7,6 +8,8 @@ import { describe, expect, it } from "vite-plus/test";
 
 import harnessToolsSupport from "./harness-tools-support.ts";
 import support from "./support.ts";
+
+const { fauxAssistantMessage, fauxText } = ai;
 
 const { GenerationTask, ToolTask } = harnessModule;
 const { LiveDoc } = durable;
@@ -17,7 +20,7 @@ const { addHooks, addTool, awaited, chatSetup, context, textOf } = support;
 const replacesRequestMessages = Effect.gen(function* () {
   const setup = chatSetup();
   const requests: string[][] = [];
-  const record: FauxResponseStep = (request) => {
+  const record: aiTypes.FauxResponseStep = (request) => {
     requests.push(
       request.messages.map((message) => `${message.role}:${textOf(message as never) ?? ""}`),
     );
@@ -67,7 +70,7 @@ const keepsRunInput = Effect.gen(function* () {
   addHooks(setup.registry, GenerationTask, {
     onYield: () => (yields++ === 0 ? { continue: "again" } : undefined),
   });
-  const second: FauxResponseStep = () =>
+  const second: aiTypes.FauxResponseStep = () =>
     runPromise(
       Effect.gen(function* () {
         input = (yield* awaited(harness.snapshot(LiveDoc, 1 as never, context)))!.run!.inputs[0];

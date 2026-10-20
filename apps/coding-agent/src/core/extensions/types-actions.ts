@@ -1,4 +1,4 @@
-import type { Provider } from "@msa/ai";
+import type aiTypes from "@msa/ai/index.types";
 
 import type { McpServerRegistry } from "../mcp-servers.ts";
 import type { VirtualModelDefinition } from "../virtual-models.ts";
@@ -29,7 +29,7 @@ export interface ExtensionRuntimeState {
     config: ProviderConfig;
     extensionPath: string;
   }>;
-  pendingNativeProviderRegistrations: Array<{ provider: Provider; extensionPath: string }>;
+  pendingNativeProviderRegistrations: Array<{ provider: aiTypes.Provider; extensionPath: string }>;
   pendingVirtualModelRegistrations: Array<{
     definition: VirtualModelDefinition;
     extensionPath: string;
@@ -39,7 +39,7 @@ export interface ExtensionRuntimeState {
   invalidate: (message?: string) => void;
   trackEventBusSubscription: (unsubscribe: () => void) => () => void;
   registerProvider: (name: string, config: ProviderConfig, extensionPath?: string) => void;
-  registerNativeProvider: (provider: Provider, extensionPath?: string) => void;
+  registerNativeProvider: (provider: aiTypes.Provider, extensionPath?: string) => void;
   unregisterProvider: (name: string, extensionPath?: string) => void;
   mcpServers: McpServerRegistry;
   registerVirtualModel: (definition: VirtualModelDefinition, extensionPath?: string) => void;

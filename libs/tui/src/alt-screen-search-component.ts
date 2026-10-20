@@ -1,8 +1,13 @@
-import { Input } from "./components/input.ts";
-import { getKeybindings } from "./keybindings.ts";
-import { truncateToWidth } from "./text-truncate.ts";
-import type { Component, Focusable } from "./tui-component.ts";
-import { visibleWidth } from "./utils.ts";
+import Input from "./components/input.ts";
+import keybindingsModule from "./keybindings.ts";
+import textTruncate from "./text-truncate.ts";
+import type tuiComponentTypes from "./tui-component.types.ts";
+import utils from "./utils.ts";
+
+const { visibleWidth } = utils;
+const { getKeybindings } = keybindingsModule;
+
+const { truncateToWidth } = textTruncate;
 
 const OUTER_GAP_WIDTH = 1;
 
@@ -33,8 +38,8 @@ function formatKey(key: string | undefined): string {
 
 function navigationButtons(previous: string, next: string, separator: string): NavigationButtons {
   return {
-    previous,
     next,
+    previous,
     separator,
     width: visibleWidth(previous) + visibleWidth(separator) + visibleWidth(next),
   };
@@ -48,11 +53,13 @@ function fitNavigationButtons(availableWidth: number): NavigationButtons {
   return labelled.width > availableWidth ? navigationButtons("↑", "↓", " ") : labelled;
 }
 
-export class AltScreenSearchComponent implements Component, Focusable {
+export default class AltScreenSearchComponent
+  implements tuiComponentTypes.Component, tuiComponentTypes.Focusable
+{
   private readonly input = new Input({
-    prompt: " ",
     placeholder: "Find in transcript",
     placeholderStyle: (text) => `\x1b[2m${text}\x1b[22m`,
+    prompt: " ",
   });
   private readonly onQueryChange: (query: string) => void;
   private readonly navigationButtonStyle: (text: string, hovered: boolean) => string;
@@ -161,7 +168,7 @@ export class AltScreenSearchComponent implements Component, Focusable {
       innerWidth - (showButtons ? buttons.width : 0) - outerGapsWidth - rightRuleWidth,
     );
     this.placeButtons(showButtons ? 1 + leftRuleWidth + OUTER_GAP_WIDTH : undefined, buttons);
-    return { rendered, leftRuleWidth, rightRuleWidth };
+    return { leftRuleWidth, rendered, rightRuleWidth };
   }
 
   private placeButtons(previousStart: number | undefined, buttons: NavigationButtons): void {

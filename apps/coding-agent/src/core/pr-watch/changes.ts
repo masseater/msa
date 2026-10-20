@@ -1,9 +1,9 @@
 import {
+  type PrCheckCounts,
+  type PrSnapshot,
   describeChecks,
   isBehind,
   isConflicting,
-  type PrCheckCounts,
-  type PrSnapshot,
 } from "./snapshot.ts";
 
 export type PrChangeKind =
@@ -24,7 +24,7 @@ export interface PrChange {
 }
 
 function change(kind: PrChangeKind, label: string, text: string, terminal = false): PrChange {
-  return { kind, label, text, terminal };
+  return { kind, label, terminal, text };
 }
 
 function commentChange(count: number): PrChange {

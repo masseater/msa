@@ -1,6 +1,7 @@
-import type { AssistantMessage, ToolResultMessage, Usage } from "@msa/ai";
+import type aiTypes from "@msa/ai/index.types";
 import testing from "@msa/testing";
-import { Container, type TUI, Text } from "@msa/tui";
+import tui from "@msa/tui";
+import type tuiTypes from "@msa/tui/index.types";
 import { Effect } from "effect";
 import { beforeAll, describe, expect, test, vi } from "vite-plus/test";
 
@@ -9,6 +10,8 @@ import type { SessionEntry } from "../../../src/core/session-manager.ts";
 import type { ToolExecutionComponent } from "../../../src/modes/interactive/components/tool-execution.ts";
 import { InteractiveMode } from "../../../src/modes/interactive/interactive-mode.ts";
 import tuiKit from "../../tui-kit.ts";
+
+const { Container, Text } = tui;
 
 const { initTheme, stripAnsi } = tuiKit;
 
@@ -19,7 +22,7 @@ type AgentMessage = AgentSession["messages"][number];
 const TOOL_CALL_ID = "tool-4167";
 const TOOL_NAME = "slow_tool";
 
-const EMPTY_USAGE: Usage = {
+const EMPTY_USAGE: aiTypes.Usage = {
   cacheRead: 0,
   cacheWrite: 0,
   cost: {
@@ -42,10 +45,10 @@ type RenderSessionItems = (
 
 type RenderSessionContextThis = {
   pendingTools: Map<string, ToolExecutionComponent>;
-  chatContainer: Container;
+  chatContainer: tuiTypes.Container;
   footer: { invalidate(): void };
   programStatus: { handleEvent(): void };
-  ui: TUI;
+  ui: tuiTypes.TUI;
   settingsManager: {
     getShowImages(): boolean;
     getImageWidthCells(): number;
@@ -60,7 +63,7 @@ type RenderSessionContextThis = {
   isInitialized: boolean;
   updateEditorBorderColor(): void;
   getRegisteredToolDefinition(toolName: string): undefined;
-  maybeShowAssistantDiagnostics(message: AssistantMessage): void;
+  maybeShowAssistantDiagnostics(message: aiTypes.AssistantMessage): void;
   addMessageToChat(message: AgentMessage, options?: { populateHistory?: boolean }): void;
   addToolExecution(component: ToolExecutionComponent): void;
   renderSessionItems: RenderSessionItems;
@@ -99,12 +102,12 @@ function createFakeInteractiveModeThis(): RenderSessionContextThis {
       getShowImages: () => false,
     },
     toolOutputExpanded: false,
-    ui: { requestRender: vi.fn() } as unknown as TUI,
+    ui: { requestRender: vi.fn() } as unknown as tuiTypes.TUI,
     updateEditorBorderColor: vi.fn(),
   };
 }
 
-function createAssistantToolCallMessage(): AssistantMessage {
+function createAssistantToolCallMessage(): aiTypes.AssistantMessage {
   return {
     api: "test-api",
     content: [
@@ -124,7 +127,7 @@ function createAssistantToolCallMessage(): AssistantMessage {
   };
 }
 
-function createToolResultMessage(text: string): ToolResultMessage {
+function createToolResultMessage(text: string): aiTypes.ToolResultMessage {
   return {
     content: [{ text, type: "text" }],
     isError: false,
@@ -150,7 +153,7 @@ function createSessionEntries(messages: AgentMessage[]): SessionEntry[] {
   });
 }
 
-function renderChat(container: Container): string {
+function renderChat(container: tuiTypes.Container): string {
   return stripAnsi(container.render(120).join("\n"));
 }
 

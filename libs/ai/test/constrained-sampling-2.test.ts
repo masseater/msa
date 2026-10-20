@@ -1,11 +1,16 @@
 import { describe, expect, it } from "vite-plus/test";
 
-import { appendGrammarToolInputJsonDelta } from "../src/api/constrained-sampling.ts";
-import { convertResponsesMessages } from "../src/api/openai-responses-messages.ts";
-import type { ToolCall } from "../src/types.ts";
-import { currentTimeMillis } from "../src/utils/clock.ts";
-import { normalizeContext } from "../src/utils/transcript.ts";
+import constrainedSampling from "../src/api/constrained-sampling.ts";
+import openaiResponsesMessages from "../src/api/openai-responses-messages.ts";
+import type typesModule from "../src/types.types.ts";
+import clock from "../src/utils/clock.ts";
+import transcript from "../src/utils/transcript.ts";
 import constrainedSamplingSupport from "./constrained-sampling-support.ts";
+
+const { convertResponsesMessages } = openaiResponsesMessages;
+const { normalizeContext } = transcript;
+const { currentTimeMillis } = clock;
+const { appendGrammarToolInputJsonDelta } = constrainedSampling;
 
 const { makeModel, makeUsage } = constrainedSamplingSupport;
 
@@ -82,7 +87,7 @@ const keepsGrammarInputJSONDeltasAppend = () => {
 };
 
 function replaysGrammarCallsAsCustomResponsesStep1() {
-  const replayedToolCall: ToolCall = {
+  const replayedToolCall: typesModule.ToolCall = {
     arguments: { payload: "abc" },
     id: "call_1|ctc_1",
     name: "sample_tool",
@@ -110,7 +115,7 @@ function replaysGrammarCallsAsCustomResponsesStep1() {
       },
     ],
   });
-  const invalidArgumentsList: ToolCall["arguments"][] = [{}, { payload: 42 }];
+  const invalidArgumentsList: typesModule.ToolCall["arguments"][] = [{}, { payload: 42 }];
   for (const invalidArguments of invalidArgumentsList) {
     replayedToolCall.arguments = invalidArguments;
     expect(() =>

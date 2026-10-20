@@ -1,30 +1,17 @@
-/**
- * Gondolin Tool Routing Example
- *
- * Runs msa's built-in tools inside a local Gondolin micro-VM. The host working
- * directory is mounted at /workspace in the guest. File changes under
- * /workspace write through to the host; other guest filesystem changes are
- * isolated to the VM.
- *
- * Setup:
- *   cd apps/coding-agent/examples/extensions/gondolin
- *   npm install --ignore-scripts
- *
- * Usage:
- *   cd /path/to/project
- *   msa -e /path/to/msa/apps/coding-agent/examples/extensions/gondolin
- *
- * Requirements:
- *   - Node.js >= 23.6.0 for @earendil-works/gondolin
- *   - QEMU installed (for example, `brew install qemu` on macOS)
- */
-
 import path from "node:path";
 
 import { RealFSProvider, VM } from "@earendil-works/gondolin";
 import type { ExtensionAPI, ExtensionContext } from "@msa/coding-agent";
 import {
   type BashOperations,
+  DEFAULT_MAX_BYTES,
+  type EditOperations,
+  type FindOperations,
+  type GrepToolDetails,
+  type GrepToolInput,
+  type LsOperations,
+  type ReadOperations,
+  type WriteOperations,
   createBashTool,
   createEditTool,
   createFindTool,
@@ -32,17 +19,9 @@ import {
   createLsTool,
   createReadTool,
   createWriteTool,
-  DEFAULT_MAX_BYTES,
-  type EditOperations,
-  type FindOperations,
   formatSize,
-  type GrepToolDetails,
-  type GrepToolInput,
-  type LsOperations,
-  type ReadOperations,
   truncateHead,
   truncateLine,
-  type WriteOperations,
 } from "@msa/coding-agent";
 
 const GUEST_WORKSPACE = "/workspace";
@@ -84,7 +63,6 @@ function toGuestPath(localCwd: string, inputPath: string): string {
 
 function createGondolinReadOps(vm: VM, localCwd: string): ReadOperations {
   return {
-    readFile: async (filePath) => vm.fs.readFile(toGuestPath(localCwd, filePath)),
     access: async (filePath) => {
       await vm.fs.access(toGuestPath(localCwd, filePath));
     },
@@ -96,16 +74,17 @@ function createGondolinReadOps(vm: VM, localCwd: string): ReadOperations {
       if (ext === ".webp") return "image/webp";
       return null;
     },
+    readFile: async (filePath) => vm.fs.readFile(toGuestPath(localCwd, filePath)),
   };
 }
 
 function createGondolinWriteOps(vm: VM, localCwd: string): WriteOperations {
   return {
-    writeFile: async (filePath, content) => {
-      await vm.fs.writeFile(toGuestPath(localCwd, filePath), content, { encoding: "utf8" });
-    },
     mkdir: async (dirPath) => {
       await vm.fs.mkdir(toGuestPath(localCwd, dirPath), { recursive: true });
+    },
+    writeFile: async (filePath, content) => {
+      await vm.fs.writeFile(toGuestPath(localCwd, filePath), content, { encoding: "utf8" });
     },
   };
 }
@@ -114,9 +93,9 @@ function createGondolinEditOps(vm: VM, localCwd: string): EditOperations {
   const readOps = createGondolinReadOps(vm, localCwd);
   const writeOps = createGondolinWriteOps(vm, localCwd);
   return {
+    access: readOps.access,
     readFile: readOps.readFile,
     writeFile: writeOps.writeFile,
-    access: readOps.access,
   };
 }
 
@@ -130,8 +109,8 @@ function createGondolinLsOps(vm: VM, localCwd: string): LsOperations {
         return false;
       }
     },
-    stat: async (filePath) => vm.fs.stat(toGuestPath(localCwd, filePath)),
     readdir: async (dirPath) => vm.fs.listDir(toGuestPath(localCwd, dirPath)),
+    stat: async (filePath) => vm.fs.stat(toGuestPath(localCwd, filePath)),
   };
 }
 
@@ -282,11 +261,11 @@ async function executeGondolinGrep(
         matchCount++;
         if (
           appendGrepBlock({
-            outputLines,
-            lines,
-            relativePath: displayPath,
-            lineIndex: index,
             contextLines,
+            lineIndex: index,
+            lines,
+            outputLines,
+            relativePath: displayPath,
           })
         ) {
           linesTruncated = true;
@@ -302,7 +281,7 @@ async function executeGondolinGrep(
   );
 
   if (matchCount === 0)
-    return { content: [{ type: "text", text: "No matches found" }], details: undefined };
+    return { content: [{ text: "No matches found", type: "text" }], details: undefined };
 
   const rawOutput = outputLines.join("\n");
   const truncation = truncateHead(rawOutput, { maxLines: Number.MAX_SAFE_INTEGER });
@@ -324,7 +303,7 @@ async function executeGondolinGrep(
   if (notices.length > 0) output += `\n\n[${notices.join(". ")}]`;
 
   return {
-    content: [{ type: "text", text: output }],
+    content: [{ text: output, type: "text" }],
     details: Object.keys(details).length > 0 ? details : undefined,
   };
 }
@@ -361,15 +340,15 @@ function createGondolinBashOps(vm: VM, localCwd: string, shellPath: string): Bas
           cwd: guestCwd,
           env: sanitizeEnv(env),
           signal: controller.signal,
-          stdout: "pipe",
           stderr: "pipe",
+          stdout: "pipe",
         });
         for await (const chunk of proc.output()) onData(chunk.data);
         const result = await proc;
         return { exitCode: result.exitCode };
       } catch (error) {
         if (signal?.aborted) throw new Error("aborted", { cause: error });
-        if (timedOut) throw new Error(`timeout:${timeout}`);
+        if (timedOut) throw new Error(`timeout:${timeout}`, { cause: error });
         throw error;
       } finally {
         if (timer) clearTimeout(timer);

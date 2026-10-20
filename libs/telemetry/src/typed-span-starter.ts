@@ -1,120 +1,86 @@
 import { dual } from "effect/Function";
 
-import type { SpanAttributes, TelemetryContext } from "./context.ts";
-import type {
-  ExactTelemetryAttributes,
-  SchemaTelemetrySpan,
-  TelemetrySchemaSpanName,
-  TelemetrySchemaSpanStartAttributes,
-} from "./schema-inference.ts";
-import type { TelemetrySchemaDefinition } from "./schema.ts";
-
-type TelemetrySchemaTuple = readonly [TelemetrySchemaDefinition, ...TelemetrySchemaDefinition[]];
-
-type SpanNameInSchema<Schema extends TelemetrySchemaDefinition> =
-  Schema extends TelemetrySchemaDefinition ? TelemetrySchemaSpanName<Schema> : never;
-
-type SpanNameInSchemas<Schemas extends TelemetrySchemaTuple> = SpanNameInSchema<Schemas[number]>;
-
-type SpanStartAttributesInSchema<
-  Schema extends TelemetrySchemaDefinition,
-  Name extends string,
-> = Schema extends TelemetrySchemaDefinition
-  ? Name extends TelemetrySchemaSpanName<Schema>
-    ? TelemetrySchemaSpanStartAttributes<Schema, Name>
-    : never
-  : never;
-
-type SpanInSchema<
-  Schema extends TelemetrySchemaDefinition,
-  Name extends string,
-> = Schema extends TelemetrySchemaDefinition
-  ? Name extends TelemetrySchemaSpanName<Schema>
-    ? SchemaTelemetrySpan<Schema, Name>
-    : never
-  : never;
+import type contextTypes from "./context.ts";
+import type schemaInferenceTypes from "./schema-inference.ts";
+import type schemaTypes from "./schema.types.ts";
+import type typedSpanStarterTypes from "./typed-span-starter.types.ts";
 
 type DuplicateTelemetrySpanNames<
-  Schemas extends readonly TelemetrySchemaDefinition[],
+  Schemas extends readonly schemaTypes.TelemetrySchemaDefinition[],
   Seen extends string = never,
 > = Schemas extends readonly [
-  infer Schema extends TelemetrySchemaDefinition,
-  ...infer Rest extends readonly TelemetrySchemaDefinition[],
+  infer Schema extends schemaTypes.TelemetrySchemaDefinition,
+  ...infer Rest extends readonly schemaTypes.TelemetrySchemaDefinition[],
 ]
   ?
-      | Extract<TelemetrySchemaSpanName<Schema>, Seen>
-      | DuplicateTelemetrySpanNames<Rest, Seen | TelemetrySchemaSpanName<Schema>>
+      | Extract<schemaInferenceTypes.TelemetrySchemaSpanName<Schema>, Seen>
+      | DuplicateTelemetrySpanNames<
+          Rest,
+          Seen | schemaInferenceTypes.TelemetrySchemaSpanName<Schema>
+        >
   : never;
 
-type UniqueTelemetrySchemas<Schemas extends TelemetrySchemaTuple> = [
+type UniqueTelemetrySchemas<Schemas extends typedSpanStarterTypes.TelemetrySchemaTuple> = [
   DuplicateTelemetrySpanNames<Schemas>,
 ] extends [never]
   ? unknown
   : { readonly "duplicate telemetry span names": DuplicateTelemetrySpanNames<Schemas> };
 
-type UnionToIntersection<Union> = (Union extends unknown ? (value: Union) => void : never) extends (
-  value: infer Intersection,
-) => void
-  ? Intersection
-  : never;
-
-type TypedSpanStarterForName<
-  Schemas extends TelemetrySchemaTuple,
-  Name extends SpanNameInSchemas<Schemas>,
-> = <const Attributes extends SpanStartAttributesInSchema<Schemas[number], Name>, Result>(
-  name: Name,
-  attributes: ExactTelemetryAttributes<
-    SpanStartAttributesInSchema<Schemas[number], Name>,
-    Attributes
-  >,
-  callback: (
-    span: SpanInSchema<Schemas[number], Name>,
-    startChildSpan: TypedSpanStarter<Schemas>,
-  ) => Result | Promise<Result>,
-) => Promise<Result>;
-
-export type TypedSpanStarter<Schemas extends TelemetrySchemaTuple> = UnionToIntersection<
-  {
-    [Name in SpanNameInSchemas<Schemas>]: TypedSpanStarterForName<Schemas, Name>;
-  }[SpanNameInSchemas<Schemas>]
->;
-
-function bindTypedSpanStarter<Schemas extends TelemetrySchemaTuple>(
-  telemetryContext: TelemetryContext,
-): TypedSpanStarter<Schemas> {
+function bindTypedSpanStarter<Schemas extends typedSpanStarterTypes.TelemetrySchemaTuple>(
+  telemetryContext: contextTypes.TelemetryContext,
+): typedSpanStarterTypes.TypedSpanStarter<Schemas> {
   const startSpan = (
-    name: SpanNameInSchemas<Schemas>,
-    attributes: SpanAttributes,
+    name: typedSpanStarterTypes.SpanNameInSchemas<Schemas>,
+    attributes: contextTypes.SpanAttributes,
     callback: (
-      span: SpanInSchema<Schemas[number], SpanNameInSchemas<Schemas>>,
-      startChildSpan: TypedSpanStarter<Schemas>,
+      span: typedSpanStarterTypes.SpanInSchema<
+        Schemas[number],
+        typedSpanStarterTypes.SpanNameInSchemas<Schemas>
+      >,
+      startChildSpan: typedSpanStarterTypes.TypedSpanStarter<Schemas>,
     ) => unknown,
   ): Promise<unknown> =>
-    telemetryContext.startSpan({ name, attributes }, (span) =>
+    telemetryContext.startSpan({ attributes, name }, (span) =>
       callback(
-        span as SpanInSchema<Schemas[number], SpanNameInSchemas<Schemas>>,
+        span as typedSpanStarterTypes.SpanInSchema<
+          Schemas[number],
+          typedSpanStarterTypes.SpanNameInSchemas<Schemas>
+        >,
         bindTypedSpanStarter<Schemas>(span),
       ),
     );
 
-  return startSpan as TypedSpanStarter<Schemas>;
+  return startSpan as typedSpanStarterTypes.TypedSpanStarter<Schemas>;
 }
 
-type CreateTypedSpanStarterDataFirst = <const Schemas extends TelemetrySchemaTuple>(
-  telemetryContext: TelemetryContext,
+type CreateTypedSpanStarterDataFirst = <
+  const Schemas extends typedSpanStarterTypes.TelemetrySchemaTuple,
+>(
+  telemetryContext: contextTypes.TelemetryContext,
   schemas: Schemas & UniqueTelemetrySchemas<Schemas>,
-) => TypedSpanStarter<Schemas>;
+) => typedSpanStarterTypes.TypedSpanStarter<Schemas>;
 
-type CreateTypedSpanStarterDataLast = <const Schemas extends TelemetrySchemaTuple>(
+type CreateTypedSpanStarterDataLast = <
+  const Schemas extends typedSpanStarterTypes.TelemetrySchemaTuple,
+>(
   schemas: Schemas & UniqueTelemetrySchemas<Schemas>,
-) => (telemetryContext: TelemetryContext) => TypedSpanStarter<Schemas>;
+) => (
+  telemetryContext: contextTypes.TelemetryContext,
+) => typedSpanStarterTypes.TypedSpanStarter<Schemas>;
 
-export const createTypedSpanStarter = dual<
+const createTypedSpanStarter = dual<
   CreateTypedSpanStarterDataLast,
   CreateTypedSpanStarterDataFirst
 >(
   2,
-  <const Schemas extends TelemetrySchemaTuple>(
-    telemetryContext: TelemetryContext,
-  ): TypedSpanStarter<Schemas> => bindTypedSpanStarter<Schemas>(telemetryContext),
+  <const Schemas extends typedSpanStarterTypes.TelemetrySchemaTuple>(
+    telemetryContext: contextTypes.TelemetryContext,
+  ): typedSpanStarterTypes.TypedSpanStarter<Schemas> =>
+    bindTypedSpanStarter<Schemas>(telemetryContext),
 );
+
+const typedSpanStarter = {
+  createTypedSpanStarter,
+};
+
+export default typedSpanStarter;

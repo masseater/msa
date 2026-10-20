@@ -1,9 +1,11 @@
 import type { Theme } from "@msa/coding-agent";
-import type { Component, OverlayHandle } from "@msa/tui";
-import { matchesKey, truncateToWidth, visibleWidth } from "@msa/tui";
+import tui from "@msa/tui";
+import type tuiTypes from "@msa/tui/index.types";
 
-export class StreamingInputPanel implements Component {
-  handle: OverlayHandle | null = null;
+const { matchesKey, truncateToWidth, visibleWidth } = tui;
+
+export class StreamingInputPanel implements tuiTypes.Component {
+  handle: tuiTypes.OverlayHandle | null = null;
   private theme: Theme;
   private typed = "";
   readonly label: string;

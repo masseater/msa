@@ -1,10 +1,16 @@
-import { type AssistantMessage, type Model, normalizeContext } from "@msa/ai";
+import ai from "@msa/ai";
+import type aiTypes from "@msa/ai/index.types";
 import { Effect, Stream } from "effect";
 import { afterEach, describe, expect, it, vi } from "vite-plus/test";
 
-import { type ProxyAssistantMessageEvent, streamProxy } from "../src/proxy.ts";
+import proxy from "../src/proxy.ts";
+import type proxyTypes from "../src/proxy.types.ts";
 
-const model: Model<"openai-responses"> = {
+const { normalizeContext } = ai;
+
+const { streamProxy } = proxy;
+
+const model: aiTypes.Model<"openai-responses"> = {
   api: "openai-responses",
   baseUrl: "https://api.openai.com/v1",
   contextWindow: 400000,
@@ -17,7 +23,7 @@ const model: Model<"openai-responses"> = {
   reasoning: true,
 };
 
-const usage: AssistantMessage["usage"] = {
+const usage: aiTypes.AssistantMessage["usage"] = {
   cacheRead: 0,
   cacheWrite: 0,
   cost: { cacheRead: 0, cacheWrite: 0, input: 0, output: 0, total: 0 },
@@ -49,7 +55,7 @@ const streamFromProxy = Effect.gen(function* () {
   return { events: [...events], result };
 });
 
-const toolCallEvents: ProxyAssistantMessageEvent[] = [
+const toolCallEvents: proxyTypes.ProxyAssistantMessageEvent[] = [
   { type: "start" },
   { contentIndex: 0, id: "call_test|fc_test", toolName: "lookup", type: "toolcall_start" },
   { contentIndex: 0, delta: '{"value":"hello"}', type: "toolcall_delta" },

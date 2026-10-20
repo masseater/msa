@@ -3,7 +3,12 @@ import { describe, it } from "node:test";
 
 import { Effect } from "effect";
 
-import {
+import tuiModule from "../src/index.ts";
+import tuiAltScreenHelpers from "./tui-alt-screen-helpers.ts";
+import InputOverlay from "./tui-alt-screen-input-overlay.ts";
+import virtualTerminal from "./virtual-terminal.ts";
+
+const {
   KeybindingsManager,
   ScrollView,
   TUI_KEYBINDINGS,
@@ -11,10 +16,8 @@ import {
   TuiAltScreen,
   getKeybindings,
   setKeybindings,
-} from "../src/index.ts";
-import tuiAltScreenHelpers from "./tui-alt-screen-helpers.ts";
-import InputOverlay from "./tui-alt-screen-input-overlay.ts";
-import { VirtualTerminal } from "./virtual-terminal.ts";
+} = tuiModule;
+const { VirtualTerminal } = virtualTerminal;
 
 const { OSC133_ZONE_START, mountTranscriptWithEditor, numberedLines, trimmedViewport } =
   tuiAltScreenHelpers;

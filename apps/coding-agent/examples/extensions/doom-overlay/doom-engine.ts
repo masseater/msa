@@ -54,14 +54,14 @@ const loadDoomFactory = (buildDir: string, doomJsPath: string): DoomFactory => {
 
 const moduleConfig = (buildDir: string, wadArray: number[]) => ({
   locateFile: (path: string) => (path.endsWith(".wasm") ? pathService.join(buildDir, path) : path),
-  print: () => {},
-  printErr: () => {},
   preRun: [
     (module: DoomModule) => {
       module.FS_createPath("/", "doom", true, true);
       module.FS_createDataFile("/doom", "doom1.wad", wadArray, true, false);
     },
   ],
+  print: () => {},
+  printErr: () => {},
 });
 
 export class DoomEngine {

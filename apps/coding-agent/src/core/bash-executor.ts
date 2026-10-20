@@ -122,11 +122,11 @@ export function executeBashWithOperations(
       const cancelled = options?.signal?.aborted ?? false;
 
       return {
-        output: truncationResult.truncated ? truncationResult.content : fullOutput,
-        exitCode: cancelled ? undefined : (exitCode ?? undefined),
         cancelled,
-        truncated: truncationResult.truncated,
+        exitCode: cancelled ? undefined : (exitCode ?? undefined),
         fullOutputPath: tempFilePath,
+        output: truncationResult.truncated ? truncationResult.content : fullOutput,
+        truncated: truncationResult.truncated,
       };
     }),
   );

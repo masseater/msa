@@ -1,17 +1,19 @@
 import * as NodeCrypto from "@effect/platform-node/NodeCrypto";
-import type { OAuthCredentials, OAuthLoginCallbacks } from "@msa/ai/compat";
-import { httpRequest } from "@msa/ai/utils/http";
+import type compatTypes from "@msa/ai/compat.types";
+import http from "@msa/ai/utils/http";
 import { Clock, Crypto, Data, Effect, ManagedRuntime, Option, Schema } from "effect";
 import { dual } from "effect/Function";
 
 import {
   BUNDLED_CLIENT_ID,
-  type DirectAccessToken,
   DIRECT_ACCESS_TTL,
+  type DirectAccessToken,
   GITLAB_COM_URL,
   OAUTH_SCOPES,
   REDIRECT_URI,
 } from "./config.ts";
+
+const { httpRequest } = http;
 
 const cryptoRuntime = ManagedRuntime.make(NodeCrypto.layer);
 
@@ -23,15 +25,15 @@ export class GitLabAuthError extends Data.TaggedError("GitLabAuthError")<{
 }> {}
 
 const DirectAccessSchema = Schema.Struct({
-  token: Schema.String,
   headers: Schema.Record(Schema.String, Schema.String),
+  token: Schema.String,
 });
 
 const TokenSchema = Schema.Struct({
   access_token: Schema.String,
-  refresh_token: Schema.String,
-  expires_in: Schema.Finite,
   created_at: Schema.Finite,
+  expires_in: Schema.Finite,
+  refresh_token: Schema.String,
 });
 
 let cachedDirectAccess: DirectAccessToken | null = null;
@@ -62,15 +64,15 @@ export const getDirectAccessToken = (gitlabAccessToken: string) =>
     }
 
     const reply = yield* httpRequest({
-      url: `${GITLAB_COM_URL}/api/v4/ai/third_party_agents/direct_access`,
-      method: "POST",
+      body: yield* encodeDirectAccessRequest({
+        feature_flags: { DuoAgentPlatformNext: true },
+      }).pipe(Effect.orDie),
       headers: {
         Authorization: `Bearer ${gitlabAccessToken}`,
         "Content-Type": "application/json",
       },
-      body: yield* encodeDirectAccessRequest({
-        feature_flags: { DuoAgentPlatformNext: true },
-      }).pipe(Effect.orDie),
+      method: "POST",
+      url: `${GITLAB_COM_URL}/api/v4/ai/third_party_agents/direct_access`,
     });
 
     if (!reply.ok) {
@@ -91,9 +93,9 @@ export const getDirectAccessToken = (gitlabAccessToken: string) =>
     }
 
     cachedDirectAccess = {
-      token: parsed.value.token,
-      headers: parsed.value.headers,
       expiresAt: now + DIRECT_ACCESS_TTL,
+      headers: parsed.value.headers,
+      token: parsed.value.token,
     };
     return cachedDirectAccess;
   });
@@ -109,17 +111,14 @@ const generatePKCE = (): Promise<{ verifier: string; challenge: string }> => {
   crypto.getRandomValues(array);
   const verifier = base64Url(array);
   return crypto.subtle.digest("SHA-256", new TextEncoder().encode(verifier)).then((hash) => ({
-    verifier,
     challenge: base64Url(new Uint8Array(hash)),
+    verifier,
   }));
 };
 
 const exchangeCode = (params: { code: string; verifier: string }) =>
   Effect.gen(function* () {
     const reply = yield* httpRequest({
-      url: `${GITLAB_COM_URL}/oauth/token`,
-      method: "POST",
-      headers: { "Content-Type": "application/x-www-form-urlencoded" },
       body: new URLSearchParams({
         client_id: BUNDLED_CLIENT_ID,
         grant_type: "authorization_code",
@@ -127,6 +126,9 @@ const exchangeCode = (params: { code: string; verifier: string }) =>
         code_verifier: params.verifier,
         redirect_uri: REDIRECT_URI,
       }).toString(),
+      headers: { "Content-Type": "application/x-www-form-urlencoded" },
+      method: "POST",
+      url: `${GITLAB_COM_URL}/oauth/token`,
     });
 
     if (!reply.ok) {
@@ -142,17 +144,19 @@ const exchangeCode = (params: { code: string; verifier: string }) =>
     return parsed.value;
   });
 
-export const loginGitLab = (callbacks: OAuthLoginCallbacks): Promise<OAuthCredentials> =>
+export const loginGitLab = (
+  callbacks: compatTypes.OAuthLoginCallbacks,
+): Promise<compatTypes.OAuthCredentials> =>
   Effect.runPromise(
     Effect.gen(function* () {
       const { verifier, challenge } = yield* Effect.promise(generatePKCE);
       const authParams = new URLSearchParams({
         client_id: BUNDLED_CLIENT_ID,
+        code_challenge: challenge,
+        code_challenge_method: "S256",
         redirect_uri: REDIRECT_URI,
         response_type: "code",
         scope: OAUTH_SCOPES.join(" "),
-        code_challenge: challenge,
-        code_challenge_method: "S256",
         state: randomUuid(),
       });
 
@@ -171,29 +175,29 @@ export const loginGitLab = (callbacks: OAuthLoginCallbacks): Promise<OAuthCreden
       const token = yield* exchangeCode({ code, verifier });
       invalidateDirectAccessToken();
       return {
-        refresh: token.refresh_token,
         access: token.access_token,
         expires: expiryOf(token),
+        refresh: token.refresh_token,
       };
     }),
   );
 
 const refreshGitLabTokenImpl = (
-  credentials: OAuthCredentials,
+  credentials: compatTypes.OAuthCredentials,
   signal: AbortSignal,
-): Promise<OAuthCredentials> =>
+): Promise<compatTypes.OAuthCredentials> =>
   Effect.runPromise(
     Effect.gen(function* () {
       const reply = yield* httpRequest({
-        url: `${GITLAB_COM_URL}/oauth/token`,
-        method: "POST",
-        headers: { "Content-Type": "application/x-www-form-urlencoded" },
         body: new URLSearchParams({
           client_id: BUNDLED_CLIENT_ID,
           grant_type: "refresh_token",
           refresh_token: credentials.refresh,
         }).toString(),
+        headers: { "Content-Type": "application/x-www-form-urlencoded" },
+        method: "POST",
         signal,
+        url: `${GITLAB_COM_URL}/oauth/token`,
       });
 
       if (!reply.ok) {
@@ -209,14 +213,19 @@ const refreshGitLabTokenImpl = (
 
       invalidateDirectAccessToken();
       return {
-        refresh: parsed.value.refresh_token,
         access: parsed.value.access_token,
         expires: expiryOf(parsed.value),
+        refresh: parsed.value.refresh_token,
       };
     }),
   );
 
 export const refreshGitLabToken: {
-  (credentials: OAuthCredentials, signal: AbortSignal): Promise<OAuthCredentials>;
-  (signal: AbortSignal): (credentials: OAuthCredentials) => Promise<OAuthCredentials>;
+  (
+    credentials: compatTypes.OAuthCredentials,
+    signal: AbortSignal,
+  ): Promise<compatTypes.OAuthCredentials>;
+  (
+    signal: AbortSignal,
+  ): (credentials: compatTypes.OAuthCredentials) => Promise<compatTypes.OAuthCredentials>;
 } = dual((args: IArguments) => args.length >= 2, refreshGitLabTokenImpl);

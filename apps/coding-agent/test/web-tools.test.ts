@@ -43,7 +43,7 @@ const runsTregWebSearchThroughTheCli = () =>
           "--method",
           "POST",
           "--data",
-          '{"q":"effect 4 release","limit":3}',
+          '{"limit":3,"q":"effect 4 release"}',
           "--header",
           "X-Treg-Route-Prefer: tinyfish",
           "--header",

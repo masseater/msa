@@ -1,7 +1,7 @@
 import { stripVTControlCharacters } from "node:util";
 
-import type { AgentToolResult } from "@msa/agent-core";
-import type { Component, TUI } from "@msa/tui";
+import type agentTypes from "@msa/agent-core/index.types";
+import type tuiTypes from "@msa/tui/index.types";
 import { afterEach, beforeAll, describe, expect, it, vi } from "vite-plus/test";
 
 import type { ToolRenderContext } from "../src/core/extensions/types.ts";
@@ -11,7 +11,7 @@ import { ToolExecutionComponent } from "../src/modes/interactive/components/tool
 import { initTheme, theme } from "../src/modes/interactive/theme/theme.ts";
 
 function render(
-  result: AgentToolResult<CodemodeToolDetails | undefined>,
+  result: agentTypes.AgentToolResult<CodemodeToolDetails | undefined>,
   isError = false,
   expanded = true,
   width = 200,
@@ -37,7 +37,7 @@ function render(
     { expanded, isPartial: false },
     theme,
     context,
-  ) as Component;
+  ) as tuiTypes.Component;
   return stripVTControlCharacters(component.render(width).join("\n"))
     .split("\n")
     .map((line) => line.trimEnd())
@@ -128,7 +128,7 @@ const collapsesToTheLatestCallAndOne = () => {
 const showsTheElapsedTimeWhileTheScript = () => {
   vi.useFakeTimers();
   vi.setSystemTime(0);
-  const tui = { requestRender: () => {} } as unknown as TUI;
+  const tui = { requestRender: () => {} } as unknown as tuiTypes.TUI;
   const component = new ToolExecutionComponent(
     "codemode",
     "call",

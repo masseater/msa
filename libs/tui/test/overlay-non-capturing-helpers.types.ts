@@ -1,16 +1,16 @@
-import type { Component } from "../src/tui-component.ts";
-import type { TUI } from "../src/tui-interface.ts";
-import type { VirtualTerminal } from "./virtual-terminal.ts";
+import type tuiComponentTypes from "../src/tui-component.types.ts";
+import type tuiInterfaceTypes from "../src/tui-interface.types.ts";
+import type virtualTerminalTypes from "./virtual-terminal.types.ts";
 
 declare namespace overlayNonCapturingHelpersTypes {
   interface OverlayTuiContext {
-    readonly tui: TUI;
-    readonly terminal: VirtualTerminal;
+    readonly tui: tuiInterfaceTypes.TUI;
+    readonly terminal: virtualTerminalTypes.VirtualTerminal;
   }
 
   interface OverlayTuiSetup {
-    readonly focus?: Component;
-    readonly root?: Component;
+    readonly focus?: tuiComponentTypes.Component;
+    readonly root?: tuiComponentTypes.Component;
     readonly width?: number;
     readonly height?: number;
   }

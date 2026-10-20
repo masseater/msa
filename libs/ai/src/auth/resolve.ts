@@ -1,36 +1,17 @@
 import { Clock, Effect, Function } from "effect";
 
-import type { ProviderEnv } from "../types.ts";
-import { abortable, operationSignal } from "../utils/abort.ts";
-import { ModelsError, promiseOrModelsError } from "../utils/models-error.ts";
+import type typesModule from "../types.types.ts";
+import abortModule from "../utils/abort.ts";
+import modelsError from "../utils/models-error.ts";
+import type resolveTypes from "./resolve.types.ts";
+import type typesModuleModule from "./types.ts";
 
-export { ModelsError, type ModelsErrorCode } from "../utils/models-error.ts";
-
-import type {
-  ApiKeyAuth,
-  ApiKeyCredential,
-  AuthContext,
-  AuthResult,
-  Credential,
-  CredentialStore,
-  OAuthAuth,
-  OAuthCredential,
-  ProviderAuth,
-} from "./types.ts";
-
-export interface AuthResolutionOverrides {
-  apiKey?: string | undefined;
-  env?: ProviderEnv | undefined;
-  minOAuthValidityMs?: number | undefined;
-  signal?: AbortSignal | undefined;
-}
-
-interface AuthProvider {
-  id: string;
-  auth: ProviderAuth;
-}
-
-const overlayEnvAuthContext = (base: AuthContext, env: ProviderEnv): AuthContext => ({
+const { ModelsError, promiseOrModelsError } = modelsError;
+const { abortable, operationSignal } = abortModule;
+const overlayEnvAuthContext = (
+  base: typesModuleModule.AuthContext,
+  env: typesModule.ProviderEnv,
+): typesModuleModule.AuthContext => ({
   env: (name) => {
     const value = env[name];
     return value === undefined || value === "" ? base.env(name) : Promise.resolve(value);
@@ -42,18 +23,18 @@ const DEFAULT_OAUTH_MINIMUM_VALIDITY_MS = 5 * 60 * 1000;
 const DEFAULT_OAUTH_REFRESH_TIMEOUT_MS = 15_000;
 
 interface RefreshRequest {
-  readonly credentials: CredentialStore;
+  readonly credentials: typesModuleModule.CredentialStore;
   readonly providerId: string;
-  readonly oauth: OAuthAuth;
-  readonly needsRefresh: (credential: OAuthCredential) => boolean;
+  readonly oauth: typesModuleModule.OAuthAuth;
+  readonly needsRefresh: (credential: typesModuleModule.OAuthCredential) => boolean;
   readonly signal: AbortSignal;
 }
 
 const refreshInsideLock = (
   request: RefreshRequest,
-  current: Credential | undefined,
+  current: typesModuleModule.Credential | undefined,
   cancelLockWait: () => void,
-): Effect.Effect<OAuthCredential | undefined> =>
+): Effect.Effect<typesModuleModule.OAuthCredential | undefined> =>
   Effect.gen(function* () {
     request.signal.removeEventListener("abort", cancelLockWait);
     request.signal.throwIfAborted();
@@ -65,7 +46,9 @@ const refreshInsideLock = (
     );
   });
 
-const refreshWithLock = (request: RefreshRequest): Effect.Effect<OAuthCredential | undefined> => {
+const refreshWithLock = (
+  request: RefreshRequest,
+): Effect.Effect<typesModuleModule.OAuthCredential | undefined> => {
   const { signal } = request;
   const lockWait = new AbortController();
   const cancelLockWait = () => lockWait.abort(signal.reason);
@@ -101,47 +84,51 @@ const refreshWithLock = (request: RefreshRequest): Effect.Effect<OAuthCredential
   });
 };
 
-export const refreshStoredOAuthCredential: {
+const refreshStoredOAuthCredential: {
   (
     providerId: string,
-    oauth: OAuthAuth,
-    needsRefresh: (credential: OAuthCredential) => boolean,
+    oauth: typesModuleModule.OAuthAuth,
+    needsRefresh: (credential: typesModuleModule.OAuthCredential) => boolean,
     signal: AbortSignal,
-  ): (credentials: CredentialStore) => Effect.Effect<OAuthCredential | undefined>;
+  ): (
+    credentials: typesModuleModule.CredentialStore,
+  ) => Effect.Effect<typesModuleModule.OAuthCredential | undefined>;
   (
-    credentials: CredentialStore,
+    credentials: typesModuleModule.CredentialStore,
     providerId: string,
-    oauth: OAuthAuth,
-    needsRefresh: (credential: OAuthCredential) => boolean,
+    oauth: typesModuleModule.OAuthAuth,
+    needsRefresh: (credential: typesModuleModule.OAuthCredential) => boolean,
     signal: AbortSignal,
-  ): Effect.Effect<OAuthCredential | undefined>;
+  ): Effect.Effect<typesModuleModule.OAuthCredential | undefined>;
 } = Function.dual(
   5,
   (
-    credentials: CredentialStore,
+    credentials: typesModuleModule.CredentialStore,
     providerId: string,
-    oauth: OAuthAuth,
-    needsRefresh: (credential: OAuthCredential) => boolean,
+    oauth: typesModuleModule.OAuthAuth,
+    needsRefresh: (credential: typesModuleModule.OAuthCredential) => boolean,
     signal: AbortSignal,
-  ): Effect.Effect<OAuthCredential | undefined> =>
-    refreshWithLock({ credentials, providerId, oauth, needsRefresh, signal }),
+  ): Effect.Effect<typesModuleModule.OAuthCredential | undefined> =>
+    refreshWithLock({ credentials, needsRefresh, oauth, providerId, signal }),
 );
 
 interface StoredOAuthRequest {
-  readonly credentials: CredentialStore;
+  readonly credentials: typesModuleModule.CredentialStore;
   readonly providerId: string;
-  readonly oauth: OAuthAuth;
-  readonly stored: OAuthCredential;
+  readonly oauth: typesModuleModule.OAuthAuth;
+  readonly stored: typesModuleModule.OAuthCredential;
   readonly signal: AbortSignal;
   readonly minOAuthValidityMs: number | undefined;
 }
 
-const resolveStoredOAuth = (request: StoredOAuthRequest): Effect.Effect<AuthResult | undefined> =>
+const resolveStoredOAuth = (
+  request: StoredOAuthRequest,
+): Effect.Effect<typesModuleModule.AuthResult | undefined> =>
   Effect.gen(function* () {
     const { providerId, minOAuthValidityMs } = request;
     const clock = yield* Clock.Clock;
     const minimumValidityMs = Math.max(DEFAULT_OAUTH_MINIMUM_VALIDITY_MS, minOAuthValidityMs ?? 0);
-    const expiresSoon = (credential: OAuthCredential) =>
+    const expiresSoon = (credential: typesModuleModule.OAuthCredential) =>
       clock.currentTimeMillisUnsafe() + minimumValidityMs >= credential.expires;
     let credential = request.stored;
 
@@ -168,33 +155,33 @@ const resolveStoredOAuth = (request: StoredOAuthRequest): Effect.Effect<AuthResu
   });
 
 const resolveApiKey = (
-  authContext: AuthContext,
-  apiKey: ApiKeyAuth,
+  authContext: typesModuleModule.AuthContext,
+  apiKey: typesModuleModule.ApiKeyAuth,
   providerId: string,
-  credential: ApiKeyCredential | undefined,
+  credential: typesModuleModule.ApiKeyCredential | undefined,
   signal: AbortSignal,
-): Effect.Effect<AuthResult | undefined> =>
-  promiseOrModelsError(() => apiKey.resolve({ ctx: authContext, credential, signal }), {
+): Effect.Effect<typesModuleModule.AuthResult | undefined> =>
+  promiseOrModelsError(() => apiKey.resolve({ credential, ctx: authContext, signal }), {
     code: "auth",
     message: `API key auth failed for provider ${providerId}`,
   });
 
 const resolveStoredCredential = (
-  provider: AuthProvider,
-  credentials: CredentialStore,
-  requestAuthContext: AuthContext,
-  overrides: AuthResolutionOverrides | undefined,
+  provider: resolveTypes.AuthProvider,
+  credentials: typesModuleModule.CredentialStore,
+  requestAuthContext: typesModuleModule.AuthContext,
+  overrides: resolveTypes.AuthResolutionOverrides | undefined,
   signal: AbortSignal,
 ) =>
-  Effect.fn("resolveStoredCredential")(function* (stored: Credential) {
+  Effect.fn("resolveStoredCredential")(function* (stored: typesModuleModule.Credential) {
     if (stored.type === "oauth" && provider.auth.oauth !== undefined) {
       return yield* resolveStoredOAuth({
         credentials,
-        providerId: provider.id,
-        oauth: provider.auth.oauth,
-        stored,
-        signal,
         minOAuthValidityMs: overrides?.minOAuthValidityMs,
+        oauth: provider.auth.oauth,
+        providerId: provider.id,
+        signal,
+        stored,
       });
     }
     if (stored.type === "api_key" && provider.auth.apiKey !== undefined) {
@@ -214,12 +201,12 @@ const resolveStoredCredential = (
   });
 
 const resolveProviderAuthWithSignal = (
-  provider: AuthProvider,
-  credentials: CredentialStore,
-  authContext: AuthContext,
-  overrides: AuthResolutionOverrides | undefined,
+  provider: resolveTypes.AuthProvider,
+  credentials: typesModuleModule.CredentialStore,
+  authContext: typesModuleModule.AuthContext,
+  overrides: resolveTypes.AuthResolutionOverrides | undefined,
   signal: AbortSignal,
-): Effect.Effect<AuthResult | undefined> =>
+): Effect.Effect<typesModuleModule.AuthResult | undefined> =>
   Effect.gen(function* () {
     signal.throwIfAborted();
     const requestAuthContext =
@@ -232,7 +219,7 @@ const resolveProviderAuthWithSignal = (
         requestAuthContext,
         provider.auth.apiKey,
         provider.id,
-        { type: "api_key", key: overrides.apiKey, env: overrides.env },
+        { env: overrides.env, key: overrides.apiKey, type: "api_key" },
         signal,
       );
     }
@@ -262,29 +249,31 @@ const resolveProviderAuthWithSignal = (
         );
   });
 
-const isAuthProvider = (value: unknown): value is AuthProvider =>
+const isAuthProvider = (value: unknown): value is resolveTypes.AuthProvider =>
   typeof value === "object" && value !== null && "id" in value && "auth" in value;
 
-export const resolveProviderAuth: {
+const resolveProviderAuth: {
   (
-    credentials: CredentialStore,
-    authContext: AuthContext,
-    overrides?: AuthResolutionOverrides,
-  ): (provider: AuthProvider) => Effect.Effect<AuthResult | undefined>;
+    credentials: typesModuleModule.CredentialStore,
+    authContext: typesModuleModule.AuthContext,
+    overrides?: resolveTypes.AuthResolutionOverrides,
+  ): (
+    provider: resolveTypes.AuthProvider,
+  ) => Effect.Effect<typesModuleModule.AuthResult | undefined>;
   (
-    provider: AuthProvider,
-    credentials: CredentialStore,
-    authContext: AuthContext,
-    overrides?: AuthResolutionOverrides,
-  ): Effect.Effect<AuthResult | undefined>;
+    provider: resolveTypes.AuthProvider,
+    credentials: typesModuleModule.CredentialStore,
+    authContext: typesModuleModule.AuthContext,
+    overrides?: resolveTypes.AuthResolutionOverrides,
+  ): Effect.Effect<typesModuleModule.AuthResult | undefined>;
 } = Function.dual(
   (args) => isAuthProvider(args[0]),
   (
-    provider: AuthProvider,
-    credentials: CredentialStore,
-    authContext: AuthContext,
-    overrides?: AuthResolutionOverrides,
-  ): Effect.Effect<AuthResult | undefined> => {
+    provider: resolveTypes.AuthProvider,
+    credentials: typesModuleModule.CredentialStore,
+    authContext: typesModuleModule.AuthContext,
+    overrides?: resolveTypes.AuthResolutionOverrides,
+  ): Effect.Effect<typesModuleModule.AuthResult | undefined> => {
     const signal = operationSignal(overrides?.signal);
     return abortable(
       resolveProviderAuthWithSignal(provider, credentials, authContext, overrides, signal),
@@ -292,3 +281,11 @@ export const resolveProviderAuth: {
     );
   },
 );
+
+const resolveModule = {
+  ModelsError: modelsError.ModelsError,
+  refreshStoredOAuthCredential,
+  resolveProviderAuth,
+};
+
+export default resolveModule;

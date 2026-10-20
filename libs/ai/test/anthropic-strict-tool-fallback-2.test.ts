@@ -4,8 +4,10 @@ import { Effect } from "effect";
 import { Type } from "typebox";
 import { describe, expect, it } from "vite-plus/test";
 
-import { stream as streamAnthropic } from "../src/api/anthropic-messages.ts";
+import anthropicMessages from "../src/api/anthropic-messages.ts";
 import anthropicStrictToolFallbackSupport from "./anthropic-strict-tool-fallback-support.ts";
+
+const { stream: streamAnthropic } = anthropicMessages;
 
 const { context, errorResponse, grammarError, harness, model, successResponse, tool } =
   anthropicStrictToolFallbackSupport;

@@ -1,19 +1,15 @@
 import { Data, Effect } from "effect";
 import { describe, expect, it } from "vite-plus/test";
 
-import { stream, streamSimple } from "../src/compat.ts";
-import type {
-  Api,
-  Context,
-  Model,
-  SimpleStreamOptions,
-  StreamOptions,
-  ThinkingLevel,
-} from "../src/types.ts";
-import { currentTimeMillis } from "../src/utils/clock.ts";
+import compat from "../src/compat.ts";
+import type typesModule from "../src/types.types.ts";
+import clock from "../src/utils/clock.ts";
 
-type DirectSamplingOptions = StreamOptions & {
-  reasoningEffort?: ThinkingLevel;
+const { currentTimeMillis } = clock;
+const { stream, streamSimple } = compat;
+
+type DirectSamplingOptions = typesModule.StreamOptions & {
+  reasoningEffort?: typesModule.ThinkingLevel;
   reasoningSummary?: "auto" | "detailed" | "concise" | null;
 };
 
@@ -27,17 +23,17 @@ interface SamplingPayload {
 
 class PayloadCaptured extends Data.TaggedError("PayloadCaptured")<{ readonly message: string }> {}
 
-function makeContext(): Context {
+function makeContext(): typesModule.Context {
   return {
     messages: [{ content: "Hello", role: "user", timestamp: currentTimeMillis() }],
   };
 }
 
 function makeModel(
-  api: Api,
+  api: typesModule.Api,
   samplingParams?: Record<string, unknown>,
-  overrides: Partial<Model<Api>> = {},
-): Model<Api> {
+  overrides: Partial<typesModule.Model<typesModule.Api>> = {},
+): typesModule.Model<typesModule.Api> {
   return {
     api,
     baseUrl: "http://127.0.0.1:9/v1",
@@ -65,7 +61,7 @@ function capturingOptions(onCapture: (payload: SamplingPayload) => void) {
 }
 
 const capturePayload = Effect.fn("capturePayload")(function* (
-  model: Model<Api>,
+  model: typesModule.Model<typesModule.Api>,
   options?: DirectSamplingOptions,
 ) {
   let capturedPayload: SamplingPayload | undefined;
@@ -87,8 +83,8 @@ const capturePayload = Effect.fn("capturePayload")(function* (
 });
 
 const captureSimplePayload = Effect.fn("captureSimplePayload")(function* (
-  model: Model<Api>,
-  options?: SimpleStreamOptions,
+  model: typesModule.Model<typesModule.Api>,
+  options?: typesModule.SimpleStreamOptions,
 ) {
   let capturedPayload: SamplingPayload | undefined;
 

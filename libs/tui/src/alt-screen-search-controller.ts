@@ -1,50 +1,50 @@
-import { isPlainPress, type SgrMouseEvent } from "./alt-screen-mouse-protocol.ts";
-import { AltScreenSearchComponent } from "./alt-screen-search-component.ts";
-import {
-  chooseSearchIndex,
-  highlightSearchMatches,
-  type SearchHighlightStyles,
-  type SearchSelectionMode,
-} from "./alt-screen-search-results.ts";
-import {
-  AltScreenSearchIndex,
-  type AltScreenSearchMatch,
-  getAltScreenSearchMatchKey,
-} from "./alt-screen-search.ts";
-import type { AltScreenView } from "./alt-screen-view.ts";
-import type { ScrollView } from "./components/scroll-view.ts";
-import { getScrollViewBox, type LayoutBox, type LayoutFrame } from "./layout.ts";
-import type { Component } from "./tui-component.ts";
-import type { OverlayHandle } from "./tui-interface.ts";
-import type { OverlayOptions } from "./tui-overlay-layout.ts";
+import type altScreenMouseProtocolTypes from "./alt-screen-mouse-protocol.types.ts";
+import type altScreenSearchComponentTypes from "./alt-screen-search-component.types.ts";
+import altScreenSearchControllerKit from "./alt-screen-search-controller-kit.ts";
+import type altScreenSearchControllerTypes from "./alt-screen-search-controller.types.ts";
+import type altScreenSearchResultsTypes from "./alt-screen-search-results.types.ts";
+import type altScreenSearchTypes from "./alt-screen-search.types.ts";
+import type scrollViewTypes from "./components/scroll-view.types.ts";
+import type layoutTypes from "./layout.types.ts";
+import type tuiInterfaceTypes from "./tui-interface.types.ts";
+import type tuiOverlayLayoutTypes from "./tui-overlay-layout.types.ts";
+
+const {
+  altScreenMouseProtocol,
+  altScreenSearch,
+  AltScreenSearchComponent,
+  altScreenSearchResults,
+  layout: layoutModule,
+} = altScreenSearchControllerKit;
+
+const { AltScreenSearchIndex, getAltScreenSearchMatchKey } = altScreenSearch;
+const { isPlainPress } = altScreenMouseProtocol;
+const { getScrollViewBox } = layoutModule;
+const { chooseSearchIndex, highlightSearchMatches } = altScreenSearchResults;
 
 interface ActiveSearch {
-  component: AltScreenSearchComponent;
-  index: AltScreenSearchIndex;
-  overlay?: OverlayHandle;
+  component: altScreenSearchComponentTypes.AltScreenSearchComponent;
+  index: altScreenSearchTypes.AltScreenSearchIndex;
+  overlay?: tuiInterfaceTypes.OverlayHandle;
   query: string;
-  matches: AltScreenSearchMatch[];
+  matches: altScreenSearchTypes.AltScreenSearchMatch[];
   selectedIndex: number;
   selectedKey?: string | undefined;
   anchorRow: number;
-  selectionMode: SearchSelectionMode;
+  selectionMode: altScreenSearchResultsTypes.SearchSelectionMode;
 }
 
-export interface SearchControllerOptions {
-  view: AltScreenView;
-  styles: SearchHighlightStyles;
-  navigationButtonStyle: (text: string, hovered: boolean) => string;
-  showOverlay: (component: Component, options: OverlayOptions) => OverlayHandle;
-}
-
-const SEARCH_OVERLAY: OverlayOptions = {
+const SEARCH_OVERLAY: tuiOverlayLayoutTypes.OverlayOptions = {
   anchor: "top-right",
-  width: "40%",
-  minWidth: 32,
   margin: 1,
+  minWidth: 32,
+  width: "40%",
 };
 
-function revealMatch(scrollView: ScrollView, match: AltScreenSearchMatch | undefined): boolean {
+function revealMatch(
+  scrollView: scrollViewTypes.ScrollView,
+  match: altScreenSearchTypes.AltScreenSearchMatch | undefined,
+): boolean {
   const firstSegment = match?.segments[0];
   const lastSegment = match?.segments[match.segments.length - 1];
   if (firstSegment === undefined || lastSegment === undefined || scrollView.viewportHeight <= 0)
@@ -59,11 +59,11 @@ function revealMatch(scrollView: ScrollView, match: AltScreenSearchMatch | undef
   return scrollView.scrollTop !== before;
 }
 
-export class AltScreenSearchController {
-  private readonly options: SearchControllerOptions;
+export default class AltScreenSearchController {
+  private readonly options: altScreenSearchControllerTypes.SearchControllerOptions;
   private active: ActiveSearch | undefined;
 
-  constructor(options: SearchControllerOptions) {
+  constructor(options: altScreenSearchControllerTypes.SearchControllerOptions) {
     this.options = options;
   }
 
@@ -81,12 +81,12 @@ export class AltScreenSearchController {
       this.options.navigationButtonStyle,
     );
     const search: ActiveSearch = {
+      anchorRow: this.options.view.primaryScrollView().scrollTop,
       component,
       index: new AltScreenSearchIndex(),
-      query: "",
       matches: [],
+      query: "",
       selectedIndex: -1,
-      anchorRow: this.options.view.primaryScrollView().scrollTop,
       selectionMode: "query",
     };
     this.active = search;
@@ -112,7 +112,7 @@ export class AltScreenSearchController {
     return this.active?.component.setHoveredNavigationDirection(undefined) === true;
   }
 
-  handleMouse(event: SgrMouseEvent): boolean {
+  handleMouse(event: altScreenMouseProtocolTypes.SgrMouseEvent): boolean {
     const search = this.active;
     if (search === undefined) return false;
     const direction = this.navigationDirectionAt(search, event.x, event.y);
@@ -123,7 +123,7 @@ export class AltScreenSearchController {
     return true;
   }
 
-  refresh(layout: LayoutFrame, scrollView: ScrollView): boolean {
+  refresh(layout: layoutTypes.LayoutFrame, scrollView: scrollViewTypes.ScrollView): boolean {
     const search = this.active;
     if (search === undefined) return false;
     const box = getScrollViewBox(layout, scrollView);
@@ -158,18 +158,22 @@ export class AltScreenSearchController {
     return revealMatch(scrollView, matches[selectedIndex]);
   }
 
-  highlight(screen: string[], layout: LayoutFrame, scrollView: ScrollView): string[] {
+  highlight(
+    screen: string[],
+    layout: layoutTypes.LayoutFrame,
+    scrollView: scrollViewTypes.ScrollView,
+  ): string[] {
     const search = this.active;
     if (search === undefined || search.selectedIndex < 0 || search.matches.length === 0)
       return screen;
-    const box: LayoutBox | undefined = getScrollViewBox(layout, scrollView);
+    const box: layoutTypes.LayoutBox | undefined = getScrollViewBox(layout, scrollView);
     if (box === undefined) return screen;
     return highlightSearchMatches(screen, {
-      matches: search.matches,
-      selectedIndex: search.selectedIndex,
       box,
-      scrollView,
       columns: this.options.view.columns(),
+      matches: search.matches,
+      scrollView,
+      selectedIndex: search.selectedIndex,
       styles: this.options.styles,
     });
   }

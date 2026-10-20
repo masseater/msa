@@ -1,11 +1,15 @@
 import { Effect } from "effect";
 import { describe, expect, it } from "vite-plus/test";
 
-import { stream as streamOpenAICodexResponses } from "../src/api/openai-codex-responses.ts";
-import { getOpenAICodexWebSocketDebugStats } from "../src/api/openai-codex-ws-stats.ts";
-import { normalizeContext } from "../src/utils/transcript.ts";
+import openaiCodexResponses from "../src/api/openai-codex-responses.ts";
+import openaiCodexWsStats from "../src/api/openai-codex-ws-stats.ts";
+import transcript from "../src/utils/transcript.ts";
 import codexFakeWebSocket from "./codex-fake-websocket.ts";
 import openaiCodexStreamSupport from "./openai-codex-stream-support.ts";
+
+const { normalizeContext } = transcript;
+const { stream: streamOpenAICodexResponses } = openaiCodexResponses;
+const { getOpenAICodexWebSocketDebugStats } = openaiCodexWsStats;
 
 const { installFakeWebSocket } = codexFakeWebSocket;
 const {

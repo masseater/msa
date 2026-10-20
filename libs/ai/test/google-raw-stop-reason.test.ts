@@ -1,16 +1,20 @@
-import { arch, platform, release } from "node:os";
+import { arch, platform } from "node:os";
 
 import { Effect } from "effect";
 import { beforeEach, describe, expect, it, vi } from "vite-plus/test";
 
 vi.mock("@google/genai", () => import("./google-genai-mock.ts").then((module) => module.default));
 
-import { stream as streamGoogleGenerativeAi } from "../src/api/google-generative-ai.ts";
-import { normalizeContext } from "../src/compat.ts";
-import type { Api, Model, StreamOptions } from "../src/types.ts";
-import { currentTimeMillis } from "../src/utils/clock.ts";
+import googleGenerativeAi from "../src/api/google-generative-ai.ts";
+import compat from "../src/compat.ts";
+import type typesModule from "../src/types.types.ts";
+import clock from "../src/utils/clock.ts";
 import googleGenAiMockModule from "./google-genai-mock.ts";
 import modelChoice from "./model-choice.ts";
+
+const { normalizeContext } = compat;
+const { currentTimeMillis } = clock;
+const { stream: streamGoogleGenerativeAi } = googleGenerativeAi;
 
 const { chooseModel, usesApi } = modelChoice;
 
@@ -20,7 +24,7 @@ beforeEach(() => {
   googleGenAiMock.streamChunks = undefined;
 });
 
-const MSA_USER_AGENT = `pi (${platform()} ${release()}; ${arch()})`;
+const MSA_USER_AGENT = `pi (${platform()}; ${arch()})`;
 
 const context = normalizeContext({
   messages: [{ content: "hello", role: "user", timestamp: currentTimeMillis() }],
@@ -137,7 +141,7 @@ describe("Google provider stream events", () => {
             },
           ];
           const received: unknown[] = [];
-          const eventModels: Model<Api>[] = [];
+          const eventModels: typesModule.Model<typesModule.Api>[] = [];
           const result = yield* Effect.promise(() =>
             createStream((chunk, eventModel) =>
               Effect.runPromiseWith(effectContext)(
@@ -191,7 +195,7 @@ function stepStep22() {
   const googleModel = googleGenerativeModel();
   const adapters = [
     {
-      createStream: (onProviderStreamEvent: StreamOptions["onProviderStreamEvent"]) =>
+      createStream: (onProviderStreamEvent: typesModule.StreamOptions["onProviderStreamEvent"]) =>
         streamGoogleGenerativeAi(googleModel, context, {
           apiKey: "test-api-key",
           onProviderStreamEvent,

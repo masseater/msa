@@ -1,12 +1,15 @@
 import { expect, vi } from "vite-plus/test";
 
-import type { Api, FetchFunction, Model } from "../src/types.ts";
-import { normalizeContext } from "../src/utils/transcript.ts";
+import type typesModule from "../src/types.types.ts";
+import transcript from "../src/utils/transcript.ts";
+
+const { normalizeContext } = transcript;
+
 const context = normalizeContext({
   messages: [{ content: "hello", role: "user", timestamp: 1 }],
 });
 
-function createModel<TApi extends Api>(api: TApi): Model<TApi> {
+function createModel<TApi extends typesModule.Api>(api: TApi): typesModule.Model<TApi> {
   return {
     api,
     baseUrl: "https://upstream.test/v1",
@@ -22,10 +25,10 @@ function createModel<TApi extends Api>(api: TApi): Model<TApi> {
 }
 
 function mockFetches() {
-  const fallback = vi.fn<FetchFunction>(() =>
+  const fallback = vi.fn<typesModule.FetchFunction>(() =>
     Promise.reject(new Error("ambient fetch must not be called")),
   );
-  const custom = vi.fn<FetchFunction>(() =>
+  const custom = vi.fn<typesModule.FetchFunction>(() =>
     Promise.resolve(
       new Response(JSON.stringify({ error: { message: "upstream rejected request" } }), {
         headers: { "content-type": "application/json" },
@@ -38,8 +41,8 @@ function mockFetches() {
 }
 
 function expectOnlyCustomFetch(
-  custom: ReturnType<typeof vi.fn<FetchFunction>>,
-  fallback: ReturnType<typeof vi.fn<FetchFunction>>,
+  custom: ReturnType<typeof vi.fn<typesModule.FetchFunction>>,
+  fallback: ReturnType<typeof vi.fn<typesModule.FetchFunction>>,
 ) {
   expect(custom).toHaveBeenCalled();
   expect(fallback).not.toHaveBeenCalled();

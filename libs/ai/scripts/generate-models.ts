@@ -1,6 +1,6 @@
 import { Cause, Console, Effect, ManagedRuntime } from "effect";
 
-import type { Model } from "../src/types.ts";
+import type typesModule from "../src/types.types.ts";
 import assembleChatModels from "./catalog/catalog-assembly.ts";
 import buildCatalog from "./catalog/catalog-build.ts";
 import type catalogBuildTypes from "./catalog/catalog-build.types.ts";
@@ -13,7 +13,7 @@ const { readGeneratorOptions } = optionsModule;
 const { ScriptFiles, scriptFilesLayer } = scriptFiles;
 
 const logStatistics = Effect.fn("logStatistics")(function* (
-  chat: readonly Model<any>[],
+  chat: readonly typesModule.Model<any>[],
   catalog: catalogBuildTypes.BuiltCatalog,
 ) {
   yield* Console.log(`\nModel Statistics:`);

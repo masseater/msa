@@ -1,20 +1,20 @@
 import { Effect } from "effect";
 
-import { type FdEntry, walkDirectoryWithFd } from "./autocomplete-fd.ts";
-import { expandHomePath } from "./autocomplete-files.ts";
-import { buildCompletionValue, toDisplayPath } from "./autocomplete-prefix.ts";
-import type { AutocompleteItem } from "./autocomplete-types.ts";
-import { pathOperations, Platform } from "./platform.ts";
+import autocompleteFd from "./autocomplete-fd.ts";
+import type autocompleteFdTypes from "./autocomplete-fd.types.ts";
+import autocompleteFiles from "./autocomplete-files.ts";
+import type autocompleteFuzzyFilesTypes from "./autocomplete-fuzzy-files.types.ts";
+import autocompletePrefix from "./autocomplete-prefix.ts";
+import type autocompleteTypesModule from "./autocomplete-types.ts";
+import platformModule from "./platform.ts";
+import type platformTypes from "./platform.types.ts";
+
+const { Platform, pathOperations } = platformModule;
+const { buildCompletionValue, toDisplayPath } = autocompletePrefix;
+const { expandHomePath } = autocompleteFiles;
+const { walkDirectoryWithFd } = autocompleteFd;
 
 const { basename, join } = pathOperations;
-
-export interface FuzzyFileQuery {
-  basePath: string;
-  fdPath: string | null;
-  query: string;
-  isQuotedPrefix: boolean;
-  signal: AbortSignal;
-}
 
 interface ScopedFuzzyQuery {
   baseDir: string;
@@ -22,14 +22,14 @@ interface ScopedFuzzyQuery {
   displayBase: string;
 }
 
-interface ScoredEntry extends FdEntry {
+interface ScoredEntry extends autocompleteFdTypes.FdEntry {
   score: number;
 }
 
 function resolveScopedFuzzyQuery(
   basePath: string,
   rawQuery: string,
-): Effect.Effect<ScopedFuzzyQuery | null, never, Platform> {
+): Effect.Effect<ScopedFuzzyQuery | null, never, platformTypes.Platform> {
   const normalizedQuery = toDisplayPath(rawQuery);
   const slashIndex = normalizedQuery.lastIndexOf("/");
   if (slashIndex === -1) {
@@ -49,7 +49,7 @@ function resolveScopedFuzzyQuery(
   }
 
   return Platform.use((platform) => platform.isDirectory(baseDir)).pipe(
-    Effect.map((isDirectory) => (isDirectory ? { baseDir, query, displayBase } : null)),
+    Effect.map((isDirectory) => (isDirectory ? { baseDir, displayBase, query } : null)),
   );
 }
 
@@ -94,7 +94,10 @@ function compareScoredEntries(a: ScoredEntry, b: ScoredEntry): number {
   return a.path.localeCompare(b.path);
 }
 
-function mergeEntries(baseDirEntries: FdEntry[], recursiveEntries: FdEntry[]): FdEntry[] {
+function mergeEntries(
+  baseDirEntries: autocompleteFdTypes.FdEntry[],
+  recursiveEntries: autocompleteFdTypes.FdEntry[],
+): autocompleteFdTypes.FdEntry[] {
   const seenPaths = new Set(baseDirEntries.map((entry) => entry.path));
   return [
     ...baseDirEntries,
@@ -106,11 +109,11 @@ function mergeEntries(baseDirEntries: FdEntry[], recursiveEntries: FdEntry[]): F
   ];
 }
 
-function rankEntries(entries: FdEntry[], fdQuery: string): ScoredEntry[] {
+function rankEntries(entries: autocompleteFdTypes.FdEntry[], fdQuery: string): ScoredEntry[] {
   return entries
     .map((entry) => ({
-      path: entry.path,
       isDirectory: entry.isDirectory,
+      path: entry.path,
       score: fdQuery === "" ? 1 : scoreEntry(entry.path, fdQuery, entry.isDirectory),
     }))
     .filter((entry) => entry.score > 0)
@@ -119,10 +122,10 @@ function rankEntries(entries: FdEntry[], fdQuery: string): ScoredEntry[] {
 }
 
 function toSuggestion(
-  entry: FdEntry,
+  entry: autocompleteFdTypes.FdEntry,
   scopedQuery: ScopedFuzzyQuery | null,
   isQuotedPrefix: boolean,
-): AutocompleteItem {
+): autocompleteTypesModule.AutocompleteItem {
   const pathWithoutSlash = entry.isDirectory ? entry.path.slice(0, -1) : entry.path;
   const displayPath =
     scopedQuery === null
@@ -130,17 +133,20 @@ function toSuggestion(
       : scopedPathForDisplay(scopedQuery.displayBase, pathWithoutSlash);
   const completionPath = entry.isDirectory ? `${displayPath}/` : displayPath;
   return {
-    value: buildCompletionValue({ path: completionPath, isAtPrefix: true, isQuotedPrefix }),
-    label: basename(pathWithoutSlash) + (entry.isDirectory ? "/" : ""),
     description: displayPath,
+    label: basename(pathWithoutSlash) + (entry.isDirectory ? "/" : ""),
+    value: buildCompletionValue({ isAtPrefix: true, isQuotedPrefix, path: completionPath }),
   };
 }
 
-const searchFuzzyFiles = Effect.fnUntraced(function* (input: FuzzyFileQuery, fdPath: string) {
+const searchFuzzyFiles = Effect.fnUntraced(function* (
+  input: autocompleteFuzzyFilesTypes.FuzzyFileQuery,
+  fdPath: string,
+) {
   const scopedQuery = yield* resolveScopedFuzzyQuery(input.basePath, input.query);
   const baseDir = scopedQuery?.baseDir ?? input.basePath;
   const query = scopedQuery?.query ?? input.query;
-  const walk = { baseDir, fdPath, query, maxResults: 100, signal: input.signal };
+  const walk = { baseDir, fdPath, maxResults: 100, query, signal: input.signal };
   const baseDirEntries = input.signal.aborted
     ? []
     : yield* walkDirectoryWithFd({ ...walk, maxDepth: 1 });
@@ -153,12 +159,18 @@ const searchFuzzyFiles = Effect.fnUntraced(function* (input: FuzzyFileQuery, fdP
   );
 });
 
-export function getFuzzyFileSuggestions(
-  input: FuzzyFileQuery,
-): Effect.Effect<AutocompleteItem[], never, Platform> {
+function getFuzzyFileSuggestions(
+  input: autocompleteFuzzyFilesTypes.FuzzyFileQuery,
+): Effect.Effect<autocompleteTypesModule.AutocompleteItem[], never, platformTypes.Platform> {
   const { fdPath } = input;
   if (fdPath === null || fdPath === "" || input.signal.aborted) {
     return Effect.succeed([]);
   }
   return searchFuzzyFiles(input, fdPath).pipe(Effect.catchDefect(() => Effect.succeed([])));
 }
+
+const autocompleteFuzzyFiles = {
+  getFuzzyFileSuggestions,
+};
+
+export default autocompleteFuzzyFiles;

@@ -1,5 +1,5 @@
-import { Agent } from "@msa/agent-core";
-import type { Model } from "@msa/ai";
+import agentModule from "@msa/agent-core";
+import type aiTypes from "@msa/ai/index.types";
 import { Effect } from "effect";
 
 import { AuthStorage } from "../../src/core/auth-storage.ts";
@@ -7,10 +7,12 @@ import modelRuntimeTestUtils from "../model-runtime-test-utils.ts";
 import fauxStream from "./faux-stream.ts";
 import type sessionAgentTypes from "./session-agent.types.ts";
 
+const { Agent } = agentModule;
+
 const { createInMemoryModelRegistry, getModelRuntime } = modelRuntimeTestUtils;
 const { createFauxStreamFn } = fauxStream;
 
-const registerProvider = Effect.fn("registerProvider")(function* (model: Model<any>) {
+const registerProvider = Effect.fn("registerProvider")(function* (model: aiTypes.Model<any>) {
   const authStorage = AuthStorage.inMemory({
     [model.provider]: { key: "faux-key", type: "api_key" },
   });

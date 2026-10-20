@@ -1,67 +1,60 @@
 import { Effect } from "effect";
 
-import { call } from "./call.ts";
-import { type LoopState, runLoop } from "./loop.ts";
-import { getDefaultStreamFn } from "./stream-fn.ts";
-import type { Emit } from "./tool-batch.ts";
-import { declareToolChanges } from "./tool-changes.ts";
-import type { AgentContext, AgentEvent, AgentLoopConfig, AgentMessage, StreamFn } from "./types.ts";
+import callModule from "./call.ts";
+import type loopRunTypes from "./loop-run.types.ts";
+import loop from "./loop.ts";
+import type loopTypes from "./loop.types.ts";
+import streamFnModule from "./stream-fn.ts";
+import type toolBatchTypes from "./tool-batch.types.ts";
+import toolChanges from "./tool-changes.ts";
+import type typesModule from "./types.ts";
 
-export type AgentEventSink = (event: AgentEvent) => Promise<void> | void;
+const { call } = callModule;
+const { getDefaultStreamFn } = streamFnModule;
+const { declareToolChanges } = toolChanges;
+const { runLoop } = loop;
 
-export const emitTo =
-  (sink: AgentEventSink): Emit =>
+const emitTo =
+  (sink: loopRunTypes.AgentEventSink): toolBatchTypes.Emit =>
   (event) =>
     call(() => sink(event));
 
-export interface LoopRun {
-  readonly context: AgentContext;
-  readonly config: AgentLoopConfig;
-  readonly emit: Emit;
-  readonly signal: AbortSignal | undefined;
-  readonly streamFn: StreamFn | undefined;
-}
-
-export interface PromptRun extends LoopRun {
-  readonly prompts: AgentMessage[];
-}
-
 const loopState = (
-  run: LoopRun,
-  context: AgentContext,
-  newMessages: AgentMessage[],
-): LoopState => ({
-  context,
+  run: loopRunTypes.LoopRun,
+  context: typesModule.AgentContext,
+  newMessages: typesModule.AgentMessage[],
+): loopTypes.LoopState => ({
   config: run.config,
-  lastCompletedTurn: undefined,
-  explicitContinuation: false,
-  pendingMessages: [],
-  hasMoreToolCalls: true,
-  newMessages,
-  signal: run.signal,
+  context,
   emit: run.emit,
+  explicitContinuation: false,
+  hasMoreToolCalls: true,
+  lastCompletedTurn: undefined,
+  newMessages,
+  pendingMessages: [],
+  signal: run.signal,
   streamFunction: run.streamFn ?? getDefaultStreamFn(),
 });
 
-export const runPrompt = (run: PromptRun): Effect.Effect<AgentMessage[]> =>
+const runPrompt = (run: loopRunTypes.PromptRun): Effect.Effect<typesModule.AgentMessage[]> =>
   Effect.gen(function* () {
     const initialMessages = declareToolChanges({ context: run.context, messages: run.prompts });
-    const newMessages: AgentMessage[] = [...initialMessages];
-    const context: AgentContext = {
+    const newMessages: typesModule.AgentMessage[] = [...initialMessages];
+    const context: typesModule.AgentContext = {
       ...run.context,
       messages: [...run.context.messages, ...initialMessages],
     };
     yield* run.emit({ type: "agent_start" });
     yield* run.emit({ type: "turn_start" });
     for (const message of initialMessages) {
-      yield* run.emit({ type: "message_start", message });
-      yield* run.emit({ type: "message_end", message });
+      yield* run.emit({ message, type: "message_start" });
+      yield* run.emit({ message, type: "message_end" });
     }
     yield* runLoop(loopState(run, context, newMessages));
     return newMessages;
   });
 
-export const continuationError = (context: AgentContext): Error | undefined => {
+const continuationError = (context: typesModule.AgentContext): Error | undefined => {
   const lastMessage = context.messages.at(-1);
   if (lastMessage === undefined) return new Error("Cannot continue: no messages in context");
   if (lastMessage.role === "assistant") {
@@ -70,13 +63,22 @@ export const continuationError = (context: AgentContext): Error | undefined => {
   return undefined;
 };
 
-export const runContinuation = (run: LoopRun): Effect.Effect<AgentMessage[]> =>
+const runContinuation = (run: loopRunTypes.LoopRun): Effect.Effect<typesModule.AgentMessage[]> =>
   Effect.gen(function* () {
     const error = continuationError(run.context);
     if (error !== undefined) return yield* Effect.die(error);
-    const newMessages: AgentMessage[] = [];
+    const newMessages: typesModule.AgentMessage[] = [];
     yield* run.emit({ type: "agent_start" });
     yield* run.emit({ type: "turn_start" });
     yield* runLoop(loopState(run, { ...run.context }, newMessages));
     return newMessages;
   });
+
+const loopRun = {
+  continuationError,
+  emitTo,
+  runContinuation,
+  runPrompt,
+};
+
+export default loopRun;

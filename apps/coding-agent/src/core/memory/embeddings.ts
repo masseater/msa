@@ -1,7 +1,9 @@
-import { httpRequest } from "@msa/ai/utils/http";
+import http from "@msa/ai/utils/http";
 import { Duration, Effect, Schema } from "effect";
 
-import { platformRuntime, ToolFailure } from "../platform/index.ts";
+import { ToolFailure, platformRuntime } from "../platform/index.ts";
+
+const { httpRequest } = http;
 
 export interface EmbeddingClientOptions {
   baseUrl: string;
@@ -44,18 +46,18 @@ interface EmbeddingRequest {
 const requestVector = Effect.fn("requestEmbedding")(function* (request: EmbeddingRequest) {
   const { endpoint, apiKey } = request;
   const body = yield* Schema.encodeEffect(Schema.fromJsonString(Schema.Unknown))({
-    model: request.model,
     input: request.text,
+    model: request.model,
   }).pipe(Effect.orDie);
   const reply = yield* httpRequest({
-    url: endpoint,
-    method: "POST",
+    body,
     headers: {
       "content-type": "application/json",
       ...(apiKey !== undefined && apiKey !== "" ? { authorization: `Bearer ${apiKey}` } : {}),
     },
-    body,
+    method: "POST",
     signal: request.signal,
+    url: endpoint,
   });
   if (!reply.ok) {
     const text = yield* reply.text.pipe(Effect.orElseSucceed(() => ""));
@@ -88,11 +90,11 @@ export class EmbeddingClient {
   embed(text: string, signal?: AbortSignal): Promise<Float32Array> {
     return platformRuntime.runPromise(
       requestVector({
+        apiKey: this.apiKey,
         endpoint: this.endpoint,
         model: this.model,
-        apiKey: this.apiKey,
-        text,
         signal,
+        text,
       }).pipe(
         Effect.timeoutOrElse({
           duration: Duration.millis(this.timeoutMs),

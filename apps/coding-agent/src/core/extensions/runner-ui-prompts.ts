@@ -15,15 +15,15 @@ export class UIPromptTracker {
   wrap(ui: ExtensionUIContext): ExtensionUIContext {
     return {
       ...ui,
-      select: (title, options, opts) =>
-        this.track("select", title, () => ui.select(title, options, opts)),
       confirm: (title, message, opts) =>
         this.track("confirm", title, () => ui.confirm(title, message, opts)),
-      input: (title, placeholder, opts) =>
-        this.track("input", title, () => ui.input(title, placeholder, opts)),
-      editor: (title, prefill) => this.track("editor", title, () => ui.editor(title, prefill)),
       custom: (factory, options) =>
         this.track("custom", undefined, () => ui.custom(factory, options)),
+      editor: (title, prefill) => this.track("editor", title, () => ui.editor(title, prefill)),
+      input: (title, placeholder, opts) =>
+        this.track("input", title, () => ui.input(title, placeholder, opts)),
+      select: (title, options, opts) =>
+        this.track("select", title, () => ui.select(title, options, opts)),
     };
   }
 
@@ -35,9 +35,9 @@ export class UIPromptTracker {
     if (this.depth++ === 0) {
       this.active = { kind, title };
       this.emitEvent({
-        type: "ui_prompt_start",
-        reason: "ui_prompt",
         kind,
+        reason: "ui_prompt",
+        type: "ui_prompt_start",
         ...(title !== undefined && title !== "" ? { title } : {}),
       });
     }
@@ -56,9 +56,9 @@ export class UIPromptTracker {
     const prompt = this.active ?? { kind, title };
     this.active = undefined;
     this.emitEvent({
-      type: "ui_prompt_end",
-      reason: "ui_prompt",
       kind: prompt.kind,
+      reason: "ui_prompt",
+      type: "ui_prompt_end",
       ...(prompt.title !== undefined && prompt.title !== "" ? { title: prompt.title } : {}),
     });
   }

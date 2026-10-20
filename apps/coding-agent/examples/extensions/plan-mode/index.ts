@@ -1,7 +1,7 @@
-import type { AgentMessage } from "@msa/agent-core";
-import type { AssistantMessage } from "@msa/ai";
+import type agentTypes from "@msa/agent-core/index.types";
+import type aiTypes from "@msa/ai/index.types";
 import type { ExtensionAPI, ExtensionContext, SessionEntry } from "@msa/coding-agent";
-import { Key } from "@msa/tui";
+import tui from "@msa/tui";
 import { Effect } from "effect";
 
 import { handleAgentEnd } from "./approval.ts";
@@ -11,13 +11,15 @@ import {
   guardBash,
   planModeContextMessage,
 } from "./context.ts";
-import { createPlanStore, type PlanStore } from "./state.ts";
+import { type PlanStore, createPlanStore } from "./state.ts";
 import { markCompletedSteps } from "./utils.ts";
 
-const isAssistantMessage = (m: AgentMessage): m is AssistantMessage =>
+const { Key } = tui;
+
+const isAssistantMessage = (m: agentTypes.AgentMessage): m is aiTypes.AssistantMessage =>
   m.role === "assistant" && Array.isArray(m.content);
 
-const getTextContent = (message: AssistantMessage): string =>
+const getTextContent = (message: aiTypes.AssistantMessage): string =>
   message.content
     .filter((block): block is { type: "text"; text: string } => block.type === "text")
     .map((block) => block.text)
@@ -91,7 +93,7 @@ const registerProgress = (msa: ExtensionAPI, store: PlanStore): void => {
   });
 
   msa.on("agent_end", (event, ctx) =>
-    Effect.runPromise(handleAgentEnd({ msa, store, event, ctx })),
+    Effect.runPromise(handleAgentEnd({ ctx, event, msa, store })),
   );
 };
 
@@ -105,10 +107,10 @@ const completedTextSinceExecute = (entries: SessionEntry[]): string => {
     }
   }
 
-  const messages: AssistantMessage[] = [];
+  const messages: aiTypes.AssistantMessage[] = [];
   for (const entry of entries.slice(executeIndex + 1)) {
-    if (entry.type === "message" && isAssistantMessage(entry.message as AgentMessage)) {
-      messages.push(entry.message as AssistantMessage);
+    if (entry.type === "message" && isAssistantMessage(entry.message as agentTypes.AgentMessage)) {
+      messages.push(entry.message as aiTypes.AssistantMessage);
     }
   }
   return messages.map(getTextContent).join("\n");
@@ -139,9 +141,9 @@ export default function planModeExtension(msa: ExtensionAPI): void {
   const store = createPlanStore(msa);
 
   msa.registerFlag("plan", {
+    default: false,
     description: "Start in plan mode (read-only exploration)",
     type: "boolean",
-    default: false,
   });
 
   registerCommands(msa, store);

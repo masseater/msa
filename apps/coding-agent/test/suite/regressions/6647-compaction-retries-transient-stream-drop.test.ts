@@ -1,15 +1,14 @@
-import type { StreamFn } from "@msa/agent-core";
-import {
-  type AssistantMessage,
-  createAssistantMessageEventStream,
-  fauxAssistantMessage,
-} from "@msa/ai";
+import type agentTypes from "@msa/agent-core/index.types";
+import ai from "@msa/ai";
+import type aiTypes from "@msa/ai/index.types";
 import testing from "@msa/testing";
 import { Effect } from "effect";
 import { afterEach, describe, expect, it } from "vite-plus/test";
 
 import harnessModule from "../harness.ts";
 import type harnessTypes from "../harness.types.ts";
+
+const { createAssistantMessageEventStream, fauxAssistantMessage } = ai;
 
 const { createHarness } = harnessModule;
 
@@ -37,7 +36,7 @@ function seedCompactableSession(harness: harnessTypes.Harness): void {
     timestamp: now - 1000,
   });
   const model = harness.getModel();
-  const assistant: AssistantMessage = {
+  const assistant: aiTypes.AssistantMessage = {
     ...fauxAssistantMessage("", { stopReason: "stop", timestamp: now - 500 }),
     api: model.api,
     model: model.id,
@@ -51,17 +50,17 @@ function seedCompactableSession(harness: harnessTypes.Harness): void {
 
 function useScriptedStreamFn(
   harness: harnessTypes.Harness,
-  script: AssistantMessage[],
+  script: aiTypes.AssistantMessage[],
 ): () => number {
   let callCount = 0;
-  const streamFunction: StreamFn = (model) => {
+  const streamFunction: agentTypes.StreamFn = (model) => {
     const message = script[callCount] ?? script[script.length - 1]!;
     callCount++;
     const stream = createAssistantMessageEventStream();
     queueMicrotask(() => {
       const response = { ...message, api: model.api, model: model.id, provider: model.provider };
       if (response.stopReason === "pending") {
-        const error: AssistantMessage = {
+        const error: aiTypes.AssistantMessage = {
           ...response,
           errorMessage: "Scripted response ended without a stop reason",
           stopReason: "error",
@@ -88,11 +87,11 @@ const retriesATransientTerminatedSummarizationError = Effect.gen(function* () {
   });
 
   const model = harness.getModel();
-  const error = (errorMessage: string): AssistantMessage => ({
+  const error = (errorMessage: string): aiTypes.AssistantMessage => ({
     ...fauxAssistantMessage("", { errorMessage, stopReason: "error" }),
     usage: createUsage(10),
   });
-  const success: AssistantMessage = {
+  const success: aiTypes.AssistantMessage = {
     ...fauxAssistantMessage("recovered summary"),
     usage: createUsage(10),
   };
@@ -125,7 +124,7 @@ const doesNotRetryANonRetryable = Effect.gen(function* () {
     retry: { baseDelayMs: 0, enabled: true, maxRetries: 3 },
   });
 
-  const error: AssistantMessage = {
+  const error: aiTypes.AssistantMessage = {
     ...fauxAssistantMessage("", { errorMessage: "insufficient_quota", stopReason: "error" }),
     usage: createUsage(10),
   };
@@ -146,7 +145,7 @@ const doesNotRetryWhenRetryIs = Effect.gen(function* () {
     retry: { baseDelayMs: 0, enabled: false, maxRetries: 3 },
   });
 
-  const error: AssistantMessage = {
+  const error: aiTypes.AssistantMessage = {
     ...fauxAssistantMessage("", { errorMessage: "terminated", stopReason: "error" }),
     usage: createUsage(10),
   };
@@ -165,7 +164,7 @@ const stopsRetryingAfterMaxretriesAndReports = Effect.gen(function* () {
     retry: { baseDelayMs: 0, enabled: true, maxRetries: 2 },
   });
 
-  const error: AssistantMessage = {
+  const error: aiTypes.AssistantMessage = {
     ...fauxAssistantMessage("", { errorMessage: "terminated", stopReason: "error" }),
     usage: createUsage(10),
   };
@@ -188,7 +187,7 @@ const abortsAnInFlightRetryBackoff = Effect.gen(function* () {
     retry: { baseDelayMs: 30_000, enabled: true, maxRetries: 5 },
   });
 
-  const error: AssistantMessage = {
+  const error: aiTypes.AssistantMessage = {
     ...fauxAssistantMessage("", { errorMessage: "terminated", stopReason: "error" }),
     usage: createUsage(10),
   };

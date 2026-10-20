@@ -1,26 +1,28 @@
 import { Effect } from "effect";
 
-import type { Model } from "../types.ts";
-import type { AssistantMessageEventStream } from "../utils/event-stream.ts";
-import { headersToRecord } from "../utils/headers.ts";
-import { callHook } from "../utils/hooks.ts";
-import type { TranscriptContext } from "../utils/transcript.ts";
-import type { AnthropicOptions } from "./anthropic-messages-options.ts";
-import { performRequest } from "./anthropic-messages-request.ts";
-import { createStreamState, runStreamEvents } from "./anthropic-messages-run-stream.ts";
-import {
-  createOutput,
-  failStream,
-  finalizeStream,
-  resolveClient,
-  type RunState,
-} from "./anthropic-messages-run.ts";
+import type typesModule from "../types.types.ts";
+import type eventStreamTypes from "../utils/event-stream.types.ts";
+import type transcriptTypes from "../utils/transcript.types.ts";
+import type anthropicMessagesOptionsTypes from "./anthropic-messages-options.ts";
+import anthropicMessagesRequest from "./anthropic-messages-request.ts";
+import anthropicMessagesRunStream from "./anthropic-messages-run-stream.ts";
+import anthropicMessagesRun from "./anthropic-messages-run.ts";
+import type anthropicMessagesRunTypes from "./anthropic-messages-run.types.ts";
+import anthropicMessagesStreamKit from "./anthropic-messages-stream-kit.ts";
+
+const { headers: headersModule, hooks } = anthropicMessagesStreamKit;
+
+const { createOutput, failStream, finalizeStream, resolveClient } = anthropicMessagesRun;
+const { performRequest } = anthropicMessagesRequest;
+const { callHook } = hooks;
+const { headersToRecord } = headersModule;
+const { createStreamState, runStreamEvents } = anthropicMessagesRunStream;
 
 interface RunAnthropicRequestInput {
-  readonly model: Model<"anthropic-messages">;
-  readonly context: TranscriptContext;
-  readonly options: AnthropicOptions | undefined;
-  readonly events: AssistantMessageEventStream;
+  readonly model: typesModule.Model<"anthropic-messages">;
+  readonly context: transcriptTypes.TranscriptContext;
+  readonly options: anthropicMessagesOptionsTypes.AnthropicOptions | undefined;
+  readonly events: eventStreamTypes.AssistantMessageEventStream;
 }
 
 function runAnthropicRequest(input: RunAnthropicRequestInput): Effect.Effect<void> {
@@ -29,29 +31,33 @@ function runAnthropicRequest(input: RunAnthropicRequestInput): Effect.Effect<voi
     const output = createOutput(model);
     yield* Effect.gen(function* () {
       const client = resolveClient({ model, options });
-      const run: RunState = { model, output, options, events, client };
-      const response = yield* performRequest({ run, context });
+      const run: anthropicMessagesRunTypes.RunState = { client, events, model, options, output };
+      const response = yield* performRequest({ context, run });
       yield* callHook(() =>
         options?.onResponse?.(
-          { status: response.status, headers: headersToRecord(response.headers) },
+          { headers: headersToRecord(response.headers), status: response.status },
           model,
         ),
       );
-      events.push({ type: "start", partial: output });
+      events.push({ partial: output, type: "start" });
       const streamState = createStreamState({ events, model, output });
-      yield* runStreamEvents({ run, response, state: streamState });
+      yield* runStreamEvents({ response, run, state: streamState });
       finalizeStream({
-        output: streamState.output,
         events: streamState.events,
         inputTransformations: streamState.inputTransformations,
+        output: streamState.output,
         signal: options?.signal,
       });
     }).pipe(
       Effect.catchDefect((error) =>
-        Effect.sync(() => failStream({ output, events, error, signal: options?.signal })),
+        Effect.sync(() => failStream({ error, events, output, signal: options?.signal })),
       ),
     );
   });
 }
 
-export { runAnthropicRequest };
+const anthropicMessagesStream = {
+  runAnthropicRequest,
+};
+
+export default anthropicMessagesStream;

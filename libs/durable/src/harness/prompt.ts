@@ -1,5 +1,5 @@
-import type { Tool as AiTool, Message, SystemMessage, ToolReference } from "@msa/ai";
-import { declarationsEqual, getCurrentTools, toToolDeclaration } from "@msa/ai/utils/transcript";
+import type aiTypes from "@msa/ai/index.types";
+import transcript from "@msa/ai/utils/transcript";
 import type chordTypes from "@msa/chord/index.types";
 import { Cause, Effect, Exit, Function } from "effect";
 
@@ -7,9 +7,11 @@ import entriesModule from "../entries.ts";
 import type promptTypes from "./prompt.types.ts";
 import type typesModule from "./types.types.ts";
 
+const { declarationsEqual, getCurrentTools, toToolDeclaration } = transcript;
+
 const { SystemEntry } = entriesModule;
 
-function replaySections(messages: readonly Message[]): Map<string, string> {
+function replaySections(messages: readonly aiTypes.Message[]): Map<string, string> {
   const shown = new Map<string, string>();
   for (const message of messages) {
     if (message.role !== "system" || message.sections === undefined) continue;
@@ -85,12 +87,15 @@ const renderSections: {
   }),
 );
 
-type ToolChanges = { readonly toolsRemoved: ToolReference[]; readonly toolsAdded: AiTool[] };
+type ToolChanges = {
+  readonly toolsRemoved: aiTypes.ToolReference[];
+  readonly toolsAdded: aiTypes.Tool[];
+};
 
 const planSystemEntries: typesModule.Dual4<
   typesModule.ContextView,
   ReadonlyMap<string, string>,
-  readonly AiTool[],
+  readonly aiTypes.Tool[],
   number,
   promptTypes.SystemDraft[]
 > = Function.dual(4, planEntries);
@@ -98,7 +103,7 @@ const planSystemEntries: typesModule.Dual4<
 function planEntries(
   view: typesModule.ContextView,
   desired: ReadonlyMap<string, string>,
-  tools: readonly AiTool[],
+  tools: readonly aiTypes.Tool[],
   timestamp: number,
 ): promptTypes.SystemDraft[] {
   const head = view.head;
@@ -127,7 +132,10 @@ function planEntries(
   );
 }
 
-function planTools(offered: readonly AiTool[], desired: readonly AiTool[]): ToolChanges {
+function planTools(
+  offered: readonly aiTypes.Tool[],
+  desired: readonly aiTypes.Tool[],
+): ToolChanges {
   const wanted = new Map(desired.map((tool) => [tool.name, tool]));
   const kept = offered.filter((tool) => {
     const next = wanted.get(tool.name);
@@ -180,7 +188,7 @@ function systemEntry(
   tools: ToolChanges | undefined,
   timestamp: number,
 ): promptTypes.SystemDraft {
-  const message: SystemMessage = {
+  const message: aiTypes.SystemMessage = {
     content: "",
     role: "system",
     ...(sections === undefined ? {} : { sections }),

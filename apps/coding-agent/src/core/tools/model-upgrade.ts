@@ -36,11 +36,11 @@ const modelUpgradeReadSchema = Type.Object({
 export type ModelUpgradeToolInput = Static<typeof modelUpgradeSchema>;
 
 export const modelUpgradeToolSystemPromptContribution = {
-  snippet: "Find and apply catalog models a newer model replaces",
   guidelines: [
     "Use model_upgrade with `list` before naming a model in a recommendation: a newer version of the same family may already exist",
     'Apply with `action: "apply"` only after reading the changes `list` reports; it rewrites defaultModel, enabledModels, modelThinkingLevels, modelPolicy, goal, orchestrator, and compaction references in settings',
   ],
+  snippet: "Find and apply catalog models a newer model replaces",
 } as const;
 
 export interface ModelUpgradeToolTarget {
@@ -60,13 +60,8 @@ export function createModelUpgradeToolDefinition(
   target: ModelUpgradeToolTarget,
 ): ToolDefinition<typeof modelUpgradeSchema, Record<string, unknown>> {
   const modelUpgrade: ToolDefinition<typeof modelUpgradeSchema, Record<string, unknown>> = {
-    name: "model_upgrade",
-    label: "model upgrade",
     description:
       "Find catalog models that a newer model of the same family and variant replaces, and apply them to settings. A higher version or a later dated variant is confident; a different variant is only a candidate. `list` reports the settings that would change without writing; `apply` rewrites defaultModel, enabledModels, modelThinkingLevels, modelPolicy, goal, orchestrator, and compaction references in agent-directory and project settings. Session transcripts keep their recorded model id.",
-    promptSnippet: modelUpgradeToolSystemPromptContribution.snippet,
-    promptGuidelines: [...modelUpgradeToolSystemPromptContribution.guidelines],
-    parameters: modelUpgradeSchema,
     async execute(_toolCallId, params) {
       const candidates = findModelUpgrades(target.modelRuntime.getCatalogModels());
       const selected = params.model ? [findModelUpgrade(candidates, params.model)] : candidates;
@@ -148,14 +143,19 @@ export function createModelUpgradeToolDefinition(
         },
       };
     },
+    label: "model upgrade",
+    name: "model_upgrade",
+    parameters: modelUpgradeSchema,
+    promptGuidelines: [...modelUpgradeToolSystemPromptContribution.guidelines],
+    promptSnippet: modelUpgradeToolSystemPromptContribution.snippet,
   };
   return {
     ...modelUpgrade,
     readOnlyVariant: readOnlyVariantOf(modelUpgrade, {
       actions: ["list"],
-      parameters: modelUpgradeReadSchema,
       description:
         "Find catalog models that a newer model of the same family and variant replaces, and the settings that would change. Applying the upgrades is not available here.",
+      parameters: modelUpgradeReadSchema,
       promptSnippet: "Find catalog models a newer model replaces",
     }),
   };

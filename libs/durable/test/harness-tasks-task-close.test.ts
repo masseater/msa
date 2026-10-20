@@ -1,4 +1,4 @@
-import { createModels } from "@msa/ai";
+import ai from "@msa/ai";
 import durable from "@msa/durable";
 import harnessModule from "@msa/durable/harness";
 import type durableTypes from "@msa/durable/index.types";
@@ -9,6 +9,8 @@ import { describe, expect, it } from "vite-plus/test";
 import harnessTasksSupport from "./harness-tasks-support.ts";
 import support from "./support.ts";
 import type supportTypes from "./support.types.ts";
+
+const { createModels } = ai;
 
 const { Harness, createRegistry } = harnessModule;
 const { defineTask } = durable;

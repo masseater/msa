@@ -1,10 +1,13 @@
-import { type AssistantMessage, Type } from "@msa/ai";
+import ai from "@msa/ai";
+import type aiTypes from "@msa/ai/index.types";
 import type chordTypes from "@msa/chord/index.types";
 import { Effect } from "effect";
 
 import durable from "../../src/index.ts";
 import type durableTypes from "../../src/index.types.ts";
 import effectSupport from "../effect-support.ts";
+
+const { Type } = ai;
 
 const { AssistantEntry, LiveDoc, configure, defineDoc, defineExtension, defineTask, defineTool } =
   durable;
@@ -98,7 +101,7 @@ const Reporter = defineTask<ReporterInput, ReporterState, null>({
                     if (agent.reported.includes(settled.answer)) return next();
                     agent.reported.push(settled.answer);
                     const answer = (yield* awaited(tx.entry(AssistantEntry, settled.answer)))
-                      ?.model?.[0] as AssistantMessage;
+                      ?.model?.[0] as aiTypes.AssistantMessage;
                     return next(`[subagent ${name} answered, no reply needed] ${textOf(answer)}`);
                   }),
                 ),
@@ -132,7 +135,7 @@ const Reporter = defineTask<ReporterInput, ReporterState, null>({
   version: 1,
 });
 
-function textOf(message: AssistantMessage | undefined): string {
+function textOf(message: aiTypes.AssistantMessage | undefined): string {
   return (message?.content ?? []).flatMap((c) => (c.type === "text" ? [c.text] : [])).join("");
 }
 

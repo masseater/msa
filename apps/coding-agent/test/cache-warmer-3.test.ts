@@ -1,4 +1,4 @@
-import { type Api, type Model } from "@msa/ai";
+import type aiTypes from "@msa/ai/index.types";
 import testing from "@msa/testing";
 import { Effect } from "effect";
 import { afterEach, describe, expect, it, vi } from "vite-plus/test";
@@ -24,7 +24,8 @@ const {
 
 const { awaited, gate, runTest } = testing;
 
-const { promptCache: _adaptivePromptCache, ...unknownModel }: Model<Api> = adaptiveModel;
+const { promptCache: _adaptivePromptCache, ...unknownModel }: aiTypes.Model<aiTypes.Api> =
+  adaptiveModel;
 
 afterEach(() => vi.useRealTimers());
 

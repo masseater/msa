@@ -1,6 +1,6 @@
 import testing from "@msa/testing";
-import type { Component, TUI, WheelScrollLines } from "@msa/tui";
-import { ScrollView, Text, getKeybindings, isViewportTUI, setKeybindings } from "@msa/tui";
+import tui from "@msa/tui";
+import type tuiTypes from "@msa/tui/index.types";
 import { Effect } from "effect";
 import { describe, expect, it, vi } from "vite-plus/test";
 
@@ -13,6 +13,8 @@ import {
 } from "../src/modes/interactive/interactive-mode.ts";
 import { initTheme } from "../src/modes/interactive/theme/theme.ts";
 import interactiveTuiSupport from "./interactive-tui-support.ts";
+
+const { ScrollView, Text, getKeybindings, isViewportTUI, setKeybindings } = tui;
 
 const { RecordingTerminal } = interactiveTuiSupport;
 
@@ -93,13 +95,13 @@ type SwitchContext = {
     session: {
       settingsManager: {
         getFullscreenCopyOnSelect: () => boolean;
-        getFullscreenWheelScrollLines: () => WheelScrollLines;
+        getFullscreenWheelScrollLines: () => tuiTypes.WheelScrollLines;
       };
     };
   };
   renderer: ReturnType<typeof createInteractiveTui>;
-  ui: TUI;
-  fullscreenLayoutRoot: Component;
+  ui: tuiTypes.TUI;
+  fullscreenLayoutRoot: tuiTypes.Component;
   options: { tuiMode?: TuiMode };
   themeController: { rebindTui: () => void };
   extensionTerminalInputSubscriptions: Set<never>;
@@ -107,7 +109,7 @@ type SwitchContext = {
 
 const createSwitchContext = (
   renderer: ReturnType<typeof createInteractiveTui>,
-  component: Component,
+  component: tuiTypes.Component,
 ): SwitchContext =>
   Object.assign(Object.create(InteractiveMode.prototype), {
     extensionTerminalInputSubscriptions: new Set<never>(),
@@ -123,7 +125,7 @@ const createSwitchContext = (
       },
     },
     themeController: { rebindTui: () => {} },
-    ui: undefined as unknown as TUI,
+    ui: undefined as unknown as tuiTypes.TUI,
   }) as SwitchContext;
 
 const replacesTheRendererAndRestoresThePrevious = Effect.gen(function* () {
@@ -134,9 +136,9 @@ const replacesTheRendererAndRestoresThePrevious = Effect.gen(function* () {
     terminal,
     tuiMode: "regular",
   });
-  let stableUi: TUI;
+  let stableUi: tuiTypes.TUI;
   const invalidatedModes: TuiMode[] = [];
-  const component: Component & { focused: boolean } = {
+  const component: tuiTypes.Component & { focused: boolean } = {
     focused: false,
     invalidate: () => invalidatedModes.push(stableUi.mode),
     render: () => ["content"],
@@ -184,7 +186,11 @@ describe("createInteractiveTui", () => {
 const feedsClipboardTextToTheFocusedComponent = Effect.gen(function* () {
   clipboardMocks.readClipboardText.mockResolvedValue("clipboard text");
   const handleInput = vi.fn<(data: string) => void>();
-  const target = { handleInput, invalidate: () => {}, render: () => [] } satisfies Component;
+  const target = {
+    handleInput,
+    invalidate: () => {},
+    render: () => [],
+  } satisfies tuiTypes.Component;
   const requestRender = vi.fn();
   const context = {
     renderer: { getFocusedComponent: () => target },

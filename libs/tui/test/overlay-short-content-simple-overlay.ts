@@ -1,6 +1,6 @@
-import type { Component } from "../src/tui-component.ts";
+import type tuiComponentTypes from "../src/tui-component.types.ts";
 
-class SimpleOverlay implements Component {
+class SimpleOverlay implements tuiComponentTypes.Component {
   render(): string[] {
     return ["OVERLAY_TOP", "OVERLAY_MID", "OVERLAY_BOT"];
   }

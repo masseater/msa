@@ -1,10 +1,13 @@
 import * as NodeServices from "@effect/platform-node/NodeServices";
 import { Cause, Console, Effect, FileSystem, ManagedRuntime, Path, Schema } from "effect";
 
-import type { OAuthCredentials } from "../src/auth/types.ts";
-import { builtinProviders } from "../src/providers/all.ts";
-import { currentTimeMillis } from "../src/utils/clock.ts";
+import type typesModule from "../src/auth/types.ts";
+import all from "../src/providers/all.ts";
+import clock from "../src/utils/clock.ts";
 import env from "./env.ts";
+
+const { builtinProviders } = all;
+const { currentTimeMillis } = clock;
 
 const { envValue } = env;
 
@@ -15,7 +18,7 @@ type ApiKeyCredential = {
 
 type OAuthCredentialEntry = {
   type: "oauth";
-} & OAuthCredentials;
+} & typesModule.OAuthCredentials;
 
 type AuthCredential = ApiKeyCredential | OAuthCredentialEntry;
 

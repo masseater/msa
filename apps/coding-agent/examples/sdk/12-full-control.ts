@@ -1,13 +1,15 @@
-import { getModel } from "@msa/ai/compat";
+import compat from "@msa/ai/compat";
 import {
-  createAgentSession,
-  createExtensionRuntime,
   ModelRuntime,
   type ResourceLoader,
   SessionManager,
   SettingsManager,
+  createAgentSession,
+  createExtensionRuntime,
 } from "@msa/coding-agent";
 import { Config, ConfigProvider, Console, Effect, Option } from "effect";
+
+const { getModel } = compat;
 
 const modelRuntime = await ModelRuntime.create({
   authPath: "/tmp/my-agent/auth.json",
@@ -33,30 +35,30 @@ const settingsManager = SettingsManager.inMemory({
 const cwd = process.cwd();
 
 const resourceLoader: ResourceLoader = {
-  getExtensions: () => ({ extensions: [], errors: [], runtime: createExtensionRuntime() }),
-  getSkills: () => ({ skills: [], diagnostics: [] }),
-  getPrompts: () => ({ prompts: [], diagnostics: [] }),
-  getThemes: () => ({ themes: [], diagnostics: [] }),
+  extendResources: () => {},
   getAgentsFiles: () => ({ agentsFiles: [] }),
+  getAppendSystemPrompt: () => [],
+  getAppendSystemPromptSources: () => [],
+  getExtensions: () => ({ extensions: [], errors: [], runtime: createExtensionRuntime() }),
+  getPrompts: () => ({ prompts: [], diagnostics: [] }),
+  getSkills: () => ({ skills: [], diagnostics: [] }),
   getSystemPrompt: () => `You are a minimal assistant.
 Available: read, bash. Be concise.`,
   getSystemPromptSource: () => undefined,
-  getAppendSystemPrompt: () => [],
-  getAppendSystemPromptSources: () => [],
-  extendResources: () => {},
+  getThemes: () => ({ themes: [], diagnostics: [] }),
   reload: () => Promise.resolve(),
 };
 
 const { session } = await createAgentSession({
-  cwd,
   agentDir: "/tmp/my-agent",
+  cwd,
   model,
-  thinkingLevel: "off",
   modelRuntime,
   resourceLoader,
-  tools: ["read", "bash"],
   sessionManager: SessionManager.inMemory(cwd),
   settingsManager,
+  thinkingLevel: "off",
+  tools: ["read", "bash"],
 });
 
 try {

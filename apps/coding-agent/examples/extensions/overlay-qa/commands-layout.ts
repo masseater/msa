@@ -1,5 +1,5 @@
 import type { ExtensionAPI, ExtensionCommandContext } from "@msa/coding-agent";
-import type { OverlayAnchor, OverlayOptions } from "@msa/tui";
+import type tuiTypes from "@msa/tui/index.types";
 import { Effect } from "effect";
 
 import { AnchorTestComponent } from "./anchor-test-component.ts";
@@ -10,7 +10,7 @@ import { PercentTestComponent } from "./percent-test-component.ts";
 import { registerOverlayCommand, showOverlay } from "./show-overlay.ts";
 import { SidepanelComponent } from "./sidepanel-component.ts";
 
-const ANCHORS: OverlayAnchor[] = [
+const ANCHORS: tuiTypes.OverlayAnchor[] = [
   "top-left",
   "top-center",
   "top-right",
@@ -22,26 +22,26 @@ const ANCHORS: OverlayAnchor[] = [
   "bottom-right",
 ];
 
-const MARGIN_CONFIGS: { name: string; options: OverlayOptions }[] = [
+const MARGIN_CONFIGS: { name: string; options: tuiTypes.OverlayOptions }[] = [
   { name: "No margin (top-left)", options: { anchor: "top-left", width: 35 } },
-  { name: "Margin: 3 all sides", options: { anchor: "top-left", width: 35, margin: 3 } },
+  { name: "Margin: 3 all sides", options: { anchor: "top-left", margin: 3, width: 35 } },
   {
     name: "Margin: top=5, left=10",
-    options: { anchor: "top-left", width: 35, margin: { top: 5, left: 10 } },
+    options: { anchor: "top-left", margin: { left: 10, top: 5 }, width: 35 },
   },
   {
     name: "Center + offset (10, -3)",
-    options: { anchor: "center", width: 35, offsetX: 10, offsetY: -3 },
+    options: { anchor: "center", offsetX: 10, offsetY: -3, width: 35 },
   },
-  { name: "Bottom-right, margin: 2", options: { anchor: "bottom-right", width: 35, margin: 2 } },
+  { name: "Bottom-right, margin: 2", options: { anchor: "bottom-right", margin: 2, width: 35 } },
 ];
 
 const PERCENT_CONFIGS = [
-  { name: "rowPercent: 0 (top)", row: 0, col: 50 },
-  { name: "rowPercent: 50 (middle)", row: 50, col: 50 },
-  { name: "rowPercent: 100 (bottom)", row: 100, col: 50 },
-  { name: "colPercent: 0 (left)", row: 50, col: 0 },
-  { name: "colPercent: 100 (right)", row: 50, col: 100 },
+  { col: 50, name: "rowPercent: 0 (top)", row: 0 },
+  { col: 50, name: "rowPercent: 50 (middle)", row: 50 },
+  { col: 50, name: "rowPercent: 100 (bottom)", row: 100 },
+  { col: 0, name: "colPercent: 0 (left)", row: 50 },
+  { col: 100, name: "colPercent: 100 (right)", row: 50 },
 ];
 
 const registerAnchors = (msa: ExtensionAPI): void => {
@@ -117,7 +117,7 @@ const registerPercent = (msa: ExtensionAPI): void => {
               showOverlay<"next" | "close">({
                 ctx,
                 factory: (_tui, theme, _kb, done) => new PercentTestComponent(theme, config, done),
-                overlayOptions: { width: 30, row: `${config.row}%`, col: `${config.col}%` },
+                overlayOptions: { col: `${config.col}%`, row: `${config.row}%`, width: 30 },
               }),
             );
 
@@ -134,37 +134,37 @@ const registerPercent = (msa: ExtensionAPI): void => {
 
 const registerEdge = (msa: ExtensionAPI): void => {
   registerOverlayCommand({
+    component: () => (_tui, theme, _kb, done) => new EdgeTestComponent(theme, done),
+    description: "Test overlay positioned at terminal edge",
     msa,
     name: "overlay-edge",
-    description: "Test overlay positioned at terminal edge",
-    overlayOptions: { anchor: "right-center", width: 40, margin: { right: 0 } },
-    component: () => (_tui, theme, _kb, done) => new EdgeTestComponent(theme, done),
+    overlayOptions: { anchor: "right-center", margin: { right: 0 }, width: 40 },
   });
 };
 
 const registerMaxHeight = (msa: ExtensionAPI): void => {
   registerOverlayCommand({
+    component: () => (_tui, theme, _kb, done) => new MaxHeightTestComponent(theme, done),
+    description: "Test maxHeight truncation",
     msa,
     name: "overlay-maxheight",
-    description: "Test maxHeight truncation",
-    overlayOptions: { anchor: "center", width: 50, maxHeight: 10 },
-    component: () => (_tui, theme, _kb, done) => new MaxHeightTestComponent(theme, done),
+    overlayOptions: { anchor: "center", maxHeight: 10, width: 50 },
   });
 };
 
 const registerSidepanel = (msa: ExtensionAPI): void => {
   registerOverlayCommand({
+    component: () => (tui, theme, _kb, done) => new SidepanelComponent(tui, theme, done),
+    description: "Test responsive sidepanel (hides when terminal < 100 cols)",
     msa,
     name: "overlay-sidepanel",
-    description: "Test responsive sidepanel (hides when terminal < 100 cols)",
     overlayOptions: {
       anchor: "right-center",
-      width: "25%",
-      minWidth: 30,
       margin: { right: 1 },
+      minWidth: 30,
       visible: (termWidth) => termWidth >= 100,
+      width: "25%",
     },
-    component: () => (tui, theme, _kb, done) => new SidepanelComponent(tui, theme, done),
   });
 };
 

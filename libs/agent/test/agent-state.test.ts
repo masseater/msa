@@ -1,16 +1,21 @@
-import { getModels } from "@msa/ai/compat";
+import compat from "@msa/ai/compat";
 import { Effect } from "effect";
 import { Type } from "typebox";
 import { describe, expect, it } from "vite-plus/test";
 
-import { Agent, type AgentMessage, type AgentTool, setDefaultStreamFn } from "../src/index.ts";
+import agentModule2 from "../src/index.ts";
+import type agentTypes from "../src/index.types.ts";
 import agentModule from "./support/agent.ts";
 import fixtures from "./support/fixtures.ts";
+
+const { getModels } = compat;
+
+const { Agent, setDefaultStreamFn } = agentModule2;
 
 const { unusedStreamFunction } = agentModule;
 const { createUserMessage, now, scripted, textMessage } = fixtures;
 
-const echoTool: AgentTool = {
+const echoTool: agentTypes.AgentTool = {
   description: "Echo input",
   execute: () => Promise.resolve({ content: [{ text: "echo", type: "text" }], details: {} }),
   label: "Echo",
@@ -21,7 +26,7 @@ const echoTool: AgentTool = {
 const usesConfiguredDefault = Effect.gen(function* () {
   const script = scripted(textMessage("fallback"));
   setDefaultStreamFn(script.streamFn);
-  const agent = Reflect.construct(Agent, [{}]) as Agent;
+  const agent = Reflect.construct(Agent, [{}]) as agentTypes.Agent;
   yield* Effect.promise(() => agent.prompt("Hello"));
   expect(script.calls()).toBe(1);
 }).pipe(Effect.ensuring(Effect.sync(() => setDefaultStreamFn(undefined))));
@@ -57,7 +62,7 @@ const customInitialState = () => {
   expect(agent.state.thinkingLevel).toBe("low");
 };
 
-const expectBaseline = (message: AgentMessage | undefined) => {
+const expectBaseline = (message: agentTypes.AgentMessage | undefined) => {
   expect(message?.role).toBe("system");
   if (message?.role !== "system") throw new Error("expected initial system message");
   expect(message.content).toBe("You are helpful.");
@@ -109,7 +114,7 @@ const mutatesState = () => {
   expect(agent.state.model).toBe(newModel);
   agent.state.thinkingLevel = "high";
   expect(agent.state.thinkingLevel).toBe("high");
-  const tools = [{ description: "test tool", name: "test" } as AgentTool];
+  const tools = [{ description: "test tool", name: "test" } as agentTypes.AgentTool];
   agent.state.tools = tools;
   expect(agent.state.tools).toEqual(tools);
   expect(agent.state.tools).not.toBe(tools);
@@ -118,7 +123,7 @@ const mutatesState = () => {
   expect(agent.state.messages).toEqual(messages);
   expect(agent.state.messages).not.toBe(messages);
   const newMessage = { content: [{ text: "Hi", type: "text" }], role: "assistant" };
-  agent.state.messages.push(newMessage as AgentMessage);
+  agent.state.messages.push(newMessage as agentTypes.AgentMessage);
   expect(agent.state.messages).toHaveLength(2);
   expect(agent.state.messages[1]).toBe(newMessage);
   agent.state.messages = [];

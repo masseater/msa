@@ -1,21 +1,16 @@
-import type {
-  AssistantMessage,
-  ImageContent,
-  Message,
-  StreamOptions,
-  TextContent,
-  ThinkingContent,
-  ToolCall,
-  ToolResultMessage,
-  TranscriptContext,
-} from "../types.ts";
-import { getSystemMessageText } from "../utils/text.ts";
+import type typesModule from "../types.types.ts";
+import textModule from "../utils/text.ts";
+import type fauxUsageTypes from "./faux-usage.types.ts";
 
-export function estimateTokens(text: string): number {
+const { getSystemMessageText } = textModule;
+
+function estimateTokens(text: string): number {
   return Math.ceil(text.length / 4);
 }
 
-function contentToText(content: string | Array<TextContent | ImageContent>): string {
+function contentToText(
+  content: string | Array<typesModule.TextContent | typesModule.ImageContent>,
+): string {
   if (typeof content === "string") {
     return content;
   }
@@ -29,7 +24,9 @@ function contentToText(content: string | Array<TextContent | ImageContent>): str
     .join("\n");
 }
 
-function assistantContentToText(content: Array<TextContent | ThinkingContent | ToolCall>): string {
+function assistantContentToText(
+  content: Array<typesModule.TextContent | typesModule.ThinkingContent | typesModule.ToolCall>,
+): string {
   return content
     .map((block) => {
       if (block.type === "text") {
@@ -43,11 +40,11 @@ function assistantContentToText(content: Array<TextContent | ThinkingContent | T
     .join("\n");
 }
 
-function toolResultToText(message: ToolResultMessage): string {
+function toolResultToText(message: typesModule.ToolResultMessage): string {
   return [message.toolName, ...message.content.map((block) => contentToText([block]))].join("\n");
 }
 
-function messageToText(message: Message): string {
+function messageToText(message: typesModule.Message): string {
   if (message.role === "system") {
     return [
       getSystemMessageText(message),
@@ -90,19 +87,12 @@ function commonPrefixLength(a: string, b: string): number {
   return index;
 }
 
-export interface UsageEstimateRequest {
-  readonly message: AssistantMessage;
-  readonly context: TranscriptContext;
-  readonly options: StreamOptions | undefined;
-  readonly promptCache: Map<string, readonly string[]>;
-}
-
-export function withUsageEstimate({
+function withUsageEstimate({
   message,
   context,
   options,
   promptCache,
-}: UsageEstimateRequest): AssistantMessage {
+}: fauxUsageTypes.UsageEstimateRequest): typesModule.AssistantMessage {
   const prompt = context.messages.map((entry) => `${entry.role}:${messageToText(entry)}`);
   const promptLength = joinedLength(prompt);
   const promptTokens = Math.ceil(promptLength / 4);
@@ -128,12 +118,19 @@ export function withUsageEstimate({
   return {
     ...message,
     usage: {
-      input,
-      output: outputTokens,
       cacheRead,
       cacheWrite,
+      cost: { cacheRead: 0, cacheWrite: 0, input: 0, output: 0, total: 0 },
+      input,
+      output: outputTokens,
       totalTokens: input + outputTokens + cacheRead + cacheWrite,
-      cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0, total: 0 },
     },
   };
 }
+
+const fauxUsage = {
+  estimateTokens,
+  withUsageEstimate,
+};
+
+export default fauxUsage;

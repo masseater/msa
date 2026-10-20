@@ -1,20 +1,18 @@
 import * as NodeRuntime from "@effect/platform-node/NodeRuntime";
-import {
-  type AssistantMessage,
-  createModels,
-  fauxAssistantMessage,
-  fauxProvider,
-  fauxToolCall,
-} from "@msa/ai";
+import ai from "@msa/ai";
+import type aiTypes from "@msa/ai/index.types";
 import contextModule from "@msa/chord/context";
 import durable from "@msa/durable";
 import harnessModule from "@msa/durable/harness";
 import memory from "@msa/durable/storage/memory";
 import { Console, Effect } from "effect";
 
-import node from "../../src/env/node.ts";
-import toolsModule from "../../src/tools/index.ts";
 import support from "../support.ts";
+import example28ReviewerKit from "./28-reviewer-kit.ts";
+
+const { node, tools: toolsModule } = example28ReviewerKit;
+
+const { createModels, fauxAssistantMessage, fauxProvider, fauxToolCall } = ai;
 
 const { BACKGROUND_CONTEXT } = contextModule;
 
@@ -27,7 +25,7 @@ const { NodeExecutionEnv } = node;
 const { awaited, joinPath, makeTempDir, removeDir, writeText } = support;
 
 const context = BACKGROUND_CONTEXT;
-const textOf = (message: AssistantMessage) =>
+const textOf = (message: aiTypes.AssistantMessage) =>
   message.content.flatMap((part) => (part.type === "text" ? [part.text] : [])).join("");
 
 const DONE = "No further findings.";
@@ -115,8 +113,8 @@ const main = Effect.gen(function* () {
   for (const entry of [...page.items].reverse()) {
     const message = entry.model?.[0];
     if (message?.role === "user") yield* Console.log(">", message.content);
-    if (AssistantEntry.is(entry) && textOf(message as AssistantMessage) !== "") {
-      yield* Console.log("reviewer:", textOf(message as AssistantMessage));
+    if (AssistantEntry.is(entry) && textOf(message as aiTypes.AssistantMessage) !== "") {
+      yield* Console.log("reviewer:", textOf(message as aiTypes.AssistantMessage));
     }
   }
 

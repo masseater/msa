@@ -1,4 +1,5 @@
-import { type Component, truncateToWidth, wrapTextWithAnsi } from "@msa/tui";
+import tui from "@msa/tui";
+import type tuiTypes from "@msa/tui/index.types";
 
 import type { Orchestrator } from "../../../core/orchestrator/orchestrator.ts";
 import { firstLine } from "../../../core/orchestrator/text.ts";
@@ -10,6 +11,8 @@ import { lineWindow } from "./scroll-window.ts";
 import { taskList } from "./tasks-list.ts";
 import { taskDetail } from "./tasks-view-detail.ts";
 import { type TasksViewState, viewHelpers } from "./tasks-view-helpers.ts";
+
+const { truncateToWidth, wrapTextWithAnsi } = tui;
 
 const LABEL_WIDTH = 6;
 const ROW_LINES = 2;
@@ -28,7 +31,7 @@ function wrap(text: string, width: number, limit: number): string[] {
   return shown;
 }
 
-export class ThreadPane implements Component {
+export class ThreadPane implements tuiTypes.Component {
   private readonly options: ThreadPaneOptions;
 
   constructor(options: ThreadPaneOptions) {
@@ -75,7 +78,7 @@ export class ThreadPane implements Component {
         formatAge(task.updatedAt),
       ];
       return [
-        taskList.taskRow(task, { selected: task.id === selected?.id, width, meta: () => "" }),
+        taskList.taskRow(task, { meta: () => "", selected: task.id === selected?.id, width }),
         truncateToWidth(`     ${theme.fg("dim", meta.join(" · "))}`, width),
       ];
     });

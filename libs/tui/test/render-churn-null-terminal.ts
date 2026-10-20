@@ -1,11 +1,11 @@
 import { Effect } from "effect";
 
-import type { Terminal } from "../src/terminal-protocol.ts";
+import type terminalProtocolTypes from "../src/terminal-protocol.types.ts";
 
 const COLUMNS = 100;
 const ROWS = 30;
 
-class NullTerminal implements Terminal {
+class NullTerminal implements terminalProtocolTypes.Terminal {
   bytesWritten = 0;
   start(_onInput: (data: string) => void, _onResize: () => void): void {}
   stop(): void {}

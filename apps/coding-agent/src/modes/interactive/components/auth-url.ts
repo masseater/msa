@@ -1,4 +1,5 @@
-import { Container, hyperlink, Text, type TUI } from "@msa/tui";
+import tuiModule from "@msa/tui";
+import type tuiTypes from "@msa/tui/index.types";
 import { Effect } from "effect";
 
 import { awaited, awaitingWith } from "../../../core/awaiting.ts";
@@ -7,12 +8,14 @@ import { toErrorMessage } from "../../../utils/errors.ts";
 import { theme } from "../theme/theme.ts";
 import { keyHint } from "./keybinding-hints.ts";
 
+const { Container, Text, hyperlink } = tuiModule;
+
 export class AuthUrlComponent extends Container {
   readonly url: string;
-  private readonly tui: TUI;
-  private readonly hint: Text;
+  private readonly tui: tuiTypes.TUI;
+  private readonly hint: tuiTypes.Text;
 
-  constructor(tui: TUI, url: string) {
+  constructor(tui: tuiTypes.TUI, url: string) {
     super();
     this.tui = tui;
     this.url = url;

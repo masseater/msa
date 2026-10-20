@@ -1,4 +1,4 @@
-import { type FauxResponseStep, type SystemMessage } from "@msa/ai";
+import type aiTypes from "@msa/ai/index.types";
 import durable from "@msa/durable";
 import harnessModule from "@msa/durable/harness";
 import type durableTypes from "@msa/durable/index.types";
@@ -41,7 +41,7 @@ const runsInputTool = Effect.gen(function* () {
     "msa.tool-result",
     "msa.assistant",
   ]);
-  const system = entries[1]!.model![0] as SystemMessage;
+  const system = entries[1]!.model![0] as aiTypes.SystemMessage;
   expect(system.toolsAdded).toEqual([
     { description: "The echo tool", name: "echo", parameters: expect.any(Object) },
   ]);
@@ -135,7 +135,7 @@ const answersCallTool = Effect.gen(function* () {
     }),
   );
   let root!: durableTypes.Conversation;
-  const deactivate: FauxResponseStep = () =>
+  const deactivate: aiTypes.FauxResponseStep = () =>
     runPromise(
       Effect.gen(function* () {
         yield* awaited(root.configure({ tools: [] }, context));
@@ -152,7 +152,9 @@ const answersCallTool = Effect.gen(function* () {
     "<harness>\n[error] Tool echo is not available\n</harness>",
   );
   const systems = result.entries.filter((entry) => entry.kind === "msa.system");
-  expect((systems.at(-1)!.model![0] as SystemMessage).toolsRemoved).toEqual([{ name: "echo" }]);
+  expect((systems.at(-1)!.model![0] as aiTypes.SystemMessage).toolsRemoved).toEqual([
+    { name: "echo" },
+  ]);
   yield* awaited(result.harness.close(context));
 });
 
@@ -174,7 +176,7 @@ const removesUnregisteredActive = Effect.gen(function* () {
   expect(second.status).toBe("done");
   let entries = yield* allEntries(first.root);
   const removal = entries.filter((entry) => entry.kind === "msa.system").at(-1)!
-    .model![0] as SystemMessage;
+    .model![0] as aiTypes.SystemMessage;
   expect(removal.toolsRemoved).toEqual([{ name: "echo" }]);
   expect(results(entries)[0]).toMatchObject({ isError: true });
   expect((yield* awaited(first.root.agent(context))).tools).toEqual([]);
@@ -186,7 +188,7 @@ const removesUnregisteredActive = Effect.gen(function* () {
   );
   entries = yield* allEntries(first.root);
   const addition = entries.filter((entry) => entry.kind === "msa.system").at(-1)!
-    .model![0] as SystemMessage;
+    .model![0] as aiTypes.SystemMessage;
   expect(addition.toolsAdded?.map((declared) => declared.name)).toEqual(["echo"]);
   yield* awaited(first.harness.close(context));
 });
@@ -248,7 +250,7 @@ const readsExecutionMode = Effect.gen(function* () {
       );
   addTool(setup.registry, tool("a", slow("a")));
   addTool(setup.registry, tool("b", slow("b")));
-  const request: FauxResponseStep = () => {
+  const request: aiTypes.FauxResponseStep = () => {
     setup.settings.toolExecution = "sequential";
     return calls(["a", {}, "c1"], ["b", {}, "c2"]);
   };

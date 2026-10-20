@@ -1,4 +1,4 @@
-import type { AssistantMessage, Models, ToolCall } from "@msa/ai";
+import type aiTypes from "@msa/ai/index.types";
 import type chordTypes from "@msa/chord/index.types";
 import type durable from "@msa/durable";
 import type durableTypes from "@msa/durable/index.types";
@@ -16,7 +16,7 @@ declare namespace specUsageNamesTypes {
   type SpecNames = {
     readonly context: chordTypes.Context;
     readonly storage: durableTypes.Storage;
-    readonly models: Models;
+    readonly models: aiTypes.Models;
     readonly session: durableTypes.Session;
     readonly conversationId: durableTypes.ConversationId;
     readonly message: { readonly kind: string };
@@ -30,10 +30,10 @@ declare namespace specUsageNamesTypes {
     };
     readonly renderAgentsMd: () => string | undefined;
     readonly renderSkills: () => string | undefined;
-    readonly isDangerous: (call: ToolCall) => boolean;
-    readonly writes: (call: ToolCall) => boolean;
+    readonly isDangerous: (call: aiTypes.ToolCall) => boolean;
+    readonly writes: (call: aiTypes.ToolCall) => boolean;
     readonly requestSecondPass: (
-      answer: AssistantMessage,
+      answer: aiTypes.AssistantMessage,
       api: durableTypes.HookApi,
       context: chordTypes.Context,
     ) => Promise<{ readonly continue: durableTypes.UserInput } | undefined>;

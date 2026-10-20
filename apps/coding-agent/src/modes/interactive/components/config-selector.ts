@@ -1,14 +1,5 @@
-import {
-  type Component,
-  Container,
-  type Focusable,
-  getKeybindings,
-  Input,
-  matchesKey,
-  Spacer,
-  truncateToWidth,
-  visibleWidth,
-} from "@msa/tui";
+import tui from "@msa/tui";
+import type tuiTypes from "@msa/tui/index.types";
 
 import { CONFIG_DIR_NAME } from "../../../config.ts";
 import type {
@@ -29,6 +20,8 @@ import { theme } from "../theme/theme.ts";
 import { DynamicBorder } from "./dynamic-border.ts";
 import { keyHint, rawKeyHint } from "./keybinding-hints.ts";
 
+const { Container, Input, Spacer, getKeybindings, matchesKey, truncateToWidth, visibleWidth } = tui;
+
 type ResourceType = "extensions" | "skills" | "prompts" | "themes";
 type ConfigWriteScope = "global" | "project";
 type SettingsScope = "user" | "project";
@@ -44,8 +37,8 @@ const RESOURCE_TYPES = [
 
 const RESOURCE_TYPE_LABELS: Record<ResourceType, string> = {
   extensions: "Extensions",
-  skills: "Skills",
   prompts: "Prompts",
+  skills: "Skills",
   themes: "Themes",
 };
 
@@ -111,8 +104,8 @@ function buildGroups(resolved: ResolvedPaths, agentDir: string): ResourceGroup[]
         groupMap.set(groupKey, {
           key: groupKey,
           label: getGroupLabel(metadata, agentDir),
-          scope: metadata.scope,
           origin: metadata.origin,
+          scope: metadata.scope,
           source: metadata.source,
           subgroups: [],
         });
@@ -124,9 +117,9 @@ function buildGroups(resolved: ResolvedPaths, agentDir: string): ResourceGroup[]
       let subgroup = group.subgroups.find((sg) => sg.type === resourceType);
       if (subgroup === undefined) {
         subgroup = {
-          type: resourceType,
-          label: RESOURCE_TYPE_LABELS[resourceType],
           items: [],
+          label: RESOURCE_TYPE_LABELS[resourceType],
+          type: resourceType,
         };
         group.subgroups.push(subgroup);
       }
@@ -144,12 +137,12 @@ function buildGroups(resolved: ResolvedPaths, agentDir: string): ResourceGroup[]
         displayName = fileName;
       }
       subgroup.items.push({
-        path,
-        enabled,
-        metadata,
-        resourceType,
         displayName,
+        enabled,
         groupKey,
+        metadata,
+        path,
+        resourceType,
         subgroupKey,
       });
     }
@@ -173,8 +166,8 @@ function buildGroups(resolved: ResolvedPaths, agentDir: string): ResourceGroup[]
 
   const typeOrder: Record<ResourceType, number> = {
     extensions: 0,
-    skills: 1,
     prompts: 2,
+    skills: 1,
     themes: 3,
   };
   for (const group of groups) {
@@ -192,7 +185,7 @@ type FlatEntry =
   | { type: "subgroup"; subgroup: ResourceSubgroup; group: ResourceGroup }
   | { type: "item"; item: ResourceItem };
 
-class ConfigSelectorHeader implements Component {
+class ConfigSelectorHeader implements tuiTypes.Component {
   private writeScope: ConfigWriteScope;
   private projectModeAvailable: boolean;
 
@@ -236,12 +229,12 @@ class ConfigSelectorHeader implements Component {
   }
 }
 
-class ResourceList implements Component, Focusable {
+class ResourceList implements tuiTypes.Component, tuiTypes.Focusable {
   private groupsByScope: Record<ConfigWriteScope, ResourceGroup[]>;
   private flatItems: FlatEntry[] = [];
   private filteredItems: FlatEntry[] = [];
   private selectedIndex = 0;
-  private searchInput: Input;
+  private searchInput: tuiTypes.Input;
   private maxVisible: number;
   private settingsManager: SettingsManager;
   private cwd: string;
@@ -309,11 +302,11 @@ class ResourceList implements Component, Focusable {
   private buildFlatList(): void {
     this.flatItems = [];
     for (const group of this.groups) {
-      this.flatItems.push({ type: "group", group });
+      this.flatItems.push({ group, type: "group" });
       for (const subgroup of group.subgroups) {
-        this.flatItems.push({ type: "subgroup", subgroup, group });
+        this.flatItems.push({ group, subgroup, type: "subgroup" });
         for (const item of subgroup.items) {
-          this.flatItems.push({ type: "item", item });
+          this.flatItems.push({ item, type: "item" });
         }
       }
     }
@@ -672,7 +665,7 @@ class ResourceList implements Component, Focusable {
     if (!hasFilters) {
       packages[pkgIndex] = (pkg as { source: string }).source;
     }
-    return { done: false, value: { scope, packages } };
+    return { done: false, value: { packages, scope } };
   }
 
   private renderCheckbox(item: ResourceItem): string {
@@ -858,13 +851,13 @@ class ResourceList implements Component, Focusable {
 
   private createPackageOverrideSource(item: ResourceItem): PackageSource {
     const source = item.metadata.source;
-    if (!isLocalPath(source)) return { source, autoload: false };
+    if (!isLocalPath(source)) return { autoload: false, source };
     const sourcePath = resolvePath(source, this.getTopLevelBaseDir(this.getItemScope(item)), {
       trim: true,
     });
     return {
-      source: relative(this.getTopLevelBaseDir("project"), sourcePath) || ".",
       autoload: false,
+      source: relative(this.getTopLevelBaseDir("project"), sourcePath) || ".",
     };
   }
 
@@ -930,7 +923,7 @@ class ResourceList implements Component, Focusable {
   }
 }
 
-export class ConfigSelectorComponent extends Container implements Focusable {
+export class ConfigSelectorComponent extends Container implements tuiTypes.Focusable {
   private header: ConfigSelectorHeader;
   private resourceList: ResourceList;
   private writeScope: ConfigWriteScope;

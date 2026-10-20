@@ -1,5 +1,6 @@
 import testing from "@msa/testing";
-import { type TUI, setKeybindings } from "@msa/tui";
+import tui from "@msa/tui";
+import type tuiTypes from "@msa/tui/index.types";
 import { Effect } from "effect";
 import { afterEach, beforeAll, beforeEach, describe, expect, it, vi } from "vite-plus/test";
 
@@ -10,12 +11,14 @@ import { stripAnsi } from "../src/utils/ansi.ts";
 import harnessModule from "./suite/harness.ts";
 import type harnessTypes from "./suite/harness.types.ts";
 
+const { setKeybindings } = tui;
+
 const { createHarness } = harnessModule;
 
 const { awaited, runTest } = testing;
 
-function createFakeTui(): TUI {
-  return { requestRender: () => {} } as unknown as TUI;
+function createFakeTui(): tuiTypes.TUI {
+  return { requestRender: () => {} } as unknown as tuiTypes.TUI;
 }
 
 let harness: harnessTypes.Harness | undefined;

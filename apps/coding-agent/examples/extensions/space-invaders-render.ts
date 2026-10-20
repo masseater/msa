@@ -1,4 +1,4 @@
-import { visibleWidth } from "@msa/tui";
+import tui from "@msa/tui";
 
 import {
   type Bullet,
@@ -8,6 +8,8 @@ import {
   PLAYER_Y,
   type Shield,
 } from "./space-invaders-state.ts";
+
+const { visibleWidth } = tui;
 
 const ANSI_SGR = new RegExp(`${String.fromCharCode(27)}\\[[0-9;]*m`, "gu");
 

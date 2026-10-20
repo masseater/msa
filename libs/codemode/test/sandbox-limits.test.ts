@@ -1,9 +1,11 @@
 import { Effect, Latch } from "effect";
 import { afterEach, expect, it } from "vite-plus/test";
 
-import { MAX_OUTPUT_CHARS, MAX_OUTPUT_ITEMS } from "../src/index.ts";
+import codemode from "../src/index.ts";
 import sandboxSupport from "./sandbox-support.ts";
 import support from "./support.ts";
+
+const { MAX_OUTPUT_CHARS, MAX_OUTPUT_ITEMS } = codemode;
 
 const { closeSandboxes, createSandbox, delayed, describeBackends } = sandboxSupport;
 const { abortController, hang } = support;

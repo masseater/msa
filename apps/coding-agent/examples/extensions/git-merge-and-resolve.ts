@@ -27,7 +27,7 @@ const collectBlocks = (file: string, content: string): ConflictBlock[] => {
       blockStart !== undefined &&
       separatorLine !== undefined
     ) {
-      blocks.push({ file, startLine: blockStart, separatorLine, endLine: lineNo });
+      blocks.push({ endLine: lineNo, file, separatorLine, startLine: blockStart });
       blockStart = undefined;
       separatorLine = undefined;
     }

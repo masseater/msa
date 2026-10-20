@@ -1,4 +1,4 @@
-import type { ModelThinkingLevel } from "@msa/ai";
+import type aiTypes from "@msa/ai/index.types";
 
 import type typesModule from "./types.types.ts";
 
@@ -8,7 +8,7 @@ declare namespace compactionTypesModule {
   type SummaryRequest = {
     attempt: number;
     model: typesModule.ModelRef;
-    thinkingLevel: ModelThinkingLevel;
+    thinkingLevel: aiTypes.ModelThinkingLevel;
     streamOptions: typesModule.ConversationStreamOptions;
     maxTokens: number;
     tail: typesModule.EntryId;

@@ -2,11 +2,10 @@ import { defineConfig } from "vite-plus";
 
 export const evalConfig = defineConfig({
   test: {
-    watch: false,
+    fileParallelism: false,
+    maxWorkers: 1,
     passWithNoTests: false,
     pool: "forks",
-    maxWorkers: 1,
-    fileParallelism: false,
     projects: [
       {
         extends: true,
@@ -30,5 +29,6 @@ export const evalConfig = defineConfig({
         },
       },
     ],
+    watch: false,
   },
 });

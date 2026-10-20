@@ -1,4 +1,4 @@
-import { type Static, type TSchemaOptions, Type } from "typebox";
+import { type TSchemaOptions, Type } from "typebox";
 
 function sessionAffinityFormat(options?: TSchemaOptions) {
   return Type.Union(
@@ -7,11 +7,11 @@ function sessionAffinityFormat(options?: TSchemaOptions) {
   );
 }
 
-export const SessionAffinityFormatSchema = sessionAffinityFormat({
+const SessionAffinityFormatSchema = sessionAffinityFormat({
   description: "Session-affinity header format used to route related requests consistently.",
 });
 
-export function thinkingTokenBudgetField(options?: TSchemaOptions) {
+function thinkingTokenBudgetField(options?: TSchemaOptions) {
   return Type.Union(
     [
       Type.Literal("thinking_token_budget"),
@@ -22,12 +22,12 @@ export function thinkingTokenBudgetField(options?: TSchemaOptions) {
   );
 }
 
-export const ThinkingTokenBudgetFieldSchema = thinkingTokenBudgetField({
+const ThinkingTokenBudgetFieldSchema = thinkingTokenBudgetField({
   description:
     'Top-level request field name used by OpenAI-compatible endpoints to cap reasoning tokens. "thinking_token_budget" is used by vLLM, "thinking_budget" by Qwen, DashScope, or SGLang, and "thinking_budget_tokens" by llama.cpp.',
 });
 
-export const ChatTemplateKwargValueSchema = Type.Union([
+const ChatTemplateKwargValueSchema = Type.Union([
   Type.String(),
   Type.Number(),
   Type.Boolean(),
@@ -42,14 +42,21 @@ export const ChatTemplateKwargValueSchema = Type.Union([
   }),
 ]);
 
-export function optionalCompatBoolean(options?: TSchemaOptions) {
+function optionalCompatBoolean(options?: TSchemaOptions) {
   return Type.Optional(Type.Boolean(options));
 }
 
-export function optionalSessionAffinityFormat(options?: TSchemaOptions) {
+function optionalSessionAffinityFormat(options?: TSchemaOptions) {
   return Type.Optional(sessionAffinityFormat(options));
 }
 
-export type ChatTemplateKwargValue = Static<typeof ChatTemplateKwargValueSchema>;
-export type ThinkingTokenBudgetField = Static<typeof ThinkingTokenBudgetFieldSchema>;
-export type SessionAffinityFormat = Static<typeof SessionAffinityFormatSchema>;
+const compatFieldsSchema = {
+  ChatTemplateKwargValueSchema,
+  SessionAffinityFormatSchema,
+  ThinkingTokenBudgetFieldSchema,
+  optionalCompatBoolean,
+  optionalSessionAffinityFormat,
+  thinkingTokenBudgetField,
+};
+
+export default compatFieldsSchema;

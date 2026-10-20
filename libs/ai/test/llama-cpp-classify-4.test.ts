@@ -1,14 +1,11 @@
 import { Effect } from "effect";
 import { describe, expect, it } from "vite-plus/test";
 
-import {
-  answerFromProbabilities,
-  classify,
-  llamaServerRoot,
-  peakConfidence,
-} from "../src/api/llama-cpp-classify.ts";
-import type { ClassifierOptions } from "../src/types.ts";
+import llamaCppClassify from "../src/api/llama-cpp-classify.ts";
+import type typesModule from "../src/types.types.ts";
 import llamaCppClassifySupport from "./llama-cpp-classify-support.ts";
+
+const { answerFromProbabilities, classify, llamaServerRoot, peakConfidence } = llamaCppClassify;
 
 const { context, fakeServer, model } = llamaCppClassifySupport;
 const passesCompletionPayloadsAndResponsesThrough = () =>
@@ -17,7 +14,7 @@ const passesCompletionPayloadsAndResponsesThrough = () =>
       const server = fakeServer();
       const payloads: unknown[] = [];
       const statuses: number[] = [];
-      const options: ClassifierOptions = {
+      const options: typesModule.ClassifierOptions = {
         fetch: server.fetch,
         onPayload: (payload) => {
           payloads.push(payload);

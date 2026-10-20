@@ -152,9 +152,9 @@ function parseDownloadProgress(data: unknown): LlamaProgress | undefined {
   }
   if (total <= 0) return undefined;
   return {
+    detail: `${formatBytes(done)} / ${formatBytes(total)}`,
     message: "Downloading model",
     ratio: done / total,
-    detail: `${formatBytes(done)} / ${formatBytes(total)}`,
   };
 }
 
@@ -252,7 +252,7 @@ export class LlamaClient {
       awaitingWith(function* () {
         const query =
           options.model !== undefined && options.model !== ""
-            ? `?${new URLSearchParams({ model: options.model, autoload: "false" })}`
+            ? `?${new URLSearchParams({ autoload: "false", model: options.model })}`
             : "";
         const payload = yield* awaited(
           this.request(`/props${query}`, { signal: options.signal ?? null }),
@@ -275,8 +275,8 @@ export class LlamaClient {
       awaitingWith(function* () {
         yield* awaited(
           this.request("/models/load", {
-            method: "POST",
             body: JSON.stringify({ model }),
+            method: "POST",
             signal: signal ?? null,
           }),
         );
@@ -289,8 +289,8 @@ export class LlamaClient {
       awaitingWith(function* () {
         yield* awaited(
           this.request("/models/unload", {
-            method: "POST",
             body: JSON.stringify({ model }),
+            method: "POST",
             signal: signal ?? null,
           }),
         );
@@ -318,8 +318,8 @@ export class LlamaClient {
       awaitingWith(function* () {
         yield* awaited(
           this.request("/models", {
-            method: "POST",
             body: JSON.stringify({ model }),
+            method: "POST",
             signal: signal ?? null,
           }),
         );

@@ -1,106 +1,103 @@
 import type { Candidate, FunctionCall, GenerateContentResponse, Part } from "@google/genai";
 
-import { calculateCost } from "../models.ts";
-import type {
-  Api,
-  AssistantMessage,
-  Model,
-  TextContent,
-  ThinkingContent,
-  ToolCall,
-  Usage,
-} from "../types.ts";
-import { currentTimeMillis } from "../utils/clock.ts";
-import { formatProviderError, normalizeProviderError } from "../utils/error-body.ts";
-import type { AssistantMessageEventStream } from "../utils/event-stream.ts";
-import { encodeJsonSync } from "../utils/json-codec.ts";
-import { isThinkingPart, retainThoughtSignature } from "./google-messages.ts";
-import { mapStopReason } from "./google-shared.ts";
-import type { GoogleApiType } from "./google-thinking.ts";
+import type typesModule from "../types.types.ts";
+import errorBody from "../utils/error-body.ts";
+import type eventStreamTypes from "../utils/event-stream.types.ts";
+import jsonCodec from "../utils/json-codec.ts";
+import googleMessages from "./google-messages.ts";
+import googleShared from "./google-shared.ts";
+import googleStreamEventsKit from "./google-stream-events-kit.ts";
+import type googleStreamEventsTypes from "./google-stream-events.types.ts";
+import type googleThinkingTypes from "./google-thinking.types.ts";
 
-export interface GoogleStreamState<T extends GoogleApiType> {
-  readonly model: Model<T>;
-  readonly output: AssistantMessage;
-  readonly events: AssistantMessageEventStream;
-  currentBlock: TextContent | ThinkingContent | null;
-}
+const { clock, models: modelsModule } = googleStreamEventsKit;
+
+const { currentTimeMillis } = clock;
+const { isThinkingPart, retainThoughtSignature } = googleMessages;
+const { encodeJsonSync } = jsonCodec;
+const { mapStopReason } = googleShared;
+const { calculateCost } = modelsModule;
+const { formatProviderError, normalizeProviderError } = errorBody;
 
 let toolCallCounter = 0;
 
-export const createGoogleStreamState = <T extends GoogleApiType>({
+const createGoogleStreamState = <T extends googleThinkingTypes.GoogleApiType>({
   model,
   events,
 }: {
-  readonly model: Model<T>;
-  readonly events: AssistantMessageEventStream;
-}): GoogleStreamState<T> => ({
-  model,
-  events,
+  readonly model: typesModule.Model<T>;
+  readonly events: eventStreamTypes.AssistantMessageEventStream;
+}): googleStreamEventsTypes.GoogleStreamState<T> => ({
   currentBlock: null,
+  events,
+  model,
   output: {
-    role: "assistant",
+    api: model.api as typesModule.Api,
     content: [],
-    api: model.api as Api,
-    provider: model.provider,
     model: model.id,
-    usage: {
-      input: 0,
-      output: 0,
-      cacheRead: 0,
-      cacheWrite: 0,
-      totalTokens: 0,
-      cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0, total: 0 },
-    },
+    provider: model.provider,
+    role: "assistant",
     stopReason: "pending",
     timestamp: currentTimeMillis(),
+    usage: {
+      cacheRead: 0,
+      cacheWrite: 0,
+      cost: { cacheRead: 0, cacheWrite: 0, input: 0, output: 0, total: 0 },
+      input: 0,
+      output: 0,
+      totalTokens: 0,
+    },
   },
 });
 
-const lastIndex = (state: GoogleStreamState<GoogleApiType>): number =>
-  state.output.content.length - 1;
+const lastIndex = (
+  state: googleStreamEventsTypes.GoogleStreamState<googleThinkingTypes.GoogleApiType>,
+): number => state.output.content.length - 1;
 
-export function closeCurrentBlock<T extends GoogleApiType>(state: GoogleStreamState<T>): void {
+function closeCurrentBlock<T extends googleThinkingTypes.GoogleApiType>(
+  state: googleStreamEventsTypes.GoogleStreamState<T>,
+): void {
   const block = state.currentBlock;
   if (block === null) return;
   const contentIndex = lastIndex(state);
   if (block.type === "text") {
     state.events.push({
-      type: "text_end",
-      contentIndex,
       content: block.text,
+      contentIndex,
       partial: state.output,
+      type: "text_end",
     });
   } else {
     state.events.push({
-      type: "thinking_end",
-      contentIndex,
       content: block.thinking,
+      contentIndex,
       partial: state.output,
+      type: "thinking_end",
     });
   }
   state.currentBlock = null;
 }
 
-function openBlock<T extends GoogleApiType>(
-  state: GoogleStreamState<T>,
+function openBlock<T extends googleThinkingTypes.GoogleApiType>(
+  state: googleStreamEventsTypes.GoogleStreamState<T>,
   isThinking: boolean,
-): TextContent | ThinkingContent {
+): typesModule.TextContent | typesModule.ThinkingContent {
   closeCurrentBlock(state);
-  const block: TextContent | ThinkingContent = isThinking
-    ? { type: "thinking", thinking: "", thinkingSignature: undefined }
-    : { type: "text", text: "" };
+  const block: typesModule.TextContent | typesModule.ThinkingContent = isThinking
+    ? { thinking: "", thinkingSignature: undefined, type: "thinking" }
+    : { text: "", type: "text" };
   state.currentBlock = block;
   state.output.content.push(block);
   state.events.push({
-    type: isThinking ? "thinking_start" : "text_start",
     contentIndex: lastIndex(state),
     partial: state.output,
+    type: isThinking ? "thinking_start" : "text_start",
   });
   return block;
 }
 
-function appendText<T extends GoogleApiType>(
-  state: GoogleStreamState<T>,
+function appendText<T extends googleThinkingTypes.GoogleApiType>(
+  state: googleStreamEventsTypes.GoogleStreamState<T>,
   part: Part,
   delta: string,
 ): void {
@@ -117,16 +114,16 @@ function appendText<T extends GoogleApiType>(
       block.thinkingSignature,
       part.thoughtSignature,
     );
-    state.events.push({ type: "thinking_delta", contentIndex, delta, partial: state.output });
+    state.events.push({ contentIndex, delta, partial: state.output, type: "thinking_delta" });
   } else {
     block.text += delta;
     block.textSignature = retainThoughtSignature(block.textSignature, part.thoughtSignature);
-    state.events.push({ type: "text_delta", contentIndex, delta, partial: state.output });
+    state.events.push({ contentIndex, delta, partial: state.output, type: "text_delta" });
   }
 }
 
-function toolCallId<T extends GoogleApiType>(
-  state: GoogleStreamState<T>,
+function toolCallId<T extends googleThinkingTypes.GoogleApiType>(
+  state: googleStreamEventsTypes.GoogleStreamState<T>,
   call: FunctionCall,
 ): string {
   const providedId = call.id;
@@ -137,17 +134,17 @@ function toolCallId<T extends GoogleApiType>(
   return needsNewId ? `${call.name}_${currentTimeMillis()}_${++toolCallCounter}` : providedId;
 }
 
-function appendFunctionCall<T extends GoogleApiType>(
-  state: GoogleStreamState<T>,
+function appendFunctionCall<T extends googleThinkingTypes.GoogleApiType>(
+  state: googleStreamEventsTypes.GoogleStreamState<T>,
   part: Part,
   call: FunctionCall,
 ): void {
   closeCurrentBlock(state);
-  const toolCall: ToolCall = {
-    type: "toolCall",
+  const toolCall: typesModule.ToolCall = {
+    arguments: (call.args as Record<string, any>) ?? {},
     id: toolCallId(state, call),
     name: call.name || "",
-    arguments: (call.args as Record<string, any>) ?? {},
+    type: "toolCall",
     ...(part.thoughtSignature && { thoughtSignature: part.thoughtSignature }),
   };
   state.output.content.push(toolCall);
@@ -155,15 +152,15 @@ function appendFunctionCall<T extends GoogleApiType>(
   const partial = state.output;
   const delta = encodeJsonSync(toolCall.arguments);
   for (const event of [
-    { type: "toolcall_start", contentIndex, partial },
-    { type: "toolcall_delta", contentIndex, delta, partial },
-    { type: "toolcall_end", contentIndex, toolCall, partial },
+    { contentIndex, partial, type: "toolcall_start" },
+    { contentIndex, delta, partial, type: "toolcall_delta" },
+    { contentIndex, partial, toolCall, type: "toolcall_end" },
   ] as const) {
     state.events.push(event);
   }
 }
 
-function applyFinishReason(output: AssistantMessage, candidate: Candidate): void {
+function applyFinishReason(output: typesModule.AssistantMessage, candidate: Candidate): void {
   if (candidate.finishReason === undefined) return;
   output.rawStopReason = candidate.finishReason;
   output.stopReason = mapStopReason(candidate.finishReason);
@@ -172,22 +169,26 @@ function applyFinishReason(output: AssistantMessage, candidate: Candidate): void
   }
 }
 
-function usageFrom(metadata: NonNullable<GenerateContentResponse["usageMetadata"]>): Usage {
+function usageFrom(
+  metadata: NonNullable<GenerateContentResponse["usageMetadata"]>,
+): typesModule.Usage {
   const cached = metadata.cachedContentTokenCount || 0;
   const thoughts = metadata.thoughtsTokenCount || 0;
   return {
-    input: (metadata.promptTokenCount || 0) - cached,
-    output: (metadata.candidatesTokenCount || 0) + thoughts,
     cacheRead: cached,
     cacheWrite: 0,
+    cost: { cacheRead: 0, cacheWrite: 0, input: 0, output: 0, total: 0 },
+    input: (metadata.promptTokenCount || 0) - cached,
+    output: (metadata.candidatesTokenCount || 0) + thoughts,
     reasoning: thoughts,
     totalTokens: metadata.totalTokenCount || 0,
-    cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0, total: 0 },
   };
 }
 
-export const googleChunkHandler =
-  <T extends GoogleApiType>(state: GoogleStreamState<T>) =>
+const googleChunkHandler =
+  <T extends googleThinkingTypes.GoogleApiType>(
+    state: googleStreamEventsTypes.GoogleStreamState<T>,
+  ) =>
   (chunk: GenerateContentResponse): void => {
     const { output } = state;
     output.responseId ||= chunk.responseId;
@@ -203,23 +204,26 @@ export const googleChunkHandler =
     }
   };
 
-export interface GoogleStreamFailure<T extends GoogleApiType> {
-  readonly state: GoogleStreamState<T>;
-  readonly error: unknown;
-  readonly signal: AbortSignal | undefined;
-}
-
-export function failGoogleStream<T extends GoogleApiType>({
+function failGoogleStream<T extends googleThinkingTypes.GoogleApiType>({
   state,
   error,
   signal,
-}: GoogleStreamFailure<T>): void {
+}: googleStreamEventsTypes.GoogleStreamFailure<T>): void {
   const { output, events } = state;
   for (const block of output.content) {
     if ("index" in block) delete (block as { index?: number }).index;
   }
   output.stopReason = signal?.aborted === true ? "aborted" : "error";
   output.errorMessage = formatProviderError(normalizeProviderError(error));
-  events.push({ type: "error", reason: output.stopReason, error: output });
+  events.push({ error: output, reason: output.stopReason, type: "error" });
   events.end();
 }
+
+const googleStreamEvents = {
+  closeCurrentBlock,
+  createGoogleStreamState,
+  failGoogleStream,
+  googleChunkHandler,
+};
+
+export default googleStreamEvents;

@@ -1,12 +1,6 @@
-import type { AgentTool } from "@msa/agent-core";
-import {
-  type AssistantMessage,
-  type ClassifierModel,
-  createProvider,
-  fauxAssistantMessage,
-  fauxProvider,
-  fauxToolCall,
-} from "@msa/ai";
+import type agentTypes from "@msa/agent-core/index.types";
+import ai from "@msa/ai";
+import type aiTypes from "@msa/ai/index.types";
 import testing from "@msa/testing";
 import { Effect } from "effect";
 import { Type } from "typebox";
@@ -20,11 +14,13 @@ import {
 import harnessModule from "./suite/harness.ts";
 import type harnessTypes from "./suite/harness.types.ts";
 
+const { createProvider, fauxAssistantMessage, fauxProvider, fauxToolCall } = ai;
+
 const { createHarness } = harnessModule;
 
 const { awaited, currentTimeMillis, runTest } = testing;
 
-function createTool(name: string, fails = false): AgentTool {
+function createTool(name: string, fails = false): agentTypes.AgentTool {
   return {
     description: `Fake ${name} tool`,
     execute: () =>
@@ -43,7 +39,7 @@ function createTool(name: string, fails = false): AgentTool {
   };
 }
 
-const jevModel: ClassifierModel<string> = {
+const jevModel: aiTypes.ClassifierModel<string> = {
   api: "typesafe-system-one" as const,
   baseUrl: "",
   contextWindow: 64_000,
@@ -101,7 +97,7 @@ const setupPart1 = (input: { readonly complex: number }) =>
     return { codex, openrouter };
   });
 
-function setup(complex: number, tools: AgentTool[]) {
+function setup(complex: number, tools: agentTypes.AgentTool[]) {
   return runTest(
     Effect.gen(function* () {
       const { codex, openrouter } = yield* setupPart1({ complex });
@@ -124,7 +120,7 @@ function setup(complex: number, tools: AgentTool[]) {
       yield* awaited(runtime.refresh({ allowNetwork: false }));
       yield* awaited(harness.session.setModel(runtime.getModel("jev", "auto")!));
 
-      const respond = (...messages: AssistantMessage[]) => codex.appendResponses(messages);
+      const respond = (...messages: aiTypes.AssistantMessage[]) => codex.appendResponses(messages);
       const dispatched = () =>
         harness.session.messages.flatMap((m) =>
           m.role === "assistant" ? [m.model.replace("gpt-5.6-", "")] : [],

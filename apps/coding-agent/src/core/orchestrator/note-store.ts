@@ -21,13 +21,13 @@ function targetsOf(database: DatabaseSync, noteId: string): string[] {
 
 function toNote(database: DatabaseSync, row: NoteRow): Note {
   return {
+    author: row.author,
+    content: row.content,
+    createdAt: row.created_at,
     id: row.id,
     project: row.project,
     round: row.round,
     taskIds: targetsOf(database, row.id),
-    content: row.content,
-    author: row.author,
-    createdAt: row.created_at,
   };
 }
 
@@ -97,10 +97,10 @@ function deleteNote(database: DatabaseSync, noteId: string): void {
 }
 
 export const noteStore = {
+  deleteNote,
   insertNote,
   listNotes,
-  unreadNotes,
   markNoteRead,
   noteRead,
-  deleteNote,
+  unreadNotes,
 };

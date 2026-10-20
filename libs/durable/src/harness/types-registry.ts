@@ -1,4 +1,4 @@
-import type { ModelThinkingLevel } from "@msa/ai";
+import type aiTypes from "@msa/ai/index.types";
 import type chordTypes from "@msa/chord/index.types";
 
 import type envTypes from "../env/index.types.ts";
@@ -75,7 +75,7 @@ declare namespace typesRegistryTypes {
 
   type AgentState = {
     model?: typesModuleModule.ModelRef;
-    thinkingLevel?: ModelThinkingLevel;
+    thinkingLevel?: aiTypes.ModelThinkingLevel;
     extensions?: string[] | { add?: string[]; remove?: string[] };
     tools?: string[] | { remove: string[] };
     modelTools?: string[] | { remove?: string[]; add?: string[] };
@@ -85,7 +85,7 @@ declare namespace typesRegistryTypes {
 
   type AgentChange = {
     readonly model?: typesModuleModule.ModelRef | null | undefined;
-    readonly thinkingLevel?: ModelThinkingLevel | null;
+    readonly thinkingLevel?: aiTypes.ModelThinkingLevel | null;
     readonly extensions?:
       | readonly Extension[]
       | { readonly add?: readonly Extension[]; readonly remove?: readonly Extension[] }
@@ -107,7 +107,7 @@ declare namespace typesRegistryTypes {
 
   type Agent<Tool extends typesToolsTypes.ToolRegistration = typesToolsTypes.ToolRegistration> = {
     readonly model?: typesModuleModule.ModelRef;
-    readonly thinkingLevel: ModelThinkingLevel;
+    readonly thinkingLevel: aiTypes.ModelThinkingLevel;
     readonly extensions: readonly Extension<Tool>[];
     readonly tools: readonly Tool[];
     readonly callable: readonly Tool[];

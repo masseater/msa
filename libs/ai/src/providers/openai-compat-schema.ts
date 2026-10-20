@@ -1,43 +1,28 @@
-import { type Static, Type } from "typebox";
+import { Type } from "typebox";
 
-import {
+import compatFieldsSchema from "./compat-fields-schema.ts";
+import routingSchema from "./routing-schema.ts";
+
+const {
   ChatTemplateKwargValueSchema,
   optionalCompatBoolean,
   optionalSessionAffinityFormat,
   thinkingTokenBudgetField,
-} from "./compat-fields-schema.ts";
-import { OpenRouterRoutingSchema } from "./routing-schema.ts";
+} = compatFieldsSchema;
+const { OpenRouterRoutingSchema } = routingSchema;
 
-export const OpenAICompletionsCompatSchema = Type.Object(
+const OpenAICompletionsCompatSchema = Type.Object(
   {
-    supportsStore: Type.Optional(
-      Type.Boolean({
+    cacheControlFormat: Type.Optional(
+      Type.Literal("anthropic", {
         description:
-          "Whether the provider supports the store field. Default: auto-detected from URL.",
+          "Cache control convention for prompt caching. Anthropic applies cache_control markers to the system prompt, last tool definition, and last user, assistant, or tool-result text content.",
       }),
     ),
-    supportsDeveloperRole: optionalCompatBoolean({
-      description:
-        "Whether the provider supports the developer role instead of system. Default: auto-detected from URL.",
-    }),
-    supportsReasoningEffort: Type.Optional(
-      Type.Boolean({
+    chatTemplateKwargs: Type.Optional(
+      Type.Record(Type.String(), ChatTemplateKwargValueSchema, {
         description:
-          "Whether the provider supports reasoning_effort. Default: auto-detected from URL.",
-      }),
-    ),
-    supportsUsageInStreaming: Type.Optional(
-      Type.Boolean({
-        description:
-          "Whether the provider supports stream_options.include_usage for token usage in streaming responses.",
-        default: true,
-      }),
-    ),
-    supportsFinishReason: Type.Optional(
-      Type.Boolean({
-        description:
-          "Whether streamed responses include finish_reason. When false, msa infers stop or toolUse when the stream ends.",
-        default: true,
+          'Kwargs sent as chat_template_kwargs when thinkingFormat is "chat-template". Use $var with "thinking.enabled", "thinking.effort", or "thinking.budget" for msa-controlled values.',
       }),
     ),
     maxTokensField: Type.Optional(
@@ -45,16 +30,17 @@ export const OpenAICompletionsCompatSchema = Type.Object(
         description: "Which field to use for max tokens. Default: auto-detected from URL.",
       }),
     ),
-    requiresToolResultName: Type.Optional(
-      Type.Boolean({
-        description:
-          "Whether tool results require the name field. Default: auto-detected from URL.",
-      }),
-    ),
+    openRouterRouting: Type.Optional(OpenRouterRoutingSchema),
     requiresAssistantAfterToolResult: Type.Optional(
       Type.Boolean({
         description:
           "Whether a user message after tool results requires an assistant message in between. Default: auto-detected from URL.",
+      }),
+    ),
+    requiresReasoningContentOnAssistantMessages: Type.Optional(
+      Type.Boolean({
+        description:
+          "Whether all replayed assistant messages must include an empty reasoning_content field when reasoning is enabled. Default: auto-detected from URL.",
       }),
     ),
     requiresThinkingAsText: Type.Optional(
@@ -63,10 +49,81 @@ export const OpenAICompletionsCompatSchema = Type.Object(
           "Whether thinking blocks must be converted to text blocks with <thinking> delimiters. Default: auto-detected from URL.",
       }),
     ),
-    requiresReasoningContentOnAssistantMessages: Type.Optional(
+    requiresToolResultName: Type.Optional(
       Type.Boolean({
         description:
-          "Whether all replayed assistant messages must include an empty reasoning_content field when reasoning is enabled. Default: auto-detected from URL.",
+          "Whether tool results require the name field. Default: auto-detected from URL.",
+      }),
+    ),
+    sendSessionAffinityHeaders: optionalCompatBoolean({
+      description:
+        "Whether to send session-affinity data from options.sessionId. Default: true for OpenRouter endpoints, false otherwise.",
+    }),
+    sessionAffinityFormat: optionalSessionAffinityFormat({
+      description:
+        "Session-affinity header format. openai sends session_id, x-client-request-id, and x-session-affinity; openai-nosession sends x-client-request-id and x-session-affinity; openrouter sends x-session-id. Does not affect prompt_cache_key. Default: auto-detected.",
+    }),
+    supportsDeveloperRole: optionalCompatBoolean({
+      description:
+        "Whether the provider supports the developer role instead of system. Default: auto-detected from URL.",
+    }),
+    supportsFinishReason: Type.Optional(
+      Type.Boolean({
+        default: true,
+        description:
+          "Whether streamed responses include finish_reason. When false, msa infers stop or toolUse when the stream ends.",
+      }),
+    ),
+    supportsLongCacheRetention: optionalCompatBoolean({
+      description:
+        'Whether the provider supports long prompt cache retention (prompt_cache_retention: "24h" or Anthropic-style cache_control.ttl: "1h", depending on format). Default: auto-detected from provider and URL.',
+    }),
+    supportsMidConvoSystemMessages: optionalCompatBoolean({
+      default: false,
+      description:
+        "Whether the exact model accepts system or developer messages after the conversation has started. When false, later system messages are folded into the leading system message. The generated catalog enables this for verified models.",
+    }),
+    supportsMidConvoToolAdditions: Type.Optional(
+      Type.Boolean({
+        default: false,
+        description:
+          "Whether system messages can introduce additional tools mid-conversation. Requires supportsMidConvoSystemMessages. The generated catalog enables this for capable models.",
+      }),
+    ),
+    supportsOpenAIGrammarTools: optionalCompatBoolean({
+      default: false,
+      description:
+        "Whether the provider supports OpenAI custom tools with Lark or regex grammar formats. When false, grammar-constrained tools fall back to normal function tools. The generated catalog enables this for capable models.",
+    }),
+    supportsReasoningEffort: Type.Optional(
+      Type.Boolean({
+        description:
+          "Whether the provider supports reasoning_effort. Default: auto-detected from URL.",
+      }),
+    ),
+    supportsStore: Type.Optional(
+      Type.Boolean({
+        description:
+          "Whether the provider supports the store field. Default: auto-detected from URL.",
+      }),
+    ),
+    supportsStrictMode: optionalCompatBoolean({
+      default: false,
+      description:
+        "Whether the provider supports the strict field in tool definitions. Generated capable models enable it explicitly.",
+    }),
+    supportsThinkingTokenBudget: Type.Optional(
+      Type.Boolean({
+        default: false,
+        description:
+          'Alias for thinkingTokenBudgetField: "thinking_token_budget" (vLLM). Prefer thinkingTokenBudgetField.',
+      }),
+    ),
+    supportsUsageInStreaming: Type.Optional(
+      Type.Boolean({
+        default: true,
+        description:
+          "Whether the provider supports stream_options.include_usage for token usage in streaming responses.",
       }),
     ),
     thinkingFormat: Type.Optional(
@@ -86,66 +143,12 @@ export const OpenAICompletionsCompatSchema = Type.Object(
         },
       ),
     ),
-    chatTemplateKwargs: Type.Optional(
-      Type.Record(Type.String(), ChatTemplateKwargValueSchema, {
-        description:
-          'Kwargs sent as chat_template_kwargs when thinkingFormat is "chat-template". Use $var with "thinking.enabled", "thinking.effort", or "thinking.budget" for msa-controlled values.',
-      }),
-    ),
-    openRouterRouting: Type.Optional(OpenRouterRoutingSchema),
     thinkingTokenBudgetField: Type.Optional(
       thinkingTokenBudgetField({
         description:
           'Top-level request field used to cap reasoning tokens from thinkingBudgets. Reasoning and the answer share max_tokens on these endpoints. "thinking_token_budget" is vLLM, "thinking_budget" is Qwen, DashScope, or SGLang, and "thinking_budget_tokens" is llama.cpp. Off by default and not set on the generated catalog.',
       }),
     ),
-    supportsThinkingTokenBudget: Type.Optional(
-      Type.Boolean({
-        description:
-          'Alias for thinkingTokenBudgetField: "thinking_token_budget" (vLLM). Prefer thinkingTokenBudgetField.',
-        default: false,
-      }),
-    ),
-    supportsOpenAIGrammarTools: optionalCompatBoolean({
-      description:
-        "Whether the provider supports OpenAI custom tools with Lark or regex grammar formats. When false, grammar-constrained tools fall back to normal function tools. The generated catalog enables this for capable models.",
-      default: false,
-    }),
-    supportsMidConvoSystemMessages: optionalCompatBoolean({
-      description:
-        "Whether the exact model accepts system or developer messages after the conversation has started. When false, later system messages are folded into the leading system message. The generated catalog enables this for verified models.",
-      default: false,
-    }),
-    supportsMidConvoToolAdditions: Type.Optional(
-      Type.Boolean({
-        description:
-          "Whether system messages can introduce additional tools mid-conversation. Requires supportsMidConvoSystemMessages. The generated catalog enables this for capable models.",
-        default: false,
-      }),
-    ),
-    supportsStrictMode: optionalCompatBoolean({
-      description:
-        "Whether the provider supports the strict field in tool definitions. Generated capable models enable it explicitly.",
-      default: false,
-    }),
-    cacheControlFormat: Type.Optional(
-      Type.Literal("anthropic", {
-        description:
-          "Cache control convention for prompt caching. Anthropic applies cache_control markers to the system prompt, last tool definition, and last user, assistant, or tool-result text content.",
-      }),
-    ),
-    sendSessionAffinityHeaders: optionalCompatBoolean({
-      description:
-        "Whether to send session-affinity data from options.sessionId. Default: true for OpenRouter endpoints, false otherwise.",
-    }),
-    sessionAffinityFormat: optionalSessionAffinityFormat({
-      description:
-        "Session-affinity header format. openai sends session_id, x-client-request-id, and x-session-affinity; openai-nosession sends x-client-request-id and x-session-affinity; openrouter sends x-session-id. Does not affect prompt_cache_key. Default: auto-detected.",
-    }),
-    supportsLongCacheRetention: optionalCompatBoolean({
-      description:
-        'Whether the provider supports long prompt cache retention (prompt_cache_retention: "24h" or Anthropic-style cache_control.ttl: "1h", depending on format). Default: auto-detected from provider and URL.',
-    }),
     vllmPriority: Type.Optional(
       Type.Number({
         description:
@@ -154,78 +157,82 @@ export const OpenAICompletionsCompatSchema = Type.Object(
     ),
   },
   {
+    additionalProperties: true,
     description:
       "Compatibility settings for OpenAI-compatible completions APIs. Use this to override URL-based auto-detection for custom providers.",
-    additionalProperties: true,
   },
 );
 
-export const OpenAIResponsesCompatSchema = Type.Object(
+const OpenAIResponsesCompatSchema = Type.Object(
   {
-    supportsDeveloperRole: optionalCompatBoolean({
-      description: "Whether the provider supports the developer role instead of system.",
-      default: true,
-    }),
-    supportsMidConvoSystemMessages: optionalCompatBoolean({
-      description:
-        "Whether the exact model accepts developer or system messages after the conversation has started. When false, later system messages are folded into the leading system message. The generated catalog enables this for verified models.",
-      default: false,
-    }),
     sessionAffinityFormat: optionalSessionAffinityFormat({
       description:
         "Session-affinity header format. openai sends session_id and x-client-request-id; openai-nosession sends x-client-request-id; openrouter sends x-session-id. Does not affect prompt_cache_key. Default: auto-detected.",
     }),
+    supportsAdditionalTools: Type.Optional(
+      Type.Boolean({
+        default: false,
+        description: "Whether the model supports message-anchored additional_tools input items.",
+      }),
+    ),
+    supportsDeveloperRole: optionalCompatBoolean({
+      default: true,
+      description: "Whether the provider supports the developer role instead of system.",
+    }),
+    supportsExplicitPromptCacheMode: Type.Optional(
+      Type.Boolean({
+        default: false,
+        description:
+          "Whether the model accepts prompt_cache_options. Older OpenAI models reject the parameter.",
+      }),
+    ),
     supportsLongCacheRetention: optionalCompatBoolean({
+      default: true,
       description:
         'Whether the provider supports long prompt cache retention. This uses prompt_cache_options.ttl: "30m" on GPT-5.6+ and prompt_cache_retention: "24h" on earlier models.',
-      default: true,
+    }),
+    supportsMaxOutputTokens: Type.Optional(
+      Type.Boolean({
+        default: true,
+        description:
+          "Whether the provider accepts max_output_tokens. Some Codex-protocol gateways reject it.",
+      }),
+    ),
+    supportsMidConvoEffort: Type.Optional(
+      Type.Boolean({
+        default: false,
+        description:
+          "Whether thinking level changes are sent as configuration_update input items instead of changing reasoning.effort, so a change keeps the prompt cache. Only used by the openai-responses API, and ignored with Sign in with ChatGPT on the openai provider.",
+      }),
+    ),
+    supportsMidConvoSystemMessages: optionalCompatBoolean({
+      default: false,
+      description:
+        "Whether the exact model accepts developer or system messages after the conversation has started. When false, later system messages are folded into the leading system message. The generated catalog enables this for verified models.",
+    }),
+    supportsOpenAIGrammarTools: optionalCompatBoolean({
+      default: false,
+      description:
+        "Whether to emit OpenAI custom tools with Lark or regex grammar formats. When false, grammar-constrained tools fall back to normal function tools. The generated catalog enables this for capable models.",
     }),
     supportsStrictMode: optionalCompatBoolean({
       description:
         "Whether the provider supports strict JSON-schema function tools. Defaults are API-specific; generated OpenAI models enable it explicitly.",
     }),
-    supportsOpenAIGrammarTools: optionalCompatBoolean({
-      description:
-        "Whether to emit OpenAI custom tools with Lark or regex grammar formats. When false, grammar-constrained tools fall back to normal function tools. The generated catalog enables this for capable models.",
-      default: false,
-    }),
-    supportsAdditionalTools: Type.Optional(
-      Type.Boolean({
-        description: "Whether the model supports message-anchored additional_tools input items.",
-        default: false,
-      }),
-    ),
     supportsToolSearch: Type.Optional(
       Type.Boolean({
+        default: false,
         description:
           "Whether the model supports client-executed tool search for transcript-anchored additions.",
-        default: false,
-      }),
-    ),
-    supportsExplicitPromptCacheMode: Type.Optional(
-      Type.Boolean({
-        description:
-          "Whether the model accepts prompt_cache_options. Older OpenAI models reject the parameter.",
-        default: false,
-      }),
-    ),
-    supportsMidConvoEffort: Type.Optional(
-      Type.Boolean({
-        description:
-          "Whether thinking level changes are sent as configuration_update input items instead of changing reasoning.effort, so a change keeps the prompt cache. Only used by the openai-responses API, and ignored with Sign in with ChatGPT on the openai provider.",
-        default: false,
-      }),
-    ),
-    supportsMaxOutputTokens: Type.Optional(
-      Type.Boolean({
-        description:
-          "Whether the provider accepts max_output_tokens. Some Codex-protocol gateways reject it.",
-        default: true,
       }),
     ),
   },
-  { description: "Compatibility settings for OpenAI Responses APIs.", additionalProperties: true },
+  { additionalProperties: true, description: "Compatibility settings for OpenAI Responses APIs." },
 );
 
-export interface OpenAICompletionsCompat extends Static<typeof OpenAICompletionsCompatSchema> {}
-export interface OpenAIResponsesCompat extends Static<typeof OpenAIResponsesCompatSchema> {}
+const openaiCompatSchema = {
+  OpenAICompletionsCompatSchema,
+  OpenAIResponsesCompatSchema,
+};
+
+export default openaiCompatSchema;

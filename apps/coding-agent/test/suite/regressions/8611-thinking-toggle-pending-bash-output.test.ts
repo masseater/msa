@@ -1,4 +1,5 @@
-import { Container, type TUI } from "@msa/tui";
+import tui from "@msa/tui";
+import type tuiTypes from "@msa/tui/index.types";
 import { beforeAll, describe, expect, test, vi } from "vite-plus/test";
 
 import { ToolExecutionComponent } from "../../../src/modes/interactive/components/tool-execution.ts";
@@ -6,9 +7,11 @@ import { InteractiveMode } from "../../../src/modes/interactive/interactive-mode
 import { initTheme } from "../../../src/modes/interactive/theme/theme.ts";
 import { stripAnsi } from "../../../src/utils/ansi.ts";
 
+const { Container } = tui;
+
 type UpdateThinkingBlockVisibility = (this: {
-  chatContainer: Container;
-  ui: TUI;
+  chatContainer: tuiTypes.Container;
+  ui: tuiTypes.TUI;
   chatComponents(): Iterable<unknown>;
 }) => void;
 
@@ -19,12 +22,12 @@ type ToggleThinkingBlockVisibility = (this: {
   showStatus(message: string): void;
 }) => void;
 
-function renderChat(container: Container): string {
+function renderChat(container: tuiTypes.Container): string {
   return stripAnsi(container.render(120).join("\n"));
 }
 
 const preservesPartialBashOutput = () => {
-  const ui = { requestRender: vi.fn() } as unknown as TUI;
+  const ui = { requestRender: vi.fn() } as unknown as tuiTypes.TUI;
   const chatContainer = new Container();
   const component = new ToolExecutionComponent(
     "bash",

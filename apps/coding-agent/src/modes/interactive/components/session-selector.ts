@@ -1,33 +1,26 @@
-import {
-  type Component,
-  Container,
-  type Focusable,
-  getKeybindings,
-  Input,
-  Spacer,
-  Text,
-  truncateToWidth,
-  visibleWidth,
-} from "@msa/tui";
+import tui from "@msa/tui";
+import type tuiTypes from "@msa/tui/index.types";
 import { Effect, FileSystem, Stream } from "effect";
 import { ChildProcess } from "effect/process";
 
 import { awaited, awaitingWith, performed } from "../../../core/awaiting.ts";
 import { KeybindingsManager } from "../../../core/keybindings.ts";
-import { nowMs, type Scheduled, schedule, toDate } from "../../../core/platform.ts";
+import { type Scheduled, nowMs, schedule, toDate } from "../../../core/platform.ts";
 import type { SessionInfo, SessionListProgress } from "../../../core/session-manager.ts";
 import { toErrorMessage } from "../../../utils/errors.ts";
-import { abbreviateHomePath, canonicalizePath as _canonicalizePath } from "../../../utils/paths.ts";
+import { canonicalizePath as _canonicalizePath, abbreviateHomePath } from "../../../utils/paths.ts";
 import { nodeRuntime } from "../../services.ts";
 import { theme } from "../theme/theme.ts";
 import { DynamicBorder } from "./dynamic-border.ts";
 import { keyHint, keyText } from "./keybinding-hints.ts";
 import {
-  filterAndSortSessions,
-  hasSessionName,
   type NameFilter,
   type SortMode,
+  filterAndSortSessions,
+  hasSessionName,
 } from "./session-selector-search.ts";
+
+const { Container, Input, Spacer, Text, getKeybindings, truncateToWidth, visibleWidth } = tui;
 
 type SessionScope = "current" | "all";
 
@@ -52,7 +45,7 @@ function canonicalizePath(path: string | undefined): string | undefined {
   return _canonicalizePath(path);
 }
 
-class SessionSelectorHeader implements Component {
+class SessionSelectorHeader implements tuiTypes.Component {
   private scope: SessionScope;
   private sortMode: SortMode;
   private nameFilter: NameFilter;
@@ -216,7 +209,7 @@ function buildSessionTree(sessions: SessionInfo[]): SessionTreeNode[] {
 
   for (const session of sessions) {
     const sessionPath = canonicalizePath(session.path) ?? session.path;
-    byPath.set(sessionPath, { session, children: [], latestActivity: session.modified.getTime() });
+    byPath.set(sessionPath, { children: [], latestActivity: session.modified.getTime(), session });
   }
 
   const roots: SessionTreeNode[] = [];
@@ -266,7 +259,7 @@ function flattenSessionTree(roots: SessionTreeNode[]): FlatSessionNode[] {
     ancestorContinues: boolean[],
     isLast: boolean,
   ): void => {
-    result.push({ session: node.session, depth, isLast, ancestorContinues });
+    result.push({ ancestorContinues, depth, isLast, session: node.session });
 
     for (let i = 0; i < node.children.length; i++) {
       const childIsLast = i === node.children.length - 1;
@@ -282,7 +275,7 @@ function flattenSessionTree(roots: SessionTreeNode[]): FlatSessionNode[] {
   return result;
 }
 
-class SessionList implements Component, Focusable {
+class SessionList implements tuiTypes.Component, tuiTypes.Focusable {
   public getSelectedSessionPath(): string | undefined {
     const selected = this.filteredSessions[this.selectedIndex];
     return selected?.session.path;
@@ -291,7 +284,7 @@ class SessionList implements Component, Focusable {
   private filteredSessions: FlatSessionNode[] = [];
   private selectedIndex: number = 0;
   private selectionTouched = false;
-  private searchInput: Input;
+  private searchInput: tuiTypes.Input;
   private showCwd = false;
   private sortMode: SortMode = "threaded";
   private nameFilter: NameFilter = "all";
@@ -387,10 +380,10 @@ class SessionList implements Component, Focusable {
     } else {
       const filtered = filterAndSortSessions(nameFiltered, query, this.sortMode, "all");
       this.filteredSessions = filtered.map((session) => ({
-        session,
+        ancestorContinues: [],
         depth: 0,
         isLast: true,
-        ancestorContinues: [],
+        session,
       }));
     }
     this.selectedIndex = Math.min(
@@ -487,7 +480,7 @@ class SessionList implements Component, Focusable {
       ),
     );
     const endIndex = Math.min(startIndex + self.maxVisible, self.filteredSessions.length);
-    return { startIndex, endIndex };
+    return { endIndex, startIndex };
   }
 
   private static renderIsSelected(
@@ -546,7 +539,7 @@ class SessionList implements Component, Focusable {
       messageColor = "warning";
     }
     let styledMsg = messageColor === null ? truncatedMsg : theme.fg(messageColor, truncatedMsg);
-    return { isSelected, styledMsg, cursor, prefix, rightPart, isConfirmingDelete };
+    return { cursor, isConfirmingDelete, isSelected, prefix, rightPart, styledMsg };
   }
 
   private buildTreePrefix(node: FlatSessionNode): string {
@@ -695,11 +688,11 @@ function deleteSessionFile(
             [Stream.mkString(Stream.decodeText(handle.stderr)), handle.exitCode],
             { concurrency: 2 },
           );
-          return { status, stderr, spawnError: undefined as string | undefined };
+          return { spawnError: undefined as string | undefined, status, stderr };
         }),
       ).pipe(
         Effect.catch((failure) =>
-          Effect.succeed({ status: -1, stderr: "", spawnError: toErrorMessage(failure) }),
+          Effect.succeed({ spawnError: toErrorMessage(failure), status: -1, stderr: "" }),
         ),
       );
 
@@ -718,11 +711,11 @@ function deleteSessionFile(
 
       const exists = yield* fileSystem.exists(sessionPath).pipe(Effect.orElseSucceed(() => false));
       if (trashResult.status === 0 || !exists) {
-        return { ok: true, method: "trash" as const };
+        return { method: "trash" as const, ok: true };
       }
 
       return yield* fileSystem.remove(sessionPath).pipe(
-        Effect.as({ ok: true, method: "unlink" as const }),
+        Effect.as({ method: "unlink" as const, ok: true }),
         Effect.catch((err) => {
           const unlinkError = toErrorMessage(err);
           const trashErrorHint = getTrashErrorHint();
@@ -730,14 +723,14 @@ function deleteSessionFile(
             trashErrorHint !== null && trashErrorHint !== ""
               ? `${unlinkError} (${trashErrorHint})`
               : unlinkError;
-          return Effect.succeed({ ok: false, method: "unlink" as const, error });
+          return Effect.succeed({ error, method: "unlink" as const, ok: false });
         }),
       );
     }),
   );
 }
 
-export class SessionSelectorComponent extends Container implements Focusable {
+export class SessionSelectorComponent extends Container implements tuiTypes.Focusable {
   handleInput(data: string): void {
     if (this.mode === "rename") {
       const kb = getKeybindings();
@@ -787,7 +780,7 @@ export class SessionSelectorComponent extends Container implements Focusable {
     }
   }
 
-  private buildBaseLayout(content: Component, options?: { showHeader?: boolean }): void {
+  private buildBaseLayout(content: tuiTypes.Component, options?: { showHeader?: boolean }): void {
     this.clear();
     this.addChild(new Spacer(1));
     this.addChild(new DynamicBorder((s) => theme.fg("accent", s)));
@@ -866,12 +859,12 @@ export class SessionSelectorComponent extends Container implements Focusable {
             this.sessionList.setSessions(sessions, showCwd);
 
             const msg = result.method === "trash" ? "Session moved to trash" : "Session deleted";
-            this.header.setStatusMessage({ type: "info", message: msg }, 2000);
+            this.header.setStatusMessage({ message: msg, type: "info" }, 2000);
             yield* performed(this.refreshSessionsAfterMutation());
           } else {
             const errorMessage = result.error ?? "Unknown error";
             this.header.setStatusMessage(
-              { type: "error", message: `Failed to delete: ${errorMessage}` },
+              { message: `Failed to delete: ${errorMessage}`, type: "error" },
               3000,
             );
           }
@@ -943,7 +936,7 @@ export class SessionSelectorComponent extends Container implements Focusable {
       self.requestRender();
     };
     self.sessionList.onError = (msg) => {
-      self.header.setStatusMessage({ type: "error", message: msg }, 3000);
+      self.header.setStatusMessage({ message: msg, type: "error" }, 3000);
       self.requestRender();
     };
   }
@@ -1100,7 +1093,7 @@ export class SessionSelectorComponent extends Container implements Focusable {
       self.header.setProgress(loaded, total);
       self.requestRender();
     };
-    return { onProgress, controller, isActive, showCwd };
+    return { controller, isActive, onProgress, showCwd };
   }
 
   private static loadScopePart2(
@@ -1111,7 +1104,7 @@ export class SessionSelectorComponent extends Container implements Focusable {
     const message = toErrorMessage(err);
     self.header.setLoading(false);
     self.header.setStatusMessage(
-      { type: "error", message: `Failed to load sessions: ${message}` },
+      { message: `Failed to load sessions: ${message}`, type: "error" },
       4000,
     );
     self.sessionList.setSessions([], showCwd);

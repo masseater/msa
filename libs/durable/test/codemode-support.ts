@@ -1,4 +1,5 @@
-import { type AssistantMessage, fauxAssistantMessage, fauxText, fauxToolCall } from "@msa/ai";
+import ai from "@msa/ai";
+import type aiTypes from "@msa/ai/index.types";
 import harnessModule from "@msa/durable/harness";
 import type durableTypes from "@msa/durable/index.types";
 import { Effect } from "effect";
@@ -8,6 +9,8 @@ import type codemodeTypes from "../src/codemode/codemode.types.ts";
 import codemodeChatSupport from "./codemode-chat-support.ts";
 import durableKit from "./durable-kit.ts";
 import support from "./support.ts";
+
+const { fauxAssistantMessage, fauxText, fauxToolCall } = ai;
 
 const { durable, envNode: nodeModule, sqliteNode: node } = durableKit;
 
@@ -21,7 +24,7 @@ const { allEntries, awaited, context, makeTempDir, makeTempFile, openChat, remov
 
 const DONE = fauxAssistantMessage([fauxText("done")]);
 
-function script(code: string): AssistantMessage {
+function script(code: string): aiTypes.AssistantMessage {
   return fauxAssistantMessage([fauxToolCall("codemode", { code }, { id: "s1" })], {
     stopReason: "toolUse",
   });

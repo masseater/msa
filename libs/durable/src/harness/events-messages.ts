@@ -1,4 +1,4 @@
-import type { AssistantMessage } from "@msa/ai";
+import type aiTypes from "@msa/ai/index.types";
 import type deltaTypes from "@msa/chord/delta.types";
 import { Function } from "effect";
 
@@ -9,13 +9,13 @@ const PARTIAL_PATH = ["docs", "msa.live", "generation", "message"];
 
 const messageChanges: typesModule.Dual2<
   readonly deltaTypes.Op[],
-  AssistantMessage,
+  aiTypes.AssistantMessage,
   eventsTypesModule.MessageChange[]
 > = Function.dual(
   2,
   (
     viewOps: readonly deltaTypes.Op[],
-    message: AssistantMessage,
+    message: aiTypes.AssistantMessage,
   ): eventsTypesModule.MessageChange[] => {
     const changes: eventsTypesModule.MessageChange[] = [];
     const whole = new Set<number>();

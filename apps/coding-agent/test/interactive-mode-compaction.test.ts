@@ -1,6 +1,7 @@
-import type { Usage } from "@msa/ai";
+import type aiTypes from "@msa/ai/index.types";
 import testing from "@msa/testing";
-import { Container } from "@msa/tui";
+import tui from "@msa/tui";
+import type tuiTypes from "@msa/tui/index.types";
 import { Effect } from "effect";
 import { describe, expect, test, vi } from "vite-plus/test";
 
@@ -9,10 +10,12 @@ import { InteractiveMode } from "../src/modes/interactive/interactive-mode.ts";
 import { initTheme } from "../src/modes/interactive/theme/theme.ts";
 import { stripAnsi } from "../src/utils/ansi.ts";
 
+const { Container } = tui;
+
 const { awaited, runTest } = testing;
 
 const usesTheCacheMissNoticeSettingFor = () => {
-  const usage: Usage = {
+  const usage: aiTypes.Usage = {
     cacheRead: 30,
     cacheWrite: 40,
     cost: { cacheRead: 0.03, cacheWrite: 0.065, input: 0.01, output: 0.02, total: 0.125 },
@@ -24,11 +27,14 @@ const usesTheCacheMissNoticeSettingFor = () => {
     InteractiveMode.prototype,
     "addCompactionCostNotice",
   ) as (
-    this: { chatContainer: Container; settingsManager: { getShowCacheMissNotices(): boolean } },
+    this: {
+      chatContainer: tuiTypes.Container;
+      settingsManager: { getShowCacheMissNotices(): boolean };
+    },
     notice: {
       type: "compaction_cost";
       kind: "compaction" | "branch_summary";
-      usage: Usage;
+      usage: aiTypes.Usage;
     },
   ) => void;
 
@@ -56,7 +62,7 @@ const usesTheCacheMissNoticeSettingFor = () => {
 };
 
 const rendersEachCompactionCostAfterItsSummaryPart1 = () => {
-  const currentUsage: Usage = {
+  const currentUsage: aiTypes.Usage = {
     cacheRead: 30,
     cacheWrite: 40,
     cost: { cacheRead: 0.03, cacheWrite: 0.04, input: 0.01, output: 0.02, total: 0.1 },
@@ -64,7 +70,7 @@ const rendersEachCompactionCostAfterItsSummaryPart1 = () => {
     output: 20,
     totalTokens: 100,
   };
-  const previousUsage: Usage = {
+  const previousUsage: aiTypes.Usage = {
     cacheRead: 3,
     cacheWrite: 4,
     cost: { cacheRead: 0.003, cacheWrite: 0.004, input: 0.001, output: 0.002, total: 0.01 },
@@ -120,7 +126,7 @@ const rendersEachCompactionCostAfterItsSummary = () => {
 
 const rendersRetainedEntriesAndAppendsTheLatestStep1 = () =>
   Effect.sync(() => {
-    const usage: Usage = {
+    const usage: aiTypes.Usage = {
       cacheRead: 30,
       cacheWrite: 40,
       cost: { cacheRead: 0.03, cacheWrite: 0.065, input: 0.01, output: 0.02, total: 0.125 },
@@ -204,7 +210,7 @@ const rendersRetainedEntriesAndAppendsTheLatest = () =>
         event: {
           type: "compaction_end";
           reason: "manual" | "threshold" | "overflow";
-          result: { tokensBefore: number; summary: string; usage?: Usage } | undefined;
+          result: { tokensBefore: number; summary: string; usage?: aiTypes.Usage } | undefined;
           aborted: boolean;
           willRetry: boolean;
           errorMessage?: string;

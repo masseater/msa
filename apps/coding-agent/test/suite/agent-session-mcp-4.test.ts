@@ -1,8 +1,11 @@
-import { fauxAssistantMessage } from "@msa/ai";
+import ai from "@msa/ai";
 import { Effect } from "effect";
 import { afterEach, describe, expect, it } from "vite-plus/test";
 
 import agentSessionMcpSupport from "./agent-session-mcp-support.ts";
+
+const { fauxAssistantMessage } = ai;
+
 const { SERVER_TOOLS, harnesses, nestedToolNames, setup } = agentSessionMcpSupport;
 
 describe("AgentSession MCP integration", () => {

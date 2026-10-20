@@ -1,7 +1,7 @@
 import { Effect } from "effect";
 import { describe, expect, it, vi } from "vite-plus/test";
 
-import type { Model } from "../src/types.ts";
+import type typesModule from "../src/types.types.ts";
 import modelChoice from "./model-choice.ts";
 import openaiCompletionsToolChoiceSupport from "./openai-completions-tool-choice-support.ts";
 
@@ -21,12 +21,12 @@ const {
 
 const openRouterCompletions = (
   wanted: string,
-  accepts: (model: Model<"openai-completions">) => boolean,
+  accepts: (model: typesModule.Model<"openai-completions">) => boolean,
 ) =>
   chooseModel(
     "openrouter",
     wanted,
-    (model): model is Model<"openai-completions"> =>
+    (model): model is typesModule.Model<"openai-completions"> =>
       usesApi("openai-completions")(model) && accepts(model),
   );
 

@@ -1,4 +1,5 @@
-import { Type, type Usage } from "@msa/ai";
+import ai from "@msa/ai";
+import type aiTypes from "@msa/ai/index.types";
 import durable from "@msa/durable";
 import harnessModule from "@msa/durable/harness";
 import type durableTypes from "@msa/durable/index.types";
@@ -8,6 +9,8 @@ import { afterEach, describe, expect, it } from "vite-plus/test";
 
 import harnessNestedToolsSupport from "./harness-nested-tools-support.ts";
 import support from "./support.ts";
+
+const { Type } = ai;
 
 const { LiveDoc, UsageDoc, defineTool } = durable;
 const { MemoryStorage } = memory;
@@ -158,7 +161,7 @@ const recordsNestedCall = Effect.gen(function* () {
   const runPromise = Effect.runPromiseWith(yield* Effect.context<never>());
 
   const setup = chatSetup();
-  const usage: Usage = {
+  const usage: aiTypes.Usage = {
     cacheRead: 0,
     cacheWrite: 0,
     cost: { cacheRead: 0, cacheWrite: 0, input: 0.1, output: 0.2, total: 0.3 },

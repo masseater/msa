@@ -3,9 +3,11 @@ import { fileURLToPath } from "node:url";
 import { Effect } from "effect";
 import { afterEach, beforeEach, describe, expect, it } from "vite-plus/test";
 
-import { CodemodeSandbox } from "../src/index.ts";
+import codemode from "../src/index.ts";
 import sandboxSupport from "./sandbox-support.ts";
 import support from "./support.ts";
+
+const { CodemodeSandbox } = codemode;
 
 const { closeSandboxes, track, useBackend } = sandboxSupport;
 const { toJson } = support;

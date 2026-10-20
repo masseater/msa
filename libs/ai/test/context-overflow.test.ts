@@ -1,6 +1,6 @@
 import { describe, inject, it } from "vite-plus/test";
 
-import type { Model } from "../src/types.ts";
+import type typesModule from "../src/types.types.ts";
 import contextOverflowSupport from "./context-overflow-support.ts";
 import env from "./env.ts";
 import modelChoice from "./model-choice.ts";
@@ -12,7 +12,7 @@ const { chooseModel, usesApi } = modelChoice;
 const openaiCodexToken = inject("storedApiKeys")["openai-codex"];
 const slow = { timeout: 120000 };
 
-const openAICompletionsModel = (): Model<"openai-completions"> => {
+const openAICompletionsModel = (): typesModule.Model<"openai-completions"> => {
   const { compat: _compat, ...baseModel } = chooseModel("openai", "direct OpenAI");
   return { ...baseModel, api: "openai-completions" };
 };

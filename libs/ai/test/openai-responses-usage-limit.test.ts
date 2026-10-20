@@ -1,10 +1,13 @@
 import { Effect } from "effect";
 import { describe, expect, it } from "vite-plus/test";
 
-import { stream as streamOpenAIResponses } from "../src/api/openai-responses.ts";
-import type { Model } from "../src/types.ts";
-import { normalizeContext } from "../src/utils/transcript.ts";
+import openaiResponses from "../src/api/openai-responses.ts";
+import type typesModule from "../src/types.types.ts";
+import transcript from "../src/utils/transcript.ts";
 import jsonCodec from "./json-codec.ts";
+
+const { normalizeContext } = transcript;
+const { stream: streamOpenAIResponses } = openaiResponses;
 
 const { encodeJson } = jsonCodec;
 
@@ -13,7 +16,7 @@ const usageLimitError = {
   message: "Usage limit reached.",
 };
 
-const model: Model<"openai-responses"> = {
+const model: typesModule.Model<"openai-responses"> = {
   api: "openai-responses",
   baseUrl: "https://api.openai.com/v1",
   contextWindow: 400000,

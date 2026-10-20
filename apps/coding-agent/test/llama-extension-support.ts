@@ -1,4 +1,4 @@
-import type { ModelsPublication, ModelsStoreEntry } from "@msa/ai";
+import type aiTypes from "@msa/ai/index.types";
 import testing from "@msa/testing";
 import { Effect, Schema } from "effect";
 
@@ -67,8 +67,8 @@ const later = (delayMs: number, effect: Effect.Effect<void>): void => {
 };
 
 const createCache = () => {
-  let entry: ModelsStoreEntry | undefined;
-  const publish = (publication: ModelsPublication): Promise<boolean> =>
+  let entry: aiTypes.ModelsStoreEntry | undefined;
+  const publish = (publication: aiTypes.ModelsPublication): Promise<boolean> =>
     runTest(
       Effect.sync(() => {
         if (publication.persist === null) entry = undefined;

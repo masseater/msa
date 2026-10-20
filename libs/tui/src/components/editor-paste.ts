@@ -1,14 +1,17 @@
 import { dual } from "effect/Function";
 
-import { replaceEscapeSequences } from "../ansi-sequences.ts";
-import type { EditorDocument } from "./editor-document.ts";
-import { normalizeEditorText } from "./editor-segments.ts";
+import ansiSequences from "../ansi-sequences.ts";
+import type editorDocumentTypes from "./editor-document.types.ts";
+import editorSegments from "./editor-segments.ts";
+
+const { replaceEscapeSequences } = ansiSequences;
+const { normalizeEditorText } = editorSegments;
 
 const CTRL_CSI_U_BODY = /^(\d+);5$/u;
 const MAX_INLINE_PASTE_LINES = 10;
 const MAX_INLINE_PASTE_CHARS = 1000;
 
-export function decodePastedText(pastedText: string): string {
+function decodePastedText(pastedText: string): string {
   const decodedText = replaceEscapeSequences(pastedText, (sequence) => {
     const control =
       sequence.kind === "csi" && sequence.final === "u"
@@ -25,7 +28,7 @@ export function decodePastedText(pastedText: string): string {
     .join("");
 }
 
-function separateFromWord(doc: EditorDocument, text: string): string {
+function separateFromWord(doc: editorDocumentTypes.EditorDocument, text: string): string {
   if (!/^[/~.]/u.test(text)) return text;
   const charBeforeCursor =
     doc.state.cursorCol > 0 ? doc.currentLine()[doc.state.cursorCol - 1] : "";
@@ -34,10 +37,10 @@ function separateFromWord(doc: EditorDocument, text: string): string {
     : text;
 }
 
-export const insertPaste: {
-  (doc: EditorDocument, pastedText: string): void;
-  (pastedText: string): (doc: EditorDocument) => void;
-} = dual(2, (doc: EditorDocument, pastedText: string): void => {
+const insertPaste: {
+  (doc: editorDocumentTypes.EditorDocument, pastedText: string): void;
+  (pastedText: string): (doc: editorDocumentTypes.EditorDocument) => void;
+} = dual(2, (doc: editorDocumentTypes.EditorDocument, pastedText: string): void => {
   const filteredText = separateFromWord(doc, decodePastedText(pastedText));
   const lineCount = filteredText.split("\n").length;
   const totalChars = filteredText.length;
@@ -52,3 +55,10 @@ export const insertPaste: {
   }
   doc.insertText(filteredText);
 });
+
+const editorPaste = {
+  decodePastedText,
+  insertPaste,
+};
+
+export default editorPaste;

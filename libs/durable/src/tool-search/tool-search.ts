@@ -1,10 +1,12 @@
-import { Type } from "@msa/ai";
+import ai from "@msa/ai";
 import { Effect } from "effect";
 
 import define from "../harness/define.ts";
 import type typesModule from "../harness/types.types.ts";
 import search from "../search.ts";
 import type toolSearchTypes from "./tool-search.types.ts";
+
+const { Type } = ai;
 
 const { defineExtension, defineTool } = define;
 const { rankDocuments } = search;

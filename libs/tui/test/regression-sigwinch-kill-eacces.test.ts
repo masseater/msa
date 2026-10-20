@@ -1,7 +1,9 @@
 import assert from "node:assert";
 import { after, describe, it } from "node:test";
 
-import { refreshTerminalDimensions } from "../src/terminal-protocol.ts";
+import terminalProtocol from "../src/terminal-protocol.ts";
+
+const { refreshTerminalDimensions } = terminalProtocol;
 
 const originalKill = process.kill;
 

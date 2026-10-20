@@ -1,12 +1,16 @@
 import { Clock, Effect } from "effect";
 import { describe, expect, it } from "vite-plus/test";
 
-import { completeSimple } from "../src/compat.ts";
-import type { Context, Model } from "../src/types.ts";
-import { currentTimeMillis } from "../src/utils/clock.ts";
-import { nextRandom } from "../src/utils/random.ts";
+import compat from "../src/compat.ts";
+import type typesModule from "../src/types.types.ts";
+import clock from "../src/utils/clock.ts";
+import random from "../src/utils/random.ts";
 import env from "./env.ts";
 import modelChoice from "./model-choice.ts";
+
+const { currentTimeMillis } = clock;
+const { nextRandom } = random;
+const { completeSimple } = compat;
 
 const { hasEnv, readEnv } = env;
 const { chooseModel, usesApi } = modelChoice;
@@ -19,7 +23,7 @@ const completions = usesApi("openai-completions");
 const explicitCacheModel = chooseModel(
   "openrouter",
   "Gemini with billed cache writes",
-  (model): model is Model<"openai-completions"> =>
+  (model): model is typesModule.Model<"openai-completions"> =>
     completions(model) && model.id.startsWith("google/") && model.cost.cacheWrite > 0,
 );
 
@@ -48,7 +52,7 @@ const markLastUserMessage = (payload: unknown): unknown => {
 };
 
 const reportsCacheWrites = Effect.gen(function* () {
-  const context: Context = {
+  const context: typesModule.Context = {
     messages: [
       {
         content: "Reply with exactly: OK",

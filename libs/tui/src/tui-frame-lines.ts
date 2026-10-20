@@ -1,21 +1,21 @@
 import { dual } from "effect/Function";
 
-import { isImageLine } from "./terminal-image-kitty.ts";
-import {
+import terminalImageKitty from "./terminal-image-kitty.ts";
+import tuiComponent from "./tui-component.ts";
+import type tuiFrameLinesTypes from "./tui-frame-lines.types.ts";
+import utils from "./utils.ts";
+
+const { isImageLine } = terminalImageKitty;
+const { normalizeTerminalOutput, visibleWidth } = utils;
+const {
   CURSOR_MARKER,
   FAKE_CURSOR_END,
   FAKE_CURSOR_START,
   SEGMENT_RESET,
   unwrapFocusedFakeCursor,
-} from "./tui-component.ts";
-import { normalizeTerminalOutput, visibleWidth } from "./utils.ts";
+} = tuiComponent;
 
-export interface CursorPosition {
-  row: number;
-  col: number;
-}
-
-export function applyLineResets(lines: string[]): string[] {
+function applyLineResets(lines: string[]): string[] {
   for (const [i, line] of lines.entries()) {
     if (!isImageLine(line)) {
       lines[i] = normalizeTerminalOutput(line) + SEGMENT_RESET;
@@ -24,10 +24,10 @@ export function applyLineResets(lines: string[]): string[] {
   return lines;
 }
 
-export const extractCursorPosition: {
-  (lines: string[], height: number): CursorPosition | null;
-  (height: number): (lines: string[]) => CursorPosition | null;
-} = dual(2, (lines: string[], height: number): CursorPosition | null => {
+const extractCursorPosition: {
+  (lines: string[], height: number): tuiFrameLinesTypes.CursorPosition | null;
+  (height: number): (lines: string[]) => tuiFrameLinesTypes.CursorPosition | null;
+} = dual(2, (lines: string[], height: number): tuiFrameLinesTypes.CursorPosition | null => {
   const viewportTop = Math.max(0, lines.length - height);
   for (let row = lines.length - 1; row >= viewportTop; row--) {
     const line = lines[row];
@@ -39,13 +39,13 @@ export const extractCursorPosition: {
 
       lines[row] = line.slice(0, markerIndex) + line.slice(markerIndex + CURSOR_MARKER.length);
 
-      return { row, col };
+      return { col, row };
     }
   }
   return null;
 });
 
-export const resolveFakeCursors: {
+const resolveFakeCursors: {
   (lines: string[], showHardwareCursor: boolean): string[];
   (showHardwareCursor: boolean): (lines: string[]) => string[];
 } = dual(2, (lines: string[], showHardwareCursor: boolean): string[] =>
@@ -57,3 +57,11 @@ export const resolveFakeCursors: {
       .replaceAll(FAKE_CURSOR_END, "\x1b[27m");
   }),
 );
+
+const tuiFrameLines = {
+  applyLineResets,
+  extractCursorPosition,
+  resolveFakeCursors,
+};
+
+export default tuiFrameLines;

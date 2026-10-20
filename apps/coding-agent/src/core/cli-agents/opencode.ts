@@ -1,13 +1,15 @@
 import { homedir } from "node:os";
 import { join } from "node:path";
 
-import type { Provider } from "@msa/ai";
-import { getBuiltinModels } from "@msa/ai/providers/all";
+import type aiTypes from "@msa/ai/index.types";
+import all from "@msa/ai/providers/all";
 
 import { envSnapshot, readEnv } from "../process-env.ts";
 import { cliAgentProvider } from "./provider.ts";
-import { streamViaCli, type CliBackend } from "./run.ts";
+import { type CliBackend, streamViaCli } from "./run.ts";
 import { flattenTranscript } from "./transcript.ts";
+
+const { getBuiltinModels } = all;
 
 const PROVIDER_ID = "opencode-free";
 
@@ -62,7 +64,6 @@ interface OpenCodeEvent {
 }
 
 const backend: CliBackend<OpenCodeEvent> = {
-  providerId: PROVIDER_ID,
   command(model, context, cwd) {
     return {
       bin: openCodeExecutable(),
@@ -101,13 +102,14 @@ const backend: CliBackend<OpenCodeEvent> = {
       });
     }
   },
+  providerId: PROVIDER_ID,
   shouldRetry: (detail) => /readiness|server-connection|database is locked/i.test(detail),
 };
 
-export function openCodeProvider(): Provider {
+export function openCodeProvider(): aiTypes.Provider {
   return cliAgentProvider({
+    executable: openCodeExecutable,
     id: PROVIDER_ID,
-    name: "OpenCode Free",
     models: freeModels().map((free) => ({
       id: free.id,
       name: free.name,
@@ -116,7 +118,7 @@ export function openCodeProvider(): Provider {
       contextWindow: free.contextWindow,
       maxTokens: free.maxTokens,
     })),
-    executable: openCodeExecutable,
+    name: "OpenCode Free",
     streamSimple: (model, context, options) => streamViaCli(backend, model, context, options),
   });
 }

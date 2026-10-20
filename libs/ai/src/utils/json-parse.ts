@@ -1,6 +1,6 @@
 import { parse as partialParse } from "partial-json";
 
-import type { ToolCall } from "../types.ts";
+import type typesModule from "../types.types.ts";
 
 const VALID_JSON_ESCAPES = new Set(['"', "\\", "/", "b", "f", "n", "r", "t"]);
 
@@ -28,19 +28,19 @@ function escapeControlCharacter(char: string): string {
 
 const repairEscape = (json: string, index: number): { text: string; skip: number } => {
   const nextChar = json[index + 1];
-  if (nextChar === undefined) return { text: "\\\\", skip: 0 };
+  if (nextChar === undefined) return { skip: 0, text: "\\\\" };
 
   if (nextChar === "u") {
     const unicodeDigits = json.slice(index + 2, index + 6);
-    if (/^[0-9a-fA-F]{4}$/u.test(unicodeDigits)) return { text: `\\u${unicodeDigits}`, skip: 5 };
+    if (/^[0-9a-fA-F]{4}$/u.test(unicodeDigits)) return { skip: 5, text: `\\u${unicodeDigits}` };
   }
 
-  if (VALID_JSON_ESCAPES.has(nextChar)) return { text: `\\${nextChar}`, skip: 1 };
+  if (VALID_JSON_ESCAPES.has(nextChar)) return { skip: 1, text: `\\${nextChar}` };
 
-  return { text: "\\\\", skip: 0 };
+  return { skip: 0, text: "\\\\" };
 };
 
-export const repairJson = (json: string): string => {
+const repairJson = (json: string): string => {
   let repaired = "";
   let inString = false;
 
@@ -74,7 +74,7 @@ export const repairJson = (json: string): string => {
   return repaired;
 };
 
-export function parseJsonWithRepair<T>(json: string): T {
+function parseJsonWithRepair<T>(json: string): T {
   try {
     return JSON.parse(json) as T;
   } catch (error) {
@@ -86,12 +86,12 @@ export function parseJsonWithRepair<T>(json: string): T {
   }
 }
 
-export function parseToolCallArguments(
+function parseToolCallArguments(
   json: string | undefined,
-): Pick<ToolCall, "arguments" | "argumentsError"> {
+): Pick<typesModule.ToolCall, "arguments" | "argumentsError"> {
   if (json === undefined || json.trim() === "") return { arguments: {} };
   try {
-    const parsed = parseJsonWithRepair<ToolCall["arguments"] | null>(json);
+    const parsed = parseJsonWithRepair<typesModule.ToolCall["arguments"] | null>(json);
     if (typeof parsed !== "object" || parsed === null || Array.isArray(parsed)) {
       throw new Error("Tool arguments must be a JSON object");
     }
@@ -104,9 +104,7 @@ export function parseToolCallArguments(
   }
 }
 
-export function parseStreamingJson<T = Record<string, unknown>>(
-  partialJson: string | undefined,
-): T {
+function parseStreamingJson<T = Record<string, unknown>>(partialJson: string | undefined): T {
   if (partialJson === undefined || partialJson === "" || partialJson.trim() === "") {
     return {} as T;
   }
@@ -127,3 +125,12 @@ export function parseStreamingJson<T = Record<string, unknown>>(
     }
   }
 }
+
+const jsonParse = {
+  parseJsonWithRepair,
+  parseStreamingJson,
+  parseToolCallArguments,
+  repairJson,
+};
+
+export default jsonParse;

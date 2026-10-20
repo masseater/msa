@@ -8,6 +8,6 @@ export interface Emitters {
 }
 
 export const createEmitters = (host: EmitHost): Emitters => ({
-  lifecycle: new LifecycleEmitter(host),
   context: new ContextEmitter(host),
+  lifecycle: new LifecycleEmitter(host),
 });

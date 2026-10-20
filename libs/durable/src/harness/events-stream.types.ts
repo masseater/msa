@@ -1,9 +1,9 @@
-import type { AssistantMessage } from "@msa/ai";
+import type aiTypes from "@msa/ai/index.types";
 
 declare namespace eventsStreamTypes {
   type Generations = {
-    readonly partialBefore: AssistantMessage | undefined;
-    readonly partial: AssistantMessage | undefined;
+    readonly partialBefore: aiTypes.AssistantMessage | undefined;
+    readonly partial: aiTypes.AssistantMessage | undefined;
   };
 }
 

@@ -1,16 +1,18 @@
 import type { Theme } from "@msa/coding-agent";
-import type { OverlayOptions } from "@msa/tui";
-import { matchesKey } from "@msa/tui";
+import tui from "@msa/tui";
+import type tuiTypes from "@msa/tui/index.types";
 
 import { BaseOverlay } from "./base-overlay.ts";
 
+const { matchesKey } = tui;
+
 export class MarginTestComponent extends BaseOverlay {
-  private config: { name: string; options: OverlayOptions };
+  private config: { name: string; options: tuiTypes.OverlayOptions };
   private done: (result: "next" | "close") => void;
 
   constructor(
     theme: Theme,
-    config: { name: string; options: OverlayOptions },
+    config: { name: string; options: tuiTypes.OverlayOptions },
     done: (result: "next" | "close") => void,
   ) {
     super(theme);

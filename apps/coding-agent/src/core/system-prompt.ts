@@ -1,7 +1,9 @@
-import { getSystemMessageText } from "@msa/ai";
+import ai from "@msa/ai";
 
 import { getDocsPath, getExamplesPath, getReadmePath } from "../config.ts";
-import { formatSkillsForPrompt, type Skill } from "./skills.ts";
+import { type Skill, formatSkillsForPrompt } from "./skills.ts";
+
+const { getSystemMessageText } = ai;
 
 export interface BuildSystemPromptOptions {
   customPrompt?: string | undefined;
@@ -43,23 +45,23 @@ export function normalizeBuildSystemPromptOptions(
   input: BuildSystemPromptOptions,
 ): NormalizedBuildSystemPromptOptions {
   return {
+    appendSystemPrompt: input.appendSystemPrompt ?? "",
+    contextFiles: (input.contextFiles ?? []).map((file) => Object.assign({}, file)),
     customPrompt: input.customPrompt,
+    cwd: input.cwd,
     forceSystemPrompt: input.forceSystemPrompt,
-    selectedTools: [...(input.selectedTools ?? ["read", "bash", "edit", "write"])],
     hiddenTools: [...(input.hiddenTools ?? [])],
-    toolSnippets: { ...(input.toolSnippets ?? {}) },
+    promptGuidelines: [...(input.promptGuidelines ?? [])],
+    sections: { ...(input.sections ?? {}) },
+    selectedTools: [...(input.selectedTools ?? ["read", "bash", "edit", "write"])],
+    skills: (input.skills ?? []).map((skill) => Object.assign({}, skill)),
     toolGuidelines: Object.fromEntries(
       Object.entries(input.toolGuidelines ?? {}).map(([name, guidelines]) => [
         name,
         [...guidelines],
       ]),
     ),
-    promptGuidelines: [...(input.promptGuidelines ?? [])],
-    appendSystemPrompt: input.appendSystemPrompt ?? "",
-    sections: { ...(input.sections ?? {}) },
-    cwd: input.cwd,
-    contextFiles: (input.contextFiles ?? []).map((file) => Object.assign({}, file)),
-    skills: (input.skills ?? []).map((skill) => Object.assign({}, skill)),
+    toolSnippets: { ...(input.toolSnippets ?? {}) },
   };
 }
 

@@ -1,9 +1,11 @@
 import type { ExtensionAPI, ExtensionContext } from "@msa/coding-agent";
-import { Key } from "@msa/tui";
+import tui from "@msa/tui";
 import { Effect } from "effect";
 
-import { createPresetStore, type Preset, type PresetStore } from "./preset-store.ts";
+import { type Preset, type PresetStore, createPresetStore } from "./preset-store.ts";
 import { showPresetSelector } from "./preset-ui.ts";
+
+const { Key } = tui;
 
 const activate = (store: PresetStore, name: string, preset: Preset, ctx: ExtensionContext) =>
   Effect.gen(function* () {
@@ -41,7 +43,7 @@ const runPresetCommand = (store: PresetStore, args: string, ctx: ExtensionContex
   Effect.gen(function* () {
     const name = args.trim();
     if (name.length === 0) {
-      yield* showPresetSelector({ store, ctx });
+      yield* showPresetSelector({ ctx, store });
       return;
     }
 

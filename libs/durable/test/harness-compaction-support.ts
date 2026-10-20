@@ -1,4 +1,4 @@
-import { type AssistantMessage, type SimpleStreamOptions, type TranscriptContext } from "@msa/ai";
+import type aiTypes from "@msa/ai/index.types";
 import type durableTypes from "@msa/durable/index.types";
 import type memoryTypes from "@msa/durable/storage/memory.types";
 import { Effect } from "effect";
@@ -51,8 +51,8 @@ function script(setup: ReturnType<typeof chatSetup>): harnessCompactionSupportTy
       { length: 500 },
       () =>
         (
-          transcript: TranscriptContext,
-          options?: SimpleStreamOptions,
+          transcript: aiTypes.TranscriptContext,
+          options?: aiTypes.SimpleStreamOptions,
           _state?: unknown,
           model?: { id: string },
         ) => {
@@ -73,7 +73,7 @@ function script(setup: ReturnType<typeof chatSetup>): harnessCompactionSupportTy
 
 function gatedImpl(
   gate: PromiseWithResolvers<void>,
-  message: AssistantMessage,
+  message: aiTypes.AssistantMessage,
   reached?: PromiseWithResolvers<void>,
 ): harnessCompactionSupportTypes.Step {
   return ({ options }) =>
@@ -88,12 +88,12 @@ function gatedImpl(
 
 const gated: {
   (
-    message: AssistantMessage,
+    message: aiTypes.AssistantMessage,
     reached?: PromiseWithResolvers<void>,
   ): (gate: PromiseWithResolvers<void>) => ReturnType<typeof gatedImpl>;
   (
     gate: PromiseWithResolvers<void>,
-    message: AssistantMessage,
+    message: aiTypes.AssistantMessage,
     reached?: PromiseWithResolvers<void>,
   ): ReturnType<typeof gatedImpl>;
 } = dual((args) => "resolve" in args[0], gatedImpl);

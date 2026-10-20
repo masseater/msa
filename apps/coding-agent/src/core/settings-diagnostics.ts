@@ -5,11 +5,11 @@ export function collectSettingsDiagnostics(
   settingsManager: SettingsManager,
 ): AgentSessionRuntimeDiagnostic[] {
   return settingsManager.drainErrors().map(({ scope, path, error }) => ({
-    type: "warning",
     message:
       path !== undefined && path !== ""
         ? `Invalid settings file ${path}: ${error.message}`
         : `Invalid ${scope} settings: ${error.message}`,
+    type: "warning",
   }));
 }
 

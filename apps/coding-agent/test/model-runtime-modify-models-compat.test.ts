@@ -1,4 +1,5 @@
-import { InMemoryModelsStore, type Model, type Provider } from "@msa/ai";
+import ai from "@msa/ai";
+import type aiTypes from "@msa/ai/index.types";
 import testing from "@msa/testing";
 import { Effect } from "effect";
 import { describe, expect, it } from "vite-plus/test";
@@ -7,9 +8,11 @@ import { AuthStorage } from "../src/core/auth-storage.ts";
 import { ModelRegistry } from "../src/core/model-registry.ts";
 import { ModelRuntime } from "../src/core/model-runtime.ts";
 
+const { InMemoryModelsStore } = ai;
+
 const { awaited, currentTimeMillis, runTest } = testing;
 
-function model(id: string): Model<"openai-completions"> {
+function model(id: string): aiTypes.Model<"openai-completions"> {
   return {
     api: "openai-completions" as const,
     baseUrl: "https://example.test/v1",
@@ -27,7 +30,7 @@ function model(id: string): Model<"openai-completions"> {
 const withStoredKey = <A>(key: string | undefined, build: (key: string) => A): A | undefined =>
   key === undefined || key === "" ? undefined : build(key);
 
-const nativeProvider = (nativeModel: Model<"openai-completions">): Provider => ({
+const nativeProvider = (nativeModel: aiTypes.Model<"openai-completions">): aiTypes.Provider => ({
   auth: {
     apiKey: {
       check: ({ credential }) =>
@@ -130,7 +133,7 @@ const marksANativeProviderWithAStored = Effect.gen(function* () {
   const unused = () => {
     throw new Error("unused");
   };
-  const provider: Provider = {
+  const provider: aiTypes.Provider = {
     auth: {
       oauth: {
         login: unused,

@@ -1,3 +1,5 @@
-import { startCodemodeWorker } from "@msa/codemode/worker-main";
+import workerMain from "@msa/codemode/worker-main";
+
+const { startCodemodeWorker } = workerMain;
 
 startCodemodeWorker();

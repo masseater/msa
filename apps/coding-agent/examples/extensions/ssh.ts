@@ -31,7 +31,7 @@ const resolveRemote = (msa: ExtensionAPI) =>
       return { remote, remoteCwd: path };
     }
 
-    const pwd = yield* Effect.promise(() => runSshText({ remote: arg, command: "pwd" }));
+    const pwd = yield* Effect.promise(() => runSshText({ command: "pwd", remote: arg }));
     return { remote: arg, remoteCwd: pwd.trim() };
   });
 
@@ -52,7 +52,7 @@ const registerReadTool = (
       const ssh = getSsh();
       if (ssh === null) return local.execute(id, params, signal, onUpdate);
       const remote = createReadTool(localCwd, {
-        operations: createRemoteReadOps({ remote: ssh.remote, remoteCwd: ssh.remoteCwd, localCwd }),
+        operations: createRemoteReadOps({ localCwd, remote: ssh.remote, remoteCwd: ssh.remoteCwd }),
       });
       return remote.execute(id, params, signal, onUpdate);
     },
@@ -72,9 +72,9 @@ const registerWriteTool = (
       if (ssh === null) return local.execute(id, params, signal, onUpdate);
       const remote = createWriteTool(localCwd, {
         operations: createRemoteWriteOps({
+          localCwd,
           remote: ssh.remote,
           remoteCwd: ssh.remoteCwd,
-          localCwd,
         }),
       });
       return remote.execute(id, params, signal, onUpdate);
@@ -94,7 +94,7 @@ const registerEditTool = (
       const ssh = getSsh();
       if (ssh === null) return local.execute(id, params, signal, onUpdate);
       const remote = createEditTool(localCwd, {
-        operations: createRemoteEditOps({ remote: ssh.remote, remoteCwd: ssh.remoteCwd, localCwd }),
+        operations: createRemoteEditOps({ localCwd, remote: ssh.remote, remoteCwd: ssh.remoteCwd }),
       });
       return remote.execute(id, params, signal, onUpdate);
     },
@@ -113,7 +113,7 @@ const registerBashTool = (
       const ssh = getSsh();
       if (ssh === null) return local.execute(id, params, signal, onUpdate);
       const remote = createBashTool(localCwd, {
-        operations: createRemoteBashOps({ remote: ssh.remote, remoteCwd: ssh.remoteCwd, localCwd }),
+        operations: createRemoteBashOps({ localCwd, remote: ssh.remote, remoteCwd: ssh.remoteCwd }),
       });
       return remote.execute(id, params, signal, onUpdate);
     },
@@ -152,9 +152,9 @@ export default function (msa: ExtensionAPI) {
     if (ssh === null) return undefined;
     return {
       operations: createRemoteBashOps({
+        localCwd,
         remote: ssh.remote,
         remoteCwd: ssh.remoteCwd,
-        localCwd,
       }),
     };
   });

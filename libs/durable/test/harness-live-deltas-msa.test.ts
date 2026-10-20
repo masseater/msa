@@ -1,4 +1,4 @@
-import { Type, fauxAssistantMessage, fauxText, fauxToolCall } from "@msa/ai";
+import ai from "@msa/ai";
 import type deltaTypes from "@msa/chord/delta.types";
 import durable from "@msa/durable";
 import type durableTypes from "@msa/durable/index.types";
@@ -9,6 +9,8 @@ import { describe, expect, it } from "vite-plus/test";
 
 import harnessLiveDeltasSupport from "./harness-live-deltas-support.ts";
 import support from "./support.ts";
+
+const { Type, fauxAssistantMessage, fauxText, fauxToolCall } = ai;
 
 const { LiveDoc, defineTool } = durable;
 const { MemoryStorage } = memory;

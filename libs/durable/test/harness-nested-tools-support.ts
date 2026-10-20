@@ -1,21 +1,18 @@
-import {
-  type AssistantMessage,
-  type ToolResultMessage,
-  Type,
-  fauxAssistantMessage,
-  fauxText,
-  fauxToolCall,
-} from "@msa/ai";
+import ai from "@msa/ai";
+import type aiTypes from "@msa/ai/index.types";
 import durable from "@msa/durable";
 import harnessModule from "@msa/durable/harness";
 import memory from "@msa/durable/storage/memory";
 import { Effect } from "effect";
 import { dual } from "effect/Function";
 
-import chatSupport from "./chat-support.ts";
-import effectSupport from "./effect-support.ts";
+import harnessNestedToolsSupportKit from "./harness-nested-tools-support-kit.ts";
 import type harnessNestedToolsSupportTypes from "./harness-nested-tools-support.types.ts";
 import sessionSupport from "./session-support.ts";
+
+const { chatSupport, effectSupport } = harnessNestedToolsSupportKit;
+
+const { Type, fauxAssistantMessage, fauxText, fauxToolCall } = ai;
 
 const { ToolResultEntry, defineTool } = durable;
 const { ToolTask } = harnessModule;
@@ -60,7 +57,11 @@ function echoTool(extra: Partial<harnessNestedToolsSupportTypes.Tool> = {}) {
   return { registration, state };
 }
 
-function callImpl(name: string, args: Record<string, string> = {}, id = "c1"): AssistantMessage {
+function callImpl(
+  name: string,
+  args: Record<string, string> = {},
+  id = "c1",
+): aiTypes.AssistantMessage {
   return fauxAssistantMessage([fauxToolCall(name, args, { id })], { stopReason: "toolUse" });
 }
 
@@ -73,14 +74,17 @@ const DONE = fauxAssistantMessage([fauxText("done")]);
 
 function results(
   entries: readonly harnessNestedToolsSupportTypes.EntryRecord[],
-): ToolResultMessage[] {
+): aiTypes.ToolResultMessage[] {
   return entries
     .filter((entry) => ToolResultEntry.is(entry))
-    .map((entry) => entry.model![0] as ToolResultMessage);
+    .map((entry) => entry.model![0] as aiTypes.ToolResultMessage);
 }
 
 function text(
-  result: harnessNestedToolsSupportTypes.NestedToolExecutionResult | ToolResultMessage | undefined,
+  result:
+    | harnessNestedToolsSupportTypes.NestedToolExecutionResult
+    | aiTypes.ToolResultMessage
+    | undefined,
 ): string {
   if (result === undefined) return "";
   if (!("role" in result))
@@ -98,7 +102,7 @@ const toolTasks = Effect.fn("toolTasks")(function* (
 
 const runOnce = Effect.fn("runOnce")(function* (
   setup: ReturnType<typeof chatSupport.chatSetup>,
-  responses: AssistantMessage[],
+  responses: aiTypes.AssistantMessage[],
 ) {
   setup.faux.setResponses(responses);
   const { harness, root } = yield* openChat(new MemoryStorage(), setup);

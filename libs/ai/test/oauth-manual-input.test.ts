@@ -1,22 +1,28 @@
 import { Deferred, Effect, Fiber } from "effect";
 import { expect, it } from "vite-plus/test";
 
-import { waitForCallbackOrManualInput } from "../src/auth/oauth/callback-server.ts";
-import type { AuthPrompt, ProviderAuthInteraction } from "../src/auth/types.ts";
+import callbackServer from "../src/auth/oauth/callback-server.ts";
+import type typesModule from "../src/auth/types.ts";
 import effectAssert from "./effect-assert.ts";
 import oauthCallback from "./oauth-callback.ts";
+
+const { waitForCallbackOrManualInput } = callbackServer;
 
 const { expectDefect } = effectAssert;
 const { callbackUrl, request, start } = oauthCallback;
 
-const interaction = (prompt: (prompt: AuthPrompt) => Promise<string>): ProviderAuthInteraction => ({
+const interaction = (
+  prompt: (prompt: typesModule.AuthPrompt) => Promise<string>,
+): typesModule.ProviderAuthInteraction => ({
   notify: () => {},
   prompt,
   signal: new AbortController().signal,
 });
 
 const pendingPrompt =
-  (onPrompt?: (prompt: AuthPrompt) => void): ((prompt: AuthPrompt) => Promise<string>) =>
+  (
+    onPrompt?: (prompt: typesModule.AuthPrompt) => void,
+  ): ((prompt: typesModule.AuthPrompt) => Promise<string>) =>
   (prompt) => {
     onPrompt?.(prompt);
     return Effect.runPromise(

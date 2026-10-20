@@ -1,4 +1,4 @@
-import type { Usage } from "@msa/ai/compat";
+import type compatTypes from "@msa/ai/compat.types";
 
 import type { SessionEntry } from "./session-manager.ts";
 
@@ -12,15 +12,15 @@ export interface UsageTotals {
 
 export function createUsageTotals(): UsageTotals {
   return {
-    input: 0,
-    output: 0,
     cacheRead: 0,
     cacheWrite: 0,
     cost: 0,
+    input: 0,
+    output: 0,
   };
 }
 
-export function addUsageToTotals(totals: UsageTotals, usage: Usage): void {
+export function addUsageToTotals(totals: UsageTotals, usage: compatTypes.Usage): void {
   totals.input += usage.input;
   totals.output += usage.output;
   totals.cacheRead += usage.cacheRead;
@@ -28,7 +28,10 @@ export function addUsageToTotals(totals: UsageTotals, usage: Usage): void {
   totals.cost += usage.cost.total;
 }
 
-export function combineUsage(first: Usage, second: Usage): Usage {
+export function combineUsage(
+  first: compatTypes.Usage,
+  second: compatTypes.Usage,
+): compatTypes.Usage {
   return {
     input: first.input + second.input,
     output: first.output + second.output,
@@ -42,10 +45,10 @@ export function combineUsage(first: Usage, second: Usage): Usage {
       : {}),
     totalTokens: first.totalTokens + second.totalTokens,
     cost: {
-      input: first.cost.input + second.cost.input,
-      output: first.cost.output + second.cost.output,
       cacheRead: first.cost.cacheRead + second.cost.cacheRead,
       cacheWrite: first.cost.cacheWrite + second.cost.cacheWrite,
+      input: first.cost.input + second.cost.input,
+      output: first.cost.output + second.cost.output,
       total: first.cost.total + second.cost.total,
     },
   };
@@ -62,7 +65,7 @@ export function getUsageCostBreakdown(entries: SessionEntry[]): UsageCostBreakdo
 
   for (const entry of entries) {
     let key: string | undefined;
-    let usage: Usage | undefined;
+    let usage: compatTypes.Usage | undefined;
     if (entry.type === "message" && entry.message.role === "assistant") {
       key = `${entry.message.provider}/${entry.message.responseModel ?? entry.message.model}`;
       usage = entry.message.usage;
@@ -94,8 +97,8 @@ export function getUsageCostBreakdown(entries: SessionEntry[]): UsageCostBreakdo
   }
 
   return Array.from(totalsByKey, ([key, totals]) => ({
-    key,
     cost: totals.cost,
+    key,
     tokens: totals.input + totals.output + totals.cacheRead + totals.cacheWrite,
   }))
     .filter((entry) => entry.cost > 0 || entry.tokens > 0)

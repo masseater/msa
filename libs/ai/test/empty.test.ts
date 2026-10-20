@@ -1,37 +1,32 @@
 import { Clock, Effect } from "effect";
 import { describe, expect, inject, it } from "vite-plus/test";
 
-import { complete } from "../src/compat.ts";
-import type {
-  Api,
-  AssistantMessage,
-  Context,
-  Model,
-  StreamOptions,
-  UserMessage,
-} from "../src/types.ts";
+import compat from "../src/compat.ts";
+import type typesModule from "../src/types.types.ts";
 import env from "./env.ts";
 import modelChoice from "./model-choice.ts";
 
+const { complete } = compat;
+
 const { chooseModel, usesApi } = modelChoice;
 
-type StreamOptionsWithExtras = StreamOptions & Record<string, unknown>;
+type StreamOptionsWithExtras = typesModule.StreamOptions & Record<string, unknown>;
 
 const { envValue } = env;
 
 const openaiCodexToken = inject("storedApiKeys")["openai-codex"];
 
-const testEmptyMessage = Effect.fn("testEmptyMessage")(function* <TApi extends Api>(
-  llm: Model<TApi>,
+const testEmptyMessage = Effect.fn("testEmptyMessage")(function* <TApi extends typesModule.Api>(
+  llm: typesModule.Model<TApi>,
   options: StreamOptionsWithExtras = {},
 ) {
-  const emptyMessage: UserMessage = {
+  const emptyMessage: typesModule.UserMessage = {
     content: [],
     role: "user",
     timestamp: yield* Clock.currentTimeMillis,
   };
 
-  const context: Context = {
+  const context: typesModule.Context = {
     messages: [emptyMessage],
   };
 
@@ -46,11 +41,10 @@ const testEmptyMessage = Effect.fn("testEmptyMessage")(function* <TApi extends A
   }
 });
 
-const testEmptyStringMessage = Effect.fn("testEmptyStringMessage")(function* <TApi extends Api>(
-  llm: Model<TApi>,
-  options: StreamOptionsWithExtras = {},
-) {
-  const context: Context = {
+const testEmptyStringMessage = Effect.fn("testEmptyStringMessage")(function* <
+  TApi extends typesModule.Api,
+>(llm: typesModule.Model<TApi>, options: StreamOptionsWithExtras = {}) {
+  const context: typesModule.Context = {
     messages: [
       {
         content: "",
@@ -73,9 +67,9 @@ const testEmptyStringMessage = Effect.fn("testEmptyStringMessage")(function* <TA
 });
 
 const testWhitespaceOnlyMessage = Effect.fn("testWhitespaceOnlyMessage")(function* <
-  TApi extends Api,
->(llm: Model<TApi>, options: StreamOptionsWithExtras = {}) {
-  const context: Context = {
+  TApi extends typesModule.Api,
+>(llm: typesModule.Model<TApi>, options: StreamOptionsWithExtras = {}) {
+  const context: typesModule.Context = {
     messages: [
       {
         content: "   \n\t  ",
@@ -98,9 +92,9 @@ const testWhitespaceOnlyMessage = Effect.fn("testWhitespaceOnlyMessage")(functio
 });
 
 const testEmptyAssistantMessage = Effect.fn("testEmptyAssistantMessage")(function* <
-  TApi extends Api,
->(llm: Model<TApi>, options: StreamOptionsWithExtras = {}) {
-  const emptyAssistant: AssistantMessage = {
+  TApi extends typesModule.Api,
+>(llm: typesModule.Model<TApi>, options: StreamOptionsWithExtras = {}) {
+  const emptyAssistant: typesModule.AssistantMessage = {
     api: llm.api,
     content: [],
     model: llm.id,
@@ -118,7 +112,7 @@ const testEmptyAssistantMessage = Effect.fn("testEmptyAssistantMessage")(functio
     },
   };
 
-  const context: Context = {
+  const context: typesModule.Context = {
     messages: [
       {
         content: "Hello, how are you?",
@@ -264,25 +258,25 @@ const gpt55ShouldHandleEmpty3 = () =>
 describe("AI Providers Empty Message Tests", () => {
   describe("OpenAI Codex Provider Empty Messages", () => {
     it.skipIf(openaiCodexToken === undefined || openaiCodexToken === "")(
-      "gpt-5.5 - should handle empty content array",
+      "Codex - should handle empty content array",
       { retry: 3, timeout: 30000 },
       gpt55ShouldHandleEmpty,
     );
 
     it.skipIf(openaiCodexToken === undefined || openaiCodexToken === "")(
-      "gpt-5.5 - should handle empty string content",
+      "Codex - should handle empty string content",
       { retry: 3, timeout: 30000 },
       gpt55ShouldHandleEmpty2,
     );
 
     it.skipIf(openaiCodexToken === undefined || openaiCodexToken === "")(
-      "gpt-5.5 - should handle whitespace-only content",
+      "Codex - should handle whitespace-only content",
       { retry: 3, timeout: 30000 },
       gpt55ShouldHandleWhitespace,
     );
 
     it.skipIf(openaiCodexToken === undefined || openaiCodexToken === "")(
-      "gpt-5.5 - should handle empty assistant message in conversation",
+      "Codex - should handle empty assistant message in conversation",
       { retry: 3, timeout: 30000 },
       gpt55ShouldHandleEmpty3,
     );

@@ -1,4 +1,4 @@
-import { Type, fauxAssistantMessage, fauxText, fauxToolCall } from "@msa/ai";
+import ai from "@msa/ai";
 import durable from "@msa/durable";
 import type durableTypes from "@msa/durable/index.types";
 import memory from "@msa/durable/storage/memory";
@@ -9,6 +9,8 @@ import { afterEach, describe, expect, it } from "vite-plus/test";
 import harnessOwnershipChildren from "./harness-ownership-children.ts";
 import harnessOwnershipSupport from "./harness-ownership-support.ts";
 import support from "./support.ts";
+
+const { Type, fauxAssistantMessage, fauxText, fauxToolCall } = ai;
 
 const { defineTool } = durable;
 const { MemoryStorage } = memory;

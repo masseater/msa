@@ -1,4 +1,4 @@
-import { InMemoryModelsStore } from "@msa/ai";
+import ai from "@msa/ai";
 import testing from "@msa/testing";
 import { Effect } from "effect";
 import { describe, expect, test, vi } from "vite-plus/test";
@@ -14,6 +14,8 @@ import { resolveCredentialForPrint } from "../src/cli/credential-print.ts";
 import { AuthStorage } from "../src/core/auth-storage.ts";
 import { ModelRuntime } from "../src/core/model-runtime.ts";
 import { main } from "../src/main.ts";
+
+const { InMemoryModelsStore } = ai;
 
 const { awaited, currentTimeMillis, runTest } = testing;
 

@@ -1,4 +1,4 @@
-import { type AssistantMessage } from "@msa/ai";
+import type aiTypes from "@msa/ai/index.types";
 import durable from "@msa/durable";
 import harnessModule from "@msa/durable/harness";
 import { Effect } from "effect";
@@ -111,7 +111,7 @@ const repairsArgumentsPrepareArguments = Effect.gen(function* () {
   expect(byId.get("fixed")).toBe("");
   expect(byId.get("broken")).toBe("<harness>\n[error] cannot repair\n</harness>");
   expect(seen).toEqual([{ text: "#7" }]);
-  const call = (entries[2]!.model![0] as AssistantMessage).content.find(
+  const call = (entries[2]!.model![0] as aiTypes.AssistantMessage).content.find(
     (item) => item.type === "toolCall",
   );
   expect(call?.type === "toolCall" && call.arguments).toEqual({ text: 7 });

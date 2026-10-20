@@ -143,7 +143,7 @@ export function extractTodoItems(message: string): TodoItem[] {
     ) {
       const cleaned = cleanStepText(text);
       if (cleaned.length > 3) {
-        items.push({ step: items.length + 1, text: cleaned, completed: false });
+        items.push({ completed: false, step: items.length + 1, text: cleaned });
       }
     }
   }

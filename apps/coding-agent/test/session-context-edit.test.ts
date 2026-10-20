@@ -1,4 +1,4 @@
-import type { AssistantMessage, ToolResultMessage } from "@msa/ai";
+import type aiTypes from "@msa/ai/index.types";
 import testing from "@msa/testing";
 import { describe, expect, it } from "vite-plus/test";
 
@@ -18,7 +18,7 @@ const omitsATargetOnlyFromModelProjection = () => {
   const session = SessionManager.inMemory();
   session.appendMessage({ content: "request", role: "user", timestamp: currentTimeMillis() });
   const assistantId = session.appendMessage(assistant("partial"));
-  const result: ToolResultMessage = {
+  const result: aiTypes.ToolResultMessage = {
     content: [{ text: "raw output", type: "text" as const }],
     details: { path: "large.txt" },
     isError: true,
@@ -35,7 +35,9 @@ const omitsATargetOnlyFromModelProjection = () => {
   expect(session.buildSessionProjection().messages.map((message) => message.role)).toEqual([
     "user",
   ]);
-  expect((session.getEntry(resultId) as { message: ToolResultMessage }).message).toBe(result);
+  expect((session.getEntry(resultId) as { message: aiTypes.ToolResultMessage }).message).toBe(
+    result,
+  );
 };
 
 const replacesOnlyContentAndLetsTheLatest = () => {
@@ -50,7 +52,7 @@ const replacesOnlyContentAndLetsTheLatest = () => {
   if (projected?.role !== "assistant") throw new Error("expected assistant");
   expect(text(projected)).toBe("restored");
   expect(projected.usage.totalTokens).toBe(11);
-  expect(text((session.getEntry(targetId) as { message: AssistantMessage }).message)).toBe(
+  expect(text((session.getEntry(targetId) as { message: aiTypes.AssistantMessage }).message)).toBe(
     "original",
   );
 };

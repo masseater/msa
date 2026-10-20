@@ -1,4 +1,5 @@
-import { getCapabilities, hyperlink, Text } from "@msa/tui";
+import tui from "@msa/tui";
+import type tuiTypes from "@msa/tui/index.types";
 
 import { expandHint } from "../../../modes/interactive/components/keybinding-hints.ts";
 import type { Theme } from "../../../modes/interactive/theme/theme.ts";
@@ -6,6 +7,8 @@ import type { ToolDefinition, ToolRenderResultOptions } from "../../extensions/t
 import { getTextOutput, invalidArgText, str } from "../render-utils.ts";
 import type { WebFetchToolDetails } from "../web-fetch.ts";
 import type { WebSearchToolDetails } from "../web-search.ts";
+
+const { Text, getCapabilities, hyperlink } = tui;
 
 type Renderers = Pick<ToolDefinition<any, any>, "renderCall" | "renderResult">;
 type Result = Parameters<NonNullable<Renderers["renderResult"]>>[0];
@@ -82,12 +85,12 @@ function textRenderers(
 ): Renderers {
   return {
     renderCall(args, theme, context) {
-      const text = (context.lastComponent as Text | undefined) ?? new Text("", 0, 0);
+      const text = (context.lastComponent as tuiTypes.Text | undefined) ?? new Text("", 0, 0);
       text.setText(formatArgs(args, theme));
       return text;
     },
     renderResult(result, options, theme, context) {
-      const text = (context.lastComponent as Text | undefined) ?? new Text("", 0, 0);
+      const text = (context.lastComponent as tuiTypes.Text | undefined) ?? new Text("", 0, 0);
       if (context.isPartial) text.setText("");
       else if (context.isError) {
         text.setText(`\n${theme.fg("error", getTextOutput(result, false).trim())}`);

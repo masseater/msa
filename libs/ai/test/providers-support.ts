@@ -1,15 +1,20 @@
-import { fauxAssistantMessage } from "../src/providers/faux.ts";
-import type { Api, Model, ProviderStreams } from "../src/types.ts";
-import { currentTimeMillis } from "../src/utils/clock.ts";
-import { AssistantMessageEventStream } from "../src/utils/event-stream.ts";
-import { normalizeContext } from "../src/utils/transcript.ts";
+import faux from "../src/providers/faux.ts";
+import type typesModule from "../src/types.types.ts";
+import clock from "../src/utils/clock.ts";
+import eventStream from "../src/utils/event-stream.ts";
+import transcript from "../src/utils/transcript.ts";
+
+const { normalizeContext } = transcript;
+const { currentTimeMillis } = clock;
+const { AssistantMessageEventStream } = eventStream;
+const { fauxAssistantMessage } = faux;
 
 const context = normalizeContext({
   messages: [{ content: "hi", role: "user", timestamp: currentTimeMillis() }],
 });
 
-function recordingStreams(label: string, calls: string[]): ProviderStreams {
-  const respond = (model: Model<Api>) => {
+function recordingStreams(label: string, calls: string[]): typesModule.ProviderStreams {
+  const respond = (model: typesModule.Model<typesModule.Api>) => {
     calls.push(`${label}:${model.id}`);
     const stream = new AssistantMessageEventStream();
     const message = fauxAssistantMessage("ok");
@@ -21,7 +26,7 @@ function recordingStreams(label: string, calls: string[]): ProviderStreams {
   return { stream: respond, streamSimple: respond };
 }
 
-const testModel = (api: string, id: string): Model<Api> => ({
+const testModel = (api: string, id: string): typesModule.Model<typesModule.Api> => ({
   api,
   baseUrl: "https://example.test/v1",
   contextWindow: 10000,

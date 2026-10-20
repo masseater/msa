@@ -1,4 +1,4 @@
-import { type ToolResultMessage, type Usage } from "@msa/ai/compat";
+import type compatTypes from "@msa/ai/compat.types";
 import testing from "@msa/testing";
 import { Effect } from "effect";
 import { describe, expect, it } from "vite-plus/test";
@@ -6,6 +6,7 @@ import { describe, expect, it } from "vite-plus/test";
 import { SessionManager } from "../src/core/session-manager.ts";
 import { getUsageCostBreakdown } from "../src/core/usage-totals.ts";
 import agentSessionStatsSupport from "./agent-session-stats-support.ts";
+
 const {
   createAssistantMessage,
   createSession,
@@ -17,7 +18,7 @@ const {
 
 const { awaited, runTest } = testing;
 
-function createToolResultMessage(usage: Usage): ToolResultMessage {
+function createToolResultMessage(usage: compatTypes.Usage): compatTypes.ToolResultMessage {
   return {
     content: [{ text: "tool result", type: "text" as const }],
     isError: false,

@@ -1,40 +1,38 @@
 import { dual } from "effect/Function";
 
-import {
-  type Color,
-  colorToRgb,
-  CUBE_VALUES,
-  GRAY_VALUES,
-  type TerminalColorMode,
-  type TextAttributes,
-  type TextStyle,
-} from "./colors.ts";
-import type { RgbColor } from "./terminal-colors.ts";
+import colors from "./colors.ts";
+import type colorsTypes from "./colors.types.ts";
+import type terminalColorsTypes from "./terminal-colors.types.ts";
+
+const { CUBE_VALUES, GRAY_VALUES, colorToRgb } = colors;
 
 function findClosest(values: readonly number[], target: number): { index: number; value: number } {
   let closest: { index: number; value: number; distance: number } | undefined;
   for (const [index, value] of values.entries()) {
     const distance = Math.abs(target - value);
     if (closest === undefined || distance < closest.distance) {
-      closest = { index, value, distance };
+      closest = { distance, index, value };
     }
   }
   if (closest === undefined) throw new Error("findClosest needs at least one value");
   return closest;
 }
 
-function colorDistance(first: RgbColor, second: RgbColor): number {
+function colorDistance(
+  first: terminalColorsTypes.RgbColor,
+  second: terminalColorsTypes.RgbColor,
+): number {
   const dr = first.r - second.r;
   const dg = first.g - second.g;
   const db = first.b - second.b;
   return dr * dr * 0.299 + dg * dg * 0.587 + db * db * 0.114;
 }
 
-function rgbToAnsi256(color: RgbColor): number {
+function rgbToAnsi256(color: terminalColorsTypes.RgbColor): number {
   const r = findClosest(CUBE_VALUES, color.r);
   const g = findClosest(CUBE_VALUES, color.g);
   const b = findClosest(CUBE_VALUES, color.b);
-  const cubeColor = { r: r.value, g: g.value, b: b.value };
+  const cubeColor = { b: b.value, g: g.value, r: r.value };
   const cubeIndex = 16 + 36 * r.index + 6 * g.index + b.index;
 
   const gray = Math.round(0.299 * color.r + 0.587 * color.g + 0.114 * color.b);
@@ -42,7 +40,7 @@ function rgbToAnsi256(color: RgbColor): number {
   const spread = Math.max(color.r, color.g, color.b) - Math.min(color.r, color.g, color.b);
   if (
     spread < 10 &&
-    colorDistance(color, { r: grayValue, g: grayValue, b: grayValue }) <
+    colorDistance(color, { b: grayValue, g: grayValue, r: grayValue }) <
       colorDistance(color, cubeColor)
   ) {
     return 232 + grayOffset;
@@ -50,7 +48,11 @@ function rgbToAnsi256(color: RgbColor): number {
   return cubeIndex;
 }
 
-function colorAnsi(color: Color, mode: TerminalColorMode, background: boolean): string {
+function colorAnsi(
+  color: colorsTypes.Color,
+  mode: colorsTypes.TerminalColorMode,
+  background: boolean,
+): string {
   if (color.kind === "indexed") return `\x1b[${background ? 48 : 38};5;${color.index}m`;
 
   const rgb = colorToRgb(color);
@@ -60,39 +62,45 @@ function colorAnsi(color: Color, mode: TerminalColorMode, background: boolean): 
   return `\x1b[${background ? 48 : 38};5;${rgbToAnsi256(rgb)}m`;
 }
 
-export const foregroundAnsi: {
-  (color: Color, mode: TerminalColorMode): string;
-  (mode: TerminalColorMode): (color: Color) => string;
-} = dual(2, (color: Color, mode: TerminalColorMode): string => colorAnsi(color, mode, false));
-
-export const backgroundAnsi: {
-  (color: Color, mode: TerminalColorMode): string;
-  (mode: TerminalColorMode): (color: Color) => string;
-} = dual(2, (color: Color, mode: TerminalColorMode): string => colorAnsi(color, mode, true));
-
-export const styleText: {
-  (text: string, options: TextStyle, mode: TerminalColorMode): string;
-  (options: TextStyle, mode: TerminalColorMode): (text: string) => string;
-} = dual(3, (text: string, options: TextStyle, mode: TerminalColorMode): string =>
-  styleTextWithAnsi(
-    text,
-    options.fg && foregroundAnsi(options.fg, mode),
-    options.bg && backgroundAnsi(options.bg, mode),
-    options,
-  ),
+const foregroundAnsi: {
+  (color: colorsTypes.Color, mode: colorsTypes.TerminalColorMode): string;
+  (mode: colorsTypes.TerminalColorMode): (color: colorsTypes.Color) => string;
+} = dual(2, (color: colorsTypes.Color, mode: colorsTypes.TerminalColorMode): string =>
+  colorAnsi(color, mode, false),
 );
 
-export const styleTextWithAnsi: {
+const backgroundAnsi: {
+  (color: colorsTypes.Color, mode: colorsTypes.TerminalColorMode): string;
+  (mode: colorsTypes.TerminalColorMode): (color: colorsTypes.Color) => string;
+} = dual(2, (color: colorsTypes.Color, mode: colorsTypes.TerminalColorMode): string =>
+  colorAnsi(color, mode, true),
+);
+
+const styleText: {
+  (text: string, options: colorsTypes.TextStyle, mode: colorsTypes.TerminalColorMode): string;
+  (options: colorsTypes.TextStyle, mode: colorsTypes.TerminalColorMode): (text: string) => string;
+} = dual(
+  3,
+  (text: string, options: colorsTypes.TextStyle, mode: colorsTypes.TerminalColorMode): string =>
+    styleTextWithAnsi(
+      text,
+      options.fg && foregroundAnsi(options.fg, mode),
+      options.bg && backgroundAnsi(options.bg, mode),
+      options,
+    ),
+);
+
+const styleTextWithAnsi: {
   (
     text: string,
     fgAnsi: string | undefined,
     bgAnsi: string | undefined,
-    options: TextAttributes,
+    options: colorsTypes.TextAttributes,
   ): string;
   (
     fgAnsi: string | undefined,
     bgAnsi: string | undefined,
-    options: TextAttributes,
+    options: colorsTypes.TextAttributes,
   ): (text: string) => string;
 } = dual(
   4,
@@ -100,7 +108,7 @@ export const styleTextWithAnsi: {
     text: string,
     fgAnsi: string | undefined,
     bgAnsi: string | undefined,
-    options: TextAttributes,
+    options: colorsTypes.TextAttributes,
   ): string => {
     let prefix = "";
     let suffix = "";
@@ -134,3 +142,12 @@ export const styleTextWithAnsi: {
     return `${prefix}${text}${suffix}`;
   },
 );
+
+const colorAnsiModule = {
+  backgroundAnsi,
+  foregroundAnsi,
+  styleText,
+  styleTextWithAnsi,
+};
+
+export default colorAnsiModule;

@@ -1,23 +1,20 @@
-import {
-  type AssistantImages,
-  type ClassifierResult,
-  type CreateProviderOptions,
-  type MutableModels,
-  createProvider,
-  fauxAssistantMessage,
-  fauxText,
-  fauxToolCall,
-} from "@msa/ai";
-import { CodemodeSandbox } from "@msa/codemode";
+import ai from "@msa/ai";
+import type aiTypes from "@msa/ai/index.types";
+import codemodeModule from "@msa/codemode";
 import durable from "@msa/durable";
 import memory from "@msa/durable/storage/memory";
 import { Effect } from "effect";
 import { dual } from "effect/Function";
 
-import codemode from "../src/codemode/codemode.ts";
 import type envTypes from "../src/env/index.types.ts";
+import codemodeModelsSupportKit from "./codemode-models-support-kit.ts";
 import type codemodeModelsSupportTypes from "./codemode-models-support.types.ts";
-import support from "./support.ts";
+
+const { codemode, support } = codemodeModelsSupportKit;
+
+const { createProvider, fauxAssistantMessage, fauxText, fauxToolCall } = ai;
+
+const { CodemodeSandbox } = codemodeModule;
 
 const { createCodemodeExtension } = codemode;
 const { MemoryStorage } = memory;
@@ -39,7 +36,7 @@ const USAGE = {
 const PNG =
   "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNkYPhfDwAChwGA60e6kgAAAABJRU5ErkJggg==";
 
-function testModels(): CreateProviderOptions["models"] {
+function testModels(): aiTypes.CreateProviderOptions["models"] {
   return [
     {
       api: "test-classifier",
@@ -70,10 +67,10 @@ function testModels(): CreateProviderOptions["models"] {
 function testClassifiersImpl(
   calls: codemodeModelsSupportTypes.Calls,
   gate: { readonly open: PromiseWithResolvers<void>; readonly atFour: boolean },
-): CreateProviderOptions["classifiers"] {
+): aiTypes.CreateProviderOptions["classifiers"] {
   return {
     "test-classifier": {
-      classify: (model, classifierContext): Promise<ClassifierResult> =>
+      classify: (model, classifierContext): Promise<aiTypes.ClassifierResult> =>
         Effect.runPromise(
           Effect.gen(function* () {
             calls.classify++;
@@ -97,7 +94,7 @@ function testClassifiersImpl(
             yield* awaited(gate.open.promise);
             calls.inFlight--;
             return {
-              answers: { good: { value: true } } as unknown as ClassifierResult["answers"],
+              answers: { good: { value: true } } as unknown as aiTypes.ClassifierResult["answers"],
               api: model.api,
               model: model.id,
               provider: model.provider,
@@ -122,10 +119,12 @@ const testClassifiers: {
   ): ReturnType<typeof testClassifiersImpl>;
 } = dual(2, testClassifiersImpl);
 
-function testImages(calls: codemodeModelsSupportTypes.Calls): CreateProviderOptions["images"] {
+function testImages(
+  calls: codemodeModelsSupportTypes.Calls,
+): aiTypes.CreateProviderOptions["images"] {
   return {
     "test-images": {
-      generateImages: (model): Promise<AssistantImages> => {
+      generateImages: (model): Promise<aiTypes.AssistantImages> => {
         calls.images++;
         return Promise.resolve({
           api: model.api,
@@ -145,7 +144,7 @@ function modelsChat() {
   const calls = { classify: 0, images: 0, inFlight: 0, maxInFlight: 0 };
   const gate = { atFour: false, open: deferred() };
   gate.open.resolve();
-  (setup.models as MutableModels).setProvider(
+  (setup.models as aiTypes.MutableModels).setProvider(
     createProvider({
       auth: { apiKey: { name: "Test", resolve: () => Promise.resolve({ auth: {} }) } },
       classifiers: testClassifiers(calls, gate),

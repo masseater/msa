@@ -1,9 +1,13 @@
-import type { OpenAICodexResponsesOptions } from "./api/openai-codex-options.ts";
-import type { OpenAICompletionsOptions } from "./api/openai-completions.ts";
-import type { OpenAIResponsesOptions } from "./api/openai-responses-config.ts";
+import type openaiCodexOptionsTypes from "./api/openai-codex-options.types.ts";
+import type openaiCompletionsTypes from "./api/openai-completions.types.ts";
+import type openaiResponsesConfigTypes from "./api/openai-responses-config.types.ts";
 
-export interface OpenAIApiOptionsMap {
-  "openai-completions": OpenAICompletionsOptions;
-  "openai-responses": OpenAIResponsesOptions;
-  "openai-codex-responses": OpenAICodexResponsesOptions;
+declare namespace apiOptionsOpenaiTypes {
+  interface OpenAIApiOptionsMap {
+    "openai-completions": openaiCompletionsTypes.OpenAICompletionsOptions;
+    "openai-responses": openaiResponsesConfigTypes.OpenAIResponsesOptions;
+    "openai-codex-responses": openaiCodexOptionsTypes.OpenAICodexResponsesOptions;
+  }
 }
+
+export type { apiOptionsOpenaiTypes as default };

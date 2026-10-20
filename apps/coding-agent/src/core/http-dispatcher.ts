@@ -85,14 +85,14 @@ export function configureHttpDispatcher(timeoutMs: number = DEFAULT_HTTP_IDLE_TI
   const dispatcher = withUndiciErrorListener(
     new undici.EnvHttpProxyAgent({
       allowH2: false,
-      proxyTunnel: true,
       bodyTimeout: normalizedTimeoutMs,
+      clientFactory: createUndiciClient,
       connect: {
         autoSelectFamilyAttemptTimeout: DEFAULT_AUTO_SELECT_FAMILY_ATTEMPT_TIMEOUT_MS,
       },
-      headersTimeout: normalizedTimeoutMs,
-      clientFactory: createUndiciClient,
       factory: createUndiciOriginDispatcher,
+      headersTimeout: normalizedTimeoutMs,
+      proxyTunnel: true,
     }),
   );
   undici.setGlobalDispatcher(dispatcher);

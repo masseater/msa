@@ -40,14 +40,14 @@ port.once("message", (message: unknown) => {
             resizeImageInProcess(message.inputBytes, message.mimeType, message.options),
           );
           const response: ResizeImageWorkerResponse = {
-            type: IMAGE_RESIZE_WORKER_RESPONSE_TYPE,
             result,
+            type: IMAGE_RESIZE_WORKER_RESPONSE_TYPE,
           };
           port.postMessage(response);
         } catch (error) {
           const response: ResizeImageWorkerResponse = {
-            type: IMAGE_RESIZE_WORKER_RESPONSE_TYPE,
             error: toErrorMessage(error),
+            type: IMAGE_RESIZE_WORKER_RESPONSE_TYPE,
           };
           port.postMessage(response);
         }

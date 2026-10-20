@@ -36,6 +36,6 @@ export const resolveModelSelection: {
         "Select a harness model explicitly or set both MSA_PROVIDER and MSA_MODEL as defaults.",
       );
     }
-    return { provider, id };
+    return { id, provider };
   },
 );

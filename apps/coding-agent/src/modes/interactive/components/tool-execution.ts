@@ -1,16 +1,3 @@
-import {
-  Box,
-  type Component,
-  Container,
-  getCapabilities,
-  Image,
-  MouseRegion,
-  Spacer,
-  Text,
-  type TUI,
-  type TuiMouseEvent,
-} from "@msa/tui";
-
 import type {
   ToolDefinition,
   ToolRenderContext,
@@ -19,6 +6,9 @@ import type {
 
 export type { ToolRenderers };
 
+import tui from "@msa/tui";
+import type tuiTypes from "@msa/tui/index.types";
+
 import {
   formatToolCallWithArgs,
   getTextOutput as getRenderedTextOutput,
@@ -26,6 +16,8 @@ import {
 import { ensurePngTranscoder } from "../../../utils/image-convert.ts";
 import { theme } from "../theme/theme.ts";
 import { collapsedOutput } from "./visual-truncate.ts";
+
+const { Box, Container, Image, MouseRegion, Spacer, Text, getCapabilities } = tui;
 
 export interface ToolExecutionOptions {
   showImages?: boolean;
@@ -42,17 +34,17 @@ export interface ToolCallSummary {
 }
 
 export class ToolExecutionComponent extends Container {
-  private contentBox: Box;
-  private contentText: Text;
-  private contentTextRegion: MouseRegion;
-  private selfRenderContainer: Container;
+  private contentBox: tuiTypes.Box;
+  private contentText: tuiTypes.Text;
+  private contentTextRegion: tuiTypes.MouseRegion;
+  private selfRenderContainer: tuiTypes.Container;
   private selfRenderHeight = 0;
-  private callRendererComponent?: Component | undefined;
-  private resultRendererComponent?: Component | undefined;
+  private callRendererComponent?: tuiTypes.Component | undefined;
+  private resultRendererComponent?: tuiTypes.Component | undefined;
   private rendererState: any = {};
-  private imageComponents: Image[] = [];
+  private imageComponents: tuiTypes.Image[] = [];
   private imageSources: Array<{ data: string; mimeType: string; widthCells: number }> = [];
-  private imageSpacers: Spacer[] = [];
+  private imageSpacers: tuiTypes.Spacer[] = [];
   private toolName: string;
   private toolCallId: string;
   private args: any;
@@ -62,7 +54,7 @@ export class ToolExecutionComponent extends Container {
   private outputPad: number;
   private isPartial = true;
   private toolDefinition?: ToolRenderers | undefined;
-  private ui: TUI;
+  private ui: tuiTypes.TUI;
   private cwd: string;
   private executionStarted = false;
   private argsComplete = false;
@@ -79,7 +71,7 @@ export class ToolExecutionComponent extends Container {
     args: any,
     options: ToolExecutionOptions = {},
     toolDefinition: ToolRenderers | ToolDefinition<any, any, any> | undefined,
-    ui: TUI,
+    ui: tuiTypes.TUI,
     cwd: string,
   ) {
     super();
@@ -125,33 +117,33 @@ export class ToolExecutionComponent extends Container {
     return this.toolDefinition?.renderShell ?? "default";
   }
 
-  private getRenderContext(lastComponent: Component | undefined): ToolRenderContext {
+  private getRenderContext(lastComponent: tuiTypes.Component | undefined): ToolRenderContext {
     return {
       args: this.args,
-      toolCallId: this.toolCallId,
+      argsComplete: this.argsComplete,
+      cwd: this.cwd,
+      durationMs: this.isPartial ? undefined : this.result?.durationMs,
+      executionStarted: this.executionStarted,
+      expanded: this.expanded,
       invalidate: () => {
         this.invalidate();
         this.ui.requestRender();
       },
-      lastComponent,
-      state: this.rendererState,
-      cwd: this.cwd,
-      executionStarted: this.executionStarted,
-      argsComplete: this.argsComplete,
-      isPartial: this.isPartial,
-      expanded: this.expanded,
-      showImages: this.showImages,
       isError: this.result?.isError ?? false,
-      durationMs: this.isPartial ? undefined : this.result?.durationMs,
+      isPartial: this.isPartial,
+      lastComponent,
       outputPad: this.outputPad,
+      showImages: this.showImages,
+      state: this.rendererState,
+      toolCallId: this.toolCallId,
     };
   }
 
-  private createCallFallback(): Component {
+  private createCallFallback(): tuiTypes.Component {
     return new Text(formatToolCallWithArgs(this.toolName, this.args, theme, this.expanded), 0, 0);
   }
 
-  private createResultFallback(): Component | undefined {
+  private createResultFallback(): tuiTypes.Component | undefined {
     const output = this.getTextOutput();
     if (output === "") {
       return undefined;
@@ -162,7 +154,7 @@ export class ToolExecutionComponent extends Container {
     return new Text(lines.map((line) => theme.fg("toolOutput", line)).join("\n"), 0, 0);
   }
 
-  private createResultRegion(component: Component): MouseRegion {
+  private createResultRegion(component: tuiTypes.Component): tuiTypes.MouseRegion {
     return new MouseRegion(component, (event) => {
       if (this.result === undefined || event.type !== "click" || event.button !== "left")
         return undefined;
@@ -173,11 +165,11 @@ export class ToolExecutionComponent extends Container {
 
   getCallSummary(): ToolCallSummary {
     return {
-      toolName: this.toolName,
       args: this.args,
+      details: this.result?.details,
       done: this.result !== undefined && !this.isPartial,
       isError: this.result?.isError ?? false,
-      details: this.result?.details,
+      toolName: this.toolName,
     };
   }
 
@@ -266,14 +258,16 @@ export class ToolExecutionComponent extends Container {
     return super.render(width);
   }
 
-  override handleMouse(event: TuiMouseEvent): ReturnType<Container["handleMouse"]> {
+  override handleMouse(
+    event: tuiTypes.TuiMouseEvent,
+  ): ReturnType<tuiTypes.Container["handleMouse"]> {
     if (!this.hasRendererDefinition() || this.getRenderShell() !== "self")
       return super.handleMouse(event);
     if (event.y <= 0 || event.y > this.selfRenderHeight) return undefined;
     return this.selfRenderContainer.handleMouse({
       ...event,
-      y: event.y - 1,
       height: this.selfRenderHeight,
+      y: event.y - 1,
     });
   }
 
@@ -348,7 +342,7 @@ export class ToolExecutionComponent extends Container {
   private static updateDisplayRenderContainer(
     self: ToolExecutionComponent,
     bgFn: (text: string) => string,
-  ): Container | Box {
+  ): tuiTypes.Container | tuiTypes.Box {
     const renderContainer =
       self.getRenderShell() === "self" ? self.selfRenderContainer : self.contentBox;
     if (renderContainer instanceof Box) {
@@ -379,7 +373,7 @@ export class ToolExecutionComponent extends Container {
 
   private static updateDisplayPart2(
     self: ToolExecutionComponent,
-    renderContainer: Container | Box,
+    renderContainer: tuiTypes.Container | tuiTypes.Box,
   ): void {
     if (self.result !== undefined) {
       const resultRenderer = self.getResultRenderer();
@@ -411,7 +405,7 @@ export class ToolExecutionComponent extends Container {
 
   private static updateDisplayPreviousSources(self: ToolExecutionComponent): {
     previousSources: { data: string; mimeType: string; widthCells: number }[];
-    previousImages: Image[];
+    previousImages: tuiTypes.Image[];
   } {
     const previousImages = self.imageComponents;
     const previousSources = self.imageSources;
@@ -424,7 +418,7 @@ export class ToolExecutionComponent extends Container {
       self.removeChild(spacer);
     }
     self.imageSpacers = [];
-    return { previousSources, previousImages };
+    return { previousImages, previousSources };
   }
 
   private getTextOutput(): string {

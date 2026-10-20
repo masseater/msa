@@ -1,10 +1,13 @@
-import { type TranscriptContext, fauxAssistantMessage, getCurrentSystemPrompt } from "@msa/ai";
+import ai from "@msa/ai";
+import type aiTypes from "@msa/ai/index.types";
 import testing from "@msa/testing";
 import { Effect } from "effect";
 import { afterEach, describe, expect, it } from "vite-plus/test";
 
 import agentSessionGoalSupport from "./agent-session-goal-support.ts";
 import harnessModule from "./harness.ts";
+
+const { fauxAssistantMessage, getCurrentSystemPrompt } = ai;
 
 const { goalEvents, harnesses, setup, touchTool, workTurn } = agentSessionGoalSupport;
 
@@ -13,7 +16,7 @@ const { createHarness, getUserTexts } = harnessModule;
 const { toJsonText } = testing;
 
 function verdict(value: "not_met" | "met" | "impossible", reason: string) {
-  return (context: TranscriptContext) => {
+  return (context: aiTypes.TranscriptContext) => {
     if (!getCurrentSystemPrompt(context.messages).includes("completion condition")) {
       throw new Error("expected an evaluator request");
     }

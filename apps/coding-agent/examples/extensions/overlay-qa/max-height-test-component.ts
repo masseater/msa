@@ -1,7 +1,9 @@
 import type { Theme } from "@msa/coding-agent";
-import { matchesKey } from "@msa/tui";
+import tui from "@msa/tui";
 
 import { BaseOverlay } from "./base-overlay.ts";
+
+const { matchesKey } = tui;
 
 export class MaxHeightTestComponent extends BaseOverlay {
   private done: () => void;

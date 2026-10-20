@@ -1,6 +1,6 @@
 import { homedir } from "os";
 
-import type { ImageContent, TextContent } from "@msa/ai";
+import type aiTypes from "@msa/ai/index.types";
 import type { Theme } from "@msa/coding-agent";
 import {
   createBashToolDefinition,
@@ -12,7 +12,9 @@ import {
   createWriteToolDefinition,
   formatReadLineRange,
 } from "@msa/coding-agent";
-import { Text } from "@msa/tui";
+import tui from "@msa/tui";
+
+const { Text } = tui;
 
 const shortenPath = (path: string): string => {
   const home = homedir();
@@ -20,7 +22,7 @@ const shortenPath = (path: string): string => {
 };
 
 const textOf = (result: {
-  content: ReadonlyArray<TextContent | ImageContent>;
+  content: ReadonlyArray<aiTypes.TextContent | aiTypes.ImageContent>;
 }): string | undefined => {
   const found = result.content.find((c) => c.type === "text");
   return found?.type === "text" ? found.text : undefined;
@@ -36,7 +38,7 @@ const expandedLines = (text: string, theme: Theme): string =>
     .join("\n");
 
 const listResult = (
-  result: { content: ReadonlyArray<TextContent | ImageContent> },
+  result: { content: ReadonlyArray<aiTypes.TextContent | aiTypes.ImageContent> },
   expanded: boolean,
   theme: Theme,
   unit: string,
@@ -209,11 +211,11 @@ const renderWriteResult: NonNullable<
 };
 
 export const toolRenderers = {
-  read: { renderCall: renderReadCall, renderResult: renderReadResult },
   bash: { renderCall: renderBashCall, renderResult: renderBashResult },
-  write: { renderCall: renderWriteCall, renderResult: renderWriteResult },
   edit: { renderCall: renderEditCall, renderResult: renderEditResult },
   find: { renderCall: renderFindCall, renderResult: renderFindResult },
   grep: { renderCall: renderGrepCall, renderResult: renderGrepResult },
   ls: { renderCall: renderLsCall, renderResult: renderLsResult },
+  read: { renderCall: renderReadCall, renderResult: renderReadResult },
+  write: { renderCall: renderWriteCall, renderResult: renderWriteResult },
 };

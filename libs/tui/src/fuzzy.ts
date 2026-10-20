@@ -1,13 +1,11 @@
 import { dual } from "effect/Function";
-export interface FuzzyMatch {
-  matches: boolean;
-  score: number;
-}
 
-export const fuzzyMatch: {
-  (query: string, text: string): FuzzyMatch;
-  (text: string): (query: string) => FuzzyMatch;
-} = dual(2, (query: string, text: string): FuzzyMatch => {
+import type fuzzyTypes from "./fuzzy.types.ts";
+
+const fuzzyMatch: {
+  (query: string, text: string): fuzzyTypes.FuzzyMatch;
+  (text: string): (query: string) => fuzzyTypes.FuzzyMatch;
+} = dual(2, (query: string, text: string): fuzzyTypes.FuzzyMatch => {
   const queryLower = query.toLowerCase();
   const textLower = text.toLowerCase();
 
@@ -31,7 +29,7 @@ export const fuzzyMatch: {
 
 const WORD_BOUNDARY = /[\s\-_./:]/u;
 
-function matchQuery(normalizedQuery: string, textLower: string): FuzzyMatch {
+function matchQuery(normalizedQuery: string, textLower: string): fuzzyTypes.FuzzyMatch {
   if (normalizedQuery.length === 0) {
     return { matches: true, score: 0 };
   }
@@ -93,7 +91,7 @@ function swapAlphaNumericQuery(queryLower: string): string {
   return ALPHA_NUMERIC_QUERY.test(queryLower) ? `${digits}${letters}` : `${letters}${digits}`;
 }
 
-export const fuzzyFilter: {
+const fuzzyFilter: {
   <T>(items: T[], query: string, getText: (item: T) => string): T[];
   <T>(query: string, getText: (item: T) => string): (items: T[]) => T[];
 } = dual(3, <T>(items: T[], query: string, getText: (item: T) => string): T[] => {
@@ -135,3 +133,10 @@ export const fuzzyFilter: {
   results.sort((a, b) => a.totalScore - b.totalScore);
   return results.map((r) => r.item);
 });
+
+const fuzzy = {
+  fuzzyFilter,
+  fuzzyMatch,
+};
+
+export default fuzzy;

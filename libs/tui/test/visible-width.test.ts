@@ -1,7 +1,9 @@
 import assert from "node:assert";
 import { describe, it } from "node:test";
 
-import { visibleWidth } from "../src/utils.ts";
+import utils from "../src/utils.ts";
+
+const { visibleWidth } = utils;
 
 describe("visibleWidth", () => {
   it("measures styled ASCII without counting escape sequences", () => {

@@ -12,15 +12,15 @@ export interface RepoState {
 
 const EMPTY: RepoState = {
   branch: "-",
-  commit: "-",
   changedFiles: 0,
+  commit: "-",
   unpushedCommits: 0,
 };
 
 function git(cwd: string, args: readonly string[]): Effect.Effect<string | undefined> {
   return Effect.tryPromise({
-    try: () => execCommand("git", [...args], cwd, { timeout: 5_000 }),
     catch: orchestratorError,
+    try: () => execCommand("git", [...args], cwd, { timeout: 5_000 }),
   }).pipe(
     Effect.map((result) => (result.code === 0 ? result.stdout.trim() : undefined)),
     Effect.orElseSucceed(() => undefined),
@@ -41,8 +41,8 @@ function read(cwd: string): Effect.Effect<RepoState> {
     if (branch === undefined && commit === undefined) return EMPTY;
     return {
       branch: branch === undefined || branch === "" ? "-" : branch,
-      commit: commit === undefined || commit === "" ? "-" : commit,
       changedFiles: count(status),
+      commit: commit === undefined || commit === "" ? "-" : commit,
       unpushedCommits: Number.parseInt(unpushed ?? "0", 10) || 0,
     };
   });
@@ -52,4 +52,4 @@ function describe(state: RepoState): string {
   return `branch ${state.branch} · commit ${state.commit} · ${state.changedFiles} changed files · ${state.unpushedCommits} unpushed commits`;
 }
 
-export const repoStates = { read, describe };
+export const repoStates = { describe, read };

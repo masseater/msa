@@ -1,23 +1,11 @@
 import { Effect } from "effect";
 
-import type { AutocompleteProvider, AutocompleteSuggestions } from "../autocomplete.ts";
-import { type CancelDelay, runAfter } from "../delay.ts";
-import type { EditorDocument } from "./editor-document.ts";
+import type autocompleteTypes from "../autocomplete.types.ts";
+import delay from "../delay.ts";
+import type delayTypes from "../delay.types.ts";
+import type editorAutocompleteRequestsTypes from "./editor-autocomplete-requests.types.ts";
 
-export interface AutocompleteRequestOptions {
-  force: boolean;
-  explicitTab: boolean;
-}
-
-export interface AutocompleteRequestHost {
-  readonly doc: EditorDocument;
-  provider(): AutocompleteProvider | undefined;
-  deliver(
-    provider: AutocompleteProvider,
-    suggestions: AutocompleteSuggestions | null,
-    options: AutocompleteRequestOptions,
-  ): void;
-}
+const { runAfter } = delay;
 
 interface RequestSnapshot {
   requestId: number;
@@ -27,15 +15,15 @@ interface RequestSnapshot {
   col: number;
 }
 
-export class AutocompleteRequests {
-  private readonly host: AutocompleteRequestHost;
+export default class AutocompleteRequests {
+  private readonly host: editorAutocompleteRequestsTypes.AutocompleteRequestHost;
   private abort: AbortController | undefined;
-  private cancelDebounce: CancelDelay | undefined;
+  private cancelDebounce: delayTypes.CancelDelay | undefined;
   private task: Promise<void> = Promise.resolve();
   private startToken = 0;
   private requestId = 0;
 
-  constructor(host: AutocompleteRequestHost) {
+  constructor(host: editorAutocompleteRequestsTypes.AutocompleteRequestHost) {
     this.host = host;
   }
 
@@ -49,7 +37,10 @@ export class AutocompleteRequests {
     this.abort = undefined;
   }
 
-  request(options: AutocompleteRequestOptions, debounceMs: number): void {
+  request(
+    options: editorAutocompleteRequestsTypes.AutocompleteRequestOptions,
+    debounceMs: number,
+  ): void {
     this.cancel();
     const startToken = ++this.startToken;
     if (debounceMs > 0) {
@@ -62,7 +53,10 @@ export class AutocompleteRequests {
     void this.start(startToken, options);
   }
 
-  private start(startToken: number, options: AutocompleteRequestOptions): Promise<void> {
+  private start(
+    startToken: number,
+    options: editorAutocompleteRequestsTypes.AutocompleteRequestOptions,
+  ): Promise<void> {
     const previousTask = this.task;
     const controller = new AbortController();
     this.task = Effect.runPromise(
@@ -74,11 +68,11 @@ export class AutocompleteRequests {
         this.abort = controller;
         const { doc } = this.host;
         const snapshot: RequestSnapshot = {
-          requestId: ++this.requestId,
-          controller,
-          text: doc.getText(),
-          line: doc.state.cursorLine,
           col: doc.state.cursorCol,
+          controller,
+          line: doc.state.cursorLine,
+          requestId: ++this.requestId,
+          text: doc.getText(),
         };
         yield* this.run(snapshot, options);
       }),
@@ -86,23 +80,26 @@ export class AutocompleteRequests {
     return this.task;
   }
 
-  private run(snapshot: RequestSnapshot, options: AutocompleteRequestOptions): Effect.Effect<void> {
+  private run(
+    snapshot: RequestSnapshot,
+    options: editorAutocompleteRequestsTypes.AutocompleteRequestOptions,
+  ): Effect.Effect<void> {
     const provider = this.host.provider();
     if (provider === undefined) return Effect.void;
     return Effect.promise(() => {
       const { state } = this.host.doc;
       return provider.getSuggestions(state.lines, state.cursorLine, state.cursorCol, {
-        signal: snapshot.controller.signal,
         force: options.force,
+        signal: snapshot.controller.signal,
       });
     }).pipe(Effect.map((suggestions) => this.receive(provider, suggestions, snapshot, options)));
   }
 
   private receive(
-    provider: AutocompleteProvider,
-    suggestions: AutocompleteSuggestions | null,
+    provider: autocompleteTypes.AutocompleteProvider,
+    suggestions: autocompleteTypes.AutocompleteSuggestions | null,
     snapshot: RequestSnapshot,
-    options: AutocompleteRequestOptions,
+    options: editorAutocompleteRequestsTypes.AutocompleteRequestOptions,
   ): void {
     if (!this.isCurrent(snapshot)) return;
     this.abort = undefined;

@@ -1,9 +1,12 @@
-import { type TranscriptContext, fauxAssistantMessage, getCurrentTools } from "@msa/ai";
+import ai from "@msa/ai";
+import type aiTypes from "@msa/ai/index.types";
 import { Effect } from "effect";
 import { expect } from "vite-plus/test";
 
 import type { ExtensionFactory } from "../../../src/index.ts";
 import type harnessTypes from "../harness.types.ts";
+
+const { fauxAssistantMessage, getCurrentTools } = ai;
 
 const compactViaHook: ExtensionFactory = (msa) => {
   msa.on("session_before_compact", (event) =>
@@ -18,8 +21,11 @@ const compactViaHook: ExtensionFactory = (msa) => {
   );
 };
 
-function captureRequest(harness: harnessTypes.Harness, text: string): () => TranscriptContext {
-  let request: TranscriptContext | undefined;
+function captureRequest(
+  harness: harnessTypes.Harness,
+  text: string,
+): () => aiTypes.TranscriptContext {
+  let request: aiTypes.TranscriptContext | undefined;
   harness.setResponses([
     (context) => {
       request = context;
@@ -32,7 +38,7 @@ function captureRequest(harness: harnessTypes.Harness, text: string): () => Tran
   };
 }
 
-function toolNames(context: TranscriptContext): string[] {
+function toolNames(context: aiTypes.TranscriptContext): string[] {
   return getCurrentTools(context.messages).map((tool) => tool.name);
 }
 

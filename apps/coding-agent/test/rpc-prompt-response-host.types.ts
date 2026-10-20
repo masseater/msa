@@ -1,4 +1,4 @@
-import type { Model } from "@msa/ai/compat";
+import type compatTypes from "@msa/ai/compat.types";
 
 import type utilities from "./utilities.ts";
 
@@ -10,7 +10,7 @@ declare namespace rpcPromptResponseHostTypes {
   interface RuntimeHostOptions {
     withAuth: boolean;
     responseDelayMs: number;
-    model?: Model<any>;
+    model?: compatTypes.Model<any>;
     extensionsResult?: NonNullable<ResourceLoaderOptions["extensionsResult"]>;
   }
 }

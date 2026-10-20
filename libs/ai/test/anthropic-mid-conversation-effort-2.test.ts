@@ -1,10 +1,13 @@
 import { Effect } from "effect";
 import { describe, expect, it } from "vite-plus/test";
 
-import { stream } from "../src/api/anthropic-messages.ts";
-import { normalizeContext } from "../src/compat.ts";
+import anthropicMessages from "../src/api/anthropic-messages.ts";
+import compatModule from "../src/compat.ts";
 import anthropicMidConversationEffortSupport from "./anthropic-mid-conversation-effort-support.ts";
 import modelChoice from "./model-choice.ts";
+
+const { stream } = anthropicMessages;
+const { normalizeContext } = compatModule;
 
 const { compatValue, modelsWhere } = modelChoice;
 

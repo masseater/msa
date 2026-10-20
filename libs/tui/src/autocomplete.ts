@@ -1,39 +1,35 @@
 import { Effect } from "effect";
 
-import { applyAutocompleteCompletion } from "./autocomplete-apply.ts";
-import {
-  type CommandEntry,
-  getCommandArgumentSuggestions,
-  getCommandNameSuggestions,
-} from "./autocomplete-commands.ts";
-import { getFileSuggestions } from "./autocomplete-files.ts";
-import { getFuzzyFileSuggestions } from "./autocomplete-fuzzy-files.ts";
-import {
-  extractAtPrefix,
-  extractForcedPathPrefix,
-  extractPathPrefix,
-  parsePathPrefix,
-} from "./autocomplete-prefix.ts";
-import type {
-  AutocompleteItem,
-  AutocompleteProvider,
-  AutocompleteSuggestions,
-} from "./autocomplete-types.ts";
-import { type Platform, platformRuntime } from "./platform.ts";
+import autocompleteApply from "./autocomplete-apply.ts";
+import autocompleteCommands from "./autocomplete-commands.ts";
+import type autocompleteCommandsTypes from "./autocomplete-commands.types.ts";
+import autocompleteFiles from "./autocomplete-files.ts";
+import autocompleteFuzzyFiles from "./autocomplete-fuzzy-files.ts";
+import autocompletePrefix from "./autocomplete-prefix.ts";
+import type autocompleteTypesModule from "./autocomplete-types.ts";
+import platform from "./platform.ts";
+import type platformTypes from "./platform.types.ts";
 
-export type {
-  AutocompleteItem,
-  AutocompleteProvider,
-  AutocompleteSuggestions,
-  SlashCommand,
-} from "./autocomplete-types.ts";
+const { platformRuntime } = platform;
+const { applyAutocompleteCompletion } = autocompleteApply;
+const { extractAtPrefix, extractForcedPathPrefix, extractPathPrefix, parsePathPrefix } =
+  autocompletePrefix;
+const { getCommandArgumentSuggestions, getCommandNameSuggestions } = autocompleteCommands;
+const { getFuzzyFileSuggestions } = autocompleteFuzzyFiles;
+const { getFileSuggestions } = autocompleteFiles;
 
-export class CombinedAutocompleteProvider implements AutocompleteProvider {
-  private commands: CommandEntry[];
+export default class CombinedAutocompleteProvider
+  implements autocompleteTypesModule.AutocompleteProvider
+{
+  private commands: autocompleteCommandsTypes.CommandEntry[];
   private basePath: string;
   private fdPath: string | null;
 
-  constructor(commands: CommandEntry[] = [], basePath: string, fdPath: string | null = null) {
+  constructor(
+    commands: autocompleteCommandsTypes.CommandEntry[] = [],
+    basePath: string,
+    fdPath: string | null = null,
+  ) {
     this.commands = commands;
     this.basePath = basePath;
     this.fdPath = fdPath;
@@ -44,7 +40,7 @@ export class CombinedAutocompleteProvider implements AutocompleteProvider {
     cursorLine: number,
     cursorCol: number,
     options: { signal: AbortSignal; force?: boolean },
-  ): Promise<AutocompleteSuggestions | null> {
+  ): Promise<autocompleteTypesModule.AutocompleteSuggestions | null> {
     return platformRuntime.runPromise(
       Effect.suspend(() =>
         this.suggestionsFor((lines[cursorLine] ?? "").slice(0, cursorCol), options),
@@ -56,10 +52,10 @@ export class CombinedAutocompleteProvider implements AutocompleteProvider {
     lines: string[],
     cursorLine: number,
     cursorCol: number,
-    item: AutocompleteItem,
+    item: autocompleteTypesModule.AutocompleteItem,
     prefix: string,
   ): { lines: string[]; cursorLine: number; cursorCol: number } {
-    return applyAutocompleteCompletion({ lines, cursorLine, cursorCol, item, prefix });
+    return applyAutocompleteCompletion({ cursorCol, cursorLine, item, lines, prefix });
   }
 
   shouldTriggerFileCompletion(lines: string[], cursorLine: number, cursorCol: number): boolean {
@@ -76,7 +72,11 @@ export class CombinedAutocompleteProvider implements AutocompleteProvider {
   private suggestionsFor(
     textBeforeCursor: string,
     options: { signal: AbortSignal; force?: boolean },
-  ): Effect.Effect<AutocompleteSuggestions | null, never, Platform> {
+  ): Effect.Effect<
+    autocompleteTypesModule.AutocompleteSuggestions | null,
+    never,
+    platformTypes.Platform
+  > {
     const atPrefix = extractAtPrefix(textBeforeCursor);
     if (atPrefix !== null && atPrefix !== "") {
       return this.atPrefixSuggestions(atPrefix, options.signal);
@@ -85,8 +85,8 @@ export class CombinedAutocompleteProvider implements AutocompleteProvider {
     const commandText = textBeforeCursor.trimStart();
     if (options.force !== true && commandText.startsWith("/")) {
       return commandText.includes(" ")
-        ? getCommandArgumentSuggestions({ commands: this.commands, commandText })
-        : Effect.succeed(getCommandNameSuggestions({ commands: this.commands, commandText }));
+        ? getCommandArgumentSuggestions({ commandText, commands: this.commands })
+        : Effect.succeed(getCommandNameSuggestions({ commandText, commands: this.commands }));
     }
 
     return this.pathSuggestions(textBeforeCursor, options.force ?? false);
@@ -95,13 +95,17 @@ export class CombinedAutocompleteProvider implements AutocompleteProvider {
   private atPrefixSuggestions(
     atPrefix: string,
     signal: AbortSignal,
-  ): Effect.Effect<AutocompleteSuggestions | null, never, Platform> {
+  ): Effect.Effect<
+    autocompleteTypesModule.AutocompleteSuggestions | null,
+    never,
+    platformTypes.Platform
+  > {
     const { rawPrefix, isQuotedPrefix } = parsePathPrefix(atPrefix);
     return getFuzzyFileSuggestions({
       basePath: this.basePath,
       fdPath: this.fdPath,
-      query: rawPrefix,
       isQuotedPrefix,
+      query: rawPrefix,
       signal,
     }).pipe(
       Effect.map((suggestions) =>
@@ -113,7 +117,11 @@ export class CombinedAutocompleteProvider implements AutocompleteProvider {
   private pathSuggestions(
     textBeforeCursor: string,
     force: boolean,
-  ): Effect.Effect<AutocompleteSuggestions | null, never, Platform> {
+  ): Effect.Effect<
+    autocompleteTypesModule.AutocompleteSuggestions | null,
+    never,
+    platformTypes.Platform
+  > {
     const pathMatch = force
       ? extractForcedPathPrefix(textBeforeCursor)
       : extractPathPrefix(textBeforeCursor);

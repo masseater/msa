@@ -1,9 +1,9 @@
 import { type ExecFileException, execFile, spawnSync } from "child_process";
 import {
-  existsSync,
   type FSWatcher,
-  readFileSync,
   type Stats,
+  existsSync,
+  readFileSync,
   statSync,
   unwatchFile,
   watchFile,
@@ -11,10 +11,10 @@ import {
 
 import * as Effect from "effect/Effect";
 
-import { closeWatcher, FS_WATCH_RETRY_DELAY_MS, watchWithErrorHandler } from "../utils/fs-watch.ts";
+import { FS_WATCH_RETRY_DELAY_MS, closeWatcher, watchWithErrorHandler } from "../utils/fs-watch.ts";
 import { awaited, awaitingWith, performed } from "./awaiting.ts";
 import { dirname, join, resolve } from "./platform-node.ts";
-import { schedule, type Scheduled } from "./platform.ts";
+import { type Scheduled, schedule } from "./platform.ts";
 import { readEnv } from "./process-env.ts";
 
 export type GitPaths = {
@@ -40,12 +40,12 @@ export function findGitPaths(cwd: string): GitPaths | null {
             const commonGitDir = existsSync(commonDirPath)
               ? resolve(gitDir, readFileSync(commonDirPath, "utf8").trim())
               : gitDir;
-            return { repoDir: dir, commonGitDir, headPath };
+            return { commonGitDir, headPath, repoDir: dir };
           }
         } else if (stat.isDirectory()) {
           const headPath = join(gitPath, "HEAD");
           if (!existsSync(headPath)) return null;
-          return { repoDir: dir, commonGitDir: gitPath, headPath };
+          return { commonGitDir: gitPath, headPath, repoDir: dir };
         }
       } catch {
         return null;

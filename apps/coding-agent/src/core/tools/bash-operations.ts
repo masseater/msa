@@ -5,14 +5,14 @@ import { dual } from "effect/Function";
 
 import { type ChildProcess, spawnProcess, waitForChildProcess } from "../../utils/child-process.ts";
 import {
+  type ShellConfig,
   getShellConfig,
   getShellEnv,
   killProcessTree,
-  type ShellConfig,
   trackDetachedChildPid,
   untrackDetachedChildPid,
 } from "../../utils/shell.ts";
-import { fromPromise, platformRuntime, ToolFailure, unwrapForeign } from "../platform/index.ts";
+import { ToolFailure, fromPromise, platformRuntime, unwrapForeign } from "../platform/index.ts";
 
 type SpawnedShell = ChildProcess;
 

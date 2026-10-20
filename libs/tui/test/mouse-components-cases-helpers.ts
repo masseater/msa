@@ -1,8 +1,8 @@
 import assert from "node:assert";
 import { it } from "node:test";
 
-import { SelectList } from "../src/components/select-list.ts";
-import { SettingsList } from "../src/components/settings-list.ts";
+import SelectList from "../src/components/select-list.ts";
+import SettingsList from "../src/components/settings-list.ts";
 import mouseComponentsHelpers from "./mouse-components-helpers.ts";
 
 const { mouse, selectTheme, settingsTheme } = mouseComponentsHelpers;

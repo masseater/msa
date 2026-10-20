@@ -1,13 +1,16 @@
 import { performance } from "node:perf_hooks";
 
-import { type CancelDelay, runAfter } from "./delay.ts";
+import delayModule from "./delay.ts";
+import type delayTypes from "./delay.types.ts";
+
+const { runAfter } = delayModule;
 
 const MIN_RENDER_INTERVAL_MS = 16;
 
-export class RenderScheduler {
+export default class RenderScheduler {
   private renderRequested = false;
   private immediateRenderScheduled = false;
-  private cancelPendingRender: CancelDelay | undefined;
+  private cancelPendingRender: delayTypes.CancelDelay | undefined;
   private lastRenderAt = 0;
   private readonly render: () => void;
   private readonly isStopped: () => boolean;

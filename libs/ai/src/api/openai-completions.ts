@@ -1,64 +1,93 @@
 import { Effect } from "effect";
 
-import { clampThinkingLevel } from "../models.ts";
-import type { Model, SimpleStreamOptions, StreamFunction } from "../types.ts";
-import { AssistantMessageEventStream } from "../utils/event-stream.ts";
-import { modelCall } from "../utils/model-call.ts";
-import type { TranscriptContext } from "../utils/transcript.ts";
-import { getClientApiKey } from "./openai-completions-client.ts";
-import { runCompletionsStream } from "./openai-completions-stream.ts";
-import type { OpenAICompletionsOptions } from "./openai-completions-types.ts";
-import { buildBaseOptions } from "./simple-options.ts";
+import type typesModule from "../types.types.ts";
+import type eventStreamTypes from "../utils/event-stream.types.ts";
+import type transcriptTypes from "../utils/transcript.types.ts";
+import openaiCompletionsClient from "./openai-completions-client.ts";
+import openaiCompletionsKit from "./openai-completions-kit.ts";
+import openaiCompletionsMessages from "./openai-completions-messages.ts";
+import openaiCompletionsStream from "./openai-completions-stream.ts";
+import type openaiCompletionsTypesModule from "./openai-completions-types.types.ts";
+import simpleOptions from "./simple-options.ts";
 
-export type { ConvertCompletionsMessagesOptions } from "./openai-completions-messages.ts";
-export { convertMessages } from "./openai-completions-messages.ts";
-export type { OpenAICompletionsOptions } from "./openai-completions-types.ts";
+const { eventStream, modelCall: modelCallModule, models: modelsModule } = openaiCompletionsKit;
 
-export const stream = modelCall<
-  Parameters<StreamFunction<"openai-completions", OpenAICompletionsOptions>>[0],
-  Parameters<StreamFunction<"openai-completions", OpenAICompletionsOptions>>[1],
-  NonNullable<Parameters<StreamFunction<"openai-completions", OpenAICompletionsOptions>>[2]>,
-  ReturnType<StreamFunction<"openai-completions", OpenAICompletionsOptions>>
+const { modelCall } = modelCallModule;
+const { AssistantMessageEventStream } = eventStream;
+const { runCompletionsStream } = openaiCompletionsStream;
+const { getClientApiKey } = openaiCompletionsClient;
+const { buildBaseOptions } = simpleOptions;
+const { clampThinkingLevel } = modelsModule;
+
+const stream = modelCall<
+  Parameters<
+    typesModule.StreamFunction<
+      "openai-completions",
+      openaiCompletionsTypesModule.OpenAICompletionsOptions
+    >
+  >[0],
+  Parameters<
+    typesModule.StreamFunction<
+      "openai-completions",
+      openaiCompletionsTypesModule.OpenAICompletionsOptions
+    >
+  >[1],
+  NonNullable<
+    Parameters<
+      typesModule.StreamFunction<
+        "openai-completions",
+        openaiCompletionsTypesModule.OpenAICompletionsOptions
+      >
+    >[2]
+  >,
+  ReturnType<
+    typesModule.StreamFunction<
+      "openai-completions",
+      openaiCompletionsTypesModule.OpenAICompletionsOptions
+    >
+  >
 >(
   (
-    model: Model<"openai-completions">,
-    context: TranscriptContext,
-    options?: OpenAICompletionsOptions,
-  ): AssistantMessageEventStream => {
+    model: typesModule.Model<"openai-completions">,
+    context: transcriptTypes.TranscriptContext,
+    options?: openaiCompletionsTypesModule.OpenAICompletionsOptions,
+  ): eventStreamTypes.AssistantMessageEventStream => {
     const events = new AssistantMessageEventStream();
     Effect.runFork(
       runCompletionsStream({
-        model,
         context,
-        options,
         events,
+        model,
+        options,
       }),
     );
     return events;
   },
 );
 
-export const streamSimple = modelCall<
-  Parameters<StreamFunction<"openai-completions", SimpleStreamOptions>>[0],
-  Parameters<StreamFunction<"openai-completions", SimpleStreamOptions>>[1],
-  NonNullable<Parameters<StreamFunction<"openai-completions", SimpleStreamOptions>>[2]>,
-  ReturnType<StreamFunction<"openai-completions", SimpleStreamOptions>>
+const streamSimple = modelCall<
+  Parameters<typesModule.StreamFunction<"openai-completions", typesModule.SimpleStreamOptions>>[0],
+  Parameters<typesModule.StreamFunction<"openai-completions", typesModule.SimpleStreamOptions>>[1],
+  NonNullable<
+    Parameters<typesModule.StreamFunction<"openai-completions", typesModule.SimpleStreamOptions>>[2]
+  >,
+  ReturnType<typesModule.StreamFunction<"openai-completions", typesModule.SimpleStreamOptions>>
 >(
   (
-    model: Model<"openai-completions">,
-    context: TranscriptContext,
-    options?: SimpleStreamOptions,
-  ): AssistantMessageEventStream => {
+    model: typesModule.Model<"openai-completions">,
+    context: transcriptTypes.TranscriptContext,
+    options?: typesModule.SimpleStreamOptions,
+  ): eventStreamTypes.AssistantMessageEventStream => {
     getClientApiKey({
-      provider: model.provider,
       apiKey: options?.apiKey,
       headers: options?.headers,
+      provider: model.provider,
     });
 
     const base = {
       ...buildBaseOptions(model, context, options, options?.apiKey),
       toolChoice: options?.toolChoice,
-    } satisfies OpenAICompletionsOptions;
+    } satisfies openaiCompletionsTypesModule.OpenAICompletionsOptions;
     const clampedReasoning =
       options?.reasoning === undefined ? undefined : clampThinkingLevel(model, options.reasoning);
     const reasoningEffort = clampedReasoning === "off" ? undefined : clampedReasoning;
@@ -67,6 +96,14 @@ export const streamSimple = modelCall<
       ...base,
       reasoningEffort,
       thinkingBudgets: options?.thinkingBudgets,
-    } satisfies OpenAICompletionsOptions);
+    } satisfies openaiCompletionsTypesModule.OpenAICompletionsOptions);
   },
 );
+
+const openaiCompletions = {
+  convertMessages: openaiCompletionsMessages.convertMessages,
+  stream,
+  streamSimple,
+};
+
+export default openaiCompletions;

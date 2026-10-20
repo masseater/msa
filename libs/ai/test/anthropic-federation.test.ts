@@ -1,12 +1,18 @@
 import { Effect } from "effect";
 import { afterEach, describe, expect, it, vi } from "vite-plus/test";
 
-import { stream as streamAnthropic } from "../src/api/anthropic-messages.ts";
-import { createModels } from "../src/models.ts";
-import { anthropicProvider } from "../src/providers/anthropic.ts";
-import type { Model } from "../src/types.ts";
-import { currentTimeMillis } from "../src/utils/clock.ts";
-import { normalizeContext } from "../src/utils/transcript.ts";
+import anthropicMessages from "../src/api/anthropic-messages.ts";
+import modelsModule from "../src/models.ts";
+import anthropic from "../src/providers/anthropic.ts";
+import type typesModule from "../src/types.types.ts";
+import clock from "../src/utils/clock.ts";
+import transcript from "../src/utils/transcript.ts";
+
+const { normalizeContext } = transcript;
+const { currentTimeMillis } = clock;
+const { anthropicProvider } = anthropic;
+const { stream: streamAnthropic } = anthropicMessages;
+const { createModels } = modelsModule;
 
 const mockState = vi.hoisted(() => ({
   constructorOpts: undefined as Record<string, unknown> | undefined,
@@ -77,7 +83,7 @@ const context = normalizeContext({
   systemPrompt: "System prompt.",
 });
 
-const anthropicModel: Model<"anthropic-messages"> = {
+const anthropicModel: typesModule.Model<"anthropic-messages"> = {
   api: "anthropic-messages",
   baseUrl: "https://api.anthropic.com",
   contextWindow: 100000,
@@ -245,7 +251,7 @@ describe("Anthropic workload identity federation", () => {
   it("does not federate other anthropic-messages providers", () =>
     Effect.runPromise(
       Effect.gen(function* () {
-        const custom: Model<"anthropic-messages"> = {
+        const custom: typesModule.Model<"anthropic-messages"> = {
           ...anthropicModel,
           baseUrl: "https://example.test/anthropic",
           provider: "custom",

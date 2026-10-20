@@ -1,4 +1,4 @@
-import { type Message } from "@msa/ai";
+import type aiTypes from "@msa/ai/index.types";
 import harnessModule from "@msa/durable/harness";
 import type durableTypes from "@msa/durable/index.types";
 import memory from "@msa/durable/storage/memory";
@@ -124,7 +124,7 @@ const asksBeforeCompactFirst = Effect.gen(function* () {
   expect(chat.setup.reports).toEqual([expect.objectContaining({ message: "hook broke" })]);
   const compaction = seen[0] as {
     entries: durableTypes.EntryRecord[];
-    messages: Message[];
+    messages: aiTypes.Message[];
     firstKept: number;
   };
   expect(compaction).toMatchObject({ instructions: "why", reason: "manual" });

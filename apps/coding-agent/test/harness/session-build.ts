@@ -1,4 +1,4 @@
-import type { Model } from "@msa/ai";
+import type aiTypes from "@msa/ai/index.types";
 import testing from "@msa/testing";
 import { Effect } from "effect";
 
@@ -15,7 +15,7 @@ const { buildAgent } = sessionAgent;
 
 const { removePath } = testing;
 
-const resolveModel = (options: sessionTypesModule.HarnessOptions): Model<any> => {
+const resolveModel = (options: sessionTypesModule.HarnessOptions): aiTypes.Model<any> => {
   const baseModel = options.model ?? fauxModel;
   return options.contextWindow === undefined
     ? baseModel

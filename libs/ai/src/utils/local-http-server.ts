@@ -1,71 +1,60 @@
-import { createServer } from "node:http";
+import { Deferred, Effect } from "effect";
+import { serve } from "srvx";
 
-import { Effect } from "effect";
+import type localHttpServerTypes from "./local-http-server.types.ts";
 
-export interface LocalHttpRequest {
-  readonly method: string;
-  readonly url: URL;
-}
-
-export interface LocalHttpResponse {
-  readonly status: number;
-  readonly headers: Readonly<Record<string, string>>;
-  readonly body: string;
-}
-
-export interface LocalHttpServer {
-  readonly port: number;
-  readonly close: Effect.Effect<void>;
-}
-
-export interface LocalHttpServerOptions {
-  readonly host: string;
-  readonly port: number;
-  readonly baseUrl: string;
-  readonly handle: (
-    request: LocalHttpRequest,
-    reply: (response: LocalHttpResponse) => Effect.Effect<void>,
-  ) => Effect.Effect<void>;
-  readonly onError: (error: Error) => Effect.Effect<void>;
-  readonly closeConnections: boolean;
-}
-
-export const startLocalHttpServer = (
-  options: LocalHttpServerOptions,
-): Effect.Effect<LocalHttpServer> =>
+const respond = (
+  options: localHttpServerTypes.LocalHttpServerOptions,
+  request: Request,
+): Effect.Effect<Response> =>
   Effect.gen(function* () {
-    const runFork = Effect.runForkWith(yield* Effect.context<never>());
-    return yield* Effect.callback<LocalHttpServer>((resume) => {
-      const server = createServer((request, response) => {
-        const url = new URL(request.url ?? "/", options.baseUrl);
-        const reply = ({ status, headers, body }: LocalHttpResponse) =>
-          Effect.sync(() => {
-            response.writeHead(status, { ...headers });
-            response.end(body);
-          });
-        runFork(options.handle({ method: request.method ?? "GET", url }, reply));
-      });
-
-      const onListenError = (error: Error) => resume(Effect.die(error));
-      server.once("error", onListenError);
-      server.listen(options.port, options.host, () => {
-        server.off("error", onListenError);
-        const address = server.address();
-        if (address === null || typeof address === "string") {
-          server.close();
-          resume(Effect.die(new Error("Local HTTP server did not bind to TCP")));
-          return;
-        }
-        server.on("error", (error) => runFork(options.onError(error)));
-        resume(
-          Effect.succeed({
-            port: address.port,
-            close: Effect.sync(() => {
-              server.close();
-              if (options.closeConnections) server.closeAllConnections();
-            }),
-          }),
-        );
-      });
-    });
+    const replied = yield* Deferred.make<localHttpServerTypes.LocalHttpResponse>();
+    const reply = (response: localHttpServerTypes.LocalHttpResponse) =>
+      Deferred.succeed(replied, response).pipe(Effect.asVoid);
+    const url = new URL(request.url, options.baseUrl);
+    yield* Effect.forkDetach(options.handle({ method: request.method, url }, reply));
+    const { body, headers, status } = yield* Deferred.await(replied);
+    return new Response(body, { headers, status });
   });
+
+const boundPort = (url: string | undefined): number | undefined => {
+  if (url === undefined) return undefined;
+  const { port } = new URL(url);
+  return port === "" ? undefined : Number(port);
+};
+
+const startLocalHttpServer = (
+  options: localHttpServerTypes.LocalHttpServerOptions,
+): Effect.Effect<localHttpServerTypes.LocalHttpServer> =>
+  Effect.gen(function* () {
+    const runPromise = Effect.runPromiseWith(yield* Effect.context<never>());
+    const runFork = Effect.runForkWith(yield* Effect.context<never>());
+    const server = serve({
+      error: (error) => {
+        runFork(options.onError(error instanceof Error ? error : new Error(String(error))));
+        return new Response("", { status: 500 });
+      },
+      fetch: (request) => runPromise(respond(options, request)),
+      gracefulShutdown: false,
+      hostname: options.host,
+      manual: true,
+      port: options.port,
+      silent: true,
+    });
+    yield* Effect.promise(() => Promise.resolve(server.serve()).then(() => server.ready()));
+    const port = boundPort(server.url);
+    if (port === undefined) {
+      yield* Effect.promise(() => server.close(true));
+      return yield* Effect.die(new Error("Local HTTP server did not bind to TCP"));
+    }
+    return {
+      close: Effect.promise(() => server.close(options.closeConnections)).pipe(Effect.asVoid),
+      port,
+    };
+  });
+
+const localHttpServer = {
+  startLocalHttpServer,
+};
+
+export default localHttpServer;

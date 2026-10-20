@@ -1,17 +1,17 @@
-import type { AgentMessage } from "@msa/agent-core";
-import type { AssistantMessage } from "@msa/ai";
+import type agentTypes from "@msa/agent-core/index.types";
+import type aiTypes from "@msa/ai/index.types";
 import type { ExtensionAPI, ExtensionContext } from "@msa/coding-agent";
 import { Effect } from "effect";
 
 import type { PlanStore } from "./state.ts";
-import { extractTodoItems, type TodoItem } from "./utils.ts";
+import { type TodoItem, extractTodoItems } from "./utils.ts";
 
 const PLAN_CHOICES = ["Execute the plan (track progress)", "Stay in plan mode", "Refine the plan"];
 
-const isAssistantMessage = (m: AgentMessage): m is AssistantMessage =>
+const isAssistantMessage = (m: agentTypes.AgentMessage): m is aiTypes.AssistantMessage =>
   m.role === "assistant" && Array.isArray(m.content);
 
-const getTextContent = (message: AssistantMessage): string =>
+const getTextContent = (message: aiTypes.AssistantMessage): string =>
   message.content
     .filter((block): block is { type: "text"; text: string } => block.type === "text")
     .map((block) => block.text)
@@ -20,8 +20,8 @@ const getTextContent = (message: AssistantMessage): string =>
 const planMessage = (todos: TodoItem[]) => {
   const todoListText = todos.map((t, i) => `${i + 1}. ☐ ${t.text}`).join("\n");
   return {
-    customType: "plan-todo-list",
     content: `**Plan Steps (${todos.length}):**\n\n${todoListText}`,
+    customType: "plan-todo-list",
     display: true,
   };
 };
@@ -53,8 +53,8 @@ After completing a step, include a [DONE:n] tag in your response.`;
 
   msa.sendMessage(planTodoListMessage, { deliverAs: "followUp" });
   msa.sendMessage(
-    { customType: "plan-mode-execute", content: execMessage, display: true },
-    { triggerTurn: true, deliverAs: "followUp" },
+    { content: execMessage, customType: "plan-mode-execute", display: true },
+    { deliverAs: "followUp", triggerTurn: true },
   );
 };
 
@@ -66,8 +66,8 @@ const completeExecution = (msa: ExtensionAPI, store: PlanStore, ctx: ExtensionCo
   const completedList = runtime.todos.map((t) => `~~${t.text}~~`).join("\n");
   msa.sendMessage(
     {
-      customType: "plan-complete",
       content: `**Plan Complete!** ✓\n\n${completedList}`,
+      customType: "plan-complete",
       display: true,
     },
     { triggerTurn: false },
@@ -79,7 +79,11 @@ const completeExecution = (msa: ExtensionAPI, store: PlanStore, ctx: ExtensionCo
   return true;
 };
 
-const extractPlan = (store: PlanStore, ctx: ExtensionContext, messages: AgentMessage[]): void => {
+const extractPlan = (
+  store: PlanStore,
+  ctx: ExtensionContext,
+  messages: agentTypes.AgentMessage[],
+): void => {
   const { runtime } = store;
   if (!runtime.enabled || !ctx.hasUI) return;
 
@@ -98,7 +102,7 @@ const extractPlan = (store: PlanStore, ctx: ExtensionContext, messages: AgentMes
 export const handleAgentEnd = (request: {
   readonly msa: ExtensionAPI;
   readonly store: PlanStore;
-  readonly event: { messages: AgentMessage[] };
+  readonly event: { messages: agentTypes.AgentMessage[] };
   readonly ctx: ExtensionContext;
 }) =>
   Effect.gen(function* () {

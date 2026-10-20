@@ -1,4 +1,4 @@
-import type { Api, Model } from "../../src/types.ts";
+import type typesModule from "../../src/types.types.ts";
 import anthropicMetadata from "./anthropic-metadata.ts";
 import thinkingLevelsProviders from "./thinking-levels-providers.ts";
 import thinkingMaps from "./thinking-maps.ts";
@@ -33,16 +33,19 @@ const OPENAI_RESPONSES_NONE_REASONING_MODELS = new Set([
 
 const GPT_6_MODEL_IDS = new Set(["gpt-6-astra", "gpt-6-sol", "gpt-6-luna", "gpt-6.1-sol"]);
 
-const OPENAI_RESPONSES_APIS = new Set<Api>(["openai-responses", "openai-codex-responses"]);
+const OPENAI_RESPONSES_APIS = new Set<typesModule.Api>([
+  "openai-responses",
+  "openai-codex-responses",
+]);
 
-function supportsOpenAiMax(model: Model<Api>): boolean {
+function supportsOpenAiMax(model: typesModule.Model<typesModule.Api>): boolean {
   return (
     (model.id.includes("gpt-5.6") || model.id.includes("gpt-6")) &&
     (OPENAI_RESPONSES_APIS.has(model.api) || model.api === "openai-completions")
   );
 }
 
-function applyGpt6ThinkingLevels(model: Model<any>): void {
+function applyGpt6ThinkingLevels(model: typesModule.Model<any>): void {
   if (!GPT_6_MODEL_IDS.has(model.id) || !OPENAI_RESPONSES_APIS.has(model.api)) return;
   mergeThinkingLevelMap(model, {
     high: "high",
@@ -55,7 +58,7 @@ function applyGpt6ThinkingLevels(model: Model<any>): void {
   });
 }
 
-function applyOpenAiThinkingLevels(model: Model<any>): void {
+function applyOpenAiThinkingLevels(model: typesModule.Model<any>): void {
   if (model.api === "openai-responses" && model.id.startsWith("gpt-5")) {
     mergeThinkingLevelMap(model, { off: null });
   }
@@ -91,7 +94,7 @@ const ANTHROPIC_XHIGH_EFFORT_MARKERS = [
   "haiku.5",
 ];
 
-function applyAnthropicThinkingLevels(model: Model<any>): void {
+function applyAnthropicThinkingLevels(model: typesModule.Model<any>): void {
   if (ANTHROPIC_MAX_EFFORT_MARKERS.some((marker) => model.id.includes(marker))) {
     mergeThinkingLevelMap(model, { max: "max" });
   }
@@ -109,7 +112,7 @@ function applyAnthropicThinkingLevels(model: Model<any>): void {
   }
 }
 
-function deepSeekThinkingLevelMap(model: Model<any>) {
+function deepSeekThinkingLevelMap(model: typesModule.Model<any>) {
   if (model.provider === "openrouter")
     return { ...DEEPSEEK_V4_THINKING_LEVEL_MAP, max: null, xhigh: "xhigh" } as const;
   const isOpenCode = model.provider === "opencode" || model.provider === "opencode-go";
@@ -118,7 +121,7 @@ function deepSeekThinkingLevelMap(model: Model<any>) {
     : DEEPSEEK_V4_THINKING_LEVEL_MAP;
 }
 
-function applyDeepSeekThinkingLevels(model: Model<any>): void {
+function applyDeepSeekThinkingLevels(model: typesModule.Model<any>): void {
   if (
     model.api === "openai-completions" &&
     model.id.includes("deepseek-v4") &&
@@ -128,7 +131,7 @@ function applyDeepSeekThinkingLevels(model: Model<any>): void {
   }
 }
 
-function applyThinkingLevelMetadata(model: Model<any>): void {
+function applyThinkingLevelMetadata(model: typesModule.Model<any>): void {
   applyOpenAiThinkingLevels(model);
   applyAnthropicThinkingLevels(model);
   applyDeepSeekThinkingLevels(model);

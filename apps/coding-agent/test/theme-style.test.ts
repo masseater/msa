@@ -1,11 +1,13 @@
 import { fileURLToPath } from "node:url";
 
 import testing from "@msa/testing";
-import { colorToHex, okhslColor, styleText } from "@msa/tui";
+import tui from "@msa/tui";
 import { Effect } from "effect";
 import { afterEach, describe, expect, it } from "vite-plus/test";
 
 import { loadThemeFromPath, setTerminalColors } from "../src/modes/interactive/theme/theme.ts";
+
+const { colorToHex, okhslColor, styleText } = tui;
 
 const { joinPath, makeTempDir, readJsonFile, removeDirs, runTest, writeJsonFile } = testing;
 

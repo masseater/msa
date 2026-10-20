@@ -1,18 +1,16 @@
+import testing from "@msa/testing";
 import { Deferred, Effect } from "effect";
 import { afterEach, describe, expect, it, vi } from "vite-plus/test";
 
-import {
-  type AuthProvider,
-  McpClient,
-  type McpFetch,
-  StreamableHttpTransport,
-} from "../src/index.ts";
-import helpers from "./helpers.ts";
+import mcp from "../src/index.ts";
+import type mcpTypes from "../src/index.types.ts";
 import httpFixture from "./http-fixture.ts";
 import type httpFixtureTypes from "./http-fixture.types.ts";
 import webFetch from "./web-fetch.ts";
 
-const { closeServers, readBody, readMessage } = helpers;
+const { McpClient, StreamableHttpTransport } = mcp;
+
+const { closeServers, readBody, readMessage } = testing;
 const { protocolHandler, protocolHandlerFor, startServer } = httpFixture;
 
 const newClient = () => new McpClient({ name: "http-test", version: "1.0.0" });
@@ -24,7 +22,11 @@ const unauthorized = (authenticate: string) =>
     new Response(null, { headers: { "www-authenticate": authenticate }, status: 401 }),
   );
 
-const connectWith = (client: McpClient, url: string, authProvider: AuthProvider) =>
+const connectWith = (
+  client: mcpTypes.McpClient,
+  url: string,
+  authProvider: mcpTypes.AuthProvider,
+) =>
   Effect.promise(() =>
     client.connect(new StreamableHttpTransport({ authProvider, openGetStream: false, url })),
   );
@@ -83,7 +85,7 @@ const recoveringProvider = () => {
   const refreshGate = Deferred.makeUnsafe<void>();
   const allWaiting = Deferred.makeUnsafe<void>();
   let refresh: Promise<void> | undefined;
-  const provider: AuthProvider = {
+  const provider: mcpTypes.AuthProvider = {
     onUnauthorized: () => {
       if (refresh === undefined) {
         state.refreshes++;
@@ -146,9 +148,9 @@ const closesWithLastToken = Effect.gen(function* () {
 const strictFetch = function (this: unknown, input: string | URL, init?: RequestInit) {
   if (this !== undefined && this !== globalThis) throw new TypeError("Illegal invocation");
   return webFetch(new Request(input, init));
-} satisfies McpFetch;
+} satisfies mcpTypes.McpFetch;
 
-const connectThrough = (url: string, fetch: McpFetch | undefined) =>
+const connectThrough = (url: string, fetch: mcpTypes.McpFetch | undefined) =>
   Effect.gen(function* () {
     let token: string | undefined;
     const client = newClient();

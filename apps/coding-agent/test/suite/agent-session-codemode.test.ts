@@ -1,15 +1,12 @@
-import {
-  type TranscriptContext,
-  fauxAssistantMessage,
-  fauxToolCall,
-  getCurrentSystemPrompt,
-  getCurrentTools,
-} from "@msa/ai";
+import ai from "@msa/ai";
+import type aiTypes from "@msa/ai/index.types";
 import { Effect } from "effect";
 import { afterEach, describe, expect, it } from "vite-plus/test";
 
 import agentSessionCodemodeSupport from "./agent-session-codemode-support.ts";
 import agentSessionCodemodeSupport2 from "./agent-session-codemode-support2.ts";
+
+const { fauxAssistantMessage, fauxToolCall, getCurrentSystemPrompt, getCurrentTools } = ai;
 
 const { harnesses, setup } = agentSessionCodemodeSupport2;
 
@@ -23,7 +20,7 @@ const presentsCallableToolsPerCodemodeMode = Effect.gen(function* () {
     harness.session.agent.state.tools.find((tool) => tool.name === name)?.description ?? "";
   const requestTools: string[][] = [];
   const requestPrompts: string[] = [];
-  const record = (context: TranscriptContext) => {
+  const record = (context: aiTypes.TranscriptContext) => {
     requestTools.push(getCurrentTools(context.messages).map((tool) => tool.name));
     requestPrompts.push(getCurrentSystemPrompt(context.messages));
     return fauxAssistantMessage("ok");

@@ -1,5 +1,5 @@
 import { NodeServices } from "@effect/platform-node";
-import type { Message } from "@msa/ai";
+import type aiTypes from "@msa/ai/index.types";
 import { Effect, FileSystem, ManagedRuntime, Path, Stream } from "effect";
 import { ChildProcess, ChildProcessSpawner } from "effect/process";
 
@@ -54,14 +54,14 @@ const getMsaInvocation = (args: string[]): { command: string; args: string[] } =
     !isBunVirtualScript &&
     runtime.runSync(fsService.exists(currentScript))
   ) {
-    return { command: process.execPath, args: [currentScript, ...args] };
+    return { args: [currentScript, ...args], command: process.execPath };
   }
 
   const execName = pathService.basename(process.execPath).toLowerCase();
   if (!/^(node|bun)(\.exe)?$/u.test(execName)) {
-    return { command: process.execPath, args };
+    return { args, command: process.execPath };
   }
-  return { command: "msa", args };
+  return { args, command: "msa" };
 };
 
 const buildArgs = (
@@ -85,7 +85,7 @@ const buildArgs = (
   return args;
 };
 
-const applyMessage = (result: SingleResult, msg: Message): void => {
+const applyMessage = (result: SingleResult, msg: aiTypes.Message): void => {
   result.messages.push(msg);
   if (msg.role !== "assistant") return;
 
@@ -117,12 +117,12 @@ const applyEvent = (result: SingleResult, line: string, emitUpdate: () => void):
   }
 
   if (event.type === "message_end" && event.message !== undefined) {
-    applyMessage(result, event.message as Message);
+    applyMessage(result, event.message as aiTypes.Message);
     emitUpdate();
     return;
   }
   if (event.type === "tool_result_end" && event.message !== undefined) {
-    result.messages.push(event.message as Message);
+    result.messages.push(event.message as aiTypes.Message);
     emitUpdate();
   }
 };
@@ -178,12 +178,12 @@ export interface RunSingleRequest {
 }
 
 const emptyUsage = () => ({
-  input: 0,
-  output: 0,
   cacheRead: 0,
   cacheWrite: 0,
-  cost: 0,
   contextTokens: 0,
+  cost: 0,
+  input: 0,
+  output: 0,
   turns: 0,
 });
 
@@ -192,25 +192,25 @@ const unknownAgentResult = (request: RunSingleRequest): SingleResult => {
   return {
     agent: request.agentName,
     agentSource: "unknown",
-    task: request.task,
     exitCode: 1,
     messages: [],
     stderr: `Unknown agent: "${request.agentName}". Available agents: ${available}.`,
-    usage: emptyUsage(),
     step: request.step,
+    task: request.task,
+    usage: emptyUsage(),
   };
 };
 
 const makeResult = (request: RunSingleRequest, agent: AgentConfig): SingleResult => ({
   agent: request.agentName,
   agentSource: agent.source,
-  task: request.task,
   exitCode: 0,
   messages: [],
-  stderr: "",
-  usage: emptyUsage(),
   model: agent.model ?? request.dispatchDefaults.model,
+  stderr: "",
   step: request.step,
+  task: request.task,
+  usage: emptyUsage(),
 });
 
 const finishResult = (
@@ -236,7 +236,7 @@ export const runSingleAgent = (request: RunSingleRequest): Promise<SingleResult>
 
   const emitUpdate = () => {
     request.onUpdate?.({
-      content: [{ type: "text", text: getFinalOutput(currentResult.messages) || "(running...)" }],
+      content: [{ text: getFinalOutput(currentResult.messages) || "(running...)", type: "text" }],
       details: request.makeDetails([currentResult]),
     });
   };
@@ -245,14 +245,14 @@ export const runSingleAgent = (request: RunSingleRequest): Promise<SingleResult>
   return runtime
     .runPromise(
       runSubagentProcess({
-        command: invocation.command,
         args: invocation.args,
+        command: invocation.command,
         cwd: request.cwd ?? request.defaultCwd,
-        signal: request.signal,
         onLine: (line) => applyEvent(currentResult, line, emitUpdate),
         onStderr: (text) => {
           currentResult.stderr += text;
         },
+        signal: request.signal,
       }),
     )
     .then((exitCode) => finishResult(currentResult, Number(exitCode), request.signal))

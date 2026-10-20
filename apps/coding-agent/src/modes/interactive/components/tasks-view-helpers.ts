@@ -1,6 +1,6 @@
-import type { AgentMessage } from "@msa/agent-core";
-import type { AssistantMessage } from "@msa/ai";
-import { Text } from "@msa/tui";
+import type agentTypes from "@msa/agent-core/index.types";
+import type aiTypes from "@msa/ai/index.types";
+import tui from "@msa/tui";
 
 import type { MessageRenderer } from "../../../core/extensions/types.ts";
 import type { Orchestrator, OrchestratorReport } from "../../../core/orchestrator/orchestrator.ts";
@@ -8,6 +8,8 @@ import { firstLine } from "../../../core/orchestrator/text.ts";
 import type { ReplanView, TaskSnapshot, TaskStatus } from "../../../core/orchestrator/types.ts";
 import { formatToolCallWithArgs } from "../../../core/tools/render-utils.ts";
 import { theme } from "../theme/theme.ts";
+
+const { Text } = tui;
 
 export interface TasksViewState {
   showFinished: boolean;
@@ -19,11 +21,11 @@ function createTasksViewState(): TasksViewState {
 }
 
 const STATUS_LABEL: Record<TaskStatus, string> = {
+  completed: "Done",
   failed: "Failed",
   running: "Running",
-  waiting: "Waiting",
-  completed: "Done",
   stopped: "Stopped",
+  waiting: "Waiting",
 };
 
 function glyph(task: TaskSnapshot): string {
@@ -59,11 +61,11 @@ function modelName(reference: string): string {
   return slash === -1 ? reference : reference.slice(slash + 1);
 }
 
-function activityLines(messages: readonly AgentMessage[]): string[] {
+function activityLines(messages: readonly agentTypes.AgentMessage[]): string[] {
   const lines: string[] = [];
   for (const message of messages) {
     if (message.role !== "assistant") continue;
-    for (const part of (message as AssistantMessage).content) {
+    for (const part of (message as aiTypes.AssistantMessage).content) {
       if (part.type === "toolCall") {
         lines.push(formatToolCallWithArgs(part.name, part.arguments, theme, false));
       } else if (part.type === "text" && part.text.trim() !== "") {
@@ -134,7 +136,7 @@ export function createTaskReportRenderer(
         ? theme.fg("muted", ` · started ${details.started.join(", ")}`)
         : "";
     const lines = [
-      `${glyph({ status: details.status, kind: "work" } as TaskSnapshot)} ${theme.bold(title)} ${theme.fg("muted", details.role)} ${details.status}${started}`,
+      `${glyph({ kind: "work", status: details.status } as TaskSnapshot)} ${theme.bold(title)} ${theme.fg("muted", details.role)} ${details.status}${started}`,
     ];
     const content = typeof message.content === "string" ? message.content : "";
     const report = /<report>\n([\s\S]*)\n<\/report>/u.exec(content)?.[1];
@@ -149,14 +151,14 @@ export function createTaskReportRenderer(
 
 export const viewHelpers = {
   STATUS_LABEL,
-  glyph,
-  finished,
-  stoppable,
-  modelName,
   activityLines,
+  createTasksViewState,
   depthOf,
-  roundTasks,
   describeReplan,
   describeTaskCounts,
-  createTasksViewState,
+  finished,
+  glyph,
+  modelName,
+  roundTasks,
+  stoppable,
 };

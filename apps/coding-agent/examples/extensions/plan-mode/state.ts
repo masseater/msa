@@ -85,8 +85,8 @@ const restoreTools = (msa: ExtensionAPI, runtime: PlanRuntime): void => {
 const persist = (msa: ExtensionAPI, runtime: PlanRuntime): void => {
   msa.appendEntry("plan-mode", {
     enabled: runtime.enabled,
-    todos: runtime.todos,
     executing: runtime.executing,
+    todos: runtime.todos,
     ...(runtime.toolsBeforePlanMode === undefined
       ? {}
       : { toolsBeforePlanMode: runtime.toolsBeforePlanMode }),
@@ -136,12 +136,12 @@ export const createPlanStore = (msa: ExtensionAPI): PlanStore => {
   };
 
   return {
-    runtime,
-    updateStatus: (ctx) => updateStatus(ctx, runtime),
     enableTools: () => enableTools(msa, runtime),
-    restoreTools: () => restoreTools(msa, runtime),
     persist: () => persist(msa, runtime),
-    toggle: (ctx) => toggle(msa, runtime, ctx),
     restore: (entry, ctx) => restore(msa, runtime, entry, ctx),
+    restoreTools: () => restoreTools(msa, runtime),
+    runtime,
+    toggle: (ctx) => toggle(msa, runtime, ctx),
+    updateStatus: (ctx) => updateStatus(ctx, runtime),
   };
 };

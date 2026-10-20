@@ -1,4 +1,4 @@
-import type { MemoryKind, MemoryScope, MemorySaveResult } from "./store-types.ts";
+import type { MemoryKind, MemorySaveResult, MemoryScope } from "./store-types.ts";
 
 export interface ResolvedMemorySettings {
   enabled: boolean;

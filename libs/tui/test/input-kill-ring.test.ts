@@ -1,7 +1,7 @@
 import assert from "node:assert";
 import { describe, it } from "node:test";
 
-import { Input } from "../src/components/input.ts";
+import Input from "../src/components/input.ts";
 
 describe("Input component", () => {
   describe("Kill ring", () => {

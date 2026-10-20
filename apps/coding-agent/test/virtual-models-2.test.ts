@@ -1,10 +1,13 @@
-import { type AssistantMessage, fauxAssistantMessage, getSupportedThinkingLevels } from "@msa/ai";
+import ai from "@msa/ai";
+import type aiTypes from "@msa/ai/index.types";
 import testing from "@msa/testing";
 import { Effect } from "effect";
 import { describe, expect, it } from "vite-plus/test";
 
 import { type ModelRouteRequest } from "../src/core/virtual-models.ts";
 import virtualModelsSupport from "./virtual-models-support.ts";
+
+const { fauxAssistantMessage, getSupportedThinkingLevels } = ai;
 
 const { assistantFrom, createRuntime } = virtualModelsSupport;
 
@@ -53,7 +56,7 @@ const reportsTheFailedRequestOfARetry = Effect.gen(function* () {
   const { runtime, virtual } = yield* awaited(createRuntime(requests));
   const small = runtime.getModel("faux", "small")!;
   const large = runtime.getModel("faux", "large")!;
-  const failed: AssistantMessage = {
+  const failed: aiTypes.AssistantMessage = {
     ...assistantFrom(large, ""),
     errorMessage: "overloaded_error",
     stopReason: "error",

@@ -1,4 +1,4 @@
-import type { TUI, TuiMouseEvent } from "@msa/tui";
+import type tuiTypes from "@msa/tui/index.types";
 import { beforeAll, describe, expect, test } from "vite-plus/test";
 
 import { createReadToolDefinition } from "../src/core/tools/read.ts";
@@ -17,7 +17,7 @@ function readCall(id: string, path: string): ToolExecutionComponent {
     { path },
     {},
     createReadToolDefinition(process.cwd()),
-    { requestRender: () => {} } as unknown as TUI,
+    { requestRender: () => {} } as unknown as tuiTypes.TUI,
     process.cwd(),
   );
   component.updateResult(
@@ -27,7 +27,7 @@ function readCall(id: string, path: string): ToolExecutionComponent {
   return component;
 }
 
-function click(y: number, height: number): TuiMouseEvent {
+function click(y: number, height: number): tuiTypes.TuiMouseEvent {
   return {
     alt: false,
     button: "left",

@@ -1,7 +1,9 @@
 import assert from "node:assert";
 import { describe, it } from "node:test";
 
-import { findWordBackward, findWordForward } from "../src/word-navigation.ts";
+import wordNavigation from "../src/word-navigation.ts";
+
+const { findWordBackward, findWordForward } = wordNavigation;
 
 const marker = "[paste #1 +5 lines]";
 

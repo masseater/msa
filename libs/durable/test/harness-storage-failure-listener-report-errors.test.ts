@@ -1,6 +1,6 @@
 import { runInNewContext } from "node:vm";
 
-import { createModels } from "@msa/ai";
+import ai from "@msa/ai";
 import durable from "@msa/durable";
 import harnessModule from "@msa/durable/harness";
 import memory from "@msa/durable/storage/memory";
@@ -9,6 +9,8 @@ import { describe, expect, it } from "vite-plus/test";
 
 import harnessStorageFailureSupport from "./harness-storage-failure-support.ts";
 import support from "./support.ts";
+
+const { createModels } = ai;
 
 const { MemoryStorage } = memory;
 const { LiveDoc, defineExtension, defineTask } = durable;

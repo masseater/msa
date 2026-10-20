@@ -1,5 +1,6 @@
-import type { AgentTool } from "@msa/agent-core";
-import { type Model, fauxAssistantMessage, fauxToolCall } from "@msa/ai";
+import type agentTypes from "@msa/agent-core/index.types";
+import ai from "@msa/ai";
+import type aiTypes from "@msa/ai/index.types";
 import testing from "@msa/testing";
 import { Effect } from "effect";
 import { Type } from "typebox";
@@ -8,6 +9,8 @@ import { afterEach, describe, expect, it, vi } from "vite-plus/test";
 import agentSessionPromptSupport from "./agent-session-prompt-support.ts";
 import harnessModule from "./harness.ts";
 import type harnessTypes from "./harness.types.ts";
+
+const { fauxAssistantMessage, fauxToolCall } = ai;
 
 const { removePath, runTest } = testing;
 
@@ -51,7 +54,7 @@ const promptsWhileIdleAndRecordsA = Effect.gen(function* () {
 const handlesAToolCallTurnAnd = Effect.gen(function* () {
   const runPromise = Effect.runPromiseWith(yield* Effect.context<never>());
   const toolRuns: string[] = [];
-  const echoTool: AgentTool = {
+  const echoTool: agentTypes.AgentTool = {
     description: "Echo text back",
     execute: (_toolCallId, params) =>
       runPromise(
@@ -96,7 +99,7 @@ const handlesAToolCallTurnAnd = Effect.gen(function* () {
 const executesMultipleToolCallsFromOne = Effect.gen(function* () {
   const runPromise = Effect.runPromiseWith(yield* Effect.context<never>());
   const toolRuns: string[] = [];
-  const makeTool = (name: string, delayMs: number): AgentTool => ({
+  const makeTool = (name: string, delayMs: number): agentTypes.AgentTool => ({
     description: `${name} tool`,
     execute: (_toolCallId, params) =>
       runPromise(
@@ -179,7 +182,7 @@ const preservesImageAttachmentsInTheProvider = Effect.gen(function* () {
 
 const usesTheModelSelectedByBefore = Effect.gen(function* () {
   const runPromise = Effect.runPromiseWith(yield* Effect.context<never>());
-  let strictModel: Model<string> | undefined;
+  let strictModel: aiTypes.Model<string> | undefined;
   const harness = yield* Effect.promise(() =>
     createHarness({
       extensionFactories: [
@@ -205,7 +208,7 @@ const usesTheModelSelectedByBefore = Effect.gen(function* () {
 });
 
 const usesTheModelSelectedByBeforeStep1 = (
-  strictModel: Model<string> | undefined,
+  strictModel: aiTypes.Model<string> | undefined,
   harness: harnessTypes.Harness,
 ) =>
   Effect.gen(function* () {

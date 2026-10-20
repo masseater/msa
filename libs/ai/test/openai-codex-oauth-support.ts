@@ -1,11 +1,14 @@
 import { Effect } from "effect";
 import { afterEach, vi } from "vite-plus/test";
 
-import { openaiCodexOAuth } from "../src/auth/oauth/openai-codex.ts";
-import type { AuthEvent } from "../src/auth/types.ts";
-import { currentTimeMillis } from "../src/utils/clock.ts";
+import openaiCodex from "../src/auth/oauth/openai-codex.ts";
+import type typesModule from "../src/auth/types.ts";
+import clock from "../src/utils/clock.ts";
 
-type DeviceCodeInfo = Omit<Extract<AuthEvent, { type: "device_code" }>, "type">;
+const { currentTimeMillis } = clock;
+const { openaiCodexOAuth } = openaiCodex;
+
+type DeviceCodeInfo = Omit<Extract<typesModule.AuthEvent, { type: "device_code" }>, "type">;
 
 const USERCODE_URL = "https://auth.openai.com/api/accounts/deviceauth/usercode";
 const DEVICE_TOKEN_URL = "https://auth.openai.com/api/accounts/deviceauth/token";

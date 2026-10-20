@@ -3,11 +3,15 @@ import { Console, Effect, FileSystem, ManagedRuntime, Option } from "effect";
 import { Type } from "typebox";
 import { inject } from "vite-plus/test";
 
-import { type BuiltinProvider, completeSimple, getEnvApiKey } from "../src/compat.ts";
-import type { Api, AssistantMessage, Message, Model, Tool } from "../src/types.ts";
-import { currentTimeMillis } from "../src/utils/clock.ts";
+import compatModule from "../src/compat.ts";
+import type compatTypes from "../src/compat.types.ts";
+import type typesModule from "../src/types.types.ts";
+import clock from "../src/utils/clock.ts";
 import jsonCodec from "./json-codec.ts";
 import modelChoice from "./model-choice.ts";
+
+const { completeSimple, getEnvApiKey } = compatModule;
+const { currentTimeMillis } = clock;
 
 const { encodeJsonPretty } = jsonCodec;
 const { chooseModel, modelsWhere } = modelChoice;
@@ -17,20 +21,20 @@ const storedApiKeys = inject("storedApiKeys");
 
 interface HandoffTarget {
   readonly label: string;
-  readonly model: Model<Api>;
+  readonly model: typesModule.Model<typesModule.Api>;
 }
 
 const doubleNumberSchema = Type.Object({
   value: Type.Number({ description: "A number to double" }),
 });
 
-const doubleNumberTool: Tool<typeof doubleNumberSchema> = {
+const doubleNumberTool: typesModule.Tool<typeof doubleNumberSchema> = {
   description: "Doubles a number and returns the result",
   name: "double_number",
   parameters: doubleNumberSchema,
 };
 
-const cheapestPerApi = (provider: BuiltinProvider): HandoffTarget[] =>
+const cheapestPerApi = (provider: compatTypes.BuiltinProvider): HandoffTarget[] =>
   [...new Set(modelsWhere(provider, () => true).map((model) => model.api))].map((api) => {
     const model = chooseModel(provider, `${api}`, (candidate) => candidate.api === api);
     return { label: `${provider}-${api}-${model.id}`, model };
@@ -53,12 +57,17 @@ const handoffTargets: HandoffTarget[] = [
   ...cheapestPerApi("opencode-go"),
 ];
 
-const apiKeyFor = (model: Model<Api>): string | undefined => {
+const apiKeyFor = (model: typesModule.Model<typesModule.Api>): string | undefined => {
   const stored = storedApiKeys[model.provider];
   return stored !== undefined && stored !== "" ? stored : getEnvApiKey(model.provider);
 };
 
-const dumpFailure = (label: string, error: string, payload: unknown, messages: Message[]) =>
+const dumpFailure = (
+  label: string,
+  error: string,
+  payload: unknown,
+  messages: typesModule.Message[],
+) =>
   runtime.runPromise(
     Effect.gen(function* () {
       const filename = `/tmp/msa-handoff-${label}-${currentTimeMillis()}.json`;
@@ -74,11 +83,11 @@ const dumpFailure = (label: string, error: string, payload: unknown, messages: M
 const completeOrReport = Effect.fn("completeOrReport")(function* (
   target: HandoffTarget,
   label: string,
-  messages: Message[],
+  messages: typesModule.Message[],
   systemPrompt: string,
 ) {
   const captured: { payload?: unknown } = {};
-  const response: AssistantMessage = yield* Effect.promise(() =>
+  const response: typesModule.AssistantMessage = yield* Effect.promise(() =>
     completeSimple(
       target.model,
       { messages, systemPrompt, tools: [doubleNumberTool] },
@@ -95,11 +104,11 @@ const completeOrReport = Effect.fn("completeOrReport")(function* (
   const error = response.errorMessage ?? "Unknown error";
   yield* Console.log(`  [${label}] ${error}`);
   yield* Effect.promise(() => dumpFailure(label, error, captured.payload, messages));
-  return Option.none<AssistantMessage>();
+  return Option.none<typesModule.AssistantMessage>();
 });
 
 const generateFixture = Effect.fn("generateFixture")(function* (target: HandoffTarget) {
-  const userMessage: Message = {
+  const userMessage: typesModule.Message = {
     content: "Please double the number 21 using the double_number tool.",
     role: "user",
     timestamp: currentTimeMillis(),
@@ -110,10 +119,10 @@ const generateFixture = Effect.fn("generateFixture")(function* (target: HandoffT
     [userMessage],
     "You are a helpful assistant. Use the provided tool to complete the task.",
   );
-  if (Option.isNone(first)) return Option.none<Message[]>();
+  if (Option.isNone(first)) return Option.none<typesModule.Message[]>();
   const toolCall = first.value.content.find((content) => content.type === "toolCall");
-  if (toolCall?.type !== "toolCall") return Option.none<Message[]>();
-  const history: Message[] = [
+  if (toolCall?.type !== "toolCall") return Option.none<typesModule.Message[]>();
+  const history: typesModule.Message[] = [
     userMessage,
     first.value,
     {

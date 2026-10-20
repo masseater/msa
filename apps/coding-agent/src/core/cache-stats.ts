@@ -1,4 +1,4 @@
-import type { AssistantMessage } from "@msa/ai";
+import type aiTypes from "@msa/ai/index.types";
 
 import type { SessionEntry } from "./session-manager.ts";
 
@@ -32,7 +32,7 @@ interface PreviousRequest {
 
 function detectMiss(
   prev: PreviousRequest | undefined,
-  message: AssistantMessage,
+  message: aiTypes.AssistantMessage,
   models: ModelPriceSource,
 ): CacheMiss | undefined {
   const usage = message.usage;
@@ -56,25 +56,25 @@ function detectMiss(
       : (models.getModel(message.provider, message.model)?.cost.cacheRead ?? 0) / 1_000_000;
 
   return {
-    missedTokens,
-    missedCost: missedTokens * Math.max(0, paidPerToken - readPerToken),
     idleMs: Math.max(0, message.timestamp - prev.timestamp),
+    missedCost: missedTokens * Math.max(0, paidPerToken - readPerToken),
+    missedTokens,
     modelChanged: `${message.provider}/${message.model}` !== prev.modelKey,
   };
 }
 
 function asPreviousRequest(
-  message: AssistantMessage,
+  message: aiTypes.AssistantMessage,
   reportedCache: boolean,
 ): PreviousRequest | undefined {
   const usage = message.usage;
   const promptTokens = usage.input + usage.cacheRead + usage.cacheWrite;
   if (promptTokens <= 0) return undefined;
   return {
-    promptTokens,
     modelKey: `${message.provider}/${message.model}`,
-    timestamp: message.timestamp,
+    promptTokens,
     reportedCache: reportedCache || usage.cacheRead + usage.cacheWrite > 0,
+    timestamp: message.timestamp,
   };
 }
 
@@ -84,11 +84,11 @@ function scan(
 ): {
   prev: PreviousRequest | undefined;
   totals: CacheWasteTotals;
-  misses: Map<AssistantMessage, CacheMiss>;
+  misses: Map<aiTypes.AssistantMessage, CacheMiss>;
 } {
   let prev: PreviousRequest | undefined;
-  const totals: CacheWasteTotals = { missedTokens: 0, missedCost: 0, missCount: 0 };
-  const misses = new Map<AssistantMessage, CacheMiss>();
+  const totals: CacheWasteTotals = { missCount: 0, missedCost: 0, missedTokens: 0 };
+  const misses = new Map<aiTypes.AssistantMessage, CacheMiss>();
 
   for (const entry of entries) {
     if (entry.type === "compaction" || entry.type === "branch_summary") {
@@ -99,10 +99,10 @@ function scan(
       const promptTokens = entry.usage.input + entry.usage.cacheRead + entry.usage.cacheWrite;
       if (promptTokens > 0) {
         prev = {
-          promptTokens,
           modelKey: `${entry.provider}/${entry.model}`,
-          timestamp: Date.parse(entry.timestamp),
+          promptTokens,
           reportedCache: true,
+          timestamp: Date.parse(entry.timestamp),
         };
       }
     } else if (entry.type === "message" && entry.message.role === "assistant") {
@@ -116,7 +116,7 @@ function scan(
       prev = asPreviousRequest(entry.message, prev?.reportedCache ?? false) ?? prev;
     }
   }
-  return { prev, totals, misses };
+  return { misses, prev, totals };
 }
 
 export function computeCacheWaste(
@@ -129,13 +129,13 @@ export function computeCacheWaste(
 export function collectCacheMisses(
   entries: SessionEntry[],
   models: ModelPriceSource,
-): Map<AssistantMessage, CacheMiss> {
+): Map<aiTypes.AssistantMessage, CacheMiss> {
   return scan(entries, models).misses;
 }
 
 export function detectCacheMiss(
   entries: SessionEntry[],
-  message: AssistantMessage,
+  message: aiTypes.AssistantMessage,
   models: ModelPriceSource,
 ): CacheMiss | undefined {
   return detectMiss(scan(entries, models).prev, message, models);

@@ -1,25 +1,22 @@
+import testing from "@msa/testing";
 import { Effect, type Schema } from "effect";
 import { dual } from "effect/Function";
 
-import { McpForeignError } from "../src/index.ts";
-import type {
-  OAuthClientInformationMixed,
-  OAuthClientProvider,
-  OAuthDiscoveryState,
-  OAuthTokens,
-} from "../src/oauth/index.ts";
-import helpers from "./helpers.ts";
+import mcp from "../src/index.ts";
+import type oauthTypes from "../src/oauth/index.types.ts";
 import MissingVerifierError from "./missing-verifier-error.ts";
 
-const { encodeJson } = helpers;
+const { McpForeignError } = mcp;
 
-class TestOAuthProvider implements OAuthClientProvider {
+const { encodeJson } = testing;
+
+class TestOAuthProvider implements oauthTypes.OAuthClientProvider {
   readonly redirectUrl: string;
   readonly clientMetadata;
-  client: OAuthClientInformationMixed | undefined;
-  tokenSet: OAuthTokens | undefined;
+  client: oauthTypes.OAuthClientInformationMixed | undefined;
+  tokenSet: oauthTypes.OAuthTokens | undefined;
   verifier: string | undefined;
-  discovery: OAuthDiscoveryState | undefined;
+  discovery: oauthTypes.OAuthDiscoveryState | undefined;
   authorizationUrl: URL | undefined;
 
   constructor(redirectUrl: string) {
@@ -37,19 +34,19 @@ class TestOAuthProvider implements OAuthClientProvider {
     return "expected-state";
   }
 
-  clientInformation(): OAuthClientInformationMixed | undefined {
+  clientInformation(): oauthTypes.OAuthClientInformationMixed | undefined {
     return this.client;
   }
 
-  saveClientInformation(information: OAuthClientInformationMixed): void {
+  saveClientInformation(information: oauthTypes.OAuthClientInformationMixed): void {
     this.client = information;
   }
 
-  tokens(): OAuthTokens | undefined {
+  tokens(): oauthTypes.OAuthTokens | undefined {
     return this.tokenSet;
   }
 
-  saveTokens(tokens: OAuthTokens): void {
+  saveTokens(tokens: oauthTypes.OAuthTokens): void {
     this.tokenSet = tokens;
   }
 
@@ -74,11 +71,11 @@ class TestOAuthProvider implements OAuthClientProvider {
     if (kind === "all" || kind === "discovery") this.discovery = undefined;
   }
 
-  saveDiscoveryState(state: OAuthDiscoveryState): void {
+  saveDiscoveryState(state: oauthTypes.OAuthDiscoveryState): void {
     this.discovery = state;
   }
 
-  discoveryState(): OAuthDiscoveryState | undefined {
+  discoveryState(): oauthTypes.OAuthDiscoveryState | undefined {
     return this.discovery;
   }
 }

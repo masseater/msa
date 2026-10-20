@@ -43,36 +43,36 @@ interface ReportRow {
 
 function toThread(row: ThreadRow): Thread {
   return {
-    id: row.id,
-    project: row.project,
-    model: row.model,
-    thinkingLevel: row.thinking_level as Thread["thinkingLevel"],
-    cwd: row.cwd,
-    status: row.status as ThreadStatus,
-    sessionFile: row.session_file,
     createdAt: row.created_at,
+    cwd: row.cwd,
+    id: row.id,
+    model: row.model,
+    project: row.project,
+    sessionFile: row.session_file,
+    status: row.status as ThreadStatus,
+    thinkingLevel: row.thinking_level as Thread["thinkingLevel"],
     updatedAt: row.updated_at,
   };
 }
 
 function toAssignment(row: AssignmentRow): Assignment {
   return {
+    createdAt: row.created_at,
+    role: row.role as ThreadRole,
     taskId: row.task_id,
     threadId: row.thread_id,
-    role: row.role as ThreadRole,
-    createdAt: row.created_at,
   };
 }
 
 function toReport(row: ReportRow): Report {
   return {
-    id: row.id,
-    taskId: row.task_id,
-    threadId: row.thread_id,
-    role: row.role as ThreadRole,
-    status: row.status as ThreadStatus,
     content: row.content,
     createdAt: row.created_at,
+    id: row.id,
+    role: row.role as ThreadRole,
+    status: row.status as ThreadStatus,
+    taskId: row.task_id,
+    threadId: row.thread_id,
   };
 }
 
@@ -104,9 +104,9 @@ function getThread(database: DatabaseSync, id: string): Thread | undefined {
 
 const THREAD_COLUMNS: Readonly<Record<string, string>> = {
   model: "model",
-  thinkingLevel: "thinking_level",
-  status: "status",
   sessionFile: "session_file",
+  status: "status",
+  thinkingLevel: "thinking_level",
 };
 
 function updateThread(
@@ -182,7 +182,7 @@ function threadViews(database: DatabaseSync, project: string): ThreadView[] {
     Object.assign(thread, {
       tasks: assignments
         .filter((assignment) => assignment.threadId === thread.id)
-        .map((assignment) => ({ taskId: assignment.taskId, role: assignment.role })),
+        .map((assignment) => ({ role: assignment.role, taskId: assignment.taskId })),
     }),
   );
 }
@@ -256,19 +256,19 @@ function searchReports(
 }
 
 export const threadStore = {
-  insertThread,
-  getThread,
-  updateThread,
-  listThreads,
-  runningThreads,
-  insertAssignment,
-  listAssignments,
-  assignmentsOfThread,
   assignmentsOfTask,
+  assignmentsOfThread,
   deleteAssignmentsOfThread,
-  threadViews,
+  getThread,
+  insertAssignment,
   insertReport,
-  reportsOfTask,
+  insertThread,
+  listAssignments,
   listReports,
+  listThreads,
+  reportsOfTask,
+  runningThreads,
   searchReports,
+  threadViews,
+  updateThread,
 };

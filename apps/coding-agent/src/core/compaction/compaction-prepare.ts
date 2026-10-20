@@ -1,11 +1,11 @@
-import type { AgentMessage } from "@msa/agent-core";
+import type agentTypes from "@msa/agent-core/index.types";
 import { Function as Fn } from "effect";
 
 import {
-  buildSessionProjection,
   type CompactionEntry,
   type ProjectedSessionEntry,
   type SessionEntry,
+  buildSessionProjection,
 } from "../session-manager.ts";
 import { findProjectedCutPoint } from "./compaction-cut.ts";
 import { estimateProjectedContextTokens } from "./compaction-tokens.ts";
@@ -15,10 +15,10 @@ import type {
   CompactionSettings,
   CutPointResult,
 } from "./compaction-types.ts";
-import { createFileOps, extractFileOpsFromMessage, type FileOperations } from "./utils.ts";
+import { type FileOperations, createFileOps, extractFileOpsFromMessage } from "./utils.ts";
 
 function extractFileOperations(
-  messages: AgentMessage[],
+  messages: agentTypes.AgentMessage[],
   entries: SessionEntry[],
   prevCompactionIndex: number,
 ): FileOperations {
@@ -48,7 +48,9 @@ function extractFileOperations(
   return fileOps;
 }
 
-function getMessagesFromProjectedEntryForCompaction(entry: ProjectedSessionEntry): AgentMessage[] {
+function getMessagesFromProjectedEntryForCompaction(
+  entry: ProjectedSessionEntry,
+): agentTypes.AgentMessage[] {
   if (entry.sourceEntry.type === "compaction") return [];
   return entry.messages.filter((message) => message.role !== "system");
 }
@@ -59,12 +61,12 @@ function findBoundary(projectedEntries: ProjectedSessionEntry[]) {
   );
   const prevCompaction = projectedEntries[prevCompactionIndex];
   return {
+    boundaryStart: prevCompaction === undefined ? 0 : prevCompactionIndex + 1,
     prevCompactionIndex,
     previousSummary:
       prevCompaction === undefined
         ? undefined
         : (prevCompaction.sourceEntry as CompactionEntry).summary,
-    boundaryStart: prevCompaction === undefined ? 0 : prevCompactionIndex + 1,
   };
 }
 
@@ -98,10 +100,10 @@ const prepareCompactionImpl = (
   const projectedEntries = projection.entries;
   const { prevCompactionIndex, previousSummary, boundaryStart } = findBoundary(projectedEntries);
   const cutPoint = findProjectedCutPoint({
-    entries: projectedEntries,
-    startIndex: boundaryStart,
     endIndex: projectedEntries.length,
+    entries: projectedEntries,
     keepRecentTokens: settings.keepRecentTokens,
+    startIndex: boundaryStart,
   });
 
   const firstKeptEntry = projectedEntries[cutPoint.firstKeptEntryIndex]?.sourceEntry;
@@ -122,14 +124,14 @@ const prepareCompactionImpl = (
   }
 
   return {
-    firstKeptEntryId: firstKeptEntry.id,
-    messagesToSummarize,
-    turnPrefixMessages,
-    isSplitTurn: cutPoint.isSplitTurn,
-    tokensBefore: estimateProjectedContextTokens(projection, pathEntries).tokens,
-    previousSummary,
     fileOps,
+    firstKeptEntryId: firstKeptEntry.id,
+    isSplitTurn: cutPoint.isSplitTurn,
+    messagesToSummarize,
+    previousSummary,
     settings,
+    tokensBefore: estimateProjectedContextTokens(projection, pathEntries).tokens,
+    turnPrefixMessages,
   };
 };
 

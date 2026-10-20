@@ -1,6 +1,6 @@
-import type { Component } from "@msa/tui";
+import type tuiTypes from "@msa/tui/index.types";
 
-export class OutputLog implements Component {
+export class OutputLog implements tuiTypes.Component {
   private lines: string[] = [];
   private maxLines = 1000;
   private visibleLines = 0;

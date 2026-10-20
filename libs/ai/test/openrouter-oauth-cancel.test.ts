@@ -1,9 +1,11 @@
 import { Effect } from "effect";
 import { describe, expect, it, vi } from "vite-plus/test";
 
-import { openRouterOAuth } from "../src/auth/oauth/openrouter.ts";
+import openrouter from "../src/auth/oauth/openrouter.ts";
 import loopbackFetch from "./loopback-fetch.ts";
 import openrouterOauthSupport from "./openrouter-oauth-support.ts";
+
+const { openRouterOAuth } = openrouter;
 
 const { cancelAtAuthUrl, restoreStubsAfterEach } = openrouterOauthSupport;
 

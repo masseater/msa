@@ -1,5 +1,5 @@
 import testing from "@msa/testing";
-import { setKeybindings } from "@msa/tui";
+import tui from "@msa/tui";
 import { Effect } from "effect";
 import { afterEach, beforeAll, beforeEach, describe, expect, it } from "vite-plus/test";
 
@@ -9,6 +9,8 @@ import { initTheme } from "../src/modes/interactive/theme/theme.ts";
 import { stripAnsi } from "../src/utils/ansi.ts";
 import harnessModule from "./suite/harness.ts";
 import type harnessTypes from "./suite/harness.types.ts";
+
+const { setKeybindings } = tui;
 
 const { createHarness } = harnessModule;
 

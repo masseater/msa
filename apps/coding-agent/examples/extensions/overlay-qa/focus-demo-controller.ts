@@ -1,26 +1,28 @@
 import type { Theme } from "@msa/coding-agent";
-import type { TUI } from "@msa/tui";
-import { matchesKey } from "@msa/tui";
+import tuiModule from "@msa/tui";
+import type tuiTypes from "@msa/tui/index.types";
 
 import { BaseOverlay } from "./base-overlay.ts";
 import { FOCUS_PANEL_CONFIGS } from "./focus-panel-configs.ts";
-import { type FocusPanelEntry, FocusPanel } from "./focus-panel.ts";
+import { FocusPanel, type FocusPanelEntry } from "./focus-panel.ts";
+
+const { matchesKey } = tuiModule;
 
 export class FocusDemoController extends BaseOverlay {
-  private readonly tui: TUI;
+  private readonly tui: tuiTypes.TUI;
   private entries: FocusPanelEntry[] = [];
   private readonly done: () => void;
   private closed = false;
 
-  constructor(tui: TUI, theme: Theme, done: () => void) {
+  constructor(tui: tuiTypes.TUI, theme: Theme, done: () => void) {
     super(theme);
     this.tui = tui;
     this.done = done;
 
     for (const config of FOCUS_PANEL_CONFIGS) {
-      const panel = new FocusPanel({ theme, config, controller: this });
+      const panel = new FocusPanel({ config, controller: this, theme });
       const handle = this.tui.showOverlay(panel, { nonCapturing: true, ...config.options });
-      this.entries.push({ panel, handle });
+      this.entries.push({ handle, panel });
     }
 
     this.focusFirstOpenPanel();

@@ -1,7 +1,9 @@
 import type { Theme } from "@msa/coding-agent";
-import { matchesKey } from "@msa/tui";
+import tui from "@msa/tui";
 
 import { BaseOverlay } from "./base-overlay.ts";
+
+const { matchesKey } = tui;
 
 export class PercentTestComponent extends BaseOverlay {
   private config: { name: string; row: number; col: number };

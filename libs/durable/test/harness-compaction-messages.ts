@@ -1,8 +1,11 @@
-import { type Message, type UserMessage, fauxAssistantMessage } from "@msa/ai";
+import ai from "@msa/ai";
+import type aiTypes from "@msa/ai/index.types";
 import type durableTypes from "@msa/durable/index.types";
 import { dual } from "effect/Function";
 
 import support from "./support.ts";
+
+const { fauxAssistantMessage } = ai;
 
 const { textOf } = support;
 
@@ -15,7 +18,7 @@ const text: {
   (label: string, tokens: number): ReturnType<typeof textImpl>;
 } = dual(2, textImpl);
 
-function isSummaryRequest(messages: readonly Message[]): boolean {
+function isSummaryRequest(messages: readonly aiTypes.Message[]): boolean {
   const firstInner = messages[0];
   return (
     firstInner?.role === "system" &&
@@ -38,15 +41,15 @@ const MANUAL: durableTypes.CompactionPolicy = {
   reserveTokens: 1000,
 };
 
-function userText(message: Message | undefined): string {
+function userText(message: aiTypes.Message | undefined): string {
   return textOf(message) ?? "";
 }
 
-function firstUserText(messages: readonly Message[]): string {
+function firstUserText(messages: readonly aiTypes.Message[]): string {
   return userText(messages.find((message) => message.role === "user"));
 }
 
-const user = (content: string): UserMessage => ({ content, role: "user", timestamp: 0 });
+const user = (content: string): aiTypes.UserMessage => ({ content, role: "user", timestamp: 0 });
 
 const BACKGROUND: durableTypes.CompactionPolicy = {
   backgroundTokens: 1000,

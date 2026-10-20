@@ -1,4 +1,4 @@
-import type { Models } from "@msa/ai";
+import type aiTypes from "@msa/ai/index.types";
 import type chordTypes from "@msa/chord/index.types";
 
 import type envTypes from "../env/index.types.ts";
@@ -38,7 +38,7 @@ declare namespace tasksTypes {
     readonly registry: typesModule.RegistrySnapshot;
     agent(context: chordTypes.Context): Promise<typesModule.Agent>;
     readonly settings: typesModule.Settings;
-    readonly models: Models;
+    readonly models: aiTypes.Models;
     env(context: chordTypes.Context): Promise<envTypes.ExecutionEnv | undefined>;
     readonly hooks: HookRunner<H>;
 

@@ -1,7 +1,9 @@
-import type { OAuthCredentials, OAuthLoginCallbacks } from "@msa/ai/compat";
-import { httpRequest } from "@msa/ai/utils/http";
+import type compatTypes from "@msa/ai/compat.types";
+import http from "@msa/ai/utils/http";
 import { Clock, Data, Effect, Option, Schema } from "effect";
 import { dual } from "effect/Function";
+
+const { httpRequest } = http;
 
 const decode = (s: string) => atob(s);
 const CLIENT_ID = decode("OWQxYzI1MGEtZTYxYi00NGQ5LTg4ZWQtNTk0NGQxOTYyZjVl");
@@ -18,20 +20,20 @@ class AnthropicAuthError extends Data.TaggedError("AnthropicAuthError")<{
 
 const TokenSchema = Schema.Struct({
   access_token: Schema.String,
-  refresh_token: Schema.String,
   expires_in: Schema.Finite,
+  refresh_token: Schema.String,
 });
 
 const decodeToken = Schema.decodeUnknownOption(Schema.fromJsonString(TokenSchema));
 
 const TokenRequestSchema = Schema.Struct({
-  grant_type: Schema.String,
   client_id: Schema.String,
   code: Schema.optional(Schema.String),
-  state: Schema.optional(Schema.String),
-  redirect_uri: Schema.optional(Schema.String),
   code_verifier: Schema.optional(Schema.String),
+  grant_type: Schema.String,
+  redirect_uri: Schema.optional(Schema.String),
   refresh_token: Schema.optional(Schema.String),
+  state: Schema.optional(Schema.String),
 });
 
 const encodeTokenRequest = Schema.encodeEffect(Schema.fromJsonString(TokenRequestSchema));
@@ -48,17 +50,17 @@ const generatePKCE = (): Promise<{ verifier: string; challenge: string }> => {
   const verifier = base64Url(array);
   return crypto.subtle
     .digest("SHA-256", new TextEncoder().encode(verifier))
-    .then((hash) => ({ verifier, challenge: base64Url(new Uint8Array(hash)) }));
+    .then((hash) => ({ challenge: base64Url(new Uint8Array(hash)), verifier }));
 };
 
 const requestToken = (body: typeof TokenRequestSchema.Type, signal?: AbortSignal) =>
   Effect.gen(function* () {
     const payload = yield* encodeTokenRequest(body).pipe(Effect.orDie);
     const reply = yield* httpRequest({
-      url: TOKEN_URL,
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
       body: payload,
+      headers: { "Content-Type": "application/json" },
+      method: "POST",
+      url: TOKEN_URL,
       ...(signal === undefined ? {} : { signal }),
     });
 
@@ -75,24 +77,29 @@ const requestToken = (body: typeof TokenRequestSchema.Type, signal?: AbortSignal
     return parsed.value;
   });
 
-const credentialsOf = (token: typeof TokenSchema.Type, now: number): OAuthCredentials => ({
-  refresh: token.refresh_token,
+const credentialsOf = (
+  token: typeof TokenSchema.Type,
+  now: number,
+): compatTypes.OAuthCredentials => ({
   access: token.access_token,
   expires: now + token.expires_in * 1000 - 5 * 60 * 1000,
+  refresh: token.refresh_token,
 });
 
-export const loginAnthropic = (callbacks: OAuthLoginCallbacks): Promise<OAuthCredentials> =>
+export const loginAnthropic = (
+  callbacks: compatTypes.OAuthLoginCallbacks,
+): Promise<compatTypes.OAuthCredentials> =>
   Effect.runPromise(
     Effect.gen(function* () {
       const { verifier, challenge } = yield* Effect.promise(generatePKCE);
       const authParams = new URLSearchParams({
-        code: "true",
         client_id: CLIENT_ID,
-        response_type: "code",
-        redirect_uri: REDIRECT_URI,
-        scope: SCOPES,
+        code: "true",
         code_challenge: challenge,
         code_challenge_method: "S256",
+        redirect_uri: REDIRECT_URI,
+        response_type: "code",
+        scope: SCOPES,
         state: verifier,
       });
 
@@ -103,27 +110,27 @@ export const loginAnthropic = (callbacks: OAuthLoginCallbacks): Promise<OAuthCre
       const [code = "", state = ""] = authCode.split("#");
 
       const token = yield* requestToken({
-        grant_type: "authorization_code",
         client_id: CLIENT_ID,
         code,
-        state,
-        redirect_uri: REDIRECT_URI,
         code_verifier: verifier,
+        grant_type: "authorization_code",
+        redirect_uri: REDIRECT_URI,
+        state,
       });
       return credentialsOf(token, yield* Clock.currentTimeMillis);
     }),
   );
 
 const refreshAnthropicTokenImpl = (
-  credentials: OAuthCredentials,
+  credentials: compatTypes.OAuthCredentials,
   signal: AbortSignal,
-): Promise<OAuthCredentials> =>
+): Promise<compatTypes.OAuthCredentials> =>
   Effect.runPromise(
     Effect.gen(function* () {
       const token = yield* requestToken(
         {
-          grant_type: "refresh_token",
           client_id: CLIENT_ID,
+          grant_type: "refresh_token",
           refresh_token: credentials.refresh,
         },
         signal,
@@ -133,6 +140,11 @@ const refreshAnthropicTokenImpl = (
   );
 
 export const refreshAnthropicToken: {
-  (credentials: OAuthCredentials, signal: AbortSignal): Promise<OAuthCredentials>;
-  (signal: AbortSignal): (credentials: OAuthCredentials) => Promise<OAuthCredentials>;
+  (
+    credentials: compatTypes.OAuthCredentials,
+    signal: AbortSignal,
+  ): Promise<compatTypes.OAuthCredentials>;
+  (
+    signal: AbortSignal,
+  ): (credentials: compatTypes.OAuthCredentials) => Promise<compatTypes.OAuthCredentials>;
 } = dual((args: IArguments) => args.length >= 2, refreshAnthropicTokenImpl);

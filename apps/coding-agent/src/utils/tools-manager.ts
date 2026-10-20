@@ -42,11 +42,7 @@ interface ToolConfig {
 
 const TOOLS: Record<string, ToolConfig> = {
   fd: {
-    name: "fd",
-    repo: "sharkdp/fd",
     binaryName: "fd",
-    systemBinaryNames: ["fd", "fdfind"],
-    tagPrefix: "v",
     getAssetName: (version, plat, architecture) => {
       if (plat === "darwin") {
         const archStr = architecture === "arm64" ? "aarch64" : "x86_64";
@@ -60,12 +56,13 @@ const TOOLS: Record<string, ToolConfig> = {
       }
       return null;
     },
+    name: "fd",
+    repo: "sharkdp/fd",
+    systemBinaryNames: ["fd", "fdfind"],
+    tagPrefix: "v",
   },
   rg: {
-    name: "ripgrep",
-    repo: "BurntSushi/ripgrep",
     binaryName: "rg",
-    tagPrefix: "",
     getAssetName: (version, plat, architecture) => {
       if (plat === "darwin") {
         const archStr = architecture === "arm64" ? "aarch64" : "x86_64";
@@ -79,6 +76,9 @@ const TOOLS: Record<string, ToolConfig> = {
       }
       return null;
     },
+    name: "ripgrep",
+    repo: "BurntSushi/ripgrep",
+    tagPrefix: "",
   },
 };
 
@@ -341,7 +341,7 @@ function downloadTool(tool: "fd" | "rg"): Promise<string> {
         }
       } finally {
         rmSync(archivePath, { force: true });
-        rmSync(extractDir, { recursive: true, force: true });
+        rmSync(extractDir, { force: true, recursive: true });
       }
 
       return binaryPath;
@@ -375,8 +375,8 @@ function ensureToolImpl(
 
       if (isOfflineModeEnabled()) {
         onStatus?.({
-          type: "warning",
           message: `${config.name} not found. Offline mode enabled, skipping download.`,
+          type: "warning",
         });
         return undefined;
       }
@@ -384,17 +384,17 @@ function ensureToolImpl(
       if (platform() === "android") {
         const pkgName = TERMUX_PACKAGES[tool] ?? tool;
         onStatus?.({
-          type: "warning",
           message: `${config.name} not found. Install with: pkg install ${pkgName}`,
+          type: "warning",
         });
         return undefined;
       }
 
-      onStatus?.({ type: "info", message: `${config.name} not found. Downloading...` });
+      onStatus?.({ message: `${config.name} not found. Downloading...`, type: "info" });
 
       try {
         const path = yield* awaited(downloadTool(tool));
-        onStatus?.({ type: "info", message: `${config.name} installed to ${path}` });
+        onStatus?.({ message: `${config.name} installed to ${path}`, type: "info" });
         return path;
       } catch (e) {
         const messages: string[] = [];
@@ -406,8 +406,8 @@ function ensureToolImpl(
           if (!messages.includes(current.message)) messages.push(current.message);
         }
         onStatus?.({
-          type: "warning",
           message: `Failed to download ${config.name}: ${messages.length > 0 ? messages.join(": ") : String(e)}`,
+          type: "warning",
         });
         return undefined;
       }

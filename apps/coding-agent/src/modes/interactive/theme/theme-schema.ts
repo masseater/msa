@@ -12,9 +12,9 @@ function colorValue(description?: string) {
           "Hex color (#RGB or #RRGGBB), OKLCH or OKHSL color, variable reference, or empty string for terminal default",
       }),
       Type.Integer({
-        minimum: 0,
-        maximum: 255,
         description: "256-color palette index (0-255)",
+        maximum: 255,
+        minimum: 0,
       }),
     ],
     description !== undefined && description !== "" ? { description } : {},
@@ -36,29 +36,19 @@ function themeTokenProperties(tokens: ThemeTokenDescriptors): TProperties {
 
 const ThemeColorsSchema = Type.Unsafe<ThemeColorValues<ThemeColorValue>>(
   Type.Object(themeTokenProperties(THEME_TOKENS), {
+    additionalProperties: false,
     description:
       "Theme color definitions (scrollbar, thinkingMax, and search highlight colors are optional and use compatible fallbacks)",
-    additionalProperties: false,
   }),
 );
 
 export const ThemeJsonSchema = Type.Object(
   {
     $schema: Type.Optional(Type.String({ description: "JSON schema reference" })),
-    name: Type.String({
-      pattern: "^[^/]+$",
-      description:
-        "Theme name. Must not contain '/' because it is reserved for automatic light/dark theme settings.",
-    }),
     appearance: Type.Optional(
       Type.Union([Type.Literal("dark"), Type.Literal("light")], {
         description:
           "Background the theme is designed for. Detected from the theme colors when omitted.",
-      }),
-    ),
-    vars: Type.Optional(
-      Type.Record(Type.String(), ColorValueSchema, {
-        description: "Reusable color variables",
       }),
     ),
     colors: ThemeColorsSchema,
@@ -76,11 +66,21 @@ export const ThemeJsonSchema = Type.Object(
         },
       ),
     ),
+    name: Type.String({
+      pattern: "^[^/]+$",
+      description:
+        "Theme name. Must not contain '/' because it is reserved for automatic light/dark theme settings.",
+    }),
+    vars: Type.Optional(
+      Type.Record(Type.String(), ColorValueSchema, {
+        description: "Reusable color variables",
+      }),
+    ),
   },
   {
-    title: "msa Coding Agent Theme",
-    description: "Theme schema for msa coding agent",
     additionalProperties: false,
+    description: "Theme schema for msa coding agent",
+    title: "msa Coding Agent Theme",
   },
 );
 

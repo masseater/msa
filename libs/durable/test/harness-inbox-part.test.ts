@@ -1,4 +1,4 @@
-import { fauxAssistantMessage } from "@msa/ai";
+import ai from "@msa/ai";
 import type deltaTypes from "@msa/chord/delta.types";
 import durable from "@msa/durable";
 import harnessModule from "@msa/durable/harness";
@@ -8,6 +8,8 @@ import { describe, expect, it } from "vite-plus/test";
 
 import harnessInboxSupport from "./harness-inbox-support.ts";
 import support from "./support.ts";
+
+const { fauxAssistantMessage } = ai;
 
 const { MemoryStorage } = memory;
 const { LiveDoc } = durable;

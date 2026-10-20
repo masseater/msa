@@ -1,24 +1,23 @@
-import type { Model, TranscriptContext } from "../types.ts";
-import { getSystemMessageText } from "../utils/text.ts";
-import {
-  getDeclaredTools,
-  getInitialSystemMessage,
-  resolveTranscriptTools,
-} from "../utils/transcript.ts";
-import { createGrammarToolInputProperties } from "./constrained-sampling.ts";
-import {
-  CODEX_TOOL_CALL_PROVIDERS,
-  type CodexRequestBody,
-  type OpenAICodexResponsesOptions,
-} from "./openai-codex-options.ts";
-import { convertResponsesMessages } from "./openai-responses-messages.ts";
-import { convertResponsesTools } from "./openai-responses-tools.ts";
+import type typesModule from "../types.types.ts";
+import textModule from "../utils/text.ts";
+import transcript from "../utils/transcript.ts";
+import constrainedSampling from "./constrained-sampling.ts";
+import type openaiCodexBodyTypes from "./openai-codex-body.types.ts";
+import openaiCodexOptions from "./openai-codex-options.ts";
+import type openaiCodexOptionsTypes from "./openai-codex-options.types.ts";
+import openaiResponsesMessages from "./openai-responses-messages.ts";
+import openaiResponsesTools from "./openai-responses-tools.ts";
 
-type CodexModel = Model<"openai-codex-responses">;
+const { createGrammarToolInputProperties } = constrainedSampling;
+const { getDeclaredTools, getInitialSystemMessage, resolveTranscriptTools } = transcript;
+const { getSystemMessageText } = textModule;
+const { convertResponsesMessages } = openaiResponsesMessages;
+const { CODEX_TOOL_CALL_PROVIDERS } = openaiCodexOptions;
+const { convertResponsesTools } = openaiResponsesTools;
 
-export function codexGrammarProperties(
-  model: CodexModel,
-): (context: TranscriptContext) => ReadonlyMap<string, string> {
+function codexGrammarProperties(
+  model: openaiCodexBodyTypes.CodexModel,
+): (context: typesModule.TranscriptContext) => ReadonlyMap<string, string> {
   return (context) =>
     createGrammarToolInputProperties(
       getDeclaredTools(context.messages),
@@ -27,8 +26,8 @@ export function codexGrammarProperties(
 }
 
 function requestedEffort(
-  model: CodexModel,
-  effort: NonNullable<OpenAICodexResponsesOptions["reasoningEffort"]>,
+  model: openaiCodexBodyTypes.CodexModel,
+  effort: NonNullable<openaiCodexOptionsTypes.OpenAICodexResponsesOptions["reasoningEffort"]>,
 ): string | null {
   if (effort !== "none") return model.thinkingLevelMap?.[effort] ?? effort;
   const off = model.thinkingLevelMap?.off;
@@ -36,9 +35,9 @@ function requestedEffort(
 }
 
 function codexReasoning(
-  model: CodexModel,
-  options: OpenAICodexResponsesOptions | undefined,
-): Pick<CodexRequestBody, "reasoning"> {
+  model: openaiCodexBodyTypes.CodexModel,
+  options: openaiCodexOptionsTypes.OpenAICodexResponsesOptions | undefined,
+): Pick<openaiCodexOptionsTypes.CodexRequestBody, "reasoning"> {
   if (options?.reasoningEffort !== undefined) {
     const effort = requestedEffort(model, options.reasoningEffort);
     return effort === null
@@ -49,30 +48,33 @@ function codexReasoning(
   return model.reasoning && off !== null ? { reasoning: { effort: off ?? "none" } } : {};
 }
 
-function instructionsOf(context: TranscriptContext): string {
+function instructionsOf(context: typesModule.TranscriptContext): string {
   const initial = getInitialSystemMessage(context.messages);
   const text = initial === undefined ? "" : getSystemMessageText(initial);
   return text || "You are a helpful assistant.";
 }
 
 function codexInput(
-  model: CodexModel,
-  context: TranscriptContext,
+  model: openaiCodexBodyTypes.CodexModel,
+  context: typesModule.TranscriptContext,
   grammarToolInputProperties: ReadonlyMap<string, string>,
-): { input: NonNullable<CodexRequestBody["input"]>; tools: CodexRequestBody["tools"] } {
+): {
+  input: NonNullable<openaiCodexOptionsTypes.CodexRequestBody["input"]>;
+  tools: openaiCodexOptionsTypes.CodexRequestBody["tools"];
+} {
   const compat = model.compat;
   const supportsAdditionalTools = compat?.supportsAdditionalTools ?? false;
   const supportsToolSearch = compat?.supportsToolSearch ?? false;
   const toolOptions = {
     strict: null,
-    supportsStrictMode: compat?.supportsStrictMode ?? true,
     supportsOpenAIGrammarTools: compat?.supportsOpenAIGrammarTools ?? false,
+    supportsStrictMode: compat?.supportsStrictMode ?? true,
   };
   const input = convertResponsesMessages(model, context, CODEX_TOOL_CALL_PROVIDERS, {
-    includeSystemPrompt: false,
     grammarToolInputProperties,
-    supportsMidConvoSystemMessages: compat?.supportsMidConvoSystemMessages ?? false,
+    includeSystemPrompt: false,
     supportsAdditionalTools,
+    supportsMidConvoSystemMessages: compat?.supportsMidConvoSystemMessages ?? false,
     supportsToolSearch,
     toolOptions,
   });
@@ -86,36 +88,35 @@ function codexInput(
   };
 }
 
-export interface CodexBodyRequest {
-  readonly model: CodexModel;
-  readonly context: TranscriptContext;
-  readonly options: OpenAICodexResponsesOptions | undefined;
-  readonly cacheSessionId: string | undefined;
-  readonly grammarToolInputProperties: ReadonlyMap<string, string>;
-}
-
-export function buildCodexRequestBody({
+function buildCodexRequestBody({
   model,
   context,
   options,
   cacheSessionId,
   grammarToolInputProperties,
-}: CodexBodyRequest): CodexRequestBody {
+}: openaiCodexBodyTypes.CodexBodyRequest): openaiCodexOptionsTypes.CodexRequestBody {
   const { input, tools } = codexInput(model, context, grammarToolInputProperties);
   return {
+    include: ["reasoning.encrypted_content"],
+    input,
+    instructions: instructionsOf(context),
     model: model.id,
+    parallel_tool_calls: true,
+    prompt_cache_key: cacheSessionId,
     store: false,
     stream: true,
-    instructions: instructionsOf(context),
-    input,
     text: { verbosity: options?.textVerbosity || "low" },
-    include: ["reasoning.encrypted_content"],
-    prompt_cache_key: cacheSessionId,
     tool_choice: options?.toolChoice ?? "auto",
-    parallel_tool_calls: true,
     ...(options?.temperature === undefined ? {} : { temperature: options.temperature }),
     ...(options?.serviceTier === undefined ? {} : { service_tier: options.serviceTier }),
     ...(tools === undefined ? {} : { tools }),
     ...codexReasoning(model, options),
   };
 }
+
+const openaiCodexBody = {
+  buildCodexRequestBody,
+  codexGrammarProperties,
+};
+
+export default openaiCodexBody;

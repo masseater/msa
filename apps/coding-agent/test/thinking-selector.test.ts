@@ -1,10 +1,12 @@
-import { setKeybindings } from "@msa/tui";
+import tui from "@msa/tui";
 import { beforeAll, beforeEach, describe, expect, it, vi } from "vite-plus/test";
 
 import { KeybindingsManager } from "../src/core/keybindings.ts";
 import { ThinkingSelectorComponent } from "../src/modes/interactive/components/thinking-selector.ts";
 import { initTheme } from "../src/modes/interactive/theme/theme.ts";
 import { stripAnsi } from "../src/utils/ansi.ts";
+
+const { setKeybindings } = tui;
 
 const keepsTheCurrentThinkingLevelMarkedWhile = () => {
   const selector = new ThinkingSelectorComponent(

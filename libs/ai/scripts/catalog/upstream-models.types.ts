@@ -1,17 +1,11 @@
-import type {
-  ClassifierApi,
-  ClassifierModel,
-  ImageApi,
-  ImageModel,
-  Model,
-} from "../../src/types.ts";
+import type typesModule from "../../src/types.types.ts";
 import type modelsDevTypes from "./models-dev.types.ts";
 
 declare namespace upstreamModelsTypes {
   interface UpstreamModels {
-    readonly chat: readonly Model<any>[];
-    readonly images: readonly ImageModel<ImageApi>[];
-    readonly classifiers: readonly ClassifierModel<ClassifierApi>[];
+    readonly chat: readonly typesModule.Model<any>[];
+    readonly images: readonly typesModule.ImageModel<typesModule.ImageApi>[];
+    readonly classifiers: readonly typesModule.ClassifierModel<typesModule.ClassifierApi>[];
     readonly reasoning: modelsDevTypes.ReasoningOptionsRegistry;
   }
 }

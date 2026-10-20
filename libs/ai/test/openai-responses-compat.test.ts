@@ -2,7 +2,7 @@ import { Effect } from "effect";
 import { Type } from "typebox";
 import { afterEach, describe, expect, it, vi } from "vite-plus/test";
 
-import type { Model } from "../src/types.ts";
+import type typesModule from "../src/types.types.ts";
 import modelChoice from "./model-choice.ts";
 import openaiResponsesCompatSupport from "./openai-responses-compat-support.ts";
 
@@ -59,7 +59,7 @@ const setsStrictModeExplicitly = () =>
       const model = chooseModel(
         "openai",
         "strict-capable Responses",
-        (candidate): candidate is Model<"openai-responses"> =>
+        (candidate): candidate is typesModule.Model<"openai-responses"> =>
           usesApi("openai-responses")(candidate) &&
           compatValue(candidate, "supportsStrictMode") === true,
       );
@@ -74,7 +74,7 @@ const setsStrictModeExplicitly = () =>
     }),
   );
 
-const sendsNoneEffort = (model: Model<"openai-responses">) =>
+const sendsNoneEffort = (model: typesModule.Model<"openai-responses">) =>
   Effect.runPromise(
     Effect.gen(function* () {
       const { payload } = yield* captureResponsesRequest({}, { model });
@@ -82,7 +82,7 @@ const sendsNoneEffort = (model: Model<"openai-responses">) =>
     }),
   );
 
-const omitsEffort = (model: Model<"openai-responses">) =>
+const omitsEffort = (model: typesModule.Model<"openai-responses">) =>
   Effect.runPromise(
     Effect.gen(function* () {
       const { payload } = yield* captureResponsesRequest({}, { model });

@@ -1,5 +1,5 @@
 import { NodeServices } from "@effect/platform-node";
-import type { Api, Model } from "@msa/ai";
+import type aiTypes from "@msa/ai/index.types";
 import type { ExtensionAPI, ExtensionContext } from "@msa/coding-agent";
 import { CONFIG_DIR_NAME, getAgentDir } from "@msa/coding-agent";
 import { Console, Effect, FileSystem, ManagedRuntime, Option, Path, Schema } from "effect";
@@ -15,11 +15,11 @@ const ThinkingLevelSchema = Schema.Literals([
 ]);
 
 const PresetSchema = Schema.Struct({
-  provider: Schema.optional(Schema.String),
+  instructions: Schema.optional(Schema.String),
   model: Schema.optional(Schema.String),
+  provider: Schema.optional(Schema.String),
   thinkingLevel: Schema.optional(ThinkingLevelSchema),
   tools: Schema.optional(Schema.Array(Schema.String)),
-  instructions: Schema.optional(Schema.String),
 });
 
 const PresetsSchema = Schema.Record(Schema.String, PresetSchema);
@@ -29,7 +29,7 @@ export type PresetsConfig = typeof PresetsSchema.Type;
 export type ThinkingLevel = typeof ThinkingLevelSchema.Type;
 
 interface OriginalState {
-  model: Model<Api> | undefined;
+  model: aiTypes.Model<aiTypes.Api> | undefined;
   thinkingLevel: ThinkingLevel;
   tools: string[];
 }
@@ -210,27 +210,28 @@ const clearPreset = (msa: ExtensionAPI, state: StoreState, ctx: ExtensionContext
 
 export const createPresetStore = (msa: ExtensionAPI): PresetStore => {
   const state: StoreState = {
-    presets: {},
-    activeName: undefined,
     active: undefined,
+    activeName: undefined,
     originalState: undefined,
+    presets: {},
   };
 
   return {
-    get presets() {
-      return state.presets;
+    get active() {
+      return state.active;
     },
     get activeName() {
       return state.activeName;
     },
-    get active() {
-      return state.active;
-    },
+    apply: (name, preset, ctx) => runtime.runPromise(apply(msa, state, name, preset, ctx)),
+    clear: (ctx) => runtime.runPromise(clearPreset(msa, state, ctx)),
     load: (cwd) => {
       state.presets = loadPresets(cwd);
     },
-    apply: (name, preset, ctx) => runtime.runPromise(apply(msa, state, name, preset, ctx)),
-    clear: (ctx) => runtime.runPromise(clearPreset(msa, state, ctx)),
+    order: () => Object.keys(state.presets).sort(),
+    get presets() {
+      return state.presets;
+    },
     restoreActive: (name) => {
       state.activeName = name;
       state.active = state.presets[name];
@@ -245,6 +246,5 @@ export const createPresetStore = (msa: ExtensionAPI): PresetStore => {
         label === undefined ? undefined : ctx.ui.theme.fg("accent", `preset:${label}`),
       );
     },
-    order: () => Object.keys(state.presets).sort(),
   };
 };

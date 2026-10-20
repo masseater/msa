@@ -1,25 +1,31 @@
 import { Effect, Function } from "effect";
 
-import type { RefreshModelsContext } from "../models.ts";
-import type { AnyModel } from "../types.ts";
-import { httpRequest } from "../utils/http.ts";
-import { decodeJsonOrDie } from "../utils/json-codec.ts";
-import { isModelType } from "../utils/model-operations.ts";
-import { OPENROUTER_BASE_URL, type OpenRouterModel, openRouterCost } from "./openrouter-api.ts";
+import type modelsTypes from "../models.types.ts";
+import type typesModule from "../types.types.ts";
+import http from "../utils/http.ts";
+import jsonCodec from "../utils/json-codec.ts";
+import modelOperations from "../utils/model-operations.ts";
+import openrouterApi from "./openrouter-api.ts";
+import type openrouterApiTypes from "./openrouter-api.types.ts";
+
+const { httpRequest } = http;
+const { OPENROUTER_BASE_URL, openRouterCost } = openrouterApi;
+const { decodeJsonOrDie } = jsonCodec;
+const { isModelType } = modelOperations;
 
 const OPENROUTER_USER_MODELS_TIMEOUT_MS = 15_000;
 
 const requestUserModels = Effect.fn("requestUserModels")(function* (
   key: string,
-  context: RefreshModelsContext,
+  context: modelsTypes.RefreshModelsContext,
 ) {
   const reply = yield* httpRequest({
-    url: `${(context.baseUrl ?? OPENROUTER_BASE_URL).replace(/\/+$/u, "")}/models/user`,
     headers: { accept: "application/json", authorization: `Bearer ${key}` },
     signal: AbortSignal.any([
       context.signal,
       AbortSignal.timeout(OPENROUTER_USER_MODELS_TIMEOUT_MS),
     ]),
+    url: `${(context.baseUrl ?? OPENROUTER_BASE_URL).replace(/\/+$/u, "")}/models/user`,
   });
   if (reply.status === 401 || reply.status === 403 || reply.status === 404) return undefined;
   if (!reply.ok)
@@ -32,8 +38,8 @@ const requestUserModels = Effect.fn("requestUserModels")(function* (
 });
 
 const personalizeCatalog = Effect.fn("personalizeCatalog")(function* (
-  catalog: readonly AnyModel[],
-  context: RefreshModelsContext,
+  catalog: readonly typesModule.AnyModel[],
+  context: modelsTypes.RefreshModelsContext,
 ) {
   const key =
     context.credential?.type === "oauth" ? context.credential.access : context.credential?.key;
@@ -43,24 +49,29 @@ const personalizeCatalog = Effect.fn("personalizeCatalog")(function* (
   return restrictCatalog(catalog, entries);
 });
 
-export const personalizeOpenRouterCatalog: {
-  (context: RefreshModelsContext): (catalog: readonly AnyModel[]) => Promise<readonly AnyModel[]>;
-  (catalog: readonly AnyModel[], context: RefreshModelsContext): Promise<readonly AnyModel[]>;
+const personalizeOpenRouterCatalog: {
+  (
+    context: modelsTypes.RefreshModelsContext,
+  ): (catalog: readonly typesModule.AnyModel[]) => Promise<readonly typesModule.AnyModel[]>;
+  (
+    catalog: readonly typesModule.AnyModel[],
+    context: modelsTypes.RefreshModelsContext,
+  ): Promise<readonly typesModule.AnyModel[]>;
 } = Function.dual(
   2,
   function (
-    catalog: readonly AnyModel[],
-    context: RefreshModelsContext,
-  ): Promise<readonly AnyModel[]> {
+    catalog: readonly typesModule.AnyModel[],
+    context: modelsTypes.RefreshModelsContext,
+  ): Promise<readonly typesModule.AnyModel[]> {
     return Effect.runPromise(personalizeCatalog(catalog, context));
   },
 );
 
 function restrictCatalog(
-  catalog: readonly AnyModel[],
+  catalog: readonly typesModule.AnyModel[],
   entries: readonly unknown[],
-): readonly AnyModel[] {
-  const allowed = new Map<string, OpenRouterModel>();
+): readonly typesModule.AnyModel[] {
+  const allowed = new Map<string, openrouterApiTypes.OpenRouterModel>();
   for (const entry of entries) {
     if (
       typeof entry === "object" &&
@@ -68,10 +79,10 @@ function restrictCatalog(
       "id" in entry &&
       typeof entry.id === "string"
     ) {
-      allowed.set(entry.id, entry as OpenRouterModel);
+      allowed.set(entry.id, entry as openrouterApiTypes.OpenRouterModel);
     }
   }
-  return catalog.flatMap((model): AnyModel[] => {
+  return catalog.flatMap((model): typesModule.AnyModel[] => {
     if (!isModelType(model, "chat")) return [model];
     const entry = allowed.get(model.id);
     if (entry === undefined) return [];
@@ -80,9 +91,15 @@ function restrictCatalog(
         ...model,
         contextWindow:
           entry.top_provider?.context_length || entry.context_length || model.contextWindow,
-        maxTokens: entry.top_provider?.max_completion_tokens || model.maxTokens,
         cost: entry.pricing === undefined ? model.cost : openRouterCost(entry.pricing),
+        maxTokens: entry.top_provider?.max_completion_tokens || model.maxTokens,
       },
     ];
   });
 }
+
+const openrouterUserModels = {
+  personalizeOpenRouterCatalog,
+};
+
+export default openrouterUserModels;

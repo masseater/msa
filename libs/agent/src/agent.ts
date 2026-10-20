@@ -1,93 +1,73 @@
-import {
-  getCurrentSystemMessage,
-  type ImageContent,
-  type SimpleStreamOptions,
-  type ThinkingBudgets,
-  type Transport,
-} from "@msa/ai";
+import ai from "@msa/ai";
+import type aiTypes from "@msa/ai/index.types";
 import { Effect } from "effect";
 
-import { createLoopConfig } from "./agent-config.ts";
-import type {
-  AfterToolCall,
-  AgentListener,
-  AgentOptions,
-  BeforeToolCall,
-  ConvertToLlm,
-  GetApiKey,
-  PrepareNextTurn,
-  PrepareNextTurnWithContext,
-  TransformContext,
-} from "./agent-options.ts";
-import { AgentRuns, busy, notifyListeners } from "./agent-run.ts";
-import {
+import agentKit from "./agent-kit.ts";
+import type agentOptionsTypes from "./agent-options.ts";
+import type agentStateTypes from "./agent-state.types.ts";
+import PendingMessageQueue from "./pending-queue.ts";
+import type pendingQueueTypes from "./pending-queue.types.ts";
+import streamFnModule from "./stream-fn.ts";
+import type typesModule from "./types.ts";
+
+const { agentConfig, agentRun, agentState, loopRun } = agentKit;
+
+const { getCurrentSystemMessage } = ai;
+
+const { AgentRuns, busy, notifyListeners } = agentRun;
+const {
   createMutableAgentState,
   defaultConvertToLlm,
-  type MutableAgentState,
   promptMessages,
   reduceAgentEvent,
   runFailureMessage,
-} from "./agent-state.ts";
-import { runContinuation, runPrompt } from "./loop-run.ts";
-import { PendingMessageQueue } from "./pending-queue.ts";
-import { getDefaultStreamFn } from "./stream-fn.ts";
-import type {
-  AgentContext,
-  AgentEvent,
-  AgentMessage,
-  AgentState,
-  FinishTurn,
-  PrepareRequest,
-  QueueMode,
-  StreamFn,
-  ToolExecutionMode,
-} from "./types.ts";
+} = agentState;
+const { getDefaultStreamFn } = streamFnModule;
 
-export type { AgentOptions } from "./agent-options.ts";
-export type { AgentInitialState } from "./agent-state.ts";
-export type { QueueMode } from "./types.ts";
+const { runContinuation, runPrompt } = loopRun;
+const { createLoopConfig } = agentConfig;
 
-export class Agent {
-  readonly #state: MutableAgentState;
-  readonly #listeners = new Set<AgentListener>();
-  readonly #steeringQueue: PendingMessageQueue;
-  readonly #followUpQueue: PendingMessageQueue;
+export default class Agent {
+  readonly #state: agentStateTypes.MutableAgentState;
+  readonly #listeners = new Set<agentOptionsTypes.AgentListener>();
+  readonly #steeringQueue: pendingQueueTypes.PendingMessageQueue;
+  readonly #followUpQueue: pendingQueueTypes.PendingMessageQueue;
   #queueSequence = 0;
   readonly #runs = new AgentRuns({
-    onStart: () => {
-      this.#state.isStreaming = true;
-      this.#state.streamingMessage = undefined;
-      this.#state.errorMessage = undefined;
-    },
     onFailure: (error, aborted) => this.#handleRunFailure(error, aborted),
     onFinish: () => {
       this.#state.isStreaming = false;
       this.#state.streamingMessage = undefined;
       this.#state.pendingToolCalls = new Set<string>();
     },
+    onStart: () => {
+      this.#state.isStreaming = true;
+      this.#state.streamingMessage = undefined;
+      this.#state.errorMessage = undefined;
+    },
   });
 
-  public convertToLlm: ConvertToLlm;
-  public transformContext?: TransformContext | undefined;
-  public streamFunction: StreamFn;
-  public getApiKey?: GetApiKey | undefined;
-  public onPayload?: SimpleStreamOptions["onPayload"];
-  public onResponse?: SimpleStreamOptions["onResponse"];
-  public onProviderStreamEvent?: SimpleStreamOptions["onProviderStreamEvent"];
-  public beforeToolCall?: BeforeToolCall | undefined;
-  public afterToolCall?: AfterToolCall | undefined;
-  public finishTurn?: FinishTurn | undefined;
-  public prepareRequest?: PrepareRequest | undefined;
-  public prepareNextTurn?: PrepareNextTurn | undefined;
-  public prepareNextTurnWithContext?: PrepareNextTurnWithContext | undefined;
+  public convertToLlm: agentOptionsTypes.ConvertToLlm;
+  public transformContext?: agentOptionsTypes.TransformContext | undefined;
+  public streamFunction: typesModule.StreamFn;
+  public getApiKey?: agentOptionsTypes.GetApiKey | undefined;
+  public onPayload?: aiTypes.SimpleStreamOptions["onPayload"];
+  public onResponse?: aiTypes.SimpleStreamOptions["onResponse"];
+  public onProviderStreamEvent?: aiTypes.SimpleStreamOptions["onProviderStreamEvent"];
+  public beforeToolCall?: agentOptionsTypes.BeforeToolCall | undefined;
+  public afterToolCall?: agentOptionsTypes.AfterToolCall | undefined;
+  public finishTurn?: typesModule.FinishTurn | undefined;
+  public prepareRequest?: typesModule.PrepareRequest | undefined;
+  public prepareNextTurn?: agentOptionsTypes.PrepareNextTurn | undefined;
+  public prepareNextTurnWithContext?: agentOptionsTypes.PrepareNextTurnWithContext | undefined;
   public sessionId?: string | undefined;
-  public thinkingBudgets?: ThinkingBudgets | undefined;
-  public transport: Transport;
+  public thinkingBudgets?: aiTypes.ThinkingBudgets | undefined;
+  public transport: aiTypes.Transport;
   public maxRetryDelayMs?: number | undefined;
-  public toolExecution: ToolExecutionMode;
+  public toolExecution: typesModule.ToolExecutionMode;
 
-  constructor(options: AgentOptions) {
-    const runtimeOptions: Partial<AgentOptions> = options ?? {};
+  constructor(options: agentOptionsTypes.AgentOptions) {
+    const runtimeOptions: Partial<agentOptionsTypes.AgentOptions> = options ?? {};
     this.#state = createMutableAgentState(runtimeOptions.initialState);
     this.convertToLlm = runtimeOptions.convertToLlm ?? defaultConvertToLlm;
     this.transformContext = runtimeOptions.transformContext;
@@ -111,36 +91,36 @@ export class Agent {
     this.toolExecution = runtimeOptions.toolExecution ?? "parallel";
   }
 
-  subscribe(listener: AgentListener): () => void {
+  subscribe(listener: agentOptionsTypes.AgentListener): () => void {
     this.#listeners.add(listener);
     return () => this.#listeners.delete(listener);
   }
 
-  get state(): AgentState {
+  get state(): typesModule.AgentState {
     return this.#state;
   }
 
-  set steeringMode(mode: QueueMode) {
+  set steeringMode(mode: typesModule.QueueMode) {
     this.#steeringQueue.mode = mode;
   }
 
-  get steeringMode(): QueueMode {
+  get steeringMode(): typesModule.QueueMode {
     return this.#steeringQueue.mode;
   }
 
-  set followUpMode(mode: QueueMode) {
+  set followUpMode(mode: typesModule.QueueMode) {
     this.#followUpQueue.mode = mode;
   }
 
-  get followUpMode(): QueueMode {
+  get followUpMode(): typesModule.QueueMode {
     return this.#followUpQueue.mode;
   }
 
-  steer(message: AgentMessage): void {
+  steer(message: typesModule.AgentMessage): void {
     this.#steeringQueue.enqueue(message, this.#queueSequence++);
   }
 
-  followUp(message: AgentMessage): void {
+  followUp(message: typesModule.AgentMessage): void {
     this.#followUpQueue.enqueue(message, this.#queueSequence++);
   }
 
@@ -171,7 +151,7 @@ export class Agent {
     return this.#steeringQueue.hasItems() || this.#followUpQueue.hasItems();
   }
 
-  peekQueuedMessages(): AgentMessage[] {
+  peekQueuedMessages(): typesModule.AgentMessage[] {
     const steering = this.#steeringQueue.peek();
     return steering.length > 0 ? steering : this.#followUpQueue.peek();
   }
@@ -202,16 +182,19 @@ export class Agent {
     this.clearSteeringQueue();
   }
 
-  prompt(message: AgentMessage | AgentMessage[]): Promise<void>;
-  prompt(input: string, images?: ImageContent[]): Promise<void>;
-  prompt(input: string | AgentMessage | AgentMessage[], images?: ImageContent[]): Promise<void> {
+  prompt(message: typesModule.AgentMessage | typesModule.AgentMessage[]): Promise<void>;
+  prompt(input: string, images?: aiTypes.ImageContent[]): Promise<void>;
+  prompt(
+    input: string | typesModule.AgentMessage | typesModule.AgentMessage[],
+    images?: aiTypes.ImageContent[],
+  ): Promise<void> {
     return Effect.runPromise(
       Effect.suspend(() =>
         this.#runs.active
           ? busy(
               "Agent is already processing a prompt. Use steer() or followUp() to queue messages, or wait for completion.",
             )
-          : this.#runPromptMessages(promptMessages({ input, images }), false),
+          : this.#runPromptMessages(promptMessages({ images, input }), false),
       ),
     );
   }
@@ -238,7 +221,7 @@ export class Agent {
   }
 
   #runPromptMessages(
-    messages: AgentMessage[],
+    messages: typesModule.AgentMessage[],
     skipInitialSteeringPoll: boolean,
   ): Effect.Effect<void> {
     return this.#runs.run((signal) =>
@@ -251,46 +234,46 @@ export class Agent {
   }
 
   #loopRun(signal: AbortSignal, skipInitialSteeringPoll: boolean) {
-    const context: AgentContext = {
+    const context: typesModule.AgentContext = {
       messages: this.#state.messages.slice(),
       tools: this.#state.tools.slice(),
     };
     const config = createLoopConfig({
       ...this,
-      state: this.#state,
-      steering: this.#steeringQueue,
       followUps: this.#followUpQueue,
-      signal: () => this.signal,
-      skipInitialSteeringPoll,
       nextTurnHooks: () => ({
         prepareNextTurn: this.prepareNextTurn,
         prepareNextTurnWithContext: this.prepareNextTurnWithContext,
       }),
+      signal: () => this.signal,
+      skipInitialSteeringPoll,
+      state: this.#state,
+      steering: this.#steeringQueue,
     });
     return {
-      context,
       config,
-      emit: (event: AgentEvent) => this.#processEvent(event),
+      context,
+      emit: (event: typesModule.AgentEvent) => this.#processEvent(event),
       signal,
       streamFn: this.streamFunction,
     };
   }
 
   #handleRunFailure(error: unknown, aborted: boolean): Effect.Effect<void> {
-    const message = runFailureMessage({ model: this.#state.model, error, aborted });
-    const events: AgentEvent[] = [
-      { type: "message_start", message },
-      { type: "message_end", message },
-      { type: "turn_end", message, toolResults: [] },
-      { type: "agent_end", messages: [message] },
+    const message = runFailureMessage({ aborted, error, model: this.#state.model });
+    const events: typesModule.AgentEvent[] = [
+      { message, type: "message_start" },
+      { message, type: "message_end" },
+      { message, toolResults: [], type: "turn_end" },
+      { messages: [message], type: "agent_end" },
     ];
     return Effect.forEach(events, (event) => this.#processEvent(event), { discard: true });
   }
 
-  #processEvent(event: AgentEvent): Effect.Effect<void> {
+  #processEvent(event: typesModule.AgentEvent): Effect.Effect<void> {
     return Effect.suspend(() => {
-      reduceAgentEvent({ state: this.#state, event });
-      return notifyListeners({ listeners: this.#listeners, event, signal: this.#runs.signal });
+      reduceAgentEvent({ event, state: this.#state });
+      return notifyListeners({ event, listeners: this.#listeners, signal: this.#runs.signal });
     });
   }
 }

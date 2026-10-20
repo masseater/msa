@@ -1,11 +1,6 @@
-import type {
-  AgentTool,
-  AgentToolResult,
-  AgentToolUpdateCallback,
-  ToolExecutionMode,
-} from "@msa/agent-core";
-import type { ConstrainedSamplingConfig } from "@msa/ai";
-import type { Component } from "@msa/tui";
+import type agentTypes from "@msa/agent-core/index.types";
+import type aiTypes from "@msa/ai/index.types";
+import type tuiTypes from "@msa/tui/index.types";
 import type { Static, TSchema } from "typebox";
 
 import type { Theme } from "../../modes/interactive/theme/theme.ts";
@@ -20,7 +15,7 @@ export interface ToolRenderContext<TState = any, TArgs = any> {
   args: TArgs;
   toolCallId: string;
   invalidate: () => void;
-  lastComponent: Component | undefined;
+  lastComponent: tuiTypes.Component | undefined;
   state: TState;
   cwd: string;
   executionStarted: boolean;
@@ -50,9 +45,9 @@ export interface ToolNamespace {
 }
 
 export interface ToolLoadout {
-  readonly declared: readonly AgentTool[];
-  readonly callable: readonly AgentTool[];
-  readonly registered: readonly AgentTool[];
+  readonly declared: readonly agentTypes.AgentTool[];
+  readonly callable: readonly agentTypes.AgentTool[];
+  readonly registered: readonly agentTypes.AgentTool[];
   getExposure(name: string): ToolExposure;
   getNamespace(name: string): ToolNamespace | undefined;
   getPromptGuidelines(name: string): readonly string[];
@@ -74,7 +69,7 @@ export interface ToolDefinition<
   promptSnippet?: string;
   promptGuidelines?: string[] | undefined;
   parameters: TParams;
-  constrainedSampling?: false | ConstrainedSamplingConfig | undefined;
+  constrainedSampling?: false | aiTypes.ConstrainedSamplingConfig | undefined;
   renderShell?: "default" | "self";
 
   prepareArguments?: ((args: unknown) => Static<TParams>) | undefined;
@@ -95,28 +90,28 @@ export interface ToolDefinition<
 
   prepareLoadout?: (loadout: ToolLoadout) => ToolLoadoutChanges | undefined;
 
-  executionMode?: ToolExecutionMode | undefined;
+  executionMode?: agentTypes.ToolExecutionMode | undefined;
 
   execute(
     toolCallId: string,
     params: Static<TParams>,
     signal: AbortSignal | undefined,
-    onUpdate: AgentToolUpdateCallback<TDetails> | undefined,
+    onUpdate: agentTypes.AgentToolUpdateCallback<TDetails> | undefined,
     ctx: ExtensionToolContext,
-  ): Promise<AgentToolResult<TDetails>>;
+  ): Promise<agentTypes.AgentToolResult<TDetails>>;
 
   renderCall?: (
     args: Static<TParams>,
     theme: Theme,
     context: ToolRenderContext<TState, Static<TParams>>,
-  ) => Component;
+  ) => tuiTypes.Component;
 
   renderResult?: (
-    result: AgentToolResult<TDetails>,
+    result: agentTypes.AgentToolResult<TDetails>,
     options: ToolRenderResultOptions,
     theme: Theme,
     context: ToolRenderContext<TState, Static<TParams>>,
-  ) => Component;
+  ) => tuiTypes.Component;
 }
 
 type AnyToolDefinition = ToolDefinition<any, any, any>;

@@ -1,8 +1,10 @@
 import { Clock, Effect, Stream } from "effect";
 import { beforeEach, describe, expect, it, vi } from "vite-plus/test";
 
-import { completeSimple } from "../src/compat.ts";
-import type { Model } from "../src/types.ts";
+import compat from "../src/compat.ts";
+import type typesModule from "../src/types.types.ts";
+
+const { completeSimple } = compat;
 
 const mockState = vi.hoisted(() => ({
   chunks: [] as unknown[],
@@ -43,7 +45,7 @@ vi.mock("openai", () => {
   return { default: FakeOpenAI };
 });
 
-function openRouterModel(): Model<"openai-completions"> {
+function openRouterModel(): typesModule.Model<"openai-completions"> {
   return {
     api: "openai-completions",
     baseUrl: "https://openrouter.ai/api/v1",

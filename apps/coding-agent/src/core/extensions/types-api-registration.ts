@@ -1,5 +1,5 @@
-import type { Provider } from "@msa/ai";
-import type { KeyId } from "@msa/tui";
+import type aiTypes from "@msa/ai/index.types";
+import type tuiTypes from "@msa/tui/index.types";
 import type { TSchema } from "typebox";
 
 import type { ExternalService } from "../external-services.ts";
@@ -22,7 +22,7 @@ export interface ExtensionRegistrationApi {
   registerCommand(name: string, options: Omit<RegisteredCommand, "name" | "sourceInfo">): void;
 
   registerShortcut(
-    shortcut: KeyId,
+    shortcut: tuiTypes.KeyId,
     options: {
       description?: string;
       handler: (ctx: ExtensionContext) => Promise<void> | void;
@@ -56,7 +56,7 @@ export interface ExtensionRegistrationApi {
 
   registerToolRenderer(resolver: ToolRendererResolver): void;
 
-  registerProvider(provider: Provider): void;
+  registerProvider(provider: aiTypes.Provider): void;
   registerProvider(name: string, config: ProviderConfig): void;
 
   unregisterProvider(name: string): void;

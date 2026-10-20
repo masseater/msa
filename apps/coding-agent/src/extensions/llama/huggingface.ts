@@ -130,11 +130,11 @@ export class HuggingFaceClient {
     return Effect.runPromise(
       awaitingWith(function* () {
         const params = new URLSearchParams({
-          search: query,
-          filter: "gguf",
-          sort: "downloads",
           direction: "-1",
+          filter: "gguf",
           limit: "20",
+          search: query,
+          sort: "downloads",
         });
         const payload = yield* awaited(this.request(`/api/models?${params}`, signal));
         if (!Array.isArray(payload))
@@ -148,7 +148,7 @@ export class HuggingFaceClient {
             return [];
           const model = value as { id: string; downloads?: unknown };
           return [
-            { id: model.id, downloads: typeof model.downloads === "number" ? model.downloads : 0 },
+            { downloads: typeof model.downloads === "number" ? model.downloads : 0, id: model.id },
           ];
         });
       }, this),
@@ -179,7 +179,7 @@ export class HuggingFaceClient {
             const stem = filename.slice(0, -5).replace(SHARD_SUFFIX_PATTERN, "");
             const quantization = stem.match(QUANTIZATION_PATTERN)?.[1]?.toUpperCase();
             if (quantization === undefined || quantization === "") continue;
-            const current = sizes.get(quantization) ?? { total: 0, complete: true };
+            const current = sizes.get(quantization) ?? { complete: true, total: 0 };
             if (typeof file.size === "number") current.total += file.size;
             else current.complete = false;
             sizes.set(quantization, current);
@@ -196,8 +196,8 @@ export class HuggingFaceClient {
             );
           });
         return {
-          id: typeof model.id === "string" ? model.id : id,
           gated: model.gated === "auto" || model.gated === "manual" ? model.gated : false,
+          id: typeof model.id === "string" ? model.id : id,
           quantizations,
         };
       }, this),

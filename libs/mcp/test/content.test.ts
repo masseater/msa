@@ -1,10 +1,13 @@
 import { describe, expect, it } from "vite-plus/test";
 
-import { type ContentBlock, toLlmContent } from "../src/index.ts";
+import mcp from "../src/index.ts";
+import type mcpTypes from "../src/index.types.ts";
+
+const { toLlmContent } = mcp;
 
 describe("toLlmContent", () => {
   it("passes text and images through and replaces other blocks with text", () => {
-    const blocks: ContentBlock[] = [
+    const blocks: mcpTypes.ContentBlock[] = [
       { annotations: { priority: 1 }, text: "hello", type: "text" },
       { _meta: { x: 1 }, data: "aW1n", mimeType: "image/png", type: "image" },
       { data: "YXVk", mimeType: "audio/wav", type: "audio" },

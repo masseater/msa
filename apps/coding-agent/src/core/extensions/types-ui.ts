@@ -1,12 +1,4 @@
-import type {
-  AutocompleteProvider,
-  Component,
-  EditorComponent,
-  EditorTheme,
-  OverlayHandle,
-  OverlayOptions,
-  TUI,
-} from "@msa/tui";
+import type tuiTypes from "@msa/tui/index.types";
 
 import type { Theme } from "../../modes/interactive/theme/theme.ts";
 import type { CompactionResult } from "../compaction/index.ts";
@@ -33,12 +25,14 @@ export interface WorkingIndicatorOptions {
   intervalMs?: number;
 }
 
-export type AutocompleteProviderFactory = (current: AutocompleteProvider) => AutocompleteProvider;
+export type AutocompleteProviderFactory = (
+  current: tuiTypes.AutocompleteProvider,
+) => tuiTypes.AutocompleteProvider;
 export type EditorFactory = (
-  tui: TUI,
-  theme: EditorTheme,
+  tui: tuiTypes.TUI,
+  theme: tuiTypes.EditorTheme,
   keybindings: KeybindingsManager,
-) => EditorComponent;
+) => tuiTypes.EditorComponent;
 
 export interface ExtensionUIContext {
   select(
@@ -72,37 +66,43 @@ export interface ExtensionUIContext {
   setWidget(key: string, content: string[] | undefined, options?: ExtensionWidgetOptions): void;
   setWidget(
     key: string,
-    content: ((tui: TUI, theme: Theme) => Component & { dispose?(): void }) | undefined,
+    content:
+      | ((tui: tuiTypes.TUI, theme: Theme) => tuiTypes.Component & { dispose?(): void })
+      | undefined,
     options?: ExtensionWidgetOptions,
   ): void;
 
   setFooter(
     factory:
       | ((
-          tui: TUI,
+          tui: tuiTypes.TUI,
           theme: Theme,
           footerData: ReadonlyFooterDataProvider,
-        ) => Component & { dispose?(): void })
+        ) => tuiTypes.Component & { dispose?(): void })
       | undefined,
   ): void;
 
   setHeader(
-    factory: ((tui: TUI, theme: Theme) => Component & { dispose?(): void }) | undefined,
+    factory:
+      | ((tui: tuiTypes.TUI, theme: Theme) => tuiTypes.Component & { dispose?(): void })
+      | undefined,
   ): void;
 
   setTitle(title: string): void;
 
   custom<T>(
     factory: (
-      tui: TUI,
+      tui: tuiTypes.TUI,
       theme: Theme,
       keybindings: KeybindingsManager,
       done: (result: T) => void,
-    ) => (Component & { dispose?(): void }) | Promise<Component & { dispose?(): void }>,
+    ) =>
+      | (tuiTypes.Component & { dispose?(): void })
+      | Promise<tuiTypes.Component & { dispose?(): void }>,
     options?: {
       overlay?: boolean;
-      overlayOptions?: OverlayOptions | (() => OverlayOptions);
-      onHandle?: (handle: OverlayHandle) => void;
+      overlayOptions?: tuiTypes.OverlayOptions | (() => tuiTypes.OverlayOptions);
+      onHandle?: (handle: tuiTypes.OverlayHandle) => void;
     },
   ): Promise<T>;
 

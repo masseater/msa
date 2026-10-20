@@ -1,29 +1,19 @@
-import type { TerminalColorMode } from "./colors.ts";
-import { isEnvSet, readEnv } from "./env.ts";
+import type colorsTypes from "./colors.types.ts";
+import env from "./env.ts";
+import type terminalCapabilitiesTypes from "./terminal-capabilities.types.ts";
 
-export type ImageProtocol = "kitty" | "iterm2" | null;
+const { isEnvSet, readEnv } = env;
 
-export interface TerminalCapabilities {
-  images: ImageProtocol;
-  trueColor: boolean;
-  hyperlinks: boolean;
-}
+let cachedCapabilities: terminalCapabilitiesTypes.TerminalCapabilities | null = null;
+let capabilityOverrides: Partial<terminalCapabilitiesTypes.TerminalCapabilities> = {};
 
-export interface CellDimensions {
-  widthPx: number;
-  heightPx: number;
-}
+let cellDimensions: terminalCapabilitiesTypes.CellDimensions = { heightPx: 18, widthPx: 9 };
 
-let cachedCapabilities: TerminalCapabilities | null = null;
-let capabilityOverrides: Partial<TerminalCapabilities> = {};
-
-let cellDimensions: CellDimensions = { widthPx: 9, heightPx: 18 };
-
-export function getCellDimensions(): CellDimensions {
+function getCellDimensions(): terminalCapabilitiesTypes.CellDimensions {
   return cellDimensions;
 }
 
-export function setCellDimensions(dims: CellDimensions): void {
+function setCellDimensions(dims: terminalCapabilitiesTypes.CellDimensions): void {
   cellDimensions = dims;
 }
 
@@ -33,7 +23,7 @@ function probedTmuxHyperlinks(): boolean {
   return tmuxHyperlinkProbe ?? false;
 }
 
-export function needsTmuxHyperlinkProbe(): boolean {
+function needsTmuxHyperlinkProbe(): boolean {
   if (tmuxHyperlinkProbe !== undefined) return false;
   let needed = false;
   const hyperlinks = capabilityOverrides.hyperlinks;
@@ -48,7 +38,7 @@ export function needsTmuxHyperlinkProbe(): boolean {
   return needed;
 }
 
-export function setTmuxHyperlinkProbe(forwardsHyperlinks: boolean): void {
+function setTmuxHyperlinkProbe(forwardsHyperlinks: boolean): void {
   if (tmuxHyperlinkProbe === forwardsHyperlinks) return;
   tmuxHyperlinkProbe = forwardsHyperlinks;
   cachedCapabilities = null;
@@ -64,41 +54,41 @@ interface TerminalHints {
 
 type CapabilityRule = readonly [
   (hints: TerminalHints) => boolean,
-  (hints: TerminalHints) => TerminalCapabilities,
+  (hints: TerminalHints) => terminalCapabilitiesTypes.TerminalCapabilities,
 ];
 
-const fullKitty = (): TerminalCapabilities => ({
+const fullKitty = (): terminalCapabilitiesTypes.TerminalCapabilities => ({
+  hyperlinks: true,
   images: "kitty",
   trueColor: true,
-  hyperlinks: true,
 });
-const trueColorLinks = (): TerminalCapabilities => ({
+const trueColorLinks = (): terminalCapabilitiesTypes.TerminalCapabilities => ({
+  hyperlinks: true,
   images: null,
   trueColor: true,
-  hyperlinks: true,
 });
-const trueColorOnly = (): TerminalCapabilities => ({
-  images: null,
-  trueColor: true,
+const trueColorOnly = (): terminalCapabilitiesTypes.TerminalCapabilities => ({
   hyperlinks: false,
+  images: null,
+  trueColor: true,
 });
 
 const CAPABILITY_RULES: readonly CapabilityRule[] = [
   [
     (hints) => isEnvSet("TMUX") || hints.term.startsWith("tmux"),
     (hints) => ({
+      hyperlinks: hints.tmuxForwardsHyperlink(),
       images: null,
       trueColor: hints.hasTrueColorHint,
-      hyperlinks: hints.tmuxForwardsHyperlink(),
     }),
   ],
   [
     (hints) => hints.term.startsWith("screen"),
-    (hints) => ({ images: null, trueColor: hints.hasTrueColorHint, hyperlinks: false }),
+    (hints) => ({ hyperlinks: false, images: null, trueColor: hints.hasTrueColorHint }),
   ],
   [
     (hints) => hints.termProgram === "herdr",
-    (hints) => ({ images: "kitty", trueColor: hints.hasTrueColorHint, hyperlinks: true }),
+    (hints) => ({ hyperlinks: true, images: "kitty", trueColor: hints.hasTrueColorHint }),
   ],
   [(hints) => isEnvSet("KITTY_WINDOW_ID") || hints.termProgram === "kitty", fullKitty],
   [
@@ -118,7 +108,7 @@ const CAPABILITY_RULES: readonly CapabilityRule[] = [
   ],
   [
     (hints) => isEnvSet("ITERM_SESSION_ID") || hints.termProgram === "iterm.app",
-    () => ({ images: "iterm2", trueColor: true, hyperlinks: true }),
+    () => ({ hyperlinks: true, images: "iterm2", trueColor: true }),
   ],
   [() => isEnvSet("WT_SESSION"), trueColorLinks],
   [(hints) => ["alacritty", "vscode", "zed"].includes(hints.termProgram), trueColorLinks],
@@ -128,20 +118,20 @@ const CAPABILITY_RULES: readonly CapabilityRule[] = [
 
 function detectCapabilitiesFromEnvironment(
   tmuxForwardsHyperlink: () => boolean,
-): TerminalCapabilities {
+): terminalCapabilitiesTypes.TerminalCapabilities {
   const term = readEnv("TERM")?.toLowerCase() ?? "";
   const colorTerm = readEnv("COLORTERM")?.toLowerCase() ?? "";
   const hints: TerminalHints = {
-    termProgram: readEnv("TERM_PROGRAM")?.toLowerCase() ?? "",
-    terminalEmulator: readEnv("TERMINAL_EMULATOR")?.toLowerCase() ?? "",
-    term,
     hasTrueColorHint:
       colorTerm === "truecolor" || colorTerm === "24bit" || term.endsWith("-direct"),
+    term,
+    termProgram: readEnv("TERM_PROGRAM")?.toLowerCase() ?? "",
+    terminalEmulator: readEnv("TERMINAL_EMULATOR")?.toLowerCase() ?? "",
     tmuxForwardsHyperlink,
   };
   const rule = CAPABILITY_RULES.find(([matches]) => matches(hints));
   return rule === undefined
-    ? { images: null, trueColor: hints.hasTrueColorHint, hyperlinks: false }
+    ? { hyperlinks: false, images: null, trueColor: hints.hasTrueColorHint }
     : rule[1](hints);
 }
 
@@ -149,9 +139,9 @@ function parseBooleanCapabilityOverride(value: string | undefined): boolean | un
   return value === "1" ? true : value === "0" ? false : undefined;
 }
 
-export function detectCapabilities(
+function detectCapabilities(
   tmuxForwardsHyperlink: () => boolean = probedTmuxHyperlinks,
-): TerminalCapabilities {
+): terminalCapabilitiesTypes.TerminalCapabilities {
   const hyperlinks = parseBooleanCapabilityOverride(readEnv("MSA_HYPERLINKS"));
   const detected = detectCapabilitiesFromEnvironment(
     hyperlinks === undefined ? tmuxForwardsHyperlink : () => hyperlinks,
@@ -172,7 +162,7 @@ export function detectCapabilities(
   };
 }
 
-export function getCapabilities(): TerminalCapabilities {
+function getCapabilities(): terminalCapabilitiesTypes.TerminalCapabilities {
   if (cachedCapabilities === null) {
     const hyperlinks = capabilityOverrides.hyperlinks;
     cachedCapabilities = {
@@ -183,17 +173,19 @@ export function getCapabilities(): TerminalCapabilities {
   return cachedCapabilities;
 }
 
-export function getTerminalColorMode(
-  capabilities: TerminalCapabilities = getCapabilities(),
-): TerminalColorMode {
+function getTerminalColorMode(
+  capabilities: terminalCapabilitiesTypes.TerminalCapabilities = getCapabilities(),
+): colorsTypes.TerminalColorMode {
   return capabilities.trueColor ? "truecolor" : "256color";
 }
 
-export function resetCapabilitiesCache(): void {
+function resetCapabilitiesCache(): void {
   cachedCapabilities = null;
 }
 
-export function setCapabilityOverrides(overrides: Partial<TerminalCapabilities>): void {
+function setCapabilityOverrides(
+  overrides: Partial<terminalCapabilitiesTypes.TerminalCapabilities>,
+): void {
   if (
     capabilityOverrides.images === overrides.images &&
     capabilityOverrides.trueColor === overrides.trueColor &&
@@ -205,6 +197,21 @@ export function setCapabilityOverrides(overrides: Partial<TerminalCapabilities>)
   cachedCapabilities = null;
 }
 
-export function setCapabilities(caps: TerminalCapabilities): void {
+function setCapabilities(caps: terminalCapabilitiesTypes.TerminalCapabilities): void {
   cachedCapabilities = caps;
 }
+
+const terminalCapabilities = {
+  detectCapabilities,
+  getCapabilities,
+  getCellDimensions,
+  getTerminalColorMode,
+  needsTmuxHyperlinkProbe,
+  resetCapabilitiesCache,
+  setCapabilities,
+  setCapabilityOverrides,
+  setCellDimensions,
+  setTmuxHyperlinkProbe,
+};
+
+export default terminalCapabilities;

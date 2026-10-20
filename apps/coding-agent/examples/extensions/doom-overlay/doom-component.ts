@@ -1,9 +1,11 @@
-import type { Component } from "@msa/tui";
-import { isKeyRelease, type TUI } from "@msa/tui";
+import tuiModule from "@msa/tui";
+import type tuiTypes from "@msa/tui/index.types";
 import { Effect, type Fiber } from "effect";
 
 import type { DoomEngine } from "./doom-engine.ts";
 import { DoomKeys, mapKeyToDoom } from "./doom-keys.ts";
+
+const { isKeyRelease } = tuiModule;
 
 function renderHalfBlock(
   rgba: Uint8Array,
@@ -39,15 +41,15 @@ function renderHalfBlock(
   return lines;
 }
 
-export class DoomOverlayComponent implements Component {
+export class DoomOverlayComponent implements tuiTypes.Component {
   private engine: DoomEngine;
-  private tui: TUI;
+  private tui: tuiTypes.TUI;
   private fiber: Fiber.Fiber<void> | undefined;
   private onExit: () => void;
 
   wantsKeyRelease = true;
 
-  constructor(tui: TUI, engine: DoomEngine, onExit: () => void, resume = false) {
+  constructor(tui: tuiTypes.TUI, engine: DoomEngine, onExit: () => void, resume = false) {
     this.tui = tui;
     this.engine = engine;
     this.onExit = onExit;

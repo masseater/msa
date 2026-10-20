@@ -1,4 +1,4 @@
-import type { Tool as AiTool, Models, Static, TSchema, ToolResultMessage, Usage } from "@msa/ai";
+import type aiTypes from "@msa/ai/index.types";
 import type chordTypes from "@msa/chord/index.types";
 
 import type envTypes from "../env/index.types.ts";
@@ -20,12 +20,12 @@ declare namespace typesToolsTypes {
   };
 
   type ToolExecutionResult<TDetails extends chordTypes.JsonValue = chordTypes.JsonValue> = {
-    readonly output?: ToolResultMessage["content"];
+    readonly output?: aiTypes.ToolResultMessage["content"];
     readonly structuredOutput?: chordTypes.JsonValue;
     readonly isError?: boolean;
     readonly details?: TDetails;
     readonly diagnostics?: readonly ToolDiagnostic[];
-    readonly usage?: Usage;
+    readonly usage?: aiTypes.Usage;
     readonly control?: ToolControl;
   };
 
@@ -35,7 +35,7 @@ declare namespace typesToolsTypes {
     readonly isError: boolean;
     readonly details?: chordTypes.JsonValue;
     readonly diagnostics: readonly ToolDiagnostic[];
-    readonly usage?: Usage;
+    readonly usage?: aiTypes.Usage;
     readonly durationMs?: number;
   };
 
@@ -50,7 +50,7 @@ declare namespace typesToolsTypes {
     readonly callId: string;
     readonly registry: typesRegistryTypes.RegistrySnapshot;
     agent(context: chordTypes.Context): Promise<typesRegistryTypes.Agent>;
-    readonly models: Models;
+    readonly models: aiTypes.Models;
     readonly env: envTypes.ExecutionEnv | undefined;
     output(chunk: string | Uint8Array, skipped?: envTypes.ShellOutputSkip): void;
     readonly outputWindow: envTypes.ShellOutputWindow | undefined;
@@ -97,13 +97,13 @@ declare namespace typesToolsTypes {
   }
 
   type ToolRegistration<
-    TParameters extends TSchema = TSchema,
+    TParameters extends aiTypes.TSchema = aiTypes.TSchema,
     TDetails extends chordTypes.JsonValue = chordTypes.JsonValue,
-  > = AiTool<TParameters> & {
+  > = aiTypes.Tool<TParameters> & {
     readonly replay?: "safe" | "unsafe";
     readonly executionMode?: ToolExecutionMode;
-    prepareArguments?(args: unknown): Static<TParameters>;
-    readonly structuredOutputSchema?: TSchema;
+    prepareArguments?(args: unknown): aiTypes.Static<TParameters>;
+    readonly structuredOutputSchema?: aiTypes.TSchema;
     readonly callers?: readonly ("model" | "tools")[];
     readonly deferred?: true;
     readonly outputLimits?: {
@@ -112,7 +112,7 @@ declare namespace typesToolsTypes {
       readonly retain?: "head" | "tail";
     };
     execute(
-      args: Static<TParameters>,
+      args: aiTypes.Static<TParameters>,
       api: ToolExecutionApi<TDetails>,
       context: chordTypes.Context,
     ): Promise<ToolExecutionResult<TDetails>>;

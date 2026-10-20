@@ -1,7 +1,9 @@
 import type { Theme } from "@msa/coding-agent";
-import { matchesKey, truncateToWidth } from "@msa/tui";
+import tui from "@msa/tui";
 
 import { BaseOverlay } from "./base-overlay.ts";
+
+const { matchesKey, truncateToWidth } = tui;
 
 export class StackOverlayComponent extends BaseOverlay {
   private num: number;

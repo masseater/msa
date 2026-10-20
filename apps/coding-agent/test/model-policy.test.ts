@@ -1,4 +1,4 @@
-import type { Provider } from "@msa/ai";
+import type aiTypes from "@msa/ai/index.types";
 import testing from "@msa/testing";
 import { Effect } from "effect";
 import { afterEach, describe, expect, it } from "vite-plus/test";
@@ -158,7 +158,7 @@ describe("model policy patterns", () => {
   );
 });
 
-const provider2: Provider = {
+const provider2: aiTypes.Provider = {
   auth: {
     apiKey: {
       name: "key",

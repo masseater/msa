@@ -3,12 +3,14 @@ import { describe, it } from "node:test";
 
 import { Effect } from "effect";
 
-import type { Component } from "../src/tui-component.ts";
-import type { TUI } from "../src/tui-interface.ts";
-import { TuiMainScreen } from "../src/tui-main-screen.ts";
-import { VirtualTerminal } from "./virtual-terminal.ts";
+import type tuiComponentTypes from "../src/tui-component.types.ts";
+import type tuiInterfaceTypes from "../src/tui-interface.types.ts";
+import TuiMainScreen from "../src/tui-main-screen.ts";
+import virtualTerminal from "./virtual-terminal.ts";
 
-class Lines implements Component {
+const { VirtualTerminal } = virtualTerminal;
+
+class Lines implements tuiComponentTypes.Component {
   private lines: string[];
 
   constructor(lines: string[]) {
@@ -27,7 +29,7 @@ describe("TUI shrinking content", () => {
     Effect.runPromise(
       Effect.gen(function* () {
         const terminal = new VirtualTerminal(40, 10);
-        const tui: TUI = new TuiMainScreen(terminal);
+        const tui: tuiInterfaceTypes.TUI = new TuiMainScreen(terminal);
         const content = new Lines(["first", "second", "third"]);
         tui.addChild(content);
         tui.start();

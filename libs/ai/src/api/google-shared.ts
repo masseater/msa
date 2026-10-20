@@ -1,10 +1,12 @@
 import { FinishReason } from "@google/genai";
 import { Effect, Function } from "effect";
 
-import type { StopReason, StreamOptions } from "../types.ts";
-import { retryProviderEffect } from "../utils/provider-retry.ts";
+import type typesModule from "../types.types.ts";
+import providerRetry from "../utils/provider-retry.ts";
 
-export function mapStopReason(reason: FinishReason): StopReason {
+const { retryProviderEffect } = providerRetry;
+
+function mapStopReason(reason: FinishReason): typesModule.StopReason {
   switch (reason) {
     case FinishReason.STOP:
       return "stop";
@@ -34,7 +36,7 @@ export function mapStopReason(reason: FinishReason): StopReason {
   }
 }
 
-export function mapStopReasonString(reason: string): StopReason {
+function mapStopReasonString(reason: string): typesModule.StopReason {
   switch (reason) {
     case "STOP":
       return "stop";
@@ -52,19 +54,19 @@ const withHeadersField = (error: unknown): unknown => {
   return error;
 };
 
-export const retryGoogleRequest: {
+const retryGoogleRequest: {
   <T>(
-    options?: Pick<StreamOptions, "maxRetries" | "maxRetryDelayMs" | "signal">,
+    options?: Pick<typesModule.StreamOptions, "maxRetries" | "maxRetryDelayMs" | "signal">,
   ): (request: () => Promise<T>) => Effect.Effect<T>;
   <T>(
     request: () => Promise<T>,
-    options?: Pick<StreamOptions, "maxRetries" | "maxRetryDelayMs" | "signal">,
+    options?: Pick<typesModule.StreamOptions, "maxRetries" | "maxRetryDelayMs" | "signal">,
   ): Effect.Effect<T>;
 } = Function.dual(
   (args) => typeof args[0] === "function",
   <T>(
     request: () => Promise<T>,
-    options?: Pick<StreamOptions, "maxRetries" | "maxRetryDelayMs" | "signal">,
+    options?: Pick<typesModule.StreamOptions, "maxRetries" | "maxRetryDelayMs" | "signal">,
   ): Effect.Effect<T> =>
     retryProviderEffect(
       Effect.promise(() => Promise.resolve(request())).pipe(
@@ -77,3 +79,11 @@ export const retryGoogleRequest: {
       },
     ),
 );
+
+const googleShared = {
+  mapStopReason,
+  mapStopReasonString,
+  retryGoogleRequest,
+};
+
+export default googleShared;

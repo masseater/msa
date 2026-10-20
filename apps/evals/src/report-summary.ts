@@ -48,12 +48,12 @@ function groupPairs(
     const existing = groups.get(key);
     if (existing !== undefined) return existing;
     const group = {
-      evalSet: identity.evalSet,
       caseId: identity.caseId,
-      model: identity.model,
-      runNumber: identity.runNumber,
+      evalSet: identity.evalSet,
       expected: new Map<DocumentationVariant, number>(),
+      model: identity.model,
       observations: new Map<DocumentationVariant, EvalObservation[]>(),
+      runNumber: identity.runNumber,
     };
     groups.set(key, group);
     return group;
@@ -96,11 +96,11 @@ function resolvePair(group: PairGroup): { pair?: Pair; blocked?: BlockedPair } {
   if (reasons.length > 0) {
     return {
       blocked: {
-        evalSet: group.evalSet,
         caseId: group.caseId,
+        evalSet: group.evalSet,
         model: group.model,
-        runNumber: group.runNumber,
         reasons,
+        runNumber: group.runNumber,
       },
     };
   }
@@ -128,13 +128,13 @@ function summarizeMetric(
   const controlMean = mean(control);
   const treatmentMean = mean(treatment);
   return {
-    eligiblePairs: control.length,
     controlMean,
-    treatmentMean,
+    eligiblePairs: control.length,
     meanDelta:
       controlMean === null || treatmentMean === null
         ? null
         : difference(treatmentMean, controlMean),
+    treatmentMean,
   };
 }
 
@@ -158,16 +158,16 @@ function variantTotals(
 ): VariantTotals {
   const runs = observations.filter((observation) => observation.variant === variant);
   return {
-    variant,
-    runs: runs.length,
-    inputTokens: operationalTotal(runs, ({ inputTokens }) => inputTokens),
-    outputTokens: operationalTotal(runs, ({ outputTokens }) => outputTokens),
     cacheReadTokens: operationalTotal(runs, ({ cacheReadTokens }) => cacheReadTokens),
     cacheWriteTokens: operationalTotal(runs, ({ cacheWriteTokens }) => cacheWriteTokens),
-    totalTokens: operationalTotal(runs, ({ totalTokens }) => totalTokens),
+    estimatedCostUsd: operationalTotal(runs, ({ estimatedCostUsd }) => estimatedCostUsd),
+    inputTokens: operationalTotal(runs, ({ inputTokens }) => inputTokens),
+    outputTokens: operationalTotal(runs, ({ outputTokens }) => outputTokens),
+    runs: runs.length,
     toolCalls: operationalTotal(runs, ({ toolCalls }) => toolCalls),
     totalMs: operationalTotal(runs, ({ totalMs }) => totalMs),
-    estimatedCostUsd: operationalTotal(runs, ({ estimatedCostUsd }) => estimatedCostUsd),
+    totalTokens: operationalTotal(runs, ({ totalTokens }) => totalTokens),
+    variant,
   };
 }
 
@@ -214,21 +214,21 @@ function comparisonFor(
     ? pairs.filter(({ treatment }) => treatment.score >= 1).length / pairs.length
     : null;
   return {
-    evalSet,
-    totalPairs,
-    eligiblePairs: pairs.length,
     blockedPairs: blockedPairCount,
     controlPassRate,
-    treatmentPassRate,
+    eligiblePairs: pairs.length,
+    estimatedCostUsd: summarizeMetric(pairs, ({ estimatedCostUsd }) => estimatedCostUsd),
+    evalSet,
+    flags: comparisonFlags(pairs, controlPassRate, treatmentPassRate),
     lift:
       controlPassRate === null || treatmentPassRate === null
         ? null
         : difference(treatmentPassRate, controlPassRate),
-    flags: comparisonFlags(pairs, controlPassRate, treatmentPassRate),
-    totalTokens: summarizeMetric(pairs, ({ totalTokens }) => totalTokens),
     toolCalls: summarizeMetric(pairs, ({ toolCalls }) => toolCalls),
     totalMs: summarizeMetric(pairs, ({ totalMs }) => totalMs),
-    estimatedCostUsd: summarizeMetric(pairs, ({ estimatedCostUsd }) => estimatedCostUsd),
+    totalPairs,
+    totalTokens: summarizeMetric(pairs, ({ totalTokens }) => totalTokens),
+    treatmentPassRate,
   };
 }
 
@@ -273,16 +273,16 @@ export const summarizeEvalObservations: {
         comparisonFor(evalSet, totalPairs, pairsByEvalSet.get(evalSet) ?? []),
       );
     return {
-      schemaVersion: 3,
-      protocolDigest,
-      control: CONTROL,
-      treatment: TREATMENT,
-      comparisons,
       blockedPairs,
+      comparisons,
+      control: CONTROL,
       operationalTotals: [
         variantTotals(observations, CONTROL),
         variantTotals(observations, TREATMENT),
       ],
+      protocolDigest,
+      schemaVersion: 3,
+      treatment: TREATMENT,
     };
   },
 );

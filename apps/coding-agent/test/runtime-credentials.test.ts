@@ -1,4 +1,4 @@
-import type { CredentialStore } from "@msa/ai";
+import type aiTypes from "@msa/ai/index.types";
 import testing from "@msa/testing";
 import { Effect } from "effect";
 import { describe, expect, test, vi } from "vite-plus/test";
@@ -62,7 +62,7 @@ const forwardsOperationSignalsToThePersistentStorePart1 = () =>
 
     const controller = abortController();
     const received: AbortSignal[] = [];
-    const storage: CredentialStore = {
+    const storage: aiTypes.CredentialStore = {
       delete: (_providerId, options) =>
         effectRunPromise(
           Effect.sync(() => {

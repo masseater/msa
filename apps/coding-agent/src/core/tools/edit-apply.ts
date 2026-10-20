@@ -1,11 +1,11 @@
 import { Effect } from "effect";
 
 import { splitBom } from "../../utils/text.ts";
-import { fromPromise, ToolFailure } from "../platform/index.ts";
+import { ToolFailure, fromPromise } from "../platform/index.ts";
 import {
+  type Edit,
   applyEditsToNormalizedContent,
   detectLineEnding,
-  type Edit,
   generateDiffString,
   generateUnifiedPatch,
   normalizeToLF,
@@ -43,8 +43,8 @@ const accessForEdit = ({ ops, path, absolutePath, signal }: EditRequest) =>
         Effect.andThen(
           Effect.fail(
             new ToolFailure({
-              message: `Could not edit file: ${path}. ${accessErrorMessage(failure.cause)}.`,
               cause: failure.cause,
+              message: `Could not edit file: ${path}. ${accessErrorMessage(failure.cause)}.`,
             }),
           ),
         ),
@@ -57,14 +57,14 @@ const editResult = (path: string, edits: Edit[], baseContent: string, newContent
   return {
     content: [
       {
-        type: "text" as const,
         text: `Successfully replaced ${edits.length} block(s) in ${path}.`,
+        type: "text" as const,
       },
     ],
     details: {
       diff: diffResult.diff,
-      patch: generateUnifiedPatch(path, baseContent, newContent),
       firstChangedLine: diffResult.firstChangedLine,
+      patch: generateUnifiedPatch(path, baseContent, newContent),
     },
   };
 };

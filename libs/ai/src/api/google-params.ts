@@ -4,43 +4,35 @@ import type {
   ThinkingConfig,
 } from "@google/genai";
 
-import type { Model, StreamOptions, TranscriptContext } from "../types.ts";
-import { sanitizeSurrogates } from "../utils/sanitize-unicode.ts";
-import { getSystemMessageText } from "../utils/text.ts";
-import { getCurrentTools, getInitialSystemMessage } from "../utils/transcript.ts";
-import { convertMessages } from "./google-messages.ts";
-import {
-  type GoogleApiThinkingLevel,
-  type GoogleApiType,
-  getDisabledGoogleThinkingConfig,
-  toGoogleSdkThinkingLevel,
-} from "./google-thinking.ts";
-import {
-  convertTools,
-  resolveGoogleFunctionCallingMode,
-  supportsGoogleStrictToolSampling,
-} from "./google-tools.ts";
+import type typesModule from "../types.types.ts";
+import sanitizeUnicode from "../utils/sanitize-unicode.ts";
+import textModule from "../utils/text.ts";
+import transcript from "../utils/transcript.ts";
+import googleMessages from "./google-messages.ts";
+import type googleParamsTypes from "./google-params.types.ts";
+import googleThinking from "./google-thinking.ts";
+import type googleThinkingTypes from "./google-thinking.types.ts";
+import googleTools from "./google-tools.ts";
 
-export interface GoogleRequestOptions extends StreamOptions {
-  toolChoice?: "auto" | "none" | "any" | undefined;
-  thinking?: {
-    enabled: boolean;
-    budgetTokens?: number;
-    level?: GoogleApiThinkingLevel;
-  };
-}
+const { getCurrentTools, getInitialSystemMessage } = transcript;
+const { convertTools, resolveGoogleFunctionCallingMode, supportsGoogleStrictToolSampling } =
+  googleTools;
+const { getDisabledGoogleThinkingConfig, toGoogleSdkThinkingLevel } = googleThinking;
+const { convertMessages } = googleMessages;
+const { getSystemMessageText } = textModule;
+const { sanitizeSurrogates } = sanitizeUnicode;
 
-function generationConfig(options: GoogleRequestOptions): GenerateContentConfig {
+function generationConfig(options: googleParamsTypes.GoogleRequestOptions): GenerateContentConfig {
   const config: GenerateContentConfig = {};
   if (options.temperature !== undefined) config.temperature = options.temperature;
   if (options.maxTokens !== undefined) config.maxOutputTokens = options.maxTokens;
   return config;
 }
 
-function toolConfig<T extends GoogleApiType>(
-  model: Model<T>,
-  context: TranscriptContext,
-  options: GoogleRequestOptions,
+function toolConfig<T extends googleThinkingTypes.GoogleApiType>(
+  model: typesModule.Model<T>,
+  context: typesModule.TranscriptContext,
+  options: googleParamsTypes.GoogleRequestOptions,
 ): GenerateContentConfig {
   const currentTools = getCurrentTools(context.messages);
   const supportsStrictMode = supportsGoogleStrictToolSampling(model.id);
@@ -57,9 +49,9 @@ function toolConfig<T extends GoogleApiType>(
   };
 }
 
-function thinkingConfig<T extends GoogleApiType>(
-  model: Model<T>,
-  options: GoogleRequestOptions,
+function thinkingConfig<T extends googleThinkingTypes.GoogleApiType>(
+  model: typesModule.Model<T>,
+  options: googleParamsTypes.GoogleRequestOptions,
 ): ThinkingConfig | undefined {
   const { thinking } = options;
   if (!model.reasoning || thinking === undefined) return undefined;
@@ -73,17 +65,11 @@ function thinkingConfig<T extends GoogleApiType>(
   return config;
 }
 
-export interface GoogleParamsRequest<T extends GoogleApiType> {
-  readonly model: Model<T>;
-  readonly context: TranscriptContext;
-  readonly options: GoogleRequestOptions | undefined;
-}
-
-export function buildGoogleParams<T extends GoogleApiType>({
+function buildGoogleParams<T extends googleThinkingTypes.GoogleApiType>({
   model,
   context,
   options = {},
-}: GoogleParamsRequest<T>): GenerateContentParameters {
+}: googleParamsTypes.GoogleParamsRequest<T>): GenerateContentParameters {
   const contents = convertMessages(model, context);
   const initialSystemMessage = getInitialSystemMessage(context.messages);
   const systemInstruction =
@@ -100,5 +86,11 @@ export function buildGoogleParams<T extends GoogleApiType>({
     if (options.signal.aborted) throw new Error("Request aborted");
     config.abortSignal = options.signal;
   }
-  return { model: model.id, contents, config };
+  return { config, contents, model: model.id };
 }
+
+const googleParams = {
+  buildGoogleParams,
+};
+
+export default googleParams;

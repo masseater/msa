@@ -1,28 +1,28 @@
 import {
-  createAgentSession,
-  createSyntheticSourceInfo,
   DefaultResourceLoader,
-  getAgentDir,
   type PromptTemplate,
   SessionManager,
+  createAgentSession,
+  createSyntheticSourceInfo,
+  getAgentDir,
 } from "@msa/coding-agent";
 import { Console, Effect } from "effect";
 
 const deployTemplate: PromptTemplate = {
-  name: "deploy",
-  description: "Deploy the application",
-  filePath: "/virtual/prompts/deploy.md",
-  sourceInfo: createSyntheticSourceInfo("/virtual/prompts/deploy.md", { source: "sdk" }),
   content: `# Deploy Instructions
 
 1. Build: npm run build
 2. Test: npm test
 3. Deploy: npm run deploy`,
+  description: "Deploy the application",
+  filePath: "/virtual/prompts/deploy.md",
+  name: "deploy",
+  sourceInfo: createSyntheticSourceInfo("/virtual/prompts/deploy.md", { source: "sdk" }),
 };
 
 const loader = new DefaultResourceLoader({
-  cwd: process.cwd(),
   agentDir: getAgentDir(),
+  cwd: process.cwd(),
   promptsOverride: (current) => ({
     prompts: [...current.prompts, deployTemplate],
     diagnostics: current.diagnostics,

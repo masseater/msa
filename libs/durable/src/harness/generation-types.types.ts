@@ -1,4 +1,4 @@
-import type { DeferredHandle, Message, ModelThinkingLevel } from "@msa/ai";
+import type aiTypes from "@msa/ai/index.types";
 
 import type toolTypes from "./tool.types.ts";
 import type typesModule from "./types.types.ts";
@@ -21,7 +21,7 @@ declare namespace generationTypesModule {
         attempt: number;
         compacted?: typesModule.TaskId<typesModule.CompactionResult>;
         model: typesModule.ModelRef;
-        thinkingLevel: ModelThinkingLevel;
+        thinkingLevel: aiTypes.ModelThinkingLevel;
         streamOptions: typesModule.ConversationStreamOptions;
         cutoff: typesModule.EntryId;
       }
@@ -37,7 +37,7 @@ declare namespace generationTypesModule {
         compacted?: typesModule.TaskId<typesModule.CompactionResult>;
         model: typesModule.ModelRef;
         cutoff: typesModule.EntryId;
-        handle: DeferredHandle;
+        handle: aiTypes.DeferredHandle;
         pollAt: number;
       }
     | {
@@ -63,7 +63,7 @@ declare namespace generationTypesModule {
     readonly compacted: typesModule.TaskId<typesModule.CompactionResult> | undefined;
     readonly model: typesModule.ModelRef;
     readonly cutoff: typesModule.EntryId;
-    readonly messages?: readonly Message[];
+    readonly messages?: readonly aiTypes.Message[];
     readonly pollAt?: number;
   };
 

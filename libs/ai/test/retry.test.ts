@@ -1,13 +1,12 @@
 import { Effect } from "effect";
 import { describe, expect, it, vi } from "vite-plus/test";
 
-import { fauxAssistantMessage } from "../src/providers/faux.ts";
-import {
-  type RetryPolicy,
-  isRetryableAssistantError,
-  retryAssistantCall,
-  retryDelayMs,
-} from "../src/utils/retry.ts";
+import faux from "../src/providers/faux.ts";
+import retry from "../src/utils/retry.ts";
+import type retryTypes from "../src/utils/retry.types.ts";
+
+const { isRetryableAssistantError, retryAssistantCall, retryDelayMs } = retry;
+const { fauxAssistantMessage } = faux;
 
 const openAIExplicitRetryMessage =
   "An error occurred while processing your request. You can retry your request, or contact us through our help center at help.openai.com if the error persists. Please include the request ID req_******** in your message.";
@@ -191,7 +190,7 @@ describe("retryDelayMs", () => {
 });
 
 describe("retryAssistantCall", () => {
-  const enabled: RetryPolicy = { baseDelayMs: 0, enabled: true, maxRetries: 3 };
+  const enabled: retryTypes.RetryPolicy = { baseDelayMs: 0, enabled: true, maxRetries: 3 };
   it("returns a successful response immediately without retrying", () =>
     Effect.runPromise(
       Effect.gen(function* () {
@@ -220,7 +219,7 @@ describe("retryAssistantCall", () => {
 });
 
 describe("retryAssistantCall", () => {
-  const enabled: RetryPolicy = { baseDelayMs: 0, enabled: true, maxRetries: 3 };
+  const enabled: retryTypes.RetryPolicy = { baseDelayMs: 0, enabled: true, maxRetries: 3 };
   it("does not retry a non-retryable error (quota/billing)", () =>
     Effect.runPromise(
       Effect.gen(function* () {

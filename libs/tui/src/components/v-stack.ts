@@ -1,20 +1,17 @@
-import {
-  allocateStackSizes,
-  Stack,
-  type StackChild,
-  type StackOptions,
-  visibleStackEntries,
-} from "./stack.ts";
+import stack from "./stack.ts";
+import type stackTypes from "./stack.types.ts";
 
-export class VStack extends Stack {
+const { Stack, allocateStackSizes, visibleStackEntries } = stack;
+
+export default class VStack extends Stack {
   protected readonly layoutType = "vstack" as const;
 
-  constructor(children: StackChild[] = [], options: StackOptions = {}) {
+  constructor(children: stackTypes.StackChild[] = [], options: stackTypes.StackOptions = {}) {
     super(children, options);
   }
 
   override render(width: number): string[] {
-    const viewport = { width: Math.max(1, width), height: Number.MAX_SAFE_INTEGER };
+    const viewport = { height: Number.MAX_SAFE_INTEGER, width: Math.max(1, width) };
     const entries = visibleStackEntries(this.entries, viewport);
     const rendered = entries.map((entry) => entry.component.render(viewport.width));
     const sizes = allocateStackSizes(
@@ -35,5 +32,3 @@ export class VStack extends Stack {
     return lines;
   }
 }
-
-export type { StackChild, StackEntry, StackEntryOptions, StackOptions } from "./stack.ts";

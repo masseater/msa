@@ -7,8 +7,8 @@ const cliPath = fileURLToPath(new URL("../dist/cli.js", import.meta.url));
 const prompt = process.argv.slice(2).join(" ") || "Explain this repository in one paragraph.";
 
 const client = new RpcClient({
-  cliPath,
   args: ["--no-session"],
+  cliPath,
 });
 
 const unsubscribe = client.onEvent((event) => {

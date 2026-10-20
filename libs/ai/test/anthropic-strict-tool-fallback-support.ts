@@ -1,13 +1,16 @@
 import type { MessageCreateParamsStreaming } from "@anthropic-ai/sdk/resources/beta/messages/messages.js";
 import { Type } from "typebox";
 
-import { type AnthropicOptions } from "../src/api/anthropic-messages.ts";
-import type { Model, Tool, TranscriptContext } from "../src/types.ts";
-import { normalizeContext } from "../src/utils/transcript.ts";
+import type anthropicMessagesTypes from "../src/api/anthropic-messages.types.ts";
+import type typesModule from "../src/types.types.ts";
+import transcript from "../src/utils/transcript.ts";
+
+const { normalizeContext } = transcript;
+
 const grammarError =
   "The compiled grammar is too large, which would cause performance issues. Simplify your tool schemas or reduce the number of strict tools.";
 
-const model: Model<"anthropic-messages"> = {
+const model: typesModule.Model<"anthropic-messages"> = {
   api: "anthropic-messages",
   baseUrl: "https://anthropic.example",
   compat: { supportsStrictTools: true },
@@ -21,7 +24,7 @@ const model: Model<"anthropic-messages"> = {
   reasoning: false,
 };
 
-function tool(name: string, strict?: "prefer" | "require"): Tool {
+function tool(name: string, strict?: "prefer" | "require"): typesModule.Tool {
   return {
     description: "Look up a value",
     name,
@@ -30,7 +33,7 @@ function tool(name: string, strict?: "prefer" | "require"): Tool {
   };
 }
 
-function context(tools: Tool[]): TranscriptContext {
+function context(tools: typesModule.Tool[]): typesModule.TranscriptContext {
   return normalizeContext({ messages: [{ content: "Hello", role: "user", timestamp: 1 }], tools });
 }
 
@@ -61,13 +64,17 @@ function successResponse(): Response {
 
 function harness(respond: (payload: MessageCreateParamsStreaming, attempt: number) => Response) {
   const payloads: MessageCreateParamsStreaming[] = [];
-  const fetch: NonNullable<AnthropicOptions["fetch"]> = (_input, init) => {
+  const fetch: NonNullable<anthropicMessagesTypes.AnthropicOptions["fetch"]> = (_input, init) => {
     const payload = JSON.parse(init?.body as string) as MessageCreateParamsStreaming;
     payloads.push(payload);
     return Promise.resolve(respond(payload, payloads.length));
   };
   return {
-    options: { apiKey: "test-key", fetch, maxRetries: 0 } satisfies AnthropicOptions,
+    options: {
+      apiKey: "test-key",
+      fetch,
+      maxRetries: 0,
+    } satisfies anthropicMessagesTypes.AnthropicOptions,
     payloads,
   };
 }

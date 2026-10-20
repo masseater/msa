@@ -1,6 +1,5 @@
 import { tmpdir } from "node:os";
 
-import type { Api, Model } from "@msa/ai";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vite-plus/test";
 
 const resizeImageMock = vi.hoisted(() =>
@@ -14,6 +13,7 @@ vi.mock("../src/utils/image-resize.js", () => ({
   resizeImage: resizeImageMock,
 }));
 
+import type aiTypes from "@msa/ai/index.types";
 import testing from "@msa/testing";
 import { Effect } from "effect";
 
@@ -63,7 +63,7 @@ const passesTheCurrentModelResizeProfileTo = () =>
       const imagePath = joinPath(testDir, "test.png");
       yield* writeBytesFile(imagePath, Buffer.from(TINY_PNG_BASE64, "base64"));
       const resize = { jpegQuality: 70, maxBytes: 500000, maxHeight: 1000, maxWidth: 1234 };
-      const model: Model<Api> = {
+      const model: aiTypes.Model<aiTypes.Api> = {
         api: "test" as const,
         baseUrl: "https://example.com",
         contextWindow: 1000,

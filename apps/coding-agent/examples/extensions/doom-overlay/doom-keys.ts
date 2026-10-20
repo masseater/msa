@@ -1,16 +1,16 @@
+import tui from "@msa/tui";
+
+const { Key, matchesKey, parseKey } = tui;
 export const DoomKeys = {
-  KEY_RIGHTARROW: 0xae,
-  KEY_LEFTARROW: 0xac,
-  KEY_UPARROW: 0xad,
+  KEY_BACKSPACE: 127,
   KEY_DOWNARROW: 0xaf,
-  KEY_STRAFE_L: 0xa0,
-  KEY_STRAFE_R: 0xa1,
-  KEY_USE: 0xa2,
-  KEY_FIRE: 0xa3,
-  KEY_ESCAPE: 27,
   KEY_ENTER: 13,
-  KEY_TAB: 9,
+  KEY_EQUALS: 0x3d,
+  KEY_ESCAPE: 27,
   KEY_F1: 0x80 + 0x3b,
+  KEY_F10: 0x80 + 0x44,
+  KEY_F11: 0x80 + 0x57,
+  KEY_F12: 0x80 + 0x58,
   KEY_F2: 0x80 + 0x3c,
   KEY_F3: 0x80 + 0x3d,
   KEY_F4: 0x80 + 0x3e,
@@ -19,19 +19,20 @@ export const DoomKeys = {
   KEY_F7: 0x80 + 0x41,
   KEY_F8: 0x80 + 0x42,
   KEY_F9: 0x80 + 0x43,
-  KEY_F10: 0x80 + 0x44,
-  KEY_F11: 0x80 + 0x57,
-  KEY_F12: 0x80 + 0x58,
-  KEY_BACKSPACE: 127,
-  KEY_PAUSE: 0xff,
-  KEY_EQUALS: 0x3d,
+  KEY_FIRE: 0xa3,
+  KEY_LEFTARROW: 0xac,
   KEY_MINUS: 0x2d,
-  KEY_RSHIFT: 0x80 + 0x36,
-  KEY_RCTRL: 0x80 + 0x1d,
+  KEY_PAUSE: 0xff,
   KEY_RALT: 0x80 + 0x38,
+  KEY_RCTRL: 0x80 + 0x1d,
+  KEY_RIGHTARROW: 0xae,
+  KEY_RSHIFT: 0x80 + 0x36,
+  KEY_STRAFE_L: 0xa0,
+  KEY_STRAFE_R: 0xa1,
+  KEY_TAB: 9,
+  KEY_UPARROW: 0xad,
+  KEY_USE: 0xa2,
 } as const;
-
-import { Key, matchesKey, parseKey } from "@msa/tui";
 
 const mapMovementKey = (data: string): number[] | undefined => {
   if (matchesKey(data, Key.up)) return [DoomKeys.KEY_UPARROW];

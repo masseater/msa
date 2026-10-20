@@ -1,10 +1,13 @@
 import { Clock, Effect, Stream } from "effect";
 import { beforeEach, describe, expect, it, vi } from "vite-plus/test";
 
-import { streamSimple } from "../src/compat.ts";
-import type { Message, Model } from "../src/types.ts";
-import { currentTimeMillis } from "../src/utils/clock.ts";
+import compatModule from "../src/compat.ts";
+import type typesModule from "../src/types.types.ts";
+import clock from "../src/utils/clock.ts";
 import modelChoice from "./model-choice.ts";
+
+const { streamSimple } = compatModule;
+const { currentTimeMillis } = clock;
 
 const { chooseModel } = modelChoice;
 
@@ -93,7 +96,7 @@ const clampsExplicitMaxTokensToRemainingContext = () =>
     }),
   );
 
-const toolHistory = (model: Model<"openai-completions">): Message[] => [
+const toolHistory = (model: typesModule.Model<"openai-completions">): typesModule.Message[] => [
   { content: "use the tool", role: "user", timestamp: currentTimeMillis() },
   {
     api: model.api,
@@ -126,7 +129,10 @@ const stillEmitsToolsForAnthropicLiteLLM = () =>
   Effect.runPromise(
     Effect.gen(function* () {
       const { compat: _compat, ...baseModel } = chooseModel("openai", "direct OpenAI");
-      const model: Model<"openai-completions"> = { ...baseModel, api: "openai-completions" };
+      const model: typesModule.Model<"openai-completions"> = {
+        ...baseModel,
+        api: "openai-completions",
+      };
       yield* Effect.promise(() =>
         streamSimple(
           model,

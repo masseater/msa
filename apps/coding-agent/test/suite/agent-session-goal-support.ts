@@ -1,5 +1,6 @@
-import type { AgentTool } from "@msa/agent-core";
-import { type AssistantMessage, fauxAssistantMessage, fauxToolCall } from "@msa/ai";
+import type agentTypes from "@msa/agent-core/index.types";
+import ai from "@msa/ai";
+import type aiTypes from "@msa/ai/index.types";
 import { Effect } from "effect";
 import { Type } from "typebox";
 
@@ -8,9 +9,11 @@ import { SessionManager } from "../../src/core/session-manager.ts";
 import harnessModule from "./harness.ts";
 import type harnessTypes from "./harness.types.ts";
 
+const { fauxAssistantMessage, fauxToolCall } = ai;
+
 const { createHarness } = harnessModule;
 
-const touchTool: AgentTool = {
+const touchTool: agentTypes.AgentTool = {
   description: "Do some work",
   execute: () => Promise.resolve({ content: [{ text: "touched", type: "text" }], details: {} }),
   label: "Touch",
@@ -18,7 +21,7 @@ const touchTool: AgentTool = {
   parameters: Type.Object({}),
 };
 
-function workTurn(text: string): AssistantMessage[] {
+function workTurn(text: string): aiTypes.AssistantMessage[] {
   return [
     fauxAssistantMessage(fauxToolCall("touch", {}), { stopReason: "toolUse" }),
     fauxAssistantMessage(text),

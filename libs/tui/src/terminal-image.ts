@@ -3,20 +3,19 @@ import { pathToFileURL } from "node:url";
 
 import { dual } from "effect/Function";
 
-import { pathOperations } from "./platform.ts";
-import { getCapabilities, getCellDimensions } from "./terminal-capabilities.ts";
-import { encodeKitty, registerKittyImageMetadata } from "./terminal-image-kitty.ts";
-import { calculateImageCellSize, type ImageDimensions } from "./terminal-image-size.ts";
+import platform from "./platform.ts";
+import terminalCapabilities from "./terminal-capabilities.ts";
+import terminalImageKitty from "./terminal-image-kitty.ts";
+import terminalImageSize from "./terminal-image-size.ts";
+import type terminalImageSizeTypes from "./terminal-image-size.types.ts";
+import type terminalImageTypes from "./terminal-image.types.ts";
 
-export interface ImageRenderOptions {
-  maxWidthCells?: number;
-  maxHeightCells?: number;
-  preserveAspectRatio?: boolean;
-  imageId?: number | undefined;
-  moveCursor?: boolean | undefined;
-}
+const { getCapabilities, getCellDimensions } = terminalCapabilities;
+const { calculateImageCellSize } = terminalImageSize;
+const { encodeKitty, registerKittyImageMetadata } = terminalImageKitty;
+const { pathOperations } = platform;
 
-export const encodeITerm2: {
+const encodeITerm2: {
   (
     base64Data: string,
     options?: {
@@ -65,30 +64,23 @@ export const encodeITerm2: {
   },
 );
 
-export interface RenderedImage {
-  sequence: string;
-  columns: number;
-  rows: number;
-  imageId?: number | undefined;
-}
-
-export const renderImage: {
+const renderImage: {
   (
     base64Data: string,
-    imageDimensions: ImageDimensions,
-    options?: ImageRenderOptions,
-  ): RenderedImage | null;
+    imageDimensions: terminalImageSizeTypes.ImageDimensions,
+    options?: terminalImageTypes.ImageRenderOptions,
+  ): terminalImageTypes.RenderedImage | null;
   (
-    imageDimensions: ImageDimensions,
-    options?: ImageRenderOptions,
-  ): (base64Data: string) => RenderedImage | null;
+    imageDimensions: terminalImageSizeTypes.ImageDimensions,
+    options?: terminalImageTypes.ImageRenderOptions,
+  ): (base64Data: string) => terminalImageTypes.RenderedImage | null;
 } = dual(
   (args) => typeof args[0] === "string",
   (
     base64Data: string,
-    imageDimensions: ImageDimensions,
-    options: ImageRenderOptions = {},
-  ): RenderedImage | null => {
+    imageDimensions: terminalImageSizeTypes.ImageDimensions,
+    options: terminalImageTypes.ImageRenderOptions = {},
+  ): terminalImageTypes.RenderedImage | null => {
     const caps = getCapabilities();
 
     if (caps.images === null) {
@@ -107,36 +99,36 @@ export const renderImage: {
     if (caps.images === "kitty") {
       if (options.imageId !== undefined) {
         registerKittyImageMetadata({
-          imageId: options.imageId,
           columns: size.columns,
+          heightPx: imageDimensions.heightPx,
+          imageId: options.imageId,
           rows: size.rows,
           widthPx: imageDimensions.widthPx,
-          heightPx: imageDimensions.heightPx,
         });
       }
       const sequence = encodeKitty(base64Data, {
         columns: size.columns,
-        rows: size.rows,
         imageId: options.imageId,
         moveCursor: options.moveCursor,
+        rows: size.rows,
       });
-      return { sequence, columns: size.columns, rows: size.rows, imageId: options.imageId };
+      return { columns: size.columns, imageId: options.imageId, rows: size.rows, sequence };
     }
 
     if (caps.images === "iterm2") {
       const sequence = encodeITerm2(base64Data, {
-        width: size.columns,
         height: "auto",
         preserveAspectRatio: options.preserveAspectRatio ?? true,
+        width: size.columns,
       });
-      return { sequence, columns: size.columns, rows: size.rows };
+      return { columns: size.columns, rows: size.rows, sequence };
     }
 
     return null;
   },
 );
 
-export const hyperlink: {
+const hyperlink: {
   (text: string, url: string): string;
   (url: string): (text: string) => string;
 } = dual(2, (text: string, url: string): string => `\x1b]8;;${url}\x1b\\${text}\x1b]8;;\x1b\\`);
@@ -152,12 +144,23 @@ function shortenImagePath(filename: string): string {
   return filename;
 }
 
-export const imageFallback: {
-  (mimeType: string, dimensions?: ImageDimensions, filename?: string): string;
-  (dimensions?: ImageDimensions, filename?: string): (mimeType: string) => string;
+const imageFallback: {
+  (
+    mimeType: string,
+    dimensions?: terminalImageSizeTypes.ImageDimensions,
+    filename?: string,
+  ): string;
+  (
+    dimensions?: terminalImageSizeTypes.ImageDimensions,
+    filename?: string,
+  ): (mimeType: string) => string;
 } = dual(
   (args) => typeof args[0] === "string",
-  (mimeType: string, dimensions?: ImageDimensions, filename?: string): string => {
+  (
+    mimeType: string,
+    dimensions?: terminalImageSizeTypes.ImageDimensions,
+    filename?: string,
+  ): string => {
     const parts: string[] = [];
     if (filename !== undefined && filename !== "") {
       const display = shortenImagePath(filename);
@@ -172,3 +175,12 @@ export const imageFallback: {
     return `[Image: ${parts.join(" ")}]`;
   },
 );
+
+const terminalImage = {
+  encodeITerm2,
+  hyperlink,
+  imageFallback,
+  renderImage,
+};
+
+export default terminalImage;

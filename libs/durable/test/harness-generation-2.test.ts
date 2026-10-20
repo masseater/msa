@@ -1,4 +1,4 @@
-import { fauxAssistantMessage } from "@msa/ai";
+import ai from "@msa/ai";
 import durable from "@msa/durable";
 import memory from "@msa/durable/storage/memory";
 import { Effect } from "effect";
@@ -8,6 +8,8 @@ import chatSupport from "./chat-support.ts";
 import effectSupport from "./effect-support.ts";
 import harnessSupport from "./harness-support.ts";
 import sessionSupport from "./session-support.ts";
+
+const { fauxAssistantMessage } = ai;
 
 const { defineExtension, wrapSection } = durable;
 const { MemoryStorage } = memory;

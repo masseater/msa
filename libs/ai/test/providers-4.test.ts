@@ -1,15 +1,11 @@
 import { Effect } from "effect";
 import { describe, expect, it } from "vite-plus/test";
 
-import { createModels, createProvider } from "../src/models.ts";
-import type {
-  Api,
-  DeferredCancelOptions,
-  DeferredFetchOptions,
-  DeferredHandle,
-  Model,
-} from "../src/types.ts";
+import modelsModule from "../src/models.ts";
+import type typesModule from "../src/types.types.ts";
 import providersSupport from "./providers-support.ts";
+
+const { createModels, createProvider } = modelsModule;
 
 const { context, recordingStreams, testModel } = providersSupport;
 
@@ -24,9 +20,9 @@ const resolvedAuth = {
 
 const deferredProvider = () => {
   const seen: {
-    cancelledOptions?: DeferredCancelOptions | undefined;
-    fetchedModel?: Model<Api>;
-    fetchedOptions?: DeferredFetchOptions | undefined;
+    cancelledOptions?: typesModule.DeferredCancelOptions | undefined;
+    fetchedModel?: typesModule.Model<typesModule.Api>;
+    fetchedOptions?: typesModule.DeferredFetchOptions | undefined;
   } = {};
   const model = { ...testModel("api-a", "model-a"), provider: "deferred-provider" };
   const streams = recordingStreams("deferred", []);
@@ -48,7 +44,7 @@ const deferredProvider = () => {
       models: [model],
     }),
   );
-  const handle: DeferredHandle = {
+  const handle: typesModule.DeferredHandle = {
     api: model.api,
     id: "response-1",
     modelId: model.id,

@@ -1,11 +1,13 @@
+import testing from "@msa/testing";
 import { Effect } from "effect";
 import { dual } from "effect/Function";
 
-import { LATEST_PROTOCOL_VERSION } from "../src/index.ts";
-import helpers from "./helpers.ts";
+import mcp from "../src/index.ts";
 import type httpFixtureTypes from "./http-fixture.types.ts";
 
-const { encodeJson, headersOf, listen, readMessage } = helpers;
+const { LATEST_PROTOCOL_VERSION } = mcp;
+
+const { encodeJson, headersOf, listen, readMessage } = testing;
 
 const startServer = Effect.fn("startServer")(function* (handler: httpFixtureTypes.FixtureHandler) {
   const requests: httpFixtureTypes.RecordedRequest[] = [];

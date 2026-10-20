@@ -1,4 +1,4 @@
-import { visibleWidth } from "@msa/tui";
+import tui from "@msa/tui";
 import { beforeAll, describe, expect, it } from "vite-plus/test";
 
 import type { AgentSession } from "../src/core/agent-session.ts";
@@ -6,6 +6,8 @@ import type { ReadonlyFooterDataProvider } from "../src/core/footer-data-provide
 import { FooterComponent } from "../src/modes/interactive/components/footer.ts";
 import { initTheme } from "../src/modes/interactive/theme/theme.ts";
 import { stripAnsi } from "../src/utils/ansi.ts";
+
+const { visibleWidth } = tui;
 
 type AssistantUsage = {
   input: number;

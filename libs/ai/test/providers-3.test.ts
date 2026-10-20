@@ -1,8 +1,10 @@
 import { Effect } from "effect";
 import { describe, expect, it } from "vite-plus/test";
 
-import { createModels, createProvider } from "../src/models.ts";
+import modelsModule from "../src/models.ts";
 import providersSupport from "./providers-support.ts";
+
+const { createModels, createProvider } = modelsModule;
 
 const { context, recordingStreams, testModel } = providersSupport;
 

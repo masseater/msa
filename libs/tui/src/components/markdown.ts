@@ -1,15 +1,18 @@
 import type { Token } from "marked";
 
-import { isImageLine } from "../terminal-image-kitty.ts";
-import { applyBackgroundToLine, wrapTextWithAnsi } from "../text-wrap.ts";
-import type { Component } from "../tui-component.ts";
-import { flattenLines, visibleWidth } from "../utils.ts";
-import { MarkdownTokenRenderer } from "./markdown-token-renderer.ts";
-import { markdownParser, trimPartialClosingFences } from "./markdown-tokenizer.ts";
+import terminalImageKitty from "../terminal-image-kitty.ts";
+import textWrap from "../text-wrap.ts";
+import type tuiComponentTypes from "../tui-component.types.ts";
+import utils from "../utils.ts";
+import MarkdownTokenRenderer from "./markdown-token-renderer.ts";
+import markdownTokenizer from "./markdown-tokenizer.ts";
 
-export type { DefaultTextStyle, MarkdownOptions, MarkdownTheme } from "./markdown-theme.ts";
+const { flattenLines, visibleWidth } = utils;
+const { markdownParser, trimPartialClosingFences } = markdownTokenizer;
+const { isImageLine } = terminalImageKitty;
+const { applyBackgroundToLine, wrapTextWithAnsi } = textWrap;
 
-export class Markdown extends MarkdownTokenRenderer implements Component {
+export default class Markdown extends MarkdownTokenRenderer implements tuiComponentTypes.Component {
   render(width: number): string[] {
     if (
       this.cachedLines !== undefined &&

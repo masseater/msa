@@ -1,5 +1,5 @@
 import type chordTypes from "@msa/chord/index.types";
-import type { CodemodeOutcome, CodemodeSandboxBase } from "@msa/codemode/portable";
+import type portableTypes from "@msa/codemode/portable.types";
 
 import type typesModule from "../harness/types.types.ts";
 import type describeTypes from "./describe.types.ts";
@@ -16,7 +16,7 @@ declare namespace runDocsTypes {
   };
 
   type CodemodeToolOptions = {
-    readonly sandbox: CodemodeSandboxBase;
+    readonly sandbox: portableTypes.CodemodeSandboxBase;
     readonly namespaces?: readonly describeTypes.CodemodeNamespace[];
     readonly inlineBudget?: number;
     readonly models?: boolean;
@@ -54,7 +54,7 @@ declare namespace runDocsTypes {
   type Settled = {
     readonly id: number;
     readonly at: number;
-    readonly outcome: CodemodeOutcome;
+    readonly outcome: portableTypes.CodemodeOutcome;
     readonly global?: JournalEntry["global"];
   };
 }

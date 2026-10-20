@@ -1,9 +1,12 @@
-import { type AnyModel, type Api, type ImagesOptions, type Model, createProvider } from "@msa/ai";
+import ai from "@msa/ai";
+import type aiTypes from "@msa/ai/index.types";
 import testing from "@msa/testing";
 import { Effect } from "effect";
 import { afterEach, describe, expect, it } from "vite-plus/test";
 
 import modelRuntimeImagesSupport from "./model-runtime-images-support.ts";
+
+const { createProvider } = ai;
 
 const { context, createRuntime, models, removeRuntimeDirs } = modelRuntimeImagesSupport;
 
@@ -21,7 +24,8 @@ const generatesImagesThroughANativeProviderWithPart1 = () =>
     const effectRunPromise = Effect.runPromiseWith(yield* Effect.context<never>());
 
     const runtime = yield* createRuntime();
-    const calls: Array<{ model: AnyModel; options: ImagesOptions | undefined }> = [];
+    const calls: Array<{ model: aiTypes.AnyModel; options: aiTypes.ImagesOptions | undefined }> =
+      [];
     runtime.registerNativeProvider(
       createProvider({
         auth: {
@@ -110,7 +114,7 @@ const rejectsImageModelsAtEveryChatEntry = Effect.gen(function* () {
   );
   yield* awaited(runtime.setRuntimeApiKey("hybrid", "sk-hybrid"));
   const image = runtime.getModelOfType("image", "hybrid", "shared")!;
-  const chat = image as unknown as Model<Api>;
+  const chat = image as unknown as aiTypes.Model<aiTypes.Api>;
   const chatContext = { messages: [] };
   const handle = { api: image.api, id: "response-1", modelId: image.id, provider: "hybrid" };
 

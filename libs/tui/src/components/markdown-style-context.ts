@@ -1,23 +1,22 @@
 import type { Token, Tokens } from "marked";
 
-import { renderLatex } from "../latex.ts";
-import { getCapabilities } from "../terminal-capabilities.ts";
-import { hyperlink } from "../terminal-image.ts";
-import type {
-  DefaultTextStyle,
-  InlineStyleContext,
-  MarkdownOptions,
-  MarkdownTheme,
-} from "./markdown-theme.ts";
-import type { LatexToken } from "./markdown-tokenizer.ts";
+import latex from "../latex.ts";
+import terminalCapabilities from "../terminal-capabilities.ts";
+import terminalImage from "../terminal-image.ts";
+import type markdownThemeTypes from "./markdown-theme.ts";
+import type markdownTokenizerTypes from "./markdown-tokenizer.types.ts";
 
-export class MarkdownStyleContext {
+const { renderLatex } = latex;
+const { getCapabilities } = terminalCapabilities;
+const { hyperlink } = terminalImage;
+
+export default class MarkdownStyleContext {
   protected text: string;
   protected paddingX: number;
   protected paddingY: number;
-  protected defaultTextStyle?: DefaultTextStyle | undefined;
-  protected theme: MarkdownTheme;
-  protected options: MarkdownOptions;
+  protected defaultTextStyle?: markdownThemeTypes.DefaultTextStyle | undefined;
+  protected theme: markdownThemeTypes.MarkdownTheme;
+  protected options: markdownThemeTypes.MarkdownOptions;
   protected defaultStylePrefix?: string;
 
   protected cachedText?: string | undefined;
@@ -29,9 +28,9 @@ export class MarkdownStyleContext {
     text: string,
     paddingX: number,
     paddingY: number,
-    theme: MarkdownTheme,
-    defaultTextStyle?: DefaultTextStyle,
-    options?: MarkdownOptions,
+    theme: markdownThemeTypes.MarkdownTheme,
+    defaultTextStyle?: markdownThemeTypes.DefaultTextStyle,
+    options?: markdownThemeTypes.MarkdownOptions,
   ) {
     this.text = text;
     this.paddingX = paddingX;
@@ -120,7 +119,7 @@ export class MarkdownStyleContext {
     return sentinelIndex >= 0 ? styled.slice(0, sentinelIndex) : "";
   }
 
-  protected getDefaultInlineStyleContext(): InlineStyleContext {
+  protected getDefaultInlineStyleContext(): markdownThemeTypes.InlineStyleContext {
     return {
       applyText: (text: string) => this.applyDefaultStyle(text),
       stylePrefix: this.getDefaultStylePrefix(),
@@ -134,14 +133,20 @@ export class MarkdownStyleContext {
     return lines;
   }
 
-  protected applyWithNewlines(context: InlineStyleContext, text: string): string {
+  protected applyWithNewlines(
+    context: markdownThemeTypes.InlineStyleContext,
+    text: string,
+  ): string {
     return text
       .split("\n")
       .map((segment: string) => context.applyText(segment))
       .join("\n");
   }
 
-  protected renderInlineLatex(token: LatexToken, context: InlineStyleContext): string {
+  protected renderInlineLatex(
+    token: markdownTokenizerTypes.LatexToken,
+    context: markdownThemeTypes.InlineStyleContext,
+  ): string {
     const rendered =
       token.pending !== true && this.options.renderLatex !== false
         ? (renderLatex(token.text) ?? token.raw)
@@ -151,7 +156,7 @@ export class MarkdownStyleContext {
 
   protected renderInlineLink(
     token: Tokens.Link | Tokens.Generic,
-    context: InlineStyleContext,
+    context: markdownThemeTypes.InlineStyleContext,
   ): string {
     const linkText = this.renderInlineTokens(token.tokens || [], context);
     const styledLink = this.theme.link(this.theme.underline(linkText));
@@ -166,11 +171,14 @@ export class MarkdownStyleContext {
     return styledLink + this.theme.linkUrl(` (${token.href})`) + context.stylePrefix;
   }
 
-  protected renderInlineToken(token: Token, context: InlineStyleContext): string {
+  protected renderInlineToken(
+    token: Token,
+    context: markdownThemeTypes.InlineStyleContext,
+  ): string {
     const { stylePrefix } = context;
     switch (token.type) {
       case "latex":
-        return this.renderInlineLatex(token as LatexToken, context);
+        return this.renderInlineLatex(token as markdownTokenizerTypes.LatexToken, context);
       case "escape":
         return this.applyWithNewlines(
           context,
@@ -210,7 +218,10 @@ export class MarkdownStyleContext {
     }
   }
 
-  protected renderInlineTokens(tokens: Token[], styleContext?: InlineStyleContext): string {
+  protected renderInlineTokens(
+    tokens: Token[],
+    styleContext?: markdownThemeTypes.InlineStyleContext,
+  ): string {
     const context = styleContext ?? this.getDefaultInlineStyleContext();
     let result = "";
     for (const token of tokens) {

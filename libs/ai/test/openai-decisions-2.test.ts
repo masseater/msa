@@ -1,10 +1,12 @@
 import { Effect } from "effect";
 import { describe, expect, it, vi } from "vite-plus/test";
 
-import { classify } from "../src/api/openai-decisions.ts";
-import type { ClassifierContext } from "../src/types.ts";
+import openaiDecisions from "../src/api/openai-decisions.ts";
+import type typesModule from "../src/types.types.ts";
 import jsonCodec from "./json-codec.ts";
 import openaiDecisionsSupport from "./openai-decisions-support.ts";
+
+const { classify } = openaiDecisions;
 
 const { context, image, model, wireAnswers, wireUsage } = openaiDecisionsSupport;
 
@@ -86,10 +88,10 @@ const returnsMissingAndMistypedAnswersAs = () =>
 const preservesPrototypeSensitiveQuestionIDsIn = () =>
   Effect.runPromise(
     Effect.gen(function* () {
-      const prototypeContext: ClassifierContext = {
+      const prototypeContext: typesModule.ClassifierContext = {
         questions: (yield* decodeJson(
           '{"__proto__":{"type":"bool","instructions":"Is this true?","criteria":{"true":"Yes","false":"No"}}}',
-        )) as ClassifierContext["questions"],
+        )) as typesModule.ClassifierContext["questions"],
         state: {},
       };
       const result = yield* Effect.promise(() =>

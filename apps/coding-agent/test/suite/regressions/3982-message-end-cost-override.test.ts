@@ -1,10 +1,12 @@
-import { fauxAssistantMessage } from "@msa/ai";
+import ai from "@msa/ai";
 import { Effect } from "effect";
 import { afterEach, describe, expect, it } from "vite-plus/test";
 
-import type { AssistantMessage } from "../../../../../libs/ai/src/message-types.ts";
+import type messageTypesModule from "../../../../../libs/ai/src/message-types.types.ts";
 import harnessModule from "../harness.ts";
 import type harnessTypes from "../harness.types.ts";
+
+const { fauxAssistantMessage } = ai;
 
 const { createHarness } = harnessModule;
 
@@ -44,7 +46,7 @@ const allowsExtensionsToReplaceFinalizedAssistant = Effect.gen(function* () {
 
 const allowsExtensionsToReplaceFinalizedAssistantStep1 = (
   harness: harnessTypes.Harness,
-  assistantMessage: AssistantMessage | undefined,
+  assistantMessage: messageTypesModule.AssistantMessage | undefined,
 ) =>
   Effect.sync(() => {
     expect(assistantMessage?.role).toBe("assistant");

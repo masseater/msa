@@ -1,6 +1,6 @@
-import type { Component } from "../tui-component.ts";
+import type tuiComponentTypes from "../tui-component.types.ts";
 
-export class Spacer implements Component {
+export default class Spacer implements tuiComponentTypes.Component {
   private lines: number;
 
   constructor(lines: number = 1) {

@@ -1,5 +1,8 @@
-import { Key, type KeyId } from "@msa/tui";
+import tui from "@msa/tui";
+import type tuiTypes from "@msa/tui/index.types";
 import { type TSchemaOptions, Type } from "typebox";
+
+const { Key } = tui;
 
 const modifiers = ["ctrl", "shift", "alt", "super"] as const;
 const baseKeyPattern = `(?:[a-z0-9]|${Object.values(Key)
@@ -11,10 +14,10 @@ const duplicateModifierPattern = modifiers
   .map((modifier) => `${modifier}\\+.*${modifier}\\+`)
   .join("|");
 
-export const KeyIdSchema = Type.Unsafe<KeyId>(
+export const KeyIdSchema = Type.Unsafe<tuiTypes.KeyId>(
   Type.String({
-    pattern: `^(?!.*(?:${duplicateModifierPattern}))(?:(?:${modifiers.join("|")})\\+){0,4}${baseKeyPattern}$`,
     description: "Key identifier with optional ctrl, shift, alt, or super modifiers.",
+    pattern: `^(?!.*(?:${duplicateModifierPattern}))(?:(?:${modifiers.join("|")})\\+){0,4}${baseKeyPattern}$`,
   }),
 );
 

@@ -26,13 +26,25 @@
       "types": "./dist/index.d.ts",
       "import": "./dist/index.js"
     },
+    "./index.types": {
+      "types": "./dist/index.types.d.ts",
+      "import": "./dist/index.types.js"
+    },
     "./otlp": {
       "types": "./dist/otlp.d.ts",
       "import": "./dist/otlp.js"
     },
+    "./otlp.types": {
+      "types": "./dist/otlp.types.d.ts",
+      "import": "./dist/otlp.types.js"
+    },
     "./testing": {
       "types": "./dist/testing/index.d.ts",
       "import": "./dist/testing/index.js"
+    },
+    "./testing.types": {
+      "types": "./dist/testing/index.types.d.ts",
+      "import": "./dist/testing/index.types.js"
     }
   },
   "scripts": {

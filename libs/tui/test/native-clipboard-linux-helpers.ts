@@ -4,10 +4,12 @@ import { fileURLToPath } from "node:url";
 import { Effect } from "effect";
 import { dual } from "effect/Function";
 
-import { pathOperations } from "../src/platform.ts";
+import platformModule from "../src/platform.ts";
 import type nativeClipboardLinuxHelpersTypes from "./native-clipboard-linux-helpers.types.ts";
 import testPlatform from "./test-platform.ts";
 import type testPlatformTypes from "./test-platform.types.ts";
+
+const { pathOperations } = platformModule;
 
 const { makeTempDirectory, removeRecursive, runCommand, runCommandChecked, startProcess } =
   testPlatform;

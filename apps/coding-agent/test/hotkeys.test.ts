@@ -1,10 +1,12 @@
-import { setKeybindings } from "@msa/tui";
+import tui from "@msa/tui";
 import { beforeEach, describe, expect, it } from "vite-plus/test";
 
 import type { ExtensionShortcut } from "../src/core/extensions/index.ts";
 import { KeybindingsManager } from "../src/core/keybindings.ts";
 import { keyDisplayText } from "../src/modes/interactive/components/keybinding-hints.ts";
 import { formatHotkeysMarkdown } from "../src/modes/interactive/hotkeys.ts";
+
+const { setKeybindings } = tui;
 
 const documentsTheActiveKeybindingsAndTypedPrefixes = () => {
   const markdown = formatHotkeysMarkdown(new Map());

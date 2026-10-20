@@ -2,20 +2,19 @@ import assert from "node:assert";
 import { homedir } from "node:os";
 import { afterEach, beforeEach, describe, it } from "node:test";
 
-import { stripHyperlinkSequences } from "../src/ansi-sequences.ts";
-import { Image } from "../src/components/image.ts";
-import { pathOperations } from "../src/platform.ts";
-import {
-  resetCapabilitiesCache,
-  setCapabilities,
-  setCellDimensions,
-} from "../src/terminal-capabilities.ts";
-import {
-  cropKittyImageLine,
-  getKittyImageMetadata,
-  getKittyImagePlacement,
-} from "../src/terminal-image-kitty.ts";
-import { imageFallback, renderImage } from "../src/terminal-image.ts";
+import ansiSequences from "../src/ansi-sequences.ts";
+import imageModule from "../src/components/image.ts";
+import platform from "../src/platform.ts";
+import terminalCapabilities from "../src/terminal-capabilities.ts";
+import terminalImageKitty from "../src/terminal-image-kitty.ts";
+import terminalImage from "../src/terminal-image.ts";
+
+const { pathOperations } = platform;
+const { resetCapabilitiesCache, setCapabilities, setCellDimensions } = terminalCapabilities;
+const { Image } = imageModule;
+const { cropKittyImageLine, getKittyImageMetadata, getKittyImagePlacement } = terminalImageKitty;
+const { imageFallback, renderImage } = terminalImage;
+const { stripHyperlinkSequences } = ansiSequences;
 
 const { join } = pathOperations;
 

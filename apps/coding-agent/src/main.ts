@@ -1,7 +1,8 @@
 import { createInterface } from "node:readline";
 
-import { type ImageContent, modelsAreEqual } from "@msa/ai";
-import { primeTerminalCapabilities, setCapabilityOverrides } from "@msa/tui";
+import ai from "@msa/ai";
+import type aiTypes from "@msa/ai/index.types";
+import tui from "@msa/tui";
 import chalk from "chalk";
 import { Effect } from "effect";
 import { dual } from "effect/Function";
@@ -37,10 +38,10 @@ import {
 import {
   APP_NAME,
   ENV_SESSION_DIR,
+  VERSION,
   expandTildePath,
   getAgentDir,
   getPackageDir,
-  VERSION,
 } from "./config.ts";
 import {
   type CreateAgentSessionRuntimeFactory,
@@ -57,7 +58,7 @@ import { awaited, awaiting, performed } from "./core/awaiting.ts";
 import { exportFromFile } from "./core/export-html/index.ts";
 import type { InlineExtension } from "./core/extensions/types.ts";
 import { applyHttpProxySettings, configureHttpDispatcher } from "./core/http-dispatcher.ts";
-import { resolveCliModel, resolveModelScope, type ScopedModel } from "./core/model-resolver.ts";
+import { type ScopedModel, resolveCliModel, resolveModelScope } from "./core/model-resolver.ts";
 import { ModelRuntime } from "./core/model-runtime.ts";
 import { describeTelemetry, startTelemetry } from "./core/observability/telemetry.ts";
 import { restoreStdout, takeOverStdout } from "./core/output-guard.ts";
@@ -66,16 +67,16 @@ import { readEnv, writeEnv } from "./core/process-env.ts";
 import { type AppMode, resolveProjectTrusted } from "./core/project-trust.ts";
 import type { CreateAgentSessionOptions } from "./core/sdk.ts";
 import {
-  formatMissingSessionCwdPrompt,
-  getMissingSessionCwdIssue,
   MissingSessionCwdError,
   type SessionCwdIssue,
+  formatMissingSessionCwdPrompt,
+  getMissingSessionCwdIssue,
 } from "./core/session-cwd.ts";
-import { assertValidSessionId, SessionManager } from "./core/session-manager.ts";
+import { SessionManager, assertValidSessionId } from "./core/session-manager.ts";
 import { collectSettingsDiagnostics, deduplicateDiagnostics } from "./core/settings-diagnostics.ts";
 import { SettingsManager } from "./core/settings-manager.ts";
 import { printTimings, resetTimings, time } from "./core/timings.ts";
-import { hasTrustRequiringProjectResources, ProjectTrustStore } from "./core/trust-manager.ts";
+import { ProjectTrustStore, hasTrustRequiringProjectResources } from "./core/trust-manager.ts";
 import { builtInExtensions } from "./extensions/index.ts";
 import { loadMcpCommand } from "./extensions/mcp/cli.lazy.ts";
 import { runMigrations, showDeprecationWarnings } from "./migrations.ts";
@@ -91,6 +92,10 @@ import { toErrorMessage } from "./utils/errors.ts";
 import { callbackPromise } from "./utils/interop.ts";
 import { isLocalPath, normalizePath, resolvePath } from "./utils/paths.ts";
 import { cleanupWindowsSelfUpdateQuarantine } from "./utils/windows-self-update.ts";
+
+const { modelsAreEqual } = ai;
+
+const { primeTerminalCapabilities, setCapabilityOverrides } = tui;
 
 const EXTENSION_LOAD_FAILURE_HINT = `Hint: Start without extensions using "${APP_NAME} -ne".`;
 
@@ -235,17 +240,17 @@ function runAuthCommand(args: string[]): Promise<boolean> {
             );
             if (credential === undefined || credential === "") {
               result = {
-                status: "not_ready",
                 provider: result.provider,
                 reason: "credential_not_available",
+                status: "not_ready",
               };
             }
           }
         } catch {
           result = {
-            status: "invalid",
             provider: requestedAuth.provider ?? requestedAuth.model!,
             reason: "invalid_state",
+            status: "invalid",
           };
         }
         const output = command.json
@@ -272,7 +277,7 @@ function prepareInitialMessage(
   stdinContent?: string,
 ): Promise<{
   initialMessage?: string | undefined;
-  initialImages?: ImageContent[] | undefined;
+  initialImages?: aiTypes.ImageContent[] | undefined;
 }> {
   return Effect.runPromise(
     awaiting(function* () {
@@ -284,9 +289,9 @@ function prepareInitialMessage(
         processFileArguments(parsed.fileArgs, { autoResizeImages: false }),
       );
       return buildInitialMessage({
-        parsed,
-        fileText: text,
         fileImages: images,
+        fileText: text,
+        parsed,
         stdinContent,
       });
     }),
@@ -305,7 +310,7 @@ function findLocalSessionByExactId(
   sessionDir?: string,
 ): { type: "local"; path: string } | undefined {
   const path = SessionManager.findById(cwd, sessionId, sessionDir);
-  return path !== undefined && path !== "" ? { type: "local", path } : undefined;
+  return path !== undefined && path !== "" ? { path, type: "local" } : undefined;
 }
 
 function resolveSessionPath(
@@ -316,7 +321,7 @@ function resolveSessionPath(
   return Effect.runPromise(
     awaiting(function* () {
       if (sessionArg.includes("/") || sessionArg.includes("\\") || sessionArg.endsWith(".jsonl")) {
-        return { type: "path", path: resolvePath(sessionArg, cwd) };
+        return { path: resolvePath(sessionArg, cwd), type: "path" };
       }
 
       const exactLocalMatch = findLocalSessionByExactId(sessionArg, cwd, sessionDir);
@@ -328,7 +333,7 @@ function resolveSessionPath(
       const localMatch = localSessions.find((s) => s.id.startsWith(sessionArg));
 
       if (localMatch !== undefined) {
-        return { type: "local", path: localMatch.path };
+        return { path: localMatch.path, type: "local" };
       }
 
       const allSessions = yield* awaited(SessionManager.listAll(sessionDir));
@@ -337,10 +342,10 @@ function resolveSessionPath(
         allSessions.find((s) => s.id.startsWith(sessionArg));
 
       if (globalMatch !== undefined) {
-        return { type: "global", path: globalMatch.path, cwd: globalMatch.cwd };
+        return { cwd: globalMatch.cwd, path: globalMatch.path, type: "global" };
       }
 
-      return { type: "not_found", arg: sessionArg };
+      return { arg: sessionArg, type: "not_found" };
     }),
   );
 }
@@ -569,23 +574,23 @@ function buildSessionOptions(
     (parsed.model === undefined || parsed.model === "")
   ) {
     diagnostics.push({
-      type: "error",
       message: `--provider requires --model (for example: --provider ${parsed.provider} --model <pattern>)`,
+      type: "error",
     });
   }
   if (parsed.model !== undefined && parsed.model !== "") {
     const resolved = resolveCliModel({
-      cliProvider: parsed.provider,
       cliModel: parsed.model,
+      cliProvider: parsed.provider,
       cliThinking: parsed.thinking,
       inlineApiKey: Boolean(parsed.apiKey),
       modelRuntime,
     });
     if (resolved.warning !== undefined && resolved.warning !== "") {
-      diagnostics.push({ type: "warning", message: resolved.warning });
+      diagnostics.push({ message: resolved.warning, type: "warning" });
     }
     if (resolved.error !== undefined && resolved.error !== "") {
-      diagnostics.push({ type: "error", message: resolved.error });
+      diagnostics.push({ message: resolved.error, type: "error" });
     }
     if (resolved.model !== undefined) {
       options.model = resolved.model;
@@ -651,7 +656,7 @@ function buildSessionOptions(
     options.excludeTools = [...parsed.excludeTools];
   }
 
-  return { options, cliThinkingFromModel, diagnostics };
+  return { cliThinkingFromModel, diagnostics, options };
 }
 
 function resolveCliPaths(cwd: string, paths: string[] | undefined): string[] | undefined {
@@ -721,7 +726,7 @@ function mainImpl(args: string[], options?: MainOptions): Promise<undefined> {
 
       if (args[0] === "mcp") {
         const { runMcpCommand } = yield* awaited(loadMcpCommand());
-        process.exitCode = yield* awaited(runMcpCommand(args.slice(1), { cwd, agentDir }));
+        process.exitCode = yield* awaited(runMcpCommand(args.slice(1), { agentDir, cwd }));
         return;
       }
 
@@ -797,8 +802,8 @@ function mainImpl(args: string[], options?: MainOptions): Promise<undefined> {
           : yield* awaited(
               startTelemetry({
                 envEndpoint: readEnv("MSA_OTLP_ENDPOINT"),
-                settingsEndpoint: startupSettingsManager.getOtlpEndpoint(),
                 path: readEnv("PATH"),
+                settingsEndpoint: startupSettingsManager.getOtlpEndpoint(),
                 version: VERSION,
               }),
             );
@@ -886,11 +891,25 @@ function mainImpl(args: string[], options?: MainOptions): Promise<undefined> {
             });
             const services = yield* awaited(
               createAgentSessionServices({
-                cwd: runtimeCwd,
                 agentDir: runtimeAgentDir,
-                settingsManager: runtimeSettingsManager,
-                modelRuntimeSignal: AbortSignal.timeout(15_000),
+                cwd: runtimeCwd,
                 extensionFlagValues: parsed.unknownFlags,
+                modelRuntimeSignal: AbortSignal.timeout(15_000),
+                resourceLoaderOptions: {
+                  additionalExtensionPaths: resolvedExtensionPaths,
+                  additionalPromptTemplatePaths: resolvedPromptTemplatePaths,
+                  additionalSkillPaths: resolvedSkillPaths,
+                  additionalThemePaths: resolvedThemePaths,
+                  appendSystemPrompt: parsed.appendSystemPrompt,
+                  disabledBuiltinExtensions: parsed.noMcp === true ? ["mcp"] : undefined,
+                  extensionFactories,
+                  noContextFiles: parsed.noContextFiles,
+                  noExtensions: parsed.noExtensions,
+                  noPromptTemplates: parsed.noPromptTemplates,
+                  noSkills: parsed.noSkills,
+                  noThemes: parsed.noThemes,
+                  systemPrompt: parsed.systemPrompt,
+                },
                 resourceLoaderReloadOptions: shouldResolveProjectTrust
                   ? {
                       resolveProjectTrust: ({ extensionsResult }) =>
@@ -922,21 +941,7 @@ function mainImpl(args: string[], options?: MainOptions): Promise<undefined> {
                         ),
                     }
                   : undefined,
-                resourceLoaderOptions: {
-                  additionalExtensionPaths: resolvedExtensionPaths,
-                  additionalSkillPaths: resolvedSkillPaths,
-                  additionalPromptTemplatePaths: resolvedPromptTemplatePaths,
-                  additionalThemePaths: resolvedThemePaths,
-                  noExtensions: parsed.noExtensions,
-                  disabledBuiltinExtensions: parsed.noMcp === true ? ["mcp"] : undefined,
-                  noSkills: parsed.noSkills,
-                  noPromptTemplates: parsed.noPromptTemplates,
-                  noThemes: parsed.noThemes,
-                  noContextFiles: parsed.noContextFiles,
-                  systemPrompt: parsed.systemPrompt,
-                  appendSystemPrompt: parsed.appendSystemPrompt,
-                  extensionFactories,
-                },
+                settingsManager: runtimeSettingsManager,
               }),
             );
             const { settingsManager, modelRuntime, resourceLoader } = services;
@@ -945,12 +950,12 @@ function mainImpl(args: string[], options?: MainOptions): Promise<undefined> {
               ...services.diagnostics,
               ...collectSettingsDiagnostics(settingsManager),
               ...resourceLoader.getExtensions().errors.map(({ path, error }) => ({
-                type: "error" as const,
                 message: `Failed to load extension "${path}": ${error}`,
+                type: "error" as const,
               })),
               ...(resourceLoader.getExtensions().warnings ?? []).map(({ path, warning }) => ({
-                type: "warning" as const,
                 message: `Extension package "${path}": ${warning}`,
+                type: "warning" as const,
               })),
             ];
 
@@ -979,9 +984,9 @@ function mainImpl(args: string[], options?: MainOptions): Promise<undefined> {
             if (parsed.apiKey !== undefined && parsed.apiKey !== "") {
               if (sessionOptions.model === undefined) {
                 diagnostics.push({
-                  type: "error",
                   message:
                     "--api-key requires a model to be specified via --model, --provider/--model, or --models",
+                  type: "error",
                 });
               } else {
                 yield* awaited(
@@ -992,20 +997,20 @@ function mainImpl(args: string[], options?: MainOptions): Promise<undefined> {
 
             const created = yield* awaited(
               createAgentSessionFromServices({
+                customTools: sessionOptions.customTools,
+                excludeTools: sessionOptions.excludeTools,
+                model: sessionOptions.model,
+                noTools: sessionOptions.noTools,
+                scopedModels: sessionOptions.scopedModels,
                 services,
                 sessionManager: runtimeSessionManager,
                 sessionStartEvent,
-                model: sessionOptions.model,
-                thinkingLevel: sessionOptions.thinkingLevel,
-                scopedModels: sessionOptions.scopedModels,
-                tools: sessionOptions.tools,
-                excludeTools: sessionOptions.excludeTools,
-                noTools: sessionOptions.noTools,
-                customTools: sessionOptions.customTools,
                 telemetry:
                   telemetry === undefined
                     ? undefined
                     : { context: telemetry.context, role: "main" },
+                thinkingLevel: sessionOptions.thinkingLevel,
+                tools: sessionOptions.tools,
               }),
             );
             const cliThinkingOverride = parsed.thinking !== undefined || cliThinkingFromModel;
@@ -1015,16 +1020,16 @@ function mainImpl(args: string[], options?: MainOptions): Promise<undefined> {
 
             return {
               ...created,
-              services,
               diagnostics,
+              services,
             };
           }),
         );
       time("createRuntime");
       const runtime = yield* awaited(
         createAgentSessionRuntime(createRuntime, {
-          cwd: sessionManager.getCwd(),
           agentDir,
+          cwd: sessionManager.getCwd(),
           sessionManager,
           ...(telemetry === undefined ? {} : { telemetry }),
         }),
@@ -1079,7 +1084,7 @@ function mainImpl(args: string[], options?: MainOptions): Promise<undefined> {
         ...runtime.diagnostics,
         ...(telemetry === undefined
           ? []
-          : [{ type: "info" as const, message: describeTelemetry(telemetry.status()) }]),
+          : [{ message: describeTelemetry(telemetry.status()), type: "info" as const }]),
       ]);
       const hasRuntimeErrors = runtime.diagnostics.some(
         (diagnostic) => diagnostic.type === "error",
@@ -1119,16 +1124,16 @@ function mainImpl(args: string[], options?: MainOptions): Promise<undefined> {
         yield* awaited(runRpcMode(runtime));
       } else if (appMode === "interactive") {
         const interactiveMode = new InteractiveMode(runtime, {
-          migratedProviders,
-          startupDiagnostics,
-          modelFallbackMessage,
           autoTrustOnReloadCwd,
-          initialMessage,
           initialImages,
+          initialMessage,
           initialMessages: parsed.messages,
-          verbose: parsed.verbose,
-          tuiMode: parsed.tuiMode,
           initialThemeSetting: parsed.useTheme,
+          migratedProviders,
+          modelFallbackMessage,
+          startupDiagnostics,
+          tuiMode: parsed.tuiMode,
+          verbose: parsed.verbose,
         });
         if (startupBenchmark) {
           yield* awaited(interactiveMode.init());
@@ -1157,10 +1162,10 @@ function mainImpl(args: string[], options?: MainOptions): Promise<undefined> {
         printTimings();
         const exitCode = yield* awaited(
           runPrintMode(runtime, {
-            mode: toPrintOutputMode(appMode),
-            messages: parsed.messages,
-            initialMessage,
             initialImages,
+            initialMessage,
+            messages: parsed.messages,
+            mode: toPrintOutputMode(appMode),
           }),
         );
         stopThemeWatcher();

@@ -1,45 +1,13 @@
 import { dual } from "effect/Function";
-export type OverlayAnchor =
-  | "center"
-  | "top-left"
-  | "top-right"
-  | "bottom-left"
-  | "bottom-right"
-  | "top-center"
-  | "bottom-center"
-  | "left-center"
-  | "right-center";
 
-export interface OverlayMargin {
-  top?: number;
-  right?: number;
-  bottom?: number;
-  left?: number;
-}
-
-export type SizeValue = number | `${number}%`;
-
-export interface OverlayOptions {
-  width?: SizeValue;
-  minWidth?: number;
-  maxHeight?: SizeValue;
-
-  anchor?: OverlayAnchor;
-  offsetX?: number;
-  offsetY?: number;
-
-  row?: SizeValue;
-  col?: SizeValue;
-
-  margin?: OverlayMargin | number;
-
-  visible?: (termWidth: number, termHeight: number) => boolean;
-  nonCapturing?: boolean;
-}
+import type tuiOverlayLayoutTypes from "./tui-overlay-layout.types.ts";
 
 const PERCENT_PATTERN = /^(\d+(?:\.\d+)?)%$/u;
 
-function parseSizeValue(value: SizeValue | undefined, referenceSize: number): number | undefined {
+function parseSizeValue(
+  value: tuiOverlayLayoutTypes.SizeValue | undefined,
+  referenceSize: number,
+): number | undefined {
   if (value === undefined) return undefined;
   if (typeof value === "number") return value;
   const percent = value.match(PERCENT_PATTERN)?.[1];
@@ -50,7 +18,7 @@ function parseSizeValue(value: SizeValue | undefined, referenceSize: number): nu
 }
 
 function resolveAnchorRow(
-  anchor: OverlayAnchor,
+  anchor: tuiOverlayLayoutTypes.OverlayAnchor,
   height: number,
   availHeight: number,
   marginTop: number,
@@ -72,7 +40,7 @@ function resolveAnchorRow(
 }
 
 function resolveAnchorCol(
-  anchor: OverlayAnchor,
+  anchor: tuiOverlayLayoutTypes.OverlayAnchor,
   width: number,
   availWidth: number,
   marginLeft: number,
@@ -100,21 +68,21 @@ interface ResolvedMargin {
   left: number;
 }
 
-function resolveMargin(margin: OverlayOptions["margin"]): ResolvedMargin {
+function resolveMargin(margin: tuiOverlayLayoutTypes.OverlayOptions["margin"]): ResolvedMargin {
   const sides =
     typeof margin === "number"
-      ? { top: margin, right: margin, bottom: margin, left: margin }
+      ? { bottom: margin, left: margin, right: margin, top: margin }
       : (margin ?? {});
   return {
-    top: Math.max(0, sides.top ?? 0),
-    right: Math.max(0, sides.right ?? 0),
     bottom: Math.max(0, sides.bottom ?? 0),
     left: Math.max(0, sides.left ?? 0),
+    right: Math.max(0, sides.right ?? 0),
+    top: Math.max(0, sides.top ?? 0),
   };
 }
 
 function resolveRow(
-  opt: OverlayOptions,
+  opt: tuiOverlayLayoutTypes.OverlayOptions,
   effectiveHeight: number,
   availHeight: number,
   marginTop: number,
@@ -133,7 +101,7 @@ function resolveRow(
 }
 
 function resolveCol(
-  opt: OverlayOptions,
+  opt: tuiOverlayLayoutTypes.OverlayOptions,
   width: number,
   availWidth: number,
   marginLeft: number,
@@ -151,9 +119,9 @@ function resolveCol(
   return marginLeft + Math.floor(maxCol * percent);
 }
 
-export const resolveOverlayLayout: {
+const resolveOverlayLayout: {
   (
-    options: OverlayOptions | undefined,
+    options: tuiOverlayLayoutTypes.OverlayOptions | undefined,
     overlayHeight: number,
     termWidth: number,
     termHeight: number,
@@ -162,7 +130,7 @@ export const resolveOverlayLayout: {
     overlayHeight: number,
     termWidth: number,
     termHeight: number,
-  ): (options: OverlayOptions | undefined) => {
+  ): (options: tuiOverlayLayoutTypes.OverlayOptions | undefined) => {
     width: number;
     row: number;
     col: number;
@@ -171,7 +139,7 @@ export const resolveOverlayLayout: {
 } = dual(
   4,
   (
-    options: OverlayOptions | undefined,
+    options: tuiOverlayLayoutTypes.OverlayOptions | undefined,
     overlayHeight: number,
     termWidth: number,
     termHeight: number,
@@ -205,6 +173,12 @@ export const resolveOverlayLayout: {
     row = Math.max(margin.top, Math.min(row, termHeight - margin.bottom - effectiveHeight));
     col = Math.max(margin.left, Math.min(col, termWidth - margin.right - width));
 
-    return { width, row, col, maxHeight };
+    return { col, maxHeight, row, width };
   },
 );
+
+const tuiOverlayLayout = {
+  resolveOverlayLayout,
+};
+
+export default tuiOverlayLayout;

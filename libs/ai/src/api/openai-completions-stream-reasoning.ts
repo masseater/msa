@@ -1,13 +1,9 @@
-import type { ThinkingContent } from "../types.ts";
-import type { OpenAIReasoningDetail } from "./openai-completions-types.ts";
-
-interface StreamedReasoningState {
-  streamedReasoningDetails: OpenAIReasoningDetail[] | undefined;
-}
+import type typesModule from "../types.types.ts";
+import type openaiCompletionsStreamReasoningTypes from "./openai-completions-stream-reasoning.types.ts";
 
 function applyStreamedReasoningDetails(input: {
-  state: StreamedReasoningState;
-  block: ThinkingContent;
+  state: openaiCompletionsStreamReasoningTypes.StreamedReasoningState;
+  block: typesModule.ThinkingContent;
 }): void {
   const { state, block } = input;
   if (state.streamedReasoningDetails !== undefined) {
@@ -15,4 +11,8 @@ function applyStreamedReasoningDetails(input: {
   }
 }
 
-export { applyStreamedReasoningDetails, type StreamedReasoningState };
+const openaiCompletionsStreamReasoning = {
+  applyStreamedReasoningDetails,
+};
+
+export default openaiCompletionsStreamReasoning;

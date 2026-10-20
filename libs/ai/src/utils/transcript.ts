@@ -1,58 +1,61 @@
 import { Function } from "effect";
 
-import type {
-  Context,
-  Message,
-  SystemMessage,
-  Tool,
-  ToolReference,
-  TranscriptContext,
-} from "../types.ts";
-import { contentText, getSystemMessageText } from "./text.ts";
+import type typesModule from "../types.types.ts";
+import textModule from "./text.ts";
+import type transcriptTypes from "./transcript.types.ts";
 
-export type { TranscriptContext } from "../types.ts";
+const { contentText, getSystemMessageText } = textModule;
 
-export const createInitialSystemMessage: {
-  (tools: Tool[] | undefined): (systemPrompt: string | undefined) => SystemMessage | undefined;
-  (systemPrompt: string | undefined, tools: Tool[] | undefined): SystemMessage | undefined;
-} = Function.dual(2, function (systemPrompt: string | undefined, tools: Tool[] | undefined):
-  | SystemMessage
-  | undefined {
-  const hasSystemPrompt = systemPrompt !== undefined && systemPrompt.length > 0;
-  const hasTools = tools !== undefined && tools.length > 0;
-  if (!hasSystemPrompt && !hasTools) return undefined;
-  return {
-    role: "system",
-    content: systemPrompt ?? "",
-    ...(hasTools ? { toolsAdded: tools } : {}),
-    timestamp: 0,
-  };
-});
+const createInitialSystemMessage: {
+  (
+    tools: typesModule.Tool[] | undefined,
+  ): (systemPrompt: string | undefined) => typesModule.SystemMessage | undefined;
+  (
+    systemPrompt: string | undefined,
+    tools: typesModule.Tool[] | undefined,
+  ): typesModule.SystemMessage | undefined;
+} = Function.dual(
+  2,
+  function (
+    systemPrompt: string | undefined,
+    tools: typesModule.Tool[] | undefined,
+  ): typesModule.SystemMessage | undefined {
+    const hasSystemPrompt = systemPrompt !== undefined && systemPrompt.length > 0;
+    const hasTools = tools !== undefined && tools.length > 0;
+    if (!hasSystemPrompt && !hasTools) return undefined;
+    return {
+      content: systemPrompt ?? "",
+      role: "system",
+      timestamp: 0,
+      ...(hasTools ? { toolsAdded: tools } : {}),
+    };
+  },
+);
 
-export function normalizeContext(context: Context): TranscriptContext {
+function normalizeContext(context: typesModule.Context): typesModule.TranscriptContext {
   const initialMessage = createInitialSystemMessage(context.systemPrompt, context.tools);
   const messages =
     initialMessage === undefined ? context.messages : [initialMessage, ...context.messages];
-  return { messages } as TranscriptContext;
+  return { messages } as typesModule.TranscriptContext;
 }
 
-export type TranscriptMessages = readonly { role: string }[];
-
-function isSystemMessage(message: { role: string }): message is SystemMessage {
+function isSystemMessage(message: { role: string }): message is typesModule.SystemMessage {
   return message.role === "system";
 }
 
-export function getInitialSystemMessage(messages: TranscriptMessages): SystemMessage | undefined {
+function getInitialSystemMessage(
+  messages: transcriptTypes.TranscriptMessages,
+): typesModule.SystemMessage | undefined {
   const first = messages[0];
   return first !== undefined && isSystemMessage(first) ? first : undefined;
 }
 
-export function withoutInitialSystemMessage(messages: Message[]): Message[] {
+function withoutInitialSystemMessage(messages: typesModule.Message[]): typesModule.Message[] {
   return getInitialSystemMessage(messages) === undefined ? messages : messages.slice(1);
 }
 
-export function getCurrentTools(messages: TranscriptMessages): Tool[] {
-  const tools = new Map<string, Tool>();
+function getCurrentTools(messages: transcriptTypes.TranscriptMessages): typesModule.Tool[] {
+  const tools = new Map<string, typesModule.Tool>();
   for (const message of messages) {
     if (!isSystemMessage(message)) continue;
     for (const tool of message.toolsRemoved ?? []) tools.delete(tool.name);
@@ -61,7 +64,9 @@ export function getCurrentTools(messages: TranscriptMessages): Tool[] {
   return [...tools.values()];
 }
 
-export function getCurrentSystemMessage(messages: TranscriptMessages): SystemMessage | undefined {
+function getCurrentSystemMessage(
+  messages: transcriptTypes.TranscriptMessages,
+): typesModule.SystemMessage | undefined {
   const content: string[] = [];
   const sections = new Map<string, string>();
   let timestamp: number | undefined;
@@ -78,72 +83,79 @@ export function getCurrentSystemMessage(messages: TranscriptMessages): SystemMes
   const tools = getCurrentTools(messages);
   if (timestamp === undefined && tools.length === 0) return undefined;
   return {
-    role: "system",
     content: content.join("\n\n"),
+    role: "system",
+    timestamp: timestamp ?? 0,
     ...(sections.size > 0 ? { sections: Object.fromEntries(sections) } : {}),
     ...(tools.length > 0 ? { toolsAdded: tools } : {}),
-    timestamp: timestamp ?? 0,
   };
 }
 
-export function getCurrentSystemPrompt(messages: TranscriptMessages): string {
+function getCurrentSystemPrompt(messages: transcriptTypes.TranscriptMessages): string {
   const message = getCurrentSystemMessage(messages);
   return message === undefined ? "" : getSystemMessageText(message);
 }
 
-export function collapseSystemMessages(context: TranscriptContext): TranscriptContext {
+function collapseSystemMessages(
+  context: typesModule.TranscriptContext,
+): typesModule.TranscriptContext {
   const head = getCurrentSystemMessage(context.messages);
   const messages = context.messages.filter((message) => message.role !== "system");
-  return { messages: head === undefined ? messages : [head, ...messages] } as TranscriptContext;
+  return {
+    messages: head === undefined ? messages : [head, ...messages],
+  } as typesModule.TranscriptContext;
 }
 
-export const resolveTranscript: {
+const resolveTranscript: {
   (
     supportsMidConvoSystemMessages: boolean | undefined,
-  ): (context: TranscriptContext) => TranscriptContext;
+  ): (context: typesModule.TranscriptContext) => typesModule.TranscriptContext;
   (
-    context: TranscriptContext,
+    context: typesModule.TranscriptContext,
     supportsMidConvoSystemMessages: boolean | undefined,
-  ): TranscriptContext;
+  ): typesModule.TranscriptContext;
 } = Function.dual(
   2,
   function (
-    context: TranscriptContext,
+    context: typesModule.TranscriptContext,
     supportsMidConvoSystemMessages: boolean | undefined,
-  ): TranscriptContext {
+  ): typesModule.TranscriptContext {
     return supportsMidConvoSystemMessages === true ? context : collapseSystemMessages(context);
   },
 );
 
-export function toToolDeclaration(tool: Tool): Tool {
+function toToolDeclaration(tool: typesModule.Tool): typesModule.Tool {
   return {
-    name: tool.name,
     description: tool.description,
-    parameters: JSON.parse(JSON.stringify(tool.parameters)) as Tool["parameters"],
+    name: tool.name,
+    parameters: JSON.parse(JSON.stringify(tool.parameters)) as typesModule.Tool["parameters"],
     ...(tool.constrainedSampling === undefined
       ? {}
       : { constrainedSampling: tool.constrainedSampling }),
   };
 }
 
-export const declarationsEqual: {
-  (right: Tool): (left: Tool) => boolean;
-  (left: Tool, right: Tool): boolean;
-} = Function.dual(2, function (left: Tool, right: Tool): boolean {
+const declarationsEqual: {
+  (right: typesModule.Tool): (left: typesModule.Tool) => boolean;
+  (left: typesModule.Tool, right: typesModule.Tool): boolean;
+} = Function.dual(2, function (left: typesModule.Tool, right: typesModule.Tool): boolean {
   return JSON.stringify(toToolDeclaration(left)) === JSON.stringify(toToolDeclaration(right));
 });
 
-export interface ToolStateChanges {
-  toolsAdded: Tool[];
-  toolsRemoved: ToolReference[];
-}
-
-export const getToolStateChanges: {
-  (current: readonly Tool[]): (previous: readonly Tool[]) => ToolStateChanges;
-  (previous: readonly Tool[], current: readonly Tool[]): ToolStateChanges;
+const getToolStateChanges: {
+  (
+    current: readonly typesModule.Tool[],
+  ): (previous: readonly typesModule.Tool[]) => transcriptTypes.ToolStateChanges;
+  (
+    previous: readonly typesModule.Tool[],
+    current: readonly typesModule.Tool[],
+  ): transcriptTypes.ToolStateChanges;
 } = Function.dual(
   2,
-  function (previous: readonly Tool[], current: readonly Tool[]): ToolStateChanges {
+  function (
+    previous: readonly typesModule.Tool[],
+    current: readonly typesModule.Tool[],
+  ): transcriptTypes.ToolStateChanges {
     const previousTools = new Map(previous.map((tool) => [tool.name, tool]));
     const currentTools = new Map(current.map((tool) => [tool.name, tool]));
     return {
@@ -163,8 +175,8 @@ export const getToolStateChanges: {
   },
 );
 
-export function getDeclaredTools(messages: TranscriptMessages): Tool[] {
-  const definitions = new Map<string, Tool>();
+function getDeclaredTools(messages: transcriptTypes.TranscriptMessages): typesModule.Tool[] {
+  const definitions = new Map<string, typesModule.Tool>();
   for (const message of messages) {
     if (!isSystemMessage(message)) continue;
     for (const tool of message.toolsAdded ?? []) definitions.set(tool.name, tool);
@@ -172,8 +184,8 @@ export function getDeclaredTools(messages: TranscriptMessages): Tool[] {
   return [...definitions.values()];
 }
 
-export function hasToolRedefinitions(messages: TranscriptMessages): boolean {
-  const declared = new Map<string, Tool>();
+function hasToolRedefinitions(messages: transcriptTypes.TranscriptMessages): boolean {
+  const declared = new Map<string, typesModule.Tool>();
   for (const message of messages) {
     if (!isSystemMessage(message)) continue;
     for (const tool of message.toolsAdded ?? []) {
@@ -185,7 +197,7 @@ export function hasToolRedefinitions(messages: TranscriptMessages): boolean {
   return false;
 }
 
-export function hasNonAdditiveToolChanges(messages: TranscriptMessages): boolean {
+function hasNonAdditiveToolChanges(messages: transcriptTypes.TranscriptMessages): boolean {
   const declared = new Set<string>();
   for (const message of messages) {
     if (!isSystemMessage(message)) continue;
@@ -198,23 +210,47 @@ export function hasNonAdditiveToolChanges(messages: TranscriptMessages): boolean
   return false;
 }
 
-export interface TranscriptTools {
-  requestTools: Tool[];
-  anchorsAdditions: boolean;
-}
-
-export const resolveTranscriptTools: {
-  (supportsToolAdditions: boolean): (messages: TranscriptMessages) => TranscriptTools;
-  (messages: TranscriptMessages, supportsToolAdditions: boolean): TranscriptTools;
+const resolveTranscriptTools: {
+  (
+    supportsToolAdditions: boolean,
+  ): (messages: transcriptTypes.TranscriptMessages) => transcriptTypes.TranscriptTools;
+  (
+    messages: transcriptTypes.TranscriptMessages,
+    supportsToolAdditions: boolean,
+  ): transcriptTypes.TranscriptTools;
 } = Function.dual(
   2,
-  function (messages: TranscriptMessages, supportsToolAdditions: boolean): TranscriptTools {
+  function (
+    messages: transcriptTypes.TranscriptMessages,
+    supportsToolAdditions: boolean,
+  ): transcriptTypes.TranscriptTools {
     const anchorsAdditions = supportsToolAdditions && !hasNonAdditiveToolChanges(messages);
     return {
+      anchorsAdditions,
       requestTools: anchorsAdditions
         ? (getInitialSystemMessage(messages)?.toolsAdded ?? [])
         : getCurrentTools(messages),
-      anchorsAdditions,
     };
   },
 );
+
+const transcript = {
+  collapseSystemMessages,
+  createInitialSystemMessage,
+  declarationsEqual,
+  getCurrentSystemMessage,
+  getCurrentSystemPrompt,
+  getCurrentTools,
+  getDeclaredTools,
+  getInitialSystemMessage,
+  getToolStateChanges,
+  hasNonAdditiveToolChanges,
+  hasToolRedefinitions,
+  normalizeContext,
+  resolveTranscript,
+  resolveTranscriptTools,
+  toToolDeclaration,
+  withoutInitialSystemMessage,
+};
+
+export default transcript;

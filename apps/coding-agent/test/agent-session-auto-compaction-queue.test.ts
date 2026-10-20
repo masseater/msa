@@ -1,9 +1,11 @@
-import { createAssistantMessageEventStream, fauxAssistantMessage } from "@msa/ai";
+import ai from "@msa/ai";
 import testing from "@msa/testing";
 import { Effect } from "effect";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vite-plus/test";
 
 import autoCompactionQueueSupport from "./agent-session-auto-compaction-queue-support.ts";
+
+const { createAssistantMessageEventStream, fauxAssistantMessage } = ai;
 
 const { awaited, currentTimeMillis, runTest } = testing;
 const {

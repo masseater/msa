@@ -1,6 +1,8 @@
-import { foregroundAnsi, rgbColor } from "@msa/tui";
+import tui from "@msa/tui";
 
 import { theme } from "../theme/theme.ts";
+
+const { foregroundAnsi, rgbColor } = tui;
 
 const CORAL = rgbColor(228, 138, 122);
 const BLUE = rgbColor(79, 142, 179);

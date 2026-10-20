@@ -1,5 +1,5 @@
-import type { AssistantMessage } from "@msa/ai";
-import { isRetryableAssistantError, retryDelayMs } from "@msa/ai/utils/retry";
+import type aiTypes from "@msa/ai/index.types";
+import retryModule from "@msa/ai/utils/retry";
 import type chordTypes from "@msa/chord/index.types";
 import { Effect, Function } from "effect";
 
@@ -9,6 +9,8 @@ import type compactionTypesModule from "./compaction-types.ts";
 import liveModule from "./live.ts";
 import type typesModule from "./types.types.ts";
 import usageModule from "./usage.ts";
+
+const { isRetryableAssistantError, retryDelayMs } = retryModule;
 
 const { recordUsage } = usageModule;
 const { LiveDoc, compactionStatus, failCompactionStatus } = liveModule;
@@ -20,7 +22,7 @@ const summaryChange =
   (
     runtime: compactionTypesModule.CompactionRuntime,
     request: compactionTypesModule.SummaryRequest,
-    message: AssistantMessage,
+    message: aiTypes.AssistantMessage,
     texts: SummaryTexts,
     until: number | undefined,
   ) =>
@@ -63,7 +65,7 @@ const summaryChange =
 const settleSummary = Effect.fnUntraced(function* (
   runtime: compactionTypesModule.CompactionRuntime,
   request: compactionTypesModule.SummaryRequest,
-  message: AssistantMessage,
+  message: aiTypes.AssistantMessage,
   texts: SummaryTexts,
   context: chordTypes.Context,
 ) {

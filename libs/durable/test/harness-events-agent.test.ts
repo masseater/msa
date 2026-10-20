@@ -1,12 +1,5 @@
-import {
-  type AssistantMessage,
-  type FauxResponseStep,
-  Type,
-  fauxAssistantMessage,
-  fauxText,
-  fauxThinking,
-  fauxToolCall,
-} from "@msa/ai";
+import ai from "@msa/ai";
+import type aiTypes from "@msa/ai/index.types";
 import durable from "@msa/durable";
 import type durableTypes from "@msa/durable/index.types";
 import memory from "@msa/durable/storage/memory";
@@ -15,6 +8,8 @@ import { describe, expect, it } from "vite-plus/test";
 
 import harnessEventsSupport from "./harness-events-support.ts";
 import support from "./support.ts";
+
+const { Type, fauxAssistantMessage, fauxText, fauxThinking, fauxToolCall } = ai;
 
 const { LiveDoc, defineTool } = durable;
 const { MemoryStorage } = memory;
@@ -32,12 +27,12 @@ const {
   waitFor,
 } = support;
 
-function partialsOf(harness: durableTypes.Harness): AssistantMessage[] {
-  const partials: AssistantMessage[] = [];
+function partialsOf(harness: durableTypes.Harness): aiTypes.AssistantMessage[] {
+  const partials: aiTypes.AssistantMessage[] = [];
   harness.subscribeCommits((publication) => {
     for (const change of documentChanges(publication)) {
       const message = (change.value as durableTypes.LiveState | null)?.generation?.message as
-        | AssistantMessage
+        | aiTypes.AssistantMessage
         | undefined;
       if (change.record.kind === "msa.live" && message !== undefined) partials.push(message);
     }
@@ -134,8 +129,8 @@ const rebuildsEveryCommitted = Effect.gen(function* () {
     (yield* awaited(root.submit({ content: "go", type: "input" }, context))).wait(context),
   );
   yield* drained();
-  const rebuilt: AssistantMessage[] = [];
-  let current: AssistantMessage | undefined;
+  const rebuilt: aiTypes.AssistantMessage[] = [];
+  let current: aiTypes.AssistantMessage | undefined;
   for (const event of events()) {
     if (event.type === "message_end" && event.entry?.kind === "msa.assistant") break;
     if (event.type === "message_start" && event.message.role === "assistant")
@@ -198,7 +193,7 @@ const emitsOneExact = Effect.gen(function* () {
 
   const setup = chatSetup();
   const release = deferred();
-  const held: FauxResponseStep = (_request, options) =>
+  const held: aiTypes.FauxResponseStep = (_request, options) =>
     runPromise(
       Effect.gen(function* () {
         yield* awaited(Promise.race([release.promise, aborted(options!.signal!)]));

@@ -1,25 +1,31 @@
 import { Effect } from "effect";
 
-import { encodeJsonSync } from "../utils/json-codec.ts";
-import { processCodexEvents } from "./openai-codex-events.ts";
-import { resolveCodexWebSocketUrl } from "./openai-codex-headers.ts";
-import { type CodexStreamRun, finishCodexOutput } from "./openai-codex-stream-run.ts";
-import { acquireWebSocket, type CachedWebSocketConnection } from "./openai-codex-ws-cache.ts";
-import {
-  collectWebSocketResponseItems,
-  continuationRequestBody,
-} from "./openai-codex-ws-continuation.ts";
-import {
-  handleWebSocketFailure,
-  type WebSocketOutcome,
-  type WebSocketRetries,
-} from "./openai-codex-ws-failure.ts";
-import { readCodexWebSocketEvents } from "./openai-codex-ws-inbox.ts";
-import { recordWebSocketRequestStats } from "./openai-codex-ws-stats.ts";
+import type openaiCodexStreamRunTypes from "./openai-codex-stream-run.types.ts";
+import openaiCodexWsCache from "./openai-codex-ws-cache.ts";
+import type openaiCodexWsCacheTypes from "./openai-codex-ws-cache.types.ts";
+import openaiCodexWsContinuation from "./openai-codex-ws-continuation.ts";
+import openaiCodexWsFailure from "./openai-codex-ws-failure.ts";
+import type openaiCodexWsFailureTypes from "./openai-codex-ws-failure.types.ts";
+import openaiCodexWsInbox from "./openai-codex-ws-inbox.ts";
+import openaiCodexWsStats from "./openai-codex-ws-stats.ts";
+import openaiCodexWsStreamKit from "./openai-codex-ws-stream-kit.ts";
+
+const { jsonCodec, openaiCodexEvents, openaiCodexHeaders, openaiCodexStreamRun } =
+  openaiCodexWsStreamKit;
+
+const { collectWebSocketResponseItems, continuationRequestBody } = openaiCodexWsContinuation;
+const { acquireWebSocket } = openaiCodexWsCache;
+const { resolveCodexWebSocketUrl } = openaiCodexHeaders;
+const { recordWebSocketRequestStats } = openaiCodexWsStats;
+const { readCodexWebSocketEvents } = openaiCodexWsInbox;
+const { encodeJsonSync } = jsonCodec;
+const { processCodexEvents } = openaiCodexEvents;
+const { finishCodexOutput } = openaiCodexStreamRun;
+const { handleWebSocketFailure } = openaiCodexWsFailure;
 
 function rememberContinuation(
-  run: CodexStreamRun,
-  entry: CachedWebSocketConnection | undefined,
+  run: openaiCodexStreamRunTypes.CodexStreamRun,
+  entry: openaiCodexWsCacheTypes.CachedWebSocketConnection | undefined,
 ): boolean {
   const { output, options, body } = run;
   if (options?.signal?.aborted === true) return false;
@@ -34,32 +40,32 @@ function rememberContinuation(
 }
 
 const streamOverWebSocket = Effect.fn("streamOverWebSocket")(function* (
-  run: CodexStreamRun,
+  run: openaiCodexStreamRunTypes.CodexStreamRun,
   onStart: () => void,
 ) {
   const { options, model } = run;
   const lease = yield* acquireWebSocket({
-    url: resolveCodexWebSocketUrl(model.baseUrl),
-    headers: run.websocketHeaders,
-    signal: options?.signal,
+    accountId: run.accountId,
     connectTimeoutMs: run.websocketConnectTimeoutMs,
     env: options?.env,
+    headers: run.websocketHeaders,
     sessionId: run.cacheSessionId,
-    accountId: run.accountId,
+    signal: options?.signal,
+    url: resolveCodexWebSocketUrl(model.baseUrl),
   });
   const useCachedContext =
     options?.transport === "websocket-cached" || options?.transport === "auto";
   const entry = useCachedContext ? lease.entry : undefined;
   const requestBody = entry === undefined ? run.body : continuationRequestBody(entry)(run.body);
   const sessionId = run.cacheSessionId;
-  recordWebSocketRequestStats({ sessionId, requestBody, reused: lease.reused, useCachedContext });
+  recordWebSocketRequestStats({ requestBody, reused: lease.reused, sessionId, useCachedContext });
   let keep = true;
   const rawEvents = readCodexWebSocketEvents({
-    socket: lease.socket,
+    idleTimeoutMs: run.httpTimeoutMs,
     onListening: () =>
       lease.socket.send(encodeJsonSync({ type: "response.create", ...requestBody })),
     signal: options?.signal,
-    idleTimeoutMs: run.httpTimeoutMs,
+    socket: lease.socket,
   });
   const forget = Effect.sync(() => {
     if (lease.entry !== undefined) lease.entry.continuation = undefined;
@@ -72,9 +78,11 @@ const streamOverWebSocket = Effect.fn("streamOverWebSocket")(function* (
   );
 });
 
-export function runWebSocketAttempt(
-  run: CodexStreamRun,
-): (retries: WebSocketRetries) => Effect.Effect<WebSocketOutcome> {
+function runWebSocketAttempt(
+  run: openaiCodexStreamRunTypes.CodexStreamRun,
+): (
+  retries: openaiCodexWsFailureTypes.WebSocketRetries,
+) => Effect.Effect<openaiCodexWsFailureTypes.WebSocketOutcome> {
   return (retries) => {
     let started = false;
     const onStart = () => {
@@ -89,8 +97,14 @@ export function runWebSocketAttempt(
         }),
       ),
       Effect.catchDefect((error) =>
-        handleWebSocketFailure({ run, retries, started, error, retry: runWebSocketAttempt(run) }),
+        handleWebSocketFailure({ error, retries, retry: runWebSocketAttempt(run), run, started }),
       ),
     );
   };
 }
+
+const openaiCodexWsStream = {
+  runWebSocketAttempt,
+};
+
+export default openaiCodexWsStream;

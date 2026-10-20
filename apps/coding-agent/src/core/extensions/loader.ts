@@ -1,7 +1,7 @@
 import { Effect, Function as Fn } from "effect";
 
 import { resolvePath } from "../../utils/paths.ts";
-import { createEventBus, type EventBus } from "../event-bus.ts";
+import { type EventBus, createEventBus } from "../event-bus.ts";
 import { fromPromise, platformRuntime, unwrapForeign } from "../platform/index.ts";
 import { useExtensionCacheCwd } from "./loader-cache.ts";
 import { discoverExtensionPaths } from "./loader-discovery.ts";
@@ -27,11 +27,11 @@ const loadExtensionFromFactoryImpl = (
   platformRuntime.runPromise(
     unwrapForeign(
       initializeExtension({
-        factory,
-        extensionPath,
-        resolvedPath: extensionPath,
         cwd: resolvePath(cwd),
         eventBus,
+        extensionPath,
+        factory,
+        resolvedPath: extensionPath,
         runtime,
       }),
     ),
@@ -68,16 +68,16 @@ const loadAll = Effect.fn("loadExtensions")(function* (input: {
   const runtime = input.runtime ?? createExtensionRuntime();
   for (const extensionPath of input.paths) {
     const { extension, error } = yield* loadExtension({
-      extensionPath,
+      cacheToken,
       cwd,
       eventBus,
+      extensionPath,
       runtime,
-      cacheToken,
     });
-    if (error !== null && error !== "") errors.push({ path: extensionPath, error });
+    if (error !== null && error !== "") errors.push({ error, path: extensionPath });
     else if (extension !== null) extensions.push(extension);
   }
-  const result: LoadExtensionsResult = { extensions, errors, warnings: [], runtime };
+  const result: LoadExtensionsResult = { errors, extensions, runtime, warnings: [] };
   return result;
 });
 
@@ -86,7 +86,7 @@ type LoadRest = [cwd: string, eventBus?: EventBus, runtime?: ExtensionRuntime];
 const loadExtensionsWith =
   (useCache: boolean) =>
   (paths: string[], ...[cwd, eventBus, runtime]: LoadRest): Promise<LoadExtensionsResult> =>
-    platformRuntime.runPromise(loadAll({ paths, cwd, eventBus, runtime, useCache }));
+    platformRuntime.runPromise(loadAll({ cwd, eventBus, paths, runtime, useCache }));
 
 export const loadExtensions: {
   (...rest: LoadRest): (paths: string[]) => Promise<LoadExtensionsResult>;

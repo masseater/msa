@@ -1,13 +1,5 @@
-import {
-  Container,
-  Editor,
-  type EditorOptions,
-  type Focusable,
-  getKeybindings,
-  Spacer,
-  Text,
-  type TUI,
-} from "@msa/tui";
+import tuiModule from "@msa/tui";
+import type tuiTypes from "@msa/tui/index.types";
 import { Effect } from "effect";
 
 import { awaited, awaitingWith } from "../../../core/awaiting.ts";
@@ -18,15 +10,17 @@ import { getEditorTheme, theme } from "../theme/theme.ts";
 import { DynamicBorder } from "./dynamic-border.ts";
 import { keyHint } from "./keybinding-hints.ts";
 
-export interface ExtensionEditorOptions extends EditorOptions {
+const { Container, Editor, Spacer, Text, getKeybindings } = tuiModule;
+
+export interface ExtensionEditorOptions extends tuiTypes.EditorOptions {
   description?: string;
 }
 
-export class ExtensionEditorComponent extends Container implements Focusable {
-  private editor: Editor;
+export class ExtensionEditorComponent extends Container implements tuiTypes.Focusable {
+  private editor: tuiTypes.Editor;
   private onSubmitCallback: (value: string) => void;
   private onCancelCallback: () => void;
-  private tui: TUI;
+  private tui: tuiTypes.TUI;
   private keybindings: KeybindingsManager;
   private externalEditorCommand: string;
 
@@ -40,7 +34,7 @@ export class ExtensionEditorComponent extends Container implements Focusable {
   }
 
   constructor(
-    tui: TUI,
+    tui: tuiTypes.TUI,
     keybindings: KeybindingsManager,
     title: string,
     prefill: string | undefined,

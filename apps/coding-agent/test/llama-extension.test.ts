@@ -116,7 +116,7 @@ const catalogServer = () =>
         ],
       };
     }
-    return path === "/props?model=loaded&autoload=false" ? {} : undefined;
+    return path === "/props?autoload=false&model=loaded" ? {} : undefined;
   });
 
 const persistsAndRestoresSelectableModelsForCache = () =>
@@ -185,7 +185,7 @@ const preservesCachedLlamaCppContextForUnloaded = () =>
       let unloadedArgs: string[] | undefined;
       const url = yield* serve(({ path }) => {
         if (path === "/models") return { data: [presetModel(loaded, unloadedArgs)] };
-        if (path === "/props?model=qwen&autoload=false") return {};
+        if (path === "/props?autoload=false&model=qwen") return {};
         return path === "/props" ? { models_autoload: true, role: "router" } : undefined;
       });
       const cache = createCache();

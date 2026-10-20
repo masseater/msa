@@ -1,6 +1,6 @@
 import type chordTypes from "@msa/chord/index.types";
-import type { CodemodeResult, CodemodeRun } from "@msa/codemode/portable";
-import type { CodemodeSourceOptions } from "@msa/codemode/source";
+import type portableTypes from "@msa/codemode/portable.types";
+import type sourceTypes from "@msa/codemode/source.types";
 import { Cause, Effect, Exit } from "effect";
 
 import type typesModule from "../harness/types.types.ts";
@@ -34,7 +34,7 @@ class CodemodeRunner {
   private readonly opened: runJournalTypes.Resumed;
   private readonly journal: runJournalTypes.RunJournal;
   private readonly controller = new AbortController();
-  private run: CodemodeRun | undefined;
+  private run: portableTypes.CodemodeRun | undefined;
   private ended: typesModule.ToolExecutionResult | undefined;
   private failure: unknown;
   private generatedImages = 0;
@@ -93,7 +93,7 @@ class CodemodeRunner {
     }).pipe(Effect.ensuring(Effect.sync(() => abortSignal?.removeEventListener("abort", onAbort))));
   }
 
-  private startScript(code: string, remaining: number | undefined): CodemodeRun {
+  private startScript(code: string, remaining: number | undefined): portableTypes.CodemodeRun {
     const { start } = this.opened;
     const { journal } = this;
     this.run = this.options.sandbox.start(code, {
@@ -128,7 +128,9 @@ class CodemodeRunner {
     });
   }
 
-  private finish(result: CodemodeResult): Effect.Effect<typesModule.ToolExecutionResult> {
+  private finish(
+    result: portableTypes.CodemodeResult,
+  ): Effect.Effect<typesModule.ToolExecutionResult> {
     const { during } = result;
     if (during !== undefined && this.wentOnBefore(during)) {
       return this.decide(
@@ -206,7 +208,7 @@ const runCodemode = Effect.fnUntraced(function* (
   options: runDocsTypes.CodemodeToolOptions,
   api: typesModule.ToolExecutionApi,
   context: chordTypes.Context,
-  source: { readonly code: string; readonly options: CodemodeSourceOptions },
+  source: { readonly code: string; readonly options: sourceTypes.CodemodeSourceOptions },
 ) {
   const opened = yield* openRun(options, source.options, api, context);
   if ("done" in opened) return opened.done;

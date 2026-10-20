@@ -3,12 +3,14 @@ import { describe, it } from "node:test";
 
 import { Effect } from "effect";
 
-import { Editor } from "../src/components/editor.ts";
-import { SettingsList } from "../src/components/settings-list.ts";
-import { TuiAltScreen } from "../src/tui-alt-screen.ts";
+import Editor from "../src/components/editor.ts";
+import SettingsList from "../src/components/settings-list.ts";
+import TuiAltScreen from "../src/tui-alt-screen.ts";
 import mouseComponentsHelpers from "./mouse-components-helpers.ts";
 import SubmenuHost from "./mouse-components-submenu-host.ts";
-import { VirtualTerminal } from "./virtual-terminal.ts";
+import virtualTerminal from "./virtual-terminal.ts";
+
+const { VirtualTerminal } = virtualTerminal;
 
 const { editorTheme, settingsTheme } = mouseComponentsHelpers;
 

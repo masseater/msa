@@ -1,4 +1,5 @@
-import { type AssistantMessage, type Message, fauxAssistantMessage } from "@msa/ai";
+import ai from "@msa/ai";
+import type aiTypes from "@msa/ai/index.types";
 import durable from "@msa/durable";
 import { Effect } from "effect";
 import { afterEach, describe, expect, it } from "vite-plus/test";
@@ -6,6 +7,8 @@ import { afterEach, describe, expect, it } from "vite-plus/test";
 import harnessGenerationRecoveryCases from "./harness-generation-recovery-cases.ts";
 import harnessGenerationRecoverySupport from "./harness-generation-recovery-support.ts";
 import support from "./support.ts";
+
+const { fauxAssistantMessage } = ai;
 
 const { LiveDoc } = durable;
 
@@ -153,7 +156,7 @@ const convertsCommittedPartial = Effect.gen(function* () {
   const watch = (yield* awaited(opened.harness.watchDoc(LiveDoc, opened.root.id, context)))!;
   let watched: string | undefined;
   watch.start((value) => {
-    watched = textOf(value?.generation?.message as Message) ?? watched;
+    watched = textOf(value?.generation?.message as aiTypes.Message) ?? watched;
 
     return Promise.resolve();
   });
@@ -171,7 +174,7 @@ const convertsCommittedPartial = Effect.gen(function* () {
   ]);
   opened = yield* open(path, setup);
   const stored = yield* awaited(opened.harness.snapshot(LiveDoc, opened.root.id, context));
-  const partial = textOf(stored?.generation?.message as Message)!;
+  const partial = textOf(stored?.generation?.message as aiTypes.Message)!;
   expect(partial.startsWith(watched!)).toBe(true);
   opened.harness.resume();
   expect(
@@ -185,7 +188,7 @@ const convertsCommittedPartial = Effect.gen(function* () {
     "msa.assistant",
     "msa.assistant",
   ]);
-  const converted = entries[1]!.model![0] as AssistantMessage;
+  const converted = entries[1]!.model![0] as aiTypes.AssistantMessage;
   expect(converted.stopReason).toBe("aborted");
   expect(textOf(converted)).toBe(partial);
   expect(yield* awaited(opened.harness.snapshot(LiveDoc, opened.root.id, context))).toEqual({});

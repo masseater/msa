@@ -1,8 +1,12 @@
-import type { ClassifierModel, Model } from "../../src/types.ts";
+import type typesModule from "../../src/types.types.ts";
 import openaiPricing from "./openai-pricing.ts";
 
-const { OPENAI_LONG_CONTEXT_INPUT_THRESHOLD, OPENAI_STANDARD_COSTS, withOpenAiLongContextPricing } =
-  openaiPricing;
+const {
+  OPENAI_LONG_CONTEXT_INPUT_THRESHOLD,
+  OPENAI_STANDARD_COSTS,
+  openAiServiceTiers,
+  withOpenAiLongContextPricing,
+} = openaiPricing;
 
 type StandardOpenAiModelId = keyof typeof OPENAI_STANDARD_COSTS;
 
@@ -25,7 +29,7 @@ const standardOpenAiFields = ([id, name]: readonly [StandardOpenAiModelId, strin
   reasoning: true,
 });
 
-const MISSING_OPENAI_MODELS: Model<"openai-responses">[] = [
+const MISSING_OPENAI_MODELS: typesModule.Model<"openai-responses">[] = [
   ...STANDARD_OPENAI_MODEL_NAMES.map((entry) => ({
     ...standardOpenAiFields(entry),
     api: "openai-responses" as const,
@@ -53,16 +57,20 @@ const CODEX_CONTEXT_BY_ID: Readonly<Record<string, number>> = { "gpt-6.1-sol": 5
 const CODEX_MAX_TOKENS = 128000;
 
 const codexModel = (
-  fields: Omit<Model<"openai-codex-responses">, "api" | "provider" | "baseUrl" | "maxTokens">,
-): Model<"openai-codex-responses"> => ({
+  fields: Omit<
+    typesModule.Model<"openai-codex-responses">,
+    "api" | "provider" | "baseUrl" | "maxTokens"
+  >,
+): typesModule.Model<"openai-codex-responses"> => ({
   ...fields,
   api: "openai-codex-responses",
   baseUrl: CODEX_BASE_URL,
+  cost: { ...fields.cost, serviceTiers: openAiServiceTiers(fields.id) },
   maxTokens: CODEX_MAX_TOKENS,
   provider: "openai-codex",
 });
 
-const CODEX_MODELS: Model<"openai-codex-responses">[] = [
+const CODEX_MODELS: typesModule.Model<"openai-codex-responses">[] = [
   ...STANDARD_OPENAI_MODEL_NAMES.map((entry) =>
     codexModel({
       ...standardOpenAiFields(entry),
@@ -87,7 +95,7 @@ const CODEX_MODELS: Model<"openai-codex-responses">[] = [
   }),
 ];
 
-const OPENAI_CLASSIFIER_MODELS: ClassifierModel<"openai-decisions">[] = [
+const OPENAI_CLASSIFIER_MODELS: typesModule.ClassifierModel<"openai-decisions">[] = [
   {
     api: "openai-decisions",
     baseUrl: "https://api.openai.com/v1",

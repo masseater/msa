@@ -2,10 +2,10 @@ import { Effect } from "effect";
 
 import { platformRuntime } from "../../platform/index.ts";
 import {
-  computeEditsDiff,
   type Edit,
   type EditDiffError,
   type EditDiffResult,
+  computeEditsDiff,
 } from "../edit-diff.ts";
 
 export type RenderableEditArgs = {
@@ -40,11 +40,11 @@ export function getRenderablePreviewInput(
       (edit) => typeof edit?.oldText === "string" && typeof edit?.newText === "string",
     )
   ) {
-    return { path, edits: args.edits };
+    return { edits: args.edits, path };
   }
 
   if (typeof args.oldText === "string" && typeof args.newText === "string") {
-    return { path, edits: [{ oldText: args.oldText, newText: args.newText }] };
+    return { edits: [{ oldText: args.oldText, newText: args.newText }], path };
   }
 
   return null;

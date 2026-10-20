@@ -1,38 +1,26 @@
 import { Effect } from "effect";
 
-import type {
-  AssistantMessage,
-  AssistantMessageEventStream,
-  TextContent,
-  ThinkingContent,
-  ToolCall,
-} from "../types.ts";
-import { encodeJsonSync } from "../utils/json-codec.ts";
-import { nextRandom } from "../utils/random.ts";
-import { abortedMessage, type FauxContentBlock } from "./faux-messages.ts";
-import { estimateTokens } from "./faux-usage.ts";
+import type typesModule from "../types.types.ts";
+import jsonCodec from "../utils/json-codec.ts";
+import random from "../utils/random.ts";
+import fauxMessages from "./faux-messages.ts";
+import type fauxMessagesTypes from "./faux-messages.types.ts";
+import type fauxStreamTypes from "./faux-stream.types.ts";
+import fauxUsage from "./faux-usage.ts";
 
-export interface FauxPacing {
-  readonly minTokenSize: number;
-  readonly maxTokenSize: number;
-  readonly tokensPerSecond: number | undefined;
-}
-
-export interface FauxDelivery {
-  readonly stream: AssistantMessageEventStream;
-  readonly message: AssistantMessage;
-  readonly pacing: FauxPacing;
-  readonly signal: AbortSignal | undefined;
-}
+const { nextRandom } = random;
+const { estimateTokens } = fauxUsage;
+const { abortedMessage } = fauxMessages;
+const { encodeJsonSync } = jsonCodec;
 
 interface BlockRun {
-  readonly stream: AssistantMessageEventStream;
-  readonly partial: AssistantMessage;
-  readonly pacing: FauxPacing;
+  readonly stream: typesModule.AssistantMessageEventStream;
+  readonly partial: typesModule.AssistantMessage;
+  readonly pacing: fauxStreamTypes.FauxPacing;
   readonly signal: AbortSignal | undefined;
 }
 
-function splitStringByTokenSize(text: string, pacing: FauxPacing): string[] {
+function splitStringByTokenSize(text: string, pacing: fauxStreamTypes.FauxPacing): string[] {
   const { minTokenSize, maxTokenSize } = pacing;
   const chunks: string[] = [];
   let index = 0;
@@ -54,11 +42,11 @@ function scheduleChunk(chunk: string, tokensPerSecond: number | undefined): Effe
 
 const isAborted = (signal: AbortSignal | undefined): boolean => signal?.aborted ?? false;
 
-const snapshot = (run: BlockRun): AssistantMessage => ({ ...run.partial });
+const snapshot = (run: BlockRun): typesModule.AssistantMessage => ({ ...run.partial });
 
 function abortStream(run: BlockRun): void {
   const aborted = abortedMessage(run.partial);
-  run.stream.push({ type: "error", reason: "aborted", error: aborted });
+  run.stream.push({ error: aborted, reason: "aborted", type: "error" });
   run.stream.end(aborted);
 }
 
@@ -78,20 +66,20 @@ const streamChunks = Effect.fn("streamChunks")(function* (
 const streamThinking = Effect.fn("streamThinking")(function* (
   run: BlockRun,
   contentIndex: number,
-  block: ThinkingContent,
+  block: typesModule.ThinkingContent,
 ) {
-  run.partial.content = [...run.partial.content, { type: "thinking", thinking: "" }];
-  run.stream.push({ type: "thinking_start", contentIndex, partial: snapshot(run) });
+  run.partial.content = [...run.partial.content, { thinking: "", type: "thinking" }];
+  run.stream.push({ contentIndex, partial: snapshot(run), type: "thinking_start" });
   const completed = yield* streamChunks(run, block.thinking, (delta) => {
-    (run.partial.content[contentIndex] as ThinkingContent).thinking += delta;
-    run.stream.push({ type: "thinking_delta", contentIndex, delta, partial: snapshot(run) });
+    (run.partial.content[contentIndex] as typesModule.ThinkingContent).thinking += delta;
+    run.stream.push({ contentIndex, delta, partial: snapshot(run), type: "thinking_delta" });
   });
   if (!completed) return false;
   run.stream.push({
-    type: "thinking_end",
-    contentIndex,
     content: block.thinking,
+    contentIndex,
     partial: snapshot(run),
+    type: "thinking_end",
   });
   return true;
 });
@@ -99,74 +87,77 @@ const streamThinking = Effect.fn("streamThinking")(function* (
 const streamText = Effect.fn("streamText")(function* (
   run: BlockRun,
   contentIndex: number,
-  block: TextContent,
+  block: typesModule.TextContent,
 ) {
-  run.partial.content = [...run.partial.content, { type: "text", text: "" }];
-  run.stream.push({ type: "text_start", contentIndex, partial: snapshot(run) });
+  run.partial.content = [...run.partial.content, { text: "", type: "text" }];
+  run.stream.push({ contentIndex, partial: snapshot(run), type: "text_start" });
   const completed = yield* streamChunks(run, block.text, (delta) => {
-    (run.partial.content[contentIndex] as TextContent).text += delta;
-    run.stream.push({ type: "text_delta", contentIndex, delta, partial: snapshot(run) });
+    (run.partial.content[contentIndex] as typesModule.TextContent).text += delta;
+    run.stream.push({ contentIndex, delta, partial: snapshot(run), type: "text_delta" });
   });
   if (!completed) return false;
-  run.stream.push({ type: "text_end", contentIndex, content: block.text, partial: snapshot(run) });
+  run.stream.push({ content: block.text, contentIndex, partial: snapshot(run), type: "text_end" });
   return true;
 });
 
 const streamToolCall = Effect.fn("streamToolCall")(function* (
   run: BlockRun,
   contentIndex: number,
-  block: ToolCall,
+  block: typesModule.ToolCall,
 ) {
   run.partial.content = [
     ...run.partial.content,
-    { type: "toolCall", id: block.id, name: block.name, arguments: {} },
+    { arguments: {}, id: block.id, name: block.name, type: "toolCall" },
   ];
-  run.stream.push({ type: "toolcall_start", contentIndex, partial: snapshot(run) });
+  run.stream.push({ contentIndex, partial: snapshot(run), type: "toolcall_start" });
   const completed = yield* streamChunks(run, encodeJsonSync(block.arguments), (delta) => {
-    run.stream.push({ type: "toolcall_delta", contentIndex, delta, partial: snapshot(run) });
+    run.stream.push({ contentIndex, delta, partial: snapshot(run), type: "toolcall_delta" });
   });
   if (!completed) return false;
-  (run.partial.content[contentIndex] as ToolCall).arguments = block.arguments;
-  run.stream.push({ type: "toolcall_end", contentIndex, toolCall: block, partial: snapshot(run) });
+  (run.partial.content[contentIndex] as typesModule.ToolCall).arguments = block.arguments;
+  run.stream.push({ contentIndex, partial: snapshot(run), toolCall: block, type: "toolcall_end" });
   return true;
 });
 
 function streamBlock(
   run: BlockRun,
   contentIndex: number,
-  block: FauxContentBlock,
+  block: fauxMessagesTypes.FauxContentBlock,
 ): Effect.Effect<boolean> {
   if (block.type === "thinking") return streamThinking(run, contentIndex, block);
   if (block.type === "text") return streamText(run, contentIndex, block);
   return streamToolCall(run, contentIndex, block);
 }
 
-function finishStream(stream: AssistantMessageEventStream, message: AssistantMessage): void {
+function finishStream(
+  stream: typesModule.AssistantMessageEventStream,
+  message: typesModule.AssistantMessage,
+): void {
   if (message.stopReason === "pending") {
     throw new Error("Faux response ended without a stop reason");
   }
   if (message.stopReason === "error" || message.stopReason === "aborted") {
-    stream.push({ type: "error", reason: message.stopReason, error: message });
+    stream.push({ error: message, reason: message.stopReason, type: "error" });
   } else {
-    stream.push({ type: "done", reason: message.stopReason, message });
+    stream.push({ message, reason: message.stopReason, type: "done" });
   }
   stream.end(message);
 }
 
-export const streamFauxMessage = Effect.fn("streamFauxMessage")(function* ({
+const streamFauxMessage = Effect.fn("streamFauxMessage")(function* ({
   stream,
   message,
   pacing,
   signal,
-}: FauxDelivery) {
+}: fauxStreamTypes.FauxDelivery) {
   const run: BlockRun = {
-    stream,
-    partial: { ...message, content: [], stopReason: "pending" },
     pacing,
+    partial: { ...message, content: [], stopReason: "pending" },
     signal,
+    stream,
   };
   if (isAborted(signal)) return abortStream(run);
-  stream.push({ type: "start", partial: snapshot(run) });
+  stream.push({ partial: snapshot(run), type: "start" });
   for (const [contentIndex, block] of message.content.entries()) {
     if (isAborted(signal) || !(yield* streamBlock(run, contentIndex, block))) {
       return abortStream(run);
@@ -174,3 +165,9 @@ export const streamFauxMessage = Effect.fn("streamFauxMessage")(function* ({
   }
   finishStream(stream, message);
 });
+
+const fauxStream = {
+  streamFauxMessage,
+};
+
+export default fauxStream;

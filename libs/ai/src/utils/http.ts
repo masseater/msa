@@ -1,23 +1,10 @@
 import { Effect, Layer, Tracer } from "effect";
 import { FetchHttpClient, HttpBody, HttpClient, HttpClientRequest } from "effect/http";
 
-import { dieOnAbort } from "./abort.ts";
+import abort from "./abort.ts";
+import type httpTypes from "./http.types.ts";
 
-export interface HttpRequest {
-  readonly url: string | URL;
-  readonly method?: "GET" | "POST" | undefined;
-  readonly headers?: Readonly<Record<string, string>> | undefined;
-  readonly body?: string | undefined;
-  readonly signal?: AbortSignal | undefined;
-}
-
-export interface HttpReply {
-  readonly status: number;
-  readonly ok: boolean;
-  readonly header: (name: string) => string | undefined;
-  readonly text: Effect.Effect<string>;
-  readonly json: Effect.Effect<unknown>;
-}
+const { dieOnAbort } = abort;
 
 const globalFetch = (): typeof globalThis.fetch => globalThis.fetch;
 
@@ -29,7 +16,7 @@ const httpLayer = Layer.mergeAll(
   Layer.succeed(FetchHttpClient.Fetch, forwardToGlobalFetch),
 );
 
-const buildRequest = (request: HttpRequest) => {
+const buildRequest = (request: httpTypes.HttpRequest) => {
   const url = request.url instanceof URL ? request.url.href : request.url;
   const base = request.method === "POST" ? HttpClientRequest.post(url) : HttpClientRequest.get(url);
   const withHeaders = HttpClientRequest.setHeaders(base, request.headers ?? {});
@@ -41,7 +28,7 @@ const buildRequest = (request: HttpRequest) => {
   return HttpClientRequest.setBody(withHeaders, HttpBody.raw(body, { contentType }));
 };
 
-const send = (request: HttpRequest) =>
+const send = (request: httpTypes.HttpRequest) =>
   Effect.gen(function* () {
     const client = yield* HttpClient.HttpClient;
     const execute = Effect.orDie(client.execute(buildRequest(request)));
@@ -54,20 +41,27 @@ const send = (request: HttpRequest) =>
         );
     const headers = response.headers;
     return {
-      status: response.status,
-      ok: response.status >= 200 && response.status < 300,
       header: (name: string) => headers[name.toLowerCase()],
-      text: Effect.orDie(response.text),
       json: Effect.orDie(Effect.map(response.json, (value): unknown => value)),
-    } satisfies HttpReply;
+      ok: response.status >= 200 && response.status < 300,
+      status: response.status,
+      text: Effect.orDie(response.text),
+    } satisfies httpTypes.HttpReply;
   });
 
-export const httpRequest = (request: HttpRequest): Effect.Effect<HttpReply> =>
+const httpRequest = (request: httpTypes.HttpRequest): Effect.Effect<httpTypes.HttpReply> =>
   Effect.scoped(
     Effect.flatMap(Layer.build(httpLayer), (services) =>
       Effect.provideContext(send(request), services),
     ),
   );
 
-export const fetchReply = (request: HttpRequest): Promise<HttpReply> =>
+const fetchReply = (request: httpTypes.HttpRequest): Promise<httpTypes.HttpReply> =>
   Effect.runPromise(httpRequest(request));
+
+const http = {
+  fetchReply,
+  httpRequest,
+};
+
+export default http;

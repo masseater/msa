@@ -1,16 +1,16 @@
-import type { AgentMessage } from "@msa/agent-core";
+import type agentTypes from "@msa/agent-core/index.types";
 
 import { SessionManager } from "../session-manager.ts";
 import type { WorkerSession } from "./worker.ts";
 
 export class TranscriptCache {
-  private readonly cache = new Map<string, readonly AgentMessage[]>();
+  private readonly cache = new Map<string, readonly agentTypes.AgentMessage[]>();
 
   messages(
     id: string,
     workers: ReadonlyMap<string, WorkerSession>,
     sessionFile: string | null,
-  ): readonly AgentMessage[] {
+  ): readonly agentTypes.AgentMessage[] {
     const worker = workers.get(id);
     if (worker !== undefined) {
       const streaming = worker.state.streamingMessage;

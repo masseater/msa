@@ -176,8 +176,8 @@ function highlightImpl(code: string, options: HighlightOptions = {}): string {
   const html =
     options.language !== undefined && options.language !== ""
       ? hljs.highlight(code, {
-          language: options.language,
           ignoreIllegals: options.ignoreIllegals,
+          language: options.language,
         }).value
       : hljs.highlightAuto(code, options.languageSubset).value;
   return renderHighlightedHtml(html, options.theme);

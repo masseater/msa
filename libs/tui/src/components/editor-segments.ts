@@ -1,25 +1,26 @@
 import { dual } from "effect/Function";
 
-import { getGraphemeSegmenter, getWordSegmenter } from "../utils.ts";
+import utils from "../utils.ts";
+import type editorSegmentsTypes from "./editor-segments.types.ts";
 
-export type SegmentMode = "word" | "grapheme";
+const { getGraphemeSegmenter, getWordSegmenter } = utils;
 
-export const PASTE_MARKER_REGEX = /\[paste #(\d+)( (\+\d+ lines|\d+ chars))?\]/gu;
+const PASTE_MARKER_REGEX = /\[paste #(\d+)( (\+\d+ lines|\d+ chars))?\]/gu;
 
-export const PASTE_MARKER_SINGLE = /^\[paste #(\d+)( (\+\d+ lines|\d+ chars))?\]$/u;
+const PASTE_MARKER_SINGLE = /^\[paste #(\d+)( (\+\d+ lines|\d+ chars))?\]$/u;
 
 const graphemeSegmenter = getGraphemeSegmenter();
 const wordSegmenter = getWordSegmenter();
 
-export function isPasteMarker(segment: string): boolean {
+function isPasteMarker(segment: string): boolean {
   return segment.length >= 10 && PASTE_MARKER_SINGLE.test(segment);
 }
 
-export function graphemeSegments(text: string): Intl.SegmentData[] {
+function graphemeSegments(text: string): Intl.SegmentData[] {
   return [...graphemeSegmenter.segment(text)];
 }
 
-export function normalizeEditorText(text: string): string {
+function normalizeEditorText(text: string): string {
   return text.replace(/\r\n/gu, "\n").replace(/\r/gu, "\n").replace(/\t/gu, "    ");
 }
 
@@ -33,7 +34,7 @@ function markerRanges(text: string, validIds: ReadonlySet<number>): MarkerRange[
   for (const m of text.matchAll(PASTE_MARKER_REGEX)) {
     const id = Number.parseInt(m[1]!, 10);
     if (!validIds.has(id)) continue;
-    markers.push({ start: m.index, end: m.index + m[0].length });
+    markers.push({ end: m.index + m[0].length, start: m.index });
   }
   return markers;
 }
@@ -54,21 +55,32 @@ function mergeMarkers(
       result.push(seg);
     } else if (seg.index === marker.start) {
       result.push({
-        segment: text.slice(marker.start, marker.end),
         index: marker.start,
         input: text,
+        segment: text.slice(marker.start, marker.end),
       });
     }
   }
   return result;
 }
 
-export const segmentText: {
-  (text: string, mode: SegmentMode, validIds: ReadonlySet<number>): Iterable<Intl.SegmentData>;
-  (mode: SegmentMode, validIds: ReadonlySet<number>): (text: string) => Iterable<Intl.SegmentData>;
+const segmentText: {
+  (
+    text: string,
+    mode: editorSegmentsTypes.SegmentMode,
+    validIds: ReadonlySet<number>,
+  ): Iterable<Intl.SegmentData>;
+  (
+    mode: editorSegmentsTypes.SegmentMode,
+    validIds: ReadonlySet<number>,
+  ): (text: string) => Iterable<Intl.SegmentData>;
 } = dual(
   3,
-  (text: string, mode: SegmentMode, validIds: ReadonlySet<number>): Iterable<Intl.SegmentData> => {
+  (
+    text: string,
+    mode: editorSegmentsTypes.SegmentMode,
+    validIds: ReadonlySet<number>,
+  ): Iterable<Intl.SegmentData> => {
     const baseSegmenter = mode === "word" ? wordSegmenter : graphemeSegmenter;
     if (validIds.size === 0 || !text.includes("[paste #")) {
       return baseSegmenter.segment(text);
@@ -81,7 +93,7 @@ export const segmentText: {
   },
 );
 
-export const renumberPasteMarkers: {
+const renumberPasteMarkers: {
   (lines: readonly string[], removedId: number): string[];
   (removedId: number): (lines: readonly string[]) => string[];
 } = dual(2, (lines: readonly string[], removedId: number): string[] =>
@@ -94,7 +106,7 @@ export const renumberPasteMarkers: {
   ),
 );
 
-export const expandPasteMarkers: {
+const expandPasteMarkers: {
   (text: string, pastes: ReadonlyMap<number, string>): string;
   (pastes: ReadonlyMap<number, string>): (text: string) => string;
 } = dual(2, (text: string, pastes: ReadonlyMap<number, string>): string => {
@@ -105,3 +117,16 @@ export const expandPasteMarkers: {
   }
   return result;
 });
+
+const editorSegments = {
+  PASTE_MARKER_REGEX,
+  PASTE_MARKER_SINGLE,
+  expandPasteMarkers,
+  graphemeSegments,
+  isPasteMarker,
+  normalizeEditorText,
+  renumberPasteMarkers,
+  segmentText,
+};
+
+export default editorSegments;

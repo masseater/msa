@@ -15,19 +15,19 @@ import { callbackPromise } from "../../utils/interop.ts";
 import { exists } from "../../utils/node-fs.ts";
 import { openBrowser } from "../../utils/open-browser.ts";
 import {
+  type LoadedMcpConfig,
+  type McpServerEntry,
   addMcpServerConfig,
   getMcpToolExposure,
-  type LoadedMcpConfig,
   loadMcpConfig,
-  type McpServerEntry,
   removeMcpServerConfig,
 } from "./config.ts";
 import {
-  createDefaultTransport,
   McpOAuthCredentialStore,
   McpServerConnection,
   McpServerLog,
   McpSignInCancelledError,
+  createDefaultTransport,
   signInMcpServer,
 } from "./runtime.ts";
 
@@ -118,10 +118,10 @@ function createConnection(
   credentials: McpOAuthCredentialStore,
 ) {
   return new McpServerConnection({
-    entry,
-    cwd: options.cwd,
     createTransport: createDefaultTransport,
     credentials,
+    cwd: options.cwd,
+    entry,
     log: new McpServerLog(join(options.agentDir, "mcp.log")),
     onTools: () => {},
   });
@@ -175,7 +175,7 @@ function parseOptions(
     if (kind === "list") lists.set(name, [...(lists.get(name) ?? []), value]);
     else values.set(name, value);
   }
-  return { positional, values, lists };
+  return { lists, positional, values };
 }
 
 function runMcpCommandImpl(args: string[], options: McpCommandOptions): Promise<number> {
@@ -308,18 +308,18 @@ function add(
   const parsed = parseOptions(
     args,
     {
-      local: "flag",
-      url: "value",
-      env: "list",
-      cwd: "value",
-      header: "list",
       "bearer-token-env-var": "value",
-      "oauth-client-id": "value",
-      "oauth-client-secret": "value",
-      "oauth-callback-port": "value",
-      "oauth-client-name": "value",
-      exposure: "value",
+      cwd: "value",
       description: "value",
+      env: "list",
+      exposure: "value",
+      header: "list",
+      local: "flag",
+      "oauth-callback-port": "value",
+      "oauth-client-id": "value",
+      "oauth-client-name": "value",
+      "oauth-client-secret": "value",
+      url: "value",
     },
     error,
     2,
@@ -528,8 +528,8 @@ function list(
         log(
           JSON.stringify(
             {
-              servers: reports,
               errors: loaded.errors,
+              servers: reports,
               ...(untrustedNote !== undefined && untrustedNote !== ""
                 ? { note: untrustedNote }
                 : {}),
@@ -606,18 +606,18 @@ function login(
       try {
         yield* awaited(
           signInMcpServer({
-            serverUrl: url,
-            store: credentials.forServer(name, url),
-            settings: connection.oauthSettings(),
             challenge: connection.challenge,
             prompt: {
+              promptForRedirectUrl: (signal) => waitForRedirectUrl(signal, interactive),
               showAuthorizationUrl: (authorizationUrl) => {
                 log(`Sign in to MCP server "${name}" in your browser:\n${authorizationUrl.href}`);
                 openUrl(authorizationUrl.href);
               },
-              promptForRedirectUrl: (signal) => waitForRedirectUrl(signal, interactive),
             },
+            serverUrl: url,
+            settings: connection.oauthSettings(),
             signal: AbortSignal.timeout(timeoutMs),
+            store: credentials.forServer(name, url),
           }),
         );
       } catch (signInError) {

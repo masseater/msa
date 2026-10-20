@@ -1,4 +1,4 @@
-import type { Model } from "@msa/ai";
+import type aiTypes from "@msa/ai/index.types";
 import testing from "@msa/testing";
 import { Effect } from "effect";
 import lockfile from "proper-lockfile";
@@ -39,7 +39,7 @@ afterEach(() => {
   vi.restoreAllMocks();
 });
 
-function model(provider: string, id: string): Model<"openai-completions"> {
+function model(provider: string, id: string): aiTypes.Model<"openai-completions"> {
   return {
     api: "openai-completions" as const,
     baseUrl: "https://example.test/v1",

@@ -1,17 +1,14 @@
+import testing from "@msa/testing";
 import { Deferred, Effect } from "effect";
 import { afterEach, describe, expect, it } from "vite-plus/test";
 
-import {
-  LATEST_PROTOCOL_VERSION,
-  type McpAuthRequiredError,
-  McpClient,
-  McpSessionExpiredError,
-  StreamableHttpTransport,
-} from "../src/index.ts";
-import helpers from "./helpers.ts";
+import mcp from "../src/index.ts";
+import type mcpTypes from "../src/index.types.ts";
 import httpFixture from "./http-fixture.ts";
 
-const { closeServers, encodeJson, openStream, readBody, readMessage } = helpers;
+const { LATEST_PROTOCOL_VERSION, McpClient, McpSessionExpiredError, StreamableHttpTransport } = mcp;
+
+const { closeServers, encodeJson, openStream, readBody, readMessage } = testing;
 const { protocolHandler, protocolHandlerFor, startServer, toolsCallOnly } = httpFixture;
 
 const eventStream = (body: string | ReadableStream<Uint8Array>) =>
@@ -19,7 +16,7 @@ const eventStream = (body: string | ReadableStream<Uint8Array>) =>
 
 const newClient = () => new McpClient({ name: "http-test", version: "1.0.0" });
 
-const connectTo = (client: McpClient, transport: StreamableHttpTransport) =>
+const connectTo = (client: mcpTypes.McpClient, transport: mcpTypes.StreamableHttpTransport) =>
   Effect.promise(() => client.connect(transport));
 
 const handlesJsonAndSse = Effect.gen(function* () {
@@ -60,7 +57,7 @@ const classifiesAuthFailures = Effect.gen(function* () {
       name: "McpAuthRequiredError",
       status: 401,
       wwwAuthenticate: 'Bearer resource_metadata="https://example.com/meta"',
-    } satisfies Partial<McpAuthRequiredError>),
+    } satisfies Partial<mcpTypes.McpAuthRequiredError>),
   );
 });
 

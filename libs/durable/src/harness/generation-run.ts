@@ -1,4 +1,4 @@
-import type { AssistantMessage } from "@msa/ai";
+import type aiTypes from "@msa/ai/index.types";
 import type chordTypes from "@msa/chord/index.types";
 import json from "@msa/chord/json";
 import { Effect, Function } from "effect";
@@ -17,14 +17,14 @@ const { AssistantEntry } = entries;
 const appendAssistant: typesModule.Dual3<
   typesModule.Tx,
   typesModule.ConversationId,
-  AssistantMessage,
+  aiTypes.AssistantMessage,
   Effect.Effect<typesModule.TypedEntry<never>>
 > = Function.dual(
   3,
   Effect.fnUntraced(function* (
     tx: typesModule.Tx,
     conversationId: typesModule.ConversationId,
-    message: AssistantMessage,
+    message: aiTypes.AssistantMessage,
   ) {
     yield* recordUsage(
       tx,
@@ -53,7 +53,7 @@ const convertPartial: typesModule.Dual3<
   ) {
     const partial = live.generation?.message;
     if (partial === undefined) return;
-    const message = copyJson(partial) as unknown as AssistantMessage;
+    const message = copyJson(partial) as unknown as aiTypes.AssistantMessage;
     yield* appendAssistant(tx, conversationId, { ...message, stopReason: "aborted" });
   }),
 );

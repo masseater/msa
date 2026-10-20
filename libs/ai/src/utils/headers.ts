@@ -1,6 +1,6 @@
-import type { ProviderHeaders } from "../types.ts";
+import type typesModule from "../types.types.ts";
 
-export function headersToRecord(headers: Headers): Record<string, string> {
+function headersToRecord(headers: Headers): Record<string, string> {
   const result: Record<string, string> = {};
   for (const [key, value] of headers.entries()) {
     result[key] = value;
@@ -8,8 +8,8 @@ export function headersToRecord(headers: Headers): Record<string, string> {
   return result;
 }
 
-export function providerHeadersToRecord(
-  ...headerSources: (ProviderHeaders | undefined)[]
+function providerHeadersToRecord(
+  ...headerSources: (typesModule.ProviderHeaders | undefined)[]
 ): Record<string, string> | undefined {
   const merged = new Map<string, [string, string]>();
   for (const source of headerSources) {
@@ -21,3 +21,10 @@ export function providerHeadersToRecord(
   }
   return merged.size > 0 ? Object.fromEntries(merged.values()) : undefined;
 }
+
+const headersModule = {
+  headersToRecord,
+  providerHeadersToRecord,
+};
+
+export default headersModule;

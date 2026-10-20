@@ -3,8 +3,15 @@ import { describe, it } from "node:test";
 
 import { Effect } from "effect";
 
-import { overrideEnv } from "../src/env.ts";
-import {
+import env from "../src/env.ts";
+import tuiModule from "../src/index.ts";
+import type tuiTypes from "../src/index.types.ts";
+import terminalImageKitty from "../src/terminal-image-kitty.ts";
+import tuiAltScreenHelpers from "./tui-alt-screen-helpers.ts";
+import RecordingTerminal from "./tui-alt-screen-recording-terminal.ts";
+
+const { overrideEnv } = env;
+const {
   HStack,
   Image,
   ScrollView,
@@ -13,10 +20,8 @@ import {
   VStack,
   resetCapabilitiesCache,
   setCapabilities,
-} from "../src/index.ts";
-import { encodeKitty, registerKittyImageMetadata } from "../src/terminal-image-kitty.ts";
-import tuiAltScreenHelpers from "./tui-alt-screen-helpers.ts";
-import RecordingTerminal from "./tui-alt-screen-recording-terminal.ts";
+} = tuiModule;
+const { encodeKitty, registerKittyImageMetadata } = terminalImageKitty;
 
 const { scrollLineByLine, someWriteSince, withCapabilities, writesSince } = tuiAltScreenHelpers;
 
@@ -32,7 +37,7 @@ function redrawsWezTermKittyImagesAfter(): void {
   it("redraws WezTerm Kitty images after writes to covered rows", () =>
     Effect.runPromise(
       Effect.gen(function* () {
-        let tui: TuiAltScreen | undefined;
+        let tui: tuiTypes.TuiAltScreen | undefined;
         const restoreEnv = overrideEnv({ WEZTERM_PANE: "1" });
         setCapabilities({ hyperlinks: true, images: "kitty", trueColor: true });
         yield* Effect.gen(function* () {
@@ -244,7 +249,10 @@ function evictsOffscreenKittyImagesDecoded(): void {
     ));
 }
 
-function mountImageRow(tui: TuiAltScreen): { label: Text; header: Text } {
+function mountImageRow(tui: tuiTypes.TuiAltScreen): {
+  label: tuiTypes.Text;
+  header: tuiTypes.Text;
+} {
   const label = new Text("left", 0, 0);
   const image = new Image(
     "A".repeat(8192),

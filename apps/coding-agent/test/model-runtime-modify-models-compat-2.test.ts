@@ -1,11 +1,5 @@
-import {
-  type DeferredCancelOptions,
-  type DeferredFetchOptions,
-  InMemoryModelsStore,
-  type Model,
-  type Provider,
-  createAssistantMessageEventStream,
-} from "@msa/ai";
+import ai from "@msa/ai";
+import type aiTypes from "@msa/ai/index.types";
 import testing from "@msa/testing";
 import { Effect } from "effect";
 import { describe, expect, it } from "vite-plus/test";
@@ -13,9 +7,11 @@ import { describe, expect, it } from "vite-plus/test";
 import { AuthStorage } from "../src/core/auth-storage.ts";
 import { ModelRuntime } from "../src/core/model-runtime.ts";
 
+const { InMemoryModelsStore, createAssistantMessageEventStream } = ai;
+
 const { awaited, joinPath, makeTempDir, removePath, runTest, toJsonText, writeTextFile } = testing;
 
-function model(id: string): Model<"openai-completions"> {
+function model(id: string): aiTypes.Model<"openai-completions"> {
   return {
     api: "openai-completions" as const,
     baseUrl: "https://example.test/v1",
@@ -39,12 +35,12 @@ const writeModels = (dir: string, value: unknown): Effect.Effect<string> =>
 
 type Observed = {
   cancelledId?: string;
-  cancelledOptions?: DeferredCancelOptions | undefined;
+  cancelledOptions?: aiTypes.DeferredCancelOptions | undefined;
   fetchedBaseUrl?: string;
-  fetchedOptions?: DeferredFetchOptions | undefined;
+  fetchedOptions?: aiTypes.DeferredFetchOptions | undefined;
 };
 
-const finishedStream = (requestModel: Model<"openai-completions">) => {
+const finishedStream = (requestModel: aiTypes.Model<"openai-completions">) => {
   const message = {
     api: requestModel.api,
     content: [],
@@ -70,9 +66,9 @@ const finishedStream = (requestModel: Model<"openai-completions">) => {
 };
 
 const deferredProvider = (
-  nativeModel: Model<"openai-completions">,
+  nativeModel: aiTypes.Model<"openai-completions">,
   observed: Observed,
-): Provider => ({
+): aiTypes.Provider => ({
   auth: {
     apiKey: {
       name: "Native key",
@@ -87,7 +83,7 @@ const deferredProvider = (
   fetchDeferred: (requestModel, _handle, options) => {
     observed.fetchedBaseUrl = requestModel.baseUrl;
     observed.fetchedOptions = options;
-    return finishedStream(requestModel as Model<"openai-completions">);
+    return finishedStream(requestModel as aiTypes.Model<"openai-completions">);
   },
   getModels: () => [nativeModel],
   id: "extension-native-deferred",

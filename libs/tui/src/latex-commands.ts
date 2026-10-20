@@ -1,4 +1,14 @@
-import {
+import latexCommandSets from "./latex-command-sets.ts";
+import latexEnvironments from "./latex-environments.ts";
+import latexFormat from "./latex-format.ts";
+import latexOperator from "./latex-operator.ts";
+import type latexParserTypes from "./latex-parser.types.ts";
+import latexSymbols from "./latex-symbols.ts";
+import latexTables from "./latex-tables.ts";
+
+const { ACCENTS, BLACKBOARD, NEGATED_SYMBOLS } = latexTables;
+const { SYMBOLS } = latexSymbols;
+const {
   DISPLAY_LIMIT_SYMBOLS,
   FONT_SWITCH_COMMANDS,
   IGNORED_COMMANDS,
@@ -10,22 +20,19 @@ import {
   RELATION_COMMANDS,
   SIZE_COMMANDS,
   SPACING_COMMANDS,
-} from "./latex-command-sets.ts";
-import { parseEnvironment } from "./latex-environments.ts";
-import {
+} = latexCommandSets;
+const { parseOperator } = latexOperator;
+const {
+  NAMED_OPERATOR_END,
+  NAMED_OPERATOR_START,
   formatFraction,
   formatRoot,
   formatScript,
-  NAMED_OPERATOR_END,
-  NAMED_OPERATOR_START,
   normalizeOutput,
-} from "./latex-format.ts";
-import { parseOperator } from "./latex-operator.ts";
-import type { LatexParser } from "./latex-parser.ts";
-import { SYMBOLS } from "./latex-symbols.ts";
-import { ACCENTS, BLACKBOARD, NEGATED_SYMBOLS } from "./latex-tables.ts";
+} = latexFormat;
+const { parseEnvironment } = latexEnvironments;
 
-type CommandHandler = (parser: LatexParser, command: string) => string;
+type CommandHandler = (parser: latexParserTypes.LatexParser, command: string) => string;
 type CommandRule = readonly [(command: string) => boolean, CommandHandler];
 
 const ESCAPED_CHARACTERS = new Set(["{", "}", "$", "%", "#", "_", "&"]);
@@ -39,12 +46,12 @@ function oneOf(...commands: string[]): (command: string) => boolean {
   return (command) => commands.includes(command);
 }
 
-function fail(parser: LatexParser, value: string): string {
+function fail(parser: latexParserTypes.LatexParser, value: string): string {
   parser.supported = false;
   return value;
 }
 
-function renderNot(parser: LatexParser): string {
+function renderNot(parser: latexParserTypes.LatexParser): string {
   const value = parser.parseRequiredArgument(false).trim();
   const negated = NEGATED_SYMBOLS[value];
   if (negated !== undefined) {
@@ -57,31 +64,31 @@ function renderNot(parser: LatexParser): string {
   return ` ${characters[0]}̸${characters.slice(1).join("")} `;
 }
 
-function renderSymbol(parser: LatexParser, command: string): string {
+function renderSymbol(parser: latexParserTypes.LatexParser, command: string): string {
   const symbol = SYMBOLS[command] ?? "";
   if (DISPLAY_LIMIT_SYMBOLS.has(command)) {
-    return parseOperator(parser, symbol, { inlineLowerStyle: "script", displayLimits: true });
+    return parseOperator(parser, symbol, { displayLimits: true, inlineLowerStyle: "script" });
   }
   return command === "cdot" || command === "times" || RELATION_COMMANDS.has(command)
     ? ` ${symbol} `
     : symbol;
 }
 
-function renderFraction(parser: LatexParser, command: string): string {
+function renderFraction(parser: latexParserTypes.LatexParser, command: string): string {
   const shouldStack = parser.display && parser.stacksFractions && command !== "tfrac";
   const numerator = parser.parseRequiredArgument(!shouldStack);
   const denominator = parser.parseRequiredArgument(!shouldStack);
   if (shouldStack) {
     return parser.pushLayout({
-      type: "fraction",
-      numerator: normalizeOutput(numerator),
       denominator: normalizeOutput(denominator),
+      numerator: normalizeOutput(numerator),
+      type: "fraction",
     });
   }
   return formatFraction(numerator, denominator);
 }
 
-function renderSqrt(parser: LatexParser): string {
+function renderSqrt(parser: latexParserTypes.LatexParser): string {
   const degree = parser.parseOptionalArgument()?.trim();
   const value = parser.parseRequiredArgument();
   const symbol = ROOT_SYMBOLS.get(degree ?? "2");
@@ -91,36 +98,36 @@ function renderSqrt(parser: LatexParser): string {
   return `${formatScript(degree ?? "", "sup")}${formatRoot(value, "√")}`;
 }
 
-function renderAccent(parser: LatexParser, command: string): string {
+function renderAccent(parser: latexParserTypes.LatexParser, command: string): string {
   const value = parser.parseRequiredArgument();
   return Array.from(value).length === 1 ? `${value}${ACCENTS[command]}` : `${command}(${value})`;
 }
 
-function renderOperatorName(parser: LatexParser): string {
+function renderOperatorName(parser: latexParserTypes.LatexParser): string {
   const starred = parser.peek() === "*";
   if (starred) {
     parser.position++;
   }
   const operator = normalizeOutput(parser.parseRequiredArgument()).trim();
   return parseOperator(parser, operator, {
-    inlineLowerStyle: "bracket",
     displayLimits: starred,
+    inlineLowerStyle: "bracket",
     spaced: true,
   });
 }
 
-function renderModulo(parser: LatexParser, command: string): string {
+function renderModulo(parser: latexParserTypes.LatexParser, command: string): string {
   const value = parser.parseRequiredArgument().trim();
   return command === "pmod" ? ` (mod ${value})` : ` (${value})`;
 }
 
-function renderStacked(parser: LatexParser, command: string): string {
+function renderStacked(parser: latexParserTypes.LatexParser, command: string): string {
   const script = parser.parseRequiredArgument();
   const value = parser.parseRequiredArgument().trim();
   return `${value}${formatScript(script, command === "underset" ? "sub" : "sup")}`;
 }
 
-function renderPlainWrapper(parser: LatexParser, command: string): string {
+function renderPlainWrapper(parser: latexParserTypes.LatexParser, command: string): string {
   const value = parser.parseRequiredArgument();
   return command.startsWith("text") || command === "mbox" ? value : value.trim();
 }
@@ -144,8 +151,8 @@ const COMMAND_RULES: readonly CommandRule[] = [
     (command) => LIMIT_OPERATORS.has(command),
     (parser, command) =>
       parseOperator(parser, command, {
-        inlineLowerStyle: "bracket",
         displayLimits: true,
+        inlineLowerStyle: "bracket",
         spaced: true,
       }),
   ],
@@ -189,7 +196,7 @@ const COMMAND_RULES: readonly CommandRule[] = [
   [oneOf("end"), (parser) => fail(parser, "")],
 ];
 
-function readCommandName(parser: LatexParser, first: string): string {
+function readCommandName(parser: latexParserTypes.LatexParser, first: string): string {
   if (/[A-Za-z]/u.test(first)) {
     const start = parser.position;
     parser.position = parser.skipWhile(/[A-Za-z]/u);
@@ -199,7 +206,7 @@ function readCommandName(parser: LatexParser, first: string): string {
   return first;
 }
 
-export function parseCommand(parser: LatexParser): string {
+function parseCommand(parser: latexParserTypes.LatexParser): string {
   parser.position++;
   if (parser.position >= parser.source.length) {
     return fail(parser, "");
@@ -218,3 +225,9 @@ export function parseCommand(parser: LatexParser): string {
   const rule = COMMAND_RULES.find(([matches]) => matches(command));
   return rule === undefined ? fail(parser, `\\${command}`) : rule[1](parser, command);
 }
+
+const latexCommands = {
+  parseCommand,
+};
+
+export default latexCommands;

@@ -2,13 +2,18 @@ import { Effect, Stream } from "effect";
 import type { ResponseStreamEvent } from "openai/resources/responses/responses.js";
 import { describe, expect, it, vi } from "vite-plus/test";
 
-import { processResponsesStream } from "../src/api/openai-responses-stream.ts";
-import { stream as streamOpenAIResponses } from "../src/api/openai-responses.ts";
-import type { Api, AssistantMessage, AssistantMessageEvent, Model } from "../src/types.ts";
-import { AssistantMessageEventStream } from "../src/utils/event-stream.ts";
-import { normalizeContext } from "../src/utils/transcript.ts";
+import openaiResponsesStream from "../src/api/openai-responses-stream.ts";
+import openaiResponses from "../src/api/openai-responses.ts";
+import type typesModule from "../src/types.types.ts";
+import eventStream from "../src/utils/event-stream.ts";
+import transcript from "../src/utils/transcript.ts";
 import effectAssert from "./effect-assert.ts";
 import openaiResponsesTerminalEventSupport from "./openai-responses-terminal-event-support.ts";
+
+const { processResponsesStream } = openaiResponsesStream;
+const { AssistantMessageEventStream } = eventStream;
+const { normalizeContext } = transcript;
+const { stream: streamOpenAIResponses } = openaiResponses;
 
 const { createModel, createOutput } = openaiResponsesTerminalEventSupport;
 
@@ -95,7 +100,7 @@ const forwardsParsedProviderStreamEventsIn = () =>
         tools: [],
       });
       const providerEvents: unknown[] = [];
-      const eventModels: Model<Api>[] = [];
+      const eventModels: typesModule.Model<typesModule.Api>[] = [];
       const stream = streamOpenAIResponses(model, context, {
         apiKey: "test",
         onProviderStreamEvent: (event, eventModel) =>
@@ -134,8 +139,8 @@ const emitsAnErrorFinalResultWhen = () =>
         tools: [],
       });
       const stream = streamOpenAIResponses(model, context, { apiKey: "test" });
-      const events: AssistantMessageEvent[] = [];
-      let initialStopReason: AssistantMessage["stopReason"] | undefined;
+      const events: typesModule.AssistantMessageEvent[] = [];
+      let initialStopReason: typesModule.AssistantMessage["stopReason"] | undefined;
 
       yield* Stream.fromAsyncIterable(stream, (error) => error).pipe(
         Stream.orDie,

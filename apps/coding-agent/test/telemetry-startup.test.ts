@@ -1,4 +1,4 @@
-import { NOOP_TELEMETRY_CONTEXT } from "@msa/telemetry";
+import telemetryModule from "@msa/telemetry";
 import testing from "@msa/testing";
 import { Effect } from "effect";
 import { afterEach, describe, expect, it } from "vite-plus/test";
@@ -8,6 +8,8 @@ import {
   resolveDestination,
   startTelemetry,
 } from "../src/core/observability/telemetry.ts";
+
+const { NOOP_TELEMETRY_CONTEXT } = telemetryModule;
 
 const {
   awaited,

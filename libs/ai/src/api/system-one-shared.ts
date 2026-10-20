@@ -1,33 +1,12 @@
 import { Clock, Effect, Function } from "effect";
 
-import type {
-  ClassifierAnswer,
-  ClassifierApi,
-  ClassifierContext,
-  ClassifierModel,
-  ClassifierOptions,
-  ClassifierResult,
-} from "../types.ts";
-import { formatProviderError, normalizeProviderError } from "../utils/error-body.ts";
-import {
-  isRecord,
-  parseClassifierUsage,
-  classifierRequest,
-  requiredNumber,
-} from "./classifier-shared.ts";
+import type typesModule from "../types.types.ts";
+import errorBody from "../utils/error-body.ts";
+import classifierShared from "./classifier-shared.ts";
+import type systemOneSharedTypes from "./system-one-shared.types.ts";
 
-export interface SystemOneWireRequest {
-  state: ClassifierContext["state"];
-  questions: Record<string, unknown>;
-}
-
-export interface SystemOneTransport {
-  api: ClassifierApi;
-  label: string;
-  url(model: ClassifierModel<ClassifierApi>): URL;
-  payload(model: ClassifierModel<ClassifierApi>, request: SystemOneWireRequest): unknown;
-  output(body: unknown): Record<string, unknown>;
-}
+const { classifierRequest, isRecord, parseClassifierUsage, requiredNumber } = classifierShared;
+const { formatProviderError, normalizeProviderError } = errorBody;
 
 function probabilities(label: string, value: unknown, id: string): Record<string, number> {
   if (!isRecord(value)) throw new Error(`${label} returned invalid probabilities for ${id}`);
@@ -42,10 +21,10 @@ function probabilities(label: string, value: unknown, id: string): Record<string
 function parseAnswers(
   label: string,
   value: unknown,
-  context: ClassifierContext,
-): Record<string, ClassifierAnswer> {
+  context: typesModule.ClassifierContext,
+): Record<string, typesModule.ClassifierAnswer> {
   if (!isRecord(value)) throw new Error(`${label} returned an unexpected response`);
-  const answers: Array<[string, ClassifierAnswer]> = [];
+  const answers: Array<[string, typesModule.ClassifierAnswer]> = [];
   for (const [id, question] of Object.entries(context.questions)) {
     const answer = value[id];
     if (!isRecord(answer)) throw new Error(`${label} did not return an answer for ${id}`);
@@ -56,10 +35,10 @@ function parseAnswers(
       answers.push([
         id,
         {
-          type: "choice",
           choice: answer["choice"],
-          probabilities: probabilities(label, answer["probabilities"], id),
           confidence: requiredNumber(label, answer["confidence"], `confidence for ${id}`),
+          probabilities: probabilities(label, answer["probabilities"], id),
+          type: "choice",
         },
       ]);
     } else if (question.type === "score") {
@@ -68,9 +47,9 @@ function parseAnswers(
       answers.push([
         id,
         {
-          type: "score",
-          score: requiredNumber(label, answer["score"], `score for ${id}`),
           confidence: requiredNumber(label, answer["confidence"], `confidence for ${id}`),
+          score: requiredNumber(label, answer["score"], `score for ${id}`),
+          type: "score",
         },
       ]);
     } else {
@@ -79,8 +58,8 @@ function parseAnswers(
       answers.push([
         id,
         {
-          type: "bool",
           probability: requiredNumber(label, answer["noul"], `probability for ${id}`),
+          type: "bool",
         },
       ]);
     }
@@ -88,35 +67,37 @@ function parseAnswers(
   return Object.fromEntries(answers);
 }
 
-function wireRequest(context: ClassifierContext): SystemOneWireRequest {
+function wireRequest(
+  context: typesModule.ClassifierContext,
+): systemOneSharedTypes.SystemOneWireRequest {
   return {
-    state: context.state,
     questions: Object.fromEntries(
       Object.entries(context.questions).map(([id, question]) => [
         id,
         question.type === "bool" ? { ...question, type: "noul" } : question,
       ]),
     ),
+    state: context.state,
   };
 }
 
 const requestSystemOne = Effect.fn("requestSystemOne")(function* (
-  transport: SystemOneTransport,
-  model: ClassifierModel<ClassifierApi>,
-  context: ClassifierContext,
-  options: ClassifierOptions | undefined,
-  output: ClassifierResult,
+  transport: systemOneSharedTypes.SystemOneTransport,
+  model: typesModule.ClassifierModel<typesModule.ClassifierApi>,
+  context: typesModule.ClassifierContext,
+  options: typesModule.ClassifierOptions | undefined,
+  output: typesModule.ClassifierResult,
 ) {
   if (model.api !== transport.api)
     return yield* Effect.die(new Error(`Unsupported classifier API: ${model.api}`));
   if (context.images?.length !== undefined && context.images?.length > 0)
     return yield* Effect.die(new Error(`${transport.label} does not support image input`));
   const body = yield* classifierRequest({
-    label: transport.label,
-    url: transport.url(model),
-    model,
     body: transport.payload(model, wireRequest(context)),
+    label: transport.label,
+    model,
     options,
+    url: transport.url(model),
   });
   const result = transport.output(body);
   const usage = parseClassifierUsage(result["usage"], model);
@@ -125,39 +106,39 @@ const requestSystemOne = Effect.fn("requestSystemOne")(function* (
   return output;
 });
 
-export const classifySystemOne: {
+const classifySystemOne: {
   (
-    model: ClassifierModel<ClassifierApi>,
-    context: ClassifierContext,
-    options: ClassifierOptions | undefined,
-  ): (transport: SystemOneTransport) => Promise<ClassifierResult>;
+    model: typesModule.ClassifierModel<typesModule.ClassifierApi>,
+    context: typesModule.ClassifierContext,
+    options: typesModule.ClassifierOptions | undefined,
+  ): (transport: systemOneSharedTypes.SystemOneTransport) => Promise<typesModule.ClassifierResult>;
   (
-    transport: SystemOneTransport,
-    model: ClassifierModel<ClassifierApi>,
-    context: ClassifierContext,
-    options: ClassifierOptions | undefined,
-  ): Promise<ClassifierResult>;
+    transport: systemOneSharedTypes.SystemOneTransport,
+    model: typesModule.ClassifierModel<typesModule.ClassifierApi>,
+    context: typesModule.ClassifierContext,
+    options: typesModule.ClassifierOptions | undefined,
+  ): Promise<typesModule.ClassifierResult>;
 } = Function.dual(
   4,
   function (
-    transport: SystemOneTransport,
-    model: ClassifierModel<ClassifierApi>,
-    context: ClassifierContext,
-    options: ClassifierOptions | undefined,
-  ): Promise<ClassifierResult> {
+    transport: systemOneSharedTypes.SystemOneTransport,
+    model: typesModule.ClassifierModel<typesModule.ClassifierApi>,
+    context: typesModule.ClassifierContext,
+    options: typesModule.ClassifierOptions | undefined,
+  ): Promise<typesModule.ClassifierResult> {
     return Effect.runPromise(
       Effect.gen(function* () {
-        const output: ClassifierResult = {
-          api: model.api,
-          provider: model.provider,
-          model: model.id,
+        const output: typesModule.ClassifierResult = {
           answers: {},
+          api: model.api,
+          model: model.id,
+          provider: model.provider,
           stopReason: "stop",
           timestamp: yield* Clock.currentTimeMillis,
         };
         return yield* requestSystemOne(transport, model, context, options, output).pipe(
           Effect.catchDefect((error) =>
-            Effect.sync((): ClassifierResult => {
+            Effect.sync((): typesModule.ClassifierResult => {
               output.stopReason = options?.signal?.aborted === true ? "aborted" : "error";
               output.errorMessage = formatProviderError(
                 normalizeProviderError(error),
@@ -171,3 +152,9 @@ export const classifySystemOne: {
     );
   },
 );
+
+const systemOneShared = {
+  classifySystemOne,
+};
+
+export default systemOneShared;

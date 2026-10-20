@@ -1,13 +1,18 @@
 import { Effect } from "effect";
 import { describe, expect, it, vi } from "vite-plus/test";
 
-import { getCompat } from "../src/api/openai-completions-compat.ts";
-import { convertMessages } from "../src/api/openai-completions.ts";
-import { normalizeContext } from "../src/compat.ts";
-import type { Model } from "../src/types.ts";
-import { currentTimeMillis } from "../src/utils/clock.ts";
+import openaiCompletionsCompat from "../src/api/openai-completions-compat.ts";
+import openaiCompletions from "../src/api/openai-completions.ts";
+import compatModule from "../src/compat.ts";
+import type typesModule from "../src/types.types.ts";
+import clock from "../src/utils/clock.ts";
 import modelChoice from "./model-choice.ts";
 import openaiCompletionsToolChoiceSupport from "./openai-completions-tool-choice-support.ts";
+
+const { convertMessages } = openaiCompletions;
+const { normalizeContext } = compatModule;
+const { currentTimeMillis } = clock;
+const { getCompat } = openaiCompletionsCompat;
 
 vi.mock("openai", () =>
   import("./openai-completions-tool-choice-mock.ts").then((module) => module.default),
@@ -25,7 +30,7 @@ const emptyUsage = {
   totalTokens: 0,
 };
 
-const openCodeGoReasoningModel = (): Model<"openai-completions"> => {
+const openCodeGoReasoningModel = (): typesModule.Model<"openai-completions"> => {
   const { compat: _compat, ...baseModel } = chooseModel(
     "opencode-go",
     "reasoning completions",

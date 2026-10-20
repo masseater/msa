@@ -1,6 +1,8 @@
 import type { ExtensionAPI } from "@msa/coding-agent";
-import { Box, Text } from "@msa/tui";
+import tui from "@msa/tui";
 import { Clock, DateTime, Effect } from "effect";
+
+const { Box, Text } = tui;
 
 interface StatusCardData {
   message: string;

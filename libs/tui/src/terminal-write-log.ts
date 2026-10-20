@@ -1,8 +1,13 @@
 import { DateTime, Effect } from "effect";
 
-import { readEnv } from "./env.ts";
-import { writeFileInBackground } from "./file-log.ts";
-import { Platform, pathOperations } from "./platform.ts";
+import env from "./env.ts";
+import fileLog from "./file-log.ts";
+import platformModule from "./platform.ts";
+import type platformTypes from "./platform.types.ts";
+
+const { Platform, pathOperations } = platformModule;
+const { readEnv } = env;
+const { writeFileInBackground } = fileLog;
 
 function timestampedLogName(): string {
   const now = DateTime.toParts(
@@ -15,7 +20,9 @@ function timestampedLogName(): string {
   return `tui-${ts}-${process.pid}.log`;
 }
 
-function resolveWriteLogPath(configured: string): Effect.Effect<string, never, Platform> {
+function resolveWriteLogPath(
+  configured: string,
+): Effect.Effect<string, never, platformTypes.Platform> {
   const logName = timestampedLogName();
   return Effect.gen(function* () {
     const platform = yield* Platform;
@@ -24,8 +31,8 @@ function resolveWriteLogPath(configured: string): Effect.Effect<string, never, P
   });
 }
 
-export class TerminalWriteLog {
-  private readonly path: Effect.Effect<string, never, Platform> | undefined;
+export default class TerminalWriteLog {
+  private readonly path: Effect.Effect<string, never, platformTypes.Platform> | undefined;
 
   constructor(configured: string = readEnv("MSA_TUI_WRITE_LOG") ?? "") {
     this.path =
@@ -36,6 +43,6 @@ export class TerminalWriteLog {
 
   append(data: string): void {
     if (this.path === undefined) return;
-    writeFileInBackground(Effect.map(this.path, (path) => ({ path, data, append: true })));
+    writeFileInBackground(Effect.map(this.path, (path) => ({ append: true, data, path })));
   }
 }

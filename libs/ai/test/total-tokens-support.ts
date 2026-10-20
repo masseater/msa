@@ -1,9 +1,12 @@
 import { Clock, Console, Effect } from "effect";
 import { expect } from "vite-plus/test";
 
-import { complete } from "../src/compat.ts";
-import type { Api, Context, Model, StreamOptions, Usage } from "../src/types.ts";
-type StreamOptionsWithExtras = StreamOptions & Record<string, unknown>;
+import compat from "../src/compat.ts";
+import type typesModule from "../src/types.types.ts";
+
+const { complete } = compat;
+
+type StreamOptionsWithExtras = typesModule.StreamOptions & Record<string, unknown>;
 
 const LONG_SYSTEM_PROMPT = `You are a helpful assistant. Be concise in your responses.
 
@@ -17,11 +20,10 @@ ${Array(50)
 
 Remember: Always be helpful and concise.`;
 
-const testTotalTokensWithCache = Effect.fn("testTotalTokensWithCache")(function* <TApi extends Api>(
-  llm: Model<TApi>,
-  options: StreamOptionsWithExtras = {},
-) {
-  const context1: Context = {
+const testTotalTokensWithCache = Effect.fn("testTotalTokensWithCache")(function* <
+  TApi extends typesModule.Api,
+>(llm: typesModule.Model<TApi>, options: StreamOptionsWithExtras = {}) {
+  const context1: typesModule.Context = {
     messages: [
       {
         content: "What is 2 + 2? Reply with just the number.",
@@ -35,7 +37,7 @@ const testTotalTokensWithCache = Effect.fn("testTotalTokensWithCache")(function*
   const response1 = yield* Effect.promise(() => complete(llm, context1, options));
   expect(response1.stopReason).toBe("stop");
 
-  const context2: Context = {
+  const context2: typesModule.Context = {
     messages: [
       ...context1.messages,
       response1,
@@ -54,17 +56,17 @@ const testTotalTokensWithCache = Effect.fn("testTotalTokensWithCache")(function*
   return { first: response1.usage, second: response2.usage };
 });
 
-const computedTotal = (usage: Usage) =>
+const computedTotal = (usage: typesModule.Usage) =>
   usage.input + usage.output + usage.cacheRead + usage.cacheWrite;
 
-const logUsage = (label: string, usage: Usage) =>
+const logUsage = (label: string, usage: typesModule.Usage) =>
   Console.log(
     `  ${label}: input: ${usage.input}, output: ${usage.output}, cacheRead: ${usage.cacheRead}, cacheWrite: ${usage.cacheWrite}, totalTokens: ${usage.totalTokens}, computed: ${computedTotal(usage)}`,
   );
 
-const expectTotalTokens = Effect.fn("expectTotalTokens")(function* <TApi extends Api>(
+const expectTotalTokens = Effect.fn("expectTotalTokens")(function* <TApi extends typesModule.Api>(
   label: string,
-  llm: Model<TApi>,
+  llm: typesModule.Model<TApi>,
   options: StreamOptionsWithExtras = {},
 ) {
   yield* Console.log(`\n${label} / ${llm.id}:`);

@@ -3,13 +3,16 @@ import { describe, it } from "node:test";
 
 import { Effect } from "effect";
 
-import { extractSegments, sliceWithWidth } from "../src/text-slice.ts";
-import type { TUI } from "../src/tui-interface.ts";
-import { TuiMainScreen } from "../src/tui-main-screen.ts";
-import { normalizeTerminalOutput, visibleWidth } from "../src/utils.ts";
+import textSlice from "../src/text-slice.ts";
+import type tuiInterfaceTypes from "../src/tui-interface.types.ts";
+import TuiMainScreen from "../src/tui-main-screen.ts";
+import utils from "../src/utils.ts";
 import CapturingVirtualTerminal from "./tab-width-capturing-virtual-terminal.ts";
 import FullViewportContent from "./tab-width-full-viewport-content.ts";
 import TabStatusOverlay from "./tab-width-tab-status-overlay.ts";
+
+const { extractSegments, sliceWithWidth } = textSlice;
+const { normalizeTerminalOutput, visibleWidth } = utils;
 
 describe("tab width accounting", () => {
   it("keeps slice helper widths consistent with visible width", () => {
@@ -56,7 +59,7 @@ describe("tab width accounting", () => {
     Effect.runPromise(
       Effect.gen(function* () {
         const terminal = new CapturingVirtualTerminal(16, 3);
-        const tui: TUI = new TuiMainScreen(terminal);
+        const tui: tuiInterfaceTypes.TUI = new TuiMainScreen(terminal);
         tui.addChild(new FullViewportContent());
         tui.showOverlay(new TabStatusOverlay(), { col: 4, row: 1, width: 4 });
         tui.start();

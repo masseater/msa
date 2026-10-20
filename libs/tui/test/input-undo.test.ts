@@ -1,7 +1,7 @@
 import assert from "node:assert";
 import { describe, it } from "node:test";
 
-import { Input } from "../src/components/input.ts";
+import Input from "../src/components/input.ts";
 import editorHelpers from "./editor-helpers.ts";
 
 const { typeText } = editorHelpers;

@@ -1,4 +1,4 @@
-import { Type, fauxAssistantMessage, fauxText, fauxToolCall } from "@msa/ai";
+import ai from "@msa/ai";
 import type chordTypes from "@msa/chord/index.types";
 import durable from "@msa/durable";
 import harnessModule from "@msa/durable/harness";
@@ -9,6 +9,8 @@ import { describe, expect, it } from "vite-plus/test";
 import type harnessEventsAgent2TestTypes from "./harness-events-agent-2.test.types.ts";
 import harnessEventsSupport from "./harness-events-support.ts";
 import support from "./support.ts";
+
+const { Type, fauxAssistantMessage, fauxText, fauxToolCall } = ai;
 
 const { MemoryStorage } = memory;
 const { AgentDoc, LiveDoc, UsageDoc, defineTool } = durable;

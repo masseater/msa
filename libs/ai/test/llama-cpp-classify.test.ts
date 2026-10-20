@@ -1,13 +1,10 @@
 import { Effect } from "effect";
 import { describe, expect, it } from "vite-plus/test";
 
-import {
-  classify,
-  labelProbabilities,
-  peakConfidence,
-  renderQuestion,
-} from "../src/api/llama-cpp-classify.ts";
+import llamaCppClassify from "../src/api/llama-cpp-classify.ts";
 import llamaCppClassifySupport from "./llama-cpp-classify-support.ts";
+
+const { classify, labelProbabilities, peakConfidence, renderQuestion } = llamaCppClassify;
 
 const { charTokens, context, fakeServer, model } = llamaCppClassifySupport;
 

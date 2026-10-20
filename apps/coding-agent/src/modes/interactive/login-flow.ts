@@ -1,6 +1,6 @@
-import type { AuthEvent, AuthPrompt } from "@msa/ai";
-import type { Model } from "@msa/ai/compat";
-import type { TUI } from "@msa/tui";
+import type compatTypes from "@msa/ai/compat.types";
+import type aiTypes from "@msa/ai/index.types";
+import type tuiTypes from "@msa/tui/index.types";
 import { Effect } from "effect";
 
 import { APP_NAME, getAuthPath } from "../../config.ts";
@@ -15,8 +15,8 @@ import { ExtensionSelectorComponent } from "./components/extension-selector.ts";
 import { LoginDialogComponent } from "./components/login-dialog.ts";
 import {
   type AuthSelectorProvider,
-  formatAuthSelectorProviderType,
   OAuthSelectorComponent,
+  formatAuthSelectorProviderType,
 } from "./components/oauth-selector.ts";
 import type { EditorSlot } from "./editor-slot.ts";
 import type { ProgramStatusReporter } from "./program-status-reporter.ts";
@@ -25,7 +25,7 @@ import { theme } from "./theme/theme.ts";
 const LOGIN_CANCELLED = "Login cancelled";
 const CREDENTIAL_TIMEOUT_MS = 15_000;
 
-const AUTH_TYPE_ORDER = { oauth: 0, api_key: 1 } satisfies Record<
+const AUTH_TYPE_ORDER = { api_key: 1, oauth: 0 } satisfies Record<
   AuthSelectorProvider["authType"],
   number
 >;
@@ -53,9 +53,9 @@ export function getLoginProviderCompletionOptions(
       continue;
     }
     byId.set(provider.id, {
+      authTypes: [provider.authType],
       id: provider.id,
       name: provider.name,
-      authTypes: [provider.authType],
       subscription: provider.subscription,
     });
   }
@@ -81,7 +81,7 @@ export function formatLoginProviderCompletionDescription(
   return provider.name === provider.id ? authTypes : `${provider.name} · ${authTypes}`;
 }
 
-function isUnknownModel(model: Model<any> | undefined): boolean {
+function isUnknownModel(model: compatTypes.Model<any> | undefined): boolean {
   return (
     model !== undefined &&
     model.provider === "unknown" &&
@@ -103,7 +103,7 @@ function llamaCppPostLoginGuidance(actionLabel: string, loadedModelCount: number
 }
 
 export interface LoginFlowHost {
-  readonly ui: TUI;
+  readonly ui: tuiTypes.TUI;
   readonly session: AgentSession;
   readonly programStatus: ProgramStatusReporter;
   readonly editorSlot: EditorSlot;
@@ -137,10 +137,10 @@ export class LoginFlow {
       const subscription = provider.auth.oauth?.isSubscription === true;
       if ((authType === undefined || authType === "oauth") && provider.auth.oauth !== undefined) {
         options.push({
-          id: provider.id,
-          name: provider.name,
           authType: "oauth",
+          id: provider.id,
           method: provider.auth.oauth,
+          name: provider.name,
           status,
           subscription,
         });
@@ -150,10 +150,10 @@ export class LoginFlow {
         provider.auth.apiKey !== undefined
       ) {
         options.push({
-          id: provider.id,
-          name: provider.name,
           authType: "api_key",
+          id: provider.id,
           method: provider.auth.apiKey,
+          name: provider.name,
           status,
           subscription,
         });
@@ -216,10 +216,10 @@ export class LoginFlow {
         providerOptions = [
           ...providerOptions,
           ...services.map((service) => ({
+            authType: "oauth" as const,
             id: service.id,
             name: service.name,
-            authType: "oauth" as const,
-            status: { type: "oauth" as const, source: `${service.name} sign-in` },
+            status: { source: `${service.name} sign-in`, type: "oauth" as const },
           })),
         ];
         if (providerOptions.length === 0) {
@@ -292,10 +292,10 @@ export class LoginFlow {
         .map(({ providerId, type }) => {
           const provider = modelRuntime.getProvider(providerId);
           return {
+            authType: type,
             id: providerId,
             name: provider?.name ?? providerId,
-            authType: type,
-            status: { type, source: "stored credential" },
+            status: { source: "stored credential", type },
             subscription: provider?.auth.oauth?.isSubscription === true,
           };
         })
@@ -407,7 +407,7 @@ export class LoginFlow {
         host.ui.requestRender();
       };
       const selector = new ExtensionSelectorComponent(title, options, onSelect, onCancel);
-      return { component: selector, focus: selector, dispose: () => selector.dispose() };
+      return { component: selector, dispose: () => selector.dispose(), focus: selector };
     });
   }
 
@@ -429,8 +429,8 @@ export class LoginFlow {
                 : ""
               : "not installed";
         return {
-          service,
           label: `${service.name} · ${service.purpose}${state === "" ? "" : ` (${state})`}`,
+          service,
         };
       });
       host.editorSlot.showSelector((done) => {
@@ -517,6 +517,8 @@ export class LoginFlow {
         yield* awaited(
           service.login(
             {
+              prompt: (message, placeholder) => dialog.showPrompt(message, placeholder),
+              select: (title, options) => this.select(title, options, dialog),
               showPage: (page) => {
                 dialog.showDetails([theme.fg("text", "Open this page to sign in:")]);
                 dialog.showInfo("", [{ url: page.url }]);
@@ -525,8 +527,6 @@ export class LoginFlow {
                 }
                 dialog.showWaiting("Waiting for you to approve the sign-in…");
               },
-              prompt: (message, placeholder) => dialog.showPrompt(message, placeholder),
-              select: (title, options) => this.select(title, options, dialog),
             },
             dialog.signal,
           ),
@@ -615,7 +615,7 @@ export class LoginFlow {
     providerId: string,
     providerName: string,
     authType: AuthType,
-    previousModel: Model<any> | undefined,
+    previousModel: compatTypes.Model<any> | undefined,
   ): Promise<void> {
     return Effect.runPromise(
       awaitingWith(function* () {
@@ -630,7 +630,7 @@ export class LoginFlow {
         const finishAuthentication = () =>
           Effect.runPromise(
             awaiting(function* () {
-              let selectedModel: Model<any> | undefined;
+              let selectedModel: compatTypes.Model<any> | undefined;
               let selectionError: string | undefined;
               if (isUnknownModel(previousModel)) {
                 const providerModels = host.session.modelRuntime
@@ -721,7 +721,7 @@ export class LoginFlow {
     self: LoginFlow,
     authType: "oauth" | "api_key",
     providerName: string,
-    previousModel: Model<any> | undefined,
+    previousModel: compatTypes.Model<any> | undefined,
     providerId: string,
   ): { host: LoginFlowHost; actionLabel: string; deferSelection: boolean; session: AgentSession } {
     const { host } = self;
@@ -738,7 +738,7 @@ export class LoginFlow {
           (model) =>
             model.provider === providerId && model.id === defaultModelPerProvider[providerId],
         );
-    return { host, actionLabel, deferSelection, session };
+    return { actionLabel, deferSelection, host, session };
   }
 
   private showAmbientAuthDialog(providerOption: AuthSelectorProvider, onBack?: () => void): void {
@@ -817,9 +817,9 @@ export class LoginFlow {
             providerId,
             method,
             {
-              signal: dialog.signal,
-              prompt: (prompt) => Effect.runPromise(this.showAuthPrompt(dialog, prompt)),
               notify: (event) => notifyAuthDialog(dialog, event),
+              prompt: (prompt) => Effect.runPromise(this.showAuthPrompt(dialog, prompt)),
+              signal: dialog.signal,
             },
             { getDeviceId: () => host.session.settingsManager.getOrCreateDeviceId() },
           ),
@@ -830,7 +830,10 @@ export class LoginFlow {
     }, this);
   }
 
-  private showAuthPrompt(dialog: LoginDialogComponent, prompt: AuthPrompt): Effect.Effect<string> {
+  private showAuthPrompt(
+    dialog: LoginDialogComponent,
+    prompt: aiTypes.AuthPrompt,
+  ): Effect.Effect<string> {
     return awaitingWith(function* () {
       let response: Promise<string>;
       if (prompt.type === "select") {
@@ -859,7 +862,7 @@ export class LoginFlow {
 
   private showAuthSelect(
     dialog: LoginDialogComponent,
-    prompt: Extract<AuthPrompt, { type: "select" }>,
+    prompt: Extract<aiTypes.AuthPrompt, { type: "select" }>,
   ): Promise<string> {
     const { host } = this;
     return Effect.runPromise(
@@ -901,7 +904,7 @@ function completeProviderAuthenticationPart2(
   });
 }
 
-function notifyAuthDialog(dialog: LoginDialogComponent, event: AuthEvent): void {
+function notifyAuthDialog(dialog: LoginDialogComponent, event: aiTypes.AuthEvent): void {
   if (event.type === "auth_url") {
     dialog.showAuth(event.url, event.instructions);
   } else if (event.type === "device_code") {

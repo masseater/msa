@@ -1,4 +1,4 @@
-import type { AssistantMessageEvent, TranscriptContext } from "@msa/ai/compat";
+import type compatTypes from "@msa/ai/compat.types";
 import testing from "@msa/testing";
 import { Data, Effect, Stream } from "effect";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vite-plus/test";
@@ -89,8 +89,8 @@ const run = Effect.fn("run")(function* (script: string) {
   const model = provider.getModels()[0]!;
   const context = {
     messages: [{ content: "hello", role: "user", timestamp: 0 }],
-  } as unknown as TranscriptContext;
-  const events: AssistantMessageEvent[] = [];
+  } as unknown as compatTypes.TranscriptContext;
+  const events: compatTypes.AssistantMessageEvent[] = [];
   yield* Stream.runForEach(
     Stream.fromAsyncIterable(
       provider.streamSimple(model, context),

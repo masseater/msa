@@ -1,11 +1,13 @@
-import type { AgentMessage, AgentTool } from "@msa/agent-core";
-import { fauxAssistantMessage } from "@msa/ai";
+import type agentTypes from "@msa/agent-core/index.types";
+import ai from "@msa/ai";
 import testing from "@msa/testing";
 import { Effect } from "effect";
 import { Type } from "typebox";
 import { describe, expect, test } from "vite-plus/test";
 
 import harnessModule from "./suite/harness.ts";
+
+const { fauxAssistantMessage } = ai;
 
 const { createHarness } = harnessModule;
 
@@ -16,7 +18,7 @@ const keepsToolDeclarationsStableAcrossASession = () =>
     Effect.gen(function* () {
       const effectRunPromise = Effect.runPromiseWith(yield* Effect.context<never>());
 
-      const executableTool: AgentTool = {
+      const executableTool: agentTypes.AgentTool = {
         description: "Plain tool",
         execute: () => effectRunPromise(awaited({ content: [], details: {} })),
         label: "Plain",
@@ -41,7 +43,7 @@ const keepsToolDeclarationsStableAcrossASession = () =>
 
         harness.session.agent.state.messages = (yield* fromJsonText(
           yield* toJsonText(harness.session.messages),
-        )) as AgentMessage[];
+        )) as agentTypes.AgentMessage[];
         yield* awaited(harness.session.prompt("two"));
         expect(
           harness.session.messages.filter((message) => message.role === "system"),

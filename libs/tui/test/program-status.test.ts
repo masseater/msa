@@ -1,8 +1,11 @@
 import assert from "node:assert";
 import { describe, it } from "node:test";
 
-import { parseEscapeSequence } from "../src/ansi-sequences.ts";
-import { formatProgramStatus, isProgramStatusReply } from "../src/program-status.ts";
+import ansiSequences from "../src/ansi-sequences.ts";
+import programStatus from "../src/program-status.ts";
+
+const { formatProgramStatus, isProgramStatusReply } = programStatus;
+const { parseEscapeSequence } = ansiSequences;
 
 function decodeMessage(sequence: string): string | undefined {
   const message = /:msg=([A-Za-z0-9+/=]*)/u.exec(sequence)?.[1];

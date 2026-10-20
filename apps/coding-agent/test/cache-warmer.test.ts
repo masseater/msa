@@ -1,5 +1,5 @@
-import { type Api, type Model } from "@msa/ai";
-import { getBuiltinModel } from "@msa/ai/providers/all";
+import type aiTypes from "@msa/ai/index.types";
+import all from "@msa/ai/providers/all";
 import testing from "@msa/testing";
 import { Effect } from "effect";
 import { afterEach, describe, expect, it, vi } from "vite-plus/test";
@@ -11,16 +11,19 @@ import {
 } from "../src/core/cache-warmer.ts";
 import cacheWarmerSupport from "./cache-warmer-support.ts";
 
+const { getBuiltinModel } = all;
+
 const { adaptiveModel, budgetModel, current, fakeRuntime, request, warmUsage } = cacheWarmerSupport;
 
 const { abortController, awaited, runTest } = testing;
 
-const openaiModel: Model<Api> = {
+const openaiModel: aiTypes.Model<aiTypes.Api> = {
   ...getBuiltinModel("openai", "gpt-5"),
   promptCache: { long: 86_400, short: 300 },
 };
 
-const { promptCache: _adaptivePromptCache, ...unknownModel }: Model<Api> = adaptiveModel;
+const { promptCache: _adaptivePromptCache, ...unknownModel }: aiTypes.Model<aiTypes.Api> =
+  adaptiveModel;
 
 afterEach(() => vi.useRealTimers());
 

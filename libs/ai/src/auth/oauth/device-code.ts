@@ -1,6 +1,9 @@
 import { Clock, Effect } from "effect";
 
-import { sleepUnlessAborted } from "../../utils/abort.ts";
+import abort from "../../utils/abort.ts";
+import type deviceCodeTypes from "./device-code.types.ts";
+
+const { sleepUnlessAborted } = abort;
 
 const CANCEL_MESSAGE = "Login cancelled";
 const TIMEOUT_MESSAGE = "Device flow timed out";
@@ -9,23 +12,6 @@ const SLOW_DOWN_TIMEOUT_MESSAGE =
 const MINIMUM_INTERVAL_MS = 1000;
 const DEFAULT_POLL_INTERVAL_SECONDS = 5;
 const SLOW_DOWN_INTERVAL_INCREMENT_MS = 5000;
-
-type OAuthDeviceCodeIncompletePollResult =
-  | { status: "pending" }
-  | { status: "slow_down"; intervalSeconds?: number | undefined }
-  | { status: "failed"; message: string };
-
-export type OAuthDeviceCodePollResult<T> =
-  | OAuthDeviceCodeIncompletePollResult
-  | { status: "complete"; value: T };
-
-export type OAuthDeviceCodePollOptions<T> = {
-  intervalSeconds?: number | undefined;
-  expiresInSeconds?: number | undefined;
-  waitBeforeFirstPoll?: boolean | undefined;
-  poll: () => Promise<OAuthDeviceCodePollResult<T>>;
-  signal: AbortSignal;
-};
 
 const cancelled = (): Error => new Error(CANCEL_MESSAGE);
 
@@ -43,7 +29,7 @@ interface PollState {
 }
 
 const pollUntilDeadline = <T>(
-  options: OAuthDeviceCodePollOptions<T>,
+  options: deviceCodeTypes.OAuthDeviceCodePollOptions<T>,
   deadline: number,
   state: PollState,
 ): Effect.Effect<T> =>
@@ -78,7 +64,9 @@ const pollUntilDeadline = <T>(
     return yield* pollUntilDeadline(options, deadline, next);
   });
 
-export const pollOAuthDeviceCodeFlow = <T>(options: OAuthDeviceCodePollOptions<T>): Promise<T> =>
+const pollOAuthDeviceCodeFlow = <T>(
+  options: deviceCodeTypes.OAuthDeviceCodePollOptions<T>,
+): Promise<T> =>
   Effect.runPromise(
     Effect.gen(function* () {
       const startedAt = yield* Clock.currentTimeMillis;
@@ -98,3 +86,9 @@ export const pollOAuthDeviceCodeFlow = <T>(options: OAuthDeviceCodePollOptions<T
       return yield* pollUntilDeadline(options, deadline, { intervalMs, slowDownResponses: 0 });
     }),
   );
+
+const deviceCode = {
+  pollOAuthDeviceCodeFlow,
+};
+
+export default deviceCode;

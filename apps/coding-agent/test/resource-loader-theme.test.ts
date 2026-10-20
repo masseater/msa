@@ -1,5 +1,5 @@
 import testing from "@msa/testing";
-import { resetCapabilitiesCache, setCapabilityOverrides } from "@msa/tui";
+import tui from "@msa/tui";
 import { Effect } from "effect";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vite-plus/test";
 
@@ -8,6 +8,8 @@ import { DefaultResourceLoader } from "../src/core/resource-loader.ts";
 import { SettingsManager } from "../src/core/settings-manager.ts";
 import { validateThemeJson } from "../src/modes/interactive/theme/theme-schema.ts";
 import { setThemeJsonValidator } from "../src/modes/interactive/theme/theme.ts";
+
+const { resetCapabilitiesCache, setCapabilityOverrides } = tui;
 
 const {
   awaited,

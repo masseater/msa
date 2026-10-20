@@ -1,13 +1,5 @@
-import type { AgentMessage } from "@msa/agent-core";
-import type {
-  Api,
-  ImageContent,
-  Message,
-  ProviderHeaders,
-  ProviderId,
-  TextContent,
-  Usage,
-} from "@msa/ai";
+import type agentTypes from "@msa/agent-core/index.types";
+import type aiTypes from "@msa/ai/index.types";
 
 import type { CompactionPreparation } from "../compaction/index.ts";
 import type { RegisteredMcpServer } from "../mcp-servers.ts";
@@ -158,12 +150,12 @@ export type SessionEvent =
 
 export interface ContextEvent {
   type: "context";
-  messages: AgentMessage[];
+  messages: agentTypes.AgentMessage[];
 }
 
 export interface ContextWithSystemEvent {
   type: "context_with_system";
-  messages: AgentMessage[];
+  messages: agentTypes.AgentMessage[];
 }
 
 export interface BeforeProviderRequestEvent {
@@ -173,7 +165,7 @@ export interface BeforeProviderRequestEvent {
 
 export interface BeforeProviderHeadersEvent {
   type: "before_provider_headers";
-  headers: ProviderHeaders;
+  headers: aiTypes.ProviderHeaders;
 }
 
 export interface AfterProviderResponseEvent {
@@ -184,8 +176,8 @@ export interface AfterProviderResponseEvent {
 
 export interface ProviderStreamEvent {
   type: "provider_stream_event";
-  provider: ProviderId;
-  api: Api;
+  provider: aiTypes.ProviderId;
+  api: aiTypes.Api;
   model: string;
   data: unknown;
 }
@@ -199,7 +191,7 @@ interface BeforeAgentStartEventBase {
 export interface BeforeAgentStartUserEvent extends BeforeAgentStartEventBase {
   messageType: "user";
   prompt: string;
-  images?: ImageContent[] | undefined;
+  images?: aiTypes.ImageContent[] | undefined;
 }
 
 export interface BeforeAgentStartCustomEvent extends BeforeAgentStartEventBase {
@@ -215,7 +207,7 @@ export interface AgentStartEvent {
 
 export interface AgentEndEvent {
   type: "agent_end";
-  messages: AgentMessage[];
+  messages: agentTypes.AgentMessage[];
 }
 
 export type AgentActivityOutcome = "completed" | "aborted" | "error";
@@ -229,7 +221,7 @@ export interface CustomEntryDraft {
 export interface CustomMessageEntryDraft {
   type: "custom_message";
   customType: string;
-  content: string | (TextContent | ImageContent)[];
+  content: string | (aiTypes.TextContent | aiTypes.ImageContent)[];
   display: boolean;
   details?: unknown;
 }
@@ -245,7 +237,7 @@ export interface CompactionEntryDraft {
   summary: string;
   firstKeptEntryId: string | null;
   details?: unknown;
-  usage?: Usage;
+  usage?: aiTypes.Usage;
 }
 
 export type SessionBoundaryDraft =
@@ -256,9 +248,9 @@ export type SessionBoundaryDraft =
 
 export interface BoundaryContextPreview {
   contextEntries: ProjectedSessionEntry[];
-  contextMessages: AgentMessage[];
-  llmMessages: Message[];
-  pendingMessages: AgentMessage[];
+  contextMessages: agentTypes.AgentMessage[];
+  llmMessages: aiTypes.Message[];
+  pendingMessages: agentTypes.AgentMessage[];
   canContinue: boolean;
 }
 

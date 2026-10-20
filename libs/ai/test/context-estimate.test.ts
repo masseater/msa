@@ -1,11 +1,15 @@
 import { describe, expect, it } from "vite-plus/test";
 
-import { buildBaseOptions } from "../src/api/simple-options.ts";
-import type { AssistantMessage, Model, Usage } from "../src/types.ts";
-import { estimateContextTokens } from "../src/utils/estimate.ts";
-import { normalizeContext } from "../src/utils/transcript.ts";
+import simpleOptions from "../src/api/simple-options.ts";
+import type typesModule from "../src/types.types.ts";
+import estimate from "../src/utils/estimate.ts";
+import transcript from "../src/utils/transcript.ts";
 
-function createUsage(totalTokens: number): Usage {
+const { normalizeContext } = transcript;
+const { estimateContextTokens } = estimate;
+const { buildBaseOptions } = simpleOptions;
+
+function createUsage(totalTokens: number): typesModule.Usage {
   return {
     cacheRead: 0,
     cacheWrite: 0,
@@ -16,7 +20,7 @@ function createUsage(totalTokens: number): Usage {
   };
 }
 
-function createAssistant(timestamp: number, totalTokens: number): AssistantMessage {
+function createAssistant(timestamp: number, totalTokens: number): typesModule.AssistantMessage {
   return {
     api: "openai-responses",
     content: [{ text: "kept", type: "text" }],
@@ -29,7 +33,7 @@ function createAssistant(timestamp: number, totalTokens: number): AssistantMessa
   };
 }
 
-const model: Model<"openai-responses"> = {
+const model: typesModule.Model<"openai-responses"> = {
   api: "openai-responses",
   baseUrl: "https://api.openai.com/v1",
   contextWindow: 10_000,

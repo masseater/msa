@@ -1,15 +1,19 @@
 import { describe, expect, it } from "vite-plus/test";
 
-import { convertMessages, requiresToolCallId } from "../src/api/google-messages.ts";
-import type { Context, Model, ToolResultMessage, Usage } from "../src/types.ts";
-import { currentTimeMillis } from "../src/utils/clock.ts";
-import { normalizeContext } from "../src/utils/transcript.ts";
+import googleMessages from "../src/api/google-messages.ts";
+import type typesModule from "../src/types.types.ts";
+import clock from "../src/utils/clock.ts";
+import transcript from "../src/utils/transcript.ts";
+
+const { currentTimeMillis } = clock;
+const { convertMessages, requiresToolCallId } = googleMessages;
+const { normalizeContext } = transcript;
 
 function makeGemini3Model<TApi extends "google-generative-ai">(
   api: TApi,
-  provider: Model<TApi>["provider"],
+  provider: typesModule.Model<TApi>["provider"],
   id = "gemini-3-pro-preview",
-): Model<TApi> {
+): typesModule.Model<TApi> {
   return {
     api,
     baseUrl: "https://example.com",
@@ -24,7 +28,7 @@ function makeGemini3Model<TApi extends "google-generative-ai">(
   };
 }
 
-const emptyUsage: Usage = {
+const emptyUsage: typesModule.Usage = {
   cacheRead: 0,
   cacheWrite: 0,
   cost: { cacheRead: 0, cacheWrite: 0, input: 0, output: 0, total: 0 },
@@ -36,9 +40,9 @@ const emptyUsage: Usage = {
 const toolResult = (
   toolName: string,
   toolCallId: string,
-  content: ToolResultMessage["content"],
+  content: typesModule.ToolResultMessage["content"],
   timestamp: number,
-): ToolResultMessage => ({
+): typesModule.ToolResultMessage => ({
   content,
   isError: false,
   role: "toolResult",
@@ -50,7 +54,7 @@ const toolResult = (
 function makeContext(
   model: { api: string; provider: string; id: string },
   thoughtSignature?: string,
-): Context {
+): typesModule.Context {
   const now = currentTimeMillis();
   return {
     messages: [

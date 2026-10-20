@@ -1,7 +1,7 @@
 import { Effect } from "effect";
 import { type Static, Type } from "typebox";
 
-import type { AgentTool } from "../../src/types.ts";
+import type typesModule from "../../src/types.ts";
 import type calculateTypes from "./calculate.types.ts";
 
 function calculate(expression: string): calculateTypes.CalculateResult {
@@ -23,7 +23,7 @@ const calculateSchema = Type.Object({
 
 type CalculateParams = Static<typeof calculateSchema>;
 
-const calculateTool: AgentTool<typeof calculateSchema, undefined> = {
+const calculateTool: typesModule.AgentTool<typeof calculateSchema, undefined> = {
   description: "Evaluate mathematical expressions",
   execute: (_toolCallId: string, args: CalculateParams) =>
     Effect.runPromise(Effect.sync(() => calculate(args.expression))),

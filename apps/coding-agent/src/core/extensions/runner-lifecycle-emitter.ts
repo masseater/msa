@@ -1,4 +1,4 @@
-import type { AgentMessage } from "@msa/agent-core";
+import type agentTypes from "@msa/agent-core/index.types";
 import { Effect, Result } from "effect";
 
 import { toErrorMessage } from "../../utils/errors.ts";
@@ -51,10 +51,10 @@ export class LifecycleEmitter extends HandlerInvoker {
       let context = yield* fromPromise(() => buildContext(entries));
       let valid = true;
       for (const { ext, handler } of this.slots(baseEvent.type)) {
-        const event = { ...baseEvent, entries, continue: shouldContinue, context } as
+        const event = { ...baseEvent, context, continue: shouldContinue, entries } as
           | TurnEndEvent
           | AgentBeforeSettleEvent;
-        const outcome = yield* this.invoke({ ext, eventType: baseEvent.type, handler, event, ctx });
+        const outcome = yield* this.invoke({ ctx, event, eventType: baseEvent.type, ext, handler });
         if (outcome.ok) {
           const handlerResult = outcome.value as BoundaryResult | undefined;
           if (handlerResult?.entries !== undefined) entries = handlerResult.entries;
@@ -76,8 +76,8 @@ export class LifecycleEmitter extends HandlerInvoker {
         }
       }
       const result: BoundaryDispatchResult = valid
-        ? { entries, continue: shouldContinue, context, valid: true }
-        : { entries: [], continue: false, context, valid: false };
+        ? { context, continue: shouldContinue, entries, valid: true }
+        : { context, continue: false, entries: [], valid: false };
       return result;
     });
   }
@@ -87,7 +87,7 @@ export class LifecycleEmitter extends HandlerInvoker {
       const ctx = this.host.createContext();
       let result: SessionBeforeEventResult | undefined;
       for (const { ext, handler } of this.slots(event.type)) {
-        const outcome = yield* this.invoke({ ext, eventType: event.type, handler, event, ctx });
+        const outcome = yield* this.invoke({ ctx, event, eventType: event.type, ext, handler });
         if (outcome.ok && isSessionBeforeEvent(event) && outcome.value !== undefined) {
           result = outcome.value as SessionBeforeEventResult;
           if (result.cancel === true) return result as RunnerEmitResult<TEvent>;
@@ -102,7 +102,7 @@ export class LifecycleEmitter extends HandlerInvoker {
       const ctx = this.host.createContext();
       let action: CacheWarmingAction = event.action;
       for (const { ext, handler } of this.slots(event.type)) {
-        const outcome = yield* this.invoke({ ext, eventType: event.type, handler, event, ctx });
+        const outcome = yield* this.invoke({ ctx, event, eventType: event.type, ext, handler });
         const result = outcome.ok
           ? (outcome.value as CacheWarmingDecisionEventResult | undefined)
           : undefined;
@@ -120,11 +120,11 @@ export class LifecycleEmitter extends HandlerInvoker {
       for (const { ext, handler } of this.slots("message_end")) {
         const currentEvent: MessageEndEvent = { ...event, message: currentMessage };
         const outcome = yield* this.invoke({
-          ext,
-          eventType: "message_end",
-          handler,
-          event: currentEvent,
           ctx,
+          event: currentEvent,
+          eventType: "message_end",
+          ext,
+          handler,
         });
         const handlerResult = outcome.ok
           ? (outcome.value as MessageEndEventResult | undefined)
@@ -132,16 +132,16 @@ export class LifecycleEmitter extends HandlerInvoker {
         if (handlerResult?.message === undefined) continue;
         if (handlerResult.message.role !== currentMessage.role) {
           this.host.emitError({
-            extensionPath: ext.path,
-            event: "message_end",
             error: "message_end handlers must return a message with the same role",
+            event: "message_end",
+            extensionPath: ext.path,
           });
           continue;
         }
         currentMessage = handlerResult.message;
         modified = true;
       }
-      const message: AgentMessage | undefined = modified ? currentMessage : undefined;
+      const message: agentTypes.AgentMessage | undefined = modified ? currentMessage : undefined;
       return message;
     });
   }
@@ -193,11 +193,11 @@ export class LifecycleEmitter extends HandlerInvoker {
       let modified = false;
       for (const { ext, handler } of this.slots("tool_result")) {
         const outcome = yield* this.invoke({
-          ext,
-          eventType: "tool_result",
-          handler,
-          event: currentEvent,
           ctx,
+          event: currentEvent,
+          eventType: "tool_result",
+          ext,
+          handler,
         });
         const handlerResult = outcome.ok
           ? (outcome.value as ToolResultEventResult | undefined)
@@ -209,8 +209,8 @@ export class LifecycleEmitter extends HandlerInvoker {
       const merged: ToolResultEventResult = {
         content: currentEvent.content,
         details: currentEvent.details,
-        structuredContent: currentEvent.structuredContent,
         isError: currentEvent.isError,
+        structuredContent: currentEvent.structuredContent,
         usage: currentEvent.usage,
       };
       return merged;

@@ -32,8 +32,10 @@ const preload = `data:text/javascript,${encodeURIComponent(`
 
 const fauxCompletionScript = (entry: string) => `
 	import assert from "node:assert/strict";
-	import { createModels, createProvider } from "${entry}";
-	import { fauxAssistantMessage, fauxProvider } from "@msa/ai/providers/faux";
+	import modelsEntry from "${entry}";
+	import fauxModule from "@msa/ai/providers/faux";
+	const { createModels, createProvider } = modelsEntry;
+	const { fauxAssistantMessage, fauxProvider } = fauxModule;
 	assert.equal(typeof createProvider, "function");
 	const models = createModels();
 	assert.deepEqual(models.getModels(), []);

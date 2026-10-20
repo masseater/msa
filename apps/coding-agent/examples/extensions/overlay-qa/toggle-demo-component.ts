@@ -1,18 +1,20 @@
 import type { Theme } from "@msa/coding-agent";
-import type { TUI } from "@msa/tui";
-import { matchesKey } from "@msa/tui";
+import tuiModule from "@msa/tui";
+import type tuiTypes from "@msa/tui/index.types";
 import { Effect } from "effect";
 
 import { BaseOverlay } from "./base-overlay.ts";
 import { getGlobalToggleHandle } from "./global-toggle-handle.ts";
 
+const { matchesKey } = tuiModule;
+
 export class ToggleDemoComponent extends BaseOverlay {
-  private tui: TUI;
+  private tui: tuiTypes.TUI;
   private toggleCount = 0;
   private isToggling = false;
   private done: () => void;
 
-  constructor(tui: TUI, theme: Theme, done: () => void) {
+  constructor(tui: tuiTypes.TUI, theme: Theme, done: () => void) {
     super(theme);
     this.tui = tui;
     this.done = done;

@@ -1,4 +1,5 @@
-import { type RgbColor, colorToOklch, colorToRgb, parseColor, rgbColor } from "@msa/tui";
+import tui from "@msa/tui";
+import type tuiTypes from "@msa/tui/index.types";
 import { afterEach, describe, expect, it } from "vite-plus/test";
 
 import {
@@ -14,8 +15,10 @@ import {
   setTerminalColors,
 } from "../src/modes/interactive/theme/theme.ts";
 
-const rgb = (hex: string): RgbColor => colorToRgb(parseColor(hex));
-const lightness = ({ r, g, b }: RgbColor) => colorToOklch(rgbColor(r, g, b)).l;
+const { colorToOklch, colorToRgb, parseColor, rgbColor } = tui;
+
+const rgb = (hex: string): tuiTypes.RgbColor => colorToRgb(parseColor(hex));
+const lightness = ({ r, g, b }: tuiTypes.RgbColor) => colorToOklch(rgbColor(r, g, b)).l;
 
 const DRACULA: SystemThemeInput = {
   background: rgb("#282a36"),
@@ -49,7 +52,7 @@ const PANELS: ThemeToken[] = [
   "selectedBg",
 ];
 
-function resolved(input: SystemThemeInput, token: ThemeToken): RgbColor {
+function resolved(input: SystemThemeInput, token: ThemeToken): tuiTypes.RgbColor {
   const value = generateSystemThemeColors(input).colors[token];
   if (value === "") return PANELS.includes(token) ? input.background! : input.foreground!;
   return rgb(value as string);
@@ -63,7 +66,7 @@ const usesTheTerminalForegroundAndPaletteHues = () => {
   expect(generateSystemThemeColors(DRACULA).colors.text).toBe("");
 
   expect(generateSystemThemeColors(TERMINALS["solarizedLight"]).colors.text).not.toBe("");
-  const hue = ({ r, g, b }: RgbColor) => colorToOklch(rgbColor(r, g, b)).h;
+  const hue = ({ r, g, b }: tuiTypes.RgbColor) => colorToOklch(rgbColor(r, g, b)).h;
   const red = DRACULA.palette?.[1];
   if (red === undefined) throw new Error("expected Dracula's red palette entry");
   expect(Math.abs(hue(resolved(DRACULA, "error")) - hue(red))).toBeLessThan(8);
@@ -95,7 +98,7 @@ const keepsPastelPaletteColorsPastelAtOther = () => {
       ])
       .map(rgb),
   };
-  const chroma = ({ r, g, b }: RgbColor) => colorToOklch(rgbColor(r, g, b)).c;
+  const chroma = ({ r, g, b }: tuiTypes.RgbColor) => colorToOklch(rgbColor(r, g, b)).c;
   const pink = frappe.palette?.[5];
   if (pink === undefined) throw new Error("expected Frappé's pink palette entry");
   const accent = resolved(frappe, "accent");

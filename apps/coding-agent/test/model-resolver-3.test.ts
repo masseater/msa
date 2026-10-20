@@ -1,7 +1,9 @@
-import { getBuiltinModels, getBuiltinProviders } from "@msa/ai/providers/all";
+import all from "@msa/ai/providers/all";
 import { describe, expect, test } from "vite-plus/test";
 
 import { defaultModelPerProvider } from "../src/core/model-resolver.ts";
+
+const { getBuiltinModels, getBuiltinProviders } = all;
 
 const openaiDefaultsTrackCurrentModels = () => {
   expect(defaultModelPerProvider.openai).toBe("gpt-5.5");

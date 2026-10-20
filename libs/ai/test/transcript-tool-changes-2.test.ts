@@ -1,7 +1,7 @@
 import { Effect } from "effect";
 import { describe, expect, test } from "vite-plus/test";
 
-import type { Model } from "../src/types.ts";
+import type typesModule from "../src/types.types.ts";
 import transcriptToolChangesSupport from "./transcript-tool-changes-support.ts";
 
 const { additionContext, anthropicNativeModel, capturePayload, context, lateTool, modelBase } =
@@ -51,7 +51,7 @@ const sendsTheCurrentAnthropicToolList = () =>
 const foldsAnthropicUpdatesIntoTheSystem = () =>
   Effect.runPromise(
     Effect.gen(function* () {
-      const model: Model<"anthropic-messages"> = {
+      const model: typesModule.Model<"anthropic-messages"> = {
         ...modelBase,
         api: "anthropic-messages",
         id: "claude-sonnet-4-5",
@@ -77,7 +77,7 @@ const foldsAnthropicUpdatesIntoTheSystem = () =>
 const requiresBothAnthropicCapabilitiesForNative = () =>
   Effect.runPromise(
     Effect.gen(function* () {
-      const model: Model<"anthropic-messages"> = {
+      const model: typesModule.Model<"anthropic-messages"> = {
         ...modelBase,
         api: "anthropic-messages",
         compat: { supportsMidConvoToolChanges: true },
@@ -100,7 +100,7 @@ const requiresBothAnthropicCapabilitiesForNative = () =>
 const anchorsOpenAIAdditionsAtTheirDeveloper = () =>
   Effect.runPromise(
     Effect.gen(function* () {
-      const model: Model<"openai-responses"> = {
+      const model: typesModule.Model<"openai-responses"> = {
         ...modelBase,
         api: "openai-responses",
         compat: { supportsAdditionalTools: true, supportsMidConvoSystemMessages: true },

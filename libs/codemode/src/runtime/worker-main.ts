@@ -3,26 +3,30 @@ import { parentPort, workerData } from "node:worker_threads";
 import * as Cause from "effect/Cause";
 import * as Effect from "effect/Effect";
 
-import { RuntimeError } from "./bridge.ts";
-import { startVm } from "./inline.ts";
-import type { WorkerData, WorkerToHostMessage } from "./protocol.ts";
-import { crashMessage, isHostToWorkerMessage } from "./vm-session.ts";
+import bridge from "./bridge.ts";
+import inline from "./inline.ts";
+import type protocolTypes from "./protocol.ts";
+import vmSession from "./vm-session.ts";
 
-function post(message: WorkerToHostMessage): void {
+const { RuntimeError } = bridge;
+const { startVm } = inline;
+const { crashMessage, isHostToWorkerMessage } = vmSession;
+
+function post(message: protocolTypes.WorkerToHostMessage): void {
   parentPort?.postMessage(message);
 }
 
 const original = (error: unknown): unknown =>
   error instanceof RuntimeError && error.reason === "launch" ? error.cause : error;
 
-const main = (data: WorkerData) =>
+const main = (data: protocolTypes.WorkerData) =>
   Effect.suspend(() => {
     const interrupt = new Int32Array(data.interrupt);
     return startVm({
       data,
-      wasm: data.wasm,
       post,
       shouldInterrupt: () => Atomics.load(interrupt, 0) !== 0,
+      wasm: data.wasm,
     });
   }).pipe(
     Effect.map((session) =>
@@ -35,6 +39,12 @@ const main = (data: WorkerData) =>
     ),
   );
 
-export function startCodemodeWorker(): void {
-  if (parentPort !== null) Effect.runFork(main(workerData as WorkerData));
+function startCodemodeWorker(): void {
+  if (parentPort !== null) Effect.runFork(main(workerData as protocolTypes.WorkerData));
 }
+
+const workerMain = {
+  startCodemodeWorker,
+};
+
+export default workerMain;

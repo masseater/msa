@@ -1,11 +1,5 @@
-import {
-  type AssistantMessage,
-  type FauxResponseStep,
-  Type,
-  fauxAssistantMessage,
-  fauxText,
-  fauxToolCall,
-} from "@msa/ai";
+import ai from "@msa/ai";
+import type aiTypes from "@msa/ai/index.types";
 import durable from "@msa/durable";
 import type durableTypes from "@msa/durable/index.types";
 import { Effect } from "effect";
@@ -13,6 +7,8 @@ import { dual } from "effect/Function";
 
 import type chatSupportTypes from "./chat-support.types.ts";
 import testSupport from "./support.ts";
+
+const { Type, fauxAssistantMessage, fauxText, fauxToolCall } = ai;
 
 const { InboxDoc, LiveDoc, defineTool } = durable;
 
@@ -24,18 +20,18 @@ const { aborted, deferred } = testSupport;
 
 const directories = new Set<string>();
 
-function answer(text: string): AssistantMessage {
+function answer(text: string): aiTypes.AssistantMessage {
   return fauxAssistantMessage([fauxText(text)]);
 }
 
-function gated(message: AssistantMessage): {
-  step: FauxResponseStep;
+function gated(message: aiTypes.AssistantMessage): {
+  step: aiTypes.FauxResponseStep;
   reached: Promise<void>;
   release: () => void;
 } {
   const reached = deferred();
   const gate = deferred();
-  const step: FauxResponseStep = (_request, options) =>
+  const step: aiTypes.FauxResponseStep = (_request, options) =>
     Effect.runPromise(
       Effect.gen(function* () {
         reached.resolve();

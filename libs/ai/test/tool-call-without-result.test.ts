@@ -2,13 +2,15 @@ import { Clock, Console, Effect } from "effect";
 import { Type } from "typebox";
 import { describe, expect, inject, it } from "vite-plus/test";
 
-import { complete } from "../src/compat.ts";
-import type { Api, Context, Model, StreamOptions, Tool } from "../src/types.ts";
+import compatModule from "../src/compat.ts";
+import type typesModule from "../src/types.types.ts";
 import env from "./env.ts";
 import jsonCodec from "./json-codec.ts";
 import modelChoice from "./model-choice.ts";
 
-type StreamOptionsWithExtras = StreamOptions & Record<string, unknown>;
+const { complete } = compatModule;
+
+type StreamOptionsWithExtras = typesModule.StreamOptions & Record<string, unknown>;
 
 const { hasEnv } = env;
 const { encodeJsonPretty } = jsonCodec;
@@ -16,7 +18,7 @@ const { chooseModel } = modelChoice;
 
 const openaiCodexToken = inject("storedApiKeys")["openai-codex"];
 
-const calculateTool: Tool = {
+const calculateTool: typesModule.Tool = {
   description: "Evaluate mathematical expressions",
   name: "calculate",
   parameters: Type.Object({
@@ -24,17 +26,17 @@ const calculateTool: Tool = {
   }),
 };
 
-const conversation = (): Context => ({
+const conversation = (): typesModule.Context => ({
   messages: [],
   systemPrompt:
     "You are a helpful assistant. Use the calculate tool when asked to perform calculations.",
   tools: [calculateTool],
 });
 
-const askForToolCall = <TApi extends Api>(
-  model: Model<TApi>,
+const askForToolCall = <TApi extends typesModule.Api>(
+  model: typesModule.Model<TApi>,
   options: StreamOptionsWithExtras,
-  context: Context,
+  context: typesModule.Context,
 ) =>
   Effect.gen(function* () {
     context.messages.push({
@@ -53,10 +55,10 @@ const askForToolCall = <TApi extends Api>(
       );
   });
 
-const continueWithoutToolResult = <TApi extends Api>(
-  model: Model<TApi>,
+const continueWithoutToolResult = <TApi extends typesModule.Api>(
+  model: typesModule.Model<TApi>,
   options: StreamOptionsWithExtras,
-  context: Context,
+  context: typesModule.Context,
 ) =>
   Effect.gen(function* () {
     context.messages.push({
@@ -77,8 +79,8 @@ const continueWithoutToolResult = <TApi extends Api>(
     expect(["stop", "toolUse"]).toContain(secondResponse.stopReason);
   });
 
-const testToolCallWithoutResult = <TApi extends Api>(
-  model: Model<TApi>,
+const testToolCallWithoutResult = <TApi extends typesModule.Api>(
+  model: typesModule.Model<TApi>,
   options: StreamOptionsWithExtras = {},
 ) =>
   Effect.suspend(() => {
@@ -90,7 +92,10 @@ const testToolCallWithoutResult = <TApi extends Api>(
   });
 
 const runWith =
-  <TApi extends Api>(model: Model<TApi>, options: StreamOptionsWithExtras = {}) =>
+  <TApi extends typesModule.Api>(
+    model: typesModule.Model<TApi>,
+    options: StreamOptionsWithExtras = {},
+  ) =>
   () =>
     Effect.runPromise(testToolCallWithoutResult(model, options));
 

@@ -1,6 +1,8 @@
 import { describe, expect, it } from "vite-plus/test";
 
-import { CodemodeSourceError, parseCodemodeSource } from "../src/source.ts";
+import source from "../src/source.ts";
+
+const { CodemodeSourceError, parseCodemodeSource } = source;
 
 function returnsPlainCodeUnchanged(): void {
   expect(parseCodemodeSource("text('hi')")).toEqual({ code: "text('hi')", options: {} });

@@ -1,4 +1,5 @@
-import { Text } from "@msa/tui";
+import tui from "@msa/tui";
+import type tuiTypes from "@msa/tui/index.types";
 
 import type { Theme } from "../../../modes/interactive/theme/theme.ts";
 import type { ToolDefinition, ToolRenderResultOptions } from "../../extensions/types.ts";
@@ -6,6 +7,8 @@ import type { GrepToolDetails } from "../grep.ts";
 import { getTextOutput, invalidArgText, shortenPath, str } from "../render-utils.ts";
 import { DEFAULT_MAX_BYTES, formatSize } from "../truncate.ts";
 import { formatListResult } from "./list-output.ts";
+
+const { Text } = tui;
 
 function formatGrepCall(
   args: { pattern: string; path?: string; glob?: string; limit?: number } | undefined,
@@ -43,17 +46,17 @@ function formatGrepResult(
     warnings.push(`${formatSize(truncation.maxBytes ?? DEFAULT_MAX_BYTES)} limit`);
   if (result.details?.linesTruncated === true) warnings.push("some lines truncated");
   const output = getTextOutput(result, showImages).trim();
-  return formatListResult({ output, warnings, expanded: options.expanded, noun: "lines", theme });
+  return formatListResult({ expanded: options.expanded, noun: "lines", output, theme, warnings });
 }
 
 export const grepRenderers: Pick<ToolDefinition<any, any>, "renderCall" | "renderResult"> = {
   renderCall(args, theme, context) {
-    const text = (context.lastComponent as Text | undefined) ?? new Text("", 0, 0);
+    const text = (context.lastComponent as tuiTypes.Text | undefined) ?? new Text("", 0, 0);
     text.setText(formatGrepCall(args as any, theme));
     return text;
   },
   renderResult(result, options, theme, context) {
-    const text = (context.lastComponent as Text | undefined) ?? new Text("", 0, 0);
+    const text = (context.lastComponent as tuiTypes.Text | undefined) ?? new Text("", 0, 0);
     text.setText(formatGrepResult(result as any, options, theme, context.showImages));
     return text;
   },

@@ -1,261 +1,260 @@
-import type {
-  Api,
-  AssistantMessage,
-  AssistantMessageEvent,
-  AssistantMessageEventStream,
-  ImageContent,
-  JsonValue,
-  Message,
-  Model,
-  SimpleStreamOptions,
-  TextContent,
-  Tool,
-  ToolResultMessage,
-  TranscriptContext,
-  Usage,
-} from "@msa/ai";
+import type aiTypes from "@msa/ai/index.types";
 import type { Static, TSchema } from "typebox";
 
-export type StreamFn = (
-  model: Model<Api>,
-  context: TranscriptContext,
-  options?: SimpleStreamOptions,
-) => AssistantMessageEventStream | Promise<AssistantMessageEventStream>;
-
-export type ToolExecutionMode = "sequential" | "parallel";
-
-export type QueueMode = "all" | "one-at-a-time";
-
-export type AgentToolCall = Extract<AssistantMessage["content"][number], { type: "toolCall" }>;
-
-export interface BeforeToolCallResult {
-  block?: boolean;
-  reason?: string;
-
-  terminate?: boolean;
+declare global {
+  interface MsaAgentCustomMessages {}
 }
 
-export interface AfterToolCallResult {
-  content?: (TextContent | ImageContent)[];
-  details?: unknown;
-  structuredContent?: JsonValue;
-  isError?: boolean;
+declare namespace typesModule {
+  type StreamFn = (
+    model: aiTypes.Model<aiTypes.Api>,
+    context: aiTypes.TranscriptContext,
+    options?: aiTypes.SimpleStreamOptions,
+  ) => aiTypes.AssistantMessageEventStream | Promise<aiTypes.AssistantMessageEventStream>;
 
-  usage?: Usage;
+  type ToolExecutionMode = "sequential" | "parallel";
 
-  terminate?: boolean;
-}
+  type QueueMode = "all" | "one-at-a-time";
 
-export interface BeforeToolCallContext {
-  assistantMessage: AssistantMessage;
+  type AgentToolCall = Extract<aiTypes.AssistantMessage["content"][number], { type: "toolCall" }>;
 
-  toolCall: AgentToolCall;
+  interface BeforeToolCallResult {
+    block?: boolean;
+    reason?: string;
 
-  args: unknown;
+    terminate?: boolean;
+  }
 
-  context: AgentContext;
-}
+  interface AfterToolCallResult {
+    content?: (aiTypes.TextContent | aiTypes.ImageContent)[];
+    details?: unknown;
+    structuredContent?: aiTypes.JsonValue;
+    isError?: boolean;
 
-export interface AfterToolCallContext {
-  assistantMessage: AssistantMessage;
+    usage?: aiTypes.Usage;
 
-  toolCall: AgentToolCall;
+    terminate?: boolean;
+  }
 
-  args: unknown;
+  interface BeforeToolCallContext {
+    assistantMessage: aiTypes.AssistantMessage;
 
-  result: AgentToolResult<any>;
+    toolCall: AgentToolCall;
 
-  isError: boolean;
+    args: unknown;
 
-  context: AgentContext;
-}
+    context: AgentContext;
+  }
 
-export interface AgentTurnContext {
-  message: AssistantMessage;
+  interface AfterToolCallContext {
+    assistantMessage: aiTypes.AssistantMessage;
 
-  toolResults: ToolResultMessage[];
+    toolCall: AgentToolCall;
 
-  context: AgentContext;
+    args: unknown;
 
-  newMessages: AgentMessage[];
-}
+    result: AgentToolResult<any>;
 
-export type AgentTurnDecision = { action: "continue" } | { action: "end" };
+    isError: boolean;
 
-export type FinishTurn = (
-  turn: AgentTurnContext,
-  signal?: AbortSignal,
-) => AgentTurnDecision | void | Promise<AgentTurnDecision | undefined> | Promise<void>;
+    context: AgentContext;
+  }
 
-export interface AgentLoopTurnUpdate {
-  context?: AgentContext;
+  interface AgentTurnContext {
+    message: aiTypes.AssistantMessage;
 
-  messages?: AgentMessage[];
+    toolResults: aiTypes.ToolResultMessage[];
 
-  model?: Model<any>;
+    context: AgentContext;
 
-  thinkingLevel?: ThinkingLevel;
-}
+    newMessages: AgentMessage[];
+  }
 
-export interface PrepareRequestContext {
-  context: AgentContext;
-  model: Model<any>;
-  thinkingLevel: ThinkingLevel;
-}
+  type AgentTurnDecision = { action: "continue" } | { action: "end" };
 
-export type AgentRequestUpdate = Omit<AgentLoopTurnUpdate, "messages">;
-
-export type PrepareRequest = (
-  request: PrepareRequestContext,
-  signal?: AbortSignal,
-) => AgentRequestUpdate | void | Promise<AgentRequestUpdate | undefined> | Promise<void>;
-
-export interface PrepareNextTurnContext extends AgentTurnContext {}
-
-export interface AgentLoopConfig extends SimpleStreamOptions {
-  model: Model<any>;
-
-  convertToLlm: (messages: AgentMessage[]) => Message[] | Promise<Message[]>;
-
-  transformContext?:
-    | ((messages: AgentMessage[], signal?: AbortSignal) => Promise<AgentMessage[]>)
-    | undefined;
-
-  getApiKey?: ((provider: string) => Promise<string | undefined> | string | undefined) | undefined;
-
-  finishTurn?: FinishTurn | undefined;
-
-  prepareRequest?: PrepareRequest | undefined;
-
-  prepareNextTurn?:
-    | ((
-        context: PrepareNextTurnContext,
-      ) => AgentLoopTurnUpdate | undefined | Promise<AgentLoopTurnUpdate | undefined>)
-    | undefined;
-
-  getSteeringMessages?: () => Promise<AgentMessage[]>;
-
-  getFollowUpMessages?: () => Promise<AgentMessage[]>;
-
-  toolExecution?: ToolExecutionMode;
-
-  beforeToolCall?:
-    | ((
-        context: BeforeToolCallContext,
-        signal?: AbortSignal,
-      ) => Promise<BeforeToolCallResult | undefined>)
-    | undefined;
-
-  afterToolCall?:
-    | ((
-        context: AfterToolCallContext,
-        signal?: AbortSignal,
-      ) => Promise<AfterToolCallResult | undefined>)
-    | undefined;
-}
-
-export type ThinkingLevel = "off" | "minimal" | "low" | "medium" | "high" | "xhigh" | "max";
-
-export interface CustomAgentMessages {}
-
-export type AgentMessage = Message | CustomAgentMessages[keyof CustomAgentMessages];
-
-export interface AgentState {
-  readonly systemPrompt: string;
-
-  model: Model<any>;
-
-  thinkingLevel: ThinkingLevel;
-
-  set tools(tools: AgentTool<any>[]);
-  get tools(): AgentTool<any>[];
-
-  set messages(messages: AgentMessage[]);
-  get messages(): AgentMessage[];
-
-  readonly isStreaming: boolean;
-
-  readonly streamingMessage?: AgentMessage | undefined;
-
-  readonly pendingToolCalls: ReadonlySet<string>;
-
-  readonly errorMessage?: string | undefined;
-}
-
-export interface AgentToolResult<T = JsonValue | undefined> {
-  content: (TextContent | ImageContent)[];
-
-  details: T;
-
-  structuredContent?: JsonValue;
-
-  usage?: Usage | undefined;
-
-  isError?: boolean;
-
-  terminate?: boolean | undefined;
-}
-
-export interface AgentToolCallOutcome {
-  toolCall: AgentToolCall;
-  result: AgentToolResult<any>;
-  isError: boolean;
-
-  durationMs?: number;
-}
-
-export type AgentToolUpdateCallback<T = any> = (partialResult: AgentToolResult<T>) => void;
-
-export interface AgentTool<
-  TParameters extends TSchema = TSchema,
-  TDetails = any,
-> extends Tool<TParameters> {
-  label: string;
-
-  prepareArguments?: (args: unknown) => Static<TParameters>;
-
-  outputSchema?: TSchema;
-
-  execute: (
-    toolCallId: string,
-    params: Static<TParameters>,
+  type FinishTurn = (
+    turn: AgentTurnContext,
     signal?: AbortSignal,
-    onUpdate?: AgentToolUpdateCallback<TDetails>,
-  ) => Promise<AgentToolResult<TDetails>>;
+  ) => AgentTurnDecision | void | Promise<AgentTurnDecision | undefined> | Promise<void>;
 
-  replay?: "never" | "safe";
+  interface AgentLoopTurnUpdate {
+    context?: AgentContext;
 
-  executionMode?: ToolExecutionMode;
+    messages?: AgentMessage[];
+
+    model?: aiTypes.Model<any>;
+
+    thinkingLevel?: ThinkingLevel;
+  }
+
+  interface PrepareRequestContext {
+    context: AgentContext;
+    model: aiTypes.Model<any>;
+    thinkingLevel: ThinkingLevel;
+  }
+
+  type AgentRequestUpdate = Omit<AgentLoopTurnUpdate, "messages">;
+
+  type PrepareRequest = (
+    request: PrepareRequestContext,
+    signal?: AbortSignal,
+  ) => AgentRequestUpdate | void | Promise<AgentRequestUpdate | undefined> | Promise<void>;
+
+  interface PrepareNextTurnContext extends AgentTurnContext {}
+
+  interface AgentLoopConfig extends aiTypes.SimpleStreamOptions {
+    model: aiTypes.Model<any>;
+
+    convertToLlm: (messages: AgentMessage[]) => aiTypes.Message[] | Promise<aiTypes.Message[]>;
+
+    transformContext?:
+      | ((messages: AgentMessage[], signal?: AbortSignal) => Promise<AgentMessage[]>)
+      | undefined;
+
+    getApiKey?:
+      | ((provider: string) => Promise<string | undefined> | string | undefined)
+      | undefined;
+
+    finishTurn?: FinishTurn | undefined;
+
+    prepareRequest?: PrepareRequest | undefined;
+
+    prepareNextTurn?:
+      | ((
+          context: PrepareNextTurnContext,
+        ) => AgentLoopTurnUpdate | undefined | Promise<AgentLoopTurnUpdate | undefined>)
+      | undefined;
+
+    getSteeringMessages?: () => Promise<AgentMessage[]>;
+
+    getFollowUpMessages?: () => Promise<AgentMessage[]>;
+
+    toolExecution?: ToolExecutionMode;
+
+    beforeToolCall?:
+      | ((
+          context: BeforeToolCallContext,
+          signal?: AbortSignal,
+        ) => Promise<BeforeToolCallResult | undefined>)
+      | undefined;
+
+    afterToolCall?:
+      | ((
+          context: AfterToolCallContext,
+          signal?: AbortSignal,
+        ) => Promise<AfterToolCallResult | undefined>)
+      | undefined;
+  }
+
+  type ThinkingLevel = "off" | "minimal" | "low" | "medium" | "high" | "xhigh" | "max";
+
+  type CustomAgentMessages = MsaAgentCustomMessages;
+
+  type AgentMessage = aiTypes.Message | MsaAgentCustomMessages[keyof MsaAgentCustomMessages];
+
+  interface AgentState {
+    readonly systemPrompt: string;
+
+    model: aiTypes.Model<any>;
+
+    thinkingLevel: ThinkingLevel;
+
+    set tools(tools: AgentTool<any>[]);
+    get tools(): AgentTool<any>[];
+
+    set messages(messages: AgentMessage[]);
+    get messages(): AgentMessage[];
+
+    readonly isStreaming: boolean;
+
+    readonly streamingMessage?: AgentMessage | undefined;
+
+    readonly pendingToolCalls: ReadonlySet<string>;
+
+    readonly errorMessage?: string | undefined;
+  }
+
+  interface AgentToolResult<T = aiTypes.JsonValue | undefined> {
+    content: (aiTypes.TextContent | aiTypes.ImageContent)[];
+
+    details: T;
+
+    structuredContent?: aiTypes.JsonValue;
+
+    usage?: aiTypes.Usage | undefined;
+
+    isError?: boolean;
+
+    terminate?: boolean | undefined;
+  }
+
+  interface AgentToolCallOutcome {
+    toolCall: AgentToolCall;
+    result: AgentToolResult<any>;
+    isError: boolean;
+
+    durationMs?: number;
+  }
+
+  type AgentToolUpdateCallback<T = any> = (partialResult: AgentToolResult<T>) => void;
+
+  interface AgentTool<
+    TParameters extends TSchema = TSchema,
+    TDetails = any,
+  > extends aiTypes.Tool<TParameters> {
+    label: string;
+
+    prepareArguments?: (args: unknown) => Static<TParameters>;
+
+    outputSchema?: TSchema;
+
+    execute: (
+      toolCallId: string,
+      params: Static<TParameters>,
+      signal?: AbortSignal,
+      onUpdate?: AgentToolUpdateCallback<TDetails>,
+    ) => Promise<AgentToolResult<TDetails>>;
+
+    replay?: "never" | "safe";
+
+    executionMode?: ToolExecutionMode;
+  }
+
+  interface AgentContext {
+    messages: AgentMessage[];
+
+    tools?: AgentTool<any>[];
+  }
+
+  type AgentEvent =
+    | { type: "agent_start" }
+    | { type: "agent_end"; messages: AgentMessage[] }
+    | { type: "turn_start" }
+    | { type: "turn_end"; message: AgentMessage; toolResults: aiTypes.ToolResultMessage[] }
+    | { type: "message_start"; message: AgentMessage }
+    | {
+        type: "message_update";
+        message: AgentMessage;
+        assistantMessageEvent: aiTypes.AssistantMessageEvent;
+      }
+    | { type: "message_end"; message: AgentMessage }
+    | { type: "tool_execution_start"; toolCallId: string; toolName: string; args: any }
+    | {
+        type: "tool_execution_update";
+        toolCallId: string;
+        toolName: string;
+        args: any;
+        partialResult: any;
+      }
+    | {
+        type: "tool_execution_end";
+        toolCallId: string;
+        toolName: string;
+        result: any;
+        isError: boolean;
+
+        durationMs?: number;
+      };
 }
 
-export interface AgentContext {
-  messages: AgentMessage[];
-
-  tools?: AgentTool<any>[];
-}
-
-export type AgentEvent =
-  | { type: "agent_start" }
-  | { type: "agent_end"; messages: AgentMessage[] }
-  | { type: "turn_start" }
-  | { type: "turn_end"; message: AgentMessage; toolResults: ToolResultMessage[] }
-  | { type: "message_start"; message: AgentMessage }
-  | { type: "message_update"; message: AgentMessage; assistantMessageEvent: AssistantMessageEvent }
-  | { type: "message_end"; message: AgentMessage }
-  | { type: "tool_execution_start"; toolCallId: string; toolName: string; args: any }
-  | {
-      type: "tool_execution_update";
-      toolCallId: string;
-      toolName: string;
-      args: any;
-      partialResult: any;
-    }
-  | {
-      type: "tool_execution_end";
-      toolCallId: string;
-      toolName: string;
-      result: any;
-      isError: boolean;
-
-      durationMs?: number;
-    };
+export type { typesModule as default };

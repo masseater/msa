@@ -1,7 +1,9 @@
-import { uuidv7 } from "@msa/ai";
+import ai from "@msa/ai";
 import type { ExtensionAPI, ExtensionContext, SessionBeforeCompactEvent } from "@msa/coding-agent";
 import { convertToLlm, serializeConversation } from "@msa/coding-agent";
 import { Clock, Effect, Option } from "effect";
+
+const { uuidv7 } = ai;
 
 const buildSummaryMessages = (conversationText: string, previousSummary: string | undefined) => {
   const previousContext =
@@ -11,7 +13,6 @@ const buildSummaryMessages = (conversationText: string, previousSummary: string 
 
   return [
     {
-      role: "user" as const,
       content: [
         {
           type: "text" as const,
@@ -33,6 +34,7 @@ ${conversationText}
 </conversation>`,
         },
       ],
+      role: "user" as const,
       timestamp: Effect.runSync(Clock.currentTimeMillis),
     },
   ];
@@ -70,10 +72,10 @@ const completeSummary = (
         model,
         { messages },
         {
-          maxTokens: 8192,
-          signal,
           cacheRetention: "none",
+          maxTokens: 8192,
           sessionId: uuidv7(),
+          signal,
         },
       ),
     ).pipe(Effect.option);
@@ -126,8 +128,8 @@ const summarize = (event: SessionBeforeCompactEvent, ctx: ExtensionContext) =>
 
     return {
       compaction: {
-        summary: completed.summary,
         firstKeptEntryId,
+        summary: completed.summary,
         tokensBefore,
         usage: completed.usage,
       },

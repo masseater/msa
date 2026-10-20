@@ -1,14 +1,14 @@
 import assert from "node:assert";
 import { afterEach, beforeEach, describe, it } from "node:test";
 
-import { Image, setImageTranscoder } from "../src/components/image.ts";
-import {
-  resetCapabilitiesCache,
-  setCapabilities,
-  setCellDimensions,
-} from "../src/terminal-capabilities.ts";
-import { hyperlink } from "../src/terminal-image.ts";
+import imageModule from "../src/components/image.ts";
+import terminalCapabilities from "../src/terminal-capabilities.ts";
+import terminalImage from "../src/terminal-image.ts";
 import terminalImageHelpers from "./terminal-image-helpers.ts";
+
+const { resetCapabilitiesCache, setCapabilities, setCellDimensions } = terminalCapabilities;
+const { Image, setImageTranscoder } = imageModule;
+const { hyperlink } = terminalImage;
 
 const { jpeg, png, render } = terminalImageHelpers;
 

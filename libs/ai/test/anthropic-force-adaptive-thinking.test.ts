@@ -1,10 +1,13 @@
 import { Data, Effect } from "effect";
 import { describe, expect, it } from "vite-plus/test";
 
-import { streamSimple } from "../src/compat.ts";
-import type { Context, Model, SimpleStreamOptions } from "../src/types.ts";
-import { currentTimeMillis } from "../src/utils/clock.ts";
+import compatModule from "../src/compat.ts";
+import type typesModule from "../src/types.types.ts";
+import clock from "../src/utils/clock.ts";
 import modelChoice from "./model-choice.ts";
+
+const { currentTimeMillis } = clock;
+const { streamSimple } = compatModule;
 
 const { chooseModel, compatValue, usesApi } = modelChoice;
 
@@ -36,15 +39,15 @@ interface AnthropicThinkingPayload {
 
 class PayloadCaptured extends Data.TaggedError("PayloadCaptured")<{ readonly message: string }> {}
 
-function makeContext(): Context {
+function makeContext(): typesModule.Context {
   return {
     messages: [{ content: "Hello", role: "user", timestamp: currentTimeMillis() }],
   };
 }
 
 function makeCustomModel(
-  compat?: Model<"anthropic-messages">["compat"],
-): Model<"anthropic-messages"> {
+  compat?: typesModule.Model<"anthropic-messages">["compat"],
+): typesModule.Model<"anthropic-messages"> {
   return {
     api: "anthropic-messages",
     baseUrl: "http://127.0.0.1:9",
@@ -61,12 +64,12 @@ function makeCustomModel(
 }
 
 const capturePayload = Effect.fn("capturePayload")(function* (
-  model: Model<"anthropic-messages">,
-  options?: SimpleStreamOptions,
+  model: typesModule.Model<"anthropic-messages">,
+  options?: typesModule.SimpleStreamOptions,
 ) {
   let capturedPayload: AnthropicThinkingPayload | undefined;
 
-  const payloadCaptureModel: Model<"anthropic-messages"> = {
+  const payloadCaptureModel: typesModule.Model<"anthropic-messages"> = {
     ...model,
     baseUrl: "http://127.0.0.1:9",
   };
@@ -127,7 +130,7 @@ describe("Anthropic forceAdaptiveThinking compat override", () => {
   it("allows built-in adaptive models to opt out with compat.forceAdaptiveThinking false", () =>
     Effect.runPromise(
       Effect.gen(function* () {
-        const model: Model<"anthropic-messages"> = {
+        const model: typesModule.Model<"anthropic-messages"> = {
           ...adaptiveModel(),
           compat: { forceAdaptiveThinking: false },
         };

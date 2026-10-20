@@ -1,32 +1,39 @@
 import { Effect, Stream } from "effect";
 
-import type { AssistantMessage, Model } from "../types.ts";
-import type { AssistantMessageEventStream } from "../utils/event-stream.ts";
-import { callHook } from "../utils/hooks.ts";
-import { dispatchEvent, type StreamState } from "./anthropic-messages-events.ts";
-import type { RunState } from "./anthropic-messages-run.ts";
-import { iterateAnthropicEvents } from "./anthropic-sse.ts";
+import type typesModule from "../types.types.ts";
+import type eventStreamTypes from "../utils/event-stream.types.ts";
+import hooks from "../utils/hooks.ts";
+import anthropicMessagesEvents from "./anthropic-messages-events.ts";
+import type anthropicMessagesEventsTypes from "./anthropic-messages-events.types.ts";
+import type anthropicMessagesRunTypes from "./anthropic-messages-run.types.ts";
+import anthropicSse from "./anthropic-sse.ts";
+
+const { iterateAnthropicEvents } = anthropicSse;
+const { callHook } = hooks;
+const { dispatchEvent } = anthropicMessagesEvents;
 
 interface CreateStreamStateInput {
-  readonly events: AssistantMessageEventStream;
-  readonly model: Model<"anthropic-messages">;
-  readonly output: AssistantMessage;
+  readonly events: eventStreamTypes.AssistantMessageEventStream;
+  readonly model: typesModule.Model<"anthropic-messages">;
+  readonly output: typesModule.AssistantMessage;
 }
 
-function createStreamState(input: CreateStreamStateInput): StreamState {
+function createStreamState(
+  input: CreateStreamStateInput,
+): anthropicMessagesEventsTypes.StreamState {
   return {
     events: input.events,
+    inputTransformations: undefined,
     model: input.model,
     output: input.output,
     usageModel: input.model,
-    inputTransformations: undefined,
   };
 }
 
 interface RunStreamEventsInput {
-  readonly run: RunState;
+  readonly run: anthropicMessagesRunTypes.RunState;
   readonly response: Response;
-  readonly state: StreamState;
+  readonly state: anthropicMessagesEventsTypes.StreamState;
 }
 
 function runStreamEvents(input: RunStreamEventsInput): Effect.Effect<void> {
@@ -36,10 +43,15 @@ function runStreamEvents(input: RunStreamEventsInput): Effect.Effect<void> {
     Stream.runForEach((event) =>
       Effect.gen(function* () {
         yield* callHook(() => options?.onProviderStreamEvent?.(event, run.model));
-        yield* Effect.sync(() => dispatchEvent({ state, event }));
+        yield* Effect.sync(() => dispatchEvent({ event, state }));
       }),
     ),
   );
 }
 
-export { createStreamState, runStreamEvents };
+const anthropicMessagesRunStream = {
+  createStreamState,
+  runStreamEvents,
+};
+
+export default anthropicMessagesRunStream;

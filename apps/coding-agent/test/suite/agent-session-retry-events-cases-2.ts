@@ -1,5 +1,5 @@
-import type { AgentTool } from "@msa/agent-core";
-import { fauxAssistantMessage, fauxThinking, fauxToolCall } from "@msa/ai";
+import type agentTypes from "@msa/agent-core/index.types";
+import ai from "@msa/ai";
 import { Effect } from "effect";
 import { Type } from "typebox";
 import { expect } from "vite-plus/test";
@@ -8,13 +8,15 @@ import agentSessionRetryEventsCases1 from "./agent-session-retry-events-cases-1.
 import harnessModule from "./harness.ts";
 import type harnessTypes from "./harness.types.ts";
 
+const { fauxAssistantMessage, fauxThinking, fauxToolCall } = ai;
+
 const { createHarness } = harnessModule;
 const { harnesses, normalizeEventOrder } = agentSessionRetryEventsCases1;
 
 const waitsForTheFullLoopWhen = Effect.gen(function* () {
   const runPromise = Effect.runPromiseWith(yield* Effect.context<never>());
   const toolRuns: string[] = [];
-  const echoTool: AgentTool = {
+  const echoTool: agentTypes.AgentTool = {
     description: "Echo text back",
     execute: (_toolCallId, params) =>
       runPromise(
@@ -168,7 +170,7 @@ const emitsTheExpectedEventOrderFor2Part2 = (entry: {
 const emitsTheExpectedEventOrderFor2 = Effect.gen(function* () {
   const runPromise = Effect.runPromiseWith(yield* Effect.context<never>());
   const toolRuns: string[] = [];
-  const echoTool: AgentTool = {
+  const echoTool: agentTypes.AgentTool = {
     description: "Echo text back",
     execute: (_toolCallId, params) =>
       runPromise(

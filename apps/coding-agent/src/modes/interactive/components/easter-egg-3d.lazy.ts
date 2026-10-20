@@ -1,6 +1,9 @@
-import { type TUI, TuiAltScreen } from "@msa/tui";
+import tuiModule from "@msa/tui";
+import type tuiTypes from "@msa/tui/index.types";
 
-function playEasterEgg3d(tui: TUI): boolean {
+const { TuiAltScreen } = tuiModule;
+
+function playEasterEgg3d(tui: tuiTypes.TUI): boolean {
   if (!(tui instanceof TuiAltScreen)) return false;
   if (tui.hasOverlay()) return true;
   const screen = tui.getScreenLines();
@@ -11,6 +14,6 @@ function playEasterEgg3d(tui: TUI): boolean {
   return true;
 }
 
-export function playArmin3d(tui: TUI): boolean {
+export function playArmin3d(tui: tuiTypes.TUI): boolean {
   return playEasterEgg3d(tui);
 }

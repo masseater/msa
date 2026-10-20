@@ -1,5 +1,5 @@
 import * as NodeRuntime from "@effect/platform-node/NodeRuntime";
-import { createModels } from "@msa/ai/models";
+import modelsModule from "@msa/ai/models";
 import contextModule from "@msa/chord/context";
 import { Console, Effect } from "effect";
 
@@ -9,6 +9,8 @@ import node from "../src/storage/sqlite/node.ts";
 import retainedBytes from "./heap-retained.ts";
 import type sessionDocumentCacheBenchTypes from "./session-document-cache-bench.types.ts";
 import support from "./support.ts";
+
+const { createModels } = modelsModule;
 
 const { BACKGROUND_CONTEXT: context } = contextModule;
 

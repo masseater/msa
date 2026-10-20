@@ -1,5 +1,5 @@
 import * as NodeServices from "@effect/platform-node/NodeServices";
-import { registerFauxProvider } from "@msa/ai/compat";
+import compat from "@msa/ai/compat";
 import testing from "@msa/testing";
 import { Effect, FileSystem, ManagedRuntime } from "effect";
 import { afterEach, describe, expect, it } from "vite-plus/test";
@@ -13,6 +13,8 @@ import {
 import { AuthStorage } from "../../../src/core/auth-storage.ts";
 import { ModelRuntime } from "../../../src/core/model-runtime.ts";
 import { SessionManager } from "../../../src/core/session-manager.ts";
+
+const { registerFauxProvider } = compat;
 
 const { joinPath, toJsonText } = testing;
 

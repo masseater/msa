@@ -35,8 +35,8 @@ const aliases: SourceAlias[] = Object.entries(paths)
     return {
       pattern,
       prefix: wildcard === -1 ? pattern : pattern.slice(0, wildcard),
-      suffix: wildcard === -1 ? "" : pattern.slice(wildcard + 1),
       replacements,
+      suffix: wildcard === -1 ? "" : pattern.slice(wildcard + 1),
     };
   })
   .sort((left, right) => right.pattern.length - left.pattern.length);
@@ -51,7 +51,7 @@ registerHooks({
       for (const replacement of alias.replacements) {
         const resolved = resolveSourcePath(replacement.replace("*", wildcard));
         if (resolved !== undefined && resolved !== "")
-          return { url: pathToFileURL(resolved).href, shortCircuit: true };
+          return { shortCircuit: true, url: pathToFileURL(resolved).href };
       }
     }
     if (matchedPattern !== undefined && matchedPattern !== "") {

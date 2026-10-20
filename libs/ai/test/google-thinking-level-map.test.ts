@@ -2,10 +2,14 @@ import type { GenerateContentParameters } from "@google/genai";
 import { Effect } from "effect";
 import { describe, expect, it } from "vite-plus/test";
 
-import { streamSimple as streamSimpleGoogle } from "../src/api/google-generative-ai.ts";
-import { resolveGoogleThinkingLevel } from "../src/api/google-thinking.ts";
-import type { Model, ThinkingBudgets, ThinkingLevel, ThinkingLevelMap } from "../src/types.ts";
-import { normalizeContext } from "../src/utils/transcript.ts";
+import googleGenerativeAi from "../src/api/google-generative-ai.ts";
+import googleThinking from "../src/api/google-thinking.ts";
+import type typesModule from "../src/types.types.ts";
+import transcript from "../src/utils/transcript.ts";
+
+const { normalizeContext } = transcript;
+const { streamSimple: streamSimpleGoogle } = googleGenerativeAi;
+const { resolveGoogleThinkingLevel } = googleThinking;
 
 const context = normalizeContext({
   messages: [{ content: "Hello", role: "user", timestamp: 0 }],
@@ -13,8 +17,8 @@ const context = normalizeContext({
 
 function googleModel(
   id: string,
-  thinkingLevelMap: ThinkingLevelMap,
-): Model<"google-generative-ai"> {
+  thinkingLevelMap: typesModule.ThinkingLevelMap,
+): typesModule.Model<"google-generative-ai"> {
   return {
     api: "google-generative-ai",
     baseUrl: "https://example.invalid/v1beta",
@@ -31,9 +35,9 @@ function googleModel(
 }
 
 function captureGooglePayload(
-  model: Model<"google-generative-ai">,
-  reasoning?: ThinkingLevel,
-  thinkingBudgets?: ThinkingBudgets,
+  model: typesModule.Model<"google-generative-ai">,
+  reasoning?: typesModule.ThinkingLevel,
+  thinkingBudgets?: typesModule.ThinkingBudgets,
 ): Promise<GenerateContentParameters> {
   return Effect.runPromise(
     Effect.gen(function* () {
@@ -59,8 +63,11 @@ function captureGooglePayload(
 
 const googleAdapters = [
   {
-    capture: (id: string, thinkingLevelMap: ThinkingLevelMap, reasoning?: ThinkingLevel) =>
-      captureGooglePayload(googleModel(id, thinkingLevelMap), reasoning),
+    capture: (
+      id: string,
+      thinkingLevelMap: typesModule.ThinkingLevelMap,
+      reasoning?: typesModule.ThinkingLevel,
+    ) => captureGooglePayload(googleModel(id, thinkingLevelMap), reasoning),
     name: "Google Generative AI",
   },
 ] as const;
@@ -72,10 +79,13 @@ describe("Google thinking level maps", () => {
       low: "low",
       medium: "medium",
       minimal: "minimal",
-    } as const satisfies Partial<Record<ThinkingLevel, ThinkingLevel>>;
+    } as const satisfies Partial<Record<typesModule.ThinkingLevel, typesModule.ThinkingLevel>>;
     for (const [level, expected] of Object.entries(defaultExpectations)) {
       expect(
-        resolveGoogleThinkingLevel(googleModel("gemini-3.7-flash", {}), level as ThinkingLevel),
+        resolveGoogleThinkingLevel(
+          googleModel("gemini-3.7-flash", {}),
+          level as typesModule.ThinkingLevel,
+        ),
       ).toBe(expected);
     }
 

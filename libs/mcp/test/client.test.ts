@@ -1,8 +1,10 @@
 import { Effect } from "effect";
 import { describe, expect, it } from "vite-plus/test";
 
-import { LATEST_PROTOCOL_VERSION, McpError } from "../src/index.ts";
+import mcp from "../src/index.ts";
 import inMemoryServer from "./in-memory-server.ts";
+
+const { LATEST_PROTOCOL_VERSION, McpError } = mcp;
 
 const { connect } = inMemoryServer;
 

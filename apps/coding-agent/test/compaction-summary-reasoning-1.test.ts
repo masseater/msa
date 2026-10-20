@@ -1,5 +1,6 @@
-import type { AgentMessage } from "@msa/agent-core";
-import { type AssistantMessage, normalizeContext } from "@msa/ai";
+import type agentTypes from "@msa/agent-core/index.types";
+import ai from "@msa/ai";
+import type aiTypes from "@msa/ai/index.types";
 import testing from "@msa/testing";
 import { Effect } from "effect";
 import { beforeEach, describe, expect, it, vi } from "vite-plus/test";
@@ -10,6 +11,8 @@ import {
   generateSummaryWithUsage,
 } from "../src/core/compaction/index.ts";
 import compactionSummaryReasoning1Support from "./compaction-summary-reasoning-1-support.ts";
+
+const { normalizeContext } = ai;
 
 const { createModel } = compactionSummaryReasoning1Support;
 
@@ -25,13 +28,13 @@ vi.mock("@msa/ai/compat", (importOriginal) =>
       const actual = yield* testing.awaited(importOriginal<typeof import("@msa/ai/compat")>());
       return yield* testing.awaited({
         ...actual,
-        completeSimple: completeSimpleMock,
+        default: { ...actual.default, completeSimple: completeSimpleMock },
       });
     }),
   ),
 );
 
-const mockSummaryResponse: AssistantMessage = {
+const mockSummaryResponse: aiTypes.AssistantMessage = {
   api: "anthropic-messages" as const,
   content: [{ text: "## Goal\nTest summary", type: "text" as const }],
   model: "claude-sonnet-4-5",
@@ -49,7 +52,7 @@ const mockSummaryResponse: AssistantMessage = {
   },
 };
 
-const messages: AgentMessage[] = [
+const messages: agentTypes.AgentMessage[] = [
   { content: "Summarize this.", role: "user", timestamp: currentTimeMillis() },
 ];
 

@@ -1,24 +1,7 @@
-import type { AgentTool, AgentToolCallOutcome, AgentToolResult } from "@msa/agent-core";
-import type {
-  AnyModel,
-  ClassifierContext,
-  ImageContent,
-  ImagesContext,
-  ModelType,
-  ModelTypeMap,
-  TextContent,
-  Usage,
-} from "@msa/ai";
-import {
-  type CodemodeOutputItem,
-  type CodemodeResult,
-  CodemodeSandbox,
-  type CodemodeTool,
-  loadQuickJSWasm,
-  parseCodemodeSource,
-  renderToolSample,
-  toCodemodeIdentifier,
-} from "@msa/codemode";
+import type agentTypes from "@msa/agent-core/index.types";
+import type aiTypes from "@msa/ai/index.types";
+import codemode from "@msa/codemode";
+import type codemodeTypes from "@msa/codemode/index.types";
 import * as Effect from "effect/Effect";
 import { dual } from "effect/Function";
 
@@ -33,8 +16,8 @@ import { callbackPromise } from "../../utils/interop.ts";
 import { writeOutputFile } from "../../utils/output-files.ts";
 import {
   Bm25Ranker,
-  createToolSearchDocument,
   DEFAULT_TOOL_SEARCH_LIMIT,
+  createToolSearchDocument,
 } from "../tool-search/tool.ts";
 import {
   CODEMODE_DOCS_PATH,
@@ -49,6 +32,8 @@ import {
   toCodemodeDeclaration,
 } from "./tool.ts";
 
+const { CodemodeSandbox, parseCodemodeSource, renderToolSample, toCodemodeIdentifier } = codemode;
+
 const ARGS_PREVIEW_CHARS = 200;
 const ERROR_PREVIEW_CHARS = 500;
 
@@ -58,7 +43,11 @@ const CODEMODE_MEMORY_LIMIT_BYTES = 256 * 1024 * 1024;
 
 const MAX_CONCURRENT_CODEMODE_WORKERS = 2;
 let activeCodemodeWorkers = 0;
-const MODEL_TYPES: ReadonlySet<string> = new Set<ModelType>(["chat", "image", "classifier"]);
+const MODEL_TYPES: ReadonlySet<string> = new Set<aiTypes.ModelType>([
+  "chat",
+  "image",
+  "classifier",
+]);
 
 function truncateText(text: string, maxChars: number): string {
   return text.length > maxChars ? `${text.slice(0, maxChars - 3)}...` : text;
@@ -73,15 +62,15 @@ function previewArgs(args: unknown): string {
   }
 }
 
-function textOf(result: AgentToolResult<unknown>): string {
+function textOf(result: agentTypes.AgentToolResult<unknown>): string {
   return (result.content ?? [])
-    .filter((block): block is TextContent => block.type === "text")
+    .filter((block): block is aiTypes.TextContent => block.type === "text")
     .map((block) => block.text)
     .join("\n");
 }
 
-function toModelType(value: unknown): ModelType {
-  if (typeof value === "string" && MODEL_TYPES.has(value)) return value as ModelType;
+function toModelType(value: unknown): aiTypes.ModelType {
+  if (typeof value === "string" && MODEL_TYPES.has(value)) return value as aiTypes.ModelType;
   throw new Error(
     `Unknown model type ${JSON.stringify(value)}. Use "chat", "image", or "classifier".`,
   );
@@ -93,7 +82,7 @@ function toProvider(value: unknown): string | undefined {
   return value;
 }
 
-function toModelInfo(model: AnyModel): Record<string, unknown> {
+function toModelInfo(model: aiTypes.AnyModel): Record<string, unknown> {
   const info: Record<string, unknown> = { ...model };
   delete info["headers"];
   return info;
@@ -119,7 +108,7 @@ function describeValue(value: unknown): string {
 const CLASSIFIER_CONTEXT_SHAPE =
   '{ state: { ... }, images?: [{ type: "image", data: <base64>, mimeType }], questions: { <id>: { type: "choice", instructions, criteria: { <label>: <meaning> } } | { type: "score", instructions, criteria: [<lowest level>, ..., <highest level>] } | { type: "bool", instructions, criteria: { true: <meaning>, false: <meaning> } } } }';
 
-function checkClassifierContext(context: unknown): ClassifierContext {
+function checkClassifierContext(context: unknown): aiTypes.ClassifierContext {
   const fail = (problem: string) =>
     new Error(
       `models.classify() ${problem}. Expected context: ${CLASSIFIER_CONTEXT_SHAPE}. See "Classify" in ${CODEMODE_DOCS_PATH}.`,
@@ -189,10 +178,10 @@ function checkClassifierContext(context: unknown): ClassifierContext {
       throw fail(`${at}.type must be "choice", "score", or "bool", got ${JSON.stringify(type)}`);
     }
   }
-  return context as unknown as ClassifierContext;
+  return context as unknown as aiTypes.ClassifierContext;
 }
 
-function checkImagesContext(context: unknown): ImagesContext {
+function checkImagesContext(context: unknown): aiTypes.ImagesContext {
   const fail = (problem: string) =>
     new Error(
       `models.generateImages() ${problem}. Expected context: { input: [{ type: "text", text: <prompt> }, ...optional { type: "image", data: <base64>, mimeType } references] }. See "Generate images" in ${CODEMODE_DOCS_PATH}.`,
@@ -216,13 +205,13 @@ function checkImagesContext(context: unknown): ImagesContext {
       `context.input[${index}] must be a text or image block, got ${describeValue(block)}`,
     );
   });
-  return context as unknown as ImagesContext;
+  return context as unknown as aiTypes.ImagesContext;
 }
 
 interface ModelCallResult {
   stopReason: "stop" | "error" | "aborted";
   errorMessage?: string;
-  usage?: Usage;
+  usage?: aiTypes.Usage;
 }
 
 function createLimiter(limit: number): <T>(run: () => Promise<T>) => Promise<T> {
@@ -280,9 +269,11 @@ function valueText(value: unknown): string {
   return JSON.stringify(value) ?? String(value);
 }
 
-function formatOutput(output: readonly CodemodeOutputItem[]): (TextContent | ImageContent)[] {
+function formatOutput(
+  output: readonly codemodeTypes.CodemodeOutputItem[],
+): (aiTypes.TextContent | aiTypes.ImageContent)[] {
   const total = output.filter((item) => item.type === "text" && item.console === undefined).length;
-  const items: (TextContent | ImageContent)[] = [];
+  const items: (aiTypes.TextContent | aiTypes.ImageContent)[] = [];
   const consoleLines: string[] = [];
   let index = 0;
   for (const item of output) {
@@ -291,8 +282,8 @@ function formatOutput(output: readonly CodemodeOutputItem[]): (TextContent | Ima
     } else if (item.console === undefined) {
       index++;
       items.push({
-        type: "text",
         text: total > 1 ? `==> text ${index}/${total} <==\n${item.text}` : item.text,
+        type: "text",
       });
     } else {
       consoleLines.push(item.text);
@@ -300,19 +291,21 @@ function formatOutput(output: readonly CodemodeOutputItem[]): (TextContent | Ima
   }
   if (consoleLines.length > 0) {
     items.push({
-      type: "text",
       text: `<console_output>\n${consoleLines.join("\n")}\n</console_output>`,
+      type: "text",
     });
   }
   return items;
 }
 
-function joinAdjacentText(items: (TextContent | ImageContent)[]): (TextContent | ImageContent)[] {
-  const joined: (TextContent | ImageContent)[] = [];
+function joinAdjacentText(
+  items: (aiTypes.TextContent | aiTypes.ImageContent)[],
+): (aiTypes.TextContent | aiTypes.ImageContent)[] {
+  const joined: (aiTypes.TextContent | aiTypes.ImageContent)[] = [];
   let parts: string[] = [];
   let lastPart = "";
   const flush = () => {
-    if (parts.length > 0) joined.push({ type: "text", text: parts.join("") });
+    if (parts.length > 0) joined.push({ text: parts.join(""), type: "text" });
     parts = [];
     lastPart = "";
   };
@@ -339,7 +332,7 @@ function formatCallSummary(calls: readonly CodemodeNestedCall[]): string {
 }
 
 function formatError(
-  result: Extract<CodemodeResult, { ok: false }>,
+  result: Extract<codemodeTypes.CodemodeResult, { ok: false }>,
   calls: readonly CodemodeNestedCall[],
 ): string {
   const { error } = result;
@@ -367,19 +360,19 @@ function spillOutput(text: string): Promise<{ path: string } | { error: string }
 }
 
 const IMAGE_EXTENSIONS: Record<string, string> = {
-  "image/png": ".png",
-  "image/jpeg": ".jpg",
   "image/gif": ".gif",
+  "image/jpeg": ".jpg",
+  "image/png": ".png",
   "image/webp": ".webp",
 };
 
 function saveImages(
-  items: (TextContent | ImageContent)[],
-): Promise<(TextContent | ImageContent)[]> {
+  items: (aiTypes.TextContent | aiTypes.ImageContent)[],
+): Promise<(aiTypes.TextContent | aiTypes.ImageContent)[]> {
   return Effect.runPromise(
     awaiting(function* () {
       const labels = new Map<string, Promise<string>>();
-      const label = ({ data, mimeType }: ImageContent): Promise<string> =>
+      const label = ({ data, mimeType }: aiTypes.ImageContent): Promise<string> =>
         Effect.runPromise(
           awaiting(function* () {
             const bytes = Buffer.from(data, "base64");
@@ -398,7 +391,7 @@ function saveImages(
         );
       const result = yield* awaited(
         Promise.all(
-          items.map((item): Promise<(TextContent | ImageContent)[]> =>
+          items.map((item): Promise<(aiTypes.TextContent | aiTypes.ImageContent)[]> =>
             Effect.runPromise(
               awaiting(function* () {
                 if (item.type !== "image") return [item];
@@ -407,7 +400,7 @@ function saveImages(
                   pending = label(item);
                   labels.set(item.data, pending);
                 }
-                return [{ type: "text", text: yield* awaited(pending) }, item];
+                return [{ text: yield* awaited(pending), type: "text" }, item];
               }),
             ),
           ),
@@ -419,13 +412,13 @@ function saveImages(
 }
 
 function truncateOutput(
-  items: (TextContent | ImageContent)[],
+  items: (aiTypes.TextContent | aiTypes.ImageContent)[],
   maxTokens: number,
-): Promise<{ items: (TextContent | ImageContent)[]; fullOutputPath?: string }> {
+): Promise<{ items: (aiTypes.TextContent | aiTypes.ImageContent)[]; fullOutputPath?: string }> {
   return Effect.runPromise(
     awaiting(function* () {
       const texts = items
-        .filter((item): item is TextContent => item.type === "text")
+        .filter((item): item is aiTypes.TextContent => item.type === "text")
         .map((item) => item.text);
       const combined = texts.join("\n");
       const budget = maxTokens * CHARS_PER_TOKEN;
@@ -442,14 +435,17 @@ function truncateOutput(
           ? `\n\n[Full output: ${spilled.path} (read with offset/limit)]`
           : `\n\n[Could not save the full output: ${spilled.error}]`;
       return {
-        items: [{ type: "text", text }, ...items.filter((item) => item.type === "image")],
+        items: [{ text, type: "text" }, ...items.filter((item) => item.type === "image")],
         ...("path" in spilled ? { fullOutputPath: spilled.path } : {}),
       };
     }),
   );
 }
 
-function toScriptValue(tool: AgentTool<any>, outcome: AgentToolCallOutcome): unknown {
+function toScriptValue(
+  tool: agentTypes.AgentTool<any>,
+  outcome: agentTypes.AgentToolCallOutcome,
+): unknown {
   const { result } = outcome;
   if (tool.outputSchema !== undefined && result.structuredContent !== undefined)
     return result.structuredContent;
@@ -462,23 +458,23 @@ function executeCodemodeImpl(
   toolCallId: string,
   input: CodemodeToolInput,
   signal: AbortSignal | undefined,
-  onUpdate: ((result: AgentToolResult<CodemodeToolDetails>) => void) | undefined,
+  onUpdate: ((result: agentTypes.AgentToolResult<CodemodeToolDetails>) => void) | undefined,
   ctx: ExtensionToolContext | undefined,
   options: CodemodeToolOptions = {},
-): Promise<AgentToolResult<CodemodeToolDetails>> {
+): Promise<agentTypes.AgentToolResult<CodemodeToolDetails>> {
   return Effect.runPromise(
     awaiting(function* () {
       const startedAt = performance.now();
       const { code, options: sourceOptions } = parseCodemodeSource(input.code);
       const calls: CodemodeNestedCall[] = [];
 
-      let modelUsage: Usage | undefined;
+      let modelUsage: aiTypes.Usage | undefined;
 
       let generatedImages = 0;
       const addGeneratedImages = (count: number) => {
         generatedImages += count;
       };
-      const addModelUsage = (usage: Usage) => {
+      const addModelUsage = (usage: aiTypes.Usage) => {
         modelUsage = modelUsage === undefined ? usage : combineUsage(modelUsage, usage);
       };
 
@@ -496,7 +492,7 @@ function executeCodemodeImpl(
           renderToolSample(toCodemodeDeclaration(tool, guidelines?.get(tool.name))),
         ]),
       );
-      const sandboxTools: CodemodeTool[] = callable.map((tool) => {
+      const sandboxTools: codemodeTypes.CodemodeTool[] = callable.map((tool) => {
         const description = samples.get(tool.name);
         return {
           name: tool.name,
@@ -505,9 +501,9 @@ function executeCodemodeImpl(
             Effect.runPromise(
               awaiting(function* () {
                 const record: CodemodeNestedCall = {
+                  args: previewArgs(args),
                   id: `${toolCallId}/?`,
                   name: tool.name,
-                  args: previewArgs(args),
                   status: "running",
                 };
                 calls.push(record);
@@ -554,7 +550,7 @@ function executeCodemodeImpl(
         ],
         timeoutMs: sourceOptions.timeoutMs ?? Number.POSITIVE_INFINITY,
         memoryLimitBytes: CODEMODE_MEMORY_LIMIT_BYTES,
-        wasm: loadQuickJSWasm(getQuickJSWasmPath()),
+        wasm: codemode.loadQuickJSWasm(getQuickJSWasmPath()),
         ...(workerUrl === undefined ? {} : { workerUrl }),
         acquireWorker: () => {
           if (activeCodemodeWorkers >= MAX_CONCURRENT_CODEMODE_WORKERS) {
@@ -569,7 +565,7 @@ function executeCodemodeImpl(
         },
       });
 
-      let result: CodemodeResult;
+      let result: codemodeTypes.CodemodeResult;
       try {
         const store = ctx === undefined ? {} : readCodemodeStore(ctx.sessionManager.getBranch());
         result = yield* awaited(
@@ -587,19 +583,19 @@ function executeCodemodeImpl(
       if (result.ok) {
         const { set, delete: deleted } = result.storeWrites;
         if (Object.keys(set).length > 0 || deleted.length > 0) {
-          options.appendEntry?.(CODEMODE_STORE_ENTRY_TYPE, { set, delete: deleted });
+          options.appendEntry?.(CODEMODE_STORE_ENTRY_TYPE, { delete: deleted, set });
         }
 
         if (result.value !== undefined)
-          scriptOutput.push({ type: "text", text: valueText(result.value) });
+          scriptOutput.push({ text: valueText(result.value), type: "text" });
       }
       const items = formatOutput(scriptOutput);
       if (!result.ok)
-        items.push({ type: "text", text: `Script error:\n${formatError(result, calls)}` });
+        items.push({ text: `Script error:\n${formatError(result, calls)}`, type: "text" });
       if (generatedImages > 0 && !items.some((item) => item.type === "image")) {
         items.push({
-          type: "text",
           text: `Note: models.generateImages() returned ${generatedImages} image${generatedImages === 1 ? "" : "s"} that the script did not show. Show each image block of result.output with image(block).`,
+          type: "text",
         });
       }
 
@@ -617,7 +613,7 @@ function executeCodemodeImpl(
       if (truncated.fullOutputPath !== undefined && truncated.fullOutputPath !== "")
         details.fullOutputPath = truncated.fullOutputPath;
       return {
-        content: [{ type: "text", text: header }, ...output],
+        content: [{ text: header, type: "text" }, ...output],
         details,
         ...(modelUsage === undefined ? {} : { usage: modelUsage }),
         ...(result.ok ? {} : { isError: true }),
@@ -631,17 +627,17 @@ export const executeCodemode: {
     toolCallId: string,
     input: CodemodeToolInput,
     signal: AbortSignal | undefined,
-    onUpdate: ((result: AgentToolResult<CodemodeToolDetails>) => void) | undefined,
+    onUpdate: ((result: agentTypes.AgentToolResult<CodemodeToolDetails>) => void) | undefined,
     ctx: ExtensionToolContext | undefined,
     options?: CodemodeToolOptions,
-  ): Promise<AgentToolResult<CodemodeToolDetails>>;
+  ): Promise<agentTypes.AgentToolResult<CodemodeToolDetails>>;
   (
     input: CodemodeToolInput,
     signal: AbortSignal | undefined,
-    onUpdate: ((result: AgentToolResult<CodemodeToolDetails>) => void) | undefined,
+    onUpdate: ((result: agentTypes.AgentToolResult<CodemodeToolDetails>) => void) | undefined,
     ctx: ExtensionToolContext | undefined,
     options?: CodemodeToolOptions,
-  ): (toolCallId: string) => Promise<AgentToolResult<CodemodeToolDetails>>;
+  ): (toolCallId: string) => Promise<agentTypes.AgentToolResult<CodemodeToolDetails>>;
 } = dual((args: IArguments) => args.length >= 5, executeCodemodeImpl);
 
 function isNamespaceName(namespace: ToolNamespace, query: string): boolean {
@@ -652,19 +648,17 @@ function isNamespaceName(namespace: ToolNamespace, query: string): boolean {
 }
 
 function createDiscoveryGlobals(
-  tools: readonly AgentTool<any>[],
+  tools: readonly agentTypes.AgentTool<any>[],
   samples: ReadonlyMap<string, string>,
   options: CodemodeToolOptions,
-): CodemodeTool[] {
+): codemodeTypes.CodemodeTool[] {
   const ranker = new Bm25Ranker();
   const entry = (name: string) => ({
-    name: toCodemodeIdentifier(name),
     description: samples.get(name) ?? "",
+    name: toCodemodeIdentifier(name),
   });
   return [
     {
-      name: "searchTools",
-      spread: true,
       execute: (args) => {
         const [query, searchOptions] = args as [
           unknown,
@@ -692,10 +686,10 @@ function createDiscoveryGlobals(
         });
         return ranker.rank(query, documents, limit).map((match) => entry(match.name));
       },
+      name: "searchTools",
+      spread: true,
     },
     {
-      name: "describeTool",
-      spread: true,
       execute: (args) => {
         const [name] = args as unknown[];
         if (typeof name !== "string") throw new Error("describeTool() expects a tool name");
@@ -704,10 +698,10 @@ function createDiscoveryGlobals(
         );
         return tool === undefined ? undefined : samples.get(tool.name);
       },
+      name: "describeTool",
+      spread: true,
     },
     {
-      name: "describeNamespace",
-      spread: true,
       execute: (args) => {
         const [name] = args as unknown[];
         if (typeof name !== "string")
@@ -732,6 +726,8 @@ function createDiscoveryGlobals(
           tools: names,
         };
       },
+      name: "describeNamespace",
+      spread: true,
     },
   ];
 }
@@ -741,9 +737,9 @@ function createModelGlobals(
   toolCallId: string,
   calls: CodemodeNestedCall[],
   publish: () => void,
-  addUsage: (usage: Usage) => void,
+  addUsage: (usage: aiTypes.Usage) => void,
   addGeneratedImages: (count: number) => void,
-): CodemodeTool[] {
+): codemodeTypes.CodemodeTool[] {
   const limit = createLimiter(MAX_CONCURRENT_MODEL_CALLS);
   let callCount = 0;
 
@@ -756,7 +752,7 @@ function createModelGlobals(
     type: TType,
     [model, context]: unknown[],
     checkContext: (context: unknown) => TContext,
-    run: (resolved: ModelTypeMap[TType], context: TContext) => Promise<TResult>,
+    run: (resolved: aiTypes.ModelTypeMap[TType], context: TContext) => Promise<TResult>,
   ): Promise<TResult> =>
     Effect.runPromise(
       awaiting(function* () {
@@ -779,7 +775,7 @@ function createModelGlobals(
           const actualType = [...MODEL_TYPES].find(
             (other) =>
               other !== type &&
-              models.getModelOfType(other as ModelType, provider, id) !== undefined,
+              models.getModelOfType(other as aiTypes.ModelType, provider, id) !== undefined,
           );
           throw new Error(
             actualType !== undefined && actualType !== ""
@@ -790,9 +786,9 @@ function createModelGlobals(
         const checked = checkContext(context);
 
         const record: CodemodeNestedCall = {
+          args: `${resolved.provider}/${resolved.id}`,
           id: `${toolCallId}/${name}/${++callCount}`,
           name,
-          args: `${resolved.provider}/${resolved.id}`,
           status: "running",
         };
         calls.push(record);
@@ -816,33 +812,7 @@ function createModelGlobals(
         return result;
       }),
     );
-  const implementations: Record<string, CodemodeTool["execute"]> = {
-    "models.getModelsOfType": (args) => {
-      const [type, provider] = args as unknown[];
-      return models.getModelsOfType(toModelType(type), toProvider(provider)).map(toModelInfo);
-    },
-    "models.getAvailableOfType": (args, { signal }) =>
-      Effect.runPromise(
-        awaiting(function* () {
-          const [type, provider] = args as unknown[];
-          const available = yield* awaited(
-            models.getAvailableOfType(toModelType(type), toProvider(provider), {
-              signal,
-            }),
-          );
-          return available.map(toModelInfo);
-        }),
-      ),
-    "models.getModelOfType": (args) => {
-      const [type, provider, id] = args as unknown[];
-      if (typeof provider !== "string" || typeof id !== "string") {
-        throw new Error(
-          `models.getModelOfType(type, provider, id) expects three strings, got (${(args as unknown[]).map(describeValue).join(", ")}). The provider and the id are separate arguments, for example models.getModelOfType("classifier", "openrouter", "~typesafe/jev-latest").`,
-        );
-      }
-      const model = models.getModelOfType(toModelType(type), provider, id);
-      return model === undefined ? undefined : toModelInfo(model);
-    },
+  const implementations: Record<string, codemodeTypes.CodemodeTool["execute"]> = {
     "models.classify": (args, { signal }) =>
       runModelCall(
         "models.classify",
@@ -866,10 +836,36 @@ function createModelGlobals(
             }),
           ),
       ),
+    "models.getAvailableOfType": (args, { signal }) =>
+      Effect.runPromise(
+        awaiting(function* () {
+          const [type, provider] = args as unknown[];
+          const available = yield* awaited(
+            models.getAvailableOfType(toModelType(type), toProvider(provider), {
+              signal,
+            }),
+          );
+          return available.map(toModelInfo);
+        }),
+      ),
+    "models.getModelOfType": (args) => {
+      const [type, provider, id] = args as unknown[];
+      if (typeof provider !== "string" || typeof id !== "string") {
+        throw new Error(
+          `models.getModelOfType(type, provider, id) expects three strings, got (${(args as unknown[]).map(describeValue).join(", ")}). The provider and the id are separate arguments, for example models.getModelOfType("classifier", "openrouter", "~typesafe/jev-latest").`,
+        );
+      }
+      const model = models.getModelOfType(toModelType(type), provider, id);
+      return model === undefined ? undefined : toModelInfo(model);
+    },
+    "models.getModelsOfType": (args) => {
+      const [type, provider] = args as unknown[];
+      return models.getModelsOfType(toModelType(type), toProvider(provider)).map(toModelInfo);
+    },
   };
   return Object.entries(implementations).map(([name, execute]) => ({
+    execute,
     name,
     spread: true,
-    execute,
   }));
 }

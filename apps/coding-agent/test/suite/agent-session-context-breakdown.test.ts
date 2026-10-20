@@ -1,4 +1,4 @@
-import { fauxAssistantMessage, fauxToolCall } from "@msa/ai/compat";
+import compat from "@msa/ai/compat";
 import testing from "@msa/testing";
 import { Effect } from "effect";
 import { afterEach, describe, expect, it } from "vite-plus/test";
@@ -7,6 +7,8 @@ import { apportion, measureContextBreakdown } from "../../src/core/context-break
 import { convertToLlm } from "../../src/core/messages.ts";
 import harnessModule from "./harness.ts";
 import type harnessTypes from "./harness.types.ts";
+
+const { fauxAssistantMessage, fauxToolCall } = compat;
 
 const { awaited, joinPath, runTest, writeTextFile } = testing;
 

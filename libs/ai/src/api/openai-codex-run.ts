@@ -1,19 +1,28 @@
 import { Effect } from "effect";
 
-import type { Api, AssistantMessage, Model, TranscriptContext } from "../types.ts";
-import { currentTimeMillis } from "../utils/clock.ts";
-import { AssistantMessageEventStream } from "../utils/event-stream.ts";
-import type { OpenAICodexResponsesOptions } from "./openai-codex-options.ts";
-import { prepareCodexRun } from "./openai-codex-prepare.ts";
-import { streamCodexOverSse } from "./openai-codex-sse-transport.ts";
-import { type CodexStreamRun, failCodexOutput } from "./openai-codex-stream-run.ts";
-import {
-  isWebSocketSseFallbackActive,
-  recordWebSocketSseFallback,
-} from "./openai-codex-ws-stats.ts";
-import { runWebSocketAttempt } from "./openai-codex-ws-stream.ts";
+import type typesModule from "../types.types.ts";
+import type eventStreamTypes from "../utils/event-stream.types.ts";
+import openaiCodexRunKit from "./openai-codex-run-kit.ts";
+import type openaiCodexRunTypes from "./openai-codex-run.types.ts";
+import openaiCodexSseTransport from "./openai-codex-sse-transport.ts";
+import openaiCodexStreamRun from "./openai-codex-stream-run.ts";
+import type openaiCodexStreamRunTypes from "./openai-codex-stream-run.types.ts";
+import openaiCodexWsStats from "./openai-codex-ws-stats.ts";
+import openaiCodexWsStream from "./openai-codex-ws-stream.ts";
 
-const websocketOutcome = (run: CodexStreamRun): Effect.Effect<"done" | "fallback" | "skipped"> => {
+const { clock, eventStream, openaiCodexPrepare } = openaiCodexRunKit;
+
+const { isWebSocketSseFallbackActive, recordWebSocketSseFallback } = openaiCodexWsStats;
+const { runWebSocketAttempt } = openaiCodexWsStream;
+const { prepareCodexRun } = openaiCodexPrepare;
+const { streamCodexOverSse } = openaiCodexSseTransport;
+const { currentTimeMillis } = clock;
+const { AssistantMessageEventStream } = eventStream;
+const { failCodexOutput } = openaiCodexStreamRun;
+
+const websocketOutcome = (
+  run: openaiCodexStreamRunTypes.CodexStreamRun,
+): Effect.Effect<"done" | "fallback" | "skipped"> => {
   if (run.transport === "sse") return Effect.succeed("skipped");
   if (isWebSocketSseFallbackActive(run.cacheSessionId)) {
     recordWebSocketSseFallback(run.cacheSessionId);
@@ -30,45 +39,47 @@ const runCodexStream = Effect.fn("runCodexStream")(function* (
   yield* streamCodexOverSse(run);
 });
 
-function pendingOutput(model: Model<"openai-codex-responses">): AssistantMessage {
+function pendingOutput(
+  model: typesModule.Model<"openai-codex-responses">,
+): typesModule.AssistantMessage {
   return {
-    role: "assistant",
+    api: "openai-codex-responses" as typesModule.Api,
     content: [],
-    api: "openai-codex-responses" as Api,
-    provider: model.provider,
     model: model.id,
-    usage: {
-      input: 0,
-      output: 0,
-      cacheRead: 0,
-      cacheWrite: 0,
-      totalTokens: 0,
-      cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0, total: 0 },
-    },
+    provider: model.provider,
+    role: "assistant",
     stopReason: "pending",
     timestamp: currentTimeMillis(),
+    usage: {
+      cacheRead: 0,
+      cacheWrite: 0,
+      cost: { cacheRead: 0, cacheWrite: 0, input: 0, output: 0, total: 0 },
+      input: 0,
+      output: 0,
+      totalTokens: 0,
+    },
   };
 }
 
-export interface CodexStreamStart {
-  readonly model: Model<"openai-codex-responses">;
-  readonly context: TranscriptContext;
-  readonly options: OpenAICodexResponsesOptions | undefined;
-}
-
-export function startCodexStream({
+function startCodexStream({
   model,
   context,
   options,
-}: CodexStreamStart): AssistantMessageEventStream {
+}: openaiCodexRunTypes.CodexStreamStart): eventStreamTypes.AssistantMessageEventStream {
   const events = new AssistantMessageEventStream();
   const output = pendingOutput(model);
   Effect.runFork(
-    runCodexStream({ model, context, output, events, options }).pipe(
+    runCodexStream({ context, events, model, options, output }).pipe(
       Effect.catchDefect((error) =>
-        Effect.sync(() => failCodexOutput({ output, events, options })(error)),
+        Effect.sync(() => failCodexOutput({ events, options, output })(error)),
       ),
     ),
   );
   return events;
 }
+
+const openaiCodexRun = {
+  startCodexStream,
+};
+
+export default openaiCodexRun;

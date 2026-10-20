@@ -1,20 +1,17 @@
 import { dual } from "effect/Function";
 
-import { formatScript, normalizeOutput } from "./latex-format.ts";
-import type { LatexParser } from "./latex-parser.ts";
+import latexFormat from "./latex-format.ts";
+import type latexOperatorTypes from "./latex-operator.types.ts";
+import type latexParserTypes from "./latex-parser.types.ts";
 
-export interface OperatorStyle {
-  inlineLowerStyle: "bracket" | "script";
-  displayLimits: boolean;
-  spaced?: boolean;
-}
+const { formatScript, normalizeOutput } = latexFormat;
 
 interface OperatorLimits {
   lower?: string | undefined;
   upper?: string | undefined;
 }
 
-function readLimitsModifier(parser: LatexParser, displayLimits: boolean): boolean {
+function readLimitsModifier(parser: latexParserTypes.LatexParser, displayLimits: boolean): boolean {
   const modifierPosition = parser.skipWhile(/[ \t]/u);
   const modifier = /^\\(limits|nolimits)(?![A-Za-z])/u.exec(parser.source.slice(modifierPosition));
   if (modifier === null) return displayLimits;
@@ -22,7 +19,7 @@ function readLimitsModifier(parser: LatexParser, displayLimits: boolean): boolea
   return modifier[1] === "limits";
 }
 
-function readOperatorLimits(parser: LatexParser): OperatorLimits {
+function readOperatorLimits(parser: latexParserTypes.LatexParser): OperatorLimits {
   const limits: OperatorLimits = {};
   for (;;) {
     const scriptPosition = parser.skipWhile(/[ \t]/u);
@@ -40,23 +37,43 @@ function readOperatorLimits(parser: LatexParser): OperatorLimits {
   }
 }
 
-export const parseOperator: {
-  (parser: LatexParser, operator: string, style: OperatorStyle): string;
-  (operator: string, style: OperatorStyle): (parser: LatexParser) => string;
-} = dual(3, (parser: LatexParser, operator: string, style: OperatorStyle): string => {
-  const useDisplayLimits = readLimitsModifier(parser, style.displayLimits);
-  const { lower, upper } = readOperatorLimits(parser);
+const parseOperator: {
+  (
+    parser: latexParserTypes.LatexParser,
+    operator: string,
+    style: latexOperatorTypes.OperatorStyle,
+  ): string;
+  (
+    operator: string,
+    style: latexOperatorTypes.OperatorStyle,
+  ): (parser: latexParserTypes.LatexParser) => string;
+} = dual(
+  3,
+  (
+    parser: latexParserTypes.LatexParser,
+    operator: string,
+    style: latexOperatorTypes.OperatorStyle,
+  ): string => {
+    const useDisplayLimits = readLimitsModifier(parser, style.displayLimits);
+    const { lower, upper } = readOperatorLimits(parser);
 
-  if (parser.display && useDisplayLimits && (lower !== undefined || upper !== undefined)) {
-    return parser.pushLayout({ type: "operator", operator, lower, upper });
-  }
+    if (parser.display && useDisplayLimits && (lower !== undefined || upper !== undefined)) {
+      return parser.pushLayout({ lower, operator, type: "operator", upper });
+    }
 
-  let rendered = operator;
-  if (lower !== undefined) {
-    rendered += style.inlineLowerStyle === "bracket" ? `[${lower}]` : formatScript(lower, "sub");
-  }
-  if (upper !== undefined) {
-    rendered += formatScript(upper, "sup");
-  }
-  return style.spaced === true ? ` ${rendered} ` : rendered;
-});
+    let rendered = operator;
+    if (lower !== undefined) {
+      rendered += style.inlineLowerStyle === "bracket" ? `[${lower}]` : formatScript(lower, "sub");
+    }
+    if (upper !== undefined) {
+      rendered += formatScript(upper, "sup");
+    }
+    return style.spaced === true ? ` ${rendered} ` : rendered;
+  },
+);
+
+const latexOperator = {
+  parseOperator,
+};
+
+export default latexOperator;

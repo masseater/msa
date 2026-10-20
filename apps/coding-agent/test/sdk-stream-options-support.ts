@@ -1,11 +1,5 @@
-import {
-  type Api,
-  type AssistantMessage,
-  type Model,
-  type SimpleStreamOptions,
-  createAssistantMessageEventStream,
-  normalizeContext,
-} from "@msa/ai";
+import ai from "@msa/ai";
+import type aiTypes from "@msa/ai/index.types";
 import testing from "@msa/testing";
 import { Effect } from "effect";
 
@@ -16,6 +10,8 @@ import { createAgentSession } from "../src/core/sdk.ts";
 import { SessionManager } from "../src/core/session-manager.ts";
 import { type Settings, SettingsManager } from "../src/core/settings-manager.ts";
 import modelRuntimeTestUtils from "./model-runtime-test-utils.ts";
+
+const { createAssistantMessageEventStream, normalizeContext } = ai;
 
 const { awaited, currentTimeMillis, joinPath, makeDirectory, makeTempDir, removePath, runTest } =
   testing;
@@ -37,7 +33,7 @@ const prepareDirs = () =>
 
 const cleanupDirs = () => runTest(dirs.tempDir === "" ? Effect.void : removePath(dirs.tempDir));
 
-const createModel = (api: Api): Model<Api> => ({
+const createModel = (api: aiTypes.Api): aiTypes.Model<aiTypes.Api> => ({
   api,
   baseUrl: "https://capture.invalid/v1",
   contextWindow: 128000,
@@ -51,7 +47,7 @@ const createModel = (api: Api): Model<Api> => ({
   reasoning: false,
 });
 
-const createDoneMessage = (api: Api, promptTokens = 0): AssistantMessage => ({
+const createDoneMessage = (api: aiTypes.Api, promptTokens = 0): aiTypes.AssistantMessage => ({
   api,
   content: [{ text: "ok", type: "text" as const }],
   model: "capture-model",
@@ -69,7 +65,7 @@ const createDoneMessage = (api: Api, promptTokens = 0): AssistantMessage => ({
   },
 });
 
-const createDoneStream = (api: Api, promptTokens = 0) => {
+const createDoneStream = (api: aiTypes.Api, promptTokens = 0) => {
   const stream = createAssistantMessageEventStream();
   stream.end(createDoneMessage(api, promptTokens));
   return stream;
@@ -86,13 +82,17 @@ const registryWithKey = Effect.fn("registryWithKey")(function* (provider: string
 });
 
 const capturingProvider = (
-  api: Api,
+  api: aiTypes.Api,
   providerEvent: unknown,
-  capture: { options?: SimpleStreamOptions | undefined },
+  capture: { options?: aiTypes.SimpleStreamOptions | undefined },
 ) => ({
   api,
   headers: { "x-provider": "provider" },
-  streamSimple: (requestModel: Model<Api>, _context: unknown, options?: SimpleStreamOptions) => {
+  streamSimple: (
+    requestModel: aiTypes.Model<aiTypes.Api>,
+    _context: unknown,
+    options?: aiTypes.SimpleStreamOptions,
+  ) => {
     capture.options = options;
     if (providerEvent === undefined) return createDoneStream(api);
     const stream = createAssistantMessageEventStream();
@@ -121,19 +121,19 @@ const loadResources = Effect.fn("loadResources")(function* (
 });
 
 const captureStreamOptions = (
-  api: Api,
+  api: aiTypes.Api,
   settings: Partial<Settings>,
-  requestOptions: SimpleStreamOptions = {},
+  requestOptions: aiTypes.SimpleStreamOptions = {},
   extensionFactory?: ExtensionFactory,
   providerEvent?: unknown,
-): Promise<SimpleStreamOptions | undefined> =>
+): Promise<aiTypes.SimpleStreamOptions | undefined> =>
   runTest(
     Effect.gen(function* () {
       const model = createModel(api);
       const settingsManager = SettingsManager.inMemory(settings);
       const resourceLoader = yield* loadResources(settingsManager, extensionFactory);
       const registry = yield* registryWithKey(model.provider);
-      const capture: { options?: SimpleStreamOptions | undefined } = {};
+      const capture: { options?: aiTypes.SimpleStreamOptions | undefined } = {};
       registry.registerProvider(model.provider, capturingProvider(api, providerEvent, capture));
       const { session } = yield* awaited(
         createAgentSession({
@@ -171,14 +171,14 @@ const captureStreamOptions = (
     }),
   );
 
-const cacheWarmingModel = (): Model<Api> => ({
+const cacheWarmingModel = (): aiTypes.Model<aiTypes.Api> => ({
   ...createModel("anthropic-messages"),
   cost: { cacheRead: 0.25, cacheWrite: 12.5, input: 10, output: 50 },
   promptCache: { short: 300 },
 });
 
 const createCacheWarmingSession = (
-  populate?: (manager: SessionManager, model: Model<Api>) => void,
+  populate?: (manager: SessionManager, model: aiTypes.Model<aiTypes.Api>) => void,
 ) =>
   runTest(
     Effect.gen(function* () {

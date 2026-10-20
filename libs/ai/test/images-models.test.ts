@@ -1,9 +1,12 @@
 import { Effect } from "effect";
 import { describe, expect, it } from "vite-plus/test";
 
-import { createModels, createProvider, getModelType, hasApi, isModelType } from "../src/models.ts";
-import { AssistantMessageEventStream } from "../src/utils/event-stream.ts";
+import modelsModule from "../src/models.ts";
+import eventStream from "../src/utils/event-stream.ts";
 import imagesModelsSupport from "./images-models-support.ts";
+
+const { createModels, createProvider, getModelType, hasApi, isModelType } = modelsModule;
+const { AssistantMessageEventStream } = eventStream;
 
 const { chatModel, fakeAuthContext, imageModel, testProvider } = imagesModelsSupport;
 const treatsModelsWithoutATypeAs = () => {

@@ -1,10 +1,10 @@
-import type { Api, Model } from "@msa/ai";
+import type aiTypes from "@msa/ai/index.types";
 
 import { findModelUpgrades } from "../src/core/model-upgrade.ts";
 import type { Settings } from "../src/core/settings-schema.ts";
 
-function model(provider: string, id: string): Model<Api> {
-  return { id, name: id, provider } as unknown as Model<Api>;
+function model(provider: string, id: string): aiTypes.Model<aiTypes.Api> {
+  return { id, name: id, provider } as unknown as aiTypes.Model<aiTypes.Api>;
 }
 
 function upgradePair(): {

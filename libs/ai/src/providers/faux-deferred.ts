@@ -1,69 +1,55 @@
 import { Effect } from "effect";
 
-import type {
-  AssistantMessageEventStream,
-  DeferredCancelOptions,
-  DeferredFetchOptions,
-  DeferredHandle,
-  Model,
-  SimpleStreamOptions,
-  TranscriptContext,
-} from "../types.ts";
-import { callHook } from "../utils/hooks.ts";
-import {
-  type DeferredEntry,
-  type FauxEngine,
-  originOf,
-  resolveFauxResponse,
-  streamDetached,
-} from "./faux-engine.ts";
-import { deferredMessage, errorMessage, randomId } from "./faux-messages.ts";
-import { streamFauxMessage } from "./faux-stream.ts";
-import type { FauxResponseStep } from "./faux-types.ts";
+import type typesModule from "../types.types.ts";
+import hooks from "../utils/hooks.ts";
+import type fauxDeferredTypes from "./faux-deferred.types.ts";
+import fauxEngine from "./faux-engine.ts";
+import type fauxEngineTypes from "./faux-engine.types.ts";
+import fauxMessages from "./faux-messages.ts";
+import fauxStream from "./faux-stream.ts";
 
-export interface DeferredSubmission {
-  readonly engine: FauxEngine;
-  readonly stream: AssistantMessageEventStream;
-  readonly step: FauxResponseStep;
-  readonly context: TranscriptContext;
-  readonly options: SimpleStreamOptions;
-  readonly model: Model<string>;
-}
+const { deferredMessage, errorMessage, randomId } = fauxMessages;
+const { streamFauxMessage } = fauxStream;
+const { originOf, resolveFauxResponse, streamDetached } = fauxEngine;
+const { callHook } = hooks;
 
-export function submitDeferred({
+function submitDeferred({
   engine,
   stream,
   step,
   context,
   options,
   model,
-}: DeferredSubmission): Effect.Effect<void> {
+}: fauxDeferredTypes.DeferredSubmission): Effect.Effect<void> {
   const pollAfterMs = engine.deferred?.pollAfterMs;
-  const handle: DeferredHandle = {
-    provider: model.provider,
-    modelId: model.id,
+  const handle: typesModule.DeferredHandle = {
     api: model.api,
     id: randomId("deferred"),
+    modelId: model.id,
+    provider: model.provider,
     ...(pollAfterMs === undefined ? {} : { pollAfterMs }),
   };
   engine.deferredResponses.set(handle.id, {
-    handle,
-    step,
-    context,
-    options,
-    model,
-    pendingFetches: Math.max(0, Math.floor(engine.deferred?.pendingFetches ?? 0)),
     cancelled: false,
+    context,
+    handle,
+    model,
+    options,
+    pendingFetches: Math.max(0, Math.floor(engine.deferred?.pendingFetches ?? 0)),
+    step,
   });
   return streamFauxMessage({
-    stream,
-    message: deferredMessage({ model, handle }),
+    message: deferredMessage({ handle, model }),
     pacing: engine.pacing,
     signal: options.signal,
+    stream,
   });
 }
 
-function findEntry(engine: FauxEngine, handle: DeferredHandle): DeferredEntry {
+function findEntry(
+  engine: fauxEngineTypes.FauxEngine,
+  handle: typesModule.DeferredHandle,
+): fauxEngineTypes.DeferredEntry {
   const entry = engine.deferredResponses.get(handle.id);
   if (
     entry === undefined ||
@@ -77,7 +63,10 @@ function findEntry(engine: FauxEngine, handle: DeferredHandle): DeferredEntry {
   return entry;
 }
 
-const settleEntry = Effect.fn("settleEntry")(function* (engine: FauxEngine, entry: DeferredEntry) {
+const settleEntry = Effect.fn("settleEntry")(function* (
+  engine: fauxEngineTypes.FauxEngine,
+  entry: fauxEngineTypes.DeferredEntry,
+) {
   if (entry.final !== undefined) return entry.final;
   const {
     deferred: _deferred,
@@ -86,11 +75,11 @@ const settleEntry = Effect.fn("settleEntry")(function* (engine: FauxEngine, entr
     ...submissionOptions
   } = entry.options ?? {};
   const final = yield* resolveFauxResponse({
-    engine,
-    step: entry.step,
     context: entry.context,
-    options: submissionOptions,
+    engine,
     model: entry.model,
+    options: submissionOptions,
+    step: entry.step,
   }).pipe(
     Effect.catchDefect((error) =>
       Effect.succeed(errorMessage({ error, origin: originOf(engine)(entry.model) })),
@@ -100,33 +89,26 @@ const settleEntry = Effect.fn("settleEntry")(function* (engine: FauxEngine, entr
   return final;
 });
 
-export interface DeferredFetch {
-  readonly engine: FauxEngine;
-  readonly model: Model<string>;
-  readonly handle: DeferredHandle;
-  readonly options: DeferredFetchOptions | undefined;
-}
-
-export function fetchDeferred({
+function fetchDeferred({
   engine,
   model,
   handle,
   options,
-}: DeferredFetch): AssistantMessageEventStream {
+}: fauxDeferredTypes.DeferredFetch): typesModule.AssistantMessageEventStream {
   engine.state.deferredFetchCount++;
   return streamDetached({
     engine,
     model,
     run: (stream) =>
       Effect.gen(function* () {
-        yield* callHook(() => options?.onResponse?.({ status: 200, headers: {} }, model));
+        yield* callHook(() => options?.onResponse?.({ headers: {}, status: 200 }, model));
         const entry = findEntry(engine, handle);
-        const delivery = { stream, pacing: engine.pacing, signal: options?.signal };
+        const delivery = { pacing: engine.pacing, signal: options?.signal, stream };
         if (entry.pendingFetches > 0) {
           entry.pendingFetches--;
           return yield* streamFauxMessage({
             ...delivery,
-            message: deferredMessage({ model, handle: entry.handle }),
+            message: deferredMessage({ handle: entry.handle, model }),
           });
         }
         yield* streamFauxMessage({ ...delivery, message: yield* settleEntry(engine, entry) });
@@ -134,20 +116,26 @@ export function fetchDeferred({
   });
 }
 
-export interface DeferredCancel {
-  readonly engine: FauxEngine;
-  readonly model: Model<string>;
-  readonly handle: DeferredHandle;
-  readonly options: DeferredCancelOptions | undefined;
-}
-
-export function cancelDeferred({ engine, model, handle, options }: DeferredCancel): Promise<void> {
+function cancelDeferred({
+  engine,
+  model,
+  handle,
+  options,
+}: fauxDeferredTypes.DeferredCancel): Promise<void> {
   return Effect.runPromise(
     Effect.gen(function* () {
       engine.state.cancelledDeferred.push(structuredClone(handle));
       const entry = engine.deferredResponses.get(handle.id);
       if (entry !== undefined) entry.cancelled = true;
-      yield* callHook(() => options?.onResponse?.({ status: 200, headers: {} }, model));
+      yield* callHook(() => options?.onResponse?.({ headers: {}, status: 200 }, model));
     }),
   );
 }
+
+const fauxDeferred = {
+  cancelDeferred,
+  fetchDeferred,
+  submitDeferred,
+};
+
+export default fauxDeferred;

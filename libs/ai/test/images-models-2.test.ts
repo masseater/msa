@@ -1,15 +1,17 @@
 import { Effect } from "effect";
 import { describe, expect, it } from "vite-plus/test";
 
-import { createModels, createProvider } from "../src/models.ts";
-import type { ImageApi, ImageModel, ImagesOptions } from "../src/types.ts";
+import modelsModule from "../src/models.ts";
+import type typesModule from "../src/types.types.ts";
 import imagesModelsSupport from "./images-models-support.ts";
+
+const { createModels, createProvider } = modelsModule;
 
 const { context, fakeAuthContext, imageModel, okResult, testProvider } = imagesModelsSupport;
 
 interface GenerateCall {
-  model: ImageModel<ImageApi>;
-  options: ImagesOptions | undefined;
+  model: typesModule.ImageModel<typesModule.ImageApi>;
+  options: typesModule.ImagesOptions | undefined;
 }
 
 const resolvesAuthThroughTheProviderAnd = () =>

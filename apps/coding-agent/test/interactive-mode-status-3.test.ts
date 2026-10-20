@@ -1,10 +1,13 @@
 import testing from "@msa/testing";
-import { type AutocompleteProvider, CombinedAutocompleteProvider } from "@msa/tui";
+import tui from "@msa/tui";
+import type tuiTypes from "@msa/tui/index.types";
 import { Effect } from "effect";
 import { describe, expect, test, vi } from "vite-plus/test";
 
 import type { AutocompleteProviderFactory } from "../src/core/extensions/types.ts";
 import { InteractiveMode } from "../src/modes/interactive/interactive-mode.ts";
+
+const { CombinedAutocompleteProvider } = tui;
 
 const { awaited, runTest } = testing;
 
@@ -13,7 +16,7 @@ const stacksWrapperFactoriesOverAFreshBasePart1 = () => {
   const customEditor = { setAutocompleteProvider: vi.fn() };
   const calls: string[] = [];
 
-  const wrap1: AutocompleteProviderFactory = (current): AutocompleteProvider => ({
+  const wrap1: AutocompleteProviderFactory = (current): tuiTypes.AutocompleteProvider => ({
     applyCompletion(lines, cursorLine, cursorCol, item, prefix) {
       calls.push("applyCompletion:wrap1");
       return current.applyCompletion(lines, cursorLine, cursorCol, item, prefix);
@@ -36,7 +39,7 @@ const stacksWrapperFactoriesOverAFreshBasePart1 = () => {
 
 const stacksWrapperFactoriesOverAFreshBase = () => {
   const { calls, customEditor, defaultEditor, wrap1 } = stacksWrapperFactoriesOverAFreshBasePart1();
-  const wrap2: AutocompleteProviderFactory = (current): AutocompleteProvider => ({
+  const wrap2: AutocompleteProviderFactory = (current): tuiTypes.AutocompleteProvider => ({
     applyCompletion(lines, cursorLine, cursorCol, item, prefix) {
       calls.push("applyCompletion:wrap2");
       return current.applyCompletion(lines, cursorLine, cursorCol, item, prefix);
@@ -67,7 +70,8 @@ const stacksWrapperFactoriesOverAFreshBase = () => {
 
   expect(defaultEditor.setAutocompleteProvider).toHaveBeenCalledTimes(1);
   expect(customEditor.setAutocompleteProvider).toHaveBeenCalledTimes(1);
-  const provider = defaultEditor.setAutocompleteProvider.mock.calls[0]?.[0] as AutocompleteProvider;
+  const provider = defaultEditor.setAutocompleteProvider.mock
+    .calls[0]?.[0] as tuiTypes.AutocompleteProvider;
   expect(provider).toBe(customEditor.setAutocompleteProvider.mock.calls[0]?.[0]);
   expect(provider.shouldTriggerFileCompletion?.(["foo"], 0, 3)).toBe(true);
   expect(calls).toEqual(["shouldTrigger:wrap2", "shouldTrigger:wrap1"]);
@@ -100,7 +104,8 @@ const mergesTriggercharactersFromWrapperFactories = () => {
     }
   ).prototype.setupAutocompleteProvider.call(fakeThis);
 
-  const provider = defaultEditor.setAutocompleteProvider.mock.calls[0]?.[0] as AutocompleteProvider;
+  const provider = defaultEditor.setAutocompleteProvider.mock
+    .calls[0]?.[0] as tuiTypes.AutocompleteProvider;
   expect(provider.triggerCharacters).toEqual(["$", "!"]);
 };
 

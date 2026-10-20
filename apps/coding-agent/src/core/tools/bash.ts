@@ -1,18 +1,18 @@
-import type { AgentTool } from "@msa/agent-core";
+import type agentTypes from "@msa/agent-core/index.types";
 import { Effect } from "effect";
 
 import type { ExtensionContext, ToolDefinition } from "../extensions/types.ts";
 import {
+  ToolFailure,
   fromPromise,
   nonEmptyOr,
   platformRuntime,
-  ToolFailure,
   unwrapForeign,
 } from "../platform/index.ts";
 import {
   type BashOperations,
-  createLocalBashOperations,
   type ExecuteOptions,
+  createLocalBashOperations,
 } from "./bash-operations.ts";
 import {
   BashOutputReporter,
@@ -24,37 +24,37 @@ import {
   type BashSpawnContext,
   type BashToolOptions,
   type BashToolOutput,
+  type ShellToolConfig,
   bashDescription,
   bashOutputSchema,
   bashSchema,
   bashToolSystemPromptContribution,
   resolveSpawnContext,
-  type ShellToolConfig,
 } from "./bash-types.ts";
 import { OutputAccumulator } from "./output-accumulator.ts";
 import { createShellRenderers } from "./renderers/bash.ts";
 import {
   type ConfiguredFactory,
-  configuredFactory,
   type CwdFactory,
+  configuredFactory,
   cwdFactory,
   wrapToolDefinition,
 } from "./tool-definition-wrapper.ts";
 
 export {
-  type BashOperations,
   createLocalBashOperations,
   createLocalShellOperations,
+  type BashOperations,
 } from "./bash-operations.ts";
 export type { BashToolDetails } from "./bash-output.ts";
 export {
+  bashToolSystemPromptContribution,
   type BashRenderState,
   type BashSpawnContext,
   type BashSpawnHook,
   type BashToolInput,
   type BashToolOptions,
   type BashToolOutput,
-  bashToolSystemPromptContribution,
   type ShellToolConfig,
 } from "./bash-types.ts";
 
@@ -78,15 +78,15 @@ const failedExec = (reporter: BashOutputReporter, error: unknown) =>
     const { text } = reporter.format(snapshot, "");
     if (error instanceof Error && error.message === "aborted") {
       return yield* new ToolFailure({
-        message: appendStatus(text, "Command aborted"),
         cause: error,
+        message: appendStatus(text, "Command aborted"),
       });
     }
     if (error instanceof Error && error.message.startsWith("timeout:")) {
       const timeoutSecs = error.message.split(":")[1];
       return yield* new ToolFailure({
-        message: appendStatus(text, `Command timed out after ${timeoutSecs} seconds`),
         cause: error,
+        message: appendStatus(text, `Command timed out after ${timeoutSecs} seconds`),
       });
     }
     return yield* fromPromise(() => Promise.reject(error));
@@ -99,10 +99,10 @@ const executeShell = Effect.fn("executeShell")(function* (
 ) {
   const startedAt = performance.now();
   const execOptions: ExecuteOptions = {
+    env: run.spawnContext.env,
     onData: reporter.handleData,
     signal: run.signal,
     timeout: run.timeout,
-    env: run.spawnContext.env,
   };
   const result = yield* fromPromise(() =>
     run.ops.exec(run.spawnContext.command, run.spawnContext.cwd, execOptions),
@@ -128,7 +128,7 @@ const executeShell = Effect.fn("executeShell")(function* (
     wall_time_seconds: wallTimeSeconds,
   };
   if (exitCode === 0) {
-    return { content: [{ type: "text" as const, text: outputText }], details, structuredContent };
+    return { content: [{ text: outputText, type: "text" as const }], details, structuredContent };
   }
   return {
     content: [
@@ -138,8 +138,8 @@ const executeShell = Effect.fn("executeShell")(function* (
       },
     ],
     details,
-    structuredContent,
     isError: true,
+    structuredContent,
   };
 });
 
@@ -177,8 +177,10 @@ const shellExecute =
     return platformRuntime.runPromise(
       unwrapForeign(
         runShellTool({
-          ops,
           config,
+          onUpdate,
+          ops,
+          signal,
           spawnContext: resolveSpawnContext({
             command:
               commandPrefix === undefined || commandPrefix === ""
@@ -190,8 +192,6 @@ const shellExecute =
             ctx,
           }),
           timeout,
-          signal,
-          onUpdate,
         }),
       ),
     );
@@ -205,18 +205,18 @@ const createShellToolDefinitionImpl = (
   const ops = options?.operations ?? createLocalBashOperations({ shellPath: options?.shellPath });
   const exposeSessionEnvironment = options?.exposeSessionEnvironment ?? true;
   return {
-    name: config.name,
-    label: config.label,
+    constrainedSampling: { strict: "prefer", type: "json_schema" },
     description: bashDescription(config.shellName),
-    promptSnippet: config.promptSnippet,
+    execute: shellExecute(cwd, config, ops, options),
+    label: config.label,
+    name: config.name,
+    outputSchema: bashOutputSchema,
+    parameters: bashSchema,
     promptGuidelines:
       exposeSessionEnvironment && config.promptGuidelines !== undefined
         ? [...config.promptGuidelines]
         : undefined,
-    parameters: bashSchema,
-    outputSchema: bashOutputSchema,
-    constrainedSampling: { type: "json_schema", strict: "prefer" },
-    execute: shellExecute(cwd, config, ops, options),
+    promptSnippet: config.promptSnippet,
     ...createShellRenderers(config.prompt),
   };
 };
@@ -228,26 +228,27 @@ export const createShellToolDefinition: ConfiguredFactory<
 > = configuredFactory(createShellToolDefinitionImpl);
 
 const bashToolConfig: ShellToolConfig = {
-  name: "bash",
   label: "bash",
-  shellName: "bash",
+  name: "bash",
   prompt: "$",
-  promptSnippet: bashToolSystemPromptContribution.snippet,
   promptGuidelines: bashToolSystemPromptContribution.guidelines,
+  promptSnippet: bashToolSystemPromptContribution.snippet,
+  shellName: "bash",
   tempFilePrefix: "msa-bash",
 };
 
 export const createBashToolDefinition: CwdFactory<BashToolOptions, ShellToolDefinition> =
   cwdFactory((cwd, options) => createShellToolDefinitionImpl(cwd, bashToolConfig, options));
 
-export const createBashTool: CwdFactory<BashToolOptions, AgentTool<typeof bashSchema>> = cwdFactory(
-  (cwd, options) => {
-    const definition = createShellToolDefinitionImpl(cwd, bashToolConfig, options);
-    const tool = wrapToolDefinition(definition);
-    Object.assign(tool, {
-      promptSnippet: definition.promptSnippet,
-      promptGuidelines: definition.promptGuidelines,
-    });
-    return tool;
-  },
-);
+export const createBashTool: CwdFactory<
+  BashToolOptions,
+  agentTypes.AgentTool<typeof bashSchema>
+> = cwdFactory((cwd, options) => {
+  const definition = createShellToolDefinitionImpl(cwd, bashToolConfig, options);
+  const tool = wrapToolDefinition(definition);
+  Object.assign(tool, {
+    promptGuidelines: definition.promptGuidelines,
+    promptSnippet: definition.promptSnippet,
+  });
+  return tool;
+});

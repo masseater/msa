@@ -1,4 +1,4 @@
-import { existsSync, readdirSync, readFileSync, statSync } from "fs";
+import { existsSync, readFileSync, readdirSync, statSync } from "fs";
 
 import ignore from "ignore";
 
@@ -7,7 +7,7 @@ import { parseFrontmatter } from "../utils/frontmatter.ts";
 import { canonicalizePath, resolvePath } from "../utils/paths.ts";
 import type { ResourceDiagnostic } from "./diagnostics.ts";
 import { basename, dirname, join, relative, resolve, sep } from "./platform-node.ts";
-import { createSyntheticSourceInfo, type SourceInfo } from "./source-info.ts";
+import { type SourceInfo, createSyntheticSourceInfo } from "./source-info.ts";
 
 const MAX_NAME_LENGTH = 64;
 
@@ -128,23 +128,23 @@ function createSkillSourceInfo(filePath: string, baseDir: string, source: string
   switch (source) {
     case "user":
       return createSyntheticSourceInfo(filePath, {
-        source: "local",
-        scope: "user",
         baseDir,
+        scope: "user",
+        source: "local",
       });
     case "project":
       return createSyntheticSourceInfo(filePath, {
-        source: "local",
-        scope: "project",
         baseDir,
+        scope: "project",
+        source: "local",
       });
     case "path":
       return createSyntheticSourceInfo(filePath, {
-        source: "local",
         baseDir,
+        source: "local",
       });
     default:
-      return createSyntheticSourceInfo(filePath, { source, baseDir });
+      return createSyntheticSourceInfo(filePath, { baseDir, source });
   }
 }
 
@@ -164,7 +164,7 @@ function loadSkillsFromDirInternal(
   const diagnostics: ResourceDiagnostic[] = [];
 
   if (!existsSync(dir)) {
-    return { skills, diagnostics };
+    return { diagnostics, skills };
   }
 
   const root = rootDir ?? dir;
@@ -200,7 +200,7 @@ function loadSkillsFromDirInternal(
         skills.push(result.skill);
       }
       diagnostics.push(...result.diagnostics);
-      return { skills, diagnostics };
+      return { diagnostics, skills };
     }
 
     for (const entry of entries) {
@@ -251,7 +251,7 @@ function loadSkillsFromDirInternal(
     }
   } catch {}
 
-  return { skills, diagnostics };
+  return { diagnostics, skills };
 }
 
 function loadSkillFromFile(
@@ -266,8 +266,8 @@ function loadSkillFromFile(
     rawContent = readFileSync(filePath, "utf-8");
   } catch (error) {
     const message = error instanceof Error ? error.message : "failed to read skill file";
-    diagnostics.push({ type: "warning", message, path: filePath });
-    return { skill: null, diagnostics };
+    diagnostics.push({ message, path: filePath, type: "warning" });
+    return { diagnostics, skill: null };
   }
 
   let frontmatter: SkillFrontmatter;
@@ -276,15 +276,15 @@ function loadSkillFromFile(
   } catch (error) {
     if (isDeclaredSkill) {
       const message = error instanceof Error ? error.message : "failed to parse skill file";
-      diagnostics.push({ type: "warning", message, path: filePath });
+      diagnostics.push({ message, path: filePath, type: "warning" });
     }
-    return { skill: null, diagnostics };
+    return { diagnostics, skill: null };
   }
 
   const description = frontmatter.description;
   const hasDescription = typeof description === "string" && description.trim() !== "";
   if (!isDeclaredSkill && !hasDescription) {
-    return { skill: null, diagnostics };
+    return { diagnostics, skill: null };
   }
 
   const skillDir = dirname(filePath);
@@ -292,7 +292,7 @@ function loadSkillFromFile(
 
   const descErrors = validateDescription(description);
   for (const error of descErrors) {
-    diagnostics.push({ type: "warning", message: error, path: filePath });
+    diagnostics.push({ message: error, path: filePath, type: "warning" });
   }
 
   const frontmatterName = typeof frontmatter.name === "string" ? frontmatter.name : undefined;
@@ -300,23 +300,23 @@ function loadSkillFromFile(
 
   const nameErrors = validateName(name);
   for (const error of nameErrors) {
-    diagnostics.push({ type: "warning", message: error, path: filePath });
+    diagnostics.push({ message: error, path: filePath, type: "warning" });
   }
 
   if (!hasDescription) {
-    return { skill: null, diagnostics };
+    return { diagnostics, skill: null };
   }
 
   return {
-    skill: {
-      name,
-      description,
-      filePath,
-      baseDir: skillDir,
-      sourceInfo: createSkillSourceInfo(filePath, skillDir, source),
-      disableModelInvocation: frontmatter["disable-model-invocation"] === true,
-    },
     diagnostics,
+    skill: {
+      baseDir: skillDir,
+      description,
+      disableModelInvocation: frontmatter["disable-model-invocation"] === true,
+      filePath,
+      name,
+      sourceInfo: createSkillSourceInfo(filePath, skillDir, source),
+    },
   };
 }
 
@@ -397,15 +397,15 @@ export function loadSkills(options: LoadSkillsOptions): LoadSkillsResult {
         realPathSet.add(realPath);
       } else {
         collisionDiagnostics.push({
-          type: "collision",
+          collision: {
+            loserPath: skill.filePath,
+            name: skill.name,
+            resourceType: "skill",
+            winnerPath: existing.filePath,
+          },
           message: `name "${skill.name}" collision`,
           path: skill.filePath,
-          collision: {
-            resourceType: "skill",
-            name: skill.name,
-            winnerPath: existing.filePath,
-            loserPath: skill.filePath,
-          },
+          type: "collision",
         });
       }
     }
@@ -442,9 +442,9 @@ export function loadSkills(options: LoadSkillsOptions): LoadSkillsResult {
     const resolvedPath = resolvePath(rawPath, resolvedCwd, { trim: true });
     if (!existsSync(resolvedPath)) {
       allDiagnostics.push({
-        type: "warning",
         message: "skill path does not exist",
         path: resolvedPath,
+        type: "warning",
       });
       continue;
     }
@@ -459,23 +459,23 @@ export function loadSkills(options: LoadSkillsOptions): LoadSkillsResult {
         if (result.skill === null) {
           allDiagnostics.push(...result.diagnostics);
         } else {
-          addSkills({ skills: [result.skill], diagnostics: result.diagnostics });
+          addSkills({ diagnostics: result.diagnostics, skills: [result.skill] });
         }
       } else {
         allDiagnostics.push({
-          type: "warning",
           message: "skill path is not a markdown file",
           path: resolvedPath,
+          type: "warning",
         });
       }
     } catch (error) {
       const message = error instanceof Error ? error.message : "failed to read skill path";
-      allDiagnostics.push({ type: "warning", message, path: resolvedPath });
+      allDiagnostics.push({ message, path: resolvedPath, type: "warning" });
     }
   }
 
   return {
-    skills: Array.from(skillMap.values()),
     diagnostics: [...allDiagnostics, ...collisionDiagnostics],
+    skills: Array.from(skillMap.values()),
   };
 }

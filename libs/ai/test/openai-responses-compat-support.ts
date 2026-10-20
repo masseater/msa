@@ -1,10 +1,13 @@
 import { Clock, Effect } from "effect";
 import { vi } from "vite-plus/test";
 
-import { stream as streamOpenAIResponses } from "../src/api/openai-responses.ts";
-import { normalizeContext } from "../src/compat.ts";
-import type { Model, Tool } from "../src/types.ts";
+import openaiResponses from "../src/api/openai-responses.ts";
+import compatModule from "../src/compat.ts";
+import type typesModule from "../src/types.types.ts";
 import modelChoice from "./model-choice.ts";
+
+const { stream: streamOpenAIResponses } = openaiResponses;
+const { normalizeContext } = compatModule;
 
 const { chooseModel, usesApi } = modelChoice;
 
@@ -51,8 +54,8 @@ const captureResponsesRequest = Effect.fn("captureResponsesRequest")(function* (
   options: Parameters<typeof streamOpenAIResponses>[2] = {},
   request: {
     readonly content?: string;
-    readonly model?: Model<"openai-responses">;
-    readonly tools?: Tool[];
+    readonly model?: typesModule.Model<"openai-responses">;
+    readonly tools?: typesModule.Tool[];
   } = {},
 ) {
   const headers = respondWith("data: [DONE]\n\n");
@@ -85,9 +88,9 @@ const captureResponsesRequest = Effect.fn("captureResponsesRequest")(function* (
 
 const proxyModel = (
   provider: string,
-  compat?: Model<"openai-responses">["compat"],
+  compat?: typesModule.Model<"openai-responses">["compat"],
   baseUrl = "https://proxy.example.com/v1",
-): Model<"openai-responses"> => ({
+): typesModule.Model<"openai-responses"> => ({
   ...responsesModel,
   baseUrl,
   provider,

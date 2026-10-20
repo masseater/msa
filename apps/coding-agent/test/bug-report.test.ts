@@ -1,6 +1,6 @@
 import testing from "@msa/testing";
-import type { Container } from "@msa/tui";
-import { stripTerminalSequences } from "@msa/tui";
+import tui from "@msa/tui";
+import type tuiTypes from "@msa/tui/index.types";
 import { Effect } from "effect";
 import { beforeAll, describe, expect, it, vi } from "vite-plus/test";
 
@@ -11,13 +11,15 @@ import { ExtensionEditorComponent } from "../src/modes/interactive/components/ex
 import { ExtensionSelectorComponent } from "../src/modes/interactive/components/extension-selector.ts";
 import editorSlotUi from "./editor-slot-ui.ts";
 
+const { stripTerminalSequences } = tui;
+
 const { awaited, runTest } = testing;
 
 const { createEditorSlotUi, prepareTheme } = editorSlotUi;
 
 beforeAll(prepareTheme);
 
-const nextSelector = Effect.fn("nextSelector")(function* (container: Container) {
+const nextSelector = Effect.fn("nextSelector")(function* (container: tuiTypes.Container) {
   yield* awaited(
     vi.waitFor(() => expect(container.children[0]).toBeInstanceOf(ExtensionSelectorComponent)),
   );
@@ -26,14 +28,17 @@ const nextSelector = Effect.fn("nextSelector")(function* (container: Container) 
   return selector;
 });
 
-const declineNext = Effect.fn("declineNext")(function* (container: Container, prompt: string) {
+const declineNext = Effect.fn("declineNext")(function* (
+  container: tuiTypes.Container,
+  prompt: string,
+) {
   const selector = yield* nextSelector(container);
   expect(selector.render(120).join("\n")).toContain(prompt);
   selector.handleInput("j");
   selector.handleInput("\r");
 });
 
-const pasteDescription = (container: Container) => {
+const pasteDescription = (container: tuiTypes.Container) => {
   const descriptionEditor = container.children[0];
   expect(descriptionEditor).toBeInstanceOf(ExtensionEditorComponent);
   if (!(descriptionEditor instanceof ExtensionEditorComponent))

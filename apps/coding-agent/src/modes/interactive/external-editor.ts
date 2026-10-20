@@ -29,10 +29,10 @@ export function editInExternalEditor(
         );
 
         const exitCode = yield* ChildProcess.make(editor, [...editorArgs, filePath], {
+          shell: process.platform === "win32",
+          stderr: "inherit",
           stdin: "inherit",
           stdout: "inherit",
-          stderr: "inherit",
-          shell: process.platform === "win32",
         }).pipe(
           Effect.flatMap((handle) => handle.exitCode),
           Effect.orElseSucceed(() => null),
@@ -40,7 +40,7 @@ export function editInExternalEditor(
         if (exitCode !== 0) return { status: "failed" } as const;
 
         const edited = yield* fileSystem.readFileString(filePath);
-        return { status: "complete", content: stripBom(edited).replace(/\n$/u, "") } as const;
+        return { content: stripBom(edited).replace(/\n$/u, ""), status: "complete" } as const;
       }),
     ).pipe(Effect.orDie),
   );

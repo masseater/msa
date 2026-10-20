@@ -1,4 +1,4 @@
-import type { AssistantMessage, ImageContent } from "@msa/ai";
+import type aiTypes from "@msa/ai/index.types";
 import testing from "@msa/testing";
 import { Effect } from "effect";
 import { afterEach, describe, expect, it, vi } from "vite-plus/test";
@@ -18,7 +18,7 @@ type FakeExtensionRunner = {
 type FakeSession = {
   sessionManager: { getHeader: () => object | undefined };
   agent: { waitForIdle: () => Promise<void>; subscribe: ReturnType<typeof vi.fn> };
-  state: { messages: AssistantMessage[] };
+  state: { messages: aiTypes.AssistantMessage[] };
   extensionRunner: FakeExtensionRunner;
   bindExtensions: ReturnType<typeof vi.fn>;
   subscribe: ReturnType<typeof vi.fn>;
@@ -37,9 +37,9 @@ type FakeRuntimeHost = {
 
 function createAssistantMessage(options?: {
   text?: string;
-  stopReason?: AssistantMessage["stopReason"];
+  stopReason?: aiTypes.AssistantMessage["stopReason"];
   errorMessage?: string;
-}): AssistantMessage {
+}): aiTypes.AssistantMessage {
   return {
     api: "openai-responses" as const,
     content:
@@ -63,7 +63,7 @@ function createAssistantMessage(options?: {
   };
 }
 
-function createRuntimeHost(assistantMessage: AssistantMessage): FakeRuntimeHost {
+function createRuntimeHost(assistantMessage: aiTypes.AssistantMessage): FakeRuntimeHost {
   const extensionRunner: FakeExtensionRunner = {
     emit: vi.fn(() => runTest(Effect.sync(() => {}))),
     hasHandlers: (eventType: string) => eventType === "session_shutdown",
@@ -125,7 +125,7 @@ describe("runPrintMode", () => {
       Effect.gen(function* () {
         const runtimeHost = createRuntimeHost(createAssistantMessage({ text: "done" }));
         const { session } = runtimeHost;
-        const images: ImageContent[] = [
+        const images: aiTypes.ImageContent[] = [
           { data: "abc", mimeType: "image/png", type: "image" as const },
         ];
 

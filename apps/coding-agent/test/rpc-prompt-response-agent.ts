@@ -1,13 +1,19 @@
-import { Agent } from "@msa/agent-core";
-import { type AssistantMessage, createAssistantMessageEventStream, getModel } from "@msa/ai/compat";
+import agent from "@msa/agent-core";
+import type agentTypes from "@msa/agent-core/index.types";
+import compat from "@msa/ai/compat";
+import type compatTypes from "@msa/ai/compat.types";
 import testing from "@msa/testing";
 import { Effect } from "effect";
 
 import type rpcPromptResponseHostTypes from "./rpc-prompt-response-host.types.ts";
 
+const { createAssistantMessageEventStream, getModel } = compat;
+
+const { Agent } = agent;
+
 const { currentTimeMillis } = testing;
 
-function createAssistantMessage(text: string): AssistantMessage {
+function createAssistantMessage(text: string): compatTypes.AssistantMessage {
   return {
     api: "anthropic-messages",
     content: [{ text, type: "text" }],
@@ -31,7 +37,9 @@ const pushAfter = (ms: number, push: () => void): void => {
   Effect.runFork(Effect.sleep(ms).pipe(Effect.andThen(Effect.sync(push))));
 };
 
-const createScriptedAgent = (options: rpcPromptResponseHostTypes.RuntimeHostOptions): Agent => {
+const createScriptedAgent = (
+  options: rpcPromptResponseHostTypes.RuntimeHostOptions,
+): agentTypes.Agent => {
   const model = options.model ?? getModel("anthropic-api", "claude-sonnet-4-5");
   if (model === undefined) {
     throw new Error("Test model not found");

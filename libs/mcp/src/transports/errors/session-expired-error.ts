@@ -1,6 +1,6 @@
-import { McpHttpError } from "./http-error.ts";
+import McpHttpError from "./http-error.ts";
 
-export class McpSessionExpiredError extends McpHttpError {
+export default class McpSessionExpiredError extends McpHttpError {
   override readonly name = "McpSessionExpiredError";
 
   constructor(body = "") {

@@ -3,8 +3,11 @@ import { Worker } from "node:worker_threads";
 import { Deferred, Effect, Latch } from "effect";
 import { type MockInstance, afterEach, describe, expect, it, vi } from "vite-plus/test";
 
-import { type CodemodeResult, CodemodeSandbox } from "../src/index.ts";
+import codemode from "../src/index.ts";
+import type codemodeTypes from "../src/index.types.ts";
 import support from "./support.ts";
+
+const { CodemodeSandbox } = codemode;
 
 const { abortController, hang } = support;
 
@@ -122,7 +125,7 @@ interface Observed {
   toolSignal: AbortSignal | undefined;
   exited: Promise<void> | undefined;
   didExit: boolean;
-  result: CodemodeResult | undefined;
+  result: codemodeTypes.CodemodeResult | undefined;
   didClose: boolean;
 }
 
@@ -155,7 +158,7 @@ function spyOnTermination() {
   return { release, spied, spy };
 }
 
-function hangingSandbox(observed: Observed, called: Latch.Latch): CodemodeSandbox {
+function hangingSandbox(observed: Observed, called: Latch.Latch): codemodeTypes.CodemodeSandbox {
   return new CodemodeSandbox({
     onWorkerStarted: (promise) => {
       observed.exited = promise;
@@ -180,7 +183,7 @@ function hangingSandbox(observed: Observed, called: Latch.Latch): CodemodeSandbo
 
 const stop = Effect.fn(function* (
   how: StopMode,
-  sandbox: CodemodeSandbox,
+  sandbox: codemodeTypes.CodemodeSandbox,
   controller: AbortController,
   observed: Observed,
 ) {

@@ -1,16 +1,17 @@
-import { CODEPOINTS, FUNCTIONAL_CODEPOINTS, MODIFIERS } from "./key-ids.ts";
-import {
-  isKittyProtocolActive,
-  matchesKittySequence,
-  matchesModifyOtherKeys,
-} from "./key-protocols.ts";
-import {
+import type keyControlMatchersTypes from "./key-control-matchers.types.ts";
+import keyIds from "./key-ids.ts";
+import keyProtocols from "./key-protocols.ts";
+import keySequences from "./key-sequences.ts";
+import type keySequencesTypes from "./key-sequences.types.ts";
+
+const { isKittyProtocolActive, matchesKittySequence, matchesModifyOtherKeys } = keyProtocols;
+const { CODEPOINTS, FUNCTIONAL_CODEPOINTS, MODIFIERS } = keyIds;
+const {
   LEGACY_KEY_SEQUENCES,
-  type LegacyModifierKey,
-  matchesLegacySequence,
   matchesLegacyModifierSequence,
+  matchesLegacySequence,
   matchesRawBackspace,
-} from "./key-sequences.ts";
+} = keySequences;
 
 function matchesEscapeKey(data: string, modifier: number): boolean {
   if (modifier !== 0) return false;
@@ -106,38 +107,34 @@ function matchesBackspaceKey(data: string, modifier: number): boolean {
 }
 
 const EDITING_CONTROL_MATCHERS: Record<string, (data: string, modifier: number) => boolean> = {
-  escape: matchesEscapeKey,
+  backspace: matchesBackspaceKey,
+  enter: matchesEnterKey,
   esc: matchesEscapeKey,
+  escape: matchesEscapeKey,
+  return: matchesEnterKey,
   space: matchesSpaceKey,
   tab: matchesTabKey,
-  enter: matchesEnterKey,
-  return: matchesEnterKey,
-  backspace: matchesBackspaceKey,
 };
 
-export interface KeyMatchRequest {
-  readonly key: string;
-  readonly data: string;
-  readonly modifier: number;
-}
-
-export function matchesEditingControlKey(request: KeyMatchRequest): boolean | undefined {
+function matchesEditingControlKey(
+  request: keyControlMatchersTypes.KeyMatchRequest,
+): boolean | undefined {
   return EDITING_CONTROL_MATCHERS[request.key]?.(request.data, request.modifier);
 }
 
 interface NavigationMatcher {
-  readonly legacy: LegacyModifierKey;
+  readonly legacy: keySequencesTypes.LegacyModifierKey;
   readonly codepoint?: number;
 }
 
 const NAVIGATION_MATCHERS: Record<string, NavigationMatcher> = {
-  insert: { legacy: "insert", codepoint: FUNCTIONAL_CODEPOINTS.insert },
-  delete: { legacy: "delete", codepoint: FUNCTIONAL_CODEPOINTS.delete },
   clear: { legacy: "clear" },
-  home: { legacy: "home", codepoint: FUNCTIONAL_CODEPOINTS.home },
-  end: { legacy: "end", codepoint: FUNCTIONAL_CODEPOINTS.end },
-  pageup: { legacy: "pageUp", codepoint: FUNCTIONAL_CODEPOINTS.pageUp },
-  pagedown: { legacy: "pageDown", codepoint: FUNCTIONAL_CODEPOINTS.pageDown },
+  delete: { codepoint: FUNCTIONAL_CODEPOINTS.delete, legacy: "delete" },
+  end: { codepoint: FUNCTIONAL_CODEPOINTS.end, legacy: "end" },
+  home: { codepoint: FUNCTIONAL_CODEPOINTS.home, legacy: "home" },
+  insert: { codepoint: FUNCTIONAL_CODEPOINTS.insert, legacy: "insert" },
+  pagedown: { codepoint: FUNCTIONAL_CODEPOINTS.pageDown, legacy: "pageDown" },
+  pageup: { codepoint: FUNCTIONAL_CODEPOINTS.pageUp, legacy: "pageUp" },
 };
 
 const matchesNavigationCodepoint = (
@@ -146,7 +143,9 @@ const matchesNavigationCodepoint = (
   modifier: number,
 ): boolean => codepoint !== undefined && matchesKittySequence(data, codepoint, modifier);
 
-export function matchesNavigationKey(request: KeyMatchRequest): boolean | undefined {
+function matchesNavigationKey(
+  request: keyControlMatchersTypes.KeyMatchRequest,
+): boolean | undefined {
   const { data, modifier } = request;
   const navigation = NAVIGATION_MATCHERS[request.key];
   if (navigation === undefined) return undefined;
@@ -161,3 +160,10 @@ export function matchesNavigationKey(request: KeyMatchRequest): boolean | undefi
     matchesNavigationCodepoint(data, navigation.codepoint, modifier)
   );
 }
+
+const keyControlMatchers = {
+  matchesEditingControlKey,
+  matchesNavigationKey,
+};
+
+export default keyControlMatchers;

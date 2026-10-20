@@ -22,12 +22,7 @@ const makeRegisterEchoTool =
 
     registeredToolNames.add(name);
     msa.registerTool({
-      name,
-      label,
       description: `Echo a message with prefix: ${prefix}`,
-      promptSnippet: `Echo back user-provided text with ${prefix.trim()} prefix`,
-      promptGuidelines: ["Use echo_session when the user asks for exact echo output."],
-      parameters: ECHO_PARAMS,
       execute: (_toolCallId, params) =>
         Effect.runPromise(
           Effect.succeed({
@@ -35,6 +30,11 @@ const makeRegisterEchoTool =
             details: { tool: name, prefix },
           }),
         ),
+      label,
+      name,
+      parameters: ECHO_PARAMS,
+      promptGuidelines: ["Use echo_session when the user asks for exact echo output."],
+      promptSnippet: `Echo back user-provided text with ${prefix.trim()} prefix`,
     });
 
     return true;

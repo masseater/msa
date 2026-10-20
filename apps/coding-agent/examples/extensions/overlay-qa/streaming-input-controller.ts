@@ -1,22 +1,24 @@
 import type { Theme } from "@msa/coding-agent";
-import type { OverlayHandle, TUI } from "@msa/tui";
-import { matchesKey } from "@msa/tui";
+import tuiModule from "@msa/tui";
+import type tuiTypes from "@msa/tui/index.types";
 import { DateTime, Effect, type Fiber } from "effect";
 
 import { BaseOverlay } from "./base-overlay.ts";
 import { StreamingInputPanel } from "./streaming-input-panel.ts";
 
+const { matchesKey } = tuiModule;
+
 export class StreamingInputController extends BaseOverlay {
-  private tui: TUI;
+  private tui: tuiTypes.TUI;
   private panels: StreamingInputPanel[] = [];
-  private handles: OverlayHandle[] = [];
+  private handles: tuiTypes.OverlayHandle[] = [];
   private focusIndex = -1;
   private streamLines: string[] = [];
   private streamFiber: Fiber.Fiber<never> | undefined;
   private lineCount = 0;
   private done: () => void;
 
-  constructor(tui: TUI, theme: Theme, done: () => void) {
+  constructor(tui: tuiTypes.TUI, theme: Theme, done: () => void) {
     super(theme);
     this.tui = tui;
     this.done = done;
@@ -33,9 +35,9 @@ export class StreamingInputController extends BaseOverlay {
         () => this.close(),
       );
       const handle = this.tui.showOverlay(panel, {
+        col: 2,
         nonCapturing: true,
         row: 1 + i * 9,
-        col: 2,
         width: 35,
       });
       panel.handle = handle;

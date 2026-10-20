@@ -1,7 +1,9 @@
-import { Container } from "@msa/tui";
+import tui from "@msa/tui";
 import { describe, expect, test } from "vite-plus/test";
 
 import { createChatViewport } from "../src/modes/interactive/chat-viewport.ts";
+
+const { Container } = tui;
 
 const defaultsTheTranscriptScrollbarToAutoAnd = () => {
   const automatic = createChatViewport({

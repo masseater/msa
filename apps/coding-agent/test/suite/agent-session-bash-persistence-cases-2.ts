@@ -1,5 +1,5 @@
-import type { AgentTool } from "@msa/agent-core";
-import { fauxAssistantMessage, fauxToolCall } from "@msa/ai";
+import type agentTypes from "@msa/agent-core/index.types";
+import ai from "@msa/ai";
 import testing from "@msa/testing";
 import { Effect } from "effect";
 import { Type } from "typebox";
@@ -7,6 +7,8 @@ import { expect } from "vite-plus/test";
 
 import agentSessionBashPersistenceCases1 from "./agent-session-bash-persistence-cases-1.ts";
 import harnessModule from "./harness.ts";
+
+const { fauxAssistantMessage, fauxToolCall } = ai;
 
 const { createHarness } = harnessModule;
 const { getEntryTypes, harnesses } = agentSessionBashPersistenceCases1;
@@ -17,7 +19,7 @@ const defersBashResultsWhileStreamingAndPart1 = () =>
   Effect.gen(function* () {
     const runPromise = Effect.runPromiseWith(yield* Effect.context<never>());
     const toolRelease = gate();
-    const waitTool: AgentTool = {
+    const waitTool: agentTypes.AgentTool = {
       description: "Wait for release",
       execute: () =>
         runPromise(

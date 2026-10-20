@@ -1,4 +1,5 @@
-import { type TranscriptContext, getCurrentTools } from "@msa/ai";
+import ai from "@msa/ai";
+import type aiTypes from "@msa/ai/index.types";
 import testing from "@msa/testing";
 import { Effect } from "effect";
 import { Type } from "typebox";
@@ -6,6 +7,8 @@ import { Type } from "typebox";
 import type { ExtensionFactory, ToolDefinition } from "../../src/index.ts";
 import harnessModule from "./harness.ts";
 import type harnessTypes from "./harness.types.ts";
+
+const { getCurrentTools } = ai;
 
 const { awaited } = testing;
 
@@ -63,9 +66,9 @@ function record(
   harness: harnessTypes.Harness,
   responses: Parameters<harnessTypes.Harness["setResponses"]>[0],
 ) {
-  const requests: TranscriptContext[] = [];
+  const requests: aiTypes.TranscriptContext[] = [];
   harness.setResponses(
-    responses.map((response) => (context: TranscriptContext) => {
+    responses.map((response) => (context: aiTypes.TranscriptContext) => {
       requests.push(context);
       return typeof response === "function"
         ? response(context, undefined, harness.faux.state, harness.getModel())
@@ -75,7 +78,7 @@ function record(
   return requests;
 }
 
-const declared = (request: TranscriptContext | undefined) =>
+const declared = (request: aiTypes.TranscriptContext | undefined) =>
   getCurrentTools(request?.messages ?? []).map((tool) => tool.name);
 
 const cleanupHarnesses = (): void => {

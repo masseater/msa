@@ -1,14 +1,19 @@
-import { type SystemMessage, type Tool, Type } from "@msa/ai";
-import { getCurrentTools, toToolDeclaration } from "@msa/ai/utils/transcript";
+import ai from "@msa/ai";
+import type aiTypes from "@msa/ai/index.types";
+import transcript from "@msa/ai/utils/transcript";
 import durable from "@msa/durable";
 import type durableTypes from "@msa/durable/index.types";
 import { Effect } from "effect";
 import { describe, expect, it } from "vite-plus/test";
 
-import prompt from "../src/harness/prompt.ts";
-import effectSupport from "./effect-support.ts";
 import harnessPromptSupport from "./harness-prompt-support.ts";
+import harnessPromptToolLoadoutPreparationKit from "./harness-prompt-tool-loadout-preparation-kit.ts";
 import sessionSupport from "./session-support.ts";
+
+const { effectSupport, prompt } = harnessPromptToolLoadoutPreparationKit;
+
+const { Type } = ai;
+const { getCurrentTools, toToolDeclaration } = transcript;
 
 const { planSystemEntries } = prompt;
 const { SystemEntry } = durable;
@@ -17,7 +22,7 @@ const { awaited } = effectSupport;
 const { marker, root } = harnessPromptSupport;
 const { context } = sessionSupport;
 
-const declaration = (name: string, description = name): Tool => ({
+const declaration = (name: string, description = name): aiTypes.Tool => ({
   description,
   name,
   parameters: Type.Object({}),
@@ -25,7 +30,7 @@ const declaration = (name: string, description = name): Tool => ({
 
 const applyTools = Effect.fn("applyTools")(function* (
   conversation: durableTypes.Conversation,
-  tools: readonly Tool[],
+  tools: readonly aiTypes.Tool[],
   sections: Record<string, string> = {},
 ) {
   const runPromise = Effect.runPromiseWith(yield* Effect.context<never>());
@@ -51,11 +56,11 @@ const applyTools = Effect.fn("applyTools")(function* (
   const offered = getCurrentTools((yield* awaited(conversation.context(context))).messages);
   expect(offered).toEqual(tools.map(toToolDeclaration));
   return drafts.map((draft) => {
-    const message = draft.model![0] as SystemMessage;
+    const message = draft.model![0] as aiTypes.SystemMessage;
     const changes: {
       removed?: string[];
       added?: string[];
-      sections?: SystemMessage["sections"];
+      sections?: aiTypes.SystemMessage["sections"];
     } = {};
     if (message.toolsRemoved !== undefined)
       changes.removed = message.toolsRemoved.map((tool) => tool.name);

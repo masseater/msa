@@ -1,4 +1,4 @@
-import { fauxAssistantMessage, fauxToolCall } from "@msa/ai";
+import ai from "@msa/ai";
 import durable from "@msa/durable";
 import harnessModule from "@msa/durable/harness";
 import type durableTypes from "@msa/durable/index.types";
@@ -8,6 +8,8 @@ import { Type } from "typebox";
 
 import harnessStructuredSupport from "./harness-structured-support.ts";
 import testSupport from "./support.ts";
+
+const { fauxAssistantMessage, fauxToolCall } = ai;
 
 const { defineTool } = durable;
 const { watchEvents } = harnessModule;

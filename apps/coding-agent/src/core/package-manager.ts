@@ -4,8 +4,8 @@ import {
   existsSync,
   globSync,
   mkdirSync,
-  readdirSync,
   readFileSync,
+  readdirSync,
   rmSync,
   statSync,
   writeFileSync,
@@ -211,8 +211,8 @@ const RESOURCE_TYPES: ResourceType[] = ["extensions", "skills", "prompts", "them
 
 const FILE_PATTERNS: Record<ResourceType, RegExp> = {
   extensions: /\.(ts|js)$/u,
-  skills: /\.md$/u,
   prompts: /\.md$/u,
+  skills: /\.md$/u,
   themes: /\.json$/u,
 };
 
@@ -230,7 +230,7 @@ function getHomeDir(): string {
 
 export function getExtensionTempFolder(agentDir: string): string {
   const tempFolder = join(agentDir, "tmp", "extensions");
-  mkdirSync(tempFolder, { recursive: true, mode: 0o700 });
+  mkdirSync(tempFolder, { mode: 0o700, recursive: true });
   chmodSync(tempFolder, 0o700);
   return tempFolder;
 }
@@ -317,7 +317,7 @@ function splitPatterns(entries: string[]): { plain: string[]; patterns: string[]
       plain.push(entry);
     }
   }
-  return { plain, patterns };
+  return { patterns, plain };
 }
 
 function collectFiles(
@@ -907,13 +907,13 @@ export class DefaultPackageManager implements PackageManager {
     operation: () => Promise<void>,
   ): Effect.Effect<void> {
     return awaitingWith(function* () {
-      this.emitProgress({ type: "start", action, source, message });
+      this.emitProgress({ action, message, source, type: "start" });
       try {
         yield* awaited(operation());
-        this.emitProgress({ type: "complete", action, source });
+        this.emitProgress({ action, source, type: "complete" });
       } catch (error) {
         const errorMessage = toErrorMessage(error);
-        this.emitProgress({ type: "error", action, source, message: errorMessage });
+        this.emitProgress({ action, message: errorMessage, source, type: "error" });
         throw error;
       }
     }, this);
@@ -949,9 +949,9 @@ export class DefaultPackageManager implements PackageManager {
             resourceType,
             target,
             {
-              source: "local",
-              scope: "project",
               origin: "top-level",
+              scope: "project",
+              source: "local",
             },
             projectBaseDir,
           );
@@ -960,9 +960,9 @@ export class DefaultPackageManager implements PackageManager {
             resourceType,
             target,
             {
-              source: "local",
-              scope: "user",
               origin: "top-level",
+              scope: "user",
+              source: "local",
             },
             globalBaseDir,
           );
@@ -987,9 +987,9 @@ export class DefaultPackageManager implements PackageManager {
             accumulator.extensions,
             path,
             {
-              source: "builtin",
-              scope: projectEnabled === undefined ? "user" : "project",
               origin: "top-level",
+              scope: projectEnabled === undefined ? "user" : "project",
+              source: "builtin",
             },
             projectEnabled ??
               isEnabledByOverrides(path, globalSettings.extensions ?? [], globalBaseDir),
@@ -1016,7 +1016,7 @@ export class DefaultPackageManager implements PackageManager {
           this.addResource(
             accumulator.extensions,
             source,
-            { source: "builtin", scope, origin: "top-level" },
+            { origin: "top-level", scope, source: "builtin" },
             true,
           );
         }
@@ -1037,20 +1037,20 @@ export class DefaultPackageManager implements PackageManager {
     for (const pkg of globalSettings.packages ?? []) {
       const source = typeof pkg === "string" ? pkg : pkg.source;
       configuredPackages.push({
-        source,
-        scope: "user",
         filtered: typeof pkg === "object",
         installedPath: this.getInstalledPath(source, "user"),
+        scope: "user",
+        source,
       });
     }
 
     for (const pkg of projectSettings.packages ?? []) {
       const source = typeof pkg === "string" ? pkg : pkg.source;
       configuredPackages.push({
-        source,
-        scope: "project",
         filtered: typeof pkg === "object",
         installedPath: this.getInstalledPath(source, "project"),
+        scope: "project",
+        source,
       });
     }
 
@@ -1158,7 +1158,7 @@ export class DefaultPackageManager implements PackageManager {
           )
             continue;
           matched = true;
-          updateSources.push({ source: sourceStr, scope: "user" });
+          updateSources.push({ scope: "user", source: sourceStr });
         }
         for (const pkg of projectSettings.packages ?? []) {
           const sourceStr = typeof pkg === "string" ? pkg : pkg.source;
@@ -1169,7 +1169,7 @@ export class DefaultPackageManager implements PackageManager {
           )
             continue;
           matched = true;
-          updateSources.push({ source: sourceStr, scope: "project" });
+          updateSources.push({ scope: "project", source: sourceStr });
         }
 
         if (source !== undefined && source !== "" && !matched) {
@@ -1384,10 +1384,10 @@ export class DefaultPackageManager implements PackageManager {
                       return undefined;
                     }
                     return {
-                      source,
                       displayName: parsed.name,
-                      type: "npm",
                       scope: entry.scope,
+                      source,
+                      type: "npm",
                     };
                   }
 
@@ -1400,10 +1400,10 @@ export class DefaultPackageManager implements PackageManager {
                     return undefined;
                   }
                   return {
-                    source,
                     displayName: `${parsed.host}/${parsed.path}`,
-                    type: "git",
                     scope: entry.scope,
+                    source,
+                    type: "git",
                   };
                 }, this),
               ),
@@ -1428,7 +1428,7 @@ export class DefaultPackageManager implements PackageManager {
         const resolvedSource = deltaBase?.source ?? sourceStr;
         const resolvedScope = deltaBase?.scope ?? scope;
         const parsed = this.parseSource(resolvedSource);
-        const metadata: PathMetadata = { source: sourceStr, scope, origin: "package" };
+        const metadata: PathMetadata = { origin: "package", scope, source: sourceStr };
 
         if (parsed.type === "local") {
           const baseDir = this.getBaseDirForScope(resolvedScope);
@@ -1498,7 +1498,7 @@ export class DefaultPackageManager implements PackageManager {
     );
     return userEntry === undefined
       ? undefined
-      : { source: this.getPackageSourceString(userEntry.pkg), scope: "user" };
+      : { scope: "user", source: this.getPackageSourceString(userEntry.pkg) };
   }
 
   private resolveLocalExtensionSource(
@@ -1641,17 +1641,17 @@ export class DefaultPackageManager implements PackageManager {
       const spec = source.slice("npm:".length).trim();
       const { name, version } = this.parseNpmSpec(spec);
       return {
-        type: "npm",
-        spec,
         name,
-        version,
-        range: getNpmVersionRange(version),
         pinned: isExactNpmVersion(version),
+        range: getNpmVersionRange(version),
+        spec,
+        type: "npm",
+        version,
       };
     }
 
     if (isLocalPath(source)) {
-      return { type: "local", path: source };
+      return { path: source, type: "local" };
     }
 
     const gitParsed = parseGitUrl(source);
@@ -1659,7 +1659,7 @@ export class DefaultPackageManager implements PackageManager {
       return gitParsed;
     }
 
-    return { type: "local", path: source };
+    return { path: source, type: "local" };
   }
 
   private installedNpmMatchesConfiguredVersion(
@@ -1820,8 +1820,6 @@ export class DefaultPackageManager implements PackageManager {
             }),
           );
           return {
-            ref: "@{upstream}",
-            head,
             fetchArgs: [
               "fetch",
               "--prune",
@@ -1829,6 +1827,8 @@ export class DefaultPackageManager implements PackageManager {
               "origin",
               `+refs/heads/${branch}:refs/remotes/origin/${branch}`,
             ],
+            head,
+            ref: "@{upstream}",
           };
         } catch {
           yield* awaited(
@@ -1851,8 +1851,6 @@ export class DefaultPackageManager implements PackageManager {
           const branch = originHeadRef.trim().replace(/^refs\/remotes\/origin\//u, "");
           if (branch !== "") {
             return {
-              ref: "origin/HEAD",
-              head,
               fetchArgs: [
                 "fetch",
                 "--prune",
@@ -1860,11 +1858,11 @@ export class DefaultPackageManager implements PackageManager {
                 "origin",
                 `+refs/heads/${branch}:refs/remotes/origin/${branch}`,
               ],
+              head,
+              ref: "origin/HEAD",
             };
           }
           return {
-            ref: "origin/HEAD",
-            head,
             fetchArgs: [
               "fetch",
               "--prune",
@@ -1872,6 +1870,8 @@ export class DefaultPackageManager implements PackageManager {
               "origin",
               "+HEAD:refs/remotes/origin/HEAD",
             ],
+            head,
+            ref: "origin/HEAD",
           };
         }
       }, this),
@@ -1902,10 +1902,10 @@ export class DefaultPackageManager implements PackageManager {
   private runGitRemoteCommand(installedPath: string, args: string[]): Promise<string> {
     return this.runCommandCapture("git", args, {
       cwd: installedPath,
-      timeoutMs: NETWORK_TIMEOUT_MS,
       env: {
         GIT_TERMINAL_PROMPT: "0",
       },
+      timeoutMs: NETWORK_TIMEOUT_MS,
     });
   }
 
@@ -1996,13 +1996,13 @@ export class DefaultPackageManager implements PackageManager {
   private getNpmCommand(): { command: string; args: string[] } {
     const configuredCommand = this.settingsManager.getNpmCommand();
     if (configuredCommand === undefined || configuredCommand.length === 0) {
-      return { command: "npm", args: [] };
+      return { args: [], command: "npm" };
     }
     const [command, ...args] = configuredCommand;
     if (command === undefined || command === "") {
       throw new Error("Invalid npmCommand: first array entry must be a non-empty command");
     }
-    return { command, args };
+    return { args, command };
   }
 
   private getPackageManagerName(): string {
@@ -2149,7 +2149,7 @@ export class DefaultPackageManager implements PackageManager {
           );
         }
       } catch (error) {
-        rmSync(targetDir, { recursive: true, force: true });
+        rmSync(targetDir, { force: true, recursive: true });
         this.pruneEmptyGitParents(targetDir, gitRoot);
         throw error;
       }
@@ -2297,7 +2297,7 @@ export class DefaultPackageManager implements PackageManager {
   private removeGit(source: GitSource, scope: SourceScope): Effect.Effect<void> {
     return Effect.sync(() => {
       const targetDir = this.getGitInstallPath(source, scope);
-      rmSync(targetDir, { recursive: true, force: true });
+      rmSync(targetDir, { force: true, recursive: true });
       rmSync(this.getGitUpdateMarkerPath(targetDir), { force: true });
       this.pruneEmptyGitParents(targetDir, this.getGitInstallRoot(scope));
     });
@@ -2317,7 +2317,7 @@ export class DefaultPackageManager implements PackageManager {
         break;
       }
       try {
-        rmSync(current, { recursive: true, force: true });
+        rmSync(current, { force: true, recursive: true });
       } catch {
         break;
       }
@@ -2686,41 +2686,41 @@ export class DefaultPackageManager implements PackageManager {
     projectBaseDir: string,
   ): void {
     const userMetadata: PathMetadata = {
-      source: "auto",
-      scope: "user",
-      origin: "top-level",
       baseDir: globalBaseDir,
+      origin: "top-level",
+      scope: "user",
+      source: "auto",
     };
     const projectMetadata: PathMetadata = {
-      source: "auto",
-      scope: "project",
-      origin: "top-level",
       baseDir: projectBaseDir,
+      origin: "top-level",
+      scope: "project",
+      source: "auto",
     };
 
     const userOverrides = {
       extensions: (globalSettings.extensions ?? []) as string[],
-      skills: (globalSettings.skills ?? []) as string[],
       prompts: (globalSettings.prompts ?? []) as string[],
+      skills: (globalSettings.skills ?? []) as string[],
       themes: (globalSettings.themes ?? []) as string[],
     };
     const projectOverrides = {
       extensions: (projectSettings.extensions ?? []) as string[],
-      skills: (projectSettings.skills ?? []) as string[],
       prompts: (projectSettings.prompts ?? []) as string[],
+      skills: (projectSettings.skills ?? []) as string[],
       themes: (projectSettings.themes ?? []) as string[],
     };
 
     const userDirs = {
       extensions: join(globalBaseDir, "extensions"),
-      skills: join(globalBaseDir, "skills"),
       prompts: join(globalBaseDir, "prompts"),
+      skills: join(globalBaseDir, "skills"),
       themes: join(globalBaseDir, "themes"),
     };
     const projectDirs = {
       extensions: join(projectBaseDir, "extensions"),
-      skills: join(projectBaseDir, "skills"),
       prompts: join(projectBaseDir, "prompts"),
+      skills: join(projectBaseDir, "skills"),
       themes: join(projectBaseDir, "themes"),
     };
     const userAgentsSkillsDir = join(getHomeDir(), ".agents", "skills");
@@ -2883,15 +2883,15 @@ export class DefaultPackageManager implements PackageManager {
   ): void {
     if (path === "") return;
     if (!map.has(path)) {
-      map.set(path, { metadata, enabled });
+      map.set(path, { enabled, metadata });
     }
   }
 
   private createAccumulator(): ResourceAccumulator {
     return {
       extensions: new Map(),
-      skills: new Map(),
       prompts: new Map(),
+      skills: new Map(),
       themes: new Map(),
     };
   }
@@ -2901,9 +2901,9 @@ export class DefaultPackageManager implements PackageManager {
       entries: Map<string, { metadata: PathMetadata; enabled: boolean }>,
     ): ResolvedResource[] => {
       const resolved = Array.from(entries.entries()).map(([path, { metadata, enabled }]) => ({
-        path,
         enabled,
         metadata,
+        path,
       }));
       resolved.sort(
         (a, b) => resourcePrecedenceRank(a.metadata) - resourcePrecedenceRank(b.metadata),
@@ -2920,8 +2920,8 @@ export class DefaultPackageManager implements PackageManager {
 
     return {
       extensions: mapToResolved(accumulator.extensions),
-      skills: mapToResolved(accumulator.skills),
       prompts: mapToResolved(accumulator.prompts),
+      skills: mapToResolved(accumulator.skills),
       themes: mapToResolved(accumulator.themes),
     };
   }
@@ -2930,8 +2930,8 @@ export class DefaultPackageManager implements PackageManager {
     const env = getEnv();
     return spawnProcess(command, args, {
       cwd: options?.cwd,
-      stdio: isStdoutTakenOver() ? ["ignore", 2, 2] : "inherit",
       env,
+      stdio: isStdoutTakenOver() ? ["ignore", 2, 2] : "inherit",
     });
   }
 
@@ -2944,8 +2944,8 @@ export class DefaultPackageManager implements PackageManager {
     const env = options?.env === undefined ? baseEnv : { ...baseEnv, ...options.env };
     return spawnProcess(command, args, {
       cwd: options?.cwd,
-      stdio: ["ignore", "pipe", "pipe"],
       env,
+      stdio: ["ignore", "pipe", "pipe"],
     });
   }
 
@@ -3026,9 +3026,9 @@ export class DefaultPackageManager implements PackageManager {
   private runCommandSync(command: string, args: string[]): string {
     const env = getEnv();
     const result = spawnProcessSync(command, args, {
-      stdio: ["ignore", "pipe", "pipe"],
       encoding: "utf-8",
       env,
+      stdio: ["ignore", "pipe", "pipe"],
     });
     if (result.error !== undefined || result.status !== 0) {
       throw new Error(

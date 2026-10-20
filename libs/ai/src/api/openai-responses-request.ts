@@ -1,26 +1,28 @@
 import OpenAI from "openai";
 
-import type { Model, ProviderHeaders, TranscriptContext } from "../types.ts";
-import { getDeclaredTools } from "../utils/transcript.ts";
-import { getMsaUserAgent } from "../utils/user-agent.ts";
-import { createGrammarToolInputProperties } from "./constrained-sampling.ts";
-import {
-  getClientApiKey,
-  getCompat,
-  type OpenAIResponsesOptions,
-  type ResolvedResponsesCompat,
-  resolveCacheRetention,
-} from "./openai-responses-config.ts";
-import { buildOpenAIResponsesParams } from "./openai-responses-params.ts";
-import { serviceTierPricing } from "./openai-responses-pricing.ts";
-import type { ResponsesRequest } from "./openai-responses-run.ts";
+import type typesModule from "../types.types.ts";
+import constrainedSampling from "./constrained-sampling.ts";
+import openaiResponsesConfig from "./openai-responses-config.ts";
+import type openaiResponsesConfigTypes from "./openai-responses-config.types.ts";
+import openaiResponsesParams from "./openai-responses-params.ts";
+import openaiResponsesPricing from "./openai-responses-pricing.ts";
+import openaiResponsesRequestKit from "./openai-responses-request-kit.ts";
+import type openaiResponsesRequestTypes from "./openai-responses-request.types.ts";
+import type openaiResponsesRunTypes from "./openai-responses-run.types.ts";
 
-type ResponsesModel = Model<"openai-responses">;
+const { transcript, userAgent } = openaiResponsesRequestKit;
+
+const { getClientApiKey, getCompat, resolveCacheRetention } = openaiResponsesConfig;
+const { getMsaUserAgent } = userAgent;
+const { createGrammarToolInputProperties } = constrainedSampling;
+const { getDeclaredTools } = transcript;
+const { buildOpenAIResponsesParams } = openaiResponsesParams;
+const { serviceTierPricing } = openaiResponsesPricing;
 
 function sessionHeaders(
-  compat: ResolvedResponsesCompat,
+  compat: openaiResponsesConfigTypes.ResolvedResponsesCompat,
   sessionId: string | undefined,
-): ProviderHeaders {
+): typesModule.ProviderHeaders {
   if (sessionId === undefined || sessionId === "") return {};
   if (compat.sessionAffinityFormat === "openrouter") return { "x-session-id": sessionId };
   return {
@@ -29,35 +31,31 @@ function sessionHeaders(
   };
 }
 
-function createClient(model: ResponsesModel, options: OpenAIResponsesOptions | undefined): OpenAI {
+function createClient(
+  model: openaiResponsesRequestTypes.ResponsesModel,
+  options: openaiResponsesConfigTypes.OpenAIResponsesOptions | undefined,
+): OpenAI {
   const sessionId = resolveCacheRetention(options) === "none" ? undefined : options?.sessionId;
   return new OpenAI({
     apiKey: getClientApiKey(model)(options),
     baseURL: model.baseUrl,
     dangerouslyAllowBrowser: true,
-    fetch: options?.fetch,
     defaultHeaders: {
       "User-Agent": getMsaUserAgent(),
       ...model.headers,
       ...sessionHeaders(getCompat(model), sessionId),
       ...options?.headers,
     },
+    fetch: options?.fetch,
   });
 }
 
-export interface OpenAIResponsesRequestSpec {
-  readonly model: ResponsesModel;
-  readonly context: TranscriptContext;
-  readonly options: OpenAIResponsesOptions | undefined;
-  readonly configurationUpdateEffort: string | undefined;
-}
-
-export function prepareOpenAIResponsesRequest({
+function prepareOpenAIResponsesRequest({
   model,
   context,
   options,
   configurationUpdateEffort,
-}: OpenAIResponsesRequestSpec): ResponsesRequest {
+}: openaiResponsesRequestTypes.OpenAIResponsesRequestSpec): openaiResponsesRunTypes.ResponsesRequest {
   const compat = getCompat(model);
   const client = createClient(model, options);
   const grammarToolInputProperties = createGrammarToolInputProperties(
@@ -65,21 +63,27 @@ export function prepareOpenAIResponsesRequest({
     compat.supportsOpenAIGrammarTools,
   );
   const params = buildOpenAIResponsesParams({
-    model,
-    context,
-    options,
     compat,
-    grammarToolInputProperties,
     configurationUpdateEffort,
+    context,
+    grammarToolInputProperties,
+    model,
+    options,
   });
   return {
     client,
     params,
     streamOptions: {
+      applyServiceTierPricing: serviceTierPricing(model),
+      grammarToolInputProperties,
       onProviderStreamEvent: options?.onProviderStreamEvent,
       serviceTier: options?.serviceTier,
-      grammarToolInputProperties,
-      applyServiceTierPricing: serviceTierPricing(model),
     },
   };
 }
+
+const openaiResponsesRequest = {
+  prepareOpenAIResponsesRequest,
+};
+
+export default openaiResponsesRequest;

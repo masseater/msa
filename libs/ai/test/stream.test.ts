@@ -1,7 +1,7 @@
 import { Effect } from "effect";
 import { describe, inject, it } from "vite-plus/test";
 
-import type { Api, Model, StreamOptions } from "../src/types.ts";
+import type typesModule from "../src/types.types.ts";
 import env from "./env.ts";
 import modelChoice from "./model-choice.ts";
 import streamScenarios from "./stream-scenarios.ts";
@@ -17,22 +17,23 @@ const {
   multiTurn,
 } = streamScenarios;
 
-type StreamOptionsWithExtras = StreamOptions & Record<string, unknown>;
+type StreamOptionsWithExtras = typesModule.StreamOptions & Record<string, unknown>;
 
 interface Target {
   readonly available: boolean;
   readonly basic?: StreamOptionsWithExtras;
   readonly label: string;
-  readonly model: Model<Api>;
+  readonly model: typesModule.Model<typesModule.Api>;
   readonly options: StreamOptionsWithExtras;
   readonly thinking?: StreamOptionsWithExtras;
 }
 
 const openaiCodexToken = inject("storedApiKeys")["openai-codex"];
 
-const reasoningVision = (model: Model<Api>) => model.reasoning && model.input.includes("image");
+const reasoningVision = (model: typesModule.Model<typesModule.Api>) =>
+  model.reasoning && model.input.includes("image");
 
-const directCompletions = (): Model<"openai-completions"> => {
+const directCompletions = (): typesModule.Model<"openai-completions"> => {
   const { compat: _compat, ...baseModel } = chooseModel("openai", "direct OpenAI");
   return { ...baseModel, api: "openai-completions" };
 };
@@ -98,7 +99,10 @@ const targets: Target[] = [
 describe.each(targets)("Generate E2E Tests: $label", (target) => {
   const run =
     (
-      scenario: (model: Model<Api>, options: StreamOptionsWithExtras) => Effect.Effect<void>,
+      scenario: (
+        model: typesModule.Model<typesModule.Api>,
+        options: StreamOptionsWithExtras,
+      ) => Effect.Effect<void>,
       extra = {},
     ) =>
     () =>

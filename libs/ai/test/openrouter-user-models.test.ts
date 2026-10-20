@@ -1,14 +1,16 @@
 import { Effect } from "effect";
 import { afterEach, describe, expect, it, vi } from "vite-plus/test";
 
-import type { RefreshModelsContext } from "../src/models.ts";
-import type { OpenRouterModel } from "../src/providers/openrouter-api.ts";
-import { personalizeOpenRouterCatalog } from "../src/providers/openrouter-user-models.ts";
-import type { AnyModel, ClassifierModel, ImageModel, Model } from "../src/types.ts";
+import type modelsTypes from "../src/models.types.ts";
+import type openrouterApiTypes from "../src/providers/openrouter-api.types.ts";
+import openrouterUserModels from "../src/providers/openrouter-user-models.ts";
+import type typesModule from "../src/types.types.ts";
+
+const { personalizeOpenRouterCatalog } = openrouterUserModels;
 
 const zeroCost = { cacheRead: 0, cacheWrite: 0, input: 0, output: 0 };
 
-function chatModel(id: string): Model<"openai-completions"> {
+function chatModel(id: string): typesModule.Model<"openai-completions"> {
   return {
     api: "openai-completions",
     baseUrl: "https://openrouter.ai/api/v1",
@@ -23,7 +25,7 @@ function chatModel(id: string): Model<"openai-completions"> {
   };
 }
 
-const imageModel: ImageModel<"openrouter-images"> = {
+const imageModel: typesModule.ImageModel<"openrouter-images"> = {
   api: "openrouter-images",
   baseUrl: "https://openrouter.ai/api/v1",
   cost: zeroCost,
@@ -35,7 +37,7 @@ const imageModel: ImageModel<"openrouter-images"> = {
   type: "image",
 };
 
-const classifierModel: ClassifierModel<"typesafe-system-one"> = {
+const classifierModel: typesModule.ClassifierModel<"typesafe-system-one"> = {
   api: "typesafe-system-one",
   baseUrl: "https://openrouter.ai/api/v1",
   contextWindow: 64_000,
@@ -47,7 +49,7 @@ const classifierModel: ClassifierModel<"typesafe-system-one"> = {
   type: "classifier",
 };
 
-function refreshContext(): RefreshModelsContext {
+function refreshContext(): modelsTypes.RefreshModelsContext {
   return {
     allowNetwork: true,
     credential: { key: "sk-or-test", type: "api_key" },
@@ -62,7 +64,7 @@ function stubUserModels(response: Response): void {
 
 afterEach(() => vi.restoreAllMocks());
 
-const keepsOnlyTheKeySChatData: OpenRouterModel[] = [
+const keepsOnlyTheKeySChatData: openrouterApiTypes.OpenRouterModel[] = [
   {
     context_length: 1_000_000,
     id: "listed",
@@ -80,9 +82,9 @@ const keepsOnlyTheKeySChatData: OpenRouterModel[] = [
 const keepsOnlyTheKeySChat = () =>
   Effect.runPromise(
     Effect.gen(function* () {
-      const data: OpenRouterModel[] = keepsOnlyTheKeySChatData;
+      const data: openrouterApiTypes.OpenRouterModel[] = keepsOnlyTheKeySChatData;
       stubUserModels(Response.json({ data }));
-      const catalog: AnyModel[] = [
+      const catalog: typesModule.AnyModel[] = [
         chatModel("listed"),
         chatModel("no-limits"),
         chatModel("router"),

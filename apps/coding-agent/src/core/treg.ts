@@ -12,19 +12,19 @@ const MAX_COST_USD = "0.05";
 
 const CliEnvelope = Schema.fromJsonString(
   Schema.Struct({
-    result: Schema.Unknown,
     _treg: Schema.Struct({
       http_status: Schema.Finite,
       charged_micro: Schema.optionalKey(Schema.Finite),
     }),
+    result: Schema.Unknown,
   }),
 );
 
 const RoutedResult = Schema.Struct({
-  output: Schema.Record(Schema.String, Schema.Unknown).pipe(Schema.NullOr, Schema.optionalKey),
   _treg: Schema.optionalKey(
     Schema.Struct({ served_by: Schema.String.pipe(Schema.NullOr, Schema.optionalKey) }),
   ),
+  output: Schema.Record(Schema.String, Schema.Unknown).pipe(Schema.NullOr, Schema.optionalKey),
 });
 
 export interface TregRun {
@@ -60,7 +60,7 @@ function spawnRunner(command: string): TregRunner {
         child.stderr?.setEncoding("utf8").on("data", (chunk: string) => (stderr += chunk));
         const exitCode = yield* awaited(waitForChildProcess(child));
         signal?.throwIfAborted();
-        return { stdout, stderr, exitCode };
+        return { exitCode, stderr, stdout };
       }),
     );
 }
@@ -113,9 +113,9 @@ export function loginTreg(
   return Effect.runPromise(
     awaiting(function* () {
       const child = spawnProcess(command, ["login"], {
+        env: { ...envSnapshot(), PYTHONUNBUFFERED: "1" },
         stdio: ["ignore", "pipe", "pipe"],
         windowsHide: true,
-        env: { ...envSnapshot(), PYTHONUNBUFFERED: "1" },
         ...(signal === undefined ? {} : { signal }),
       });
       let output = "";
@@ -127,7 +127,7 @@ export function loginTreg(
         const code = /matches:\s*(\S+)/u.exec(output)?.[1];
         if ((code === undefined || code === "") && !/Waiting/u.test(output)) return;
         shown = true;
-        onPage(code !== undefined && code !== "" ? { url, code } : { url });
+        onPage(code !== undefined && code !== "" ? { code, url } : { url });
       };
       child.stdout?.setEncoding("utf8").on("data", onOutput);
       child.stderr?.setEncoding("utf8").on("data", onOutput);

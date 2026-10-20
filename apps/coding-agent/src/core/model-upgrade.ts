@@ -1,4 +1,4 @@
-import type { Api, Model } from "@msa/ai";
+import type aiTypes from "@msa/ai/index.types";
 
 import type { Settings } from "./settings-schema.ts";
 
@@ -32,10 +32,10 @@ export function parseModelIdVersion(id: string): ModelIdVersion | undefined {
   const last = tokens[tokens.length - 1];
   const date = last !== undefined && DATE_PATTERN.test(last) ? tokens.pop() : undefined;
   return {
-    family,
-    version,
-    variant: tokens.join("-").toLowerCase(),
     date: date?.toLowerCase(),
+    family,
+    variant: tokens.join("-").toLowerCase(),
+    version,
   };
 }
 
@@ -58,8 +58,8 @@ function compareDates(a: string | undefined, b: string | undefined): number {
 }
 
 export interface ModelUpgradeCandidate {
-  from: Model<Api>;
-  to: Model<Api>;
+  from: aiTypes.Model<aiTypes.Api>;
+  to: aiTypes.Model<aiTypes.Api>;
 
   confident: boolean;
 
@@ -80,19 +80,21 @@ function describeReason(from: ModelIdVersion, to: ModelIdVersion): string {
   return `dated variant ${from.date ?? "none"} to ${to.date ?? "none"}`;
 }
 
-function familyKey(model: Model<Api>, parsed: ModelIdVersion): string {
+function familyKey(model: aiTypes.Model<aiTypes.Api>, parsed: ModelIdVersion): string {
   return [model.provider, parsed.family, parsed.variant].join("\u0000");
 }
 
-export function findModelUpgrades(models: readonly Model<Api>[]): ModelUpgradeCandidate[] {
-  const parsed = new Map<Model<Api>, ModelIdVersion>();
+export function findModelUpgrades(
+  models: readonly aiTypes.Model<aiTypes.Api>[],
+): ModelUpgradeCandidate[] {
+  const parsed = new Map<aiTypes.Model<aiTypes.Api>, ModelIdVersion>();
   for (const model of models) {
     const version = parseModelIdVersion(model.id);
     if (version) parsed.set(model, version);
   }
 
-  const byFamily = new Map<string, Model<Api>[]>();
-  const byFamilyWithoutVariant = new Map<string, Model<Api>[]>();
+  const byFamily = new Map<string, aiTypes.Model<aiTypes.Api>[]>();
+  const byFamilyWithoutVariant = new Map<string, aiTypes.Model<aiTypes.Api>[]>();
   for (const [model, version] of parsed) {
     const key = familyKey(model, version);
     byFamily.set(key, [...(byFamily.get(key) ?? []), model]);
@@ -100,13 +102,13 @@ export function findModelUpgrades(models: readonly Model<Api>[]): ModelUpgradeCa
     byFamilyWithoutVariant.set(loose, [...(byFamilyWithoutVariant.get(loose) ?? []), model]);
   }
 
-  const newestFirst = (a: Model<Api>, b: Model<Api>): number => {
+  const newestFirst = (a: aiTypes.Model<aiTypes.Api>, b: aiTypes.Model<aiTypes.Api>): number => {
     const left = parsed.get(a)!;
     const right = parsed.get(b)!;
     return compareModelVersions(right.version, left.version) || compareDates(right.date, left.date);
   };
 
-  const reference = (model: Model<Api>): string => `${model.provider}/${model.id}`;
+  const reference = (model: aiTypes.Model<aiTypes.Api>): string => `${model.provider}/${model.id}`;
   const candidates: ModelUpgradeCandidate[] = [];
   const reported = new Set<string>();
   for (const family of byFamily.values()) {
@@ -116,10 +118,10 @@ export function findModelUpgrades(models: readonly Model<Api>[]): ModelUpgradeCa
     for (const model of ordered.slice(1)) {
       const version = parsed.get(model)!;
       candidates.push({
-        from: model,
-        to: newest,
         confident: true,
+        from: model,
         reason: describeReason(version, newestVersion),
+        to: newest,
       });
       reported.add(reference(model));
     }
@@ -135,10 +137,10 @@ export function findModelUpgrades(models: readonly Model<Api>[]): ModelUpgradeCa
       if (version.variant === newestVersion.variant) continue;
       if (compareModelVersions(version.version, newestVersion.version) >= 0) continue;
       candidates.push({
-        from: model,
-        to: newest,
         confident: false,
+        from: model,
         reason: `${describeReason(version, newestVersion)}; variant ${version.variant || "none"} to ${newestVersion.variant || "none"}`,
+        to: newest,
       });
       reported.add(reference(model));
     }
@@ -228,7 +230,7 @@ function rewriteString(
   const next = rewrite(current);
   if (next === undefined || next === current) return;
   settings[key] = next;
-  changes.push({ setting: path, from: current, to: next });
+  changes.push({ from: current, setting: path, to: next });
 }
 
 function rewriteStringArray(
@@ -246,7 +248,7 @@ function rewriteStringArray(
     const replacement = rewrite(entry);
     if (replacement === undefined || replacement === entry) return entry;
     changed = true;
-    changes.push({ setting: path, from: entry, to: replacement });
+    changes.push({ from: entry, setting: path, to: replacement });
     return replacement;
   });
   if (changed) settings[key] = next;
@@ -269,7 +271,7 @@ function rewriteRecordKeys(
     const target = replacement === undefined || replacement === entryKey ? entryKey : replacement;
     if (target !== entryKey) {
       changed = true;
-      changes.push({ setting: path, from: entryKey, to: target });
+      changes.push({ from: entryKey, setting: path, to: target });
     }
     next[target] = value;
   }

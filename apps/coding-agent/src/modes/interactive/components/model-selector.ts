@@ -1,20 +1,13 @@
-import { type Model, modelsAreEqual } from "@msa/ai";
-import {
-  Container,
-  type Focusable,
-  fuzzyFilter,
-  getKeybindings,
-  Input,
-  Spacer,
-  Text,
-  type TUI,
-} from "@msa/tui";
+import ai from "@msa/ai";
+import type aiTypes from "@msa/ai/index.types";
+import tuiModule from "@msa/tui";
+import type tuiTypes from "@msa/tui/index.types";
 
 import {
+  type ModelPolicy,
   addModelPolicyPattern,
   allowModelReference,
   evaluateModelPolicy,
-  type ModelPolicy,
   removeModelPolicyPattern,
 } from "../../../core/model-policy.ts";
 import type { ModelRuntime } from "../../../core/model-runtime.ts";
@@ -25,10 +18,14 @@ import { theme } from "../theme/theme.ts";
 import { DynamicBorder } from "./dynamic-border.ts";
 import { keyDisplayText, keyHint } from "./keybinding-hints.ts";
 
+const { modelsAreEqual } = ai;
+
+const { Container, Input, Spacer, Text, fuzzyFilter, getKeybindings } = tuiModule;
+
 interface ModelItem {
   provider: string;
   id: string;
-  model: Model<any>;
+  model: aiTypes.Model<any>;
 
   deniedBy?: string | undefined;
 }
@@ -36,13 +33,13 @@ interface ModelItem {
 export interface ModelSelectorPolicyOptions {
   getPolicy(): ModelPolicy;
 
-  getCatalogModels(): readonly Model<any>[];
+  getCatalogModels(): readonly aiTypes.Model<any>[];
 
   savePolicy(policy: ModelPolicy): ModelPolicy;
 }
 
 interface ScopedModelItem {
-  model: Model<any>;
+  model: aiTypes.Model<any>;
   thinkingLevel?: string | undefined;
 }
 
@@ -53,8 +50,8 @@ interface DefaultModelReference {
 
 type ModelScope = "all" | "scoped" | "hidden";
 
-export class ModelSelectorComponent extends Container implements Focusable {
-  private searchInput: Input;
+export class ModelSelectorComponent extends Container implements tuiTypes.Focusable {
+  private searchInput: tuiTypes.Input;
 
   private _focused = false;
   get focused(): boolean {
@@ -64,42 +61,42 @@ export class ModelSelectorComponent extends Container implements Focusable {
     this._focused = value;
     this.searchInput.focused = value;
   }
-  private listContainer: Container;
+  private listContainer: tuiTypes.Container;
   private allModels: ModelItem[] = [];
   private scopedModelItems: ModelItem[] = [];
   private hiddenModelItems: ModelItem[] = [];
   private activeModels: ModelItem[] = [];
   private filteredModels: ModelItem[] = [];
   private selectedIndex: number = 0;
-  private currentModel?: Model<any> | undefined;
+  private currentModel?: aiTypes.Model<any> | undefined;
   private modelRuntime: ModelRuntime;
-  private onSelectCallback: (model: Model<any>) => void;
-  private onSelectAsDefaultCallback?: ((model: Model<any>) => void) | undefined;
+  private onSelectCallback: (model: aiTypes.Model<any>) => void;
+  private onSelectAsDefaultCallback?: ((model: aiTypes.Model<any>) => void) | undefined;
   private onCancelCallback: () => void;
   private errorMessage?: string | undefined;
   private refreshStatusMessage = "Refreshing model catalogs…";
   private refreshStatusSuccess = false;
-  private tui: TUI;
+  private tui: tuiTypes.TUI;
   private scopedModels: ReadonlyArray<ScopedModelItem>;
   private defaultModel?: DefaultModelReference | undefined;
   private policyOptions?: ModelSelectorPolicyOptions | undefined;
   private scope: ModelScope = "all";
-  private scopeText?: Text;
-  private scopeHintText?: Text;
-  private policyHintText?: Text;
+  private scopeText?: tuiTypes.Text;
+  private scopeHintText?: tuiTypes.Text;
+  private policyHintText?: tuiTypes.Text;
   private readonly refreshAbortController = new AbortController();
   private refreshTimeout?: ReturnType<typeof setTimeout>;
   private closed = false;
 
   constructor(
-    tui: TUI,
-    currentModel: Model<any> | undefined,
+    tui: tuiTypes.TUI,
+    currentModel: aiTypes.Model<any> | undefined,
     modelRuntime: ModelRuntime,
     scopedModels: ReadonlyArray<ScopedModelItem>,
-    onSelect: (model: Model<any>) => void,
+    onSelect: (model: aiTypes.Model<any>) => void,
     onCancel: () => void,
     initialSearchInput?: string,
-    onSelectAsDefault?: (model: Model<any>) => void,
+    onSelectAsDefault?: (model: aiTypes.Model<any>) => void,
     defaultModel?: DefaultModelReference,
     policyOptions?: ModelSelectorPolicyOptions,
   ) {
@@ -178,10 +175,10 @@ export class ModelSelectorComponent extends Container implements Focusable {
   }
 
   private loadModelsFromSnapshot(): void {
-    const models = this.modelRuntime.getAvailableSnapshot().map((model: Model<any>) => ({
-      provider: model.provider,
+    const models = this.modelRuntime.getAvailableSnapshot().map((model: aiTypes.Model<any>) => ({
       id: model.id,
       model,
+      provider: model.provider,
     }));
     this.allModels = this.sortModels(models);
     this.scopedModels = this.scopedModels.map((scoped) => {
@@ -189,9 +186,9 @@ export class ModelSelectorComponent extends Container implements Focusable {
       return refreshed ? { ...scoped, model: refreshed } : scoped;
     });
     this.scopedModelItems = this.scopedModels.map((scoped) => ({
-      provider: scoped.model.provider,
       id: scoped.model.id,
       model: scoped.model,
+      provider: scoped.model.provider,
     }));
     this.hiddenModelItems = this.buildHiddenItems();
     this.syncScope();
@@ -216,10 +213,10 @@ export class ModelSelectorComponent extends Container implements Focusable {
       const decision = evaluateModelPolicy(policy, model);
       if (decision.allowed) continue;
       items.push({
-        provider: model.provider,
+        deniedBy: decision.reason === "deny" ? decision.pattern : "",
         id: model.id,
         model,
-        deniedBy: decision.reason === "deny" ? decision.pattern : "",
+        provider: model.provider,
       });
     }
     return items.sort((a, b) => a.provider.localeCompare(b.provider) || a.id.localeCompare(b.id));
@@ -330,7 +327,7 @@ export class ModelSelectorComponent extends Container implements Focusable {
     );
   }
 
-  private isDefaultModel(model: Model<any>): boolean {
+  private isDefaultModel(model: aiTypes.Model<any>): boolean {
     return this.defaultModel?.provider === model.provider && this.defaultModel.id === model.id;
   }
 
@@ -357,7 +354,7 @@ export class ModelSelectorComponent extends Container implements Focusable {
     if (query) {
       const filtered = fuzzyFilter(this.activeModels, query, (item) => {
         const defaultText = this.isDefaultModel(item.model) ? " default" : "";
-        return `${getModelSelectorSearchText({ id: item.id, provider: item.provider, name: item.model.name })}${defaultText}`;
+        return `${getModelSelectorSearchText({ id: item.id, name: item.model.name, provider: item.provider })}${defaultText}`;
       });
       if (this.isDefaultSearch(query)) {
         const defaultItems = this.activeModels.filter((item) => this.isDefaultModel(item.model));
@@ -514,7 +511,7 @@ export class ModelSelectorComponent extends Container implements Focusable {
     }
   }
 
-  private handleSelect(model: Model<any>): void {
+  private handleSelect(model: aiTypes.Model<any>): void {
     this.dispose();
     this.onSelectCallback(model);
   }
@@ -570,7 +567,7 @@ export class ModelSelectorComponent extends Container implements Focusable {
     this.tui.requestRender();
   }
 
-  getSearchInput(): Input {
+  getSearchInput(): tuiTypes.Input {
     return this.searchInput;
   }
 }

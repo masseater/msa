@@ -1,4 +1,5 @@
-import { Text, type TuiMouseEvent, resetCapabilitiesCache } from "@msa/tui";
+import tui from "@msa/tui";
+import type tuiTypes from "@msa/tui/index.types";
 import { afterEach, beforeAll, describe, expect, test, vi } from "vite-plus/test";
 
 import { type ToolDefinition } from "../src/core/extensions/types.ts";
@@ -7,6 +8,8 @@ import { ToolExecutionComponent } from "../src/modes/interactive/components/tool
 import { initTheme } from "../src/modes/interactive/theme/theme.ts";
 import { stripAnsi } from "../src/utils/ansi.ts";
 import toolExecutionComponentSupport from "./tool-execution-component-support.ts";
+
+const { Text, resetCapabilitiesCache } = tui;
 
 const { createBaseToolDefinition, createFakeTui } = toolExecutionComponentSupport;
 
@@ -124,7 +127,7 @@ const expandsACollapsedToolResultWhenClicked = () => {
   const lines = component.render(width);
   const resultRow = lines.findIndex((line) => stripAnsi(line).includes("notes.txt"));
   expect(resultRow).toBeGreaterThanOrEqual(0);
-  const event: TuiMouseEvent = {
+  const event: tuiTypes.TuiMouseEvent = {
     alt: false,
     button: "left",
     clickCount: 1,

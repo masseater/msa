@@ -1,5 +1,5 @@
-import type { AgentTool } from "@msa/agent-core";
-import type { AssistantMessage } from "@msa/ai";
+import type agentTypes from "@msa/agent-core/index.types";
+import type aiTypes from "@msa/ai/index.types";
 import testing from "@msa/testing";
 import { Effect } from "effect";
 import { Type } from "typebox";
@@ -26,7 +26,7 @@ const simpleTextResponse = () =>
       const assistantMessages = harness.session.messages.filter((m) => m.role === "assistant");
       expect(assistantMessages).toHaveLength(1);
 
-      const msg = assistantMessages[0] as AssistantMessage;
+      const msg = assistantMessages[0] as aiTypes.AssistantMessage;
       expect(msg.content).toEqual([{ text: "hello world", type: "text" as const }]);
       expect(msg.stopReason).toBe("stop");
     }),
@@ -44,7 +44,7 @@ const responseSequence = () =>
       expect(harness.faux.callCount).toBe(3);
 
       const assistantTexts = harness.session.messages
-        .filter((m): m is AssistantMessage => m.role === "assistant")
+        .filter((m): m is aiTypes.AssistantMessage => m.role === "assistant")
         .map((m) => m.content.find((c) => c.type === "text")?.text);
 
       expect(assistantTexts).toEqual(["first", "second", "third"]);
@@ -57,7 +57,7 @@ const toolCallResponseTriggersToolExecution = () =>
       const effectRunPromise = Effect.runPromiseWith(yield* Effect.context<never>());
 
       let toolExecuted = false;
-      const echoTool: AgentTool = {
+      const echoTool: agentTypes.AgentTool = {
         description: "Echo back",
         execute: () =>
           effectRunPromise(
@@ -104,7 +104,7 @@ const errorResponse = () =>
       yield* awaited(harness.session.prompt("hi"));
 
       const assistantMessages = harness.session.messages.filter(
-        (m): m is AssistantMessage => m.role === "assistant",
+        (m): m is aiTypes.AssistantMessage => m.role === "assistant",
       );
       expect(assistantMessages).toHaveLength(1);
       expect(assistantMessages[0]?.stopReason).toBe("error");
@@ -125,7 +125,7 @@ const turnsAPendingTerminalResponseIntoAn = () =>
       yield* awaited(harness.session.prompt("hi"));
 
       const assistantMessages = harness.session.messages.filter(
-        (m): m is AssistantMessage => m.role === "assistant",
+        (m): m is aiTypes.AssistantMessage => m.role === "assistant",
       );
       expect(assistantMessages).toHaveLength(1);
       expect(assistantMessages[0]?.stopReason).toBe("error");
@@ -168,7 +168,7 @@ const customUsageNumbers = () =>
       yield* awaited(harness.session.prompt("hi"));
 
       const msg = harness.session.messages.find(
-        (m): m is AssistantMessage => m.role === "assistant",
+        (m): m is aiTypes.AssistantMessage => m.role === "assistant",
       )!;
       expect(msg.usage.input).toBe(100000);
       expect(msg.usage.output).toBe(5000);

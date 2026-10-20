@@ -1,12 +1,11 @@
 import assert from "node:assert";
 import { describe, it } from "node:test";
 
-import {
-  escapeSequences,
-  stripHyperlinkSequences,
-  stripStyleSequences,
-} from "../src/ansi-sequences.ts";
-import { wrapTextWithAnsi } from "../src/text-wrap.ts";
+import ansiSequences from "../src/ansi-sequences.ts";
+import textWrap from "../src/text-wrap.ts";
+
+const { wrapTextWithAnsi } = textWrap;
+const { escapeSequences, stripHyperlinkSequences, stripStyleSequences } = ansiSequences;
 
 describe("wrapTextWithAnsi with OSC 8 hyperlinks", () => {
   it("re-emits OSC 8 open at the start of continuation lines", () => {

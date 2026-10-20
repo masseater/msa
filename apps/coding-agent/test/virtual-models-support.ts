@@ -1,16 +1,13 @@
-import {
-  type AssistantMessage,
-  InMemoryModelsStore,
-  type Model,
-  fauxAssistantMessage,
-  fauxProvider,
-} from "@msa/ai";
+import ai from "@msa/ai";
+import type aiTypes from "@msa/ai/index.types";
 import testing from "@msa/testing";
 import { Effect } from "effect";
 
 import { AuthStorage } from "../src/core/auth-storage.ts";
 import { ModelRuntime } from "../src/core/model-runtime.ts";
 import { type ModelRouteRequest, type VirtualModelDefinition } from "../src/core/virtual-models.ts";
+
+const { InMemoryModelsStore, fauxAssistantMessage, fauxProvider } = ai;
 
 const { awaited, runTest } = testing;
 
@@ -64,7 +61,7 @@ function createRuntime(requests: ModelRouteRequest[] = []) {
   );
 }
 
-function assistantFrom(model: Model<string>, text: string): AssistantMessage {
+function assistantFrom(model: aiTypes.Model<string>, text: string): aiTypes.AssistantMessage {
   return {
     ...fauxAssistantMessage(text),
     api: model.api,

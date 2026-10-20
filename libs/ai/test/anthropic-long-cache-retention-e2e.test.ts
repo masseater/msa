@@ -1,22 +1,28 @@
 import { Clock, Effect } from "effect";
 import { describe, expect, it } from "vite-plus/test";
 
-import { type BuiltinProvider, complete, getModels, getProviders } from "../src/compat.ts";
-import { getEnvApiKey } from "../src/env-api-keys.ts";
-import type { Api, Model, ProviderStreamOptions } from "../src/types.ts";
+import compatModule from "../src/compat.ts";
+import type compatTypes from "../src/compat.types.ts";
+import envApiKeys from "../src/env-api-keys.ts";
+import type typesModule from "../src/types.types.ts";
+
+const { complete, getModels, getProviders } = compatModule;
+const { getEnvApiKey } = envApiKeys;
 
 interface AnthropicLongCacheRetentionE2ECase {
   name: string;
-  provider: BuiltinProvider;
-  model: Model<"anthropic-messages">;
+  provider: compatTypes.BuiltinProvider;
+  model: typesModule.Model<"anthropic-messages">;
   apiKey: string | undefined;
 }
 
-function getAnthropicMessagesModels(provider: BuiltinProvider): Model<"anthropic-messages">[] {
-  const models = getModels(provider) as Model<Api>[];
+function getAnthropicMessagesModels(
+  provider: compatTypes.BuiltinProvider,
+): typesModule.Model<"anthropic-messages">[] {
+  const models = getModels(provider) as typesModule.Model<typesModule.Api>[];
   return models.filter(
     (model) => model.api === "anthropic-messages",
-  ) as Model<"anthropic-messages">[];
+  ) as typesModule.Model<"anthropic-messages">[];
 }
 
 const anthropicMessagesCases: AnthropicLongCacheRetentionE2ECase[] = getProviders().flatMap(
@@ -29,7 +35,7 @@ const anthropicMessagesCases: AnthropicLongCacheRetentionE2ECase[] = getProvider
     })),
 );
 
-function getProbePriority(model: Model<"anthropic-messages">): number {
+function getProbePriority(model: typesModule.Model<"anthropic-messages">): number {
   const modelId = model.id.toLowerCase();
   const cost = model.cost.input + model.cost.output;
   let priority = cost;
@@ -48,7 +54,7 @@ function getProbePriority(model: Model<"anthropic-messages">): number {
 function selectOneCasePerProvider(
   cases: AnthropicLongCacheRetentionE2ECase[],
 ): AnthropicLongCacheRetentionE2ECase[] {
-  const byProvider = new Map<BuiltinProvider, AnthropicLongCacheRetentionE2ECase[]>();
+  const byProvider = new Map<compatTypes.BuiltinProvider, AnthropicLongCacheRetentionE2ECase[]>();
   for (const testCase of cases) {
     const providerCases = byProvider.get(testCase.provider) ?? [];
     providerCases.push(testCase);
@@ -68,7 +74,9 @@ function selectOneCasePerProvider(
 
 const probeCases = selectOneCasePerProvider(anthropicMessagesCases);
 
-function withLongCacheRetention(model: Model<"anthropic-messages">): Model<"anthropic-messages"> {
+function withLongCacheRetention(
+  model: typesModule.Model<"anthropic-messages">,
+): typesModule.Model<"anthropic-messages"> {
   return {
     ...model,
     compat: {
@@ -79,10 +87,10 @@ function withLongCacheRetention(model: Model<"anthropic-messages">): Model<"anth
 }
 
 const expectLongCacheRetentionAccepted = Effect.fn("expectLongCacheRetentionAccepted")(function* (
-  model: Model<"anthropic-messages">,
+  model: typesModule.Model<"anthropic-messages">,
   apiKey: string | undefined,
 ) {
-  const options: ProviderStreamOptions = {
+  const options: typesModule.ProviderStreamOptions = {
     apiKey,
     cacheRetention: "long",
     maxTokens: 128,

@@ -1,9 +1,9 @@
-import type { AssistantMessage } from "@msa/ai";
+import type aiTypes from "@msa/ai/index.types";
 
 declare namespace agentSessionCompactionSupportTypes {
   type SessionWithCompactionInternals = {
     checkCompaction: (
-      assistantMessage: AssistantMessage,
+      assistantMessage: aiTypes.AssistantMessage,
       skipAbortedCheck?: boolean,
     ) => Promise<boolean>;
     runAutoCompaction: (reason: "overflow" | "threshold", willRetry: boolean) => Promise<boolean>;

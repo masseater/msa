@@ -1,16 +1,19 @@
+import testing from "@msa/testing";
 import { Clock, Effect } from "effect";
 import { afterEach, describe, expect, it } from "vite-plus/test";
 
-import {
+import oauth from "../src/oauth/index.ts";
+import type oauthTypes from "../src/oauth/index.types.ts";
+import oauthSupport from "./oauth-support.ts";
+
+const {
   McpOAuthAuthorizationRequiredError,
   McpOAuthProvider,
   MemoryOAuthStateStore,
   adaptOAuthProvider,
-} from "../src/oauth/index.ts";
-import helpers from "./helpers.ts";
-import oauthSupport from "./oauth-support.ts";
+} = oauth;
 
-const { closeServers, listen, readBody } = helpers;
+const { closeServers, listen, readBody } = testing;
 const { TestOAuthProvider, authorizationServerMetadata, endWith, sendJson } = oauthSupport;
 
 const rotateToken = (request: Request, grants: string[]) =>
@@ -107,7 +110,7 @@ const asksForMoreScope = Effect.gen(function* () {
   expect(provider.tokenSet?.access_token).toBe("a1");
 });
 
-const providerFor = (serverUrl: string, store: MemoryOAuthStateStore) =>
+const providerFor = (serverUrl: string, store: oauthTypes.MemoryOAuthStateStore) =>
   new McpOAuthProvider({
     clientMetadata: { client_name: "test" },
     onRedirect: () => undefined,

@@ -1,5 +1,5 @@
 declare module "cloudflare:workers" {
-  export abstract class DurableObject<Env = unknown> {
+  abstract class DurableObject<Env = unknown> {
     protected ctx: unknown;
     protected env: Env;
     constructor(ctx: unknown, env: Env);

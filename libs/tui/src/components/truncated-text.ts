@@ -1,8 +1,11 @@
-import { truncateToWidth } from "../text-truncate.ts";
-import type { Component } from "../tui-component.ts";
-import { visibleWidth } from "../utils.ts";
+import textTruncate from "../text-truncate.ts";
+import type tuiComponentTypes from "../tui-component.types.ts";
+import utils from "../utils.ts";
 
-export class TruncatedText implements Component {
+const { truncateToWidth } = textTruncate;
+const { visibleWidth } = utils;
+
+export default class TruncatedText implements tuiComponentTypes.Component {
   private text: string;
   private paddingX: number;
   private paddingY: number;

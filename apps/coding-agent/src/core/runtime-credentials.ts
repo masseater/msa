@@ -1,13 +1,13 @@
-import type { AuthOperationOptions, Credential, CredentialInfo, CredentialStore } from "@msa/ai";
+import type aiTypes from "@msa/ai/index.types";
 import * as Effect from "effect/Effect";
 
 import { awaited, awaitingWith } from "./awaiting.ts";
 
-export class RuntimeCredentials implements CredentialStore {
-  private readonly store: CredentialStore;
+export class RuntimeCredentials implements aiTypes.CredentialStore {
+  private readonly store: aiTypes.CredentialStore;
   private readonly overrides = new Map<string, string>();
 
-  constructor(store: CredentialStore) {
+  constructor(store: aiTypes.CredentialStore) {
     this.store = store;
   }
 
@@ -23,21 +23,24 @@ export class RuntimeCredentials implements CredentialStore {
     return this.overrides.has(providerId);
   }
 
-  read(providerId: string, options?: AuthOperationOptions): Promise<Credential | undefined> {
+  read(
+    providerId: string,
+    options?: aiTypes.AuthOperationOptions,
+  ): Promise<aiTypes.Credential | undefined> {
     return Effect.runPromise(
       awaitingWith(function* () {
         options?.signal?.throwIfAborted();
         const override = this.overrides.get(providerId);
         return yield* awaited(
           override !== undefined && override !== ""
-            ? { type: "api_key", key: override }
+            ? { key: override, type: "api_key" }
             : this.store.read(providerId, options),
         );
       }, this),
     );
   }
 
-  list(options?: AuthOperationOptions): Promise<readonly CredentialInfo[]> {
+  list(options?: aiTypes.AuthOperationOptions): Promise<readonly aiTypes.CredentialInfo[]> {
     return Effect.runPromise(
       awaitingWith(function* () {
         const entries = new Map(
@@ -54,13 +57,13 @@ export class RuntimeCredentials implements CredentialStore {
 
   modify(
     providerId: string,
-    fn: (current: Credential | undefined) => Promise<Credential | undefined>,
-    options?: AuthOperationOptions,
-  ): Promise<Credential | undefined> {
+    fn: (current: aiTypes.Credential | undefined) => Promise<aiTypes.Credential | undefined>,
+    options?: aiTypes.AuthOperationOptions,
+  ): Promise<aiTypes.Credential | undefined> {
     return this.store.modify(providerId, fn, options);
   }
 
-  delete(providerId: string, options?: AuthOperationOptions): Promise<void> {
+  delete(providerId: string, options?: aiTypes.AuthOperationOptions): Promise<void> {
     return Effect.runPromise(
       awaitingWith(function* () {
         options?.signal?.throwIfAborted();

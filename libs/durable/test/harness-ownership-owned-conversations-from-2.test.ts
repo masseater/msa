@@ -1,4 +1,4 @@
-import { fauxAssistantMessage, fauxText } from "@msa/ai";
+import ai from "@msa/ai";
 import durable from "@msa/durable";
 import type durableTypes from "@msa/durable/index.types";
 import { Effect } from "effect";
@@ -7,6 +7,8 @@ import { afterEach, describe, expect, it } from "vite-plus/test";
 import node from "../src/storage/sqlite/node.ts";
 import harnessOwnershipSupport from "./harness-ownership-support.ts";
 import support from "./support.ts";
+
+const { fauxAssistantMessage, fauxText } = ai;
 
 const { configure, defineDoc, defineTask } = durable;
 const { openNodeSqliteStorage } = node;

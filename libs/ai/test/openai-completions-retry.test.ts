@@ -1,9 +1,12 @@
 import { Effect, Stream } from "effect";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vite-plus/test";
 
-import { stream as streamOpenAICompletions } from "../src/api/openai-completions.ts";
-import type { Model } from "../src/types.ts";
-import { normalizeContext } from "../src/utils/transcript.ts";
+import openaiCompletions from "../src/api/openai-completions.ts";
+import type typesModule from "../src/types.types.ts";
+import transcript from "../src/utils/transcript.ts";
+
+const { normalizeContext } = transcript;
+const { stream: streamOpenAICompletions } = openaiCompletions;
 
 const mockState = vi.hoisted(() => ({
   requestErrors: [] as Error[],
@@ -56,7 +59,7 @@ vi.mock("openai", () => {
   return { default: FakeOpenAI };
 });
 
-const model: Model<"openai-completions"> = {
+const model: typesModule.Model<"openai-completions"> = {
   api: "openai-completions",
   baseUrl: "https://opencode.ai/zen/go/v1",
   contextWindow: 1000,

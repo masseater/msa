@@ -1,9 +1,11 @@
-import { fauxAssistantMessage, fauxToolCall } from "@msa/ai";
+import ai from "@msa/ai";
 import { Effect } from "effect";
 import { expect } from "vite-plus/test";
 
 import agentSessionQueueCases1 from "./agent-session-queue-cases-1.ts";
 import harnessModule from "./harness.ts";
+
+const { fauxAssistantMessage, fauxToolCall } = ai;
 
 const { createWaitingHarness, harnesses } = agentSessionQueueCases1;
 const { createHarness, getAssistantTexts, getMessageText } = harnessModule;

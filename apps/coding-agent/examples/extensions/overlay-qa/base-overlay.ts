@@ -1,5 +1,7 @@
 import type { Theme } from "@msa/coding-agent";
-import { truncateToWidth, visibleWidth } from "@msa/tui";
+import tui from "@msa/tui";
+
+const { truncateToWidth, visibleWidth } = tui;
 
 export abstract class BaseOverlay {
   protected theme: Theme;

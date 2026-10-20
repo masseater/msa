@@ -1,16 +1,20 @@
 import { Effect } from "effect";
 import { describe, expect, it } from "vite-plus/test";
 
-import { type CreateProviderOptions, createModels, createProvider } from "../src/models.ts";
-import type { Api, ImageApi, ImageModel, ImagesOptions, Model } from "../src/types.ts";
-import { AssistantMessageEventStream } from "../src/utils/event-stream.ts";
+import modelsModule from "../src/models.ts";
+import type modelsTypes from "../src/models.types.ts";
+import type typesModule from "../src/types.types.ts";
+import eventStream from "../src/utils/event-stream.ts";
 import imagesModelsSupport from "./images-models-support.ts";
+
+const { createModels, createProvider } = modelsModule;
+const { AssistantMessageEventStream } = eventStream;
 
 const { chatModel, context, fakeAuthContext, imageModel, testProvider } = imagesModelsSupport;
 
 interface GenerateCall {
-  model: ImageModel<ImageApi>;
-  options: ImagesOptions | undefined;
+  model: typesModule.ImageModel<typesModule.ImageApi>;
+  options: typesModule.ImagesOptions | undefined;
 }
 
 const returnsErrorResultsInsteadOfRejecting = () =>
@@ -43,7 +47,10 @@ const rejectsChatModelsAtTheImage = () =>
       models.setProvider(testProvider({ id: "p1", images: { "test-chat": true }, models: [chat] }));
 
       const result = yield* Effect.promise(() =>
-        models.generateImages(chat as unknown as ImageModel<ImageApi>, context),
+        models.generateImages(
+          chat as unknown as typesModule.ImageModel<typesModule.ImageApi>,
+          context,
+        ),
       );
       expect(result.stopReason).toBe("error");
       expect(result.errorMessage).toContain("is not an image model");
@@ -58,7 +65,9 @@ const rejectsImageModelsAtTheStream = () =>
       const image = models.getModelOfType("image", "p1", "model-a")!;
 
       const result = yield* Effect.promise(() =>
-        models.streamSimple(image as unknown as Model<Api>, { messages: [] }).result(),
+        models
+          .streamSimple(image as unknown as typesModule.Model<typesModule.Api>, { messages: [] })
+          .result(),
       );
       expect(result.stopReason).toBe("error");
       expect(result.errorMessage).toContain("is not a chat model");
@@ -67,7 +76,7 @@ const rejectsImageModelsAtTheStream = () =>
 
 const requiresAtLeastOneConcreteOperation = () => {
   const createEmptyProvider = (
-    implementations: Pick<CreateProviderOptions, "api" | "images" | "classifiers">,
+    implementations: Pick<modelsTypes.CreateProviderOptions, "api" | "images" | "classifiers">,
   ) =>
     createProvider({
       auth: { apiKey: { name: "Test", resolve: () => Promise.resolve({ auth: {} }) } },

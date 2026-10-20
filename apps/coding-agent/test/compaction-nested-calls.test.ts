@@ -1,4 +1,4 @@
-import type { ToolResultMessage } from "@msa/ai/compat";
+import type compatTypes from "@msa/ai/compat.types";
 import { describe, expect, it } from "vite-plus/test";
 
 import {
@@ -8,7 +8,7 @@ import {
 } from "../src/core/compaction/utils.ts";
 
 const includeFilesTouchedByNestedCallsRecorded = () => {
-  const result: ToolResultMessage = {
+  const result: compatTypes.ToolResultMessage = {
     content: [],
     isError: false,
     nestedCalls: {

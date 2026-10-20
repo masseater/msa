@@ -56,26 +56,26 @@ function measure(content: string, options: TruncationOptions): Measured {
   return {
     content,
     lines,
-    totalLines: lines.length,
-    totalBytes: byteLength(content),
-    maxLines: options.maxLines ?? DEFAULT_MAX_LINES,
     maxBytes: options.maxBytes ?? DEFAULT_MAX_BYTES,
+    maxLines: options.maxLines ?? DEFAULT_MAX_LINES,
+    totalBytes: byteLength(content),
+    totalLines: lines.length,
   };
 }
 
 function untruncated(measured: Measured): TruncationResult {
   return {
     content: measured.content,
+    firstLineExceedsLimit: false,
+    lastLinePartial: false,
+    maxBytes: measured.maxBytes,
+    maxLines: measured.maxLines,
+    outputBytes: measured.totalBytes,
+    outputLines: measured.totalLines,
+    totalBytes: measured.totalBytes,
+    totalLines: measured.totalLines,
     truncated: false,
     truncatedBy: null,
-    totalLines: measured.totalLines,
-    totalBytes: measured.totalBytes,
-    outputLines: measured.totalLines,
-    outputBytes: measured.totalBytes,
-    lastLinePartial: false,
-    firstLineExceedsLimit: false,
-    maxLines: measured.maxLines,
-    maxBytes: measured.maxBytes,
   };
 }
 
@@ -87,16 +87,16 @@ function truncatedResult(
   const content = output.lines.join("\n");
   return {
     content,
+    firstLineExceedsLimit: output.firstLineExceedsLimit ?? false,
+    lastLinePartial: output.lastLinePartial ?? false,
+    maxBytes: measured.maxBytes,
+    maxLines: measured.maxLines,
+    outputBytes: byteLength(content),
+    outputLines: output.lines.length,
+    totalBytes: measured.totalBytes,
+    totalLines: measured.totalLines,
     truncated: true,
     truncatedBy,
-    totalLines: measured.totalLines,
-    totalBytes: measured.totalBytes,
-    outputLines: output.lines.length,
-    outputBytes: byteLength(content),
-    lastLinePartial: output.lastLinePartial ?? false,
-    firstLineExceedsLimit: output.firstLineExceedsLimit ?? false,
-    maxLines: measured.maxLines,
-    maxBytes: measured.maxBytes,
   };
 }
 
@@ -111,7 +111,7 @@ function truncateHeadImpl(content: string, options: TruncationOptions = {}): Tru
   const { lines, maxLines, maxBytes } = measured;
 
   if (byteLength(lines[0] ?? "") > maxBytes) {
-    return truncatedResult(measured, "bytes", { lines: [], firstLineExceedsLimit: true });
+    return truncatedResult(measured, "bytes", { firstLineExceedsLimit: true, lines: [] });
   }
 
   const kept: string[] = [];
@@ -162,7 +162,7 @@ function truncateTailImpl(content: string, options: TruncationOptions = {}): Tru
     keptBytes += lineBytes;
   }
   if (kept.length >= maxLines && keptBytes <= maxBytes) truncatedBy = "lines";
-  return truncatedResult(measured, truncatedBy, { lines: kept, lastLinePartial });
+  return truncatedResult(measured, truncatedBy, { lastLinePartial, lines: kept });
 }
 
 export const truncateTail: {
@@ -212,7 +212,7 @@ function truncateMiddleImpl(content: string, maxBytes: number): MiddleTruncation
   const buf = Buffer.from(content, "utf-8");
   const totalLines = splitLinesForCounting(content).length;
   if (buf.length <= maxBytes) {
-    return { content, truncated: false, removedChars: 0, totalBytes: buf.length, totalLines };
+    return { content, removedChars: 0, totalBytes: buf.length, totalLines, truncated: false };
   }
   const isBoundary = (index: number) => index >= buf.length || ((buf[index] ?? 0) & 0xc0) !== 0x80;
   let headEnd = Math.floor(maxBytes / 2);
@@ -224,10 +224,10 @@ function truncateMiddleImpl(content: string, maxBytes: number): MiddleTruncation
   const removedChars = Array.from(buf.subarray(headEnd, tailStart).toString("utf-8")).length;
   return {
     content: `${head}…${removedChars} chars truncated…${tail}`,
-    truncated: true,
     removedChars,
     totalBytes: buf.length,
     totalLines,
+    truncated: true,
   };
 }
 

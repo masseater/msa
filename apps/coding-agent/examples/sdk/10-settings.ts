@@ -1,4 +1,4 @@
-import { createAgentSession, SessionManager, SettingsManager } from "@msa/coding-agent";
+import { SessionManager, SettingsManager, createAgentSession } from "@msa/coding-agent";
 import { Console, Effect } from "effect";
 
 const cwd = process.cwd();
@@ -14,12 +14,12 @@ Effect.runSync(
 const settingsManager = SettingsManager.create(cwd);
 settingsManager.applyOverrides({
   compaction: { enabled: false },
-  retry: { enabled: true, maxRetries: 5, baseDelayMs: 1000 },
+  retry: { baseDelayMs: 1000, enabled: true, maxRetries: 5 },
 });
 
 const { session: customSettingsSession } = await createAgentSession({
-  settingsManager,
   sessionManager: SessionManager.inMemory(),
+  settingsManager,
 });
 Effect.runSync(Console.log("Session created with custom settings"));
 customSettingsSession.dispose();
@@ -40,8 +40,8 @@ const inMemorySettings = SettingsManager.inMemory({
 });
 
 const { session: testSession } = await createAgentSession({
-  settingsManager: inMemorySettings,
   sessionManager: SessionManager.inMemory(),
+  settingsManager: inMemorySettings,
 });
 Effect.runSync(Console.log("Test session created with in-memory settings"));
 testSession.dispose();

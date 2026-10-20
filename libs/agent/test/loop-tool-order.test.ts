@@ -1,9 +1,11 @@
 import { Effect } from "effect";
 import { describe, expect, it } from "vite-plus/test";
 
-import { agentLoop } from "../src/agent-loop.ts";
-import type { AgentEvent, AgentLoopConfig, AgentTool } from "../src/types.ts";
+import agentLoopModule from "../src/agent-loop.ts";
+import type typesModule from "../src/types.ts";
 import fixtures from "./support/fixtures.ts";
+
+const { agentLoop } = agentLoopModule;
 
 const {
   collect,
@@ -36,7 +38,7 @@ const runRace = (race: Race, value: string) =>
     }),
   );
 
-const racingTool = (race: Race, mode?: AgentTool["executionMode"]) =>
+const racingTool = (race: Race, mode?: typesModule.AgentTool["executionMode"]) =>
   tool({
     ...(mode === undefined ? {} : { executionMode: mode }),
     run: (_id, params) => runRace(race, params.value),
@@ -47,7 +49,10 @@ const firstAndSecond = toolCallMessage([
   { args: { value: "second" }, id: "tool-2" },
 ]);
 
-const runRacing = (echo: AgentTool<any>, config: Partial<AgentLoopConfig> = {}) =>
+const runRacing = (
+  echo: typesModule.AgentTool<any>,
+  config: Partial<typesModule.AgentLoopConfig> = {},
+) =>
   collect(
     agentLoop(
       [createUserMessage("echo both")],
@@ -73,7 +78,7 @@ const completionOrder = Effect.gen(function* () {
   expect(turnResults).toEqual(["tool-1", "tool-2"]);
 });
 
-const userTexts = (events: readonly AgentEvent[]): string[] =>
+const userTexts = (events: readonly typesModule.AgentEvent[]): string[] =>
   events.flatMap((event) => {
     if (event.type !== "message_start") return [];
     if (event.message.role === "toolResult") return [`tool:${event.message.toolCallId}`];
@@ -137,7 +142,7 @@ const sequentialTool = Effect.gen(function* () {
 
 const oneSequentialTool = Effect.gen(function* () {
   const executionOrder: string[] = [];
-  const ordered = (name: string, mode: AgentTool["executionMode"]) =>
+  const ordered = (name: string, mode: typesModule.AgentTool["executionMode"]) =>
     tool({
       executionMode: mode,
       name,

@@ -25,4 +25,4 @@ function appliesTo(note: Pick<Note, "round" | "taskIds">, task: Task): boolean {
   return note.taskIds.includes(task.id);
 }
 
-export const actionHelpers = { taskView, runningThreadOf, appliesTo };
+export const actionHelpers = { appliesTo, runningThreadOf, taskView };

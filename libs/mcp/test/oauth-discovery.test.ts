@@ -1,17 +1,19 @@
+import testing from "@msa/testing";
 import { Effect } from "effect";
 import { afterEach, describe, expect, it } from "vite-plus/test";
 
-import {
+import oauth from "../src/oauth/index.ts";
+import oauthSupport from "./oauth-support.ts";
+
+const {
   OAuthInsecureEndpointError,
   OAuthIssuerMismatchError,
   authorizeMcp,
   discoverAuthorizationServerMetadata,
   registerClient,
-} from "../src/oauth/index.ts";
-import helpers from "./helpers.ts";
-import oauthSupport from "./oauth-support.ts";
+} = oauth;
 
-const { closeServers, listen, readBody, readMessage } = helpers;
+const { closeServers, listen, readBody, readMessage } = testing;
 const { TestOAuthProvider, authorizationServerMetadata, endWith, sendJson } = oauthSupport;
 
 const derivesApplicationType = Effect.gen(function* () {

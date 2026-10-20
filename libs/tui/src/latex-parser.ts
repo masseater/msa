@@ -1,18 +1,14 @@
-import { NEGATIVE_SPACE } from "./latex-command-sets.ts";
-import { parseCommand } from "./latex-commands.ts";
-import {
-  formatScript,
-  formatUnicodeScript,
-  NAMED_OPERATOR_END,
-  normalizeOutput,
-  type ScriptKind,
-} from "./latex-format.ts";
-import {
-  LAYOUT_MARKER_START,
-  type LayoutNode,
-  layoutMarker,
-  TRAILING_LAYOUT_MARKER_PATTERN,
-} from "./latex-layout.ts";
+import latexCommandSets from "./latex-command-sets.ts";
+import latexCommands from "./latex-commands.ts";
+import latexFormat from "./latex-format.ts";
+import type latexFormatTypes from "./latex-format.types.ts";
+import latexLayout from "./latex-layout.ts";
+import type latexLayoutTypes from "./latex-layout.types.ts";
+
+const { NAMED_OPERATOR_END, formatScript, formatUnicodeScript, normalizeOutput } = latexFormat;
+const { NEGATIVE_SPACE } = latexCommandSets;
+const { LAYOUT_MARKER_START, TRAILING_LAYOUT_MARKER_PATTERN, layoutMarker } = latexLayout;
+const { parseCommand } = latexCommands;
 
 type ScriptMarker = "^" | "_";
 type ScriptValues = { sub?: string; sup?: string };
@@ -31,7 +27,10 @@ function appendScript(result: string, script: string): string {
     : result + script;
 }
 
-function appendToTrailingMatrix(result: string, nodes: readonly LayoutNode[]): boolean {
+function appendToTrailingMatrix(
+  result: string,
+  nodes: readonly latexLayoutTypes.LayoutNode[],
+): boolean {
   const marker = TRAILING_LAYOUT_MARKER_PATTERN.exec(result);
   const node = marker === null ? undefined : nodes[Number(marker[1])];
   if (node?.type !== "matrix") return false;
@@ -40,7 +39,11 @@ function appendToTrailingMatrix(result: string, nodes: readonly LayoutNode[]): b
   return true;
 }
 
-function appendCharacter(result: string, character: string, nodes: readonly LayoutNode[]): string {
+function appendCharacter(
+  result: string,
+  character: string,
+  nodes: readonly latexLayoutTypes.LayoutNode[],
+): string {
   if (character === "=" || character === "<" || character === ">") {
     return `${result.trimEnd()} ${character} `;
   }
@@ -61,16 +64,16 @@ function scriptCanUseLayout(scripts: ScriptValues): boolean {
   );
 }
 
-export class LatexParser {
+export default class LatexParser {
   readonly source: string;
-  readonly layoutNodes: LayoutNode[];
+  readonly layoutNodes: latexLayoutTypes.LayoutNode[];
   readonly display: boolean;
   position = 0;
   supported = true;
   private stackFractions = true;
   private scriptDepth = 0;
 
-  constructor(source: string, layoutNodes: LayoutNode[], display: boolean) {
+  constructor(source: string, layoutNodes: latexLayoutTypes.LayoutNode[], display: boolean) {
     this.source = source;
     this.layoutNodes = layoutNodes;
     this.display = display;
@@ -88,7 +91,7 @@ export class LatexParser {
     return normalizeOutput(rendered);
   }
 
-  pushLayout(node: LayoutNode): string {
+  pushLayout(node: latexLayoutTypes.LayoutNode): string {
     return layoutMarker(this.layoutNodes.push(node) - 1);
   }
 
@@ -149,7 +152,7 @@ export class LatexParser {
   private parseScriptArgument(
     marker: ScriptMarker,
     scripts: ScriptValues,
-    order: ScriptKind[],
+    order: latexFormatTypes.ScriptKind[],
   ): void {
     const kind = marker === "_" ? "sub" : "sup";
     this.scriptDepth++;
@@ -163,7 +166,7 @@ export class LatexParser {
 
   private parseScripts(initialMarker: ScriptMarker): string {
     const scripts: ScriptValues = {};
-    const order: ScriptKind[] = [];
+    const order: latexFormatTypes.ScriptKind[] = [];
     this.parseScriptArgument(initialMarker, scripts, order);
     const nextPosition = this.skipWhile(/\s/u);
     const nextMarker = this.source[nextPosition];
@@ -174,7 +177,10 @@ export class LatexParser {
     return this.renderScripts(scripts, order);
   }
 
-  private renderScripts(scripts: ScriptValues, order: readonly ScriptKind[]): string {
+  private renderScripts(
+    scripts: ScriptValues,
+    order: readonly latexFormatTypes.ScriptKind[],
+  ): string {
     const unicode = {
       sub: scripts.sub === undefined ? undefined : formatUnicodeScript(scripts.sub, "sub"),
       sup: scripts.sup === undefined ? undefined : formatUnicodeScript(scripts.sup, "sup"),
@@ -189,8 +195,8 @@ export class LatexParser {
       return order.map((kind) => unicode[kind] ?? formatScript(scripts[kind] ?? "", kind)).join("");
     }
     return this.pushLayout({
-      type: "script",
       lower: scripts.sub === undefined ? undefined : normalizeOutput(scripts.sub),
+      type: "script",
       upper: scripts.sup === undefined ? undefined : normalizeOutput(scripts.sup),
     });
   }

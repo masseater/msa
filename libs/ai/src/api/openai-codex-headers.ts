@@ -1,11 +1,13 @@
-import type { ProviderHeaders } from "../types.ts";
-import { getMsaUserAgent } from "../utils/user-agent.ts";
+import userAgent from "../utils/user-agent.ts";
+import type openaiCodexHeadersTypes from "./openai-codex-headers.types.ts";
+
+const { getMsaUserAgent } = userAgent;
 
 const DEFAULT_CODEX_BASE_URL = "https://chatgpt.com/backend-api";
 const JWT_CLAIM_PATH = "https://api.openai.com/auth";
 const OPENAI_BETA_RESPONSES_WEBSOCKETS = "responses_websockets=2026-02-06";
 
-export function resolveCodexUrl(baseUrl: string | undefined): string {
+function resolveCodexUrl(baseUrl: string | undefined): string {
   const raw = baseUrl !== undefined && baseUrl.trim().length > 0 ? baseUrl : DEFAULT_CODEX_BASE_URL;
   const normalized = raw.replace(/\/+$/u, "");
   if (normalized.endsWith("/codex/responses")) return normalized;
@@ -13,14 +15,14 @@ export function resolveCodexUrl(baseUrl: string | undefined): string {
   return `${normalized}/codex/responses`;
 }
 
-export function resolveCodexWebSocketUrl(baseUrl: string | undefined): string {
+function resolveCodexWebSocketUrl(baseUrl: string | undefined): string {
   const url = new URL(resolveCodexUrl(baseUrl));
   if (url.protocol === "https:") url.protocol = "wss:";
   if (url.protocol === "http:") url.protocol = "ws:";
   return url.toString();
 }
 
-export function extractAccountId(token: string): string {
+function extractAccountId(token: string): string {
   try {
     const parts = token.split(".");
     const payloadPart = parts[1];
@@ -37,15 +39,13 @@ export function extractAccountId(token: string): string {
   }
 }
 
-export interface CodexCredentials {
-  readonly modelHeaders: Record<string, string> | undefined;
-  readonly optionHeaders: ProviderHeaders | undefined;
-  readonly accountId: string;
-  readonly token: string;
-}
-
-function baseCodexHeaders({ modelHeaders, optionHeaders, accountId, token }: CodexCredentials) {
-  const headers = new Headers({ originator: "pi", "User-Agent": getMsaUserAgent() });
+function baseCodexHeaders({
+  modelHeaders,
+  optionHeaders,
+  accountId,
+  token,
+}: openaiCodexHeadersTypes.CodexCredentials) {
+  const headers = new Headers({ "User-Agent": getMsaUserAgent(), originator: "pi" });
   for (const [key, value] of Object.entries(modelHeaders ?? {})) headers.set(key, value);
   for (const [key, value] of Object.entries(optionHeaders ?? {})) {
     if (value === null) headers.delete(key);
@@ -56,8 +56,8 @@ function baseCodexHeaders({ modelHeaders, optionHeaders, accountId, token }: Cod
   return headers;
 }
 
-export function buildSSEHeaders(
-  credentials: CodexCredentials,
+function buildSSEHeaders(
+  credentials: openaiCodexHeadersTypes.CodexCredentials,
 ): (sessionId: string | undefined) => Headers {
   return (sessionId) => {
     const headers = baseCodexHeaders(credentials);
@@ -72,8 +72,8 @@ export function buildSSEHeaders(
   };
 }
 
-export function buildWebSocketHeaders(
-  credentials: CodexCredentials,
+function buildWebSocketHeaders(
+  credentials: openaiCodexHeadersTypes.CodexCredentials,
 ): (requestId: string) => Headers {
   return (requestId) => {
     const headers = baseCodexHeaders(credentials);
@@ -87,3 +87,13 @@ export function buildWebSocketHeaders(
     return headers;
   };
 }
+
+const openaiCodexHeaders = {
+  buildSSEHeaders,
+  buildWebSocketHeaders,
+  extractAccountId,
+  resolveCodexUrl,
+  resolveCodexWebSocketUrl,
+};
+
+export default openaiCodexHeaders;

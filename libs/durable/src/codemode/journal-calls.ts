@@ -1,4 +1,4 @@
-import type { CodemodeHostCall } from "@msa/codemode/portable";
+import type portableTypes from "@msa/codemode/portable.types";
 import { Effect } from "effect";
 
 import clockModule from "../clock.ts";
@@ -18,7 +18,7 @@ type Global = NonNullable<runDocsTypes.JournalEntry["global"]>;
 
 const priorCall = Effect.fnUntraced(function* (
   host: runCallsTypes.CallHost,
-  call: CodemodeHostCall,
+  call: portableTypes.CodemodeHostCall,
 ) {
   const { api, context } = host;
   const nested = yield* Effect.promise(() =>
@@ -41,7 +41,7 @@ const priorCall = Effect.fnUntraced(function* (
 
 const settleCall = Effect.fnUntraced(function* (
   host: runCallsTypes.CallHost,
-  call: CodemodeHostCall,
+  call: portableTypes.CodemodeHostCall,
 ) {
   if (call.target === "tool") {
     const outcome = yield* callTool(host, call);

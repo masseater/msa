@@ -1,9 +1,9 @@
-import type { Keybinding } from "@msa/tui";
+import type tuiTypes from "@msa/tui/index.types";
 
 import type { ExtensionShortcut } from "../../core/extensions/index.ts";
 import { formatKeyText, keyDisplayText } from "./components/keybinding-hints.ts";
 
-type Row = readonly [keys: readonly Keybinding[] | string, action: string];
+type Row = readonly [keys: readonly tuiTypes.Keybinding[] | string, action: string];
 
 const NEW_LINE_ACTION =
   process.platform === "win32" ? "New line (Ctrl+Enter on Windows Terminal)" : "New line";

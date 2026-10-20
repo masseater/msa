@@ -1,4 +1,4 @@
-import type { AgentTool } from "@msa/agent-core";
+import type agentTypes from "@msa/agent-core/index.types";
 import { Effect } from "effect";
 import { Type } from "typebox";
 
@@ -9,7 +9,7 @@ import type virtualModelsSupportTypes from "./virtual-models-support.types.ts";
 
 const { createHarness } = harnessModule;
 
-const echoTool: AgentTool = {
+const echoTool: agentTypes.AgentTool = {
   description: "Echo text back",
   execute: () => Promise.resolve({ content: [{ text: "echoed", type: "text" }], details: {} }),
   label: "Echo",

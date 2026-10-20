@@ -1,4 +1,4 @@
-import type { Provider } from "@msa/ai";
+import type aiTypes from "@msa/ai/index.types";
 
 import { toErrorMessage } from "../../utils/errors.ts";
 import type { ModelRegistry } from "../model-registry.ts";
@@ -7,7 +7,7 @@ import type { ExtensionError, ExtensionRuntime, ProviderConfig } from "./types.t
 
 export interface ProviderActions {
   registerProvider?: (name: string, config: ProviderConfig) => void;
-  registerNativeProvider?: (provider: Provider) => void;
+  registerNativeProvider?: (provider: aiTypes.Provider) => void;
   unregisterProvider?: (name: string) => void;
   registerVirtualModel?: (definition: VirtualModelDefinition) => void;
   unregisterVirtualModel?: (provider: string, id: string) => void;
@@ -57,7 +57,7 @@ export class ProviderBinder {
     else this.actions.registerProvider(name, config);
   }
 
-  private registerNativeProvider(provider: Provider): void {
+  private registerNativeProvider(provider: aiTypes.Provider): void {
     if (this.actions?.registerNativeProvider === undefined) {
       this.modelRegistry.registerProvider(provider);
     } else {
@@ -96,9 +96,9 @@ export class ProviderBinder {
       register();
     } catch (err) {
       this.emitError({
-        extensionPath,
-        event,
         error: toErrorMessage(err),
+        event,
+        extensionPath,
         stack: err instanceof Error ? err.stack : undefined,
       });
     }

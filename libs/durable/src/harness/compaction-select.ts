@@ -1,9 +1,11 @@
-import type { AssistantMessage, Message } from "@msa/ai";
-import { calculateContextTokens, estimateMessageTokens } from "@msa/ai/utils/estimate";
+import type aiTypes from "@msa/ai/index.types";
+import estimate from "@msa/ai/utils/estimate";
 import { Function } from "effect";
 
 import contextModule from "./context.ts";
 import type typesModule from "./types.types.ts";
+
+const { calculateContextTokens, estimateMessageTokens } = estimate;
 
 const { orderToolResults } = contextModule;
 
@@ -58,28 +60,31 @@ function isCandidate(
   return true;
 }
 
-const summarizedMessages: typesModule.Dual2<typesModule.ContextView, number, Message[]> =
-  Function.dual(2, (view: typesModule.ContextView, cut: number): Message[] =>
+const summarizedMessages: typesModule.Dual2<typesModule.ContextView, number, aiTypes.Message[]> =
+  Function.dual(2, (view: typesModule.ContextView, cut: number): aiTypes.Message[] =>
     orderToolResults(view.contributions.slice(0, cut).flat()),
   );
 
-const estimateContext: typesModule.Dual2<typesModule.ContextView, readonly Message[], number> =
-  Function.dual(2, (view: typesModule.ContextView, extra: readonly Message[]): number => {
-    let measured: AssistantMessage | undefined;
-    const after = view.head?.id ?? Number.NEGATIVE_INFINITY;
-    for (let index = view.entries.length - 1; index >= 0 && measured === undefined; index--) {
-      if (view.entries[index]!.id <= after) continue;
-      measured = view.contributions[index]!.findLast(
-        (message): message is AssistantMessage =>
-          message.role === "assistant" && calculateContextTokens(message.usage) > 0,
-      );
-    }
-    const from = measured === undefined ? 0 : view.messages.lastIndexOf(measured) + 1;
-    let tokens = measured === undefined ? 0 : calculateContextTokens(measured.usage);
-    for (const message of view.messages.slice(from)) tokens += estimateMessageTokens(message);
-    for (const message of extra) tokens += estimateMessageTokens(message);
-    return tokens;
-  });
+const estimateContext: typesModule.Dual2<
+  typesModule.ContextView,
+  readonly aiTypes.Message[],
+  number
+> = Function.dual(2, (view: typesModule.ContextView, extra: readonly aiTypes.Message[]): number => {
+  let measured: aiTypes.AssistantMessage | undefined;
+  const after = view.head?.id ?? Number.NEGATIVE_INFINITY;
+  for (let index = view.entries.length - 1; index >= 0 && measured === undefined; index--) {
+    if (view.entries[index]!.id <= after) continue;
+    measured = view.contributions[index]!.findLast(
+      (message): message is aiTypes.AssistantMessage =>
+        message.role === "assistant" && calculateContextTokens(message.usage) > 0,
+    );
+  }
+  const from = measured === undefined ? 0 : view.messages.lastIndexOf(measured) + 1;
+  let tokens = measured === undefined ? 0 : calculateContextTokens(measured.usage);
+  for (const message of view.messages.slice(from)) tokens += estimateMessageTokens(message);
+  for (const message of extra) tokens += estimateMessageTokens(message);
+  return tokens;
+});
 
 const compactionSelect = {
   estimateContext,

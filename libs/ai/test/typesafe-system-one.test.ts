@@ -1,8 +1,10 @@
 import { Effect } from "effect";
 import { describe, expect, it, vi } from "vite-plus/test";
 
-import { classify } from "../src/api/typesafe-system-one.ts";
+import typesafeSystemOne from "../src/api/typesafe-system-one.ts";
 import typesafeSystemOneSupport from "./typesafe-system-one-support.ts";
+
+const { classify } = typesafeSystemOne;
 
 const { context, model, wireAnswers } = typesafeSystemOneSupport;
 

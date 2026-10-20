@@ -1,8 +1,10 @@
 import assert from "node:assert";
 import { describe, it } from "node:test";
 
-import { escapeSequences, stripStyleSequences } from "../src/ansi-sequences.ts";
-import {
+import ansiSequences from "../src/ansi-sequences.ts";
+import tui from "../src/index.ts";
+
+const {
   colorToHex,
   colorToOkhsl,
   colorToRgb,
@@ -12,7 +14,8 @@ import {
   parseColor,
   rgbColor,
   styleText,
-} from "../src/index.ts";
+} = tui;
+const { escapeSequences, stripStyleSequences } = ansiSequences;
 
 describe("colors", () => {
   it("parses hex and OKLCH colors and rejects everything else", () => {

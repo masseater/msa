@@ -2,11 +2,15 @@ import assert from "node:assert";
 import { describe, it } from "node:test";
 import { stripVTControlCharacters } from "node:util";
 
-import { Editor } from "../src/components/editor.ts";
-import { FAKE_CURSOR_START, renderFakeCursor } from "../src/tui-component.ts";
-import { stripTerminalSequences, visibleWidth } from "../src/utils.ts";
+import Editor from "../src/components/editor.ts";
+import tuiComponent from "../src/tui-component.ts";
+import utils from "../src/utils.ts";
 import editorHelpers from "./editor-helpers.ts";
-import { defaultEditorTheme } from "./test-themes.ts";
+import testThemes from "./test-themes.ts";
+
+const { defaultEditorTheme } = testThemes;
+const { stripTerminalSequences, visibleWidth } = utils;
+const { FAKE_CURSOR_START, renderFakeCursor } = tuiComponent;
 
 const { createTestTUI } = editorHelpers;
 

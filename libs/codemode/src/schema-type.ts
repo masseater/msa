@@ -1,13 +1,13 @@
 import { dual } from "effect/Function";
 
-import type { CodemodeJsonSchema } from "./types.ts";
+import type typesModule from "./types.ts";
 
 const IDENTIFIER = /^[A-Za-z_$][A-Za-z0-9_$]*$/u;
 const INDENT = "  ";
 const MAX_REF_EXPANSIONS = 32;
 
 interface SchemaContext {
-  root: CodemodeJsonSchema;
+  root: typesModule.CodemodeJsonSchema;
   resolving: Set<string>;
   expansions: number;
   tags: boolean;
@@ -28,7 +28,10 @@ function union(types: string[]): string {
   return unique.length === 0 ? "never" : unique.join(" | ");
 }
 
-function resolveRef(ref: string, root: CodemodeJsonSchema): CodemodeJsonSchema | undefined {
+function resolveRef(
+  ref: string,
+  root: typesModule.CodemodeJsonSchema,
+): typesModule.CodemodeJsonSchema | undefined {
   if (ref !== "#" && !ref.startsWith("#/")) return undefined;
   let current: unknown = root;
   for (const segment of ref.slice(2).split("/").filter(Boolean)) {
@@ -63,10 +66,12 @@ function compositeType(schema: SchemaObject, context: SchemaContext): string | u
       ? schema["oneOf"]
       : undefined;
   if (variants !== undefined)
-    return union(variants.map((variant) => toType(variant as CodemodeJsonSchema, context)));
+    return union(
+      variants.map((variant) => toType(variant as typesModule.CodemodeJsonSchema, context)),
+    );
   if (!Array.isArray(schema["allOf"])) return undefined;
   const parts = schema["allOf"]
-    .map((part) => toType(part as CodemodeJsonSchema, context))
+    .map((part) => toType(part as typesModule.CodemodeJsonSchema, context))
     .filter((part) => part !== "unknown");
   return parts.length === 0
     ? "unknown"
@@ -106,7 +111,7 @@ function keywordType(schema: SchemaObject, context: SchemaContext): string {
   }
 }
 
-function toType(schema: CodemodeJsonSchema, context: SchemaContext): string {
+function toType(schema: typesModule.CodemodeJsonSchema, context: SchemaContext): string {
   if (schema === true) return "unknown";
   if (schema === false) return "never";
   if (!isObject(schema)) return "unknown";
@@ -116,7 +121,7 @@ function toType(schema: CodemodeJsonSchema, context: SchemaContext): string {
 
 function arrayType(schema: SchemaObject, context: SchemaContext): string {
   if (schema["items"] !== undefined && !Array.isArray(schema["items"])) {
-    return `Array<${toType(schema["items"] as CodemodeJsonSchema, context)}>`;
+    return `Array<${toType(schema["items"] as typesModule.CodemodeJsonSchema, context)}>`;
   }
   const tuple = Array.isArray(schema["prefixItems"])
     ? schema["prefixItems"]
@@ -124,7 +129,7 @@ function arrayType(schema: SchemaObject, context: SchemaContext): string {
       ? schema["items"]
       : [];
   if (tuple.length > 0)
-    return `[${tuple.map((item) => toType(item as CodemodeJsonSchema, context)).join(", ")}]`;
+    return `[${tuple.map((item) => toType(item as typesModule.CodemodeJsonSchema, context)).join(", ")}]`;
   return "unknown[]";
 }
 
@@ -138,12 +143,14 @@ function objectMembers(schema: SchemaObject, names: string[], context: SchemaCon
   const required = new Set(Array.isArray(schema["required"]) ? schema["required"] : []);
   const members = names.map((name) => {
     const optional = required.has(name) ? "" : "?";
-    return `${propertyKey(name)}${optional}: ${toType(properties[name] as CodemodeJsonSchema, context)};`;
+    return `${propertyKey(name)}${optional}: ${toType(properties[name] as typesModule.CodemodeJsonSchema, context)};`;
   });
   const additional = schema["additionalProperties"];
   if (additional !== undefined && additional !== false) {
     const type =
-      additional === true ? "unknown" : toType(additional as CodemodeJsonSchema, context);
+      additional === true
+        ? "unknown"
+        : toType(additional as typesModule.CodemodeJsonSchema, context);
     members.push(`[key: string]: ${type};`);
   } else if (additional === undefined && names.length === 0) {
     members.push("[key: string]: unknown;");
@@ -181,17 +188,17 @@ function objectType(schema: SchemaObject, context: SchemaContext): string {
   return lines.join("\n");
 }
 
-const render = (schema: CodemodeJsonSchema, tags: boolean) =>
-  toType(schema, { root: schema, resolving: new Set(), expansions: 0, tags });
+const render = (schema: typesModule.CodemodeJsonSchema, tags: boolean) =>
+  toType(schema, { expansions: 0, resolving: new Set(), root: schema, tags });
 
-export function schemaToType(schema: CodemodeJsonSchema): string {
+function schemaToType(schema: typesModule.CodemodeJsonSchema): string {
   return render(schema, true);
 }
 
-export const schemaToTypeWithin: {
-  (maxChars: number): (schema: CodemodeJsonSchema) => string;
-  (schema: CodemodeJsonSchema, maxChars: number): string;
-} = dual(2, (schema: CodemodeJsonSchema, maxChars: number): string => {
+const schemaToTypeWithin: {
+  (maxChars: number): (schema: typesModule.CodemodeJsonSchema) => string;
+  (schema: typesModule.CodemodeJsonSchema, maxChars: number): string;
+} = dual(2, (schema: typesModule.CodemodeJsonSchema, maxChars: number): string => {
   const type = render(schema, true);
   if (type.length <= maxChars) return type;
   const untagged = render(schema, false);
@@ -214,7 +221,7 @@ const TAG_KEYWORDS = [
 const LOWER_BOUNDS = new Set(["minimum", "exclusiveMinimum", "minLength", "minItems"]);
 const UPPER_BOUNDS = new Set(["maximum", "exclusiveMaximum", "maxLength", "maxItems"]);
 const MAX_TAG_CHARS = 80;
-export const LINE_TERMINATORS = /[\r\n\u2028\u2029]/gu;
+const LINE_TERMINATORS = /[\r\n\u2028\u2029]/gu;
 
 function normalizeExclusive(candidate: SchemaObject): SchemaObject {
   const normalized: SchemaObject = { ...candidate };
@@ -264,7 +271,7 @@ function keywordTags(schemas: SchemaObject[]): string[] {
 const escapeTerminators = (tag: string): string =>
   tag.replace(LINE_TERMINATORS, (char) => `\\u${char.charCodeAt(0).toString(16).padStart(4, "0")}`);
 
-export function constraintTags(schema: unknown): string {
+function constraintTags(schema: unknown): string {
   if (!isObject(schema)) return "";
   const schemas = constraintBranches(schema);
   const tags: string[] = [];
@@ -280,3 +287,12 @@ export function constraintTags(schema: unknown): string {
     .map(escapeTerminators)
     .join(" ");
 }
+
+const schemaType = {
+  LINE_TERMINATORS,
+  constraintTags,
+  schemaToType,
+  schemaToTypeWithin,
+};
+
+export default schemaType;

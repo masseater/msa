@@ -3,7 +3,7 @@ import { describe, it } from "node:test";
 
 import { Effect } from "effect";
 
-import { CombinedAutocompleteProvider } from "../src/autocomplete.ts";
+import CombinedAutocompleteProvider from "../src/autocomplete.ts";
 
 const commands = [
   { description: "Multi-agent deep research", name: "skill:deep-research" },

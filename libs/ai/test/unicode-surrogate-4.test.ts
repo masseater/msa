@@ -10,7 +10,7 @@ const { testEmojiInToolResults, testRealWorldLinkedInData, testUnpairedHighSurro
   unicodeSurrogateSupport;
 const openaiCodexToken = inject("storedApiKeys")["openai-codex"];
 
-const gpt55ShouldHandleEmoji = () =>
+const codexShouldHandleEmoji = () =>
   Effect.runPromise(
     Effect.gen(function* () {
       const llm = chooseModel("openai-codex", "Codex");
@@ -18,7 +18,7 @@ const gpt55ShouldHandleEmoji = () =>
     }),
   );
 
-const gpt55ShouldHandleReal = () =>
+const codexShouldHandleReal = () =>
   Effect.runPromise(
     Effect.gen(function* () {
       const llm = chooseModel("openai-codex", "Codex");
@@ -26,7 +26,7 @@ const gpt55ShouldHandleReal = () =>
     }),
   );
 
-const gpt55ShouldHandleUnpaired = () =>
+const codexShouldHandleUnpaired = () =>
   Effect.runPromise(
     Effect.gen(function* () {
       const llm = chooseModel("openai-codex", "Codex");
@@ -37,21 +37,21 @@ const gpt55ShouldHandleUnpaired = () =>
 describe("AI Providers Unicode Surrogate Pair Tests", () => {
   describe("OpenAI Codex Provider Unicode Handling", () => {
     it.skipIf(openaiCodexToken === undefined || openaiCodexToken === "")(
-      "gpt-5.5 - should handle emoji in tool results",
+      "Codex - should handle emoji in tool results",
       { retry: 3, timeout: 30000 },
-      gpt55ShouldHandleEmoji,
+      codexShouldHandleEmoji,
     );
 
     it.skipIf(openaiCodexToken === undefined || openaiCodexToken === "")(
-      "gpt-5.5 - should handle real-world LinkedIn comment data with emoji",
+      "Codex - should handle real-world LinkedIn comment data with emoji",
       { retry: 3, timeout: 30000 },
-      gpt55ShouldHandleReal,
+      codexShouldHandleReal,
     );
 
     it.skipIf(openaiCodexToken === undefined || openaiCodexToken === "")(
-      "gpt-5.5 - should handle unpaired high surrogate (0xD83D) in tool results",
+      "Codex - should handle unpaired high surrogate (0xD83D) in tool results",
       { retry: 3, timeout: 30000 },
-      gpt55ShouldHandleUnpaired,
+      codexShouldHandleUnpaired,
     );
   });
 });

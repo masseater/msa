@@ -3,12 +3,16 @@ import { describe, it } from "node:test";
 
 import { Effect } from "effect";
 
-import { Image, type TUI, TuiMainScreen } from "../src/index.ts";
+import tuiModule from "../src/index.ts";
+import type tuiTypes from "../src/index.types.ts";
 import tuiRenderHelpers from "./tui-render-helpers.ts";
 import tuiRenderKittyHelpers from "./tui-render-kitty-helpers.ts";
 import LoggingVirtualTerminal from "./tui-render-logging-virtual-terminal.ts";
 import TestComponent from "./tui-render-test-component.ts";
-import { VirtualTerminal } from "./virtual-terminal.ts";
+import virtualTerminal from "./virtual-terminal.ts";
+
+const { Image, TuiMainScreen } = tuiModule;
+const { VirtualTerminal } = virtualTerminal;
 
 const { withEnv } = tuiRenderHelpers;
 const { renderKittyTestImage, withKittyCells } = tuiRenderKittyHelpers;
@@ -29,7 +33,7 @@ function cases(): void {
       withKittyCells(
         Effect.gen(function* () {
           const terminal = new LoggingVirtualTerminal(40, 10);
-          const tui: TUI = new TuiMainScreen(terminal);
+          const tui: tuiTypes.TUI = new TuiMainScreen(terminal);
           const component = new TestComponent();
           tui.addChild(component);
 
@@ -65,7 +69,7 @@ function fallsBackFullRedrawKitty(): void {
       withKittyCells(
         Effect.gen(function* () {
           const terminal = new LoggingVirtualTerminal(40, 2);
-          const tui: TUI = new TuiMainScreen(terminal);
+          const tui: tuiTypes.TUI = new TuiMainScreen(terminal);
           const component = new TestComponent();
           tui.addChild(component);
 
@@ -107,7 +111,7 @@ function reservesKittyImageRowsBefore(): void {
       withKittyCells(
         Effect.gen(function* () {
           const terminal = new LoggingVirtualTerminal(40, 5);
-          const tui: TUI = new TuiMainScreen(terminal);
+          const tui: tuiTypes.TUI = new TuiMainScreen(terminal);
           const component = new TestComponent();
           tui.addChild(component);
 
@@ -148,7 +152,7 @@ function doesNotUseCursorUp(): void {
       withKittyCells(
         Effect.gen(function* () {
           const terminal = new LoggingVirtualTerminal(40, 5);
-          const tui: TUI = new TuiMainScreen(terminal);
+          const tui: tuiTypes.TUI = new TuiMainScreen(terminal);
           const component = new TestComponent();
           tui.addChild(component);
 
@@ -187,7 +191,7 @@ function triggersFullReRenderTerminal(): void {
         { TERMUX_VERSION: undefined },
         Effect.gen(function* () {
           const terminal = new VirtualTerminal(40, 10);
-          const tui: TUI = new TuiMainScreen(terminal);
+          const tui: tuiTypes.TUI = new TuiMainScreen(terminal);
           const component = new TestComponent();
           tui.addChild(component);
 

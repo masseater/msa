@@ -1,5 +1,5 @@
-import type { CodemodeJsonSchema } from "@msa/codemode";
-import { renderToolSample, toCodemodeIdentifier } from "@msa/codemode/declarations";
+import declarations from "@msa/codemode/declarations";
+import type codemodeTypes from "@msa/codemode/index.types";
 import { Function } from "effect";
 
 import type dualTypes from "../dual.ts";
@@ -7,12 +7,14 @@ import type typesModule from "../harness/types.types.ts";
 import type describeTypes from "./describe.types.ts";
 import modelsModule from "./models.ts";
 
+const { renderToolSample, toCodemodeIdentifier } = declarations;
+
 const { MODELS_DESCRIPTION } = modelsModule;
 
 const DEFAULT_CODEMODE_INLINE_BUDGET = 3000;
 const CHARS_PER_TOKEN = 4;
 
-const TEXT_OUTPUT_SCHEMA: CodemodeJsonSchema = { type: "string" };
+const TEXT_OUTPUT_SCHEMA: codemodeTypes.CodemodeJsonSchema = { type: "string" };
 
 const DESCRIPTION_INTRO = `Run JavaScript that calls other tools. The input is raw JavaScript (not JSON, no code fence), run as an async function body in a QuickJS sandbox: top-level \`await\` and \`return\` work. No Node, file system, network, or timers.
 - \`await tools.<name>({ ...args })\` resolves to a string, or an object if the tool's declaration says so, and rejects with an Error on failure. A tool whose declaration returns an object resolves on failure too when it returned that object; check its fields. Calls still running when the script ends are cancelled.
@@ -37,15 +39,16 @@ function codemodeDescription(models: boolean): string {
 function declarationOf(tool: typesModule.ToolRegistration): {
   name: string;
   description: string;
-  inputSchema: CodemodeJsonSchema;
-  outputSchema: CodemodeJsonSchema;
+  inputSchema: codemodeTypes.CodemodeJsonSchema;
+  outputSchema: codemodeTypes.CodemodeJsonSchema;
 } {
   return {
     description: tool.description,
-    inputSchema: tool.parameters as CodemodeJsonSchema,
+    inputSchema: tool.parameters as codemodeTypes.CodemodeJsonSchema,
     name: tool.name,
     outputSchema:
-      (tool.structuredOutputSchema as CodemodeJsonSchema | undefined) ?? TEXT_OUTPUT_SCHEMA,
+      (tool.structuredOutputSchema as codemodeTypes.CodemodeJsonSchema | undefined) ??
+      TEXT_OUTPUT_SCHEMA,
   };
 }
 

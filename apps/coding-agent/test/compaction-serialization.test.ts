@@ -1,4 +1,4 @@
-import type { Message } from "@msa/ai";
+import type aiTypes from "@msa/ai/index.types";
 import testing from "@msa/testing";
 import { describe, expect, it } from "vite-plus/test";
 
@@ -8,7 +8,7 @@ const { currentTimeMillis } = testing;
 
 const shouldTruncateLongToolResults = () => {
   const longContent = "x".repeat(5000);
-  const messages: Message[] = [
+  const messages: aiTypes.Message[] = [
     {
       content: [{ text: longContent, type: "text" }],
       isError: false,
@@ -30,7 +30,7 @@ const shouldTruncateLongToolResults = () => {
 
 const shouldNotTruncateShortToolResults = () => {
   const shortContent = "x".repeat(1500);
-  const messages: Message[] = [
+  const messages: aiTypes.Message[] = [
     {
       content: [{ text: shortContent, type: "text" }],
       isError: false,
@@ -49,7 +49,7 @@ const shouldNotTruncateShortToolResults = () => {
 
 const shouldNotTruncateAssistantOrUserMessages = () => {
   const longText = "y".repeat(5000);
-  const messages: Message[] = [
+  const messages: aiTypes.Message[] = [
     {
       content: [{ text: longText, type: "text" }],
       role: "user",
@@ -81,7 +81,7 @@ const shouldNotTruncateAssistantOrUserMessages = () => {
 };
 
 const shouldOmitThinking = () => {
-  const messages: Message[] = [
+  const messages: aiTypes.Message[] = [
     {
       api: "anthropic",
       content: [

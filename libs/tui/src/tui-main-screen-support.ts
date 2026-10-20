@@ -3,64 +3,16 @@ import * as os from "node:os";
 import { Clock, DateTime, Effect, Random } from "effect";
 import { dual } from "effect/Function";
 
-import { writeFileInBackground } from "./file-log.ts";
-import { Platform, type PlatformFailure, pathOperations, platformRuntime } from "./platform.ts";
+import BoundedTerminalWriter from "./bounded-terminal-writer.ts";
+import fileLog from "./file-log.ts";
+import platformModule from "./platform.ts";
+import type platformTypes from "./platform.types.ts";
+import type tuiMainScreenSupportTypes from "./tui-main-screen-support.types.ts";
+
+const { writeFileInBackground } = fileLog;
+const { Platform, pathOperations, platformRuntime } = platformModule;
 
 const KITTY_SEQUENCE_PREFIX = "\x1b_G";
-const MAX_RENDER_WRITE_CHARS = 1024 * 1024;
-
-export class BoundedTerminalWriter {
-  private buffer = "";
-  private writtenChars = 0;
-  private readonly write: (data: string) => void;
-
-  constructor(write: (data: string) => void) {
-    this.write = write;
-  }
-
-  append(value: string): void {
-    let offset = 0;
-    while (offset < value.length) {
-      const capacity = MAX_RENDER_WRITE_CHARS - this.buffer.length;
-      if (capacity === 0) {
-        this.flush();
-        continue;
-      }
-
-      let end = Math.min(value.length, offset + capacity);
-      if (
-        end < value.length &&
-        value.charCodeAt(end - 1) >= 0xd800 &&
-        value.charCodeAt(end - 1) <= 0xdbff &&
-        value.charCodeAt(end) >= 0xdc00 &&
-        value.charCodeAt(end) <= 0xdfff
-      ) {
-        end--;
-      }
-      if (end === offset) {
-        this.flush();
-        continue;
-      }
-
-      this.buffer += value.slice(offset, end);
-      offset = end;
-      if (this.buffer.length === MAX_RENDER_WRITE_CHARS) {
-        this.flush();
-      }
-    }
-  }
-
-  flush(): void {
-    if (this.buffer === "") return;
-    this.write(this.buffer);
-    this.writtenChars += this.buffer.length;
-    this.buffer = "";
-  }
-
-  get length(): number {
-    return this.writtenChars + this.buffer.length;
-  }
-}
 
 interface KittyImageHeader {
   ids: number[];
@@ -87,11 +39,11 @@ function parseKittyImageHeader(line: string): KittyImageHeader | undefined {
   return { ids, rows };
 }
 
-export function extractKittyImageIds(line: string): number[] {
+function extractKittyImageIds(line: string): number[] {
   return parseKittyImageHeader(line)?.ids ?? [];
 }
 
-export function extractKittyImageRows(line: string): number {
+function extractKittyImageRows(line: string): number {
   return parseKittyImageHeader(line)?.rows ?? 1;
 }
 
@@ -99,69 +51,80 @@ function nowIso(): string {
   return DateTime.formatIso(Effect.runSync(DateTime.now));
 }
 
-export const appendRedrawLog: {
+const appendRedrawLog: {
   (directory: string, message: string): void;
   (message: string): (directory: string) => void;
 } = dual(2, (directory: string, message: string): void => {
   writeFileInBackground(
     Effect.succeed({
-      path: pathOperations.join(directory, "msa-tui-debug.log"),
-      data: `[${nowIso()}] fullRender: ${message}\n`,
       append: true,
+      data: `[${nowIso()}] fullRender: ${message}\n`,
+      path: pathOperations.join(directory, "msa-tui-debug.log"),
     }),
   );
 });
 
-export const writeCrashLog: {
+const writeCrashLog: {
   (
     directory: string | undefined,
     lines: readonly string[],
-  ): Effect.Effect<string, PlatformFailure, Platform>;
+  ): Effect.Effect<string, platformTypes.PlatformFailure, platformTypes.Platform>;
   (
     lines: readonly string[],
-  ): (directory: string | undefined) => Effect.Effect<string, PlatformFailure, Platform>;
+  ): (
+    directory: string | undefined,
+  ) => Effect.Effect<string, platformTypes.PlatformFailure, platformTypes.Platform>;
 } = dual(
   2,
   (
     directory: string | undefined,
     lines: readonly string[],
-  ): Effect.Effect<string, PlatformFailure, Platform> =>
+  ): Effect.Effect<string, platformTypes.PlatformFailure, platformTypes.Platform> =>
     Effect.gen(function* () {
       const platform = yield* Platform;
       const crashLogPath = pathOperations.join(directory ?? os.tmpdir(), "msa-tui-crash.log");
       const data = [`Crash at ${nowIso()}`, ...lines].join("\n");
-      yield* platform.writeFile({ path: crashLogPath, data, append: false });
+      yield* platform.writeFile({ append: false, data, path: crashLogPath });
       return crashLogPath;
     }),
 );
 
-export interface RenderCrash {
-  readonly directory: string | undefined;
-  readonly lines: readonly string[];
-  readonly message: (crashLogPath: string) => string;
-}
-
-export const crashAfterLogging = (crash: RenderCrash): Effect.Effect<never, never, Platform> =>
+const crashAfterLogging = (
+  crash: tuiMainScreenSupportTypes.RenderCrash,
+): Effect.Effect<never, never, platformTypes.Platform> =>
   writeCrashLog(crash.directory, crash.lines).pipe(
     Effect.matchEffect({
-      onSuccess: (crashLogPath) => Effect.die(new Error(crash.message(crashLogPath))),
       onFailure: (failure) =>
         Effect.die(
           new Error(crash.message(`(not written: ${failure.operation} failed)`), {
             cause: failure,
           }),
         ),
+      onSuccess: (crashLogPath) => Effect.die(new Error(crash.message(crashLogPath))),
     }),
   );
 
-export function raiseRenderCrash(crash: RenderCrash): Promise<never> {
+function raiseRenderCrash(crash: tuiMainScreenSupportTypes.RenderCrash): Promise<never> {
   return platformRuntime.runPromise(crashAfterLogging(crash));
 }
 
-export function writeRenderDebugLog(lines: readonly string[]): void {
+function writeRenderDebugLog(lines: readonly string[]): void {
   const debugPath = pathOperations.join(
     "/tmp/tui",
     `render-${Effect.runSync(Clock.currentTimeMillis)}-${Effect.runSync(Random.next).toString(36).slice(2)}.log`,
   );
-  writeFileInBackground(Effect.succeed({ path: debugPath, data: lines.join("\n"), append: false }));
+  writeFileInBackground(Effect.succeed({ append: false, data: lines.join("\n"), path: debugPath }));
 }
+
+const tuiMainScreenSupport = {
+  BoundedTerminalWriter,
+  appendRedrawLog,
+  crashAfterLogging,
+  extractKittyImageIds,
+  extractKittyImageRows,
+  raiseRenderCrash,
+  writeCrashLog,
+  writeRenderDebugLog,
+};
+
+export default tuiMainScreenSupport;

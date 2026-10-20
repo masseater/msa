@@ -1,20 +1,18 @@
 import * as NodeRuntime from "@effect/platform-node/NodeRuntime";
-import {
-  type ToolResultMessage,
-  createModels,
-  fauxAssistantMessage,
-  fauxProvider,
-  fauxToolCall,
-} from "@msa/ai";
+import ai from "@msa/ai";
+import type aiTypes from "@msa/ai/index.types";
 import durable from "@msa/durable";
 import harnessModule from "@msa/durable/harness";
 import type durableTypes from "@msa/durable/index.types";
 import memory from "@msa/durable/storage/memory";
 import { Console, Effect } from "effect";
 
-import node from "../../src/env/node.ts";
-import toolsModule from "../../src/tools/index.ts";
 import support from "../support.ts";
+import example30ToolOverrideKit from "./30-tool-override-kit.ts";
+
+const { node, tools: toolsModule } = example30ToolOverrideKit;
+
+const { createModels, fauxAssistantMessage, fauxProvider, fauxToolCall } = ai;
 
 const { ToolResultEntry, defineExtension, wrapTool } = durable;
 const { CodingTools, createBashTool } = toolsModule;
@@ -123,7 +121,7 @@ const main = Effect.gen(function* () {
     );
     const page = yield* awaited(conversation.entries({}, 10, undefined, context));
     const result = page.items.find((entry) => ToolResultEntry.is(entry))
-      ?.model?.[0] as ToolResultMessage;
+      ?.model?.[0] as aiTypes.ToolResultMessage;
     return result.content.map((part) => (part.type === "text" ? part.text.trim() : "")).join("");
   });
 

@@ -1,6 +1,7 @@
 import { Worker } from "node:worker_threads";
 
-import * as codemode from "@msa/codemode";
+import codemodeModule from "@msa/codemode";
+import type codemodeTypes from "@msa/codemode/index.types";
 import testing from "@msa/testing";
 import { Effect } from "effect";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vite-plus/test";
@@ -49,9 +50,9 @@ const run = (code: string, signal?: AbortSignal) =>
 const boundsWorkersThatStartAfterTheirResults = () =>
   runTest(
     Effect.gen(function* () {
-      const wasm = yield* awaited(codemode.loadQuickJSWasm());
-      const loading = Promise.withResolvers<codemode.CodemodeWasmModule>();
-      vi.spyOn(codemode, "loadQuickJSWasm").mockReturnValue(loading.promise);
+      const wasm = yield* awaited(codemodeModule.loadQuickJSWasm());
+      const loading = Promise.withResolvers<codemodeTypes.CodemodeWasmModule>();
+      vi.spyOn(codemodeModule, "loadQuickJSWasm").mockReturnValue(loading.promise);
       try {
         const results = yield* awaited(
           Promise.all(

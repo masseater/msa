@@ -1,13 +1,10 @@
-import {
-  type AssistantMessage,
-  type SimpleStreamOptions,
-  type TranscriptContext,
-  createAssistantMessageEventStream,
-  fauxAssistantMessage,
-} from "@msa/ai";
+import ai from "@msa/ai";
+import type aiTypes from "@msa/ai/index.types";
 import testing from "@msa/testing";
 
 import type harnessTypes from "./harness.types.ts";
+
+const { createAssistantMessageEventStream, fauxAssistantMessage } = ai;
 
 const { currentTimeMillis } = testing;
 
@@ -25,12 +22,12 @@ function createUsage(totalTokens: number) {
 function createAssistant(
   harness: harnessTypes.Harness,
   options: {
-    stopReason?: AssistantMessage["stopReason"];
+    stopReason?: aiTypes.AssistantMessage["stopReason"];
     errorMessage?: string;
     totalTokens?: number;
     timestamp?: number;
   },
-): AssistantMessage {
+): aiTypes.AssistantMessage {
   const model = harness.getModel();
   return {
     ...fauxAssistantMessage("", {
@@ -48,7 +45,10 @@ function createAssistant(
 function useSummaryStreamFn(
   harness: harnessTypes.Harness,
   summary: string,
-  onRequest?: (context: TranscriptContext, options: SimpleStreamOptions | undefined) => void,
+  onRequest?: (
+    context: aiTypes.TranscriptContext,
+    options: aiTypes.SimpleStreamOptions | undefined,
+  ) => void,
 ): () => number {
   let callCount = 0;
   harness.session.agent.streamFunction = (model, context, options) => {
@@ -56,7 +56,7 @@ function useSummaryStreamFn(
     onRequest?.(context, options);
     const stream = createAssistantMessageEventStream();
     queueMicrotask(() => {
-      const message: AssistantMessage = {
+      const message: aiTypes.AssistantMessage = {
         ...fauxAssistantMessage(summary),
         api: model.api,
         model: model.id,

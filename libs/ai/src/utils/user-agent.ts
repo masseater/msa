@@ -1,20 +1,13 @@
-import type * as NodeOs from "node:os";
+import runtime from "./runtime.ts";
 
-import { isNodeRuntime } from "./runtime.ts";
+const { isNodeRuntime } = runtime;
 
-type ProcessWithOsBuiltinModule = typeof process & {
-  getBuiltinModule?: (id: "node:os") => typeof NodeOs;
+function getMsaUserAgent(): string {
+  return isNodeRuntime() ? `pi (${process.platform}; ${process.arch})` : "pi (browser)";
+}
+
+const userAgent = {
+  getMsaUserAgent,
 };
 
-function loadNodeOs(): typeof NodeOs | null {
-  if (!isNodeRuntime()) return null;
-  return (process as ProcessWithOsBuiltinModule).getBuiltinModule?.("node:os") ?? null;
-}
-
-const nodeOs = loadNodeOs();
-
-export function getMsaUserAgent(): string {
-  return nodeOs === null
-    ? "pi (browser)"
-    : `pi (${nodeOs.platform()} ${nodeOs.release()}; ${nodeOs.arch()})`;
-}
+export default userAgent;

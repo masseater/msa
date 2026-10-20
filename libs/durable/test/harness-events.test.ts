@@ -1,11 +1,5 @@
-import {
-  type AssistantMessage,
-  type FauxResponseStep,
-  Type,
-  fauxAssistantMessage,
-  fauxText,
-  fauxToolCall,
-} from "@msa/ai";
+import ai from "@msa/ai";
+import type aiTypes from "@msa/ai/index.types";
 import durable from "@msa/durable";
 import harnessModule from "@msa/durable/harness";
 import type durableTypes from "@msa/durable/index.types";
@@ -13,9 +7,12 @@ import memory from "@msa/durable/storage/memory";
 import { Effect } from "effect";
 import { describe, expect, it } from "vite-plus/test";
 
-import harnessEventsSupport from "./harness-events-support.ts";
-import support from "./support.ts";
+import harnessEventsKit from "./harness-events-kit.ts";
 import type supportTypes from "./support.types.ts";
+
+const { harnessEventsSupport, support } = harnessEventsKit;
+
+const { Type, fauxAssistantMessage, fauxText, fauxToolCall } = ai;
 
 const { MemoryStorage } = memory;
 const { defineTool } = durable;
@@ -72,7 +69,7 @@ const streamingRun = Effect.fn("streamingRun")(function* () {
   harness.subscribeCommits((publication) => {
     for (const change of documentChanges(publication)) {
       const message = (change.value as durableTypes.LiveState | null)?.generation?.message as
-        | AssistantMessage
+        | aiTypes.AssistantMessage
         | undefined;
       if (change.record.kind === "msa.live" && message !== undefined)
         partials.push(textOf(message) ?? "");
@@ -217,7 +214,7 @@ const reportsQueuedSubmissions = Effect.gen(function* () {
 
   const setup = chatSetup();
   const release = deferred();
-  const held: FauxResponseStep = (_request, options) =>
+  const held: aiTypes.FauxResponseStep = (_request, options) =>
     runPromise(
       Effect.gen(function* () {
         yield* awaited(Promise.race([release.promise, aborted(options!.signal!)]));

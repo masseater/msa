@@ -1,22 +1,18 @@
-import {
-  type AssistantMessage,
-  type FauxResponseStep,
-  type Context as ModelContext,
-  Type,
-  fauxAssistantMessage,
-  fauxText,
-  fauxToolCall,
-} from "@msa/ai";
+import ai from "@msa/ai";
+import type aiTypes from "@msa/ai/index.types";
 import durable from "@msa/durable";
 import { Effect } from "effect";
 import { dual } from "effect/Function";
 
-import chatSupport from "./chat-support.ts";
-import effectSupport from "./effect-support.ts";
+import harnessInputEntriesSupportKit from "./harness-input-entries-support-kit.ts";
 import type harnessInputEntriesSupportTypes from "./harness-input-entries-support.types.ts";
 import harnessSupport from "./harness-support.ts";
 import sessionSupport from "./session-support.ts";
 import taskSupport from "./task-support.ts";
+
+const { chatSupport, effectSupport } = harnessInputEntriesSupportKit;
+
+const { Type, fauxAssistantMessage, fauxText, fauxToolCall } = ai;
 
 const { InboxDoc, LiveDoc, defineTool } = durable;
 
@@ -26,18 +22,18 @@ const { addTool } = harnessSupport;
 const { context } = sessionSupport;
 const { aborted, deferred } = taskSupport;
 
-function answer(text: string): AssistantMessage {
+function answer(text: string): aiTypes.AssistantMessage {
   return fauxAssistantMessage([fauxText(text)]);
 }
 
-function gated(message: AssistantMessage): {
-  step: FauxResponseStep;
+function gated(message: aiTypes.AssistantMessage): {
+  step: aiTypes.FauxResponseStep;
   reached: Promise<void>;
   release: () => void;
 } {
   const reached = deferred();
   const gate = deferred();
-  const step: FauxResponseStep = (_request, options) =>
+  const step: aiTypes.FauxResponseStep = (_request, options) =>
     Effect.runPromise(
       Effect.gen(function* () {
         reached.resolve();
@@ -83,16 +79,19 @@ const HOLD = fauxAssistantMessage([fauxToolCall("hold", {}, { id: "c1" })], {
   stopReason: "toolUse",
 });
 
-function requestLogImpl(requests: string[][], reply: AssistantMessage): FauxResponseStep {
-  return (request: ModelContext) => {
+function requestLogImpl(
+  requests: string[][],
+  reply: aiTypes.AssistantMessage,
+): aiTypes.FauxResponseStep {
+  return (request: aiTypes.Context) => {
     requests.push(request.messages.map((message) => `${message.role}:${textOf(message) ?? ""}`));
     return reply;
   };
 }
 
 const requestLog: {
-  (reply: AssistantMessage): (requests: string[][]) => ReturnType<typeof requestLogImpl>;
-  (requests: string[][], reply: AssistantMessage): ReturnType<typeof requestLogImpl>;
+  (reply: aiTypes.AssistantMessage): (requests: string[][]) => ReturnType<typeof requestLogImpl>;
+  (requests: string[][], reply: aiTypes.AssistantMessage): ReturnType<typeof requestLogImpl>;
 } = dual(2, requestLogImpl);
 
 function transcript(entries: readonly harnessInputEntriesSupportTypes.EntryRecord[]): unknown[][] {

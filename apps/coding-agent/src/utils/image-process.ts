@@ -3,7 +3,7 @@ import { dual } from "effect/Function";
 
 import { awaited, awaiting } from "../core/awaiting.ts";
 import { convertImageBytesToPng } from "./image-convert.ts";
-import { formatDimensionNote, type ImageResizeOptions, resizeImage } from "./image-resize.ts";
+import { type ImageResizeOptions, formatDimensionNote, resizeImage } from "./image-resize.ts";
 
 export interface ProcessImageOptions {
   autoResizeImages?: boolean;
@@ -64,8 +64,8 @@ function normalizeImage(bytes: Uint8Array, mimeType: string): Promise<Normalized
 
       return {
         bytes: pngBytes,
-        mimeType: "image/png",
         convertedFrom: baseMimeType(mimeType),
+        mimeType: "image/png",
       };
     }),
   );
@@ -87,8 +87,8 @@ function processImageImpl(
       const normalized = yield* awaited(normalizeImage(bytes, mimeType));
       if (normalized === null) {
         return {
-          ok: false,
           message: "[Image omitted: could not be converted to a supported inline image format.]",
+          ok: false,
         };
       }
 
@@ -98,8 +98,8 @@ function processImageImpl(
         );
         if (resized === null) {
           return {
-            ok: false,
             message: "[Image omitted: could not be resized below the inline image size limit.]",
+            ok: false,
           };
         }
 
@@ -110,10 +110,10 @@ function processImageImpl(
         if (dimensionNote !== undefined && dimensionNote !== "") hints.push(dimensionNote);
 
         return {
-          ok: true,
           data: resized.data,
-          mimeType: resized.mimeType,
           hints,
+          mimeType: resized.mimeType,
+          ok: true,
         };
       }
 
@@ -122,10 +122,10 @@ function processImageImpl(
       if (convertedHint !== undefined && convertedHint !== "") hints.push(convertedHint);
 
       return {
-        ok: true,
         data: Buffer.from(normalized.bytes).toString("base64"),
-        mimeType: normalized.mimeType,
         hints,
+        mimeType: normalized.mimeType,
+        ok: true,
       };
     }),
   );

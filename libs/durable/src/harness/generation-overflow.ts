@@ -1,4 +1,4 @@
-import type { AssistantMessage } from "@msa/ai";
+import type aiTypes from "@msa/ai/index.types";
 import type chordTypes from "@msa/chord/index.types";
 import { Effect } from "effect";
 
@@ -14,7 +14,7 @@ const { LiveDoc } = liveModule;
 const compactOverflow = Effect.fnUntraced(function* (
   runtime: generationTypesModule.GenerationRuntime,
   request: generationTypesModule.GenerationRequest,
-  message: AssistantMessage,
+  message: aiTypes.AssistantMessage,
   context: chordTypes.Context,
 ) {
   const { conversationId } = runtime;

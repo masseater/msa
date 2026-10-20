@@ -1,12 +1,15 @@
 import { Clock, Effect } from "effect";
 import { afterEach, describe, expect, it, vi } from "vite-plus/test";
 
-import { stream as streamOpenAIResponses } from "../src/api/openai-responses.ts";
-import { normalizeContext } from "../src/compat.ts";
-import type { Model } from "../src/types.ts";
+import openaiResponses from "../src/api/openai-responses.ts";
+import compatModule from "../src/compat.ts";
+import type typesModule from "../src/types.types.ts";
 import jsonCodec from "./json-codec.ts";
 import modelChoice from "./model-choice.ts";
 import openaiResponsesCompatSupport from "./openai-responses-compat-support.ts";
+
+const { stream: streamOpenAIResponses } = openaiResponses;
+const { normalizeContext } = compatModule;
 
 const { encodeJson } = jsonCodec;
 const { chooseModel, usesApi } = modelChoice;
@@ -15,24 +18,54 @@ const { captureResponsesRequest, respondWith, responsesModel } = openaiResponses
 const tokenCount = 100_000;
 const tokenScale = tokenCount / 1_000_000;
 
+const STANDARD_PRIORITY_MULTIPLIER = 2;
+
 const pricedModel = chooseModel(
   "openai",
   "priced Responses",
-  (model): model is Model<"openai-responses"> =>
-    usesApi("openai-responses")(model) && model.id !== "gpt-5.5" && model.cost.input > 0,
+  (model): model is typesModule.Model<"openai-responses"> =>
+    usesApi("openai-responses")(model) &&
+    model.cost.serviceTiers?.priority === STANDARD_PRIORITY_MULTIPLIER &&
+    model.cost.input > 0,
 );
 const surchargedModel = chooseModel(
   "openai",
   "priority-surcharged Responses",
-  (model): model is Model<"openai-responses"> => model.id === "gpt-5.5",
+  (model): model is typesModule.Model<"openai-responses"> =>
+    usesApi("openai-responses")(model) &&
+    (model.cost.serviceTiers?.priority ?? 0) > STANDARD_PRIORITY_MULTIPLIER,
 );
 
+const priorityOf = (model: typesModule.Model<"openai-responses">) =>
+  model.cost.serviceTiers?.priority ?? 1;
+const flexOf = (model: typesModule.Model<"openai-responses">) => model.cost.serviceTiers?.flex ?? 1;
+
 const serviceTierCases = [
-  { model: pricedModel, multiplier: 2, requested: "priority", returned: "priority" },
-  { model: surchargedModel, multiplier: 2.5, requested: "priority", returned: "priority" },
-  { model: surchargedModel, multiplier: 0.5, requested: "flex", returned: "flex" },
-  { model: pricedModel, multiplier: 2, requested: "priority", returned: "fast" },
-  { model: pricedModel, multiplier: 2, requested: "fast", returned: "fast" },
+  {
+    model: pricedModel,
+    multiplier: priorityOf(pricedModel),
+    requested: "priority",
+    returned: "priority",
+  },
+  {
+    model: surchargedModel,
+    multiplier: priorityOf(surchargedModel),
+    requested: "priority",
+    returned: "priority",
+  },
+  {
+    model: surchargedModel,
+    multiplier: flexOf(surchargedModel),
+    requested: "flex",
+    returned: "flex",
+  },
+  {
+    model: pricedModel,
+    multiplier: priorityOf(pricedModel),
+    requested: "priority",
+    returned: "fast",
+  },
+  { model: pricedModel, multiplier: priorityOf(pricedModel), requested: "fast", returned: "fast" },
 ] as const;
 
 const appliesServiceTierCost = ({
@@ -75,7 +108,7 @@ const appliesServiceTierCost = ({
     }),
   );
 
-const maxOutputTokens = (model: Model<"openai-responses">) =>
+const maxOutputTokens = (model: typesModule.Model<"openai-responses">) =>
   captureResponsesRequest({ maxTokens: 1024 }, { model }).pipe(
     Effect.map(({ payload }) => payload?.max_output_tokens),
   );

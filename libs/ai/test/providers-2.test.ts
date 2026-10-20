@@ -1,17 +1,22 @@
 import { Effect } from "effect";
 import { describe, expect, it } from "vite-plus/test";
 
-import { lazyApi } from "../src/api/lazy.ts";
-import { envApiKeyAuth } from "../src/auth/helpers.ts";
-import type { AuthContext } from "../src/auth/types.ts";
-import { createModels, createProvider } from "../src/models.ts";
-import { anthropicProvider } from "../src/providers/anthropic.ts";
-import type { DeferredHandle } from "../src/types.ts";
+import lazy from "../src/api/lazy.ts";
+import helpers from "../src/auth/helpers.ts";
+import type typesModule from "../src/auth/types.ts";
+import modelsModule from "../src/models.ts";
+import anthropic from "../src/providers/anthropic.ts";
+import type typesModuleModule from "../src/types.types.ts";
 import providersSupport from "./providers-support.ts";
+
+const { createModels, createProvider } = modelsModule;
+const { anthropicProvider } = anthropic;
+const { envApiKeyAuth } = helpers;
+const { lazyApi } = lazy;
 
 const { context, recordingStreams, testModel } = providersSupport;
 
-function fakeAuthContext(env: Record<string, string>): AuthContext {
+function fakeAuthContext(env: Record<string, string>): typesModule.AuthContext {
   return {
     env: (name) => Promise.resolve(env[name]),
     fileExists: () => Promise.resolve(false),
@@ -122,7 +127,7 @@ const lazilyExposesOnlyDeclaredDeferredCapabilities = () =>
         { fetchDeferred: true },
       );
       const model = testModel("api-a", "model-a");
-      const handle: DeferredHandle = {
+      const handle: typesModuleModule.DeferredHandle = {
         api: model.api,
         id: "response-1",
         modelId: model.id,

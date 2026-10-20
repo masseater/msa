@@ -1,11 +1,15 @@
 import { Effect, Stream } from "effect";
 import { beforeEach, describe, expect, it, vi } from "vite-plus/test";
 
-import { stream as streamOpenAICompletions } from "../src/api/openai-completions.ts";
-import { stream as streamOpenAIResponses } from "../src/api/openai-responses.ts";
-import { normalizeContext } from "../src/compat.ts";
-import type { Model } from "../src/types.ts";
+import openaiCompletions from "../src/api/openai-completions.ts";
+import openaiResponses from "../src/api/openai-responses.ts";
+import compat from "../src/compat.ts";
+import type typesModule from "../src/types.types.ts";
 import openaiPermissionDeniedMock from "./openai-permission-denied-mock.ts";
+
+const { normalizeContext } = compat;
+const { stream: streamOpenAICompletions } = openaiCompletions;
+const { stream: streamOpenAIResponses } = openaiResponses;
 
 vi.mock("openai", () =>
   import("./openai-permission-denied-mock.ts").then((module) => module.default),
@@ -19,7 +23,7 @@ const context = normalizeContext({
   tools: [],
 });
 
-const completionsModel: Model<"openai-completions"> = {
+const completionsModel: typesModule.Model<"openai-completions"> = {
   api: "openai-completions",
   baseUrl: "https://openrouter.ai/api/v1",
   contextWindow: 1000,
@@ -32,7 +36,7 @@ const completionsModel: Model<"openai-completions"> = {
   reasoning: false,
 };
 
-const responsesModel: Model<"openai-responses"> = {
+const responsesModel: typesModule.Model<"openai-responses"> = {
   api: "openai-responses",
   baseUrl: "https://api.openai.com/v1",
   contextWindow: 1000,

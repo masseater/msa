@@ -1,4 +1,4 @@
-import { createModels, fauxAssistantMessage, fauxProvider, fauxText, fauxToolCall } from "@msa/ai";
+import ai from "@msa/ai";
 import durable from "@msa/durable";
 import harnessModule from "@msa/durable/harness";
 import { Effect } from "effect";
@@ -9,6 +9,8 @@ import toolsModule from "../src/tools/index.ts";
 import support from "./support.ts";
 import type toolOutputScenarioTypes from "./tool-output-scenario.types.ts";
 import toolOutputStorage from "./tool-output-storage.ts";
+
+const { createModels, fauxAssistantMessage, fauxProvider, fauxText, fauxToolCall } = ai;
 
 const { LiveDoc, defineTool } = durable;
 const { Harness, createRegistry } = harnessModule;

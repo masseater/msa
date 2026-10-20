@@ -1,10 +1,18 @@
-import { isPlainPress, type SgrMouseEvent } from "./alt-screen-mouse-protocol.ts";
-import type { ScrollView } from "./components/scroll-view.ts";
-import { getScrollbarGeometry, getScrollViewBox, type LayoutFrame } from "./layout.ts";
-import { isImageLine } from "./terminal-image-kitty.ts";
-import { truncateToWidth } from "./text-truncate.ts";
-import { compositeTuiLine } from "./tui-component.ts";
-import { visibleWidth } from "./utils.ts";
+import type altScreenEndIndicatorTypes from "./alt-screen-end-indicator.types.ts";
+import altScreenMouseProtocol from "./alt-screen-mouse-protocol.ts";
+import type altScreenMouseProtocolTypes from "./alt-screen-mouse-protocol.types.ts";
+import layoutModule from "./layout.ts";
+import terminalImageKitty from "./terminal-image-kitty.ts";
+import textTruncate from "./text-truncate.ts";
+import tuiComponent from "./tui-component.ts";
+import utils from "./utils.ts";
+
+const { isPlainPress } = altScreenMouseProtocol;
+const { getScrollViewBox, getScrollbarGeometry } = layoutModule;
+const { isImageLine } = terminalImageKitty;
+const { truncateToWidth } = textTruncate;
+const { visibleWidth } = utils;
+const { compositeTuiLine } = tuiComponent;
 
 interface IndicatorRect {
   row: number;
@@ -12,13 +20,7 @@ interface IndicatorRect {
   width: number;
 }
 
-export interface IndicatorFrame {
-  layout: LayoutFrame;
-  scrollView: ScrollView;
-  width: number;
-}
-
-export class ScrollToEndIndicator {
+export default class ScrollToEndIndicator {
   private readonly label: (() => string) | undefined;
   private rect: IndicatorRect | undefined;
 
@@ -26,13 +28,16 @@ export class ScrollToEndIndicator {
     this.label = label;
   }
 
-  hit(event: SgrMouseEvent): boolean {
+  hit(event: altScreenMouseProtocolTypes.SgrMouseEvent): boolean {
     const rect = this.rect;
     if (rect === undefined || !isPlainPress(event)) return false;
     return event.y === rect.row && event.x >= rect.column && event.x < rect.column + rect.width;
   }
 
-  composite(screen: string[], { layout, scrollView, width }: IndicatorFrame): string[] {
+  composite(
+    screen: string[],
+    { layout, scrollView, width }: altScreenEndIndicatorTypes.IndicatorFrame,
+  ): string[] {
     this.rect = undefined;
     if (this.label === undefined || !scrollView.followEnd || scrollView.isFollowingEnd)
       return screen;
@@ -50,7 +55,7 @@ export class ScrollToEndIndicator {
     if (textWidth === 0) return screen;
     const result = [...screen];
     result[row] = compositeTuiLine(result[row] ?? "", text, column, textWidth, width);
-    this.rect = { row, column, width: textWidth };
+    this.rect = { column, row, width: textWidth };
     return result;
   }
 }

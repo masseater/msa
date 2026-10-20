@@ -1,9 +1,12 @@
-import type { AgentToolCall } from "@msa/agent-core";
+import type agentTypes from "@msa/agent-core/index.types";
 import { describe, expect, it } from "vite-plus/test";
 
 import { NESTED_CALL_LIMITS, NestedCallRecorder } from "../src/core/nested-tool-calls.ts";
 
-const call2 = (id: string, args: AgentToolCall["arguments"]): AgentToolCall => ({
+const call2 = (
+  id: string,
+  args: agentTypes.AgentToolCall["arguments"],
+): agentTypes.AgentToolCall => ({
   arguments: args,
   id,
   name: "t",

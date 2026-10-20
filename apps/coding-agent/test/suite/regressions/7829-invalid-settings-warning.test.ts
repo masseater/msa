@@ -1,5 +1,6 @@
 import testing from "@msa/testing";
-import { Container } from "@msa/tui";
+import tui from "@msa/tui";
+import type tuiTypes from "@msa/tui/index.types";
 import { Effect } from "effect";
 import { beforeAll, describe, expect, it, vi } from "vite-plus/test";
 
@@ -8,11 +9,13 @@ import { InteractiveMode } from "../../../src/modes/interactive/interactive-mode
 import { initTheme } from "../../../src/modes/interactive/theme/theme.ts";
 import harnessModule from "../harness.ts";
 
+const { Container } = tui;
+
 const { createHarness } = harnessModule;
 
 const { neverPromise } = testing;
 
-function render(container: Container): string {
+function render(container: tuiTypes.Container): string {
   return container.children.flatMap((child) => child.render(120)).join("\n");
 }
 

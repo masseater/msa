@@ -1,9 +1,11 @@
-import type { ThinkingLevel } from "@msa/agent-core";
-import type { Message } from "@msa/ai";
-import { StringEnum } from "@msa/ai";
+import type agentTypes from "@msa/agent-core/index.types";
+import ai from "@msa/ai";
+import type aiTypes from "@msa/ai/index.types";
 import { Type } from "typebox";
 
 import type { AgentScope } from "./agents.ts";
+
+const { StringEnum } = ai;
 
 export const MAX_PARALLEL_TASKS = 8;
 export const MAX_CONCURRENCY = 4;
@@ -25,7 +27,7 @@ export interface SingleResult {
   agentSource: "user" | "project" | "unknown";
   task: string;
   exitCode: number;
-  messages: Message[];
+  messages: aiTypes.Message[];
   stderr: string;
   usage: UsageStats;
   model?: string | undefined;
@@ -48,7 +50,7 @@ export type OnUpdateCallback = (partial: {
 
 export interface DispatchDefaults {
   model?: string | undefined;
-  thinkingLevel?: ThinkingLevel | undefined;
+  thinkingLevel?: agentTypes.ThinkingLevel | undefined;
 }
 
 export type DisplayItem =
@@ -57,34 +59,30 @@ export type DisplayItem =
 
 const TaskItem = Type.Object({
   agent: Type.String({ description: "Name of the agent to invoke" }),
-  task: Type.String({ description: "Task to delegate to the agent" }),
   cwd: Type.Optional(Type.String({ description: "Working directory for the agent process" })),
+  task: Type.String({ description: "Task to delegate to the agent" }),
 });
 
 const ChainItem = Type.Object({
   agent: Type.String({ description: "Name of the agent to invoke" }),
-  task: Type.String({ description: "Task with optional {previous} placeholder for prior output" }),
   cwd: Type.Optional(Type.String({ description: "Working directory for the agent process" })),
+  task: Type.String({ description: "Task with optional {previous} placeholder for prior output" }),
 });
 
 const AgentScopeSchema = StringEnum(["user", "project", "both"] as const, {
+  default: "user",
   description:
     'Which agent directories to use. Default: "user". Use "both" to include project-local agents.',
-  default: "user",
 });
 
 export const SubagentParams = Type.Object({
   agent: Type.Optional(
     Type.String({ description: "Name of the agent to invoke (for single mode)" }),
   ),
-  task: Type.Optional(Type.String({ description: "Task to delegate (for single mode)" })),
-  tasks: Type.Optional(
-    Type.Array(TaskItem, { description: "Array of {agent, task} for parallel execution" }),
-  ),
+  agentScope: Type.Optional(AgentScopeSchema),
   chain: Type.Optional(
     Type.Array(ChainItem, { description: "Array of {agent, task} for sequential execution" }),
   ),
-  agentScope: Type.Optional(AgentScopeSchema),
   confirmProjectAgents: Type.Optional(
     Type.Boolean({
       description: "Prompt before running project-local agents. Default: true.",
@@ -93,5 +91,9 @@ export const SubagentParams = Type.Object({
   ),
   cwd: Type.Optional(
     Type.String({ description: "Working directory for the agent process (single mode)" }),
+  ),
+  task: Type.Optional(Type.String({ description: "Task to delegate (for single mode)" })),
+  tasks: Type.Optional(
+    Type.Array(TaskItem, { description: "Array of {agent, task} for parallel execution" }),
   ),
 });

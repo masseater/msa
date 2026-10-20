@@ -1,4 +1,4 @@
-import { type FauxResponseStep } from "@msa/ai";
+import type aiTypes from "@msa/ai/index.types";
 import type durableTypes from "@msa/durable/index.types";
 import memory from "@msa/durable/storage/memory";
 import { Effect } from "effect";
@@ -59,7 +59,7 @@ const publishesOneFrame = Effect.gen(function* () {
 
   const setup = chatSetup();
   const release = deferred();
-  const step: FauxResponseStep = (_request, options) =>
+  const step: aiTypes.FauxResponseStep = (_request, options) =>
     runPromise(
       Effect.gen(function* () {
         yield* awaited(Promise.race([release.promise, aborted(options!.signal!)]));

@@ -1,39 +1,25 @@
-import type OpenAI from "openai";
-import type { ChatCompletionMessageParam } from "openai/resources/chat/completions.js";
+import type typesModule from "../types.types.ts";
+import hashModule from "../utils/hash.ts";
 
-import type {
-  ImageContent,
-  Message,
-  Model,
-  TextContent,
-  ThinkingContent,
-  ToolCall,
-} from "../types.ts";
-import { shortHash } from "../utils/hash.ts";
-import type { ResolvedOpenAICompletionsCompat } from "./openai-completions-types.ts";
+const { shortHash } = hashModule;
 
-type KimiToolSystemMessageParam = {
-  role: "system";
-  tools: OpenAI.Chat.Completions.ChatCompletionTool[];
-};
-
-function isTextContentBlock(block: { type: string }): block is TextContent {
+function isTextContentBlock(block: { type: string }): block is typesModule.TextContent {
   return block.type === "text";
 }
 
-function isThinkingContentBlock(block: { type: string }): block is ThinkingContent {
+function isThinkingContentBlock(block: { type: string }): block is typesModule.ThinkingContent {
   return block.type === "thinking";
 }
 
-function isToolCallBlock(block: { type: string }): block is ToolCall {
+function isToolCallBlock(block: { type: string }): block is typesModule.ToolCall {
   return block.type === "toolCall";
 }
 
-function isImageContentBlock(block: { type: string }): block is ImageContent {
+function isImageContentBlock(block: { type: string }): block is typesModule.ImageContent {
   return block.type === "image";
 }
 
-function hasToolHistory(messages: Message[]): boolean {
+function hasToolHistory(messages: typesModule.Message[]): boolean {
   for (const msg of messages) {
     if (msg.role === "toolResult") {
       return true;
@@ -47,23 +33,10 @@ function hasToolHistory(messages: Message[]): boolean {
   return false;
 }
 
-interface ConvertCompletionsMessagesOptions {
-  grammarToolInputProperties?: ReadonlyMap<string, string>;
-}
-
-type ImageUrlPart = { type: "image_url"; image_url: { url: string } };
-
-interface ConvertState {
-  readonly model: Model<"openai-completions">;
-  readonly compat: ResolvedOpenAICompletionsCompat;
-  readonly options: ConvertCompletionsMessagesOptions | undefined;
-  readonly instructionRole: "developer" | "system";
-  readonly anchorsAdditions: boolean;
-  readonly params: ChatCompletionMessageParam[];
-  lastRole: string | null;
-}
-
-function normalizeToolCallId(input: { model: Model<"openai-completions">; id: string }): string {
+function normalizeToolCallId(input: {
+  model: typesModule.Model<"openai-completions">;
+  id: string;
+}): string {
   const { model, id } = input;
   if (id.includes("|")) {
     const separatorIndex = id.indexOf("|");
@@ -86,15 +59,13 @@ function normalizeToolCallId(input: { model: Model<"openai-completions">; id: st
   return id;
 }
 
-export {
+const openaiCompletionsConvertState = {
   hasToolHistory,
   isImageContentBlock,
   isTextContentBlock,
   isThinkingContentBlock,
   isToolCallBlock,
   normalizeToolCallId,
-  type ConvertCompletionsMessagesOptions,
-  type ConvertState,
-  type ImageUrlPart,
-  type KimiToolSystemMessageParam,
 };
+
+export default openaiCompletionsConvertState;

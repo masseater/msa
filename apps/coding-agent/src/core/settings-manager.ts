@@ -1,8 +1,8 @@
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from "fs";
 
-import type { ThinkingLevel } from "@msa/agent-core";
-import type { Model } from "@msa/ai";
-import type { ScrollViewScrollbar, TerminalCapabilities, WheelScrollLines } from "@msa/tui";
+import type agentTypes from "@msa/agent-core/index.types";
+import type aiTypes from "@msa/ai/index.types";
+import type tuiTypes from "@msa/tui/index.types";
 import * as Effect from "effect/Effect";
 import lockfile from "proper-lockfile";
 
@@ -12,7 +12,7 @@ import { stripBom } from "../utils/text.ts";
 import { awaited, awaitingWith } from "./awaiting.ts";
 import { DEFAULT_HTTP_IDLE_TIMEOUT_MS, parseHttpIdleTimeoutMs } from "./http-dispatcher.ts";
 import type { ResolvedMemorySettings } from "./memory/memory.ts";
-import { EMPTY_MODEL_POLICY, mergeModelPolicies, type ModelPolicy } from "./model-policy.ts";
+import { EMPTY_MODEL_POLICY, type ModelPolicy, mergeModelPolicies } from "./model-policy.ts";
 import { ORCHESTRATOR_TOOL_NAMES } from "./orchestrator/tool-names.ts";
 import { dirname, join, randomUuid } from "./platform-node.ts";
 import { nowMs } from "./platform.ts";
@@ -63,8 +63,8 @@ export const CACHE_WARMING_MODES = [
 ] as const satisfies readonly CacheWarmingMode[];
 
 const DEFAULT_COMPACTION_TOKEN_SETTINGS: Required<CompactionModelOverride> = {
-  reserveTokens: SETTINGS_DEFAULTS.compaction.reserveTokens,
   keepRecentTokens: SETTINGS_DEFAULTS.compaction.keepRecentTokens,
+  reserveTokens: SETTINGS_DEFAULTS.compaction.reserveTokens,
 };
 
 function isMergeableObject(value: unknown): value is Record<string, unknown> {
@@ -425,11 +425,11 @@ export class SettingsManager {
   ): { settings: Settings; error: Error | null } {
     try {
       return {
-        settings: SettingsManager.loadFromStorage(storage, scope, projectTrusted),
         error: null,
+        settings: SettingsManager.loadFromStorage(storage, scope, projectTrusted),
       };
     } catch (error) {
-      return { settings: {}, error: error as Error };
+      return { error: error as Error, settings: {} };
     }
   }
 
@@ -829,23 +829,23 @@ export class SettingsManager {
     this.setGlobalSetting("theme", theme);
   }
 
-  getDefaultThinkingLevel(): ThinkingLevel | undefined {
+  getDefaultThinkingLevel(): agentTypes.ThinkingLevel | undefined {
     return this.settings.defaultThinkingLevel;
   }
 
-  setDefaultThinkingLevel(level: ThinkingLevel): void {
+  setDefaultThinkingLevel(level: agentTypes.ThinkingLevel): void {
     this.setGlobalSetting("defaultThinkingLevel", level);
   }
 
-  getModelThinkingLevel(provider: string, modelId: string): ThinkingLevel | undefined {
+  getModelThinkingLevel(provider: string, modelId: string): agentTypes.ThinkingLevel | undefined {
     return this.settings.modelThinkingLevels?.[`${provider}/${modelId}`];
   }
 
-  getAllModelThinkingLevels(): Record<string, ThinkingLevel> {
+  getAllModelThinkingLevels(): Record<string, agentTypes.ThinkingLevel> {
     return { ...(this.settings.modelThinkingLevels ?? {}) };
   }
 
-  setModelThinkingLevel(provider: string, modelId: string, level: ThinkingLevel): void {
+  setModelThinkingLevel(provider: string, modelId: string, level: agentTypes.ThinkingLevel): void {
     if (this.globalSettings.modelThinkingLevels === undefined) {
       this.globalSettings.modelThinkingLevels = {};
     }
@@ -882,7 +882,7 @@ export class SettingsManager {
 
   private getCompactionTokenSetting(
     field: keyof CompactionModelOverride,
-    model?: Pick<Model<string>, "provider" | "id">,
+    model?: Pick<aiTypes.Model<string>, "provider" | "id">,
   ): number {
     const compaction = this.settings.compaction;
     const ordinary = compaction?.[field];
@@ -914,23 +914,23 @@ export class SettingsManager {
     return override ?? ordinary ?? DEFAULT_COMPACTION_TOKEN_SETTINGS[field];
   }
 
-  getCompactionReserveTokens(model?: Pick<Model<string>, "provider" | "id">): number {
+  getCompactionReserveTokens(model?: Pick<aiTypes.Model<string>, "provider" | "id">): number {
     return this.getCompactionTokenSetting("reserveTokens", model);
   }
 
-  getCompactionKeepRecentTokens(model?: Pick<Model<string>, "provider" | "id">): number {
+  getCompactionKeepRecentTokens(model?: Pick<aiTypes.Model<string>, "provider" | "id">): number {
     return this.getCompactionTokenSetting("keepRecentTokens", model);
   }
 
-  getCompactionSettings(model?: Pick<Model<string>, "provider" | "id">): {
+  getCompactionSettings(model?: Pick<aiTypes.Model<string>, "provider" | "id">): {
     enabled: boolean;
     reserveTokens: number;
     keepRecentTokens: number;
   } {
     return {
       enabled: this.getCompactionEnabled(),
-      reserveTokens: this.getCompactionReserveTokens(model),
       keepRecentTokens: this.getCompactionKeepRecentTokens(model),
+      reserveTokens: this.getCompactionReserveTokens(model),
     };
   }
 
@@ -955,7 +955,7 @@ export class SettingsManager {
     return this.settings.orchestrator?.workerModel;
   }
 
-  getOrchestratorWorkerThinkingLevel(): ThinkingLevel | undefined {
+  getOrchestratorWorkerThinkingLevel(): agentTypes.ThinkingLevel | undefined {
     return this.settings.orchestrator?.workerThinkingLevel;
   }
 
@@ -963,7 +963,7 @@ export class SettingsManager {
     return this.settings.orchestrator?.reviewModel;
   }
 
-  getOrchestratorReviewThinkingLevel(): ThinkingLevel | undefined {
+  getOrchestratorReviewThinkingLevel(): agentTypes.ThinkingLevel | undefined {
     return this.settings.orchestrator?.reviewThinkingLevel;
   }
 
@@ -1000,11 +1000,11 @@ export class SettingsManager {
     maxAgentDelayMs: number;
   } {
     return {
-      enabled: this.getRetryEnabled(),
-      maxRetries: this.settings.retry?.maxRetries ?? SETTINGS_DEFAULTS.retry.maxRetries,
       baseDelayMs: this.settings.retry?.baseDelayMs ?? SETTINGS_DEFAULTS.retry.baseDelayMs,
+      enabled: this.getRetryEnabled(),
       maxAgentDelayMs:
         this.settings.retry?.maxAgentDelayMs ?? SETTINGS_DEFAULTS.retry.maxAgentDelayMs,
+      maxRetries: this.settings.retry?.maxRetries ?? SETTINGS_DEFAULTS.retry.maxRetries,
     };
   }
 
@@ -1039,11 +1039,11 @@ export class SettingsManager {
     maxRetryDelayMs: number;
   } {
     return {
-      timeoutMs: this.settings.retry?.provider?.timeoutMs,
       maxRetries: this.settings.retry?.provider?.maxRetries,
       maxRetryDelayMs:
         this.settings.retry?.provider?.maxRetryDelayMs ??
         SETTINGS_DEFAULTS.retry.provider.maxRetryDelayMs,
+      timeoutMs: this.settings.retry?.provider?.timeoutMs,
     };
   }
 
@@ -1258,7 +1258,7 @@ export class SettingsManager {
     return this.settings.thinkingBudgets;
   }
 
-  getTerminalCapabilityOverrides(): Partial<TerminalCapabilities> {
+  getTerminalCapabilityOverrides(): Partial<tuiTypes.TerminalCapabilities> {
     const terminal = this.settings.terminal;
     const images = terminal?.images;
     return {
@@ -1333,12 +1333,12 @@ export class SettingsManager {
     this.setGlobalSetting("fullscreenExitOutput", output);
   }
 
-  getFullscreenScrollbar(): ScrollViewScrollbar {
+  getFullscreenScrollbar(): tuiTypes.ScrollViewScrollbar {
     const mode = this.settings.fullscreenScrollbar;
     return mode === "always" || mode === "hidden" ? mode : SETTINGS_DEFAULTS.fullscreenScrollbar;
   }
 
-  setFullscreenScrollbar(mode: ScrollViewScrollbar): void {
+  setFullscreenScrollbar(mode: tuiTypes.ScrollViewScrollbar): void {
     this.setGlobalSetting("fullscreenScrollbar", mode);
   }
 
@@ -1350,14 +1350,14 @@ export class SettingsManager {
     this.setGlobalSetting("fullscreenCopyOnSelect", enabled);
   }
 
-  getFullscreenWheelScrollLines(): WheelScrollLines {
+  getFullscreenWheelScrollLines(): tuiTypes.WheelScrollLines {
     const lines = this.settings.fullscreenWheelScrollLines;
     return typeof lines === "number" && Number.isFinite(lines)
       ? Math.max(1, Math.min(100, Math.floor(lines)))
       : SETTINGS_DEFAULTS.fullscreenWheelScrollLines;
   }
 
-  setFullscreenWheelScrollLines(lines: WheelScrollLines): void {
+  setFullscreenWheelScrollLines(lines: tuiTypes.WheelScrollLines): void {
     this.globalSettings.fullscreenWheelScrollLines =
       lines === "auto" ? lines : Math.max(1, Math.min(100, Math.floor(lines)));
     this.markModified("fullscreenWheelScrollLines");
@@ -1395,7 +1395,6 @@ export class SettingsManager {
         ? dirname(this.settingsPaths.global)
         : getAgentDir();
     return {
-      enabled: memory?.enabled ?? defaults.enabled,
       database:
         database !== undefined && database !== ""
           ? resolvePath(database, agentDir)
@@ -1412,6 +1411,7 @@ export class SettingsManager {
             ? timeoutMs
             : defaults.embedding.timeoutMs,
       },
+      enabled: memory?.enabled ?? defaults.enabled,
       recall: {
         enabled: memory?.recall?.enabled ?? defaults.recall.enabled,
         limit:

@@ -5,9 +5,12 @@ import { fileURLToPath } from "node:url";
 
 import { Effect } from "effect";
 
-import { overrideEnv, readEnv } from "../src/env.ts";
-import { getNativeClipboard, getNativePlatformHelper } from "../src/native-platform.ts";
+import env from "../src/env.ts";
+import nativePlatform from "../src/native-platform.ts";
 import testPlatform from "./test-platform.ts";
+
+const { overrideEnv, readEnv } = env;
+const { getNativeClipboard, getNativePlatformHelper } = nativePlatform;
 
 const { readFileBytes } = testPlatform;
 

@@ -3,14 +3,19 @@ import { describe, it } from "node:test";
 
 import { Effect } from "effect";
 
-import { HStack } from "../src/components/h-stack.ts";
-import { ScrollView } from "../src/components/scroll-view.ts";
-import { Text } from "../src/components/text.ts";
-import { VStack } from "../src/components/v-stack.ts";
-import { renderLayoutFrame } from "../src/layout.ts";
-import { stripTerminalSequences } from "../src/utils.ts";
+import Text from "../src/components/text.ts";
+import type textTypes from "../src/components/text.types.ts";
+import VStack from "../src/components/v-stack.ts";
+import layout from "../src/layout.ts";
+import utils from "../src/utils.ts";
 import visibleLines from "./layout-helpers.ts";
+import layoutViewportLayoutKit from "./layout-viewport-layout-kit.ts";
 
+const { HStack, ScrollView } = layoutViewportLayoutKit;
+
+const { stripTerminalSequences } = utils;
+
+const { renderLayoutFrame } = layout;
 const sourceLines = [
   "abcd界",
   "abcde2",
@@ -41,7 +46,7 @@ function assertActiveThumb(lines: string[]): void {
   assert.ok(lines[1]!.lastIndexOf(contentBackground) < lines[1]!.lastIndexOf(thumbColor));
 }
 
-const verifyScrollSequence = (content: Text): Effect.Effect<void> =>
+const verifyScrollSequence = (content: textTypes.Text): Effect.Effect<void> =>
   Effect.gen(function* () {
     const scrollView = new ScrollView(content, {
       scrollbar: "auto",
@@ -116,7 +121,7 @@ function verifyFittingContent(): void {
   assert.ok(visible(alwaysFittingFrame.lines).every((line) => line.endsWith("┃")));
 }
 
-function verifyAlwaysOverflowing(content: Text): void {
+function verifyAlwaysOverflowing(content: textTypes.Text): void {
   const alwaysOverflowing = new ScrollView(content, {
     scrollbar: "always",
     scrollbarThumbStyle,

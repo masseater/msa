@@ -1,25 +1,25 @@
-import type { ProgramStatus, Terminal } from "@msa/tui";
+import type tuiTypes from "@msa/tui/index.types";
 
 import { APP_NAME } from "../../config.ts";
 import type { AgentSessionEvent } from "../../core/agent-session.ts";
 
-export type BlockedStatus = { kind: NonNullable<ProgramStatus["kind"]>; message: string };
+export type BlockedStatus = { kind: NonNullable<tuiTypes.ProgramStatus["kind"]>; message: string };
 
 function firstLine(text: string | undefined): string {
   return text?.split(/\r?\n/u, 1)[0]?.trim() || "Error";
 }
 
 export class ProgramStatusReporter {
-  private readonly getTerminal: () => Terminal;
+  private readonly getTerminal: () => tuiTypes.Terminal;
   private readonly getSessionName: () => string | undefined;
   private runActive = false;
   private compacting = false;
-  private runResult: ProgramStatus = { state: "done" };
-  private restingStatus: ProgramStatus = { state: "idle" };
+  private runResult: tuiTypes.ProgramStatus = { state: "done" };
+  private restingStatus: tuiTypes.ProgramStatus = { state: "idle" };
   private readonly blocked = new Map<string, BlockedStatus>();
   private lastReport: string | undefined;
 
-  constructor(getTerminal: () => Terminal, getSessionName: () => string | undefined) {
+  constructor(getTerminal: () => tuiTypes.Terminal, getSessionName: () => string | undefined) {
     this.getTerminal = getTerminal;
     this.getSessionName = getSessionName;
   }
@@ -34,7 +34,7 @@ export class ProgramStatusReporter {
         if (event.message.role !== "assistant") return;
         this.runResult =
           event.message.stopReason === "error"
-            ? { state: "error", message: firstLine(event.message.errorMessage) }
+            ? { message: firstLine(event.message.errorMessage), state: "error" }
             : { state: "done" };
         break;
       case "compaction_start":
@@ -45,13 +45,13 @@ export class ProgramStatusReporter {
         if (this.runActive) {
           if (event.aborted) this.runResult = { state: "idle" };
           else if (event.errorMessage !== undefined && event.errorMessage !== "")
-            this.runResult = { state: "error", message: firstLine(event.errorMessage) };
+            this.runResult = { message: firstLine(event.errorMessage), state: "error" };
         } else if (event.aborted) {
           this.restingStatus = { state: "idle" };
         } else if (event.reason === "manual") {
           this.restingStatus =
             event.errorMessage !== undefined && event.errorMessage !== ""
-              ? { state: "error", message: firstLine(event.errorMessage) }
+              ? { message: firstLine(event.errorMessage), state: "error" }
               : { state: "done" };
         }
         break;
@@ -82,17 +82,17 @@ export class ProgramStatusReporter {
   }
 
   report(): void {
-    const status: ProgramStatus = { ...this.currentStatus(), app: APP_NAME };
+    const status: tuiTypes.ProgramStatus = { ...this.currentStatus(), app: APP_NAME };
     const key = JSON.stringify(status);
     if (key === this.lastReport) return;
     this.lastReport = key;
     this.getTerminal().setProgramStatus(status);
   }
 
-  private currentStatus(): ProgramStatus {
+  private currentStatus(): tuiTypes.ProgramStatus {
     const blocked = [...this.blocked.values()].at(-1);
     if (blocked !== undefined) return { state: "blocked", ...blocked };
-    if (this.compacting) return { state: "working", message: "Compacting context" };
+    if (this.compacting) return { message: "Compacting context", state: "working" };
     const status = this.runActive ? { state: "working" as const } : this.restingStatus;
     if (status.state === "working" || status.state === "done") {
       const message = this.getSessionName();

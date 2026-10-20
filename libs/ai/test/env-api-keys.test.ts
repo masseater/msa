@@ -1,7 +1,9 @@
 import { afterEach, describe, expect, it, vi } from "vite-plus/test";
 
-import { findEnvKeys, getEnvApiKey } from "../src/env-api-keys.ts";
+import envApiKeys from "../src/env-api-keys.ts";
 import env from "./env.ts";
+
+const { findEnvKeys, getEnvApiKey } = envApiKeys;
 
 const { envValue } = env;
 

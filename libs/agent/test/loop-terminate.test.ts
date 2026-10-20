@@ -1,10 +1,12 @@
 import { Effect } from "effect";
 import { describe, expect, it } from "vite-plus/test";
 
-import { agentLoop } from "../src/agent-loop.ts";
-import type { AgentLoopConfig, AgentTool } from "../src/types.ts";
+import agentLoopModule from "../src/agent-loop.ts";
+import type typesModule from "../src/types.ts";
 import fixtures from "./support/fixtures.ts";
 import type fixturesTypes from "./support/fixtures.types.ts";
+
+const { agentLoop } = agentLoopModule;
 
 const {
   collect,
@@ -26,9 +28,9 @@ const bothCalls = toolCallMessage([
 ]);
 
 const run = (
-  echo: AgentTool<any>,
+  echo: typesModule.AgentTool<any>,
   script: fixturesTypes.Script,
-  config: Partial<AgentLoopConfig> = {},
+  config: Partial<typesModule.AgentLoopConfig> = {},
 ) =>
   collect(
     agentLoop(

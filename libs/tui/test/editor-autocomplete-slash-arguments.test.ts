@@ -3,10 +3,13 @@ import { describe, it } from "node:test";
 
 import { Effect } from "effect";
 
-import { type AutocompleteProvider, CombinedAutocompleteProvider } from "../src/autocomplete.ts";
-import { Editor } from "../src/components/editor.ts";
+import CombinedAutocompleteProvider from "../src/autocomplete.ts";
+import type autocompleteTypes from "../src/autocomplete.types.ts";
+import Editor from "../src/components/editor.ts";
 import editorHelpers from "./editor-helpers.ts";
-import { defaultEditorTheme } from "./test-themes.ts";
+import testThemes from "./test-themes.ts";
+
+const { defaultEditorTheme } = testThemes;
 
 const { applyCompletion, createTestTUI, flushAutocomplete, typeText } = editorHelpers;
 
@@ -28,7 +31,7 @@ function appliesExactTypedSlashArgument(): void {
       Effect.gen(function* () {
         const editor = new Editor(createTestTUI(), defaultEditorTheme);
 
-        const mockProvider: AutocompleteProvider = {
+        const mockProvider: autocompleteTypes.AutocompleteProvider = {
           applyCompletion,
           getSuggestions: (lines, _cursorLine, cursorCol) => {
             const text = lines[0] || "";
@@ -72,7 +75,7 @@ function selectsFirstPrefixMatchEnter(): void {
       Effect.gen(function* () {
         const editor = new Editor(createTestTUI(), defaultEditorTheme);
 
-        const mockProvider: AutocompleteProvider = {
+        const mockProvider: autocompleteTypes.AutocompleteProvider = {
           applyCompletion,
           getSuggestions: (lines, _cursorLine, cursorCol) => {
             const text = lines[0] || "";
@@ -114,7 +117,7 @@ function highlightsUniquePrefixMatchUser(): void {
       Effect.gen(function* () {
         const editor = new Editor(createTestTUI(), defaultEditorTheme);
 
-        const mockProvider: AutocompleteProvider = {
+        const mockProvider: autocompleteTypes.AutocompleteProvider = {
           applyCompletion,
           getSuggestions: (lines, _cursorLine, cursorCol) => {
             const text = lines[0] || "";
@@ -154,7 +157,7 @@ function selectsFirstPrefixMatchMultiple(): void {
       Effect.gen(function* () {
         const editor = new Editor(createTestTUI(), defaultEditorTheme);
 
-        const mockProvider: AutocompleteProvider = {
+        const mockProvider: autocompleteTypes.AutocompleteProvider = {
           applyCompletion,
           getSuggestions: (lines, _cursorLine, cursorCol) => {
             const text = lines[0] || "";
@@ -193,7 +196,7 @@ function worksBuiltStyleCommandArgument(): void {
       Effect.gen(function* () {
         const editor = new Editor(createTestTUI(), defaultEditorTheme);
 
-        const mockProvider: AutocompleteProvider = {
+        const mockProvider: autocompleteTypes.AutocompleteProvider = {
           applyCompletion,
           getSuggestions: (lines, _cursorLine, cursorCol) => {
             const text = lines[0] || "";

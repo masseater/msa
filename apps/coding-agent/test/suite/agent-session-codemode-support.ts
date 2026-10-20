@@ -1,14 +1,16 @@
 import { once } from "node:events";
 import { Worker } from "node:worker_threads";
 
-import { fauxAssistantMessage, fauxToolCall } from "@msa/ai";
-import type { ToolResultMessage, Usage } from "@msa/ai/compat";
+import ai from "@msa/ai";
+import type compatTypes from "@msa/ai/compat.types";
 import testing from "@msa/testing";
 import { Effect } from "effect";
 import { type MockInstance, afterEach, beforeEach, expect, vi } from "vite-plus/test";
 
 import harnessModule from "./harness.ts";
 import type harnessTypes from "./harness.types.ts";
+
+const { fauxAssistantMessage, fauxToolCall } = ai;
 
 const { awaited, readBytesFile, removePath, runTest } = testing;
 
@@ -17,7 +19,7 @@ const { getToolResult } = harnessModule;
 const TINY_PNG_BASE64 =
   "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8DwHwAFBQIAX8jx0gAAAABJRU5ErkJggg==";
 
-const usage = (input: number, cost: number): Usage => ({
+const usage = (input: number, cost: number): compatTypes.Usage => ({
   cacheRead: 0,
   cacheWrite: 0,
   cost: { cacheRead: 0, cacheWrite: 0, input: cost, output: 0, total: cost },
@@ -28,7 +30,7 @@ const usage = (input: number, cost: number): Usage => ({
 
 const codemodeResult = (harness: harnessTypes.Harness) => getToolResult(harness, "codemode");
 
-const resultText = (message: ToolResultMessage): string => {
+const resultText = (message: compatTypes.ToolResultMessage): string => {
   const [header, ...items] = message.content;
   expect(header).toEqual({
     text: expect.stringMatching(
@@ -75,7 +77,10 @@ const trackCodemodeWorkers = (): void => {
   );
 };
 
-const runCodemode = (harness: harnessTypes.Harness, code: string): Promise<ToolResultMessage> =>
+const runCodemode = (
+  harness: harnessTypes.Harness,
+  code: string,
+): Promise<compatTypes.ToolResultMessage> =>
   runTest(
     Effect.gen(function* () {
       harness.setResponses([

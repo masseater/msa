@@ -1,6 +1,8 @@
 import { expectTypeOf, it } from "vite-plus/test";
 
-import { OPENAI_MODELS } from "../src/providers/openai.models.ts";
+import openaiModels from "../src/providers/openai.models.ts";
+
+const { OPENAI_MODELS } = openaiModels;
 
 type OpenAICatalog = typeof OPENAI_MODELS;
 type OpenAIModelId = keyof OpenAICatalog;

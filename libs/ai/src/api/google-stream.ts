@@ -1,32 +1,27 @@
-import type { GenerateContentParameters, GoogleGenAI } from "@google/genai";
+import type { GenerateContentParameters } from "@google/genai";
 import { Effect, Stream } from "effect";
 
-import type { Model, TranscriptContext } from "../types.ts";
-import { AssistantMessageEventStream } from "../utils/event-stream.ts";
-import { callHook } from "../utils/hooks.ts";
-import { collapseSystemMessages } from "../utils/transcript.ts";
-import { buildGoogleParams, type GoogleRequestOptions } from "./google-params.ts";
-import { retryGoogleRequest } from "./google-shared.ts";
-import {
-  closeCurrentBlock,
-  createGoogleStreamState,
-  failGoogleStream,
-  googleChunkHandler,
-  type GoogleStreamState,
-} from "./google-stream-events.ts";
-import type { GoogleApiType } from "./google-thinking.ts";
+import type eventStreamTypes from "../utils/event-stream.types.ts";
+import type googleParamsTypes from "./google-params.types.ts";
+import googleShared from "./google-shared.ts";
+import googleStreamEvents from "./google-stream-events.ts";
+import type googleStreamEventsTypes from "./google-stream-events.types.ts";
+import googleStreamKit from "./google-stream-kit.ts";
+import type googleStreamTypes from "./google-stream.types.ts";
+import type googleThinkingTypes from "./google-thinking.types.ts";
 
-export interface GoogleStreamSpec<T extends GoogleApiType, O extends GoogleRequestOptions> {
-  readonly model: Model<T>;
-  readonly context: TranscriptContext;
-  readonly options: O | undefined;
-  readonly adapterName: string;
-  readonly streamName: string;
-  readonly createClient: (options: O | undefined) => GoogleGenAI;
-}
+const { eventStream, googleParams, hooks, transcript } = googleStreamKit;
 
-function finishStream<T extends GoogleApiType>(
-  state: GoogleStreamState<T>,
+const { closeCurrentBlock, createGoogleStreamState, failGoogleStream, googleChunkHandler } =
+  googleStreamEvents;
+const { buildGoogleParams } = googleParams;
+const { callHook } = hooks;
+const { retryGoogleRequest } = googleShared;
+const { AssistantMessageEventStream } = eventStream;
+const { collapseSystemMessages } = transcript;
+
+function finishStream<T extends googleThinkingTypes.GoogleApiType>(
+  state: googleStreamEventsTypes.GoogleStreamState<T>,
   streamName: string,
   signal: AbortSignal | undefined,
 ): void {
@@ -43,27 +38,30 @@ function finishStream<T extends GoogleApiType>(
         : "An unknown error occurred",
     );
   }
-  events.push({ type: "done", reason: output.stopReason, message: output });
+  events.push({ message: output, reason: output.stopReason, type: "done" });
   events.end();
 }
 
 const runGoogleRequest = Effect.fn("runGoogleRequest")(function* <
-  T extends GoogleApiType,
-  O extends GoogleRequestOptions,
->(spec: GoogleStreamSpec<T, O>, state: GoogleStreamState<T>) {
+  T extends googleThinkingTypes.GoogleApiType,
+  O extends googleParamsTypes.GoogleRequestOptions,
+>(
+  spec: googleStreamTypes.GoogleStreamSpec<T, O>,
+  state: googleStreamEventsTypes.GoogleStreamState<T>,
+) {
   const { model, options } = spec;
   if (options?.fetch !== undefined && options.fetch !== globalThis.fetch) {
     throw new Error(`Custom fetch is not supported by the ${spec.adapterName} adapter`);
   }
   const client = spec.createClient(options);
-  let params = buildGoogleParams({ model, context: spec.context, options });
+  let params = buildGoogleParams({ context: spec.context, model, options });
   const nextParams = yield* callHook(() => options?.onPayload?.(params, model));
   if (nextParams !== undefined) params = nextParams as GenerateContentParameters;
   const googleStream = yield* retryGoogleRequest(
     () => client.models.generateContentStream(params),
     options,
   );
-  state.events.push({ type: "start", partial: state.output });
+  state.events.push({ partial: state.output, type: "start" });
   const handleChunk = googleChunkHandler(state);
   yield* Stream.fromAsyncIterable(googleStream, (error) => error).pipe(
     Stream.orDie,
@@ -77,20 +75,27 @@ const runGoogleRequest = Effect.fn("runGoogleRequest")(function* <
   finishStream(state, spec.streamName, options?.signal);
 });
 
-export function runGoogleStream<T extends GoogleApiType, O extends GoogleRequestOptions>(
-  spec: GoogleStreamSpec<T, O>,
-): AssistantMessageEventStream {
+function runGoogleStream<
+  T extends googleThinkingTypes.GoogleApiType,
+  O extends googleParamsTypes.GoogleRequestOptions,
+>(spec: googleStreamTypes.GoogleStreamSpec<T, O>): eventStreamTypes.AssistantMessageEventStream {
   const events = new AssistantMessageEventStream();
   const normalized = { ...spec, context: collapseSystemMessages(spec.context) };
   Effect.runFork(
     Effect.gen(function* () {
-      const state = createGoogleStreamState({ model: spec.model, events });
+      const state = createGoogleStreamState({ events, model: spec.model });
       yield* runGoogleRequest(normalized, state).pipe(
         Effect.catchDefect((error) =>
-          Effect.sync(() => failGoogleStream({ state, error, signal: spec.options?.signal })),
+          Effect.sync(() => failGoogleStream({ error, signal: spec.options?.signal, state })),
         ),
       );
     }),
   );
   return events;
 }
+
+const googleStreamModule = {
+  runGoogleStream,
+};
+
+export default googleStreamModule;

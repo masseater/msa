@@ -1,47 +1,50 @@
-import { Data } from "effect";
+import diagnosticsModule from "../utils/diagnostics.ts";
+import CodexStreamError from "./codex-stream-error.ts";
+import type openaiCodexErrorTypes from "./openai-codex-error.types.ts";
 
-import { formatThrownValue } from "../utils/diagnostics.ts";
+const { formatThrownValue } = diagnosticsModule;
 
 const WEBSOCKET_CONNECTION_LIMIT_REACHED_CODE = "websocket_connection_limit_reached";
 const PREVIOUS_RESPONSE_NOT_FOUND_CODE = "previous_response_not_found";
 
-export class CodexStreamError extends Data.TaggedError("CodexStreamError")<{
-  readonly message: string;
-  readonly kind: "api" | "protocol" | "callback";
-  readonly code?: string | undefined;
-  readonly payload?: unknown;
-  readonly cause?: unknown;
-}> {}
-
-export interface CodexProtocolFailure {
-  readonly source: "SSE" | "WebSocket";
-  readonly cause: unknown;
-  readonly payload: unknown;
-}
-
-export function codexProtocolError({ source, cause, payload }: CodexProtocolFailure) {
+function codexProtocolError({
+  source,
+  cause,
+  payload,
+}: openaiCodexErrorTypes.CodexProtocolFailure) {
   return new CodexStreamError({
-    message: `Invalid Codex ${source} JSON: ${formatThrownValue(cause)}`,
-    kind: "protocol",
     cause,
+    kind: "protocol",
+    message: `Invalid Codex ${source} JSON: ${formatThrownValue(cause)}`,
     payload,
   });
 }
 
-export const isCodexNonTransportError = (error: unknown): boolean =>
-  error instanceof CodexStreamError;
+const isCodexNonTransportError = (error: unknown): boolean => error instanceof CodexStreamError;
 
 const hasApiCode = (error: unknown, code: string): boolean =>
   error instanceof CodexStreamError && error.kind === "api" && error.code === code;
 
-export const isWebSocketConnectionLimitReachedError = (error: unknown): boolean =>
+const isWebSocketConnectionLimitReachedError = (error: unknown): boolean =>
   hasApiCode(error, WEBSOCKET_CONNECTION_LIMIT_REACHED_CODE);
 
-export const isPreviousResponseNotFoundError = (error: unknown): boolean =>
+const isPreviousResponseNotFoundError = (error: unknown): boolean =>
   hasApiCode(error, PREVIOUS_RESPONSE_NOT_FOUND_CODE);
 
-export const requestAbortedError = (): Error => new Error("Request was aborted");
+const requestAbortedError = (): Error => new Error("Request was aborted");
 
-export const throwIfRequestAborted = (signal: AbortSignal | undefined): void => {
+const throwIfRequestAborted = (signal: AbortSignal | undefined): void => {
   if (signal?.aborted === true) throw requestAbortedError();
 };
+
+const openaiCodexError = {
+  CodexStreamError,
+  codexProtocolError,
+  isCodexNonTransportError,
+  isPreviousResponseNotFoundError,
+  isWebSocketConnectionLimitReachedError,
+  requestAbortedError,
+  throwIfRequestAborted,
+};
+
+export default openaiCodexError;

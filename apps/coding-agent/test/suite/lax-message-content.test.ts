@@ -1,5 +1,5 @@
-import type { AgentMessage, AgentToolResult } from "@msa/agent-core";
-import { fauxAssistantMessage, fauxToolCall } from "@msa/ai";
+import type agentTypes from "@msa/agent-core/index.types";
+import ai from "@msa/ai";
 import testing from "@msa/testing";
 import { Effect } from "effect";
 import { Type } from "typebox";
@@ -11,6 +11,8 @@ import {
 } from "../../src/core/session-manager.ts";
 import type { ExtensionFactory } from "../../src/index.ts";
 import harnessModule from "./harness.ts";
+
+const { fauxAssistantMessage, fauxToolCall } = ai;
 
 const { createHarness } = harnessModule;
 
@@ -31,7 +33,8 @@ const normalizesToolResultsFromUntypedTools = Effect.gen(function* () {
     (msa) => {
       msa.registerTool({
         description: "Custom tool that returns a result without content",
-        execute: () => Promise.resolve({ details: {} } as unknown as AgentToolResult<unknown>),
+        execute: () =>
+          Promise.resolve({ details: {} } as unknown as agentTypes.AgentToolResult<unknown>),
         label: "Web Search",
         name: "web_search",
         parameters: Type.Object({}),
@@ -68,7 +71,7 @@ const normalizesNullContentInMessageEnd = Effect.gen(function* () {
             if (event.message.role !== "assistant") return undefined;
 
             return {
-              message: { ...event.message, content: null } as unknown as AgentMessage,
+              message: { ...event.message, content: null } as unknown as agentTypes.AgentMessage,
             };
           }),
         ),

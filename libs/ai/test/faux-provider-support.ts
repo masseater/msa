@@ -1,12 +1,16 @@
 import { Effect, Stream } from "effect";
 
-import { stream } from "../src/compat.ts";
-import type { AssistantMessageEvent } from "../src/types.ts";
+import compat from "../src/compat.ts";
+import type typesModule from "../src/types.types.ts";
 
-function collectEvents(streamResult: ReturnType<typeof stream>): Promise<AssistantMessageEvent[]> {
+const { stream } = compat;
+
+function collectEvents(
+  streamResult: ReturnType<typeof stream>,
+): Promise<typesModule.AssistantMessageEvent[]> {
   return Effect.runPromise(
     Effect.gen(function* () {
-      const events: AssistantMessageEvent[] = [];
+      const events: typesModule.AssistantMessageEvent[] = [];
       yield* Stream.fromAsyncIterable(streamResult, (error) => error).pipe(
         Stream.orDie,
         Stream.runForEach((event) =>

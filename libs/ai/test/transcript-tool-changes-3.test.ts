@@ -1,7 +1,7 @@
 import { Effect } from "effect";
 import { describe, expect, test } from "vite-plus/test";
 
-import type { Model } from "../src/types.ts";
+import type typesModule from "../src/types.types.ts";
 import transcriptToolChangesSupport from "./transcript-tool-changes-support.ts";
 
 const { additionContext, capturePayload, context, modelBase } = transcriptToolChangesSupport;
@@ -9,7 +9,7 @@ const { additionContext, capturePayload, context, modelBase } = transcriptToolCh
 const mapsSystemMessageAdditionsIntoSynthetic = () =>
   Effect.runPromise(
     Effect.gen(function* () {
-      const model: Model<"openai-responses"> = {
+      const model: typesModule.Model<"openai-responses"> = {
         ...modelBase,
         api: "openai-responses",
         compat: { supportsMidConvoSystemMessages: true, supportsToolSearch: true },
@@ -35,7 +35,7 @@ const mapsSystemMessageAdditionsIntoSynthetic = () =>
 const foldsOpenAIUpdatesIntoTheLeading = () =>
   Effect.runPromise(
     Effect.gen(function* () {
-      const model: Model<"openai-responses"> = {
+      const model: typesModule.Model<"openai-responses"> = {
         ...modelBase,
         api: "openai-responses",
         compat: { supportsAdditionalTools: true },
@@ -59,7 +59,7 @@ const foldsOpenAIUpdatesIntoTheLeading = () =>
 const fallsBackToTheCompleteCurrent = () =>
   Effect.runPromise(
     Effect.gen(function* () {
-      const model: Model<"openai-responses"> = {
+      const model: typesModule.Model<"openai-responses"> = {
         ...modelBase,
         api: "openai-responses",
         compat: { supportsAdditionalTools: true, supportsMidConvoSystemMessages: true },
@@ -81,7 +81,7 @@ const fallsBackToTheCompleteCurrent = () =>
 const anchorsKimiAdditionsInToolBearing = () =>
   Effect.runPromise(
     Effect.gen(function* () {
-      const model: Model<"openai-completions"> = {
+      const model: typesModule.Model<"openai-completions"> = {
         ...modelBase,
         api: "openai-completions",
         compat: {

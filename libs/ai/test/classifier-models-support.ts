@@ -1,5 +1,5 @@
-import type { ClassifierContext } from "../src/types.ts";
-const context: ClassifierContext = {
+import type typesModule from "../src/types.types.ts";
+const context: typesModule.ClassifierContext = {
   questions: {
     approved: {
       criteria: { false: "No approval", true: "Approval" },

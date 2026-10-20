@@ -1,10 +1,14 @@
 import { Effect } from "effect";
 import { describe, expect, it } from "vite-plus/test";
 
-import { InMemoryCredentialStore } from "../src/auth/credential-store.ts";
-import { builtinModels, getBuiltinClassifierModels } from "../src/providers/all.ts";
-import { currentTimeMillis } from "../src/utils/clock.ts";
+import credentialStore from "../src/auth/credential-store.ts";
+import all from "../src/providers/all.ts";
+import clock from "../src/utils/clock.ts";
 import classifierModelsSupport from "./classifier-models-support.ts";
+
+const { builtinModels, getBuiltinClassifierModels } = all;
+const { InMemoryCredentialStore } = credentialStore;
+const { currentTimeMillis } = clock;
 
 const { context } = classifierModelsSupport;
 

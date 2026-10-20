@@ -1,34 +1,26 @@
-import {
-  type Component,
-  Container,
-  fuzzyFilter,
-  getKeybindings,
-  Input,
-  type SelectItem,
-  SelectList,
-  type SelectListLayoutOptions,
-  Spacer,
-  Text,
-} from "@msa/tui";
+import tui from "@msa/tui";
+import type tuiTypes from "@msa/tui/index.types";
 
 import { getSelectListTheme, theme } from "../theme/theme.ts";
 
-const SUBMENU_SELECT_LIST_LAYOUT: SelectListLayoutOptions = {
-  minPrimaryColumnWidth: 12,
+const { Container, Input, SelectList, Spacer, Text, fuzzyFilter, getKeybindings } = tui;
+
+const SUBMENU_SELECT_LIST_LAYOUT: tuiTypes.SelectListLayoutOptions = {
   maxPrimaryColumnWidth: 32,
+  minPrimaryColumnWidth: 12,
 };
 
 export interface SelectSubmenuOptions {
   searchable?: boolean | undefined;
-  layout?: SelectListLayoutOptions | undefined;
+  layout?: tuiTypes.SelectListLayoutOptions | undefined;
 }
 
 export class SelectSubmenu extends Container {
-  private selectList: SelectList;
+  private selectList: tuiTypes.SelectList;
   private listChildIndex: number;
-  private allOptions: SelectItem[];
-  private listLayout: SelectListLayoutOptions;
-  private searchInput: Input | undefined;
+  private allOptions: tuiTypes.SelectItem[];
+  private listLayout: tuiTypes.SelectListLayoutOptions;
+  private searchInput: tuiTypes.Input | undefined;
   private onSelectCb: (value: string) => void;
   private onCancelCb: () => void;
   private onSelectionChangeCb?: ((value: string) => void) | undefined;
@@ -36,7 +28,7 @@ export class SelectSubmenu extends Container {
   constructor(
     title: string,
     description: string,
-    options: SelectItem[],
+    options: tuiTypes.SelectItem[],
     currentValue: string,
     onSelect: (value: string) => void,
     onCancel: () => void,
@@ -81,7 +73,7 @@ export class SelectSubmenu extends Container {
     this.addChild(new Text(theme.fg("dim", hint), 0, 0));
   }
 
-  private buildSelectList(options: SelectItem[], preselect: string): SelectList {
+  private buildSelectList(options: tuiTypes.SelectItem[], preselect: string): tuiTypes.SelectList {
     const list = new SelectList(
       options,
       Math.min(options.length, 10),
@@ -137,10 +129,10 @@ export interface SteppedSubmenuStep {
   key: string;
   title: string | ((context: Record<string, string>) => string);
   description: string | ((context: Record<string, string>) => string);
-  options: (context: Record<string, string>) => SelectItem[];
+  options: (context: Record<string, string>) => tuiTypes.SelectItem[];
   preselect?: (context: Record<string, string>) => string | undefined;
   searchable?: boolean;
-  layout?: SelectListLayoutOptions;
+  layout?: tuiTypes.SelectListLayoutOptions;
 }
 
 interface SteppedSubmenuOptions {
@@ -154,7 +146,7 @@ export class SteppedSubmenu extends Container {
   private readonly onComplete: (context: Record<string, string>) => void;
   private readonly onCancel: () => void;
   private readonly opts: SteppedSubmenuOptions;
-  private activeComponent: Component;
+  private activeComponent: tuiTypes.Component;
   private context: Record<string, string>;
 
   constructor(
@@ -172,7 +164,7 @@ export class SteppedSubmenu extends Container {
     this.activeComponent = this.buildStep(opts.startAtStep ?? 0);
   }
 
-  private buildStep(stepIndex: number): Component {
+  private buildStep(stepIndex: number): tuiTypes.Component {
     const step = this.steps[stepIndex];
     if (step === undefined) throw new Error(`Step ${stepIndex} does not exist`);
     const total = this.steps.length;
@@ -215,7 +207,7 @@ export class SteppedSubmenu extends Container {
       },
       undefined,
       step.searchable === true || step.layout !== undefined
-        ? { searchable: step.searchable, layout: step.layout }
+        ? { layout: step.layout, searchable: step.searchable }
         : undefined,
     );
   }

@@ -1,6 +1,8 @@
-import { truncateToWidth, visibleWidth } from "@msa/tui";
+import tui from "@msa/tui";
 
 import { type Cell, type GameState, getCell, getWinLine } from "./tic-tac-toe-game.ts";
+
+const { truncateToWidth, visibleWidth } = tui;
 
 const CELL_WIDTH = 7;
 const CELL_HEIGHT = 3;
@@ -77,7 +79,7 @@ interface RenderContext {
 }
 
 const cellAt = (ctx: RenderContext, r: number, c: number) => ({
-  cell: getCell({ board: ctx.board, row: r, col: c }),
+  cell: getCell({ board: ctx.board, col: c, row: r }),
   isWin: ctx.winCells.has(`${r},${c}`),
 });
 
@@ -164,9 +166,9 @@ const cellRows = (ctx: RenderContext, gridR: number, lineIdx: number): string =>
     contentRow += paintBorder(ctx, "\u2502", isCursorVBorder(ctx, gridR, gridC), borderFgCode(adj));
     if (gridC < 3) {
       contentRow += buildCellContent({
-        mark: getCell({ board: ctx.board, row: gridR, col: gridC }),
-        lineIdx,
         isWin: ctx.winCells.has(`${gridR},${gridC}`),
+        lineIdx,
+        mark: getCell({ board: ctx.board, row: gridR, col: gridC }),
       });
     }
   }
@@ -178,11 +180,11 @@ function renderBoard(opts: BoardRenderOpts): string[] {
   const winLine = getWinLine(board);
   const ctx: RenderContext = {
     board,
-    maxWidth,
-    showCursor: cursor !== undefined,
-    row: cursor?.row ?? -1,
     col: cursor?.col ?? -1,
     cursorSgr: cursor?.owner === "agent" ? "\x1b[33;1m" : "\x1b[32;1m",
+    maxWidth,
+    row: cursor?.row ?? -1,
+    showCursor: cursor !== undefined,
     winCells: new Set((winLine ?? []).map(([r, c]) => `${r},${c}`)),
   };
 
@@ -207,12 +209,12 @@ export function renderVisualBoard(request: {
   const cursor =
     state.status === "playing"
       ? {
-          row: isUserTurn ? state.userCursorRow : state.agentCursorRow,
           col: isUserTurn ? state.userCursorCol : state.agentCursorCol,
           owner: (isUserTurn ? "user" : "agent") as "user" | "agent",
+          row: isUserTurn ? state.userCursorRow : state.agentCursorRow,
         }
       : undefined;
-  return renderBoard({ board: state.board, maxWidth, cursor });
+  return renderBoard({ board: state.board, cursor, maxWidth });
 }
 
 export function renderBoardSnapshot(request: {

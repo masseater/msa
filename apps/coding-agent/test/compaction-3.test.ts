@@ -1,5 +1,5 @@
-import type { AgentMessage } from "@msa/agent-core";
-import type { AssistantMessage, Usage } from "@msa/ai/compat";
+import type agentTypes from "@msa/agent-core/index.types";
+import type compatTypes from "@msa/ai/compat.types";
 import testing from "@msa/testing";
 import { describe, expect, it } from "vite-plus/test";
 
@@ -7,7 +7,12 @@ import { estimateContextTokens } from "../src/core/compaction/index.ts";
 
 const { currentTimeMillis } = testing;
 
-function createMockUsage(input: number, output: number, cacheRead = 0, cacheWrite = 0): Usage {
+function createMockUsage(
+  input: number,
+  output: number,
+  cacheRead = 0,
+  cacheWrite = 0,
+): compatTypes.Usage {
   return {
     cacheRead,
     cacheWrite,
@@ -18,11 +23,14 @@ function createMockUsage(input: number, output: number, cacheRead = 0, cacheWrit
   };
 }
 
-function createUserMessage(text: string): AgentMessage {
+function createUserMessage(text: string): agentTypes.AgentMessage {
   return { content: text, role: "user", timestamp: currentTimeMillis() };
 }
 
-function createAssistantMessage(text: string, usage?: Usage): AssistantMessage {
+function createAssistantMessage(
+  text: string,
+  usage?: compatTypes.Usage,
+): compatTypes.AssistantMessage {
   return {
     api: "anthropic-messages" as const,
     content: [{ text, type: "text" as const }],
@@ -36,7 +44,7 @@ function createAssistantMessage(text: string, usage?: Usage): AssistantMessage {
 }
 
 const usesTheLastNonZeroAssistantUsage = () => {
-  const messages: AgentMessage[] = [
+  const messages: agentTypes.AgentMessage[] = [
     createUserMessage("Hello"),
     createAssistantMessage("Hi", createMockUsage(100, 50)),
     createUserMessage("continue"),

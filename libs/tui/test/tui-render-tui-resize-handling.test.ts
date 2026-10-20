@@ -3,12 +3,14 @@ import { describe, it } from "node:test";
 
 import { Effect } from "effect";
 
-import { type TUI } from "../src/tui-interface.ts";
-import { TuiMainScreen } from "../src/tui-main-screen.ts";
+import type tuiInterfaceTypes from "../src/tui-interface.types.ts";
+import TuiMainScreen from "../src/tui-main-screen.ts";
 import tuiRenderHelpers from "./tui-render-helpers.ts";
 import LoggingVirtualTerminal from "./tui-render-logging-virtual-terminal.ts";
 import TestComponent from "./tui-render-test-component.ts";
-import { VirtualTerminal } from "./virtual-terminal.ts";
+import virtualTerminal from "./virtual-terminal.ts";
+
+const { VirtualTerminal } = virtualTerminal;
 
 const { getCellItalic, withEnv } = tuiRenderHelpers;
 
@@ -19,7 +21,7 @@ describe("TUI resize handling", () => {
         { TERMUX_VERSION: "1" },
         Effect.gen(function* () {
           const terminal = new LoggingVirtualTerminal(40, 10);
-          const tui: TUI = new TuiMainScreen(terminal);
+          const tui: tuiInterfaceTypes.TUI = new TuiMainScreen(terminal);
           const component = new TestComponent();
           tui.addChild(component);
 
@@ -65,7 +67,7 @@ describe("TUI resize handling", () => {
     Effect.runPromise(
       Effect.gen(function* () {
         const terminal = new VirtualTerminal(40, 10);
-        const tui: TUI = new TuiMainScreen(terminal);
+        const tui: tuiInterfaceTypes.TUI = new TuiMainScreen(terminal);
         const component = new TestComponent();
         tui.addChild(component);
 
@@ -90,7 +92,7 @@ describe("TUI content shrinkage", () => {
     Effect.runPromise(
       Effect.gen(function* () {
         const terminal = new VirtualTerminal(40, 10);
-        const tui: TUI = new TuiMainScreen(terminal);
+        const tui: tuiInterfaceTypes.TUI = new TuiMainScreen(terminal);
         tui.setClearOnShrink(true);
         const component = new TestComponent();
         tui.addChild(component);
@@ -123,7 +125,7 @@ describe("TUI content shrinkage", () => {
     Effect.runPromise(
       Effect.gen(function* () {
         const terminal = new VirtualTerminal(40, 10);
-        const tui: TUI = new TuiMainScreen(terminal);
+        const tui: tuiInterfaceTypes.TUI = new TuiMainScreen(terminal);
         tui.setClearOnShrink(true);
         const component = new TestComponent();
         tui.addChild(component);
@@ -150,7 +152,7 @@ describe("TUI content shrinkage", () => {
     Effect.runPromise(
       Effect.gen(function* () {
         const terminal = new VirtualTerminal(40, 10);
-        const tui: TUI = new TuiMainScreen(terminal);
+        const tui: tuiInterfaceTypes.TUI = new TuiMainScreen(terminal);
         tui.setClearOnShrink(true);
         const component = new TestComponent();
         tui.addChild(component);
@@ -177,7 +179,7 @@ describe("TUI differential rendering", () => {
     Effect.runPromise(
       Effect.gen(function* () {
         const terminal = new VirtualTerminal(40, 10);
-        const tui: TUI = new TuiMainScreen(terminal);
+        const tui: tuiInterfaceTypes.TUI = new TuiMainScreen(terminal);
         const component = new TestComponent();
         tui.addChild(component);
 
@@ -209,7 +211,7 @@ describe("TUI differential rendering", () => {
     Effect.runPromise(
       Effect.gen(function* () {
         const terminal = new VirtualTerminal(40, 10);
-        const tui: TUI = new TuiMainScreen(terminal);
+        const tui: tuiInterfaceTypes.TUI = new TuiMainScreen(terminal);
         const component = new TestComponent();
         tui.addChild(component);
 
@@ -237,7 +239,7 @@ describe("TUI differential rendering", () => {
     Effect.runPromise(
       Effect.gen(function* () {
         const terminal = new VirtualTerminal(20, 6);
-        const tui: TUI = new TuiMainScreen(terminal);
+        const tui: tuiInterfaceTypes.TUI = new TuiMainScreen(terminal);
         const component = new TestComponent();
         tui.addChild(component);
 

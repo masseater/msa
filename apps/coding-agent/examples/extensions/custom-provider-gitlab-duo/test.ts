@@ -1,11 +1,6 @@
 import { NodeServices } from "@effect/platform-node";
-import {
-  type Api,
-  type Context,
-  type Model,
-  registerApiProvider,
-  streamSimple,
-} from "@msa/ai/compat";
+import compat from "@msa/ai/compat";
+import type compatTypes from "@msa/ai/compat.types";
 import { getAgentDir } from "@msa/coding-agent";
 import {
   Clock,
@@ -21,6 +16,8 @@ import {
 } from "effect";
 
 import { MODELS, streamGitLabDuo } from "./index.ts";
+
+const { registerApiProvider, streamSimple } = compat;
 
 const runtime = ManagedRuntime.make(NodeServices.layer);
 const pathService = runtime.runSync(Path.Path);
@@ -55,17 +52,17 @@ const readGitLabAccess = Effect.gen(function* () {
   return access;
 });
 
-const buildModel = (cfg: (typeof MODELS)[number]): Model<Api> => ({
-  id: cfg.id,
-  name: cfg.name,
-  api: "gitlab-duo-api" as Api,
-  provider: "gitlab-duo",
+const buildModel = (cfg: (typeof MODELS)[number]): compatTypes.Model<compatTypes.Api> => ({
+  api: "gitlab-duo-api" as compatTypes.Api,
   baseUrl: cfg.baseUrl,
-  reasoning: cfg.reasoning,
-  input: cfg.input,
-  cost: cfg.cost,
   contextWindow: cfg.contextWindow,
+  cost: cfg.cost,
+  id: cfg.id,
+  input: cfg.input,
   maxTokens: cfg.maxTokens,
+  name: cfg.name,
+  provider: "gitlab-duo",
+  reasoning: cfg.reasoning,
 });
 
 interface ProviderEvent {
@@ -112,17 +109,17 @@ const runTest = Effect.gen(function* () {
   const gitlabAccess = yield* readGitLabAccess;
 
   registerApiProvider({
-    api: "gitlab-duo-api" as Api,
+    api: "gitlab-duo-api" as compatTypes.Api,
     stream: streamGitLabDuo,
     streamSimple: streamGitLabDuo,
   });
 
   const model = buildModel(cfg);
-  const context: Context = {
+  const context: compatTypes.Context = {
     messages: [
       {
-        role: "user",
         content: "Say hello in exactly 3 words.",
+        role: "user",
         timestamp: yield* Clock.currentTimeMillis,
       },
     ],

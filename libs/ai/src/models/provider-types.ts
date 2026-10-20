@@ -1,109 +1,92 @@
-import type { Credential, ProviderAuth } from "../auth/types.ts";
-import type { ModelsStoreEntry } from "../models-store.ts";
-import type {
-  Api,
-  ApiStreamOptions,
-  AssistantImages,
-  AssistantMessageEventStream,
-  ClassifierApi,
-  ClassifierContext,
-  ClassifierModel,
-  ClassifierOptions,
-  ClassifierResult,
-  DeferredCancelOptions,
-  DeferredFetchOptions,
-  DeferredHandle,
-  ImageApi,
-  ImageModel,
-  ImagesContext,
-  ImagesOptions,
-  Model,
-  ProviderHeaders,
-  SimpleStreamOptions,
-  TranscriptContext,
-} from "../types.ts";
+import type typesModule from "../auth/types.ts";
+import type modelsStoreTypes from "../models-store.types.ts";
+import type typesModuleModule from "../types.types.ts";
 
-export interface ModelsPublication {
-  persist?: ModelsStoreEntry | null;
-  update?: () => void;
+declare namespace providerTypesModule {
+  interface ModelsPublication {
+    persist?: modelsStoreTypes.ModelsStoreEntry | null;
+    update?: () => void;
+  }
+
+  interface RefreshModelsContext {
+    credential?: typesModule.Credential | undefined;
+    stored?: Readonly<modelsStoreTypes.ModelsStoreEntry> | undefined;
+    publish(publication: ModelsPublication): Promise<boolean>;
+    allowNetwork: boolean;
+    force?: boolean | undefined;
+    signal: AbortSignal;
+    baseUrl?: string | undefined;
+  }
+
+  type ProviderModel<TApi extends typesModuleModule.Api> =
+    | typesModuleModule.Model<TApi>
+    | typesModuleModule.ImageModel<typesModuleModule.ImageApi>
+    | typesModuleModule.ClassifierModel<typesModuleModule.ClassifierApi>;
+
+  interface Provider<TApi extends typesModuleModule.Api = typesModuleModule.Api> {
+    readonly id: string;
+    readonly name: string;
+
+    readonly baseUrl?: string | undefined;
+    readonly headers?: typesModuleModule.ProviderHeaders | undefined;
+
+    readonly auth: typesModule.ProviderAuth;
+
+    getModels(): readonly typesModuleModule.Model<TApi>[];
+
+    getAllModels?(): readonly ProviderModel<TApi>[];
+
+    refreshModels?(context: RefreshModelsContext): Promise<void>;
+
+    filterModels?(
+      models: readonly typesModuleModule.Model<TApi>[],
+      credential: typesModule.Credential | undefined,
+    ): readonly typesModuleModule.Model<TApi>[];
+
+    filterAllModels?(
+      models: readonly ProviderModel<TApi>[],
+      credential: typesModule.Credential | undefined,
+    ): readonly ProviderModel<TApi>[];
+
+    stream<T extends TApi>(
+      model: typesModuleModule.Model<T>,
+      context: typesModuleModule.TranscriptContext,
+      options?: typesModuleModule.ApiStreamOptions<T>,
+    ): typesModuleModule.AssistantMessageEventStream;
+
+    streamSimple(
+      model: typesModuleModule.Model<TApi>,
+      context: typesModuleModule.TranscriptContext,
+      options?: typesModuleModule.SimpleStreamOptions,
+    ): typesModuleModule.AssistantMessageEventStream;
+    fetchDeferred?(
+      model: typesModuleModule.Model<TApi>,
+      handle: typesModuleModule.DeferredHandle,
+      options?: typesModuleModule.DeferredFetchOptions,
+    ): typesModuleModule.AssistantMessageEventStream;
+    cancelDeferred?(
+      model: typesModuleModule.Model<TApi>,
+      handle: typesModuleModule.DeferredHandle,
+      options?: typesModuleModule.DeferredCancelOptions,
+    ): Promise<void>;
+    countTokens?(
+      model: typesModuleModule.Model<TApi>,
+      context: typesModuleModule.TranscriptContext,
+      options?: typesModuleModule.SimpleStreamOptions,
+    ): Promise<number>;
+
+    generateImages?(
+      model: typesModuleModule.ImageModel<typesModuleModule.ImageApi>,
+      context: typesModuleModule.ImagesContext,
+      options?: typesModuleModule.ImagesOptions,
+    ): Promise<typesModuleModule.AssistantImages>;
+
+    classify?(
+      model: typesModuleModule.ClassifierModel<typesModuleModule.ClassifierApi>,
+      context: typesModuleModule.ClassifierContext,
+      options?: typesModuleModule.ClassifierOptions,
+    ): Promise<typesModuleModule.ClassifierResult>;
+  }
 }
 
-export interface RefreshModelsContext {
-  credential?: Credential | undefined;
-  stored?: Readonly<ModelsStoreEntry> | undefined;
-  publish(publication: ModelsPublication): Promise<boolean>;
-  allowNetwork: boolean;
-  force?: boolean | undefined;
-  signal: AbortSignal;
-  baseUrl?: string | undefined;
-}
-
-export type ProviderModel<TApi extends Api> =
-  | Model<TApi>
-  | ImageModel<ImageApi>
-  | ClassifierModel<ClassifierApi>;
-
-export interface Provider<TApi extends Api = Api> {
-  readonly id: string;
-  readonly name: string;
-
-  readonly baseUrl?: string | undefined;
-  readonly headers?: ProviderHeaders | undefined;
-
-  readonly auth: ProviderAuth;
-
-  getModels(): readonly Model<TApi>[];
-
-  getAllModels?(): readonly ProviderModel<TApi>[];
-
-  refreshModels?(context: RefreshModelsContext): Promise<void>;
-
-  filterModels?(
-    models: readonly Model<TApi>[],
-    credential: Credential | undefined,
-  ): readonly Model<TApi>[];
-
-  filterAllModels?(
-    models: readonly ProviderModel<TApi>[],
-    credential: Credential | undefined,
-  ): readonly ProviderModel<TApi>[];
-
-  stream<T extends TApi>(
-    model: Model<T>,
-    context: TranscriptContext,
-    options?: ApiStreamOptions<T>,
-  ): AssistantMessageEventStream;
-
-  streamSimple(
-    model: Model<TApi>,
-    context: TranscriptContext,
-    options?: SimpleStreamOptions,
-  ): AssistantMessageEventStream;
-  fetchDeferred?(
-    model: Model<TApi>,
-    handle: DeferredHandle,
-    options?: DeferredFetchOptions,
-  ): AssistantMessageEventStream;
-  cancelDeferred?(
-    model: Model<TApi>,
-    handle: DeferredHandle,
-    options?: DeferredCancelOptions,
-  ): Promise<void>;
-  countTokens?(
-    model: Model<TApi>,
-    context: TranscriptContext,
-    options?: SimpleStreamOptions,
-  ): Promise<number>;
-
-  generateImages?(
-    model: ImageModel<ImageApi>,
-    context: ImagesContext,
-    options?: ImagesOptions,
-  ): Promise<AssistantImages>;
-
-  classify?(
-    model: ClassifierModel<ClassifierApi>,
-    context: ClassifierContext,
-    options?: ClassifierOptions,
-  ): Promise<ClassifierResult>;
-}
+export type { providerTypesModule as default };

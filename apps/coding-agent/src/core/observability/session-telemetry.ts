@@ -1,21 +1,23 @@
-import type { AgentMessage } from "@msa/agent-core";
-import type { AssistantMessage } from "@msa/ai/compat";
-import { contentText } from "@msa/ai/utils/text";
-import type { SpanAttributes, TelemetryContext } from "@msa/telemetry";
+import type agentTypes from "@msa/agent-core/index.types";
+import type compatTypes from "@msa/ai/compat.types";
+import textModule from "@msa/ai/utils/text";
+import type telemetryTypes from "@msa/telemetry/index.types";
 
 import type { AgentSessionEvent } from "../agent-session.ts";
 import { type OpenSpan, openSpan } from "./open-span.ts";
 
+const { contentText } = textModule;
+
 export type SessionTelemetryRole = "main" | "worker" | "reviewer";
 
 export interface SessionTelemetryOptions {
-  readonly context: TelemetryContext;
+  readonly context: telemetryTypes.TelemetryContext;
   readonly role: SessionTelemetryRole;
 }
 
 const ERROR_TEXT_LIMIT = 300;
 
-function isAssistant(message: AgentMessage): message is AssistantMessage {
+function isAssistant(message: agentTypes.AgentMessage): message is compatTypes.AssistantMessage {
   return message.role === "assistant";
 }
 
@@ -32,7 +34,7 @@ function toolErrorText(result: unknown): string {
     : "";
 }
 
-function requestOutcome(message: AssistantMessage): "ok" | "error" | "aborted" {
+function requestOutcome(message: compatTypes.AssistantMessage): "ok" | "error" | "aborted" {
   if (message.stopReason === "aborted") return "aborted";
   return message.stopReason === "error" ? "error" : "ok";
 }
@@ -43,7 +45,7 @@ interface PendingRequest {
 }
 
 export class SessionTelemetry {
-  readonly #context: TelemetryContext;
+  readonly #context: telemetryTypes.TelemetryContext;
   readonly #role: SessionTelemetryRole;
   #turn: OpenSpan | undefined;
   #turnIndex = 0;
@@ -51,7 +53,7 @@ export class SessionTelemetry {
   readonly #tools = new Map<string, OpenSpan>();
   #compaction: OpenSpan | undefined;
 
-  constructor(context: TelemetryContext, role: SessionTelemetryRole) {
+  constructor(context: telemetryTypes.TelemetryContext, role: SessionTelemetryRole) {
     this.#context = context;
     this.#role = role;
   }
@@ -79,8 +81,8 @@ export class SessionTelemetry {
       case "compaction_start":
         this.#compaction?.end();
         this.#compaction = openSpan(this.#context, {
-          name: "msa.compaction",
           attributes: { "msa.compaction.reason": event.reason },
+          name: "msa.compaction",
         });
         break;
       case "compaction_end":
@@ -88,21 +90,21 @@ export class SessionTelemetry {
           event.errorMessage === undefined
             ? undefined
             : {
+                error: { message: firstLines(event.errorMessage), name: "CompactionError" },
                 status: "error",
-                error: { name: "CompactionError", message: firstLines(event.errorMessage) },
               },
         );
         this.#compaction = undefined;
         break;
       case "auto_retry_start":
         (this.#turn?.span ?? this.#context).log({
-          severity: "warn",
-          body: "msa.llm.retry",
           attributes: {
+            "error.message": firstLines(event.errorMessage),
             "msa.retry.attempt": event.attempt,
             "msa.retry.max_attempts": event.maxAttempts,
-            "error.message": firstLines(event.errorMessage),
           },
+          body: "msa.llm.retry",
+          severity: "warn",
         });
         break;
       default:
@@ -120,7 +122,7 @@ export class SessionTelemetry {
     this.#endTurn();
   }
 
-  #parent(): TelemetryContext {
+  #parent(): telemetryTypes.TelemetryContext {
     return this.#turn?.span ?? this.#context;
   }
 
@@ -128,8 +130,8 @@ export class SessionTelemetry {
     this.#endTurn();
     this.#turnIndex += 1;
     this.#turn = openSpan(this.#context, {
-      name: "msa.turn",
       attributes: { "msa.session.role": this.#role, "msa.turn.index": this.#turnIndex },
+      name: "msa.turn",
     });
   }
 
@@ -138,21 +140,21 @@ export class SessionTelemetry {
     this.#turn = undefined;
   }
 
-  #startRequest(message: AssistantMessage): void {
+  #startRequest(message: compatTypes.AssistantMessage): void {
     this.#request?.span.end();
     this.#request = {
       span: openSpan(this.#parent(), {
-        name: "msa.llm.request",
         attributes: {
           "gen_ai.provider.name": message.provider,
           "gen_ai.request.model": message.model,
         },
+        name: "msa.llm.request",
       }),
       startedAt: performance.now(),
     };
   }
 
-  #endRequest(message: AssistantMessage): void {
+  #endRequest(message: compatTypes.AssistantMessage): void {
     const request = this.#request ?? {
       span: openSpan(this.#parent(), { name: "msa.llm.request" }),
       startedAt: performance.now(),
@@ -160,76 +162,76 @@ export class SessionTelemetry {
     this.#request = undefined;
     const { usage } = message;
     const outcome = requestOutcome(message);
-    const model: SpanAttributes = {
+    const model: telemetryTypes.SpanAttributes = {
       "gen_ai.provider.name": message.provider,
       "gen_ai.request.model": message.model,
     };
     request.span.span.setAttributes({
       ...model,
+      "error.type": outcome === "ok" ? undefined : message.stopReason,
       "gen_ai.response.model": message.responseModel ?? message.model,
-      "msa.thinking_level": message.thinkingLevel,
-      "msa.stop_reason": message.stopReason,
       "gen_ai.usage.input_tokens": usage.input,
       "gen_ai.usage.output_tokens": usage.output,
+      "msa.cost.usd": usage.cost.total,
+      "msa.stop_reason": message.stopReason,
+      "msa.thinking_level": message.thinkingLevel,
       "msa.usage.cache_read_tokens": usage.cacheRead,
       "msa.usage.cache_write_tokens": usage.cacheWrite,
-      "msa.cost.usd": usage.cost.total,
-      "error.type": outcome === "ok" ? undefined : message.stopReason,
     });
     this.#turn?.span.setAttributes({ ...model, "msa.thinking_level": message.thinkingLevel });
     request.span.end(
       outcome === "ok"
         ? undefined
         : {
+            error: { message: firstLines(message.errorMessage ?? ""), name: message.stopReason },
             status: "error",
-            error: { name: message.stopReason, message: firstLines(message.errorMessage ?? "") },
           },
     );
     this.#recordRequestMetrics(message, model, outcome, request.startedAt);
   }
 
   #recordRequestMetrics(
-    message: AssistantMessage,
-    model: SpanAttributes,
+    message: compatTypes.AssistantMessage,
+    model: telemetryTypes.SpanAttributes,
     outcome: string,
     startedAt: number,
   ): void {
     const attributes = { ...model, "msa.session.role": this.#role };
     const tokens = {
-      input: message.usage.input,
-      output: message.usage.output,
       cache_read: message.usage.cacheRead,
       cache_write: message.usage.cacheWrite,
+      input: message.usage.input,
+      output: message.usage.output,
     };
     for (const [type, value] of Object.entries(tokens)) {
       if (value > 0) {
         this.#context.recordMetric({
+          attributes: { ...attributes, "msa.token.type": type },
+          description: "Tokens used by LLM requests",
           kind: "counter",
           name: "msa.llm.tokens",
-          value,
           unit: "{token}",
-          description: "Tokens used by LLM requests",
-          attributes: { ...attributes, "msa.token.type": type },
+          value,
         });
       }
     }
     if (message.usage.cost.total > 0) {
       this.#context.recordMetric({
+        attributes,
+        description: "Cost of LLM requests",
         kind: "counter",
         name: "msa.llm.cost",
-        value: message.usage.cost.total,
         unit: "USD",
-        description: "Cost of LLM requests",
-        attributes,
+        value: message.usage.cost.total,
       });
     }
     this.#context.recordMetric({
+      attributes: { ...attributes, "msa.outcome": outcome },
+      description: "Time from the start of an LLM response to its end",
       kind: "histogram",
       name: "msa.llm.request.duration",
-      value: (performance.now() - startedAt) / 1000,
       unit: "s",
-      description: "Time from the start of an LLM response to its end",
-      attributes: { ...attributes, "msa.outcome": outcome },
+      value: (performance.now() - startedAt) / 1000,
     });
   }
 
@@ -238,8 +240,8 @@ export class SessionTelemetry {
     this.#tools.set(
       toolCallId,
       openSpan(this.#parent(), {
+        attributes: { "gen_ai.tool.call.id": toolCallId, "gen_ai.tool.name": toolName },
         name: "msa.tool.call",
-        attributes: { "gen_ai.tool.name": toolName, "gen_ai.tool.call.id": toolCallId },
       }),
     );
   }
@@ -248,18 +250,18 @@ export class SessionTelemetry {
     const span =
       this.#tools.get(toolCallId) ??
       openSpan(this.#parent(), {
+        attributes: { "gen_ai.tool.call.id": toolCallId, "gen_ai.tool.name": toolName },
         name: "msa.tool.call",
-        attributes: { "gen_ai.tool.name": toolName, "gen_ai.tool.call.id": toolCallId },
       });
     this.#tools.delete(toolCallId);
     const outcome = isError ? "error" : "ok";
     this.#context.recordMetric({
+      attributes: { "gen_ai.tool.name": toolName, "msa.outcome": outcome },
+      description: "Tool calls by tool and outcome",
       kind: "counter",
       name: "msa.tool.calls",
-      value: 1,
       unit: "{call}",
-      description: "Tool calls by tool and outcome",
-      attributes: { "gen_ai.tool.name": toolName, "msa.outcome": outcome },
+      value: 1,
     });
     if (!isError) {
       span.end();
@@ -268,10 +270,10 @@ export class SessionTelemetry {
     const message = toolErrorText(result);
     span.span.setAttributes({ "error.type": "tool_error" });
     span.span.log({
-      severity: "warn",
+      attributes: { "error.message": message, "gen_ai.tool.name": toolName },
       body: "msa.tool.failed",
-      attributes: { "gen_ai.tool.name": toolName, "error.message": message },
+      severity: "warn",
     });
-    span.end({ status: "error", error: { name: "ToolError", message } });
+    span.end({ error: { message, name: "ToolError" }, status: "error" });
   }
 }

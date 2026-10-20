@@ -1,27 +1,30 @@
 import * as NodeRuntime from "@effect/platform-node/NodeRuntime";
 import { Clock, Console, Effect } from "effect";
 
-import { stream as streamOpenAICodexResponses } from "../src/api/openai-codex-responses.ts";
-import { closeOpenAICodexWebSocketSessions } from "../src/api/openai-codex-ws-cache.ts";
-import {
-  getOpenAICodexWebSocketDebugStats,
-  resetOpenAICodexWebSocketDebugStats,
-} from "../src/api/openai-codex-ws-stats.ts";
-import { normalizeContext } from "../src/compat.ts";
-import type { AssistantMessage, Model, ToolCall, TranscriptContext } from "../src/types.ts";
+import openaiCodexResponses from "../src/api/openai-codex-responses.ts";
+import openaiCodexWsCache from "../src/api/openai-codex-ws-cache.ts";
+import openaiCodexWsStats from "../src/api/openai-codex-ws-stats.ts";
+import compat from "../src/compat.ts";
+import type typesModule from "../src/types.types.ts";
 import probeInput from "./codex-websocket-cached-probe-input.ts";
 import modelChoice from "./model-choice.ts";
 import resolveApiKey from "./oauth.ts";
+
+const { stream: streamOpenAICodexResponses } = openaiCodexResponses;
+const { getOpenAICodexWebSocketDebugStats, resetOpenAICodexWebSocketDebugStats } =
+  openaiCodexWsStats;
+const { closeOpenAICodexWebSocketSessions } = openaiCodexWsCache;
+const { normalizeContext } = compat;
 
 const { chooseModel } = modelChoice;
 const { buildPrompt, probeTool, readArgs } = probeInput;
 
 type ProbeArgs = ReturnType<typeof readArgs>;
 
-const toolCallsOf = (message: AssistantMessage) =>
-  message.content.filter((block): block is ToolCall => block.type === "toolCall");
+const toolCallsOf = (message: typesModule.AssistantMessage) =>
+  message.content.filter((block): block is typesModule.ToolCall => block.type === "toolCall");
 
-const answerTool = (call: ToolCall, timestamp: number) => ({
+const answerTool = (call: typesModule.ToolCall, timestamp: number) => ({
   content: [
     {
       text: `deterministic_probe_result turn=${String(call.arguments["turn"])} fixed=OK`,
@@ -39,8 +42,8 @@ const answerTool = (call: ToolCall, timestamp: number) => ({
 interface Probe {
   readonly apiKey: string;
   readonly args: ProbeArgs;
-  readonly context: TranscriptContext;
-  readonly model: Model<"openai-codex-responses">;
+  readonly context: typesModule.TranscriptContext;
+  readonly model: typesModule.Model<"openai-codex-responses">;
 }
 
 const requestOnce = (probe: Probe, turn: number, request: number) =>
@@ -75,7 +78,7 @@ const runTurn = (probe: Probe, turn: number) =>
       timestamp: yield* Clock.currentTimeMillis,
     });
     const started = yield* Clock.currentTimeMillis;
-    const answerUntilDone = (request: number): Effect.Effect<AssistantMessage> =>
+    const answerUntilDone = (request: number): Effect.Effect<typesModule.AssistantMessage> =>
       Effect.gen(function* () {
         if (request > 5) return yield* Effect.die(new Error(`Too many requests for turn ${turn}`));
         const message = yield* requestOnce(probe, turn, request);
@@ -128,7 +131,7 @@ const program = Effect.gen(function* () {
         "You are participating in a benchmark. For each benchmark turn, call deterministic_probe exactly once before the final answer. Keep final answers minimal.",
       tools: [probeTool],
     }),
-    model: { ...(codex as Model<"openai-codex-responses">), maxTokens: args.maxTokens },
+    model: { ...(codex as typesModule.Model<"openai-codex-responses">), maxTokens: args.maxTokens },
   };
   resetOpenAICodexWebSocketDebugStats(args.sessionId);
   yield* Console.log(

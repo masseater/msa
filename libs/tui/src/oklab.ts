@@ -7,41 +7,51 @@ import {
 } from "culori";
 import { dual } from "effect/Function";
 
-import type { RgbColor } from "./terminal-colors.ts";
+import type terminalColorsTypes from "./terminal-colors.types.ts";
 
 type Vector = [number, number, number];
 
-export const oklabToOkhslLightness = (x: number): number =>
-  convertOklabToOkhsl({ l: x, a: 0, b: 0 }).l;
+const oklabToOkhslLightness = (x: number): number => convertOklabToOkhsl({ a: 0, b: 0, l: x }).l;
 
-export function oklabToLinearSrgb([l, a, b]: Vector): Vector {
-  const linear = convertOklabToLrgb({ l, a, b });
+function oklabToLinearSrgb([l, a, b]: Vector): Vector {
+  const linear = convertOklabToLrgb({ a, b, l });
   return [linear.r, linear.g, linear.b];
 }
 
-export function rgbToOklab(rgb: RgbColor): Vector {
-  const lab = convertRgbToOklab({ r: rgb.r / 255, g: rgb.g / 255, b: rgb.b / 255 });
+function rgbToOklab(rgb: terminalColorsTypes.RgbColor): Vector {
+  const lab = convertRgbToOklab({ b: rgb.b / 255, g: rgb.g / 255, r: rgb.r / 255 });
   return [lab.l, lab.a, lab.b];
 }
 
 const toByte = (value: number): number => Math.round(Math.min(1, Math.max(0, value)) * 255);
 
-export function linearSrgbToRgb([r, g, b]: Vector): RgbColor {
-  const srgb = convertLrgbToRgb({ r, g, b });
-  return { r: toByte(srgb.r), g: toByte(srgb.g), b: toByte(srgb.b) };
+function linearSrgbToRgb([r, g, b]: Vector): terminalColorsTypes.RgbColor {
+  const srgb = convertLrgbToRgb({ b, g, r });
+  return { b: toByte(srgb.b), g: toByte(srgb.g), r: toByte(srgb.r) };
 }
 
-export const okhslToRgb: {
-  (hue: number, saturation: number, lightness: number): RgbColor;
-  (saturation: number, lightness: number): (hue: number) => RgbColor;
-} = dual(3, (hue: number, saturation: number, lightness: number): RgbColor => {
+const okhslToRgb: {
+  (hue: number, saturation: number, lightness: number): terminalColorsTypes.RgbColor;
+  (saturation: number, lightness: number): (hue: number) => terminalColorsTypes.RgbColor;
+} = dual(3, (hue: number, saturation: number, lightness: number): terminalColorsTypes.RgbColor => {
   const s = lightness > 0 ? saturation : 0;
-  const lab = convertOkhslToOklab({ h: hue, s, l: lightness });
+  const lab = convertOkhslToOklab({ h: hue, l: lightness, s });
   return linearSrgbToRgb(oklabToLinearSrgb([lab.l, lab.a, lab.b]));
 });
 
-export function rgbToOkhsl(rgb: RgbColor): { h: number; s: number; l: number } {
+function rgbToOkhsl(rgb: terminalColorsTypes.RgbColor): { h: number; s: number; l: number } {
   const [l, a, b] = rgbToOklab(rgb);
-  const okhsl = convertOklabToOkhsl({ l, a, b });
-  return { h: okhsl.h ?? 0, s: Math.min(1, Math.max(0, okhsl.s)), l: okhsl.l };
+  const okhsl = convertOklabToOkhsl({ a, b, l });
+  return { h: okhsl.h ?? 0, l: okhsl.l, s: Math.min(1, Math.max(0, okhsl.s)) };
 }
+
+const oklab = {
+  linearSrgbToRgb,
+  okhslToRgb,
+  oklabToLinearSrgb,
+  oklabToOkhslLightness,
+  rgbToOkhsl,
+  rgbToOklab,
+};
+
+export default oklab;

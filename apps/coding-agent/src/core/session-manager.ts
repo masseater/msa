@@ -1,13 +1,13 @@
 import {
+  type Stats,
   appendFileSync,
   closeSync,
   createReadStream,
   existsSync,
   mkdirSync,
   openSync,
-  readdirSync,
   readSync,
-  type Stats,
+  readdirSync,
   statSync,
   writeFileSync,
 } from "fs";
@@ -15,19 +15,9 @@ import { readdir, stat } from "fs/promises";
 import { createInterface } from "readline";
 import { StringDecoder } from "string_decoder";
 
-import type { AgentMessage } from "@msa/agent-core";
-import {
-  type AssistantMessage,
-  getCurrentSystemMessage,
-  type ImageContent,
-  type Message,
-  type SystemMessage,
-  type TextContent,
-  type ToolResultMessage,
-  type Usage,
-  type UserMessage,
-  uuidv7,
-} from "@msa/ai";
+import type agentTypes from "@msa/agent-core/index.types";
+import ai from "@msa/ai";
+import type aiTypes from "@msa/ai/index.types";
 import * as Data from "effect/Data";
 import * as Effect from "effect/Effect";
 import { isNullish } from "effect/Predicate";
@@ -44,6 +34,9 @@ import {
 } from "./messages.ts";
 import { basename, join, randomUuid, resolve } from "./platform-node.ts";
 import { nowIso, toDate, toEpochMs } from "./platform.ts";
+
+const { getCurrentSystemMessage, uuidv7 } = ai;
+
 export const CURRENT_SESSION_VERSION = 3;
 
 export interface SessionHeader {
@@ -69,7 +62,7 @@ export interface SessionEntryBase {
 
 export interface SessionMessageEntry extends SessionEntryBase {
   type: "message";
-  message: AgentMessage;
+  message: agentTypes.AgentMessage;
 }
 
 export interface ThinkingLevelChangeEntry extends SessionEntryBase {
@@ -88,7 +81,7 @@ export interface UsageEntry extends SessionEntryBase {
   kind: string;
   provider: string;
   model: string;
-  usage: Usage;
+  usage: aiTypes.Usage;
   note?: string;
 }
 
@@ -98,9 +91,9 @@ export interface CompactionEntry<T = unknown> extends SessionEntryBase {
   firstKeptEntryId: string;
   tokensBefore: number;
   details?: T | undefined;
-  usage?: Usage | undefined;
+  usage?: aiTypes.Usage | undefined;
   fromHook?: boolean | undefined;
-  systemMessage?: SystemMessage | undefined;
+  systemMessage?: aiTypes.SystemMessage | undefined;
 }
 
 export interface BranchSummaryEntry<T = unknown> extends SessionEntryBase {
@@ -108,7 +101,7 @@ export interface BranchSummaryEntry<T = unknown> extends SessionEntryBase {
   fromId: string;
   summary: string;
   details?: T | undefined;
-  usage?: Usage | undefined;
+  usage?: aiTypes.Usage | undefined;
   fromHook?: boolean | undefined;
 }
 
@@ -132,15 +125,15 @@ export interface SessionInfoEntry extends SessionEntryBase {
 export interface CustomMessageEntry<T = unknown> extends SessionEntryBase {
   type: "custom_message";
   customType: string;
-  content: string | (TextContent | ImageContent)[];
+  content: string | (aiTypes.TextContent | aiTypes.ImageContent)[];
   details?: T | undefined;
   display: boolean;
 }
 
 export type ContextEditableContent =
-  | UserMessage["content"]
-  | AssistantMessage["content"]
-  | ToolResultMessage["content"]
+  | aiTypes.UserMessage["content"]
+  | aiTypes.AssistantMessage["content"]
+  | aiTypes.ToolResultMessage["content"]
   | CustomMessage["content"];
 
 export interface ContextEditEntry extends SessionEntryBase {
@@ -173,18 +166,18 @@ export interface SessionTreeNode {
 
 export interface ProjectedSessionEntry {
   sourceEntry: SessionEntry;
-  messages: AgentMessage[];
+  messages: agentTypes.AgentMessage[];
 }
 
 export interface SessionProjection {
   entries: ProjectedSessionEntry[];
-  messages: AgentMessage[];
+  messages: agentTypes.AgentMessage[];
   thinkingLevel: string;
   model: { provider: string; modelId: string } | null;
 }
 
 export interface SessionContext {
-  messages: AgentMessage[];
+  messages: agentTypes.AgentMessage[];
   thinkingLevel: string;
   model: { provider: string; modelId: string } | null;
 }
@@ -378,16 +371,16 @@ function getSessionContextSettings(
     if (entry.type === "thinking_level_change") {
       thinkingLevel = entry.thinkingLevel;
     } else if (entry.type === "model_change") {
-      model = { provider: entry.provider, modelId: entry.modelId };
+      model = { modelId: entry.modelId, provider: entry.provider };
     } else if (entry.type === "message" && entry.message.role === "assistant") {
-      model = { provider: entry.message.provider, modelId: entry.message.model };
+      model = { modelId: entry.message.model, provider: entry.message.provider };
     }
   }
 
-  return { thinkingLevel, model };
+  return { model, thinkingLevel };
 }
 
-export function sessionEntryToContextMessages(entry: SessionEntry): AgentMessage[] {
+export function sessionEntryToContextMessages(entry: SessionEntry): agentTypes.AgentMessage[] {
   if (entry.type === "message") {
     const message = entry.message;
     if (message.role === "system" && isNullish(message.content))
@@ -467,7 +460,7 @@ export function buildContextEntries(
 function projectContextEntry(
   entry: SessionEntry,
   edit: ContextEditEntry | undefined,
-): AgentMessage[] {
+): agentTypes.AgentMessage[] {
   const messages = sessionEntryToContextMessages(entry);
   if (edit === undefined) return messages;
   const replacement = edit.replacement;
@@ -485,9 +478,9 @@ function projectContextEntry(
     const content =
       (message.role === "assistant" || message.role === "toolResult") &&
       typeof replacement.content === "string"
-        ? [{ type: "text" as const, text: replacement.content }]
+        ? [{ text: replacement.content, type: "text" as const }]
         : replacement.content;
-    return Object.assign({}, message, { content }) as AgentMessage;
+    return Object.assign({}, message, { content }) as agentTypes.AgentMessage;
   });
 }
 
@@ -504,17 +497,17 @@ export function buildSessionProjection(
     if (entry.type === "context_edit") edits.set(entry.targetId, entry);
   }
   const projectedEntries = contextEntries.map((sourceEntry, index): ProjectedSessionEntry => ({
-    sourceEntry,
     messages:
       sourceEntry.type === "compaction" && index > 0
         ? []
         : projectContextEntry(sourceEntry, edits.get(sourceEntry.id)),
+    sourceEntry,
   }));
   return {
     entries: projectedEntries,
     messages: projectedEntries.flatMap((entry) => entry.messages),
-    thinkingLevel,
     model,
+    thinkingLevel,
   };
 }
 
@@ -524,7 +517,7 @@ export function buildSessionContext(
   byId?: Map<string, SessionEntry>,
 ): SessionContext {
   const { messages, thinkingLevel, model } = buildSessionProjection(entries, leafId, byId);
-  return { messages, thinkingLevel, model };
+  return { messages, model, thinkingLevel };
 }
 
 function getDefaultSessionDirPath(cwd: string, agentDir: string = getDefaultAgentDir()): string {
@@ -683,7 +676,7 @@ export function findMostRecentSession(sessionDir: string, cwd?: string): string 
     const files = readdirSync(resolvedSessionDir)
       .filter((file) => file.endsWith(".jsonl"))
       .map((file) => join(resolvedSessionDir, file))
-      .map((path) => ({ path, mtime: statSync(path).mtimeMs }))
+      .map((path) => ({ mtime: statSync(path).mtimeMs, path }))
       .sort((a, b) => b.mtime - a.mtime);
 
     for (const { path } of files) {
@@ -702,17 +695,17 @@ export function findMostRecentSession(sessionDir: string, cwd?: string): string 
   }
 }
 
-function isMessageWithContent(message: AgentMessage): message is Message {
-  return typeof (message as Message).role === "string" && "content" in message;
+function isMessageWithContent(message: agentTypes.AgentMessage): message is aiTypes.Message {
+  return typeof (message as aiTypes.Message).role === "string" && "content" in message;
 }
 
-function extractTextContent(message: Message): string {
+function extractTextContent(message: aiTypes.Message): string {
   const content = message.content;
   if (typeof content === "string") {
     return content;
   }
   return content
-    .filter((block): block is TextContent => block.type === "text")
+    .filter((block): block is aiTypes.TextContent => block.type === "text")
     .map((block) => block.text)
     .join(" ");
 }
@@ -747,8 +740,8 @@ function buildSessionInfo(
       let lastActivityTime: number | undefined;
 
       const rl = createInterface({
-        input: createReadStream(filePath, { encoding: "utf8", signal }),
         crlfDelay: Infinity,
+        input: createReadStream(filePath, { encoding: "utf8", signal }),
       });
 
       const lines = rl[Symbol.asyncIterator]();
@@ -809,16 +802,16 @@ function buildSessionInfo(
             : toDate(headerTime);
 
       return {
-        path: filePath,
-        id: header.id,
+        allMessagesText: allMessages.join(" "),
+        created: toDate(header.timestamp),
         cwd,
+        firstMessage: firstMessage || "(no messages)",
+        id: header.id,
+        messageCount,
+        modified,
         name,
         parentSessionPath,
-        created: toDate(header.timestamp),
-        modified,
-        messageCount,
-        firstMessage: firstMessage || "(no messages)",
-        allMessagesText: allMessages.join(" "),
+        path: filePath,
       };
     } catch {
       signal?.throwIfAborted();
@@ -1014,12 +1007,12 @@ export class SessionManager {
     this.sessionId = options?.id ?? createSessionId();
     const timestamp = nowIso();
     const header: SessionHeader = {
+      cwd: this.cwd,
+      id: this.sessionId,
+      parentSession: options?.parentSession,
+      timestamp,
       type: "session",
       version: CURRENT_SESSION_VERSION,
-      id: this.sessionId,
-      timestamp,
-      cwd: this.cwd,
-      parentSession: options?.parentSession,
     };
     this.fileEntries = [header];
     this.byId.clear();
@@ -1142,13 +1135,13 @@ export class SessionManager {
     this.persistInternal(entry);
   }
 
-  appendMessage(message: Message | CustomMessage | BashExecutionMessage): string {
+  appendMessage(message: aiTypes.Message | CustomMessage | BashExecutionMessage): string {
     const entry: SessionMessageEntry = {
-      type: "message",
       id: generateId(this.byId),
+      message,
       parentId: this.leafId,
       timestamp: nowIso(),
-      message,
+      type: "message",
     };
     this.appendEntry(entry);
     return entry.id;
@@ -1156,11 +1149,11 @@ export class SessionManager {
 
   appendThinkingLevelChange(thinkingLevel: string): string {
     const entry: ThinkingLevelChangeEntry = {
-      type: "thinking_level_change",
       id: generateId(this.byId),
       parentId: this.leafId,
-      timestamp: nowIso(),
       thinkingLevel,
+      timestamp: nowIso(),
+      type: "thinking_level_change",
     };
     this.appendEntry(entry);
     return entry.id;
@@ -1168,12 +1161,12 @@ export class SessionManager {
 
   appendModelChange(provider: string, modelId: string): string {
     const entry: ModelChangeEntry = {
-      type: "model_change",
       id: generateId(this.byId),
-      parentId: this.leafId,
-      timestamp: nowIso(),
-      provider,
       modelId,
+      parentId: this.leafId,
+      provider,
+      timestamp: nowIso(),
+      type: "model_change",
     };
     this.appendEntry(entry);
     return entry.id;
@@ -1183,17 +1176,17 @@ export class SessionManager {
     kind: string,
     provider: string,
     model: string,
-    usage: Usage,
+    usage: aiTypes.Usage,
     note?: string,
   ): UsageEntry {
     const entry: UsageEntry = {
-      type: "usage",
       id: generateId(this.byId),
-      parentId: this.leafId,
-      timestamp: nowIso(),
       kind,
-      provider,
       model,
+      parentId: this.leafId,
+      provider,
+      timestamp: nowIso(),
+      type: "usage",
       usage,
       ...(note !== undefined && note !== "" ? { note } : {}),
     };
@@ -1207,22 +1200,22 @@ export class SessionManager {
     tokensBefore: number,
     details?: T,
     fromHook?: boolean,
-    usage?: Usage,
+    usage?: aiTypes.Usage,
   ): string {
     const timestamp = nowIso();
     const systemMessage = getCurrentSystemMessage(this.buildSessionProjection().messages);
     const id = generateId(this.byId);
     const entry: CompactionEntry<T> = {
-      type: "compaction",
+      details,
+      firstKeptEntryId: firstKeptEntryId ?? id,
+      fromHook,
       id,
       parentId: this.leafId,
-      timestamp,
       summary,
-      firstKeptEntryId: firstKeptEntryId ?? id,
+      timestamp,
       tokensBefore,
-      details,
+      type: "compaction",
       usage,
-      fromHook,
       ...(systemMessage === undefined
         ? {}
         : { systemMessage: { ...systemMessage, timestamp: toEpochMs(timestamp) } }),
@@ -1233,12 +1226,12 @@ export class SessionManager {
 
   appendCustomEntry(customType: string, data?: unknown): string {
     const entry: CustomEntry = {
-      type: "custom",
       customType,
       data,
       id: generateId(this.byId),
       parentId: this.leafId,
       timestamp: nowIso(),
+      type: "custom",
     };
     this.appendEntry(entry);
     return entry.id;
@@ -1247,11 +1240,11 @@ export class SessionManager {
   appendSessionInfo(name: string): string {
     const sanitizedName = name.replace(/[\r\n]+/gu, " ").trim();
     const entry: SessionInfoEntry = {
-      type: "session_info",
       id: generateId(this.byId),
+      name: sanitizedName,
       parentId: this.leafId,
       timestamp: nowIso(),
-      name: sanitizedName,
+      type: "session_info",
     };
     this.appendEntry(entry);
     return entry.id;
@@ -1269,19 +1262,19 @@ export class SessionManager {
 
   appendCustomMessageEntry<T = unknown>(
     customType: string,
-    content: string | (TextContent | ImageContent)[],
+    content: string | (aiTypes.TextContent | aiTypes.ImageContent)[],
     display: boolean,
     details?: T,
   ): string {
     const entry: CustomMessageEntry<T> = {
-      type: "custom_message",
-      customType,
       content,
-      display,
+      customType,
       details,
+      display,
       id: generateId(this.byId),
       parentId: this.leafId,
       timestamp: nowIso(),
+      type: "custom_message",
     };
     this.appendEntry(entry);
     return entry.id;
@@ -1313,15 +1306,15 @@ export class SessionManager {
       replacement !== null &&
       (targetRole === "assistant" || targetRole === "toolResult") &&
       typeof replacement.content === "string"
-        ? { content: [{ type: "text" as const, text: replacement.content }] }
+        ? { content: [{ text: replacement.content, type: "text" as const }] }
         : replacement;
     const entry: ContextEditEntry = {
-      type: "context_edit",
       id: generateId(this.byId),
       parentId: this.leafId,
-      timestamp: nowIso(),
-      targetId,
       replacement: normalizedReplacement,
+      targetId,
+      timestamp: nowIso(),
+      type: "context_edit",
     };
     this.appendEntry(entry);
     return entry.id;
@@ -1358,12 +1351,12 @@ export class SessionManager {
       throw new Error(`Entry ${targetId} not found`);
     }
     const entry: LabelEntry = {
-      type: "label",
       id: generateId(this.byId),
-      parentId: this.leafId,
-      timestamp: nowIso(),
-      targetId,
       label,
+      parentId: this.leafId,
+      targetId,
+      timestamp: nowIso(),
+      type: "label",
     };
     this.appendEntry(entry);
     if (label !== undefined && label !== "") {
@@ -1401,7 +1394,7 @@ export class SessionManager {
 
   buildSessionContext(): SessionContext {
     const { messages, thinkingLevel, model } = this.buildSessionProjection();
-    return { messages, thinkingLevel, model };
+    return { messages, model, thinkingLevel };
   }
 
   getHeader(): SessionHeader | null {
@@ -1425,7 +1418,7 @@ export class SessionManager {
     for (const entry of entries) {
       const label = this.labelsById.get(entry.id);
       const labelTimestamp = this.labelTimestampsById.get(entry.id);
-      nodeMap.set(entry.id, { entry, children: [], label, labelTimestamp });
+      nodeMap.set(entry.id, { children: [], entry, label, labelTimestamp });
     }
 
     for (const entry of entries) {
@@ -1468,7 +1461,7 @@ export class SessionManager {
     summary: string,
     details?: unknown,
     fromHook?: boolean,
-    usage?: Usage,
+    usage?: aiTypes.Usage,
   ): string {
     if (branchFromId !== null && !this.byId.has(branchFromId)) {
       throw new Error(`Entry ${branchFromId} not found`);
@@ -1476,15 +1469,15 @@ export class SessionManager {
     const fromId = this.leafId ?? "root";
     this.leafId = branchFromId;
     const entry: BranchSummaryEntry = {
-      type: "branch_summary",
+      details,
+      fromHook,
+      fromId,
       id: generateId(this.byId),
       parentId: branchFromId,
-      timestamp: nowIso(),
-      fromId,
       summary,
-      details,
+      timestamp: nowIso(),
+      type: "branch_summary",
       usage,
-      fromHook,
     };
     this.appendEntry(entry);
     return entry.id;
@@ -1514,11 +1507,11 @@ export class SessionManager {
         entry.type === "compaction"
           ? {
               ...entry,
-              parentId: pathParentId,
               firstKeptEntryId:
                 entry.firstKeptEntryId === entry.id
                   ? entry.id
                   : (replacementByLabelId.get(entry.firstKeptEntryId) ?? entry.firstKeptEntryId),
+              parentId: pathParentId,
             }
           : { ...entry, parentId: pathParentId },
       );
@@ -1531,19 +1524,19 @@ export class SessionManager {
     const newSessionFile = join(this.getSessionDir(), `${fileTimestamp}_${newSessionId}.jsonl`);
 
     const header: SessionHeader = {
+      cwd: this.cwd,
+      id: newSessionId,
+      parentSession: this.persist ? previousSessionFile : undefined,
+      timestamp,
       type: "session",
       version: CURRENT_SESSION_VERSION,
-      id: newSessionId,
-      timestamp,
-      cwd: this.cwd,
-      parentSession: this.persist ? previousSessionFile : undefined,
     };
 
     const pathEntryIds = new Set(pathWithoutLabels.map((e) => e.id));
     const labelsToWrite: Array<{ targetId: string; label: string; timestamp: string }> = [];
     for (const [targetId, label] of this.labelsById) {
       if (pathEntryIds.has(targetId)) {
-        labelsToWrite.push({ targetId, label, timestamp: this.labelTimestampsById.get(targetId)! });
+        labelsToWrite.push({ label, targetId, timestamp: this.labelTimestampsById.get(targetId)! });
       }
     }
 
@@ -1553,12 +1546,12 @@ export class SessionManager {
       const labelEntries: LabelEntry[] = [];
       for (const { targetId, label, timestamp: labelTimestamp } of labelsToWrite) {
         const labelEntry: LabelEntry = {
-          type: "label",
           id: generateId(new Set(pathEntryIds)),
-          parentId,
-          timestamp: labelTimestamp,
-          targetId,
           label,
+          parentId,
+          targetId,
+          timestamp: labelTimestamp,
+          type: "label",
         };
         pathEntryIds.add(labelEntry.id);
         labelEntries.push(labelEntry);
@@ -1584,12 +1577,12 @@ export class SessionManager {
     let parentId = pathWithoutLabels[pathWithoutLabels.length - 1]?.id || null;
     for (const { targetId, label, timestamp: labelTimestamp } of labelsToWrite) {
       const labelEntry: LabelEntry = {
-        type: "label",
         id: generateId(new Set([...pathEntryIds, ...labelEntries.map((e) => e.id)])),
-        parentId,
-        timestamp: labelTimestamp,
-        targetId,
         label,
+        parentId,
+        targetId,
+        timestamp: labelTimestamp,
+        type: "label",
       };
       labelEntries.push(labelEntry);
       parentId = labelEntry.id;
@@ -1691,12 +1684,12 @@ export class SessionManager {
     const newSessionFile = join(dir, `${fileTimestamp}_${newSessionId}.jsonl`);
 
     const newHeader: SessionHeader = {
+      cwd: resolvedTargetCwd,
+      id: newSessionId,
+      parentSession: resolvedSourcePath,
+      timestamp,
       type: "session",
       version: CURRENT_SESSION_VERSION,
-      id: newSessionId,
-      timestamp,
-      cwd: resolvedTargetCwd,
-      parentSession: resolvedSourcePath,
     };
     writeFileSync(newSessionFile, `${JSON.stringify(newHeader)}\n`, { flag: "wx" });
 

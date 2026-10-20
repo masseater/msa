@@ -56,17 +56,17 @@ export function runRpcMode(runtimeHost: AgentSessionRuntime): Promise<never> {
         data?: object | null,
       ): RpcResponse => {
         if (data === undefined) {
-          return { id, type: "response", command, success: true } as RpcResponse;
+          return { command, id, success: true, type: "response" } as RpcResponse;
         }
-        return { id, type: "response", command, success: true, data } as RpcResponse;
+        return { command, data, id, success: true, type: "response" } as RpcResponse;
       };
 
       const error = (id: string | undefined, command: string, message: string): RpcResponse => ({
-        id,
-        type: "response",
         command,
-        success: false,
         error: message,
+        id,
+        success: false,
+        type: "response",
       });
 
       const pendingExtensionRequests = new Map<
@@ -91,11 +91,11 @@ export function runRpcMode(runtimeHost: AgentSessionRuntime): Promise<never> {
           const onAbort = () => resume(Effect.succeed(defaultValue));
           opts?.signal?.addEventListener("abort", onAbort, { once: true });
           pendingExtensionRequests.set(id, {
+            reject: (failure: Error) => resume(Effect.fail(failure)),
             resolve: (extensionResponse: RpcExtensionUIResponse) =>
               resume(Effect.succeed(parseResponse(extensionResponse))),
-            reject: (failure: Error) => resume(Effect.fail(failure)),
           });
-          output({ type: "extension_ui_request", id, ...request } as RpcExtensionUIRequest);
+          output({ id, type: "extension_ui_request", ...request } as RpcExtensionUIRequest);
           return Effect.sync(() => {
             opts?.signal?.removeEventListener("abort", onAbort);
             pendingExtensionRequests.delete(id);
@@ -113,14 +113,7 @@ export function runRpcMode(runtimeHost: AgentSessionRuntime): Promise<never> {
       }
 
       const createExtensionUIContext = (): ExtensionUIContext => ({
-        select: (title, options, opts) =>
-          createDialogPromise(
-            opts,
-            undefined,
-            { method: "select", title, options, timeout: opts?.timeout },
-            (r) =>
-              "cancelled" in r && r.cancelled ? undefined : "value" in r ? r.value : undefined,
-          ),
+        addAutocompleteProvider(): void {},
 
         confirm: (title, message, opts) =>
           createDialogPromise(
@@ -131,92 +124,8 @@ export function runRpcMode(runtimeHost: AgentSessionRuntime): Promise<never> {
               "cancelled" in r && r.cancelled ? false : "confirmed" in r ? r.confirmed : false,
           ),
 
-        input: (title, placeholder, opts) =>
-          createDialogPromise(
-            opts,
-            undefined,
-            { method: "input", title, placeholder, timeout: opts?.timeout },
-            (r) =>
-              "cancelled" in r && r.cancelled ? undefined : "value" in r ? r.value : undefined,
-          ),
-
-        notify(message: string, type?: "info" | "warning" | "error"): void {
-          output({
-            type: "extension_ui_request",
-            id: randomUuid(),
-            method: "notify",
-            message,
-            notifyType: type,
-          } as RpcExtensionUIRequest);
-        },
-
-        onTerminalInput(): () => void {
-          return () => {};
-        },
-
-        setStatus(key: string, text: string | undefined): void {
-          output({
-            type: "extension_ui_request",
-            id: randomUuid(),
-            method: "setStatus",
-            statusKey: key,
-            statusText: text,
-          } as RpcExtensionUIRequest);
-        },
-
-        setWorkingMessage(_message?: string): void {},
-
-        setWorkingVisible(_visible: boolean): void {},
-
-        setWorkingIndicator(_options?: WorkingIndicatorOptions): void {},
-
-        setHiddenThinkingLabel(_label?: string): void {},
-
-        setWidget(key: string, content: unknown, options?: ExtensionWidgetOptions): void {
-          if (content === undefined || Array.isArray(content)) {
-            output({
-              type: "extension_ui_request",
-              id: randomUuid(),
-              method: "setWidget",
-              widgetKey: key,
-              widgetLines: content as string[] | undefined,
-              widgetPlacement: options?.placement,
-            } as RpcExtensionUIRequest);
-          }
-        },
-
-        setFooter(_factory: unknown): void {},
-
-        setHeader(_factory: unknown): void {},
-
-        setTitle(title: string): void {
-          output({
-            type: "extension_ui_request",
-            id: randomUuid(),
-            method: "setTitle",
-            title,
-          } as RpcExtensionUIRequest);
-        },
-
         custom() {
           return undefined as never;
-        },
-
-        pasteToEditor(text: string): void {
-          this.setEditorText(text);
-        },
-
-        setEditorText(text: string): void {
-          output({
-            type: "extension_ui_request",
-            id: randomUuid(),
-            method: "set_editor_text",
-            text,
-          } as RpcExtensionUIRequest);
-        },
-
-        getEditorText(): string {
-          return "";
         },
 
         editor(title: string, prefill?: string): Promise<string | undefined> {
@@ -244,35 +153,126 @@ export function runRpcMode(runtimeHost: AgentSessionRuntime): Promise<never> {
           );
         },
 
-        addAutocompleteProvider(): void {},
-
-        setEditorComponent(): void {},
+        getAllThemes() {
+          return [];
+        },
 
         getEditorComponent() {
           return undefined;
         },
 
-        get theme() {
-          return theme;
-        },
-
-        getAllThemes() {
-          return [];
+        getEditorText(): string {
+          return "";
         },
 
         getTheme(_name: string) {
           return undefined;
         },
 
-        setTheme(_theme: string | Theme) {
-          return { success: false, error: "Theme switching not supported in RPC mode" };
-        },
-
         getToolsExpanded() {
           return false;
         },
 
+        input: (title, placeholder, opts) =>
+          createDialogPromise(
+            opts,
+            undefined,
+            { method: "input", title, placeholder, timeout: opts?.timeout },
+            (r) =>
+              "cancelled" in r && r.cancelled ? undefined : "value" in r ? r.value : undefined,
+          ),
+
+        notify(message: string, type?: "info" | "warning" | "error"): void {
+          output({
+            type: "extension_ui_request",
+            id: randomUuid(),
+            method: "notify",
+            message,
+            notifyType: type,
+          } as RpcExtensionUIRequest);
+        },
+
+        onTerminalInput(): () => void {
+          return () => {};
+        },
+
+        pasteToEditor(text: string): void {
+          this.setEditorText(text);
+        },
+
+        select: (title, options, opts) =>
+          createDialogPromise(
+            opts,
+            undefined,
+            { method: "select", title, options, timeout: opts?.timeout },
+            (r) =>
+              "cancelled" in r && r.cancelled ? undefined : "value" in r ? r.value : undefined,
+          ),
+
+        setEditorComponent(): void {},
+
+        setEditorText(text: string): void {
+          output({
+            type: "extension_ui_request",
+            id: randomUuid(),
+            method: "set_editor_text",
+            text,
+          } as RpcExtensionUIRequest);
+        },
+
+        setFooter(_factory: unknown): void {},
+
+        setHeader(_factory: unknown): void {},
+
+        setHiddenThinkingLabel(_label?: string): void {},
+
+        setStatus(key: string, text: string | undefined): void {
+          output({
+            type: "extension_ui_request",
+            id: randomUuid(),
+            method: "setStatus",
+            statusKey: key,
+            statusText: text,
+          } as RpcExtensionUIRequest);
+        },
+
+        setTheme(_theme: string | Theme) {
+          return { success: false, error: "Theme switching not supported in RPC mode" };
+        },
+
+        setTitle(title: string): void {
+          output({
+            type: "extension_ui_request",
+            id: randomUuid(),
+            method: "setTitle",
+            title,
+          } as RpcExtensionUIRequest);
+        },
+
         setToolsExpanded(_expanded: boolean) {},
+
+        setWidget(key: string, content: unknown, options?: ExtensionWidgetOptions): void {
+          if (content === undefined || Array.isArray(content)) {
+            output({
+              type: "extension_ui_request",
+              id: randomUuid(),
+              method: "setWidget",
+              widgetKey: key,
+              widgetLines: content as string[] | undefined,
+              widgetPlacement: options?.placement,
+            } as RpcExtensionUIRequest);
+          }
+        },
+
+        setWorkingIndicator(_options?: WorkingIndicatorOptions): void {},
+
+        setWorkingMessage(_message?: string): void {},
+
+        setWorkingVisible(_visible: boolean): void {},
+
+        get theme() {
+          return theme;
+        },
       });
 
       runtimeHost.setRebindSession(() =>
@@ -289,11 +289,7 @@ export function runRpcMode(runtimeHost: AgentSessionRuntime): Promise<never> {
             session = runtimeHost.session;
             yield* awaited(
               session.bindExtensions({
-                uiContext: createExtensionUIContext(),
-                mode: "rpc",
                 commandContextActions: {
-                  waitForIdle: () => session.waitForIdle(),
-                  newSession: (options) => runtimeHost.newSession(options),
                   fork: (entryId, forkOptions) =>
                     Effect.runPromise(
                       awaiting(function* () {
@@ -315,18 +311,18 @@ export function runRpcMode(runtimeHost: AgentSessionRuntime): Promise<never> {
                         return { cancelled: result.cancelled };
                       }),
                     ),
-                  switchSession: (sessionPath, options) =>
-                    runtimeHost.switchSession(sessionPath, options),
+                  newSession: (options) => runtimeHost.newSession(options),
                   reload: () =>
                     Effect.runPromise(
                       awaiting(function* () {
                         yield* awaited(session.reload());
                       }),
                     ),
+                  switchSession: (sessionPath, options) =>
+                    runtimeHost.switchSession(sessionPath, options),
+                  waitForIdle: () => session.waitForIdle(),
                 },
-                shutdownHandler: () => {
-                  shutdownRequested = true;
-                },
+                mode: "rpc",
                 onError: (err) => {
                   output({
                     type: "extension_error",
@@ -335,6 +331,10 @@ export function runRpcMode(runtimeHost: AgentSessionRuntime): Promise<never> {
                     error: err.error,
                   });
                 },
+                shutdownHandler: () => {
+                  shutdownRequested = true;
+                },
+                uiContext: createExtensionUIContext(),
               }),
             );
 
@@ -369,13 +369,13 @@ export function runRpcMode(runtimeHost: AgentSessionRuntime): Promise<never> {
                 void session
                   .prompt(command.message, {
                     images: command.images,
-                    streamingBehavior: command.streamingBehavior,
                     mode: command.mode,
-                    source: "rpc",
                     preflightResult: (disposition) => {
                       preflightSucceeded = true;
                       output(success(id, "prompt", { disposition }));
                     },
+                    source: "rpc",
+                    streamingBehavior: command.streamingBehavior,
                   })
                   .catch((e) => {
                     if (!preflightSucceeded) {
@@ -427,25 +427,25 @@ export function runRpcMode(runtimeHost: AgentSessionRuntime): Promise<never> {
                 const breakdown =
                   usage === undefined ? undefined : yield* awaited(session.getContextBreakdown());
                 const state: RpcSessionState = {
-                  model: session.model,
-                  thinkingLevel: session.thinkingLevel,
-                  isStreaming: session.isStreaming,
-                  isCompacting: session.isCompacting,
-                  steeringMode: session.steeringMode,
+                  autoCompactionEnabled: session.autoCompactionEnabled,
                   followUpMode: session.followUpMode,
+                  isCompacting: session.isCompacting,
+                  isStreaming: session.isStreaming,
+                  messageCount: session.messages.length,
+                  model: session.model,
+                  pendingMessageCount: session.pendingMessageCount,
                   sessionFile: session.sessionFile,
                   sessionId: session.sessionId,
                   sessionName: session.sessionName,
-                  autoCompactionEnabled: session.autoCompactionEnabled,
-                  messageCount: session.messages.length,
-                  pendingMessageCount: session.pendingMessageCount,
+                  steeringMode: session.steeringMode,
+                  thinkingLevel: session.thinkingLevel,
                   ...(usage !== undefined && breakdown !== undefined
                     ? {
                         contextUsage: {
-                          tokens: breakdown.tokens,
+                          breakdown,
                           contextWindow: usage.contextWindow,
                           percent: (breakdown.tokens / usage.contextWindow) * 100,
-                          breakdown,
+                          tokens: breakdown.tokens,
                         },
                       }
                     : {}),
@@ -533,10 +533,10 @@ export function runRpcMode(runtimeHost: AgentSessionRuntime): Promise<never> {
               case "bash": {
                 const eventResult = yield* awaited(
                   session.extensionRunner.emitUserBash({
-                    type: "user_bash",
                     command: command.command,
-                    excludeFromContext: command.excludeFromContext ?? false,
                     cwd: session.sessionManager.getCwd(),
+                    excludeFromContext: command.excludeFromContext ?? false,
+                    type: "user_bash",
                   }),
                 );
 
@@ -586,8 +586,8 @@ export function runRpcMode(runtimeHost: AgentSessionRuntime): Promise<never> {
                   yield* awaited(rebindSession());
                 }
                 return success(id, "fork", {
-                  text: result.selectedText,
                   cancelled: result.cancelled,
+                  text: result.selectedText,
                 });
               }
 
@@ -624,8 +624,8 @@ export function runRpcMode(runtimeHost: AgentSessionRuntime): Promise<never> {
               case "get_tree": {
                 const sessionManager = session.sessionManager;
                 return success(id, "get_tree", {
-                  tree: sessionManager.getTree(),
                   leafId: sessionManager.getLeafId(),
+                  tree: sessionManager.getTree(),
                 });
               }
 
@@ -652,8 +652,8 @@ export function runRpcMode(runtimeHost: AgentSessionRuntime): Promise<never> {
 
                 for (const registered of session.extensionRunner.getRegisteredCommands()) {
                   commands.push({
-                    name: registered.invocationName,
                     description: registered.description,
+                    name: registered.invocationName,
                     source: "extension",
                     sourceInfo: registered.sourceInfo,
                   });
@@ -661,8 +661,8 @@ export function runRpcMode(runtimeHost: AgentSessionRuntime): Promise<never> {
 
                 for (const template of session.promptTemplates) {
                   commands.push({
-                    name: template.name,
                     description: template.description,
+                    name: template.name,
                     source: "prompt",
                     sourceInfo: template.sourceInfo,
                   });
@@ -671,8 +671,8 @@ export function runRpcMode(runtimeHost: AgentSessionRuntime): Promise<never> {
                 const skills: RpcSlashCommand[] = session.resourceLoader
                   .getSkills()
                   .skills.map((skill) => ({
-                    name: skill.name,
                     description: skill.description,
+                    name: skill.name,
                     source: "skill",
                     sourceInfo: skill.sourceInfo,
                   }));

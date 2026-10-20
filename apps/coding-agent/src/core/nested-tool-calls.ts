@@ -1,17 +1,5 @@
-import type {
-  AgentTool,
-  AgentToolCall,
-  AgentToolCallOutcome,
-  AgentToolResult,
-  AgentToolUpdateCallback,
-} from "@msa/agent-core";
-import type {
-  JsonObject,
-  NestedToolCallRecord,
-  NestedToolCalls,
-  TextContent,
-  Usage,
-} from "@msa/ai";
+import type agentTypes from "@msa/agent-core/index.types";
+import type aiTypes from "@msa/ai/index.types";
 import * as Effect from "effect/Effect";
 
 import { awaited, awaitingWith } from "./awaiting.ts";
@@ -19,32 +7,32 @@ import { makeLatch } from "./platform.ts";
 import { combineUsage } from "./usage-totals.ts";
 
 export const NESTED_CALL_LIMITS = {
-  maxCalls: 256,
   maxArgumentBytesPerCall: 8 * 1024,
   maxArgumentBytesTotal: 32 * 1024,
+  maxCalls: 256,
   maxErrorChars: 500,
 } as const;
 
 const encoder = new TextEncoder();
 
 export interface NestedCallSummary {
-  calls: NestedToolCalls | undefined;
-  usage: Usage | undefined;
+  calls: aiTypes.NestedToolCalls | undefined;
+  usage: aiTypes.Usage | undefined;
 }
 
 export class NestedCallRecorder {
-  private readonly calls: NestedToolCallRecord[] = [];
-  private readonly startedAt = new Map<NestedToolCallRecord, number>();
+  private readonly calls: aiTypes.NestedToolCallRecord[] = [];
+  private readonly startedAt = new Map<aiTypes.NestedToolCallRecord, number>();
   private complete = true;
   private argumentBytes = 0;
-  private usage: Usage | undefined;
+  private usage: aiTypes.Usage | undefined;
 
-  start(toolCall: AgentToolCall): NestedToolCallRecord | undefined {
+  start(toolCall: agentTypes.AgentToolCall): aiTypes.NestedToolCallRecord | undefined {
     if (this.calls.length >= NESTED_CALL_LIMITS.maxCalls) {
       this.complete = false;
       return undefined;
     }
-    const record: NestedToolCallRecord = {
+    const record: aiTypes.NestedToolCallRecord = {
       id: toolCall.id,
       name: toolCall.name,
       status: "unfinished",
@@ -58,7 +46,7 @@ export class NestedCallRecorder {
       record.argumentsBytes = bytes;
       this.complete = false;
     } else {
-      record.arguments = JSON.parse(json) as JsonObject;
+      record.arguments = JSON.parse(json) as aiTypes.JsonObject;
       this.argumentBytes += bytes;
     }
     this.calls.push(record);
@@ -66,7 +54,11 @@ export class NestedCallRecorder {
     return record;
   }
 
-  finish(record: NestedToolCallRecord | undefined, isError: boolean, errorText: string): void {
+  finish(
+    record: aiTypes.NestedToolCallRecord | undefined,
+    isError: boolean,
+    errorText: string,
+  ): void {
     if (record === undefined) return;
     record.status = isError ? "error" : "ok";
     record.durationMs = Math.round(
@@ -77,15 +69,15 @@ export class NestedCallRecorder {
       record.error = errorText.slice(0, NESTED_CALL_LIMITS.maxErrorChars);
   }
 
-  addUsage(usage: Usage): void {
+  addUsage(usage: aiTypes.Usage): void {
     this.usage = this.usage === undefined ? usage : combineUsage(this.usage, usage);
   }
 
-  get totalUsage(): Usage | undefined {
+  get totalUsage(): aiTypes.Usage | undefined {
     return this.usage;
   }
 
-  snapshot(): NestedToolCalls | undefined {
+  snapshot(): aiTypes.NestedToolCalls | undefined {
     if (this.calls.length === 0 && this.complete) return undefined;
     const calls = this.calls.map((call) => ({ ...call }));
     return {
@@ -97,7 +89,7 @@ export class NestedCallRecorder {
 
 export interface NestedToolCallOptions {
   signal?: AbortSignal | undefined;
-  onUpdate?: AgentToolUpdateCallback | undefined;
+  onUpdate?: agentTypes.AgentToolUpdateCallback | undefined;
 }
 
 export type NestedToolExecutionEvent =
@@ -113,28 +105,28 @@ export type NestedToolExecutionEvent =
       toolCallId: string;
       toolName: string;
       args: unknown;
-      partialResult: AgentToolResult<unknown>;
+      partialResult: agentTypes.AgentToolResult<unknown>;
       parentToolCallId: string;
     }
   | {
       type: "tool_execution_end";
       toolCallId: string;
       toolName: string;
-      result: AgentToolResult<unknown>;
+      result: agentTypes.AgentToolResult<unknown>;
       isError: boolean;
       durationMs?: number;
       parentToolCallId: string;
     };
 
 export interface NestedToolCallHost {
-  getTools(): readonly AgentTool[];
+  getTools(): readonly agentTypes.AgentTool[];
   isSequential(): boolean;
   runToolCall(
-    toolCall: AgentToolCall,
+    toolCall: agentTypes.AgentToolCall,
     parentToolCallId: string,
     signal: AbortSignal | undefined,
-    onUpdate: (partialResult: AgentToolResult<unknown>) => Promise<void>,
-  ): Promise<AgentToolCallOutcome>;
+    onUpdate: (partialResult: agentTypes.AgentToolResult<unknown>) => Promise<void>,
+  ): Promise<agentTypes.AgentToolCallOutcome>;
   emit(event: NestedToolExecutionEvent): Promise<void>;
 }
 
@@ -144,9 +136,9 @@ interface CallScope {
   holdsQueue: boolean;
 }
 
-function textOf(result: AgentToolResult<unknown>): string {
+function textOf(result: agentTypes.AgentToolResult<unknown>): string {
   return (result.content ?? [])
-    .filter((block): block is TextContent => block.type === "text")
+    .filter((block): block is aiTypes.TextContent => block.type === "text")
     .map((block) => block.text)
     .join("\n");
 }
@@ -165,28 +157,28 @@ export class NestedToolCallRunner {
     name: string,
     args: unknown,
     options: NestedToolCallOptions = {},
-  ): Promise<AgentToolCallOutcome> {
+  ): Promise<agentTypes.AgentToolCallOutcome> {
     return Effect.runPromise(
       awaitingWith(function* () {
         let scope = this.scopes.get(callerId);
         if (scope === undefined) {
-          scope = { recorder: new NestedCallRecorder(), nextId: 1, holdsQueue: false };
+          scope = { holdsQueue: false, nextId: 1, recorder: new NestedCallRecorder() };
           this.scopes.set(callerId, scope);
         }
-        const toolCall: AgentToolCall = {
-          type: "toolCall",
+        const toolCall: agentTypes.AgentToolCall = {
+          arguments: (args ?? {}) as agentTypes.AgentToolCall["arguments"],
           id: `${callerId}/${scope.nextId++}`,
           name,
-          arguments: (args ?? {}) as AgentToolCall["arguments"],
+          type: "toolCall",
         };
         const record = scope.recorder.start(toolCall);
         yield* awaited(
           this.host.emit({
-            type: "tool_execution_start",
-            toolCallId: toolCall.id,
-            toolName: name,
             args: toolCall.arguments,
             parentToolCallId: callerId,
+            toolCallId: toolCall.id,
+            toolName: name,
+            type: "tool_execution_start",
           }),
         );
 
@@ -204,11 +196,11 @@ export class NestedToolCallRunner {
           yield* awaited(previous);
         }
         this.scopes.set(toolCall.id, {
-          recorder: scope.recorder,
-          nextId: 1,
           holdsQueue: scope.holdsQueue || exclusive,
+          nextId: 1,
+          recorder: scope.recorder,
         });
-        let outcome: AgentToolCallOutcome;
+        let outcome: agentTypes.AgentToolCallOutcome;
         try {
           outcome = yield* awaited(
             this.host.runToolCall(toolCall, callerId, options.signal, (partialResult) =>
@@ -217,12 +209,12 @@ export class NestedToolCallRunner {
                   options.onUpdate?.(partialResult);
                   yield* awaited(
                     this.host.emit({
-                      type: "tool_execution_update",
+                      args: toolCall.arguments,
+                      parentToolCallId: callerId,
+                      partialResult,
                       toolCallId: toolCall.id,
                       toolName: name,
-                      args: toolCall.arguments,
-                      partialResult,
-                      parentToolCallId: callerId,
+                      type: "tool_execution_update",
                     }),
                   );
                 }, this),

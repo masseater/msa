@@ -1,4 +1,5 @@
-import { type AssistantMessage, fauxAssistantMessage } from "@msa/ai";
+import ai from "@msa/ai";
+import type aiTypes from "@msa/ai/index.types";
 import durable from "@msa/durable";
 import harnessModule from "@msa/durable/harness";
 import { Effect } from "effect";
@@ -6,6 +7,8 @@ import { afterEach, describe, expect, it } from "vite-plus/test";
 
 import harnessCompactionSupport from "./harness-compaction-support.ts";
 import support from "./support.ts";
+
+const { fauxAssistantMessage } = ai;
 
 const { UsageDoc } = durable;
 const { watchEvents } = harnessModule;
@@ -248,7 +251,7 @@ describe("compaction pinning, silent overflow, and late policy changes", () => {
           const input = yield* awaited(chat.root.submit({ content: "go", type: "input" }, context));
           expect((yield* awaited(input.wait(context))).status).toBe("done");
           const [last] = (yield* allEntries(chat.root)).slice(-1);
-          const message = last!.model![0] as AssistantMessage;
+          const message = last!.model![0] as aiTypes.AssistantMessage;
           expect(message.usage.input).toBeGreaterThanOrEqual(300);
           expect(chat.faux.summaryRequests).toHaveLength(0);
           yield* awaited(chat.harness.close(context));

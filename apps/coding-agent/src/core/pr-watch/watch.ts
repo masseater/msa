@@ -1,8 +1,8 @@
 import { Clock, Duration, Effect, Option, Result } from "effect";
 
-import { describeChanges, describeChangeText, isTerminalChange } from "./changes.ts";
+import { describeChangeText, describeChanges, isTerminalChange } from "./changes.ts";
 import type { PrWatchFailure, PrWatchGh, PrWatchGhError } from "./gh.ts";
-import { isBehind, type PrSnapshot, type PrWatchTarget } from "./snapshot.ts";
+import { type PrSnapshot, type PrWatchTarget, isBehind } from "./snapshot.ts";
 import { describeWatchStatus } from "./summary.ts";
 
 export interface PrNotification {
@@ -62,22 +62,22 @@ export function createPrWatchEntry(
   statusIntervalMs: number,
 ): PrWatchEntry {
   return {
-    target,
+    baseIntervalMs: intervalMs,
+    baseMovedAt: undefined,
+    error: undefined,
+    intervalMs,
     key: prWatchKey(target),
     label: prWatchLabel(target),
-    baseIntervalMs: intervalMs,
-    statusIntervalMs,
-    intervalMs,
-    status: "watching",
-    snapshot: undefined,
     lastNotification: undefined,
-    error: undefined,
-    notifiedError: undefined,
-    polls: 0,
-    startedAt: undefined,
     lastNotificationAt: undefined,
+    notifiedError: undefined,
     pendingSince: undefined,
-    baseMovedAt: undefined,
+    polls: 0,
+    snapshot: undefined,
+    startedAt: undefined,
+    status: "watching",
+    statusIntervalMs,
+    target,
   };
 }
 
@@ -150,8 +150,8 @@ function applySnapshot(
       ? {}
       : {
           ci: {
-            durationMs: now - pendingSince,
             conclusion: checks.kind === "checks-passed" ? "passed" : "failed",
+            durationMs: now - pendingSince,
           },
         }),
   };
@@ -236,8 +236,8 @@ export interface PrWatchLoopOptions {
 
 export function prWatchLoop(options: PrWatchLoopOptions): Effect.Effect<void> {
   return Effect.whileLoop({
-    while: () => options.entry.status === "watching",
     body: () => poll(options),
     step: () => undefined,
+    while: () => options.entry.status === "watching",
   });
 }

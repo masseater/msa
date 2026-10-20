@@ -1,8 +1,12 @@
-import { uuidv7 } from "@msa/ai";
+import ai from "@msa/ai";
 import type { ExtensionAPI, ExtensionCommandContext } from "@msa/coding-agent";
 import { DynamicBorder, getMarkdownTheme } from "@msa/coding-agent";
-import { Container, Markdown, matchesKey, Text } from "@msa/tui";
+import tui from "@msa/tui";
 import { Clock, Effect } from "effect";
+
+const { uuidv7 } = ai;
+
+const { Container, Markdown, Text, matchesKey } = tui;
 
 type ContentBlock = {
   type?: string;
@@ -136,13 +140,13 @@ const showSummaryUi = (summary: string, ctx: ExtensionCommandContext) => {
     container.addChild(border);
 
     return {
-      render: (width: number) => container.render(width),
-      invalidate: () => container.invalidate(),
       handleInput: (data: string) => {
         if (matchesKey(data, "enter") || matchesKey(data, "escape")) {
           done(undefined);
         }
       },
+      invalidate: () => container.invalidate(),
+      render: (width: number) => container.render(width),
     };
   });
 };
@@ -161,8 +165,8 @@ const summarizeConversation = (ctx: ExtensionCommandContext, conversationText: s
 
     const summaryMessages = [
       {
-        role: "user" as const,
         content: [{ type: "text" as const, text: buildSummaryPrompt(conversationText) }],
+        role: "user" as const,
         timestamp: yield* Clock.currentTimeMillis,
       },
     ];
@@ -172,8 +176,8 @@ const summarizeConversation = (ctx: ExtensionCommandContext, conversationText: s
         model,
         { messages: summaryMessages },
         {
-          reasoningEffort: "high",
           cacheRetention: "none",
+          reasoningEffort: "high",
           sessionId: uuidv7(),
         },
       ),

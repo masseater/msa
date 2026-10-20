@@ -1,5 +1,5 @@
-import type { Api, Model } from "@msa/ai";
-import { setKeybindings } from "@msa/tui";
+import type aiTypes from "@msa/ai/index.types";
+import tui from "@msa/tui";
 import { Effect } from "effect";
 import { afterEach, beforeAll, beforeEach, describe, expect, it, vi } from "vite-plus/test";
 
@@ -9,14 +9,16 @@ import tuiKit from "../../tui-kit.ts";
 import harnessModule from "../harness.ts";
 import type harnessTypes from "../harness.types.ts";
 
+const { setKeybindings } = tui;
+
 const { KeybindingsManager, initTheme, stripAnsi, theme } = tuiKit;
 
 const { createHarness } = harnessModule;
 
 function createInteractiveContext(options: {
-  allModels: Model<Api>[];
+  allModels: aiTypes.Model<aiTypes.Api>[];
   enabledModelIds: string[];
-  scopedModels?: Array<{ model: Model<Api> }>;
+  scopedModels?: Array<{ model: aiTypes.Model<aiTypes.Api> }>;
 }) {
   let selector: ScopedModelsSelectorComponent | undefined;
   const setScopedModels = vi.fn();

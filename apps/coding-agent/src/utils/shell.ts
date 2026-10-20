@@ -19,8 +19,8 @@ function isLegacyWslBashPath(path: string): boolean {
 
 function getBashShellConfig(shell: string): ShellConfig {
   return isLegacyWslBashPath(shell)
-    ? { shell, args: ["-s"], commandTransport: "stdin" }
-    : { shell, args: ["-c"] };
+    ? { args: ["-s"], commandTransport: "stdin", shell }
+    : { args: ["-c"], shell };
 }
 
 export function findExecutableOnPath(executable: string): string | null {
@@ -101,7 +101,7 @@ export function getShellConfig(customShellPath?: string): ShellConfig {
     return getBashShellConfig(bashOnPath);
   }
 
-  return { shell: "sh", args: ["-c"] };
+  return { args: ["-c"], shell: "sh" };
 }
 
 export const POWERSHELL_ARGS = [
@@ -124,7 +124,7 @@ export function getPowerShellConfig(): ShellConfig {
     );
   }
 
-  return { shell, args: [...POWERSHELL_ARGS] };
+  return { args: [...POWERSHELL_ARGS], shell };
 }
 
 export function getShellEnv(): NodeJS.ProcessEnv {
@@ -182,8 +182,8 @@ export function killProcessTree(pid: number): void {
         join(readEnv("SystemRoot") ?? "C:\\Windows", "System32", "taskkill.exe"),
         ["/F", "/T", "/PID", String(pid)],
         {
-          stdio: "ignore",
           detached: true,
+          stdio: "ignore",
           windowsHide: true,
         },
       );

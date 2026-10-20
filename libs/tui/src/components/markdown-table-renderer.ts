@@ -1,9 +1,12 @@
 import type { Tokens } from "marked";
 
-import { wrapTextWithAnsi } from "../text-wrap.ts";
-import { visibleWidth } from "../utils.ts";
-import { MarkdownStyleContext } from "./markdown-style-context.ts";
-import type { InlineStyleContext } from "./markdown-theme.ts";
+import textWrap from "../text-wrap.ts";
+import utils from "../utils.ts";
+import MarkdownStyleContext from "./markdown-style-context.ts";
+import type markdownThemeTypes from "./markdown-theme.ts";
+
+const { visibleWidth } = utils;
+const { wrapTextWithAnsi } = textWrap;
 
 const MAX_UNBROKEN_WORD_WIDTH = 30;
 
@@ -22,7 +25,7 @@ interface WrappedCell {
   lines: string[];
 }
 
-export class MarkdownTableRenderer extends MarkdownStyleContext {
+export default class MarkdownTableRenderer extends MarkdownStyleContext {
   protected getLongestWordWidth(text: string, maxWidth?: number): number {
     const words = text.split(/\s+/u).filter((word) => word.length > 0);
     let longest = 0;
@@ -45,7 +48,7 @@ export class MarkdownTableRenderer extends MarkdownStyleContext {
 
   protected tableColumnMetrics(
     token: Tokens.Table,
-    styleContext?: InlineStyleContext,
+    styleContext?: markdownThemeTypes.InlineStyleContext,
   ): ColumnMetrics[] {
     const columns: ColumnMetrics[] = [];
     for (const cells of [token.header, ...token.rows]) {
@@ -55,7 +58,7 @@ export class MarkdownTableRenderer extends MarkdownStyleContext {
         const minWord = this.getLongestWordWidth(cellText, MAX_UNBROKEN_WORD_WIDTH);
         const column = columns[i];
         if (column === undefined) {
-          columns[i] = { natural, minWord: Math.max(1, minWord) };
+          columns[i] = { minWord: Math.max(1, minWord), natural };
         } else {
           column.natural = Math.max(column.natural, natural);
           column.minWord = Math.max(column.minWord, minWord);
@@ -71,7 +74,7 @@ export class MarkdownTableRenderer extends MarkdownStyleContext {
   ): ColumnWidth[] {
     const remaining = availableForCells - columns.length;
     if (remaining <= 0) {
-      return columns.map((column) => ({ natural: column.natural, min: 1 }));
+      return columns.map((column) => ({ min: 1, natural: column.natural }));
     }
 
     const totalWeight = columns.reduce(
@@ -81,14 +84,14 @@ export class MarkdownTableRenderer extends MarkdownStyleContext {
     const grown = columns.map((column) => {
       const weight = Math.max(0, column.minWord - 1);
       const growth = totalWeight > 0 ? Math.floor((weight / totalWeight) * remaining) : 0;
-      return { natural: column.natural, growth };
+      return { growth, natural: column.natural };
     });
 
     let leftover = remaining - grown.reduce((total, column) => total + column.growth, 0);
     return grown.map((column) => {
       const extra = leftover > 0 ? 1 : 0;
       leftover -= extra;
-      return { natural: column.natural, min: 1 + column.growth + extra };
+      return { min: 1 + column.growth + extra, natural: column.natural };
     });
   }
 
@@ -128,15 +131,15 @@ export class MarkdownTableRenderer extends MarkdownStyleContext {
   protected tableColumnWidths(
     token: Tokens.Table,
     availableWidth: number,
-    styleContext?: InlineStyleContext,
+    styleContext?: markdownThemeTypes.InlineStyleContext,
   ): number[] {
     const columns = this.tableColumnMetrics(token, styleContext);
     const borderOverhead = 3 * token.header.length + 1;
     const availableForCells = availableWidth - borderOverhead;
 
     let minColumns: ColumnWidth[] = columns.map((column) => ({
-      natural: column.natural,
       min: column.minWord,
+      natural: column.natural,
     }));
     let minCellsWidth = minColumns.reduce((total, column) => total + column.min, 0);
 
@@ -155,7 +158,7 @@ export class MarkdownTableRenderer extends MarkdownStyleContext {
   protected wrapRowCells(
     cells: readonly Tokens.TableCell[],
     columnWidths: readonly number[],
-    styleContext?: InlineStyleContext,
+    styleContext?: markdownThemeTypes.InlineStyleContext,
   ): WrappedCell[] {
     return cells.map((cell, i) => {
       const width = columnWidths[i];
@@ -163,7 +166,7 @@ export class MarkdownTableRenderer extends MarkdownStyleContext {
         throw new Error(`Table cell ${i} has no column width`);
       }
       const text = this.renderInlineTokens(cell.tokens || [], styleContext);
-      return { width, lines: this.wrapCellText(text, width, styleContext?.stylePrefix) };
+      return { lines: this.wrapCellText(text, width, styleContext?.stylePrefix), width };
     });
   }
 
@@ -185,7 +188,7 @@ export class MarkdownTableRenderer extends MarkdownStyleContext {
     token: Tokens.Table,
     availableWidth: number,
     nextTokenType?: string,
-    styleContext?: InlineStyleContext,
+    styleContext?: markdownThemeTypes.InlineStyleContext,
   ): string[] {
     const numCols = token.header.length;
     if (numCols === 0) {

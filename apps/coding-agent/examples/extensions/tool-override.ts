@@ -1,5 +1,5 @@
 import { NodeServices } from "@effect/platform-node";
-import type { TextContent } from "@msa/ai";
+import type aiTypes from "@msa/ai/index.types";
 import { type ExtensionAPI, getAgentDir } from "@msa/coding-agent";
 import { DateTime, Effect, FileSystem, ManagedRuntime, Option, Path } from "effect";
 import { Type } from "typebox";
@@ -34,11 +34,11 @@ const logAccess = (path: string, allowed: boolean, reason?: string) =>
   }).pipe(Effect.ignore);
 
 const readSchema = Type.Object({
-  path: Type.String({ description: "Path to the file to read (relative or absolute)" }),
+  limit: Type.Optional(Type.Number({ description: "Maximum number of lines to read" })),
   offset: Type.Optional(
     Type.Number({ description: "Line number to start reading from (1-indexed)" }),
   ),
-  limit: Type.Optional(Type.Number({ description: "Maximum number of lines to read" })),
+  path: Type.String({ description: "Path to the file to read (relative or absolute)" }),
 });
 
 const selectLines = (
@@ -54,21 +54,21 @@ const selectLines = (
   if (Buffer.byteLength(text, "utf-8") > maxBytes) {
     text = `${text.slice(0, maxBytes)}\n\n[Output truncated at 50KB]`;
   }
-  return { text, lineCount: lines.length };
+  return { lineCount: lines.length, text };
 };
 
 const blockedResult = (path: string) => ({
   content: [
     {
-      type: "text",
       text: `Access denied: "${path}" matches a blocked pattern (sensitive file). This tool blocks access to .env files, secrets, credentials, and SSH/AWS/GPG directories.`,
+      type: "text",
     },
-  ] as TextContent[],
+  ] as aiTypes.TextContent[],
   details: { blocked: true },
 });
 
 const errorResult = (message: string) => ({
-  content: [{ type: "text", text: `Error reading file: ${message}` }] as TextContent[],
+  content: [{ text: `Error reading file: ${message}`, type: "text" }] as aiTypes.TextContent[],
   details: { error: true },
 });
 
@@ -95,21 +95,20 @@ const readAudited = (
 
     const { text, lineCount } = selectLines(content.value, params.offset, params.limit);
     return {
-      content: [{ type: "text", text }] as TextContent[],
+      content: [{ text, type: "text" }] as aiTypes.TextContent[],
       details: { lines: lineCount },
     };
   });
 
 export default function (msa: ExtensionAPI) {
   msa.registerTool({
-    name: "read",
-    label: "read (audited)",
     description:
       "Read the contents of a file with access logging. Some sensitive paths (.env, secrets, credentials) are blocked.",
-    parameters: readSchema,
-
     execute: (_toolCallId, params, _signal, _onUpdate, ctx) =>
       runtime.runPromise(readAudited(ctx.cwd, params)),
+    label: "read (audited)",
+    name: "read",
+    parameters: readSchema,
   });
 
   msa.registerCommand("read-log", {

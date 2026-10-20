@@ -1,51 +1,35 @@
 import { Cause, Deferred, Effect, Exit, Fiber } from "effect";
 
-import {
-  type LocalHttpRequest,
-  type LocalHttpResponse,
-  startLocalHttpServer,
-} from "../../utils/local-http-server.ts";
-import { oauthErrorHtml, oauthSuccessHtml } from "../../utils/oauth-page.ts";
-import type { ProviderAuthInteraction } from "../types.ts";
+import localHttpServer from "../../utils/local-http-server.ts";
+import type localHttpServerTypes from "../../utils/local-http-server.types.ts";
+import oauthPage from "../../utils/oauth-page.ts";
+import type callbackServerTypes from "./callback-server.types.ts";
 
-export interface OAuthCallbackServerOptions<T> {
-  readonly providerName: string;
-  readonly host: string;
-  readonly port: number;
-  readonly path: string;
-  readonly redirectHost?: string;
-  readonly state?: string | undefined;
-  readonly complete: (code: string) => Effect.Effect<T>;
-  readonly signal?: AbortSignal;
-  readonly timeoutMs?: number;
-}
+const { oauthErrorHtml, oauthSuccessHtml } = oauthPage;
+const { startLocalHttpServer } = localHttpServer;
 
-export interface OAuthCallbackServer<T> {
-  readonly redirectUri: string;
-  readonly wait: Effect.Effect<T | undefined>;
-  readonly cancel: Effect.Effect<void>;
-  readonly close: Effect.Effect<void>;
-}
-
-const page = (status: number, body: string): LocalHttpResponse => ({
-  status,
-  headers: { "content-type": "text/html; charset=utf-8", "cache-control": "no-store" },
+const page = (status: number, body: string): localHttpServerTypes.LocalHttpResponse => ({
   body,
+  headers: { "cache-control": "no-store", "content-type": "text/html; charset=utf-8" },
+  status,
 });
 
 const toError = (cause: unknown): Error =>
   cause instanceof Error ? cause : new Error(String(cause));
 
-const redirectUriOf = <T>(options: OAuthCallbackServerOptions<T>, port: number): string => {
+const redirectUriOf = <T>(
+  options: callbackServerTypes.OAuthCallbackServerOptions<T>,
+  port: number,
+): string => {
   const redirectHost = options.redirectHost ?? options.host;
   const authority = redirectHost.includes(":") ? `[${redirectHost}]` : redirectHost;
   return `http://${authority}:${port}${options.path}`;
 };
 
-type Reply = (response: LocalHttpResponse) => Effect.Effect<void>;
+type Reply = (response: localHttpServerTypes.LocalHttpResponse) => Effect.Effect<void>;
 
 interface CallbackFlow<T> {
-  readonly options: OAuthCallbackServerOptions<T>;
+  readonly options: callbackServerTypes.OAuthCallbackServerOptions<T>;
   readonly state: { claimed: boolean; settled: boolean };
   readonly finish: (exit: Exit.Exit<T | undefined>) => Effect.Effect<void>;
 }
@@ -68,7 +52,7 @@ const claim = <T>(flow: CallbackFlow<T>, code: string, reply: Reply): Effect.Eff
 
 const handleCallback = <T>(
   flow: CallbackFlow<T>,
-  { method, url }: LocalHttpRequest,
+  { method, url }: localHttpServerTypes.LocalHttpRequest,
   reply: Reply,
 ): Effect.Effect<void> => {
   const { options, state } = flow;
@@ -99,7 +83,7 @@ const handleCallback = <T>(
   return claim(flow, code, reply);
 };
 
-const makeFlow = <T>(options: OAuthCallbackServerOptions<T>) =>
+const makeFlow = <T>(options: callbackServerTypes.OAuthCallbackServerOptions<T>) =>
   Effect.gen(function* () {
     const result = yield* Deferred.make<T | undefined>();
     const runFork = Effect.runForkWith(yield* Effect.context<never>());
@@ -114,8 +98,8 @@ const makeFlow = <T>(options: OAuthCallbackServerOptions<T>) =>
         options.signal?.removeEventListener("abort", onAbort);
         return Effect.asVoid(Deferred.done(result, exit));
       });
-    const flow: CallbackFlow<T> = { options, state, finish };
-    return { flow, result, onAbort };
+    const flow: CallbackFlow<T> = { finish, options, state };
+    return { flow, onAbort, result };
   });
 
 const startTimeout = <T>(
@@ -135,25 +119,23 @@ const startTimeout = <T>(
   );
 };
 
-export const startOAuthCallbackServer = <T>(
-  options: OAuthCallbackServerOptions<T>,
-): Effect.Effect<OAuthCallbackServer<T>> =>
+const startOAuthCallbackServer = <T>(
+  options: callbackServerTypes.OAuthCallbackServerOptions<T>,
+): Effect.Effect<callbackServerTypes.OAuthCallbackServer<T>> =>
   Effect.gen(function* () {
     if (options.signal?.aborted === true) return yield* Effect.die(new Error("Login cancelled"));
     const { flow, result, onAbort } = yield* makeFlow(options);
     const server = yield* startLocalHttpServer({
-      host: options.host,
-      port: options.port,
       baseUrl: "http://localhost",
-      handle: (request, reply) => handleCallback(flow, request, reply),
-      onError: (error) => flow.finish(Exit.die(error)),
       closeConnections: false,
+      handle: (request, reply) => handleCallback(flow, request, reply),
+      host: options.host,
+      onError: (error) => flow.finish(Exit.die(error)),
+      port: options.port,
     });
     options.signal?.addEventListener("abort", onAbort, { once: true });
     yield* startTimeout(flow, result);
     return {
-      redirectUri: redirectUriOf(options, server.port),
-      wait: Deferred.await(result),
       cancel: Effect.suspend(() =>
         flow.state.claimed ? Effect.void : flow.finish(Exit.succeed(undefined)),
       ),
@@ -161,31 +143,26 @@ export const startOAuthCallbackServer = <T>(
         flow.finish(Exit.die(new Error("OAuth callback server closed"))),
         server.close,
       ),
+      redirectUri: redirectUriOf(options, server.port),
+      wait: Deferred.await(result),
     };
   });
 
-export interface CallbackOrManualInputOptions<T> {
-  readonly interaction: ProviderAuthInteraction;
-  readonly callback: OAuthCallbackServer<T> | undefined;
-  readonly message: string;
-  readonly placeholder: string;
-}
-
-export type CallbackOrManualInput<T> =
-  | { readonly type: "callback"; readonly value: T }
-  | { readonly type: "manual"; readonly input: string };
-
 const promptManualInput = <T>(
-  { interaction, callback, message, placeholder }: CallbackOrManualInputOptions<T>,
+  {
+    interaction,
+    callback,
+    message,
+    placeholder,
+  }: callbackServerTypes.CallbackOrManualInputOptions<T>,
   failure: { cause: Cause.Cause<never> | undefined },
   signal: AbortSignal,
 ): Effect.Effect<string | undefined> => {
   const cancelCallback = callback === undefined ? Effect.void : callback.cancel;
   return Effect.promise(() =>
-    interaction.prompt({ type: "manual_code", message, placeholder, signal }),
+    interaction.prompt({ message, placeholder, signal, type: "manual_code" }),
   ).pipe(
     Effect.matchCauseEffect({
-      onSuccess: (input) => Effect.as(cancelCallback, input),
       onFailure: (cause) =>
         Effect.as(
           Effect.andThen(
@@ -196,13 +173,14 @@ const promptManualInput = <T>(
           ),
           undefined,
         ),
+      onSuccess: (input) => Effect.as(cancelCallback, input),
     }),
   );
 };
 
-export const waitForCallbackOrManualInput = <T>(
-  options: CallbackOrManualInputOptions<T>,
-): Effect.Effect<CallbackOrManualInput<T>> =>
+const waitForCallbackOrManualInput = <T>(
+  options: callbackServerTypes.CallbackOrManualInputOptions<T>,
+): Effect.Effect<callbackServerTypes.CallbackOrManualInput<T>> =>
   Effect.gen(function* () {
     const failure: { cause: Cause.Cause<never> | undefined } = { cause: undefined };
     const signal = yield* Effect.abortSignal;
@@ -217,6 +195,13 @@ export const waitForCallbackOrManualInput = <T>(
       if (value !== undefined) return { type: "callback" as const, value };
       const input = yield* Fiber.join(manual);
       yield* rethrow;
-      return { type: "manual" as const, input: input ?? "" };
+      return { input: input ?? "", type: "manual" as const };
     }).pipe(Effect.ensuring(Fiber.interrupt(manual)));
   }).pipe(Effect.scoped);
+
+const callbackServer = {
+  startOAuthCallbackServer,
+  waitForCallbackOrManualInput,
+};
+
+export default callbackServer;

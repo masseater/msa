@@ -1,7 +1,9 @@
 import { Effect } from "effect";
 import { afterEach, describe, expect, it, vi } from "vite-plus/test";
 
-import { retryProviderRequest } from "../src/utils/provider-retry.ts";
+import providerRetry from "../src/utils/provider-retry.ts";
+
+const { retryProviderRequest } = providerRetry;
 
 function providerError(status: number | undefined, headers?: Record<string, string>): Error {
   return Object.assign(new Error(`Provider error: ${status}`), {

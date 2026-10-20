@@ -1,20 +1,13 @@
-import type {
-  Api,
-  ClassifierApi,
-  ClassifierModel,
-  ImageApi,
-  ImageModel,
-  Model,
-} from "../../src/types.ts";
+import type typesModule from "../../src/types.types.ts";
 import type catalogBuildTypes from "./catalog-build.types.ts";
 import modelMetadata from "./model-metadata.ts";
 
 const { applyImageInputMetadata } = modelMetadata;
 
 interface ProviderCatalog {
-  chat: Record<string, Model<Api>>;
-  image: Record<string, ImageModel<ImageApi>>;
-  classifier: Record<string, ClassifierModel<ClassifierApi>>;
+  chat: Record<string, typesModule.Model<typesModule.Api>>;
+  image: Record<string, typesModule.ImageModel<typesModule.ImageApi>>;
+  classifier: Record<string, typesModule.ClassifierModel<typesModule.ClassifierApi>>;
 }
 
 function collectProviders({ chat, images, classifiers }: catalogBuildTypes.CatalogSources) {
@@ -45,7 +38,7 @@ function buildCatalog(sources: catalogBuildTypes.CatalogSources): catalogBuildTy
   const sortedProviders = Object.entries(providers).sort(([left], [right]) =>
     left < right ? -1 : left > right ? 1 : 0,
   );
-  const chatProviders: Record<string, Record<string, Model<Api>>> = {};
+  const chatProviders: Record<string, Record<string, typesModule.Model<typesModule.Api>>> = {};
   const allProviders: Record<string, catalogBuildTypes.CatalogEntry[]> = {};
   for (const [providerId, catalog] of sortedProviders) {
     const chat = sortedById(catalog.chat);

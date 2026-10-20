@@ -1,7 +1,10 @@
 import { dual } from "effect/Function";
 
-import { Image } from "../src/components/image.ts";
-import { overrideEnv } from "../src/env.ts";
+import image from "../src/components/image.ts";
+import env from "../src/env.ts";
+
+const { overrideEnv } = env;
+const { Image } = image;
 
 const ENV_KEYS = [
   "TERM",

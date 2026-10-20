@@ -2,12 +2,16 @@ import { Clock, Effect } from "effect";
 import { Type } from "typebox";
 import { describe, expect, it } from "vite-plus/test";
 
-import { completeSimple } from "../src/compat.ts";
-import { getEnvApiKey } from "../src/env-api-keys.ts";
-import type { Api, Context, Model, StopReason, Tool, ToolCall } from "../src/types.ts";
-import { StringEnum } from "../src/utils/typebox-helpers.ts";
+import compat from "../src/compat.ts";
+import envApiKeys from "../src/env-api-keys.ts";
+import type typesModule from "../src/types.types.ts";
+import typeboxHelpers from "../src/utils/typebox-helpers.ts";
 import env from "./env.ts";
 import modelChoice from "./model-choice.ts";
+
+const { StringEnum } = typeboxHelpers;
+const { completeSimple } = compat;
+const { getEnvApiKey } = envApiKeys;
 
 const { hasValue } = env;
 const { chooseModel, compatValue } = modelChoice;
@@ -22,7 +26,7 @@ const calculatorSchema = Type.Object({
   }),
 });
 
-const calculatorTool: Tool<typeof calculatorSchema> = {
+const calculatorTool: typesModule.Tool<typeof calculatorSchema> = {
   description: "Perform basic arithmetic operations",
   name: "calculator",
   parameters: calculatorSchema,
@@ -36,7 +40,7 @@ type CalculatorArguments = {
   operation: CalculatorOperation;
 };
 
-function asCalculatorArguments(args: ToolCall["arguments"]): CalculatorArguments {
+function asCalculatorArguments(args: typesModule.ToolCall["arguments"]): CalculatorArguments {
   if (typeof args !== "object" || args === null) {
     throw new Error("Tool arguments must be an object");
   }
@@ -57,7 +61,7 @@ function asCalculatorArguments(args: ToolCall["arguments"]): CalculatorArguments
   return { a: value["a"], b: value["b"], operation };
 }
 
-function evaluateCalculatorCall(toolCall: ToolCall): number {
+function evaluateCalculatorCall(toolCall: typesModule.ToolCall): number {
   const { a, b, operation } = asCalculatorArguments(toolCall.arguments);
   switch (operation) {
     case "add":
@@ -71,7 +75,7 @@ function evaluateCalculatorCall(toolCall: ToolCall): number {
   }
 }
 
-const calculatorContext = (timestamp: number): Context => ({
+const calculatorContext = (timestamp: number): typesModule.Context => ({
   messages: [
     {
       content: [
@@ -92,15 +96,15 @@ const calculatorContext = (timestamp: number): Context => ({
   tools: [calculatorTool],
 });
 
-const thinksBeforeTheToolCall = <TApi extends Api>(
-  llm: Model<TApi>,
+const thinksBeforeTheToolCall = <TApi extends typesModule.Api>(
+  llm: typesModule.Model<TApi>,
   reasoning: Reasoning,
-  context: Context,
+  context: typesModule.Context,
 ) =>
   Effect.gen(function* () {
     const response = yield* Effect.promise(() => completeSimple(llm, context, { reasoning }));
     expect(response.stopReason, `Error: ${response.errorMessage}`).toBe(
-      "toolUse" satisfies StopReason,
+      "toolUse" satisfies typesModule.StopReason,
     );
     expect(response.content.some((block) => block.type === "thinking")).toBe(true);
     const toolCall = response.content.find((block) => block.type === "toolCall");
@@ -111,11 +115,11 @@ const thinksBeforeTheToolCall = <TApi extends Api>(
     return toolCall;
   });
 
-const thinksAgainAfterTheToolResult = <TApi extends Api>(
-  llm: Model<TApi>,
+const thinksAgainAfterTheToolResult = <TApi extends typesModule.Api>(
+  llm: typesModule.Model<TApi>,
   reasoning: Reasoning,
-  context: Context,
-  toolCall: ToolCall,
+  context: typesModule.Context,
+  toolCall: typesModule.ToolCall,
 ) =>
   Effect.gen(function* () {
     const correctAnswer = evaluateCalculatorCall(toolCall);
@@ -129,14 +133,14 @@ const thinksAgainAfterTheToolResult = <TApi extends Api>(
     });
     const response = yield* Effect.promise(() => completeSimple(llm, context, { reasoning }));
     expect(response.stopReason, `Error: ${response.errorMessage}`).toBe(
-      "stop" satisfies StopReason,
+      "stop" satisfies typesModule.StopReason,
     );
     expect(response.content.some((block) => block.type === "thinking")).toBe(true);
     expect(response.content.some((block) => block.type === "text")).toBe(true);
   });
 
-const assertSecondToolCallWithInterleavedThinking = <TApi extends Api>(
-  llm: Model<TApi>,
+const assertSecondToolCallWithInterleavedThinking = <TApi extends typesModule.Api>(
+  llm: typesModule.Model<TApi>,
   reasoning: Reasoning,
 ) =>
   Effect.gen(function* () {

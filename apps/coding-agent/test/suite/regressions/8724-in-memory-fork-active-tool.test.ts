@@ -1,5 +1,5 @@
-import type { AgentTool, AgentToolResult } from "@msa/agent-core";
-import { fauxAssistantMessage, fauxToolCall } from "@msa/ai";
+import type agentTypes from "@msa/agent-core/index.types";
+import ai from "@msa/ai";
 import testing from "@msa/testing";
 import { Effect } from "effect";
 import { Type } from "typebox";
@@ -13,16 +13,18 @@ import {
 } from "../../../src/core/agent-session-runtime.ts";
 import harnessModule from "../harness.ts";
 
+const { fauxAssistantMessage, fauxToolCall } = ai;
+
 const { createHarness } = harnessModule;
 
 const { deferredPromise, gate, runTest } = testing;
 
 const cleanups: Array<() => Promise<void> | void> = [];
 
-const blockingTool = (toolStarted: ReturnType<typeof gate>): AgentTool => ({
+const blockingTool = (toolStarted: ReturnType<typeof gate>): agentTypes.AgentTool => ({
   description: "Wait until aborted",
   execute: (_toolCallId, _params, signal) => {
-    const aborted = deferredPromise<AgentToolResult<unknown>>();
+    const aborted = deferredPromise<agentTypes.AgentToolResult<unknown>>();
     toolStarted.release();
     signal?.addEventListener(
       "abort",

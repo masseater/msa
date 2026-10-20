@@ -28,13 +28,8 @@ export function readOnlyVariantOf(
   },
 ): ToolDefinition<any, any> {
   return {
-    name: tool.name,
-    label: tool.label,
-    description: variant.description,
-    promptSnippet: variant.promptSnippet,
-    promptGuidelines: variant.promptGuidelines,
-    parameters: variant.parameters,
     annotations: { readOnlyHint: true },
+    description: variant.description,
     execute: (toolCallId, params, signal, onUpdate, ctx) => {
       const action = (params as { action?: unknown }).action;
       if (typeof action !== "string" || !variant.actions.includes(action)) {
@@ -44,6 +39,11 @@ export function readOnlyVariantOf(
       }
       return tool.execute(toolCallId, params, signal, onUpdate, ctx);
     },
+    label: tool.label,
+    name: tool.name,
+    parameters: variant.parameters,
+    promptGuidelines: variant.promptGuidelines,
+    promptSnippet: variant.promptSnippet,
   };
 }
 

@@ -1,23 +1,40 @@
 import { Effect } from "effect";
 import { dual } from "effect/Function";
 
-import { type Component, type TerminalCapabilities, TuiAltScreen, VStack } from "../src/index.ts";
-import { resetCapabilitiesCache, setCapabilities } from "../src/terminal-capabilities.ts";
+import tuiModule from "../src/index.ts";
+import type tuiTypes from "../src/index.types.ts";
+import terminalCapabilities from "../src/terminal-capabilities.ts";
 import type tuiAltScreenHelpersTypes from "./tui-alt-screen-helpers.types.ts";
-import { VirtualTerminal } from "./virtual-terminal.ts";
+import type virtualTerminalTypes from "./virtual-terminal.types.ts";
+
+const { resetCapabilitiesCache, setCapabilities } = terminalCapabilities;
+const { VStack } = tuiModule;
 
 const OSC133_ZONE_START = "\x1b]133;A\x07";
 
 const scrollLineByLine: {
-  (tui: TuiAltScreen, terminal: VirtualTerminal, steps: number): Effect.Effect<void>;
-  (terminal: VirtualTerminal, steps: number): (tui: TuiAltScreen) => Effect.Effect<void>;
-} = dual(3, (tui: TuiAltScreen, terminal: VirtualTerminal, steps: number): Effect.Effect<void> =>
-  Effect.gen(function* () {
-    for (let step = 0; step < steps; step++) {
-      tui.scrollBy(1);
-      yield* Effect.promise(() => terminal.waitForRender());
-    }
-  }),
+  (
+    tui: tuiTypes.TuiAltScreen,
+    terminal: virtualTerminalTypes.VirtualTerminal,
+    steps: number,
+  ): Effect.Effect<void>;
+  (
+    terminal: virtualTerminalTypes.VirtualTerminal,
+    steps: number,
+  ): (tui: tuiTypes.TuiAltScreen) => Effect.Effect<void>;
+} = dual(
+  3,
+  (
+    tui: tuiTypes.TuiAltScreen,
+    terminal: virtualTerminalTypes.VirtualTerminal,
+    steps: number,
+  ): Effect.Effect<void> =>
+    Effect.gen(function* () {
+      for (let step = 0; step < steps; step++) {
+        tui.scrollBy(1);
+        yield* Effect.promise(() => terminal.waitForRender());
+      }
+    }),
 );
 
 const writesSince: {
@@ -32,11 +49,13 @@ const writesSince: {
 );
 
 const withCapabilities: {
-  (capabilities: TerminalCapabilities, effect: Effect.Effect<void>): Effect.Effect<void>;
-  (effect: Effect.Effect<void>): (capabilities: TerminalCapabilities) => Effect.Effect<void>;
+  (capabilities: tuiTypes.TerminalCapabilities, effect: Effect.Effect<void>): Effect.Effect<void>;
+  (
+    effect: Effect.Effect<void>,
+  ): (capabilities: tuiTypes.TerminalCapabilities) => Effect.Effect<void>;
 } = dual(
   2,
-  (capabilities: TerminalCapabilities, effect: Effect.Effect<void>): Effect.Effect<void> =>
+  (capabilities: tuiTypes.TerminalCapabilities, effect: Effect.Effect<void>): Effect.Effect<void> =>
     Effect.suspend(() => {
       setCapabilities(capabilities);
       return effect.pipe(
@@ -50,9 +69,9 @@ const withCapabilities: {
 );
 
 const viewportHas: {
-  (terminal: VirtualTerminal, text: string): boolean;
-  (text: string): (terminal: VirtualTerminal) => boolean;
-} = dual(2, (terminal: VirtualTerminal, text: string): boolean =>
+  (terminal: virtualTerminalTypes.VirtualTerminal, text: string): boolean;
+  (text: string): (terminal: virtualTerminalTypes.VirtualTerminal) => boolean;
+} = dual(2, (terminal: virtualTerminalTypes.VirtualTerminal, text: string): boolean =>
   terminal.getViewport().some((line) => line.includes(text)),
 );
 
@@ -71,9 +90,9 @@ const someWriteSince: {
 );
 
 const mountTranscriptWithEditor: {
-  (tui: TuiAltScreen, transcript: Component): string[];
-  (transcript: Component): (tui: TuiAltScreen) => string[];
-} = dual(2, (tui: TuiAltScreen, transcript: Component): string[] => {
+  (tui: tuiTypes.TuiAltScreen, transcript: tuiTypes.Component): string[];
+  (transcript: tuiTypes.Component): (tui: tuiTypes.TuiAltScreen) => string[];
+} = dual(2, (tui: tuiTypes.TuiAltScreen, transcript: tuiTypes.Component): string[] => {
   const editorInputs: string[] = [];
   const editor = {
     focused: false,
@@ -91,7 +110,7 @@ const mountTranscriptWithEditor: {
   return editorInputs;
 });
 
-const trimmedViewport = (terminal: VirtualTerminal): string[] =>
+const trimmedViewport = (terminal: virtualTerminalTypes.VirtualTerminal): string[] =>
   terminal.getViewport().map((line) => line.trimEnd());
 
 const numberedLines: {

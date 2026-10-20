@@ -1,4 +1,4 @@
-import { streamSimple } from "@msa/ai/compat";
+import compat from "@msa/ai/compat";
 import testing from "@msa/testing";
 import { Effect } from "effect";
 
@@ -14,6 +14,8 @@ import { createSyntheticSourceInfo } from "../src/core/source-info.ts";
 import { createCodingTools } from "../src/index.ts";
 import type compactionExtensionsSupportTypes from "./compaction-extensions-support.types.ts";
 import sessionKit from "./session-kit.ts";
+
+const { streamSimple } = compat;
 
 const { createAgentSession } = sessionKit;
 const { makeTempDir, removePath, runTest } = testing;

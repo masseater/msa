@@ -1,7 +1,7 @@
 import { fileURLToPath } from "node:url";
 
 import testing from "@msa/testing";
-import type { Component } from "@msa/tui";
+import type tuiTypes from "@msa/tui/index.types";
 import { Effect } from "effect";
 import { describe, expect, it } from "vite-plus/test";
 
@@ -36,7 +36,7 @@ const doesNotInsertSourceWhitespaceBetweenAnsi = () => {
 };
 
 const trimsTuiSpacingLinesFromCustomTool = () => {
-  const component: Component = {
+  const component: tuiTypes.Component = {
     invalidate: () => {},
     render: () => ["", "\u001b[31mone\u001b[0m", "two", ""],
   };

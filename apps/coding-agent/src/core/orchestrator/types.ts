@@ -1,4 +1,4 @@
-import type { ThinkingLevel } from "@msa/agent-core";
+import type agentTypes from "@msa/agent-core/index.types";
 
 export type TaskStatus = "waiting" | "running" | "completed" | "failed" | "stopped";
 export type TaskKind = "work" | "review";
@@ -28,7 +28,7 @@ export interface Task {
   cwd: string;
   condition: string | null;
   model: string | null;
-  thinkingLevel: ThinkingLevel | null;
+  thinkingLevel: agentTypes.ThinkingLevel | null;
   createdAt: number;
   updatedAt: number;
 }
@@ -37,7 +37,7 @@ export interface Thread {
   id: string;
   project: string;
   model: string;
-  thinkingLevel: ThinkingLevel;
+  thinkingLevel: agentTypes.ThinkingLevel;
   cwd: string;
   status: ThreadStatus;
   sessionFile: string | null;
@@ -125,7 +125,7 @@ export interface CreateTaskInput {
   round?: string;
   condition?: string;
   model?: string;
-  thinkingLevel?: ThinkingLevel;
+  thinkingLevel?: agentTypes.ThinkingLevel;
   cwd?: string;
 }
 
@@ -163,7 +163,7 @@ export interface ReplanTaskInput {
   dependsOn?: readonly string[];
   round?: string;
   model?: string;
-  thinkingLevel?: ThinkingLevel;
+  thinkingLevel?: agentTypes.ThinkingLevel;
   cwd?: string;
 }
 

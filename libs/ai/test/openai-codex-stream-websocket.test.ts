@@ -1,15 +1,17 @@
 import { Effect } from "effect";
 import { describe, expect, it, vi } from "vite-plus/test";
 
-import {
-  stream as streamOpenAICodexResponses,
-  streamSimple as streamSimpleOpenAICodexResponses,
-} from "../src/api/openai-codex-responses.ts";
-import { getOpenAICodexWebSocketDebugStats } from "../src/api/openai-codex-ws-stats.ts";
-import type { Api, Model } from "../src/types.ts";
-import { normalizeContext } from "../src/utils/transcript.ts";
+import openaiCodexResponses from "../src/api/openai-codex-responses.ts";
+import openaiCodexWsStats from "../src/api/openai-codex-ws-stats.ts";
+import type typesModule from "../src/types.types.ts";
+import transcript from "../src/utils/transcript.ts";
 import codexFakeWebSocket from "./codex-fake-websocket.ts";
 import openaiCodexStreamSupport from "./openai-codex-stream-support.ts";
+
+const { stream: streamOpenAICodexResponses, streamSimple: streamSimpleOpenAICodexResponses } =
+  openaiCodexResponses;
+const { getOpenAICodexWebSocketDebugStats } = openaiCodexWsStats;
+const { normalizeContext } = transcript;
 
 const { completedResponse, installFakeWebSocket } = codexFakeWebSocket;
 const {
@@ -35,7 +37,8 @@ const forwardsAutoTransportEvents = () =>
           }),
       });
       const model = codexModel();
-      const providerEvents: Array<{ event: unknown; model: Model<Api> }> = [];
+      const providerEvents: Array<{ event: unknown; model: typesModule.Model<typesModule.Api> }> =
+        [];
       const result = yield* Effect.promise(() =>
         streamSimpleOpenAICodexResponses(model, promptContext(), {
           apiKey: mockToken(),

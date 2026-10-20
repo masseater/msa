@@ -1,16 +1,20 @@
 import testing from "@msa/testing";
 import { Effect } from "effect";
 
-import { type Component, Container, type Focusable } from "../../../libs/tui/src/tui-component.ts";
-import type { TUI } from "../../../libs/tui/src/tui-interface.ts";
-import { TuiMainScreen } from "../../../libs/tui/src/tui-main-screen.ts";
-import { VirtualTerminal } from "../../../libs/tui/test/virtual-terminal.ts";
+import tuiComponent from "../../../libs/tui/src/tui-component.ts";
+import type tuiComponentTypes from "../../../libs/tui/src/tui-component.types.ts";
+import type tuiInterfaceTypes from "../../../libs/tui/src/tui-interface.types.ts";
+import TuiMainScreen from "../../../libs/tui/src/tui-main-screen.ts";
+import virtualTerminal from "../../../libs/tui/test/virtual-terminal.ts";
 import { EditorSlot } from "../src/modes/interactive/editor-slot.ts";
 import { InteractiveMode } from "../src/modes/interactive/interactive-mode.ts";
 
+const { VirtualTerminal } = virtualTerminal;
+const { Container } = tuiComponent;
+
 const { awaited } = testing;
 
-class TestFocusableComponent implements Component, Focusable {
+class TestFocusableComponent implements tuiComponentTypes.Component, tuiComponentTypes.Focusable {
   focused = false;
   inputs: string[] = [];
   private readonly label: string;
@@ -40,15 +44,15 @@ class TestFocusableComponent implements Component, Focusable {
 }
 
 type CustomFactory<T> = (
-  tui: TUI,
+  tui: tuiInterfaceTypes.TUI,
   theme: unknown,
   keybindings: unknown,
   done: (result: T) => void,
-) => Component;
+) => tuiComponentTypes.Component;
 
 const createCustomUiScene = () => {
   const terminal = new VirtualTerminal(80, 24);
-  const ui: TUI = new TuiMainScreen(terminal);
+  const ui: tuiInterfaceTypes.TUI = new TuiMainScreen(terminal);
   const editorContainer = new Container();
   const editor = new TestFocusableComponent("EDITOR");
   const palette = new TestFocusableComponent("PALETTE");

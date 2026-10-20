@@ -1,10 +1,12 @@
-import { fauxAssistantMessage } from "@msa/ai";
+import ai from "@msa/ai";
 import { Effect } from "effect";
 import { afterEach, describe, expect, it, vi } from "vite-plus/test";
 
 import agentSessionCompactionSupport from "./agent-session-compaction-support.ts";
 import type agentSessionCompactionSupportTypes from "./agent-session-compaction-support.types.ts";
 import harnessModule from "./harness.ts";
+
+const { fauxAssistantMessage } = ai;
 
 const { harnesses, seedCompactableSession, useSummaryStreamFn } = agentSessionCompactionSupport;
 

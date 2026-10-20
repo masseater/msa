@@ -1,5 +1,5 @@
-import { fauxAssistantMessage } from "@msa/ai";
-import type { SystemMessage } from "@msa/ai/compat";
+import ai from "@msa/ai";
+import type compatTypes from "@msa/ai/compat.types";
 import { Effect } from "effect";
 import { Type } from "typebox";
 import { afterEach, describe, expect, it, vi } from "vite-plus/test";
@@ -8,6 +8,8 @@ import type { ExtensionFactory } from "../../src/core/extensions/types.ts";
 import { MCP_SERVERS_SECTION } from "../../src/extensions/mcp/index.ts";
 import agentSessionMcpSupport from "./agent-session-mcp-support.ts";
 import harnessModule from "./harness.ts";
+
+const { fauxAssistantMessage } = ai;
 
 const { declaredToolNames, harnesses, setup, setupSlow } = agentSessionMcpSupport;
 
@@ -36,10 +38,10 @@ const tellsScriptsWhatDirectlyExposedMcp = Effect.gen(function* () {
   );
   const fail = harness.session.agent.state.tools.find((tool) => tool.name === "mcp__docs__fail");
   expect(search?.description).toContain(
-    "Codemode: `tools.mcp__docs__search(args)` resolves to `{ content, structuredContent?: { hits }, isError? }`.",
+    "Codemode: `tools.mcp__docs__search(args)` resolves to `{ content, isError?, structuredContent?: { hits } }`.",
   );
   expect(fail?.description).toContain(
-    "Codemode: `tools.mcp__docs__fail(args)` resolves to `{ content, structuredContent?, isError? }`.",
+    "Codemode: `tools.mcp__docs__fail(args)` resolves to `{ content, isError?, structuredContent? }`.",
   );
 });
 
@@ -120,7 +122,7 @@ const listsAServerBeforeItConnects = Effect.gen(function* () {
   yield* Effect.promise(() => harness.session.prompt("second"));
 
   const systemMessages = harness.session.messages.filter(
-    (message): message is SystemMessage => message.role === "system",
+    (message): message is compatTypes.SystemMessage => message.role === "system",
   );
 
   expect(systemMessages).toHaveLength(2);

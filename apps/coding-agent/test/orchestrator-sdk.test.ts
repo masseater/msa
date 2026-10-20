@@ -1,4 +1,4 @@
-import { fauxAssistantMessage, fauxToolCall } from "@msa/ai/compat";
+import compat from "@msa/ai/compat";
 import testing from "@msa/testing";
 import { Effect } from "effect";
 import { afterAll, expect, it } from "vite-plus/test";
@@ -9,6 +9,8 @@ import { SessionManager } from "../src/core/session-manager.ts";
 import { handoffPrompt } from "../src/core/slash-commands.ts";
 import orchestratorHarness from "./orchestrator-harness.ts";
 import orchestratorSdkSupport from "./orchestrator-sdk-support.ts";
+
+const { fauxAssistantMessage, fauxToolCall } = compat;
 
 const { readTextFile, removePath, runTest } = testing;
 

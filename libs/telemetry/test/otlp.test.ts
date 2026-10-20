@@ -4,13 +4,14 @@ import { HttpEffect, HttpServer } from "effect/http";
 import * as NetAddress from "effect/net/NetAddress";
 import { describe, expect, it } from "vite-plus/test";
 
-import { OtlpTelemetry, layer } from "../src/otlp.ts";
-import {
-  type TelemetryAdapterFixture,
-  createTelemetryAdapterConformance,
-} from "../src/testing/index.ts";
+import otlp from "../src/otlp.ts";
+import testing from "../src/testing/index.ts";
+import type testingTypes from "../src/testing/index.types.ts";
 import otlpRecords from "./otlp-records.ts";
 import type otlpRecordsTypes from "./otlp-records.types.ts";
+
+const { OtlpTelemetry, layer } = otlp;
+const { createTelemetryAdapterConformance } = testing;
 
 const { normalizeLogs, normalizeMetrics, normalizeSpans, receive } = otlpRecords;
 
@@ -67,7 +68,7 @@ const makeFixture = Effect.gen(function* () {
     Effect.promise(() => runtime.runPromise(telemetry.flush)),
     received,
   );
-  const fixture: TelemetryAdapterFixture = {
+  const fixture: testingTypes.TelemetryAdapterFixture = {
     [Symbol.asyncDispose]: () =>
       runPromise(
         Effect.andThen(

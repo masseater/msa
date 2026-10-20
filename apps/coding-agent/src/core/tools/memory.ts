@@ -4,17 +4,17 @@ import { type Static, Type } from "typebox";
 import { readOnlyVariantOf } from "../ask.ts";
 import type { ToolDefinition } from "../extensions/types.ts";
 import {
+  type MemoryService,
   formatMemoryList,
   formatSearchResults,
   isMemoryKind,
-  type MemoryService,
 } from "../memory/memory.ts";
 import { MEMORY_KINDS } from "../memory/store.ts";
 import {
   type ForeignError,
+  ToolFailure,
   fromPromise,
   platformRuntime,
-  ToolFailure,
   unwrapForeign,
 } from "../platform/index.ts";
 
@@ -29,21 +29,21 @@ const memorySchema = Type.Object({
   content: Type.Optional(
     Type.String({ description: "The memory text (action: save). One durable fact per memory." }),
   ),
-  query: Type.Optional(Type.String({ description: "What to look for (action: search)" })),
   id: Type.Optional(Type.String({ description: "Memory id to delete (action: forget)" })),
   kind: Type.Optional(
     Type.String({
       description: `Memory kind: ${MEMORY_KINDS.join(", ")} (action: save, default fact)`,
     }),
   ),
+  limit: Type.Optional(
+    Type.Number({ description: "Maximum results (actions: search, list; default 5)" }),
+  ),
+  query: Type.Optional(Type.String({ description: "What to look for (action: search)" })),
   scope: Type.Optional(
     Type.String({
       description:
         "project (default): only this repository; global: every project, for user preferences",
     }),
-  ),
-  limit: Type.Optional(
-    Type.Number({ description: "Maximum results (actions: search, list; default 5)" }),
   ),
 });
 
@@ -51,19 +51,19 @@ const memoryReadSchema = Type.Object({
   action: Type.Union([Type.Literal("search"), Type.Literal("list")], {
     description: "search: find memories by meaning and keywords; list: newest memories",
   }),
-  query: Type.Optional(Type.String({ description: "What to look for (action: search)" })),
   limit: Type.Optional(
     Type.Number({ description: "Maximum results (actions: search, list; default 5)" }),
   ),
+  query: Type.Optional(Type.String({ description: "What to look for (action: search)" })),
 });
 
 export type MemoryToolInput = Static<typeof memorySchema>;
 
 export const memoryToolSystemPromptContribution = {
-  snippet: "Save, search, list, and forget long-term memories across sessions",
   guidelines: [
     "Use the memory tool to save durable facts, user preferences, and decisions that future sessions need; do not save transient details",
   ],
+  snippet: "Save, search, list, and forget long-term memories across sessions",
 } as const;
 
 type MemoryParams = Static<typeof memorySchema>;
@@ -74,7 +74,7 @@ interface MemoryToolResult {
 }
 
 const textResult = (text: string, details: Record<string, unknown>): MemoryToolResult => ({
-  content: [{ type: "text", text }],
+  content: [{ text, type: "text" }],
   details,
 });
 
@@ -142,9 +142,9 @@ const saveMemory = Effect.fn("memorySave")(function* (
   }
   return textResult(lines.join("\n"), {
     action: "save",
-    id: record.id,
     created: outcome.created,
     embedded: outcome.embedded,
+    id: record.id,
   });
 });
 
@@ -154,7 +154,7 @@ const searchMemory = Effect.fn("memorySearch")(function* (
 ) {
   const query = yield* requireText(params.query, "search", "query");
   const scores = yield* fromPromise(() => service.search(query, params.limit ?? 5));
-  return textResult(formatSearchResults(scores), { action: "search", query, count: scores.length });
+  return textResult(formatSearchResults(scores), { action: "search", count: scores.length, query });
 });
 
 const forgetMemory = Effect.fn("memoryForget")(function* (
@@ -165,8 +165,8 @@ const forgetMemory = Effect.fn("memoryForget")(function* (
   const forgotten = service.forget(id);
   return textResult(forgotten ? `Forgot memory ${id}.` : `No memory with id ${id}.`, {
     action: "forget",
-    id,
     forgotten,
+    id,
   });
 });
 
@@ -196,23 +196,23 @@ export function createMemoryToolDefinition(
   service: MemoryService,
 ): ToolDefinition<typeof memorySchema, Record<string, unknown> | undefined> {
   const memory: ToolDefinition<typeof memorySchema, Record<string, unknown> | undefined> = {
-    name: "memory",
-    label: "memory",
     description:
       "Long-term memory shared across sessions. Save durable facts, user preferences, and decisions (one per memory); search before assuming something was never decided; forget memories the user wants removed. Memories are scoped to this project by default, or global for user-level preferences.",
-    promptSnippet: memoryToolSystemPromptContribution.snippet,
-    promptGuidelines: [...memoryToolSystemPromptContribution.guidelines],
-    parameters: memorySchema,
     execute: (_toolCallId, params) =>
       platformRuntime.runPromise(unwrapForeign(runMemoryAction(service, params))),
+    label: "memory",
+    name: "memory",
+    parameters: memorySchema,
+    promptGuidelines: [...memoryToolSystemPromptContribution.guidelines],
+    promptSnippet: memoryToolSystemPromptContribution.snippet,
   };
   return {
     ...memory,
     readOnlyVariant: readOnlyVariantOf(memory, {
       actions: ["search", "list"],
-      parameters: memoryReadSchema,
       description:
         "Long-term memory shared across sessions, read only: search memories by meaning and keywords, or list the newest.",
+      parameters: memoryReadSchema,
       promptSnippet: "Search and list long-term memories across sessions",
     }),
   };

@@ -1,12 +1,12 @@
-import { InMemoryCredentialStore } from "@msa/ai";
+import ai from "@msa/ai";
 import {
   type AgentSession,
-  createAgentSessionFromServices,
-  createAgentSessionServices,
   type InlineExtension,
   ModelRuntime,
-  readStoredCredential,
   SessionManager,
+  createAgentSessionFromServices,
+  createAgentSessionServices,
+  readStoredCredential,
 } from "@msa/coding-agent";
 import { Effect } from "effect";
 import type { JsonValue } from "vitest-evals/harness";
@@ -14,6 +14,8 @@ import type { JsonValue } from "vitest-evals/harness";
 import { files, pathOperations } from "./platform.ts";
 import type { HostSelection, Options, RunPaths, RunState } from "./run-types.ts";
 import { seedWorkspace } from "./workspace.ts";
+
+const { InMemoryCredentialStore } = ai;
 
 export const throwIfAborted = (signal: AbortSignal | undefined): Effect.Effect<void> =>
   Effect.sync(() => signal?.throwIfAborted());
@@ -111,9 +113,9 @@ export const openSession = <TOutput extends JsonValue>({
     state.sessionManager = sessionManager;
     const { session } = yield* Effect.promise(() =>
       createAgentSessionFromServices({
+        model: prepared.model,
         services,
         sessionManager,
-        model: prepared.model,
         thinkingLevel: "off",
         ...(options.tools === undefined ? {} : { tools: options.tools }),
         ...(options.noTools === undefined ? {} : { noTools: options.noTools }),

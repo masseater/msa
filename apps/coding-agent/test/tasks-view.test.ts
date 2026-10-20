@@ -1,4 +1,4 @@
-import { setKeybindings } from "@msa/tui";
+import tui from "@msa/tui";
 import { beforeAll, expect, it } from "vite-plus/test";
 
 import { KeybindingsManager } from "../src/core/keybindings.ts";
@@ -6,6 +6,8 @@ import { viewHelpers } from "../src/modes/interactive/components/tasks-view-help
 import { initTheme } from "../src/modes/interactive/theme/theme.ts";
 import tasksViewHarness from "./tasks-view-harness.ts";
 import tasksViewSupport from "./tasks-view-support.ts";
+
+const { setKeybindings } = tui;
 
 const { ENTER } = tasksViewSupport;
 

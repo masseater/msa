@@ -1,10 +1,7 @@
-import {
-  OPENAI_COMPLETIONS_REASONING_FIELDS,
-  type OpenAICompletionsReasoningField,
-  type OpenAIEncryptedReasoningDetail,
-  type OpenAIReasoningDetail,
-  type OpenAIReasoningDetailBase,
-} from "./openai-completions-types.ts";
+import openaiCompletionsTypes from "./openai-completions-types.ts";
+import type openaiCompletionsTypesModule from "./openai-completions-types.types.ts";
+
+const { OPENAI_COMPLETIONS_REASONING_FIELDS } = openaiCompletionsTypes;
 
 function isReasoningDetailObject(detail: unknown): detail is Record<string, unknown> {
   return typeof detail === "object" && detail !== null && !Array.isArray(detail);
@@ -20,7 +17,9 @@ function hasValidCommonReasoningDetailFields(candidate: Record<string, unknown>)
   );
 }
 
-function isOpenAIReasoningDetail(detail: unknown): detail is OpenAIReasoningDetail {
+function isOpenAIReasoningDetail(
+  detail: unknown,
+): detail is openaiCompletionsTypesModule.OpenAIReasoningDetail {
   if (!isReasoningDetailObject(detail) || !hasValidCommonReasoningDetailFields(detail)) {
     return false;
   }
@@ -43,7 +42,7 @@ function isOpenAIReasoningDetail(detail: unknown): detail is OpenAIReasoningDeta
 
 function parseOpenAIReasoningDetails(
   signature: string | undefined,
-): OpenAIReasoningDetail[] | undefined {
+): openaiCompletionsTypesModule.OpenAIReasoningDetail[] | undefined {
   if (signature === undefined || signature === "") return undefined;
   try {
     const parsed = JSON.parse(signature) as unknown;
@@ -57,7 +56,7 @@ function parseOpenAIReasoningDetails(
 
 function parseLegacyEncryptedReasoningDetail(
   signature: string | undefined,
-): OpenAIEncryptedReasoningDetail | undefined {
+): openaiCompletionsTypesModule.OpenAIEncryptedReasoningDetail | undefined {
   if (signature === undefined || signature === "") return undefined;
   try {
     const parsed = JSON.parse(signature) as unknown;
@@ -74,8 +73,8 @@ function parseLegacyEncryptedReasoningDetail(
 }
 
 function fillMissingCommonReasoningDetailFields(
-  target: OpenAIReasoningDetailBase,
-  source: OpenAIReasoningDetail,
+  target: openaiCompletionsTypesModule.OpenAIReasoningDetailBase,
+  source: openaiCompletionsTypesModule.OpenAIReasoningDetail,
 ): void {
   if (target.id === undefined || target.id === null) {
     if (source.id === undefined) delete target.id;
@@ -92,8 +91,8 @@ function fillMissingCommonReasoningDetailFields(
 }
 
 function mergeReasoningText(
-  lastDetail: OpenAIReasoningDetail & { type: "reasoning.text" },
-  detail: OpenAIReasoningDetail & { type: "reasoning.text" },
+  lastDetail: openaiCompletionsTypesModule.OpenAIReasoningDetail & { type: "reasoning.text" },
+  detail: openaiCompletionsTypesModule.OpenAIReasoningDetail & { type: "reasoning.text" },
 ): void {
   lastDetail.text += detail.text;
   if (
@@ -108,8 +107,8 @@ function mergeReasoningText(
 }
 
 function appendOpenAIReasoningDetail(input: {
-  details: OpenAIReasoningDetail[];
-  detail: OpenAIReasoningDetail;
+  details: openaiCompletionsTypesModule.OpenAIReasoningDetail[];
+  detail: openaiCompletionsTypesModule.OpenAIReasoningDetail;
 }): void {
   const { details, detail } = input;
   const lastDetail = details.at(-1);
@@ -127,14 +126,18 @@ function appendOpenAIReasoningDetail(input: {
 
 function isOpenAICompletionsReasoningField(
   field: string,
-): field is OpenAICompletionsReasoningField {
-  return OPENAI_COMPLETIONS_REASONING_FIELDS.includes(field as OpenAICompletionsReasoningField);
+): field is openaiCompletionsTypesModule.OpenAICompletionsReasoningField {
+  return OPENAI_COMPLETIONS_REASONING_FIELDS.includes(
+    field as openaiCompletionsTypesModule.OpenAICompletionsReasoningField,
+  );
 }
 
-export {
+const openaiCompletionsReasoning = {
   appendOpenAIReasoningDetail,
   isOpenAICompletionsReasoningField,
   isOpenAIReasoningDetail,
   parseLegacyEncryptedReasoningDetail,
   parseOpenAIReasoningDetails,
 };
+
+export default openaiCompletionsReasoning;

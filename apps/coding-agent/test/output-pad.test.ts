@@ -1,5 +1,6 @@
 import testing from "@msa/testing";
-import { type Component, TuiMainScreen } from "@msa/tui";
+import tui from "@msa/tui";
+import type tuiTypes from "@msa/tui/index.types";
 import { Type } from "typebox";
 import { afterAll, beforeAll, describe, expect, test } from "vite-plus/test";
 
@@ -9,6 +10,8 @@ import { BashExecutionComponent } from "../src/modes/interactive/components/bash
 import { CompactionSummaryMessageComponent } from "../src/modes/interactive/components/compaction-summary-message.ts";
 import { ToolExecutionComponent } from "../src/modes/interactive/components/tool-execution.ts";
 import tuiKit from "./tui-kit.ts";
+
+const { TuiMainScreen } = tui;
 
 const { VirtualTerminal, initTheme, stripAnsi } = tuiKit;
 
@@ -25,9 +28,9 @@ const tool: ToolDefinition = {
   parameters: Type.Any(),
 };
 
-type OutputPaddedComponent = Component & { setOutputPad(outputPad: number): void };
+type OutputPaddedComponent = tuiTypes.Component & { setOutputPad(outputPad: number): void };
 
-function renderLines(component: Component): string[] {
+function renderLines(component: tuiTypes.Component): string[] {
   return component
     .render(60)
     .map((line) => stripAnsi(line).trimEnd())

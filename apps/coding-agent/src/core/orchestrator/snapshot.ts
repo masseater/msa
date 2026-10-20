@@ -23,14 +23,14 @@ function reasonFor(
   );
   if (unfinished.length > 0) {
     const titles = unfinished.map((id) => byId.get(id)?.title ?? id);
-    return { kind: "dependencies", detail: `waiting for ${titles.join(", ")}` };
+    return { detail: `waiting for ${titles.join(", ")}`, kind: "dependencies" };
   }
-  if (task.condition !== null) return { kind: "condition", detail: `condition: ${task.condition}` };
+  if (task.condition !== null) return { detail: `condition: ${task.condition}`, kind: "condition" };
   if (task.kind === "review" && task.dependsOn.length === 0) {
-    return { kind: "review", detail: "round has no work to review yet" };
+    return { detail: "round has no work to review yet", kind: "review" };
   }
-  if (free <= 0) return { kind: "capacity", detail: "no free thread slot" };
-  return { kind: "scheduling", detail: "about to start" };
+  if (free <= 0) return { detail: "no free thread slot", kind: "capacity" };
+  return { detail: "about to start", kind: "scheduling" };
 }
 
 function taskViews(database: DatabaseSync, project: string): TaskView[] {
@@ -40,15 +40,15 @@ function taskViews(database: DatabaseSync, project: string): TaskView[] {
   const reports = store.listReports(database, project);
   return tasks.map((task) =>
     Object.assign(task, {
-      dependsOn: dependencies
-        .filter((pair) => pair.taskId === task.id)
-        .map((pair) => pair.dependsOn)
-        .toSorted(),
+      assignments: assignments.filter((assignment) => assignment.taskId === task.id),
       dependents: dependencies
         .filter((pair) => pair.dependsOn === task.id)
         .map((pair) => pair.taskId)
         .toSorted(),
-      assignments: assignments.filter((assignment) => assignment.taskId === task.id),
+      dependsOn: dependencies
+        .filter((pair) => pair.taskId === task.id)
+        .map((pair) => pair.dependsOn)
+        .toSorted(),
       reports: reports.filter((report) => report.taskId === task.id),
     }),
   );
@@ -61,10 +61,10 @@ function roundViews(
 ): RoundView[] {
   return store.listRoundIds(database, project).map((round) => ({
     id: round.id,
-    title: round.title,
     reviewTaskId:
       tasks.find((task) => task.round === round.id && task.kind === "review")?.id ?? null,
     taskIds: tasks.filter((task) => task.round === round.id).map((task) => task.id),
+    title: round.title,
   }));
 }
 
@@ -108,20 +108,20 @@ function buildSnapshot(
   const byTask = taskMarks(replans[0]);
   const snapshots: TaskSnapshot[] = views.map((task) => ({
     ...task,
-    waitingReason: task.status === "waiting" ? reasonFor(task, byId, free) : null,
     handoff: handoffOf(task),
     replan: byTask.get(task.id) ?? null,
+    waitingReason: task.status === "waiting" ? reasonFor(task, byId, free) : null,
   }));
   return {
+    maxConcurrentThreads,
+    replans,
+    rounds: roundViews(database, project, views),
     tasks: snapshots,
     threads: store.threadViews(database, project),
-    rounds: roundViews(database, project, views),
-    replans,
-    maxConcurrentThreads,
   };
 }
 
-export const snapshots = { taskViews, buildSnapshot };
+export const snapshots = { buildSnapshot, taskViews };
 
 export type {
   CreateTaskInput,

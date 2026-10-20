@@ -1,6 +1,6 @@
 import { Effect } from "effect";
 
-import type { OAuthAuth } from "../types.ts";
+import type typesModule from "../types.ts";
 
 const importOAuthModule = (specifier: string): Promise<unknown> => {
   const runtimeSpecifier = import.meta.url.endsWith(".js")
@@ -10,24 +10,26 @@ const importOAuthModule = (specifier: string): Promise<unknown> => {
 };
 
 type OAuthFlowLoaders = {
-  openaiCodex: () => OAuthAuth | Promise<OAuthAuth>;
-  openaiChatGPT: () => OAuthAuth | Promise<OAuthAuth>;
-  openrouter: () => OAuthAuth | Promise<OAuthAuth>;
+  openaiCodex: () => typesModule.OAuthAuth | Promise<typesModule.OAuthAuth>;
+  openaiChatGPT: () => typesModule.OAuthAuth | Promise<typesModule.OAuthAuth>;
+  openrouter: () => typesModule.OAuthAuth | Promise<typesModule.OAuthAuth>;
 };
 
 let bundledLoaders: OAuthFlowLoaders | undefined;
 
-export const registerBundledOAuthFlowLoaders = (loaders: OAuthFlowLoaders): void => {
+const registerBundledOAuthFlowLoaders = (loaders: OAuthFlowLoaders): void => {
   bundledLoaders = loaders;
 };
 
 interface OAuthModuleSource {
-  readonly bundled: (loaders: OAuthFlowLoaders) => OAuthAuth | Promise<OAuthAuth>;
+  readonly bundled: (
+    loaders: OAuthFlowLoaders,
+  ) => typesModule.OAuthAuth | Promise<typesModule.OAuthAuth>;
   readonly specifier: string;
-  readonly fromModule: (module: unknown) => OAuthAuth;
+  readonly fromModule: (module: unknown) => typesModule.OAuthAuth;
 }
 
-const loadOAuth = (source: OAuthModuleSource): Promise<OAuthAuth> =>
+const loadOAuth = (source: OAuthModuleSource): Promise<typesModule.OAuthAuth> =>
   Effect.runPromise(
     Effect.gen(function* () {
       const loaders = bundledLoaders;
@@ -37,23 +39,38 @@ const loadOAuth = (source: OAuthModuleSource): Promise<OAuthAuth> =>
     }),
   );
 
-export const loadOpenAICodexOAuth = (): Promise<OAuthAuth> =>
+const loadOpenAICodexOAuth = (): Promise<typesModule.OAuthAuth> =>
   loadOAuth({
     bundled: (loaders) => loaders.openaiCodex(),
+    fromModule: (module) =>
+      (module as { readonly default: { readonly openaiCodexOAuth: typesModule.OAuthAuth } }).default
+        .openaiCodexOAuth,
     specifier: "./openai-codex.ts",
-    fromModule: (module) => (module as { openaiCodexOAuth: OAuthAuth }).openaiCodexOAuth,
   });
 
-export const loadOpenAIChatGPTOAuth = (): Promise<OAuthAuth> =>
+const loadOpenAIChatGPTOAuth = (): Promise<typesModule.OAuthAuth> =>
   loadOAuth({
     bundled: (loaders) => loaders.openaiChatGPT(),
+    fromModule: (module) =>
+      (module as { readonly default: { readonly openaiChatGPTOAuth: typesModule.OAuthAuth } })
+        .default.openaiChatGPTOAuth,
     specifier: "./openai-chatgpt.ts",
-    fromModule: (module) => (module as { openaiChatGPTOAuth: OAuthAuth }).openaiChatGPTOAuth,
   });
 
-export const loadOpenRouterOAuth = (): Promise<OAuthAuth> =>
+const loadOpenRouterOAuth = (): Promise<typesModule.OAuthAuth> =>
   loadOAuth({
     bundled: (loaders) => loaders.openrouter(),
+    fromModule: (module) =>
+      (module as { readonly default: { readonly openRouterOAuth: typesModule.OAuthAuth } }).default
+        .openRouterOAuth,
     specifier: "./openrouter.ts",
-    fromModule: (module) => (module as { openRouterOAuth: OAuthAuth }).openRouterOAuth,
   });
+
+const load = {
+  loadOpenAIChatGPTOAuth,
+  loadOpenAICodexOAuth,
+  loadOpenRouterOAuth,
+  registerBundledOAuthFlowLoaders,
+};
+
+export default load;

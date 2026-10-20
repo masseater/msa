@@ -1,6 +1,8 @@
-import { type Static, Type } from "typebox";
+import { Type } from "typebox";
 
-import { ModelCostSchema } from "./model-schema.ts";
+import modelSchema from "./model-schema.ts";
+
+const { ModelCostSchema } = modelSchema;
 
 function percentileCutoffs(metric: string) {
   return Type.Object({
@@ -11,36 +13,60 @@ function percentileCutoffs(metric: string) {
   });
 }
 
-export const OpenRouterRoutingSchema = Type.Object(
+const OpenRouterRoutingSchema = Type.Object(
   {
     allow_fallbacks: Type.Optional(
       Type.Boolean({
-        description: "Whether to allow backup providers to serve requests.",
         default: true,
-      }),
-    ),
-    require_parameters: Type.Optional(
-      Type.Boolean({
-        description:
-          "Whether to filter providers to only those that support all parameters in the request.",
-        default: false,
+        description: "Whether to allow backup providers to serve requests.",
       }),
     ),
     data_collection: Type.Optional(
       Type.Union([Type.Literal("deny"), Type.Literal("allow")], {
+        default: "allow",
         description:
           'Data collection setting. "allow": allow providers that may store or train on data. "deny": only use providers that do not collect user data.',
-        default: "allow",
-      }),
-    ),
-    zdr: Type.Optional(
-      Type.Boolean({
-        description: "Whether to restrict routing to only ZDR (Zero Data Retention) endpoints.",
       }),
     ),
     enforce_distillable_text: Type.Optional(
       Type.Boolean({
         description: "Whether to restrict routing to only models that allow text distillation.",
+      }),
+    ),
+    ignore: Type.Optional(
+      Type.Array(Type.String(), {
+        description: "List of provider names or slugs to skip for this request.",
+      }),
+    ),
+    max_price: Type.Optional(
+      Type.Object(
+        {
+          audio: Type.Optional(
+            Type.Union([Type.Number(), Type.String()], { description: "Price per audio unit." }),
+          ),
+          completion: Type.Optional(
+            Type.Union([Type.Number(), Type.String()], {
+              description: "Price per million completion tokens.",
+            }),
+          ),
+          image: Type.Optional(
+            Type.Union([Type.Number(), Type.String()], { description: "Price per image." }),
+          ),
+          prompt: Type.Optional(
+            Type.Union([Type.Number(), Type.String()], {
+              description: "Price per million prompt tokens.",
+            }),
+          ),
+          request: Type.Optional(
+            Type.Union([Type.Number(), Type.String()], { description: "Price per request." }),
+          ),
+        },
+        { description: "Maximum price per million tokens in USD." },
+      ),
+    ),
+    only: Type.Optional(
+      Type.Array(Type.String(), {
+        description: "List of provider names or slugs to exclusively allow for this request.",
       }),
     ),
     order: Type.Optional(
@@ -49,20 +75,27 @@ export const OpenRouterRoutingSchema = Type.Object(
           "An ordered list of provider names or slugs to try in sequence, falling back to the next if unavailable.",
       }),
     ),
-    only: Type.Optional(
-      Type.Array(Type.String(), {
-        description: "List of provider names or slugs to exclusively allow for this request.",
+    preferred_max_latency: Type.Optional(
+      Type.Union([Type.Number(), percentileCutoffs("Maximum latency in seconds")], {
+        description: "Preferred maximum latency in seconds. A number applies to p50.",
       }),
     ),
-    ignore: Type.Optional(
-      Type.Array(Type.String(), {
-        description: "List of provider names or slugs to skip for this request.",
+    preferred_min_throughput: Type.Optional(
+      Type.Union([Type.Number(), percentileCutoffs("Minimum tokens per second")], {
+        description: "Preferred minimum throughput in tokens per second. A number applies to p50.",
       }),
     ),
     quantizations: Type.Optional(
       Type.Array(Type.String(), {
         description:
           'A list of quantization levels to filter providers by, for example ["fp16", "bf16", "fp8", "fp6", "int8", "int4", "fp4", "fp32"].',
+      }),
+    ),
+    require_parameters: Type.Optional(
+      Type.Boolean({
+        default: false,
+        description:
+          "Whether to filter providers to only those that support all parameters in the request.",
       }),
     ),
     sort: Type.Optional(
@@ -77,8 +110,8 @@ export const OpenRouterRoutingSchema = Type.Object(
             ),
             partition: Type.Optional(
               Type.Union([Type.String(), Type.Null()], {
-                description: 'Partitioning strategy: "model" or "none".',
                 default: "model",
+                description: 'Partitioning strategy: "model" or "none".',
               }),
             ),
           }),
@@ -89,40 +122,9 @@ export const OpenRouterRoutingSchema = Type.Object(
         },
       ),
     ),
-    max_price: Type.Optional(
-      Type.Object(
-        {
-          prompt: Type.Optional(
-            Type.Union([Type.Number(), Type.String()], {
-              description: "Price per million prompt tokens.",
-            }),
-          ),
-          completion: Type.Optional(
-            Type.Union([Type.Number(), Type.String()], {
-              description: "Price per million completion tokens.",
-            }),
-          ),
-          image: Type.Optional(
-            Type.Union([Type.Number(), Type.String()], { description: "Price per image." }),
-          ),
-          audio: Type.Optional(
-            Type.Union([Type.Number(), Type.String()], { description: "Price per audio unit." }),
-          ),
-          request: Type.Optional(
-            Type.Union([Type.Number(), Type.String()], { description: "Price per request." }),
-          ),
-        },
-        { description: "Maximum price per million tokens in USD." },
-      ),
-    ),
-    preferred_min_throughput: Type.Optional(
-      Type.Union([Type.Number(), percentileCutoffs("Minimum tokens per second")], {
-        description: "Preferred minimum throughput in tokens per second. A number applies to p50.",
-      }),
-    ),
-    preferred_max_latency: Type.Optional(
-      Type.Union([Type.Number(), percentileCutoffs("Maximum latency in seconds")], {
-        description: "Preferred maximum latency in seconds. A number applies to p50.",
+    zdr: Type.Optional(
+      Type.Boolean({
+        description: "Whether to restrict routing to only ZDR (Zero Data Retention) endpoints.",
       }),
     ),
   },
@@ -132,16 +134,18 @@ export const OpenRouterRoutingSchema = Type.Object(
   },
 );
 
-export const AnthropicAllowedFallbackModelSchema = Type.Object(
+const AnthropicAllowedFallbackModelSchema = Type.Object(
   {
-    provider: Type.String({ minLength: 1 }),
-    model: Type.String({ minLength: 1 }),
     cost: ModelCostSchema,
+    model: Type.String({ minLength: 1 }),
+    provider: Type.String({ minLength: 1 }),
   },
   { description: "An Anthropic server-side refusal fallback model with local pricing metadata." },
 );
 
-export interface OpenRouterRouting extends Static<typeof OpenRouterRoutingSchema> {}
-export interface AnthropicAllowedFallbackModel extends Static<
-  typeof AnthropicAllowedFallbackModelSchema
-> {}
+const routingSchema = {
+  AnthropicAllowedFallbackModelSchema,
+  OpenRouterRoutingSchema,
+};
+
+export default routingSchema;

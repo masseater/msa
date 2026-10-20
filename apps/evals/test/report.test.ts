@@ -16,13 +16,13 @@ afterEach(() =>
 const run = (effect: Effect.Effect<void>) => Effect.runPromise(effect);
 
 const task: EvalTask = {
+  caseId: "handles the case",
+  evalSet: "Example workflow",
   file: "evals/example.docs.eval.ts",
   fullName: "Example workflow > handles the case",
-  evalSet: "Example workflow",
-  caseId: "handles the case",
-  variant: "without_docs",
   model: "fixture/model",
   runNumber: 1,
+  variant: "without_docs",
 };
 const SESSION = '{"type":"session"}\n';
 
@@ -43,9 +43,6 @@ function reportJson(assertion: ReportAssertion): string {
     success: true,
     testResults: [
       {
-        message: "",
-        name: "/repo/apps/evals/evals/example.docs.eval.ts",
-        status: "passed",
         assertionResults: [
           {
             ancestorTitles: [task.evalSet],
@@ -56,6 +53,9 @@ function reportJson(assertion: ReportAssertion): string {
             meta: assertion.meta ?? {},
           },
         ],
+        message: "",
+        name: "/repo/apps/evals/evals/example.docs.eval.ts",
+        status: "passed",
       },
     ],
   });
@@ -85,23 +85,23 @@ function scoredMeta(overrides?: {
     harness: {
       name: "without_docs",
       run: {
-        output: { ok: true },
-        session: { events: [{ type: "message", role: "user", content: "prompt" }] },
-        usage: {
-          provider: "fixture",
-          model: overrides?.model ?? "model",
-          inputTokens: 10,
-          outputTokens: 5,
-          totalTokens: 15,
-          toolCalls: 1,
-          metadata: { cacheReadTokens: 2, cacheWriteTokens: 3, estimatedCostUsd: 0.01 },
-        },
-        timings: { totalMs: 1234 },
         artifacts: overrides?.artifacts ?? {
           runId: "run-1",
           [MSA_SESSION_SNAPSHOT_ARTIFACT]: SESSION,
         },
         errors: overrides?.errors ?? [],
+        output: { ok: true },
+        session: { events: [{ type: "message", role: "user", content: "prompt" }] },
+        timings: { totalMs: 1234 },
+        usage: {
+          inputTokens: 10,
+          metadata: { cacheReadTokens: 2, cacheWriteTokens: 3, estimatedCostUsd: 0.01 },
+          model: overrides?.model ?? "model",
+          outputTokens: 5,
+          provider: "fixture",
+          toolCalls: 1,
+          totalTokens: 15,
+        },
       },
     },
   };
@@ -111,9 +111,9 @@ const readObservation = (assertion?: ReportAssertion) =>
   Effect.gen(function* () {
     const { directory, reportPath } = yield* writeTaskReport(assertion);
     const observation = yield* readTaskObservation({
-      task,
-      reportPath,
       artifactDirectory: directory,
+      reportPath,
+      task,
     });
     return { directory, observation };
   });
@@ -126,28 +126,28 @@ const persistedSession = (directory: string) =>
     if (hash === undefined)
       return yield* Effect.die(new Error("Expected a persisted session directory."));
     return {
-      count: hashes.length,
       content: yield* files.readFileString(pathOperations.join(sessions, hash, "session.jsonl")),
+      count: hashes.length,
     };
   });
 
 const expectedIdentity = {
-  evalSet: task.evalSet,
   caseId: task.caseId,
-  variant: task.variant,
+  evalSet: task.evalSet,
   model: task.model,
   runNumber: task.runNumber,
+  variant: task.variant,
 };
 
 const expectedMetrics = {
-  inputTokens: 10,
-  outputTokens: 5,
   cacheReadTokens: 2,
   cacheWriteTokens: 3,
-  totalTokens: 15,
+  estimatedCostUsd: 0.01,
+  inputTokens: 10,
+  outputTokens: 5,
   toolCalls: 1,
   totalMs: 1234,
-  estimatedCostUsd: 0.01,
+  totalTokens: 15,
 };
 
 describe("classifyCaseStatus", () => {
@@ -191,8 +191,8 @@ describe("readTaskObservation with a harness run", () => {
     run(
       Effect.gen(function* () {
         const { directory, observation } = yield* readObservation({
-          status: "failed",
           meta: scoredMeta({ errors: [{ message: "Prompt verification failed" }] }),
+          status: "failed",
         });
         expect(observation).toEqual({
           ...expectedIdentity,

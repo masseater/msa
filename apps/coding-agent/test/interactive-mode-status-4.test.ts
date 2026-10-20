@@ -1,5 +1,5 @@
 import testing from "@msa/testing";
-import { type AutocompleteProvider } from "@msa/tui";
+import type tuiTypes from "@msa/tui/index.types";
 import { Effect } from "effect";
 import { describe, expect, test } from "vite-plus/test";
 
@@ -29,7 +29,7 @@ const matchesModelCommandArgumentsAcrossProviderModel = Effect.gen(function* () 
   const createBaseAutocompleteProvider = (
     InteractiveMode as unknown as {
       prototype: {
-        createBaseAutocompleteProvider(this: FakeInteractiveMode): AutocompleteProvider;
+        createBaseAutocompleteProvider(this: FakeInteractiveMode): tuiTypes.AutocompleteProvider;
       };
     }
   ).prototype.createBaseAutocompleteProvider;
@@ -85,7 +85,7 @@ const matchesLoginCommandArgumentsByProviderIdStep = () => {
   const createBaseAutocompleteProvider = (
     InteractiveMode as unknown as {
       prototype: {
-        createBaseAutocompleteProvider(this: LoginCommandMode): AutocompleteProvider;
+        createBaseAutocompleteProvider(this: LoginCommandMode): tuiTypes.AutocompleteProvider;
       };
     }
   ).prototype.createBaseAutocompleteProvider;

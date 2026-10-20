@@ -1,10 +1,12 @@
-import { fauxAssistantMessage, fauxToolCall } from "@msa/ai";
+import ai from "@msa/ai";
 import testing from "@msa/testing";
 import { Effect } from "effect";
 import { afterEach, describe, expect, it } from "vite-plus/test";
 
 import agentSessionMcpSupport from "./agent-session-mcp-support.ts";
 import harnessModule from "./harness.ts";
+
+const { fauxAssistantMessage, fauxToolCall } = ai;
 
 const { declaredToolNames, harnesses, nestedToolNames, serversSection, setup, setupSlow } =
   agentSessionMcpSupport;

@@ -1,106 +1,91 @@
-import type { AssistantMessage, ToolResultMessage } from "@msa/ai";
+import type aiTypes from "@msa/ai/index.types";
 import { Effect } from "effect";
 
-import { now } from "./call.ts";
-import {
-  createErrorToolResult,
-  executeAndFinalize,
-  prepareToolCall,
-  type ToolCallSite,
-  type ToolUpdateSink,
-} from "./tool-call.ts";
-import type {
-  AgentEvent,
-  AgentToolCall,
-  AgentToolCallOutcome,
-  ToolExecutionMode,
-} from "./types.ts";
+import callModule from "./call.ts";
+import type toolBatchTypes from "./tool-batch.types.ts";
+import toolCallModule from "./tool-call.ts";
+import type toolCallTypes from "./tool-call.types.ts";
+import type typesModule from "./types.ts";
 
-export type Emit = (event: AgentEvent) => Effect.Effect<void>;
+const { now } = callModule;
+const { createErrorToolResult, executeAndFinalize, prepareToolCall } = toolCallModule;
 
-export type ExecutedToolCallBatch = {
-  messages: ToolResultMessage[];
-  terminate: boolean;
-};
-
-export interface ToolBatch extends ToolCallSite {
-  readonly toolCalls: AgentToolCall[];
-  readonly emit: Emit;
-}
-
-const shouldTerminate = (finalizedCalls: readonly AgentToolCallOutcome[]): boolean =>
+const shouldTerminate = (finalizedCalls: readonly typesModule.AgentToolCallOutcome[]): boolean =>
   finalizedCalls.length > 0 &&
   finalizedCalls.every((finalized) => finalized.result.terminate === true);
 
-const toolExecutionStart = (toolCall: AgentToolCall): AgentEvent => ({
-  type: "tool_execution_start",
+const toolExecutionStart = (toolCall: typesModule.AgentToolCall): typesModule.AgentEvent => ({
+  args: toolCall.arguments,
   toolCallId: toolCall.id,
   toolName: toolCall.name,
-  args: toolCall.arguments,
+  type: "tool_execution_start",
 });
 
 const toolUpdates =
-  (toolCall: AgentToolCall, emit: Emit): ToolUpdateSink =>
+  (toolCall: typesModule.AgentToolCall, emit: toolBatchTypes.Emit): toolCallTypes.ToolUpdateSink =>
   (partialResult) =>
     Effect.runPromise(
       emit({
-        type: "tool_execution_update",
-        toolCallId: toolCall.id,
-        toolName: toolCall.name,
         args: toolCall.arguments,
         partialResult,
+        toolCallId: toolCall.id,
+        toolName: toolCall.name,
+        type: "tool_execution_update",
       }),
     );
 
-const emitToolExecutionEnd = (finalized: AgentToolCallOutcome, emit: Emit): Effect.Effect<void> =>
+const emitToolExecutionEnd = (
+  finalized: typesModule.AgentToolCallOutcome,
+  emit: toolBatchTypes.Emit,
+): Effect.Effect<void> =>
   emit({
-    type: "tool_execution_end",
+    isError: finalized.isError,
+    result: finalized.result,
     toolCallId: finalized.toolCall.id,
     toolName: finalized.toolCall.name,
-    result: finalized.result,
-    isError: finalized.isError,
+    type: "tool_execution_end",
     ...(finalized.durationMs === undefined ? {} : { durationMs: finalized.durationMs }),
   });
 
-const createToolResultMessage = (finalized: AgentToolCallOutcome): ToolResultMessage => ({
-  role: "toolResult",
-  toolCallId: finalized.toolCall.id,
-  toolName: finalized.toolCall.name,
+const createToolResultMessage = (
+  finalized: typesModule.AgentToolCallOutcome,
+): aiTypes.ToolResultMessage => ({
   content: finalized.result.content ?? [],
   details: finalized.result.details,
-  ...(finalized.result.usage === undefined ? {} : { usage: finalized.result.usage }),
   isError: finalized.isError,
-  ...(finalized.durationMs === undefined ? {} : { durationMs: finalized.durationMs }),
+  role: "toolResult",
   timestamp: now(),
+  toolCallId: finalized.toolCall.id,
+  toolName: finalized.toolCall.name,
+  ...(finalized.result.usage === undefined ? {} : { usage: finalized.result.usage }),
+  ...(finalized.durationMs === undefined ? {} : { durationMs: finalized.durationMs }),
 });
 
-const emitToolResultMessage = (finalized: AgentToolCallOutcome, emit: Emit) =>
+const emitToolResultMessage = (
+  finalized: typesModule.AgentToolCallOutcome,
+  emit: toolBatchTypes.Emit,
+) =>
   Effect.gen(function* () {
     const message = createToolResultMessage(finalized);
-    yield* emit({ type: "message_start", message });
-    yield* emit({ type: "message_end", message });
+    yield* emit({ message, type: "message_start" });
+    yield* emit({ message, type: "message_end" });
     return message;
   });
 
-export interface TruncatedToolCalls {
-  readonly toolCalls: AgentToolCall[];
-  readonly emit: Emit;
-}
-
-export const failToolCallsFromTruncatedMessage = ({
+const failToolCallsFromTruncatedMessage = ({
   toolCalls,
   emit,
-}: TruncatedToolCalls): Effect.Effect<ExecutedToolCallBatch> =>
+}: toolBatchTypes.TruncatedToolCalls): Effect.Effect<toolBatchTypes.ExecutedToolCallBatch> =>
   Effect.gen(function* () {
-    const messages: ToolResultMessage[] = [];
+    const messages: aiTypes.ToolResultMessage[] = [];
     for (const toolCall of toolCalls) {
       yield* emit(toolExecutionStart(toolCall));
-      const finalized: AgentToolCallOutcome = {
-        toolCall,
+      const finalized: typesModule.AgentToolCallOutcome = {
+        isError: true,
         result: createErrorToolResult(
           `Tool call "${toolCall.name}" was not executed: the response hit the output token limit, so its arguments may be truncated. Re-issue the tool call with complete arguments.`,
         ),
-        isError: true,
+        toolCall,
       };
       yield* emitToolExecutionEnd(finalized, emit);
       messages.push(yield* emitToolResultMessage(finalized, emit));
@@ -108,30 +93,32 @@ export const failToolCallsFromTruncatedMessage = ({
     return { messages, terminate: false };
   });
 
-const finalizeOne = (batch: ToolBatch, toolCall: AgentToolCall) =>
+const finalizeOne = (batch: toolBatchTypes.ToolBatch, toolCall: typesModule.AgentToolCall) =>
   Effect.gen(function* () {
     yield* batch.emit(toolExecutionStart(toolCall));
     const preparation = yield* prepareToolCall({ ...batch, toolCall });
     if (preparation.kind === "immediate") {
       return {
+        finalized: { isError: preparation.isError, result: preparation.result, toolCall },
         immediate: true,
-        finalized: { toolCall, result: preparation.result, isError: preparation.isError },
       } as const;
     }
     return {
       immediate: false,
       run: executeAndFinalize({
         ...batch,
-        prepared: preparation,
         onUpdate: toolUpdates(toolCall, batch.emit),
+        prepared: preparation,
       }),
     } as const;
   });
 
-const executeSequential = (batch: ToolBatch): Effect.Effect<ExecutedToolCallBatch> =>
+const executeSequential = (
+  batch: toolBatchTypes.ToolBatch,
+): Effect.Effect<toolBatchTypes.ExecutedToolCallBatch> =>
   Effect.gen(function* () {
-    const finalizedCalls: AgentToolCallOutcome[] = [];
-    const messages: ToolResultMessage[] = [];
+    const finalizedCalls: typesModule.AgentToolCallOutcome[] = [];
+    const messages: aiTypes.ToolResultMessage[] = [];
     for (const toolCall of batch.toolCalls) {
       const step = yield* finalizeOne(batch, toolCall);
       const finalized = step.immediate ? step.finalized : yield* step.run;
@@ -144,22 +131,24 @@ const executeSequential = (batch: ToolBatch): Effect.Effect<ExecutedToolCallBatc
   });
 
 const deferredRun = (
-  batch: ToolBatch,
-  toolCall: AgentToolCall,
-  run: Effect.Effect<AgentToolCallOutcome>,
-): Effect.Effect<AgentToolCallOutcome> =>
+  batch: toolBatchTypes.ToolBatch,
+  toolCall: typesModule.AgentToolCall,
+  run: Effect.Effect<typesModule.AgentToolCallOutcome>,
+): Effect.Effect<typesModule.AgentToolCallOutcome> =>
   Effect.gen(function* () {
-    const finalized: AgentToolCallOutcome =
+    const finalized: typesModule.AgentToolCallOutcome =
       batch.signal?.aborted === true
-        ? { toolCall, result: createErrorToolResult("Operation aborted"), isError: true }
+        ? { isError: true, result: createErrorToolResult("Operation aborted"), toolCall }
         : yield* run;
     yield* emitToolExecutionEnd(finalized, batch.emit);
     return finalized;
   });
 
-const executeParallel = (batch: ToolBatch): Effect.Effect<ExecutedToolCallBatch> =>
+const executeParallel = (
+  batch: toolBatchTypes.ToolBatch,
+): Effect.Effect<toolBatchTypes.ExecutedToolCallBatch> =>
   Effect.gen(function* () {
-    const entries: Effect.Effect<AgentToolCallOutcome>[] = [];
+    const entries: Effect.Effect<typesModule.AgentToolCallOutcome>[] = [];
     for (const toolCall of batch.toolCalls) {
       const step = yield* finalizeOne(batch, toolCall);
       if (step.immediate) {
@@ -171,23 +160,18 @@ const executeParallel = (batch: ToolBatch): Effect.Effect<ExecutedToolCallBatch>
       if (batch.signal?.aborted === true) break;
     }
     const ordered = yield* Effect.all(entries, { concurrency: "unbounded" });
-    const messages: ToolResultMessage[] = [];
+    const messages: aiTypes.ToolResultMessage[] = [];
     for (const finalized of ordered) {
       messages.push(yield* emitToolResultMessage(finalized, batch.emit));
     }
     return { messages, terminate: shouldTerminate(ordered) };
   });
 
-export interface ToolBatchRequest extends Omit<ToolBatch, "toolCalls"> {
-  readonly assistantMessage: AssistantMessage;
-  readonly toolExecution: ToolExecutionMode | undefined;
-}
-
-export const executeToolCalls = (
-  request: ToolBatchRequest,
-): Effect.Effect<ExecutedToolCallBatch> => {
+const executeToolCalls = (
+  request: toolBatchTypes.ToolBatchRequest,
+): Effect.Effect<toolBatchTypes.ExecutedToolCallBatch> => {
   const toolCalls = request.assistantMessage.content.filter(
-    (content): content is AgentToolCall => content.type === "toolCall",
+    (content): content is typesModule.AgentToolCall => content.type === "toolCall",
   );
   const hasSequentialToolCall = toolCalls.some(
     (toolCall) =>
@@ -199,3 +183,10 @@ export const executeToolCalls = (
     ? executeSequential(batch)
     : executeParallel(batch);
 };
+
+const toolBatch = {
+  executeToolCalls,
+  failToolCallsFromTruncatedMessage,
+};
+
+export default toolBatch;

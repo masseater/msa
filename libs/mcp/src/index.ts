@@ -1,75 +1,48 @@
-export type { AuthProvider, McpFetch, UnauthorizedContext } from "./auth-provider.ts";
-export { McpForeignError, toPromise, unwrapForeign } from "./foreign.ts";
-export { McpClient, type McpClientOptions, type McpRequestOptions } from "./client.ts";
-export {
-  type AudioContent,
-  type BlobResourceContents,
-  type CallToolResult,
-  type ContentAnnotations,
-  type ContentBlock,
-  type EmbeddedResourceContent,
-  type ImageContent,
-  type LlmContent,
-  type ResourceLinkContent,
-  type TextContent,
-  type TextResourceContents,
-  toLlmContent,
-} from "./protocol/content.ts";
-export {
-  isJsonRpcNotification,
-  isJsonRpcRequest,
-  isJsonRpcResponse,
-  JSON_RPC_ERROR_CODES,
-  type JsonRpcErrorObject,
-  type JsonRpcErrorResponse,
-  type JsonRpcId,
-  type JsonRpcMessage,
-  type JsonRpcNotification,
-  type JsonRpcRequest,
-  type JsonRpcResponse,
-  type JsonRpcSuccessResponse,
+import indexKit from "./index-kit.ts";
+import McpTimeoutError from "./protocol/errors/timeout-error.ts";
+import jsonrpcModule from "./protocol/jsonrpc.ts";
+import types from "./protocol/types.ts";
+import McpAuthRequiredError from "./transports/errors/auth-required-error.ts";
+import McpHttpError from "./transports/errors/http-error.ts";
+import McpSessionExpiredError from "./transports/errors/session-expired-error.ts";
+import McpTransportError from "./transports/errors/transport-error.ts";
+import StdioTransport from "./transports/stdio.ts";
+import streamableHttp from "./transports/streamable-http.ts";
+
+const {
   McpAbortError,
+  McpClient,
   McpClientError,
   McpConnectionClosedError,
+  content: contentModule,
+  foreign: foreignModule,
   McpError,
-  McpTimeoutError,
-  parseJsonRpcMessage,
-} from "./protocol/jsonrpc.ts";
-export {
-  type CancelledNotification,
-  type ClientCapabilities,
-  type Implementation,
-  type InitializeParams,
-  type InitializeResult,
-  LATEST_PROTOCOL_VERSION,
-  type ListResourcesResult,
-  type ListResourceTemplatesResult,
-  type ListToolsResult,
-  type ProgressNotification,
-  type ReadResourceResult,
-  type Resource,
-  type ResourceTemplate,
-  type Root,
-  type ServerCapabilities,
-  SUPPORTED_PROTOCOL_VERSIONS,
-  type SupportedProtocolVersion,
-  type Tool,
-  type ToolAnnotations,
-  type ToolExecution,
-} from "./protocol/types.ts";
-export { StdioTransport, type StdioTransportOptions } from "./transports/stdio.ts";
-export {
-  McpAuthRequiredError,
-  McpHttpError,
-  McpSessionExpiredError,
-  McpTransportError,
-  StreamableHttpTransport,
-  type StreamableHttpTransportOptions,
-} from "./transports/streamable-http.ts";
-export type {
-  McpTransport,
-  McpTransportCloseListener,
-  McpTransportErrorListener,
-  McpTransportMessageListener,
-  McpTransportSendOptions,
-} from "./transports/transport.ts";
+} = indexKit;
+
+const mcp = {
+  JSON_RPC_ERROR_CODES: jsonrpcModule.JSON_RPC_ERROR_CODES,
+  LATEST_PROTOCOL_VERSION: types.LATEST_PROTOCOL_VERSION,
+  McpAbortError: McpAbortError,
+  McpAuthRequiredError: McpAuthRequiredError,
+  McpClient: McpClient,
+  McpClientError: McpClientError,
+  McpConnectionClosedError: McpConnectionClosedError,
+  McpError: McpError,
+  McpForeignError: foreignModule.McpForeignError,
+  McpHttpError: McpHttpError,
+  McpSessionExpiredError: McpSessionExpiredError,
+  McpTimeoutError: McpTimeoutError,
+  McpTransportError: McpTransportError,
+  SUPPORTED_PROTOCOL_VERSIONS: types.SUPPORTED_PROTOCOL_VERSIONS,
+  StdioTransport: StdioTransport,
+  StreamableHttpTransport: streamableHttp.StreamableHttpTransport,
+  isJsonRpcNotification: jsonrpcModule.isJsonRpcNotification,
+  isJsonRpcRequest: jsonrpcModule.isJsonRpcRequest,
+  isJsonRpcResponse: jsonrpcModule.isJsonRpcResponse,
+  parseJsonRpcMessage: jsonrpcModule.parseJsonRpcMessage,
+  toLlmContent: contentModule.toLlmContent,
+  toPromise: foreignModule.toPromise,
+  unwrapForeign: foreignModule.unwrapForeign,
+};
+
+export default mcp;

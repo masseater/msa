@@ -1,31 +1,30 @@
 import { Effect, Option } from "effect";
 
-import { randomHex } from "../../utils/crypto.ts";
-import type {
-  LoginOptions,
-  OAuthAuth,
-  OAuthCredential,
-  ProviderAuthInteraction,
-} from "../types.ts";
-import { parseAuthorizationInput } from "./authorization-input.ts";
-import {
-  type OAuthCallbackServer,
-  startOAuthCallbackServer,
-  waitForCallbackOrManualInput,
-} from "./callback-server.ts";
-import { loginWithDeviceCode } from "./openai-codex-device.ts";
-import {
+import cryptoModule from "../../utils/crypto.ts";
+import type typesModule from "../types.ts";
+import authorizationInput from "./authorization-input.ts";
+import callbackServer from "./callback-server.ts";
+import type callbackServerTypes from "./callback-server.types.ts";
+import openaiCodexDevice from "./openai-codex-device.ts";
+import openaiCodexShared from "./openai-codex-shared.ts";
+import pkce from "./pkce.ts";
+
+const { generatePKCE } = pkce;
+const { randomHex } = cryptoModule;
+const {
   AUTHORIZE_URL,
   BROWSER_LOGIN_METHOD,
   CLIENT_ID,
   DEVICE_CODE_LOGIN_METHOD,
+  REDIRECT_URI,
+  SCOPE,
   exchangeAuthorizationCode,
   getCallbackHost,
-  REDIRECT_URI,
   refreshCodexToken,
-  SCOPE,
-} from "./openai-codex-shared.ts";
-import { generatePKCE } from "./pkce.ts";
+} = openaiCodexShared;
+const { startOAuthCallbackServer, waitForCallbackOrManualInput } = callbackServer;
+const { parseAuthorizationInput } = authorizationInput;
+const { loginWithDeviceCode } = openaiCodexDevice;
 
 interface AuthorizationFlow {
   readonly verifier: string;
@@ -50,21 +49,21 @@ const createAuthorizationFlow = (originator: string): Effect.Effect<Authorizatio
     url.searchParams.set("codex_cli_simplified_flow", "true");
     url.searchParams.set("originator", originator);
 
-    return { verifier, state, url: url.toString() };
+    return { state, url: url.toString(), verifier };
   });
 
 const openCallbackServer = (
-  interaction: ProviderAuthInteraction,
+  interaction: typesModule.ProviderAuthInteraction,
   state: string,
-): Effect.Effect<OAuthCallbackServer<string> | undefined> =>
+): Effect.Effect<callbackServerTypes.OAuthCallbackServer<string> | undefined> =>
   startOAuthCallbackServer({
-    providerName: "OpenAI",
-    host: getCallbackHost(),
-    port: 1455,
-    path: "/auth/callback",
-    state,
     complete: (code) => Effect.succeed(code),
+    host: getCallbackHost(),
+    path: "/auth/callback",
+    port: 1455,
+    providerName: "OpenAI",
     signal: interaction.signal,
+    state,
   }).pipe(
     Effect.asSome,
     Effect.catchDefect(() => Effect.succeedNone),
@@ -72,14 +71,14 @@ const openCallbackServer = (
   );
 
 const readAuthorizationCode = (
-  interaction: ProviderAuthInteraction,
-  callback: OAuthCallbackServer<string> | undefined,
+  interaction: typesModule.ProviderAuthInteraction,
+  callback: callbackServerTypes.OAuthCallbackServer<string> | undefined,
   state: string,
 ): Effect.Effect<string> =>
   Effect.gen(function* () {
     const result = yield* waitForCallbackOrManualInput({
-      interaction,
       callback,
+      interaction,
       message:
         "Complete login in your browser, or paste the authorization code / redirect URL here:",
       placeholder: REDIRECT_URI,
@@ -97,43 +96,43 @@ const readAuthorizationCode = (
   });
 
 const loginWithBrowser = (
-  interaction: ProviderAuthInteraction,
-  options?: LoginOptions,
-): Effect.Effect<OAuthCredential> =>
+  interaction: typesModule.ProviderAuthInteraction,
+  options?: typesModule.LoginOptions,
+): Effect.Effect<typesModule.OAuthCredential> =>
   Effect.gen(function* () {
     const flow = yield* createAuthorizationFlow(options?.agentName ?? "pi");
     const callback = yield* openCallbackServer(interaction, flow.state);
 
     interaction.notify({
+      instructions: "A browser window should open. Complete login to finish.",
       type: "auth_url",
       url: flow.url,
-      instructions: "A browser window should open. Complete login to finish.",
     });
 
     return yield* Effect.gen(function* () {
       const code = yield* readAuthorizationCode(interaction, callback, flow.state);
       return yield* exchangeAuthorizationCode({
         code,
-        verifier: flow.verifier,
         redirectUri: REDIRECT_URI,
         signal: interaction.signal,
+        verifier: flow.verifier,
       });
     }).pipe(Effect.ensuring(callback === undefined ? Effect.void : callback.close));
   });
 
 const login = (
-  interaction: ProviderAuthInteraction,
-  options?: LoginOptions,
-): Effect.Effect<OAuthCredential> =>
+  interaction: typesModule.ProviderAuthInteraction,
+  options?: typesModule.LoginOptions,
+): Effect.Effect<typesModule.OAuthCredential> =>
   Effect.gen(function* () {
     const method = yield* Effect.promise(() =>
       interaction.prompt({
-        type: "select",
         message: "Select OpenAI Codex login method:",
         options: [
           { id: BROWSER_LOGIN_METHOD, label: "Browser login (default)" },
           { id: DEVICE_CODE_LOGIN_METHOD, label: "Device code login (headless)" },
         ],
+        type: "select",
       }),
     );
 
@@ -144,16 +143,19 @@ const login = (
     return yield* loginWithBrowser(interaction, options);
   });
 
-export const openaiCodexOAuth: OAuthAuth = {
-  name: "OpenAI (ChatGPT Plus/Pro)",
+const openaiCodexOAuth: typesModule.OAuthAuth = {
   isSubscription: true,
-
   login: (interaction, options) => Effect.runPromise(login(interaction, options)),
-
+  name: "OpenAI (ChatGPT Plus/Pro)",
   refresh: (credential, signal) =>
     Effect.runPromise(refreshCodexToken({ refreshToken: credential.refresh, signal })),
-
   toAuth(credential) {
     return Promise.resolve({ apiKey: credential.access });
   },
 };
+
+const openaiCodex = {
+  openaiCodexOAuth,
+};
+
+export default openaiCodex;

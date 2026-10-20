@@ -1,19 +1,14 @@
-import {
-  type Component,
-  Container,
-  MouseRegion,
-  Spacer,
-  truncateToWidth,
-  type TuiMouseEvent,
-  type TuiMouseEventResult,
-} from "@msa/tui";
+import tui from "@msa/tui";
+import type tuiTypes from "@msa/tui/index.types";
 
 import { stripAnsi } from "../../../utils/ansi.ts";
 import { theme } from "../theme/theme.ts";
 import { AssistantMessageComponent } from "./assistant-message.ts";
 import { type ToolCallSummary, ToolExecutionComponent } from "./tool-execution.ts";
 
-const FILE_VERBS: Record<string, string> = { read: "read", edit: "edited", write: "wrote" };
+const { Container, MouseRegion, Spacer, truncateToWidth } = tui;
+
+const FILE_VERBS: Record<string, string> = { edit: "edited", read: "read", write: "wrote" };
 const SEARCH_TOOLS = new Set(["grep", "find", "ls"]);
 
 function plural(count: number, noun: string): string {
@@ -78,7 +73,7 @@ function summarize(calls: readonly ToolCallSummary[], thought: boolean): string 
   return line;
 }
 
-class ToolRow implements Component {
+class ToolRow implements tuiTypes.Component {
   open = false;
   readonly tool: ToolExecutionComponent;
   private readonly outputPad: () => number;
@@ -107,7 +102,7 @@ class ToolRow implements Component {
     this.tool.invalidate();
   }
 
-  handleMouse(event: TuiMouseEvent): TuiMouseEventResult | undefined {
+  handleMouse(event: tuiTypes.TuiMouseEvent): tuiTypes.TuiMouseEventResult | undefined {
     if (this.open) return this.tool.handleMouse(event);
     if (event.type !== "click" || event.button !== "left") return undefined;
     this.open = true;
@@ -123,7 +118,7 @@ export class ToolGroupComponent extends Container {
   private readonly rows = new Map<ToolExecutionComponent, ToolRow>();
   private readonly spacer = new Spacer(1);
   private readonly headerRegion = new MouseRegion(
-    { render: (width) => [this.header(width)], invalidate: () => {} },
+    { invalidate: () => {}, render: (width) => [this.header(width)] },
     (event) => {
       if (event.type !== "click" || event.button !== "left") return undefined;
       this.expanded = !this.expanded;

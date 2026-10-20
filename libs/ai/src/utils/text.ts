@@ -1,16 +1,14 @@
 import { Function } from "effect";
 
-import type {
-  ImageContent,
-  SystemMessage,
-  TextContent,
-  ThinkingContent,
-  ToolCall,
-} from "../types.ts";
+import type typesModule from "../types.types.ts";
 
-type Content = TextContent | ImageContent | ThinkingContent | ToolCall;
+type Content =
+  | typesModule.TextContent
+  | typesModule.ImageContent
+  | typesModule.ThinkingContent
+  | typesModule.ToolCall;
 
-export const contentText: {
+const contentText: {
   (separator: string): (content: string | readonly Content[]) => string;
   (content: string | readonly Content[], separator: string): string;
 } = Function.dual(2, function (content: string | readonly Content[], separator: string): string {
@@ -21,7 +19,7 @@ export const contentText: {
     .join(separator);
 });
 
-export function getSystemMessageText(message: SystemMessage): string {
+function getSystemMessageText(message: typesModule.SystemMessage): string {
   const parts = [contentText(message.content, "\n")];
   for (const text of Object.values(message.sections ?? {})) {
     if (text !== null) parts.push(text);
@@ -29,7 +27,7 @@ export function getSystemMessageText(message: SystemMessage): string {
   return parts.filter((part) => part.length > 0).join("\n\n");
 }
 
-export function renderSystemMessageUpdate(message: SystemMessage): string {
+function renderSystemMessageUpdate(message: typesModule.SystemMessage): string {
   const parts: string[] = [];
   const text = contentText(message.content, "\n");
   if (text.length > 0) parts.push(text);
@@ -42,3 +40,11 @@ export function renderSystemMessageUpdate(message: SystemMessage): string {
   }
   return parts.join("\n\n");
 }
+
+const textModule = {
+  contentText,
+  getSystemMessageText,
+  renderSystemMessageUpdate,
+};
+
+export default textModule;

@@ -1,7 +1,10 @@
 import { Effect } from "effect";
 import { describe, expect, it } from "vite-plus/test";
 
-import { type SseEvent, consumeSseStream } from "../src/transports/streamable-http.ts";
+import streamableHttp from "../src/transports/streamable-http.ts";
+import type streamableHttpTypes from "../src/transports/streamable-http.types.ts";
+
+const { consumeSseStream } = streamableHttp;
 
 const encoder = new TextEncoder();
 
@@ -13,7 +16,7 @@ const parsesChunkedEvents = Effect.gen(function* () {
       controller.close();
     },
   });
-  const events: SseEvent[] = [];
+  const events: streamableHttpTypes.SseEvent[] = [];
   yield* consumeSseStream(stream, { onEvent: (event) => events.push(event) });
   expect(events).toEqual([{ data: '{"one":\n1}', id: "7" }]);
 });

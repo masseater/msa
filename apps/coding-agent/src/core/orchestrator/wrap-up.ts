@@ -35,7 +35,7 @@ function begin(
 ): Effect.Effect<Deferred.Deferred<string, string>> {
   return Effect.sync(() => {
     const memo = Deferred.makeUnsafe<string, string>();
-    runtime.wrapUps.set(threadId, { sent: false, memo });
+    runtime.wrapUps.set(threadId, { memo, sent: false });
     return memo;
   });
 }
@@ -56,13 +56,13 @@ function stopped(runtime: Runtime, threadId: string, memo: string, now: number):
   store.updateThread(database, threadId, { status: "stopped" }, now);
   for (const assignment of store.assignmentsOfThread(database, threadId)) {
     store.insertReport(database, {
-      id: `rep-${assignment.threadId}-${assignment.taskId}-wrap-up`,
-      taskId: assignment.taskId,
-      threadId,
-      role: assignment.role,
-      status: "stopped",
       content: memo,
       createdAt: now,
+      id: `rep-${assignment.threadId}-${assignment.taskId}-wrap-up`,
+      role: assignment.role,
+      status: "stopped",
+      taskId: assignment.taskId,
+      threadId,
     });
     store.setTaskStatus(database, assignment.taskId, "stopped", now);
   }
@@ -125,4 +125,4 @@ function awaitMemo(
   });
 }
 
-export const wrapping = { begin, fail, cancel, takeOver, awaitMemo };
+export const wrapping = { awaitMemo, begin, cancel, fail, takeOver };

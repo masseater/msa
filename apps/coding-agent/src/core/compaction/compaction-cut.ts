@@ -1,4 +1,4 @@
-import type { AgentMessage } from "@msa/agent-core";
+import type agentTypes from "@msa/agent-core/index.types";
 import { Function as Fn } from "effect";
 
 import {
@@ -9,7 +9,7 @@ import {
 import { estimateTokens } from "./compaction-tokens.ts";
 import type { CutPointResult } from "./compaction-types.ts";
 
-function isCutPointMessage(message: AgentMessage): boolean {
+function isCutPointMessage(message: agentTypes.AgentMessage): boolean {
   switch (message.role) {
     case "user":
     case "assistant":
@@ -24,7 +24,7 @@ function isCutPointMessage(message: AgentMessage): boolean {
   return false;
 }
 
-function isTurnStartMessage(message: AgentMessage): boolean {
+function isTurnStartMessage(message: agentTypes.AgentMessage): boolean {
   switch (message.role) {
     case "user":
     case "bashExecution":
@@ -125,7 +125,7 @@ function skipEmptyBack(
   return index;
 }
 
-const tokensOfMessages = (messages: AgentMessage[]): number =>
+const tokensOfMessages = (messages: agentTypes.AgentMessage[]): number =>
   messages.reduce((sum, message) => sum + estimateTokens(message), 0);
 
 const findCutPointImpl = (
@@ -136,13 +136,13 @@ const findCutPointImpl = (
 ): CutPointResult => {
   const cutPoints = findValidCutPoints(entries, startIndex, endIndex);
   if (cutPoints.length === 0) {
-    return { firstKeptEntryIndex: startIndex, turnStartIndex: -1, isSplitTurn: false };
+    return { firstKeptEntryIndex: startIndex, isSplitTurn: false, turnStartIndex: -1 };
   }
   const { cutIndex: budgetIndex } = walkBackToBudget({
     cutPoints,
-    startIndex,
     endIndex,
     keepRecentTokens,
+    startIndex,
     tokensAt: (index) => {
       const entry = entries[index];
       return entry === undefined ? 0 : tokensOfMessages(sessionEntryToContextMessages(entry));
@@ -161,8 +161,8 @@ const findCutPointImpl = (
   const turnStartIndex = startsTurn ? -1 : findTurnStartIndexImpl(entries, cutIndex, startIndex);
   return {
     firstKeptEntryIndex: cutIndex,
-    turnStartIndex,
     isSplitTurn: !startsTurn && turnStartIndex !== -1,
+    turnStartIndex,
   };
 };
 
@@ -261,13 +261,13 @@ export function findProjectedCutPoint({
 }: ProjectedCutInput): CutPointResult {
   const cutPoints = projectedCutPoints(entries, startIndex, endIndex);
   if (cutPoints.length === 0) {
-    return { firstKeptEntryIndex: startIndex, turnStartIndex: -1, isSplitTurn: false };
+    return { firstKeptEntryIndex: startIndex, isSplitTurn: false, turnStartIndex: -1 };
   }
   const walked = walkBackToBudget({
     cutPoints,
-    startIndex,
     endIndex,
     keepRecentTokens,
+    startIndex,
     tokensAt: (index) => tokensOfMessages(entries[index]?.messages ?? []),
   });
   const recovery =
@@ -291,7 +291,7 @@ export function findProjectedCutPoint({
     : findProjectedTurnStartIndex(entries, cutIndex, startIndex);
   return {
     firstKeptEntryIndex: cutIndex,
-    turnStartIndex,
     isSplitTurn: !startsTurn && turnStartIndex !== -1,
+    turnStartIndex,
   };
 }

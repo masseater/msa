@@ -1,10 +1,12 @@
 import OpenAI from "openai";
 
-import type { Model, ProviderHeaders } from "../types.ts";
-import { getMsaUserAgent } from "../utils/user-agent.ts";
-import type { ResolvedOpenAICompletionsCompat } from "./openai-completions-types.ts";
+import type typesModule from "../types.types.ts";
+import userAgent from "../utils/user-agent.ts";
+import type openaiCompletionsTypesModule from "./openai-completions-types.types.ts";
 
-function hasHeader(headers: ProviderHeaders | undefined, name: string): boolean {
+const { getMsaUserAgent } = userAgent;
+
+function hasHeader(headers: typesModule.ProviderHeaders | undefined, name: string): boolean {
   if (headers === undefined) return false;
   const expected = name.toLowerCase();
   for (const [key, value] of Object.entries(headers)) {
@@ -16,7 +18,7 @@ function hasHeader(headers: ProviderHeaders | undefined, name: string): boolean 
 function getClientApiKey(input: {
   provider: string;
   apiKey: string | undefined;
-  headers: ProviderHeaders | undefined;
+  headers: typesModule.ProviderHeaders | undefined;
 }): string {
   const { provider, apiKey, headers } = input;
   if (apiKey !== undefined && apiKey !== "") return apiKey;
@@ -26,9 +28,9 @@ function getClientApiKey(input: {
 }
 
 function applySessionAffinity(
-  headers: ProviderHeaders,
+  headers: typesModule.ProviderHeaders,
   sessionId: string | undefined,
-  compat: ResolvedOpenAICompletionsCompat,
+  compat: openaiCompletionsTypesModule.ResolvedOpenAICompletionsCompat,
 ): void {
   if (sessionId === undefined || sessionId === "" || !compat.sendSessionAffinityHeaders) return;
   if (compat.sessionAffinityFormat === "openrouter") {
@@ -43,17 +45,20 @@ function applySessionAffinity(
 }
 
 interface CreateClientInput {
-  readonly model: Model<"openai-completions">;
+  readonly model: typesModule.Model<"openai-completions">;
   readonly apiKey: string;
-  readonly optionsHeaders: ProviderHeaders | undefined;
+  readonly optionsHeaders: typesModule.ProviderHeaders | undefined;
   readonly fetch: typeof globalThis.fetch | undefined;
   readonly sessionId: string | undefined;
-  readonly compat: ResolvedOpenAICompletionsCompat;
+  readonly compat: openaiCompletionsTypesModule.ResolvedOpenAICompletionsCompat;
 }
 
 function createClient(input: CreateClientInput): OpenAI {
   const { model, apiKey, optionsHeaders, fetch, sessionId, compat } = input;
-  const headers: ProviderHeaders = { "User-Agent": getMsaUserAgent(), ...model.headers };
+  const headers: typesModule.ProviderHeaders = {
+    "User-Agent": getMsaUserAgent(),
+    ...model.headers,
+  };
   applySessionAffinity(headers, sessionId, compat);
   if (optionsHeaders !== undefined) {
     Object.assign(headers, optionsHeaders);
@@ -62,9 +67,14 @@ function createClient(input: CreateClientInput): OpenAI {
     apiKey,
     baseURL: model.baseUrl,
     dangerouslyAllowBrowser: true,
-    fetch,
     defaultHeaders: headers,
+    fetch,
   });
 }
 
-export { createClient, getClientApiKey };
+const openaiCompletionsClient = {
+  createClient,
+  getClientApiKey,
+};
+
+export default openaiCompletionsClient;

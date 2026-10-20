@@ -1,13 +1,19 @@
 import type { Token, Tokens } from "marked";
 
-import { renderLatex } from "../latex.ts";
-import { wrapTextWithAnsi } from "../text-wrap.ts";
-import { visibleWidth } from "../utils.ts";
-import { MarkdownTableRenderer } from "./markdown-table-renderer.ts";
-import type { InlineStyleContext } from "./markdown-theme.ts";
-import { type LatexToken, RESET_STYLE } from "./markdown-tokenizer.ts";
+import latex from "../latex.ts";
+import textWrap from "../text-wrap.ts";
+import utils from "../utils.ts";
+import MarkdownTableRenderer from "./markdown-table-renderer.ts";
+import type markdownThemeTypes from "./markdown-theme.ts";
+import markdownTokenizer from "./markdown-tokenizer.ts";
+import type markdownTokenizerTypes from "./markdown-tokenizer.types.ts";
 
-export class MarkdownTokenRenderer extends MarkdownTableRenderer {
+const { renderLatex } = latex;
+const { RESET_STYLE } = markdownTokenizer;
+const { wrapTextWithAnsi } = textWrap;
+const { visibleWidth } = utils;
+
+export default class MarkdownTokenRenderer extends MarkdownTableRenderer {
   protected renderHeading(
     token: Tokens.Heading | Tokens.Generic,
     nextTokenType?: string,
@@ -18,7 +24,7 @@ export class MarkdownTokenRenderer extends MarkdownTableRenderer {
         ? (text: string) => this.theme.heading(this.theme.bold(this.theme.underline(text)))
         : (text: string) => this.theme.heading(this.theme.bold(text));
 
-    const headingStyleContext: InlineStyleContext = {
+    const headingStyleContext: markdownThemeTypes.InlineStyleContext = {
       applyText: headingStyleFn,
       stylePrefix: this.getStylePrefix(headingStyleFn),
     };
@@ -34,14 +40,17 @@ export class MarkdownTokenRenderer extends MarkdownTableRenderer {
   protected renderParagraph(
     token: Tokens.Paragraph | Tokens.Generic,
     nextTokenType?: string,
-    styleContext?: InlineStyleContext,
+    styleContext?: markdownThemeTypes.InlineStyleContext,
   ): string[] {
     const lines = [this.renderInlineTokens(token.tokens || [], styleContext)];
     if (nextTokenType === "list") return lines;
     return this.addTrailingBlank(lines, nextTokenType);
   }
 
-  protected renderLatexBlock(token: LatexToken, nextTokenType?: string): string[] {
+  protected renderLatexBlock(
+    token: markdownTokenizerTypes.LatexToken,
+    nextTokenType?: string,
+  ): string[] {
     const rendered =
       token.pending !== true && this.options.renderLatex !== false
         ? (renderLatex(token.text, { display: true }) ?? token.raw.trim())
@@ -70,7 +79,7 @@ export class MarkdownTokenRenderer extends MarkdownTableRenderer {
     token: Tokens.Blockquote | Tokens.Generic,
     quoteContentWidth: number,
   ): string[] {
-    const quoteInlineStyleContext: InlineStyleContext = {
+    const quoteInlineStyleContext: markdownThemeTypes.InlineStyleContext = {
       applyText: (text: string) => text,
       stylePrefix: this.getStylePrefix((text: string) => this.theme.quote(this.theme.italic(text))),
     };
@@ -121,7 +130,7 @@ export class MarkdownTokenRenderer extends MarkdownTableRenderer {
     token: Token,
     width: number,
     nextTokenType?: string,
-    styleContext?: InlineStyleContext,
+    styleContext?: markdownThemeTypes.InlineStyleContext,
   ): string[] {
     switch (token.type) {
       case "heading":
@@ -131,7 +140,7 @@ export class MarkdownTokenRenderer extends MarkdownTableRenderer {
       case "text":
         return [this.renderInlineTokens([token], styleContext)];
       case "latexBlock":
-        return this.renderLatexBlock(token as LatexToken, nextTokenType);
+        return this.renderLatexBlock(token as markdownTokenizerTypes.LatexToken, nextTokenType);
       case "code":
         return this.renderCodeBlock(token, nextTokenType);
       case "list":
@@ -188,7 +197,7 @@ export class MarkdownTokenRenderer extends MarkdownTableRenderer {
       depth: number;
       width: number;
     },
-    styleContext?: InlineStyleContext,
+    styleContext?: markdownThemeTypes.InlineStyleContext,
   ): string[] {
     const firstPrefix = request.indent + this.theme.listBullet(request.marker);
     const continuationPrefix = request.indent + " ".repeat(visibleWidth(request.marker));
@@ -225,7 +234,7 @@ export class MarkdownTokenRenderer extends MarkdownTableRenderer {
     token: Tokens.List,
     depth: number,
     width: number,
-    styleContext?: InlineStyleContext,
+    styleContext?: markdownThemeTypes.InlineStyleContext,
   ): string[] {
     const lines: string[] = [];
     const indent = "    ".repeat(depth);
@@ -233,7 +242,7 @@ export class MarkdownTokenRenderer extends MarkdownTableRenderer {
     for (const [i, item] of token.items.entries()) {
       lines.push(
         ...this.renderListItem(
-          { item, marker: this.listItemMarker(token, item, i), indent, depth, width },
+          { depth, indent, item, marker: this.listItemMarker(token, item, i), width },
           styleContext,
         ),
       );

@@ -1,6 +1,9 @@
-import type { AgentMessage } from "@msa/agent-core";
-import { contentText, type Message } from "@msa/ai";
+import type agentTypes from "@msa/agent-core/index.types";
+import ai from "@msa/ai";
+import type aiTypes from "@msa/ai/index.types";
 import { Function as Fn } from "effect";
+
+const { contentText } = ai;
 
 export interface FileOperations {
   read: Set<string>;
@@ -10,13 +13,16 @@ export interface FileOperations {
 
 export function createFileOps(): FileOperations {
   return {
+    edited: new Set(),
     read: new Set(),
     written: new Set(),
-    edited: new Set(),
   };
 }
 
-const extractFileOpsFromMessageImpl = (message: AgentMessage, fileOps: FileOperations): void => {
+const extractFileOpsFromMessageImpl = (
+  message: agentTypes.AgentMessage,
+  fileOps: FileOperations,
+): void => {
   if (message.role === "toolResult") {
     for (const call of message.nestedCalls?.calls ?? [])
       addFileOp(call.name, call.arguments, fileOps);
@@ -34,8 +40,8 @@ const extractFileOpsFromMessageImpl = (message: AgentMessage, fileOps: FileOpera
 };
 
 export const extractFileOpsFromMessage: {
-  (fileOps: FileOperations): (message: AgentMessage) => void;
-  (message: AgentMessage, fileOps: FileOperations): void;
+  (fileOps: FileOperations): (message: agentTypes.AgentMessage) => void;
+  (message: agentTypes.AgentMessage, fileOps: FileOperations): void;
 } = Fn.dual(2, extractFileOpsFromMessageImpl);
 
 function addFileOp(
@@ -65,7 +71,7 @@ export function computeFileLists(fileOps: FileOperations): {
   const modified = new Set([...fileOps.edited, ...fileOps.written]);
   const readOnly = [...fileOps.read].filter((f) => !modified.has(f)).sort();
   const modifiedFiles = [...modified].sort();
-  return { readFiles: readOnly, modifiedFiles };
+  return { modifiedFiles, readFiles: readOnly };
 }
 
 const formatFileOperationsImpl = (readFiles: string[], modifiedFiles: string[]): string => {
@@ -94,7 +100,7 @@ function truncateForSummary(text: string, maxChars: number): string {
 }
 
 const serializeConversationImpl = (
-  messages: Message[],
+  messages: aiTypes.Message[],
   truncateToolResult: (text: string) => string = (text) =>
     truncateForSummary(text, TOOL_RESULT_MAX_CHARS),
 ): string => {
@@ -135,8 +141,8 @@ const serializeConversationImpl = (
 };
 
 export const serializeConversation: {
-  (truncateToolResult?: (text: string) => string): (messages: Message[]) => string;
-  (messages: Message[], truncateToolResult?: (text: string) => string): string;
+  (truncateToolResult?: (text: string) => string): (messages: aiTypes.Message[]) => string;
+  (messages: aiTypes.Message[], truncateToolResult?: (text: string) => string): string;
 } = Fn.dual((args) => Array.isArray(args[0]), serializeConversationImpl);
 
 export const SUMMARIZATION_SYSTEM_PROMPT = `You are a context summarization assistant. Your task is to read a conversation between a user and an AI assistant, then produce a structured summary following the exact format specified.

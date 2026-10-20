@@ -15,7 +15,7 @@ describe("runCommand", () => {
             "--eval",
             `process.stdout.write([process.env.${probeName} ?? "", process.env.PATH ? "inherited" : "isolated"].join("|"))`,
           ],
-          { cwd: process.cwd(), output: "capture", env: { [probeName]: "child-only" } },
+          { cwd: process.cwd(), env: { [probeName]: "child-only" }, output: "capture" },
         );
         expect(result.status).toBe(0);
         expect(result.stdout).toBe("child-only|inherited");
@@ -27,8 +27,8 @@ describe("runCommand", () => {
       Effect.gen(function* () {
         yield* runCommand(process.execPath, ["--eval", ""], {
           cwd: process.cwd(),
-          output: "ignore",
           env: { [probeName]: "child-only" },
+          output: "ignore",
         });
         expect(readEnv(probeName)).toBeUndefined();
       }),

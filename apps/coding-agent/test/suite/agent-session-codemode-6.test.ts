@@ -1,10 +1,12 @@
-import { fauxAssistantMessage, fauxToolCall } from "@msa/ai";
+import ai from "@msa/ai";
 import { Effect } from "effect";
 import { afterEach, describe, expect, it } from "vite-plus/test";
 
 import { type CodemodeToolDetails } from "../../src/extensions/codemode/tool.ts";
 import agentSessionCodemodeSupport from "./agent-session-codemode-support.ts";
 import agentSessionCodemodeSupport2 from "./agent-session-codemode-support2.ts";
+
+const { fauxAssistantMessage, fauxToolCall } = ai;
 
 const { harnesses, setup } = agentSessionCodemodeSupport2;
 

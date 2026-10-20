@@ -1,12 +1,15 @@
-import { Container, getKeybindings, Spacer, Text, type TUI } from "@msa/tui";
+import tuiModule from "@msa/tui";
+import type tuiTypes from "@msa/tui/index.types";
 
 import { theme } from "../theme/theme.ts";
 import { CountdownTimer } from "./countdown-timer.ts";
 import { DynamicBorder } from "./dynamic-border.ts";
 import { keyHint, rawKeyHint } from "./keybinding-hints.ts";
 
+const { Container, Spacer, Text, getKeybindings } = tuiModule;
+
 export interface ExtensionSelectorOptions {
-  tui?: TUI | undefined;
+  tui?: tuiTypes.TUI | undefined;
   timeout?: number | undefined;
   onToggleToolsExpanded?: (() => void) | undefined;
   description?: string | undefined;
@@ -15,10 +18,10 @@ export interface ExtensionSelectorOptions {
 export class ExtensionSelectorComponent extends Container {
   private options: string[];
   private selectedIndex = 0;
-  private listContainer: Container;
+  private listContainer: tuiTypes.Container;
   private onSelectCallback: (option: string) => void;
   private onCancelCallback: () => void;
-  private titleText: Text;
+  private titleText: tuiTypes.Text;
   private baseTitle: string;
   private countdown: CountdownTimer | undefined;
   private onToggleToolsExpanded: (() => void) | undefined;

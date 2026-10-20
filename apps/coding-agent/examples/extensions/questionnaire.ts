@@ -1,20 +1,26 @@
 import type { ExtensionAPI, Theme } from "@msa/coding-agent";
-import { Text } from "@msa/tui";
+import tuiModule from "@msa/tui";
+import type tuiTypes from "@msa/tui/index.types";
 import { Effect } from "effect";
 import { Type } from "typebox";
 
 import type { Question, QuestionnaireResult } from "./questionnaire-types.ts";
 import { askQuestionnaire } from "./questionnaire-ui.ts";
 
+const { Text } = tuiModule;
+
 const QuestionOptionSchema = Type.Object({
-  value: Type.String({ description: "The value returned when selected" }),
-  label: Type.String({ description: "Display label for the option" }),
   description: Type.Optional(
     Type.String({ description: "Optional description shown below label" }),
   ),
+  label: Type.String({ description: "Display label for the option" }),
+  value: Type.String({ description: "The value returned when selected" }),
 });
 
 const QuestionSchema = Type.Object({
+  allowOther: Type.Optional(
+    Type.Boolean({ description: "Allow 'Type something' option (default: true)" }),
+  ),
   id: Type.String({ description: "Unique identifier for this question" }),
   label: Type.Optional(
     Type.String({
@@ -22,11 +28,8 @@ const QuestionSchema = Type.Object({
         "Short contextual label for tab bar, e.g. 'Scope', 'Priority' (defaults to Q1, Q2)",
     }),
   ),
-  prompt: Type.String({ description: "The full question text to display" }),
   options: Type.Array(QuestionOptionSchema, { description: "Available options to choose from" }),
-  allowOther: Type.Optional(
-    Type.Boolean({ description: "Allow 'Type something' option (default: true)" }),
-  ),
+  prompt: Type.String({ description: "The full question text to display" }),
 });
 
 const QuestionnaireParams = Type.Object({
@@ -44,8 +47,8 @@ interface QuestionnaireParamsValue {
 }
 
 const errorResult = (message: string, questions: Question[] = []) => ({
-  content: [{ type: "text" as const, text: message }],
-  details: { questions, answers: [], cancelled: true } satisfies QuestionnaireResult,
+  content: [{ text: message, type: "text" as const }],
+  details: { answers: [], cancelled: true, questions } satisfies QuestionnaireResult,
 });
 
 const answerLines = (result: QuestionnaireResult): string[] =>
@@ -59,12 +62,12 @@ const answerLines = (result: QuestionnaireResult): string[] =>
 const resultFor = (result: QuestionnaireResult) => {
   if (result.cancelled) {
     return {
-      content: [{ type: "text" as const, text: "User cancelled the questionnaire" }],
+      content: [{ text: "User cancelled the questionnaire", type: "text" as const }],
       details: result,
     };
   }
   return {
-    content: [{ type: "text" as const, text: answerLines(result).join("\n") }],
+    content: [{ text: answerLines(result).join("\n"), type: "text" as const }],
     details: result,
   };
 };
@@ -72,8 +75,8 @@ const resultFor = (result: QuestionnaireResult) => {
 const toQuestions = (params: QuestionnaireParamsValue): Question[] =>
   params.questions.map((question, i) => ({
     ...question,
-    label: question.label || `Q${i + 1}`,
     allowOther: question.allowOther !== false,
+    label: question.label || `Q${i + 1}`,
   }));
 
 const runQuestionnaire = (
@@ -91,13 +94,13 @@ const runQuestionnaire = (
     const questions = toQuestions(params);
     const result = yield* Effect.promise(() =>
       ctx.ui.custom<QuestionnaireResult>((tui, theme, _kb, done) =>
-        askQuestionnaire({ tui, theme, questions, done }),
+        askQuestionnaire({ done, questions, theme, tui }),
       ),
     );
     return resultFor(result);
   });
 
-const renderCall = (args: QuestionnaireParamsValue, theme: Theme): Text => {
+const renderCall = (args: QuestionnaireParamsValue, theme: Theme): tuiTypes.Text => {
   const questions = args.questions;
   const count = questions.length;
   const labels = questions.map((q) => q.label || q.id).join(", ");
@@ -113,7 +116,7 @@ const renderResult = (
   result: { content: ReadonlyArray<{ type: string; text?: string }>; details: unknown },
   _options: unknown,
   theme: Theme,
-): Text => {
+): tuiTypes.Text => {
   const details = result.details as QuestionnaireResult | undefined;
   if (details === undefined) {
     const content = result.content[0];
@@ -135,15 +138,13 @@ const renderResult = (
 
 export default function questionnaire(msa: ExtensionAPI) {
   msa.registerTool({
-    name: "questionnaire",
-    label: "Questionnaire",
     description:
       "Ask the user one or more questions. Use for clarifying requirements, getting preferences, or confirming decisions. For single questions, shows a simple option list. For multiple questions, shows a tab-based interface.",
-    parameters: QuestionnaireParams,
-
     execute: (_toolCallId, params, _signal, _onUpdate, ctx) =>
       Effect.runPromise(runQuestionnaire(ctx, params)),
-
+    label: "Questionnaire",
+    name: "questionnaire",
+    parameters: QuestionnaireParams,
     renderCall,
     renderResult,
   });

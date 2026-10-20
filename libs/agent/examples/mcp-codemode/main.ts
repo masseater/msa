@@ -1,11 +1,20 @@
 import * as NodeRuntime from "@effect/platform-node/NodeRuntime";
-import { Agent } from "@msa/agent-core";
-import { createModels } from "@msa/ai";
-import { anthropicProvider } from "@msa/ai/providers/anthropic";
-import { McpClient, StdioTransport } from "@msa/mcp";
+import agentModule from "@msa/agent-core";
+import type agentTypes from "@msa/agent-core/index.types";
+import ai from "@msa/ai";
+import anthropic from "@msa/ai/providers/anthropic";
+import mcp from "@msa/mcp";
+import type mcpTypes from "@msa/mcp/index.types";
 import { Console, Effect } from "effect";
 
 import toolsModule from "./tools.ts";
+
+const { createModels } = ai;
+const { anthropicProvider } = anthropic;
+
+const { Agent } = agentModule;
+
+const { McpClient, StdioTransport } = mcp;
 
 const { createCodemodeTool, createMcpTools, createNestedToolRunner } = toolsModule;
 
@@ -14,7 +23,7 @@ const usage = Effect.gen(function* () {
   return yield* Effect.sync(() => process.exit(1));
 });
 
-const run = (agent: Agent, client: McpClient) =>
+const run = (agent: agentTypes.Agent, client: mcpTypes.McpClient) =>
   Effect.gen(function* () {
     const mcpTools = yield* Effect.promise(() => createMcpTools(client, "mcp"));
     agent.state.tools = [...mcpTools, createCodemodeTool(mcpTools, createNestedToolRunner(agent))];

@@ -125,7 +125,7 @@ export class Bm25Ranker implements ToolRanker {
       const counts = new Map<string, number>();
       for (const term of tokenize(document.text)) counts.set(term, (counts.get(term) ?? 0) + 1);
       const length = [...counts.values()].reduce((sum, count) => sum + count, 0);
-      return { document, counts, length };
+      return { counts, document, length };
     });
     const averageLength =
       indexed.reduce((sum, { length }) => sum + length, 0) / documents.length || 1;
@@ -154,12 +154,12 @@ export class Bm25Ranker implements ToolRanker {
 }
 
 export const toolSearchSchema = Type.Object({
-  query: Type.String({ description: "Search query for deferred tools." }),
   limit: Type.Optional(
     Type.Number({
       description: `Maximum number of tools to return. Defaults to ${DEFAULT_TOOL_SEARCH_LIMIT}.`,
     }),
   ),
+  query: Type.String({ description: "Search query for deferred tools." }),
 });
 
 export type ToolSearchInput = Static<typeof toolSearchSchema>;
@@ -194,8 +194,8 @@ function searchAndLoad(
   const matches = new Bm25Ranker().rank(query, documents, limit);
   if (matches.length > 0) tools.setActiveTools([...active, ...matches.map((match) => match.name)]);
   return matches.map((match) => ({
-    name: match.name,
     description: candidates.find((tool) => tool.name === match.name)?.description ?? "",
+    name: match.name,
   }));
 }
 
@@ -205,15 +205,7 @@ export function createToolSearchToolDefinition(
   options: ToolSearchToolOptions = {},
 ): ToolDefinition<typeof toolSearchSchema, ToolSearchToolDetails> {
   return {
-    name: TOOL_SEARCH_TOOL_NAME,
-    label: TOOL_SEARCH_TOOL_NAME,
     description: TOOL_SEARCH_DESCRIPTION,
-    promptSnippet: "Search for tools that are not loaded yet and load the matches",
-    parameters: toolSearchSchema,
-
-    exposure: "model-only",
-
-    reachesTools: () => "all",
     execute(_toolCallId, { query, limit }) {
       return Effect.runPromise(
         Effect.sync(() => {
@@ -235,5 +227,11 @@ export function createToolSearchToolDefinition(
         }),
       );
     },
+    exposure: "model-only",
+    label: TOOL_SEARCH_TOOL_NAME,
+    name: TOOL_SEARCH_TOOL_NAME,
+    parameters: toolSearchSchema,
+    promptSnippet: "Search for tools that are not loaded yet and load the matches",
+    reachesTools: () => "all",
   };
 }

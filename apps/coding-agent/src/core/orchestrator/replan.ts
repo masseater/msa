@@ -168,8 +168,8 @@ function prepare(runtime: Runtime, input: ReplanInput): Effect.Effect<Prepared, 
       if (runtime.replanning) throw fail("A replan is already running");
       if (input.reason.trim() === "") throw fail("A replan needs a reason");
       const entries = (input.tasks ?? []).map((task) => ({
-        input: task,
         from: unique(task.from ?? []),
+        input: task,
         key: task.key ?? null,
       }));
       validateEntries(runtime, entries, views);
@@ -182,17 +182,17 @@ function prepare(runtime: Runtime, input: ReplanInput): Effect.Effect<Prepared, 
               .runningThreads(runtime.database, runtime.options.project)
               .map((thread) => thread.id);
       return {
-        input,
-        entries,
-        keep: unique(input.keep ?? []),
         drop: input.drop ?? [],
+        entries,
+        input,
+        keep: unique(input.keep ?? []),
+        memos: register(runtime, threads),
         rewire: input.rewire ?? [],
         sources: unique([
           ...entries.flatMap((entry) => entry.from),
           ...(input.drop ?? []).map((item) => item.taskId),
         ]),
         views,
-        memos: register(runtime, threads),
       };
     });
   });
@@ -200,14 +200,14 @@ function prepare(runtime: Runtime, input: ReplanInput): Effect.Effect<Prepared, 
 
 function abortedResult(reason: string): ReplanResult {
   return {
-    replanId: null,
     aborted: reason,
-    stopped: [],
     created: [],
     dropped: [],
     kept: [],
+    replanId: null,
     rewired: [],
     started: [],
+    stopped: [],
   };
 }
 

@@ -1,4 +1,4 @@
-import { fauxAssistantMessage, fauxText } from "@msa/ai";
+import ai from "@msa/ai";
 import durable from "@msa/durable";
 import memory from "@msa/durable/storage/memory";
 import { Effect } from "effect";
@@ -6,6 +6,8 @@ import { describe, expect, it } from "vite-plus/test";
 
 import harnessEventsSupport from "./harness-events-support.ts";
 import support from "./support.ts";
+
+const { fauxAssistantMessage, fauxText } = ai;
 
 const { MemoryStorage } = memory;
 const { LiveDoc } = durable;

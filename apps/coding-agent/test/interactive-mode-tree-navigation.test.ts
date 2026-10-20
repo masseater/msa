@@ -1,5 +1,5 @@
 import testing from "@msa/testing";
-import { Container } from "@msa/tui";
+import tui from "@msa/tui";
 import { Effect } from "effect";
 import { beforeEach, describe, expect, it, vi } from "vite-plus/test";
 
@@ -8,6 +8,8 @@ import type { StatusIndicator } from "../src/modes/interactive/components/status
 import type { TreeSelectorComponent } from "../src/modes/interactive/components/tree-selector.ts";
 import { initTheme } from "../src/modes/interactive/theme/theme.ts";
 import utilities from "./utilities.ts";
+
+const { Container } = tui;
 
 const { assistantMsg, userMsg } = utilities;
 

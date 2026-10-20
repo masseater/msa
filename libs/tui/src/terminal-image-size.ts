@@ -1,12 +1,11 @@
 import { dual } from "effect/Function";
 
-import { type CellDimensions, getCellDimensions } from "./terminal-capabilities.ts";
-import type { ImageCellSize } from "./terminal-image-kitty.ts";
+import terminalCapabilities from "./terminal-capabilities.ts";
+import type terminalCapabilitiesTypes from "./terminal-capabilities.types.ts";
+import type terminalImageKittyTypes from "./terminal-image-kitty.types.ts";
+import type terminalImageSizeTypes from "./terminal-image-size.types.ts";
 
-export interface ImageDimensions {
-  widthPx: number;
-  heightPx: number;
-}
+const { getCellDimensions } = terminalCapabilities;
 
 function chooseLessDistortedCellCount(upperCount: number, idealCount: number): number {
   if (upperCount <= 1) return upperCount;
@@ -17,29 +16,31 @@ function chooseLessDistortedCellCount(upperCount: number, idealCount: number): n
   return lowerDistortion < upperDistortion ? lowerCount : upperCount;
 }
 
-export const calculateImageCellSize: {
+const calculateImageCellSize: {
   (
-    imageDimensions: ImageDimensions,
+    imageDimensions: terminalImageSizeTypes.ImageDimensions,
     maxWidthCells: number,
     maxHeightCells?: number,
-    cellSize?: CellDimensions,
+    cellSize?: terminalCapabilitiesTypes.CellDimensions,
     optimizeAspectRatio?: boolean,
-  ): ImageCellSize;
+  ): terminalImageKittyTypes.ImageCellSize;
   (
     maxWidthCells: number,
     maxHeightCells?: number,
-    cellSize?: CellDimensions,
+    cellSize?: terminalCapabilitiesTypes.CellDimensions,
     optimizeAspectRatio?: boolean,
-  ): (imageDimensions: ImageDimensions) => ImageCellSize;
+  ): (
+    imageDimensions: terminalImageSizeTypes.ImageDimensions,
+  ) => terminalImageKittyTypes.ImageCellSize;
 } = dual(
   (args) => typeof args[0] === "object" && args[0] !== null && !Array.isArray(args[0]),
   (
-    imageDimensions: ImageDimensions,
+    imageDimensions: terminalImageSizeTypes.ImageDimensions,
     maxWidthCells: number,
     maxHeightCells?: number,
-    cellSize: CellDimensions = { widthPx: 9, heightPx: 18 },
+    cellSize: terminalCapabilitiesTypes.CellDimensions = { heightPx: 18, widthPx: 9 },
     optimizeAspectRatio: boolean = false,
-  ): ImageCellSize => {
+  ): terminalImageKittyTypes.ImageCellSize => {
     const maxWidth = Math.max(1, Math.floor(maxWidthCells));
     const maxHeight =
       maxHeightCells === undefined ? undefined : Math.max(1, Math.floor(maxHeightCells));
@@ -78,22 +79,26 @@ export const calculateImageCellSize: {
   },
 );
 
-export const calculateImageRows: {
-  (imageDimensions: ImageDimensions, targetWidthCells: number, cellSize?: CellDimensions): number;
+const calculateImageRows: {
+  (
+    imageDimensions: terminalImageSizeTypes.ImageDimensions,
+    targetWidthCells: number,
+    cellSize?: terminalCapabilitiesTypes.CellDimensions,
+  ): number;
   (
     targetWidthCells: number,
-    cellSize?: CellDimensions,
-  ): (imageDimensions: ImageDimensions) => number;
+    cellSize?: terminalCapabilitiesTypes.CellDimensions,
+  ): (imageDimensions: terminalImageSizeTypes.ImageDimensions) => number;
 } = dual(
   (args) => typeof args[0] === "object" && args[0] !== null && !Array.isArray(args[0]),
   (
-    imageDimensions: ImageDimensions,
+    imageDimensions: terminalImageSizeTypes.ImageDimensions,
     targetWidthCells: number,
-    cellSize: CellDimensions = { widthPx: 9, heightPx: 18 },
+    cellSize: terminalCapabilitiesTypes.CellDimensions = { heightPx: 18, widthPx: 9 },
   ): number => calculateImageCellSize(imageDimensions, targetWidthCells, undefined, cellSize).rows,
 );
 
-export function getPngDimensions(base64Data: string): ImageDimensions | null {
+function getPngDimensions(base64Data: string): terminalImageSizeTypes.ImageDimensions | null {
   try {
     const buffer = Buffer.from(base64Data, "base64");
 
@@ -108,13 +113,13 @@ export function getPngDimensions(base64Data: string): ImageDimensions | null {
     const width = buffer.readUInt32BE(16);
     const height = buffer.readUInt32BE(20);
 
-    return { widthPx: width, heightPx: height };
+    return { heightPx: height, widthPx: width };
   } catch {
     return null;
   }
 }
 
-export function getJpegDimensions(base64Data: string): ImageDimensions | null {
+function getJpegDimensions(base64Data: string): terminalImageSizeTypes.ImageDimensions | null {
   try {
     const buffer = Buffer.from(base64Data, "base64");
 
@@ -138,7 +143,7 @@ export function getJpegDimensions(base64Data: string): ImageDimensions | null {
       if (marker >= 0xc0 && marker <= 0xc2) {
         const height = buffer.readUInt16BE(offset + 5);
         const width = buffer.readUInt16BE(offset + 7);
-        return { widthPx: width, heightPx: height };
+        return { heightPx: height, widthPx: width };
       }
 
       if (offset + 3 >= buffer.length) {
@@ -157,7 +162,7 @@ export function getJpegDimensions(base64Data: string): ImageDimensions | null {
   }
 }
 
-export function getGifDimensions(base64Data: string): ImageDimensions | null {
+function getGifDimensions(base64Data: string): terminalImageSizeTypes.ImageDimensions | null {
   try {
     const buffer = Buffer.from(base64Data, "base64");
 
@@ -173,13 +178,13 @@ export function getGifDimensions(base64Data: string): ImageDimensions | null {
     const width = buffer.readUInt16LE(6);
     const height = buffer.readUInt16LE(8);
 
-    return { widthPx: width, heightPx: height };
+    return { heightPx: height, widthPx: width };
   } catch {
     return null;
   }
 }
 
-export function getWebpDimensions(base64Data: string): ImageDimensions | null {
+function getWebpDimensions(base64Data: string): terminalImageSizeTypes.ImageDimensions | null {
   try {
     const buffer = Buffer.from(base64Data, "base64");
 
@@ -198,18 +203,18 @@ export function getWebpDimensions(base64Data: string): ImageDimensions | null {
       if (buffer.length < 30) return null;
       const width = buffer.readUInt16LE(26) & 0x3fff;
       const height = buffer.readUInt16LE(28) & 0x3fff;
-      return { widthPx: width, heightPx: height };
+      return { heightPx: height, widthPx: width };
     } else if (chunk === "VP8L") {
       if (buffer.length < 25) return null;
       const bits = buffer.readUInt32LE(21);
       const width = (bits & 0x3fff) + 1;
       const height = ((bits >> 14) & 0x3fff) + 1;
-      return { widthPx: width, heightPx: height };
+      return { heightPx: height, widthPx: width };
     } else if (chunk === "VP8X") {
       if (buffer.length < 30) return null;
       const width = buffer.readUIntLE(24, 3) + 1;
       const height = buffer.readUIntLE(27, 3) + 1;
-      return { widthPx: width, heightPx: height };
+      return { heightPx: height, widthPx: width };
     }
 
     return null;
@@ -218,21 +223,36 @@ export function getWebpDimensions(base64Data: string): ImageDimensions | null {
   }
 }
 
-export const getImageDimensions: {
-  (base64Data: string, mimeType: string): ImageDimensions | null;
-  (mimeType: string): (base64Data: string) => ImageDimensions | null;
-} = dual(2, (base64Data: string, mimeType: string): ImageDimensions | null => {
-  if (mimeType === "image/png") {
-    return getPngDimensions(base64Data);
-  }
-  if (mimeType === "image/jpeg") {
-    return getJpegDimensions(base64Data);
-  }
-  if (mimeType === "image/gif") {
-    return getGifDimensions(base64Data);
-  }
-  if (mimeType === "image/webp") {
-    return getWebpDimensions(base64Data);
-  }
-  return null;
-});
+const getImageDimensions: {
+  (base64Data: string, mimeType: string): terminalImageSizeTypes.ImageDimensions | null;
+  (mimeType: string): (base64Data: string) => terminalImageSizeTypes.ImageDimensions | null;
+} = dual(
+  2,
+  (base64Data: string, mimeType: string): terminalImageSizeTypes.ImageDimensions | null => {
+    if (mimeType === "image/png") {
+      return getPngDimensions(base64Data);
+    }
+    if (mimeType === "image/jpeg") {
+      return getJpegDimensions(base64Data);
+    }
+    if (mimeType === "image/gif") {
+      return getGifDimensions(base64Data);
+    }
+    if (mimeType === "image/webp") {
+      return getWebpDimensions(base64Data);
+    }
+    return null;
+  },
+);
+
+const terminalImageSize = {
+  calculateImageCellSize,
+  calculateImageRows,
+  getGifDimensions,
+  getImageDimensions,
+  getJpegDimensions,
+  getPngDimensions,
+  getWebpDimensions,
+};
+
+export default terminalImageSize;

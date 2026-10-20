@@ -3,10 +3,12 @@ import { describe, it } from "node:test";
 
 import { Effect } from "effect";
 
-import type { AutocompleteProvider } from "../src/autocomplete.ts";
-import { Editor } from "../src/components/editor.ts";
+import type autocompleteTypes from "../src/autocomplete.types.ts";
+import Editor from "../src/components/editor.ts";
 import editorHelpers from "./editor-helpers.ts";
-import { defaultEditorTheme } from "./test-themes.ts";
+import testThemes from "./test-themes.ts";
+
+const { defaultEditorTheme } = testThemes;
 
 const { applyCompletion, createTestTUI, flushAutocomplete, typeText } = editorHelpers;
 
@@ -97,7 +99,7 @@ function undoesAutocomplete(): void {
       Effect.gen(function* () {
         const editor = new Editor(createTestTUI(), defaultEditorTheme);
 
-        const mockProvider: AutocompleteProvider = {
+        const mockProvider: autocompleteTypes.AutocompleteProvider = {
           applyCompletion,
           getSuggestions: (lines, _cursorLine, cursorCol) => {
             const text = lines[0] || "";

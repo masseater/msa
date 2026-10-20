@@ -1,5 +1,5 @@
-import type { ThinkingLevel } from "@msa/agent-core";
-import type { Model } from "@msa/ai";
+import type agentTypes from "@msa/agent-core/index.types";
+import type aiTypes from "@msa/ai/index.types";
 import * as Effect from "effect/Effect";
 
 import { getAgentDir } from "../config.ts";
@@ -47,10 +47,10 @@ export interface CreateAgentSessionFromServicesOptions {
   services: AgentSessionServices;
   sessionManager: SessionManager;
   sessionStartEvent?: SessionStartEvent | undefined;
-  model?: Model<any> | undefined;
-  thinkingLevel?: ThinkingLevel | undefined;
+  model?: aiTypes.Model<any> | undefined;
+  thinkingLevel?: agentTypes.ThinkingLevel | undefined;
   scopedModels?:
-    | Array<{ model: Model<any>; thinkingLevel?: ThinkingLevel | undefined }>
+    | Array<{ model: aiTypes.Model<any>; thinkingLevel?: agentTypes.ThinkingLevel | undefined }>
     | undefined;
   tools?: string[] | undefined;
   excludeTools?: CreateAgentSessionOptions["excludeTools"] | undefined;
@@ -101,15 +101,15 @@ function applyExtensionFlagValues(
       continue;
     }
     diagnostics.push({
-      type: "error",
       message: `Extension flag "--${name}" requires a value`,
+      type: "error",
     });
   }
 
   if (unknownFlags.length > 0) {
     diagnostics.push({
-      type: "error",
       message: `Unknown option${unknownFlags.length === 1 ? "" : "s"}: ${unknownFlags.map((name) => `--${name}`).join(", ")}`,
+      type: "error",
     });
   }
 
@@ -139,8 +139,8 @@ export function createAgentSessionServices(
       modelRuntime.setModelPolicy(settingsManager.getModelPolicy());
       const resourceLoader = new DefaultResourceLoader({
         ...(options.resourceLoaderOptions ?? {}),
-        cwd,
         agentDir,
+        cwd,
         settingsManager,
       });
       yield* awaited(resourceLoader.reload(options.resourceLoaderReloadOptions));
@@ -154,8 +154,8 @@ export function createAgentSessionServices(
         } catch (error) {
           const message = toErrorMessage(error);
           diagnostics.push({
-            type: "error",
             message: `Extension "${extensionPath}" error: ${message}`,
+            type: "error",
           });
         }
       }
@@ -167,8 +167,8 @@ export function createAgentSessionServices(
         } catch (error) {
           const message = toErrorMessage(error);
           diagnostics.push({
-            type: "error",
             message: `Extension "${extensionPath}" error: ${message}`,
+            type: "error",
           });
         }
       }
@@ -180,8 +180,8 @@ export function createAgentSessionServices(
         } catch (error) {
           const message = toErrorMessage(error);
           diagnostics.push({
-            type: "error",
             message: `Extension "${extensionPath}" error: ${message}`,
+            type: "error",
           });
         }
       }
@@ -190,12 +190,12 @@ export function createAgentSessionServices(
       diagnostics.push(...applyExtensionFlagValues(resourceLoader, options.extensionFlagValues));
 
       return {
-        cwd,
         agentDir,
-        modelRuntime,
-        settingsManager,
-        resourceLoader,
+        cwd,
         diagnostics,
+        modelRuntime,
+        resourceLoader,
+        settingsManager,
       };
     }),
   );
@@ -208,21 +208,21 @@ export function createAgentSessionFromServices(
     awaiting(function* () {
       return yield* awaited(
         createAgentSession({
-          cwd: options.services.cwd,
           agentDir: options.services.agentDir,
-          modelRuntime: options.services.modelRuntime,
-          settingsManager: options.services.settingsManager,
-          resourceLoader: options.services.resourceLoader,
-          sessionManager: options.sessionManager,
-          model: options.model,
-          thinkingLevel: options.thinkingLevel,
-          scopedModels: options.scopedModels,
-          tools: options.tools,
-          excludeTools: options.excludeTools,
-          noTools: options.noTools,
           customTools: options.customTools,
+          cwd: options.services.cwd,
+          excludeTools: options.excludeTools,
+          model: options.model,
+          modelRuntime: options.services.modelRuntime,
+          noTools: options.noTools,
+          resourceLoader: options.services.resourceLoader,
+          scopedModels: options.scopedModels,
+          sessionManager: options.sessionManager,
           sessionStartEvent: options.sessionStartEvent,
+          settingsManager: options.services.settingsManager,
           telemetry: options.telemetry,
+          thinkingLevel: options.thinkingLevel,
+          tools: options.tools,
         }),
       );
     }),

@@ -1,8 +1,10 @@
 import { Effect } from "effect";
 import { describe, expect, it } from "vite-plus/test";
 
-import { createModels } from "../src/models.ts";
+import modelsModule from "../src/models.ts";
 import modelsRuntimeSupport from "./models-runtime-support.ts";
+
+const { createModels } = modelsModule;
 
 const { testModel, testProvider } = modelsRuntimeSupport;
 const keepsChatReadsIndependentFromThe = () =>

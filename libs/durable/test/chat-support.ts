@@ -1,20 +1,18 @@
-import {
-  type FauxResponseStep,
-  type Message,
-  type RegisterFauxProviderOptions,
-  createModels,
-  fauxProvider,
-} from "@msa/ai";
+import ai from "@msa/ai";
+import type aiTypes from "@msa/ai/index.types";
 import type chordTypes from "@msa/chord/index.types";
 import harnessModule from "@msa/durable/harness";
 import type durableTypes from "@msa/durable/index.types";
 import { Effect } from "effect";
 
-import clockModule from "../src/clock.ts";
 import type envTypes from "../src/env/index.types.ts";
+import chatSupportKit from "./chat-support-kit.ts";
 import type chatSupportTypes from "./chat-support.types.ts";
-import effectSupport from "./effect-support.ts";
 import sessionSupport from "./session-support.ts";
+
+const { clock: clockModule, effectSupport } = chatSupportKit;
+
+const { createModels, fauxProvider } = ai;
 
 const { currentTimeMillis } = clockModule;
 const { Harness, createRegistry } = harnessModule;
@@ -22,7 +20,7 @@ const { Harness, createRegistry } = harnessModule;
 const { awaited } = effectSupport;
 const { context } = sessionSupport;
 
-function chatSetup(options: RegisterFauxProviderOptions = {}): chatSupportTypes.ChatSetup {
+function chatSetup(options: aiTypes.RegisterFauxProviderOptions = {}): chatSupportTypes.ChatSetup {
   const faux = fauxProvider(options);
   const models = createModels();
   models.setProvider(faux.provider);
@@ -80,7 +78,7 @@ const allEntries = Effect.fn("allEntries")(function* (
   return [...page.items].reverse();
 });
 
-function textOf(message: Message | undefined): string | undefined {
+function textOf(message: aiTypes.Message | undefined): string | undefined {
   if (message === undefined) return undefined;
   if (message.role === "system") return undefined;
   if (typeof message.content === "string") return message.content;
@@ -97,9 +95,12 @@ const waitFor = Effect.fn("waitFor")(function* (check: chatSupportTypes.Check, t
   }
 });
 
-function unanswered(): { readonly step: FauxResponseStep; readonly reached: Promise<void> } {
+function unanswered(): {
+  readonly step: aiTypes.FauxResponseStep;
+  readonly reached: Promise<void>;
+} {
   const { promise: reached, resolve: reach } = Promise.withResolvers<void>();
-  const step: FauxResponseStep = (_context, options) => {
+  const step: aiTypes.FauxResponseStep = (_context, options) => {
     reach();
     const signal = options!.signal!;
     const { promise, reject } = Promise.withResolvers<never>();

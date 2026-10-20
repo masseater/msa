@@ -1,13 +1,10 @@
 import assert from "node:assert";
 import { describe, it } from "node:test";
 
-import {
-  decodeKittyPrintable,
-  decodePrintableKey,
-  matchesKey,
-  parseKey,
-  setKittyProtocolActive,
-} from "../src/keys.ts";
+import keys from "../src/keys.ts";
+
+const { decodeKittyPrintable, decodePrintableKey, matchesKey, parseKey, setKittyProtocolActive } =
+  keys;
 
 describe("matchesKey", () => {
   describe("Legacy key matching", () => {

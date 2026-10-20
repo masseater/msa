@@ -1,68 +1,31 @@
-import { McpError } from "./errors/mcp-error.ts";
+import McpAbortError from "./errors/abort-error.ts";
+import McpClientError from "./errors/client-error.ts";
+import McpConnectionClosedError from "./errors/connection-closed-error.ts";
+import McpError from "./errors/mcp-error.ts";
+import McpTimeoutError from "./errors/timeout-error.ts";
+import type jsonrpcTypes from "./jsonrpc.types.ts";
 
-export { McpAbortError } from "./errors/abort-error.ts";
-export { McpClientError } from "./errors/client-error.ts";
-export { McpConnectionClosedError } from "./errors/connection-closed-error.ts";
-export { McpError } from "./errors/mcp-error.ts";
-export { McpTimeoutError } from "./errors/timeout-error.ts";
-
-export type JsonRpcId = string | number;
-
-export interface JsonRpcRequest {
-  jsonrpc: "2.0";
-  id: JsonRpcId;
-  method: string;
-  params?: unknown;
-}
-
-export interface JsonRpcNotification {
-  jsonrpc: "2.0";
-  method: string;
-  params?: unknown;
-}
-
-export interface JsonRpcErrorObject {
-  code: number;
-  message: string;
-  data?: unknown;
-}
-
-export interface JsonRpcSuccessResponse {
-  jsonrpc: "2.0";
-  id: JsonRpcId;
-  result: unknown;
-}
-
-export interface JsonRpcErrorResponse {
-  jsonrpc: "2.0";
-  id: JsonRpcId;
-  error: JsonRpcErrorObject;
-}
-
-export type JsonRpcResponse = JsonRpcSuccessResponse | JsonRpcErrorResponse;
-export type JsonRpcMessage = JsonRpcRequest | JsonRpcNotification | JsonRpcResponse;
-
-export const JSON_RPC_ERROR_CODES = {
-  parseError: -32700,
+const JSON_RPC_ERROR_CODES = {
+  internalError: -32603,
+  invalidParams: -32602,
   invalidRequest: -32600,
   methodNotFound: -32601,
-  invalidParams: -32602,
-  internalError: -32603,
+  parseError: -32700,
 } as const;
 
-export function isObject(value: unknown): value is Record<string, unknown> {
+function isObject(value: unknown): value is Record<string, unknown> {
   return typeof value === "object" && value !== null && !Array.isArray(value);
 }
 
-export function toError(value: unknown): Error {
+function toError(value: unknown): Error {
   return value instanceof Error ? value : new Error(String(value));
 }
 
-export function isJsonRpcId(value: unknown): value is JsonRpcId {
+function isJsonRpcId(value: unknown): value is jsonrpcTypes.JsonRpcId {
   return typeof value === "string" || (typeof value === "number" && Number.isFinite(value));
 }
 
-export function isJsonRpcRequest(message: unknown): message is JsonRpcRequest {
+function isJsonRpcRequest(message: unknown): message is jsonrpcTypes.JsonRpcRequest {
   return (
     isObject(message) &&
     message["jsonrpc"] === "2.0" &&
@@ -71,7 +34,7 @@ export function isJsonRpcRequest(message: unknown): message is JsonRpcRequest {
   );
 }
 
-export function isJsonRpcNotification(message: unknown): message is JsonRpcNotification {
+function isJsonRpcNotification(message: unknown): message is jsonrpcTypes.JsonRpcNotification {
   return (
     isObject(message) &&
     message["jsonrpc"] === "2.0" &&
@@ -80,7 +43,7 @@ export function isJsonRpcNotification(message: unknown): message is JsonRpcNotif
   );
 }
 
-export function isJsonRpcResponse(message: unknown): message is JsonRpcResponse {
+function isJsonRpcResponse(message: unknown): message is jsonrpcTypes.JsonRpcResponse {
   if (!isObject(message) || message["jsonrpc"] !== "2.0" || !isJsonRpcId(message["id"]))
     return false;
   if ("result" in message) return !("error" in message);
@@ -90,8 +53,26 @@ export function isJsonRpcResponse(message: unknown): message is JsonRpcResponse 
   );
 }
 
-export function parseJsonRpcMessage(value: unknown): JsonRpcMessage {
+function parseJsonRpcMessage(value: unknown): jsonrpcTypes.JsonRpcMessage {
   if (isJsonRpcRequest(value) || isJsonRpcNotification(value) || isJsonRpcResponse(value))
     return value;
   throw new McpError(JSON_RPC_ERROR_CODES.invalidRequest, "Invalid JSON-RPC message");
 }
+
+const jsonrpcModule = {
+  JSON_RPC_ERROR_CODES,
+  McpAbortError: McpAbortError,
+  McpClientError: McpClientError,
+  McpConnectionClosedError: McpConnectionClosedError,
+  McpError: McpError,
+  McpTimeoutError: McpTimeoutError,
+  isJsonRpcId,
+  isJsonRpcNotification,
+  isJsonRpcRequest,
+  isJsonRpcResponse,
+  isObject,
+  parseJsonRpcMessage,
+  toError,
+};
+
+export default jsonrpcModule;

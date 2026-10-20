@@ -1,8 +1,12 @@
 import { dual } from "effect/Function";
 
-import { matchStringSequence } from "./ansi-sequences.ts";
-import { AnsiCodeTracker } from "./ansi-tracker.ts";
-import { textUnits } from "./utils.ts";
+import ansiSequences from "./ansi-sequences.ts";
+import ansiTracker from "./ansi-tracker.ts";
+import utils from "./utils.ts";
+
+const { AnsiCodeTracker } = ansiTracker;
+const { textUnits } = utils;
+const { matchStringSequence } = ansiSequences;
 
 interface SegmentRange {
   beforeEnd: number;
@@ -32,7 +36,7 @@ interface GraphemeCellRange {
   end: number;
 }
 
-export const getGraphemeCellRange: {
+const getGraphemeCellRange: {
   (line: string, column: number): GraphemeCellRange | undefined;
   (column: number): (line: string) => GraphemeCellRange | undefined;
 } = dual(2, (line: string, column: number): GraphemeCellRange | undefined => {
@@ -40,14 +44,14 @@ export const getGraphemeCellRange: {
   for (const unit of textUnits(line)) {
     if (unit.ansi) continue;
     if (unit.width > 0 && column >= currentCol && column < currentCol + unit.width) {
-      return { start: currentCol, end: currentCol + unit.width };
+      return { end: currentCol + unit.width, start: currentCol };
     }
     currentCol += unit.width;
   }
   return undefined;
 });
 
-export const getOsc8LinkAtColumn: {
+const getOsc8LinkAtColumn: {
   (line: string, column: number): string | undefined;
   (column: number): (line: string) => string | undefined;
 } = dual(2, (line: string, column: number): string | undefined => {
@@ -55,7 +59,7 @@ export const getOsc8LinkAtColumn: {
   let currentCol = 0;
   for (const unit of textUnits(line)) {
     if (unit.ansi) {
-      const hyperlink = matchStringSequence({ data: unit.text, kind: "osc", body: OSC8_BODY });
+      const hyperlink = matchStringSequence({ body: OSC8_BODY, data: unit.text, kind: "osc" });
       if (hyperlink !== null) activeUrl = hyperlink.groups[1] || undefined;
       continue;
     }
@@ -65,7 +69,7 @@ export const getOsc8LinkAtColumn: {
   return undefined;
 });
 
-export const sliceWithWidth: {
+const sliceWithWidth: {
   (
     line: string,
     startCol: number,
@@ -114,7 +118,7 @@ export const sliceWithWidth: {
   },
 );
 
-export const sliceByColumn: {
+const sliceByColumn: {
   (line: string, startCol: number, length: number, strict?: boolean): string;
   (startCol: number, length: number, strict?: boolean): (line: string) => string;
 } = dual(
@@ -163,7 +167,7 @@ function collectSegmentText(
   state.afterWidth += unit.width;
 }
 
-export const extractSegments: {
+const extractSegments: {
   (
     line: string,
     beforeEnd: number,
@@ -186,15 +190,15 @@ export const extractSegments: {
     afterLen: number,
     strictAfter: boolean = false,
   ): ExtractedSegments => {
-    const range = { beforeEnd, afterStart, afterEnd: afterStart + afterLen, strictAfter };
+    const range = { afterEnd: afterStart + afterLen, afterStart, beforeEnd, strictAfter };
     const stopCol = afterLen <= 0 ? beforeEnd : range.afterEnd;
     const state: SegmentState = {
+      after: "",
+      afterStarted: false,
+      afterWidth: 0,
       before: "",
       beforeWidth: 0,
-      after: "",
-      afterWidth: 0,
       pendingAnsiBefore: "",
-      afterStarted: false,
     };
     let currentCol = 0;
 
@@ -210,6 +214,16 @@ export const extractSegments: {
     }
 
     const { before, beforeWidth, after, afterWidth } = state;
-    return { before, beforeWidth, after, afterWidth };
+    return { after, afterWidth, before, beforeWidth };
   },
 );
+
+const textSlice = {
+  extractSegments,
+  getGraphemeCellRange,
+  getOsc8LinkAtColumn,
+  sliceByColumn,
+  sliceWithWidth,
+};
+
+export default textSlice;

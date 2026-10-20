@@ -1,4 +1,4 @@
-import type { Api, Model, OpenAICompletionsCompat } from "../../src/types.ts";
+import type typesModule from "../../src/types.types.ts";
 import type openaiCompletionsCompatTypes from "./openai-completions-compat.types.ts";
 
 const OPENAI_COMPLETIONS_DEFAULT_COMPAT: openaiCompletionsCompatTypes.OpenAICompletionsResolvedCompat =
@@ -25,7 +25,7 @@ const OPENAI_COMPLETIONS_DEFAULT_COMPAT: openaiCompletionsCompatTypes.OpenAIComp
   };
 
 function detectOpenAICompletionsCompat(
-  model: Model<"openai-completions">,
+  model: typesModule.Model<"openai-completions">,
 ): openaiCompletionsCompatTypes.OpenAICompletionsResolvedCompat {
   const { provider, baseUrl } = model;
   const isOpenRouter = provider === "openrouter" || baseUrl.includes("openrouter.ai");
@@ -58,8 +58,8 @@ function isPlainEmptyObject(value: unknown): boolean {
 
 function openAICompletionsCompatDelta(
   compat: openaiCompletionsCompatTypes.OpenAICompletionsResolvedCompat,
-): OpenAICompletionsCompat {
-  const delta: OpenAICompletionsCompat = {};
+): typesModule.OpenAICompletionsCompat {
+  const delta: typesModule.OpenAICompletionsCompat = {};
   for (const [key, value] of Object.entries(compat)) {
     const defaultValue =
       OPENAI_COMPLETIONS_DEFAULT_COMPAT[key as keyof typeof OPENAI_COMPLETIONS_DEFAULT_COMPAT];
@@ -71,12 +71,15 @@ function openAICompletionsCompatDelta(
   return delta;
 }
 
-function applyOpenAICompletionsCompatMetadata(model: Model<Api>): void {
+function applyOpenAICompletionsCompatMetadata(model: typesModule.Model<typesModule.Api>): void {
   if (model.api !== "openai-completions") return;
   const detected = openAICompletionsCompatDelta(
-    detectOpenAICompletionsCompat(model as Model<"openai-completions">),
+    detectOpenAICompletionsCompat(model as typesModule.Model<"openai-completions">),
   );
-  model.compat = { ...detected, ...(model.compat as OpenAICompletionsCompat | undefined) };
+  model.compat = {
+    ...detected,
+    ...(model.compat as typesModule.OpenAICompletionsCompat | undefined),
+  };
   if (Object.keys(model.compat).length === 0) {
     delete model.compat;
   }

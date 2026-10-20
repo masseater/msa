@@ -1,4 +1,4 @@
-import type { Message } from "@msa/ai";
+import type aiTypes from "@msa/ai/index.types";
 
 import type typesModule from "./types.types.ts";
 
@@ -13,12 +13,12 @@ declare namespace contextRangeTypes {
     readonly entries: readonly typesModule.EntryRecord[];
     readonly view: typesModule.ContextView;
     readonly edited: ReadonlySet<typesModule.EntryId>;
-    readonly settled: readonly Message[];
-    readonly open: readonly Message[];
+    readonly settled: readonly aiTypes.Message[];
+    readonly open: readonly aiTypes.Message[];
     readonly baseline: Baseline;
   };
 
-  type Baseline = Message | null | undefined;
+  type Baseline = aiTypes.Message | null | undefined;
 }
 
 export type { contextRangeTypes as default };

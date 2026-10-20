@@ -1,6 +1,8 @@
 import { dual } from "effect/Function";
 
-import { overrideEnv } from "../src/env.ts";
+import env from "../src/env.ts";
+
+const { overrideEnv } = env;
 
 const withEnv: {
   (name: string, value: string | undefined, fn: () => void): void;

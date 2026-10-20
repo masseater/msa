@@ -1,13 +1,15 @@
 import testing from "@msa/testing";
-import type { Terminal } from "@msa/tui";
+import type tuiTypes from "@msa/tui/index.types";
 
-import { VirtualTerminal } from "../../../libs/tui/test/virtual-terminal.ts";
+import virtualTerminal from "../../../libs/tui/test/virtual-terminal.ts";
 import type { Orchestrator } from "../src/core/orchestrator/orchestrator.ts";
 import type { OrchestratorSnapshot, TaskSnapshot } from "../src/core/orchestrator/types.ts";
 import { viewHelpers } from "../src/modes/interactive/components/tasks-view-helpers.ts";
 import { OrchestratorPane } from "../src/modes/interactive/orchestrator-pane.ts";
 import { createInteractiveTui } from "../src/modes/interactive/tui-renderer.ts";
 import tasksViewHarness from "./tasks-view-harness.ts";
+
+const { VirtualTerminal } = virtualTerminal;
 
 const { currentTimeMillis } = testing;
 
@@ -61,7 +63,7 @@ const createPaneUi = (options: { width?: number; orchestrator?: Orchestrator | u
   const ui = createInteractiveTui({
     logDirectory: "/tmp",
     showHardwareCursor: false,
-    terminal: terminal as unknown as Terminal,
+    terminal: terminal as unknown as tuiTypes.Terminal,
     tuiMode: "fullscreen",
   });
   const orchestrator =

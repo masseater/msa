@@ -3,9 +3,11 @@ import type {
   MessageCreateParamsStreaming,
 } from "@anthropic-ai/sdk/resources/beta/messages/messages.js";
 
-import type { Model } from "../types.ts";
-import { sanitizeSurrogates } from "../utils/sanitize-unicode.ts";
-import type { AnthropicOptions } from "./anthropic-messages-options.ts";
+import type typesModule from "../types.types.ts";
+import sanitizeUnicode from "../utils/sanitize-unicode.ts";
+import type anthropicMessagesOptionsTypes from "./anthropic-messages-options.ts";
+
+const { sanitizeSurrogates } = sanitizeUnicode;
 
 interface BuildSystemInput {
   readonly initialSystemText: string;
@@ -18,11 +20,11 @@ function buildSystem(
   const { initialSystemText, cacheControl } = input;
   if (initialSystemText === "") return undefined;
   const cache = cacheControl === undefined ? {} : { cache_control: cacheControl };
-  return [{ type: "text", text: sanitizeSurrogates(initialSystemText), ...cache }];
+  return [{ text: sanitizeSurrogates(initialSystemText), type: "text", ...cache }];
 }
 
 function applyMetadata(input: {
-  options: AnthropicOptions | undefined;
+  options: anthropicMessagesOptionsTypes.AnthropicOptions | undefined;
   params: MessageCreateParamsStreaming;
 }): void {
   const { options, params } = input;
@@ -34,7 +36,7 @@ function applyMetadata(input: {
 }
 
 function applyToolChoice(input: {
-  options: AnthropicOptions | undefined;
+  options: anthropicMessagesOptionsTypes.AnthropicOptions | undefined;
   params: MessageCreateParamsStreaming;
 }): void {
   const { options, params } = input;
@@ -44,7 +46,7 @@ function applyToolChoice(input: {
 }
 
 function applyFallbacks(input: {
-  model: Model<"anthropic-messages">;
+  model: typesModule.Model<"anthropic-messages">;
   params: MessageCreateParamsStreaming;
 }): void {
   const { model, params } = input;
@@ -54,8 +56,8 @@ function applyFallbacks(input: {
 }
 
 interface ParamsOptionsInput {
-  readonly model: Model<"anthropic-messages">;
-  readonly options: AnthropicOptions | undefined;
+  readonly model: typesModule.Model<"anthropic-messages">;
+  readonly options: anthropicMessagesOptionsTypes.AnthropicOptions | undefined;
   readonly params: MessageCreateParamsStreaming;
 }
 
@@ -65,4 +67,9 @@ function applyParamsOptions(input: ParamsOptionsInput): void {
   applyFallbacks(input);
 }
 
-export { applyParamsOptions, buildSystem };
+const anthropicMessagesParamsOptions = {
+  applyParamsOptions,
+  buildSystem,
+};
+
+export default anthropicMessagesParamsOptions;

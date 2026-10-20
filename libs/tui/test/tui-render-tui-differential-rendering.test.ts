@@ -3,17 +3,19 @@ import { describe, it } from "node:test";
 
 import { Effect } from "effect";
 
-import { type TUI } from "../src/tui-interface.ts";
-import { TuiMainScreen } from "../src/tui-main-screen.ts";
+import type tuiInterfaceTypes from "../src/tui-interface.types.ts";
+import TuiMainScreen from "../src/tui-main-screen.ts";
 import TestComponent from "./tui-render-test-component.ts";
-import { VirtualTerminal } from "./virtual-terminal.ts";
+import virtualTerminal from "./virtual-terminal.ts";
+
+const { VirtualTerminal } = virtualTerminal;
 
 describe("TUI differential rendering", () => {
   it("renders correctly when first line changes but rest stays same", () =>
     Effect.runPromise(
       Effect.gen(function* () {
         const terminal = new VirtualTerminal(40, 10);
-        const tui: TUI = new TuiMainScreen(terminal);
+        const tui: tuiInterfaceTypes.TUI = new TuiMainScreen(terminal);
         const component = new TestComponent();
         tui.addChild(component);
 
@@ -41,7 +43,7 @@ describe("TUI differential rendering", () => {
     Effect.runPromise(
       Effect.gen(function* () {
         const terminal = new VirtualTerminal(40, 10);
-        const tui: TUI = new TuiMainScreen(terminal);
+        const tui: tuiInterfaceTypes.TUI = new TuiMainScreen(terminal);
         const component = new TestComponent();
         tui.addChild(component);
 
@@ -69,7 +71,7 @@ describe("TUI differential rendering", () => {
     Effect.runPromise(
       Effect.gen(function* () {
         const terminal = new VirtualTerminal(40, 10);
-        const tui: TUI = new TuiMainScreen(terminal);
+        const tui: tuiInterfaceTypes.TUI = new TuiMainScreen(terminal);
         const component = new TestComponent();
         tui.addChild(component);
 
@@ -98,7 +100,7 @@ describe("TUI differential rendering", () => {
     Effect.runPromise(
       Effect.gen(function* () {
         const terminal = new VirtualTerminal(40, 10);
-        const tui: TUI = new TuiMainScreen(terminal);
+        const tui: tuiInterfaceTypes.TUI = new TuiMainScreen(terminal);
         const component = new TestComponent();
         tui.addChild(component);
 
@@ -131,7 +133,7 @@ describe("TUI differential rendering", () => {
     Effect.runPromise(
       Effect.gen(function* () {
         const terminal = new VirtualTerminal(20, 5);
-        const tui: TUI = new TuiMainScreen(terminal);
+        const tui: tuiInterfaceTypes.TUI = new TuiMainScreen(terminal);
         const component = new TestComponent();
         tui.addChild(component);
 
@@ -164,7 +166,7 @@ describe("TUI differential rendering", () => {
     Effect.runPromise(
       Effect.gen(function* () {
         const terminal = new VirtualTerminal(20, 5);
-        const tui: TUI = new TuiMainScreen(terminal);
+        const tui: tuiInterfaceTypes.TUI = new TuiMainScreen(terminal);
         const component = new TestComponent();
         tui.addChild(component);
 
@@ -232,7 +234,7 @@ function tuiDifferentialRenderingCases3(): void {
     Effect.runPromise(
       Effect.gen(function* () {
         const terminal = new VirtualTerminal(40, 10);
-        const tui: TUI = new TuiMainScreen(terminal);
+        const tui: tuiInterfaceTypes.TUI = new TuiMainScreen(terminal);
         const chat = new TestComponent();
         const editor = new TestComponent();
         tui.addChild(chat);

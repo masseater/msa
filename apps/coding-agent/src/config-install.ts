@@ -4,16 +4,16 @@ import { homedir } from "os";
 import { dual } from "effect/Function";
 
 import {
-  detectInstallMethod,
-  getInferredNpmInstall,
-  normalizeSelfUpdatePackageTarget,
-  getSelfUpdateCommandForMethod,
   type InstallMethod,
-  readCommandOutput,
   type SelfUpdateCommand,
   type SelfUpdatePackageTarget,
+  detectInstallMethod,
+  getInferredNpmInstall,
+  getSelfUpdateCommandForMethod,
+  normalizeSelfUpdatePackageTarget,
+  readCommandOutput,
 } from "./config-install-command.ts";
-import { getPackageDir, RELEASES_URL } from "./config-package.ts";
+import { RELEASES_URL, getPackageDir } from "./config-package.ts";
 import { dirname, join, resolve, sep } from "./core/platform-node.ts";
 
 export {

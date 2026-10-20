@@ -1,10 +1,5 @@
-import {
-  type TranscriptContext,
-  fauxAssistantMessage,
-  fauxToolCall,
-  getCurrentSystemPrompt,
-  getCurrentTools,
-} from "@msa/ai";
+import ai from "@msa/ai";
+import type aiTypes from "@msa/ai/index.types";
 import { Effect } from "effect";
 import { Type } from "typebox";
 import { describe, expect, it } from "vite-plus/test";
@@ -13,9 +8,11 @@ import type { ExtensionAPI, ExtensionFactory } from "../../../src/index.ts";
 import harnessModule from "../harness.ts";
 import type harnessTypes from "../harness.types.ts";
 
+const { fauxAssistantMessage, fauxToolCall, getCurrentSystemPrompt, getCurrentTools } = ai;
+
 const { createHarness } = harnessModule;
 
-function getProviderToolNames(context: TranscriptContext): string[] {
+function getProviderToolNames(context: aiTypes.TranscriptContext): string[] {
   return getCurrentTools(context.messages)
     .map((tool) => tool.name)
     .sort();
@@ -139,7 +136,7 @@ const preservesBeforeAgentStartSystemPromptStep1 = (harness: harnessTypes.Harnes
 
       const providerSystemPrompts: string[] = [];
       const providerToolNames: string[][] = [];
-      const captureSystemPrompt = (context: TranscriptContext): void => {
+      const captureSystemPrompt = (context: aiTypes.TranscriptContext): void => {
         providerSystemPrompts.push(getCurrentSystemPrompt(context.messages));
       };
       harness.setResponses([

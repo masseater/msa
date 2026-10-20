@@ -1,11 +1,5 @@
-import {
-  type AssistantMessage,
-  type ToolResultMessage,
-  Type,
-  fauxAssistantMessage,
-  fauxText,
-  fauxToolCall,
-} from "@msa/ai";
+import ai from "@msa/ai";
+import type aiTypes from "@msa/ai/index.types";
 import durable from "@msa/durable";
 import type durableTypes from "@msa/durable/index.types";
 import { Effect } from "effect";
@@ -15,6 +9,8 @@ import type envTypes from "../src/env/index.types.ts";
 import node from "../src/storage/sqlite/node.ts";
 import support from "./support.ts";
 import type supportTypes from "./support.types.ts";
+
+const { Type, fauxAssistantMessage, fauxText, fauxToolCall } = ai;
 
 const { openNodeSqliteStorage } = node;
 const { LiveDoc, ToolResultEntry, defineTool } = durable;
@@ -72,19 +68,19 @@ const tool: {
   ): ReturnType<typeof toolImpl>;
 } = dual((args) => typeof args[0] === "string", toolImpl);
 
-function call(name: string): AssistantMessage {
+function call(name: string): aiTypes.AssistantMessage {
   return fauxAssistantMessage([fauxToolCall(name, {}, { id: "c1" })], { stopReason: "toolUse" });
 }
 
 const DONE = fauxAssistantMessage([fauxText("done")]);
 
-function results(entries: readonly durableTypes.EntryRecord[]): ToolResultMessage[] {
+function results(entries: readonly durableTypes.EntryRecord[]): aiTypes.ToolResultMessage[] {
   return entries
     .filter((entry) => ToolResultEntry.is(entry))
-    .map((entry) => entry.model![0] as ToolResultMessage);
+    .map((entry) => entry.model![0] as aiTypes.ToolResultMessage);
 }
 
-function text(message: ToolResultMessage | undefined): string {
+function text(message: aiTypes.ToolResultMessage | undefined): string {
   return (message?.content ?? []).map((item) => (item.type === "text" ? item.text : "")).join("|");
 }
 

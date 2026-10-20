@@ -1,15 +1,15 @@
-import type { AssistantMessage } from "@msa/ai";
-import type { ProgramStatus, Terminal } from "@msa/tui";
+import type aiTypes from "@msa/ai/index.types";
+import type tuiTypes from "@msa/tui/index.types";
 import { describe, expect, it } from "vite-plus/test";
 
 import type { AgentSessionEvent } from "../src/core/agent-session.ts";
 import { ProgramStatusReporter } from "../src/modes/interactive/program-status-reporter.ts";
 
 function setup(sessionName?: string) {
-  const reports: ProgramStatus[] = [];
+  const reports: tuiTypes.ProgramStatus[] = [];
   const terminal = {
-    setProgramStatus: (status: ProgramStatus) => reports.push(status),
-  } as unknown as Terminal;
+    setProgramStatus: (status: tuiTypes.ProgramStatus) => reports.push(status),
+  } as unknown as tuiTypes.Terminal;
   const session = { name: sessionName };
   const reporter = new ProgramStatusReporter(
     () => terminal,
@@ -26,7 +26,7 @@ function setup(sessionName?: string) {
 }
 
 function assistantEnd(
-  stopReason: AssistantMessage["stopReason"],
+  stopReason: aiTypes.AssistantMessage["stopReason"],
   errorMessage?: string,
 ): AgentSessionEvent {
   const message = {
@@ -34,7 +34,7 @@ function assistantEnd(
     errorMessage,
     role: "assistant",
     stopReason,
-  } as AssistantMessage;
+  } as aiTypes.AssistantMessage;
   return { message, type: "message_end" };
 }
 

@@ -2,12 +2,11 @@ import assert from "node:assert";
 
 import { Effect } from "effect";
 
-import { Image } from "../src/index.ts";
-import {
-  resetCapabilitiesCache,
-  setCapabilities,
-  setCellDimensions,
-} from "../src/terminal-capabilities.ts";
+import tui from "../src/index.ts";
+import terminalCapabilities from "../src/terminal-capabilities.ts";
+
+const { resetCapabilitiesCache, setCapabilities, setCellDimensions } = terminalCapabilities;
+const { Image } = tui;
 
 const withKittyCells = <A>(effect: Effect.Effect<A>): Effect.Effect<A> =>
   Effect.suspend(() => {

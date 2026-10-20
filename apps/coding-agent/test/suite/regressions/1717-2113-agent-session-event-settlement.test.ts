@@ -1,5 +1,5 @@
-import type { AgentTool } from "@msa/agent-core";
-import { fauxAssistantMessage, fauxToolCall } from "@msa/ai";
+import type agentTypes from "@msa/agent-core/index.types";
+import ai from "@msa/ai";
 import { Effect } from "effect";
 import { Type } from "typebox";
 import { afterEach, describe, expect, it } from "vite-plus/test";
@@ -7,9 +7,11 @@ import { afterEach, describe, expect, it } from "vite-plus/test";
 import harnessModule from "../harness.ts";
 import type harnessTypes from "../harness.types.ts";
 
+const { fauxAssistantMessage, fauxToolCall } = ai;
+
 const { createHarness } = harnessModule;
 
-function createEchoTool(): AgentTool {
+function createEchoTool(): agentTypes.AgentTool {
   return {
     description: "Echo text back",
     execute: (_toolCallId, params) =>

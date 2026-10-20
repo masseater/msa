@@ -1,8 +1,10 @@
 import { Effect } from "effect";
 import { describe, expect, it } from "vite-plus/test";
 
-import { openRouterOAuth } from "../src/auth/oauth/openrouter.ts";
+import openrouter from "../src/auth/oauth/openrouter.ts";
 import openrouterOauthSupport from "./openrouter-oauth-support.ts";
+
+const { openRouterOAuth } = openrouter;
 
 const { jsonResponse, neverAbortedSignal, permanentKey, restoreStubsAfterEach, stubTokenExchange } =
   openrouterOauthSupport;

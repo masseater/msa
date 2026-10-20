@@ -8,7 +8,7 @@ export function openBrowser(target: string): void {
         ? ["rundll32", ["url.dll,FileProtocolHandler", target]]
         : ["xdg-open", [target]];
 
-  spawnProcess(cmd, args, { stdio: "ignore", detached: true })
+  spawnProcess(cmd, args, { detached: true, stdio: "ignore" })
     .on("error", () => {})
     .unref();
 }

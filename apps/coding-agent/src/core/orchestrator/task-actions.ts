@@ -25,13 +25,13 @@ function sendNote(
       throw new Error("audience tasks needs taskIds");
     }
     const note: Note = {
+      author: "orchestrator",
+      content: input.content,
+      createdAt: now,
       id: newId("note"),
       project,
       round,
       taskIds,
-      content: input.content,
-      author: "orchestrator",
-      createdAt: now,
     };
     yield* Effect.sync(() => store.insertNote(database, note));
     const steered: string[] = [];
@@ -43,8 +43,8 @@ function sendNote(
       const worker = runtime.workers.get(thread.id);
       if (worker === undefined) continue;
       yield* Effect.tryPromise({
-        try: () => worker.steer(input.content),
         catch: orchestratorError,
+        try: () => worker.steer(input.content),
       });
       yield* Effect.sync(() => store.markNoteRead(database, note.id, thread.id, now));
       steered.push(thread.id);
@@ -74,7 +74,7 @@ function sendMessage(
       yield* Effect.sync(() => runtime.publish());
       return actionHelpers.taskView(runtime, taskId);
     }
-    yield* sendNote(runtime, { content: message, audience: "tasks", taskIds: [taskId] });
+    yield* sendNote(runtime, { audience: "tasks", content: message, taskIds: [taskId] });
     return actionHelpers.taskView(runtime, taskId);
   });
 }
@@ -138,4 +138,4 @@ function setMaxConcurrent(
   });
 }
 
-export const taskActions = { sendNote, sendMessage, stop, rerun, setMaxConcurrent };
+export const taskActions = { rerun, sendMessage, sendNote, setMaxConcurrent, stop };

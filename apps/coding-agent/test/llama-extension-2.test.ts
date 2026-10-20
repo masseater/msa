@@ -1,4 +1,4 @@
-import type { AuthContext, AuthPrompt } from "@msa/ai";
+import type aiTypes from "@msa/ai/index.types";
 import testing from "@msa/testing";
 import { Effect } from "effect";
 import { afterEach, describe, expect, it } from "vite-plus/test";
@@ -28,7 +28,7 @@ const hidesUnloadedPresetsWhenRouterAutoloadIs = () =>
     }),
   );
 
-const emptyContext: AuthContext = {
+const emptyContext: aiTypes.AuthContext = {
   env: () => runTest(Effect.as(Effect.void, undefined)),
   fileExists: () => runTest(Effect.succeed(false)),
 };
@@ -50,7 +50,7 @@ const staysDormantUntilConfiguredAndStoresUrl = () =>
       const credential = yield* awaited(
         auth.login!({
           notify: () => {},
-          prompt: (_prompt: AuthPrompt) => runTest(Effect.succeed(answers.shift()!)),
+          prompt: (_prompt: aiTypes.AuthPrompt) => runTest(Effect.succeed(answers.shift()!)),
           signal,
         }),
       );

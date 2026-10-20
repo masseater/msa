@@ -1,18 +1,25 @@
 import { describe, expect, it } from "vite-plus/test";
 
-import { type BuiltinProvider, getProviders, getSupportedThinkingLevels } from "../src/compat.ts";
-import type { Api, Model } from "../src/types.ts";
+import compat from "../src/compat.ts";
+import type compatTypes from "../src/compat.types.ts";
+import type typesModule from "../src/types.types.ts";
 import modelChoice from "./model-choice.ts";
+
+const { getProviders, getSupportedThinkingLevels } = compat;
 
 const { compatValue, modelsWhere } = modelChoice;
 
-const everyModel = (accepts: (model: Model<Api>) => boolean): Model<Api>[] =>
-  (getProviders() as BuiltinProvider[]).flatMap((provider) => modelsWhere(provider, accepts));
+const everyModel = (
+  accepts: (model: typesModule.Model<typesModule.Api>) => boolean,
+): typesModule.Model<typesModule.Api>[] =>
+  (getProviders() as compatTypes.BuiltinProvider[]).flatMap((provider) =>
+    modelsWhere(provider, accepts),
+  );
 
-const mapped = (model: Model<Api>, level: string) =>
+const mapped = (model: typesModule.Model<typesModule.Api>, level: string) =>
   (model.thinkingLevelMap as Record<string, string | null | undefined> | undefined)?.[level];
 
-const nonEmpty = (models: Model<Api>[]) => {
+const nonEmpty = (models: typesModule.Model<typesModule.Api>[]) => {
   expect(models.length).toBeGreaterThan(0);
   return models;
 };

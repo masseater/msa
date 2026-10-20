@@ -1,17 +1,12 @@
-import type {
-  BetaInputTransformation,
-  BetaRawMessageStreamEvent as RawMessageStreamEvent,
-} from "@anthropic-ai/sdk/resources/beta/messages/messages.js";
+import type { BetaRawMessageStreamEvent as RawMessageStreamEvent } from "@anthropic-ai/sdk/resources/beta/messages/messages.js";
 
-import { calculateCost } from "../models.ts";
-import type { AssistantMessage, Model } from "../types.ts";
-import { mapStopReason } from "./anthropic-messages-tools.ts";
+import modelsModule from "../models.ts";
+import type typesModule from "../types.types.ts";
+import anthropicMessagesTools from "./anthropic-messages-tools.ts";
+import type anthropicMessagesUsageTypes from "./anthropic-messages-usage.types.ts";
 
-interface UsageState {
-  readonly output: AssistantMessage;
-  usageModel: Model<"anthropic-messages">;
-  inputTransformations: BetaInputTransformation[] | undefined;
-}
+const { mapStopReason } = anthropicMessagesTools;
+const { calculateCost } = modelsModule;
 
 type UsageEvent = Extract<RawMessageStreamEvent, { type: "message_delta" }>;
 
@@ -20,7 +15,7 @@ function applyNumber(value: number | null | undefined, set: (next: number) => vo
   set(value);
 }
 
-function applyUsage(usage: AssistantMessage["usage"], event: UsageEvent): void {
+function applyUsage(usage: typesModule.AssistantMessage["usage"], event: UsageEvent): void {
   const usageDelta = event.usage;
   if (usageDelta === undefined || usageDelta === null) return;
   applyNumber(usageDelta.input_tokens, (next) => {
@@ -48,7 +43,7 @@ function applyUsage(usage: AssistantMessage["usage"], event: UsageEvent): void {
   });
 }
 
-function applyStopReason(state: UsageState, event: UsageEvent): void {
+function applyStopReason(state: anthropicMessagesUsageTypes.UsageState, event: UsageEvent): void {
   const transformations = event.input_transformations;
   if (Array.isArray(transformations)) state.inputTransformations = transformations;
   if (event.delta.stop_reason === null) return;
@@ -64,7 +59,7 @@ function applyStopReason(state: UsageState, event: UsageEvent): void {
 }
 
 interface MessageDeltaInput {
-  readonly state: UsageState;
+  readonly state: anthropicMessagesUsageTypes.UsageState;
   readonly event: UsageEvent;
 }
 
@@ -78,17 +73,22 @@ function applyMessageDelta(input: MessageDeltaInput): void {
 }
 
 interface ResolveUsageModelInput {
-  readonly model: Model<"anthropic-messages">;
+  readonly model: typesModule.Model<"anthropic-messages">;
   readonly responseModel: string;
 }
 
-function resolveUsageModel(input: ResolveUsageModelInput): Model<"anthropic-messages"> {
+function resolveUsageModel(input: ResolveUsageModelInput): typesModule.Model<"anthropic-messages"> {
   const { model, responseModel } = input;
   if (responseModel === model.id) return model;
   const fallbackCost = model.compat?.allowedFallbackModels?.find(
     (fallback) => fallback.provider === model.provider && fallback.model === responseModel,
   )?.cost;
-  return fallbackCost === undefined ? model : { ...model, id: responseModel, cost: fallbackCost };
+  return fallbackCost === undefined ? model : { ...model, cost: fallbackCost, id: responseModel };
 }
 
-export { applyMessageDelta, resolveUsageModel, type UsageState };
+const anthropicMessagesUsage = {
+  applyMessageDelta,
+  resolveUsageModel,
+};
+
+export default anthropicMessagesUsage;

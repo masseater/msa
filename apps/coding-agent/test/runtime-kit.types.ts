@@ -1,9 +1,9 @@
-import type { registerFauxProvider } from "@msa/ai/compat";
+import type compat from "@msa/ai/compat";
 
 import type { ExtensionFactory } from "../src/index.ts";
 
 declare namespace runtimeKitTypes {
-  type Faux = ReturnType<typeof registerFauxProvider>;
+  type Faux = ReturnType<typeof compat.registerFauxProvider>;
 
   interface FauxRuntimeOptions {
     readonly agentDir?: string;

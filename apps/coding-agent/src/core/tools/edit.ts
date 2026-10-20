@@ -1,4 +1,4 @@
-import type { AgentTool } from "@msa/agent-core";
+import type agentTypes from "@msa/agent-core/index.types";
 import { Effect, FileSystem } from "effect";
 
 import type { ExtensionContext, ToolDefinition } from "../extensions/types.ts";
@@ -11,8 +11,8 @@ import {
 } from "../platform/index.ts";
 import { type EditOperations, performEdit } from "./edit-apply.ts";
 import {
-  editSchema,
   type EditToolInput,
+  editSchema,
   editToolSystemPromptContribution,
   prepareEditArguments,
   validateEditInput,
@@ -23,7 +23,7 @@ import { type EditRenderState, editRenderers } from "./renderers/edit.ts";
 import { type CwdFactory, cwdFactory, wrapToolDefinition } from "./tool-definition-wrapper.ts";
 
 export type { EditOperations } from "./edit-apply.ts";
-export { type EditToolInput, editToolSystemPromptContribution } from "./edit-input.ts";
+export { editToolSystemPromptContribution, type EditToolInput } from "./edit-input.ts";
 
 export interface EditToolDetails {
   diff: string;
@@ -32,6 +32,12 @@ export interface EditToolDetails {
 }
 
 const defaultEditOperations: EditOperations = {
+  access: (path) =>
+    platformRuntime.runPromise(
+      rethrowCause(
+        FileSystem.FileSystem.use((fs) => fs.access(path, { readable: true, writable: true })),
+      ),
+    ),
   readFile: (path) =>
     platformRuntime.runPromise(
       rethrowCause(
@@ -43,12 +49,6 @@ const defaultEditOperations: EditOperations = {
   writeFile: (path, content) =>
     platformRuntime.runPromise(
       rethrowCause(FileSystem.FileSystem.use((fs) => fs.writeFileString(path, content))),
-    ),
-  access: (path) =>
-    platformRuntime.runPromise(
-      rethrowCause(
-        FileSystem.FileSystem.use((fs) => fs.access(path, { readable: true, writable: true })),
-      ),
     ),
 };
 
@@ -62,16 +62,9 @@ const createEditToolDefinitionImpl = (
 ): ToolDefinition<typeof editSchema, EditToolDetails | undefined, EditRenderState> => {
   const ops = options?.operations ?? defaultEditOperations;
   return {
-    name: "edit",
-    label: "edit",
+    constrainedSampling: { strict: "prefer", type: "json_schema" },
     description:
       "Edit a single file using exact text replacement. Every edits[].oldText must match a unique, non-overlapping region of the original file. If two changes affect the same block or nearby lines, merge them into one edit instead of emitting overlapping edits. Do not include large unchanged regions just to connect distant changes.",
-    promptSnippet: editToolSystemPromptContribution.snippet,
-    promptGuidelines: [...editToolSystemPromptContribution.guidelines],
-    parameters: editSchema,
-    constrainedSampling: { type: "json_schema", strict: "prefer" },
-    renderShell: "self",
-    prepareArguments: prepareEditArguments,
     execute: (
       _toolCallId,
       input: EditToolInput,
@@ -94,6 +87,13 @@ const createEditToolDefinitionImpl = (
           }),
         ),
       ),
+    label: "edit",
+    name: "edit",
+    parameters: editSchema,
+    prepareArguments: prepareEditArguments,
+    promptGuidelines: [...editToolSystemPromptContribution.guidelines],
+    promptSnippet: editToolSystemPromptContribution.snippet,
+    renderShell: "self",
     ...editRenderers,
   };
 };
@@ -103,6 +103,7 @@ export const createEditToolDefinition: CwdFactory<
   ToolDefinition<typeof editSchema, EditToolDetails | undefined, EditRenderState>
 > = cwdFactory(createEditToolDefinitionImpl);
 
-export const createEditTool: CwdFactory<EditToolOptions, AgentTool<typeof editSchema>> = cwdFactory(
-  (cwd, options) => wrapToolDefinition(createEditToolDefinitionImpl(cwd, options)),
-);
+export const createEditTool: CwdFactory<
+  EditToolOptions,
+  agentTypes.AgentTool<typeof editSchema>
+> = cwdFactory((cwd, options) => wrapToolDefinition(createEditToolDefinitionImpl(cwd, options)));

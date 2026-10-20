@@ -23,19 +23,19 @@ export const runMsaCodingAgent = <TOutput extends JsonValue>(
     yield* throwIfAborted(request.signal);
     const { host, paths, state, extensionFactories } = yield* createRunContext(request.options);
     const exit = yield* Effect.exit(
-      executeAgentRun({ state, request, context: { host, paths, extensionFactories } }),
+      executeAgentRun({ context: { extensionFactories, host, paths }, request, state }),
     );
     const cleanupErrors = yield* cleanup({
-      state,
       root: paths.root,
       setArtifact: request.setArtifact,
+      state,
     });
     const failure = combineFailures({
-      runError: Exit.isFailure(exit) ? Option.some(Cause.squash(exit.cause)) : Option.none(),
       cleanupErrors,
+      runError: Exit.isFailure(exit) ? Option.some(Cause.squash(exit.cause)) : Option.none(),
     });
     if (Option.isSome(failure)) {
-      return yield* failRun({ state, input: request.input, failure: failure.value, startedAt });
+      return yield* failRun({ failure: failure.value, input: request.input, startedAt, state });
     }
     if (state.result === undefined) {
       return yield* Effect.die(new Error("msa eval completed without a result."));

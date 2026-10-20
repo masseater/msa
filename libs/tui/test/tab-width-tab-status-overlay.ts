@@ -1,6 +1,6 @@
-import type { Component } from "../src/tui-component.ts";
+import type tuiComponentTypes from "../src/tui-component.types.ts";
 
-class TabStatusOverlay implements Component {
+class TabStatusOverlay implements tuiComponentTypes.Component {
   render(): string[] {
     return ["\tX"];
   }

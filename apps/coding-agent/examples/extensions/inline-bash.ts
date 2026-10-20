@@ -16,7 +16,7 @@ const collectMatches = (text: string): Array<{ full: string; command: string }> 
   let match = PATTERN.exec(text);
   while (match !== null) {
     const [full, command] = match;
-    if (command !== undefined) matches.push({ full, command });
+    if (command !== undefined) matches.push({ command, full });
     match = PATTERN.exec(text);
   }
   return matches;
@@ -46,7 +46,7 @@ const expandCommands = (
       ).pipe(Effect.option);
 
       if (Option.isNone(bashResult)) {
-        expansions.push({ command, output: "", error: "command failed" });
+        expansions.push({ command, error: "command failed", output: "" });
         result = result.replace(full, "[error]");
         continue;
       }
@@ -54,14 +54,14 @@ const expandCommands = (
       const { stdout, stderr, code } = bashResult.value;
       const trimmed = (stdout || stderr || "").trim();
       if (code !== 0 && stderr.length > 0) {
-        expansions.push({ command, output: trimmed, error: `exit code ${code}` });
+        expansions.push({ command, error: `exit code ${code}`, output: trimmed });
       } else {
         expansions.push({ command, output: trimmed });
       }
       result = result.replace(full, trimmed);
     }
 
-    return { expansions, expanded: result };
+    return { expanded: result, expansions };
   });
 
 export default function (msa: ExtensionAPI) {

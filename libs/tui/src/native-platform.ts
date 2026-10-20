@@ -1,23 +1,19 @@
 import { createRequire } from "node:module";
 
-import { isEnvSet } from "./env.ts";
-import { getNativeModuleCandidates } from "./native-module-path.ts";
-import { pathOperations } from "./platform.ts";
+import env from "./env.ts";
+import nativeModulePath from "./native-module-path.ts";
+import type nativePlatformTypes from "./native-platform.types.ts";
+import platformModule from "./platform.ts";
+
+const { pathOperations } = platformModule;
+const { getNativeModuleCandidates } = nativeModulePath;
+const { isEnvSet } = env;
 
 const cjsRequire = createRequire(import.meta.url);
 
-export type ModifierKey = "shift" | "command" | "control" | "option";
-
-export interface NativeClipboard {
-  getText(): Promise<string | null | undefined>;
-  getImage(): Promise<Uint8Array | null | undefined>;
-  getFilePaths?(): Promise<string[] | null | undefined>;
-  setText?(text: string): Promise<void>;
-}
-
-type NativePlatformHelper = NativeClipboard & {
+type NativePlatformHelper = nativePlatformTypes.NativeClipboard & {
   enableVirtualTerminalInput?: () => boolean;
-  isModifierPressed?: (name: ModifierKey) => boolean;
+  isModifierPressed?: (name: nativePlatformTypes.ModifierKey) => boolean;
 };
 
 const helpers = new Map<string, NativePlatformHelper | undefined>();
@@ -47,13 +43,20 @@ function loadNativePlatformHelper(platform: string, suffix = ""): NativePlatform
   return undefined;
 }
 
-export function getNativePlatformHelper(): NativePlatformHelper | undefined {
+function getNativePlatformHelper(): NativePlatformHelper | undefined {
   if (process.platform !== "darwin" && process.platform !== "win32") return undefined;
   return loadNativePlatformHelper(process.platform);
 }
 
-export function getNativeClipboard(): NativeClipboard | undefined {
+function getNativeClipboard(): nativePlatformTypes.NativeClipboard | undefined {
   if (process.platform !== "linux") return getNativePlatformHelper();
   if (!isEnvSet("DISPLAY")) return undefined;
   return loadNativePlatformHelper("linux", "-x11");
 }
+
+const nativePlatform = {
+  getNativeClipboard,
+  getNativePlatformHelper,
+};
+
+export default nativePlatform;

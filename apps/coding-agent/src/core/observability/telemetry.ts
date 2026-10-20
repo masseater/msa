@@ -1,5 +1,6 @@
-import { NOOP_TELEMETRY_CONTEXT, type TelemetryContext } from "@msa/telemetry";
-import { OtlpTelemetry, layer as otlpLayer } from "@msa/telemetry/otlp";
+import telemetryModule from "@msa/telemetry";
+import type telemetryTypes from "@msa/telemetry/index.types";
+import otlp from "@msa/telemetry/otlp";
 import {
   Context,
   Duration,
@@ -14,13 +15,16 @@ import {
 import { FetchHttpClient, HttpClient } from "effect/http";
 
 import {
-  ensureLgtm,
-  findPodman,
   GRAFANA_URL,
   LGTM_CONTAINER,
   LGTM_OTLP_ENDPOINT,
   PodmanError,
+  ensureLgtm,
+  findPodman,
 } from "./lgtm.ts";
+
+const { OtlpTelemetry, layer: otlpLayer } = otlp;
+const { NOOP_TELEMETRY_CONTEXT } = telemetryModule;
 
 export type TelemetryDestination =
   | { readonly kind: "endpoint"; readonly endpoint: string; readonly source: string }
@@ -38,10 +42,10 @@ export interface TelemetryInputs {
 
 export function resolveDestination(inputs: TelemetryInputs): TelemetryDestination {
   const envEndpoint = inputs.envEndpoint?.trim();
-  if (envEndpoint) return { kind: "endpoint", endpoint: envEndpoint, source: "MSA_OTLP_ENDPOINT" };
+  if (envEndpoint) return { endpoint: envEndpoint, kind: "endpoint", source: "MSA_OTLP_ENDPOINT" };
   const settingsEndpoint = inputs.settingsEndpoint?.trim();
   if (settingsEndpoint) {
-    return { kind: "endpoint", endpoint: settingsEndpoint, source: "telemetry.otlpEndpoint" };
+    return { endpoint: settingsEndpoint, kind: "endpoint", source: "telemetry.otlpEndpoint" };
   }
   const podman = findPodman(inputs.path);
   if (podman !== undefined) return { kind: "lgtm", podman };
@@ -65,7 +69,7 @@ export interface TelemetryStatus {
 export class Telemetry extends Context.Service<
   Telemetry,
   {
-    readonly context: TelemetryContext;
+    readonly context: telemetryTypes.TelemetryContext;
     readonly status: Effect.Effect<TelemetryStatus>;
   }
 >()("@msa/coding-agent/core/observability/telemetry") {}
@@ -81,11 +85,13 @@ export function describeTelemetry(status: TelemetryStatus): string {
   return state.kind === "starting" ? `Telemetry: ${target}, connecting` : `Telemetry: ${target}`;
 }
 
-function forwardingContext(target: { current: TelemetryContext }): TelemetryContext {
+function forwardingContext(target: {
+  current: telemetryTypes.TelemetryContext;
+}): telemetryTypes.TelemetryContext {
   return {
-    startSpan: (options, callback) => target.current.startSpan(options, callback),
     log: (record) => target.current.log(record),
     recordMetric: (record) => target.current.recordMetric(record),
+    startSpan: (options, callback) => target.current.startSpan(options, callback),
   };
 }
 
@@ -93,7 +99,7 @@ function exportPipeline(
   endpoint: string,
   version: string,
   scope: Scope.Scope,
-): Effect.Effect<TelemetryContext> {
+): Effect.Effect<telemetryTypes.TelemetryContext> {
   return Layer.buildWithScope(
     otlpLayer({ endpoint, serviceName: "msa", serviceVersion: version }),
     scope,
@@ -101,7 +107,7 @@ function exportPipeline(
 }
 
 export interface TelemetryHandle {
-  readonly context: TelemetryContext;
+  readonly context: telemetryTypes.TelemetryContext;
   status(): TelemetryStatus;
   dispose(): Promise<void>;
 }
@@ -113,11 +119,11 @@ export async function startTelemetry(inputs: TelemetryInputs): Promise<Telemetry
   const telemetry = await runtime.runPromise(Effect.service(Telemetry));
   return {
     context: telemetry.context,
-    status: () => Effect.runSync(telemetry.status),
     dispose: () =>
       Effect.runPromise(
         Effect.promise(() => runtime.dispose()).pipe(Effect.timeoutOption(SHUTDOWN_TIMEOUT)),
       ).then(() => undefined),
+    status: () => Effect.runSync(telemetry.status),
   };
 }
 

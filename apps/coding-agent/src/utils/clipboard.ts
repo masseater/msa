@@ -1,6 +1,6 @@
 import { platform, tmpdir } from "node:os";
 
-import { getNativeClipboard } from "@msa/tui";
+import tui from "@msa/tui";
 import * as Effect from "effect/Effect";
 
 import { awaited, awaiting } from "../core/awaiting.ts";
@@ -9,6 +9,8 @@ import { readEnv } from "../core/platform.ts";
 import { runClipboardCommand } from "./clipboard-command.ts";
 import { remove, writeFile } from "./node-fs.ts";
 import { isWSL } from "./wsl.ts";
+
+const { getNativeClipboard } = tui;
 
 const MAX_OSC52_ENCODED_LENGTH = 100_000;
 
@@ -35,7 +37,7 @@ function copyViaWindowsClipboard(text: string): Promise<boolean> {
     awaiting(function* () {
       const tmpFile = join(tmpdir(), `msa-wsl-clip-${randomUuid()}.txt`);
       try {
-        yield* awaited(writeFile({ path: tmpFile, data: text, mode: 0o600 }));
+        yield* awaited(writeFile({ data: text, mode: 0o600, path: tmpFile }));
         const winPath = (yield* awaited(
           runClipboardCommand("wslpath", ["-w", tmpFile], { timeoutMs: 1000 }),
         ))
@@ -53,7 +55,7 @@ function copyViaWindowsClipboard(text: string): Promise<boolean> {
         return false;
       } finally {
         try {
-          yield* awaited(remove({ path: tmpFile, force: true }));
+          yield* awaited(remove({ force: true, path: tmpFile }));
         } catch {}
       }
     }),

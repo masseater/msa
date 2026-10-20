@@ -1,7 +1,9 @@
 import { Function } from "effect";
 
-import type { ProviderEnv } from "../types.ts";
-import { getProviderEnvValue } from "./provider-env.ts";
+import type typesModule from "../types.types.ts";
+import providerEnv from "./provider-env.ts";
+
+const { getProviderEnvValue } = providerEnv;
 
 const DEFAULT_PROXY_PORTS: Record<string, number> = {
   ftp: 21,
@@ -12,7 +14,7 @@ const DEFAULT_PROXY_PORTS: Record<string, number> = {
   wss: 443,
 };
 
-function getProxyEnv(key: string, env?: ProviderEnv): string {
+function getProxyEnv(key: string, env?: typesModule.ProviderEnv): string {
   const lowercaseKey = key.toLowerCase();
   const uppercaseKey = key.toUpperCase();
   return (
@@ -73,7 +75,11 @@ function parseNoProxyEntry(entry: string): { host: string; port: number } | unde
   return { host: trimmed, port: 0 };
 }
 
-function shouldProxyHostname(hostname: string, port: number, env?: ProviderEnv): boolean {
+function shouldProxyHostname(
+  hostname: string,
+  port: number,
+  env?: typesModule.ProviderEnv,
+): boolean {
   const noProxy = getProxyEnv("no_proxy", env).toLowerCase();
   if (noProxy === "") {
     return true;
@@ -117,7 +123,7 @@ function shouldProxyHostname(hostname: string, port: number, env?: ProviderEnv):
   });
 }
 
-function getProxyForUrl(targetUrl: string | URL, env?: ProviderEnv): string {
+function getProxyForUrl(targetUrl: string | URL, env?: typesModule.ProviderEnv): string {
   const parsedUrl = parseProxyTargetUrl(targetUrl);
   if (parsedUrl?.protocol === undefined || parsedUrl?.protocol === "" || parsedUrl.host === "") {
     return "";
@@ -137,15 +143,15 @@ function getProxyForUrl(targetUrl: string | URL, env?: ProviderEnv): string {
   return proxy;
 }
 
-export const UNSUPPORTED_PROXY_PROTOCOL_MESSAGE =
+const UNSUPPORTED_PROXY_PROTOCOL_MESSAGE =
   "Unsupported proxy protocol. SOCKS and PAC proxy URLs are not supported; use an HTTP or HTTPS proxy URL.";
 
-export const resolveHttpProxyUrlForTarget: {
-  (env?: ProviderEnv): (targetUrl: string | URL) => URL | undefined;
-  (targetUrl: string | URL, env?: ProviderEnv): URL | undefined;
+const resolveHttpProxyUrlForTarget: {
+  (env?: typesModule.ProviderEnv): (targetUrl: string | URL) => URL | undefined;
+  (targetUrl: string | URL, env?: typesModule.ProviderEnv): URL | undefined;
 } = Function.dual(
   (args) => typeof args[0] === "string" || args[0] instanceof URL,
-  function (targetUrl: string | URL, env?: ProviderEnv): URL | undefined {
+  function (targetUrl: string | URL, env?: typesModule.ProviderEnv): URL | undefined {
     const proxy = getProxyForUrl(targetUrl, env);
     if (proxy === "") {
       return undefined;
@@ -168,3 +174,10 @@ export const resolveHttpProxyUrlForTarget: {
     return proxyUrl;
   },
 );
+
+const nodeHttpProxy = {
+  UNSUPPORTED_PROXY_PROTOCOL_MESSAGE,
+  resolveHttpProxyUrlForTarget,
+};
+
+export default nodeHttpProxy;

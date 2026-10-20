@@ -2,109 +2,116 @@ import { deepStrictEqual, doesNotThrow, ok, strictEqual } from "node:assert/stri
 
 import { Effect } from "effect";
 
-import type { TelemetryLogRecord, TelemetryMetricRecord, TelemetrySpan } from "../context.ts";
-import type { RecordedTelemetryLog, RecordedTelemetryMetric } from "../memory.ts";
-import type { ConformanceCaseDefinition, ConformanceTest } from "./support.ts";
-import { findSpan, recordedSpans, unreadable } from "./support.ts";
-import type { TelemetryAdapterFixture } from "./types.ts";
+import type contextTypes from "../context.ts";
+import type memoryTypes from "../memory.types.ts";
+import support from "./support.ts";
+import type supportTypes from "./support.types.ts";
+import type typesModule from "./types.ts";
+
+const { findSpan, recordedSpans, unreadable } = support;
 
 function recordedLogs(
-  fixture: TelemetryAdapterFixture,
-): Effect.Effect<readonly RecordedTelemetryLog[]> {
+  fixture: typesModule.TelemetryAdapterFixture,
+): Effect.Effect<readonly memoryTypes.RecordedTelemetryLog[]> {
   return Effect.promise(() => fixture.getLogs());
 }
 
 function recordedMetrics(
-  fixture: TelemetryAdapterFixture,
-): Effect.Effect<readonly RecordedTelemetryMetric[]> {
+  fixture: typesModule.TelemetryAdapterFixture,
+): Effect.Effect<readonly memoryTypes.RecordedTelemetryMetric[]> {
   return Effect.promise(() => fixture.getMetrics());
 }
 
-function findLog(logs: readonly RecordedTelemetryLog[], body: string): RecordedTelemetryLog {
+function findLog(
+  logs: readonly memoryTypes.RecordedTelemetryLog[],
+  body: string,
+): memoryTypes.RecordedTelemetryLog {
   const log = logs.find((candidate) => candidate.body === body);
   ok(log, `Expected recorded log ${body}`);
   return log;
 }
 
 function findMetric(
-  metrics: readonly RecordedTelemetryMetric[],
+  metrics: readonly memoryTypes.RecordedTelemetryMetric[],
   name: string,
-): RecordedTelemetryMetric {
+): memoryTypes.RecordedTelemetryMetric {
   const metric = metrics.find((candidate) => candidate.name === name);
   ok(metric, `Expected recorded metric ${name}`);
   return metric;
 }
 
-const recordsLogs: ConformanceTest = (fixture) =>
+const recordsLogs: supportTypes.ConformanceTest = (fixture) =>
   Effect.gen(function* () {
     fixture.context.log({
-      severity: "info",
+      attributes: { ignored: undefined, kept: "value" },
       body: "root log",
-      attributes: { kept: "value", ignored: undefined },
+      severity: "info",
     });
     yield* Effect.promise(() =>
       fixture.context.startSpan({ name: "logging" }, (span) => {
-        span.log({ severity: "error", body: "span log", attributes: { count: 2 } });
+        span.log({ attributes: { count: 2 }, body: "span log", severity: "error" });
       }),
     );
 
     const logs = yield* recordedLogs(fixture);
     const span = findSpan(yield* recordedSpans(fixture), "logging");
     deepStrictEqual(findLog(logs, "root log"), {
-      spanId: null,
-      severity: "info",
-      body: "root log",
       attributes: { kept: "value" },
+      body: "root log",
+      severity: "info",
+      spanId: null,
     });
     deepStrictEqual(findLog(logs, "span log"), {
-      spanId: span.id,
-      severity: "error",
-      body: "span log",
       attributes: { count: 2 },
+      body: "span log",
+      severity: "error",
+      spanId: span.id,
     });
   });
 
-const recordsMetrics: ConformanceTest = (fixture) =>
+const recordsMetrics: supportTypes.ConformanceTest = (fixture) =>
   Effect.gen(function* () {
     fixture.context.recordMetric({
+      attributes: { kind: "input" },
       kind: "counter",
       name: "conformance.counter",
       value: 3,
-      attributes: { kind: "input" },
     });
     fixture.context.recordMetric({
       kind: "histogram",
       name: "conformance.histogram",
-      value: 1.5,
       unit: "s",
+      value: 1.5,
     });
     fixture.context.recordMetric({ kind: "gauge", name: "conformance.gauge", value: 4 });
 
     const metrics = yield* recordedMetrics(fixture);
     deepStrictEqual(findMetric(metrics, "conformance.counter"), {
+      attributes: { kind: "input" },
       kind: "counter",
       name: "conformance.counter",
       value: 3,
-      attributes: { kind: "input" },
     });
     deepStrictEqual(findMetric(metrics, "conformance.histogram"), {
+      attributes: {},
       kind: "histogram",
       name: "conformance.histogram",
-      value: 1.5,
       unit: "s",
-      attributes: {},
+      value: 1.5,
     });
     deepStrictEqual(findMetric(metrics, "conformance.gauge"), {
+      attributes: {},
       kind: "gauge",
       name: "conformance.gauge",
       value: 4,
-      attributes: {},
     });
   });
 
-const settledSpan = (fixture: TelemetryAdapterFixture): Effect.Effect<TelemetrySpan> =>
+const settledSpan = (
+  fixture: typesModule.TelemetryAdapterFixture,
+): Effect.Effect<contextTypes.TelemetrySpan> =>
   Effect.gen(function* () {
-    let captured: TelemetrySpan | undefined;
+    let captured: contextTypes.TelemetrySpan | undefined;
     yield* Effect.promise(() =>
       fixture.context.startSpan({ name: "settled-signals" }, (span) => {
         captured = span;
@@ -114,17 +121,23 @@ const settledSpan = (fixture: TelemetryAdapterFixture): Effect.Effect<TelemetryS
     return captured;
   });
 
-const ignoresInertSignals: ConformanceTest = (fixture) =>
+const ignoresInertSignals: supportTypes.ConformanceTest = (fixture) =>
   Effect.gen(function* () {
     const span = yield* settledSpan(fixture);
-    doesNotThrow(() => span.log({ severity: "warn", body: "late log" }));
+    doesNotThrow(() => span.log({ body: "late log", severity: "warn" }));
     doesNotThrow(() => span.recordMetric({ kind: "counter", name: "late.counter", value: 1 }));
     doesNotThrow(() =>
-      fixture.context.log(unreadable<TelemetryLogRecord>({ severity: "info", body: "hidden" })),
+      fixture.context.log(
+        unreadable<contextTypes.TelemetryLogRecord>({ body: "hidden", severity: "info" }),
+      ),
     );
     doesNotThrow(() =>
       fixture.context.recordMetric(
-        unreadable<TelemetryMetricRecord>({ kind: "counter", name: "hidden.counter", value: 1 }),
+        unreadable<contextTypes.TelemetryMetricRecord>({
+          kind: "counter",
+          name: "hidden.counter",
+          value: 1,
+        }),
       ),
     );
 
@@ -135,7 +148,7 @@ const ignoresInertSignals: ConformanceTest = (fixture) =>
     );
   });
 
-export const signalCases: readonly ConformanceCaseDefinition[] = [
+const signalCases: readonly supportTypes.ConformanceCaseDefinition[] = [
   { group: "signals", name: "records logs with their parent span", test: recordsLogs },
   { group: "signals", name: "records counter, histogram, and gauge values", test: recordsMetrics },
   {
@@ -144,3 +157,9 @@ export const signalCases: readonly ConformanceCaseDefinition[] = [
     test: ignoresInertSignals,
   },
 ];
+
+const signalCasesModule = {
+  signalCases,
+};
+
+export default signalCasesModule;

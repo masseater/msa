@@ -1,4 +1,4 @@
-import type { Api, Model, ProviderHeaders } from "@msa/ai";
+import type aiTypes from "@msa/ai/index.types";
 
 import { APP_NAME } from "../config.ts";
 import type { SettingsManager } from "./settings-manager.ts";
@@ -16,12 +16,12 @@ function matchesHost(baseUrl: string, expectedHost: string): boolean {
   }
 }
 
-function isOpenRouterModel(model: Model<Api>): boolean {
+function isOpenRouterModel(model: aiTypes.Model<aiTypes.Api>): boolean {
   return model.provider === "openrouter" || model.baseUrl.includes(OPENROUTER_HOST);
 }
 
 function getDefaultAttributionHeaders(
-  model: Model<Api>,
+  model: aiTypes.Model<aiTypes.Api>,
   settingsManager: SettingsManager,
 ): Record<string, string> | undefined {
   if (!isInstallTelemetryEnabled(settingsManager)) {
@@ -31,8 +31,8 @@ function getDefaultAttributionHeaders(
   if (isOpenRouterModel(model)) {
     return {
       "HTTP-Referer": APP_URL,
-      "X-OpenRouter-Title": APP_NAME,
       "X-OpenRouter-Categories": "cli-agent",
+      "X-OpenRouter-Title": APP_NAME,
     };
   }
 
@@ -40,7 +40,7 @@ function getDefaultAttributionHeaders(
 }
 
 function getSessionHeaders(
-  model: Model<Api>,
+  model: aiTypes.Model<aiTypes.Api>,
   sessionId: string | undefined,
 ): Record<string, string> | undefined {
   if (sessionId === undefined || sessionId === "") return undefined;
@@ -51,16 +51,16 @@ function getSessionHeaders(
   ) {
     return undefined;
   }
-  return { "x-opencode-session": sessionId, "x-opencode-client": APP_NAME };
+  return { "x-opencode-client": APP_NAME, "x-opencode-session": sessionId };
 }
 
 export function mergeProviderAttributionHeaders(
-  model: Model<Api>,
+  model: aiTypes.Model<aiTypes.Api>,
   settingsManager: SettingsManager,
   sessionId: string | undefined,
-  ...headerSources: Array<ProviderHeaders | undefined>
-): ProviderHeaders | undefined {
-  const merged: ProviderHeaders = {
+  ...headerSources: Array<aiTypes.ProviderHeaders | undefined>
+): aiTypes.ProviderHeaders | undefined {
+  const merged: aiTypes.ProviderHeaders = {
     ...getSessionHeaders(model, sessionId),
     ...getDefaultAttributionHeaders(model, settingsManager),
   };

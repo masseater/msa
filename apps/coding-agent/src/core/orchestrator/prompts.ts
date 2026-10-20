@@ -184,15 +184,15 @@ function formatReplan(result: ReplanResult): string {
 }
 
 export const prompts = {
-  stateBlock,
-  notesBlock,
   dependencyBlock,
-  latestReport,
-  workerPrompt,
-  taskReviewerPrompt,
-  roundReviewPrompt,
-  taskHeading,
-  formatTaskList,
-  formatTaskDetail,
   formatReplan,
+  formatTaskDetail,
+  formatTaskList,
+  latestReport,
+  notesBlock,
+  roundReviewPrompt,
+  stateBlock,
+  taskHeading,
+  taskReviewerPrompt,
+  workerPrompt,
 };

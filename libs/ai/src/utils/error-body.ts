@@ -1,12 +1,8 @@
 import { Function } from "effect";
-export const MAX_PROVIDER_ERROR_BODY_CHARS = 4000;
 
-export interface NormalizedProviderError {
-  status?: number | undefined;
-  body?: string | undefined;
-  message: string;
-  messageCarriesBody: boolean;
-}
+import type errorBodyTypes from "./error-body.types.ts";
+
+const MAX_PROVIDER_ERROR_BODY_CHARS = 4000;
 
 type SdkErrorShape = Error & {
   status?: unknown;
@@ -14,7 +10,7 @@ type SdkErrorShape = Error & {
   error?: unknown;
 };
 
-export function normalizeProviderError(error: unknown): NormalizedProviderError {
+function normalizeProviderError(error: unknown): errorBodyTypes.NormalizedProviderError {
   if (!(error instanceof Error)) {
     return { message: safeJsonStringify(error), messageCarriesBody: false };
   }
@@ -25,11 +21,11 @@ export function normalizeProviderError(error: unknown): NormalizedProviderError 
   const messageCarriesBody = body === undefined || error.message.includes(body);
 
   return {
-    status,
     body,
     message: error.message,
     messageCarriesBody,
-  } satisfies NormalizedProviderError;
+    status,
+  } satisfies errorBodyTypes.NormalizedProviderError;
 }
 
 function extractStatus(error: SdkErrorShape): number | undefined {
@@ -58,12 +54,12 @@ function isPlainNonEmptyObject(value: unknown): boolean {
   return Object.keys(value).length > 0;
 }
 
-export const formatProviderError: {
-  (prefix?: string): (norm: NormalizedProviderError) => string;
-  (norm: NormalizedProviderError, prefix?: string): string;
+const formatProviderError: {
+  (prefix?: string): (norm: errorBodyTypes.NormalizedProviderError) => string;
+  (norm: errorBodyTypes.NormalizedProviderError, prefix?: string): string;
 } = Function.dual(
   (args) => typeof args[0] === "object" && args[0] !== null,
-  function (norm: NormalizedProviderError, prefix?: string): string {
+  function (norm: errorBodyTypes.NormalizedProviderError, prefix?: string): string {
     if (norm.messageCarriesBody || norm.status === undefined || norm.body === undefined) {
       return prefix !== undefined && norm.status !== undefined
         ? `${prefix} (${norm.status}): ${norm.message}`
@@ -75,7 +71,7 @@ export const formatProviderError: {
   },
 );
 
-export const truncateErrorText: {
+const truncateErrorText: {
   (maxChars: number): (text: string) => string;
   (text: string, maxChars: number): string;
 } = Function.dual(2, function (text: string, maxChars: number): string {
@@ -83,7 +79,7 @@ export const truncateErrorText: {
   return `${text.slice(0, maxChars)}... [truncated ${text.length - maxChars} chars]`;
 });
 
-export function safeJsonStringify(value: unknown): string {
+function safeJsonStringify(value: unknown): string {
   try {
     const serialized = JSON.stringify(value);
     return serialized === undefined ? String(value) : serialized;
@@ -91,3 +87,13 @@ export function safeJsonStringify(value: unknown): string {
     return String(value);
   }
 }
+
+const errorBody = {
+  MAX_PROVIDER_ERROR_BODY_CHARS,
+  formatProviderError,
+  normalizeProviderError,
+  safeJsonStringify,
+  truncateErrorText,
+};
+
+export default errorBody;

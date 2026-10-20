@@ -1,4 +1,4 @@
-import { renderToolOutputType } from "@msa/codemode/declarations";
+import declarations from "@msa/codemode/declarations";
 import testing from "@msa/testing";
 import { Effect } from "effect";
 import { describe, expect, it } from "vite-plus/test";
@@ -9,6 +9,8 @@ import {
   createMcpResultSchema,
   createMcpToolName,
 } from "../src/extensions/mcp/tools.ts";
+
+const { renderToolOutputType } = declarations;
 
 const { awaited, runTest } = testing;
 

@@ -1,5 +1,5 @@
 import testing from "@msa/testing";
-import type { TerminalColors } from "@msa/tui";
+import type tuiTypes from "@msa/tui/index.types";
 import { Effect } from "effect";
 import { afterEach, describe, expect, it, vi } from "vite-plus/test";
 
@@ -16,7 +16,7 @@ const { DARK, createController, createUi, flush } = themeControllerSupport;
 
 const { awaited, deferredPromise, runTest } = testing;
 
-const LIGHT: TerminalColors = {
+const LIGHT: tuiTypes.TerminalColors = {
   background: { b: 250, g: 250, r: 250 },
   foreground: { b: 30, g: 30, r: 30 },
 };
@@ -52,7 +52,7 @@ const appliesTheThemeImmediatelyAndLetsStartup = () =>
   runTest(
     Effect.gen(function* () {
       const { ui, queryTerminalColors } = createUi();
-      const answer = deferredPromise<TerminalColors>();
+      const answer = deferredPromise<tuiTypes.TerminalColors>();
       queryTerminalColors.mockReturnValue(answer.promise);
       const controller = createController(ui, () => SettingsManager.inMemory());
       controller.applyFromSettings();
@@ -72,7 +72,7 @@ const fallsBackToPaletteIndicesThenApplies = () =>
       const effectRunPromise = Effect.runPromiseWith(yield* Effect.context<never>());
 
       const { ui, queryTerminalColors } = createUi();
-      let lateReply: (colors: TerminalColors) => void = () => {};
+      let lateReply: (colors: tuiTypes.TerminalColors) => void = () => {};
       queryTerminalColors.mockImplementation((options) =>
         effectRunPromise(
           Effect.gen(function* () {

@@ -1,34 +1,22 @@
 import { Deferred, Effect, type Fiber } from "effect";
 import { type Server, serve } from "srvx";
 
-import { foreign, type McpForeignError, toPromise } from "../foreign.ts";
-import { OAuthCallbackError } from "./errors.ts";
+import foreignModule from "../foreign.ts";
+import type foreignTypes from "../foreign.types.ts";
+import type callbackTypes from "./callback.types.ts";
+import errors from "./errors.ts";
+import type errorsTypes from "./errors.types.ts";
 
-export interface OAuthCallback {
-  code: string;
-  state: string;
-  iss?: string;
-}
-
-export type OAuthCallbackPage = { ok: true } | { ok: false; message: string; details?: string };
-
-export interface OAuthCallbackServerOptions {
-  host?: string;
-  redirectHost?: string;
-  port?: number;
-  path?: string;
-  extraPaths?: string[];
-  timeoutMs?: number;
-  renderPage?: (page: OAuthCallbackPage) => string;
-}
+const { foreign, toPromise } = foreignModule;
+const { OAuthCallbackError } = errors;
 
 interface PendingCallback {
-  deferred: Deferred.Deferred<OAuthCallback, OAuthCallbackError>;
+  deferred: Deferred.Deferred<callbackTypes.OAuthCallback, errorsTypes.OAuthCallbackError>;
   timer: Fiber.Fiber<void>;
   path: string | undefined;
 }
 
-function plainText(page: OAuthCallbackPage): string {
+function plainText(page: callbackTypes.OAuthCallbackPage): string {
   if (page.ok) return "Authorization complete. You may close this window.";
   return page.details !== undefined && page.details !== ""
     ? `${page.message}\n\n${page.details}`
@@ -41,24 +29,26 @@ const listenOn = (
   port: number,
   hostname: string,
   handle: (request: Request) => Response,
-): Effect.Effect<Server, McpForeignError> =>
+): Effect.Effect<Server, foreignTypes.McpForeignError> =>
   Effect.tryPromise({
+    catch: foreign,
     try: () => {
       const server = serve({
         fetch: handle,
-        port,
+        gracefulShutdown: false,
         hostname,
         manual: true,
+        port,
         silent: true,
-        gracefulShutdown: false,
       });
       return Promise.resolve(server.serve()).then(() => server);
     },
-    catch: foreign,
   });
 
-const fromServer = (close: () => Promise<void>): Effect.Effect<void, McpForeignError> =>
-  Effect.tryPromise({ try: close, catch: foreign });
+const fromServer = (
+  close: () => Promise<void>,
+): Effect.Effect<void, foreignTypes.McpForeignError> =>
+  Effect.tryPromise({ catch: foreign, try: close });
 
 const boundPort = (server: Server): number | undefined => {
   const { url } = server;
@@ -67,12 +57,12 @@ const boundPort = (server: Server): number | undefined => {
   return port === "" ? undefined : Number(port);
 };
 
-export class OAuthCallbackServer {
+export default class OAuthCallbackServer {
   readonly redirectUrl: string;
   private server: Server;
   private paths: string[];
   private timeoutMs: number;
-  private renderPage: ((page: OAuthCallbackPage) => string) | undefined;
+  private renderPage: ((page: callbackTypes.OAuthCallbackPage) => string) | undefined;
   private pending = new Map<string, PendingCallback>();
 
   private constructor(
@@ -80,7 +70,7 @@ export class OAuthCallbackServer {
     redirectUrl: string,
     paths: string[],
     timeoutMs: number,
-    renderPage: ((page: OAuthCallbackPage) => string) | undefined,
+    renderPage: ((page: callbackTypes.OAuthCallbackPage) => string) | undefined,
   ) {
     this.server = server;
     this.redirectUrl = redirectUrl;
@@ -89,7 +79,9 @@ export class OAuthCallbackServer {
     this.renderPage = renderPage;
   }
 
-  static listen(options: OAuthCallbackServerOptions = {}): Promise<OAuthCallbackServer> {
+  static listen(
+    options: callbackTypes.OAuthCallbackServerOptions = {},
+  ): Promise<OAuthCallbackServer> {
     return toPromise(
       Effect.gen(function* () {
         const host = options.host ?? "127.0.0.1";
@@ -117,9 +109,12 @@ export class OAuthCallbackServer {
     );
   }
 
-  waitForCallback(state: string, path?: string): Promise<OAuthCallback> {
+  waitForCallback(state: string, path?: string): Promise<callbackTypes.OAuthCallback> {
     if (this.pending.has(state)) throw new OAuthCallbackError("OAuth state is already pending");
-    const deferred = Deferred.makeUnsafe<OAuthCallback, OAuthCallbackError>();
+    const deferred = Deferred.makeUnsafe<
+      callbackTypes.OAuthCallback,
+      errorsTypes.OAuthCallbackError
+    >();
     const timedOut = Effect.sync(() => {
       this.pending.delete(state);
       Deferred.doneUnsafe(
@@ -128,7 +123,7 @@ export class OAuthCallbackServer {
       );
     });
     const timer = Effect.runFork(Effect.delay(timedOut, this.timeoutMs));
-    this.pending.set(state, { deferred, timer, path });
+    this.pending.set(state, { deferred, path, timer });
     return toPromise(Deferred.await(deferred));
   }
 
@@ -144,20 +139,23 @@ export class OAuthCallbackServer {
     return toPromise(fromServer(() => this.server.close()));
   }
 
-  private reply(status: number, page: OAuthCallbackPage): Response {
+  private reply(status: number, page: callbackTypes.OAuthCallbackPage): Response {
     if (this.renderPage === undefined) {
       return new Response(plainText(page), {
-        status,
         headers: { "content-type": "text/plain; charset=utf-8" },
+        status,
       });
     }
     return new Response(this.renderPage(page), {
+      headers: { "cache-control": "no-store", "content-type": "text/html; charset=utf-8" },
       status,
-      headers: { "content-type": "text/html; charset=utf-8", "cache-control": "no-store" },
     });
   }
 
-  private settle(pending: PendingCallback, outcome: OAuthCallback | OAuthCallbackError): void {
+  private settle(
+    pending: PendingCallback,
+    outcome: callbackTypes.OAuthCallback | errorsTypes.OAuthCallbackError,
+  ): void {
     Deferred.doneUnsafe(
       pending.deferred,
       outcome instanceof OAuthCallbackError ? Effect.fail(outcome) : Effect.succeed(outcome),
@@ -166,12 +164,12 @@ export class OAuthCallbackServer {
 
   private handle(url: URL): Response {
     if (!this.paths.includes(url.pathname)) {
-      return this.reply(404, { ok: false, message: "Not found" });
+      return this.reply(404, { message: "Not found", ok: false });
     }
     const state = url.searchParams.get("state");
     const pending = nonEmpty(state) ? this.pending.get(state) : undefined;
     if (!nonEmpty(state) || pending === undefined) {
-      return this.reply(400, { ok: false, message: "Invalid or expired OAuth state" });
+      return this.reply(400, { message: "Invalid or expired OAuth state", ok: false });
     }
     pending.timer.interruptUnsafe();
     this.pending.delete(state);
@@ -184,16 +182,16 @@ export class OAuthCallbackServer {
         pending,
         new OAuthCallbackError("The authorization response arrived on another redirect URI"),
       );
-      return this.reply(400, { ok: false, message: "Unexpected redirect URI" });
+      return this.reply(400, { message: "Unexpected redirect URI", ok: false });
     }
     const error = url.searchParams.get("error");
     if (nonEmpty(error)) {
       const description = url.searchParams.get("error_description") ?? error;
       this.settle(pending, new OAuthCallbackError(description));
       return this.reply(200, {
-        ok: false,
-        message: "Authorization failed. You may close this window.",
         details: description,
+        message: "Authorization failed. You may close this window.",
+        ok: false,
       });
     }
     const code = url.searchParams.get("code");
@@ -202,7 +200,7 @@ export class OAuthCallbackServer {
         pending,
         new OAuthCallbackError("OAuth callback did not include an authorization code"),
       );
-      return this.reply(400, { ok: false, message: "Missing authorization code" });
+      return this.reply(400, { message: "Missing authorization code", ok: false });
     }
     const iss = url.searchParams.get("iss");
     this.settle(pending, { code, state, ...(nonEmpty(iss) ? { iss } : {}) });

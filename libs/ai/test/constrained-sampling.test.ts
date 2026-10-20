@@ -1,14 +1,14 @@
 import { Type } from "typebox";
 import { describe, expect, it } from "vite-plus/test";
 
-import {
-  makeStrictJsonSchema,
-  resolveJsonSchemaStrictSampling,
-} from "../src/api/constrained-sampling.ts";
-import { convertResponsesTools } from "../src/api/openai-responses-tools.ts";
-import type { Tool } from "../src/types.ts";
+import constrainedSamplingModule from "../src/api/constrained-sampling.ts";
+import openaiResponsesTools from "../src/api/openai-responses-tools.ts";
+import type typesModule from "../src/types.types.ts";
 
-function makeTool(overrides: Partial<Tool> = {}): Tool {
+const { convertResponsesTools } = openaiResponsesTools;
+const { makeStrictJsonSchema, resolveJsonSchemaStrictSampling } = constrainedSamplingModule;
+
+function makeTool(overrides: Partial<typesModule.Tool> = {}): typesModule.Tool {
   return {
     description: "Sample tool",
     name: "sample_tool",
@@ -91,7 +91,7 @@ const derivesStrictProviderSchemasWithoutChanging = () => {
 };
 
 const fallsBackOrRejectsSchemasThat = () => {
-  const cases: Array<{ parameters: Tool["parameters"]; error: string }> = [
+  const cases: Array<{ parameters: typesModule.Tool["parameters"]; error: string }> = [
     {
       error: "additionalProperties is unsupported",
       parameters: Type.Object({
@@ -117,12 +117,12 @@ const fallsBackOrRejectsSchemasThat = () => {
         properties: { child: { $ref: "https://example.com/child.json" } },
         required: ["child"],
         type: "object",
-      } as Tool["parameters"],
+      } as typesModule.Tool["parameters"],
     },
   ];
 
   for (const { parameters, error } of cases) {
-    const tool: Tool = {
+    const tool: typesModule.Tool = {
       ...makeTool(),
       constrainedSampling: { strict: "prefer", type: "json_schema" },
       parameters,

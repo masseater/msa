@@ -1,31 +1,25 @@
 import { Function } from "effect";
 
-import type {
-  Api,
-  AssistantMessage,
-  ImageContent,
-  Message,
-  Model,
-  TextContent,
-  ToolCall,
-  ToolResultMessage,
-} from "../types.ts";
-import { currentTimeMillis } from "../utils/clock.ts";
+import type typesModule from "../types.types.ts";
+import clock from "../utils/clock.ts";
+import type transformMessagesTypes from "./transform-messages.types.ts";
+
+const { currentTimeMillis } = clock;
 
 const NON_VISION_USER_IMAGE_PLACEHOLDER = "(image omitted: model does not support images)";
 const NON_VISION_TOOL_IMAGE_PLACEHOLDER = "(tool image omitted: model does not support images)";
 
 function replaceImagesWithPlaceholder(
-  content: (TextContent | ImageContent)[],
+  content: (typesModule.TextContent | typesModule.ImageContent)[],
   placeholder: string,
-): TextContent[] {
-  const result: TextContent[] = [];
+): typesModule.TextContent[] {
+  const result: typesModule.TextContent[] = [];
   let previousWasPlaceholder = false;
 
   for (const block of content) {
     if (block.type === "image") {
       if (!previousWasPlaceholder) {
-        result.push({ type: "text", text: placeholder });
+        result.push({ text: placeholder, type: "text" });
       }
       previousWasPlaceholder = true;
       continue;
@@ -38,10 +32,10 @@ function replaceImagesWithPlaceholder(
   return result;
 }
 
-function downgradeUnsupportedImages<TApi extends Api>(
-  messages: Message[],
-  model: Model<TApi>,
-): Message[] {
+function downgradeUnsupportedImages<TApi extends typesModule.Api>(
+  messages: typesModule.Message[],
+  model: typesModule.Model<TApi>,
+): typesModule.Message[] {
   if (model.input.includes("image")) {
     return messages;
   }
@@ -65,19 +59,13 @@ function downgradeUnsupportedImages<TApi extends Api>(
   });
 }
 
-export type ToolCallIdNormalizer<TApi extends Api> = (
-  id: string,
-  model: Model<TApi>,
-  source: AssistantMessage,
-) => string;
-
-interface ReplayContext<TApi extends Api> {
-  readonly model: Model<TApi>;
-  readonly normalizeToolCallId: ToolCallIdNormalizer<TApi> | undefined;
+interface ReplayContext<TApi extends typesModule.Api> {
+  readonly model: typesModule.Model<TApi>;
+  readonly normalizeToolCallId: transformMessagesTypes.ToolCallIdNormalizer<TApi> | undefined;
   readonly toolCallIdMap: Map<string, string>;
 }
 
-type AssistantBlock = AssistantMessage["content"][number];
+type AssistantBlock = typesModule.AssistantMessage["content"][number];
 type ThinkingBlock = Extract<AssistantBlock, { type: "thinking" }>;
 
 function replayThinking(block: ThinkingBlock, isSameModel: boolean): AssistantBlock[] {
@@ -86,15 +74,15 @@ function replayThinking(block: ThinkingBlock, isSameModel: boolean): AssistantBl
     return [block];
   }
   if (block.thinking.trim() === "") return [];
-  return isSameModel ? [block] : [{ type: "text", text: block.thinking }];
+  return isSameModel ? [block] : [{ text: block.thinking, type: "text" }];
 }
 
-function replayToolCall<TApi extends Api>(
-  toolCall: ToolCall,
-  source: AssistantMessage,
+function replayToolCall<TApi extends typesModule.Api>(
+  toolCall: typesModule.ToolCall,
+  source: typesModule.AssistantMessage,
   context: ReplayContext<TApi>,
-): ToolCall {
-  let normalizedToolCall: ToolCall = toolCall;
+): typesModule.ToolCall {
+  let normalizedToolCall: typesModule.ToolCall = toolCall;
   if (toolCall.thoughtSignature !== undefined && toolCall.thoughtSignature !== "") {
     normalizedToolCall = { ...toolCall };
     delete (normalizedToolCall as { thoughtSignature?: string }).thoughtSignature;
@@ -106,24 +94,27 @@ function replayToolCall<TApi extends Api>(
   return { ...normalizedToolCall, id: normalizedId };
 }
 
-function replayAssistant<TApi extends Api>(
-  message: AssistantMessage,
+function replayAssistant<TApi extends typesModule.Api>(
+  message: typesModule.AssistantMessage,
   context: ReplayContext<TApi>,
-): AssistantMessage {
+): typesModule.AssistantMessage {
   const { model } = context;
   const isSameModel =
     message.provider === model.provider && message.api === model.api && message.model === model.id;
   const content = message.content.flatMap((block): AssistantBlock[] => {
     if (block.type === "thinking") return replayThinking(block, isSameModel);
     if (isSameModel) return [block];
-    if (block.type === "text") return [{ type: "text", text: block.text }];
+    if (block.type === "text") return [{ text: block.text, type: "text" }];
     if (block.type === "toolCall") return [replayToolCall(block, message, context)];
     return [block];
   });
   return Object.assign({}, message, { content });
 }
 
-function replayMessage<TApi extends Api>(message: Message, context: ReplayContext<TApi>): Message {
+function replayMessage<TApi extends typesModule.Api>(
+  message: typesModule.Message,
+  context: ReplayContext<TApi>,
+): typesModule.Message {
   if (message.role === "assistant") return replayAssistant(message, context);
   if (message.role !== "toolResult") return message;
   const normalizedId = context.toolCallIdMap.get(message.toolCallId);
@@ -133,22 +124,22 @@ function replayMessage<TApi extends Api>(message: Message, context: ReplayContex
   return Object.assign({}, message, { toolCallId: normalizedId });
 }
 
-function missingToolResult(toolCall: ToolCall): ToolResultMessage {
+function missingToolResult(toolCall: typesModule.ToolCall): typesModule.ToolResultMessage {
   return {
+    content: [{ text: "No result provided", type: "text" }],
+    isError: true,
     role: "toolResult",
+    timestamp: currentTimeMillis(),
     toolCallId: toolCall.id,
     toolName: toolCall.name,
-    content: [{ type: "text", text: "No result provided" }],
-    isError: true,
-    timestamp: currentTimeMillis(),
   };
 }
 
-function pairToolResults(messages: readonly Message[]): Message[] {
-  const result: Message[] = [];
-  let pendingToolCalls: ToolCall[] = [];
+function pairToolResults(messages: readonly typesModule.Message[]): typesModule.Message[] {
+  const result: typesModule.Message[] = [];
+  let pendingToolCalls: typesModule.ToolCall[] = [];
   const answered = new Set<string>();
-  const heldSystemMessages: Message[] = [];
+  const heldSystemMessages: typesModule.Message[] = [];
   const closePendingToolCalls = () => {
     for (const toolCall of pendingToolCalls) {
       if (!answered.has(toolCall.id)) result.push(missingToolResult(toolCall));
@@ -175,23 +166,23 @@ function pairToolResults(messages: readonly Message[]): Message[] {
   return result;
 }
 
-export const transformMessages: {
-  <TApi extends Api>(
-    model: Model<TApi>,
-    normalizeToolCallId?: ToolCallIdNormalizer<TApi>,
-  ): (messages: Message[]) => Message[];
-  <TApi extends Api>(
-    messages: Message[],
-    model: Model<TApi>,
-    normalizeToolCallId?: ToolCallIdNormalizer<TApi>,
-  ): Message[];
+const transformMessages: {
+  <TApi extends typesModule.Api>(
+    model: typesModule.Model<TApi>,
+    normalizeToolCallId?: transformMessagesTypes.ToolCallIdNormalizer<TApi>,
+  ): (messages: typesModule.Message[]) => typesModule.Message[];
+  <TApi extends typesModule.Api>(
+    messages: typesModule.Message[],
+    model: typesModule.Model<TApi>,
+    normalizeToolCallId?: transformMessagesTypes.ToolCallIdNormalizer<TApi>,
+  ): typesModule.Message[];
 } = Function.dual(
   (args) => Array.isArray(args[0]),
-  function <TApi extends Api>(
-    messages: Message[],
-    model: Model<TApi>,
-    normalizeToolCallId?: ToolCallIdNormalizer<TApi>,
-  ): Message[] {
+  function <TApi extends typesModule.Api>(
+    messages: typesModule.Message[],
+    model: typesModule.Model<TApi>,
+    normalizeToolCallId?: transformMessagesTypes.ToolCallIdNormalizer<TApi>,
+  ): typesModule.Message[] {
     const normalizedMessages = messages.map((msg) =>
       msg.content === undefined || msg.content === null ? { ...msg, content: [] } : msg,
     );
@@ -207,3 +198,9 @@ export const transformMessages: {
     );
   },
 );
+
+const transformMessagesModule = {
+  transformMessages,
+};
+
+export default transformMessagesModule;

@@ -1,5 +1,5 @@
-import type { AgentTool } from "@msa/agent-core";
-import type { Usage } from "@msa/ai";
+import type agentTypes from "@msa/agent-core/index.types";
+import type aiTypes from "@msa/ai/index.types";
 import testing from "@msa/testing";
 import { Effect } from "effect";
 import { Type } from "typebox";
@@ -13,7 +13,7 @@ import {
 
 const { awaited, runTest } = testing;
 
-function usage(input: number, cost: number): Usage {
+function usage(input: number, cost: number): aiTypes.Usage {
   return {
     cacheRead: 0,
     cacheWrite: 0,
@@ -24,7 +24,7 @@ function usage(input: number, cost: number): Usage {
   };
 }
 
-function createRunner(tools: AgentTool[], options: { sequential?: boolean } = {}) {
+function createRunner(tools: agentTypes.AgentTool[], options: { sequential?: boolean } = {}) {
   const events: NestedToolExecutionEvent[] = [];
   const host: NestedToolCallHost = {
     emit: (event) =>
@@ -68,7 +68,7 @@ const assignsIdsBelowTheCallerEmitsEventsPart1 = () =>
   Effect.gen(function* () {
     const effectRunPromise = Effect.runPromiseWith(yield* Effect.context<never>());
 
-    const echo: AgentTool = {
+    const echo: agentTypes.AgentTool = {
       description: "Echo",
       execute(_id, _params, _signal, onUpdate) {
         return effectRunPromise(
@@ -136,7 +136,7 @@ const assignsIdsBelowTheCallerEmitsEvents = Effect.gen(function* () {
 const recordsCallsOfNestedToolsOnThe = Effect.gen(function* () {
   const effectRunPromise = Effect.runPromiseWith(yield* Effect.context<never>());
 
-  const leaf: AgentTool = {
+  const leaf: agentTypes.AgentTool = {
     description: "Leaf",
     execute() {
       return effectRunPromise(awaited({ content: [], details: {} }));
@@ -145,7 +145,7 @@ const recordsCallsOfNestedToolsOnThe = Effect.gen(function* () {
     name: "leaf",
     parameters: Type.Object({}),
   };
-  const tools: AgentTool[] = [leaf];
+  const tools: agentTypes.AgentTool[] = [leaf];
   const { runner } = createRunner(tools);
   tools.push({
     description: "Calls leaf",
@@ -173,7 +173,7 @@ const recordsCallsOfNestedToolsOnThe = Effect.gen(function* () {
 const sumsTheUsageOfNestedResultsAt = Effect.gen(function* () {
   const effectRunPromise = Effect.runPromiseWith(yield* Effect.context<never>());
 
-  const leaf: AgentTool = {
+  const leaf: agentTypes.AgentTool = {
     description: "Leaf",
     execute() {
       return effectRunPromise(awaited({ content: [], details: {}, usage: usage(10, 0.01) }));
@@ -182,12 +182,12 @@ const sumsTheUsageOfNestedResultsAt = Effect.gen(function* () {
     name: "leaf",
     parameters: Type.Object({}),
   };
-  const plain: AgentTool = {
+  const plain: agentTypes.AgentTool = {
     ...leaf,
     execute: () => effectRunPromise(awaited({ content: [], details: {} })),
     name: "plain",
   };
-  const tools: AgentTool[] = [leaf, plain];
+  const tools: agentTypes.AgentTool[] = [leaf, plain];
   const { runner } = createRunner(tools);
   tools.push({
     description: "Calls leaf",
@@ -224,7 +224,7 @@ const serializesConcurrentCallsToSequentialTools = Effect.gen(function* () {
 
   let active = 0;
   let maxActive = { parallel: 0, sequential: 0 };
-  const makeTool = (name: "sequential" | "parallel"): AgentTool => ({
+  const makeTool = (name: "sequential" | "parallel"): agentTypes.AgentTool => ({
     description: name,
     label: name,
     name,

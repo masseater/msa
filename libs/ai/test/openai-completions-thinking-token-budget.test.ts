@@ -1,8 +1,10 @@
 import { Clock, Effect, Stream } from "effect";
 import { beforeEach, describe, expect, it, vi } from "vite-plus/test";
 
-import { streamSimple } from "../src/compat.ts";
-import type { Model, SimpleStreamOptions, ThinkingBudgets } from "../src/types.ts";
+import compatModule from "../src/compat.ts";
+import type typesModule from "../src/types.types.ts";
+
+const { streamSimple } = compatModule;
 
 const mockState = vi.hoisted(() => ({
   lastParams: undefined as unknown,
@@ -62,11 +64,11 @@ type CapturedParams = {
 };
 
 function vllmModel(
-  compat: Model<"openai-completions">["compat"] = {
+  compat: typesModule.Model<"openai-completions">["compat"] = {
     supportsThinkingTokenBudget: true,
     thinkingFormat: "qwen",
   },
-): Model<"openai-completions"> {
+): typesModule.Model<"openai-completions"> {
   return {
     api: "openai-completions",
     baseUrl: "http://localhost:8000/v1",
@@ -83,10 +85,10 @@ function vllmModel(
 }
 
 const capture = Effect.fn("capture")(function* (
-  model: Model<"openai-completions">,
+  model: typesModule.Model<"openai-completions">,
   options?: {
-    reasoning?: SimpleStreamOptions["reasoning"];
-    thinkingBudgets?: ThinkingBudgets;
+    reasoning?: typesModule.SimpleStreamOptions["reasoning"];
+    thinkingBudgets?: typesModule.ThinkingBudgets;
     maxTokens?: number;
   },
 ) {

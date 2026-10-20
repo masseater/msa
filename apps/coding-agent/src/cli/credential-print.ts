@@ -1,4 +1,4 @@
-import type { Api, CredentialInfo, Model } from "@msa/ai";
+import type aiTypes from "@msa/ai/index.types";
 import * as Effect from "effect/Effect";
 import { dual } from "effect/Function";
 
@@ -27,12 +27,12 @@ function resolveCredentialForPrintImpl(
   return Effect.runPromise(
     awaiting(function* () {
       const { provider: cliProvider, model: cliModel } = validateAuthCommandArgs(args, kind);
-      const credentialTypes = new Map<string, CredentialInfo["type"]>(
+      const credentialTypes = new Map<string, aiTypes.CredentialInfo["type"]>(
         (yield* awaited(modelRuntime.listCredentials(signal === undefined ? {} : { signal }))).map(
           (credential) => [credential.providerId, credential.type],
         ),
       );
-      const providers: Array<{ id: string; model?: Model<Api> }> = [];
+      const providers: Array<{ id: string; model?: aiTypes.Model<aiTypes.Api> }> = [];
       if (cliProvider !== undefined && cliProvider !== "") {
         const provider = modelRuntime.getProvider(cliProvider);
         if (provider === undefined) {
@@ -41,7 +41,7 @@ function resolveCredentialForPrintImpl(
           );
         }
         if (cliModel !== undefined && cliModel !== "") {
-          const resolved = resolveCliModel({ cliProvider: provider.id, cliModel, modelRuntime });
+          const resolved = resolveCliModel({ cliModel, cliProvider: provider.id, modelRuntime });
           if (
             (resolved.error !== undefined && resolved.error !== "") ||
             resolved.model === undefined
@@ -59,7 +59,7 @@ function resolveCredentialForPrintImpl(
         for (const provider of modelRuntime.getProviders()) {
           if (!credentialTypes.has(provider.id)) continue;
           const resolved = resolveModelReference(
-            { text: cliModel!, provider: provider.id, thinkingSuffix: "strict", fuzzy: true },
+            { fuzzy: true, provider: provider.id, text: cliModel!, thinkingSuffix: "strict" },
             models,
             () => true,
           );

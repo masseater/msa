@@ -1,40 +1,31 @@
 import type { ResponseCreateParamsStreaming } from "openai/resources/responses/responses.js";
 import type { ReasoningEffort } from "openai/resources/shared.js";
 
-import { clampThinkingLevel } from "../models.ts";
-import type {
-  Api,
-  Model,
-  SimpleStreamOptions,
-  StreamOptions,
-  TranscriptContext,
-} from "../types.ts";
-import { buildBaseOptions, resolveSamplingParams } from "./simple-options.ts";
+import modelsModule from "../models.ts";
+import type typesModule from "../types.types.ts";
+import type openaiResponsesReasoningTypes from "./openai-responses-reasoning.types.ts";
+import simpleOptions from "./simple-options.ts";
 
-export interface ResponsesReasoningOptions extends StreamOptions {
-  reasoningEffort?: "minimal" | "low" | "medium" | "high" | "xhigh" | "max" | undefined;
-  reasoningSummary?: "auto" | "detailed" | "concise" | null | undefined;
-  toolChoice?: ResponseCreateParamsStreaming["tool_choice"] | undefined;
-}
+const { buildBaseOptions, resolveSamplingParams } = simpleOptions;
+const { clampThinkingLevel } = modelsModule;
 
-export interface ReasoningRequest<TApi extends Api> {
-  readonly model: Model<TApi>;
-  readonly options: ResponsesReasoningOptions | undefined;
-  readonly effortOverride?: string | undefined;
-}
-
-function requestedEffort(options: ResponsesReasoningOptions | undefined) {
+function requestedEffort(
+  options: openaiResponsesReasoningTypes.ResponsesReasoningOptions | undefined,
+) {
   const summary = options?.reasoningSummary;
   return (
     options?.reasoningEffort ?? (summary !== undefined && summary !== null ? "medium" : undefined)
   );
 }
 
-function reasoningParams<TApi extends Api>({
+function reasoningParams<TApi extends typesModule.Api>({
   model,
   options,
   effortOverride,
-}: ReasoningRequest<TApi>): Pick<ResponseCreateParamsStreaming, "reasoning" | "include"> {
+}: openaiResponsesReasoningTypes.ReasoningRequest<TApi>): Pick<
+  ResponseCreateParamsStreaming,
+  "reasoning" | "include"
+> {
   const effort = requestedEffort(options);
   if (effort === undefined) {
     const off = model.thinkingLevelMap?.off;
@@ -45,16 +36,18 @@ function reasoningParams<TApi extends Api>({
       ? effort
       : (model.thinkingLevelMap?.[options.reasoningEffort] ?? options.reasoningEffort);
   return {
+    include: ["reasoning.encrypted_content"],
     reasoning: {
       effort: (effortOverride ?? requested) as ReasoningEffort,
       summary: options?.reasoningSummary || "auto",
     },
-    include: ["reasoning.encrypted_content"],
   };
 }
 
-export function applyReasoningParams(params: ResponseCreateParamsStreaming) {
-  return <TApi extends Api>(request: ReasoningRequest<TApi>): void => {
+function applyReasoningParams(params: ResponseCreateParamsStreaming) {
+  return <TApi extends typesModule.Api>(
+    request: openaiResponsesReasoningTypes.ReasoningRequest<TApi>,
+  ): void => {
     const { model, options } = request;
     if (model.reasoning) Object.assign(params, reasoningParams(request));
     const sampling = resolveSamplingParams(
@@ -66,24 +59,24 @@ export function applyReasoningParams(params: ResponseCreateParamsStreaming) {
   };
 }
 
-export interface SimpleResponsesRequest<TApi extends Api> {
-  readonly model: Model<TApi>;
-  readonly context: TranscriptContext;
-  readonly options: SimpleStreamOptions | undefined;
-  readonly apiKey: string | undefined;
-}
-
-export function responsesSimpleOptions<TApi extends Api>({
+function responsesSimpleOptions<TApi extends typesModule.Api>({
   model,
   context,
   options,
   apiKey,
-}: SimpleResponsesRequest<TApi>): ResponsesReasoningOptions {
+}: openaiResponsesReasoningTypes.SimpleResponsesRequest<TApi>): openaiResponsesReasoningTypes.ResponsesReasoningOptions {
   const clamped =
     options?.reasoning === undefined ? undefined : clampThinkingLevel(model, options.reasoning);
   return {
     ...buildBaseOptions(model, context, options, apiKey),
-    toolChoice: options?.toolChoice,
     reasoningEffort: clamped === "off" ? undefined : clamped,
+    toolChoice: options?.toolChoice,
   };
 }
+
+const openaiResponsesReasoning = {
+  applyReasoningParams,
+  responsesSimpleOptions,
+};
+
+export default openaiResponsesReasoning;

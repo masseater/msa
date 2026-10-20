@@ -1,9 +1,11 @@
 import type { ExtensionAPI } from "@msa/coding-agent";
-import { matchesKey } from "@msa/tui";
+import tuiModule from "@msa/tui";
 import { Effect, type Fiber } from "effect";
 
 import { renderFrame } from "./snake-render.ts";
-import { advance, createInitialState, type GameState, TICK_MS } from "./snake-state.ts";
+import { type GameState, TICK_MS, advance, createInitialState } from "./snake-state.ts";
+
+const { matchesKey } = tuiModule;
 
 const SNAKE_SAVE_TYPE = "snake-save";
 
@@ -108,7 +110,7 @@ class SnakeComponent {
       return this.cachedLines;
     }
 
-    const lines = renderFrame({ state: this.state, paused: this.paused, width });
+    const lines = renderFrame({ paused: this.paused, state: this.state, width });
 
     this.cachedLines = lines;
     this.cachedWidth = width;

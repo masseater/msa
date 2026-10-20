@@ -19,15 +19,15 @@ export default function (msa: ExtensionAPI) {
       Effect.runPromise(
         Effect.sync(() => {
           const message = args.trim() || "hello";
-          msa.events.emit("my:notification", { message, from: "/emit command" });
+          msa.events.emit("my:notification", { from: "/emit command", message });
         }),
       ),
   });
 
   msa.on("session_start", () => {
     msa.events.emit("my:notification", {
-      message: "Session started",
       from: "event-bus-example",
+      message: "Session started",
     });
   });
 }

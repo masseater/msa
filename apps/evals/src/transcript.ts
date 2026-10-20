@@ -1,20 +1,22 @@
-import { contentText } from "@msa/ai";
+import ai from "@msa/ai";
 import type { AgentSession } from "@msa/coding-agent";
-import { normalizeRecord, toJsonValue, type TranscriptEvent } from "vitest-evals/harness";
+import { type TranscriptEvent, normalizeRecord, toJsonValue } from "vitest-evals/harness";
+
+const { contentText } = ai;
 
 type SessionMessage = AgentSession["messages"][number];
 
 function assistantEvents(message: Extract<SessionMessage, { role: "assistant" }>) {
   const events: TranscriptEvent[] = [];
   const text = contentText(message.content, "\n");
-  if (text !== "") events.push({ type: "message", role: "assistant", content: text });
+  if (text !== "") events.push({ content: text, role: "assistant", type: "message" });
   for (const part of message.content) {
     if (part.type !== "toolCall") continue;
     events.push({
-      type: "tool_call",
+      arguments: normalizeRecord(part.arguments),
       id: part.id,
       name: part.name,
-      arguments: normalizeRecord(part.arguments),
+      type: "tool_call",
     });
   }
   return events;
@@ -27,9 +29,9 @@ function toolResultEvent(message: Extract<SessionMessage, { role: "toolResult" }
     : toJsonValue(message.content);
   const failureMessage = text === "" ? "Tool failed" : text;
   const event: TranscriptEvent = {
-    type: "tool_result",
-    toolCallId: message.toolCallId,
     name: message.toolName,
+    toolCallId: message.toolCallId,
+    type: "tool_result",
     ...(content === undefined ? {} : { content }),
     ...(message.isError ? { error: { message: failureMessage } } : {}),
   };
@@ -38,7 +40,7 @@ function toolResultEvent(message: Extract<SessionMessage, { role: "toolResult" }
 
 function messageEvents(message: SessionMessage): TranscriptEvent[] {
   if (message.role === "user") {
-    return [{ type: "message", role: "user", content: contentText(message.content, "\n") }];
+    return [{ content: contentText(message.content, "\n"), role: "user", type: "message" }];
   }
   if (message.role === "assistant") return assistantEvents(message);
   if (message.role === "toolResult") return [toolResultEvent(message)];

@@ -1,9 +1,12 @@
 import { Data, Effect } from "effect";
 import { describe, expect, it } from "vite-plus/test";
 
-import { streamSimple } from "../src/compat.ts";
-import type { AssistantMessage, Context, Model } from "../src/types.ts";
-import { currentTimeMillis } from "../src/utils/clock.ts";
+import compatModule from "../src/compat.ts";
+import type typesModule from "../src/types.types.ts";
+import clock from "../src/utils/clock.ts";
+
+const { currentTimeMillis } = clock;
+const { streamSimple } = compatModule;
 
 interface AnthropicPayload {
   messages?: Array<{
@@ -14,7 +17,7 @@ interface AnthropicPayload {
 
 class PayloadCaptured extends Data.TaggedError("PayloadCaptured")<{ readonly message: string }> {}
 
-function makeModel(allowEmptySignature?: boolean): Model<"anthropic-messages"> {
+function makeModel(allowEmptySignature?: boolean): typesModule.Model<"anthropic-messages"> {
   return {
     api: "anthropic-messages",
     baseUrl: "http://127.0.0.1:9/anthropic",
@@ -35,8 +38,8 @@ function makeContext(
   thinking = "internal reasoning",
   provider = "xiaomi-token-plan-ams",
   model = "mimo-v2.6-pro",
-): Context {
-  const assistant: AssistantMessage = {
+): typesModule.Context {
+  const assistant: typesModule.AssistantMessage = {
     api: "anthropic-messages",
     content: [{ thinking, thinkingSignature, type: "thinking" }],
     model,
@@ -63,8 +66,8 @@ function makeContext(
 }
 
 const capturePayload = Effect.fn("capturePayload")(function* (
-  model: Model<"anthropic-messages">,
-  context: Context,
+  model: typesModule.Model<"anthropic-messages">,
+  context: typesModule.Context,
 ) {
   let capturedPayload: AnthropicPayload | undefined;
   const stream = streamSimple(model, context, {

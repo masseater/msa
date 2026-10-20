@@ -1,5 +1,6 @@
 import testing from "@msa/testing";
-import { type TUI, TuiMainScreen } from "@msa/tui";
+import tuiModule from "@msa/tui";
+import type tuiTypes from "@msa/tui/index.types";
 import { Effect } from "effect";
 import { afterEach, beforeAll, describe, expect, it } from "vite-plus/test";
 
@@ -9,6 +10,8 @@ import { ToolExecutionComponent } from "../src/modes/interactive/components/tool
 import { initTheme } from "../src/modes/interactive/theme/theme.ts";
 import { stripAnsi } from "../src/utils/ansi.ts";
 import editToolNoFullRedrawSupport from "./edit-tool-no-full-redraw-support.ts";
+
+const { TuiMainScreen } = tuiModule;
 
 const { FakeTerminal, createLargeEdits, tempDirs, waitForRender, waitForRenderedText } =
   editToolNoFullRedrawSupport;
@@ -48,7 +51,7 @@ const reconstructsTheBoxedPreviewFromASettled = Effect.gen(function* () {
   yield* removePath(filePath);
 
   const terminal = new FakeTerminal();
-  const tui: TUI = new TuiMainScreen(terminal);
+  const tui: tuiTypes.TUI = new TuiMainScreen(terminal);
   const component = new ToolExecutionComponent(
     "edit",
     "tool-call-replay",
@@ -95,7 +98,7 @@ const showsAPreflightErrorWithoutRenderingA = Effect.gen(function* () {
   yield* writeTextFile(filePath, "line 0\nline 1\n");
 
   const terminal = new FakeTerminal();
-  const tui: TUI = new TuiMainScreen(terminal);
+  const tui: tuiTypes.TUI = new TuiMainScreen(terminal);
   const component = new ToolExecutionComponent(
     "edit",
     "tool-call-2",

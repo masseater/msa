@@ -1,4 +1,4 @@
-export class KillRing {
+export default class KillRing {
   private ring: string[] = [];
 
   push(text: string, opts: { prepend: boolean; accumulate?: boolean }): void {

@@ -1,24 +1,24 @@
 import { dual } from "effect/Function";
 
-import {
-  type KeyMatchRequest,
-  matchesEditingControlKey,
-  matchesNavigationKey,
-} from "./key-control-matchers.ts";
-import { ARROW_CODEPOINTS, type KeyId, MODIFIER_NAMES, MODIFIERS, SYMBOL_KEYS } from "./key-ids.ts";
-import {
-  isKittyProtocolActive,
-  matchesKittySequence,
-  matchesPrintableModifyOtherKeys,
-} from "./key-protocols.ts";
-import {
-  isDigitKey,
+import keyControlMatchers from "./key-control-matchers.ts";
+import type keyControlMatchersTypes from "./key-control-matchers.types.ts";
+import keyIds from "./key-ids.ts";
+import type keyIdsTypes from "./key-ids.types.ts";
+import keyProtocols from "./key-protocols.ts";
+import keySequences from "./key-sequences.ts";
+import type keySequencesTypes from "./key-sequences.types.ts";
+
+const { ARROW_CODEPOINTS, MODIFIERS, MODIFIER_NAMES, SYMBOL_KEYS } = keyIds;
+const { isKittyProtocolActive, matchesKittySequence, matchesPrintableModifyOtherKeys } =
+  keyProtocols;
+const {
   LEGACY_KEY_SEQUENCES,
-  type LegacyModifierKey,
-  matchesLegacySequence,
+  isDigitKey,
   matchesLegacyModifierSequence,
+  matchesLegacySequence,
   rawCtrlChar,
-} from "./key-sequences.ts";
+} = keySequences;
+const { matchesEditingControlKey, matchesNavigationKey } = keyControlMatchers;
 
 function findModifierPrefix(key: string): (typeof MODIFIER_NAMES)[number] | undefined {
   return MODIFIER_NAMES.find((name) => key.startsWith(`${name}+`));
@@ -38,16 +38,16 @@ function parseKeyId(
   }
   if (key === "" || (key.includes("+") && key !== "+")) return null;
   return {
-    key,
-    ctrl: modifiers.has("ctrl"),
-    shift: modifiers.has("shift"),
     alt: modifiers.has("alt"),
+    ctrl: modifiers.has("ctrl"),
+    key,
+    shift: modifiers.has("shift"),
     super: modifiers.has("super"),
   };
 }
 
 interface ArrowMatcher {
-  readonly legacy: LegacyModifierKey;
+  readonly legacy: keySequencesTypes.LegacyModifierKey;
   readonly codepoint: number;
   readonly alt: readonly string[];
   readonly altWithoutKittyProtocol: readonly string[];
@@ -55,37 +55,37 @@ interface ArrowMatcher {
 }
 
 const ARROW_MATCHERS: Record<string, ArrowMatcher> = {
-  up: {
-    legacy: "up",
-    codepoint: ARROW_CODEPOINTS.up,
-    alt: ["\x1bp"],
-    altWithoutKittyProtocol: [],
-    ctrl: [],
-  },
   down: {
-    legacy: "down",
-    codepoint: ARROW_CODEPOINTS.down,
     alt: ["\x1bn"],
     altWithoutKittyProtocol: [],
+    codepoint: ARROW_CODEPOINTS.down,
     ctrl: [],
+    legacy: "down",
   },
   left: {
-    legacy: "left",
-    codepoint: ARROW_CODEPOINTS.left,
     alt: ["\x1b[1;3D", "\x1bb"],
     altWithoutKittyProtocol: ["\x1bB"],
+    codepoint: ARROW_CODEPOINTS.left,
     ctrl: ["\x1b[1;5D"],
+    legacy: "left",
   },
   right: {
-    legacy: "right",
-    codepoint: ARROW_CODEPOINTS.right,
     alt: ["\x1b[1;3C", "\x1bf"],
     altWithoutKittyProtocol: ["\x1bF"],
+    codepoint: ARROW_CODEPOINTS.right,
     ctrl: ["\x1b[1;5C"],
+    legacy: "right",
+  },
+  up: {
+    alt: ["\x1bp"],
+    altWithoutKittyProtocol: [],
+    codepoint: ARROW_CODEPOINTS.up,
+    ctrl: [],
+    legacy: "up",
   },
 };
 
-function matchesArrowKey(request: KeyMatchRequest): boolean | undefined {
+function matchesArrowKey(request: keyControlMatchersTypes.KeyMatchRequest): boolean | undefined {
   const { data, modifier } = request;
   const arrow = ARROW_MATCHERS[request.key];
   if (arrow === undefined) return undefined;
@@ -109,7 +109,7 @@ function matchesArrowKey(request: KeyMatchRequest): boolean | undefined {
   );
 }
 
-function matchesFunctionKey(request: KeyMatchRequest): boolean | undefined {
+function matchesFunctionKey(request: keyControlMatchersTypes.KeyMatchRequest): boolean | undefined {
   const { key, data, modifier } = request;
   switch (key) {
     case "f1":
@@ -165,7 +165,7 @@ function matchesPrintableKeyWithModifier(key: string, data: string, modifier: nu
   return data === key || matchesPrintableSequence(data, codepoint, 0);
 }
 
-function matchesPrintableKey(request: KeyMatchRequest): boolean {
+function matchesPrintableKey(request: keyControlMatchersTypes.KeyMatchRequest): boolean {
   const { key, data, modifier } = request;
   if (key.length !== 1) return false;
   if (!(key >= "a" && key <= "z") && !isDigitKey(key) && !SYMBOL_KEYS.has(key)) return false;
@@ -182,10 +182,10 @@ const KEY_MATCHERS = [
   matchesFunctionKey,
 ] as const;
 
-export const matchesKey: {
-  (data: string, keyId: KeyId): boolean;
-  (keyId: KeyId): (data: string) => boolean;
-} = dual(2, (data: string, keyId: KeyId): boolean => {
+const matchesKey: {
+  (data: string, keyId: keyIdsTypes.KeyId): boolean;
+  (keyId: keyIdsTypes.KeyId): (data: string) => boolean;
+} = dual(2, (data: string, keyId: keyIdsTypes.KeyId): boolean => {
   const parsed = parseKeyId(keyId);
   if (parsed === null) return false;
 
@@ -196,7 +196,7 @@ export const matchesKey: {
   if (ctrl) modifier |= MODIFIERS.ctrl;
   if (superModifier) modifier |= MODIFIERS.super;
 
-  const request = { key, data, modifier };
+  const request = { data, key, modifier };
   for (const matches of KEY_MATCHERS) {
     const result = matches(request);
     if (result !== undefined) return result;
@@ -204,3 +204,9 @@ export const matchesKey: {
 
   return matchesPrintableKey(request);
 });
+
+const keyMatchers = {
+  matchesKey,
+};
+
+export default keyMatchers;

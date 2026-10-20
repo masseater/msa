@@ -1,13 +1,7 @@
 import { readFile } from "node:fs/promises";
 
-import { ProviderCompatSchema } from "@msa/ai/providers/compat-schema";
-import {
-  ModelCostSchema,
-  ModelInputLimitsSchema,
-  ModelInputModalitySchema,
-  ModelPromptCacheSchema,
-  ThinkingLevelMapSchema,
-} from "@msa/ai/providers/model-schema";
+import compatSchema from "@msa/ai/providers/compat-schema";
+import modelSchema from "@msa/ai/providers/model-schema";
 import * as Effect from "effect/Effect";
 import { type Static, Type } from "typebox";
 import { Compile } from "typebox/compile";
@@ -18,64 +12,73 @@ import { normalizePath } from "../utils/paths.ts";
 import { stripBom } from "../utils/text.ts";
 import { awaited, awaiting } from "./awaiting.ts";
 
+const {
+  ModelCostSchema,
+  ModelInputLimitsSchema,
+  ModelInputModalitySchema,
+  ModelPromptCacheSchema,
+  ThinkingLevelMapSchema,
+} = modelSchema;
+const { ProviderCompatSchema } = compatSchema;
+
 const SamplingParamsSchema = Type.Record(Type.String(), Type.Unknown());
 const SamplingParamsByThinkingLevelSchema = Type.Object({
-  off: Type.Optional(SamplingParamsSchema),
-  minimal: Type.Optional(SamplingParamsSchema),
-  low: Type.Optional(SamplingParamsSchema),
-  medium: Type.Optional(SamplingParamsSchema),
   high: Type.Optional(SamplingParamsSchema),
-  xhigh: Type.Optional(SamplingParamsSchema),
+  low: Type.Optional(SamplingParamsSchema),
   max: Type.Optional(SamplingParamsSchema),
+  medium: Type.Optional(SamplingParamsSchema),
+  minimal: Type.Optional(SamplingParamsSchema),
+  off: Type.Optional(SamplingParamsSchema),
+  xhigh: Type.Optional(SamplingParamsSchema),
 });
 
 const PositiveTokenCountSchema = Type.Number({ exclusiveMinimum: 0 });
 
 const ModelDefinitionSchema = Type.Object({
-  id: Type.String({ minLength: 1 }),
-  name: Type.Optional(Type.String({ minLength: 1 })),
   api: Type.Optional(Type.String({ minLength: 1 })),
   baseUrl: Type.Optional(Type.String({ minLength: 1 })),
-  reasoning: Type.Optional(Type.Boolean()),
-  thinkingLevelMap: Type.Optional(ThinkingLevelMapSchema),
+  compat: Type.Optional(ProviderCompatSchema),
+  contextWindow: Type.Optional(PositiveTokenCountSchema),
+  cost: Type.Optional(ModelCostSchema),
+  headers: Type.Optional(Type.Record(Type.String(), Type.String())),
+  id: Type.String({ minLength: 1 }),
   input: Type.Optional(Type.Array(ModelInputModalitySchema)),
   inputLimits: Type.Optional(ModelInputLimitsSchema),
-  cost: Type.Optional(ModelCostSchema),
-  promptCache: Type.Optional(ModelPromptCacheSchema),
-  contextWindow: Type.Optional(PositiveTokenCountSchema),
   maxTokens: Type.Optional(PositiveTokenCountSchema),
+  name: Type.Optional(Type.String({ minLength: 1 })),
+  promptCache: Type.Optional(ModelPromptCacheSchema),
+  reasoning: Type.Optional(Type.Boolean()),
   samplingParams: Type.Optional(SamplingParamsSchema),
   samplingParamsByThinkingLevel: Type.Optional(SamplingParamsByThinkingLevelSchema),
-  headers: Type.Optional(Type.Record(Type.String(), Type.String())),
-  compat: Type.Optional(ProviderCompatSchema),
+  thinkingLevelMap: Type.Optional(ThinkingLevelMapSchema),
 });
 
 const ModelOverrideSchema = Type.Object({
-  name: Type.Optional(Type.String({ minLength: 1 })),
-  reasoning: Type.Optional(Type.Boolean()),
-  thinkingLevelMap: Type.Optional(ThinkingLevelMapSchema),
+  compat: Type.Optional(ProviderCompatSchema),
+  contextWindow: Type.Optional(PositiveTokenCountSchema),
+  cost: Type.Optional(Type.Partial(ModelCostSchema)),
+  headers: Type.Optional(Type.Record(Type.String(), Type.String())),
   input: Type.Optional(Type.Array(ModelInputModalitySchema)),
   inputLimits: Type.Optional(ModelInputLimitsSchema),
-  cost: Type.Optional(Type.Partial(ModelCostSchema)),
-  promptCache: Type.Optional(ModelPromptCacheSchema),
-  contextWindow: Type.Optional(PositiveTokenCountSchema),
   maxTokens: Type.Optional(PositiveTokenCountSchema),
+  name: Type.Optional(Type.String({ minLength: 1 })),
+  promptCache: Type.Optional(ModelPromptCacheSchema),
+  reasoning: Type.Optional(Type.Boolean()),
   samplingParams: Type.Optional(SamplingParamsSchema),
   samplingParamsByThinkingLevel: Type.Optional(SamplingParamsByThinkingLevelSchema),
-  headers: Type.Optional(Type.Record(Type.String(), Type.String())),
-  compat: Type.Optional(ProviderCompatSchema),
+  thinkingLevelMap: Type.Optional(ThinkingLevelMapSchema),
 });
 
 const ProviderConfigSchema = Type.Object({
-  name: Type.Optional(Type.String({ minLength: 1 })),
-  baseUrl: Type.Optional(Type.String({ minLength: 1 })),
-  apiKey: Type.Optional(Type.String({ minLength: 1 })),
   api: Type.Optional(Type.String({ minLength: 1 })),
-  headers: Type.Optional(Type.Record(Type.String(), Type.String())),
-  compat: Type.Optional(ProviderCompatSchema),
+  apiKey: Type.Optional(Type.String({ minLength: 1 })),
   authHeader: Type.Optional(Type.Boolean()),
-  models: Type.Optional(Type.Array(ModelDefinitionSchema)),
+  baseUrl: Type.Optional(Type.String({ minLength: 1 })),
+  compat: Type.Optional(ProviderCompatSchema),
+  headers: Type.Optional(Type.Record(Type.String(), Type.String())),
   modelOverrides: Type.Optional(Type.Record(Type.String(), ModelOverrideSchema)),
+  models: Type.Optional(Type.Array(ModelDefinitionSchema)),
+  name: Type.Optional(Type.String({ minLength: 1 })),
 });
 
 const ModelsConfigProperties = {

@@ -1,14 +1,22 @@
 import { Effect } from "effect";
 import { afterEach, describe, expect, it, vi } from "vite-plus/test";
 
-import { InMemoryCredentialStore } from "../src/auth/credential-store.ts";
-import { openaiChatGPTOAuth } from "../src/auth/oauth/openai-chatgpt.ts";
-import { openaiCodexOAuth } from "../src/auth/oauth/openai-codex.ts";
-import { openRouterOAuth } from "../src/auth/oauth/openrouter.ts";
-import { createModels } from "../src/models.ts";
-import * as extensionOAuthCompatibility from "../src/oauth.ts";
-import { openaiProvider } from "../src/providers/openai.ts";
-import { currentTimeMillis } from "../src/utils/clock.ts";
+import credentialStore from "../src/auth/credential-store.ts";
+import openaiChatgpt from "../src/auth/oauth/openai-chatgpt.ts";
+import openaiCodex from "../src/auth/oauth/openai-codex.ts";
+import openrouter from "../src/auth/oauth/openrouter.ts";
+import modelsModule from "../src/models.ts";
+import * as oauthModule from "../src/oauth.ts";
+import openai from "../src/providers/openai.ts";
+import clock from "../src/utils/clock.ts";
+
+const { openaiChatGPTOAuth } = openaiChatgpt;
+const { openaiCodexOAuth } = openaiCodex;
+const { openRouterOAuth } = openrouter;
+const { openaiProvider } = openai;
+const { InMemoryCredentialStore } = credentialStore;
+const { currentTimeMillis } = clock;
+const { createModels } = modelsModule;
 
 const neverAbortedSignal = new AbortController().signal;
 
@@ -17,7 +25,7 @@ describe("OAuthAuth adapters", () => {
     vi.unstubAllGlobals();
   });
   it("keeps the extension OAuth barrel free of built-in flow implementations", () => {
-    expect(extensionOAuthCompatibility).not.toHaveProperty("openaiCodexOAuth");
+    expect(oauthModule).not.toHaveProperty("openaiCodexOAuth");
   });
 
   it("identifies only subscription-backed OAuth flows as subscriptions", () => {

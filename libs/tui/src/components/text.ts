@@ -1,8 +1,11 @@
-import { applyBackgroundToLine, wrapTextWithAnsi } from "../text-wrap.ts";
-import type { Component } from "../tui-component.ts";
-import { flattenLines, visibleWidth } from "../utils.ts";
+import textWrap from "../text-wrap.ts";
+import type tuiComponentTypes from "../tui-component.types.ts";
+import utils from "../utils.ts";
 
-export class Text implements Component {
+const { applyBackgroundToLine, wrapTextWithAnsi } = textWrap;
+const { flattenLines, visibleWidth } = utils;
+
+export default class Text implements tuiComponentTypes.Component {
   private text: string;
   private paddingX: number;
   private paddingY: number;

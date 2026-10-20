@@ -1,30 +1,20 @@
 import { Effect } from "effect";
 
-import type {
-  ApiKeyAuth,
-  Credential,
-  CredentialStore,
-  OAuthAuth,
-  ProviderAuth,
-} from "../src/auth/types.ts";
-import { type Provider } from "../src/models.ts";
-import type {
-  Api,
-  AssistantMessage,
-  Context,
-  Model,
-  SimpleStreamOptions,
-  StreamOptions,
-} from "../src/types.ts";
-import { currentTimeMillis } from "../src/utils/clock.ts";
-import { AssistantMessageEventStream } from "../src/utils/event-stream.ts";
+import type typesModuleModule from "../src/auth/types.ts";
+import type modelsTypes from "../src/models.types.ts";
+import type typesModule from "../src/types.types.ts";
+import clock from "../src/utils/clock.ts";
+import eventStream from "../src/utils/event-stream.ts";
+
+const { currentTimeMillis } = clock;
+const { AssistantMessageEventStream } = eventStream;
 
 interface ProviderCall {
-  model: Model<Api>;
-  options: StreamOptions | undefined;
+  model: typesModule.Model<typesModule.Api>;
+  options: typesModule.StreamOptions | undefined;
 }
 
-function testModel(provider: string, id: string): Model<Api> {
+function testModel(provider: string, id: string): typesModule.Model<typesModule.Api> {
   return {
     api: "test-api",
     baseUrl: "https://example.test/v1",
@@ -39,7 +29,10 @@ function testModel(provider: string, id: string): Model<Api> {
   };
 }
 
-function doneMessage(model: Model<Api>, text: string): AssistantMessage {
+function doneMessage(
+  model: typesModule.Model<typesModule.Api>,
+  text: string,
+): typesModule.AssistantMessage {
   return {
     api: model.api,
     content: [{ text, type: "text" }],
@@ -59,21 +52,24 @@ function doneMessage(model: Model<Api>, text: string): AssistantMessage {
   };
 }
 
-const ambientAuth: ApiKeyAuth = {
+const ambientAuth: typesModuleModule.ApiKeyAuth = {
   name: "Ambient",
   resolve: () => Promise.resolve({ auth: {} }),
 };
 
 function testProvider(input: {
   id: string;
-  models?: Model<Api>[];
-  auth?: ProviderAuth;
-  getModels?: () => readonly Model<Api>[];
-  refreshModels?: Provider["refreshModels"];
+  models?: typesModule.Model<typesModule.Api>[];
+  auth?: typesModuleModule.ProviderAuth;
+  getModels?: () => readonly typesModule.Model<typesModule.Api>[];
+  refreshModels?: modelsTypes.Provider["refreshModels"];
   calls?: ProviderCall[];
-}): Provider {
+}): modelsTypes.Provider {
   const models = input.models ?? [testModel(input.id, "model-a")];
-  const respond = (model: Model<Api>, options: StreamOptions | undefined) => {
+  const respond = (
+    model: typesModule.Model<typesModule.Api>,
+    options: typesModule.StreamOptions | undefined,
+  ) => {
     input.calls?.push({ model, options });
     const stream = new AssistantMessageEventStream();
     const message = doneMessage(model, "ok");
@@ -87,18 +83,19 @@ function testProvider(input: {
     getModels: input.getModels ?? (() => models),
     id: input.id,
     name: input.id,
-    stream: (model, _context, options) => respond(model, options as StreamOptions | undefined),
+    stream: (model, _context, options) =>
+      respond(model, options as typesModule.StreamOptions | undefined),
     streamSimple: (model, _context, options) =>
-      respond(model, options as SimpleStreamOptions | undefined),
+      respond(model, options as typesModule.SimpleStreamOptions | undefined),
     ...(input.refreshModels === undefined ? {} : { refreshModels: input.refreshModels }),
   };
 }
 
-const context: Context = {
+const context: typesModule.Context = {
   messages: [{ content: "hi", role: "user", timestamp: currentTimeMillis() }],
 };
 
-function envKeyAuth(key: string | undefined): ApiKeyAuth {
+function envKeyAuth(key: string | undefined): typesModuleModule.ApiKeyAuth {
   return {
     name: "Test API key",
     resolve: ({ credential }) => {
@@ -112,7 +109,7 @@ function envKeyAuth(key: string | undefined): ApiKeyAuth {
   };
 }
 
-function testOAuth(overrides?: Partial<OAuthAuth>): OAuthAuth {
+function testOAuth(overrides?: Partial<typesModuleModule.OAuthAuth>): typesModuleModule.OAuthAuth {
   return {
     login: () => Promise.reject(new Error("not used")),
     name: "Test OAuth",
@@ -123,9 +120,9 @@ function testOAuth(overrides?: Partial<OAuthAuth>): OAuthAuth {
 }
 
 const storeCredential = (
-  credentials: CredentialStore,
+  credentials: typesModuleModule.CredentialStore,
   providerId: string,
-  credential: Credential,
+  credential: typesModuleModule.Credential,
 ): Effect.Effect<void> =>
   Effect.promise(() => credentials.modify(providerId, () => Promise.resolve(credential)));
 

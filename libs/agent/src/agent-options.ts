@@ -1,72 +1,70 @@
-import type { Message, SimpleStreamOptions, ThinkingBudgets, Transport } from "@msa/ai";
+import type aiTypes from "@msa/ai/index.types";
 
-import type { AgentInitialState } from "./agent-state.ts";
-import type {
-  AfterToolCallContext,
-  AfterToolCallResult,
-  AgentEvent,
-  AgentLoopTurnUpdate,
-  AgentMessage,
-  BeforeToolCallContext,
-  BeforeToolCallResult,
-  FinishTurn,
-  PrepareNextTurnContext,
-  PrepareRequest,
-  QueueMode,
-  StreamFn,
-  ToolExecutionMode,
-} from "./types.ts";
+import type agentStateTypes from "./agent-state.types.ts";
+import type typesModule from "./types.ts";
 
-export type ConvertToLlm = (messages: AgentMessage[]) => Message[] | Promise<Message[]>;
+declare namespace agentOptionsTypes {
+  type ConvertToLlm = (
+    messages: typesModule.AgentMessage[],
+  ) => aiTypes.Message[] | Promise<aiTypes.Message[]>;
 
-export type TransformContext = (
-  messages: AgentMessage[],
-  signal?: AbortSignal,
-) => Promise<AgentMessage[]>;
+  type TransformContext = (
+    messages: typesModule.AgentMessage[],
+    signal?: AbortSignal,
+  ) => Promise<typesModule.AgentMessage[]>;
 
-export type GetApiKey = (provider: string) => Promise<string | undefined> | string | undefined;
+  type GetApiKey = (provider: string) => Promise<string | undefined> | string | undefined;
 
-export type BeforeToolCall = (
-  context: BeforeToolCallContext,
-  signal?: AbortSignal,
-) => Promise<BeforeToolCallResult | undefined>;
+  type BeforeToolCall = (
+    context: typesModule.BeforeToolCallContext,
+    signal?: AbortSignal,
+  ) => Promise<typesModule.BeforeToolCallResult | undefined>;
 
-export type AfterToolCall = (
-  context: AfterToolCallContext,
-  signal?: AbortSignal,
-) => Promise<AfterToolCallResult | undefined>;
+  type AfterToolCall = (
+    context: typesModule.AfterToolCallContext,
+    signal?: AbortSignal,
+  ) => Promise<typesModule.AfterToolCallResult | undefined>;
 
-export type PrepareNextTurn = (
-  signal?: AbortSignal,
-) => Promise<AgentLoopTurnUpdate | undefined> | AgentLoopTurnUpdate | undefined;
+  type PrepareNextTurn = (
+    signal?: AbortSignal,
+  ) =>
+    | Promise<typesModule.AgentLoopTurnUpdate | undefined>
+    | typesModule.AgentLoopTurnUpdate
+    | undefined;
 
-export type PrepareNextTurnWithContext = (
-  context: PrepareNextTurnContext,
-  signal?: AbortSignal,
-) => Promise<AgentLoopTurnUpdate | undefined> | AgentLoopTurnUpdate | undefined;
+  type PrepareNextTurnWithContext = (
+    context: typesModule.PrepareNextTurnContext,
+    signal?: AbortSignal,
+  ) =>
+    | Promise<typesModule.AgentLoopTurnUpdate | undefined>
+    | typesModule.AgentLoopTurnUpdate
+    | undefined;
 
-export type AgentListener = (event: AgentEvent, signal: AbortSignal) => Promise<void> | void;
+  type AgentListener = (event: typesModule.AgentEvent, signal: AbortSignal) => Promise<void> | void;
 
-export interface AgentOptions {
-  initialState?: AgentInitialState;
-  convertToLlm?: ConvertToLlm;
-  transformContext?: TransformContext | undefined;
-  streamFn: StreamFn;
-  getApiKey?: GetApiKey;
-  onPayload?: SimpleStreamOptions["onPayload"];
-  onResponse?: SimpleStreamOptions["onResponse"];
-  onProviderStreamEvent?: SimpleStreamOptions["onProviderStreamEvent"];
-  beforeToolCall?: BeforeToolCall;
-  afterToolCall?: AfterToolCall;
-  finishTurn?: FinishTurn;
-  prepareRequest?: PrepareRequest;
-  prepareNextTurn?: PrepareNextTurn;
-  prepareNextTurnWithContext?: PrepareNextTurnWithContext;
-  steeringMode?: QueueMode;
-  followUpMode?: QueueMode;
-  sessionId?: string;
-  thinkingBudgets?: ThinkingBudgets;
-  transport?: Transport;
-  maxRetryDelayMs?: number;
-  toolExecution?: ToolExecutionMode;
+  interface AgentOptions {
+    initialState?: agentStateTypes.AgentInitialState;
+    convertToLlm?: ConvertToLlm;
+    transformContext?: TransformContext | undefined;
+    streamFn: typesModule.StreamFn;
+    getApiKey?: GetApiKey;
+    onPayload?: aiTypes.SimpleStreamOptions["onPayload"];
+    onResponse?: aiTypes.SimpleStreamOptions["onResponse"];
+    onProviderStreamEvent?: aiTypes.SimpleStreamOptions["onProviderStreamEvent"];
+    beforeToolCall?: BeforeToolCall;
+    afterToolCall?: AfterToolCall;
+    finishTurn?: typesModule.FinishTurn;
+    prepareRequest?: typesModule.PrepareRequest;
+    prepareNextTurn?: PrepareNextTurn;
+    prepareNextTurnWithContext?: PrepareNextTurnWithContext;
+    steeringMode?: typesModule.QueueMode;
+    followUpMode?: typesModule.QueueMode;
+    sessionId?: string;
+    thinkingBudgets?: aiTypes.ThinkingBudgets;
+    transport?: aiTypes.Transport;
+    maxRetryDelayMs?: number;
+    toolExecution?: typesModule.ToolExecutionMode;
+  }
 }
+
+export type { agentOptionsTypes as default };

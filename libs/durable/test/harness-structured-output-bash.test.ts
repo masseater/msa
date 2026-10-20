@@ -1,4 +1,4 @@
-import { Type } from "@msa/ai";
+import ai from "@msa/ai";
 import durable from "@msa/durable";
 import type durableTypes from "@msa/durable/index.types";
 import memory from "@msa/durable/storage/memory";
@@ -9,6 +9,8 @@ import node from "../src/env/node.ts";
 import toolsModule from "../src/tools/index.ts";
 import harnessStructuredOutputSupport from "./harness-structured-output-support.ts";
 import support from "./support.ts";
+
+const { Type } = ai;
 
 const { createBashTool } = toolsModule;
 const { defineTool } = durable;

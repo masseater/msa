@@ -1,11 +1,15 @@
 import { Effect } from "effect";
 import { describe, expect, it, vi } from "vite-plus/test";
 
-import { fauxAssistantMessage } from "../src/providers/faux.ts";
-import { type RetryPolicy, retryAssistantCall } from "../src/utils/retry.ts";
+import faux from "../src/providers/faux.ts";
+import retry from "../src/utils/retry.ts";
+import type retryTypes from "../src/utils/retry.types.ts";
+
+const { fauxAssistantMessage } = faux;
+const { retryAssistantCall } = retry;
 
 describe("retryAssistantCall", () => {
-  const enabled: RetryPolicy = { baseDelayMs: 0, enabled: true, maxRetries: 3 };
+  const enabled: retryTypes.RetryPolicy = { baseDelayMs: 0, enabled: true, maxRetries: 3 };
   it("retries a transient error up to maxRetries then returns the final error", () =>
     Effect.runPromise(
       Effect.gen(function* () {
@@ -35,7 +39,7 @@ describe("retryAssistantCall", () => {
     Effect.runPromise(
       Effect.gen(function* () {
         let n = 0;
-        const policy: RetryPolicy = {
+        const policy: retryTypes.RetryPolicy = {
           baseDelayMs: 10,
           enabled: true,
           maxAgentDelayMs: 15,
@@ -61,7 +65,7 @@ describe("retryAssistantCall", () => {
 });
 
 describe("retryAssistantCall", () => {
-  const enabled: RetryPolicy = { baseDelayMs: 0, enabled: true, maxRetries: 3 };
+  const enabled: retryTypes.RetryPolicy = { baseDelayMs: 0, enabled: true, maxRetries: 3 };
   it("stops retrying once a call succeeds", () =>
     Effect.runPromise(
       Effect.gen(function* () {
@@ -108,7 +112,7 @@ describe("retryAssistantCall", () => {
 });
 
 describe("retryAssistantCall", () => {
-  const disabled: RetryPolicy = { baseDelayMs: 0, enabled: false, maxRetries: 3 };
+  const disabled: retryTypes.RetryPolicy = { baseDelayMs: 0, enabled: false, maxRetries: 3 };
   it("does not retry when policy is disabled", () =>
     Effect.runPromise(
       Effect.gen(function* () {
@@ -134,7 +138,7 @@ describe("retryAssistantCall", () => {
 });
 
 describe("retryAssistantCall", () => {
-  const enabled: RetryPolicy = { baseDelayMs: 0, enabled: true, maxRetries: 3 };
+  const enabled: retryTypes.RetryPolicy = { baseDelayMs: 0, enabled: true, maxRetries: 3 };
   it("emits onRetryAttemptStart after backoff before each retried call", () =>
     Effect.runPromise(
       Effect.gen(function* () {
@@ -187,7 +191,11 @@ describe("retryAssistantCall", () => {
             fauxAssistantMessage("", { errorMessage: "terminated", stopReason: "error" }),
           ),
         );
-        const policy: RetryPolicy = { baseDelayMs: 10_000, enabled: true, maxRetries: 5 };
+        const policy: retryTypes.RetryPolicy = {
+          baseDelayMs: 10_000,
+          enabled: true,
+          maxRetries: 5,
+        };
         const onRetryFinished = vi.fn();
         const p = retryAssistantCall(produce, policy, controller.signal, { onRetryFinished });
         yield* Effect.promise(() => vi.waitFor(() => expect(produce).toHaveBeenCalled()));

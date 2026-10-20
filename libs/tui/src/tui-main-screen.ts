@@ -1,48 +1,36 @@
-import { isEnvSet, readEnv } from "./env.ts";
-import { isImageLine } from "./terminal-image-kitty.ts";
-import { type TUI, type TuiStopOptions } from "./tui-interface.ts";
-import {
+import type tuiInterfaceTypes from "./tui-interface.types.ts";
+import type tuiMainScreenFrameTypes from "./tui-main-screen-frame.types.ts";
+import tuiMainScreenKit from "./tui-main-screen-kit.ts";
+import type tuiMainScreenKittyTypes from "./tui-main-screen-kitty.types.ts";
+import tuiMainScreenReports from "./tui-main-screen-reports.ts";
+import tuiMainScreenSupport from "./tui-main-screen-support.ts";
+import type tuiMainScreenSupportTypes from "./tui-main-screen-support.types.ts";
+import type tuiMainScreenTypes from "./tui-main-screen.types.ts";
+import TuiBase from "./tui.ts";
+
+const { termuxSession, tuiMainScreenKitty } = tuiMainScreenKit;
+
+const { isTermuxSession } = termuxSession;
+
+const { env, terminalImageKitty, tuiMainScreenFrame } = tuiMainScreenKit;
+const { readEnv } = env;
+
+const { isImageLine } = terminalImageKitty;
+const { fullRenderReason, overwideCrash, renderDebugLines } = tuiMainScreenReports;
+const { changedRange, collectKittyImageIds, deleteChangedKittyImages, deleteKittyImages } =
+  tuiMainScreenKitty;
+const { BoundedTerminalWriter, appendRedrawLog, raiseRenderCrash, writeRenderDebugLog } =
+  tuiMainScreenSupport;
+const {
   appendChangedLines,
   appendFullRenderLines,
   appendTrailingClear,
   clearDeletedTail,
-  type CursorPosition,
-  type FrameOutcome,
   hardwareCursorMove,
   moveToFirstChanged,
-  type RenderFrame,
-} from "./tui-main-screen-frame.ts";
-import {
-  type ChangedRange,
-  changedRange,
-  collectKittyImageIds,
-  deleteChangedKittyImages,
-  deleteKittyImages,
-} from "./tui-main-screen-kitty.ts";
-import { fullRenderReason, overwideCrash, renderDebugLines } from "./tui-main-screen-reports.ts";
-import {
-  appendRedrawLog,
-  BoundedTerminalWriter,
-  raiseRenderCrash,
-  writeRenderDebugLog,
-} from "./tui-main-screen-support.ts";
-import { TuiBase } from "./tui.ts";
+} = tuiMainScreenFrame;
 
-function isTermuxSession(): boolean {
-  return isEnvSet("TERMUX_VERSION");
-}
-
-export interface TuiMainScreenRenderState {
-  previousLines: string[];
-  previousWidth: number;
-  previousHeight: number;
-  cursorRow: number;
-  hardwareCursorRow: number;
-  maxLinesRendered: number;
-  previousViewportTop: number;
-}
-
-export class TuiMainScreen extends TuiBase implements TUI {
+export default class TuiMainScreen extends TuiBase implements tuiInterfaceTypes.TUI {
   readonly mode = "regular" as const;
   private previousLines: string[] = [];
   private previousKittyImageIds = new Set<number>();
@@ -53,19 +41,19 @@ export class TuiMainScreen extends TuiBase implements TUI {
   private maxLinesRendered = 0;
   private previousViewportTop = 0;
 
-  captureRenderState(): TuiMainScreenRenderState {
+  captureRenderState(): tuiMainScreenTypes.TuiMainScreenRenderState {
     return {
-      previousLines: [...this.previousLines],
-      previousWidth: this.previousWidth,
-      previousHeight: this.previousHeight,
       cursorRow: this.cursorRow,
       hardwareCursorRow: this.hardwareCursorRow,
       maxLinesRendered: this.maxLinesRendered,
+      previousHeight: this.previousHeight,
+      previousLines: [...this.previousLines],
       previousViewportTop: this.previousViewportTop,
+      previousWidth: this.previousWidth,
     };
   }
 
-  restoreRenderState(state: TuiMainScreenRenderState): void {
+  restoreRenderState(state: tuiMainScreenTypes.TuiMainScreenRenderState): void {
     this.previousLines = state.previousLines.map((line) => (isImageLine(line) ? "" : line));
     this.previousKittyImageIds = new Set();
     this.previousWidth = state.previousWidth;
@@ -86,7 +74,7 @@ export class TuiMainScreen extends TuiBase implements TUI {
     this.previousViewportTop = 0;
   }
 
-  protected override beforeTerminalStop(options: TuiStopOptions): void {
+  protected override beforeTerminalStop(options: tuiInterfaceTypes.TuiStopOptions): void {
     if (options.preserveScreen === true || this.previousLines.length === 0) return;
     this.terminal.write(" ");
     const targetRow = this.previousLines.length;
@@ -102,10 +90,10 @@ export class TuiMainScreen extends TuiBase implements TUI {
     const reason = fullRenderReason(
       frame,
       {
-        lineCount: this.previousLines.length,
-        width: this.previousWidth,
         height: this.previousHeight,
+        lineCount: this.previousLines.length,
         maxLinesRendered: this.maxLinesRendered,
+        width: this.previousWidth,
       },
       {
         clearOnShrink: this.getClearOnShrink(),
@@ -144,7 +132,7 @@ export class TuiMainScreen extends TuiBase implements TUI {
     this.renderChangedLines(frame, range);
   }
 
-  private prepareFrame(): RenderFrame {
+  private prepareFrame(): tuiMainScreenFrameTypes.RenderFrame {
     const width = this.terminal.columns;
     const height = this.terminal.rows;
     const heightChanged = this.previousHeight !== 0 && this.previousHeight !== height;
@@ -163,17 +151,17 @@ export class TuiMainScreen extends TuiBase implements TUI {
     newLines = this.applyLineResets(newLines);
 
     return {
-      width,
+      cursorPos,
+      hardwareCursorRow,
       height,
       newLines,
-      cursorPos,
       prevViewportTop,
       viewportTop: prevViewportTop,
-      hardwareCursorRow,
+      width,
     };
   }
 
-  private logRedraw(frame: RenderFrame, reason: string): void {
+  private logRedraw(frame: tuiMainScreenFrameTypes.RenderFrame, reason: string): void {
     if (readEnv("MSA_TUI_DEBUG_REDRAW") !== "1" || this.logDirectory === undefined) return;
     appendRedrawLog(
       this.logDirectory,
@@ -181,18 +169,18 @@ export class TuiMainScreen extends TuiBase implements TUI {
     );
   }
 
-  private newWriter(): BoundedTerminalWriter {
+  private newWriter(): tuiMainScreenSupportTypes.BoundedTerminalWriter {
     return new BoundedTerminalWriter((data) => this.terminal.write(data));
   }
 
-  private commitFrame(frame: RenderFrame): void {
+  private commitFrame(frame: tuiMainScreenFrameTypes.RenderFrame): void {
     this.previousLines = frame.newLines;
     this.previousKittyImageIds = collectKittyImageIds(frame.newLines);
     this.previousWidth = frame.width;
     this.previousHeight = frame.height;
   }
 
-  private fullRender(frame: RenderFrame, clear: boolean): void {
+  private fullRender(frame: tuiMainScreenFrameTypes.RenderFrame, clear: boolean): void {
     const { newLines, height } = frame;
     this.fullRedrawCount += 1;
     const output = this.newWriter();
@@ -215,7 +203,10 @@ export class TuiMainScreen extends TuiBase implements TUI {
     this.commitFrame(frame);
   }
 
-  private renderDeletedTail(frame: RenderFrame, range: ChangedRange): void {
+  private renderDeletedTail(
+    frame: tuiMainScreenFrameTypes.RenderFrame,
+    range: tuiMainScreenKittyTypes.ChangedRange,
+  ): void {
     if (this.previousLines.length > frame.newLines.length) {
       const output = this.newWriter();
       const outcome = clearDeletedTail(output, frame, this.previousLines, range);
@@ -229,12 +220,15 @@ export class TuiMainScreen extends TuiBase implements TUI {
     this.previousViewportTop = frame.prevViewportTop;
   }
 
-  private failOnOverwideLine(frame: RenderFrame, index: number): void {
+  private failOnOverwideLine(frame: tuiMainScreenFrameTypes.RenderFrame, index: number): void {
     this.stop();
     void raiseRenderCrash(overwideCrash(frame, index, this.logDirectory));
   }
 
-  private handleFallback(frame: RenderFrame, outcome: FrameOutcome): boolean {
+  private handleFallback(
+    frame: tuiMainScreenFrameTypes.RenderFrame,
+    outcome: tuiMainScreenFrameTypes.FrameOutcome,
+  ): boolean {
     if (outcome.kind === "overwide") {
       this.failOnOverwideLine(frame, outcome.index);
       return true;
@@ -245,7 +239,10 @@ export class TuiMainScreen extends TuiBase implements TUI {
     return true;
   }
 
-  private renderChangedLines(frame: RenderFrame, range: ChangedRange): void {
+  private renderChangedLines(
+    frame: tuiMainScreenFrameTypes.RenderFrame,
+    range: tuiMainScreenKittyTypes.ChangedRange,
+  ): void {
     const { newLines, height } = frame;
     const output = this.newWriter();
     output.append("\x1b[?2026h");
@@ -258,12 +255,12 @@ export class TuiMainScreen extends TuiBase implements TUI {
     if (readEnv("MSA_TUI_DEBUG") === "1") {
       writeRenderDebugLog(
         renderDebugLines(frame, range, {
-          lineDiff,
-          renderEnd,
-          finalCursorRow,
-          written: output.length,
           cursorRow: this.cursorRow,
+          finalCursorRow,
+          lineDiff,
           previousLines: this.previousLines,
+          renderEnd,
+          written: output.length,
         }),
       );
     }
@@ -277,7 +274,10 @@ export class TuiMainScreen extends TuiBase implements TUI {
     this.commitFrame(frame);
   }
 
-  private positionHardwareCursor(cursorPos: CursorPosition | null, totalLines: number): void {
+  private positionHardwareCursor(
+    cursorPos: tuiMainScreenFrameTypes.CursorPosition | null,
+    totalLines: number,
+  ): void {
     if (cursorPos === null || totalLines <= 0) {
       this.terminal.hideCursor();
       return;

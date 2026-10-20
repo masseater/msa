@@ -1,10 +1,13 @@
 import { Clock, Effect } from "effect";
 import { describe, expect, it } from "vite-plus/test";
 
-import { stream as streamAnthropic } from "../src/api/anthropic-messages.ts";
-import { normalizeContext } from "../src/compat.ts";
+import anthropicMessages from "../src/api/anthropic-messages.ts";
+import compat from "../src/compat.ts";
 import anthropicSseParsingSupport from "./anthropic-sse-parsing-support.ts";
 import modelChoice from "./model-choice.ts";
+
+const { normalizeContext } = compat;
+const { stream: streamAnthropic } = anthropicMessages;
 
 const { chooseModel, usesApi } = modelChoice;
 

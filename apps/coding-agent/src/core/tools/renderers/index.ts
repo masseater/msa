@@ -38,16 +38,16 @@ export {
 
 export function createAllToolRenderers(): Record<RenderedToolName, ToolRenderers> {
   return {
-    read: readRenderers,
     bash: createShellRenderers("$"),
-    powershell: createShellRenderers("PS>"),
     edit: editRenderers,
-    write: writeRenderers,
-    grep: grepRenderers,
     find: findRenderers,
+    grep: grepRenderers,
     ls: lsRenderers,
-    web_search: webSearchRenderers,
+    powershell: createShellRenderers("PS>"),
+    read: readRenderers,
     web_fetch: webFetchRenderers,
+    web_search: webSearchRenderers,
+    write: writeRenderers,
   };
 }
 

@@ -1,4 +1,4 @@
-import type { ToolResultMessage } from "@msa/ai/compat";
+import type compatTypes from "@msa/ai/compat.types";
 import { Function } from "effect";
 
 import type typesModule from "./types.ts";
@@ -41,16 +41,19 @@ function getAssistantTexts(harness: typesModule.Harness): string[] {
 }
 
 const getToolResult: {
-  (harness: typesModule.Harness, toolName: string): ToolResultMessage;
-  (toolName: string): (harness: typesModule.Harness) => ToolResultMessage;
-} = Function.dual(2, (harness: typesModule.Harness, toolName: string): ToolResultMessage => {
-  const result = harness.session.messages.findLast(
-    (message): message is ToolResultMessage =>
-      message.role === "toolResult" && message.toolName === toolName,
-  );
-  if (result === undefined) throw new Error(`No ${toolName} tool result`);
-  return result;
-});
+  (harness: typesModule.Harness, toolName: string): compatTypes.ToolResultMessage;
+  (toolName: string): (harness: typesModule.Harness) => compatTypes.ToolResultMessage;
+} = Function.dual(
+  2,
+  (harness: typesModule.Harness, toolName: string): compatTypes.ToolResultMessage => {
+    const result = harness.session.messages.findLast(
+      (message): message is compatTypes.ToolResultMessage =>
+        message.role === "toolResult" && message.toolName === toolName,
+    );
+    if (result === undefined) throw new Error(`No ${toolName} tool result`);
+    return result;
+  },
+);
 
 const text = {
   getAssistantTexts,

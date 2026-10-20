@@ -1,5 +1,5 @@
 import testing from "@msa/testing";
-import type { TerminalColors } from "@msa/tui";
+import type tuiTypes from "@msa/tui/index.types";
 import { Effect } from "effect";
 import { afterEach, describe, expect, it, vi } from "vite-plus/test";
 
@@ -46,7 +46,7 @@ const reRendersOnlyWhenTheReportedColors = () =>
 
       const { ui, queryTerminalColors } = createUi();
       const controller = createController(ui, () => SettingsManager.inMemory({ theme: "dark" }));
-      const query = (colors: TerminalColors) =>
+      const query = (colors: tuiTypes.TerminalColors) =>
         effectRunPromise(
           Effect.gen(function* () {
             queryTerminalColors.mockResolvedValue(colors);

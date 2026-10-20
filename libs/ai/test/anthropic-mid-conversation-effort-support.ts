@@ -1,8 +1,12 @@
 import { Effect } from "effect";
 
-import { type AnthropicOptions, stream } from "../src/api/anthropic-messages.ts";
-import { normalizeContext } from "../src/compat.ts";
-import type { Context, Model } from "../src/types.ts";
+import anthropicMessages from "../src/api/anthropic-messages.ts";
+import type anthropicMessagesTypes from "../src/api/anthropic-messages.types.ts";
+import compatModule from "../src/compat.ts";
+import type typesModule from "../src/types.types.ts";
+
+const { stream } = anthropicMessages;
+const { normalizeContext } = compatModule;
 
 interface WireMessage {
   role: string;
@@ -21,7 +25,7 @@ interface CapturedPayload {
   fallbacks?: Array<{ model: string }>;
 }
 
-function managedModel(provider = "anthropic-api"): Model<"anthropic-messages"> {
+function managedModel(provider = "anthropic-api"): typesModule.Model<"anthropic-messages"> {
   return {
     api: "anthropic-messages",
     baseUrl: "http://127.0.0.1:9",
@@ -46,9 +50,9 @@ function managedModel(provider = "anthropic-api"): Model<"anthropic-messages"> {
 }
 
 const capture = Effect.fn("capture")(function* (
-  model: Model<"anthropic-messages">,
-  context: Context,
-  options: Pick<AnthropicOptions, "effort" | "thinkingEnabled"> = {},
+  model: typesModule.Model<"anthropic-messages">,
+  context: typesModule.Context,
+  options: Pick<anthropicMessagesTypes.AnthropicOptions, "effort" | "thinkingEnabled"> = {},
 ) {
   let payload: CapturedPayload | undefined;
   const result = stream(model, normalizeContext(context), {

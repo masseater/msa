@@ -1,21 +1,26 @@
-import { type EscapeKind, introducerOf, matchCsiSequence } from "./ansi-sequences.ts";
+import ansiSequences from "./ansi-sequences.ts";
+import type ansiSequencesTypes from "./ansi-sequences.types.ts";
+
+const { introducerOf, matchCsiSequence } = ansiSequences;
 
 const KITTY_PRINTABLE_BODY = /^(\d+)(?::\d*)?(?::\d+)?$/u;
 
-export const ESC = "\x1b";
-const TERMINAL_REPLY_HEADER_BODIES: ReadonlyArray<readonly [EscapeKind, RegExp]> = [
+const ESC = "\x1b";
+const TERMINAL_REPLY_HEADER_BODIES: ReadonlyArray<
+  readonly [ansiSequencesTypes.EscapeKind, RegExp]
+> = [
   ["osc", /^(?:1[01];|4;\d{1,3};|7501;\?)/u],
   ["dcs", /^>\|/u],
   ["apc", /^G(?:[a-z]=\d+,)*[a-z]=\d+;/u],
 ];
 
-export function startsWithTerminalReplyHeader(data: string): boolean {
+function startsWithTerminalReplyHeader(data: string): boolean {
   return TERMINAL_REPLY_HEADER_BODIES.some(
     ([kind, body]) => data.startsWith(introducerOf(kind)) && body.test(data.slice(2)),
   );
 }
 
-export function isControlString(data: string): boolean {
+function isControlString(data: string): boolean {
   return data.startsWith(`${ESC}]`) || data.startsWith(`${ESC}P`) || data.startsWith(`${ESC}_`);
 }
 
@@ -132,11 +137,11 @@ function isCompleteApcSequence(data: string): "complete" | "incomplete" {
   return "incomplete";
 }
 
-export function parseUnmodifiedKittyPrintableCodepoint(sequence: string): number | undefined {
+function parseUnmodifiedKittyPrintableCodepoint(sequence: string): number | undefined {
   const match = matchCsiSequence({
+    body: KITTY_PRINTABLE_BODY,
     data: sequence,
     finals: "u",
-    body: KITTY_PRINTABLE_BODY,
   })?.groups;
   if (match === undefined || match === null) return undefined;
 
@@ -151,19 +156,19 @@ const DOUBLE_ESCAPE_FOLLOWERS = new Set(["[", "]", "O", "P", "_"]);
 function terminalReplyCut(remaining: string, seqEnd: number): EscapeScan | undefined {
   const char = remaining[seqEnd - 1];
   if (char === "\x18" || char === "\x1a") {
-    return { emitted: undefined, advance: seqEnd };
+    return { advance: seqEnd, emitted: undefined };
   }
   if (char === ESC && seqEnd < remaining.length && remaining[seqEnd] !== "\\") {
-    return { emitted: undefined, advance: seqEnd - 1 };
+    return { advance: seqEnd - 1, emitted: undefined };
   }
   return undefined;
 }
 
 function completedScan(remaining: string, candidate: string, seqEnd: number): EscapeScan {
   if (candidate === "\x1b\x1b" && DOUBLE_ESCAPE_FOLLOWERS.has(remaining[seqEnd] ?? "")) {
-    return { emitted: ESC, advance: 1 };
+    return { advance: 1, emitted: ESC };
   }
-  return { emitted: candidate, advance: seqEnd };
+  return { advance: seqEnd, emitted: candidate };
 }
 
 function scanEscapeSequence(remaining: string): EscapeScan | undefined {
@@ -174,12 +179,12 @@ function scanEscapeSequence(remaining: string): EscapeScan | undefined {
     const candidate = remaining.slice(0, seqEnd);
     const status = isCompleteSequence(candidate);
     if (status === "complete") return completedScan(remaining, candidate, seqEnd);
-    if (status === "not-escape") return { emitted: candidate, advance: seqEnd };
+    if (status === "not-escape") return { advance: seqEnd, emitted: candidate };
   }
   return undefined;
 }
 
-export function extractCompleteSequences(buffer: string): {
+function extractCompleteSequences(buffer: string): {
   sequences: string[];
   remainder: string;
 } {
@@ -195,11 +200,21 @@ export function extractCompleteSequences(buffer: string): {
     }
     const scan = scanEscapeSequence(remaining);
     if (scan === undefined) {
-      return { sequences, remainder: remaining };
+      return { remainder: remaining, sequences };
     }
     if (scan.emitted !== undefined) sequences.push(scan.emitted);
     pos += scan.advance;
   }
 
-  return { sequences, remainder: "" };
+  return { remainder: "", sequences };
 }
+
+const stdinSequences = {
+  ESC,
+  extractCompleteSequences,
+  isControlString,
+  parseUnmodifiedKittyPrintableCodepoint,
+  startsWithTerminalReplyHeader,
+};
+
+export default stdinSequences;

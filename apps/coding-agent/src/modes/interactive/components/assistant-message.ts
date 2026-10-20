@@ -1,32 +1,35 @@
-import type { AssistantMessage } from "@msa/ai";
-import type { TextContent } from "@msa/ai/compat";
-import { Container, Markdown, type MarkdownTheme, MouseRegion, Spacer, Text } from "@msa/tui";
+import type compatTypes from "@msa/ai/compat.types";
+import type aiTypes from "@msa/ai/index.types";
+import tui from "@msa/tui";
+import type tuiTypes from "@msa/tui/index.types";
 
 import type { MarkdownTransformer } from "../../../core/extensions/types.ts";
 import { getMarkdownTheme, theme } from "../theme/theme.ts";
 import { createMarkdownTransform } from "./markdown-transform.ts";
+
+const { Container, Markdown, MouseRegion, Spacer, Text } = tui;
 
 const OSC133_ZONE_START = "\x1b]133;A\x07";
 const OSC133_ZONE_END = "\x1b]133;B\x07";
 const OSC133_ZONE_FINAL = "\x1b]133;C\x07";
 
 export class AssistantMessageComponent extends Container {
-  private contentContainer: Container;
+  private contentContainer: tuiTypes.Container;
   private hideThinkingBlock: boolean;
-  private markdownTheme: MarkdownTheme;
+  private markdownTheme: tuiTypes.MarkdownTheme;
   private hiddenThinkingLabel: string;
   private outputPad: number;
   private markdownTransformers: readonly MarkdownTransformer[];
-  private lastMessage?: AssistantMessage;
+  private lastMessage?: aiTypes.AssistantMessage;
   private hasToolCalls = false;
   private isStreaming = false;
   private thinkingVisibilityOverrides = new Map<number, boolean>();
   private splitThinking?: AssistantMessageComponent;
 
   constructor(
-    message?: AssistantMessage,
+    message?: aiTypes.AssistantMessage,
     hideThinkingBlock = false,
-    markdownTheme: MarkdownTheme = getMarkdownTheme(),
+    markdownTheme: tuiTypes.MarkdownTheme = getMarkdownTheme(),
     hiddenThinkingLabel = "Thinking...",
     outputPad = 1,
     markdownTransformers: readonly MarkdownTransformer[] = [],
@@ -123,7 +126,7 @@ export class AssistantMessageComponent extends Container {
     return lines;
   }
 
-  updateContent(message: AssistantMessage, isStreaming = this.isStreaming): void {
+  updateContent(message: aiTypes.AssistantMessage, isStreaming = this.isStreaming): void {
     this.lastMessage = message;
     this.isStreaming = isStreaming;
 
@@ -196,7 +199,10 @@ export class AssistantMessageComponent extends Container {
     AssistantMessageComponent.updateContentPart4(this, message);
   }
 
-  private static updateContentPart2(self: AssistantMessageComponent, content: TextContent): void {
+  private static updateContentPart2(
+    self: AssistantMessageComponent,
+    content: compatTypes.TextContent,
+  ): void {
     self.contentContainer.addChild(
       new Markdown(content.text.trim(), self.outputPad, 0, self.markdownTheme, undefined, {
         transform: createMarkdownTransform(
@@ -253,7 +259,7 @@ export class AssistantMessageComponent extends Container {
 
   private static updateContentPart4(
     self: AssistantMessageComponent,
-    message: AssistantMessage,
+    message: aiTypes.AssistantMessage,
   ): void {
     const hasToolCalls = message.content.some((c) => c.type === "toolCall");
     self.hasToolCalls = hasToolCalls;

@@ -1,17 +1,7 @@
 import Anthropic from "@anthropic-ai/sdk";
 import type { MessageCreateParamsStreaming } from "@anthropic-ai/sdk/resources/messages.js";
-import {
-  type Api,
-  type AssistantMessage,
-  type AssistantMessageEventStream,
-  collapseSystemMessages,
-  createAssistantMessageEventStream,
-  getCurrentSystemPrompt,
-  getCurrentTools,
-  type Model,
-  type SimpleStreamOptions,
-  type TranscriptContext,
-} from "@msa/ai";
+import ai from "@msa/ai";
+import type aiTypes from "@msa/ai/index.types";
 import { Clock, Data, Effect, Stream } from "effect";
 import { dual } from "effect/Function";
 
@@ -19,29 +9,43 @@ import { isOAuthToken } from "./auth.ts";
 import { convertMessages, convertTools, sanitizeSurrogates } from "./convert.ts";
 import { handleEvent } from "./stream-events.ts";
 
+const {
+  collapseSystemMessages,
+  createAssistantMessageEventStream,
+  getCurrentSystemPrompt,
+  getCurrentTools,
+} = ai;
+
 class AnthropicStreamError extends Data.TaggedError("AnthropicStreamError")<{
   readonly message: string;
 }> {}
 
-const initialOutput = (model: Model<Api>, timestamp: number): AssistantMessage => ({
-  role: "assistant",
-  content: [],
+const initialOutput = (
+  model: aiTypes.Model<aiTypes.Api>,
+  timestamp: number,
+): aiTypes.AssistantMessage => ({
   api: model.api,
-  provider: model.provider,
+  content: [],
   model: model.id,
-  usage: {
-    input: 0,
-    output: 0,
-    cacheRead: 0,
-    cacheWrite: 0,
-    totalTokens: 0,
-    cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0, total: 0 },
-  },
+  provider: model.provider,
+  role: "assistant",
   stopReason: "pending",
   timestamp,
+  usage: {
+    cacheRead: 0,
+    cacheWrite: 0,
+    cost: { cacheRead: 0, cacheWrite: 0, input: 0, output: 0, total: 0 },
+    input: 0,
+    output: 0,
+    totalTokens: 0,
+  },
 });
 
-const buildClient = (model: Model<Api>, apiKey: string, isOAuth: boolean): Anthropic => {
+const buildClient = (
+  model: aiTypes.Model<aiTypes.Api>,
+  apiKey: string,
+  isOAuth: boolean,
+): Anthropic => {
   const betaFeatures = [
     "fine-grained-tool-streaming-2025-05-14",
     "interleaved-thinking-2025-05-14",
@@ -49,14 +53,14 @@ const buildClient = (model: Model<Api>, apiKey: string, isOAuth: boolean): Anthr
 
   if (isOAuth) {
     return new Anthropic({
-      baseURL: model.baseUrl,
-      dangerouslyAllowBrowser: true,
       apiKey: null,
       authToken: apiKey,
+      baseURL: model.baseUrl,
+      dangerouslyAllowBrowser: true,
       defaultHeaders: {
         accept: "application/json",
-        "anthropic-dangerous-direct-browser-access": "true",
         "anthropic-beta": `claude-code-20250219,oauth-2025-04-20,${betaFeatures.join(",")}`,
+        "anthropic-dangerous-direct-browser-access": "true",
         "user-agent": "claude-cli/2.1.2 (external, cli)",
         "x-app": "cli",
       },
@@ -64,13 +68,13 @@ const buildClient = (model: Model<Api>, apiKey: string, isOAuth: boolean): Anthr
   }
 
   return new Anthropic({
+    apiKey,
     baseURL: model.baseUrl,
     dangerouslyAllowBrowser: true,
-    apiKey,
     defaultHeaders: {
       accept: "application/json",
-      "anthropic-dangerous-direct-browser-access": "true",
       "anthropic-beta": betaFeatures.join(","),
+      "anthropic-dangerous-direct-browser-access": "true",
     },
   });
 };
@@ -79,42 +83,42 @@ const buildSystem = (systemPrompt: string, isOAuth: boolean) => {
   const blocks: { type: "text"; text: string; cache_control: { type: "ephemeral" } }[] = [];
   if (isOAuth) {
     blocks.push({
-      type: "text",
-      text: "You are Claude Code, Anthropic's official CLI for Claude.",
       cache_control: { type: "ephemeral" },
+      text: "You are Claude Code, Anthropic's official CLI for Claude.",
+      type: "text",
     });
   }
   if (systemPrompt.length > 0) {
     blocks.push({
-      type: "text",
-      text: sanitizeSurrogates(systemPrompt),
       cache_control: { type: "ephemeral" },
+      text: sanitizeSurrogates(systemPrompt),
+      type: "text",
     });
   }
   return blocks;
 };
 
-const buildThinking = (options: SimpleStreamOptions, model: Model<Api>) => {
+const buildThinking = (options: aiTypes.SimpleStreamOptions, model: aiTypes.Model<aiTypes.Api>) => {
   if (options.reasoning === undefined || !model.reasoning) return undefined;
 
   const defaultBudgets: Record<string, number> = {
-    minimal: 1024,
+    high: 20480,
     low: 4096,
     medium: 10240,
-    high: 20480,
+    minimal: 1024,
   };
   const budgets = options.thinkingBudgets as Record<string, number | undefined> | undefined;
   const customBudget = budgets?.[options.reasoning];
   return {
-    type: "enabled" as const,
     budget_tokens: customBudget ?? defaultBudgets[options.reasoning] ?? 10240,
+    type: "enabled" as const,
   };
 };
 
 const buildParams = (
-  model: Model<Api>,
-  context: TranscriptContext,
-  options: SimpleStreamOptions | undefined,
+  model: aiTypes.Model<aiTypes.Api>,
+  context: aiTypes.TranscriptContext,
+  options: aiTypes.SimpleStreamOptions | undefined,
   isOAuth: boolean,
 ): MessageCreateParamsStreaming => {
   const transcript = collapseSystemMessages(context);
@@ -122,18 +126,18 @@ const buildParams = (
   const tools = getCurrentTools(transcript.messages);
 
   const params: MessageCreateParamsStreaming = {
-    model: model.id,
+    max_tokens: options?.maxTokens ?? Math.floor(model.maxTokens / 3),
     messages: convertMessages({
       messages: transcript.messages,
       isOAuth,
     }) as MessageCreateParamsStreaming["messages"],
-    max_tokens: options?.maxTokens ?? Math.floor(model.maxTokens / 3),
+    model: model.id,
     stream: true,
   };
 
   const system = buildSystem(systemPrompt, isOAuth);
   if (system.length > 0) params.system = system;
-  const convertedTools = convertTools({ tools, isOAuth }) as NonNullable<
+  const convertedTools = convertTools({ isOAuth, tools }) as NonNullable<
     MessageCreateParamsStreaming["tools"]
   >;
   if (convertedTools.length > 0) {
@@ -148,23 +152,26 @@ const buildParams = (
   return params;
 };
 
-const finish = (stream: AssistantMessageEventStream, output: AssistantMessage): void => {
+const finish = (
+  stream: aiTypes.AssistantMessageEventStream,
+  output: aiTypes.AssistantMessage,
+): void => {
   if (output.stopReason === "pending") {
     throw new Error("Anthropic stream ended without a stop reason");
   }
   if (output.stopReason === "error" || output.stopReason === "aborted") {
     throw new Error(output.errorMessage || "An unknown error occurred");
   }
-  stream.push({ type: "done", reason: output.stopReason, message: output });
+  stream.push({ message: output, reason: output.stopReason, type: "done" });
   stream.end();
 };
 
 const runStream = (
-  stream: AssistantMessageEventStream,
-  output: AssistantMessage,
-  model: Model<Api>,
-  context: TranscriptContext,
-  options: SimpleStreamOptions | undefined,
+  stream: aiTypes.AssistantMessageEventStream,
+  output: aiTypes.AssistantMessage,
+  model: aiTypes.Model<aiTypes.Api>,
+  context: aiTypes.TranscriptContext,
+  options: aiTypes.SimpleStreamOptions | undefined,
 ) =>
   Effect.gen(function* () {
     const apiKey = options?.apiKey ?? "";
@@ -174,14 +181,14 @@ const runStream = (
     const params = buildParams(model, context, options, isOAuth);
 
     const anthropicStream = client.messages.stream(params, { signal: options?.signal });
-    stream.push({ type: "start", partial: output });
+    stream.push({ partial: output, type: "start" });
 
     yield* Stream.runForEach(
       Stream.fromAsyncIterable(
         anthropicStream,
         (cause) => new AnthropicStreamError({ message: String(cause) }),
       ),
-      (event) => Effect.sync(() => handleEvent({ stream, output, model, tools, isOAuth, event })),
+      (event) => Effect.sync(() => handleEvent({ event, isOAuth, model, output, stream, tools })),
     );
 
     if (options?.signal?.aborted === true) {
@@ -191,10 +198,10 @@ const runStream = (
   });
 
 const streamCustomAnthropicImpl = (
-  model: Model<Api>,
-  context: TranscriptContext,
-  options?: SimpleStreamOptions,
-): AssistantMessageEventStream => {
+  model: aiTypes.Model<aiTypes.Api>,
+  context: aiTypes.TranscriptContext,
+  options?: aiTypes.SimpleStreamOptions,
+): aiTypes.AssistantMessageEventStream => {
   const stream = createAssistantMessageEventStream();
   const output = initialOutput(model, Effect.runSync(Clock.currentTimeMillis));
 
@@ -207,7 +214,7 @@ const streamCustomAnthropicImpl = (
           }
           output.stopReason = options?.signal?.aborted === true ? "aborted" : "error";
           output.errorMessage = error.message;
-          stream.push({ type: "error", reason: output.stopReason, error: output });
+          stream.push({ error: output, reason: output.stopReason, type: "error" });
           stream.end();
         }),
       ),
@@ -219,12 +226,12 @@ const streamCustomAnthropicImpl = (
 
 export const streamCustomAnthropic: {
   (
-    model: Model<Api>,
-    context: TranscriptContext,
-    options?: SimpleStreamOptions,
-  ): AssistantMessageEventStream;
+    model: aiTypes.Model<aiTypes.Api>,
+    context: aiTypes.TranscriptContext,
+    options?: aiTypes.SimpleStreamOptions,
+  ): aiTypes.AssistantMessageEventStream;
   (
-    context: TranscriptContext,
-    options?: SimpleStreamOptions,
-  ): (model: Model<Api>) => AssistantMessageEventStream;
+    context: aiTypes.TranscriptContext,
+    options?: aiTypes.SimpleStreamOptions,
+  ): (model: aiTypes.Model<aiTypes.Api>) => aiTypes.AssistantMessageEventStream;
 } = dual((args: IArguments) => args.length >= 2, streamCustomAnthropicImpl);

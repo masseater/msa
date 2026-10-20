@@ -4,10 +4,13 @@ import { stripVTControlCharacters } from "node:util";
 
 import { Effect } from "effect";
 
-import { type AutocompleteProvider, CombinedAutocompleteProvider } from "../src/autocomplete.ts";
-import { Editor } from "../src/components/editor.ts";
+import CombinedAutocompleteProvider from "../src/autocomplete.ts";
+import type autocompleteTypes from "../src/autocomplete.types.ts";
+import Editor from "../src/components/editor.ts";
 import editorHelpers from "./editor-helpers.ts";
-import { defaultEditorTheme } from "./test-themes.ts";
+import testThemes from "./test-themes.ts";
+
+const { defaultEditorTheme } = testThemes;
 
 const { applyCompletion, createTestTUI, flushAutocomplete, typeText } = editorHelpers;
 
@@ -63,7 +66,7 @@ function hidesAutocompleteBackspacingSlashCommand(): void {
       Effect.gen(function* () {
         const editor = new Editor(createTestTUI(), defaultEditorTheme);
 
-        const mockProvider: AutocompleteProvider = {
+        const mockProvider: autocompleteTypes.AutocompleteProvider = {
           applyCompletion,
           getSuggestions: (lines, _cursorLine, cursorCol) => {
             const text = lines[0] || "";
@@ -127,7 +130,7 @@ function doesNotShowArgumentCompletions(): void {
     ));
 }
 
-function commandArgumentProvider(): AutocompleteProvider {
+function commandArgumentProvider(): autocompleteTypes.AutocompleteProvider {
   return {
     applyCompletion,
     getSuggestions: (lines, _cursorLine, cursorCol) => {

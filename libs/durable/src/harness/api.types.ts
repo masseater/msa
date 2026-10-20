@@ -1,4 +1,4 @@
-import type { TSchema } from "@msa/ai";
+import type aiTypes from "@msa/ai/index.types";
 import type chordTypes from "@msa/chord/index.types";
 
 import type typesRegistryTypes from "./types-registry.ts";
@@ -29,7 +29,7 @@ declare namespace harnessApiTypes {
   type ToolExecutionResult<TDetails extends chordTypes.JsonValue = chordTypes.JsonValue> =
     typesToolsTypes.ToolExecutionResult<TDetails>;
   type ToolRegistration<
-    TParameters extends TSchema = TSchema,
+    TParameters extends aiTypes.TSchema = aiTypes.TSchema,
     TDetails extends chordTypes.JsonValue = chordTypes.JsonValue,
   > = typesToolsTypes.ToolRegistration<TParameters, TDetails>;
   type Wrap<Tool extends typesToolsTypes.ToolRegistration = typesToolsTypes.ToolRegistration> =

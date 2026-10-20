@@ -34,23 +34,23 @@ const optionalComments = Schema.Unknown.pipe(Schema.Array, Schema.NullOr, Schema
 
 const RollupEntry = Schema.Struct({
   __typename: Schema.optionalKey(Schema.String),
-  name: Schema.optionalKey(Schema.String),
-  context: Schema.optionalKey(Schema.String),
-  status: optionalString,
   conclusion: optionalString,
+  context: Schema.optionalKey(Schema.String),
+  name: Schema.optionalKey(Schema.String),
   state: optionalString,
+  status: optionalString,
 });
 
 const GhPrView = Schema.Struct({
-  state: Schema.String,
-  mergeable: Schema.optionalKey(Schema.String),
-  mergeStateStatus: Schema.optionalKey(Schema.String),
-  reviewDecision: optionalString,
+  baseRefName: Schema.optionalKey(Schema.String),
   comments: optionalComments,
+  headRefOid: Schema.optionalKey(Schema.String),
+  mergeStateStatus: Schema.optionalKey(Schema.String),
+  mergeable: Schema.optionalKey(Schema.String),
+  reviewDecision: optionalString,
+  state: Schema.String,
   statusCheckRollup: RollupEntry.pipe(Schema.Array, Schema.NullOr, Schema.optionalKey),
   updatedAt: Schema.optionalKey(Schema.String),
-  baseRefName: Schema.optionalKey(Schema.String),
-  headRefOid: Schema.optionalKey(Schema.String),
 });
 
 const GhPrViewJson = Schema.fromJsonString(GhPrView);
@@ -108,7 +108,7 @@ function countChecks(entries: readonly RollupEntryValue[]): PrCheckCounts {
       }
     }
   }
-  return { total: entries.length, passed, failed, pending, pendingNames };
+  return { failed, passed, pending, pendingNames, total: entries.length };
 }
 
 export function parsePrView(json: string): PrSnapshot | undefined {
@@ -116,16 +116,16 @@ export function parsePrView(json: string): PrSnapshot | undefined {
   if (Option.isNone(decoded)) return undefined;
   const value = decoded.value;
   return {
-    state: value.state.toUpperCase(),
-    mergeable: (value.mergeable ?? "UNKNOWN").toUpperCase(),
-    mergeStateStatus: (value.mergeStateStatus ?? "").toUpperCase(),
-    reviewDecision: (value.reviewDecision ?? "").toUpperCase(),
-    updatedAt: value.updatedAt ?? "",
-    comments: value.comments?.length ?? 0,
-    checks: countChecks(value.statusCheckRollup ?? []),
     baseRefName: value.baseRefName ?? "",
-    headRefOid: value.headRefOid ?? "",
     behindBy: undefined,
+    checks: countChecks(value.statusCheckRollup ?? []),
+    comments: value.comments?.length ?? 0,
+    headRefOid: value.headRefOid ?? "",
+    mergeStateStatus: (value.mergeStateStatus ?? "").toUpperCase(),
+    mergeable: (value.mergeable ?? "UNKNOWN").toUpperCase(),
+    reviewDecision: (value.reviewDecision ?? "").toUpperCase(),
+    state: value.state.toUpperCase(),
+    updatedAt: value.updatedAt ?? "",
   };
 }
 

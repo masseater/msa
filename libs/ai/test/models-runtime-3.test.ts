@@ -1,14 +1,14 @@
 import { Effect } from "effect";
 import { describe, expect, it } from "vite-plus/test";
 
-import {
-  InMemoryModelsStore,
-  type ModelsStore,
-  type ModelsStoreEntry,
-} from "../src/models-store.ts";
-import { createModels, createProvider } from "../src/models.ts";
-import { AssistantMessageEventStream } from "../src/utils/event-stream.ts";
+import InMemoryModelsStore from "../src/models-store.ts";
+import type modelsStoreTypes from "../src/models-store.types.ts";
+import modelsModule from "../src/models.ts";
+import eventStream from "../src/utils/event-stream.ts";
 import modelsRuntimeSupport from "./models-runtime-support.ts";
+
+const { createModels, createProvider } = modelsModule;
+const { AssistantMessageEventStream } = eventStream;
 
 const { testModel, testProvider } = modelsRuntimeSupport;
 const restoresCachedModelsBeforeWaitingFor = () => {
@@ -60,7 +60,9 @@ const restoresCachedModelsBeforeWaitingFor = () => {
   );
 };
 
-const singleEntryStore = (entry: { value: ModelsStoreEntry | undefined }): ModelsStore => ({
+const singleEntryStore = (entry: {
+  value: modelsStoreTypes.ModelsStoreEntry | undefined;
+}): modelsStoreTypes.ModelsStore => ({
   delete: () => {
     entry.value = undefined;
     return Promise.resolve();
@@ -75,7 +77,7 @@ const singleEntryStore = (entry: { value: ModelsStoreEntry | undefined }): Model
 const choosesPersistentDeletionAndEphemeralPublication = () =>
   Effect.runPromise(
     Effect.gen(function* () {
-      const entry: { value: ModelsStoreEntry | undefined } = {
+      const entry: { value: modelsStoreTypes.ModelsStoreEntry | undefined } = {
         value: { models: [testModel("dynamic", "stored")] },
       };
       const state = { value: "initial" };

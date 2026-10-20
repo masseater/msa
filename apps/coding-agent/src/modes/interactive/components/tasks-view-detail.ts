@@ -1,4 +1,4 @@
-import { truncateToWidth, wrapTextWithAnsi } from "@msa/tui";
+import tui from "@msa/tui";
 
 import type { Orchestrator } from "../../../core/orchestrator/orchestrator.ts";
 import { firstLine } from "../../../core/orchestrator/text.ts";
@@ -8,6 +8,8 @@ import { theme } from "../theme/theme.ts";
 import { keyHint } from "./keybinding-hints.ts";
 import { viewHelpers } from "./tasks-view-helpers.ts";
 import { truncateToVisualLines } from "./visual-truncate.ts";
+
+const { truncateToWidth, wrapTextWithAnsi } = tui;
 
 const { activityLines, glyph, modelName, stoppable } = viewHelpers;
 
@@ -139,4 +141,4 @@ function listHints(showFinished: boolean, selected: TaskSnapshot | undefined): s
     .join("  ")}`;
 }
 
-export const taskDetail = { reasonLine, threadLines, sections, hints, listHints };
+export const taskDetail = { hints, listHints, reasonLine, sections, threadLines };

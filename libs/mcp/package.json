@@ -30,15 +30,30 @@
       "types": "./dist/index.d.ts",
       "import": "./dist/index.js"
     },
+    "./index.types": {
+      "source": "./src/index.types.ts",
+      "types": "./dist/index.types.d.ts",
+      "import": "./dist/index.types.js"
+    },
     "./oauth": {
       "source": "./src/oauth/index.ts",
       "types": "./dist/oauth/index.d.ts",
       "import": "./dist/oauth/index.js"
     },
+    "./oauth.types": {
+      "source": "./src/oauth/index.types.ts",
+      "types": "./dist/oauth/index.types.d.ts",
+      "import": "./dist/oauth/index.types.js"
+    },
     "./testing": {
       "source": "./src/testing/index.ts",
       "types": "./dist/testing/index.d.ts",
       "import": "./dist/testing/index.js"
+    },
+    "./testing.types": {
+      "source": "./src/testing/index.types.ts",
+      "types": "./dist/testing/index.types.d.ts",
+      "import": "./dist/testing/index.types.js"
     }
   },
   "scripts": {
@@ -54,6 +69,7 @@
   "devDependencies": {
     "@effect/platform-node": "catalog:",
     "@effect/vitest": "catalog:stack",
+    "@msa/testing": "workspace:*",
     "@types/cross-spawn": "catalog:",
     "shx": "catalog:",
     "vitest": "catalog:"

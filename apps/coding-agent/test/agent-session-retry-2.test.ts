@@ -1,4 +1,4 @@
-import type { AgentTool } from "@msa/agent-core";
+import type agentTypes from "@msa/agent-core/index.types";
 import testing from "@msa/testing";
 import { Effect } from "effect";
 import { Type } from "typebox";
@@ -16,7 +16,7 @@ let tempDir = "";
 
 let session: AgentSession | undefined;
 
-const echoTool = (executed: { value: boolean }): AgentTool => ({
+const echoTool = (executed: { value: boolean }): agentTypes.AgentTool => ({
   description: "Echo text back",
   execute: () =>
     runTest(

@@ -1,5 +1,5 @@
-import type { AgentTool } from "@msa/agent-core";
-import { fauxAssistantMessage, fauxToolCall } from "@msa/ai";
+import type agentTypes from "@msa/agent-core/index.types";
+import ai from "@msa/ai";
 import testing from "@msa/testing";
 import { Effect } from "effect";
 import { Type } from "typebox";
@@ -8,6 +8,8 @@ import { afterEach, describe, expect, it } from "vite-plus/test";
 import agentSessionBoundaries5Support from "./agent-session-boundaries-5-support.ts";
 import harnessModule from "./harness.ts";
 import type harnessTypes from "./harness.types.ts";
+
+const { fauxAssistantMessage, fauxToolCall } = ai;
 
 const { harnesses3 } = agentSessionBoundaries5Support;
 
@@ -19,7 +21,7 @@ const keepsTruncatedToolAttemptsInContext = Effect.gen(function* () {
   const runPromise = Effect.runPromiseWith(yield* Effect.context<never>());
   let executed = false;
   const requests: string[] = [];
-  const tool: AgentTool = {
+  const tool: agentTypes.AgentTool = {
     description: "Must not execute from a length response",
     execute: () =>
       runPromise(
@@ -55,7 +57,7 @@ const keepsTruncatedToolAttemptsInContext = Effect.gen(function* () {
 });
 
 const resetsLengthRecoveryAfterASuccessful = Effect.gen(function* () {
-  const tool: AgentTool = {
+  const tool: agentTypes.AgentTool = {
     description: "Noop",
     execute: () => Promise.resolve({ content: [{ text: "done", type: "text" }], details: {} }),
     label: "Noop",

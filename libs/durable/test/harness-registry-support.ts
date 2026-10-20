@@ -1,10 +1,12 @@
-import { Type } from "@msa/ai";
+import ai from "@msa/ai";
 import durable from "@msa/durable";
 import type durableTypes from "@msa/durable/index.types";
 import { dual } from "effect/Function";
 
 import agentModule from "../src/harness/agent.ts";
 import type harnessRegistrySupportTypes from "./harness-registry-support.types.ts";
+
+const { Type } = ai;
 
 const { resolveAgent, resolveSettings } = agentModule;
 const { defineExtension, section } = durable;

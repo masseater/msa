@@ -1,10 +1,4 @@
-import type {
-  AnthropicMessagesCompat,
-  AnyModel,
-  Api,
-  Model,
-  OpenAICompletionsCompat,
-} from "../../src/types.ts";
+import type typesModule from "../../src/types.types.ts";
 import getEffortThinkingLevelMap from "../models-dev-reasoning-options.ts";
 import anthropicMetadata from "./anthropic-metadata.ts";
 import type modelsDevTypes from "./models-dev.types.ts";
@@ -34,24 +28,27 @@ const DEFAULT_IMAGE_RESIZE = {
   maxWidth: 2000,
 } as const;
 
-function supportsDirectReasoningEffort(model: Model<Api>): boolean {
+function supportsDirectReasoningEffort(model: typesModule.Model<typesModule.Api>): boolean {
   if (model.api === "anthropic-messages") {
-    return (model.compat as AnthropicMessagesCompat | undefined)?.forceAdaptiveThinking === true;
+    return (
+      (model.compat as typesModule.AnthropicMessagesCompat | undefined)?.forceAdaptiveThinking ===
+      true
+    );
   }
   if (model.api === "openai-responses" || model.api === "openai-codex-responses") return true;
   if (model.api !== "openai-completions") return false;
 
   const compat = {
-    ...detectOpenAICompletionsCompat(model as Model<"openai-completions">),
-    ...(model.compat as OpenAICompletionsCompat | undefined),
+    ...detectOpenAICompletionsCompat(model as typesModule.Model<"openai-completions">),
+    ...(model.compat as typesModule.OpenAICompletionsCompat | undefined),
   };
   return compat.thinkingFormat === "openai" && compat.supportsReasoningEffort;
 }
 
-function applyImageInputMetadata(model: AnyModel): void {
+function applyImageInputMetadata(model: typesModule.AnyModel): void {
   if (!model.input.includes("image")) return;
 
-  const providerLimits: AnyModel["inputLimits"] =
+  const providerLimits: typesModule.AnyModel["inputLimits"] =
     model.provider === "anthropic-api"
       ? {
           images: {
@@ -76,7 +73,7 @@ function applyImageInputMetadata(model: AnyModel): void {
 
 function reasoningOptionMetadata(
   reasoning: modelsDevTypes.ReasoningOptionsRegistry,
-): (model: Model<Api>) => void {
+): (model: typesModule.Model<typesModule.Api>) => void {
   return (model) => {
     const reasoningOptions = reasoning.get(`${model.provider}:${model.id}`);
     if (reasoningOptions === undefined || !supportsDirectReasoningEffort(model)) return;
@@ -87,8 +84,8 @@ function reasoningOptionMetadata(
 
 function modelMetadata(
   reasoning: modelsDevTypes.ReasoningOptionsRegistry,
-): (model: Model<Api>) => void {
-  const steps: readonly ((model: Model<Api>) => void)[] = [
+): (model: typesModule.Model<typesModule.Api>) => void {
+  const steps: readonly ((model: typesModule.Model<typesModule.Api>) => void)[] = [
     applyOpenAICompletionsCompatMetadata,
     applyAnthropicMessagesCompatMetadata,
     reasoningOptionMetadata(reasoning),

@@ -1,11 +1,12 @@
 import { dual } from "effect/Function";
 
-import { SUBSCRIPTS, SUPERSCRIPTS } from "./latex-tables.ts";
+import type latexFormatTypes from "./latex-format.types.ts";
+import latexTables from "./latex-tables.ts";
 
-export type ScriptKind = "sub" | "sup";
+const { SUBSCRIPTS, SUPERSCRIPTS } = latexTables;
 
-export const NAMED_OPERATOR_START = "\u{f0004}";
-export const NAMED_OPERATOR_END = "\u{f0005}";
+const NAMED_OPERATOR_START = "\u{f0004}";
+const NAMED_OPERATOR_END = "\u{f0005}";
 const NAMED_OPERATOR_LEFT_SPACING_PATTERN = /(?<=[\p{L}\p{N})\]}\u{f0001}])\u{f0004}/gu;
 const NAMED_OPERATOR_RIGHT_SPACING_PATTERN = /\u{f0005}(?=[\p{L}\p{N}√\u{f0000}])/gu;
 
@@ -28,17 +29,17 @@ function normalizeScriptValue(value: string): string {
   return value.trim().replace(/\s*([=+-])\s*/gu, "$1");
 }
 
-export const formatUnicodeScript: {
-  (value: string, kind: ScriptKind): string | undefined;
-  (kind: ScriptKind): (value: string) => string | undefined;
-} = dual(2, (value: string, kind: ScriptKind): string | undefined =>
+const formatUnicodeScript: {
+  (value: string, kind: latexFormatTypes.ScriptKind): string | undefined;
+  (kind: latexFormatTypes.ScriptKind): (value: string) => string | undefined;
+} = dual(2, (value: string, kind: latexFormatTypes.ScriptKind): string | undefined =>
   replaceCharacters(normalizeScriptValue(value), kind === "sub" ? SUBSCRIPTS : SUPERSCRIPTS),
 );
 
-export const formatScript: {
-  (value: string, kind: ScriptKind): string;
-  (kind: ScriptKind): (value: string) => string;
-} = dual(2, (rawValue: string, kind: ScriptKind): string => {
+const formatScript: {
+  (value: string, kind: latexFormatTypes.ScriptKind): string;
+  (kind: latexFormatTypes.ScriptKind): (value: string) => string;
+} = dual(2, (rawValue: string, kind: latexFormatTypes.ScriptKind): string => {
   const value = normalizeScriptValue(rawValue);
   const unicode = formatUnicodeScript(value, kind);
   if (unicode !== undefined) {
@@ -52,7 +53,7 @@ export const formatScript: {
   return `${prefix}(${value})`;
 });
 
-export const formatFraction: {
+const formatFraction: {
   (numerator: string, denominator: string): string;
   (denominator: string): (numerator: string) => string;
 } = dual(2, (rawNumerator: string, rawDenominator: string): string => {
@@ -64,7 +65,7 @@ export const formatFraction: {
   return `${simpleNumerator ? numerator : `(${numerator})`}/${simpleDenominator ? denominator : `(${denominator})`}`;
 });
 
-export const formatRoot: {
+const formatRoot: {
   (value: string, symbol: string): string;
   (symbol: string): (value: string) => string;
 } = dual(2, (rawValue: string, symbol: string): string => {
@@ -72,7 +73,7 @@ export const formatRoot: {
   return /^[\p{L}\p{N}.]+$/u.test(value) ? `${symbol}${value}` : `${symbol}(${value})`;
 });
 
-export function normalizeOutput(value: string): string {
+function normalizeOutput(value: string): string {
   return value
     .replace(NAMED_OPERATOR_LEFT_SPACING_PATTERN, " ")
     .replaceAll(NAMED_OPERATOR_START, "")
@@ -84,3 +85,15 @@ export function normalizeOutput(value: string): string {
     .join("\n")
     .trim();
 }
+
+const latexFormat = {
+  NAMED_OPERATOR_END,
+  NAMED_OPERATOR_START,
+  formatFraction,
+  formatRoot,
+  formatScript,
+  formatUnicodeScript,
+  normalizeOutput,
+};
+
+export default latexFormat;

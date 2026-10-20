@@ -1,14 +1,13 @@
 import type {
-  BetaCacheControlEphemeral as CacheControlEphemeral,
   BetaTool,
+  BetaCacheControlEphemeral as CacheControlEphemeral,
 } from "@anthropic-ai/sdk/resources/beta/messages/messages.js";
 
-import type { CacheRetention, Model, ProviderEnv, SimpleStreamOptions } from "../types.ts";
-import { getProviderEnvValue } from "../utils/provider-env.ts";
+import type typesModule from "../types.types.ts";
+import providerEnv from "../utils/provider-env.ts";
+import type anthropicMessagesCompatTypes from "./anthropic-messages-compat.types.ts";
 
-export type AnthropicEffort = "low" | "medium" | "high" | "xhigh" | "max";
-
-export type AnthropicThinkingDisplay = "summarized" | "omitted";
+const { getProviderEnvValue } = providerEnv;
 
 const FINE_GRAINED_TOOL_STREAMING_BETA = "fine-grained-tool-streaming-2025-05-14";
 const INTERLEAVED_THINKING_BETA = "interleaved-thinking-2025-05-14";
@@ -18,39 +17,35 @@ const THINKING_BINDING_CONTROLS_BETA = "thinking-binding-controls-2026-08-01";
 const INLINE_TOOLS_BETA = "inline-tools-2026-09-15";
 
 const DEFERRED_TOOL_PLACEHOLDER: BetaTool = {
-  name: "__pi_deferred_placeholder__",
-  description: "Reserved placeholder. Never available. Never call this.",
-  input_schema: { type: "object", properties: {}, required: [] },
   defer_loading: true,
+  description: "Reserved placeholder. Never available. Never call this.",
+  input_schema: { properties: {}, required: [], type: "object" },
+  name: "__pi_deferred_placeholder__",
 };
 
-function shouldUseServerSideFallbackBeta(model: Model<"anthropic-messages">): boolean {
+function shouldUseServerSideFallbackBeta(model: typesModule.Model<"anthropic-messages">): boolean {
   return (model.compat?.allowedFallbackModels?.length ?? 0) > 0;
 }
 
-function getAnthropicCompat(model: Model<"anthropic-messages">) {
+function getAnthropicCompat(model: typesModule.Model<"anthropic-messages">) {
   const isOpenRouter = model.provider === "openrouter" || model.baseUrl.includes("openrouter.ai");
   return {
-    supportsEagerToolInputStreaming: model.compat?.supportsEagerToolInputStreaming ?? true,
-    supportsLongCacheRetention: model.compat?.supportsLongCacheRetention ?? true,
+    allowEmptySignature: model.compat?.allowEmptySignature ?? false,
     sendSessionAffinityHeaders: model.compat?.sendSessionAffinityHeaders ?? isOpenRouter,
     sessionAffinityFormat:
       model.compat?.sessionAffinityFormat ?? (isOpenRouter ? "openrouter" : undefined),
     supportsCacheControlOnTools: model.compat?.supportsCacheControlOnTools ?? true,
-    supportsTemperature: model.compat?.supportsTemperature ?? true,
-    allowEmptySignature: model.compat?.allowEmptySignature ?? false,
-    supportsStrictTools: model.compat?.supportsStrictTools ?? false,
+    supportsEagerToolInputStreaming: model.compat?.supportsEagerToolInputStreaming ?? true,
+    supportsLongCacheRetention: model.compat?.supportsLongCacheRetention ?? true,
     supportsMidConvoSystemMessages: model.compat?.supportsMidConvoSystemMessages ?? false,
     supportsMidConvoToolChanges: model.compat?.supportsMidConvoToolChanges ?? false,
+    supportsStrictTools: model.compat?.supportsStrictTools ?? false,
+    supportsTemperature: model.compat?.supportsTemperature ?? true,
   };
 }
-
-interface CacheRetentionInput {
-  readonly cacheRetention?: CacheRetention | undefined;
-  readonly env?: ProviderEnv | undefined;
-}
-
-function resolveCacheRetention(input: CacheRetentionInput): CacheRetention {
+function resolveCacheRetention(
+  input: anthropicMessagesCompatTypes.CacheRetentionInput,
+): typesModule.CacheRetention {
   const { cacheRetention, env } = input;
   if (cacheRetention !== undefined) {
     return cacheRetention;
@@ -60,13 +55,8 @@ function resolveCacheRetention(input: CacheRetentionInput): CacheRetention {
   }
   return "short";
 }
-
-interface CacheControlInput extends CacheRetentionInput {
-  readonly model: Model<"anthropic-messages">;
-}
-
-function getCacheControl(input: CacheControlInput): {
-  retention: CacheRetention;
+function getCacheControl(input: anthropicMessagesCompatTypes.CacheControlInput): {
+  retention: typesModule.CacheRetention;
   cacheControl?: CacheControlEphemeral;
 } {
   const { model } = input;
@@ -77,12 +67,12 @@ function getCacheControl(input: CacheControlInput): {
   const ttl =
     retention === "long" && getAnthropicCompat(model).supportsLongCacheRetention ? "1h" : undefined;
   return {
-    retention,
     cacheControl: { type: "ephemeral", ...(ttl && { ttl }) },
+    retention,
   };
 }
 
-function isAnthropicEffort(value: unknown): value is AnthropicEffort {
+function isAnthropicEffort(value: unknown): value is anthropicMessagesCompatTypes.AnthropicEffort {
   return (
     value === "low" ||
     value === "medium" ||
@@ -91,16 +81,12 @@ function isAnthropicEffort(value: unknown): value is AnthropicEffort {
     value === "max"
   );
 }
-
-interface ThinkingLevelInput {
-  readonly model: Model<"anthropic-messages">;
-  readonly level: SimpleStreamOptions["reasoning"];
-}
-
-function mapThinkingLevelToEffort(input: ThinkingLevelInput): AnthropicEffort {
+function mapThinkingLevelToEffort(
+  input: anthropicMessagesCompatTypes.ThinkingLevelInput,
+): anthropicMessagesCompatTypes.AnthropicEffort {
   const { model, level } = input;
   const mapped = level === undefined ? undefined : model.thinkingLevelMap?.[level];
-  if (typeof mapped === "string") return mapped as AnthropicEffort;
+  if (typeof mapped === "string") return mapped as anthropicMessagesCompatTypes.AnthropicEffort;
 
   switch (level) {
     case "minimal":
@@ -115,18 +101,20 @@ function mapThinkingLevelToEffort(input: ThinkingLevelInput): AnthropicEffort {
   }
 }
 
-export {
+const anthropicMessagesCompat = {
   DEFERRED_TOOL_PLACEHOLDER,
   FINE_GRAINED_TOOL_STREAMING_BETA,
-  getAnthropicCompat,
-  getCacheControl,
   INLINE_TOOLS_BETA,
   INTERLEAVED_THINKING_BETA,
+  MID_CONVERSATION_OUTPUT_CONFIG_BETA,
+  SERVER_SIDE_FALLBACK_BETA,
+  THINKING_BINDING_CONTROLS_BETA,
+  getAnthropicCompat,
+  getCacheControl,
   isAnthropicEffort,
   mapThinkingLevelToEffort,
-  MID_CONVERSATION_OUTPUT_CONFIG_BETA,
   resolveCacheRetention,
-  SERVER_SIDE_FALLBACK_BETA,
   shouldUseServerSideFallbackBeta,
-  THINKING_BINDING_CONTROLS_BETA,
 };
+
+export default anthropicMessagesCompat;

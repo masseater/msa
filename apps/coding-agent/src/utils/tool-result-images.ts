@@ -1,16 +1,16 @@
-import type { ImageContent, ModelImageResizeOptions, TextContent } from "@msa/ai";
+import type aiTypes from "@msa/ai/index.types";
 import * as Effect from "effect/Effect";
 import { dual } from "effect/Function";
 
 import { awaited, awaiting } from "../core/awaiting.ts";
 import { processImage } from "./image-process.ts";
 
-export type ToolResultContent = TextContent | ImageContent;
+export type ToolResultContent = aiTypes.TextContent | aiTypes.ImageContent;
 
 export interface NormalizeToolResultImagesOptions {
   autoResizeImages?: boolean;
 
-  resizeOptions?: ModelImageResizeOptions;
+  resizeOptions?: aiTypes.ModelImageResizeOptions;
 }
 
 function* normalizeImageBlock(
@@ -31,9 +31,9 @@ function* normalizeImageBlock(
   )
     return undefined;
   const next: ToolResultContent[] = [
-    { type: "image", data: processed.data, mimeType: processed.mimeType },
+    { data: processed.data, mimeType: processed.mimeType, type: "image" },
   ];
-  if (processed.hints.length > 0) next.push({ type: "text", text: processed.hints.join("\n") });
+  if (processed.hints.length > 0) next.push({ text: processed.hints.join("\n"), type: "text" });
   return next;
 }
 

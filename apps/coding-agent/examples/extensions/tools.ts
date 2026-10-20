@@ -1,7 +1,10 @@
 import type { ExtensionAPI, ExtensionContext, Theme, ToolInfo } from "@msa/coding-agent";
 import { getSettingsListTheme } from "@msa/coding-agent";
-import { Container, type SettingItem, SettingsList } from "@msa/tui";
+import tui from "@msa/tui";
+import type tuiTypes from "@msa/tui/index.types";
 import { Effect } from "effect";
+
+const { Container, SettingsList } = tui;
 
 interface ToolsState {
   enabledTools: string[];
@@ -32,17 +35,17 @@ const makeToolList = (
   persistState: () => void,
   onDone: () => void,
 ) => {
-  const items: SettingItem[] = state.allTools.map((tool) => ({
+  const items: tuiTypes.SettingItem[] = state.allTools.map((tool) => ({
+    currentValue: state.enabledTools.has(tool.name) ? "enabled" : "disabled",
     id: tool.name,
     label: tool.name,
-    currentValue: state.enabledTools.has(tool.name) ? "enabled" : "disabled",
     values: ["enabled", "disabled"],
   }));
 
   const container = new Container();
   container.addChild({
-    render: () => [theme.fg("accent", theme.bold("Tool Configuration")), ""],
     invalidate: () => {},
+    render: () => [theme.fg("accent", theme.bold("Tool Configuration")), ""],
   });
 
   const settingsList = new SettingsList(
@@ -64,13 +67,13 @@ const makeToolList = (
   container.addChild(settingsList);
 
   return {
-    render: (width: number) => container.render(width),
-    invalidate: () => {
-      container.invalidate();
-    },
     handleInput: (data: string) => {
       settingsList.handleInput?.(data);
     },
+    invalidate: () => {
+      container.invalidate();
+    },
+    render: (width: number) => container.render(width),
   };
 };
 
@@ -88,7 +91,7 @@ const registerRestoreEvents = (
 };
 
 export default function toolsExtension(msa: ExtensionAPI) {
-  const state: ExtensionState = { enabledTools: new Set(), allTools: [] };
+  const state: ExtensionState = { allTools: [], enabledTools: new Set() };
 
   const persistState = () => {
     msa.appendEntry<ToolsState>("tools-config", {

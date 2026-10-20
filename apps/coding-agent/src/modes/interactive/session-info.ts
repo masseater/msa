@@ -47,17 +47,17 @@ export function formatContextBreakdown(
       .sort((a, b) => b.tokens - a.tokens);
     if (entries.length === 0) continue;
     const partTokens = entries.reduce((sum, entry) => sum + entry.tokens, 0);
-    rows.push({ name: title, tokens: partTokens, heading: true });
+    rows.push({ heading: true, name: title, tokens: partTokens });
     const shown = entries.length > CONTEXT_PART_LIMIT ? CONTEXT_PART_LIMIT - 1 : entries.length;
     for (const entry of entries.slice(0, shown)) {
-      rows.push({ name: `  ${entry.name}`, tokens: entry.tokens, heading: false });
+      rows.push({ heading: false, name: `  ${entry.name}`, tokens: entry.tokens });
     }
     const rest = entries.slice(shown);
     if (rest.length > 0) {
       rows.push({
+        heading: false,
         name: `  +${rest.length}`,
         tokens: rest.reduce((sum, entry) => sum + entry.tokens, 0),
-        heading: false,
       });
     }
   }
@@ -150,5 +150,5 @@ function formatSessionInfoStats(info: SessionInfo): {
     lines.push(`${label("Refresh cost:")} $${decision.warmCost.toFixed(3)}`);
   }
   if (info.telemetry !== undefined) lines.push("", theme.bold("Telemetry"), info.telemetry);
-  return { stats, cacheWaste, lines, usageBreakdown };
+  return { cacheWaste, lines, stats, usageBreakdown };
 }

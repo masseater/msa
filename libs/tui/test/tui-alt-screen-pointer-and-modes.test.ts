@@ -3,10 +3,14 @@ import { describe, it } from "node:test";
 
 import { Effect } from "effect";
 
-import { overrideEnv } from "../src/env.ts";
-import { MouseRegion, ScrollView, Text, TuiAltScreen } from "../src/index.ts";
+import env from "../src/env.ts";
+import tuiModule from "../src/index.ts";
 import RecordingTerminal from "./tui-alt-screen-recording-terminal.ts";
-import { VirtualTerminal } from "./virtual-terminal.ts";
+import virtualTerminal from "./virtual-terminal.ts";
+
+const { overrideEnv } = env;
+const { MouseRegion, ScrollView, Text, TuiAltScreen } = tuiModule;
+const { VirtualTerminal } = virtualTerminal;
 
 describe("TuiAltScreen", () => {
   usesButtonMotionTrackingInside();

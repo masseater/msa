@@ -1,11 +1,13 @@
-import { arch, platform, release } from "node:os";
+import { arch, platform } from "node:os";
 
 import { Effect, Stream } from "effect";
 import { describe, expect, it, vi } from "vite-plus/test";
 
-import { stream as streamOpenAICodexResponses } from "../src/api/openai-codex-responses.ts";
-import type { Api, Model } from "../src/types.ts";
+import openaiCodexResponses from "../src/api/openai-codex-responses.ts";
+import type typesModule from "../src/types.types.ts";
 import openaiCodexStreamSupport from "./openai-codex-stream-support.ts";
+
+const { stream: streamOpenAICodexResponses } = openaiCodexResponses;
 
 const {
   codexModel,
@@ -28,7 +30,8 @@ const streamsAndForwardsRawEvents = () =>
       const token = mockToken();
       const { requests } = stubCodexFetch();
       const model = codexModel();
-      const providerEvents: Array<{ event: unknown; model: Model<Api> }> = [];
+      const providerEvents: Array<{ event: unknown; model: typesModule.Model<typesModule.Api> }> =
+        [];
       const { events, result } = yield* collectEvents(
         streamOpenAICodexResponses(model, promptContext(), {
           apiKey: token,
@@ -54,7 +57,7 @@ const streamsAndForwardsRawEvents = () =>
       expect(headers?.get("chatgpt-account-id")).toBe("acc_test");
       expect(headers?.get("OpenAI-Beta")).toBe("responses=experimental");
       expect(headers?.get("originator")).toBe("pi");
-      expect(headers?.get("User-Agent")).toBe(`pi (${platform()} ${release()}; ${arch()})`);
+      expect(headers?.get("User-Agent")).toBe(`pi (${platform()}; ${arch()})`);
       expect(headers?.get("accept")).toBe("text/event-stream");
       expect(headers?.has("x-api-key")).toBe(false);
     }),

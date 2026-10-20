@@ -1,21 +1,21 @@
-import { isPlainPress, type SgrMouseEvent, type WheelEvent } from "./alt-screen-mouse-protocol.ts";
-import type { AltScreenView } from "./alt-screen-view.ts";
-import type { ScrollView } from "./components/scroll-view.ts";
-import {
-  getScrollbarGeometry,
-  getScrollViewBox,
-  getScrollViewsAt,
-  type ScrollbarGeometry,
-} from "./layout.ts";
+import altScreenMouseProtocol from "./alt-screen-mouse-protocol.ts";
+import type altScreenMouseProtocolTypes from "./alt-screen-mouse-protocol.types.ts";
+import type altScreenViewTypes from "./alt-screen-view.ts";
+import type scrollViewTypes from "./components/scroll-view.types.ts";
+import layoutModule from "./layout.ts";
+import type layoutTypes from "./layout.types.ts";
+
+const { getScrollViewBox, getScrollViewsAt, getScrollbarGeometry } = layoutModule;
+const { isPlainPress } = altScreenMouseProtocol;
 
 interface ScrollbarDrag {
-  scrollView: ScrollView;
+  scrollView: scrollViewTypes.ScrollView;
   grabOffset: number;
 }
 
 interface ScrollbarTarget {
-  scrollView: ScrollView;
-  geometry: ScrollbarGeometry;
+  scrollView: scrollViewTypes.ScrollView;
+  geometry: layoutTypes.ScrollbarGeometry;
 }
 
 interface ScrollbarPointer {
@@ -24,8 +24,8 @@ interface ScrollbarPointer {
 }
 
 function scrollToPointer(
-  scrollView: ScrollView,
-  geometry: ScrollbarGeometry,
+  scrollView: scrollViewTypes.ScrollView,
+  geometry: layoutTypes.ScrollbarGeometry,
   { pointerY, grabOffset }: ScrollbarPointer,
 ): void {
   const maxThumbOffset = geometry.trackHeight - geometry.thumbHeight;
@@ -38,12 +38,12 @@ function scrollToPointer(
   scrollView.scrollTo(scrollTop);
 }
 
-export class AltScreenScrollbars {
-  private readonly view: AltScreenView;
+export default class AltScreenScrollbars {
+  private readonly view: altScreenViewTypes.AltScreenView;
   private drag: ScrollbarDrag | undefined;
-  private hover: ScrollView | undefined;
+  private hover: scrollViewTypes.ScrollView | undefined;
 
-  constructor(view: AltScreenView) {
+  constructor(view: altScreenViewTypes.AltScreenView) {
     this.view = view;
   }
 
@@ -63,10 +63,10 @@ export class AltScreenScrollbars {
     this.drag = undefined;
   }
 
-  routeWheel(event: WheelEvent, delta: number): void {
+  routeWheel(event: altScreenMouseProtocolTypes.WheelEvent, delta: number): void {
     const layout = this.view.frame.currentLayout;
     let remaining = delta;
-    const seen = new Set<ScrollView>();
+    const seen = new Set<scrollViewTypes.ScrollView>();
     for (const scrollView of layout === undefined
       ? []
       : getScrollViewsAt(layout, event.x, event.y)) {
@@ -80,7 +80,7 @@ export class AltScreenScrollbars {
     this.view.requestRender();
   }
 
-  handleMouse(event: SgrMouseEvent, onGrab: () => void): boolean {
+  handleMouse(event: altScreenMouseProtocolTypes.SgrMouseEvent, onGrab: () => void): boolean {
     if (this.drag !== undefined) {
       this.continueDrag(this.drag, event);
       return true;
@@ -94,12 +94,15 @@ export class AltScreenScrollbars {
     const onThumb =
       event.y >= geometry.thumbTop && event.y < geometry.thumbTop + geometry.thumbHeight;
     const grabOffset = onThumb ? event.y - geometry.thumbTop : Math.floor(geometry.thumbHeight / 2);
-    if (!onThumb) scrollToPointer(target.scrollView, geometry, { pointerY: event.y, grabOffset });
-    this.drag = { scrollView: target.scrollView, grabOffset };
+    if (!onThumb) scrollToPointer(target.scrollView, geometry, { grabOffset, pointerY: event.y });
+    this.drag = { grabOffset, scrollView: target.scrollView };
     return true;
   }
 
-  private continueDrag(drag: ScrollbarDrag, event: SgrMouseEvent): void {
+  private continueDrag(
+    drag: ScrollbarDrag,
+    event: altScreenMouseProtocolTypes.SgrMouseEvent,
+  ): void {
     if (event.release) {
       this.stopDrag();
       return;
@@ -109,13 +112,13 @@ export class AltScreenScrollbars {
     const geometry = box === undefined ? undefined : getScrollbarGeometry(box);
     if (geometry !== undefined) {
       scrollToPointer(drag.scrollView, geometry, {
-        pointerY: event.y,
         grabOffset: drag.grabOffset,
+        pointerY: event.y,
       });
     }
   }
 
-  private setHover(scrollView: ScrollView | undefined): void {
+  private setHover(scrollView: scrollViewTypes.ScrollView | undefined): void {
     if (scrollView === this.hover) return;
     this.hover?.setScrollbarActive(false);
     this.hover = scrollView;
@@ -134,7 +137,7 @@ export class AltScreenScrollbars {
         y >= geometry.trackTop &&
         y < geometry.trackTop + geometry.trackHeight
       ) {
-        return { scrollView, geometry };
+        return { geometry, scrollView };
       }
     }
     return undefined;

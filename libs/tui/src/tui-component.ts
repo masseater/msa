@@ -1,115 +1,90 @@
 import { dual } from "effect/Function";
 
-import { isImageLine } from "./terminal-image-kitty.ts";
-import { extractSegments, sliceByColumn, sliceWithWidth } from "./text-slice.ts";
-import { visibleWidth } from "./utils.ts";
+import Container from "./container.ts";
+import terminalImageKitty from "./terminal-image-kitty.ts";
+import textSlice from "./text-slice.ts";
+import type tuiComponentTypes from "./tui-component.types.ts";
+import utils from "./utils.ts";
 
-export type TuiMouseEventType = "press" | "release" | "move" | "drag" | "click" | "wheel";
-export type TuiMouseButton = "left" | "middle" | "right" | "none";
+const { isImageLine } = terminalImageKitty;
+const { extractSegments, sliceByColumn, sliceWithWidth } = textSlice;
+const { visibleWidth } = utils;
 
-export interface TuiMouseEvent {
-  type: TuiMouseEventType;
-  button: TuiMouseButton;
-  x: number;
-  y: number;
-  screenX: number;
-  screenY: number;
-  width: number;
-  height: number;
-  shift: boolean;
-  alt: boolean;
-  ctrl: boolean;
-  wheelDelta?: number;
-  clickCount?: number;
-}
+const dispatchMouseEvent: {
+  (
+    component: tuiComponentTypes.Component,
+    event: tuiComponentTypes.TuiMouseEvent,
+  ): tuiComponentTypes.TuiMouseDispatchResult | undefined;
+  (
+    event: tuiComponentTypes.TuiMouseEvent,
+  ): (
+    component: tuiComponentTypes.Component,
+  ) => tuiComponentTypes.TuiMouseDispatchResult | undefined;
+} = dual(
+  2,
+  (
+    component: tuiComponentTypes.Component,
+    event: tuiComponentTypes.TuiMouseEvent,
+  ): tuiComponentTypes.TuiMouseDispatchResult | undefined => {
+    const result = component.handleMouse?.(event);
+    if (result === undefined) return undefined;
+    if ("target" in result) {
+      const forwarded = result as tuiComponentTypes.TuiMouseDispatchResult;
+      return forwarded.focus === true && component.handleInput !== undefined
+        ? { ...forwarded, focusTarget: component }
+        : forwarded;
+    }
+    if (result.handled !== true && result.capture !== true && result.focus !== true)
+      return undefined;
+    return {
+      ...result,
+      handled: true,
+      ...(result.focus === true ? { focusTarget: component } : {}),
+      target: {
+        component,
+        height: event.height,
+        originX: event.screenX - event.x,
+        originY: event.screenY - event.y,
+        width: event.width,
+      },
+    };
+  },
+);
 
-export interface TuiMouseEventResult {
-  handled?: boolean;
-  capture?: boolean;
-  focus?: boolean;
-  render?: boolean;
-}
+const retargetMouseEvent: {
+  (
+    event: tuiComponentTypes.TuiMouseEvent,
+    target: tuiComponentTypes.TuiMouseDispatchTarget,
+  ): tuiComponentTypes.TuiMouseEvent;
+  (
+    target: tuiComponentTypes.TuiMouseDispatchTarget,
+  ): (event: tuiComponentTypes.TuiMouseEvent) => tuiComponentTypes.TuiMouseEvent;
+} = dual(
+  2,
+  (
+    event: tuiComponentTypes.TuiMouseEvent,
+    target: tuiComponentTypes.TuiMouseDispatchTarget,
+  ): tuiComponentTypes.TuiMouseEvent => ({
+    ...event,
+    height: target.height,
+    width: target.width,
+    x: event.screenX - target.originX,
+    y: event.screenY - target.originY,
+  }),
+);
 
-export interface TuiMouseDispatchTarget {
-  component: Component;
-  originX: number;
-  originY: number;
-  width: number;
-  height: number;
-}
-
-export interface TuiMouseDispatchResult extends TuiMouseEventResult {
-  handled: true;
-  target: TuiMouseDispatchTarget;
-  focusTarget?: Component;
-}
-
-export const dispatchMouseEvent: {
-  (component: Component, event: TuiMouseEvent): TuiMouseDispatchResult | undefined;
-  (event: TuiMouseEvent): (component: Component) => TuiMouseDispatchResult | undefined;
-} = dual(2, (component: Component, event: TuiMouseEvent): TuiMouseDispatchResult | undefined => {
-  const result = component.handleMouse?.(event);
-  if (result === undefined) return undefined;
-  if ("target" in result) {
-    const forwarded = result as TuiMouseDispatchResult;
-    return forwarded.focus === true && component.handleInput !== undefined
-      ? { ...forwarded, focusTarget: component }
-      : forwarded;
-  }
-  if (result.handled !== true && result.capture !== true && result.focus !== true) return undefined;
-  return {
-    ...result,
-    handled: true,
-    ...(result.focus === true ? { focusTarget: component } : {}),
-    target: {
-      component,
-      originX: event.screenX - event.x,
-      originY: event.screenY - event.y,
-      width: event.width,
-      height: event.height,
-    },
-  };
-});
-
-export const retargetMouseEvent: {
-  (event: TuiMouseEvent, target: TuiMouseDispatchTarget): TuiMouseEvent;
-  (target: TuiMouseDispatchTarget): (event: TuiMouseEvent) => TuiMouseEvent;
-} = dual(2, (event: TuiMouseEvent, target: TuiMouseDispatchTarget): TuiMouseEvent => ({
-  ...event,
-  x: event.screenX - target.originX,
-  y: event.screenY - target.originY,
-  width: target.width,
-  height: target.height,
-}));
-
-export interface Component {
-  render(width: number): string[];
-
-  handleInput?(data: string): void;
-
-  handleMouse?(event: TuiMouseEvent): TuiMouseEventResult | undefined;
-
-  wantsKeyRelease?: boolean;
-
-  wantsViewportKeys?: boolean;
-
-  invalidate(): void;
-}
-
-export interface Focusable {
-  focused: boolean;
-}
-
-export function isFocusable(component: Component | null): component is Component & Focusable {
+function isFocusable(
+  component: tuiComponentTypes.Component | null,
+): component is tuiComponentTypes.Component & tuiComponentTypes.Focusable {
   return component !== null && "focused" in component;
 }
 
-export const CURSOR_MARKER = "\x1b_pi:c\x07";
+const CURSOR_MARKER = "\x1b_pi:c\x07";
 
-export const FAKE_CURSOR_START = "\x1b_pi:fc\x07";
-export const FAKE_CURSOR_END = "\x1b_pi:/fc\x07";
+const FAKE_CURSOR_START = "\x1b_pi:fc\x07";
+const FAKE_CURSOR_END = "\x1b_pi:/fc\x07";
 
-export function unwrapFocusedFakeCursor(line: string): string {
+function unwrapFocusedFakeCursor(line: string): string {
   const marker = `${CURSOR_MARKER}${FAKE_CURSOR_START}`;
   const markerStart = line.indexOf(marker);
   if (markerStart === -1) return line;
@@ -121,82 +96,13 @@ export function unwrapFocusedFakeCursor(line: string): string {
   return `${line.slice(0, markerStart)}${CURSOR_MARKER}${content}${rest}`;
 }
 
-export function renderFakeCursor(text: string): string {
+function renderFakeCursor(text: string): string {
   return `${FAKE_CURSOR_START}${text}${FAKE_CURSOR_END}`;
 }
 
-export class Container implements Component {
-  children: Component[] = [];
-  private mouseLayout?: {
-    width: number;
-    children: Array<{ component: Component; height: number }>;
-  };
+const SEGMENT_RESET = "\x1b[0m\x1b]8;;\x07";
 
-  addChild(component: Component): void {
-    this.children.push(component);
-  }
-
-  removeChild(component: Component): void {
-    const index = this.children.indexOf(component);
-    if (index !== -1) {
-      this.children.splice(index, 1);
-    }
-  }
-
-  clear(): void {
-    this.children = [];
-  }
-
-  invalidate(): void {
-    for (const child of this.children) {
-      child.invalidate?.();
-    }
-  }
-
-  handleMouse(event: TuiMouseEvent): TuiMouseDispatchResult | undefined {
-    if (event.y < 0 || event.y >= event.height) return undefined;
-    const mouseChildren =
-      this.mouseLayout?.width === event.width
-        ? this.mouseLayout.children
-        : this.children.map((component) => ({
-            component,
-            height: component.render(event.width).length,
-          }));
-    let childY = 0;
-    for (const { component: child, height: childHeight } of mouseChildren) {
-      if (event.y >= childY && event.y < childY + childHeight) {
-        const result = dispatchMouseEvent(child, {
-          ...event,
-          y: event.y - childY,
-          height: childHeight,
-        });
-        if (result?.focus === true && (this as Component).handleInput !== undefined)
-          return { ...result, focusTarget: this };
-        return result;
-      }
-      childY += childHeight;
-    }
-    return undefined;
-  }
-
-  render(width: number): string[] {
-    const lines: string[] = [];
-    const mouseChildren: Array<{ component: Component; height: number }> = [];
-    for (const child of this.children) {
-      const childLines = child.render(width);
-      mouseChildren.push({ component: child, height: childLines.length });
-      for (const line of childLines) {
-        lines.push(line);
-      }
-    }
-    this.mouseLayout = { width, children: mouseChildren };
-    return lines;
-  }
-}
-
-export const SEGMENT_RESET = "\x1b[0m\x1b]8;;\x07";
-
-export const compositeTuiLine: {
+const compositeTuiLine: {
   (
     baseLine: string,
     overlayLine: string,
@@ -243,3 +149,19 @@ export const compositeTuiLine: {
     return visibleWidth(result) <= totalWidth ? result : sliceByColumn(result, 0, totalWidth, true);
   },
 );
+
+const tuiComponent = {
+  CURSOR_MARKER,
+  Container,
+  FAKE_CURSOR_END,
+  FAKE_CURSOR_START,
+  SEGMENT_RESET,
+  compositeTuiLine,
+  dispatchMouseEvent,
+  isFocusable,
+  renderFakeCursor,
+  retargetMouseEvent,
+  unwrapFocusedFakeCursor,
+};
+
+export default tuiComponent;

@@ -1,17 +1,21 @@
 import { Type } from "typebox";
 
-import { stream as streamOpenAICompletions } from "../src/api/openai-completions.ts";
-import type { AssistantMessage, Model, Tool } from "../src/types.ts";
-import { normalizeContext } from "../src/utils/transcript.ts";
+import openaiCompletions from "../src/api/openai-completions.ts";
+import type typesModule from "../src/types.types.ts";
+import transcript from "../src/utils/transcript.ts";
+
+const { stream: streamOpenAICompletions } = openaiCompletions;
+const { normalizeContext } = transcript;
+
 const reasoningDetail = { data: "encrypted-signature", id: "call_1", type: "reasoning.encrypted" };
 
-const readTool: Tool = {
+const readTool: typesModule.Tool = {
   description: "Read a file",
   name: "read",
   parameters: Type.Object({ path: Type.String() }),
 };
 
-function model(): Model<"openai-completions"> {
+function model(): typesModule.Model<"openai-completions"> {
   return {
     api: "openai-completions",
     baseUrl: "https://openrouter.ai/api/v1",
@@ -47,7 +51,9 @@ function toolCallChunk(): unknown {
   });
 }
 
-function runOpenAICompletionsStream(messages: AssistantMessage[] = []): Promise<AssistantMessage> {
+function runOpenAICompletionsStream(
+  messages: typesModule.AssistantMessage[] = [],
+): Promise<typesModule.AssistantMessage> {
   return streamOpenAICompletions(model(), normalizeContext({ messages, tools: [readTool] }), {
     apiKey: "test",
   }).result();

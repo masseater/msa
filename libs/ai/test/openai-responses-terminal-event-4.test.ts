@@ -2,9 +2,12 @@ import { Effect, Stream } from "effect";
 import type { ResponseStreamEvent } from "openai/resources/responses/responses.js";
 import { describe, expect, it, vi } from "vite-plus/test";
 
-import { processResponsesStream } from "../src/api/openai-responses-stream.ts";
-import { AssistantMessageEventStream } from "../src/utils/event-stream.ts";
+import openaiResponsesStream from "../src/api/openai-responses-stream.ts";
+import eventStream from "../src/utils/event-stream.ts";
 import openaiResponsesTerminalEventSupport from "./openai-responses-terminal-event-support.ts";
+
+const { AssistantMessageEventStream } = eventStream;
+const { processResponsesStream } = openaiResponsesStream;
 
 const { createModel, createOutput } = openaiResponsesTerminalEventSupport;
 

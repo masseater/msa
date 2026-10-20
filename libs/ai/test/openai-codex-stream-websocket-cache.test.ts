@@ -2,12 +2,16 @@ import { DateTime, Effect } from "effect";
 import { Type } from "typebox";
 import { describe, expect, it, vi } from "vite-plus/test";
 
-import { stream as streamOpenAICodexResponses } from "../src/api/openai-codex-responses.ts";
-import { getOpenAICodexWebSocketDebugStats } from "../src/api/openai-codex-ws-stats.ts";
-import type { AssistantMessage, Context } from "../src/types.ts";
-import { normalizeContext } from "../src/utils/transcript.ts";
+import openaiCodexResponses from "../src/api/openai-codex-responses.ts";
+import openaiCodexWsStats from "../src/api/openai-codex-ws-stats.ts";
+import type typesModule from "../src/types.types.ts";
+import transcript from "../src/utils/transcript.ts";
 import codexFakeWebSocket from "./codex-fake-websocket.ts";
 import openaiCodexStreamSupport from "./openai-codex-stream-support.ts";
+
+const { normalizeContext } = transcript;
+const { stream: streamOpenAICodexResponses } = openaiCodexResponses;
+const { getOpenAICodexWebSocketDebugStats } = openaiCodexWsStats;
 
 const { completedResponse, installFakeWebSocket } = codexFakeWebSocket;
 const {
@@ -22,7 +26,11 @@ const {
 
 const cached = (sessionId: string) => ({ sessionId, transport: "websocket-cached" as const });
 
-const followUp = (first: Context, reply: AssistantMessage, extra: Context["messages"] = []) =>
+const followUp = (
+  first: typesModule.Context,
+  reply: typesModule.AssistantMessage,
+  extra: typesModule.Context["messages"] = [],
+) =>
   normalizeContext({
     ...first,
     messages: [
@@ -136,7 +144,7 @@ const toolTurnEvents = (responseId: string, withToolCall: boolean) => [
   },
 ];
 
-const grammarToolContext: Context = {
+const grammarToolContext: typesModule.Context = {
   messages: [{ content: "Use the tool", role: "user", timestamp: 1 }],
   systemPrompt: "You are a helpful assistant.",
   tools: [

@@ -4,8 +4,10 @@ import type { Terminal as XtermTerminalType } from "@xterm/headless";
 import { Effect } from "effect";
 import { dual } from "effect/Function";
 
-import { overrideEnv } from "../src/env.ts";
-import { VirtualTerminal } from "./virtual-terminal.ts";
+import env from "../src/env.ts";
+import type virtualTerminalTypes from "./virtual-terminal.types.ts";
+
+const { overrideEnv } = env;
 
 const MAX_RENDER_WRITE_CHARS = 1024 * 1024;
 
@@ -31,9 +33,9 @@ const withEnv: {
 );
 
 const getCellItalic: {
-  (terminal: VirtualTerminal, row: number, col: number): number;
-  (row: number, col: number): (terminal: VirtualTerminal) => number;
-} = dual(3, (terminal: VirtualTerminal, row: number, col: number): number => {
+  (terminal: virtualTerminalTypes.VirtualTerminal, row: number, col: number): number;
+  (row: number, col: number): (terminal: virtualTerminalTypes.VirtualTerminal) => number;
+} = dual(3, (terminal: virtualTerminalTypes.VirtualTerminal, row: number, col: number): number => {
   const xterm = (terminal as unknown as { xterm: XtermTerminalType }).xterm;
   const buffer = xterm.buffer.active;
   const line = buffer.getLine(buffer.viewportY + row);

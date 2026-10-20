@@ -1,18 +1,18 @@
-import type { AssistantMessage, Message, SimpleStreamOptions } from "@msa/ai";
+import type aiTypes from "@msa/ai/index.types";
 import type durableTypes from "@msa/durable/index.types";
 
 import type supportTypes from "./support.types.ts";
 
 declare namespace harnessCompactionSupportTypes {
   type Request = {
-    readonly messages: readonly Message[];
-    readonly options: SimpleStreamOptions | undefined;
+    readonly messages: readonly aiTypes.Message[];
+    readonly options: aiTypes.SimpleStreamOptions | undefined;
     readonly model: string;
   };
 
   type Step =
-    | AssistantMessage
-    | ((request: Request) => AssistantMessage | Promise<AssistantMessage>);
+    | aiTypes.AssistantMessage
+    | ((request: Request) => aiTypes.AssistantMessage | Promise<aiTypes.AssistantMessage>);
 
   type Script = {
     readonly agent: Step[];

@@ -1,5 +1,5 @@
 import type chordTypes from "@msa/chord/index.types";
-import type { CodemodeHostCall, CodemodeOutcome } from "@msa/codemode/portable";
+import type portableTypes from "@msa/codemode/portable.types";
 import { Cause, Effect, Exit, Semaphore } from "effect";
 
 import errors from "../errors.ts";
@@ -32,7 +32,7 @@ const createCallHost = (
 
 const callTool = Effect.fnUntraced(function* (
   host: runCallsTypes.CallHost,
-  call: CodemodeHostCall,
+  call: portableTypes.CodemodeHostCall,
 ) {
   const { api, context, start } = host;
   const args = (call.args ?? {}) as typesModuleModule.JsonObject;
@@ -54,7 +54,7 @@ const callTool = Effect.fnUntraced(function* (
   return outcome;
 });
 
-const globalValue = (host: runCallsTypes.CallHost, call: CodemodeHostCall) => {
+const globalValue = (host: runCallsTypes.CallHost, call: portableTypes.CodemodeHostCall) => {
   if ((DISCOVERY_GLOBALS as readonly string[]).includes(call.name))
     return Effect.sync(() => discover(host.start, call));
   if ((CATALOG_GLOBALS as readonly string[]).includes(call.name))
@@ -68,21 +68,24 @@ const globalValue = (host: runCallsTypes.CallHost, call: CodemodeHostCall) => {
 
 const callGlobal = Effect.fnUntraced(function* (
   host: runCallsTypes.CallHost,
-  call: CodemodeHostCall,
+  call: portableTypes.CodemodeHostCall,
 ) {
   const value = globalValue(host, call);
   if (value === undefined) {
-    const unknown: CodemodeOutcome = { message: `Unknown global ${call.name}`, ok: false };
+    const unknown: portableTypes.CodemodeOutcome = {
+      message: `Unknown global ${call.name}`,
+      ok: false,
+    };
     return unknown;
   }
   const exit = yield* Effect.exit(value);
   if (Exit.isSuccess(exit)) {
-    const done: CodemodeOutcome = { ok: true, value: exit.value };
+    const done: portableTypes.CodemodeOutcome = { ok: true, value: exit.value };
     return done;
   }
   const error = Cause.squash(exit.cause);
   if (host.context.abortSignal?.aborted === true) throw error;
-  const failed: CodemodeOutcome = { message: errorMessage(error), ok: false };
+  const failed: portableTypes.CodemodeOutcome = { message: errorMessage(error), ok: false };
   return failed;
 });
 

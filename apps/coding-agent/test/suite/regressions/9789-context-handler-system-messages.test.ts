@@ -1,11 +1,13 @@
-import type { AgentMessage } from "@msa/agent-core";
-import { fauxAssistantMessage, getCurrentSystemPrompt } from "@msa/ai";
+import type agentTypes from "@msa/agent-core/index.types";
+import ai from "@msa/ai";
 import { Effect } from "effect";
 import { afterEach, describe, expect, it } from "vite-plus/test";
 
 import harnessModule from "../harness.ts";
 import type harnessTypes from "../harness.types.ts";
 import ContextHandlerSystemMessagesSupport from "./9789-context-handler-system-messages-support.ts";
+
+const { fauxAssistantMessage, getCurrentSystemPrompt } = ai;
 
 const { captureRequest, compactSession, compactViaHook, toolNames } =
   ContextHandlerSystemMessagesSupport;
@@ -16,7 +18,7 @@ const harnesses: harnessTypes.Harness[] = [];
 
 const keepsThePromptAndToolsWhen = Effect.gen(function* () {
   const runPromise = Effect.runPromiseWith(yield* Effect.context<never>());
-  const seen: AgentMessage[][] = [];
+  const seen: agentTypes.AgentMessage[][] = [];
   const harness = yield* Effect.promise(() =>
     createHarness({
       extensionFactories: [

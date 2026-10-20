@@ -1,97 +1,55 @@
 import { Effect } from "effect";
 
-import type {
-  AssistantMessage,
-  AssistantMessageEventStream,
-  DeferredHandle,
-  Model,
-  SimpleStreamOptions,
-  TranscriptContext,
-} from "../types.ts";
-import { createAssistantMessageEventStream } from "../utils/event-stream.ts";
-import { errorMessage, type FauxOrigin, stampMessage } from "./faux-messages.ts";
-import type { FauxPacing } from "./faux-stream.ts";
-import type {
-  FauxProviderState,
-  FauxResponseStep,
-  RegisterFauxProviderOptions,
-} from "./faux-types.ts";
-import { withUsageEstimate } from "./faux-usage.ts";
+import type typesModule from "../types.types.ts";
+import eventStream from "../utils/event-stream.ts";
+import type fauxEngineTypes from "./faux-engine.types.ts";
+import fauxMessages from "./faux-messages.ts";
+import type fauxMessagesTypes from "./faux-messages.types.ts";
+import fauxUsage from "./faux-usage.ts";
 
-export interface DeferredEntry {
-  readonly handle: DeferredHandle;
-  readonly step: FauxResponseStep;
-  readonly context: TranscriptContext;
-  readonly options: SimpleStreamOptions | undefined;
-  readonly model: Model<string>;
-  pendingFetches: number;
-  cancelled: boolean;
-  final?: AssistantMessage;
-}
+const { withUsageEstimate } = fauxUsage;
+const { errorMessage, stampMessage } = fauxMessages;
+const { createAssistantMessageEventStream } = eventStream;
 
-export interface FauxEngine {
-  readonly api: string;
-  readonly provider: string;
-  readonly state: FauxProviderState;
-  readonly promptCache: Map<string, readonly string[]>;
-  readonly pacing: FauxPacing;
-  readonly deferred: RegisterFauxProviderOptions["deferred"];
-  readonly deferredResponses: Map<string, DeferredEntry>;
-}
-
-export const originOf =
-  (engine: FauxEngine) =>
-  (model: Model<string>): FauxOrigin => ({
+const originOf =
+  (engine: fauxEngineTypes.FauxEngine) =>
+  (model: typesModule.Model<string>): fauxMessagesTypes.FauxOrigin => ({
     api: engine.api,
-    provider: engine.provider,
     modelId: model.id,
+    provider: engine.provider,
   });
 
-export interface FauxResponseRequest {
-  readonly engine: FauxEngine;
-  readonly step: FauxResponseStep;
-  readonly context: TranscriptContext;
-  readonly options: SimpleStreamOptions | undefined;
-  readonly model: Model<string>;
-}
-
-export const resolveFauxResponse = Effect.fn("resolveFauxResponse")(function* ({
+const resolveFauxResponse = Effect.fn("resolveFauxResponse")(function* ({
   engine,
   step,
   context,
   options,
   model,
-}: FauxResponseRequest) {
+}: fauxEngineTypes.FauxResponseRequest) {
   const resolved =
     typeof step === "function"
       ? yield* Effect.promise(() => Promise.resolve(step(context, options, engine.state, model)))
       : step;
   return withUsageEstimate({
-    message: stampMessage({ message: resolved, origin: originOf(engine)(model) }),
     context,
+    message: stampMessage({ message: resolved, origin: originOf(engine)(model) }),
     options,
     promptCache: engine.promptCache,
   });
 });
 
-export const endWithError =
-  (stream: AssistantMessageEventStream) =>
-  (message: AssistantMessage): void => {
-    stream.push({ type: "error", reason: "error", error: message });
+const endWithError =
+  (stream: typesModule.AssistantMessageEventStream) =>
+  (message: typesModule.AssistantMessage): void => {
+    stream.push({ error: message, reason: "error", type: "error" });
     stream.end(message);
   };
 
-export interface DetachedStream {
-  readonly engine: FauxEngine;
-  readonly model: Model<string>;
-  readonly run: (stream: AssistantMessageEventStream) => Effect.Effect<void>;
-}
-
-export function streamDetached({
+function streamDetached({
   engine,
   model,
   run,
-}: DetachedStream): AssistantMessageEventStream {
+}: fauxEngineTypes.DetachedStream): typesModule.AssistantMessageEventStream {
   const stream = createAssistantMessageEventStream();
   queueMicrotask(() => {
     Effect.runFork(
@@ -106,3 +64,12 @@ export function streamDetached({
   });
   return stream;
 }
+
+const fauxEngine = {
+  endWithError,
+  originOf,
+  resolveFauxResponse,
+  streamDetached,
+};
+
+export default fauxEngine;

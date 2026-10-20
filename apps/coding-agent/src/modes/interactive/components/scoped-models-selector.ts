@@ -1,20 +1,13 @@
-import type { Model } from "@msa/ai";
-import {
-  Container,
-  type Focusable,
-  fuzzyFilter,
-  getKeybindings,
-  Input,
-  Key,
-  matchesKey,
-  Spacer,
-  Text,
-} from "@msa/tui";
+import type aiTypes from "@msa/ai/index.types";
+import tui from "@msa/tui";
+import type tuiTypes from "@msa/tui/index.types";
 
 import { getModelSearchText } from "../model-search.ts";
 import { theme } from "../theme/theme.ts";
 import { DynamicBorder } from "./dynamic-border.ts";
 import { keyDisplayText } from "./keybinding-hints.ts";
+
+const { Container, Input, Key, Spacer, Text, fuzzyFilter, getKeybindings, matchesKey } = tui;
 
 type EnabledIds = string[] | null;
 
@@ -77,12 +70,12 @@ function getSortedIds(enabledIds: EnabledIds, allIds: string[]): string[] {
 
 interface ModelItem {
   fullId: string;
-  model: Model<any> | undefined;
+  model: aiTypes.Model<any> | undefined;
   enabled: boolean;
 }
 
 export interface ModelsConfig {
-  allModels: Model<any>[];
+  allModels: aiTypes.Model<any>[];
   enabledModelIds: string[] | null;
   refreshStatus?: string;
 }
@@ -93,13 +86,13 @@ export interface ModelsCallbacks {
   onCancel: () => void;
 }
 
-export class ScopedModelsSelectorComponent extends Container implements Focusable {
-  private modelsById: Map<string, Model<any>> = new Map();
+export class ScopedModelsSelectorComponent extends Container implements tuiTypes.Focusable {
+  private modelsById: Map<string, aiTypes.Model<any>> = new Map();
   private allIds: string[] = [];
   private enabledIds: EnabledIds = null;
   private filteredItems: ModelItem[] = [];
   private selectedIndex = 0;
-  private searchInput: Input;
+  private searchInput: tuiTypes.Input;
 
   private focusedState = false;
   get focused(): boolean {
@@ -109,12 +102,12 @@ export class ScopedModelsSelectorComponent extends Container implements Focusabl
     this.focusedState = value;
     this.searchInput.focused = value;
   }
-  private listContainer: Container;
-  private footerText: Text;
+  private listContainer: tuiTypes.Container;
+  private footerText: tuiTypes.Text;
   private callbacks: ModelsCallbacks;
   private maxVisible = 8;
   private isDirty = false;
-  private refreshStatusText?: Text;
+  private refreshStatusText?: tuiTypes.Text;
 
   constructor(config: ModelsConfig, callbacks: ModelsCallbacks) {
     super();
@@ -163,7 +156,7 @@ export class ScopedModelsSelectorComponent extends Container implements Focusabl
     this.updateList();
   }
 
-  updateModels(models: readonly Model<any>[], enabledModelIds?: string[] | null): void {
+  updateModels(models: readonly aiTypes.Model<any>[], enabledModelIds?: string[] | null): void {
     const selectedId = this.filteredItems[this.selectedIndex]?.fullId;
     if (enabledModelIds !== undefined)
       this.enabledIds = enabledModelIds === null ? null : [...enabledModelIds];
@@ -191,9 +184,9 @@ export class ScopedModelsSelectorComponent extends Container implements Focusabl
 
   private buildItems(): ModelItem[] {
     return getSortedIds(this.enabledIds, this.allIds).map((id) => ({
+      enabled: isEnabled(this.enabledIds, id),
       fullId: id,
       model: this.modelsById.get(id),
-      enabled: isEnabled(this.enabledIds, id),
     }));
   }
 
@@ -230,8 +223,8 @@ export class ScopedModelsSelectorComponent extends Container implements Focusabl
               ? item.fullId
               : getModelSearchText({
                   id: item.model.id,
-                  provider: item.model.provider,
                   name: item.model.name,
+                  provider: item.model.provider,
                 }),
           );
     this.selectedIndex = Math.min(this.selectedIndex, Math.max(0, this.filteredItems.length - 1));
@@ -418,7 +411,7 @@ export class ScopedModelsSelectorComponent extends Container implements Focusabl
     this.refresh();
   }
 
-  getSearchInput(): Input {
+  getSearchInput(): tuiTypes.Input {
     return this.searchInput;
   }
 }

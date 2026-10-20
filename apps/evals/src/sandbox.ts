@@ -22,7 +22,7 @@ export function resolveSandboxIdentity(): SandboxIdentity | undefined {
   if (uid === undefined || gid === undefined) {
     throw new Error("Set both MSA_EVAL_SANDBOX_UID and MSA_EVAL_SANDBOX_GID, or neither.");
   }
-  return { uid, gid };
+  return { gid, uid };
 }
 
 export const chownTree: {

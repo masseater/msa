@@ -2,97 +2,105 @@ import type {
   BetaCacheControlEphemeral as CacheControlEphemeral,
   BetaContentBlockParam as ContentBlockParam,
   BetaMessageParam as MessageParam,
-  BetaTool,
 } from "@anthropic-ai/sdk/resources/beta/messages/messages.js";
 
-import type { Message, Tool, ToolResultMessage } from "../types.ts";
-import { sanitizeSurrogates } from "../utils/sanitize-unicode.ts";
-import { renderSystemMessageUpdate } from "../utils/text.ts";
-import { isAnthropicEffort, type AnthropicEffort } from "./anthropic-messages-compat.ts";
-import { convertContentBlocks } from "./anthropic-messages-content.ts";
+import type typesModule from "../types.types.ts";
+import sanitizeUnicode from "../utils/sanitize-unicode.ts";
+import textModule from "../utils/text.ts";
+import anthropicMessagesCompat from "./anthropic-messages-compat.ts";
+import type anthropicMessagesCompatTypes from "./anthropic-messages-compat.types.ts";
+import anthropicMessagesContent from "./anthropic-messages-content.ts";
+import type anthropicMessagesConvertTypes from "./anthropic-messages-convert.types.ts";
+
+const { convertContentBlocks } = anthropicMessagesContent;
+const { renderSystemMessageUpdate } = textModule;
+const { sanitizeSurrogates } = sanitizeUnicode;
+const { isAnthropicEffort } = anthropicMessagesCompat;
 
 function normalizeToolCallId(id: string): string {
   return id.replaceAll(/[^a-zA-Z0-9_-]/gu, (char) => "_".repeat(char.length)).slice(0, 64);
 }
 
-function convertToolResult(msg: ToolResultMessage): ContentBlockParam {
+function convertToolResult(msg: typesModule.ToolResultMessage): ContentBlockParam {
   const content = msg.isError
     ? msg.content.map((block) =>
         block.type === "image"
           ? {
-              type: "text" as const,
               text: "[image omitted: error tool results cannot contain images]",
+              type: "text" as const,
             }
           : block,
       )
     : msg.content;
   return {
-    type: "tool_result",
-    tool_use_id: msg.toolCallId,
     content: convertContentBlocks(content),
     is_error: msg.isError,
+    tool_use_id: msg.toolCallId,
+    type: "tool_result",
   };
 }
 
-type ToolDefinitionsConverter = (tools: Tool[]) => BetaTool[];
-
 function convertSystemMessage(
-  msg: Extract<Message, { role: "system" }>,
-  convertToolDefinitions: ToolDefinitionsConverter | undefined,
+  msg: Extract<typesModule.Message, { role: "system" }>,
+  convertToolDefinitions: anthropicMessagesConvertTypes.ToolDefinitionsConverter | undefined,
 ): MessageParam | undefined {
   const text = renderSystemMessageUpdate(msg);
   const blocks: ContentBlockParam[] = [];
-  if (text.length > 0) blocks.push({ type: "text", text: sanitizeSurrogates(text) });
+  if (text.length > 0) blocks.push({ text: sanitizeSurrogates(text), type: "text" });
   if (convertToolDefinitions !== undefined) {
     const added = msg.toolsAdded ?? [];
     const redefined = new Set(added.map((tool) => tool.name));
     for (const tool of msg.toolsRemoved ?? []) {
       if (redefined.has(tool.name)) continue;
       blocks.push({
-        type: "tool_removal",
         tool: {
-          type: "tool_reference",
           name: tool.name,
+          type: "tool_reference",
         },
+        type: "tool_removal",
       });
     }
     for (const definition of convertToolDefinitions(added)) {
-      blocks.push({ type: "tool_addition", tool: { type: "tool_definition", definition } });
+      blocks.push({ tool: { definition, type: "tool_definition" }, type: "tool_addition" });
     }
   }
-  return blocks.length > 0 ? { role: "system", content: blocks } : undefined;
+  return blocks.length > 0 ? { content: blocks, role: "system" } : undefined;
 }
 
-function convertUserMessage(msg: Extract<Message, { role: "user" }>): MessageParam | undefined {
+function convertUserMessage(
+  msg: Extract<typesModule.Message, { role: "user" }>,
+): MessageParam | undefined {
   if (typeof msg.content === "string") {
     if (msg.content.trim().length === 0) return undefined;
-    return { role: "user", content: sanitizeSurrogates(msg.content) };
+    return { content: sanitizeSurrogates(msg.content), role: "user" };
   }
   const blocks = msg.content.map((item): ContentBlockParam =>
     item.type === "text"
-      ? { type: "text", text: sanitizeSurrogates(item.text) }
+      ? { text: sanitizeSurrogates(item.text), type: "text" }
       : {
-          type: "image",
           source: {
-            type: "base64",
-            media_type: item.mimeType as "image/jpeg" | "image/png" | "image/gif" | "image/webp",
             data: item.data,
+            media_type: item.mimeType as "image/jpeg" | "image/png" | "image/gif" | "image/webp",
+            type: "base64",
           },
+          type: "image",
         },
   );
   const filteredBlocks = blocks.filter((b) =>
     b.type === "text" ? b.text.trim().length > 0 : true,
   );
   if (filteredBlocks.length === 0) return undefined;
-  return { role: "user", content: filteredBlocks };
+  return { content: filteredBlocks, role: "user" };
 }
 
 function convertThinkingBlock(
-  block: Extract<Message, { role: "assistant" }>["content"][number] & { type: "thinking" },
+  block: Extract<typesModule.Message, { role: "assistant" }>["content"][number] & {
+    type: "thinking";
+  },
   allowEmptySignature: boolean,
 ): ContentBlockParam | undefined {
   if (block.redacted === true) {
-    return { type: "redacted_thinking", data: block.thinkingSignature! };
+    return { data: block.thinkingSignature!, type: "redacted_thinking" };
   }
   const thinkingSignature = block.thinkingSignature;
   const hasThinkingSignature =
@@ -102,34 +110,34 @@ function convertThinkingBlock(
   if (block.thinking.trim().length === 0 && !hasThinkingSignature) return undefined;
   if (hasThinkingSignature) {
     return {
-      type: "thinking",
-      thinking: sanitizeSurrogates(block.thinking),
       signature: thinkingSignature,
+      thinking: sanitizeSurrogates(block.thinking),
+      type: "thinking",
     };
   }
   return allowEmptySignature
-    ? { type: "thinking", thinking: sanitizeSurrogates(block.thinking), signature: "" }
-    : { type: "text", text: sanitizeSurrogates(block.thinking) };
+    ? { signature: "", thinking: sanitizeSurrogates(block.thinking), type: "thinking" }
+    : { text: sanitizeSurrogates(block.thinking), type: "text" };
 }
 
 function convertAssistantBlocks(
-  msg: Extract<Message, { role: "assistant" }>,
+  msg: Extract<typesModule.Message, { role: "assistant" }>,
   allowEmptySignature: boolean,
 ): ContentBlockParam[] {
   const blocks: ContentBlockParam[] = [];
   for (const block of msg.content) {
     if (block.type === "text") {
       if (block.text.trim().length === 0) continue;
-      blocks.push({ type: "text", text: sanitizeSurrogates(block.text) });
+      blocks.push({ text: sanitizeSurrogates(block.text), type: "text" });
     } else if (block.type === "thinking") {
       const converted = convertThinkingBlock(block, allowEmptySignature);
       if (converted !== undefined) blocks.push(converted);
     } else if (block.type === "toolCall") {
       blocks.push({
-        type: "tool_use",
         id: block.id,
-        name: block.name,
         input: block.arguments ?? {},
+        name: block.name,
+        type: "tool_use",
       });
     }
   }
@@ -137,7 +145,7 @@ function convertAssistantBlocks(
 }
 
 function collectToolResults(
-  messages: ReadonlyArray<Message>,
+  messages: ReadonlyArray<typesModule.Message>,
   start: number,
 ): { blocks: ContentBlockParam[]; nextIndex: number } {
   const blocks: ContentBlockParam[] = [];
@@ -173,29 +181,19 @@ function applyCacheControlToLastMessage(
   if (typeof lastMessage.content !== "string") return;
   lastMessage.content = [
     {
-      type: "text",
-      text: lastMessage.content,
       cache_control: cacheControl,
+      text: lastMessage.content,
+      type: "text",
     },
   ] as any;
 }
 
-interface ConvertedAnthropicMessages {
-  messages: MessageParam[];
-  assistantLevels: Map<number, AnthropicEffort>;
-}
-
-interface ConvertMessagesOptions {
-  cacheControl?: CacheControlEphemeral | undefined;
-  allowEmptySignature?: boolean | undefined;
-  managedProvider?: string | undefined;
-  convertToolDefinitions?: ToolDefinitionsConverter | undefined;
-}
-
 function convertAssistantMessage(
-  msg: Extract<Message, { role: "assistant" }>,
-  options: ConvertMessagesOptions,
-): { message: MessageParam; effort: AnthropicEffort | undefined } | undefined {
+  msg: Extract<typesModule.Message, { role: "assistant" }>,
+  options: anthropicMessagesConvertTypes.ConvertMessagesOptions,
+):
+  | { message: MessageParam; effort: anthropicMessagesCompatTypes.AnthropicEffort | undefined }
+  | undefined {
   const blocks = convertAssistantBlocks(msg, options.allowEmptySignature ?? false);
   if (blocks.length === 0) return undefined;
   const effort =
@@ -205,17 +203,15 @@ function convertAssistantMessage(
     isAnthropicEffort(msg.providerThinkingLevel)
       ? msg.providerThinkingLevel
       : undefined;
-  return { message: { role: "assistant", content: blocks }, effort };
+  return { effort, message: { content: blocks, role: "assistant" } };
 }
 
-interface ConvertMessagesInput extends ConvertMessagesOptions {
-  readonly messages: Message[];
-}
-
-function convertMessages(input: ConvertMessagesInput): ConvertedAnthropicMessages {
+function convertMessages(
+  input: anthropicMessagesConvertTypes.ConvertMessagesInput,
+): anthropicMessagesConvertTypes.ConvertedAnthropicMessages {
   const { messages: transformedMessages, ...options } = input;
   const params: MessageParam[] = [];
-  const assistantLevels = new Map<number, AnthropicEffort>();
+  const assistantLevels = new Map<number, anthropicMessagesCompatTypes.AnthropicEffort>();
   const pendingSystemMessages: MessageParam[] = [];
   const flushPendingSystemMessages = (): void => {
     params.push(...pendingSystemMessages);
@@ -243,7 +239,7 @@ function convertMessages(input: ConvertMessagesInput): ConvertedAnthropicMessage
     } else if (msg.role === "toolResult") {
       const collected = collectToolResults(transformedMessages, i);
       i = collected.nextIndex;
-      params.push({ role: "user", content: collected.blocks });
+      params.push({ content: collected.blocks, role: "user" });
     }
   }
 
@@ -253,34 +249,28 @@ function convertMessages(input: ConvertMessagesInput): ConvertedAnthropicMessage
     applyCacheControlToLastMessage(params, options.cacheControl);
   }
 
-  return { messages: params, assistantLevels };
+  return { assistantLevels, messages: params };
 }
-
-interface InsertThinkingLevelMessagesInput {
-  readonly converted: ConvertedAnthropicMessages;
-  readonly activeEffort: AnthropicEffort;
-}
-
-function insertThinkingLevelMessages(input: InsertThinkingLevelMessagesInput): MessageParam[] {
+function insertThinkingLevelMessages(
+  input: anthropicMessagesConvertTypes.InsertThinkingLevelMessagesInput,
+): MessageParam[] {
   const { converted, activeEffort } = input;
   const messages: MessageParam[] = [];
   for (const [index, message] of converted.messages.entries()) {
     const historicalEffort = converted.assistantLevels.get(index);
     if (historicalEffort !== undefined) {
-      messages.push({ role: "system", content: [], output_config: { effort: historicalEffort } });
+      messages.push({ content: [], output_config: { effort: historicalEffort }, role: "system" });
     }
     messages.push(message);
   }
-  messages.push({ role: "system", content: [], output_config: { effort: activeEffort } });
+  messages.push({ content: [], output_config: { effort: activeEffort }, role: "system" });
   return messages;
 }
 
-export {
+const anthropicMessagesConvert = {
   convertMessages,
   insertThinkingLevelMessages,
   normalizeToolCallId,
-  type ConvertMessagesInput,
-  type ConvertMessagesOptions,
-  type ConvertedAnthropicMessages,
-  type ToolDefinitionsConverter,
 };
+
+export default anthropicMessagesConvert;

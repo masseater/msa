@@ -1,10 +1,13 @@
 import { Effect } from "effect";
 import { describe, expect, it } from "vite-plus/test";
 
-import { stream as streamAnthropic } from "../src/api/anthropic-messages.ts";
-import { normalizeContext } from "../src/compat.ts";
+import anthropicMessages from "../src/api/anthropic-messages.ts";
+import compat from "../src/compat.ts";
 import anthropicSseParsingSupport from "./anthropic-sse-parsing-support.ts";
 import modelChoice from "./model-choice.ts";
+
+const { stream: streamAnthropic } = anthropicMessages;
+const { normalizeContext } = compat;
 
 const { createFakeAnthropicClient, createSseResponse, minimalAnthropicEvents } =
   anthropicSseParsingSupport;

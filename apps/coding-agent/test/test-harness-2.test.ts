@@ -1,5 +1,5 @@
-import type { AgentTool } from "@msa/agent-core";
-import type { AssistantMessage } from "@msa/ai";
+import type agentTypes from "@msa/agent-core/index.types";
+import type aiTypes from "@msa/ai/index.types";
 import testing from "@msa/testing";
 import { Effect } from "effect";
 import { Type } from "typebox";
@@ -58,7 +58,7 @@ const wrapsAroundWhenMoreCallsThanResponses = () =>
       expect(harness.faux.callCount).toBe(3);
 
       const texts = harness.session.messages
-        .filter((m): m is AssistantMessage => m.role === "assistant")
+        .filter((m): m is aiTypes.AssistantMessage => m.role === "assistant")
         .map((m) => m.content.find((c) => c.type === "text")?.text);
 
       expect(texts).toEqual(["a", "b", "a"]);
@@ -119,7 +119,7 @@ const streamsToolCallDeltas = () =>
     Effect.gen(function* () {
       const effectRunPromise = Effect.runPromiseWith(yield* Effect.context<never>());
 
-      const echoTool: AgentTool = {
+      const echoTool: agentTypes.AgentTool = {
         description: "Echo back",
         execute: () =>
           effectRunPromise(
@@ -160,7 +160,7 @@ const streamsThinkingThenTextThenToolCall = () =>
     Effect.gen(function* () {
       const effectRunPromise = Effect.runPromiseWith(yield* Effect.context<never>());
 
-      const echoTool: AgentTool = {
+      const echoTool: agentTypes.AgentTool = {
         description: "Echo back",
         execute: () =>
           effectRunPromise(

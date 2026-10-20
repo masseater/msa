@@ -1,4 +1,5 @@
-import { type OAuthChallenge, OAuthIssuerMismatchError } from "@msa/mcp/oauth";
+import oauth from "@msa/mcp/oauth";
+import type oauthTypes from "@msa/mcp/oauth.types";
 import testing from "@msa/testing";
 import { Effect } from "effect";
 import { afterEach, describe, expect, it } from "vite-plus/test";
@@ -12,6 +13,8 @@ import {
 } from "../src/extensions/mcp/oauth.ts";
 import mcpOauthBrowser from "./suite/mcp-oauth-browser.ts";
 import mcpOauthServer from "./suite/mcp-oauth-server.ts";
+
+const { OAuthIssuerMismatchError } = oauth;
 
 const { startOAuthMcpServer } = mcpOauthServer;
 
@@ -163,7 +166,7 @@ const keepsTheGrantedScopeWhenTheServer = () =>
           server.url,
         );
         const opened: URL[] = [];
-        const signInWith = (challenge: OAuthChallenge) =>
+        const signInWith = (challenge: oauthTypes.OAuthChallenge) =>
           signInMcpServer({
             challenge,
             prompt: browserPrompt((url) => opened.push(url)),

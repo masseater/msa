@@ -6,7 +6,7 @@ const makeTimeoutSignal = (ms: number): { signal: AbortSignal; cancel: () => voi
   const fiber = Effect.runFork(
     Effect.sleep(ms).pipe(Effect.andThen(Effect.sync(() => controller.abort()))),
   );
-  return { signal: controller.signal, cancel: () => fiber.interruptUnsafe() };
+  return { cancel: () => fiber.interruptUnsafe(), signal: controller.signal };
 };
 
 const registerTimedConfirm = (msa: ExtensionAPI): void => {

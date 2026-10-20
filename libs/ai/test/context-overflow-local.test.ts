@@ -1,9 +1,11 @@
 import { Console, Effect } from "effect";
 import { afterAll, beforeAll, describe, expect, inject, it } from "vite-plus/test";
 
-import { isContextOverflow } from "../src/utils/overflow.ts";
+import overflowModule from "../src/utils/overflow.ts";
 import contextOverflowSupport from "./context-overflow-support.ts";
 import localLlmSupport from "./local-llm-support.ts";
+
+const { isContextOverflow } = overflowModule;
 
 const { expectOverflowDetected, overflow } = contextOverflowSupport;
 const { llamaCppModel, lmStudioModel, ollamaModel, startOllama } = localLlmSupport;

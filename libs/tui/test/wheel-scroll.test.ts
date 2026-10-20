@@ -1,10 +1,11 @@
 import assert from "node:assert";
 import { describe, it } from "node:test";
 
-import { WheelScrollAccelerator } from "../src/wheel-scroll.ts";
+import WheelScrollAccelerator from "../src/wheel-scroll.ts";
+import type wheelScrollTypes from "../src/wheel-scroll.types.ts";
 
 function scroll(
-  accelerator: WheelScrollAccelerator,
+  accelerator: wheelScrollTypes.WheelScrollAccelerator,
   times: number[],
   direction: -1 | 1 = 1,
 ): number[] {

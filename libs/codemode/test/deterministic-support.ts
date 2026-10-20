@@ -1,30 +1,23 @@
 import { Effect, Schedule } from "effect";
 import { dual } from "effect/Function";
 
-import {
-  type CodemodeHostCall,
-  type CodemodeRemoteExchange,
-  type CodemodeRun,
-  CodemodeSandbox,
-  type CodemodeSandboxBase,
-  type CodemodeSandboxBaseOptions,
-  RemoteCodemodeSandbox,
-  loadQuickJSWasm,
-  serveCodemodeRemote,
-} from "../src/index.ts";
+import codemode from "../src/index.ts";
+import type codemodeTypes from "../src/index.types.ts";
 import type deterministicSupportTypes from "./deterministic-support.types.ts";
+
+const { CodemodeSandbox, RemoteCodemodeSandbox, loadQuickJSWasm, serveCodemodeRemote } = codemode;
 
 const BUDGET = 50_000;
 
 function makeRemote(
-  options: CodemodeSandboxBaseOptions,
+  options: codemodeTypes.CodemodeSandboxBaseOptions,
   delayFirst: boolean,
-): RemoteCodemodeSandbox {
+): codemodeTypes.RemoteCodemodeSandbox {
   return new RemoteCodemodeSandbox({
     ...options,
     remote: () => ({
       execute: (request, exchange) => {
-        const wrapped: CodemodeRemoteExchange = (messages) =>
+        const wrapped: codemodeTypes.CodemodeRemoteExchange = (messages) =>
           Effect.runPromise(
             Effect.gen(function* () {
               const reply = structuredClone(
@@ -44,7 +37,9 @@ function makeRemote(
   });
 }
 
-function remoteDelayingFirst(options: CodemodeSandboxBaseOptions): RemoteCodemodeSandbox {
+function remoteDelayingFirst(
+  options: codemodeTypes.CodemodeSandboxBaseOptions,
+): codemodeTypes.RemoteCodemodeSandbox {
   return makeRemote(options, true);
 }
 
@@ -56,17 +51,18 @@ const BACKENDS: Record<string, deterministicSupportTypes.Create> = {
 const STARTED_AT = Date.UTC(2026, 0, 15, 10, 0, 0);
 
 function startRecorded(
-  sandbox: CodemodeSandboxBase,
+  sandbox: codemodeTypes.CodemodeSandboxBase,
   code: string,
   options: deterministicSupportTypes.StartOptions = {},
 ): deterministicSupportTypes.Recorded {
-  const calls: CodemodeHostCall[] = [];
+  const calls: codemodeTypes.CodemodeHostCall[] = [];
   const idles: [number, number][] = [];
   const events: string[] = [];
   let fingerprint: string | undefined;
   let seq = 0;
-  const answer = options.answer ?? ((call: CodemodeHostCall) => ({ ok: true, value: call.args }));
-  const run: CodemodeRun = sandbox.start(code, {
+  const answer =
+    options.answer ?? ((call: codemodeTypes.CodemodeHostCall) => ({ ok: true, value: call.args }));
+  const run: codemodeTypes.CodemodeRun = sandbox.start(code, {
     seed: 1,
     startedAt: STARTED_AT,
     timeoutMs: 20_000,
@@ -97,9 +93,9 @@ const start: {
   (
     code: string,
     options?: deterministicSupportTypes.StartOptions,
-  ): (sandbox: CodemodeSandboxBase) => deterministicSupportTypes.Recorded;
+  ): (sandbox: codemodeTypes.CodemodeSandboxBase) => deterministicSupportTypes.Recorded;
   (
-    sandbox: CodemodeSandboxBase,
+    sandbox: codemodeTypes.CodemodeSandboxBase,
     code: string,
     options?: deterministicSupportTypes.StartOptions,
   ): deterministicSupportTypes.Recorded;

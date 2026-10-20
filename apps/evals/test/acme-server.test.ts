@@ -4,13 +4,13 @@ import { afterAll, beforeAll, beforeEach, describe, expect, it } from "vite-plus
 
 import {
   type AcmeServer,
-  createAcmeServer,
   OPENAI_MODEL_ID,
   OPENAI_PROBE_PROMPT,
   OPENAI_PROBE_RESPONSE,
   STREAM_MODEL_ID,
   STREAM_PROBE_PROMPT,
   STREAM_PROBE_RESPONSE,
+  createAcmeServer,
 } from "../evals/acme-server.ts";
 
 type Fixture = {
@@ -28,33 +28,33 @@ type Fixture = {
 
 const fixtures: Fixture[] = [
   {
-    mode: "openai",
-    url: (server) => `${server.baseUrl()}/chat/completions`,
+    contentType: "text/event-stream",
     headers: { authorization: "Bearer resolved-acme-key" },
-    unauthorizedHeaders: { authorization: "Bearer wrong-key" },
+    invalid: "Invalid OpenAI-compatible request",
+    mode: "openai",
     model: OPENAI_MODEL_ID,
     prompt: OPENAI_PROBE_PROMPT,
     response: OPENAI_PROBE_RESPONSE,
-    contentType: "text/event-stream",
     unauthorized: "Invalid Acme credential",
-    invalid: "Invalid OpenAI-compatible request",
+    unauthorizedHeaders: { authorization: "Bearer wrong-key" },
+    url: (server) => `${server.baseUrl()}/chat/completions`,
   },
   {
-    mode: "stream",
-    url: (server) => `${server.origin()}/generate`,
+    contentType: "application/x-ndjson",
     headers: { "x-acme-key": "resolved-stream-key" },
-    unauthorizedHeaders: { "x-acme-key": "wrong-key" },
+    invalid: "Invalid Acme Stream request",
+    mode: "stream",
     model: STREAM_MODEL_ID,
     prompt: STREAM_PROBE_PROMPT,
     response: STREAM_PROBE_RESPONSE,
-    contentType: "application/x-ndjson",
     unauthorized: "Invalid Acme Stream credential",
-    invalid: "Invalid Acme Stream request",
+    unauthorizedHeaders: { "x-acme-key": "wrong-key" },
+    url: (server) => `${server.origin()}/generate`,
   },
 ];
 
 function body(model: string, prompt: string, stream = true) {
-  return { model, messages: [{ role: "user", content: prompt }], stream };
+  return { messages: [{ role: "user", content: prompt }], model, stream };
 }
 
 const encodeJson = Schema.encodeEffect(Schema.fromJsonString(Schema.Unknown));
@@ -79,8 +79,8 @@ const post = (
         );
         const response = yield* client.execute(request);
         return {
-          status: response.status,
           contentType: response.headers["content-type"],
+          status: response.status,
           text: yield* response.text,
         };
       }).pipe(Effect.orDie),

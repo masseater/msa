@@ -1,27 +1,25 @@
 import { Effect, Latch } from "effect";
 import { describe, expect, it } from "vite-plus/test";
 
-import {
-  type CodemodeRemote,
-  type CodemodeRemoteExchange,
-  type CodemodeRemoteRequest,
-  type CodemodeServeOptions,
-  InlineCodemodeSandbox,
-  RemoteCodemodeSandbox,
-  loadQuickJSWasm,
-  serveCodemodeRemote,
-} from "../src/index.ts";
+import codemode from "../src/index.ts";
+import type codemodeTypes from "../src/index.types.ts";
 import support from "./support.ts";
+
+const { InlineCodemodeSandbox, RemoteCodemodeSandbox, loadQuickJSWasm, serveCodemodeRemote } =
+  codemode;
 
 const { abortController, hang, toJson } = support;
 
 const wasm = loadQuickJSWasm();
 
-function recordingRemote(options: Partial<CodemodeServeOptions> = {}) {
+function recordingRemote(options: Partial<codemodeTypes.CodemodeServeOptions> = {}) {
   const exchanges: number[] = [];
   const served: Promise<void>[] = [];
-  const remote: CodemodeRemote = {
-    execute(request: CodemodeRemoteRequest, exchange: CodemodeRemoteExchange) {
+  const remote: codemodeTypes.CodemodeRemote = {
+    execute(
+      request: codemodeTypes.CodemodeRemoteRequest,
+      exchange: codemodeTypes.CodemodeRemoteExchange,
+    ) {
       const done = serveCodemodeRemote(
         structuredClone(request),
         (messages) => {

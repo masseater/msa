@@ -1,4 +1,5 @@
-import { Container, Spacer, Text } from "@msa/tui";
+import tui from "@msa/tui";
+import type tuiTypes from "@msa/tui/index.types";
 
 import type { ToolDefinition } from "../../core/extensions/types.ts";
 import {
@@ -9,9 +10,11 @@ import {
   toolTimerText,
 } from "../../core/tools/render-utils.ts";
 import { expandHint } from "../../modes/interactive/components/keybinding-hints.ts";
-import { collapsedOutput, SingleLine } from "../../modes/interactive/components/visual-truncate.ts";
-import { highlightCode, type Theme } from "../../modes/interactive/theme/theme.ts";
+import { SingleLine, collapsedOutput } from "../../modes/interactive/components/visual-truncate.ts";
+import { type Theme, highlightCode } from "../../modes/interactive/theme/theme.ts";
 import type { CodemodeNestedCall, CodemodeToolDetails } from "./tool.ts";
+
+const { Container, Spacer, Text } = tui;
 
 const COLLAPSED_ARGS_CHARS = 80;
 const SCRIPT_HEADER = /^Script (completed|failed)\nWall time [\d.]+ seconds\nOutput:\n$/u;
@@ -63,7 +66,7 @@ export const codemodeRenderers: Pick<
 
     const code = str((args as { code?: unknown } | undefined)?.code);
     const title = theme.fg("toolTitle", theme.bold("codemode"));
-    const component = (context.lastComponent as Container | undefined) ?? new Container();
+    const component = (context.lastComponent as tuiTypes.Container | undefined) ?? new Container();
     component.clear();
     if (code === null) {
       component.addChild(new Text(`${title} ${theme.fg("error", "[invalid arg]")}`, 0, 0));
@@ -87,7 +90,7 @@ export const codemodeRenderers: Pick<
   },
   renderResult(result, options, theme, context) {
     const timerText = toolTimerText(context, options.isPartial);
-    const component = (context.lastComponent as Container | undefined) ?? new Container();
+    const component = (context.lastComponent as tuiTypes.Container | undefined) ?? new Container();
     component.clear();
     const calls = result.details?.calls ?? [];
     if (calls.length > 0 && !options.expanded) {

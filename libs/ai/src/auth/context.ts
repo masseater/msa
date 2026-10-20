@@ -1,6 +1,6 @@
 import { Effect } from "effect";
 
-import type { AuthContext } from "./types.ts";
+import type typesModule from "./types.ts";
 
 interface NodeFsModule {
   access(path: string): Promise<void>;
@@ -24,7 +24,7 @@ const expandHome = (path: string): Effect.Effect<string> =>
     return os.homedir() + path.slice(1);
   });
 
-export const defaultProviderAuthContext = (): AuthContext => ({
+const defaultProviderAuthContext = (): typesModule.AuthContext => ({
   env(name: string): Promise<string | undefined> {
     const value = getProcessEnv()?.[name];
     return Promise.resolve(
@@ -45,3 +45,9 @@ export const defaultProviderAuthContext = (): AuthContext => ({
     );
   },
 });
+
+const context = {
+  defaultProviderAuthContext,
+};
+
+export default context;

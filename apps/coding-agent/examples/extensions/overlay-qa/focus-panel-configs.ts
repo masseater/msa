@@ -1,7 +1,7 @@
 import type { FocusPanelConfig } from "./focus-panel.ts";
 
 export const FOCUS_PANEL_CONFIGS = [
-  { label: "Alpha", color: "error", options: { row: 2, col: 4, width: 34 } },
-  { label: "Beta", color: "success", options: { row: 5, col: 28, width: 34 } },
-  { label: "Gamma", color: "accent", options: { row: 8, col: 52, width: 34 } },
+  { color: "error", label: "Alpha", options: { col: 4, row: 2, width: 34 } },
+  { color: "success", label: "Beta", options: { col: 28, row: 5, width: 34 } },
+  { color: "accent", label: "Gamma", options: { col: 52, row: 8, width: 34 } },
 ] satisfies FocusPanelConfig[];

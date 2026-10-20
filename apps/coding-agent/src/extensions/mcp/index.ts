@@ -1,4 +1,4 @@
-import type { SelectItem } from "@msa/tui";
+import type tuiTypes from "@msa/tui/index.types";
 import * as Effect from "effect/Effect";
 import * as Option from "effect/Option";
 import type { TSchema } from "typebox";
@@ -21,29 +21,29 @@ import { openBrowser } from "../../utils/open-browser.ts";
 import { CODEMODE_TOOL_NAME } from "../codemode/tool.ts";
 import { TOOL_SEARCH_TOOL_NAME } from "../tool-search/tool.ts";
 import {
-  getMcpToolExposure,
   type LoadedMcpConfig,
-  loadMcpConfig,
   type McpExposure,
   type McpServerConfigPatch,
   type McpServerEntry,
+  getMcpToolExposure,
+  loadMcpConfig,
   updateMcpServerConfig,
 } from "./config.ts";
 import type { McpOAuthCredentialStore, McpSignInPrompt } from "./oauth.ts";
 import {
-  createMcpResourceToolDefinitions,
-  LIST_MCP_RESOURCE_TEMPLATES_TOOL,
   LIST_MCP_RESOURCES_TOOL,
+  LIST_MCP_RESOURCE_TEMPLATES_TOOL,
   READ_MCP_RESOURCE_TOOL,
+  createMcpResourceToolDefinitions,
 } from "./resources.ts";
 import { loadMcpRuntime } from "./runtime.lazy.ts";
 import type * as McpRuntime from "./runtime.ts";
 import type { McpServerConnection, McpServerLog, McpTransportFactory } from "./runtime.ts";
 import {
+  type McpToolDetails,
   createMcpToolDefinition,
   createMcpToolName,
   createMcpToolRenderers,
-  type McpToolDetails,
 } from "./tools.ts";
 import { type McpMenu, type McpUi, showMcpManager } from "./ui.ts";
 
@@ -308,11 +308,11 @@ export function createMcpExtension(options: McpExtensionOptions = {}): Extension
           continue;
         }
         registered.push({
-          entry: { name, config, source: extensionPath, scope: "extension" },
+          entry: { config, name, scope: "extension", source: extensionPath },
           registeredConfig: JSON.stringify(config),
         });
       }
-      return { servers: registered, overridden: overriddenNames };
+      return { overridden: overriddenNames, servers: registered };
     };
 
     const getCredentials = (runtime: typeof McpRuntime): McpOAuthCredentialStore => {
@@ -343,9 +343,9 @@ export function createMcpExtension(options: McpExtensionOptions = {}): Extension
       const entry = findServer(server)?.entry ?? connection.entry;
       const description = entry.config.description?.trim();
       const namespace = {
-        name: mcpNamespace(server),
-
         aliases: [server],
+
+        name: mcpNamespace(server),
         ...(description !== undefined && description !== "" ? { description } : {}),
         ...(connection.instructions !== undefined && connection.instructions !== ""
           ? { instructions: connection.instructions }
@@ -372,12 +372,7 @@ export function createMcpExtension(options: McpExtensionOptions = {}): Extension
       };
       for (const tool of connection.tools) {
         const definition = createMcpToolDefinition({
-          server,
-          tool,
-          name: assignName(tool.name, `${server}\0${tool.name}`),
           exposure: getMcpToolExposure(entry.config, tool.name),
-          namespace,
-          timeoutMs: connection.timeoutMs,
           getClient: () =>
             Effect.runPromise(
               Effect.sync(() => {
@@ -397,7 +392,12 @@ export function createMcpExtension(options: McpExtensionOptions = {}): Extension
                 return client;
               }),
             ),
+          name: assignName(tool.name, `${server}\0${tool.name}`),
+          namespace,
           readableResources: () => resourceServers().some((candidate) => candidate.name === server),
+          server,
+          timeoutMs: connection.timeoutMs,
+          tool,
         });
         definitions.set(definition.name, definition);
         msa.registerTool(definition);
@@ -539,24 +539,24 @@ export function createMcpExtension(options: McpExtensionOptions = {}): Extension
           const runtime = yield* awaited(loadMcpRuntime());
           if (!isCurrent()) return undefined;
           const connection = new runtime.McpServerConnection({
-            entry: server.entry,
-            cwd: sessionCwd,
             createTransport: options.createTransport ?? runtime.createDefaultTransport,
             credentials: getCredentials(runtime),
+            cwd: sessionCwd,
+            entry: server.entry,
+            log: getServerLog(runtime),
+            onChange: (serverConnection) => {
+              if (isCurrent()) onConnectionChange(serverConnection);
+              else tokensAtSignIn.delete(serverConnection);
+            },
+            onTools: (serverConnection) => {
+              if (isCurrent()) registerTools(serverConnection);
+            },
             providerToken: (provider) =>
               Effect.runPromise(
                 awaiting(function* () {
                   return yield* awaited(modelRegistry?.getApiKeyForProvider(provider));
                 }),
               ),
-            log: getServerLog(runtime),
-            onTools: (serverConnection) => {
-              if (isCurrent()) registerTools(serverConnection);
-            },
-            onChange: (serverConnection) => {
-              if (isCurrent()) onConnectionChange(serverConnection);
-              else tokensAtSignIn.delete(serverConnection);
-            },
           });
           server.connection = connection;
           emitChange();
@@ -593,7 +593,7 @@ export function createMcpExtension(options: McpExtensionOptions = {}): Extension
           const readyOf = () =>
             waiting.flatMap((server) =>
               isEnabled(server) && servers.includes(server) && server.ready !== undefined
-                ? [{ server, ready: server.ready }]
+                ? [{ ready: server.ready, server }]
                 : [],
             );
           const unchanged = (ready: ReturnType<typeof readyOf>) =>
@@ -673,12 +673,12 @@ export function createMcpExtension(options: McpExtensionOptions = {}): Extension
             yield* awaited(
               track(
                 runtime.signInMcpServer({
-                  serverUrl: url,
-                  store: getCredentials(runtime).forServer(server.entry.name, url),
-                  settings: connection.oauthSettings(),
                   challenge: connection.challenge,
                   prompt,
+                  serverUrl: url,
+                  settings: connection.oauthSettings(),
                   signal,
+                  store: getCredentials(runtime).forServer(server.entry.name, url),
                 }),
               ),
             );
@@ -794,7 +794,9 @@ export function createMcpExtension(options: McpExtensionOptions = {}): Extension
     ];
 
     const serversMenu = (): McpMenu => ({
-      title: "MCP servers",
+      cancelLabel: "close",
+      confirmLabel: "manage",
+      empty: `No MCP servers configured. Add them to ${resolve(getAgentDir(), "mcp.json")} or .msa/mcp.json.`,
       error: notices().join("\n") || undefined,
       items: [...servers]
         .sort(
@@ -805,20 +807,18 @@ export function createMcpExtension(options: McpExtensionOptions = {}): Extension
           label: server.entry.name,
           description: `${describeState(server)} · ${exposureOf(server.entry)} · ${server.entry.override !== undefined && server.entry.override !== "" ? "global, project override" : (server.entry.scope ?? server.entry.source)}`,
         })),
-      empty: `No MCP servers configured. Add them to ${resolve(getAgentDir(), "mcp.json")} or .msa/mcp.json.`,
-      confirmLabel: "manage",
-      cancelLabel: "close",
+      title: "MCP servers",
     });
 
     const serverMenu = (name: string): McpMenu => {
       const server = findServer(name);
       if (server === undefined) {
         return {
-          title: name,
-          items: [],
-          empty: "This server is no longer configured.",
-          confirmLabel: "",
           cancelLabel: "back",
+          confirmLabel: "",
+          empty: "This server is no longer configured.",
+          items: [],
+          title: name,
         };
       }
       const { entry, connection } = server;
@@ -836,16 +836,16 @@ export function createMcpExtension(options: McpExtensionOptions = {}): Extension
         (entry.override === undefined || entry.override === "") &&
         projectConfig !== undefined;
       const inProjectSaved = "saved to the project mcp.json";
-      const items: SelectItem[] = [];
+      const items: tuiTypes.SelectItem[] = [];
       if (isEnabled(server)) {
         const state = connection?.state;
         if (state === "needs-auth")
-          items.push({ value: "signin", label: "Sign in", description: "opens the browser" });
+          items.push({ description: "opens the browser", label: "Sign in", value: "signin" });
         if (state === "connected" && connection !== undefined) {
           items.push({
-            value: "tools",
-            label: "Tools",
             description: `${connection.tools.length} offered`,
+            label: "Tools",
+            value: "tools",
           });
         }
         if (
@@ -854,7 +854,7 @@ export function createMcpExtension(options: McpExtensionOptions = {}): Extension
           state === "connected" ||
           state === "needs-auth"
         ) {
-          items.push({ value: "reconnect", label: "Reconnect" });
+          items.push({ label: "Reconnect", value: "reconnect" });
         }
         if (
           state === "connected" &&
@@ -862,27 +862,27 @@ export function createMcpExtension(options: McpExtensionOptions = {}): Extension
           connection?.oauthUrl !== ""
         ) {
           items.push({
-            value: "signout",
-            label: "Sign out",
             description: "deletes the stored credentials",
+            label: "Sign out",
+            value: "signout",
           });
         }
-        items.push({ value: "exposure", label: "Exposure", description: exposureOf(entry) });
-        items.push({ value: "disable", label: "Disable", description: saved });
+        items.push({ description: exposureOf(entry), label: "Exposure", value: "exposure" });
+        items.push({ description: saved, label: "Disable", value: "disable" });
         if (inProject) {
           items.push({
-            value: "disable-project",
-            label: "Disable in this project",
             description: inProjectSaved,
+            label: "Disable in this project",
+            value: "disable-project",
           });
         }
       } else {
-        items.push({ value: "enable", label: "Enable", description: saved });
+        items.push({ description: saved, label: "Enable", value: "enable" });
         if (inProject) {
           items.push({
-            value: "enable-project",
-            label: "Enable in this project",
             description: inProjectSaved,
+            label: "Enable in this project",
+            value: "enable-project",
           });
         }
       }
@@ -901,13 +901,13 @@ export function createMcpExtension(options: McpExtensionOptions = {}): Extension
         .filter((line): line is string => line !== undefined)
         .join("\n");
       return {
-        title: `MCP server ${name}`,
+        cancelLabel: "back",
+        confirmLabel: "select",
         details: details.join("\n"),
         error: error || undefined,
         items,
         selected: items[0]?.value,
-        confirmLabel: "select",
-        cancelLabel: "back",
+        title: `MCP server ${name}`,
       };
     };
 
@@ -919,8 +919,10 @@ export function createMcpExtension(options: McpExtensionOptions = {}): Extension
             Object.keys(server.entry.config.toolExposure ?? {}).length > 0;
           yield* awaited(
             ui.menu(() => ({
-              title: `Tools of ${server.entry.name}`,
+              cancelLabel: "back",
+              confirmLabel: "back",
               details: `Exposure ${exposure}: ${exposure === "hidden" ? "unreachable" : EXPOSURE_DESCRIPTIONS[exposure]}${hasToolExposureOverrides ? "\nSome tools override it with toolExposure." : ""}`,
+              empty: "The server offers no tools.",
               items: (server.connection?.tools ?? []).map((tool) => {
                 const toolExposure = getMcpToolExposure(server.entry.config, tool.name);
                 const description = firstLine(tool.description ?? "");
@@ -931,9 +933,7 @@ export function createMcpExtension(options: McpExtensionOptions = {}): Extension
                     toolExposure === exposure ? description : `[${toolExposure}] ${description}`,
                 };
               }),
-              empty: "The server offers no tools.",
-              confirmLabel: "back",
-              cancelLabel: "back",
+              title: `Tools of ${server.entry.name}`,
             })),
           );
         }),
@@ -945,7 +945,8 @@ export function createMcpExtension(options: McpExtensionOptions = {}): Extension
           const current = exposureOf(server.entry);
           const choice = yield* awaited(
             ui.menu(() => ({
-              title: `Exposure of ${server.entry.name}`,
+              cancelLabel: "back",
+              confirmLabel: "save",
               details:
                 server.entry.scope === "extension"
                   ? `Applies to this session; the server is registered by ${server.entry.source}.`
@@ -958,8 +959,7 @@ export function createMcpExtension(options: McpExtensionOptions = {}): Extension
                 description: EXPOSURE_DESCRIPTIONS[exposure],
               })),
               selected: current,
-              confirmLabel: "save",
-              cancelLabel: "back",
+              title: `Exposure of ${server.entry.name}`,
             })),
           );
           if (choice === undefined || choice === "" || choice === current) return undefined;
@@ -976,10 +976,6 @@ export function createMcpExtension(options: McpExtensionOptions = {}): Extension
       return signIn(
         server,
         {
-          showAuthorizationUrl: (url) => {
-            authorizationUrl = url.href;
-            openUrl(url.href);
-          },
           promptForRedirectUrl: (signal) =>
             Effect.runPromise(
               awaiting(function* () {
@@ -988,6 +984,10 @@ export function createMcpExtension(options: McpExtensionOptions = {}): Extension
                 return value;
               }),
             ),
+          showAuthorizationUrl: (url) => {
+            authorizationUrl = url.href;
+            openUrl(url.href);
+          },
         },
         cancel.signal,
       );
@@ -1139,8 +1139,8 @@ export function createMcpExtension(options: McpExtensionOptions = {}): Extension
     const usesOAuth = (server: McpServer) => server.connection?.oauthUrl !== undefined;
     const oauthPick = {
       eligible: usesOAuth,
-      preferred: (server: McpServer) => server.connection?.state === "needs-auth",
       none: "No enabled MCP server uses OAuth. Only HTTP servers without an Authorization header do.",
+      preferred: (server: McpServer) => server.connection?.state === "needs-auth",
     };
 
     const loginCommand = (server: McpServer, ctx: ExtensionCommandContext) =>
@@ -1166,6 +1166,12 @@ export function createMcpExtension(options: McpExtensionOptions = {}): Extension
           } else {
             failure = yield* awaited(
               signIn(server, {
+                promptForRedirectUrl: (promptSignal) =>
+                  ctx.ui.input(
+                    `Waiting for sign-in to "${name}". If the browser cannot reach this machine, paste the URL it was redirected to.`,
+                    "http://127.0.0.1:.../callback?code=...",
+                    { signal: promptSignal },
+                  ),
                 showAuthorizationUrl: (url) => {
                   ctx.ui.notify(
                     `Sign in to MCP server "${name}" in your browser:\n${url.href}`,
@@ -1173,12 +1179,6 @@ export function createMcpExtension(options: McpExtensionOptions = {}): Extension
                   );
                   openUrl(url.href);
                 },
-                promptForRedirectUrl: (promptSignal) =>
-                  ctx.ui.input(
-                    `Waiting for sign-in to "${name}". If the browser cannot reach this machine, paste the URL it was redirected to.`,
-                    "http://127.0.0.1:.../callback?code=...",
-                    { signal: promptSignal },
-                  ),
               }),
             );
           }
@@ -1362,7 +1362,7 @@ export function createMcpExtension(options: McpExtensionOptions = {}): Extension
         if (server === undefined) {
           return ["login", "logout", "reconnect"]
             .filter((item) => item.startsWith(action ?? ""))
-            .map((item) => ({ value: `${item} `, label: item }));
+            .map((item) => ({ label: item, value: `${item} ` }));
         }
         if (action !== "login" && action !== "logout" && action !== "reconnect") return null;
         const items = servers
@@ -1371,9 +1371,9 @@ export function createMcpExtension(options: McpExtensionOptions = {}): Extension
           )
           .filter((candidate) => candidate.entry.name.startsWith(server))
           .map((candidate) => ({
-            value: `${action} ${candidate.entry.name}`,
-            label: candidate.entry.name,
             description: describeState(candidate),
+            label: candidate.entry.name,
+            value: `${action} ${candidate.entry.name}`,
           }));
         return items.length > 0 ? items : null;
       },
@@ -1416,10 +1416,10 @@ export function createMcpExtension(options: McpExtensionOptions = {}): Extension
                 const server = yield* awaited(
                   pickServer(name, ctx, {
                     eligible: (candidate) => candidate.connection !== undefined,
+                    none: "No enabled MCP server to reconnect.",
                     preferred: (candidate) =>
                       candidate.connection?.state === "failed" ||
                       candidate.connection?.state === "disconnected",
-                    none: "No enabled MCP server to reconnect.",
                   }),
                 );
                 if (server === undefined) return;

@@ -1,4 +1,3 @@
-import { type TUI, setKeybindings } from "@msa/tui";
 import { Effect } from "effect";
 import { beforeAll, beforeEach, describe, expect, test, vi } from "vite-plus/test";
 const APC_SEQUENCE = new RegExp(
@@ -6,10 +5,15 @@ const APC_SEQUENCE = new RegExp(
   "gu",
 );
 
+import tui from "@msa/tui";
+import type tuiTypes from "@msa/tui/index.types";
+
 import { KeybindingsManager } from "../../../src/core/keybindings.ts";
 import { LoginDialogComponent } from "../../../src/modes/interactive/components/login-dialog.ts";
 import { initTheme } from "../../../src/modes/interactive/theme/theme.ts";
 import { stripAnsi } from "../../../src/utils/ansi.ts";
+
+const { setKeybindings } = tui;
 
 vi.mock("../../../src/utils/open-browser.ts", () => ({
   openBrowser: vi.fn(),
@@ -17,7 +21,7 @@ vi.mock("../../../src/utils/open-browser.ts", () => ({
 
 function createDialog(): LoginDialogComponent {
   return new LoginDialogComponent(
-    { requestRender: vi.fn() } as unknown as TUI,
+    { requestRender: vi.fn() } as unknown as tuiTypes.TUI,
     "prompt-repro",
     () => {},
     "Prompt Repro",

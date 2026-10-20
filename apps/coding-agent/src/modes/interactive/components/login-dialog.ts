@@ -1,5 +1,6 @@
-import type { AuthInfoLink, OAuthDeviceCodeInfo } from "@msa/ai";
-import { Container, type Focusable, getKeybindings, Input, Spacer, Text, type TUI } from "@msa/tui";
+import type aiTypes from "@msa/ai/index.types";
+import tuiModule from "@msa/tui";
+import type tuiTypes from "@msa/tui/index.types";
 import { Effect } from "effect";
 
 import { openBrowser } from "../../../utils/open-browser.ts";
@@ -8,10 +9,12 @@ import { AuthUrlComponent } from "./auth-url.ts";
 import { DynamicBorder } from "./dynamic-border.ts";
 import { keyHint } from "./keybinding-hints.ts";
 
-export class LoginDialogComponent extends Container implements Focusable {
-  private contentContainer: Container;
-  private input: Input;
-  private tui: TUI;
+const { Container, Input, Spacer, Text, getKeybindings } = tuiModule;
+
+export class LoginDialogComponent extends Container implements tuiTypes.Focusable {
+  private contentContainer: tuiTypes.Container;
+  private input: tuiTypes.Input;
+  private tui: tuiTypes.TUI;
   private authUrl?: AuthUrlComponent | undefined;
   private abortController = new AbortController();
   private inputResolver?: ((value: string) => void) | undefined;
@@ -28,7 +31,7 @@ export class LoginDialogComponent extends Container implements Focusable {
   }
 
   constructor(
-    tui: TUI,
+    tui: tuiTypes.TUI,
     providerId: string,
     onComplete: (success: boolean, message?: string) => void,
     providerNameOverride?: string,
@@ -100,7 +103,7 @@ export class LoginDialogComponent extends Container implements Focusable {
     this.tui.requestRender();
   }
 
-  showDeviceCode(info: Pick<OAuthDeviceCodeInfo, "userCode" | "verificationUri">): void {
+  showDeviceCode(info: Pick<aiTypes.OAuthDeviceCodeInfo, "userCode" | "verificationUri">): void {
     this.authUrl = undefined;
     this.contentContainer.clear();
     this.contentContainer.addChild(new Spacer(1));
@@ -172,7 +175,11 @@ export class LoginDialogComponent extends Container implements Focusable {
     this.tui.requestRender();
   }
 
-  showInfo(message: string, links: readonly AuthInfoLink[] = [], showCloseHint = false): void {
+  showInfo(
+    message: string,
+    links: readonly aiTypes.AuthInfoLink[] = [],
+    showCloseHint = false,
+  ): void {
     this.contentContainer.addChild(new Spacer(1));
     this.contentContainer.addChild(new Text(theme.fg("text", message), 1, 0));
     for (const link of links) {

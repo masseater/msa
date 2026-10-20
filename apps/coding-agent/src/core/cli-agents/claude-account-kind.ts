@@ -1,12 +1,13 @@
-import type { AutocompleteItem } from "@msa/tui";
+import type tuiTypes from "@msa/tui/index.types";
 
 import type { AccountKind, AccountsContext } from "../accounts.ts";
 import {
+  type Account,
   addAccount,
   authStatus,
   blockOf,
-  describeLogin,
   clearBlocks,
+  describeLogin,
   loadAccounts,
   loginAccount,
   logoutAccount,
@@ -14,18 +15,17 @@ import {
   removeAccount,
   setAutoRotation,
   withAuthStatus,
-  type Account,
 } from "./claude-accounts.ts";
 
 const ACTIONS: Record<string, string> = {
   add: "add <name> [tokenCommand]: add an account and sign it in",
+  clear: "clear: forget usage-limit blocks",
+  disable: "disable <name>: keep out of the claude-subs rotation",
+  enable: "enable <name>: include in the claude-subs rotation",
   login: "login <name>: sign an account in to Claude",
   logout: "logout <name>: sign an account out",
   remove: "remove <name>: forget an account",
   use: "use <name>: try this account first",
-  enable: "enable <name>: include in the claude-subs rotation",
-  disable: "disable <name>: keep out of the claude-subs rotation",
-  clear: "clear: forget usage-limit blocks",
 };
 
 async function describeAccounts(): Promise<string> {
@@ -112,24 +112,24 @@ async function run(args: string, ctx: AccountsContext): Promise<void> {
   if (loadAccounts().length !== before) await ctx.refreshProviders();
 }
 
-function completions(prefix: string): AutocompleteItem[] | null {
+function completions(prefix: string): tuiTypes.AutocompleteItem[] | null {
   const [action = "", name, ...rest] = prefix.trimStart().split(/\s+/);
   if (name === undefined) {
     return Object.entries(ACTIONS)
       .filter(([item]) => item.startsWith(action))
-      .map(([item, description]) => ({ value: `${item} `, label: item, description }));
+      .map(([item, description]) => ({ description, label: item, value: `${item} ` }));
   }
   if (rest.length > 0 || action === "add" || action === "clear" || !(action in ACTIONS))
     return null;
   return loadAccounts()
     .filter((account) => account.name.startsWith(name))
-    .map((account) => ({ value: `${action} ${account.name}`, label: account.name }));
+    .map((account) => ({ label: account.name, value: `${action} ${account.name}` }));
 }
 
 export const claudeAccounts: AccountKind = {
-  name: "claude",
-  description: "Claude Code accounts the claude-subs provider rotates through",
-  describe: describeAccounts,
-  run,
   complete: completions,
+  describe: describeAccounts,
+  description: "Claude Code accounts the claude-subs provider rotates through",
+  name: "claude",
+  run,
 };

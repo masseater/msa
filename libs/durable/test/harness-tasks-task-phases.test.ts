@@ -1,4 +1,4 @@
-import { Type } from "@msa/ai";
+import ai from "@msa/ai";
 import durable from "@msa/durable";
 import type durableTypes from "@msa/durable/index.types";
 import { Effect } from "effect";
@@ -9,6 +9,8 @@ import harnessSupport from "./harness-support.ts";
 import harnessTasksSupport from "./harness-tasks-support.ts";
 import sessionSupport from "./session-support.ts";
 import taskSupport from "./task-support.ts";
+
+const { Type } = ai;
 
 const { defineTask, defineTool } = durable;
 

@@ -1,29 +1,27 @@
 import type { ResponseInput } from "openai/resources/responses/responses.js";
 
-import type { Api, Model, SystemMessage } from "../types.ts";
-import { shortHash } from "../utils/hash.ts";
-import { sanitizeSurrogates } from "../utils/sanitize-unicode.ts";
-import { getSystemMessageText, renderSystemMessageUpdate } from "../utils/text.ts";
-import type { ConvertResponsesMessagesOptions } from "./openai-responses-options.ts";
-import { convertResponsesTools } from "./openai-responses-tools.ts";
+import type typesModule from "../types.types.ts";
+import hash from "../utils/hash.ts";
+import sanitizeUnicode from "../utils/sanitize-unicode.ts";
+import textModule from "../utils/text.ts";
+import type openaiResponsesSystemInputTypes from "./openai-responses-system-input.types.ts";
+import openaiResponsesTools from "./openai-responses-tools.ts";
 
-export interface ConversionScope<TApi extends Api> {
-  readonly model: Model<TApi>;
-  readonly options: ConvertResponsesMessagesOptions | undefined;
-  readonly instructionRole: "developer" | "system";
-  readonly anchorsAdditions: boolean;
-}
+const { convertResponsesTools } = openaiResponsesTools;
+const { shortHash } = hash;
+const { getSystemMessageText, renderSystemMessageUpdate } = textModule;
+const { sanitizeSurrogates } = sanitizeUnicode;
 
-function systemToolAdditions<TApi extends Api>(
-  { options, anchorsAdditions }: ConversionScope<TApi>,
-  message: SystemMessage,
+function systemToolAdditions<TApi extends typesModule.Api>(
+  { options, anchorsAdditions }: openaiResponsesSystemInputTypes.ConversionScope<TApi>,
+  message: typesModule.SystemMessage,
   seed: string,
 ): ResponseInput {
   const tools = anchorsAdditions ? (message.toolsAdded ?? []) : [];
   if (tools.length === 0) return [];
   if (options?.supportsAdditionalTools === true) {
     const converted = convertResponsesTools(tools, options.toolOptions);
-    return [{ type: "additional_tools", role: "developer", tools: converted }];
+    return [{ role: "developer", tools: converted, type: "additional_tools" }];
   }
   if (options?.supportsToolSearch !== true) return [];
   const names = tools.map((tool) => tool.name);
@@ -33,7 +31,7 @@ function systemToolAdditions<TApi extends Api>(
     {
       type: "tool_search_call",
       ...status,
-      arguments: { query: names.join(" "), limit: names.length },
+      arguments: { limit: names.length, query: names.join(" ") },
     },
     {
       type: "tool_search_output",
@@ -43,25 +41,20 @@ function systemToolAdditions<TApi extends Api>(
   ];
 }
 
-export interface Position {
-  readonly leading: boolean;
-  readonly msgIndex: number;
-}
-
-export interface SystemConversion<TApi extends Api> {
-  readonly scope: ConversionScope<TApi>;
-  readonly message: SystemMessage;
-  readonly position: Position;
-}
-
-export function convertSystemMessage<TApi extends Api>({
+function convertSystemMessage<TApi extends typesModule.Api>({
   scope,
   message,
   position: { leading, msgIndex },
-}: SystemConversion<TApi>): ResponseInput {
+}: openaiResponsesSystemInputTypes.SystemConversion<TApi>): ResponseInput {
   if (leading && scope.options?.includeSystemPrompt === false) return [];
   const additions = leading ? [] : systemToolAdditions(scope, message, `system:${msgIndex}`);
   const text = leading ? getSystemMessageText(message) : renderSystemMessageUpdate(message);
   if (text.length === 0) return additions;
-  return [...additions, { role: scope.instructionRole, content: sanitizeSurrogates(text) }];
+  return [...additions, { content: sanitizeSurrogates(text), role: scope.instructionRole }];
 }
+
+const openaiResponsesSystemInput = {
+  convertSystemMessage,
+};
+
+export default openaiResponsesSystemInput;

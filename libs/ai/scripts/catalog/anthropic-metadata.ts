@@ -1,6 +1,6 @@
 import { Function } from "effect";
 
-import type { AnthropicMessagesCompat, Api, Model, ModelPromptCache } from "../../src/types.ts";
+import type typesModule from "../../src/types.types.ts";
 import thinkingMaps from "./thinking-maps.ts";
 
 const { mergeThinkingLevelMap } = thinkingMaps;
@@ -85,13 +85,24 @@ function isAnthropicTemperatureUnsupportedModel(modelId: string): boolean {
 }
 
 const mergeAnthropicMessagesCompat: {
-  (compat: AnthropicMessagesCompat): (model: Model<Api>) => void;
-  (model: Model<Api>, compat: AnthropicMessagesCompat): void;
-} = Function.dual(2, (model: Model<Api>, compat: AnthropicMessagesCompat): void => {
-  model.compat = { ...(model.compat as AnthropicMessagesCompat | undefined), ...compat };
-});
+  (
+    compat: typesModule.AnthropicMessagesCompat,
+  ): (model: typesModule.Model<typesModule.Api>) => void;
+  (model: typesModule.Model<typesModule.Api>, compat: typesModule.AnthropicMessagesCompat): void;
+} = Function.dual(
+  2,
+  (
+    model: typesModule.Model<typesModule.Api>,
+    compat: typesModule.AnthropicMessagesCompat,
+  ): void => {
+    model.compat = {
+      ...(model.compat as typesModule.AnthropicMessagesCompat | undefined),
+      ...compat,
+    };
+  },
+);
 
-function applyAnthropicMessagesCompatMetadata(model: Model<Api>): void {
+function applyAnthropicMessagesCompatMetadata(model: typesModule.Model<typesModule.Api>): void {
   if (model.api !== "anthropic-messages") return;
   const compat = getAnthropicMessagesCompat(model.provider, model.id);
   if (compat !== undefined) {
@@ -105,7 +116,9 @@ function applyAnthropicMessagesCompatMetadata(model: Model<Api>): void {
   }
 }
 
-function isAnthropicFallbackMetadataModel(model: Model<Api>): model is Model<"anthropic-messages"> {
+function isAnthropicFallbackMetadataModel(
+  model: typesModule.Model<typesModule.Api>,
+): model is typesModule.Model<"anthropic-messages"> {
   if (model.provider !== "anthropic-api" || model.api !== "anthropic-messages") return false;
   return (
     model.id in ANTHROPIC_ALLOWED_FALLBACK_MODELS ||
@@ -116,7 +129,7 @@ function isAnthropicFallbackMetadataModel(model: Model<Api>): model is Model<"an
 }
 
 function applyAnthropicAllowedFallbackModelMetadata(
-  models: readonly Model<"anthropic-messages">[],
+  models: readonly typesModule.Model<"anthropic-messages">[],
 ): void {
   const modelsById = new Map(models.map((model) => [model.id, model]));
   for (const [modelId, fallbackModelIds] of Object.entries(ANTHROPIC_ALLOWED_FALLBACK_MODELS)) {
@@ -139,9 +152,9 @@ function applyAnthropicAllowedFallbackModelMetadata(
   }
 }
 
-const ANTHROPIC_PROMPT_CACHE: ModelPromptCache = { long: 3600, short: 300 };
+const ANTHROPIC_PROMPT_CACHE: typesModule.ModelPromptCache = { long: 3600, short: 300 };
 
-function applyPromptCacheMetadata(model: Model<Api>): void {
+function applyPromptCacheMetadata(model: typesModule.Model<typesModule.Api>): void {
   if (model.provider === "anthropic-api" && model.api === "anthropic-messages") {
     model.promptCache = ANTHROPIC_PROMPT_CACHE;
   }
@@ -150,8 +163,8 @@ function applyPromptCacheMetadata(model: Model<Api>): void {
 function getAnthropicMessagesCompat(
   provider: string,
   modelId: string,
-): AnthropicMessagesCompat | undefined {
-  const compat: AnthropicMessagesCompat = {};
+): typesModule.AnthropicMessagesCompat | undefined {
+  const compat: typesModule.AnthropicMessagesCompat = {};
   if (
     VERIFIED_ANTHROPIC_MID_CONVO_EFFORT_PROVIDERS.has(provider) &&
     supportsAnthropicMidConvoEffort(modelId) &&

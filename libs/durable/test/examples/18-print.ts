@@ -1,21 +1,19 @@
 import * as NodeRuntime from "@effect/platform-node/NodeRuntime";
-import {
-  type AssistantMessage,
-  createModels,
-  fauxAssistantMessage,
-  fauxProvider,
-  fauxText,
-  fauxToolCall,
-} from "@msa/ai";
-import { openaiProvider } from "@msa/ai/providers/openai";
+import ai from "@msa/ai";
+import type aiTypes from "@msa/ai/index.types";
+import openai from "@msa/ai/providers/openai";
 import durable from "@msa/durable";
 import harnessModule from "@msa/durable/harness";
 import memory from "@msa/durable/storage/memory";
 import { Console, Effect } from "effect";
 
-import node from "../../src/env/node.ts";
-import toolsModule from "../../src/tools/index.ts";
 import support from "../support.ts";
+import example18PrintKit from "./18-print-kit.ts";
+
+const { node, tools: toolsModule } = example18PrintKit;
+
+const { createModels, fauxAssistantMessage, fauxProvider, fauxText, fauxToolCall } = ai;
+const { openaiProvider } = openai;
 
 const { Harness, createRegistry } = harnessModule;
 const { AssistantEntry, defineExtension, section } = durable;
@@ -68,7 +66,7 @@ const main = Effect.gen(function* () {
     const entry = yield* awaited(
       root.commit((tx) => tx.entry(AssistantEntry, settled.answer), context),
     );
-    const answer = entry?.model?.[0] as AssistantMessage;
+    const answer = entry?.model?.[0] as aiTypes.AssistantMessage;
     yield* Console.log(
       answer.content.flatMap((content) => (content.type === "text" ? [content.text] : [])).join(""),
     );

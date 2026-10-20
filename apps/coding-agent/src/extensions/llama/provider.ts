@@ -1,18 +1,8 @@
-import {
-  type AnyModel,
-  type ApiKeyCredential,
-  type AuthContext,
-  type AuthResult,
-  type ClassifierModel,
-  isModelType,
-  type Model,
-  type Provider,
-  type ProviderStreamOptions,
-  type RefreshModelsContext,
-} from "@msa/ai";
-import { llamaCppClassifyApi } from "@msa/ai/api/llama-cpp-classify.lazy";
-import { typesafeSystemOneApi } from "@msa/ai/api/typesafe-system-one.lazy";
-import { stream, streamSimple } from "@msa/ai/compat";
+import ai from "@msa/ai";
+import llamaCppClassifyLazy from "@msa/ai/api/llama-cpp-classify.lazy";
+import typesafeSystemOneLazy from "@msa/ai/api/typesafe-system-one.lazy";
+import compatModule from "@msa/ai/compat";
+import type aiTypes from "@msa/ai/index.types";
 import * as Effect from "effect/Effect";
 
 import { awaited, awaiting } from "../../core/awaiting.ts";
@@ -25,9 +15,14 @@ import {
   normalizeLlamaServerUrl,
 } from "./client.ts";
 
+const { isModelType } = ai;
+const { llamaCppClassifyApi } = llamaCppClassifyLazy;
+const { typesafeSystemOneApi } = typesafeSystemOneLazy;
+const { stream, streamSimple } = compatModule;
+
 export const LLAMA_PROVIDER_ID = "llama.cpp";
 export const DEFAULT_LLAMA_SERVER_URL = "http://127.0.0.1:8080";
-function credentialServerUrl(credential: ApiKeyCredential | undefined): string | undefined {
+function credentialServerUrl(credential: aiTypes.ApiKeyCredential | undefined): string | undefined {
   const value = credential?.env?.["LLAMA_BASE_URL"];
   return typeof value === "string" && value.trim() !== ""
     ? normalizeLlamaServerUrl(value)
@@ -35,8 +30,8 @@ function credentialServerUrl(credential: ApiKeyCredential | undefined): string |
 }
 
 function resolveServerUrl(
-  ctx: AuthContext,
-  credential: ApiKeyCredential | undefined,
+  ctx: aiTypes.AuthContext,
+  credential: aiTypes.ApiKeyCredential | undefined,
 ): Promise<string | undefined> {
   return Effect.runPromise(
     awaiting(function* () {
@@ -123,22 +118,24 @@ function toMsaClassifierModel(
   model: LlamaModelInfo,
   serverUrl: string,
   cachedContextWindow?: number,
-): ClassifierModel<LlamaClassifierApi> {
+): aiTypes.ClassifierModel<LlamaClassifierApi> {
   const decision = isDecisionModel(model);
   return {
-    type: "classifier",
-    id: model.id,
-    name: model.id,
     api: decision ? "typesafe-system-one" : "llama-cpp-classify",
-    provider: LLAMA_PROVIDER_ID,
     baseUrl: decision ? llamaInferenceUrl(serverUrl) : serverUrl,
-    input: ["text"],
-    cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0 },
     contextWindow: contextWindowOf(model, cachedContextWindow),
+    cost: { cacheRead: 0, cacheWrite: 0, input: 0, output: 0 },
+    id: model.id,
+    input: ["text"],
+    name: model.id,
+    provider: LLAMA_PROVIDER_ID,
+    type: "classifier",
   };
 }
 
-function isLlamaClassifierModel(model: AnyModel): model is ClassifierModel<LlamaClassifierApi> {
+function isLlamaClassifierModel(
+  model: aiTypes.AnyModel,
+): model is aiTypes.ClassifierModel<LlamaClassifierApi> {
   return (
     isModelType(model, "classifier") &&
     (model.api === "llama-cpp-classify" || model.api === "typesafe-system-one")
@@ -150,7 +147,7 @@ function toMsaModel(
   serverUrl: string,
   props?: LlamaServerProps,
   cachedContextWindow?: number,
-): Model<"openai-completions"> {
+): aiTypes.Model<"openai-completions"> {
   const contextWindow = contextWindowOf(model, cachedContextWindow);
   const reasoning = props?.chat_template?.includes("enable_thinking") === true;
   return {
@@ -162,11 +159,11 @@ function toMsaModel(
     reasoning,
     ...(reasoning && {
       thinkingLevelMap: {
-        off: "off",
-        minimal: null,
+        high: null,
         low: null,
         medium: "medium",
-        high: null,
+        minimal: null,
+        off: "off",
         xhigh: null,
       },
     }),
@@ -174,23 +171,23 @@ function toMsaModel(
       model.architecture?.input_modalities?.includes("image") === true
         ? ["text", "image"]
         : ["text"],
-    cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0 },
+    cost: { cacheRead: 0, cacheWrite: 0, input: 0, output: 0 },
     contextWindow,
     maxTokens: contextWindow,
     compat: {
-      supportsStore: false,
+      maxTokensField: "max_tokens",
       supportsDeveloperRole: false,
       supportsReasoningEffort: false,
-      supportsUsageInStreaming: true,
+      supportsStore: false,
       supportsStrictMode: false,
-      maxTokensField: "max_tokens",
+      supportsUsageInStreaming: true,
       ...(reasoning && { thinkingFormat: "qwen-chat-template" }),
     },
   };
 }
 
 export interface LlamaProviderController {
-  provider: Provider<"openai-completions">;
+  provider: aiTypes.Provider<"openai-completions">;
   setCatalog(
     models: readonly LlamaModelInfo[],
     serverUrl: string,
@@ -199,8 +196,8 @@ export interface LlamaProviderController {
 }
 
 export function createLlamaProvider(): LlamaProviderController {
-  let models: readonly Model<"openai-completions">[] = [];
-  let classifiers: readonly ClassifierModel<LlamaClassifierApi>[] = [];
+  let models: readonly aiTypes.Model<"openai-completions">[] = [];
+  let classifiers: readonly aiTypes.ClassifierModel<LlamaClassifierApi>[] = [];
   const fallbackClassifier = llamaCppClassifyApi();
   const decisionClassifier = typesafeSystemOneApi();
 
@@ -216,14 +213,22 @@ export function createLlamaProvider(): LlamaProviderController {
     classifiers = selectable.map((model) => toMsaClassifierModel(model, serverUrl));
   };
 
-  const provider: Provider<"openai-completions"> = {
-    id: LLAMA_PROVIDER_ID,
-    name: "llama.cpp",
-    baseUrl: llamaInferenceUrl(DEFAULT_LLAMA_SERVER_URL),
+  const provider: aiTypes.Provider<"openai-completions"> = {
     auth: {
       apiKey: {
-        name: "llama.cpp server",
-        login: (interaction): Promise<ApiKeyCredential> =>
+        check: ({ ctx, credential }) =>
+          Effect.runPromise(
+            awaiting(function* () {
+              const serverUrl = yield* awaited(resolveServerUrl(ctx, credential));
+              return serverUrl !== undefined && serverUrl !== ""
+                ? {
+                    type: "api_key",
+                    source: credential === undefined ? "LLAMA_BASE_URL" : "stored credential",
+                  }
+                : undefined;
+            }),
+          ),
+        login: (interaction): Promise<aiTypes.ApiKeyCredential> =>
           Effect.runPromise(
             awaiting(function* () {
               const enteredUrl = yield* awaited(
@@ -254,19 +259,8 @@ export function createLlamaProvider(): LlamaProviderController {
               };
             }),
           ),
-        check: ({ ctx, credential }) =>
-          Effect.runPromise(
-            awaiting(function* () {
-              const serverUrl = yield* awaited(resolveServerUrl(ctx, credential));
-              return serverUrl !== undefined && serverUrl !== ""
-                ? {
-                    type: "api_key",
-                    source: credential === undefined ? "LLAMA_BASE_URL" : "stored credential",
-                  }
-                : undefined;
-            }),
-          ),
-        resolve: ({ ctx, credential }): Promise<AuthResult | undefined> =>
+        name: "llama.cpp server",
+        resolve: ({ ctx, credential }): Promise<aiTypes.AuthResult | undefined> =>
           Effect.runPromise(
             awaiting(function* () {
               const serverUrl = yield* awaited(resolveServerUrl(ctx, credential));
@@ -282,9 +276,18 @@ export function createLlamaProvider(): LlamaProviderController {
           ),
       },
     },
-    getModels: () => models,
+    baseUrl: llamaInferenceUrl(DEFAULT_LLAMA_SERVER_URL),
+    classify: (model, context, options) =>
+      (model.api === "typesafe-system-one" ? decisionClassifier : fallbackClassifier).classify(
+        model,
+        context,
+        options,
+      ),
     getAllModels: () => [...models, ...classifiers],
-    refreshModels: (context: RefreshModelsContext): Promise<void> =>
+    getModels: () => models,
+    id: LLAMA_PROVIDER_ID,
+    name: "llama.cpp",
+    refreshModels: (context: aiTypes.RefreshModelsContext): Promise<void> =>
       Effect.runPromise(
         awaiting(function* () {
           const cachedContextWindows = new Map<string, number>();
@@ -293,7 +296,7 @@ export function createLlamaProvider(): LlamaProviderController {
               (model) => model.provider === LLAMA_PROVIDER_ID,
             );
             const restored = stored.filter(
-              (model): model is Model<"openai-completions"> =>
+              (model): model is aiTypes.Model<"openai-completions"> =>
                 isModelType(model, "chat") && model.api === "openai-completions",
             );
             const restoredClassifiers = stored.filter(isLlamaClassifierModel);
@@ -364,14 +367,8 @@ export function createLlamaProvider(): LlamaProviderController {
         }),
       ),
     stream: (model, context, options) =>
-      stream(model, context, options as ProviderStreamOptions | undefined),
+      stream(model, context, options as aiTypes.ProviderStreamOptions | undefined),
     streamSimple: (model, context, options) => streamSimple(model, context, options),
-    classify: (model, context, options) =>
-      (model.api === "typesafe-system-one" ? decisionClassifier : fallbackClassifier).classify(
-        model,
-        context,
-        options,
-      ),
   };
 
   return { provider, setCatalog };

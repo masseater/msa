@@ -1,11 +1,15 @@
 import { Clock, Effect } from "effect";
 import { describe, expect, it } from "vite-plus/test";
 
-import { InMemoryCredentialStore } from "../src/auth/credential-store.ts";
-import type { CredentialStore } from "../src/auth/types.ts";
-import { createModels } from "../src/models.ts";
-import { currentTimeMillis } from "../src/utils/clock.ts";
+import credentialStore from "../src/auth/credential-store.ts";
+import type typesModule from "../src/auth/types.ts";
+import modelsModule from "../src/models.ts";
+import clock from "../src/utils/clock.ts";
 import modelsRuntimeSupport from "./models-runtime-support.ts";
+
+const { InMemoryCredentialStore } = credentialStore;
+const { createModels } = modelsModule;
+const { currentTimeMillis } = clock;
 
 const { envKeyAuth, storeCredential, testModel, testOAuth, testProvider } = modelsRuntimeSupport;
 const serializesConcurrentOAuthRefreshesThroughStore = () =>
@@ -54,7 +58,7 @@ const validOauthTokensResolveWithoutTouching = () =>
     Effect.gen(function* () {
       const modifies = { value: 0 };
       const base = new InMemoryCredentialStore();
-      const credentials: CredentialStore = {
+      const credentials: typesModule.CredentialStore = {
         delete: (pid) => base.delete(pid),
         list: () => base.list(),
         modify: (pid, fn) => {
@@ -80,7 +84,7 @@ const validOauthTokensResolveWithoutTouching = () =>
 const wrapsCredentialStoreFailuresInModelsError = () =>
   Effect.runPromise(
     Effect.gen(function* () {
-      const readFailing: CredentialStore = {
+      const readFailing: typesModule.CredentialStore = {
         delete: () => Promise.resolve(),
         list: () => Promise.resolve([]),
         modify: () => Promise.resolve(undefined),
@@ -92,7 +96,7 @@ const wrapsCredentialStoreFailuresInModelsError = () =>
         expect(models.getAuth("p1")).rejects.toMatchObject({ code: "auth" }),
       );
 
-      const modifyFailing: CredentialStore = {
+      const modifyFailing: typesModule.CredentialStore = {
         delete: () => Promise.resolve(),
         list: () => Promise.resolve([{ providerId: "p1", type: "oauth" }]),
         modify: () => Promise.reject(new Error("disk on fire")),

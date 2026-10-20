@@ -1,10 +1,4 @@
-import type {
-  AssistantImages,
-  ClassifierModel,
-  ClassifierResult,
-  ImageModel,
-  ImagesContext,
-} from "@msa/ai";
+import type aiTypes from "@msa/ai/index.types";
 import testing from "@msa/testing";
 import { Deferred, Effect } from "effect";
 
@@ -25,7 +19,7 @@ const cleanupModelHarnesses = (): void => {
   while (harnesses4.length > 0) harnesses4.pop()?.cleanup();
 };
 
-const scorerModel: ClassifierModel<"test-classifier"> = {
+const scorerModel: aiTypes.ClassifierModel<"test-classifier"> = {
   api: "test-classifier",
   baseUrl: "https://classifier.test/v1",
   contextWindow: 1000,
@@ -38,7 +32,7 @@ const scorerModel: ClassifierModel<"test-classifier"> = {
   type: "classifier",
 };
 
-const painterModel: ImageModel<"test-images"> = {
+const painterModel: aiTypes.ImageModel<"test-images"> = {
   api: "test-images",
   baseUrl: "https://images.test/v1",
   cost: { cacheRead: 0, cacheWrite: 0, input: 0, output: 0 },
@@ -59,7 +53,7 @@ interface ClassifyObservation {
 interface ImagesObservation {
   baseUrl: string;
   apiKey: string | undefined;
-  input: ImagesContext["input"];
+  input: aiTypes.ImagesContext["input"];
 }
 
 interface Gate {
@@ -94,10 +88,10 @@ const waitForTurn = Effect.fn("waitForTurn")(function* (state: ScorerState) {
 const classify =
   (state: ScorerState) =>
   (
-    model: ClassifierModel<"test-classifier">,
+    model: aiTypes.ClassifierModel<"test-classifier">,
     context: { state: Record<string, unknown> },
     options?: { apiKey?: string },
-  ): Promise<ClassifierResult> =>
+  ): Promise<aiTypes.ClassifierResult> =>
     runTest(
       Effect.gen(function* () {
         yield* waitForTurn(state);
@@ -126,10 +120,10 @@ const classify =
 const generateImages =
   (state: ScorerState) =>
   (
-    model: ImageModel<"test-images">,
-    context: ImagesContext,
+    model: aiTypes.ImageModel<"test-images">,
+    context: aiTypes.ImagesContext,
     options?: { apiKey?: string },
-  ): Promise<AssistantImages> => {
+  ): Promise<aiTypes.AssistantImages> => {
     state.imageRequests.push({
       apiKey: options?.apiKey,
       baseUrl: model.baseUrl,

@@ -1,32 +1,19 @@
 import { Effect } from "effect";
 
-import { fromSync, type McpForeignError } from "./foreign.ts";
-import type { CallToolResult } from "./protocol/content.ts";
-import { McpClientError } from "./protocol/errors/client-error.ts";
-import {
-  isObject,
-  JSON_RPC_ERROR_CODES,
-  type McpAbortError,
-  type McpConnectionClosedError,
-  McpError,
-} from "./protocol/jsonrpc.ts";
-import type {
-  InitializeResult,
-  ReadResourceResult,
-  Resource,
-  ResourceTemplate,
-} from "./protocol/types.ts";
+import type clientResultsTypes from "./client-results.types.ts";
+import foreignModule from "./foreign.ts";
+import type contentTypes from "./protocol/content.types.ts";
+import McpClientError from "./protocol/errors/client-error.ts";
+import jsonrpcModule from "./protocol/jsonrpc.ts";
+import type jsonrpcTypes from "./protocol/jsonrpc.types.ts";
+import type typesModule from "./protocol/types.types.ts";
+
+const { JSON_RPC_ERROR_CODES, McpError, isObject } = jsonrpcModule;
+const { fromSync } = foreignModule;
 
 const MAX_LIST_PAGES = 1_000;
 
-export type ItemCheck = (item: Record<string, unknown>) => boolean;
-
-export interface ListPage {
-  items: Record<string, unknown>[];
-  nextCursor?: string;
-}
-
-export function validateInitializeResult(value: unknown): InitializeResult {
+function validateInitializeResult(value: unknown): typesModule.InitializeResult {
   if (
     !isObject(value) ||
     typeof value["protocolVersion"] !== "string" ||
@@ -38,10 +25,10 @@ export function validateInitializeResult(value: unknown): InitializeResult {
   ) {
     throw new McpError(JSON_RPC_ERROR_CODES.invalidRequest, "Invalid MCP initialize result");
   }
-  return value as unknown as InitializeResult;
+  return value as unknown as typesModule.InitializeResult;
 }
 
-function invalid(message: string): McpError {
+function invalid(message: string): jsonrpcTypes.McpError {
   return new McpError(JSON_RPC_ERROR_CODES.invalidRequest, message);
 }
 
@@ -49,8 +36,8 @@ function validateListPage(
   method: string,
   key: string,
   value: unknown,
-  isItem: ItemCheck,
-): ListPage {
+  isItem: clientResultsTypes.ItemCheck,
+): clientResultsTypes.ListPage {
   const items = isObject(value) ? value[key] : undefined;
   if (!isObject(value) || !Array.isArray(items)) throw invalid(`Invalid MCP ${method} result`);
   for (const item of items) {
@@ -63,28 +50,28 @@ function validateListPage(
   return { items, ...(nextCursor === undefined ? {} : { nextCursor }) };
 }
 
-export const isTool = (tool: Record<string, unknown>) =>
+const isTool = (tool: Record<string, unknown>) =>
   typeof tool["name"] === "string" && isObject(tool["inputSchema"]);
-export const isResource = (resource: Record<string, unknown>) =>
+const isResource = (resource: Record<string, unknown>) =>
   typeof resource["uri"] === "string" &&
   (resource["name"] === undefined || typeof resource["name"] === "string");
-export const isResourceTemplate = (template: Record<string, unknown>) =>
+const isResourceTemplate = (template: Record<string, unknown>) =>
   typeof template["uriTemplate"] === "string" &&
   (template["name"] === undefined || typeof template["name"] === "string");
 
-export function toResource(item: Record<string, unknown>): Resource {
-  return { ...item, name: item["name"] ?? item["uri"] } as Resource;
+function toResource(item: Record<string, unknown>): typesModule.Resource {
+  return { ...item, name: item["name"] ?? item["uri"] } as typesModule.Resource;
 }
 
-export function toResourceTemplate(item: Record<string, unknown>): ResourceTemplate {
-  return { ...item, name: item["name"] ?? item["uriTemplate"] } as ResourceTemplate;
+function toResourceTemplate(item: Record<string, unknown>): typesModule.ResourceTemplate {
+  return { ...item, name: item["name"] ?? item["uriTemplate"] } as typesModule.ResourceTemplate;
 }
 
-export function pageCursor(page: { nextCursor?: string }): { nextCursor?: string } {
+function pageCursor(page: { nextCursor?: string }): { nextCursor?: string } {
   return page.nextCursor === undefined ? {} : { nextCursor: page.nextCursor };
 }
 
-export function validateReadResourceResult(value: unknown): ReadResourceResult {
+function validateReadResourceResult(value: unknown): typesModule.ReadResourceResult {
   if (!isObject(value) || !Array.isArray(value["contents"]))
     throw invalid("Invalid MCP resources/read result");
   for (const contents of value["contents"]) {
@@ -96,32 +83,21 @@ export function validateReadResourceResult(value: unknown): ReadResourceResult {
       throw invalid("Invalid contents in MCP resources/read result");
     }
   }
-  return value as unknown as ReadResourceResult;
+  return value as unknown as typesModule.ReadResourceResult;
 }
 
-export function validateCallToolResult(value: unknown): CallToolResult {
+function validateCallToolResult(value: unknown): contentTypes.CallToolResult {
   if (!isObject(value) || (value["content"] !== undefined && !Array.isArray(value["content"]))) {
     throw new McpError(JSON_RPC_ERROR_CODES.invalidRequest, "Invalid MCP tools/call result");
   }
   return (value["content"] === undefined
     ? { ...value, content: [] }
-    : value) as unknown as CallToolResult;
+    : value) as unknown as contentTypes.CallToolResult;
 }
 
-export type McpRequestFailure = McpForeignError | McpConnectionClosedError | McpAbortError;
-
-export type PageRequest = (cursor: string | undefined) => Effect.Effect<unknown, McpRequestFailure>;
-
-export interface ListSpec {
-  method: string;
-  key: string;
-  isItem: ItemCheck;
-  request: PageRequest;
-}
-
-export const listPage = (
-  spec: ListSpec & { cursor: string | undefined },
-): Effect.Effect<ListPage, McpRequestFailure> =>
+const listPage = (
+  spec: clientResultsTypes.ListSpec & { cursor: string | undefined },
+): Effect.Effect<clientResultsTypes.ListPage, clientResultsTypes.McpRequestFailure> =>
   spec
     .request(spec.cursor)
     .pipe(
@@ -130,7 +106,7 @@ export const listPage = (
       ),
     );
 
-export const listAll = Effect.fn("listAll")(function* (spec: ListSpec) {
+const listAll = Effect.fn("listAll")(function* (spec: clientResultsTypes.ListSpec) {
   const items: Record<string, unknown>[] = [];
   const cursors = new Set<string>();
   let cursor: string | undefined;
@@ -147,3 +123,19 @@ export const listAll = Effect.fn("listAll")(function* (spec: ListSpec) {
   }
   return yield* new McpClientError(`MCP ${spec.method} exceeded ${MAX_LIST_PAGES} pages`);
 });
+
+const clientResults = {
+  isResource,
+  isResourceTemplate,
+  isTool,
+  listAll,
+  listPage,
+  pageCursor,
+  toResource,
+  toResourceTemplate,
+  validateCallToolResult,
+  validateInitializeResult,
+  validateReadResourceResult,
+};
+
+export default clientResults;

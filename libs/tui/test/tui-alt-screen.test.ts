@@ -3,12 +3,14 @@ import { describe, it } from "node:test";
 
 import { Effect } from "effect";
 
-import { ScrollView } from "../src/components/scroll-view.ts";
-import { Text } from "../src/components/text.ts";
-import { VStack } from "../src/components/v-stack.ts";
-import { TuiAltScreen } from "../src/tui-alt-screen.ts";
+import ScrollView from "../src/components/scroll-view.ts";
+import Text from "../src/components/text.ts";
+import VStack from "../src/components/v-stack.ts";
+import TuiAltScreen from "../src/tui-alt-screen.ts";
 import tuiAltScreenHelpers from "./tui-alt-screen-helpers.ts";
-import { VirtualTerminal } from "./virtual-terminal.ts";
+import virtualTerminal from "./virtual-terminal.ts";
+
+const { VirtualTerminal } = virtualTerminal;
 
 const { numberedLines, trimmedViewport, viewportHas } = tuiAltScreenHelpers;
 

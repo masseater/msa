@@ -1,10 +1,12 @@
-import { uuidv7 } from "@msa/ai/utils/uuid";
+import uuid from "@msa/ai/utils/uuid";
 import type chordTypes from "@msa/chord/index.types";
 import { Effect, Function } from "effect";
 
 import documents from "../documents.ts";
 import type providerTypes from "./provider.types.ts";
 import type typesModule from "./types.types.ts";
+
+const { uuidv7 } = uuid;
 
 const { defineDoc } = documents;
 

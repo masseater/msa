@@ -1,5 +1,7 @@
-import { truncateToWidth, visibleWidth } from "@msa/tui";
+import tui from "@msa/tui";
 import { describe, expect, it } from "vite-plus/test";
+
+const { truncateToWidth, visibleWidth } = tui;
 
 const shouldTruncateMessagesWithUnicodeCharactersCorrectly = () => {
   const message = '✔ script to run › dev $ concurrently "vite" "node --import tsx ./';

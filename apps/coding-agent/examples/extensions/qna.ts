@@ -1,4 +1,4 @@
-import type { UserMessage } from "@msa/ai";
+import type aiTypes from "@msa/ai/index.types";
 import type { ExtensionAPI, ExtensionContext } from "@msa/coding-agent";
 import { BorderedLoader } from "@msa/coding-agent";
 import { Clock, Effect } from "effect";
@@ -45,16 +45,16 @@ const extractQuestions = (ctx: ExtensionContext, lastAssistantText: string) =>
     loader.onAbort = () => done(null);
 
     const doExtract = Effect.gen(function* () {
-      const userMessage: UserMessage = {
-        role: "user",
+      const userMessage: aiTypes.UserMessage = {
         content: [{ type: "text", text: lastAssistantText }],
+        role: "user",
         timestamp: yield* Clock.currentTimeMillis,
       };
 
       const response = yield* Effect.promise(() =>
         ctx.modelRegistry.complete(
           ctx.model!,
-          { systemPrompt: SYSTEM_PROMPT, messages: [userMessage] },
+          { messages: [userMessage], systemPrompt: SYSTEM_PROMPT },
           { signal: loader.signal },
         ),
       );

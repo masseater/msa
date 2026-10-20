@@ -50,9 +50,11 @@ vi.mock("../src/utils/clipboard-command.ts", () => ({
 }));
 
 vi.mock("@msa/tui", () => ({
-  getNativeClipboard: () => ({
-    getImage: () => testing.runTest(testing.awaited(createTinyBmp1x1Red24bpp())),
-  }),
+  default: {
+    getNativeClipboard: () => ({
+      getImage: () => testing.runTest(testing.awaited(createTinyBmp1x1Red24bpp())),
+    }),
+  },
 }));
 
 describe("readClipboardImage BMP conversion", () => {

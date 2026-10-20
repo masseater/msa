@@ -38,56 +38,50 @@ export class ContextFactory {
       return read();
     };
     return {
-      get ui() {
-        return guarded(() => host.ui());
-      },
-      get mode() {
-        return guarded(() => host.mode());
-      },
-      get hasUI() {
-        return guarded(() => host.hasUI());
-      },
+      abort: () => guarded(() => bindings.abortFn()),
+      compact: (options) => guarded(() => bindings.compactFn(options)),
       get cwd() {
         return guarded(() => host.cwd);
       },
-      get sessionManager() {
-        return guarded(() => host.sessionManager);
+      getContextUsage: () => guarded(() => bindings.getContextUsageFn()),
+      getSystemPrompt: () => guarded(() => bindings.getSystemPromptFn()),
+      hasPendingMessages: () => guarded(() => bindings.hasPendingMessagesFn()),
+      get hasUI() {
+        return guarded(() => host.hasUI());
       },
-      get modelRegistry() {
-        return guarded(() => host.modelRegistry);
+      isIdle: () => guarded(() => bindings.isIdleFn()),
+      isProjectTrusted: () => guarded(() => bindings.isProjectTrustedFn()),
+      get mode() {
+        return guarded(() => host.mode());
       },
       get model() {
         return guarded(() => bindings.getModel());
       },
+      get modelRegistry() {
+        return guarded(() => host.modelRegistry);
+      },
       get scopedModels() {
         return guarded(() => bindings.getScopedModels());
+      },
+      get sessionManager() {
+        return guarded(() => host.sessionManager);
+      },
+      shutdown: () => guarded(() => bindings.shutdownHandler()),
+      get signal() {
+        return guarded(() => bindings.getSignalFn());
       },
       get thinkingLevel() {
         return guarded(() => host.runtime.getThinkingLevel());
       },
-      isIdle: () => guarded(() => bindings.isIdleFn()),
-      isProjectTrusted: () => guarded(() => bindings.isProjectTrustedFn()),
-      get signal() {
-        return guarded(() => bindings.getSignalFn());
+      get ui() {
+        return guarded(() => host.ui());
       },
-      abort: () => guarded(() => bindings.abortFn()),
-      hasPendingMessages: () => guarded(() => bindings.hasPendingMessagesFn()),
-      shutdown: () => guarded(() => bindings.shutdownHandler()),
-      getContextUsage: () => guarded(() => bindings.getContextUsageFn()),
-      compact: (options) => guarded(() => bindings.compactFn(options)),
-      getSystemPrompt: () => guarded(() => bindings.getSystemPromptFn()),
     };
   }
 
   createToolContext(toolCallId: string, signal: AbortSignal | undefined): ExtensionToolContext {
     const { host } = this;
     return Object.defineProperties(this.createContext() as ExtensionToolContext, {
-      tools: {
-        get() {
-          host.assertActive();
-          return host.bindings.getCallableToolsFn();
-        },
-      },
       executeTool: {
         value: (name: string, args: unknown, options: ExecuteToolOptions = {}) => {
           host.assertActive();
@@ -108,6 +102,12 @@ export class ContextFactory {
             ...options,
             signal: options.signal ?? signal,
           });
+        },
+      },
+      tools: {
+        get() {
+          host.assertActive();
+          return host.bindings.getCallableToolsFn();
         },
       },
     });

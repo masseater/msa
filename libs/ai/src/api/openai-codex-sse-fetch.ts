@@ -1,16 +1,17 @@
 import { Effect } from "effect";
 
-import { combineAbortSignals } from "../utils/abort-signals.ts";
-import { resolveCodexUrl } from "./openai-codex-headers.ts";
-import type { CodexStreamRun } from "./openai-codex-stream-run.ts";
+import abortSignals from "../utils/abort-signals.ts";
+import openaiCodexHeaders from "./openai-codex-headers.ts";
+import type openaiCodexSseFetchTypes from "./openai-codex-sse-fetch.types.ts";
+import type openaiCodexStreamRunTypes from "./openai-codex-stream-run.types.ts";
 
-export interface CodexSseRequest {
-  readonly run: CodexStreamRun;
-  readonly body: Uint8Array<ArrayBuffer> | string;
-  readonly maxRetries: number;
-}
+const { combineAbortSignals } = abortSignals;
+const { resolveCodexUrl } = openaiCodexHeaders;
 
-function headerTimeoutError(run: CodexStreamRun, signal: AbortSignal | undefined) {
+function headerTimeoutError(
+  run: openaiCodexStreamRunTypes.CodexStreamRun,
+  signal: AbortSignal | undefined,
+) {
   return (error: unknown): unknown =>
     signal?.aborted === true && !(run.options?.signal?.aborted ?? false)
       ? new Error(`Codex SSE response headers timed out after ${run.httpTimeoutMs}ms`, {
@@ -19,15 +20,24 @@ function headerTimeoutError(run: CodexStreamRun, signal: AbortSignal | undefined
       : error;
 }
 
-export function fetchCodexSseResponse({ run, body }: CodexSseRequest): Effect.Effect<Response> {
+function fetchCodexSseResponse({
+  run,
+  body,
+}: openaiCodexSseFetchTypes.CodexSseRequest): Effect.Effect<Response> {
   const timeoutMs = run.httpTimeoutMs;
   const headerTimeout =
     timeoutMs !== undefined && timeoutMs > 0 ? AbortSignal.timeout(timeoutMs) : undefined;
   const combined = combineAbortSignals([run.options?.signal, headerTimeout]);
   const fetch = run.options?.fetch ?? globalThis.fetch;
-  const init = { method: "POST", headers: run.sseHeaders, body, signal: combined.signal ?? null };
+  const init = { body, headers: run.sseHeaders, method: "POST", signal: combined.signal ?? null };
   return Effect.promise(() => fetch(resolveCodexUrl(run.model.baseUrl), init)).pipe(
     Effect.catchDefect((error) => Effect.die(headerTimeoutError(run, headerTimeout)(error))),
     Effect.ensuring(Effect.sync(() => combined.cleanup())),
   );
 }
+
+const openaiCodexSseFetch = {
+  fetchCodexSseResponse,
+};
+
+export default openaiCodexSseFetch;

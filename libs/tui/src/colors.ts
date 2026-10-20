@@ -1,72 +1,26 @@
 import { dual } from "effect/Function";
 
-import { linearSrgbToRgb, okhslToRgb, oklabToLinearSrgb, rgbToOkhsl, rgbToOklab } from "./oklab.ts";
-import type { RgbColor } from "./terminal-colors.ts";
+import type colorsTypes from "./colors.types.ts";
+import oklab from "./oklab.ts";
+import type terminalColorsTypes from "./terminal-colors.types.ts";
 
-export interface IndexedColor {
-  readonly kind: "indexed";
-  readonly index: number;
-}
-
-export interface RgbColorValue {
-  readonly kind: "rgb";
-  readonly r: number;
-  readonly g: number;
-  readonly b: number;
-}
-
-export interface OklchColorValue {
-  readonly kind: "oklch";
-  readonly l: number;
-  readonly c: number;
-  readonly h: number;
-}
-
-export type Color = IndexedColor | RgbColorValue | OklchColorValue;
-export type TerminalColorMode = "256color" | "truecolor";
-export type ColorMixSpace = "oklch" | "srgb";
-
-export interface OklchChannels {
-  l: number;
-  c: number;
-  h: number;
-}
-
-export interface OkhslChannels {
-  h: number;
-  s: number;
-  l: number;
-}
-
-export interface TextAttributes {
-  bold?: boolean;
-  dim?: boolean;
-  italic?: boolean;
-  underline?: boolean;
-  inverse?: boolean;
-  strikethrough?: boolean;
-}
-
-export interface TextStyle extends TextAttributes {
-  fg?: Color;
-  bg?: Color;
-}
+const { linearSrgbToRgb, okhslToRgb, oklabToLinearSrgb, rgbToOkhsl, rgbToOklab } = oklab;
 
 function requireFinite(value: number, name: string): void {
   if (!Number.isFinite(value)) throw new Error(`${name} must be finite`);
 }
 
-export function indexedColor(index: number): IndexedColor {
+function indexedColor(index: number): colorsTypes.IndexedColor {
   if (!Number.isInteger(index) || index < 0 || index > 255) {
     throw new Error(`ANSI color index must be an integer from 0 to 255: ${index}`);
   }
-  return Object.freeze({ kind: "indexed", index });
+  return Object.freeze({ index, kind: "indexed" });
 }
 
-export const rgbColor: {
-  (r: number, g: number, b: number): RgbColorValue;
-  (g: number, b: number): (r: number) => RgbColorValue;
-} = dual(3, (r: number, g: number, b: number): RgbColorValue => {
+const rgbColor: {
+  (r: number, g: number, b: number): colorsTypes.RgbColorValue;
+  (g: number, b: number): (r: number) => colorsTypes.RgbColorValue;
+} = dual(3, (r: number, g: number, b: number): colorsTypes.RgbColorValue => {
   for (const [name, value] of [
     ["r", r],
     ["g", g],
@@ -75,19 +29,19 @@ export const rgbColor: {
     requireFinite(value, name);
     if (value < 0 || value > 255) throw new Error(`${name} must be between 0 and 255: ${value}`);
   }
-  return Object.freeze({ kind: "rgb", r, g, b });
+  return Object.freeze({ b, g, kind: "rgb", r });
 });
 
-export const oklchColor: {
-  (l: number, c: number, h: number): OklchColorValue;
-  (c: number, h: number): (l: number) => OklchColorValue;
-} = dual(3, (l: number, c: number, h: number): OklchColorValue => {
+const oklchColor: {
+  (l: number, c: number, h: number): colorsTypes.OklchColorValue;
+  (c: number, h: number): (l: number) => colorsTypes.OklchColorValue;
+} = dual(3, (l: number, c: number, h: number): colorsTypes.OklchColorValue => {
   requireFinite(l, "l");
   requireFinite(c, "c");
   requireFinite(h, "h");
   if (l < 0 || l > 1) throw new Error(`l must be between 0 and 1: ${l}`);
   if (c < 0) throw new Error(`c must not be negative: ${c}`);
-  return Object.freeze({ kind: "oklch", l, c, h: ((h % 360) + 360) % 360 });
+  return Object.freeze({ c, h: ((h % 360) + 360) % 360, kind: "oklch", l });
 });
 
 const NUMBER_PATTERN = String.raw`[+-]?(?:\d+(?:\.\d*)?|\.\d+)(?:[Ee][+-]?\d+)?`;
@@ -101,10 +55,10 @@ const OKHSL_PATTERN = new RegExp(
   "u",
 );
 
-export const okhslColor: {
-  (h: number, s: number, l: number): RgbColorValue;
-  (s: number, l: number): (h: number) => RgbColorValue;
-} = dual(3, (h: number, s: number, l: number): RgbColorValue => {
+const okhslColor: {
+  (h: number, s: number, l: number): colorsTypes.RgbColorValue;
+  (s: number, l: number): (h: number) => colorsTypes.RgbColorValue;
+} = dual(3, (h: number, s: number, l: number): colorsTypes.RgbColorValue => {
   requireFinite(h, "h");
   requireFinite(s, "s");
   requireFinite(l, "l");
@@ -114,11 +68,11 @@ export const okhslColor: {
   return rgbColor(r, g, b);
 });
 
-export function colorToOkhsl(color: Color): OkhslChannels {
+function colorToOkhsl(color: colorsTypes.Color): colorsTypes.OkhslChannels {
   return rgbToOkhsl(colorToRgb(color));
 }
 
-export function parseColor(value: string | number): Color {
+function parseColor(value: string | number): colorsTypes.Color {
   if (typeof value === "number") return indexedColor(value);
 
   const hex = /^#([\da-f]{3}|[\da-f]{6})$/iu.exec(value)?.[1];
@@ -150,26 +104,26 @@ export function parseColor(value: string | number): Color {
   throw new Error(`Invalid color value: ${value}`);
 }
 
-const BASIC_COLORS: readonly RgbColor[] = [
-  { r: 0, g: 0, b: 0 },
-  { r: 128, g: 0, b: 0 },
-  { r: 0, g: 128, b: 0 },
-  { r: 128, g: 128, b: 0 },
-  { r: 0, g: 0, b: 128 },
-  { r: 128, g: 0, b: 128 },
-  { r: 0, g: 128, b: 128 },
-  { r: 192, g: 192, b: 192 },
-  { r: 128, g: 128, b: 128 },
-  { r: 255, g: 0, b: 0 },
-  { r: 0, g: 255, b: 0 },
-  { r: 255, g: 255, b: 0 },
-  { r: 0, g: 0, b: 255 },
-  { r: 255, g: 0, b: 255 },
-  { r: 0, g: 255, b: 255 },
-  { r: 255, g: 255, b: 255 },
+const BASIC_COLORS: readonly terminalColorsTypes.RgbColor[] = [
+  { b: 0, g: 0, r: 0 },
+  { b: 0, g: 0, r: 128 },
+  { b: 0, g: 128, r: 0 },
+  { b: 0, g: 128, r: 128 },
+  { b: 128, g: 0, r: 0 },
+  { b: 128, g: 0, r: 128 },
+  { b: 128, g: 128, r: 0 },
+  { b: 192, g: 192, r: 192 },
+  { b: 128, g: 128, r: 128 },
+  { b: 0, g: 0, r: 255 },
+  { b: 0, g: 255, r: 0 },
+  { b: 0, g: 255, r: 255 },
+  { b: 255, g: 0, r: 0 },
+  { b: 255, g: 0, r: 255 },
+  { b: 255, g: 255, r: 0 },
+  { b: 255, g: 255, r: 255 },
 ];
-export const CUBE_VALUES = [0, 95, 135, 175, 215, 255] as const;
-export const GRAY_VALUES = Array.from({ length: 24 }, (_, index) => 8 + index * 10);
+const CUBE_VALUES = [0, 95, 135, 175, 215, 255] as const;
+const GRAY_VALUES = Array.from({ length: 24 }, (_, index) => 8 + index * 10);
 
 function cubeValue(index: number): number {
   const value = CUBE_VALUES[index];
@@ -177,7 +131,7 @@ function cubeValue(index: number): number {
   return value;
 }
 
-function indexedToRgb(index: number): RgbColor {
+function indexedToRgb(index: number): terminalColorsTypes.RgbColor {
   if (index < 16) {
     const basic = BASIC_COLORS[index];
     if (basic === undefined) throw new Error(`ANSI basic color index out of range: ${index}`);
@@ -186,13 +140,13 @@ function indexedToRgb(index: number): RgbColor {
   if (index < 232) {
     const cubeIndex = index - 16;
     return {
-      r: cubeValue(Math.floor(cubeIndex / 36)),
-      g: cubeValue(Math.floor((cubeIndex % 36) / 6)),
       b: cubeValue(cubeIndex % 6),
+      g: cubeValue(Math.floor((cubeIndex % 36) / 6)),
+      r: cubeValue(Math.floor(cubeIndex / 36)),
     };
   }
   const gray = 8 + (index - 232) * 10;
-  return { r: gray, g: gray, b: gray };
+  return { b: gray, g: gray, r: gray };
 }
 
 function isInSrgbGamut(linear: number[]): boolean {
@@ -200,7 +154,7 @@ function isInSrgbGamut(linear: number[]): boolean {
   return linear.every((channel) => channel >= -epsilon && channel <= 1 + epsilon);
 }
 
-function oklchToRgb({ l, c, h }: OklchChannels): RgbColor {
+function oklchToRgb({ l, c, h }: colorsTypes.OklchChannels): terminalColorsTypes.RgbColor {
   const radians = (h * Math.PI) / 180;
   const cos = Math.cos(radians);
   const sin = Math.sin(radians);
@@ -225,35 +179,49 @@ function oklchToRgb({ l, c, h }: OklchChannels): RgbColor {
   return linearSrgbToRgb(linear);
 }
 
-export function colorToRgb(color: Color): RgbColor {
+function colorToRgb(color: colorsTypes.Color): terminalColorsTypes.RgbColor {
   switch (color.kind) {
     case "indexed":
       return indexedToRgb(color.index);
     case "rgb":
-      return { r: color.r, g: color.g, b: color.b };
+      return { b: color.b, g: color.g, r: color.r };
     case "oklch":
       return oklchToRgb(color);
   }
 }
 
-export function colorToOklch(color: Color): OklchChannels {
-  if (color.kind === "oklch") return { l: color.l, c: color.c, h: color.h };
+function colorToOklch(color: colorsTypes.Color): colorsTypes.OklchChannels {
+  if (color.kind === "oklch") return { c: color.c, h: color.h, l: color.l };
   const [l, a, b] = rgbToOklab(colorToRgb(color));
-  return { l, c: Math.hypot(a, b), h: ((Math.atan2(b, a) * 180) / Math.PI + 360) % 360 };
+  return { c: Math.hypot(a, b), h: ((Math.atan2(b, a) * 180) / Math.PI + 360) % 360, l };
 }
 
-export function colorToHex(color: Color): string {
+function colorToHex(color: colorsTypes.Color): string {
   const { r, g, b } = colorToRgb(color);
   const channel = (value: number) => Math.round(value).toString(16).padStart(2, "0");
   return `#${channel(r)}${channel(g)}${channel(b)}`;
 }
 
-export const mixColors: {
-  (first: Color, second: Color, amount: number, space?: ColorMixSpace): Color;
-  (second: Color, amount: number, space?: ColorMixSpace): (first: Color) => Color;
+const mixColors: {
+  (
+    first: colorsTypes.Color,
+    second: colorsTypes.Color,
+    amount: number,
+    space?: colorsTypes.ColorMixSpace,
+  ): colorsTypes.Color;
+  (
+    second: colorsTypes.Color,
+    amount: number,
+    space?: colorsTypes.ColorMixSpace,
+  ): (first: colorsTypes.Color) => colorsTypes.Color;
 } = dual(
   (args) => typeof args[2] === "number",
-  (first: Color, second: Color, amount: number, space: ColorMixSpace = "oklch"): Color => {
+  (
+    first: colorsTypes.Color,
+    second: colorsTypes.Color,
+    amount: number,
+    space: colorsTypes.ColorMixSpace = "oklch",
+  ): colorsTypes.Color => {
     requireFinite(amount, "amount");
     if (amount < 0 || amount > 1) throw new Error(`amount must be between 0 and 1: ${amount}`);
 
@@ -279,3 +247,20 @@ export const mixColors: {
     );
   },
 );
+
+const colors = {
+  CUBE_VALUES,
+  GRAY_VALUES,
+  colorToHex,
+  colorToOkhsl,
+  colorToOklch,
+  colorToRgb,
+  indexedColor,
+  mixColors,
+  okhslColor,
+  oklchColor,
+  parseColor,
+  rgbColor,
+};
+
+export default colors;

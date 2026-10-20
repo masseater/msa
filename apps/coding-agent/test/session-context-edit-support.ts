@@ -1,9 +1,9 @@
-import type { AssistantMessage } from "@msa/ai";
+import type aiTypes from "@msa/ai/index.types";
 import testing from "@msa/testing";
 
 const { currentTimeMillis } = testing;
 
-function assistant(reply: string): AssistantMessage {
+function assistant(reply: string): aiTypes.AssistantMessage {
   return {
     api: "faux" as const,
     content: [{ text: reply, type: "text" as const }],

@@ -1,4 +1,4 @@
-import type { Model, OpenAICompletionsCompat } from "../../src/types.ts";
+import type typesModule from "../../src/types.types.ts";
 import anthropicMetadata from "./anthropic-metadata.ts";
 import type catalogAssemblyTypes from "./catalog-assembly.types.ts";
 import applyCatalogOverrides from "./catalog-overrides.ts";
@@ -15,22 +15,25 @@ const { CODEX_MODELS, MISSING_OPENAI_MODELS } = staticOpenaiModels;
 const DEEPSEEK_COMPAT = {
   requiresReasoningContentOnAssistantMessages: true,
   thinkingFormat: "deepseek",
-} satisfies OpenAICompletionsCompat;
+} satisfies typesModule.OpenAICompletionsCompat;
 
-function isCatalogedModel(model: Model<any>): boolean {
+function isCatalogedModel(model: typesModule.Model<any>): boolean {
   return !(
     (model.provider === "opencode" || model.provider === "opencode-go") &&
     model.id === "gpt-5.3-codex-spark"
   );
 }
 
-function addMissing(models: Model<any>[], additions: readonly Model<any>[]): void {
+function addMissing(
+  models: typesModule.Model<any>[],
+  additions: readonly typesModule.Model<any>[],
+): void {
   for (const model of additions) {
     if (!models.some((m) => m.provider === model.provider && m.id === model.id)) models.push(model);
   }
 }
 
-function applyDeepSeekCompat(candidate: Model<any>): void {
+function applyDeepSeekCompat(candidate: typesModule.Model<any>): void {
   if (candidate.api !== "openai-completions" || !candidate.id.includes("deepseek-v4")) return;
   const preservesNativeReasoningEffort =
     candidate.provider === "openrouter" || candidate.provider === "opencode";
@@ -48,7 +51,7 @@ function applyDeepSeekCompat(candidate: Model<any>): void {
 function assembleChatModels({
   upstream,
   reasoning,
-}: catalogAssemblyTypes.CatalogAssembly): Model<any>[] {
+}: catalogAssemblyTypes.CatalogAssembly): typesModule.Model<any>[] {
   const models = upstream.filter(isCatalogedModel);
   for (const candidate of models) applyCatalogOverrides(candidate);
   addMissing(models, MISSING_OPENAI_MODELS);

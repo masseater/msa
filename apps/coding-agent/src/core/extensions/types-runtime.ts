@@ -1,5 +1,5 @@
-import type { ThinkingLevel } from "@msa/agent-core";
-import type { ImageContent, Model, TextContent } from "@msa/ai";
+import type agentTypes from "@msa/agent-core/index.types";
+import type aiTypes from "@msa/ai/index.types";
 
 import type { CustomMessage } from "../messages.ts";
 import type { Settings } from "../settings-manager.ts";
@@ -20,7 +20,7 @@ export type SendMessageHandler = <T = unknown>(
 ) => void;
 
 export type SendUserMessageHandler = (
-  content: string | (TextContent | ImageContent)[],
+  content: string | (aiTypes.TextContent | aiTypes.ImageContent)[],
   options?: { deliverAs?: "steer" | "followUp"; expandPromptTemplates?: boolean },
 ) => void;
 
@@ -52,10 +52,10 @@ export type SetActiveToolsHandler = (toolNames: string[]) => void;
 
 export type RefreshToolsHandler = () => void;
 
-export type SetModelHandler = (model: Model<any>) => Promise<boolean>;
+export type SetModelHandler = (model: aiTypes.Model<any>) => Promise<boolean>;
 
-export type GetThinkingLevelHandler = () => ThinkingLevel;
+export type GetThinkingLevelHandler = () => agentTypes.ThinkingLevel;
 
-export type SetThinkingLevelHandler = (level: ThinkingLevel) => void;
+export type SetThinkingLevelHandler = (level: agentTypes.ThinkingLevel) => void;
 
 export type SetLabelHandler = (entryId: string, label: string | undefined) => void;

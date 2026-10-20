@@ -1,14 +1,5 @@
-import {
-  Container,
-  type Focusable,
-  type SelectItem,
-  SelectList,
-  Spacer,
-  Text,
-  type TUI,
-  truncateToWidth,
-  visibleWidth,
-} from "@msa/tui";
+import tuiModule from "@msa/tui";
+import type tuiTypes from "@msa/tui/index.types";
 import { Effect } from "effect";
 import { dual } from "effect/Function";
 
@@ -23,6 +14,8 @@ import type { LlamaModelInfo, LlamaProgress } from "./client.ts";
 import { HuggingFaceSearch } from "./huggingface-search.ts";
 import type { HuggingFaceModel } from "./huggingface.ts";
 import { frame, selectTheme } from "./ui-frame.ts";
+
+const { SelectList, Spacer, Text, truncateToWidth, visibleWidth } = tuiModule;
 
 const DOWNLOAD_VALUE = "\0download";
 
@@ -73,20 +66,20 @@ export interface LlamaUi {
   updateProgress(state: ProgressState): void;
 }
 
-class LlamaView implements LlamaUi, Focusable {
-  private readonly tui: TUI;
+class LlamaView implements LlamaUi, tuiTypes.Focusable {
+  private readonly tui: tuiTypes.TUI;
   private readonly theme: Theme;
   private readonly keybindings: KeybindingsManager;
   private readonly searchCache = new Map<string, HuggingFaceModel[]>();
-  private content: Container;
+  private content: tuiTypes.Container;
   private inputHandler: { handleInput?(data: string): void } | undefined;
-  private inputTarget: Focusable | undefined;
+  private inputTarget: tuiTypes.Focusable | undefined;
   private progressPromise: Promise<void> | undefined;
   private progressResolver: (() => void) | undefined;
   private showingProgress = false;
   private isFocused = false;
 
-  constructor(tui: TUI, theme: Theme, keybindings: KeybindingsManager) {
+  constructor(tui: tuiTypes.TUI, theme: Theme, keybindings: KeybindingsManager) {
     this.tui = tui;
     this.theme = theme;
     this.keybindings = keybindings;
@@ -105,9 +98,9 @@ class LlamaView implements LlamaUi, Focusable {
   }
 
   private setContent(
-    content: Container,
+    content: tuiTypes.Container,
     inputHandler?: { handleInput?(data: string): void },
-    inputTarget?: Focusable,
+    inputTarget?: tuiTypes.Focusable,
   ): void {
     if (this.inputTarget !== undefined) this.inputTarget.focused = false;
     this.progressPromise = undefined;
@@ -127,28 +120,28 @@ class LlamaView implements LlamaUi, Focusable {
       return loaded || left.id.localeCompare(right.id);
     });
     const byId = new Map(sorted.map((model) => [model.id, model]));
-    const items: SelectItem[] = [
+    const items: tuiTypes.SelectItem[] = [
       ...sorted.map((model) => ({
-        value: model.id,
-        label: model.id,
         description: modelDescription(model),
+        label: model.id,
+        value: model.id,
       })),
       {
-        value: DOWNLOAD_VALUE,
-        label: "Download model…",
         description: "Hugging Face owner/repository[:quant]",
+        label: "Download model…",
+        value: DOWNLOAD_VALUE,
       },
     ];
     return callbackPromise((resolve) => {
       const list = new SelectList(items, Math.min(items.length, 12), selectTheme(this.theme), {
-        minPrimaryColumnWidth: 36,
         maxPrimaryColumnWidth: 56,
+        minPrimaryColumnWidth: 36,
       });
       list.onSelect = (item) => {
         if (item.value === DOWNLOAD_VALUE) resolve({ type: "download" });
         else {
           const model = byId.get(item.value);
-          if (model !== undefined) resolve({ type: "model", model });
+          if (model !== undefined) resolve({ model, type: "model" });
         }
       };
       list.onCancel = () => resolve({ type: "close" });
@@ -167,7 +160,7 @@ class LlamaView implements LlamaUi, Focusable {
   select(title: string, options: string[]): Promise<string | undefined> {
     return callbackPromise((resolve) => {
       const list = new SelectList(
-        options.map((option) => ({ value: option, label: option })),
+        options.map((option) => ({ label: option, value: option })),
         Math.min(options.length, 12),
         selectTheme(this.theme),
       );
@@ -345,9 +338,9 @@ function runWithProgressImpl<T>(
     awaiting(function* () {
       const controller = new AbortController();
       const state: ProgressState = {
-        title: options.title,
-        model: options.model,
         message: options.initialMessage,
+        model: options.model,
+        title: options.title,
       };
       const settled = options
         .run(controller.signal, (progress) => {
@@ -356,7 +349,7 @@ function runWithProgressImpl<T>(
         })
         .then(
           (value) => ({ ok: true as const, value }),
-          (error: unknown) => ({ ok: false as const, error }),
+          (error: unknown) => ({ error, ok: false as const }),
         );
       const progress = { completed: false };
       settled.finally(() => {

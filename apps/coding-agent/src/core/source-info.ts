@@ -26,11 +26,11 @@ export function isSyntheticPath(path: string): boolean {
 
 export function createSourceInfo(path: string, metadata: PathMetadata): SourceInfo {
   return {
-    path,
-    source: metadata.source,
-    scope: metadata.scope,
-    origin: metadata.origin,
     baseDir: metadata.baseDir,
+    origin: metadata.origin,
+    path,
+    scope: metadata.scope,
+    source: metadata.source,
   };
 }
 
@@ -44,10 +44,10 @@ export function createSyntheticSourceInfo(
   },
 ): SourceInfo {
   return {
-    path,
-    source: options.source,
-    scope: options.scope ?? "temporary",
-    origin: options.origin ?? "top-level",
     baseDir: options.baseDir,
+    origin: options.origin ?? "top-level",
+    path,
+    scope: options.scope ?? "temporary",
+    source: options.source,
   };
 }

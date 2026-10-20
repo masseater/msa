@@ -1,5 +1,7 @@
-import { type JsonRpcMessage, LATEST_PROTOCOL_VERSION, McpSessionExpiredError } from "@msa/mcp";
-import { type InMemoryTransport, createInMemoryTransportPair } from "@msa/mcp/testing";
+import mcp from "@msa/mcp";
+import type mcpTypes from "@msa/mcp/index.types";
+import testingModule from "@msa/mcp/testing";
+import type testingTypes from "@msa/mcp/testing.types";
 import testing from "@msa/testing";
 import { Effect } from "effect";
 
@@ -12,9 +14,12 @@ import {
 } from "../src/extensions/mcp/runtime.ts";
 import type mcpConnectionSupportTypes from "./mcp-connection-support.types.ts";
 
+const { LATEST_PROTOCOL_VERSION, McpSessionExpiredError } = mcp;
+const { createInMemoryTransportPair } = testingModule;
+
 const { runTest } = testing;
 
-const fakeServers: InMemoryTransport[] = [];
+const fakeServers: testingTypes.InMemoryTransport[] = [];
 
 const STDIO_ENTRY: McpServerEntry = { config: { command: "unused" }, name: "fake", source: "test" };
 
@@ -37,7 +42,7 @@ const respond = (
   options: mcpConnectionSupportTypes.TransportOptions,
   id: string | number,
   method: string,
-): JsonRpcMessage => {
+): mcpTypes.JsonRpcMessage => {
   switch (method) {
     case "initialize":
       return { id, jsonrpc: "2.0", result: initializeResult(options) };
@@ -65,7 +70,7 @@ const createTransport = (options: mcpConnectionSupportTypes.TransportOptions = {
   void pair.server.start();
   if (options.expireFirstCall === true) {
     const send = pair.client.send.bind(pair.client);
-    pair.client.send = (message: JsonRpcMessage) =>
+    pair.client.send = (message: mcpTypes.JsonRpcMessage) =>
       "method" in message && message.method === "tools/call"
         ? Promise.reject(new McpSessionExpiredError("gone"))
         : send(message);

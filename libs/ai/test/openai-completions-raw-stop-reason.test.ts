@@ -1,10 +1,14 @@
 import { Effect, Stream } from "effect";
 import { beforeEach, describe, expect, it, vi } from "vite-plus/test";
 
-import { stream as streamOpenAICompletions } from "../src/api/openai-completions.ts";
-import type { Model } from "../src/types.ts";
-import { currentTimeMillis } from "../src/utils/clock.ts";
-import { normalizeContext } from "../src/utils/transcript.ts";
+import openaiCompletions from "../src/api/openai-completions.ts";
+import type typesModule from "../src/types.types.ts";
+import clock from "../src/utils/clock.ts";
+import transcript from "../src/utils/transcript.ts";
+
+const { normalizeContext } = transcript;
+const { currentTimeMillis } = clock;
+const { stream: streamOpenAICompletions } = openaiCompletions;
 
 const mockState = vi.hoisted(() => ({
   chunks: [] as unknown[],
@@ -46,7 +50,7 @@ vi.mock("openai", () => {
   return { default: FakeOpenAI };
 });
 
-const model: Model<"openai-completions"> = {
+const model: typesModule.Model<"openai-completions"> = {
   api: "openai-completions",
   baseUrl: "https://api.openai.com/v1",
   contextWindow: 128_000,

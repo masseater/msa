@@ -1,6 +1,6 @@
-import type { AgentMessage, ThinkingLevel } from "@msa/agent-core";
-import type { Model } from "@msa/ai/compat";
-import type { TelemetryContext } from "@msa/telemetry";
+import type agentTypes from "@msa/agent-core/index.types";
+import type compatTypes from "@msa/ai/compat.types";
+import type telemetryTypes from "@msa/telemetry/index.types";
 
 import type { SessionTelemetryOptions } from "../observability/session-telemetry.ts";
 
@@ -8,12 +8,12 @@ export interface WorkerSession {
   prompt(text: string): Promise<unknown>;
   steer(text: string): Promise<unknown>;
   abort(): Promise<unknown>;
-  setModel(model: Model<any>): Promise<unknown>;
-  setThinkingLevel(level: ThinkingLevel): void;
+  setModel(model: compatTypes.Model<any>): Promise<unknown>;
+  setThinkingLevel(level: agentTypes.ThinkingLevel): void;
   isStreaming: boolean;
-  messages: readonly AgentMessage[];
+  messages: readonly agentTypes.AgentMessage[];
   sessionFile?: string | undefined;
-  state: { streamingMessage?: AgentMessage | undefined };
+  state: { streamingMessage?: agentTypes.AgentMessage | undefined };
   isRetrying: boolean;
   subscribe(listener: () => void): () => void;
   dispose(): void;
@@ -21,17 +21,17 @@ export interface WorkerSession {
 
 export interface CreateWorkerOptions {
   cwd: string;
-  model: Model<any>;
-  thinkingLevel: ThinkingLevel;
+  model: compatTypes.Model<any>;
+  thinkingLevel: agentTypes.ThinkingLevel;
   sessionFile?: string | undefined;
   telemetry: SessionTelemetryOptions;
 }
 
 export interface OrchestratorDefaults {
   workerModel: string;
-  workerThinkingLevel: ThinkingLevel;
+  workerThinkingLevel: agentTypes.ThinkingLevel;
   reviewModel: string;
-  reviewThinkingLevel: ThinkingLevel;
+  reviewThinkingLevel: agentTypes.ThinkingLevel;
   maxConcurrentThreads: number;
 }
 
@@ -51,11 +51,11 @@ export interface OrchestratorOptions {
 
   version: string;
   createWorker: (options: CreateWorkerOptions) => Promise<WorkerSession>;
-  resolveModel: (reference: string) => Model<any>;
+  resolveModel: (reference: string) => compatTypes.Model<any>;
   defaults: () => OrchestratorDefaults;
   report: (text: string, details: OrchestratorReport) => void;
   runCondition: (command: string, cwd: string) => Promise<boolean>;
   pollIntervalMs?: number | null;
 
-  telemetry: TelemetryContext;
+  telemetry: telemetryTypes.TelemetryContext;
 }

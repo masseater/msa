@@ -1,8 +1,10 @@
 import { Clock, Effect, Stream } from "effect";
 import { afterEach, describe, expect, it } from "vite-plus/test";
 
-import { fauxAssistantMessage, registerFauxProvider, stream } from "../src/compat.ts";
+import compat from "../src/compat.ts";
 import fauxProviderSupport from "./faux-provider-support.ts";
+
+const { fauxAssistantMessage, registerFauxProvider, stream } = compat;
 
 const { collectEvents, registrations } = fauxProviderSupport;
 

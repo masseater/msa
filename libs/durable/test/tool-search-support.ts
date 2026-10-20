@@ -1,4 +1,5 @@
-import { type AssistantMessage, Type, fauxAssistantMessage, fauxText, fauxToolCall } from "@msa/ai";
+import ai from "@msa/ai";
+import type aiTypes from "@msa/ai/index.types";
 import durable from "@msa/durable";
 import type durableTypes from "@msa/durable/index.types";
 import { Effect } from "effect";
@@ -8,6 +9,8 @@ import chatSupport from "./chat-support.ts";
 import effectSupport from "./effect-support.ts";
 import harnessSupport from "./harness-support.ts";
 import sessionSupport from "./session-support.ts";
+
+const { Type, fauxAssistantMessage, fauxText, fauxToolCall } = ai;
 
 const { defineTool } = durable;
 const { createToolSearchExtension } = toolSearch;
@@ -38,7 +41,11 @@ function tool(
 
 const DONE = fauxAssistantMessage([fauxText("done")]);
 
-function call(name: string, args: durableTypes.JsonObject = {}, id = "c1"): AssistantMessage {
+function call(
+  name: string,
+  args: durableTypes.JsonObject = {},
+  id = "c1",
+): aiTypes.AssistantMessage {
   return fauxAssistantMessage([fauxToolCall(name, args, { id })], { stopReason: "toolUse" });
 }
 

@@ -3,13 +3,20 @@ import { describe, it } from "node:test";
 
 import { Effect } from "effect";
 
-import { stripStyleSequences } from "../src/ansi-sequences.ts";
-import { Markdown } from "../src/components/markdown.ts";
-import type { Component } from "../src/tui-component.ts";
-import { TuiMainScreen } from "../src/tui-main-screen.ts";
+import type markdownTypes from "../src/components/markdown.types.ts";
+import type tuiComponentTypes from "../src/tui-component.types.ts";
+import TuiMainScreen from "../src/tui-main-screen.ts";
 import markdownHelpers from "./markdown-helpers.ts";
-import { defaultMarkdownTheme } from "./test-themes.ts";
-import { VirtualTerminal } from "./virtual-terminal.ts";
+import markdownLatexMathKit from "./markdown-latex-math-kit.ts";
+import testThemes from "./test-themes.ts";
+import virtualTerminal from "./virtual-terminal.ts";
+
+const { ansiSequences, Markdown } = markdownLatexMathKit;
+
+const { defaultMarkdownTheme } = testThemes;
+const { VirtualTerminal } = virtualTerminal;
+
+const { stripStyleSequences } = ansiSequences;
 
 const { chalk, getCell, stripAnsi } = markdownHelpers;
 
@@ -155,11 +162,11 @@ function preStyledTextThinkingCases4(): void {
   it("should not leak styles into following lines when rendered in TUI", () =>
     Effect.runPromise(
       Effect.gen(function* () {
-        class MarkdownWithInput implements Component {
+        class MarkdownWithInput implements tuiComponentTypes.Component {
           public markdownLineCount = 0;
-          private readonly markdown: Markdown;
+          private readonly markdown: markdownTypes.Markdown;
 
-          constructor(markdown: Markdown) {
+          constructor(markdown: markdownTypes.Markdown) {
             this.markdown = markdown;
           }
 

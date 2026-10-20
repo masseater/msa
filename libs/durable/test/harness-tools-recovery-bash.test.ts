@@ -1,4 +1,4 @@
-import { fauxAssistantMessage, fauxToolCall } from "@msa/ai";
+import ai from "@msa/ai";
 import durable from "@msa/durable";
 import { Effect } from "effect";
 import { afterEach, describe, expect, it } from "vite-plus/test";
@@ -7,6 +7,8 @@ import node from "../src/env/node.ts";
 import toolsModule from "../src/tools/index.ts";
 import harnessToolsRecoverySupport from "./harness-tools-recovery-support.ts";
 import support from "./support.ts";
+
+const { fauxAssistantMessage, fauxToolCall } = ai;
 
 const { NodeExecutionEnv } = node;
 const { createBashTool } = toolsModule;

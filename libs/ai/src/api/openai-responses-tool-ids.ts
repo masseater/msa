@@ -1,6 +1,9 @@
-import type { Api, AssistantMessage, Model } from "../types.ts";
-import { shortHash } from "../utils/hash.ts";
-import type { ToolCallIdNormalizer } from "./transform-messages.ts";
+import type typesModule from "../types.types.ts";
+import hash from "../utils/hash.ts";
+import type openaiResponsesToolIdsTypes from "./openai-responses-tool-ids.types.ts";
+import type transformMessagesTypes from "./transform-messages.types.ts";
+
+const { shortHash } = hash;
 
 const MAX_ID_LENGTH = 64;
 
@@ -16,16 +19,15 @@ function normalizeItemId(itemId: string, foreign: boolean): string {
   return normalized.startsWith("fc_") ? normalized : normalizeIdPart(`fc_${normalized}`);
 }
 
-export interface ToolCallIdScope<TApi extends Api> {
-  readonly model: Model<TApi>;
-  readonly allowedToolCallProviders: ReadonlySet<string>;
-}
-
-export function responsesToolCallIdNormalizer<TApi extends Api>({
+function responsesToolCallIdNormalizer<TApi extends typesModule.Api>({
   model,
   allowedToolCallProviders,
-}: ToolCallIdScope<TApi>): ToolCallIdNormalizer<TApi> {
-  return (id: string, _targetModel: Model<TApi>, source: AssistantMessage): string => {
+}: openaiResponsesToolIdsTypes.ToolCallIdScope<TApi>): transformMessagesTypes.ToolCallIdNormalizer<TApi> {
+  return (
+    id: string,
+    _targetModel: typesModule.Model<TApi>,
+    source: typesModule.AssistantMessage,
+  ): string => {
     if (!allowedToolCallProviders.has(model.provider) || !id.includes("|")) {
       return normalizeIdPart(id);
     }
@@ -34,3 +36,9 @@ export function responsesToolCallIdNormalizer<TApi extends Api>({
     return `${normalizeIdPart(callId)}|${normalizeItemId(itemId, foreign)}`;
   };
 }
+
+const openaiResponsesToolIds = {
+  responsesToolCallIdNormalizer,
+};
+
+export default openaiResponsesToolIds;

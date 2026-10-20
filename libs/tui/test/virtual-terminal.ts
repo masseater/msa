@@ -2,12 +2,14 @@ import type { Terminal as XtermTerminalType } from "@xterm/headless";
 import xterm from "@xterm/headless";
 import { Effect } from "effect";
 
-import type { Terminal } from "../src/terminal-protocol.ts";
-import { nextTick } from "./effect-helpers.ts";
+import type terminalProtocolTypes from "../src/terminal-protocol.types.ts";
+import effectHelpers from "./effect-helpers.ts";
+
+const { nextTick } = effectHelpers;
 
 const XtermTerminal = xterm.Terminal;
 
-export class VirtualTerminal implements Terminal {
+class VirtualTerminal implements terminalProtocolTypes.Terminal {
   private xterm: XtermTerminalType;
   private inputHandler?: ((data: string) => void) | undefined;
   private resizeHandler?: (() => void) | undefined;
@@ -19,10 +21,10 @@ export class VirtualTerminal implements Terminal {
     this.rowCount = rows;
 
     this.xterm = new XtermTerminal({
-      cols: columns,
-      rows: rows,
-      disableStdin: true,
       allowProposedApi: true,
+      cols: columns,
+      disableStdin: true,
+      rows: rows,
     });
   }
 
@@ -176,3 +178,9 @@ export class VirtualTerminal implements Terminal {
     );
   }
 }
+
+const virtualTerminal = {
+  VirtualTerminal,
+};
+
+export default virtualTerminal;

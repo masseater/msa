@@ -66,17 +66,17 @@ export interface Latch {
 export const makeLatch = (): Latch => {
   const gate = Deferred.makeUnsafe<void>();
   return {
-    promise: Deferred.await(gate).pipe(Effect.runPromise),
     open: () => {
       Deferred.doneUnsafe(gate, Exit.void);
     },
+    promise: Deferred.await(gate).pipe(Effect.runPromise),
   };
 };
 
 const abortError = (signal: AbortSignal): Error =>
   Object.assign(new Error("The operation was aborted", { cause: signal.reason }), {
-    name: "AbortError",
     code: "ABORT_ERR",
+    name: "AbortError",
   });
 
 export const sleepFor: {

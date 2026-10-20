@@ -1,76 +1,98 @@
 import { Effect } from "effect";
 
-import type { Model, SimpleStreamOptions, StreamFunction } from "../types.ts";
-import { AssistantMessageEventStream } from "../utils/event-stream.ts";
-import { modelCall } from "../utils/model-call.ts";
-import { resolveTranscript, type TranscriptContext } from "../utils/transcript.ts";
-import { assertRequestAuth, getAnthropicFederation } from "./anthropic-messages-client.ts";
-import { getAnthropicCompat, mapThinkingLevelToEffort } from "./anthropic-messages-compat.ts";
-import type { AnthropicOptions } from "./anthropic-messages-options.ts";
-import { buildParams } from "./anthropic-messages-params.ts";
-import { resolveClient } from "./anthropic-messages-run.ts";
-import { runAnthropicRequest } from "./anthropic-messages-stream.ts";
-import {
-  adjustMaxTokensForThinking,
-  buildBaseOptions,
-  clampMaxTokensToContext,
-} from "./simple-options.ts";
+import type typesModule from "../types.types.ts";
+import type eventStreamTypes from "../utils/event-stream.types.ts";
+import type transcriptTypes from "../utils/transcript.types.ts";
+import anthropicMessagesKit from "./anthropic-messages-kit.ts";
+import type anthropicMessagesOptionsTypes from "./anthropic-messages-options.ts";
+import anthropicMessagesParams from "./anthropic-messages-params.ts";
+import anthropicMessagesRun from "./anthropic-messages-run.ts";
+import anthropicMessagesStream from "./anthropic-messages-stream.ts";
+import simpleOptions from "./simple-options.ts";
 
-export type { AnthropicEffort, AnthropicThinkingDisplay } from "./anthropic-messages-compat.ts";
-export type { AnthropicOptions } from "./anthropic-messages-options.ts";
+const {
+  anthropicMessagesClient,
+  anthropicMessagesCompat,
+  eventStream,
+  modelCall: modelCallModule,
+  transcript,
+} = anthropicMessagesKit;
 
-export const stream = modelCall<
-  Parameters<StreamFunction<"anthropic-messages", AnthropicOptions>>[0],
-  Parameters<StreamFunction<"anthropic-messages", AnthropicOptions>>[1],
-  NonNullable<Parameters<StreamFunction<"anthropic-messages", AnthropicOptions>>[2]>,
-  ReturnType<StreamFunction<"anthropic-messages", AnthropicOptions>>
+const { modelCall } = modelCallModule;
+const { AssistantMessageEventStream } = eventStream;
+const { resolveTranscript } = transcript;
+const { getAnthropicCompat, mapThinkingLevelToEffort } = anthropicMessagesCompat;
+const { runAnthropicRequest } = anthropicMessagesStream;
+const { assertRequestAuth, getAnthropicFederation } = anthropicMessagesClient;
+const { adjustMaxTokensForThinking, buildBaseOptions, clampMaxTokensToContext } = simpleOptions;
+const { resolveClient } = anthropicMessagesRun;
+const { buildParams } = anthropicMessagesParams;
+
+const stream = modelCall<
+  Parameters<
+    typesModule.StreamFunction<"anthropic-messages", anthropicMessagesOptionsTypes.AnthropicOptions>
+  >[0],
+  Parameters<
+    typesModule.StreamFunction<"anthropic-messages", anthropicMessagesOptionsTypes.AnthropicOptions>
+  >[1],
+  NonNullable<
+    Parameters<
+      typesModule.StreamFunction<
+        "anthropic-messages",
+        anthropicMessagesOptionsTypes.AnthropicOptions
+      >
+    >[2]
+  >,
+  ReturnType<
+    typesModule.StreamFunction<"anthropic-messages", anthropicMessagesOptionsTypes.AnthropicOptions>
+  >
 >(
   (
-    model: Model<"anthropic-messages">,
-    context: TranscriptContext,
-    options?: AnthropicOptions,
-  ): AssistantMessageEventStream => {
+    model: typesModule.Model<"anthropic-messages">,
+    context: transcriptTypes.TranscriptContext,
+    options?: anthropicMessagesOptionsTypes.AnthropicOptions,
+  ): eventStreamTypes.AssistantMessageEventStream => {
     const events = new AssistantMessageEventStream();
     const normalizedContext = resolveTranscript(
       context,
       getAnthropicCompat(model).supportsMidConvoSystemMessages,
     );
-    Effect.runFork(runAnthropicRequest({ model, context: normalizedContext, options, events }));
+    Effect.runFork(runAnthropicRequest({ context: normalizedContext, events, model, options }));
     return events;
   },
 );
 
 function simpleStreamOptions(
-  model: Model<"anthropic-messages">,
-  context: TranscriptContext,
-  options: SimpleStreamOptions | undefined,
-): AnthropicOptions {
+  model: typesModule.Model<"anthropic-messages">,
+  context: transcriptTypes.TranscriptContext,
+  options: typesModule.SimpleStreamOptions | undefined,
+): anthropicMessagesOptionsTypes.AnthropicOptions {
   if (
     getAnthropicFederation({
-      model,
       apiKey: options?.apiKey,
-      headers: options?.headers,
       env: options?.env,
+      headers: options?.headers,
+      model,
     }) === undefined
   ) {
     assertRequestAuth({
-      provider: model.provider,
       apiKey: options?.apiKey,
       headers: options?.headers,
+      provider: model.provider,
     });
   }
   const base = {
     ...buildBaseOptions(model, context, options, options?.apiKey),
     toolChoice: options?.toolChoice,
-  } satisfies AnthropicOptions;
+  } satisfies anthropicMessagesOptionsTypes.AnthropicOptions;
   if (options?.reasoning === undefined) {
     return { ...base, thinkingEnabled: false };
   }
   if (model.compat?.forceAdaptiveThinking === true) {
     return {
       ...base,
+      effort: mapThinkingLevelToEffort({ level: options.reasoning, model }),
       thinkingEnabled: true,
-      effort: mapThinkingLevelToEffort({ model, level: options.reasoning }),
     };
   }
   const adjusted = adjustMaxTokensForThinking(
@@ -83,29 +105,31 @@ function simpleStreamOptions(
   return {
     ...base,
     maxTokens,
-    thinkingEnabled: true,
     thinkingBudgetTokens: Math.min(adjusted.thinkingBudget, Math.max(0, maxTokens - 1024)),
+    thinkingEnabled: true,
   };
 }
 
-export const streamSimple = modelCall<
-  Parameters<StreamFunction<"anthropic-messages", SimpleStreamOptions>>[0],
-  Parameters<StreamFunction<"anthropic-messages", SimpleStreamOptions>>[1],
-  NonNullable<Parameters<StreamFunction<"anthropic-messages", SimpleStreamOptions>>[2]>,
-  ReturnType<StreamFunction<"anthropic-messages", SimpleStreamOptions>>
+const streamSimple = modelCall<
+  Parameters<typesModule.StreamFunction<"anthropic-messages", typesModule.SimpleStreamOptions>>[0],
+  Parameters<typesModule.StreamFunction<"anthropic-messages", typesModule.SimpleStreamOptions>>[1],
+  NonNullable<
+    Parameters<typesModule.StreamFunction<"anthropic-messages", typesModule.SimpleStreamOptions>>[2]
+  >,
+  ReturnType<typesModule.StreamFunction<"anthropic-messages", typesModule.SimpleStreamOptions>>
 >(
   (
-    model: Model<"anthropic-messages">,
-    context: TranscriptContext,
-    options?: SimpleStreamOptions,
-  ): AssistantMessageEventStream =>
+    model: typesModule.Model<"anthropic-messages">,
+    context: transcriptTypes.TranscriptContext,
+    options?: typesModule.SimpleStreamOptions,
+  ): eventStreamTypes.AssistantMessageEventStream =>
     stream(model, context, simpleStreamOptions(model, context, options)),
 );
 
-export const countTokens = (
-  model: Model<"anthropic-messages">,
-  context: TranscriptContext,
-  options?: SimpleStreamOptions,
+const countTokens = (
+  model: typesModule.Model<"anthropic-messages">,
+  context: transcriptTypes.TranscriptContext,
+  options?: typesModule.SimpleStreamOptions,
 ): Promise<number> =>
   Effect.runPromise(
     Effect.gen(function* () {
@@ -116,15 +140,15 @@ export const countTokens = (
         getAnthropicCompat(model).supportsMidConvoSystemMessages,
       );
       const { params } = buildParams({
-        model,
         context: normalizedContext,
+        model,
         options: anthropicOptions,
       });
       const counted = yield* Effect.promise(() =>
         client.beta.messages.countTokens(
           {
-            model: params.model,
             messages: params.messages,
+            model: params.model,
             ...(params.system === undefined ? {} : { system: params.system }),
             ...(params.tools === undefined ? {} : { tools: params.tools }),
             ...(params.thinking === undefined ? {} : { thinking: params.thinking }),
@@ -141,3 +165,11 @@ export const countTokens = (
       return counted.input_tokens;
     }),
   );
+
+const anthropicMessages = {
+  countTokens,
+  stream,
+  streamSimple,
+};
+
+export default anthropicMessages;

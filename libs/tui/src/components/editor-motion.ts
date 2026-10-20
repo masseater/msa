@@ -1,60 +1,31 @@
-import { visibleWidth } from "../utils.ts";
-import { findWordBackward, findWordForward } from "../word-navigation.ts";
-import type { EditorDocument } from "./editor-document.ts";
-import { isPasteMarker } from "./editor-segments.ts";
-import {
-  buildVisualLineMap,
-  findVisualLineAt,
-  isLastSegmentOfLine,
-  type VisualLine,
-} from "./editor-wrap.ts";
+import utils from "../utils.ts";
+import wordNavigation from "../word-navigation.ts";
+import type editorDocumentTypes from "./editor-document.types.ts";
+import editorMotionLines from "./editor-motion-lines.ts";
+import type editorMotionTypes from "./editor-motion.types.ts";
+import editorSegments from "./editor-segments.ts";
+import editorWrap from "./editor-wrap.ts";
+import type editorWrapTypes from "./editor-wrap.types.ts";
 
-export interface CursorTarget {
-  line: number;
-  col: number;
-}
+const { findSplitGrapheme, maxVisualCol, nextVisualLineAfter } = editorMotionLines;
 
-function maxVisualCol(visualLines: readonly VisualLine[], index: number): number {
-  const vl = visualLines[index]!;
-  return isLastSegmentOfLine(visualLines, index) ? vl.length : Math.max(0, vl.length - 1);
-}
+const { buildVisualLineMap, findVisualLineAt, isLastSegmentOfLine } = editorWrap;
+const { findWordBackward, findWordForward } = wordNavigation;
+const { isPasteMarker } = editorSegments;
+const { visibleWidth } = utils;
 
-function findSplitGrapheme(
-  segments: readonly Intl.SegmentData[],
-  col: number,
-): Intl.SegmentData | undefined {
-  return segments.find(
-    (seg) => seg.index <= col && seg.segment.length > 1 && col < seg.index + seg.segment.length,
-  );
-}
+export default class EditorMotion {
+  private readonly doc: editorDocumentTypes.EditorDocument;
 
-function nextVisualLineAfter(
-  visualLines: readonly VisualLine[],
-  targetVisualLine: number,
-  segEnd: number,
-): number {
-  const logicalLine = visualLines[targetVisualLine]?.logicalLine;
-  let next = targetVisualLine + 1;
-  let nextVL = visualLines[next];
-  while (nextVL !== undefined && nextVL.logicalLine === logicalLine && nextVL.startCol < segEnd) {
-    next++;
-    nextVL = visualLines[next];
-  }
-  return next;
-}
-
-export class EditorMotion {
-  private readonly doc: EditorDocument;
-
-  constructor(doc: EditorDocument) {
+  constructor(doc: editorDocumentTypes.EditorDocument) {
     this.doc = doc;
   }
 
-  visualLines(width: number): VisualLine[] {
+  visualLines(width: number): editorWrapTypes.VisualLine[] {
     return buildVisualLineMap(this.doc, width);
   }
 
-  currentVisualLine(visualLines: readonly VisualLine[]): number {
+  currentVisualLine(visualLines: readonly editorWrapTypes.VisualLine[]): number {
     return findVisualLineAt(visualLines, this.doc.state.cursorLine, this.doc.state.cursorCol);
   }
 
@@ -118,8 +89,8 @@ export class EditorMotion {
     }
     this.doc.setCursorCol(
       findWordBackward(this.doc.currentLine(), state.cursorCol, {
-        segment: (text) => this.doc.segment(text, "word"),
         isAtomicSegment: isPasteMarker,
+        segment: (text) => this.doc.segment(text, "word"),
       }),
     );
   }
@@ -137,8 +108,8 @@ export class EditorMotion {
     }
     this.doc.setCursorCol(
       findWordForward(currentLine, state.cursorCol, {
-        segment: (text) => this.doc.segment(text, "word"),
         isAtomicSegment: isPasteMarker,
+        segment: (text) => this.doc.segment(text, "word"),
       }),
     );
   }
@@ -166,7 +137,7 @@ export class EditorMotion {
     width: number,
     visualLineIndex: number,
     targetColumn: number,
-  ): CursorTarget | undefined {
+  ): editorMotionTypes.CursorTarget | undefined {
     const visualLines = this.visualLines(width);
     const visualLine = visualLines[visualLineIndex];
     if (visualLine === undefined) return undefined;
@@ -191,11 +162,11 @@ export class EditorMotion {
     ) {
       targetIndex = lastGraphemeIndex;
     }
-    return { line: visualLine.logicalLine, col: visualLine.startCol + targetIndex };
+    return { col: visualLine.startCol + targetIndex, line: visualLine.logicalLine };
   }
 
   private moveToVisualLine(
-    visualLines: readonly VisualLine[],
+    visualLines: readonly editorWrapTypes.VisualLine[],
     currentVisualLine: number,
     targetVisualLine: number,
   ): void {
@@ -230,7 +201,10 @@ export class EditorMotion {
     state.cursorCol = split.index;
   }
 
-  private sourceVisualCol(visualLines: readonly VisualLine[], currentVL: VisualLine): number {
+  private sourceVisualCol(
+    visualLines: readonly editorWrapTypes.VisualLine[],
+    currentVL: editorWrapTypes.VisualLine,
+  ): number {
     const snapped = this.doc.snappedFromCursorCol;
     if (snapped === null) return this.doc.state.cursorCol - currentVL.startCol;
     const vlIndex = findVisualLineAt(visualLines, currentVL.logicalLine, snapped);
@@ -263,7 +237,7 @@ export class EditorMotion {
     return preferred;
   }
 
-  private moveCursorRight(currentVL: VisualLine | undefined): void {
+  private moveCursorRight(currentVL: editorWrapTypes.VisualLine | undefined): void {
     const { state } = this.doc;
     const currentLine = this.doc.currentLine();
     if (state.cursorCol < currentLine.length) {

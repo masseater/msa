@@ -1,55 +1,59 @@
-export interface AutocompleteItem {
-  value: string;
-  label: string;
-  description?: string;
-}
+declare namespace autocompleteTypesModule {
+  interface AutocompleteItem {
+    value: string;
+    label: string;
+    description?: string;
+  }
 
-type Awaitable<T> = T | Promise<T>;
+  type Awaitable<T> = T | Promise<T>;
 
-export interface SlashCommand {
-  name: string;
-  description?: string;
-  argumentHint?: string;
-  getArgumentCompletions?(argumentPrefix: string): Awaitable<AutocompleteItem[] | null>;
-}
+  interface SlashCommand {
+    name: string;
+    description?: string;
+    argumentHint?: string;
+    getArgumentCompletions?(argumentPrefix: string): Awaitable<AutocompleteItem[] | null>;
+  }
 
-export interface AutocompleteSuggestions {
-  items: AutocompleteItem[];
-  prefix: string;
-}
+  interface AutocompleteSuggestions {
+    items: AutocompleteItem[];
+    prefix: string;
+  }
 
-export interface CompletionResult {
-  lines: string[];
-  cursorLine: number;
-  cursorCol: number;
-}
-
-export interface CompletionRequest extends CompletionResult {
-  item: AutocompleteItem;
-  prefix: string;
-}
-
-export interface AutocompleteProvider {
-  triggerCharacters?: string[];
-
-  getSuggestions(
-    lines: string[],
-    cursorLine: number,
-    cursorCol: number,
-    options: { signal: AbortSignal; force?: boolean },
-  ): Promise<AutocompleteSuggestions | null>;
-
-  applyCompletion(
-    lines: string[],
-    cursorLine: number,
-    cursorCol: number,
-    item: AutocompleteItem,
-    prefix: string,
-  ): {
+  interface CompletionResult {
     lines: string[];
     cursorLine: number;
     cursorCol: number;
-  };
+  }
 
-  shouldTriggerFileCompletion?(lines: string[], cursorLine: number, cursorCol: number): boolean;
+  interface CompletionRequest extends CompletionResult {
+    item: AutocompleteItem;
+    prefix: string;
+  }
+
+  interface AutocompleteProvider {
+    triggerCharacters?: string[];
+
+    getSuggestions(
+      lines: string[],
+      cursorLine: number,
+      cursorCol: number,
+      options: { signal: AbortSignal; force?: boolean },
+    ): Promise<AutocompleteSuggestions | null>;
+
+    applyCompletion(
+      lines: string[],
+      cursorLine: number,
+      cursorCol: number,
+      item: AutocompleteItem,
+      prefix: string,
+    ): {
+      lines: string[];
+      cursorLine: number;
+      cursorCol: number;
+    };
+
+    shouldTriggerFileCompletion?(lines: string[], cursorLine: number, cursorCol: number): boolean;
+  }
 }
+
+export type { autocompleteTypesModule as default };

@@ -83,8 +83,8 @@ const registerAskwith = (msa: ExtensionAPI): void => {
           }
 
           msa.sendUserMessage([
-            { type: "text", text: `User request: ${args}` },
-            { type: "text", text: "Please respond concisely." },
+            { text: `User request: ${args}`, type: "text" },
+            { text: "Please respond concisely.", type: "text" },
           ]);
         }),
       ),

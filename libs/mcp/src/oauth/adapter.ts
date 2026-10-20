@@ -1,28 +1,36 @@
 import { Effect } from "effect";
 
-import type { AuthProvider, UnauthorizedContext } from "../auth-provider.ts";
-import { fromPromise, type McpForeignError, toPromise } from "../foreign.ts";
-import { parseWwwAuthenticate } from "./discovery.ts";
-import { McpOAuthAuthorizationRequiredError } from "./errors.ts";
-import type { OAuthClientProvider } from "./flow-types.ts";
-import { authorizeMcp, stepUpScope } from "./flow.ts";
+import type authProviderTypes from "../auth-provider.ts";
+import foreignModule from "../foreign.ts";
+import type foreignTypes from "../foreign.types.ts";
+import discovery from "./discovery.ts";
+import errors from "./errors.ts";
+import type flowTypesModule from "./flow-types.ts";
+import flow from "./flow.ts";
+
+const { fromPromise, toPromise } = foreignModule;
+const { parseWwwAuthenticate } = discovery;
+const { authorizeMcp, stepUpScope } = flow;
+const { McpOAuthAuthorizationRequiredError } = errors;
 
 const accessToken = (
-  provider: OAuthClientProvider,
-): Effect.Effect<string | undefined, McpForeignError> =>
+  provider: flowTypesModule.OAuthClientProvider,
+): Effect.Effect<string | undefined, foreignTypes.McpForeignError> =>
   fromPromise(() => provider.tokens()).pipe(Effect.map((tokens) => tokens?.access_token));
 
-export function adaptOAuthProvider(provider: OAuthClientProvider): AuthProvider {
+function adaptOAuthProvider(
+  provider: flowTypesModule.OAuthClientProvider,
+): authProviderTypes.AuthProvider {
   let inFlight: Promise<void> | undefined;
-  const recover = (context: UnauthorizedContext, insufficientScope: boolean) =>
+  const recover = (context: authProviderTypes.UnauthorizedContext, insufficientScope: boolean) =>
     Effect.gen(function* () {
       const challenge = parseWwwAuthenticate(context.response.headers.get("www-authenticate"));
       const granted = insufficientScope ? yield* fromPromise(() => provider.tokens()) : undefined;
       const result = yield* authorizeMcp(provider, {
-        serverUrl: context.serverUrl,
+        fetch: context.fetch,
         resourceMetadataUrl: challenge.resourceMetadataUrl,
         scope: insufficientScope ? stepUpScope(granted?.scope, challenge.scope) : challenge.scope,
-        fetch: context.fetch,
+        serverUrl: context.serverUrl,
         skipRefresh: insufficientScope,
       });
       if (result === "REDIRECT") return yield* new McpOAuthAuthorizationRequiredError();
@@ -34,8 +42,7 @@ export function adaptOAuthProvider(provider: OAuthClientProvider): AuthProvider 
       ),
     );
   return {
-    token: () => toPromise(accessToken(provider)),
-    onUnauthorized: (context: UnauthorizedContext) =>
+    onUnauthorized: (context: authProviderTypes.UnauthorizedContext) =>
       toPromise(
         Effect.gen(function* () {
           const challenge = parseWwwAuthenticate(context.response.headers.get("www-authenticate"));
@@ -49,5 +56,12 @@ export function adaptOAuthProvider(provider: OAuthClientProvider): AuthProvider 
           yield* fromPromise(() => shared);
         }),
       ),
+    token: () => toPromise(accessToken(provider)),
   };
 }
+
+const adapter = {
+  adaptOAuthProvider,
+};
+
+export default adapter;

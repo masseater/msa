@@ -11,10 +11,10 @@ let activeWadPath: string | null = null;
 const OVERLAY_OPTIONS = {
   overlay: true,
   overlayOptions: {
-    width: "75%",
-    maxHeight: "95%",
     anchor: "center",
     margin: { top: 1 },
+    maxHeight: "95%",
+    width: "75%",
   },
 } as const;
 

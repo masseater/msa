@@ -1,13 +1,18 @@
-import { zstdDecompressSync } from "node:zlib";
+import { constants, zstdCompressSync, zstdDecompressSync } from "node:zlib";
 
 import { Effect, Stream } from "effect";
 import { afterEach, vi } from "vite-plus/test";
 
-import { stream as streamOpenAICodexResponses } from "../src/api/openai-codex-responses.ts";
-import { closeOpenAICodexWebSocketSessions } from "../src/api/openai-codex-ws-cache.ts";
-import { resetOpenAICodexWebSocketDebugStats } from "../src/api/openai-codex-ws-stats.ts";
-import type { AssistantMessageEvent, Model, TranscriptContext } from "../src/types.ts";
-import { normalizeContext } from "../src/utils/transcript.ts";
+import openaiCodexResponses from "../src/api/openai-codex-responses.ts";
+import openaiCodexWsCache from "../src/api/openai-codex-ws-cache.ts";
+import openaiCodexWsStats from "../src/api/openai-codex-ws-stats.ts";
+import type typesModule from "../src/types.types.ts";
+import transcript from "../src/utils/transcript.ts";
+
+const { stream: streamOpenAICodexResponses } = openaiCodexResponses;
+const { normalizeContext } = transcript;
+const { closeOpenAICodexWebSocketSessions } = openaiCodexWsCache;
+const { resetOpenAICodexWebSocketDebugStats } = openaiCodexWsStats;
 
 type CodexOptions = NonNullable<Parameters<typeof streamOpenAICodexResponses>[2]>;
 type CodexStream = ReturnType<typeof streamOpenAICodexResponses>;
@@ -15,8 +20,8 @@ type CodexStream = ReturnType<typeof streamOpenAICodexResponses>;
 const CODEX_URL = "https://chatgpt.com/backend-api/codex/responses";
 
 const codexModel = (
-  overrides: Partial<Model<"openai-codex-responses">> = {},
-): Model<"openai-codex-responses"> => ({
+  overrides: Partial<typesModule.Model<"openai-codex-responses">> = {},
+): typesModule.Model<"openai-codex-responses"> => ({
   api: "openai-codex-responses",
   baseUrl: "https://chatgpt.com/backend-api",
   contextWindow: 400000,
@@ -30,7 +35,7 @@ const codexModel = (
   ...overrides,
 });
 
-const promptContext = (content = "Say hello", timestamp = 1): TranscriptContext =>
+const promptContext = (content = "Say hello", timestamp = 1): typesModule.TranscriptContext =>
   normalizeContext({
     messages: [{ content, role: "user", timestamp }],
     systemPrompt: "You are a helpful assistant.",
@@ -131,8 +136,8 @@ const stubCodexFetch = (
 const runCodex = (
   options: CodexOptions,
   request: {
-    readonly context?: TranscriptContext;
-    readonly model?: Model<"openai-codex-responses">;
+    readonly context?: typesModule.TranscriptContext;
+    readonly model?: typesModule.Model<"openai-codex-responses">;
   } = {},
 ) =>
   Effect.promise(() =>
@@ -145,10 +150,10 @@ const runCodex = (
 
 const collectEvents = (
   stream: CodexStream,
-  onEvent: (event: AssistantMessageEvent) => void = () => {},
+  onEvent: (event: typesModule.AssistantMessageEvent) => void = () => {},
 ) =>
   Effect.gen(function* () {
-    const events: AssistantMessageEvent[] = [];
+    const events: typesModule.AssistantMessageEvent[] = [];
     yield* Stream.fromAsyncIterable(stream, (error) => error).pipe(
       Stream.orDie,
       Stream.runForEach((event) =>
@@ -171,6 +176,11 @@ const resetCodexStateAfterEach = () => {
   });
 };
 
+const zstdCompress = (bodyJson: string): Uint8Array<ArrayBuffer> =>
+  new Uint8Array(
+    zstdCompressSync(bodyJson, { params: { [constants.ZSTD_c_compressionLevel]: 3 } }),
+  );
+
 const openaiCodexStreamSupport = {
   CODEX_URL,
   codexModel,
@@ -187,6 +197,7 @@ const openaiCodexStreamSupport = {
   sseText,
   stubCodexFetch,
   usage,
+  zstdCompress,
 };
 
 export default openaiCodexStreamSupport;

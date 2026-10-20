@@ -1,11 +1,6 @@
-import type { AgentTool } from "@msa/agent-core";
-import {
-  type FauxResponseStep,
-  type JsonObject,
-  type Usage,
-  fauxAssistantMessage,
-  fauxToolCall,
-} from "@msa/ai";
+import type agentTypes from "@msa/agent-core/index.types";
+import ai from "@msa/ai";
+import type aiTypes from "@msa/ai/index.types";
 import { Effect } from "effect";
 import { Type } from "typebox";
 import { expect } from "vite-plus/test";
@@ -13,6 +8,8 @@ import { expect } from "vite-plus/test";
 import agentSessionModelExtensionCases1 from "./agent-session-model-extension-cases-1.ts";
 import harnessModule from "./harness.ts";
 import type harnessTypes from "./harness.types.ts";
+
+const { fauxAssistantMessage, fauxToolCall } = ai;
 
 const { createHarness, getAssistantTexts } = harnessModule;
 const { harnesses } = agentSessionModelExtensionCases1;
@@ -43,7 +40,7 @@ const allowsExtensionToolCallHandlersToPart2 = (harness: harnessTypes.Harness) =
   });
 const allowsExtensionToolCallHandlersTo = Effect.gen(function* () {
   const runPromise = Effect.runPromiseWith(yield* Effect.context<never>());
-  const echoTool: AgentTool = {
+  const echoTool: agentTypes.AgentTool = {
     description: "Echo text back",
     execute: () =>
       runPromise(
@@ -68,7 +65,7 @@ const allowsExtensionToolCallHandlersTo = Effect.gen(function* () {
   harnesses.push(harness);
   return yield* allowsExtensionToolCallHandlersToPart2(harness);
 });
-const toolUsage: Usage = {
+const toolUsage: aiTypes.Usage = {
   cacheRead: 3,
   cacheWrite: 4,
   cost: { cacheRead: 0.3, cacheWrite: 0.4, input: 0.1, output: 0.2, total: 1 },
@@ -76,7 +73,7 @@ const toolUsage: Usage = {
   output: 2,
   totalTokens: 10,
 };
-const patchedToolUsage: Usage = {
+const patchedToolUsage: aiTypes.Usage = {
   cacheRead: 7,
   cacheWrite: 8,
   cost: { cacheRead: 0.7, cacheWrite: 0.8, input: 0.5, output: 0.6, total: 2.6 },
@@ -84,7 +81,7 @@ const patchedToolUsage: Usage = {
   output: 6,
   totalTokens: 26,
 };
-const echoToolWithUsage: AgentTool = {
+const echoToolWithUsage: agentTypes.AgentTool = {
   description: "Echo text back",
   execute: (_toolCallId, params) => {
     const text =
@@ -99,7 +96,7 @@ const echoToolWithUsage: AgentTool = {
   name: "echo",
   parameters: Type.Object({ text: Type.String() }),
 };
-const echoToolResultResponses: FauxResponseStep[] = [
+const echoToolResultResponses: aiTypes.FauxResponseStep[] = [
   fauxAssistantMessage([fauxToolCall("echo", { text: "hello" })], { stopReason: "toolUse" }),
   (context) => {
     const toolResult = context.messages.find((message) => message.role === "toolResult");
@@ -114,7 +111,7 @@ const echoToolResultResponses: FauxResponseStep[] = [
   },
 ];
 const allowsExtensionToolResultHandlersTo = Effect.gen(function* () {
-  let observedToolUsage: Usage | undefined;
+  let observedToolUsage: aiTypes.Usage | undefined;
   const harness = yield* Effect.promise(() =>
     createHarness({
       extensionFactories: [
@@ -144,7 +141,7 @@ const allowsExtensionToolResultHandlersTo = Effect.gen(function* () {
       typeof message.details === "object" &&
       message.details !== null &&
       !Array.isArray(message.details) &&
-      (message.details as JsonObject)["patched"] === true,
+      (message.details as aiTypes.JsonObject)["patched"] === true,
   );
   expect(observedToolUsage).toEqual(toolUsage);
   expect(toolResult).toBeDefined();

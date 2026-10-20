@@ -1,9 +1,9 @@
-import type { Message } from "@msa/ai/compat";
+import type compatTypes from "@msa/ai/compat.types";
 
 const MAX_TRANSCRIPT_CHARS = 200_000;
 const MAX_TOOL_RESULT_CHARS = 800;
 
-export function textFromContent(content: Message["content"]): string {
+export function textFromContent(content: compatTypes.Message["content"]): string {
   if (typeof content === "string") return content;
   const parts: string[] = [];
   for (const part of content) {
@@ -14,7 +14,7 @@ export function textFromContent(content: Message["content"]): string {
   return parts.filter((value) => value.length > 0).join("\n");
 }
 
-export function flattenTranscript(messages: readonly Message[]): string {
+export function flattenTranscript(messages: readonly compatTypes.Message[]): string {
   const blocks: string[] = [];
   for (const message of messages) {
     let text = textFromContent(message.content).trim();

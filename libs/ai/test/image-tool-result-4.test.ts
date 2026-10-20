@@ -9,7 +9,7 @@ const { chooseModel } = modelChoice;
 const { handleToolWithImageResult, handleToolWithTextAndImageResult } = imageToolResultSupport;
 const openaiCodexToken = inject("storedApiKeys")["openai-codex"];
 
-const gpt55ShouldHandleTool = () =>
+const codexShouldHandleTool = () =>
   Effect.runPromise(
     Effect.gen(function* () {
       const llm = chooseModel("openai-codex", "vision Codex", (model) =>
@@ -19,7 +19,7 @@ const gpt55ShouldHandleTool = () =>
     }),
   );
 
-const gpt55ShouldHandleTool2 = () =>
+const codexShouldHandleTool2 = () =>
   Effect.runPromise(
     Effect.gen(function* () {
       const llm = chooseModel("openai-codex", "vision Codex", (model) =>
@@ -32,15 +32,15 @@ const gpt55ShouldHandleTool2 = () =>
 describe("Tool Results with Images", () => {
   describe("OpenAI Codex Provider", () => {
     it.skipIf(openaiCodexToken === undefined || openaiCodexToken === "")(
-      "gpt-5.5 - should handle tool result with only image",
+      "Codex - should handle tool result with only image",
       { retry: 3, timeout: 30000 },
-      gpt55ShouldHandleTool,
+      codexShouldHandleTool,
     );
 
     it.skipIf(openaiCodexToken === undefined || openaiCodexToken === "")(
-      "gpt-5.5 - should handle tool result with text and image",
+      "Codex - should handle tool result with text and image",
       { retry: 3, timeout: 30000 },
-      gpt55ShouldHandleTool2,
+      codexShouldHandleTool2,
     );
   });
 });

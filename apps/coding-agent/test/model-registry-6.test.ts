@@ -1,4 +1,4 @@
-import type { OpenAICompletionsCompat } from "@msa/ai/compat";
+import type compatTypes from "@msa/ai/compat.types";
 import testing from "@msa/testing";
 import { Effect } from "effect";
 import { afterEach, beforeEach, describe, expect, test, vi } from "vite-plus/test";
@@ -45,7 +45,7 @@ const modelOverrideWithCompatOpenrouterrouting = () =>
       const models = getModelsForProvider(registry, "openrouter");
 
       const sonnet = models.find((m) => m.id === "anthropic/claude-sonnet-4.5");
-      const compat = sonnet?.compat as OpenAICompletionsCompat | undefined;
+      const compat = sonnet?.compat as compatTypes.OpenAICompletionsCompat | undefined;
       expect(compat?.openRouterRouting).toEqual({ only: ["amazon-bedrock"] });
     }),
   );
@@ -68,12 +68,12 @@ const supportsfinishreasonCanBeConfiguredAtProviderAnd = () =>
       const sonnet = models.find((model) => model.id === "anthropic/claude-sonnet-4.5");
       const opus = models.find((model) => model.id === "anthropic/claude-opus-4.1");
 
-      expect((sonnet?.compat as OpenAICompletionsCompat | undefined)?.supportsFinishReason).toBe(
-        false,
-      );
-      expect((opus?.compat as OpenAICompletionsCompat | undefined)?.supportsFinishReason).toBe(
-        true,
-      );
+      expect(
+        (sonnet?.compat as compatTypes.OpenAICompletionsCompat | undefined)?.supportsFinishReason,
+      ).toBe(false);
+      expect(
+        (opus?.compat as compatTypes.OpenAICompletionsCompat | undefined)?.supportsFinishReason,
+      ).toBe(true);
     }),
   );
 
@@ -96,7 +96,7 @@ const modelOverrideDeepMergesCompatSettings = () =>
       const models = getModelsForProvider(registry, "openrouter");
       const sonnet = models.find((m) => m.id === "anthropic/claude-sonnet-4.5");
 
-      const compat = sonnet?.compat as OpenAICompletionsCompat | undefined;
+      const compat = sonnet?.compat as compatTypes.OpenAICompletionsCompat | undefined;
       expect(compat?.openRouterRouting).toEqual({ order: ["anthropic-api", "together"] });
     }),
   );
@@ -123,8 +123,8 @@ const multipleModelOverridesOnSameProvider = () =>
       const sonnet = models.find((m) => m.id === "anthropic/claude-sonnet-4.5");
       const opus = models.find((m) => m.id === "anthropic/claude-opus-4.1");
 
-      const sonnetCompat = sonnet?.compat as OpenAICompletionsCompat | undefined;
-      const opusCompat = opus?.compat as OpenAICompletionsCompat | undefined;
+      const sonnetCompat = sonnet?.compat as compatTypes.OpenAICompletionsCompat | undefined;
+      const opusCompat = opus?.compat as compatTypes.OpenAICompletionsCompat | undefined;
       expect(sonnetCompat?.openRouterRouting).toEqual({ only: ["amazon-bedrock"] });
       expect(opusCompat?.openRouterRouting).toEqual({ only: ["anthropic-api"] });
     }),

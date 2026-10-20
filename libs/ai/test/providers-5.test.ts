@@ -1,11 +1,16 @@
 import { Effect, Stream } from "effect";
 import { describe, expect, it } from "vite-plus/test";
 
-import { InMemoryModelsStore } from "../src/models-store.ts";
-import { type Provider, createModels, createProvider } from "../src/models.ts";
-import { fauxAssistantMessage, fauxProvider } from "../src/providers/faux.ts";
-import type { Api } from "../src/types.ts";
+import InMemoryModelsStore from "../src/models-store.ts";
+import type modelsStoreTypes from "../src/models-store.types.ts";
+import modelsModule from "../src/models.ts";
+import type modelsTypes from "../src/models.types.ts";
+import fauxModule from "../src/providers/faux.ts";
+import type typesModule from "../src/types.types.ts";
 import providersSupport from "./providers-support.ts";
+
+const { fauxAssistantMessage, fauxProvider } = fauxModule;
+const { createModels, createProvider } = modelsModule;
 
 const { context, recordingStreams, testModel } = providersSupport;
 
@@ -71,7 +76,10 @@ const submitsPollsAndRedeemsDeferredResponses = () =>
     }),
   );
 
-const expectOnlyLatestListing = (provider: Provider<Api>, store: InMemoryModelsStore) =>
+const expectOnlyLatestListing = (
+  provider: modelsTypes.Provider<typesModule.Api>,
+  store: modelsStoreTypes.InMemoryModelsStore,
+) =>
   Effect.gen(function* () {
     expect(provider.getModels().map((model) => model.id)).toEqual(["listed-2"]);
     const stored = yield* Effect.promise(() => store.read("dynamic"));

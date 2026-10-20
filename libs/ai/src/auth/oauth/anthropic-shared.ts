@@ -1,30 +1,36 @@
 import { Clock, Effect } from "effect";
 
-import { httpRequest } from "../../utils/http.ts";
-import { decodeJson, encodeJson } from "../../utils/json-codec.ts";
-import { getProviderEnvValue } from "../../utils/provider-env.ts";
-import type { OAuthCredential } from "../types.ts";
-import { readText } from "./response-json.ts";
+import http from "../../utils/http.ts";
+import jsonCodec from "../../utils/json-codec.ts";
+import providerEnv from "../../utils/provider-env.ts";
+import type typesModule from "../types.ts";
+import type anthropicSharedTypes from "./anthropic-shared.types.ts";
+import responseJson from "./response-json.ts";
+
+const { getProviderEnvValue } = providerEnv;
+const { httpRequest } = http;
+const { decodeJson, encodeJson } = jsonCodec;
+const { readText } = responseJson;
 
 const decode = (value: string): string => atob(value);
 
-export const CLIENT_ID = decode("OWQxYzI1MGEtZTYxYi00NGQ5LTg4ZWQtNTk0NGQxOTYyZjVl");
-export const AUTHORIZE_URL = "https://claude.ai/oauth/authorize";
-export const TOKEN_URL = "https://platform.claude.com/v1/oauth/token";
-export const CALLBACK_HOST = getProviderEnvValue("MSA_OAUTH_CALLBACK_HOST") ?? "127.0.0.1";
-export const CALLBACK_PORT = 53692;
-export const CALLBACK_PATH = "/callback";
-export const REDIRECT_URI = `http://localhost:${CALLBACK_PORT}${CALLBACK_PATH}`;
-export const COPY_CODE_REDIRECT_URI = "https://platform.claude.com/oauth/code/callback";
-export const BROWSER_LOGIN_METHOD = "browser";
-export const COPY_CODE_LOGIN_METHOD = "copy_code";
-export const SCOPES =
+const CLIENT_ID = decode("OWQxYzI1MGEtZTYxYi00NGQ5LTg4ZWQtNTk0NGQxOTYyZjVl");
+const AUTHORIZE_URL = "https://claude.ai/oauth/authorize";
+const TOKEN_URL = "https://platform.claude.com/v1/oauth/token";
+const CALLBACK_HOST = getProviderEnvValue("MSA_OAUTH_CALLBACK_HOST") ?? "127.0.0.1";
+const CALLBACK_PORT = 53692;
+const CALLBACK_PATH = "/callback";
+const REDIRECT_URI = `http://localhost:${CALLBACK_PORT}${CALLBACK_PATH}`;
+const COPY_CODE_REDIRECT_URI = "https://platform.claude.com/oauth/code/callback";
+const BROWSER_LOGIN_METHOD = "browser";
+const COPY_CODE_LOGIN_METHOD = "copy_code";
+const SCOPES =
   "org:create_api_key user:profile user:inference user:sessions:claude_code user:mcp_servers user:file_upload";
 
 const REQUEST_TIMEOUT_MS = 30_000;
 const EXPIRY_MARGIN_MS = 5 * 60 * 1000;
 
-export const formatErrorDetails = (error: unknown): string => {
+const formatErrorDetails = (error: unknown): string => {
   if (error instanceof Error) {
     const details: string[] = [`${error.name}: ${error.message}`];
     const errorWithCode = error as Error & {
@@ -54,11 +60,11 @@ interface JsonPost {
 const postJson = ({ url, body, signal }: JsonPost): Effect.Effect<string> =>
   Effect.gen(function* () {
     const reply = yield* httpRequest({
-      url,
-      method: "POST",
-      headers: { "Content-Type": "application/json", Accept: "application/json" },
       body: yield* encodeJson(body),
+      headers: { Accept: "application/json", "Content-Type": "application/json" },
+      method: "POST",
       signal: AbortSignal.any([signal, AbortSignal.timeout(REQUEST_TIMEOUT_MS)]),
+      url,
     });
     const responseBody = yield* readText(reply);
     if (!reply.ok) {
@@ -75,21 +81,14 @@ interface TokenFields {
   readonly expires_in: number;
 }
 
-export interface TokenPost {
-  readonly body: Record<string, string | number>;
-  readonly signal: AbortSignal;
-  readonly requestFailure: (error: unknown) => Error;
-  readonly jsonFailure: (responseBody: string, error: unknown) => Error;
-}
-
-export const requestAnthropicToken = ({
+const requestAnthropicToken = ({
   body,
   signal,
   requestFailure,
   jsonFailure,
-}: TokenPost): Effect.Effect<OAuthCredential> =>
+}: anthropicSharedTypes.TokenPost): Effect.Effect<typesModule.OAuthCredential> =>
   Effect.gen(function* () {
-    const responseBody = yield* postJson({ url: TOKEN_URL, body, signal }).pipe(
+    const responseBody = yield* postJson({ body, signal, url: TOKEN_URL }).pipe(
       Effect.catchDefect((error) => Effect.die(requestFailure(error))),
     );
     const tokenData = (yield* decodeJson(responseBody).pipe(
@@ -97,90 +96,96 @@ export const requestAnthropicToken = ({
     )) as TokenFields;
     const now = yield* Clock.currentTimeMillis;
     return {
-      type: "oauth",
-      refresh: tokenData.refresh_token,
       access: tokenData.access_token,
       expires: now + tokenData.expires_in * 1000 - EXPIRY_MARGIN_MS,
+      refresh: tokenData.refresh_token,
+      type: "oauth",
     };
   });
 
-export interface CodeExchange {
-  readonly code: string;
-  readonly state: string;
-  readonly verifier: string;
-  readonly redirectUri: string;
-  readonly signal: AbortSignal;
-}
-
-export const exchangeAuthorizationCode = ({
+const exchangeAuthorizationCode = ({
   code,
   state,
   verifier,
   redirectUri,
   signal,
-}: CodeExchange): Effect.Effect<OAuthCredential> =>
+}: anthropicSharedTypes.CodeExchange): Effect.Effect<typesModule.OAuthCredential> =>
   requestAnthropicToken({
     body: {
-      grant_type: "authorization_code",
       client_id: CLIENT_ID,
       code,
-      state,
-      redirect_uri: redirectUri,
       code_verifier: verifier,
+      grant_type: "authorization_code",
+      redirect_uri: redirectUri,
+      state,
     },
-    signal,
-    requestFailure: (error) =>
-      new Error(
-        `Token exchange request failed. url=${TOKEN_URL}; redirect_uri=${redirectUri}; response_type=authorization_code; details=${formatErrorDetails(error)}`,
-        { cause: error },
-      ),
     jsonFailure: (responseBody, error) =>
       new Error(
         `Token exchange returned invalid JSON. url=${TOKEN_URL}; body=${responseBody}; details=${formatErrorDetails(error)}`,
         { cause: error },
       ),
-  });
-
-export interface TokenRefresh {
-  readonly refreshToken: string;
-  readonly signal: AbortSignal;
-}
-
-export const refreshAnthropicToken = ({
-  refreshToken,
-  signal,
-}: TokenRefresh): Effect.Effect<OAuthCredential> =>
-  requestAnthropicToken({
-    body: { grant_type: "refresh_token", client_id: CLIENT_ID, refresh_token: refreshToken },
-    signal,
     requestFailure: (error) =>
       new Error(
-        `Anthropic token refresh request failed. url=${TOKEN_URL}; details=${formatErrorDetails(error)}`,
+        `Token exchange request failed. url=${TOKEN_URL}; redirect_uri=${redirectUri}; response_type=authorization_code; details=${formatErrorDetails(error)}`,
         { cause: error },
       ),
+    signal,
+  });
+
+const refreshAnthropicToken = ({
+  refreshToken,
+  signal,
+}: anthropicSharedTypes.TokenRefresh): Effect.Effect<typesModule.OAuthCredential> =>
+  requestAnthropicToken({
+    body: { client_id: CLIENT_ID, grant_type: "refresh_token", refresh_token: refreshToken },
     jsonFailure: (responseBody, error) =>
       new Error(
         `Anthropic token refresh returned invalid JSON. url=${TOKEN_URL}; body=${responseBody}; details=${formatErrorDetails(error)}`,
         { cause: error },
       ),
+    requestFailure: (error) =>
+      new Error(
+        `Anthropic token refresh request failed. url=${TOKEN_URL}; details=${formatErrorDetails(error)}`,
+        { cause: error },
+      ),
+    signal,
   });
 
-export interface AuthorizeUrl {
-  readonly redirectUri: string;
-  readonly challenge: string;
-  readonly verifier: string;
-}
-
-export const authorizeUrl = ({ redirectUri, challenge, verifier }: AuthorizeUrl): string => {
+const authorizeUrl = ({
+  redirectUri,
+  challenge,
+  verifier,
+}: anthropicSharedTypes.AuthorizeUrl): string => {
   const authParams = new URLSearchParams({
-    code: "true",
     client_id: CLIENT_ID,
-    response_type: "code",
-    redirect_uri: redirectUri,
-    scope: SCOPES,
+    code: "true",
     code_challenge: challenge,
     code_challenge_method: "S256",
+    redirect_uri: redirectUri,
+    response_type: "code",
+    scope: SCOPES,
     state: verifier,
   });
   return `${AUTHORIZE_URL}?${authParams.toString()}`;
 };
+
+const anthropicShared = {
+  AUTHORIZE_URL,
+  BROWSER_LOGIN_METHOD,
+  CALLBACK_HOST,
+  CALLBACK_PATH,
+  CALLBACK_PORT,
+  CLIENT_ID,
+  COPY_CODE_LOGIN_METHOD,
+  COPY_CODE_REDIRECT_URI,
+  REDIRECT_URI,
+  SCOPES,
+  TOKEN_URL,
+  authorizeUrl,
+  exchangeAuthorizationCode,
+  formatErrorDetails,
+  refreshAnthropicToken,
+  requestAnthropicToken,
+};
+
+export default anthropicShared;

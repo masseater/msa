@@ -1,35 +1,33 @@
 import type OpenAI from "openai";
 
-import type { ChatTemplateKwargValue, Model, ThinkingTokenBudgetField } from "../types.ts";
-import type {
-  OpenAICompletionsOptions,
-  ResolvedChatTemplateKwargValue,
-  ResolvedOpenAICompletionsCompat,
-} from "./openai-completions-types.ts";
-import { clampThinkingBudgetToAnswerRoom, thinkingBudgetForLevel } from "./simple-options.ts";
+import type typesModule from "../types.types.ts";
+import type openaiCompletionsTypesModule from "./openai-completions-types.types.ts";
+import simpleOptions from "./simple-options.ts";
+
+const { clampThinkingBudgetToAnswerRoom, thinkingBudgetForLevel } = simpleOptions;
 
 interface ThinkingInput {
   readonly params: OpenAI.Chat.Completions.ChatCompletionCreateParamsStreaming;
-  readonly model: Model<"openai-completions">;
-  readonly options: OpenAICompletionsOptions | undefined;
-  readonly compat: ResolvedOpenAICompletionsCompat;
+  readonly model: typesModule.Model<"openai-completions">;
+  readonly options: openaiCompletionsTypesModule.OpenAICompletionsOptions | undefined;
+  readonly compat: openaiCompletionsTypesModule.ResolvedOpenAICompletionsCompat;
   readonly thinkingBudget: number | undefined;
 }
 
 function resolveThinkingTokenBudgetField(
   compat: Pick<
-    ResolvedOpenAICompletionsCompat,
+    openaiCompletionsTypesModule.ResolvedOpenAICompletionsCompat,
     "thinkingTokenBudgetField" | "supportsThinkingTokenBudget"
   >,
-): ThinkingTokenBudgetField | undefined {
+): typesModule.ThinkingTokenBudgetField | undefined {
   if (compat.thinkingTokenBudgetField !== undefined) return compat.thinkingTokenBudgetField;
   if (compat.supportsThinkingTokenBudget === true) return "thinking_token_budget";
   return undefined;
 }
 
 function resolveClampedThinkingBudget(input: {
-  model: Model<"openai-completions">;
-  options: OpenAICompletionsOptions | undefined;
+  model: typesModule.Model<"openai-completions">;
+  options: openaiCompletionsTypesModule.OpenAICompletionsOptions | undefined;
   params: { max_tokens?: number | null; max_completion_tokens?: number | null };
 }): number | undefined {
   const { model, options, params } = input;
@@ -43,11 +41,11 @@ function resolveClampedThinkingBudget(input: {
 }
 
 function resolveChatTemplateKwargValue(
-  model: Model<"openai-completions">,
-  options: OpenAICompletionsOptions | undefined,
-  value: ChatTemplateKwargValue,
+  model: typesModule.Model<"openai-completions">,
+  options: openaiCompletionsTypesModule.OpenAICompletionsOptions | undefined,
+  value: typesModule.ChatTemplateKwargValue,
   thinkingBudget?: number,
-): ResolvedChatTemplateKwargValue | undefined {
+): openaiCompletionsTypesModule.ResolvedChatTemplateKwargValue | undefined {
   if (typeof value !== "object" || value === null) {
     return value;
   }
@@ -75,12 +73,15 @@ function resolveChatTemplateKwargValue(
 }
 
 function buildChatTemplateValues(
-  model: Model<"openai-completions">,
-  options: OpenAICompletionsOptions | undefined,
-  values: Record<string, ChatTemplateKwargValue>,
+  model: typesModule.Model<"openai-completions">,
+  options: openaiCompletionsTypesModule.OpenAICompletionsOptions | undefined,
+  values: Record<string, typesModule.ChatTemplateKwargValue>,
   thinkingBudget?: number,
-): Record<string, ResolvedChatTemplateKwargValue> | undefined {
-  const resolvedValues: Record<string, ResolvedChatTemplateKwargValue> = {};
+): Record<string, openaiCompletionsTypesModule.ResolvedChatTemplateKwargValue> | undefined {
+  const resolvedValues: Record<
+    string,
+    openaiCompletionsTypesModule.ResolvedChatTemplateKwargValue
+  > = {};
 
   for (const [key, value] of Object.entries(values)) {
     const resolved = resolveChatTemplateKwargValue(model, options, value, thinkingBudget);
@@ -193,4 +194,10 @@ function applyThinkingParams(input: ThinkingInput): void {
   }
 }
 
-export { applyThinkingParams, resolveClampedThinkingBudget, resolveThinkingTokenBudgetField };
+const openaiCompletionsThinkingParams = {
+  applyThinkingParams,
+  resolveClampedThinkingBudget,
+  resolveThinkingTokenBudgetField,
+};
+
+export default openaiCompletionsThinkingParams;

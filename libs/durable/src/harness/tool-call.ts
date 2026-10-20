@@ -1,5 +1,5 @@
-import type { ToolCall } from "@msa/ai";
-import { validateToolArguments } from "@msa/ai/utils/validation";
+import type aiTypes from "@msa/ai/index.types";
+import validation from "@msa/ai/utils/validation";
 import type chordTypes from "@msa/chord/index.types";
 import { Cause, Effect, Exit, Function } from "effect";
 
@@ -9,6 +9,8 @@ import bridge from "./bridge.ts";
 import type toolCallTypes from "./tool-call.types.ts";
 import type toolTypesModule from "./tool-types.types.ts";
 import type typesModule from "./types.types.ts";
+
+const { validateToolArguments } = validation;
 
 const { AssistantEntry } = entries;
 const { errorMessage } = errors;
@@ -42,7 +44,7 @@ const readCall = Effect.fnUntraced(function* (
   const call =
     message?.role === "assistant"
       ? message.content.find(
-          (content): content is ToolCall =>
+          (content): content is aiTypes.ToolCall =>
             content.type === "toolCall" && content.id === input.callId,
         )
       : undefined;
@@ -71,14 +73,14 @@ const prepareArguments: typesModule.Dual2<
 
 const validate: typesModule.Dual3<
   typesModule.ToolRegistration,
-  ToolCall,
+  aiTypes.ToolCall,
   typesModule.JsonObject,
   toolCallTypes.Checked
 > = Function.dual(
   3,
   (
     tool: typesModule.ToolRegistration,
-    call: ToolCall,
+    call: aiTypes.ToolCall,
     args: typesModule.JsonObject,
   ): toolCallTypes.Checked => {
     try {

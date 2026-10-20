@@ -1,10 +1,10 @@
-import { type Model } from "@msa/ai";
+import type aiTypes from "@msa/ai/index.types";
 
 function createModel(
   reasoning: boolean,
   maxTokens = 8192,
-  compat?: Model<"anthropic-messages">["compat"],
-): Model<"anthropic-messages"> {
+  compat?: aiTypes.Model<"anthropic-messages">["compat"],
+): aiTypes.Model<"anthropic-messages"> {
   return {
     api: "anthropic-messages" as const,
     baseUrl: "https://api.anthropic.com",

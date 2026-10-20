@@ -1,5 +1,6 @@
-import type { AgentMessage } from "@msa/agent-core";
-import { type Model, fauxAssistantMessage } from "@msa/ai";
+import type agentTypes from "@msa/agent-core/index.types";
+import ai from "@msa/ai";
+import type aiTypes from "@msa/ai/index.types";
 import testing from "@msa/testing";
 import { Effect } from "effect";
 import { afterEach, describe, expect, it } from "vite-plus/test";
@@ -9,6 +10,8 @@ import agentSessionCompactionSupport from "./agent-session-compaction-support.ts
 import agentSessionCompactionSupport2 from "./agent-session-compaction-support2.ts";
 import harnessModule from "./harness.ts";
 import type harnessTypes from "./harness.types.ts";
+
+const { fauxAssistantMessage } = ai;
 
 const { afterEachHook } = agentSessionCompactionSupport2;
 
@@ -119,7 +122,7 @@ const checkpointsTheReplayedSystemStateAnd = Effect.gen(function* () {
 
 const checkpointsTheReplayedSystemStateAndStep1 = (
   harness: harnessTypes.Harness,
-  declared: AgentMessage | undefined,
+  declared: agentTypes.AgentMessage | undefined,
   firstKeptEntryId: string,
 ) =>
   Effect.sync(() => {
@@ -197,7 +200,7 @@ const allowsAQueuedPromptToStart = Effect.gen(function* () {
 const throwsWhenCompactingWithoutAModel = Effect.gen(function* () {
   const harness = yield* Effect.promise(() => createHarness());
   harnesses.push(harness);
-  harness.session.agent.state.model = undefined as unknown as Model<any>;
+  harness.session.agent.state.model = undefined as unknown as aiTypes.Model<any>;
 
   yield* Effect.promise(() =>
     expect(harness.session.compact()).rejects.toThrow("No model selected"),

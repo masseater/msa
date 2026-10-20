@@ -1,41 +1,39 @@
 import { dual } from "effect/Function";
 
-import { matchCsiSequence } from "./ansi-sequences.ts";
-import {
-  ARROW_CODEPOINTS,
-  FUNCTIONAL_CODEPOINTS,
-  LOCK_MASK,
-  SHIFTED_SYMBOL_KEYS,
-  SYMBOL_KEYS,
-} from "./key-ids.ts";
-import {
+import ansiSequences from "./ansi-sequences.ts";
+import keyIds from "./key-ids.ts";
+import type keyProtocolsTypes from "./key-protocols.types.ts";
+import keySequences from "./key-sequences.ts";
+
+const { ARROW_CODEPOINTS, FUNCTIONAL_CODEPOINTS, LOCK_MASK, SHIFTED_SYMBOL_KEYS, SYMBOL_KEYS } =
+  keyIds;
+const { matchCsiSequence } = ansiSequences;
+const {
   getLogicalShiftedSymbolCandidate,
   normalizeKittyFunctionalCodepoint,
   normalizeShiftedLetterIdentityCodepoint,
-} from "./key-sequences.ts";
+} = keySequences;
 
-export const KITTY_CSI_U_BODY = /^(\d+)(?::(\d*))?(?::(\d+))?(?:;(\d+))?(?::(\d+))?$/u;
+const KITTY_CSI_U_BODY = /^(\d+)(?::(\d*))?(?::(\d+))?(?:;(\d+))?(?::(\d+))?$/u;
 const MODIFIED_KEY_BODY = /^1;(\d+)(?::(\d+))?$/u;
 const FUNCTION_KEY_BODY = /^(\d+)(?:;(\d+))?(?::(\d+))?$/u;
 const MODIFY_OTHER_KEYS_BODY = /^27;(\d+);(\d+)$/u;
 let kittyProtocolEnabled = false;
 
-export function setKittyProtocolActive(active: boolean): void {
+function setKittyProtocolActive(active: boolean): void {
   kittyProtocolEnabled = active;
 }
 
-export function isKittyProtocolActive(): boolean {
+function isKittyProtocolActive(): boolean {
   return kittyProtocolEnabled;
 }
-
-export type KeyEventType = "press" | "repeat" | "release";
 
 interface ParsedKittySequence {
   codepoint: number;
   shiftedKey?: number | undefined;
   baseLayoutKey?: number | undefined;
   modifier: number;
-  eventType: KeyEventType;
+  eventType: keyProtocolsTypes.KeyEventType;
 }
 
 interface ParsedModifyOtherKeysSequence {
@@ -43,7 +41,7 @@ interface ParsedModifyOtherKeysSequence {
   modifier: number;
 }
 
-export function isKeyRelease(data: string): boolean {
+function isKeyRelease(data: string): boolean {
   if (data.includes("\x1b[200~")) {
     return false;
   }
@@ -63,7 +61,7 @@ export function isKeyRelease(data: string): boolean {
   return false;
 }
 
-export function isKeyRepeat(data: string): boolean {
+function isKeyRepeat(data: string): boolean {
   if (data.includes("\x1b[200~")) {
     return false;
   }
@@ -83,7 +81,7 @@ export function isKeyRepeat(data: string): boolean {
   return false;
 }
 
-function parseEventType(eventTypeStr: string | undefined): KeyEventType {
+function parseEventType(eventTypeStr: string | undefined): keyProtocolsTypes.KeyEventType {
   if (eventTypeStr === undefined || eventTypeStr === "") return "press";
   const eventType = parseInt(eventTypeStr, 10);
   if (eventType === 2) return "repeat";
@@ -108,7 +106,7 @@ const FUNCTION_KEY_CODEPOINTS: Record<number, number> = {
 };
 
 function parseKittyCsiU(data: string): ParsedKittySequence | null {
-  const csiU = matchCsiSequence({ data, finals: "u", body: KITTY_CSI_U_BODY });
+  const csiU = matchCsiSequence({ body: KITTY_CSI_U_BODY, data, finals: "u" });
   if (csiU === null) return null;
   const csiUMatch = csiU.groups;
   const codepoint = parseInt(csiUMatch[1]!, 10);
@@ -121,19 +119,19 @@ function parseKittyCsiU(data: string): ParsedKittySequence | null {
   const modValue =
     csiUMatch[4] !== undefined && csiUMatch[4] !== "" ? parseInt(csiUMatch[4], 10) : 1;
   const eventType = parseEventType(csiUMatch[5]);
-  return { codepoint, shiftedKey, baseLayoutKey, modifier: modValue - 1, eventType };
+  return { baseLayoutKey, codepoint, eventType, modifier: modValue - 1, shiftedKey };
 }
 
 function parseKittyArrow(data: string): ParsedKittySequence | null {
-  const arrow = matchCsiSequence({ data, finals: "ABCD", body: MODIFIED_KEY_BODY });
+  const arrow = matchCsiSequence({ body: MODIFIED_KEY_BODY, data, finals: "ABCD" });
   if (arrow === null) return null;
   const modValue = parseInt(arrow.groups[1]!, 10);
   const eventType = parseEventType(arrow.groups[2]);
-  return { codepoint: ARROW_FINAL_CODEPOINTS[arrow.final]!, modifier: modValue - 1, eventType };
+  return { codepoint: ARROW_FINAL_CODEPOINTS[arrow.final]!, eventType, modifier: modValue - 1 };
 }
 
 function parseKittyFunctionKey(data: string): ParsedKittySequence | null {
-  const func = matchCsiSequence({ data, finals: "~", body: FUNCTION_KEY_BODY });
+  const func = matchCsiSequence({ body: FUNCTION_KEY_BODY, data, finals: "~" });
   if (func === null) return null;
   const funcMatch = func.groups;
   const keyNum = parseInt(funcMatch[1]!, 10);
@@ -141,19 +139,19 @@ function parseKittyFunctionKey(data: string): ParsedKittySequence | null {
     funcMatch[2] !== undefined && funcMatch[2] !== "" ? parseInt(funcMatch[2], 10) : 1;
   const eventType = parseEventType(funcMatch[3]);
   const codepoint = FUNCTION_KEY_CODEPOINTS[keyNum];
-  return codepoint === undefined ? null : { codepoint, modifier: modValue - 1, eventType };
+  return codepoint === undefined ? null : { codepoint, eventType, modifier: modValue - 1 };
 }
 
 function parseKittyHomeEnd(data: string): ParsedKittySequence | null {
-  const homeEnd = matchCsiSequence({ data, finals: "HF", body: MODIFIED_KEY_BODY });
+  const homeEnd = matchCsiSequence({ body: MODIFIED_KEY_BODY, data, finals: "HF" });
   if (homeEnd === null) return null;
   const modValue = parseInt(homeEnd.groups[1]!, 10);
   const eventType = parseEventType(homeEnd.groups[2]);
   const codepoint = homeEnd.final === "H" ? FUNCTIONAL_CODEPOINTS.home : FUNCTIONAL_CODEPOINTS.end;
-  return { codepoint, modifier: modValue - 1, eventType };
+  return { codepoint, eventType, modifier: modValue - 1 };
 }
 
-export function parseKittySequence(data: string): ParsedKittySequence | null {
+function parseKittySequence(data: string): ParsedKittySequence | null {
   return (
     parseKittyCsiU(data) ??
     parseKittyArrow(data) ??
@@ -162,7 +160,7 @@ export function parseKittySequence(data: string): ParsedKittySequence | null {
   );
 }
 
-export const matchesKittySequence: {
+const matchesKittySequence: {
   (data: string, expectedCodepoint: number, expectedModifier: number): boolean;
   (expectedCodepoint: number, expectedModifier: number): (data: string) => boolean;
 } = dual(3, (data: string, expectedCodepoint: number, expectedModifier: number): boolean => {
@@ -207,15 +205,15 @@ export const matchesKittySequence: {
   return false;
 });
 
-export function parseModifyOtherKeysSequence(data: string): ParsedModifyOtherKeysSequence | null {
-  const match = matchCsiSequence({ data, finals: "~", body: MODIFY_OTHER_KEYS_BODY })?.groups;
+function parseModifyOtherKeysSequence(data: string): ParsedModifyOtherKeysSequence | null {
+  const match = matchCsiSequence({ body: MODIFY_OTHER_KEYS_BODY, data, finals: "~" })?.groups;
   if (match === undefined || match === null) return null;
   const modValue = parseInt(match[1]!, 10);
   const codepoint = parseInt(match[2]!, 10);
   return { codepoint, modifier: modValue - 1 };
 }
 
-export const matchesModifyOtherKeys: {
+const matchesModifyOtherKeys: {
   (data: string, expectedKeycode: number, expectedModifier: number): boolean;
   (expectedKeycode: number, expectedModifier: number): (data: string) => boolean;
 } = dual(3, (data: string, expectedKeycode: number, expectedModifier: number): boolean => {
@@ -224,7 +222,7 @@ export const matchesModifyOtherKeys: {
   return parsed.codepoint === expectedKeycode && parsed.modifier === expectedModifier;
 });
 
-export const matchesPrintableModifyOtherKeys: {
+const matchesPrintableModifyOtherKeys: {
   (data: string, expectedKeycode: number, expectedModifier: number): boolean;
   (expectedKeycode: number, expectedModifier: number): (data: string) => boolean;
 } = dual(3, (data: string, expectedKeycode: number, expectedModifier: number): boolean => {
@@ -245,3 +243,18 @@ export const matchesPrintableModifyOtherKeys: {
     logicalShiftedSymbol.codepoint === expectedKeycode
   );
 });
+
+const keyProtocols = {
+  KITTY_CSI_U_BODY,
+  isKeyRelease,
+  isKeyRepeat,
+  isKittyProtocolActive,
+  matchesKittySequence,
+  matchesModifyOtherKeys,
+  matchesPrintableModifyOtherKeys,
+  parseKittySequence,
+  parseModifyOtherKeysSequence,
+  setKittyProtocolActive,
+};
+
+export default keyProtocols;

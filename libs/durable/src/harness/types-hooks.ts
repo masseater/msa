@@ -1,4 +1,4 @@
-import type { AssistantMessage, Message, Models, ToolCall } from "@msa/ai";
+import type aiTypes from "@msa/ai/index.types";
 import type chordTypes from "@msa/chord/index.types";
 
 import type typesModule from "../types.types.ts";
@@ -9,7 +9,7 @@ declare namespace typesHooksTypes {
   interface HookApi extends typesModule.DocumentReader {
     readonly taskId: typesModule.TaskId;
     readonly conversationId: typesModule.ConversationId;
-    readonly models: Models;
+    readonly models: aiTypes.Models;
     memo<T extends chordTypes.JsonValue>(
       name: string,
       context: chordTypes.Context,
@@ -25,17 +25,17 @@ declare namespace typesHooksTypes {
 
   interface GenerationHooks {
     beforeRequest(
-      request: { readonly messages: readonly Message[] },
+      request: { readonly messages: readonly aiTypes.Message[] },
       api: HookApi,
       context: chordTypes.Context,
-    ): HookResult<{ readonly messages: readonly Message[] }>;
+    ): HookResult<{ readonly messages: readonly aiTypes.Message[] }>;
     afterResponse(
-      message: AssistantMessage,
+      message: aiTypes.AssistantMessage,
       api: HookApi,
       context: chordTypes.Context,
     ): void | Promise<void>;
     onYield(
-      answer: AssistantMessage,
+      answer: aiTypes.AssistantMessage,
       api: HookApi,
       context: chordTypes.Context,
     ): HookResult<{ readonly continue: typesModuleModule.UserInput }>;
@@ -47,7 +47,7 @@ declare namespace typesHooksTypes {
     ): void | Promise<void>;
   }
 
-  type ToolHookCall = ToolCall & {
+  type ToolHookCall = aiTypes.ToolCall & {
     readonly parent?: { readonly taskId: typesModule.TaskId; readonly callId: string };
   };
 
@@ -70,7 +70,7 @@ declare namespace typesHooksTypes {
       compaction: {
         readonly reason: typesModuleModule.CompactionReason;
         readonly entries: readonly typesModule.EntryRecord[];
-        readonly messages: readonly Message[];
+        readonly messages: readonly aiTypes.Message[];
         readonly firstKept: typesModule.EntryId;
         readonly instructions?: string;
       },

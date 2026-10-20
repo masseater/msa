@@ -1,4 +1,4 @@
-import type { AgentState } from "@msa/agent-core";
+import type agentTypes from "@msa/agent-core/index.types";
 import { Effect, FileSystem, Function as Fn, Schema } from "effect";
 
 import { APP_NAME, getExportTemplateDir } from "../../config.ts";
@@ -8,15 +8,15 @@ import {
 } from "../../modes/interactive/theme/theme.ts";
 import { normalizePath, resolvePath } from "../../utils/paths.ts";
 import {
+  ToolFailure,
   nonEmptyOr,
   pathOperations,
   platformRuntime,
   rethrowCause,
-  ToolFailure,
 } from "../platform/index.ts";
 import { SessionManager } from "../session-manager.ts";
 import { deriveExportColors, generateThemeVars } from "./export-colors.ts";
-import type { ExportOptions, SessionData, RenderedToolHtml } from "./export-types.ts";
+import type { ExportOptions, RenderedToolHtml, SessionData } from "./export-types.ts";
 import { preRenderCustomTools } from "./render-custom-tools.ts";
 
 export type { ExportOptions, ToolHtmlRenderer } from "./export-types.ts";
@@ -27,11 +27,11 @@ const readTemplates = (templateDir: string) =>
     const read = (...segments: string[]) =>
       fs.readFileString(pathOperations.join(templateDir, ...segments), "utf-8");
     return {
+      hljsJs: yield* read("vendor", "highlight.min.js"),
+      markedJs: yield* read("vendor", "marked.min.js"),
       template: yield* read("template.html"),
       templateCss: yield* read("template.css"),
       templateJs: yield* read("template.js"),
-      markedJs: yield* read("vendor", "marked.min.js"),
-      hljsJs: yield* read("vendor", "highlight.min.js"),
     };
   });
 
@@ -90,7 +90,7 @@ const writeExport = Effect.fn("writeExport")(function* (
 
 const exportSession = Effect.fn("exportSessionToHtml")(function* (
   sm: SessionManager,
-  state: AgentState | undefined,
+  state: agentTypes.AgentState | undefined,
   options: ExportOptions | string | undefined,
 ) {
   const opts = normalizeOptions(options);
@@ -108,19 +108,19 @@ const exportSession = Effect.fn("exportSessionToHtml")(function* (
   const renderedTools: Record<string, RenderedToolHtml> | undefined =
     opts.toolRenderer === undefined ? undefined : preRenderCustomTools(entries, opts.toolRenderer);
   const sessionData: SessionData = {
-    header: sm.getHeader(),
     entries,
+    header: sm.getHeader(),
     leafId: sm.getLeafId(),
+    renderedTools:
+      renderedTools !== undefined && Object.keys(renderedTools).length > 0
+        ? renderedTools
+        : undefined,
     systemPrompt: state?.systemPrompt,
     tools: state?.tools?.map((t) => ({
       name: t.name,
       description: t.description,
       parameters: t.parameters,
     })),
-    renderedTools:
-      renderedTools !== undefined && Object.keys(renderedTools).length > 0
-        ? renderedTools
-        : undefined,
   };
   return yield* writeExport(sessionData, opts, sessionFile);
 });
@@ -135,8 +135,8 @@ const exportFile = Effect.fn("exportFromFile")(function* (
   if (!exists) return yield* new ToolFailure({ message: `File not found: ${resolvedInputPath}` });
   const sm = yield* Effect.sync(() => SessionManager.open(resolvedInputPath));
   const sessionData: SessionData = {
-    header: sm.getHeader(),
     entries: sm.getEntries(),
+    header: sm.getHeader(),
     leafId: sm.getLeafId(),
     systemPrompt: undefined,
     tools: undefined,
@@ -145,12 +145,22 @@ const exportFile = Effect.fn("exportFromFile")(function* (
 });
 
 export const exportSessionToHtml: {
-  (state?: AgentState, options?: ExportOptions | string): (sm: SessionManager) => Promise<string>;
-  (sm: SessionManager, state?: AgentState, options?: ExportOptions | string): Promise<string>;
+  (
+    state?: agentTypes.AgentState,
+    options?: ExportOptions | string,
+  ): (sm: SessionManager) => Promise<string>;
+  (
+    sm: SessionManager,
+    state?: agentTypes.AgentState,
+    options?: ExportOptions | string,
+  ): Promise<string>;
 } = Fn.dual(
   (args) => args[0] instanceof SessionManager,
-  (sm: SessionManager, state?: AgentState, options?: ExportOptions | string): Promise<string> =>
-    platformRuntime.runPromise(rethrowCause(exportSession(sm, state, options))),
+  (
+    sm: SessionManager,
+    state?: agentTypes.AgentState,
+    options?: ExportOptions | string,
+  ): Promise<string> => platformRuntime.runPromise(rethrowCause(exportSession(sm, state, options))),
 );
 
 export const exportFromFile: {

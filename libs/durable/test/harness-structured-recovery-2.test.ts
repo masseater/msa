@@ -1,4 +1,4 @@
-import { type ToolResultMessage } from "@msa/ai";
+import type aiTypes from "@msa/ai/index.types";
 import durable from "@msa/durable";
 import memory from "@msa/durable/storage/memory";
 import { Effect } from "effect";
@@ -44,10 +44,9 @@ const abortsParallelRound = Effect.gen(function* () {
     status: "unanswered",
   });
   const results = (yield* allEntries(root)).filter((entry) => ToolResultEntry.is(entry));
-  expect(results.map((entry) => (entry.model![0] as ToolResultMessage).toolCallId)).toEqual([
-    "c1",
-    "c2",
-  ]);
+  expect(results.map((entry) => (entry.model![0] as aiTypes.ToolResultMessage).toolCallId)).toEqual(
+    ["c1", "c2"],
+  );
   expect(yield* awaited(harness.snapshot(LiveDoc, root.id, context))).toEqual({});
   expect((yield* awaited(harness.waitForTask(generation, context))).state.outcome.status).toBe(
     "aborted",

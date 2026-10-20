@@ -1,10 +1,10 @@
-import type { Models } from "@msa/ai";
+import type aiTypes from "@msa/ai/index.types";
 import testing from "@msa/testing";
 import { Effect } from "effect";
 import { afterEach, describe, expect, it, vi } from "vite-plus/test";
 
-import type { Model } from "../../../../../libs/ai/src/model-types.ts";
-import type { Api } from "../../../../../libs/ai/src/types.ts";
+import type modelTypesModule from "../../../../../libs/ai/src/model-types.ts";
+import type typesModule from "../../../../../libs/ai/src/types.types.ts";
 import { ModelRuntime } from "../../../src/core/model-runtime.ts";
 import harnessModule from "../harness.ts";
 import type harnessTypes from "../harness.types.ts";
@@ -114,7 +114,7 @@ const recoversWithoutLettingTheStalledRefresh = Effect.gen(function* () {
 
 const recoversWithoutLettingTheStalledRefreshStep1 = (
   runtime: ModelRuntime,
-  staleRefresh: Promise<readonly Model<Api>[]>,
+  staleRefresh: Promise<readonly modelTypesModule.Model<typesModule.Api>[]>,
 ) =>
   Effect.gen(function* () {
     expect(runtime.getProviderAuthStatus("stale-provider")).toEqual({ configured: false });
@@ -152,7 +152,7 @@ const doesNotLetAStaleProvider = Effect.gen(function* () {
   const runPromise = Effect.runPromiseWith(yield* Effect.context<never>());
   harness = yield* Effect.promise(() => createHarness());
   const runtime = harness.session.modelRuntime;
-  const models = Reflect.get(runtime, "models") as Models;
+  const models = Reflect.get(runtime, "models") as aiTypes.Models;
   const originalGetAvailable = models.getAvailable.bind(models);
   const started = createDeferred();
   const gate = createDeferred();

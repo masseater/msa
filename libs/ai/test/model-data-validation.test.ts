@@ -4,9 +4,11 @@ import { describe, expect, it } from "vite-plus/test";
 import modelData from "../scripts/model-data.ts";
 import type modelDataTypes from "../scripts/model-data.types.ts";
 import scriptFiles from "../scripts/script-files.ts";
-import { decodeJsonOrDie } from "../src/utils/json-codec.ts";
+import jsonCodec from "../src/utils/json-codec.ts";
 import modelDataFixture from "./model-data-fixture.ts";
 import type modelDataFixtureTypes from "./model-data-fixture.types.ts";
+
+const { decodeJsonOrDie } = jsonCodec;
 
 const {
   MODEL_DATA_MANIFEST_FILE,
@@ -72,7 +74,7 @@ const rejectsMissingProviderShardsImportedBy = () =>
       const files = yield* ScriptFiles;
       yield* writeFile(
         files.join(packageRoot, "src", "models.generated.ts"),
-        `${AGGREGATOR_SOURCE}import { MISSING_CLASSIFIER_MODELS, MISSING_IMAGE_MODELS, MISSING_MODELS } from "./providers/missing.models.ts";\n`,
+        `${AGGREGATOR_SOURCE}import missingModels from "./providers/missing.models.ts";\n`,
       );
       expect(yield* failureMessage(readModelDataStructure(packageRoot))).toContain(
         "aggregator and provider shards do not match",

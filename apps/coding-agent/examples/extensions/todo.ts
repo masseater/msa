@@ -1,10 +1,15 @@
-import { StringEnum } from "@msa/ai";
+import ai from "@msa/ai";
 import type { ExtensionAPI, ExtensionContext, Theme } from "@msa/coding-agent";
-import { Text } from "@msa/tui";
+import tui from "@msa/tui";
+import type tuiTypes from "@msa/tui/index.types";
 import { Effect } from "effect";
 import { Type } from "typebox";
 
 import { type Todo, TodoListComponent } from "./todo-list.ts";
+
+const { StringEnum } = ai;
+
+const { Text } = tui;
 
 interface TodoDetails {
   action: "list" | "add" | "toggle" | "clear";
@@ -15,8 +20,8 @@ interface TodoDetails {
 
 const TodoParams = Type.Object({
   action: StringEnum(["list", "add", "toggle", "clear"] as const),
-  text: Type.Optional(Type.String({ description: "Todo text (for add)" })),
   id: Type.Optional(Type.Number({ description: "Todo ID (for toggle)" })),
+  text: Type.Optional(Type.String({ description: "Todo text (for add)" })),
 });
 
 interface TodoState {
@@ -26,12 +31,12 @@ interface TodoState {
 
 const details = (state: TodoState, action: TodoDetails["action"], error?: string): TodoDetails => ({
   action,
-  todos: [...state.todos],
   nextId: state.nextId,
+  todos: [...state.todos],
   ...(error === undefined ? {} : { error }),
 });
 
-const textContent = (value: string) => ({ type: "text" as const, text: value });
+const textContent = (value: string) => ({ text: value, type: "text" as const });
 
 const listAction = (state: TodoState) => ({
   content: [
@@ -51,7 +56,7 @@ const addAction = (state: TodoState, value: string | undefined) => {
       details: details(state, "add", "text required"),
     };
   }
-  const newTodo: Todo = { id: state.nextId++, text: value, done: false };
+  const newTodo: Todo = { done: false, id: state.nextId++, text: value };
   state.todos.push(newTodo);
   return {
     content: [textContent(`Added todo #${newTodo.id}: ${newTodo.text}`)],
@@ -86,7 +91,7 @@ const clearAction = (state: TodoState) => {
   state.nextId = 1;
   return {
     content: [textContent(`Cleared ${count} todos`)],
-    details: { action: "clear", todos: [], nextId: 1 } as TodoDetails,
+    details: { action: "clear", nextId: 1, todos: [] } as TodoDetails,
   };
 };
 
@@ -125,7 +130,10 @@ const reconstructState = (state: TodoState, ctx: ExtensionContext): void => {
   }
 };
 
-const renderCall = (args: { action: string; text?: string; id?: number }, theme: Theme): Text => {
+const renderCall = (
+  args: { action: string; text?: string; id?: number },
+  theme: Theme,
+): tuiTypes.Text => {
   let text = theme.fg("toolTitle", theme.bold("todo ")) + theme.fg("muted", args.action);
   if (args.text !== undefined && args.text.length > 0) {
     text += ` ${theme.fg("dim", `"${args.text}"`)}`;
@@ -134,7 +142,7 @@ const renderCall = (args: { action: string; text?: string; id?: number }, theme:
   return new Text(text, 0, 0);
 };
 
-const renderTodoList = (todos: Todo[], expanded: boolean, theme: Theme): Text => {
+const renderTodoList = (todos: Todo[], expanded: boolean, theme: Theme): tuiTypes.Text => {
   if (todos.length === 0) {
     return new Text(theme.fg("dim", "No todos"), 0, 0);
   }
@@ -151,7 +159,7 @@ const renderTodoList = (todos: Todo[], expanded: boolean, theme: Theme): Text =>
   return new Text(listText, 0, 0);
 };
 
-const renderAdded = (todos: Todo[], theme: Theme): Text => {
+const renderAdded = (todos: Todo[], theme: Theme): tuiTypes.Text => {
   const added = todos.at(-1);
   if (added === undefined) return new Text(theme.fg("success", "✓ Added"), 0, 0);
   return new Text(
@@ -168,7 +176,7 @@ const renderResult = (
   result: { content: ReadonlyArray<{ type: string; text?: string }>; details: unknown },
   options: { expanded: boolean },
   theme: Theme,
-): Text => {
+): tuiTypes.Text => {
   const data = result.details as TodoDetails | undefined;
   if (data === undefined) {
     const content = result.content[0];
@@ -207,20 +215,18 @@ const showTodoList = (state: TodoState, ctx: ExtensionContext) =>
   });
 
 export default function (msa: ExtensionAPI) {
-  const state: TodoState = { todos: [], nextId: 1 };
+  const state: TodoState = { nextId: 1, todos: [] };
 
   msa.on("session_start", (_event, ctx) => reconstructState(state, ctx));
   msa.on("session_tree", (_event, ctx) => reconstructState(state, ctx));
 
   msa.registerTool({
-    name: "todo",
-    label: "Todo",
     description: "Manage a todo list. Actions: list, add (text), toggle (id), clear",
-    parameters: TodoParams,
-
     execute: (_toolCallId, params, _signal, _onUpdate, _ctx) =>
       Effect.runPromise(Effect.sync(() => runAction(state, params))),
-
+    label: "Todo",
+    name: "todo",
+    parameters: TodoParams,
     renderCall,
     renderResult,
   });

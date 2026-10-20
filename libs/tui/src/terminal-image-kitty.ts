@@ -1,21 +1,23 @@
 import { Effect, Random } from "effect";
 import { dual } from "effect/Function";
 
+import type terminalImageKittyTypes from "./terminal-image-kitty.types.ts";
+
 const KITTY_PREFIX = "\x1b_G";
 const ITERM2_PREFIX = "\x1b]1337;File=";
 
-export function isImageLine(line: string): boolean {
+function isImageLine(line: string): boolean {
   if (line.startsWith(KITTY_PREFIX) || line.startsWith(ITERM2_PREFIX)) {
     return true;
   }
   return line.includes(KITTY_PREFIX) || line.includes(ITERM2_PREFIX);
 }
 
-export function allocateImageId(): number {
+function allocateImageId(): number {
   return Math.floor(Effect.runSync(Random.next) * 0xfffffffe) + 1;
 }
 
-export const encodeKitty: {
+const encodeKitty: {
   (
     base64Data: string,
     options?: {
@@ -79,47 +81,26 @@ export const encodeKitty: {
   },
 );
 
-export function deleteKittyImage(imageId: number): string {
+function deleteKittyImage(imageId: number): string {
   return `\x1b_Ga=d,d=I,i=${imageId},q=2\x1b\\`;
 }
 
-export function deleteAllKittyImages(): string {
+function deleteAllKittyImages(): string {
   return "\x1b_Ga=d,d=A,q=2\x1b\\";
 }
 
-export function deleteAllKittyPlacements(): string {
+function deleteAllKittyPlacements(): string {
   return "\x1b_Ga=d,d=a,q=2\x1b\\";
 }
 
-export interface ImageCellSize {
-  columns: number;
-  rows: number;
-}
-
-export interface KittyImageMetadata extends ImageCellSize {
-  imageId: number;
-  widthPx: number;
-  heightPx: number;
-}
-
-interface RegisteredKittyImageMetadata extends KittyImageMetadata {
+interface RegisteredKittyImageMetadata extends terminalImageKittyTypes.KittyImageMetadata {
   transmissionGeneration: number;
-}
-
-export interface KittyImagePlacement {
-  imageId: number;
-  transmissionGeneration: number;
-  transmissionBytes: number;
-  estimatedDecodedBytes: number;
-  rows: number;
-  sequence: string;
-  replacementLine: string;
 }
 
 const kittyImageMetadata = new Map<number, RegisteredKittyImageMetadata>();
 let kittyTransmissionGeneration = 0;
 
-export function registerKittyImageMetadata(metadata: KittyImageMetadata): void {
+function registerKittyImageMetadata(metadata: terminalImageKittyTypes.KittyImageMetadata): void {
   kittyTransmissionGeneration += 1;
   kittyImageMetadata.delete(metadata.imageId);
   kittyImageMetadata.set(metadata.imageId, {
@@ -151,8 +132,8 @@ function findKittyCommand(line: string): KittyCommand | undefined {
   const controlsEnd = line.indexOf(";", index + KITTY_PREFIX.length);
   if (controlsEnd === -1) return undefined;
   return {
-    index,
     controls: line.slice(index + KITTY_PREFIX.length, controlsEnd),
+    index,
     length: controlsEnd + 1 - index,
   };
 }
@@ -173,15 +154,17 @@ function getKittyImageRowsFromControls(controls: string, fallbackRows: number): 
   return getExplicitKittyImageRows(controls) ?? fallbackRows;
 }
 
-export function getKittyImageMetadata(line: string): KittyImageMetadata | undefined {
+function getKittyImageMetadata(
+  line: string,
+): terminalImageKittyTypes.KittyImageMetadata | undefined {
   const metadata = getRegisteredKittyImageMetadata(line);
   if (metadata === undefined) return undefined;
   return {
-    imageId: metadata.imageId,
     columns: metadata.columns,
+    heightPx: metadata.heightPx,
+    imageId: metadata.imageId,
     rows: metadata.rows,
     widthPx: metadata.widthPx,
-    heightPx: metadata.heightPx,
   };
 }
 
@@ -205,7 +188,7 @@ const KITTY_PLACEMENT_CONTROL_KEYS = new Set([
   "V",
 ]);
 
-export function getKittyImagePlacementRows(line: string): number | undefined {
+function getKittyImagePlacementRows(line: string): number | undefined {
   const controls = findKittyCommand(line)?.controls;
   if (controls === undefined) return undefined;
   const explicitRows = getExplicitKittyImageRows(controls);
@@ -213,7 +196,9 @@ export function getKittyImagePlacementRows(line: string): number | undefined {
   return getRegisteredKittyImageMetadataFromControls(controls)?.rows;
 }
 
-export function getKittyImagePlacement(line: string): KittyImagePlacement | undefined {
+function getKittyImagePlacement(
+  line: string,
+): terminalImageKittyTypes.KittyImagePlacement | undefined {
   const match = findKittyCommand(line);
   const imageControls = match?.controls;
   if (match === undefined || imageControls === undefined) return undefined;
@@ -240,17 +225,17 @@ export function getKittyImagePlacement(line: string): KittyImagePlacement | unde
     .filter((control) => KITTY_PLACEMENT_CONTROL_KEYS.has(control.split("=", 1)[0] ?? ""));
   const sequence = `\x1b_Ga=p,q=2,${controls.join(",")}\x1b\\`;
   return {
-    imageId: metadata.imageId,
-    transmissionGeneration: metadata.transmissionGeneration,
-    transmissionBytes: transmissionEnd - match.index,
     estimatedDecodedBytes: metadata.widthPx * metadata.heightPx * 4,
+    imageId: metadata.imageId,
+    replacementLine: `${line.slice(0, match.index)}${sequence}${line.slice(transmissionEnd)}`,
     rows: getKittyImageRowsFromControls(imageControls, metadata.rows),
     sequence,
-    replacementLine: `${line.slice(0, match.index)}${sequence}${line.slice(transmissionEnd)}`,
+    transmissionBytes: transmissionEnd - match.index,
+    transmissionGeneration: metadata.transmissionGeneration,
   };
 }
 
-export const cropKittyImageLine: {
+const cropKittyImageLine: {
   (line: string, hiddenRows: number, visibleRows: number): string;
   (hiddenRows: number, visibleRows: number): (line: string) => string;
 } = dual(3, (line: string, hiddenRows: number, visibleRows: number): string => {
@@ -275,3 +260,19 @@ export const cropKittyImageLine: {
   controls.push(`y=${sourceY}`, `h=${sourceHeight}`, `r=${croppedRows}`);
   return `${line.slice(0, match.index)}\x1b_G${controls.join(",")};${line.slice(match.index + match.length)}`;
 });
+
+const terminalImageKitty = {
+  allocateImageId,
+  cropKittyImageLine,
+  deleteAllKittyImages,
+  deleteAllKittyPlacements,
+  deleteKittyImage,
+  encodeKitty,
+  getKittyImageMetadata,
+  getKittyImagePlacement,
+  getKittyImagePlacementRows,
+  isImageLine,
+  registerKittyImageMetadata,
+};
+
+export default terminalImageKitty;

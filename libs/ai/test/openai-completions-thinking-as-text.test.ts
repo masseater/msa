@@ -1,18 +1,19 @@
 import { Effect } from "effect";
 import { describe, expect, it } from "vite-plus/test";
 
-import { getCompat } from "../src/api/openai-completions-compat.ts";
-import {
-  convertMessages,
-  stream as streamOpenAICompletions,
-} from "../src/api/openai-completions.ts";
-import type { AssistantMessage, Context, Model } from "../src/types.ts";
-import { normalizeContext } from "../src/utils/transcript.ts";
+import openaiCompletionsCompat from "../src/api/openai-completions-compat.ts";
+import openaiCompletions from "../src/api/openai-completions.ts";
+import type typesModule from "../src/types.types.ts";
+import transcript from "../src/utils/transcript.ts";
 import jsonCodec from "./json-codec.ts";
+
+const { convertMessages, stream: streamOpenAICompletions } = openaiCompletions;
+const { normalizeContext } = transcript;
+const { getCompat } = openaiCompletionsCompat;
 
 const { decodeJson, encodeJson } = jsonCodec;
 
-const model: Model<"openai-completions"> = {
+const model: typesModule.Model<"openai-completions"> = {
   api: "openai-completions",
   baseUrl: "https://completions.test/v1",
   compat: { requiresThinkingAsText: true },
@@ -26,7 +27,7 @@ const model: Model<"openai-completions"> = {
   reasoning: true,
 };
 
-const replayContext = (content: AssistantMessage["content"]): Context => ({
+const replayContext = (content: typesModule.AssistantMessage["content"]): typesModule.Context => ({
   messages: [
     { content: "hello", role: "user", timestamp: 1 },
     {
@@ -50,12 +51,12 @@ const replayContext = (content: AssistantMessage["content"]): Context => ({
   ],
 });
 
-const thinkingAndText: AssistantMessage["content"] = [
+const thinkingAndText: typesModule.AssistantMessage["content"] = [
   { thinking: "internal reasoning", type: "thinking" },
   { text: "visible answer", type: "text" },
 ];
 
-const replayedAssistant = (content: AssistantMessage["content"]) =>
+const replayedAssistant = (content: typesModule.AssistantMessage["content"]) =>
   convertMessages(model, normalizeContext(replayContext(content)), getCompat(model))[1];
 
 const completionStream = Effect.gen(function* () {

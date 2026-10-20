@@ -1,4 +1,4 @@
-import type { CredentialStore } from "@msa/ai";
+import type aiTypes from "@msa/ai/index.types";
 import testing from "@msa/testing";
 import { Effect } from "effect";
 
@@ -18,7 +18,7 @@ function wrap(runtime: ModelRuntime): ModelRegistry {
 }
 
 const createModelRegistry = (
-  ...[credentials, modelsPath]: [credentials: CredentialStore, modelsPath?: string]
+  ...[credentials, modelsPath]: [credentials: aiTypes.CredentialStore, modelsPath?: string]
 ): Promise<ModelRegistry> =>
   runTest(
     Effect.gen(function* () {
@@ -34,7 +34,9 @@ const createModelRegistry = (
     }),
   );
 
-const createInMemoryModelRegistry = (credentials: CredentialStore): Promise<ModelRegistry> =>
+const createInMemoryModelRegistry = (
+  credentials: aiTypes.CredentialStore,
+): Promise<ModelRegistry> =>
   runTest(
     Effect.gen(function* () {
       const runtime = yield* awaited(

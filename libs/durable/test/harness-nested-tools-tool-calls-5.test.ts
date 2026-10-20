@@ -1,4 +1,4 @@
-import { type Usage } from "@msa/ai";
+import type aiTypes from "@msa/ai/index.types";
 import type chordTypes from "@msa/chord/index.types";
 import durable from "@msa/durable";
 import harnessModule from "@msa/durable/harness";
@@ -31,7 +31,7 @@ function summarizedTools() {
       }),
     ),
   );
-  const usage: Usage = {
+  const usage: aiTypes.Usage = {
     cacheRead: 0,
     cacheWrite: 0,
     cost: { cacheRead: 0, cacheWrite: 0, input: 0.1, output: 0.2, total: 0.3 },

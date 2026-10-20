@@ -1,4 +1,4 @@
-import type { KeyId } from "@msa/tui";
+import type tuiTypes from "@msa/tui/index.types";
 import { Console } from "effect";
 
 import type { ResourceDiagnostic } from "../diagnostics.ts";
@@ -93,13 +93,13 @@ export abstract class RunnerQueries {
     return new Map(this.runtime.flagValues);
   }
 
-  getShortcuts(resolvedKeybindings: KeybindingsConfig): Map<KeyId, ExtensionShortcut> {
+  getShortcuts(resolvedKeybindings: KeybindingsConfig): Map<tuiTypes.KeyId, ExtensionShortcut> {
     this.shortcutDiagnostics = [];
     const builtinKeybindings = buildBuiltinKeybindings(resolvedKeybindings);
-    const extensionShortcuts = new Map<KeyId, ExtensionShortcut>();
+    const extensionShortcuts = new Map<tuiTypes.KeyId, ExtensionShortcut>();
 
     const addDiagnostic = (message: string, extensionPath: string) => {
-      this.shortcutDiagnostics.push({ type: "warning", message, path: extensionPath });
+      this.shortcutDiagnostics.push({ message, path: extensionPath, type: "warning" });
       if (!this.hasUI()) {
         platformRuntime.runSync(Console.warn(message));
       }
@@ -107,7 +107,7 @@ export abstract class RunnerQueries {
 
     for (const ext of this.extensions) {
       for (const [key, shortcut] of ext.shortcuts) {
-        const normalizedKey = key.toLowerCase() as KeyId;
+        const normalizedKey = key.toLowerCase() as tuiTypes.KeyId;
 
         const builtInKeybinding = builtinKeybindings[normalizedKey];
         if (builtInKeybinding?.restrictOverride === true) {

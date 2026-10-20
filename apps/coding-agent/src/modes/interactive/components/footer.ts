@@ -1,6 +1,7 @@
-import type { AgentState } from "@msa/agent-core";
-import type { Model } from "@msa/ai";
-import { type Component, truncateToWidth, visibleWidth } from "@msa/tui";
+import type agentTypes from "@msa/agent-core/index.types";
+import type aiTypes from "@msa/ai/index.types";
+import tui from "@msa/tui";
+import type tuiTypes from "@msa/tui/index.types";
 import { dual } from "effect/Function";
 
 import type { AgentSession } from "../../../core/agent-session.ts";
@@ -13,13 +14,15 @@ import { describePrWatchIndicator } from "../../../core/pr-watch/summary.ts";
 import { readEnv } from "../../../core/process-env.ts";
 import type { SessionManager } from "../../../core/session-manager.ts";
 import {
+  type UsageTotals,
   addUsageToTotals,
   createUsageTotals,
-  type UsageTotals,
 } from "../../../core/usage-totals.ts";
 import { isAbsolute, relative, resolve, sep } from "../../path.ts";
 import { theme } from "../theme/theme.ts";
 import { viewHelpers } from "./tasks-view-helpers.ts";
+
+const { truncateToWidth, visibleWidth } = tui;
 
 function sanitizeStatusText(text: string): string {
   return text
@@ -66,7 +69,7 @@ interface SessionStats {
   contextUsage: ContextUsage | undefined;
 }
 
-export class FooterComponent implements Component {
+export class FooterComponent implements tuiTypes.Component {
   private autoCompactEnabled = true;
   private session: AgentSession;
   private footerData: ReadonlyFooterDataProvider;
@@ -126,14 +129,14 @@ export class FooterComponent implements Component {
 
     const contextUsage = this.session.getContextUsage();
     this.sessionStats = {
+      contextUsage,
+      entryCount,
+      latestCacheHitRate,
+      leafId,
+      limitsModel,
       session: this.session,
       sessionId,
-      leafId,
-      entryCount,
-      limitsModel,
       usageTotals,
-      latestCacheHitRate,
-      contextUsage,
     };
     return this.sessionStats;
   }
@@ -148,7 +151,7 @@ export class FooterComponent implements Component {
           sessionId: string;
           leafId: string | null;
           entryCount: number;
-          limitsModel: Model<any> | undefined;
+          limitsModel: aiTypes.Model<any> | undefined;
         };
       } {
     const sessionManager = self.session.sessionManager;
@@ -172,12 +175,12 @@ export class FooterComponent implements Component {
     return {
       done: false,
       value: {
+        entryCount,
+        leafId,
+        limitsModel,
+        sessionId,
         sessionManager,
         usageTotals,
-        sessionId,
-        leafId,
-        entryCount,
-        limitsModel,
       },
     };
   }
@@ -268,7 +271,7 @@ export class FooterComponent implements Component {
     self: FooterComponent,
     statsParts: string[],
     contextPercentStr: string,
-    state: AgentState,
+    state: agentTypes.AgentState,
     width: number,
     pwd: string,
   ): { tasks: string | undefined; lines: string[] } {
@@ -301,14 +304,14 @@ export class FooterComponent implements Component {
     }
 
     const tasks = viewHelpers.describeTaskCounts(self.session.orchestrator?.snapshot.tasks ?? []);
-    return { tasks, lines };
+    return { lines, tasks };
   }
 
   private static renderRemainder(
     self: FooterComponent,
     statsParts: string[],
     contextPercentStr: string,
-    state: AgentState,
+    state: agentTypes.AgentState,
     width: number,
   ): { remainder: string; dimStatsLeft: string } {
     let { rightSide, rightSideWithoutProvider, statsLeftWidth, minPadding, statsLeft } =
@@ -341,14 +344,14 @@ export class FooterComponent implements Component {
 
     const dimStatsLeft = theme.fg("dim", statsLeft);
     const remainder = statsLine.slice(statsLeft.length);
-    return { remainder, dimStatsLeft };
+    return { dimStatsLeft, remainder };
   }
 
   private static renderRightSide(
     self: FooterComponent,
     statsParts: any[],
     contextPercentStr: string,
-    state: AgentState,
+    state: agentTypes.AgentState,
     width: number,
   ): {
     rightSide: string;
@@ -388,6 +391,6 @@ export class FooterComponent implements Component {
     }
 
     let rightSide = rightSideWithoutProvider;
-    return { rightSide, rightSideWithoutProvider, statsLeftWidth, minPadding, statsLeft };
+    return { minPadding, rightSide, rightSideWithoutProvider, statsLeft, statsLeftWidth };
   }
 }

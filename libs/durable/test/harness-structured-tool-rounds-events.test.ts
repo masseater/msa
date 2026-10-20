@@ -1,4 +1,4 @@
-import { Type, fauxAssistantMessage, fauxText } from "@msa/ai";
+import ai from "@msa/ai";
 import type chordTypes from "@msa/chord/index.types";
 import durable from "@msa/durable";
 import memory from "@msa/durable/storage/memory";
@@ -8,6 +8,8 @@ import { afterEach, describe, expect, it } from "vite-plus/test";
 import harnessStructuredEvents from "./harness-structured-events.ts";
 import harnessStructuredSupport from "./harness-structured-support.ts";
 import support from "./support.ts";
+
+const { Type, fauxAssistantMessage, fauxText } = ai;
 
 const { LiveDoc, defineTool } = durable;
 const { MemoryStorage } = memory;

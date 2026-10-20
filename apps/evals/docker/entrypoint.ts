@@ -196,7 +196,7 @@ const program = Effect.gen(function* () {
   if (codingAgentEntry !== `${codingAgentDir}/dist/index.js`) {
     return yield* die(`Eval does not resolve @msa/coding-agent from dist: ${codingAgentEntry}`);
   }
-  yield* prepareAgentDirectory({ uid: sandboxUid, gid: sandboxGid });
+  yield* prepareAgentDirectory({ gid: sandboxGid, uid: sandboxUid });
   process.umask(0o022);
 
   const vitestCli = pathOperations.resolve(
@@ -220,8 +220,8 @@ const program = Effect.gen(function* () {
   const artifactGid = readEnv("MSA_EVAL_ARTIFACT_GID");
   if (artifactUid !== undefined && artifactGid !== undefined) {
     yield* chownTree("/artifacts", {
-      uid: parseId("MSA_EVAL_ARTIFACT_UID"),
       gid: parseId("MSA_EVAL_ARTIFACT_GID"),
+      uid: parseId("MSA_EVAL_ARTIFACT_UID"),
     });
   }
   if (status !== 0) return yield* new ChildExit({ status });

@@ -1,5 +1,10 @@
-import { matchCsiSequence } from "./ansi-sequences.ts";
-import {
+import ansiSequences from "./ansi-sequences.ts";
+import keyIds from "./key-ids.ts";
+import keyMatchers from "./key-matchers.ts";
+import keyProtocols from "./key-protocols.ts";
+import keySequences from "./key-sequences.ts";
+
+const {
   ARROW_CODEPOINTS,
   CODEPOINTS,
   FUNCTIONAL_CODEPOINTS,
@@ -7,30 +12,21 @@ import {
   MODIFIERS,
   SHIFTED_SYMBOL_KEYS,
   SYMBOL_KEYS,
-} from "./key-ids.ts";
-import {
-  isKittyProtocolActive,
-  KITTY_CSI_U_BODY,
-  parseKittySequence,
-  parseModifyOtherKeysSequence,
-} from "./key-protocols.ts";
-import {
+} = keyIds;
+const {
+  LEGACY_SEQUENCE_KEY_IDS,
   getLogicalShiftedSymbolCandidate,
   isWindowsTerminalSession,
-  LEGACY_SEQUENCE_KEY_IDS,
   normalizeKittyFunctionalCodepoint,
   normalizeShiftedLetterIdentityCodepoint,
-} from "./key-sequences.ts";
-
-export { Key, type KeyId } from "./key-ids.ts";
-export { matchesKey } from "./key-matchers.ts";
-export {
-  isKeyRelease,
-  isKeyRepeat,
+} = keySequences;
+const {
+  KITTY_CSI_U_BODY,
   isKittyProtocolActive,
-  type KeyEventType,
-  setKittyProtocolActive,
-} from "./key-protocols.ts";
+  parseKittySequence,
+  parseModifyOtherKeysSequence,
+} = keyProtocols;
+const { matchCsiSequence } = ansiSequences;
 
 function formatKeyNameWithModifiers(keyName: string, modifier: number): string | undefined {
   const mods: string[] = [];
@@ -183,7 +179,7 @@ function parseSingleCharacterKey(data: string): string | undefined {
   return code >= 32 && code <= 126 ? data : undefined;
 }
 
-export function parseKey(data: string): string | undefined {
+function parseKey(data: string): string | undefined {
   return (
     parseProtocolKey(data) ??
     LEGACY_SEQUENCE_KEY_IDS[data] ??
@@ -196,8 +192,8 @@ export function parseKey(data: string): string | undefined {
 
 const KITTY_PRINTABLE_ALLOWED_MODIFIERS = MODIFIERS.shift | LOCK_MASK;
 
-export function decodeKittyPrintable(data: string): string | undefined {
-  const match = matchCsiSequence({ data, finals: "u", body: KITTY_CSI_U_BODY })?.groups;
+function decodeKittyPrintable(data: string): string | undefined {
+  const match = matchCsiSequence({ body: KITTY_CSI_U_BODY, data, finals: "u" })?.groups;
   if (match === undefined || match === null) return undefined;
 
   const codepoint = Number.parseInt(match[1] ?? "", 10);
@@ -241,6 +237,20 @@ function decodeModifyOtherKeysPrintable(data: string): string | undefined {
   }
 }
 
-export function decodePrintableKey(data: string): string | undefined {
+function decodePrintableKey(data: string): string | undefined {
   return decodeKittyPrintable(data) ?? decodeModifyOtherKeysPrintable(data);
 }
+
+const keys = {
+  Key: keyIds.Key,
+  decodeKittyPrintable,
+  decodePrintableKey,
+  isKeyRelease: keyProtocols.isKeyRelease,
+  isKeyRepeat: keyProtocols.isKeyRepeat,
+  isKittyProtocolActive: keyProtocols.isKittyProtocolActive,
+  matchesKey: keyMatchers.matchesKey,
+  parseKey,
+  setKittyProtocolActive: keyProtocols.setKittyProtocolActive,
+};
+
+export default keys;

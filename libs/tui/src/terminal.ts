@@ -1,28 +1,30 @@
-import { Clock, Effect } from "effect";
+import { Effect } from "effect";
 
-import { readEnv } from "./env.ts";
-import { setKittyProtocolActive } from "./keys.ts";
-import { isNativeModifierPressed } from "./native-modifiers.ts";
-import { getNativePlatformHelper } from "./native-platform.ts";
-import type { ProgramStatus } from "./program-status.ts";
-import { StdinBuffer } from "./stdin-buffer.ts";
-import {
-  isAppleTerminalSession,
+import type programStatusTypes from "./program-status.types.ts";
+import type stdinBufferTypes from "./stdin-buffer.types.ts";
+import terminalKit from "./terminal-kit.ts";
+import terminalProtocol from "./terminal-protocol.ts";
+import type terminalProtocolTypes from "./terminal-protocol.types.ts";
+import TerminalStatusReporter from "./terminal-status.ts";
+import TerminalWriteLog from "./terminal-write-log.ts";
+
+const { env, keys, nativeModifiers, nativePlatform, StdinBuffer, terminalProtocolQueries } =
+  terminalKit;
+const { DEVICE_ATTRIBUTES_QUERY, KITTY_KEYBOARD_PROTOCOL_QUERY } = terminalProtocolQueries;
+
+const {
   KeyboardNegotiationBuffer,
-  type KeyboardProtocolNegotiationSequence,
+  isAppleTerminalSession,
   normalizeNativeShiftEnterInput,
   refreshTerminalDimensions,
   resolveEscapeTimeoutMs,
-  type Terminal,
-} from "./terminal-protocol.ts";
-import { TerminalStatusReporter } from "./terminal-status.ts";
-import { TerminalWriteLog } from "./terminal-write-log.ts";
+} = terminalProtocol;
+const { setKittyProtocolActive } = keys;
+const { isNativeModifierPressed } = nativeModifiers;
+const { getNativePlatformHelper } = nativePlatform;
+const { readEnv } = env;
 
-const DESIRED_KITTY_KEYBOARD_PROTOCOL_FLAGS = 7;
-const KITTY_KEYBOARD_PROTOCOL_QUERY = `\x1b[>${DESIRED_KITTY_KEYBOARD_PROTOCOL_FLAGS}u\x1b[?u`;
-const DEVICE_ATTRIBUTES_QUERY = "\x1b[c";
-
-export class ProcessTerminal implements Terminal {
+export default class ProcessTerminal implements terminalProtocolTypes.Terminal {
   private wasRaw = false;
   private inputHandler?: ((data: string) => void) | undefined;
   private resizeHandler?: (() => void) | undefined;
@@ -30,7 +32,7 @@ export class ProcessTerminal implements Terminal {
   #modifyOtherKeysActive = false;
   private keyboardProtocolPushed = false;
   private pendingKeyboardProtocolDeviceAttributes = 0;
-  private stdinBuffer?: StdinBuffer | undefined;
+  private stdinBuffer?: stdinBufferTypes.StdinBuffer | undefined;
   private stdinDataHandler?: ((data: string) => void) | undefined;
   private readonly writeLog = new TerminalWriteLog();
   private readonly status = new TerminalStatusReporter();
@@ -103,7 +105,7 @@ export class ProcessTerminal implements Terminal {
   }
 
   private handleKeyboardProtocolNegotiationSequence(
-    negotiationSequence: KeyboardProtocolNegotiationSequence,
+    negotiationSequence: terminalProtocolTypes.KeyboardProtocolNegotiationSequence,
   ): boolean {
     this.negotiationBuffer.clear();
     if (negotiationSequence.type === "device-attributes") {
@@ -174,40 +176,17 @@ export class ProcessTerminal implements Terminal {
   }
 
   drainInput(maxMs = 1000, idleMs = 50): Promise<void> {
+    this.popKeyboardProtocol();
+    const previousHandler = this.inputHandler;
+    this.inputHandler = undefined;
     return Effect.runPromise(
-      Effect.gen({ self: this }, function* () {
-        this.popKeyboardProtocol();
-
-        const previousHandler = this.inputHandler;
-        this.inputHandler = undefined;
-
-        const clock = yield* Clock.Clock;
-        let lastDataTime = clock.currentTimeMillisUnsafe();
-        const onData = (): void => {
-          lastDataTime = clock.currentTimeMillisUnsafe();
-        };
-
-        process.stdin.on("data", onData);
-        const endTime = clock.currentTimeMillisUnsafe() + maxMs;
-
-        const waitUntilIdle = Effect.gen(function* () {
-          for (;;) {
-            const now = clock.currentTimeMillisUnsafe();
-            const timeLeft = endTime - now;
-            if (timeLeft <= 0 || now - lastDataTime >= idleMs) return;
-            yield* Effect.sleep(Math.min(idleMs, timeLeft));
-          }
-        });
-
-        yield* waitUntilIdle.pipe(
-          Effect.ensuring(
-            Effect.sync(() => {
-              process.stdin.removeListener("data", onData);
-              this.inputHandler = previousHandler;
-            }),
-          ),
-        );
-      }),
+      terminalKit.stdinIdle.waitForStdinIdle(maxMs, idleMs).pipe(
+        Effect.ensuring(
+          Effect.sync(() => {
+            this.inputHandler = previousHandler;
+          }),
+        ),
+      ),
     );
   }
 
@@ -279,7 +258,7 @@ export class ProcessTerminal implements Terminal {
     process.stdout.write(`\x1b]0;${title}\x07`);
   }
 
-  setProgramStatus(status: ProgramStatus): void {
+  setProgramStatus(status: programStatusTypes.ProgramStatus): void {
     this.status.setProgramStatus(status);
   }
 

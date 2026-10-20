@@ -1,10 +1,12 @@
 import { Effect } from "effect";
 import { describe, expect, it } from "vite-plus/test";
 
-import { classify } from "../src/api/typesafe-system-one.ts";
-import type { ClassifierContext } from "../src/types.ts";
+import typesafeSystemOne from "../src/api/typesafe-system-one.ts";
+import type typesModule from "../src/types.types.ts";
 import jsonCodec from "./json-codec.ts";
 import typesafeSystemOneSupport from "./typesafe-system-one-support.ts";
+
+const { classify } = typesafeSystemOne;
 
 const { context, model, wireAnswers } = typesafeSystemOneSupport;
 
@@ -14,10 +16,10 @@ describe("TypeSafe System One", () => {
   it("preserves prototype-sensitive question IDs in answers", () =>
     Effect.runPromise(
       Effect.gen(function* () {
-        const prototypeContext: ClassifierContext = {
+        const prototypeContext: typesModule.ClassifierContext = {
           questions: (yield* decodeJson(
             '{"__proto__":{"type":"bool","instructions":"Is this true?","criteria":{"true":"Yes","false":"No"}}}',
-          )) as ClassifierContext["questions"],
+          )) as typesModule.ClassifierContext["questions"],
           state: {},
         };
         const result = yield* Effect.promise(() =>

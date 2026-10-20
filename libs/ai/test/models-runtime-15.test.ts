@@ -1,17 +1,20 @@
 import { Effect } from "effect";
 import { describe, expect, it } from "vite-plus/test";
 
-import { InMemoryCredentialStore } from "../src/auth/credential-store.ts";
-import type { ApiKeyAuth } from "../src/auth/types.ts";
-import { createModels } from "../src/models.ts";
-import type { Api, Model, StreamOptions } from "../src/types.ts";
+import credentialStore from "../src/auth/credential-store.ts";
+import type typesModuleModule from "../src/auth/types.ts";
+import modelsModule from "../src/models.ts";
+import type typesModule from "../src/types.types.ts";
 import modelsRuntimeSupport from "./models-runtime-support.ts";
+
+const { InMemoryCredentialStore } = credentialStore;
+const { createModels } = modelsModule;
 
 const { context, storeCredential, testModel, testOAuth, testProvider } = modelsRuntimeSupport;
 
 interface ProviderCall {
-  model: Model<Api>;
-  options: StreamOptions | undefined;
+  model: typesModule.Model<typesModule.Api>;
+  options: typesModule.StreamOptions | undefined;
 }
 
 const keepsTheUnderlyingReasonInWrapped = () =>
@@ -47,7 +50,7 @@ const keepsTheUnderlyingReasonInWrapped = () =>
 const wrapsApiKeyAuthFailuresIn = () =>
   Effect.runPromise(
     Effect.gen(function* () {
-      const failing: ApiKeyAuth = {
+      const failing: typesModuleModule.ApiKeyAuth = {
         name: "Failing",
         resolve: () => Promise.reject(new Error("nope")),
       };
@@ -64,7 +67,7 @@ const usesExplicitRequestApiKeyAnd = () =>
     Effect.gen(function* () {
       const effectContext = yield* Effect.context();
       const calls: ProviderCall[] = [];
-      const apiKey: ApiKeyAuth = {
+      const apiKey: typesModuleModule.ApiKeyAuth = {
         name: "Scoped",
         resolve: ({ credential, ctx }) =>
           Effect.runPromiseWith(effectContext)(

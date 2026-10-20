@@ -27,7 +27,7 @@ export const createMarkdownTransform: {
     (markdown, availableWidth) =>
       applyMarkdownTransformers(
         markdown,
-        { messageType, isStreaming, availableWidth },
+        { availableWidth, isStreaming, messageType },
         transformers,
       ),
 );

@@ -1,27 +1,33 @@
 import { dual } from "effect/Function";
 
-import { type EditorTheme } from "../src/components/editor.ts";
-import { type SelectListTheme } from "../src/components/select-list.ts";
-import { type SettingsListTheme } from "../src/components/settings-list.ts";
-import { type TuiMouseEvent, type TuiMouseEventType } from "../src/tui-component.ts";
+import type editorTypes from "../src/components/editor.types.ts";
+import type selectListTypes from "../src/components/select-list.types.ts";
+import type settingsListTypes from "../src/components/settings-list.types.ts";
+import type tuiComponentTypes from "../src/tui-component.types.ts";
 
 const mouse: {
-  (type: TuiMouseEventType, x: number, y: number, width?: number, height?: number): TuiMouseEvent;
+  (
+    type: tuiComponentTypes.TuiMouseEventType,
+    x: number,
+    y: number,
+    width?: number,
+    height?: number,
+  ): tuiComponentTypes.TuiMouseEvent;
   (
     x: number,
     y: number,
     width?: number,
     height?: number,
-  ): (type: TuiMouseEventType) => TuiMouseEvent;
+  ): (type: tuiComponentTypes.TuiMouseEventType) => tuiComponentTypes.TuiMouseEvent;
 } = dual(
   (args) => typeof args[0] === "string",
   (
-    type: TuiMouseEventType,
+    type: tuiComponentTypes.TuiMouseEventType,
     x: number,
     y: number,
     width: number = 80,
     height: number = 10,
-  ): TuiMouseEvent => ({
+  ): tuiComponentTypes.TuiMouseEvent => ({
     alt: false,
     button: "left",
     ctrl: false,
@@ -37,7 +43,7 @@ const mouse: {
   }),
 );
 
-const selectTheme: SelectListTheme = {
+const selectTheme: selectListTypes.SelectListTheme = {
   description: (text) => text,
   noMatch: (text) => text,
   scrollInfo: (text) => text,
@@ -45,7 +51,7 @@ const selectTheme: SelectListTheme = {
   selectedText: (text) => text,
 };
 
-const settingsTheme: SettingsListTheme = {
+const settingsTheme: settingsListTypes.SettingsListTheme = {
   cursor: "> ",
   description: (text) => text,
   hint: (text) => text,
@@ -53,7 +59,7 @@ const settingsTheme: SettingsListTheme = {
   value: (text) => text,
 };
 
-const editorTheme: EditorTheme = {
+const editorTheme: editorTypes.EditorTheme = {
   borderColor: (text) => text,
   selectList: selectTheme,
 };

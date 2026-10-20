@@ -2,11 +2,14 @@ import { Effect } from "effect";
 import { Type } from "typebox";
 import { describe, expect, it, vi } from "vite-plus/test";
 
-import { streamSimple } from "../src/compat.ts";
-import type { Tool } from "../src/types.ts";
-import { currentTimeMillis } from "../src/utils/clock.ts";
+import compat from "../src/compat.ts";
+import type typesModule from "../src/types.types.ts";
+import clock from "../src/utils/clock.ts";
 import mixedDeltaChunks from "./openai-completions-mixed-deltas-fixture.ts";
 import openaiCompletionsToolChoiceSupport from "./openai-completions-tool-choice-support.ts";
+
+const { streamSimple } = compat;
+const { currentTimeMillis } = clock;
 
 vi.mock("openai", () =>
   import("./openai-completions-tool-choice-mock.ts").then((module) => module.default),
@@ -21,7 +24,7 @@ const {
   readTool,
 } = openaiCompletionsToolChoiceSupport;
 
-const tools: Tool[] = [
+const tools: typesModule.Tool[] = [
   readTool,
   {
     description: "Search a file",

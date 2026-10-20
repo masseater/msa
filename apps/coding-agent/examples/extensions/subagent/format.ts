@@ -1,6 +1,6 @@
 import { homedir } from "os";
 
-import type { Message } from "@msa/ai";
+import type aiTypes from "@msa/ai/index.types";
 import { formatReadLineRange } from "@msa/coding-agent";
 
 import {
@@ -116,7 +116,7 @@ export const formatToolCall = (request: {
   }
 };
 
-export const getFinalOutput = (messages: Message[]): string => {
+export const getFinalOutput = (messages: aiTypes.Message[]): string => {
   for (const msg of messages.toReversed()) {
     if (msg.role !== "assistant") continue;
     for (const part of msg.content) {
@@ -148,15 +148,15 @@ export const truncateParallelOutput = (output: string): string => {
   return `${truncated}\n\n[Output truncated: ${omitted} bytes omitted. Full output preserved in tool details.]`;
 };
 
-export const getDisplayItems = (messages: Message[]): DisplayItem[] => {
+export const getDisplayItems = (messages: aiTypes.Message[]): DisplayItem[] => {
   const items: DisplayItem[] = [];
   for (const msg of messages) {
     if (msg.role !== "assistant") continue;
     for (const part of msg.content) {
       if (part.type === "text") {
-        items.push({ type: "text", text: part.text });
+        items.push({ text: part.text, type: "text" });
       } else if (part.type === "toolCall") {
-        items.push({ type: "toolCall", name: part.name, args: part.arguments });
+        items.push({ args: part.arguments, name: part.name, type: "toolCall" });
       }
     }
   }
@@ -165,12 +165,12 @@ export const getDisplayItems = (messages: Message[]): DisplayItem[] => {
 
 export const aggregateUsage = (results: SingleResult[]): UsageStats => {
   const total: UsageStats = {
-    input: 0,
-    output: 0,
     cacheRead: 0,
     cacheWrite: 0,
-    cost: 0,
     contextTokens: 0,
+    cost: 0,
+    input: 0,
+    output: 0,
     turns: 0,
   };
   for (const r of results) {

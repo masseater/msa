@@ -1,6 +1,7 @@
-import { type Component, Container, type TUI } from "@msa/tui";
+import tuiModule from "@msa/tui";
+import type tuiTypes from "@msa/tui/index.types";
 
-import { BOLD, BLUE, DIM, GREEN, MAGENTA, RED, RESET, YELLOW } from "./colors.ts";
+import { BLUE, BOLD, DIM, GREEN, MAGENTA, RED, RESET, YELLOW } from "./colors.ts";
 import type { ExtensionUIRequest } from "./extension-ui-request.ts";
 import { InputDialog } from "./input-dialog.ts";
 import { LoadingIndicator } from "./loading-indicator.ts";
@@ -9,6 +10,8 @@ import { PromptInput } from "./prompt-input.ts";
 import { SelectDialog } from "./select-dialog.ts";
 import { runSlashCommand } from "./slash-commands.ts";
 
+const { Container } = tuiModule;
+
 const NOTICE = `${MAGENTA}${BOLD}Notification:${RESET}`;
 
 export class UiController {
@@ -16,15 +19,19 @@ export class UiController {
   readonly promptInput = new PromptInput();
   private readonly loadingIndicator = new LoadingIndicator();
   private readonly root = new Container();
-  private activeDialog: Component | null = null;
+  private activeDialog: tuiTypes.Component | null = null;
   private isStreaming = false;
   private hasTextOutput = false;
 
-  private readonly tui: TUI;
+  private readonly tui: tuiTypes.TUI;
   private readonly send: (message: Record<string, unknown>) => void;
   private readonly exit: () => void;
 
-  constructor(tui: TUI, send: (message: Record<string, unknown>) => void, exit: () => void) {
+  constructor(
+    tui: tuiTypes.TUI,
+    send: (message: Record<string, unknown>) => void,
+    exit: () => void,
+  ) {
     this.tui = tui;
     this.send = send;
     this.exit = exit;
@@ -54,7 +61,7 @@ export class UiController {
     this.exit();
   }
 
-  private setBottomComponent(component: Component): void {
+  private setBottomComponent(component: tuiTypes.Component): void {
     this.root.clear();
     this.root.addChild(this.outputLog);
     if (this.isStreaming) this.root.addChild(this.loadingIndicator);
@@ -69,7 +76,7 @@ export class UiController {
     this.tui.setFocus(this.promptInput.input);
   }
 
-  private showDialog(dialog: Component): void {
+  private showDialog(dialog: tuiTypes.Component): void {
     this.activeDialog = dialog;
     this.setBottomComponent(dialog);
   }
@@ -140,7 +147,7 @@ export class UiController {
       | { readonly confirmed: boolean }
       | { readonly cancelled: true },
   ): void {
-    this.send({ type: "extension_ui_response", id, ...response });
+    this.send({ id, type: "extension_ui_response", ...response });
   }
 
   private respondValue(id: string, value: string | undefined): void {
@@ -270,8 +277,8 @@ export class UiController {
     this.promptInput.input.setValue("");
     this.outputLog.append(`${GREEN}${BOLD}You:${RESET} ${trimmed}`);
 
-    if (!runSlashCommand({ ui: this, command: trimmed })) {
-      this.send({ type: "prompt", message: trimmed });
+    if (!runSlashCommand({ command: trimmed, ui: this })) {
+      this.send({ message: trimmed, type: "prompt" });
     }
     this.tui.requestRender();
   }

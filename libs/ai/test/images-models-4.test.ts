@@ -1,18 +1,22 @@
 import { Effect } from "effect";
 import { describe, expect, it } from "vite-plus/test";
 
-import { getModels as getCompatModels } from "../src/compat.ts";
-import { InMemoryModelsStore } from "../src/models-store.ts";
-import { createModels, createProvider, isModelType } from "../src/models.ts";
-import {
+import compatModule from "../src/compat.ts";
+import InMemoryModelsStore from "../src/models-store.ts";
+import modelsModule from "../src/models.ts";
+import allModule from "../src/providers/all.ts";
+import imagesModelsSupport from "./images-models-support.ts";
+
+const { createModels, createProvider, isModelType } = modelsModule;
+const {
   builtinModels,
   getAllBuiltinModels,
   getBuiltinClassifierModels,
   getBuiltinImageModel,
   getBuiltinImageModels,
   getBuiltinModels,
-} from "../src/providers/all.ts";
-import imagesModelsSupport from "./images-models-support.ts";
+} = allModule;
+const { getModels: getCompatModels } = compatModule;
 
 const { chatModel, fakeAuthContext, imageModel, okResult } = imagesModelsSupport;
 

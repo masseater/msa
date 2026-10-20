@@ -1,4 +1,4 @@
-import { Type } from "@msa/ai";
+import ai from "@msa/ai";
 import { defineTool } from "@msa/coding-agent";
 import { Effect } from "effect";
 import { expect } from "vite-plus/test";
@@ -7,12 +7,20 @@ import { describeEval, toolCalls } from "vitest-evals";
 import { createMsaCodingAgentHarness } from "../src/harness.ts";
 import { files, pathOperations } from "../src/platform.ts";
 
+const { Type } = ai;
+
 const TOOL_NAME = "submit_documentation_audit";
 const submitAudit = defineTool({
-  name: TOOL_NAME,
-  label: "Submit documentation audit",
+  constrainedSampling: { strict: "prefer", type: "json_schema" },
   description: "Submit the final verdict after completing the documentation investigation.",
-  promptSnippet: "Submit the final documentation audit as validated structured data",
+  execute: (_toolCallId, params) =>
+    Promise.resolve({
+      content: [{ type: "text", text: "Documentation audit submitted." }],
+      details: params,
+      terminate: true,
+    }),
+  label: "Submit documentation audit",
+  name: TOOL_NAME,
   parameters: Type.Object(
     {
       verdict: Type.Union([
@@ -24,13 +32,7 @@ const submitAudit = defineTool({
     },
     { additionalProperties: false },
   ),
-  constrainedSampling: { type: "json_schema", strict: "prefer" },
-  execute: (_toolCallId, params) =>
-    Promise.resolve({
-      content: [{ type: "text", text: "Documentation audit submitted." }],
-      details: params,
-      terminate: true,
-    }),
+  promptSnippet: "Submit the final documentation audit as validated structured data",
 });
 
 const repositoryRoot = pathOperations.resolve(import.meta.dirname, "../../..");
@@ -39,9 +41,9 @@ const pages = (await Effect.runPromise(files.glob("**/*.md", docsRoot)))
   .map((path) => ({ path: path.replaceAll("\\", "/") }))
   .sort((left, right) => left.path.localeCompare(right.path));
 const harness = createMsaCodingAgentHarness({
+  customTools: [submitAudit],
   name: "documentation-page-audit",
   tools: ["read", "grep", "find", "ls", TOOL_NAME],
-  customTools: [submitAudit],
 });
 
 const auditPrompt = (

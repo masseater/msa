@@ -1,6 +1,6 @@
 import { stripVTControlCharacters } from "node:util";
 
-import type { ProgramStatus } from "@msa/tui";
+import type tuiTypes from "@msa/tui/index.types";
 import { Effect } from "effect";
 
 export class RecordingTerminal {
@@ -34,7 +34,7 @@ export class RecordingTerminal {
   clearScreen(): void {}
   setTitle(_title: string): void {}
   setProgress(_active: boolean): void {}
-  setProgramStatus(_status: ProgramStatus): void {}
+  setProgramStatus(_status: tuiTypes.ProgramStatus): void {}
 
   requestResize(): void {
     this.resizeHandler?.();

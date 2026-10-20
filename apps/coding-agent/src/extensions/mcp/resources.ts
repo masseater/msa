@@ -1,26 +1,18 @@
-import type { ImageContent, JsonValue, TextContent } from "@msa/ai";
-import type {
-  ContentBlock,
-  ListResourcesResult,
-  ListResourceTemplatesResult,
-  McpRequestOptions,
-  ReadResourceResult,
-  Resource,
-  ResourceTemplate,
-} from "@msa/mcp";
+import type aiTypes from "@msa/ai/index.types";
+import type mcpTypes from "@msa/mcp/index.types";
 import * as Effect from "effect/Effect";
 import type { TSchema } from "typebox";
 
 import { awaited, awaiting } from "../../core/awaiting.ts";
 import type { ToolAnnotations, ToolDefinition } from "../../core/extensions/types.ts";
 import {
-  LIST_MCP_RESOURCE_TEMPLATES_TOOL,
   LIST_MCP_RESOURCES_TOOL,
+  LIST_MCP_RESOURCE_TEMPLATES_TOOL,
   READ_MCP_RESOURCE_TOOL,
 } from "../../core/mcp-servers.ts";
 import { toErrorMessage } from "../../utils/errors.ts";
 import type { McpExposure } from "./config.ts";
-import { limitMcpContent, type McpToolDetails, toModelContent, toToolExposure } from "./tools.ts";
+import { type McpToolDetails, limitMcpContent, toModelContent, toToolExposure } from "./tools.ts";
 
 export { LIST_MCP_RESOURCE_TEMPLATES_TOOL, LIST_MCP_RESOURCES_TOOL, READ_MCP_RESOURCE_TOOL };
 
@@ -29,15 +21,18 @@ export interface McpResourceServer {
   timeoutMs: number;
   resourcesPage(
     cursor: string | undefined,
-    options: McpRequestOptions,
-  ): Promise<ListResourcesResult>;
+    options: mcpTypes.McpRequestOptions,
+  ): Promise<mcpTypes.ListResourcesResult>;
   resourceTemplatesPage(
     cursor: string | undefined,
-    options: McpRequestOptions,
-  ): Promise<ListResourceTemplatesResult>;
-  allResources(options: McpRequestOptions): Promise<Resource[]>;
-  allResourceTemplates(options: McpRequestOptions): Promise<ResourceTemplate[]>;
-  readResource(uri: string, options: McpRequestOptions): Promise<ReadResourceResult>;
+    options: mcpTypes.McpRequestOptions,
+  ): Promise<mcpTypes.ListResourceTemplatesResult>;
+  allResources(options: mcpTypes.McpRequestOptions): Promise<mcpTypes.Resource[]>;
+  allResourceTemplates(options: mcpTypes.McpRequestOptions): Promise<mcpTypes.ResourceTemplate[]>;
+  readResource(
+    uri: string,
+    options: mcpTypes.McpRequestOptions,
+  ): Promise<mcpTypes.ReadResourceResult>;
 }
 
 function isMcpAppResource(item: {
@@ -54,18 +49,18 @@ function listed<T extends { _meta?: unknown }>(server: string, item: T): Record<
   return { server, ...rest };
 }
 
-const stringProperty = (description: string) => ({ type: "string", description });
+const stringProperty = (description: string) => ({ description, type: "string" });
 const SERVER_FILTER = stringProperty("MCP server name. Omit to list every server with resources.");
 const CURSOR = stringProperty(
   "Opaque cursor from a previous call with the same server; omit for the first page.",
 );
 const LIST_PARAMETERS = {
-  type: "object",
-  properties: { server: SERVER_FILTER, cursor: CURSOR },
   additionalProperties: false,
+  properties: { cursor: CURSOR, server: SERVER_FILTER },
+  type: "object",
 };
 const READ_PARAMETERS = {
-  type: "object",
+  additionalProperties: false,
   properties: {
     server: stringProperty(
       "MCP server name exactly as configured. Must match the 'server' field returned by list_mcp_resources.",
@@ -75,75 +70,71 @@ const READ_PARAMETERS = {
     ),
   },
   required: ["server", "uri"],
-  additionalProperties: false,
+  type: "object",
 };
 
 const optionalString = { type: "string" };
 const LISTING_ERRORS = {
-  type: "array",
   description: "Servers that could not be listed",
   items: {
-    type: "object",
-    properties: { server: { type: "string" }, error: { type: "string" } },
+    properties: { error: { type: "string" }, server: { type: "string" } },
     required: ["server", "error"],
+    type: "object",
   },
+  type: "array",
 };
 const LIST_OUTPUT_SCHEMA = {
-  type: "object",
   properties: {
-    server: optionalString,
+    errors: LISTING_ERRORS,
+    nextCursor: optionalString,
     resources: {
-      type: "array",
       items: {
-        type: "object",
         properties: {
-          server: { type: "string" },
-          uri: { type: "string" },
-          name: { type: "string" },
-          title: optionalString,
           description: optionalString,
           mimeType: optionalString,
+          name: { type: "string" },
+          server: { type: "string" },
           size: { type: "number" },
+          title: optionalString,
+          uri: { type: "string" },
         },
         required: ["server", "uri", "name"],
+        type: "object",
       },
+      type: "array",
     },
-    nextCursor: optionalString,
-    errors: LISTING_ERRORS,
+    server: optionalString,
   },
   required: ["resources"],
+  type: "object",
 };
 const LIST_TEMPLATES_OUTPUT_SCHEMA = {
-  type: "object",
   properties: {
-    server: optionalString,
+    errors: LISTING_ERRORS,
+    nextCursor: optionalString,
     resourceTemplates: {
-      type: "array",
       items: {
-        type: "object",
         properties: {
-          server: { type: "string" },
-          uriTemplate: { type: "string", description: "RFC 6570 URI template" },
-          name: { type: "string" },
-          title: optionalString,
           description: optionalString,
           mimeType: optionalString,
+          name: { type: "string" },
+          server: { type: "string" },
+          title: optionalString,
+          uriTemplate: { description: "RFC 6570 URI template", type: "string" },
         },
         required: ["server", "uriTemplate", "name"],
+        type: "object",
       },
+      type: "array",
     },
-    nextCursor: optionalString,
-    errors: LISTING_ERRORS,
+    server: optionalString,
   },
   required: ["resourceTemplates"],
+  type: "object",
 };
 const READ_OUTPUT_SCHEMA = {
-  type: "object",
   properties: {
-    server: { type: "string" },
-    uri: { type: "string" },
     contents: {
-      type: "array",
       items: {
         anyOf: [
           {
@@ -166,9 +157,13 @@ const READ_OUTPUT_SCHEMA = {
           },
         ],
       },
+      type: "array",
     },
+    server: { type: "string" },
+    uri: { type: "string" },
   },
   required: ["server", "uri", "contents"],
+  type: "object",
 };
 
 function stringArgument(params: unknown, key: string): string | undefined {
@@ -183,14 +178,14 @@ function jsonResult(
   server: string | undefined,
   payload: Record<string, unknown>,
 ): Promise<{
-  content: (TextContent | ImageContent)[];
+  content: (aiTypes.TextContent | aiTypes.ImageContent)[];
   details: McpToolDetails;
-  structuredContent: JsonValue;
+  structuredContent: aiTypes.JsonValue;
 }> {
   return Effect.runPromise(
     awaiting(function* () {
       const { content, fullOutputPath } = yield* awaited(
-        limitMcpContent([{ type: "text", text: JSON.stringify(payload) }]),
+        limitMcpContent([{ text: JSON.stringify(payload), type: "text" }]),
       );
       return {
         content,
@@ -199,7 +194,7 @@ function jsonResult(
           tool,
           ...(fullOutputPath !== undefined && fullOutputPath !== "" ? { fullOutputPath } : {}),
         },
-        structuredContent: payload as unknown as JsonValue,
+        structuredContent: payload as unknown as aiTypes.JsonValue,
       };
     }),
   );
@@ -228,12 +223,12 @@ export function createMcpResourceToolDefinitions(options: {
     page: (
       server: McpResourceServer,
       cursor: string | undefined,
-      options: McpRequestOptions,
+      options: mcpTypes.McpRequestOptions,
     ) => Promise<{
       items: T[];
       nextCursor?: string | undefined;
     }>,
-    all: (server: McpResourceServer, options: McpRequestOptions) => Promise<T[]>,
+    all: (server: McpResourceServer, options: mcpTypes.McpRequestOptions) => Promise<T[]>,
   ): Promise<Record<string, unknown>> =>
     Effect.runPromise(
       awaiting(function* () {
@@ -275,21 +270,16 @@ export function createMcpResourceToolDefinitions(options: {
           if (server === undefined) return;
           if (result.status === "fulfilled")
             items.push(...result.value.filter(visible).map((item) => listed(server, item)));
-          else errors.push({ server, error: toErrorMessage(result.reason) });
+          else errors.push({ error: toErrorMessage(result.reason), server });
         });
         return { [key]: items, ...(errors.length > 0 ? { errors } : {}) };
       }),
     );
 
   const listResources: ToolDefinition<TSchema, McpToolDetails> = {
-    name: LIST_MCP_RESOURCES_TOOL,
-    label: LIST_MCP_RESOURCES_TOOL,
+    annotations: readOnly,
     description:
       "Lists resources provided by MCP servers. Resources allow servers to share data that provides context to language models, such as files, database schemas, or application-specific information. Prefer resources over web search when possible.",
-    parameters: LIST_PARAMETERS as unknown as TSchema,
-    outputSchema: LIST_OUTPUT_SCHEMA as unknown as TSchema,
-    exposure: toToolExposure(options.exposure),
-    annotations: readOnly,
     execute(_toolCallId, params, signal) {
       return Effect.runPromise(
         awaiting(function* () {
@@ -314,17 +304,17 @@ export function createMcpResourceToolDefinitions(options: {
         }),
       );
     },
+    exposure: toToolExposure(options.exposure),
+    label: LIST_MCP_RESOURCES_TOOL,
+    name: LIST_MCP_RESOURCES_TOOL,
+    outputSchema: LIST_OUTPUT_SCHEMA as unknown as TSchema,
+    parameters: LIST_PARAMETERS as unknown as TSchema,
   };
 
   const listTemplates: ToolDefinition<TSchema, McpToolDetails> = {
-    name: LIST_MCP_RESOURCE_TEMPLATES_TOOL,
-    label: LIST_MCP_RESOURCE_TEMPLATES_TOOL,
+    annotations: readOnly,
     description:
       "Lists resource templates provided by MCP servers. Parameterized resource templates allow servers to share data that takes parameters and provides context to language models, such as files, database schemas, or application-specific information. Prefer resource templates over web search when possible.",
-    parameters: LIST_PARAMETERS as unknown as TSchema,
-    outputSchema: LIST_TEMPLATES_OUTPUT_SCHEMA as unknown as TSchema,
-    exposure: toToolExposure(options.exposure),
-    annotations: readOnly,
     execute(_toolCallId, params, signal) {
       return Effect.runPromise(
         awaiting(function* () {
@@ -351,17 +341,17 @@ export function createMcpResourceToolDefinitions(options: {
         }),
       );
     },
+    exposure: toToolExposure(options.exposure),
+    label: LIST_MCP_RESOURCE_TEMPLATES_TOOL,
+    name: LIST_MCP_RESOURCE_TEMPLATES_TOOL,
+    outputSchema: LIST_TEMPLATES_OUTPUT_SCHEMA as unknown as TSchema,
+    parameters: LIST_PARAMETERS as unknown as TSchema,
   };
 
   const readResource: ToolDefinition<TSchema, McpToolDetails> = {
-    name: READ_MCP_RESOURCE_TOOL,
-    label: READ_MCP_RESOURCE_TOOL,
+    annotations: readOnly,
     description:
       "Read a specific resource from an MCP server given the server name and resource URI.",
-    parameters: READ_PARAMETERS as unknown as TSchema,
-    outputSchema: READ_OUTPUT_SCHEMA as unknown as TSchema,
-    exposure: toToolExposure(options.exposure),
-    annotations: readOnly,
     execute(_toolCallId, params, signal) {
       return Effect.runPromise(
         awaiting(function* () {
@@ -378,7 +368,7 @@ export function createMcpResourceToolDefinitions(options: {
             }),
           );
 
-          const blocks: ContentBlock[] = result.contents.flatMap((contents) => [
+          const blocks: mcpTypes.ContentBlock[] = result.contents.flatMap((contents) => [
             ...(result.contents.length > 1
               ? [{ type: "text" as const, text: `${contents.uri}:` }]
               : []),
@@ -400,11 +390,20 @@ export function createMcpResourceToolDefinitions(options: {
               tool: READ_MCP_RESOURCE_TOOL,
               ...(fullOutputPath !== undefined && fullOutputPath !== "" ? { fullOutputPath } : {}),
             },
-            structuredContent: { server: server.name, uri, contents } as unknown as JsonValue,
+            structuredContent: {
+              server: server.name,
+              uri,
+              contents,
+            } as unknown as aiTypes.JsonValue,
           };
         }),
       );
     },
+    exposure: toToolExposure(options.exposure),
+    label: READ_MCP_RESOURCE_TOOL,
+    name: READ_MCP_RESOURCE_TOOL,
+    outputSchema: READ_OUTPUT_SCHEMA as unknown as TSchema,
+    parameters: READ_PARAMETERS as unknown as TSchema,
   };
 
   return [listResources, listTemplates, readResource];

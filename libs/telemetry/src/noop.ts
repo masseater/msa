@@ -1,8 +1,8 @@
-import type { SpanOptions, TelemetryContext, TelemetrySpan } from "./context.ts";
+import type contextTypes from "./context.ts";
 
 function startNoopSpan<T>(
-  _options: SpanOptions,
-  callback: (span: TelemetrySpan) => T | Promise<T>,
+  _options: contextTypes.SpanOptions,
+  callback: (span: contextTypes.TelemetrySpan) => T | Promise<T>,
 ): Promise<T> {
   try {
     return Promise.resolve(callback(noopTelemetrySpan));
@@ -11,14 +11,20 @@ function startNoopSpan<T>(
   }
 }
 
-const noopTelemetrySpan: TelemetrySpan = {
-  startSpan: startNoopSpan,
+const noopTelemetrySpan: contextTypes.TelemetrySpan = {
   addEvent: () => {},
-  setAttributes: () => {},
-  setStatus: () => {},
   log: () => {},
   recordMetric: () => {},
+  setAttributes: () => {},
+  setStatus: () => {},
+  startSpan: startNoopSpan,
 };
 Object.freeze(noopTelemetrySpan);
 
-export const NOOP_TELEMETRY_CONTEXT: TelemetryContext = noopTelemetrySpan;
+const NOOP_TELEMETRY_CONTEXT: contextTypes.TelemetryContext = noopTelemetrySpan;
+
+const noop = {
+  NOOP_TELEMETRY_CONTEXT,
+};
+
+export default noop;

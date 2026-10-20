@@ -1,9 +1,12 @@
 import { DateTime, Effect } from "effect";
 import { describe, expect, it, vi } from "vite-plus/test";
 
-import { stream as streamOpenAICodexResponses } from "../src/api/openai-codex-responses.ts";
-import { currentTimeMillis } from "../src/utils/clock.ts";
+import openaiCodexResponses from "../src/api/openai-codex-responses.ts";
+import clock from "../src/utils/clock.ts";
 import openaiCodexStreamSupport from "./openai-codex-stream-support.ts";
+
+const { stream: streamOpenAICodexResponses } = openaiCodexResponses;
+const { currentTimeMillis } = clock;
 
 const {
   codexModel,

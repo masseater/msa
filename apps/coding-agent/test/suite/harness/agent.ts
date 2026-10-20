@@ -1,10 +1,14 @@
-import type { AgentMessage } from "@msa/agent-core";
-import { Agent } from "@msa/agent-core";
-import type { FauxProviderRegistration, Model } from "@msa/ai/compat";
-import { streamSimple } from "@msa/ai/compat";
+import agentModule from "@msa/agent-core";
+import type agentTypes from "@msa/agent-core/index.types";
+import compat from "@msa/ai/compat";
+import type compatTypes from "@msa/ai/compat.types";
 
 import type { ExtensionRunner } from "../../../src/core/extensions/index.ts";
 import { convertToLlm } from "../../../src/core/messages.ts";
+
+const { streamSimple } = compat;
+
+const { Agent } = agentModule;
 
 type RunnerRef = { current?: ExtensionRunner };
 
@@ -24,18 +28,18 @@ const extensionHooks = (extensionRunnerRef: RunnerRef) => ({
       type: "after_provider_response",
     });
   },
-  transformContext: (messages: AgentMessage[]) => {
+  transformContext: (messages: agentTypes.AgentMessage[]) => {
     const runner = extensionRunnerRef.current;
     return runner === undefined ? Promise.resolve(messages) : runner.emitContext(messages);
   },
 });
 
 function createFauxAgent(entry: {
-  model: Model<string>;
-  fauxProvider: FauxProviderRegistration;
+  model: compatTypes.Model<string>;
+  fauxProvider: compatTypes.FauxProviderRegistration;
   withConfiguredAuth: boolean;
   extensionRunnerRef: RunnerRef;
-}): Agent {
+}): agentTypes.Agent {
   const { model, withConfiguredAuth, extensionRunnerRef } = entry;
   return new Agent({
     convertToLlm,

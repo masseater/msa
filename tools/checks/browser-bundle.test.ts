@@ -66,7 +66,7 @@ const catalogDataPlugin = (
     esbuild.onResolve({ filter: new EsbuildFilter(/^\.\/data\/[^/]+\.json$/u) }, (args) => {
       const resolved = path.resolve(path.dirname(args.importer), args.path);
       if (path.dirname(resolved) !== dataDir || existing.has(resolved)) return undefined;
-      return { path: resolved, namespace: "empty-generated-model-catalog" };
+      return { namespace: "empty-generated-model-catalog", path: resolved };
     });
     esbuild.onLoad(
       { filter: new EsbuildFilter(/.*/u), namespace: "empty-generated-model-catalog" },
@@ -77,6 +77,7 @@ const catalogDataPlugin = (
 
 const runBuild = (options: BuildOptions) =>
   Effect.tryPromise({
+    catch: (cause) => new BundleError({ message: `esbuild build failed: ${String(cause)}` }),
     try: () =>
       build({
         ...options,
@@ -86,7 +87,6 @@ const runBuild = (options: BuildOptions) =>
         platform: "browser",
         write: false,
       }),
-    catch: (cause) => new BundleError({ message: `esbuild build failed: ${String(cause)}` }),
   });
 
 const metafileOf = (options: BuildOptions) =>

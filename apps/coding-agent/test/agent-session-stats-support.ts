@@ -1,5 +1,6 @@
-import { Agent } from "@msa/agent-core";
-import { type AssistantMessage, type Usage, getModel, streamSimple } from "@msa/ai/compat";
+import agentModule from "@msa/agent-core";
+import compat from "@msa/ai/compat";
+import type compatTypes from "@msa/ai/compat.types";
 import testing from "@msa/testing";
 import { Effect } from "effect";
 
@@ -10,6 +11,10 @@ import { SettingsManager } from "../src/core/settings-manager.ts";
 import modelRuntimeTestUtils from "./model-runtime-test-utils.ts";
 import utilities from "./utilities.ts";
 
+const { getModel, streamSimple } = compat;
+
+const { Agent } = agentModule;
+
 const { createInMemoryModelRegistry, getModelRuntime } = modelRuntimeTestUtils;
 
 const { createTestResourceLoader } = utilities;
@@ -18,7 +23,7 @@ const { awaited, runTest } = testing;
 
 const model = getModel("anthropic-api", "claude-sonnet-4-5")!;
 
-function createUsage(totalTokens: number): Usage {
+function createUsage(totalTokens: number): compatTypes.Usage {
   return {
     cacheRead: 0,
     cacheWrite: 0,
@@ -39,7 +44,7 @@ function createAssistantMessage(
   text: string,
   totalTokens: number,
   timestamp: number,
-): AssistantMessage {
+): compatTypes.AssistantMessage {
   return {
     api: model.api,
     content: [{ text, type: "text" as const }],

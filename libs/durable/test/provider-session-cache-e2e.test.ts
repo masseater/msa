@@ -1,14 +1,20 @@
-import { type AssistantMessage, type Model, type Models, normalizeContext, uuidv7 } from "@msa/ai";
-import { builtinModels } from "@msa/ai/providers/all";
+import ai from "@msa/ai";
+import type aiTypes from "@msa/ai/index.types";
+import all from "@msa/ai/providers/all";
 import durable from "@msa/durable";
 import harnessModule from "@msa/durable/harness";
 import memory from "@msa/durable/storage/memory";
 import { Effect } from "effect";
 import { describe, expect, inject, it } from "vite-plus/test";
 
-import { streamSimple as streamSimpleOpenAICodexResponses } from "../../ai/src/api/openai-codex-responses.ts";
+import providerSessionCacheE2eKit from "./provider-session-cache-e2e-kit.ts";
 import type providerSessionCacheE2eTestTypes from "./provider-session-cache-e2e.test.types.ts";
-import support from "./support.ts";
+
+const { openaiCodexResponses, support } = providerSessionCacheE2eKit;
+
+const { normalizeContext, uuidv7 } = ai;
+const { builtinModels } = all;
+const { streamSimple: streamSimpleOpenAICodexResponses } = openaiCodexResponses;
 
 const { AssistantEntry, ProviderDoc } = durable;
 const { Harness, createRegistry } = harnessModule;
@@ -41,7 +47,7 @@ function assistant(
     .then((record) => {
       if (record?.conversationId !== conversationId)
         throw new Error("Answer belongs to another conversation");
-      return record.model?.[0] as AssistantMessage | undefined;
+      return record.model?.[0] as aiTypes.AssistantMessage | undefined;
     });
 }
 
@@ -49,7 +55,7 @@ const promptUntilCached = Effect.fn("promptUntilCached")(function* (
   harness: providerSessionCacheE2eTestTypes.Harness,
   root: providerSessionCacheE2eTestTypes.Conversation,
 ) {
-  const usages: AssistantMessage["usage"][] = [];
+  const usages: aiTypes.AssistantMessage["usage"][] = [];
   const hits: { firstHit?: number } = {};
   for (const turn of Array.from({ length: 8 }, (_, i) => i)) {
     const content =
@@ -70,7 +76,7 @@ const promptUntilCached = Effect.fn("promptUntilCached")(function* (
   return { firstHit: hits.firstHit, usages };
 });
 
-function cacheHitRate(usage: AssistantMessage["usage"]): number {
+function cacheHitRate(usage: aiTypes.AssistantMessage["usage"]): number {
   const promptTokens = usage.input + usage.cacheRead + usage.cacheWrite;
   return promptTokens === 0 ? 0 : usage.cacheRead / promptTokens;
 }
@@ -82,13 +88,13 @@ function forwardingCodexModels() {
     get(target, property) {
       if (property === "streamSimple") {
         return (
-          model: Parameters<Models["streamSimple"]>[0],
-          request: Parameters<Models["streamSimple"]>[1],
-          options?: Parameters<Models["streamSimple"]>[2],
+          model: Parameters<aiTypes.Models["streamSimple"]>[0],
+          request: Parameters<aiTypes.Models["streamSimple"]>[1],
+          options?: Parameters<aiTypes.Models["streamSimple"]>[2],
         ) => {
           forwarded.push(options?.sessionId ?? "");
           return streamSimpleOpenAICodexResponses(
-            model as Model<"openai-codex-responses">,
+            model as aiTypes.Model<"openai-codex-responses">,
             normalizeContext(request),
             {
               ...options,
@@ -101,7 +107,7 @@ function forwardingCodexModels() {
       const value = Reflect.get(target, property, target);
       return typeof value === "function" ? value.bind(target) : value;
     },
-  }) as Models;
+  }) as aiTypes.Models;
   return { forwarded, models };
 }
 

@@ -1,12 +1,23 @@
-import { registerBundledOAuthFlowLoaders } from "./auth/oauth/load.ts";
-import { openaiChatGPTOAuth } from "./auth/oauth/openai-chatgpt.ts";
-import { openaiCodexOAuth } from "./auth/oauth/openai-codex.ts";
-import { openRouterOAuth } from "./auth/oauth/openrouter.ts";
+import load from "./auth/oauth/load.ts";
+import openaiChatgpt from "./auth/oauth/openai-chatgpt.ts";
+import openaiCodexModule from "./auth/oauth/openai-codex.ts";
+import openrouterModule from "./auth/oauth/openrouter.ts";
 
-export function registerBunOAuthFlows(): void {
+const { registerBundledOAuthFlowLoaders } = load;
+const { openaiChatGPTOAuth } = openaiChatgpt;
+const { openaiCodexOAuth } = openaiCodexModule;
+const { openRouterOAuth } = openrouterModule;
+
+function registerBunOAuthFlows(): void {
   registerBundledOAuthFlowLoaders({
-    openaiCodex: () => openaiCodexOAuth,
     openaiChatGPT: () => openaiChatGPTOAuth,
+    openaiCodex: () => openaiCodexOAuth,
     openrouter: () => openRouterOAuth,
   });
 }
+
+const bunOauth = {
+  registerBunOAuthFlows,
+};
+
+export default bunOauth;

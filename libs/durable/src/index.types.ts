@@ -1,4 +1,4 @@
-import type { TSchema } from "@msa/ai";
+import type aiTypes from "@msa/ai/index.types";
 import type chordTypes from "@msa/chord/index.types";
 
 import type errorsTypes from "./errors/index.types.ts";
@@ -105,7 +105,7 @@ declare namespace durableTypes {
   type ToolHookCall = typesModule.ToolHookCall;
   type ToolHooks = typesModule.ToolHooks;
   type ToolRegistration<
-    TParameters extends TSchema = TSchema,
+    TParameters extends aiTypes.TSchema = aiTypes.TSchema,
     TDetails extends chordTypes.JsonValue = chordTypes.JsonValue,
   > = harnessApiTypes.ToolRegistration<TParameters, TDetails>;
   type UserInput = typesModule.UserInput;

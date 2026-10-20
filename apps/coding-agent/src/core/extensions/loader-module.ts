@@ -7,7 +7,7 @@ import type { createJiti } from "jiti";
 import { isBunBinary, isBundledNode } from "../../config.ts";
 import { fromPromise, pathOperations } from "../platform/index.ts";
 import { pathExists } from "../tools/path-utils.ts";
-import { extensionCache, type ExtensionCacheToken, isCurrentCacheToken } from "./loader-cache.ts";
+import { type ExtensionCacheToken, extensionCache, isCurrentCacheToken } from "./loader-cache.ts";
 import type { ExtensionFactory } from "./types.ts";
 
 const require = createRequire(import.meta.url);
@@ -62,26 +62,26 @@ const buildAliases = Effect.gen(function* () {
   const typeboxCompileEntry = require.resolve("typebox/compile");
   const typeboxValueEntry = require.resolve("typebox/value");
   return {
-    "@msa/coding-agent": msaCodingAgentEntry,
-    "@msa/agent-core": msaAgentCoreEntry,
-    "@msa/tui": msaTuiEntry,
-    "@msa/ai/providers/all": msaAiProvidersEntry,
-    "@msa/ai/compat": msaAiCompatEntry,
-    "@msa/ai/oauth": msaAiOauthEntry,
-    "@msa/ai": msaAiCompatEntry,
-    "@mariozechner/pi-coding-agent": msaCodingAgentEntry,
     "@mariozechner/pi-agent-core": msaAgentCoreEntry,
-    "@mariozechner/pi-tui": msaTuiEntry,
-    "@mariozechner/pi-ai/providers/all": msaAiProvidersEntry,
+    "@mariozechner/pi-ai": msaAiCompatEntry,
     "@mariozechner/pi-ai/compat": msaAiCompatEntry,
     "@mariozechner/pi-ai/oauth": msaAiOauthEntry,
-    "@mariozechner/pi-ai": msaAiCompatEntry,
-    typebox: typeboxEntry,
-    "typebox/compile": typeboxCompileEntry,
-    "typebox/value": typeboxValueEntry,
+    "@mariozechner/pi-ai/providers/all": msaAiProvidersEntry,
+    "@mariozechner/pi-coding-agent": msaCodingAgentEntry,
+    "@mariozechner/pi-tui": msaTuiEntry,
+    "@msa/agent-core": msaAgentCoreEntry,
+    "@msa/ai": msaAiCompatEntry,
+    "@msa/ai/compat": msaAiCompatEntry,
+    "@msa/ai/oauth": msaAiOauthEntry,
+    "@msa/ai/providers/all": msaAiProvidersEntry,
+    "@msa/coding-agent": msaCodingAgentEntry,
+    "@msa/tui": msaTuiEntry,
     "@sinclair/typebox": typeboxEntry,
     "@sinclair/typebox/compile": typeboxCompileEntry,
     "@sinclair/typebox/value": typeboxValueEntry,
+    typebox: typeboxEntry,
+    "typebox/compile": typeboxCompileEntry,
+    "typebox/value": typeboxValueEntry,
   };
 });
 
@@ -99,10 +99,10 @@ const aliases = Effect.suspend(() =>
 
 const resolutionOptions = Effect.gen(function* () {
   if (usesEmbeddedModules) {
-    return { virtualModules: yield* fromPromise(() => getVirtualModules()), tryNative: false };
+    return { tryNative: false, virtualModules: yield* fromPromise(() => getVirtualModules()) };
   }
   if (isTypeScriptSourceRuntime) {
-    return { virtualModules: yield* fromPromise(() => getVirtualModules()), tsconfigPaths: true };
+    return { tsconfigPaths: true, virtualModules: yield* fromPromise(() => getVirtualModules()) };
   }
   return { alias: yield* aliases };
 });

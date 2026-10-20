@@ -1,16 +1,14 @@
 import type { ExtensionAPI, ExtensionContext } from "@msa/coding-agent";
-import {
-  type AutocompleteItem,
-  type AutocompleteProvider,
-  type AutocompleteSuggestions,
-  fuzzyFilter,
-} from "@msa/tui";
+import tui from "@msa/tui";
+import type tuiTypes from "@msa/tui/index.types";
 import { Effect, Option, Schema } from "effect";
+
+const { fuzzyFilter } = tui;
 
 const GitHubIssueSchema = Schema.Struct({
   number: Schema.Finite,
-  title: Schema.String,
   state: Schema.String,
+  title: Schema.String,
 });
 
 type GitHubIssue = typeof GitHubIssueSchema.Type;
@@ -50,8 +48,8 @@ const resolveGitHubRepo = (msa: ExtensionAPI, cwd: string) =>
     );
     if (result.code !== 0) {
       return {
-        ok: false,
         error: "github-issue-autocomplete: cwd is not a git repository",
+        ok: false,
       } satisfies RepoResolution;
     }
 
@@ -65,18 +63,18 @@ const resolveGitHubRepo = (msa: ExtensionAPI, cwd: string) =>
     }
 
     return {
-      ok: false,
       error: "github-issue-autocomplete: cwd is not a GitHub repository",
+      ok: false,
     } satisfies RepoResolution;
   });
 
-const formatIssueItem = (issue: GitHubIssue): AutocompleteItem => ({
-  value: `#${issue.number}`,
-  label: `#${issue.number}`,
+const formatIssueItem = (issue: GitHubIssue): tuiTypes.AutocompleteItem => ({
   description: `[${issue.state.toLowerCase()}] ${issue.title}`,
+  label: `#${issue.number}`,
+  value: `#${issue.number}`,
 });
 
-const filterIssues = (issues: GitHubIssue[], query: string): AutocompleteItem[] => {
+const filterIssues = (issues: GitHubIssue[], query: string): tuiTypes.AutocompleteItem[] => {
   if (query.trim().length === 0) {
     return issues.slice(0, MAX_SUGGESTIONS).map(formatIssueItem);
   }
@@ -146,9 +144,12 @@ const makeIssueLoader = (msa: ExtensionAPI, ctx: ExtensionContext, repo: string)
 };
 
 const createIssueAutocompleteProvider = (
-  current: AutocompleteProvider,
+  current: tuiTypes.AutocompleteProvider,
   getIssues: () => Promise<GitHubIssue[] | undefined>,
-): AutocompleteProvider => ({
+): tuiTypes.AutocompleteProvider => ({
+  applyCompletion: (lines, cursorLine, cursorCol, item, prefix) =>
+    current.applyCompletion(lines, cursorLine, cursorCol, item, prefix),
+
   getSuggestions: (lines, cursorLine, cursorCol, options) =>
     Effect.runPromise(
       Effect.gen(function* () {
@@ -174,12 +175,12 @@ const createIssueAutocompleteProvider = (
           );
         }
 
-        return { items: suggestions, prefix: `#${token}` } satisfies AutocompleteSuggestions;
+        return {
+          items: suggestions,
+          prefix: `#${token}`,
+        } satisfies tuiTypes.AutocompleteSuggestions;
       }),
     ),
-
-  applyCompletion: (lines, cursorLine, cursorCol, item, prefix) =>
-    current.applyCompletion(lines, cursorLine, cursorCol, item, prefix),
 
   shouldTriggerFileCompletion: (lines, cursorLine, cursorCol) =>
     current.shouldTriggerFileCompletion?.(lines, cursorLine, cursorCol) ?? true,

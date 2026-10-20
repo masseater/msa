@@ -1,10 +1,10 @@
-import type { ThinkingLevel } from "@msa/agent-core";
+import type agentTypes from "@msa/agent-core/index.types";
 import chalk from "chalk";
 
 import { APP_NAME, CONFIG_DIR_NAME, ENV_AGENT_DIR, ENV_SESSION_DIR } from "../config.ts";
 import type { ExtensionFlag } from "../core/extensions/types.ts";
 import { writeLog } from "../core/platform.ts";
-import { getToolListError, type TuiMode } from "../core/settings-manager.ts";
+import { type TuiMode, getToolListError } from "../core/settings-manager.ts";
 
 export type Mode = "text" | "json" | "rpc";
 
@@ -14,7 +14,7 @@ export interface Args {
   apiKey?: string;
   systemPrompt?: string;
   appendSystemPrompt?: string[];
-  thinking?: ThinkingLevel;
+  thinking?: agentTypes.ThinkingLevel;
   continue?: boolean;
   resume?: boolean;
   help?: boolean;
@@ -58,8 +58,8 @@ export interface Args {
 
 const VALID_THINKING_LEVELS = ["off", "minimal", "low", "medium", "high", "xhigh", "max"] as const;
 
-export function isValidThinkingLevel(level: string): level is ThinkingLevel {
-  return VALID_THINKING_LEVELS.includes(level as ThinkingLevel);
+export function isValidThinkingLevel(level: string): level is agentTypes.ThinkingLevel {
+  return VALID_THINKING_LEVELS.includes(level as agentTypes.ThinkingLevel);
 }
 
 export function normalizeSessionName(value: string): string | undefined {
@@ -69,10 +69,10 @@ export function normalizeSessionName(value: string): string | undefined {
 
 export function parseArgs(args: string[]): Args {
   const result: Args = {
-    messages: [],
-    fileArgs: [],
-    unknownFlags: new Map(),
     diagnostics: [],
+    fileArgs: [],
+    messages: [],
+    unknownFlags: new Map(),
   };
 
   for (let i = 0; i < args.length; i++) {
@@ -96,14 +96,14 @@ export function parseArgs(args: string[]): Args {
     } else if (arg === "--mode") {
       const mode = nextArg;
       if (mode === undefined || mode.startsWith("-")) {
-        result.diagnostics.push({ type: "error", message: "--mode requires text, json, or rpc" });
+        result.diagnostics.push({ message: "--mode requires text, json, or rpc", type: "error" });
         continue;
       }
       i++;
       if (mode !== "text" && mode !== "json" && mode !== "rpc") {
         result.diagnostics.push({
-          type: "error",
           message: `Invalid mode "${mode}". Valid values: text, json, rpc`,
+          type: "error",
         });
         continue;
       }
@@ -130,7 +130,7 @@ export function parseArgs(args: string[]): Args {
       result.appendSystemPrompt.push(nextArg);
     } else if (arg === "--name" || arg === "-n") {
       if (nextArg === undefined) {
-        result.diagnostics.push({ type: "error", message: "--name requires a value" });
+        result.diagnostics.push({ message: "--name requires a value", type: "error" });
       } else {
         result.name = nextArg;
         i++;
@@ -161,9 +161,9 @@ export function parseArgs(args: string[]): Args {
       result.noBuiltinTools = true;
     } else if (arg === "--orchestrator") {
       result.diagnostics.push({
-        type: "error",
         message:
           "--orchestrator is the default: the orchestrator tools are always enabled. Remove the flag.",
+        type: "error",
       });
     } else if ((arg === "--tools" || arg === "-t") && nextArg !== undefined) {
       i++;
@@ -173,7 +173,7 @@ export function parseArgs(args: string[]): Args {
         .filter((name) => name.length > 0);
       const error = getToolListError(tools);
       if (error !== undefined && error !== "") {
-        result.diagnostics.push({ type: "error", message: `${arg}: ${error}` });
+        result.diagnostics.push({ message: `${arg}: ${error}`, type: "error" });
       } else {
         result.tools = tools;
       }
@@ -190,8 +190,8 @@ export function parseArgs(args: string[]): Args {
         result.thinking = level;
       } else {
         result.diagnostics.push({
-          type: "warning",
           message: `Invalid thinking level "${level}". Valid values: ${VALID_THINKING_LEVELS.join(", ")}`,
+          type: "warning",
         });
       }
     } else if (arg === "--print" || arg === "-p") {
@@ -231,7 +231,7 @@ export function parseArgs(args: string[]): Args {
     } else if (arg === "--use-theme") {
       const themeName = nextArg;
       if (themeName === undefined || themeName.startsWith("-")) {
-        result.diagnostics.push({ type: "error", message: "--use-theme requires a theme name" });
+        result.diagnostics.push({ message: "--use-theme requires a theme name", type: "error" });
       } else {
         result.useTheme = themeName;
         i++;
@@ -258,14 +258,14 @@ export function parseArgs(args: string[]): Args {
         i++;
       } else if (mode === undefined || mode.startsWith("-")) {
         result.diagnostics.push({
-          type: "error",
           message: "--tui-mode requires regular or fullscreen",
+          type: "error",
         });
       } else {
         i++;
         result.diagnostics.push({
-          type: "error",
           message: `Invalid TUI mode "${mode}". Valid values: regular, fullscreen`,
+          type: "error",
         });
       }
     } else if (arg === "--verbose") {
@@ -293,7 +293,7 @@ export function parseArgs(args: string[]): Args {
         result.unknownFlags.set(arg.slice(2, eqIndex), arg.slice(eqIndex + 1));
       }
     } else if (arg.startsWith("-") && !arg.startsWith("--")) {
-      result.diagnostics.push({ type: "error", message: `Unknown option: ${arg}` });
+      result.diagnostics.push({ message: `Unknown option: ${arg}`, type: "error" });
     } else if (!arg.startsWith("-")) {
       result.messages.push(arg);
     }

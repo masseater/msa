@@ -2,9 +2,11 @@ import { Effect } from "effect";
 import { Type } from "typebox";
 import { describe, expect, it } from "vite-plus/test";
 
-import type { Tool } from "../src/types.ts";
-import { normalizeContext } from "../src/utils/transcript.ts";
+import type typesModule from "../src/types.types.ts";
+import transcript from "../src/utils/transcript.ts";
 import openaiCodexStreamSupport from "./openai-codex-stream-support.ts";
+
+const { normalizeContext } = transcript;
 
 const { codexModel, mockToken, resetCodexStateAfterEach, runCodex, stubCodexFetch } =
   openaiCodexStreamSupport;
@@ -88,7 +90,7 @@ const callerHeadersWin = () =>
     }),
   );
 
-const toolContext = (tools: Tool[]) =>
+const toolContext = (tools: typesModule.Tool[]) =>
   normalizeContext({ messages: [{ content: "Use a tool", role: "user", timestamp: 1 }], tools });
 
 const forwardsRequiredToolChoice = () =>

@@ -7,8 +7,8 @@ import { awaited, awaiting } from "../core/awaiting.ts";
 import {
   IMAGE_RESIZE_WORKER_RESPONSE_TYPE,
   type ImageResizeOptions,
-  type ResizedImage,
   type ResizeImageWorkerResponse,
+  type ResizedImage,
   resizeImageInProcess,
 } from "./image-resize-core.ts";
 import { callbackPromise } from "./interop.ts";

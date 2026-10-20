@@ -1,9 +1,9 @@
-import type { OpenAICompletionsCompat } from "../../src/types.ts";
+import type typesModule from "../../src/types.types.ts";
 
 declare namespace openaiCompletionsCompatTypes {
   type OpenAICompletionsResolvedCompat = Required<
     Omit<
-      OpenAICompletionsCompat,
+      typesModule.OpenAICompletionsCompat,
       | "cacheControlFormat"
       | "sessionAffinityFormat"
       | "supportsThinkingTokenBudget"
@@ -11,7 +11,7 @@ declare namespace openaiCompletionsCompatTypes {
       | "vllmPriority"
     >
   > & {
-    cacheControlFormat?: OpenAICompletionsCompat["cacheControlFormat"];
+    cacheControlFormat?: typesModule.OpenAICompletionsCompat["cacheControlFormat"];
   };
 }
 

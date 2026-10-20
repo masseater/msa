@@ -1,9 +1,12 @@
-import { type Component, Loader, type TUI, truncateToWidth } from "@msa/tui";
+import tui from "@msa/tui";
+import type tuiTypes from "@msa/tui/index.types";
 
 import type { WorkingIndicatorOptions } from "../../../core/extensions/index.ts";
 import { theme } from "../theme/theme.ts";
 import { CountdownTimer } from "./countdown-timer.ts";
 import { keyText } from "./keybinding-hints.ts";
+
+const { Loader, truncateToWidth } = tui;
 
 export type StatusIndicatorKind = "working" | "retry" | "compaction" | "branchSummary";
 
@@ -12,7 +15,7 @@ export class StatusIndicator extends Loader {
 
   constructor(
     kind: StatusIndicatorKind,
-    ui: TUI,
+    ui: tuiTypes.TUI,
     spinnerColorFn: (str: string) => string,
     messageColorFn: (str: string) => string,
     message: string,
@@ -42,7 +45,7 @@ export class StatusIndicator extends Loader {
 
 export class WorkingStatusIndicator extends StatusIndicator {
   constructor(
-    ui: TUI,
+    ui: tuiTypes.TUI,
     message: string,
     indicator?: WorkingIndicatorOptions,
     colorFn?: (text: string) => string,
@@ -61,7 +64,7 @@ export class WorkingStatusIndicator extends StatusIndicator {
 export class RetryStatusIndicator extends StatusIndicator {
   private countdown: CountdownTimer | undefined;
 
-  constructor(ui: TUI, attempt: number, maxAttempts: number, delayMs: number) {
+  constructor(ui: tuiTypes.TUI, attempt: number, maxAttempts: number, delayMs: number) {
     const retryMessage = (seconds: number) =>
       `Retrying (${attempt}/${maxAttempts}) in ${seconds}s... (${keyText("app.interrupt")} to cancel)`;
     super(
@@ -93,7 +96,11 @@ export class RetryStatusIndicator extends StatusIndicator {
 export type CompactionStatusReason = "manual" | "threshold" | "overflow";
 
 export class CompactionStatusIndicator extends StatusIndicator {
-  constructor(ui: TUI, reason: CompactionStatusReason, colorFn?: (text: string) => string) {
+  constructor(
+    ui: tuiTypes.TUI,
+    reason: CompactionStatusReason,
+    colorFn?: (text: string) => string,
+  ) {
     const cancelHint = `(${keyText("app.interrupt")} to cancel)`;
     const label =
       reason === "manual"
@@ -110,7 +117,7 @@ export class CompactionStatusIndicator extends StatusIndicator {
 }
 
 export class BranchSummaryStatusIndicator extends StatusIndicator {
-  constructor(ui: TUI) {
+  constructor(ui: tuiTypes.TUI) {
     super(
       "branchSummary",
       ui,
@@ -121,7 +128,7 @@ export class BranchSummaryStatusIndicator extends StatusIndicator {
   }
 }
 
-export class IdleStatus implements Component {
+export class IdleStatus implements tuiTypes.Component {
   invalidate(): void {}
 
   render(width: number): string[] {

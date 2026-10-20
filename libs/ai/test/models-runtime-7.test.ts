@@ -1,9 +1,12 @@
 import { Effect } from "effect";
 import { describe, expect, it } from "vite-plus/test";
 
-import { InMemoryModelsStore } from "../src/models-store.ts";
-import { createModels } from "../src/models.ts";
+import InMemoryModelsStore from "../src/models-store.ts";
+import type modelsStoreTypes from "../src/models-store.types.ts";
+import modelsModule from "../src/models.ts";
 import modelsRuntimeSupport from "./models-runtime-support.ts";
+
+const { createModels } = modelsModule;
 
 const { testModel, testProvider } = modelsRuntimeSupport;
 const stopsWaitingOnAbortWhenA = () => {
@@ -48,7 +51,7 @@ const stopsWaitingOnAbortWhenA = () => {
   );
 };
 
-const generationalProvider = (store: InMemoryModelsStore) => {
+const generationalProvider = (store: modelsStoreTypes.InMemoryModelsStore) => {
   const state = { value: "initial" };
   const calls = { value: 0 };
   const firstStarted = Promise.withResolvers<void>();

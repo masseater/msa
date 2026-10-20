@@ -1,4 +1,4 @@
-import type { Message, SimpleStreamOptions } from "@msa/ai";
+import type aiTypes from "@msa/ai/index.types";
 import type chordTypes from "@msa/chord/index.types";
 import { Effect, Function } from "effect";
 
@@ -19,7 +19,7 @@ const summaryMessages = (
   cut: number,
   instructions: string | undefined,
   now: number,
-): Message[] => [
+): aiTypes.Message[] => [
   { content: SUMMARIZATION_SYSTEM_PROMPT, role: "system", timestamp: now },
   {
     content: [
@@ -46,7 +46,7 @@ const summaryOptions = Effect.fnUntraced(function* (
   context: chordTypes.Context,
 ) {
   const { thinkingLevel, streamOptions, maxTokens } = request;
-  const options: SimpleStreamOptions = {
+  const options: aiTypes.SimpleStreamOptions = {
     ...withoutDeferred(streamOptions),
     cacheRetention: "none",
     maxTokens,

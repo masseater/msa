@@ -127,9 +127,9 @@ export class AgentSessionRuntime {
 
       const result = yield* awaited(
         runner.emit({
-          type: "session_before_switch",
           reason,
           targetSessionFile,
+          type: "session_before_switch",
         }),
       );
       return { cancelled: result?.cancel === true };
@@ -148,8 +148,8 @@ export class AgentSessionRuntime {
 
       const result = yield* awaited(
         runner.emit({
-          type: "session_before_fork",
           entryId,
+          type: "session_before_fork",
           ...options,
         }),
       );
@@ -165,9 +165,9 @@ export class AgentSessionRuntime {
       yield* awaited(this.session.abort());
       yield* awaited(
         emitSessionShutdownEvent(this.session.extensionRunner, {
-          type: "session_shutdown",
           reason,
           targetSessionFile,
+          type: "session_shutdown",
         }),
       );
       this.beforeSessionInvalidate?.();
@@ -217,11 +217,11 @@ export class AgentSessionRuntime {
         this.apply(
           yield* awaited(
             this.createRuntime({
-              cwd: sessionManager.getCwd(),
               agentDir: this.services.agentDir,
-              sessionManager,
-              sessionStartEvent: { type: "session_start", reason: "resume", previousSessionFile },
+              cwd: sessionManager.getCwd(),
               projectTrustContext: options?.projectTrustContextFactory?.(sessionManager.getCwd()),
+              sessionManager,
+              sessionStartEvent: { previousSessionFile, reason: "resume", type: "session_start" },
             }),
           ),
         );
@@ -256,10 +256,10 @@ export class AgentSessionRuntime {
         this.apply(
           yield* awaited(
             this.createRuntime({
-              cwd: this.cwd,
               agentDir: this.services.agentDir,
+              cwd: this.cwd,
               sessionManager,
-              sessionStartEvent: { type: "session_start", reason: "new", previousSessionFile },
+              sessionStartEvent: { previousSessionFile, reason: "new", type: "session_start" },
             }),
           ),
         );
@@ -319,10 +319,10 @@ export class AgentSessionRuntime {
             this.apply(
               yield* awaited(
                 this.createRuntime({
-                  cwd: this.cwd,
                   agentDir: this.services.agentDir,
+                  cwd: this.cwd,
                   sessionManager,
-                  sessionStartEvent: { type: "session_start", reason: "fork", previousSessionFile },
+                  sessionStartEvent: { previousSessionFile, reason: "fork", type: "session_start" },
                 }),
               ),
             );
@@ -344,10 +344,10 @@ export class AgentSessionRuntime {
           this.apply(
             yield* awaited(
               this.createRuntime({
-                cwd: sessionManager.getCwd(),
                 agentDir: this.services.agentDir,
+                cwd: sessionManager.getCwd(),
                 sessionManager,
-                sessionStartEvent: { type: "session_start", reason: "fork", previousSessionFile },
+                sessionStartEvent: { previousSessionFile, reason: "fork", type: "session_start" },
               }),
             ),
           );
@@ -365,10 +365,10 @@ export class AgentSessionRuntime {
         this.apply(
           yield* awaited(
             this.createRuntime({
-              cwd: this.cwd,
               agentDir: this.services.agentDir,
+              cwd: this.cwd,
               sessionManager,
-              sessionStartEvent: { type: "session_start", reason: "fork", previousSessionFile },
+              sessionStartEvent: { previousSessionFile, reason: "fork", type: "session_start" },
             }),
           ),
         );
@@ -416,10 +416,10 @@ export class AgentSessionRuntime {
         this.apply(
           yield* awaited(
             this.createRuntime({
-              cwd: sessionManager.getCwd(),
               agentDir: this.services.agentDir,
+              cwd: sessionManager.getCwd(),
               sessionManager,
-              sessionStartEvent: { type: "session_start", reason: "resume", previousSessionFile },
+              sessionStartEvent: { previousSessionFile, reason: "resume", type: "session_start" },
             }),
           ),
         );
@@ -434,8 +434,8 @@ export class AgentSessionRuntime {
       awaitingWith(function* () {
         yield* awaited(
           emitSessionShutdownEvent(this.session.extensionRunner, {
-            type: "session_shutdown",
             reason: "quit",
+            type: "session_shutdown",
           }),
         );
         this.beforeSessionInvalidate?.();

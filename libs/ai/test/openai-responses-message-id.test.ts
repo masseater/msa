@@ -1,15 +1,19 @@
 import type { ResponseOutputMessage } from "openai/resources/responses/responses.js";
 import { describe, expect, it } from "vite-plus/test";
 
-import { convertResponsesMessages } from "../src/api/openai-responses-messages.ts";
-import { normalizeContext } from "../src/compat.ts";
-import type { AssistantMessage, Usage } from "../src/types.ts";
-import { currentTimeMillis } from "../src/utils/clock.ts";
+import openaiResponsesMessages from "../src/api/openai-responses-messages.ts";
+import compat from "../src/compat.ts";
+import type typesModule from "../src/types.types.ts";
+import clock from "../src/utils/clock.ts";
 import modelChoice from "./model-choice.ts";
+
+const { currentTimeMillis } = clock;
+const { normalizeContext } = compat;
+const { convertResponsesMessages } = openaiResponsesMessages;
 
 const { chooseModel } = modelChoice;
 
-const usage: Usage = {
+const usage: typesModule.Usage = {
   cacheRead: 0,
   cacheWrite: 0,
   cost: { cacheRead: 0, cacheWrite: 0, input: 0, output: 0, total: 0 },
@@ -21,7 +25,7 @@ const usage: Usage = {
 describe("OpenAI Responses message ID conversion", () => {
   it("generates unique fallback message IDs for multiple text blocks in one assistant turn", () => {
     const model = chooseModel("openai-codex", "Codex");
-    const assistant: AssistantMessage = {
+    const assistant: typesModule.AssistantMessage = {
       api: "anthropic-messages",
       content: [
         { thinking: "private reasoning", type: "thinking" },

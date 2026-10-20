@@ -1,25 +1,29 @@
-import type { Component, Container, TUI } from "@msa/tui";
+import type tuiTypes from "@msa/tui/index.types";
 
 export type SelectorFactory = (done: () => void) => {
-  component: Component;
-  focus: Component;
+  component: tuiTypes.Component;
+  focus: tuiTypes.Component;
   dispose?: () => void;
 };
 
 export class EditorSlot {
-  private readonly container: Container;
-  private readonly ui: TUI;
-  private readonly getEditor: () => Component;
+  private readonly container: tuiTypes.Container;
+  private readonly ui: tuiTypes.TUI;
+  private readonly getEditor: () => tuiTypes.Component;
   private activeSelectorToken: object | undefined;
   private activeSelectorDispose: (() => void) | undefined;
 
-  constructor(container: Container, ui: TUI, getEditor: () => Component) {
+  constructor(
+    container: tuiTypes.Container,
+    ui: tuiTypes.TUI,
+    getEditor: () => tuiTypes.Component,
+  ) {
     this.container = container;
     this.ui = ui;
     this.getEditor = getEditor;
   }
 
-  show(component: Component, focus: Component = component): void {
+  show(component: tuiTypes.Component, focus: tuiTypes.Component = component): void {
     this.container.clear();
     this.container.addChild(component);
     this.ui.setFocus(focus);

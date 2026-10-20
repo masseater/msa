@@ -1,5 +1,5 @@
 import testing from "@msa/testing";
-import type * as Tui from "@msa/tui";
+import type tui from "@msa/tui";
 import { Effect } from "effect";
 import { afterEach, expect, test, vi } from "vite-plus/test";
 
@@ -12,17 +12,21 @@ vi.mock("@msa/tui", (importOriginal) =>
   testing.runTest(
     Effect.gen(function* () {
       const effectRunPromise = Effect.runPromiseWith(yield* Effect.context<never>());
+      const actual = yield* testing.awaited(importOriginal<{ default: typeof tui }>());
       return {
-        ...(yield* testing.awaited(importOriginal<typeof Tui>())),
-        getNativeClipboard: () => ({
-          getImage() {
-            return effectRunPromise(
-              Effect.sync(() => {
-                throw new Error("Native clipboard operation failed");
-              }),
-            );
-          },
-        }),
+        ...actual,
+        default: {
+          ...actual.default,
+          getNativeClipboard: () => ({
+            getImage() {
+              return effectRunPromise(
+                Effect.sync(() => {
+                  throw new Error("Native clipboard operation failed");
+                }),
+              );
+            },
+          }),
+        },
       };
     }),
   ),

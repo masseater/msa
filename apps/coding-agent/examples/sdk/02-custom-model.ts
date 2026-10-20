@@ -1,4 +1,4 @@
-import { createAgentSession, ModelRuntime } from "@msa/coding-agent";
+import { ModelRuntime, createAgentSession } from "@msa/coding-agent";
 import { Console, Effect } from "effect";
 
 const modelRuntime = await ModelRuntime.create();
@@ -24,8 +24,8 @@ Effect.runSync(
 if (available.length > 0) {
   const { session } = await createAgentSession({
     model: available[0],
-    thinkingLevel: "medium",
     modelRuntime,
+    thinkingLevel: "medium",
   });
 
   try {

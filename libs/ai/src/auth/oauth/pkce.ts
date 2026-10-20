@@ -8,7 +8,7 @@ const base64urlEncode = (bytes: Uint8Array): string => {
   return btoa(binary).replaceAll("+", "-").replaceAll("/", "_").replaceAll("=", "");
 };
 
-export const generatePKCE = (): Promise<{ verifier: string; challenge: string }> =>
+const generatePKCE = (): Promise<{ verifier: string; challenge: string }> =>
   Effect.runPromise(
     Effect.gen(function* () {
       const verifierBytes = new Uint8Array(32);
@@ -20,6 +20,12 @@ export const generatePKCE = (): Promise<{ verifier: string; challenge: string }>
       const hashBuffer = yield* Effect.promise(() => crypto.subtle.digest("SHA-256", data));
       const challenge = base64urlEncode(new Uint8Array(hashBuffer));
 
-      return { verifier, challenge };
+      return { challenge, verifier };
     }),
   );
+
+const pkce = {
+  generatePKCE,
+};
+
+export default pkce;

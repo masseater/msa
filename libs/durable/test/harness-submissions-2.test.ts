@@ -1,4 +1,4 @@
-import { fauxAssistantMessage } from "@msa/ai";
+import ai from "@msa/ai";
 import harnessModule from "@msa/durable/harness";
 import { Effect } from "effect";
 import { afterEach, describe, expect, it } from "vite-plus/test";
@@ -6,6 +6,8 @@ import { afterEach, describe, expect, it } from "vite-plus/test";
 import node from "../src/storage/sqlite/node.ts";
 import directories from "./harness-submissions-support.ts";
 import support from "./support.ts";
+
+const { fauxAssistantMessage } = ai;
 
 const { openNodeSqliteStorage } = node;
 const { GenerationTask } = harnessModule;

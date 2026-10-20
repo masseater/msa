@@ -1,11 +1,11 @@
-import { existsSync, readdirSync, readFileSync, statSync } from "fs";
+import { existsSync, readFileSync, readdirSync, statSync } from "fs";
 
 import { CONFIG_DIR_NAME } from "../config.ts";
 import { parseFrontmatter } from "../utils/frontmatter.ts";
 import { resolvePath } from "../utils/paths.ts";
 import type { ResourceDiagnostic } from "./diagnostics.ts";
 import { basename, dirname, join, resolve, sep } from "./platform-node.ts";
-import { createSyntheticSourceInfo, type SourceInfo } from "./source-info.ts";
+import { type SourceInfo, createSyntheticSourceInfo } from "./source-info.ts";
 
 export interface PromptTemplate {
   name: string;
@@ -96,8 +96,8 @@ function loadTemplateFromFile(
     rawContent = readFileSync(filePath, "utf-8");
   } catch (error) {
     const message = error instanceof Error ? error.message : "failed to read prompt template file";
-    diagnostics.push({ type: "warning", message, path: filePath });
-    return { template: null, diagnostics };
+    diagnostics.push({ message, path: filePath, type: "warning" });
+    return { diagnostics, template: null };
   }
 
   let frontmatter: Record<string, unknown>;
@@ -106,8 +106,8 @@ function loadTemplateFromFile(
     ({ frontmatter, body } = parseFrontmatter(rawContent));
   } catch (error) {
     const message = error instanceof Error ? error.message : "failed to parse prompt template file";
-    diagnostics.push({ type: "warning", message, path: filePath });
-    return { template: null, diagnostics };
+    diagnostics.push({ message, path: filePath, type: "warning" });
+    return { diagnostics, template: null };
   }
 
   const name = basename(filePath).replace(/\.md$/u, "");
@@ -125,6 +125,7 @@ function loadTemplateFromFile(
   const argumentHint =
     typeof frontmatter["argument-hint"] === "string" ? frontmatter["argument-hint"] : undefined;
   return {
+    diagnostics,
     template: {
       name,
       description,
@@ -133,7 +134,6 @@ function loadTemplateFromFile(
       sourceInfo,
       filePath,
     },
-    diagnostics,
   };
 }
 
@@ -145,7 +145,7 @@ function loadTemplatesFromDir(
   const diagnostics: ResourceDiagnostic[] = [];
 
   if (!existsSync(dir)) {
-    return { templates, diagnostics };
+    return { diagnostics, templates };
   }
 
   try {
@@ -173,10 +173,10 @@ function loadTemplatesFromDir(
       }
     }
   } catch {
-    return { templates, diagnostics };
+    return { diagnostics, templates };
   }
 
-  return { templates, diagnostics };
+  return { diagnostics, templates };
 }
 
 export interface LoadPromptTemplatesOptions {
@@ -221,21 +221,21 @@ export function loadPromptTemplates(
   const getSourceInfo = (resolvedPath: string): SourceInfo => {
     if (isUnderPath(resolvedPath, globalPromptsDir)) {
       return createSyntheticSourceInfo(resolvedPath, {
-        source: "local",
-        scope: "user",
         baseDir: globalPromptsDir,
+        scope: "user",
+        source: "local",
       });
     }
     if (isUnderPath(resolvedPath, projectPromptsDir)) {
       return createSyntheticSourceInfo(resolvedPath, {
-        source: "local",
-        scope: "project",
         baseDir: projectPromptsDir,
+        scope: "project",
+        source: "local",
       });
     }
     return createSyntheticSourceInfo(resolvedPath, {
-      source: "local",
       baseDir: statSync(resolvedPath).isDirectory() ? resolvedPath : dirname(resolvedPath),
+      source: "local",
     });
   };
 
@@ -264,11 +264,11 @@ export function loadPromptTemplates(
     } catch (error) {
       const message =
         error instanceof Error ? error.message : "failed to read prompt template path";
-      diagnostics.push({ type: "warning", message, path: resolvedPath });
+      diagnostics.push({ message, path: resolvedPath, type: "warning" });
     }
   }
 
-  return { templates, diagnostics };
+  return { diagnostics, templates };
 }
 
 export function expandPromptTemplate(text: string, templates: PromptTemplate[]): string {

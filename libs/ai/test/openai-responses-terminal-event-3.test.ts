@@ -2,10 +2,13 @@ import { Effect, Stream } from "effect";
 import type { ResponseStreamEvent } from "openai/resources/responses/responses.js";
 import { describe, expect, it, vi } from "vite-plus/test";
 
-import { processResponsesStream } from "../src/api/openai-responses-stream.ts";
-import type { AssistantMessage } from "../src/types.ts";
-import { AssistantMessageEventStream } from "../src/utils/event-stream.ts";
+import openaiResponsesStream from "../src/api/openai-responses-stream.ts";
+import type typesModule from "../src/types.types.ts";
+import eventStream from "../src/utils/event-stream.ts";
 import openaiResponsesTerminalEventSupport from "./openai-responses-terminal-event-support.ts";
+
+const { AssistantMessageEventStream } = eventStream;
+const { processResponsesStream } = openaiResponsesStream;
 
 const { createModel, createOutput } = openaiResponsesTerminalEventSupport;
 
@@ -74,7 +77,7 @@ describe("OpenAI Responses terminal event handling", () => {
         const model = createModel();
         const output = createOutput(model);
         const stream = new AssistantMessageEventStream();
-        const observedStopReasons: AssistantMessage["stopReason"][] = [];
+        const observedStopReasons: typesModule.AssistantMessage["stopReason"][] = [];
         const push = stream.push.bind(stream);
         stream.push = (event) => {
           if ("partial" in event) observedStopReasons.push(event.partial.stopReason);
@@ -96,7 +99,7 @@ const replacesAProvisionalFinalAnswerStop = () =>
       const model = createModel();
       const output = createOutput(model);
       const stream = new AssistantMessageEventStream();
-      const observedStopReasons: AssistantMessage["stopReason"][] = [];
+      const observedStopReasons: typesModule.AssistantMessage["stopReason"][] = [];
       const push = stream.push.bind(stream);
       stream.push = (event) => {
         if ("partial" in event) observedStopReasons.push(event.partial.stopReason);

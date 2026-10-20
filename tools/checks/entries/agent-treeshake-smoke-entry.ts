@@ -1,6 +1,11 @@
-import { Agent } from "@msa/agent-core";
-import { createModels } from "@msa/ai";
-import { anthropicProvider } from "@msa/ai/providers/anthropic";
+import agentModule from "@msa/agent-core";
+import ai from "@msa/ai";
+import anthropic from "@msa/ai/providers/anthropic";
+
+const { createModels } = ai;
+const { anthropicProvider } = anthropic;
+
+const { Agent } = agentModule;
 
 const models = createModels();
 models.setProvider(anthropicProvider());

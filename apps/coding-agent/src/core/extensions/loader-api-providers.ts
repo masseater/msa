@@ -1,4 +1,4 @@
-import type { Provider } from "@msa/ai";
+import type aiTypes from "@msa/ai/index.types";
 
 import { type McpServerConfig, mcpNamespace, validateMcpServerConfig } from "../mcp-servers.ts";
 import type { ModelRouteRequest, VirtualModelDefinition } from "../virtual-models.ts";
@@ -11,7 +11,7 @@ export const providerMembers = ({
   assertActive,
   applyRuntimeChange,
 }: ApiScope) => ({
-  registerProvider(providerOrName: Provider | string, config?: ProviderConfig) {
+  registerProvider(providerOrName: aiTypes.Provider | string, config?: ProviderConfig) {
     assertActive();
     if (typeof providerOrName === "string") {
       if (config === undefined)
@@ -20,11 +20,6 @@ export const providerMembers = ({
       return;
     }
     applyRuntimeChange(() => runtime.registerNativeProvider(providerOrName, extension.path));
-  },
-
-  unregisterProvider(name: string) {
-    assertActive();
-    applyRuntimeChange(() => runtime.unregisterProvider(name, extension.path));
   },
 
   registerVirtualModel<TState>(model: ExtensionVirtualModel<TState>) {
@@ -37,6 +32,11 @@ export const providerMembers = ({
     applyRuntimeChange(() => runtime.registerVirtualModel(definition, extension.path));
   },
 
+  unregisterProvider(name: string) {
+    assertActive();
+    applyRuntimeChange(() => runtime.unregisterProvider(name, extension.path));
+  },
+
   unregisterVirtualModel(provider: string, id: string) {
     assertActive();
     applyRuntimeChange(() => runtime.unregisterVirtualModel(provider, id));
@@ -44,6 +44,11 @@ export const providerMembers = ({
 });
 
 export const mcpMembers = ({ extension, runtime, assertActive, applyRuntimeChange }: ApiScope) => ({
+  getMcpServers() {
+    assertActive();
+    return runtime.mcpServers.list();
+  },
+
   registerMcpServer(name: string, config: McpServerConfig) {
     assertActive();
     const validated = validateMcpServerConfig(name, config);
@@ -69,10 +74,5 @@ export const mcpMembers = ({ extension, runtime, assertActive, applyRuntimeChang
   unregisterMcpServer(name: string) {
     assertActive();
     applyRuntimeChange(() => runtime.mcpServers.unregister(name, extension.path));
-  },
-
-  getMcpServers() {
-    assertActive();
-    return runtime.mcpServers.list();
   },
 });

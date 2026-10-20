@@ -1,4 +1,4 @@
-import { McpHttpError } from "@msa/mcp";
+import mcp from "@msa/mcp";
 import testing from "@msa/testing";
 import { Effect } from "effect";
 import { describe, expect, it, vi } from "vite-plus/test";
@@ -11,6 +11,8 @@ import {
   createDefaultTransport,
 } from "../src/extensions/mcp/runtime.ts";
 import mcpConnectionSupport from "./mcp-connection-support.ts";
+
+const { McpHttpError } = mcp;
 
 const {
   awaited,

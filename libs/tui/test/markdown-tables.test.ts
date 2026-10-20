@@ -1,10 +1,14 @@
 import assert from "node:assert";
 import { describe, it } from "node:test";
 
-import { stripStyleSequences } from "../src/ansi-sequences.ts";
-import { Markdown } from "../src/components/markdown.ts";
-import { resetCapabilitiesCache, setCapabilities } from "../src/terminal-capabilities.ts";
-import { defaultMarkdownTheme } from "./test-themes.ts";
+import ansiSequences from "../src/ansi-sequences.ts";
+import Markdown from "../src/components/markdown.ts";
+import terminalCapabilities from "../src/terminal-capabilities.ts";
+import testThemes from "./test-themes.ts";
+
+const { defaultMarkdownTheme } = testThemes;
+const { stripStyleSequences } = ansiSequences;
+const { resetCapabilitiesCache, setCapabilities } = terminalCapabilities;
 
 describe("Markdown component", () => {
   describe("Tables", () => {

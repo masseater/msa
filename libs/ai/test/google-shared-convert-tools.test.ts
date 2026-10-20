@@ -1,17 +1,16 @@
 import { describe, expect, it } from "vite-plus/test";
 
-import {
-  convertTools,
-  resolveGoogleFunctionCallingMode,
-  supportsGoogleStrictToolSampling,
-} from "../src/api/google-tools.ts";
-import type { Tool } from "../src/types.ts";
+import googleTools from "../src/api/google-tools.ts";
+import type typesModule from "../src/types.types.ts";
 
-function makeTool(parameters: Record<string, unknown>): Tool {
+const { convertTools, resolveGoogleFunctionCallingMode, supportsGoogleStrictToolSampling } =
+  googleTools;
+
+function makeTool(parameters: Record<string, unknown>): typesModule.Tool {
   return {
     description: "A test tool",
     name: "test_tool",
-    parameters: parameters as Tool["parameters"],
+    parameters: parameters as typesModule.Tool["parameters"],
   };
 }
 

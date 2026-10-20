@@ -1,13 +1,17 @@
 import assert from "node:assert";
 import { describe, it } from "node:test";
 
-import { HStack } from "../src/components/h-stack.ts";
-import { ScrollView } from "../src/components/scroll-view.ts";
-import { Text } from "../src/components/text.ts";
-import { VStack } from "../src/components/v-stack.ts";
-import { renderLayoutFrame } from "../src/layout.ts";
-import { encodeKitty, registerKittyImageMetadata } from "../src/terminal-image-kitty.ts";
+import HStack from "../src/components/h-stack.ts";
+import ScrollView from "../src/components/scroll-view.ts";
+import Text from "../src/components/text.ts";
+import VStack from "../src/components/v-stack.ts";
+import layout from "../src/layout.ts";
+import terminalImageKitty from "../src/terminal-image-kitty.ts";
 import visibleLines from "./layout-helpers.ts";
+
+const { renderLayoutFrame } = layout;
+
+const { encodeKitty, registerKittyImageMetadata } = terminalImageKitty;
 
 const rendersScrollContentOnce = (): void => {
   let renderCount = 0;

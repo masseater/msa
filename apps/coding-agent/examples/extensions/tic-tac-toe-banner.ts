@@ -1,10 +1,13 @@
 import type { Theme } from "@msa/coding-agent";
-import { type Component, visibleWidth } from "@msa/tui";
+import tui from "@msa/tui";
+import type tuiTypes from "@msa/tui/index.types";
 
 import type { BoardDetails } from "./tic-tac-toe-game.ts";
 import { renderBoardSnapshot } from "./tic-tac-toe-render.ts";
 
-export class BannerMessageComponent implements Component {
+const { visibleWidth } = tui;
+
+export class BannerMessageComponent implements tuiTypes.Component {
   private readonly title: string;
   private readonly details: BoardDetails | undefined;
   private readonly expanded: boolean;

@@ -1,19 +1,19 @@
 import { dual } from "effect/Function";
 
-import { type LayoutNode, PROTECTED_SPACE, renderLayout } from "./latex-layout.ts";
-import { LatexParser } from "./latex-parser.ts";
+import latexLayout from "./latex-layout.ts";
+import type latexLayoutTypes from "./latex-layout.types.ts";
+import LatexParser from "./latex-parser.ts";
+import type latexTypes from "./latex.types.ts";
 
-export interface RenderLatexOptions {
-  display?: boolean;
-}
+const { PROTECTED_SPACE, renderLayout } = latexLayout;
 
-export const renderLatex: {
-  (source: string, options?: RenderLatexOptions): string | undefined;
-  (options?: RenderLatexOptions): (source: string) => string | undefined;
+const renderLatex: {
+  (source: string, options?: latexTypes.RenderLatexOptions): string | undefined;
+  (options?: latexTypes.RenderLatexOptions): (source: string) => string | undefined;
 } = dual(
   (args) => typeof args[0] === "string",
-  (source: string, options: RenderLatexOptions = {}): string | undefined => {
-    const layoutNodes: LayoutNode[] = [];
+  (source: string, options: latexTypes.RenderLatexOptions = {}): string | undefined => {
+    const layoutNodes: latexLayoutTypes.LayoutNode[] = [];
     const rendered = new LatexParser(source, layoutNodes, options.display === true).render();
     if (rendered === undefined) {
       return undefined;
@@ -32,3 +32,9 @@ export const renderLatex: {
       .replaceAll(PROTECTED_SPACE, " ");
   },
 );
+
+const latex = {
+  renderLatex,
+};
+
+export default latex;

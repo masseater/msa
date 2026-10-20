@@ -1,4 +1,4 @@
-import { getModel } from "@msa/ai/compat";
+import compat from "@msa/ai/compat";
 import testing from "@msa/testing";
 import { Effect } from "effect";
 import { afterEach, beforeAll, describe, expect, it } from "vite-plus/test";
@@ -9,6 +9,8 @@ import { SessionManager } from "../src/core/session-manager.ts";
 import { SettingsManager } from "../src/core/settings-manager.ts";
 import { ToolExecutionComponent } from "../src/modes/interactive/components/tool-execution.ts";
 import { initTheme } from "../src/modes/interactive/theme/theme.ts";
+
+const { getModel } = compat;
 
 const { awaited, joinPath, makeDirectory, makeTempDir, removeDirs, runTest } = testing;
 

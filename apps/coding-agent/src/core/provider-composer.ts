@@ -1,32 +1,7 @@
-import {
-  type AnyModel,
-  type Api,
-  type ApiKeyAuth,
-  type AssistantMessageEventStream,
-  type AuthContext,
-  type AuthInteraction,
-  type AuthResult,
-  type ClassifierApi,
-  type Credential,
-  type ImageApi,
-  isModelType,
-  lazyStream,
-  type Model,
-  type ModelAuth,
-  type OAuthAuth,
-  type OAuthCredentials,
-  type OAuthLoginCallbacks,
-  type Provider,
-  type ProviderClassifier,
-  type ProviderHeaders,
-  type ProviderImages,
-  type RefreshModelsContext,
-  type SimpleStreamOptions,
-  type StreamOptions,
-  type TranscriptContext,
-} from "@msa/ai";
-import { getApiProvider } from "@msa/ai/compat";
-import { classifierErrorResult, imageErrorResult } from "@msa/ai/utils/model-operations";
+import ai from "@msa/ai";
+import compatModule from "@msa/ai/compat";
+import type aiTypes from "@msa/ai/index.types";
+import modelOperations from "@msa/ai/utils/model-operations";
 import * as Effect from "effect/Effect";
 
 import { awaited, awaiting, performed } from "./awaiting.ts";
@@ -45,14 +20,24 @@ import {
   resolveHeadersOrThrow,
 } from "./resolve-config-value.ts";
 
+const { isModelType, lazyStream } = ai;
+const { getApiProvider } = compatModule;
+const { classifierErrorResult, imageErrorResult } = modelOperations;
+
 export interface ExtensionOAuthConfig {
   name: string;
   isSubscription?: boolean;
   usesCallbackServer?: boolean;
-  login(callbacks: OAuthLoginCallbacks): Promise<OAuthCredentials>;
-  refreshToken(credentials: OAuthCredentials, signal: AbortSignal): Promise<OAuthCredentials>;
-  getApiKey(credentials: OAuthCredentials): string;
-  modifyModels?(models: Model<Api>[], credentials: OAuthCredentials): Model<Api>[];
+  login(callbacks: aiTypes.OAuthLoginCallbacks): Promise<aiTypes.OAuthCredentials>;
+  refreshToken(
+    credentials: aiTypes.OAuthCredentials,
+    signal: AbortSignal,
+  ): Promise<aiTypes.OAuthCredentials>;
+  getApiKey(credentials: aiTypes.OAuthCredentials): string;
+  modifyModels?(
+    models: aiTypes.Model<aiTypes.Api>[],
+    credentials: aiTypes.OAuthCredentials,
+  ): aiTypes.Model<aiTypes.Api>[];
 }
 
 interface ProviderModelConfigBase {
@@ -61,33 +46,35 @@ interface ProviderModelConfigBase {
   api?: string;
   baseUrl?: string;
   input: ("text" | "image")[];
-  inputLimits?: NonNullable<AnyModel["inputLimits"]>;
-  cost: AnyModel["cost"];
+  inputLimits?: NonNullable<aiTypes.AnyModel["inputLimits"]>;
+  cost: aiTypes.AnyModel["cost"];
   headers?: Record<string, string>;
 }
 
 export interface ProviderChatModelConfig extends ProviderModelConfigBase {
   type?: "chat";
-  api?: Api;
+  api?: aiTypes.Api;
   reasoning: boolean;
-  thinkingLevelMap?: NonNullable<Model<Api>["thinkingLevelMap"]>;
-  promptCache?: NonNullable<Model<Api>["promptCache"]>;
+  thinkingLevelMap?: NonNullable<aiTypes.Model<aiTypes.Api>["thinkingLevelMap"]>;
+  promptCache?: NonNullable<aiTypes.Model<aiTypes.Api>["promptCache"]>;
   contextWindow: number;
   maxTokens: number;
-  samplingParams?: NonNullable<Model<Api>["samplingParams"]>;
-  samplingParamsByThinkingLevel?: NonNullable<Model<Api>["samplingParamsByThinkingLevel"]>;
-  compat?: Model<Api>["compat"];
+  samplingParams?: NonNullable<aiTypes.Model<aiTypes.Api>["samplingParams"]>;
+  samplingParamsByThinkingLevel?: NonNullable<
+    aiTypes.Model<aiTypes.Api>["samplingParamsByThinkingLevel"]
+  >;
+  compat?: aiTypes.Model<aiTypes.Api>["compat"];
 }
 
 export interface ProviderImageModelConfig extends ProviderModelConfigBase {
   type: "image";
-  api?: ImageApi;
+  api?: aiTypes.ImageApi;
   output: ("text" | "image")[];
 }
 
 export interface ProviderClassifierModelConfig extends ProviderModelConfigBase {
   type: "classifier";
-  api?: ClassifierApi;
+  api?: aiTypes.ClassifierApi;
   contextWindow: number;
 }
 
@@ -100,19 +87,19 @@ export interface ProviderConfigInput {
   name?: string;
   baseUrl?: string;
   apiKey?: string;
-  api?: Api;
+  api?: aiTypes.Api;
   streamSimple?: (
-    model: Model<Api>,
-    context: TranscriptContext,
-    options?: SimpleStreamOptions,
-  ) => AssistantMessageEventStream;
-  images?: Partial<Record<ImageApi, ProviderImages>>;
-  classifiers?: Partial<Record<ClassifierApi, ProviderClassifier>>;
+    model: aiTypes.Model<aiTypes.Api>,
+    context: aiTypes.TranscriptContext,
+    options?: aiTypes.SimpleStreamOptions,
+  ) => aiTypes.AssistantMessageEventStream;
+  images?: Partial<Record<aiTypes.ImageApi, aiTypes.ProviderImages>>;
+  classifiers?: Partial<Record<aiTypes.ClassifierApi, aiTypes.ProviderClassifier>>;
   headers?: Record<string, string>;
   authHeader?: boolean;
   oauth?: ExtensionOAuthConfig;
   models?: ProviderModelConfig[];
-  refreshModels?(context: RefreshModelsContext): Promise<ProviderModelConfig[]>;
+  refreshModels?(context: aiTypes.RefreshModelsContext): Promise<ProviderModelConfig[]>;
 }
 
 export type AuthStatus = {
@@ -129,16 +116,16 @@ export type AuthStatus = {
 
 export const clearApiKeyCache = clearConfigValueCache;
 
-function getAllProviderModels(provider: Provider | undefined): readonly AnyModel[] {
+function getAllProviderModels(provider: aiTypes.Provider | undefined): readonly aiTypes.AnyModel[] {
   return provider === undefined ? [] : (provider.getAllModels?.() ?? provider.getModels());
 }
 
 function mergeCompat(
-  base: Model<Api>["compat"],
-  override: Model<Api>["compat"] | ModelsJsonModelOverride["compat"],
-): Model<Api>["compat"] {
+  base: aiTypes.Model<aiTypes.Api>["compat"],
+  override: aiTypes.Model<aiTypes.Api>["compat"] | ModelsJsonModelOverride["compat"],
+): aiTypes.Model<aiTypes.Api>["compat"] {
   if (override === undefined) return base;
-  const merged = { ...base, ...override } as NonNullable<Model<Api>["compat"]>;
+  const merged = { ...base, ...override } as NonNullable<aiTypes.Model<aiTypes.Api>["compat"]>;
   const baseNested = base as Record<string, unknown> | undefined;
   const overrideNested = override as Record<string, unknown>;
   const mergedNested = merged as Record<string, unknown>;
@@ -159,9 +146,9 @@ function mergeCompat(
 }
 
 function mergeInputLimits(
-  base: Model<Api>["inputLimits"],
+  base: aiTypes.Model<aiTypes.Api>["inputLimits"],
   override: ModelsJsonModelOverride["inputLimits"],
-): Model<Api>["inputLimits"] {
+): aiTypes.Model<aiTypes.Api>["inputLimits"] {
   if (override === undefined) return base;
   return {
     ...base,
@@ -181,9 +168,9 @@ function mergeInputLimits(
 }
 
 function mergeSamplingParamsByThinkingLevel(
-  base: Model<Api>["samplingParamsByThinkingLevel"],
-  override: Model<Api>["samplingParamsByThinkingLevel"],
-): Model<Api>["samplingParamsByThinkingLevel"] {
+  base: aiTypes.Model<aiTypes.Api>["samplingParamsByThinkingLevel"],
+  override: aiTypes.Model<aiTypes.Api>["samplingParamsByThinkingLevel"],
+): aiTypes.Model<aiTypes.Api>["samplingParamsByThinkingLevel"] {
   if (override === undefined) return base;
   const merged = { ...base };
   for (const level of ["off", "minimal", "low", "medium", "high", "xhigh", "max"] as const) {
@@ -193,7 +180,10 @@ function mergeSamplingParamsByThinkingLevel(
   return merged;
 }
 
-function applyModelOverride(model: Model<Api>, override: ModelsJsonModelOverride): Model<Api> {
+function applyModelOverride(
+  model: aiTypes.Model<aiTypes.Api>,
+  override: ModelsJsonModelOverride,
+): aiTypes.Model<aiTypes.Api> {
   const inputLimits = mergeInputLimits(model.inputLimits, override.inputLimits);
   const tiers = override.cost?.tiers ?? model.cost.tiers;
   const samplingParamsByThinkingLevel = mergeSamplingParamsByThinkingLevel(
@@ -214,10 +204,10 @@ function applyModelOverride(model: Model<Api>, override: ModelsJsonModelOverride
       override.cost === undefined
         ? model.cost
         : {
-            input: override.cost.input ?? model.cost.input,
-            output: override.cost.output ?? model.cost.output,
             cacheRead: override.cost.cacheRead ?? model.cost.cacheRead,
             cacheWrite: override.cost.cacheWrite ?? model.cost.cacheWrite,
+            input: override.cost.input ?? model.cost.input,
+            output: override.cost.output ?? model.cost.output,
             ...(tiers === undefined ? {} : { tiers }),
           },
     ...(override.promptCache === undefined
@@ -237,8 +227,8 @@ function modelFromJson(
   providerId: string,
   definition: ModelsJsonModel,
   providerConfig: ModelsJsonProvider,
-  defaults: Model<Api> | undefined,
-): Model<Api> {
+  defaults: aiTypes.Model<aiTypes.Api> | undefined,
+): aiTypes.Model<aiTypes.Api> {
   const api = definition.api ?? providerConfig.api ?? defaults?.api;
   if (api === undefined || api === "") {
     throw new Error(
@@ -258,7 +248,7 @@ function modelFromJson(
   return {
     id: definition.id,
     name: definition.name ?? definition.id,
-    api: api as Api,
+    api: api as aiTypes.Api,
     provider: providerId,
     baseUrl,
     reasoning: definition.reasoning ?? false,
@@ -267,7 +257,7 @@ function modelFromJson(
       : { thinkingLevelMap: definition.thinkingLevelMap }),
     input: (definition.input ?? ["text"]) as ("text" | "image")[],
     ...(definition.inputLimits === undefined ? {} : { inputLimits: definition.inputLimits }),
-    cost: definition.cost ?? { input: 0, output: 0, cacheRead: 0, cacheWrite: 0 },
+    cost: definition.cost ?? { cacheRead: 0, cacheWrite: 0, input: 0, output: 0 },
     ...(definition.promptCache === undefined ? {} : { promptCache: definition.promptCache }),
     contextWindow: definition.contextWindow ?? 128000,
     maxTokens: definition.maxTokens ?? 16384,
@@ -282,10 +272,10 @@ function modelFromJson(
 }
 
 function findModelDefaults(
-  models: readonly AnyModel[],
+  models: readonly aiTypes.AnyModel[],
   modelId: string,
-  api?: Api,
-): Model<Api> | undefined {
+  api?: aiTypes.Api,
+): aiTypes.Model<aiTypes.Api> | undefined {
   const chatModels = models.filter((model) => isModelType(model, "chat"));
   return (
     chatModels.find((model) => model.id === modelId) ??
@@ -296,9 +286,9 @@ function findModelDefaults(
 }
 
 function findExtensionModelDefaults(
-  models: readonly AnyModel[],
+  models: readonly aiTypes.AnyModel[],
   definition: ProviderModelConfig,
-): AnyModel | undefined {
+): aiTypes.AnyModel | undefined {
   const type = definition.type ?? "chat";
   const candidates = models.filter((model) => isModelType(model, type));
   return (
@@ -315,10 +305,10 @@ function findExtensionModelDefaults(
 
 function extensionModelFromDefinition(
   providerId: string,
-  models: readonly AnyModel[],
+  models: readonly aiTypes.AnyModel[],
   config: ProviderConfigInput,
   definition: ProviderModelConfig,
-): AnyModel {
+): aiTypes.AnyModel {
   const type = definition.type ?? "chat";
   const defaults = findExtensionModelDefaults(models, definition);
   const api = definition.api ?? (type === "chat" ? config.api : undefined) ?? defaults?.api;
@@ -332,19 +322,19 @@ function extensionModelFromDefinition(
     throw new Error(`Provider ${providerId}: "baseUrl" is required when defining custom models.`);
   const { headers: _headers, ...fields } = definition;
   if (fields.type === "image") {
-    return { ...fields, api: api as ImageApi, provider: providerId, baseUrl };
+    return { ...fields, api: api as aiTypes.ImageApi, baseUrl, provider: providerId };
   }
   if (fields.type === "classifier") {
-    return { ...fields, api: api as ClassifierApi, provider: providerId, baseUrl };
+    return { ...fields, api: api as aiTypes.ClassifierApi, baseUrl, provider: providerId };
   }
-  return { ...fields, api: api as Api, provider: providerId, baseUrl };
+  return { ...fields, api: api as aiTypes.Api, baseUrl, provider: providerId };
 }
 
 function applyModelsJson(
   providerId: string,
-  baseModels: readonly AnyModel[],
+  baseModels: readonly aiTypes.AnyModel[],
   config: ModelsJsonProvider | undefined,
-): AnyModel[] {
+): aiTypes.AnyModel[] {
   if (config === undefined) return [...baseModels];
   const hasOverrides = config.modelOverrides && Object.keys(config.modelOverrides).length > 0;
   if (
@@ -361,7 +351,7 @@ function applyModelsJson(
     );
   }
 
-  const models: AnyModel[] = baseModels.map((model) => {
+  const models: aiTypes.AnyModel[] = baseModels.map((model) => {
     const baseUrl = config.baseUrl ?? model.baseUrl;
     return isModelType(model, "chat")
       ? { ...model, baseUrl, compat: mergeCompat(model.compat, config.compat) }
@@ -381,9 +371,9 @@ function applyModelsJson(
 
 function applyExtension(
   providerId: string,
-  models: readonly AnyModel[],
+  models: readonly aiTypes.AnyModel[],
   config: ProviderConfigInput | undefined,
-): AnyModel[] {
+): aiTypes.AnyModel[] {
   if (config === undefined) return [...models];
   if (config.models === undefined) {
     return config.baseUrl !== undefined && config.baseUrl !== ""
@@ -395,9 +385,8 @@ function applyExtension(
   );
 }
 
-function adaptOAuth(config: ExtensionOAuthConfig): OAuthAuth {
+function adaptOAuth(config: ExtensionOAuthConfig): aiTypes.OAuthAuth {
   return {
-    name: config.name,
     isSubscription: config.isSubscription,
     login: (callbacks) =>
       Effect.runPromise(
@@ -417,6 +406,7 @@ function adaptOAuth(config: ExtensionOAuthConfig): OAuthAuth {
           return { ...credential, type: "oauth" };
         }),
       ),
+    name: config.name,
     refresh: (credential, signal) =>
       Effect.runPromise(
         awaiting(function* () {
@@ -432,11 +422,11 @@ function adaptOAuth(config: ExtensionOAuthConfig): OAuthAuth {
 }
 
 function withConfiguredAuth(
-  auth: ModelAuth,
+  auth: aiTypes.ModelAuth,
   headers: Record<string, string> | undefined,
   authHeader: boolean,
-): ModelAuth {
-  let mergedHeaders: ProviderHeaders | undefined =
+): aiTypes.ModelAuth {
+  let mergedHeaders: aiTypes.ProviderHeaders | undefined =
     auth.headers !== undefined || headers !== undefined
       ? { ...auth.headers, ...headers }
       : undefined;
@@ -465,7 +455,7 @@ function configuredHeaders(
 
 function configContextEnv(
   values: readonly string[],
-  ctx: AuthContext,
+  ctx: aiTypes.AuthContext,
   explicit?: Record<string, string>,
 ): Effect.Effect<Record<string, string> | undefined> {
   return awaiting(function* () {
@@ -481,10 +471,10 @@ function configContextEnv(
 
 function composeApiKeyAuth(
   providerId: string,
-  base: Provider | undefined,
+  base: aiTypes.Provider | undefined,
   config: ModelsJsonProvider | undefined,
   extension: ProviderConfigInput | undefined,
-): ApiKeyAuth | undefined {
+): aiTypes.ApiKeyAuth | undefined {
   const inherited = base?.auth.apiKey;
   const rawKey = configuredApiKey(config, extension);
   const oauth = extension?.oauth ?? base?.auth.oauth;
@@ -492,18 +482,6 @@ function composeApiKeyAuth(
   const rawHeaders = configuredHeaders(config, extension);
   const authHeader = extension?.authHeader ?? config?.authHeader ?? false;
   return {
-    name: inherited?.name ?? "API key",
-    login:
-      inherited?.login ??
-      ((interaction: AuthInteraction) =>
-        Effect.runPromise(
-          awaiting(function* () {
-            return {
-              type: "api_key",
-              key: yield* awaited(interaction.prompt({ type: "secret", message: "Enter API key" })),
-            };
-          }),
-        )),
     check: (input) =>
       Effect.runPromise(
         awaiting(function* () {
@@ -530,10 +508,22 @@ function composeApiKeyAuth(
           return resolved === undefined ? undefined : { type: "api_key", source: resolved.source };
         }),
       ),
+    login:
+      inherited?.login ??
+      ((interaction: aiTypes.AuthInteraction) =>
+        Effect.runPromise(
+          awaiting(function* () {
+            return {
+              type: "api_key",
+              key: yield* awaited(interaction.prompt({ type: "secret", message: "Enter API key" })),
+            };
+          }),
+        )),
+    name: inherited?.name ?? "API key",
     resolve: (input) =>
       Effect.runPromise(
         awaiting(function* () {
-          let result: AuthResult | undefined;
+          let result: aiTypes.AuthResult | undefined;
           if (input.credential !== undefined) {
             result =
               inherited === undefined
@@ -575,10 +565,10 @@ function composeApiKeyAuth(
 
 function composeOAuthAuth(
   providerId: string,
-  base: Provider | undefined,
+  base: aiTypes.Provider | undefined,
   config: ModelsJsonProvider | undefined,
   extension: ProviderConfigInput | undefined,
-): OAuthAuth | undefined {
+): aiTypes.OAuthAuth | undefined {
   const oauth = extension?.oauth === undefined ? base?.auth.oauth : adaptOAuth(extension.oauth);
   if (oauth === undefined) return undefined;
   const rawHeaders = configuredHeaders(config, extension);
@@ -602,7 +592,7 @@ function composeOAuthAuth(
 }
 
 function rawModelHeaders(
-  model: AnyModel,
+  model: aiTypes.AnyModel,
   config: ModelsJsonProvider | undefined,
   extension: ProviderConfigInput | undefined,
 ): Record<string, string> | undefined {
@@ -622,7 +612,7 @@ function rawModelHeaders(
 
 export function validateExtensionProvider(
   providerId: string,
-  base: Provider | undefined,
+  base: aiTypes.Provider | undefined,
   modelsConfig: ModelsJsonProvider | undefined,
   extension: ProviderConfigInput,
 ): void {
@@ -638,18 +628,18 @@ export function validateExtensionProvider(
 
 export function composeModelProvider(
   providerId: string,
-  base: Provider | undefined,
+  base: aiTypes.Provider | undefined,
   modelConfig: ModelConfig,
   extension: ProviderConfigInput | undefined,
-): Provider {
+): aiTypes.Provider {
   const config = modelConfig.getProvider(providerId);
-  let extensionOAuthCredential: OAuthCredentials | undefined;
+  let extensionOAuthCredential: aiTypes.OAuthCredentials | undefined;
   let refreshedExtensionModels: ProviderConfigInput["models"];
   const currentExtension = (): ProviderConfigInput | undefined =>
     extension !== undefined && refreshedExtensionModels !== undefined
       ? { ...extension, models: refreshedExtensionModels }
       : extension;
-  const getAllModels = (): AnyModel[] => {
+  const getAllModels = (): aiTypes.AnyModel[] => {
     let models = applyExtension(
       providerId,
       applyModelsJson(providerId, getAllProviderModels(base), config),
@@ -677,36 +667,36 @@ export function composeModelProvider(
   if (apiKey === undefined && oauth === undefined)
     throw new Error(`Provider ${providerId}: no authentication method configured.`);
 
-  const supportsBaseApi = (model: Model<Api>) =>
+  const supportsBaseApi = (model: aiTypes.Model<aiTypes.Api>) =>
     base?.getModels().some((entry) => entry.api === model.api) ?? false;
   const streamWith = (
-    model: Model<Api>,
-    context: TranscriptContext,
-    options: StreamOptions | undefined,
+    model: aiTypes.Model<aiTypes.Api>,
+    context: aiTypes.TranscriptContext,
+    options: aiTypes.StreamOptions | undefined,
     simple: boolean,
-  ): AssistantMessageEventStream =>
+  ): aiTypes.AssistantMessageEventStream =>
     lazyStream(model, () =>
       Effect.runPromise(
         Effect.sync(() => {
           if (extension?.streamSimple !== undefined && model.api === extension.api) {
-            return extension.streamSimple(model, context, options as SimpleStreamOptions);
+            return extension.streamSimple(model, context, options as aiTypes.SimpleStreamOptions);
           }
           if (base !== undefined && supportsBaseApi(model)) {
             return simple
-              ? base.streamSimple(model, context, options as SimpleStreamOptions)
+              ? base.streamSimple(model, context, options as aiTypes.SimpleStreamOptions)
               : base.stream(model, context, options);
           }
           const api = getApiProvider(model.api);
           if (api === undefined)
             throw new Error(`No API provider registered for api: ${model.api}`);
           return simple
-            ? api.streamSimple(model, context, options as SimpleStreamOptions)
+            ? api.streamSimple(model, context, options as aiTypes.SimpleStreamOptions)
             : api.stream(model, context, options);
         }),
       ),
     );
 
-  const provider: Provider = {
+  const provider: aiTypes.Provider = {
     id: providerId,
     name: extension?.name ?? config?.name ?? base?.name ?? extension?.oauth?.name ?? providerId,
     baseUrl: extension?.baseUrl ?? config?.baseUrl ?? base?.baseUrl,
@@ -721,7 +711,7 @@ export function composeModelProvider(
     extension?.refreshModels !== undefined ||
     extension?.oauth?.modifyModels !== undefined
       ? {
-          refreshModels: (context: RefreshModelsContext) =>
+          refreshModels: (context: aiTypes.RefreshModelsContext) =>
             Effect.runPromise(
               awaiting(function* () {
                 yield* awaited(base?.refreshModels?.(context));
@@ -756,14 +746,18 @@ export function composeModelProvider(
     ...(base?.filterModels === undefined
       ? {}
       : {
-          filterModels: (models: readonly Model<Api>[], credential: Credential | undefined) =>
-            base.filterModels!(models, credential),
+          filterModels: (
+            models: readonly aiTypes.Model<aiTypes.Api>[],
+            credential: aiTypes.Credential | undefined,
+          ) => base.filterModels!(models, credential),
         }),
     ...(base?.filterAllModels === undefined
       ? {}
       : {
-          filterAllModels: (models: readonly AnyModel[], credential: Credential | undefined) =>
-            base.filterAllModels!(models, credential),
+          filterAllModels: (
+            models: readonly aiTypes.AnyModel[],
+            credential: aiTypes.Credential | undefined,
+          ) => base.filterAllModels!(models, credential),
         }),
     stream: (model, context, options) => streamWith(model, context, options, false),
     streamSimple: (model, context, options) => streamWith(model, context, options, true),
@@ -822,7 +816,7 @@ export function composeModelProvider(
 }
 
 export function resolveConfiguredModelHeaders(
-  model: AnyModel,
+  model: aiTypes.AnyModel,
   config: ModelsJsonProvider | undefined,
   extension: ProviderConfigInput | undefined,
   env?: Record<string, string>,
@@ -835,12 +829,12 @@ export function resolveConfiguredModelHeaders(
 }
 
 export interface CompatibilityRequestConfig {
-  headers?: ProviderHeaders | undefined;
+  headers?: aiTypes.ProviderHeaders | undefined;
   authHeader: boolean;
 }
 
 export function resolveCompatibilityRequestConfig(
-  model: AnyModel,
+  model: aiTypes.AnyModel,
   config: ModelsJsonProvider | undefined,
   extension: ProviderConfigInput | undefined,
 ): CompatibilityRequestConfig {
@@ -849,11 +843,11 @@ export function resolveCompatibilityRequestConfig(
     `model "${model.provider}/${model.id}"`,
   );
   return {
+    authHeader: extension?.authHeader ?? config?.authHeader ?? false,
     headers:
       model.headers !== undefined || configured !== undefined
         ? { ...model.headers, ...configured }
         : undefined,
-    authHeader: extension?.authHeader ?? config?.authHeader ?? false,
   };
 }
 
@@ -867,7 +861,7 @@ export function configuredRequestAuthStatus(
   const names = getConfigValueEnvVarNames(value);
   if (names.length > 0) {
     return isConfigValueConfigured(value)
-      ? { configured: true, source: "environment", label: names.join(", ") }
+      ? { configured: true, label: names.join(", "), source: "environment" }
       : { configured: false };
   }
   return {

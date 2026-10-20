@@ -1,4 +1,4 @@
-import type { CodemodeHostCall, CodemodeOutcome } from "@msa/codemode/portable";
+import type portableTypes from "@msa/codemode/portable.types";
 
 import type typesModule from "../harness/types.types.ts";
 import type callRowsTypes from "./call-rows.types.ts";
@@ -16,7 +16,7 @@ const cut = (text: string, max: number): string =>
 export default class CallRows {
   readonly #rows = new Map<number, callRowsTypes.CodemodeNestedCall>();
 
-  started(call: CodemodeHostCall): void {
+  started(call: portableTypes.CodemodeHostCall): void {
     if (this.#rows.has(call.id)) return;
     const args = call.args === undefined ? "" : (JSON.stringify(call.args) ?? "");
     const name = call.name.startsWith(CODEMODE_INTERNAL_PREFIX)
@@ -32,7 +32,7 @@ export default class CallRows {
 
   finished(
     id: number,
-    outcome: CodemodeOutcome,
+    outcome: portableTypes.CodemodeOutcome,
     result: typesModule.NestedToolExecutionResult,
   ): void {
     const row = this.#rows.get(id);

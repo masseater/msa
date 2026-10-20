@@ -1,5 +1,5 @@
 import testing from "@msa/testing";
-import { setKeybindings } from "@msa/tui";
+import tui from "@msa/tui";
 import { Effect } from "effect";
 import { afterEach, beforeAll, beforeEach, describe, expect, it } from "vite-plus/test";
 
@@ -8,6 +8,8 @@ import type { SessionInfo } from "../src/core/session-manager.ts";
 import { SessionSelectorComponent } from "../src/modes/interactive/components/session-selector.ts";
 import { initTheme } from "../src/modes/interactive/theme/theme.ts";
 import sessionSelectorPathDeleteSupport from "./session-selector-path-delete-support.ts";
+
+const { setKeybindings } = tui;
 
 const { afterEachHook, flushPromises, keybindings, makeSession } = sessionSelectorPathDeleteSupport;
 

@@ -1,18 +1,12 @@
-import type { ResponseCreateParamsStreaming } from "openai/resources/responses/responses.js";
+import type typesModule from "../types.types.ts";
+import providerEnv from "../utils/provider-env.ts";
+import type openaiResponsesConfigTypes from "./openai-responses-config.types.ts";
 
-import type { CacheRetention, Model, OpenAIResponsesCompat, ProviderHeaders } from "../types.ts";
-import { getProviderEnvValue } from "../utils/provider-env.ts";
-import type { ResponsesReasoningOptions } from "./openai-responses-reasoning.ts";
+const { getProviderEnvValue } = providerEnv;
 
-export interface OpenAIResponsesOptions extends ResponsesReasoningOptions {
-  serviceTier?: ResponseCreateParamsStreaming["service_tier"] | undefined;
-}
+type ResponsesModel = typesModule.Model<"openai-responses">;
 
-export type ResolvedResponsesCompat = Required<OpenAIResponsesCompat>;
-
-type ResponsesModel = Model<"openai-responses">;
-
-export function isChatGPTSignIn(model: ResponsesModel): (apiKey: string | undefined) => boolean {
+function isChatGPTSignIn(model: ResponsesModel): (apiKey: string | undefined) => boolean {
   return (apiKey) =>
     model.provider === "openai" &&
     model.baseUrl === "https://api.openai.com/v1" &&
@@ -20,16 +14,20 @@ export function isChatGPTSignIn(model: ResponsesModel): (apiKey: string | undefi
     !apiKey.startsWith("sk-");
 }
 
-function hasHeader(headers: ProviderHeaders | undefined, name: string): boolean {
+function hasHeader(headers: typesModule.ProviderHeaders | undefined, name: string): boolean {
   const expected = name.toLowerCase();
   return Object.entries(headers ?? {}).some(
     ([key, value]) => key.toLowerCase() === expected && value !== null && value.trim().length > 0,
   );
 }
 
-export function getClientApiKey(
+function getClientApiKey(
   model: Pick<ResponsesModel, "provider">,
-): (options: Pick<OpenAIResponsesOptions, "apiKey" | "headers"> | undefined) => string {
+): (
+  options:
+    | Pick<openaiResponsesConfigTypes.OpenAIResponsesOptions, "apiKey" | "headers">
+    | undefined,
+) => string {
   return (options) => {
     const apiKey = options?.apiKey;
     if (apiKey !== undefined && apiKey !== "") return apiKey;
@@ -46,33 +44,35 @@ const detectSessionAffinityFormat = (model: Pick<ResponsesModel, "provider" | "b
     ? "openrouter"
     : "openai";
 
-export function resolveCacheRetention(
-  options: Pick<OpenAIResponsesOptions, "cacheRetention" | "env"> | undefined,
-): CacheRetention {
+function resolveCacheRetention(
+  options:
+    | Pick<openaiResponsesConfigTypes.OpenAIResponsesOptions, "cacheRetention" | "env">
+    | undefined,
+): typesModule.CacheRetention {
   if (options?.cacheRetention !== undefined) return options.cacheRetention;
   return getProviderEnvValue("MSA_CACHE_RETENTION", options?.env) === "long" ? "long" : "short";
 }
 
-export function getCompat(model: ResponsesModel): ResolvedResponsesCompat {
+function getCompat(model: ResponsesModel): openaiResponsesConfigTypes.ResolvedResponsesCompat {
   const compat = model.compat;
   return {
-    supportsDeveloperRole: compat?.supportsDeveloperRole ?? true,
-    supportsMidConvoSystemMessages: compat?.supportsMidConvoSystemMessages ?? false,
     sessionAffinityFormat: compat?.sessionAffinityFormat ?? detectSessionAffinityFormat(model),
-    supportsLongCacheRetention: compat?.supportsLongCacheRetention ?? true,
-    supportsStrictMode: compat?.supportsStrictMode ?? false,
-    supportsOpenAIGrammarTools: compat?.supportsOpenAIGrammarTools ?? false,
     supportsAdditionalTools: compat?.supportsAdditionalTools ?? false,
-    supportsToolSearch: compat?.supportsToolSearch ?? false,
+    supportsDeveloperRole: compat?.supportsDeveloperRole ?? true,
     supportsExplicitPromptCacheMode: compat?.supportsExplicitPromptCacheMode ?? false,
+    supportsLongCacheRetention: compat?.supportsLongCacheRetention ?? true,
     supportsMaxOutputTokens: compat?.supportsMaxOutputTokens ?? true,
     supportsMidConvoEffort: compat?.supportsMidConvoEffort ?? false,
+    supportsMidConvoSystemMessages: compat?.supportsMidConvoSystemMessages ?? false,
+    supportsOpenAIGrammarTools: compat?.supportsOpenAIGrammarTools ?? false,
+    supportsStrictMode: compat?.supportsStrictMode ?? false,
+    supportsToolSearch: compat?.supportsToolSearch ?? false,
   };
 }
 
-export function getConfigurationUpdateEffort(
+function getConfigurationUpdateEffort(
   model: ResponsesModel,
-): (options: OpenAIResponsesOptions | undefined) => string | undefined {
+): (options: openaiResponsesConfigTypes.OpenAIResponsesOptions | undefined) => string | undefined {
   return (options) => {
     if (
       !getCompat(model).supportsMidConvoEffort ||
@@ -84,3 +84,13 @@ export function getConfigurationUpdateEffort(
     return model.thinkingLevelMap?.[options.reasoningEffort] ?? options.reasoningEffort;
   };
 }
+
+const openaiResponsesConfig = {
+  getClientApiKey,
+  getCompat,
+  getConfigurationUpdateEffort,
+  isChatGPTSignIn,
+  resolveCacheRetention,
+};
+
+export default openaiResponsesConfig;

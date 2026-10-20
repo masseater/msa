@@ -1,11 +1,13 @@
 import { Effect } from "effect";
 import { describe, expect, it } from "vite-plus/test";
 
-import { stream as streamOpenAICompletions } from "../src/api/openai-completions.ts";
-import type { Model } from "../src/types.ts";
+import openaiCompletions from "../src/api/openai-completions.ts";
+import type typesModule from "../src/types.types.ts";
 import cacheRetentionSupport from "./cache-retention-support.ts";
 import type cacheRetentionSupportTypes from "./cache-retention-support.types.ts";
 import modelChoice from "./model-choice.ts";
+
+const { stream: streamOpenAICompletions } = openaiCompletions;
 
 const { capturePayload, context, createCompletionsModel, isolateCacheRetentionEnv } =
   cacheRetentionSupport;
@@ -13,7 +15,7 @@ const { modelsWhere } = modelChoice;
 
 type CompletionsPayload = cacheRetentionSupportTypes.OpenAICompletionsCachePayload;
 
-const captureLong = (model: Model<"openai-completions">, sessionId: string) =>
+const captureLong = (model: typesModule.Model<"openai-completions">, sessionId: string) =>
   capturePayload<CompletionsPayload>((onPayload) =>
     streamOpenAICompletions(model, context, {
       apiKey: "fake-key",
@@ -49,7 +51,7 @@ const omitsRetentionWithoutLongSupport = Effect.map(
   },
 );
 
-const omitsLongRetentionFor = (model: Model<"openai-completions">) =>
+const omitsLongRetentionFor = (model: typesModule.Model<"openai-completions">) =>
   Effect.map(captureLong(model, "session-opencode-long-cache-unsupported"), (payload) => {
     expect(payload).toBeDefined();
     expect(payload?.prompt_cache_key).toBeUndefined();
@@ -68,7 +70,7 @@ describe("Cache Retention (MSA_CACHE_RETENTION)", () => {
       expect(withoutLongRetention.length).toBeGreaterThan(0);
     });
     it.each(withoutLongRetention)("should omit long cache retention for $provider/$id", (model) =>
-      Effect.runPromise(omitsLongRetentionFor(model as Model<"openai-completions">)),
+      Effect.runPromise(omitsLongRetentionFor(model as typesModule.Model<"openai-completions">)),
     );
   });
 });

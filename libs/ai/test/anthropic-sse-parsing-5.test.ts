@@ -2,12 +2,16 @@ import { Effect } from "effect";
 import { Type } from "typebox";
 import { describe, expect, it } from "vite-plus/test";
 
-import { stream as streamAnthropic } from "../src/api/anthropic-messages.ts";
-import { normalizeContext } from "../src/compat.ts";
-import type { ToolCall } from "../src/types.ts";
-import { currentTimeMillis } from "../src/utils/clock.ts";
+import anthropicMessages from "../src/api/anthropic-messages.ts";
+import compat from "../src/compat.ts";
+import type typesModule from "../src/types.types.ts";
+import clock from "../src/utils/clock.ts";
 import anthropicSseParsingSupport from "./anthropic-sse-parsing-support.ts";
 import modelChoice from "./model-choice.ts";
+
+const { normalizeContext } = compat;
+const { currentTimeMillis } = clock;
+const { stream: streamAnthropic } = anthropicMessages;
 
 const { createFakeAnthropicClient, createSseResponse, sse } = anthropicSseParsingSupport;
 const { chooseModel, usesApi } = modelChoice;
@@ -47,7 +51,9 @@ const repairsMalformedJson = () =>
 
       expect(result.stopReason).toBe("toolUse");
       expect(result.errorMessage).toBeUndefined();
-      const toolCall = result.content.find((block): block is ToolCall => block.type === "toolCall");
+      const toolCall = result.content.find(
+        (block): block is typesModule.ToolCall => block.type === "toolCall",
+      );
       expect(toolCall?.arguments).toEqual({ path: "A\\H", text: "col1\tcol2" });
     }),
   );

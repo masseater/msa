@@ -1,4 +1,4 @@
-import { Type } from "@msa/ai";
+import ai from "@msa/ai";
 import type durableTypes from "@msa/durable/index.types";
 import { Effect } from "effect";
 import { afterEach, describe, expect, it } from "vite-plus/test";
@@ -7,6 +7,8 @@ import durableKit from "./durable-kit.ts";
 import harnessTasksRecoverySupport from "./harness-tasks-recovery-support.ts";
 import type harnessTasksRecoverySupportTypes from "./harness-tasks-recovery-support.types.ts";
 import support from "./support.ts";
+
+const { Type } = ai;
 
 const { durable, harness: harnessModule, memory, sqliteNode: node } = durableKit;
 

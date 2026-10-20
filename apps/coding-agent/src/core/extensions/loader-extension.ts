@@ -19,16 +19,16 @@ function createExtension(extensionPath: string, resolvedPath: string): Extension
   const baseDir = isSyntheticPath(extensionPath) ? undefined : pathOperations.dirname(resolvedPath);
 
   return {
+    commands: new Map(),
+    entryRenderers: new Map(),
+    flags: new Map(),
+    handlers: new Map(),
+    messageRenderers: new Map(),
     path: extensionPath,
     resolvedPath,
-    sourceInfo: createSyntheticSourceInfo(extensionPath, { source, baseDir }),
-    handlers: new Map(),
-    tools: new Map(),
-    messageRenderers: new Map(),
-    entryRenderers: new Map(),
-    commands: new Map(),
-    flags: new Map(),
     shortcuts: new Map(),
+    sourceInfo: createSyntheticSourceInfo(extensionPath, { source, baseDir }),
+    tools: new Map(),
   };
 }
 
@@ -46,7 +46,7 @@ export const initializeExtension = Effect.fn("initializeExtension")(function* (
 ) {
   const { factory, extensionPath, resolvedPath, cwd, eventBus, runtime } = input;
   const extension = createExtension(extensionPath, resolvedPath);
-  const load = createExtensionAPI({ extension, runtime, cwd, eventBus });
+  const load = createExtensionAPI({ cwd, eventBus, extension, runtime });
   yield* fromPromise(() => factory(load.api)).pipe(
     Effect.andThen(Effect.sync(() => load.commit())),
     Effect.tapCause(() => Effect.sync(() => load.discard())),
@@ -77,28 +77,28 @@ export const loadExtension = ({
 }: LoadOneInput) =>
   Effect.gen(function* () {
     const resolvedPath = resolvePath(extensionPath, cwd, { normalizeUnicodeSpaces: true });
-    const factory = yield* loadExtensionModule({ extensionPath: resolvedPath, cacheToken });
+    const factory = yield* loadExtensionModule({ cacheToken, extensionPath: resolvedPath });
     time(`${extensionPath} module import`, "extensions");
     if (factory === undefined) {
       return {
-        extension: null,
         error: `Extension does not export a valid factory function: ${extensionPath}`,
+        extension: null,
       } as LoadOutcome;
     }
     const extension = yield* initializeExtension({
-      factory,
-      extensionPath,
-      resolvedPath,
       cwd,
       eventBus,
+      extensionPath,
+      factory,
+      resolvedPath,
       runtime,
     });
-    return { extension, error: null } as LoadOutcome;
+    return { error: null, extension } as LoadOutcome;
   }).pipe(
     Effect.catchCause((cause) =>
       Effect.succeed({
-        extension: null,
         error: `Failed to load extension: ${causeMessage(cause)}`,
+        extension: null,
       } as LoadOutcome),
     ),
   );

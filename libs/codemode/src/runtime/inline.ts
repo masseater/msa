@@ -1,74 +1,75 @@
 import * as Effect from "effect/Effect";
 import { Intrinsics, MAX_STACK_SIZE, QuickJS } from "quickjs-wasi";
 
-import type { CodemodeWasmModule } from "../types.ts";
-import { RuntimeError } from "./bridge.ts";
-import { errorMessage } from "./prelude-source.ts";
-import type {
-  InlineCodemodeSandboxOptions,
-  InlineLauncherOptions,
-  StartVmOptions,
-  VmEvents,
-  VmLauncher,
-  VmStartData,
-  WorkerToHostMessage,
-} from "./protocol.ts";
-import { CodemodeSandboxBase } from "./sandbox-base.ts";
-import { bootVm, deterministicWasi, discardOutput, type VirtualClock } from "./vm-session.ts";
+import type typesModule from "../types.ts";
+import bridge from "./bridge.ts";
+import InlineCodemodeSandbox from "./inline-codemode-sandbox.ts";
+import preludeSource from "./prelude-source.ts";
+import type protocolTypes from "./protocol.ts";
+import vmSession from "./vm-session.ts";
+import type vmSessionTypes from "./vm-session.types.ts";
 
-export type { InlineCodemodeSandboxOptions } from "./protocol.ts";
+const { RuntimeError } = bridge;
+const { errorMessage } = preludeSource;
+const { bootVm, deterministicWasi, discardOutput } = vmSession;
 
-export const DEFAULT_INTERRUPT_BUDGET = 100_000;
+const DEFAULT_INTERRUPT_BUDGET = 100_000;
 
 const INLINE_MAX_STACK_SIZE = 256 * 1024;
 
 const launchError = (message: string, cause: unknown) =>
-  new RuntimeError({ reason: "launch", message, cause });
+  new RuntimeError({ cause, message, reason: "launch" });
 
-const virtualClock = (data: VmStartData): VirtualClock | undefined =>
+const virtualClock = (data: protocolTypes.VmStartData): vmSessionTypes.VirtualClock | undefined =>
   data.deterministic === undefined
     ? undefined
     : {
         creating: true,
-        startedAt: data.deterministic.startedAt,
         now: data.deterministic.startedAt,
         seed: data.deterministic.seed >>> 0,
+        startedAt: data.deterministic.startedAt,
       };
 
-const createVm = (options: StartVmOptions, clock: VirtualClock | undefined, maxStackSize: number) =>
+const createVm = (
+  options: protocolTypes.StartVmOptions,
+  clock: vmSessionTypes.VirtualClock | undefined,
+  maxStackSize: number,
+) =>
   Effect.tryPromise({
+    catch: (cause) => launchError(errorMessage(cause), cause),
     try: () =>
       QuickJS.create({
-        wasm: options.wasm,
-        memoryLimit: options.data.memoryLimitBytes,
-        maxStackSize,
         interruptHandler: options.shouldInterrupt,
+        maxStackSize,
+        memoryLimit: options.data.memoryLimitBytes,
         wasi: clock === undefined ? discardOutput : deterministicWasi(clock),
+        wasm: options.wasm,
         ...(clock === undefined
           ? {}
-          : { timezoneOffset: 0, intrinsics: Intrinsics.ALL & ~Intrinsics.WEAK_REF }),
+          : { intrinsics: Intrinsics.ALL & ~Intrinsics.WEAK_REF, timezoneOffset: 0 }),
       }),
-    catch: (cause) => launchError(errorMessage(cause), cause),
   });
 
-export const startVm = Effect.fn("startVm")(function* (options: StartVmOptions) {
+const startVm = Effect.fn("startVm")(function* (options: protocolTypes.StartVmOptions) {
   const maxStackSize = options.maxStackSize ?? MAX_STACK_SIZE;
   const clock = virtualClock(options.data);
   const vm = yield* createVm(options, clock, maxStackSize);
   if (clock !== undefined) clock.creating = false;
   const { data, interruptBudget, post, shouldInterrupt } = options;
-  return bootVm(vm, { data, maxStackSize, interruptBudget, post, shouldInterrupt }, clock);
+  return bootVm(vm, { data, interruptBudget, maxStackSize, post, shouldInterrupt }, clock);
 });
 
-export const loadWasm = (source: () => CodemodeWasmModule | Promise<CodemodeWasmModule>) =>
+const loadWasm = (
+  source: () => typesModule.CodemodeWasmModule | Promise<typesModule.CodemodeWasmModule>,
+) =>
   Effect.tryPromise({
-    try: () => Promise.resolve(source()),
     catch: (cause) => launchError(`Failed to load QuickJS: ${errorMessage(cause)}`, cause),
+    try: () => Promise.resolve(source()),
   });
 
 interface InlineRun {
-  readonly data: VmStartData;
-  readonly events: VmEvents;
+  readonly data: protocolTypes.VmStartData;
+  readonly events: protocolTypes.VmEvents;
   readonly interruptBudget: number;
   readonly deadline: number | undefined;
   stopped: boolean;
@@ -89,7 +90,11 @@ const shouldInterrupt = (run: InlineRun): boolean => {
   return true;
 };
 
-const dispatch = (run: InlineRun, message: WorkerToHostMessage, terminal: boolean): void => {
+const dispatch = (
+  run: InlineRun,
+  message: protocolTypes.WorkerToHostMessage,
+  terminal: boolean,
+): void => {
   if (run.stopped) return;
   if ((run.exhausted || run.timedOut) && terminal) {
     run.events.failure({
@@ -103,26 +108,30 @@ const dispatch = (run: InlineRun, message: WorkerToHostMessage, terminal: boolea
   run.events.message(message);
 };
 
-const postFrom = (run: InlineRun, message: WorkerToHostMessage): void => {
+const postFrom = (run: InlineRun, message: protocolTypes.WorkerToHostMessage): void => {
   const terminal = message.type === "done" || message.type === "crash";
   if (terminal && run.settled) return;
   if (terminal) run.settled = true;
   queueMicrotask(() => dispatch(run, message, terminal));
 };
 
-const newRun = (data: VmStartData, events: VmEvents, interruptBudget: number): InlineRun => ({
+const newRun = (
+  data: protocolTypes.VmStartData,
+  events: protocolTypes.VmEvents,
+  interruptBudget: number,
+): InlineRun => ({
   data,
-  events,
-  interruptBudget,
   deadline: data.timeoutMs === undefined ? undefined : performance.now() + data.timeoutMs,
-  stopped: false,
-  settled: false,
-  polls: 0,
+  events,
   exhausted: false,
+  interruptBudget,
+  polls: 0,
+  settled: false,
+  stopped: false,
   timedOut: false,
 });
 
-export function inlineLauncher(options: InlineLauncherOptions): VmLauncher {
+function inlineLauncher(options: protocolTypes.InlineLauncherOptions): protocolTypes.VmLauncher {
   const interruptBudget = options.interruptBudget ?? DEFAULT_INTERRUPT_BUDGET;
   return (data, events) =>
     Effect.gen(function* () {
@@ -130,11 +139,11 @@ export function inlineLauncher(options: InlineLauncherOptions): VmLauncher {
       const run = newRun(data, events, interruptBudget);
       const session = yield* startVm({
         data,
-        wasm: module,
-        maxStackSize: INLINE_MAX_STACK_SIZE,
         interruptBudget,
-        shouldInterrupt: () => shouldInterrupt(run),
+        maxStackSize: INLINE_MAX_STACK_SIZE,
         post: (message) => postFrom(run, message),
+        shouldInterrupt: () => shouldInterrupt(run),
+        wasm: module,
       });
       return {
         post: (message) => {
@@ -149,11 +158,12 @@ export function inlineLauncher(options: InlineLauncherOptions): VmLauncher {
     });
 }
 
-export class InlineCodemodeSandbox extends CodemodeSandboxBase {
-  constructor(options: InlineCodemodeSandboxOptions) {
-    super(
-      options,
-      inlineLauncher({ wasm: options.wasm, interruptBudget: options.interruptBudget }),
-    );
-  }
-}
+const inline = {
+  DEFAULT_INTERRUPT_BUDGET,
+  InlineCodemodeSandbox,
+  inlineLauncher,
+  loadWasm,
+  startVm,
+};
+
+export default inline;

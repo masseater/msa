@@ -1,27 +1,36 @@
-import { NOOP_TELEMETRY_CONTEXT, type TelemetryContext } from "@msa/telemetry";
+import telemetry from "@msa/telemetry";
+import type telemetryTypes from "@msa/telemetry/index.types";
 import { Effect } from "effect";
 import { describe, expect, it } from "vite-plus/test";
 
-import { buildBaseOptions } from "../src/api/simple-options.ts";
-import { registerImagesApiProvider } from "../src/images-api-registry.ts";
-import { generateImages } from "../src/images.ts";
-import { createModels, createProvider } from "../src/models.ts";
-import type { MutableModels, Provider } from "../src/models.ts";
-import type {
-  DeferredHandle,
-  ImageModel,
-  ImagesContext,
-  Model,
-  ProviderRequestOptions,
-} from "../src/types.ts";
-import { AssistantMessageEventStream } from "../src/utils/event-stream.ts";
-import { normalizeContext } from "../src/utils/transcript.ts";
+import type modelsTypes from "../src/models.types.ts";
+import type typesModule from "../src/types.types.ts";
+import eventStream from "../src/utils/event-stream.ts";
+import type eventStreamTypes from "../src/utils/event-stream.types.ts";
+import transcript from "../src/utils/transcript.ts";
+import telemetryOptionsKit from "./telemetry-options-kit.ts";
 
-const telemetryContext: TelemetryContext = NOOP_TELEMETRY_CONTEXT;
+const {
+  images: imagesModule,
+  imagesApiRegistry,
+  models: modelsModule,
+  simpleOptions,
+} = telemetryOptionsKit;
+
+const { normalizeContext } = transcript;
+const { AssistantMessageEventStream } = eventStream;
+const { buildBaseOptions } = simpleOptions;
+const { registerImagesApiProvider } = imagesApiRegistry;
+const { generateImages } = imagesModule;
+const { createModels, createProvider } = modelsModule;
+
+const { NOOP_TELEMETRY_CONTEXT } = telemetry;
+
+const telemetryContext: telemetryTypes.TelemetryContext = NOOP_TELEMETRY_CONTEXT;
 const context = normalizeContext({ messages: [] });
-const imagesContext: ImagesContext = { input: [{ text: "circle", type: "text" }] };
+const imagesContext: typesModule.ImagesContext = { input: [{ text: "circle", type: "text" }] };
 
-const model: Model<"telemetry-test"> = {
+const model: typesModule.Model<"telemetry-test"> = {
   api: "telemetry-test",
   baseUrl: "https://example.test",
   contextWindow: 1000,
@@ -34,7 +43,7 @@ const model: Model<"telemetry-test"> = {
   reasoning: false,
 };
 
-const imageModel: ImageModel<"telemetry-test-images"> = {
+const imageModel: typesModule.ImageModel<"telemetry-test-images"> = {
   api: "telemetry-test-images",
   baseUrl: "https://example.test",
   cost: { cacheRead: 0, cacheWrite: 0, input: 0, output: 0 },
@@ -46,7 +55,9 @@ const imageModel: ImageModel<"telemetry-test-images"> = {
   type: "image",
 };
 
-function completedStream(requestModel: Model<string>): AssistantMessageEventStream {
+function completedStream(
+  requestModel: typesModule.Model<string>,
+): eventStreamTypes.AssistantMessageEventStream {
   const stream = new AssistantMessageEventStream();
   queueMicrotask(() => {
     stream.push({
@@ -75,7 +86,7 @@ function completedStream(requestModel: Model<string>): AssistantMessageEventStre
 }
 
 const isInheritedByEveryRequestOption = () => {
-  const options = { telemetryContext } satisfies ProviderRequestOptions;
+  const options = { telemetryContext } satisfies typesModule.ProviderRequestOptions;
   expect(options.telemetryContext).toBe(telemetryContext);
   expect(buildBaseOptions(model, context, { telemetryContext }).telemetryContext).toBe(
     telemetryContext,
@@ -98,10 +109,10 @@ const survivesProviderAndModelsStreamDeferred = () =>
         handle,
         observed,
       }: {
-        models: MutableModels;
-        provider: Provider<"telemetry-test">;
-        handle: DeferredHandle;
-        observed: (TelemetryContext | undefined)[];
+        models: modelsTypes.MutableModels;
+        provider: modelsTypes.Provider<"telemetry-test">;
+        handle: typesModule.DeferredHandle;
+        observed: (telemetryTypes.TelemetryContext | undefined)[];
       } = yield* survivesProviderAndModelsStreamDeferredStep1();
       models.setProvider(provider);
       yield* Effect.promise(() => models.stream(model, context, { telemetryContext }).result());
@@ -126,7 +137,7 @@ describe("ProviderRequestOptions.telemetryContext", () => {
 const survivesDirectAndModelsImageDispatch = () =>
   Effect.runPromise(
     Effect.gen(function* () {
-      const observed: Array<TelemetryContext | undefined> = [];
+      const observed: Array<telemetryTypes.TelemetryContext | undefined> = [];
       registerImagesApiProvider({
         api: imageModel.api,
         generateImages: (requestModel, _context, options) => {
@@ -180,8 +191,8 @@ describe("ProviderRequestOptions.telemetryContext", () => {
 
 const survivesProviderAndModelsStreamDeferredStep1 = () =>
   Effect.gen(function* () {
-    const observed: Array<TelemetryContext | undefined> = [];
-    const handle: DeferredHandle = {
+    const observed: Array<telemetryTypes.TelemetryContext | undefined> = [];
+    const handle: typesModule.DeferredHandle = {
       api: model.api,
       id: "response",
       modelId: model.id,

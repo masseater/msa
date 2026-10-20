@@ -1,19 +1,18 @@
-import {
-  type AssistantMessage,
-  type ToolResultMessage,
-  type Usage,
-  fauxAssistantMessage,
-} from "@msa/ai";
+import ai from "@msa/ai";
+import type aiTypes from "@msa/ai/index.types";
 import type deltaTypes from "@msa/chord/delta.types";
 import type durableTypes from "@msa/durable/index.types";
 import type memoryTypes from "@msa/durable/storage/memory.types";
 import { Effect } from "effect";
 import { describe, expect, it } from "vite-plus/test";
 
-import usageModule from "../src/harness/usage.ts";
 import durableKit from "./durable-kit.ts";
-import harnessInboxSupport from "./harness-inbox-support.ts";
+import harnessInboxPart3Kit from "./harness-inbox-part-3-kit.ts";
 import support from "./support.ts";
+
+const { harnessInboxSupport, usage: usageModule } = harnessInboxPart3Kit;
+
+const { fauxAssistantMessage } = ai;
 
 const { durable, harness: harnessModule, memory } = durableKit;
 
@@ -91,7 +90,7 @@ describe("inbox", () => {
 
 const retryingUsageChat = Effect.fn("retryingUsageChat")(function* () {
   const setup = chatSetup({ tokenSize: { max: 1, min: 1 }, tokensPerSecond: 200 });
-  const spent: Usage = {
+  const spent: aiTypes.Usage = {
     cacheRead: 0,
     cacheWrite: 0,
     cost: { cacheRead: 0, cacheWrite: 0, input: 0, output: 0, total: 0 },
@@ -116,7 +115,7 @@ const retryingUsageChat = Effect.fn("retryingUsageChat")(function* () {
 
 const totalsAssistantUsageStep1 = Effect.gen(function* () {
   const setup = chatSetup();
-  const spent: Usage = {
+  const spent: aiTypes.Usage = {
     cacheRead: 3,
     cacheWrite: 4,
     cost: { cacheRead: 0.3, cacheWrite: 0.4, input: 0.1, output: 0.2, total: 1 },
@@ -134,7 +133,7 @@ const totalsAssistantUsageStep1 = Effect.gen(function* () {
   );
   const entries = yield* allEntries(root);
   const assistants = entries.flatMap((entry) =>
-    entry.kind === "msa.assistant" ? [entry.model![0] as AssistantMessage] : [],
+    entry.kind === "msa.assistant" ? [entry.model![0] as aiTypes.AssistantMessage] : [],
   );
   const expected = assistants.reduce(
     (sum, message) => ({
@@ -148,7 +147,7 @@ const totalsAssistantUsageStep1 = Effect.gen(function* () {
   expect(usage.models["faux/faux-1"]).toMatchObject(expected);
   expect(usage.tools).toEqual({ hold: spent });
   const result = entries.find((entry) => entry.kind === "msa.tool-result")!
-    .model![0] as ToolResultMessage;
+    .model![0] as aiTypes.ToolResultMessage;
   expect(result.usage).toEqual(spent);
 
   const fork = yield* awaited(
@@ -207,7 +206,7 @@ const countsFailedAttempts = Effect.gen(function* () {
   );
   yield* awaited(input.wait(context));
   const assistants = (yield* allEntries(root)).flatMap((entry) =>
-    entry.kind === "msa.assistant" ? [entry.model![0] as AssistantMessage] : [],
+    entry.kind === "msa.assistant" ? [entry.model![0] as aiTypes.AssistantMessage] : [],
   );
   expect(assistants.map((message) => message.stopReason)).toEqual([
     "error",
@@ -230,7 +229,7 @@ describe("usage", () => {
 const keepsToolsNamed = Effect.gen(function* () {
   const runPromise = Effect.runPromiseWith(yield* Effect.context<never>());
   const { harness, root } = yield* openChat(new MemoryStorage(), chatSetup());
-  const usage: Usage = {
+  const usage: aiTypes.Usage = {
     cacheRead: 0,
     cacheWrite: 0,
     cost: { cacheRead: 0, cacheWrite: 0, input: 0, output: 0, total: 0 },

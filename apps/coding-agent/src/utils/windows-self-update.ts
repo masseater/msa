@@ -56,7 +56,7 @@ export function cleanupWindowsSelfUpdateQuarantine(packageDir: string): Promise<
   if (quarantineRoot === undefined || quarantineRoot === "") {
     return Effect.runPromise(Effect.void);
   }
-  return remove({ path: quarantineRoot, recursive: true, force: true }).catch(() => undefined);
+  return remove({ force: true, path: quarantineRoot, recursive: true }).catch(() => undefined);
 }
 
 export function quarantineWindowsNativeDependencies(packageDir: string): Promise<void> {

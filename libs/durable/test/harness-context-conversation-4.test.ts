@@ -1,4 +1,5 @@
-import { type Message, createModels } from "@msa/ai";
+import ai from "@msa/ai";
+import type aiTypes from "@msa/ai/index.types";
 import durable from "@msa/durable";
 import harnessModule from "@msa/durable/harness";
 import type durableTypes from "@msa/durable/index.types";
@@ -8,6 +9,8 @@ import { afterEach, describe, expect, it, vi } from "vite-plus/test";
 
 import harnessContextSupport from "./harness-context-support.ts";
 import testSupport from "./support.ts";
+
+const { createModels } = ai;
 
 const { MemoryStorage } = memoryModule;
 const { Harness, createRegistry } = harnessModule;
@@ -30,7 +33,7 @@ const keepsReturnedViews = Effect.gen(function* () {
     runPromise(
       Effect.gen(function* () {
         const view = yield* awaited(runtime.context(opened.root.id, taskContext));
-        (view.messages as Message[]).length = 0;
+        (view.messages as aiTypes.Message[]).length = 0;
         (view.entries as durableTypes.EntryRecord[]).pop();
         expect(() => {
           (view.contributions[0]![0] as { content: unknown }).content = "changed";

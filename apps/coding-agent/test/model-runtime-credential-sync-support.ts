@@ -1,4 +1,4 @@
-import type { ApiKeyCredential, Model, Provider } from "@msa/ai";
+import type aiTypes from "@msa/ai/index.types";
 import testing from "@msa/testing";
 import { Deferred, Effect } from "effect";
 
@@ -8,7 +8,7 @@ import type modelRuntimeCredentialSyncSupportTypes from "./model-runtime-credent
 
 const { awaited, runTest } = testing;
 
-function model(provider: string): Model<"openai-completions"> {
+function model(provider: string): aiTypes.Model<"openai-completions"> {
   return {
     api: "openai-completions" as const,
     baseUrl: "https://example.test/v1",
@@ -26,10 +26,10 @@ function model(provider: string): Model<"openai-completions"> {
 const makeProvider = (
   id: string,
   options: {
-    login?: () => Promise<ApiKeyCredential>;
-    refreshModels?: Provider["refreshModels"];
+    login?: () => Promise<aiTypes.ApiKeyCredential>;
+    refreshModels?: aiTypes.Provider["refreshModels"];
   } = {},
-): Provider<"openai-completions"> => {
+): aiTypes.Provider<"openai-completions"> => {
   const providerModel = model(id);
   return {
     auth: {
@@ -67,7 +67,7 @@ const makeProvider = (
 };
 
 const withProvider = (
-  registered: Provider,
+  registered: aiTypes.Provider,
   credentials: AuthStorage = AuthStorage.inMemory(),
 ): Promise<ModelRuntime> =>
   runTest(

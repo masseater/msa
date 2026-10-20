@@ -1,21 +1,23 @@
 import { Clock, Effect, Exit, Scope, Stream } from "effect";
 import { describe, expect, inject, it } from "vite-plus/test";
 
-import { stream } from "../src/compat.ts";
-import type { Api, Context, Model, StreamOptions } from "../src/types.ts";
+import compatModule from "../src/compat.ts";
+import type typesModule from "../src/types.types.ts";
 import env from "./env.ts";
 import modelChoice from "./model-choice.ts";
 
+const { stream } = compatModule;
+
 const { chooseModel, usesApi } = modelChoice;
 
-type StreamOptionsWithExtras = StreamOptions & Record<string, unknown>;
+type StreamOptionsWithExtras = typesModule.StreamOptions & Record<string, unknown>;
 
 const { envValue } = env;
 
 const openaiCodexToken = inject("storedApiKeys")["openai-codex"];
 
-function testTokensOnAbort<TApi extends Api>(
-  llm: Model<TApi>,
+function testTokensOnAbort<TApi extends typesModule.Api>(
+  llm: typesModule.Model<TApi>,
   options: StreamOptionsWithExtras = {},
 ) {
   return Effect.runPromise(
@@ -48,7 +50,7 @@ describe("Token Statistics on Abort", () => {
     () => {
       const { compat: _compat, ...baseModel } = chooseModel("openai", "direct OpenAI");
       void _compat;
-      const llm: Model<"openai-completions"> = {
+      const llm: typesModule.Model<"openai-completions"> = {
         ...baseModel,
         api: "openai-completions",
       };
@@ -98,18 +100,18 @@ const gpt55ShouldIncludeToken = () =>
 describe("Token Statistics on Abort", () => {
   describe("OpenAI Codex Provider", () => {
     it.skipIf(openaiCodexToken === undefined || openaiCodexToken === "")(
-      "gpt-5.5 - should include token stats when aborted mid-stream",
+      "Codex - should include token stats when aborted mid-stream",
       { retry: 3, timeout: 30000 },
       gpt55ShouldIncludeToken,
     );
   });
 });
 
-function* testTokensOnAbortStep1<TApi extends Api>(
-  llm: Model<TApi>,
+function* testTokensOnAbortStep1<TApi extends typesModule.Api>(
+  llm: typesModule.Model<TApi>,
   options: StreamOptionsWithExtras,
 ) {
-  const context: Context = {
+  const context: typesModule.Context = {
     messages: [
       {
         content: "Write a long poem with 20 stanzas about the beauty of nature.",

@@ -18,8 +18,10 @@ import { Hex } from "effect/encoding";
 import { dual } from "effect/Function";
 import { ChildProcess, ChildProcessSpawner } from "effect/process";
 
-import { pathOperations } from "../src/platform.ts";
+import platform from "../src/platform.ts";
 import type testPlatformTypes from "./test-platform.types.ts";
+
+const { pathOperations } = platform;
 
 const testServices = Layer.mergeAll(
   NodeFileSystem.layer,

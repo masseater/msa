@@ -1,14 +1,21 @@
-import { type AssistantMessage, Type, fauxAssistantMessage, fauxText } from "@msa/ai";
-import { CodemodeSandbox } from "@msa/codemode";
-import { CODEMODE_SOURCE_GRAMMAR } from "@msa/codemode/source";
+import ai from "@msa/ai";
+import type aiTypes from "@msa/ai/index.types";
+import codemodeModule from "@msa/codemode";
+import source from "@msa/codemode/source";
 import type durableTypes from "@msa/durable/index.types";
 import { Effect } from "effect";
 import { describe, expect, it } from "vite-plus/test";
 
-import codemode from "../src/codemode/codemode.ts";
-import describeModule from "../src/codemode/describe.ts";
+import codemodeDescribeKit from "./codemode-describe-kit.ts";
 import durableKit from "./durable-kit.ts";
 import support from "./support.ts";
+
+const { codemode, describe: describeModule } = codemodeDescribeKit;
+
+const { Type, fauxAssistantMessage, fauxText } = ai;
+
+const { CodemodeSandbox } = codemodeModule;
+const { CODEMODE_SOURCE_GRAMMAR } = source;
 
 const { codemodeDescription, codemodeSection } = describeModule;
 const { createCodemodeExtension } = codemode;
@@ -96,7 +103,7 @@ const rendersSectionConversation = Effect.gen(function* () {
       tool("mcp__github__get_issue", "Get an issue.", { deferred: true }),
     ],
   });
-  setup.faux.setResponses([fauxAssistantMessage([fauxText("hi")]) as AssistantMessage]);
+  setup.faux.setResponses([fauxAssistantMessage([fauxText("hi")]) as aiTypes.AssistantMessage]);
   const { harness, root } = yield* openChat(new MemoryStorage(), setup);
   yield* awaited(
     (yield* awaited(root.submit({ content: "go", type: "input" }, context))).wait(context),

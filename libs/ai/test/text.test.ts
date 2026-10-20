@@ -1,8 +1,11 @@
 import { describe, expect, it } from "vite-plus/test";
 
-import { type AssistantMessage, type ToolResultMessage, contentText } from "../src/index.ts";
+import ai from "../src/index.ts";
+import type aiTypes from "../src/index.types.ts";
 
-const content: AssistantMessage["content"] = [
+const { contentText } = ai;
+
+const content: aiTypes.AssistantMessage["content"] = [
   { thinking: "reasoning", type: "thinking" },
   { text: "first", type: "text" },
   { arguments: {}, id: "1", name: "read", type: "toolCall" },
@@ -23,7 +26,7 @@ describe("contentText", () => {
   });
 
   it("extracts text from tool-result content", () => {
-    const toolResultContent: ToolResultMessage["content"] = [
+    const toolResultContent: aiTypes.ToolResultMessage["content"] = [
       { text: "first", type: "text" },
       { data: "...", mimeType: "image/png", type: "image" },
       { text: "second", type: "text" },

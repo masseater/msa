@@ -1,11 +1,11 @@
 import { Effect, FileSystem } from "effect";
 
 import {
+  ToolFailure,
   currentTimeMillis,
   fromPromise,
   pathOperations,
   platformRuntime,
-  ToolFailure,
   unwrapForeign,
 } from "../platform/index.ts";
 import { EmbeddingClient } from "./embeddings.ts";
@@ -13,15 +13,15 @@ import { formatMemoryStats, formatMemoryStatus, isMemoryKind } from "./memory-fo
 import { projectNameOf } from "./memory-project.ts";
 import type {
   MemorySaveOutcome,
-  MemoryServiceOptions,
   MemorySaveRequest,
+  MemoryServiceOptions,
   ResolvedMemorySettings,
 } from "./memory-types.ts";
 import {
   MEMORY_KINDS,
-  MemoryStore,
   type MemoryRecord,
   type MemoryScore,
+  MemoryStore,
   type MemoryStoreStats,
 } from "./store.ts";
 
@@ -112,7 +112,7 @@ export class MemoryService {
   }
 
   list(limit = 20): MemoryRecord[] {
-    return this.ensureStore().list({ project: this.project, limit });
+    return this.ensureStore().list({ limit, project: this.project });
   }
 
   stats(): MemoryStoreStats {
@@ -126,10 +126,10 @@ export class MemoryService {
   describeStatus(): string {
     if (!this.settings.enabled) return "Memory is disabled (settings: memory.enabled).";
     return formatMemoryStatus({
-      settings: this.settings,
-      project: this.project,
-      stats: this.ensureStore().stats(),
       lastEmbeddingError: this.lastEmbeddingError,
+      project: this.project,
+      settings: this.settings,
+      stats: this.ensureStore().stats(),
     });
   }
 
@@ -257,8 +257,8 @@ export class MemoryService {
       const result = this.ensureStore().save({
         content,
         kind,
-        scope,
         project: this.project,
+        scope,
         ...(embedding === undefined
           ? {}
           : { embedding, embeddingModel: this.settings.embedding.model }),

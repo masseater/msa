@@ -1,5 +1,5 @@
-import type { AgentTool } from "@msa/agent-core";
-import { fauxAssistantMessage, fauxToolCall } from "@msa/ai";
+import type agentTypes from "@msa/agent-core/index.types";
+import ai from "@msa/ai";
 import { Effect } from "effect";
 import { Type } from "typebox";
 import { afterEach, describe, expect, it, vi } from "vite-plus/test";
@@ -7,6 +7,8 @@ import { afterEach, describe, expect, it, vi } from "vite-plus/test";
 import type { ExtensionFactory } from "../../src/index.ts";
 import agentSessionCompactionSupport from "./agent-session-compaction-support.ts";
 import harnessModule from "./harness.ts";
+
+const { fauxAssistantMessage, fauxToolCall } = ai;
 
 const { harnesses } = agentSessionCompactionSupport;
 
@@ -22,7 +24,7 @@ const afterEachHook3 = () => {
 
 const TOOL_RESULT = `large-tool-result:${"x".repeat(8000)}`;
 
-const largeTool: AgentTool = {
+const largeTool: agentTypes.AgentTool = {
   description: "Returns enough content to cross the compaction threshold",
   execute: () => Promise.resolve({ content: [{ text: TOOL_RESULT, type: "text" }], details: {} }),
   label: "Large result",

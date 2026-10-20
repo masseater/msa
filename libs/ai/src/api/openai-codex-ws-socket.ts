@@ -1,14 +1,14 @@
 import { Data, Effect } from "effect";
 
-import type { ProviderEnv } from "../types.ts";
-import { headersToRecord } from "../utils/headers.ts";
-import { requestAbortedError } from "./openai-codex-error.ts";
-import {
-  getWebSocketConstructor,
-  type WebSocketConstructor,
-  type WebSocketLike,
-  type WebSocketListener,
-} from "./openai-codex-ws-constructor.ts";
+import headersModule from "../utils/headers.ts";
+import openaiCodexError from "./openai-codex-error.ts";
+import openaiCodexWsConstructor from "./openai-codex-ws-constructor.ts";
+import type openaiCodexWsConstructorTypes from "./openai-codex-ws-constructor.types.ts";
+import type openaiCodexWsSocketTypes from "./openai-codex-ws-socket.types.ts";
+
+const { requestAbortedError } = openaiCodexError;
+const { headersToRecord } = headersModule;
+const { getWebSocketConstructor } = openaiCodexWsConstructor;
 
 const DEFAULT_WEBSOCKET_CONNECT_TIMEOUT_MS = 15_000;
 const WEBSOCKET_MESSAGE_TOO_BIG_CLOSE_CODE = 1009;
@@ -25,7 +25,7 @@ const field = (event: object, key: string): unknown =>
 
 const nonEmpty = (value: unknown): value is string => typeof value === "string" && value.length > 0;
 
-export function extractWebSocketError(event: unknown): Error {
+function extractWebSocketError(event: unknown): Error {
   if (typeof event !== "object" || event === null) return new Error("WebSocket error");
   const message = field(event, "message");
   if (nonEmpty(message)) return new Error(message);
@@ -36,7 +36,7 @@ export function extractWebSocketError(event: unknown): Error {
   return new Error(nonEmpty(nestedMessage) ? nestedMessage : "WebSocket error");
 }
 
-export function extractWebSocketCloseError(event: unknown): Error {
+function extractWebSocketCloseError(event: unknown): Error {
   if (typeof event !== "object" || event === null) return new Error("WebSocket closed");
   const code = field(event, "code");
   const reason = field(event, "reason");
@@ -45,14 +45,16 @@ export function extractWebSocketCloseError(event: unknown): Error {
   const tooBig = code === WEBSOCKET_MESSAGE_TOO_BIG_CLOSE_CODE ? " message too big" : "";
   const reasonText = nonEmpty(reason) ? ` ${reason}` : tooBig;
   return new WebSocketCloseError({
-    message: `WebSocket closed${codeText}${reasonText}`.trim(),
     code: typeof code === "number" ? code : undefined,
+    message: `WebSocket closed${codeText}${reasonText}`.trim(),
     reason: nonEmpty(reason) ? reason : undefined,
     wasClean: typeof wasClean === "boolean" ? wasClean : undefined,
   });
 }
 
-export function closeWebSocket(reason = "done"): (socket: WebSocketLike) => void {
+function closeWebSocket(
+  reason = "done",
+): (socket: openaiCodexWsConstructorTypes.WebSocketLike) => void {
   return (socket) => {
     try {
       socket.close(1000, reason);
@@ -60,22 +62,24 @@ export function closeWebSocket(reason = "done"): (socket: WebSocketLike) => void
   };
 }
 
-export function isWebSocketReusable(socket: WebSocketLike): boolean {
+function isWebSocketReusable(socket: openaiCodexWsConstructorTypes.WebSocketLike): boolean {
   const readyState = (socket as { readyState?: unknown }).readyState;
   return typeof readyState !== "number" || readyState === 1;
 }
 
 interface OpenWatch {
-  readonly socket: WebSocketLike;
+  readonly socket: openaiCodexWsConstructorTypes.WebSocketLike;
   readonly signal: AbortSignal | undefined;
-  readonly resume: (effect: Effect.Effect<WebSocketLike>) => void;
+  readonly resume: (effect: Effect.Effect<openaiCodexWsConstructorTypes.WebSocketLike>) => void;
 }
 
 function watchOpen({ socket, signal, resume }: OpenWatch): Effect.Effect<void> {
   let settled = false;
-  const onOpen: WebSocketListener = () => settle(Effect.succeed(socket));
-  const onError: WebSocketListener = (event) => settle(Effect.die(extractWebSocketError(event)));
-  const onClose: WebSocketListener = (event) =>
+  const onOpen: openaiCodexWsConstructorTypes.WebSocketListener = () =>
+    settle(Effect.succeed(socket));
+  const onError: openaiCodexWsConstructorTypes.WebSocketListener = (event) =>
+    settle(Effect.die(extractWebSocketError(event)));
+  const onClose: openaiCodexWsConstructorTypes.WebSocketListener = (event) =>
     settle(Effect.die(extractWebSocketCloseError(event)));
   const onAbort = () => settle(Effect.die(requestAbortedError()), "aborted");
   const cleanup = () => {
@@ -84,7 +88,10 @@ function watchOpen({ socket, signal, resume }: OpenWatch): Effect.Effect<void> {
     socket.removeEventListener("close", onClose);
     signal?.removeEventListener("abort", onAbort);
   };
-  function settle(result: Effect.Effect<WebSocketLike>, closeReason?: string): void {
+  function settle(
+    result: Effect.Effect<openaiCodexWsConstructorTypes.WebSocketLike>,
+    closeReason?: string,
+  ): void {
     if (settled) return;
     settled = true;
     cleanup();
@@ -104,24 +111,16 @@ function watchOpen({ socket, signal, resume }: OpenWatch): Effect.Effect<void> {
   });
 }
 
-export interface WebSocketConnectRequest {
-  readonly url: string;
-  readonly headers: Headers;
-  readonly signal: AbortSignal | undefined;
-  readonly connectTimeoutMs: number | undefined;
-  readonly env: ProviderEnv | undefined;
-}
-
 function openSocket(
-  WebSocketCtor: WebSocketConstructor,
-  { url, headers, signal }: WebSocketConnectRequest,
-): Effect.Effect<WebSocketLike> {
+  WebSocketCtor: openaiCodexWsConstructorTypes.WebSocketConstructor,
+  { url, headers, signal }: openaiCodexWsSocketTypes.WebSocketConnectRequest,
+): Effect.Effect<openaiCodexWsConstructorTypes.WebSocketLike> {
   const wsHeaders = headersToRecord(headers);
   delete wsHeaders["OpenAI-Beta"];
-  return Effect.callback<WebSocketLike>((resume) => {
+  return Effect.callback<openaiCodexWsConstructorTypes.WebSocketLike>((resume) => {
     try {
       const socket = new WebSocketCtor(url, { headers: wsHeaders });
-      return watchOpen({ socket, signal, resume });
+      return watchOpen({ resume, signal, socket });
     } catch (error) {
       resume(Effect.die(error instanceof Error ? error : new Error(String(error))));
       return undefined;
@@ -129,7 +128,9 @@ function openSocket(
   });
 }
 
-export function connectWebSocket(request: WebSocketConnectRequest): Effect.Effect<WebSocketLike> {
+function connectWebSocket(
+  request: openaiCodexWsSocketTypes.WebSocketConnectRequest,
+): Effect.Effect<openaiCodexWsConstructorTypes.WebSocketLike> {
   return Effect.suspend(() => {
     const WebSocketCtor = getWebSocketConstructor(request.env);
     if (WebSocketCtor === null) {
@@ -146,3 +147,13 @@ export function connectWebSocket(request: WebSocketConnectRequest): Effect.Effec
     );
   });
 }
+
+const openaiCodexWsSocket = {
+  closeWebSocket,
+  connectWebSocket,
+  extractWebSocketCloseError,
+  extractWebSocketError,
+  isWebSocketReusable,
+};
+
+export default openaiCodexWsSocket;

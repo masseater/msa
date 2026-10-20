@@ -181,10 +181,10 @@ function compareVersions(v1: ChangelogEntry, v2: ChangelogEntry): number {
 function getNewEntriesImpl(entries: ChangelogEntry[], lastVersion: string): ChangelogEntry[] {
   const parts = lastVersion.split(".").map(Number);
   const last: ChangelogEntry = {
+    content: "",
     major: parts[0] || 0,
     minor: parts[1] || 0,
     patch: parts[2] || 0,
-    content: "",
   };
 
   return entries.filter((entry) => compareVersions(entry, last) > 0);

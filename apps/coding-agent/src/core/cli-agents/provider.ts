@@ -1,13 +1,9 @@
 import { existsSync } from "node:fs";
 
-import {
-  createProvider,
-  type AssistantMessageEventStream,
-  type Model,
-  type Provider,
-  type SimpleStreamOptions,
-  type TranscriptContext,
-} from "@msa/ai";
+import ai from "@msa/ai";
+import type aiTypes from "@msa/ai/index.types";
+
+const { createProvider } = ai;
 
 export interface CliAgentModel {
   id: string;
@@ -25,15 +21,17 @@ export function cliAgentProvider(input: {
 
   executable(): string | undefined;
   streamSimple(
-    model: Model<string>,
-    context: TranscriptContext,
-    options?: SimpleStreamOptions,
-  ): AssistantMessageEventStream;
-}): Provider {
+    model: aiTypes.Model<string>,
+    context: aiTypes.TranscriptContext,
+    options?: aiTypes.SimpleStreamOptions,
+  ): aiTypes.AssistantMessageEventStream;
+}): aiTypes.Provider {
   const api = input.id;
   return createProvider({
-    id: input.id,
-    name: input.name,
+    api: {
+      stream: (model, context, options) => input.streamSimple(model, context, options),
+      streamSimple: (model, context, options) => input.streamSimple(model, context, options),
+    },
     auth: {
       apiKey: {
         name: `${input.name} login`,
@@ -45,6 +43,7 @@ export function cliAgentProvider(input: {
         },
       },
     },
+    id: input.id,
     models: input.models.map((model) => ({
       ...model,
       api,
@@ -52,9 +51,6 @@ export function cliAgentProvider(input: {
       baseUrl: "",
       cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0 },
     })),
-    api: {
-      stream: (model, context, options) => input.streamSimple(model, context, options),
-      streamSimple: (model, context, options) => input.streamSimple(model, context, options),
-    },
+    name: input.name,
   });
 }

@@ -1,9 +1,11 @@
 import { Deferred, Effect } from "effect";
 import { afterEach, describe, expect, it, vi } from "vite-plus/test";
 
-import { McpAbortError, McpClient, McpTimeoutError } from "../src/index.ts";
+import mcp from "../src/index.ts";
 import inMemoryServer from "./in-memory-server.ts";
 import type inMemoryServerTypes from "./in-memory-server.types.ts";
+
+const { McpAbortError, McpClient, McpTimeoutError } = mcp;
 
 const { connect, createServer } = inMemoryServer;
 

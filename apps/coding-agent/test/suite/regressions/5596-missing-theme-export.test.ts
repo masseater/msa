@@ -1,4 +1,4 @@
-import { fauxAssistantMessage } from "@msa/ai";
+import ai from "@msa/ai";
 import testing from "@msa/testing";
 import { Effect } from "effect";
 import { afterEach, describe, expect, it } from "vite-plus/test";
@@ -7,6 +7,8 @@ import { SessionManager } from "../../../src/core/session-manager.ts";
 import tuiKit from "../../tui-kit.ts";
 import harnessModule from "../harness.ts";
 import type harnessTypes from "../harness.types.ts";
+
+const { fauxAssistantMessage } = ai;
 
 const { awaited, joinPath, makeTempDir, pathExists, removeDirs, runTest } = testing;
 

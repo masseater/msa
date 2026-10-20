@@ -1,6 +1,8 @@
-import { Agent, type AgentMessage, setDefaultStreamFn, type ThinkingLevel } from "@msa/agent-core";
-import type { ModelsSimpleStreamOptions } from "@msa/ai";
-import { clampThinkingLevel, type Message, type Model, streamSimple } from "@msa/ai/compat";
+import agentModule from "@msa/agent-core";
+import type agentTypes from "@msa/agent-core/index.types";
+import compat from "@msa/ai/compat";
+import type compatTypes from "@msa/ai/compat.types";
+import type aiTypes from "@msa/ai/index.types";
 import * as Effect from "effect/Effect";
 
 import { getAgentDir } from "../config.ts";
@@ -21,18 +23,18 @@ import { convertToLlm } from "./messages.ts";
 import { findInitialModel } from "./model-resolver.ts";
 import { ModelRuntime } from "./model-runtime.ts";
 import type { SessionTelemetryOptions } from "./observability/session-telemetry.ts";
-import { isOrchestratorTool, ORCHESTRATOR_TOOL_NAMES } from "./orchestrator/tool-names.ts";
+import { ORCHESTRATOR_TOOL_NAMES, isOrchestratorTool } from "./orchestrator/tool-names.ts";
 import { join } from "./platform-node.ts";
 import { mergeProviderAttributionHeaders } from "./provider-attribution.ts";
 import type { ResourceLoader } from "./resource-loader.ts";
 import { DefaultResourceLoader } from "./resource-loader.ts";
-import { getDefaultSessionDir, SessionManager } from "./session-manager.ts";
+import { SessionManager, getDefaultSessionDir } from "./session-manager.ts";
 import {
-  applyToolModifiers,
   DEFAULT_TOOL_NAMES,
+  SettingsManager,
+  applyToolModifiers,
   getToolListError,
   isToolModifier,
-  SettingsManager,
 } from "./settings-manager.ts";
 import { time } from "./timings.ts";
 import {
@@ -50,6 +52,10 @@ import {
 } from "./tools/index.ts";
 import { getBranchSelection } from "./virtual-models.ts";
 
+const { clampThinkingLevel, streamSimple } = compat;
+
+const { Agent, setDefaultStreamFn } = agentModule;
+
 setDefaultStreamFn(streamSimple);
 
 export interface CreateAgentSessionOptions {
@@ -58,10 +64,10 @@ export interface CreateAgentSessionOptions {
 
   modelRuntime?: ModelRuntime;
 
-  model?: Model<any> | undefined;
-  thinkingLevel?: ThinkingLevel | undefined;
+  model?: compatTypes.Model<any> | undefined;
+  thinkingLevel?: agentTypes.ThinkingLevel | undefined;
   scopedModels?:
-    | Array<{ model: Model<any>; thinkingLevel?: ThinkingLevel | undefined }>
+    | Array<{ model: compatTypes.Model<any>; thinkingLevel?: agentTypes.ThinkingLevel | undefined }>
     | undefined;
 
   noTools?: "all" | "builtin" | undefined;
@@ -101,17 +107,17 @@ export type { Skill } from "./skills.ts";
 export type { Tool } from "./tools/index.ts";
 
 export {
-  withFileMutationQueue,
-  createCodingTools,
-  createReadOnlyTools,
-  createReadTool,
   createBashTool,
+  createCodingTools,
   createEditTool,
-  createWriteTool,
-  createGrepTool,
   createFindTool,
+  createGrepTool,
   createLsTool,
   createPowerShellTool,
+  createReadOnlyTools,
+  createReadTool,
+  createWriteTool,
+  withFileMutationQueue,
 };
 
 function getDefaultAgentDir(): string {
@@ -147,7 +153,7 @@ export function createAgentSession(
         options.sessionManager ?? SessionManager.create(cwd, getDefaultSessionDir(cwd, agentDir));
 
       if (resourceLoader === undefined) {
-        resourceLoader = new DefaultResourceLoader({ cwd, agentDir, settingsManager });
+        resourceLoader = new DefaultResourceLoader({ agentDir, cwd, settingsManager });
         yield* awaited(resourceLoader.reload());
         time("resourceLoader.reload");
       }
@@ -178,13 +184,13 @@ export function createAgentSession(
       if (model === undefined) {
         const result = yield* awaited(
           findInitialModel({
-            scopedModels: [],
-            isContinuing: hasExistingSession,
-            defaultProvider: settingsManager.getDefaultProvider(),
             defaultModelId: settingsManager.getDefaultModel(),
+            defaultProvider: settingsManager.getDefaultProvider(),
             defaultThinkingLevel: settingsManager.getDefaultThinkingLevel(),
-            modelThinkingLevels: settingsManager.getAllModelThinkingLevels(),
+            isContinuing: hasExistingSession,
             modelRuntime,
+            modelThinkingLevels: settingsManager.getAllModelThinkingLevels(),
+            scopedModels: [],
           }),
         );
         model = result.model;
@@ -199,7 +205,7 @@ export function createAgentSession(
 
       if (thinkingLevel === undefined && hasExistingSession) {
         thinkingLevel = hasThinkingEntry
-          ? (existingSession.thinkingLevel as ThinkingLevel)
+          ? (existingSession.thinkingLevel as agentTypes.ThinkingLevel)
           : (settingsManager.getDefaultThinkingLevel() ?? DEFAULT_THINKING_LEVEL);
       }
 
@@ -216,7 +222,7 @@ export function createAgentSession(
       if (model === undefined) {
         thinkingLevel = "off";
       } else {
-        thinkingLevel = clampThinkingLevel(model, thinkingLevel) as ThinkingLevel;
+        thinkingLevel = clampThinkingLevel(model, thinkingLevel) as agentTypes.ThinkingLevel;
       }
 
       const toolListError =
@@ -246,7 +252,9 @@ export function createAgentSession(
         (name) => isExcludedTool?.(name) !== true,
       );
 
-      const convertToLlmWithBlockImages = (messages: AgentMessage[]): Message[] => {
+      const convertToLlmWithBlockImages = (
+        messages: agentTypes.AgentMessage[],
+      ): compatTypes.Message[] => {
         const converted = convertToLlm(messages);
         if (!settingsManager.getBlockImages()) {
           return converted;
@@ -260,7 +268,7 @@ export function createAgentSession(
                 const filteredContent = content
                   .map((c) =>
                     c.type === "image"
-                      ? { type: "text" as const, text: "Image reading is disabled." }
+                      ? { text: "Image reading is disabled.", type: "text" as const }
                       : c,
                   )
                   .filter(
@@ -297,22 +305,19 @@ export function createAgentSession(
           ),
       );
       const buildRequestOptions = (
-        requestModel: Model<any>,
-        streamOptions: ModelsSimpleStreamOptions = {},
-      ): ModelsSimpleStreamOptions => {
+        requestModel: compatTypes.Model<any>,
+        streamOptions: aiTypes.ModelsSimpleStreamOptions = {},
+      ): aiTypes.ModelsSimpleStreamOptions => {
         const providerRetrySettings = settingsManager.getProviderRetrySettings();
         const httpIdleTimeoutMs = settingsManager.getHttpIdleTimeoutMs();
         const effectiveTimeoutMs = httpIdleTimeoutMs === 0 ? 2147483647 : httpIdleTimeoutMs;
         const headerRunner = extensionRunnerRef.current;
         return {
           ...streamOptions,
-          timeoutMs:
-            streamOptions.timeoutMs ?? providerRetrySettings.timeoutMs ?? effectiveTimeoutMs,
-          websocketConnectTimeoutMs:
-            streamOptions.websocketConnectTimeoutMs ??
-            settingsManager.getWebSocketConnectTimeoutMs(),
           maxRetries: streamOptions.maxRetries ?? providerRetrySettings.maxRetries,
           maxRetryDelayMs: streamOptions.maxRetryDelayMs ?? providerRetrySettings.maxRetryDelayMs,
+          timeoutMs:
+            streamOptions.timeoutMs ?? providerRetrySettings.timeoutMs ?? effectiveTimeoutMs,
           transformHeaders: (requestHeaders) =>
             Effect.runPromise(
               awaiting(function* () {
@@ -329,9 +334,12 @@ export function createAgentSession(
                 );
               }),
             ),
+          websocketConnectTimeoutMs:
+            streamOptions.websocketConnectTimeoutMs ??
+            settingsManager.getWebSocketConnectTimeoutMs(),
         };
       };
-      const cacheContextIsCurrent = (requestModel: Model<any>) => {
+      const cacheContextIsCurrent = (requestModel: compatTypes.Model<any>) => {
         const messages = agent.state.messages;
         return () => {
           const currentModel = agent.state.model;
@@ -352,7 +360,7 @@ export function createAgentSession(
             return yield* awaited(runner.emitBeforeProviderRequest(payload));
           }),
         );
-      const handleProviderResponse: NonNullable<ModelsSimpleStreamOptions["onResponse"]> = (
+      const handleProviderResponse: NonNullable<aiTypes.ModelsSimpleStreamOptions["onResponse"]> = (
         response,
       ) =>
         Effect.runPromise(
@@ -361,15 +369,15 @@ export function createAgentSession(
             if (runner?.hasHandlers("after_provider_response") !== true) return;
             yield* awaited(
               runner.emit({
-                type: "after_provider_response",
-                status: response.status,
                 headers: response.headers,
+                status: response.status,
+                type: "after_provider_response",
               }),
             );
           }),
         );
       const handleProviderStreamEvent: NonNullable<
-        ModelsSimpleStreamOptions["onProviderStreamEvent"]
+        aiTypes.ModelsSimpleStreamOptions["onProviderStreamEvent"]
       > = (data, eventModel) =>
         Effect.runPromise(
           awaiting(function* () {
@@ -377,11 +385,11 @@ export function createAgentSession(
             if (runner?.hasHandlers("provider_stream_event") !== true) return;
             yield* awaited(
               runner.emit({
-                data,
-                type: "provider_stream_event",
-                provider: eventModel.provider,
                 api: eventModel.api,
+                data,
                 model: eventModel.id,
+                provider: eventModel.provider,
+                type: "provider_stream_event",
               }),
             );
           }),
@@ -403,7 +411,7 @@ export function createAgentSession(
               const requestOptions = buildRequestOptions(requestModel, streamOptions);
               if (streamOptions?.sessionId === sessionManager.getSessionId()) {
                 cacheWarmer.start(
-                  { model: requestModel, context, options: requestOptions },
+                  { context, model: requestModel, options: requestOptions },
                   cacheContextIsCurrent(requestModel),
                 );
               }
@@ -442,24 +450,8 @@ export function createAgentSession(
 
       const session = new AgentSession({
         agent,
-        sessionManager,
-        settingsManager,
-        cwd,
-        scopedModels: options.scopedModels,
-        resourceLoader,
-        customTools: options.customTools,
-        modelRuntime,
-        cacheWarmer,
-        initialActiveToolNames,
-        usesDefaultTools:
-          (options.tools === undefined || toolModifiers !== undefined) &&
-          options.noTools === undefined,
-        defaultToolModifiers: toolModifiers,
         allowedToolNames,
-        excludedToolNames,
-        extensionRunnerRef,
-        sessionStartEvent: options.sessionStartEvent,
-        telemetry: options.telemetry,
+        cacheWarmer,
         createWorkerSession:
           options.isWorker !== true && resourceLoader instanceof DefaultResourceLoader
             ? (worker) =>
@@ -513,14 +505,30 @@ export function createAgentSession(
                   }),
                 )
             : undefined,
+        customTools: options.customTools,
+        cwd,
+        defaultToolModifiers: toolModifiers,
+        excludedToolNames,
+        extensionRunnerRef,
+        initialActiveToolNames,
+        modelRuntime,
+        resourceLoader,
+        scopedModels: options.scopedModels,
+        sessionManager,
+        sessionStartEvent: options.sessionStartEvent,
+        settingsManager,
+        telemetry: options.telemetry,
+        usesDefaultTools:
+          (options.tools === undefined || toolModifiers !== undefined) &&
+          options.noTools === undefined,
       });
 
       const extensionsResult = resourceLoader.getExtensions();
 
       return {
-        session,
         extensionsResult,
         modelFallbackMessage,
+        session,
       };
     }),
   );

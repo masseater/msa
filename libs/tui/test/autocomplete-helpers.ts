@@ -3,10 +3,13 @@ import { afterEach, beforeEach, it } from "node:test";
 import { Effect } from "effect";
 import { dual } from "effect/Function";
 
-import { type AutocompleteSuggestions, CombinedAutocompleteProvider } from "../src/autocomplete.ts";
-import { pathOperations } from "../src/platform.ts";
+import CombinedAutocompleteProvider from "../src/autocomplete.ts";
+import type autocompleteTypes from "../src/autocomplete.types.ts";
+import platformModule from "../src/platform.ts";
 import type autocompleteHelpersTypes from "./autocomplete-helpers.types.ts";
 import testPlatform from "./test-platform.ts";
+
+const { pathOperations } = platformModule;
 
 const { makeDirectory, makeTempDirectory, removeRecursive, runCommand, writeFileString } =
   testPlatform;
@@ -104,27 +107,29 @@ const requireFdPath = (): string => {
 
 const getSuggestions: {
   (
-    provider: CombinedAutocompleteProvider,
+    provider: autocompleteTypes.CombinedAutocompleteProvider,
     lines: string[],
     cursorLine: number,
     cursorCol: number,
     force?: boolean,
-  ): Promise<AutocompleteSuggestions | null>;
+  ): Promise<autocompleteTypes.AutocompleteSuggestions | null>;
   (
     lines: string[],
     cursorLine: number,
     cursorCol: number,
     force?: boolean,
-  ): (provider: CombinedAutocompleteProvider) => Promise<AutocompleteSuggestions | null>;
+  ): (
+    provider: autocompleteTypes.CombinedAutocompleteProvider,
+  ) => Promise<autocompleteTypes.AutocompleteSuggestions | null>;
 } = dual(
   (args) => args[0] instanceof CombinedAutocompleteProvider,
   (
-    provider: CombinedAutocompleteProvider,
+    provider: autocompleteTypes.CombinedAutocompleteProvider,
     lines: string[],
     cursorLine: number,
     cursorCol: number,
     force: boolean = false,
-  ): Promise<AutocompleteSuggestions | null> =>
+  ): Promise<autocompleteTypes.AutocompleteSuggestions | null> =>
     provider.getSuggestions(lines, cursorLine, cursorCol, {
       force,
       signal: new AbortController().signal,

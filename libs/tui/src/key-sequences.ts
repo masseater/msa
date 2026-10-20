@@ -1,13 +1,12 @@
 import { dual } from "effect/Function";
 
-import { isEnvSet } from "./env.ts";
-import {
-  ARROW_CODEPOINTS,
-  FUNCTIONAL_CODEPOINTS,
-  type KeyId,
-  LOCK_MASK,
-  MODIFIERS,
-} from "./key-ids.ts";
+import env from "./env.ts";
+import keyIds from "./key-ids.ts";
+import type keyIdsTypes from "./key-ids.types.ts";
+import type keySequencesTypes from "./key-sequences.types.ts";
+
+const { ARROW_CODEPOINTS, FUNCTIONAL_CODEPOINTS, LOCK_MASK, MODIFIERS } = keyIds;
+const { isEnvSet } = env;
 
 const KITTY_FUNCTIONAL_KEY_EQUIVALENTS = new Map<number, number>([
   [57399, 48],
@@ -39,11 +38,11 @@ const KITTY_FUNCTIONAL_KEY_EQUIVALENTS = new Map<number, number>([
   [57426, FUNCTIONAL_CODEPOINTS.delete],
 ]);
 
-export function normalizeKittyFunctionalCodepoint(codepoint: number): number {
+function normalizeKittyFunctionalCodepoint(codepoint: number): number {
   return KITTY_FUNCTIONAL_KEY_EQUIVALENTS.get(codepoint) ?? codepoint;
 }
 
-export const normalizeShiftedLetterIdentityCodepoint: {
+const normalizeShiftedLetterIdentityCodepoint: {
   (codepoint: number, modifier: number): number;
   (modifier: number): (codepoint: number) => number;
 } = dual(2, (codepoint: number, modifier: number): number => {
@@ -54,7 +53,7 @@ export const normalizeShiftedLetterIdentityCodepoint: {
   return codepoint;
 });
 
-export const getLogicalShiftedSymbolCandidate: {
+const getLogicalShiftedSymbolCandidate: {
   (
     codepoint: number | undefined,
     modifier: number,
@@ -78,19 +77,15 @@ export const getLogicalShiftedSymbolCandidate: {
   },
 );
 
-export const LEGACY_KEY_SEQUENCES = {
-  up: ["\x1b[A", "\x1bOA"],
-  down: ["\x1b[B", "\x1bOB"],
-  right: ["\x1b[C", "\x1bOC"],
-  left: ["\x1b[D", "\x1bOD"],
-  home: ["\x1b[H", "\x1bOH", "\x1b[1~", "\x1b[7~"],
-  end: ["\x1b[F", "\x1bOF", "\x1b[4~", "\x1b[8~"],
-  insert: ["\x1b[2~"],
-  delete: ["\x1b[3~"],
-  pageUp: ["\x1b[5~", "\x1b[[5~"],
-  pageDown: ["\x1b[6~", "\x1b[[6~"],
+const LEGACY_KEY_SEQUENCES = {
   clear: ["\x1b[E", "\x1bOE"],
+  delete: ["\x1b[3~"],
+  down: ["\x1b[B", "\x1bOB"],
+  end: ["\x1b[F", "\x1bOF", "\x1b[4~", "\x1b[8~"],
   f1: ["\x1bOP", "\x1b[11~", "\x1b[[A"],
+  f10: ["\x1b[21~"],
+  f11: ["\x1b[23~"],
+  f12: ["\x1b[24~"],
   f2: ["\x1bOQ", "\x1b[12~", "\x1b[[B"],
   f3: ["\x1bOR", "\x1b[13~", "\x1b[[C"],
   f4: ["\x1bOS", "\x1b[14~", "\x1b[[D"],
@@ -99,111 +94,113 @@ export const LEGACY_KEY_SEQUENCES = {
   f7: ["\x1b[18~"],
   f8: ["\x1b[19~"],
   f9: ["\x1b[20~"],
-  f10: ["\x1b[21~"],
-  f11: ["\x1b[23~"],
-  f12: ["\x1b[24~"],
+  home: ["\x1b[H", "\x1bOH", "\x1b[1~", "\x1b[7~"],
+  insert: ["\x1b[2~"],
+  left: ["\x1b[D", "\x1bOD"],
+  pageDown: ["\x1b[6~", "\x1b[[6~"],
+  pageUp: ["\x1b[5~", "\x1b[[5~"],
+  right: ["\x1b[C", "\x1bOC"],
+  up: ["\x1b[A", "\x1bOA"],
 } as const;
 
 const LEGACY_SHIFT_SEQUENCES = {
-  up: ["\x1b[a"],
-  down: ["\x1b[b"],
-  right: ["\x1b[c"],
-  left: ["\x1b[d"],
   clear: ["\x1b[e"],
-  insert: ["\x1b[2$"],
   delete: ["\x1b[3$"],
-  pageUp: ["\x1b[5$"],
-  pageDown: ["\x1b[6$"],
-  home: ["\x1b[7$"],
+  down: ["\x1b[b"],
   end: ["\x1b[8$"],
+  home: ["\x1b[7$"],
+  insert: ["\x1b[2$"],
+  left: ["\x1b[d"],
+  pageDown: ["\x1b[6$"],
+  pageUp: ["\x1b[5$"],
+  right: ["\x1b[c"],
+  up: ["\x1b[a"],
 } as const;
 
 const LEGACY_CTRL_SEQUENCES = {
-  up: ["\x1bOa"],
-  down: ["\x1bOb"],
-  right: ["\x1bOc"],
-  left: ["\x1bOd"],
   clear: ["\x1bOe"],
-  insert: ["\x1b[2^"],
   delete: ["\x1b[3^"],
-  pageUp: ["\x1b[5^"],
-  pageDown: ["\x1b[6^"],
-  home: ["\x1b[7^"],
+  down: ["\x1bOb"],
   end: ["\x1b[8^"],
+  home: ["\x1b[7^"],
+  insert: ["\x1b[2^"],
+  left: ["\x1bOd"],
+  pageDown: ["\x1b[6^"],
+  pageUp: ["\x1b[5^"],
+  right: ["\x1bOc"],
+  up: ["\x1bOa"],
 } as const;
 
-export const LEGACY_SEQUENCE_KEY_IDS: Record<string, KeyId> = {
+const LEGACY_SEQUENCE_KEY_IDS: Record<string, keyIdsTypes.KeyId> = {
   "\x1bOA": "up",
   "\x1bOB": "down",
   "\x1bOC": "right",
   "\x1bOD": "left",
-  "\x1bOH": "home",
-  "\x1bOF": "end",
-  "\x1b[E": "clear",
   "\x1bOE": "clear",
-  "\x1bOe": "ctrl+clear",
-  "\x1b[e": "shift+clear",
-  "\x1b[2~": "insert",
-  "\x1b[2$": "shift+insert",
-  "\x1b[2^": "ctrl+insert",
-  "\x1b[3$": "shift+delete",
-  "\x1b[3^": "ctrl+delete",
-  "\x1b[[5~": "pageUp",
-  "\x1b[[6~": "pageDown",
-  "\x1b[a": "shift+up",
-  "\x1b[b": "shift+down",
-  "\x1b[c": "shift+right",
-  "\x1b[d": "shift+left",
-  "\x1bOa": "ctrl+up",
-  "\x1bOb": "ctrl+down",
-  "\x1bOc": "ctrl+right",
-  "\x1bOd": "ctrl+left",
-  "\x1b[5$": "shift+pageUp",
-  "\x1b[6$": "shift+pageDown",
-  "\x1b[7$": "shift+home",
-  "\x1b[8$": "shift+end",
-  "\x1b[5^": "ctrl+pageUp",
-  "\x1b[6^": "ctrl+pageDown",
-  "\x1b[7^": "ctrl+home",
-  "\x1b[8^": "ctrl+end",
+  "\x1bOF": "end",
+  "\x1bOH": "home",
   "\x1bOP": "f1",
   "\x1bOQ": "f2",
   "\x1bOR": "f3",
   "\x1bOS": "f4",
+  "\x1bOa": "ctrl+up",
+  "\x1bOb": "ctrl+down",
+  "\x1bOc": "ctrl+right",
+  "\x1bOd": "ctrl+left",
+  "\x1bOe": "ctrl+clear",
   "\x1b[11~": "f1",
   "\x1b[12~": "f2",
   "\x1b[13~": "f3",
   "\x1b[14~": "f4",
+  "\x1b[15~": "f5",
+  "\x1b[17~": "f6",
+  "\x1b[18~": "f7",
+  "\x1b[19~": "f8",
+  "\x1b[2$": "shift+insert",
+  "\x1b[20~": "f9",
+  "\x1b[21~": "f10",
+  "\x1b[23~": "f11",
+  "\x1b[24~": "f12",
+  "\x1b[2^": "ctrl+insert",
+  "\x1b[2~": "insert",
+  "\x1b[3$": "shift+delete",
+  "\x1b[3^": "ctrl+delete",
+  "\x1b[5$": "shift+pageUp",
+  "\x1b[5^": "ctrl+pageUp",
+  "\x1b[6$": "shift+pageDown",
+  "\x1b[6^": "ctrl+pageDown",
+  "\x1b[7$": "shift+home",
+  "\x1b[7^": "ctrl+home",
+  "\x1b[8$": "shift+end",
+  "\x1b[8^": "ctrl+end",
+  "\x1b[E": "clear",
+  "\x1b[[5~": "pageUp",
+  "\x1b[[6~": "pageDown",
   "\x1b[[A": "f1",
   "\x1b[[B": "f2",
   "\x1b[[C": "f3",
   "\x1b[[D": "f4",
   "\x1b[[E": "f5",
-  "\x1b[15~": "f5",
-  "\x1b[17~": "f6",
-  "\x1b[18~": "f7",
-  "\x1b[19~": "f8",
-  "\x1b[20~": "f9",
-  "\x1b[21~": "f10",
-  "\x1b[23~": "f11",
-  "\x1b[24~": "f12",
+  "\x1b[a": "shift+up",
+  "\x1b[b": "shift+down",
+  "\x1b[c": "shift+right",
+  "\x1b[d": "shift+left",
+  "\x1b[e": "shift+clear",
   "\x1bb": "alt+left",
   "\x1bf": "alt+right",
-  "\x1bp": "alt+up",
   "\x1bn": "alt+down",
+  "\x1bp": "alt+up",
 } as const;
 
-export type LegacyModifierKey = keyof typeof LEGACY_SHIFT_SEQUENCES;
-
-export const matchesLegacySequence: {
+const matchesLegacySequence: {
   (data: string, sequences: readonly string[]): boolean;
   (sequences: readonly string[]): (data: string) => boolean;
 } = dual(2, (data: string, sequences: readonly string[]): boolean => sequences.includes(data));
 
-export const matchesLegacyModifierSequence: {
-  (data: string, key: LegacyModifierKey, modifier: number): boolean;
-  (key: LegacyModifierKey, modifier: number): (data: string) => boolean;
-} = dual(3, (data: string, key: LegacyModifierKey, modifier: number): boolean => {
+const matchesLegacyModifierSequence: {
+  (data: string, key: keySequencesTypes.LegacyModifierKey, modifier: number): boolean;
+  (key: keySequencesTypes.LegacyModifierKey, modifier: number): (data: string) => boolean;
+} = dual(3, (data: string, key: keySequencesTypes.LegacyModifierKey, modifier: number): boolean => {
   if (modifier === MODIFIERS.shift) {
     return matchesLegacySequence(data, LEGACY_SHIFT_SEQUENCES[key]);
   }
@@ -213,7 +210,7 @@ export const matchesLegacyModifierSequence: {
   return false;
 });
 
-export function isWindowsTerminalSession(): boolean {
+function isWindowsTerminalSession(): boolean {
   return (
     isEnvSet("WT_SESSION") &&
     !isEnvSet("SSH_CONNECTION") &&
@@ -222,7 +219,7 @@ export function isWindowsTerminalSession(): boolean {
   );
 }
 
-export const matchesRawBackspace: {
+const matchesRawBackspace: {
   (data: string, expectedModifier: number): boolean;
   (expectedModifier: number): (data: string) => boolean;
 } = dual(2, (data: string, expectedModifier: number): boolean => {
@@ -231,7 +228,7 @@ export const matchesRawBackspace: {
   return isWindowsTerminalSession() ? expectedModifier === MODIFIERS.ctrl : expectedModifier === 0;
 });
 
-export function rawCtrlChar(key: string): string | null {
+function rawCtrlChar(key: string): string | null {
   const char = key.toLowerCase();
   const code = char.charCodeAt(0);
   if (
@@ -249,6 +246,23 @@ export function rawCtrlChar(key: string): string | null {
   return null;
 }
 
-export function isDigitKey(key: string): boolean {
+function isDigitKey(key: string): boolean {
   return key >= "0" && key <= "9";
 }
+
+const keySequences = {
+  LEGACY_KEY_SEQUENCES,
+  LEGACY_SEQUENCE_KEY_IDS,
+  LEGACY_SHIFT_SEQUENCES,
+  getLogicalShiftedSymbolCandidate,
+  isDigitKey,
+  isWindowsTerminalSession,
+  matchesLegacyModifierSequence,
+  matchesLegacySequence,
+  matchesRawBackspace,
+  normalizeKittyFunctionalCodepoint,
+  normalizeShiftedLetterIdentityCodepoint,
+  rawCtrlChar,
+};
+
+export default keySequences;

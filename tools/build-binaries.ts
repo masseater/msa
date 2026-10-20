@@ -7,12 +7,12 @@ import { captureProcess, processRunnerLayer, runInherit } from "./capture-proces
 import { Workspace, workspaceLayer } from "./coding-agent-package.ts";
 import {
   ARCHIVE_FLAGS,
-  archiveFileNameFor,
-  archiveRootFor,
   DIST_ENTRIES,
-  hostPlatformName,
   RELEASE_PLATFORMS,
   type ReleasePlatform,
+  archiveFileNameFor,
+  archiveRootFor,
+  hostPlatformName,
 } from "./release-platforms.ts";
 import { runMainWith } from "./run-main.ts";
 
@@ -46,15 +46,15 @@ const makeContext = () =>
     const fs = yield* FileSystem.FileSystem;
     const path = yield* Path.Path;
     return {
-      fs,
-      path,
-      repoRoot,
       codingAgentDir: path.join(repoRoot, "apps", "coding-agent"),
-      tuiDir: path.join(repoRoot, "libs", "tui"),
+      fs,
       outDir: path.join(repoRoot, ...DEFAULT_OUT_DIR),
-      version,
+      path,
       platforms: requestedPlatforms(),
+      repoRoot,
       skipBuild: process.argv.includes(SKIP_BUILD_FLAG),
+      tuiDir: path.join(repoRoot, "libs", "tui"),
+      version,
     };
   });
 
@@ -137,7 +137,7 @@ const copyPayload = (context: Context, platform: ReleasePlatform, payloadDir: st
 const buildPlatformArtifact = (context: Context, platform: ReleasePlatform) =>
   Effect.gen(function* () {
     const payloadDir = payloadDirFor(context, platform);
-    yield* context.fs.remove(workDirFor(context, platform), { recursive: true, force: true });
+    yield* context.fs.remove(workDirFor(context, platform), { force: true, recursive: true });
     yield* context.fs.makeDirectory(payloadDir, { recursive: true });
     yield* Console.log(`==> compiling ${platform.name} (${platform.bunTarget})`);
     yield* runInherit({
@@ -196,7 +196,7 @@ const smokeTest = (context: Context) =>
       return;
     }
     const smokeDir = context.path.join(context.outDir, "smoke");
-    yield* context.fs.remove(smokeDir, { recursive: true, force: true });
+    yield* context.fs.remove(smokeDir, { force: true, recursive: true });
     yield* context.fs.makeDirectory(smokeDir, { recursive: true });
     yield* runInherit({
       args: [ARCHIVE_FLAGS[platform.archive], archivePathFor(context, platform), "-C", smokeDir],

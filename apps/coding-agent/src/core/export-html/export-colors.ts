@@ -9,18 +9,18 @@ function parseColor(color: string): { r: number; g: number; b: number } | undefi
   const [, hexR, hexG, hexB] = hexMatch ?? [];
   if (hexR !== undefined && hexG !== undefined && hexB !== undefined) {
     return {
-      r: Number.parseInt(hexR, 16),
-      g: Number.parseInt(hexG, 16),
       b: Number.parseInt(hexB, 16),
+      g: Number.parseInt(hexG, 16),
+      r: Number.parseInt(hexR, 16),
     };
   }
   const rgbMatch = color.match(/^rgb\s*\(\s*(\d+)\s*,\s*(\d+)\s*,\s*(\d+)\s*\)$/u);
   const [, rgbR, rgbG, rgbB] = rgbMatch ?? [];
   if (rgbR !== undefined && rgbG !== undefined && rgbB !== undefined) {
     return {
-      r: Number.parseInt(rgbR, 10),
-      g: Number.parseInt(rgbG, 10),
       b: Number.parseInt(rgbB, 10),
+      g: Number.parseInt(rgbG, 10),
+      r: Number.parseInt(rgbR, 10),
     };
   }
   return undefined;
@@ -49,9 +49,9 @@ export function deriveExportColors(baseColor: string): {
   const parsed = parseColor(baseColor);
   if (parsed === undefined) {
     return {
-      pageBg: "rgb(24, 24, 30)",
       cardBg: "rgb(30, 30, 36)",
       infoBg: "rgb(60, 55, 40)",
+      pageBg: "rgb(24, 24, 30)",
     };
   }
 
@@ -60,15 +60,15 @@ export function deriveExportColors(baseColor: string): {
 
   if (isLight) {
     return {
-      pageBg: adjustBrightness(baseColor, 0.96),
       cardBg: baseColor,
       infoBg: `rgb(${Math.min(255, parsed.r + 10)}, ${Math.min(255, parsed.g + 5)}, ${Math.max(0, parsed.b - 20)})`,
+      pageBg: adjustBrightness(baseColor, 0.96),
     };
   }
   return {
-    pageBg: adjustBrightness(baseColor, 0.7),
     cardBg: adjustBrightness(baseColor, 0.85),
     infoBg: `rgb(${Math.min(255, parsed.r + 20)}, ${Math.min(255, parsed.g + 15)}, ${parsed.b})`,
+    pageBg: adjustBrightness(baseColor, 0.7),
   };
 }
 

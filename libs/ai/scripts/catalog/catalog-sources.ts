@@ -13,18 +13,31 @@ const classifierCatalogConstName = (providerId: string): string =>
 
 const providerShardFile = (providerId: string): string => `${providerId}.models.ts`;
 
+const camelName = (providerId: string): string =>
+  providerId.replaceAll(/[^a-zA-Z0-9]+([a-zA-Z0-9])/gu, (_, c: string) => c.toUpperCase());
+const shardVar = (providerId: string): string => `${camelName(providerId)}Models`;
+
 function renderProviderShard(providerId: string): string {
   const quoted = JSON.stringify(providerId);
+  const names = [
+    classifierCatalogConstName(providerId),
+    imageCatalogConstName(providerId),
+    catalogConstName(providerId),
+  ];
   return [
     GENERATED_HEADER,
-    `import values from "./data/${providerId}.json" with { type: "json" };\n`,
-    `import { flattenChatModelCatalog, flattenClassifierModelCatalog, flattenImageModelCatalog, type ChatModelCatalog, type ClassifierModelCatalog, type ImageModelCatalog } from "../model-catalog.ts";\n\n`,
-    `export const ${catalogConstName(providerId)}: ChatModelCatalog<typeof values, ${quoted}> =\n`,
+    `import modelCatalog from "../model-catalog.ts";\n`,
+    `import type modelCatalogTypes from "../model-catalog.types.ts";\n`,
+    `import values from "./data/${providerId}.json" with { type: "json" };\n\n`,
+    `const { flattenChatModelCatalog, flattenClassifierModelCatalog, flattenImageModelCatalog } = modelCatalog;\n\n`,
+    `const ${catalogConstName(providerId)}: modelCatalogTypes.ChatModelCatalog<typeof values, ${quoted}> =\n`,
     `\tflattenChatModelCatalog(${quoted}, values);\n\n`,
-    `export const ${imageCatalogConstName(providerId)}: ImageModelCatalog<typeof values, ${quoted}> =\n`,
+    `const ${imageCatalogConstName(providerId)}: modelCatalogTypes.ImageModelCatalog<typeof values, ${quoted}> =\n`,
     `\tflattenImageModelCatalog(${quoted}, values);\n\n`,
-    `export const ${classifierCatalogConstName(providerId)}: ClassifierModelCatalog<typeof values, ${quoted}> =\n`,
-    `\tflattenClassifierModelCatalog(${quoted}, values);\n`,
+    `const ${classifierCatalogConstName(providerId)}: modelCatalogTypes.ClassifierModelCatalog<typeof values, ${quoted}> =\n`,
+    `\tflattenClassifierModelCatalog(${quoted}, values);\n\n`,
+    `const ${shardVar(providerId)} = {\n${names.map((name) => `  ${name},\n`).join("")}};\n\n`,
+    `export default ${shardVar(providerId)};\n`,
   ].join("");
 }
 
@@ -42,25 +55,35 @@ function renderCatalogRecord(
   const values = providerIds
     .map((providerId) => `\t${JSON.stringify(providerId)}: ${constName(providerId)},\n`)
     .join("");
-  return `export const ${name}: {\n${types}} = {\n${values}};\n`;
+  return `const ${name}: {\n${types}} = {\n${values}};\n`;
 }
 
 function renderAggregator(providerIds: readonly string[]): string {
-  const imports = providerIds
+  const sorted = [...providerIds].sort((a, b) => (shardVar(a) < shardVar(b) ? -1 : 1));
+  const imports = sorted
     .map(
       (providerId) =>
-        `import { ${classifierCatalogConstName(providerId)}, ${imageCatalogConstName(providerId)}, ${catalogConstName(providerId)} } from "./providers/${providerShardFile(providerId)}";\n`,
+        `import ${shardVar(providerId)} from "./providers/${providerShardFile(providerId)}";\n`,
+    )
+    .join("");
+  const destructures = providerIds
+    .map(
+      (providerId) =>
+        `const { ${classifierCatalogConstName(providerId)}, ${imageCatalogConstName(providerId)}, ${catalogConstName(providerId)} } = ${shardVar(providerId)};\n`,
     )
     .join("");
   return [
     GENERATED_HEADER,
     imports,
     "\n",
+    destructures,
+    "\n",
     renderCatalogRecord("MODELS", providerIds, catalogConstName),
     "\n",
     renderCatalogRecord("IMAGE_MODELS", providerIds, imageCatalogConstName),
     "\n",
     renderCatalogRecord("CLASSIFIER_MODELS", providerIds, classifierCatalogConstName),
+    "\nconst modelsGenerated = {\n  CLASSIFIER_MODELS,\n  IMAGE_MODELS,\n  MODELS,\n};\n\nexport default modelsGenerated;\n",
   ].join("");
 }
 

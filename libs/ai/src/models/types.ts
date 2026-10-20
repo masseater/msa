@@ -1,182 +1,175 @@
-import type { AuthResolutionOverrides } from "../auth/resolve.ts";
-import type {
-  AuthCheck,
-  AuthContext,
-  AuthInteraction,
-  AuthOperationOptions,
-  AuthResult,
-  AuthType,
-  Credential,
-  CredentialStore,
-  LoginOptions,
-} from "../auth/types.ts";
-import type { ModelsStore } from "../models-store.ts";
-import type {
-  AnyModel,
-  Api,
-  ApiStreamOptions,
-  AssistantImages,
-  AssistantMessage,
-  AssistantMessageEventStream,
-  ClassifierApi,
-  ClassifierContext,
-  ClassifierModel,
-  ClassifierOptions,
-  ClassifierResult,
-  Context,
-  DeferredCancelOptions,
-  DeferredFetchOptions,
-  DeferredHandle,
-  ImageApi,
-  ImageModel,
-  ImagesContext,
-  ImagesOptions,
-  Model,
-  ModelType,
-  ModelTypeMap,
-  ProviderHeaders,
-  SimpleStreamOptions,
-} from "../types.ts";
-import type { Provider } from "./provider-types.ts";
+import type resolveTypes from "../auth/resolve.types.ts";
+import type typesModuleModule2 from "../auth/types.ts";
+import type modelsStoreTypes from "../models-store.types.ts";
+import type typesModuleModule from "../types.types.ts";
+import type providerTypesModule from "./provider-types.ts";
 
-export interface ModelsRefreshOptions {
-  allowNetwork?: boolean;
-  providers?: readonly string[];
-  force?: boolean;
-  signal?: AbortSignal;
+declare namespace typesModule {
+  interface ModelsRefreshOptions {
+    allowNetwork?: boolean;
+    providers?: readonly string[];
+    force?: boolean;
+    signal?: AbortSignal;
+  }
+
+  interface ModelsRefreshResult {
+    aborted: boolean;
+    errors: ReadonlyMap<string, Error>;
+  }
+
+  interface ModelsRequestTransforms {
+    transformHeaders?: (
+      headers: typesModuleModule.ProviderHeaders,
+    ) => typesModuleModule.ProviderHeaders | Promise<typesModuleModule.ProviderHeaders>;
+  }
+
+  type ModelsApiStreamOptions<TApi extends typesModuleModule.Api> =
+    typesModuleModule.ApiStreamOptions<TApi> & ModelsRequestTransforms;
+
+  type ModelsSimpleStreamOptions = typesModuleModule.SimpleStreamOptions & ModelsRequestTransforms;
+
+  type ModelsDeferredFetchOptions = typesModuleModule.DeferredFetchOptions &
+    ModelsRequestTransforms;
+
+  type ModelsDeferredCancelOptions = typesModuleModule.DeferredCancelOptions &
+    ModelsRequestTransforms;
+
+  type ModelsImagesOptions = typesModuleModule.ImagesOptions & ModelsRequestTransforms;
+
+  type ModelsClassifierOptions = typesModuleModule.ClassifierOptions & ModelsRequestTransforms;
+
+  interface Models {
+    getProviders(): readonly providerTypesModule.Provider[];
+    getProvider(id: string): providerTypesModule.Provider | undefined;
+
+    getModels(provider?: string): readonly typesModuleModule.Model<typesModuleModule.Api>[];
+
+    getModel(
+      provider: string,
+      id: string,
+    ): typesModuleModule.Model<typesModuleModule.Api> | undefined;
+
+    getModelsOfType<TType extends typesModuleModule.ModelType>(
+      type: TType,
+      provider?: string,
+    ): readonly typesModuleModule.ModelTypeMap[TType][];
+
+    getModelOfType<TType extends typesModuleModule.ModelType>(
+      type: TType,
+      provider: string,
+      id: string,
+    ): typesModuleModule.ModelTypeMap[TType] | undefined;
+
+    getAllModels(provider?: string): readonly typesModuleModule.AnyModel[];
+
+    refresh(options?: ModelsRefreshOptions): Promise<ModelsRefreshResult>;
+
+    checkAuth(
+      providerId: string,
+      options?: typesModuleModule2.AuthOperationOptions,
+    ): Promise<typesModuleModule2.AuthCheck | undefined>;
+
+    getAvailable(
+      providerId?: string,
+      options?: typesModuleModule2.AuthOperationOptions,
+    ): Promise<readonly typesModuleModule.Model<typesModuleModule.Api>[]>;
+
+    getAvailableOfType<TType extends typesModuleModule.ModelType>(
+      type: TType,
+      providerId?: string,
+      options?: typesModuleModule2.AuthOperationOptions,
+    ): Promise<readonly typesModuleModule.ModelTypeMap[TType][]>;
+
+    getAllAvailable(
+      providerId?: string,
+      options?: typesModuleModule2.AuthOperationOptions,
+    ): Promise<readonly typesModuleModule.AnyModel[]>;
+
+    getAuth(
+      providerId: string,
+      overrides?: resolveTypes.AuthResolutionOverrides,
+    ): Promise<typesModuleModule2.AuthResult | undefined>;
+    getAuth(
+      model: typesModuleModule.AnyModel,
+      overrides?: resolveTypes.AuthResolutionOverrides,
+    ): Promise<typesModuleModule2.AuthResult | undefined>;
+
+    login(
+      providerId: string,
+      type: typesModuleModule2.AuthType,
+      interaction: typesModuleModule2.AuthInteraction,
+      options?: typesModuleModule2.LoginOptions,
+    ): Promise<typesModuleModule2.Credential>;
+
+    logout(providerId: string, options?: typesModuleModule2.AuthOperationOptions): Promise<void>;
+
+    stream<TApi extends typesModuleModule.Api>(
+      model: typesModuleModule.Model<TApi>,
+      context: typesModuleModule.Context,
+      options?: ModelsApiStreamOptions<TApi>,
+    ): typesModuleModule.AssistantMessageEventStream;
+
+    complete<TApi extends typesModuleModule.Api>(
+      model: typesModuleModule.Model<TApi>,
+      context: typesModuleModule.Context,
+      options?: ModelsApiStreamOptions<TApi>,
+    ): Promise<typesModuleModule.AssistantMessage>;
+
+    streamSimple(
+      model: typesModuleModule.Model<typesModuleModule.Api>,
+      context: typesModuleModule.Context,
+      options?: ModelsSimpleStreamOptions,
+    ): typesModuleModule.AssistantMessageEventStream;
+    completeSimple(
+      model: typesModuleModule.Model<typesModuleModule.Api>,
+      context: typesModuleModule.Context,
+      options?: ModelsSimpleStreamOptions,
+    ): Promise<typesModuleModule.AssistantMessage>;
+    streamDeferred(
+      model: typesModuleModule.Model<typesModuleModule.Api>,
+      handle: typesModuleModule.DeferredHandle,
+      options?: ModelsDeferredFetchOptions,
+    ): typesModuleModule.AssistantMessageEventStream;
+    fetchDeferred(
+      model: typesModuleModule.Model<typesModuleModule.Api>,
+      handle: typesModuleModule.DeferredHandle,
+      options?: ModelsDeferredFetchOptions,
+    ): Promise<typesModuleModule.AssistantMessage>;
+    cancelDeferred(
+      model: typesModuleModule.Model<typesModuleModule.Api>,
+      handle: typesModuleModule.DeferredHandle,
+      options?: ModelsDeferredCancelOptions,
+    ): Promise<void>;
+    countTokens(
+      model: typesModuleModule.Model<typesModuleModule.Api>,
+      context: typesModuleModule.Context,
+      options?: ModelsSimpleStreamOptions,
+    ): Promise<number | undefined>;
+
+    generateImages(
+      model: typesModuleModule.ImageModel<typesModuleModule.ImageApi>,
+      context: typesModuleModule.ImagesContext,
+      options?: ModelsImagesOptions,
+    ): Promise<typesModuleModule.AssistantImages>;
+
+    classify(
+      model: typesModuleModule.ClassifierModel<typesModuleModule.ClassifierApi>,
+      context: typesModuleModule.ClassifierContext,
+      options?: ModelsClassifierOptions,
+    ): Promise<typesModuleModule.ClassifierResult>;
+  }
+
+  interface MutableModels extends Models {
+    setProvider(provider: providerTypesModule.Provider): void;
+    deleteProvider(id: string): void;
+    clearProviders(): void;
+  }
+
+  interface CreateModelsOptions {
+    credentials?: typesModuleModule2.CredentialStore;
+    modelsStore?: modelsStoreTypes.ModelsStore;
+    authContext?: typesModuleModule2.AuthContext;
+  }
 }
 
-export interface ModelsRefreshResult {
-  aborted: boolean;
-  errors: ReadonlyMap<string, Error>;
-}
-
-export interface ModelsRequestTransforms {
-  transformHeaders?: (headers: ProviderHeaders) => ProviderHeaders | Promise<ProviderHeaders>;
-}
-
-export type ModelsApiStreamOptions<TApi extends Api> = ApiStreamOptions<TApi> &
-  ModelsRequestTransforms;
-export type ModelsSimpleStreamOptions = SimpleStreamOptions & ModelsRequestTransforms;
-export type ModelsDeferredFetchOptions = DeferredFetchOptions & ModelsRequestTransforms;
-export type ModelsDeferredCancelOptions = DeferredCancelOptions & ModelsRequestTransforms;
-export type ModelsImagesOptions = ImagesOptions & ModelsRequestTransforms;
-export type ModelsClassifierOptions = ClassifierOptions & ModelsRequestTransforms;
-
-export interface Models {
-  getProviders(): readonly Provider[];
-  getProvider(id: string): Provider | undefined;
-
-  getModels(provider?: string): readonly Model<Api>[];
-
-  getModel(provider: string, id: string): Model<Api> | undefined;
-
-  getModelsOfType<TType extends ModelType>(
-    type: TType,
-    provider?: string,
-  ): readonly ModelTypeMap[TType][];
-
-  getModelOfType<TType extends ModelType>(
-    type: TType,
-    provider: string,
-    id: string,
-  ): ModelTypeMap[TType] | undefined;
-
-  getAllModels(provider?: string): readonly AnyModel[];
-
-  refresh(options?: ModelsRefreshOptions): Promise<ModelsRefreshResult>;
-
-  checkAuth(providerId: string, options?: AuthOperationOptions): Promise<AuthCheck | undefined>;
-
-  getAvailable(providerId?: string, options?: AuthOperationOptions): Promise<readonly Model<Api>[]>;
-
-  getAvailableOfType<TType extends ModelType>(
-    type: TType,
-    providerId?: string,
-    options?: AuthOperationOptions,
-  ): Promise<readonly ModelTypeMap[TType][]>;
-
-  getAllAvailable(
-    providerId?: string,
-    options?: AuthOperationOptions,
-  ): Promise<readonly AnyModel[]>;
-
-  getAuth(providerId: string, overrides?: AuthResolutionOverrides): Promise<AuthResult | undefined>;
-  getAuth(model: AnyModel, overrides?: AuthResolutionOverrides): Promise<AuthResult | undefined>;
-
-  login(
-    providerId: string,
-    type: AuthType,
-    interaction: AuthInteraction,
-    options?: LoginOptions,
-  ): Promise<Credential>;
-
-  logout(providerId: string, options?: AuthOperationOptions): Promise<void>;
-
-  stream<TApi extends Api>(
-    model: Model<TApi>,
-    context: Context,
-    options?: ModelsApiStreamOptions<TApi>,
-  ): AssistantMessageEventStream;
-
-  complete<TApi extends Api>(
-    model: Model<TApi>,
-    context: Context,
-    options?: ModelsApiStreamOptions<TApi>,
-  ): Promise<AssistantMessage>;
-
-  streamSimple(
-    model: Model<Api>,
-    context: Context,
-    options?: ModelsSimpleStreamOptions,
-  ): AssistantMessageEventStream;
-  completeSimple(
-    model: Model<Api>,
-    context: Context,
-    options?: ModelsSimpleStreamOptions,
-  ): Promise<AssistantMessage>;
-  streamDeferred(
-    model: Model<Api>,
-    handle: DeferredHandle,
-    options?: ModelsDeferredFetchOptions,
-  ): AssistantMessageEventStream;
-  fetchDeferred(
-    model: Model<Api>,
-    handle: DeferredHandle,
-    options?: ModelsDeferredFetchOptions,
-  ): Promise<AssistantMessage>;
-  cancelDeferred(
-    model: Model<Api>,
-    handle: DeferredHandle,
-    options?: ModelsDeferredCancelOptions,
-  ): Promise<void>;
-  countTokens(
-    model: Model<Api>,
-    context: Context,
-    options?: ModelsSimpleStreamOptions,
-  ): Promise<number | undefined>;
-
-  generateImages(
-    model: ImageModel<ImageApi>,
-    context: ImagesContext,
-    options?: ModelsImagesOptions,
-  ): Promise<AssistantImages>;
-
-  classify(
-    model: ClassifierModel<ClassifierApi>,
-    context: ClassifierContext,
-    options?: ModelsClassifierOptions,
-  ): Promise<ClassifierResult>;
-}
-
-export interface MutableModels extends Models {
-  setProvider(provider: Provider): void;
-  deleteProvider(id: string): void;
-  clearProviders(): void;
-}
-
-export interface CreateModelsOptions {
-  credentials?: CredentialStore;
-  modelsStore?: ModelsStore;
-  authContext?: AuthContext;
-}
+export type { typesModule as default };

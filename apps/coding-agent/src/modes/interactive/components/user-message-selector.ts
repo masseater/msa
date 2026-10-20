@@ -1,8 +1,11 @@
-import { type Component, Container, getKeybindings, Spacer, Text, truncateToWidth } from "@msa/tui";
+import tui from "@msa/tui";
+import type tuiTypes from "@msa/tui/index.types";
 
 import { schedule } from "../../../core/platform.ts";
 import { theme } from "../theme/theme.ts";
 import { DynamicBorder } from "./dynamic-border.ts";
+
+const { Container, Spacer, Text, getKeybindings, truncateToWidth } = tui;
 
 interface UserMessageItem {
   id: string;
@@ -10,7 +13,7 @@ interface UserMessageItem {
   timestamp?: string;
 }
 
-class UserMessageList implements Component {
+class UserMessageList implements tuiTypes.Component {
   private messages: UserMessageItem[] = [];
   private selectedIndex: number = 0;
   public onSelect?: (entryId: string) => void;

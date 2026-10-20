@@ -1,4 +1,4 @@
-import type { AssistantMessage } from "@msa/ai";
+import type aiTypes from "@msa/ai/index.types";
 import testing from "@msa/testing";
 import { describe, expect, test } from "vite-plus/test";
 
@@ -10,9 +10,9 @@ import { stripAnsi } from "../src/utils/ansi.ts";
 const { currentTimeMillis } = testing;
 
 function createAssistantMessage(
-  content: AssistantMessage["content"],
-  overrides: Partial<Pick<AssistantMessage, "stopReason">> = {},
-): AssistantMessage {
+  content: aiTypes.AssistantMessage["content"],
+  overrides: Partial<Pick<aiTypes.AssistantMessage, "stopReason">> = {},
+): aiTypes.AssistantMessage {
   return {
     api: "openai-responses" as const,
     content,

@@ -1,54 +1,50 @@
 import { Effect, Function } from "effect";
 
-import type {
-  ApiKeyAuth,
-  AuthContext,
-  AuthPrompt,
-  OAuthAuth,
-  ProviderAuthInteraction,
-} from "./types.ts";
+import type helpersTypes from "./helpers.types.ts";
+import type typesModule from "./types.ts";
 
-export const promptUser: {
-  (prompt: AuthPrompt): (interaction: ProviderAuthInteraction) => Effect.Effect<string>;
-  (interaction: ProviderAuthInteraction, prompt: AuthPrompt): Effect.Effect<string>;
+const promptUser: {
+  (
+    prompt: typesModule.AuthPrompt,
+  ): (interaction: typesModule.ProviderAuthInteraction) => Effect.Effect<string>;
+  (
+    interaction: typesModule.ProviderAuthInteraction,
+    prompt: typesModule.AuthPrompt,
+  ): Effect.Effect<string>;
 } = Function.dual(
   2,
-  (interaction: ProviderAuthInteraction, prompt: AuthPrompt): Effect.Effect<string> =>
-    Effect.promise(() => interaction.prompt(prompt)),
+  (
+    interaction: typesModule.ProviderAuthInteraction,
+    prompt: typesModule.AuthPrompt,
+  ): Effect.Effect<string> => Effect.promise(() => interaction.prompt(prompt)),
 );
 
-export const throwIfAborted = (signal: AbortSignal): Effect.Effect<void> =>
+const throwIfAborted = (signal: AbortSignal): Effect.Effect<void> =>
   Effect.sync(() => signal.throwIfAborted());
-
-interface AuthEnvSource {
-  readonly ctx: AuthContext;
-  readonly signal: AbortSignal;
-}
-
-export const authEnv =
-  ({ ctx, signal }: AuthEnvSource) =>
+const authEnv =
+  ({ ctx, signal }: helpersTypes.AuthEnvSource) =>
   (name: string): Effect.Effect<string | undefined> =>
     throwIfAborted(signal).pipe(
       Effect.andThen(Effect.promise(() => ctx.env(name))),
       Effect.tap(throwIfAborted(signal)),
     );
 
-export const envApiKeyAuth: {
-  (envVars: readonly string[]): (name: string) => ApiKeyAuth;
-  (name: string, envVars: readonly string[]): ApiKeyAuth;
-} = Function.dual(2, (name: string, envVars: readonly string[]): ApiKeyAuth => ({
-  name,
+const envApiKeyAuth: {
+  (envVars: readonly string[]): (name: string) => typesModule.ApiKeyAuth;
+  (name: string, envVars: readonly string[]): typesModule.ApiKeyAuth;
+} = Function.dual(2, (name: string, envVars: readonly string[]): typesModule.ApiKeyAuth => ({
   login: (interaction) =>
     Effect.runPromise(
       Effect.gen(function* () {
         interaction.signal.throwIfAborted();
         const key = yield* Effect.promise(() =>
-          interaction.prompt({ type: "secret", message: `Enter ${name}` }),
+          interaction.prompt({ message: `Enter ${name}`, type: "secret" }),
         );
         interaction.signal.throwIfAborted();
-        return { type: "api_key" as const, key };
+        return { key, type: "api_key" as const };
       }),
     ),
+  name,
   resolve: ({ ctx, credential, signal }) =>
     Effect.runPromise(
       Effect.gen(function* () {
@@ -71,29 +67,39 @@ export const envApiKeyAuth: {
     ),
 }));
 
-export const lazyOAuth = (input: {
+const lazyOAuth = (input: {
   name: string;
   isSubscription?: boolean;
   loginLabel?: string;
-  load: () => Promise<OAuthAuth>;
-}): OAuthAuth => {
-  let promise: Promise<OAuthAuth> | undefined;
+  load: () => Promise<typesModule.OAuthAuth>;
+}): typesModule.OAuthAuth => {
+  let promise: Promise<typesModule.OAuthAuth> | undefined;
   const loaded = () => {
     promise ??= input.load();
     return promise;
   };
-  const withLoaded = <T>(use: (auth: OAuthAuth) => Promise<T>): Promise<T> =>
+  const withLoaded = <T>(use: (auth: typesModule.OAuthAuth) => Promise<T>): Promise<T> =>
     Effect.runPromise(
       Effect.promise(() => loaded()).pipe(
         Effect.flatMap((auth) => Effect.promise(() => use(auth))),
       ),
     );
   return {
-    name: input.name,
     isSubscription: input.isSubscription,
-    loginLabel: input.loginLabel,
     login: (interaction, options) => withLoaded((auth) => auth.login(interaction, options)),
+    loginLabel: input.loginLabel,
+    name: input.name,
     refresh: (credential, signal) => withLoaded((auth) => auth.refresh(credential, signal)),
     toAuth: (credential) => withLoaded((auth) => auth.toAuth(credential)),
   };
 };
+
+const helpers = {
+  authEnv,
+  envApiKeyAuth,
+  lazyOAuth,
+  promptUser,
+  throwIfAborted,
+};
+
+export default helpers;

@@ -1,50 +1,40 @@
-import type { AssistantMessage, ToolResultMessage } from "@msa/ai";
+import type aiTypes from "@msa/ai/index.types";
 import { Effect } from "effect";
 
-import { streamAssistantResponse } from "./assistant-response.ts";
-import { call } from "./call.ts";
-import { type Emit, executeToolCalls, failToolCallsFromTruncatedMessage } from "./tool-batch.ts";
-import { declareToolChanges, withRequestState } from "./tool-changes.ts";
-import type {
-  AgentContext,
-  AgentLoopConfig,
-  AgentMessage,
-  AgentToolCall,
-  PrepareNextTurnContext,
-  StreamFn,
-} from "./types.ts";
+import assistantResponse from "./assistant-response.ts";
+import callModule from "./call.ts";
+import type loopTypes from "./loop.types.ts";
+import toolBatch from "./tool-batch.ts";
+import toolChanges from "./tool-changes.ts";
+import type typesModule from "./types.ts";
 
-export interface LoopState {
-  context: AgentContext;
-  config: AgentLoopConfig;
-  lastCompletedTurn: PrepareNextTurnContext | undefined;
-  explicitContinuation: boolean;
-  pendingMessages: AgentMessage[];
-  hasMoreToolCalls: boolean;
-  readonly newMessages: AgentMessage[];
-  readonly signal: AbortSignal | undefined;
-  readonly emit: Emit;
-  readonly streamFunction: StreamFn;
-}
+const { call } = callModule;
+const { declareToolChanges, withRequestState } = toolChanges;
+const { executeToolCalls, failToolCallsFromTruncatedMessage } = toolBatch;
+const { streamAssistantResponse } = assistantResponse;
 
-const pollSteering = (config: AgentLoopConfig): Effect.Effect<AgentMessage[]> =>
+const pollSteering = (
+  config: typesModule.AgentLoopConfig,
+): Effect.Effect<typesModule.AgentMessage[]> =>
   Effect.map(
     call(() => config.getSteeringMessages?.()),
     (messages) => messages ?? [],
   );
 
-const pollFollowUps = (config: AgentLoopConfig): Effect.Effect<AgentMessage[]> =>
+const pollFollowUps = (
+  config: typesModule.AgentLoopConfig,
+): Effect.Effect<typesModule.AgentMessage[]> =>
   Effect.map(
     call(() => config.getFollowUpMessages?.()),
     (messages) => messages ?? [],
   );
 
-const startTurn = (state: LoopState): Effect.Effect<AgentMessage[]> =>
+const startTurn = (state: loopTypes.LoopState): Effect.Effect<typesModule.AgentMessage[]> =>
   Effect.gen(function* () {
     const turn = state.lastCompletedTurn;
     if (turn === undefined) return [];
     const snapshot = yield* call(() => state.config.prepareNextTurn?.(turn));
-    let prepared: AgentMessage[] = [];
+    let prepared: typesModule.AgentMessage[] = [];
     if (snapshot !== undefined) {
       state.context = snapshot.context ?? state.context;
       prepared = snapshot.messages ?? [];
@@ -60,22 +50,25 @@ const startTurn = (state: LoopState): Effect.Effect<AgentMessage[]> =>
     return prepared;
   });
 
-const appendMessages = (state: LoopState, prepared: AgentMessage[]): Effect.Effect<void> =>
+const appendMessages = (
+  state: loopTypes.LoopState,
+  prepared: typesModule.AgentMessage[],
+): Effect.Effect<void> =>
   Effect.gen(function* () {
     const messages = declareToolChanges({
       context: state.context,
       messages: [...prepared, ...state.pendingMessages],
     });
     for (const message of messages) {
-      yield* state.emit({ type: "message_start", message });
-      yield* state.emit({ type: "message_end", message });
+      yield* state.emit({ message, type: "message_start" });
+      yield* state.emit({ message, type: "message_end" });
       state.context.messages.push(message);
       state.newMessages.push(message);
     }
     state.pendingMessages = [];
   });
 
-const applyRequestUpdate = (state: LoopState): Effect.Effect<void> =>
+const applyRequestUpdate = (state: loopTypes.LoopState): Effect.Effect<void> =>
   Effect.gen(function* () {
     const { config, context, signal } = state;
     const update = yield* call(() =>
@@ -94,24 +87,24 @@ const applyRequestUpdate = (state: LoopState): Effect.Effect<void> =>
   });
 
 const runToolCalls = (
-  state: LoopState,
-  message: AssistantMessage,
-): Effect.Effect<ToolResultMessage[]> =>
+  state: loopTypes.LoopState,
+  message: aiTypes.AssistantMessage,
+): Effect.Effect<aiTypes.ToolResultMessage[]> =>
   Effect.gen(function* () {
     state.hasMoreToolCalls = false;
     const toolCalls = message.content.filter(
-      (content): content is AgentToolCall => content.type === "toolCall",
+      (content): content is typesModule.AgentToolCall => content.type === "toolCall",
     );
     if (toolCalls.length === 0) return [];
     const batch =
       message.stopReason === "length"
-        ? yield* failToolCallsFromTruncatedMessage({ toolCalls, emit: state.emit })
+        ? yield* failToolCallsFromTruncatedMessage({ emit: state.emit, toolCalls })
         : yield* executeToolCalls({
-            context: state.context,
             assistantMessage: message,
+            context: state.context,
+            emit: state.emit,
             hooks: state.config,
             signal: state.signal,
-            emit: state.emit,
             toolExecution: state.config.toolExecution,
           });
     state.hasMoreToolCalls = !batch.terminate;
@@ -123,22 +116,22 @@ const runToolCalls = (
   });
 
 const finishTurn = (
-  state: LoopState,
-  message: AssistantMessage,
-  toolResults: ToolResultMessage[],
+  state: loopTypes.LoopState,
+  message: aiTypes.AssistantMessage,
+  toolResults: aiTypes.ToolResultMessage[],
 ) =>
   Effect.gen(function* () {
-    const turn = { message, toolResults, context: state.context, newMessages: state.newMessages };
+    const turn = { context: state.context, message, newMessages: state.newMessages, toolResults };
     state.lastCompletedTurn = turn;
     const decision = yield* call(() => state.config.finishTurn?.(turn, state.signal));
-    yield* state.emit({ type: "turn_end", message, toolResults });
+    yield* state.emit({ message, toolResults, type: "turn_end" });
     return decision ?? undefined;
   });
 
-const endRun = (state: LoopState): Effect.Effect<"end"> =>
-  Effect.as(state.emit({ type: "agent_end", messages: state.newMessages }), "end" as const);
+const endRun = (state: loopTypes.LoopState): Effect.Effect<"end"> =>
+  Effect.as(state.emit({ messages: state.newMessages, type: "agent_end" }), "end" as const);
 
-const runTurn = (state: LoopState): Effect.Effect<"end" | "continue"> =>
+const runTurn = (state: loopTypes.LoopState): Effect.Effect<"end" | "continue"> =>
   Effect.gen(function* () {
     yield* appendMessages(state, yield* startTurn(state));
     yield* applyRequestUpdate(state);
@@ -158,7 +151,7 @@ const runTurn = (state: LoopState): Effect.Effect<"end" | "continue"> =>
     return "continue";
   });
 
-const runTurns = (state: LoopState): Effect.Effect<"end" | "idle"> =>
+const runTurns = (state: loopTypes.LoopState): Effect.Effect<"end" | "idle"> =>
   Effect.gen(function* () {
     state.hasMoreToolCalls = true;
     while (state.hasMoreToolCalls || state.pendingMessages.length > 0) {
@@ -167,7 +160,7 @@ const runTurns = (state: LoopState): Effect.Effect<"end" | "idle"> =>
     return "idle";
   });
 
-export const runLoop = (state: LoopState): Effect.Effect<void> =>
+const runLoop = (state: loopTypes.LoopState): Effect.Effect<void> =>
   Effect.gen(function* () {
     state.pendingMessages = yield* pollSteering(state.config);
     for (;;) {
@@ -184,3 +177,9 @@ export const runLoop = (state: LoopState): Effect.Effect<void> =>
     }
     yield* endRun(state);
   });
+
+const loop = {
+  runLoop,
+};
+
+export default loop;

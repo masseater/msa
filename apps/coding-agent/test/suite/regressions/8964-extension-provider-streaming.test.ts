@@ -1,11 +1,15 @@
-import { type AssistantMessage, fauxAssistantMessage, fauxProvider } from "@msa/ai";
-import { getApiProvider } from "@msa/ai/compat";
+import ai from "@msa/ai";
+import compat from "@msa/ai/compat";
+import type aiTypes from "@msa/ai/index.types";
 import type { ExtensionFactory } from "@msa/coding-agent";
 import testing from "@msa/testing";
 import { Effect, Stream } from "effect";
 import { expect, it } from "vite-plus/test";
 
 import harnessModule from "../harness.ts";
+
+const { fauxAssistantMessage, fauxProvider } = ai;
+const { getApiProvider } = compat;
 
 const { createHarness } = harnessModule;
 
@@ -14,7 +18,7 @@ const { currentTimeMillis } = testing;
 type Faux = ReturnType<typeof fauxProvider>;
 type Observed = {
   receivedApiKey?: string | undefined;
-  result?: AssistantMessage;
+  result?: aiTypes.AssistantMessage;
   streamedText: string;
 };
 

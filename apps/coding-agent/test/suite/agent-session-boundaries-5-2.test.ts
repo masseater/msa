@@ -1,4 +1,4 @@
-import { fauxAssistantMessage } from "@msa/ai";
+import ai from "@msa/ai";
 import testing from "@msa/testing";
 import { Effect } from "effect";
 import { afterEach, describe, expect, it } from "vite-plus/test";
@@ -6,6 +6,8 @@ import { afterEach, describe, expect, it } from "vite-plus/test";
 import type { ExtensionFactory } from "../../src/index.ts";
 import agentSessionBoundaries5Support from "./agent-session-boundaries-5-support.ts";
 import harnessModule from "./harness.ts";
+
+const { fauxAssistantMessage } = ai;
 
 const { harnesses3 } = agentSessionBoundaries5Support;
 

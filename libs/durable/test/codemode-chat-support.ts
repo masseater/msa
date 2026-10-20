@@ -1,14 +1,20 @@
-import { Type } from "@msa/ai";
-import { type CodemodeRun, CodemodeSandbox } from "@msa/codemode";
+import ai from "@msa/ai";
+import codemodeModule from "@msa/codemode";
+import type codemodeTypesModule from "@msa/codemode/index.types";
 import durable from "@msa/durable";
 import type durableTypes from "@msa/durable/index.types";
 import { Effect } from "effect";
 import { dual } from "effect/Function";
 
-import codemode from "../src/codemode/codemode.ts";
 import type codemodeTypes from "../src/codemode/codemode.types.ts";
 import type describeTypes from "../src/codemode/describe.types.ts";
-import support from "./support.ts";
+import codemodeChatSupportKit from "./codemode-chat-support-kit.ts";
+
+const { codemode, support } = codemodeChatSupportKit;
+
+const { Type } = ai;
+
+const { CodemodeSandbox } = codemodeModule;
 
 const { defineTool } = durable;
 const { createCodemodeTool } = codemode;
@@ -42,7 +48,9 @@ const tool: {
 
 function countingSandbox() {
   const sandbox = new CodemodeSandbox({ memoryLimitBytes: 64 * 1024 * 1024 });
-  const vm: { starts: number; onStart?: (run: CodemodeRun) => void } = { starts: 0 };
+  const vm: { starts: number; onStart?: (run: codemodeTypesModule.CodemodeRun) => void } = {
+    starts: 0,
+  };
   const start = sandbox.start.bind(sandbox);
   sandbox.start = (code, options) => {
     vm.starts++;

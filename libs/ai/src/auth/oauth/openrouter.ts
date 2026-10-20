@@ -1,16 +1,21 @@
 import { Effect } from "effect";
 
-import { randomUuid } from "../../utils/crypto.ts";
-import { type HttpReply, httpRequest } from "../../utils/http.ts";
-import { encodeJson } from "../../utils/json-codec.ts";
-import { getProviderEnvValue } from "../../utils/provider-env.ts";
-import type { OAuthAuth, OAuthCredential, ProviderAuthInteraction } from "../types.ts";
-import {
-  type OAuthCallbackServer,
-  startOAuthCallbackServer,
-  waitForCallbackOrManualInput,
-} from "./callback-server.ts";
-import { generatePKCE } from "./pkce.ts";
+import cryptoModule from "../../utils/crypto.ts";
+import http from "../../utils/http.ts";
+import type httpTypes from "../../utils/http.types.ts";
+import jsonCodec from "../../utils/json-codec.ts";
+import providerEnv from "../../utils/provider-env.ts";
+import type typesModule from "../types.ts";
+import callbackServer from "./callback-server.ts";
+import type callbackServerTypes from "./callback-server.types.ts";
+import pkce from "./pkce.ts";
+
+const { getProviderEnvValue } = providerEnv;
+const { httpRequest } = http;
+const { encodeJson } = jsonCodec;
+const { startOAuthCallbackServer, waitForCallbackOrManualInput } = callbackServer;
+const { generatePKCE } = pkce;
+const { randomUuid } = cryptoModule;
 
 const AUTHORIZE_URL = "https://openrouter.ai/auth";
 const TOKEN_URL = "https://openrouter.ai/api/v1/auth/keys";
@@ -52,16 +57,16 @@ const exchangeAuthorizationCode = (
   code: string,
   verifier: string,
   signal: AbortSignal,
-): Effect.Effect<OAuthCredential> =>
+): Effect.Effect<typesModule.OAuthCredential> =>
   Effect.gen(function* () {
     if (signal.aborted) return yield* Effect.die(new Error("Login cancelled"));
     const timeout = AbortSignal.timeout(TOKEN_EXCHANGE_TIMEOUT_MS);
     const reply = yield* httpRequest({
-      url: TOKEN_URL,
-      method: "POST",
+      body: yield* encodeJson({ code, code_challenge_method: "S256", code_verifier: verifier }),
       headers: { accept: "application/json", "content-type": "application/json" },
-      body: yield* encodeJson({ code, code_verifier: verifier, code_challenge_method: "S256" }),
+      method: "POST",
       signal: AbortSignal.any([signal, timeout]),
+      url: TOKEN_URL,
     }).pipe(
       Effect.catchDefect((error) =>
         Effect.die(
@@ -78,7 +83,7 @@ const exchangeAuthorizationCode = (
     return yield* credentialFromBody(reply, body);
   });
 
-const readJsonBody = (reply: HttpReply): Effect.Effect<JsonObject> =>
+const readJsonBody = (reply: httpTypes.HttpReply): Effect.Effect<JsonObject> =>
   reply.json.pipe(
     Effect.map((parsed) =>
       parsed !== null && typeof parsed === "object" && !Array.isArray(parsed)
@@ -92,7 +97,10 @@ const readJsonBody = (reply: HttpReply): Effect.Effect<JsonObject> =>
     ),
   );
 
-const credentialFromBody = (reply: HttpReply, body: JsonObject): Effect.Effect<OAuthCredential> =>
+const credentialFromBody = (
+  reply: httpTypes.HttpReply,
+  body: JsonObject,
+): Effect.Effect<typesModule.OAuthCredential> =>
   Effect.gen(function* () {
     if (!reply.ok) {
       const detail = errorDetail(body);
@@ -109,22 +117,22 @@ const credentialFromBody = (reply: HttpReply, body: JsonObject): Effect.Effect<O
     }
 
     return {
-      type: "oauth" as const,
       access: key,
-      refresh: "",
       expires: Number.MAX_SAFE_INTEGER,
+      refresh: "",
+      type: "oauth" as const,
     };
   });
 
 const promptForManualCode = (
-  interaction: ProviderAuthInteraction,
-  callback: OAuthCallbackServer<OAuthCredential>,
+  interaction: typesModule.ProviderAuthInteraction,
+  callback: callbackServerTypes.OAuthCallbackServer<typesModule.OAuthCredential>,
   verifier: string,
 ) =>
   Effect.gen(function* () {
     const result = yield* waitForCallbackOrManualInput({
-      interaction,
       callback,
+      interaction,
       message:
         "Complete sign-in in your browser, or paste the authorization code / redirect URL here:",
       placeholder: callback.redirectUri,
@@ -135,22 +143,24 @@ const promptForManualCode = (
       return yield* Effect.die(new Error("Missing authorization code"));
     }
     interaction.notify({
-      type: "progress",
       message: "Exchanging authorization code for an API key...",
+      type: "progress",
     });
     return yield* exchangeAuthorizationCode(code, verifier, interaction.signal);
   });
 
-const loginOpenRouter = (interaction: ProviderAuthInteraction): Promise<OAuthCredential> =>
+const loginOpenRouter = (
+  interaction: typesModule.ProviderAuthInteraction,
+): Promise<typesModule.OAuthCredential> =>
   Effect.runPromise(
     Effect.gen(function* () {
       const { verifier, challenge } = yield* Effect.promise(() => generatePKCE());
       const callback = yield* startOAuthCallbackServer({
-        providerName: "OpenRouter",
-        host: getCallbackHost(),
-        port: 0,
-        path: `/oauth/callback/${randomUuid()}`,
         complete: (code) => exchangeAuthorizationCode(code, verifier, interaction.signal),
+        host: getCallbackHost(),
+        path: `/oauth/callback/${randomUuid()}`,
+        port: 0,
+        providerName: "OpenRouter",
         signal: interaction.signal,
         timeoutMs: LOGIN_TIMEOUT_MS,
       });
@@ -163,14 +173,14 @@ const loginOpenRouter = (interaction: ProviderAuthInteraction): Promise<OAuthCre
       }).toString();
 
       interaction.notify({
-        type: "progress",
         message: `Listening for OpenRouter OAuth callback on ${callback.redirectUri}`,
+        type: "progress",
       });
       interaction.notify({
-        type: "auth_url",
-        url: authorizeUrl.toString(),
         instructions:
           "Complete sign-in in your browser. If the browser is on another machine, paste the final redirect URL here.",
+        type: "auth_url",
+        url: authorizeUrl.toString(),
       });
 
       return yield* promptForManualCode(interaction, callback, verifier).pipe(
@@ -179,10 +189,10 @@ const loginOpenRouter = (interaction: ProviderAuthInteraction): Promise<OAuthCre
     }),
   );
 
-export const openRouterOAuth: OAuthAuth = {
-  name: "OpenRouter OAuth",
-  loginLabel: "Sign in with OpenRouter",
+const openRouterOAuth: typesModule.OAuthAuth = {
   login: loginOpenRouter,
+  loginLabel: "Sign in with OpenRouter",
+  name: "OpenRouter OAuth",
   refresh(credential, _signal) {
     return Promise.resolve(credential);
   },
@@ -190,3 +200,9 @@ export const openRouterOAuth: OAuthAuth = {
     return Promise.resolve({ apiKey: credential.access });
   },
 };
+
+const openrouter = {
+  openRouterOAuth,
+};
+
+export default openrouter;

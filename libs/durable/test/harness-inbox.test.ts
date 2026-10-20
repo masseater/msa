@@ -1,4 +1,4 @@
-import { type FauxResponseStep } from "@msa/ai";
+import type aiTypes from "@msa/ai/index.types";
 import durable from "@msa/durable";
 import harnessModule from "@msa/durable/harness";
 import memory from "@msa/durable/storage/memory";
@@ -237,7 +237,7 @@ const endsRunQueued = Effect.gen(function* () {
   const gate = deferred();
   holdTool(setup, gate);
   const requests: string[][] = [];
-  const record: FauxResponseStep = (request) => {
+  const record: aiTypes.FauxResponseStep = (request) => {
     requests.push(request.messages.map((message) => `${message.role}:${textOf(message) ?? ""}`));
     return answer("fresh");
   };

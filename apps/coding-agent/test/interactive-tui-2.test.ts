@@ -1,5 +1,5 @@
 import testing from "@msa/testing";
-import { Text } from "@msa/tui";
+import tui from "@msa/tui";
 import { Effect } from "effect";
 import { beforeEach, describe, expect, it, vi } from "vite-plus/test";
 
@@ -8,6 +8,8 @@ import {
   createInteractiveTui,
 } from "../src/modes/interactive/interactive-mode.ts";
 import interactiveTuiSupport from "./interactive-tui-support.ts";
+
+const { Text } = tui;
 
 const { RecordingTerminal } = interactiveTuiSupport;
 

@@ -44,7 +44,7 @@ function collect(runtime: Runtime, memos: ReadonlyMap<string, string>): Effect.E
         const task = store.getTask(database, assignment.taskId);
         if (task === undefined) continue;
         const repo = yield* repoStates.read(task.cwd);
-        handoffs.push({ taskId: task.id, threadId, title: task.title, memo, repo });
+        handoffs.push({ memo, repo, taskId: task.id, threadId, title: task.title });
       }
     }
     return handoffs;
@@ -68,13 +68,13 @@ function writeReport(
   now: number,
 ): void {
   store.insertReport(runtime.database, {
-    id: newId("rep"),
-    taskId,
-    threadId,
-    role: "worker",
-    status: "stopped",
     content,
     createdAt: now,
+    id: newId("rep"),
+    role: "worker",
+    status: "stopped",
+    taskId,
+    threadId,
   });
 }
 
@@ -97,7 +97,7 @@ function closeDropped(
     detachReview(runtime, task);
     store.setTaskStatus(database, task.id, "stopped", now);
     writeReport(runtime, task.id, "replan", `dropped by replan ${replanId}: ${item.reason}`, now);
-    dropped.push({ taskId: task.id, title: task.title, reason: item.reason });
+    dropped.push({ reason: item.reason, taskId: task.id, title: task.title });
   }
   for (const entry of prepared.entries) {
     for (const id of entry.from) {
@@ -130,19 +130,19 @@ function newTask(
   now: number,
 ): Task {
   return {
+    condition: null,
+    createdAt: now,
+    currentState: input.currentState ?? inherited(sources, (source) => source.currentState),
+    cwd: input.cwd ?? sources[0]?.cwd ?? runtime.options.cwd,
+    goalState: input.goalState ?? inherited(sources, (source) => source.goalState),
     id: newId("t"),
+    kind: "work",
+    model: input.model ?? null,
     project: runtime.options.project,
     round: roundFor(input, sources),
-    kind: "work",
-    title: input.title,
-    currentState: input.currentState ?? inherited(sources, (source) => source.currentState),
-    goalState: input.goalState ?? inherited(sources, (source) => source.goalState),
     status: "waiting",
-    cwd: input.cwd ?? sources[0]?.cwd ?? runtime.options.cwd,
-    condition: null,
-    model: input.model ?? null,
     thinkingLevel: input.thinkingLevel ?? null,
-    createdAt: now,
+    title: input.title,
     updatedAt: now,
   };
 }
@@ -162,14 +162,14 @@ function createTasks(runtime: Runtime, prepared: Prepared, now: number): Creatio
     const review = rounds.ensureReview(runtime, task.round, now);
     rounds.attachReview(runtime, review, task.id, now);
     if (entry.key !== null) byKey.set(entry.key, task.id);
-    created.push({ taskId: task.id, title: task.title, from: entry.from });
+    created.push({ from: entry.from, taskId: task.id, title: task.title });
     for (const source of entry.from) {
       inheritors.set(source, [...(inheritors.get(source) ?? []), task.id]);
     }
     pending.push({
-      taskId: task.id,
-      refs: entry.input.dependsOn ?? sources.flatMap((source) => source.dependsOn),
       explicit: entry.input.dependsOn !== undefined,
+      refs: entry.input.dependsOn ?? sources.flatMap((source) => source.dependsOn),
+      taskId: task.id,
     });
   }
   for (const item of pending) {
@@ -182,7 +182,7 @@ function createTasks(runtime: Runtime, prepared: Prepared, now: number): Creatio
       store.addDependency(database, project, item.taskId, id);
     }
   }
-  return { created, inheritors, byKey };
+  return { byKey, created, inheritors };
 }
 
 function rewire(
@@ -198,7 +198,7 @@ function rewire(
     for (const dependency of refs) {
       store.addDependency(database, runtime.options.project, item.taskId, dependency);
     }
-    rewired.push({ taskId: item.taskId, dependsOn: refs });
+    rewired.push({ dependsOn: refs, taskId: item.taskId });
   }
   return rewired;
 }
@@ -228,13 +228,13 @@ function writeHandoffs(
     if (targets.length === 0) continue;
     for (const target of targets) writeReport(runtime, target, handoff.threadId, content, now);
     store.insertNote(runtime.database, {
+      author: "replan",
+      content,
+      createdAt: now,
       id: newId("note"),
       project: runtime.options.project,
       round: null,
       taskIds: targets,
-      content,
-      author: "replan",
-      createdAt: now,
     });
   }
 }
@@ -259,24 +259,24 @@ function write(
     }
     writeHandoffs(runtime, prepared, handoffs, replanId, now, creation.inheritors);
     const stopped: ReplanStopped[] = handoffs.map((handoff) => ({
-      taskId: handoff.taskId,
-      title: handoff.title,
-      threadId: handoff.threadId,
       memo: handoff.memo,
+      taskId: handoff.taskId,
+      threadId: handoff.threadId,
+      title: handoff.title,
     }));
     const changes: ReplanChanges = {
-      stopped,
       created: creation.created,
       dropped,
       kept: prepared.keep,
       rewired,
+      stopped,
     };
     replanStore.insertReplan(database, {
+      after: changes,
+      createdAt: now,
       id: replanId,
       project,
       reason: prepared.input.reason,
-      after: changes,
-      createdAt: now,
     });
     return changes;
   });
@@ -298,14 +298,14 @@ function apply(
       prepared.input.resume === false ? [] : yield* scheduling.scheduleEffect(runtime);
     yield* Effect.sync(() => runtime.publish());
     return {
-      replanId,
       aborted: null,
-      stopped: changes.stopped,
       created: changes.created,
       dropped: changes.dropped,
       kept: changes.kept,
+      replanId,
       rewired: changes.rewired,
       started,
+      stopped: changes.stopped,
     };
   });
 }

@@ -11,22 +11,22 @@ const notInitialized = () => {
 };
 
 const pendingActions = () => ({
-  sendMessage: notInitialized,
-  sendUserMessage: notInitialized,
   appendEntry: notInitialized,
-  setSessionName: notInitialized,
-  getSessionName: notInitialized,
-  setLabel: notInitialized,
+  createContext: notInitialized,
   getActiveTools: notInitialized,
   getAllTools: notInitialized,
-  getSettings: notInitialized,
-  setActiveTools: notInitialized,
-  refreshTools: () => {},
   getCommands: notInitialized,
-  setModel: () => Promise.reject(new Error("Extension runtime not initialized")),
+  getSessionName: notInitialized,
+  getSettings: notInitialized,
   getThinkingLevel: notInitialized,
+  refreshTools: () => {},
+  sendMessage: notInitialized,
+  sendUserMessage: notInitialized,
+  setActiveTools: notInitialized,
+  setLabel: notInitialized,
+  setModel: () => Promise.reject(new Error("Extension runtime not initialized")),
+  setSessionName: notInitialized,
   setThinkingLevel: notInitialized,
-  createContext: notInitialized,
 });
 
 const lifecycle = () => {
@@ -59,17 +59,24 @@ const lifecycle = () => {
 };
 
 const registrations = (runtime: () => ExtensionRuntime) => ({
-  registerProvider: (
-    ...[name, config, extensionPath = "<unknown>"]: Parameters<ExtensionRuntime["registerProvider"]>
-  ) => {
-    runtime().pendingProviderRegistrations.push({ name, config, extensionPath });
-  },
   registerNativeProvider: (
     ...[provider, extensionPath = "<unknown>"]: Parameters<
       ExtensionRuntime["registerNativeProvider"]
     >
   ) => {
     runtime().pendingNativeProviderRegistrations.push({ provider, extensionPath });
+  },
+  registerProvider: (
+    ...[name, config, extensionPath = "<unknown>"]: Parameters<ExtensionRuntime["registerProvider"]>
+  ) => {
+    runtime().pendingProviderRegistrations.push({ name, config, extensionPath });
+  },
+  registerVirtualModel: (
+    ...[definition, extensionPath = "<unknown>"]: Parameters<
+      ExtensionRuntime["registerVirtualModel"]
+    >
+  ) => {
+    runtime().pendingVirtualModelRegistrations.push({ definition, extensionPath });
   },
   unregisterProvider: (name: string) => {
     const current = runtime();
@@ -79,13 +86,6 @@ const registrations = (runtime: () => ExtensionRuntime) => ({
     current.pendingNativeProviderRegistrations = current.pendingNativeProviderRegistrations.filter(
       (r) => r.provider.id !== name,
     );
-  },
-  registerVirtualModel: (
-    ...[definition, extensionPath = "<unknown>"]: Parameters<
-      ExtensionRuntime["registerVirtualModel"]
-    >
-  ) => {
-    runtime().pendingVirtualModelRegistrations.push({ definition, extensionPath });
   },
   unregisterVirtualModel: (provider: string, id: string) => {
     const current = runtime();
@@ -101,9 +101,9 @@ export function createExtensionRuntime(): ExtensionRuntime {
     ...lifecycle(),
     ...registrations(() => runtime),
     flagValues: new Map(),
-    pendingProviderRegistrations: [],
-    pendingNativeProviderRegistrations: [],
     mcpServers: new McpServerRegistry(),
+    pendingNativeProviderRegistrations: [],
+    pendingProviderRegistrations: [],
     pendingVirtualModelRegistrations: [],
   };
   return runtime;

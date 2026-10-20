@@ -1,21 +1,13 @@
-import type {
-  AnyModel,
-  Api,
-  ClassifierApi,
-  ClassifierModel,
-  ImageApi,
-  ImageModel,
-  Model,
-} from "../../src/types.ts";
+import type typesModule from "../../src/types.types.ts";
 import type modelDataTypes from "../model-data.types.ts";
 
 declare namespace catalogBuildTypes {
-  type CatalogEntry = AnyModel & modelDataTypes.ModelCatalogEntry;
+  type CatalogEntry = typesModule.AnyModel & modelDataTypes.ModelCatalogEntry;
 
   interface CatalogSources {
-    readonly chat: readonly Model<any>[];
-    readonly images: readonly ImageModel<ImageApi>[];
-    readonly classifiers: readonly ClassifierModel<ClassifierApi>[];
+    readonly chat: readonly typesModule.Model<any>[];
+    readonly images: readonly typesModule.ImageModel<typesModule.ImageApi>[];
+    readonly classifiers: readonly typesModule.ClassifierModel<typesModule.ClassifierApi>[];
   }
 
   interface ProviderCounts {
@@ -27,7 +19,9 @@ declare namespace catalogBuildTypes {
 
   interface BuiltCatalog {
     readonly providerIds: readonly string[];
-    readonly chatProviders: Readonly<Record<string, Record<string, Model<Api>>>>;
+    readonly chatProviders: Readonly<
+      Record<string, Record<string, typesModule.Model<typesModule.Api>>>
+    >;
     readonly allProviders: Readonly<Record<string, CatalogEntry[]>>;
     readonly counts: readonly ProviderCounts[];
   }

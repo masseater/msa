@@ -1,15 +1,14 @@
 import type { ChatCompletionToolMessageParam } from "openai/resources/chat/completions.js";
 
-import type { Message } from "../types.ts";
-import { sanitizeSurrogates } from "../utils/sanitize-unicode.ts";
-import {
-  isImageContentBlock,
-  isTextContentBlock,
-  type ConvertState,
-  type ImageUrlPart,
-} from "./openai-completions-convert-state.ts";
+import type typesModule from "../types.types.ts";
+import sanitizeUnicode from "../utils/sanitize-unicode.ts";
+import openaiCompletionsConvertState from "./openai-completions-convert-state.ts";
+import type openaiCompletionsConvertStateTypes from "./openai-completions-convert-state.types.ts";
 
-function toolResultText(toolMsg: Extract<Message, { role: "toolResult" }>): string {
+const { isImageContentBlock, isTextContentBlock } = openaiCompletionsConvertState;
+const { sanitizeSurrogates } = sanitizeUnicode;
+
+function toolResultText(toolMsg: Extract<typesModule.Message, { role: "toolResult" }>): string {
   const textResult = toolMsg.content
     .filter(isTextContentBlock)
     .map((block) => block.text)
@@ -21,14 +20,14 @@ function toolResultText(toolMsg: Extract<Message, { role: "toolResult" }>): stri
 }
 
 function pushToolResult(
-  state: ConvertState,
-  toolMsg: Extract<Message, { role: "toolResult" }>,
-  imageBlocks: ImageUrlPart[],
+  state: openaiCompletionsConvertStateTypes.ConvertState,
+  toolMsg: Extract<typesModule.Message, { role: "toolResult" }>,
+  imageBlocks: openaiCompletionsConvertStateTypes.ImageUrlPart[],
 ): void {
   const hasImages = toolMsg.content.some((c) => c.type === "image");
   const toolResultMsg: ChatCompletionToolMessageParam = {
-    role: "tool",
     content: sanitizeSurrogates(toolResultText(toolMsg)),
+    role: "tool",
     tool_call_id: toolMsg.toolCallId,
   };
   if (state.compat.requiresToolResultName && toolMsg.toolName !== "") {
@@ -40,22 +39,22 @@ function pushToolResult(
   for (const block of toolMsg.content) {
     if (isImageContentBlock(block)) {
       imageBlocks.push({
-        type: "image_url",
         image_url: {
           url: `data:${block.mimeType};base64,${block.data}`,
         },
+        type: "image_url",
       });
     }
   }
 }
 
 function convertToolResults(input: {
-  state: ConvertState;
-  messages: Message[];
+  state: openaiCompletionsConvertStateTypes.ConvertState;
+  messages: typesModule.Message[];
   index: number;
 }): number {
   const { state, messages, index } = input;
-  const imageBlocks: ImageUrlPart[] = [];
+  const imageBlocks: openaiCompletionsConvertStateTypes.ImageUrlPart[] = [];
   let next = index;
   for (let toolMsg = messages[next]; toolMsg?.role === "toolResult"; toolMsg = messages[++next]) {
     pushToolResult(state, toolMsg, imageBlocks);
@@ -63,11 +62,11 @@ function convertToolResults(input: {
 
   if (imageBlocks.length > 0) {
     if (state.compat.requiresAssistantAfterToolResult) {
-      state.params.push({ role: "assistant", content: "I have processed the tool results." });
+      state.params.push({ content: "I have processed the tool results.", role: "assistant" });
     }
     state.params.push({
+      content: [{ text: "Attached image(s) from tool result:", type: "text" }, ...imageBlocks],
       role: "user",
-      content: [{ type: "text", text: "Attached image(s) from tool result:" }, ...imageBlocks],
     });
     state.lastRole = "user";
   } else {
@@ -76,4 +75,8 @@ function convertToolResults(input: {
   return next;
 }
 
-export { convertToolResults };
+const openaiCompletionsToolResults = {
+  convertToolResults,
+};
+
+export default openaiCompletionsToolResults;

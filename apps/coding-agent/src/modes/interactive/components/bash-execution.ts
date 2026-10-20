@@ -1,4 +1,5 @@
-import { Container, Loader, Spacer, Text, type TUI } from "@msa/tui";
+import tui from "@msa/tui";
+import type tuiTypes from "@msa/tui/index.types";
 
 import {
   DEFAULT_MAX_BYTES,
@@ -12,6 +13,8 @@ import { DynamicBorder } from "./dynamic-border.ts";
 import { keyHint, keyText } from "./keybinding-hints.ts";
 import { truncateToVisualLines } from "./visual-truncate.ts";
 
+const { Container, Loader, Spacer, Text } = tui;
+
 const PREVIEW_LINES = 20;
 
 export class BashExecutionComponent extends Container {
@@ -19,15 +22,15 @@ export class BashExecutionComponent extends Container {
   private outputLines: string[] = [];
   private status: "running" | "complete" | "cancelled" | "error" = "running";
   private exitCode: number | undefined = undefined;
-  private loader: Loader;
+  private loader: tuiTypes.Loader;
   private truncationResult?: TruncationResult | undefined;
   private fullOutputPath?: string | undefined;
   private expanded = false;
-  private contentContainer: Container;
+  private contentContainer: tuiTypes.Container;
   private readonly colorKey: "dim" | "bashMode";
   private outputPad: number;
 
-  constructor(command: string, ui: TUI, excludeFromContext = false, outputPad = 1) {
+  constructor(command: string, ui: tuiTypes.TUI, excludeFromContext = false, outputPad = 1) {
     super();
     this.command = command;
     this.colorKey = excludeFromContext ? "dim" : "bashMode";
@@ -108,8 +111,8 @@ export class BashExecutionComponent extends Container {
   private updateDisplay(): void {
     const fullOutput = this.outputLines.join("\n");
     const contextTruncation = truncateTail(fullOutput, {
-      maxLines: DEFAULT_MAX_LINES,
       maxBytes: DEFAULT_MAX_BYTES,
+      maxLines: DEFAULT_MAX_LINES,
     });
 
     const availableLines =
@@ -147,6 +150,10 @@ export class BashExecutionComponent extends Container {
         let cachedWidth: number | undefined;
         let cachedLines: string[] | undefined;
         self.contentContainer.addChild({
+          invalidate: () => {
+            cachedWidth = undefined;
+            cachedLines = undefined;
+          },
           render: (width: number) => {
             if (cachedLines === undefined || cachedWidth !== width) {
               const result = truncateToVisualLines(
@@ -159,10 +166,6 @@ export class BashExecutionComponent extends Container {
               cachedWidth = width;
             }
             return cachedLines ?? [];
-          },
-          invalidate: () => {
-            cachedWidth = undefined;
-            cachedLines = undefined;
           },
         });
       }

@@ -1,17 +1,14 @@
 import * as NodeRuntime from "@effect/platform-node/NodeRuntime";
-import {
-  type ToolResultMessage,
-  createModels,
-  fauxAssistantMessage,
-  fauxProvider,
-  fauxToolCall,
-} from "@msa/ai";
+import ai from "@msa/ai";
+import type aiTypes from "@msa/ai/index.types";
 import contextModule from "@msa/chord/context";
 import type durableTypes from "@msa/durable/index.types";
 import { Console, Effect } from "effect";
 
 import durableKit from "../durable-kit.ts";
 import support from "../support.ts";
+
+const { createModels, fauxAssistantMessage, fauxProvider, fauxToolCall } = ai;
 
 const { BACKGROUND_CONTEXT } = contextModule;
 
@@ -79,7 +76,7 @@ const main = Effect.gen(function* () {
   const lastBashOutput = Effect.fn("lastBashOutput")(function* () {
     const page = yield* awaited(root.entries({}, 10, undefined, context));
     const result = page.items.find((entry) => ToolResultEntry.is(entry))
-      ?.model?.[0] as ToolResultMessage;
+      ?.model?.[0] as aiTypes.ToolResultMessage;
     return result.content.map((part) => (part.type === "text" ? part.text.trim() : "")).join("");
   });
 

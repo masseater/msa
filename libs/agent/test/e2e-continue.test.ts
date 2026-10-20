@@ -1,16 +1,13 @@
-import {
-  type AssistantMessage,
-  type Model,
-  type ToolResultMessage,
-  type UserMessage,
-  fauxAssistantMessage,
-} from "@msa/ai/compat";
+import compat from "@msa/ai/compat";
+import type compatTypes from "@msa/ai/compat.types";
 import { Effect } from "effect";
 import { describe, expect, it } from "vite-plus/test";
 
 import fauxModule from "./support/faux.ts";
 import fixtures from "./support/fixtures.ts";
 import calculate from "./utils/calculate.ts";
+
+const { fauxAssistantMessage } = compat;
 
 const { expectAssistant, fauxAgent, textOf, useFaux } = fauxModule;
 const { createUsage, now } = fixtures;
@@ -19,9 +16,9 @@ const { calculateTool } = calculate;
 const createFaux = useFaux();
 
 const assistantFrom = (
-  model: Model<string>,
-  content: AssistantMessage["content"],
-): AssistantMessage => ({
+  model: compatTypes.Model<string>,
+  content: compatTypes.AssistantMessage["content"],
+): compatTypes.AssistantMessage => ({
   api: model.api,
   content,
   model: model.id,
@@ -32,7 +29,7 @@ const assistantFrom = (
   usage: createUsage(),
 });
 
-const userText = (text: string): UserMessage => ({
+const userText = (text: string): compatTypes.UserMessage => ({
   content: [{ text, type: "text" }],
   role: "user",
   timestamp: now(),
@@ -68,7 +65,7 @@ const continuesFromUser = Effect.gen(function* () {
   expect(textOf(expectAssistant(agent.state.messages[1])).toUpperCase()).toContain("HELLO WORLD");
 });
 
-const toolResult: ToolResultMessage = {
+const toolResult: compatTypes.ToolResultMessage = {
   content: [{ text: "5 + 3 = 8", type: "text" }],
   isError: false,
   role: "toolResult",
@@ -87,7 +84,7 @@ const continuesFromToolResult = Effect.gen(function* () {
       "You are a helpful assistant. After getting a calculation result, state the answer clearly.",
     tools: [calculateTool],
   });
-  const toolUse: AssistantMessage = {
+  const toolUse: compatTypes.AssistantMessage = {
     ...assistantFrom(model, [
       { text: "Let me calculate that.", type: "text" },
       { arguments: { expression: "5 + 3" }, id: "calc-1", name: "calculate", type: "toolCall" },

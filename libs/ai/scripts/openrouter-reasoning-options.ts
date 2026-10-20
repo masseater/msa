@@ -1,10 +1,10 @@
-import type { ThinkingLevelMap } from "../src/types.ts";
+import type typesModule from "../src/types.types.ts";
 import getEffortThinkingLevelMap from "./models-dev-reasoning-options.ts";
 import type openrouterReasoningOptionsTypes from "./openrouter-reasoning-options.types.ts";
 
 function getOpenRouterThinkingLevelMap(
   reasoning: openrouterReasoningOptionsTypes.OpenRouterReasoningMetadata | undefined,
-): ThinkingLevelMap | undefined {
+): typesModule.ThinkingLevelMap | undefined {
   if (reasoning === undefined) return undefined;
   if (
     reasoning.supported_efforts?.length === undefined ||

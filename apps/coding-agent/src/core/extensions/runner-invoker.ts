@@ -48,9 +48,9 @@ export class HandlerInvoker {
     message = toErrorMessage(error),
   ): void {
     this.host.emitError({
-      extensionPath,
-      event,
       error: message,
+      event,
+      extensionPath,
       stack: error instanceof Error ? error.stack : undefined,
     });
   }

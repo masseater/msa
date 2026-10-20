@@ -1,16 +1,17 @@
-import { contentText } from "@msa/ai";
+import ai from "@msa/ai";
 import { Effect } from "effect";
-import { describeEval, StructuredOutputJudge, ToolCallJudge } from "vitest-evals";
+import { StructuredOutputJudge, ToolCallJudge, describeEval } from "vitest-evals";
 
 import { createMsaDocumentationEvalHarness } from "../src/harness.ts";
 import { DOCUMENTATION_EVAL_TOOLS } from "../src/system-prompt.ts";
+
+const { contentText } = ai;
 
 const TOOL_NAME = "hello";
 const TOOL_ARGUMENTS = { name: "Bob" };
 const TOOL_RESULT = "Hello, Bob!";
 
 const harness = createMsaDocumentationEvalHarness({
-  tools: [...DOCUMENTATION_EVAL_TOOLS, TOOL_NAME],
   output: ({ response, session }) =>
     Effect.sync(() => {
       const extensions = session.resourceLoader.getExtensions();
@@ -27,12 +28,14 @@ const harness = createMsaDocumentationEvalHarness({
         toolResult: result?.role === "toolResult" ? contentText(result.content, "\n") : null,
       };
     }),
+  tools: [...DOCUMENTATION_EVAL_TOOLS, TOOL_NAME],
 });
 
 describeEval(
   "Create and use a tool extension",
   {
     harness,
+    judgeThreshold: null,
     judges: [
       StructuredOutputJudge({
         expected: {
@@ -46,21 +49,20 @@ describeEval(
       }),
       ToolCallJudge({ expectedTools: [{ name: TOOL_NAME, arguments: TOOL_ARGUMENTS }] }),
     ],
-    judgeThreshold: null,
   },
   (it) => {
     it("creates, reloads, and invokes the extension", ({ run }) =>
       run([
         {
-          type: "prompt",
           content:
             "Configure this running msa installation with an extension containing a hello tool that takes a name and returns a greeting. Do not create project source. For example, passing Bob should return `Hello, Bob!`.",
+          type: "prompt",
         },
         { type: "reload" },
         {
-          type: "prompt",
           content:
             "Use the hello tool to greet Bob. Respond with exactly the tool's greeting and nothing else.",
+          type: "prompt",
         },
       ]));
   },

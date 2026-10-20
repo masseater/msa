@@ -16,27 +16,9 @@ export function createProjectTrustContext(options: {
 }): ProjectTrustContext {
   return {
     cwd: options.cwd,
-    mode: options.mode === "interactive" ? "tui" : options.mode,
     hasUI: options.hasUI,
+    mode: options.mode === "interactive" ? "tui" : options.mode,
     ui: {
-      select: (title, selectOptions) =>
-        Effect.runPromise(
-          awaiting(function* () {
-            if (!options.hasUI) {
-              return undefined;
-            }
-            if (options.mode !== "interactive") {
-              return undefined;
-            }
-            return yield* awaited(
-              showStartupSelector(
-                options.settingsManager,
-                title,
-                selectOptions.map((option) => ({ label: option, value: option })),
-              ),
-            );
-          }),
-        ),
       confirm: (title, message) =>
         Effect.runPromise(
           awaiting(function* () {
@@ -75,6 +57,24 @@ export function createProjectTrustContext(options: {
           writeError(color(message));
         }
       },
+      select: (title, selectOptions) =>
+        Effect.runPromise(
+          awaiting(function* () {
+            if (!options.hasUI) {
+              return undefined;
+            }
+            if (options.mode !== "interactive") {
+              return undefined;
+            }
+            return yield* awaited(
+              showStartupSelector(
+                options.settingsManager,
+                title,
+                selectOptions.map((option) => ({ label: option, value: option })),
+              ),
+            );
+          }),
+        ),
     },
   };
 }

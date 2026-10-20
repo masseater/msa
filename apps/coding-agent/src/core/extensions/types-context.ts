@@ -1,10 +1,5 @@
-import type {
-  AgentTool,
-  AgentToolCallOutcome,
-  AgentToolUpdateCallback,
-  ThinkingLevel,
-} from "@msa/agent-core";
-import type { ImageContent, Model, TextContent } from "@msa/ai";
+import type agentTypes from "@msa/agent-core/index.types";
+import type aiTypes from "@msa/ai/index.types";
 
 import type { CustomMessage } from "../messages.ts";
 import type { ModelRegistry } from "../model-registry.ts";
@@ -25,9 +20,9 @@ export interface ExtensionContext {
   cwd: string;
   sessionManager: ReadonlySessionManager;
   modelRegistry: ModelRegistry;
-  model: Model<any> | undefined;
+  model: aiTypes.Model<any> | undefined;
   scopedModels: readonly ScopedModel[];
-  thinkingLevel?: ThinkingLevel;
+  thinkingLevel?: agentTypes.ThinkingLevel;
   isIdle(): boolean;
   isProjectTrusted(): boolean;
   signal: AbortSignal | undefined;
@@ -41,16 +36,16 @@ export interface ExtensionContext {
 
 export interface ExecuteToolOptions {
   signal?: AbortSignal | undefined;
-  onUpdate?: AgentToolUpdateCallback | undefined;
+  onUpdate?: agentTypes.AgentToolUpdateCallback | undefined;
 }
 
 export interface ExtensionToolContext extends ExtensionContext {
-  readonly tools: readonly AgentTool[];
+  readonly tools: readonly agentTypes.AgentTool[];
   executeTool(
     name: string,
     args: unknown,
     options?: ExecuteToolOptions,
-  ): Promise<AgentToolCallOutcome>;
+  ): Promise<agentTypes.AgentToolCallOutcome>;
 }
 
 export interface ExtensionCommandContext extends ExtensionContext {
@@ -97,7 +92,7 @@ export interface ReplacedSessionContext extends ExtensionCommandContext {
   ): Promise<void>;
 
   sendUserMessage(
-    content: string | (TextContent | ImageContent)[],
+    content: string | (aiTypes.TextContent | aiTypes.ImageContent)[],
     options?: { deliverAs?: "steer" | "followUp"; expandPromptTemplates?: boolean },
   ): Promise<void>;
 }

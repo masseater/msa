@@ -1,8 +1,10 @@
 import { Clock, Effect } from "effect";
 import { afterEach, describe, expect, it, vi } from "vite-plus/test";
 
-import { openaiChatGPTOAuth } from "../src/auth/oauth/openai-chatgpt.ts";
-import type { OAuthCredential, ProviderAuthInteraction } from "../src/auth/types.ts";
+import openaiChatgpt from "../src/auth/oauth/openai-chatgpt.ts";
+import type typesModule from "../src/auth/types.ts";
+
+const { openaiChatGPTOAuth } = openaiChatgpt;
 
 const TOKEN_URL = "https://auth.openai.com/api/accounts/oauth/token";
 const REQUIRED_SCOPE =
@@ -40,7 +42,7 @@ function stubTokenEndpoint(response: unknown, inspect?: (body: URLSearchParams) 
 function loginInteraction(options?: {
   callbackClientId?: string;
   onAuthorize?: (url: URL) => void;
-}): ProviderAuthInteraction {
+}): typesModule.ProviderAuthInteraction {
   let authorizeUrl: URL | undefined;
   return {
     notify: (event) => {
@@ -66,7 +68,7 @@ function loginInteraction(options?: {
   };
 }
 
-function connectedCredential(): OAuthCredential {
+function connectedCredential(): typesModule.OAuthCredential {
   return {
     access: "old-access",
     clientId: "oaiapp_existing",

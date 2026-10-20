@@ -1,4 +1,5 @@
-import { ProcessTerminal, type TUI, TuiMainScreen } from "@msa/tui";
+import tui from "@msa/tui";
+import type tuiTypes from "@msa/tui/index.types";
 import * as Effect from "effect/Effect";
 
 import { awaited, awaiting } from "../core/awaiting.ts";
@@ -9,6 +10,8 @@ import {
 } from "../modes/interactive/components/config-selector.ts";
 import { initTheme, stopThemeWatcher } from "../modes/interactive/theme/theme.ts";
 import { callbackPromise } from "../utils/interop.ts";
+
+const { ProcessTerminal, TuiMainScreen } = tui;
 
 export interface ConfigSelectorOptions {
   resolvedPaths: ScopedResolvedPaths;
@@ -26,7 +29,7 @@ export function selectConfig(options: ConfigSelectorOptions): Promise<void> {
 
       return yield* awaited(
         callbackPromise((resolve) => {
-          const ui: TUI = new TuiMainScreen(
+          const ui: tuiTypes.TUI = new TuiMainScreen(
             new ProcessTerminal(),
             options.settingsManager.getShowHardwareCursor(),
             options.agentDir,

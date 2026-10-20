@@ -1,25 +1,25 @@
 import {
-  createAgentSession,
-  createSyntheticSourceInfo,
   DefaultResourceLoader,
-  getAgentDir,
   SessionManager,
   type Skill,
+  createAgentSession,
+  createSyntheticSourceInfo,
+  getAgentDir,
 } from "@msa/coding-agent";
 import { Console, Effect } from "effect";
 
 const customSkill: Skill = {
-  name: "my-skill",
-  description: "Custom project instructions",
-  filePath: "/virtual/SKILL.md",
   baseDir: "/virtual",
-  sourceInfo: createSyntheticSourceInfo("/virtual/SKILL.md", { source: "sdk" }),
+  description: "Custom project instructions",
   disableModelInvocation: false,
+  filePath: "/virtual/SKILL.md",
+  name: "my-skill",
+  sourceInfo: createSyntheticSourceInfo("/virtual/SKILL.md", { source: "sdk" }),
 };
 
 const loader = new DefaultResourceLoader({
-  cwd: process.cwd(),
   agentDir: getAgentDir(),
+  cwd: process.cwd(),
   skillsOverride: (current) => {
     const filteredSkills = current.skills.filter(
       (s) => s.name.includes("browser") || s.name.includes("search"),

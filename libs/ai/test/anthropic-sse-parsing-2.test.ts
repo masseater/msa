@@ -1,11 +1,14 @@
 import { Effect } from "effect";
 import { describe, expect, it } from "vite-plus/test";
 
-import { stream as streamAnthropic } from "../src/api/anthropic-messages.ts";
-import { normalizeContext } from "../src/compat.ts";
-import type { Model } from "../src/types.ts";
+import anthropicMessages from "../src/api/anthropic-messages.ts";
+import compatModule from "../src/compat.ts";
+import type typesModule from "../src/types.types.ts";
 import anthropicSseParsingSupport from "./anthropic-sse-parsing-support.ts";
 import modelChoice from "./model-choice.ts";
+
+const { normalizeContext } = compatModule;
+const { stream: streamAnthropic } = anthropicMessages;
 
 const { createFakeAnthropicClient, createResponseModelSseResponse, createSseResponse } =
   anthropicSseParsingSupport;
@@ -18,7 +21,7 @@ const hello = normalizeContext({ messages: [{ content: "Hello", role: "user", ti
 const usesFallbackModelForCost = () =>
   Effect.runPromise(
     Effect.gen(function* () {
-      const model: Model<"anthropic-messages"> = {
+      const model: typesModule.Model<"anthropic-messages"> = {
         ...servedModel,
         compat: {
           allowedFallbackModels: [

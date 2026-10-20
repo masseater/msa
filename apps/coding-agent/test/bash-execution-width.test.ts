@@ -1,8 +1,10 @@
-import { visibleWidth } from "@msa/tui";
+import tui from "@msa/tui";
 import { beforeAll, describe, expect, it } from "vite-plus/test";
 
 import { BashExecutionComponent } from "../src/modes/interactive/components/bash-execution.ts";
 import { initTheme } from "../src/modes/interactive/theme/theme.ts";
+
+const { visibleWidth } = tui;
 
 function createTuiStub(columns: number): { columns: number; stub: any } {
   const state = { columns };

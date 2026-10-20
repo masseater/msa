@@ -23,9 +23,9 @@ export function normalizeSelfUpdatePackageTarget(target: SelfUpdatePackageTarget
   installSpec: string;
 } {
   if (typeof target === "string") {
-    return { packageName: target, installSpec: target };
+    return { installSpec: target, packageName: target };
   }
-  return { packageName: target.packageName, installSpec: target.installSpec ?? target.packageName };
+  return { installSpec: target.installSpec ?? target.packageName, packageName: target.packageName };
 }
 
 export function makeSelfUpdateCommand(
@@ -42,8 +42,8 @@ export function makeSelfUpdateCommand(
 
 export function makeSelfUpdateCommandStep(command: string, args: string[]): SelfUpdateCommandStep {
   return {
-    command,
     args,
+    command,
     display: [command, ...args].map((arg) => (/\s/u.test(arg) ? `"${arg}"` : arg)).join(" "),
   };
 }
@@ -91,7 +91,7 @@ export function getInferredNpmInstall(): { root: string; prefix: string } | unde
   }
   if (root === undefined || root === "") return undefined;
   const rootParent = path.dirname(root);
-  if (path.basename(rootParent) === "lib") return { root, prefix: path.dirname(rootParent) };
+  if (path.basename(rootParent) === "lib") return { prefix: path.dirname(rootParent), root };
 
   return undefined;
 }

@@ -44,7 +44,7 @@ export const runSteps = ({
   input: MsaCodingAgentInput;
   signal: AbortSignal | undefined;
 }): Effect.Effect<string> => {
-  const steps = typeof input === "string" ? [{ type: "prompt" as const, content: input }] : input;
+  const steps = typeof input === "string" ? [{ content: input, type: "prompt" as const }] : input;
   const abortState: { promise?: Promise<void> } = {};
   const abort = () => {
     abortState.promise ??= session.abort();

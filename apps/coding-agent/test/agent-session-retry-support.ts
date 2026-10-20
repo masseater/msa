@@ -1,5 +1,5 @@
-import type { AgentEvent, AgentTool, StreamFn } from "@msa/agent-core";
-import type { AssistantMessage } from "@msa/ai/compat";
+import type agentTypes from "@msa/agent-core/index.types";
+import type compatTypes from "@msa/ai/compat.types";
 import testing from "@msa/testing";
 import { Effect } from "effect";
 
@@ -9,12 +9,12 @@ import sessionKit from "./session-kit.ts";
 const { awaited, runTest } = testing;
 const { assistantMessage, createAgentSession, streamWith } = sessionKit;
 
-const errorMessage = (text: string): AssistantMessage =>
+const errorMessage = (text: string): compatTypes.AssistantMessage =>
   assistantMessage("", { errorMessage: text, stopReason: "error" });
 
-const scriptedStream = (replies: (call: number) => AssistantMessage) => {
+const scriptedStream = (replies: (call: number) => compatTypes.AssistantMessage) => {
   let calls = 0;
-  const streamFn: StreamFn = streamWith(({ stream }) => {
+  const streamFn: agentTypes.StreamFn = streamWith(({ stream }) => {
     calls++;
     const message = replies(calls);
     stream.push({ partial: message, type: "start" });
@@ -32,9 +32,9 @@ const scriptedStream = (replies: (call: number) => AssistantMessage) => {
 
 const createRetrySession = Effect.fn("createRetrySession")(function* (options: {
   cwd: string;
-  streamFn: StreamFn;
+  streamFn: agentTypes.StreamFn;
   retry: { maxRetries: number; maxAgentDelayMs?: number };
-  tools?: AgentTool[];
+  tools?: agentTypes.AgentTool[];
 }) {
   const created = yield* createAgentSession({
     cwd: options.cwd,
@@ -49,9 +49,9 @@ const createRetrySession = Effect.fn("createRetrySession")(function* (options: {
 
 const delayAssistantMessageEnd = (session: AgentSession, delayMs: number): void => {
   const original = Reflect.get(session, "emitExtensionEvent") as (
-    event: AgentEvent,
+    event: agentTypes.AgentEvent,
   ) => Promise<void>;
-  Reflect.set(session, "emitExtensionEvent", (event: AgentEvent) =>
+  Reflect.set(session, "emitExtensionEvent", (event: agentTypes.AgentEvent) =>
     runTest(
       Effect.gen(function* () {
         if (event.type === "message_end" && event.message.role === "assistant") {

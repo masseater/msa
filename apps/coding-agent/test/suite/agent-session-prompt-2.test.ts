@@ -1,4 +1,4 @@
-import { fauxAssistantMessage } from "@msa/ai";
+import ai from "@msa/ai";
 import testing from "@msa/testing";
 import { Effect } from "effect";
 import { afterEach, describe, expect, it, vi } from "vite-plus/test";
@@ -9,6 +9,8 @@ import { createSyntheticSourceInfo } from "../../src/core/source-info.ts";
 import utilities from "../utilities.ts";
 import agentSessionPromptSupport from "./agent-session-prompt-support.ts";
 import harnessModule from "./harness.ts";
+
+const { fauxAssistantMessage } = ai;
 
 const { harnesses, tempDirs } = agentSessionPromptSupport;
 

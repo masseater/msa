@@ -1,10 +1,15 @@
-import { createAssistantMessageEventStream } from "@msa/ai";
+import ai from "@msa/ai";
 import { Deferred, Effect, Exit } from "effect";
 import { describe, expect, it } from "vite-plus/test";
 
-import { Agent } from "../src/index.ts";
+import agentModule2 from "../src/index.ts";
+import type agentTypes from "../src/index.types.ts";
 import agentModule from "./support/agent.ts";
 import fixtures from "./support/fixtures.ts";
+
+const { createAssistantMessageEventStream } = ai;
+
+const { Agent } = agentModule2;
 
 const { abortableStream, awaitDeferred, release } = agentModule;
 const { scripted, textMessage } = fixtures;
@@ -149,7 +154,10 @@ const rejectsResetWhileRunning = Effect.gen(function* () {
   expect(roles()).toEqual(["user", "assistant"]);
 });
 
-const rejectsWhileStreaming = (start: (agent: Agent) => Promise<void>, message: string) =>
+const rejectsWhileStreaming = (
+  start: (agent: agentTypes.Agent) => Promise<void>,
+  message: string,
+) =>
   Effect.gen(function* () {
     const agent = new Agent({ streamFn: abortableStream() });
     const first = agent.prompt("First message");

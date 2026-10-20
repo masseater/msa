@@ -1,26 +1,24 @@
 import { Console, Effect } from "effect";
 import { describe, expect, it } from "vite-plus/test";
 
-import { getImageModels } from "../src/image-models.ts";
-import { generateImages } from "../src/images.ts";
-import type {
-  ImageContent,
-  ImageModel,
-  ImagesContext,
-  ProviderImagesOptions,
-} from "../src/types.ts";
+import imageModelsModule from "../src/image-models.ts";
+import images from "../src/images.ts";
+import type typesModule from "../src/types.types.ts";
 import env from "./env.ts";
 import redCircle from "./red-circle.ts";
 
+const { generateImages } = images;
+const { getImageModels } = imageModelsModule;
+
 const { envValue } = env;
 
-type ImagesOptionsWithExtras = ProviderImagesOptions & Record<string, unknown>;
+type ImagesOptionsWithExtras = typesModule.ProviderImagesOptions & Record<string, unknown>;
 
 const basicImageGeneration = Effect.fn("basicImageGeneration")(function* <TApi extends string>(
-  model: ImageModel<TApi>,
+  model: typesModule.ImageModel<TApi>,
   options?: ImagesOptionsWithExtras,
 ) {
-  const context: ImagesContext = {
+  const context: typesModule.ImagesContext = {
     input: [
       { text: "Generate a simple red circle on a plain white background. No text.", type: "text" },
     ],
@@ -35,7 +33,7 @@ const basicImageGeneration = Effect.fn("basicImageGeneration")(function* <TApi e
 });
 
 const handleImageInput = Effect.fn("handleImageInput")(function* <TApi extends string>(
-  model: ImageModel<TApi>,
+  model: typesModule.ImageModel<TApi>,
   options?: ImagesOptionsWithExtras,
 ) {
   if (!model.input.includes("image")) {
@@ -43,13 +41,13 @@ const handleImageInput = Effect.fn("handleImageInput")(function* <TApi extends s
     return;
   }
 
-  const imageContent: ImageContent = {
+  const imageContent: typesModule.ImageContent = {
     data: redCircle.data,
     mimeType: "image/png",
     type: "image",
   };
 
-  const context: ImagesContext = {
+  const context: typesModule.ImagesContext = {
     input: [
       { text: "Create a variation of this image with a blue background.", type: "text" },
       imageContent,

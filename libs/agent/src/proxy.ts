@@ -1,57 +1,33 @@
-import {
-  type AssistantMessage,
-  type AssistantMessageEventStream,
-  createAssistantMessageEventStream,
-  type Model,
-  type SimpleStreamOptions,
-  type TranscriptContext,
-} from "@msa/ai";
+import ai from "@msa/ai";
+import type aiTypes from "@msa/ai/index.types";
 import { Cause, Data, Effect, Exit, Function, Layer, Option, Schema, Stream, Tracer } from "effect";
 import { FetchHttpClient, HttpBody, HttpClient, HttpClientRequest } from "effect/http";
 
-import { now } from "./call.ts";
-import { processProxyEvent, type ProxyAssistantMessageEvent } from "./proxy-events.ts";
+import callModule from "./call.ts";
+import proxyEvents from "./proxy-events.ts";
+import type proxyEventsTypes from "./proxy-events.types.ts";
+import type proxyTypes from "./proxy.types.ts";
 
-export type { ProxyAssistantMessageEvent } from "./proxy-events.ts";
+const { createAssistantMessageEventStream } = ai;
 
-type ProxySerializableStreamOptions = {
-  [
-    K in
-      | "temperature"
-      | "samplingParams"
-      | "maxTokens"
-      | "reasoning"
-      | "cacheRetention"
-      | "sessionId"
-      | "headers"
-      | "metadata"
-      | "transport"
-      | "thinkingBudgets"
-      | "maxRetryDelayMs"
-  ]?: SimpleStreamOptions[K] | undefined;
-};
+const { now } = callModule;
+const { processProxyEvent } = proxyEvents;
 
-export interface ProxyStreamOptions extends ProxySerializableStreamOptions {
-  signal?: AbortSignal;
-
-  authToken: string;
-
-  proxyUrl: string;
-}
-
-function buildProxyRequestOptions(options: ProxyStreamOptions): ProxySerializableStreamOptions {
+function buildProxyRequestOptions(
+  options: proxyTypes.ProxyStreamOptions,
+): proxyTypes.ProxySerializableStreamOptions {
   return {
-    temperature: options.temperature,
-    samplingParams: options.samplingParams,
-    maxTokens: options.maxTokens,
-    reasoning: options.reasoning,
     cacheRetention: options.cacheRetention,
-    sessionId: options.sessionId,
     headers: options.headers,
-    metadata: options.metadata,
-    transport: options.transport,
-    thinkingBudgets: options.thinkingBudgets,
     maxRetryDelayMs: options.maxRetryDelayMs,
+    maxTokens: options.maxTokens,
+    metadata: options.metadata,
+    reasoning: options.reasoning,
+    samplingParams: options.samplingParams,
+    sessionId: options.sessionId,
+    temperature: options.temperature,
+    thinkingBudgets: options.thinkingBudgets,
+    transport: options.transport,
   };
 }
 
@@ -81,28 +57,28 @@ const decodeErrorBody = Schema.decodeUnknownOption(
   Schema.fromJsonString(Schema.Struct({ error: Schema.optional(Schema.String) })),
 );
 
-const initialPartial = (model: Model<any>): AssistantMessage => ({
+const initialPartial = (model: aiTypes.Model<any>): aiTypes.AssistantMessage => ({
+  api: model.api,
+  content: [],
+  model: model.id,
+  provider: model.provider,
   role: "assistant",
   stopReason: "pending",
-  content: [],
-  api: model.api,
-  provider: model.provider,
-  model: model.id,
+  timestamp: now(),
   usage: {
-    input: 0,
-    output: 0,
     cacheRead: 0,
     cacheWrite: 0,
+    cost: { cacheRead: 0, cacheWrite: 0, input: 0, output: 0, total: 0 },
+    input: 0,
+    output: 0,
     totalTokens: 0,
-    cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0, total: 0 },
   },
-  timestamp: now(),
 });
 
 interface ProxyRequest {
-  readonly model: Model<any>;
-  readonly context: TranscriptContext;
-  readonly options: ProxyStreamOptions;
+  readonly model: aiTypes.Model<any>;
+  readonly context: aiTypes.TranscriptContext;
+  readonly options: proxyTypes.ProxyStreamOptions;
 }
 
 const errorFromBody = (status: string, body: string): string => {
@@ -114,7 +90,7 @@ const openProxy = ({ model, context, options }: ProxyRequest, received: Received
   Effect.gen(function* () {
     const client = yield* HttpClient.HttpClient;
     const body = yield* Effect.orDie(
-      encodeJson({ model, context, options: buildProxyRequestOptions(options) }),
+      encodeJson({ context, model, options: buildProxyRequestOptions(options) }),
     );
     const request = HttpClientRequest.post(`${options.proxyUrl}/api/stream`).pipe(
       HttpClientRequest.setHeaders({ Authorization: `Bearer ${options.authToken}` }),
@@ -129,8 +105,8 @@ const openProxy = ({ model, context, options }: ProxyRequest, received: Received
   });
 
 interface ProxyRead {
-  readonly partial: AssistantMessage;
-  readonly stream: AssistantMessageEventStream;
+  readonly partial: aiTypes.AssistantMessage;
+  readonly stream: aiTypes.AssistantMessageEventStream;
 }
 
 const readLine = ({ partial, stream }: ProxyRead, line: string) =>
@@ -138,7 +114,9 @@ const readLine = ({ partial, stream }: ProxyRead, line: string) =>
     if (!line.startsWith("data: ")) return false;
     const data = line.slice(6).trim();
     if (data === "") return false;
-    const event = (yield* Effect.orDie(decodeJson(data))) as ProxyAssistantMessageEvent;
+    const event = (yield* Effect.orDie(
+      decodeJson(data),
+    )) as proxyEventsTypes.ProxyAssistantMessageEvent;
     const outcome = processProxyEvent({ event, partial });
     if (!outcome.known) {
       yield* Effect.logWarning(`Unhandled proxy event type: ${String(outcome.type)}`);
@@ -192,7 +170,7 @@ const abortedBy = (signal: AbortSignal) =>
 const fail = (read: ProxyRead, message: string, aborted: boolean): void => {
   read.partial.stopReason = aborted ? "aborted" : "error";
   read.partial.errorMessage = message;
-  read.stream.push({ type: "error", reason: aborted ? "aborted" : "error", error: read.partial });
+  read.stream.push({ error: read.partial, reason: aborted ? "aborted" : "error", type: "error" });
 };
 
 const streamProxyEffect = (request: ProxyRequest, read: ProxyRead): Effect.Effect<void> =>
@@ -213,26 +191,32 @@ const streamProxyEffect = (request: ProxyRequest, read: ProxyRead): Effect.Effec
     read.stream.end();
   });
 
-export const streamProxy: {
+const streamProxy: {
   (
-    context: TranscriptContext,
-    options: ProxyStreamOptions,
-  ): (model: Model<any>) => AssistantMessageEventStream;
+    context: aiTypes.TranscriptContext,
+    options: proxyTypes.ProxyStreamOptions,
+  ): (model: aiTypes.Model<any>) => aiTypes.AssistantMessageEventStream;
   (
-    model: Model<any>,
-    context: TranscriptContext,
-    options: ProxyStreamOptions,
-  ): AssistantMessageEventStream;
+    model: aiTypes.Model<any>,
+    context: aiTypes.TranscriptContext,
+    options: proxyTypes.ProxyStreamOptions,
+  ): aiTypes.AssistantMessageEventStream;
 } = Function.dual(
   3,
   (
-    model: Model<any>,
-    context: TranscriptContext,
-    options: ProxyStreamOptions,
-  ): AssistantMessageEventStream => {
+    model: aiTypes.Model<any>,
+    context: aiTypes.TranscriptContext,
+    options: proxyTypes.ProxyStreamOptions,
+  ): aiTypes.AssistantMessageEventStream => {
     const stream = createAssistantMessageEventStream();
     const read = { partial: initialPartial(model), stream };
-    Effect.runFork(streamProxyEffect({ model, context, options }, read));
+    Effect.runFork(streamProxyEffect({ context, model, options }, read));
     return stream;
   },
 );
+
+const proxy = {
+  streamProxy,
+};
+
+export default proxy;

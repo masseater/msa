@@ -1,4 +1,4 @@
-import type { Api } from "@msa/ai/compat";
+import type compatTypes from "@msa/ai/compat.types";
 
 import { type ModelRegistry, type ProviderConfigInput } from "../src/core/model-registry.ts";
 
@@ -8,7 +8,7 @@ function providerConfig(
   api: string = "anthropic-messages",
 ): ProviderConfigInput {
   return {
-    api: api as Api,
+    api: api as compatTypes.Api,
     apiKey: "test-key",
     baseUrl,
     models: models.map((m) => ({

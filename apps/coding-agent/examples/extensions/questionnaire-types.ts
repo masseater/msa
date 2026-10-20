@@ -1,5 +1,5 @@
 import type { Theme } from "@msa/coding-agent";
-import type { Editor, EditorTheme } from "@msa/tui";
+import type tuiTypes from "@msa/tui/index.types";
 
 export interface QuestionOption {
   value: string;
@@ -35,7 +35,7 @@ export interface QuestionnaireState {
   readonly questions: Question[];
   readonly isMulti: boolean;
   readonly totalTabs: number;
-  readonly editor: Editor;
+  readonly editor: tuiTypes.Editor;
   readonly done: (result: QuestionnaireResult) => void;
   readonly refresh: () => void;
   readonly answers: Map<string, Answer>;
@@ -46,13 +46,13 @@ export interface QuestionnaireState {
   cachedLines: string[] | undefined;
 }
 
-export const editorTheme = (theme: Theme): EditorTheme => ({
+export const editorTheme = (theme: Theme): tuiTypes.EditorTheme => ({
   borderColor: (s) => theme.fg("accent", s),
   selectList: {
+    description: (t) => theme.fg("muted", t),
+    noMatch: (t) => theme.fg("warning", t),
+    scrollInfo: (t) => theme.fg("dim", t),
     selectedPrefix: (t) => theme.fg("accent", t),
     selectedText: (t) => theme.fg("accent", t),
-    description: (t) => theme.fg("muted", t),
-    scrollInfo: (t) => theme.fg("dim", t),
-    noMatch: (t) => theme.fg("warning", t),
   },
 });

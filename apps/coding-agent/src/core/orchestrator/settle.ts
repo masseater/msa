@@ -41,10 +41,10 @@ function settleEffect(
       runtime.publish();
       const first = assignments[0];
       runtime.options.report(outcomes.reportText(runtime, assignments, outcome, started), {
-        taskId: first?.taskId ?? threadId,
         role: first?.role ?? "worker",
-        status: outcome.status === "completed" ? "completed" : "failed",
         started,
+        status: outcome.status === "completed" ? "completed" : "failed",
+        taskId: first?.taskId ?? threadId,
       });
     });
   });
@@ -63,8 +63,8 @@ function settle(
 function afterTurn(runtime: Runtime, threadId: string, run: number, worker: WorkerSession): void {
   if (runtime.runs.get(threadId) !== run) return;
   const handled = wrapping.takeOver(runtime, threadId, worker, {
-    turn: () => afterTurn(runtime, threadId, run, worker),
     settle: (error: unknown) => void settle(runtime, threadId, run, worker, error),
+    turn: () => afterTurn(runtime, threadId, run, worker),
   });
   if (handled) return;
   const assignments = store.assignmentsOfThread(runtime.database, threadId);
@@ -85,4 +85,4 @@ function afterTurn(runtime: Runtime, threadId: string, run: number, worker: Work
   );
 }
 
-export const settling = { settle, afterTurn };
+export const settling = { afterTurn, settle };

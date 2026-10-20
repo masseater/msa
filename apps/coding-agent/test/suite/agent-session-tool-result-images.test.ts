@@ -1,11 +1,13 @@
-import type { AgentTool } from "@msa/agent-core";
-import { fauxAssistantMessage, fauxToolCall } from "@msa/ai";
+import type agentTypes from "@msa/agent-core/index.types";
+import ai from "@msa/ai";
 import { Effect } from "effect";
 import { Type } from "typebox";
 import { afterEach, describe, expect, it, vi } from "vite-plus/test";
 
 import harnessModule from "./harness.ts";
 import type harnessTypes from "./harness.types.ts";
+
+const { fauxAssistantMessage, fauxToolCall } = ai;
 
 const { createHarness } = harnessModule;
 
@@ -17,7 +19,7 @@ vi.mock("../../src/utils/tool-result-images.ts", () => ({ normalizeToolResultIma
 const TINY_PNG_BASE64 =
   "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8DwHwAFBQIAX8jx0gAAAABJRU5ErkJggg==";
 
-const screenshotTool: AgentTool = {
+const screenshotTool: agentTypes.AgentTool = {
   description: "Return a screenshot",
   execute: () =>
     Promise.resolve({

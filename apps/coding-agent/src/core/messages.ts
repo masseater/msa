@@ -1,5 +1,5 @@
-import type { AgentMessage } from "@msa/agent-core";
-import type { ImageContent, Message, TextContent } from "@msa/ai";
+import type agentTypes from "@msa/agent-core/index.types";
+import type aiTypes from "@msa/ai/index.types";
 
 import { toEpochMs } from "./platform.ts";
 
@@ -33,7 +33,7 @@ export interface BashExecutionMessage {
 export interface CustomMessage<T = unknown> {
   role: "custom";
   customType: string;
-  content: string | (TextContent | ImageContent)[];
+  content: string | (aiTypes.TextContent | aiTypes.ImageContent)[];
   display: boolean;
   details?: T | undefined;
   timestamp: number;
@@ -53,8 +53,8 @@ export interface CompactionSummaryMessage {
   timestamp: number;
 }
 
-declare module "@msa/agent-core" {
-  interface CustomAgentMessages {
+declare global {
+  interface MsaAgentCustomMessages {
     bashExecution: BashExecutionMessage;
     custom: CustomMessage;
     branchSummary: BranchSummaryMessage;
@@ -86,9 +86,9 @@ export function createBranchSummaryMessage(
   timestamp: string,
 ): BranchSummaryMessage {
   return {
+    fromId,
     role: "branchSummary",
     summary,
-    fromId,
     timestamp: toEpochMs(timestamp),
   };
 }
@@ -101,72 +101,72 @@ export function createCompactionSummaryMessage(
   return {
     role: "compactionSummary",
     summary: summary,
-    tokensBefore,
     timestamp: toEpochMs(timestamp),
+    tokensBefore,
   };
 }
 
 export function createCustomMessage(
   customType: string,
-  content: string | (TextContent | ImageContent)[],
+  content: string | (aiTypes.TextContent | aiTypes.ImageContent)[],
   display: boolean,
   details: unknown | undefined,
   timestamp: string,
 ): CustomMessage {
   return {
-    role: "custom",
-    customType,
     content,
-    display,
+    customType,
     details,
+    display,
+    role: "custom",
     timestamp: toEpochMs(timestamp),
   };
 }
 
-export function convertToLlm(messages: AgentMessage[]): Message[] {
+export function convertToLlm(messages: agentTypes.AgentMessage[]): aiTypes.Message[] {
   return messages
-    .map((m): Message | undefined => {
+    .map((m): aiTypes.Message | undefined => {
       switch (m.role) {
         case "bashExecution":
           if (m.excludeFromContext === true) {
             return undefined;
           }
           return {
-            role: "user",
             content: [{ type: "text", text: bashExecutionToText(m) }],
+            role: "user",
             timestamp: m.timestamp,
           };
         case "custom": {
           const content =
             typeof m.content === "string"
-              ? [{ type: "text" as const, text: m.content }]
+              ? [{ text: m.content, type: "text" as const }]
               : m.content;
           return {
-            role: "user",
             content,
+            role: "user",
             timestamp: m.timestamp,
           };
         }
         case "branchSummary":
           return {
-            role: "user",
             content: [
               {
                 type: "text" as const,
                 text: BRANCH_SUMMARY_PREFIX + m.summary + BRANCH_SUMMARY_SUFFIX,
               },
             ],
+            role: "user",
             timestamp: m.timestamp,
           };
         case "compactionSummary":
           return {
-            role: "user",
             content: [
               {
                 type: "text" as const,
                 text: COMPACTION_SUMMARY_PREFIX + m.summary + COMPACTION_SUMMARY_SUFFIX,
               },
             ],
+            role: "user",
             timestamp: m.timestamp,
           };
         case "system":

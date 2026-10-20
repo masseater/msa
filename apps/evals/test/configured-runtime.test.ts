@@ -2,11 +2,11 @@ import { Effect, Schema } from "effect";
 import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it } from "vite-plus/test";
 
 import {
-  createAcmeServer,
   OPENAI_MODEL_ID,
   OPENAI_PROBE_PROMPT,
   OPENAI_PROBE_RESPONSE,
   OPENAI_PROVIDER_ID,
+  createAcmeServer,
 } from "../evals/acme-server.ts";
 import {
   inspectAddedModel,
@@ -17,14 +17,14 @@ import { files, pathOperations } from "../src/platform.ts";
 
 const PROVIDER_ID = OPENAI_PROVIDER_ID;
 const MODEL = {
+  contextWindow: 32768,
+  cost: { cacheRead: 0, cacheWrite: 0, input: 0, output: 0 },
   id: OPENAI_MODEL_ID,
+  input: ["text"],
+  maxTokens: 4096,
   name: "Acme Chat",
   provider: PROVIDER_ID,
   reasoning: false,
-  input: ["text"],
-  cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0 },
-  contextWindow: 32768,
-  maxTokens: 4096,
 };
 const server = createAcmeServer("openai");
 const temporaryDirectories: string[] = [];
@@ -64,21 +64,21 @@ const modelEntry = (model: {
   contextWindow: number;
   maxTokens: number;
 }) => ({
+  contextWindow: model.contextWindow,
+  cost: model.cost,
   id: model.id,
+  input: model.input,
+  maxTokens: model.maxTokens,
   name: model.name,
   reasoning: model.reasoning,
-  input: model.input,
-  cost: model.cost,
-  contextWindow: model.contextWindow,
-  maxTokens: model.maxTokens,
 });
 
 const acmeModelsJson = () => ({
   providers: {
     [PROVIDER_ID]: {
-      baseUrl: server.baseUrl(),
       api: "openai-completions",
       apiKey: "$ACME_API_KEY",
+      baseUrl: server.baseUrl(),
       models: [modelEntry(MODEL)],
     },
   },
@@ -86,21 +86,21 @@ const acmeModelsJson = () => ({
 
 function probe(content: string, apiKey: string) {
   return {
-    providerId: PROVIDER_ID,
-    modelId: OPENAI_MODEL_ID,
     createContext: () => ({
       messages: [{ role: "user" as const, content, timestamp: 0 }],
     }),
+    modelId: OPENAI_MODEL_ID,
     options: { env: { ACME_API_KEY: apiKey }, maxTokens: 32 },
+    providerId: PROVIDER_ID,
     validRequestReceived: server.validRequestReceived,
   };
 }
 
 const probedResponse = {
-  text: OPENAI_PROBE_RESPONSE,
-  stopReason: "stop",
   inputTokens: 3,
   outputTokens: 2,
+  stopReason: "stop",
+  text: OPENAI_PROBE_RESPONSE,
 };
 
 describe("inspectProvider probing", () => {
@@ -113,7 +113,7 @@ describe("inspectProvider probing", () => {
           probe(OPENAI_PROBE_PROMPT, "resolved-acme-key"),
         );
         expect(output).toEqual({
-          result: { validRequestReceived: true, model: MODEL, response: probedResponse },
+          result: { model: MODEL, response: probedResponse, validRequestReceived: true },
         });
       }),
     ));
@@ -124,7 +124,7 @@ describe("inspectProvider probing", () => {
         const runtime = yield* runtimeWith(acmeModelsJson());
         const output = yield* inspectProvider(runtime, probe("hello", "resolved-acme-key"));
         expect(output).toEqual({
-          result: { validRequestReceived: false, model: MODEL, response: probedResponse },
+          result: { model: MODEL, response: probedResponse, validRequestReceived: false },
         });
       }),
     ));
@@ -136,9 +136,9 @@ describe("inspectProvider probing", () => {
         const output = yield* inspectProvider(runtime, probe(OPENAI_PROBE_PROMPT, "wrong-key"));
         expect(output).toEqual({
           result: {
-            validRequestReceived: false,
             model: MODEL,
-            response: { text: "", stopReason: "error", inputTokens: 0, outputTokens: 0 },
+            response: { inputTokens: 0, outputTokens: 0, stopReason: "error", text: "" },
+            validRequestReceived: false,
           },
         });
       }),
@@ -182,14 +182,14 @@ describe("inspectProvider failures", () => {
 const ADDED_PROVIDER = "openai";
 const ADDED_MODEL_ID = "fixture-chat";
 const ADDED_MODEL = {
+  contextWindow: 32768,
+  cost: { cacheRead: 0, cacheWrite: 0, input: 0, output: 0 },
   id: ADDED_MODEL_ID,
+  input: ["text"],
+  maxTokens: 4096,
   name: "Fixture Chat",
   provider: ADDED_PROVIDER,
   reasoning: true,
-  input: ["text"],
-  cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0 },
-  contextWindow: 32768,
-  maxTokens: 4096,
 };
 
 describe("inspectAddedModel", () => {
@@ -201,7 +201,7 @@ describe("inspectAddedModel", () => {
         });
         const runtime = yield* loadConfiguredModelRuntime(directory);
         const output = yield* inspectAddedModel(runtime, ADDED_PROVIDER, ADDED_MODEL_ID);
-        expect(output).toEqual({ result: { model: ADDED_MODEL, existingModelsPreserved: true } });
+        expect(output).toEqual({ result: { existingModelsPreserved: true, model: ADDED_MODEL } });
       }),
     ));
 

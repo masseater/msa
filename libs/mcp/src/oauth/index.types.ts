@@ -1,0 +1,50 @@
+import type oauthTypesPart1 from "./index-part1.types.ts";
+import type oauthTypesPart2 from "./index-part2.types.ts";
+import type oauthTypesPart3 from "./index-part3.types.ts";
+
+declare namespace oauthTypes {
+  type OAuthCallback = oauthTypesPart1.OAuthCallback;
+  type OAuthCallbackPage = oauthTypesPart1.OAuthCallbackPage;
+  type OAuthCallbackServerOptions = oauthTypesPart1.OAuthCallbackServerOptions;
+  type AuthorizationServerDiscoveryOptions = oauthTypesPart1.AuthorizationServerDiscoveryOptions;
+  type OAuthServerInfoDiscoveryOptions = oauthTypesPart1.OAuthServerInfoDiscoveryOptions;
+  type ProtectedResourceDiscoveryOptions = oauthTypesPart1.ProtectedResourceDiscoveryOptions;
+  type AuthorizationRequest = oauthTypesPart1.AuthorizationRequest;
+  type AuthorizationStart = oauthTypesPart1.AuthorizationStart;
+  type ClientRegistrationRequest = oauthTypesPart1.ClientRegistrationRequest;
+  type OAuthFlowFailure = oauthTypesPart1.OAuthFlowFailure;
+  type AddClientAuthentication = oauthTypesPart1.AddClientAuthentication;
+  type OAuthClientMetadataDocument = oauthTypesPart1.OAuthClientMetadataDocument;
+  type OAuthClientProvider = oauthTypesPart1.OAuthClientProvider;
+  type OAuthFlowOptions = oauthTypesPart1.OAuthFlowOptions;
+  type OAuthFlowResult = oauthTypesPart1.OAuthFlowResult;
+  type TokenRequestOptions = oauthTypesPart1.TokenRequestOptions;
+  type AuthorizationCodeExchange = oauthTypesPart1.AuthorizationCodeExchange;
+  type RefreshRequest = oauthTypesPart1.RefreshRequest;
+  type TokenRequestError = oauthTypesPart1.TokenRequestError;
+  type McpOAuthProviderOptions = oauthTypesPart1.McpOAuthProviderOptions;
+  type McpOAuthState = oauthTypesPart1.McpOAuthState;
+  type McpOAuthStateStore = oauthTypesPart1.McpOAuthStateStore;
+  type AuthorizationServerMetadata = oauthTypesPart1.AuthorizationServerMetadata;
+  type OAuthChallenge = oauthTypesPart1.OAuthChallenge;
+  type OAuthClientInformation = oauthTypesPart1.OAuthClientInformation;
+  type OAuthClientInformationFull = oauthTypesPart1.OAuthClientInformationFull;
+  type OAuthClientInformationMixed = oauthTypesPart1.OAuthClientInformationMixed;
+  type OAuthClientMetadata = oauthTypesPart1.OAuthClientMetadata;
+  type OAuthDiscoveryState = oauthTypesPart1.OAuthDiscoveryState;
+  type OAuthProtectedResourceMetadata = oauthTypesPart1.OAuthProtectedResourceMetadata;
+  type OAuthServerInfo = oauthTypesPart1.OAuthServerInfo;
+  type OAuthTokens = oauthTypesPart1.OAuthTokens;
+  type OAuthCallbackServer = oauthTypesPart1.OAuthCallbackServer;
+  type McpOAuthAuthorizationRequiredError = oauthTypesPart2.McpOAuthAuthorizationRequiredError;
+  type OAuthCallbackError = oauthTypesPart2.OAuthCallbackError;
+  type OAuthError = oauthTypesPart2.OAuthError;
+  type OAuthFlowError = oauthTypesPart2.OAuthFlowError;
+  type OAuthInsecureEndpointError = oauthTypesPart2.OAuthInsecureEndpointError;
+  type OAuthIssuerMismatchError = oauthTypesPart2.OAuthIssuerMismatchError;
+  type OAuthRegistrationError = oauthTypesPart2.OAuthRegistrationError;
+  type McpOAuthProvider = oauthTypesPart2.McpOAuthProvider;
+  type MemoryOAuthStateStore = oauthTypesPart3.MemoryOAuthStateStore;
+}
+
+export type { oauthTypes as default };

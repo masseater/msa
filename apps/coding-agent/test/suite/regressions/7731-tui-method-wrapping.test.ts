@@ -1,4 +1,4 @@
-import type { TUI } from "@msa/tui";
+import type tuiTypes from "@msa/tui/index.types";
 import { describe, expect, it, vi } from "vite-plus/test";
 
 import { createInteractiveTuiReference } from "../../../src/modes/interactive/interactive-mode.ts";
@@ -6,7 +6,7 @@ import { createInteractiveTuiReference } from "../../../src/modes/interactive/in
 const callsTheMethodCapturedBeforeA = () => {
   const renderer = {
     render: (width: number) => [`width: ${width}`],
-  } as unknown as TUI;
+  } as unknown as tuiTypes.TUI;
   const tui = createInteractiveTuiReference(() => renderer);
   const originalRender = tui.render;
   tui.render = (width: number) => originalRender(width);
@@ -17,12 +17,12 @@ const callsTheMethodCapturedBeforeA = () => {
 const routesACapturedMethodToA = () => {
   const regularRequestRender = vi.fn();
   const fullscreenRequestRender = vi.fn();
-  let renderer = { requestRender: regularRequestRender } as unknown as TUI;
+  let renderer = { requestRender: regularRequestRender } as unknown as tuiTypes.TUI;
   const tui = createInteractiveTuiReference(() => renderer);
   const requestRender = tui.requestRender;
 
   requestRender();
-  renderer = { requestRender: fullscreenRequestRender } as unknown as TUI;
+  renderer = { requestRender: fullscreenRequestRender } as unknown as tuiTypes.TUI;
   requestRender();
 
   expect(regularRequestRender).toHaveBeenCalledOnce();

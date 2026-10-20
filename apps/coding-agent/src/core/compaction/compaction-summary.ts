@@ -1,28 +1,16 @@
-import type { AgentMessage, StreamFn, ThinkingLevel } from "@msa/agent-core";
-import {
-  contentText,
-  normalizeContext,
-  type RetryCallbacks,
-  type RetryPolicy,
-  retryAssistantCall,
-  uuidv7,
-} from "@msa/ai";
-import type {
-  AssistantMessage,
-  Model,
-  SimpleStreamOptions,
-  TranscriptContext,
-  Usage,
-} from "@msa/ai/compat";
-import { completeSimple } from "@msa/ai/compat";
+import type agentTypes from "@msa/agent-core/index.types";
+import ai from "@msa/ai";
+import compat from "@msa/ai/compat";
+import type compatTypes from "@msa/ai/compat.types";
+import type aiTypes from "@msa/ai/index.types";
 import { Effect, Function as Fn } from "effect";
 
 import { convertToLlm } from "../messages.ts";
 import {
+  ToolFailure,
   currentTimeMillis,
   fromPromise,
   platformRuntime,
-  ToolFailure,
   unwrapForeign,
 } from "../platform/index.ts";
 import {
@@ -32,8 +20,11 @@ import {
 } from "./compaction-prompts.ts";
 import { SUMMARIZATION_SYSTEM_PROMPT, serializeConversation } from "./utils.ts";
 
+const { contentText, normalizeContext, retryAssistantCall, uuidv7 } = ai;
+const { completeSimple } = compat;
+
 const getSummarizationFailureImpl = (
-  response: AssistantMessage,
+  response: compatTypes.AssistantMessage,
   label: string,
 ): string | undefined => {
   if (response.stopReason === "error") {
@@ -46,24 +37,33 @@ const getSummarizationFailureImpl = (
 };
 
 export const getSummarizationFailure: {
-  (label: string): (response: AssistantMessage) => string | undefined;
-  (response: AssistantMessage, label: string): string | undefined;
+  (label: string): (response: compatTypes.AssistantMessage) => string | undefined;
+  (response: compatTypes.AssistantMessage, label: string): string | undefined;
 } = Fn.dual(2, getSummarizationFailureImpl);
 
 interface SummarizationOptionsInput {
-  model: Model<any>;
+  model: compatTypes.Model<any>;
   maxTokens: number;
   apiKey: string | undefined;
   headers: Record<string, string> | undefined;
   env: Record<string, string> | undefined;
   signal: AbortSignal | undefined;
-  thinkingLevel: ThinkingLevel | undefined;
+  thinkingLevel: agentTypes.ThinkingLevel | undefined;
   sessionId: string | undefined;
 }
 
-function createSummarizationOptions(input: SummarizationOptionsInput): SimpleStreamOptions {
+function createSummarizationOptions(
+  input: SummarizationOptionsInput,
+): compatTypes.SimpleStreamOptions {
   const { model, maxTokens, apiKey, headers, env, signal, thinkingLevel, sessionId } = input;
-  const options: SimpleStreamOptions = { maxTokens, signal, apiKey, headers, env, sessionId };
+  const options: compatTypes.SimpleStreamOptions = {
+    apiKey,
+    env,
+    headers,
+    maxTokens,
+    sessionId,
+    signal,
+  };
   if (model.reasoning && thinkingLevel !== undefined && thinkingLevel !== "off") {
     options.reasoning = thinkingLevel;
   }
@@ -71,23 +71,23 @@ function createSummarizationOptions(input: SummarizationOptionsInput): SimpleStr
 }
 
 type CompleteRest = [
-  context: TranscriptContext,
-  options: SimpleStreamOptions,
-  streamFn?: StreamFn,
-  retry?: RetryPolicy,
-  callbacks?: RetryCallbacks,
+  context: compatTypes.TranscriptContext,
+  options: compatTypes.SimpleStreamOptions,
+  streamFn?: agentTypes.StreamFn,
+  retry?: aiTypes.RetryPolicy,
+  callbacks?: aiTypes.RetryCallbacks,
 ];
 
 const completeSummarizationImpl = (
-  model: Model<any>,
+  model: compatTypes.Model<any>,
   ...[context, options, streamFn, retry, callbacks]: CompleteRest
-): Promise<AssistantMessage> => {
-  const requestOptions: SimpleStreamOptions = {
+): Promise<compatTypes.AssistantMessage> => {
+  const requestOptions: compatTypes.SimpleStreamOptions = {
     ...options,
     cacheRetention: "none",
     sessionId: options.sessionId ?? uuidv7(),
   };
-  const produce = (): Promise<AssistantMessage> =>
+  const produce = (): Promise<compatTypes.AssistantMessage> =>
     streamFn === undefined
       ? completeSimple(model, context, requestOptions)
       : platformRuntime.runPromise(
@@ -101,29 +101,28 @@ const completeSummarizationImpl = (
 };
 
 export const completeSummarization: {
-  (...rest: CompleteRest): (model: Model<any>) => Promise<AssistantMessage>;
-  (model: Model<any>, ...rest: CompleteRest): Promise<AssistantMessage>;
+  (...rest: CompleteRest): (model: compatTypes.Model<any>) => Promise<compatTypes.AssistantMessage>;
+  (model: compatTypes.Model<any>, ...rest: CompleteRest): Promise<compatTypes.AssistantMessage>;
 } = Fn.dual((args) => !("messages" in (args[0] as object)), completeSummarizationImpl);
 
 export type SummaryRest = [
-  model: Model<any>,
+  model: compatTypes.Model<any>,
   reserveTokens: number,
   apiKey: string | undefined,
   headers?: Record<string, string>,
   signal?: AbortSignal,
   customInstructions?: string,
   previousSummary?: string,
-  thinkingLevel?: ThinkingLevel,
-  streamFn?: StreamFn,
+  thinkingLevel?: agentTypes.ThinkingLevel,
+  streamFn?: agentTypes.StreamFn,
   env?: Record<string, string>,
-  retry?: RetryPolicy,
-  callbacks?: RetryCallbacks,
+  retry?: aiTypes.RetryPolicy,
+  callbacks?: aiTypes.RetryCallbacks,
   sessionId?: string,
 ];
 
-function buildSummarizationContext(promptText: string): TranscriptContext {
+function buildSummarizationContext(promptText: string): compatTypes.TranscriptContext {
   return normalizeContext({
-    systemPrompt: SUMMARIZATION_SYSTEM_PROMPT,
     messages: [
       {
         role: "user",
@@ -131,10 +130,15 @@ function buildSummarizationContext(promptText: string): TranscriptContext {
         timestamp: currentTimeMillis(),
       },
     ],
+    systemPrompt: SUMMARIZATION_SYSTEM_PROMPT,
   });
 }
 
-const maxSummaryTokens = (model: Model<any>, reserveTokens: number, share: number): number =>
+const maxSummaryTokens = (
+  model: compatTypes.Model<any>,
+  reserveTokens: number,
+  share: number,
+): number =>
   Math.min(
     Math.floor(share * reserveTokens),
     model.maxTokens > 0 ? model.maxTokens : Number.POSITIVE_INFINITY,
@@ -163,7 +167,11 @@ function buildSummaryPrompt({
   return promptText + basePrompt;
 }
 
-const requireSummary = (response: AssistantMessage, label: string, toolMessage: string) =>
+const requireSummary = (
+  response: compatTypes.AssistantMessage,
+  label: string,
+  toolMessage: string,
+) =>
   Effect.gen(function* () {
     const failure = getSummarizationFailure(response, label);
     if (failure !== undefined && failure !== "") {
@@ -176,7 +184,7 @@ const requireSummary = (response: AssistantMessage, label: string, toolMessage: 
   });
 
 const summaryWithUsage = Effect.fn("generateSummaryWithUsage")(function* (
-  currentMessages: AgentMessage[],
+  currentMessages: agentTypes.AgentMessage[],
   ...rest: SummaryRest
 ) {
   const [
@@ -195,20 +203,20 @@ const summaryWithUsage = Effect.fn("generateSummaryWithUsage")(function* (
     sessionId,
   ] = rest;
   const conversationText = serializeConversation(convertToLlm(currentMessages));
-  const promptText = buildSummaryPrompt({ conversationText, previousSummary, customInstructions });
+  const promptText = buildSummaryPrompt({ conversationText, customInstructions, previousSummary });
   const response = yield* fromPromise(() =>
     completeSummarization(
       model,
       buildSummarizationContext(promptText),
       createSummarizationOptions({
-        model,
-        maxTokens: maxSummaryTokens(model, reserveTokens, 0.8),
         apiKey,
-        headers,
         env,
+        headers,
+        maxTokens: maxSummaryTokens(model, reserveTokens, 0.8),
+        model,
+        sessionId,
         signal,
         thinkingLevel,
-        sessionId,
       }),
       streamFn,
       retry,
@@ -219,20 +227,25 @@ const summaryWithUsage = Effect.fn("generateSummaryWithUsage")(function* (
 });
 
 const generateSummaryWithUsageImpl = (
-  currentMessages: AgentMessage[],
+  currentMessages: agentTypes.AgentMessage[],
   ...rest: SummaryRest
-): Promise<{ text: string; usage: Usage }> =>
+): Promise<{ text: string; usage: compatTypes.Usage }> =>
   platformRuntime.runPromise(unwrapForeign(summaryWithUsage(currentMessages, ...rest)));
 
 export const generateSummaryWithUsage: {
   (
     ...rest: SummaryRest
-  ): (currentMessages: AgentMessage[]) => Promise<{ text: string; usage: Usage }>;
-  (currentMessages: AgentMessage[], ...rest: SummaryRest): Promise<{ text: string; usage: Usage }>;
+  ): (
+    currentMessages: agentTypes.AgentMessage[],
+  ) => Promise<{ text: string; usage: compatTypes.Usage }>;
+  (
+    currentMessages: agentTypes.AgentMessage[],
+    ...rest: SummaryRest
+  ): Promise<{ text: string; usage: compatTypes.Usage }>;
 } = Fn.dual((args) => Array.isArray(args[0]), generateSummaryWithUsageImpl);
 
 const generateSummaryImpl = (
-  currentMessages: AgentMessage[],
+  currentMessages: agentTypes.AgentMessage[],
   ...rest: SummaryRest
 ): Promise<string> =>
   platformRuntime.runPromise(
@@ -240,22 +253,22 @@ const generateSummaryImpl = (
   );
 
 export const generateSummary: {
-  (...rest: SummaryRest): (currentMessages: AgentMessage[]) => Promise<string>;
-  (currentMessages: AgentMessage[], ...rest: SummaryRest): Promise<string>;
+  (...rest: SummaryRest): (currentMessages: agentTypes.AgentMessage[]) => Promise<string>;
+  (currentMessages: agentTypes.AgentMessage[], ...rest: SummaryRest): Promise<string>;
 } = Fn.dual((args) => Array.isArray(args[0]), generateSummaryImpl);
 
 export interface TurnPrefixInput {
-  messages: AgentMessage[];
-  model: Model<any>;
+  messages: agentTypes.AgentMessage[];
+  model: compatTypes.Model<any>;
   reserveTokens: number;
   apiKey: string | undefined;
   headers: Record<string, string> | undefined;
   env: Record<string, string> | undefined;
   signal: AbortSignal | undefined;
-  thinkingLevel: ThinkingLevel | undefined;
-  streamFn: StreamFn | undefined;
-  retry: RetryPolicy | undefined;
-  callbacks: RetryCallbacks | undefined;
+  thinkingLevel: agentTypes.ThinkingLevel | undefined;
+  streamFn: agentTypes.StreamFn | undefined;
+  retry: aiTypes.RetryPolicy | undefined;
+  callbacks: aiTypes.RetryCallbacks | undefined;
   sessionId: string | undefined;
 }
 
@@ -270,14 +283,14 @@ export const generateTurnPrefixSummary = Effect.fn("generateTurnPrefixSummary")(
       model,
       buildSummarizationContext(promptText),
       createSummarizationOptions({
-        model,
-        maxTokens: maxSummaryTokens(model, reserveTokens, 0.5),
         apiKey: input.apiKey,
-        headers: input.headers,
         env: input.env,
+        headers: input.headers,
+        maxTokens: maxSummaryTokens(model, reserveTokens, 0.5),
+        model,
+        sessionId: input.sessionId,
         signal: input.signal,
         thinkingLevel: input.thinkingLevel,
-        sessionId: input.sessionId,
       }),
       streamFn,
       retry,

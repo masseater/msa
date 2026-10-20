@@ -3,17 +3,18 @@ import { describe, it } from "node:test";
 
 import { Effect } from "effect";
 
-import { type AutocompleteProvider, CombinedAutocompleteProvider } from "../src/autocomplete.ts";
-import { Editor } from "../src/components/editor.ts";
-import { pathOperations } from "../src/platform.ts";
+import CombinedAutocompleteProvider from "../src/autocomplete.ts";
+import type autocompleteTypes from "../src/autocomplete.types.ts";
+import Editor from "../src/components/editor.ts";
+import platform from "../src/platform.ts";
 import editorHelpers from "./editor-helpers.ts";
 import testPlatform from "./test-platform.ts";
-import { defaultEditorTheme } from "./test-themes.ts";
+import testThemes from "./test-themes.ts";
 
+const { defaultEditorTheme } = testThemes;
 const { applyCompletion, createTestTUI, flushAutocomplete, settlingProvider } = editorHelpers;
 const { makeTempDirectory, removeRecursive, writeFileString } = testPlatform;
-
-const { join } = pathOperations;
+const { join } = platform.pathOperations;
 
 describe("Editor component", () => {
   describe("Autocomplete", () => {
@@ -266,19 +267,19 @@ function reTriggersCJKPathCompletion(): void {
 
 function cjkPathCompletion(
   directory: string,
-  provider: CombinedAutocompleteProvider,
+  provider: autocompleteTypes.CombinedAutocompleteProvider,
 ): {
   initial: string;
   directoryValue: string;
   fileValue: string;
-  autocomplete: AutocompleteProvider;
+  autocomplete: autocompleteTypes.AutocompleteProvider;
 } {
   const quoted = directory !== "文档";
   const initial = quoted ? `@"${directory.slice(0, 2)}` : "@文";
   const directoryValue = quoted ? `@"${directory}/"` : `@${directory}/`;
   const fileValue = quoted ? `@"${directory}/说明.md"` : `@${directory}/说明.md`;
   const filePrefix = quoted ? `@"${directory}/说` : `@${directory}/说`;
-  const autocomplete: AutocompleteProvider = {
+  const autocomplete: autocompleteTypes.AutocompleteProvider = {
     applyCompletion: (...args) => provider.applyCompletion(...args),
     getSuggestions: (lines, cursorLine, cursorCol) => {
       const before = lines[cursorLine]!.slice(0, cursorCol);

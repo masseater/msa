@@ -1,10 +1,12 @@
 import { Clock, Effect } from "effect";
 import { beforeEach, describe, expect, it, vi } from "vite-plus/test";
 
-import { streamSimple } from "../src/compat.ts";
-import type { Model, SimpleStreamOptions } from "../src/types.ts";
+import compatModule from "../src/compat.ts";
+import type typesModule from "../src/types.types.ts";
 import openaiCompletionsToolChoiceMock from "./openai-completions-tool-choice-mock.ts";
 import openaiCompletionsToolChoiceSupport from "./openai-completions-tool-choice-support.ts";
+
+const { streamSimple } = compatModule;
 
 const { localOpenAICompletionsModel } = openaiCompletionsToolChoiceSupport;
 
@@ -21,8 +23,8 @@ type CapturedParams = {
 };
 
 const captureSimpleParams = Effect.fn("captureSimpleParams")(function* (
-  model: Model<"openai-completions">,
-  reasoning?: SimpleStreamOptions["reasoning"],
+  model: typesModule.Model<"openai-completions">,
+  reasoning?: typesModule.SimpleStreamOptions["reasoning"],
 ) {
   const payload: { value: unknown } = { value: undefined };
 
@@ -58,7 +60,7 @@ const usesConfigurableChatTemplateBooleanThinking = () =>
         },
         id: "deepseek-ai/DeepSeek-V3.1",
         name: "DeepSeek V3.1 via vLLM",
-      } satisfies Model<"openai-completions">;
+      } satisfies typesModule.Model<"openai-completions">;
 
       for (const testCase of [
         { expected: true, reasoning: "high" as const },
@@ -84,7 +86,7 @@ const usesQwenChatTemplateThinkingKwargs = () =>
         },
         id: "Qwen/Qwen3-Coder",
         name: "Qwen3 Coder via vLLM",
-      } satisfies Model<"openai-completions">;
+      } satisfies typesModule.Model<"openai-completions">;
 
       for (const testCase of [
         { expected: true, reasoning: "high" as const },
@@ -117,7 +119,7 @@ const usesConfigurableChatTemplateEffortKwargs = () =>
         id: "unsloth/gpt-oss-120b-GGUF",
         name: "GPT OSS via vLLM",
         thinkingLevelMap: { xhigh: "max" },
-      } satisfies Model<"openai-completions">;
+      } satisfies typesModule.Model<"openai-completions">;
 
       const params = yield* captureSimpleParams(model, "xhigh");
 

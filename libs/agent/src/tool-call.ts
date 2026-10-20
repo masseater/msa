@@ -1,67 +1,32 @@
-import { type AssistantMessage, validateToolArguments } from "@msa/ai";
+import ai from "@msa/ai";
 import { Cause, Effect, Exit } from "effect";
 
-import { call } from "./call.ts";
-import type {
-  AfterToolCallResult,
-  AgentContext,
-  AgentLoopConfig,
-  AgentTool,
-  AgentToolCall,
-  AgentToolCallOutcome,
-  AgentToolResult,
-} from "./types.ts";
+import callModule from "./call.ts";
+import type toolCallTypes from "./tool-call.types.ts";
+import type typesModule from "./types.ts";
 
-export type ToolCallHooks = Pick<AgentLoopConfig, "beforeToolCall" | "afterToolCall">;
+const { validateToolArguments } = ai;
 
-export type ToolUpdateSink = (partialResult: AgentToolResult<any>) => Promise<void> | void;
+const { call } = callModule;
 
-export type PreparedToolCall = {
-  kind: "prepared";
-  toolCall: AgentToolCall;
-  tool: AgentTool<any>;
-  args: unknown;
-};
-
-export type ImmediateToolCallOutcome = {
-  kind: "immediate";
-  result: AgentToolResult<any>;
-  isError: boolean;
-};
-
-type ExecutedToolCallOutcome = {
-  result: AgentToolResult<any>;
-  isError: boolean;
-  durationMs: number;
-};
-
-export const createErrorToolResult = (message: string): AgentToolResult<any> => ({
-  content: [{ type: "text", text: message }],
+const createErrorToolResult = (message: string): typesModule.AgentToolResult<any> => ({
+  content: [{ text: message, type: "text" }],
   details: {},
 });
 
 const errorText = (error: unknown): string =>
   error instanceof Error ? error.message : String(error);
 
-const immediateError = (message: string): ImmediateToolCallOutcome => ({
+const immediateError = (message: string): toolCallTypes.ImmediateToolCallOutcome => ({
+  isError: true,
   kind: "immediate",
   result: createErrorToolResult(message),
-  isError: true,
 });
 
-export interface ToolCallSite {
-  readonly context: AgentContext;
-  readonly assistantMessage: AssistantMessage;
-  readonly hooks: ToolCallHooks;
-  readonly signal: AbortSignal | undefined;
-}
-
-export interface ToolCallRequest extends ToolCallSite {
-  readonly toolCall: AgentToolCall;
-  readonly tools?: readonly AgentTool<any>[] | undefined;
-}
-
-const prepareToolCallArguments = (tool: AgentTool<any>, toolCall: AgentToolCall): AgentToolCall => {
+const prepareToolCallArguments = (
+  tool: typesModule.AgentTool<any>,
+  toolCall: typesModule.AgentToolCall,
+): typesModule.AgentToolCall => {
   if (tool.prepareArguments === undefined) return toolCall;
   const preparedArguments = tool.prepareArguments(toolCall.arguments);
   if (preparedArguments === toolCall.arguments) return toolCall;
@@ -71,15 +36,15 @@ const prepareToolCallArguments = (tool: AgentTool<any>, toolCall: AgentToolCall)
 const aborted = (signal: AbortSignal | undefined): boolean => signal?.aborted === true;
 
 const runBeforeHook = (
-  request: ToolCallRequest,
+  request: toolCallTypes.ToolCallRequest,
   args: unknown,
-): Effect.Effect<ImmediateToolCallOutcome | undefined> =>
+): Effect.Effect<toolCallTypes.ImmediateToolCallOutcome | undefined> =>
   Effect.gen(function* () {
     const before = request.hooks.beforeToolCall;
     if (before === undefined) return undefined;
     const { assistantMessage, toolCall, context, signal } = request;
     const beforeResult = yield* call(() =>
-      before({ assistantMessage, toolCall, args, context }, signal),
+      before({ args, assistantMessage, context, toolCall }, signal),
     );
     if (aborted(signal)) return immediateError("Operation aborted");
     if (beforeResult?.block !== true) return undefined;
@@ -88,12 +53,12 @@ const runBeforeHook = (
       reason === undefined || reason === "" ? "Tool execution was blocked" : reason,
     );
     if (beforeResult.terminate === true) result.terminate = true;
-    return { kind: "immediate", result, isError: true };
+    return { isError: true, kind: "immediate", result };
   });
 
-export const prepareToolCall = (
-  request: ToolCallRequest,
-): Effect.Effect<PreparedToolCall | ImmediateToolCallOutcome> =>
+const prepareToolCall = (
+  request: toolCallTypes.ToolCallRequest,
+): Effect.Effect<toolCallTypes.PreparedToolCall | toolCallTypes.ImmediateToolCallOutcome> =>
   Effect.gen(function* () {
     const { toolCall } = request;
     const tools = request.tools ?? request.context.tools ?? [];
@@ -103,22 +68,16 @@ export const prepareToolCall = (
     const blocked = yield* runBeforeHook(request, args);
     if (blocked !== undefined) return blocked;
     if (aborted(request.signal)) return immediateError("Operation aborted");
-    return { kind: "prepared", toolCall, tool, args } satisfies PreparedToolCall;
+    return { args, kind: "prepared", tool, toolCall } satisfies toolCallTypes.PreparedToolCall;
   }).pipe(
     Effect.catchCause((cause) => Effect.succeed(immediateError(errorText(Cause.squash(cause))))),
   );
 
-export interface ToolExecution {
-  readonly prepared: PreparedToolCall;
-  readonly signal: AbortSignal | undefined;
-  readonly onUpdate: ToolUpdateSink;
-}
-
-export const executePreparedToolCall = ({
+const executePreparedToolCall = ({
   prepared,
   signal,
   onUpdate,
-}: ToolExecution): Effect.Effect<ExecutedToolCallOutcome> =>
+}: toolCallTypes.ToolExecution): Effect.Effect<toolCallTypes.ExecutedToolCallOutcome> =>
   Effect.gen(function* () {
     const updateEvents: Promise<void>[] = [];
     let acceptingUpdates = true;
@@ -135,56 +94,51 @@ export const executePreparedToolCall = ({
     acceptingUpdates = false;
     yield* Effect.promise(() => Promise.all(updateEvents));
     if (Exit.isSuccess(exit)) {
-      return { result: exit.value, isError: exit.value.isError === true, durationMs };
+      return { durationMs, isError: exit.value.isError === true, result: exit.value };
     }
     return {
-      result: createErrorToolResult(errorText(Cause.squash(exit.cause))),
-      isError: true,
       durationMs,
+      isError: true,
+      result: createErrorToolResult(errorText(Cause.squash(exit.cause))),
     };
   });
 
 const mergeAfterResult = (
-  { result, isError }: ExecutedToolCallOutcome,
-  afterResult: AfterToolCallResult,
-): Pick<AgentToolCallOutcome, "result" | "isError"> => {
+  { result, isError }: toolCallTypes.ExecutedToolCallOutcome,
+  afterResult: typesModule.AfterToolCallResult,
+): Pick<typesModule.AgentToolCallOutcome, "result" | "isError"> => {
   const structuredContent =
     afterResult.structuredContent ??
     (afterResult.content === undefined ? result.structuredContent : undefined);
   const { structuredContent: _replaced, ...rest } = result;
   return {
+    isError: afterResult.isError ?? isError,
     result: {
       ...rest,
       content: afterResult.content ?? result.content,
       details: afterResult.details ?? result.details,
-      usage: afterResult.usage ?? result.usage,
       terminate: afterResult.terminate ?? result.terminate,
+      usage: afterResult.usage ?? result.usage,
       ...(structuredContent === undefined ? {} : { structuredContent }),
     },
-    isError: afterResult.isError ?? isError,
   };
 };
 
-export interface ToolFinalization extends ToolCallSite {
-  readonly prepared: PreparedToolCall;
-  readonly executed: ExecutedToolCallOutcome;
-}
-
 const runAfterHook = (
-  finalization: ToolFinalization,
-): Effect.Effect<Pick<AgentToolCallOutcome, "result" | "isError">> => {
+  finalization: toolCallTypes.ToolFinalization,
+): Effect.Effect<Pick<typesModule.AgentToolCallOutcome, "result" | "isError">> => {
   const { executed, hooks, prepared } = finalization;
   const after = hooks.afterToolCall;
   if (after === undefined) return Effect.succeed(executed);
   return call(() =>
     after(
       {
-        assistantMessage: finalization.assistantMessage,
-        toolCall: prepared.toolCall,
         args: prepared.args,
-        result: executed.result,
-        isError: executed.isError,
+        assistantMessage: finalization.assistantMessage,
         context: finalization.context,
+        isError: executed.isError,
+        result: executed.result,
+        toolCall: prepared.toolCall,
       },
       finalization.signal,
     ),
@@ -194,29 +148,36 @@ const runAfterHook = (
     ),
     Effect.catchCause((cause) =>
       Effect.succeed({
-        result: createErrorToolResult(errorText(Cause.squash(cause))),
         isError: true,
+        result: createErrorToolResult(errorText(Cause.squash(cause))),
       }),
     ),
   );
 };
 
-export const finalizeExecutedToolCall = (
-  finalization: ToolFinalization,
-): Effect.Effect<AgentToolCallOutcome> =>
+const finalizeExecutedToolCall = (
+  finalization: toolCallTypes.ToolFinalization,
+): Effect.Effect<typesModule.AgentToolCallOutcome> =>
   Effect.map(runAfterHook(finalization), ({ result, isError }) => ({
-    toolCall: finalization.prepared.toolCall,
-    result,
-    isError,
     durationMs: finalization.executed.durationMs,
+    isError,
+    result,
+    toolCall: finalization.prepared.toolCall,
   }));
 
-export interface ToolRun extends ToolCallSite {
-  readonly prepared: PreparedToolCall;
-  readonly onUpdate: ToolUpdateSink;
-}
-
-export const executeAndFinalize = (run: ToolRun): Effect.Effect<AgentToolCallOutcome> =>
+const executeAndFinalize = (
+  run: toolCallTypes.ToolRun,
+): Effect.Effect<typesModule.AgentToolCallOutcome> =>
   Effect.flatMap(executePreparedToolCall(run), (executed) =>
     finalizeExecutedToolCall({ ...run, executed }),
   );
+
+const toolCallModule = {
+  createErrorToolResult,
+  executeAndFinalize,
+  executePreparedToolCall,
+  finalizeExecutedToolCall,
+  prepareToolCall,
+};
+
+export default toolCallModule;

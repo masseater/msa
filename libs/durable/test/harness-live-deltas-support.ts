@@ -1,4 +1,4 @@
-import { Type, fauxAssistantMessage, fauxText, fauxToolCall } from "@msa/ai";
+import ai from "@msa/ai";
 import durable from "@msa/durable";
 import type durableTypes from "@msa/durable/index.types";
 import memory from "@msa/durable/storage/memory";
@@ -7,6 +7,8 @@ import { dual } from "effect/Function";
 
 import type harnessLiveDeltasSupportTypes from "./harness-live-deltas-support.types.ts";
 import testSupport from "./support.ts";
+
+const { Type, fauxAssistantMessage, fauxText, fauxToolCall } = ai;
 
 const { LiveDoc, defineTool } = durable;
 const { MemoryStorage } = memory;

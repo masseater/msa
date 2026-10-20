@@ -1,9 +1,12 @@
 import { Effect } from "effect";
 import { describe, expect, it, vi } from "vite-plus/test";
 
-import { openaiCodexOAuth } from "../src/auth/oauth/openai-codex.ts";
-import { startLocalHttpServer } from "../src/utils/local-http-server.ts";
+import openaiCodex from "../src/auth/oauth/openai-codex.ts";
+import localHttpServer from "../src/utils/local-http-server.ts";
 import openaiCodexOauthSupport from "./openai-codex-oauth-support.ts";
+
+const { openaiCodexOAuth } = openaiCodex;
+const { startLocalHttpServer } = localHttpServer;
 
 const { createAccessToken, jsonResponse, neverAbortedSignal, restoreAfterEach, stubOpenAIAuth } =
   openaiCodexOauthSupport;

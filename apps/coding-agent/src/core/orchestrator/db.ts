@@ -230,4 +230,4 @@ function definedEntries(value: object): [string, unknown][] {
   return Object.entries(value).filter(([, field]) => field !== undefined);
 }
 
-export const db = { openDatabase, transaction, definedEntries };
+export const db = { definedEntries, openDatabase, transaction };

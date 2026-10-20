@@ -1,20 +1,22 @@
-import type { GrammarToolInputJsonBuffer } from "./constrained-sampling.ts";
-import { appendGrammarToolInputJsonDelta } from "./constrained-sampling.ts";
-import type {
-  CompletionsStreamState,
-  StreamingToolCallBlock,
-  StreamingToolCallDelta,
-} from "./openai-completions-stream-types.ts";
+import constrainedSampling from "./constrained-sampling.ts";
+import type constrainedSamplingTypes from "./constrained-sampling.types.ts";
+import type openaiCompletionsStreamTypesModule from "./openai-completions-stream-types.types.ts";
 
-function emptyJsonBuffer(): GrammarToolInputJsonBuffer {
-  return { input: "", started: false, closed: false };
+const { appendGrammarToolInputJsonDelta } = constrainedSampling;
+
+function emptyJsonBuffer(): constrainedSamplingTypes.GrammarToolInputJsonBuffer {
+  return { closed: false, input: "", started: false };
 }
 
-function isCustomToolCall(toolCall: StreamingToolCallDelta): boolean {
+function isCustomToolCall(
+  toolCall: openaiCompletionsStreamTypesModule.StreamingToolCallDelta,
+): boolean {
   return toolCall.custom !== undefined && toolCall.function === undefined;
 }
 
-function getCustomToolCallInput(input: { block: StreamingToolCallBlock }): string {
+function getCustomToolCallInput(input: {
+  block: openaiCompletionsStreamTypesModule.StreamingToolCallBlock;
+}): string {
   const { block } = input;
   const property = block.customInput?.property;
   if (property === undefined) return "";
@@ -23,7 +25,7 @@ function getCustomToolCallInput(input: { block: StreamingToolCallBlock }): strin
 }
 
 function appendCustomToolCallInput(input: {
-  block: StreamingToolCallBlock;
+  block: openaiCompletionsStreamTypesModule.StreamingToolCallBlock;
   nextInput: string;
   close: boolean;
 }): string | undefined {
@@ -41,10 +43,10 @@ function appendCustomToolCallInput(input: {
 }
 
 function findToolCallBlock(
-  state: CompletionsStreamState,
-  toolCall: StreamingToolCallDelta,
+  state: openaiCompletionsStreamTypesModule.CompletionsStreamState,
+  toolCall: openaiCompletionsStreamTypesModule.StreamingToolCallDelta,
   streamIndex: number | undefined,
-): StreamingToolCallBlock | undefined {
+): openaiCompletionsStreamTypesModule.StreamingToolCallBlock | undefined {
   const byIndex =
     streamIndex === undefined ? undefined : state.toolCallBlocksByIndex.get(streamIndex);
   if (byIndex !== undefined) return byIndex;
@@ -53,25 +55,25 @@ function findToolCallBlock(
 }
 
 function registerToolCallBlock(
-  state: CompletionsStreamState,
-  toolCall: StreamingToolCallDelta,
+  state: openaiCompletionsStreamTypesModule.CompletionsStreamState,
+  toolCall: openaiCompletionsStreamTypesModule.StreamingToolCallDelta,
   streamIndex: number | undefined,
   name: string,
-): StreamingToolCallBlock {
+): openaiCompletionsStreamTypesModule.StreamingToolCallBlock {
   const customInputProperty = isCustomToolCall(toolCall)
     ? (state.grammarToolInputProperties.get(name) ?? "input")
     : undefined;
   const hasCustomInput = customInputProperty !== undefined;
-  const block: StreamingToolCallBlock = {
-    type: "toolCall",
+  const block: openaiCompletionsStreamTypesModule.StreamingToolCallBlock = {
+    arguments: hasCustomInput ? { [customInputProperty]: "" } : {},
+    customInput: hasCustomInput
+      ? { jsonBuffer: emptyJsonBuffer(), property: customInputProperty }
+      : undefined,
     id: toolCall.id || "",
     name,
-    arguments: hasCustomInput ? { [customInputProperty]: "" } : {},
     partialArgs: hasCustomInput ? undefined : "",
-    customInput: hasCustomInput
-      ? { property: customInputProperty, jsonBuffer: emptyJsonBuffer() }
-      : undefined,
     streamIndex,
+    type: "toolCall",
   };
   if (streamIndex !== undefined) {
     state.toolCallBlocksByIndex.set(streamIndex, block);
@@ -81,17 +83,17 @@ function registerToolCallBlock(
   }
   state.blocks.push(block);
   state.events.push({
-    type: "toolcall_start",
     contentIndex: state.blocks.indexOf(block),
     partial: state.output,
+    type: "toolcall_start",
   });
   return block;
 }
 
 function linkToolCallBlock(
-  state: CompletionsStreamState,
-  block: StreamingToolCallBlock,
-  toolCall: StreamingToolCallDelta,
+  state: openaiCompletionsStreamTypesModule.CompletionsStreamState,
+  block: openaiCompletionsStreamTypesModule.StreamingToolCallBlock,
+  toolCall: openaiCompletionsStreamTypesModule.StreamingToolCallDelta,
   streamIndex: number | undefined,
 ): void {
   if (streamIndex !== undefined && block.streamIndex === undefined) {
@@ -104,21 +106,21 @@ function linkToolCallBlock(
 }
 
 function adoptCustomInput(
-  state: CompletionsStreamState,
-  block: StreamingToolCallBlock,
-  toolCall: StreamingToolCallDelta,
+  state: openaiCompletionsStreamTypesModule.CompletionsStreamState,
+  block: openaiCompletionsStreamTypesModule.StreamingToolCallBlock,
+  toolCall: openaiCompletionsStreamTypesModule.StreamingToolCallDelta,
 ): void {
   if (!isCustomToolCall(toolCall) || block.customInput !== undefined) return;
   const customInputProperty = state.grammarToolInputProperties.get(block.name) ?? "input";
   block.arguments = { [customInputProperty]: "" };
-  block.customInput = { property: customInputProperty, jsonBuffer: emptyJsonBuffer() };
+  block.customInput = { jsonBuffer: emptyJsonBuffer(), property: customInputProperty };
   delete block.partialArgs;
 }
 
 function ensureToolCallBlock(input: {
-  state: CompletionsStreamState;
-  toolCall: StreamingToolCallDelta;
-}): StreamingToolCallBlock {
+  state: openaiCompletionsStreamTypesModule.CompletionsStreamState;
+  toolCall: openaiCompletionsStreamTypesModule.StreamingToolCallDelta;
+}): openaiCompletionsStreamTypesModule.StreamingToolCallBlock {
   const { state, toolCall } = input;
   const streamIndex = typeof toolCall.index === "number" ? toolCall.index : undefined;
   const name = toolCall.function?.name ?? toolCall.custom?.name ?? "";
@@ -130,4 +132,10 @@ function ensureToolCallBlock(input: {
   return block;
 }
 
-export { appendCustomToolCallInput, ensureToolCallBlock, getCustomToolCallInput };
+const openaiCompletionsStreamToolCalls = {
+  appendCustomToolCallInput,
+  ensureToolCallBlock,
+  getCustomToolCallInput,
+};
+
+export default openaiCompletionsStreamToolCalls;

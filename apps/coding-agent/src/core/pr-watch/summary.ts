@@ -1,5 +1,5 @@
 import type { PrWatchSnapshot } from "./service.ts";
-import { isBehind, isConflicting, type PrSnapshot } from "./snapshot.ts";
+import { type PrSnapshot, isBehind, isConflicting } from "./snapshot.ts";
 import type { PrWatchEntry } from "./watch.ts";
 
 export const CI_STALL_MS = 10 * 60_000;

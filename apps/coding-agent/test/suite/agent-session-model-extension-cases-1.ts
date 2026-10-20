@@ -1,5 +1,5 @@
-import type { ThinkingLevel } from "@msa/agent-core";
-import { type Model } from "@msa/ai";
+import type agentTypes from "@msa/agent-core/index.types";
+import type aiTypes from "@msa/ai/index.types";
 import { Effect } from "effect";
 import { expect } from "vite-plus/test";
 
@@ -185,8 +185,8 @@ const cyclesThroughScopedModelsAndPreserves = Effect.gen(function* () {
     { model: modelOne, thinkingLevel: "high" },
     { model: modelTwo },
   ] as Array<{
-    model: Model<string>;
-    thinkingLevel?: ThinkingLevel;
+    model: aiTypes.Model<string>;
+    thinkingLevel?: agentTypes.ThinkingLevel;
   }>);
   harness.session.setThinkingLevel("high");
 

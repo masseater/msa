@@ -1,10 +1,13 @@
 import { Effect } from "effect";
 import { describe, expect, it } from "vite-plus/test";
 
-import { streamSimple as streamSimpleOpenAICodexResponses } from "../src/api/openai-codex-responses.ts";
-import type { Model } from "../src/types.ts";
+import openaiCodexCompress from "../src/api/openai-codex-compress.ts";
+import openaiCodexResponses from "../src/api/openai-codex-responses.ts";
+import type typesModule from "../src/types.types.ts";
 import modelChoice from "./model-choice.ts";
 import openaiCodexStreamSupport from "./openai-codex-stream-support.ts";
+
+const { streamSimple: streamSimpleOpenAICodexResponses } = openaiCodexResponses;
 
 const { chooseModel, modelsWhere } = modelChoice;
 const {
@@ -20,12 +23,13 @@ const {
   usage,
 } = openaiCodexStreamSupport;
 
-const codexCatalog = (accepts: (model: Model<"openai-codex-responses">) => boolean) =>
+const codexCatalog = (accepts: (model: typesModule.Model<"openai-codex-responses">) => boolean) =>
   modelsWhere(
     "openai-codex",
     (model) =>
-      model.api === "openai-codex-responses" && accepts(model as Model<"openai-codex-responses">),
-  ) as Model<"openai-codex-responses">[];
+      model.api === "openai-codex-responses" &&
+      accepts(model as typesModule.Model<"openai-codex-responses">),
+  ) as typesModule.Model<"openai-codex-responses">[];
 
 const keepsXhighFromSimpleOptions = () =>
   Effect.runPromise(
@@ -44,7 +48,7 @@ const keepsXhighFromSimpleOptions = () =>
     }),
   );
 
-const clampsMinimalEffort = (model: Model<"openai-codex-responses">) =>
+const clampsMinimalEffort = (model: typesModule.Model<"openai-codex-responses">) =>
   Effect.runPromise(
     Effect.gen(function* () {
       const { requests } = stubCodexFetch();
@@ -60,23 +64,26 @@ const defaultTierSse = sseText(
   }),
 );
 
+const STANDARD_PRIORITY_MULTIPLIER = 2;
+
 const pricedModel = chooseModel(
   "openai-codex",
   "standard-priced Codex",
-  (model) => model.id !== "gpt-5.5",
+  (model) => model.cost.serviceTiers?.priority === STANDARD_PRIORITY_MULTIPLIER,
 );
 const surchargedModel = chooseModel(
   "openai-codex",
   "priority-surcharged Codex",
-  (model) => model.id === "gpt-5.5",
+  (model) => (model.cost.serviceTiers?.priority ?? 0) > STANDARD_PRIORITY_MULTIPLIER,
 );
 
-const serviceTierCases = [
-  { model: pricedModel, multiplier: 0.5, serviceTier: "flex" },
-  { model: pricedModel, multiplier: 2, serviceTier: "priority" },
-  { model: surchargedModel, multiplier: 0.5, serviceTier: "flex" },
-  { model: surchargedModel, multiplier: 2.5, serviceTier: "priority" },
-] as const;
+const serviceTierCases = [pricedModel, surchargedModel].flatMap((model) =>
+  (["flex", "priority"] as const).map((serviceTier) => ({
+    model,
+    multiplier: model.cost.serviceTiers?.[serviceTier] ?? 1,
+    serviceTier,
+  })),
+);
 
 const pricesRequestedTier = ({
   model,
@@ -88,7 +95,20 @@ const pricesRequestedTier = ({
       stubCodexFetch(() => sseResponse(defaultTierSse));
       const result = yield* runCodex(
         { serviceTier },
-        { model: { ...model, cost: { cacheRead: 0, cacheWrite: 0, input: 1, output: 2 } } },
+        {
+          model: {
+            ...model,
+            cost: {
+              cacheRead: 0,
+              cacheWrite: 0,
+              input: 1,
+              output: 2,
+              ...(model.cost.serviceTiers === undefined
+                ? {}
+                : { serviceTiers: model.cost.serviceTiers }),
+            },
+          },
+        },
       );
       expect(result.usage.cost).toMatchObject({
         input: 1 * multiplier,
@@ -102,6 +122,10 @@ const compressesRequestBodies = () =>
   Effect.runPromise(
     Effect.gen(function* () {
       const { requests } = stubCodexFetch();
+      openaiCodexCompress.setRequestBodyCompressor(openaiCodexStreamSupport.zstdCompress);
+      yield* Effect.addFinalizer(() =>
+        Effect.sync(() => openaiCodexCompress.setRequestBodyCompressor(undefined)),
+      );
       const largeText = "compress me ".repeat(400);
       yield* runCodex({}, { context: promptContext(largeText) });
       yield* runCodex({}, { context: promptContext("hi") });
@@ -114,7 +138,7 @@ const compressesRequestBodies = () =>
         input: Array<{ content: Array<{ text: string }> }>;
       };
       expect(decoded.input[0]?.content[0]?.text).toBe(largeText);
-    }),
+    }).pipe(Effect.scoped),
   );
 
 describe("openai-codex reasoning, pricing, and compression", () => {

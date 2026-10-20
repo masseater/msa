@@ -1,3 +1,9 @@
 import { Clock, Effect } from "effect";
 
-export const currentTimeMillis = (): number => Effect.runSync(Clock.currentTimeMillis);
+const currentTimeMillis = (): number => Effect.runSync(Clock.currentTimeMillis);
+
+const clock = {
+  currentTimeMillis,
+};
+
+export default clock;

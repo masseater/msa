@@ -39,7 +39,7 @@ export function parseDiscoveredCases(value: unknown): DiscoveredEvalCase[] {
     if (identities.has(identity))
       throw new TypeError(`Duplicate eval case identity: ${item["name"]}`);
     identities.add(identity);
-    return { file: item["file"], fullName: caseId, evalSet, caseId };
+    return { caseId, evalSet, file: item["file"], fullName: caseId };
   });
 }
 
@@ -60,7 +60,7 @@ export const createTaskPlan: {
       for (let runNumber = 1; runNumber <= runsPerVariant; runNumber += 1) {
         const variants: DocumentationVariant[] =
           runNumber % 2 === 1 ? ["without_docs", "with_docs"] : ["with_docs", "without_docs"];
-        for (const variant of variants) tasks.push({ ...evalCase, variant, model, runNumber });
+        for (const variant of variants) tasks.push({ ...evalCase, model, runNumber, variant });
       }
     }
     return tasks;

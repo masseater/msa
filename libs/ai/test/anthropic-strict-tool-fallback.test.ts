@@ -5,10 +5,12 @@ import type {
 import { Effect, Stream } from "effect";
 import { describe, expect, it, vi } from "vite-plus/test";
 
-import { stream as streamAnthropic } from "../src/api/anthropic-messages.ts";
-import type { TranscriptContext } from "../src/types.ts";
+import anthropicMessages from "../src/api/anthropic-messages.ts";
+import type typesModule from "../src/types.types.ts";
 import anthropicStrictToolFallbackSupport from "./anthropic-strict-tool-fallback-support.ts";
 import jsonCodec from "./json-codec.ts";
+
+const { stream: streamAnthropic } = anthropicMessages;
 
 const { context, errorResponse, grammarError, harness, model, successResponse, tool } =
   anthropicStrictToolFallbackSupport;
@@ -65,7 +67,7 @@ const downgradesInlineAdditionsAndSameName = () =>
   );
 
 const retriesSWithOriginalStep1 = (
-  transcript: TranscriptContext,
+  transcript: typesModule.TranscriptContext,
   options: {
     apiKey: string;
     fetch: (input: string | URL | Request, init?: RequestInit) => Promise<Response>;

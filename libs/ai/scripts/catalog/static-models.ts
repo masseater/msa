@@ -1,6 +1,6 @@
-import type { ClassifierModel, Model } from "../../src/types.ts";
+import type typesModule from "../../src/types.types.ts";
 
-const FALLBACK_MODELS: Model<any>[] = [
+const FALLBACK_MODELS: typesModule.Model<any>[] = [
   {
     api: "openai-completions",
     baseUrl: "https://openrouter.ai/api/v1",
@@ -27,7 +27,7 @@ const FALLBACK_MODELS: Model<any>[] = [
   },
 ];
 
-const OPENCODE_CLASSIFIER_MODELS: ClassifierModel<"typesafe-system-one">[] = [
+const OPENCODE_CLASSIFIER_MODELS: typesModule.ClassifierModel<"typesafe-system-one">[] = [
   {
     api: "typesafe-system-one",
     baseUrl: "https://opencode.ai/inference/v1",

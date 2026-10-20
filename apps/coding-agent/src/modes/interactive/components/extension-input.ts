@@ -1,22 +1,25 @@
-import { Container, type Focusable, getKeybindings, Input, Spacer, Text, type TUI } from "@msa/tui";
+import tuiModule from "@msa/tui";
+import type tuiTypes from "@msa/tui/index.types";
 
 import { theme } from "../theme/theme.ts";
 import { CountdownTimer } from "./countdown-timer.ts";
 import { DynamicBorder } from "./dynamic-border.ts";
 import { keyHint } from "./keybinding-hints.ts";
 
+const { Container, Input, Spacer, Text, getKeybindings } = tuiModule;
+
 export interface ExtensionInputOptions {
-  tui?: TUI | undefined;
+  tui?: tuiTypes.TUI | undefined;
   timeout?: number | undefined;
   initialValue?: string | undefined;
   description?: string | undefined;
 }
 
-export class ExtensionInputComponent extends Container implements Focusable {
-  private input: Input;
+export class ExtensionInputComponent extends Container implements tuiTypes.Focusable {
+  private input: tuiTypes.Input;
   private onSubmitCallback: (value: string) => void;
   private onCancelCallback: () => void;
-  private titleText: Text;
+  private titleText: tuiTypes.Text;
   private baseTitle: string;
   private countdown: CountdownTimer | undefined;
 

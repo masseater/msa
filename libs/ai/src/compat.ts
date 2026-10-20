@@ -1,199 +1,176 @@
-import { Function } from "effect";
-export * from "./api/anthropic-messages.lazy.ts";
-export * from "./api/google-generative-ai.lazy.ts";
-export * from "./api/openai-codex-responses.lazy.ts";
-export * from "./api/openai-completions.lazy.ts";
-export * from "./api/openai-responses.lazy.ts";
-export {
-  type ApiProvider,
-  type ApiStreamFunction,
-  type ApiStreamSimpleFunction,
-  getApiProvider,
-  getApiProviders,
-  registerApiProvider,
-  registerFauxProvider,
-  unregisterApiProviders,
-} from "./api-provider-registry.ts";
-export { registerBuiltInApiProviders, resetApiProviders } from "./builtin-api-providers.ts";
-export * from "./env-api-keys.ts";
-export * from "./image-models.ts";
-export * from "./images.ts";
-export * from "./images-api-registry.ts";
-export * from "./index.ts";
-export * from "./legacy-api-aliases.ts";
-export * from "./legacy-openai-api-aliases.ts";
-export * from "./providers/images/register-builtins.ts";
+import { Type } from "typebox";
 
-import { getApiProvider } from "./api-provider-registry.ts";
-import { isBuiltinApiProvider, registerBuiltInApiProviders } from "./builtin-api-providers.ts";
-import { getEnvApiKey } from "./env-api-keys.ts";
-import {
-  builtinModels,
-  getBuiltinModel,
-  getBuiltinModels,
-  getBuiltinProviders,
-} from "./providers/all.ts";
+import openaiCodexCompress from "./api/openai-codex-compress.ts";
+import compatKit from "./compat-kit.ts";
+import compatStream from "./compat-stream.ts";
+import retry from "./utils/retry.ts";
+import textModule from "./utils/text.ts";
+import transcriptModule from "./utils/transcript.ts";
+import typeboxHelpers from "./utils/typebox-helpers.ts";
+import uuid from "./utils/uuid.ts";
+import validation from "./utils/validation.ts";
 
-export type { BuiltinProvider } from "./providers/all.ts";
+const { complete, completeSimple, getModel, getModels, getProviders, stream, streamSimple } =
+  compatStream;
 
-import type {
-  Api,
-  ApiStreamOptions,
-  AssistantMessage,
-  AssistantMessageEventStream,
-  Context,
-  Model,
-  ProviderStreamOptions,
-  SimpleStreamOptions,
-  StreamOptions,
-} from "./types.ts";
-import { normalizeContext } from "./utils/transcript.ts";
+const {
+  anthropicMessagesLazy,
+  apiProviderRegistry: apiProviderRegistryModule,
+  EventStream,
+  builtinApiProviders,
+  context: contextModule,
+  credentialStore,
+  diagnostics: diagnosticsModule,
+  envApiKeys,
+  eventStream,
+  faux,
+  fauxCore,
+  fauxMessages,
+  googleGenerativeAiLazy,
+  helpers,
+  imageModels: imageModelsModule,
+  images,
+  imagesApiRegistry,
+  jsonParse,
+  lazy,
+  legacyApiAliases,
+  legacyOpenaiApiAliases,
+  modelOperations,
+  models: modelsModule,
+  modelsError,
+  InMemoryModelsStore,
+  openaiCodexResponsesLazy,
+  openaiCompletionsLazy,
+  openaiResponsesLazy,
+  overflow,
+  registerBuiltins,
+  sessionResources,
+} = compatKit;
 
-export const getModel = getBuiltinModel;
-
-export const getModels = getBuiltinModels;
-
-export const getProviders = getBuiltinProviders;
+const { registerBuiltInApiProviders } = builtinApiProviders;
 
 registerBuiltInApiProviders();
 
-const compatModels = builtinModels();
-const AMBIENT_AUTH_MARKER = "<authenticated>";
+const compat = {
+  ANTHROPIC_API_KEY_ENV: envApiKeys.ANTHROPIC_API_KEY_ENV,
+  ANTHROPIC_AUTH_TOKEN_ENV: envApiKeys.ANTHROPIC_AUTH_TOKEN_ENV,
+  ANTHROPIC_FEDERATION_RULE_ID_ENV: envApiKeys.ANTHROPIC_FEDERATION_RULE_ID_ENV,
+  ANTHROPIC_IDENTITY_TOKEN_FILE_ENV: envApiKeys.ANTHROPIC_IDENTITY_TOKEN_FILE_ENV,
+  ANTHROPIC_ORGANIZATION_ID_ENV: envApiKeys.ANTHROPIC_ORGANIZATION_ID_ENV,
+  ANTHROPIC_SERVICE_ACCOUNT_ID_ENV: envApiKeys.ANTHROPIC_SERVICE_ACCOUNT_ID_ENV,
+  ANTHROPIC_WORKSPACE_ID_ENV: envApiKeys.ANTHROPIC_WORKSPACE_ID_ENV,
+  AssistantMessageEventStream: eventStream.AssistantMessageEventStream,
+  DEFAULT_MAX_AGENT_RETRY_DELAY_MS: retry.DEFAULT_MAX_AGENT_RETRY_DELAY_MS,
+  EventStream,
+  InMemoryCredentialStore: credentialStore.InMemoryCredentialStore,
+  InMemoryModelsStore,
+  ModelsError: modelsError.ModelsError,
+  StringEnum: typeboxHelpers.StringEnum,
+  Type,
+  anthropicMessagesApi: anthropicMessagesLazy.anthropicMessagesApi,
+  appendAssistantMessageDiagnostic: diagnosticsModule.appendAssistantMessageDiagnostic,
+  authEnv: helpers.authEnv,
+  calculateCost: modelsModule.calculateCost,
+  clampThinkingLevel: modelsModule.clampThinkingLevel,
+  cleanupSessionResources: sessionResources.cleanupSessionResources,
+  collapseSystemMessages: transcriptModule.collapseSystemMessages,
+  complete,
+  completeSimple,
+  contentText: textModule.contentText,
+  createAssistantMessageDiagnostic: diagnosticsModule.createAssistantMessageDiagnostic,
+  createAssistantMessageEventStream: eventStream.createAssistantMessageEventStream,
+  createEventChannel: eventStream.createEventChannel,
+  createFauxCore: fauxCore.createFauxCore,
+  createInitialSystemMessage: transcriptModule.createInitialSystemMessage,
+  createModels: modelsModule.createModels,
+  createProvider: modelsModule.createProvider,
+  declarationsEqual: transcriptModule.declarationsEqual,
+  defaultProviderAuthContext: contextModule.defaultProviderAuthContext,
+  envApiKeyAuth: helpers.envApiKeyAuth,
+  extractDiagnosticError: diagnosticsModule.extractDiagnosticError,
+  fauxAssistantMessage: fauxMessages.fauxAssistantMessage,
+  fauxProvider: faux.fauxProvider,
+  fauxText: fauxMessages.fauxText,
+  fauxThinking: fauxMessages.fauxThinking,
+  fauxToolCall: fauxMessages.fauxToolCall,
+  findEnvKeys: envApiKeys.findEnvKeys,
+  formatThrownValue: diagnosticsModule.formatThrownValue,
+  generateImages: images.generateImages,
+  generateImagesOpenRouter: registerBuiltins.generateImagesOpenRouter,
+  getApiProvider: apiProviderRegistryModule.getApiProvider,
+  getApiProviders: apiProviderRegistryModule.getApiProviders,
+  getCurrentSystemMessage: transcriptModule.getCurrentSystemMessage,
+  getCurrentSystemPrompt: transcriptModule.getCurrentSystemPrompt,
+  getCurrentTools: transcriptModule.getCurrentTools,
+  getDeclaredTools: transcriptModule.getDeclaredTools,
+  getEnvApiKey: envApiKeys.getEnvApiKey,
+  getImageModel: imageModelsModule.getImageModel,
+  getImageModels: imageModelsModule.getImageModels,
+  getImageProviders: imageModelsModule.getImageProviders,
+  getImagesApiProvider: imagesApiRegistry.getImagesApiProvider,
+  getInitialSystemMessage: transcriptModule.getInitialSystemMessage,
+  getModel,
+  getModelType: modelOperations.getModelType,
+  getModels,
+  getOverflowPatterns: overflow.getOverflowPatterns,
+  getProviders,
+  getSupportedThinkingLevels: modelsModule.getSupportedThinkingLevels,
+  getSystemMessageText: textModule.getSystemMessageText,
+  getToolStateChanges: transcriptModule.getToolStateChanges,
+  googleGenerativeAIApi: googleGenerativeAiLazy.googleGenerativeAIApi,
+  hasApi: modelsModule.hasApi,
+  hasNonAdditiveToolChanges: transcriptModule.hasNonAdditiveToolChanges,
+  hasToolRedefinitions: transcriptModule.hasToolRedefinitions,
+  isContextOverflow: overflow.isContextOverflow,
+  isModelType: modelOperations.isModelType,
+  isRecoverableLength: overflow.isRecoverableLength,
+  isRetryableAssistantError: retry.isRetryableAssistantError,
+  lazyApi: lazy.lazyApi,
+  lazyOAuth: helpers.lazyOAuth,
+  lazyStream: lazy.lazyStream,
+  modelsAreEqual: modelsModule.modelsAreEqual,
+  normalizeContext: transcriptModule.normalizeContext,
+  openAICodexResponsesApi: openaiCodexResponsesLazy.openAICodexResponsesApi,
+  openAICompletionsApi: openaiCompletionsLazy.openAICompletionsApi,
+  openAIResponsesApi: openaiResponsesLazy.openAIResponsesApi,
+  parseJsonWithRepair: jsonParse.parseJsonWithRepair,
+  parseStreamingJson: jsonParse.parseStreamingJson,
+  parseToolCallArguments: jsonParse.parseToolCallArguments,
+  promptUser: helpers.promptUser,
+  registerApiProvider: apiProviderRegistryModule.registerApiProvider,
+  registerBuiltInApiProviders: builtinApiProviders.registerBuiltInApiProviders,
+  registerBuiltInImagesApiProviders: registerBuiltins.registerBuiltInImagesApiProviders,
+  registerFauxProvider: apiProviderRegistryModule.registerFauxProvider,
+  registerImagesApiProvider: imagesApiRegistry.registerImagesApiProvider,
+  registerSessionResourceCleanup: sessionResources.registerSessionResourceCleanup,
+  renderSystemMessageUpdate: textModule.renderSystemMessageUpdate,
+  repairJson: jsonParse.repairJson,
+  resetApiProviders: builtinApiProviders.resetApiProviders,
+  resolveTranscript: transcriptModule.resolveTranscript,
+  resolveTranscriptTools: transcriptModule.resolveTranscriptTools,
+  retryAssistantCall: retry.retryAssistantCall,
+  retryDelayMs: retry.retryDelayMs,
+  runAfterPrevious: credentialStore.runAfterPrevious,
+  setRequestBodyCompressor: openaiCodexCompress.setRequestBodyCompressor,
+  stream,
+  streamAnthropic: legacyApiAliases.streamAnthropic,
+  streamGoogle: legacyApiAliases.streamGoogle,
+  streamOpenAICodexResponses: legacyOpenaiApiAliases.streamOpenAICodexResponses,
+  streamOpenAICompletions: legacyOpenaiApiAliases.streamOpenAICompletions,
+  streamOpenAIResponses: legacyOpenaiApiAliases.streamOpenAIResponses,
+  streamSimple,
+  streamSimpleAnthropic: legacyApiAliases.streamSimpleAnthropic,
+  streamSimpleGoogle: legacyApiAliases.streamSimpleGoogle,
+  streamSimpleOpenAICodexResponses: legacyOpenaiApiAliases.streamSimpleOpenAICodexResponses,
+  streamSimpleOpenAICompletions: legacyOpenaiApiAliases.streamSimpleOpenAICompletions,
+  streamSimpleOpenAIResponses: legacyOpenaiApiAliases.streamSimpleOpenAIResponses,
+  throwIfAborted: helpers.throwIfAborted,
+  toToolDeclaration: transcriptModule.toToolDeclaration,
+  unregisterApiProviders: apiProviderRegistryModule.unregisterApiProviders,
+  uuidv7: uuid.uuidv7,
+  validateToolArguments: validation.validateToolArguments,
+  validateToolCall: validation.validateToolCall,
+  withoutInitialSystemMessage: transcriptModule.withoutInitialSystemMessage,
+};
 
-function hasExplicitApiKey(apiKey: string | undefined): apiKey is string {
-  return typeof apiKey === "string" && apiKey.trim().length > 0;
-}
-
-function withEnvApiKey<TOptions extends StreamOptions>(
-  model: Model<Api>,
-  options: TOptions | undefined,
-): TOptions | undefined {
-  if (hasExplicitApiKey(options?.apiKey)) return options;
-  const apiKey = getEnvApiKey(model.provider, options?.env);
-  if (apiKey === undefined || apiKey === "" || apiKey === AMBIENT_AUTH_MARKER) return options;
-  return { ...options, apiKey } as TOptions;
-}
-
-function getBuiltinProviderForModel(model: Model<Api>) {
-  if (!isBuiltinApiProvider(model.api)) return undefined;
-  const provider = compatModels.getProvider(model.provider);
-  return provider?.getModels().some((candidate) => candidate.api === model.api) === true
-    ? provider
-    : undefined;
-}
-
-function resolveApiProvider(api: Api) {
-  const provider = getApiProvider(api);
-  if (provider === undefined) {
-    throw new Error(`No API provider registered for api: ${api}`);
-  }
-  return provider;
-}
-
-export const stream: {
-  <TApi extends Api>(
-    context: Context,
-    options?: ProviderStreamOptions,
-  ): (model: Model<TApi>) => AssistantMessageEventStream;
-  <TApi extends Api>(
-    model: Model<TApi>,
-    context: Context,
-    options?: ProviderStreamOptions,
-  ): AssistantMessageEventStream;
-} = Function.dual(
-  (args) => typeof args[0] === "object" && args[0] !== null && "api" in args[0],
-  function <TApi extends Api>(
-    model: Model<TApi>,
-    context: Context,
-    options?: ProviderStreamOptions,
-  ): AssistantMessageEventStream {
-    const transcript = normalizeContext(context);
-    const builtinProvider = getBuiltinProviderForModel(model);
-    if (builtinProvider !== undefined) {
-      return builtinProvider.stream(
-        model,
-        transcript,
-        withEnvApiKey(model, options) as ApiStreamOptions<TApi>,
-      );
-    }
-    const provider = resolveApiProvider(model.api);
-    return provider.stream(model, transcript, withEnvApiKey(model, options) as StreamOptions);
-  },
-);
-
-export const complete: {
-  <TApi extends Api>(
-    context: Context,
-    options?: ProviderStreamOptions,
-  ): (model: Model<TApi>) => Promise<AssistantMessage>;
-  <TApi extends Api>(
-    model: Model<TApi>,
-    context: Context,
-    options?: ProviderStreamOptions,
-  ): Promise<AssistantMessage>;
-} = Function.dual(
-  (args) => typeof args[0] === "object" && args[0] !== null && "api" in args[0],
-  function <TApi extends Api>(
-    model: Model<TApi>,
-    context: Context,
-    options?: ProviderStreamOptions,
-  ): Promise<AssistantMessage> {
-    try {
-      return stream(model, context, options).result();
-    } catch (error) {
-      return Promise.reject(error);
-    }
-  },
-);
-
-export const streamSimple: {
-  <TApi extends Api>(
-    context: Context,
-    options?: SimpleStreamOptions,
-  ): (model: Model<TApi>) => AssistantMessageEventStream;
-  <TApi extends Api>(
-    model: Model<TApi>,
-    context: Context,
-    options?: SimpleStreamOptions,
-  ): AssistantMessageEventStream;
-} = Function.dual(
-  (args) => typeof args[0] === "object" && args[0] !== null && "api" in args[0],
-  function <TApi extends Api>(
-    model: Model<TApi>,
-    context: Context,
-    options?: SimpleStreamOptions,
-  ): AssistantMessageEventStream {
-    const transcript = normalizeContext(context);
-    const builtinProvider = getBuiltinProviderForModel(model);
-    if (builtinProvider !== undefined) {
-      return builtinProvider.streamSimple(model, transcript, withEnvApiKey(model, options));
-    }
-    const provider = resolveApiProvider(model.api);
-    return provider.streamSimple(model, transcript, withEnvApiKey(model, options));
-  },
-);
-
-export const completeSimple: {
-  <TApi extends Api>(
-    context: Context,
-    options?: SimpleStreamOptions,
-  ): (model: Model<TApi>) => Promise<AssistantMessage>;
-  <TApi extends Api>(
-    model: Model<TApi>,
-    context: Context,
-    options?: SimpleStreamOptions,
-  ): Promise<AssistantMessage>;
-} = Function.dual(
-  (args) => typeof args[0] === "object" && args[0] !== null && "api" in args[0],
-  function <TApi extends Api>(
-    model: Model<TApi>,
-    context: Context,
-    options?: SimpleStreamOptions,
-  ): Promise<AssistantMessage> {
-    try {
-      return streamSimple(model, context, options).result();
-    } catch (error) {
-      return Promise.reject(error);
-    }
-  },
-);
+export default compat;

@@ -3,13 +3,15 @@ import { describe, it } from "node:test";
 
 import { Effect } from "effect";
 
-import type { TUI } from "../src/tui-interface.ts";
-import { TuiMainScreen } from "../src/tui-main-screen.ts";
+import type tuiInterfaceTypes from "../src/tui-interface.types.ts";
+import TuiMainScreen from "../src/tui-main-screen.ts";
 import CursorTrackingTerminal from "./overlay-options-cursor-tracking-terminal.ts";
 import EmptyContent from "./overlay-options-empty-content.ts";
 import renderAndFlush from "./overlay-options-helpers.ts";
 import StaticOverlay from "./overlay-options-static-overlay.ts";
-import { VirtualTerminal } from "./virtual-terminal.ts";
+import virtualTerminal from "./virtual-terminal.ts";
+
+const { VirtualTerminal } = virtualTerminal;
 
 describe("TUI overlay options", () => {
   describe("stacked overlays", () => {
@@ -17,7 +19,7 @@ describe("TUI overlay options", () => {
       Effect.runPromise(
         Effect.gen(function* () {
           const terminal = new VirtualTerminal(80, 24);
-          const tui: TUI = new TuiMainScreen(terminal);
+          const tui: tuiInterfaceTypes.TUI = new TuiMainScreen(terminal);
 
           tui.addChild(new EmptyContent());
 
@@ -47,7 +49,7 @@ describe("TUI overlay options", () => {
       Effect.runPromise(
         Effect.gen(function* () {
           const terminal = new VirtualTerminal(80, 24);
-          const tui: TUI = new TuiMainScreen(terminal);
+          const tui: tuiInterfaceTypes.TUI = new TuiMainScreen(terminal);
 
           tui.addChild(new EmptyContent());
 
@@ -81,7 +83,7 @@ describe("TUI overlay options", () => {
       Effect.runPromise(
         Effect.gen(function* () {
           const terminal = new VirtualTerminal(80, 24);
-          const tui: TUI = new TuiMainScreen(terminal);
+          const tui: tuiInterfaceTypes.TUI = new TuiMainScreen(terminal);
 
           tui.addChild(new EmptyContent());
 
@@ -113,7 +115,7 @@ describe("TUI overlay options", () => {
   describe("hiding after stop", () => {
     it("hideOverlay() leaves the cursor visible", () => {
       const terminal = new CursorTrackingTerminal(80, 24);
-      const tui: TUI = new TuiMainScreen(terminal);
+      const tui: tuiInterfaceTypes.TUI = new TuiMainScreen(terminal);
       tui.start();
       tui.showOverlay(new StaticOverlay(["OVERLAY"]), { nonCapturing: true });
 
@@ -125,7 +127,7 @@ describe("TUI overlay options", () => {
 
     it("overlay handle hide() leaves the cursor visible", () => {
       const terminal = new CursorTrackingTerminal(80, 24);
-      const tui: TUI = new TuiMainScreen(terminal);
+      const tui: tuiInterfaceTypes.TUI = new TuiMainScreen(terminal);
       tui.start();
       const handle = tui.showOverlay(new StaticOverlay(["OVERLAY"]), { nonCapturing: true });
 

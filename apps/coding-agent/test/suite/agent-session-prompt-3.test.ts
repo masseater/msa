@@ -1,5 +1,5 @@
-import type { AgentTool } from "@msa/agent-core";
-import { fauxAssistantMessage, fauxToolCall } from "@msa/ai";
+import type agentTypes from "@msa/agent-core/index.types";
+import ai from "@msa/ai";
 import testing from "@msa/testing";
 import { Effect } from "effect";
 import { Type } from "typebox";
@@ -8,6 +8,8 @@ import { afterEach, describe, expect, it, vi } from "vite-plus/test";
 import type { InputEvent } from "../../src/core/extensions/index.ts";
 import agentSessionPromptSupport from "./agent-session-prompt-support.ts";
 import harnessModule from "./harness.ts";
+
+const { fauxAssistantMessage, fauxToolCall } = ai;
 
 const { harnesses, tempDirs } = agentSessionPromptSupport;
 
@@ -71,7 +73,7 @@ const reportsStreamingbehaviorToInputHandlersWhilePart1 = () =>
     const runPromise = Effect.runPromiseWith(yield* Effect.context<never>());
     const toolRelease = gate();
     const inputEvents: InputEvent[] = [];
-    const waitTool: AgentTool = {
+    const waitTool: agentTypes.AgentTool = {
       description: "Wait for release",
       execute: () =>
         runPromise(

@@ -2,14 +2,14 @@ import { Effect } from "effect";
 import { type Static, Type } from "typebox";
 
 import type { ToolDefinition } from "../extensions/types.ts";
-import { fromPromise, platformRuntime, ToolFailure, unwrapForeign } from "../platform/index.ts";
-import { callTreg, pickString, rows, type TregOptions } from "../treg.ts";
+import { ToolFailure, fromPromise, platformRuntime, unwrapForeign } from "../platform/index.ts";
+import { type TregOptions, callTreg, pickString, rows } from "../treg.ts";
 import { webFetchRenderers } from "./renderers/web.ts";
 import {
   DEFAULT_MAX_BYTES,
   DEFAULT_MAX_LINES,
-  formatSize,
   type TruncationResult,
+  formatSize,
   truncateHead,
 } from "./truncate.ts";
 
@@ -63,22 +63,22 @@ const fetchPage = Effect.fn("webFetch")(function* (
     text += `\n\n[Truncated at ${limit}]`;
     details.truncation = truncation;
   }
-  return { content: [{ type: "text" as const, text }], details };
+  return { content: [{ text, type: "text" as const }], details };
 });
 
 export function createWebFetchToolDefinition(
   options: TregOptions,
 ): ToolDefinition<typeof webFetchSchema, WebFetchToolDetails> {
   return {
-    name: "web_fetch",
-    label: "web fetch",
+    annotations: { openWorldHint: true, readOnlyHint: true },
     description: `Read a web page as Markdown. Output is truncated to ${DEFAULT_MAX_LINES} lines or ${DEFAULT_MAX_BYTES / 1024}KB (whichever is hit first).`,
-    promptSnippet: "Read a web page as Markdown",
-    parameters: webFetchSchema,
-    annotations: { readOnlyHint: true, openWorldHint: true },
-    executionMode: "parallel",
     execute: (_toolCallId, params, signal) =>
       platformRuntime.runPromise(unwrapForeign(fetchPage(options, params.url, signal))),
+    executionMode: "parallel",
+    label: "web fetch",
+    name: "web_fetch",
+    parameters: webFetchSchema,
+    promptSnippet: "Read a web page as Markdown",
     ...webFetchRenderers,
   };
 }

@@ -1,4 +1,5 @@
-import { Box, Container, Spacer, Text } from "@msa/tui";
+import tui from "@msa/tui";
+import type tuiTypes from "@msa/tui/index.types";
 
 import { renderDiff } from "../../../modes/interactive/components/diff.ts";
 import { expandHint } from "../../../modes/interactive/components/keybinding-hints.ts";
@@ -8,10 +9,12 @@ import type { EditDiffError, EditDiffResult } from "../edit-diff.ts";
 import type { EditToolDetails } from "../edit.ts";
 import { renderToolPath, str } from "../render-utils.ts";
 import {
-  getRenderablePreviewInput,
   type RenderableEditArgs,
+  getRenderablePreviewInput,
   requestEditPreview,
 } from "./edit-preview-input.ts";
+
+const { Box, Container, Spacer, Text } = tui;
 
 type EditPreview = EditDiffResult | EditDiffError;
 export type EditRenderState = {
@@ -21,7 +24,7 @@ type EditToolResultLike = {
   content: Array<{ type: string; text?: string; data?: string; mimeType?: string }>;
   details?: EditToolDetails;
 };
-type EditCallRenderComponent = Box & {
+type EditCallRenderComponent = tuiTypes.Box & {
   preview?: EditPreview | undefined;
   previewArgsKey?: string | undefined;
   previewPending?: boolean;
@@ -168,7 +171,7 @@ function syncCallComponent(
   const argsKey =
     previewInput === null
       ? undefined
-      : JSON.stringify({ path: previewInput.path, edits: previewInput.edits });
+      : JSON.stringify({ edits: previewInput.edits, path: previewInput.path });
   const resultDiff = context.isError ? undefined : typedResult.details?.diff;
   let changed = false;
   if (typeof resultDiff === "string") {
@@ -201,7 +204,7 @@ export const editRenderers: Pick<ToolDefinition<any, any>, "renderCall" | "rende
     const argsKey =
       previewInput === null
         ? undefined
-        : JSON.stringify({ path: previewInput.path, edits: previewInput.edits });
+        : JSON.stringify({ edits: previewInput.edits, path: previewInput.path });
 
     if (component.previewArgsKey !== argsKey) {
       component.preview = undefined;
@@ -219,15 +222,15 @@ export const editRenderers: Pick<ToolDefinition<any, any>, "renderCall" | "rende
       component.previewPending = true;
       const requestKey = argsKey;
       requestEditPreview({
-        path: previewInput.path,
-        edits: previewInput.edits,
         cwd: context.cwd,
+        edits: previewInput.edits,
         onPreview: (preview) => {
           if (component.previewArgsKey === requestKey) {
             setEditPreview(component, preview, requestKey);
             context.invalidate();
           }
         },
+        path: previewInput.path,
       });
     }
 
@@ -255,7 +258,7 @@ export const editRenderers: Pick<ToolDefinition<any, any>, "renderCall" | "rende
       context.isError,
       context.expanded,
     );
-    const component = (context.lastComponent as Container | undefined) ?? new Container();
+    const component = (context.lastComponent as tuiTypes.Container | undefined) ?? new Container();
     component.clear();
     if (output === undefined || output === "") {
       return component;

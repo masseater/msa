@@ -1,6 +1,6 @@
-import { StringEnum } from "@msa/ai";
+import ai from "@msa/ai";
 import type { ExtensionAPI, Theme, ToolExecutionMode } from "@msa/coding-agent";
-import { Text } from "@msa/tui";
+import tui from "@msa/tui";
 import { Effect } from "effect";
 import { Type } from "typebox";
 
@@ -9,21 +9,25 @@ import {
   AGENT_CURSOR_HOME_COL,
   AGENT_CURSOR_HOME_ROW,
   type BoardDetails,
+  type GameState,
+  TicTacToeError,
   boardToAscii,
   checkWin,
-  type GameState,
   getCell,
   setCell,
-  TicTacToeError,
 } from "./tic-tac-toe-game.ts";
+
+const { StringEnum } = ai;
+
+const { Text } = tui;
 
 export type Action = "move_up" | "move_down" | "move_left" | "move_right" | "play";
 
 export const ACTION_DELAYS: Record<Action, number> = {
-  move_up: 300,
   move_down: 300,
   move_left: 300,
   move_right: 300,
+  move_up: 300,
   play: 0,
 };
 
@@ -71,7 +75,7 @@ const playForAgent = (access: GameAccess): string => {
 
   const r = gameState.agentCursorRow;
   const c = gameState.agentCursorCol;
-  const target = getCell({ board: gameState.board, row: r, col: c });
+  const target = getCell({ board: gameState.board, col: c, row: r });
   if (target !== " ") {
     access.syncComponent();
     access.save();
@@ -80,7 +84,7 @@ const playForAgent = (access: GameAccess): string => {
     });
   }
 
-  setCell({ board: gameState.board, row: r, col: c, mark: gameState.agentMark });
+  setCell({ board: gameState.board, col: c, mark: gameState.agentMark, row: r });
   gameState.status = checkWin(gameState.board);
   gameState.agentCursorRow = AGENT_CURSOR_HOME_ROW;
   gameState.agentCursorCol = AGENT_CURSOR_HOME_COL;
@@ -124,23 +128,8 @@ const renderMoveResult = (
 export const registerPlayTool = (access: GameAccess): void => {
   const { msa } = access;
   msa.registerTool({
-    name: "tic_tac_toe",
-    label: "Tic-Tac-Toe",
     description:
       "Execute ONE tic-tac-toe action as Player O. `action` is exactly one of: move_up, move_down, move_left, move_right (move YOUR cursor one cell, clamped at edges), or play (place O under YOUR cursor; errors if the cell is not empty). There is no batched form. To play at (r, c) from your current cursor (r0, c0), emit the required move_down/move_up and move_right/move_left calls, then play, all as separate tool_use blocks in the SAME assistant response. Do not split the sequence across responses and do not wait for a result before emitting the next call. Your cursor position persists between turns and is reset to (0,0) only after a successful play.",
-    promptSnippet: "Play a tic-tac-toe action (move_up/down/left/right or play) as Player O",
-    promptGuidelines: [
-      "When it is your tic-tac-toe turn, decide the target cell first, then emit every move_* plus the final play as separate tic_tac_toe tool calls in a SINGLE assistant response. Never split them across responses or wait for intermediate results.",
-      "Never ask the user for the board. The board and your cursor position are included in the user's move message; use tic_tac_toe_see_board if you need them restated.",
-    ],
-    parameters: Type.Object({
-      action: StringEnum(["move_up", "move_down", "move_left", "move_right", "play"] as const, {
-        description:
-          "The single action to perform this call. Emit multiple tic_tac_toe calls in one response to string actions together.",
-      }),
-    }),
-    executionMode: "sequential" as ToolExecutionMode,
-
     execute: (_toolCallId, params, _signal, _onUpdate, _ctx) =>
       Effect.runPromise(
         Effect.gen(function* () {
@@ -157,7 +146,20 @@ export const registerPlayTool = (access: GameAccess): void => {
           };
         }),
       ),
-
+    executionMode: "sequential" as ToolExecutionMode,
+    label: "Tic-Tac-Toe",
+    name: "tic_tac_toe",
+    parameters: Type.Object({
+      action: StringEnum(["move_up", "move_down", "move_left", "move_right", "play"] as const, {
+        description:
+          "The single action to perform this call. Emit multiple tic_tac_toe calls in one response to string actions together.",
+      }),
+    }),
+    promptGuidelines: [
+      "When it is your tic-tac-toe turn, decide the target cell first, then emit every move_* plus the final play as separate tic_tac_toe tool calls in a SINGLE assistant response. Never split them across responses or wait for intermediate results.",
+      "Never ask the user for the board. The board and your cursor position are included in the user's move message; use tic_tac_toe_see_board if you need them restated.",
+    ],
+    promptSnippet: "Play a tic-tac-toe action (move_up/down/left/right or play) as Player O",
     renderCall(args, theme) {
       const action = typeof args.action === "string" ? args.action : "";
       return new Text(
@@ -166,16 +168,15 @@ export const registerPlayTool = (access: GameAccess): void => {
         0,
       );
     },
-
     renderResult: renderMoveResult,
   });
 };
 
 const boardText = (state: GameState): string => {
   const boardAscii = boardToAscii({
-    board: state.board,
-    agentCursorRow: state.agentCursorRow,
     agentCursorCol: state.agentCursorCol,
+    agentCursorRow: state.agentCursorRow,
+    board: state.board,
   });
   return (
     `Board (your cursor marked with <>):\n${boardAscii}\n\n` +
@@ -207,13 +208,8 @@ export const registerSeeBoardTool = (request: {
   const { access, getBoardDetails } = request;
 
   access.msa.registerTool({
-    name: "tic_tac_toe_see_board",
-    label: "See Board",
     description:
       "Return the current tic-tac-toe board state and YOUR cursor position (Player O). Takes no arguments. Use this if you need the current state restated mid-turn (for example after a failed play). The user's cursor is never exposed.",
-    promptSnippet: "Inspect the tic-tac-toe board and your cursor",
-    parameters: Type.Object({}),
-
     execute: (_toolCallId, _params, _signal, _onUpdate, _ctx) =>
       Effect.runPromise(
         Effect.sync(() => ({
@@ -221,11 +217,13 @@ export const registerSeeBoardTool = (request: {
           details: getBoardDetails(),
         })),
       ),
-
+    label: "See Board",
+    name: "tic_tac_toe_see_board",
+    parameters: Type.Object({}),
+    promptSnippet: "Inspect the tic-tac-toe board and your cursor",
     renderCall(_args, theme) {
       return new Text(theme.fg("toolTitle", theme.bold("tic_tac_toe_see_board")), 0, 0);
     },
-
     renderResult: renderSeeBoardResult,
   });
 };

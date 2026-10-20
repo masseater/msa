@@ -1,37 +1,43 @@
 import type { ExtensionContext } from "@msa/coding-agent";
 import { DynamicBorder } from "@msa/coding-agent";
-import { Container, type SelectItem, SelectList, Text } from "@msa/tui";
+import tuiModule from "@msa/tui";
+import type tuiTypes from "@msa/tui/index.types";
 import { Effect } from "effect";
 
-import { buildPresetDescription, type PresetStore, presetsPathHint } from "./preset-store.ts";
+import { type PresetStore, buildPresetDescription, presetsPathHint } from "./preset-store.ts";
 
-const buildItems = (store: PresetStore): SelectItem[] => {
-  const items: SelectItem[] = Object.entries(store.presets).map(([name, preset]) => ({
-    value: name,
-    label: name === store.activeName ? `${name} (active)` : name,
+const { Container, SelectList, Text } = tuiModule;
+
+const buildItems = (store: PresetStore): tuiTypes.SelectItem[] => {
+  const items: tuiTypes.SelectItem[] = Object.entries(store.presets).map(([name, preset]) => ({
     description: buildPresetDescription(preset),
+    label: name === store.activeName ? `${name} (active)` : name,
+    value: name,
   }));
 
   items.push({
-    value: "(none)",
-    label: "(none)",
     description: "Clear active preset, restore defaults",
+    label: "(none)",
+    value: "(none)",
   });
   return items;
 };
 
-const openSelector = (ctx: ExtensionContext, items: SelectItem[]): Promise<string | null> =>
+const openSelector = (
+  ctx: ExtensionContext,
+  items: tuiTypes.SelectItem[],
+): Promise<string | null> =>
   ctx.ui.custom<string | null>((tui, theme, _kb, done) => {
     const container = new Container();
     container.addChild(new DynamicBorder((str) => theme.fg("accent", str)));
     container.addChild(new Text(theme.fg("accent", theme.bold("Select Preset"))));
 
     const selectList = new SelectList(items, Math.min(items.length, 10), {
+      description: (text) => theme.fg("muted", text),
+      noMatch: (text) => theme.fg("warning", text),
+      scrollInfo: (text) => theme.fg("dim", text),
       selectedPrefix: (text) => theme.fg("accent", text),
       selectedText: (text) => theme.fg("accent", text),
-      description: (text) => theme.fg("muted", text),
-      scrollInfo: (text) => theme.fg("dim", text),
-      noMatch: (text) => theme.fg("warning", text),
     });
 
     selectList.onSelect = (item) => done(item.value);
@@ -42,12 +48,12 @@ const openSelector = (ctx: ExtensionContext, items: SelectItem[]): Promise<strin
     container.addChild(new DynamicBorder((str) => theme.fg("accent", str)));
 
     return {
-      render: (width: number) => container.render(width),
-      invalidate: () => container.invalidate(),
       handleInput: (data: string) => {
         selectList.handleInput(data);
         tui.requestRender();
       },
+      invalidate: () => container.invalidate(),
+      render: (width: number) => container.render(width),
     };
   });
 

@@ -1,11 +1,11 @@
 import {
   type AgentSession,
   type CreateAgentSessionRuntimeFactory,
+  SessionManager,
   createAgentSessionFromServices,
   createAgentSessionRuntime,
   createAgentSessionServices,
   getAgentDir,
-  SessionManager,
 } from "@msa/coding-agent";
 import { Console, Effect } from "effect";
 
@@ -24,13 +24,13 @@ const createRuntime: CreateAgentSessionRuntimeFactory = ({
           ...(sessionStartEvent === undefined ? {} : { sessionStartEvent }),
         }),
       );
-      return { ...session, services, diagnostics: services.diagnostics };
+      return { ...session, diagnostics: services.diagnostics, services };
     }),
   );
 
 const runtime = await createAgentSessionRuntime(createRuntime, {
-  cwd: process.cwd(),
   agentDir: getAgentDir(),
+  cwd: process.cwd(),
   sessionManager: SessionManager.create(process.cwd()),
 });
 

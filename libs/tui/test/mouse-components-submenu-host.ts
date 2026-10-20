@@ -1,6 +1,8 @@
-import { SelectList } from "../src/components/select-list.ts";
-import { Container } from "../src/tui-component.ts";
+import SelectList from "../src/components/select-list.ts";
+import tuiComponent from "../src/tui-component.ts";
 import mouseComponentsHelpers from "./mouse-components-helpers.ts";
+
+const { Container } = tuiComponent;
 
 const { selectTheme } = mouseComponentsHelpers;
 

@@ -1,5 +1,5 @@
-import type { AgentMessage } from "@msa/agent-core";
-import type { Usage } from "@msa/ai/compat";
+import type agentTypes from "@msa/agent-core/index.types";
+import type compatTypes from "@msa/ai/compat.types";
 
 import type { FileOperations } from "./utils.ts";
 
@@ -13,7 +13,7 @@ export interface CompactionResult<T = unknown> {
   firstKeptEntryId: string;
   tokensBefore: number;
   estimatedTokensAfter?: number;
-  usage?: Usage | undefined;
+  usage?: compatTypes.Usage | undefined;
   details?: T | undefined;
 }
 
@@ -25,8 +25,8 @@ export interface CompactionSettings {
 
 export const DEFAULT_COMPACTION_SETTINGS: CompactionSettings = {
   enabled: true,
-  reserveTokens: 16384,
   keepRecentTokens: 20000,
+  reserveTokens: 16384,
 };
 
 export interface CutPointResult {
@@ -37,8 +37,8 @@ export interface CutPointResult {
 
 export interface CompactionPreparation {
   firstKeptEntryId: string;
-  messagesToSummarize: AgentMessage[];
-  turnPrefixMessages: AgentMessage[];
+  messagesToSummarize: agentTypes.AgentMessage[];
+  turnPrefixMessages: agentTypes.AgentMessage[];
   isSplitTurn: boolean;
   tokensBefore: number;
   previousSummary?: string | undefined;

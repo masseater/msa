@@ -1,34 +1,25 @@
-import type { Terminal } from "./terminal-protocol.ts";
-import {
-  type Component,
-  Container,
-  isFocusable,
-  type TuiMouseDispatchResult,
-  type TuiMouseEvent,
-} from "./tui-component.ts";
-import type { OverlayHandle, OverlayUnfocusOptions } from "./tui-interface.ts";
-import type { OverlayOptions } from "./tui-overlay-layout.ts";
-import {
-  type OverlayFocusRestoreState,
-  OverlayStack,
-  type OverlayStackEntry,
-} from "./tui-overlay-stack.ts";
+import overlayContains from "./overlay-contains.ts";
+import type terminalProtocolTypes from "./terminal-protocol.types.ts";
+import tuiComponent from "./tui-component.ts";
+import type tuiComponentTypes from "./tui-component.types.ts";
+import type tuiInterfaceTypes from "./tui-interface.types.ts";
+import type tuiOverlayLayoutTypes from "./tui-overlay-layout.types.ts";
+import OverlayStack from "./tui-overlay-stack.ts";
+import type tuiOverlayStackTypes from "./tui-overlay-stack.types.ts";
+
+const { containsComponent } = overlayContains;
+
+const { Container, isFocusable } = tuiComponent;
 
 type OverlayFocusRestorePolicy = "clear" | "preserve";
 
-function containsComponent(root: Component, target: Component): boolean {
-  if (root === target) return true;
-  if (!(root instanceof Container)) return false;
-  return root.children.some((child) => containsComponent(child, target));
-}
-
-export abstract class TuiOverlayHost extends Container {
-  public terminal: Terminal;
+export default abstract class TuiOverlayHost extends Container {
+  public terminal: terminalProtocolTypes.Terminal;
   protected stopped = false;
   protected readonly overlays = new OverlayStack(() => this.terminal);
-  private focusedComponent: Component | null = null;
+  private focusedComponent: tuiComponentTypes.Component | null = null;
 
-  constructor(terminal: Terminal) {
+  constructor(terminal: terminalProtocolTypes.Terminal) {
     super();
     this.terminal = terminal;
   }
@@ -39,15 +30,18 @@ export abstract class TuiOverlayHost extends Container {
     return this.overlays.entries.length > 0;
   }
 
-  getFocusedComponent(): Component | null {
+  getFocusedComponent(): tuiComponentTypes.Component | null {
     return this.focusedComponent;
   }
 
-  setFocus(component: Component | null): void {
+  setFocus(component: tuiComponentTypes.Component | null): void {
     this.setFocusInternal(component, "clear");
   }
 
-  private setFocusInternal(component: Component | null, policy: OverlayFocusRestorePolicy): void {
+  private setFocusInternal(
+    component: tuiComponentTypes.Component | null,
+    policy: OverlayFocusRestorePolicy,
+  ): void {
     const nextFocus = this.resolveNextFocus(component, policy);
     if (isFocusable(this.focusedComponent)) {
       this.focusedComponent.focused = false;
@@ -58,14 +52,14 @@ export abstract class TuiOverlayHost extends Container {
     }
     const focusedOverlay = this.overlays.findVisible(nextFocus);
     if (focusedOverlay !== undefined) {
-      this.overlays.restore = { status: "eligible", overlay: focusedOverlay };
+      this.overlays.restore = { overlay: focusedOverlay, status: "eligible" };
     }
   }
 
   private resolveNextFocus(
-    component: Component | null,
+    component: tuiComponentTypes.Component | null,
     policy: OverlayFocusRestorePolicy,
-  ): Component | null {
+  ): tuiComponentTypes.Component | null {
     const previousFocus = this.focusedComponent;
     const restoreState = this.overlays.getVisibleRestore();
     if (component === null) {
@@ -80,10 +74,10 @@ export abstract class TuiOverlayHost extends Container {
   }
 
   private resolveUnderlayFocus(
-    component: Component,
-    previousFocus: Component | null,
-    restoreState: OverlayFocusRestoreState,
-  ): Component | null {
+    component: tuiComponentTypes.Component,
+    previousFocus: tuiComponentTypes.Component | null,
+    restoreState: tuiOverlayStackTypes.OverlayFocusRestoreState,
+  ): tuiComponentTypes.Component | null {
     if (restoreState.status === "blocked" && restoreState.blockedBy === previousFocus) {
       if (
         restoreState.resume.status === "focus-target" ||
@@ -102,10 +96,10 @@ export abstract class TuiOverlayHost extends Container {
       !this.overlays.isFocusAncestor(previousFocusedOverlay, component)
     ) {
       this.overlays.restore = {
-        status: "blocked",
-        overlay: previousFocusedOverlay,
         blockedBy: component,
+        overlay: previousFocusedOverlay,
         resume: { status: "restore-overlay" },
+        status: "blocked",
       };
     }
     return component;
@@ -144,21 +138,24 @@ export abstract class TuiOverlayHost extends Container {
     }
   }
 
-  protected getMountedRoots(): readonly Component[] {
+  protected getMountedRoots(): readonly tuiComponentTypes.Component[] {
     return this.children;
   }
 
-  private isComponentMounted(component: Component): boolean {
+  private isComponentMounted(component: tuiComponentTypes.Component): boolean {
     return this.getMountedRoots().some((child) => containsComponent(child, component));
   }
 
-  showOverlay(component: Component, options?: OverlayOptions): OverlayHandle {
-    const entry: OverlayStackEntry = {
+  showOverlay(
+    component: tuiComponentTypes.Component,
+    options?: tuiOverlayLayoutTypes.OverlayOptions,
+  ): tuiInterfaceTypes.OverlayHandle {
+    const entry: tuiOverlayStackTypes.OverlayStackEntry = {
       component,
-      ...(options === undefined ? {} : { options }),
-      preFocus: this.focusedComponent,
-      hidden: false,
       focusOrder: this.overlays.nextFocusOrder(),
+      hidden: false,
+      preFocus: this.focusedComponent,
+      ...(options === undefined ? {} : { options }),
     };
     this.overlays.entries.push(entry);
     if (options?.nonCapturing !== true && this.overlays.isVisible(entry)) {
@@ -169,41 +166,46 @@ export abstract class TuiOverlayHost extends Container {
     return this.overlayHandle(entry);
   }
 
-  private overlayHandle(entry: OverlayStackEntry): OverlayHandle {
+  private overlayHandle(
+    entry: tuiOverlayStackTypes.OverlayStackEntry,
+  ): tuiInterfaceTypes.OverlayHandle {
     return {
-      hide: () => this.detachOverlay(entry),
-      setHidden: (hidden: boolean) => this.setOverlayEntryHidden(entry, hidden),
-      isHidden: () => entry.hidden,
       focus: () => {
         if (!this.overlays.isLive(entry)) return;
         entry.focusOrder = this.overlays.nextFocusOrder();
         this.setFocus(entry.component);
         this.requestRender();
       },
-      unfocus: (unfocusOptions) => this.unfocusOverlayEntry(entry, unfocusOptions),
-      isFocused: () => this.focusedComponent === entry.component,
       getBounds: () => {
         if (!this.overlays.isLive(entry) || entry.bounds === undefined) return undefined;
         return { ...entry.bounds };
       },
+      hide: () => this.detachOverlay(entry),
+      isFocused: () => this.focusedComponent === entry.component,
+      isHidden: () => entry.hidden,
+      setHidden: (hidden: boolean) => this.setOverlayEntryHidden(entry, hidden),
+      unfocus: (unfocusOptions) => this.unfocusOverlayEntry(entry, unfocusOptions),
     };
   }
 
-  private focusAfterOverlayLeaves(entry: OverlayStackEntry): void {
+  private focusAfterOverlayLeaves(entry: tuiOverlayStackTypes.OverlayStackEntry): void {
     if (this.focusedComponent === entry.component) {
       const topVisible = this.overlays.getTopmostVisible();
       this.setFocus(topVisible?.component ?? entry.preFocus);
     }
   }
 
-  private detachOverlay(entry: OverlayStackEntry): void {
+  private detachOverlay(entry: tuiOverlayStackTypes.OverlayStackEntry): void {
     if (!this.overlays.remove(entry)) return;
     this.focusAfterOverlayLeaves(entry);
     if (this.overlays.entries.length === 0) this.hideTerminalCursor();
     this.requestRender();
   }
 
-  private setOverlayEntryHidden(entry: OverlayStackEntry, hidden: boolean): void {
+  private setOverlayEntryHidden(
+    entry: tuiOverlayStackTypes.OverlayStackEntry,
+    hidden: boolean,
+  ): void {
     if (entry.hidden === hidden) return;
     entry.hidden = hidden;
     if (hidden) {
@@ -217,8 +219,8 @@ export abstract class TuiOverlayHost extends Container {
   }
 
   private unfocusOverlayEntry(
-    entry: OverlayStackEntry,
-    unfocusOptions: OverlayUnfocusOptions | undefined,
+    entry: tuiOverlayStackTypes.OverlayStackEntry,
+    unfocusOptions: tuiInterfaceTypes.OverlayUnfocusOptions | undefined,
   ): void {
     const isFocused = this.focusedComponent === entry.component;
     const restoreState = this.overlays.restore;
@@ -267,16 +269,18 @@ export abstract class TuiOverlayHost extends Container {
     return this.overlays.findVisible(this.focusedComponent) !== undefined;
   }
 
-  protected resolveMouseFocusTarget(component: Component): Component {
+  protected resolveMouseFocusTarget(
+    component: tuiComponentTypes.Component,
+  ): tuiComponentTypes.Component {
     const overlay = this.overlays.entries.findLast(
       (entry) => this.overlays.isVisible(entry) && containsComponent(entry.component, component),
     );
     return overlay?.component ?? component;
   }
 
-  protected dispatchMouseToOverlay(event: TuiMouseEvent): {
+  protected dispatchMouseToOverlay(event: tuiComponentTypes.TuiMouseEvent): {
     hit: boolean;
-    result?: TuiMouseDispatchResult;
+    result?: tuiComponentTypes.TuiMouseDispatchResult;
   } {
     return this.overlays.dispatchMouse(event);
   }

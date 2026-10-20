@@ -1,9 +1,4 @@
-import type {
-  Api,
-  Model,
-  OpenAICompletionsCompat,
-  OpenAIResponsesCompat,
-} from "../../src/types.ts";
+import type typesModule from "../../src/types.types.ts";
 import anthropicMetadata from "./anthropic-metadata.ts";
 
 const { mergeAnthropicMessagesCompat } = anthropicMetadata;
@@ -43,10 +38,10 @@ const OPENAI_MID_CONVO_EFFORT_MODEL_IDS = new Set([
   "gpt-6.1-sol",
 ]);
 
-function applyStrictToolCompatMetadata(model: Model<Api>): void {
+function applyStrictToolCompatMetadata(model: typesModule.Model<typesModule.Api>): void {
   if (model.provider === "openai" && model.api === "openai-responses") {
     model.compat = {
-      ...(model.compat as OpenAIResponsesCompat | undefined),
+      ...(model.compat as typesModule.OpenAIResponsesCompat | undefined),
       supportsStrictMode: true,
     };
   } else if (model.provider === "anthropic-api" && model.api === "anthropic-messages") {
@@ -56,9 +51,12 @@ function applyStrictToolCompatMetadata(model: Model<Api>): void {
 
 const OPENAI_GRAMMAR_TOOL_PROVIDERS = new Set(["openai", "openai-codex", "opencode"]);
 
-const OPENAI_GRAMMAR_TOOL_APIS = new Set<Api>(["openai-responses", "openai-codex-responses"]);
+const OPENAI_GRAMMAR_TOOL_APIS = new Set<typesModule.Api>([
+  "openai-responses",
+  "openai-codex-responses",
+]);
 
-function applyOpenAIGrammarToolCompatMetadata(model: Model<Api>): void {
+function applyOpenAIGrammarToolCompatMetadata(model: typesModule.Model<typesModule.Api>): void {
   if (
     !OPENAI_GRAMMAR_TOOL_APIS.has(model.api) ||
     !OPENAI_GRAMMAR_TOOL_PROVIDERS.has(model.provider)
@@ -67,12 +65,12 @@ function applyOpenAIGrammarToolCompatMetadata(model: Model<Api>): void {
   const match = /^gpt-(\d+)/u.exec(model.id);
   if (match === null || Number(match[1]) < 5) return;
   model.compat = {
-    ...(model.compat as OpenAIResponsesCompat | undefined),
+    ...(model.compat as typesModule.OpenAIResponsesCompat | undefined),
     supportsOpenAIGrammarTools: true,
   };
 }
 
-function applyOpenAIToolSearchMetadata(model: Model<Api>): void {
+function applyOpenAIToolSearchMetadata(model: typesModule.Model<typesModule.Api>): void {
   const isOpenAIResponses = model.provider === "openai" && model.api === "openai-responses";
   const isOpenAICodex = model.provider === "openai-codex" && model.api === "openai-codex-responses";
   if (!(isOpenAIResponses || isOpenAICodex) || !OPENAI_TOOL_SEARCH_MODEL_IDS.has(model.id)) return;
@@ -80,13 +78,13 @@ function applyOpenAIToolSearchMetadata(model: Model<Api>): void {
     (isOpenAIResponses && OPENAI_ADDITIONAL_TOOLS_MODEL_IDS.has(model.id)) ||
     (isOpenAICodex && OPENAI_CODEX_ADDITIONAL_TOOLS_MODEL_IDS.has(model.id));
   model.compat = {
-    ...(model.compat as OpenAIResponsesCompat | undefined),
+    ...(model.compat as typesModule.OpenAIResponsesCompat | undefined),
     ...(supportsAdditionalTools ? { supportsAdditionalTools: true } : {}),
     supportsToolSearch: true,
   };
 }
 
-function applyOpenAICompletionsTranscriptMetadata(model: Model<Api>): void {
+function applyOpenAICompletionsTranscriptMetadata(model: typesModule.Model<typesModule.Api>): void {
   if (model.api !== "openai-completions") return;
   const isKimiK3 =
     (model.provider === "opencode" || model.provider === "opencode-go") && model.id === "kimi-k3";
@@ -96,7 +94,7 @@ function applyOpenAICompletionsTranscriptMetadata(model: Model<Api>): void {
     OPENAI_MID_CONVO_SYSTEM_MESSAGE_MODEL_IDS.has(model.id.slice("openai/".length));
   if (!isKimiK3 && !isTextOnly) return;
   model.compat = {
-    ...(model.compat as OpenAICompletionsCompat | undefined),
+    ...(model.compat as typesModule.OpenAICompletionsCompat | undefined),
     supportsMidConvoSystemMessages: true,
     ...(isKimiK3 ? { supportsMidConvoToolAdditions: true } : {}),
   };
@@ -104,7 +102,7 @@ function applyOpenAICompletionsTranscriptMetadata(model: Model<Api>): void {
 
 const OPENAI_RESPONSES_PROXY_PROVIDERS = new Set(["opencode", "opencode-go"]);
 
-function applyOpenAIResponsesTranscriptMetadata(model: Model<Api>): void {
+function applyOpenAIResponsesTranscriptMetadata(model: typesModule.Model<typesModule.Api>): void {
   const isOpenAIResponses = model.provider === "openai" && model.api === "openai-responses";
   const isOpenAICodex = model.provider === "openai-codex" && model.api === "openai-codex-responses";
   const isProxiedResponses =
@@ -116,26 +114,26 @@ function applyOpenAIResponsesTranscriptMetadata(model: Model<Api>): void {
     return;
   }
   model.compat = {
-    ...(model.compat as OpenAIResponsesCompat | undefined),
+    ...(model.compat as typesModule.OpenAIResponsesCompat | undefined),
     supportsMidConvoSystemMessages: true,
     ...(isProxiedResponses ? { supportsAdditionalTools: true } : {}),
   };
 }
 
-function applyOpenAIExplicitPromptCacheMetadata(model: Model<Api>): void {
+function applyOpenAIExplicitPromptCacheMetadata(model: typesModule.Model<typesModule.Api>): void {
   if (model.provider !== "openai" || model.api !== "openai-responses") return;
   if (!(model.cost.cacheWrite > 0)) return;
   model.compat = {
-    ...(model.compat as OpenAIResponsesCompat | undefined),
+    ...(model.compat as typesModule.OpenAIResponsesCompat | undefined),
     supportsExplicitPromptCacheMode: true,
   };
 }
 
-function applyOpenAIMidConvoEffortMetadata(model: Model<Api>): void {
+function applyOpenAIMidConvoEffortMetadata(model: typesModule.Model<typesModule.Api>): void {
   if (model.provider !== "openai" || model.api !== "openai-responses") return;
   if (!OPENAI_MID_CONVO_EFFORT_MODEL_IDS.has(model.id)) return;
   model.compat = {
-    ...(model.compat as OpenAIResponsesCompat | undefined),
+    ...(model.compat as typesModule.OpenAIResponsesCompat | undefined),
     supportsMidConvoEffort: true,
   };
 }

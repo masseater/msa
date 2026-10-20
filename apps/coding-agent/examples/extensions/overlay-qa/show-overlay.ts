@@ -4,20 +4,20 @@ import type {
   KeybindingsManager,
   Theme,
 } from "@msa/coding-agent";
-import type { Component, OverlayOptions, TUI } from "@msa/tui";
+import type tuiTypes from "@msa/tui/index.types";
 import { Effect } from "effect";
 
 export type OverlayFactory<T> = (
-  tui: TUI,
+  tui: tuiTypes.TUI,
   theme: Theme,
   keybindings: KeybindingsManager,
   done: (result: T) => void,
-) => Component;
+) => tuiTypes.Component;
 
 export const showOverlay = <T>(request: {
   readonly ctx: ExtensionCommandContext;
   readonly factory: OverlayFactory<T>;
-  readonly overlayOptions: OverlayOptions;
+  readonly overlayOptions: tuiTypes.OverlayOptions;
 }): Promise<T> =>
   request.ctx.ui.custom<T>(request.factory, {
     overlay: true,
@@ -28,7 +28,7 @@ export const registerOverlayCommand = (request: {
   readonly msa: ExtensionAPI;
   readonly name: string;
   readonly description: string;
-  readonly overlayOptions: OverlayOptions;
+  readonly overlayOptions: tuiTypes.OverlayOptions;
   readonly component: (ctx: ExtensionCommandContext) => OverlayFactory<void>;
 }): void => {
   request.msa.registerCommand(request.name, {

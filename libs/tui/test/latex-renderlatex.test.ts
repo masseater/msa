@@ -1,7 +1,9 @@
 import assert from "node:assert";
 import { describe, it } from "node:test";
 
-import { renderLatex } from "../src/index.ts";
+import tui from "../src/index.ts";
+
+const { renderLatex } = tui;
 
 describe("renderLatex", () => {
   it("composes matrices with fractions and adjacent matrices", () => {

@@ -3,12 +3,14 @@ import { describe, it } from "node:test";
 
 import { Effect } from "effect";
 
-import type { TUI } from "../src/tui-interface.ts";
-import { TuiMainScreen } from "../src/tui-main-screen.ts";
+import type tuiInterfaceTypes from "../src/tui-interface.types.ts";
+import TuiMainScreen from "../src/tui-main-screen.ts";
 import tuiOverlayStyleLeakHelpers from "./tui-overlay-style-leak-helpers.ts";
 import StaticLines from "./tui-overlay-style-leak-static-lines.ts";
 import StaticOverlay from "./tui-overlay-style-leak-static-overlay.ts";
-import { VirtualTerminal } from "./virtual-terminal.ts";
+import virtualTerminal from "./virtual-terminal.ts";
+
+const { VirtualTerminal } = virtualTerminal;
 
 const { getCellItalic, renderAndFlush } = tuiOverlayStyleLeakHelpers;
 
@@ -20,7 +22,7 @@ describe("TUI overlay compositing", () => {
         const baseLine = `\x1b[3m${"X".repeat(width)}\x1b[23m`;
 
         const terminal = new VirtualTerminal(width, 6);
-        const tui: TUI = new TuiMainScreen(terminal);
+        const tui: tuiInterfaceTypes.TUI = new TuiMainScreen(terminal);
         tui.addChild(new StaticLines([baseLine, "INPUT"]));
         tui.start();
         yield* renderAndFlush(tui, terminal);
@@ -36,7 +38,7 @@ describe("TUI overlay compositing", () => {
         const baseLine = `\x1b[3m${"X".repeat(width)}\x1b[23m`;
 
         const terminal = new VirtualTerminal(width, 6);
-        const tui: TUI = new TuiMainScreen(terminal);
+        const tui: tuiInterfaceTypes.TUI = new TuiMainScreen(terminal);
         tui.addChild(new StaticLines([baseLine, "INPUT"]));
 
         tui.showOverlay(new StaticOverlay("OVR"), { col: 5, row: 0, width: 3 });

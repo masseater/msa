@@ -1,4 +1,4 @@
-import { Type } from "@msa/ai";
+import ai from "@msa/ai";
 import type chordTypes from "@msa/chord/index.types";
 import durable from "@msa/durable";
 import harnessModule from "@msa/durable/harness";
@@ -9,6 +9,8 @@ import { describe, expect, it } from "vite-plus/test";
 
 import harnessStructuredOutputSupport from "./harness-structured-output-support.ts";
 import support from "./support.ts";
+
+const { Type } = ai;
 
 const { NestedCallDoc, defineTool } = durable;
 const { MemoryStorage } = memory;

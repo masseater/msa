@@ -1,14 +1,16 @@
 import { dual } from "effect/Function";
 import { eastAsianWidth } from "get-east-asian-width";
 
+import type utilsTypes from "./utils.types.ts";
+
 const graphemeSegmenter = new Intl.Segmenter(undefined, { granularity: "grapheme" });
 const wordSegmenter = new Intl.Segmenter(undefined, { granularity: "word" });
 
-export function getGraphemeSegmenter(): Intl.Segmenter {
+function getGraphemeSegmenter(): Intl.Segmenter {
   return graphemeSegmenter;
 }
 
-export function getWordSegmenter(): Intl.Segmenter {
+function getWordSegmenter(): Intl.Segmenter {
   return wordSegmenter;
 }
 
@@ -38,7 +40,7 @@ const rgiEmojiRegex = /^\p{RGI_Emoji}$/v;
 const WIDTH_CACHE_SIZE = 512;
 const widthCache = new Map<string, number>();
 
-export function isPrintableAscii(str: string): boolean {
+function isPrintableAscii(str: string): boolean {
   for (let i = 0; i < str.length; i++) {
     const code = str.charCodeAt(i);
     if (code < 0x20 || code > 0x7e) {
@@ -102,13 +104,7 @@ function graphemeWidth(segment: string): number {
   return eastAsianWidth(cp) + trailingCharsWidth([...base].slice(1));
 }
 
-export interface TextUnit {
-  readonly ansi: boolean;
-  readonly text: string;
-  readonly width: number;
-}
-
-export function* textUnits(text: string): Generator<TextUnit> {
+function* textUnits(text: string): Generator<utilsTypes.TextUnit> {
   let i = 0;
   while (i < text.length) {
     const ansi = extractAnsiCode(text, i);
@@ -155,7 +151,7 @@ function rememberWidth(str: string, width: number): void {
   widthCache.set(str, width);
 }
 
-export function visibleWidth(str: string): number {
+function visibleWidth(str: string): number {
   if (str.length === 0) {
     return 0;
   }
@@ -179,7 +175,7 @@ export function visibleWidth(str: string): number {
   return width;
 }
 
-export function stripTerminalSequences(str: string): string {
+function stripTerminalSequences(str: string): string {
   if (!str.includes("\x1b")) return str;
   let result = "";
   let i = 0;
@@ -198,7 +194,7 @@ export function stripTerminalSequences(str: string): string {
 const THAI_LAO_AM_REGEX = /[\u0e33\u0eb3]/u;
 const THAI_LAO_AM_GLOBAL_REGEX = /[\u0e33\u0eb3]/gu;
 
-export function normalizeTerminalOutput(str: string): string {
+function normalizeTerminalOutput(str: string): string {
   let normalized = str;
   if (THAI_LAO_AM_REGEX.test(normalized)) {
     normalized = normalized.replace(THAI_LAO_AM_GLOBAL_REGEX, (char) =>
@@ -222,7 +218,7 @@ export function normalizeTerminalOutput(str: string): string {
   return result;
 }
 
-export const extractAnsiCode: {
+const extractAnsiCode: {
   (str: string, pos: number): { code: string; length: number } | null;
   (pos: number): (str: string) => { code: string; length: number } | null;
 } = dual(2, (str: string, pos: number): { code: string; length: number } | null => {
@@ -252,7 +248,7 @@ function asciiVisibleWidth(str: string): number {
   return width;
 }
 
-export const ansiCodeLength: {
+const ansiCodeLength: {
   (str: string, pos: number): number;
   (pos: number): (str: string) => number;
 } = dual(2, (str: string, pos: number): number => {
@@ -280,6 +276,21 @@ export const ansiCodeLength: {
   return 0;
 });
 
-export function flattenLines(lines: readonly string[]): void {
+function flattenLines(lines: readonly string[]): void {
   for (const line of lines) Number(line);
 }
+
+const utils = {
+  ansiCodeLength,
+  extractAnsiCode,
+  flattenLines,
+  getGraphemeSegmenter,
+  getWordSegmenter,
+  isPrintableAscii,
+  normalizeTerminalOutput,
+  stripTerminalSequences,
+  textUnits,
+  visibleWidth,
+};
+
+export default utils;

@@ -1,24 +1,20 @@
-import { Data, Effect } from "effect";
+import { Effect } from "effect";
 
-import { toError } from "./protocol/jsonrpc.ts";
+import McpForeignError from "./mcp-foreign-error.ts";
+import jsonrpcModule from "./protocol/jsonrpc.ts";
 
-export class McpForeignError extends Data.TaggedError("McpForeignError")<{
-  readonly cause: unknown;
-  readonly message: string;
-}> {}
+const { toError } = jsonrpcModule;
 
-export const foreign = (cause: unknown): McpForeignError =>
+const foreign = (cause: unknown): McpForeignError =>
   new McpForeignError({ cause, message: toError(cause).message });
 
-export const fromPromise = <A>(
-  evaluate: () => PromiseLike<A> | A,
-): Effect.Effect<A, McpForeignError> =>
-  Effect.tryPromise({ try: () => Promise.resolve(evaluate()), catch: foreign });
+const fromPromise = <A>(evaluate: () => PromiseLike<A> | A): Effect.Effect<A, McpForeignError> =>
+  Effect.tryPromise({ catch: foreign, try: () => Promise.resolve(evaluate()) });
 
-export const fromSync = <A>(evaluate: () => A): Effect.Effect<A, McpForeignError> =>
-  Effect.try({ try: evaluate, catch: foreign });
+const fromSync = <A>(evaluate: () => A): Effect.Effect<A, McpForeignError> =>
+  Effect.try({ catch: foreign, try: evaluate });
 
-export const unwrapForeign = <A, E, R>(
+const unwrapForeign = <A, E, R>(
   effect: Effect.Effect<A, E, R>,
 ): Effect.Effect<A, Exclude<E, McpForeignError>, R> =>
   effect.pipe(
@@ -29,5 +25,16 @@ export const unwrapForeign = <A, E, R>(
     ),
   );
 
-export const toPromise = <A, E>(effect: Effect.Effect<A, E>): Promise<A> =>
+const toPromise = <A, E>(effect: Effect.Effect<A, E>): Promise<A> =>
   Effect.runPromise(unwrapForeign(effect));
+
+const foreignModule = {
+  McpForeignError,
+  foreign,
+  fromPromise,
+  fromSync,
+  toPromise,
+  unwrapForeign,
+};
+
+export default foreignModule;

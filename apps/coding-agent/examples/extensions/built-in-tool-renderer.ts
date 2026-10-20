@@ -10,7 +10,9 @@ import {
   createReadToolDefinition,
   createWriteToolDefinition,
 } from "@msa/coding-agent";
-import { Text } from "@msa/tui";
+import tui from "@msa/tui";
+
+const { Text } = tui;
 
 const renderReadResult: NonNullable<ReturnType<typeof createReadToolDefinition>["renderResult"]> = (
   result,

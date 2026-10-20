@@ -1,8 +1,10 @@
 import { Effect } from "effect";
 import { beforeEach, describe, expect, it, vi } from "vite-plus/test";
 
-import { generateImages } from "../src/images.ts";
-import type { ImageModel, ImagesContext } from "../src/types.ts";
+import imagesModule from "../src/images.ts";
+import type typesModule from "../src/types.types.ts";
+
+const { generateImages } = imagesModule;
 
 const mockState = vi.hoisted(() => ({
   lastParams: undefined as unknown,
@@ -67,7 +69,7 @@ describe("openrouter images", () => {
   it("returns text plus images in final output", () =>
     Effect.runPromise(
       Effect.gen(function* () {
-        const model: ImageModel<"openrouter-images"> = {
+        const model: typesModule.ImageModel<"openrouter-images"> = {
           api: "openrouter-images",
           baseUrl: "https://openrouter.ai/api/v1",
           cost: { cacheRead: 0, cacheWrite: 0, input: 0.015, output: 0.03 },
@@ -79,7 +81,7 @@ describe("openrouter images", () => {
           provider: "openrouter",
           type: "image",
         };
-        const context: ImagesContext = {
+        const context: typesModule.ImagesContext = {
           input: [{ text: "Generate a dog", type: "text" }],
         };
 
@@ -118,7 +120,7 @@ describe("openrouter images", () => {
   it("passes through abort signal and returns aborted result", () =>
     Effect.runPromise(
       Effect.gen(function* () {
-        const model: ImageModel<"openrouter-images"> = {
+        const model: typesModule.ImageModel<"openrouter-images"> = {
           api: "openrouter-images",
           baseUrl: "https://openrouter.ai/api/v1",
           cost: { cacheRead: 0, cacheWrite: 0, input: 0.015, output: 0.03 },
@@ -129,7 +131,7 @@ describe("openrouter images", () => {
           provider: "openrouter",
           type: "image",
         };
-        const context: ImagesContext = {
+        const context: typesModule.ImagesContext = {
           input: [{ text: "Generate a dog", type: "text" }],
         };
         const controllerSignal = AbortSignal.abort();
@@ -155,7 +157,7 @@ describe("openrouter images", () => {
   it("generateImages resolves the final assistant images result", () =>
     Effect.runPromise(
       Effect.gen(function* () {
-        const model: ImageModel<"openrouter-images"> = {
+        const model: typesModule.ImageModel<"openrouter-images"> = {
           api: "openrouter-images",
           baseUrl: "https://openrouter.ai/api/v1",
           cost: { cacheRead: 0, cacheWrite: 0, input: 0.015, output: 0.03 },
@@ -166,7 +168,7 @@ describe("openrouter images", () => {
           provider: "openrouter",
           type: "image",
         };
-        const context: ImagesContext = {
+        const context: typesModule.ImagesContext = {
           input: [{ text: "Generate a dog", type: "text" }],
         };
 

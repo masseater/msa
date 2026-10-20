@@ -1,9 +1,12 @@
-import { type Component, Input, matchesKey } from "@msa/tui";
+import tui from "@msa/tui";
+import type tuiTypes from "@msa/tui/index.types";
 
 import { BOLD, DIM, MAGENTA, RESET } from "./colors.ts";
 
-export class InputDialog implements Component {
-  private dialogInput: Input;
+const { Input, matchesKey } = tui;
+
+export class InputDialog implements tuiTypes.Component {
+  private dialogInput: tuiTypes.Input;
   private title: string;
   onCtrlD?: () => void;
 
@@ -29,7 +32,7 @@ export class InputDialog implements Component {
     this.dialogInput.onEscape = fn;
   }
 
-  get inputComponent(): Input {
+  get inputComponent(): tuiTypes.Input {
     return this.dialogInput;
   }
 

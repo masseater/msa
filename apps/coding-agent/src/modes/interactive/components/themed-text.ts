@@ -1,4 +1,6 @@
-import { Text } from "@msa/tui";
+import tui from "@msa/tui";
+
+const { Text } = tui;
 
 export class ThemedText extends Text {
   private readonly build: () => string;

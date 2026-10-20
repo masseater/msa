@@ -1,5 +1,5 @@
-import type { AgentTool } from "@msa/agent-core";
-import type { AssistantMessage, ToolCall } from "@msa/ai/compat";
+import type agentTypes from "@msa/agent-core/index.types";
+import type compatTypes from "@msa/ai/compat.types";
 import testing from "@msa/testing";
 import { Effect } from "effect";
 import { Type } from "typebox";
@@ -16,7 +16,7 @@ import type sessionKitTypes from "./session-kit.types.ts";
 const { runTest } = testing;
 const { assistantMessage, reply } = sessionKit;
 
-const toolUsage: AssistantMessage["usage"] = {
+const toolUsage: compatTypes.AssistantMessage["usage"] = {
   cacheRead: 0,
   cacheWrite: 0,
   cost: { cacheRead: 0, cacheWrite: 0, input: 0, output: 0, total: 0 },
@@ -25,7 +25,7 @@ const toolUsage: AssistantMessage["usage"] = {
   totalTokens: 2,
 };
 
-const dummyTool: AgentTool = {
+const dummyTool: agentTypes.AgentTool = {
   description: "Dummy tool",
   execute: (_toolCallId, params) =>
     runTest(
@@ -39,7 +39,7 @@ const dummyTool: AgentTool = {
   parameters: Type.Object({ q: Type.String() }),
 };
 
-const dummyCall = (id: string, q: string): ToolCall => ({
+const dummyCall = (id: string, q: string): compatTypes.ToolCall => ({
   arguments: { q },
   id,
   name: "dummy",
@@ -47,7 +47,7 @@ const dummyCall = (id: string, q: string): ToolCall => ({
 });
 
 const toolCallResponder =
-  (content: AssistantMessage["content"]): sessionKitTypes.Responder =>
+  (content: compatTypes.AssistantMessage["content"]): sessionKitTypes.Responder =>
   ({ context, stream }) => {
     const done = context.messages.some((message) => message.role === "toolResult");
     reply(

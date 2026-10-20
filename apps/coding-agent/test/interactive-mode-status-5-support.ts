@@ -1,8 +1,10 @@
-import { Container } from "../../../libs/tui/src/tui-component.ts";
+import tuiComponent from "../../../libs/tui/src/tui-component.ts";
 import type { QuietStartup } from "../src/core/settings-manager.ts";
 import type { SourceInfo } from "../src/core/source-info.ts";
 import { InteractiveMode } from "../src/modes/interactive/interactive-mode.ts";
 import type interactiveModeStatus5SupportTypes from "./interactive-mode-status-5-support.types.ts";
+
+const { Container } = tuiComponent;
 
 type ShowLoadedResourcesOptions = {
   quietStartup: QuietStartup;

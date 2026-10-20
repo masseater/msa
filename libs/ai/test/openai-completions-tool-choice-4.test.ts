@@ -1,9 +1,12 @@
 import { Effect } from "effect";
 import { describe, expect, it, vi } from "vite-plus/test";
 
-import { streamSimple } from "../src/compat.ts";
-import { currentTimeMillis } from "../src/utils/clock.ts";
+import compat from "../src/compat.ts";
+import clock from "../src/utils/clock.ts";
 import openaiCompletionsToolChoiceSupport from "./openai-completions-tool-choice-support.ts";
+
+const { streamSimple } = compat;
+const { currentTimeMillis } = clock;
 
 vi.mock("openai", () =>
   import("./openai-completions-tool-choice-mock.ts").then((module) => module.default),

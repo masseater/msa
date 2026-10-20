@@ -1,10 +1,14 @@
 import { Console, Effect, Stream } from "effect";
 
-import { createModels } from "../src/models.ts";
-import { anthropicProvider } from "../src/providers/anthropic.ts";
-import type { Context } from "../src/types.ts";
-import { currentTimeMillis } from "../src/utils/clock.ts";
+import modelsModule from "../src/models.ts";
+import anthropic from "../src/providers/anthropic.ts";
+import type typesModule from "../src/types.types.ts";
+import clock from "../src/utils/clock.ts";
 import modelChoice from "./model-choice.ts";
+
+const { createModels } = modelsModule;
+const { anthropicProvider } = anthropic;
+const { currentTimeMillis } = clock;
 
 const { chooseModel, usesApi } = modelChoice;
 
@@ -23,7 +27,7 @@ const main = Effect.gen(function* () {
     `auth:  ${auth === undefined ? "not configured" : `configured via ${auth.source}`}\n`,
   );
   if (auth === undefined) process.exit(1);
-  const context: Context = {
+  const context: typesModule.Context = {
     messages: [{ content: "Say exactly: ok", role: "user", timestamp: currentTimeMillis() }],
     systemPrompt: "You are terse.",
   };

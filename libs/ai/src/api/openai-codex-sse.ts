@@ -1,10 +1,11 @@
 import { Cause, Effect, Stream } from "effect";
 
-import { codexProtocolError, throwIfRequestAborted } from "./openai-codex-error.ts";
+import openaiCodexError from "./openai-codex-error.ts";
+import type openaiCodexSseTypes from "./openai-codex-sse.types.ts";
 
-export type CodexRawEvent = Record<string, unknown>;
+const { codexProtocolError, throwIfRequestAborted } = openaiCodexError;
 
-function parseCodexSseChunk(chunk: string): CodexRawEvent | undefined {
+function parseCodexSseChunk(chunk: string): openaiCodexSseTypes.CodexRawEvent | undefined {
   const dataLines = chunk
     .split("\n")
     .filter((line) => line.startsWith("data:"))
@@ -13,9 +14,9 @@ function parseCodexSseChunk(chunk: string): CodexRawEvent | undefined {
   const data = dataLines.join("\n").trim();
   if (data === "" || data === "[DONE]") return undefined;
   try {
-    return JSON.parse(data) as CodexRawEvent;
+    return JSON.parse(data) as openaiCodexSseTypes.CodexRawEvent;
   } catch (cause) {
-    throw codexProtocolError({ source: "SSE", cause, payload: data });
+    throw codexProtocolError({ cause, payload: data, source: "SSE" });
   }
 }
 
@@ -33,7 +34,7 @@ const openCodexSseReader = (body: ReadableStream<Uint8Array>, signal: AbortSigna
         void reader.cancel().catch(() => undefined);
       };
       signal?.addEventListener("abort", onAbort, { once: true });
-      return { reader, onAbort };
+      return { onAbort, reader };
     }),
     ({ reader, onAbort }) =>
       Effect.sync(() => signal?.removeEventListener("abort", onAbort)).pipe(
@@ -64,9 +65,9 @@ const readCodexSseBytes = (
     ),
   );
 
-export function readCodexSseEvents(
+function readCodexSseEvents(
   signal: AbortSignal | undefined,
-): (response: Response) => Stream.Stream<CodexRawEvent> {
+): (response: Response) => Stream.Stream<openaiCodexSseTypes.CodexRawEvent> {
   return (response) => {
     const body = response.body;
     if (body === null) return Stream.empty;
@@ -80,7 +81,13 @@ export function readCodexSseEvents(
         { onHalt: (buffer) => (buffer.trim() === "" ? [] : [buffer]) },
       ),
       Stream.map(parseCodexSseChunk),
-      Stream.filter((event): event is CodexRawEvent => event !== undefined),
+      Stream.filter((event): event is openaiCodexSseTypes.CodexRawEvent => event !== undefined),
     );
   };
 }
+
+const openaiCodexSse = {
+  readCodexSseEvents,
+};
+
+export default openaiCodexSse;

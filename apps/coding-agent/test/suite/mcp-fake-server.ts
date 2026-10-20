@@ -1,8 +1,12 @@
-import { type JsonRpcRequest, LATEST_PROTOCOL_VERSION } from "@msa/mcp";
-import { createInMemoryTransportPair } from "@msa/mcp/testing";
+import mcp from "@msa/mcp";
+import type mcpTypes from "@msa/mcp/index.types";
+import testing from "@msa/mcp/testing";
 import { Effect } from "effect";
 
 import type mcpFakeServerTypes from "./mcp-fake-server.types.ts";
+
+const { LATEST_PROTOCOL_VERSION } = mcp;
+const { createInMemoryTransportPair } = testing;
 
 const TINY_PNG_BASE64 =
   "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8DwHwAFBQIAX8jx0gAAAABJRU5ErkJggg==";
@@ -49,7 +53,7 @@ const RESOURCE_TEMPLATES = [
   },
 ];
 
-const callTool = (calls: string[], request: JsonRpcRequest): unknown => {
+const callTool = (calls: string[], request: mcpTypes.JsonRpcRequest): unknown => {
   const params = request.params as { name: string; arguments?: { query?: string } };
   calls.push(`${params.name}:${JSON.stringify(params.arguments ?? {})}`);
   if (params.name === "search") {
@@ -62,7 +66,7 @@ const callTool = (calls: string[], request: JsonRpcRequest): unknown => {
   return { content: [{ text: "server exploded", type: "text" }], isError: true };
 };
 
-const readResource = (calls: string[], request: JsonRpcRequest): unknown => {
+const readResource = (calls: string[], request: mcpTypes.JsonRpcRequest): unknown => {
   const { uri } = request.params as { uri: string };
   calls.push(`read:${uri}`);
   return { contents: [{ mimeType: "text/markdown", text: `# ${uri}`, uri }] };
@@ -80,7 +84,7 @@ const initializeResult = (options: mcpFakeServerTypes.Options): unknown => ({
 const respond = (
   calls: string[],
   options: mcpFakeServerTypes.Options,
-  request: JsonRpcRequest,
+  request: mcpTypes.JsonRpcRequest,
 ): unknown => {
   switch (request.method) {
     case "initialize":
@@ -105,7 +109,7 @@ const createFakeServer = (calls: string[], options: mcpFakeServerTypes.Options =
   const initializeDelayMs = options.initializeDelayMs ?? 0;
   pair.server.onMessage((message) => {
     if (!("id" in message) || !("method" in message)) return;
-    const request = message as JsonRpcRequest;
+    const request = message as mcpTypes.JsonRpcRequest;
     const send = () =>
       void pair.server.send({
         id: request.id,

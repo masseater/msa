@@ -9,10 +9,7 @@ export default function (msa: ExtensionAPI) {
   });
 
   msa.registerTool({
-    name: "reload_runtime",
-    label: "Reload Runtime",
     description: "Reload extensions, skills, prompts, themes, and context files",
-    parameters: Type.Object({}),
     execute: () =>
       Effect.runPromise(
         Effect.sync(() => {
@@ -23,5 +20,8 @@ export default function (msa: ExtensionAPI) {
           };
         }),
       ),
+    label: "Reload Runtime",
+    name: "reload_runtime",
+    parameters: Type.Object({}),
   });
 }

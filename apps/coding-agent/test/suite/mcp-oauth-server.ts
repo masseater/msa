@@ -1,10 +1,12 @@
 import * as NodeHttpServer from "@effect/platform-node/NodeHttpServer";
 import * as NodeServices from "@effect/platform-node/NodeServices";
-import { LATEST_PROTOCOL_VERSION } from "@msa/mcp";
+import mcp from "@msa/mcp";
 import testing from "@msa/testing";
 import { Context, Crypto, Deferred, Effect, Exit, Layer, ManagedRuntime, Scope } from "effect";
 import { HttpEffect, HttpServer } from "effect/http";
 import * as NetAddress from "effect/net/NetAddress";
+
+const { LATEST_PROTOCOL_VERSION } = mcp;
 
 const { fromJsonText } = testing;
 

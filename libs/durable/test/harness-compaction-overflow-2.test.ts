@@ -1,4 +1,4 @@
-import { type Message } from "@msa/ai";
+import type aiTypes from "@msa/ai/index.types";
 import harnessModule from "@msa/durable/harness";
 import { Effect } from "effect";
 import { afterEach, describe, expect, it } from "vite-plus/test";
@@ -43,7 +43,7 @@ const summarizesReplacedEntry = Effect.gen(function* () {
       context,
     ),
   );
-  let messages: readonly Message[] = [];
+  let messages: readonly aiTypes.Message[] = [];
   addHooks(chat.setup.registry, CompactionTask, {
     beforeCompact: (compaction) => {
       messages = compaction.messages;

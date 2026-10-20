@@ -1,5 +1,6 @@
-import type { AgentMessage } from "@msa/agent-core";
-import { type Message, uuidv7 } from "@msa/ai";
+import type agentTypes from "@msa/agent-core/index.types";
+import ai from "@msa/ai";
+import type aiTypes from "@msa/ai/index.types";
 import type {
   ExtensionAPI,
   ExtensionCommandContext,
@@ -8,6 +9,8 @@ import type {
 } from "@msa/coding-agent";
 import { BorderedLoader, convertToLlm, serializeConversation } from "@msa/coding-agent";
 import { Clock, DateTime, Effect } from "effect";
+
+const { uuidv7 } = ai;
 
 const SYSTEM_PROMPT = `You are a context transfer assistant. Given a conversation history and the user's goal for a new thread, generate a focused prompt that:
 
@@ -18,7 +21,7 @@ const SYSTEM_PROMPT = `You are a context transfer assistant. Given a conversatio
 
 Output only the new prompt, nothing else.`;
 
-function entryToMessage(entry: SessionEntry): AgentMessage | undefined {
+function entryToMessage(entry: SessionEntry): agentTypes.AgentMessage | undefined {
   if (entry.type === "message") {
     return entry.message;
   }
@@ -26,14 +29,14 @@ function entryToMessage(entry: SessionEntry): AgentMessage | undefined {
     return {
       role: "compactionSummary",
       summary: entry.summary,
-      tokensBefore: entry.tokensBefore,
       timestamp: DateTime.makeUnsafe(entry.timestamp).epochMilliseconds,
+      tokensBefore: entry.tokensBefore,
     };
   }
   return undefined;
 }
 
-function getHandoffMessages(branch: SessionEntry[]): AgentMessage[] {
+function getHandoffMessages(branch: SessionEntry[]): agentTypes.AgentMessage[] {
   const compactionIndex = branch.findLastIndex((entry) => entry.type === "compaction");
   const compaction = branch[compactionIndex];
   if (compaction === undefined) {
@@ -59,25 +62,25 @@ const generatePrompt = (
   signal: AbortSignal,
 ) =>
   Effect.gen(function* () {
-    const userMessage: Message = {
-      role: "user",
+    const userMessage: aiTypes.Message = {
       content: [
         {
           type: "text",
           text: `## Conversation History\n\n${conversationText}\n\n## User's Goal for New Thread\n\n${goal}`,
         },
       ],
+      role: "user",
       timestamp: yield* Clock.currentTimeMillis,
     };
 
     const response = yield* Effect.promise(() =>
       ctx.modelRegistry.complete(
         ctx.model!,
-        { systemPrompt: SYSTEM_PROMPT, messages: [userMessage] },
+        { messages: [userMessage], systemPrompt: SYSTEM_PROMPT },
         {
-          signal,
           cacheRetention: "none",
           sessionId: uuidv7(),
+          signal,
         },
       ),
     );

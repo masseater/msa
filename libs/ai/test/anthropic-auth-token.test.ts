@@ -1,15 +1,22 @@
-import { arch, platform, release } from "node:os";
+import { arch, platform } from "node:os";
 
 import { Effect } from "effect";
 import { afterEach, describe, expect, it, vi } from "vite-plus/test";
 
-import { stream as streamAnthropic } from "../src/api/anthropic-messages.ts";
-import { ANTHROPIC_AUTH_TOKEN_ENV } from "../src/env-api-keys.ts";
-import { createModels } from "../src/models.ts";
-import { anthropicProvider } from "../src/providers/anthropic.ts";
-import type { Model } from "../src/types.ts";
-import { currentTimeMillis } from "../src/utils/clock.ts";
-import { normalizeContext } from "../src/utils/transcript.ts";
+import anthropicMessages from "../src/api/anthropic-messages.ts";
+import envApiKeys from "../src/env-api-keys.ts";
+import modelsModule from "../src/models.ts";
+import anthropic from "../src/providers/anthropic.ts";
+import type typesModule from "../src/types.types.ts";
+import clock from "../src/utils/clock.ts";
+import transcript from "../src/utils/transcript.ts";
+
+const { normalizeContext } = transcript;
+const { currentTimeMillis } = clock;
+const { anthropicProvider } = anthropic;
+const { ANTHROPIC_AUTH_TOKEN_ENV } = envApiKeys;
+const { stream: streamAnthropic } = anthropicMessages;
+const { createModels } = modelsModule;
 
 const mockState = vi.hoisted(() => ({
   constructorOpts: undefined as Record<string, unknown> | undefined,
@@ -59,7 +66,7 @@ vi.mock("@anthropic-ai/sdk", () => {
   return { default: FakeAnthropic };
 });
 
-const MSA_USER_AGENT = `pi (${platform()} ${release()}; ${arch()})`;
+const MSA_USER_AGENT = `pi (${platform()}; ${arch()})`;
 const neverAbortedSignal = new AbortController().signal;
 
 const context = normalizeContext({
@@ -67,7 +74,7 @@ const context = normalizeContext({
   systemPrompt: "System prompt.",
 });
 
-const anthropicModel: Model<"anthropic-messages"> = {
+const anthropicModel: typesModule.Model<"anthropic-messages"> = {
   api: "anthropic-messages",
   baseUrl: "https://api.anthropic.com",
   contextWindow: 100000,
@@ -80,7 +87,7 @@ const anthropicModel: Model<"anthropic-messages"> = {
   reasoning: false,
 };
 
-const compatibleModel: Model<"anthropic-messages"> = {
+const compatibleModel: typesModule.Model<"anthropic-messages"> = {
   ...anthropicModel,
   baseUrl: "https://example.test/anthropic",
   id: "custom-model",

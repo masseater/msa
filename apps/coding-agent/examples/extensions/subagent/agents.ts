@@ -74,13 +74,13 @@ function loadAgentsFromDir(dir: string, source: "user" | "project"): AgentConfig
     }
 
     agents.push({
-      name: frontmatter.name,
       description: frontmatter.description,
-      tools: parseToolList(frontmatter.tools),
-      model: typeof frontmatter.model === "string" ? frontmatter.model : undefined,
-      systemPrompt: body,
-      source,
       filePath,
+      model: typeof frontmatter.model === "string" ? frontmatter.model : undefined,
+      name: frontmatter.name,
+      source,
+      systemPrompt: body,
+      tools: parseToolList(frontmatter.tools),
     });
   }
 
@@ -137,12 +137,12 @@ function formatAgentListImpl(
   agents: AgentConfig[],
   maxItems: number,
 ): { text: string; remaining: number } {
-  if (agents.length === 0) return { text: "none", remaining: 0 };
+  if (agents.length === 0) return { remaining: 0, text: "none" };
   const listed = agents.slice(0, maxItems);
   const remaining = agents.length - listed.length;
   return {
-    text: listed.map((a) => `${a.name} (${a.source}): ${a.description}`).join("; "),
     remaining,
+    text: listed.map((a) => `${a.name} (${a.source}): ${a.description}`).join("; "),
   };
 }
 

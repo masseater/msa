@@ -26,9 +26,9 @@ export const startAgent = (options: AgentOptions): AgentHandle => {
     const spawner = yield* ChildProcessSpawner.ChildProcessSpawner;
     const handle = yield* spawner.spawn(
       ChildProcess.make(options.command, [...options.args], {
+        stderr: "pipe",
         stdin: "pipe",
         stdout: "pipe",
-        stderr: "pipe",
       }),
     );
 
@@ -59,10 +59,10 @@ export const startAgent = (options: AgentOptions): AgentHandle => {
   runtime.runFork(Effect.scoped(program).pipe(Effect.ignore));
 
   return {
+    isRunning: () => running,
     send: (message) => {
       Queue.offerUnsafe(outbound, `${JSON.stringify(message)}\n`);
     },
-    isRunning: () => running,
     stderrText: () => stderrText,
   };
 };

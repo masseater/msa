@@ -1,28 +1,24 @@
 import { Effect } from "effect";
 
-import { matchCsiSequence } from "./ansi-sequences.ts";
-import { type CancelDelay, runAfter } from "./delay.ts";
-import {
-  parseOscColorResponse,
-  parseTerminalColorSchemeReport,
-  type RgbColor,
-  type TerminalColors,
-  type TerminalColorScheme,
-} from "./terminal-colors.ts";
+import ansiSequences from "./ansi-sequences.ts";
+import delay from "./delay.ts";
+import type delayTypes from "./delay.types.ts";
+import terminalColors from "./terminal-colors.ts";
+import type terminalColorsTypes from "./terminal-colors.types.ts";
+import type tuiColorQueriesTypes from "./tui-color-queries.types.ts";
+
+const { parseOscColorResponse, parseTerminalColorSchemeReport } = terminalColors;
+const { matchCsiSequence } = ansiSequences;
+const { runAfter } = delay;
 
 type PendingTerminalColorQuery = {
-  foreground?: RgbColor | undefined;
-  background?: RgbColor | undefined;
-  palette: Array<RgbColor | undefined>;
+  foreground?: terminalColorsTypes.RgbColor | undefined;
+  background?: terminalColorsTypes.RgbColor | undefined;
+  palette: Array<terminalColorsTypes.RgbColor | undefined>;
   replied: Set<string>;
-  deliver: ((colors: TerminalColors) => void) | undefined;
-  cancelTimeout: CancelDelay | undefined;
+  deliver: ((colors: terminalColorsTypes.TerminalColors) => void) | undefined;
+  cancelTimeout: delayTypes.CancelDelay | undefined;
 };
-
-export interface TerminalColorQueryOptions {
-  timeoutMs: number;
-  onLateReply?: (colors: TerminalColors) => void;
-}
 
 const TERMINAL_PALETTE_SIZE = 16;
 const TERMINAL_COLOR_REPLY_COUNT = 2 + TERMINAL_PALETTE_SIZE;
@@ -32,11 +28,13 @@ const TERMINAL_COLOR_QUERY = `\x1b]10;?\x07\x1b]11;?\x07${Array.from(
 ).join("")}\x1b[c`;
 const DEVICE_ATTRIBUTES_BODY = /^\?[\d;]*$/u;
 
-function terminalColorQueryResult(query: PendingTerminalColorQuery): TerminalColors {
+function terminalColorQueryResult(
+  query: PendingTerminalColorQuery,
+): terminalColorsTypes.TerminalColors {
   const palette = query.palette.every((color) => color !== undefined)
-    ? (query.palette as RgbColor[])
+    ? (query.palette as terminalColorsTypes.RgbColor[])
     : undefined;
-  return { foreground: query.foreground, background: query.background, palette };
+  return { background: query.background, foreground: query.foreground, palette };
 }
 
 function completeTerminalColorQuery(query: PendingTerminalColorQuery): void {
@@ -46,11 +44,13 @@ function completeTerminalColorQuery(query: PendingTerminalColorQuery): void {
   deliver?.(terminalColorQueryResult(query));
 }
 
-export class TerminalColorQueries {
+export default class TerminalColorQueries {
   private readonly pending: PendingTerminalColorQuery[] = [];
-  private readonly schemeListeners = new Set<(scheme: TerminalColorScheme) => void>();
+  private readonly schemeListeners = new Set<
+    (scheme: terminalColorsTypes.TerminalColorScheme) => void
+  >();
 
-  onSchemeChange(listener: (scheme: TerminalColorScheme) => void): () => void {
+  onSchemeChange(listener: (scheme: terminalColorsTypes.TerminalColorScheme) => void): () => void {
     this.schemeListeners.add(listener);
     return () => {
       this.schemeListeners.delete(listener);
@@ -73,7 +73,7 @@ export class TerminalColorQueries {
     if (query === undefined) {
       return false;
     }
-    if (matchCsiSequence({ data, finals: "c", body: DEVICE_ATTRIBUTES_BODY }) !== null) {
+    if (matchCsiSequence({ body: DEVICE_ATTRIBUTES_BODY, data, finals: "c" }) !== null) {
       this.pending.shift();
       completeTerminalColorQuery(query);
       return true;
@@ -103,17 +103,18 @@ export class TerminalColorQueries {
   }
 
   query(
-    { timeoutMs, onLateReply }: TerminalColorQueryOptions,
+    { timeoutMs, onLateReply }: tuiColorQueriesTypes.TerminalColorQueryOptions,
     write: (data: string) => void,
-  ): Promise<TerminalColors> {
+  ): Promise<terminalColorsTypes.TerminalColors> {
     return Effect.runPromise(
-      Effect.callback<TerminalColors>((resume) => {
-        const resolve = (colors: TerminalColors): void => resume(Effect.succeed(colors));
+      Effect.callback<terminalColorsTypes.TerminalColors>((resume) => {
+        const resolve = (colors: terminalColorsTypes.TerminalColors): void =>
+          resume(Effect.succeed(colors));
         const query: PendingTerminalColorQuery = {
+          cancelTimeout: undefined,
+          deliver: resolve,
           palette: Array.from({ length: TERMINAL_PALETTE_SIZE }, () => undefined),
           replied: new Set(),
-          deliver: resolve,
-          cancelTimeout: undefined,
         };
         query.cancelTimeout = runAfter(timeoutMs, () => {
           query.deliver = onLateReply;

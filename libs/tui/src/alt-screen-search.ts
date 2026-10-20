@@ -1,6 +1,10 @@
 import { dual } from "effect/Function";
 
-import { getGraphemeSegmenter, stripTerminalSequences, visibleWidth } from "./utils.ts";
+import AltScreenSearchIndex from "./alt-screen-search-index.ts";
+import type altScreenSearchTypes from "./alt-screen-search.types.ts";
+import utils from "./utils.ts";
+
+const { getGraphemeSegmenter, stripTerminalSequences, visibleWidth } = utils;
 
 const segmenter = getGraphemeSegmenter();
 
@@ -16,16 +20,6 @@ interface SearchSourceSpan {
 interface SearchCorpus {
   text: string;
   spans: SearchSourceSpan[];
-}
-
-export interface AltScreenSearchSegment {
-  row: number;
-  startCol: number;
-  endCol: number;
-}
-
-export interface AltScreenSearchMatch {
-  segments: AltScreenSearchSegment[];
 }
 
 const PRINTABLE_ASCII = /^[\x20-\x7e]*$/u;
@@ -57,12 +51,12 @@ function appendToken(state: CorpusState, token: CorpusToken): void {
   }
   state.chunks.push(token.text);
   state.spans.push({
-    textStart: state.textLength,
-    textEnd: state.textLength + token.text.length,
-    row: token.row,
-    startCol: token.startCol,
     endCol: token.endCol,
     linearColumns: token.linearColumns,
+    row: token.row,
+    startCol: token.startCol,
+    textEnd: state.textLength + token.text.length,
+    textStart: state.textLength,
   });
   state.textLength += token.text.length;
 }
@@ -78,7 +72,7 @@ function appendAsciiLine(state: CorpusState, line: string, row: number): void {
     let end = index + 1;
     while (end < line.length && line.charCodeAt(end) !== 0x20) end += 1;
     const text = line.slice(index, end);
-    appendToken(state, { text, row, startCol: index, endCol: end, linearColumns: true });
+    appendToken(state, { endCol: end, linearColumns: true, row, startCol: index, text });
     index = end;
   }
 }
@@ -92,11 +86,11 @@ function appendGraphemeLine(state: CorpusState, line: string, row: number): void
       markSeparator(state);
     } else {
       appendToken(state, {
-        text,
-        row,
-        startCol: column,
         endCol: column + width,
         linearColumns: false,
+        row,
+        startCol: column,
+        text,
       });
     }
     column += width;
@@ -104,7 +98,7 @@ function appendGraphemeLine(state: CorpusState, line: string, row: number): void
 }
 
 function buildSearchCorpus(lines: readonly string[]): SearchCorpus {
-  const state: CorpusState = { chunks: [], spans: [], textLength: 0, pendingSeparator: false };
+  const state: CorpusState = { chunks: [], pendingSeparator: false, spans: [], textLength: 0 };
   for (let row = 0; row < lines.length; row++) {
     const line = stripTerminalSequences(lines[row] ?? "");
     if (PRINTABLE_ASCII.test(line)) {
@@ -114,7 +108,7 @@ function buildSearchCorpus(lines: readonly string[]): SearchCorpus {
     }
     markSeparator(state);
   }
-  return { text: state.chunks.join(""), spans: state.spans };
+  return { spans: state.spans, text: state.chunks.join("") };
 }
 
 function normalizeQuery(query: string): string {
@@ -128,10 +122,10 @@ function escapeRegExp(text: string): string {
 function findSearchCorpusMatches(
   corpus: SearchCorpus,
   normalizedQuery: string,
-): AltScreenSearchMatch[] {
+): altScreenSearchTypes.AltScreenSearchMatch[] {
   if (normalizedQuery === "") return [];
   const expression = new RegExp(escapeRegExp(normalizedQuery), "giu");
-  const matches: AltScreenSearchMatch[] = [];
+  const matches: altScreenSearchTypes.AltScreenSearchMatch[] = [];
   let spanIndex = 0;
 
   for (const match of corpus.text.matchAll(expression)) {
@@ -140,7 +134,7 @@ function findSearchCorpusMatches(
     while (spanIndex < corpus.spans.length && corpus.spans[spanIndex]!.textEnd <= start)
       spanIndex += 1;
 
-    const segments: AltScreenSearchSegment[] = [];
+    const segments: altScreenSearchTypes.AltScreenSearchSegment[] = [];
     for (let index = spanIndex; index < corpus.spans.length; index++) {
       const span = corpus.spans[index]!;
       if (span.textStart >= end) break;
@@ -155,7 +149,7 @@ function findSearchCorpusMatches(
       if (previous !== undefined && previous.row === span.row && startCol <= previous.endCol) {
         previous.endCol = Math.max(previous.endCol, endCol);
       } else {
-        segments.push({ row: span.row, startCol, endCol });
+        segments.push({ endCol, row: span.row, startCol });
       }
     }
     while (spanIndex < corpus.spans.length && corpus.spans[spanIndex]!.textEnd <= end)
@@ -166,55 +160,34 @@ function findSearchCorpusMatches(
   return matches;
 }
 
-export interface AltScreenSearchResult {
-  matches: AltScreenSearchMatch[];
-  changed: boolean;
-}
-
-export class AltScreenSearchIndex {
-  private sourceLines: string[] | undefined;
-  private corpus: SearchCorpus | undefined;
-  private normalizedQuery: string | undefined;
-  private matches: AltScreenSearchMatch[] = [];
-
-  search(lines: readonly string[], query: string): AltScreenSearchResult {
-    let sourceChanged = this.sourceLines?.length !== lines.length;
-    if (!sourceChanged && this.sourceLines !== undefined) {
-      for (let index = 0; index < lines.length; index++) {
-        if (this.sourceLines[index] === lines[index]) continue;
-        sourceChanged = true;
-        break;
-      }
-    }
-    if (sourceChanged || this.corpus === undefined) {
-      this.sourceLines = Array.from(lines);
-      this.corpus = buildSearchCorpus(lines);
-    }
-
+const findAltScreenSearchMatches: {
+  (lines: readonly string[], query: string): altScreenSearchTypes.AltScreenSearchMatch[];
+  (query: string): (lines: readonly string[]) => altScreenSearchTypes.AltScreenSearchMatch[];
+} = dual(
+  2,
+  (lines: readonly string[], query: string): altScreenSearchTypes.AltScreenSearchMatch[] => {
     const normalizedQuery = normalizeQuery(query);
-    const changed = sourceChanged || normalizedQuery !== this.normalizedQuery;
-    if (changed) {
-      this.normalizedQuery = normalizedQuery;
-      this.matches = findSearchCorpusMatches(this.corpus, normalizedQuery);
-    }
-    return { matches: this.matches, changed };
-  }
-}
+    return normalizedQuery === ""
+      ? []
+      : findSearchCorpusMatches(buildSearchCorpus(lines), normalizedQuery);
+  },
+);
 
-export const findAltScreenSearchMatches: {
-  (lines: readonly string[], query: string): AltScreenSearchMatch[];
-  (query: string): (lines: readonly string[]) => AltScreenSearchMatch[];
-} = dual(2, (lines: readonly string[], query: string): AltScreenSearchMatch[] => {
-  const normalizedQuery = normalizeQuery(query);
-  return normalizedQuery === ""
-    ? []
-    : findSearchCorpusMatches(buildSearchCorpus(lines), normalizedQuery);
-});
-
-export function getAltScreenSearchMatchKey(match: AltScreenSearchMatch): string {
+function getAltScreenSearchMatchKey(match: altScreenSearchTypes.AltScreenSearchMatch): string {
   const first = match.segments[0];
   const last = match.segments[match.segments.length - 1];
   return first !== undefined && last !== undefined
     ? `${first.row}:${first.startCol}:${last.row}:${last.endCol}`
     : "";
 }
+
+const altScreenSearch = {
+  AltScreenSearchIndex,
+  buildSearchCorpus,
+  findAltScreenSearchMatches,
+  findSearchCorpusMatches,
+  getAltScreenSearchMatchKey,
+  normalizeQuery,
+};
+
+export default altScreenSearch;

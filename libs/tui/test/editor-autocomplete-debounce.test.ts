@@ -3,10 +3,12 @@ import { describe, it } from "node:test";
 
 import { Effect } from "effect";
 
-import type { AutocompleteProvider, AutocompleteSuggestions } from "../src/autocomplete.ts";
-import { Editor } from "../src/components/editor.ts";
+import type autocompleteTypes from "../src/autocomplete.types.ts";
+import Editor from "../src/components/editor.ts";
 import editorHelpers from "./editor-helpers.ts";
-import { defaultEditorTheme } from "./test-themes.ts";
+import testThemes from "./test-themes.ts";
+
+const { defaultEditorTheme } = testThemes;
 
 const { applyCompletion, createTestTUI, flushAutocomplete, typeText } = editorHelpers;
 
@@ -27,7 +29,7 @@ function debouncesAutocompleteWhileTyping(): void {
         const editor = new Editor(createTestTUI(), defaultEditorTheme);
         let suggestionCalls = 0;
 
-        const mockProvider: AutocompleteProvider = {
+        const mockProvider: autocompleteTypes.AutocompleteProvider = {
           applyCompletion,
           getSuggestions: (lines, _cursorLine, cursorCol) => {
             suggestionCalls += 1;
@@ -62,7 +64,7 @@ function debouncesAutocompleteWhileTyping2(): void {
         const editor = new Editor(createTestTUI(), defaultEditorTheme);
         let suggestionCalls = 0;
 
-        const mockProvider: AutocompleteProvider = {
+        const mockProvider: autocompleteTypes.AutocompleteProvider = {
           applyCompletion,
           getSuggestions: (lines, _cursorLine, cursorCol) => {
             suggestionCalls += 1;
@@ -183,13 +185,13 @@ function abortsActiveAutocompleteTypingContinues(): void {
     ));
 }
 
-function abortableProvider(onAbort: () => void): AutocompleteProvider {
+function abortableProvider(onAbort: () => void): autocompleteTypes.AutocompleteProvider {
   return {
     applyCompletion,
     getSuggestions: (_lines, _cursorLine, _cursorCol, options) =>
       Effect.runPromise(
         Effect.sleep(500).pipe(
-          Effect.as<AutocompleteSuggestions | null>({
+          Effect.as<autocompleteTypes.AutocompleteSuggestions | null>({
             items: [{ label: "main.ts", value: "@main.ts" }],
             prefix: "@main",
           }),

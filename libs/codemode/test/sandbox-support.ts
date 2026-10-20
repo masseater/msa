@@ -2,19 +2,22 @@ import { Data, Effect } from "effect";
 import { dual } from "effect/Function";
 import { beforeEach, describe } from "vite-plus/test";
 
-import {
+import codemode from "../src/index.ts";
+import type codemodeTypes from "../src/index.types.ts";
+
+const {
   CodemodeSandbox,
-  type CodemodeSandboxBase,
-  type CodemodeSandboxBaseOptions,
-  type CodemodeTool,
   InlineCodemodeSandbox,
   RemoteCodemodeSandbox,
   loadQuickJSWasm,
   serveCodemodeRemote,
-} from "../src/index.ts";
+} = codemode;
 
 const INTERRUPT_BUDGET = 20_000;
-const BACKENDS: Record<string, (options: CodemodeSandboxBaseOptions) => CodemodeSandboxBase> = {
+const BACKENDS: Record<
+  string,
+  (options: codemodeTypes.CodemodeSandboxBaseOptions) => codemodeTypes.CodemodeSandboxBase
+> = {
   inline: (options) =>
     new InlineCodemodeSandbox({
       ...options,
@@ -38,17 +41,19 @@ const BACKENDS: Record<string, (options: CodemodeSandboxBaseOptions) => Codemode
 };
 
 const current = { backend: "worker" };
-const sandboxes: CodemodeSandboxBase[] = [];
+const sandboxes: codemodeTypes.CodemodeSandboxBase[] = [];
 
 function useBackend(name: string): void {
   current.backend = name;
 }
 
-function track(sandbox: CodemodeSandboxBase): void {
+function track(sandbox: codemodeTypes.CodemodeSandboxBase): void {
   sandboxes.push(sandbox);
 }
 
-function newSandbox(options: CodemodeSandboxBaseOptions = {}): CodemodeSandboxBase {
+function newSandbox(
+  options: codemodeTypes.CodemodeSandboxBaseOptions = {},
+): codemodeTypes.CodemodeSandboxBase {
   const create = BACKENDS[current.backend];
   if (create === undefined) throw new Error(`Unknown backend: ${current.backend}`);
   const sandbox = create(options);
@@ -56,7 +61,9 @@ function newSandbox(options: CodemodeSandboxBaseOptions = {}): CodemodeSandboxBa
   return sandbox;
 }
 
-function createSandbox(tools: CodemodeTool[] = []): CodemodeSandboxBase {
+function createSandbox(
+  tools: codemodeTypes.CodemodeTool[] = [],
+): codemodeTypes.CodemodeSandboxBase {
   return newSandbox({ timeoutMs: 10_000, tools });
 }
 
@@ -99,7 +106,7 @@ const rejectOnAbort: {
   ),
 );
 
-const echo: CodemodeTool = { execute: (args) => args, name: "echo" };
+const echo: codemodeTypes.CodemodeTool = { execute: (args) => args, name: "echo" };
 
 const PNG = "iVBORw0KGgo=";
 const JPEG = "/9j/4A==";

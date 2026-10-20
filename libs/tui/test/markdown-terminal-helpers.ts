@@ -3,14 +3,19 @@ import assert from "node:assert";
 import { Effect } from "effect";
 import { dual } from "effect/Function";
 
-import { Markdown } from "../src/components/markdown.ts";
-import type { TUI } from "../src/tui-interface.ts";
-import { TuiMainScreen } from "../src/tui-main-screen.ts";
-import { toJson } from "./effect-helpers.ts";
+import Markdown from "../src/components/markdown.ts";
+import type tuiInterfaceTypes from "../src/tui-interface.types.ts";
+import TuiMainScreen from "../src/tui-main-screen.ts";
+import effectHelpers from "./effect-helpers.ts";
 import type markdownTerminalHelpersTypes from "./markdown-terminal-helpers.types.ts";
-import { VirtualTerminal } from "./virtual-terminal.ts";
+import virtualTerminal from "./virtual-terminal.ts";
+import type virtualTerminalTypes from "./virtual-terminal.types.ts";
 
-type Verify = (terminal: VirtualTerminal) => Effect.Effect<void>;
+const { VirtualTerminal } = virtualTerminal;
+
+const { toJson } = effectHelpers;
+
+type Verify = (terminal: virtualTerminalTypes.VirtualTerminal) => Effect.Effect<void>;
 
 const renderMarkdownInTerminal: {
   (
@@ -28,7 +33,7 @@ const renderMarkdownInTerminal: {
   ): Effect.Effect<void> =>
     Effect.suspend(() => {
       const terminal = new VirtualTerminal(request.width, request.height);
-      const tui: TUI = new TuiMainScreen(terminal);
+      const tui: tuiInterfaceTypes.TUI = new TuiMainScreen(terminal);
       tui.addChild(new Markdown(request.source, 0, 0, request.theme));
       tui.start();
       return Effect.gen(function* () {

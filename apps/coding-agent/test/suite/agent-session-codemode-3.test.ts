@@ -1,4 +1,4 @@
-import type { AgentTool } from "@msa/agent-core";
+import type agentTypes from "@msa/agent-core/index.types";
 import testing from "@msa/testing";
 import { Effect } from "effect";
 import { afterEach, describe, expect, it } from "vite-plus/test";
@@ -74,7 +74,9 @@ const declaresModelsOnlyForTheSession = Effect.gen(function* () {
   const codemode = harness.session.agent.state.tools.find((tool) => tool.name === "codemode");
   expect(codemode?.description).toContain("`models`: classifiers and image generation");
   expect(codemode?.description).toContain(CODEMODE_DOCS_PATH);
-  const overridden = yield* awaited(createHarness({ tools: [createCodemodeTool() as AgentTool] }));
+  const overridden = yield* awaited(
+    createHarness({ tools: [createCodemodeTool() as agentTypes.AgentTool] }),
+  );
   harnesses4.push(overridden);
   const plain = overridden.session.agent.state.tools.find((tool) => tool.name === "codemode");
   expect(plain?.description).not.toContain("`models`");

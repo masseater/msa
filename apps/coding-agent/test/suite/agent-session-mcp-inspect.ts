@@ -1,5 +1,5 @@
-import { fauxAssistantMessage, fauxToolCall } from "@msa/ai";
-import type { SystemMessage } from "@msa/ai/compat";
+import ai from "@msa/ai";
+import type compatTypes from "@msa/ai/compat.types";
 import testing from "@msa/testing";
 import { Effect } from "effect";
 import { expect } from "vite-plus/test";
@@ -7,11 +7,13 @@ import { expect } from "vite-plus/test";
 import { MCP_SERVERS_SECTION } from "../../src/extensions/mcp/index.ts";
 import type harnessTypes from "./harness.types.ts";
 
+const { fauxAssistantMessage, fauxToolCall } = ai;
+
 const { awaited, runTest } = testing;
 
 const declaredToolNames = (harness: harnessTypes.Harness): string[] =>
   harness.session.messages
-    .filter((message): message is SystemMessage => message.role === "system")
+    .filter((message): message is compatTypes.SystemMessage => message.role === "system")
     .flatMap((message) => (message.toolsAdded ?? []).map((tool) => tool.name));
 
 const serversSection = (harness: harnessTypes.Harness): string | null | undefined => {

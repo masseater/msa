@@ -1,4 +1,4 @@
-import { type SystemMessage } from "@msa/ai";
+import type aiTypes from "@msa/ai/index.types";
 import durable from "@msa/durable";
 import harness from "@msa/durable/harness";
 import type durableTypes from "@msa/durable/index.types";
@@ -50,7 +50,7 @@ const apply = Effect.fn("apply")(function* (
   const replayed = replaySections((yield* awaited(conversation.context(context))).messages);
   expect([...replayed]).toEqual(Object.entries(desired));
   return drafts.map((draft): Planned => {
-    const message = draft.model![0] as SystemMessage;
+    const message = draft.model![0] as aiTypes.SystemMessage;
     expect(message).toMatchObject({ content: "", role: "system", timestamp: 7 });
     const omit = draft.edits?.map((edit) => {
       expect(edit.action).toBe("omit");
@@ -193,7 +193,7 @@ const emitsMinimalValue = Effect.gen(function* () {
 
 describe("system prompt preparation", () => {
   it("replays sections in place, deletes on null, and appends re-additions", () => {
-    const system = (sections: Record<string, string | null>): SystemMessage => ({
+    const system = (sections: Record<string, string | null>): aiTypes.SystemMessage => ({
       content: "",
       role: "system",
       sections,

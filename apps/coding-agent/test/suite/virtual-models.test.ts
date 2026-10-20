@@ -1,9 +1,11 @@
-import { fauxAssistantMessage, fauxToolCall } from "@msa/ai";
+import ai from "@msa/ai";
 import testing from "@msa/testing";
 import { Effect } from "effect";
 import { afterEach, describe, expect, it } from "vite-plus/test";
 
 import virtualModelsSupport from "./virtual-models-support.ts";
+
+const { fauxAssistantMessage, fauxToolCall } = ai;
 
 const { createRoutedHarness, defaultRoute, harnesses } = virtualModelsSupport;
 

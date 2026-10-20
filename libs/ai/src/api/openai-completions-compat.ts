@@ -1,14 +1,13 @@
-import type { CacheRetention, Model, ProviderEnv } from "../types.ts";
-import { getProviderEnvValue } from "../utils/provider-env.ts";
-import type {
-  OpenAICompletionsOptions,
-  ResolvedOpenAICompletionsCompat,
-} from "./openai-completions-types.ts";
+import type typesModule from "../types.types.ts";
+import providerEnv from "../utils/provider-env.ts";
+import type openaiCompletionsTypesModule from "./openai-completions-types.types.ts";
+
+const { getProviderEnvValue } = providerEnv;
 
 function resolveCacheRetention(input: {
-  cacheRetention?: CacheRetention | undefined;
-  env?: ProviderEnv | undefined;
-}): CacheRetention {
+  cacheRetention?: typesModule.CacheRetention | undefined;
+  env?: typesModule.ProviderEnv | undefined;
+}): typesModule.CacheRetention {
   const { cacheRetention, env } = input;
   if (cacheRetention !== undefined) {
     return cacheRetention;
@@ -19,7 +18,9 @@ function resolveCacheRetention(input: {
   return "short";
 }
 
-function detectCompat(model: Model<"openai-completions">): ResolvedOpenAICompletionsCompat {
+function detectCompat(
+  model: typesModule.Model<"openai-completions">,
+): openaiCompletionsTypesModule.ResolvedOpenAICompletionsCompat {
   const provider = model.provider;
   const baseUrl = model.baseUrl;
 
@@ -36,82 +37,84 @@ function detectCompat(model: Model<"openai-completions">): ResolvedOpenAIComplet
     provider === "openrouter" && model.id.startsWith("anthropic/") ? "anthropic" : undefined;
 
   return {
-    supportsStore: !isNonStandard,
-    supportsDeveloperRole: isOpenRouterDeveloperRoleModel || (!isNonStandard && !isOpenRouter),
-    supportsReasoningEffort: true,
-    supportsUsageInStreaming: true,
-    supportsFinishReason: true,
-    maxTokensField: useMaxTokens ? "max_tokens" : "max_completion_tokens",
-    requiresToolResultName: false,
-    requiresAssistantAfterToolResult: false,
-    requiresThinkingAsText: false,
-    requiresReasoningContentOnAssistantMessages: false,
-    thinkingFormat: isOpenRouter ? "openrouter" : "openai",
-    openRouterRouting: isOpenRouter ? { data_collection: "deny" } : {},
-    chatTemplateKwargs: {},
-    supportsThinkingTokenBudget: false,
-    thinkingTokenBudgetField: undefined,
-    supportsStrictMode: false,
-    supportsOpenAIGrammarTools: false,
-    supportsMidConvoSystemMessages: false,
-    supportsMidConvoToolAdditions: false,
     cacheControlFormat,
+    chatTemplateKwargs: {},
+    maxTokensField: useMaxTokens ? "max_tokens" : "max_completion_tokens",
+    openRouterRouting: isOpenRouter ? { data_collection: "deny" } : {},
+    requiresAssistantAfterToolResult: false,
+    requiresReasoningContentOnAssistantMessages: false,
+    requiresThinkingAsText: false,
+    requiresToolResultName: false,
     sendSessionAffinityHeaders: isOpenRouter,
     sessionAffinityFormat: isOpenRouter ? "openrouter" : "openai",
+    supportsDeveloperRole: isOpenRouterDeveloperRoleModel || (!isNonStandard && !isOpenRouter),
+    supportsFinishReason: true,
     supportsLongCacheRetention: true,
+    supportsMidConvoSystemMessages: false,
+    supportsMidConvoToolAdditions: false,
+    supportsOpenAIGrammarTools: false,
+    supportsReasoningEffort: true,
+    supportsStore: !isNonStandard,
+    supportsStrictMode: false,
+    supportsThinkingTokenBudget: false,
+    supportsUsageInStreaming: true,
+    thinkingFormat: isOpenRouter ? "openrouter" : "openai",
+    thinkingTokenBudgetField: undefined,
   };
 }
 
 function mergeCompat(
-  compat: NonNullable<Model<"openai-completions">["compat"]>,
-  detected: ResolvedOpenAICompletionsCompat,
-): ResolvedOpenAICompletionsCompat {
+  compat: NonNullable<typesModule.Model<"openai-completions">["compat"]>,
+  detected: openaiCompletionsTypesModule.ResolvedOpenAICompletionsCompat,
+): openaiCompletionsTypesModule.ResolvedOpenAICompletionsCompat {
   return {
-    supportsStore: compat.supportsStore ?? detected.supportsStore,
-    supportsDeveloperRole: compat.supportsDeveloperRole ?? detected.supportsDeveloperRole,
-    supportsReasoningEffort: compat.supportsReasoningEffort ?? detected.supportsReasoningEffort,
-    supportsUsageInStreaming: compat.supportsUsageInStreaming ?? detected.supportsUsageInStreaming,
-    supportsFinishReason: compat.supportsFinishReason ?? detected.supportsFinishReason,
+    cacheControlFormat: compat.cacheControlFormat ?? detected.cacheControlFormat,
+    chatTemplateKwargs: compat.chatTemplateKwargs ?? detected.chatTemplateKwargs,
     maxTokensField: compat.maxTokensField ?? detected.maxTokensField,
-    requiresToolResultName: compat.requiresToolResultName ?? detected.requiresToolResultName,
+    openRouterRouting: { ...detected.openRouterRouting, ...compat.openRouterRouting },
     requiresAssistantAfterToolResult:
       compat.requiresAssistantAfterToolResult ?? detected.requiresAssistantAfterToolResult,
-    requiresThinkingAsText: compat.requiresThinkingAsText ?? detected.requiresThinkingAsText,
     requiresReasoningContentOnAssistantMessages:
       compat.requiresReasoningContentOnAssistantMessages ??
       detected.requiresReasoningContentOnAssistantMessages,
-    thinkingFormat: compat.thinkingFormat ?? detected.thinkingFormat,
-    openRouterRouting: { ...detected.openRouterRouting, ...compat.openRouterRouting },
-    chatTemplateKwargs: compat.chatTemplateKwargs ?? detected.chatTemplateKwargs,
-    supportsThinkingTokenBudget:
-      compat.supportsThinkingTokenBudget ?? detected.supportsThinkingTokenBudget,
-    thinkingTokenBudgetField: compat.thinkingTokenBudgetField ?? detected.thinkingTokenBudgetField,
-    supportsStrictMode: compat.supportsStrictMode ?? detected.supportsStrictMode,
-    supportsOpenAIGrammarTools:
-      compat.supportsOpenAIGrammarTools ?? detected.supportsOpenAIGrammarTools,
+    requiresThinkingAsText: compat.requiresThinkingAsText ?? detected.requiresThinkingAsText,
+    requiresToolResultName: compat.requiresToolResultName ?? detected.requiresToolResultName,
+    sendSessionAffinityHeaders:
+      compat.sendSessionAffinityHeaders ?? detected.sendSessionAffinityHeaders,
+    sessionAffinityFormat: compat.sessionAffinityFormat ?? detected.sessionAffinityFormat,
+    supportsDeveloperRole: compat.supportsDeveloperRole ?? detected.supportsDeveloperRole,
+    supportsFinishReason: compat.supportsFinishReason ?? detected.supportsFinishReason,
+    supportsLongCacheRetention:
+      compat.supportsLongCacheRetention ?? detected.supportsLongCacheRetention,
     supportsMidConvoSystemMessages:
       compat.supportsMidConvoSystemMessages ?? detected.supportsMidConvoSystemMessages,
     supportsMidConvoToolAdditions:
       compat.supportsMidConvoToolAdditions ?? detected.supportsMidConvoToolAdditions,
-    cacheControlFormat: compat.cacheControlFormat ?? detected.cacheControlFormat,
-    sendSessionAffinityHeaders:
-      compat.sendSessionAffinityHeaders ?? detected.sendSessionAffinityHeaders,
-    sessionAffinityFormat: compat.sessionAffinityFormat ?? detected.sessionAffinityFormat,
-    supportsLongCacheRetention:
-      compat.supportsLongCacheRetention ?? detected.supportsLongCacheRetention,
+    supportsOpenAIGrammarTools:
+      compat.supportsOpenAIGrammarTools ?? detected.supportsOpenAIGrammarTools,
+    supportsReasoningEffort: compat.supportsReasoningEffort ?? detected.supportsReasoningEffort,
+    supportsStore: compat.supportsStore ?? detected.supportsStore,
+    supportsStrictMode: compat.supportsStrictMode ?? detected.supportsStrictMode,
+    supportsThinkingTokenBudget:
+      compat.supportsThinkingTokenBudget ?? detected.supportsThinkingTokenBudget,
+    supportsUsageInStreaming: compat.supportsUsageInStreaming ?? detected.supportsUsageInStreaming,
+    thinkingFormat: compat.thinkingFormat ?? detected.thinkingFormat,
+    thinkingTokenBudgetField: compat.thinkingTokenBudgetField ?? detected.thinkingTokenBudgetField,
     vllmPriority: compat.vllmPriority,
   };
 }
 
-function getCompat(model: Model<"openai-completions">): ResolvedOpenAICompletionsCompat {
+function getCompat(
+  model: typesModule.Model<"openai-completions">,
+): openaiCompletionsTypesModule.ResolvedOpenAICompletionsCompat {
   const detected = detectCompat(model);
   if (model.compat === undefined) return detected;
   return mergeCompat(model.compat, detected);
 }
 
-export {
+const openaiCompletionsCompat = {
   getCompat,
   resolveCacheRetention,
-  type OpenAICompletionsOptions,
-  type ResolvedOpenAICompletionsCompat,
 };
+
+export default openaiCompletionsCompat;

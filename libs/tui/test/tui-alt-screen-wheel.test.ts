@@ -3,18 +3,13 @@ import { describe, it } from "node:test";
 
 import { Effect } from "effect";
 
-import {
-  HStack,
-  MouseRegion,
-  ScrollView,
-  SelectList,
-  Text,
-  TuiAltScreen,
-  VStack,
-} from "../src/index.ts";
+import tuiModule from "../src/index.ts";
 import tuiAltScreenHelpers from "./tui-alt-screen-helpers.ts";
 import InputOverlay from "./tui-alt-screen-input-overlay.ts";
-import { VirtualTerminal } from "./virtual-terminal.ts";
+import virtualTerminal from "./virtual-terminal.ts";
+
+const { VirtualTerminal } = virtualTerminal;
+const { HStack, MouseRegion, ScrollView, SelectList, Text, TuiAltScreen, VStack } = tuiModule;
 
 const { trimmedViewport } = tuiAltScreenHelpers;
 

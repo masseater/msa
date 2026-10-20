@@ -1,5 +1,5 @@
 import testing from "@msa/testing";
-import type { NativeClipboard } from "@msa/tui";
+import type tuiTypes from "@msa/tui/index.types";
 import { Effect } from "effect";
 import { beforeEach, describe, expect, test, vi } from "vite-plus/test";
 
@@ -10,12 +10,12 @@ const { awaited, runTest, writeBytesFile } = testing;
 const mocks = vi.hoisted(() => ({
   command:
     vi.fn<(command: string, args: string[], options?: unknown) => Promise<Buffer | undefined>>(),
-  getImage: vi.fn<NativeClipboard["getImage"]>(),
-  getNativeClipboard: vi.fn<() => NativeClipboard | undefined>(),
+  getImage: vi.fn<tuiTypes.NativeClipboard["getImage"]>(),
+  getNativeClipboard: vi.fn<() => tuiTypes.NativeClipboard | undefined>(),
 }));
 
 vi.mock("../src/utils/clipboard-command.ts", () => ({ runClipboardCommand: mocks.command }));
-vi.mock("@msa/tui", () => ({ getNativeClipboard: mocks.getNativeClipboard }));
+vi.mock("@msa/tui", () => ({ default: { getNativeClipboard: mocks.getNativeClipboard } }));
 
 function commandResult(stdout: Buffer, status = 0): Buffer | undefined {
   return status === 0 ? stdout : undefined;

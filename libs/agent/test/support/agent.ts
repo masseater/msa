@@ -1,12 +1,15 @@
-import { type TranscriptContext, createAssistantMessageEventStream } from "@msa/ai";
+import ai from "@msa/ai";
+import type aiTypes from "@msa/ai/index.types";
 import { Deferred, Effect } from "effect";
 
-import type { StreamFn } from "../../src/types.ts";
+import type typesModule from "../../src/types.ts";
 import fixtures from "./fixtures.ts";
+
+const { createAssistantMessageEventStream } = ai;
 
 const { textMessage } = fixtures;
 
-const unusedStreamFunction = (): StreamFn => () => {
+const unusedStreamFunction = (): typesModule.StreamFn => () => {
   throw new Error("Unexpected stream call");
 };
 
@@ -22,7 +25,7 @@ const waitForAbort = (signal: AbortSignal | undefined): Effect.Effect<void> =>
     signal?.aborted === true ? Effect.void : Effect.andThen(Effect.sleep(5), waitForAbort(signal)),
   );
 
-const abortableStream = (): StreamFn => (_model, _context, options) => {
+const abortableStream = (): typesModule.StreamFn => (_model, _context, options) => {
   const stream = createAssistantMessageEventStream();
   queueMicrotask(() => {
     stream.push({ partial: textMessage(""), type: "start" });
@@ -38,7 +41,7 @@ const abortableStream = (): StreamFn => (_model, _context, options) => {
   return stream;
 };
 
-const userTexts = (context: TranscriptContext): string[] =>
+const userTexts = (context: aiTypes.TranscriptContext): string[] =>
   context.messages.flatMap((message) =>
     message.role === "user" && typeof message.content === "string" ? [message.content] : [],
   );

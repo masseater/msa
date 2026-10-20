@@ -1,12 +1,16 @@
 import * as NodeRuntime from "@effect/platform-node/NodeRuntime";
-import { type Message, createModels } from "@msa/ai";
-import { openaiProvider } from "@msa/ai/providers/openai";
+import ai from "@msa/ai";
+import type aiTypes from "@msa/ai/index.types";
+import openai from "@msa/ai/providers/openai";
 import durable from "@msa/durable";
 import harnessModule from "@msa/durable/harness";
 import memory from "@msa/durable/storage/memory";
 import { Console, Effect } from "effect";
 
 import support from "../support.ts";
+
+const { createModels } = ai;
+const { openaiProvider } = openai;
 
 const { Harness, createRegistry } = harnessModule;
 const { AssistantEntry, LiveDoc, defineExtension, section } = durable;
@@ -35,7 +39,7 @@ const openHarness = Effect.gen(function* () {
   return { harness, root };
 });
 
-const textBlock = (message: Message | undefined) =>
+const textBlock = (message: aiTypes.Message | undefined) =>
   message?.role === "assistant"
     ? message.content.find((content) => content.type === "text")
     : undefined;

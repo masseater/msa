@@ -1,10 +1,12 @@
-import type { AssistantMessage } from "@msa/ai/compat";
-import { contentText } from "@msa/ai/utils/text";
+import type compatTypes from "@msa/ai/compat.types";
+import textModule from "@msa/ai/utils/text";
 
 import type { Runtime } from "./runtime.ts";
 import { store } from "./store.ts";
-import type { Assignment, ThreadStatus, Task } from "./types.ts";
+import type { Assignment, Task, ThreadStatus } from "./types.ts";
 import type { WorkerSession } from "./worker.ts";
+
+const { contentText } = textModule;
 
 const REPORT_LIMIT = 4000;
 
@@ -19,16 +21,16 @@ function errorText(error: unknown): string {
 
 function outcomeOf(worker: WorkerSession, error: unknown): Outcome {
   const last = worker.messages.findLast(
-    (message): message is AssistantMessage => message.role === "assistant",
+    (message): message is compatTypes.AssistantMessage => message.role === "assistant",
   );
-  if (error !== undefined) return { status: "failed", content: errorText(error) };
+  if (error !== undefined) return { content: errorText(error), status: "failed" };
   if (last?.stopReason === "error" || last?.stopReason === "aborted") {
     const text = contentText(last.content, "\n").trim();
-    return { status: "failed", content: [text, last.errorMessage].filter(Boolean).join("\n") };
+    return { content: [text, last.errorMessage].filter(Boolean).join("\n"), status: "failed" };
   }
   return {
-    status: "completed",
     content: last === undefined ? "" : contentText(last.content, "\n").trim(),
+    status: "completed",
   };
 }
 
@@ -42,13 +44,13 @@ function applyOutcome(
   const review: Task[] = [];
   for (const assignment of assignments) {
     store.insertReport(database, {
-      id: `rep-${assignment.threadId}-${assignment.role}`,
-      taskId: assignment.taskId,
-      threadId: assignment.threadId,
-      role: assignment.role,
-      status: outcome.status,
       content: outcome.content,
       createdAt: now,
+      id: `rep-${assignment.threadId}-${assignment.role}`,
+      role: assignment.role,
+      status: outcome.status,
+      taskId: assignment.taskId,
+      threadId: assignment.threadId,
     });
     if (outcome.status !== "completed") {
       store.setTaskStatus(database, assignment.taskId, "failed", now);
@@ -91,4 +93,4 @@ function reportText(
     .join("\n\n");
 }
 
-export const outcomes = { outcomeOf, applyOutcome, reportText, errorText };
+export const outcomes = { applyOutcome, errorText, outcomeOf, reportText };

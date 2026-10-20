@@ -1,5 +1,5 @@
-import { createProvider } from "@msa/ai";
-import type { Model } from "@msa/ai/compat";
+import ai from "@msa/ai";
+import type compatTypes from "@msa/ai/compat.types";
 import testing from "@msa/testing";
 import { Effect } from "effect";
 import { afterEach, beforeEach, describe, expect, test, vi } from "vite-plus/test";
@@ -9,6 +9,8 @@ import { ModelConfig } from "../src/core/model-config.ts";
 import { type ModelRegistry, clearApiKeyCache } from "../src/core/model-registry.ts";
 import modelRegistrySupport from "./model-registry-support.ts";
 import modelRuntimeTestUtils from "./model-runtime-test-utils.ts";
+
+const { createProvider } = ai;
 
 const { makeGate } = modelRegistrySupport;
 const { createModelRegistry } = modelRuntimeTestUtils;
@@ -57,7 +59,7 @@ function providerWithApiKey(apiKey: string) {
   };
 }
 
-const filteredChatModel = (id: string): Model<"openai-completions"> => ({
+const filteredChatModel = (id: string): compatTypes.Model<"openai-completions"> => ({
   api: "openai-completions",
   baseUrl: "https://provider.test/v1",
   contextWindow: 1000,

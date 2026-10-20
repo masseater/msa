@@ -49,16 +49,16 @@ const projectTrust = (
           continue;
         }
         const handlerResult = outcome.success as ProjectTrustEventResult;
-        if (handlerResult.trusted !== "undecided") return { result: handlerResult, errors };
+        if (handlerResult.trusted !== "undecided") return { errors, result: handlerResult };
       }
     }
     return { errors };
   });
 
 const trustError = (ext: Extension, event: ProjectTrustEvent, error: unknown): ExtensionError => ({
-  extensionPath: ext.path,
-  event: event.type,
   error: toErrorMessage(error),
+  event: event.type,
+  extensionPath: ext.path,
   stack: error instanceof Error ? error.stack : undefined,
 });
 

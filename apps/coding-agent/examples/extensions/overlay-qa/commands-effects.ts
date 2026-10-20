@@ -19,7 +19,7 @@ const registerAnimation = (msa: ExtensionAPI): void => {
           showOverlay<void>({
             ctx,
             factory: (tui, theme, _kb, done) => new AnimationDemoComponent(tui, theme, done),
-            overlayOptions: { anchor: "center", width: 50, maxHeight: 20 },
+            overlayOptions: { anchor: "center", maxHeight: 20, width: 50 },
           }),
         ),
       ),
@@ -38,7 +38,7 @@ const showStacked = (ctx: ExtensionCommandContext, layer: 1 | 2 | 3) => {
     showOverlay<string>({
       ctx,
       factory: (_tui, theme, _kb, done) => new StackOverlayComponent(theme, layer, label, done),
-      overlayOptions: { anchor: "center", width: 50, offsetX, offsetY, maxHeight: 15 },
+      overlayOptions: { anchor: "center", maxHeight: 15, offsetX, offsetY, width: 50 },
     }),
   );
 };
@@ -77,9 +77,9 @@ const registerToggle = (msa: ExtensionAPI): void => {
             ctx.ui.custom<void>(
               (tui, theme, _kb, done) => new ToggleDemoComponent(tui, theme, done),
               {
+                onHandle: (handle) => setGlobalToggleHandle(handle),
                 overlay: true,
                 overlayOptions: { anchor: "center", width: 50 },
-                onHandle: (handle) => setGlobalToggleHandle(handle),
               },
             ),
           );
@@ -119,7 +119,7 @@ const registerFocus = (msa: ExtensionAPI): void => {
             showOverlay<void>({
               ctx,
               factory: (tui, theme, _kb, done) => new FocusDemoController(tui, theme, done),
-              overlayOptions: { anchor: "bottom-center", width: 55, margin: { bottom: 1 } },
+              overlayOptions: { anchor: "bottom-center", margin: { bottom: 1 }, width: 55 },
             }),
           );
         }),
@@ -138,7 +138,7 @@ const registerStreaming = (msa: ExtensionAPI): void => {
             showOverlay<void>({
               ctx,
               factory: (tui, theme, _kb, done) => new StreamingInputController(tui, theme, done),
-              overlayOptions: { anchor: "bottom-center", width: 60, margin: { bottom: 1 } },
+              overlayOptions: { anchor: "bottom-center", margin: { bottom: 1 }, width: 60 },
             }),
           );
         }),

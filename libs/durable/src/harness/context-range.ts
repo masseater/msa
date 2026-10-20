@@ -1,4 +1,4 @@
-import type { AssistantMessage, Message } from "@msa/ai";
+import type aiTypes from "@msa/ai/index.types";
 import type chordTypes from "@msa/chord/index.types";
 import { Effect, Function } from "effect";
 
@@ -13,7 +13,7 @@ const { SystemEntry } = entriesModule;
 const { scanAll } = util;
 
 const SCAN_PAGE_SIZE = 256;
-const EXCLUDED_STOP_REASONS: ReadonlySet<AssistantMessage["stopReason"]> = new Set([
+const EXCLUDED_STOP_REASONS: ReadonlySet<aiTypes.AssistantMessage["stopReason"]> = new Set([
   "aborted",
   "error",
   "deferred",
@@ -94,7 +94,7 @@ function findBaseline(
 }
 
 function carriesSystemMessage(entry: typesModule.EntryRecord): boolean {
-  const isSystem = (message: Message) => message.role === "system";
+  const isSystem = (message: aiTypes.Message) => message.role === "system";
   return (
     (entry.model?.some(isSystem) ?? false) ||
     (entry.edits?.some((edit) => edit.action === "replace" && edit.messages.some(isSystem)) ??
@@ -102,7 +102,10 @@ function carriesSystemMessage(entry: typesModule.EntryRecord): boolean {
   );
 }
 
-function leadWithSystem(messages: Message[], baseline: contextRangeTypes.Baseline): Message[] {
+function leadWithSystem(
+  messages: aiTypes.Message[],
+  baseline: contextRangeTypes.Baseline,
+): aiTypes.Message[] {
   const index = messages.findIndex((message) => message.role === "system");
   if (index <= 0) return messages;
   const system = messages[index]!;
@@ -115,7 +118,7 @@ function leadWithSystem(messages: Message[], baseline: contextRangeTypes.Baselin
 function contribute(
   entry: typesModule.EntryRecord,
   edit: typesModule.ContextEdit | undefined,
-): readonly Message[] {
+): readonly aiTypes.Message[] {
   if (edit?.action === "omit") return Object.freeze([]);
   const contributed = edit?.action === "replace" ? edit.messages : (entry.model ?? []);
   return Object.freeze(
@@ -126,9 +129,9 @@ function contribute(
 }
 
 function settle(
-  settled: readonly Message[],
-  open: readonly Message[],
-): { readonly settled: readonly Message[]; readonly open: readonly Message[] } {
+  settled: readonly aiTypes.Message[],
+  open: readonly aiTypes.Message[],
+): { readonly settled: readonly aiTypes.Message[]; readonly open: readonly aiTypes.Message[] } {
   const last = open.findLastIndex((message) => message.role === "assistant");
   if (last <= 0) return { open, settled };
   return {

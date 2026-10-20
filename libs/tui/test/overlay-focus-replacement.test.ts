@@ -3,9 +3,11 @@ import { describe, it } from "node:test";
 
 import { Effect } from "effect";
 
-import { Container } from "../src/tui-component.ts";
+import tuiComponent from "../src/tui-component.ts";
 import FocusableOverlay from "./overlay-non-capturing-focusable-overlay.ts";
 import overlayNonCapturingHelpers from "./overlay-non-capturing-helpers.ts";
+
+const { Container } = tuiComponent;
 
 const { renderAndFlush, withOverlayTui } = overlayNonCapturingHelpers;
 

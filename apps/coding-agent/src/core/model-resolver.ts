@@ -1,11 +1,6 @@
-import type { ThinkingLevel } from "@msa/agent-core";
-import {
-  type Api,
-  type AuthOperationOptions,
-  type KnownProvider,
-  type Model,
-  modelsAreEqual,
-} from "@msa/ai";
+import type agentTypes from "@msa/agent-core/index.types";
+import ai from "@msa/ai";
+import type aiTypes from "@msa/ai/index.types";
 import chalk from "chalk";
 import * as Effect from "effect/Effect";
 import { minimatch } from "minimatch";
@@ -13,22 +8,24 @@ import { minimatch } from "minimatch";
 import { isValidThinkingLevel } from "../cli/args.ts";
 import { awaited, awaiting } from "./awaiting.ts";
 import { DEFAULT_THINKING_LEVEL } from "./defaults.ts";
-import { describeModelPolicyDenial, type ModelPolicy } from "./model-policy.ts";
+import { type ModelPolicy, describeModelPolicyDenial } from "./model-policy.ts";
 import type { ModelRuntime } from "./model-runtime.ts";
 import { writeError, writeLog, writeWarn } from "./platform.ts";
 
-export const defaultModelPerProvider: Partial<Record<KnownProvider, string>> = {
+const { modelsAreEqual } = ai;
+
+export const defaultModelPerProvider: Partial<Record<aiTypes.KnownProvider, string>> = {
   "anthropic-api": "claude-opus-4-8",
   openai: "gpt-5.5",
   "openai-codex": "gpt-6.1-sol",
-  openrouter: "moonshotai/kimi-k2.6",
   opencode: "kimi-k2.6",
   "opencode-go": "kimi-k3",
+  openrouter: "moonshotai/kimi-k2.6",
 };
 
 export interface ScopedModel {
-  model: Model<Api>;
-  thinkingLevel?: ThinkingLevel | undefined;
+  model: aiTypes.Model<aiTypes.Api>;
+  thinkingLevel?: agentTypes.ThinkingLevel | undefined;
 }
 
 export interface ModelReferenceRequest {
@@ -41,15 +38,15 @@ export interface ModelReferenceRequest {
 export type ModelReferenceResult =
   | {
       status: "resolved";
-      model: Model<Api>;
-      thinkingLevel?: ThinkingLevel | undefined;
+      model: aiTypes.Model<aiTypes.Api>;
+      thinkingLevel?: agentTypes.ThinkingLevel | undefined;
       warning?: string;
     }
   | {
       status: "ambiguous";
-      candidates: Model<Api>[];
+      candidates: aiTypes.Model<aiTypes.Api>[];
       usableCount: number;
-      thinkingLevel?: ThinkingLevel | undefined;
+      thinkingLevel?: agentTypes.ThinkingLevel | undefined;
       warning?: string;
     }
   | {
@@ -59,17 +56,17 @@ export type ModelReferenceResult =
 
 export interface ModelReferenceTarget {
   provider: string;
-  providerModels: [Model<Api>, ...Model<Api>[]];
+  providerModels: [aiTypes.Model<aiTypes.Api>, ...aiTypes.Model<aiTypes.Api>[]];
   modelText: string;
   modelId: string;
-  thinkingLevel?: ThinkingLevel | undefined;
+  thinkingLevel?: agentTypes.ThinkingLevel | undefined;
 }
 
 type ResolvedOrAmbiguous = Exclude<ModelReferenceResult, { status: "not-found" }>;
 
 function splitThinkingSuffix(
   text: string,
-): { base: string; thinkingLevel: ThinkingLevel } | undefined {
+): { base: string; thinkingLevel: agentTypes.ThinkingLevel } | undefined {
   const colonIndex = text.lastIndexOf(":");
   const suffix = text.substring(colonIndex + 1);
   if (colonIndex === -1 || !isValidThinkingLevel(suffix)) return undefined;
@@ -78,7 +75,7 @@ function splitThinkingSuffix(
 
 function splitProviderPrefix(
   text: string,
-  models: readonly Model<Api>[],
+  models: readonly aiTypes.Model<aiTypes.Api>[],
 ): { provider: string; modelText: string } | undefined {
   const slashIndex = text.indexOf("/");
   if (slashIndex === -1) return undefined;
@@ -86,12 +83,12 @@ function splitProviderPrefix(
   const modelText = text.substring(slashIndex + 1).trim();
   if (prefix === "" || modelText === "") return undefined;
   const provider = models.find((model) => model.provider.toLowerCase() === prefix)?.provider;
-  return provider !== undefined && provider !== "" ? { provider, modelText } : undefined;
+  return provider !== undefined && provider !== "" ? { modelText, provider } : undefined;
 }
 
 export function resolveModelReference(
   request: ModelReferenceRequest,
-  models: readonly Model<Api>[],
+  models: readonly aiTypes.Model<aiTypes.Api>[],
   usable: (provider: string) => boolean,
 ): ModelReferenceResult {
   const text = request.text.trim();
@@ -115,13 +112,13 @@ export function resolveModelReference(
   return {
     status: "not-found",
     target: {
+      modelId: suffix?.base ?? modelText,
+      modelText,
       provider: anchor.provider,
       providerModels: [
         anchor,
         ...pool.filter((model) => model.provider === anchor.provider && model !== anchor),
       ],
-      modelText,
-      modelId: suffix?.base ?? modelText,
       thinkingLevel: suffix?.thinkingLevel,
     },
   };
@@ -129,10 +126,10 @@ export function resolveModelReference(
 
 export function findExactModelReferenceMatch(
   modelReference: string,
-  models: readonly Model<Api>[],
-): Model<Api> | undefined {
+  models: readonly aiTypes.Model<aiTypes.Api>[],
+): aiTypes.Model<aiTypes.Api> | undefined {
   const result = resolveModelReference(
-    { text: modelReference, thinkingSuffix: "none", fuzzy: false },
+    { fuzzy: false, text: modelReference, thinkingSuffix: "none" },
     models,
     () => true,
   );
@@ -142,7 +139,7 @@ export function findExactModelReferenceMatch(
 function resolveText(
   text: string,
   request: ModelReferenceRequest,
-  pool: readonly Model<Api>[],
+  pool: readonly aiTypes.Model<aiTypes.Api>[],
   usable: (provider: string) => boolean,
 ): ModelReferenceResult {
   const reference = selectReference(text, pool, request.fuzzy, usable);
@@ -180,14 +177,14 @@ function resolveText(
 
 function selectReference(
   text: string,
-  pool: readonly Model<Api>[],
+  pool: readonly aiTypes.Model<aiTypes.Api>[],
   fuzzy: boolean,
   usable: (provider: string) => boolean,
 ): ResolvedOrAmbiguous | undefined {
   const lowerText = text.toLowerCase();
   const raw = pool.filter((model) => model.id.toLowerCase() === lowerText);
   const split = splitProviderPrefix(text, pool);
-  let named: Model<Api> | undefined;
+  let named: aiTypes.Model<aiTypes.Api> | undefined;
   if (split !== undefined) {
     const providerModels = pool.filter((model) => model.provider === split.provider);
     const lowerModelText = split.modelText.toLowerCase();
@@ -202,17 +199,20 @@ function selectReference(
   const [firstCandidate] = candidates;
   if (firstCandidate === undefined) return undefined;
   if (new Set(candidates.map((model) => model.provider)).size === 1)
-    return { status: "resolved", model: firstCandidate };
-  if (named !== undefined && usable(named.provider)) return { status: "resolved", model: named };
+    return { model: firstCandidate, status: "resolved" };
+  if (named !== undefined && usable(named.provider)) return { model: named, status: "resolved" };
   const usableOthers = others.filter((model) => usable(model.provider));
   const [onlyUsable] = usableOthers;
   if (usableOthers.length === 1 && onlyUsable !== undefined)
-    return { status: "resolved", model: onlyUsable };
-  if (usableOthers.length === 0 && named !== undefined) return { status: "resolved", model: named };
-  return { status: "ambiguous", candidates, usableCount: usableOthers.length };
+    return { model: onlyUsable, status: "resolved" };
+  if (usableOthers.length === 0 && named !== undefined) return { model: named, status: "resolved" };
+  return { candidates, status: "ambiguous", usableCount: usableOthers.length };
 }
 
-function fuzzyMatches(text: string, models: readonly Model<Api>[]): Model<Api>[] {
+function fuzzyMatches(
+  text: string,
+  models: readonly aiTypes.Model<aiTypes.Api>[],
+): aiTypes.Model<aiTypes.Api>[] {
   const lowerText = text.toLowerCase();
   return models.filter(
     (model) =>
@@ -221,7 +221,7 @@ function fuzzyMatches(text: string, models: readonly Model<Api>[]): Model<Api>[]
 }
 
 function selectFuzzy(
-  matches: Model<Api>[],
+  matches: aiTypes.Model<aiTypes.Api>[],
   usable: (provider: string) => boolean,
 ): ResolvedOrAmbiguous | undefined {
   if (matches.length === 0) return undefined;
@@ -232,15 +232,17 @@ function selectFuzzy(
   if (best === undefined) return undefined;
   const tied = pool.filter((model) => model.id === best.id);
   if (new Set(tied.map((model) => model.provider)).size === 1)
-    return { status: "resolved", model: best };
+    return { model: best, status: "resolved" };
   return {
-    status: "ambiguous",
     candidates: tied,
+    status: "ambiguous",
     usableCount: usableMatches.length > 0 ? tied.length : 0,
   };
 }
 
-function bestFuzzyMatch(matches: readonly Model<Api>[]): Model<Api> | undefined {
+function bestFuzzyMatch(
+  matches: readonly aiTypes.Model<aiTypes.Api>[],
+): aiTypes.Model<aiTypes.Api> | undefined {
   const aliases = matches.filter((model) => isAlias(model.id));
   return [...(aliases.length > 0 ? aliases : matches)].sort((a, b) => b.id.localeCompare(a.id))[0];
 }
@@ -250,10 +252,10 @@ function isAlias(id: string): boolean {
 }
 
 function buildFallbackModel(
-  providerModels: [Model<Api>, ...Model<Api>[]],
+  providerModels: [aiTypes.Model<aiTypes.Api>, ...aiTypes.Model<aiTypes.Api>[]],
   modelId: string,
-): Model<Api> {
-  const defaultId = defaultModelPerProvider[providerModels[0].provider as KnownProvider];
+): aiTypes.Model<aiTypes.Api> {
+  const defaultId = defaultModelPerProvider[providerModels[0].provider as aiTypes.KnownProvider];
   const baseModel =
     defaultId !== undefined && defaultId !== ""
       ? (providerModels.find((m) => m.id === defaultId) ?? providerModels[0])
@@ -270,14 +272,14 @@ export function findModelPolicyDenial(options: {
   reference: string;
   provider?: string | undefined;
   policy: ModelPolicy;
-  catalogModels: readonly Model<Api>[];
-}): { model: Model<Api>; message: string } | undefined {
+  catalogModels: readonly aiTypes.Model<aiTypes.Api>[];
+}): { model: aiTypes.Model<aiTypes.Api>; message: string } | undefined {
   const result = resolveModelReference(
     {
-      text: options.reference,
-      provider: options.provider,
-      thinkingSuffix: "lenient",
       fuzzy: true,
+      provider: options.provider,
+      text: options.reference,
+      thinkingSuffix: "lenient",
     },
     options.catalogModels,
     () => true,
@@ -290,13 +292,13 @@ export function findModelPolicyDenial(options: {
         : [];
   for (const model of candidates) {
     const message = describeModelPolicyDenial(options.policy, model);
-    if (message) return { model, message };
+    if (message) return { message, model };
   }
   return undefined;
 }
 
 export function formatModelPolicyDenialError(denial: {
-  model: Model<Api>;
+  model: aiTypes.Model<aiTypes.Api>;
   message: string;
 }): string {
   return `Model "${denial.model.provider}/${denial.model.id}" is ${denial.message}. Open /model to change it.`;
@@ -316,31 +318,34 @@ export interface ResolveModelScopeResult {
 
 export function resolveModelScopeFromModels(
   patterns: string[],
-  models: readonly Model<Api>[],
+  models: readonly aiTypes.Model<aiTypes.Api>[],
 ): ResolveModelScopeResult {
   const scopedModels: ScopedModel[] = [];
   const diagnostics: ModelScopeDiagnostic[] = [];
-  const add = (model: Model<Api>, thinkingLevel: ThinkingLevel | undefined) => {
+  const add = (
+    model: aiTypes.Model<aiTypes.Api>,
+    thinkingLevel: agentTypes.ThinkingLevel | undefined,
+  ) => {
     if (!scopedModels.some((scoped) => modelsAreEqual(scoped.model, model))) {
       scopedModels.push({ model, thinkingLevel });
     }
   };
   const noMatch = (pattern: string) =>
     diagnostics.push({
-      type: "warning",
       code: "no-match",
       message: `No models match pattern "${pattern}"`,
       pattern,
+      type: "warning",
     });
-  const ambiguous = (pattern: string, candidates: readonly Model<Api>[]) => {
+  const ambiguous = (pattern: string, candidates: readonly aiTypes.Model<aiTypes.Api>[]) => {
     const providers = [...new Set(candidates.map((m) => m.provider))].sort((a, b) =>
       a.localeCompare(b),
     );
     diagnostics.push({
-      type: "warning",
       code: "ambiguous",
       message: `Pattern "${pattern}" matches several providers: ${providers.join(", ")}. Use provider/id to choose one.`,
       pattern,
+      type: "warning",
     });
   };
 
@@ -351,11 +356,11 @@ export function resolveModelScopeFromModels(
       const thinkingLevel = thinking?.thinkingLevel;
 
       const exact = resolveModelReference(
-        { text: globPattern, thinkingSuffix: "none", fuzzy: false },
+        { fuzzy: false, text: globPattern, thinkingSuffix: "none" },
         models,
         () => true,
       );
-      let matches: readonly Model<Api>[];
+      let matches: readonly aiTypes.Model<aiTypes.Api>[];
       if (exact.status === "resolved") matches = [exact.model];
       else if (exact.status === "ambiguous") {
         matches = exact.candidates;
@@ -373,7 +378,7 @@ export function resolveModelScopeFromModels(
     }
 
     const result = resolveModelReference(
-      { text: pattern, thinkingSuffix: "lenient", fuzzy: true },
+      { fuzzy: true, text: pattern, thinkingSuffix: "lenient" },
       models,
       () => true,
     );
@@ -383,10 +388,10 @@ export function resolveModelScopeFromModels(
     }
     if (result.warning !== undefined && result.warning !== "") {
       diagnostics.push({
-        type: "warning",
         code: "invalid-thinking-level",
         message: result.warning,
         pattern,
+        type: "warning",
       });
     }
     if (result.status === "ambiguous") ambiguous(pattern, result.candidates);
@@ -394,13 +399,13 @@ export function resolveModelScopeFromModels(
     for (const model of matches) add(model, result.thinkingLevel);
   }
 
-  return { scopedModels, diagnostics };
+  return { diagnostics, scopedModels };
 }
 
 export function resolveModelScopeWithDiagnostics(
   patterns: string[],
   modelRuntime: ModelRuntime,
-  options?: AuthOperationOptions,
+  options?: aiTypes.AuthOperationOptions,
 ): Promise<ResolveModelScopeResult> {
   return Effect.runPromise(
     awaiting(function* () {
@@ -415,7 +420,7 @@ export function resolveModelScopeWithDiagnostics(
 export function resolveModelScope(
   patterns: string[],
   modelRuntime: ModelRuntime,
-  options?: AuthOperationOptions,
+  options?: aiTypes.AuthOperationOptions,
 ): Promise<ScopedModel[]> {
   return Effect.runPromise(
     awaiting(function* () {
@@ -431,8 +436,8 @@ export function resolveModelScope(
 }
 
 export interface ResolveCliModelResult {
-  model: Model<Api> | undefined;
-  thinkingLevel?: ThinkingLevel | undefined;
+  model: aiTypes.Model<aiTypes.Api> | undefined;
+  thinkingLevel?: agentTypes.ThinkingLevel | undefined;
   warning: string | undefined;
   error: string | undefined;
 }
@@ -440,22 +445,22 @@ export interface ResolveCliModelResult {
 export function resolveCliModel(options: {
   cliProvider?: string | undefined;
   cliModel?: string | undefined;
-  cliThinking?: ThinkingLevel | undefined;
+  cliThinking?: agentTypes.ThinkingLevel | undefined;
   inlineApiKey?: boolean | undefined;
   modelRuntime: ModelRuntime;
 }): ResolveCliModelResult {
   const { cliProvider, cliModel, cliThinking, inlineApiKey, modelRuntime } = options;
 
   if (cliModel === undefined || cliModel === "") {
-    return { model: undefined, warning: undefined, error: undefined };
+    return { error: undefined, model: undefined, warning: undefined };
   }
 
   const models = [...modelRuntime.getModels()];
   if (models.length === 0) {
     return {
+      error: "No models available. Check your installation or add models to models.json.",
       model: undefined,
       warning: undefined,
-      error: "No models available. Check your installation or add models to models.json.",
     };
   }
 
@@ -469,14 +474,14 @@ export function resolveCliModel(options: {
     (provider === undefined || provider === "")
   ) {
     return {
+      error: `Unknown provider "${cliProvider}". Use --list-models to see available providers/models.`,
       model: undefined,
       warning: undefined,
-      error: `Unknown provider "${cliProvider}". Use --list-models to see available providers/models.`,
     };
   }
 
   const result = resolveModelReference(
-    { text: cliModel, provider, thinkingSuffix: "strict", fuzzy: true },
+    { fuzzy: true, provider, text: cliModel, thinkingSuffix: "strict" },
     models,
     inlineApiKey === true
       ? () => false
@@ -484,23 +489,23 @@ export function resolveCliModel(options: {
   );
   if (result.status === "resolved") {
     return {
+      error: undefined,
       model: result.model,
       thinkingLevel: result.thinkingLevel,
       warning: result.warning,
-      error: undefined,
     };
   }
   const denial = findModelPolicyDenial({
-    reference: cliModel,
-    provider,
-    policy: modelRuntime.getModelPolicy(),
     catalogModels: modelRuntime.getCatalogModels(),
+    policy: modelRuntime.getModelPolicy(),
+    provider,
+    reference: cliModel,
   });
   if (denial) {
     return {
+      error: formatModelPolicyDenialError(denial),
       model: undefined,
       warning: undefined,
-      error: formatModelPolicyDenialError(denial),
     };
   }
   if (result.status === "ambiguous") {
@@ -515,18 +520,18 @@ export function resolveCliModel(options: {
           ? "No matching provider is authenticated."
           : "More than one matching provider is authenticated.";
     return {
+      error: `Model "${cliModel}" is ambiguous across providers: ${matches}. ${authHint} Use --provider or provider/model.`,
       model: undefined,
       warning: undefined,
-      error: `Model "${cliModel}" is ambiguous across providers: ${matches}. ${authHint} Use --provider or provider/model.`,
     };
   }
 
   const { target } = result;
   if (target === undefined) {
     return {
+      error: `Model "${cliModel}" not found. Use --list-models to see available models.`,
       model: undefined,
       warning: undefined,
-      error: `Model "${cliModel}" not found. Use --list-models to see available models.`,
     };
   }
 
@@ -535,19 +540,19 @@ export function resolveCliModel(options: {
   const fallbackModel = buildFallbackModel(target.providerModels, modelId);
   const requestedThinking = cliThinking ?? fallbackThinking;
   return {
+    error: undefined,
     model:
       requestedThinking !== undefined && requestedThinking !== "off"
         ? { ...fallbackModel, reasoning: true }
         : fallbackModel,
     thinkingLevel: fallbackThinking,
     warning: `Model "${modelId}" not found for provider "${target.provider}". Using custom model id.`,
-    error: undefined,
   };
 }
 
 export interface InitialModelResult {
-  model: Model<Api> | undefined;
-  thinkingLevel: ThinkingLevel;
+  model: aiTypes.Model<aiTypes.Api> | undefined;
+  thinkingLevel: agentTypes.ThinkingLevel;
   fallbackMessage: string | undefined;
 }
 
@@ -556,8 +561,8 @@ export function findInitialModel(options: {
   isContinuing: boolean;
   defaultProvider?: string | undefined;
   defaultModelId?: string | undefined;
-  defaultThinkingLevel?: ThinkingLevel | undefined;
-  modelThinkingLevels?: Record<string, ThinkingLevel> | undefined;
+  defaultThinkingLevel?: agentTypes.ThinkingLevel | undefined;
+  modelThinkingLevels?: Record<string, agentTypes.ThinkingLevel> | undefined;
   modelRuntime: ModelRuntime;
 }): Promise<InitialModelResult> {
   return Effect.runPromise(
@@ -572,18 +577,18 @@ export function findInitialModel(options: {
         modelRuntime,
       } = options;
 
-      let model: Model<Api> | undefined;
-      let thinkingLevel: ThinkingLevel = DEFAULT_THINKING_LEVEL;
+      let model: aiTypes.Model<aiTypes.Api> | undefined;
+      let thinkingLevel: agentTypes.ThinkingLevel = DEFAULT_THINKING_LEVEL;
 
       const scopedModel = scopedModels[0];
       if (scopedModel !== undefined && !isContinuing) {
         const perModel =
           modelThinkingLevels?.[`${scopedModel.model.provider}/${scopedModel.model.id}`];
         return {
+          fallbackMessage: undefined,
           model: scopedModel.model,
           thinkingLevel:
             scopedModel.thinkingLevel ?? perModel ?? defaultThinkingLevel ?? DEFAULT_THINKING_LEVEL,
-          fallbackMessage: undefined,
         };
       }
 
@@ -602,36 +607,36 @@ export function findInitialModel(options: {
           } else if (defaultThinkingLevel !== undefined) {
             thinkingLevel = defaultThinkingLevel;
           }
-          return { model, thinkingLevel, fallbackMessage: undefined };
+          return { fallbackMessage: undefined, model, thinkingLevel };
         }
       }
 
       const availableModels = [...modelRuntime.getAvailableSnapshot()];
 
       if (availableModels.length > 0) {
-        for (const provider of Object.keys(defaultModelPerProvider) as KnownProvider[]) {
+        for (const provider of Object.keys(defaultModelPerProvider) as aiTypes.KnownProvider[]) {
           const defaultId = defaultModelPerProvider[provider];
           const match = availableModels.find((m) => m.provider === provider && m.id === defaultId);
           if (match !== undefined) {
             return {
+              fallbackMessage: undefined,
               model: match,
               thinkingLevel: DEFAULT_THINKING_LEVEL,
-              fallbackMessage: undefined,
             };
           }
         }
 
         return {
+          fallbackMessage: undefined,
           model: availableModels[0],
           thinkingLevel: DEFAULT_THINKING_LEVEL,
-          fallbackMessage: undefined,
         };
       }
 
       return {
+        fallbackMessage: undefined,
         model: undefined,
         thinkingLevel: DEFAULT_THINKING_LEVEL,
-        fallbackMessage: undefined,
       };
     }),
   );
@@ -640,10 +645,10 @@ export function findInitialModel(options: {
 export function restoreModelFromSession(
   savedProvider: string,
   savedModelId: string,
-  currentModel: Model<Api> | undefined,
+  currentModel: aiTypes.Model<aiTypes.Api> | undefined,
   shouldPrintMessages: boolean,
   modelRuntime: ModelRuntime,
-): Promise<{ model: Model<Api> | undefined; fallbackMessage: string | undefined }> {
+): Promise<{ model: aiTypes.Model<aiTypes.Api> | undefined; fallbackMessage: string | undefined }> {
   return Effect.runPromise(
     Effect.sync(() => {
       const restoredModel = modelRuntime.getModel(savedProvider, savedModelId);
@@ -657,7 +662,7 @@ export function restoreModelFromSession(
         if (shouldPrintMessages) {
           writeLog(chalk.dim(`Restored model: ${savedProvider}/${savedModelId}`));
         }
-        return { model: restoredModel, fallbackMessage: undefined };
+        return { fallbackMessage: undefined, model: restoredModel };
       }
 
       const reason = restoredModel === undefined ? "model no longer exists" : "no auth configured";
@@ -675,8 +680,8 @@ export function restoreModelFromSession(
           writeLog(chalk.dim(`Falling back to: ${currentModel.provider}/${currentModel.id}`));
         }
         return {
-          model: currentModel,
           fallbackMessage: `Could not restore model ${savedProvider}/${savedModelId} (${reason}). Using ${currentModel.provider}/${currentModel.id}.`,
+          model: currentModel,
         };
       }
 
@@ -684,8 +689,8 @@ export function restoreModelFromSession(
 
       const firstAvailableModel = availableModels[0];
       if (firstAvailableModel !== undefined) {
-        let fallbackModel: Model<Api> | undefined;
-        for (const provider of Object.keys(defaultModelPerProvider) as KnownProvider[]) {
+        let fallbackModel: aiTypes.Model<aiTypes.Api> | undefined;
+        for (const provider of Object.keys(defaultModelPerProvider) as aiTypes.KnownProvider[]) {
           const defaultId = defaultModelPerProvider[provider];
           const match = availableModels.find((m) => m.provider === provider && m.id === defaultId);
           if (match !== undefined) {
@@ -703,12 +708,12 @@ export function restoreModelFromSession(
         }
 
         return {
-          model: fallbackModel,
           fallbackMessage: `Could not restore model ${savedProvider}/${savedModelId} (${reason}). Using ${fallbackModel.provider}/${fallbackModel.id}.`,
+          model: fallbackModel,
         };
       }
 
-      return { model: undefined, fallbackMessage: undefined };
+      return { fallbackMessage: undefined, model: undefined };
     }),
   );
 }

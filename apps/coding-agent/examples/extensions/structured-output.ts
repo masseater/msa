@@ -1,7 +1,9 @@
-import { defineTool, type ExtensionAPI } from "@msa/coding-agent";
-import { Text } from "@msa/tui";
+import { type ExtensionAPI, defineTool } from "@msa/coding-agent";
+import tui from "@msa/tui";
 import { Effect } from "effect";
 import { Type } from "typebox";
+
+const { Text } = tui;
 
 interface StructuredOutputDetails {
   headline: string;
@@ -10,21 +12,8 @@ interface StructuredOutputDetails {
 }
 
 const structuredOutputTool = defineTool({
-  name: "structured_output",
-  label: "Structured Output",
   description:
     "Return a final structured answer. Use this as your last action when the user asks for structured output or a machine-readable summary.",
-  promptSnippet: "Emit a final structured answer as a terminating tool result",
-  promptGuidelines: [
-    "Use structured_output as your final action when the user asks for structured output, JSON-like output, or a machine-readable summary.",
-    "After calling structured_output, do not emit another assistant response in the same turn.",
-  ],
-  parameters: Type.Object({
-    headline: Type.String({ description: "Short title for the result" }),
-    summary: Type.String({ description: "One-paragraph summary" }),
-    actionItems: Type.Array(Type.String(), { description: "Concrete next steps or key bullets" }),
-  }),
-
   execute: (_toolCallId, params) =>
     Effect.runPromise(
       Effect.succeed({
@@ -37,7 +26,18 @@ const structuredOutputTool = defineTool({
         terminate: true,
       }),
     ),
-
+  label: "Structured Output",
+  name: "structured_output",
+  parameters: Type.Object({
+    headline: Type.String({ description: "Short title for the result" }),
+    summary: Type.String({ description: "One-paragraph summary" }),
+    actionItems: Type.Array(Type.String(), { description: "Concrete next steps or key bullets" }),
+  }),
+  promptGuidelines: [
+    "Use structured_output as your final action when the user asks for structured output, JSON-like output, or a machine-readable summary.",
+    "After calling structured_output, do not emit another assistant response in the same turn.",
+  ],
+  promptSnippet: "Emit a final structured answer as a terminating tool result",
   renderResult(result, _options, theme) {
     const details = result.details as StructuredOutputDetails | undefined;
     if (details === undefined) {

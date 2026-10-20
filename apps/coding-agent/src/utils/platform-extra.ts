@@ -30,7 +30,7 @@ export const toNamespacedPath = (path: string): string => pathService.toNamespac
 
 const lastWindowsSeparator = (path: string): { trimmed: string; index: number } => {
   const trimmed = path.replace(/[\\/]+$/u, "");
-  return { trimmed, index: Math.max(trimmed.lastIndexOf("\\"), trimmed.lastIndexOf("/")) };
+  return { index: Math.max(trimmed.lastIndexOf("\\"), trimmed.lastIndexOf("/")), trimmed };
 };
 
 export const windowsBasename = (path: string): string => {

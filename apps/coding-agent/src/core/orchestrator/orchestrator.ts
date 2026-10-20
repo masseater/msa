@@ -1,4 +1,4 @@
-import type { AgentMessage } from "@msa/agent-core";
+import type agentTypes from "@msa/agent-core/index.types";
 import { Effect, Fiber } from "effect";
 
 import { actions } from "./actions.ts";
@@ -8,7 +8,6 @@ import { type Runtime, nowMillis } from "./runtime.ts";
 import { scheduling } from "./schedule.ts";
 import { settling } from "./settle.ts";
 import {
-  snapshots,
   type CreateTaskInput,
   type NoteDelivery,
   type OrchestratorSnapshot,
@@ -19,6 +18,7 @@ import {
   type SetTaskDependsInput,
   type SetTaskStateInput,
   type TaskView,
+  snapshots,
 } from "./snapshot.ts";
 import { store } from "./store.ts";
 import { OrchestratorTelemetry } from "./telemetry.ts";
@@ -28,13 +28,6 @@ import type { WrapUp } from "./wrap-up.ts";
 
 export type { HandoffInput, HandoffResult } from "./handoff.ts";
 export type {
-  CreateWorkerOptions,
-  OrchestratorDefaults,
-  OrchestratorOptions,
-  OrchestratorReport,
-  WorkerSession,
-} from "./worker.ts";
-export type {
   CreateTaskInput,
   NoteDelivery,
   ReplanInput,
@@ -43,15 +36,22 @@ export type {
   SetTaskDependsInput,
   SetTaskStateInput,
 } from "./types.ts";
+export type {
+  CreateWorkerOptions,
+  OrchestratorDefaults,
+  OrchestratorOptions,
+  OrchestratorReport,
+  WorkerSession,
+} from "./worker.ts";
 
 export const ORCHESTRATOR_REPORT_MESSAGE_TYPE = "msa.orchestrator.report";
 
 const EMPTY: OrchestratorSnapshot = {
+  maxConcurrentThreads: 4,
+  replans: [],
+  rounds: [],
   tasks: [],
   threads: [],
-  rounds: [],
-  replans: [],
-  maxConcurrentThreads: 4,
 };
 
 export class Orchestrator implements Runtime {
@@ -134,15 +134,15 @@ export class Orchestrator implements Runtime {
     };
   }
 
-  messages(id: string): readonly AgentMessage[] {
+  messages(id: string): readonly agentTypes.AgentMessage[] {
     const sessionFile = this.snapshot.threads.find((thread) => thread.id === id)?.sessionFile;
     return this.transcripts.messages(id, this.workers, sessionFile ?? null);
   }
 
   progress(id: string): { startedAt: number | undefined; retrying: boolean } {
     return {
-      startedAt: this.runs.has(id) ? this.runStartedAt.get(id) : undefined,
       retrying: this.workers.get(id)?.isRetrying ?? false,
+      startedAt: this.runs.has(id) ? this.runStartedAt.get(id) : undefined,
     };
   }
 
@@ -230,8 +230,8 @@ export class Orchestrator implements Runtime {
         self.runs.clear();
         for (const worker of self.workers.values()) {
           yield* Effect.tryPromise({
-            try: () => worker.abort(),
             catch: () => undefined,
+            try: () => worker.abort(),
           });
           worker.dispose();
         }

@@ -43,7 +43,7 @@ const textResult = (
   details: SubagentDetails,
   isError = false,
 ): { content: { type: "text"; text: string }[]; details: SubagentDetails; isError?: boolean } => ({
-  content: [{ type: "text", text }],
+  content: [{ text, type: "text" }],
   details,
   ...(isError ? { isError: true } : {}),
 });
@@ -102,16 +102,16 @@ const runChainMode = (context: DispatchContext, steps: NonNullable<SubagentParam
 
       const result = yield* Effect.promise(() =>
         runSingleAgent({
+          agentName: step.agent,
+          agents: context.agents,
+          cwd: step.cwd,
           defaultCwd: context.ctx.cwd,
           dispatchDefaults: context.dispatchDefaults,
-          agents: context.agents,
-          agentName: step.agent,
-          task: taskWithContext,
-          cwd: step.cwd,
-          step: i + 1,
-          signal: context.signal,
-          onUpdate: chainUpdate,
           makeDetails: context.makeDetails("chain"),
+          onUpdate: chainUpdate,
+          signal: context.signal,
+          step: i + 1,
+          task: taskWithContext,
         }),
       );
       results.push(result);
@@ -132,11 +132,11 @@ const runChainMode = (context: DispatchContext, steps: NonNullable<SubagentParam
 const emptyResult = (agent: string, task: string): SingleResult => ({
   agent,
   agentSource: "unknown",
-  task,
   exitCode: -1,
   messages: [],
   stderr: "",
-  usage: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0, cost: 0, contextTokens: 0, turns: 0 },
+  task,
+  usage: { cacheRead: 0, cacheWrite: 0, contextTokens: 0, cost: 0, input: 0, output: 0, turns: 0 },
 });
 
 const summarizeResults = (results: SingleResult[]): string => {
@@ -160,7 +160,7 @@ const emitParallelUpdate = (context: DispatchContext, allResults: SingleResult[]
   const done = allResults.filter((r) => r.exitCode !== -1).length;
   context.onUpdate({
     content: [
-      { type: "text", text: `Parallel: ${done}/${allResults.length} done, ${running} running...` },
+      { text: `Parallel: ${done}/${allResults.length} done, ${running} running...`, type: "text" },
     ],
     details: context.makeDetails("parallel")([...allResults]),
   });
@@ -174,21 +174,21 @@ const runParallelTask = (
   emit: () => void,
 ) =>
   runSingleAgent({
+    agentName: task.agent,
+    agents: context.agents,
+    cwd: task.cwd,
     defaultCwd: context.ctx.cwd,
     dispatchDefaults: context.dispatchDefaults,
-    agents: context.agents,
-    agentName: task.agent,
-    task: task.task,
-    cwd: task.cwd,
-    step: undefined,
-    signal: context.signal,
+    makeDetails: context.makeDetails("parallel"),
     onUpdate: (partial) => {
       const first = partial.details?.results[0];
       if (first === undefined) return;
       allResults[index] = first;
       emit();
     },
-    makeDetails: context.makeDetails("parallel"),
+    signal: context.signal,
+    step: undefined,
+    task: task.task,
   }).then((result) => {
     allResults[index] = result;
     emit();
@@ -211,8 +211,8 @@ const runParallelMode = (
 
     const results = yield* Effect.promise(() =>
       mapWithConcurrencyLimit({
-        items: tasks,
         concurrency: MAX_CONCURRENCY,
+        items: tasks,
         run: (task, index) =>
           runParallelTask(context, task, allResults, index, () =>
             emitParallelUpdate(context, allResults),
@@ -229,16 +229,16 @@ const runSingleMode = (context: DispatchContext, params: SubagentParamsValue) =>
     const task = params.task ?? "";
     const result = yield* Effect.promise(() =>
       runSingleAgent({
+        agentName,
+        agents: context.agents,
+        cwd: params.cwd,
         defaultCwd: context.ctx.cwd,
         dispatchDefaults: context.dispatchDefaults,
-        agents: context.agents,
-        agentName,
-        task,
-        cwd: params.cwd,
-        step: undefined,
-        signal: context.signal,
-        onUpdate: context.onUpdate,
         makeDetails: context.makeDetails("single"),
+        onUpdate: context.onUpdate,
+        signal: context.signal,
+        step: undefined,
+        task,
       }),
     );
 

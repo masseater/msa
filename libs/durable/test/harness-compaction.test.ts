@@ -1,4 +1,5 @@
-import { type AssistantMessage, type Message, fauxAssistantMessage, fauxToolCall } from "@msa/ai";
+import ai from "@msa/ai";
+import type aiTypes from "@msa/ai/index.types";
 import type durableTypes from "@msa/durable/index.types";
 import { Effect } from "effect";
 import { afterEach, describe, expect, it } from "vite-plus/test";
@@ -7,6 +8,8 @@ import compaction from "../src/harness/compaction.ts";
 import contextModule from "../src/harness/context.ts";
 import harnessCompactionSupport from "./harness-compaction-support.ts";
 import platformSupport from "./platform-support.ts";
+
+const { fauxAssistantMessage, fauxToolCall } = ai;
 
 const { orderToolResults } = contextModule;
 const { selectCut, serializeConversation } = compaction;
@@ -25,7 +28,7 @@ afterEach(() =>
 
 let nextId = 1;
 
-function entry(kind: string, model: Message[], head?: number): durableTypes.EntryRecord {
+function entry(kind: string, model: aiTypes.Message[], head?: number): durableTypes.EntryRecord {
   return {
     conversationId: 1,
     id: nextId++,
@@ -38,7 +41,7 @@ function entry(kind: string, model: Message[], head?: number): durableTypes.Entr
 const assistant = (
   content: string,
   calls: string[] = [],
-  stopReason: AssistantMessage["stopReason"] = "stop",
+  stopReason: aiTypes.AssistantMessage["stopReason"] = "stop",
 ) =>
   ({
     ...fauxAssistantMessage([
@@ -46,9 +49,9 @@ const assistant = (
       ...calls.map((id) => fauxToolCall("read", {}, { id })),
     ]),
     stopReason,
-  }) as AssistantMessage;
+  }) as aiTypes.AssistantMessage;
 
-const toolResult = (callId: string, content: string): Message => ({
+const toolResult = (callId: string, content: string): aiTypes.Message => ({
   content: [{ text: content, type: "text" }],
   isError: false,
   role: "toolResult",
@@ -199,7 +202,7 @@ describe("range selection", () => {
 describe("serialization", () => {
   it("writes a transcript, truncates tool results, and omits system messages and thinking", () => {
     const call = fauxToolCall("read", { path: "a.ts" }, { id: "c" });
-    const messages: Message[] = [
+    const messages: aiTypes.Message[] = [
       { content: "", role: "system", sections: { s: "hidden" }, timestamp: 0 },
       user("hello"),
       {

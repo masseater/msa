@@ -1,4 +1,4 @@
-import { Type, fauxAssistantMessage, fauxToolCall } from "@msa/ai";
+import ai from "@msa/ai";
 import durable from "@msa/durable";
 import harnessModule from "@msa/durable/harness";
 import type durableTypes from "@msa/durable/index.types";
@@ -8,6 +8,8 @@ import { afterEach, describe, expect, it } from "vite-plus/test";
 import harnessCompactionSupport from "./harness-compaction-support.ts";
 import type harnessCompactionSupportTypes from "./harness-compaction-support.types.ts";
 import support from "./support.ts";
+
+const { Type, fauxAssistantMessage, fauxToolCall } = ai;
 
 const { defineTool } = durable;
 const { CompactionTask } = harnessModule;

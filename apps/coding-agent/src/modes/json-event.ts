@@ -1,4 +1,4 @@
-import type { Usage } from "@msa/ai";
+import type aiTypes from "@msa/ai/index.types";
 
 import type { AgentSessionEvent } from "../core/agent-session.ts";
 
@@ -11,7 +11,7 @@ type ToJsonAssistantMessageEvent<T> = T extends { type: "toolcall_start"; partia
 type MessageUpdateEvent = Extract<AgentSessionEvent, { type: "message_update" }>;
 type JsonMessageUpdateEvent = {
   type: "message_update";
-  usage: Usage;
+  usage: aiTypes.Usage;
   assistantMessageEvent: ToJsonAssistantMessageEvent<MessageUpdateEvent["assistantMessageEvent"]>;
 };
 
@@ -50,8 +50,8 @@ export function toJsonEvent(event: AgentSessionEvent): JsonAgentSessionEvent {
   }
 
   return {
+    assistantMessageEvent: toJsonAssistantMessageEvent(event.assistantMessageEvent),
     type: "message_update",
     usage: event.message.usage,
-    assistantMessageEvent: toJsonAssistantMessageEvent(event.assistantMessageEvent),
   };
 }

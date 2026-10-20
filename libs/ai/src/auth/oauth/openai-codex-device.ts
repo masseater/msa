@@ -1,10 +1,16 @@
 import { Effect } from "effect";
 
-import type { HttpReply } from "../../utils/http.ts";
-import { decodeJson, encodeJson } from "../../utils/json-codec.ts";
-import type { OAuthCredential, ProviderAuthInteraction } from "../types.ts";
-import { type OAuthDeviceCodePollResult, pollOAuthDeviceCodeFlow } from "./device-code.ts";
-import {
+import type httpTypes from "../../utils/http.types.ts";
+import jsonCodec from "../../utils/json-codec.ts";
+import type typesModule from "../types.ts";
+import deviceCode from "./device-code.ts";
+import type deviceCodeTypes from "./device-code.types.ts";
+import openaiCodexShared from "./openai-codex-shared.ts";
+import responseJson from "./response-json.ts";
+
+const { readText } = responseJson;
+const { decodeJson, encodeJson } = jsonCodec;
+const {
   CLIENT_ID,
   DEVICE_CODE_TIMEOUT_SECONDS,
   DEVICE_REDIRECT_URI,
@@ -13,8 +19,8 @@ import {
   DEVICE_VERIFICATION_URI,
   exchangeAuthorizationCode,
   requestWithLoginCancellation,
-} from "./openai-codex-shared.ts";
-import { readText } from "./response-json.ts";
+} = openaiCodexShared;
+const { pollOAuthDeviceCodeFlow } = deviceCode;
 
 const jsonHeaders = { "Content-Type": "application/json" } as const;
 
@@ -29,7 +35,7 @@ interface DeviceTokenSuccess {
   readonly codeVerifier: string;
 }
 
-const failDeviceAuth = (reply: HttpReply): Effect.Effect<never> =>
+const failDeviceAuth = (reply: httpTypes.HttpReply): Effect.Effect<never> =>
   Effect.gen(function* () {
     if (reply.status === 404) {
       return yield* Effect.die(
@@ -72,19 +78,19 @@ const readDeviceAuthInfo = (
 
     return {
       deviceAuthId: json.device_auth_id,
-      userCode: json.user_code,
       intervalSeconds,
+      userCode: json.user_code,
     };
   });
 
 const startDeviceAuth = (signal: AbortSignal): Effect.Effect<DeviceAuthInfo> =>
   Effect.gen(function* () {
     const reply = yield* requestWithLoginCancellation({
-      url: DEVICE_USER_CODE_URL,
-      method: "POST",
-      headers: jsonHeaders,
       body: yield* encodeJson({ client_id: CLIENT_ID }),
+      headers: jsonHeaders,
+      method: "POST",
       signal,
+      url: DEVICE_USER_CODE_URL,
     });
     if (!reply.ok) return yield* failDeviceAuth(reply);
     return yield* readDeviceAuthInfo(
@@ -108,7 +114,7 @@ const readErrorCode = (responseBody: string): Effect.Effect<unknown> =>
 
 const readDeviceToken = (
   json: { authorization_code?: string; code_verifier?: string } | null,
-): Effect.Effect<OAuthDeviceCodePollResult<DeviceTokenSuccess>> =>
+): Effect.Effect<deviceCodeTypes.OAuthDeviceCodePollResult<DeviceTokenSuccess>> =>
   Effect.gen(function* () {
     if (
       json?.authorization_code === undefined ||
@@ -117,8 +123,8 @@ const readDeviceToken = (
       json.code_verifier === ""
     ) {
       return {
-        status: "failed",
         message: `Invalid OpenAI Codex device auth token response: ${yield* encodeJson(json)}`,
+        status: "failed",
       };
     }
     return {
@@ -130,17 +136,17 @@ const readDeviceToken = (
 const pollDeviceAuthOnce = (
   device: DeviceAuthInfo,
   signal: AbortSignal,
-): Effect.Effect<OAuthDeviceCodePollResult<DeviceTokenSuccess>> =>
+): Effect.Effect<deviceCodeTypes.OAuthDeviceCodePollResult<DeviceTokenSuccess>> =>
   Effect.gen(function* () {
     const reply = yield* requestWithLoginCancellation({
-      url: DEVICE_TOKEN_URL,
-      method: "POST",
-      headers: jsonHeaders,
       body: yield* encodeJson({
         device_auth_id: device.deviceAuthId,
         user_code: device.userCode,
       }),
+      headers: jsonHeaders,
+      method: "POST",
       signal,
+      url: DEVICE_TOKEN_URL,
     });
 
     if (reply.ok) {
@@ -157,36 +163,42 @@ const pollDeviceAuthOnce = (
     if (errorCode === "slow_down") return { status: "slow_down" };
 
     return {
-      status: "failed",
       message: `OpenAI Codex device auth failed with status ${reply.status}${responseBody === "" ? "" : `: ${responseBody}`}`,
+      status: "failed",
     };
   });
 
-export const loginWithDeviceCode = (
-  interaction: ProviderAuthInteraction,
-): Effect.Effect<OAuthCredential> =>
+const loginWithDeviceCode = (
+  interaction: typesModule.ProviderAuthInteraction,
+): Effect.Effect<typesModule.OAuthCredential> =>
   Effect.gen(function* () {
     const runPoll = Effect.runPromiseWith(yield* Effect.context<never>());
     const device = yield* startDeviceAuth(interaction.signal);
     interaction.notify({
+      expiresInSeconds: DEVICE_CODE_TIMEOUT_SECONDS,
+      intervalSeconds: device.intervalSeconds,
       type: "device_code",
       userCode: device.userCode,
       verificationUri: DEVICE_VERIFICATION_URI,
-      intervalSeconds: device.intervalSeconds,
-      expiresInSeconds: DEVICE_CODE_TIMEOUT_SECONDS,
     });
     const code = yield* Effect.promise(() =>
       pollOAuthDeviceCodeFlow<DeviceTokenSuccess>({
-        intervalSeconds: device.intervalSeconds,
         expiresInSeconds: DEVICE_CODE_TIMEOUT_SECONDS,
-        signal: interaction.signal,
+        intervalSeconds: device.intervalSeconds,
         poll: () => runPoll(pollDeviceAuthOnce(device, interaction.signal)),
+        signal: interaction.signal,
       }),
     );
     return yield* exchangeAuthorizationCode({
       code: code.authorizationCode,
-      verifier: code.codeVerifier,
       redirectUri: DEVICE_REDIRECT_URI,
       signal: interaction.signal,
+      verifier: code.codeVerifier,
     });
   });
+
+const openaiCodexDevice = {
+  loginWithDeviceCode,
+};
+
+export default openaiCodexDevice;

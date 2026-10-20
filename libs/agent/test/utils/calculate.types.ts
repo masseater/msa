@@ -1,7 +1,7 @@
-import type { AgentToolResult } from "../../src/types.ts";
+import type typesModule from "../../src/types.ts";
 
 declare namespace calculateTypes {
-  interface CalculateResult extends AgentToolResult<undefined> {
+  interface CalculateResult extends typesModule.AgentToolResult<undefined> {
     content: Array<{ type: "text"; text: string }>;
     details: undefined;
   }

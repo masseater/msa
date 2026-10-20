@@ -1,9 +1,9 @@
-import type { MarkdownTheme } from "../src/components/markdown.ts";
+import type markdownTypes from "../src/components/markdown.types.ts";
 
 declare namespace markdownTerminalHelpersTypes {
   interface MarkdownTerminalRequest {
     readonly source: string;
-    readonly theme: MarkdownTheme;
+    readonly theme: markdownTypes.MarkdownTheme;
     readonly width: number;
     readonly height: number;
   }

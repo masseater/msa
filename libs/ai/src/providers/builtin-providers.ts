@@ -1,12 +1,19 @@
-import type { Provider } from "../models.ts";
-import { anthropicProvider } from "./anthropic.ts";
-import { openaiCodexProvider } from "./openai-codex.ts";
-import { openaiProvider } from "./openai.ts";
-import { opencodeGoProvider } from "./opencode-go.ts";
-import { opencodeProvider } from "./opencode.ts";
-import { openrouterProvider } from "./openrouter.ts";
+import type modelsTypes from "../models.types.ts";
+import anthropic from "./anthropic.ts";
+import openaiCodex from "./openai-codex.ts";
+import openai from "./openai.ts";
+import opencodeGo from "./opencode-go.ts";
+import opencode from "./opencode.ts";
+import openrouter from "./openrouter.ts";
 
-export function builtinProviders(): Provider[] {
+const { anthropicProvider } = anthropic;
+const { openaiProvider } = openai;
+const { openaiCodexProvider } = openaiCodex;
+const { opencodeProvider } = opencode;
+const { opencodeGoProvider } = opencodeGo;
+const { openrouterProvider } = openrouter;
+
+function builtinProviders(): modelsTypes.Provider[] {
   return [
     anthropicProvider(),
     openaiProvider(),
@@ -16,3 +23,9 @@ export function builtinProviders(): Provider[] {
     openrouterProvider(),
   ];
 }
+
+const builtinProvidersModule = {
+  builtinProviders,
+};
+
+export default builtinProvidersModule;

@@ -1,4 +1,4 @@
-import { ModelThinkingLevelSchema } from "@msa/ai/providers/model-schema";
+import modelSchemaModule from "@msa/ai/providers/model-schema";
 import { Type } from "typebox";
 
 import type { ToolDefinition } from "../extensions/types.ts";
@@ -14,73 +14,75 @@ import {
   tool,
 } from "./tool-support.ts";
 
+const { ModelThinkingLevelSchema } = modelSchemaModule;
+
 const createSchema = Type.Object({
-  title: Type.String({ description: "Short name of the work." }),
-  currentState: Type.String({
-    description:
-      "What is true now: the code as it stands, the failing check, what already exists. Facts, not steps.",
-  }),
-  goalState: Type.String({
-    description: "What should be true when the task is done, in terms that can be checked.",
-  }),
-  dependsOn: Type.Optional(
-    Type.Array(taskIdSchema, {
-      description:
-        "Tasks that must complete before this one starts; their reports join the prompt. Pass [] only when the work needs none.",
-    }),
-  ),
-  round: Type.Optional(
-    Type.String({
-      description:
-        "Partial DAG (round) this task belongs to. Unrelated work belongs to a different round, so each round's closing review waits only for its own tasks. Default: the round of the dependencies, or main.",
-    }),
-  ),
   condition: Type.Optional(
     Type.String({
       description:
         "Shell command that must exit 0 before the task starts, for external waits such as a merged PR or a green CI.",
     }),
   ),
-  model: Type.Optional(modelSchema),
-  thinkingLevel: Type.Optional(ModelThinkingLevelSchema),
+  currentState: Type.String({
+    description:
+      "What is true now: the code as it stands, the failing check, what already exists. Facts, not steps.",
+  }),
   cwd: Type.Optional(Type.String({ description: "Working directory. Default: this session's." })),
+  dependsOn: Type.Optional(
+    Type.Array(taskIdSchema, {
+      description:
+        "Tasks that must complete before this one starts; their reports join the prompt. Pass [] only when the work needs none.",
+    }),
+  ),
+  goalState: Type.String({
+    description: "What should be true when the task is done, in terms that can be checked.",
+  }),
+  model: Type.Optional(modelSchema),
+  round: Type.Optional(
+    Type.String({
+      description:
+        "Partial DAG (round) this task belongs to. Unrelated work belongs to a different round, so each round's closing review waits only for its own tasks. Default: the round of the dependencies, or main.",
+    }),
+  ),
+  thinkingLevel: Type.Optional(ModelThinkingLevelSchema),
+  title: Type.String({ description: "Short name of the work." }),
 });
 
 export function taskToolsA(orchestrator: Orchestrator): Record<string, ToolDefinition> {
   return {
     create_task: tool({
-      name: "create_task",
-      label: "create task",
       description:
         "Create a task from the state it starts in and the state it must reach. Write those two states, not a procedure: a list of steps breaks as soon as the starting state is not what you assumed. The scheduler starts the task when its dependencies finish and assigns a separate reviewer thread after the worker. Each round's tasks end in a closing review task.",
-      promptSnippet: "Create a task from its current state and goal state",
+      label: "create task",
+      name: "create_task",
+      parameters: createSchema,
       promptGuidelines: [
         "Answer simple questions yourself; put new work into tasks with create_task, one task per independent piece.",
         "Write currentState and goalState only. Never list steps; say what holds now and what must hold at the end.",
         "The scheduler owns assignment and start; do not start threads yourself.",
         "When a closing review reports, act on it: create the next round's tasks, or tell the user the work is done.",
       ],
-      parameters: createSchema,
+      promptSnippet: "Create a task from its current state and goal state",
       run: (params) =>
         orchestrator.createTask(params).then((task) => prompts.formatTaskList([task])),
     }),
     list_tasks: tool({
-      name: "list_tasks",
-      label: "list tasks",
-      description: "List tasks with status, round, dependencies, assignments, and conditions.",
-      promptSnippet: "List the task DAG",
       annotations: { readOnlyHint: true },
+      description: "List tasks with status, round, dependencies, assignments, and conditions.",
+      label: "list tasks",
+      name: "list_tasks",
       parameters: Type.Object({}),
+      promptSnippet: "List the task DAG",
       run: () => orchestrator.list().then(prompts.formatTaskList),
     }),
     read_task: tool({
-      name: "read_task",
-      label: "read task",
+      annotations: { readOnlyHint: true },
       description:
         "Read a task's current state, goal state, reports, dependencies, dependents, and threads.",
-      promptSnippet: "Read a task's full state and reports",
-      annotations: { readOnlyHint: true },
+      label: "read task",
+      name: "read_task",
       parameters: taskIdObject,
+      promptSnippet: "Read a task's full state and reports",
       run: ({ taskId }) =>
         orchestrator.read(taskId).then((task) =>
           prompts.formatTaskDetail(
@@ -113,6 +115,18 @@ export function taskToolsB(orchestrator: Orchestrator): Record<string, ToolDefin
               .join("\n"),
           ),
     }),
+    set_task_model: tool({
+      name: "set_task_model",
+      label: "set task model",
+      description:
+        "Change the model and thinking level of a task, including one that is running. It applies to the task's next session and to the running one.",
+      promptSnippet: "Change a task's model",
+      parameters: modelChangeSchema,
+      run: ({ taskId, model, thinkingLevel }) =>
+        orchestrator
+          .setModel(taskId, model, thinkingLevel)
+          .then((task) => `${task.id} now uses ${task.model} (thinking ${task.thinkingLevel}).`),
+    }),
     set_task_state: tool({
       name: "set_task_state",
       label: "set task state",
@@ -127,18 +141,6 @@ export function taskToolsB(orchestrator: Orchestrator): Record<string, ToolDefin
             (task) =>
               `${task.id} ${task.title}\nCurrent state: ${task.currentState}\nGoal state: ${task.goalState}`,
           ),
-    }),
-    set_task_model: tool({
-      name: "set_task_model",
-      label: "set task model",
-      description:
-        "Change the model and thinking level of a task, including one that is running. It applies to the task's next session and to the running one.",
-      promptSnippet: "Change a task's model",
-      parameters: modelChangeSchema,
-      run: ({ taskId, model, thinkingLevel }) =>
-        orchestrator
-          .setModel(taskId, model, thinkingLevel)
-          .then((task) => `${task.id} now uses ${task.model} (thinking ${task.thinkingLevel}).`),
     }),
   };
 }

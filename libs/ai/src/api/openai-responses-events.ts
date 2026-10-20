@@ -1,25 +1,25 @@
 import type { ResponseStreamEvent } from "openai/resources/responses/responses.js";
 
-import type { Api } from "../types.ts";
-import { parseStreamingJson } from "../utils/json-parse.ts";
-import { finalizeResponse } from "./openai-responses-finalize.ts";
-import { completeOutputItem } from "./openai-responses-item-done.ts";
-import {
-  appendCustomToolCallInput,
-  customToolCallInput,
-  openSlot,
-  pushToolCallDelta,
-  type ResponsesStreamState,
-  slotOf,
-} from "./openai-responses-stream-state.ts";
+import type typesModule from "../types.types.ts";
+import jsonParse from "../utils/json-parse.ts";
+import openaiResponsesFinalize from "./openai-responses-finalize.ts";
+import openaiResponsesItemDone from "./openai-responses-item-done.ts";
+import openaiResponsesStreamState from "./openai-responses-stream-state.ts";
+import type openaiResponsesStreamStateTypes from "./openai-responses-stream-state.types.ts";
+
+const { appendCustomToolCallInput, customToolCallInput, openSlot, pushToolCallDelta, slotOf } =
+  openaiResponsesStreamState;
+const { parseStreamingJson } = jsonParse;
+const { completeOutputItem } = openaiResponsesItemDone;
+const { finalizeResponse } = openaiResponsesFinalize;
 
 type EventOf<TType extends ResponseStreamEvent["type"]> = Extract<
   ResponseStreamEvent,
   { type: TType }
 >;
 
-function appendThinking<TApi extends Api>(
-  state: ResponsesStreamState<TApi>,
+function appendThinking<TApi extends typesModule.Api>(
+  state: openaiResponsesStreamStateTypes.ResponsesStreamState<TApi>,
   outputIndex: number,
   delta: string,
 ): void {
@@ -30,8 +30,8 @@ function appendThinking<TApi extends Api>(
   state.stream.push({ type: "thinking_delta", ...event });
 }
 
-function appendText<TApi extends Api>(
-  state: ResponsesStreamState<TApi>,
+function appendText<TApi extends typesModule.Api>(
+  state: openaiResponsesStreamStateTypes.ResponsesStreamState<TApi>,
   outputIndex: number,
   delta: string,
 ): void {
@@ -39,15 +39,15 @@ function appendText<TApi extends Api>(
   if (slot === undefined) return;
   slot.block.text += delta;
   state.stream.push({
-    type: "text_delta",
     contentIndex: slot.contentIndex,
     delta,
     partial: state.output,
+    type: "text_delta",
   });
 }
 
-function functionArgumentsDelta<TApi extends Api>(
-  state: ResponsesStreamState<TApi>,
+function functionArgumentsDelta<TApi extends typesModule.Api>(
+  state: openaiResponsesStreamStateTypes.ResponsesStreamState<TApi>,
   event: EventOf<"response.function_call_arguments.delta">,
 ): void {
   const slot = slotOf(state)(event.output_index, "toolCall");
@@ -57,8 +57,8 @@ function functionArgumentsDelta<TApi extends Api>(
   pushToolCallDelta(state)(slot, event.delta);
 }
 
-function functionArgumentsDone<TApi extends Api>(
-  state: ResponsesStreamState<TApi>,
+function functionArgumentsDone<TApi extends typesModule.Api>(
+  state: openaiResponsesStreamStateTypes.ResponsesStreamState<TApi>,
   event: EventOf<"response.function_call_arguments.done">,
 ): void {
   const slot = slotOf(state)(event.output_index, "toolCall");
@@ -71,8 +71,8 @@ function functionArgumentsDone<TApi extends Api>(
   if (delta.length > 0) pushToolCallDelta(state)(slot, delta);
 }
 
-function customInput<TApi extends Api>(
-  state: ResponsesStreamState<TApi>,
+function customInput<TApi extends typesModule.Api>(
+  state: openaiResponsesStreamStateTypes.ResponsesStreamState<TApi>,
   outputIndex: number,
   next: { readonly delta?: string; readonly input?: string },
 ): void {
@@ -82,7 +82,7 @@ function customInput<TApi extends Api>(
   const close = next.input !== undefined;
   pushToolCallDelta(state)(
     slot,
-    appendCustomToolCallInput({ block: slot.block, nextInput, close }),
+    appendCustomToolCallInput({ block: slot.block, close, nextInput }),
   );
 }
 
@@ -95,7 +95,9 @@ function failedResponseMessage(event: EventOf<"response.failed">): string {
     : `incomplete: ${reason}`;
 }
 
-export function handleResponsesEvent<TApi extends Api>(state: ResponsesStreamState<TApi>) {
+function handleResponsesEvent<TApi extends typesModule.Api>(
+  state: openaiResponsesStreamStateTypes.ResponsesStreamState<TApi>,
+) {
   return (event: ResponseStreamEvent): void => {
     switch (event.type) {
       case "response.created":
@@ -133,3 +135,9 @@ export function handleResponsesEvent<TApi extends Api>(state: ResponsesStreamSta
     }
   };
 }
+
+const openaiResponsesEvents = {
+  handleResponsesEvent,
+};
+
+export default openaiResponsesEvents;

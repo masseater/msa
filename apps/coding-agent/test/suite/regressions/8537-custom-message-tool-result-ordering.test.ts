@@ -1,5 +1,5 @@
-import type { AgentMessage, AgentTool } from "@msa/agent-core";
-import { fauxAssistantMessage, fauxToolCall } from "@msa/ai";
+import type agentTypes from "@msa/agent-core/index.types";
+import ai from "@msa/ai";
 import { Effect } from "effect";
 import { Type } from "typebox";
 import { afterEach, describe, expect, it } from "vite-plus/test";
@@ -8,9 +8,11 @@ import { convertToLlm } from "../../../src/core/messages.ts";
 import harnessModule from "../harness.ts";
 import type harnessTypes from "../harness.types.ts";
 
+const { fauxAssistantMessage, fauxToolCall } = ai;
+
 const { createHarness } = harnessModule;
 
-function roles(messages: AgentMessage[]): string[] {
+function roles(messages: agentTypes.AgentMessage[]): string[] {
   return messages.map((message) => message.role);
 }
 
@@ -19,7 +21,7 @@ const harnesses: harnessTypes.Harness[] = [];
 const appendsTheMessageAfterTheTurn = Effect.gen(function* () {
   const runPromise = Effect.runPromiseWith(yield* Effect.context<never>());
   let notify: (() => Promise<void>) | undefined;
-  const slowTool: AgentTool = {
+  const slowTool: agentTypes.AgentTool = {
     description: "Wait for a background task",
     execute: () =>
       runPromise(
@@ -61,7 +63,7 @@ const appendsTheMessageAfterTheTurn = Effect.gen(function* () {
 const keepsSessionEntriesAndMessageEvents = Effect.gen(function* () {
   const runPromise = Effect.runPromiseWith(yield* Effect.context<never>());
   let notify: (() => Promise<void>) | undefined;
-  const slowTool: AgentTool = {
+  const slowTool: agentTypes.AgentTool = {
     description: "Wait for a background task",
     execute: () =>
       runPromise(
@@ -124,7 +126,7 @@ const keepsSessionEntriesAndMessageEventsStep1 = (harness: harnessTypes.Harness)
 const producesAnLlmHistoryWhereEvery = Effect.gen(function* () {
   const runPromise = Effect.runPromiseWith(yield* Effect.context<never>());
   let notify: (() => Promise<void>) | undefined;
-  const slowTool: AgentTool = {
+  const slowTool: agentTypes.AgentTool = {
     description: "Wait for a background task",
     execute: () =>
       runPromise(

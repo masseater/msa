@@ -1,5 +1,5 @@
-import type { AgentMessage } from "@msa/agent-core";
-import type { AssistantMessage } from "@msa/ai";
+import type agentTypes from "@msa/agent-core/index.types";
+import type aiTypes from "@msa/ai/index.types";
 import testing from "@msa/testing";
 import { Effect } from "effect";
 import { describe, expect, it, vi } from "vite-plus/test";
@@ -11,11 +11,11 @@ const { awaited, currentTimeMillis, runTest } = testing;
 
 type CommandHandler = (args: string, ctx: ExtensionContext) => Promise<void> | void;
 type AgentEndHandler = (
-  event: { type: "agent_end"; messages: AgentMessage[] },
+  event: { type: "agent_end"; messages: agentTypes.AgentMessage[] },
   ctx: ExtensionContext,
 ) => Promise<void> | void;
 
-function createAssistantMessage(text: string): AssistantMessage {
+function createAssistantMessage(text: string): aiTypes.AssistantMessage {
   return {
     api: "anthropic-messages" as const,
     content: [{ text, type: "text" as const }],

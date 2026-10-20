@@ -1,13 +1,16 @@
 import { Data, Effect, Function } from "effect";
 import { Hex } from "effect/encoding";
 
-import { digest } from "../src/utils/crypto.ts";
-import { decodeJson, encodeJson } from "../src/utils/json-codec.ts";
+import cryptoModule from "../src/utils/crypto.ts";
+import jsonCodec from "../src/utils/json-codec.ts";
 import modelDataChecks from "./model-data-checks.ts";
 import type modelDataTypes from "./model-data.types.ts";
 import ScriptFileError from "./script-file-error.ts";
 import scriptFiles from "./script-files.ts";
 import type scriptFilesTypes from "./script-files.types.ts";
+
+const { digest } = cryptoModule;
+const { decodeJson, encodeJson } = jsonCodec;
 
 const {
   apiPlacementErrors,
@@ -28,7 +31,7 @@ class ModelDataError extends Data.TaggedError("ModelDataError")<{
 }> {}
 
 const MODEL_DATA_IMPORT_PATTERN =
-  /^import \{ [A-Z][A-Z0-9_]*_CLASSIFIER_MODELS, [A-Z][A-Z0-9_]*_IMAGE_MODELS, [A-Z][A-Z0-9_]*_MODELS \} from "\.\/providers\/([^"/]+)\.models\.ts";$/gmu;
+  /^import \w+Models from "\.\/providers\/([^"/]+)\.models\.ts";$/gmu;
 
 const fail = (message: string) => Effect.fail(new ModelDataError({ message }));
 

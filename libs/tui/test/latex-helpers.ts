@@ -1,8 +1,10 @@
 import assert from "node:assert";
 import { it } from "node:test";
 
-import { renderLatex } from "../src/index.ts";
+import tui from "../src/index.ts";
 import type latexHelpersTypes from "./latex-helpers.types.ts";
+
+const { renderLatex } = tui;
 
 function defineCases(cases: readonly latexHelpersTypes.LatexCase[]): void {
   for (const [source, expected] of cases) {

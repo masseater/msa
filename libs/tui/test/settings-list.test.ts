@@ -1,13 +1,10 @@
 import assert from "node:assert";
 import { describe, it } from "node:test";
 
-import {
-  type SettingItem,
-  SettingsList,
-  type SettingsListTheme,
-} from "../src/components/settings-list.ts";
+import SettingsList from "../src/components/settings-list.ts";
+import type settingsListTypes from "../src/components/settings-list.types.ts";
 
-const testTheme: SettingsListTheme = {
+const testTheme: settingsListTypes.SettingsListTheme = {
   cursor: "> ",
   description: (text) => text,
   hint: (text) => text,
@@ -15,7 +12,7 @@ const testTheme: SettingsListTheme = {
   value: (text) => text,
 };
 
-function createItems(): SettingItem[] {
+function createItems(): settingsListTypes.SettingItem[] {
   return [
     {
       currentValue: "regular",

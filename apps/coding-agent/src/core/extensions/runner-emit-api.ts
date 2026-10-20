@@ -1,11 +1,11 @@
-import type { AgentMessage } from "@msa/agent-core";
-import type { ImageContent, ProviderHeaders } from "@msa/ai";
+import type agentTypes from "@msa/agent-core/index.types";
+import type aiTypes from "@msa/ai/index.types";
 import { Effect } from "effect";
 
 import type { CacheWarmingAction } from "../cache-warmer.ts";
 import { platformRuntime, unwrapForeign } from "../platform/index.ts";
 import type { BuildSystemPromptOptions } from "../system-prompt.ts";
-import { createEmitters, type Emitters } from "./runner-emitters.ts";
+import { type Emitters, createEmitters } from "./runner-emitters.ts";
 import { RunnerQueries } from "./runner-queries.ts";
 import type {
   BeforeAgentStartTrigger,
@@ -50,7 +50,7 @@ export abstract class RunnerEmitApi extends RunnerQueries {
     return this.run(this.emitters().lifecycle.emitCacheWarmingDecision(event));
   }
 
-  emitMessageEnd(event: MessageEndEvent): Promise<AgentMessage | undefined> {
+  emitMessageEnd(event: MessageEndEvent): Promise<agentTypes.AgentMessage | undefined> {
     return this.run(this.emitters().lifecycle.emitMessageEnd(event));
   }
 
@@ -66,7 +66,7 @@ export abstract class RunnerEmitApi extends RunnerQueries {
     return this.run(this.emitters().lifecycle.emitUserBash(event));
   }
 
-  emitContext(messages: AgentMessage[]): Promise<AgentMessage[]> {
+  emitContext(messages: agentTypes.AgentMessage[]): Promise<agentTypes.AgentMessage[]> {
     return this.run(this.emitters().context.emitContext(messages));
   }
 
@@ -74,7 +74,7 @@ export abstract class RunnerEmitApi extends RunnerQueries {
     return this.run(this.emitters().context.emitBeforeProviderRequest(payload));
   }
 
-  emitBeforeProviderHeaders(headers: ProviderHeaders): Promise<ProviderHeaders> {
+  emitBeforeProviderHeaders(headers: aiTypes.ProviderHeaders): Promise<aiTypes.ProviderHeaders> {
     return this.run(this.emitters().context.emitBeforeProviderHeaders(headers));
   }
 
@@ -88,7 +88,7 @@ export abstract class RunnerEmitApi extends RunnerQueries {
 
   emitInput(
     text: string,
-    images: ImageContent[] | undefined,
+    images: aiTypes.ImageContent[] | undefined,
     source: InputSource,
     streamingBehavior?: "steer" | "followUp",
   ) {
@@ -97,10 +97,10 @@ export abstract class RunnerEmitApi extends RunnerQueries {
 
   private emitters(): Emitters {
     this.cachedEmitters ??= createEmitters({
-      extensions: this.extensions,
+      assertActive: () => this.assertActive(),
       createContext: () => this.createContext(),
       emitError: (error) => this.emitError(error),
-      assertActive: () => this.assertActive(),
+      extensions: this.extensions,
     });
     return this.cachedEmitters;
   }

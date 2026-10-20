@@ -1,11 +1,6 @@
-import type { StreamFn } from "@msa/agent-core";
-import {
-  type AssistantMessage,
-  type Model,
-  type SimpleStreamOptions,
-  createAssistantMessageEventStream,
-  fauxAssistantMessage,
-} from "@msa/ai";
+import type agentTypes from "@msa/agent-core/index.types";
+import ai from "@msa/ai";
+import type aiTypes from "@msa/ai/index.types";
 import testing from "@msa/testing";
 import { DateTime, Effect } from "effect";
 import { describe, expect, it } from "vite-plus/test";
@@ -13,9 +8,11 @@ import { describe, expect, it } from "vite-plus/test";
 import { generateBranchSummary } from "../src/core/compaction/index.ts";
 import type { SessionEntry } from "../src/core/session-manager.ts";
 
+const { createAssistantMessageEventStream, fauxAssistantMessage } = ai;
+
 const { abortController, awaited, runTest } = testing;
 
-const model: Model<"anthropic-messages"> = {
+const model: aiTypes.Model<"anthropic-messages"> = {
   api: "anthropic-messages",
   baseUrl: "https://api.anthropic.com",
   contextWindow: 200000,
@@ -38,7 +35,7 @@ const entries: SessionEntry[] = [
   },
 ];
 
-function response(content: AssistantMessage["content"]): AssistantMessage {
+function response(content: aiTypes.AssistantMessage["content"]): aiTypes.AssistantMessage {
   return {
     ...fauxAssistantMessage(""),
     api: model.api,
@@ -51,8 +48,8 @@ function response(content: AssistantMessage["content"]): AssistantMessage {
 const doesNotOverrideToolChoiceForBranch = () =>
   runTest(
     Effect.gen(function* () {
-      let requestOptions: SimpleStreamOptions | undefined;
-      const streamFn: StreamFn = (_model, _context, options) => {
+      let requestOptions: aiTypes.SimpleStreamOptions | undefined;
+      const streamFn: agentTypes.StreamFn = (_model, _context, options) => {
         requestOptions = options;
         const stream = createAssistantMessageEventStream();
         queueMicrotask(() =>
@@ -81,8 +78,8 @@ const doesNotOverrideToolChoiceForBranch = () =>
 const clampsTheBranchSummaryOutputCapTo = () =>
   runTest(
     Effect.gen(function* () {
-      let requestOptions: SimpleStreamOptions | undefined;
-      const streamFn: StreamFn = (_model, _context, options) => {
+      let requestOptions: aiTypes.SimpleStreamOptions | undefined;
+      const streamFn: agentTypes.StreamFn = (_model, _context, options) => {
         requestOptions = options;
         const stream = createAssistantMessageEventStream();
         queueMicrotask(() =>
@@ -110,7 +107,7 @@ const clampsTheBranchSummaryOutputCapTo = () =>
 const rejectsToolCallsFromBranchSummaries = () =>
   runTest(
     Effect.gen(function* () {
-      const streamFn: StreamFn = () => {
+      const streamFn: agentTypes.StreamFn = () => {
         const stream = createAssistantMessageEventStream();
         queueMicrotask(() =>
           stream.push({
@@ -144,7 +141,7 @@ const rejectsToolCallsFromBranchSummaries = () =>
 const rejectsLengthLimitedBranchSummaries = () =>
   runTest(
     Effect.gen(function* () {
-      const streamFn: StreamFn = () => {
+      const streamFn: agentTypes.StreamFn = () => {
         const stream = createAssistantMessageEventStream();
         queueMicrotask(() =>
           stream.push({

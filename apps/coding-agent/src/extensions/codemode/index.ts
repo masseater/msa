@@ -25,14 +25,14 @@ export function createCodemodeExtension(options: CodemodeExtensionOptions = {}):
     msa.registerTool({
       ...createCodemodeToolDefinition({
         appendEntry: (customType, data) => msa.appendEntry(customType, data),
-        models: options.models ?? true,
-        getToolNamespace: (name) => msa.getAllTools().find((tool) => tool.name === name)?.namespace,
+        getInlineBudget: () => options.inlineBudget ?? readInlineBudget(msa),
+        getMode: () => options.mode ?? readMode(msa),
         getToolGuidelines: () =>
           new Map(
             msa.getAllTools().map((tool) => [tool.name, tool.promptGuidelines ?? []] as const),
           ),
-        getMode: () => options.mode ?? readMode(msa),
-        getInlineBudget: () => options.inlineBudget ?? readInlineBudget(msa),
+        getToolNamespace: (name) => msa.getAllTools().find((tool) => tool.name === name)?.namespace,
+        models: options.models ?? true,
       }),
       defaultActive: false,
     });

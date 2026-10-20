@@ -1,4 +1,4 @@
-import type { Model } from "@msa/ai";
+import type aiTypes from "@msa/ai/index.types";
 import testing from "@msa/testing";
 import { Effect } from "effect";
 import { describe, expect, test } from "vite-plus/test";
@@ -10,7 +10,7 @@ const { awaited, runTest } = testing;
 const findinitialmodelSelectsAnAvailableGatewayModel = () =>
   runTest(
     Effect.gen(function* () {
-      const gatewayModel: Model<"anthropic-messages"> = {
+      const gatewayModel: aiTypes.Model<"anthropic-messages"> = {
         api: "anthropic-messages" as const,
         baseUrl: "https://gateway.example.test",
         contextWindow: 200000,
@@ -43,7 +43,7 @@ const findinitialmodelSelectsAnAvailableGatewayModel = () =>
 const findinitialmodelIgnoresAnUnauthenticatedSavedDefault = () =>
   runTest(
     Effect.gen(function* () {
-      const savedDeepSeekModel: Model<"anthropic-messages"> = {
+      const savedDeepSeekModel: aiTypes.Model<"anthropic-messages"> = {
         api: "anthropic-messages" as const,
         baseUrl: "https://api.deepseek.com",
         contextWindow: 128000,
@@ -55,7 +55,7 @@ const findinitialmodelIgnoresAnUnauthenticatedSavedDefault = () =>
         provider: "deepseek",
         reasoning: true,
       };
-      const localDeepSeekModel: Model<"anthropic-messages"> = {
+      const localDeepSeekModel: aiTypes.Model<"anthropic-messages"> = {
         ...savedDeepSeekModel,
         baseUrl: "http://spark-two:8000/v1",
         provider: "spark-two",

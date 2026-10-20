@@ -1,10 +1,12 @@
 import { Clock, Effect } from "effect";
 import { describe, expect, it } from "vite-plus/test";
 
-import { complete } from "../src/compat.ts";
-import type { Context } from "../src/types.ts";
+import compat from "../src/compat.ts";
+import type typesModule from "../src/types.types.ts";
 import env from "./env.ts";
 import modelChoice from "./model-choice.ts";
+
+const { complete } = compat;
 
 const { chooseModel, usesApi } = modelChoice;
 
@@ -25,7 +27,7 @@ describe.skipIf(envValue("OPENAI_API_KEY") === undefined || envValue("OPENAI_API
               (candidate) => usesApi("openai-responses")(candidate) && candidate.reasoning,
             );
             const sessionId = "0195d6e4-4cf9-7f44-a2d8-f8f7f49ee9d3";
-            const context: Context = {
+            const context: typesModule.Context = {
               messages: [
                 {
                   content: "Reply with exactly: openai cache affinity e2e success",

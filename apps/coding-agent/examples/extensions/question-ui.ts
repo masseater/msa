@@ -1,13 +1,8 @@
 import type { Theme } from "@msa/coding-agent";
-import {
-  Editor,
-  type EditorTheme,
-  Key,
-  matchesKey,
-  type TUI,
-  visibleWidth,
-  wrapTextWithAnsi,
-} from "@msa/tui";
+import tuiModule from "@msa/tui";
+import type tuiTypes from "@msa/tui/index.types";
+
+const { Editor, Key, matchesKey, visibleWidth, wrapTextWithAnsi } = tuiModule;
 
 export interface OptionWithDesc {
   label: string;
@@ -23,25 +18,25 @@ export interface QuestionAnswer {
 }
 
 interface QuestionState {
-  readonly tui: TUI;
+  readonly tui: tuiTypes.TUI;
   readonly theme: Theme;
   readonly question: string;
   readonly options: DisplayOption[];
-  readonly editor: Editor;
+  readonly editor: tuiTypes.Editor;
   readonly done: (result: QuestionAnswer | null) => void;
   optionIndex: number;
   editMode: boolean;
   cachedLines: string[] | undefined;
 }
 
-const editorTheme = (theme: Theme): EditorTheme => ({
+const editorTheme = (theme: Theme): tuiTypes.EditorTheme => ({
   borderColor: (s) => theme.fg("accent", s),
   selectList: {
+    description: (t) => theme.fg("muted", t),
+    noMatch: (t) => theme.fg("warning", t),
+    scrollInfo: (t) => theme.fg("dim", t),
     selectedPrefix: (t) => theme.fg("accent", t),
     selectedText: (t) => theme.fg("accent", t),
-    description: (t) => theme.fg("muted", t),
-    scrollInfo: (t) => theme.fg("dim", t),
-    noMatch: (t) => theme.fg("warning", t),
   },
 });
 
@@ -81,7 +76,7 @@ const handleQuestionInput = (state: QuestionState, data: string): void => {
       state.editMode = true;
       refresh(state);
     } else {
-      state.done({ answer: selected.label, wasCustom: false, index: state.optionIndex + 1 });
+      state.done({ answer: selected.label, index: state.optionIndex + 1, wasCustom: false });
     }
     return;
   }
@@ -166,7 +161,7 @@ const renderQuestion = (state: QuestionState, width: number): string[] => {
 };
 
 export const askQuestion = (request: {
-  readonly tui: TUI;
+  readonly tui: tuiTypes.TUI;
   readonly theme: Theme;
   readonly question: string;
   readonly options: DisplayOption[];
@@ -174,15 +169,15 @@ export const askQuestion = (request: {
 }) => {
   const { tui, theme, question, options, done } = request;
   const state: QuestionState = {
-    tui,
-    theme,
-    question,
-    options,
-    editor: new Editor(tui, editorTheme(theme)),
-    done,
-    optionIndex: 0,
-    editMode: false,
     cachedLines: undefined,
+    done,
+    editMode: false,
+    editor: new Editor(tui, editorTheme(theme)),
+    optionIndex: 0,
+    options,
+    question,
+    theme,
+    tui,
   };
 
   state.editor.onSubmit = (value) => {
@@ -197,10 +192,10 @@ export const askQuestion = (request: {
   };
 
   return {
-    render: (width: number) => renderQuestion(state, width),
+    handleInput: (data: string) => handleQuestionInput(state, data),
     invalidate: () => {
       state.cachedLines = undefined;
     },
-    handleInput: (data: string) => handleQuestionInput(state, data),
+    render: (width: number) => renderQuestion(state, width),
   };
 };

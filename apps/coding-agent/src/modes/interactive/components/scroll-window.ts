@@ -1,6 +1,8 @@
-import { visibleWidth } from "@msa/tui";
+import tui from "@msa/tui";
 
 import { theme } from "../theme/theme.ts";
+
+const { visibleWidth } = tui;
 
 export interface ViewFrame {
   header: string[];
@@ -38,7 +40,7 @@ export function lineWindow(
     else if (cursorEnd >= start + height) start = cursorEnd - height + 1;
   }
   start = Math.max(0, Math.min(start, maxOffset));
-  return { offset: start, above: start, below: Math.max(0, lines - start - height) };
+  return { above: start, below: Math.max(0, lines - start - height), offset: start };
 }
 
 export function fitView(frame: ViewFrame, width: number, max: number, offset: number): FittedView {

@@ -1,7 +1,7 @@
 {
-  "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "$id": "https://raw.githubusercontent.com/masseater/msa/main/apps/coding-agent/schemas/models.schema.json",
   "$comment": "This file is generated from TypeScript source. Do not edit it manually; run npm run generate:schemas.",
+  "$id": "https://raw.githubusercontent.com/masseater/msa/main/apps/coding-agent/schemas/models.schema.json",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
   "type": "object",
   "required": ["providers"],
   "properties": {
@@ -14,11 +14,7 @@
         "^.*$": {
           "type": "object",
           "properties": {
-            "name": {
-              "type": "string",
-              "minLength": 1
-            },
-            "baseUrl": {
+            "api": {
               "type": "string",
               "minLength": 1
             },
@@ -26,9 +22,16 @@
               "type": "string",
               "minLength": 1
             },
-            "api": {
+            "authHeader": {
+              "type": "boolean"
+            },
+            "baseUrl": {
               "type": "string",
               "minLength": 1
+            },
+            "compat": {
+              "$ref": "#/$defs/ProviderCompat",
+              "description": "Provider and model compatibility overrides."
             },
             "headers": {
               "type": "object",
@@ -38,169 +41,23 @@
                 }
               }
             },
-            "compat": {
-              "$ref": "#/$defs/ProviderCompat",
-              "description": "Provider and model compatibility overrides."
-            },
-            "authHeader": {
-              "type": "boolean"
-            },
-            "models": {
-              "type": "array",
-              "items": {
-                "type": "object",
-                "required": ["id"],
-                "properties": {
-                  "id": {
-                    "type": "string",
-                    "minLength": 1
-                  },
-                  "name": {
-                    "type": "string",
-                    "minLength": 1
-                  },
-                  "api": {
-                    "type": "string",
-                    "minLength": 1
-                  },
-                  "baseUrl": {
-                    "type": "string",
-                    "minLength": 1
-                  },
-                  "reasoning": {
-                    "type": "boolean"
-                  },
-                  "thinkingLevelMap": {
-                    "$ref": "#/$defs/ThinkingLevelMap"
-                  },
-                  "input": {
-                    "type": "array",
-                    "items": {
-                      "enum": ["text", "image"]
-                    }
-                  },
-                  "inputLimits": {
-                    "$ref": "#/$defs/ModelInputLimits"
-                  },
-                  "cost": {
-                    "$ref": "#/$defs/ModelCost"
-                  },
-                  "promptCache": {
-                    "$ref": "#/$defs/ModelPromptCache",
-                    "description": "Best-effort prompt cache lifetime in seconds for each retention tier. A missing tier means the lifetime is unknown, so msa does not warm it."
-                  },
-                  "contextWindow": {
-                    "type": "number",
-                    "exclusiveMinimum": 0
-                  },
-                  "maxTokens": {
-                    "type": "number",
-                    "exclusiveMinimum": 0
-                  },
-                  "samplingParams": {
-                    "type": "object",
-                    "patternProperties": {
-                      "^.*$": {}
-                    }
-                  },
-                  "samplingParamsByThinkingLevel": {
-                    "type": "object",
-                    "properties": {
-                      "off": {
-                        "type": "object",
-                        "patternProperties": {
-                          "^.*$": {}
-                        }
-                      },
-                      "minimal": {
-                        "type": "object",
-                        "patternProperties": {
-                          "^.*$": {}
-                        }
-                      },
-                      "low": {
-                        "type": "object",
-                        "patternProperties": {
-                          "^.*$": {}
-                        }
-                      },
-                      "medium": {
-                        "type": "object",
-                        "patternProperties": {
-                          "^.*$": {}
-                        }
-                      },
-                      "high": {
-                        "type": "object",
-                        "patternProperties": {
-                          "^.*$": {}
-                        }
-                      },
-                      "xhigh": {
-                        "type": "object",
-                        "patternProperties": {
-                          "^.*$": {}
-                        }
-                      },
-                      "max": {
-                        "type": "object",
-                        "patternProperties": {
-                          "^.*$": {}
-                        }
-                      }
-                    }
-                  },
-                  "headers": {
-                    "type": "object",
-                    "patternProperties": {
-                      "^.*$": {
-                        "type": "string"
-                      }
-                    }
-                  },
-                  "compat": {
-                    "$ref": "#/$defs/ProviderCompat",
-                    "description": "Provider and model compatibility overrides."
-                  }
-                }
-              }
-            },
             "modelOverrides": {
               "type": "object",
               "patternProperties": {
                 "^.*$": {
                   "type": "object",
                   "properties": {
-                    "name": {
-                      "type": "string",
-                      "minLength": 1
+                    "compat": {
+                      "$ref": "#/$defs/ProviderCompat",
+                      "description": "Provider and model compatibility overrides."
                     },
-                    "reasoning": {
-                      "type": "boolean"
-                    },
-                    "thinkingLevelMap": {
-                      "$ref": "#/$defs/ThinkingLevelMap"
-                    },
-                    "input": {
-                      "type": "array",
-                      "items": {
-                        "enum": ["text", "image"]
-                      }
-                    },
-                    "inputLimits": {
-                      "$ref": "#/$defs/ModelInputLimits"
+                    "contextWindow": {
+                      "type": "number",
+                      "exclusiveMinimum": 0
                     },
                     "cost": {
                       "type": "object",
                       "properties": {
-                        "input": {
-                          "type": "number",
-                          "description": "Input cost in USD per million tokens."
-                        },
-                        "output": {
-                          "type": "number",
-                          "description": "Output cost in USD per million tokens."
-                        },
                         "cacheRead": {
                           "type": "number",
                           "description": "Cache-read cost in USD per million tokens."
@@ -209,29 +66,43 @@
                           "type": "number",
                           "description": "Cache-write cost in USD per million tokens."
                         },
+                        "input": {
+                          "type": "number",
+                          "description": "Input cost in USD per million tokens."
+                        },
+                        "output": {
+                          "type": "number",
+                          "description": "Output cost in USD per million tokens."
+                        },
+                        "serviceTiers": {
+                          "type": "object",
+                          "properties": {
+                            "flex": {
+                              "type": "number",
+                              "exclusiveMinimum": 0
+                            },
+                            "priority": {
+                              "type": "number",
+                              "exclusiveMinimum": 0
+                            }
+                          },
+                          "description": "Multiplier applied to every rate when a request runs on this service tier. A missing tier keeps the standard rates."
+                        },
                         "tiers": {
                           "type": "array",
                           "items": {
                             "type": "object",
                             "required": [
                               "inputTokensAbove",
-                              "input",
-                              "output",
                               "cacheRead",
-                              "cacheWrite"
+                              "cacheWrite",
+                              "input",
+                              "output"
                             ],
                             "properties": {
                               "inputTokensAbove": {
                                 "type": "number",
                                 "description": "Use this tier when total request input exceeds this token count."
-                              },
-                              "input": {
-                                "type": "number",
-                                "description": "Input cost in USD per million tokens."
-                              },
-                              "output": {
-                                "type": "number",
-                                "description": "Output cost in USD per million tokens."
                               },
                               "cacheRead": {
                                 "type": "number",
@@ -240,75 +111,18 @@
                               "cacheWrite": {
                                 "type": "number",
                                 "description": "Cache-write cost in USD per million tokens."
+                              },
+                              "input": {
+                                "type": "number",
+                                "description": "Input cost in USD per million tokens."
+                              },
+                              "output": {
+                                "type": "number",
+                                "description": "Output cost in USD per million tokens."
                               }
                             }
                           },
                           "description": "Request-wide pricing tiers. The highest matching input threshold applies to the full request."
-                        }
-                      }
-                    },
-                    "promptCache": {
-                      "$ref": "#/$defs/ModelPromptCache",
-                      "description": "Best-effort prompt cache lifetime in seconds for each retention tier. A missing tier means the lifetime is unknown, so msa does not warm it."
-                    },
-                    "contextWindow": {
-                      "type": "number",
-                      "exclusiveMinimum": 0
-                    },
-                    "maxTokens": {
-                      "type": "number",
-                      "exclusiveMinimum": 0
-                    },
-                    "samplingParams": {
-                      "type": "object",
-                      "patternProperties": {
-                        "^.*$": {}
-                      }
-                    },
-                    "samplingParamsByThinkingLevel": {
-                      "type": "object",
-                      "properties": {
-                        "off": {
-                          "type": "object",
-                          "patternProperties": {
-                            "^.*$": {}
-                          }
-                        },
-                        "minimal": {
-                          "type": "object",
-                          "patternProperties": {
-                            "^.*$": {}
-                          }
-                        },
-                        "low": {
-                          "type": "object",
-                          "patternProperties": {
-                            "^.*$": {}
-                          }
-                        },
-                        "medium": {
-                          "type": "object",
-                          "patternProperties": {
-                            "^.*$": {}
-                          }
-                        },
-                        "high": {
-                          "type": "object",
-                          "patternProperties": {
-                            "^.*$": {}
-                          }
-                        },
-                        "xhigh": {
-                          "type": "object",
-                          "patternProperties": {
-                            "^.*$": {}
-                          }
-                        },
-                        "max": {
-                          "type": "object",
-                          "patternProperties": {
-                            "^.*$": {}
-                          }
                         }
                       }
                     },
@@ -320,13 +134,213 @@
                         }
                       }
                     },
-                    "compat": {
-                      "$ref": "#/$defs/ProviderCompat",
-                      "description": "Provider and model compatibility overrides."
+                    "input": {
+                      "type": "array",
+                      "items": {
+                        "enum": ["text", "image"]
+                      }
+                    },
+                    "inputLimits": {
+                      "$ref": "#/$defs/ModelInputLimits"
+                    },
+                    "maxTokens": {
+                      "type": "number",
+                      "exclusiveMinimum": 0
+                    },
+                    "name": {
+                      "type": "string",
+                      "minLength": 1
+                    },
+                    "promptCache": {
+                      "$ref": "#/$defs/ModelPromptCache",
+                      "description": "Best-effort prompt cache lifetime in seconds for each retention tier. A missing tier means the lifetime is unknown, so msa does not warm it."
+                    },
+                    "reasoning": {
+                      "type": "boolean"
+                    },
+                    "samplingParams": {
+                      "type": "object",
+                      "patternProperties": {
+                        "^.*$": {}
+                      }
+                    },
+                    "samplingParamsByThinkingLevel": {
+                      "type": "object",
+                      "properties": {
+                        "high": {
+                          "type": "object",
+                          "patternProperties": {
+                            "^.*$": {}
+                          }
+                        },
+                        "low": {
+                          "type": "object",
+                          "patternProperties": {
+                            "^.*$": {}
+                          }
+                        },
+                        "max": {
+                          "type": "object",
+                          "patternProperties": {
+                            "^.*$": {}
+                          }
+                        },
+                        "medium": {
+                          "type": "object",
+                          "patternProperties": {
+                            "^.*$": {}
+                          }
+                        },
+                        "minimal": {
+                          "type": "object",
+                          "patternProperties": {
+                            "^.*$": {}
+                          }
+                        },
+                        "off": {
+                          "type": "object",
+                          "patternProperties": {
+                            "^.*$": {}
+                          }
+                        },
+                        "xhigh": {
+                          "type": "object",
+                          "patternProperties": {
+                            "^.*$": {}
+                          }
+                        }
+                      }
+                    },
+                    "thinkingLevelMap": {
+                      "$ref": "#/$defs/ThinkingLevelMap"
                     }
                   }
                 }
               }
+            },
+            "models": {
+              "type": "array",
+              "items": {
+                "type": "object",
+                "required": ["id"],
+                "properties": {
+                  "api": {
+                    "type": "string",
+                    "minLength": 1
+                  },
+                  "baseUrl": {
+                    "type": "string",
+                    "minLength": 1
+                  },
+                  "compat": {
+                    "$ref": "#/$defs/ProviderCompat",
+                    "description": "Provider and model compatibility overrides."
+                  },
+                  "contextWindow": {
+                    "type": "number",
+                    "exclusiveMinimum": 0
+                  },
+                  "cost": {
+                    "$ref": "#/$defs/ModelCost"
+                  },
+                  "headers": {
+                    "type": "object",
+                    "patternProperties": {
+                      "^.*$": {
+                        "type": "string"
+                      }
+                    }
+                  },
+                  "id": {
+                    "type": "string",
+                    "minLength": 1
+                  },
+                  "input": {
+                    "type": "array",
+                    "items": {
+                      "enum": ["text", "image"]
+                    }
+                  },
+                  "inputLimits": {
+                    "$ref": "#/$defs/ModelInputLimits"
+                  },
+                  "maxTokens": {
+                    "type": "number",
+                    "exclusiveMinimum": 0
+                  },
+                  "name": {
+                    "type": "string",
+                    "minLength": 1
+                  },
+                  "promptCache": {
+                    "$ref": "#/$defs/ModelPromptCache",
+                    "description": "Best-effort prompt cache lifetime in seconds for each retention tier. A missing tier means the lifetime is unknown, so msa does not warm it."
+                  },
+                  "reasoning": {
+                    "type": "boolean"
+                  },
+                  "samplingParams": {
+                    "type": "object",
+                    "patternProperties": {
+                      "^.*$": {}
+                    }
+                  },
+                  "samplingParamsByThinkingLevel": {
+                    "type": "object",
+                    "properties": {
+                      "high": {
+                        "type": "object",
+                        "patternProperties": {
+                          "^.*$": {}
+                        }
+                      },
+                      "low": {
+                        "type": "object",
+                        "patternProperties": {
+                          "^.*$": {}
+                        }
+                      },
+                      "max": {
+                        "type": "object",
+                        "patternProperties": {
+                          "^.*$": {}
+                        }
+                      },
+                      "medium": {
+                        "type": "object",
+                        "patternProperties": {
+                          "^.*$": {}
+                        }
+                      },
+                      "minimal": {
+                        "type": "object",
+                        "patternProperties": {
+                          "^.*$": {}
+                        }
+                      },
+                      "off": {
+                        "type": "object",
+                        "patternProperties": {
+                          "^.*$": {}
+                        }
+                      },
+                      "xhigh": {
+                        "type": "object",
+                        "patternProperties": {
+                          "^.*$": {}
+                        }
+                      }
+                    }
+                  },
+                  "thinkingLevelMap": {
+                    "$ref": "#/$defs/ThinkingLevelMap"
+                  }
+                }
+              }
+            },
+            "name": {
+              "type": "string",
+              "minLength": 1
             }
           }
         }
@@ -336,16 +350,8 @@
   "$defs": {
     "ModelCost": {
       "type": "object",
-      "required": ["input", "output", "cacheRead", "cacheWrite"],
+      "required": ["cacheRead", "cacheWrite", "input", "output"],
       "properties": {
-        "input": {
-          "type": "number",
-          "description": "Input cost in USD per million tokens."
-        },
-        "output": {
-          "type": "number",
-          "description": "Output cost in USD per million tokens."
-        },
         "cacheRead": {
           "type": "number",
           "description": "Cache-read cost in USD per million tokens."
@@ -354,23 +360,37 @@
           "type": "number",
           "description": "Cache-write cost in USD per million tokens."
         },
+        "input": {
+          "type": "number",
+          "description": "Input cost in USD per million tokens."
+        },
+        "output": {
+          "type": "number",
+          "description": "Output cost in USD per million tokens."
+        },
+        "serviceTiers": {
+          "type": "object",
+          "properties": {
+            "flex": {
+              "type": "number",
+              "exclusiveMinimum": 0
+            },
+            "priority": {
+              "type": "number",
+              "exclusiveMinimum": 0
+            }
+          },
+          "description": "Multiplier applied to every rate when a request runs on this service tier. A missing tier keeps the standard rates."
+        },
         "tiers": {
           "type": "array",
           "items": {
             "type": "object",
-            "required": ["inputTokensAbove", "input", "output", "cacheRead", "cacheWrite"],
+            "required": ["inputTokensAbove", "cacheRead", "cacheWrite", "input", "output"],
             "properties": {
               "inputTokensAbove": {
                 "type": "number",
                 "description": "Use this tier when total request input exceeds this token count."
-              },
-              "input": {
-                "type": "number",
-                "description": "Input cost in USD per million tokens."
-              },
-              "output": {
-                "type": "number",
-                "description": "Output cost in USD per million tokens."
               },
               "cacheRead": {
                 "type": "number",
@@ -379,6 +399,14 @@
               "cacheWrite": {
                 "type": "number",
                 "description": "Cache-write cost in USD per million tokens."
+              },
+              "input": {
+                "type": "number",
+                "description": "Input cost in USD per million tokens."
+              },
+              "output": {
+                "type": "number",
+                "description": "Output cost in USD per million tokens."
               }
             }
           },
@@ -389,49 +417,49 @@
     "ModelInputLimits": {
       "type": "object",
       "properties": {
-        "maxRequestBytes": {
-          "type": "integer",
-          "minimum": 1,
-          "description": "Maximum serialized provider request size in bytes."
-        },
         "images": {
           "type": "object",
           "properties": {
+            "maxPerMessage": {
+              "type": "integer",
+              "description": "Maximum images accepted in one provider message.",
+              "minimum": 1
+            },
+            "maxPerRequest": {
+              "type": "integer",
+              "description": "Maximum images accepted across one provider request.",
+              "minimum": 1
+            },
             "resize": {
               "type": "object",
               "properties": {
-                "maxWidth": {
+                "jpegQuality": {
                   "type": "integer",
+                  "maximum": 100,
+                  "minimum": 1
+                },
+                "maxBytes": {
+                  "type": "integer",
+                  "description": "Maximum base64-encoded payload size in bytes.",
                   "minimum": 1
                 },
                 "maxHeight": {
                   "type": "integer",
                   "minimum": 1
                 },
-                "maxBytes": {
+                "maxWidth": {
                   "type": "integer",
-                  "minimum": 1,
-                  "description": "Maximum base64-encoded payload size in bytes."
-                },
-                "jpegQuality": {
-                  "type": "integer",
-                  "minimum": 1,
-                  "maximum": 100
+                  "minimum": 1
                 }
               },
               "description": "Cache-safe resize profile applied before a new image enters conversation history."
-            },
-            "maxPerMessage": {
-              "type": "integer",
-              "minimum": 1,
-              "description": "Maximum images accepted in one provider message."
-            },
-            "maxPerRequest": {
-              "type": "integer",
-              "minimum": 1,
-              "description": "Maximum images accepted across one provider request."
             }
           }
+        },
+        "maxRequestBytes": {
+          "type": "integer",
+          "description": "Maximum serialized provider request size in bytes.",
+          "minimum": 1
         }
       }
     },
@@ -451,58 +479,44 @@
     "ProviderCompat": {
       "type": "object",
       "properties": {
-        "supportsStore": {
+        "allowEmptySignature": {
           "type": "boolean",
-          "description": "Whether the provider supports the store field. Default: auto-detected from URL."
+          "default": false,
+          "description": "Whether to replay empty thinking signatures instead of converting thinking to text."
         },
-        "supportsDeveloperRole": {
-          "type": "boolean",
-          "description": "Whether the provider supports the developer role instead of system. Defaults are API-specific."
-        },
-        "supportsReasoningEffort": {
-          "type": "boolean",
-          "description": "Whether the provider supports reasoning_effort. Default: auto-detected from URL."
-        },
-        "supportsUsageInStreaming": {
-          "type": "boolean",
-          "description": "Whether the provider supports stream_options.include_usage for token usage in streaming responses.",
-          "default": true
-        },
-        "supportsFinishReason": {
-          "type": "boolean",
-          "description": "Whether streamed responses include finish_reason. When false, msa infers stop or toolUse when the stream ends.",
-          "default": true
-        },
-        "maxTokensField": {
-          "anyOf": [
-            {
-              "type": "string",
-              "const": "max_completion_tokens"
+        "allowedFallbackModels": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "required": ["cost", "model", "provider"],
+            "properties": {
+              "cost": {
+                "$ref": "#/$defs/ModelCost"
+              },
+              "model": {
+                "type": "string",
+                "minLength": 1
+              },
+              "provider": {
+                "type": "string",
+                "minLength": 1
+              }
             },
-            {
-              "type": "string",
-              "const": "max_tokens"
-            }
-          ],
-          "description": "Which field to use for max tokens. Default: auto-detected from URL."
+            "description": "An Anthropic server-side refusal fallback model with local pricing metadata."
+          },
+          "description": "Models Anthropic accepts for server-side refusal fallback, with local pricing metadata for returned fallback responses. When absent or empty, callers must omit fallbacks; Anthropic rejects the field for models with no permitted fallback targets.",
+          "maxItems": 3
         },
-        "requiresToolResultName": {
+        "forceAdaptiveThinking": {
           "type": "boolean",
-          "description": "Whether tool results require the name field. Default: auto-detected from URL."
+          "default": false,
+          "description": "Whether to force adaptive thinking (thinking.type: adaptive plus output_config.effort) regardless of model ID. Built-in models that require adaptive thinking set this in generated metadata. Custom Anthropic-compatible providers can set this to true for any model whose upstream requires the adaptive format. Set false to opt out on overridden built-in models."
         },
-        "requiresAssistantAfterToolResult": {
+        "sendSessionAffinityHeaders": {
           "type": "boolean",
-          "description": "Whether a user message after tool results requires an assistant message in between. Default: auto-detected from URL."
+          "description": "Whether to send session-affinity data from options.sessionId. Defaults are API-specific."
         },
-        "requiresThinkingAsText": {
-          "type": "boolean",
-          "description": "Whether thinking blocks must be converted to text blocks with <thinking> delimiters. Default: auto-detected from URL."
-        },
-        "requiresReasoningContentOnAssistantMessages": {
-          "type": "boolean",
-          "description": "Whether all replayed assistant messages must include an empty reasoning_content field when reasoning is enabled. Default: auto-detected from URL."
-        },
-        "thinkingFormat": {
+        "sessionAffinityFormat": {
           "anyOf": [
             {
               "type": "string",
@@ -510,30 +524,58 @@
             },
             {
               "type": "string",
+              "const": "openai-nosession"
+            },
+            {
+              "type": "string",
               "const": "openrouter"
-            },
-            {
-              "type": "string",
-              "const": "deepseek"
-            },
-            {
-              "type": "string",
-              "const": "qwen"
-            },
-            {
-              "type": "string",
-              "const": "chat-template"
-            },
-            {
-              "type": "string",
-              "const": "qwen-chat-template"
-            },
-            {
-              "type": "string",
-              "const": "string-thinking"
             }
           ],
-          "description": "Format for reasoning or thinking parameters. When omitted, msa auto-detects the format from the provider URL. \"openai\" uses reasoning_effort, \"openrouter\" uses reasoning.effort, \"deepseek\" uses thinking.type plus reasoning_effort when supported, \"qwen\" uses top-level enable_thinking, \"qwen-chat-template\" uses chat_template_kwargs.enable_thinking and preserve_thinking, \"chat-template\" uses configurable chat_template_kwargs, and \"string-thinking\" uses top-level thinking."
+          "description": "Session-affinity header format. Defaults are API-specific or auto-detected."
+        },
+        "supportsCacheControlOnTools": {
+          "type": "boolean",
+          "default": true,
+          "description": "Whether the provider supports Anthropic-style cache_control markers on tool definitions. When false, cache_control is omitted from tool parameters. Some Anthropic-compatible providers do not support this field on tools and may reject or ignore it."
+        },
+        "supportsEagerToolInputStreaming": {
+          "type": "boolean",
+          "default": true,
+          "description": "Whether the provider accepts per-tool eager_input_streaming. When false, the Anthropic provider omits tools[].eager_input_streaming and sends the legacy fine-grained-tool-streaming-2025-05-14 beta header for tool-enabled requests."
+        },
+        "supportsLongCacheRetention": {
+          "type": "boolean",
+          "description": "Whether the provider supports long prompt cache retention. Defaults are API-specific or auto-detected."
+        },
+        "supportsMidConvoEffort": {
+          "type": "boolean",
+          "default": false,
+          "description": "Whether thinking level changes are sent inside the conversation instead of changing the request's effort, so a change keeps the prompt cache. Used by the anthropic-messages and openai-responses APIs."
+        },
+        "supportsMidConvoSystemMessages": {
+          "type": "boolean",
+          "default": false,
+          "description": "Whether the exact model accepts system or developer messages after the conversation has started. When false, later system messages are folded into the leading system message."
+        },
+        "supportsMidConvoToolChanges": {
+          "type": "boolean",
+          "default": false,
+          "description": "Whether the exact model accepts mid-conversation tool_addition and tool_removal blocks. Requires supportsMidConvoSystemMessages."
+        },
+        "supportsStrictTools": {
+          "type": "boolean",
+          "default": false,
+          "description": "Whether the provider supports Anthropic strict tool schemas. Generated Anthropic models enable it explicitly."
+        },
+        "supportsTemperature": {
+          "type": "boolean",
+          "default": true,
+          "description": "Whether the model accepts the Anthropic temperature request field. Claude Opus 4.7+ rejects non-default values."
+        },
+        "cacheControlFormat": {
+          "type": "string",
+          "const": "anthropic",
+          "description": "Cache control convention for prompt caching. Anthropic applies cache_control markers to the system prompt, last tool definition, and last user, assistant, or tool-result text content."
         },
         "chatTemplateKwargs": {
           "type": "object",
@@ -582,18 +624,26 @@
           },
           "description": "Kwargs sent as chat_template_kwargs when thinkingFormat is \"chat-template\". Use $var with \"thinking.enabled\", \"thinking.effort\", or \"thinking.budget\" for msa-controlled values."
         },
+        "maxTokensField": {
+          "anyOf": [
+            {
+              "type": "string",
+              "const": "max_completion_tokens"
+            },
+            {
+              "type": "string",
+              "const": "max_tokens"
+            }
+          ],
+          "description": "Which field to use for max tokens. Default: auto-detected from URL."
+        },
         "openRouterRouting": {
           "type": "object",
           "properties": {
             "allow_fallbacks": {
               "type": "boolean",
-              "description": "Whether to allow backup providers to serve requests.",
-              "default": true
-            },
-            "require_parameters": {
-              "type": "boolean",
-              "description": "Whether to filter providers to only those that support all parameters in the request.",
-              "default": false
+              "default": true,
+              "description": "Whether to allow backup providers to serve requests."
             },
             "data_collection": {
               "anyOf": [
@@ -606,30 +656,12 @@
                   "const": "allow"
                 }
               ],
-              "description": "Data collection setting. \"allow\": allow providers that may store or train on data. \"deny\": only use providers that do not collect user data.",
-              "default": "allow"
-            },
-            "zdr": {
-              "type": "boolean",
-              "description": "Whether to restrict routing to only ZDR (Zero Data Retention) endpoints."
+              "default": "allow",
+              "description": "Data collection setting. \"allow\": allow providers that may store or train on data. \"deny\": only use providers that do not collect user data."
             },
             "enforce_distillable_text": {
               "type": "boolean",
               "description": "Whether to restrict routing to only models that allow text distillation."
-            },
-            "order": {
-              "type": "array",
-              "items": {
-                "type": "string"
-              },
-              "description": "An ordered list of provider names or slugs to try in sequence, falling back to the next if unavailable."
-            },
-            "only": {
-              "type": "array",
-              "items": {
-                "type": "string"
-              },
-              "description": "List of provider names or slugs to exclusively allow for this request."
             },
             "ignore": {
               "type": "array",
@@ -638,46 +670,10 @@
               },
               "description": "List of provider names or slugs to skip for this request."
             },
-            "quantizations": {
-              "type": "array",
-              "items": {
-                "type": "string"
-              },
-              "description": "A list of quantization levels to filter providers by, for example [\"fp16\", \"bf16\", \"fp8\", \"fp6\", \"int8\", \"int4\", \"fp4\", \"fp32\"]."
-            },
-            "sort": {
-              "anyOf": [
-                {
-                  "type": "string"
-                },
-                {
-                  "type": "object",
-                  "properties": {
-                    "by": {
-                      "type": "string",
-                      "description": "The sorting metric, such as \"price\", \"throughput\", or \"latency\"."
-                    },
-                    "partition": {
-                      "anyOf": [
-                        {
-                          "type": "string"
-                        },
-                        {
-                          "type": "null"
-                        }
-                      ],
-                      "description": "Partitioning strategy: \"model\" or \"none\".",
-                      "default": "model"
-                    }
-                  }
-                }
-              ],
-              "description": "Sorting strategy. Can be a string such as \"price\", \"throughput\", or \"latency\", or an object."
-            },
             "max_price": {
               "type": "object",
               "properties": {
-                "prompt": {
+                "audio": {
                   "anyOf": [
                     {
                       "type": "number"
@@ -686,7 +682,7 @@
                       "type": "string"
                     }
                   ],
-                  "description": "Price per million prompt tokens."
+                  "description": "Price per audio unit."
                 },
                 "completion": {
                   "anyOf": [
@@ -710,7 +706,7 @@
                   ],
                   "description": "Price per image."
                 },
-                "audio": {
+                "prompt": {
                   "anyOf": [
                     {
                       "type": "number"
@@ -719,7 +715,7 @@
                       "type": "string"
                     }
                   ],
-                  "description": "Price per audio unit."
+                  "description": "Price per million prompt tokens."
                 },
                 "request": {
                   "anyOf": [
@@ -734,6 +730,49 @@
                 }
               },
               "description": "Maximum price per million tokens in USD."
+            },
+            "only": {
+              "type": "array",
+              "items": {
+                "type": "string"
+              },
+              "description": "List of provider names or slugs to exclusively allow for this request."
+            },
+            "order": {
+              "type": "array",
+              "items": {
+                "type": "string"
+              },
+              "description": "An ordered list of provider names or slugs to try in sequence, falling back to the next if unavailable."
+            },
+            "preferred_max_latency": {
+              "anyOf": [
+                {
+                  "type": "number"
+                },
+                {
+                  "type": "object",
+                  "properties": {
+                    "p50": {
+                      "type": "number",
+                      "description": "Maximum latency in seconds at the 50th percentile."
+                    },
+                    "p75": {
+                      "type": "number",
+                      "description": "Maximum latency in seconds at the 75th percentile."
+                    },
+                    "p90": {
+                      "type": "number",
+                      "description": "Maximum latency in seconds at the 90th percentile."
+                    },
+                    "p99": {
+                      "type": "number",
+                      "description": "Maximum latency in seconds at the 99th percentile."
+                    }
+                  }
+                }
+              ],
+              "description": "Preferred maximum latency in seconds. A number applies to p50."
             },
             "preferred_min_throughput": {
               "anyOf": [
@@ -764,37 +803,143 @@
               ],
               "description": "Preferred minimum throughput in tokens per second. A number applies to p50."
             },
-            "preferred_max_latency": {
+            "quantizations": {
+              "type": "array",
+              "items": {
+                "type": "string"
+              },
+              "description": "A list of quantization levels to filter providers by, for example [\"fp16\", \"bf16\", \"fp8\", \"fp6\", \"int8\", \"int4\", \"fp4\", \"fp32\"]."
+            },
+            "require_parameters": {
+              "type": "boolean",
+              "default": false,
+              "description": "Whether to filter providers to only those that support all parameters in the request."
+            },
+            "sort": {
               "anyOf": [
                 {
-                  "type": "number"
+                  "type": "string"
                 },
                 {
                   "type": "object",
                   "properties": {
-                    "p50": {
-                      "type": "number",
-                      "description": "Maximum latency in seconds at the 50th percentile."
+                    "by": {
+                      "type": "string",
+                      "description": "The sorting metric, such as \"price\", \"throughput\", or \"latency\"."
                     },
-                    "p75": {
-                      "type": "number",
-                      "description": "Maximum latency in seconds at the 75th percentile."
-                    },
-                    "p90": {
-                      "type": "number",
-                      "description": "Maximum latency in seconds at the 90th percentile."
-                    },
-                    "p99": {
-                      "type": "number",
-                      "description": "Maximum latency in seconds at the 99th percentile."
+                    "partition": {
+                      "anyOf": [
+                        {
+                          "type": "string"
+                        },
+                        {
+                          "type": "null"
+                        }
+                      ],
+                      "default": "model",
+                      "description": "Partitioning strategy: \"model\" or \"none\"."
                     }
                   }
                 }
               ],
-              "description": "Preferred maximum latency in seconds. A number applies to p50."
+              "description": "Sorting strategy. Can be a string such as \"price\", \"throughput\", or \"latency\", or an object."
+            },
+            "zdr": {
+              "type": "boolean",
+              "description": "Whether to restrict routing to only ZDR (Zero Data Retention) endpoints."
             }
           },
           "description": "OpenRouter provider routing preferences. Controls which upstream providers OpenRouter routes requests to. Sent as the provider field in the OpenRouter API request body. See https://openrouter.ai/docs/guides/routing/provider-selection."
+        },
+        "requiresAssistantAfterToolResult": {
+          "type": "boolean",
+          "description": "Whether a user message after tool results requires an assistant message in between. Default: auto-detected from URL."
+        },
+        "requiresReasoningContentOnAssistantMessages": {
+          "type": "boolean",
+          "description": "Whether all replayed assistant messages must include an empty reasoning_content field when reasoning is enabled. Default: auto-detected from URL."
+        },
+        "requiresThinkingAsText": {
+          "type": "boolean",
+          "description": "Whether thinking blocks must be converted to text blocks with <thinking> delimiters. Default: auto-detected from URL."
+        },
+        "requiresToolResultName": {
+          "type": "boolean",
+          "description": "Whether tool results require the name field. Default: auto-detected from URL."
+        },
+        "supportsDeveloperRole": {
+          "type": "boolean",
+          "description": "Whether the provider supports the developer role instead of system. Defaults are API-specific."
+        },
+        "supportsFinishReason": {
+          "type": "boolean",
+          "default": true,
+          "description": "Whether streamed responses include finish_reason. When false, msa infers stop or toolUse when the stream ends."
+        },
+        "supportsMidConvoToolAdditions": {
+          "type": "boolean",
+          "default": false,
+          "description": "Whether system messages can introduce additional tools mid-conversation. Requires supportsMidConvoSystemMessages. The generated catalog enables this for capable models."
+        },
+        "supportsOpenAIGrammarTools": {
+          "type": "boolean",
+          "default": false,
+          "description": "Whether the provider supports OpenAI custom tools with Lark or regex grammar formats. When false, grammar-constrained tools fall back to normal function tools."
+        },
+        "supportsReasoningEffort": {
+          "type": "boolean",
+          "description": "Whether the provider supports reasoning_effort. Default: auto-detected from URL."
+        },
+        "supportsStore": {
+          "type": "boolean",
+          "description": "Whether the provider supports the store field. Default: auto-detected from URL."
+        },
+        "supportsStrictMode": {
+          "type": "boolean",
+          "description": "Whether the provider supports strict tool schemas. Defaults are API-specific."
+        },
+        "supportsThinkingTokenBudget": {
+          "type": "boolean",
+          "default": false,
+          "description": "Alias for thinkingTokenBudgetField: \"thinking_token_budget\" (vLLM). Prefer thinkingTokenBudgetField."
+        },
+        "supportsUsageInStreaming": {
+          "type": "boolean",
+          "default": true,
+          "description": "Whether the provider supports stream_options.include_usage for token usage in streaming responses."
+        },
+        "thinkingFormat": {
+          "anyOf": [
+            {
+              "type": "string",
+              "const": "openai"
+            },
+            {
+              "type": "string",
+              "const": "openrouter"
+            },
+            {
+              "type": "string",
+              "const": "deepseek"
+            },
+            {
+              "type": "string",
+              "const": "qwen"
+            },
+            {
+              "type": "string",
+              "const": "chat-template"
+            },
+            {
+              "type": "string",
+              "const": "qwen-chat-template"
+            },
+            {
+              "type": "string",
+              "const": "string-thinking"
+            }
+          ],
+          "description": "Format for reasoning or thinking parameters. When omitted, msa auto-detects the format from the provider URL. \"openai\" uses reasoning_effort, \"openrouter\" uses reasoning.effort, \"deepseek\" uses thinking.type plus reasoning_effort when supported, \"qwen\" uses top-level enable_thinking, \"qwen-chat-template\" uses chat_template_kwargs.enable_thinking and preserve_thinking, \"chat-template\" uses configurable chat_template_kwargs, and \"string-thinking\" uses top-level thinking."
         },
         "thinkingTokenBudgetField": {
           "anyOf": [
@@ -813,146 +958,29 @@
           ],
           "description": "Top-level request field used to cap reasoning tokens from thinkingBudgets. Reasoning and the answer share max_tokens on these endpoints. \"thinking_token_budget\" is vLLM, \"thinking_budget\" is Qwen, DashScope, or SGLang, and \"thinking_budget_tokens\" is llama.cpp. Off by default and not set on the generated catalog."
         },
-        "supportsThinkingTokenBudget": {
-          "type": "boolean",
-          "description": "Alias for thinkingTokenBudgetField: \"thinking_token_budget\" (vLLM). Prefer thinkingTokenBudgetField.",
-          "default": false
-        },
-        "supportsOpenAIGrammarTools": {
-          "type": "boolean",
-          "description": "Whether the provider supports OpenAI custom tools with Lark or regex grammar formats. When false, grammar-constrained tools fall back to normal function tools.",
-          "default": false
-        },
-        "supportsMidConvoSystemMessages": {
-          "type": "boolean",
-          "description": "Whether the exact model accepts system or developer messages after the conversation has started. When false, later system messages are folded into the leading system message.",
-          "default": false
-        },
-        "supportsMidConvoToolAdditions": {
-          "type": "boolean",
-          "description": "Whether system messages can introduce additional tools mid-conversation. Requires supportsMidConvoSystemMessages. The generated catalog enables this for capable models.",
-          "default": false
-        },
-        "supportsStrictMode": {
-          "type": "boolean",
-          "description": "Whether the provider supports strict tool schemas. Defaults are API-specific."
-        },
-        "cacheControlFormat": {
-          "type": "string",
-          "const": "anthropic",
-          "description": "Cache control convention for prompt caching. Anthropic applies cache_control markers to the system prompt, last tool definition, and last user, assistant, or tool-result text content."
-        },
-        "sendSessionAffinityHeaders": {
-          "type": "boolean",
-          "description": "Whether to send session-affinity data from options.sessionId. Defaults are API-specific."
-        },
-        "sessionAffinityFormat": {
-          "anyOf": [
-            {
-              "type": "string",
-              "const": "openai"
-            },
-            {
-              "type": "string",
-              "const": "openai-nosession"
-            },
-            {
-              "type": "string",
-              "const": "openrouter"
-            }
-          ],
-          "description": "Session-affinity header format. Defaults are API-specific or auto-detected."
-        },
-        "supportsLongCacheRetention": {
-          "type": "boolean",
-          "description": "Whether the provider supports long prompt cache retention. Defaults are API-specific or auto-detected."
-        },
         "vllmPriority": {
           "type": "number",
           "description": "vLLM scheduler priority sent as the top-level priority request field. Lower values are handled earlier and the server default is 0. Only meaningful with --scheduling-policy priority. Off by default and not set on the generated catalog."
         },
         "supportsAdditionalTools": {
           "type": "boolean",
-          "description": "Whether the model supports message-anchored additional_tools input items.",
-          "default": false
-        },
-        "supportsToolSearch": {
-          "type": "boolean",
-          "description": "Whether the model supports client-executed tool search for transcript-anchored additions.",
-          "default": false
+          "default": false,
+          "description": "Whether the model supports message-anchored additional_tools input items."
         },
         "supportsExplicitPromptCacheMode": {
           "type": "boolean",
-          "description": "Whether the model accepts prompt_cache_options. Older OpenAI models reject the parameter.",
-          "default": false
-        },
-        "supportsMidConvoEffort": {
-          "type": "boolean",
-          "description": "Whether thinking level changes are sent inside the conversation instead of changing the request's effort, so a change keeps the prompt cache. Used by the anthropic-messages and openai-responses APIs.",
-          "default": false
+          "default": false,
+          "description": "Whether the model accepts prompt_cache_options. Older OpenAI models reject the parameter."
         },
         "supportsMaxOutputTokens": {
           "type": "boolean",
-          "description": "Whether the provider accepts max_output_tokens. Some Codex-protocol gateways reject it.",
-          "default": true
+          "default": true,
+          "description": "Whether the provider accepts max_output_tokens. Some Codex-protocol gateways reject it."
         },
-        "supportsEagerToolInputStreaming": {
+        "supportsToolSearch": {
           "type": "boolean",
-          "description": "Whether the provider accepts per-tool eager_input_streaming. When false, the Anthropic provider omits tools[].eager_input_streaming and sends the legacy fine-grained-tool-streaming-2025-05-14 beta header for tool-enabled requests.",
-          "default": true
-        },
-        "supportsCacheControlOnTools": {
-          "type": "boolean",
-          "description": "Whether the provider supports Anthropic-style cache_control markers on tool definitions. When false, cache_control is omitted from tool parameters. Some Anthropic-compatible providers do not support this field on tools and may reject or ignore it.",
-          "default": true
-        },
-        "supportsTemperature": {
-          "type": "boolean",
-          "description": "Whether the model accepts the Anthropic temperature request field. Claude Opus 4.7+ rejects non-default values.",
-          "default": true
-        },
-        "forceAdaptiveThinking": {
-          "type": "boolean",
-          "description": "Whether to force adaptive thinking (thinking.type: adaptive plus output_config.effort) regardless of model ID. Built-in models that require adaptive thinking set this in generated metadata. Custom Anthropic-compatible providers can set this to true for any model whose upstream requires the adaptive format. Set false to opt out on overridden built-in models.",
-          "default": false
-        },
-        "allowEmptySignature": {
-          "type": "boolean",
-          "description": "Whether to replay empty thinking signatures instead of converting thinking to text.",
-          "default": false
-        },
-        "supportsStrictTools": {
-          "type": "boolean",
-          "description": "Whether the provider supports Anthropic strict tool schemas. Generated Anthropic models enable it explicitly.",
-          "default": false
-        },
-        "supportsMidConvoToolChanges": {
-          "type": "boolean",
-          "description": "Whether the exact model accepts mid-conversation tool_addition and tool_removal blocks. Requires supportsMidConvoSystemMessages.",
-          "default": false
-        },
-        "allowedFallbackModels": {
-          "type": "array",
-          "items": {
-            "type": "object",
-            "required": ["provider", "model", "cost"],
-            "properties": {
-              "provider": {
-                "type": "string",
-                "minLength": 1
-              },
-              "model": {
-                "type": "string",
-                "minLength": 1
-              },
-              "cost": {
-                "$ref": "#/$defs/ModelCost"
-              }
-            },
-            "description": "An Anthropic server-side refusal fallback model with local pricing metadata."
-          },
-          "maxItems": 3,
-          "description": "Models Anthropic accepts for server-side refusal fallback, with local pricing metadata for returned fallback responses. When absent or empty, callers must omit fallbacks; Anthropic rejects the field for models with no permitted fallback targets."
+          "default": false,
+          "description": "Whether the model supports client-executed tool search for transcript-anchored additions."
         }
       },
       "additionalProperties": true

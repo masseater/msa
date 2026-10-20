@@ -1,33 +1,24 @@
 import { Effect } from "effect";
-import type OpenAI from "openai";
 import type { ResponseCreateParamsStreaming } from "openai/resources/responses/responses.js";
 
-import type { Api, AssistantMessage, Model, StreamOptions } from "../types.ts";
-import { AssistantMessageEventStream } from "../utils/event-stream.ts";
-import { headersToRecord } from "../utils/headers.ts";
-import { callHook } from "../utils/hooks.ts";
-import { providerRequestWithRetry } from "../utils/provider-retry.ts";
-import type { OpenAIResponsesStreamOptions } from "./openai-responses-options.ts";
-import { processResponsesStream } from "./openai-responses-stream.ts";
+import type typesModule from "../types.types.ts";
+import eventStream from "../utils/event-stream.ts";
+import type eventStreamTypes from "../utils/event-stream.types.ts";
+import headersModule from "../utils/headers.ts";
+import hooks from "../utils/hooks.ts";
+import providerRetry from "../utils/provider-retry.ts";
+import type openaiResponsesRunTypes from "./openai-responses-run.types.ts";
+import openaiResponsesStream from "./openai-responses-stream.ts";
 
-export interface ResponsesRequest {
-  readonly client: Pick<OpenAI, "responses">;
-  readonly params: ResponseCreateParamsStreaming;
-  readonly streamOptions: OpenAIResponsesStreamOptions;
-}
-
-export interface ResponsesRunSpec<TApi extends Api> {
-  readonly model: Model<TApi>;
-  readonly options: StreamOptions | undefined;
-  readonly output: AssistantMessage;
-  readonly streamName: string;
-  readonly prepare: () => ResponsesRequest;
-  readonly formatError: (error: unknown) => string;
-}
+const { callHook } = hooks;
+const { providerRequestWithRetry } = providerRetry;
+const { headersToRecord } = headersModule;
+const { processResponsesStream } = openaiResponsesStream;
+const { AssistantMessageEventStream } = eventStream;
 
 function finish(
-  { output, options, streamName }: ResponsesRunSpec<Api>,
-  events: AssistantMessageEventStream,
+  { output, options, streamName }: openaiResponsesRunTypes.ResponsesRunSpec<typesModule.Api>,
+  events: eventStreamTypes.AssistantMessageEventStream,
 ): void {
   if (options?.signal?.aborted === true) throw new Error("Request was aborted");
   if (output.stopReason === "pending") {
@@ -36,13 +27,13 @@ function finish(
   if (output.stopReason === "aborted" || output.stopReason === "error") {
     throw new Error(output.errorMessage || "An unknown error occurred");
   }
-  events.push({ type: "done", reason: output.stopReason, message: output });
+  events.push({ message: output, reason: output.stopReason, type: "done" });
   events.end();
 }
 
 function fail(
-  { output, options, formatError }: ResponsesRunSpec<Api>,
-  events: AssistantMessageEventStream,
+  { output, options, formatError }: openaiResponsesRunTypes.ResponsesRunSpec<typesModule.Api>,
+  events: eventStreamTypes.AssistantMessageEventStream,
   error: unknown,
 ): void {
   for (const block of output.content) {
@@ -52,13 +43,13 @@ function fail(
   }
   output.stopReason = options?.signal?.aborted === true ? "aborted" : "error";
   output.errorMessage = formatError(error);
-  events.push({ type: "error", reason: output.stopReason, error: output });
+  events.push({ error: output, reason: output.stopReason, type: "error" });
   events.end();
 }
 
 const request = Effect.fn("openaiResponsesRequest")(function* (
-  spec: ResponsesRunSpec<Api>,
-  events: AssistantMessageEventStream,
+  spec: openaiResponsesRunTypes.ResponsesRunSpec<typesModule.Api>,
+  events: eventStreamTypes.AssistantMessageEventStream,
 ) {
   const { model, options, output } = spec;
   const { client, params: prepared, streamOptions } = spec.prepare();
@@ -77,16 +68,16 @@ const request = Effect.fn("openaiResponsesRequest")(function* (
       signal: options?.signal,
     },
   );
-  const head = { status: response.status, headers: headersToRecord(response.headers) };
+  const head = { headers: headersToRecord(response.headers), status: response.status };
   yield* callHook(() => options?.onResponse?.(head, model));
-  events.push({ type: "start", partial: output });
+  events.push({ partial: output, type: "start" });
   yield* processResponsesStream(openaiStream, output, events, model, streamOptions);
   finish(spec, events);
 });
 
-export function runResponsesStream<TApi extends Api>(
-  spec: ResponsesRunSpec<TApi>,
-): AssistantMessageEventStream {
+function runResponsesStream<TApi extends typesModule.Api>(
+  spec: openaiResponsesRunTypes.ResponsesRunSpec<TApi>,
+): eventStreamTypes.AssistantMessageEventStream {
   const events = new AssistantMessageEventStream();
   Effect.runFork(
     request(spec, events).pipe(
@@ -95,3 +86,9 @@ export function runResponsesStream<TApi extends Api>(
   );
   return events;
 }
+
+const openaiResponsesRun = {
+  runResponsesStream,
+};
+
+export default openaiResponsesRun;

@@ -1,13 +1,5 @@
-import {
-  type Component,
-  type Focusable,
-  getKeybindings,
-  Input,
-  matchesKey,
-  Spacer,
-  truncateToWidth,
-  visibleWidth,
-} from "@msa/tui";
+import tui from "@msa/tui";
+import type tuiTypes from "@msa/tui/index.types";
 
 import type { Orchestrator } from "../../../core/orchestrator/orchestrator.ts";
 import type { TaskSnapshot } from "../../../core/orchestrator/types.ts";
@@ -16,10 +8,12 @@ import { shortId } from "../../../utils/text.ts";
 import { theme } from "../theme/theme.ts";
 import { DynamicBorder } from "./dynamic-border.ts";
 import { keyHint } from "./keybinding-hints.ts";
-import { fitView, type ViewFrame } from "./scroll-window.ts";
+import { type ViewFrame, fitView } from "./scroll-window.ts";
 import { taskList } from "./tasks-list.ts";
 import { taskDetail } from "./tasks-view-detail.ts";
 import { type TasksViewState, viewHelpers } from "./tasks-view-helpers.ts";
+
+const { Input, Spacer, getKeybindings, matchesKey, truncateToWidth, visibleWidth } = tui;
 
 const { STATUS_LABEL, glyph, finished, stoppable, modelName, depthOf, roundTasks } = viewHelpers;
 const { describeReplan } = viewHelpers;
@@ -67,7 +61,7 @@ export interface TasksViewOptions {
   state?: TasksViewState;
 }
 
-export class TasksView implements Component, Focusable {
+export class TasksView implements tuiTypes.Component, tuiTypes.Focusable {
   readonly wantsViewportKeys = true;
   private readonly options: TasksViewOptions;
   private openId: string | undefined;
@@ -122,10 +116,10 @@ export class TasksView implements Component, Focusable {
 
   private rowLine(task: TaskSnapshot, selected: boolean, width: number): string {
     return taskList.taskRow(task, {
-      selected,
-      width,
       meta: (entry) =>
         [shortId(entry.id), modelName(entry.model ?? "default")].filter(Boolean).join("  "),
+      selected,
+      width,
     });
   }
 
@@ -190,9 +184,9 @@ export class TasksView implements Component, Focusable {
       if (reason !== "") {
         lines.push(truncateToWidth(`${"  ".repeat(depth)}     ${theme.fg("dim", reason)}`, width));
       }
-      if (task.id === selected?.id) cursor = { start: cursorTop ?? start, end: lines.length - 1 };
+      if (task.id === selected?.id) cursor = { end: lines.length - 1, start: cursorTop ?? start };
     }
-    return { lines, cursor };
+    return { cursor, lines };
   }
 
   private renderList(width: number): ViewFrame {
@@ -205,10 +199,10 @@ export class TasksView implements Component, Focusable {
     const borderIndex = header.length - 1 - (replan === undefined ? 0 : 1);
     if (tasks.length === 0) {
       return {
-        header,
-        borderIndex,
         body: [],
+        borderIndex,
         footer: ["", ` ${keyHint("tui.select.cancel", "close")}`],
+        header,
       };
     }
     const selected = this.selected();
@@ -225,33 +219,33 @@ export class TasksView implements Component, Focusable {
     }
     if (this.composing !== undefined) {
       return {
-        header,
-        borderIndex,
         body,
-        cursorLine,
+        borderIndex,
         cursorEnd,
+        cursorLine,
         footer: ["", ...this.renderComposer(width)],
+        header,
       };
     }
     return {
-      header,
-      borderIndex,
       body,
-      cursorLine,
+      borderIndex,
       cursorEnd,
+      cursorLine,
       footer: ["", taskDetail.listHints(this.state.showFinished, selected)],
+      header,
     };
   }
 
   private renderDetail(task: TaskSnapshot, width: number): ViewFrame {
     const right = theme.fg("dim", `${STATUS_LABEL[task.status].toLowerCase()} · ${task.round}`);
     return {
-      header: this.header(`${glyph(task)} ${task.title}`, right, width),
       body: taskDetail.sections(this.options.orchestrator, task, width),
       footer: [
         "",
         ...(this.composing === undefined ? [taskDetail.hints(task)] : this.renderComposer(width)),
       ],
+      header: this.header(`${glyph(task)} ${task.title}`, right, width),
     };
   }
 
@@ -317,12 +311,12 @@ export class TasksView implements Component, Focusable {
       this.startComposing({ kind: "depends", taskId: selected.id });
     } else if (kb.matches(data, "app.orchestrator.currentState") && selected !== undefined) {
       this.startComposing(
-        { kind: "state", taskId: selected.id, field: "currentState" },
+        { field: "currentState", kind: "state", taskId: selected.id },
         selected.currentState,
       );
     } else if (kb.matches(data, "app.orchestrator.goalState") && selected !== undefined) {
       this.startComposing(
-        { kind: "state", taskId: selected.id, field: "goalState" },
+        { field: "goalState", kind: "state", taskId: selected.id },
         selected.goalState,
       );
     } else if (
@@ -383,7 +377,7 @@ export class TasksView implements Component, Focusable {
     };
     if (composing.kind === "note") {
       this.options.orchestrator
-        .sendNote({ content: text, audience: "round", round: composing.round })
+        .sendNote({ audience: "round", content: text, round: composing.round })
         .catch(failed);
       return;
     }

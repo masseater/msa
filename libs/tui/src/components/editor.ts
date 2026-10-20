@@ -1,44 +1,36 @@
-import type { AutocompleteProvider } from "../autocomplete.ts";
-import { getKeybindings, type KeybindingsManager } from "../keybindings.ts";
-import type { Component, Focusable, TuiMouseEvent, TuiMouseEventResult } from "../tui-component.ts";
-import type { TUI } from "../tui-interface.ts";
-import { EditorAutocomplete } from "./editor-autocomplete.ts";
-import { EditorCommands } from "./editor-commands.ts";
-import { EditorDocument } from "./editor-document.ts";
-import { insertableInput, isNewLineInput, printableInput } from "./editor-keys.ts";
-import {
+import type autocompleteTypes from "../autocomplete.types.ts";
+import type keybindingsTypes from "../keybindings.types.ts";
+import type tuiComponentTypes from "../tui-component.types.ts";
+import type tuiInterfaceTypes from "../tui-interface.types.ts";
+import type editorAutocompleteTypes from "./editor-autocomplete.types.ts";
+import type editorCommandsTypes from "./editor-commands.types.ts";
+import editorKit from "./editor-kit.ts";
+import editorRender from "./editor-render.ts";
+import type editorTypes from "./editor.types.ts";
+
+const { editorKeys, editorLimits } = editorKit;
+
+const { PASTE_END, PASTE_START, clampMaxVisible, clampPadding } = editorLimits;
+
+const {
+  EditorAutocomplete,
+  EditorCommands,
+  EditorDocument,
+  keybindings: keybindingsModule,
+} = editorKit;
+const {
   clampScrollOffset,
   createScrollBorder,
   editorPadding,
   padContentLines,
   renderContentLines,
-} from "./editor-render.ts";
-import type { SelectListTheme } from "./select-list.ts";
+} = editorRender;
+const { getKeybindings } = keybindingsModule;
+const { insertableInput, isNewLineInput, printableInput } = editorKeys;
 
-export interface EditorTheme {
-  borderColor: (str: string) => string;
-  selectList: SelectListTheme;
-}
-
-export interface EditorOptions {
-  paddingX?: number;
-  autocompleteMaxVisible?: number;
-}
-
-const PASTE_START = "\x1b[200~";
-const PASTE_END = "\x1b[201~";
-
-function clampPadding(padding: number): number {
-  return Number.isFinite(padding) ? Math.max(0, Math.floor(padding)) : 0;
-}
-
-function clampMaxVisible(maxVisible: number): number {
-  return Number.isFinite(maxVisible) ? Math.max(3, Math.min(20, Math.floor(maxVisible))) : 5;
-}
-
-export class Editor implements Component, Focusable {
+export default class Editor implements tuiComponentTypes.Component, tuiComponentTypes.Focusable {
   focused: boolean = false;
-  protected tui: TUI;
+  protected tui: tuiInterfaceTypes.TUI;
   public borderColor: (str: string) => string;
   public onSubmit?: (text: string) => void;
   public onChange?: (text: string) => void;
@@ -51,25 +43,29 @@ export class Editor implements Component, Focusable {
   private isInPaste: boolean = false;
   private jumpMode: "forward" | "backward" | null = null;
   private readonly doc = new EditorDocument(() => this.onChange?.(this.getText()));
-  private readonly autocomplete: EditorAutocomplete;
-  private readonly commands: EditorCommands;
+  private readonly autocomplete: editorAutocompleteTypes.EditorAutocomplete;
+  private readonly commands: editorCommandsTypes.EditorCommands;
 
-  constructor(tui: TUI, theme: EditorTheme, options: EditorOptions = {}) {
+  constructor(
+    tui: tuiInterfaceTypes.TUI,
+    theme: editorTypes.EditorTheme,
+    options: editorTypes.EditorOptions = {},
+  ) {
     this.tui = tui;
     this.borderColor = theme.borderColor;
     this.paddingX = clampPadding(options.paddingX ?? 0);
     this.autocomplete = new EditorAutocomplete(this.doc, {
-      theme: theme.selectList,
       maxVisible: clampMaxVisible(options.autocompleteMaxVisible ?? 5),
       requestRender: () => this.tui.requestRender(),
+      theme: theme.selectList,
     });
     this.commands = new EditorCommands(this.doc, this.autocomplete, {
-      terminalRows: () => this.tui.terminal.rows,
       isSubmitDisabled: () => this.disableSubmit,
       submit: (text) => {
         this.onChange?.("");
         this.onSubmit?.(text);
       },
+      terminalRows: () => this.tui.terminal.rows,
     });
   }
 
@@ -97,7 +93,7 @@ export class Editor implements Component, Focusable {
     }
   }
 
-  setAutocompleteProvider(provider: AutocompleteProvider): void {
+  setAutocompleteProvider(provider: autocompleteTypes.AutocompleteProvider): void {
     this.autocomplete.setProvider(provider);
   }
 
@@ -129,8 +125,8 @@ export class Editor implements Component, Focusable {
     const maxVisibleLines = Math.max(5, Math.floor(this.tui.terminal.rows * 0.3));
     const scrollOffset = clampScrollOffset({
       layoutLines,
-      scrollOffset: this.doc.scrollOffset,
       maxVisibleLines,
+      scrollOffset: this.doc.scrollOffset,
     });
     this.doc.scrollOffset = scrollOffset;
     const visibleLines = layoutLines.slice(scrollOffset, scrollOffset + maxVisibleLines);
@@ -150,7 +146,9 @@ export class Editor implements Component, Focusable {
     return [...result, ...padContentLines(autocompleteLines, padding)];
   }
 
-  handleMouse(event: TuiMouseEvent): TuiMouseEventResult | undefined {
+  handleMouse(
+    event: tuiComponentTypes.TuiMouseEvent,
+  ): tuiComponentTypes.TuiMouseEventResult | undefined {
     const list = this.autocomplete.visibleList();
     const autocompleteStartRow = this.renderedVisibleLineCount + 2;
     if (
@@ -161,10 +159,10 @@ export class Editor implements Component, Focusable {
       const { paddingX, contentWidth } = editorPadding(event.width, this.paddingX);
       const result = list.handleMouse?.({
         ...event,
+        height: this.renderedAutocompleteHeight,
+        width: contentWidth,
         x: event.x - paddingX,
         y: event.y - autocompleteStartRow,
-        width: contentWidth,
-        height: this.renderedAutocompleteHeight,
       });
       return result === undefined ? undefined : { ...result, focus: true };
     }
@@ -174,7 +172,7 @@ export class Editor implements Component, Focusable {
       const { paddingX } = editorPadding(event.width, this.paddingX);
       this.commands.click(this.doc.scrollOffset + event.y - 1, Math.max(0, event.x - paddingX));
     }
-    return { handled: true, focus: true };
+    return { focus: true, handled: true };
   }
 
   handleInput(data: string): void {
@@ -212,7 +210,7 @@ export class Editor implements Component, Focusable {
     this.insertPrintable(input);
   }
 
-  private handleJumpInput(data: string, kb: KeybindingsManager): boolean {
+  private handleJumpInput(data: string, kb: keybindingsTypes.KeybindingsManager): boolean {
     const direction = this.jumpMode;
     this.jumpMode = null;
     if (direction === null) return false;
@@ -269,7 +267,7 @@ export class Editor implements Component, Focusable {
   }
 
   getCursor(): { line: number; col: number } {
-    return { line: this.doc.state.cursorLine, col: this.doc.state.cursorCol };
+    return { col: this.doc.state.cursorCol, line: this.doc.state.cursorLine };
   }
 
   setText(text: string): void {

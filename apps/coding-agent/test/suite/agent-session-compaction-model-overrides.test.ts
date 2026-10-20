@@ -1,4 +1,4 @@
-import { fauxAssistantMessage } from "@msa/ai";
+import ai from "@msa/ai";
 import testing from "@msa/testing";
 import { Effect } from "effect";
 import { afterEach, describe, expect, it, vi } from "vite-plus/test";
@@ -6,6 +6,8 @@ import { afterEach, describe, expect, it, vi } from "vite-plus/test";
 import type { SessionBeforeCompactEvent } from "../../src/core/extensions/index.ts";
 import harnessModule from "./harness.ts";
 import type harnessTypes from "./harness.types.ts";
+
+const { fauxAssistantMessage } = ai;
 
 const { createHarness } = harnessModule;
 

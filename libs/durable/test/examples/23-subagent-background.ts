@@ -1,21 +1,19 @@
 import * as NodeRuntime from "@effect/platform-node/NodeRuntime";
-import {
-  type FauxResponseStep,
-  createModels,
-  fauxAssistantMessage,
-  fauxProvider,
-  fauxText,
-  fauxToolCall,
-} from "@msa/ai";
-import { openaiProvider } from "@msa/ai/providers/openai";
+import ai from "@msa/ai";
+import type aiTypes from "@msa/ai/index.types";
+import openai from "@msa/ai/providers/openai";
 import durable from "@msa/durable";
 import harnessModule from "@msa/durable/harness";
 import type durableTypes from "@msa/durable/index.types";
 import { Console, Effect } from "effect";
 
-import node from "../../src/storage/sqlite/node.ts";
-import support from "../support.ts";
+import example23SubagentBackgroundKit from "./23-subagent-background-kit.ts";
 import subagentBackgroundTools from "./subagent-background-tools.ts";
+
+const { node, support } = example23SubagentBackgroundKit;
+
+const { createModels, fauxAssistantMessage, fauxProvider, fauxText, fauxToolCall } = ai;
+const { openaiProvider } = openai;
 
 const { Harness, createRegistry, watchEvents } = harnessModule;
 const { openNodeSqliteStorage } = node;
@@ -36,7 +34,7 @@ if (environmentVariable("OPENAI_API_KEY", true) === undefined) {
   const call = (input: Record<string, string>) =>
     fauxAssistantMessage([fauxToolCall("subagent", input)], { stopReason: "toolUse" });
   const answer = (text: string) => fauxAssistantMessage([fauxText(text)]);
-  const route: FauxResponseStep = (request) => {
+  const route: aiTypes.FauxResponseStep = (request) => {
     const last = request.messages.findLast((message) => message.role !== "system")!;
     const content =
       typeof last.content === "string" ? [{ text: last.content, type: "text" }] : last.content;

@@ -1,24 +1,23 @@
 import { Effect } from "effect";
 
-import { matchCsiSequence } from "./ansi-sequences.ts";
-import { primeTerminalCapabilities } from "./terminal-capabilities-probe.ts";
-import {
-  getCapabilities,
-  needsTmuxHyperlinkProbe,
-  setCellDimensions,
-} from "./terminal-capabilities.ts";
+import ansiSequences from "./ansi-sequences.ts";
+import terminalCapabilitiesProbe from "./terminal-capabilities-probe.ts";
+import terminalCapabilities from "./terminal-capabilities.ts";
+import type tuiTerminalQueriesTypes from "./tui-terminal-queries.types.ts";
+
+const { getCapabilities, needsTmuxHyperlinkProbe, setCellDimensions } = terminalCapabilities;
+const { matchCsiSequence } = ansiSequences;
+const { primeTerminalCapabilities } = terminalCapabilitiesProbe;
 
 const CELL_SIZE_BODY = /^6;(\d+);(\d+)$/u;
 
-export function cellSizeQuery(): string {
+function cellSizeQuery(): string {
   return getCapabilities().images === null ? "" : "\x1b[16t";
 }
 
-export type CellSizeResponse = "none" | "ignored" | "updated";
-
-export function consumeCellSizeResponse(data: string): CellSizeResponse {
+function consumeCellSizeResponse(data: string): tuiTerminalQueriesTypes.CellSizeResponse {
   const [, height, width] =
-    matchCsiSequence({ data, finals: "t", body: CELL_SIZE_BODY })?.groups ?? [];
+    matchCsiSequence({ body: CELL_SIZE_BODY, data, finals: "t" })?.groups ?? [];
   if (height === undefined || width === undefined) {
     return "none";
   }
@@ -27,11 +26,19 @@ export function consumeCellSizeResponse(data: string): CellSizeResponse {
   if (heightPx <= 0 || widthPx <= 0) {
     return "ignored";
   }
-  setCellDimensions({ widthPx, heightPx });
+  setCellDimensions({ heightPx, widthPx });
   return "updated";
 }
 
-export function probeCapabilitiesInBackground(onUpdate: () => void): void {
+function probeCapabilitiesInBackground(onUpdate: () => void): void {
   if (!needsTmuxHyperlinkProbe()) return;
   Effect.runFork(primeTerminalCapabilities.pipe(Effect.andThen(Effect.sync(onUpdate))));
 }
+
+const tuiTerminalQueries = {
+  cellSizeQuery,
+  consumeCellSizeResponse,
+  probeCapabilitiesInBackground,
+};
+
+export default tuiTerminalQueries;

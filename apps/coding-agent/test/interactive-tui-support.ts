@@ -1,8 +1,10 @@
-import type { Terminal } from "@msa/tui";
+import type tuiTypes from "@msa/tui/index.types";
 
-import { VirtualTerminal } from "../../../libs/tui/test/virtual-terminal.ts";
+import virtualTerminal from "../../../libs/tui/test/virtual-terminal.ts";
 
-class RecordingTerminal extends VirtualTerminal implements Terminal {
+const { VirtualTerminal } = virtualTerminal;
+
+class RecordingTerminal extends VirtualTerminal implements tuiTypes.Terminal {
   readonly writes: string[] = [];
   startCount = 0;
   stopCount = 0;

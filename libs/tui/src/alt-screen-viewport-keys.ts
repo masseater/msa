@@ -1,31 +1,21 @@
 import { dual } from "effect/Function";
 
-import { startsWithOsc133PromptStart } from "./ansi-sequences.ts";
-import type { Keybinding } from "./keybinding-definitions.ts";
-import { getKeybindings } from "./keybindings.ts";
-import { isKeyRelease } from "./keys.ts";
+import type altScreenViewportKeysTypes from "./alt-screen-viewport-keys.types.ts";
+import ansiSequences from "./ansi-sequences.ts";
+import type keybindingDefinitionsTypes from "./keybinding-definitions.types.ts";
+import keybindingsModule from "./keybindings.ts";
+import keys from "./keys.ts";
+
+const { getKeybindings } = keybindingsModule;
+const { isKeyRelease } = keys;
+const { startsWithOsc133PromptStart } = ansiSequences;
 
 const PAGE_SCROLL_OVERLAP = 4;
 
-export interface ViewportKeyTarget {
-  toggleSearch(): void;
-  isSearchFocused(): boolean;
-  navigateSearch(direction: -1 | 1): void;
-  closeSearch(): void;
-  shouldDeferToOverlay(): boolean;
-  viewportHeight(): number;
-  scrollBy(lines: number): void;
-  scrollToPrompt(direction: -1 | 1): void;
-  scrollToTop(): void;
-  scrollToBottom(): void;
-}
-
-export interface PromptSearch {
-  from: number;
-  direction: -1 | 1;
-}
-
-type ViewportKeyAction = readonly [Keybinding, (target: ViewportKeyTarget) => void];
+type ViewportKeyAction = readonly [
+  keybindingDefinitionsTypes.Keybinding,
+  (target: altScreenViewportKeysTypes.ViewportKeyTarget) => void,
+];
 
 const SEARCH_KEYS: readonly ViewportKeyAction[] = [
   ["tui.altScreen.searchNext", (target) => target.navigateSearch(1)],
@@ -33,9 +23,9 @@ const SEARCH_KEYS: readonly ViewportKeyAction[] = [
   ["tui.altScreen.searchClose", (target) => target.closeSearch()],
 ];
 
-const pageLines = (target: ViewportKeyTarget): number =>
+const pageLines = (target: altScreenViewportKeysTypes.ViewportKeyTarget): number =>
   Math.max(1, target.viewportHeight() - PAGE_SCROLL_OVERLAP);
-const halfPageLines = (target: ViewportKeyTarget): number =>
+const halfPageLines = (target: altScreenViewportKeysTypes.ViewportKeyTarget): number =>
   Math.max(1, Math.floor(target.viewportHeight() / 2));
 
 const VIEWPORT_KEYS: readonly ViewportKeyAction[] = [
@@ -51,32 +41,60 @@ const VIEWPORT_KEYS: readonly ViewportKeyAction[] = [
   ["tui.altScreen.bottom", (target) => target.scrollToBottom()],
 ];
 
-export const handleViewportKey: {
-  (data: string, target: ViewportKeyTarget): { consume?: boolean } | undefined;
-  (target: ViewportKeyTarget): (data: string) => { consume?: boolean } | undefined;
-} = dual(2, (data: string, target: ViewportKeyTarget): { consume?: boolean } | undefined => {
-  const keybindings = getKeybindings();
-  const isRelease = isKeyRelease(data);
-  const run = (action: (target: ViewportKeyTarget) => void): { consume: boolean } => {
-    if (!isRelease) action(target);
-    return { consume: true };
-  };
-  const find = (actions: readonly ViewportKeyAction[]): ViewportKeyAction | undefined =>
-    actions.find(([binding]) => keybindings.matches(data, binding));
-  if (keybindings.matches(data, "tui.altScreen.search")) return run((t) => t.toggleSearch());
-  const searchAction = target.isSearchFocused() ? find(SEARCH_KEYS) : undefined;
-  if (searchAction !== undefined) return run(searchAction[1]);
-  if (target.shouldDeferToOverlay()) return undefined;
-  const action = find(VIEWPORT_KEYS);
-  return action === undefined ? undefined : run(action[1]);
-});
+const handleViewportKey: {
+  (
+    data: string,
+    target: altScreenViewportKeysTypes.ViewportKeyTarget,
+  ): { consume?: boolean } | undefined;
+  (
+    target: altScreenViewportKeysTypes.ViewportKeyTarget,
+  ): (data: string) => { consume?: boolean } | undefined;
+} = dual(
+  2,
+  (
+    data: string,
+    target: altScreenViewportKeysTypes.ViewportKeyTarget,
+  ): { consume?: boolean } | undefined => {
+    const keybindings = getKeybindings();
+    const isRelease = isKeyRelease(data);
+    const run = (
+      action: (target: altScreenViewportKeysTypes.ViewportKeyTarget) => void,
+    ): { consume: boolean } => {
+      if (!isRelease) action(target);
+      return { consume: true };
+    };
+    const find = (actions: readonly ViewportKeyAction[]): ViewportKeyAction | undefined =>
+      actions.find(([binding]) => keybindings.matches(data, binding));
+    if (keybindings.matches(data, "tui.altScreen.search")) return run((t) => t.toggleSearch());
+    const searchAction = target.isSearchFocused() ? find(SEARCH_KEYS) : undefined;
+    if (searchAction !== undefined) return run(searchAction[1]);
+    if (target.shouldDeferToOverlay()) return undefined;
+    const action = find(VIEWPORT_KEYS);
+    return action === undefined ? undefined : run(action[1]);
+  },
+);
 
-export const findPromptRow: {
-  (lines: readonly string[], search: PromptSearch): number | undefined;
-  (search: PromptSearch): (lines: readonly string[]) => number | undefined;
-} = dual(2, (lines: readonly string[], { from, direction }: PromptSearch): number | undefined => {
-  for (let row = from + direction; row >= 0 && row < lines.length; row += direction) {
-    if (startsWithOsc133PromptStart(lines[row] ?? "")) return row;
-  }
-  return undefined;
-});
+const findPromptRow: {
+  (lines: readonly string[], search: altScreenViewportKeysTypes.PromptSearch): number | undefined;
+  (
+    search: altScreenViewportKeysTypes.PromptSearch,
+  ): (lines: readonly string[]) => number | undefined;
+} = dual(
+  2,
+  (
+    lines: readonly string[],
+    { from, direction }: altScreenViewportKeysTypes.PromptSearch,
+  ): number | undefined => {
+    for (let row = from + direction; row >= 0 && row < lines.length; row += direction) {
+      if (startsWithOsc133PromptStart(lines[row] ?? "")) return row;
+    }
+    return undefined;
+  },
+);
+
+const altScreenViewportKeys = {
+  findPromptRow,
+  handleViewportKey,
+};
+
+export default altScreenViewportKeys;

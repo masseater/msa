@@ -51,7 +51,7 @@ const buildImage = (
     if (inspected.status !== 0 || id === "") {
       return yield* Effect.die(new Error(`Cannot inspect ${name}.`));
     }
-    return { name, id };
+    return { id, name };
   });
 
 export const buildImages: Effect.Effect<BuiltImages> = Effect.gen(function* () {
@@ -59,7 +59,7 @@ export const buildImages: Effect.Effect<BuiltImages> = Effect.gen(function* () {
   const prefix = `msa-evals-${digest.slice(0, 12)}`;
   const withoutDocs = yield* buildImage("without_docs", `${prefix}-without-docs:local`);
   const withDocs = yield* buildImage("with_docs", `${prefix}-with-docs:local`);
-  return { without_docs: withoutDocs, with_docs: withDocs };
+  return { with_docs: withDocs, without_docs: withoutDocs };
 });
 
 const environment = (name: string, value: string): string[] => ["--env", `${name}=${value}`];
@@ -153,9 +153,9 @@ export const discoverCases = ({
     const outputDirectory = pathOperations.join(context.artifactDirectory, "discovery", variant);
     const args = yield* dockerArgs({
       context,
-      variant,
-      outputDirectory,
       entrypointArgs: ["--discover", "--project", "docs", ...evalFiles, ...vitestArgs],
+      outputDirectory,
+      variant,
     });
     const { status } = yield* execute("docker", args, false);
     if (status !== 0) return yield* Effect.die(new Error(`${variant} eval discovery failed.`));
@@ -181,9 +181,9 @@ export const runTask = ({
     const exactName = `(?:^| )${task.caseId.replace(/[.*+?^${}()|[\]\\]/gu, "\\$&")}$`;
     const args = yield* dockerArgs({
       context,
-      variant: task.variant,
-      outputDirectory,
       entrypointArgs: ["--project", "docs", task.file, "--testNamePattern", exactName],
+      outputDirectory,
+      variant: task.variant,
     });
     yield* execute("docker", args, false);
     const reportPath = pathOperations.join(outputDirectory, "vitest.json");

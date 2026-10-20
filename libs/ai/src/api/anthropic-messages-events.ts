@@ -1,32 +1,29 @@
-import type {
-  BetaInputTransformation,
-  BetaRawMessageStreamEvent as RawMessageStreamEvent,
-} from "@anthropic-ai/sdk/resources/beta/messages/messages.js";
+import type { BetaRawMessageStreamEvent as RawMessageStreamEvent } from "@anthropic-ai/sdk/resources/beta/messages/messages.js";
 
-import { calculateCost } from "../models.ts";
-import type { AssistantMessage, Model, TextContent, ThinkingContent, ToolCall } from "../types.ts";
-import type { AssistantMessageEventStream } from "../utils/event-stream.ts";
-import { parseStreamingJson, parseToolCallArguments } from "../utils/json-parse.ts";
-import { applyMessageDelta, resolveUsageModel } from "./anthropic-messages-usage.ts";
+import modelsModule from "../models.ts";
+import type typesModule from "../types.types.ts";
+import jsonParse from "../utils/json-parse.ts";
+import type anthropicMessagesEventsTypes from "./anthropic-messages-events.types.ts";
+import anthropicMessagesUsage from "./anthropic-messages-usage.ts";
 
-type Block = (ThinkingContent | TextContent | (ToolCall & { partialJson: string })) & {
+const { applyMessageDelta, resolveUsageModel } = anthropicMessagesUsage;
+const { calculateCost } = modelsModule;
+const { parseStreamingJson, parseToolCallArguments } = jsonParse;
+
+type Block = (
+  | typesModule.ThinkingContent
+  | typesModule.TextContent
+  | (typesModule.ToolCall & { partialJson: string })
+) & {
   index: number;
 };
 
-interface StreamState {
-  readonly events: AssistantMessageEventStream;
-  readonly model: Model<"anthropic-messages">;
-  readonly output: AssistantMessage;
-  usageModel: Model<"anthropic-messages">;
-  inputTransformations: BetaInputTransformation[] | undefined;
-}
-
-function blocksOf(state: StreamState): Block[] {
+function blocksOf(state: anthropicMessagesEventsTypes.StreamState): Block[] {
   return state.output.content as Block[];
 }
 
 function findBlockEntry(
-  state: StreamState,
+  state: anthropicMessagesEventsTypes.StreamState,
   index: number,
 ): { block: Block; contentIndex: number } | undefined {
   const blocks = blocksOf(state);
@@ -36,7 +33,7 @@ function findBlockEntry(
 }
 
 function handleMessageStart(
-  state: StreamState,
+  state: anthropicMessagesEventsTypes.StreamState,
   event: Extract<RawMessageStreamEvent, { type: "message_start" }>,
 ): void {
   const output = state.output;
@@ -57,74 +54,82 @@ function handleMessageStart(
   calculateCost(state.usageModel, output.usage);
 }
 
-function startTextBlock(state: StreamState, block: { text?: string | null }, index: number): void {
-  const content: Block = { type: "text", text: block.text ?? "", index };
+function startTextBlock(
+  state: anthropicMessagesEventsTypes.StreamState,
+  block: { text?: string | null },
+  index: number,
+): void {
+  const content: Block = { index, text: block.text ?? "", type: "text" };
   state.output.content.push(content);
   state.events.push({
-    type: "text_start",
     contentIndex: state.output.content.length - 1,
     partial: state.output,
+    type: "text_start",
   });
 }
 
 function startThinkingBlock(
-  state: StreamState,
+  state: anthropicMessagesEventsTypes.StreamState,
   block: { thinking?: string | null; signature?: string | null },
   index: number,
 ): void {
   const content: Block = {
-    type: "thinking",
+    index,
     thinking: block.thinking ?? "",
     thinkingSignature: block.signature ?? "",
-    index,
+    type: "thinking",
   };
   state.output.content.push(content);
   state.events.push({
-    type: "thinking_start",
     contentIndex: state.output.content.length - 1,
     partial: state.output,
+    type: "thinking_start",
   });
 }
 
-function startRedactedThinkingBlock(state: StreamState, data: string, index: number): void {
+function startRedactedThinkingBlock(
+  state: anthropicMessagesEventsTypes.StreamState,
+  data: string,
+  index: number,
+): void {
   const content: Block = {
-    type: "thinking",
+    index,
+    redacted: true,
     thinking: "[Reasoning redacted]",
     thinkingSignature: data,
-    redacted: true,
-    index,
+    type: "thinking",
   };
   state.output.content.push(content);
   state.events.push({
-    type: "thinking_start",
     contentIndex: state.output.content.length - 1,
     partial: state.output,
+    type: "thinking_start",
   });
 }
 
 function startToolUseBlock(
-  state: StreamState,
+  state: anthropicMessagesEventsTypes.StreamState,
   block: { id: string; name: string; input: unknown },
   index: number,
 ): void {
   const content: Block = {
-    type: "toolCall",
-    id: block.id,
-    name: block.name,
     arguments: (block.input as Record<string, any>) ?? {},
-    partialJson: "",
+    id: block.id,
     index,
+    name: block.name,
+    partialJson: "",
+    type: "toolCall",
   };
   state.output.content.push(content);
   state.events.push({
-    type: "toolcall_start",
     contentIndex: state.output.content.length - 1,
     partial: state.output,
+    type: "toolcall_start",
   });
 }
 
 function handleContentBlockStart(
-  state: StreamState,
+  state: anthropicMessagesEventsTypes.StreamState,
   event: Extract<RawMessageStreamEvent, { type: "content_block_start" }>,
 ): void {
   const block = event.content_block;
@@ -141,51 +146,67 @@ function handleContentBlockStart(
   if (block.type === "tool_use") return startToolUseBlock(state, block, event.index);
 }
 
-function applyTextDelta(state: StreamState, delta: string, index: number): void {
+function applyTextDelta(
+  state: anthropicMessagesEventsTypes.StreamState,
+  delta: string,
+  index: number,
+): void {
   const entry = findBlockEntry(state, index);
   if (entry?.block.type !== "text") return;
   entry.block.text += delta;
   state.events.push({
-    type: "text_delta",
     contentIndex: entry.contentIndex,
     delta,
     partial: state.output,
+    type: "text_delta",
   });
 }
 
-function applyThinkingDelta(state: StreamState, delta: string, index: number): void {
+function applyThinkingDelta(
+  state: anthropicMessagesEventsTypes.StreamState,
+  delta: string,
+  index: number,
+): void {
   const entry = findBlockEntry(state, index);
   if (entry?.block.type !== "thinking") return;
   entry.block.thinking += delta;
   state.events.push({
-    type: "thinking_delta",
     contentIndex: entry.contentIndex,
     delta,
     partial: state.output,
+    type: "thinking_delta",
   });
 }
 
-function applyInputJsonDelta(state: StreamState, delta: string, index: number): void {
+function applyInputJsonDelta(
+  state: anthropicMessagesEventsTypes.StreamState,
+  delta: string,
+  index: number,
+): void {
   const entry = findBlockEntry(state, index);
   if (entry?.block.type !== "toolCall") return;
   entry.block.partialJson += delta;
   entry.block.arguments = parseStreamingJson(entry.block.partialJson);
   state.events.push({
-    type: "toolcall_delta",
     contentIndex: entry.contentIndex,
     delta,
     partial: state.output,
+    type: "toolcall_delta",
   });
 }
 
-function applySignatureDelta(state: StreamState, delta: string, index: number): void {
+function applySignatureDelta(
+  state: anthropicMessagesEventsTypes.StreamState,
+  delta: string,
+  index: number,
+): void {
   const entry = findBlockEntry(state, index);
   if (entry?.block.type !== "thinking") return;
   entry.block.thinkingSignature = (entry.block.thinkingSignature ?? "") + delta;
 }
 
 function handleContentBlockDelta(
-  state: StreamState,
+  state: anthropicMessagesEventsTypes.StreamState,
   event: Extract<RawMessageStreamEvent, { type: "content_block_delta" }>,
 ): void {
   if (event.delta.type === "text_delta")
@@ -198,43 +219,55 @@ function handleContentBlockDelta(
     return applySignatureDelta(state, event.delta.signature, event.index);
 }
 
-function finishTextBlock(state: StreamState, block: Block, contentIndex: number): void {
+function finishTextBlock(
+  state: anthropicMessagesEventsTypes.StreamState,
+  block: Block,
+  contentIndex: number,
+): void {
   delete (block as any).index;
   if (block.type !== "text") return;
   state.events.push({
-    type: "text_end",
-    contentIndex,
     content: block.text,
+    contentIndex,
     partial: state.output,
+    type: "text_end",
   });
 }
 
-function finishThinkingBlock(state: StreamState, block: Block, contentIndex: number): void {
+function finishThinkingBlock(
+  state: anthropicMessagesEventsTypes.StreamState,
+  block: Block,
+  contentIndex: number,
+): void {
   delete (block as any).index;
   if (block.type !== "thinking") return;
   state.events.push({
-    type: "thinking_end",
-    contentIndex,
     content: block.thinking,
+    contentIndex,
     partial: state.output,
+    type: "thinking_end",
   });
 }
 
-function finishToolCallBlock(state: StreamState, block: Block, contentIndex: number): void {
+function finishToolCallBlock(
+  state: anthropicMessagesEventsTypes.StreamState,
+  block: Block,
+  contentIndex: number,
+): void {
   delete (block as any).index;
   if (block.type !== "toolCall") return;
   Object.assign(block, parseToolCallArguments(block.partialJson));
   delete (block as { partialJson?: string }).partialJson;
   state.events.push({
-    type: "toolcall_end",
     contentIndex,
-    toolCall: block,
     partial: state.output,
+    toolCall: block,
+    type: "toolcall_end",
   });
 }
 
 function handleContentBlockStop(
-  state: StreamState,
+  state: anthropicMessagesEventsTypes.StreamState,
   event: Extract<RawMessageStreamEvent, { type: "content_block_stop" }>,
 ): void {
   const entry = findBlockEntry(state, event.index);
@@ -246,7 +279,7 @@ function handleContentBlockStop(
 }
 
 interface DispatchEventInput {
-  readonly state: StreamState;
+  readonly state: anthropicMessagesEventsTypes.StreamState;
   readonly event: RawMessageStreamEvent;
 }
 
@@ -256,7 +289,11 @@ function dispatchEvent(input: DispatchEventInput): void {
   if (event.type === "content_block_start") return handleContentBlockStart(state, event);
   if (event.type === "content_block_delta") return handleContentBlockDelta(state, event);
   if (event.type === "content_block_stop") return handleContentBlockStop(state, event);
-  if (event.type === "message_delta") return applyMessageDelta({ state, event });
+  if (event.type === "message_delta") return applyMessageDelta({ event, state });
 }
 
-export { dispatchEvent, type StreamState };
+const anthropicMessagesEvents = {
+  dispatchEvent,
+};
+
+export default anthropicMessagesEvents;

@@ -1,15 +1,15 @@
-import type { Api, Model } from "@msa/ai";
+import type aiTypes from "@msa/ai/index.types";
 import { type Static, Type } from "typebox";
 
 import { readOnlyVariantOf } from "../ask.ts";
 import type { ToolDefinition } from "../extensions/types.ts";
 import {
+  type ModelPolicy,
   addModelPolicyPattern,
   allowModelReference,
   describeModelPolicyDenial,
   evaluateModelPolicy,
   hiddenModelsByPolicy,
-  type ModelPolicy,
   removeModelPolicyPattern,
   saveModelPolicy,
 } from "../model-policy.ts";
@@ -44,18 +44,18 @@ const modelPolicyReadSchema = Type.Object({
 export type ModelPolicyToolInput = Static<typeof modelPolicySchema>;
 
 export const modelPolicyToolSystemPromptContribution = {
-  snippet: "Read and change which models this session may use",
   guidelines: [
     "Use model_policy before switching models: `list` shows the patterns in effect and the models they hide, so a model that is missing from a listing can be explained and re-allowed",
     "A deny pattern wins over allow patterns, and the running session's own model cannot be denied",
   ],
+  snippet: "Read and change which models this session may use",
 } as const;
 
 export interface ModelPolicyToolTarget {
   settingsManager: SettingsManager;
   modelRuntime: ModelRuntime;
 
-  currentModel(): Model<Api> | undefined;
+  currentModel(): aiTypes.Model<aiTypes.Api> | undefined;
 }
 
 function formatPatterns(patterns: readonly string[]): string {
@@ -64,7 +64,7 @@ function formatPatterns(patterns: readonly string[]): string {
 
 function formatHidden(
   policy: ModelPolicy,
-  models: readonly Model<Api>[],
+  models: readonly aiTypes.Model<aiTypes.Api>[],
   limit = HIDDEN_LIMIT,
 ): string[] {
   const hidden = hiddenModelsByPolicy(policy, models);
@@ -82,13 +82,8 @@ export function createModelPolicyToolDefinition(
   target: ModelPolicyToolTarget,
 ): ToolDefinition<typeof modelPolicySchema, Record<string, unknown>> {
   const modelPolicy: ToolDefinition<typeof modelPolicySchema, Record<string, unknown>> = {
-    name: "model_policy",
-    label: "model policy",
     description:
       "Read and change which models this session may use. `list` shows the allow and deny patterns and the models they hide; `deny` and `allow` add a pattern in the --models forms (provider/model, provider/*, *); `remove` drops one. Deny wins over allow, and a change applies to the next listing, selection, and session. The model the running session uses cannot be denied.",
-    promptSnippet: modelPolicyToolSystemPromptContribution.snippet,
-    promptGuidelines: [...modelPolicyToolSystemPromptContribution.guidelines],
-    parameters: modelPolicySchema,
     async execute(_toolCallId, params) {
       const catalog = target.modelRuntime.getCatalogModels();
       const before = target.modelRuntime.getModelPolicy();
@@ -159,14 +154,19 @@ export function createModelPolicyToolDefinition(
         },
       };
     },
+    label: "model policy",
+    name: "model_policy",
+    parameters: modelPolicySchema,
+    promptGuidelines: [...modelPolicyToolSystemPromptContribution.guidelines],
+    promptSnippet: modelPolicyToolSystemPromptContribution.snippet,
   };
   return {
     ...modelPolicy,
     readOnlyVariant: readOnlyVariantOf(modelPolicy, {
       actions: ["list"],
-      parameters: modelPolicyReadSchema,
       description:
         "Show which models this session may use: the allow and deny patterns and the models they hide. Changing the policy is not available here.",
+      parameters: modelPolicyReadSchema,
       promptSnippet: "Show which models this session may use",
     }),
   };

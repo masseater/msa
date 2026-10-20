@@ -4,7 +4,7 @@ import * as Effect from "effect/Effect";
 
 import { waitForChildProcess } from "../utils/child-process.ts";
 import { awaiting, performed } from "./awaiting.ts";
-import { schedule, type Scheduled } from "./platform.ts";
+import { type Scheduled, schedule } from "./platform.ts";
 
 export interface ExecOptions {
   signal?: AbortSignal;
@@ -79,7 +79,7 @@ export function execCommand(
             if (options?.signal !== undefined) {
               options.signal.removeEventListener("abort", killProcess);
             }
-            resume(Effect.succeed({ stdout, stderr, code, killed }));
+            resume(Effect.succeed({ code, killed, stderr, stdout }));
           };
           waitForChildProcess(proc).then(
             (code) => {

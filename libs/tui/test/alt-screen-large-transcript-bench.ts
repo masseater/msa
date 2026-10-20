@@ -2,20 +2,23 @@ import { performance } from "node:perf_hooks";
 
 import { Console, Effect } from "effect";
 
-import { Markdown, type MarkdownTheme } from "../src/components/markdown.ts";
-import { ScrollView } from "../src/components/scroll-view.ts";
-import { Text } from "../src/components/text.ts";
-import { VStack } from "../src/components/v-stack.ts";
-import type { Terminal } from "../src/terminal-protocol.ts";
-import { TuiAltScreen } from "../src/tui-alt-screen.ts";
-import { Container } from "../src/tui-component.ts";
+import Markdown from "../src/components/markdown.ts";
+import type markdownTypes from "../src/components/markdown.types.ts";
+import ScrollView from "../src/components/scroll-view.ts";
+import Text from "../src/components/text.ts";
+import VStack from "../src/components/v-stack.ts";
+import type terminalProtocolTypes from "../src/terminal-protocol.types.ts";
+import TuiAltScreen from "../src/tui-alt-screen.ts";
+import tuiComponent from "../src/tui-component.ts";
+
+const { Container } = tuiComponent;
 
 const COLUMNS = 80;
 const ROWS = 50;
 const COMPONENT_COUNT = 2_500;
 const WARMUP_FRAMES = 20;
 
-const theme: MarkdownTheme = {
+const theme: markdownTypes.MarkdownTheme = {
   bold: (text) => text,
   code: (text) => text,
   codeBlock: (text) => text,
@@ -32,7 +35,7 @@ const theme: MarkdownTheme = {
   underline: (text) => text,
 };
 
-class NullTerminal implements Terminal {
+class NullTerminal implements terminalProtocolTypes.Terminal {
   columns = COLUMNS;
   rows = ROWS;
 
@@ -100,7 +103,7 @@ header.addChild(new Text("msa benchmark\nheader line", 0, 0));
 const resources = new Container();
 resources.addChild(new Text("resource", 0, 0));
 const chat = new Container();
-let streamingMarkdown: Markdown | undefined;
+let streamingMarkdown: markdownTypes.Markdown | undefined;
 for (let index = 0; index < COMPONENT_COUNT; index++) {
   const markdown = new Markdown(index % 2 === 0 ? userMarkdown : assistantMarkdown, 1, 0, theme);
   chat.addChild(markdown);

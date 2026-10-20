@@ -1,9 +1,11 @@
-import { fauxAssistantMessage } from "@msa/ai";
+import ai from "@msa/ai";
 import { Effect } from "effect";
 import { describe, expect, it } from "vite-plus/test";
 
 import utilities from "../../utilities.ts";
 import harnessModule from "../harness.ts";
+
+const { fauxAssistantMessage } = ai;
 
 const { createHarness } = harnessModule;
 const { userMsg } = utilities;

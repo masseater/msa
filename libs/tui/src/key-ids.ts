@@ -1,129 +1,41 @@
-type Letter =
-  | "a"
-  | "b"
-  | "c"
-  | "d"
-  | "e"
-  | "f"
-  | "g"
-  | "h"
-  | "i"
-  | "j"
-  | "k"
-  | "l"
-  | "m"
-  | "n"
-  | "o"
-  | "p"
-  | "q"
-  | "r"
-  | "s"
-  | "t"
-  | "u"
-  | "v"
-  | "w"
-  | "x"
-  | "y"
-  | "z";
+import type keyIdsTypes from "./key-ids.types.ts";
 
-type Digit = "0" | "1" | "2" | "3" | "4" | "5" | "6" | "7" | "8" | "9";
-
-type SymbolKey =
-  | "`"
-  | "-"
-  | "="
-  | "["
-  | "]"
-  | "\\"
-  | ";"
-  | "'"
-  | ","
-  | "."
-  | "/"
-  | "!"
-  | "@"
-  | "#"
-  | "$"
-  | "%"
-  | "^"
-  | "&"
-  | "*"
-  | "("
-  | ")"
-  | "_"
-  | "+"
-  | "|"
-  | "~"
-  | "{"
-  | "}"
-  | ":"
-  | "<"
-  | ">"
-  | "?";
-
-type SpecialKey =
-  | "escape"
-  | "esc"
-  | "enter"
-  | "return"
-  | "tab"
-  | "space"
-  | "backspace"
-  | "delete"
-  | "insert"
-  | "clear"
-  | "home"
-  | "end"
-  | "pageUp"
-  | "pageDown"
-  | "up"
-  | "down"
-  | "left"
-  | "right"
-  | "f1"
-  | "f2"
-  | "f3"
-  | "f4"
-  | "f5"
-  | "f6"
-  | "f7"
-  | "f8"
-  | "f9"
-  | "f10"
-  | "f11"
-  | "f12";
-
-type BaseKey = Letter | Digit | SymbolKey | SpecialKey;
-type ModifierName = "ctrl" | "shift" | "alt" | "super";
-
-type ModifiedKeyId<Key extends string, RemainingModifiers extends ModifierName = ModifierName> = {
-  [M in RemainingModifiers]:
-    | `${M}+${Key}`
-    | `${M}+${ModifiedKeyId<Key, Exclude<RemainingModifiers, M>>}`;
-}[RemainingModifiers];
-
-export type KeyId = BaseKey | ModifiedKeyId<BaseKey>;
-
-export const Key = {
-  escape: "escape" as const,
-  esc: "esc" as const,
-  enter: "enter" as const,
-  return: "return" as const,
-  tab: "tab" as const,
-  space: "space" as const,
+const Key = {
+  alt: <K extends keyIdsTypes.BaseKey>(key: K): `alt+${K}` => `alt+${key}`,
+  altCtrl: <K extends keyIdsTypes.BaseKey>(key: K): `alt+ctrl+${K}` => `alt+ctrl+${key}`,
+  altShift: <K extends keyIdsTypes.BaseKey>(key: K): `alt+shift+${K}` => `alt+shift+${key}`,
+  altSuper: <K extends keyIdsTypes.BaseKey>(key: K): `alt+super+${K}` => `alt+super+${key}`,
+  ampersand: "&" as const,
+  asterisk: "*" as const,
+  at: "@" as const,
+  backslash: "\\" as const,
   backspace: "backspace" as const,
-  delete: "delete" as const,
-  insert: "insert" as const,
+  backtick: "`" as const,
+  caret: "^" as const,
   clear: "clear" as const,
-  home: "home" as const,
-  end: "end" as const,
-  pageUp: "pageUp" as const,
-  pageDown: "pageDown" as const,
-  up: "up" as const,
+  colon: ":" as const,
+  comma: "," as const,
+  ctrl: <K extends keyIdsTypes.BaseKey>(key: K): `ctrl+${K}` => `ctrl+${key}`,
+  ctrlAlt: <K extends keyIdsTypes.BaseKey>(key: K): `ctrl+alt+${K}` => `ctrl+alt+${key}`,
+  ctrlShift: <K extends keyIdsTypes.BaseKey>(key: K): `ctrl+shift+${K}` => `ctrl+shift+${key}`,
+  ctrlShiftAlt: <K extends keyIdsTypes.BaseKey>(key: K): `ctrl+shift+alt+${K}` =>
+    `ctrl+shift+alt+${key}`,
+  ctrlShiftSuper: <K extends keyIdsTypes.BaseKey>(key: K): `ctrl+shift+super+${K}` =>
+    `ctrl+shift+super+${key}`,
+  ctrlSuper: <K extends keyIdsTypes.BaseKey>(key: K): `ctrl+super+${K}` => `ctrl+super+${key}`,
+  delete: "delete" as const,
+  dollar: "$" as const,
   down: "down" as const,
-  left: "left" as const,
-  right: "right" as const,
+  end: "end" as const,
+  enter: "enter" as const,
+  equals: "=" as const,
+  esc: "esc" as const,
+  escape: "escape" as const,
+  exclamation: "!" as const,
   f1: "f1" as const,
+  f10: "f10" as const,
+  f11: "f11" as const,
+  f12: "f12" as const,
   f2: "f2" as const,
   f3: "f3" as const,
   f4: "f4" as const,
@@ -132,65 +44,47 @@ export const Key = {
   f7: "f7" as const,
   f8: "f8" as const,
   f9: "f9" as const,
-  f10: "f10" as const,
-  f11: "f11" as const,
-  f12: "f12" as const,
-
-  backtick: "`" as const,
-  hyphen: "-" as const,
-  equals: "=" as const,
-  leftbracket: "[" as const,
-  rightbracket: "]" as const,
-  backslash: "\\" as const,
-  semicolon: ";" as const,
-  quote: "'" as const,
-  comma: "," as const,
-  period: "." as const,
-  slash: "/" as const,
-  exclamation: "!" as const,
-  at: "@" as const,
-  hash: "#" as const,
-  dollar: "$" as const,
-  percent: "%" as const,
-  caret: "^" as const,
-  ampersand: "&" as const,
-  asterisk: "*" as const,
-  leftparen: "(" as const,
-  rightparen: ")" as const,
-  underscore: "_" as const,
-  plus: "+" as const,
-  pipe: "|" as const,
-  tilde: "~" as const,
-  leftbrace: "{" as const,
-  rightbrace: "}" as const,
-  colon: ":" as const,
-  lessthan: "<" as const,
   greaterthan: ">" as const,
+  hash: "#" as const,
+  home: "home" as const,
+  hyphen: "-" as const,
+  insert: "insert" as const,
+  left: "left" as const,
+  leftbrace: "{" as const,
+  leftbracket: "[" as const,
+  leftparen: "(" as const,
+  lessthan: "<" as const,
+  pageDown: "pageDown" as const,
+  pageUp: "pageUp" as const,
+  percent: "%" as const,
+  period: "." as const,
+  pipe: "|" as const,
+  plus: "+" as const,
   question: "?" as const,
-
-  ctrl: <K extends BaseKey>(key: K): `ctrl+${K}` => `ctrl+${key}`,
-  shift: <K extends BaseKey>(key: K): `shift+${K}` => `shift+${key}`,
-  alt: <K extends BaseKey>(key: K): `alt+${K}` => `alt+${key}`,
-  super: <K extends BaseKey>(key: K): `super+${K}` => `super+${key}`,
-
-  ctrlShift: <K extends BaseKey>(key: K): `ctrl+shift+${K}` => `ctrl+shift+${key}`,
-  shiftCtrl: <K extends BaseKey>(key: K): `shift+ctrl+${K}` => `shift+ctrl+${key}`,
-  ctrlAlt: <K extends BaseKey>(key: K): `ctrl+alt+${K}` => `ctrl+alt+${key}`,
-  altCtrl: <K extends BaseKey>(key: K): `alt+ctrl+${K}` => `alt+ctrl+${key}`,
-  shiftAlt: <K extends BaseKey>(key: K): `shift+alt+${K}` => `shift+alt+${key}`,
-  altShift: <K extends BaseKey>(key: K): `alt+shift+${K}` => `alt+shift+${key}`,
-  ctrlSuper: <K extends BaseKey>(key: K): `ctrl+super+${K}` => `ctrl+super+${key}`,
-  superCtrl: <K extends BaseKey>(key: K): `super+ctrl+${K}` => `super+ctrl+${key}`,
-  shiftSuper: <K extends BaseKey>(key: K): `shift+super+${K}` => `shift+super+${key}`,
-  superShift: <K extends BaseKey>(key: K): `super+shift+${K}` => `super+shift+${key}`,
-  altSuper: <K extends BaseKey>(key: K): `alt+super+${K}` => `alt+super+${key}`,
-  superAlt: <K extends BaseKey>(key: K): `super+alt+${K}` => `super+alt+${key}`,
-
-  ctrlShiftAlt: <K extends BaseKey>(key: K): `ctrl+shift+alt+${K}` => `ctrl+shift+alt+${key}`,
-  ctrlShiftSuper: <K extends BaseKey>(key: K): `ctrl+shift+super+${K}` => `ctrl+shift+super+${key}`,
+  quote: "'" as const,
+  return: "return" as const,
+  right: "right" as const,
+  rightbrace: "}" as const,
+  rightbracket: "]" as const,
+  rightparen: ")" as const,
+  semicolon: ";" as const,
+  shift: <K extends keyIdsTypes.BaseKey>(key: K): `shift+${K}` => `shift+${key}`,
+  shiftAlt: <K extends keyIdsTypes.BaseKey>(key: K): `shift+alt+${K}` => `shift+alt+${key}`,
+  shiftCtrl: <K extends keyIdsTypes.BaseKey>(key: K): `shift+ctrl+${K}` => `shift+ctrl+${key}`,
+  shiftSuper: <K extends keyIdsTypes.BaseKey>(key: K): `shift+super+${K}` => `shift+super+${key}`,
+  slash: "/" as const,
+  space: "space" as const,
+  super: <K extends keyIdsTypes.BaseKey>(key: K): `super+${K}` => `super+${key}`,
+  superAlt: <K extends keyIdsTypes.BaseKey>(key: K): `super+alt+${K}` => `super+alt+${key}`,
+  superCtrl: <K extends keyIdsTypes.BaseKey>(key: K): `super+ctrl+${K}` => `super+ctrl+${key}`,
+  superShift: <K extends keyIdsTypes.BaseKey>(key: K): `super+shift+${K}` => `super+shift+${key}`,
+  tab: "tab" as const,
+  tilde: "~" as const,
+  underscore: "_" as const,
+  up: "up" as const,
 } as const;
 
-export const SYMBOL_KEYS = new Set([
+const SYMBOL_KEYS = new Set([
   "`",
   "-",
   "=",
@@ -224,40 +118,54 @@ export const SYMBOL_KEYS = new Set([
   "?",
 ]);
 
-export const SHIFTED_SYMBOL_KEYS = new Set("~!@#$%^&*()_+|{}:<>?");
+const SHIFTED_SYMBOL_KEYS = new Set("~!@#$%^&*()_+|{}:<>?");
 
-export const MODIFIER_NAMES = ["shift", "alt", "ctrl", "super"] as const;
+const MODIFIER_NAMES = ["shift", "alt", "ctrl", "super"] as const;
 
-export const MODIFIERS = {
-  shift: 1,
+const MODIFIERS = {
   alt: 2,
   ctrl: 4,
+  shift: 1,
   super: 8,
 } as const;
 
-export const LOCK_MASK = 64 + 128;
+const LOCK_MASK = 64 + 128;
 
-export const CODEPOINTS = {
-  escape: 27,
-  tab: 9,
-  enter: 13,
-  space: 32,
+const CODEPOINTS = {
   backspace: 127,
+  enter: 13,
+  escape: 27,
   kpEnter: 57414,
+  space: 32,
+  tab: 9,
 } as const;
 
-export const ARROW_CODEPOINTS = {
-  up: -1,
+const ARROW_CODEPOINTS = {
   down: -2,
-  right: -3,
   left: -4,
+  right: -3,
+  up: -1,
 } as const;
 
-export const FUNCTIONAL_CODEPOINTS = {
+const FUNCTIONAL_CODEPOINTS = {
   delete: -10,
-  insert: -11,
-  pageUp: -12,
-  pageDown: -13,
-  home: -14,
   end: -15,
+  home: -14,
+  insert: -11,
+  pageDown: -13,
+  pageUp: -12,
 } as const;
+
+const keyIds = {
+  ARROW_CODEPOINTS,
+  CODEPOINTS,
+  FUNCTIONAL_CODEPOINTS,
+  Key,
+  LOCK_MASK,
+  MODIFIERS,
+  MODIFIER_NAMES,
+  SHIFTED_SYMBOL_KEYS,
+  SYMBOL_KEYS,
+};
+
+export default keyIds;

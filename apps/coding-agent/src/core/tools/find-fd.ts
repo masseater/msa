@@ -2,7 +2,7 @@ import { Effect } from "effect";
 
 import { ensureTool } from "../../utils/tools-manager.ts";
 import { runCommand } from "../platform/command.ts";
-import { fromPromise, pathOperations, ToolFailure } from "../platform/index.ts";
+import { ToolFailure, fromPromise, pathOperations } from "../platform/index.ts";
 import {
   type FindRequest,
   formatFindOutput,
@@ -50,7 +50,7 @@ export const globWithFd = Effect.fn("findWithFd")(function* (request: FindReques
   }
   const insideGitRepo = yield* isInsideGitRepo(request.searchPath);
   const { lines, stderr, exitCode } = yield* fromPromise((signal) =>
-    runCommand({ file: fdPath, args: fdArguments(request, insideGitRepo), signal }),
+    runCommand({ args: fdArguments(request, insideGitRepo), file: fdPath, signal }),
   );
   const output = lines.join("\n");
   if (exitCode !== 0 && output === "") {
@@ -66,8 +66,8 @@ export const globWithFd = Effect.fn("findWithFd")(function* (request: FindReques
     .map((line) => relativizeFindResultPath(line, request.searchPath));
   const { effectiveLimit } = request;
   return formatFindOutput({
-    results,
     effectiveLimit,
     limitNotice: `${effectiveLimit} results limit reached. Use limit=${effectiveLimit * 2} for more, or refine pattern`,
+    results,
   });
 });

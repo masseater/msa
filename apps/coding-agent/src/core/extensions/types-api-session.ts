@@ -1,5 +1,5 @@
-import type { ThinkingLevel } from "@msa/agent-core";
-import type { ImageContent, Model, TextContent } from "@msa/ai";
+import type agentTypes from "@msa/agent-core/index.types";
+import type aiTypes from "@msa/ai/index.types";
 
 import type { EventBus } from "../event-bus.ts";
 import type { ExecOptions, ExecResult } from "../exec.ts";
@@ -15,7 +15,7 @@ export interface ExtensionSessionApi {
   ): void;
 
   sendUserMessage(
-    content: string | (TextContent | ImageContent)[],
+    content: string | (aiTypes.TextContent | aiTypes.ImageContent)[],
     options?: { deliverAs?: "steer" | "followUp"; expandPromptTemplates?: boolean },
   ): void;
 
@@ -39,11 +39,11 @@ export interface ExtensionSessionApi {
 
   getCommands(): SlashCommandInfo[];
 
-  setModel(model: Model<any>): Promise<boolean>;
+  setModel(model: aiTypes.Model<any>): Promise<boolean>;
 
-  getThinkingLevel(): ThinkingLevel;
+  getThinkingLevel(): agentTypes.ThinkingLevel;
 
-  setThinkingLevel(level: ThinkingLevel): void;
+  setThinkingLevel(level: agentTypes.ThinkingLevel): void;
 
   events: EventBus;
 }

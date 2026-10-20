@@ -1,10 +1,13 @@
 import { Clock, Console, Effect } from "effect";
 import { expect } from "vite-plus/test";
 
-import { complete } from "../src/compat.ts";
-import type { Api, Model } from "../src/types.ts";
-import { isContextOverflow } from "../src/utils/overflow.ts";
+import compat from "../src/compat.ts";
+import type typesModule from "../src/types.types.ts";
+import overflowModule from "../src/utils/overflow.ts";
 import jsonCodec from "./json-codec.ts";
+
+const { complete } = compat;
+const { isContextOverflow } = overflowModule;
 
 const { encodeJson } = jsonCodec;
 
@@ -13,8 +16,8 @@ const LOREM_IPSUM = `Lorem ipsum dolor sit amet, consectetur adipiscing elit. Se
 const overflowContent = (contextWindow: number) =>
   LOREM_IPSUM.repeat(Math.ceil(((contextWindow + 10000) * 4 * 1.5) / LOREM_IPSUM.length));
 
-const overflow = Effect.fn("overflow")(function* <TApi extends Api>(
-  model: Model<TApi>,
+const overflow = Effect.fn("overflow")(function* <TApi extends typesModule.Api>(
+  model: typesModule.Model<TApi>,
   apiKey: string | undefined,
 ) {
   const timestamp = yield* Clock.currentTimeMillis;
@@ -40,8 +43,8 @@ const overflow = Effect.fn("overflow")(function* <TApi extends Api>(
   return response;
 });
 
-const expectOverflowDetected = <TApi extends Api>(
-  model: Model<TApi>,
+const expectOverflowDetected = <TApi extends typesModule.Api>(
+  model: typesModule.Model<TApi>,
   apiKey: string | undefined,
   message?: RegExp,
 ) =>

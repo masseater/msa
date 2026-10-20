@@ -1,8 +1,8 @@
 import { Effect } from "effect";
 
-import { type Terminal } from "../src/index.ts";
+import type tuiTypes from "../src/index.types.ts";
 
-class TestTerminal implements Terminal {
+class TestTerminal implements tuiTypes.Terminal {
   private inputHandler?: ((data: string) => void) | undefined;
   private resizeHandler?: (() => void) | undefined;
   private readonly columnCount: number;

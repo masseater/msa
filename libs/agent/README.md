@@ -433,8 +433,8 @@ Follow-up messages are checked only when there are no more tool calls and no ste
 Extend `AgentMessage` via declaration merging:
 
 ```typescript
-declare module "@msa/agent-core" {
-  interface CustomAgentMessages {
+declare global {
+  interface MsaAgentCustomMessages {
     notification: { role: "notification"; text: string; timestamp: number };
   }
 }

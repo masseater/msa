@@ -1,13 +1,16 @@
 import { Effect } from "effect";
 import { describe, expect, it, vi } from "vite-plus/test";
 
-import { stream as streamOpenAIResponses } from "../src/api/openai-responses.ts";
-import { stream } from "../src/compat.ts";
-import type { Model, StreamOptions } from "../src/types.ts";
+import openaiResponses from "../src/api/openai-responses.ts";
+import compatModule from "../src/compat.ts";
+import type typesModule from "../src/types.types.ts";
 import cacheRetentionSupport from "./cache-retention-support.ts";
 import type cacheRetentionSupportTypes from "./cache-retention-support.types.ts";
 import env from "./env.ts";
 import modelChoice from "./model-choice.ts";
+
+const { stream } = compatModule;
+const { stream: streamOpenAIResponses } = openaiResponses;
 
 const { capturePayload, context, isolateCacheRetentionEnv } = cacheRetentionSupport;
 const { hasEnv } = env;
@@ -37,8 +40,8 @@ const captureLive = capturePayload<ResponsesPayload>((onPayload) =>
 );
 
 const captureFake = (
-  target: Model<"openai-responses">,
-  options: Omit<StreamOptions, "onPayload"> = {},
+  target: typesModule.Model<"openai-responses">,
+  options: Omit<typesModule.StreamOptions, "onPayload"> = {},
 ) =>
   capturePayload<ResponsesPayload>((onPayload) =>
     streamOpenAIResponses(target, context, { apiKey: "sk-fake-key", ...options, onPayload }),
@@ -101,7 +104,7 @@ const longCacheCases = [
 ] as const;
 
 const usesSupportedLongCacheField = (
-  model: Model<"openai-responses">,
+  model: typesModule.Model<"openai-responses">,
   retention: string | undefined,
   cacheOptions: { readonly ttl: "30m" } | undefined,
 ) =>

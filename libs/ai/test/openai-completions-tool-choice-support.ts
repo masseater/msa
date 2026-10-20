@@ -2,17 +2,13 @@ import { Clock, Effect, Stream } from "effect";
 import { Type } from "typebox";
 import { beforeEach, expect } from "vite-plus/test";
 
-import { type AssistantMessageEventStream, streamSimple } from "../src/compat.ts";
-import type {
-  Api,
-  AssistantMessage,
-  Model,
-  OpenAICompletionsCompat,
-  SimpleStreamOptions,
-  Tool,
-} from "../src/types.ts";
+import compatModule from "../src/compat.ts";
+import type compatTypes from "../src/compat.types.ts";
+import type typesModule from "../src/types.types.ts";
 import modelChoice from "./model-choice.ts";
 import openaiCompletionsToolChoiceMock from "./openai-completions-tool-choice-mock.ts";
+
+const { streamSimple } = compatModule;
 
 const { chooseModel } = modelChoice;
 const { mockState } = openaiCompletionsToolChoiceMock;
@@ -39,20 +35,22 @@ const localOpenAICompletionsModel = {
   maxTokens: 8192,
   provider: "local-vllm",
   reasoning: true,
-} satisfies Omit<Model<"openai-completions">, "id" | "name" | "compat">;
+} satisfies Omit<typesModule.Model<"openai-completions">, "id" | "name" | "compat">;
 
-const directCompletionsModel = (compat?: OpenAICompletionsCompat): Model<"openai-completions"> => {
+const directCompletionsModel = (
+  compat?: typesModule.OpenAICompletionsCompat,
+): typesModule.Model<"openai-completions"> => {
   const { compat: _compat, ...baseModel } = chooseModel("openai", "direct OpenAI");
   return { ...baseModel, api: "openai-completions", ...(compat === undefined ? {} : { compat }) };
 };
 
-const pingTool: Tool = {
+const pingTool: typesModule.Tool = {
   description: "Ping tool",
   name: "ping",
   parameters: Type.Object({ ok: Type.Boolean() }),
 };
 
-const optionalFieldTool: Tool = {
+const optionalFieldTool: typesModule.Tool = {
   constrainedSampling: { strict: "prefer", type: "json_schema" },
   description: "Ping tool",
   name: "ping",
@@ -63,12 +61,12 @@ const optionalFieldTool: Tool = {
 };
 
 const promptModel = Effect.fn("promptModel")(function* (
-  model: Model<Api>,
+  model: typesModule.Model<typesModule.Api>,
   content: string,
   request: {
-    readonly options?: SimpleStreamOptions;
+    readonly options?: typesModule.SimpleStreamOptions;
     readonly systemPrompt?: string;
-    readonly tools?: Tool[];
+    readonly tools?: typesModule.Tool[];
   } = {},
 ) {
   const captured: { payload?: unknown } = {};
@@ -96,7 +94,9 @@ const promptModel = Effect.fn("promptModel")(function* (
 const isToolEvent = (type: string) =>
   type === "toolcall_start" || type === "toolcall_delta" || type === "toolcall_end";
 
-const collectEvents = Effect.fn("collectEvents")(function* (s: AssistantMessageEventStream) {
+const collectEvents = Effect.fn("collectEvents")(function* (
+  s: compatTypes.AssistantMessageEventStream,
+) {
   const eventTypes: string[] = [];
   const toolEventsByContentIndex = new Map<number, string[]>();
   yield* Stream.fromAsyncIterable(s, (error) => error).pipe(
@@ -116,7 +116,7 @@ const collectEvents = Effect.fn("collectEvents")(function* (s: AssistantMessageE
 });
 
 const expectFinishedToolCall = (
-  content: AssistantMessage["content"][number] | undefined,
+  content: typesModule.AssistantMessage["content"][number] | undefined,
   expected: { arguments: Record<string, unknown>; id: string; name: string },
 ) => {
   if (content?.type !== "toolCall") throw new Error("Expected toolCall content");
@@ -125,7 +125,7 @@ const expectFinishedToolCall = (
   expect(content).not.toHaveProperty("partialArgs");
 };
 
-const readTool: Tool = {
+const readTool: typesModule.Tool = {
   description: "Read a file",
   name: "read",
   parameters: Type.Object({ path: Type.String() }),

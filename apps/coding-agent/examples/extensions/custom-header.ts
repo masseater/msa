@@ -25,13 +25,13 @@ export default function (msa: ExtensionAPI) {
   msa.on("session_start", (_event, ctx) => {
     if (ctx.mode === "tui") {
       ctx.ui.setHeader((_tui, theme) => ({
+        invalidate() {},
         render(_width: number): string[] {
           const mascotLines = getMsaMascot(theme);
 
           const subtitle = `${theme.fg("muted", "   shitty coding agent")}${theme.fg("dim", ` v${VERSION}`)}`;
           return [...mascotLines, subtitle];
         },
-        invalidate() {},
       }));
     }
   });

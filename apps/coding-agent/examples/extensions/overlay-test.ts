@@ -1,12 +1,9 @@
 import type { ExtensionAPI, ExtensionCommandContext, Theme } from "@msa/coding-agent";
-import {
-  CURSOR_MARKER,
-  type Focusable,
-  matchesKey,
-  renderFakeCursor,
-  visibleWidth,
-} from "@msa/tui";
+import tui from "@msa/tui";
+import type tuiTypes from "@msa/tui/index.types";
 import { Effect } from "effect";
+
+const { CURSOR_MARKER, matchesKey, renderFakeCursor, visibleWidth } = tui;
 
 export default function (msa: ExtensionAPI) {
   msa.registerCommand("overlay-test", {
@@ -64,17 +61,17 @@ const renderItem = (
   return `${prefix + label} ${inputDisplay}`;
 };
 
-class OverlayTestComponent implements Focusable {
+class OverlayTestComponent implements tuiTypes.Focusable {
   readonly width = 70;
 
   focused = false;
 
   private selected = 0;
   private items = [
-    { label: "Search", hasInput: true, text: "", cursor: 0 },
-    { label: "Run", hasInput: true, text: "", cursor: 0 },
-    { label: "Settings", hasInput: false, text: "", cursor: 0 },
-    { label: "Cancel", hasInput: false, text: "", cursor: 0 },
+    { cursor: 0, hasInput: true, label: "Search", text: "" },
+    { cursor: 0, hasInput: true, label: "Run", text: "" },
+    { cursor: 0, hasInput: false, label: "Settings", text: "" },
+    { cursor: 0, hasInput: false, label: "Cancel", text: "" },
   ];
 
   private theme: Theme;

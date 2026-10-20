@@ -1,4 +1,4 @@
-import type { ImageContent } from "@msa/ai";
+import type aiTypes from "@msa/ai/index.types";
 import { Effect } from "effect";
 import { dual } from "effect/Function";
 import { Type } from "typebox";
@@ -69,7 +69,7 @@ function classifyTool(scenario: nestedImagesBenchToolsTypes.Scenario) {
               const stored = yield* awaited(
                 api.snapshot(NestedCallDoc, input.parent, source.key, callContext),
               );
-              const block = stored?.result?.structuredOutput as ImageContent | undefined;
+              const block = stored?.result?.structuredOutput as aiTypes.ImageContent | undefined;
               data = block?.type === "image" ? block.data : undefined;
             }
             if (data?.length !== scenario.bytes)
@@ -93,7 +93,7 @@ function scriptTool(scenario: nestedImagesBenchToolsTypes.Scenario, probe: Probe
           for (const n of Array.from({ length: args.count }, (_, i) => i)) {
             const key = `read${n}`;
             const read = yield* awaited(api.executeTool("read_image", { n }, callContext, { key }));
-            const image = read.structuredOutput as unknown as ImageContent;
+            const image = read.structuredOutput as unknown as aiTypes.ImageContent;
             const argument: durableTypes.JsonObject =
               scenario.variant === "inline"
                 ? { data: image.data, mimeType: image.mimeType, type: "image" }

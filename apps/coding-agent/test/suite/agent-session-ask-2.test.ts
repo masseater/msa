@@ -1,10 +1,12 @@
-import { fauxAssistantMessage, fauxToolCall, getCurrentSystemPrompt } from "@msa/ai";
+import ai from "@msa/ai";
 import testing from "@msa/testing";
 import { Effect } from "effect";
 import { afterEach, describe, expect, it } from "vite-plus/test";
 
 import agentSessionAskSupport from "./agent-session-ask-support.ts";
 import harnessModule from "./harness.ts";
+
+const { fauxAssistantMessage, fauxToolCall, getCurrentSystemPrompt } = ai;
 
 const { awaited, gate, runTest, toJsonText } = testing;
 

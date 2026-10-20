@@ -1,24 +1,19 @@
-import type { ApiKeyAuth, AuthCheck, OAuthAuth } from "@msa/ai";
-import {
-  Container,
-  type Focusable,
-  fuzzyFilter,
-  getKeybindings,
-  Input,
-  Spacer,
-  TruncatedText,
-} from "@msa/tui";
+import type aiTypes from "@msa/ai/index.types";
+import tui from "@msa/tui";
+import type tuiTypes from "@msa/tui/index.types";
 import { dual } from "effect/Function";
 
 import { theme } from "../theme/theme.ts";
 import { DynamicBorder } from "./dynamic-border.ts";
 
+const { Container, Input, Spacer, TruncatedText, fuzzyFilter, getKeybindings } = tui;
+
 export type AuthSelectorProvider = {
   id: string;
   name: string;
   authType: "oauth" | "api_key";
-  method?: ApiKeyAuth | OAuthAuth | undefined;
-  status?: AuthCheck | undefined;
+  method?: aiTypes.ApiKeyAuth | aiTypes.OAuthAuth | undefined;
+  status?: aiTypes.AuthCheck | undefined;
   subscription?: boolean | undefined;
 };
 
@@ -53,8 +48,8 @@ export function formatAuthSelectorProviderStatus(provider: AuthSelectorProvider)
   return theme.fg("success", ` ✓ ${source}`);
 }
 
-export class OAuthSelectorComponent extends Container implements Focusable {
-  private searchInput: Input;
+export class OAuthSelectorComponent extends Container implements tuiTypes.Focusable {
+  private searchInput: tuiTypes.Input;
 
   private focusedState = false;
   get focused(): boolean {
@@ -65,7 +60,7 @@ export class OAuthSelectorComponent extends Container implements Focusable {
     this.searchInput.focused = value;
   }
 
-  private listContainer: Container;
+  private listContainer: tuiTypes.Container;
   private allProviders: AuthSelectorProvider[];
   private filteredProviders: AuthSelectorProvider[];
   private selectedIndex: number = 0;
@@ -203,7 +198,7 @@ export class OAuthSelectorComponent extends Container implements Focusable {
 
       self.listContainer.addChild(new TruncatedText(line, 1, 0));
     }
-    return { startIndex, endIndex };
+    return { endIndex, startIndex };
   }
 
   handleInput(keyData: string): void {

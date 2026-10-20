@@ -1,16 +1,12 @@
-import { matchStringSequence, replaceControlRuns } from "./ansi-sequences.ts";
+import ansiSequences from "./ansi-sequences.ts";
+import type programStatusTypes from "./program-status.types.ts";
 
-export interface ProgramStatus {
-  state: "idle" | "working" | "blocked" | "done" | "error" | "clear";
-  app?: string;
-  kind?: "permission" | "question" | "auth";
-  message?: string;
-}
+const { matchStringSequence, replaceControlRuns } = ansiSequences;
 
-export const PROGRAM_STATUS_QUERY = "\x1b]7501;?\x1b\\";
+const PROGRAM_STATUS_QUERY = "\x1b]7501;?\x1b\\";
 
-export function isProgramStatusReply(sequence: string): boolean {
-  return matchStringSequence({ data: sequence, kind: "osc", body: PROGRAM_STATUS_BODY }) !== null;
+function isProgramStatusReply(sequence: string): boolean {
+  return matchStringSequence({ body: PROGRAM_STATUS_BODY, data: sequence, kind: "osc" }) !== null;
 }
 
 const APP_PATTERN = /^[A-Za-z0-9_.+-]{1,32}$/u;
@@ -30,7 +26,7 @@ function truncateUtf8(text: string, maxBytes: number): string {
   return text.slice(0, end);
 }
 
-export function formatProgramStatus(status: ProgramStatus): string {
+function formatProgramStatus(status: programStatusTypes.ProgramStatus): string {
   const pairs = [`state=${status.state}`];
   if (status.app !== undefined && APP_PATTERN.test(status.app)) pairs.push(`app=${status.app}`);
   if (status.state === "blocked" && status.kind !== undefined) pairs.push(`kind=${status.kind}`);
@@ -41,3 +37,11 @@ export function formatProgramStatus(status: ProgramStatus): string {
   if (message !== "") pairs.push(`msg=${Buffer.from(message, "utf8").toString("base64")}`);
   return `\x1b]7501;${pairs.join(":")}\x1b\\`;
 }
+
+const programStatus = {
+  PROGRAM_STATUS_QUERY,
+  formatProgramStatus,
+  isProgramStatusReply,
+};
+
+export default programStatus;

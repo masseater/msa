@@ -1,4 +1,4 @@
-import { fauxAssistantMessage } from "@msa/ai";
+import ai from "@msa/ai";
 import testing from "@msa/testing";
 import { Effect } from "effect";
 import { afterEach, describe, expect, it, vi } from "vite-plus/test";
@@ -7,6 +7,8 @@ import agentSessionCompaction5Support from "./agent-session-compaction-5-support
 import agentSessionCompactionSupport from "./agent-session-compaction-support.ts";
 import type agentSessionCompactionSupportTypes from "./agent-session-compaction-support.types.ts";
 import harnessModule from "./harness.ts";
+
+const { fauxAssistantMessage } = ai;
 
 const { afterEachHook5 } = agentSessionCompaction5Support;
 

@@ -6,9 +6,9 @@ import { dispatch } from "./dispatch.ts";
 import { renderCall, renderResult } from "./render.ts";
 import {
   type DispatchDefaults,
-  SubagentParams,
-  type SubagentDetails,
   type SingleResult,
+  type SubagentDetails,
+  SubagentParams,
 } from "./types.ts";
 
 const description = (): string =>
@@ -21,11 +21,7 @@ const description = (): string =>
 
 export default function (msa: ExtensionAPI) {
   msa.registerTool({
-    name: "subagent",
-    label: "Subagent",
     description: description(),
-    parameters: SubagentParams,
-
     execute: (_toolCallId, params, signal, onUpdate, ctx) =>
       Effect.runPromise(
         Effect.gen(function* () {
@@ -61,7 +57,9 @@ export default function (msa: ExtensionAPI) {
           });
         }),
       ),
-
+    label: "Subagent",
+    name: "subagent",
+    parameters: SubagentParams,
     renderCall: (args, theme) => renderCall({ args, theme }),
     renderResult: (result, options, theme) => renderResult({ result, options, theme }),
   });

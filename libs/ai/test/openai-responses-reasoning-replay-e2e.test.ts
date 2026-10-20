@@ -1,11 +1,13 @@
 import { Clock, Effect } from "effect";
 import { describe, expect, it } from "vite-plus/test";
 
-import { complete, getEnvApiKey } from "../src/compat.ts";
-import type { AssistantMessage, Model } from "../src/types.ts";
+import compat from "../src/compat.ts";
+import type typesModule from "../src/types.types.ts";
 import env from "./env.ts";
 import modelChoice from "./model-choice.ts";
 import openaiResponsesReasoningReplayE2eSupport from "./openai-responses-reasoning-replay-e2e-support.ts";
+
+const { complete, getEnvApiKey } = compat;
 
 const { hasEnv } = env;
 const { chooseModel, compatValue, modelsWhere, usesApi } = modelChoice;
@@ -18,7 +20,7 @@ const anthropicKey = getEnvApiKey("anthropic-api");
 const reasoningResponsesModels = modelsWhere(
   "openai",
   (model) => usesApi("openai-responses")(model) && model.reasoning,
-) as Model<"openai-responses">[];
+) as typesModule.Model<"openai-responses">[];
 const [cheapReasoningModel, otherReasoningModel] = reasoningResponsesModels;
 if (cheapReasoningModel === undefined || otherReasoningModel === undefined) {
   throw new Error("The openai catalog has fewer than two reasoning Responses models");
@@ -29,7 +31,7 @@ const budgetThinkingAnthropic = chooseModel(
   (model) => model.reasoning && compatValue(model, "forceAdaptiveThinking") !== true,
 );
 
-const expectAnswered = (response: AssistantMessage) => {
+const expectAnswered = (response: typesModule.AssistantMessage) => {
   expect(response.stopReason, `Error: ${response.errorMessage}`).not.toBe("error");
   expect(response.errorMessage).toBeFalsy();
   expect(response.content.length).toBeGreaterThan(0);

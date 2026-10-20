@@ -1,16 +1,18 @@
 import type { Theme } from "@msa/coding-agent";
-import type { OverlayAnchor } from "@msa/tui";
-import { matchesKey } from "@msa/tui";
+import tui from "@msa/tui";
+import type tuiTypes from "@msa/tui/index.types";
 
 import { BaseOverlay } from "./base-overlay.ts";
 
+const { matchesKey } = tui;
+
 export class AnchorTestComponent extends BaseOverlay {
-  private anchor: OverlayAnchor;
+  private anchor: tuiTypes.OverlayAnchor;
   private done: (result: "next" | "confirm" | "cancel") => void;
 
   constructor(
     theme: Theme,
-    anchor: OverlayAnchor,
+    anchor: tuiTypes.OverlayAnchor,
     done: (result: "next" | "confirm" | "cancel") => void,
   ) {
     super(theme);

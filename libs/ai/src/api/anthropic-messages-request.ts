@@ -2,13 +2,19 @@ import Anthropic, { APIError } from "@anthropic-ai/sdk";
 import type { MessageCreateParamsStreaming } from "@anthropic-ai/sdk/resources/beta/messages/messages.js";
 import { Effect } from "effect";
 
-import { currentTimeMillis } from "../utils/clock.ts";
-import { appendAssistantMessageDiagnostic } from "../utils/diagnostics.ts";
-import { callHook } from "../utils/hooks.ts";
-import { providerRequestWithRetry } from "../utils/provider-retry.ts";
-import type { TranscriptContext } from "../utils/transcript.ts";
-import { buildParams } from "./anthropic-messages-params.ts";
-import type { RunState } from "./anthropic-messages-run.ts";
+import clock from "../utils/clock.ts";
+import diagnosticsModule from "../utils/diagnostics.ts";
+import hooks from "../utils/hooks.ts";
+import providerRetry from "../utils/provider-retry.ts";
+import type transcriptTypes from "../utils/transcript.types.ts";
+import anthropicMessagesParams from "./anthropic-messages-params.ts";
+import type anthropicMessagesRunTypes from "./anthropic-messages-run.types.ts";
+
+const { appendAssistantMessageDiagnostic } = diagnosticsModule;
+const { currentTimeMillis } = clock;
+const { buildParams } = anthropicMessagesParams;
+const { callHook } = hooks;
+const { providerRequestWithRetry } = providerRetry;
 
 const STRICT_TOOL_LIMIT_MESSAGES = [
   "The compiled grammar is too large",
@@ -37,7 +43,7 @@ function shouldRetryWithoutPreferredStrictTools(error: APIError, decision: Retry
 
 function retryOrDie(
   error: unknown,
-  run: RunState,
+  run: anthropicMessagesRunTypes.RunState,
   decision: RetryDecision,
   retry: () => Effect.Effect<Response>,
 ): Effect.Effect<Response> {
@@ -45,17 +51,17 @@ function retryOrDie(
     return Effect.die(error);
   }
   appendAssistantMessageDiagnostic(run.output, {
-    type: "anthropic_strict_tools_fallback",
-    timestamp: currentTimeMillis(),
-    error: { message: error.message },
     details: { reason: "strict_tool_limits_exceeded" },
+    error: { message: error.message },
+    timestamp: currentTimeMillis(),
+    type: "anthropic_strict_tools_fallback",
   });
   return retry();
 }
 
 interface AttemptInput {
-  readonly run: RunState;
-  readonly context: TranscriptContext;
+  readonly run: anthropicMessagesRunTypes.RunState;
+  readonly context: transcriptTypes.TranscriptContext;
   readonly requestOptions: ClientRequestOptions;
   readonly disablePreferredStrictTools: boolean;
 }
@@ -66,10 +72,10 @@ function attemptRequest(input: AttemptInput): Effect.Effect<Response> {
   return Effect.gen(function* () {
     options?.signal?.throwIfAborted();
     const built = buildParams({
-      model,
       context,
-      options,
       disablePreferredStrictTools: input.disablePreferredStrictTools,
+      model,
+      options,
     });
     if (built.providerThinkingLevel !== undefined) {
       output.providerThinkingLevel = built.providerThinkingLevel;
@@ -80,8 +86,8 @@ function attemptRequest(input: AttemptInput): Effect.Effect<Response> {
       params = { ...(nextParams as MessageCreateParamsStreaming), stream: true };
     }
     const decision: RetryDecision = {
-      hasPreferredStrictTools: built.hasPreferredStrictTools,
       disable: input.disablePreferredStrictTools,
+      hasPreferredStrictTools: built.hasPreferredStrictTools,
       signal: options?.signal,
     };
     return yield* providerRequestWithRetry(
@@ -102,23 +108,27 @@ function attemptRequest(input: AttemptInput): Effect.Effect<Response> {
 }
 
 interface PerformRequestInput {
-  readonly run: RunState;
-  readonly context: TranscriptContext;
+  readonly run: anthropicMessagesRunTypes.RunState;
+  readonly context: transcriptTypes.TranscriptContext;
 }
 
 function performRequest(input: PerformRequestInput): Effect.Effect<Response> {
   const { run, context } = input;
   const { options } = run;
   return attemptRequest({
-    run,
     context,
+    disablePreferredStrictTools: false,
     requestOptions: {
       ...(options?.signal === undefined ? {} : { signal: options.signal }),
       ...(options?.timeoutMs === undefined ? {} : { timeout: options.timeoutMs }),
       maxRetries: 0,
     },
-    disablePreferredStrictTools: false,
+    run,
   });
 }
 
-export { performRequest };
+const anthropicMessagesRequest = {
+  performRequest,
+};
+
+export default anthropicMessagesRequest;

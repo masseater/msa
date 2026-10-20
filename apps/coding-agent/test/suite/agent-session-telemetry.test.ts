@@ -1,6 +1,7 @@
-import type { AgentTool } from "@msa/agent-core";
-import { fauxAssistantMessage, fauxToolCall } from "@msa/ai";
-import { InMemoryTelemetryContext, type RecordedTelemetrySpan } from "@msa/telemetry";
+import type agentTypes from "@msa/agent-core/index.types";
+import ai from "@msa/ai";
+import telemetryModule from "@msa/telemetry";
+import type telemetryTypes from "@msa/telemetry/index.types";
 import testing from "@msa/testing";
 import { Effect } from "effect";
 import { Type } from "typebox";
@@ -9,11 +10,15 @@ import { afterEach, describe, expect, it } from "vite-plus/test";
 import harnessModule from "./harness.ts";
 import type harnessTypes from "./harness.types.ts";
 
+const { fauxAssistantMessage, fauxToolCall } = ai;
+
+const { InMemoryTelemetryContext } = telemetryModule;
+
 const { awaited, runTest } = testing;
 
 const { createHarness } = harnessModule;
 
-const echoTool: AgentTool = {
+const echoTool: agentTypes.AgentTool = {
   description: "Echo text",
   execute: (_id, params) =>
     runTest(
@@ -27,7 +32,7 @@ const echoTool: AgentTool = {
   parameters: Type.Object({ text: Type.String() }),
 };
 
-const brokenTool: AgentTool = {
+const brokenTool: agentTypes.AgentTool = {
   description: "Always fails",
   execute: () =>
     runTest(
@@ -40,7 +45,10 @@ const brokenTool: AgentTool = {
   parameters: Type.Object({}),
 };
 
-function named(spans: readonly RecordedTelemetrySpan[], name: string): RecordedTelemetrySpan[] {
+function named(
+  spans: readonly telemetryTypes.RecordedTelemetrySpan[],
+  name: string,
+): telemetryTypes.RecordedTelemetrySpan[] {
   return spans.filter((span) => span.name === name);
 }
 

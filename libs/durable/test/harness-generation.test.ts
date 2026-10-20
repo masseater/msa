@@ -1,14 +1,18 @@
-import { type AssistantMessage, fauxAssistantMessage } from "@msa/ai";
+import ai from "@msa/ai";
+import type aiTypes from "@msa/ai/index.types";
 import durable from "@msa/durable";
 import memory from "@msa/durable/storage/memory";
 import { Effect } from "effect";
 import { describe, expect, it } from "vite-plus/test";
 
-import chatSupport from "./chat-support.ts";
-import effectSupport from "./effect-support.ts";
+import harnessGenerationKit from "./harness-generation-kit.ts";
 import harnessGenerationSupport from "./harness-generation-support.ts";
 import harnessSupport from "./harness-support.ts";
 import sessionSupport from "./session-support.ts";
+
+const { chatSupport, effectSupport } = harnessGenerationKit;
+
+const { fauxAssistantMessage } = ai;
 
 const { MemoryStorage } = memory;
 const { AssistantEntry } = durable;
@@ -186,7 +190,7 @@ const retriesRetryableError = Effect.gen(function* () {
     "msa.assistant",
     "msa.assistant",
   ]);
-  expect((entries[2]!.model![0] as AssistantMessage).stopReason).toBe("error");
+  expect((entries[2]!.model![0] as aiTypes.AssistantMessage).stopReason).toBe("error");
   expect(values.some((value) => value.generation?.retry?.error === "503 Service Unavailable")).toBe(
     true,
   );

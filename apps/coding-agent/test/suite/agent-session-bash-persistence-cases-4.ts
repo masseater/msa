@@ -1,5 +1,5 @@
-import type { AgentTool } from "@msa/agent-core";
-import { fauxAssistantMessage, fauxToolCall } from "@msa/ai";
+import type agentTypes from "@msa/agent-core/index.types";
+import ai from "@msa/ai";
 import { Effect } from "effect";
 import { Type } from "typebox";
 import { expect } from "vite-plus/test";
@@ -8,13 +8,15 @@ import agentSessionBashPersistenceCases1 from "./agent-session-bash-persistence-
 import agentSessionBashPersistenceCases3 from "./agent-session-bash-persistence-cases-3.ts";
 import harnessModule from "./harness.ts";
 
+const { fauxAssistantMessage, fauxToolCall } = ai;
+
 const { createHarness } = harnessModule;
 const { harnesses } = agentSessionBashPersistenceCases1;
 const { persistsUserAssistantToolresultAndCustomPart2 } = agentSessionBashPersistenceCases3;
 
 const persistsUserAssistantToolresultAndCustom = Effect.gen(function* () {
   const runPromise = Effect.runPromiseWith(yield* Effect.context<never>());
-  const echoTool: AgentTool = {
+  const echoTool: agentTypes.AgentTool = {
     description: "Echo text back",
     execute: (_toolCallId, params) =>
       runPromise(

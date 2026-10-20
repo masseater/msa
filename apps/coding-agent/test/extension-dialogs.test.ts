@@ -1,5 +1,5 @@
 import testing from "@msa/testing";
-import { Container, Editor, TuiMainScreen, setKeybindings } from "@msa/tui";
+import tui from "@msa/tui";
 import { Effect } from "effect";
 import { beforeAll, describe, expect, it, vi } from "vite-plus/test";
 
@@ -9,6 +9,8 @@ import { EditorSlot } from "../src/modes/interactive/editor-slot.ts";
 import { ExtensionDialogs } from "../src/modes/interactive/extension-dialogs.ts";
 import type { ProgramStatusReporter } from "../src/modes/interactive/program-status-reporter.ts";
 import tuiKit from "./tui-kit.ts";
+
+const { Container, Editor, TuiMainScreen, setKeybindings } = tui;
 
 const { KeybindingsManager, VirtualTerminal, getEditorTheme, initTheme } = tuiKit;
 

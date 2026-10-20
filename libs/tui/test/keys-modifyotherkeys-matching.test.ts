@@ -1,8 +1,10 @@
 import assert from "node:assert";
 import { describe, it } from "node:test";
 
-import { matchesKey, parseKey, setKittyProtocolActive } from "../src/keys.ts";
+import keys from "../src/keys.ts";
 import keysHelpers from "./keys-helpers.ts";
+
+const { matchesKey, parseKey, setKittyProtocolActive } = keys;
 
 const { withEnv, withEnvVars } = keysHelpers;
 

@@ -3,12 +3,14 @@ import { describe, it } from "node:test";
 
 import { Effect } from "effect";
 
-import type { TUI } from "../src/tui-interface.ts";
-import { TuiMainScreen } from "../src/tui-main-screen.ts";
+import type tuiInterfaceTypes from "../src/tui-interface.types.ts";
+import TuiMainScreen from "../src/tui-main-screen.ts";
 import EmptyContent from "./overlay-options-empty-content.ts";
 import renderAndFlush from "./overlay-options-helpers.ts";
 import StaticOverlay from "./overlay-options-static-overlay.ts";
-import { VirtualTerminal } from "./virtual-terminal.ts";
+import virtualTerminal from "./virtual-terminal.ts";
+
+const { VirtualTerminal } = virtualTerminal;
 
 describe("TUI overlay options", () => {
   describe("margin", () => {
@@ -16,7 +18,7 @@ describe("TUI overlay options", () => {
       Effect.runPromise(
         Effect.gen(function* () {
           const terminal = new VirtualTerminal(80, 24);
-          const tui: TUI = new TuiMainScreen(terminal);
+          const tui: tuiInterfaceTypes.TUI = new TuiMainScreen(terminal);
           const overlay = new StaticOverlay(["NEG-MARGIN"]);
 
           tui.addChild(new EmptyContent());
@@ -45,7 +47,7 @@ describe("TUI overlay options", () => {
       Effect.runPromise(
         Effect.gen(function* () {
           const terminal = new VirtualTerminal(80, 24);
-          const tui: TUI = new TuiMainScreen(terminal);
+          const tui: tuiInterfaceTypes.TUI = new TuiMainScreen(terminal);
           const overlay = new StaticOverlay(["MARGIN"]);
 
           tui.addChild(new EmptyContent());
@@ -74,7 +76,7 @@ describe("TUI overlay options", () => {
       Effect.runPromise(
         Effect.gen(function* () {
           const terminal = new VirtualTerminal(80, 24);
-          const tui: TUI = new TuiMainScreen(terminal);
+          const tui: tuiInterfaceTypes.TUI = new TuiMainScreen(terminal);
           const overlay = new StaticOverlay(["MARGIN"]);
 
           tui.addChild(new EmptyContent());
@@ -105,7 +107,7 @@ describe("TUI overlay options", () => {
       Effect.runPromise(
         Effect.gen(function* () {
           const terminal = new VirtualTerminal(80, 24);
-          const tui: TUI = new TuiMainScreen(terminal);
+          const tui: tuiInterfaceTypes.TUI = new TuiMainScreen(terminal);
           const overlay = new StaticOverlay(["OFFSET"]);
 
           tui.addChild(new EmptyContent());
@@ -132,7 +134,7 @@ describe("TUI overlay options", () => {
       Effect.runPromise(
         Effect.gen(function* () {
           const terminal = new VirtualTerminal(80, 24);
-          const tui: TUI = new TuiMainScreen(terminal);
+          const tui: tuiInterfaceTypes.TUI = new TuiMainScreen(terminal);
           const overlay = new StaticOverlay(["PCT"]);
 
           tui.addChild(new EmptyContent());
@@ -157,7 +159,7 @@ describe("TUI overlay options", () => {
       Effect.runPromise(
         Effect.gen(function* () {
           const terminal = new VirtualTerminal(80, 24);
-          const tui: TUI = new TuiMainScreen(terminal);
+          const tui: tuiInterfaceTypes.TUI = new TuiMainScreen(terminal);
           const overlay = new StaticOverlay(["TOP"]);
 
           tui.addChild(new EmptyContent());
@@ -179,7 +181,7 @@ describe("TUI overlay options", () => {
       Effect.runPromise(
         Effect.gen(function* () {
           const terminal = new VirtualTerminal(80, 24);
-          const tui: TUI = new TuiMainScreen(terminal);
+          const tui: tuiInterfaceTypes.TUI = new TuiMainScreen(terminal);
           const overlay = new StaticOverlay(["BOTTOM"]);
 
           tui.addChild(new EmptyContent());
@@ -204,7 +206,7 @@ describe("TUI overlay options", () => {
       Effect.runPromise(
         Effect.gen(function* () {
           const terminal = new VirtualTerminal(80, 24);
-          const tui: TUI = new TuiMainScreen(terminal);
+          const tui: tuiInterfaceTypes.TUI = new TuiMainScreen(terminal);
           const overlay = new StaticOverlay(["Line 1", "Line 2", "Line 3", "Line 4", "Line 5"]);
 
           tui.addChild(new EmptyContent());
@@ -231,7 +233,7 @@ describe("TUI overlay options", () => {
       Effect.runPromise(
         Effect.gen(function* () {
           const terminal = new VirtualTerminal(80, 10);
-          const tui: TUI = new TuiMainScreen(terminal);
+          const tui: tuiInterfaceTypes.TUI = new TuiMainScreen(terminal);
           const overlay = new StaticOverlay([
             "L1",
             "L2",
@@ -267,7 +269,7 @@ describe("TUI overlay options", () => {
       Effect.runPromise(
         Effect.gen(function* () {
           const terminal = new VirtualTerminal(80, 24);
-          const tui: TUI = new TuiMainScreen(terminal);
+          const tui: tuiInterfaceTypes.TUI = new TuiMainScreen(terminal);
           const overlay = new StaticOverlay(["ABSOLUTE"]);
 
           tui.addChild(new EmptyContent());

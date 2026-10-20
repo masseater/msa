@@ -1,38 +1,19 @@
 import { dual } from "effect/Function";
 
-import type { KittyImageCache, PreparedKittyScreen } from "./alt-screen-kitty-cache.ts";
-import {
-  BEGIN_SYNCHRONIZED_OUTPUT,
-  END_SYNCHRONIZED_OUTPUT,
-  kittyImagesDeletion,
-} from "./alt-screen-terminal-modes.ts";
-import { isEnvSet, readEnv } from "./env.ts";
-import type { ImageProtocol } from "./terminal-capabilities.ts";
-import {
-  deleteAllKittyPlacements,
-  getKittyImagePlacementRows,
-  isImageLine,
-} from "./terminal-image-kitty.ts";
-import { compositeTuiLine } from "./tui-component.ts";
-import { visibleWidth } from "./utils.ts";
+import type altScreenFrameTypes from "./alt-screen-frame.types.ts";
+import type altScreenKittyCacheTypes from "./alt-screen-kitty-cache.types.ts";
+import altScreenTerminalModes from "./alt-screen-terminal-modes.ts";
+import env from "./env.ts";
+import terminalImageKitty from "./terminal-image-kitty.ts";
+import tuiComponent from "./tui-component.ts";
+import utils from "./utils.ts";
 
-export interface AltScreenFrameInput {
-  screen: string[];
-  previousScreen: readonly string[];
-  previousWidth: number;
-  previousHeight: number;
-  width: number;
-  height: number;
-  imageProtocol: ImageProtocol;
-  kittyImages: KittyImageCache;
-  cursor: { row: number; col: number } | null;
-  showHardwareCursor: boolean;
-}
-
-export interface AltScreenFrameOutput {
-  buffer: string;
-  fullRedraw: boolean;
-}
+const { deleteAllKittyPlacements, getKittyImagePlacementRows, isImageLine } = terminalImageKitty;
+const { isEnvSet, readEnv } = env;
+const { BEGIN_SYNCHRONIZED_OUTPUT, END_SYNCHRONIZED_OUTPUT, kittyImagesDeletion } =
+  altScreenTerminalModes;
+const { visibleWidth } = utils;
+const { compositeTuiLine } = tuiComponent;
 
 interface RedrawPlan {
   fullRedraw: boolean;
@@ -51,7 +32,7 @@ function kittyCellsChanged(screen: readonly string[], changedRows: readonly bool
   });
 }
 
-function planRedraw(input: AltScreenFrameInput): RedrawPlan {
+function planRedraw(input: altScreenFrameTypes.AltScreenFrameInput): RedrawPlan {
   const { screen, previousScreen } = input;
   const fullRedraw =
     previousScreen.length === 0 ||
@@ -77,7 +58,11 @@ function planRedraw(input: AltScreenFrameInput): RedrawPlan {
   };
 }
 
-function clearSequence(input: AltScreenFrameInput, plan: RedrawPlan, hadUploads: boolean): string {
+function clearSequence(
+  input: altScreenFrameTypes.AltScreenFrameInput,
+  plan: RedrawPlan,
+  hadUploads: boolean,
+): string {
   if (plan.fullRedraw) {
     const clearImages =
       input.imageProtocol === "kitty" && hadUploads
@@ -92,9 +77,9 @@ function clearSequence(input: AltScreenFrameInput, plan: RedrawPlan, hadUploads:
 }
 
 function rowsSequence(
-  input: AltScreenFrameInput,
+  input: altScreenFrameTypes.AltScreenFrameInput,
   plan: RedrawPlan,
-  prepared: PreparedKittyScreen,
+  prepared: altScreenKittyCacheTypes.PreparedKittyScreen,
 ): string {
   const { screen, previousScreen, height } = input;
   const redrawAll = plan.fullRedraw || plan.imagesNeedRedraw;
@@ -119,21 +104,23 @@ function rowsSequence(
   return clears + text + images;
 }
 
-function cursorSequence(input: AltScreenFrameInput): string {
+function cursorSequence(input: altScreenFrameTypes.AltScreenFrameInput): string {
   const { cursor } = input;
   if (cursor === null) return "\x1b[?25l";
   const position = `\x1b[${cursor.row + 1};${Math.min(input.width, cursor.col) + 1}H`;
   return position + (input.showHardwareCursor ? "\x1b[?25h" : "\x1b[?25l");
 }
 
-export function buildAltScreenFrame(input: AltScreenFrameInput): AltScreenFrameOutput {
+function buildAltScreenFrame(
+  input: altScreenFrameTypes.AltScreenFrameInput,
+): altScreenFrameTypes.AltScreenFrameOutput {
   const plan = planRedraw(input);
   const redrawImages = plan.fullRedraw || plan.imagesNeedRedraw;
   const hadUploads = input.kittyImages.size > 0;
   const prepared =
     redrawImages && input.imageProtocol === "kitty"
       ? input.kittyImages.prepare(input.screen)
-      : { lines: input.screen, evictedImageDeletion: "" };
+      : { evictedImageDeletion: "", lines: input.screen };
   const buffer =
     BEGIN_SYNCHRONIZED_OUTPUT +
     clearSequence(input, plan, hadUploads) +
@@ -144,29 +131,34 @@ export function buildAltScreenFrame(input: AltScreenFrameInput): AltScreenFrameO
   return { buffer, fullRedraw: plan.fullRedraw };
 }
 
-export interface FlashFrame {
-  width: number;
-  height: number;
-}
+const compositeFlashes: {
+  (screen: string[], flashLines: string[], frame: altScreenFrameTypes.FlashFrame): string[];
+  (flashLines: string[], frame: altScreenFrameTypes.FlashFrame): (screen: string[]) => string[];
+} = dual(
+  3,
+  (screen: string[], flashLines: string[], frame: altScreenFrameTypes.FlashFrame): string[] => {
+    const visibleFlashes = flashLines.slice(-frame.height);
+    if (visibleFlashes.length === 0) return screen;
+    const result = [...screen];
+    while (result.length < frame.height) result.push("");
+    for (const [row, line] of visibleFlashes.entries()) {
+      const flashWidth = visibleWidth(line);
+      if (flashWidth === 0) continue;
+      result[row] = compositeTuiLine(
+        result[row] ?? "",
+        line,
+        frame.width - flashWidth,
+        flashWidth,
+        frame.width,
+      );
+    }
+    return result;
+  },
+);
 
-export const compositeFlashes: {
-  (screen: string[], flashLines: string[], frame: FlashFrame): string[];
-  (flashLines: string[], frame: FlashFrame): (screen: string[]) => string[];
-} = dual(3, (screen: string[], flashLines: string[], frame: FlashFrame): string[] => {
-  const visibleFlashes = flashLines.slice(-frame.height);
-  if (visibleFlashes.length === 0) return screen;
-  const result = [...screen];
-  while (result.length < frame.height) result.push("");
-  for (const [row, line] of visibleFlashes.entries()) {
-    const flashWidth = visibleWidth(line);
-    if (flashWidth === 0) continue;
-    result[row] = compositeTuiLine(
-      result[row] ?? "",
-      line,
-      frame.width - flashWidth,
-      flashWidth,
-      frame.width,
-    );
-  }
-  return result;
-});
+const altScreenFrame = {
+  buildAltScreenFrame,
+  compositeFlashes,
+};
+
+export default altScreenFrame;

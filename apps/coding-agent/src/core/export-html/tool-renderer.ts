@@ -1,5 +1,5 @@
-import type { ImageContent, TextContent } from "@msa/ai";
-import type { Component } from "@msa/tui";
+import type aiTypes from "@msa/ai/index.types";
+import type tuiTypes from "@msa/tui/index.types";
 
 import type { Theme } from "../../modes/interactive/theme/theme.ts";
 import type { ToolRenderContext, ToolRenderers } from "../extensions/types.ts";
@@ -39,7 +39,7 @@ function trimRenderedResultLines(lines: string[]): string[] {
 
 interface RenderContextInput {
   toolCallId: string;
-  lastComponent: Component | undefined;
+  lastComponent: tuiTypes.Component | undefined;
   expanded: boolean;
   isPartial: boolean;
   isError: boolean;
@@ -48,8 +48,8 @@ interface RenderContextInput {
 type ResultBlocks = Array<{ type: string; text?: string; data?: string; mimeType?: string }>;
 
 class HtmlToolRenderer implements ToolHtmlRenderer {
-  private readonly renderedCallComponents = new Map<string, Component>();
-  private readonly renderedResultComponents = new Map<string, Component>();
+  private readonly renderedCallComponents = new Map<string, tuiTypes.Component>();
+  private readonly renderedResultComponents = new Map<string, tuiTypes.Component>();
   private readonly renderedStates = new Map<string, any>();
   private readonly renderedArgs = new Map<string, unknown>();
   private readonly deps: ToolHtmlRendererDeps;
@@ -71,11 +71,11 @@ class HtmlToolRenderer implements ToolHtmlRenderer {
         args,
         this.deps.theme,
         this.createRenderContext({
-          toolCallId,
-          lastComponent: this.renderedCallComponents.get(toolCallId),
           expanded: false,
-          isPartial: true,
           isError: false,
+          isPartial: true,
+          lastComponent: this.renderedCallComponents.get(toolCallId),
+          toolCallId,
         }),
       );
       this.renderedCallComponents.set(toolCallId, component);
@@ -99,7 +99,7 @@ class HtmlToolRenderer implements ToolHtmlRenderer {
       }
       const renderResult = toolDef.renderResult;
       const agentToolResult = {
-        content: result as (TextContent | ImageContent)[],
+        content: result as (aiTypes.TextContent | aiTypes.ImageContent)[],
         details,
         isError,
       };
@@ -109,11 +109,11 @@ class HtmlToolRenderer implements ToolHtmlRenderer {
           { expanded, isPartial: false },
           this.deps.theme,
           this.createRenderContext({
-            toolCallId,
-            lastComponent: this.renderedResultComponents.get(toolCallId),
             expanded,
-            isPartial: false,
             isError,
+            isPartial: false,
+            lastComponent: this.renderedResultComponents.get(toolCallId),
+            toolCallId,
           }),
         );
         this.renderedResultComponents.set(toolCallId, component);
@@ -142,19 +142,19 @@ class HtmlToolRenderer implements ToolHtmlRenderer {
   private createRenderContext(input: RenderContextInput): ToolRenderContext {
     return {
       args: this.renderedArgs.get(input.toolCallId),
-      toolCallId: input.toolCallId,
-      invalidate: () => {},
-      lastComponent: input.lastComponent,
-      state: this.getState(input.toolCallId),
-      cwd: this.deps.cwd,
-      executionStarted: true,
       argsComplete: true,
-      isPartial: input.isPartial,
-      expanded: input.expanded,
-      showImages: false,
-      isError: input.isError,
+      cwd: this.deps.cwd,
       durationMs: undefined,
+      executionStarted: true,
+      expanded: input.expanded,
+      invalidate: () => {},
+      isError: input.isError,
+      isPartial: input.isPartial,
+      lastComponent: input.lastComponent,
       outputPad: 1,
+      showImages: false,
+      state: this.getState(input.toolCallId),
+      toolCallId: input.toolCallId,
     };
   }
 }

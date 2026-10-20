@@ -1,11 +1,11 @@
-import type { EditorDocument } from "./editor-document.ts";
-import type { EditorMotion } from "./editor-motion.ts";
+import type editorDocumentTypes from "./editor-document.types.ts";
+import type editorMotionTypes from "./editor-motion.types.ts";
 
-export class EditorKillCommands {
-  private readonly doc: EditorDocument;
-  private readonly motion: EditorMotion;
+export default class EditorKillCommands {
+  private readonly doc: editorDocumentTypes.EditorDocument;
+  private readonly motion: editorMotionTypes.EditorMotion;
 
-  constructor(doc: EditorDocument, motion: EditorMotion) {
+  constructor(doc: editorDocumentTypes.EditorDocument, motion: editorMotionTypes.EditorMotion) {
     this.doc = doc;
     this.motion = motion;
   }
@@ -108,7 +108,7 @@ export class EditorKillCommands {
   }
 
   private kill(text: string, prepend: boolean, accumulate: boolean): void {
-    this.doc.killRing.push(text, { prepend, accumulate });
+    this.doc.killRing.push(text, { accumulate, prepend });
     this.doc.lastAction = "kill";
   }
 

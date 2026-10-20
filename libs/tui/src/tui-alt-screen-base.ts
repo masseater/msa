@@ -1,65 +1,83 @@
-import {
+import type altScreenTerminalModesTypes from "./alt-screen-terminal-modes.types.ts";
+import type altScreenViewTypes from "./alt-screen-view.ts";
+import type altScreenFlashTypes from "./components/alt-screen-flash.types.ts";
+import type scrollViewTypes from "./components/scroll-view.types.ts";
+import type terminalProtocolTypes from "./terminal-protocol.types.ts";
+import tuiAltScreenBaseKit from "./tui-alt-screen-base-kit.ts";
+import type tuiComponentTypes from "./tui-component.types.ts";
+import tuiInterface from "./tui-interface.ts";
+import type tuiInterfaceTypes from "./tui-interface.types.ts";
+import TuiBase from "./tui.ts";
+
+const {
+  AltScreenFlashContainer,
+  altScreenTerminalModes,
+  altScreenViewportKeys,
+  layout,
+  ScrollView,
+} = tuiAltScreenBaseKit;
+
+const { VIEWPORT_TUI } = tuiInterface;
+const { getScrollViewBox } = layout;
+const { findPromptRow } = altScreenViewportKeys;
+const {
   enterAltScreenSequence,
-  type ImageCapabilities,
   exitAltScreenPreservingSequence,
   leaveAltScreenSequence,
   restoreCapabilities,
   restoreDocumentSequence,
   restoredDocument,
   suspendInlineImages,
-} from "./alt-screen-terminal-modes.ts";
-import type { AltScreenFrameState, AltScreenView } from "./alt-screen-view.ts";
-import { findPromptRow } from "./alt-screen-viewport-keys.ts";
-import { AltScreenFlashContainer } from "./components/alt-screen-flash.ts";
-import { ScrollView } from "./components/scroll-view.ts";
-import { getScrollViewBox } from "./layout.ts";
-import type { Terminal } from "./terminal-protocol.ts";
-import type { Component } from "./tui-component.ts";
-import { type TuiStopOptions, VIEWPORT_TUI, type ViewportTUI } from "./tui-interface.ts";
-import { TuiBase } from "./tui.ts";
+} = altScreenTerminalModes;
 
-export abstract class AltScreenTuiBase extends TuiBase implements ViewportTUI {
+export default abstract class AltScreenTuiBase
+  extends TuiBase
+  implements tuiInterfaceTypes.ViewportTUI
+{
   readonly mode = "fullscreen" as const;
   readonly [VIEWPORT_TUI] = true as const;
-  protected readonly frame: AltScreenFrameState = {
-    previousScreen: [],
-    previousScreenWidth: 0,
-    previousScreenHeight: 0,
+  protected readonly frame: altScreenViewTypes.AltScreenFrameState = {
     currentLayout: undefined,
+    previousScreen: [],
+    previousScreenHeight: 0,
+    previousScreenWidth: 0,
   };
-  protected readonly view: AltScreenView;
-  protected readonly implicitScrollView: ScrollView;
-  protected readonly flashes: AltScreenFlashContainer;
-  protected layoutRoot: Component | undefined;
+  protected readonly view: altScreenViewTypes.AltScreenView;
+  protected readonly implicitScrollView: scrollViewTypes.ScrollView;
+  protected readonly flashes: altScreenFlashTypes.AltScreenFlashContainer;
+  protected layoutRoot: tuiComponentTypes.Component | undefined;
   protected altScreenActive = false;
-  protected images: ImageCapabilities = { protocol: null, saved: undefined };
+  protected images: altScreenTerminalModesTypes.ImageCapabilities = {
+    protocol: null,
+    saved: undefined,
+  };
   private readonly mouseEnabled: boolean;
   private lastDocument: string[] = [];
 
   constructor(
-    terminal: Terminal,
+    terminal: terminalProtocolTypes.Terminal,
     showHardwareCursor: boolean | undefined,
     logDirectory: string | undefined,
     mouseEnabled: boolean,
   ) {
     super(terminal, showHardwareCursor, logDirectory);
-    const implicitDocument: Component = {
-      render: (width) => super.render(width),
+    const implicitDocument: tuiComponentTypes.Component = {
       handleMouse: (event) => super.handleMouse(event),
       invalidate: () => {
         for (const child of this.children) child.invalidate();
       },
+      render: (width) => super.render(width),
     };
     this.implicitScrollView = new ScrollView(implicitDocument, { follow: "end", primary: true });
     this.flashes = new AltScreenFlashContainer(() => this.requestRender());
     this.mouseEnabled = mouseEnabled;
     this.view = {
-      frame: this.frame,
       columns: () => this.terminal.columns,
-      rows: () => this.terminal.rows,
-      primaryScrollView: () => this.getPrimaryScrollView(),
+      frame: this.frame,
       hasOverlay: () => this.hasOverlay(),
+      primaryScrollView: () => this.getPrimaryScrollView(),
       requestRender: () => this.requestRender(),
+      rows: () => this.terminal.rows,
     };
   }
 
@@ -81,7 +99,7 @@ export abstract class AltScreenTuiBase extends TuiBase implements ViewportTUI {
     return [...this.frame.previousScreen];
   }
 
-  setLayoutRoot(component: Component | undefined): void {
+  setLayoutRoot(component: tuiComponentTypes.Component | undefined): void {
     if (this.layoutRoot === component) return;
     this.layoutRoot = component;
     this.frame.currentLayout = undefined;
@@ -92,11 +110,11 @@ export abstract class AltScreenTuiBase extends TuiBase implements ViewportTUI {
     return this.layoutRoot?.render(width) ?? super.render(width);
   }
 
-  protected override getMountedRoots(): readonly Component[] {
+  protected override getMountedRoots(): readonly tuiComponentTypes.Component[] {
     return this.layoutRoot === undefined ? this.children : [this.layoutRoot];
   }
 
-  protected getPrimaryScrollView(): ScrollView {
+  protected getPrimaryScrollView(): scrollViewTypes.ScrollView {
     return this.frame.currentLayout?.primaryScrollView ?? this.implicitScrollView;
   }
 
@@ -131,7 +149,7 @@ export abstract class AltScreenTuiBase extends TuiBase implements ViewportTUI {
     const scrollView = this.getPrimaryScrollView();
     const lines = getScrollViewBox(this.frame.currentLayout, scrollView)?.scrollContentLines;
     if (lines === undefined) return;
-    const row = findPromptRow(lines, { from: scrollView.scrollTop, direction });
+    const row = findPromptRow(lines, { direction, from: scrollView.scrollTop });
     if (row === undefined) return;
     scrollView.scrollTo(row);
     this.requestRender();
@@ -150,7 +168,7 @@ export abstract class AltScreenTuiBase extends TuiBase implements ViewportTUI {
     this.terminal.write(enterAltScreenSequence(this.mouseEnabled));
   }
 
-  protected override beforeTerminalStop(_options: TuiStopOptions): void {
+  protected override beforeTerminalStop(_options: tuiInterfaceTypes.TuiStopOptions): void {
     this.stopInteraction();
     this.flashes.dispose();
     if (!this.altScreenActive) return;
@@ -158,7 +176,7 @@ export abstract class AltScreenTuiBase extends TuiBase implements ViewportTUI {
     this.clearImageCache();
   }
 
-  protected override afterTerminalStop(options: TuiStopOptions): void {
+  protected override afterTerminalStop(options: tuiInterfaceTypes.TuiStopOptions): void {
     if (!this.altScreenActive) return;
     this.altScreenActive = false;
     if (options.preserveScreen === true) {

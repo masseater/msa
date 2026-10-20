@@ -1,17 +1,20 @@
 import { Clock, Effect } from "effect";
 import { afterEach, describe, expect, it } from "vite-plus/test";
 
-import {
+import compat from "../src/compat.ts";
+import type typesModule from "../src/types.types.ts";
+import clock from "../src/utils/clock.ts";
+import fauxProviderSupport from "./faux-provider-support.ts";
+
+const {
   complete,
   fauxAssistantMessage,
   fauxText,
   fauxThinking,
   fauxToolCall,
   registerFauxProvider,
-} from "../src/compat.ts";
-import type { Context } from "../src/types.ts";
-import { currentTimeMillis } from "../src/utils/clock.ts";
-import fauxProviderSupport from "./faux-provider-support.ts";
+} = compat;
+const { currentTimeMillis } = clock;
 
 const { registrations } = fauxProviderSupport;
 
@@ -28,7 +31,7 @@ const registersACustomProviderAndEstimates = () =>
       registrations.push(registration);
       registration.setResponses([fauxAssistantMessage("hello world")]);
 
-      const context: Context = {
+      const context: typesModule.Context = {
         messages: [
           { content: "hi there", role: "user", timestamp: yield* Clock.currentTimeMillis },
         ],
@@ -144,7 +147,7 @@ const consumesQueuedResponsesInOrderAnd = () =>
       registrations.push(registration);
       registration.setResponses([fauxAssistantMessage("first"), fauxAssistantMessage("second")]);
 
-      const context: Context = {
+      const context: typesModule.Context = {
         messages: [{ content: "hi", role: "user", timestamp: yield* Clock.currentTimeMillis }],
       };
 
@@ -168,7 +171,7 @@ const canReplaceAndAppendQueuedResponses = () =>
       registrations.push(registration);
       registration.setResponses([fauxAssistantMessage("first")]);
 
-      const context: Context = {
+      const context: typesModule.Context = {
         messages: [{ content: "hi", role: "user", timestamp: yield* Clock.currentTimeMillis }],
       };
 

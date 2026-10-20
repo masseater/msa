@@ -1,5 +1,5 @@
-import type { AgentTool } from "@msa/agent-core";
-import type { Model } from "@msa/ai";
+import type agentTypes from "@msa/agent-core/index.types";
+import type aiTypes from "@msa/ai/index.types";
 
 import type { ScopedModel } from "../model-resolver.ts";
 import {
@@ -17,7 +17,7 @@ import type {
 import type { CompactOptions, ContextUsage, ExtensionContextActions } from "./types.ts";
 
 export interface RunnerBindings {
-  getModel: () => Model<any> | undefined;
+  getModel: () => aiTypes.Model<any> | undefined;
   getScopedModels: () => readonly ScopedModel[];
   isIdleFn: () => boolean;
   isProjectTrustedFn: () => boolean;
@@ -30,7 +30,7 @@ export interface RunnerBindings {
   getSystemPromptFn: () => string;
   getSystemPromptOptionsFn: () => BuildSystemPromptOptions;
   executeToolFn: ExtensionContextActions["executeTool"] | undefined;
-  getCallableToolsFn: () => readonly AgentTool[];
+  getCallableToolsFn: () => readonly agentTypes.AgentTool[];
   newSessionHandler: NewSessionHandler;
   forkHandler: ForkHandler;
   navigateTreeHandler: NavigateTreeHandler;
@@ -40,28 +40,28 @@ export interface RunnerBindings {
 }
 
 export const idleCommandBindings = () => ({
-  waitForIdleFn: () => Promise.resolve(),
-  newSessionHandler: () => Promise.resolve({ cancelled: false }),
   forkHandler: () => Promise.resolve({ cancelled: false }),
   navigateTreeHandler: () => Promise.resolve({ cancelled: false }),
-  switchSessionHandler: () => Promise.resolve({ cancelled: false }),
+  newSessionHandler: () => Promise.resolve({ cancelled: false }),
   reloadHandler: () => Promise.resolve(),
+  switchSessionHandler: () => Promise.resolve({ cancelled: false }),
+  waitForIdleFn: () => Promise.resolve(),
 });
 
 export const createBindings = (cwd: string): RunnerBindings => ({
-  getModel: () => undefined,
-  getScopedModels: () => [],
-  isIdleFn: () => true,
-  isProjectTrustedFn: () => true,
-  getSignalFn: () => undefined,
   abortFn: () => {},
-  hasPendingMessagesFn: () => false,
-  getContextUsageFn: () => undefined,
   compactFn: () => {},
-  getSystemPromptFn: () => "",
-  getSystemPromptOptionsFn: () => normalizeBuildSystemPromptOptions({ cwd }),
   executeToolFn: undefined,
   getCallableToolsFn: () => [],
+  getContextUsageFn: () => undefined,
+  getModel: () => undefined,
+  getScopedModels: () => [],
+  getSignalFn: () => undefined,
+  getSystemPromptFn: () => "",
+  getSystemPromptOptionsFn: () => normalizeBuildSystemPromptOptions({ cwd }),
+  hasPendingMessagesFn: () => false,
+  isIdleFn: () => true,
+  isProjectTrustedFn: () => true,
   shutdownHandler: () => {},
   ...idleCommandBindings(),
 });

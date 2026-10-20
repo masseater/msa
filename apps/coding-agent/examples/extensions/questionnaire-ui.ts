@@ -1,15 +1,18 @@
 import type { Theme } from "@msa/coding-agent";
-import { Editor, Key, matchesKey, type TUI } from "@msa/tui";
+import tuiModule from "@msa/tui";
+import type tuiTypes from "@msa/tui/index.types";
 
 import { renderQuestionnaire } from "./questionnaire-render.ts";
 import {
   type Answer,
-  editorTheme,
   type Question,
   type QuestionnaireResult,
   type QuestionnaireState,
   type RenderOption,
+  editorTheme,
 } from "./questionnaire-types.ts";
+
+const { Editor, Key, matchesKey } = tuiModule;
 
 const currentQuestion = (state: QuestionnaireState): Question | undefined =>
   state.questions[state.currentTab];
@@ -20,7 +23,7 @@ const currentOptions = (state: QuestionnaireState): RenderOption[] => {
 
   const options: RenderOption[] = [...question.options];
   if (question.allowOther) {
-    options.push({ value: "__other__", label: "Type something.", isOther: true });
+    options.push({ isOther: true, label: "Type something.", value: "__other__" });
   }
   return options;
 };
@@ -30,9 +33,9 @@ const allAnswered = (state: QuestionnaireState): boolean =>
 
 const submit = (state: QuestionnaireState, cancelled: boolean): void => {
   state.done({
-    questions: state.questions,
     answers: Array.from(state.answers.values()),
     cancelled,
+    questions: state.questions,
   });
 };
 
@@ -44,7 +47,7 @@ const saveAnswer = (
   wasCustom: boolean,
   index?: number,
 ): void => {
-  state.answers.set(questionId, { id: questionId, value, label, wasCustom, index });
+  state.answers.set(questionId, { id: questionId, index, label, value, wasCustom });
 };
 
 const advanceAfterAnswer = (state: QuestionnaireState): void => {
@@ -150,7 +153,7 @@ const handleInput = (state: QuestionnaireState, data: string): void => {
 };
 
 export const askQuestionnaire = (request: {
-  readonly tui: TUI;
+  readonly tui: tuiTypes.TUI;
   readonly theme: Theme;
   readonly questions: Question[];
   readonly done: (result: QuestionnaireResult) => void;
@@ -159,21 +162,21 @@ export const askQuestionnaire = (request: {
   const isMulti = questions.length > 1;
 
   const state: QuestionnaireState = {
-    questions,
-    isMulti,
-    totalTabs: questions.length + 1,
-    editor: new Editor(tui, editorTheme(theme)),
+    answers: new Map<string, Answer>(),
+    cachedLines: undefined,
+    currentTab: 0,
     done,
+    editor: new Editor(tui, editorTheme(theme)),
+    inputMode: false,
+    inputQuestionId: null,
+    isMulti,
+    optionIndex: 0,
+    questions,
     refresh: () => {
       state.cachedLines = undefined;
       tui.requestRender();
     },
-    answers: new Map<string, Answer>(),
-    currentTab: 0,
-    optionIndex: 0,
-    inputMode: false,
-    inputQuestionId: null,
-    cachedLines: undefined,
+    totalTabs: questions.length + 1,
   };
 
   state.editor.onSubmit = (value) => {
@@ -187,10 +190,10 @@ export const askQuestionnaire = (request: {
   };
 
   return {
-    render: (width: number) => renderQuestionnaire({ state, theme, width }),
+    handleInput: (data: string) => handleInput(state, data),
     invalidate: () => {
       state.cachedLines = undefined;
     },
-    handleInput: (data: string) => handleInput(state, data),
+    render: (width: number) => renderQuestionnaire({ state, theme, width }),
   };
 };

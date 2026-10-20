@@ -1,6 +1,6 @@
 import * as NodeRuntime from "@effect/platform-node/NodeRuntime";
-import { Type } from "@msa/ai";
-import { createModels } from "@msa/ai/models";
+import ai from "@msa/ai";
+import modelsModule from "@msa/ai/models";
 import contextModule from "@msa/chord/context";
 import { Console, Effect } from "effect";
 
@@ -8,6 +8,9 @@ import harnessModule from "../../src/harness/index.ts";
 import durable from "../../src/index.ts";
 import memory from "../../src/storage/memory.ts";
 import effectSupport from "../effect-support.ts";
+
+const { Type } = ai;
+const { createModels } = modelsModule;
 
 const { BACKGROUND_CONTEXT } = contextModule;
 

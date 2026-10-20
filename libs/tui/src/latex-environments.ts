@@ -1,6 +1,9 @@
-import { PROTECTED_SPACE } from "./latex-layout.ts";
-import type { LatexParser } from "./latex-parser.ts";
-import { visibleWidth } from "./utils.ts";
+import latexLayout from "./latex-layout.ts";
+import type latexParserTypes from "./latex-parser.types.ts";
+import utils from "./utils.ts";
+
+const { PROTECTED_SPACE } = latexLayout;
+const { visibleWidth } = utils;
 
 type MatrixDelimiters = readonly [string, string, string, string, string, string];
 
@@ -43,13 +46,17 @@ function splitEnvironmentRows(body: string): string[] {
   return body.split(/\\\\(?:\[[^\]\n]*\])?/u);
 }
 
-function renderCells(parser: LatexParser, body: string): string[][] {
+function renderCells(parser: latexParserTypes.LatexParser, body: string): string[][] {
   return splitEnvironmentRows(body)
     .map((row) => row.split("&").map((cell) => parser.renderNested(cell, false).trim()))
     .filter((row) => row.some(Boolean));
 }
 
-function renderAligned(parser: LatexParser, environment: string, body: string): string {
+function renderAligned(
+  parser: latexParserTypes.LatexParser,
+  environment: string,
+  body: string,
+): string {
   const alignedAt = ALIGNED_AT_ENVIRONMENTS.has(environment);
   const alignedBody = alignedAt ? body.replace(/^\s*\{[^}]*\}/u, "") : body;
   return splitEnvironmentRows(alignedBody)
@@ -77,7 +84,7 @@ function caseContent(row: readonly string[], valueWidth: number): string {
   return `${value}${PROTECTED_SPACE.repeat(valueWidth - visibleWidth(value))}${conditionPrefix}${condition}`;
 }
 
-function renderCases(parser: LatexParser, body: string): string {
+function renderCases(parser: latexParserTypes.LatexParser, body: string): string {
   const rows = renderCells(parser, body);
   const valueWidth = Math.max(
     0,
@@ -97,7 +104,7 @@ function renderCases(parser: LatexParser, body: string): string {
     const delimiter = index === 0 ? "⎧" : index === visualRows.length - 1 ? "⎩" : "⎨";
     return content === undefined ? delimiter : `${delimiter} ${content}`;
   });
-  return parser.pushLayout({ type: "matrix", lines, baseline: middle });
+  return parser.pushLayout({ baseline: middle, lines, type: "matrix" });
 }
 
 function alignedMatrixRows(matrix: readonly string[][]): string[] {
@@ -120,7 +127,11 @@ function delimitedRows(rows: readonly string[], delimiter: MatrixDelimiters): st
   });
 }
 
-function renderMatrix(parser: LatexParser, environment: string, body: string): string {
+function renderMatrix(
+  parser: latexParserTypes.LatexParser,
+  environment: string,
+  body: string,
+): string {
   const rows = alignedMatrixRows(renderCells(parser, body));
   let lines = rows;
   if (!UNDELIMITED_MATRICES.has(environment)) {
@@ -135,10 +146,14 @@ function renderMatrix(parser: LatexParser, environment: string, body: string): s
   if (lines.length <= 1) {
     return lines[0] ?? "";
   }
-  return parser.pushLayout({ type: "matrix", lines, baseline: 0 });
+  return parser.pushLayout({ baseline: 0, lines, type: "matrix" });
 }
 
-function renderEnvironment(parser: LatexParser, environment: string, body: string): string {
+function renderEnvironment(
+  parser: latexParserTypes.LatexParser,
+  environment: string,
+  body: string,
+): string {
   if (EQUATION_ENVIRONMENTS.has(environment)) {
     return parser.renderNested(body).trim();
   }
@@ -156,7 +171,7 @@ function renderEnvironment(parser: LatexParser, environment: string, body: strin
   return body;
 }
 
-export function parseEnvironment(parser: LatexParser): string {
+function parseEnvironment(parser: latexParserTypes.LatexParser): string {
   const environment = parser.readRawGroup();
   if (environment === undefined || environment === "") {
     return "";
@@ -171,3 +186,9 @@ export function parseEnvironment(parser: LatexParser): string {
   parser.position = end + endMarker.length;
   return renderEnvironment(parser, environment, body);
 }
+
+const latexEnvironments = {
+  parseEnvironment,
+};
+
+export default latexEnvironments;

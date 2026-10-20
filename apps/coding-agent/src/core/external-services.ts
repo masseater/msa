@@ -5,7 +5,7 @@ import { claudeCodeService } from "./cli-agents/claude-service.ts";
 import type { ToolDefinition } from "./extensions/types.ts";
 import { createWebFetchToolDefinition } from "./tools/web-fetch.ts";
 import { createWebSearchToolDefinition } from "./tools/web-search.ts";
-import { findTreg, findTregCli, loginTreg, logoutTreg, TREG_INSTALL_COMMAND } from "./treg.ts";
+import { TREG_INSTALL_COMMAND, findTreg, findTregCli, loginTreg, logoutTreg } from "./treg.ts";
 
 export interface ServiceSignInPage {
   url: string;
@@ -37,18 +37,6 @@ export interface ExternalService {
 
 const treg: ExternalService = {
   id: "treg",
-  name: "treg",
-  purpose: "web search and page reading",
-  status() {
-    return Effect.runPromise(
-      Effect.sync(() => {
-        const cli = findTregCli();
-        return cli === undefined
-          ? { installed: false, install: TREG_INSTALL_COMMAND }
-          : { installed: true, signedIn: cli.signedIn };
-      }),
-    );
-  },
   login(interaction, signal) {
     return Effect.runPromise(
       awaiting(function* () {
@@ -64,6 +52,18 @@ const treg: ExternalService = {
       awaiting(function* () {
         const cli = findTregCli();
         if (cli !== undefined) yield* awaited(logoutTreg(cli.command));
+      }),
+    );
+  },
+  name: "treg",
+  purpose: "web search and page reading",
+  status() {
+    return Effect.runPromise(
+      Effect.sync(() => {
+        const cli = findTregCli();
+        return cli === undefined
+          ? { installed: false, install: TREG_INSTALL_COMMAND }
+          : { installed: true, signedIn: cli.signedIn };
       }),
     );
   },

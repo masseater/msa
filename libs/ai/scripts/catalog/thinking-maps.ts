@@ -1,6 +1,6 @@
 import { Function } from "effect";
 
-import type { Model } from "../../src/types.ts";
+import type typesModule from "../../src/types.types.ts";
 import getEffortThinkingLevelMap from "../models-dev-reasoning-options.ts";
 import type modelsDevReasoningOptionsTypes from "../models-dev-reasoning-options.types.ts";
 import type modelsDevTypes from "./models-dev.types.ts";
@@ -19,11 +19,14 @@ const DEEPSEEK_V4_FLASH_THINKING_LEVEL_MAP = {
 } as const;
 
 const mergeThinkingLevelMap: {
-  (map: modelsDevTypes.ThinkingLevelMap): (model: Model<any>) => void;
-  (model: Model<any>, map: modelsDevTypes.ThinkingLevelMap): void;
-} = Function.dual(2, (model: Model<any>, map: modelsDevTypes.ThinkingLevelMap): void => {
-  model.thinkingLevelMap = { ...model.thinkingLevelMap, ...map };
-});
+  (map: modelsDevTypes.ThinkingLevelMap): (model: typesModule.Model<any>) => void;
+  (model: typesModule.Model<any>, map: modelsDevTypes.ThinkingLevelMap): void;
+} = Function.dual(
+  2,
+  (model: typesModule.Model<any>, map: modelsDevTypes.ThinkingLevelMap): void => {
+    model.thinkingLevelMap = { ...model.thinkingLevelMap, ...map };
+  },
+);
 
 function isGemma4Model(modelId: string): boolean {
   return /gemma-?4/u.test(modelId.toLowerCase());

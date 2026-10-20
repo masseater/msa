@@ -1,5 +1,5 @@
-import type { AssistantMessage, ToolResultMessage } from "@msa/ai/compat";
-import { getModel } from "@msa/ai/compat";
+import compat from "@msa/ai/compat";
+import type compatTypes from "@msa/ai/compat.types";
 import testing from "@msa/testing";
 import { Effect } from "effect";
 import { Type } from "typebox";
@@ -10,6 +10,8 @@ import { serializeSessionBranch } from "../src/core/session-export.ts";
 import { SessionManager, SettingsManager, createAgentSession } from "../src/index.ts";
 import { createShareTrailingEntries } from "../src/modes/interactive/session-share.ts";
 import utilities from "./utilities.ts";
+
+const { getModel } = compat;
 
 const { assistantMsg, userMsg } = utilities;
 
@@ -55,7 +57,7 @@ const createShareSession = (tempDir: string, sessionManager: SessionManager) =>
 
 const appendToolTurn = (sessionManager: SessionManager) => {
   const userId = sessionManager.appendMessage(userMsg("hello"));
-  const assistant: AssistantMessage = {
+  const assistant: compatTypes.AssistantMessage = {
     ...assistantMsg(""),
     content: [
       {
@@ -68,7 +70,7 @@ const appendToolTurn = (sessionManager: SessionManager) => {
     stopReason: "toolUse",
   };
   const assistantId = sessionManager.appendMessage(assistant);
-  const result: ToolResultMessage = {
+  const result: compatTypes.ToolResultMessage = {
     content: [{ text: "done", type: "text" as const }],
     details: {},
     isError: false,

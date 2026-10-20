@@ -1,11 +1,13 @@
-import type { ToolResultMessage } from "@msa/ai";
+import type aiTypes from "@msa/ai/index.types";
 import { Effect } from "effect";
 import { Type } from "typebox";
 import { describe, expect, it } from "vite-plus/test";
 
-import { agentLoop } from "../src/agent-loop.ts";
-import type { AgentLoopConfig, AgentTool } from "../src/types.ts";
+import agentLoopModule from "../src/agent-loop.ts";
+import type typesModule from "../src/types.ts";
 import fixtures from "./support/fixtures.ts";
+
+const { agentLoop } = agentLoopModule;
 
 const {
   collect,
@@ -48,7 +50,7 @@ const handlesToolCalls = Effect.gen(function* () {
       return Promise.resolve({ ...echoResult(params.value), usage: toolUsage });
     },
   });
-  const config: AgentLoopConfig = {
+  const config: typesModule.AgentLoopConfig = {
     afterToolCall: ({ result }) => {
       observedToolUsage = result.usage;
       return Promise.resolve({ usage: patchedToolUsage });
@@ -84,7 +86,7 @@ const recordsDuration = Effect.gen(function* () {
   const echo = tool({
     run: (_id, params) => delayed(30)(echoResult(params.value)),
   });
-  const config: AgentLoopConfig = {
+  const config: typesModule.AgentLoopConfig = {
     beforeToolCall: ({ toolCall }) =>
       delayed(100)(toolCall.id === "blocked" ? { block: true, reason: "no" } : undefined),
     convertToLlm: identityConverter,
@@ -107,7 +109,7 @@ const recordsDuration = Effect.gen(function* () {
     ),
   );
   const [ran, blocked] = messages.filter(
-    (message): message is ToolResultMessage => message.role === "toolResult",
+    (message): message is aiTypes.ToolResultMessage => message.role === "toolResult",
   );
   expect(ran?.durationMs).toBeGreaterThanOrEqual(25);
   expect(ran?.durationMs).toBeLessThan(100);
@@ -153,7 +155,7 @@ const runsMutatedArgs = Effect.gen(function* () {
       return Promise.resolve(echoResult(String(params.value)));
     },
   });
-  const config: AgentLoopConfig = {
+  const config: typesModule.AgentLoopConfig = {
     beforeToolCall: ({ args }) => {
       (args as { value: string | number }).value = 123;
       return Promise.resolve(undefined);
@@ -192,7 +194,7 @@ const prepareEditArguments = (args: unknown): { edits: Edit[] } => {
 
 const preparesArguments = Effect.gen(function* () {
   const executed: Edit[][] = [];
-  const edit: AgentTool<typeof editSchema, { count: number }> = {
+  const edit: typesModule.AgentTool<typeof editSchema, { count: number }> = {
     ...tool({
       name: "edit",
       parameters: editSchema,

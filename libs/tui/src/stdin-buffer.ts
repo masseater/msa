@@ -1,13 +1,18 @@
 import { EventEmitter } from "events";
 
-import { type CancelDelay, runAfter } from "./delay.ts";
-import {
+import delay from "./delay.ts";
+import type delayTypes from "./delay.types.ts";
+import type stdinBufferTypes from "./stdin-buffer.types.ts";
+import stdinSequences from "./stdin-sequences.ts";
+
+const {
   ESC,
   extractCompleteSequences,
   isControlString,
   parseUnmodifiedKittyPrintableCodepoint,
   startsWithTerminalReplyHeader,
-} from "./stdin-sequences.ts";
+} = stdinSequences;
+const { runAfter } = delay;
 
 const DEFAULT_SEQUENCE_TIMEOUT_MS = 50;
 const DEFAULT_ESCAPE_TIMEOUT_MS = 10;
@@ -25,26 +30,16 @@ function decodeInput(data: string | Buffer): string {
   return data.toString();
 }
 
-export type StdinBufferOptions = {
-  timeout?: number;
-  escapeTimeout?: number;
-};
-
-export type StdinBufferEventMap = {
-  data: [string];
-  paste: [string];
-};
-
-export class StdinBuffer extends EventEmitter<StdinBufferEventMap> {
+export default class StdinBuffer extends EventEmitter<stdinBufferTypes.StdinBufferEventMap> {
   private buffer: string = "";
-  private cancelTimeout: CancelDelay | null = null;
+  private cancelTimeout: delayTypes.CancelDelay | null = null;
   private readonly timeoutMs: number;
   private readonly escapeTimeoutMs: number;
   private pasteMode: boolean = false;
   private pasteBuffer: string = "";
   private pendingKittyPrintableCodepoint: number | undefined;
 
-  constructor(options: StdinBufferOptions = {}) {
+  constructor(options: stdinBufferTypes.StdinBufferOptions = {}) {
     super();
     this.timeoutMs = options.timeout ?? DEFAULT_SEQUENCE_TIMEOUT_MS;
     this.escapeTimeoutMs = options.escapeTimeout ?? DEFAULT_ESCAPE_TIMEOUT_MS;

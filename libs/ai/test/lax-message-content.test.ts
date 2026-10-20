@@ -1,10 +1,13 @@
 import { describe, expect, it } from "vite-plus/test";
 
-import { transformMessages } from "../src/api/transform-messages.ts";
-import type { Message, Model } from "../src/types.ts";
-import { currentTimeMillis } from "../src/utils/clock.ts";
+import transformMessagesModule from "../src/api/transform-messages.ts";
+import type typesModule from "../src/types.types.ts";
+import clock from "../src/utils/clock.ts";
 
-function makeTextOnlyModel(): Model<"openai-completions"> {
+const { currentTimeMillis } = clock;
+const { transformMessages } = transformMessagesModule;
+
+function makeTextOnlyModel(): typesModule.Model<"openai-completions"> {
   return {
     api: "openai-completions",
     baseUrl: "https://example.invalid/v1",
@@ -47,7 +50,7 @@ describe("lax message content handling", () => {
         toolCallId: "call_1",
         toolName: "web_search",
       },
-    ] as unknown as Message[];
+    ] as unknown as typesModule.Message[];
 
     const result = transformMessages(messages, makeTextOnlyModel());
 

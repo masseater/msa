@@ -1,4 +1,5 @@
-import { type AssistantMessage, Type, fauxAssistantMessage, fauxText, fauxToolCall } from "@msa/ai";
+import ai from "@msa/ai";
+import type aiTypes from "@msa/ai/index.types";
 import durable from "@msa/durable";
 import type durableTypes from "@msa/durable/index.types";
 import memory from "@msa/durable/storage/memory";
@@ -7,6 +8,8 @@ import { describe, expect, it } from "vite-plus/test";
 
 import type chatSupportTypes from "./chat-support.types.ts";
 import testSupport from "./support.ts";
+
+const { Type, fauxAssistantMessage, fauxText, fauxToolCall } = ai;
 
 const { AgentDoc, defineTool } = durable;
 const { MemoryStorage } = memory;
@@ -31,7 +34,7 @@ function tool(
 
 const DONE = fauxAssistantMessage([fauxText("done")]);
 
-function call(name: string, id = "c1"): AssistantMessage {
+function call(name: string, id = "c1"): aiTypes.AssistantMessage {
   return fauxAssistantMessage([fauxToolCall(name, {}, { id })], { stopReason: "toolUse" });
 }
 

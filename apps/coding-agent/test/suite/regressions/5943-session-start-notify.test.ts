@@ -1,4 +1,4 @@
-import { Container, Text } from "@msa/tui";
+import tui from "@msa/tui";
 import { Effect } from "effect";
 import { describe, expect, it } from "vite-plus/test";
 
@@ -6,6 +6,8 @@ import { initTheme } from "../../../src/modes/interactive/theme/theme.ts";
 import harnessModule from "../harness.ts";
 import SessionStartNotifySupport from "./5943-session-start-notify-support.ts";
 import type SessionStartNotifySupportTypes from "./5943-session-start-notify-support.types.ts";
+
+const { Container, Text } = tui;
 
 const { getMessageText, interactiveModePrototype } = SessionStartNotifySupport;
 

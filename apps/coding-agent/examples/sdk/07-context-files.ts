@@ -1,13 +1,12 @@
 import {
-  createAgentSession,
   DefaultResourceLoader,
-  getAgentDir,
   SessionManager,
+  createAgentSession,
+  getAgentDir,
 } from "@msa/coding-agent";
 import { Console, Effect } from "effect";
 
 const loader = new DefaultResourceLoader({
-  cwd: process.cwd(),
   agentDir: getAgentDir(),
   agentsFilesOverride: (current) => ({
     agentsFiles: [
@@ -23,6 +22,7 @@ const loader = new DefaultResourceLoader({
       },
     ],
   }),
+  cwd: process.cwd(),
 });
 await loader.reload();
 

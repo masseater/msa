@@ -3,10 +3,14 @@ import { describe, it } from "node:test";
 
 import { Effect } from "effect";
 
-import { type TerminalColors, parseTerminalColorSchemeReport } from "../src/index.ts";
-import { StdinBuffer } from "../src/stdin-buffer.ts";
-import { parseOscColorResponse } from "../src/terminal-colors.ts";
+import tuiModule from "../src/index.ts";
+import type tuiTypes from "../src/index.types.ts";
+import StdinBuffer from "../src/stdin-buffer.ts";
+import terminalColors from "../src/terminal-colors.ts";
 import terminalColorsHelpers from "./terminal-colors-helpers.ts";
+
+const { parseTerminalColorSchemeReport } = tuiModule;
+const { parseOscColorResponse } = terminalColors;
 
 const { BLACK, DA1, PALETTE_REPLIES, WHITE, setup, wait } = terminalColorsHelpers;
 
@@ -155,7 +159,7 @@ describe("TUI.queryTerminalColors", () => {
       Effect.gen(function* () {
         const { terminal, tui, component } = setup();
         yield* Effect.gen(function* () {
-          const late: TerminalColors[] = [];
+          const late: tuiTypes.TerminalColors[] = [];
           const query = tui.queryTerminalColors({
             onLateReply: (colors) => late.push(colors),
             timeoutMs: 1,

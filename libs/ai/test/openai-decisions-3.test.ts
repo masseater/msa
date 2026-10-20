@@ -1,8 +1,10 @@
 import { Effect } from "effect";
 import { describe, expect, it, vi } from "vite-plus/test";
 
-import { classify } from "../src/api/openai-decisions.ts";
+import openaiDecisions from "../src/api/openai-decisions.ts";
 import openaiDecisionsSupport from "./openai-decisions-support.ts";
+
+const { classify } = openaiDecisions;
 
 const { context, model, wireAnswers } = openaiDecisionsSupport;
 

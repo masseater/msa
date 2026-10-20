@@ -1,10 +1,13 @@
 import { Clock, Effect } from "effect";
 import { describe, expect, it } from "vite-plus/test";
 
-import { complete } from "../src/compat.ts";
-import { MODELS } from "../src/models.generated.ts";
-import type { Model } from "../src/types.ts";
+import compat from "../src/compat.ts";
+import modelsGenerated from "../src/models.generated.ts";
+import type typesModule from "../src/types.types.ts";
 import env from "./env.ts";
+
+const { MODELS } = modelsGenerated;
+const { complete } = compat;
 
 const { envValue } = env;
 
@@ -26,7 +29,7 @@ describe.skipIf(envValue("OPENCODE_API_KEY") === undefined || envValue("OPENCODE
               Effect.gen(function* () {
                 const currentTime = yield* Clock.currentTimeMillis;
                 const response = yield* Effect.promise(() =>
-                  complete(model as Model<any>, {
+                  complete(model as typesModule.Model<any>, {
                     messages: [{ content: "Say hello.", role: "user", timestamp: currentTime }],
                   }),
                 );

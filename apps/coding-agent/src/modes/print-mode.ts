@@ -1,4 +1,4 @@
-import type { AssistantMessage, ImageContent } from "@msa/ai";
+import type aiTypes from "@msa/ai/index.types";
 import { Effect } from "effect";
 import { dual } from "effect/Function";
 
@@ -19,7 +19,7 @@ export interface PrintModeOptions {
   mode: "text" | "json";
   messages?: string[] | undefined;
   initialMessage?: string | undefined;
-  initialImages?: ImageContent[] | undefined;
+  initialImages?: aiTypes.ImageContent[] | undefined;
 }
 
 export const runPrintMode: {
@@ -81,10 +81,7 @@ export const runPrintMode: {
             session = runtimeHost.session;
             yield* awaited(
               session.bindExtensions({
-                mode: mode === "json" ? "json" : "print",
                 commandContextActions: {
-                  waitForIdle: () => session.waitForIdle(),
-                  newSession: (newSessionOptions) => runtimeHost.newSession(newSessionOptions),
                   fork: (entryId, forkOptions) =>
                     Effect.runPromise(
                       awaiting(function* () {
@@ -106,15 +103,18 @@ export const runPrintMode: {
                         return { cancelled: result.cancelled };
                       }),
                     ),
-                  switchSession: (sessionPath, switchOptions) =>
-                    runtimeHost.switchSession(sessionPath, switchOptions),
+                  newSession: (newSessionOptions) => runtimeHost.newSession(newSessionOptions),
                   reload: () =>
                     Effect.runPromise(
                       awaiting(function* () {
                         yield* awaited(session.reload());
                       }),
                     ),
+                  switchSession: (sessionPath, switchOptions) =>
+                    runtimeHost.switchSession(sessionPath, switchOptions),
+                  waitForIdle: () => session.waitForIdle(),
                 },
+                mode: mode === "json" ? "json" : "print",
                 onError: (err) => {
                   writeError(`Extension error (${err.extensionPath}): ${err.error}`);
                 },
@@ -173,7 +173,7 @@ export const runPrintMode: {
           const lastMessage = state.messages[state.messages.length - 1];
 
           if (lastMessage?.role === "assistant") {
-            const assistantMsg = lastMessage as AssistantMessage;
+            const assistantMsg = lastMessage as aiTypes.AssistantMessage;
             if (assistantMsg.stopReason === "error" || assistantMsg.stopReason === "aborted") {
               writeError(assistantMsg.errorMessage || `Request ${assistantMsg.stopReason}`);
               exitCode = 1;

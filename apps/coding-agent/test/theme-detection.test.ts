@@ -1,4 +1,4 @@
-import { resetCapabilitiesCache, setCapabilities } from "@msa/tui";
+import tui from "@msa/tui";
 import { afterEach, describe, expect, it } from "vite-plus/test";
 
 import {
@@ -8,6 +8,8 @@ import {
   parseAutoThemeSetting,
   resolveThemeSetting,
 } from "../src/modes/interactive/theme/theme.ts";
+
+const { resetCapabilitiesCache, setCapabilities } = tui;
 
 const ESC = String.fromCharCode(27);
 

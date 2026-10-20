@@ -16,10 +16,7 @@ const registerQuit = (msa: ExtensionAPI): void => {
 
 const registerFinishAndExit = (msa: ExtensionAPI): void => {
   msa.registerTool({
-    name: "finish_and_exit",
-    label: "Finish and Exit",
     description: "Complete a task and exit msa",
-    parameters: Type.Object({}),
     execute: (_toolCallId, _params, _signal, _onUpdate, ctx) =>
       Effect.runPromise(
         Effect.sync(() => {
@@ -31,17 +28,15 @@ const registerFinishAndExit = (msa: ExtensionAPI): void => {
           };
         }),
       ),
+    label: "Finish and Exit",
+    name: "finish_and_exit",
+    parameters: Type.Object({}),
   });
 };
 
 const registerDeployAndExit = (msa: ExtensionAPI): void => {
   msa.registerTool({
-    name: "deploy_and_exit",
-    label: "Deploy and Exit",
     description: "Deploy the application and exit msa",
-    parameters: Type.Object({
-      environment: Type.String({ description: "Target environment (e.g., production, staging)" }),
-    }),
     execute: (_toolCallId, params, _signal, onUpdate, ctx) =>
       Effect.runPromise(
         Effect.sync(() => {
@@ -62,6 +57,11 @@ const registerDeployAndExit = (msa: ExtensionAPI): void => {
           };
         }),
       ),
+    label: "Deploy and Exit",
+    name: "deploy_and_exit",
+    parameters: Type.Object({
+      environment: Type.String({ description: "Target environment (e.g., production, staging)" }),
+    }),
   });
 };
 

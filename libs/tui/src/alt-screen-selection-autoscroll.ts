@@ -1,25 +1,24 @@
-import { scrollSelectionPoint } from "./alt-screen-selection-points.ts";
-import { type SelectionPoint, visibleRows } from "./alt-screen-selection-text.ts";
-import type { AltScreenView } from "./alt-screen-view.ts";
-import type { ScrollView } from "./components/scroll-view.ts";
-import { type CancelDelay, runEvery } from "./delay.ts";
-import { getScrollViewBox } from "./layout.ts";
+import type altScreenSelectionAutoscrollTypes from "./alt-screen-selection-autoscroll.types.ts";
+import altScreenSelectionPoints from "./alt-screen-selection-points.ts";
+import altScreenSelectionText from "./alt-screen-selection-text.ts";
+import delay from "./delay.ts";
+import type delayTypes from "./delay.types.ts";
+import layoutModule from "./layout.ts";
+
+const { visibleRows } = altScreenSelectionText;
+const { getScrollViewBox } = layoutModule;
+const { runEvery } = delay;
+const { scrollSelectionPoint } = altScreenSelectionPoints;
 
 const AUTO_SCROLL_INTERVAL_MS = 50;
 
-export interface AutoScrollHost {
-  readonly view: AltScreenView;
-  anchorScrollView(): ScrollView | undefined;
-  onScroll(point: SelectionPoint | undefined): void;
-}
-
-export class SelectionAutoScroll {
-  private readonly host: AutoScrollHost;
+export default class SelectionAutoScroll {
+  private readonly host: altScreenSelectionAutoscrollTypes.AutoScrollHost;
   private pointer: { x: number; y: number } | undefined;
   private direction: -1 | 0 | 1 = 0;
-  private cancel: CancelDelay | undefined;
+  private cancel: delayTypes.CancelDelay | undefined;
 
-  constructor(host: AutoScrollHost) {
+  constructor(host: altScreenSelectionAutoscrollTypes.AutoScrollHost) {
     this.host = host;
   }
 

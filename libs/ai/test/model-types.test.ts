@@ -1,24 +1,25 @@
 import { Effect } from "effect";
 import { describe, expect, it } from "vite-plus/test";
 
-import { getModel as getCompatModel } from "../src/compat.ts";
-import { InMemoryModelsStore, type ModelsStoreEntry } from "../src/models-store.ts";
-import {
-  type Provider,
-  createModels,
-  createProvider,
-  getModelType,
-  hasApi,
-  isModelType,
-  modelsAreEqual,
-} from "../src/models.ts";
-import { getBuiltinModel } from "../src/providers/all.ts";
-import { fauxAssistantMessage, fauxProvider } from "../src/providers/faux.ts";
-import { OPENAI_MODELS } from "../src/providers/openai.models.ts";
-import type { Api, ImageApi, ImageModel, Model } from "../src/types.ts";
-import { AssistantMessageEventStream } from "../src/utils/event-stream.ts";
+import type modelsStoreTypes from "../src/models-store.types.ts";
+import type modelsTypes from "../src/models.types.ts";
+import all from "../src/providers/all.ts";
+import fauxModule from "../src/providers/faux.ts";
+import openaiModels from "../src/providers/openai.models.ts";
+import type typesModule from "../src/types.types.ts";
+import eventStream from "../src/utils/event-stream.ts";
+import modelTypesKit from "./model-types-kit.ts";
 
-function chatModel(provider: string, id: string): Model<Api> {
+const { compat: compatModule, models: modelsModule, InMemoryModelsStore } = modelTypesKit;
+
+const { AssistantMessageEventStream } = eventStream;
+const { fauxAssistantMessage, fauxProvider } = fauxModule;
+const { createModels, createProvider, getModelType, hasApi, isModelType, modelsAreEqual } =
+  modelsModule;
+const { OPENAI_MODELS } = openaiModels;
+const { getBuiltinModel } = all;
+const { getModel: getCompatModel } = compatModule;
+function chatModel(provider: string, id: string): typesModule.Model<typesModule.Api> {
   return {
     api: "test-chat",
     baseUrl: "https://example.test/v1",
@@ -33,7 +34,7 @@ function chatModel(provider: string, id: string): Model<Api> {
   };
 }
 
-function imageModel(provider: string, id: string): ImageModel<ImageApi> {
+function imageModel(provider: string, id: string): typesModule.ImageModel<typesModule.ImageApi> {
   return {
     api: "test-images",
     baseUrl: "https://example.test/v1",
@@ -58,7 +59,7 @@ describe("chat models without a type", () => {
     Effect.runPromise(
       Effect.gen(function* () {
         const faux = fauxProvider({ provider: "handwritten" });
-        const handwritten: Provider = {
+        const handwritten: modelsTypes.Provider = {
           auth: faux.provider.auth,
           getModels: () => faux.models,
           id: "handwritten",
@@ -139,7 +140,7 @@ describe("stored and fetched models of unknown types", () => {
             { ...chatModel("dyn", "future-embedding"), type: "embedding" },
             { ...imageModel("dyn", "future-video"), type: "video" },
           ],
-        } as unknown as ModelsStoreEntry;
+        } as unknown as modelsStoreTypes.ModelsStoreEntry;
         yield* Effect.promise(() => modelsStore.write("dyn", stored));
 
         let fetched: unknown[] = [];
@@ -148,7 +149,7 @@ describe("stored and fetched models of unknown types", () => {
           createProvider({
             api: chatStreams,
             auth: noAuth,
-            fetchModels: () => Promise.resolve(fetched as Model<Api>[]),
+            fetchModels: () => Promise.resolve(fetched as typesModule.Model<typesModule.Api>[]),
             id: "dyn",
             models: [],
           }),

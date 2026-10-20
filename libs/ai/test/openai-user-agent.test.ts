@@ -1,19 +1,23 @@
-import { arch, platform, release } from "node:os";
+import { arch, platform } from "node:os";
 
 import { Effect } from "effect";
 import { afterEach, describe, expect, it, vi } from "vite-plus/test";
 
-import { stream as streamOpenAICompletions } from "../src/api/openai-completions.ts";
-import { stream as streamOpenAIResponses } from "../src/api/openai-responses.ts";
-import type { Model } from "../src/types.ts";
-import { normalizeContext } from "../src/utils/transcript.ts";
+import openaiCompletions from "../src/api/openai-completions.ts";
+import openaiResponses from "../src/api/openai-responses.ts";
+import type typesModule from "../src/types.types.ts";
+import transcript from "../src/utils/transcript.ts";
 import modelChoice from "./model-choice.ts";
+
+const { stream: streamOpenAIResponses } = openaiResponses;
+const { normalizeContext } = transcript;
+const { stream: streamOpenAICompletions } = openaiCompletions;
 
 const { chooseModel, usesApi } = modelChoice;
 
-const MSA_USER_AGENT = `pi (${platform()} ${release()}; ${arch()})`;
+const MSA_USER_AGENT = `pi (${platform()}; ${arch()})`;
 
-const customCompletionsModel: Model<"openai-completions"> = {
+const customCompletionsModel: typesModule.Model<"openai-completions"> = {
   api: "openai-completions",
   baseUrl: "https://example.test/v1",
   contextWindow: 128000,

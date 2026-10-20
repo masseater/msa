@@ -1,10 +1,6 @@
-import {
-  type TranscriptContext,
-  fauxAssistantMessage,
-  fauxToolCall,
-  getCurrentTools,
-} from "@msa/ai";
-import type { ToolResultMessage } from "@msa/ai/compat";
+import ai from "@msa/ai";
+import type compatTypes from "@msa/ai/compat.types";
+import type aiTypes from "@msa/ai/index.types";
 import { Effect } from "effect";
 import { Type } from "typebox";
 import { afterEach, describe, expect, it } from "vite-plus/test";
@@ -14,6 +10,8 @@ import { createCodemodeExtension } from "../../src/extensions/codemode/index.ts"
 import { createToolSearchExtension } from "../../src/extensions/tool-search/index.ts";
 import harnessModule from "./harness.ts";
 import type harnessTypes from "./harness.types.ts";
+
+const { fauxAssistantMessage, fauxToolCall, getCurrentTools } = ai;
 
 const { createHarness } = harnessModule;
 
@@ -100,7 +98,7 @@ const supportsToolsThatCallOtherTools = Effect.gen(function* () {
 
   const requestTools: string[][] = [];
   harness.setResponses([
-    (context: TranscriptContext) => {
+    (context: aiTypes.TranscriptContext) => {
       requestTools.push(getCurrentTools(context.messages).map((tool) => tool.name));
       return fauxAssistantMessage([fauxToolCall("run_tools", {})], { stopReason: "toolUse" });
     },
@@ -110,7 +108,7 @@ const supportsToolsThatCallOtherTools = Effect.gen(function* () {
 
   expect(requestTools[0]).toEqual(["run_tools"]);
   const result = harness.session.messages.find(
-    (message): message is ToolResultMessage => message.role === "toolResult",
+    (message): message is compatTypes.ToolResultMessage => message.role === "toolResult",
   );
   if (result === undefined) throw new Error("No tool result");
   expect(result.content).toEqual([

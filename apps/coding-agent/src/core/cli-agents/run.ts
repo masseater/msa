@@ -1,11 +1,11 @@
 import type { ChildProcess } from "node:child_process";
 import { createInterface } from "node:readline";
 
-import type { Model, SimpleStreamOptions, TranscriptContext } from "@msa/ai/compat";
+import type compatTypes from "@msa/ai/compat.types";
 
 import { envSnapshot } from "../../core/process-env.ts";
 import { spawnProcess, waitForChildProcess } from "../../utils/child-process.ts";
-import { createReply, type ReplyBuilder } from "./reply.ts";
+import { type ReplyBuilder, createReply } from "./reply.ts";
 
 const SPAWN_ATTEMPTS = 3;
 const RETRY_DELAY_MS = 1_500;
@@ -27,7 +27,11 @@ export type EventSink = Pick<
 
 export interface CliBackend<Event> {
   providerId: string;
-  command(model: Model<string>, context: TranscriptContext, cwd: string): CliCommand;
+  command(
+    model: compatTypes.Model<string>,
+    context: compatTypes.TranscriptContext,
+    cwd: string,
+  ): CliCommand;
 
   handleEvent(event: Event, sink: EventSink): void;
 
@@ -40,23 +44,23 @@ function sleep(ms: number): Promise<void> {
 
 export function streamViaCli<Event>(
   backend: CliBackend<Event>,
-  model: Model<string>,
-  context: TranscriptContext,
-  options?: SimpleStreamOptions,
+  model: compatTypes.Model<string>,
+  context: compatTypes.TranscriptContext,
+  options?: compatTypes.SimpleStreamOptions,
 ): ReplyBuilder["stream"] {
   const reply = createReply(model);
   const cwd = process.cwd();
   let failed = false;
   let reportedFailure = "";
   const sink: EventSink = {
-    setText: reply.setText,
+    addUsage: reply.addUsage,
     appendText: reply.appendText,
     appendThinking: reply.appendThinking,
-    addUsage: reply.addUsage,
     fail(failure) {
       failed = true;
       reportedFailure = failure;
     },
+    setText: reply.setText,
   };
 
   void (async () => {
@@ -73,11 +77,11 @@ export function streamViaCli<Event>(
       try {
         const replaced = await options?.onPayload?.(
           {
-            provider: backend.providerId,
-            model: model.id,
-            cwd,
             args: command.args,
+            cwd,
+            model: model.id,
             prompt: command.stdin,
+            provider: backend.providerId,
           },
           model,
         );
@@ -93,7 +97,7 @@ export function streamViaCli<Event>(
           stdio: ["pipe", "pipe", "pipe"],
         });
       } catch (error) {
-        return { ok: false, detail: String(error) };
+        return { detail: String(error), ok: false };
       }
 
       let stderr = "";
@@ -139,15 +143,15 @@ export function streamViaCli<Event>(
         setTimeout(() => child.kill("SIGKILL"), KILL_GRACE_MS).unref?.();
       }
       await finished;
-      if (aborted) return { ok: false, detail: "aborted" };
-      if (spawnError) return { ok: false, detail: spawnError };
-      if (exitCode === 0 && !failed) return { ok: true, detail: "" };
+      if (aborted) return { detail: "aborted", ok: false };
+      if (spawnError) return { detail: spawnError, ok: false };
+      if (exitCode === 0 && !failed) return { detail: "", ok: true };
       return {
-        ok: false,
         detail:
           reportedFailure ||
           stderr.trim().slice(-2_000) ||
           `${command.bin} exited with code ${exitCode}`,
+        ok: false,
       };
     };
 

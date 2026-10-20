@@ -1,24 +1,26 @@
 import { Clock, Effect } from "effect";
 import { describe, expect, inject, it } from "vite-plus/test";
 
-import { complete } from "../src/compat.ts";
-import type { Api, Context, Model, StreamOptions } from "../src/types.ts";
+import compatModule from "../src/compat.ts";
+import type typesModule from "../src/types.types.ts";
 import env from "./env.ts";
 import modelChoice from "./model-choice.ts";
+
+const { complete } = compatModule;
 
 const { chooseModel, usesApi } = modelChoice;
 
 const { envValue } = env;
 
-type StreamOptionsWithExtras = StreamOptions & Record<string, unknown>;
+type StreamOptionsWithExtras = typesModule.StreamOptions & Record<string, unknown>;
 
 const openaiCodexToken = inject("storedApiKeys")["openai-codex"];
 
-const expectResponseId = Effect.fn("expectResponseId")(function* <TApi extends Api>(
-  model: Model<TApi>,
+const expectResponseId = Effect.fn("expectResponseId")(function* <TApi extends typesModule.Api>(
+  model: typesModule.Model<TApi>,
   options: StreamOptionsWithExtras = {},
 ) {
-  const context: Context = {
+  const context: typesModule.Context = {
     messages: [
       {
         content: "Reply with exactly: response id test",
@@ -42,7 +44,7 @@ describe("responseId E2E Tests", () => {
     () => {
       const { compat: _compat, ...baseModel } = chooseModel("openai", "direct OpenAI");
       void _compat;
-      const llm: Model<"openai-completions"> = {
+      const llm: typesModule.Model<"openai-completions"> = {
         ...baseModel,
         api: "openai-completions",
       };

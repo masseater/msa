@@ -1,10 +1,11 @@
 import { Effect, Function } from "effect";
 
-import {
-  type OAuthCallbackServerOptions,
-  startOAuthCallbackServer,
-} from "../src/auth/oauth/callback-server.ts";
-import { httpRequest } from "../src/utils/http.ts";
+import callbackServer from "../src/auth/oauth/callback-server.ts";
+import type callbackServerTypes from "../src/auth/oauth/callback-server.types.ts";
+import http from "../src/utils/http.ts";
+
+const { httpRequest } = http;
+const { startOAuthCallbackServer } = callbackServer;
 
 const callbackUrl: {
   (params: Record<string, string>): (redirectUri: string) => string;
@@ -32,7 +33,7 @@ const send = ({ url, method }: CallbackRequest) =>
 
 const request = (url: string | URL) => send({ method: "GET", url });
 
-const start = (overrides: Partial<OAuthCallbackServerOptions<string>> = {}) =>
+const start = (overrides: Partial<callbackServerTypes.OAuthCallbackServerOptions<string>> = {}) =>
   Effect.acquireRelease(
     startOAuthCallbackServer<string>({
       complete: (code) => Effect.succeed(`completed:${code}`),

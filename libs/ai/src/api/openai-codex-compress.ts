@@ -1,27 +1,23 @@
-import type * as NodeZlib from "node:zlib";
+type RequestBodyCompressor = (bodyJson: string) => Uint8Array<ArrayBuffer> | null;
 
-import { isNodeRuntime } from "../utils/runtime.ts";
+let compressor: RequestBodyCompressor | undefined;
 
-const REQUEST_COMPRESSION_ZSTD_LEVEL = 3;
-
-type ProcessWithBuiltinModule = typeof process & {
-  getBuiltinModule?: (id: "node:zlib") => typeof NodeZlib;
-};
-
-function loadNodeZlib(): typeof NodeZlib | null {
-  if (!isNodeRuntime()) return null;
-  return (process as ProcessWithBuiltinModule).getBuiltinModule?.("node:zlib") ?? null;
+function setRequestBodyCompressor(next: RequestBodyCompressor | undefined): void {
+  compressor = next;
 }
 
-export function compressRequestBodyZstd(bodyJson: string): Uint8Array<ArrayBuffer> | null {
-  const zlib = loadNodeZlib();
-  if (zlib === null || typeof zlib.zstdCompressSync !== "function") return null;
+function compressRequestBodyZstd(bodyJson: string): Uint8Array<ArrayBuffer> | null {
+  if (compressor === undefined) return null;
   try {
-    const compressed = zlib.zstdCompressSync(bodyJson, {
-      params: { [zlib.constants.ZSTD_c_compressionLevel]: REQUEST_COMPRESSION_ZSTD_LEVEL },
-    });
-    return new Uint8Array(compressed);
+    return compressor(bodyJson);
   } catch {
     return null;
   }
 }
+
+const openaiCodexCompress = {
+  compressRequestBodyZstd,
+  setRequestBodyCompressor,
+};
+
+export default openaiCodexCompress;

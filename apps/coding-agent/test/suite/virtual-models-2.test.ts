@@ -1,10 +1,13 @@
-import { type FauxResponseStep, fauxAssistantMessage, fauxToolCall } from "@msa/ai";
+import ai from "@msa/ai";
+import type aiTypes from "@msa/ai/index.types";
 import { Effect } from "effect";
 import { afterEach, describe, expect, it, vi } from "vite-plus/test";
 
 import { VIRTUAL_MODEL_STATE_ENTRY } from "../../src/core/virtual-models.ts";
 import virtualModelsSupport from "./virtual-models-support.ts";
 import type virtualModelsSupportTypes from "./virtual-models-support.types.ts";
+
+const { fauxAssistantMessage, fauxToolCall } = ai;
 
 const { createRoutedHarness, defaultRoute, harnesses } = virtualModelsSupport;
 
@@ -178,7 +181,7 @@ const routesCompactionSummariesBeforeSizingThem = Effect.gen(function* () {
       settings: { compaction: { keepRecentTokens: 1 } },
     }),
   );
-  const summary: FauxResponseStep = (_context, options, _state, model) => {
+  const summary: aiTypes.FauxResponseStep = (_context, options, _state, model) => {
     summaries.push(`${model.id}:${options?.reasoning ?? "off"}:${options?.maxTokens}`);
     return fauxAssistantMessage("summary");
   };

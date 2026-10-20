@@ -1,10 +1,12 @@
-import { fauxAssistantMessage } from "@msa/ai";
+import ai from "@msa/ai";
 import testing from "@msa/testing";
 import { Effect } from "effect";
 import { expect } from "vite-plus/test";
 
 import agentSessionBashPersistenceCases1 from "./agent-session-bash-persistence-cases-1.ts";
 import harnessModule from "./harness.ts";
+
+const { fauxAssistantMessage } = ai;
 
 const { createHarness } = harnessModule;
 const { harnesses } = agentSessionBashPersistenceCases1;

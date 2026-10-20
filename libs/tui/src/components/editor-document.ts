@@ -1,41 +1,33 @@
-import { KillRing } from "../kill-ring.ts";
-import { isWhitespaceChar } from "../text-boundaries.ts";
-import { UndoStack } from "../undo-stack.ts";
-import {
+import KillRing from "../kill-ring.ts";
+import textBoundaries from "../text-boundaries.ts";
+import UndoStack from "../undo-stack.ts";
+import type editorDocumentTypes from "./editor-document.types.ts";
+import editorSegments from "./editor-segments.ts";
+import type editorSegmentsTypes from "./editor-segments.types.ts";
+import editorWrap from "./editor-wrap.ts";
+import type editorWrapTypes from "./editor-wrap.types.ts";
+
+const {
+  PASTE_MARKER_SINGLE,
   expandPasteMarkers,
   normalizeEditorText,
-  PASTE_MARKER_SINGLE,
   renumberPasteMarkers,
-  type SegmentMode,
   segmentText,
-} from "./editor-segments.ts";
-import { type LayoutLine, layoutText, type WrappableText } from "./editor-wrap.ts";
-
-export interface EditorState {
-  lines: string[];
-  cursorLine: number;
-  cursorCol: number;
-}
+} = editorSegments;
+const { layoutText } = editorWrap;
+const { isWhitespaceChar } = textBoundaries;
 
 interface EditorSnapshot {
-  state: EditorState;
+  state: editorDocumentTypes.EditorState;
   pastes: Map<number, string>;
   pasteCounter: number;
 }
 
-export type EditorAction = "kill" | "yank" | "type-word" | null;
-
-export interface CompletionResult {
-  lines: string[];
-  cursorLine: number;
-  cursorCol: number;
-}
-
-export class EditorDocument implements WrappableText {
-  state: EditorState = { lines: [""], cursorLine: 0, cursorCol: 0 };
+export default class EditorDocument implements editorWrapTypes.WrappableText {
+  state: editorDocumentTypes.EditorState = { cursorCol: 0, cursorLine: 0, lines: [""] };
   pastes: Map<number, string> = new Map();
   pasteCounter = 0;
-  lastAction: EditorAction = null;
+  lastAction: editorDocumentTypes.EditorAction = null;
   preferredVisualCol: number | null = null;
   snappedFromCursorCol: number | null = null;
   scrollOffset = 0;
@@ -59,7 +51,7 @@ export class EditorDocument implements WrappableText {
     return this.state.cursorCol;
   }
 
-  segment(text: string, mode: SegmentMode): Iterable<Intl.SegmentData> {
+  segment(text: string, mode: editorSegmentsTypes.SegmentMode): Iterable<Intl.SegmentData> {
     return segmentText(text, mode, new Set(this.pastes.keys()));
   }
 
@@ -67,7 +59,7 @@ export class EditorDocument implements WrappableText {
     return [...this.segment(text, "grapheme")];
   }
 
-  layout(width: number): LayoutLine[] {
+  layout(width: number): editorWrapTypes.LayoutLine[] {
     return layoutText(this, width);
   }
 
@@ -103,9 +95,9 @@ export class EditorDocument implements WrappableText {
 
   pushUndoSnapshot(): void {
     this.undoStack.push({
-      state: this.state,
-      pastes: this.pastes,
       pasteCounter: this.pasteCounter,
+      pastes: this.pastes,
+      state: this.state,
     });
   }
 
@@ -129,7 +121,7 @@ export class EditorDocument implements WrappableText {
     this.notify();
   }
 
-  restoreState(state: EditorState): void {
+  restoreState(state: editorDocumentTypes.EditorState): void {
     this.state = state;
     this.preferredVisualCol = null;
     this.snappedFromCursorCol = null;
@@ -139,7 +131,7 @@ export class EditorDocument implements WrappableText {
 
   reset(): string {
     const result = this.expandedText().trim();
-    this.state = { lines: [""], cursorLine: 0, cursorCol: 0 };
+    this.state = { cursorCol: 0, cursorLine: 0, lines: [""] };
     this.pastes.clear();
     this.pasteCounter = 0;
     this.scrollOffset = 0;
@@ -148,7 +140,7 @@ export class EditorDocument implements WrappableText {
     return result;
   }
 
-  applyCompletion(result: CompletionResult): void {
+  applyCompletion(result: editorDocumentTypes.CompletionResult): void {
     this.state.lines = result.lines;
     this.state.cursorLine = result.cursorLine;
     this.setCursorCol(result.cursorCol);

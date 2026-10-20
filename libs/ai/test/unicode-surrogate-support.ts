@@ -2,11 +2,14 @@ import { Effect } from "effect";
 import { Type } from "typebox";
 import { expect } from "vite-plus/test";
 
-import { complete } from "../src/compat.ts";
-import type { Api, Context, Model, StreamOptions } from "../src/types.ts";
-import { currentTimeMillis } from "../src/utils/clock.ts";
+import compat from "../src/compat.ts";
+import type typesModule from "../src/types.types.ts";
+import clock from "../src/utils/clock.ts";
 
-type StreamOptionsWithExtras = StreamOptions & Record<string, unknown>;
+const { currentTimeMillis } = clock;
+const { complete } = compat;
+
+type StreamOptionsWithExtras = typesModule.StreamOptions & Record<string, unknown>;
 
 interface ToolResultScenario {
   readonly followUp: string;
@@ -26,10 +29,10 @@ const emptyUsage = {
   totalTokens: 0,
 };
 
-const toolResultContext = <TApi extends Api>(
-  llm: Model<TApi>,
+const toolResultContext = <TApi extends typesModule.Api>(
+  llm: typesModule.Model<TApi>,
   scenario: ToolResultScenario,
-): Context => ({
+): typesModule.Context => ({
   messages: [
     { content: scenario.request, role: "user", timestamp: currentTimeMillis() },
     {
@@ -60,8 +63,8 @@ const toolResultContext = <TApi extends Api>(
   ],
 });
 
-const answerToolResult = <TApi extends Api>(
-  llm: Model<TApi>,
+const answerToolResult = <TApi extends typesModule.Api>(
+  llm: typesModule.Model<TApi>,
   options: StreamOptionsWithExtras,
   scenario: ToolResultScenario,
 ) =>
@@ -74,8 +77,8 @@ const answerToolResult = <TApi extends Api>(
     return response;
   });
 
-const testEmojiInToolResults = <TApi extends Api>(
-  llm: Model<TApi>,
+const testEmojiInToolResults = <TApi extends typesModule.Api>(
+  llm: typesModule.Model<TApi>,
   options: StreamOptionsWithExtras = {},
 ) =>
   Effect.runPromise(
@@ -102,8 +105,8 @@ const testEmojiInToolResults = <TApi extends Api>(
     }),
   );
 
-const testRealWorldLinkedInData = <TApi extends Api>(
-  llm: Model<TApi>,
+const testRealWorldLinkedInData = <TApi extends typesModule.Api>(
+  llm: typesModule.Model<TApi>,
   options: StreamOptionsWithExtras = {},
 ) =>
   Effect.runPromise(
@@ -134,8 +137,8 @@ Unanswered Comments: 2
     }),
   );
 
-const testUnpairedHighSurrogate = <TApi extends Api>(
-  llm: Model<TApi>,
+const testUnpairedHighSurrogate = <TApi extends typesModule.Api>(
+  llm: typesModule.Model<TApi>,
   options: StreamOptionsWithExtras = {},
 ) =>
   Effect.runPromise(

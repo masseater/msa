@@ -1,45 +1,37 @@
 import { Clock, Effect } from "effect";
 
-import { createMouseEvent, type SgrMouseEvent } from "./alt-screen-mouse-protocol.ts";
-import type { AltScreenView } from "./alt-screen-view.ts";
-import { getLayoutNode } from "./layout-node.ts";
-import { getLayoutBoxesAt } from "./layout.ts";
-import {
-  type Component,
-  Container,
-  dispatchMouseEvent,
-  retargetMouseEvent,
-  type TuiMouseDispatchResult,
-  type TuiMouseDispatchTarget,
-  type TuiMouseEvent,
-} from "./tui-component.ts";
+import altScreenMouseProtocol from "./alt-screen-mouse-protocol.ts";
+import type altScreenMouseProtocolTypes from "./alt-screen-mouse-protocol.types.ts";
+import type altScreenMouseRouterTypes from "./alt-screen-mouse-router.types.ts";
+import layoutNode from "./layout-node.ts";
+import layoutModule from "./layout.ts";
+import tuiComponent from "./tui-component.ts";
+import type tuiComponentTypes from "./tui-component.types.ts";
+
+const { createMouseEvent } = altScreenMouseProtocol;
+const { getLayoutBoxesAt } = layoutModule;
+const { getLayoutNode } = layoutNode;
+const { Container, dispatchMouseEvent, retargetMouseEvent } = tuiComponent;
 
 const DOUBLE_CLICK_INTERVAL_MS = 500;
 
 interface ComponentClick {
   timestamp: number;
   count: number;
-  component: Component;
+  component: tuiComponentTypes.Component;
   x: number;
   y: number;
 }
 
-export interface MouseRouterHost {
-  readonly view: AltScreenView;
-  resolveFocusTarget(component: Component): Component;
-  focusedComponent(): Component | null;
-  setFocus(component: Component): void;
-}
-
-export class AltScreenMouseRouter {
-  private readonly host: MouseRouterHost;
-  private capture: TuiMouseDispatchTarget | undefined;
-  private pressTarget: TuiMouseDispatchTarget | undefined;
+export default class AltScreenMouseRouter {
+  private readonly host: altScreenMouseRouterTypes.MouseRouterHost;
+  private capture: tuiComponentTypes.TuiMouseDispatchTarget | undefined;
+  private pressTarget: tuiComponentTypes.TuiMouseDispatchTarget | undefined;
   private pressPoint: { x: number; y: number } | undefined;
   private pressMoved = false;
   private lastComponentClick: ComponentClick | undefined;
 
-  constructor(host: MouseRouterHost) {
+  constructor(host: altScreenMouseRouterTypes.MouseRouterHost) {
     this.host = host;
   }
 
@@ -58,22 +50,28 @@ export class AltScreenMouseRouter {
     this.lastComponentClick = undefined;
   }
 
-  startPress(target: TuiMouseDispatchTarget, raw: SgrMouseEvent): void {
+  startPress(
+    target: tuiComponentTypes.TuiMouseDispatchTarget,
+    raw: altScreenMouseProtocolTypes.SgrMouseEvent,
+  ): void {
     this.pressTarget = target;
     this.pressPoint = { x: raw.x, y: raw.y };
     this.pressMoved = false;
   }
 
   mouseEvent(
-    type: TuiMouseEvent["type"],
+    type: tuiComponentTypes.TuiMouseEvent["type"],
     raw: { button: number; x: number; y: number },
     extra: { wheelDelta?: number; clickCount?: number } = {},
-  ): TuiMouseEvent {
+  ): tuiComponentTypes.TuiMouseEvent {
     const { view } = this.host;
     return createMouseEvent({ type, ...raw, columns: view.columns(), rows: view.rows(), ...extra });
   }
 
-  applyResult(event: TuiMouseEvent, result: TuiMouseDispatchResult): boolean {
+  applyResult(
+    event: tuiComponentTypes.TuiMouseEvent,
+    result: tuiComponentTypes.TuiMouseDispatchResult,
+  ): boolean {
     const focusTarget = this.host.resolveFocusTarget(result.focusTarget ?? result.target.component);
     const focusChanged = result.focus === true && this.host.focusedComponent() !== focusTarget;
     if (result.focus === true) this.host.setFocus(focusTarget);
@@ -88,10 +86,12 @@ export class AltScreenMouseRouter {
     );
   }
 
-  dispatchToLayout(event: TuiMouseEvent): TuiMouseDispatchResult | undefined {
+  dispatchToLayout(
+    event: tuiComponentTypes.TuiMouseEvent,
+  ): tuiComponentTypes.TuiMouseDispatchResult | undefined {
     const layout = this.host.view.frame.currentLayout;
     if (layout === undefined) return undefined;
-    const visited = new Set<Component>();
+    const visited = new Set<tuiComponentTypes.Component>();
     for (const box of getLayoutBoxesAt(layout, event.screenX, event.screenY)) {
       if (visited.has(box.component)) continue;
       if (
@@ -102,17 +102,20 @@ export class AltScreenMouseRouter {
       visited.add(box.component);
       const result = dispatchMouseEvent(box.component, {
         ...event,
+        height: box.rect.height,
+        width: box.rect.width,
         x: event.screenX - box.rect.x,
         y: event.screenY - box.rect.y,
-        width: box.rect.width,
-        height: box.rect.height,
       });
       if (result !== undefined) return result;
     }
     return undefined;
   }
 
-  handleGesture(raw: SgrMouseEvent, event: TuiMouseEvent): void {
+  handleGesture(
+    raw: altScreenMouseProtocolTypes.SgrMouseEvent,
+    event: tuiComponentTypes.TuiMouseEvent,
+  ): void {
     const target = this.capture ?? this.pressTarget;
     if (target === undefined) return;
     if (
@@ -134,7 +137,10 @@ export class AltScreenMouseRouter {
     if (render) this.host.view.requestRender();
   }
 
-  private dispatchGestureClick(raw: SgrMouseEvent, target: TuiMouseDispatchTarget): boolean {
+  private dispatchGestureClick(
+    raw: altScreenMouseProtocolTypes.SgrMouseEvent,
+    target: tuiComponentTypes.TuiMouseDispatchTarget,
+  ): boolean {
     const clickEvent = this.mouseEvent("click", raw, {
       clickCount: this.componentClickCount(target, raw.x, raw.y),
     });
@@ -145,7 +151,11 @@ export class AltScreenMouseRouter {
     return clickResult === undefined ? false : this.applyResult(clickEvent, clickResult);
   }
 
-  private componentClickCount(target: TuiMouseDispatchTarget, x: number, y: number): number {
+  private componentClickCount(
+    target: tuiComponentTypes.TuiMouseDispatchTarget,
+    x: number,
+    y: number,
+  ): number {
     const now = Effect.runSync(Clock.currentTimeMillis);
     const previous = this.lastComponentClick;
     const count =
@@ -156,7 +166,7 @@ export class AltScreenMouseRouter {
       previous.y === y
         ? (previous.count % 3) + 1
         : 1;
-    this.lastComponentClick = { timestamp: now, count, component: target.component, x, y };
+    this.lastComponentClick = { component: target.component, count, timestamp: now, x, y };
     return count;
   }
 }

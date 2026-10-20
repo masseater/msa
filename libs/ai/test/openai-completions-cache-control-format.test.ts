@@ -2,11 +2,15 @@ import { Clock, Effect, Stream } from "effect";
 import { Type } from "typebox";
 import { beforeEach, describe, expect, it, vi } from "vite-plus/test";
 
-import { stream as streamOpenAICompletions } from "../src/api/openai-completions.ts";
-import { normalizeContext } from "../src/compat.ts";
-import type { Message, Model, Usage } from "../src/types.ts";
-import { currentTimeMillis } from "../src/utils/clock.ts";
+import openaiCompletions from "../src/api/openai-completions.ts";
+import compatModule from "../src/compat.ts";
+import type typesModule from "../src/types.types.ts";
+import clock from "../src/utils/clock.ts";
 import modelChoice from "./model-choice.ts";
+
+const { stream: streamOpenAICompletions } = openaiCompletions;
+const { normalizeContext } = compatModule;
+const { currentTimeMillis } = clock;
 
 const { chooseModel, compatValue, usesApi } = modelChoice;
 
@@ -15,11 +19,11 @@ const completions = usesApi("openai-completions");
 const anthropicCacheModel = chooseModel(
   "openrouter",
   "Chat Completions with Anthropic cache markers",
-  (model): model is Model<"openai-completions"> =>
+  (model): model is typesModule.Model<"openai-completions"> =>
     completions(model) && compatValue(model, "cacheControlFormat") === "anthropic",
 );
 
-const emptyUsage: Usage = {
+const emptyUsage: typesModule.Usage = {
   cacheRead: 0,
   cacheWrite: 0,
   cost: { cacheRead: 0, cacheWrite: 0, input: 0, output: 0, total: 0 },
@@ -103,9 +107,9 @@ vi.mock("openai", () => {
 });
 
 function capturePayload(
-  model: Model<"openai-completions">,
+  model: typesModule.Model<"openai-completions">,
   options?: { cacheRetention?: "none" | "short" | "long" },
-  messages?: Message[],
+  messages?: typesModule.Message[],
 ): Promise<CapturedParams> {
   return Effect.runPromise(
     Effect.gen(function* () {
@@ -171,7 +175,7 @@ describe("openai-completions cacheControlFormat", () => {
   it("applies Anthropic-style cache markers when model compat enables them", () =>
     Effect.runPromise(
       Effect.gen(function* () {
-        const model: Model<"openai-completions"> = {
+        const model: typesModule.Model<"openai-completions"> = {
           api: "openai-completions",
           baseUrl: "https://example.com/v1",
           compat: {
@@ -263,7 +267,7 @@ describe("openai-completions cacheControlFormat", () => {
   it("omits Anthropic-style cache markers when cacheRetention is none", () =>
     Effect.runPromise(
       Effect.gen(function* () {
-        const model: Model<"openai-completions"> = {
+        const model: typesModule.Model<"openai-completions"> = {
           api: "openai-completions",
           baseUrl: "https://example.com/v1",
           compat: {

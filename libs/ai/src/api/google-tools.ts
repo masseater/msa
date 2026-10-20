@@ -1,12 +1,12 @@
 import { FunctionCallingConfigMode } from "@google/genai";
 import { Function } from "effect";
 
-import type { Tool } from "../types.ts";
-import {
-  getJsonSchemaToolParameters,
-  resolveJsonSchemaStrictSampling,
-} from "./constrained-sampling.ts";
-import { getGeminiMajorVersion } from "./google-messages.ts";
+import type typesModule from "../types.types.ts";
+import constrainedSampling from "./constrained-sampling.ts";
+import googleMessages from "./google-messages.ts";
+
+const { getJsonSchemaToolParameters, resolveJsonSchemaStrictSampling } = constrainedSampling;
+const { getGeminiMajorVersion } = googleMessages;
 
 const JSON_SCHEMA_META_DECLARATIONS = new Set([
   "$schema",
@@ -32,20 +32,22 @@ function sanitizeForOpenApi(schema: unknown): unknown {
   return result;
 }
 
-export const convertTools: {
+const convertTools: {
   (
     useParameters?: boolean,
     supportsStrictMode?: boolean,
-  ): (tools: Tool[]) => { functionDeclarations: Record<string, unknown>[] }[] | undefined;
+  ): (
+    tools: typesModule.Tool[],
+  ) => { functionDeclarations: Record<string, unknown>[] }[] | undefined;
   (
-    tools: Tool[],
+    tools: typesModule.Tool[],
     useParameters?: boolean,
     supportsStrictMode?: boolean,
   ): { functionDeclarations: Record<string, unknown>[] }[] | undefined;
 } = Function.dual(
   (args) => Array.isArray(args[0]),
   function (
-    tools: Tool[],
+    tools: typesModule.Tool[],
     useParameters: boolean = false,
     supportsStrictMode: boolean = true,
   ): { functionDeclarations: Record<string, unknown>[] }[] | undefined {
@@ -56,8 +58,8 @@ export const convertTools: {
           const strict = resolveJsonSchemaStrictSampling(tool, supportsStrictMode);
           const parameters = getJsonSchemaToolParameters(tool, strict);
           return {
-            name: tool.name,
             description: tool.description,
+            name: tool.name,
             ...(useParameters
               ? { parameters: sanitizeForOpenApi(parameters as unknown) }
               : { parametersJsonSchema: parameters }),
@@ -68,12 +70,12 @@ export const convertTools: {
   },
 );
 
-export function supportsGoogleStrictToolSampling(modelId: string): boolean {
+function supportsGoogleStrictToolSampling(modelId: string): boolean {
   const majorVersion = getGeminiMajorVersion(modelId);
   return majorVersion !== undefined && majorVersion >= 3;
 }
 
-export function mapToolChoice(choice: string): FunctionCallingConfigMode {
+function mapToolChoice(choice: string): FunctionCallingConfigMode {
   switch (choice) {
     case "auto":
       return FunctionCallingConfigMode.AUTO;
@@ -86,20 +88,20 @@ export function mapToolChoice(choice: string): FunctionCallingConfigMode {
   }
 }
 
-export const resolveGoogleFunctionCallingMode: {
+const resolveGoogleFunctionCallingMode: {
   (
     toolChoice: string | undefined,
     supportsStrictMode: boolean,
-  ): (tools: Tool[]) => FunctionCallingConfigMode | undefined;
+  ): (tools: typesModule.Tool[]) => FunctionCallingConfigMode | undefined;
   (
-    tools: Tool[],
+    tools: typesModule.Tool[],
     toolChoice: string | undefined,
     supportsStrictMode: boolean,
   ): FunctionCallingConfigMode | undefined;
 } = Function.dual(
   3,
   function (
-    tools: Tool[],
+    tools: typesModule.Tool[],
     toolChoice: string | undefined,
     supportsStrictMode: boolean,
   ): FunctionCallingConfigMode | undefined {
@@ -115,3 +117,12 @@ export const resolveGoogleFunctionCallingMode: {
     return toolChoice !== undefined && toolChoice !== "" ? mapToolChoice(toolChoice) : undefined;
   },
 );
+
+const googleTools = {
+  convertTools,
+  mapToolChoice,
+  resolveGoogleFunctionCallingMode,
+  supportsGoogleStrictToolSampling,
+};
+
+export default googleTools;

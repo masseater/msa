@@ -1,4 +1,4 @@
-import { setKeybindings } from "@msa/tui";
+import tui from "@msa/tui";
 import { beforeAll, describe, expect, it } from "vite-plus/test";
 
 import { KeybindingsManager } from "../src/core/keybindings.ts";
@@ -6,6 +6,8 @@ import type { TaskSnapshot } from "../src/core/orchestrator/types.ts";
 import { initTheme } from "../src/modes/interactive/theme/theme.ts";
 import tasksViewHarness from "./tasks-view-harness.ts";
 import tasksViewSupport from "./tasks-view-support.ts";
+
+const { setKeybindings } = tui;
 
 const { DOWN, ENTER, PAGE_DOWN, PAGE_UP } = tasksViewSupport;
 

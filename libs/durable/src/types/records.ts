@@ -1,4 +1,4 @@
-import type { Message } from "@msa/ai";
+import type aiTypes from "@msa/ai/index.types";
 import type chordTypes from "@msa/chord/index.types";
 
 import type idsTypes from "./ids.types.ts";
@@ -29,7 +29,7 @@ declare namespace recordsTypes {
       }
     | {
         readonly action: "replace";
-        readonly messages: readonly Message[];
+        readonly messages: readonly aiTypes.Message[];
       }
   );
 
@@ -37,7 +37,7 @@ declare namespace recordsTypes {
     readonly id: idsTypes.EntryId;
     readonly conversationId: idsTypes.ConversationId;
     readonly kind: string;
-    readonly model?: readonly Message[];
+    readonly model?: readonly aiTypes.Message[];
     readonly data?: chordTypes.JsonValue;
     readonly head?: idsTypes.EntryId;
     readonly edits?: readonly ContextEdit[];

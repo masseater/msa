@@ -1,4 +1,4 @@
-import type { Model } from "@msa/ai";
+import type aiTypes from "@msa/ai/index.types";
 import contextModule from "@msa/chord/context";
 import type durableTypes from "@msa/durable/index.types";
 import { Effect, Random } from "effect";
@@ -47,7 +47,7 @@ const read = Effect.fn("read")(function* (
     ...(options.resize === undefined
       ? {}
       : { inputLimits: { images: { resize: options.resize } } }),
-  } as unknown as Model<never>;
+  } as unknown as aiTypes.Model<never>;
   const api = {
     agent: () => Promise.resolve({ model: { modelId: "test", provider: "test" } }),
     details: () => Promise.resolve(),

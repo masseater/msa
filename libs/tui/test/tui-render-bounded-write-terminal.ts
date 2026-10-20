@@ -1,8 +1,8 @@
 import { Effect } from "effect";
 
-import type { Terminal } from "../src/terminal-protocol.ts";
+import type terminalProtocolTypes from "../src/terminal-protocol.types.ts";
 
-class BoundedWriteTerminal implements Terminal {
+class BoundedWriteTerminal implements terminalProtocolTypes.Terminal {
   readonly writes: string[] = [];
   columns = 80;
   rows = 24;

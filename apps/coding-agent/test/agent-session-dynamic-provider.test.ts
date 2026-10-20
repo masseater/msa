@@ -1,5 +1,5 @@
-import type { Provider } from "@msa/ai";
-import { getModel } from "@msa/ai/compat";
+import compat from "@msa/ai/compat";
+import type aiTypes from "@msa/ai/index.types";
 import testing from "@msa/testing";
 import { Effect } from "effect";
 import { afterEach, beforeEach, describe, expect, it } from "vite-plus/test";
@@ -9,6 +9,8 @@ import type { ExtensionFactory } from "../src/core/sdk.ts";
 import { SessionManager } from "../src/core/session-manager.ts";
 import { SettingsManager } from "../src/core/settings-manager.ts";
 import { DefaultResourceLoader, ModelRuntime, createAgentSession } from "../src/index.ts";
+
+const { getModel } = compat;
 
 const {
   awaited,
@@ -22,7 +24,7 @@ const {
   tempRoot,
 } = testing;
 
-function nativeAnthropicProvider(baseUrl: string): Provider {
+function nativeAnthropicProvider(baseUrl: string): aiTypes.Provider {
   const model = { ...getModel("anthropic-api", "claude-sonnet-4-5")!, baseUrl };
   return {
     auth: {

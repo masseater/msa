@@ -1,20 +1,18 @@
 import { describe, expect, it } from "vite-plus/test";
 
-import { convertMessages } from "../src/api/openai-completions.ts";
-import { normalizeContext } from "../src/compat.ts";
-import type {
-  AssistantMessage,
-  Model,
-  OpenAICompletionsCompat,
-  ToolResultMessage,
-  Usage,
-} from "../src/types.ts";
-import { currentTimeMillis } from "../src/utils/clock.ts";
+import openaiCompletions from "../src/api/openai-completions.ts";
+import compatModule from "../src/compat.ts";
+import type typesModule from "../src/types.types.ts";
+import clock from "../src/utils/clock.ts";
 import modelChoice from "./model-choice.ts";
+
+const { normalizeContext } = compatModule;
+const { currentTimeMillis } = clock;
+const { convertMessages } = openaiCompletions;
 
 const { chooseModel } = modelChoice;
 
-const emptyUsage: Usage = {
+const emptyUsage: typesModule.Usage = {
   cacheRead: 0,
   cacheWrite: 0,
   cost: { cacheRead: 0, cacheWrite: 0, input: 0, output: 0, total: 0 },
@@ -24,10 +22,10 @@ const emptyUsage: Usage = {
 };
 
 const compat: Omit<
-  Required<OpenAICompletionsCompat>,
+  Required<typesModule.OpenAICompletionsCompat>,
   "thinkingTokenBudgetField" | "vllmPriority"
 > & {
-  thinkingTokenBudgetField?: OpenAICompletionsCompat["thinkingTokenBudgetField"];
+  thinkingTokenBudgetField?: typesModule.OpenAICompletionsCompat["thinkingTokenBudgetField"];
 } = {
   cacheControlFormat: "anthropic",
   chatTemplateKwargs: {},
@@ -54,7 +52,7 @@ const compat: Omit<
   thinkingTokenBudgetField: undefined,
 };
 
-function buildToolResult(toolCallId: string, timestamp: number): ToolResultMessage {
+function buildToolResult(toolCallId: string, timestamp: number): typesModule.ToolResultMessage {
   return {
     content: [
       { text: "Read image file [image/png]", type: "text" },
@@ -68,7 +66,10 @@ function buildToolResult(toolCallId: string, timestamp: number): ToolResultMessa
   };
 }
 
-function buildEmptyToolResult(toolCallId: string, timestamp: number): ToolResultMessage {
+function buildEmptyToolResult(
+  toolCallId: string,
+  timestamp: number,
+): typesModule.ToolResultMessage {
   return {
     content: [{ text: "", type: "text" }],
     isError: false,
@@ -82,7 +83,7 @@ function buildEmptyToolResult(toolCallId: string, timestamp: number): ToolResult
 describe("openai-completions convertMessages", () => {
   it("omits empty text parts from user messages with images", () => {
     const { compat: _compat, ...baseModel } = chooseModel("openai", "direct OpenAI");
-    const model: Model<"openai-completions"> = {
+    const model: typesModule.Model<"openai-completions"> = {
       ...baseModel,
       api: "openai-completions",
       input: ["text", "image"],
@@ -112,14 +113,14 @@ describe("openai-completions convertMessages", () => {
 describe("openai-completions convertMessages", () => {
   it("batches tool-result images after consecutive tool results", () => {
     const { compat: _compat, ...baseModel } = chooseModel("openai", "direct OpenAI");
-    const model: Model<"openai-completions"> = {
+    const model: typesModule.Model<"openai-completions"> = {
       ...baseModel,
       api: "openai-completions",
       input: ["text", "image"],
     };
 
     const now = currentTimeMillis();
-    const assistantMessage: AssistantMessage = {
+    const assistantMessage: typesModule.AssistantMessage = {
       api: model.api,
       content: [
         { arguments: { path: "img-1.png" }, id: "tool-1", name: "read", type: "toolCall" },
@@ -161,14 +162,14 @@ describe("openai-completions convertMessages", () => {
 describe("openai-completions convertMessages", () => {
   it("uses '(no tool output)' placeholder for empty tool results without images", () => {
     const { compat: _compat, ...baseModel } = chooseModel("openai", "direct OpenAI");
-    const model: Model<"openai-completions"> = {
+    const model: typesModule.Model<"openai-completions"> = {
       ...baseModel,
       api: "openai-completions",
       input: ["text", "image"],
     };
 
     const now = currentTimeMillis();
-    const assistantMessage: AssistantMessage = {
+    const assistantMessage: typesModule.AssistantMessage = {
       api: model.api,
       content: [{ arguments: { command: "true" }, id: "tool-1", name: "bash", type: "toolCall" }],
       model: model.id,

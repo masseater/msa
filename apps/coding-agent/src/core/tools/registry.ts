@@ -7,8 +7,8 @@ import { createPowerShellTool, createPowerShellToolDefinition } from "./powershe
 import { createReadTool, createReadToolDefinition } from "./read.ts";
 import {
   type CwdFactory,
-  cwdFactory,
   type NamedFactory,
+  cwdFactory,
   namedFactory,
 } from "./tool-definition-wrapper.ts";
 import type { Tool, ToolDef, ToolName, ToolsOptions } from "./tool-types.ts";
@@ -86,14 +86,14 @@ export const createAllToolDefinitions: CwdFactory<
   ToolsOptions,
   Record<ToolName, ToolDef>
 > = cwdFactory((cwd, options) => ({
-  read: createReadToolDefinition(cwd, options?.read),
   bash: createBashToolDefinition(cwd, options?.bash),
-  powershell: createPowerShellToolDefinition(cwd, options?.powershell),
   edit: createEditToolDefinition(cwd, options?.edit),
-  write: createWriteToolDefinition(cwd, options?.write),
-  grep: createGrepToolDefinition(cwd, options?.grep),
   find: createFindToolDefinition(cwd, options?.find),
+  grep: createGrepToolDefinition(cwd, options?.grep),
   ls: createLsToolDefinition(cwd, options?.ls),
+  powershell: createPowerShellToolDefinition(cwd, options?.powershell),
+  read: createReadToolDefinition(cwd, options?.read),
+  write: createWriteToolDefinition(cwd, options?.write),
 }));
 
 export const createCodingTools: CwdFactory<ToolsOptions, Tool[]> = cwdFactory((cwd, options) => [
@@ -112,13 +112,13 @@ export const createReadOnlyTools: CwdFactory<ToolsOptions, Tool[]> = cwdFactory(
 
 export const createAllTools: CwdFactory<ToolsOptions, Record<ToolName, Tool>> = cwdFactory(
   (cwd, options) => ({
-    read: createReadTool(cwd, options?.read),
     bash: createBashTool(cwd, options?.bash),
-    powershell: createPowerShellTool(cwd, options?.powershell),
     edit: createEditTool(cwd, options?.edit),
-    write: createWriteTool(cwd, options?.write),
-    grep: createGrepTool(cwd, options?.grep),
     find: createFindTool(cwd, options?.find),
+    grep: createGrepTool(cwd, options?.grep),
     ls: createLsTool(cwd, options?.ls),
+    powershell: createPowerShellTool(cwd, options?.powershell),
+    read: createReadTool(cwd, options?.read),
+    write: createWriteTool(cwd, options?.write),
   }),
 );

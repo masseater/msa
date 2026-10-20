@@ -1,4 +1,4 @@
-import type { Message, ToolCall, ToolResultMessage } from "@msa/ai";
+import type aiTypes from "@msa/ai/index.types";
 
 import contextFreeze from "./context-freeze.ts";
 
@@ -6,15 +6,15 @@ const { freezeJson } = contextFreeze;
 
 const MISSING_RESULT_TEXT = "Tool result unavailable: history ends before this call completed.";
 
-function orderToolResults(messages: readonly Message[]): Message[] {
-  const ordered: Message[] = [];
+function orderToolResults(messages: readonly aiTypes.Message[]): aiTypes.Message[] {
+  const ordered: aiTypes.Message[] = [];
   for (let index = 0; index < messages.length; index++) {
     const message = messages[index]!;
     if (message.role === "toolResult") continue;
     ordered.push(message);
     if (message.role !== "assistant") continue;
     const calls = message.content.filter(
-      (content): content is ToolCall => content.type === "toolCall",
+      (content): content is aiTypes.ToolCall => content.type === "toolCall",
     );
     if (calls.length === 0) continue;
     const results = new Map<string, number>();
@@ -38,7 +38,7 @@ function orderToolResults(messages: readonly Message[]): Message[] {
   return ordered;
 }
 
-function missingResult(call: ToolCall, timestamp: number): ToolResultMessage {
+function missingResult(call: aiTypes.ToolCall, timestamp: number): aiTypes.ToolResultMessage {
   return freezeJson({
     content: [{ text: MISSING_RESULT_TEXT, type: "text" }],
     details: { reason: "missing_result" },

@@ -1,9 +1,9 @@
-import type { Model } from "../../src/types.ts";
+import type typesModule from "../../src/types.types.ts";
 import type modelsDevTypes from "./models-dev.types.ts";
 
 declare namespace catalogAssemblyTypes {
   interface CatalogAssembly {
-    readonly upstream: readonly Model<any>[];
+    readonly upstream: readonly typesModule.Model<any>[];
     readonly reasoning: modelsDevTypes.ReasoningOptionsRegistry;
   }
 }

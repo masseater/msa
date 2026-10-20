@@ -1,4 +1,4 @@
-import type { Message } from "@msa/ai";
+import type aiTypes from "@msa/ai/index.types";
 import type chordTypes from "@msa/chord/index.types";
 import { Effect, Function } from "effect";
 
@@ -9,7 +9,7 @@ import type typesModule from "./types.types.ts";
 
 const thresholdCompaction: typesModule.Dual4<
   typesModule.ContextView,
-  readonly { readonly model?: readonly Message[] }[],
+  readonly { readonly model?: readonly aiTypes.Message[] }[],
   number,
   typesModule.CompactionPolicy,
   generationThresholdTypes.ThresholdOutcome
@@ -17,7 +17,7 @@ const thresholdCompaction: typesModule.Dual4<
   4,
   (
     view: typesModule.ContextView,
-    planned: readonly { readonly model?: readonly Message[] }[],
+    planned: readonly { readonly model?: readonly aiTypes.Message[] }[],
     contextWindow: number,
     policy: typesModule.CompactionPolicy,
   ): generationThresholdTypes.ThresholdOutcome => {

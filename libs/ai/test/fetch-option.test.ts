@@ -1,10 +1,14 @@
 import { Effect } from "effect";
 import { afterEach, describe, expect, it, vi } from "vite-plus/test";
 
-import { streamSimple as streamAnthropic } from "../src/api/anthropic-messages.ts";
-import { streamSimple as streamOpenAICompletions } from "../src/api/openai-completions.ts";
-import { streamSimple as streamOpenAIResponses } from "../src/api/openai-responses.ts";
+import anthropicMessages from "../src/api/anthropic-messages.ts";
+import openaiCompletions from "../src/api/openai-completions.ts";
+import openaiResponses from "../src/api/openai-responses.ts";
 import fetchOptionSupport from "./fetch-option-support.ts";
+
+const { streamSimple: streamAnthropic } = anthropicMessages;
+const { streamSimple: streamOpenAICompletions } = openaiCompletions;
+const { streamSimple: streamOpenAIResponses } = openaiResponses;
 
 const { context, createModel, expectOnlyCustomFetch, mockFetches } = fetchOptionSupport;
 

@@ -1,13 +1,5 @@
-import type {
-  AssistantMessage,
-  Message,
-  StopReason,
-  SystemMessage,
-  ToolCall,
-  ToolResultMessage,
-  UserMessage,
-} from "@msa/ai";
-import { Type, createModels } from "@msa/ai";
+import ai from "@msa/ai";
+import type aiTypes from "@msa/ai/index.types";
 import durable from "@msa/durable";
 import harnessModule from "@msa/durable/harness";
 import type durableTypes from "@msa/durable/index.types";
@@ -17,6 +9,8 @@ import { dual } from "effect/Function";
 import effectSupport from "./effect-support.ts";
 import type harnessSupportTypes from "./harness-support.types.ts";
 import sessionSupport from "./session-support.ts";
+
+const { Type, createModels } = ai;
 
 const { defineExtension, defineTool, hook, section } = durable;
 const { Harness, createRegistry } = harnessModule;
@@ -60,15 +54,15 @@ const openHarness = Effect.fn("openHarness")(function* (
   return { harness, registry };
 });
 
-function user(text: string): UserMessage {
+function user(text: string): aiTypes.UserMessage {
   return { content: text, role: "user", timestamp: 1 };
 }
 
 function assistantImpl(
   text: string,
-  options: { readonly calls?: readonly string[]; readonly stopReason?: StopReason } = {},
-): AssistantMessage {
-  const calls: ToolCall[] = (options.calls ?? []).map((id) => ({
+  options: { readonly calls?: readonly string[]; readonly stopReason?: aiTypes.StopReason } = {},
+): aiTypes.AssistantMessage {
+  const calls: aiTypes.ToolCall[] = (options.calls ?? []).map((id) => ({
     arguments: {},
     id,
     name: `tool-${id}`,
@@ -96,15 +90,15 @@ function assistantImpl(
 const assistant: {
   (options?: {
     readonly calls?: readonly string[];
-    readonly stopReason?: StopReason;
+    readonly stopReason?: aiTypes.StopReason;
   }): (text: string) => ReturnType<typeof assistantImpl>;
   (
     text: string,
-    options?: { readonly calls?: readonly string[]; readonly stopReason?: StopReason },
+    options?: { readonly calls?: readonly string[]; readonly stopReason?: aiTypes.StopReason },
   ): ReturnType<typeof assistantImpl>;
 } = dual((args) => typeof args[0] === "string", assistantImpl);
 
-function toolResult(id: string): ToolResultMessage {
+function toolResult(id: string): aiTypes.ToolResultMessage {
   return {
     content: [{ text: `result ${id}`, type: "text" }],
     isError: false,
@@ -115,11 +109,11 @@ function toolResult(id: string): ToolResultMessage {
   };
 }
 
-function system(sections: Record<string, string | null>): SystemMessage {
+function system(sections: Record<string, string | null>): aiTypes.SystemMessage {
   return { content: "", role: "system", sections, timestamp: 4 };
 }
 
-function describeMessage(message: Message): string {
+function describeMessage(message: aiTypes.Message): string {
   switch (message.role) {
     case "user":
       return `user:${message.content as string}`;

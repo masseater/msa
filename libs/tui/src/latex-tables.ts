@@ -1,7 +1,13 @@
-export const NEGATED_SYMBOLS: Readonly<Record<string, string>> = {
+const NEGATED_SYMBOLS: Readonly<Record<string, string>> = {
   "<": "≮",
-  ">": "≯",
   "=": "≠",
+  ">": "≯",
+  "←": "↚",
+  "→": "↛",
+  "↔": "↮",
+  "⇐": "⇍",
+  "⇒": "⇏",
+  "⇔": "⇎",
   "∈": "∉",
   "∋": "∌",
   "∣": "∤",
@@ -15,23 +21,17 @@ export const NEGATED_SYMBOLS: Readonly<Record<string, string>> = {
   "≥": "≱",
   "≺": "⊀",
   "≻": "⊁",
+  "≼": "⋠",
+  "≽": "⋡",
   "⊂": "⊄",
   "⊃": "⊅",
   "⊆": "⊈",
   "⊇": "⊉",
   "⊢": "⊬",
   "⊨": "⊭",
-  "↔": "↮",
-  "←": "↚",
-  "→": "↛",
-  "⇒": "⇏",
-  "⇐": "⇍",
-  "⇔": "⇎",
-  "≼": "⋠",
-  "≽": "⋡",
 };
 
-export const BLACKBOARD: Readonly<Record<string, string>> = {
+const BLACKBOARD: Readonly<Record<string, string>> = {
   C: "ℂ",
   H: "ℍ",
   N: "ℕ",
@@ -41,7 +41,11 @@ export const BLACKBOARD: Readonly<Record<string, string>> = {
   Z: "ℤ",
 };
 
-export const SUPERSCRIPTS: Readonly<Record<string, string>> = {
+const SUPERSCRIPTS: Readonly<Record<string, string>> = {
+  "(": "⁽",
+  ")": "⁾",
+  "+": "⁺",
+  "-": "⁻",
   "0": "⁰",
   "1": "¹",
   "2": "²",
@@ -52,11 +56,7 @@ export const SUPERSCRIPTS: Readonly<Record<string, string>> = {
   "7": "⁷",
   "8": "⁸",
   "9": "⁹",
-  "+": "⁺",
-  "-": "⁻",
   "=": "⁼",
-  "(": "⁽",
-  ")": "⁾",
   a: "ᵃ",
   b: "ᵇ",
   c: "ᶜ",
@@ -84,7 +84,11 @@ export const SUPERSCRIPTS: Readonly<Record<string, string>> = {
   z: "ᶻ",
 };
 
-export const SUBSCRIPTS: Readonly<Record<string, string>> = {
+const SUBSCRIPTS: Readonly<Record<string, string>> = {
+  "(": "₍",
+  ")": "₎",
+  "+": "₊",
+  "-": "₋",
   "0": "₀",
   "1": "₁",
   "2": "₂",
@@ -95,11 +99,7 @@ export const SUBSCRIPTS: Readonly<Record<string, string>> = {
   "7": "₇",
   "8": "₈",
   "9": "₉",
-  "+": "₊",
-  "-": "₋",
   "=": "₌",
-  "(": "₍",
-  ")": "₎",
   a: "ₐ",
   e: "ₑ",
   h: "ₕ",
@@ -119,7 +119,7 @@ export const SUBSCRIPTS: Readonly<Record<string, string>> = {
   x: "ₓ",
 };
 
-export const ACCENTS: Readonly<Record<string, string>> = {
+const ACCENTS: Readonly<Record<string, string>> = {
   acute: "\u0301",
   bar: "\u0305",
   breve: "\u0306",
@@ -139,3 +139,13 @@ export const ACCENTS: Readonly<Record<string, string>> = {
   widehat: "\u0302",
   widetilde: "\u0303",
 };
+
+const latexTables = {
+  ACCENTS,
+  BLACKBOARD,
+  NEGATED_SYMBOLS,
+  SUBSCRIPTS,
+  SUPERSCRIPTS,
+};
+
+export default latexTables;

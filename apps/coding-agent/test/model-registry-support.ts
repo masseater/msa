@@ -1,10 +1,12 @@
-import { normalizeContext } from "@msa/ai";
-import type { Api, Model } from "@msa/ai/compat";
+import ai from "@msa/ai";
+import type compatTypes from "@msa/ai/compat.types";
 import { Deferred, Effect } from "effect";
 
 import type modelRegistrySupportTypes from "./model-registry-support.types.ts";
 
-const openAiModel: Model<Api> = {
+const { normalizeContext } = ai;
+
+const openAiModel: compatTypes.Model<compatTypes.Api> = {
   api: "openai-completions",
   baseUrl: "https://api.openai.com/v1",
   contextWindow: 128000,

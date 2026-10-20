@@ -20,13 +20,6 @@ export function createExtensionAPI({ extension, runtime, cwd, eventBus }: Extens
 } {
   const lifecycle = new ExtensionApiLifecycle(runtime);
   const scope: ApiScope = {
-    extension,
-    runtime,
-    cwd,
-    eventBus,
-    pendingFlagValues: lifecycle.pendingFlagValues,
-    loadingUnsubscribers: lifecycle.loadingUnsubscribers,
-    isLoading: () => lifecycle.isLoading(),
     applyRuntimeChange: (change) => lifecycle.applyRuntimeChange(change),
     assertActive: () => {
       if (lifecycle.isFailed()) {
@@ -36,6 +29,13 @@ export function createExtensionAPI({ extension, runtime, cwd, eventBus }: Extens
       }
       runtime.assertActive();
     },
+    cwd,
+    eventBus,
+    extension,
+    isLoading: () => lifecycle.isLoading(),
+    loadingUnsubscribers: lifecycle.loadingUnsubscribers,
+    pendingFlagValues: lifecycle.pendingFlagValues,
+    runtime,
   };
 
   const api = {

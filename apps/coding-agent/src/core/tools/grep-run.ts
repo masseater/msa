@@ -2,13 +2,13 @@ import { Effect, FileSystem } from "effect";
 
 import { ensureTool } from "../../utils/tools-manager.ts";
 import { streamCommand } from "../platform/command.ts";
-import { fromPromise, platformRuntime, rethrowCause, ToolFailure } from "../platform/index.ts";
+import { ToolFailure, fromPromise, platformRuntime, rethrowCause } from "../platform/index.ts";
 import { GrepFormatter } from "./grep-format.ts";
 import {
-  formatGrepOutput,
   type GrepOperations,
   type GrepRequest,
   RgMatchCollector,
+  formatGrepOutput,
   rgArguments,
 } from "./grep-support.ts";
 
@@ -41,10 +41,10 @@ const searchWithRipgrep = Effect.fn("ripgrep")(function* (rgPath: string, reques
   const collector = new RgMatchCollector(request.effectiveLimit);
   const { stoppedEarly, stderr, exitCode } = yield* fromPromise((signal) =>
     streamCommand({
-      file: rgPath,
       args: rgArguments(request),
-      signal,
+      file: rgPath,
       onLine: collector.onLine,
+      signal,
     }),
   );
   if (!stoppedEarly && exitCode !== 0 && exitCode !== 1) {
@@ -68,22 +68,22 @@ export const runGrep = Effect.fn("grep")(function* (
   );
   const collector = yield* searchWithRipgrep(rgPath, { ...request, isDirectory });
   if (collector.matchCount === 0) {
-    return { content: [{ type: "text" as const, text: "No matches found" }], details: undefined };
+    return { content: [{ text: "No matches found", type: "text" as const }], details: undefined };
   }
   const formatter = new GrepFormatter({
+    contextValue: request.contextValue,
+    isDirectory,
     ops,
     searchPath: request.searchPath,
-    isDirectory,
-    contextValue: request.contextValue,
   });
   const outputLines: string[] = [];
   for (const match of collector.matches) {
     outputLines.push(...(yield* formatter.formatMatch(match)));
   }
   return formatGrepOutput({
-    outputLines,
     effectiveLimit: request.effectiveLimit,
-    matchLimitReached: collector.matchLimitReached,
     linesTruncated: formatter.linesTruncated,
+    matchLimitReached: collector.matchLimitReached,
+    outputLines,
   });
 });

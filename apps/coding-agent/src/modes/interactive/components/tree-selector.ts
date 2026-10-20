@@ -1,24 +1,24 @@
-import {
-  type Component,
-  Container,
-  type Focusable,
-  getKeybindings,
-  Input,
-  type Keybinding,
-  Spacer,
-  sliceByColumn,
-  Text,
-  truncateToWidth,
-  visibleWidth,
-  wrapTextWithAnsi,
-} from "@msa/tui";
+import tui from "@msa/tui";
+import type tuiTypes from "@msa/tui/index.types";
 
 import { nowIso, nowMs, schedule, toDate } from "../../../core/platform.ts";
-import type { SessionTreeNode, SessionEntry } from "../../../core/session-manager.ts";
+import type { SessionEntry, SessionTreeNode } from "../../../core/session-manager.ts";
 import { formatReadLineRange, shortenPath } from "../../../core/tools/render-utils.ts";
 import { theme } from "../theme/theme.ts";
 import { DynamicBorder } from "./dynamic-border.ts";
 import { formatKeyText, keyHint } from "./keybinding-hints.ts";
+
+const {
+  Container,
+  Input,
+  Spacer,
+  Text,
+  getKeybindings,
+  sliceByColumn,
+  truncateToWidth,
+  visibleWidth,
+  wrapTextWithAnsi,
+} = tui;
 
 interface GutterInfo {
   position: number;
@@ -85,7 +85,7 @@ interface ToolCallInfo {
   arguments: Record<string, unknown>;
 }
 
-class TreeList implements Component {
+class TreeList implements tuiTypes.Component {
   private flatNodes: FlatNode[] = [];
   private filteredNodes: FlatNode[] = [];
   private selectedIndex = 0;
@@ -232,13 +232,13 @@ class TreeList implements Component {
               block.type === "toolCall"
             ) {
               const tc = block as { id: string; name: string; arguments: Record<string, unknown> };
-              this.toolCallMap.set(tc.id, { name: tc.name, arguments: tc.arguments });
+              this.toolCallMap.set(tc.id, { arguments: tc.arguments, name: tc.name });
             }
           }
         }
       }
 
-      result.push({ node, indent, showConnector, isLast, gutters, isVirtualRootChild });
+      result.push({ gutters, indent, isLast, isVirtualRootChild, node, showConnector });
 
       const children = node.children;
       const multipleChildren = children.length > 1;
@@ -530,7 +530,7 @@ class TreeList implements Component {
     const childGutters: GutterInfo[] = connectorDisplayed
       ? [...gutters, { position: connectorPosition, show: !isLast }]
       : gutters;
-    return { children, childIndent, multipleChildren, childGutters };
+    return { childGutters, childIndent, children, multipleChildren };
   }
 
   private getSearchableText(node: SessionTreeNode): string {
@@ -743,14 +743,14 @@ class TreeList implements Component {
     const prefixChars: string[] = [];
     const isFolded = self.foldedNodes.has(entry.id);
     return {
-      totalChars,
-      prefixChars,
       connector,
       connectorPosition,
+      cursor,
       entry,
       isFolded,
       isSelected,
-      cursor,
+      prefixChars,
+      totalChars,
     };
   }
 
@@ -800,7 +800,7 @@ class TreeList implements Component {
       flatNode.node.label !== undefined && flatNode.node.label !== ""
         ? theme.fg("warning", `[${flatNode.node.label}] `)
         : "";
-    return { prefix, foldMarker, pathMarker, label };
+    return { foldMarker, label, pathMarker, prefix };
   }
 
   private static renderPart3(
@@ -831,7 +831,7 @@ class TreeList implements Component {
       gutter = theme.bg("selectedBg", gutter);
       body = theme.bg("selectedBg", body);
     }
-    renderedRows.push({ gutter, body, anchorCol, bodyWidth: visibleWidth(body), isSelected });
+    renderedRows.push({ anchorCol, body, bodyWidth: visibleWidth(body), gutter, isSelected });
   }
 
   private getEntryDisplayText(node: SessionTreeNode, isSelected: boolean): string {
@@ -1241,7 +1241,7 @@ class TreeList implements Component {
   }
 }
 
-class SearchLine implements Component {
+class SearchLine implements tuiTypes.Component {
   private treeList: TreeList;
 
   constructor(treeList: TreeList) {
@@ -1266,7 +1266,7 @@ class SearchLine implements Component {
   handleInput(_keyData: string): void {}
 }
 
-class TreeHelp implements Component {
+class TreeHelp implements tuiTypes.Component {
   invalidate(): void {}
 
   render(width: number): string[] {
@@ -1306,32 +1306,33 @@ class TreeHelp implements Component {
   }
 }
 
-const TREE_HELP_ITEMS: Array<{ keys: Keybinding[]; label: string; labelFirst?: boolean }> = [
-  { keys: ["tui.select.up", "tui.select.down"], label: "move" },
-  { keys: ["tui.editor.cursorLeft", "tui.editor.cursorRight"], label: "page" },
-  { keys: ["app.tree.foldOrUp", "app.tree.unfoldOrDown"], label: "branch" },
-  { keys: ["app.message.copy"], label: "copy" },
-  { keys: ["app.tree.editLabel"], label: "label" },
-  { keys: ["app.tree.toggleLabelTimestamp"], label: "label time" },
-  {
-    keys: [
-      "app.tree.filter.default",
-      "app.tree.filter.noTools",
-      "app.tree.filter.userOnly",
-      "app.tree.filter.labeledOnly",
-      "app.tree.filter.all",
-    ],
-    label: "filters",
-    labelFirst: true,
-  },
-  {
-    keys: ["app.tree.filter.cycleForward", "app.tree.filter.cycleBackward"],
-    label: "cycle",
-    labelFirst: true,
-  },
-];
+const TREE_HELP_ITEMS: Array<{ keys: tuiTypes.Keybinding[]; label: string; labelFirst?: boolean }> =
+  [
+    { keys: ["tui.select.up", "tui.select.down"], label: "move" },
+    { keys: ["tui.editor.cursorLeft", "tui.editor.cursorRight"], label: "page" },
+    { keys: ["app.tree.foldOrUp", "app.tree.unfoldOrDown"], label: "branch" },
+    { keys: ["app.message.copy"], label: "copy" },
+    { keys: ["app.tree.editLabel"], label: "label" },
+    { keys: ["app.tree.toggleLabelTimestamp"], label: "label time" },
+    {
+      keys: [
+        "app.tree.filter.default",
+        "app.tree.filter.noTools",
+        "app.tree.filter.userOnly",
+        "app.tree.filter.labeledOnly",
+        "app.tree.filter.all",
+      ],
+      label: "filters",
+      labelFirst: true,
+    },
+    {
+      keys: ["app.tree.filter.cycleForward", "app.tree.filter.cycleBackward"],
+      label: "cycle",
+      labelFirst: true,
+    },
+  ];
 
-function formatHelpKeys(keybindings: Keybinding[]): string {
+function formatHelpKeys(keybindings: tuiTypes.Keybinding[]): string {
   const keys: string[] = [];
   for (const keybinding of keybindings) {
     const key = getKeybindings().getKeys(keybinding)[0];
@@ -1363,8 +1364,8 @@ function compactRawKeys(keys: string[]): string {
     : keys.join("/");
 }
 
-class LabelInput implements Component, Focusable {
-  private input: Input;
+class LabelInput implements tuiTypes.Component, tuiTypes.Focusable {
+  private input: tuiTypes.Input;
   private entryId: string;
   public onSubmit?: (entryId: string, label: string | undefined) => void;
   public onCancel?: () => void;
@@ -1420,11 +1421,11 @@ class LabelInput implements Component, Focusable {
   }
 }
 
-export class TreeSelectorComponent extends Container implements Focusable {
+export class TreeSelectorComponent extends Container implements tuiTypes.Focusable {
   private treeList: TreeList;
   private labelInput: LabelInput | null = null;
-  private labelInputContainer: Container;
-  private treeContainer: Container;
+  private labelInputContainer: tuiTypes.Container;
+  private treeContainer: tuiTypes.Container;
   private onLabelChangeCallback?:
     | ((entryId: string, label: string | undefined) => void)
     | undefined;

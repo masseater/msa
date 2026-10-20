@@ -1,4 +1,4 @@
-import { type AssistantMessage } from "@msa/ai";
+import type aiTypes from "@msa/ai/index.types";
 import testing from "@msa/testing";
 import { Effect } from "effect";
 import { afterEach, describe, expect, it, vi } from "vite-plus/test";
@@ -168,8 +168,8 @@ const doesNotTriggerThresholdCompactionWhenStep1 = (
   harness: harnessTypes.Harness,
   sessionInternals: agentSessionCompactionSupportTypes.SessionWithCompactionInternals,
   preCompactionTimestamp: number,
-  keptAssistant: AssistantMessage,
-  errorAssistant: AssistantMessage,
+  keptAssistant: aiTypes.AssistantMessage,
+  errorAssistant: aiTypes.AssistantMessage,
 ) =>
   Effect.gen(function* () {
     harness.session.agent.state.messages = [

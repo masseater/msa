@@ -22,7 +22,7 @@ const enqueue = (filePath: string) =>
       const previous = fileMutationQueues.get(key);
       const next = yield* Deferred.make<void>();
       fileMutationQueues.set(key, next);
-      return { key, previous, next };
+      return { key, next, previous };
     }),
   );
 

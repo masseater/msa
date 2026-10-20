@@ -1,4 +1,4 @@
-import type { AutocompleteItem } from "@msa/tui";
+import type tuiTypes from "@msa/tui/index.types";
 
 import { claudeAccounts } from "./cli-agents/claude-account-kind.ts";
 import type { ExtensionUIContext } from "./extensions/types.ts";
@@ -17,21 +17,21 @@ export interface AccountKind {
 
   run(args: string, ctx: AccountsContext): Promise<void>;
 
-  complete(prefix: string): AutocompleteItem[] | null;
+  complete(prefix: string): tuiTypes.AutocompleteItem[] | null;
 }
 
 const KINDS: AccountKind[] = [claudeAccounts];
 
 export const ACCOUNTS_DESCRIPTION = `Manage accounts: ${KINDS.map((kind) => kind.name).join(", ")}`;
 
-export function completeAccountsArgument(prefix: string): AutocompleteItem[] | null {
+export function completeAccountsArgument(prefix: string): tuiTypes.AutocompleteItem[] | null {
   const trimmed = prefix.trimStart();
   const space = trimmed.search(/\s/);
   if (space < 0) {
     return KINDS.filter((kind) => kind.name.startsWith(trimmed)).map((kind) => ({
-      value: `${kind.name} `,
-      label: kind.name,
       description: kind.description,
+      label: kind.name,
+      value: `${kind.name} `,
     }));
   }
   const kind = KINDS.find((candidate) => candidate.name === trimmed.slice(0, space));

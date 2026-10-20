@@ -1,10 +1,13 @@
-import { type AssistantMessage, fauxAssistantMessage } from "@msa/ai";
+import ai from "@msa/ai";
+import type aiTypes from "@msa/ai/index.types";
 import testing from "@msa/testing";
 import { Effect } from "effect";
 import { afterEach, describe, expect, it } from "vite-plus/test";
 
 import harnessModule from "../harness.ts";
 import type harnessTypes from "../harness.types.ts";
+
+const { fauxAssistantMessage } = ai;
 
 const { createHarness } = harnessModule;
 
@@ -19,7 +22,7 @@ function seedCompactableSession(harness: harnessTypes.Harness): void {
     timestamp: now - 1000,
   });
   const model = harness.getModel();
-  const assistant: AssistantMessage = {
+  const assistant: aiTypes.AssistantMessage = {
     ...fauxAssistantMessage("assistant response to compact", { timestamp: now - 500 }),
     api: model.api,
     model: model.id,

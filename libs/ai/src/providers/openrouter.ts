@@ -1,39 +1,53 @@
-import { anthropicMessagesApi } from "../api/anthropic-messages.lazy.ts";
-import { openAICompletionsApi } from "../api/openai-completions.lazy.ts";
-import { openrouterImagesApi } from "../api/openrouter-images.lazy.ts";
-import { typesafeSystemOneApi } from "../api/typesafe-system-one.lazy.ts";
-import { envApiKeyAuth, lazyOAuth } from "../auth/helpers.ts";
-import { loadOpenRouterOAuth } from "../auth/oauth/load.ts";
-import { createProvider, type Provider } from "../models.ts";
-import { OPENROUTER_BASE_URL } from "./openrouter-api.ts";
-import {
-  OPENROUTER_CLASSIFIER_MODELS,
-  OPENROUTER_IMAGE_MODELS,
-  OPENROUTER_MODELS,
-} from "./openrouter.models.ts";
-export function openrouterProvider(): Provider<"anthropic-messages" | "openai-completions"> {
+import anthropicMessagesLazy from "../api/anthropic-messages.lazy.ts";
+import openaiCompletionsLazy from "../api/openai-completions.lazy.ts";
+import openrouterImagesLazy from "../api/openrouter-images.lazy.ts";
+import typesafeSystemOneLazy from "../api/typesafe-system-one.lazy.ts";
+import helpers from "../auth/helpers.ts";
+import loadModule from "../auth/oauth/load.ts";
+import modelsModule from "../models.ts";
+import type modelsTypes from "../models.types.ts";
+import openrouterApi from "./openrouter-api.ts";
+import openrouterModels from "./openrouter.models.ts";
+
+const { createProvider } = modelsModule;
+const { anthropicMessagesApi } = anthropicMessagesLazy;
+const { openAICompletionsApi } = openaiCompletionsLazy;
+const { envApiKeyAuth, lazyOAuth } = helpers;
+const { loadOpenRouterOAuth } = loadModule;
+const { OPENROUTER_BASE_URL } = openrouterApi;
+const { typesafeSystemOneApi } = typesafeSystemOneLazy;
+const { openrouterImagesApi } = openrouterImagesLazy;
+const { OPENROUTER_CLASSIFIER_MODELS, OPENROUTER_IMAGE_MODELS, OPENROUTER_MODELS } =
+  openrouterModels;
+function openrouterProvider(): modelsTypes.Provider<"anthropic-messages" | "openai-completions"> {
   return createProvider<"anthropic-messages" | "openai-completions">({
-    id: "openrouter",
-    name: "OpenRouter",
-    baseUrl: OPENROUTER_BASE_URL,
+    api: {
+      "anthropic-messages": anthropicMessagesApi(),
+      "openai-completions": openAICompletionsApi(),
+    },
     auth: {
       apiKey: envApiKeyAuth("OpenRouter API key", ["OPENROUTER_API_KEY"]),
       oauth: lazyOAuth({
-        name: "OpenRouter OAuth",
-        loginLabel: "Sign in with OpenRouter",
         load: loadOpenRouterOAuth,
+        loginLabel: "Sign in with OpenRouter",
+        name: "OpenRouter OAuth",
       }),
     },
+    baseUrl: OPENROUTER_BASE_URL,
+    classifiers: { "typesafe-system-one": typesafeSystemOneApi() },
+    id: "openrouter",
+    images: { "openrouter-images": openrouterImagesApi() },
     models: [
       ...Object.values(OPENROUTER_MODELS),
       ...Object.values(OPENROUTER_IMAGE_MODELS),
       ...Object.values(OPENROUTER_CLASSIFIER_MODELS),
     ],
-    api: {
-      "anthropic-messages": anthropicMessagesApi(),
-      "openai-completions": openAICompletionsApi(),
-    },
-    images: { "openrouter-images": openrouterImagesApi() },
-    classifiers: { "typesafe-system-one": typesafeSystemOneApi() },
+    name: "OpenRouter",
   });
 }
+
+const openrouter = {
+  openrouterProvider,
+};
+
+export default openrouter;

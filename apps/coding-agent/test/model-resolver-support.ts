@@ -1,6 +1,6 @@
-import type { Api, Model } from "@msa/ai";
+import type aiTypes from "@msa/ai/index.types";
 
-const mockModels: Model<"anthropic-messages">[] = [
+const mockModels: aiTypes.Model<"anthropic-messages">[] = [
   {
     api: "anthropic-messages" as const,
     baseUrl: "https://api.anthropic.com",
@@ -27,7 +27,7 @@ const mockModels: Model<"anthropic-messages">[] = [
   },
 ];
 
-const mockOpenRouterModels: Model<"anthropic-messages">[] = [
+const mockOpenRouterModels: aiTypes.Model<"anthropic-messages">[] = [
   {
     api: "anthropic-messages" as const,
     baseUrl: "https://openrouter.ai/api/v1",
@@ -56,7 +56,7 @@ const mockOpenRouterModels: Model<"anthropic-messages">[] = [
 
 const allModels = [...mockModels, ...mockOpenRouterModels];
 
-function referenceModel(provider: string, id: string): Model<Api> {
+function referenceModel(provider: string, id: string): aiTypes.Model<aiTypes.Api> {
   return {
     api: "openai-completions" as const,
     baseUrl: "https://example.invalid",
@@ -93,7 +93,7 @@ const referenceCatalog = [
   referenceModel("gw-b", "zz:free"),
 ];
 
-function modelRef(m: Model<Api>): string {
+function modelRef(m: aiTypes.Model<aiTypes.Api>): string {
   return `${m.provider}/${m.id}`;
 }
 

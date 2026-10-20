@@ -1,19 +1,18 @@
 import { dual } from "effect/Function";
 
-import { cjkBreakRegex, isWhitespaceChar } from "../text-boundaries.ts";
-import { visibleWidth } from "../utils.ts";
-import { graphemeSegments, isPasteMarker } from "./editor-segments.ts";
+import textBoundaries from "../text-boundaries.ts";
+import utils from "../utils.ts";
+import editorSegments from "./editor-segments.ts";
+import type editorWrapTypes from "./editor-wrap.types.ts";
 
-export interface TextChunk {
-  text: string;
-  startIndex: number;
-  endIndex: number;
-}
+const { visibleWidth } = utils;
+const { graphemeSegments, isPasteMarker } = editorSegments;
+const { cjkBreakRegex, isWhitespaceChar } = textBoundaries;
 
 interface WrapProgress {
   readonly line: string;
   readonly maxWidth: number;
-  chunks: TextChunk[];
+  chunks: editorWrapTypes.TextChunk[];
   currentWidth: number;
   chunkStart: number;
   wrapOppIndex: number;
@@ -22,9 +21,9 @@ interface WrapProgress {
 
 function pushChunk(progress: WrapProgress, endIndex: number): void {
   progress.chunks.push({
-    text: progress.line.slice(progress.chunkStart, endIndex),
-    startIndex: progress.chunkStart,
     endIndex,
+    startIndex: progress.chunkStart,
+    text: progress.line.slice(progress.chunkStart, endIndex),
   });
   progress.chunkStart = endIndex;
 }
@@ -47,9 +46,9 @@ function splitWideGrapheme(progress: WrapProgress, grapheme: string, charIndex: 
   const subChunks = wordWrapLine(grapheme, progress.maxWidth);
   for (const sc of subChunks.slice(0, -1)) {
     progress.chunks.push({
-      text: sc.text,
-      startIndex: charIndex + sc.startIndex,
       endIndex: charIndex + sc.endIndex,
+      startIndex: charIndex + sc.startIndex,
+      text: sc.text,
     });
   }
   const last = subChunks[subChunks.length - 1]!;
@@ -67,26 +66,33 @@ function isWrapOpportunity(grapheme: string, next: Intl.SegmentData): boolean {
   return isCjk || nextIsCjk;
 }
 
-export const wordWrapLine: {
-  (line: string, maxWidth: number, preSegmented?: Intl.SegmentData[]): TextChunk[];
-  (maxWidth: number, preSegmented?: Intl.SegmentData[]): (line: string) => TextChunk[];
+const wordWrapLine: {
+  (line: string, maxWidth: number, preSegmented?: Intl.SegmentData[]): editorWrapTypes.TextChunk[];
+  (
+    maxWidth: number,
+    preSegmented?: Intl.SegmentData[],
+  ): (line: string) => editorWrapTypes.TextChunk[];
 } = dual(
   (args) => typeof args[0] === "string",
-  (line: string, maxWidth: number, preSegmented?: Intl.SegmentData[]): TextChunk[] => {
+  (
+    line: string,
+    maxWidth: number,
+    preSegmented?: Intl.SegmentData[],
+  ): editorWrapTypes.TextChunk[] => {
     if (line === "" || maxWidth <= 0) {
-      return [{ text: "", startIndex: 0, endIndex: 0 }];
+      return [{ endIndex: 0, startIndex: 0, text: "" }];
     }
     if (visibleWidth(line) <= maxWidth) {
-      return [{ text: line, startIndex: 0, endIndex: line.length }];
+      return [{ endIndex: line.length, startIndex: 0, text: line }];
     }
 
     const segments = preSegmented ?? graphemeSegments(line);
     const progress: WrapProgress = {
-      line,
-      maxWidth,
+      chunkStart: 0,
       chunks: [],
       currentWidth: 0,
-      chunkStart: 0,
+      line,
+      maxWidth,
       wrapOppIndex: -1,
       wrapOppWidth: 0,
     };
@@ -105,50 +111,31 @@ export const wordWrapLine: {
       }
     }
     progress.chunks.push({
-      text: line.slice(progress.chunkStart),
-      startIndex: progress.chunkStart,
       endIndex: line.length,
+      startIndex: progress.chunkStart,
+      text: line.slice(progress.chunkStart),
     });
     return progress.chunks;
   },
 );
 
-export interface VisualLine {
-  logicalLine: number;
-  startCol: number;
-  length: number;
-}
-
-export interface LayoutLine {
-  text: string;
-  hasCursor: boolean;
-  cursorPos?: number;
-}
-
-export interface WrappableText {
-  readonly lines: readonly string[];
-  readonly cursorLine: number;
-  readonly cursorCol: number;
-  graphemes(text: string): Intl.SegmentData[];
-}
-
-export const buildVisualLineMap: {
-  (text: WrappableText, width: number): VisualLine[];
-  (width: number): (text: WrappableText) => VisualLine[];
-} = dual(2, (text: WrappableText, width: number): VisualLine[] => {
-  const visualLines: VisualLine[] = [];
+const buildVisualLineMap: {
+  (text: editorWrapTypes.WrappableText, width: number): editorWrapTypes.VisualLine[];
+  (width: number): (text: editorWrapTypes.WrappableText) => editorWrapTypes.VisualLine[];
+} = dual(2, (text: editorWrapTypes.WrappableText, width: number): editorWrapTypes.VisualLine[] => {
+  const visualLines: editorWrapTypes.VisualLine[] = [];
   for (const [i, rawLine] of text.lines.entries()) {
     const line = rawLine || "";
     if (line.length === 0) {
-      visualLines.push({ logicalLine: i, startCol: 0, length: 0 });
+      visualLines.push({ length: 0, logicalLine: i, startCol: 0 });
     } else if (visibleWidth(line) <= width) {
-      visualLines.push({ logicalLine: i, startCol: 0, length: line.length });
+      visualLines.push({ length: line.length, logicalLine: i, startCol: 0 });
     } else {
       for (const chunk of wordWrapLine(line, width, text.graphemes(line))) {
         visualLines.push({
+          length: chunk.endIndex - chunk.startIndex,
           logicalLine: i,
           startCol: chunk.startIndex,
-          length: chunk.endIndex - chunk.startIndex,
         });
       }
     }
@@ -156,75 +143,95 @@ export const buildVisualLineMap: {
   return visualLines;
 });
 
-export const isLastSegmentOfLine: {
-  (visualLines: readonly VisualLine[], index: number): boolean;
-  (index: number): (visualLines: readonly VisualLine[]) => boolean;
+const isLastSegmentOfLine: {
+  (visualLines: readonly editorWrapTypes.VisualLine[], index: number): boolean;
+  (index: number): (visualLines: readonly editorWrapTypes.VisualLine[]) => boolean;
 } = dual(
   2,
-  (visualLines: readonly VisualLine[], index: number): boolean =>
+  (visualLines: readonly editorWrapTypes.VisualLine[], index: number): boolean =>
     index === visualLines.length - 1 ||
     visualLines[index + 1]?.logicalLine !== visualLines[index]?.logicalLine,
 );
 
-export const findVisualLineAt: {
-  (visualLines: readonly VisualLine[], line: number, col: number): number;
-  (line: number, col: number): (visualLines: readonly VisualLine[]) => number;
-} = dual(3, (visualLines: readonly VisualLine[], line: number, col: number): number => {
-  for (const [i, vl] of visualLines.entries()) {
-    if (vl.logicalLine !== line) continue;
-    const offset = col - vl.startCol;
-    if (
-      offset >= 0 &&
-      (offset < vl.length || (isLastSegmentOfLine(visualLines, i) && offset === vl.length))
-    ) {
-      return i;
+const findVisualLineAt: {
+  (visualLines: readonly editorWrapTypes.VisualLine[], line: number, col: number): number;
+  (line: number, col: number): (visualLines: readonly editorWrapTypes.VisualLine[]) => number;
+} = dual(
+  3,
+  (visualLines: readonly editorWrapTypes.VisualLine[], line: number, col: number): number => {
+    for (const [i, vl] of visualLines.entries()) {
+      if (vl.logicalLine !== line) continue;
+      const offset = col - vl.startCol;
+      if (
+        offset >= 0 &&
+        (offset < vl.length || (isLastSegmentOfLine(visualLines, i) && offset === vl.length))
+      ) {
+        return i;
+      }
     }
-  }
-  return visualLines.length - 1;
-});
+    return visualLines.length - 1;
+  },
+);
 
-function layoutChunk(chunk: TextChunk, isLastChunk: boolean, cursorPos: number): LayoutLine {
+function layoutChunk(
+  chunk: editorWrapTypes.TextChunk,
+  isLastChunk: boolean,
+  cursorPos: number,
+): editorWrapTypes.LayoutLine {
   const hasCursor = isLastChunk
     ? cursorPos >= chunk.startIndex
     : cursorPos >= chunk.startIndex && cursorPos < chunk.endIndex;
-  if (!hasCursor) return { text: chunk.text, hasCursor: false };
+  if (!hasCursor) return { hasCursor: false, text: chunk.text };
   const offset = cursorPos - chunk.startIndex;
   return {
-    text: chunk.text,
-    hasCursor: true,
     cursorPos: isLastChunk ? offset : Math.min(offset, chunk.text.length),
+    hasCursor: true,
+    text: chunk.text,
   };
 }
 
 function layoutLogicalLine(
-  text: WrappableText,
+  text: editorWrapTypes.WrappableText,
   line: string,
   isCurrentLine: boolean,
   contentWidth: number,
-): LayoutLine[] {
+): editorWrapTypes.LayoutLine[] {
   if (visibleWidth(line) <= contentWidth) {
     return [
       isCurrentLine
-        ? { text: line, hasCursor: true, cursorPos: text.cursorCol }
-        : { text: line, hasCursor: false },
+        ? { cursorPos: text.cursorCol, hasCursor: true, text: line }
+        : { hasCursor: false, text: line },
     ];
   }
   const chunks = wordWrapLine(line, contentWidth, text.graphemes(line));
   return chunks.map((chunk, chunkIndex) =>
     isCurrentLine
       ? layoutChunk(chunk, chunkIndex === chunks.length - 1, text.cursorCol)
-      : { text: chunk.text, hasCursor: false },
+      : { hasCursor: false, text: chunk.text },
   );
 }
 
-export const layoutText: {
-  (text: WrappableText, contentWidth: number): LayoutLine[];
-  (contentWidth: number): (text: WrappableText) => LayoutLine[];
-} = dual(2, (text: WrappableText, contentWidth: number): LayoutLine[] => {
-  if (text.lines.length === 0 || (text.lines.length === 1 && text.lines[0] === "")) {
-    return [{ text: "", hasCursor: true, cursorPos: 0 }];
-  }
-  return text.lines.flatMap((rawLine, i) =>
-    layoutLogicalLine(text, rawLine || "", i === text.cursorLine, contentWidth),
-  );
-});
+const layoutText: {
+  (text: editorWrapTypes.WrappableText, contentWidth: number): editorWrapTypes.LayoutLine[];
+  (contentWidth: number): (text: editorWrapTypes.WrappableText) => editorWrapTypes.LayoutLine[];
+} = dual(
+  2,
+  (text: editorWrapTypes.WrappableText, contentWidth: number): editorWrapTypes.LayoutLine[] => {
+    if (text.lines.length === 0 || (text.lines.length === 1 && text.lines[0] === "")) {
+      return [{ cursorPos: 0, hasCursor: true, text: "" }];
+    }
+    return text.lines.flatMap((rawLine, i) =>
+      layoutLogicalLine(text, rawLine || "", i === text.cursorLine, contentWidth),
+    );
+  },
+);
+
+const editorWrap = {
+  buildVisualLineMap,
+  findVisualLineAt,
+  isLastSegmentOfLine,
+  layoutText,
+  wordWrapLine,
+};
+
+export default editorWrap;

@@ -1,8 +1,10 @@
 import assert from "node:assert";
 import { describe, it } from "node:test";
 
-import { SelectList } from "../src/components/select-list.ts";
-import { visibleWidth } from "../src/utils.ts";
+import SelectList from "../src/components/select-list.ts";
+import utils from "../src/utils.ts";
+
+const { visibleWidth } = utils;
 
 const testTheme = {
   description: (text: string) => text,

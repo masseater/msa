@@ -1,4 +1,4 @@
-import { fauxAssistantMessage } from "@msa/ai";
+import ai from "@msa/ai";
 import { Effect } from "effect";
 import { afterEach, describe, expect, it } from "vite-plus/test";
 
@@ -6,6 +6,8 @@ import { GOAL_ENTRY_TYPE, type GoalEntryData } from "../../src/core/goal.ts";
 import { SessionManager } from "../../src/core/session-manager.ts";
 import agentSessionGoalSupport from "./agent-session-goal-support.ts";
 import harnessModule from "./harness.ts";
+
+const { fauxAssistantMessage } = ai;
 
 const { goalEvents, harnesses, setup, touchTool, workTurn } = agentSessionGoalSupport;
 

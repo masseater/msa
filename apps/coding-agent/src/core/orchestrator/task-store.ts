@@ -22,19 +22,19 @@ interface TaskRow {
 
 function toTask(row: TaskRow): Task {
   return {
+    condition: row.condition,
+    createdAt: row.created_at,
+    currentState: row.current_state,
+    cwd: row.cwd,
+    goalState: row.goal_state,
     id: row.id,
+    kind: row.kind as TaskKind,
+    model: row.model,
     project: row.project,
     round: row.round,
-    kind: row.kind as TaskKind,
-    title: row.title,
-    currentState: row.current_state,
-    goalState: row.goal_state,
     status: row.status as TaskStatus,
-    cwd: row.cwd,
-    condition: row.condition,
-    model: row.model,
     thinkingLevel: row.thinking_level as Task["thinkingLevel"],
-    createdAt: row.created_at,
+    title: row.title,
     updatedAt: row.updated_at,
   };
 }
@@ -77,13 +77,13 @@ function listTasks(database: DatabaseSync, project: string): Task[] {
 }
 
 const PATCH_COLUMNS: Readonly<Record<string, string>> = {
-  title: "title",
+  condition: "condition",
   currentState: "current_state",
   goalState: "goal_state",
-  status: "status",
-  condition: "condition",
   model: "model",
+  status: "status",
   thinkingLevel: "thinking_level",
+  title: "title",
 };
 
 function updateTask(
@@ -138,7 +138,7 @@ function listDependencyPairs(
        JOIN tasks t ON t.id = d.task_id WHERE t.project = ?`,
     )
     .all(project) as unknown as { task_id: string; depends_on: string }[];
-  return rows.map((row) => ({ taskId: row.task_id, dependsOn: row.depends_on }));
+  return rows.map((row) => ({ dependsOn: row.depends_on, taskId: row.task_id }));
 }
 
 function reaches(database: DatabaseSync, from: string, target: string): boolean {
@@ -286,24 +286,24 @@ function deleteTask(database: DatabaseSync, taskId: string): void {
 }
 
 export const taskStore = {
-  insertTask,
-  getTask,
-  listTasks,
-  updateTask,
-  setTaskStatus,
-  dependenciesOf,
-  dependentsOf,
-  listDependencyPairs,
   addDependency,
-  removeDependency,
-  replaceDependencies,
   clearDependencies,
   deleteTask,
-  unfinishedDependencies,
-  readyTasks,
-  tasksWithCondition,
+  dependenciesOf,
+  dependentsOf,
+  getTask,
   insertRound,
+  insertTask,
+  listDependencyPairs,
   listRoundIds,
+  listTasks,
+  readyTasks,
+  removeDependency,
+  replaceDependencies,
   reviewTaskOfRound,
+  setTaskStatus,
+  tasksWithCondition,
+  unfinishedDependencies,
+  updateTask,
   workTasksOfRound,
 };

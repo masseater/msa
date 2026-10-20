@@ -1,7 +1,7 @@
 import { Effect } from "effect";
 import { describe, expect, it } from "vite-plus/test";
 
-import type { Model } from "../src/types.ts";
+import type typesModule from "../src/types.types.ts";
 import env from "./env.ts";
 import modelChoice from "./model-choice.ts";
 import totalTokensSupport from "./total-tokens-support.ts";
@@ -23,7 +23,7 @@ const anthropicReportsCachedTotals = () =>
     }),
   );
 
-const openAICompletionsModel = (): Model<"openai-completions"> => {
+const openAICompletionsModel = (): typesModule.Model<"openai-completions"> => {
   const { compat: _compat, ...baseModel } = chooseModel("openai", "direct OpenAI");
   return { ...baseModel, api: "openai-completions" };
 };

@@ -1,4 +1,4 @@
-import type { Api, Model, ModelCost } from "../../src/types.ts";
+import type typesModule from "../../src/types.types.ts";
 import type modelsDevTypes from "./models-dev.types.ts";
 
 function createModelsDevSource(data: modelsDevTypes.ModelsDevCatalog): {
@@ -25,7 +25,7 @@ function roundCost(value: number): number {
   return Number(value.toFixed(6));
 }
 
-function getModelsDevCost(cost: modelsDevTypes.ModelsDevModel["cost"]): ModelCost {
+function getModelsDevCost(cost: modelsDevTypes.ModelsDevModel["cost"]): typesModule.ModelCost {
   const base = {
     cacheRead: orZero(cost?.cache_read),
     cacheWrite: cost?.cache_write || 0,
@@ -82,7 +82,7 @@ function modelsDevModel({
   compat,
   thinkingLevelMap,
   overrides,
-}: modelsDevTypes.ModelsDevModelSpec): Model<Api> {
+}: modelsDevTypes.ModelsDevModelSpec): typesModule.Model<typesModule.Api> {
   return {
     ...modelsDevFields({ id, source }),
     api,

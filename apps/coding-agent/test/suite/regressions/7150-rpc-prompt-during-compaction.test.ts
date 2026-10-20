@@ -1,4 +1,4 @@
-import { fauxAssistantMessage } from "@msa/ai";
+import ai from "@msa/ai";
 import testing from "@msa/testing";
 import { Cause, Effect, Exit } from "effect";
 import { afterEach, describe, expect, it } from "vite-plus/test";
@@ -6,6 +6,8 @@ import { afterEach, describe, expect, it } from "vite-plus/test";
 import type { PromptDisposition } from "../../../src/core/agent-session.ts";
 import harnessModule from "../harness.ts";
 import type harnessTypes from "../harness.types.ts";
+
+const { fauxAssistantMessage } = ai;
 
 const { createHarness, getMessageText, getUserTexts } = harnessModule;
 

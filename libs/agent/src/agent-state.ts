@@ -1,17 +1,15 @@
-import {
-  createInitialSystemMessage,
-  getCurrentSystemPrompt,
-  type ImageContent,
-  type Message,
-  type Model,
-  type TextContent,
-  toToolDeclaration,
-} from "@msa/ai";
+import ai from "@msa/ai";
+import type aiTypes from "@msa/ai/index.types";
 
-import { now } from "./call.ts";
-import type { AgentEvent, AgentMessage, AgentState, AgentTool } from "./types.ts";
+import type agentStateTypes from "./agent-state.types.ts";
+import callModule from "./call.ts";
+import type typesModule from "./types.ts";
 
-export const defaultConvertToLlm = (messages: AgentMessage[]): Message[] =>
+const { createInitialSystemMessage, getCurrentSystemPrompt, toToolDeclaration } = ai;
+
+const { now } = callModule;
+
+const defaultConvertToLlm = (messages: typesModule.AgentMessage[]): aiTypes.Message[] =>
   messages.filter(
     (message) =>
       message.role === "system" ||
@@ -21,42 +19,30 @@ export const defaultConvertToLlm = (messages: AgentMessage[]): Message[] =>
   );
 
 const EMPTY_USAGE = {
-  input: 0,
-  output: 0,
   cacheRead: 0,
   cacheWrite: 0,
+  cost: { cacheRead: 0, cacheWrite: 0, input: 0, output: 0, total: 0 },
+  input: 0,
+  output: 0,
   totalTokens: 0,
-  cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0, total: 0 },
 };
 
 const DEFAULT_MODEL = {
-  id: "unknown",
-  name: "unknown",
   api: "unknown",
-  provider: "unknown",
   baseUrl: "",
-  reasoning: false,
-  input: [],
-  cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0 },
   contextWindow: 0,
+  cost: { cacheRead: 0, cacheWrite: 0, input: 0, output: 0 },
+  id: "unknown",
+  input: [],
   maxTokens: 0,
-} satisfies Model<any>;
+  name: "unknown",
+  provider: "unknown",
+  reasoning: false,
+} satisfies aiTypes.Model<any>;
 
-export type MutableAgentState = Omit<
-  AgentState,
-  "isStreaming" | "streamingMessage" | "pendingToolCalls" | "errorMessage"
-> & {
-  isStreaming: boolean;
-  streamingMessage?: AgentMessage | undefined;
-  pendingToolCalls: Set<string>;
-  errorMessage?: string | undefined;
-};
-
-export type AgentInitialState = Partial<
-  Omit<AgentState, "pendingToolCalls" | "isStreaming" | "streamingMessage" | "errorMessage">
->;
-
-export const createMutableAgentState = (initialState?: AgentInitialState): MutableAgentState => {
+const createMutableAgentState = (
+  initialState?: agentStateTypes.AgentInitialState,
+): agentStateTypes.MutableAgentState => {
   let tools = initialState?.tools?.slice() ?? [];
   let messages = initialState?.messages?.slice() ?? [];
   const initialMessage = createInitialSystemMessage(
@@ -68,74 +54,66 @@ export const createMutableAgentState = (initialState?: AgentInitialState): Mutab
   }
 
   return {
+    errorMessage: undefined,
+    isStreaming: false,
+    get messages() {
+      return messages;
+    },
+    set messages(nextMessages: typesModule.AgentMessage[]) {
+      messages = nextMessages.slice();
+    },
+    model: initialState?.model ?? DEFAULT_MODEL,
+    pendingToolCalls: new Set<string>(),
+    streamingMessage: undefined,
     get systemPrompt() {
       return getCurrentSystemPrompt(messages);
     },
-    model: initialState?.model ?? DEFAULT_MODEL,
     thinkingLevel: initialState?.thinkingLevel ?? "off",
     get tools() {
       return tools;
     },
-    set tools(nextTools: AgentTool<any>[]) {
+    set tools(nextTools: typesModule.AgentTool<any>[]) {
       tools = nextTools.slice();
     },
-    get messages() {
-      return messages;
-    },
-    set messages(nextMessages: AgentMessage[]) {
-      messages = nextMessages.slice();
-    },
-    isStreaming: false,
-    streamingMessage: undefined,
-    pendingToolCalls: new Set<string>(),
-    errorMessage: undefined,
   };
 };
 
-export interface PromptInput {
-  readonly input: string | AgentMessage | AgentMessage[];
-  readonly images: ImageContent[] | undefined;
-}
-
-export const promptMessages = ({ input, images }: PromptInput): AgentMessage[] => {
+const promptMessages = ({
+  input,
+  images,
+}: agentStateTypes.PromptInput): typesModule.AgentMessage[] => {
   if (Array.isArray(input)) return input;
   if (typeof input !== "string") return [input];
-  const content: Array<TextContent | ImageContent> = [{ type: "text", text: input }];
+  const content: Array<aiTypes.TextContent | aiTypes.ImageContent> = [
+    { text: input, type: "text" },
+  ];
   if (images !== undefined && images.length > 0) content.push(...images);
-  return [{ role: "user", content, timestamp: now() }];
+  return [{ content, role: "user", timestamp: now() }];
 };
 
-export interface RunFailure {
-  readonly model: Model<any>;
-  readonly error: unknown;
-  readonly aborted: boolean;
-}
-
-export const runFailureMessage = ({ model, error, aborted }: RunFailure) =>
+const runFailureMessage = ({ model, error, aborted }: agentStateTypes.RunFailure) =>
   ({
-    role: "assistant",
-    content: [{ type: "text", text: "" }],
     api: model.api,
-    provider: model.provider,
-    model: model.id,
-    usage: EMPTY_USAGE,
-    stopReason: aborted ? "aborted" : "error",
+    content: [{ text: "", type: "text" }],
     errorMessage: error instanceof Error ? error.message : String(error),
+    model: model.id,
+    provider: model.provider,
+    role: "assistant",
+    stopReason: aborted ? "aborted" : "error",
     timestamp: now(),
-  }) satisfies AgentMessage;
+    usage: EMPTY_USAGE,
+  }) satisfies typesModule.AgentMessage;
 
-const withPending = (state: MutableAgentState, update: (pending: Set<string>) => void): void => {
+const withPending = (
+  state: agentStateTypes.MutableAgentState,
+  update: (pending: Set<string>) => void,
+): void => {
   const pendingToolCalls = new Set(state.pendingToolCalls);
   update(pendingToolCalls);
   state.pendingToolCalls = pendingToolCalls;
 };
 
-export interface StateEvent {
-  readonly state: MutableAgentState;
-  readonly event: AgentEvent;
-}
-
-export const reduceAgentEvent = ({ state, event }: StateEvent): void => {
+const reduceAgentEvent = ({ state, event }: agentStateTypes.StateEvent): void => {
   switch (event.type) {
     case "message_start":
     case "message_update":
@@ -167,3 +145,13 @@ export const reduceAgentEvent = ({ state, event }: StateEvent): void => {
       break;
   }
 };
+
+const agentState = {
+  createMutableAgentState,
+  defaultConvertToLlm,
+  promptMessages,
+  reduceAgentEvent,
+  runFailureMessage,
+};
+
+export default agentState;

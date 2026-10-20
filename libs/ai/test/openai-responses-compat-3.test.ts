@@ -1,7 +1,7 @@
 import { Effect } from "effect";
 import { afterEach, describe, expect, it, vi } from "vite-plus/test";
 
-import type { Model } from "../src/types.ts";
+import type typesModule from "../src/types.types.ts";
 import modelChoice from "./model-choice.ts";
 import openaiResponsesCompatSupport from "./openai-responses-compat-support.ts";
 
@@ -36,7 +36,7 @@ const usesNoSessionForOpenCode = () =>
       const model = chooseModel(
         "opencode",
         "no-session Responses",
-        (candidate): candidate is Model<"openai-responses"> =>
+        (candidate): candidate is typesModule.Model<"openai-responses"> =>
           usesApi("openai-responses")(candidate) &&
           compatValue(candidate, "sessionAffinityFormat") === "openai-nosession",
       );

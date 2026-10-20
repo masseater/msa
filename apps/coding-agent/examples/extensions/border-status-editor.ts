@@ -1,13 +1,17 @@
-import { readProcessEnv } from "@msa/ai/utils/env";
+import env from "@msa/ai/utils/env";
 import {
   CustomEditor,
   type ExtensionAPI,
   type ExtensionContext,
   type KeybindingsManager,
 } from "@msa/coding-agent";
-import type { EditorTheme, TUI } from "@msa/tui";
-import { truncateToWidth, visibleWidth } from "@msa/tui";
+import tuiModule from "@msa/tui";
+import type tuiTypes from "@msa/tui/index.types";
 import { Effect, type Fiber, Option } from "effect";
+
+const { readProcessEnv } = env;
+
+const { truncateToWidth, visibleWidth } = tuiModule;
 
 function fitBorder(
   left: string,
@@ -71,7 +75,7 @@ interface StatusState {
   isWorking: boolean;
   spinnerIndex: number;
   branch: string | undefined;
-  activeTui: TUI | undefined;
+  activeTui: tuiTypes.TUI | undefined;
   spinnerFiber: Fiber.Fiber<never> | undefined;
 }
 
@@ -84,7 +88,12 @@ interface EditorDeps {
 class BorderStatusEditor extends CustomEditor {
   private readonly deps: EditorDeps;
 
-  constructor(tui: TUI, theme: EditorTheme, keybindings: KeybindingsManager, deps: EditorDeps) {
+  constructor(
+    tui: tuiTypes.TUI,
+    theme: tuiTypes.EditorTheme,
+    keybindings: KeybindingsManager,
+    deps: EditorDeps,
+  ) {
     super(tui, theme, keybindings, { paddingX: 0 });
     this.deps = deps;
     deps.state.activeTui = tui;
@@ -166,24 +175,24 @@ const registerAgentEvents = (msa: ExtensionAPI, state: StatusState): void => {
 const registerSessionStart = (msa: ExtensionAPI, state: StatusState): void => {
   msa.on("session_start", (_event, ctx) => {
     ctx.ui.setWorkingVisible(false);
-    ctx.ui.setFooter(() => ({ render: () => [], invalidate: () => {} }));
+    ctx.ui.setFooter(() => ({ invalidate: () => {}, render: () => [] }));
 
     void refreshBranch(msa, ctx, state);
 
     ctx.ui.setEditorComponent(
       (tui, theme, keybindings) =>
-        new BorderStatusEditor(tui, theme, keybindings, { msa, ctx, state }),
+        new BorderStatusEditor(tui, theme, keybindings, { ctx, msa, state }),
     );
   });
 };
 
 export default function (msa: ExtensionAPI) {
   const state: StatusState = {
-    isWorking: false,
-    spinnerIndex: 0,
-    branch: undefined,
     activeTui: undefined,
+    branch: undefined,
+    isWorking: false,
     spinnerFiber: undefined,
+    spinnerIndex: 0,
   };
 
   registerAgentEvents(msa, state);

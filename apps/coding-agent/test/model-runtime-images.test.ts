@@ -1,9 +1,12 @@
-import { type Model, createProvider, isModelType } from "@msa/ai";
+import ai from "@msa/ai";
+import type aiTypes from "@msa/ai/index.types";
 import testing from "@msa/testing";
 import { Effect } from "effect";
 import { afterEach, describe, expect, it } from "vite-plus/test";
 
 import modelRuntimeImagesSupport from "./model-runtime-images-support.ts";
+
+const { createProvider, isModelType } = ai;
 
 const { classifierContext, context, createRuntime, models, okImageResult, removeRuntimeDirs } =
   modelRuntimeImagesSupport;
@@ -42,7 +45,7 @@ const extensionModelListsReplaceUndeclaredModelsOfPart1 = () =>
     const effectRunPromise = Effect.runPromiseWith(yield* Effect.context<never>());
 
     const runtime = yield* createRuntime();
-    const chat: Model<"test-chat"> = {
+    const chat: aiTypes.Model<"test-chat"> = {
       api: "test-chat" as const,
       baseUrl: "https://built-in.test/v1",
       contextWindow: 1000,

@@ -1,22 +1,24 @@
 import type { ResponseInput } from "openai/resources/responses/responses.js";
 
-import type { AssistantMessage, Model } from "../types.ts";
-import { normalizeContext } from "../utils/transcript.ts";
-import { CODEX_TOOL_CALL_PROVIDERS, type CodexRequestBody } from "./openai-codex-options.ts";
-import type {
-  CachedWebSocketConnection,
-  CachedWebSocketContinuationState,
-} from "./openai-codex-ws-cache.ts";
-import { convertResponsesMessages } from "./openai-responses-messages.ts";
+import transcript from "../utils/transcript.ts";
+import openaiCodexOptions from "./openai-codex-options.ts";
+import type openaiCodexOptionsTypes from "./openai-codex-options.types.ts";
+import type openaiCodexWsCacheTypes from "./openai-codex-ws-cache.types.ts";
+import type openaiCodexWsContinuationTypes from "./openai-codex-ws-continuation.types.ts";
+import openaiResponsesMessages from "./openai-responses-messages.ts";
 
-function bodyWithoutInput(body: CodexRequestBody): string {
+const { convertResponsesMessages } = openaiResponsesMessages;
+const { normalizeContext } = transcript;
+const { CODEX_TOOL_CALL_PROVIDERS } = openaiCodexOptions;
+
+function bodyWithoutInput(body: openaiCodexOptionsTypes.CodexRequestBody): string {
   const { input: _input, previous_response_id: _previousResponseId, ...rest } = body;
   return JSON.stringify(rest);
 }
 
 function inputDelta(
-  body: CodexRequestBody,
-  continuation: CachedWebSocketContinuationState,
+  body: openaiCodexOptionsTypes.CodexRequestBody,
+  continuation: openaiCodexWsCacheTypes.CachedWebSocketContinuationState,
 ): ResponseInput | undefined {
   if (bodyWithoutInput(body) !== bodyWithoutInput(continuation.lastRequestBody)) return undefined;
   const currentInput = body.input ?? [];
@@ -30,9 +32,9 @@ function inputDelta(
   return currentInput.slice(baseline.length);
 }
 
-export function continuationRequestBody(
-  entry: CachedWebSocketConnection,
-): (body: CodexRequestBody) => CodexRequestBody {
+function continuationRequestBody(
+  entry: openaiCodexWsCacheTypes.CachedWebSocketConnection,
+): (body: openaiCodexOptionsTypes.CodexRequestBody) => openaiCodexOptionsTypes.CodexRequestBody {
   return (body) => {
     const continuation = entry.continuation;
     if (continuation === undefined) return body;
@@ -41,27 +43,28 @@ export function continuationRequestBody(
       entry.continuation = undefined;
       return body;
     }
-    return { ...body, previous_response_id: continuation.lastResponseId, input: delta };
+    return { ...body, input: delta, previous_response_id: continuation.lastResponseId };
   };
 }
 
-export interface ResponseItemsSource {
-  readonly model: Model<"openai-codex-responses">;
-  readonly output: AssistantMessage;
-  readonly grammarToolInputProperties: ReadonlyMap<string, string>;
-}
-
-export function collectWebSocketResponseItems({
+function collectWebSocketResponseItems({
   model,
   output,
   grammarToolInputProperties,
-}: ResponseItemsSource): ResponseInput {
+}: openaiCodexWsContinuationTypes.ResponseItemsSource): ResponseInput {
   return convertResponsesMessages(
     model,
     normalizeContext({ messages: [output] }),
     CODEX_TOOL_CALL_PROVIDERS,
-    { includeSystemPrompt: false, grammarToolInputProperties },
+    { grammarToolInputProperties, includeSystemPrompt: false },
   ).filter(
     (item) => item.type !== "function_call_output" && item.type !== "custom_tool_call_output",
   );
 }
+
+const openaiCodexWsContinuation = {
+  collectWebSocketResponseItems,
+  continuationRequestBody,
+};
+
+export default openaiCodexWsContinuation;

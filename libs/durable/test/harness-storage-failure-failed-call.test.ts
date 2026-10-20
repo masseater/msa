@@ -1,4 +1,4 @@
-import { createModels } from "@msa/ai";
+import ai from "@msa/ai";
 import type chordTypes from "@msa/chord/index.types";
 import durable from "@msa/durable";
 import harnessModule from "@msa/durable/harness";
@@ -9,6 +9,8 @@ import { describe, expect, it } from "vite-plus/test";
 import type harnessStorageFailureFailedCallTestTypes from "./harness-storage-failure-failed-call.test.types.ts";
 import harnessStorageFailureSupport from "./harness-storage-failure-support.ts";
 import support from "./support.ts";
+
+const { createModels } = ai;
 
 const { LiveDoc, defineExtension, defineTask } = durable;
 const { Harness, createRegistry } = harnessModule;

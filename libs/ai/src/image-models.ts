@@ -1,43 +1,52 @@
 import { Function } from "effect";
 
-import { IMAGE_MODELS } from "./models.generated.ts";
-import type { ImageApi, ImageModel } from "./types.ts";
+import type imageModelsTypes from "./image-models.types.ts";
+import modelsGenerated from "./models.generated.ts";
+import type typesModule from "./types.types.ts";
 
-type Catalog = typeof IMAGE_MODELS;
-type ImageModelIds<TProvider extends keyof Catalog> = keyof Catalog[TProvider];
-
-export type BuiltinImageProvider = {
-  [TProvider in keyof Catalog]: [ImageModelIds<TProvider>] extends [never] ? never : TProvider;
-}[keyof Catalog];
+const { IMAGE_MODELS } = modelsGenerated;
 
 type BuiltinImageModel<
-  TProvider extends BuiltinImageProvider,
-  TModelId extends ImageModelIds<TProvider>,
+  TProvider extends imageModelsTypes.BuiltinImageProvider,
+  TModelId extends imageModelsTypes.ImageModelIds<TProvider>,
 > =
-  Catalog[TProvider][TModelId] extends ImageModel<infer TApi extends ImageApi>
-    ? ImageModel<TApi>
+  imageModelsTypes.Catalog[TProvider][TModelId] extends typesModule.ImageModel<
+    infer TApi extends typesModule.ImageApi
+  >
+    ? typesModule.ImageModel<TApi>
     : never;
 
-const imageModelsByProvider = new Map<string, Map<string, ImageModel<ImageApi>>>();
+const imageModelsByProvider = new Map<
+  string,
+  Map<string, typesModule.ImageModel<typesModule.ImageApi>>
+>();
 for (const [provider, models] of Object.entries(IMAGE_MODELS)) {
-  const imageModels = new Map<string, ImageModel<ImageApi>>();
-  for (const model of Object.values(models as Record<string, ImageModel<ImageApi>>)) {
+  const imageModels = new Map<string, typesModule.ImageModel<typesModule.ImageApi>>();
+  for (const model of Object.values(
+    models as Record<string, typesModule.ImageModel<typesModule.ImageApi>>,
+  )) {
     imageModels.set(model.id, model);
   }
   if (imageModels.size > 0) imageModelsByProvider.set(provider, imageModels);
 }
 
-export const getImageModel: {
-  <TProvider extends BuiltinImageProvider, TModelId extends ImageModelIds<TProvider>>(
+const getImageModel: {
+  <
+    TProvider extends imageModelsTypes.BuiltinImageProvider,
+    TModelId extends imageModelsTypes.ImageModelIds<TProvider>,
+  >(
     modelId: TModelId,
   ): (provider: TProvider) => BuiltinImageModel<TProvider, TModelId>;
-  <TProvider extends BuiltinImageProvider, TModelId extends ImageModelIds<TProvider>>(
+  <
+    TProvider extends imageModelsTypes.BuiltinImageProvider,
+    TModelId extends imageModelsTypes.ImageModelIds<TProvider>,
+  >(
     provider: TProvider,
     modelId: TModelId,
   ): BuiltinImageModel<TProvider, TModelId>;
 } = Function.dual(2, function <
-  TProvider extends BuiltinImageProvider,
-  TModelId extends ImageModelIds<TProvider>,
+  TProvider extends imageModelsTypes.BuiltinImageProvider,
+  TModelId extends imageModelsTypes.ImageModelIds<TProvider>,
 >(provider: TProvider, modelId: TModelId): BuiltinImageModel<TProvider, TModelId> {
   return imageModelsByProvider.get(provider)?.get(modelId as string) as BuiltinImageModel<
     TProvider,
@@ -45,15 +54,26 @@ export const getImageModel: {
   >;
 });
 
-export function getImageProviders(): BuiltinImageProvider[] {
-  return Array.from(imageModelsByProvider.keys()) as BuiltinImageProvider[];
+function getImageProviders(): imageModelsTypes.BuiltinImageProvider[] {
+  return Array.from(imageModelsByProvider.keys()) as imageModelsTypes.BuiltinImageProvider[];
 }
 
-export function getImageModels<TProvider extends BuiltinImageProvider>(
+function getImageModels<TProvider extends imageModelsTypes.BuiltinImageProvider>(
   provider: TProvider,
-): BuiltinImageModel<TProvider, ImageModelIds<TProvider>>[] {
+): BuiltinImageModel<TProvider, imageModelsTypes.ImageModelIds<TProvider>>[] {
   const models = imageModelsByProvider.get(provider);
   return models === undefined
     ? []
-    : (Array.from(models.values()) as BuiltinImageModel<TProvider, ImageModelIds<TProvider>>[]);
+    : (Array.from(models.values()) as BuiltinImageModel<
+        TProvider,
+        imageModelsTypes.ImageModelIds<TProvider>
+      >[]);
 }
+
+const imageModelsModule = {
+  getImageModel,
+  getImageModels,
+  getImageProviders,
+};
+
+export default imageModelsModule;

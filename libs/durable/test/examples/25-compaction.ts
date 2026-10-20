@@ -1,13 +1,16 @@
 import * as NodeRuntime from "@effect/platform-node/NodeRuntime";
-import type { AssistantMessage, Message, TranscriptContext } from "@msa/ai";
-import { createModels } from "@msa/ai/models";
-import { fauxAssistantMessage, fauxProvider } from "@msa/ai/providers/faux";
+import type aiTypes from "@msa/ai/index.types";
+import modelsModule from "@msa/ai/models";
+import fauxModule from "@msa/ai/providers/faux";
 import contextModule from "@msa/chord/context";
 import { Console, Effect } from "effect";
 
 import type durableTypes from "../../src/index.types.ts";
 import durableKit from "../durable-kit.ts";
 import effectSupport from "../effect-support.ts";
+
+const { fauxAssistantMessage, fauxProvider } = fauxModule;
+const { createModels } = modelsModule;
 
 const { BACKGROUND_CONTEXT } = contextModule;
 
@@ -24,7 +27,7 @@ const context = BACKGROUND_CONTEXT;
 let overflowOnce = false;
 let summaries = 0;
 let hold: Promise<void> | undefined;
-function respond(transcript: TranscriptContext): Promise<AssistantMessage> {
+function respond(transcript: aiTypes.TranscriptContext): Promise<aiTypes.AssistantMessage> {
   return Effect.runPromise(
     Effect.gen(function* () {
       const first = transcript.messages[0];
@@ -80,7 +83,7 @@ const show = Effect.fn("show")(function* (conversation: durableTypes.Conversatio
   }
 });
 
-function text(message: Message | undefined): string {
+function text(message: aiTypes.Message | undefined): string {
   if (message === undefined || message.role === "system") return "";
   if (typeof message.content === "string") return message.content;
   const block = message.content.find((content) => content.type === "text");

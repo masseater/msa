@@ -1,14 +1,21 @@
 import { describe, expect, it } from "vite-plus/test";
 
-import { streamSimple as streamAnthropic } from "../src/api/anthropic-messages.ts";
-import { streamSimple as streamGoogle } from "../src/api/google-generative-ai.ts";
-import { streamSimple as streamCodex } from "../src/api/openai-codex-responses.ts";
-import { streamSimple as streamOpenAICompletions } from "../src/api/openai-completions.ts";
-import { streamSimple as streamOpenAIResponses } from "../src/api/openai-responses.ts";
-import type { Api, AssistantMessageEventStream, Model } from "../src/types.ts";
-import { normalizeContext } from "../src/utils/transcript.ts";
+import anthropicMessages from "../src/api/anthropic-messages.ts";
+import googleGenerativeAi from "../src/api/google-generative-ai.ts";
+import openaiCodexResponses from "../src/api/openai-codex-responses.ts";
+import openaiCompletions from "../src/api/openai-completions.ts";
+import openaiResponses from "../src/api/openai-responses.ts";
+import type typesModule from "../src/types.types.ts";
+import transcript from "../src/utils/transcript.ts";
 
-function model<TApi extends Api>(api: TApi): Model<TApi> {
+const { normalizeContext } = transcript;
+const { streamSimple: streamAnthropic } = anthropicMessages;
+const { streamSimple: streamGoogle } = googleGenerativeAi;
+const { streamSimple: streamCodex } = openaiCodexResponses;
+const { streamSimple: streamOpenAICompletions } = openaiCompletions;
+const { streamSimple: streamOpenAIResponses } = openaiResponses;
+
+function model<TApi extends typesModule.Api>(api: TApi): typesModule.Model<TApi> {
   return {
     api,
     baseUrl: "https://example.invalid",
@@ -23,7 +30,7 @@ function model<TApi extends Api>(api: TApi): Model<TApi> {
   };
 }
 
-function expectMissingAuthThrows(create: () => AssistantMessageEventStream): void {
+function expectMissingAuthThrows(create: () => typesModule.AssistantMessageEventStream): void {
   expect(create).toThrow("No API key for provider: test-provider");
 }
 

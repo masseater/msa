@@ -1,11 +1,7 @@
-import type { AgentTool } from "@msa/agent-core";
-import type { CodemodeJsonSchema, CodemodeTool } from "@msa/codemode";
-import {
-  renderToolOutputType,
-  renderToolSample,
-  toCodemodeIdentifier,
-} from "@msa/codemode/declarations";
-import { CODEMODE_SOURCE_GRAMMAR } from "@msa/codemode/source";
+import type agentTypes from "@msa/agent-core/index.types";
+import declarationsModule from "@msa/codemode/declarations";
+import type codemodeTypes from "@msa/codemode/index.types";
+import source from "@msa/codemode/source";
 import * as Effect from "effect/Effect";
 import { dual } from "effect/Function";
 import { type Static, Type } from "typebox";
@@ -25,6 +21,9 @@ import type { CodemodeMode } from "../../core/settings-manager.ts";
 import { wrapToolDefinition } from "../../core/tools/tool-definition-wrapper.ts";
 import { loadCodemodeExecutor } from "./execute.lazy.ts";
 import { codemodeRenderers } from "./renderer.ts";
+
+const { renderToolOutputType, renderToolSample, toCodemodeIdentifier } = declarationsModule;
+const { CODEMODE_SOURCE_GRAMMAR } = source;
 
 export const CODEMODE_TOOL_NAME = "codemode";
 
@@ -54,7 +53,7 @@ export interface CodemodeToolOptions {
   getInlineBudget?: () => number | undefined;
 }
 
-const TEXT_OUTPUT_SCHEMA: CodemodeJsonSchema = { type: "string" };
+const TEXT_OUTPUT_SCHEMA: codemodeTypes.CodemodeJsonSchema = { type: "string" };
 
 export const codemodeSchema = Type.Object({
   code: Type.String({
@@ -86,10 +85,10 @@ export interface CodemodeToolDetails {
 }
 
 export const codemodeToolSystemPromptContribution = {
-  snippet: "Run JavaScript that calls other tools",
   guidelines: [
     "Use codemode to batch independent tool calls (Promise.allSettled), chain them, or filter large output, instead of many separate calls.",
   ],
+  snippet: "Run JavaScript that calls other tools",
 } as const;
 
 export const CODEMODE_DOCS_PATH = join(getDocsPath(), "codemode.md");
@@ -116,27 +115,35 @@ export const DEFAULT_CODEMODE_INLINE_BUDGET = SETTINGS_DEFAULTS.codemode.inlineB
 const CHARS_PER_TOKEN = 4;
 
 function toCodemodeDeclarationImpl(
-  tool: AgentTool<any>,
+  tool: agentTypes.AgentTool<any>,
   guidelines: readonly string[] = [],
-): Omit<CodemodeTool, "execute"> {
+): Omit<codemodeTypes.CodemodeTool, "execute"> {
   const bullets = guidelines.flatMap((guideline) =>
     guideline.trim() === "" ? [] : [`- ${guideline.trim()}`],
   );
   return {
-    name: tool.name,
     description:
       bullets.length > 0 ? `${tool.description.trim()}\n\n${bullets.join("\n")}` : tool.description,
-    inputSchema: tool.parameters as CodemodeJsonSchema,
-    outputSchema: (tool.outputSchema as CodemodeJsonSchema | undefined) ?? TEXT_OUTPUT_SCHEMA,
+    inputSchema: tool.parameters as codemodeTypes.CodemodeJsonSchema,
+    name: tool.name,
+    outputSchema:
+      (tool.outputSchema as codemodeTypes.CodemodeJsonSchema | undefined) ?? TEXT_OUTPUT_SCHEMA,
   };
 }
 
 export const toCodemodeDeclaration: {
-  (tool: AgentTool<any>, guidelines?: readonly string[]): Omit<CodemodeTool, "execute">;
-  (guidelines?: readonly string[]): (tool: AgentTool<any>) => Omit<CodemodeTool, "execute">;
+  (
+    tool: agentTypes.AgentTool<any>,
+    guidelines?: readonly string[],
+  ): Omit<codemodeTypes.CodemodeTool, "execute">;
+  (
+    guidelines?: readonly string[],
+  ): (tool: agentTypes.AgentTool<any>) => Omit<codemodeTypes.CodemodeTool, "execute">;
 } = dual((args: IArguments) => args.length >= 1, toCodemodeDeclarationImpl);
 
-export function getCodemodeCallableTools(tools: readonly AgentTool<any>[]): AgentTool<any>[] {
+export function getCodemodeCallableTools(
+  tools: readonly agentTypes.AgentTool<any>[],
+): agentTypes.AgentTool<any>[] {
   return tools.filter((tool) => tool.name !== CODEMODE_TOOL_NAME);
 }
 
@@ -152,7 +159,7 @@ export interface CodemodeDescriptionOptions {
   inlineBudget?: number;
 }
 
-function renderToolSection(declaration: Omit<CodemodeTool, "execute">): string {
+function renderToolSection(declaration: Omit<codemodeTypes.CodemodeTool, "execute">): string {
   const id = toCodemodeIdentifier(declaration.name);
   const heading =
     id === declaration.name ? `### \`${id}\`` : `### \`${id}\` (\`${declaration.name}\`)`;
@@ -193,23 +200,23 @@ function selectCatalog(groups: readonly CatalogGroup[], budget: number | undefin
 }
 
 function createCodemodeDescriptionImpl(
-  tools: readonly AgentTool<any>[],
+  tools: readonly agentTypes.AgentTool<any>[],
   options: CodemodeDescriptionOptions = {},
 ): string {
   const declarations = getCodemodeCallableTools(tools)
     .filter((tool) => options.deferred?.has(tool.name) !== true)
     .map((tool) => toCodemodeDeclaration(tool, options.guidelines?.get(tool.name)));
-  const groups = new Map<string, CatalogGroup>([["", { namespace: undefined, entries: [] }]]);
+  const groups = new Map<string, CatalogGroup>([["", { entries: [], namespace: undefined }]]);
   for (const declaration of declarations) {
     const namespace = options.namespaces?.get(declaration.name);
     const key = namespace === undefined ? "" : `ns:${namespace.name}`;
-    const group = groups.get(key) ?? { namespace, entries: [] };
+    const group = groups.get(key) ?? { entries: [], namespace };
     groups.set(key, group);
     const section = renderToolSection(declaration);
     group.entries.push({
+      cost: Math.ceil(section.length / CHARS_PER_TOKEN),
       name: declaration.name,
       section,
-      cost: Math.ceil(section.length / CHARS_PER_TOKEN),
     });
   }
   const ordered = [...groups.values()].sort((a, b) =>
@@ -246,8 +253,8 @@ function createCodemodeDescriptionImpl(
 }
 
 export const createCodemodeDescription: {
-  (tools: readonly AgentTool<any>[], options?: CodemodeDescriptionOptions): string;
-  (options?: CodemodeDescriptionOptions): (tools: readonly AgentTool<any>[]) => string;
+  (tools: readonly agentTypes.AgentTool<any>[], options?: CodemodeDescriptionOptions): string;
+  (options?: CodemodeDescriptionOptions): (tools: readonly agentTypes.AgentTool<any>[]) => string;
 } = dual((args: IArguments) => args.length >= 1, createCodemodeDescriptionImpl);
 
 function describeFields(schema: unknown, depth: number): string | undefined {
@@ -262,14 +269,14 @@ function describeFields(schema: unknown, depth: number): string | undefined {
   return `{ ${fields.join(", ")} }`;
 }
 
-function describeOutput(schema: CodemodeJsonSchema | undefined): string {
+function describeOutput(schema: codemodeTypes.CodemodeJsonSchema | undefined): string {
   const type = renderToolOutputType(schema);
   if (type === "string") return "a string";
   const fields = describeFields(schema, 1);
   return `\`${fields ?? type.replace(/\s+/gu, " ")}\``;
 }
 
-function describeScriptCall(tool: AgentTool<any>): string {
+function describeScriptCall(tool: agentTypes.AgentTool<any>): string {
   return `${tool.description.trim()}\n\nCodemode: \`tools.${toCodemodeIdentifier(tool.name)}(args)\` resolves to ${describeOutput(toCodemodeDeclaration(tool).outputSchema)}.`;
 }
 
@@ -278,7 +285,7 @@ function prepareCodemodeLoadout(
   options: CodemodeToolOptions,
 ): ToolLoadoutChanges {
   const mode = options.getMode?.() ?? SETTINGS_DEFAULTS.codemode.mode;
-  const isDirect = (tool: AgentTool) => loadout.getExposure(tool.name) === "direct";
+  const isDirect = (tool: agentTypes.AgentTool) => loadout.getExposure(tool.name) === "direct";
   const callable = getCodemodeCallableTools(loadout.callable);
   const callableNames = new Set(callable.map((tool) => tool.name));
   const descriptions: Record<string, string> = {};
@@ -298,15 +305,15 @@ function prepareCodemodeLoadout(
     listed.map((tool) => [tool.name, loadout.getPromptGuidelines(tool.name)] as const),
   );
   descriptions[CODEMODE_TOOL_NAME] = createCodemodeDescription(listed, {
-    models: options.models === true,
-    namespaces,
-    guidelines,
     deferred: new Set(
       listed
         .filter((tool) => loadout.getExposure(tool.name) === "deferred")
         .map((tool) => tool.name),
     ),
+    guidelines,
     inlineBudget: options.getInlineBudget?.() ?? DEFAULT_CODEMODE_INLINE_BUDGET,
+    models: options.models === true,
+    namespaces,
   });
   const declaredNames = new Set(loadout.declared.map((tool) => tool.name));
   return {
@@ -331,20 +338,8 @@ export function createCodemodeToolDefinition(
   options: CodemodeToolOptions = {},
 ): ToolDefinition<typeof codemodeSchema, CodemodeToolDetails | undefined> {
   return {
-    name: CODEMODE_TOOL_NAME,
-    label: CODEMODE_TOOL_NAME,
-
-    description: createCodemodeDescription([], { models: options.models === true }),
-    promptSnippet: codemodeToolSystemPromptContribution.snippet,
-    promptGuidelines: [...codemodeToolSystemPromptContribution.guidelines],
-    parameters: codemodeSchema,
-
-    exposure: "model-only",
-    prepareLoadout: (loadout) => prepareCodemodeLoadout(loadout, options),
-    reachesTools: (input) => getScriptReach(input["code"]),
-
     constrainedSampling: { type: "grammar", variants: { openai_lark: CODEMODE_SOURCE_GRAMMAR } },
-
+    description: createCodemodeDescription([], { models: options.models === true }),
     execute: (toolCallId, params, signal, onUpdate, ctx) =>
       Effect.runPromise(
         awaiting(function* () {
@@ -360,30 +355,38 @@ export function createCodemodeToolDefinition(
           );
         }),
       ),
+    exposure: "model-only",
+    label: CODEMODE_TOOL_NAME,
+    name: CODEMODE_TOOL_NAME,
+    parameters: codemodeSchema,
+    prepareLoadout: (loadout) => prepareCodemodeLoadout(loadout, options),
+    promptGuidelines: [...codemodeToolSystemPromptContribution.guidelines],
+    promptSnippet: codemodeToolSystemPromptContribution.snippet,
+    reachesTools: (input) => getScriptReach(input["code"]),
     ...codemodeRenderers,
   };
 }
 
 function createCodemodeToolImpl(
-  tools: readonly AgentTool<any>[] = [],
+  tools: readonly agentTypes.AgentTool<any>[] = [],
   options: CodemodeToolOptions = {},
-): AgentTool<typeof codemodeSchema> {
+): agentTypes.AgentTool<typeof codemodeSchema> {
   const definition = createCodemodeToolDefinition(options);
   const tool = wrapToolDefinition(definition);
   Object.assign(tool, {
     description: createCodemodeDescription(tools, { models: options.models === true }),
-    promptSnippet: definition.promptSnippet,
     promptGuidelines: definition.promptGuidelines,
+    promptSnippet: definition.promptSnippet,
   });
   return tool;
 }
 
 export const createCodemodeTool: {
   (
-    tools?: readonly AgentTool<any>[],
+    tools?: readonly agentTypes.AgentTool<any>[],
     options?: CodemodeToolOptions,
-  ): AgentTool<typeof codemodeSchema>;
+  ): agentTypes.AgentTool<typeof codemodeSchema>;
   (
     options?: CodemodeToolOptions,
-  ): (tools?: readonly AgentTool<any>[]) => AgentTool<typeof codemodeSchema>;
+  ): (tools?: readonly agentTypes.AgentTool<any>[]) => agentTypes.AgentTool<typeof codemodeSchema>;
 } = dual((args: IArguments) => args.length >= 0, createCodemodeToolImpl);

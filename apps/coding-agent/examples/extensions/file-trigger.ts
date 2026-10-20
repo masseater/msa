@@ -37,8 +37,8 @@ export default function (msa: ExtensionAPI) {
       watchTrigger((content) => {
         msa.sendMessage(
           {
-            customType: "file-trigger",
             content: `External trigger: ${content}`,
+            customType: "file-trigger",
             display: true,
           },
           { triggerTurn: true },

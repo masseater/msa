@@ -1,11 +1,14 @@
 import { Effect, Stream } from "effect";
 import { describe, expect, it } from "vite-plus/test";
 
-import { streamSimple } from "../src/compat.ts";
-import type { Context } from "../src/types.ts";
-import { currentTimeMillis } from "../src/utils/clock.ts";
+import compat from "../src/compat.ts";
+import type typesModule from "../src/types.types.ts";
+import clock from "../src/utils/clock.ts";
 import env from "./env.ts";
 import modelChoice from "./model-choice.ts";
+
+const { currentTimeMillis } = clock;
+const { streamSimple } = compat;
 
 const { chooseModel, compatValue, usesApi } = modelChoice;
 
@@ -27,7 +30,7 @@ interface AnthropicThinkingPayload {
   output_config?: { effort?: string };
 }
 
-function makeContext(): Context {
+function makeContext(): typesModule.Context {
   return {
     messages: [
       {

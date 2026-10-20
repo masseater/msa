@@ -1,9 +1,11 @@
 import assert from "node:assert";
 import { describe, it } from "node:test";
 
-import { renderLatex } from "../src/index.ts";
+import tui from "../src/index.ts";
 import defineCases from "./latex-helpers.ts";
 import type latexHelpersTypes from "./latex-helpers.types.ts";
+
+const { renderLatex } = tui;
 
 const sessionCases1: readonly latexHelpersTypes.LatexCase[] = [
   [String.raw`e^{i\pi}+1=0`, "e^(iπ)+1 = 0"],

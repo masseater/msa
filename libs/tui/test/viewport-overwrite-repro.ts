@@ -1,11 +1,11 @@
 import { Effect } from "effect";
 
-import { ProcessTerminal } from "../src/terminal.ts";
-import type { Component } from "../src/tui-component.ts";
-import type { TUI } from "../src/tui-interface.ts";
-import { TuiMainScreen } from "../src/tui-main-screen.ts";
+import ProcessTerminal from "../src/terminal.ts";
+import type tuiComponentTypes from "../src/tui-component.types.ts";
+import type tuiInterfaceTypes from "../src/tui-interface.types.ts";
+import TuiMainScreen from "../src/tui-main-screen.ts";
 
-class Lines implements Component {
+class Lines implements tuiComponentTypes.Component {
   private lines: string[] = [];
 
   set(lines: string[]): void {
@@ -31,7 +31,7 @@ function streamLines(
   label: string,
   count: number,
   delayMs: number,
-  ui: TUI,
+  ui: tuiInterfaceTypes.TUI,
 ): Effect.Effect<void> {
   return Effect.gen(function* () {
     for (let i = 1; i <= count; i++) {
@@ -43,7 +43,7 @@ function streamLines(
 }
 
 const main = Effect.gen(function* () {
-  const ui: TUI = new TuiMainScreen(new ProcessTerminal());
+  const ui: tuiInterfaceTypes.TUI = new TuiMainScreen(new ProcessTerminal());
   const buffer = new Lines();
   ui.addChild(buffer);
   ui.start();
@@ -82,7 +82,7 @@ const main = Effect.gen(function* () {
 
 Effect.runPromise(main).catch((error: unknown) => {
   try {
-    const ui: TUI = new TuiMainScreen(new ProcessTerminal());
+    const ui: tuiInterfaceTypes.TUI = new TuiMainScreen(new ProcessTerminal());
     ui.stop();
   } catch {}
   process.stderr.write(`${String(error)}\n`);

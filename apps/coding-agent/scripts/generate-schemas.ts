@@ -46,7 +46,7 @@ const splitAnnotations = (schema: object): SplitSchema => {
   for (const [key, value] of Object.entries(schema)) {
     (schemaAnnotationKeys.has(key) ? annotations : shape)[key] = value;
   }
-  return { shape, annotations };
+  return { annotations, shape };
 };
 
 interface PreparedDefinition {
@@ -123,9 +123,9 @@ const serializeSchema = (artifact: SchemaArtifact) =>
         ? artifact.schema
         : yield* addDefinitions(artifact.schema, definitions);
     return `${yield* encodeIndentedJson({
-      $schema: schemaDraft,
-      $id: `${schemaBaseUrl}/${artifact.filename}`,
       $comment: generatedComment,
+      $id: `${schemaBaseUrl}/${artifact.filename}`,
+      $schema: schemaDraft,
       ...schema,
     })}\n`;
   });

@@ -1,4 +1,4 @@
-import type { CodemodeRun } from "@msa/codemode/portable";
+import type portableTypes from "@msa/codemode/portable.types";
 import type { Effect } from "effect";
 
 import type typesModule from "../harness/types.types.ts";
@@ -15,7 +15,7 @@ declare namespace runJournalTypes {
   type RunControl = {
     readonly host: runCallsTypes.CallHost;
     readonly opened: Resumed;
-    readonly run: () => CodemodeRun;
+    readonly run: () => portableTypes.CodemodeRun;
     readonly stopped: () => boolean;
     readonly diverge: (message: string) => void;
     readonly fail: (error: unknown) => void;

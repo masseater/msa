@@ -3,10 +3,13 @@ import { describe, it } from "node:test";
 
 import { Effect } from "effect";
 
-import { ScrollView, Text, TuiAltScreen, VStack } from "../src/index.ts";
+import tuiModule from "../src/index.ts";
 import tuiAltScreenHelpers from "./tui-alt-screen-helpers.ts";
 import RecordingTerminal from "./tui-alt-screen-recording-terminal.ts";
-import { VirtualTerminal } from "./virtual-terminal.ts";
+import virtualTerminal from "./virtual-terminal.ts";
+
+const { ScrollView, Text, TuiAltScreen, VStack } = tuiModule;
+const { VirtualTerminal } = virtualTerminal;
 
 const { someWriteSince, viewportHas } = tuiAltScreenHelpers;
 

@@ -1,9 +1,11 @@
 import assert from "node:assert";
 import { describe, it, mock } from "node:test";
 
-import { overrideEnv } from "../src/env.ts";
-import { ProcessTerminal } from "../src/terminal.ts";
+import env from "../src/env.ts";
+import ProcessTerminal from "../src/terminal.ts";
 import terminalHelpers from "./terminal-helpers.ts";
+
+const { overrideEnv } = env;
 
 const { clear, setupNegotiation, withOverride, working } = terminalHelpers;
 

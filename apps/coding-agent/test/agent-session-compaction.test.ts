@@ -1,5 +1,5 @@
-import { Agent } from "@msa/agent-core";
-import { getModel, streamSimple } from "@msa/ai/compat";
+import agentModule from "@msa/agent-core";
+import compat from "@msa/ai/compat";
 import testing from "@msa/testing";
 import { Effect } from "effect";
 import { afterEach, beforeEach, describe, expect, it } from "vite-plus/test";
@@ -14,6 +14,10 @@ import {
 } from "../src/index.ts";
 import modelRuntimeTestUtils from "./model-runtime-test-utils.ts";
 import utilities from "./utilities.ts";
+
+const { getModel, streamSimple } = compat;
+
+const { Agent } = agentModule;
 
 const { API_KEY, createTestResourceLoader } = utilities;
 

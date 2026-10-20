@@ -1,60 +1,50 @@
-import { ScrollToEndIndicator } from "./alt-screen-end-indicator.ts";
-import {
-  rawEventType,
-  type SgrMouseEvent,
-  shouldPasteOnRightClick,
-  type WheelEvent,
-} from "./alt-screen-mouse-protocol.ts";
-import { AltScreenMouseRouter, type MouseRouterHost } from "./alt-screen-mouse-router.ts";
-import { AltScreenScrollbars } from "./alt-screen-scrollbars.ts";
-import type { AltScreenSearchController } from "./alt-screen-search-controller.ts";
-import { AltScreenSelection } from "./alt-screen-selection.ts";
-import type { TuiMouseDispatchResult, TuiMouseEvent } from "./tui-component.ts";
-import { WheelScrollAccelerator, type WheelScrollLines } from "./wheel-scroll.ts";
+import type altScreenEndIndicatorTypes from "./alt-screen-end-indicator.types.ts";
+import type altScreenMouseProtocolTypes from "./alt-screen-mouse-protocol.types.ts";
+import type altScreenMouseRouterTypes from "./alt-screen-mouse-router.types.ts";
+import altScreenPointerKit from "./alt-screen-pointer-kit.ts";
+import type altScreenPointerTypes from "./alt-screen-pointer.types.ts";
+import type altScreenScrollbarsTypes from "./alt-screen-scrollbars.types.ts";
+import type altScreenSelectionTypes from "./alt-screen-selection.types.ts";
+import type tuiComponentTypes from "./tui-component.types.ts";
+import WheelScrollAccelerator from "./wheel-scroll.ts";
+import type wheelScrollTypes from "./wheel-scroll.types.ts";
+
+const {
+  ScrollToEndIndicator,
+  altScreenMouseProtocol,
+  AltScreenMouseRouter,
+  AltScreenScrollbars,
+  AltScreenSelection,
+} = altScreenPointerKit;
+
+const { rawEventType, shouldPasteOnRightClick } = altScreenMouseProtocol;
 
 const ALT_WHEEL_SCROLL_MULTIPLIER = 5;
 
-export interface OverlayDispatch {
-  hit: boolean;
-  result?: TuiMouseDispatchResult;
-}
+export default class AltScreenPointer {
+  readonly selection: altScreenSelectionTypes.AltScreenSelection;
+  readonly scrollbars: altScreenScrollbarsTypes.AltScreenScrollbars;
+  readonly endIndicator: altScreenEndIndicatorTypes.ScrollToEndIndicator;
+  private readonly router: altScreenMouseRouterTypes.AltScreenMouseRouter;
+  private readonly wheelScroll: wheelScrollTypes.WheelScrollAccelerator;
+  private readonly host: altScreenPointerTypes.PointerHost;
 
-export interface PointerHost extends MouseRouterHost {
-  readonly search: AltScreenSearchController;
-  dispatchToOverlay(event: TuiMouseEvent): OverlayDispatch;
-  scrollToBottom(): void;
-  openUrl: ((url: string) => void) | undefined;
-  onRightClickPaste: (() => void) | undefined;
-  scrollToEndIndicator: (() => string) | undefined;
-  wheelScrollLines: WheelScrollLines;
-  copyOnSelect(): boolean;
-  copySelection(): void;
-}
-
-export class AltScreenPointer {
-  readonly selection: AltScreenSelection;
-  readonly scrollbars: AltScreenScrollbars;
-  readonly endIndicator: ScrollToEndIndicator;
-  private readonly router: AltScreenMouseRouter;
-  private readonly wheelScroll: WheelScrollAccelerator;
-  private readonly host: PointerHost;
-
-  constructor(host: PointerHost) {
+  constructor(host: altScreenPointerTypes.PointerHost) {
     this.host = host;
     this.router = new AltScreenMouseRouter(host);
     this.scrollbars = new AltScreenScrollbars(host.view);
     this.endIndicator = new ScrollToEndIndicator(host.scrollToEndIndicator);
     this.wheelScroll = new WheelScrollAccelerator(host.wheelScrollLines);
     this.selection = new AltScreenSelection({
-      view: host.view,
-      openUrl: host.openUrl,
       copyOnSelect: () => host.copyOnSelect(),
       copySelection: () => host.copySelection(),
       dispatchClick: (event, clickCount) => this.dispatchClick(event, clickCount),
+      openUrl: host.openUrl,
+      view: host.view,
     });
   }
 
-  setWheelScrollLines(lines: WheelScrollLines): void {
+  setWheelScrollLines(lines: wheelScrollTypes.WheelScrollLines): void {
     this.wheelScroll.setLines(lines);
   }
 
@@ -81,7 +71,7 @@ export class AltScreenPointer {
     this.router.forgetClick();
   }
 
-  handleWheel(wheelEvent: WheelEvent): void {
+  handleWheel(wheelEvent: altScreenMouseProtocolTypes.WheelEvent): void {
     const lines = this.wheelScroll.next(wheelEvent.direction, performance.now());
     const wheelDelta =
       wheelEvent.direction *
@@ -95,7 +85,7 @@ export class AltScreenPointer {
     this.scrollbars.routeWheel(wheelEvent, wheelDelta);
   }
 
-  handleMouse(raw: SgrMouseEvent): void {
+  handleMouse(raw: altScreenMouseProtocolTypes.SgrMouseEvent): void {
     const type = rawEventType(raw);
     const event = this.router.mouseEvent(type, raw);
     if (this.router.hasGesture) {
@@ -127,7 +117,7 @@ export class AltScreenPointer {
     this.selection.handleMouse(raw);
   }
 
-  private handleChrome(raw: SgrMouseEvent): boolean {
+  private handleChrome(raw: altScreenMouseProtocolTypes.SgrMouseEvent): boolean {
     if (this.endIndicator.hit(raw)) {
       this.host.scrollToBottom();
       return true;
@@ -137,7 +127,7 @@ export class AltScreenPointer {
     return scrollbarHandled;
   }
 
-  private handleRightClickPaste(event: SgrMouseEvent): boolean {
+  private handleRightClickPaste(event: altScreenMouseProtocolTypes.SgrMouseEvent): boolean {
     const paste = this.host.onRightClickPaste;
     if (paste === undefined || !shouldPasteOnRightClick(event)) return false;
     try {
@@ -146,12 +136,17 @@ export class AltScreenPointer {
     return true;
   }
 
-  private dispatchToTargets(event: TuiMouseEvent): TuiMouseDispatchResult | undefined {
+  private dispatchToTargets(
+    event: tuiComponentTypes.TuiMouseEvent,
+  ): tuiComponentTypes.TuiMouseDispatchResult | undefined {
     const overlay = this.host.dispatchToOverlay(event);
     return overlay.result ?? (overlay.hit ? undefined : this.router.dispatchToLayout(event));
   }
 
-  private dispatchClick(raw: SgrMouseEvent, clickCount: number): boolean | undefined {
+  private dispatchClick(
+    raw: altScreenMouseProtocolTypes.SgrMouseEvent,
+    clickCount: number,
+  ): boolean | undefined {
     const clickEvent = this.router.mouseEvent("click", raw, { clickCount });
     const result = this.dispatchToTargets(clickEvent);
     return result === undefined ? undefined : this.router.applyResult(clickEvent, result);

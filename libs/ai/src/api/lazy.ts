@@ -1,46 +1,46 @@
 import { Clock, Effect, Function, Stream } from "effect";
 
-import type {
-  Api,
-  AssistantMessage,
-  AssistantMessageEvent,
-  Model,
-  ProviderStreams,
-} from "../types.ts";
-import { toErrorMessage } from "../utils/errors.ts";
-import { AssistantMessageEventStream } from "../utils/event-stream.ts";
+import type typesModule from "../types.types.ts";
+import errors from "../utils/errors.ts";
+import eventStream from "../utils/event-stream.ts";
+import type eventStreamTypes from "../utils/event-stream.types.ts";
+import type lazyTypes from "./lazy.types.ts";
+
+const { toErrorMessage } = errors;
+const { AssistantMessageEventStream } = eventStream;
 
 const createSetupErrorMessage = (
-  model: Model<Api>,
+  model: typesModule.Model<typesModule.Api>,
   error: unknown,
   timestamp: number,
-): AssistantMessage => ({
-  role: "assistant",
-  content: [],
+): typesModule.AssistantMessage => ({
   api: model.api,
-  provider: model.provider,
+  content: [],
+  errorMessage: toErrorMessage(error),
   model: model.id,
+  provider: model.provider,
+  role: "assistant",
+  stopReason: "error",
+  timestamp,
   usage: {
-    input: 0,
-    output: 0,
     cacheRead: 0,
     cacheWrite: 0,
+    cost: { cacheRead: 0, cacheWrite: 0, input: 0, output: 0, total: 0 },
+    input: 0,
+    output: 0,
     totalTokens: 0,
-    cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0, total: 0 },
   },
-  stopReason: "error",
-  errorMessage: toErrorMessage(error),
-  timestamp,
 });
 
 const hasResult = (
-  source: AsyncIterable<AssistantMessageEvent>,
-): source is AsyncIterable<AssistantMessageEvent> & { result(): Promise<AssistantMessage> } =>
-  typeof (source as { result?: unknown }).result === "function";
+  source: AsyncIterable<typesModule.AssistantMessageEvent>,
+): source is AsyncIterable<typesModule.AssistantMessageEvent> & {
+  result(): Promise<typesModule.AssistantMessage>;
+} => typeof (source as { result?: unknown }).result === "function";
 
 const forwardStream = (
-  target: AssistantMessageEventStream,
-  source: AsyncIterable<AssistantMessageEvent>,
+  target: eventStreamTypes.AssistantMessageEventStream,
+  source: AsyncIterable<typesModule.AssistantMessageEvent>,
 ): Effect.Effect<void> =>
   Effect.gen(function* () {
     yield* Stream.fromAsyncIterable(source, (error) => error).pipe(
@@ -51,41 +51,46 @@ const forwardStream = (
   });
 
 type StreamSetup = () =>
-  | Promise<AsyncIterable<AssistantMessageEvent>>
-  | AsyncIterable<AssistantMessageEvent>;
+  | Promise<AsyncIterable<typesModule.AssistantMessageEvent>>
+  | AsyncIterable<typesModule.AssistantMessageEvent>;
 
-export const lazyStream: {
-  (setup: StreamSetup): (model: Model<Api>) => AssistantMessageEventStream;
-  (model: Model<Api>, setup: StreamSetup): AssistantMessageEventStream;
-} = Function.dual(2, (model: Model<Api>, setup: StreamSetup): AssistantMessageEventStream => {
-  const outer = new AssistantMessageEventStream();
-  Effect.runFork(
-    Effect.gen(function* () {
-      const startedAt = yield* Clock.currentTimeMillis;
-      yield* Effect.promise(() => Promise.resolve(setup())).pipe(
-        Effect.flatMap((inner) => forwardStream(outer, inner)),
-        Effect.catchDefect((error) =>
-          Effect.sync(() => {
-            const message = createSetupErrorMessage(model, error, startedAt);
-            outer.push({ type: "error", reason: "error", error: message });
-            outer.end(message);
-          }),
-        ),
-      );
-    }),
-  );
-  return outer;
-});
-
-export interface LazyApiCapabilities {
-  fetchDeferred?: boolean;
-  cancelDeferred?: boolean;
-  countTokens?: boolean;
-}
+const lazyStream: {
+  (
+    setup: StreamSetup,
+  ): (model: typesModule.Model<typesModule.Api>) => eventStreamTypes.AssistantMessageEventStream;
+  (
+    model: typesModule.Model<typesModule.Api>,
+    setup: StreamSetup,
+  ): eventStreamTypes.AssistantMessageEventStream;
+} = Function.dual(
+  2,
+  (
+    model: typesModule.Model<typesModule.Api>,
+    setup: StreamSetup,
+  ): eventStreamTypes.AssistantMessageEventStream => {
+    const outer = new AssistantMessageEventStream();
+    Effect.runFork(
+      Effect.gen(function* () {
+        const startedAt = yield* Clock.currentTimeMillis;
+        yield* Effect.promise(() => Promise.resolve(setup())).pipe(
+          Effect.flatMap((inner) => forwardStream(outer, inner)),
+          Effect.catchDefect((error) =>
+            Effect.sync(() => {
+              const message = createSetupErrorMessage(model, error, startedAt);
+              outer.push({ error: message, reason: "error", type: "error" });
+              outer.end(message);
+            }),
+          ),
+        );
+      }),
+    );
+    return outer;
+  },
+);
 
 const loadThen = <A>(
-  load: () => Promise<ProviderStreams>,
-  use: (implementation: ProviderStreams) => A | Promise<A>,
+  load: () => Promise<typesModule.ProviderStreams>,
+  use: (implementation: typesModule.ProviderStreams) => A | Promise<A>,
 ): Promise<A> =>
   Effect.runPromise(
     Effect.promise(() => load()).pipe(
@@ -96,10 +101,10 @@ const loadThen = <A>(
   );
 
 const withDeferredSupport = (
-  api: ProviderStreams,
-  load: () => Promise<ProviderStreams>,
-  capabilities: LazyApiCapabilities | undefined,
-): ProviderStreams => {
+  api: typesModule.ProviderStreams,
+  load: () => Promise<typesModule.ProviderStreams>,
+  capabilities: lazyTypes.LazyApiCapabilities | undefined,
+): typesModule.ProviderStreams => {
   if (capabilities?.fetchDeferred === true) {
     api.fetchDeferred = (model, handle, options) =>
       lazyStream(model, () =>
@@ -128,12 +133,20 @@ const withDeferredSupport = (
   return api;
 };
 
-export const lazyApi: {
-  (capabilities?: LazyApiCapabilities): (load: () => Promise<ProviderStreams>) => ProviderStreams;
-  (load: () => Promise<ProviderStreams>, capabilities?: LazyApiCapabilities): ProviderStreams;
+const lazyApi: {
+  (
+    capabilities?: lazyTypes.LazyApiCapabilities,
+  ): (load: () => Promise<typesModule.ProviderStreams>) => typesModule.ProviderStreams;
+  (
+    load: () => Promise<typesModule.ProviderStreams>,
+    capabilities?: lazyTypes.LazyApiCapabilities,
+  ): typesModule.ProviderStreams;
 } = Function.dual(
   (args) => typeof args[0] === "function",
-  (load: () => Promise<ProviderStreams>, capabilities?: LazyApiCapabilities): ProviderStreams =>
+  (
+    load: () => Promise<typesModule.ProviderStreams>,
+    capabilities?: lazyTypes.LazyApiCapabilities,
+  ): typesModule.ProviderStreams =>
     withDeferredSupport(
       {
         stream: (model, context, options) =>
@@ -151,3 +164,10 @@ export const lazyApi: {
       capabilities,
     ),
 );
+
+const lazy = {
+  lazyApi,
+  lazyStream,
+};
+
+export default lazy;

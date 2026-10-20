@@ -1,17 +1,20 @@
 import { Effect, Stream } from "effect";
 import { describe, expect, it } from "vite-plus/test";
 
-import { streamSimple } from "../src/compat.ts";
-import type { Api, Context, Model, SimpleStreamOptions } from "../src/types.ts";
-import { currentTimeMillis } from "../src/utils/clock.ts";
+import compat from "../src/compat.ts";
+import type typesModule from "../src/types.types.ts";
+import clock from "../src/utils/clock.ts";
 import env from "./env.ts";
 import modelChoice from "./model-choice.ts";
+
+const { currentTimeMillis } = clock;
+const { streamSimple } = compat;
 
 const { chooseModel, compatValue, usesApi } = modelChoice;
 
 const { envValue } = env;
 
-type SimpleOptionsWithExtras = SimpleStreamOptions & Record<string, unknown>;
+type SimpleOptionsWithExtras = typesModule.SimpleStreamOptions & Record<string, unknown>;
 
 interface RunResult {
   thinkingEventCount: number;
@@ -27,7 +30,7 @@ interface DisableExpectations {
   maxOutputTokens?: number;
 }
 
-function makeContext(): Context {
+function makeContext(): typesModule.Context {
   return {
     messages: [
       {
@@ -45,8 +48,8 @@ function countPongs(text: string): number {
   return text.match(/\bpong\b/giu)?.length ?? 0;
 }
 
-function runWithoutReasoning<TApi extends Api>(
-  model: Model<TApi>,
+function runWithoutReasoning<TApi extends typesModule.Api>(
+  model: typesModule.Model<TApi>,
   options: SimpleOptionsWithExtras = {},
 ): Promise<RunResult> {
   return Effect.runPromise(
@@ -96,8 +99,8 @@ function runWithoutReasoning<TApi extends Api>(
 }
 
 const expectThinkingDisabledE2E = Effect.fn("expectThinkingDisabledE2E")(function* <
-  TApi extends Api,
->(model: Model<TApi>, expectations: DisableExpectations = {}) {
+  TApi extends typesModule.Api,
+>(model: typesModule.Model<TApi>, expectations: DisableExpectations = {}) {
   const result = yield* Effect.promise(() =>
     runWithoutReasoning(model, expectations.requestOptions),
   );

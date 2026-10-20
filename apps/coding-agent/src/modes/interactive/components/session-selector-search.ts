@@ -1,8 +1,10 @@
-import { fuzzyMatch } from "@msa/tui";
+import tui from "@msa/tui";
 import { dual } from "effect/Function";
 
 import type { SessionInfo } from "../../../core/session-manager.ts";
 import { toErrorMessage } from "../../../utils/errors.ts";
+
+const { fuzzyMatch } = tui;
 
 export type SortMode = "threaded" | "recent" | "relevance";
 
@@ -40,19 +42,19 @@ function matchesNameFilter(session: SessionInfo, filter: NameFilter): boolean {
 export function parseSearchQuery(query: string): ParsedSearchQuery {
   const trimmed = query.trim();
   if (trimmed === "") {
-    return { mode: "tokens", tokens: [], regex: null };
+    return { mode: "tokens", regex: null, tokens: [] };
   }
 
   if (trimmed.startsWith("re:")) {
     const pattern = trimmed.slice(3).trim();
     if (pattern === "") {
-      return { mode: "regex", tokens: [], regex: null, error: "Empty regex" };
+      return { error: "Empty regex", mode: "regex", regex: null, tokens: [] };
     }
     try {
-      return { mode: "regex", tokens: [], regex: new RegExp(pattern, "iu") };
+      return { mode: "regex", regex: new RegExp(pattern, "iu"), tokens: [] };
     } catch (err) {
       const msg = toErrorMessage(err);
-      return { mode: "regex", tokens: [], regex: null, error: msg };
+      return { error: msg, mode: "regex", regex: null, tokens: [] };
     }
   }
 
@@ -96,18 +98,18 @@ export function parseSearchQuery(query: string): ParsedSearchQuery {
   if (hadUnclosedQuote) {
     return {
       mode: "tokens",
+      regex: null,
       tokens: trimmed
         .split(/\s+/u)
         .map((t) => t.trim())
         .filter((t) => t.length > 0)
         .map((t) => ({ kind: "fuzzy" as const, value: t })),
-      regex: null,
     };
   }
 
   flush(inQuote ? "phrase" : "fuzzy");
 
-  return { mode: "tokens", tokens, regex: null };
+  return { mode: "tokens", regex: null, tokens };
 }
 
 export const matchSession: {
@@ -196,7 +198,7 @@ export const filterAndSortSessions: {
     for (const s of nameFiltered) {
       const res = matchSession(s, parsed);
       if (!res.matches) continue;
-      scored.push({ session: s, score: res.score });
+      scored.push({ score: res.score, session: s });
     }
 
     scored.sort((a, b) => {

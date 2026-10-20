@@ -1,8 +1,14 @@
-import type { ProviderImages } from "../types.ts";
+import type typesModule from "../types.types.ts";
 
-export const openrouterImagesApi = (): ProviderImages => ({
+const openrouterImagesApi = (): typesModule.ProviderImages => ({
   generateImages: (model, context, options) =>
     import("./openrouter-images.ts").then((module) =>
-      module.generateImages(model, context, options),
+      module.default.generateImages(model, context, options),
     ),
 });
+
+const openrouterImagesLazy = {
+  openrouterImagesApi,
+};
+
+export default openrouterImagesLazy;

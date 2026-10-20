@@ -1,25 +1,9 @@
 import { pathToFileURL } from "node:url";
 
-import {
-  type AuthProvider,
-  type CallToolResult,
-  JSON_RPC_ERROR_CODES,
-  type ListResourcesResult,
-  type ListResourceTemplatesResult,
-  McpAuthRequiredError,
-  McpClient,
-  McpError,
-  McpHttpError,
-  type McpRequestOptions,
-  McpSessionExpiredError,
-  type Tool as McpTool,
-  type McpTransport,
-  StdioTransport,
-  type ReadResourceResult,
-  type Resource,
-  type ResourceTemplate,
-} from "@msa/mcp";
-import { McpOAuthAuthorizationRequiredError, type OAuthChallenge } from "@msa/mcp/oauth";
+import mcp from "@msa/mcp";
+import type mcpTypes from "@msa/mcp/index.types";
+import oauthModule from "@msa/mcp/oauth";
+import type oauthTypes from "@msa/mcp/oauth.types";
 import * as Effect from "effect/Effect";
 
 import { VERSION } from "../../config.ts";
@@ -30,13 +14,24 @@ import { toErrorMessage } from "../../utils/errors.ts";
 import type { McpServerEntry } from "./config.ts";
 import type { McpServerLog } from "./log.ts";
 import {
-  createMcpAuthProvider,
   type McpAuthProvider,
   type McpOAuthCredentialStore,
   type McpOAuthSettings,
+  createMcpAuthProvider,
 } from "./oauth.ts";
 import type { McpResourceServer } from "./resources.ts";
 import type { McpToolCaller } from "./tools.ts";
+
+const {
+  JSON_RPC_ERROR_CODES,
+  McpAuthRequiredError,
+  McpClient,
+  McpError,
+  McpHttpError,
+  McpSessionExpiredError,
+  StdioTransport,
+} = mcp;
+const { McpOAuthAuthorizationRequiredError } = oauthModule;
 
 export { McpServerLog } from "./log.ts";
 export { McpOAuthCredentialStore, McpSignInCancelledError, signInMcpServer } from "./oauth.ts";
@@ -51,8 +46,8 @@ type ServerState = "connecting" | "connected" | "disconnected" | "needs-auth" | 
 export type McpTransportFactory = (
   entry: McpServerEntry,
   cwd: string,
-  authProvider: AuthProvider | undefined,
-) => McpTransport;
+  authProvider: mcpTypes.AuthProvider | undefined,
+) => mcpTypes.McpTransport;
 
 function isTransientError(error: unknown): boolean {
   if (error instanceof McpHttpError) {
@@ -91,9 +86,9 @@ function withoutTemplates<T>(list: () => Promise<T>, empty: T): Promise<T> {
 }
 
 function listTemplates(
-  client: McpClient,
-  options: McpRequestOptions = {},
-): Promise<ResourceTemplate[]> {
+  client: mcpTypes.McpClient,
+  options: mcpTypes.McpRequestOptions = {},
+): Promise<mcpTypes.ResourceTemplate[]> {
   return withoutTemplates(() => client.listResourceTemplates(options), []);
 }
 
@@ -101,15 +96,15 @@ export class McpServerConnection implements McpToolCaller, McpResourceServer {
   readonly entry: McpServerEntry;
   state: ServerState = "connecting";
   error: string | undefined;
-  tools: McpTool[] = [];
+  tools: mcpTypes.Tool[] = [];
 
   hasResources = false;
 
   instructions: string | undefined;
 
-  challenge: OAuthChallenge | undefined;
-  private client: McpClient | undefined;
-  private opening: Promise<McpClient> | undefined;
+  challenge: oauthTypes.OAuthChallenge | undefined;
+  private client: mcpTypes.McpClient | undefined;
+  private opening: Promise<mcpTypes.McpClient> | undefined;
 
   private readonly shutdown = new AbortController();
 
@@ -145,22 +140,22 @@ export class McpServerConnection implements McpToolCaller, McpResourceServer {
     this.authProvider =
       url !== undefined && url !== ""
         ? createMcpAuthProvider({
-            serverUrl: url,
-            store: options.credentials.forServer(this.entry.name, url),
-            settings: () => this.oauthSettings(),
             onChallenge: (challenge) => {
               this.challenge = challenge;
             },
+            serverUrl: url,
+            settings: () => this.oauthSettings(),
+            store: options.credentials.forServer(this.entry.name, url),
           })
         : provider !== undefined && provider !== ""
           ? {
+              settled: () => Effect.runPromise(Effect.sync(() => {})),
               token: () =>
                 Effect.runPromise(
                   awaiting(function* () {
                     return yield* awaited(options.providerToken?.(provider));
                   }),
                 ),
-              settled: () => Effect.runPromise(Effect.sync(() => {})),
             }
           : undefined;
   }
@@ -185,7 +180,15 @@ export class McpServerConnection implements McpToolCaller, McpResourceServer {
     const oauth = "url" in this.entry.config ? this.entry.config.oauth : undefined;
     if (oauth === undefined) return {};
     return {
+      authServerMetadataUrl:
+        oauth.authServerMetadataUrl !== undefined && oauth.authServerMetadataUrl !== ""
+          ? new URL(oauth.authServerMetadataUrl)
+          : undefined,
+      callbackPort: oauth.callbackPort,
+      callbackUrl: oauth.callbackUrl,
       clientId: oauth.clientId,
+      clientName: oauth.clientName,
+      clientRegistration: oauth.clientRegistration,
       clientSecret:
         oauth.clientSecret === undefined
           ? undefined
@@ -193,19 +196,11 @@ export class McpServerConnection implements McpToolCaller, McpResourceServer {
               oauth.clientSecret,
               `MCP server "${this.entry.name}" oauth.clientSecret`,
             ),
-      callbackPort: oauth.callbackPort,
-      callbackUrl: oauth.callbackUrl,
       scope: oauth.scope,
-      clientName: oauth.clientName,
-      clientRegistration: oauth.clientRegistration,
-      authServerMetadataUrl:
-        oauth.authServerMetadataUrl !== undefined && oauth.authServerMetadataUrl !== ""
-          ? new URL(oauth.authServerMetadataUrl)
-          : undefined,
     };
   }
 
-  getClient(): Promise<McpClient> {
+  getClient(): Promise<mcpTypes.McpClient> {
     if (this.closed)
       return Promise.reject(new Error(`MCP server "${this.entry.name}" is shut down`));
     if (this.client?.connectionState === "connected") return Promise.resolve(this.client);
@@ -218,26 +213,29 @@ export class McpServerConnection implements McpToolCaller, McpResourceServer {
   callTool(
     name: string,
     args: Record<string, unknown>,
-    options: McpRequestOptions,
-  ): Promise<CallToolResult> {
+    options: mcpTypes.McpRequestOptions,
+  ): Promise<mcpTypes.CallToolResult> {
     return this.withClient((client) => client.callTool(name, args, options));
   }
 
-  readResource(uri: string, options: McpRequestOptions): Promise<ReadResourceResult> {
+  readResource(
+    uri: string,
+    options: mcpTypes.McpRequestOptions,
+  ): Promise<mcpTypes.ReadResourceResult> {
     return this.withClient((client) => client.readResource(uri, options), true);
   }
 
   resourcesPage(
     cursor: string | undefined,
-    options: McpRequestOptions,
-  ): Promise<ListResourcesResult> {
+    options: mcpTypes.McpRequestOptions,
+  ): Promise<mcpTypes.ListResourcesResult> {
     return this.withClient((client) => client.listResourcesPage(cursor, options), true);
   }
 
   resourceTemplatesPage(
     cursor: string | undefined,
-    options: McpRequestOptions,
-  ): Promise<ListResourceTemplatesResult> {
+    options: mcpTypes.McpRequestOptions,
+  ): Promise<mcpTypes.ListResourceTemplatesResult> {
     return this.withClient(
       (client) =>
         withoutTemplates(() => client.listResourceTemplatesPage(cursor, options), {
@@ -247,15 +245,18 @@ export class McpServerConnection implements McpToolCaller, McpResourceServer {
     );
   }
 
-  allResources(options: McpRequestOptions): Promise<Resource[]> {
+  allResources(options: mcpTypes.McpRequestOptions): Promise<mcpTypes.Resource[]> {
     return this.withClient((client) => client.listResources(options), true);
   }
 
-  allResourceTemplates(options: McpRequestOptions): Promise<ResourceTemplate[]> {
+  allResourceTemplates(options: mcpTypes.McpRequestOptions): Promise<mcpTypes.ResourceTemplate[]> {
     return this.withClient((client) => listTemplates(client, options), true);
   }
 
-  private withClient<T>(run: (client: McpClient) => Promise<T>, readOnly = false): Promise<T> {
+  private withClient<T>(
+    run: (client: mcpTypes.McpClient) => Promise<T>,
+    readOnly = false,
+  ): Promise<T> {
     return Effect.runPromise(
       awaitingWith(function* () {
         for (let attempt = 1; ; attempt++) {
@@ -323,7 +324,7 @@ export class McpServerConnection implements McpToolCaller, McpResourceServer {
     this.onChange?.(this);
   }
 
-  private dropClient(client: McpClient): Promise<void> {
+  private dropClient(client: mcpTypes.McpClient): Promise<void> {
     return Effect.runPromise(
       awaitingWith(function* () {
         if (this.client === client) this.client = undefined;
@@ -332,7 +333,7 @@ export class McpServerConnection implements McpToolCaller, McpResourceServer {
     );
   }
 
-  private open(): Promise<McpClient> {
+  private open(): Promise<mcpTypes.McpClient> {
     return Effect.runPromise(
       awaitingWith(function* () {
         this.state = "connecting";
@@ -359,14 +360,14 @@ export class McpServerConnection implements McpToolCaller, McpResourceServer {
     );
   }
 
-  private connectOnce(): Promise<McpClient> {
+  private connectOnce(): Promise<mcpTypes.McpClient> {
     return Effect.runPromise(
       awaitingWith(function* () {
         const client = new McpClient({
           name: "msa",
-          version: VERSION,
           requestTimeoutMs: this.timeoutMs,
           roots: [{ uri: pathToFileURL(this.cwd).href, name: basename(this.cwd) }],
+          version: VERSION,
         });
         const log = this.log;
         if (log !== undefined)
@@ -380,7 +381,7 @@ export class McpServerConnection implements McpToolCaller, McpResourceServer {
           return closing;
         };
         this.shutdown.signal.addEventListener("abort", closeClient, { once: true });
-        let transport: McpTransport | undefined;
+        let transport: mcpTypes.McpTransport | undefined;
         try {
           transport = this.createTransport(this.entry, this.cwd, this.authProvider);
           yield* awaited(client.connect(transport));
@@ -433,7 +434,10 @@ export class McpServerConnection implements McpToolCaller, McpResourceServer {
     return new Error(`MCP server "${this.entry.name}" failed to connect: ${this.error}`);
   }
 
-  private handleClientClose(client: McpClient, stdio: StdioTransport | undefined): void {
+  private handleClientClose(
+    client: mcpTypes.McpClient,
+    stdio: mcpTypes.StdioTransport | undefined,
+  ): void {
     if (this.client !== client || this.closed) return;
     this.client = undefined;
     this.state = "disconnected";
@@ -443,7 +447,7 @@ export class McpServerConnection implements McpToolCaller, McpResourceServer {
     this.changed();
   }
 
-  private refreshTools(client: McpClient): Promise<void> {
+  private refreshTools(client: mcpTypes.McpClient): Promise<void> {
     return Effect.runPromise(
       awaitingWith(function* () {
         try {

@@ -1,5 +1,5 @@
-import type { AgentMessage } from "@msa/agent-core";
-import type { Api, AssistantMessage, Model } from "@msa/ai/compat";
+import type agentTypes from "@msa/agent-core/index.types";
+import type compatTypes from "@msa/ai/compat.types";
 import * as Effect from "effect/Effect";
 
 import { toErrorMessage } from "../utils/errors.ts";
@@ -33,7 +33,7 @@ export function parseGoalCommand(text: string): GoalCommand | undefined {
   const args = (match[1] ?? "").trim();
   if (args === "") return { kind: "status" };
   if (CLEAR_WORDS.has(args.toLowerCase())) return { kind: "clear" };
-  return { kind: "set", condition: args };
+  return { condition: args, kind: "set" };
 }
 
 export type GoalVerdict = "not_met" | "met" | "impossible";
@@ -117,7 +117,7 @@ const FATAL_ERROR_PATTERN = new RegExp(
 const RATE_LIMIT_PATTERN = /rate.?limit|too many requests|\b429\b|ResourceExhausted/iu;
 
 export function classifyGoalError(
-  message: AssistantMessage,
+  message: compatTypes.AssistantMessage,
   contextOverflow: boolean,
 ): GoalErrorKind {
   if (contextOverflow) return "fatal";
@@ -129,15 +129,15 @@ export function classifyGoalError(
 
 const SMALL_TIER_PATTERN = /(?:^|[-_./:])(?:haiku|flash|mini|lite|small)(?=$|[-_./:])/iu;
 
-function price(model: Model<Api>): number {
+function price(model: compatTypes.Model<compatTypes.Api>): number {
   return model.cost.input + model.cost.output;
 }
 
 export function pickEvaluatorModel(
-  current: Model<Api>,
-  available: readonly Model<Api>[],
-): Model<Api> {
-  let best: Model<Api> | undefined;
+  current: compatTypes.Model<compatTypes.Api>,
+  available: readonly compatTypes.Model<compatTypes.Api>[],
+): compatTypes.Model<compatTypes.Api> {
+  let best: compatTypes.Model<compatTypes.Api> | undefined;
   for (const model of available) {
     if (model.provider !== current.provider || !SMALL_TIER_PATTERN.test(model.id)) continue;
     if (price(model) > price(current)) continue;
@@ -163,7 +163,7 @@ function truncateToolResult(text: string): string {
 
 export function buildGoalEvaluationPrompt(input: {
   condition: string;
-  messages: AgentMessage[];
+  messages: agentTypes.AgentMessage[];
   turn: number;
   elapsedMs: number;
 }): string {
@@ -196,9 +196,9 @@ export function parseGoalEvaluation(text: string): GoalEvaluation | undefined {
   const reason = "reason" in value ? value.reason : undefined;
   if (typeof verdict !== "string" || !VERDICTS.has(verdict)) return undefined;
   return {
-    verdict: verdict as GoalVerdict,
     reason:
       typeof reason === "string" && reason.trim() !== "" ? reason.trim() : "(no reason given)",
+    verdict: verdict as GoalVerdict,
   };
 }
 
@@ -235,26 +235,26 @@ export function describeGoalEntry(
   const data = entry.data;
   switch (data.event) {
     case "set":
-      return { tone: "accent", text: `◎ Goal set: ${firstLine(data.condition)}` };
+      return { text: `◎ Goal set: ${firstLine(data.condition)}`, tone: "accent" };
     case "evaluated":
-      return { tone: "muted", text: `◎ Not met yet (turn ${data.turn}): ${data.reason}` };
+      return { text: `◎ Not met yet (turn ${data.turn}): ${data.reason}`, tone: "muted" };
     case "met":
       return {
-        tone: "success",
         text: `✓ Goal met · ${turnCount(data.turns)} · ${formatGoalDuration(data.elapsedMs)} · ${formatTokenCount(data.tokens)} tokens: ${data.reason}`,
+        tone: "success",
       };
     case "impossible":
-      return { tone: "error", text: `✗ Goal cannot be met: ${data.reason}` };
+      return { text: `✗ Goal cannot be met: ${data.reason}`, tone: "error" };
     case "cleared":
-      return { tone: "muted", text: `◎ Goal cleared: ${firstLine(data.condition)}` };
+      return { text: `◎ Goal cleared: ${firstLine(data.condition)}`, tone: "muted" };
     case "failed":
-      return { tone: "error", text: `✗ Goal stopped by an error: ${data.reason}` };
+      return { text: `✗ Goal stopped by an error: ${data.reason}`, tone: "error" };
     case "paused":
-      return { tone: "warning", text: `◎ Goal paused: ${data.reason}` };
+      return { text: `◎ Goal paused: ${data.reason}`, tone: "warning" };
     case "waiting":
       return {
-        tone: "warning",
         text: `◎ Rate limited, resuming in ${formatGoalDuration(data.delayMs)}: ${data.reason}`,
+        tone: "warning",
       };
   }
 }
@@ -289,10 +289,10 @@ export interface GoalSnapshot {
 }
 
 export interface GoalHost {
-  messages(): AgentMessage[];
+  messages(): agentTypes.AgentMessage[];
   totalTokens(): number;
-  lastAssistant(): AssistantMessage | undefined;
-  isContextOverflow(message: AssistantMessage): boolean;
+  lastAssistant(): compatTypes.AssistantMessage | undefined;
+  isContextOverflow(message: compatTypes.AssistantMessage): boolean;
   evaluate(prompt: string, signal: AbortSignal): Promise<string>;
   record(data: GoalEntryData): void;
   queueContinue(text: string): void;
@@ -346,14 +346,14 @@ export class GoalLoop {
     }
     this.abortController?.abort();
     this.active = this.start(trimmed);
-    this.host.record({ event: "set", condition: trimmed });
+    this.host.record({ condition: trimmed, event: "set" });
     this.host.changed();
   }
 
   clear(): boolean {
     const goal = this.active;
     if (goal === undefined) return false;
-    this.end({ event: "cleared", condition: goal.condition });
+    this.end({ condition: goal.condition, event: "cleared" });
     return true;
   }
 
@@ -397,14 +397,14 @@ export class GoalLoop {
   private start(condition: string): ActiveGoal {
     return {
       condition,
+      errorTurns: 0,
+      evaluating: false,
+      idleTurns: 0,
+      rateLimitWaits: 0,
       startedAt: nowMs(),
       tokenBaseline: this.host.totalTokens(),
-      turns: 0,
-      evaluating: false,
       toolUsed: false,
-      idleTurns: 0,
-      errorTurns: 0,
-      rateLimitWaits: 0,
+      turns: 0,
     };
   }
 
@@ -416,21 +416,21 @@ export class GoalLoop {
   }
 
   private pause(goal: ActiveGoal, reason: string): false {
-    this.host.record({ event: "paused", condition: goal.condition, reason });
+    this.host.record({ condition: goal.condition, event: "paused", reason });
     this.host.changed();
     return false;
   }
 
   private afterError(
     goal: ActiveGoal,
-    message: AssistantMessage,
+    message: compatTypes.AssistantMessage,
     signal: AbortSignal,
   ): Effect.Effect<boolean> {
     return awaitingWith(function* () {
       const error = message.errorMessage || "Unknown error";
       const kind = classifyGoalError(message, this.host.isContextOverflow(message));
       if (kind === "fatal") {
-        this.end({ event: "failed", condition: goal.condition, reason: error });
+        this.end({ condition: goal.condition, event: "failed", reason: error });
         return false;
       }
       if (kind === "rate_limit") {
@@ -439,7 +439,7 @@ export class GoalLoop {
           RATE_LIMIT_BASE_DELAY_MS * 2 ** (goal.rateLimitWaits - 1),
           RATE_LIMIT_MAX_DELAY_MS,
         );
-        this.host.record({ event: "waiting", condition: goal.condition, reason: error, delayMs });
+        this.host.record({ condition: goal.condition, delayMs, event: "waiting", reason: error });
         try {
           yield* performed(sleepFor(delayMs, signal));
         } catch {
@@ -467,9 +467,9 @@ export class GoalLoop {
         const turn = goal.turns + 1;
         const prompt = buildGoalEvaluationPrompt({
           condition: goal.condition,
+          elapsedMs: nowMs() - goal.startedAt,
           messages: this.host.messages(),
           turn,
-          elapsedMs: nowMs() - goal.startedAt,
         });
         goal.evaluating = true;
         this.host.changed();
@@ -498,19 +498,19 @@ export class GoalLoop {
 
         if (evaluation.verdict !== "not_met") {
           this.end({
-            event: evaluation.verdict,
             condition: goal.condition,
-            reason: evaluation.reason,
-            turns: goal.turns,
             elapsedMs: nowMs() - goal.startedAt,
+            event: evaluation.verdict,
+            reason: evaluation.reason,
             tokens: Math.max(0, this.host.totalTokens() - goal.tokenBaseline),
+            turns: goal.turns,
           });
           return false;
         }
 
         this.host.record({
-          event: "evaluated",
           condition: goal.condition,
+          event: "evaluated",
           reason: evaluation.reason,
           turn,
         });

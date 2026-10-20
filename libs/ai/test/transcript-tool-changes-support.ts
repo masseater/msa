@@ -1,18 +1,20 @@
 import { Data, Effect } from "effect";
 import { Type } from "typebox";
 
-import { streamSimple } from "../src/compat.ts";
-import type { Api, Context, Model, Tool } from "../src/types.ts";
+import compatModule from "../src/compat.ts";
+import type typesModule from "../src/types.types.ts";
+
+const { streamSimple } = compatModule;
 
 class PayloadCaptured extends Data.TaggedError("PayloadCaptured") {}
 
-function tool(name: string): Tool {
+function tool(name: string): typesModule.Tool {
   return { description: `${name} tool`, name, parameters: Type.Object({}) };
 }
 
 const capturePayload = Effect.fn("capturePayload")(function* <T>(
-  model: Model<Api>,
-  context: Context,
+  model: typesModule.Model<typesModule.Api>,
+  context: typesModule.Context,
 ) {
   let captured: T | undefined;
   const stream = streamSimple(model, context, {
@@ -40,7 +42,7 @@ const baseTool = tool("base_tool");
 
 const lateTool = tool("late_tool");
 
-const context: Context = {
+const context: typesModule.Context = {
   messages: [
     {
       content: "base prompt",
@@ -67,7 +69,7 @@ const context: Context = {
   ],
 };
 
-const additionContext: Context = {
+const additionContext: typesModule.Context = {
   messages: [
     { content: "base prompt", role: "system", timestamp: 0, toolsAdded: [baseTool] },
     { content: "before", role: "user", timestamp: 1 },
@@ -75,7 +77,7 @@ const additionContext: Context = {
   ],
 };
 
-const anthropicNativeModel: Model<"anthropic-messages"> = {
+const anthropicNativeModel: typesModule.Model<"anthropic-messages"> = {
   ...modelBase,
   api: "anthropic-messages",
   compat: { supportsMidConvoSystemMessages: true, supportsMidConvoToolChanges: true },

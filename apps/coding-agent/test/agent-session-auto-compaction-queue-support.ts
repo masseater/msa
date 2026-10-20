@@ -1,4 +1,5 @@
-import { type AssistantMessage, streamSimple } from "@msa/ai/compat";
+import compat from "@msa/ai/compat";
+import type compatTypes from "@msa/ai/compat.types";
 import testing from "@msa/testing";
 import { Effect } from "effect";
 import { vi } from "vite-plus/test";
@@ -8,6 +9,8 @@ import type { SessionManager } from "../src/core/session-manager.ts";
 import type { SettingsManager } from "../src/core/settings-manager.ts";
 import type autoCompactionQueueSupportTypes from "./agent-session-auto-compaction-queue-support.types.ts";
 import sessionKit from "./session-kit.ts";
+
+const { streamSimple } = compat;
 
 const { awaited, currentTimeMillis, runTest } = testing;
 const { createAgentSession, disposeWorkspace, prepareWorkspace } = sessionKit;
@@ -45,7 +48,7 @@ const cleanUp = (): Promise<void> =>
     }),
   );
 
-const usage = (input: number, output = 0): AssistantMessage["usage"] => ({
+const usage = (input: number, output = 0): compatTypes.AssistantMessage["usage"] => ({
   cacheRead: 0,
   cacheWrite: 0,
   cost: { cacheRead: 0, cacheWrite: 0, input: 0, output: 0, total: 0 },
@@ -56,7 +59,7 @@ const usage = (input: number, output = 0): AssistantMessage["usage"] => ({
 
 const modelMessage = (
   options: autoCompactionQueueSupportTypes.ModelMessageOptions,
-): AssistantMessage => {
+): compatTypes.AssistantMessage => {
   const model = state.session!.model!;
   return {
     api: model.api,
@@ -71,7 +74,7 @@ const modelMessage = (
   };
 };
 
-const overloaded = (timestamp?: number): AssistantMessage =>
+const overloaded = (timestamp?: number): compatTypes.AssistantMessage =>
   modelMessage({
     errorMessage: "529 overloaded",
     ...(timestamp === undefined ? {} : { timestamp }),
@@ -93,14 +96,20 @@ const spyAutoCompaction = () =>
     )
     .mockResolvedValue();
 
-const checkCompaction = (message: AssistantMessage, skipAbortedCheck?: boolean) => {
+const checkCompaction = (message: compatTypes.AssistantMessage, skipAbortedCheck?: boolean) => {
   const session = state.session as unknown as {
-    checkCompaction: (message: AssistantMessage, skipAbortedCheck?: boolean) => Promise<void>;
+    checkCompaction: (
+      message: compatTypes.AssistantMessage,
+      skipAbortedCheck?: boolean,
+    ) => Promise<void>;
   };
   return awaited(session.checkCompaction(message, skipAbortedCheck));
 };
 
-const appendCompactedHistory = (assistant: AssistantMessage, userText: string): void => {
+const appendCompactedHistory = (
+  assistant: compatTypes.AssistantMessage,
+  userText: string,
+): void => {
   const { sessionManager } = harness();
   sessionManager.appendMessage(userMessage(userText, assistant.timestamp - 1000));
   sessionManager.appendMessage(assistant);

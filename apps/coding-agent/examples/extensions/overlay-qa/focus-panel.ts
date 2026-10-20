@@ -1,18 +1,20 @@
 import type { Theme } from "@msa/coding-agent";
-import type { OverlayHandle, OverlayOptions } from "@msa/tui";
-import { Input, matchesKey, truncateToWidth } from "@msa/tui";
+import tui from "@msa/tui";
+import type tuiTypes from "@msa/tui/index.types";
 
 import { BaseOverlay } from "./base-overlay.ts";
 import type { FocusDemoController } from "./focus-demo-controller.ts";
+
+const { Input, matchesKey, truncateToWidth } = tui;
 
 export type FocusPanelColor = "error" | "success" | "accent";
 export type FocusPanelConfig = {
   label: string;
   color: FocusPanelColor;
-  options: OverlayOptions;
+  options: tuiTypes.OverlayOptions;
 };
 
-export type FocusPanelEntry = { panel: FocusPanel; handle: OverlayHandle };
+export type FocusPanelEntry = { panel: FocusPanel; handle: tuiTypes.OverlayHandle };
 
 export class FocusPanel extends BaseOverlay {
   focused = false;

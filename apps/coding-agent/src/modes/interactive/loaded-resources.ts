@@ -1,4 +1,5 @@
-import { type Container, Spacer } from "@msa/tui";
+import tui from "@msa/tui";
+import type tuiTypes from "@msa/tui/index.types";
 import { dual } from "effect/Function";
 
 import type { LoadExtensionsResult } from "../../core/extensions/types.ts";
@@ -12,8 +13,10 @@ import { abbreviateHomePath, getCwdRelativePath } from "../../utils/paths.ts";
 import { isAbsolute, posixParse, posixRelative, relative, resolve } from "../path.ts";
 import { ExpandableText } from "./components/expandable-text.ts";
 import { ThemedText } from "./components/themed-text.ts";
-import { type ThemeColor, theme } from "./theme/theme.ts";
 import type { Theme } from "./theme/theme.ts";
+import { type ThemeColor, theme } from "./theme/theme.ts";
+
+const { Spacer } = tui;
 
 type ResourceItem = { path: string; sourceInfo?: SourceInfo };
 type ScopeName = "user" | "project" | "path";
@@ -34,8 +37,8 @@ export const getStartupVisibility: {
     quietStartup: QuietStartup | undefined,
     verbose: boolean,
   ): { header: boolean; details: boolean } => ({
-    header: verbose || quietStartup !== true,
     details: verbose || quietStartup === false,
+    header: verbose || quietStartup !== true,
   }),
 );
 
@@ -199,9 +202,9 @@ function getScopeName(sourceInfo?: SourceInfo): ScopeName {
 
 function buildScopeGroups(items: readonly ResourceItem[]): ScopeGroup[] {
   const groups: Record<ScopeName, ScopeGroup> = {
-    user: { scope: "user", paths: [], packages: new Map() },
-    project: { scope: "project", paths: [], packages: new Map() },
-    path: { scope: "path", paths: [], packages: new Map() },
+    path: { packages: new Map(), paths: [], scope: "path" },
+    project: { packages: new Map(), paths: [], scope: "project" },
+    user: { packages: new Map(), paths: [], scope: "user" },
   };
 
   for (const item of items) {
@@ -347,11 +350,22 @@ export type LoadedResourcesOptions = {
 };
 
 export const renderLoadedResources: {
-  (source: LoadedResourcesSource, options: LoadedResourcesOptions): (container: Container) => void;
-  (container: Container, source: LoadedResourcesSource, options: LoadedResourcesOptions): void;
+  (
+    source: LoadedResourcesSource,
+    options: LoadedResourcesOptions,
+  ): (container: tuiTypes.Container) => void;
+  (
+    container: tuiTypes.Container,
+    source: LoadedResourcesSource,
+    options: LoadedResourcesOptions,
+  ): void;
 } = dual(
   3,
-  (container: Container, source: LoadedResourcesSource, options: LoadedResourcesOptions): void => {
+  (
+    container: tuiTypes.Container,
+    source: LoadedResourcesSource,
+    options: LoadedResourcesOptions,
+  ): void => {
     container.clear();
     if (!options.showListing && !options.showDiagnostics) {
       return;
@@ -375,7 +389,7 @@ export const renderLoadedResources: {
 function buildAddDiagnostics(
   source: LoadedResourcesSource,
   options: LoadedResourcesOptions,
-  container: Container,
+  container: tuiTypes.Container,
 ): {
   addDiagnostics: (title: string, diagnostics: readonly ResourceDiagnostic[]) => void;
   skillsResult: { skills: Skill[]; diagnostics: ResourceDiagnostic[] };
@@ -417,13 +431,13 @@ function buildAddDiagnostics(
     );
     buildPart3(templates, addSection, extensions);
   }
-  return { addDiagnostics, skillsResult, promptsResult, extensionsResult, themesResult };
+  return { addDiagnostics, extensionsResult, promptsResult, skillsResult, themesResult };
 }
 
 function buildSectionHeader(
   source: LoadedResourcesSource,
   options: LoadedResourcesOptions,
-  container: Container,
+  container: tuiTypes.Container,
 ): {
   sectionHeader: (name: string, color: ThemeColor) => string;
   sourceInfos: Map<string, SourceInfo>;
@@ -456,14 +470,14 @@ function buildSectionHeader(
     themesResult,
   } = buildSectionHeaderSectionHeader(source, options, container);
   return {
-    sectionHeader,
-    sourceInfos,
-    resourceLoader,
     addSection,
-    skillsResult,
     extensions,
-    promptsResult,
     extensionsResult,
+    promptsResult,
+    resourceLoader,
+    sectionHeader,
+    skillsResult,
+    sourceInfos,
     themesResult,
   };
 }
@@ -471,7 +485,7 @@ function buildSectionHeader(
 function buildSectionHeaderSectionHeader(
   source: LoadedResourcesSource,
   options: LoadedResourcesOptions,
-  container: Container,
+  container: tuiTypes.Container,
 ): {
   sectionHeader: (name: string, color: ThemeColor) => string;
   sourceInfos: Map<string, SourceInfo>;
@@ -504,14 +518,14 @@ function buildSectionHeaderSectionHeader(
     themesResult,
   } = buildSectionHeaderSectionHeaderSectionHeader(source, options, container);
   return {
-    sectionHeader,
-    sourceInfos,
-    resourceLoader,
     addSection,
-    skillsResult,
     extensions,
-    promptsResult,
     extensionsResult,
+    promptsResult,
+    resourceLoader,
+    sectionHeader,
+    skillsResult,
+    sourceInfos,
     themesResult,
   };
 }
@@ -519,7 +533,7 @@ function buildSectionHeaderSectionHeader(
 function buildSectionHeaderSectionHeaderSectionHeader(
   source: LoadedResourcesSource,
   options: LoadedResourcesOptions,
-  container: Container,
+  container: tuiTypes.Container,
 ): {
   sectionHeader: (name: string, color: ThemeColor) => string;
   sourceInfos: Map<string, SourceInfo>;
@@ -574,14 +588,14 @@ function buildSectionHeaderSectionHeaderSectionHeader(
     container.addChild(new Spacer(1));
   };
   return {
-    sectionHeader,
-    sourceInfos,
-    resourceLoader,
     addSection,
-    skillsResult,
     extensions,
-    promptsResult,
     extensionsResult,
+    promptsResult,
+    resourceLoader,
+    sectionHeader,
+    skillsResult,
+    sourceInfos,
     themesResult,
   };
 }
@@ -597,7 +611,7 @@ function buildTemplates(
     | "getAppendSystemPromptSources"
     | "getAgentsFiles"
   >,
-  container: Container,
+  container: tuiTypes.Container,
   addSection: (name: string, collapsedBody: () => string, expandedBody: () => string) => void,
   options: LoadedResourcesOptions,
   skillsResult: { skills: Skill[]; diagnostics: ResourceDiagnostic[] },
@@ -625,7 +639,7 @@ function buildTemplatesTemplates(
     | "getAppendSystemPromptSources"
     | "getAgentsFiles"
   >,
-  container: Container,
+  container: tuiTypes.Container,
   addSection: (name: string, collapsedBody: () => string, expandedBody: () => string) => void,
   options: LoadedResourcesOptions,
   skillsResult: { skills: Skill[]; diagnostics: ResourceDiagnostic[] },
@@ -653,7 +667,7 @@ function buildTemplatesTemplatesTemplates(
     | "getAppendSystemPromptSources"
     | "getAgentsFiles"
   >,
-  container: Container,
+  container: tuiTypes.Container,
   addSection: (name: string, collapsedBody: () => string, expandedBody: () => string) => void,
   options: LoadedResourcesOptions,
   skillsResult: { skills: Skill[]; diagnostics: ResourceDiagnostic[] },
@@ -756,14 +770,14 @@ function buildPart4(
     addDiagnostics("Prompt conflicts", promptsResult.diagnostics);
     addDiagnostics("Extension issues", [
       ...extensionsResult.errors.map((error) => ({
-        type: "error" as const,
         message: error.error,
         path: error.path,
+        type: "error" as const,
       })),
       ...(extensionsResult.warnings ?? []).map((warning) => ({
-        type: "warning" as const,
         message: warning.warning,
         path: warning.path,
+        type: "warning" as const,
       })),
       ...source.extensionRunnerDiagnostics,
     ]);

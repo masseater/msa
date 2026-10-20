@@ -1,4 +1,4 @@
-import type { AssistantMessage } from "@msa/ai";
+import type aiTypes from "@msa/ai/index.types";
 import testing from "@msa/testing";
 import { Effect } from "effect";
 import { afterEach, describe, expect, it, vi } from "vite-plus/test";
@@ -11,11 +11,11 @@ const { createHarness } = harnessModule;
 const { currentTimeMillis } = testing;
 
 type SessionWithCompactionInternals = {
-  checkCompaction: (assistantMessage: AssistantMessage) => Promise<boolean>;
+  checkCompaction: (assistantMessage: aiTypes.AssistantMessage) => Promise<boolean>;
   runAutoCompaction: (reason: "overflow" | "threshold", willRetry: boolean) => Promise<boolean>;
 };
 
-function createZeroUsageAssistant(harness: harnessTypes.Harness): AssistantMessage {
+function createZeroUsageAssistant(harness: harnessTypes.Harness): aiTypes.AssistantMessage {
   const model = harness.getModel();
   return {
     api: model.api,

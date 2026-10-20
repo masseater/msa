@@ -3,7 +3,10 @@ import { fileURLToPath } from "node:url";
 import { Clock, Effect } from "effect";
 import { describe, expect, it } from "vite-plus/test";
 
-import { McpClient, StdioTransport } from "../src/index.ts";
+import mcp from "../src/index.ts";
+import type mcpTypes from "../src/index.types.ts";
+
+const { McpClient, StdioTransport } = mcp;
 
 const fixture = fileURLToPath(new URL("./fixtures/stdio-server.mjs", import.meta.url));
 const stubborn = fileURLToPath(new URL("./fixtures/stubborn-server.mjs", import.meta.url));
@@ -40,7 +43,7 @@ const connectsAndCapturesStderr = Effect.gen(function* () {
   expect(client.connectionState).toBe("closed");
 });
 
-const waitForGrandchild = (transport: StdioTransport) =>
+const waitForGrandchild = (transport: mcpTypes.StdioTransport) =>
   Effect.gen(function* () {
     for (let i = 0; i < 100; i++) {
       const match = /grandchild (\d+)/u.exec(transport.stderr);

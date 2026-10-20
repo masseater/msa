@@ -1,21 +1,8 @@
-import { oauthErrorHtml, oauthSuccessHtml } from "@msa/ai/utils/oauth-page";
-import { type AuthProvider, type McpFetch, toPromise } from "@msa/mcp";
-import {
-  type AuthorizationServerMetadata,
-  authorizeMcp,
-  McpOAuthAuthorizationRequiredError,
-  McpOAuthProvider,
-  type McpOAuthState,
-  type McpOAuthStateStore,
-  type OAuthCallback,
-  type OAuthCallbackPage,
-  OAuthCallbackServer,
-  type OAuthChallenge,
-  type OAuthClientInformationMixed,
-  type OAuthClientMetadataDocument,
-  parseWwwAuthenticate,
-  stepUpScope,
-} from "@msa/mcp/oauth";
+import oauthPage from "@msa/ai/utils/oauth-page";
+import mcp from "@msa/mcp";
+import type mcpTypes from "@msa/mcp/index.types";
+import oauth from "@msa/mcp/oauth";
+import type oauthTypes from "@msa/mcp/oauth.types";
 import * as Effect from "effect/Effect";
 import lockfile from "proper-lockfile";
 
@@ -27,6 +14,18 @@ import { join, sha256Hex } from "../../core/platform-node.ts";
 import { nowMs } from "../../core/platform.ts";
 import { makeDirectory } from "../../utils/node-fs.ts";
 import { McpSignInCancelledError } from "./sign-in-cancelled.ts";
+
+const { oauthErrorHtml, oauthSuccessHtml } = oauthPage;
+
+const {
+  McpOAuthAuthorizationRequiredError,
+  McpOAuthProvider,
+  OAuthCallbackServer,
+  authorizeMcp,
+  parseWwwAuthenticate,
+  stepUpScope,
+} = oauth;
+const { toPromise } = mcp;
 
 const CALLBACK_HOST = "127.0.0.1";
 const CALLBACK_PATH = "/callback";
@@ -83,11 +82,11 @@ function callbackSettings(settings: McpOAuthSettings): CallbackSettings {
     fixedRedirectUrl = url.href;
   }
   return {
-    host: address === "localhost" ? CALLBACK_HOST : address,
-    redirectHost: address,
-    port,
-    path: url.pathname,
     fixedRedirectUrl,
+    host: address === "localhost" ? CALLBACK_HOST : address,
+    path: url.pathname,
+    port,
+    redirectHost: address,
   };
 }
 
@@ -98,7 +97,7 @@ function mergeScopes(...scopes: (string | undefined)[]): string | undefined {
   return merged.length > 0 ? merged.join(" ") : undefined;
 }
 
-type StoredStates = Record<string, McpOAuthState>;
+type StoredStates = Record<string, oauthTypes.McpOAuthState>;
 
 function parseStates(content: string | undefined): StoredStates {
   if (content === undefined || content.trim() === "") return {};
@@ -117,7 +116,7 @@ function storeKeys(name: string, serverUrl: string): { key: string; legacyKey: s
   return { key: `${mcpNamespace(name)}|${legacyKey}`, legacyKey };
 }
 
-export interface McpOAuthServerStore extends McpOAuthStateStore {
+export interface McpOAuthServerStore extends oauthTypes.McpOAuthStateStore {
   withRefreshLock<T>(fn: () => Promise<T>): Promise<T>;
 }
 
@@ -141,7 +140,7 @@ export class McpOAuthCredentialStore {
             return { result: states[key] };
           states[key] = states[legacyKey];
           delete states[legacyKey];
-          return { result: states[key], next: serializeStates(states) };
+          return { next: serializeStates(states), result: states[key] };
         }),
       save: (state) =>
         this.write((states) => {
@@ -156,20 +155,19 @@ export class McpOAuthCredentialStore {
       awaitingWith(function* () {
         if (this.lockDir === undefined || this.lockDir === "") return yield* awaited(fn());
         const lockDir = this.lockDir;
-        yield* awaited(makeDirectory({ path: lockDir, mode: 0o700 }));
+        yield* awaited(makeDirectory({ mode: 0o700, path: lockDir }));
         const hash = sha256Hex(key).slice(0, 16);
         const release = yield* awaited(
           lockfile.lock(join(this.lockDir, `mcp-auth-refresh-${hash}`), {
-            realpath: false,
-            stale: REFRESH_LOCK_STALE_MS,
-            retries: {
-              retries: REFRESH_LOCK_WAIT_MS / REFRESH_LOCK_RETRY_MS,
-              factor: 1,
-              minTimeout: REFRESH_LOCK_RETRY_MS,
-              maxTimeout: REFRESH_LOCK_RETRY_MS,
-            },
-
             onCompromised: () => {},
+            realpath: false,
+            retries: {
+              factor: 1,
+              maxTimeout: REFRESH_LOCK_RETRY_MS,
+              minTimeout: REFRESH_LOCK_RETRY_MS,
+              retries: REFRESH_LOCK_WAIT_MS / REFRESH_LOCK_RETRY_MS,
+            },
+            stale: REFRESH_LOCK_STALE_MS,
           }),
         );
         try {
@@ -181,7 +179,7 @@ export class McpOAuthCredentialStore {
     );
   }
 
-  tokens(name: string, serverUrl: string): McpOAuthState["tokens"] {
+  tokens(name: string, serverUrl: string): oauthTypes.McpOAuthState["tokens"] {
     const { key, legacyKey } = storeKeys(name, serverUrl);
     const states = this.backend.withLock((current) => ({ result: parseStates(current) }));
     return (states[key] ?? states[legacyKey])?.tokens;
@@ -194,7 +192,7 @@ export class McpOAuthCredentialStore {
       const stored = key in states ? key : legacyKey in states ? legacyKey : undefined;
       if (stored === undefined || stored === "") return { result: false };
       delete states[stored];
-      return { result: true, next: serializeStates(states) };
+      return { next: serializeStates(states), result: true };
     });
   }
 
@@ -202,12 +200,12 @@ export class McpOAuthCredentialStore {
     this.backend.withLock((current) => {
       const states = parseStates(current);
       update(states);
-      return { result: undefined, next: serializeStates(states) };
+      return { next: serializeStates(states), result: undefined };
     });
   }
 }
 
-function timedFetch(fetch: McpFetch = globalThis.fetch): McpFetch {
+function timedFetch(fetch: mcpTypes.McpFetch = globalThis.fetch): mcpTypes.McpFetch {
   return (input, init) => {
     const timeout = AbortSignal.timeout(OAUTH_REQUEST_TIMEOUT_MS);
     return fetch(input, {
@@ -220,7 +218,9 @@ function timedFetch(fetch: McpFetch = globalThis.fetch): McpFetch {
   };
 }
 
-function registeredRedirectUrls(client: OAuthClientInformationMixed | undefined): string[] {
+function registeredRedirectUrls(
+  client: oauthTypes.OAuthClientInformationMixed | undefined,
+): string[] {
   return client !== undefined && "redirect_uris" in client ? client.redirect_uris : [];
 }
 
@@ -233,8 +233,8 @@ function callbackId(serverUrl: string): string {
 function clientMetadataDocument(
   serverUrl: string,
   redirectUrl: string,
-  metadata: AuthorizationServerMetadata | undefined,
-): OAuthClientMetadataDocument {
+  metadata: oauthTypes.AuthorizationServerMetadata | undefined,
+): oauthTypes.OAuthClientMetadataDocument {
   if (
     metadata?.client_id_metadata_document_supported !== true ||
     metadata.token_endpoint_auth_methods_supported?.includes("none") !== true
@@ -244,28 +244,28 @@ function clientMetadataDocument(
     );
   }
   if (metadata.authorization_response_iss_parameter_supported === true) {
-    return { url: `${CLIENT_METADATA_BASE_URL}/client.json`, redirectUrl };
+    return { redirectUrl, url: `${CLIENT_METADATA_BASE_URL}/client.json` };
   }
   const id = callbackId(serverUrl);
   const redirect = new URL(redirectUrl);
   redirect.pathname = `${CALLBACK_PATH}/${id}`;
-  return { url: `${CLIENT_METADATA_BASE_URL}/${id}/client.json`, redirectUrl: redirect.href };
+  return { redirectUrl: redirect.href, url: `${CLIENT_METADATA_BASE_URL}/${id}/client.json` };
 }
 
 function createProvider(
   serverUrl: string,
-  store: McpOAuthStateStore,
+  store: oauthTypes.McpOAuthStateStore,
   settings: McpOAuthSettings,
   redirectUrl: string,
   onRedirect: (url: URL) => void,
-): McpOAuthProvider {
+): oauthTypes.McpOAuthProvider {
   return new McpOAuthProvider({
     serverUrl,
     redirectUrl,
     clientMetadata: { client_name: settings.clientName ?? APP_NAME },
     ...(settings.clientRegistration === "cimd"
       ? {
-          clientMetadataDocument: (metadata: AuthorizationServerMetadata | undefined) =>
+          clientMetadataDocument: (metadata: oauthTypes.AuthorizationServerMetadata | undefined) =>
             clientMetadataDocument(serverUrl, redirectUrl, metadata),
         }
       : {}),
@@ -276,7 +276,7 @@ function createProvider(
   });
 }
 
-export interface McpAuthProvider extends AuthProvider {
+export interface McpAuthProvider extends mcpTypes.AuthProvider {
   settled(): Promise<void>;
 }
 
@@ -284,15 +284,15 @@ export function createMcpAuthProvider(options: {
   serverUrl: string;
   store: McpOAuthServerStore;
   settings: () => McpOAuthSettings;
-  onChallenge: (challenge: OAuthChallenge) => void;
+  onChallenge: (challenge: oauthTypes.OAuthChallenge) => void;
 }): McpAuthProvider {
   const { serverUrl, store } = options;
   let refreshing: Promise<void> | undefined;
 
   const refresh = (
     staleToken: string | undefined,
-    fetch: McpFetch = globalThis.fetch,
-    challenge?: OAuthChallenge,
+    fetch: mcpTypes.McpFetch = globalThis.fetch,
+    challenge?: oauthTypes.OAuthChallenge,
   ) => {
     refreshing ??= store
       .withRefreshLock(() =>
@@ -334,6 +334,23 @@ export function createMcpAuthProvider(options: {
   };
 
   return {
+    onUnauthorized: (context) =>
+      Effect.runPromise(
+        awaiting(function* () {
+          const challenge = parseWwwAuthenticate(context.response.headers.get("www-authenticate"));
+          options.onChallenge(challenge);
+
+          if (challenge.error === "insufficient_scope")
+            throw new McpOAuthAuthorizationRequiredError();
+          yield* awaited(refresh(context.token, context.fetch, challenge));
+        }),
+      ),
+    settled: () =>
+      Effect.runPromise(
+        awaiting(function* () {
+          yield* awaited(refreshing?.catch(() => undefined));
+        }),
+      ),
     token: () =>
       Effect.runPromise(
         awaiting(function* () {
@@ -354,23 +371,6 @@ export function createMcpAuthProvider(options: {
           return (yield* awaited(store.load()))?.tokens?.access_token;
         }),
       ),
-    onUnauthorized: (context) =>
-      Effect.runPromise(
-        awaiting(function* () {
-          const challenge = parseWwwAuthenticate(context.response.headers.get("www-authenticate"));
-          options.onChallenge(challenge);
-
-          if (challenge.error === "insufficient_scope")
-            throw new McpOAuthAuthorizationRequiredError();
-          yield* awaited(refresh(context.token, context.fetch, challenge));
-        }),
-      ),
-    settled: () =>
-      Effect.runPromise(
-        awaiting(function* () {
-          yield* awaited(refreshing?.catch(() => undefined));
-        }),
-      ),
   };
 }
 
@@ -382,7 +382,7 @@ export interface McpSignInPrompt {
 
 export { McpSignInCancelledError } from "./sign-in-cancelled.ts";
 
-type AuthorizationResponse = Pick<OAuthCallback, "code" | "iss">;
+type AuthorizationResponse = Pick<oauthTypes.OAuthCallback, "code" | "iss">;
 
 function responseFromRedirectUrl(
   input: string,
@@ -412,7 +412,7 @@ function responseFromRedirectUrl(
 }
 
 function waitForAuthorizationResponse(
-  callback: OAuthCallbackServer,
+  callback: oauthTypes.OAuthCallbackServer,
   state: string,
   redirectUrl: URL,
   prompt: McpSignInPrompt,
@@ -444,15 +444,15 @@ function listenForCallback(
   extraPaths: string[],
   port: number | undefined,
   required: boolean,
-): Promise<OAuthCallbackServer> {
+): Promise<oauthTypes.OAuthCallbackServer> {
   return Effect.runPromise(
     awaiting(function* () {
       const options = {
-        host: settings.host,
-        redirectHost: settings.redirectHost,
-        path: settings.path,
         extraPaths,
-        renderPage: (page: OAuthCallbackPage) =>
+        host: settings.host,
+        path: settings.path,
+        redirectHost: settings.redirectHost,
+        renderPage: (page: oauthTypes.OAuthCallbackPage) =>
           page.ok
             ? oauthSuccessHtml("Signed in to the MCP server. You may now close this page.")
             : oauthErrorHtml(page.message, page.details),
@@ -469,9 +469,9 @@ function listenForCallback(
 
 export function signInMcpServer(options: {
   serverUrl: string;
-  store: McpOAuthStateStore;
+  store: oauthTypes.McpOAuthStateStore;
   settings: McpOAuthSettings;
-  challenge?: OAuthChallenge | undefined;
+  challenge?: oauthTypes.OAuthChallenge | undefined;
   prompt: McpSignInPrompt;
   signal?: AbortSignal | undefined;
 }): Promise<void> {
@@ -501,7 +501,7 @@ export function signInMcpServer(options: {
       const redirectUrl = callbackOptions.fixedRedirectUrl ?? callback.redirectUrl;
       try {
         if (stored !== undefined) {
-          const next: McpOAuthState = { ...stored };
+          const next: oauthTypes.McpOAuthState = { ...stored };
 
           delete next.oauthState;
 
@@ -532,8 +532,8 @@ export function signInMcpServer(options: {
             : options.challenge?.scope,
         );
         const flow = {
-          serverUrl,
           fetch: timedFetch(),
+          serverUrl,
           ...(signal === undefined ? {} : { signal }),
           ...(resourceMetadataUrl === undefined ? {} : { resourceMetadataUrl }),
           ...(authorizationServerMetadataUrl === undefined

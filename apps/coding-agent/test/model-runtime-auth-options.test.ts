@@ -1,4 +1,5 @@
-import { type CredentialStore, InMemoryCredentialStore } from "@msa/ai";
+import ai from "@msa/ai";
+import type aiTypes from "@msa/ai/index.types";
 import testing from "@msa/testing";
 import { Effect } from "effect";
 import { describe, expect, it } from "vite-plus/test";
@@ -6,6 +7,8 @@ import { describe, expect, it } from "vite-plus/test";
 import { AuthStorage } from "../src/core/auth-storage.ts";
 import { ModelRuntime } from "../src/core/model-runtime.ts";
 import modelRuntimeAuthSupport from "./model-runtime-auth-support.ts";
+
+const { InMemoryCredentialStore } = ai;
 
 const { authOptions } = modelRuntimeAuthSupport;
 
@@ -32,7 +35,7 @@ const scopesProviderAvailabilityReadsAndRecordsRefresh = () =>
       const base = new InMemoryCredentialStore();
       const reads: string[] = [];
       let failReads = false;
-      const credentials: CredentialStore = {
+      const credentials: aiTypes.CredentialStore = {
         delete: (providerId) => base.delete(providerId),
         list: () => base.list(),
         modify: (providerId, fn) => base.modify(providerId, fn),

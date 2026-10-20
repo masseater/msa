@@ -1,5 +1,5 @@
-import type { Api } from "@msa/ai/compat";
-import { getApiProvider } from "@msa/ai/compat";
+import compat from "@msa/ai/compat";
+import type compatTypes from "@msa/ai/compat.types";
 import testing from "@msa/testing";
 import { Effect } from "effect";
 import { afterEach, beforeEach, describe, expect, test, vi } from "vite-plus/test";
@@ -12,6 +12,8 @@ import {
 } from "../src/core/model-registry.ts";
 import modelRegistrySupport from "./model-registry-support.ts";
 import modelRuntimeTestUtils from "./model-runtime-test-utils.ts";
+
+const { getApiProvider } = compat;
 
 const { createModelRegistry } = modelRuntimeTestUtils;
 const { captureThrown, emptyContext, openAiModel } = modelRegistrySupport;
@@ -31,7 +33,7 @@ function providerConfig(
   api: string = "anthropic-messages",
 ): ProviderConfigInput {
   return {
-    api: api as Api,
+    api: api as compatTypes.Api,
     apiKey: "test-key",
     baseUrl,
     models: models.map((m) => ({

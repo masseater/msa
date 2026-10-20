@@ -1,28 +1,32 @@
-import type { AutocompleteProvider } from "./autocomplete.ts";
-import type { Component } from "./tui-component.ts";
+import type autocompleteTypes from "./autocomplete.types.ts";
+import type tuiComponentTypes from "./tui-component.types.ts";
 
-export interface EditorComponent extends Component {
-  getText(): string;
+declare namespace editorComponentTypes {
+  interface EditorComponent extends tuiComponentTypes.Component {
+    getText(): string;
 
-  setText(text: string): void;
+    setText(text: string): void;
 
-  handleInput(data: string): void;
+    handleInput(data: string): void;
 
-  onSubmit?: (text: string) => void;
+    onSubmit?: (text: string) => void;
 
-  onChange?: (text: string) => void;
+    onChange?: (text: string) => void;
 
-  addToHistory?(text: string): void;
+    addToHistory?(text: string): void;
 
-  insertTextAtCursor?(text: string): void;
+    insertTextAtCursor?(text: string): void;
 
-  getExpandedText?(): string;
+    getExpandedText?(): string;
 
-  setAutocompleteProvider?(provider: AutocompleteProvider): void;
+    setAutocompleteProvider?(provider: autocompleteTypes.AutocompleteProvider): void;
 
-  borderColor?: (str: string) => string;
+    borderColor?: (str: string) => string;
 
-  setPaddingX?(padding: number): void;
+    setPaddingX?(padding: number): void;
 
-  setAutocompleteMaxVisible?(maxVisible: number): void;
+    setAutocompleteMaxVisible?(maxVisible: number): void;
+  }
 }
+
+export type { editorComponentTypes as default };

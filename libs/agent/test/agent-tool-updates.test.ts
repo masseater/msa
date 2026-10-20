@@ -2,14 +2,12 @@ import { Deferred, Effect } from "effect";
 import { Type } from "typebox";
 import { describe, expect, it } from "vite-plus/test";
 
-import {
-  Agent,
-  type AgentEvent,
-  type AgentTool,
-  type AgentToolUpdateCallback,
-} from "../src/index.ts";
+import agentModule2 from "../src/index.ts";
+import type agentTypes from "../src/index.types.ts";
 import agentModule from "./support/agent.ts";
 import fixtures from "./support/fixtures.ts";
+
+const { Agent } = agentModule2;
 
 const { awaitDeferred, release } = agentModule;
 const { scripted, toolCallMessage } = fixtures;
@@ -22,8 +20,8 @@ const done = { content: [{ text: "done", type: "text" as const }], details: { st
 
 const capturing = (
   name: string,
-  capture: (update: AgentToolUpdateCallback<Status> | undefined) => void,
-): AgentTool<typeof schema, Status> => ({
+  capture: (update: agentTypes.AgentToolUpdateCallback<Status> | undefined) => void,
+): agentTypes.AgentTool<typeof schema, Status> => ({
   description: "Captures progress callbacks",
   execute: (_id, _params, _signal, onUpdate) => {
     capture(onUpdate);
@@ -37,8 +35,8 @@ const capturing = (
 const late = { content: [{ text: "late", type: "text" as const }], details: { status: "late" } };
 
 const ignoresLateUpdate = Effect.gen(function* () {
-  let delayedUpdate: AgentToolUpdateCallback<Status> | undefined;
-  const events: AgentEvent[] = [];
+  let delayedUpdate: agentTypes.AgentToolUpdateCallback<Status> | undefined;
+  const events: agentTypes.AgentEvent[] = [];
   const unhandledRejections: unknown[] = [];
   const onUnhandledRejection = (error: unknown) => {
     unhandledRejections.push(error);
@@ -81,8 +79,8 @@ const ignoresSettledParallelUpdate = Effect.gen(function* () {
   const slowStarted = yield* Deferred.make<void>();
   const settledEnded = yield* Deferred.make<void>();
   const releaseSlow = yield* Deferred.make<void>();
-  let settledUpdate: AgentToolUpdateCallback<Status> | undefined;
-  const events: AgentEvent[] = [];
+  let settledUpdate: agentTypes.AgentToolUpdateCallback<Status> | undefined;
+  const events: agentTypes.AgentEvent[] = [];
   const settledTool = capturing("settled_tool", (onUpdate) => {
     settledUpdate = onUpdate;
   });

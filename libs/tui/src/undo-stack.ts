@@ -1,4 +1,4 @@
-export class UndoStack<S> {
+export default class UndoStack<S> {
   private stack: S[] = [];
 
   push(state: S): void {

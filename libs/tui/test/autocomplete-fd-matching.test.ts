@@ -3,8 +3,9 @@ import { describe, test } from "node:test";
 
 import { Effect } from "effect";
 
-import { type AutocompleteSuggestions, CombinedAutocompleteProvider } from "../src/autocomplete.ts";
-import { pathOperations } from "../src/platform.ts";
+import CombinedAutocompleteProvider from "../src/autocomplete.ts";
+import type autocompleteTypes from "../src/autocomplete.types.ts";
+import platform from "../src/platform.ts";
 import autocompleteHelpers from "./autocomplete-helpers.ts";
 import type autocompleteHelpersTypes from "./autocomplete-helpers.types.ts";
 import testPlatform from "./test-platform.ts";
@@ -12,8 +13,7 @@ import testPlatform from "./test-platform.ts";
 const { getSuggestions, withFd, requireFdPath, setupFolder, useTempWorkspace } =
   autocompleteHelpers;
 const { makeDirectory } = testPlatform;
-
-const { join } = pathOperations;
+const { join } = platform.pathOperations;
 
 describe("CombinedAutocompleteProvider", () => {
   describe("fd @ file suggestions", () =>
@@ -284,7 +284,7 @@ function returnsSameSuggestionsCwdPath(ws: autocompleteHelpersTypes.TempWorkspac
           getSuggestions(queryInPathProvider, [query], 0, query.length),
         );
 
-        const normalize = (result: AutocompleteSuggestions | null) =>
+        const normalize = (result: autocompleteTypes.AutocompleteSuggestions | null) =>
           (result?.items ?? []).map((item) => `${item.label} :: ${item.description ?? ""}`).sort();
 
         assert.deepStrictEqual(normalize(queryInPathResult), normalize(normalResult));

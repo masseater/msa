@@ -2,15 +2,19 @@ import { Clock, Effect } from "effect";
 import { Type } from "typebox";
 import { describe, expect, it } from "vite-plus/test";
 
-import { type BuiltinProvider, complete, getModels, getProviders } from "../src/compat.ts";
-import { getEnvApiKey } from "../src/env-api-keys.ts";
-import type { Api, Model, ProviderStreamOptions, Tool } from "../src/types.ts";
+import compatModule from "../src/compat.ts";
+import type compatTypes from "../src/compat.types.ts";
+import envApiKeys from "../src/env-api-keys.ts";
+import type typesModule from "../src/types.types.ts";
+
+const { complete, getModels, getProviders } = compatModule;
+const { getEnvApiKey } = envApiKeys;
 
 const echoToolSchema = Type.Object({
   value: Type.String({ description: "The value to echo" }),
 });
 
-const echoTool: Tool<typeof echoToolSchema> = {
+const echoTool: typesModule.Tool<typeof echoToolSchema> = {
   description: "Echo a string value",
   name: "echo_value",
   parameters: echoToolSchema,
@@ -18,16 +22,18 @@ const echoTool: Tool<typeof echoToolSchema> = {
 
 interface AnthropicEagerE2ECase {
   name: string;
-  provider: BuiltinProvider;
-  model: Model<"anthropic-messages">;
+  provider: compatTypes.BuiltinProvider;
+  model: typesModule.Model<"anthropic-messages">;
   apiKey: string | undefined;
 }
 
-function getAnthropicMessagesModels(provider: BuiltinProvider): Model<"anthropic-messages">[] {
-  const models = getModels(provider) as Model<Api>[];
+function getAnthropicMessagesModels(
+  provider: compatTypes.BuiltinProvider,
+): typesModule.Model<"anthropic-messages">[] {
+  const models = getModels(provider) as typesModule.Model<typesModule.Api>[];
   return models.filter(
     (model) => model.api === "anthropic-messages",
-  ) as Model<"anthropic-messages">[];
+  ) as typesModule.Model<"anthropic-messages">[];
 }
 
 const anthropicMessagesCases: AnthropicEagerE2ECase[] = getProviders().flatMap((provider) =>
@@ -39,7 +45,7 @@ const anthropicMessagesCases: AnthropicEagerE2ECase[] = getProviders().flatMap((
   })),
 );
 
-function getProbePriority(model: Model<"anthropic-messages">): number {
+function getProbePriority(model: typesModule.Model<"anthropic-messages">): number {
   const modelId = model.id.toLowerCase();
   const cost = model.cost.input + model.cost.output;
   let priority = cost;
@@ -56,7 +62,7 @@ function getProbePriority(model: Model<"anthropic-messages">): number {
 }
 
 function selectOneCasePerProvider(cases: AnthropicEagerE2ECase[]): AnthropicEagerE2ECase[] {
-  const byProvider = new Map<BuiltinProvider, AnthropicEagerE2ECase[]>();
+  const byProvider = new Map<compatTypes.BuiltinProvider, AnthropicEagerE2ECase[]>();
   for (const testCase of cases) {
     const providerCases = byProvider.get(testCase.provider) ?? [];
     providerCases.push(testCase);
@@ -82,8 +88,8 @@ const forcedEagerProbeCases = selectOneCasePerProvider(
 );
 
 function withEagerToolInputStreaming(
-  model: Model<"anthropic-messages">,
-): Model<"anthropic-messages"> {
+  model: typesModule.Model<"anthropic-messages">,
+): typesModule.Model<"anthropic-messages"> {
   return {
     ...model,
     compat: {
@@ -94,10 +100,10 @@ function withEagerToolInputStreaming(
 }
 
 const expectToolEnabledRequestAccepted = Effect.fn("expectToolEnabledRequestAccepted")(function* (
-  model: Model<"anthropic-messages">,
+  model: typesModule.Model<"anthropic-messages">,
   apiKey: string | undefined,
 ) {
-  const options: ProviderStreamOptions = {
+  const options: typesModule.ProviderStreamOptions = {
     apiKey,
     maxTokens: 128,
     thinkingEnabled: false,

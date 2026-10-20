@@ -1,6 +1,6 @@
 import * as NodeRuntime from "@effect/platform-node/NodeRuntime";
-import { createModels, fauxAssistantMessage, fauxProvider, fauxText, fauxToolCall } from "@msa/ai";
-import { openaiProvider } from "@msa/ai/providers/openai";
+import ai from "@msa/ai";
+import openai from "@msa/ai/providers/openai";
 import durable from "@msa/durable";
 import harnessModule from "@msa/durable/harness";
 import { Console, Effect } from "effect";
@@ -9,6 +9,9 @@ import node from "../../src/env/node.ts";
 import toolsModule from "../../src/tools/index.ts";
 import support from "../support.ts";
 import openJsonExampleStorage from "./json-storage.ts";
+
+const { createModels, fauxAssistantMessage, fauxProvider, fauxText, fauxToolCall } = ai;
+const { openaiProvider } = openai;
 
 const { Harness, createRegistry, watchEvents } = harnessModule;
 const { defineExtension, section } = durable;

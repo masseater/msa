@@ -1,21 +1,18 @@
 import * as NodeRuntime from "@effect/platform-node/NodeRuntime";
-import {
-  type ToolResultMessage,
-  createModels,
-  fauxAssistantMessage,
-  fauxProvider,
-  fauxText,
-  fauxToolCall,
-} from "@msa/ai";
+import ai from "@msa/ai";
+import type aiTypes from "@msa/ai/index.types";
 import durable from "@msa/durable";
 import harnessModule from "@msa/durable/harness";
 import { Console, Effect } from "effect";
 
-import nodeModule from "../../src/env/node.ts";
-import node from "../../src/storage/jsonl/node.ts";
 import toolsModule from "../../src/tools/index.ts";
 import type toolsTypes from "../../src/tools/index.types.ts";
 import support from "../support.ts";
+import example17CodingToolsKit from "./17-coding-tools-kit.ts";
+
+const { jsonlNode: node, node: nodeModule } = example17CodingToolsKit;
+
+const { createModels, fauxAssistantMessage, fauxProvider, fauxText, fauxToolCall } = ai;
 
 const { AssistantEntry, ToolResultEntry, defineExtension, hook } = durable;
 const { Harness, ToolTask, createRegistry } = harnessModule;
@@ -113,7 +110,7 @@ const main = Effect.gen(function* () {
       yield* Console.log(entry.kind);
       continue;
     }
-    const result = entry.model![0] as ToolResultMessage;
+    const result = entry.model![0] as aiTypes.ToolResultMessage;
     const text = result.content.map((item) => (item.type === "text" ? item.text : "")).join("");
     yield* Console.log(
       `${entry.kind} ${result.toolName}:`,

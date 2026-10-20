@@ -8,82 +8,76 @@ import type {
   ChatCompletionCreateParamsNonStreaming,
 } from "openai/resources/chat/completions.js";
 
-import type { ImageApi, ImageModel, ImagesContext, ImagesOptions } from "../types.ts";
-import { providerHeadersToRecord } from "../utils/headers.ts";
-import { providerRequestWithRetry } from "../utils/provider-retry.ts";
-import { sanitizeSurrogates } from "../utils/sanitize-unicode.ts";
+import type typesModule from "../types.types.ts";
+import headersModule from "../utils/headers.ts";
+import providerRetry from "../utils/provider-retry.ts";
+import sanitizeUnicode from "../utils/sanitize-unicode.ts";
+import type openrouterImagesRequestTypes from "./openrouter-images-request.types.ts";
 
-export type OpenRouterImagesCreateParams = Omit<
-  ChatCompletionCreateParamsNonStreaming,
-  "modalities"
-> & {
-  modalities: Array<"image" | "text">;
-};
+const { sanitizeSurrogates } = sanitizeUnicode;
+const { providerHeadersToRecord } = headersModule;
+const { providerRequestWithRetry } = providerRetry;
 
-export function buildParams({
+function buildParams({
   model,
   context,
 }: {
-  readonly model: ImageModel<ImageApi>;
-  readonly context: ImagesContext;
-}): OpenRouterImagesCreateParams {
+  readonly model: typesModule.ImageModel<typesModule.ImageApi>;
+  readonly context: typesModule.ImagesContext;
+}): openrouterImagesRequestTypes.OpenRouterImagesCreateParams {
   const content: ChatCompletionContentPart[] = context.input.map(
     (item): ChatCompletionContentPart => {
       if (item.type === "text") {
         return {
-          type: "text",
           text: sanitizeSurrogates(item.text),
+          type: "text",
         } satisfies ChatCompletionContentPartText;
       }
       return {
-        type: "image_url",
         image_url: {
           url: `data:${item.mimeType};base64,${item.data}`,
         },
+        type: "image_url",
       } satisfies ChatCompletionContentPartImage;
     },
   );
 
   return {
-    model: model.id,
     messages: [
       {
-        role: "user" as const,
         content,
+        role: "user" as const,
       },
     ],
-    stream: false,
     modalities: model.output.includes("text") ? ["image", "text"] : ["image"],
+    model: model.id,
+    stream: false,
   };
 }
 
 function createClient(
-  model: ImageModel<ImageApi>,
+  model: typesModule.ImageModel<typesModule.ImageApi>,
   apiKey: string,
-  options?: ImagesOptions,
+  options?: typesModule.ImagesOptions,
 ): OpenAI {
   return new OpenAI({
     apiKey,
     baseURL: model.baseUrl,
     dangerouslyAllowBrowser: true,
-    fetch: options?.fetch,
     defaultHeaders: providerHeadersToRecord({ ...model.headers, ...options?.headers }),
+    fetch: options?.fetch,
   });
 }
 
-export interface ImagesRequest {
-  readonly model: ImageModel<ImageApi>;
-  readonly apiKey: string;
-  readonly params: OpenRouterImagesCreateParams;
-  readonly options: ImagesOptions | undefined;
-}
-
-export function requestImages({
+function requestImages({
   model,
   apiKey,
   params,
   options,
-}: ImagesRequest): Effect.Effect<{ data: ChatCompletion; response: Response }> {
+}: openrouterImagesRequestTypes.ImagesRequest): Effect.Effect<{
+  data: ChatCompletion;
+  response: Response;
+}> {
   const client = createClient(model, apiKey, options);
   const requestOptions = {
     ...(options?.signal === undefined ? {} : { signal: options.signal }),
@@ -102,3 +96,10 @@ export function requestImages({
     },
   );
 }
+
+const openrouterImagesRequest = {
+  buildParams,
+  requestImages,
+};
+
+export default openrouterImagesRequest;

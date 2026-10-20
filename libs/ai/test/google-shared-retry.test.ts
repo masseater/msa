@@ -1,8 +1,10 @@
 import { Effect, Fiber } from "effect";
 import { afterEach, describe, expect, it, vi } from "vite-plus/test";
 
-import { retryGoogleRequest } from "../src/api/google-shared.ts";
+import googleShared from "../src/api/google-shared.ts";
 import effectAssert from "./effect-assert.ts";
+
+const { retryGoogleRequest } = googleShared;
 
 const { defectOf } = effectAssert;
 

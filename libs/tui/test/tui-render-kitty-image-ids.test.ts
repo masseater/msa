@@ -3,9 +3,12 @@ import { describe, it } from "node:test";
 
 import { Effect } from "effect";
 
-import { type TUI, TuiMainScreen, deleteKittyImage, encodeKitty } from "../src/index.ts";
+import tuiModule from "../src/index.ts";
+import type tuiTypes from "../src/index.types.ts";
 import LoggingVirtualTerminal from "./tui-render-logging-virtual-terminal.ts";
 import TestComponent from "./tui-render-test-component.ts";
+
+const { TuiMainScreen, deleteKittyImage, encodeKitty } = tuiModule;
 
 describe("TUI Kitty image cleanup", () => {
   deletesChangedImageIdsBefore();
@@ -18,7 +21,7 @@ function deletesChangedImageIdsBefore(): void {
     Effect.runPromise(
       Effect.gen(function* () {
         const terminal = new LoggingVirtualTerminal(40, 10);
-        const tui: TUI = new TuiMainScreen(terminal);
+        const tui: tuiTypes.TUI = new TuiMainScreen(terminal);
         const component = new TestComponent();
         tui.addChild(component);
 
@@ -63,7 +66,7 @@ function redrawsImageLinesEarlierReserved(): void {
     Effect.runPromise(
       Effect.gen(function* () {
         const terminal = new LoggingVirtualTerminal(40, 10);
-        const tui: TUI = new TuiMainScreen(terminal);
+        const tui: tuiTypes.TUI = new TuiMainScreen(terminal);
         const component = new TestComponent();
         tui.addChild(component);
 
@@ -104,7 +107,7 @@ function deletesPreviouslyRenderedImageIds(): void {
     Effect.runPromise(
       Effect.gen(function* () {
         const terminal = new LoggingVirtualTerminal(40, 10);
-        const tui: TUI = new TuiMainScreen(terminal);
+        const tui: tuiTypes.TUI = new TuiMainScreen(terminal);
         const component = new TestComponent();
         tui.addChild(component);
 

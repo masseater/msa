@@ -76,7 +76,7 @@ describe("lazy provider module loading", () => {
   it(
     "does not load provider SDKs when building all builtin providers",
     expectLoadedSdks(
-      `const all = await import("${providersAllUrl}");
+      `const { default: all } = await import("${providersAllUrl}");
 			all.builtinModels().getModels();`,
       [],
     ),
@@ -88,7 +88,7 @@ describe("lazy provider module loading", () => {
   it(
     "loads only the Anthropic SDK when streaming through the lazy API wrapper",
     expectLoadedSdks(
-      `const compat = await import("${compatEntryUrl}");
+      `const { default: compat } = await import("${compatEntryUrl}");
 			const context = { messages: [{ role: "user", content: "hi" }] };
 			await compat.anthropicMessagesApi().streamSimple(${anthropicModelLiteral}, context).result();`,
       ["@anthropic-ai/sdk"],
@@ -97,7 +97,7 @@ describe("lazy provider module loading", () => {
   it(
     "loads only the Anthropic SDK when dispatching through streamSimple",
     expectLoadedSdks(
-      `const compat = await import("${compatEntryUrl}");
+      `const { default: compat } = await import("${compatEntryUrl}");
 			const model = compat.getModels("anthropic-api").find((candidate) => candidate.api === "anthropic-messages");
 			const context = { messages: [{ role: "user", content: "hi" }] };
 			await compat.streamSimple(model, context).result();`,

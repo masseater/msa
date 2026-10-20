@@ -1,4 +1,4 @@
-import { Type, createModels, fauxAssistantMessage, fauxText, fauxToolCall } from "@msa/ai";
+import ai from "@msa/ai";
 import type chordTypes from "@msa/chord/index.types";
 import durable from "@msa/durable";
 import harnessModule from "@msa/durable/harness";
@@ -9,6 +9,8 @@ import { describe, expect, it } from "vite-plus/test";
 
 import harnessLifecycleSupport from "./harness-lifecycle-support.ts";
 import support from "./support.ts";
+
+const { Type, createModels, fauxAssistantMessage, fauxText, fauxToolCall } = ai;
 
 const { GenerationTask, Harness, createRegistry } = harnessModule;
 const { MemoryStorage } = memory;

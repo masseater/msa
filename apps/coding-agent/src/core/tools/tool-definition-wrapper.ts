@@ -1,4 +1,4 @@
-import type { AgentTool } from "@msa/agent-core";
+import type agentTypes from "@msa/agent-core/index.types";
 import { dual } from "effect/Function";
 
 import type { ExtensionToolContext, ToolDefinition } from "../extensions/types.ts";
@@ -11,7 +11,7 @@ export type ToolContextFactory = (
 const wrapToolDefinitionImpl = <TDetails = unknown>(
   definition: ToolDefinition<any, TDetails>,
   ctxFactory?: ToolContextFactory,
-): AgentTool<any, TDetails> => ({
+): agentTypes.AgentTool<any, TDetails> => ({
   name: definition.name,
   label: definition.label,
   description: definition.description,
@@ -67,35 +67,43 @@ const isDefinitionFirst = (args: IArguments): boolean => typeof args[0] !== "fun
 export const wrapToolDefinition: {
   <TDetails = unknown>(
     ctxFactory?: ToolContextFactory,
-  ): (definition: ToolDefinition<any, TDetails>) => AgentTool<any, TDetails>;
+  ): (definition: ToolDefinition<any, TDetails>) => agentTypes.AgentTool<any, TDetails>;
   <TDetails = unknown>(
     definition: ToolDefinition<any, TDetails>,
     ctxFactory?: ToolContextFactory,
-  ): AgentTool<any, TDetails>;
+  ): agentTypes.AgentTool<any, TDetails>;
 } = dual(isDefinitionFirst, wrapToolDefinitionImpl);
 
 export const wrapToolDefinitions: {
-  (ctxFactory?: ToolContextFactory): (definitions: ToolDefinition<any, any>[]) => AgentTool<any>[];
-  (definitions: ToolDefinition<any, any>[], ctxFactory?: ToolContextFactory): AgentTool<any>[];
+  (
+    ctxFactory?: ToolContextFactory,
+  ): (definitions: ToolDefinition<any, any>[]) => agentTypes.AgentTool<any>[];
+  (
+    definitions: ToolDefinition<any, any>[],
+    ctxFactory?: ToolContextFactory,
+  ): agentTypes.AgentTool<any>[];
 } = dual(
   (args) => Array.isArray(args[0]),
-  (definitions: ToolDefinition<any, any>[], ctxFactory?: ToolContextFactory): AgentTool<any>[] =>
+  (
+    definitions: ToolDefinition<any, any>[],
+    ctxFactory?: ToolContextFactory,
+  ): agentTypes.AgentTool<any>[] =>
     definitions.map((definition) => wrapToolDefinitionImpl(definition, ctxFactory)),
 );
 
 export function createToolDefinitionFromAgentTool(
-  tool: AgentTool<any>,
+  tool: agentTypes.AgentTool<any>,
 ): ToolDefinition<any, unknown> {
   return {
-    name: tool.name,
-    label: tool.label,
-    description: tool.description,
-    parameters: tool.parameters as any,
-    outputSchema: tool.outputSchema,
     constrainedSampling: tool.constrainedSampling,
-    prepareArguments: tool.prepareArguments,
-    executionMode: tool.executionMode,
+    description: tool.description,
     execute: (toolCallId, params, signal, onUpdate) =>
       tool.execute(toolCallId, params, signal, onUpdate),
+    executionMode: tool.executionMode,
+    label: tool.label,
+    name: tool.name,
+    outputSchema: tool.outputSchema,
+    parameters: tool.parameters as any,
+    prepareArguments: tool.prepareArguments,
   };
 }

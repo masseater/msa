@@ -1,4 +1,4 @@
-import type { AgentTool } from "@msa/agent-core";
+import type agentTypes from "@msa/agent-core/index.types";
 import testing from "@msa/testing";
 import { Effect } from "effect";
 import { Type } from "typebox";
@@ -18,7 +18,7 @@ const { createHarness } = harnessModule;
 
 const echoSchema = Type.Object({ text: Type.String({ description: "Text to echo" }) });
 
-const echoTool: AgentTool<typeof echoSchema> = {
+const echoTool: agentTypes.AgentTool<typeof echoSchema> = {
   description: "Echo text back.\n\nSecond paragraph.",
   execute: (_id, params) =>
     Promise.resolve({
@@ -30,7 +30,7 @@ const echoTool: AgentTool<typeof echoSchema> = {
   parameters: echoSchema,
 };
 
-const statsTool: AgentTool = {
+const statsTool: agentTypes.AgentTool = {
   description: "Return structured stats",
   execute: () =>
     Promise.resolve({
@@ -44,7 +44,7 @@ const statsTool: AgentTool = {
   parameters: Type.Object({}),
 };
 
-const screenshotTool: AgentTool = {
+const screenshotTool: agentTypes.AgentTool = {
   description: "Return a screenshot",
   execute: () =>
     Promise.resolve({
@@ -62,7 +62,7 @@ const screenshotTool: AgentTool = {
 const harnesses: harnessTypes.Harness[] = [];
 
 const registerTools = (msa: ExtensionAPI) => {
-  for (const tool of [echoTool as AgentTool, statsTool, screenshotTool]) {
+  for (const tool of [echoTool as agentTypes.AgentTool, statsTool, screenshotTool]) {
     msa.registerTool(createToolDefinitionFromAgentTool(tool));
   }
 };

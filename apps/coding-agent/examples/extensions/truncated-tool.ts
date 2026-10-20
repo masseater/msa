@@ -3,23 +3,26 @@ import type { ExtensionAPI, Theme } from "@msa/coding-agent";
 import {
   DEFAULT_MAX_BYTES,
   DEFAULT_MAX_LINES,
-  formatSize,
   type TruncationResult,
+  formatSize,
   truncateHead,
 } from "@msa/coding-agent";
-import { Text } from "@msa/tui";
+import tui from "@msa/tui";
+import type tuiTypes from "@msa/tui/index.types";
 import { Data, Effect, FileSystem, ManagedRuntime, Path, Stream } from "effect";
 import { ChildProcess, ChildProcessSpawner } from "effect/process";
 import { Type } from "typebox";
 
+const { Text } = tui;
+
 const runtime = ManagedRuntime.make(NodeServices.layer);
 
 const RgParams = Type.Object({
-  pattern: Type.String({ description: "Search pattern (regex)" }),
+  glob: Type.Optional(Type.String({ description: "File glob pattern, e.g. '*.ts'" })),
   path: Type.Optional(
     Type.String({ description: "Directory to search (default: current directory)" }),
   ),
-  glob: Type.Optional(Type.String({ description: "File glob pattern, e.g. '*.ts'" })),
+  pattern: Type.String({ description: "Search pattern (regex)" }),
 });
 
 interface RgDetails {
@@ -57,18 +60,18 @@ const runRipgrep = (cwd: string, args: string[]) =>
           [Stream.mkString(Stream.decodeText(handle.stdout)), handle.exitCode],
           { concurrency: 2 },
         );
-        return { stdout, exitCode };
+        return { exitCode, stdout };
       }),
     );
   });
 
 const noMatchResult = (params: RgParamsValue) => ({
-  content: [{ type: "text" as const, text: "No matches found" }],
+  content: [{ text: "No matches found", type: "text" as const }],
   details: {
-    pattern: params.pattern,
-    path: params.path,
     glob: params.glob,
     matchCount: 0,
+    path: params.path,
+    pattern: params.pattern,
   } as RgDetails,
 });
 
@@ -105,15 +108,15 @@ const search = (cwd: string, params: RgParamsValue) =>
     }
 
     const truncation = truncateHead(stdout, {
-      maxLines: DEFAULT_MAX_LINES,
       maxBytes: DEFAULT_MAX_BYTES,
+      maxLines: DEFAULT_MAX_LINES,
     });
     const matchCount = stdout.split("\n").filter((line) => line.trim()).length;
     const details: RgDetails = {
-      pattern: params.pattern,
-      path: params.path,
       glob: params.glob,
       matchCount,
+      path: params.path,
+      pattern: params.pattern,
     };
 
     let resultText = truncation.content;
@@ -124,10 +127,10 @@ const search = (cwd: string, params: RgParamsValue) =>
       resultText += truncationNote(truncation, tempFile);
     }
 
-    return { content: [{ type: "text" as const, text: resultText }], details };
+    return { content: [{ text: resultText, type: "text" as const }], details };
   });
 
-const renderCall = (args: RgParamsValue, theme: Theme): Text => {
+const renderCall = (args: RgParamsValue, theme: Theme): tuiTypes.Text => {
   let text = theme.fg("toolTitle", theme.bold("rg "));
   text += theme.fg("accent", `"${args.pattern}"`);
   if (args.path !== undefined && args.path.length > 0) {
@@ -151,7 +154,7 @@ const renderResult = (
   result: { content: ReadonlyArray<{ type: string; text?: string }>; details: unknown },
   options: { expanded: boolean; isPartial: boolean },
   theme: Theme,
-): Text => {
+): tuiTypes.Text => {
   const details = result.details as RgDetails | undefined;
 
   if (options.isPartial) {
@@ -181,14 +184,12 @@ const renderResult = (
 
 export default function (msa: ExtensionAPI) {
   msa.registerTool({
-    name: "rg",
-    label: "ripgrep",
     description: `Search file contents using ripgrep. Output is truncated to ${DEFAULT_MAX_LINES} lines or ${formatSize(DEFAULT_MAX_BYTES)} (whichever is hit first). If truncated, full output is saved to a temp file.`,
-    parameters: RgParams,
-
     execute: (_toolCallId, params, _signal, _onUpdate, ctx) =>
       runtime.runPromise(search(ctx.cwd, params)),
-
+    label: "ripgrep",
+    name: "rg",
+    parameters: RgParams,
     renderCall,
     renderResult,
   });

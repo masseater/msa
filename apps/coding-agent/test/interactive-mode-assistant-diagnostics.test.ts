@@ -1,12 +1,15 @@
-import type { AssistantMessage } from "@msa/ai";
-import { Container } from "@msa/tui";
+import type aiTypes from "@msa/ai/index.types";
+import tui from "@msa/tui";
+import type tuiTypes from "@msa/tui/index.types";
 import { describe, expect, test } from "vite-plus/test";
 
 import { InteractiveMode } from "../src/modes/interactive/interactive-mode.ts";
 import { initTheme } from "../src/modes/interactive/theme/theme.ts";
 import { stripAnsi } from "../src/utils/ansi.ts";
 
-const message: AssistantMessage = {
+const { Container } = tui;
+
+const message: aiTypes.AssistantMessage = {
   api: "anthropic-messages",
   content: [{ text: "survived", type: "text" }],
   diagnostics: [
@@ -50,15 +53,15 @@ const message: AssistantMessage = {
 };
 
 type NoticeContext = {
-  chatContainer: Container;
+  chatContainer: tuiTypes.Container;
   settingsManager: { getShowCacheMissNotices(): boolean };
-  sessionManager: { getBranch(): Array<{ type: "message"; message: AssistantMessage }> };
+  sessionManager: { getBranch(): Array<{ type: "message"; message: aiTypes.AssistantMessage }> };
 };
 
 const maybeShowThinkingDropNotice = Reflect.get(
   InteractiveMode.prototype,
   "maybeShowThinkingDropNotice",
-) as (this: NoticeContext, message: AssistantMessage) => void;
+) as (this: NoticeContext, message: aiTypes.AssistantMessage) => void;
 
 const showsAnthropicThinkingDropsWhenCacheMiss = () => {
   initTheme("dark");

@@ -1,11 +1,5 @@
-import {
-  type AssistantMessage,
-  type ToolResultMessage,
-  Type,
-  fauxAssistantMessage,
-  fauxText,
-  fauxToolCall,
-} from "@msa/ai";
+import ai from "@msa/ai";
+import type aiTypes from "@msa/ai/index.types";
 import durable from "@msa/durable";
 import harnessModule from "@msa/durable/harness";
 import type durableTypes from "@msa/durable/index.types";
@@ -15,6 +9,8 @@ import { dual } from "effect/Function";
 import node from "../src/storage/sqlite/node.ts";
 import support from "./support.ts";
 import type supportTypes from "./support.types.ts";
+
+const { Type, fauxAssistantMessage, fauxText, fauxToolCall } = ai;
 
 const { ToolResultEntry, defineTool } = durable;
 const { openNodeSqliteStorage } = node;
@@ -44,7 +40,7 @@ const tool: {
   ): ReturnType<typeof toolImpl>;
 } = dual((args) => typeof args[0] === "string", toolImpl);
 
-function call(name: string): AssistantMessage {
+function call(name: string): aiTypes.AssistantMessage {
   return fauxAssistantMessage([fauxToolCall(name, {}, { id: "c1" })], { stopReason: "toolUse" });
 }
 
@@ -69,10 +65,12 @@ const nestedTasks = Effect.fn("nestedTasks")(function* (harness: durableTypes.Ha
   return tasks.filter((task) => (task.input as durableTypes.ToolTaskInput).kind === "nested");
 });
 
-function results(entries: Effect.Success<ReturnType<typeof allEntries>>): ToolResultMessage[] {
+function results(
+  entries: Effect.Success<ReturnType<typeof allEntries>>,
+): aiTypes.ToolResultMessage[] {
   return entries
     .filter((entry) => ToolResultEntry.is(entry))
-    .map((entry) => entry.model![0] as ToolResultMessage);
+    .map((entry) => entry.model![0] as aiTypes.ToolResultMessage);
 }
 
 function codes(result: durableTypes.NestedToolExecutionResult | undefined): string[] {

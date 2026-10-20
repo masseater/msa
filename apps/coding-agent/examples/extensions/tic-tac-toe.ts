@@ -6,11 +6,11 @@ import { BannerMessageComponent } from "./tic-tac-toe-banner.ts";
 import { TicTacToeComponent } from "./tic-tac-toe-component.ts";
 import {
   type BoardDetails,
+  type GameState,
+  type GameStatus,
   boardToAscii,
   checkWin,
   createInitialState,
-  type GameState,
-  type GameStatus,
   setCell,
 } from "./tic-tac-toe-game.ts";
 import { GameOverMessageComponent } from "./tic-tac-toe-gameover.ts";
@@ -25,11 +25,11 @@ let component: TicTacToeComponent | null = null;
 let gameActive = false;
 
 const getBoardDetails = (): BoardDetails => ({
-  board: gameState.board.map((row) => [...row]),
-  agentCursorRow: gameState.agentCursorRow,
   agentCursorCol: gameState.agentCursorCol,
-  status: gameState.status,
+  agentCursorRow: gameState.agentCursorRow,
+  board: gameState.board.map((row) => [...row]),
   currentTurn: gameState.currentTurn,
+  status: gameState.status,
 });
 
 const reconstructState = (ctx: ExtensionContext): void => {
@@ -68,10 +68,10 @@ const gameOverLabel = (): string => {
 
 const emitGameOverMessage = (msa: ExtensionAPI): void => {
   msa.sendMessage({
-    customType: GAME_OVER_MESSAGE_TYPE,
     content: `Game over: ${gameOverLabel()}.`,
-    display: true,
+    customType: GAME_OVER_MESSAGE_TYPE,
     details: getBoardDetails(),
+    display: true,
   });
 };
 
@@ -107,28 +107,28 @@ const registerPrompt = (msa: ExtensionAPI): void => {
 
 const announceTurn = (msa: ExtensionAPI, row: number, col: number): void => {
   const boardAscii = boardToAscii({
-    board: gameState.board,
-    agentCursorRow: gameState.agentCursorRow,
     agentCursorCol: gameState.agentCursorCol,
+    agentCursorRow: gameState.agentCursorRow,
+    board: gameState.board,
   });
   msa.sendMessage(
     {
-      customType: MOVE_MESSAGE_TYPE,
       content:
         `Player X played at (row=${row}, col=${col}). It is now Player O's turn.\n\n` +
         `Board (your cursor marked with <>):\n${boardAscii}\n\n` +
         `Your cursor is at (row=${gameState.agentCursorRow}, col=${gameState.agentCursorCol}). ` +
         `Decide your target cell, then emit every move_* and the final play ` +
         `as separate tic_tac_toe tool calls in THIS response.`,
-      display: true,
+      customType: MOVE_MESSAGE_TYPE,
       details: getBoardDetails(),
+      display: true,
     },
     { triggerTurn: true },
   );
 };
 
 const handleUserPlay = (msa: ExtensionAPI, row: number, col: number): void => {
-  setCell({ board: gameState.board, row, col, mark: gameState.userMark });
+  setCell({ board: gameState.board, col, mark: gameState.userMark, row });
   gameState.status = checkWin(gameState.board);
   if (gameState.status === "playing") {
     gameState.currentTurn = gameState.agentMark;
@@ -184,14 +184,14 @@ const registerCommand = (msa: ExtensionAPI): void => {
 
 export default function (msa: ExtensionAPI) {
   const access = {
-    msa,
+    emitGameOver: () => emitGameOverMessage(msa),
     getState: () => gameState,
-    syncComponent: () => component?.updateState(gameState),
+    msa,
     save: () => msa.appendEntry(SAVE_TYPE, getBoardDetails()),
     setActive: (active: boolean) => {
       gameActive = active;
     },
-    emitGameOver: () => emitGameOverMessage(msa),
+    syncComponent: () => component?.updateState(gameState),
   };
 
   registerSessionEvents(msa);

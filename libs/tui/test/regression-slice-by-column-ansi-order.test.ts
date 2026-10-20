@@ -1,7 +1,9 @@
 import assert from "node:assert";
 import { describe, it } from "node:test";
 
-import { sliceByColumn } from "../src/text-slice.ts";
+import textSlice from "../src/text-slice.ts";
+
+const { sliceByColumn } = textSlice;
 
 describe("sliceByColumn ANSI order regression", () => {
   it("keeps a reset at the slice start after earlier style codes", () => {

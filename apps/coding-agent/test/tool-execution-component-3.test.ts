@@ -1,4 +1,4 @@
-import { Text, resetCapabilitiesCache } from "@msa/tui";
+import tui from "@msa/tui";
 import { afterEach, beforeAll, describe, expect, test, vi } from "vite-plus/test";
 
 import { type ToolDefinition } from "../src/core/extensions/types.ts";
@@ -8,6 +8,8 @@ import { ToolExecutionComponent } from "../src/modes/interactive/components/tool
 import { initTheme } from "../src/modes/interactive/theme/theme.ts";
 import { stripAnsi } from "../src/utils/ansi.ts";
 import toolExecutionComponentSupport from "./tool-execution-component-support.ts";
+
+const { Text, resetCapabilitiesCache } = tui;
 
 const { createBaseToolDefinition, createFakeTui } = toolExecutionComponentSupport;
 

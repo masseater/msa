@@ -1,9 +1,12 @@
-import { Marked, type Token } from "@msa/tui";
-import { type MermaidArt, render, type Span } from "grok-mermaid";
+import tui from "@msa/tui";
+import type tuiTypes from "@msa/tui/index.types";
+import { type MermaidArt, type Span, render } from "grok-mermaid";
 
 import type { MarkdownTransformer } from "../../../core/extensions/types.ts";
 import type { MermaidRenderingMode } from "../../../core/settings-manager.ts";
 import type { Theme } from "../theme/theme.ts";
+
+const { Marked } = tui;
 
 const markdownParser = new Marked();
 
@@ -12,7 +15,9 @@ interface MermaidTransformerOptions {
   theme?: Theme;
 }
 
-function isMermaid(token: Token): token is Token & { type: "code"; text: string; lang?: string } {
+function isMermaid(
+  token: tuiTypes.Token,
+): token is tuiTypes.Token & { type: "code"; text: string; lang?: string } {
   return (
     token.type === "code" && token.lang?.trim().split(/\s+/u, 1)[0]?.toLowerCase() === "mermaid"
   );

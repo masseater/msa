@@ -1,14 +1,14 @@
-import type { Component, TUI } from "@msa/tui";
+import type tuiTypes from "@msa/tui/index.types";
 import { Effect, type Fiber } from "effect";
 
 import { BLUE, BOLD, DIM, RESET } from "./colors.ts";
 
-export class LoadingIndicator implements Component {
+export class LoadingIndicator implements tuiTypes.Component {
   private dots = 1;
   private fiber: Fiber.Fiber<never> | undefined;
-  private tui: TUI | null = null;
+  private tui: tuiTypes.TUI | null = null;
 
-  start(tui: TUI): void {
+  start(tui: tuiTypes.TUI): void {
     this.tui = tui;
     this.dots = 1;
     this.fiber = Effect.runFork(

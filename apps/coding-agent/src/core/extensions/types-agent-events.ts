@@ -1,13 +1,5 @@
-import type { AgentMessage, ThinkingLevel } from "@msa/agent-core";
-import type {
-  AssistantMessageEvent,
-  ImageContent,
-  JsonValue,
-  Model,
-  TextContent,
-  ToolResultMessage,
-  Usage,
-} from "@msa/ai";
+import type agentTypes from "@msa/agent-core/index.types";
+import type aiTypes from "@msa/ai/index.types";
 
 import type { EditToolDetails } from "../tools/edit.ts";
 import type {
@@ -37,26 +29,26 @@ export interface TurnStartEvent {
 export interface TurnEndEvent extends BoundaryState {
   type: "turn_end";
   turnIndex: number;
-  message: AgentMessage;
-  toolResults: ToolResultMessage[];
+  message: agentTypes.AgentMessage;
+  toolResults: aiTypes.ToolResultMessage[];
   messageEntryId: string;
   toolResultEntryIds: string[];
 }
 
 export interface MessageStartEvent {
   type: "message_start";
-  message: AgentMessage;
+  message: agentTypes.AgentMessage;
 }
 
 export interface MessageUpdateEvent {
   type: "message_update";
-  message: AgentMessage;
-  assistantMessageEvent: AssistantMessageEvent;
+  message: agentTypes.AgentMessage;
+  assistantMessageEvent: aiTypes.AssistantMessageEvent;
 }
 
 export interface MessageEndEvent {
   type: "message_end";
-  message: AgentMessage;
+  message: agentTypes.AgentMessage;
 }
 
 export interface ToolExecutionStartEvent {
@@ -90,15 +82,15 @@ export type ModelSelectSource = "set" | "cycle" | "restore";
 
 export interface ModelSelectEvent {
   type: "model_select";
-  model: Model<any>;
-  previousModel: Model<any> | undefined;
+  model: aiTypes.Model<any>;
+  previousModel: aiTypes.Model<any> | undefined;
   source: ModelSelectSource;
 }
 
 export interface ThinkingLevelSelectEvent {
   type: "thinking_level_select";
-  level: ThinkingLevel;
-  previousLevel: ThinkingLevel;
+  level: agentTypes.ThinkingLevel;
+  previousLevel: agentTypes.ThinkingLevel;
 }
 
 export interface UserBashEvent {
@@ -113,14 +105,14 @@ export type InputSource = "interactive" | "rpc" | "extension";
 export interface InputEvent {
   type: "input";
   text: string;
-  images?: ImageContent[] | undefined;
+  images?: aiTypes.ImageContent[] | undefined;
   source: InputSource;
   streamingBehavior?: "steer" | "followUp" | undefined;
 }
 
 export type InputEventResult =
   | { action: "continue" }
-  | { action: "transform"; text: string; images?: ImageContent[] | undefined }
+  | { action: "transform"; text: string; images?: aiTypes.ImageContent[] | undefined }
   | { action: "handled" };
 
 interface ToolCallEventBase {
@@ -190,10 +182,10 @@ interface ToolResultEventBase {
   toolCallId: string;
   parentToolCallId?: string;
   input: Record<string, unknown>;
-  content: (TextContent | ImageContent)[];
-  structuredContent?: JsonValue;
+  content: (aiTypes.TextContent | aiTypes.ImageContent)[];
+  structuredContent?: aiTypes.JsonValue;
   isError: boolean;
-  usage?: Usage | undefined;
+  usage?: aiTypes.Usage | undefined;
 }
 
 export interface BashToolResultEvent extends ToolResultEventBase {

@@ -1,10 +1,12 @@
 import * as fs from "node:fs";
 
-import { Container, Image, Spacer, Text } from "@msa/tui";
+import tui from "@msa/tui";
 
 import { getBundledInteractiveAssetPath } from "../../../config.ts";
 import { theme } from "../theme/theme.ts";
 import { DynamicBorder } from "./dynamic-border.ts";
+
+const { Container, Image, Spacer, Text } = tui;
 
 const BLOG_URL = "https://mariozechner.at/posts/2026-04-08-ive-sold-out/";
 const IMAGE_FILENAME = "clankolas.png";
@@ -46,7 +48,7 @@ export class EarendilAnnouncementComponent extends Container {
           imageBase64,
           "image/png",
           { fallbackColor: (text) => theme.fg("muted", text) },
-          { maxWidthCells: 56, filename: IMAGE_FILENAME },
+          { filename: IMAGE_FILENAME, maxWidthCells: 56 },
         ),
       );
       this.addChild(new Spacer(1));

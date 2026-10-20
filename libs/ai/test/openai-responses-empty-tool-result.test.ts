@@ -1,14 +1,18 @@
 import { describe, expect, it } from "vite-plus/test";
 
-import { convertResponsesMessages } from "../src/api/openai-responses-messages.ts";
-import { normalizeContext } from "../src/compat.ts";
-import type { AssistantMessage, ToolResultMessage, Usage } from "../src/types.ts";
-import { currentTimeMillis } from "../src/utils/clock.ts";
+import openaiResponsesMessages from "../src/api/openai-responses-messages.ts";
+import compat from "../src/compat.ts";
+import type typesModule from "../src/types.types.ts";
+import clock from "../src/utils/clock.ts";
 import modelChoice from "./model-choice.ts";
+
+const { currentTimeMillis } = clock;
+const { normalizeContext } = compat;
+const { convertResponsesMessages } = openaiResponsesMessages;
 
 const { chooseModel } = modelChoice;
 
-const usage: Usage = {
+const usage: typesModule.Usage = {
   cacheRead: 0,
   cacheWrite: 0,
   cost: { cacheRead: 0, cacheWrite: 0, input: 0, output: 0, total: 0 },
@@ -17,7 +21,10 @@ const usage: Usage = {
   totalTokens: 0,
 };
 
-function buildEmptyToolResult(toolCallId: string, timestamp: number): ToolResultMessage {
+function buildEmptyToolResult(
+  toolCallId: string,
+  timestamp: number,
+): typesModule.ToolResultMessage {
   return {
     content: [{ text: "", type: "text" }],
     isError: false,
@@ -32,7 +39,7 @@ describe("OpenAI Responses convertResponsesMessages empty tool result", () => {
   it("uses '(no tool output)' placeholder for empty tool results without images", () => {
     const model = chooseModel("openai", "direct OpenAI");
     const now = currentTimeMillis();
-    const assistant: AssistantMessage = {
+    const assistant: typesModule.AssistantMessage = {
       api: model.api,
       content: [{ arguments: { command: "true" }, id: "tool-1", name: "bash", type: "toolCall" }],
       model: model.id,

@@ -132,7 +132,7 @@ export class MemoryStore {
       const refreshed = this.statement(`SELECT * FROM memories WHERE id = ?`).get(
         existing.id,
       ) as unknown as MemoryRow;
-      return { record: toRecord(refreshed), created: false };
+      return { created: false, record: toRecord(refreshed) };
     }
     const id = `mem_${now.toString(36)}_${randomHex(4)}`;
     this.transaction(() => {
@@ -157,7 +157,7 @@ export class MemoryStore {
     const row = this.statement(`SELECT * FROM memories WHERE id = ?`).get(
       id,
     ) as unknown as MemoryRow;
-    return { record: toRecord(row), created: true };
+    return { created: true, record: toRecord(row) };
   }
 
   search(options: MemoryStoreSearchOptions): MemoryScore[] {
@@ -192,9 +192,9 @@ export class MemoryStore {
 
     const fused = reciprocalRankFusion([vectorRanking, keywordRanking]);
     const scores: MemoryScore[] = [...fused].map(([id, score]) => ({
+      keyword: keywords.get(id) ?? 0,
       record: records.get(id)!,
       score,
-      keyword: keywords.get(id) ?? 0,
       vector: vectors.get(id),
     }));
     scores.sort(
@@ -283,7 +283,7 @@ export class MemoryStore {
     ).all() as unknown as Array<{ kind: string; count: number }>) {
       byKind[row.kind] = row.count;
     }
-    return { total, embedded, projects, byKind };
+    return { byKind, embedded, projects, total };
   }
 
   close(): void {

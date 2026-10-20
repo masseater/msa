@@ -1,4 +1,4 @@
-import { setKeybindings } from "@msa/tui";
+import tui from "@msa/tui";
 import * as Effect from "effect/Effect";
 import { dual } from "effect/Function";
 
@@ -9,6 +9,8 @@ import type { SettingsManager } from "../core/settings-manager.ts";
 import { SessionSelectorComponent } from "../modes/interactive/components/session-selector.ts";
 import { callbackPromise } from "../utils/interop.ts";
 import { createStartupTui, startStartupTui } from "./startup-ui.ts";
+
+const { setKeybindings } = tui;
 
 type SessionsLoader = (
   onProgress?: SessionListProgress,
@@ -51,7 +53,7 @@ function selectSessionImpl(
               process.exit(0);
             },
             () => ui.requestRender(),
-            { showRenameHint: false, keybindings },
+            { keybindings, showRenameHint: false },
           );
 
           ui.addChild(selector);

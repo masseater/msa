@@ -1,14 +1,18 @@
-import { type Message, createModels } from "@msa/ai";
+import ai from "@msa/ai";
+import type aiTypes from "@msa/ai/index.types";
 import durable from "@msa/durable";
 import harnessModule from "@msa/durable/harness";
 import memoryModule from "@msa/durable/storage/memory";
 import { Effect } from "effect";
 import { expect } from "vite-plus/test";
 
-import effectSupport from "./effect-support.ts";
+import harnessContextSupportKit from "./harness-context-support-kit.ts";
 import type harnessContextSupportTypes from "./harness-context-support.types.ts";
-import harnessSupport from "./harness-support.ts";
 import sessionSupport from "./session-support.ts";
+
+const { effectSupport, harnessSupport } = harnessContextSupportKit;
+
+const { createModels } = ai;
 
 const { MemoryStorage } = memoryModule;
 const { Harness, createRegistry } = harnessModule;
@@ -26,7 +30,7 @@ const setup = Effect.fn("setup")(function* () {
   ): Promise<harnessContextSupportTypes.EntryRecord> =>
     root.commit((tx) => tx.appendEntry(root.id, draft), context);
   const message = (
-    model: Message,
+    model: aiTypes.Message,
     kind = "message",
   ): Promise<harnessContextSupportTypes.EntryRecord> => append({ kind, model: [model] });
   return { append, harness, message, root };

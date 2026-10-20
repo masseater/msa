@@ -1,7 +1,7 @@
 import chord from "@msa/chord";
 import type chordTypes from "@msa/chord/index.types";
-import { toCodemodeIdentifier } from "@msa/codemode/portable";
-import type { CodemodeSourceOptions } from "@msa/codemode/source";
+import portable from "@msa/codemode/portable";
+import type sourceTypes from "@msa/codemode/source.types";
 import { Effect } from "effect";
 
 import type typesModule from "../harness/types.types.ts";
@@ -9,6 +9,8 @@ import type runDocsTypes from "./run-docs.types.ts";
 import runStartKit from "./run-start-kit.ts";
 import type runStartTypes from "./run-start.types.ts";
 import startKit from "./start-kit.ts";
+
+const { toCodemodeIdentifier } = portable;
 
 const { clock: clockModule, runDocs } = runStartKit;
 
@@ -80,7 +82,7 @@ function declarationsOf(
 
 const openRun = Effect.fnUntraced(function* (
   options: runDocsTypes.CodemodeToolOptions,
-  sourceOptions: CodemodeSourceOptions,
+  sourceOptions: sourceTypes.CodemodeSourceOptions,
   api: typesModule.ToolExecutionApi,
   context: chordTypes.Context,
 ) {

@@ -1,6 +1,8 @@
-import { visibleWidth } from "@msa/tui";
+import tui from "@msa/tui";
 
 import { GAME_HEIGHT, GAME_WIDTH, type GameState } from "./snake-state.ts";
+
+const { visibleWidth } = tui;
 
 const ANSI_SGR = new RegExp(`${String.fromCharCode(27)}\\[[0-9;]*m`, "gu");
 

@@ -1,13 +1,4 @@
-import type {
-  AttributeValue,
-  RecordedTelemetryLog,
-  RecordedTelemetryMetric,
-  RecordedTelemetrySpan,
-  SpanAttributes,
-  SpanStatus,
-  TelemetryLogSeverity,
-  TelemetryMetricKind,
-} from "../src/index.ts";
+import type telemetryTypes from "../src/index.types.ts";
 import type otlpRecordsTypes from "./otlp-records.types.ts";
 
 function scalar(value: otlpRecordsTypes.OtlpValue): string | number | boolean {
@@ -17,9 +8,9 @@ function scalar(value: otlpRecordsTypes.OtlpValue): string | number | boolean {
   return value.doubleValue ?? 0;
 }
 
-function attributeValue(value: otlpRecordsTypes.OtlpValue): AttributeValue {
+function attributeValue(value: otlpRecordsTypes.OtlpValue): telemetryTypes.AttributeValue {
   if (value.arrayValue !== undefined) {
-    return (value.arrayValue.values ?? []).map(scalar) as AttributeValue;
+    return (value.arrayValue.values ?? []).map(scalar) as telemetryTypes.AttributeValue;
   }
   return scalar(value);
 }
@@ -27,15 +18,15 @@ function attributeValue(value: otlpRecordsTypes.OtlpValue): AttributeValue {
 function attributes(
   list: readonly otlpRecordsTypes.OtlpAttribute[],
   hidden: readonly string[] = [],
-): SpanAttributes {
-  const result: SpanAttributes = {};
+): telemetryTypes.SpanAttributes {
+  const result: telemetryTypes.SpanAttributes = {};
   for (const { key, value } of list) {
     if (!hidden.includes(key) && !key.startsWith("effect.")) result[key] = attributeValue(value);
   }
   return result;
 }
 
-function statusOf(span: otlpRecordsTypes.OtlpSpan): SpanStatus {
+function statusOf(span: otlpRecordsTypes.OtlpSpan): telemetryTypes.SpanStatus {
   if (span.status.code !== 2) return { status: "ok" };
   const exception = span.events.find((event) => event.name === "exception");
   if (exception === undefined) return { status: "error" };
@@ -50,7 +41,7 @@ function statusOf(span: otlpRecordsTypes.OtlpSpan): SpanStatus {
 }
 
 function normalizeSpans(received: otlpRecordsTypes.Received): {
-  spans: RecordedTelemetrySpan[];
+  spans: telemetryTypes.RecordedTelemetrySpan[];
   ids: Map<string, number>;
 } {
   const started = received.spans.toSorted((a, b) =>
@@ -60,7 +51,7 @@ function normalizeSpans(received: otlpRecordsTypes.Received): {
     Number(BigInt(a.endTimeUnixNano) - BigInt(b.endTimeUnixNano)),
   );
   const ids = new Map(started.map((span, index) => [span.spanId, index + 1]));
-  const spans = started.map((span): RecordedTelemetrySpan => ({
+  const spans = started.map((span): telemetryTypes.RecordedTelemetrySpan => ({
     attributes: attributes(span.attributes),
     endSequence: ended.indexOf(span) + 1,
     events: span.events
@@ -75,13 +66,13 @@ function normalizeSpans(received: otlpRecordsTypes.Received): {
   return { ids, spans };
 }
 
-const severities: Readonly<Record<string, TelemetryLogSeverity>> = {
+const severities: Readonly<Record<string, telemetryTypes.TelemetryLogSeverity>> = {
   Error: "error",
   Info: "info",
   Warn: "warn",
 };
 
-function normalizeLogs(received: otlpRecordsTypes.Received): RecordedTelemetryLog[] {
+function normalizeLogs(received: otlpRecordsTypes.Received): telemetryTypes.RecordedTelemetryLog[] {
   const { ids } = normalizeSpans(received);
   return received.logs.map((log) => ({
     attributes: attributes(log.attributes),
@@ -91,16 +82,21 @@ function normalizeLogs(received: otlpRecordsTypes.Received): RecordedTelemetryLo
   }));
 }
 
-function normalizeMetrics(received: otlpRecordsTypes.Received): RecordedTelemetryMetric[] {
+function normalizeMetrics(
+  received: otlpRecordsTypes.Received,
+): telemetryTypes.RecordedTelemetryMetric[] {
   return [...received.metrics.values()].flatMap((metric) => {
-    const [kind, points]: [TelemetryMetricKind, readonly otlpRecordsTypes.OtlpDataPoint[]] =
+    const [kind, points]: [
+      telemetryTypes.TelemetryMetricKind,
+      readonly otlpRecordsTypes.OtlpDataPoint[],
+    ] =
       metric.histogram === undefined
         ? metric.gauge === undefined
           ? ["counter", metric.sum?.dataPoints ?? []]
           : ["gauge", metric.gauge.dataPoints]
         : ["histogram", metric.histogram.dataPoints];
     const unit = metric.unit === undefined || metric.unit === "1" ? {} : { unit: metric.unit };
-    return points.map((point): RecordedTelemetryMetric =>
+    return points.map((point): telemetryTypes.RecordedTelemetryMetric =>
       Object.assign(
         {
           attributes: attributes(point.attributes, ["unit"]),

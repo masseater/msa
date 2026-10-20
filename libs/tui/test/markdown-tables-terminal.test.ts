@@ -3,12 +3,15 @@ import { describe, it } from "node:test";
 
 import { Effect } from "effect";
 
-import { type MarkdownTheme } from "../src/components/markdown.ts";
-import { resetCapabilitiesCache, setCapabilities } from "../src/terminal-capabilities.ts";
+import type markdownTypes from "../src/components/markdown.types.ts";
+import terminalCapabilities from "../src/terminal-capabilities.ts";
 import markdownHelpers from "./markdown-helpers.ts";
 import markdownTerminalHelpers from "./markdown-terminal-helpers.ts";
-import { defaultMarkdownTheme } from "./test-themes.ts";
-import type { VirtualTerminal } from "./virtual-terminal.ts";
+import testThemes from "./test-themes.ts";
+import type virtualTerminalTypes from "./virtual-terminal.types.ts";
+
+const { defaultMarkdownTheme } = testThemes;
+const { resetCapabilitiesCache, setCapabilities } = terminalCapabilities;
 
 const { getCell } = markdownHelpers;
 const { findViewportRow, renderMarkdownInTerminal } = markdownTerminalHelpers;
@@ -17,7 +20,9 @@ const wrappedLinkSource = `| Link | Plain |
 | --- | --- |
 | [**one two three four five six**](https://example.com) | normal text |`;
 
-const assertWrappedLinkRow = (terminal: VirtualTerminal): Effect.Effect<void> =>
+const assertWrappedLinkRow = (
+  terminal: virtualTerminalTypes.VirtualTerminal,
+): Effect.Effect<void> =>
   Effect.gen(function* () {
     const { row, line } = yield* findViewportRow(
       terminal.getViewport(),
@@ -36,7 +41,9 @@ const assertWrappedLinkRow = (terminal: VirtualTerminal): Effect.Effect<void> =>
     assert.strictEqual(getCell(terminal, row, plainCol).isBold(), 0);
   });
 
-const assertFallbackUrlRow = (terminal: VirtualTerminal): Effect.Effect<void> =>
+const assertFallbackUrlRow = (
+  terminal: virtualTerminalTypes.VirtualTerminal,
+): Effect.Effect<void> =>
   Effect.gen(function* () {
     const { row, line } = yield* findViewportRow(
       terminal.getViewport(),
@@ -54,7 +61,7 @@ const assertFallbackUrlRow = (terminal: VirtualTerminal): Effect.Effect<void> =>
 
 const quoteColor = 0x123456;
 
-const quoteTheme: MarkdownTheme = {
+const quoteTheme: markdownTypes.MarkdownTheme = {
   ...defaultMarkdownTheme,
   link: (text) => `\x1b[38;2;129;162;190m${text}\x1b[39m`,
   quote: (text) => `\x1b[38;2;18;52;86m${text}\x1b[39m`,
@@ -64,7 +71,7 @@ const quotedLinkSource = `> | Link | Plain |
 > | --- | --- |
 > | [one two three four five six](https://example.com) | normal text |`;
 
-const assertQuotedLinkRow = (terminal: VirtualTerminal): Effect.Effect<void> =>
+const assertQuotedLinkRow = (terminal: virtualTerminalTypes.VirtualTerminal): Effect.Effect<void> =>
   Effect.gen(function* () {
     const { row, line } = yield* findViewportRow(
       terminal.getViewport(),
@@ -80,7 +87,9 @@ const assertQuotedLinkRow = (terminal: VirtualTerminal): Effect.Effect<void> =>
     assert.strictEqual(getCell(terminal, row, plainCol).getFgColor(), quoteColor);
   });
 
-const assertQuotedFinalRow = (terminal: VirtualTerminal): Effect.Effect<void> =>
+const assertQuotedFinalRow = (
+  terminal: virtualTerminalTypes.VirtualTerminal,
+): Effect.Effect<void> =>
   Effect.gen(function* () {
     const { row, line } = yield* findViewportRow(
       terminal.getViewport(),

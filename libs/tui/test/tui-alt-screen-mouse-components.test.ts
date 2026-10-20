@@ -3,11 +3,16 @@ import { describe, it } from "node:test";
 
 import { Effect } from "effect";
 
-import { MouseRegion, Text, TuiAltScreen, type TuiMouseEvent } from "../src/index.ts";
-import { hyperlink } from "../src/terminal-image.ts";
+import tuiModule from "../src/index.ts";
+import type tuiTypes from "../src/index.types.ts";
+import terminalImage from "../src/terminal-image.ts";
 import tuiAltScreenHelpers from "./tui-alt-screen-helpers.ts";
 import RecordingTerminal from "./tui-alt-screen-recording-terminal.ts";
-import { VirtualTerminal } from "./virtual-terminal.ts";
+import virtualTerminal from "./virtual-terminal.ts";
+
+const { MouseRegion, Text, TuiAltScreen } = tuiModule;
+const { hyperlink } = terminalImage;
+const { VirtualTerminal } = virtualTerminal;
 
 const { someWriteSince } = tuiAltScreenHelpers;
 
@@ -108,7 +113,7 @@ function focusesCapturesDragGesturesMouse(): void {
         const tui = new TuiAltScreen(terminal);
         const events: string[] = [];
         const component = {
-          handleMouse: (event: TuiMouseEvent) => {
+          handleMouse: (event: tuiTypes.TuiMouseEvent) => {
             events.push(event.type);
             return event.type === "press"
               ? { capture: true, focus: true, handled: true }

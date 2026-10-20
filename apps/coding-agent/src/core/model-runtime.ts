@@ -1,70 +1,8 @@
-import {
-  type AnyModel,
-  type Api,
-  type ApiStreamOptions,
-  type AssistantImages,
-  type AssistantMessage,
-  type AssistantMessageEventStream,
-  type AuthCheck,
-  type AuthInteraction,
-  type AuthOperationOptions,
-  type AuthResult,
-  type AuthType,
-  type ClassifierApi,
-  type ClassifierContext,
-  type ClassifierModel,
-  type ClassifierOptions,
-  type ClassifierResult,
-  type Context,
-  type Credential,
-  type CredentialInfo,
-  type CredentialStore,
-  clampThinkingLevel,
-  createModels,
-  type DeferredCancelOptions,
-  type DeferredFetchOptions,
-  type DeferredHandle,
-  type ImageApi,
-  type ImageModel,
-  type ImagesContext,
-  type ImagesOptions,
-  type LoginOptions,
-  lazyStream,
-  type Message,
-  type Model,
-  type Models,
-  type ModelsApiStreamOptions,
-  type ModelsClassifierOptions,
-  type ModelsDeferredCancelOptions,
-  type ModelsDeferredFetchOptions,
-  ModelsError,
-  type ModelsImagesOptions,
-  type ModelsRefreshOptions,
-  type ModelsRefreshResult,
-  type ModelsRequestTransforms,
-  type ModelsSimpleStreamOptions,
-  type ModelsStore,
-  type ModelThinkingLevel,
-  type ModelType,
-  type ModelTypeMap,
-  type MutableModels,
-  normalizeContext,
-  type Provider,
-  type ProviderHeaders,
-  type ProviderRequestOptions,
-  type SimpleStreamOptions,
-  type StreamOptions,
-} from "@msa/ai";
-import * as builtinProviderCatalog from "@msa/ai/providers/all";
-import { personalizeOpenRouterCatalog } from "@msa/ai/providers/openrouter-user-models";
-import {
-  assertChatModel,
-  assertClassifierInputSupported,
-  assertClassifierModel,
-  assertImageModel,
-  classifierErrorResult,
-  imageErrorResult,
-} from "@msa/ai/utils/model-operations";
+import ai from "@msa/ai";
+import type aiTypes from "@msa/ai/index.types";
+import allModule from "@msa/ai/providers/all";
+import openrouterUserModels from "@msa/ai/providers/openrouter-user-models";
+import modelOperations from "@msa/ai/utils/model-operations";
 import * as Data from "effect/Data";
 import * as Effect from "effect/Effect";
 
@@ -83,9 +21,9 @@ import { readEnv } from "./process-env.ts";
 import {
   type AuthStatus,
   type CompatibilityRequestConfig,
+  type ProviderConfigInput,
   composeModelProvider,
   configuredRequestAuthStatus,
-  type ProviderConfigInput,
   resolveCompatibilityRequestConfig,
   resolveConfiguredModelHeaders,
   validateExtensionProvider,
@@ -93,33 +31,41 @@ import {
 import { withPersonalizedCatalog, withRemoteCatalog } from "./remote-catalog-provider.ts";
 import { RuntimeCredentials } from "./runtime-credentials.ts";
 import {
-  createVirtualModel,
-  findLatestResponse,
-  isVirtualModel,
   type ModelRoute,
   type ModelRouteReason,
   type VirtualModelDefinition,
+  createVirtualModel,
+  findLatestResponse,
+  isVirtualModel,
   withVirtualModels,
 } from "./virtual-models.ts";
 
+const { ModelsError, clampThinkingLevel, createModels, lazyStream, normalizeContext } = ai;
+const { personalizeOpenRouterCatalog } = openrouterUserModels;
+const { assertClassifierInputSupported, classifierErrorResult, imageErrorResult } = modelOperations;
+const assertChatModel: typeof modelOperations.assertChatModel = modelOperations.assertChatModel;
+const assertClassifierModel: typeof modelOperations.assertClassifierModel =
+  modelOperations.assertClassifierModel;
+const assertImageModel: typeof modelOperations.assertImageModel = modelOperations.assertImageModel;
+
 interface RegisteredVirtualModel {
-  model: Model<Api>;
+  model: aiTypes.Model<aiTypes.Api>;
   route: VirtualModelDefinition["route"];
 }
 
 interface ModelRuntimeSnapshot {
-  all: readonly Model<Api>[];
-  available: readonly Model<Api>[];
+  all: readonly aiTypes.Model<aiTypes.Api>[];
+  available: readonly aiTypes.Model<aiTypes.Api>[];
   configuredProviders: ReadonlySet<string>;
   storedProviders: ReadonlySet<string>;
-  auth: ReadonlyMap<string, AuthCheck | undefined>;
+  auth: ReadonlyMap<string, aiTypes.AuthCheck | undefined>;
 }
 
 export interface CreateModelRuntimeOptions {
-  credentials?: CredentialStore | undefined;
+  credentials?: aiTypes.CredentialStore | undefined;
   authPath?: string | undefined;
   modelsPath?: string | null | undefined;
-  modelsStore?: ModelsStore | undefined;
+  modelsStore?: aiTypes.ModelsStore | undefined;
   modelsStorePath?: string | undefined;
   allowModelNetwork?: boolean | undefined;
   modelRefreshTimeoutMs?: number | undefined;
@@ -128,7 +74,7 @@ export interface CreateModelRuntimeOptions {
   refreshOnCreate?: boolean | undefined;
 }
 
-export interface ModelRuntimeAuthOverrides extends AuthOperationOptions {
+export interface ModelRuntimeAuthOverrides extends aiTypes.AuthOperationOptions {
   apiKey?: string | undefined;
   env?: Record<string, string> | undefined;
   minOAuthValidityMs?: number | undefined;
@@ -145,30 +91,30 @@ export class CredentialSynchronizationError extends Data.TaggedError(
 )<{
   readonly providerId: string;
   readonly operation: CredentialSynchronizationOperation;
-  readonly credential: Credential | undefined;
+  readonly credential: aiTypes.Credential | undefined;
   readonly message: string;
   readonly cause: unknown;
 }> {
   constructor(
     providerId: string,
     operation: CredentialSynchronizationOperation,
-    credential: Credential | undefined,
+    credential: aiTypes.Credential | undefined,
     options: ErrorOptions,
   ) {
     super({
-      providerId,
-      operation,
+      cause: options.cause,
       credential,
       message: `Credential ${operation} committed for ${providerId}, but local synchronization failed`,
-      cause: options.cause,
+      operation,
+      providerId,
     });
   }
 }
 
 function mergeHeaders(
-  base: ProviderHeaders | undefined,
-  override: ProviderHeaders | undefined,
-): ProviderHeaders | undefined {
+  base: aiTypes.ProviderHeaders | undefined,
+  override: aiTypes.ProviderHeaders | undefined,
+): aiTypes.ProviderHeaders | undefined {
   if (base === undefined && override === undefined) return undefined;
   const merged = { ...base };
   for (const [name, value] of Object.entries(override ?? {})) {
@@ -181,15 +127,15 @@ function mergeHeaders(
   return merged;
 }
 
-export class ModelRuntime implements Models {
-  private readonly models: MutableModels;
+export class ModelRuntime implements aiTypes.Models {
+  private readonly models: aiTypes.MutableModels;
   private readonly credentials: RuntimeCredentials;
-  private readonly catalogProviders: readonly Provider[];
-  private builtins: ReadonlyMap<string, Provider> = new Map();
-  private readonly nativeExtensionProviders = new Map<string, Provider>();
+  private readonly catalogProviders: readonly aiTypes.Provider[];
+  private builtins: ReadonlyMap<string, aiTypes.Provider> = new Map();
+  private readonly nativeExtensionProviders = new Map<string, aiTypes.Provider>();
   private readonly extensionProviders = new Map<string, ProviderConfigInput>();
   private readonly virtualModels = new Map<string, Map<string, RegisteredVirtualModel>>();
-  private readonly catalogProvidersById = new Map<string, Provider>();
+  private readonly catalogProvidersById = new Map<string, aiTypes.Provider>();
   private policy: ModelPolicy = EMPTY_MODEL_POLICY;
   private readonly compositionErrors = new Map<string, string>();
   private readonly modelsPath: string | undefined;
@@ -197,10 +143,10 @@ export class ModelRuntime implements Models {
   private config: ModelConfig;
   private snapshot: ModelRuntimeSnapshot = {
     all: [],
+    auth: new Map(),
     available: [],
     configuredProviders: new Set(),
     storedProviders: new Set(),
-    auth: new Map(),
   };
   private availabilityRefreshSeq = 0;
   private latestAvailabilityRefresh: { seq: number; pass: Promise<void> } | undefined;
@@ -213,8 +159,8 @@ export class ModelRuntime implements Models {
     credentials: RuntimeCredentials,
     config: ModelConfig,
     modelsPath: string | undefined,
-    modelsStore: ModelsStore,
-    providers: readonly Provider[],
+    modelsStore: aiTypes.ModelsStore,
+    providers: readonly aiTypes.Provider[],
     modelNetworkEnabled: boolean,
   ) {
     this.credentials = credentials;
@@ -244,8 +190,8 @@ export class ModelRuntime implements Models {
                 options.modelsStorePath ?? join(dirname(modelsPath), "models-store.json"),
               )
             : new InMemoryCodingAgentModelsStore());
-        const builtinModelDataGeneratedAt = builtinProviderCatalog.getBuiltinModelDataGeneratedAt();
-        const providers = builtinProviderCatalog.builtinProviders().map((provider) => {
+        const builtinModelDataGeneratedAt = allModule.getBuiltinModelDataGeneratedAt();
+        const providers = allModule.builtinProviders().map((provider) => {
           if (provider.id === "openrouter") {
             return withPersonalizedCatalog(
               provider,
@@ -308,7 +254,7 @@ export class ModelRuntime implements Models {
     ]);
   }
 
-  private recomposeProvider(providerId: string): Provider | undefined {
+  private recomposeProvider(providerId: string): aiTypes.Provider | undefined {
     const provider = this.composeProvider(providerId);
     const virtualModels = [...(this.virtualModels.get(providerId)?.values() ?? [])].map(
       (entry) => entry.model,
@@ -340,17 +286,17 @@ export class ModelRuntime implements Models {
     this.rebuildProviders();
   }
 
-  getCatalogModels(providerId?: string): readonly Model<Api>[] {
+  getCatalogModels(providerId?: string): readonly aiTypes.Model<aiTypes.Api>[] {
     const providers =
       providerId === undefined
         ? [...this.catalogProvidersById.values()]
         : [this.catalogProvidersById.get(providerId)].filter(
-            (provider): provider is Provider => provider !== undefined,
+            (provider): provider is aiTypes.Provider => provider !== undefined,
           );
     return providers.flatMap((provider) => provider.getModels());
   }
 
-  private composeProvider(providerId: string): Provider | undefined {
+  private composeProvider(providerId: string): aiTypes.Provider | undefined {
     const base = this.nativeExtensionProviders.get(providerId) ?? this.builtins.get(providerId);
     const extension = this.extensionProviders.get(providerId);
     if (this.config.getProvider(providerId) === undefined && extension === undefined) {
@@ -398,7 +344,7 @@ export class ModelRuntime implements Models {
         Promise.all([
           this.models.getAvailable(undefined, { signal }),
           Promise.all(
-            providers.map((provider): Promise<[string, AuthCheck | undefined]> =>
+            providers.map((provider): Promise<[string, aiTypes.AuthCheck | undefined]> =>
               Effect.runPromise(
                 awaitingWith(function* () {
                   return [
@@ -420,15 +366,15 @@ export class ModelRuntime implements Models {
       const auth = new Map(checks);
       const configuredProviders = new Set(
         checks
-          .filter((entry): entry is [string, AuthCheck] => entry[1] !== undefined)
+          .filter((entry): entry is [string, aiTypes.AuthCheck] => entry[1] !== undefined)
           .map(([providerId]) => providerId),
       );
       this.snapshot = {
         all: [...this.models.getModels()],
+        auth,
         available: [...available],
         configuredProviders,
         storedProviders: new Set(credentials.map((entry) => entry.providerId)),
-        auth,
       };
       if (errorSeq === this.availabilityErrorSeq) this.availabilityError = undefined;
     }, this);
@@ -449,7 +395,7 @@ export class ModelRuntime implements Models {
       }
       throw error;
     });
-    this.latestAvailabilityRefresh = { seq, pass };
+    this.latestAvailabilityRefresh = { pass, seq };
     return pass;
   }
 
@@ -493,12 +439,12 @@ export class ModelRuntime implements Models {
         );
         this.snapshot = {
           all,
+          auth: authByProvider,
           available: all.flatMap(
             (model) => availableById.get(`${model.provider}\0${model.id}`) ?? [],
           ),
           configuredProviders,
           storedProviders,
-          auth: authByProvider,
         };
         if (errorSeq === this.availabilityErrorSeq) this.availabilityError = undefined;
       } catch (error) {
@@ -514,57 +460,60 @@ export class ModelRuntime implements Models {
     }, this);
   }
 
-  getProviders(): readonly Provider[] {
+  getProviders(): readonly aiTypes.Provider[] {
     return this.models.getProviders();
   }
 
-  getProvider(providerId: string): Provider | undefined {
+  getProvider(providerId: string): aiTypes.Provider | undefined {
     return this.models.getProvider(providerId);
   }
 
-  getModels(providerId?: string): readonly Model<Api>[] {
+  getModels(providerId?: string): readonly aiTypes.Model<aiTypes.Api>[] {
     return this.models.getModels(providerId);
   }
 
-  getModel(providerId: string, modelId: string): Model<Api> | undefined {
+  getModel(providerId: string, modelId: string): aiTypes.Model<aiTypes.Api> | undefined {
     return this.models.getModel(providerId, modelId);
   }
 
-  getModelsOfType<TType extends ModelType>(
+  getModelsOfType<TType extends aiTypes.ModelType>(
     type: TType,
     providerId?: string,
-  ): readonly ModelTypeMap[TType][] {
+  ): readonly aiTypes.ModelTypeMap[TType][] {
     return this.models.getModelsOfType(type, providerId);
   }
 
-  getModelOfType<TType extends ModelType>(
+  getModelOfType<TType extends aiTypes.ModelType>(
     type: TType,
     providerId: string,
     modelId: string,
-  ): ModelTypeMap[TType] | undefined {
+  ): aiTypes.ModelTypeMap[TType] | undefined {
     return this.models.getModelOfType(type, providerId, modelId);
   }
 
-  getAllModels(providerId?: string): readonly AnyModel[] {
+  getAllModels(providerId?: string): readonly aiTypes.AnyModel[] {
     return this.models.getAllModels(providerId);
   }
 
-  getAvailableOfType<TType extends ModelType>(
+  getAvailableOfType<TType extends aiTypes.ModelType>(
     type: TType,
     providerId?: string,
-    options?: AuthOperationOptions,
-  ): Promise<readonly ModelTypeMap[TType][]> {
+    options?: aiTypes.AuthOperationOptions,
+  ): Promise<readonly aiTypes.ModelTypeMap[TType][]> {
     return this.models.getAvailableOfType(type, providerId, options);
   }
 
   getAllAvailable(
     providerId?: string,
-    options?: AuthOperationOptions,
-  ): Promise<readonly AnyModel[]> {
+    options?: aiTypes.AuthOperationOptions,
+  ): Promise<readonly aiTypes.AnyModel[]> {
     return this.models.getAllAvailable(providerId, options);
   }
 
-  checkAuth(providerId: string, options?: AuthOperationOptions): Promise<AuthCheck | undefined> {
+  checkAuth(
+    providerId: string,
+    options?: aiTypes.AuthOperationOptions,
+  ): Promise<aiTypes.AuthCheck | undefined> {
     return Effect.runPromise(
       awaitingWith(function* () {
         return yield* awaited(this.models.checkAuth(providerId, options));
@@ -574,8 +523,8 @@ export class ModelRuntime implements Models {
 
   getAvailable(
     providerId?: string,
-    options?: AuthOperationOptions,
-  ): Promise<readonly Model<Api>[]> {
+    options?: aiTypes.AuthOperationOptions,
+  ): Promise<readonly aiTypes.Model<aiTypes.Api>[]> {
     return Effect.runPromise(
       awaitingWith(function* () {
         if (providerId !== undefined && providerId !== "") {
@@ -597,7 +546,7 @@ export class ModelRuntime implements Models {
     );
   }
 
-  getAvailableSnapshot(): readonly Model<Api>[] {
+  getAvailableSnapshot(): readonly aiTypes.Model<aiTypes.Api>[] {
     return this.snapshot.available;
   }
 
@@ -623,11 +572,11 @@ export class ModelRuntime implements Models {
     ];
   }
 
-  getRegisteredNativeProvider(providerId: string): Provider | undefined {
+  getRegisteredNativeProvider(providerId: string): aiTypes.Provider | undefined {
     return this.nativeExtensionProviders.get(providerId);
   }
 
-  getCompatibilityRequestConfig(model: Model<Api>): CompatibilityRequestConfig {
+  getCompatibilityRequestConfig(model: aiTypes.Model<aiTypes.Api>): CompatibilityRequestConfig {
     return resolveCompatibilityRequestConfig(
       model,
       this.config.getProvider(model.provider),
@@ -653,12 +602,15 @@ export class ModelRuntime implements Models {
   getAuth(
     providerId: string,
     overrides?: ModelRuntimeAuthOverrides,
-  ): Promise<AuthResult | undefined>;
-  getAuth(model: AnyModel, overrides?: ModelRuntimeAuthOverrides): Promise<AuthResult | undefined>;
+  ): Promise<aiTypes.AuthResult | undefined>;
   getAuth(
-    providerOrModel: string | AnyModel,
+    model: aiTypes.AnyModel,
+    overrides?: ModelRuntimeAuthOverrides,
+  ): Promise<aiTypes.AuthResult | undefined>;
+  getAuth(
+    providerOrModel: string | aiTypes.AnyModel,
     overrides: ModelRuntimeAuthOverrides = {},
-  ): Promise<AuthResult | undefined> {
+  ): Promise<aiTypes.AuthResult | undefined> {
     return Effect.runPromise(
       awaitingWith(function* () {
         if (typeof providerOrModel === "string")
@@ -714,7 +666,7 @@ export class ModelRuntime implements Models {
   private synchronizeCredentialState(
     providerId: string,
     operation: CredentialSynchronizationOperation,
-    credential: Credential | undefined,
+    credential: aiTypes.Credential | undefined,
     signal: AbortSignal,
   ): Effect.Effect<void> {
     return awaitingWith(function* () {
@@ -745,7 +697,7 @@ export class ModelRuntime implements Models {
   setRuntimeApiKey(
     providerId: string,
     apiKey: string,
-    options: AuthOperationOptions = {},
+    options: aiTypes.AuthOperationOptions = {},
   ): Promise<void> {
     const signal = operationSignal(options.signal);
     return this.enqueueCredentialOperation(providerId, signal, () =>
@@ -756,7 +708,7 @@ export class ModelRuntime implements Models {
             this.synchronizeCredentialState(
               providerId,
               "setRuntimeApiKey",
-              { type: "api_key", key: apiKey },
+              { key: apiKey, type: "api_key" },
               signal,
             ),
           );
@@ -765,7 +717,10 @@ export class ModelRuntime implements Models {
     );
   }
 
-  removeRuntimeApiKey(providerId: string, options: AuthOperationOptions = {}): Promise<void> {
+  removeRuntimeApiKey(
+    providerId: string,
+    options: aiTypes.AuthOperationOptions = {},
+  ): Promise<void> {
     const signal = operationSignal(options.signal);
     return this.enqueueCredentialOperation(providerId, signal, () =>
       Effect.runPromise(
@@ -779,7 +734,9 @@ export class ModelRuntime implements Models {
     );
   }
 
-  listCredentials(options?: AuthOperationOptions): Promise<readonly CredentialInfo[]> {
+  listCredentials(
+    options?: aiTypes.AuthOperationOptions,
+  ): Promise<readonly aiTypes.CredentialInfo[]> {
     return this.credentials.list(options);
   }
 
@@ -796,19 +753,19 @@ export class ModelRuntime implements Models {
     const check = this.snapshot.auth.get(providerId);
     return check === undefined
       ? { configured: false }
-      : { configured: true, source: "environment", label: check.source };
+      : { configured: true, label: check.source, source: "environment" };
   }
 
   private prepareRequest<
-    TModel extends AnyModel,
-    TOptions extends ProviderRequestOptions<TModel> & ModelsRequestTransforms,
+    TModel extends aiTypes.AnyModel,
+    TOptions extends aiTypes.ProviderRequestOptions<TModel> & aiTypes.ModelsRequestTransforms,
   >(
     model: TModel,
     options: TOptions | undefined,
   ): Promise<{
-    provider: Provider;
+    provider: aiTypes.Provider;
     model: TModel;
-    options: Omit<TOptions, "transformHeaders"> & ProviderRequestOptions<TModel>;
+    options: Omit<TOptions, "transformHeaders"> & aiTypes.ProviderRequestOptions<TModel>;
   }> {
     return Effect.runPromise(
       awaitingWith(function* () {
@@ -827,7 +784,7 @@ export class ModelRuntime implements Models {
 
         const { transformHeaders, ...rawProviderOptions } = options ?? {};
         const providerOptions = rawProviderOptions as Omit<TOptions, "transformHeaders"> &
-          ProviderRequestOptions<TModel>;
+          aiTypes.ProviderRequestOptions<TModel>;
         let headers = mergeHeaders(resolution.auth.headers, providerOptions.headers);
         if (transformHeaders !== undefined)
           headers = yield* awaited(transformHeaders(headers ?? {}));
@@ -840,24 +797,24 @@ export class ModelRuntime implements Models {
             ? { ...model, baseUrl: resolution.auth.baseUrl }
             : model;
         return {
-          provider,
           model: requestModel,
           options: {
             ...providerOptions,
             apiKey: providerOptions.apiKey ?? resolution.auth.apiKey,
             headers,
             env,
-          } as Omit<TOptions, "transformHeaders"> & ProviderRequestOptions<TModel>,
+          } as Omit<TOptions, "transformHeaders"> & aiTypes.ProviderRequestOptions<TModel>,
+          provider,
         };
       }, this),
     );
   }
 
-  stream<TApi extends Api>(
-    model: Model<TApi>,
-    context: Context,
-    options?: ModelsApiStreamOptions<TApi>,
-  ): AssistantMessageEventStream {
+  stream<TApi extends aiTypes.Api>(
+    model: aiTypes.Model<TApi>,
+    context: aiTypes.Context,
+    options?: aiTypes.ModelsApiStreamOptions<TApi>,
+  ): aiTypes.AssistantMessageEventStream {
     const transcript = normalizeContext(context);
     return lazyStream(model, () =>
       Effect.runPromise(
@@ -866,32 +823,32 @@ export class ModelRuntime implements Models {
           const prepared = yield* awaited(
             this.prepareRequest(
               model,
-              options as (StreamOptions & ModelsRequestTransforms) | undefined,
+              options as (aiTypes.StreamOptions & aiTypes.ModelsRequestTransforms) | undefined,
             ),
           );
           return prepared.provider.stream(
             prepared.model,
             transcript,
-            prepared.options as ApiStreamOptions<TApi>,
+            prepared.options as aiTypes.ApiStreamOptions<TApi>,
           );
         }, this),
       ),
     );
   }
 
-  complete<TApi extends Api>(
-    model: Model<TApi>,
-    context: Context,
-    options?: ModelsApiStreamOptions<TApi>,
-  ): Promise<AssistantMessage> {
+  complete<TApi extends aiTypes.Api>(
+    model: aiTypes.Model<TApi>,
+    context: aiTypes.Context,
+    options?: aiTypes.ModelsApiStreamOptions<TApi>,
+  ): Promise<aiTypes.AssistantMessage> {
     return this.stream(model, context, options).result();
   }
 
   streamSimple(
-    model: Model<Api>,
-    context: Context,
-    options?: ModelsSimpleStreamOptions,
-  ): AssistantMessageEventStream {
+    model: aiTypes.Model<aiTypes.Api>,
+    context: aiTypes.Context,
+    options?: aiTypes.ModelsSimpleStreamOptions,
+  ): aiTypes.AssistantMessageEventStream {
     const transcript = normalizeContext(context);
     if (isVirtualModel(model)) {
       return lazyStream(model, () =>
@@ -900,8 +857,8 @@ export class ModelRuntime implements Models {
             const route = yield* awaited(
               this.resolveModel(model, transcript.messages, {
                 reason: "direct",
-                thinkingLevel: options?.reasoning ?? "off",
                 signal: options?.signal,
+                thinkingLevel: options?.reasoning ?? "off",
               }),
             );
             const { maxTokens: limit } = route.model;
@@ -911,7 +868,7 @@ export class ModelRuntime implements Models {
                 : options?.maxTokens;
             const reasoning = route.thinkingLevel === "off" ? undefined : route.thinkingLevel;
             const { apiKey, headers, env, ...rest } = options ?? {};
-            const auth = route.model.provider === model.provider ? { apiKey, headers, env } : {};
+            const auth = route.model.provider === model.provider ? { apiKey, env, headers } : {};
             return this.streamSimple(route.model, context, {
               ...rest,
               ...auth,
@@ -930,7 +887,7 @@ export class ModelRuntime implements Models {
           return prepared.provider.streamSimple(
             prepared.model,
             transcript,
-            prepared.options as SimpleStreamOptions,
+            prepared.options as aiTypes.SimpleStreamOptions,
           );
         }, this),
       ),
@@ -938,18 +895,18 @@ export class ModelRuntime implements Models {
   }
 
   completeSimple(
-    model: Model<Api>,
-    context: Context,
-    options?: ModelsSimpleStreamOptions,
-  ): Promise<AssistantMessage> {
+    model: aiTypes.Model<aiTypes.Api>,
+    context: aiTypes.Context,
+    options?: aiTypes.ModelsSimpleStreamOptions,
+  ): Promise<aiTypes.AssistantMessage> {
     return this.streamSimple(model, context, options).result();
   }
 
   streamDeferred(
-    model: Model<Api>,
-    handle: DeferredHandle,
-    options?: ModelsDeferredFetchOptions,
-  ): AssistantMessageEventStream {
+    model: aiTypes.Model<aiTypes.Api>,
+    handle: aiTypes.DeferredHandle,
+    options?: aiTypes.ModelsDeferredFetchOptions,
+  ): aiTypes.AssistantMessageEventStream {
     return lazyStream(model, () =>
       Effect.runPromise(
         awaitingWith(function* () {
@@ -964,7 +921,7 @@ export class ModelRuntime implements Models {
           return prepared.provider.fetchDeferred(
             prepared.model,
             handle,
-            prepared.options as DeferredFetchOptions,
+            prepared.options as aiTypes.DeferredFetchOptions,
           );
         }, this),
       ),
@@ -972,10 +929,10 @@ export class ModelRuntime implements Models {
   }
 
   fetchDeferred(
-    model: Model<Api>,
-    handle: DeferredHandle,
-    options?: ModelsDeferredFetchOptions,
-  ): Promise<AssistantMessage> {
+    model: aiTypes.Model<aiTypes.Api>,
+    handle: aiTypes.DeferredHandle,
+    options?: aiTypes.ModelsDeferredFetchOptions,
+  ): Promise<aiTypes.AssistantMessage> {
     return Effect.runPromise(
       awaitingWith(function* () {
         return yield* awaited(this.streamDeferred(model, handle, options).result());
@@ -984,9 +941,9 @@ export class ModelRuntime implements Models {
   }
 
   cancelDeferred(
-    model: Model<Api>,
-    handle: DeferredHandle,
-    options?: ModelsDeferredCancelOptions,
+    model: aiTypes.Model<aiTypes.Api>,
+    handle: aiTypes.DeferredHandle,
+    options?: aiTypes.ModelsDeferredCancelOptions,
   ): Promise<void> {
     return Effect.runPromise(
       awaitingWith(function* () {
@@ -1002,7 +959,7 @@ export class ModelRuntime implements Models {
           prepared.provider.cancelDeferred(
             prepared.model,
             handle,
-            prepared.options as DeferredCancelOptions,
+            prepared.options as aiTypes.DeferredCancelOptions,
           ),
         );
       }, this),
@@ -1010,9 +967,9 @@ export class ModelRuntime implements Models {
   }
 
   countTokens(
-    model: Model<Api>,
-    context: Context,
-    options?: ModelsSimpleStreamOptions,
+    model: aiTypes.Model<aiTypes.Api>,
+    context: aiTypes.Context,
+    options?: aiTypes.ModelsSimpleStreamOptions,
   ): Promise<number | undefined> {
     return Effect.runPromise(
       awaitingWith(function* () {
@@ -1024,7 +981,7 @@ export class ModelRuntime implements Models {
           prepared.provider.countTokens(
             prepared.model,
             normalizeContext(context),
-            prepared.options as SimpleStreamOptions,
+            prepared.options as aiTypes.SimpleStreamOptions,
           ),
         );
       }, this),
@@ -1032,10 +989,10 @@ export class ModelRuntime implements Models {
   }
 
   generateImages(
-    model: ImageModel<ImageApi>,
-    context: ImagesContext,
-    options?: ModelsImagesOptions,
-  ): Promise<AssistantImages> {
+    model: aiTypes.ImageModel<aiTypes.ImageApi>,
+    context: aiTypes.ImagesContext,
+    options?: aiTypes.ModelsImagesOptions,
+  ): Promise<aiTypes.AssistantImages> {
     return Effect.runPromise(
       awaitingWith(function* () {
         try {
@@ -1051,7 +1008,7 @@ export class ModelRuntime implements Models {
             prepared.provider.generateImages(
               prepared.model,
               context,
-              prepared.options as ImagesOptions,
+              prepared.options as aiTypes.ImagesOptions,
             ),
           );
         } catch (error) {
@@ -1062,10 +1019,10 @@ export class ModelRuntime implements Models {
   }
 
   classify(
-    model: ClassifierModel<ClassifierApi>,
-    context: ClassifierContext,
-    options?: ModelsClassifierOptions,
-  ): Promise<ClassifierResult> {
+    model: aiTypes.ClassifierModel<aiTypes.ClassifierApi>,
+    context: aiTypes.ClassifierContext,
+    options?: aiTypes.ModelsClassifierOptions,
+  ): Promise<aiTypes.ClassifierResult> {
     return Effect.runPromise(
       awaitingWith(function* () {
         try {
@@ -1082,7 +1039,7 @@ export class ModelRuntime implements Models {
             prepared.provider.classify(
               prepared.model,
               context,
-              prepared.options as ClassifierOptions,
+              prepared.options as aiTypes.ClassifierOptions,
             ),
           );
         } catch (error) {
@@ -1094,10 +1051,10 @@ export class ModelRuntime implements Models {
 
   login(
     providerId: string,
-    type: AuthType,
-    interaction: AuthInteraction,
-    options?: LoginOptions,
-  ): Promise<Credential> {
+    type: aiTypes.AuthType,
+    interaction: aiTypes.AuthInteraction,
+    options?: aiTypes.LoginOptions,
+  ): Promise<aiTypes.Credential> {
     const signal = operationSignal(interaction.signal);
     return this.enqueueCredentialOperation(providerId, signal, () =>
       Effect.runPromise(
@@ -1114,7 +1071,7 @@ export class ModelRuntime implements Models {
     );
   }
 
-  logout(providerId: string, options: AuthOperationOptions = {}): Promise<void> {
+  logout(providerId: string, options: aiTypes.AuthOperationOptions = {}): Promise<void> {
     const signal = operationSignal(options.signal);
     return this.enqueueCredentialOperation(providerId, signal, () =>
       Effect.runPromise(
@@ -1128,7 +1085,7 @@ export class ModelRuntime implements Models {
     );
   }
 
-  refresh(options: ModelsRefreshOptions = {}): Promise<ModelsRefreshResult> {
+  refresh(options: aiTypes.ModelsRefreshOptions = {}): Promise<aiTypes.ModelsRefreshResult> {
     return Effect.runPromise(
       awaitingWith(function* () {
         this.config = yield* awaited(ModelConfig.load(this.modelsPath));
@@ -1143,7 +1100,7 @@ export class ModelRuntime implements Models {
           allowNetwork: options.allowNetwork ?? this.modelNetworkEnabled,
         };
         const result = ((yield* awaited(this.models.refresh(refreshOptions))) as
-          | ModelsRefreshResult
+          | aiTypes.ModelsRefreshResult
           | undefined) ?? {
           aborted: refreshOptions.signal?.aborted ?? false,
           errors: new Map(),
@@ -1186,7 +1143,7 @@ export class ModelRuntime implements Models {
     );
   }
 
-  registerNativeProvider(provider: Provider): void {
+  registerNativeProvider(provider: aiTypes.Provider): void {
     if (provider.id.trim() === "") throw new Error("Provider id must not be empty.");
     this.extensionProviders.delete(provider.id);
     this.nativeExtensionProviders.set(provider.id, provider);
@@ -1203,19 +1160,19 @@ export class ModelRuntime implements Models {
   private markProvisionallyConfigured(
     providerId: string,
     configuredStatus: AuthStatus | undefined,
-    type: AuthType,
+    type: aiTypes.AuthType,
   ): void {
     if (!this.snapshot.storedProviders.has(providerId) && configuredStatus?.configured !== true)
       return;
     const configuredProviders = new Set(this.snapshot.configuredProviders).add(providerId);
     const auth = new Map(this.snapshot.auth);
     if (auth.get(providerId) === undefined)
-      auth.set(providerId, { type, source: "configured provider" });
+      auth.set(providerId, { source: "configured provider", type });
     this.snapshot = {
       ...this.snapshot,
       auth,
-      configuredProviders,
       available: this.snapshot.all.filter((model) => configuredProviders.has(model.provider)),
+      configuredProviders,
     };
   }
 
@@ -1272,8 +1229,8 @@ export class ModelRuntime implements Models {
       !this.snapshot.configuredProviders.has(providerId)
     ) {
       const auth = new Map(this.snapshot.auth).set(providerId, {
-        type: "api_key",
         source: "virtual",
+        type: "api_key",
       });
       const configuredProviders = new Set(this.snapshot.configuredProviders).add(providerId);
       this.snapshot = { ...this.snapshot, auth, configuredProviders };
@@ -1292,13 +1249,13 @@ export class ModelRuntime implements Models {
   }
 
   resolveModel(
-    model: Model<Api>,
-    messages: readonly Message[],
+    model: aiTypes.Model<aiTypes.Api>,
+    messages: readonly aiTypes.Message[],
     options: {
       reason: ModelRouteReason;
-      thinkingLevel: ModelThinkingLevel;
+      thinkingLevel: aiTypes.ModelThinkingLevel;
       signal?: AbortSignal | undefined;
-      failed?: AssistantMessage | undefined;
+      failed?: aiTypes.AssistantMessage | undefined;
       state?: unknown;
     },
   ): Promise<ModelRoute> {
@@ -1314,11 +1271,6 @@ export class ModelRuntime implements Models {
         const route = yield* awaited(
           virtual.route({
             ...request,
-            model,
-            previous: previousModel && {
-              model: previousModel,
-              thinkingLevel: latest?.thinkingLevel,
-            },
             failed: failedModel &&
               failed && {
                 model: failedModel,
@@ -1326,6 +1278,11 @@ export class ModelRuntime implements Models {
                 message: failed,
               },
             messages,
+            model,
+            previous: previousModel && {
+              model: previousModel,
+              thinkingLevel: latest?.thinkingLevel,
+            },
           }),
         );
         const target = this.getPhysicalModel(route.model.provider, route.model.id);
@@ -1335,14 +1292,14 @@ export class ModelRuntime implements Models {
           throw new Error(`${routed}, which has no credentials.`);
         return {
           model: target,
-          thinkingLevel: clampThinkingLevel(target, route.thinkingLevel),
           state: route.state,
+          thinkingLevel: clampThinkingLevel(target, route.thinkingLevel),
         };
       }, this),
     );
   }
 
-  getPhysicalModel(providerId: string, modelId: string): Model<Api> | undefined {
+  getPhysicalModel(providerId: string, modelId: string): aiTypes.Model<aiTypes.Api> | undefined {
     const model = this.models.getModel(providerId, modelId);
     return model !== undefined && !isVirtualModel(model) ? model : undefined;
   }

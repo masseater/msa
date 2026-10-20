@@ -1,10 +1,10 @@
 import type { ModelRegistry } from "../model-registry.ts";
 import type { SessionManager } from "../session-manager.ts";
 import {
+  type RunnerBindings,
   applyContextActions,
   createBindings,
   idleCommandBindings,
-  type RunnerBindings,
 } from "./runner-bindings.ts";
 import { ContextFactory } from "./runner-context.ts";
 import { RunnerEmitApi } from "./runner-emit-api.ts";
@@ -62,14 +62,14 @@ export class ExtensionRunner extends RunnerEmitApi {
     this.bindings = createBindings(cwd);
     this.contextFactory = new ContextFactory({
       assertActive: () => this.assertActive(),
-      ui: () => this.uiContext,
-      mode: () => this.mode,
-      hasUI: () => this.hasUI(),
+      bindings: this.bindings,
       cwd,
-      sessionManager,
+      hasUI: () => this.hasUI(),
+      mode: () => this.mode,
       modelRegistry,
       runtime,
-      bindings: this.bindings,
+      sessionManager,
+      ui: () => this.uiContext,
     });
     this.prompts = new UIPromptTracker((event) => {
       queueMicrotask(() => {
@@ -100,9 +100,9 @@ export class ExtensionRunner extends RunnerEmitApi {
     runtime.getThinkingLevel = actions.getThinkingLevel;
     runtime.setThinkingLevel = actions.setThinkingLevel;
     runtime.createContext = () => this.createContext();
-    applyContextActions({ bindings: this.bindings, actions: contextActions, cwd: this.cwd });
+    applyContextActions({ actions: contextActions, bindings: this.bindings, cwd: this.cwd });
     runtime.mcpServers.setChangeListener(() => {
-      void this.emit({ type: "mcp_servers_change", servers: runtime.mcpServers.list() });
+      void this.emit({ servers: runtime.mcpServers.list(), type: "mcp_servers_change" });
       this.reportUnhandledMcpServers();
     });
     new ProviderBinder(runtime, this.modelRegistry, providerActions, (error) =>
@@ -115,12 +115,12 @@ export class ExtensionRunner extends RunnerEmitApi {
       actions === undefined
         ? idleCommandBindings()
         : {
-            waitForIdleFn: actions.waitForIdle,
-            newSessionHandler: actions.newSession,
             forkHandler: actions.fork,
             navigateTreeHandler: actions.navigateTree,
-            switchSessionHandler: actions.switchSession,
+            newSessionHandler: actions.newSession,
             reloadHandler: actions.reload,
+            switchSessionHandler: actions.switchSession,
+            waitForIdleFn: actions.waitForIdle,
           };
     Object.assign(this.bindings, next);
   }
@@ -162,9 +162,9 @@ export class ExtensionRunner extends RunnerEmitApi {
       if (this.reportedMcpServers.has(server.name)) continue;
       this.reportedMcpServers.add(server.name);
       this.emitError({
-        extensionPath: server.extensionPath,
-        event: "register_mcp_server",
         error: `MCP server "${server.name}" is registered, but no loaded extension connects MCP servers; another extension may have replaced the built-in MCP support`,
+        event: "register_mcp_server",
+        extensionPath: server.extensionPath,
       });
     }
   }

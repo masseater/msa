@@ -2,7 +2,8 @@ import { spawn, spawnSync } from "node:child_process";
 import * as fs from "node:fs";
 import * as os from "node:os";
 
-import { hyperlink, type TUI } from "@msa/tui";
+import tui from "@msa/tui";
+import type tuiTypes from "@msa/tui/index.types";
 import { Effect } from "effect";
 import { dual } from "effect/Function";
 
@@ -14,9 +15,11 @@ import { BorderedLoader } from "./components/bordered-loader.ts";
 import type { EditorSlot } from "./editor-slot.ts";
 import { theme } from "./theme/theme.ts";
 
+const { hyperlink } = tui;
+
 interface SessionShareContext {
   session: AgentSession;
-  ui: TUI;
+  ui: tuiTypes.TUI;
   editorSlot: EditorSlot;
   showStatus: (message: string) => void;
   showError: (message: string) => void;
@@ -27,11 +30,7 @@ export const createShareTrailingEntries: {
   (session: AgentSession, parentId: string | null, timestamp: string): object[];
 } = dual(3, (session: AgentSession, parentId: string | null, timestamp: string): object[] => [
   {
-    type: "custom",
     customType: "msa.share",
-    id: randomUuid().slice(0, 8),
-    parentId,
-    timestamp,
     data: {
       systemPrompt: session.state.systemPrompt,
       tools: session.state.tools.map((tool) => ({
@@ -40,6 +39,10 @@ export const createShareTrailingEntries: {
         parameters: tool.parameters,
       })),
     },
+    id: randomUuid().slice(0, 8),
+    parentId,
+    timestamp,
+    type: "custom",
   },
 ]);
 
@@ -74,7 +77,7 @@ export function shareSession(context: SessionShareContext): Promise<void> {
         yield* performed(shareViaGist(htmlFile, context));
       } finally {
         try {
-          fs.rmSync(tempDir, { recursive: true, force: true });
+          fs.rmSync(tempDir, { force: true, recursive: true });
         } catch {}
       }
     }),
@@ -105,7 +108,7 @@ function shareViaGist(tmpFile: string, context: SessionShareContext): Effect.Eff
           proc.stderr?.on("data", (data) => {
             stderr += data.toString();
           });
-          proc.on("close", (code) => resolve({ stdout, stderr, code }));
+          proc.on("close", (code) => resolve({ code, stderr, stdout }));
         }),
       );
 

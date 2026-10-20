@@ -1,12 +1,18 @@
 import { Console, Effect } from "effect";
 
-import { runEvery } from "../src/delay.ts";
-import { matchesKey } from "../src/keys.ts";
-import { ProcessTerminal } from "../src/terminal.ts";
-import { truncateToWidth } from "../src/text-truncate.ts";
-import type { Component } from "../src/tui-component.ts";
-import type { TUI } from "../src/tui-interface.ts";
-import { TuiMainScreen } from "../src/tui-main-screen.ts";
+import delay from "../src/delay.ts";
+import keys from "../src/keys.ts";
+import ProcessTerminal from "../src/terminal.ts";
+import type terminalTypes from "../src/terminal.types.ts";
+import textTruncate from "../src/text-truncate.ts";
+import type tuiComponentTypes from "../src/tui-component.types.ts";
+import type tuiInterfaceTypes from "../src/tui-interface.types.ts";
+import TuiMainScreen from "../src/tui-main-screen.ts";
+
+const { matchesKey } = keys;
+const { truncateToWidth } = textTruncate;
+
+const { runEvery } = delay;
 
 const CONTROL_NAMES = new Map([
   ["\u001b", "\\x1b"],
@@ -16,13 +22,13 @@ const CONTROL_NAMES = new Map([
   ["\u007f", "\\x7f"],
 ]);
 
-class KeyLogger implements Component {
+class KeyLogger implements tuiComponentTypes.Component {
   private log: string[] = [];
   private maxLines = 20;
-  private tui: TUI;
-  private terminal: ProcessTerminal;
+  private tui: tuiInterfaceTypes.TUI;
+  private terminal: terminalTypes.ProcessTerminal;
 
-  constructor(tui: TUI, terminal: ProcessTerminal) {
+  constructor(tui: tuiInterfaceTypes.TUI, terminal: terminalTypes.ProcessTerminal) {
     this.tui = tui;
     this.terminal = terminal;
   }
@@ -97,7 +103,7 @@ class KeyLogger implements Component {
 }
 
 const terminal = new ProcessTerminal();
-const tui: TUI = new TuiMainScreen(terminal);
+const tui: tuiInterfaceTypes.TUI = new TuiMainScreen(terminal);
 const logger = new KeyLogger(tui, terminal);
 
 tui.addChild(logger);

@@ -31,10 +31,10 @@ export type ResizeImageWorkerResponse =
 const DEFAULT_MAX_BYTES = 4.5 * 1024 * 1024;
 
 const DEFAULT_OPTIONS: Required<ImageResizeOptions> = {
-  maxWidth: 2000,
-  maxHeight: 2000,
-  maxBytes: DEFAULT_MAX_BYTES,
   jpegQuality: 80,
+  maxBytes: DEFAULT_MAX_BYTES,
+  maxHeight: 2000,
+  maxWidth: 2000,
 };
 
 interface EncodedCandidate {
@@ -84,12 +84,12 @@ function resizeImageInProcessImpl(
         ) {
           return {
             data: Buffer.from(inputBytes).toString("base64"),
-            mimeType: mimeType || `image/${format}`,
-            originalWidth,
-            originalHeight,
-            width: originalWidth,
             height: originalHeight,
+            mimeType: mimeType || `image/${format}`,
+            originalHeight,
+            originalWidth,
             wasResized: false,
+            width: originalWidth,
           };
         }
 
@@ -135,12 +135,12 @@ function resizeImageInProcessImpl(
             if (candidate.encodedSize < opts.maxBytes) {
               return {
                 data: candidate.data,
-                mimeType: candidate.mimeType,
-                originalWidth,
-                originalHeight,
-                width: currentWidth,
                 height: currentHeight,
+                mimeType: candidate.mimeType,
+                originalHeight,
+                originalWidth,
                 wasResized: true,
+                width: currentWidth,
               };
             }
           }

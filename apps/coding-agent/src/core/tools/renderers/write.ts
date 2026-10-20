@@ -1,13 +1,16 @@
-import { Container, Text } from "@msa/tui";
+import tui from "@msa/tui";
+import type tuiTypes from "@msa/tui/index.types";
 
 import { expandHint } from "../../../modes/interactive/components/keybinding-hints.ts";
 import {
+  type Theme,
   getLanguageFromPath,
   highlightCode,
-  type Theme,
 } from "../../../modes/interactive/theme/theme.ts";
 import type { ToolDefinition, ToolRenderResultOptions } from "../../extensions/types.ts";
 import { normalizeDisplayText, renderToolPath, replaceTabs, str } from "../render-utils.ts";
+
+const { Container, Text } = tui;
 
 type WriteHighlightCache = {
   rawPath: string | null;
@@ -47,11 +50,11 @@ function rebuildWriteHighlightCacheFull(
   const displayContent = normalizeDisplayText(fileContent);
   const normalized = replaceTabs(displayContent);
   return {
-    rawPath,
-    lang,
-    rawContent: fileContent,
-    normalizedLines: normalized.split("\n"),
     highlightedLines: highlightCode(normalized, lang),
+    lang,
+    normalizedLines: normalized.split("\n"),
+    rawContent: fileContent,
+    rawPath,
   };
 }
 function updateWriteHighlightCacheIncremental(
@@ -175,11 +178,12 @@ export const writeRenderers: Pick<ToolDefinition<any, any>, "renderCall" | "rend
   renderResult(result, _options, theme, context) {
     const output = formatWriteResult({ ...result, isError: context.isError }, theme);
     if (output === undefined || output === "") {
-      const component = (context.lastComponent as Container | undefined) ?? new Container();
+      const component =
+        (context.lastComponent as tuiTypes.Container | undefined) ?? new Container();
       component.clear();
       return component;
     }
-    const text = (context.lastComponent as Text | undefined) ?? new Text("", 0, 0);
+    const text = (context.lastComponent as tuiTypes.Text | undefined) ?? new Text("", 0, 0);
     text.setText(output);
     return text;
   },

@@ -1,5 +1,5 @@
-import type { AgentMessage } from "@msa/agent-core";
-import type { AssistantMessage, Usage } from "@msa/ai/compat";
+import type agentTypes from "@msa/agent-core/index.types";
+import type compatTypes from "@msa/ai/compat.types";
 import testing from "@msa/testing";
 import { beforeEach, describe, expect, it } from "vite-plus/test";
 
@@ -12,7 +12,12 @@ import { type CompactionEntry, type SessionMessageEntry } from "../src/core/sess
 
 const { currentDate, currentTimeMillis } = testing;
 
-function createMockUsage(input: number, output: number, cacheRead = 0, cacheWrite = 0): Usage {
+function createMockUsage(
+  input: number,
+  output: number,
+  cacheRead = 0,
+  cacheWrite = 0,
+): compatTypes.Usage {
   return {
     cacheRead,
     cacheWrite,
@@ -23,11 +28,14 @@ function createMockUsage(input: number, output: number, cacheRead = 0, cacheWrit
   };
 }
 
-function createUserMessage(text: string): AgentMessage {
+function createUserMessage(text: string): agentTypes.AgentMessage {
   return { content: text, role: "user", timestamp: currentTimeMillis() };
 }
 
-function createAssistantMessage(text: string, usage?: Usage): AssistantMessage {
+function createAssistantMessage(
+  text: string,
+  usage?: compatTypes.Usage,
+): compatTypes.AssistantMessage {
   return {
     api: "anthropic-messages" as const,
     content: [{ text, type: "text" as const }],
@@ -52,7 +60,7 @@ beforeEach(() => {
   resetEntryCounter();
 });
 
-function createMessageEntry(message: AgentMessage): SessionMessageEntry {
+function createMessageEntry(message: agentTypes.AgentMessage): SessionMessageEntry {
   const id = `test-id-${entryCounter++}`;
   const entry: SessionMessageEntry = {
     id,
@@ -80,7 +88,7 @@ function createCompactionEntry(summary: string, firstKeptEntryId: string): Compa
   return entry;
 }
 
-function extractText(messages: AgentMessage[]): string {
+function extractText(messages: agentTypes.AgentMessage[]): string {
   return messages
     .map((message) => {
       switch (message.role) {

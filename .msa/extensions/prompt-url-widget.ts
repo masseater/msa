@@ -3,8 +3,10 @@ import { homedir } from "node:os";
 import * as NodePath from "@effect/platform-node/NodePath";
 import * as NodeServices from "@effect/platform-node/NodeServices";
 import { DynamicBorder, type ExtensionAPI, type ExtensionContext } from "@msa/coding-agent";
-import { Container, hyperlink, Text } from "@msa/tui";
+import tui from "@msa/tui";
 import { Effect, FileSystem, ManagedRuntime, Option, Path } from "effect";
+
+const { Container, hyperlink, Text } = tui;
 
 const runtime = ManagedRuntime.make(NodeServices.layer);
 const nodePath = ManagedRuntime.make(NodePath.layer).runSync(Path.Path);

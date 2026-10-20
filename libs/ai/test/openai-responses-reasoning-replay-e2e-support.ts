@@ -1,41 +1,48 @@
 import { Clock, Console, Effect } from "effect";
 import { Type } from "typebox";
 
-import { complete } from "../src/compat.ts";
-import type { Api, AssistantMessage, Message, Model, StreamOptions, Tool } from "../src/types.ts";
+import compat from "../src/compat.ts";
+import type typesModule from "../src/types.types.ts";
 
-type StreamOptionsWithExtras = StreamOptions & Record<string, unknown>;
+const { complete } = compat;
+
+type StreamOptionsWithExtras = typesModule.StreamOptions & Record<string, unknown>;
 type ResponsesInputItem = { readonly id?: unknown; readonly type?: unknown };
 
 const doubleNumberSchema = Type.Object({
   value: Type.Number({ description: "A number to double" }),
 });
 
-const doubleNumberTool: Tool<typeof doubleNumberSchema> = {
+const doubleNumberTool: typesModule.Tool<typeof doubleNumberSchema> = {
   description: "Doubles a number and returns the result",
   name: "double_number",
   parameters: doubleNumberSchema,
 };
 
-const askToDouble = Effect.fn("askToDouble")(function* <TApi extends Api>(
-  model: Model<TApi>,
+const askToDouble = Effect.fn("askToDouble")(function* <TApi extends typesModule.Api>(
+  model: typesModule.Model<TApi>,
   options: StreamOptionsWithExtras,
   systemPrompt = "You are a helpful assistant. Always use the tool when asked.",
 ) {
-  const userMessage: Message = {
+  const userMessage: typesModule.Message = {
     content: "Use the double_number tool to double 21.",
     role: "user",
     timestamp: yield* Clock.currentTimeMillis,
   };
-  const assistantResponse: AssistantMessage = yield* Effect.promise(() =>
+  const assistantResponse: typesModule.AssistantMessage = yield* Effect.promise(() =>
     complete(model, { messages: [userMessage], systemPrompt, tools: [doubleNumberTool] }, options),
   );
   return { assistantResponse, userMessage };
 });
 
-const answerAfterToolResult = Effect.fn("answerAfterToolResult")(function* <TApi extends Api>(
-  history: { readonly assistantResponse: AssistantMessage; readonly userMessage: Message },
-  model: Model<TApi>,
+const answerAfterToolResult = Effect.fn("answerAfterToolResult")(function* <
+  TApi extends typesModule.Api,
+>(
+  history: {
+    readonly assistantResponse: typesModule.AssistantMessage;
+    readonly userMessage: typesModule.Message;
+  },
+  model: typesModule.Model<TApi>,
   options: StreamOptionsWithExtras,
 ) {
   const toolCall = history.assistantResponse.content.find((block) => block.type === "toolCall");
@@ -78,7 +85,7 @@ const answerAfterToolResult = Effect.fn("answerAfterToolResult")(function* <TApi
   return response;
 });
 
-const textOf = (message: AssistantMessage) =>
+const textOf = (message: typesModule.AssistantMessage) =>
   message.content.flatMap((block) => (block.type === "text" ? [block.text] : [])).join("");
 
 const openaiResponsesReasoningReplayE2eSupport = {

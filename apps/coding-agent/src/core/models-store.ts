@@ -1,4 +1,4 @@
-import type { ModelsStore, ModelsStoreEntry, ModelsStoreOperationOptions } from "@msa/ai";
+import type aiTypes from "@msa/ai/index.types";
 import * as Effect from "effect/Effect";
 
 import { getAgentDir } from "../config.ts";
@@ -9,7 +9,7 @@ import { type AuthStorageBackend, FileAuthStorageBackend } from "./auth-storage.
 import { awaited, awaitingWith, performed } from "./awaiting.ts";
 import { join } from "./platform-node.ts";
 
-type StoredModels = Record<string, ModelsStoreEntry>;
+type StoredModels = Record<string, aiTypes.ModelsStoreEntry>;
 
 type ModelsFileReload = {
   controller: AbortController;
@@ -25,13 +25,13 @@ type ModelsFileReadState = {
 
 let sharedModelsFileReadState: { path: string; readState: ModelsFileReadState } | undefined;
 
-export class InMemoryCodingAgentModelsStore implements ModelsStore {
-  private readonly entries = new Map<string, ModelsStoreEntry>();
+export class InMemoryCodingAgentModelsStore implements aiTypes.ModelsStore {
+  private readonly entries = new Map<string, aiTypes.ModelsStoreEntry>();
 
   read(
     providerId: string,
-    options?: ModelsStoreOperationOptions,
-  ): Promise<ModelsStoreEntry | undefined> {
+    options?: aiTypes.ModelsStoreOperationOptions,
+  ): Promise<aiTypes.ModelsStoreEntry | undefined> {
     return Effect.runPromise(
       Effect.sync(() => {
         options?.signal?.throwIfAborted();
@@ -43,8 +43,8 @@ export class InMemoryCodingAgentModelsStore implements ModelsStore {
 
   write(
     providerId: string,
-    entry: ModelsStoreEntry,
-    options?: ModelsStoreOperationOptions,
+    entry: aiTypes.ModelsStoreEntry,
+    options?: aiTypes.ModelsStoreOperationOptions,
   ): Promise<void> {
     return Effect.runPromise(
       Effect.sync(() => {
@@ -54,7 +54,7 @@ export class InMemoryCodingAgentModelsStore implements ModelsStore {
     );
   }
 
-  delete(providerId: string, options?: ModelsStoreOperationOptions): Promise<void> {
+  delete(providerId: string, options?: aiTypes.ModelsStoreOperationOptions): Promise<void> {
     return Effect.runPromise(
       Effect.sync(() => {
         options?.signal?.throwIfAborted();
@@ -64,7 +64,7 @@ export class InMemoryCodingAgentModelsStore implements ModelsStore {
   }
 }
 
-export class FileModelsStore implements ModelsStore {
+export class FileModelsStore implements aiTypes.ModelsStore {
   private readonly storage: AuthStorageBackend;
   private readonly path: string;
   private readonly readState: ModelsFileReadState;
@@ -98,7 +98,7 @@ export class FileModelsStore implements ModelsStore {
 
   private reloadFromStorage(
     readState: ModelsFileReadState,
-    options?: ModelsStoreOperationOptions,
+    options?: aiTypes.ModelsStoreOperationOptions,
   ): Promise<StoredModels> {
     return this.storage.withLockAsync(
       (content) =>
@@ -115,7 +115,7 @@ export class FileModelsStore implements ModelsStore {
 
   private readLatest(
     readState: ModelsFileReadState,
-    options?: ModelsStoreOperationOptions,
+    options?: aiTypes.ModelsStoreOperationOptions,
   ): Effect.Effect<StoredModels> {
     return awaitingWith(function* () {
       options?.signal?.throwIfAborted();
@@ -157,8 +157,8 @@ export class FileModelsStore implements ModelsStore {
 
   read(
     providerId: string,
-    options?: ModelsStoreOperationOptions,
-  ): Promise<ModelsStoreEntry | undefined> {
+    options?: aiTypes.ModelsStoreOperationOptions,
+  ): Promise<aiTypes.ModelsStoreEntry | undefined> {
     return Effect.runPromise(
       awaitingWith(function* () {
         const entry = (yield* performed(this.readLatest(this.readState, options)))[providerId];
@@ -170,8 +170,8 @@ export class FileModelsStore implements ModelsStore {
 
   write(
     providerId: string,
-    entry: ModelsStoreEntry,
-    options?: ModelsStoreOperationOptions,
+    entry: aiTypes.ModelsStoreEntry,
+    options?: aiTypes.ModelsStoreOperationOptions,
   ): Promise<void> {
     return Effect.runPromise(
       awaitingWith(function* () {
@@ -184,7 +184,7 @@ export class FileModelsStore implements ModelsStore {
                   const current = this.parse(content);
                   current[providerId] = structuredClone(entry);
                   latest = current;
-                  return { result: undefined, next: prettyJson(current) };
+                  return { next: prettyJson(current), result: undefined };
                 }),
               ),
             options,
@@ -195,7 +195,7 @@ export class FileModelsStore implements ModelsStore {
     );
   }
 
-  delete(providerId: string, options?: ModelsStoreOperationOptions): Promise<void> {
+  delete(providerId: string, options?: aiTypes.ModelsStoreOperationOptions): Promise<void> {
     return Effect.runPromise(
       awaitingWith(function* () {
         let latest: StoredModels | undefined;
@@ -207,7 +207,7 @@ export class FileModelsStore implements ModelsStore {
                   const current = this.parse(content);
                   delete current[providerId];
                   latest = current;
-                  return { result: undefined, next: prettyJson(current) };
+                  return { next: prettyJson(current), result: undefined };
                 }),
               ),
             options,

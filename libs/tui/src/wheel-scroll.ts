@@ -1,4 +1,4 @@
-export type WheelScrollLines = number | "auto";
+import type wheelScrollTypes from "./wheel-scroll.types.ts";
 
 const BURST_GAP_MS = 5;
 const GESTURE_GAP_MS = 200;
@@ -15,20 +15,23 @@ function terminalAcceleratesWheel(): boolean {
   );
 }
 
-export class WheelScrollAccelerator {
-  private lines: WheelScrollLines;
+export default class WheelScrollAccelerator {
+  private lines: wheelScrollTypes.WheelScrollLines;
   private readonly accelerate: boolean;
   private lastTime = Number.NEGATIVE_INFINITY;
   private lastDirection = 0;
   private averageGap: number | undefined;
   private carry = 0;
 
-  constructor(lines: WheelScrollLines = "auto", accelerate = !terminalAcceleratesWheel()) {
+  constructor(
+    lines: wheelScrollTypes.WheelScrollLines = "auto",
+    accelerate = !terminalAcceleratesWheel(),
+  ) {
     this.lines = lines;
     this.accelerate = accelerate;
   }
 
-  setLines(lines: WheelScrollLines): void {
+  setLines(lines: wheelScrollTypes.WheelScrollLines): void {
     this.lines = lines;
     this.reset();
   }

@@ -1,8 +1,9 @@
 import * as os from "node:os";
 
-import type { AgentMessage, StreamFn, ThinkingLevel } from "@msa/agent-core";
-import { contentText, normalizeContext, type RetryPolicy, uuidv7 } from "@msa/ai";
-import type { Api, Model, Provider, SimpleStreamOptions } from "@msa/ai/compat";
+import type agentTypes from "@msa/agent-core/index.types";
+import ai from "@msa/ai";
+import type compatTypes from "@msa/ai/compat.types";
+import type aiTypes from "@msa/ai/index.types";
 import * as Effect from "effect/Effect";
 
 import { VERSION } from "../config.ts";
@@ -23,6 +24,8 @@ import { nowIso, nowMs } from "./platform.ts";
 import { envNames, readEnv } from "./process-env.ts";
 import type { ReadonlySessionManager } from "./session-manager.ts";
 import type { Settings } from "./settings-manager.ts";
+
+const { contentText, normalizeContext, uuidv7 } = ai;
 
 export const BUG_REPORT_CUSTOM_ENTRY_TYPE = "msa.bug-report";
 const BUG_REPORT_SCHEMA_VERSION = 1;
@@ -76,77 +79,77 @@ function redactSettings(settings: Settings): Settings {
 function collectEnvironment() {
   const env = (name: string): string | null => readEnv(name) || null;
   return {
-    version: VERSION,
-    userAgent: getMsaUserAgent(VERSION),
+    arch: process.arch,
+    osRelease: os.release(),
+    osVersion: os.version(),
+    piEnvironmentVariables: envNames()
+      .filter((name) => name.startsWith("MSA_"))
+      .sort(),
+    platform: process.platform,
     runtime:
       process.versions["bun"] !== undefined && process.versions["bun"] !== ""
         ? `bun/${process.versions["bun"]}`
         : `node/${process.version}`,
-    platform: process.platform,
-    arch: process.arch,
-    osRelease: os.release(),
-    osVersion: os.version(),
     shell: readEnv("SHELL")?.split(/[\\/]/u).pop() || null,
     terminal: {
-      term: env("TERM"),
+      ci: Boolean(readEnv("CI")),
+      colorterm: env("COLORTERM"),
       program: env("TERM_PROGRAM"),
       programVersion: env("TERM_PROGRAM_VERSION"),
-      colorterm: env("COLORTERM"),
-      tmux: Boolean(readEnv("TMUX")),
       ssh: Boolean(readEnv("SSH_CONNECTION") || readEnv("SSH_CLIENT") || readEnv("SSH_TTY")),
-      ci: Boolean(readEnv("CI")),
+      term: env("TERM"),
+      tmux: Boolean(readEnv("TMUX")),
     },
-    piEnvironmentVariables: envNames()
-      .filter((name) => name.startsWith("MSA_"))
-      .sort(),
+    userAgent: getMsaUserAgent(VERSION),
+    version: VERSION,
   };
 }
 
-function describeModel(model: Model<Api>) {
+function describeModel(model: compatTypes.Model<compatTypes.Api>) {
   return {
-    provider: model.provider,
-    id: model.id,
-    name: model.name,
     api: model.api,
     baseUrl: redactUrl(model.baseUrl),
-    reasoning: model.reasoning,
-    input: model.input,
+    compat: model.compat === undefined ? null : redactJsonValue(model.compat),
     contextWindow: model.contextWindow,
+    headerNames: Object.keys(model.headers ?? {}).sort(),
+    id: model.id,
+    input: model.input,
     maxTokens: model.maxTokens,
+    name: model.name,
+    provider: model.provider,
+    reasoning: model.reasoning,
     samplingParams:
       model.samplingParams === undefined ? null : redactJsonValue(model.samplingParams),
-    compat: model.compat === undefined ? null : redactJsonValue(model.compat),
     thinkingLevelMap: model.thinkingLevelMap ?? null,
-    headerNames: Object.keys(model.headers ?? {}).sort(),
   };
 }
 
-function describeProvider(modelRuntime: ModelRuntime, provider: Provider) {
+function describeProvider(modelRuntime: ModelRuntime, provider: compatTypes.Provider) {
   const authTypes: Array<"api_key" | "oauth"> = [];
   if (provider.auth.apiKey !== undefined) authTypes.push("api_key");
   if (provider.auth.oauth !== undefined) authTypes.push("oauth");
   return {
-    id: provider.id,
-    name: provider.name,
+    authStatus: modelRuntime.getProviderAuthStatus(provider.id),
+    authTypes,
     baseUrl:
       provider.baseUrl !== undefined && provider.baseUrl !== ""
         ? redactUrl(provider.baseUrl)
         : null,
     headerNames: Object.keys(provider.headers ?? {}).sort(),
-    authTypes,
-    authStatus: modelRuntime.getProviderAuthStatus(provider.id),
-    usingOAuth: modelRuntime.isUsingOAuth(provider.id),
+    id: provider.id,
+    name: provider.name,
     registeredByExtension: modelRuntime.getRegisteredProviderIds().includes(provider.id),
+    usingOAuth: modelRuntime.isUsingOAuth(provider.id),
   };
 }
 
 function describeExtension(extension: Extension) {
   return {
-    path: extension.path,
-    source: redactUrl(extension.sourceInfo.source),
-    scope: extension.sourceInfo.scope,
-    origin: extension.sourceInfo.origin,
     hidden: extension.hidden === true,
+    origin: extension.sourceInfo.origin,
+    path: extension.path,
+    scope: extension.sourceInfo.scope,
+    source: redactUrl(extension.sourceInfo.source),
   };
 }
 
@@ -158,9 +161,9 @@ interface CollectBugReportMetadataOptions {
   includeSession: boolean;
   includeSummary: boolean;
   messageCount: number;
-  model?: Model<Api> | undefined;
+  model?: compatTypes.Model<compatTypes.Api> | undefined;
   modelRuntime: ModelRuntime;
-  thinkingLevel: ThinkingLevel;
+  thinkingLevel: agentTypes.ThinkingLevel;
   extensions: readonly Extension[];
   extensionErrors: ReadonlyArray<{ path: string; error: string }>;
   globalSettings: Settings;
@@ -174,27 +177,27 @@ export function collectBugReportMetadata(options: CollectBugReportMetadataOption
       ? undefined
       : options.modelRuntime.getProvider(options.model.provider);
   return {
-    schemaVersion: BUG_REPORT_SCHEMA_VERSION,
-    id: options.id ?? uuidv7(),
     createdAt: nowIso(),
-    hint,
     environment: collectEnvironment(),
+    extensionErrors: options.extensionErrors.map(({ path, error }) => ({ path, error })),
+    extensions: options.extensions.map(describeExtension),
+    hint,
+    id: options.id ?? uuidv7(),
+    model: options.model === undefined ? null : describeModel(options.model),
+    provider: provider === undefined ? null : describeProvider(options.modelRuntime, provider),
+    schemaVersion: BUG_REPORT_SCHEMA_VERSION,
     session: {
       id: options.sessionId,
       included: options.includeSession,
-      summaryIncluded: options.includeSummary,
       messageCount: options.messageCount,
+      summaryIncluded: options.includeSummary,
       ...(options.includeSession ? { cwd: options.cwd } : {}),
     },
-    model: options.model === undefined ? null : describeModel(options.model),
-    provider: provider === undefined ? null : describeProvider(options.modelRuntime, provider),
-    thinkingLevel: options.thinkingLevel,
-    extensions: options.extensions.map(describeExtension),
-    extensionErrors: options.extensionErrors.map(({ path, error }) => ({ path, error })),
     settings: {
       global: redactSettings(options.globalSettings),
       project: redactSettings(options.projectSettings),
     },
+    thinkingLevel: options.thinkingLevel,
   };
 }
 
@@ -231,12 +234,12 @@ export function collectBugReportDiagnostics(
     });
   }
   return {
+    assistant,
+    assistantMessageCount,
+    crashes: crashes.map(({ notified: _notified, ...record }) => record),
+    entryCount: entries.length,
     schemaVersion: BUG_REPORT_SCHEMA_VERSION,
     sessionId: sessionManager.getSessionId(),
-    entryCount: entries.length,
-    assistantMessageCount,
-    assistant,
-    crashes: crashes.map(({ notified: _notified, ...record }) => record),
   };
 }
 
@@ -269,28 +272,28 @@ interface BugReportFile {
 function bugReportFiles(bundle: BugReportBundle): BugReportFile[] {
   const files: BugReportFile[] = [
     {
-      name: "report.json",
       contentType: "application/json",
       data: `${JSON.stringify(bundle.metadata, null, 2)}\n`,
+      name: "report.json",
     },
     {
-      name: "diagnostics.json",
       contentType: "application/json",
       data: `${JSON.stringify(bundle.diagnostics, null, 2)}\n`,
+      name: "diagnostics.json",
     },
   ];
   if (bundle.sessionJsonl !== undefined) {
     files.push({
-      name: "session.jsonl",
       contentType: "application/x-ndjson",
       data: bundle.sessionJsonl,
+      name: "session.jsonl",
     });
   }
   if (bundle.summary !== undefined) {
     files.push({
-      name: "summary.md",
       contentType: "text/markdown",
       data: bundle.summary.endsWith("\n") ? bundle.summary : `${bundle.summary}\n`,
+      name: "summary.md",
     });
   }
   return files;
@@ -324,8 +327,11 @@ Tool calls involved, files touched, model behavior, anything else that helps a d
 
 Do not include file contents, secrets, or credentials from the transcript; refer to files by path only. Keep the report factual and concise.`;
 
-function selectMessages(messages: readonly AgentMessage[], tokenBudget: number): AgentMessage[] {
-  const selected: AgentMessage[] = [];
+function selectMessages(
+  messages: readonly agentTypes.AgentMessage[],
+  tokenBudget: number,
+): agentTypes.AgentMessage[] {
+  const selected: agentTypes.AgentMessage[] = [];
   let tokens = 0;
   for (let index = messages.length - 1; index >= 0; index--) {
     const message = messages[index];
@@ -339,16 +345,16 @@ function selectMessages(messages: readonly AgentMessage[], tokenBudget: number):
 }
 
 interface GenerateBugReportSummaryOptions {
-  messages: readonly AgentMessage[];
+  messages: readonly agentTypes.AgentMessage[];
   hint?: string | undefined;
-  model: Model<Api>;
+  model: compatTypes.Model<compatTypes.Api>;
   apiKey?: string | undefined;
   headers?: Record<string, string> | undefined;
   env?: Record<string, string> | undefined;
   signal: AbortSignal;
-  thinkingLevel?: ThinkingLevel;
-  streamFn?: StreamFn;
-  retry?: RetryPolicy;
+  thinkingLevel?: agentTypes.ThinkingLevel;
+  streamFn?: agentTypes.StreamFn;
+  retry?: aiTypes.RetryPolicy;
   sessionId?: string;
 }
 
@@ -371,13 +377,13 @@ export function generateBugReportSummary(
       ]
         .filter((part) => part !== undefined)
         .join("\n\n");
-      const requestOptions: SimpleStreamOptions = {
-        maxTokens: Math.min(4096, model.maxTokens > 0 ? model.maxTokens : Number.POSITIVE_INFINITY),
-        signal: options.signal,
+      const requestOptions: compatTypes.SimpleStreamOptions = {
         apiKey: options.apiKey,
-        headers: options.headers,
         env: options.env,
+        headers: options.headers,
+        maxTokens: Math.min(4096, model.maxTokens > 0 ? model.maxTokens : Number.POSITIVE_INFINITY),
         sessionId: options.sessionId,
+        signal: options.signal,
         ...(model.reasoning &&
         options.thinkingLevel !== undefined &&
         options.thinkingLevel !== "off"
@@ -388,10 +394,10 @@ export function generateBugReportSummary(
         completeSummarization(
           model,
           normalizeContext({
-            systemPrompt: BUG_SUMMARY_SYSTEM_PROMPT,
             messages: [
               { role: "user", content: [{ type: "text", text: prompt }], timestamp: nowMs() },
             ],
+            systemPrompt: BUG_SUMMARY_SYSTEM_PROMPT,
           }),
           requestOptions,
           options.streamFn,

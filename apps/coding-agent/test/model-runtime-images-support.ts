@@ -1,14 +1,12 @@
-import {
-  type AssistantImages,
-  type ClassifierModel,
-  type ImageModel,
-  InMemoryModelsStore,
-} from "@msa/ai";
+import ai from "@msa/ai";
+import type aiTypes from "@msa/ai/index.types";
 import testing from "@msa/testing";
 import { Effect } from "effect";
 
 import { AuthStorage } from "../src/core/auth-storage.ts";
 import { ModelRuntime } from "../src/core/model-runtime.ts";
+
+const { InMemoryModelsStore } = ai;
 
 const { awaited, joinPath, makeTempDir, removeDirs, toJsonText, writeTextFile } = testing;
 
@@ -35,7 +33,7 @@ const createRuntime = (modelsJson?: object): Effect.Effect<ModelRuntime> =>
     );
   });
 
-const image = (provider: string, id: string): ImageModel<"test-images"> => ({
+const image = (provider: string, id: string): aiTypes.ImageModel<"test-images"> => ({
   api: "test-images" as const,
   baseUrl: "https://images.test/v1",
   cost: { cacheRead: 0, cacheWrite: 0, input: 0, output: 0 },
@@ -47,7 +45,7 @@ const image = (provider: string, id: string): ImageModel<"test-images"> => ({
   type: "image" as const,
 });
 
-const classifier = (provider: string, id: string): ClassifierModel<"test-classifier"> => ({
+const classifier = (provider: string, id: string): aiTypes.ClassifierModel<"test-classifier"> => ({
   api: "test-classifier" as const,
   baseUrl: "https://classifier.test/v1",
   contextWindow: 1000,
@@ -74,7 +72,7 @@ const classifierContext = {
   state: { text: "Looks good" },
 };
 
-function okImageResult(model: ImageModel<string>): AssistantImages {
+function okImageResult(model: aiTypes.ImageModel<string>): aiTypes.AssistantImages {
   return {
     api: model.api,
     model: model.id,

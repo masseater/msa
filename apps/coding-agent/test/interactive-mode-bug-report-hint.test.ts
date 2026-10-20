@@ -1,10 +1,13 @@
-import { type AssistantMessage, fauxAssistantMessage } from "@msa/ai";
+import ai from "@msa/ai";
+import type aiTypes from "@msa/ai/index.types";
 import { describe, expect, test, vi } from "vite-plus/test";
 
 import {
   InteractiveMode,
   formatCrashExtensionHint,
 } from "../src/modes/interactive/interactive-mode.ts";
+
+const { fauxAssistantMessage } = ai;
 
 type BugReportHintContext = {
   suggestBugReport(): void;
@@ -13,10 +16,10 @@ type BugReportHintContext = {
 
 const maybeSuggestBugReport = Reflect.get(InteractiveMode.prototype, "maybeSuggestBugReport") as (
   this: BugReportHintContext,
-  message: AssistantMessage,
+  message: aiTypes.AssistantMessage,
 ) => void;
 
-function errorMessage(message: string): AssistantMessage {
+function errorMessage(message: string): aiTypes.AssistantMessage {
   return fauxAssistantMessage("", { errorMessage: message, stopReason: "error" });
 }
 

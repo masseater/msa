@@ -1,29 +1,31 @@
 import type {
-  BetaCacheControlEphemeral as CacheControlEphemeral,
-  BetaRefusalStopDetails as RefusalStopDetails,
   BetaStopReason,
   BetaTool,
   MessageCreateParamsStreaming,
+  BetaRefusalStopDetails as RefusalStopDetails,
 } from "@anthropic-ai/sdk/resources/beta/messages/messages.js";
 
-import type { Model, StopReason, Tool } from "../types.ts";
-import { getCurrentTools, type TranscriptContext } from "../utils/transcript.ts";
-import {
+import type typesModule from "../types.types.ts";
+import transcript from "../utils/transcript.ts";
+import type transcriptTypes from "../utils/transcript.types.ts";
+import anthropicMessagesCompat from "./anthropic-messages-compat.ts";
+import type anthropicMessagesOptionsTypes from "./anthropic-messages-options.ts";
+import type anthropicMessagesToolsTypes from "./anthropic-messages-tools.types.ts";
+import constrainedSamplingSchema from "./constrained-sampling-schema.ts";
+import type constrainedSamplingSchemaTypes from "./constrained-sampling-schema.types.ts";
+
+const { getJsonSchemaToolParameters, resolveJsonSchemaStrictSampling } = constrainedSamplingSchema;
+const { getCurrentTools } = transcript;
+const {
   FINE_GRAINED_TOOL_STREAMING_BETA,
-  getAnthropicCompat,
   INLINE_TOOLS_BETA,
   INTERLEAVED_THINKING_BETA,
   MID_CONVERSATION_OUTPUT_CONFIG_BETA,
   SERVER_SIDE_FALLBACK_BETA,
-  shouldUseServerSideFallbackBeta,
   THINKING_BINDING_CONTROLS_BETA,
-} from "./anthropic-messages-compat.ts";
-import type { AnthropicOptions } from "./anthropic-messages-options.ts";
-import {
-  getJsonSchemaToolParameters,
-  resolveJsonSchemaStrictSampling,
-  type UnsupportedStrictSchemaKeywordCheck,
-} from "./constrained-sampling-schema.ts";
+  getAnthropicCompat,
+  shouldUseServerSideFallbackBeta,
+} = anthropicMessagesCompat;
 
 const ANTHROPIC_STRICT_UNSUPPORTED_KEYWORDS = new Set([
   "minimum",
@@ -51,22 +53,19 @@ const ANTHROPIC_STRICT_STRING_FORMATS = new Set([
   "uuid",
 ]);
 
-const isAnthropicStrictUnsupportedKeyword: UnsupportedStrictSchemaKeywordCheck = (key, value) => {
-  if (ANTHROPIC_STRICT_UNSUPPORTED_KEYWORDS.has(key)) return true;
-  if (key === "minItems") return value !== 0 && value !== 1;
-  if (key === "format")
-    return typeof value !== "string" || !ANTHROPIC_STRICT_STRING_FORMATS.has(value);
-  return false;
-};
+const isAnthropicStrictUnsupportedKeyword: constrainedSamplingSchemaTypes.UnsupportedStrictSchemaKeywordCheck =
+  (key, value) => {
+    if (ANTHROPIC_STRICT_UNSUPPORTED_KEYWORDS.has(key)) return true;
+    if (key === "minItems") return value !== 0 && value !== 1;
+    if (key === "format")
+      return typeof value !== "string" || !ANTHROPIC_STRICT_STRING_FORMATS.has(value);
+    return false;
+  };
 
-interface ConvertToolsOptions {
-  supportsEagerToolInputStreaming: boolean;
-  supportsStrictTools: boolean;
-  cacheControl?: CacheControlEphemeral | undefined;
-  disablePreferredStrictTools?: boolean | undefined;
-}
-
-function resolveToolStrict(tool: Tool, options: ConvertToolsOptions): boolean | undefined {
+function resolveToolStrict(
+  tool: typesModule.Tool,
+  options: anthropicMessagesToolsTypes.ConvertToolsOptions,
+): boolean | undefined {
   const config = tool.constrainedSampling;
   const isPreferred =
     config !== undefined &&
@@ -82,18 +81,18 @@ function resolveToolStrict(tool: Tool, options: ConvertToolsOptions): boolean | 
 }
 
 function toBetaTool(
-  tool: Tool,
+  tool: typesModule.Tool,
   index: number,
-  tools: ReadonlyArray<Tool>,
-  options: ConvertToolsOptions,
+  tools: ReadonlyArray<typesModule.Tool>,
+  options: anthropicMessagesToolsTypes.ConvertToolsOptions,
 ): BetaTool {
   const strict = resolveToolStrict(tool, options);
   const parameters = getJsonSchemaToolParameters(tool, strict);
   const schema = parameters as { properties?: unknown; required?: string[] };
   const legacyInputSchema = {
-    type: "object" as const,
     properties: schema.properties ?? {},
     required: schema.required ?? [],
+    type: "object" as const,
   };
   const inputSchema =
     strict === true
@@ -101,19 +100,19 @@ function toBetaTool(
       : legacyInputSchema;
 
   return {
-    name: tool.name,
     description: tool.description,
+    input_schema: inputSchema,
+    name: tool.name,
     ...(options.supportsEagerToolInputStreaming ? { eager_input_streaming: true } : {}),
     ...(strict === true ? { strict: true } : {}),
-    input_schema: inputSchema,
     ...(options.cacheControl !== undefined && index === tools.length - 1
       ? { cache_control: options.cacheControl }
       : {}),
   };
 }
 
-interface ConvertToolsInput extends ConvertToolsOptions {
-  readonly tools: Tool[];
+interface ConvertToolsInput extends anthropicMessagesToolsTypes.ConvertToolsOptions {
+  readonly tools: typesModule.Tool[];
 }
 
 function convertTools(input: ConvertToolsInput): BetaTool[] {
@@ -128,7 +127,7 @@ interface MapStopReasonInput {
 }
 
 function mapStopReason(input: MapStopReasonInput): {
-  stopReason: StopReason;
+  stopReason: typesModule.StopReason;
   errorMessage?: string;
 } {
   const { reason, stopDetails } = input;
@@ -141,23 +140,23 @@ function mapStopReason(input: MapStopReasonInput): {
       return { stopReason: "toolUse" };
     case "refusal":
       return {
-        stopReason: "error",
         errorMessage: stopDetails?.explanation || `The model refused to complete the request`,
+        stopReason: "error",
       };
     case "pause_turn":
       return { stopReason: "stop" };
     case "stop_sequence":
       return { stopReason: "stop" };
     case "sensitive":
-      return { stopReason: "error", errorMessage: "Provider stopped with: sensitive" };
+      return { errorMessage: "Provider stopped with: sensitive", stopReason: "error" };
     default:
       throw new Error(`Unhandled stop reason: ${reason}`);
   }
 }
 
 function shouldUseFineGrainedToolStreamingBeta(
-  model: Model<"anthropic-messages">,
-  context: TranscriptContext,
+  model: typesModule.Model<"anthropic-messages">,
+  context: transcriptTypes.TranscriptContext,
 ): boolean {
   return (
     getCurrentTools(context.messages).length > 0 &&
@@ -166,8 +165,8 @@ function shouldUseFineGrainedToolStreamingBeta(
 }
 
 function configuredBetaFeatures(
-  model: Model<"anthropic-messages">,
-  options: AnthropicOptions | undefined,
+  model: typesModule.Model<"anthropic-messages">,
+  options: anthropicMessagesOptionsTypes.AnthropicOptions | undefined,
 ): ReadonlyArray<string> | undefined {
   let configuredFeatures: string | null | undefined;
   for (const headers of [model.headers, options?.headers]) {
@@ -188,10 +187,10 @@ function configuredBetaFeatures(
 }
 
 interface BetaFeaturesInput {
-  readonly model: Model<"anthropic-messages">;
-  readonly context: TranscriptContext;
+  readonly model: typesModule.Model<"anthropic-messages">;
+  readonly context: transcriptTypes.TranscriptContext;
   readonly nativeToolChanges: boolean;
-  readonly options?: AnthropicOptions | undefined;
+  readonly options?: anthropicMessagesOptionsTypes.AnthropicOptions | undefined;
 }
 
 function getBetaFeatures(
@@ -220,4 +219,10 @@ function getBetaFeatures(
   return [...new Set(features)];
 }
 
-export { convertTools, getBetaFeatures, mapStopReason, type ConvertToolsOptions };
+const anthropicMessagesTools = {
+  convertTools,
+  getBetaFeatures,
+  mapStopReason,
+};
+
+export default anthropicMessagesTools;

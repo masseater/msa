@@ -1,7 +1,7 @@
 import { Effect } from "effect";
 import { describe, expect, it } from "vite-plus/test";
 
-import type { AssistantMessage, Model } from "../src/types.ts";
+import type typesModule from "../src/types.types.ts";
 import anthropicMidConversationEffortSupport from "./anthropic-mid-conversation-effort-support.ts";
 
 const { capture, managedModel, user } = anthropicMidConversationEffortSupport;
@@ -23,7 +23,10 @@ interface CapturedPayload {
   fallbacks?: Array<{ model: string }>;
 }
 
-function assistant(model: Model<"anthropic-messages">, level?: string): AssistantMessage {
+function assistant(
+  model: typesModule.Model<"anthropic-messages">,
+  level?: string,
+): typesModule.AssistantMessage {
   return {
     api: "anthropic-messages",
     content: [

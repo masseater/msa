@@ -1,15 +1,13 @@
 import { Clock, Effect } from "effect";
 import { describe, expect, it } from "vite-plus/test";
 
-import { streamSimple as streamSimpleOpenAICodexResponses } from "../src/api/openai-codex-responses.ts";
-import {
-  clampThinkingLevel,
-  getModel,
-  getSupportedThinkingLevels,
-  normalizeContext,
-} from "../src/compat.ts";
-import type { Model } from "../src/types.ts";
+import openaiCodexResponses from "../src/api/openai-codex-responses.ts";
+import compat from "../src/compat.ts";
+import type typesModule from "../src/types.types.ts";
 import modelChoice from "./model-choice.ts";
+
+const { clampThinkingLevel, getModel, getSupportedThinkingLevels, normalizeContext } = compat;
+const { streamSimple: streamSimpleOpenAICodexResponses } = openaiCodexResponses;
 
 const { modelsWhere } = modelChoice;
 
@@ -23,7 +21,7 @@ function mockToken(): string {
 
 describe("max thinking level", () => {
   it("is opt-in for ordinary reasoning models", () => {
-    const model: Model<"openai-completions"> = {
+    const model: typesModule.Model<"openai-completions"> = {
       api: "openai-completions",
       baseUrl: "https://example.com/v1",
       contextWindow: 128000,
@@ -56,7 +54,7 @@ describe("max thinking level", () => {
 
 describe("max thinking level", () => {
   it("supports a hole between high and max", () => {
-    const model: Model<"openai-completions"> = {
+    const model: typesModule.Model<"openai-completions"> = {
       api: "openai-completions",
       baseUrl: "https://example.com/v1",
       contextWindow: 128000,

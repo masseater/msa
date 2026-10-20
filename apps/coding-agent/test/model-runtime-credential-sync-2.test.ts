@@ -1,4 +1,4 @@
-import type { Credential, CredentialStore } from "@msa/ai";
+import type aiTypes from "@msa/ai/index.types";
 import testing from "@msa/testing";
 import { Effect } from "effect";
 import { describe, expect, it, vi } from "vite-plus/test";
@@ -79,8 +79,8 @@ const keepsProviderScopedRefreshesFromSupersedingUnrelated = Effect.gen(function
 type Gate = ReturnType<typeof makeGate>;
 
 const delayedCommitStore = (committed: Gate, mutationFinished: Gate) => {
-  let stored: Credential | undefined;
-  const credentials: CredentialStore = {
+  let stored: aiTypes.Credential | undefined;
+  const credentials: aiTypes.CredentialStore = {
     delete: () => {
       stored = undefined;
       return Promise.resolve();

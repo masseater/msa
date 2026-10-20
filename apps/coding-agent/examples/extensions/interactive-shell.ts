@@ -1,8 +1,10 @@
 import { NodeServices } from "@effect/platform-node";
-import { readProcessEnv } from "@msa/ai/utils/env";
+import env from "@msa/ai/utils/env";
 import type { ExtensionAPI, ExtensionContext } from "@msa/coding-agent";
 import { Effect, ManagedRuntime } from "effect";
 import { ChildProcess, ChildProcessSpawner } from "effect/process";
+
+const { readProcessEnv } = env;
 
 const runtime = ManagedRuntime.make(NodeServices.layer);
 
@@ -126,9 +128,9 @@ const runShell = (shell: string, command: string) =>
       Effect.gen(function* () {
         const handle = yield* spawner.spawn(
           ChildProcess.make(shell, ["-c", command], {
+            stderr: "inherit",
             stdin: "inherit",
             stdout: "inherit",
-            stderr: "inherit",
           }),
         );
         return yield* handle.exitCode;
@@ -137,7 +139,7 @@ const runShell = (shell: string, command: string) =>
   });
 
 const bashResult = (output: string, exitCode: number) => ({
-  result: { output, exitCode, cancelled: false, truncated: false },
+  result: { cancelled: false, exitCode, output, truncated: false },
 });
 
 const openShell = (ctx: ExtensionContext, command: string): Promise<number | null> =>
@@ -158,7 +160,7 @@ const openShell = (ctx: ExtensionContext, command: string): Promise<number | nul
       ),
     );
 
-    return { render: () => [], invalidate: () => {} };
+    return { invalidate: () => {}, render: () => [] };
   });
 
 const stripForcePrefix = (command: string): { command: string; forced: boolean } => {

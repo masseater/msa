@@ -1,12 +1,7 @@
 import { existsSync } from "fs";
 
-import {
-  ProcessTerminal,
-  setCapabilityOverrides,
-  setKeybindings,
-  type TUI,
-  TuiMainScreen,
-} from "@msa/tui";
+import tuiModule from "@msa/tui";
+import type tuiTypes from "@msa/tui/index.types";
 import * as Effect from "effect/Effect";
 import { dual } from "effect/Function";
 
@@ -14,9 +9,9 @@ import {
   APP_NAME,
   CONFIG_DIR_NAME,
   ENV_AGENT_DIR,
+  PACKAGE_NAME,
   getAgentDir,
   getSettingsPath,
-  PACKAGE_NAME,
 } from "../config.ts";
 import { awaited, awaiting, performed } from "../core/awaiting.ts";
 import { areExperimentalFeaturesEnabled } from "../core/experimental.ts";
@@ -33,6 +28,7 @@ import {
 import { SYSTEM_THEME_NAME } from "../modes/interactive/theme/system-theme.ts";
 import { requestTerminalColors } from "../modes/interactive/theme/theme-controller.ts";
 import {
+  type Theme,
   getTerminalTheme,
   initTheme,
   loadThemeFromPath,
@@ -41,9 +37,10 @@ import {
   setRegisteredThemes,
   setTerminalColors,
   setTheme,
-  type Theme,
 } from "../modes/interactive/theme/theme.ts";
 import { callbackPromise } from "../utils/interop.ts";
+
+const { ProcessTerminal, TuiMainScreen, setCapabilityOverrides, setKeybindings } = tuiModule;
 
 const OFFICIAL_PACKAGE_NAME = "@msa/coding-agent";
 const OFFICIAL_APP_NAME = "msa";
@@ -91,8 +88,8 @@ function loadStartupThemes(settingsManager: SettingsManager): Promise<Theme[]> {
         projectTrusted: false,
       });
       const packageManager = new DefaultPackageManager({
-        cwd: process.cwd(),
         agentDir: getAgentDir(),
+        cwd: process.cwd(),
         settingsManager: globalSettingsManager,
       });
       const resolvedPaths = yield* awaited(
@@ -103,7 +100,7 @@ function loadStartupThemes(settingsManager: SettingsManager): Promise<Theme[]> {
   );
 }
 
-export function createStartupTui(settingsManager: SettingsManager): Promise<TUI> {
+export function createStartupTui(settingsManager: SettingsManager): Promise<tuiTypes.TUI> {
   return Effect.runPromise(
     awaiting(function* () {
       setCapabilityOverrides(settingsManager.getTerminalCapabilityOverrides());
@@ -115,7 +112,7 @@ export function createStartupTui(settingsManager: SettingsManager): Promise<TUI>
           SYSTEM_THEME_NAME,
       );
       setKeybindings(KeybindingsManager.create());
-      const ui: TUI = new TuiMainScreen(
+      const ui: tuiTypes.TUI = new TuiMainScreen(
         new ProcessTerminal(),
         settingsManager.getShowHardwareCursor(),
         getAgentDir(),
@@ -126,7 +123,7 @@ export function createStartupTui(settingsManager: SettingsManager): Promise<TUI>
   );
 }
 
-function startStartupTuiImpl(ui: TUI, settingsManager: SettingsManager): void {
+function startStartupTuiImpl(ui: tuiTypes.TUI, settingsManager: SettingsManager): void {
   ui.start();
   const themeSetting = settingsManager.getThemeSetting();
   queryStartupTerminalColors(ui, () => {
@@ -135,11 +132,11 @@ function startStartupTuiImpl(ui: TUI, settingsManager: SettingsManager): void {
 }
 
 export const startStartupTui: {
-  (ui: TUI, settingsManager: SettingsManager): void;
-  (settingsManager: SettingsManager): (ui: TUI) => void;
+  (ui: tuiTypes.TUI, settingsManager: SettingsManager): void;
+  (settingsManager: SettingsManager): (ui: tuiTypes.TUI) => void;
 } = dual((args: IArguments) => args.length >= 2, startStartupTuiImpl);
 
-function queryStartupTerminalColors(ui: TUI, onColors: () => void): void {
+function queryStartupTerminalColors(ui: tuiTypes.TUI, onColors: () => void): void {
   void requestTerminalColors(ui, (colors) => {
     setTerminalColors(colors);
     onColors();
@@ -148,7 +145,7 @@ function queryStartupTerminalColors(ui: TUI, onColors: () => void): void {
   });
 }
 
-function clearStartupTui(ui: TUI): Promise<void> {
+function clearStartupTui(ui: tuiTypes.TUI): Promise<void> {
   return Effect.runPromise(
     awaiting(function* () {
       ui.clear();
@@ -161,9 +158,9 @@ function clearStartupTui(ui: TUI): Promise<void> {
 export function shouldRunFirstTimeSetup(settingsPath: string = getSettingsPath()): boolean {
   if (
     !isOfficialDistribution({
-      packageName: PACKAGE_NAME,
       appName: APP_NAME,
       configDirName: CONFIG_DIR_NAME,
+      packageName: PACKAGE_NAME,
     })
   ) {
     return false;
@@ -258,13 +255,13 @@ export function showFirstTimeSetup(settingsManager: SettingsManager): Promise<vo
           let previewTheme = SYSTEM_THEME_NAME;
           setTheme(previewTheme);
           const component = new FirstTimeSetupComponent({
+            onCancel: () => void finish(undefined),
+            onSubmit: (result) => void finish(result),
             onThemePreview: (themeName) => {
               previewTheme = themeName;
               setTheme(themeName);
               ui.requestRender();
             },
-            onSubmit: (result) => void finish(result),
-            onCancel: () => void finish(undefined),
           });
           ui.addChild(component);
           ui.setFocus(component);

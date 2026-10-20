@@ -1,33 +1,23 @@
 import { Effect } from "effect";
 
-import {
-  appendAssistantMessageDiagnostic,
-  createAssistantMessageDiagnostic,
-} from "../utils/diagnostics.ts";
-import {
+import diagnosticsModule from "../utils/diagnostics.ts";
+import openaiCodexError from "./openai-codex-error.ts";
+import type openaiCodexWsFailureTypes from "./openai-codex-ws-failure.types.ts";
+import openaiCodexWsStats from "./openai-codex-ws-stats.ts";
+
+const { appendAssistantMessageDiagnostic, createAssistantMessageDiagnostic } = diagnosticsModule;
+const { recordWebSocketFailure, recordWebSocketSseFallback } = openaiCodexWsStats;
+const {
   isCodexNonTransportError,
   isPreviousResponseNotFoundError,
   isWebSocketConnectionLimitReachedError,
-} from "./openai-codex-error.ts";
-import type { CodexStreamRun } from "./openai-codex-stream-run.ts";
-import { recordWebSocketFailure, recordWebSocketSseFallback } from "./openai-codex-ws-stats.ts";
+} = openaiCodexError;
 
-export type WebSocketOutcome = "done" | "fallback";
-
-export interface WebSocketRetries {
-  readonly connectionLimit: boolean;
-  readonly missingContinuation: boolean;
-}
-
-export interface WebSocketFailure {
-  readonly run: CodexStreamRun;
-  readonly retries: WebSocketRetries;
-  readonly started: boolean;
-  readonly error: unknown;
-  readonly retry: (retries: WebSocketRetries) => Effect.Effect<WebSocketOutcome>;
-}
-
-function recordTransportFailure({ run, started, error }: WebSocketFailure): void {
+function recordTransportFailure({
+  run,
+  started,
+  error,
+}: openaiCodexWsFailureTypes.WebSocketFailure): void {
   appendAssistantMessageDiagnostic(
     run.output,
     createAssistantMessageDiagnostic("provider_transport_failure", error, {
@@ -41,7 +31,9 @@ function recordTransportFailure({ run, started, error }: WebSocketFailure): void
   recordWebSocketFailure(run.cacheSessionId)(error);
 }
 
-export function handleWebSocketFailure(failure: WebSocketFailure): Effect.Effect<WebSocketOutcome> {
+function handleWebSocketFailure(
+  failure: openaiCodexWsFailureTypes.WebSocketFailure,
+): Effect.Effect<openaiCodexWsFailureTypes.WebSocketOutcome> {
   const { run, retries, started, error, retry } = failure;
   const aborted = run.options?.signal?.aborted === true;
   const connectionLimitBeforeStart = !started && isWebSocketConnectionLimitReachedError(error);
@@ -59,3 +51,9 @@ export function handleWebSocketFailure(failure: WebSocketFailure): Effect.Effect
   recordWebSocketSseFallback(run.cacheSessionId);
   return Effect.succeed("fallback");
 }
+
+const openaiCodexWsFailure = {
+  handleWebSocketFailure,
+};
+
+export default openaiCodexWsFailure;

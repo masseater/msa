@@ -6,35 +6,35 @@ import type { Edit } from "./edit-diff.ts";
 
 const replaceEditSchema = Type.Object(
   {
+    newText: Type.String({ description: "Replacement text for this targeted edit." }),
     oldText: Type.String({
       description:
         "Exact text for one targeted replacement. It must be unique in the original file and must not overlap with any other edits[].oldText in the same call.",
     }),
-    newText: Type.String({ description: "Replacement text for this targeted edit." }),
   },
   {},
 );
 
 export const editSchema = Type.Object(
   {
-    path: Type.String({ description: "Path to the file to edit (relative or absolute)" }),
     edits: Type.Array(replaceEditSchema, {
       description:
         "One or more targeted replacements. Each edit is matched against the original file, not incrementally. Do not include overlapping or nested edits. If two changes touch the same block or nearby lines, merge them into one edit instead.",
     }),
+    path: Type.String({ description: "Path to the file to edit (relative or absolute)" }),
   },
   {},
 );
 
 export const editToolSystemPromptContribution = {
-  snippet:
-    "Make precise file edits with exact text replacement, including multiple disjoint edits in one call",
   guidelines: [
     "Use edit for precise changes (edits[].oldText must match exactly)",
     "When changing multiple separate locations in one file, use one edit call with multiple entries in edits[] instead of multiple edit calls",
     "Each edits[].oldText is matched against the original file, not after earlier edits are applied. Do not emit overlapping or nested edits. Merge nearby changes into one edit.",
     "Keep edits[].oldText as small as possible while still being unique in the file. Do not pad with large unchanged regions.",
   ],
+  snippet:
+    "Make precise file edits with exact text replacement, including multiple disjoint edits in one call",
 } as const;
 
 export type EditToolInput = Static<typeof editSchema>;
@@ -80,7 +80,7 @@ export function prepareEditArguments(input: unknown): EditToolInput {
   }
 
   const edits = Array.isArray(legacy.edits) ? [...legacy.edits] : [];
-  edits.push({ oldText: legacy.oldText, newText: legacy.newText });
+  edits.push({ newText: legacy.newText, oldText: legacy.oldText });
   const { oldText: _oldText, newText: _newText, ...rest } = legacy;
   return { ...rest, edits } as EditToolInput;
 }
@@ -92,4 +92,4 @@ export const validateEditInput = (input: EditToolInput) =>
           message: "Edit tool input is invalid. edits must contain at least one replacement.",
         }),
       )
-    : Effect.succeed({ path: input.path, edits: input.edits as Edit[] });
+    : Effect.succeed({ edits: input.edits as Edit[], path: input.path });

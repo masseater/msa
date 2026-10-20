@@ -1,5 +1,5 @@
-import type { Agent, AgentTool } from "@msa/agent-core";
-import type { Model } from "@msa/ai";
+import type agentTypes from "@msa/agent-core/index.types";
+import type aiTypes from "@msa/ai/index.types";
 
 import type { AgentSession, AgentSessionEvent } from "../../src/core/agent-session.ts";
 import type { SessionManager } from "../../src/core/session-manager.ts";
@@ -12,19 +12,19 @@ import type fauxStreamTypes from "./faux-stream.types.ts";
 declare namespace sessionTypesModule {
   interface HarnessOptions {
     responses?: fauxModelTypes.FauxResponseInput[];
-    model?: Model<any>;
+    model?: aiTypes.Model<any>;
     contextWindow?: number;
     settings?: Partial<Settings>;
     systemPrompt?: string;
-    tools?: AgentTool[];
-    baseToolsOverride?: Record<string, AgentTool>;
+    tools?: agentTypes.AgentTool[];
+    baseToolsOverride?: Record<string, agentTypes.AgentTool>;
     resourceLoader?: ResourceLoader;
     extensionFactories?: Array<InlineExtension | utilitiesTypes.CreateTestExtensionsResultInput>;
   }
 
   interface Harness {
     session: AgentSession;
-    agent: Agent;
+    agent: agentTypes.Agent;
     sessionManager: SessionManager;
     settingsManager: SettingsManager;
     faux: fauxStreamTypes.FauxStreamFnState;

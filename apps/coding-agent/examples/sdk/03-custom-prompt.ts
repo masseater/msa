@@ -1,8 +1,8 @@
 import {
-  createAgentSession,
   DefaultResourceLoader,
-  getAgentDir,
   SessionManager,
+  createAgentSession,
+  getAgentDir,
 } from "@msa/coding-agent";
 import { Console, Effect } from "effect";
 
@@ -10,12 +10,11 @@ const cwd = process.cwd();
 const agentDir = getAgentDir();
 
 const loader1 = new DefaultResourceLoader({
-  cwd,
   agentDir,
+  appendSystemPromptOverride: () => [],
+  cwd,
   systemPromptOverride: () => `You are a helpful assistant that speaks like a pirate.
 Always end responses with "Arrr!"`,
-
-  appendSystemPromptOverride: () => [],
 });
 await loader1.reload();
 
@@ -39,12 +38,12 @@ try {
 }
 
 const loader2 = new DefaultResourceLoader({
-  cwd,
   agentDir,
   appendSystemPromptOverride: (base) => [
     ...base,
     "## Additional Instructions\n- Always be concise\n- Use bullet points when listing things",
   ],
+  cwd,
 });
 await loader2.reload();
 

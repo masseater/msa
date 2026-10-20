@@ -1,4 +1,4 @@
-import { fauxAssistantMessage, registerFauxProvider } from "@msa/ai/compat";
+import compat from "@msa/ai/compat";
 import testing from "@msa/testing";
 import { Effect } from "effect";
 
@@ -6,6 +6,8 @@ import { AuthStorage } from "../src/core/auth-storage.ts";
 import { ModelRuntime } from "../src/core/model-runtime.ts";
 import { createAgentSession } from "../src/core/sdk.ts";
 import { SessionManager } from "../src/core/session-manager.ts";
+
+const { fauxAssistantMessage, registerFauxProvider } = compat;
 
 const { makeDirectory, tempRoot } = testing;
 

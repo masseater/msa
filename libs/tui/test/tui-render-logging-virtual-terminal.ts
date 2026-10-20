@@ -1,4 +1,6 @@
-import { VirtualTerminal } from "./virtual-terminal.ts";
+import virtualTerminal from "./virtual-terminal.ts";
+
+const { VirtualTerminal } = virtualTerminal;
 
 class LoggingVirtualTerminal extends VirtualTerminal {
   private writes: string[] = [];

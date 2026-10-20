@@ -7,16 +7,26 @@ const decode = Schema.decodeUnknownEffect(jsonString);
 const encode = Schema.encodeUnknownEffect(jsonString);
 const encodePretty = Schema.encodeUnknownEffect(prettyJsonString);
 
-export const decodeJson = (text: string): Effect.Effect<unknown, Schema.SchemaError> =>
-  decode(text);
+const decodeJson = (text: string): Effect.Effect<unknown, Schema.SchemaError> => decode(text);
 
-export const decodeJsonOrDie = (text: string): Effect.Effect<unknown> => Effect.orDie(decode(text));
+const decodeJsonOrDie = (text: string): Effect.Effect<unknown> => Effect.orDie(decode(text));
 
-export const encodeJson = (value: unknown): Effect.Effect<string> => Effect.orDie(encode(value));
+const encodeJson = (value: unknown): Effect.Effect<string> => Effect.orDie(encode(value));
 
-export const encodeJsonPretty = (value: unknown): Effect.Effect<string> =>
+const encodeJsonPretty = (value: unknown): Effect.Effect<string> =>
   Effect.orDie(encodePretty(value));
 
-export const encodeJsonSync = (value: unknown): string => Effect.runSync(encodeJson(value));
+const encodeJsonSync = (value: unknown): string => Effect.runSync(encodeJson(value));
 
-export const decodeJsonSync = (text: string): unknown => Effect.runSync(decodeJsonOrDie(text));
+const decodeJsonSync = (text: string): unknown => Effect.runSync(decodeJsonOrDie(text));
+
+const jsonCodec = {
+  decodeJson,
+  decodeJsonOrDie,
+  decodeJsonSync,
+  encodeJson,
+  encodeJsonPretty,
+  encodeJsonSync,
+};
+
+export default jsonCodec;

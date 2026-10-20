@@ -9,19 +9,19 @@ function ensureReview(runtime: Runtime, round: string, now: number): Task {
   const existing = store.reviewTaskOfRound(database, project, round);
   if (existing !== undefined) return existing;
   const review: Task = {
+    condition: null,
+    createdAt: now,
+    currentState: `Every task of round ${round} has finished.`,
+    cwd: runtime.options.cwd,
+    goalState: `Round ${round} is reviewed as a whole and the remaining work is laid out.`,
     id: newId("rev"),
+    kind: "review",
+    model: null,
     project,
     round,
-    kind: "review",
-    title: `Review of ${round}`,
-    currentState: `Every task of round ${round} has finished.`,
-    goalState: `Round ${round} is reviewed as a whole and the remaining work is laid out.`,
     status: "waiting",
-    cwd: runtime.options.cwd,
-    condition: null,
-    model: null,
     thinkingLevel: null,
-    createdAt: now,
+    title: `Review of ${round}`,
     updatedAt: now,
   };
   store.insertTask(database, review);
@@ -36,4 +36,4 @@ function attachReview(runtime: Runtime, review: Task, taskId: string, now: numbe
   }
 }
 
-export const rounds = { ensureReview, attachReview };
+export const rounds = { attachReview, ensureReview };

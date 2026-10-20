@@ -35,7 +35,7 @@ const collect = (request: CommandRequest) =>
         ],
         { concurrency: 3 },
       );
-      return { lines, stderr, exitCode };
+      return { exitCode, lines, stderr };
     }),
   );
 
@@ -45,8 +45,8 @@ export const runCommand = (request: CommandRequest): Promise<CommandOutput> =>
       Effect.mapError(
         (error) =>
           new ToolFailure({
-            message: `Failed to run ${request.file}: ${error.message}`,
             cause: error,
+            message: `Failed to run ${request.file}: ${error.message}`,
           }),
       ),
     ),
@@ -84,10 +84,10 @@ const streamLines = (request: StreamRequest) =>
         }),
         Stream.runDrain,
       );
-      if (stoppedEarly) return { stoppedEarly, stderr: "", exitCode: undefined };
+      if (stoppedEarly) return { exitCode: undefined, stderr: "", stoppedEarly };
       const exitCode = yield* handle.exitCode;
       const stderr = yield* Fiber.join(stderrFiber);
-      return { stoppedEarly, stderr, exitCode };
+      return { exitCode, stderr, stoppedEarly };
     }),
   );
 
@@ -97,8 +97,8 @@ export const streamCommand = (request: StreamRequest): Promise<StreamOutput> =>
       Effect.mapError(
         (error) =>
           new ToolFailure({
-            message: `Failed to run ${request.file}: ${error.message}`,
             cause: error,
+            message: `Failed to run ${request.file}: ${error.message}`,
           }),
       ),
     ),

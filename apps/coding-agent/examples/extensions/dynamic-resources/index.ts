@@ -6,8 +6,8 @@ const baseDir = fileURLToPath(new URL(".", import.meta.url));
 
 export default function (msa: ExtensionAPI) {
   msa.on("resources_discover", () => ({
-    skillPaths: [`${baseDir}SKILL.md`],
     promptPaths: [`${baseDir}dynamic.md`],
+    skillPaths: [`${baseDir}SKILL.md`],
     themePaths: [`${baseDir}dynamic.json`],
   }));
 }

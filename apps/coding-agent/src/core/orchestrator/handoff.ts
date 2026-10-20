@@ -37,7 +37,7 @@ function write(
   input: HandoffInput,
 ): Effect.Effect<HandoffResult, OrchestratorError> {
   return Effect.gen(function* () {
-    yield* Effect.try({ try: () => requireSections(input), catch: orchestratorError });
+    yield* Effect.try({ catch: orchestratorError, try: () => requireSections(input) });
     const createdAt = yield* nowMillis;
     const { project, cwd, version, handoffDirectory } = runtime.options;
     const snapshot = snapshots.buildSnapshot(
@@ -46,6 +46,7 @@ function write(
       runtime.maxConcurrentThreads,
     );
     const path = yield* Effect.tryPromise({
+      catch: orchestratorError,
       try: async () => {
         const environment = await gatherEnvironment(cwd, version);
         const target = await handoffPath(handoffDirectory, cwd, createdAt, input.path);
@@ -59,15 +60,14 @@ function write(
         await saveHandoff(target, content);
         return target;
       },
-      catch: orchestratorError,
     });
     const running = snapshot.tasks.filter((task) => task.status === "running").length;
     return {
-      path,
-      tasks: snapshot.tasks.length,
-      running,
       line: `${path} を読んで再開して`,
       notice: running > 0 ? runningNotice(running) : undefined,
+      path,
+      running,
+      tasks: snapshot.tasks.length,
     };
   });
 }

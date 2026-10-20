@@ -1,14 +1,14 @@
-import type { EditorDocument, EditorState } from "./editor-document.ts";
+import type editorDocumentTypes from "./editor-document.types.ts";
 
 const MAX_HISTORY_ENTRIES = 100;
 
-export class EditorHistory {
+export default class EditorHistory {
   private readonly entries: string[] = [];
   private index = -1;
-  private draft: EditorState | null = null;
-  private readonly doc: EditorDocument;
+  private draft: editorDocumentTypes.EditorState | null = null;
+  private readonly doc: editorDocumentTypes.EditorDocument;
 
-  constructor(doc: EditorDocument) {
+  constructor(doc: editorDocumentTypes.EditorDocument) {
     this.doc = doc;
   }
 

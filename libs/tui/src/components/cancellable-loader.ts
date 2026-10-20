@@ -1,7 +1,9 @@
-import { getKeybindings } from "../keybindings.ts";
-import { Loader } from "./loader.ts";
+import keybindingsModule from "../keybindings.ts";
+import Loader from "./loader.ts";
 
-export class CancellableLoader extends Loader {
+const { getKeybindings } = keybindingsModule;
+
+export default class CancellableLoader extends Loader {
   private abortController = new AbortController();
 
   onAbort?: () => void;

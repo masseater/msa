@@ -1,4 +1,4 @@
-import type { AgentTool } from "@msa/agent-core";
+import type agentTypes from "@msa/agent-core/index.types";
 import type { ExtensionAPI } from "@msa/coding-agent";
 import testing from "@msa/testing";
 import { Effect } from "effect";
@@ -11,7 +11,7 @@ const { createHarness } = harnessModule;
 
 const { gate } = testing;
 
-const makeWaitTool = (toolRelease: ReturnType<typeof gate>): AgentTool => ({
+const makeWaitTool = (toolRelease: ReturnType<typeof gate>): agentTypes.AgentTool => ({
   description: "Wait for the test to release execution",
   execute: () =>
     Effect.runPromise(
@@ -38,7 +38,7 @@ const toolStarted = (harness: harnessTypes.Harness, toolName: string) => {
 
 function createWaitingHarness(
   options: {
-    tools?: AgentTool[];
+    tools?: agentTypes.AgentTool[];
     extensionFactories?: harnessTypes.Harness["session"]["extensionRunner"] extends never
       ? never
       : Array<(msa: ExtensionAPI) => void>;

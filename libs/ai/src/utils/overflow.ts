@@ -1,6 +1,6 @@
 import { Function } from "effect";
 
-import type { AssistantMessage } from "../types.ts";
+import type typesModule from "../types.types.ts";
 
 const OVERFLOW_PATTERNS = [
   /prompt (?:is )?too long/iu,
@@ -31,12 +31,12 @@ const OVERFLOW_PATTERNS = [
 
 const NON_OVERFLOW_PATTERNS = [/rate limit/iu, /too many requests/iu];
 
-export const isContextOverflow: {
-  (contextWindow?: number): (message: AssistantMessage) => boolean;
-  (message: AssistantMessage, contextWindow?: number): boolean;
+const isContextOverflow: {
+  (contextWindow?: number): (message: typesModule.AssistantMessage) => boolean;
+  (message: typesModule.AssistantMessage, contextWindow?: number): boolean;
 } = Function.dual(
   (args) => typeof args[0] === "object" && args[0] !== null,
-  function (message: AssistantMessage, contextWindow?: number): boolean {
+  function (message: typesModule.AssistantMessage, contextWindow?: number): boolean {
     if (
       message.stopReason === "error" &&
       message.errorMessage !== undefined &&
@@ -77,17 +77,28 @@ export const isContextOverflow: {
   },
 );
 
-export const isRecoverableLength: {
-  (desiredMaxOutput: number): (message: AssistantMessage) => boolean;
-  (message: AssistantMessage, desiredMaxOutput: number): boolean;
-} = Function.dual(2, function (message: AssistantMessage, desiredMaxOutput: number): boolean {
-  return (
-    message.stopReason === "length" &&
-    desiredMaxOutput > 0 &&
-    message.usage.output < desiredMaxOutput
-  );
-});
+const isRecoverableLength: {
+  (desiredMaxOutput: number): (message: typesModule.AssistantMessage) => boolean;
+  (message: typesModule.AssistantMessage, desiredMaxOutput: number): boolean;
+} = Function.dual(
+  2,
+  function (message: typesModule.AssistantMessage, desiredMaxOutput: number): boolean {
+    return (
+      message.stopReason === "length" &&
+      desiredMaxOutput > 0 &&
+      message.usage.output < desiredMaxOutput
+    );
+  },
+);
 
-export function getOverflowPatterns(): RegExp[] {
+function getOverflowPatterns(): RegExp[] {
   return [...OVERFLOW_PATTERNS];
 }
+
+const overflow = {
+  getOverflowPatterns,
+  isContextOverflow,
+  isRecoverableLength,
+};
+
+export default overflow;

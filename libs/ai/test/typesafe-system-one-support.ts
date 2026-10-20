@@ -1,5 +1,5 @@
-import type { ClassifierContext, ClassifierModel, ClassifierQuestion } from "../src/types.ts";
-const model: ClassifierModel<"typesafe-system-one"> = {
+import type typesModule from "../src/types.types.ts";
+const model: typesModule.ClassifierModel<"typesafe-system-one"> = {
   api: "typesafe-system-one",
   baseUrl: "https://api.typesafe.ai/v1/",
   contextWindow: 64000,
@@ -11,8 +11,8 @@ const model: ClassifierModel<"typesafe-system-one"> = {
   type: "classifier",
 };
 
-const context: ClassifierContext = {
-  questions: Object.fromEntries<ClassifierQuestion>([
+const context: typesModule.ClassifierContext = {
+  questions: Object.fromEntries<typesModule.ClassifierQuestion>([
     [
       "category",
       {

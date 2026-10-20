@@ -1,13 +1,13 @@
-import type { JsonObject, StopReason, Usage } from "@msa/ai";
+import type aiTypes from "@msa/ai/index.types";
 
 declare namespace fauxModelTypes {
   interface FauxResponse {
     text?: string;
-    toolCalls?: Array<{ id?: string; name: string; args: JsonObject }>;
+    toolCalls?: Array<{ id?: string; name: string; args: aiTypes.JsonObject }>;
     thinking?: string;
-    stopReason?: StopReason;
+    stopReason?: aiTypes.StopReason;
     error?: string;
-    usage?: Partial<Usage>;
+    usage?: Partial<aiTypes.Usage>;
     delayMs?: number;
     model?: { provider?: string; id?: string };
   }

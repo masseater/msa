@@ -1,20 +1,20 @@
-import type { RgbColor, TerminalColors, TUI } from "@msa/tui";
+import type tuiTypes from "@msa/tui/index.types";
 import { dual } from "effect/Function";
 
 import type { SettingsManager } from "../../../core/settings-manager.ts";
 import {
+  SYSTEM_THEME_NAME,
+  type TerminalTheme,
+  type Theme,
   getTerminalTheme,
   initTheme,
   markTerminalColorsPending,
   parseAutoThemeSetting,
   resolveThemeSetting,
-  SYSTEM_THEME_NAME,
   setTerminalColorScheme,
   setTerminalColors,
   setTheme,
   setThemeInstance,
-  type TerminalTheme,
-  type Theme,
 } from "./theme.ts";
 
 type ThemeResult = { success: boolean; error?: string };
@@ -22,25 +22,25 @@ type ThemeResult = { success: boolean; error?: string };
 const TERMINAL_QUERY_TIMEOUT_MS = 100;
 
 export const requestTerminalColors: {
-  (apply: (colors: TerminalColors) => void): (ui: TUI) => Promise<void>;
-  (ui: TUI, apply: (colors: TerminalColors) => void): Promise<void>;
-} = dual(2, (ui: TUI, apply: (colors: TerminalColors) => void): Promise<void> => {
-  let query: Promise<TerminalColors>;
+  (apply: (colors: tuiTypes.TerminalColors) => void): (ui: tuiTypes.TUI) => Promise<void>;
+  (ui: tuiTypes.TUI, apply: (colors: tuiTypes.TerminalColors) => void): Promise<void>;
+} = dual(2, (ui: tuiTypes.TUI, apply: (colors: tuiTypes.TerminalColors) => void): Promise<void> => {
+  let query: Promise<tuiTypes.TerminalColors>;
   try {
-    query = ui.queryTerminalColors({ timeoutMs: TERMINAL_QUERY_TIMEOUT_MS, onLateReply: apply });
+    query = ui.queryTerminalColors({ onLateReply: apply, timeoutMs: TERMINAL_QUERY_TIMEOUT_MS });
   } catch {
     query = Promise.resolve({});
   }
   return query.then(apply, () => apply({}));
 });
 
-function sameRgb(a: RgbColor | undefined, b: RgbColor | undefined): boolean {
+function sameRgb(a: tuiTypes.RgbColor | undefined, b: tuiTypes.RgbColor | undefined): boolean {
   return (
     a === b || (a !== undefined && b !== undefined && a.r === b.r && a.g === b.g && a.b === b.b)
   );
 }
 
-function sameTerminalColors(a: TerminalColors, b: TerminalColors): boolean {
+function sameTerminalColors(a: tuiTypes.TerminalColors, b: tuiTypes.TerminalColors): boolean {
   if (!sameRgb(a.foreground, b.foreground) || !sameRgb(a.background, b.background)) return false;
   if (a.palette === b.palette) return true;
   if (a.palette === undefined || b.palette === undefined || a.palette.length !== b.palette.length)
@@ -49,19 +49,19 @@ function sameTerminalColors(a: TerminalColors, b: TerminalColors): boolean {
 }
 
 export class InteractiveThemeController {
-  private readonly ui: TUI;
+  private readonly ui: tuiTypes.TUI;
   private readonly getSettingsManager: () => SettingsManager;
   private readonly showError: (message: string) => void;
   private readonly onChanged: () => void;
   private currentThemeSetting: string | undefined;
-  private terminalColors: TerminalColors | undefined;
+  private terminalColors: tuiTypes.TerminalColors | undefined;
   private activeThemeName: string | undefined;
   private autoSyncEnabled = false;
   private terminalColorSchemeUnsubscribe: (() => void) | undefined;
   private terminalColorQuery: Promise<void> = Promise.resolve();
 
   constructor(
-    ui: TUI,
+    ui: tuiTypes.TUI,
     options: {
       getSettingsManager: () => SettingsManager;
       showError: (message: string) => void;
@@ -180,12 +180,12 @@ export class InteractiveThemeController {
     );
   }
 
-  private applyTerminalColors(reported: TerminalColors): void {
+  private applyTerminalColors(reported: tuiTypes.TerminalColors): void {
     const previous = this.terminalColors;
     const foreground = reported.foreground ?? previous?.foreground;
     const background = reported.background ?? previous?.background;
     const palette = reported.palette ?? previous?.palette;
-    const next: TerminalColors = {
+    const next: tuiTypes.TerminalColors = {
       ...(foreground === undefined ? {} : { foreground }),
       ...(background === undefined ? {} : { background }),
       ...(palette === undefined ? {} : { palette }),

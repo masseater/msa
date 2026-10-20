@@ -1,10 +1,13 @@
 import { Clock, Effect, Stream } from "effect";
 import { beforeEach, describe, expect, it, vi } from "vite-plus/test";
 
-import { stream as streamOpenAICompletions } from "../src/api/openai-completions.ts";
-import { normalizeContext } from "../src/compat.ts";
-import type { Model } from "../src/types.ts";
+import openaiCompletions from "../src/api/openai-completions.ts";
+import compatModule from "../src/compat.ts";
+import type typesModule from "../src/types.types.ts";
 import modelChoice from "./model-choice.ts";
+
+const { stream: streamOpenAICompletions } = openaiCompletions;
+const { normalizeContext } = compatModule;
 
 const { chooseModel } = modelChoice;
 
@@ -63,17 +66,19 @@ vi.mock("openai", () => {
 });
 
 function createModel(
-  overrides: Partial<Model<"openai-completions">> = {},
-): Model<"openai-completions"> {
+  overrides: Partial<typesModule.Model<"openai-completions">> = {},
+): typesModule.Model<"openai-completions"> {
   const { compat: _compat, ...baseModel } = chooseModel("openai", "direct OpenAI");
   return {
-    ...(baseModel as Omit<Model<"openai-completions">, "api">),
+    ...(baseModel as Omit<typesModule.Model<"openai-completions">, "api">),
     api: "openai-completions",
     ...overrides,
   };
 }
 
-const captureRequest = Effect.fn("captureRequest")(function* (model: Model<"openai-completions">) {
+const captureRequest = Effect.fn("captureRequest")(function* (
+  model: typesModule.Model<"openai-completions">,
+) {
   const currentTime = yield* Clock.currentTimeMillis;
   yield* Effect.promise(() =>
     streamOpenAICompletions(
@@ -98,7 +103,9 @@ describe("openai-completions vllm priority", () => {
     Effect.runPromise(
       Effect.gen(function* () {
         const payload = yield* captureRequest(
-          createModel({ compat: { vllmPriority: 10 } as Model<"openai-completions">["compat"] }),
+          createModel({
+            compat: { vllmPriority: 10 } as typesModule.Model<"openai-completions">["compat"],
+          }),
         );
 
         expect(payload?.priority).toBe(10);

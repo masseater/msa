@@ -1,56 +1,44 @@
-import { formatThrownValue } from "../utils/diagnostics.ts";
-import type { CodexRequestBody } from "./openai-codex-options.ts";
+import diagnosticsModule from "../utils/diagnostics.ts";
+import type openaiCodexWsStatsTypes from "./openai-codex-ws-stats.types.ts";
 
-export interface OpenAICodexWebSocketDebugStats {
-  requests: number;
-  connectionsCreated: number;
-  connectionsReused: number;
-  cachedContextRequests: number;
-  storeTrueRequests: number;
-  fullContextRequests: number;
-  deltaRequests: number;
-  lastInputItems: number;
-  lastDeltaInputItems?: number | undefined;
-  lastPreviousResponseId?: string | undefined;
-  websocketFailures: number;
-  sseFallbacks: number;
-  websocketFallbackActive?: boolean;
-  lastWebSocketError?: string;
-}
+const { formatThrownValue } = diagnosticsModule;
 
-const websocketDebugStats = new Map<string, OpenAICodexWebSocketDebugStats>();
+const websocketDebugStats = new Map<
+  string,
+  openaiCodexWsStatsTypes.OpenAICodexWebSocketDebugStats
+>();
 const websocketSseFallbackSessions = new Set<string>();
 
 const hasSession = (sessionId: string | undefined): sessionId is string =>
   sessionId !== undefined && sessionId !== "";
 
-function statsFor(sessionId: string): OpenAICodexWebSocketDebugStats {
+function statsFor(sessionId: string): openaiCodexWsStatsTypes.OpenAICodexWebSocketDebugStats {
   const existing = websocketDebugStats.get(sessionId);
   if (existing !== undefined) return existing;
-  const stats: OpenAICodexWebSocketDebugStats = {
-    requests: 0,
+  const stats: openaiCodexWsStatsTypes.OpenAICodexWebSocketDebugStats = {
+    cachedContextRequests: 0,
     connectionsCreated: 0,
     connectionsReused: 0,
-    cachedContextRequests: 0,
-    storeTrueRequests: 0,
-    fullContextRequests: 0,
     deltaRequests: 0,
+    fullContextRequests: 0,
     lastInputItems: 0,
-    websocketFailures: 0,
+    requests: 0,
     sseFallbacks: 0,
+    storeTrueRequests: 0,
+    websocketFailures: 0,
   };
   websocketDebugStats.set(sessionId, stats);
   return stats;
 }
 
-export function getOpenAICodexWebSocketDebugStats(
+function getOpenAICodexWebSocketDebugStats(
   sessionId: string,
-): OpenAICodexWebSocketDebugStats | undefined {
+): openaiCodexWsStatsTypes.OpenAICodexWebSocketDebugStats | undefined {
   const stats = websocketDebugStats.get(sessionId);
   return stats === undefined ? undefined : { ...stats };
 }
 
-export function resetOpenAICodexWebSocketDebugStats(sessionId?: string): void {
+function resetOpenAICodexWebSocketDebugStats(sessionId?: string): void {
   if (hasSession(sessionId)) {
     websocketDebugStats.delete(sessionId);
     websocketSseFallbackSessions.delete(sessionId);
@@ -60,18 +48,18 @@ export function resetOpenAICodexWebSocketDebugStats(sessionId?: string): void {
   websocketSseFallbackSessions.clear();
 }
 
-export function isWebSocketSseFallbackActive(sessionId: string | undefined): boolean {
+function isWebSocketSseFallbackActive(sessionId: string | undefined): boolean {
   return hasSession(sessionId) && websocketSseFallbackSessions.has(sessionId);
 }
 
-export function recordWebSocketSseFallback(sessionId: string | undefined): void {
+function recordWebSocketSseFallback(sessionId: string | undefined): void {
   if (!hasSession(sessionId)) return;
   const stats = statsFor(sessionId);
   stats.sseFallbacks++;
   stats.websocketFallbackActive = isWebSocketSseFallbackActive(sessionId);
 }
 
-export function recordWebSocketFailure(sessionId: string | undefined): (error: unknown) => void {
+function recordWebSocketFailure(sessionId: string | undefined): (error: unknown) => void {
   return (error) => {
     if (!hasSession(sessionId)) return;
     websocketSseFallbackSessions.add(sessionId);
@@ -82,19 +70,12 @@ export function recordWebSocketFailure(sessionId: string | undefined): (error: u
   };
 }
 
-export interface WebSocketRequestRecord {
-  readonly sessionId: string | undefined;
-  readonly requestBody: CodexRequestBody;
-  readonly reused: boolean;
-  readonly useCachedContext: boolean;
-}
-
-export function recordWebSocketRequestStats({
+function recordWebSocketRequestStats({
   sessionId,
   requestBody,
   reused,
   useCachedContext,
-}: WebSocketRequestRecord): void {
+}: openaiCodexWsStatsTypes.WebSocketRequestRecord): void {
   if (!hasSession(sessionId)) return;
   const stats = statsFor(sessionId);
   stats.requests++;
@@ -111,3 +92,14 @@ export function recordWebSocketRequestStats({
   stats.lastDeltaInputItems = delta ? inputItems : undefined;
   stats.lastPreviousResponseId = delta ? previousResponseId : undefined;
 }
+
+const openaiCodexWsStats = {
+  getOpenAICodexWebSocketDebugStats,
+  isWebSocketSseFallbackActive,
+  recordWebSocketFailure,
+  recordWebSocketRequestStats,
+  recordWebSocketSseFallback,
+  resetOpenAICodexWebSocketDebugStats,
+};
+
+export default openaiCodexWsStats;

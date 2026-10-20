@@ -1,25 +1,21 @@
 import type { Content, Part } from "@google/genai";
 import { Function } from "effect";
 
-import type {
-  AssistantMessage,
-  ImageContent,
-  Model,
-  TextContent,
-  ToolResultMessage,
-  TranscriptContext,
-  UserMessage,
-} from "../types.ts";
-import { sanitizeSurrogates } from "../utils/sanitize-unicode.ts";
-import { collapseSystemMessages, withoutInitialSystemMessage } from "../utils/transcript.ts";
-import type { GoogleApiType } from "./google-thinking.ts";
-import { transformMessages } from "./transform-messages.ts";
+import type typesModule from "../types.types.ts";
+import sanitizeUnicode from "../utils/sanitize-unicode.ts";
+import transcript from "../utils/transcript.ts";
+import type googleThinkingTypes from "./google-thinking.types.ts";
+import transformMessagesModule from "./transform-messages.ts";
 
-export function isThinkingPart(part: Pick<Part, "thought" | "thoughtSignature">): boolean {
+const { sanitizeSurrogates } = sanitizeUnicode;
+const { collapseSystemMessages, withoutInitialSystemMessage } = transcript;
+const { transformMessages } = transformMessagesModule;
+
+function isThinkingPart(part: Pick<Part, "thought" | "thoughtSignature">): boolean {
   return part.thought === true;
 }
 
-export const retainThoughtSignature: {
+const retainThoughtSignature: {
   (incoming: string | undefined): (existing: string | undefined) => string | undefined;
   (existing: string | undefined, incoming: string | undefined): string | undefined;
 } = Function.dual(2, function (existing: string | undefined, incoming: string | undefined):
@@ -44,7 +40,7 @@ function resolveThoughtSignature(
   return isSameProviderAndModel && isValidThoughtSignature(signature) ? signature : undefined;
 }
 
-export function requiresToolCallId(modelId: string): boolean {
+function requiresToolCallId(modelId: string): boolean {
   const geminiMajorVersion = getGeminiMajorVersion(modelId);
   return (
     modelId.startsWith("claude-") ||
@@ -53,7 +49,7 @@ export function requiresToolCallId(modelId: string): boolean {
   );
 }
 
-export function getGeminiMajorVersion(modelId: string): number | undefined {
+function getGeminiMajorVersion(modelId: string): number | undefined {
   const major = modelId.toLowerCase().match(/^gemini(?:-live)?-(\d+)/u)?.[1];
   if (major === undefined) return undefined;
   return Number.parseInt(major, 10);
@@ -67,16 +63,16 @@ function supportsMultimodalFunctionResponse(modelId: string): boolean {
   return true;
 }
 
-function userContent(message: UserMessage): Content | undefined {
+function userContent(message: typesModule.UserMessage): Content | undefined {
   if (typeof message.content === "string") {
-    return { role: "user", parts: [{ text: sanitizeSurrogates(message.content) }] };
+    return { parts: [{ text: sanitizeSurrogates(message.content) }], role: "user" };
   }
   const parts: Part[] = message.content.map((item) =>
     item.type === "text"
       ? { text: sanitizeSurrogates(item.text) }
-      : { inlineData: { mimeType: item.mimeType, data: item.data } },
+      : { inlineData: { data: item.data, mimeType: item.mimeType } },
   );
-  return parts.length === 0 ? undefined : { role: "user", parts };
+  return parts.length === 0 ? undefined : { parts, role: "user" };
 }
 
 const isBlank = (text: string): boolean => text.trim() === "";
@@ -89,7 +85,7 @@ interface AssistantPartContext {
   readonly includeToolCallId: boolean;
 }
 
-type AssistantBlock = AssistantMessage["content"][number];
+type AssistantBlock = typesModule.AssistantMessage["content"][number];
 
 function assistantPart(block: AssistantBlock, context: AssistantPartContext): Part | undefined {
   const { sameModel } = context;
@@ -109,15 +105,15 @@ function assistantPart(block: AssistantBlock, context: AssistantPartContext): Pa
       return undefined;
     }
     return withSignature(
-      { thought: true, text: sanitizeSurrogates(block.thinking) },
+      { text: sanitizeSurrogates(block.thinking), thought: true },
       thoughtSignature,
     );
   }
   return withSignature(
     {
       functionCall: {
-        name: block.name,
         args: block.arguments ?? {},
+        name: block.name,
         ...(context.includeToolCallId ? { id: block.id } : {}),
       },
     },
@@ -125,35 +121,35 @@ function assistantPart(block: AssistantBlock, context: AssistantPartContext): Pa
   );
 }
 
-function assistantContent<T extends GoogleApiType>(
-  message: AssistantMessage,
-  model: Model<T>,
+function assistantContent<T extends googleThinkingTypes.GoogleApiType>(
+  message: typesModule.AssistantMessage,
+  model: typesModule.Model<T>,
 ): Content | undefined {
   const context: AssistantPartContext = {
-    sameModel: message.provider === model.provider && message.model === model.id,
     includeToolCallId: requiresToolCallId(model.id),
+    sameModel: message.provider === model.provider && message.model === model.id,
   };
   const parts = message.content.flatMap((block) => assistantPart(block, context) ?? []);
-  return parts.length === 0 ? undefined : { role: "model", parts };
+  return parts.length === 0 ? undefined : { parts, role: "model" };
 }
 
-function toolResultValue(message: ToolResultMessage, hasImages: boolean): string {
+function toolResultValue(message: typesModule.ToolResultMessage, hasImages: boolean): string {
   const textResult = message.content
-    .filter((content): content is TextContent => content.type === "text")
+    .filter((content): content is typesModule.TextContent => content.type === "text")
     .map((content) => content.text)
     .join("\n");
   if (textResult.length > 0) return sanitizeSurrogates(textResult);
   return hasImages ? "(see attached image)" : "";
 }
 
-function appendToolResult<T extends GoogleApiType>(
+function appendToolResult<T extends googleThinkingTypes.GoogleApiType>(
   contents: Content[],
-  message: ToolResultMessage,
-  model: Model<T>,
+  message: typesModule.ToolResultMessage,
+  model: typesModule.Model<T>,
 ): void {
   const imageParts: Part[] = (model.input.includes("image") ? message.content : [])
-    .filter((content): content is ImageContent => content.type === "image")
-    .map((image) => ({ inlineData: { mimeType: image.mimeType, data: image.data } }));
+    .filter((content): content is typesModule.ImageContent => content.type === "image")
+    .map((image) => ({ inlineData: { data: image.data, mimeType: image.mimeType } }));
   const hasImages = imageParts.length > 0;
   const multimodalResponse = supportsMultimodalFunctionResponse(model.id);
   const responseValue = toolResultValue(message, hasImages);
@@ -172,19 +168,24 @@ function appendToolResult<T extends GoogleApiType>(
   ) {
     lastContent.parts.push(functionResponsePart);
   } else {
-    contents.push({ role: "user", parts: [functionResponsePart] });
+    contents.push({ parts: [functionResponsePart], role: "user" });
   }
   if (hasImages && !multimodalResponse) {
-    contents.push({ role: "user", parts: [{ text: "Tool result image:" }, ...imageParts] });
+    contents.push({ parts: [{ text: "Tool result image:" }, ...imageParts], role: "user" });
   }
 }
 
-export const convertMessages: {
-  <T extends GoogleApiType>(context: TranscriptContext): (model: Model<T>) => Content[];
-  <T extends GoogleApiType>(model: Model<T>, context: TranscriptContext): Content[];
+const convertMessages: {
+  <T extends googleThinkingTypes.GoogleApiType>(
+    context: typesModule.TranscriptContext,
+  ): (model: typesModule.Model<T>) => Content[];
+  <T extends googleThinkingTypes.GoogleApiType>(
+    model: typesModule.Model<T>,
+    context: typesModule.TranscriptContext,
+  ): Content[];
 } = Function.dual(2, function <
-  T extends GoogleApiType,
->(model: Model<T>, context: TranscriptContext): Content[] {
+  T extends googleThinkingTypes.GoogleApiType,
+>(model: typesModule.Model<T>, context: typesModule.TranscriptContext): Content[] {
   const conversation = withoutInitialSystemMessage(collapseSystemMessages(context).messages);
   const normalizeToolCallId = (id: string): string => {
     if (!requiresToolCallId(model.id)) return id;
@@ -206,3 +207,13 @@ export const convertMessages: {
   }
   return contents;
 });
+
+const googleMessages = {
+  convertMessages,
+  getGeminiMajorVersion,
+  isThinkingPart,
+  requiresToolCallId,
+  retainThoughtSignature,
+};
+
+export default googleMessages;

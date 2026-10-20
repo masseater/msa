@@ -21,7 +21,7 @@ export function exclusive<A>(
   runtime: Runtime,
   effect: Effect.Effect<A, OrchestratorError>,
 ): Effect.Effect<A, OrchestratorError> {
-  return Effect.tryPromise({ try: () => runtime.exclusive(effect), catch: orchestratorError });
+  return Effect.tryPromise({ catch: orchestratorError, try: () => runtime.exclusive(effect) });
 }
 
 export function release(runtime: Runtime): void {

@@ -1,4 +1,4 @@
-import { createModels } from "@msa/ai";
+import ai from "@msa/ai";
 import durable from "@msa/durable";
 import harnessModule from "@msa/durable/harness";
 import type durableTypes from "@msa/durable/index.types";
@@ -9,6 +9,8 @@ import harnessTasksRecoverySupport from "./harness-tasks-recovery-support.ts";
 import type harnessTasksRecoverySupportTypes from "./harness-tasks-recovery-support.types.ts";
 import support from "./support.ts";
 import type supportTypes from "./support.types.ts";
+
+const { createModels } = ai;
 
 const { defineTask } = durable;
 const { Harness, createRegistry } = harnessModule;

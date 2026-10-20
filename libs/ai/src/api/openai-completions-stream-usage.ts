@@ -1,21 +1,15 @@
 import type { ChatCompletionChunk } from "openai/resources/chat/completions.js";
 
-import { calculateCost } from "../models.ts";
-import type { AssistantMessage, Model, StopReason } from "../types.ts";
+import modelsModule from "../models.ts";
+import type typesModule from "../types.types.ts";
+import type openaiCompletionsStreamUsageTypes from "./openai-completions-stream-usage.types.ts";
 
-interface RawUsage {
-  prompt_tokens?: number;
-  completion_tokens?: number;
-  cached_tokens?: number;
-  prompt_cache_hit_tokens?: number;
-  prompt_tokens_details?: { cached_tokens?: number; cache_write_tokens?: number };
-  completion_tokens_details?: { reasoning_tokens?: number };
-}
+const { calculateCost } = modelsModule;
 
 function parseChunkUsage(input: {
-  rawUsage: RawUsage;
-  model: Model<"openai-completions">;
-}): AssistantMessage["usage"] {
+  rawUsage: openaiCompletionsStreamUsageTypes.RawUsage;
+  model: typesModule.Model<"openai-completions">;
+}): typesModule.AssistantMessage["usage"] {
   const { rawUsage, model } = input;
   const promptTokens = rawUsage.prompt_tokens || 0;
   const cacheReadTokens =
@@ -27,21 +21,21 @@ function parseChunkUsage(input: {
 
   const inputTokens = Math.max(0, promptTokens - cacheReadTokens - cacheWriteTokens);
   const outputTokens = rawUsage.completion_tokens || 0;
-  const usage: AssistantMessage["usage"] = {
-    input: inputTokens,
-    output: outputTokens,
+  const usage: typesModule.AssistantMessage["usage"] = {
     cacheRead: cacheReadTokens,
     cacheWrite: cacheWriteTokens,
+    cost: { cacheRead: 0, cacheWrite: 0, input: 0, output: 0, total: 0 },
+    input: inputTokens,
+    output: outputTokens,
     reasoning: rawUsage.completion_tokens_details?.reasoning_tokens || 0,
     totalTokens: inputTokens + outputTokens + cacheReadTokens + cacheWriteTokens,
-    cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0, total: 0 },
   };
   calculateCost(model, usage);
   return usage;
 }
 
 function mapStopReason(reason: ChatCompletionChunk.Choice["finish_reason"] | string): {
-  stopReason: StopReason;
+  stopReason: typesModule.StopReason;
   errorMessage?: string;
 } {
   if (reason === null) return { stopReason: "stop" };
@@ -55,15 +49,20 @@ function mapStopReason(reason: ChatCompletionChunk.Choice["finish_reason"] | str
     case "tool_calls":
       return { stopReason: "toolUse" };
     case "content_filter":
-      return { stopReason: "error", errorMessage: "Provider finish_reason: content_filter" };
+      return { errorMessage: "Provider finish_reason: content_filter", stopReason: "error" };
     case "network_error":
-      return { stopReason: "error", errorMessage: "Provider finish_reason: network_error" };
+      return { errorMessage: "Provider finish_reason: network_error", stopReason: "error" };
     default:
       return {
-        stopReason: "error",
         errorMessage: `Provider finish_reason: ${reason}`,
+        stopReason: "error",
       };
   }
 }
 
-export { mapStopReason, parseChunkUsage, type RawUsage };
+const openaiCompletionsStreamUsage = {
+  mapStopReason,
+  parseChunkUsage,
+};
+
+export default openaiCompletionsStreamUsage;

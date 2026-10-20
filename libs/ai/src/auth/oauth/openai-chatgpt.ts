@@ -1,28 +1,22 @@
 import { Data, Deferred, Effect, type Scope } from "effect";
 import { Base64Url } from "effect/encoding";
 
-import { randomBytes } from "../../utils/crypto.ts";
-import {
-  type LocalHttpRequest,
-  type LocalHttpResponse,
-  type LocalHttpServer,
-  startLocalHttpServer,
-} from "../../utils/local-http-server.ts";
-import { oauthErrorHtml, oauthSuccessHtml } from "../../utils/oauth-page.ts";
-import { getProviderEnvValue } from "../../utils/provider-env.ts";
-import type {
-  LoginOptions,
-  OAuthAuth,
-  OAuthCredential,
-  ProviderAuthInteraction,
-} from "../types.ts";
-import {
-  DIRECT_TOKEN_SCOPE,
-  exchangeAuthorizationCode,
-  RESOURCE,
-  refreshAccessToken,
-} from "./openai-chatgpt-token.ts";
-import { generatePKCE } from "./pkce.ts";
+import cryptoModule from "../../utils/crypto.ts";
+import localHttpServer from "../../utils/local-http-server.ts";
+import type localHttpServerTypes from "../../utils/local-http-server.types.ts";
+import oauthPage from "../../utils/oauth-page.ts";
+import providerEnv from "../../utils/provider-env.ts";
+import type typesModule from "../types.ts";
+import openaiChatgptToken from "./openai-chatgpt-token.ts";
+import pkce from "./pkce.ts";
+
+const { DIRECT_TOKEN_SCOPE, RESOURCE, exchangeAuthorizationCode, refreshAccessToken } =
+  openaiChatgptToken;
+const { getProviderEnvValue } = providerEnv;
+const { randomBytes } = cryptoModule;
+const { oauthErrorHtml, oauthSuccessHtml } = oauthPage;
+const { startLocalHttpServer } = localHttpServer;
+const { generatePKCE } = pkce;
 
 const DYNAMIC_CLIENT_ID = "dynamic_agent_client";
 const AGENT_NAME_HINT = "msa";
@@ -60,7 +54,7 @@ const authorizationResultFromCallback = (
   const clientId = url.searchParams.get("client_id")?.trim();
   if (clientId === undefined || clientId === "")
     return fail("OpenAI OAuth registration callback did not contain an issued client ID");
-  return Effect.succeed({ code, clientId });
+  return Effect.succeed({ clientId, code });
 };
 
 const authorizationResultFromManualInput = (
@@ -69,8 +63,8 @@ const authorizationResultFromManualInput = (
 ): Effect.Effect<AuthorizationResult> =>
   Effect.gen(function* () {
     const url = yield* Effect.try({
-      try: () => new URL(input.trim()),
       catch: () => new CallbackError({ message: "Paste the full callback URL from the browser" }),
+      try: () => new URL(input.trim()),
     });
     const expected = new URL(REDIRECT_URI);
     if (url.origin !== expected.origin || url.pathname !== expected.pathname) {
@@ -85,22 +79,22 @@ const authorizationResultFromManualInput = (
     return yield* authorizationResultFromCallback(url, expectedState);
   }).pipe(Effect.catchTag("CallbackError", (error) => Effect.die(new Error(error.message))));
 
-const html = (status: number, body: string): LocalHttpResponse => ({
-  status,
-  headers: { "content-type": "text/html; charset=utf-8" },
+const html = (status: number, body: string): localHttpServerTypes.LocalHttpResponse => ({
   body,
+  headers: { "content-type": "text/html; charset=utf-8" },
+  status,
 });
 
 interface CallbackListener {
-  readonly server: LocalHttpServer;
+  readonly server: localHttpServerTypes.LocalHttpServer;
   readonly result: Deferred.Deferred<AuthorizationResult>;
 }
 
 const handleCallback = (
-  { url }: LocalHttpRequest,
+  { url }: localHttpServerTypes.LocalHttpRequest,
   expectedState: string,
   result: Deferred.Deferred<AuthorizationResult>,
-): Effect.Effect<LocalHttpResponse> => {
+): Effect.Effect<localHttpServerTypes.LocalHttpResponse> => {
   if (url.pathname !== CALLBACK_PATH) {
     return Effect.succeed(html(404, oauthErrorHtml("Callback route not found.", undefined)));
   }
@@ -131,8 +125,6 @@ const listenForCallback = (expectedState: string): Effect.Effect<CallbackListene
   Effect.gen(function* () {
     const result = yield* Deferred.make<AuthorizationResult>();
     const server = yield* startLocalHttpServer({
-      host: callbackHost(),
-      port: CALLBACK_PORT,
       baseUrl: REDIRECT_URI,
       closeConnections: true,
       handle: (request, reply) =>
@@ -144,9 +136,11 @@ const listenForCallback = (expectedState: string): Effect.Effect<CallbackListene
           ),
           Effect.flatMap(reply),
         ),
+      host: callbackHost(),
       onError: (error) => Effect.asVoid(Deferred.die(result, error)),
+      port: CALLBACK_PORT,
     });
-    return { server, result };
+    return { result, server };
   }).pipe(
     Effect.catchDefect((error) =>
       Effect.die(
@@ -176,23 +170,23 @@ interface AuthorizationRequest {
 const authorizationUrl = ({ hostId, agentName, state, challenge }: AuthorizationRequest): URL => {
   const url = new URL(AUTHORIZE_URL);
   url.search = new URLSearchParams({
-    client_id: DYNAMIC_CLIENT_ID,
     agent_name_hint: agentName,
-    ext_agent_host_id: hostId,
-    response_type: "code",
-    redirect_uri: REDIRECT_URI,
-    resource: RESOURCE,
-    scope: SCOPE,
-    state,
+    client_id: DYNAMIC_CLIENT_ID,
     code_challenge: challenge,
     code_challenge_method: "S256",
+    ext_agent_host_id: hostId,
     nonce: randomValue(),
+    redirect_uri: REDIRECT_URI,
+    resource: RESOURCE,
+    response_type: "code",
+    scope: SCOPE,
+    state,
   }).toString();
   return url;
 };
 
 const awaitAuthorization = (
-  interaction: ProviderAuthInteraction,
+  interaction: typesModule.ProviderAuthInteraction,
   listener: CallbackListener,
   state: string,
 ): Effect.Effect<AuthorizationResult, never, Scope.Scope> =>
@@ -201,10 +195,10 @@ const awaitAuthorization = (
     const manual = Effect.flatMap(
       Effect.promise(() =>
         interaction.prompt({
-          type: "manual_code",
           message: "Complete login in your browser, or paste the final redirect URL here:",
           placeholder: REDIRECT_URI,
           signal: AbortSignal.any([signal, interaction.signal]),
+          type: "manual_code",
         }),
       ),
       (input) => authorizationResultFromManualInput(input, state),
@@ -213,9 +207,9 @@ const awaitAuthorization = (
   });
 
 const loginOpenAIChatGPT = (
-  interaction: ProviderAuthInteraction,
-  options?: LoginOptions,
-): Effect.Effect<OAuthCredential> =>
+  interaction: typesModule.ProviderAuthInteraction,
+  options?: typesModule.LoginOptions,
+): Effect.Effect<typesModule.OAuthCredential> =>
   Effect.gen(function* () {
     const hostId = yield* agentHostId(options?.getDeviceId?.());
     const { verifier, challenge } = yield* Effect.promise(() => generatePKCE());
@@ -223,23 +217,23 @@ const loginOpenAIChatGPT = (
     const agentName = options?.agentName ?? AGENT_NAME_HINT;
     const listener = yield* listenForCallback(state);
     interaction.notify({
-      type: "auth_url",
-      url: authorizationUrl({ hostId, agentName, state, challenge }).toString(),
       instructions:
         "Complete sign-in in your browser. If the callback does not complete, paste the final redirect URL here.",
+      type: "auth_url",
+      url: authorizationUrl({ agentName, challenge, hostId, state }).toString(),
     });
     return yield* Effect.gen(function* () {
       const result = yield* awaitAuthorization(interaction, listener, state);
       interaction.notify({
-        type: "progress",
         message: "Exchanging authorization code for tokens...",
+        type: "progress",
       });
       return yield* exchangeAuthorizationCode({
-        code: result.code,
-        verifier,
         clientId: result.clientId,
+        code: result.code,
         redirectUri: REDIRECT_URI,
         signal: interaction.signal,
+        verifier,
       });
     }).pipe(
       Effect.scoped,
@@ -252,13 +246,19 @@ const loginOpenAIChatGPT = (
     );
   });
 
-export const openaiChatGPTOAuth: OAuthAuth = {
-  name: "OpenAI (ChatGPT subscription)",
+const openaiChatGPTOAuth: typesModule.OAuthAuth = {
   isSubscription: true,
-  loginLabel: "Sign in with ChatGPT",
   login: (interaction, options) => Effect.runPromise(loginOpenAIChatGPT(interaction, options)),
+  loginLabel: "Sign in with ChatGPT",
+  name: "OpenAI (ChatGPT subscription)",
   refresh: (credential, signal) => Effect.runPromise(refreshAccessToken(credential, signal)),
   toAuth(credential) {
     return Promise.resolve({ apiKey: credential.access });
   },
 };
+
+const openaiChatgpt = {
+  openaiChatGPTOAuth,
+};
+
+export default openaiChatgpt;

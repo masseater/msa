@@ -1,21 +1,12 @@
 import { Effect } from "effect";
 
-import { toDisplayPath } from "./autocomplete-prefix.ts";
-import { Platform } from "./platform.ts";
+import type autocompleteFdTypes from "./autocomplete-fd.types.ts";
+import autocompletePrefix from "./autocomplete-prefix.ts";
+import platformModule from "./platform.ts";
+import type platformTypes from "./platform.types.ts";
 
-export interface FdEntry {
-  path: string;
-  isDirectory: boolean;
-}
-
-export interface FdWalkOptions {
-  baseDir: string;
-  fdPath: string;
-  query: string;
-  maxResults: number;
-  signal: AbortSignal;
-  maxDepth?: number;
-}
+const { toDisplayPath } = autocompletePrefix;
+const { Platform } = platformModule;
 
 function escapeRegex(value: string): string {
   return value.replace(/[.*+?^${}()|[\]\\]/gu, "\\$&");
@@ -49,7 +40,7 @@ function buildFdPathQuery(query: string): string {
   return pattern;
 }
 
-function buildFdArgs(options: FdWalkOptions): string[] {
+function buildFdArgs(options: autocompleteFdTypes.FdWalkOptions): string[] {
   const args = [
     "--base-directory",
     options.baseDir,
@@ -83,9 +74,9 @@ function buildFdArgs(options: FdWalkOptions): string[] {
   return args;
 }
 
-function parseFdOutput(stdout: string): FdEntry[] {
+function parseFdOutput(stdout: string): autocompleteFdTypes.FdEntry[] {
   const lines = stdout.trim().split("\n").filter(Boolean);
-  const results: FdEntry[] = [];
+  const results: autocompleteFdTypes.FdEntry[] = [];
 
   for (const line of lines) {
     const displayLine = toDisplayPath(line);
@@ -100,15 +91,15 @@ function parseFdOutput(stdout: string): FdEntry[] {
     }
 
     results.push({
-      path: displayLine,
       isDirectory: hasTrailingSeparator,
+      path: displayLine,
     });
   }
   return results;
 }
 
-const waitForAbort = (signal: AbortSignal): Effect.Effect<FdEntry[]> =>
-  Effect.callback<FdEntry[]>((resume) => {
+const waitForAbort = (signal: AbortSignal): Effect.Effect<autocompleteFdTypes.FdEntry[]> =>
+  Effect.callback<autocompleteFdTypes.FdEntry[]>((resume) => {
     const onAbort = (): void => {
       resume(Effect.succeed([]));
     };
@@ -118,19 +109,25 @@ const waitForAbort = (signal: AbortSignal): Effect.Effect<FdEntry[]> =>
     });
   });
 
-export function walkDirectoryWithFd(
-  options: FdWalkOptions,
-): Effect.Effect<FdEntry[], never, Platform> {
+function walkDirectoryWithFd(
+  options: autocompleteFdTypes.FdWalkOptions,
+): Effect.Effect<autocompleteFdTypes.FdEntry[], never, platformTypes.Platform> {
   const args = buildFdArgs(options);
   const { signal } = options;
   return Effect.suspend(() => {
     if (signal.aborted) return Effect.succeed([]);
-    return Platform.use((platform) => platform.runCommand({ file: options.fdPath, args })).pipe(
+    return Platform.use((platform) => platform.runCommand({ args, file: options.fdPath })).pipe(
       Effect.map(({ exitCode, stdout }) =>
         signal.aborted || exitCode !== 0 || stdout === "" ? [] : parseFdOutput(stdout),
       ),
-      Effect.orElseSucceed((): FdEntry[] => []),
+      Effect.orElseSucceed((): autocompleteFdTypes.FdEntry[] => []),
       Effect.raceFirst(waitForAbort(signal)),
     );
   });
 }
+
+const autocompleteFd = {
+  walkDirectoryWithFd,
+};
+
+export default autocompleteFd;

@@ -1,12 +1,18 @@
 import assert from "node:assert";
 import { afterEach, describe, it } from "node:test";
 
-import { Editor } from "../src/components/editor.ts";
-import { TUI_KEYBINDINGS } from "../src/keybinding-definitions.ts";
-import { KeybindingsManager, setKeybindings } from "../src/keybindings.ts";
-import { TuiMainScreen } from "../src/tui-main-screen.ts";
-import { defaultEditorTheme } from "./test-themes.ts";
-import { VirtualTerminal } from "./virtual-terminal.ts";
+import Editor from "../src/components/editor.ts";
+import keybindingDefinitions from "../src/keybinding-definitions.ts";
+import keybindingsModule from "../src/keybindings.ts";
+import TuiMainScreen from "../src/tui-main-screen.ts";
+import testThemes from "./test-themes.ts";
+import virtualTerminal from "./virtual-terminal.ts";
+
+const { KeybindingsManager, setKeybindings } = keybindingsModule;
+const { TUI_KEYBINDINGS } = keybindingDefinitions;
+
+const { VirtualTerminal } = virtualTerminal;
+const { defaultEditorTheme } = testThemes;
 
 afterEach(() => {
   setKeybindings(new KeybindingsManager(TUI_KEYBINDINGS));

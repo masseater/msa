@@ -1,15 +1,17 @@
-import type { Component } from "@msa/tui";
-import { Box, Container, Spacer, Text } from "@msa/tui";
+import tui from "@msa/tui";
+import type tuiTypes from "@msa/tui/index.types";
 
 import type { EntryRenderer } from "../../../core/extensions/types.ts";
 import type { CustomEntry } from "../../../core/session-manager.ts";
 import { toErrorMessage } from "../../../utils/errors.ts";
 import { theme } from "../theme/theme.ts";
 
+const { Box, Container, Spacer, Text } = tui;
+
 export class CustomEntryComponent extends Container {
   private entry: CustomEntry<unknown>;
   private renderer: EntryRenderer;
-  private customComponent?: Component | undefined;
+  private customComponent?: tuiTypes.Component | undefined;
   private expandedState = false;
   private outputPad: number;
 
@@ -46,7 +48,7 @@ export class CustomEntryComponent extends Container {
     this.clear();
     this.customComponent = undefined;
 
-    let component: Component | undefined;
+    let component: tuiTypes.Component | undefined;
     try {
       component = this.renderer(this.entry, { expanded: this.expandedState }, theme);
     } catch (error) {

@@ -1,10 +1,13 @@
-import { getCapabilities, type ImageTranscoder, setImageTranscoder } from "@msa/tui";
+import tui from "@msa/tui";
+import type tuiTypes from "@msa/tui/index.types";
 import * as Effect from "effect/Effect";
 import { dual } from "effect/Function";
 
 import { awaited, awaiting } from "../core/awaiting.ts";
 import { applyExifOrientation } from "./exif-orientation.ts";
 import { loadPhoton } from "./photon.ts";
+
+const { getCapabilities, setImageTranscoder } = tui;
 
 type Photon = NonNullable<Awaited<ReturnType<typeof loadPhoton>>>;
 
@@ -64,7 +67,7 @@ export const convertToPng: {
   (mimeType: string): (base64Data: string) => Promise<{ data: string; mimeType: string } | null>;
 } = dual((args: IArguments) => args.length >= 2, convertToPngImpl);
 
-export function loadPngTranscoder(): Promise<ImageTranscoder | undefined> {
+export function loadPngTranscoder(): Promise<tuiTypes.ImageTranscoder | undefined> {
   return Effect.runPromise(
     awaiting(function* () {
       const photon = yield* awaited(loadPhoton());

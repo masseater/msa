@@ -1,7 +1,7 @@
 import { Effect } from "effect";
 import { describe, expect, it, vi } from "vite-plus/test";
 
-import type { Model } from "../src/types.ts";
+import type typesModule from "../src/types.types.ts";
 import modelChoice from "./model-choice.ts";
 import openaiCompletionsToolChoiceSupport from "./openai-completions-tool-choice-support.ts";
 
@@ -66,7 +66,7 @@ const usesOpenRouterReasoningObject = () =>
       const model = chooseModel(
         "openrouter",
         "openrouter-format reasoning",
-        (candidate): candidate is Model<"openai-completions"> =>
+        (candidate): candidate is typesModule.Model<"openai-completions"> =>
           usesApi("openai-completions")(candidate) &&
           candidate.reasoning &&
           compatValue(candidate, "thinkingFormat") === "openrouter" &&

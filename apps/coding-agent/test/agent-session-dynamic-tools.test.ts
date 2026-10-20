@@ -1,6 +1,6 @@
 import { tmpdir } from "node:os";
 
-import { getModel } from "@msa/ai/compat";
+import compat from "@msa/ai/compat";
 import testing from "@msa/testing";
 import { Effect } from "effect";
 import { afterEach, beforeEach, describe, expect, it } from "vite-plus/test";
@@ -10,6 +10,8 @@ import { createAgentSession } from "../src/core/sdk.ts";
 import { SessionManager } from "../src/core/session-manager.ts";
 import { SettingsManager } from "../src/core/settings-manager.ts";
 import { createBashTool } from "../src/core/tools/bash.ts";
+
+const { getModel } = compat;
 
 const {
   awaited,

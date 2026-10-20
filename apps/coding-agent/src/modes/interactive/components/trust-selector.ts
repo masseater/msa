@@ -1,13 +1,16 @@
-import { Container, getKeybindings, Spacer, Text } from "@msa/tui";
+import tui from "@msa/tui";
+import type tuiTypes from "@msa/tui/index.types";
 
 import {
-  getProjectTrustOptions,
   type ProjectTrustOption,
   type ProjectTrustStoreEntry,
+  getProjectTrustOptions,
 } from "../../../core/trust-manager.ts";
 import { theme } from "../theme/theme.ts";
 import { DynamicBorder } from "./dynamic-border.ts";
 import { keyHint, rawKeyHint } from "./keybinding-hints.ts";
+
+const { Container, Spacer, Text, getKeybindings } = tui;
 
 export type TrustSelection = Pick<ProjectTrustOption, "trusted" | "updates">;
 
@@ -35,7 +38,7 @@ function formatDecision(
 
 export class TrustSelectorComponent extends Container {
   private selectedIndex: number;
-  private readonly listContainer: Container;
+  private readonly listContainer: tuiTypes.Container;
   private readonly trustOptions: ProjectTrustOption[];
   private readonly savedDecision: ProjectTrustStoreEntry | null;
   private readonly onSelectCallback: (selection: TrustSelection) => void;

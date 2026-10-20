@@ -1,4 +1,4 @@
-import type { SpanAttributes, TelemetryContext } from "@msa/telemetry";
+import type telemetryTypes from "@msa/telemetry/index.types";
 
 import { type OpenSpan, openSpan } from "../observability/open-span.ts";
 import type { SessionTelemetryOptions } from "../observability/session-telemetry.ts";
@@ -6,10 +6,10 @@ import type {
   OrchestratorSnapshot,
   ReplanInput,
   ReplanResult,
-  ThreadRole,
-  ThreadStatus,
   Task,
   TaskStatus,
+  ThreadRole,
+  ThreadStatus,
 } from "./types.ts";
 import type { OrchestratorReport } from "./worker.ts";
 
@@ -27,15 +27,15 @@ function endStatus(
   name: string,
 ): Parameters<OpenSpan["end"]>[0] {
   if (status === "completed") return undefined;
-  return { status: "error", error: { name, message: status } };
+  return { error: { message: status, name }, status: "error" };
 }
 
 export class OrchestratorTelemetry {
-  readonly context: TelemetryContext;
+  readonly context: telemetryTypes.TelemetryContext;
   readonly #tasks = new Map<string, OpenSpan>();
   readonly #threads = new Map<string, OpenSpan>();
 
-  constructor(context: TelemetryContext) {
+  constructor(context: telemetryTypes.TelemetryContext) {
     this.context = context;
   }
 
@@ -43,25 +43,25 @@ export class OrchestratorTelemetry {
     const taskSpan =
       this.#tasks.get(task.id) ??
       openSpan(this.context, {
-        name: "msa.task",
         attributes: {
           "msa.task.id": task.id,
           "msa.task.kind": task.kind,
-          "msa.task.title": task.title,
           "msa.task.round": task.round,
+          "msa.task.title": task.title,
         },
+        name: "msa.task",
       });
     this.#tasks.set(task.id, taskSpan);
     this.#threads.get(plan.threadId)?.end();
     const thread = openSpan(taskSpan.span, {
-      name: "msa.thread",
       attributes: {
+        "gen_ai.request.model": plan.model,
+        "msa.task.id": task.id,
+        "msa.thinking_level": plan.thinkingLevel,
         "msa.thread.id": plan.threadId,
         "msa.thread.role": plan.role,
-        "msa.task.id": task.id,
-        "gen_ai.request.model": plan.model,
-        "msa.thinking_level": plan.thinkingLevel,
       },
+      name: "msa.thread",
     });
     this.#threads.set(plan.threadId, thread);
     return { context: thread.span, role: plan.role };
@@ -83,43 +83,43 @@ export class OrchestratorTelemetry {
       this.#tasks.delete(task.id);
     }
     this.context.recordMetric({
+      description: "Orchestrator threads running now",
       kind: "gauge",
       name: "msa.orchestrator.threads.active",
-      value: activeThreads,
       unit: "{thread}",
-      description: "Orchestrator threads running now",
+      value: activeThreads,
     });
   }
 
   reported(text: string, details: OrchestratorReport): void {
-    const attributes: SpanAttributes = {
+    const attributes: telemetryTypes.SpanAttributes = {
+      "msa.report.started": [...details.started],
+      "msa.report.status": details.status,
+      "msa.report.text": text,
       "msa.task.id": details.taskId,
       "msa.thread.role": details.role,
-      "msa.report.status": details.status,
-      "msa.report.started": [...details.started],
-      "msa.report.text": text,
     };
     const task = this.#tasks.get(details.taskId);
     (task?.span ?? this.context).log({
-      severity: details.status === "completed" ? "info" : "warn",
-      body: "msa.orchestrator.report",
       attributes,
+      body: "msa.orchestrator.report",
+      severity: details.status === "completed" ? "info" : "warn",
     });
   }
 
   replanned(input: ReplanInput, result: ReplanResult): void {
     this.context.log({
-      severity: result.aborted === null ? "info" : "warn",
-      body: "msa.orchestrator.replan",
       attributes: {
-        "msa.replan.id": result.replanId ?? undefined,
-        "msa.replan.reason": input.reason,
         "msa.replan.aborted": result.aborted ?? undefined,
-        "msa.replan.stopped": result.stopped.length,
         "msa.replan.created": result.created.length,
         "msa.replan.dropped": result.dropped.length,
+        "msa.replan.id": result.replanId ?? undefined,
+        "msa.replan.reason": input.reason,
         "msa.replan.started": result.started.length,
+        "msa.replan.stopped": result.stopped.length,
       },
+      body: "msa.orchestrator.replan",
+      severity: result.aborted === null ? "info" : "warn",
     });
   }
 

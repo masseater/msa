@@ -1,4 +1,4 @@
-import type { TSchema } from "@msa/ai";
+import type aiTypes from "@msa/ai/index.types";
 import type chordTypes from "@msa/chord/index.types";
 
 import type transactionTypes from "../session/transaction.types.ts";
@@ -78,7 +78,7 @@ declare namespace schedulerTypesModule {
   type ToolExecutionApi<TDetails extends chordTypes.JsonValue = chordTypes.JsonValue> =
     typesToolsTypes.ToolExecutionApi<TDetails>;
   type ToolRegistration<
-    TParameters extends TSchema = TSchema,
+    TParameters extends aiTypes.TSchema = aiTypes.TSchema,
     TDetails extends chordTypes.JsonValue = chordTypes.JsonValue,
   > = typesToolsTypes.ToolRegistration<TParameters, TDetails>;
   type PromptInput<

@@ -1,8 +1,11 @@
-import { type Component, Text, truncateToWidth } from "@msa/tui";
+import tui from "@msa/tui";
+import type tuiTypes from "@msa/tui/index.types";
 import { dual } from "effect/Function";
 
 import { theme } from "../theme/theme.ts";
 import { expandHint } from "./keybinding-hints.ts";
+
+const { Text, truncateToWidth } = tui;
 
 export interface VisualTruncateResult {
   visualLines: string[];
@@ -33,14 +36,14 @@ export const truncateToVisualLines: {
     keep: "start" | "end" = "end",
   ): VisualTruncateResult => {
     if (text === "") {
-      return { visualLines: [], skippedCount: 0 };
+      return { skippedCount: 0, visualLines: [] };
     }
 
     const tempText = new Text(text, paddingX, 0);
     const allVisualLines = tempText.render(width);
 
     if (allVisualLines.length <= maxVisualLines) {
-      return { visualLines: allVisualLines, skippedCount: 0 };
+      return { skippedCount: 0, visualLines: allVisualLines };
     }
 
     const truncatedLines =
@@ -49,7 +52,7 @@ export const truncateToVisualLines: {
         : allVisualLines.slice(-maxVisualLines);
     const skippedCount = allVisualLines.length - maxVisualLines;
 
-    return { visualLines: truncatedLines, skippedCount };
+    return { skippedCount, visualLines: truncatedLines };
   },
 );
 
@@ -73,7 +76,7 @@ export const collapsedOutput: {
   },
 );
 
-export class SingleLine implements Component {
+export class SingleLine implements tuiTypes.Component {
   private text: string;
 
   constructor(text: string) {
@@ -94,7 +97,7 @@ export interface VisualLinePreviewOptions {
   formatHint: (hidden: number) => string;
 }
 
-export class VisualLinePreview implements Component {
+export class VisualLinePreview implements tuiTypes.Component {
   private options: VisualLinePreviewOptions;
   private cachedWidth: number | undefined;
   private cachedLines: string[] | undefined;

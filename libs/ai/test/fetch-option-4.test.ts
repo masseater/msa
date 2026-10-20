@@ -1,9 +1,11 @@
 import { Effect } from "effect";
 import { afterEach, describe, it, vi } from "vite-plus/test";
 
-import { generateImages } from "../src/api/openrouter-images.ts";
-import type { ImageModel } from "../src/types.ts";
+import openrouterImages from "../src/api/openrouter-images.ts";
+import type typesModule from "../src/types.types.ts";
 import fetchOptionSupport from "./fetch-option-support.ts";
+
+const { generateImages } = openrouterImages;
 
 const { createModel, expectOnlyCustomFetch, mockFetches } = fetchOptionSupport;
 
@@ -16,7 +18,7 @@ describe("fetch stream option", () => {
     Effect.runPromise(
       Effect.gen(function* () {
         const { custom, fallback } = mockFetches();
-        const model: ImageModel<"openrouter-images"> = {
+        const model: typesModule.ImageModel<"openrouter-images"> = {
           ...createModel("openrouter-images"),
           output: ["image"],
           provider: "openrouter",

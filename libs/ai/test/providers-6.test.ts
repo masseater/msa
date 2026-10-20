@@ -1,9 +1,12 @@
 import { Effect } from "effect";
 import { describe, expect, it } from "vite-plus/test";
 
-import { createModels } from "../src/models.ts";
-import { fauxAssistantMessage, fauxProvider } from "../src/providers/faux.ts";
+import modelsModule from "../src/models.ts";
+import fauxModule from "../src/providers/faux.ts";
 import providersSupport from "./providers-support.ts";
+
+const { fauxAssistantMessage, fauxProvider } = fauxModule;
+const { createModels } = modelsModule;
 
 const { context } = providersSupport;
 

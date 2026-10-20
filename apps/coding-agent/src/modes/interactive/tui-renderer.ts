@@ -1,5 +1,5 @@
-import type { Terminal, WheelScrollLines } from "@msa/tui";
-import { ProcessTerminal, type TUI, TuiAltScreen, TuiMainScreen } from "@msa/tui";
+import tuiModule from "@msa/tui";
+import type tuiTypes from "@msa/tui/index.types";
 import { Effect } from "effect";
 
 import { awaited, awaiting } from "../../core/awaiting.ts";
@@ -9,24 +9,30 @@ import { openBrowser } from "../../utils/open-browser.ts";
 import { keyDisplayText } from "./components/keybinding-hints.ts";
 import { theme } from "./theme/theme.ts";
 
+const { ProcessTerminal, TuiAltScreen, TuiMainScreen } = tuiModule;
+
 export interface InteractiveTuiOptions {
   readonly tuiMode: "regular" | "fullscreen";
   readonly showHardwareCursor: boolean;
   readonly logDirectory: string;
-  readonly terminal?: Terminal | undefined;
+  readonly terminal?: tuiTypes.Terminal | undefined;
   readonly onRightClickPaste?: (() => void) | undefined;
   readonly fullscreenCopyOnSelect?: boolean | undefined;
-  readonly fullscreenWheelScrollLines?: WheelScrollLines | undefined;
+  readonly fullscreenWheelScrollLines?: tuiTypes.WheelScrollLines | undefined;
 }
 
 export function createInteractiveTui(
   options: InteractiveTuiOptions & { readonly tuiMode: "fullscreen" },
-): TuiAltScreen;
+): tuiTypes.TuiAltScreen;
 export function createInteractiveTui(
   options: InteractiveTuiOptions & { readonly tuiMode: "regular" },
-): TuiMainScreen;
-export function createInteractiveTui(options: InteractiveTuiOptions): TuiMainScreen | TuiAltScreen;
-export function createInteractiveTui(options: InteractiveTuiOptions): TuiMainScreen | TuiAltScreen {
+): tuiTypes.TuiMainScreen;
+export function createInteractiveTui(
+  options: InteractiveTuiOptions,
+): tuiTypes.TuiMainScreen | tuiTypes.TuiAltScreen;
+export function createInteractiveTui(
+  options: InteractiveTuiOptions,
+): tuiTypes.TuiMainScreen | tuiTypes.TuiAltScreen {
   const terminal = options.terminal ?? new ProcessTerminal();
   if (options.tuiMode === "fullscreen") {
     const styleSearchMatch = (text: string) =>
@@ -64,8 +70,8 @@ export function createInteractiveTui(options: InteractiveTuiOptions): TuiMainScr
   return new TuiMainScreen(terminal, options.showHardwareCursor, options.logDirectory);
 }
 
-export function createInteractiveTuiReference(getTui: () => TUI): TUI {
-  return new Proxy({} as TUI, {
+export function createInteractiveTuiReference(getTui: () => tuiTypes.TUI): tuiTypes.TUI {
+  return new Proxy({} as tuiTypes.TUI, {
     get: (_target, property) => {
       const tui = getTui();
       const value = Reflect.get(tui, property, tui);
@@ -85,11 +91,11 @@ export function createInteractiveTuiReference(getTui: () => TUI): TUI {
         return Reflect.apply(method, methodTui, args);
       };
     },
+    getPrototypeOf: () => Reflect.getPrototypeOf(getTui()),
+    has: (_target, property) => Reflect.has(getTui(), property),
     set: (_target, property, value) => {
       const tui = getTui();
       return Reflect.set(tui, property, value, tui);
     },
-    has: (_target, property) => Reflect.has(getTui(), property),
-    getPrototypeOf: () => Reflect.getPrototypeOf(getTui()),
   });
 }

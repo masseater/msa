@@ -67,7 +67,7 @@ export function addAccount(name: string, tokenCommand?: string): Account {
   }
   const account: Account = tokenCommand
     ? { name, tokenCommand }
-    : { name, configDir: managedDir(name) };
+    : { configDir: managedDir(name), name };
   editAccounts((accounts) => {
     if (accounts.some((candidate) => candidate.name === name)) {
       throw new Error(`Claude account "${name}" already exists`);
@@ -84,7 +84,7 @@ export function removeAccount(name: string): void {
     return accounts.filter((candidate) => candidate !== removed);
   });
   if (removed?.configDir && expandTildePath(removed.configDir) === managedDir(name)) {
-    rmSync(managedDir(name), { recursive: true, force: true });
+    rmSync(managedDir(name), { force: true, recursive: true });
   }
   const blocks = loadBlocks();
   delete blocks[name];
@@ -181,8 +181,8 @@ export async function authStatus(account: Account): Promise<AuthStatus> {
         return { loggedIn: false };
     } catch {}
     return {
-      loggedIn: false,
       detail: error instanceof Error ? (error.message.split("\n")[0] ?? "") : String(error),
+      loggedIn: false,
     };
   }
 }
@@ -294,7 +294,7 @@ export function blockIfUnusable(account: Account, failure: RunFailure): boolean 
   }
   if (until === undefined) return false;
   const blocks = loadBlocks();
-  blocks[account.name] = { until, reason: error.split("\n")[0]!.slice(0, 200) };
+  blocks[account.name] = { reason: error.split("\n")[0]!.slice(0, 200), until };
   saveBlocks(blocks);
   return true;
 }

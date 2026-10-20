@@ -1,14 +1,18 @@
-import { type ToolResultMessage, Type, fauxAssistantMessage, fauxText } from "@msa/ai";
+import ai from "@msa/ai";
+import type aiTypes from "@msa/ai/index.types";
 import type durableTypes from "@msa/durable/index.types";
 import type memoryTypes from "@msa/durable/storage/memory.types";
 import { Effect } from "effect";
 import { afterEach, describe, expect, it } from "vite-plus/test";
 
 import durableKit from "./durable-kit.ts";
-import harnessGenerationSupport from "./harness-generation-support.ts";
-import harnessStructuredEvents from "./harness-structured-events.ts";
 import harnessStructuredSupport from "./harness-structured-support.ts";
+import harnessStructuredToolRoundsKit from "./harness-structured-tool-rounds-kit.ts";
 import support from "./support.ts";
+
+const { harnessGenerationSupport, harnessStructuredEvents } = harnessStructuredToolRoundsKit;
+
+const { Type, fauxAssistantMessage, fauxText } = ai;
 
 const { durable, harness: harnessModule, memory } = durableKit;
 
@@ -137,7 +141,7 @@ const answersUnstartedCalls = Effect.gen(function* () {
   });
   const results = (yield* allEntries(root))
     .filter((entry) => ToolResultEntry.is(entry))
-    .map((entry) => entry.model![0] as ToolResultMessage);
+    .map((entry) => entry.model![0] as aiTypes.ToolResultMessage);
   expect(results.map((result) => result.toolCallId)).toEqual(["c1", "c2", "c3"]);
   expect(results.map((result) => result.isError)).toEqual([true, true, true]);
   expect(results[1]!.content).toEqual([

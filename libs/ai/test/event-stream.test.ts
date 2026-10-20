@@ -1,10 +1,13 @@
 import { Clock, Effect, Stream } from "effect";
 import { describe, expect, it } from "vite-plus/test";
 
-import type { AssistantMessage } from "../src/types.ts";
-import { EventStream } from "../src/utils/async-event-stream.ts";
-import { currentTimeMillis } from "../src/utils/clock.ts";
-import { AssistantMessageEventStream } from "../src/utils/event-stream.ts";
+import type typesModule from "../src/types.types.ts";
+import EventStream from "../src/utils/async-event-stream.ts";
+import clock from "../src/utils/clock.ts";
+import eventStream from "../src/utils/event-stream.ts";
+
+const { AssistantMessageEventStream } = eventStream;
+const { currentTimeMillis } = clock;
 
 const drainsBufferedEventsInOrderAnd = () =>
   Effect.runPromise(
@@ -147,7 +150,7 @@ describe("EventStream", () => {
   it("wakes all waiting consumers when ended without a result", wakesAllWaitingConsumersWhenEnded);
 });
 
-function message(timestamp: number, durationMs?: number): AssistantMessage {
+function message(timestamp: number, durationMs?: number): typesModule.AssistantMessage {
   return {
     api: "openai-responses",
     content: [],

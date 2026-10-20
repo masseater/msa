@@ -1,10 +1,5 @@
-import type { AgentTool } from "@msa/agent-core";
-import type {
-  FauxModelDefinition,
-  FauxProviderRegistration,
-  FauxResponseStep,
-  Model,
-} from "@msa/ai/compat";
+import type agentTypes from "@msa/agent-core/index.types";
+import type compatTypes from "@msa/ai/compat.types";
 
 import type { AgentSession, AgentSessionEvent } from "../../../src/core/agent-session.ts";
 import type { AuthStorage } from "../../../src/core/auth-storage.ts";
@@ -16,9 +11,9 @@ import type utilitiesTypes from "../../utilities.types.ts";
 
 declare namespace typesModule {
   interface HarnessOptions {
-    models?: FauxModelDefinition[];
+    models?: compatTypes.FauxModelDefinition[];
     settings?: Partial<Settings>;
-    tools?: AgentTool[];
+    tools?: agentTypes.AgentTool[];
     initialActiveToolNames?: string[];
     allowedToolNames?: string[] | undefined;
     excludedToolNames?: string[] | undefined;
@@ -38,12 +33,12 @@ declare namespace typesModule {
     sessionManager: SessionManager;
     settingsManager: SettingsManager;
     authStorage: AuthStorage;
-    faux: FauxProviderRegistration;
-    models: [Model<string>, ...Model<string>[]];
-    getModel(): Model<string>;
-    getModel(modelId: string): Model<string> | undefined;
-    setResponses: (responses: FauxResponseStep[]) => void;
-    appendResponses: (responses: FauxResponseStep[]) => void;
+    faux: compatTypes.FauxProviderRegistration;
+    models: [compatTypes.Model<string>, ...compatTypes.Model<string>[]];
+    getModel(): compatTypes.Model<string>;
+    getModel(modelId: string): compatTypes.Model<string> | undefined;
+    setResponses: (responses: compatTypes.FauxResponseStep[]) => void;
+    appendResponses: (responses: compatTypes.FauxResponseStep[]) => void;
     getPendingResponseCount: () => number;
     events: AgentSessionEvent[];
     eventsOfType<T extends AgentSessionEvent["type"]>(

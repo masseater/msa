@@ -1,10 +1,13 @@
 import { Data, Effect } from "effect";
 import { describe, expect, it } from "vite-plus/test";
 
-import { streamSimple } from "../src/compat.ts";
-import type { Context, Model, SimpleStreamOptions } from "../src/types.ts";
-import { currentTimeMillis } from "../src/utils/clock.ts";
+import compatModule from "../src/compat.ts";
+import type typesModule from "../src/types.types.ts";
+import clock from "../src/utils/clock.ts";
 import modelChoice from "./model-choice.ts";
+
+const { currentTimeMillis } = clock;
+const { streamSimple } = compatModule;
 
 const { compatValue, modelsWhere, usesApi } = modelChoice;
 
@@ -14,15 +17,15 @@ interface AnthropicTemperaturePayload {
 
 class PayloadCaptured extends Data.TaggedError("PayloadCaptured")<{ readonly message: string }> {}
 
-function makeContext(): Context {
+function makeContext(): typesModule.Context {
   return {
     messages: [{ content: "Hello", role: "user", timestamp: currentTimeMillis() }],
   };
 }
 
 function makeCustomModel(
-  compat?: Model<"anthropic-messages">["compat"],
-): Model<"anthropic-messages"> {
+  compat?: typesModule.Model<"anthropic-messages">["compat"],
+): typesModule.Model<"anthropic-messages"> {
   return {
     api: "anthropic-messages",
     baseUrl: "http://127.0.0.1:9",
@@ -39,12 +42,12 @@ function makeCustomModel(
 }
 
 const capturePayload = Effect.fn("capturePayload")(function* (
-  model: Model<"anthropic-messages">,
-  options?: SimpleStreamOptions,
+  model: typesModule.Model<"anthropic-messages">,
+  options?: typesModule.SimpleStreamOptions,
 ) {
   let capturedPayload: AnthropicTemperaturePayload | undefined;
 
-  const payloadCaptureModel: Model<"anthropic-messages"> = {
+  const payloadCaptureModel: typesModule.Model<"anthropic-messages"> = {
     ...model,
     baseUrl: "http://127.0.0.1:9",
   };
@@ -70,9 +73,9 @@ const capturePayload = Effect.fn("capturePayload")(function* (
 const anthropicModels = modelsWhere("anthropic-api", () => true).filter(
   usesApi("anthropic-messages"),
 );
-const rejectsTemperature = (model: Model<"anthropic-messages">) =>
+const rejectsTemperature = (model: typesModule.Model<"anthropic-messages">) =>
   compatValue(model, "supportsTemperature") === false;
-const keepsTemperature = (model: Model<"anthropic-messages">) =>
+const keepsTemperature = (model: typesModule.Model<"anthropic-messages">) =>
   !rejectsTemperature(model) && model.thinkingLevelMap?.off !== null;
 
 describe("Anthropic temperature compatibility", () => {

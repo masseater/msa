@@ -1,10 +1,12 @@
 import assert from "node:assert";
 import { describe, it } from "node:test";
 
-import type { AutocompleteProvider } from "../src/autocomplete.ts";
-import { Editor } from "../src/components/editor.ts";
+import type autocompleteTypes from "../src/autocomplete.types.ts";
+import Editor from "../src/components/editor.ts";
 import editorHelpers from "./editor-helpers.ts";
-import { defaultEditorTheme } from "./test-themes.ts";
+import testThemes from "./test-themes.ts";
+
+const { defaultEditorTheme } = testThemes;
 
 const { applyCompletion, createTestTUI, typeText } = editorHelpers;
 
@@ -54,7 +56,7 @@ function doesNotTriggerAutocompleteDuring(): void {
     const editor = new Editor(createTestTUI(), defaultEditorTheme);
     let suggestionCalls = 0;
 
-    const mockProvider: AutocompleteProvider = {
+    const mockProvider: autocompleteTypes.AutocompleteProvider = {
       applyCompletion,
       getSuggestions: () => {
         suggestionCalls += 1;

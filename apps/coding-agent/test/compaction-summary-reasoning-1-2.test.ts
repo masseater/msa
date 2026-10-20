@@ -1,5 +1,5 @@
-import type { AgentMessage } from "@msa/agent-core";
-import { type AssistantMessage, type TranscriptContext } from "@msa/ai";
+import type agentTypes from "@msa/agent-core/index.types";
+import type aiTypes from "@msa/ai/index.types";
 import testing from "@msa/testing";
 import { Effect } from "effect";
 import { beforeEach, describe, expect, it, vi } from "vite-plus/test";
@@ -26,13 +26,13 @@ vi.mock("@msa/ai/compat", (importOriginal) =>
       const actual = yield* testing.awaited(importOriginal<typeof import("@msa/ai/compat")>());
       return yield* testing.awaited({
         ...actual,
-        completeSimple: completeSimpleMock,
+        default: { ...actual.default, completeSimple: completeSimpleMock },
       });
     }),
   ),
 );
 
-const mockSummaryResponse: AssistantMessage = {
+const mockSummaryResponse: aiTypes.AssistantMessage = {
   api: "anthropic-messages" as const,
   content: [{ text: "## Goal\nTest summary", type: "text" as const }],
   model: "claude-sonnet-4-5",
@@ -50,7 +50,7 @@ const mockSummaryResponse: AssistantMessage = {
   },
 };
 
-const mockToolCallResponse: AssistantMessage = {
+const mockToolCallResponse: aiTypes.AssistantMessage = {
   ...mockSummaryResponse,
   content: [
     {
@@ -63,7 +63,7 @@ const mockToolCallResponse: AssistantMessage = {
   stopReason: "toolUse",
 };
 
-const messages: AgentMessage[] = [
+const messages: agentTypes.AgentMessage[] = [
   { content: "Summarize this.", role: "user", timestamp: currentTimeMillis() },
 ];
 
@@ -87,7 +87,7 @@ const preservesThePreviousSummaryWithoutAnEmpty = () =>
       expect(result.summary).toContain("previous checkpoint");
       const [call] = completeSimpleMock.mock.calls;
       if (call === undefined) throw new Error("expected completeSimple to be called");
-      const requestContext = call[1] as TranscriptContext;
+      const requestContext = call[1] as aiTypes.TranscriptContext;
       const prompt = yield* toJsonText(requestContext.messages);
 
       expect(prompt).toContain("# Conversation\\n[User]: Summarize this.");

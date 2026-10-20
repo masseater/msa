@@ -1,15 +1,20 @@
-import type { Message } from "@msa/ai";
+import type aiTypes from "@msa/ai/index.types";
 import { Effect } from "effect";
 import { describe, expect, it } from "vite-plus/test";
 
-import { agentLoopContinue } from "../src/agent-loop.ts";
-import type { AgentContext, AgentLoopConfig, AgentMessage } from "../src/types.ts";
+import agentLoopModule from "../src/agent-loop.ts";
+import type typesModule from "../src/types.ts";
 import fixtures from "./support/fixtures.ts";
+
+const { agentLoopContinue } = agentLoopModule;
 
 const { collect, createModel, createUserMessage, identityConverter, now, scripted, textMessage } =
   fixtures;
 
-const config: AgentLoopConfig = { convertToLlm: identityConverter, model: createModel() };
+const config: typesModule.AgentLoopConfig = {
+  convertToLlm: identityConverter,
+  model: createModel(),
+};
 
 const throwsWithoutMessages = () => {
   expect(() =>
@@ -20,7 +25,7 @@ const throwsWithoutMessages = () => {
 };
 
 const continuesWithoutUserEvents = Effect.gen(function* () {
-  const context: AgentContext = { messages: [createUserMessage("Hello")], tools: [] };
+  const context: typesModule.AgentContext = { messages: [createUserMessage("Hello")], tools: [] };
   const { streamFn } = scripted(textMessage("Response"));
   const { events, messages } = yield* collect(
     agentLoopContinue(context, config, undefined, streamFn),
@@ -36,7 +41,7 @@ const continuesWithoutUserEvents = Effect.gen(function* () {
 
 type CustomMessage = { role: "custom"; text: string; timestamp: number };
 
-const customToUser = (messages: AgentMessage[]): Message[] =>
+const customToUser = (messages: typesModule.AgentMessage[]): aiTypes.Message[] =>
   messages
     .map((message) => {
       const custom = message as unknown as CustomMessage;
@@ -47,12 +52,12 @@ const customToUser = (messages: AgentMessage[]): Message[] =>
     .filter(
       (message) =>
         message.role === "user" || message.role === "assistant" || message.role === "toolResult",
-    ) as Message[];
+    ) as aiTypes.Message[];
 
 const continuesFromCustomMessage = Effect.gen(function* () {
   const customMessage: CustomMessage = { role: "custom", text: "Hook content", timestamp: now() };
-  const context: AgentContext = {
-    messages: [customMessage as unknown as AgentMessage],
+  const context: typesModule.AgentContext = {
+    messages: [customMessage as unknown as typesModule.AgentMessage],
     tools: [],
   };
   const { streamFn } = scripted(textMessage("Response to custom message"));

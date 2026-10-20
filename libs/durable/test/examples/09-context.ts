@@ -1,12 +1,14 @@
 import * as NodeRuntime from "@effect/platform-node/NodeRuntime";
-import type { AssistantMessage, Message, StopReason, ToolResultMessage } from "@msa/ai";
-import { createModels } from "@msa/ai/models";
+import type aiTypes from "@msa/ai/index.types";
+import modelsModule from "@msa/ai/models";
 import contextModule from "@msa/chord/context";
 import { Console, Effect } from "effect";
 
 import harnessModule from "../../src/harness/index.ts";
 import memory from "../../src/storage/memory.ts";
 import effectSupport from "../effect-support.ts";
+
+const { createModels } = modelsModule;
 
 const { BACKGROUND_CONTEXT } = contextModule;
 
@@ -29,8 +31,8 @@ const mainStep1 = Effect.gen(function* () {
   function assistantMessage(
     text: string,
     calls: readonly string[] = [],
-    stopReason?: StopReason,
-  ): AssistantMessage {
+    stopReason?: aiTypes.StopReason,
+  ): aiTypes.AssistantMessage {
     return {
       api: "example",
       content: [
@@ -57,7 +59,7 @@ const mainStep1 = Effect.gen(function* () {
 
 const mainStep2 = Effect.gen(function* () {
   const { harness, assistantMessage } = yield* mainStep1;
-  function toolResultMessage(id: string): ToolResultMessage {
+  function toolResultMessage(id: string): aiTypes.ToolResultMessage {
     return {
       content: [{ text: `file ${id}`, type: "text" }],
       isError: false,
@@ -68,7 +70,7 @@ const mainStep2 = Effect.gen(function* () {
     };
   }
 
-  function show(message: Message): string {
+  function show(message: aiTypes.Message): string {
     switch (message.role) {
       case "user":
         return `user: ${message.content as string}`;
@@ -88,7 +90,7 @@ const mainStep2 = Effect.gen(function* () {
   const transcript = yield* awaited(
     harness.createConversation({ ownership: { kind: "ownerless" } }, context),
   );
-  const say = (kind: string, ...model: Message[]) =>
+  const say = (kind: string, ...model: aiTypes.Message[]) =>
     transcript.commit((tx) => tx.appendEntry(transcript.id, { kind, model }), context);
   return { assistantMessage, harness, say, show, toolResultMessage, transcript };
 });

@@ -1,14 +1,18 @@
 import type Anthropic from "@anthropic-ai/sdk";
 
-import type { StreamOptions } from "../types.ts";
-import type { AnthropicEffort, AnthropicThinkingDisplay } from "./anthropic-messages-compat.ts";
+import type typesModule from "../types.types.ts";
+import type anthropicMessagesCompatTypes from "./anthropic-messages-compat.types.ts";
 
-export interface AnthropicOptions extends StreamOptions {
-  thinkingEnabled?: boolean | undefined;
-  thinkingBudgetTokens?: number | undefined;
-  effort?: AnthropicEffort | undefined;
-  thinkingDisplay?: AnthropicThinkingDisplay | undefined;
-  interleavedThinking?: boolean | undefined;
-  toolChoice?: "auto" | "any" | "none" | { type: "tool"; name: string } | undefined;
-  client?: Anthropic | undefined;
+declare namespace anthropicMessagesOptionsTypes {
+  interface AnthropicOptions extends typesModule.StreamOptions {
+    thinkingEnabled?: boolean | undefined;
+    thinkingBudgetTokens?: number | undefined;
+    effort?: anthropicMessagesCompatTypes.AnthropicEffort | undefined;
+    thinkingDisplay?: anthropicMessagesCompatTypes.AnthropicThinkingDisplay | undefined;
+    interleavedThinking?: boolean | undefined;
+    toolChoice?: "auto" | "any" | "none" | { type: "tool"; name: string } | undefined;
+    client?: Anthropic | undefined;
+  }
 }
+
+export type { anthropicMessagesOptionsTypes as default };

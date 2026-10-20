@@ -1,4 +1,4 @@
-import type { Api, Model } from "@msa/ai";
+import type aiTypes from "@msa/ai/index.types";
 import testing from "@msa/testing";
 import { Effect } from "effect";
 import { afterEach, describe, expect, it, vi } from "vite-plus/test";
@@ -14,7 +14,7 @@ const { neverPromise } = testing;
 const findExactModelMatch = Reflect.get(InteractiveMode.prototype, "findExactModelMatch") as (
   this: object,
   searchTerm: string,
-) => Promise<Model<Api> | undefined>;
+) => Promise<aiTypes.Model<aiTypes.Api> | undefined>;
 
 let harness!: harnessTypes.Harness;
 

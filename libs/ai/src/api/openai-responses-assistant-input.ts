@@ -6,27 +6,25 @@ import type {
   ResponseReasoningItem,
 } from "openai/resources/responses/responses.js";
 
-import type {
-  Api,
-  AssistantMessage,
-  Model,
-  TextContent,
-  ThinkingContent,
-  ToolCall,
-} from "../types.ts";
-import { shortHash } from "../utils/hash.ts";
-import { sanitizeSurrogates } from "../utils/sanitize-unicode.ts";
-import { getGrammarToolInput } from "./constrained-sampling.ts";
-import type { ConvertResponsesMessagesOptions } from "./openai-responses-options.ts";
-import { parseTextSignature } from "./openai-responses-signature.ts";
+import type typesModule from "../types.types.ts";
+import hash from "../utils/hash.ts";
+import sanitizeUnicode from "../utils/sanitize-unicode.ts";
+import constrainedSampling from "./constrained-sampling.ts";
+import type openaiResponsesAssistantInputTypes from "./openai-responses-assistant-input.types.ts";
+import openaiResponsesSignature from "./openai-responses-signature.ts";
+
+const { shortHash } = hash;
+const { parseTextSignature } = openaiResponsesSignature;
+const { sanitizeSurrogates } = sanitizeUnicode;
+const { getGrammarToolInput } = constrainedSampling;
 
 type ReasoningEffort = NonNullable<ResponseConfigurationUpdateItemParam.Reasoning["effort"]>;
 
-export function configurationUpdate(effort: string): ResponseConfigurationUpdateItemParam {
-  return { type: "configuration_update", reasoning: { effort: effort as ReasoningEffort } };
+function configurationUpdate(effort: string): ResponseConfigurationUpdateItemParam {
+  return { reasoning: { effort: effort as ReasoningEffort }, type: "configuration_update" };
 }
 
-function reasoningItems(block: ThinkingContent): ResponseInputItem[] {
+function reasoningItems(block: typesModule.ThinkingContent): ResponseInputItem[] {
   if (block.thinkingSignature === undefined || block.thinkingSignature === "") return [];
   return [JSON.parse(block.thinkingSignature) as ResponseReasoningItem];
 }
@@ -36,14 +34,14 @@ function replayMessageId(rawId: string | undefined, fallbackId: string): string 
   return rawId.length > 64 ? `msg_${shortHash(rawId)}` : rawId;
 }
 
-function textItem(block: TextContent, fallbackId: string): ResponseOutputMessage {
+function textItem(block: typesModule.TextContent, fallbackId: string): ResponseOutputMessage {
   const signature = parseTextSignature(block.textSignature);
   return {
-    type: "message",
-    role: "assistant",
-    content: [{ type: "output_text", text: sanitizeSurrogates(block.text), annotations: [] }],
-    status: "completed",
+    content: [{ annotations: [], text: sanitizeSurrogates(block.text), type: "output_text" }],
     id: replayMessageId(signature?.id, fallbackId),
+    role: "assistant",
+    status: "completed",
+    type: "message",
     ...(signature?.phase === undefined ? {} : { phase: signature.phase }),
   };
 }
@@ -54,7 +52,7 @@ interface ReplayRoute {
 }
 
 interface ToolCallReplay {
-  readonly toolCall: ToolCall;
+  readonly toolCall: typesModule.ToolCall;
   readonly route: ReplayRoute;
   readonly customInputProperty: string | undefined;
 }
@@ -81,23 +79,16 @@ function toolCallItem({ toolCall, route, customInputProperty }: ToolCallReplay):
 const fallbackMessageId = (msgIndex: number, textBlockIndex: number): string =>
   textBlockIndex === 0 ? `msg_pi_${msgIndex}` : `msg_pi_${msgIndex}_${textBlockIndex}`;
 
-export interface AssistantConversion<TApi extends Api> {
-  readonly model: Model<TApi>;
-  readonly message: AssistantMessage;
-  readonly msgIndex: number;
-  readonly options: ConvertResponsesMessagesOptions | undefined;
-}
-
-export function convertAssistantMessage<TApi extends Api>({
+function convertAssistantMessage<TApi extends typesModule.Api>({
   model,
   message,
   msgIndex,
   options,
-}: AssistantConversion<TApi>): ResponseInput | undefined {
+}: openaiResponsesAssistantInputTypes.AssistantConversion<TApi>): ResponseInput | undefined {
   const sameRoute = message.provider === model.provider && message.api === model.api;
   const route: ReplayRoute = {
-    sameModel: sameRoute && message.model === model.id,
     differentModel: sameRoute && message.model !== model.id,
+    sameModel: sameRoute && message.model === model.id,
   };
   let textBlockIndex = 0;
   const output = message.content.flatMap((block): ResponseInputItem[] => {
@@ -105,7 +96,7 @@ export function convertAssistantMessage<TApi extends Api>({
     if (block.type === "text")
       return [textItem(block, fallbackMessageId(msgIndex, textBlockIndex++))];
     const customInputProperty = options?.grammarToolInputProperties?.get(block.name);
-    return [toolCallItem({ toolCall: block, route, customInputProperty })];
+    return [toolCallItem({ customInputProperty, route, toolCall: block })];
   });
   if (output.length === 0) return undefined;
   const replayEffort =
@@ -114,3 +105,10 @@ export function convertAssistantMessage<TApi extends Api>({
       : undefined;
   return replayEffort === undefined ? output : [configurationUpdate(replayEffort), ...output];
 }
+
+const openaiResponsesAssistantInput = {
+  configurationUpdate,
+  convertAssistantMessage,
+};
+
+export default openaiResponsesAssistantInput;

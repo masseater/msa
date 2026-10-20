@@ -1,5 +1,7 @@
-import { Agent } from "@msa/agent-core";
-import { type AssistantMessage, createAssistantMessageEventStream, getModel } from "@msa/ai/compat";
+import agentModule from "@msa/agent-core";
+import type agentTypes from "@msa/agent-core/index.types";
+import compat from "@msa/ai/compat";
+import type compatTypes from "@msa/ai/compat.types";
 import testing from "@msa/testing";
 import { Effect } from "effect";
 
@@ -10,6 +12,10 @@ import { SettingsManager } from "../src/core/settings-manager.ts";
 import modelRuntimeTestUtils from "./model-runtime-test-utils.ts";
 import utilities from "./utilities.ts";
 
+const { createAssistantMessageEventStream, getModel } = compat;
+
+const { Agent } = agentModule;
+
 const { awaited, currentTimeMillis, gate, joinPath, pollUntil, runTest } = testing;
 const { createModelRegistry, getModelRuntime } = modelRuntimeTestUtils;
 const { createTestResourceLoader } = utilities;
@@ -18,7 +24,7 @@ type SubmitHandler = (text: string) => unknown;
 
 type QueueEvent = { steering: readonly string[]; followUp: readonly string[] };
 
-const createAssistantMessage = (text: string): AssistantMessage => ({
+const createAssistantMessage = (text: string): compatTypes.AssistantMessage => ({
   api: "anthropic-messages",
   content: [{ text, type: "text" }],
   model: "mock",
@@ -46,7 +52,7 @@ const userTexts = (messages: readonly { role: string; content: unknown }[]): str
     return Array.isArray(message.content) ? textParts(message.content) : [];
   });
 
-const createAgent = (requests: string[][], firstReply: Promise<void>): Agent =>
+const createAgent = (requests: string[][], firstReply: Promise<void>): agentTypes.Agent =>
   new Agent({
     getApiKey: () => "test-key",
     initialState: {
@@ -65,7 +71,10 @@ const createAgent = (requests: string[][], firstReply: Promise<void>): Agent =>
     },
   });
 
-const createSession = Effect.fn("createSession")(function* (tempDir: string, agent: Agent) {
+const createSession = Effect.fn("createSession")(function* (
+  tempDir: string,
+  agent: agentTypes.Agent,
+) {
   const authStorage = AuthStorage.create(joinPath(tempDir, "auth.json"));
   const modelRegistry = yield* awaited(createModelRegistry(authStorage, tempDir));
   yield* awaited(

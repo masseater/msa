@@ -1,4 +1,4 @@
-import type { AnthropicMessagesCompat } from "@msa/ai/compat";
+import type compatTypes from "@msa/ai/compat.types";
 import testing from "@msa/testing";
 import { Effect } from "effect";
 import { afterEach, beforeEach, describe, expect, test, vi } from "vite-plus/test";
@@ -110,7 +110,7 @@ const anthropicModelOverrideReplacesAllowedFallbackMetadata = () =>
 
       const registry = yield* awaited(createModelRegistry(authStorage, modelsJsonPath));
       const compat = registry.find("anthropic-api", "claude-fable-5")?.compat as
-        | AnthropicMessagesCompat
+        | compatTypes.AnthropicMessagesCompat
         | undefined;
 
       expect(registry.getError()).toBeUndefined();

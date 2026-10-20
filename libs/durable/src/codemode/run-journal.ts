@@ -1,4 +1,4 @@
-import type { CodemodeHostCall, CodemodeOutcome } from "@msa/codemode/portable";
+import type portableTypes from "@msa/codemode/portable.types";
 import { Cause, Effect, Exit } from "effect";
 
 import callRows from "./call-outcome.ts";
@@ -18,7 +18,7 @@ const { priorCall, settleCall } = journalCalls;
 export default class RunJournal {
   private readonly control: runJournalTypes.RunControl;
   private readonly gate = Promise.withResolvers<void>();
-  private readonly ready = new Map<number, CodemodeOutcome>();
+  private readonly ready = new Map<number, portableTypes.CodemodeOutcome>();
   private readonly acks = new Map<number, number>();
   private readonly replayIndex: Map<number, number>;
   private journalLength: number;
@@ -27,8 +27,8 @@ export default class RunJournal {
   private released = false;
   private durableIssued: number;
   private issued = 0;
-  private waiting: CodemodeHostCall[] = [];
-  private held: CodemodeHostCall[] = [];
+  private waiting: portableTypes.CodemodeHostCall[] = [];
+  private held: portableTypes.CodemodeHostCall[] = [];
   private queue: runDocsTypes.Settled[] = [];
   private committing = false;
 
@@ -77,7 +77,7 @@ export default class RunJournal {
     });
   }
 
-  onCall(made: CodemodeHostCall): void {
+  onCall(made: portableTypes.CodemodeHostCall): void {
     if (this.stopped) return;
     const call = asToolCall(made);
     if (call.target === "tool") this.control.host.rows.started(call);
@@ -93,7 +93,7 @@ export default class RunJournal {
     } else this.held.push(call);
   }
 
-  private replayCall(call: CodemodeHostCall, entry: runDocsTypes.JournalEntry): void {
+  private replayCall(call: portableTypes.CodemodeHostCall, entry: runDocsTypes.JournalEntry): void {
     const { global } = entry;
     if (global !== undefined) {
       if (
@@ -106,7 +106,7 @@ export default class RunJournal {
         );
         return;
       }
-      this.ready.set(call.id, global.outcome as CodemodeOutcome);
+      this.ready.set(call.id, global.outcome as portableTypes.CodemodeOutcome);
       void this.gate.promise.then(() => this.deliverReplayed());
       return;
     }
@@ -122,12 +122,12 @@ export default class RunJournal {
       );
   }
 
-  private replayedOutcome(id: number, outcome: CodemodeOutcome): void {
+  private replayedOutcome(id: number, outcome: portableTypes.CodemodeOutcome): void {
     this.ready.set(id, outcome);
     this.deliverReplayed();
   }
 
-  private callFailed(call: CodemodeHostCall, error: unknown): void {
+  private callFailed(call: portableTypes.CodemodeHostCall, error: unknown): void {
     if (this.stopped) return;
     if (this.control.host.context.abortSignal?.aborted === true) this.control.fail(error);
     else this.control.diverge(failedCall(call, error));
@@ -190,7 +190,7 @@ export default class RunJournal {
     });
   }
 
-  private sameAsBefore(calls: readonly CodemodeHostCall[]): Effect.Effect<boolean> {
+  private sameAsBefore(calls: readonly portableTypes.CodemodeHostCall[]): Effect.Effect<boolean> {
     return Effect.gen({ self: this }, function* () {
       const { control } = this;
       for (const call of calls) {
@@ -217,7 +217,7 @@ export default class RunJournal {
     for (const call of covered) this.launch(call);
   }
 
-  private launch(call: CodemodeHostCall): void {
+  private launch(call: portableTypes.CodemodeHostCall): void {
     if (this.stopped) return;
     Effect.runPromise(settleCall(this.control.host, call)).then(
       (settled) => this.settled(settled),

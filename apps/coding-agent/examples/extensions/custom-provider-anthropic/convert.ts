@@ -1,12 +1,5 @@
 import type { ContentBlockParam } from "@anthropic-ai/sdk/resources/messages.js";
-import type {
-  ImageContent,
-  Message,
-  StopReason,
-  TextContent,
-  ThinkingContent,
-  Tool,
-} from "@msa/ai";
+import type aiTypes from "@msa/ai/index.types";
 
 const CLAUDE_CODE_TOOLS = [
   "Read",
@@ -28,7 +21,7 @@ export const toClaudeCodeName = (name: string): string =>
 
 export const fromClaudeCodeName = (request: {
   readonly name: string;
-  readonly tools?: Tool[];
+  readonly tools?: aiTypes.Tool[];
 }): string => {
   const { name, tools } = request;
   const lowerName = name.toLowerCase();
@@ -38,45 +31,45 @@ export const fromClaudeCodeName = (request: {
 export const sanitizeSurrogates = (text: string): string =>
   text.replace(/[\uD800-\uDFFF]/gu, "\uFFFD");
 
-const imageBlock = (item: ImageContent) => ({
-  type: "image" as const,
+const imageBlock = (item: aiTypes.ImageContent) => ({
   source: {
-    type: "base64" as const,
-    media_type: item.mimeType as "image/jpeg",
     data: item.data,
+    media_type: item.mimeType as "image/jpeg",
+    type: "base64" as const,
   },
+  type: "image" as const,
 });
 
 export const convertContentBlocks = (
-  content: (TextContent | ImageContent)[],
+  content: (aiTypes.TextContent | aiTypes.ImageContent)[],
 ): string | ContentBlockParam[] => {
   if (!content.some((c) => c.type === "image")) {
-    return sanitizeSurrogates(content.map((c) => (c as TextContent).text).join("\n"));
+    return sanitizeSurrogates(content.map((c) => (c as aiTypes.TextContent).text).join("\n"));
   }
 
   const blocks: ContentBlockParam[] = content.map((block) =>
     block.type === "text"
-      ? { type: "text" as const, text: sanitizeSurrogates(block.text) }
+      ? { text: sanitizeSurrogates(block.text), type: "text" as const }
       : imageBlock(block),
   );
 
   if (!blocks.some((b) => b.type === "text")) {
-    blocks.unshift({ type: "text" as const, text: "(see attached image)" });
+    blocks.unshift({ text: "(see attached image)", type: "text" as const });
   }
   return blocks;
 };
 
-const convertUserMessage = (msg: Message): ContentBlockParam[] | undefined => {
+const convertUserMessage = (msg: aiTypes.Message): ContentBlockParam[] | undefined => {
   if (typeof msg.content === "string") {
     return msg.content.trim().length > 0
-      ? [{ type: "text", text: sanitizeSurrogates(msg.content) }]
+      ? [{ text: sanitizeSurrogates(msg.content), type: "text" }]
       : undefined;
   }
 
   const blocks: ContentBlockParam[] = [];
   for (const item of msg.content) {
     if (item.type === "text") {
-      blocks.push({ type: "text", text: sanitizeSurrogates(item.text) });
+      blocks.push({ text: sanitizeSurrogates(item.text), type: "text" });
     } else if (item.type === "image") {
       blocks.push(imageBlock(item));
     }
@@ -84,48 +77,50 @@ const convertUserMessage = (msg: Message): ContentBlockParam[] | undefined => {
   return blocks.length > 0 ? blocks : undefined;
 };
 
-const convertThinkingBlock = (block: ThinkingContent): ContentBlockParam => {
+const convertThinkingBlock = (block: aiTypes.ThinkingContent): ContentBlockParam => {
   const signature = block.thinkingSignature ?? "";
   if (signature.length > 0) {
     return {
-      type: "thinking",
-      thinking: sanitizeSurrogates(block.thinking),
       signature,
+      thinking: sanitizeSurrogates(block.thinking),
+      type: "thinking",
     } as unknown as ContentBlockParam;
   }
-  return { type: "text", text: sanitizeSurrogates(block.thinking) };
+  return { text: sanitizeSurrogates(block.thinking), type: "text" };
 };
 
-const convertAssistantMessage = (msg: Message, isOAuth: boolean): ContentBlockParam[] => {
+const convertAssistantMessage = (msg: aiTypes.Message, isOAuth: boolean): ContentBlockParam[] => {
   if (typeof msg.content === "string") return [];
 
   const blocks: ContentBlockParam[] = [];
   for (const block of msg.content) {
     if (block.type === "text" && block.text.trim().length > 0) {
-      blocks.push({ type: "text", text: sanitizeSurrogates(block.text) });
+      blocks.push({ text: sanitizeSurrogates(block.text), type: "text" });
     } else if (block.type === "thinking" && block.thinking.trim().length > 0) {
       blocks.push(convertThinkingBlock(block));
     } else if (block.type === "toolCall") {
       blocks.push({
-        type: "tool_use",
         id: block.id,
-        name: isOAuth ? toClaudeCodeName(block.name) : block.name,
         input: block.arguments,
+        name: isOAuth ? toClaudeCodeName(block.name) : block.name,
+        type: "tool_use",
       });
     }
   }
   return blocks;
 };
 
-const toolResultBlock = (msg: Message) => ({
-  type: "tool_result" as const,
-  tool_use_id: (msg as { toolCallId: string }).toolCallId,
-  content: convertContentBlocks((msg as { content: (TextContent | ImageContent)[] }).content),
+const toolResultBlock = (msg: aiTypes.Message) => ({
+  content: convertContentBlocks(
+    (msg as { content: (aiTypes.TextContent | aiTypes.ImageContent)[] }).content,
+  ),
   is_error: (msg as { isError: boolean }).isError,
+  tool_use_id: (msg as { toolCallId: string }).toolCallId,
+  type: "tool_result" as const,
 });
 
 const convertToolResults = (
-  messages: Message[],
+  messages: aiTypes.Message[],
   start: number,
 ): { blocks: unknown[]; next: number } => {
   const blocks: unknown[] = [];
@@ -140,7 +135,7 @@ const convertToolResults = (
 };
 
 export const convertMessages = (request: {
-  readonly messages: Message[];
+  readonly messages: aiTypes.Message[];
   readonly isOAuth: boolean;
 }): unknown[] => {
   const { messages, isOAuth } = request;
@@ -152,14 +147,14 @@ export const convertMessages = (request: {
 
     if (msg.role === "user") {
       const content = convertUserMessage(msg);
-      if (content !== undefined) params.push({ role: "user", content });
+      if (content !== undefined) params.push({ content, role: "user" });
     } else if (msg.role === "assistant") {
       const content = convertAssistantMessage(msg, isOAuth);
-      if (content.length > 0) params.push({ role: "assistant", content });
+      if (content.length > 0) params.push({ content, role: "assistant" });
     } else if (msg.role === "toolResult") {
       const { blocks, next } = convertToolResults(messages, i);
       i = next - 1;
-      params.push({ role: "user", content: blocks });
+      params.push({ content: blocks, role: "user" });
     }
   }
 
@@ -175,20 +170,20 @@ export const convertMessages = (request: {
 };
 
 export const convertTools = (request: {
-  readonly tools: Tool[];
+  readonly tools: aiTypes.Tool[];
   readonly isOAuth: boolean;
 }): unknown[] =>
   request.tools.map((tool) => ({
-    name: request.isOAuth ? toClaudeCodeName(tool.name) : tool.name,
     description: tool.description,
     input_schema: {
-      type: "object",
       properties: (tool.parameters as { properties?: unknown }).properties ?? {},
       required: (tool.parameters as { required?: unknown }).required ?? [],
+      type: "object",
     },
+    name: request.isOAuth ? toClaudeCodeName(tool.name) : tool.name,
   }));
 
-export const mapStopReason = (reason: string): StopReason => {
+export const mapStopReason = (reason: string): aiTypes.StopReason => {
   switch (reason) {
     case "end_turn":
     case "pause_turn":

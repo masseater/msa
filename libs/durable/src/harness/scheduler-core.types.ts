@@ -1,4 +1,4 @@
-import type { Models } from "@msa/ai";
+import type aiTypes from "@msa/ai/index.types";
 import type chordTypes from "@msa/chord/index.types";
 
 import type envTypes from "../env/index.types.ts";
@@ -106,7 +106,7 @@ declare namespace schedulerCoreTypes {
     readonly session: sessionTypes.SessionImpl;
     readonly storage: typesModule.Storage;
     readonly registry: typesModule.RegistryReader;
-    readonly models: Models;
+    readonly models: aiTypes.Models;
     readonly agent: (
       conversationId: typesModule.ConversationId,
       snapshot: typesModule.RegistrySnapshot,

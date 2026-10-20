@@ -1,31 +1,32 @@
-import type {
-  Api,
-  AssistantMessage,
-  Model,
-  SimpleStreamOptions,
-  StreamFunction,
-  StreamOptions,
-  TranscriptContext,
-} from "../types.ts";
-import { currentTimeMillis } from "../utils/clock.ts";
-import { formatProviderError, normalizeProviderError } from "../utils/error-body.ts";
-import type { AssistantMessageEventStream } from "../utils/event-stream.ts";
-import { modelCall } from "../utils/model-call.ts";
-import { resolveTranscript } from "../utils/transcript.ts";
-import {
-  getClientApiKey,
-  getCompat,
-  getConfigurationUpdateEffort,
-  type OpenAIResponsesOptions,
-} from "./openai-responses-config.ts";
-import { responsesSimpleOptions } from "./openai-responses-reasoning.ts";
-import { prepareOpenAIResponsesRequest } from "./openai-responses-request.ts";
-import { runResponsesStream } from "./openai-responses-run.ts";
+import type typesModule from "../types.types.ts";
+import type eventStreamTypes from "../utils/event-stream.types.ts";
+import modelCallModule from "../utils/model-call.ts";
+import transcript from "../utils/transcript.ts";
+import openaiResponsesConfig from "./openai-responses-config.ts";
+import type openaiResponsesConfigTypes from "./openai-responses-config.types.ts";
+import openaiResponsesKit from "./openai-responses-kit.ts";
+import openaiResponsesReasoning from "./openai-responses-reasoning.ts";
+import openaiResponsesRequest from "./openai-responses-request.ts";
+import openaiResponsesRun from "./openai-responses-run.ts";
+
+const { clock, errorBody } = openaiResponsesKit;
+
+const { formatProviderError, normalizeProviderError } = errorBody;
+const { currentTimeMillis } = clock;
+const { modelCall } = modelCallModule;
+const { resolveTranscript } = transcript;
+const { getClientApiKey, getCompat, getConfigurationUpdateEffort } = openaiResponsesConfig;
+const { runResponsesStream } = openaiResponsesRun;
+const { prepareOpenAIResponsesRequest } = openaiResponsesRequest;
+const { responsesSimpleOptions } = openaiResponsesReasoning;
 
 const CHATGPT_USAGE_URL = "https://chatgpt.com/settings/usage";
 
-type ResponsesModel = Model<"openai-responses">;
-type Stream<O extends StreamOptions> = StreamFunction<"openai-responses", O>;
+type ResponsesModel = typesModule.Model<"openai-responses">;
+type Stream<O extends typesModule.StreamOptions> = typesModule.StreamFunction<
+  "openai-responses",
+  O
+>;
 
 function formatOpenAIError(model: ResponsesModel): (error: unknown) => string {
   return (error) => {
@@ -42,72 +43,79 @@ function formatOpenAIError(model: ResponsesModel): (error: unknown) => string {
 function pendingOutput(
   model: ResponsesModel,
   configurationUpdateEffort: string | undefined,
-): AssistantMessage {
+): typesModule.AssistantMessage {
   return {
-    role: "assistant",
+    api: model.api as typesModule.Api,
     content: [],
-    api: model.api as Api,
-    provider: model.provider,
     model: model.id,
+    provider: model.provider,
+    role: "assistant",
+    stopReason: "pending",
+    timestamp: currentTimeMillis(),
+    usage: {
+      cacheRead: 0,
+      cacheWrite: 0,
+      cost: { cacheRead: 0, cacheWrite: 0, input: 0, output: 0, total: 0 },
+      input: 0,
+      output: 0,
+      totalTokens: 0,
+    },
     ...(configurationUpdateEffort === undefined
       ? {}
       : { providerThinkingLevel: configurationUpdateEffort }),
-    usage: {
-      input: 0,
-      output: 0,
-      cacheRead: 0,
-      cacheWrite: 0,
-      totalTokens: 0,
-      cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0, total: 0 },
-    },
-    stopReason: "pending",
-    timestamp: currentTimeMillis(),
   };
 }
 
-export const stream = modelCall<
-  Parameters<Stream<OpenAIResponsesOptions>>[0],
-  Parameters<Stream<OpenAIResponsesOptions>>[1],
-  NonNullable<Parameters<Stream<OpenAIResponsesOptions>>[2]>,
-  ReturnType<Stream<OpenAIResponsesOptions>>
+const stream = modelCall<
+  Parameters<Stream<openaiResponsesConfigTypes.OpenAIResponsesOptions>>[0],
+  Parameters<Stream<openaiResponsesConfigTypes.OpenAIResponsesOptions>>[1],
+  NonNullable<Parameters<Stream<openaiResponsesConfigTypes.OpenAIResponsesOptions>>[2]>,
+  ReturnType<Stream<openaiResponsesConfigTypes.OpenAIResponsesOptions>>
 >(
   (
     model: ResponsesModel,
-    context: TranscriptContext,
-    options?: OpenAIResponsesOptions,
-  ): AssistantMessageEventStream => {
+    context: typesModule.TranscriptContext,
+    options?: openaiResponsesConfigTypes.OpenAIResponsesOptions,
+  ): eventStreamTypes.AssistantMessageEventStream => {
     const normalized = resolveTranscript(context, getCompat(model).supportsMidConvoSystemMessages);
     const configurationUpdateEffort = getConfigurationUpdateEffort(model)(options);
     return runResponsesStream({
+      formatError: formatOpenAIError(model),
       model,
       options,
       output: pendingOutput(model, configurationUpdateEffort),
-      streamName: "OpenAI Responses",
       prepare: () =>
         prepareOpenAIResponsesRequest({
-          model,
-          context: normalized,
-          options,
           configurationUpdateEffort,
+          context: normalized,
+          model,
+          options,
         }),
-      formatError: formatOpenAIError(model),
+      streamName: "OpenAI Responses",
     });
   },
 );
 
-export const streamSimple = modelCall<
-  Parameters<Stream<SimpleStreamOptions>>[0],
-  Parameters<Stream<SimpleStreamOptions>>[1],
-  NonNullable<Parameters<Stream<SimpleStreamOptions>>[2]>,
-  ReturnType<Stream<SimpleStreamOptions>>
+const streamSimple = modelCall<
+  Parameters<Stream<typesModule.SimpleStreamOptions>>[0],
+  Parameters<Stream<typesModule.SimpleStreamOptions>>[1],
+  NonNullable<Parameters<Stream<typesModule.SimpleStreamOptions>>[2]>,
+  ReturnType<Stream<typesModule.SimpleStreamOptions>>
 >(
   (
     model: ResponsesModel,
-    context: TranscriptContext,
-    options?: SimpleStreamOptions,
-  ): AssistantMessageEventStream => {
+    context: typesModule.TranscriptContext,
+    options?: typesModule.SimpleStreamOptions,
+  ): eventStreamTypes.AssistantMessageEventStream => {
     getClientApiKey(model)(options);
     const apiKey = options?.apiKey;
-    return stream(model, context, responsesSimpleOptions({ model, context, options, apiKey }));
+    return stream(model, context, responsesSimpleOptions({ apiKey, context, model, options }));
   },
 );
+
+const openaiResponses = {
+  stream,
+  streamSimple,
+};
+
+export default openaiResponses;

@@ -1,9 +1,11 @@
 import { Clock, Effect } from "effect";
 import { afterEach, describe, expect, it } from "vite-plus/test";
 
-import { complete, fauxAssistantMessage, registerFauxProvider } from "../src/compat.ts";
-import type { Context } from "../src/types.ts";
+import compat from "../src/compat.ts";
+import type typesModule from "../src/types.types.ts";
 import fauxProviderSupport from "./faux-provider-support.ts";
+
+const { complete, fauxAssistantMessage, registerFauxProvider } = compat;
 
 const { registrations } = fauxProviderSupport;
 
@@ -24,7 +26,7 @@ const doesNotShareCacheAcrossSessions = () =>
         fauxAssistantMessage("third"),
       ]);
 
-      const context: Context = {
+      const context: typesModule.Context = {
         messages: [{ content: "hello", role: "user", timestamp: yield* Clock.currentTimeMillis }],
       };
 
@@ -63,7 +65,7 @@ const simulatesPromptCachingPerSessionId = () =>
       registrations.push(registration);
       registration.setResponses([fauxAssistantMessage("first"), fauxAssistantMessage("second")]);
 
-      const context: Context = {
+      const context: typesModule.Context = {
         messages: [{ content: "hello", role: "user", timestamp: yield* Clock.currentTimeMillis }],
         systemPrompt: "Be concise.",
       };
@@ -137,7 +139,7 @@ const doesNotSimulateCachingWhenCacheRetention = () =>
       registrations.push(registration);
       registration.setResponses([fauxAssistantMessage("first"), fauxAssistantMessage("second")]);
 
-      const context: Context = {
+      const context: typesModule.Context = {
         messages: [{ content: "hello", role: "user", timestamp: yield* Clock.currentTimeMillis }],
       };
 

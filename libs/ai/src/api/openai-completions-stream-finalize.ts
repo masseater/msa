@@ -1,10 +1,15 @@
-import type { AssistantMessage } from "../types.ts";
-import { formatProviderError, normalizeProviderError } from "../utils/error-body.ts";
-import type { AssistantMessageEventStream } from "../utils/event-stream.ts";
-import { finishAllBlocks } from "./openai-completions-stream-state.ts";
-import type { CompletionsStreamState } from "./openai-completions-stream-types.ts";
+import type typesModule from "../types.types.ts";
+import errorBody from "../utils/error-body.ts";
+import type eventStreamTypes from "../utils/event-stream.types.ts";
+import openaiCompletionsStreamState from "./openai-completions-stream-state.ts";
+import type openaiCompletionsStreamTypesModule from "./openai-completions-stream-types.types.ts";
 
-function finalizeCompletionsStream(state: CompletionsStreamState): void {
+const { finishAllBlocks } = openaiCompletionsStreamState;
+const { formatProviderError, normalizeProviderError } = errorBody;
+
+function finalizeCompletionsStream(
+  state: openaiCompletionsStreamTypesModule.CompletionsStreamState,
+): void {
   const { output, options, compat } = state;
   finishAllBlocks(state);
   if (options?.signal?.aborted === true) {
@@ -24,13 +29,13 @@ function finalizeCompletionsStream(state: CompletionsStreamState): void {
   if ((compat.supportsFinishReason && !state.hasFinishReason) || output.stopReason === "pending") {
     throw new Error("Stream ended without finish_reason");
   }
-  state.events.push({ type: "done", reason: output.stopReason, message: output });
+  state.events.push({ message: output, reason: output.stopReason, type: "done" });
   state.events.end();
 }
 
 interface FailStreamInput {
-  readonly output: AssistantMessage;
-  readonly events: AssistantMessageEventStream;
+  readonly output: typesModule.AssistantMessage;
+  readonly events: eventStreamTypes.AssistantMessageEventStream;
   readonly error: unknown;
   readonly signal: AbortSignal | undefined;
 }
@@ -49,8 +54,13 @@ function failCompletionsStream(input: FailStreamInput): void {
   if (Boolean(rawMetadata) && !output.errorMessage.includes(String(rawMetadata))) {
     output.errorMessage += `\n${rawMetadata}`;
   }
-  events.push({ type: "error", reason: output.stopReason, error: output });
+  events.push({ error: output, reason: output.stopReason, type: "error" });
   events.end();
 }
 
-export { failCompletionsStream, finalizeCompletionsStream };
+const openaiCompletionsStreamFinalize = {
+  failCompletionsStream,
+  finalizeCompletionsStream,
+};
+
+export default openaiCompletionsStreamFinalize;

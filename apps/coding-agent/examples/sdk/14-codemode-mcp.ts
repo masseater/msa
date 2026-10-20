@@ -1,20 +1,20 @@
 import {
+  DefaultResourceLoader,
+  SessionManager,
+  SettingsManager,
   createAgentSession,
   createCodemodeExtension,
   createMcpExtension,
   createToolSearchExtension,
-  DefaultResourceLoader,
   getAgentDir,
-  SessionManager,
-  SettingsManager,
 } from "@msa/coding-agent";
 import { Console, Effect } from "effect";
 
 const cwd = process.cwd();
 
 const resourceLoader = new DefaultResourceLoader({
-  cwd,
   agentDir: getAgentDir(),
+  cwd,
   extensionFactories: [
     createCodemodeExtension({ mode: "on" }),
     createToolSearchExtension(),
@@ -30,8 +30,8 @@ settingsManager.applyOverrides({ defaultTools: ["+codemode", "+tool_search"] });
 
 const { session } = await createAgentSession({
   resourceLoader,
-  settingsManager,
   sessionManager: SessionManager.inMemory(),
+  settingsManager,
 });
 
 try {

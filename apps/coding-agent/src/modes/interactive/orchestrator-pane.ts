@@ -1,4 +1,5 @@
-import { type Component, SplitPane, splitPaneWidths } from "@msa/tui";
+import tui from "@msa/tui";
+import type tuiTypes from "@msa/tui/index.types";
 
 import type { Orchestrator } from "../../core/orchestrator/orchestrator.ts";
 import type { CustomEditor } from "./components/custom-editor.ts";
@@ -6,10 +7,12 @@ import { PaneResizer } from "./components/pane-resizer.ts";
 import type { TasksViewState } from "./components/tasks-view-helpers.ts";
 import { ThreadPane } from "./components/thread-pane.ts";
 
+const { SplitPane, splitPaneWidths } = tui;
+
 export const ORCHESTRATOR_PANE = {
-  share: 0.3,
-  minRightWidth: 24,
   minLeftWidth: 40,
+  minRightWidth: 24,
+  share: 0.3,
   stepColumns: 2,
 } as const;
 
@@ -61,20 +64,20 @@ export class OrchestratorPane {
     this.options = options;
   }
 
-  layout(left: Component): SplitPane {
+  layout(left: tuiTypes.Component): tuiTypes.SplitPane {
     const { orchestrator, state, rows, columns, requestRender } = this.options;
     return new SplitPane({
-      left,
-      right: new ThreadPane({ orchestrator, state, height: rows }),
       divider: new PaneResizer({
         height: rows,
         onDrag: (screenX) => {
           if (this.width.dragTo(screenX, columns())) requestRender();
         },
       }),
-      rightShare: () => this.width.share,
-      minRightWidth: ORCHESTRATOR_PANE.minRightWidth,
+      left,
       minLeftWidth: ORCHESTRATOR_PANE.minLeftWidth,
+      minRightWidth: ORCHESTRATOR_PANE.minRightWidth,
+      right: new ThreadPane({ orchestrator, state, height: rows }),
+      rightShare: () => this.width.share,
       visible: () => !this.threadsOpen && orchestrator() !== undefined,
     });
   }

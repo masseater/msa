@@ -1,33 +1,34 @@
 import { Clock, Effect } from "effect";
 
-import { type HttpReply, type HttpRequest, httpRequest } from "../../utils/http.ts";
-import { decodeJson, encodeJson } from "../../utils/json-codec.ts";
-import { getProviderEnvValue } from "../../utils/provider-env.ts";
-import type { OAuthCredential } from "../types.ts";
-import { readText } from "./response-json.ts";
+import http from "../../utils/http.ts";
+import type httpTypes from "../../utils/http.types.ts";
+import jsonCodec from "../../utils/json-codec.ts";
+import providerEnv from "../../utils/provider-env.ts";
+import type typesModule from "../types.ts";
+import type openaiCodexSharedTypes from "./openai-codex-shared.types.ts";
+import responseJson from "./response-json.ts";
+
+const { getProviderEnvValue } = providerEnv;
+const { httpRequest } = http;
+const { decodeJson, encodeJson } = jsonCodec;
+const { readText } = responseJson;
 
 const AUTH_BASE_URL = "https://auth.openai.com";
 
-export const CLIENT_ID = "app_EMoamEEZ73f0CkXaXp7hrann";
-export const AUTHORIZE_URL = `${AUTH_BASE_URL}/oauth/authorize`;
-export const TOKEN_URL = `${AUTH_BASE_URL}/oauth/token`;
-export const REDIRECT_URI = "http://localhost:1455/auth/callback";
-export const DEVICE_USER_CODE_URL = `${AUTH_BASE_URL}/api/accounts/deviceauth/usercode`;
-export const DEVICE_TOKEN_URL = `${AUTH_BASE_URL}/api/accounts/deviceauth/token`;
-export const DEVICE_VERIFICATION_URI = `${AUTH_BASE_URL}/codex/device`;
-export const DEVICE_REDIRECT_URI = `${AUTH_BASE_URL}/deviceauth/callback`;
-export const DEVICE_CODE_TIMEOUT_SECONDS = 15 * 60;
-export const BROWSER_LOGIN_METHOD = "browser";
-export const DEVICE_CODE_LOGIN_METHOD = "device_code";
-export const SCOPE = "openid profile email offline_access";
+const CLIENT_ID = "app_EMoamEEZ73f0CkXaXp7hrann";
+const AUTHORIZE_URL = `${AUTH_BASE_URL}/oauth/authorize`;
+const TOKEN_URL = `${AUTH_BASE_URL}/oauth/token`;
+const REDIRECT_URI = "http://localhost:1455/auth/callback";
+const DEVICE_USER_CODE_URL = `${AUTH_BASE_URL}/api/accounts/deviceauth/usercode`;
+const DEVICE_TOKEN_URL = `${AUTH_BASE_URL}/api/accounts/deviceauth/token`;
+const DEVICE_VERIFICATION_URI = `${AUTH_BASE_URL}/codex/device`;
+const DEVICE_REDIRECT_URI = `${AUTH_BASE_URL}/deviceauth/callback`;
+const DEVICE_CODE_TIMEOUT_SECONDS = 15 * 60;
+const BROWSER_LOGIN_METHOD = "browser";
+const DEVICE_CODE_LOGIN_METHOD = "device_code";
+const SCOPE = "openid profile email offline_access";
 
 const JWT_CLAIM_PATH = "https://api.openai.com/auth";
-
-export interface OAuthToken {
-  readonly access: string;
-  readonly refresh: string;
-  readonly expires: number;
-}
 
 type TokenOperation = "exchange" | "refresh";
 
@@ -38,10 +39,11 @@ interface JwtPayload {
   readonly [key: string]: unknown;
 }
 
-export const getCallbackHost = (): string =>
-  getProviderEnvValue("MSA_OAUTH_CALLBACK_HOST") ?? "127.0.0.1";
+const getCallbackHost = (): string => getProviderEnvValue("MSA_OAUTH_CALLBACK_HOST") ?? "127.0.0.1";
 
-export const requestWithLoginCancellation = (request: HttpRequest): Effect.Effect<HttpReply> =>
+const requestWithLoginCancellation = (
+  request: httpTypes.HttpRequest,
+): Effect.Effect<httpTypes.HttpReply> =>
   httpRequest(request).pipe(
     Effect.catchDefect((error) =>
       Effect.die(
@@ -69,27 +71,32 @@ const accountIdOf = (accessToken: string): Effect.Effect<string | null> =>
     return typeof accountId === "string" && accountId.length > 0 ? accountId : null;
   });
 
-export const credentialsFromToken = (token: OAuthToken): Effect.Effect<OAuthCredential> =>
+const credentialsFromToken = (
+  token: openaiCodexSharedTypes.OAuthToken,
+): Effect.Effect<typesModule.OAuthCredential> =>
   Effect.gen(function* () {
     const accountId = yield* accountIdOf(token.access);
     if (accountId === null || accountId === "") {
       return yield* Effect.die(new Error("Failed to extract accountId from token"));
     }
     return {
-      type: "oauth",
       access: token.access,
-      refresh: token.refresh,
-      expires: token.expires,
       accountId,
+      expires: token.expires,
+      refresh: token.refresh,
+      type: "oauth",
     };
   });
 
 interface TokenRead {
-  readonly reply: HttpReply;
+  readonly reply: httpTypes.HttpReply;
   readonly operation: TokenOperation;
 }
 
-const readTokenResponse = ({ reply, operation }: TokenRead): Effect.Effect<OAuthToken> =>
+const readTokenResponse = ({
+  reply,
+  operation,
+}: TokenRead): Effect.Effect<openaiCodexSharedTypes.OAuthToken> =>
   Effect.gen(function* () {
     if (!reply.ok) {
       const text = yield* readText(reply);
@@ -120,61 +127,49 @@ const readTokenResponse = ({ reply, operation }: TokenRead): Effect.Effect<OAuth
     const now = yield* Clock.currentTimeMillis;
     return {
       access: json.access_token,
-      refresh: json.refresh_token,
       expires: now + json.expires_in * 1000,
+      refresh: json.refresh_token,
     };
   });
 
-export interface CodeExchange {
-  readonly code: string;
-  readonly verifier: string;
-  readonly redirectUri: string;
-  readonly signal: AbortSignal;
-}
-
-export const exchangeAuthorizationCode = ({
+const exchangeAuthorizationCode = ({
   code,
   verifier,
   redirectUri,
   signal,
-}: CodeExchange): Effect.Effect<OAuthCredential> =>
+}: openaiCodexSharedTypes.CodeExchange): Effect.Effect<typesModule.OAuthCredential> =>
   Effect.gen(function* () {
     const reply = yield* requestWithLoginCancellation({
-      url: TOKEN_URL,
-      method: "POST",
-      headers: { "Content-Type": "application/x-www-form-urlencoded" },
       body: new URLSearchParams({
-        grant_type: "authorization_code",
         client_id: CLIENT_ID,
         code,
         code_verifier: verifier,
+        grant_type: "authorization_code",
         redirect_uri: redirectUri,
       }).toString(),
+      headers: { "Content-Type": "application/x-www-form-urlencoded" },
+      method: "POST",
       signal,
+      url: TOKEN_URL,
     });
-    return yield* credentialsFromToken(yield* readTokenResponse({ reply, operation: "exchange" }));
+    return yield* credentialsFromToken(yield* readTokenResponse({ operation: "exchange", reply }));
   });
 
-export interface TokenRefresh {
-  readonly refreshToken: string;
-  readonly signal: AbortSignal;
-}
-
-export const refreshCodexToken = ({
+const refreshCodexToken = ({
   refreshToken,
   signal,
-}: TokenRefresh): Effect.Effect<OAuthCredential> =>
+}: openaiCodexSharedTypes.TokenRefresh): Effect.Effect<typesModule.OAuthCredential> =>
   Effect.gen(function* () {
     const reply = yield* httpRequest({
-      url: TOKEN_URL,
-      method: "POST",
-      headers: { "Content-Type": "application/x-www-form-urlencoded" },
       body: new URLSearchParams({
+        client_id: CLIENT_ID,
         grant_type: "refresh_token",
         refresh_token: refreshToken,
-        client_id: CLIENT_ID,
       }).toString(),
+      headers: { "Content-Type": "application/x-www-form-urlencoded" },
+      method: "POST",
       signal,
+      url: TOKEN_URL,
     }).pipe(
       Effect.catchDefect((error) =>
         Effect.die(
@@ -185,5 +180,27 @@ export const refreshCodexToken = ({
         ),
       ),
     );
-    return yield* credentialsFromToken(yield* readTokenResponse({ reply, operation: "refresh" }));
+    return yield* credentialsFromToken(yield* readTokenResponse({ operation: "refresh", reply }));
   });
+
+const openaiCodexShared = {
+  AUTHORIZE_URL,
+  BROWSER_LOGIN_METHOD,
+  CLIENT_ID,
+  DEVICE_CODE_LOGIN_METHOD,
+  DEVICE_CODE_TIMEOUT_SECONDS,
+  DEVICE_REDIRECT_URI,
+  DEVICE_TOKEN_URL,
+  DEVICE_USER_CODE_URL,
+  DEVICE_VERIFICATION_URI,
+  REDIRECT_URI,
+  SCOPE,
+  TOKEN_URL,
+  credentialsFromToken,
+  exchangeAuthorizationCode,
+  getCallbackHost,
+  refreshCodexToken,
+  requestWithLoginCancellation,
+};
+
+export default openaiCodexShared;

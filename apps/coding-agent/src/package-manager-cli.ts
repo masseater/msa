@@ -7,15 +7,15 @@ import { createProjectTrustContext } from "./cli/project-trust.ts";
 import {
   APP_NAME,
   CONFIG_DIR_NAME,
+  PACKAGE_NAME,
+  type SelfUpdateCommand,
+  type SelfUpdatePackageTarget,
+  VERSION,
   detectInstallMethod,
   getAgentDir,
   getPackageDir,
   getSelfUpdateCommand,
   getSelfUpdateUnavailableInstruction,
-  PACKAGE_NAME,
-  type SelfUpdateCommand,
-  type SelfUpdatePackageTarget,
-  VERSION,
 } from "./config.ts";
 import { awaited, awaiting } from "./core/awaiting.ts";
 import type { InlineExtension } from "./core/extensions/types.ts";
@@ -26,14 +26,14 @@ import { writeError, writeLog } from "./core/platform.ts";
 import { type AppMode, resolveProjectTrusted } from "./core/project-trust.ts";
 import { DefaultResourceLoader, isBuiltinExtension } from "./core/resource-loader.ts";
 import { SettingsManager } from "./core/settings-manager.ts";
-import { hasTrustRequiringProjectResources, ProjectTrustStore } from "./core/trust-manager.ts";
+import { ProjectTrustStore, hasTrustRequiringProjectResources } from "./core/trust-manager.ts";
 import { spawnProcess } from "./utils/child-process.ts";
 import { callbackPromise } from "./utils/interop.ts";
 import {
+  type LatestMsaRelease,
   formatVersionCheckError,
   getLatestMsaRelease,
   isNewerPackageVersion,
-  type LatestMsaRelease,
 } from "./utils/version-check.ts";
 import {
   cleanupWindowsSelfUpdateQuarantine,
@@ -362,7 +362,7 @@ function parsePackageCommand(args: string[]): PackageCommandOptions | undefined 
         conflictingOptions =
           conflictingOptions ?? "--extension cannot be combined with a positional source";
       }
-      updateTarget = { type: "extensions", source: extensionFlagSource };
+      updateTarget = { source: extensionFlagSource, type: "extensions" };
     } else if (source !== undefined && source !== "") {
       const sourceIsSelf = source === "self" || source === "msa";
       if (sourceIsSelf) {
@@ -373,7 +373,7 @@ function parsePackageCommand(args: string[]): PackageCommandOptions | undefined 
             conflictingOptions ??
             "positional update targets cannot be combined with --self, --extensions, or --all";
         }
-        updateTarget = { type: "extensions", source };
+        updateTarget = { source, type: "extensions" };
       }
     } else if (allFlag) {
       updateTarget = { type: "all" };
@@ -391,17 +391,17 @@ function parsePackageCommand(args: string[]): PackageCommandOptions | undefined 
 
   return {
     command,
+    conflictingOptions,
+    force,
+    help,
+    invalidArgument,
+    invalidOption,
+    local,
+    missingOptionValue,
+    projectTrustOverride,
+    showExtensionsSkippedNote,
     source,
     updateTarget,
-    showExtensionsSkippedNote,
-    local,
-    force,
-    projectTrustOverride,
-    help,
-    invalidOption,
-    invalidArgument,
-    missingOptionValue,
-    conflictingOptions,
   };
 }
 
@@ -419,9 +419,9 @@ function refreshModelCatalogs(agentDir: string): Promise<void> {
       const signal = AbortSignal.timeout(15_000);
       const modelRuntime = yield* awaited(
         ModelRuntime.create({
+          allowModelNetwork: false,
           authPath: join(agentDir, "auth.json"),
           modelsPath: join(agentDir, "models.json"),
-          allowModelNetwork: false,
           signal,
         }),
       );
@@ -480,8 +480,8 @@ function* performSelfUpdate(
     return;
   }
   const selfUpdateTarget = {
-    packageName: PACKAGE_NAME,
     installSpec: selfUpdatePlan.installSpec,
+    packageName: PACKAGE_NAME,
   };
   const selfUpdateCommand = getSelfUpdateCommand(PACKAGE_NAME, npmCommand, selfUpdateTarget);
   if (selfUpdateCommand === undefined) {
@@ -546,11 +546,11 @@ function getSelfUpdatePlan(force: boolean): Promise<SelfUpdatePlan> {
 
       const installSpec = `${PACKAGE_NAME}@${latestRelease.version}`;
       if (force || isNewerPackageVersion(latestRelease.version, VERSION)) {
-        return { installSpec, version: latestRelease.version, shouldRun: true };
+        return { installSpec, shouldRun: true, version: latestRelease.version };
       }
 
       writeLog(chalk.green(`${APP_NAME} is already up to date (v${VERSION})`));
-      return { installSpec, version: latestRelease.version, shouldRun: false };
+      return { installSpec, shouldRun: false, version: latestRelease.version };
     }),
   );
 }
@@ -634,7 +634,7 @@ function createCommandSettingsManager(options: {
       if (options.useSavedProjectTrustOnly === true) {
         const savedProjectTrusted = trustStore.get(options.cwd) === true;
         settingsManager.setProjectTrusted(options.projectTrustOverride ?? savedProjectTrusted);
-        return { settingsManager, projectTrustWarnings };
+        return { projectTrustWarnings, settingsManager };
       }
 
       const appMode = getCommandAppMode();
@@ -642,10 +642,10 @@ function createCommandSettingsManager(options: {
         options.projectTrustOverride === undefined && hasTrustRequiringProjectResources(options.cwd)
           ? yield* awaited(
               new DefaultResourceLoader({
-                cwd: options.cwd,
                 agentDir: options.agentDir,
-                settingsManager,
+                cwd: options.cwd,
                 extensionFactories: options.extensionFactories,
+                settingsManager,
               }).loadProjectTrustExtensions(),
             )
           : undefined;
@@ -656,21 +656,21 @@ function createCommandSettingsManager(options: {
       const projectTrusted = yield* awaited(
         resolveProjectTrusted({
           cwd: options.cwd,
-          trustStore,
-          trustOverride: options.projectTrustOverride,
           defaultProjectTrust: settingsManager.getDefaultProjectTrust(),
           extensionsResult,
+          onExtensionError: (message) => projectTrustWarnings.push(message),
           projectTrustContext: createProjectTrustContext({
             cwd: options.cwd,
             mode: appMode,
             settingsManager,
             hasUI: appMode === "interactive",
           }),
-          onExtensionError: (message) => projectTrustWarnings.push(message),
+          trustOverride: options.projectTrustOverride,
+          trustStore,
         }),
       );
       settingsManager.setProjectTrusted(projectTrusted);
-      return { settingsManager, projectTrustWarnings };
+      return { projectTrustWarnings, settingsManager };
     }),
   );
 }
@@ -717,10 +717,10 @@ function handleConfigCommandImpl(
       const agentDir = getAgentDir();
       const { settingsManager, projectTrustWarnings } = yield* awaited(
         createCommandSettingsManager({
-          cwd,
           agentDir,
-          projectTrustOverride,
+          cwd,
           extensionFactories: runtimeOptions.extensionFactories,
+          projectTrustOverride,
         }),
       );
       reportProjectTrustWarnings(projectTrustWarnings);
@@ -740,31 +740,31 @@ function handleConfigCommandImpl(
       });
       const globalResolvedPaths = yield* awaited(
         new DefaultPackageManager({
-          cwd,
           agentDir,
-          settingsManager: globalSettingsManager,
           builtinExtensions,
+          cwd,
+          settingsManager: globalSettingsManager,
         }).resolve(),
       );
       const projectResolvedPaths = settingsManager.isProjectTrusted()
         ? yield* awaited(
             new DefaultPackageManager({
-              cwd,
               agentDir,
-              settingsManager,
               builtinExtensions,
+              cwd,
+              settingsManager,
             }).resolve(),
           )
         : globalResolvedPaths;
 
       yield* awaited(
         selectConfig({
+          agentDir,
+          cwd,
+          projectModeAvailable: settingsManager.isProjectTrusted(),
           resolvedPaths: { global: globalResolvedPaths, project: projectResolvedPaths },
           settingsManager,
-          cwd,
-          agentDir,
           writeScope: local ? "project" : "global",
-          projectModeAvailable: settingsManager.isProjectTrusted(),
         }),
       );
 
@@ -853,11 +853,11 @@ function handlePackageCommandImpl(
         (options.command === "install" || options.command === "remove") && options.local;
       const { settingsManager, projectTrustWarnings } = yield* awaited(
         createCommandSettingsManager({
-          cwd,
           agentDir,
+          cwd,
+          extensionFactories: runtimeOptions.extensionFactories,
           projectTrustOverride: options.projectTrustOverride,
           useSavedProjectTrustOnly: options.command === "update",
-          extensionFactories: runtimeOptions.extensionFactories,
         }),
       );
       reportProjectTrustWarnings(projectTrustWarnings);
@@ -871,7 +871,7 @@ function handlePackageCommandImpl(
       reportSettingsErrors(settingsManager, "package command");
       const selfUpdateNpmCommand = settingsManager.getGlobalSettings().npmCommand;
 
-      const packageManager = new DefaultPackageManager({ cwd, agentDir, settingsManager });
+      const packageManager = new DefaultPackageManager({ agentDir, cwd, settingsManager });
 
       packageManager.setProgressCallback((event) => {
         if (event.type === "start") {

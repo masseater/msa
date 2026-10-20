@@ -1,10 +1,6 @@
-import type { AgentTool } from "@msa/agent-core";
-import {
-  type TranscriptContext,
-  fauxAssistantMessage,
-  fauxToolCall,
-  getCurrentSystemPrompt,
-} from "@msa/ai";
+import type agentTypes from "@msa/agent-core/index.types";
+import ai from "@msa/ai";
+import type aiTypes from "@msa/ai/index.types";
 import testing from "@msa/testing";
 import { Effect } from "effect";
 import { Type } from "typebox";
@@ -13,6 +9,8 @@ import { afterEach, describe, expect, it, vi } from "vite-plus/test";
 import type { BeforeAgentStartEvent } from "../../src/core/extensions/index.ts";
 import agentSessionPromptSupport from "./agent-session-prompt-support.ts";
 import harnessModule from "./harness.ts";
+
+const { fauxAssistantMessage, fauxToolCall, getCurrentSystemPrompt } = ai;
 
 const { harnesses, tempDirs } = agentSessionPromptSupport;
 
@@ -35,7 +33,7 @@ vi.mock("../../src/utils/image-process.ts", () => ({ processImage }));
 
 const keepsTheSameSystemPromptFor = Effect.gen(function* () {
   const events: BeforeAgentStartEvent[] = [];
-  const noopTool: AgentTool = {
+  const noopTool: agentTypes.AgentTool = {
     description: "Does nothing",
     execute: () => Promise.resolve({ content: [{ text: "ok", type: "text" }], details: {} }),
     label: "Noop",
@@ -58,7 +56,7 @@ const keepsTheSameSystemPromptFor = Effect.gen(function* () {
   harnesses.push(harness);
   const prompts: string[] = [];
   const record =
-    (response: ReturnType<typeof fauxAssistantMessage>) => (context: TranscriptContext) => {
+    (response: ReturnType<typeof fauxAssistantMessage>) => (context: aiTypes.TranscriptContext) => {
       prompts.push(getCurrentSystemPrompt(context.messages));
       return response;
     };
@@ -110,7 +108,7 @@ const queuesACustomMessageSentWhilePart1 = () =>
       }),
     );
     harnesses.push(harness);
-    const requests: TranscriptContext[] = [];
+    const requests: aiTypes.TranscriptContext[] = [];
     harness.setResponses([
       (context) => {
         requests.push(context);
@@ -163,7 +161,7 @@ const includesACustomMessageSentWithout = Effect.gen(function* () {
     }),
   );
   harnesses.push(harness);
-  const requests: TranscriptContext[] = [];
+  const requests: aiTypes.TranscriptContext[] = [];
   harness.setResponses([
     (context) => {
       requests.push(context);

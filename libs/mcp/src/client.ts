@@ -1,62 +1,44 @@
 import { Effect } from "effect";
 
-import { McpClientCore, type McpRequestOptions } from "./client-core.ts";
-import {
+import type clientCoreTypes from "./client-core.types.ts";
+import clientKit from "./client-kit.ts";
+import type clientResultsTypes from "./client-results.types.ts";
+import type clientTypes from "./client.types.ts";
+import type contentTypes from "./protocol/content.types.ts";
+import jsonrpcModule from "./protocol/jsonrpc.ts";
+import types from "./protocol/types.ts";
+import type typesModule from "./protocol/types.types.ts";
+import type transportTypes from "./transports/transport.types.ts";
+
+const { McpClientCore, McpClientError, clientResults, foreign: foreignModule } = clientKit;
+
+const { fromPromise, fromSync, toPromise } = foreignModule;
+const { McpConnectionClosedError } = jsonrpcModule;
+const {
   isResource,
   isResourceTemplate,
   isTool,
-  type ItemCheck,
   listAll,
   listPage,
-  type ListSpec,
   pageCursor,
   toResource,
   toResourceTemplate,
   validateCallToolResult,
   validateInitializeResult,
   validateReadResourceResult,
-} from "./client-results.ts";
-import { fromPromise, fromSync, toPromise } from "./foreign.ts";
-import type { CallToolResult } from "./protocol/content.ts";
-import { McpClientError } from "./protocol/errors/client-error.ts";
-import { McpConnectionClosedError } from "./protocol/jsonrpc.ts";
-import {
-  type ClientCapabilities,
-  type Implementation,
-  type InitializeResult,
-  LATEST_PROTOCOL_VERSION,
-  type ListResourcesResult,
-  type ListResourceTemplatesResult,
-  type ReadResourceResult,
-  type Resource,
-  type ResourceTemplate,
-  type Root,
-  type ServerCapabilities,
-  SUPPORTED_PROTOCOL_VERSIONS,
-  type SupportedProtocolVersion,
-  type Tool,
-} from "./protocol/types.ts";
-import type { McpTransport } from "./transports/transport.ts";
-
-export type { McpRequestOptions } from "./client-core.ts";
-
-export interface McpClientOptions extends Implementation {
-  capabilities?: ClientCapabilities;
-  protocolVersion?: SupportedProtocolVersion;
-  requestTimeoutMs?: number;
-  roots?: readonly Root[] | (() => readonly Root[] | Promise<readonly Root[]>);
-}
+} = clientResults;
+const { LATEST_PROTOCOL_VERSION, SUPPORTED_PROTOCOL_VERSIONS } = types;
 
 const TEMPLATES = "resources/templates/list";
 
-export class McpClient extends McpClientCore {
-  readonly options: Readonly<McpClientOptions>;
-  private serverInfoValue: Implementation | undefined;
-  private serverCapabilitiesValue: ServerCapabilities | undefined;
+export default class McpClient extends McpClientCore {
+  readonly options: Readonly<clientTypes.McpClientOptions>;
+  private serverInfoValue: typesModule.Implementation | undefined;
+  private serverCapabilitiesValue: typesModule.ServerCapabilities | undefined;
   private instructionsValue: string | undefined;
   private protocolVersionValue: string | undefined;
 
-  constructor(options: McpClientOptions) {
+  constructor(options: clientTypes.McpClientOptions) {
     super(options.requestTimeoutMs);
     this.options = Object.freeze({ ...options });
     this.incoming.setHandler("ping", () => ({}));
@@ -70,11 +52,11 @@ export class McpClient extends McpClientCore {
     }
   }
 
-  get serverInfo(): Implementation | undefined {
+  get serverInfo(): typesModule.Implementation | undefined {
     return this.serverInfoValue;
   }
 
-  get serverCapabilities(): ServerCapabilities | undefined {
+  get serverCapabilities(): typesModule.ServerCapabilities | undefined {
     return this.serverCapabilitiesValue;
   }
 
@@ -86,7 +68,7 @@ export class McpClient extends McpClientCore {
     return this.protocolVersionValue;
   }
 
-  connect(transport: McpTransport): Promise<InitializeResult> {
+  connect(transport: transportTypes.McpTransport): Promise<typesModule.InitializeResult> {
     if (this.state !== "idle")
       return toPromise(
         Effect.fail(new McpClientError(`Cannot connect MCP client in ${this.state} state`)),
@@ -105,19 +87,19 @@ export class McpClient extends McpClientCore {
     );
   }
 
-  ping(options: McpRequestOptions = {}): Promise<void> {
+  ping(options: clientCoreTypes.McpRequestOptions = {}): Promise<void> {
     return toPromise(Effect.asVoid(this.requestEffect("ping", undefined, options, false)));
   }
 
-  listTools(options: McpRequestOptions = {}): Promise<Tool[]> {
+  listTools(options: clientCoreTypes.McpRequestOptions = {}): Promise<typesModule.Tool[]> {
     return toPromise(
       listAll(this.spec("tools/list", "tools", isTool, options)).pipe(
-        Effect.map((items) => items as unknown as Tool[]),
+        Effect.map((items) => items as unknown as typesModule.Tool[]),
       ),
     );
   }
 
-  listResources(options: McpRequestOptions = {}): Promise<Resource[]> {
+  listResources(options: clientCoreTypes.McpRequestOptions = {}): Promise<typesModule.Resource[]> {
     return toPromise(
       listAll(this.spec("resources/list", "resources", isResource, options)).pipe(
         Effect.map((items) => items.map(toResource)),
@@ -127,8 +109,8 @@ export class McpClient extends McpClientCore {
 
   listResourcesPage(
     cursor?: string,
-    options: McpRequestOptions = {},
-  ): Promise<ListResourcesResult> {
+    options: clientCoreTypes.McpRequestOptions = {},
+  ): Promise<typesModule.ListResourcesResult> {
     const spec = this.spec("resources/list", "resources", isResource, options);
     return toPromise(
       listPage({ ...spec, cursor }).pipe(
@@ -137,7 +119,9 @@ export class McpClient extends McpClientCore {
     );
   }
 
-  listResourceTemplates(options: McpRequestOptions = {}): Promise<ResourceTemplate[]> {
+  listResourceTemplates(
+    options: clientCoreTypes.McpRequestOptions = {},
+  ): Promise<typesModule.ResourceTemplate[]> {
     return toPromise(
       listAll(this.spec(TEMPLATES, "resourceTemplates", isResourceTemplate, options)).pipe(
         Effect.map((items) => items.map(toResourceTemplate)),
@@ -147,8 +131,8 @@ export class McpClient extends McpClientCore {
 
   listResourceTemplatesPage(
     cursor?: string,
-    options: McpRequestOptions = {},
-  ): Promise<ListResourceTemplatesResult> {
+    options: clientCoreTypes.McpRequestOptions = {},
+  ): Promise<typesModule.ListResourceTemplatesResult> {
     const spec = this.spec(TEMPLATES, "resourceTemplates", isResourceTemplate, options);
     return toPromise(
       listPage({ ...spec, cursor }).pipe(
@@ -160,7 +144,10 @@ export class McpClient extends McpClientCore {
     );
   }
 
-  readResource(uri: string, options: McpRequestOptions = {}): Promise<ReadResourceResult> {
+  readResource(
+    uri: string,
+    options: clientCoreTypes.McpRequestOptions = {},
+  ): Promise<typesModule.ReadResourceResult> {
     return toPromise(
       this.requestEffect("resources/read", { uri }, options, false).pipe(
         Effect.flatMap((value) => fromSync(() => validateReadResourceResult(value))),
@@ -171,8 +158,8 @@ export class McpClient extends McpClientCore {
   callTool(
     name: string,
     args?: Record<string, unknown>,
-    options: McpRequestOptions = {},
-  ): Promise<CallToolResult> {
+    options: clientCoreTypes.McpRequestOptions = {},
+  ): Promise<contentTypes.CallToolResult> {
     const params = { name, ...(args === undefined ? {} : { arguments: args }) };
     return toPromise(
       this.requestEffect("tools/call", params, options, false).pipe(
@@ -184,22 +171,22 @@ export class McpClient extends McpClientCore {
   private spec(
     method: string,
     key: string,
-    isItem: ItemCheck,
-    options: McpRequestOptions,
-  ): ListSpec {
+    isItem: clientResultsTypes.ItemCheck,
+    options: clientCoreTypes.McpRequestOptions,
+  ): clientResultsTypes.ListSpec {
     return {
-      method,
-      key,
       isItem,
+      key,
+      method,
       request: (cursor) =>
         this.requestEffect(method, cursor === undefined ? undefined : { cursor }, options, false),
     };
   }
 
-  private initialize(transport: McpTransport) {
+  private initialize(transport: transportTypes.McpTransport) {
     return Effect.gen({ self: this }, function* () {
       yield* fromPromise(() => transport.start());
-      const capabilities: ClientCapabilities = { ...this.options.capabilities };
+      const capabilities: typesModule.ClientCapabilities = { ...this.options.capabilities };
       if (this.options.roots !== undefined && capabilities.roots === undefined)
         capabilities.roots = {};
       const clientInfo = {
@@ -208,7 +195,7 @@ export class McpClient extends McpClientCore {
         ...(this.options.title === undefined ? {} : { title: this.options.title }),
       };
       const protocolVersion = this.options.protocolVersion ?? LATEST_PROTOCOL_VERSION;
-      const params = { protocolVersion, capabilities, clientInfo };
+      const params = { capabilities, clientInfo, protocolVersion };
       const value = yield* this.requestEffect("initialize", params, {}, true);
       const result = yield* fromSync(() => validateInitializeResult(value));
       const supported: readonly string[] = SUPPORTED_PROTOCOL_VERSIONS;

@@ -1,9 +1,11 @@
 import { DateTime, Effect } from "effect";
 import { describe, expect, it, vi } from "vite-plus/test";
 
-import { openaiCodexOAuth } from "../src/auth/oauth/openai-codex.ts";
+import openaiCodex from "../src/auth/oauth/openai-codex.ts";
 import jsonCodec from "./json-codec.ts";
 import openaiCodexOauthSupport from "./openai-codex-oauth-support.ts";
+
+const { openaiCodexOAuth } = openaiCodex;
 
 const { decodeJson } = jsonCodec;
 const {

@@ -2,16 +2,19 @@ import { Clock, Console, Effect } from "effect";
 import { Type } from "typebox";
 import { expect } from "vite-plus/test";
 
-import type { Api, Context, Model, Tool, ToolResultMessage } from "../src/compat.ts";
-import { complete } from "../src/compat.ts";
-import type { ToolCall } from "../src/message-types.ts";
-import type { StreamOptions } from "../src/types.ts";
+import compat from "../src/compat.ts";
+import type compatTypes from "../src/compat.types.ts";
+import type messageTypesModule from "../src/message-types.types.ts";
+import type typesModule from "../src/types.types.ts";
 import redCircle from "./red-circle.ts";
-type StreamOptionsWithExtras = StreamOptions & Record<string, unknown>;
+
+const { complete } = compat;
+
+type StreamOptionsWithExtras = typesModule.StreamOptions & Record<string, unknown>;
 
 const handleToolWithImageResult = Effect.fn("handleToolWithImageResult")(function* <
-  TApi extends Api,
->(model: Model<TApi>, options?: StreamOptionsWithExtras) {
+  TApi extends compatTypes.Api,
+>(model: compatTypes.Model<TApi>, options?: StreamOptionsWithExtras) {
   if (!model.input.includes("image")) {
     yield* Console.log(
       `Skipping tool image result test - model ${model.id} doesn't support images`,
@@ -23,10 +26,13 @@ const handleToolWithImageResult = Effect.fn("handleToolWithImageResult")(functio
     base64Image,
     toolCall,
     context,
-  }: { base64Image: string; toolCall: ToolCall | undefined; context: Context } =
-    yield* handleToolWithImageResultStep1<TApi>(model, options);
+  }: {
+    base64Image: string;
+    toolCall: messageTypesModule.ToolCall | undefined;
+    context: compatTypes.Context;
+  } = yield* handleToolWithImageResultStep1<TApi>(model, options);
 
-  const toolResult: ToolResultMessage = {
+  const toolResult: compatTypes.ToolResultMessage = {
     content: [
       {
         data: base64Image,
@@ -57,8 +63,8 @@ const handleToolWithImageResult = Effect.fn("handleToolWithImageResult")(functio
 });
 
 const handleToolWithTextAndImageResult = Effect.fn("handleToolWithTextAndImageResult")(function* <
-  TApi extends Api,
->(model: Model<TApi>, options?: StreamOptionsWithExtras) {
+  TApi extends compatTypes.Api,
+>(model: compatTypes.Model<TApi>, options?: StreamOptionsWithExtras) {
   if (!model.input.includes("image")) {
     yield* Console.log(
       `Skipping tool text+image result test - model ${model.id} doesn't support images`,
@@ -69,18 +75,21 @@ const handleToolWithTextAndImageResult = Effect.fn("handleToolWithTextAndImageRe
   yield* handleToolWithTextAndImageResultStep2<TApi>(model, options);
 });
 
-function* handleToolWithTextAndImageResultStep2<TApi extends Api>(
-  model: Model<TApi>,
+function* handleToolWithTextAndImageResultStep2<TApi extends compatTypes.Api>(
+  model: compatTypes.Model<TApi>,
   options: StreamOptionsWithExtras | undefined,
 ) {
   const {
     base64Image,
     toolCall,
     context,
-  }: { base64Image: string; toolCall: ToolCall | undefined; context: Context } =
-    yield* handleToolWithTextAndImageResultStep1<TApi>(model, options);
+  }: {
+    base64Image: string;
+    toolCall: messageTypesModule.ToolCall | undefined;
+    context: compatTypes.Context;
+  } = yield* handleToolWithTextAndImageResultStep1<TApi>(model, options);
 
-  const toolResult: ToolResultMessage = {
+  const toolResult: compatTypes.ToolResultMessage = {
     content: [
       {
         text: "This is a geometric shape with specific properties: it has a diameter of 100 pixels.",
@@ -115,20 +124,20 @@ function* handleToolWithTextAndImageResultStep2<TApi extends Api>(
   }
 }
 
-function* handleToolWithTextAndImageResultStep1<TApi extends Api>(
-  model: Model<TApi>,
+function* handleToolWithTextAndImageResultStep1<TApi extends compatTypes.Api>(
+  model: compatTypes.Model<TApi>,
   options: StreamOptionsWithExtras | undefined,
 ) {
   const base64Image = redCircle.data;
 
   const getImageSchema = Type.Object({});
-  const getImageTool: Tool<typeof getImageSchema> = {
+  const getImageTool: compatTypes.Tool<typeof getImageSchema> = {
     description: "Returns a circle image with a text description",
     name: "get_circle_with_description",
     parameters: getImageSchema,
   };
 
-  const context: Context = {
+  const context: compatTypes.Context = {
     messages: [
       {
         content:
@@ -155,20 +164,20 @@ function* handleToolWithTextAndImageResultStep1<TApi extends Api>(
   return { base64Image, context, toolCall };
 }
 
-function* handleToolWithImageResultStep1<TApi extends Api>(
-  model: Model<TApi>,
+function* handleToolWithImageResultStep1<TApi extends compatTypes.Api>(
+  model: compatTypes.Model<TApi>,
   options: StreamOptionsWithExtras | undefined,
 ) {
   const base64Image = redCircle.data;
 
   const getImageSchema = Type.Object({});
-  const getImageTool: Tool<typeof getImageSchema> = {
+  const getImageTool: compatTypes.Tool<typeof getImageSchema> = {
     description: "Returns a circle image for visualization",
     name: "get_circle",
     parameters: getImageSchema,
   };
 
-  const context: Context = {
+  const context: compatTypes.Context = {
     messages: [
       {
         content:

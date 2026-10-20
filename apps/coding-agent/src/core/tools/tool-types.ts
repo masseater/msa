@@ -1,4 +1,4 @@
-import type { AgentTool } from "@msa/agent-core";
+import type agentTypes from "@msa/agent-core/index.types";
 
 import type { ToolDefinition } from "../extensions/types.ts";
 import type { BashToolOptions } from "./bash.ts";
@@ -10,7 +10,7 @@ import type { PowerShellToolOptions } from "./powershell.ts";
 import type { ReadToolOptions } from "./read.ts";
 import type { WriteToolOptions } from "./write.ts";
 
-export type Tool = AgentTool<any>;
+export type Tool = agentTypes.AgentTool<any>;
 export type ToolDef = ToolDefinition<any, any>;
 export type ToolName = "read" | "bash" | "powershell" | "edit" | "write" | "grep" | "find" | "ls";
 export const allToolNames: Set<ToolName> = new Set([

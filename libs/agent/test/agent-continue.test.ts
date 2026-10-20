@@ -1,14 +1,20 @@
 import { Effect } from "effect";
 import { describe, expect, it } from "vite-plus/test";
 
-import { Agent, type AgentMessage, type QueueMode } from "../src/index.ts";
+import agentModule2 from "../src/index.ts";
+import type agentTypes from "../src/index.types.ts";
 import agentModule from "./support/agent.ts";
 import fixtures from "./support/fixtures.ts";
+
+const { Agent } = agentModule2;
 
 const { unusedStreamFunction, userTexts } = agentModule;
 const { createUserMessage, now, respond, textMessage, toolCallMessage } = fixtures;
 
-const recordingAgent = (options: { messages?: AgentMessage[]; steeringMode?: QueueMode }) => {
+const recordingAgent = (options: {
+  messages?: agentTypes.AgentMessage[];
+  steeringMode?: agentTypes.QueueMode;
+}) => {
   const requests: string[][] = [];
   const agent = new Agent({
     initialState: { messages: options.messages ?? [] },
@@ -21,7 +27,7 @@ const recordingAgent = (options: { messages?: AgentMessage[]; steeringMode?: Que
   return { agent, requests };
 };
 
-const hasText = (message: AgentMessage, text: string): boolean => {
+const hasText = (message: agentTypes.AgentMessage, text: string): boolean => {
   if (message.role !== "user") return false;
   if (typeof message.content === "string") return message.content === text;
   return message.content.some((part) => part.type === "text" && part.text === text);
@@ -45,7 +51,7 @@ const processesFollowUp = Effect.gen(function* () {
 
 const expectSteering = (
   requests: string[][],
-  mode: QueueMode,
+  mode: agentTypes.QueueMode,
   [first, second]: [string, string],
 ) => {
   expect(requests[0]).toContain(first);
@@ -57,7 +63,7 @@ const expectSteering = (
   }
 };
 
-const assistantTailSteering = (mode: QueueMode, expectedRequests: number) =>
+const assistantTailSteering = (mode: agentTypes.QueueMode, expectedRequests: number) =>
   Effect.gen(function* () {
     const { agent, requests } = recordingAgent({
       messages: [createUserMessage("Initial"), textMessage("Initial response")],
@@ -70,7 +76,7 @@ const assistantTailSteering = (mode: QueueMode, expectedRequests: number) =>
     expectSteering(requests, mode, ["Steering 1", "Steering 2"]);
   });
 
-const rejectsWithoutMessages = (messages: AgentMessage[]) =>
+const rejectsWithoutMessages = (messages: agentTypes.AgentMessage[]) =>
   Effect.gen(function* () {
     const agent = new Agent({ initialState: { messages }, streamFn: unusedStreamFunction() });
     const steering = createUserMessage("steering");
@@ -85,7 +91,7 @@ const rejectsWithoutMessages = (messages: AgentMessage[]) =>
     expect(agent.peekQueuedMessages()).toEqual([followUp]);
   });
 
-const toolResultTail: AgentMessage[] = [
+const toolResultTail: agentTypes.AgentMessage[] = [
   createUserMessage("existing user"),
   toolCallMessage([{ id: "call-1", name: "noop" }]),
   {
@@ -98,7 +104,7 @@ const toolResultTail: AgentMessage[] = [
   },
 ];
 
-const defersFollowUp = (messages: AgentMessage[]) =>
+const defersFollowUp = (messages: agentTypes.AgentMessage[]) =>
   Effect.gen(function* () {
     const { agent, requests } = recordingAgent({ messages });
     agent.followUp(createUserMessage("follow-up"));
@@ -108,7 +114,7 @@ const defersFollowUp = (messages: AgentMessage[]) =>
     expect(requests[1]).toContain("follow-up");
   });
 
-const pollsSteeringAtStartup = (mode: QueueMode, expectedRequests: number) =>
+const pollsSteeringAtStartup = (mode: agentTypes.QueueMode, expectedRequests: number) =>
   Effect.gen(function* () {
     const { agent, requests } = recordingAgent({
       messages: [createUserMessage("existing")],

@@ -1,7 +1,9 @@
-import { VirtualTerminal } from "../../../libs/tui/test/virtual-terminal.ts";
+import virtualTerminal from "../../../libs/tui/test/virtual-terminal.ts";
 import { KeybindingsManager } from "../src/core/keybindings.ts";
 import { getEditorTheme, initTheme, theme } from "../src/modes/interactive/theme/theme.ts";
 import { stripAnsi } from "../src/utils/ansi.ts";
+
+const { VirtualTerminal } = virtualTerminal;
 
 const tuiKit = {
   KeybindingsManager,

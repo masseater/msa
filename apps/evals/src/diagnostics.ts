@@ -26,17 +26,17 @@ export const collectDiagnostics = ({
       events: toTranscriptEvents(session.messages),
       metadata: { systemPromptSha256: digest },
       usage: {
-        provider: model.provider,
-        model: model.id,
         inputTokens: stats.tokens.input,
-        outputTokens: stats.tokens.output,
-        totalTokens: stats.tokens.total,
-        toolCalls: stats.toolCalls,
         metadata: {
           cacheReadTokens: stats.tokens.cacheRead,
           cacheWriteTokens: stats.tokens.cacheWrite,
           ...(hasPricing ? { estimatedCostUsd: stats.cost } : {}),
         },
+        model: model.id,
+        outputTokens: stats.tokens.output,
+        provider: model.provider,
+        toolCalls: stats.toolCalls,
+        totalTokens: stats.tokens.total,
       },
     };
   });

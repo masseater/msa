@@ -2,9 +2,11 @@ import { Effect } from "effect";
 import { Type } from "typebox";
 import { describe, expect, it } from "vite-plus/test";
 
-import { agentLoop, runAgentLoop } from "../src/agent-loop.ts";
-import type { AgentLoopConfig } from "../src/types.ts";
+import agentLoopModule from "../src/agent-loop.ts";
+import type typesModule from "../src/types.ts";
 import fixtures from "./support/fixtures.ts";
+
+const { agentLoop, runAgentLoop } = agentLoopModule;
 
 const {
   createAssistantMessage,
@@ -30,7 +32,7 @@ const finishesBeforeTurnEnd = Effect.gen(function* () {
     run: (_id, params) => Promise.resolve({ ...echoResult(params.value), terminate: true }),
   });
   const ordering: string[] = [];
-  const config: AgentLoopConfig = {
+  const config: typesModule.AgentLoopConfig = {
     convertToLlm: identityConverter,
     finishTurn: ({ context, toolResults }) => {
       ordering.push("finishTurn");
@@ -65,7 +67,7 @@ const hardExit = (reason: "error" | "aborted") =>
       ...stoppedWith(reason)(createAssistantMessage([])),
       errorMessage: reason,
     });
-    const config: AgentLoopConfig = {
+    const config: typesModule.AgentLoopConfig = {
       convertToLlm: identityConverter,
       finishTurn: ({ message }) => {
         expect(message.stopReason).toBe(reason);
@@ -97,7 +99,7 @@ const hardExit = (reason: "error" | "aborted") =>
 
 const endSkipsPolling = Effect.gen(function* () {
   const polls = counters();
-  const config: AgentLoopConfig = {
+  const config: typesModule.AgentLoopConfig = {
     convertToLlm: identityConverter,
     finishTurn: () => ({ action: "end" }),
     getFollowUpMessages: () => Promise.resolve((polls.followUps++, [createUserMessage("queued")])),
@@ -168,7 +170,7 @@ const queueSatisfies = (queueKind: "steering" | "follow-up") =>
     const finish = continueOnce();
     let steeringPolls = 0;
     let followUpDelivered = false;
-    const config: AgentLoopConfig = {
+    const config: typesModule.AgentLoopConfig = {
       convertToLlm: identityConverter,
       finishTurn: finish.finishTurn,
       getFollowUpMessages: () => {

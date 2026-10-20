@@ -1,40 +1,29 @@
 import { dual } from "effect/Function";
 
-import { sliceByColumn } from "../text-slice.ts";
-import { CURSOR_MARKER, renderFakeCursor } from "../tui-component.ts";
-import { visibleWidth } from "../utils.ts";
-import type { LayoutLine } from "./editor-wrap.ts";
+import textSlice from "../text-slice.ts";
+import tuiComponent from "../tui-component.ts";
+import utils from "../utils.ts";
+import type editorRenderTypes from "./editor-render.types.ts";
+import type editorWrapTypes from "./editor-wrap.types.ts";
 
-export interface EditorPadding {
-  paddingX: number;
-  contentWidth: number;
-}
+const { visibleWidth } = utils;
+const { sliceByColumn } = textSlice;
+const { CURSOR_MARKER, renderFakeCursor } = tuiComponent;
 
-export interface EditorContentFrame extends EditorPadding {
-  focused: boolean;
-  graphemes: (text: string) => Intl.SegmentData[];
-}
-
-export interface ScrollWindow {
-  layoutLines: readonly LayoutLine[];
-  scrollOffset: number;
-  maxVisibleLines: number;
-}
-
-export const editorPadding: {
-  (width: number, paddingX: number): EditorPadding;
-  (paddingX: number): (width: number) => EditorPadding;
-} = dual(2, (width: number, requestedPaddingX: number): EditorPadding => {
+const editorPadding: {
+  (width: number, paddingX: number): editorRenderTypes.EditorPadding;
+  (paddingX: number): (width: number) => editorRenderTypes.EditorPadding;
+} = dual(2, (width: number, requestedPaddingX: number): editorRenderTypes.EditorPadding => {
   const maxPadding = Math.max(0, Math.floor((width - 1) / 2));
   const paddingX = Math.min(requestedPaddingX, maxPadding);
-  return { paddingX, contentWidth: Math.max(1, width - paddingX * 2) };
+  return { contentWidth: Math.max(1, width - paddingX * 2), paddingX };
 });
 
-export function clampScrollOffset({
+function clampScrollOffset({
   layoutLines,
   scrollOffset,
   maxVisibleLines,
-}: ScrollWindow): number {
+}: editorRenderTypes.ScrollWindow): number {
   let cursorLineIndex = layoutLines.findIndex((line) => line.hasCursor);
   if (cursorLineIndex === -1) cursorLineIndex = 0;
   let offset = scrollOffset;
@@ -47,7 +36,7 @@ export function clampScrollOffset({
   return Math.max(0, Math.min(offset, maxScrollOffset));
 }
 
-export const createScrollBorder: {
+const createScrollBorder: {
   (direction: "↑" | "↓", hiddenLineCount: number, width: number): string;
   (hiddenLineCount: number, width: number): (direction: "↑" | "↓") => string;
 } = dual(3, (direction: "↑" | "↓", hiddenLineCount: number, width: number): string => {
@@ -74,47 +63,71 @@ interface CursorLineText {
   cursorAtEnd: boolean;
 }
 
-function withCursor(layoutLine: LayoutLine, frame: EditorContentFrame): CursorLineText {
+function withCursor(
+  layoutLine: editorWrapTypes.LayoutLine,
+  frame: editorRenderTypes.EditorContentFrame,
+): CursorLineText {
   const width = visibleWidth(layoutLine.text);
   if (!layoutLine.hasCursor || layoutLine.cursorPos === undefined) {
-    return { text: layoutLine.text, width, cursorAtEnd: false };
+    return { cursorAtEnd: false, text: layoutLine.text, width };
   }
   const before = layoutLine.text.slice(0, layoutLine.cursorPos);
   const after = layoutLine.text.slice(layoutLine.cursorPos);
   const marker = frame.focused ? CURSOR_MARKER : "";
   if (after.length === 0) {
-    return { text: before + marker + renderFakeCursor(" "), width: width + 1, cursorAtEnd: true };
+    return { cursorAtEnd: true, text: before + marker + renderFakeCursor(" "), width: width + 1 };
   }
   const firstGrapheme = frame.graphemes(after)[0]?.segment || "";
   return {
+    cursorAtEnd: false,
     text: before + marker + renderFakeCursor(firstGrapheme) + after.slice(firstGrapheme.length),
     width,
-    cursorAtEnd: false,
   };
 }
 
-export const renderContentLines: {
-  (lines: readonly LayoutLine[], frame: EditorContentFrame): string[];
-  (frame: EditorContentFrame): (lines: readonly LayoutLine[]) => string[];
-} = dual(2, (lines: readonly LayoutLine[], frame: EditorContentFrame): string[] => {
-  const sidePadding = " ".repeat(frame.paddingX);
-  return lines.map((layoutLine) => {
-    const line = withCursor(layoutLine, frame);
-    const cursorInPadding =
-      line.cursorAtEnd && line.width > frame.contentWidth && frame.paddingX > 0;
-    const padding = " ".repeat(Math.max(0, frame.contentWidth - line.width));
-    const rightPadding = cursorInPadding ? sidePadding.slice(1) : sidePadding;
-    return `${sidePadding}${line.text}${padding}${rightPadding}`;
-  });
-});
+const renderContentLines: {
+  (
+    lines: readonly editorWrapTypes.LayoutLine[],
+    frame: editorRenderTypes.EditorContentFrame,
+  ): string[];
+  (
+    frame: editorRenderTypes.EditorContentFrame,
+  ): (lines: readonly editorWrapTypes.LayoutLine[]) => string[];
+} = dual(
+  2,
+  (
+    lines: readonly editorWrapTypes.LayoutLine[],
+    frame: editorRenderTypes.EditorContentFrame,
+  ): string[] => {
+    const sidePadding = " ".repeat(frame.paddingX);
+    return lines.map((layoutLine) => {
+      const line = withCursor(layoutLine, frame);
+      const cursorInPadding =
+        line.cursorAtEnd && line.width > frame.contentWidth && frame.paddingX > 0;
+      const padding = " ".repeat(Math.max(0, frame.contentWidth - line.width));
+      const rightPadding = cursorInPadding ? sidePadding.slice(1) : sidePadding;
+      return `${sidePadding}${line.text}${padding}${rightPadding}`;
+    });
+  },
+);
 
-export const padContentLines: {
-  (lines: readonly string[], frame: EditorPadding): string[];
-  (frame: EditorPadding): (lines: readonly string[]) => string[];
-} = dual(2, (lines: readonly string[], frame: EditorPadding): string[] => {
+const padContentLines: {
+  (lines: readonly string[], frame: editorRenderTypes.EditorPadding): string[];
+  (frame: editorRenderTypes.EditorPadding): (lines: readonly string[]) => string[];
+} = dual(2, (lines: readonly string[], frame: editorRenderTypes.EditorPadding): string[] => {
   const sidePadding = " ".repeat(frame.paddingX);
   return lines.map((line) => {
     const linePadding = " ".repeat(Math.max(0, frame.contentWidth - visibleWidth(line)));
     return `${sidePadding}${line}${linePadding}${sidePadding}`;
   });
 });
+
+const editorRender = {
+  clampScrollOffset,
+  createScrollBorder,
+  editorPadding,
+  padContentLines,
+  renderContentLines,
+};
+
+export default editorRender;

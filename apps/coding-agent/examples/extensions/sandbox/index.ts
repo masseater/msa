@@ -53,8 +53,8 @@ const runSandboxed = (request: SandboxExecRequest) =>
           ChildProcess.make("bash", ["-c", wrappedCommand], {
             cwd: request.cwd,
             detached: true,
-            stdin: "ignore",
             killSignal: "SIGKILL",
+            stdin: "ignore",
           }),
         );
         const pid = Number(handle.pid);
@@ -106,12 +106,12 @@ const registerBashTool = (
 
   msa.registerTool({
     ...localBash,
-    label: "bash (sandboxed)",
     execute: (id, params, signal, onUpdate) => {
       if (!getSandboxed()) return localBash.execute(id, params, signal, onUpdate);
       const sandboxedBash = createBashTool(localCwd, { operations: createSandboxedBashOps() });
       return sandboxedBash.execute(id, params, signal, onUpdate);
     },
+    label: "bash (sandboxed)",
   });
 };
 
@@ -159,6 +159,8 @@ const initializeSandbox = (
     };
 
     yield* Effect.tryPromise({
+      catch: (error) =>
+        new SandboxError({ message: error instanceof Error ? error.message : String(error) }),
       try: () =>
         SandboxManager.initialize({
           network: config.network,
@@ -166,8 +168,6 @@ const initializeSandbox = (
           ignoreViolations: extended.ignoreViolations,
           enableWeakerNestedSandbox: extended.enableWeakerNestedSandbox,
         }),
-      catch: (error) =>
-        new SandboxError({ message: error instanceof Error ? error.message : String(error) }),
     }).pipe(
       Effect.match({
         onFailure: (error) => {
@@ -218,9 +218,9 @@ export default function (msa: ExtensionAPI) {
   let sandboxInitialized = false;
 
   msa.registerFlag("no-sandbox", {
+    default: false,
     description: "Disable OS-level sandboxing for bash commands",
     type: "boolean",
-    default: false,
   });
 
   registerBashTool(msa, localCwd, () => sandboxEnabled && sandboxInitialized);

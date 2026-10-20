@@ -1,10 +1,8 @@
 import { describe, expect, it } from "vite-plus/test";
 
-import {
-  MAX_PROVIDER_ERROR_BODY_CHARS,
-  formatProviderError,
-  normalizeProviderError,
-} from "../src/utils/error-body.ts";
+import errorBody from "../src/utils/error-body.ts";
+
+const { MAX_PROVIDER_ERROR_BODY_CHARS, formatProviderError, normalizeProviderError } = errorBody;
 
 describe("normalizeProviderError", () => {
   it("extracts status and body from a string-body HTTP error", () => {

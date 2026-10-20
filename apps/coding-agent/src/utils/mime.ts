@@ -23,7 +23,7 @@ export function detectSupportedImageMimeType(buffer: Uint8Array): string | null 
 }
 
 export function detectSupportedImageMimeTypeFromFile(filePath: string): Promise<string | null> {
-  return readHead({ path: filePath, length: IMAGE_TYPE_SNIFF_BYTES }).then(
+  return readHead({ length: IMAGE_TYPE_SNIFF_BYTES, path: filePath }).then(
     detectSupportedImageMimeType,
   );
 }

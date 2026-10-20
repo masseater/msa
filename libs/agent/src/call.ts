@@ -1,6 +1,6 @@
 import { Effect, Predicate } from "effect";
 
-export const call = <A>(evaluate: () => A | PromiseLike<A>): Effect.Effect<A> =>
+const call = <A>(evaluate: () => A | PromiseLike<A>): Effect.Effect<A> =>
   Effect.suspend(() => {
     const value = evaluate();
     return Predicate.isPromiseLike(value)
@@ -8,5 +8,11 @@ export const call = <A>(evaluate: () => A | PromiseLike<A>): Effect.Effect<A> =>
       : Effect.succeed(value);
   });
 
-export const now = (): number =>
-  Effect.runSync(Effect.clockWith((clock) => clock.currentTimeMillis));
+const now = (): number => Effect.runSync(Effect.clockWith((clock) => clock.currentTimeMillis));
+
+const callModule = {
+  call,
+  now,
+};
+
+export default callModule;

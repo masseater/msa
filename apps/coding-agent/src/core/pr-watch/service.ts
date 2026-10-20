@@ -3,10 +3,10 @@ import { Effect, Fiber, Layer, ManagedRuntime } from "effect";
 import type { PrWatchGh } from "./gh.ts";
 import type { PrWatchTarget } from "./snapshot.ts";
 import {
-  createPrWatchEntry,
   type PrNotification,
   type PrWatchEntry,
   type PrWatchHost,
+  createPrWatchEntry,
   prWatchKey,
   prWatchLoop,
 } from "./watch.ts";
@@ -65,7 +65,7 @@ export class PrWatch {
     );
     this.#entries.set(key, entry);
     const fiber = this.#runtime.runFork(
-      prWatchLoop({ gh: this.#gh, entry, host: this.#hostFor(entry) }),
+      prWatchLoop({ entry, gh: this.#gh, host: this.#hostFor(entry) }),
     );
     this.#fibers.set(key, fiber);
     return { entry, started: true };
@@ -94,11 +94,11 @@ export class PrWatch {
 
   #hostFor(entry: PrWatchEntry): PrWatchHost {
     return {
+      changed: () => this.#host.changed(),
       notify: (notification: PrNotification) => {
         this.#last = { key: entry.key, target: entry.label, change: notification.label };
         this.#host.notify(notification);
       },
-      changed: () => this.#host.changed(),
     };
   }
 }

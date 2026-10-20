@@ -1,14 +1,18 @@
-import { type Message, type Models, type SystemMessage, fauxAssistantMessage } from "@msa/ai";
+import ai from "@msa/ai";
+import type aiTypes from "@msa/ai/index.types";
 import durable from "@msa/durable";
 import type durableTypes from "@msa/durable/index.types";
 import memory from "@msa/durable/storage/memory";
 import { Effect } from "effect";
 import { describe, expect, it } from "vite-plus/test";
 
-import agentModule from "../src/harness/agent.ts";
-import harnessGenerationSupport from "./harness-generation-support.ts";
+import harnessGenerationPart2Kit from "./harness-generation-part-2-kit.ts";
 import support from "./support.ts";
 import type supportTypes from "./support.types.ts";
+
+const { agent: agentModule, harnessGenerationSupport } = harnessGenerationPart2Kit;
+
+const { fauxAssistantMessage } = ai;
 
 const { defineDoc } = durable;
 const { MemoryStorage } = memory;
@@ -86,7 +90,7 @@ describe("generation", () => {
 const commitsPartialsNo = Effect.gen(function* () {
   const runPromise = Effect.runPromiseWith(yield* Effect.context<never>());
 
-  const shortStream = (): ReturnType<Models["streamSimple"]> =>
+  const shortStream = (): ReturnType<aiTypes.Models["streamSimple"]> =>
     heldStream(
       { partial: fauxAssistantMessage("partial", { stopReason: "pending" }), type: "start" },
       fauxAssistantMessage("final"),
@@ -106,7 +110,9 @@ const commitsPartialsNo = Effect.gen(function* () {
         const submission = yield* awaited(root.submit({ content: "hi", type: "input" }, context));
         expect(yield* awaited(submission.wait(context))).toMatchObject({ status: "done" });
         yield* awaited(harness.close(context));
-        return values.some((value) => textOf(value.generation?.message as Message) === "partial");
+        return values.some(
+          (value) => textOf(value.generation?.message as aiTypes.Message) === "partial",
+        );
       }),
     );
   expect(yield* awaited(publishedPartial({}))).toBe(true);
@@ -172,7 +178,7 @@ const rendersSectionsRead = Effect.gen(function* () {
   expect(yield* awaited(sections(root))).toMatchObject({
     sections: { agents: "<agents>\nRead AGENTS.md\n</agents>", cwd: "<cwd>\n/repo\n</cwd>" },
   });
-  expect((yield* awaited(sections(sub))) as SystemMessage).toEqual({
+  expect((yield* awaited(sections(sub))) as aiTypes.SystemMessage).toEqual({
     content: "",
     role: "system",
     sections: { cwd: "<cwd>\n/sub\n</cwd>" },
@@ -195,7 +201,7 @@ const commitsNoPartial = Effect.gen(function* () {
     pollAfterMs: 60_000,
     provider: "faux",
   };
-  const deferredStream = (): ReturnType<Models["streamSimple"]> =>
+  const deferredStream = (): ReturnType<aiTypes.Models["streamSimple"]> =>
     heldStream(
       { partial: fauxAssistantMessage([], { stopReason: "pending" }), type: "start" },
       fauxAssistantMessage([], { deferred: handle, stopReason: "deferred" }),
@@ -242,9 +248,9 @@ const faultsRunTask = Effect.gen(function* () {
     reason: "faulted",
     status: "unanswered",
   });
-  expect(values.some((value) => textOf(value.generation?.message as Message) === "partial")).toBe(
-    true,
-  );
+  expect(
+    values.some((value) => textOf(value.generation?.message as aiTypes.Message) === "partial"),
+  ).toBe(true);
   const entries = yield* allEntries(root);
   expect(entries.map((entry) => entry.kind)).toEqual(["msa.user", "msa.assistant"]);
   expect(entries[1]!.model![0]).toMatchObject({ role: "assistant", stopReason: "aborted" });

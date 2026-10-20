@@ -1,16 +1,18 @@
 import type { ExtensionAPI, ExtensionContext } from "@msa/coding-agent";
-import { isKeyRelease, Key, matchesKey } from "@msa/tui";
+import tuiModule from "@msa/tui";
 import { Effect, type Fiber } from "effect";
 
 import { renderFrame } from "./space-invaders-render.ts";
 import {
-  advance,
-  createInitialState,
   type Counters,
   type GameState,
   type KeyState,
   TICK_MS,
+  advance,
+  createInitialState,
 } from "./space-invaders-state.ts";
+
+const { Key, isKeyRelease, matchesKey } = tuiModule;
 
 const INVADERS_SAVE_TYPE = "space-invaders-save";
 
@@ -46,7 +48,7 @@ const playingAction = (data: string, released: boolean, state: GameState): KeyAc
 
 class SpaceInvadersComponent {
   private state: GameState;
-  private keys: KeyState = { left: false, right: false, fire: false };
+  private keys: KeyState = { fire: false, left: false, right: false };
   private counters: Counters = { fireCooldown: 0, playerMoveCounter: 0 };
   private fiber: Fiber.Fiber<never> | undefined;
   private onClose: () => void;
@@ -82,7 +84,7 @@ class SpaceInvadersComponent {
   private startGame(): void {
     const step = Effect.sync(() => {
       if (this.state.gameOver || this.state.victory) return;
-      advance({ state: this.state, keys: this.keys, counters: this.counters });
+      advance({ counters: this.counters, keys: this.keys, state: this.state });
       this.version++;
       this.tui.requestRender();
     });
@@ -93,7 +95,7 @@ class SpaceInvadersComponent {
     const highScore = this.state.highScore;
     const nextLevel = this.state.victory ? this.state.level + 1 : 1;
     this.state = createInitialState({ highScore, level: nextLevel });
-    this.keys = { left: false, right: false, fire: false };
+    this.keys = { fire: false, left: false, right: false };
     this.counters = { fireCooldown: 0, playerMoveCounter: 0 };
     this.onSave(null);
     this.version++;
@@ -149,7 +151,7 @@ class SpaceInvadersComponent {
       return this.cachedLines;
     }
 
-    const lines = renderFrame({ state: this.state, paused: this.paused, width });
+    const lines = renderFrame({ paused: this.paused, state: this.state, width });
 
     this.cachedLines = lines;
     this.cachedWidth = width;

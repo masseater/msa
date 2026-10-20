@@ -2,17 +2,17 @@ import { Effect } from "effect";
 import { dual } from "effect/Function";
 import { Type } from "typebox";
 
-import { fromPromise, pathOperations, ToolFailure } from "../platform/index.ts";
-import { DEFAULT_MAX_BYTES, formatSize, type TruncationResult, truncateHead } from "./truncate.ts";
+import { ToolFailure, fromPromise, pathOperations } from "../platform/index.ts";
+import { DEFAULT_MAX_BYTES, type TruncationResult, formatSize, truncateHead } from "./truncate.ts";
 
 export const findSchema = Type.Object({
-  pattern: Type.String({
-    description: "Glob pattern to match files, e.g. '*.ts', '**/*.json', or 'src/**/*.spec.ts'",
-  }),
+  limit: Type.Optional(Type.Number({ description: "Maximum number of results (default: 1000)" })),
   path: Type.Optional(
     Type.String({ description: "Directory to search in (default: current directory)" }),
   ),
-  limit: Type.Optional(Type.Number({ description: "Maximum number of results (default: 1000)" })),
+  pattern: Type.String({
+    description: "Glob pattern to match files, e.g. '*.ts', '**/*.json', or 'src/**/*.spec.ts'",
+  }),
 });
 
 export const DEFAULT_FIND_LIMIT = 1000;
@@ -35,7 +35,7 @@ export interface FindRequest {
 }
 
 export const noFilesFound = {
-  content: [{ type: "text" as const, text: "No files found matching pattern" }],
+  content: [{ text: "No files found matching pattern", type: "text" as const }],
   details: undefined,
 };
 
@@ -60,7 +60,7 @@ export function formatFindOutput({ results, effectiveLimit, limitNotice }: FindO
   const text =
     notices.length > 0 ? `${truncation.content}\n\n[${notices.join(". ")}]` : truncation.content;
   return {
-    content: [{ type: "text" as const, text }],
+    content: [{ text, type: "text" as const }],
     details: Object.keys(details).length > 0 ? details : undefined,
   };
 }
@@ -104,8 +104,8 @@ export const globWithOperations = Effect.fn("findWithOperations")(function* (
   );
   if (results.length === 0) return noFilesFound;
   return formatFindOutput({
-    results: results.map((result) => relativizeFindResultPath(result, searchPath)),
     effectiveLimit,
     limitNotice: `${effectiveLimit} results limit reached`,
+    results: results.map((result) => relativizeFindResultPath(result, searchPath)),
   });
 });

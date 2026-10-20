@@ -1,21 +1,20 @@
-import type { TextSignatureV1 } from "../types.ts";
+import type typesModule from "../types.types.ts";
+import type openaiResponsesSignatureTypes from "./openai-responses-signature.types.ts";
 
-type Phase = TextSignatureV1["phase"];
-
-export interface ParsedTextSignature {
-  readonly id: string;
-  readonly phase?: Phase;
-}
-
-export function encodeTextSignatureV1({ id, phase }: ParsedTextSignature): string {
-  const payload: TextSignatureV1 = { v: 1, id };
+function encodeTextSignatureV1({
+  id,
+  phase,
+}: openaiResponsesSignatureTypes.ParsedTextSignature): string {
+  const payload: typesModule.TextSignatureV1 = { id, v: 1 };
   if (phase !== undefined) payload.phase = phase;
   return JSON.stringify(payload);
 }
 
-function parseJsonSignature(signature: string): ParsedTextSignature | undefined {
+function parseJsonSignature(
+  signature: string,
+): openaiResponsesSignatureTypes.ParsedTextSignature | undefined {
   try {
-    const parsed = JSON.parse(signature) as Partial<TextSignatureV1>;
+    const parsed = JSON.parse(signature) as Partial<typesModule.TextSignatureV1>;
     if (parsed.v !== 1 || typeof parsed.id !== "string") return undefined;
     if (parsed.phase === "commentary" || parsed.phase === "final_answer") {
       return { id: parsed.id, phase: parsed.phase };
@@ -26,8 +25,17 @@ function parseJsonSignature(signature: string): ParsedTextSignature | undefined 
   }
 }
 
-export function parseTextSignature(signature: string | undefined): ParsedTextSignature | undefined {
+function parseTextSignature(
+  signature: string | undefined,
+): openaiResponsesSignatureTypes.ParsedTextSignature | undefined {
   if (signature === undefined || signature === "") return undefined;
   const parsed = signature.startsWith("{") ? parseJsonSignature(signature) : undefined;
   return parsed ?? { id: signature };
 }
+
+const openaiResponsesSignature = {
+  encodeTextSignatureV1,
+  parseTextSignature,
+};
+
+export default openaiResponsesSignature;

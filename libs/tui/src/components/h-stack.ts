@@ -1,23 +1,22 @@
-import { compositeTuiLine } from "../tui-component.ts";
-import { visibleWidth } from "../utils.ts";
-import {
-  allocateStackSizes,
-  Stack,
-  type StackChild,
-  type StackOptions,
-  visibleStackEntries,
-} from "./stack.ts";
+import tuiComponent from "../tui-component.ts";
+import utils from "../utils.ts";
+import stack from "./stack.ts";
+import type stackTypes from "./stack.types.ts";
 
-export class HStack extends Stack {
+const { Stack, allocateStackSizes, visibleStackEntries } = stack;
+const { visibleWidth } = utils;
+const { compositeTuiLine } = tuiComponent;
+
+export default class HStack extends Stack {
   protected readonly layoutType = "hstack" as const;
 
-  constructor(children: StackChild[] = [], options: StackOptions = {}) {
+  constructor(children: stackTypes.StackChild[] = [], options: stackTypes.StackOptions = {}) {
     super(children, options);
   }
 
   override render(width: number): string[] {
     const safeWidth = Math.max(1, width);
-    const viewport = { width: safeWidth, height: Number.MAX_SAFE_INTEGER };
+    const viewport = { height: Number.MAX_SAFE_INTEGER, width: safeWidth };
     const entries = visibleStackEntries(this.entries, viewport);
     if (entries.length === 0) return [];
 

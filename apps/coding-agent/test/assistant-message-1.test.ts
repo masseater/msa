@@ -1,6 +1,6 @@
-import type { AssistantMessage } from "@msa/ai";
+import type aiTypes from "@msa/ai/index.types";
 import testing from "@msa/testing";
-import type { TuiMouseEvent } from "@msa/tui";
+import type tuiTypes from "@msa/tui/index.types";
 import { describe, expect, test } from "vite-plus/test";
 
 import { AssistantMessageComponent } from "../src/modes/interactive/components/assistant-message.ts";
@@ -14,9 +14,9 @@ const OSC133_ZONE_END = "\x1b]133;B\x07";
 const OSC133_ZONE_FINAL = "\x1b]133;C\x07";
 
 function createAssistantMessage(
-  content: AssistantMessage["content"],
-  overrides: Partial<Pick<AssistantMessage, "stopReason">> = {},
-): AssistantMessage {
+  content: aiTypes.AssistantMessage["content"],
+  overrides: Partial<Pick<aiTypes.AssistantMessage, "stopReason">> = {},
+): aiTypes.AssistantMessage {
   return {
     api: "openai-responses" as const,
     content,
@@ -162,7 +162,7 @@ const collapsesIndividualThinkingRunsWhenClicked = () => {
   const lines = component.render(width);
   const firstThinkingRow = lines.findIndex((line) => stripAnsi(line).includes("first reasoning"));
   expect(firstThinkingRow).toBeGreaterThanOrEqual(0);
-  const event: TuiMouseEvent = {
+  const event: tuiTypes.TuiMouseEvent = {
     alt: false,
     button: "left",
     clickCount: 1,

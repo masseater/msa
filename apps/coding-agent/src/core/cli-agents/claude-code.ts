@@ -1,36 +1,27 @@
-import { spawn, type ChildProcess } from "node:child_process";
+import { type ChildProcess, spawn } from "node:child_process";
 import { createHash } from "node:crypto";
 
 import type { Query, SDKMessage, SDKUserMessage } from "@anthropic-ai/claude-agent-sdk";
 import type { ContentBlockParam } from "@anthropic-ai/sdk/resources/messages";
 import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import type { CallToolResult } from "@modelcontextprotocol/sdk/types.js";
-import { getCurrentSystemPrompt, getCurrentTools } from "@msa/ai/compat";
-import type {
-  AssistantMessage,
-  JsonObject,
-  Message,
-  Model,
-  Provider,
-  SimpleStreamOptions,
-  Tool,
-  ToolResultMessage,
-  TranscriptContext,
-  UserMessage,
-} from "@msa/ai/compat";
+import compat from "@msa/ai/compat";
+import type compatTypes from "@msa/ai/compat.types";
 
 import {
+  type Account,
+  type RunFailure,
   accountEnv,
   blockIfUnusable,
   blockOf,
   claudeExecutable,
   loadAccounts,
-  type Account,
-  type RunFailure,
 } from "./claude-accounts.ts";
-import { cliAgentProvider, type CliAgentModel } from "./provider.ts";
-import { createReply, type ReplyBuilder } from "./reply.ts";
+import { type CliAgentModel, cliAgentProvider } from "./provider.ts";
+import { type ReplyBuilder, createReply } from "./reply.ts";
 import { flattenTranscript, textFromContent } from "./transcript.ts";
+
+const { getCurrentSystemPrompt, getCurrentTools } = compat;
 
 const PROVIDER_ID = "claude-subs";
 const SERVER = "msa";
@@ -48,12 +39,12 @@ const MODELS = [
 
 type Effort = "low" | "medium" | "high" | "xhigh" | "max";
 const EFFORT: Record<string, Effort> = {
-  minimal: "low",
-  low: "low",
-  medium: "medium",
   high: "high",
-  xhigh: "xhigh",
+  low: "low",
   max: "max",
+  medium: "medium",
+  minimal: "low",
+  xhigh: "xhigh",
 };
 
 type ImageMediaType = "image/jpeg" | "image/png" | "image/gif" | "image/webp";
@@ -74,11 +65,11 @@ const loadSdk = (() => {
       import("@modelcontextprotocol/sdk/server/mcp.js"),
       import("@modelcontextprotocol/sdk/types.js"),
     ]).then(([agent, mcp, types]) => ({
-      query: agent.query,
-      usageLimitPrefixes: agent.USAGE_LIMIT_ERROR_PREFIXES,
-      McpServer: mcp.McpServer,
       CallToolRequestSchema: types.CallToolRequestSchema,
       ListToolsRequestSchema: types.ListToolsRequestSchema,
+      McpServer: mcp.McpServer,
+      query: agent.query,
+      usageLimitPrefixes: agent.USAGE_LIMIT_ERROR_PREFIXES,
     }));
     return loaded;
   };
@@ -89,27 +80,27 @@ function hash(value: string): string {
   return createHash("sha256").update(value).digest("hex");
 }
 
-function replyKey(content: Message["content"]): string {
+function replyKey(content: compatTypes.Message["content"]): string {
   return hash(textFromContent(content));
 }
 
-function toAnthropicContent(content: UserMessage["content"]): ContentBlockParam[] {
-  if (typeof content === "string") return [{ type: "text", text: content }];
+function toAnthropicContent(content: compatTypes.UserMessage["content"]): ContentBlockParam[] {
+  if (typeof content === "string") return [{ text: content, type: "text" }];
   return content.map((part) =>
     part.type === "text"
-      ? { type: "text", text: part.text }
+      ? { text: part.text, type: "text" }
       : {
+          source: { data: part.data, media_type: part.mimeType as ImageMediaType, type: "base64" },
           type: "image",
-          source: { type: "base64", media_type: part.mimeType as ImageMediaType, data: part.data },
         },
   );
 }
 
-function toCallToolResult(result: ToolResultMessage): CallToolResult {
+function toCallToolResult(result: compatTypes.ToolResultMessage): CallToolResult {
   const content = result.content.map((part) =>
     part.type === "image"
-      ? { type: "image" as const, data: part.data, mimeType: part.mimeType }
-      : { type: "text" as const, text: part.text },
+      ? { data: part.data, mimeType: part.mimeType, type: "image" as const }
+      : { text: part.text, type: "text" as const },
   );
   return { content, isError: result.isError };
 }
@@ -121,9 +112,9 @@ class Input implements AsyncIterable<SDKUserMessage> {
 
   push(content: ContentBlockParam[], priority?: SDKUserMessage["priority"]): void {
     this.queue.push({
-      type: "user",
-      message: { role: "user", content },
+      message: { content, role: "user" },
       parent_tool_use_id: null,
+      type: "user",
       ...(priority ? { priority } : {}),
     });
     this.wake?.();
@@ -155,7 +146,7 @@ interface SessionConfig {
   model: string;
   effort: Effort | undefined;
   systemPrompt: string;
-  tools: Tool[];
+  tools: compatTypes.Tool[];
 }
 
 const sessions = new Set<Session>();
@@ -165,7 +156,7 @@ class Session {
   readonly systemKey: string;
   readonly effort: Effort | undefined;
   private model: string;
-  private tools: Tool[];
+  private tools: compatTypes.Tool[];
   private readonly input = new Input();
   private readonly server: McpServer;
   private readonly query: Query;
@@ -194,17 +185,17 @@ class Session {
     );
     this.server.server.setRequestHandler(sdk.ListToolsRequestSchema, async () => ({
       tools: this.tools.map((tool) => ({
-        name: tool.name,
+        _meta: { "anthropic/alwaysLoad": true },
         description: tool.description,
         inputSchema: JSON.parse(JSON.stringify(tool.parameters)),
-        _meta: { "anthropic/alwaysLoad": true },
+        name: tool.name,
       })),
     }));
     this.server.server.setRequestHandler(sdk.CallToolRequestSchema, async (request) => {
       const id = request.params._meta?.["claudecode/toolUseId"];
       if (typeof id !== "string") {
         return {
-          content: [{ type: "text", text: "tool call without a tool use id" }],
+          content: [{ text: "tool call without a tool use id", type: "text" }],
           isError: true,
         };
       }
@@ -218,7 +209,6 @@ class Session {
 
     const executable = claudeExecutable();
     this.query = sdk.query({
-      prompt: this.input,
       options: {
         model: config.model,
         ...(config.effort ? { effort: config.effort } : {}),
@@ -247,6 +237,7 @@ class Session {
           return child as never;
         },
       },
+      prompt: this.input,
     });
     this.events = this.query[Symbol.asyncIterator]();
     sessions.add(this);
@@ -290,7 +281,7 @@ class Session {
       this.model = config.model;
       await this.query.setModel(config.model);
     }
-    const names = (tools: Tool[]) =>
+    const names = (tools: compatTypes.Tool[]) =>
       JSON.stringify(tools.map((tool) => [tool.name, tool.description]));
     if (names(config.tools) !== names(this.tools)) {
       this.tools = config.tools;
@@ -332,7 +323,7 @@ class Session {
     if (!sessions.delete(this)) return;
     clearTimeout(this.idleTimer);
     for (const resolve of this.waiting.values()) {
-      resolve({ content: [{ type: "text", text: "session closed" }], isError: true });
+      resolve({ content: [{ text: "session closed", type: "text" }], isError: true });
     }
     this.waiting.clear();
     this.input.close();
@@ -340,15 +331,20 @@ class Session {
   }
 }
 
-async function attach(messages: readonly Message[], config: SessionConfig): Promise<Session> {
+async function attach(
+  messages: readonly compatTypes.Message[],
+  config: SessionConfig,
+): Promise<Session> {
   let tail = messages.length;
   while (tail > 0 && messages[tail - 1]?.role !== "assistant") tail -= 1;
   const newTurns = messages.slice(tail);
   const toolResults = newTurns.filter(
-    (message): message is ToolResultMessage => message.role === "toolResult",
+    (message): message is compatTypes.ToolResultMessage => message.role === "toolResult",
   );
-  const userTurns = newTurns.filter((message): message is UserMessage => message.role === "user");
-  const last = messages[tail - 1] as AssistantMessage | undefined;
+  const userTurns = newTurns.filter(
+    (message): message is compatTypes.UserMessage => message.role === "user",
+  );
+  const last = messages[tail - 1] as compatTypes.AssistantMessage | undefined;
 
   for (const session of sessions) {
     if (session.busy || !session.matches(config)) continue;
@@ -395,7 +391,6 @@ async function attach(messages: readonly Message[], config: SessionConfig): Prom
   session.busy = true;
   session.send([
     {
-      type: "text",
       text: [
         "The transcript below is the conversation so far. Continue it as the assistant.",
         "",
@@ -407,6 +402,7 @@ async function attach(messages: readonly Message[], config: SessionConfig): Prom
         "",
         "Reply now as the assistant to the last message.",
       ].join("\n"),
+      type: "text",
     },
   ]);
   return session;
@@ -415,8 +411,8 @@ async function attach(messages: readonly Message[], config: SessionConfig): Prom
 async function pump(
   session: Session,
   reply: ReplyBuilder,
-  model: Model<string>,
-  options?: SimpleStreamOptions,
+  model: compatTypes.Model<string>,
+  options?: compatTypes.SimpleStreamOptions,
 ): Promise<RunFailure | undefined> {
   let messageId = "";
   let apiError: RunFailure["cause"];
@@ -444,9 +440,9 @@ async function pump(
         messageId = inner.message.id;
         messageOutput = 0;
         reply.addUsage({
-          input: usage.input_tokens,
           cacheRead: usage.cache_read_input_tokens ?? 0,
           cacheWrite: usage.cache_creation_input_tokens ?? 0,
+          input: usage.input_tokens,
         });
       } else if (inner.type === "content_block_delta") {
         const key = `${messageId}:${inner.index}`;
@@ -475,7 +471,7 @@ async function pump(
           reply.toolCall(
             block.id,
             block.name.slice(TOOL_PREFIX.length),
-            (block.input ?? {}) as JsonObject,
+            (block.input ?? {}) as compatTypes.JsonObject,
           );
         } else if (block.type === "text" && !sawPartials) {
           reply.setText(`${message.id}:${index}`, block.text);
@@ -507,15 +503,19 @@ async function pump(
 
 const streamFor =
   (fixed?: Account) =>
-  (model: Model<string>, context: TranscriptContext, options?: SimpleStreamOptions) => {
+  (
+    model: compatTypes.Model<string>,
+    context: compatTypes.TranscriptContext,
+    options?: compatTypes.SimpleStreamOptions,
+  ) => {
     const reply = createReply(model);
     const messages = context.messages;
     const config: SessionConfig = {
       accounts: fixed
         ? [fixed]
         : loadAccounts().filter((account) => account.auto !== false && !blockOf(account)),
-      model: model.id,
       effort: options?.reasoning ? EFFORT[options.reasoning] : undefined,
+      model: model.id,
       systemPrompt: getCurrentSystemPrompt(messages),
       tools: getCurrentTools(messages),
     };
@@ -591,23 +591,23 @@ const streamFor =
   };
 
 const MODEL_LIMITS = {
-  reasoning: true,
-  input: ["text", "image"],
   contextWindow: 1_000_000,
+  input: ["text", "image"],
   maxTokens: 128_000,
+  reasoning: true,
 } as const satisfies Omit<CliAgentModel, "id" | "name">;
 
-function provider(id: string, name: string, account?: Account): Provider {
+function provider(id: string, name: string, account?: Account): compatTypes.Provider {
   return cliAgentProvider({
-    id,
-    name,
-    models: MODELS.map((model) => ({ ...MODEL_LIMITS, id: model.id, name: model.name })),
     executable: claudeExecutable,
+    id,
+    models: MODELS.map((model) => ({ ...MODEL_LIMITS, id: model.id, name: model.name })),
+    name,
     streamSimple: streamFor(account),
   });
 }
 
-export function claudeCodeProviders(): Provider[] {
+export function claudeCodeProviders(): compatTypes.Provider[] {
   const accounts = loadAccounts();
   return [
     provider(PROVIDER_ID, "Claude subscription"),

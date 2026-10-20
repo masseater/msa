@@ -24,14 +24,14 @@ export interface PathOperations {
 const servicePath = platformRuntime.runSync(Path.Path);
 
 export const pathOperations: PathOperations = {
-  join: (...segments) => servicePath.join(...segments),
-  resolve: (...segments) => servicePath.resolve(...segments),
-  dirname: (path) => servicePath.dirname(path),
   basename: (path, suffix) => servicePath.basename(path, suffix),
+  dirname: (path) => servicePath.dirname(path),
   extname: (path) => servicePath.extname(path),
-  relative: (from, to) => servicePath.relative(from, to),
   isAbsolute: (path) => servicePath.isAbsolute(path),
+  join: (...segments) => servicePath.join(...segments),
   normalize: (path) => servicePath.normalize(path),
+  relative: (from, to) => servicePath.relative(from, to),
+  resolve: (...segments) => servicePath.resolve(...segments),
   sep: servicePath.sep,
 };
 
@@ -85,9 +85,9 @@ export const fromPromise = <A>(
   evaluate: (signal: AbortSignal) => PromiseLike<A> | A,
 ): Effect.Effect<A, ForeignError> =>
   Effect.tryPromise({
-    try: (signal) => Promise.resolve(evaluate(signal)),
     catch: (cause) =>
       new ForeignError({ cause, message: cause instanceof Error ? cause.message : String(cause) }),
+    try: (signal) => Promise.resolve(evaluate(signal)),
   });
 
 export const unwrapForeign = <A, E, R>(

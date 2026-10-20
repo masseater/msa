@@ -1,6 +1,6 @@
 import { mkdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 
-import { getAgentDir, VERSION } from "../config.ts";
+import { VERSION, getAgentDir } from "../config.ts";
 import type { Extension } from "./extensions/types.ts";
 import { dirname, join } from "./platform-node.ts";
 import { nowIso, nowMs } from "./platform.ts";
@@ -141,8 +141,7 @@ export function recordCrash(
   try {
     const { error } = crash;
     const record: CrashRecord = {
-      timestamp: nowIso(),
-      version: VERSION,
+      cwd: crash.cwd,
       kind: crash.kind,
       message:
         error instanceof Error
@@ -150,12 +149,13 @@ export function recordCrash(
             ? error.name
             : error.message
           : String(error),
+      sessionFile: crash.sessionFile ?? null,
       stack:
         error instanceof Error && error.stack !== undefined && error.stack !== ""
           ? error.stack
           : null,
-      sessionFile: crash.sessionFile ?? null,
-      cwd: crash.cwd,
+      timestamp: nowIso(),
+      version: VERSION,
     };
     writeCrashLog([...readCrashLog(path), record].slice(-MAX_CRASH_RECORDS), path);
     return record;

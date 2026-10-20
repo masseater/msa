@@ -5,9 +5,11 @@ import type {
   ResponseUsage,
 } from "openai/resources/responses/responses.js";
 
-import { calculateCost } from "../models.ts";
-import type { Api, AssistantMessage, StopReason, ThinkingContent, Usage } from "../types.ts";
-import type { ResponsesStreamState } from "./openai-responses-stream-state.ts";
+import modelsModule from "../models.ts";
+import type typesModule from "../types.types.ts";
+import type openaiResponsesStreamStateTypes from "./openai-responses-stream-state.types.ts";
+
+const { calculateCost } = modelsModule;
 
 type TerminalResponse = Extract<
   ResponseStreamEvent,
@@ -18,7 +20,7 @@ const hasText = (value: string | null | undefined): value is string =>
   value !== undefined && value !== null && value !== "";
 
 function backfillReasoningSignatures(
-  blocksById: ReadonlyMap<string, ThinkingContent>,
+  blocksById: ReadonlyMap<string, typesModule.ThinkingContent>,
   responseOutput: readonly ResponseOutputItem[],
 ): void {
   for (const item of responseOutput) {
@@ -34,25 +36,25 @@ function backfillReasoningSignatures(
   }
 }
 
-function usageOf(usage: ResponseUsage): Usage {
+function usageOf(usage: ResponseUsage): typesModule.Usage {
   const inputDetails = usage.input_tokens_details as
     | { cached_tokens?: number; cache_write_tokens?: number }
     | undefined;
   const cachedTokens = inputDetails?.cached_tokens || 0;
   const cacheWriteTokens = inputDetails?.cache_write_tokens || 0;
   return {
-    input: Math.max(0, (usage.input_tokens || 0) - cachedTokens - cacheWriteTokens),
-    output: usage.output_tokens || 0,
     cacheRead: cachedTokens,
     cacheWrite: cacheWriteTokens,
+    cost: { cacheRead: 0, cacheWrite: 0, input: 0, output: 0, total: 0 },
+    input: Math.max(0, (usage.input_tokens || 0) - cachedTokens - cacheWriteTokens),
+    output: usage.output_tokens || 0,
     reasoning: usage.output_tokens_details?.reasoning_tokens || 0,
     totalTokens: usage.total_tokens || 0,
-    cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0, total: 0 },
   };
 }
 
-function applyPricing<TApi extends Api>(
-  { model, options, output }: ResponsesStreamState<TApi>,
+function applyPricing<TApi extends typesModule.Api>(
+  { model, options, output }: openaiResponsesStreamStateTypes.ResponsesStreamState<TApi>,
   response: TerminalResponse,
 ): void {
   calculateCost(model, output.usage);
@@ -73,12 +75,12 @@ function incompleteMessage(incompleteReason: string | undefined): string {
 function mapStopReason(
   status: ResponseStatus | undefined,
   incompleteReason: string | undefined,
-): { stopReason: StopReason; errorMessage?: string } {
+): { stopReason: typesModule.StopReason; errorMessage?: string } {
   switch (status) {
     case "incomplete":
       return incompleteReason === "max_output_tokens"
         ? { stopReason: "length" }
-        : { stopReason: "error", errorMessage: incompleteMessage(incompleteReason) };
+        : { errorMessage: incompleteMessage(incompleteReason), stopReason: "error" };
     case "failed":
     case "cancelled":
       return { stopReason: "error" };
@@ -94,7 +96,7 @@ function mapStopReason(
   }
 }
 
-function applyStatus(output: AssistantMessage, response: TerminalResponse): void {
+function applyStatus(output: typesModule.AssistantMessage, response: TerminalResponse): void {
   const status = response.status;
   const details = response.incomplete_details as { reason?: unknown } | null | undefined;
   const reason = typeof details?.reason === "string" ? details.reason : undefined;
@@ -108,7 +110,9 @@ function applyStatus(output: AssistantMessage, response: TerminalResponse): void
   }
 }
 
-export function finalizeResponse<TApi extends Api>(state: ResponsesStreamState<TApi>) {
+function finalizeResponse<TApi extends typesModule.Api>(
+  state: openaiResponsesStreamStateTypes.ResponsesStreamState<TApi>,
+) {
   return (response: TerminalResponse): void => {
     state.sawTerminalResponseEvent = true;
     backfillReasoningSignatures(state.reasoningBlocksById, response.output ?? []);
@@ -118,3 +122,9 @@ export function finalizeResponse<TApi extends Api>(state: ResponsesStreamState<T
     applyStatus(state.output, response);
   };
 }
+
+const openaiResponsesFinalize = {
+  finalizeResponse,
+};
+
+export default openaiResponsesFinalize;

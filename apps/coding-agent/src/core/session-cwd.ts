@@ -28,9 +28,9 @@ export function getMissingSessionCwdIssue(
   }
 
   return {
-    sessionFile,
-    sessionCwd,
     fallbackCwd,
+    sessionCwd,
+    sessionFile,
   };
 }
 

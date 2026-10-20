@@ -1,4 +1,4 @@
-import type { ThinkingLevel } from "@msa/agent-core";
+import type agentTypes from "@msa/agent-core/index.types";
 import { Effect } from "effect";
 
 import { actionHelpers } from "./action-helpers.ts";
@@ -47,19 +47,19 @@ function createTask(
     const round = resolveRound(runtime, input);
     const id = newId("t");
     const task: Task = {
+      condition: input.condition ?? null,
+      createdAt: now,
+      currentState: states.currentState,
+      cwd: input.cwd ?? runtime.options.cwd,
+      goalState: states.goalState,
       id,
+      kind: "work",
+      model: input.model ?? null,
       project,
       round,
-      kind: "work",
-      title: input.title,
-      currentState: states.currentState,
-      goalState: states.goalState,
       status: "waiting",
-      cwd: input.cwd ?? runtime.options.cwd,
-      condition: input.condition ?? null,
-      model: input.model ?? null,
       thinkingLevel: input.thinkingLevel ?? null,
-      createdAt: now,
+      title: input.title,
       updatedAt: now,
     };
     yield* Effect.sync(() => {
@@ -113,7 +113,7 @@ function dependencyEdit(runtime: Runtime, input: SetTaskDependsInput): Dependenc
     }
   }
   const running = tasks.filter((task) => task.status === "running").map((task) => task.id);
-  if (running.length === 0) return { taskIds, add, remove };
+  if (running.length === 0) return { add, remove, taskIds };
   if (remove.length > 0) {
     throw new Error(
       `${running.join(", ")} is running. Stop it with stop_task before dropping dependencies; send_message steers it while it runs.`,
@@ -127,7 +127,7 @@ function dependencyEdit(runtime: Runtime, input: SetTaskDependsInput): Dependenc
       `${running.join(", ")} is running, so it can only gain a dependency that already finished. Stop it with stop_task to wait for ${unfinished.join(", ")}.`,
     );
   }
-  return { taskIds, add, remove };
+  return { add, remove, taskIds };
 }
 
 function setDepends(
@@ -189,7 +189,7 @@ function setModel(
   runtime: Runtime,
   taskId: string,
   model: string,
-  thinkingLevel?: ThinkingLevel,
+  thinkingLevel?: agentTypes.ThinkingLevel,
 ): Effect.Effect<TaskView, OrchestratorError> {
   return Effect.gen(function* () {
     const now = yield* nowMillis;
@@ -203,8 +203,8 @@ function setModel(
       const worker = runtime.workers.get(thread.id);
       if (worker !== undefined) {
         yield* Effect.tryPromise({
-          try: () => worker.setModel(resolved),
           catch: orchestratorError,
+          try: () => worker.setModel(resolved),
         });
         if (thinkingLevel !== undefined) worker.setThinkingLevel(thinkingLevel);
       }
@@ -218,7 +218,7 @@ function setModel(
 export const actions = {
   createTask,
   setDepends,
-  setState,
   setModel,
+  setState,
   ...taskActions,
 };

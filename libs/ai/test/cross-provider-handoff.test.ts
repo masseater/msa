@@ -1,15 +1,17 @@
 import { Console, Effect, Option } from "effect";
 import { beforeAll, describe, expect, it } from "vite-plus/test";
 
-import type { Message } from "../src/types.ts";
-import { currentTimeMillis } from "../src/utils/clock.ts";
+import type typesModule from "../src/types.types.ts";
+import clock from "../src/utils/clock.ts";
 import crossProviderHandoffSupport from "./cross-provider-handoff-support.ts";
+
+const { currentTimeMillis } = clock;
 
 const { apiKeyFor, completeOrReport, generateFixture, handoffTargets } =
   crossProviderHandoffSupport;
 
 const authorizedTargets = handoffTargets.filter((target) => apiKeyFor(target.model) !== undefined);
-const fixtures = new Map<string, Message[]>();
+const fixtures = new Map<string, typesModule.Message[]>();
 
 const generateFixtures = () =>
   Effect.runPromise(
@@ -25,7 +27,7 @@ const generateFixtures = () =>
     ),
   );
 
-const confirmation: Message = {
+const confirmation: typesModule.Message = {
   content:
     "Great, thanks for all that help! Now just say 'Hello, handoff successful!' to confirm you received everything.",
   role: "user",

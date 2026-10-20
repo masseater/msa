@@ -1,4 +1,4 @@
-import { fauxAssistantMessage, fauxToolCall } from "@msa/ai/compat";
+import compat from "@msa/ai/compat";
 import testing from "@msa/testing";
 import { Effect } from "effect";
 import { Type } from "typebox";
@@ -16,6 +16,8 @@ import type {
   SessionStartEvent,
 } from "../../src/index.ts";
 import agentSessionRuntimeSupport from "./agent-session-runtime-support.ts";
+
+const { fauxAssistantMessage, fauxToolCall } = compat;
 
 const { createRuntimeForTest, disposeRuntimes } = agentSessionRuntimeSupport;
 

@@ -8,9 +8,9 @@ export { MODELS, streamGitLabDuo };
 
 export default function (msa: ExtensionAPI) {
   msa.registerProvider("gitlab-duo", {
-    baseUrl: "https://cloud.gitlab.com",
-    apiKey: "$GITLAB_TOKEN",
     api: "gitlab-duo-api",
+    apiKey: "$GITLAB_TOKEN",
+    baseUrl: "https://cloud.gitlab.com",
     models: MODELS.map(
       ({ id, name, reasoning, thinkingLevelMap, input, cost, contextWindow, maxTokens }) =>
         Object.assign(
@@ -19,10 +19,10 @@ export default function (msa: ExtensionAPI) {
         ),
     ),
     oauth: {
-      name: "GitLab Duo",
-      login: loginGitLab,
-      refreshToken: refreshGitLabToken,
       getApiKey: (cred) => cred.access,
+      login: loginGitLab,
+      name: "GitLab Duo",
+      refreshToken: refreshGitLabToken,
     },
     streamSimple: streamGitLabDuo,
   });

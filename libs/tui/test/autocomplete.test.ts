@@ -3,7 +3,7 @@ import { describe, it, test } from "node:test";
 
 import { Console, Effect } from "effect";
 
-import { CombinedAutocompleteProvider } from "../src/autocomplete.ts";
+import CombinedAutocompleteProvider from "../src/autocomplete.ts";
 import autocompleteHelpers from "./autocomplete-helpers.ts";
 
 const { getSuggestions, withFd, requireFdPath, setupFolder, useTempWorkspace } =

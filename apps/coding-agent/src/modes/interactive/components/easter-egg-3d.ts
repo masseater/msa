@@ -1,17 +1,5 @@
-import {
-  backgroundAnsi,
-  type Color,
-  type Component,
-  colorToRgb,
-  foregroundAnsi,
-  getKeybindings,
-  indexedColor,
-  rgbColor,
-  type TUI,
-  type TuiMouseEvent,
-  type TuiMouseEventResult,
-  visibleWidth,
-} from "@msa/tui";
+import tuiModule from "@msa/tui";
+import type tuiTypes from "@msa/tui/index.types";
 import { Effect } from "effect";
 import { dual } from "effect/Function";
 
@@ -21,6 +9,16 @@ import { every } from "../../interval.ts";
 import { theme } from "../theme/theme.ts";
 import { ARMIN_HEIGHT, ARMIN_WIDTH, isArminPixel } from "./armin.ts";
 import { formatKeyText } from "./keybinding-hints.ts";
+
+const {
+  backgroundAnsi,
+  colorToRgb,
+  foregroundAnsi,
+  getKeybindings,
+  indexedColor,
+  rgbColor,
+  visibleWidth,
+} = tuiModule;
 
 type Rgb = readonly [number, number, number];
 
@@ -87,18 +85,18 @@ function createModel(
   for (let row = 0; row < rows; row++) {
     for (let column = 0; column < columns; column++) {
       const color = pixel(column, row);
-      if (color !== undefined) blocks.push({ home: [column, row, 0], color });
+      if (color !== undefined) blocks.push({ color, home: [column, row, 0] });
     }
   }
   return {
-    columns,
-    rows,
     blocks,
     cameraDistance: options.cameraDistance,
-    radius: Math.hypot(columns / 2, rows / 2, 1 + DEPTH / 2),
-    widthShare: options.widthShare,
-    puzzleMoves: (random) => options.puzzleMoves(random, blocks.length),
+    columns,
     origin: options.origin,
+    puzzleMoves: (random) => options.puzzleMoves(random, blocks.length),
+    radius: Math.hypot(columns / 2, rows / 2, 1 + DEPTH / 2),
+    rows,
+    widthShare: options.widthShare,
   };
 }
 
@@ -109,9 +107,9 @@ function arminModel(color: Rgb): Model {
     (column, row) => (isArminPixel(column, row) ? color : undefined),
     {
       cameraDistance: 80,
-      widthShare: 0.45,
-      puzzleMoves: (random, blockCount) => Math.round(blockCount * (0.03 + random * 0.04)),
       origin: undefined,
+      puzzleMoves: (random, blockCount) => Math.round(blockCount * (0.03 + random * 0.04)),
+      widthShare: 0.45,
     },
   );
 }
@@ -245,7 +243,7 @@ function isLight([r, g, b]: Rgb): boolean {
   return 0.2126 * r + 0.7152 * g + 0.0722 * b > 128;
 }
 
-function toRgb(color: Color): Rgb {
+function toRgb(color: tuiTypes.Color): Rgb {
   const { r, g, b } = colorToRgb(color);
   return [r, g, b];
 }
@@ -323,13 +321,13 @@ function parseScreen(
         }
         if (dim) cellFg = mix(cellFg, cellBg ?? background, 0.4);
         const cell = {
-          text: segment,
-          width: glyphWidth,
-          fg: cellFg,
           bg: cellBg,
           delay: 0,
+          fg: cellFg,
           ink: 0,
           seed: 0,
+          text: segment,
+          width: glyphWidth,
         };
         cells.push(cell);
         if (glyphWidth === 2) cells.push({ ...cell, text: "", width: 0 });
@@ -536,7 +534,7 @@ class BlockRaster {
       }
     }
     if (cellMaxX >= 0)
-      this.dirty = { minX: cellMinX, minY: cellMinY, maxX: cellMaxX, maxY: cellMaxY };
+      this.dirty = { maxX: cellMaxX, maxY: cellMaxY, minX: cellMinX, minY: cellMinY };
     if (haloStrength > 0) this.renderHalo(haloStrength);
   }
 
@@ -606,16 +604,16 @@ class BlockRaster {
     return {
       done: false,
       value: {
-        dotWidth,
-        dotHeight,
-        faces,
-        origin,
-        m,
-        scale,
+        cameraDistance,
         centerX,
         centerY,
-        cameraDistance,
+        dotHeight,
+        dotWidth,
+        faces,
         light,
+        m,
+        origin,
+        scale,
       },
     };
   }
@@ -682,19 +680,19 @@ class BlockRaster {
     return {
       done: false,
       value: {
-        minY,
+        bits,
+        cellMaxX,
+        cellMaxY,
+        cellMinX,
+        cellMinY,
+        counts,
+        depth,
+        faceIds,
+        maxX,
         maxY,
         minX,
-        maxX,
-        faceIds,
-        depth,
-        bits,
-        counts,
+        minY,
         rgb,
-        cellMinX,
-        cellMaxX,
-        cellMinY,
-        cellMaxY,
       },
     };
   }
@@ -741,7 +739,7 @@ class BlockRaster {
     let cellMinY = height;
     let cellMaxX = -1;
     let cellMaxY = -1;
-    return { faceIds, depth, bits, counts, rgb, cellMinX, cellMaxX, cellMinY, cellMaxY };
+    return { bits, cellMaxX, cellMaxY, cellMinX, cellMinY, counts, depth, faceIds, rgb };
   }
 
   private static renderBits(
@@ -777,7 +775,7 @@ class BlockRaster {
       self,
       width,
     );
-    return { bits, counts, rgb, cellMinX };
+    return { bits, cellMinX, counts, rgb };
   }
 
   private renderHalo(strength: number): void {
@@ -872,7 +870,7 @@ class BlockRaster {
           Math.round(blue / coverage / LOGO_COLOR_STEP) * LOGO_COLOR_STEP;
       }
     }
-    self.haloDirty = { minX, minY, maxX, maxY };
+    self.haloDirty = { maxX, maxY, minX, minY };
   }
 
   private visibleFaces(
@@ -937,7 +935,7 @@ function renderBitsBits(
     self,
     width,
   );
-  return { bits, counts, rgb, cellMinX };
+  return { bits, cellMinX, counts, rgb };
 }
 
 function renderBitsBitsBits(
@@ -998,7 +996,7 @@ function renderBitsBitsBits(
   const counts = self.counts;
   const rgb = self.rgb;
   let cellMinX = width;
-  return { bits, counts, rgb, cellMinX };
+  return { bits, cellMinX, counts, rgb };
 }
 
 function visibleFacesPart1(
@@ -1067,10 +1065,10 @@ function visibleFacesPart1Part1(
         cameraDistance,
       );
       const face = {
-        minX: Math.max(0, Math.floor(minX)),
-        minY: Math.max(0, Math.floor(minY)),
         maxX: Math.min(dotWidth - 1, Math.ceil(maxX)),
         maxY: Math.min(dotHeight - 1, Math.ceil(maxY)),
+        minX: Math.max(0, Math.floor(minX)),
+        minY: Math.max(0, Math.floor(minY)),
       };
       if (face.maxX < face.minX || face.maxY < face.minY) continue;
 
@@ -1149,7 +1147,7 @@ function visibleFacesMinX(
       maxY = Math.max(maxY, screenY);
     }
   }
-  return { minX, minY, maxX, maxY };
+  return { maxX, maxY, minX, minY };
 }
 
 function visibleFacesPart2(
@@ -1194,9 +1192,9 @@ function visibleFacesPart2(
 let playing = false;
 
 export const playEasterEgg3d: {
-  (screen: readonly string[]): (tui: TUI) => Promise<void>;
-  (tui: TUI, screen: readonly string[]): Promise<void>;
-} = dual(2, (tui: TUI, screen: readonly string[]): Promise<void> =>
+  (screen: readonly string[]): (tui: tuiTypes.TUI) => Promise<void>;
+  (tui: tuiTypes.TUI, screen: readonly string[]): Promise<void>;
+} = dual(2, (tui: tuiTypes.TUI, screen: readonly string[]): Promise<void> =>
   Effect.runPromise(
     awaiting(function* () {
       if (playing) return;
@@ -1208,8 +1206,8 @@ export const playEasterEgg3d: {
         fallback: Rgb,
       ): Rgb => (rgb === undefined ? fallback : [rgb.r, rgb.g, rgb.b]);
       const colors = {
-        foreground: toRgbTuple(reported.foreground, toRgb(theme.colors.text)),
         background: toRgbTuple(reported.background, dark ? [0, 0, 0] : [255, 255, 255]),
+        foreground: toRgbTuple(reported.foreground, toRgb(theme.colors.text)),
       };
       if (tui.hasOverlay()) {
         playing = false;
@@ -1222,15 +1220,15 @@ export const playEasterEgg3d: {
       });
       const overlay = tui.showOverlay(animation, {
         anchor: "top-left",
-        width: "100%",
         maxHeight: "100%",
+        width: "100%",
       });
     }),
   ),
 );
 
-export class EasterEgg3dAnimation implements Component {
-  private readonly tui: TUI;
+export class EasterEgg3dAnimation implements tuiTypes.Component {
+  private readonly tui: tuiTypes.TUI;
   private readonly screen: readonly string[];
   private readonly model: Model;
   private readonly foreground: Rgb;
@@ -1257,7 +1255,7 @@ export class EasterEgg3dAnimation implements Component {
   private readonly raster: BlockRaster;
 
   constructor(
-    tui: TUI,
+    tui: tuiTypes.TUI,
     screen: readonly string[],
     model: Model,
     colors: { foreground: Rgb; background: Rgb },
@@ -1289,11 +1287,11 @@ export class EasterEgg3dAnimation implements Component {
     const yaw = spinAngle(time);
     const turn = Math.PI * 2;
     this.exit = {
+      offsets: this.blockOffsets(time),
       start: performance.now(),
+      targetYaw: Math.ceil(yaw / turn) * turn,
       time,
       yaw,
-      targetYaw: Math.ceil(yaw / turn) * turn,
-      offsets: this.blockOffsets(time),
     };
   }
 
@@ -1303,7 +1301,7 @@ export class EasterEgg3dAnimation implements Component {
       this.close();
   }
 
-  handleMouse(event: TuiMouseEvent): TuiMouseEventResult {
+  handleMouse(event: tuiTypes.TuiMouseEvent): tuiTypes.TuiMouseEventResult {
     if (event.type === "click") this.close();
     return { handled: true, render: false };
   }
@@ -1432,18 +1430,18 @@ export class EasterEgg3dAnimation implements Component {
       foreground,
     );
     return {
-      height,
-      textActive,
-      halo,
-      backgroundFade,
       background,
+      backgroundFade,
+      dissolveTime,
+      frame,
+      halo,
+      height,
       hint,
+      lines,
       raster,
       starfield,
-      dissolveTime,
+      textActive,
       textFade,
-      frame,
-      lines,
     };
   }
 
@@ -1484,9 +1482,9 @@ export class EasterEgg3dAnimation implements Component {
       const x = block.home[0] - columns / 2 + dx;
       const y = block.home[1] - rows / 2 + dy;
       return {
-        min: [x, y, dz - DEPTH / 2],
-        max: [x + 1, y + 1, dz + DEPTH / 2],
         color: block.color,
+        max: [x + 1, y + 1, dz + DEPTH / 2],
+        min: [x, y, dz - DEPTH / 2],
       };
     });
     const { starLevel, now, textActive, halo, backgroundFade, hint, raster, textFade, frame } =
@@ -1502,19 +1500,19 @@ export class EasterEgg3dAnimation implements Component {
         starAlpha,
       );
     return {
-      starLevel,
-      now,
       background,
-      foreground,
-      height,
-      textActive,
-      halo,
       backgroundFade,
-      hint,
-      raster,
       dissolveTime,
-      textFade,
+      foreground,
       frame,
+      halo,
+      height,
+      hint,
+      now,
+      raster,
+      starLevel,
+      textActive,
+      textFade,
     };
   }
 
@@ -1532,7 +1530,7 @@ export class EasterEgg3dAnimation implements Component {
       background,
       foreground,
     );
-    return { starfield, lines };
+    return { lines, starfield };
   }
 
   private static renderOffsets(
@@ -1590,16 +1588,16 @@ export class EasterEgg3dAnimation implements Component {
 
     const { columns, rows } = self.model;
     return {
-      offsets,
-      columns,
-      rows,
-      height,
-      pose,
       background,
+      columns,
       dissolveTime,
-      hintAlpha,
-      starAlpha,
       foreground,
+      height,
+      hintAlpha,
+      offsets,
+      pose,
+      rows,
+      starAlpha,
     };
   }
 
@@ -1652,7 +1650,7 @@ export class EasterEgg3dAnimation implements Component {
     const frame = Math.floor(dissolveTime * 14);
     const now = self.elapsed();
     const starLevel = Math.round(starAlpha * STAR_ALPHA_LEVELS) / STAR_ALPHA_LEVELS;
-    return { starLevel, now, textActive, halo, backgroundFade, hint, raster, textFade, frame };
+    return { backgroundFade, frame, halo, hint, now, raster, starLevel, textActive, textFade };
   }
 
   private static renderStarfield(
@@ -1670,16 +1668,16 @@ export class EasterEgg3dAnimation implements Component {
         Math.round((0.5 + 0.5 * Math.sin(now * star.speed + star.phase)) * STAR_FLICKER_LEVELS) /
         STAR_FLICKER_LEVELS;
       return {
-        text: star.glyph,
         fg: mix(
           background,
           mix(foreground, star.tint, 0.5),
           star.strength * (0.7 + 0.3 * flicker) * starLevel,
         ),
+        text: star.glyph,
       };
     };
     const lines: string[] = [];
-    return { starfield, lines };
+    return { lines, starfield };
   }
 
   private static renderCells(
@@ -1794,10 +1792,10 @@ export class EasterEgg3dAnimation implements Component {
     return {
       centerX: startX + (endX - startX) * progress,
       centerY: startY + (endY - startY) * progress,
-      scale: startScale * (endScale / startScale) ** progress,
-      yaw: spinAngle(time),
       pitch: 0.3 * Math.sin(spinPhase(time)) * progress,
       roll: 0.06 * Math.sin(2 * spinPhase(time)) * progress,
+      scale: startScale * (endScale / startScale) ** progress,
+      yaw: spinAngle(time),
     };
   }
 
@@ -1814,12 +1812,12 @@ export class EasterEgg3dAnimation implements Component {
     const text = `${key} to return`;
     if (text.length > width) return undefined;
     return {
+      color: mix(background, toRgb(theme.colors.dim), alpha),
+      keyColor: mix(background, toRgb(theme.colors.muted), alpha),
+      keyLength: key.length,
       row: height - 2,
       start: Math.floor((width - text.length) / 2),
       text,
-      keyLength: key.length,
-      keyColor: mix(background, toRgb(theme.colors.muted), alpha),
-      color: mix(background, toRgb(theme.colors.dim), alpha),
     };
   }
 
@@ -1830,10 +1828,10 @@ export class EasterEgg3dAnimation implements Component {
       const random = (salt: number) => hash(index * 7 + salt * 0x9e37);
       stars[index] = {
         glyph: BRAILLE[DOT_BITS[Math.floor(random(1) * 8)]!]!,
-        tint: STAR_TINTS[Math.floor(random(2) * STAR_TINTS.length)]!,
-        strength: 0.1 + random(3) * 0.12,
         phase: random(4) * Math.PI * 2,
         speed: 0.4 + random(5) * 0.8,
+        strength: 0.1 + random(3) * 0.12,
+        tint: STAR_TINTS[Math.floor(random(2) * STAR_TINTS.length)]!,
       };
     }
     return stars;

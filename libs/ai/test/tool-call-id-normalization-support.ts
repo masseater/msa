@@ -2,10 +2,12 @@ import { Clock, Effect } from "effect";
 import { Type } from "typebox";
 import { expect, inject } from "vite-plus/test";
 
-import { completeSimple, getEnvApiKey } from "../src/compat.ts";
-import type { Api, AssistantMessage, Message, Model, Tool } from "../src/types.ts";
+import compat from "../src/compat.ts";
+import type typesModule from "../src/types.types.ts";
 import env from "./env.ts";
 import modelChoice from "./model-choice.ts";
+
+const { completeSimple, getEnvApiKey } = compat;
 
 const { hasValue } = env;
 const { chooseModel, usesApi } = modelChoice;
@@ -18,7 +20,7 @@ const openaiModel = chooseModel("openai", "Responses", usesApi("openai-responses
 const openrouterModel = chooseModel(
   "openrouter",
   "OpenAI-family completions",
-  (model): model is Model<"openai-completions"> =>
+  (model): model is typesModule.Model<"openai-completions"> =>
     usesApi("openai-completions")(model) && model.id.startsWith("openai/"),
 );
 const codexModel = chooseModel("openai-codex", "Codex");
@@ -27,13 +29,17 @@ const echoToolSchema = Type.Object({
   message: Type.String({ description: "Message to echo back" }),
 });
 
-const echoTool: Tool<typeof echoToolSchema> = {
+const echoTool: typesModule.Tool<typeof echoToolSchema> = {
   description: "Echoes the message back",
   name: "echo",
   parameters: echoToolSchema,
 };
 
-const replyAfterToolResult = (model: Model<Api>, apiKey: string | undefined, messages: Message[]) =>
+const replyAfterToolResult = (
+  model: typesModule.Model<typesModule.Api>,
+  apiKey: string | undefined,
+  messages: typesModule.Message[],
+) =>
   Effect.promise(() =>
     completeSimple(
       model,
@@ -43,12 +49,12 @@ const replyAfterToolResult = (model: Model<Api>, apiKey: string | undefined, mes
   );
 
 const echoThroughOpenAI = Effect.fn("echoThroughOpenAI")(function* (text: string) {
-  const userMessage: Message = {
+  const userMessage: typesModule.Message = {
     content: `Use the echo tool to echo '${text}'`,
     role: "user",
     timestamp: yield* Clock.currentTimeMillis,
   };
-  const assistantResponse: AssistantMessage = yield* Effect.promise(() =>
+  const assistantResponse: typesModule.AssistantMessage = yield* Effect.promise(() =>
     completeSimple(
       openaiModel,
       {
@@ -65,7 +71,7 @@ const echoThroughOpenAI = Effect.fn("echoThroughOpenAI")(function* (text: string
   const toolCall = assistantResponse.content.find((content) => content.type === "toolCall");
   if (toolCall?.type !== "toolCall") throw new Error("OpenAI returned no tool call");
   const now = yield* Clock.currentTimeMillis;
-  const messages: Message[] = [
+  const messages: typesModule.Message[] = [
     userMessage,
     assistantResponse,
     {

@@ -1,7 +1,10 @@
 import { dual } from "effect/Function";
 
-import { getActiveOsc8Close } from "./ansi-tracker.ts";
-import { isPrintableAscii, textUnits, visibleWidth } from "./utils.ts";
+import ansiTracker from "./ansi-tracker.ts";
+import utils from "./utils.ts";
+
+const { isPrintableAscii, textUnits, visibleWidth } = utils;
+const { getActiveOsc8Close } = ansiTracker;
 
 interface TruncateRequest {
   text: string;
@@ -83,7 +86,7 @@ function truncateToEllipsis(request: TruncateRequest): string {
 
 function scanTruncation(request: TruncateRequest): TruncateScan {
   const targetWidth = request.maxWidth - request.ellipsisWidth;
-  const scan: TruncateScan = { result: "", keptWidth: 0, visibleSoFar: 0, overflowed: false };
+  const scan: TruncateScan = { keptWidth: 0, overflowed: false, result: "", visibleSoFar: 0 };
   let pendingAnsi = "";
   let keepContiguousPrefix = true;
 
@@ -134,7 +137,7 @@ function truncateRequest(request: TruncateRequest): string {
   return finalizeTruncatedResult(request, scan.result, scan.keptWidth, ellipsis);
 }
 
-export const truncateToWidth: {
+const truncateToWidth: {
   (text: string, maxWidth: number, ellipsis?: string, pad?: boolean): string;
   (maxWidth: number, ellipsis?: string, pad?: boolean): (text: string) => string;
 } = dual(
@@ -147,11 +150,17 @@ export const truncateToWidth: {
       return pad ? " ".repeat(maxWidth) : "";
     }
     return truncateRequest({
-      text,
-      maxWidth,
       ellipsis,
       ellipsisWidth: visibleWidth(ellipsis),
+      maxWidth,
       pad,
+      text,
     });
   },
 );
+
+const textTruncate = {
+  truncateToWidth,
+};
+
+export default textTruncate;

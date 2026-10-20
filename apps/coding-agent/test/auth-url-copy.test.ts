@@ -1,5 +1,6 @@
 import testing from "@msa/testing";
-import { type TUI, setKeybindings } from "@msa/tui";
+import tuiModule from "@msa/tui";
+import type tuiTypes from "@msa/tui/index.types";
 import { Effect } from "effect";
 import { beforeAll, beforeEach, describe, expect, test, vi } from "vite-plus/test";
 
@@ -8,6 +9,8 @@ import { McpManagerView } from "../src/extensions/mcp/ui.ts";
 import { LoginDialogComponent } from "../src/modes/interactive/components/login-dialog.ts";
 import { initTheme, theme } from "../src/modes/interactive/theme/theme.ts";
 import { stripAnsi } from "../src/utils/ansi.ts";
+
+const { setKeybindings } = tuiModule;
 
 const { abortController, awaited, runTest } = testing;
 
@@ -21,7 +24,7 @@ vi.mock("../src/utils/open-browser.ts", () => ({ openBrowser: vi.fn() }));
 const URL = `https://auth.example.invalid/authorize?${"x".repeat(300)}`;
 const CTRL_X = "\x18";
 
-const tui = { requestRender: vi.fn() } as unknown as TUI;
+const tui = { requestRender: vi.fn() } as unknown as tuiTypes.TUI;
 
 function rendered(component: { render(width: number): string[] }): string {
   return stripAnsi(component.render(80).join("\n"));

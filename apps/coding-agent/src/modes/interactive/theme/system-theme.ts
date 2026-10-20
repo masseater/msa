@@ -1,17 +1,18 @@
-import {
+import tui from "@msa/tui";
+import type tuiTypes from "@msa/tui/index.types";
+import { dual } from "effect/Function";
+
+import type { TerminalTheme, ThemeAppearance, ThemeBg, ThemeColor, ThemeToken } from "./theme.ts";
+
+const {
   colorToOkhsl,
   colorToOklch,
   colorToRgb,
-  type OkhslChannels,
   okhslColor,
   oklabToOkhslLightness,
   oklchColor,
-  type RgbColor,
   rgbColor,
-} from "@msa/tui";
-import { dual } from "effect/Function";
-
-import type { ThemeAppearance, ThemeBg, ThemeColor, ThemeToken, TerminalTheme } from "./theme.ts";
+} = tui;
 
 export const SYSTEM_THEME_NAME = "system";
 
@@ -22,90 +23,87 @@ interface Family {
 }
 
 const FAMILIES = {
-  neutral: { hue: 231.49, saturation: { min: 0.02, max: 0.08 }, slot: 8 },
-  blue: { hue: 231.49, saturation: { min: 0.1, max: 0.68 }, slot: 4 },
-  green: { hue: 158.68, saturation: { min: 0.1, max: 0.76 }, slot: 2 },
-  red: { hue: 20, saturation: { min: 0.1, max: 0.92 }, slot: 1 },
-  yellow: { hue: 82.36, saturation: { min: 0.5, max: 1 }, slot: 3 },
-  orange: { hue: 52, saturation: { min: 0.12, max: 0.85 }, slot: 3 },
-  violet: { hue: 295, saturation: { min: 0.2, max: 0.6 }, slot: 5 },
-  calamine: { hue: 202.43, saturation: { min: 0.1, max: 0.74 }, slot: 6 },
-  thinkingSlate: { hue: 231.49, saturation: { min: 0.08, max: 0.2 }, slot: 4 },
-  thinkingBlue: { hue: 231.49, saturation: { min: 0.2, max: 0.45 }, slot: 4 },
-  thinkingPeriwinkle: { hue: 263.25, saturation: { min: 0.3, max: 0.6 }, slot: 6 },
-  thinkingViolet: { hue: 295, saturation: { min: 0.4, max: 0.75 }, slot: 5 },
-  thinkingMagenta: { hue: 337.5, saturation: { min: 0.5, max: 0.85 }, slot: 13 },
-  thinkingRed: { hue: 20, saturation: { min: 0.95, max: 1 }, slot: 1 },
+  blue: { hue: 231.49, saturation: { max: 0.68, min: 0.1 }, slot: 4 },
+  calamine: { hue: 202.43, saturation: { max: 0.74, min: 0.1 }, slot: 6 },
+  green: { hue: 158.68, saturation: { max: 0.76, min: 0.1 }, slot: 2 },
+  neutral: { hue: 231.49, saturation: { max: 0.08, min: 0.02 }, slot: 8 },
+  orange: { hue: 52, saturation: { max: 0.85, min: 0.12 }, slot: 3 },
+  red: { hue: 20, saturation: { max: 0.92, min: 0.1 }, slot: 1 },
+  thinkingBlue: { hue: 231.49, saturation: { max: 0.45, min: 0.2 }, slot: 4 },
+  thinkingMagenta: { hue: 337.5, saturation: { max: 0.85, min: 0.5 }, slot: 13 },
+  thinkingPeriwinkle: { hue: 263.25, saturation: { max: 0.6, min: 0.3 }, slot: 6 },
+  thinkingRed: { hue: 20, saturation: { max: 1, min: 0.95 }, slot: 1 },
+  thinkingSlate: { hue: 231.49, saturation: { max: 0.2, min: 0.08 }, slot: 4 },
+  thinkingViolet: { hue: 295, saturation: { max: 0.75, min: 0.4 }, slot: 5 },
+  violet: { hue: 295, saturation: { max: 0.6, min: 0.2 }, slot: 5 },
+  yellow: { hue: 82.36, saturation: { max: 1, min: 0.5 }, slot: 3 },
 } satisfies Record<string, Family>;
 
 type FamilyName = keyof typeof FAMILIES;
 
 const TOKEN_FAMILIES: Record<ThemeToken, FamilyName> = {
-  selectedBg: "blue",
-  searchMatchBg: "orange",
-  userMessageBg: "blue",
+  accent: "violet",
+  bashMode: "green",
+  border: "blue",
+  borderAccent: "violet",
+  borderMuted: "neutral",
   customMessageBg: "violet",
-  toolPendingBg: "neutral",
-  toolSuccessBg: "green",
-  toolErrorBg: "red",
-
-  text: "neutral",
-  userMessageText: "neutral",
+  customMessageLabel: "violet",
   customMessageText: "neutral",
-  toolTitle: "neutral",
-  syntaxOperator: "neutral",
-  syntaxPunctuation: "neutral",
-  muted: "neutral",
   dim: "neutral",
-  thinkingText: "neutral",
-  toolOutput: "neutral",
+  error: "red",
+  mdCode: "violet",
+  mdCodeBlock: "green",
+  mdCodeBlockBorder: "neutral",
+  mdHeading: "yellow",
+  mdHr: "neutral",
+  mdLink: "blue",
   mdLinkUrl: "neutral",
+  mdListBullet: "violet",
   mdQuote: "neutral",
   mdQuoteBorder: "neutral",
-  mdHr: "neutral",
-  mdCodeBlockBorder: "neutral",
-  toolDiffContext: "neutral",
-  syntaxComment: "neutral",
-  scrollbarTrack: "neutral",
+  muted: "neutral",
   scrollbarThumb: "neutral",
+  scrollbarTrack: "neutral",
+  searchMatchBg: "orange",
   searchMatchText: "neutral",
-  borderMuted: "neutral",
-
-  accent: "violet",
-  borderAccent: "violet",
-  customMessageLabel: "violet",
-  mdCode: "violet",
-  mdListBullet: "violet",
-  syntaxType: "violet",
-  border: "blue",
-  mdLink: "blue",
-  syntaxKeyword: "blue",
-  syntaxVariable: "calamine",
+  selectedBg: "blue",
   success: "green",
-  mdCodeBlock: "green",
-  toolDiffAdded: "green",
-  bashMode: "green",
-  syntaxNumber: "green",
-  error: "red",
-  toolDiffRemoved: "red",
-  warning: "yellow",
-  mdHeading: "yellow",
+  syntaxComment: "neutral",
   syntaxFunction: "yellow",
+  syntaxKeyword: "blue",
+  syntaxNumber: "green",
+  syntaxOperator: "neutral",
+  syntaxPunctuation: "neutral",
   syntaxString: "orange",
-
-  thinkingOff: "neutral",
-  thinkingMinimal: "thinkingSlate",
-  thinkingLow: "thinkingBlue",
-  thinkingMedium: "thinkingPeriwinkle",
+  syntaxType: "violet",
+  syntaxVariable: "calamine",
+  text: "neutral",
   thinkingHigh: "thinkingViolet",
-  thinkingXhigh: "thinkingMagenta",
+  thinkingLow: "thinkingBlue",
   thinkingMax: "thinkingRed",
+  thinkingMedium: "thinkingPeriwinkle",
+  thinkingMinimal: "thinkingSlate",
+  thinkingOff: "neutral",
+  thinkingText: "neutral",
+  thinkingXhigh: "thinkingMagenta",
+  toolDiffAdded: "green",
+  toolDiffContext: "neutral",
+  toolDiffRemoved: "red",
+  toolErrorBg: "red",
+  toolOutput: "neutral",
+  toolPendingBg: "neutral",
+  toolSuccessBg: "green",
+  toolTitle: "neutral",
+  userMessageBg: "blue",
+  userMessageText: "neutral",
+  warning: "yellow",
 };
 
 const TOKEN_SLOTS: Partial<Record<ThemeToken, number>> = {
-  syntaxString: 2,
-  syntaxNumber: 5,
   searchMatchBg: 3,
+  syntaxNumber: 5,
+  syntaxString: 2,
 };
 
 interface Curve {
@@ -114,6 +112,16 @@ interface Curve {
 }
 
 const LEVELS = {
+  emphasis: {
+    dark: {
+      coefficients: [0.7303, 0.07695, -1.31626, 7.1681, -10.14436, 4.92846],
+      reachable: [0, 0.712],
+    },
+    light: {
+      coefficients: [-4948.31942, 26870.91986, -58334.48399, 63280.17197, -34298.01053, 7430.30146],
+      reachable: [0.811, 1],
+    },
+  },
   panel: {
     dark: {
       coefficients: [0.29131, -0.39746, 2.33185, -0.85524, -1.2076, 0.86276],
@@ -124,14 +132,44 @@ const LEVELS = {
       reachable: [0.348, 1],
     },
   },
-  track: {
+  readable: {
     dark: {
-      coefficients: [0.39028, -0.23015, 0.83573, 2.43829, -4.38292, 2.01582],
-      reachable: [0, 0.946],
+      coefficients: [0.66937, 0.04704, -1.06871, 6.43941, -8.9332, 4.17229],
+      reachable: [0, 0.77],
     },
     light: {
-      coefficients: [-5.24921, 38.37322, -107.28833, 152.10005, -106.17127, 29.18061],
-      reachable: [0.368, 1],
+      coefficients: [-1554.52576, 8733.56817, -19604.93507, 21977.72696, -12300.99599, 2749.81288],
+      reachable: [0.751, 1],
+    },
+  },
+  subtle: {
+    dark: {
+      coefficients: [0.56762, -0.02475, -0.5383, 5.12628, -7.10931, 3.17324],
+      reachable: [0, 0.848],
+    },
+    light: {
+      coefficients: [-232.85459, 1376.54473, -3249.11801, 3827.91186, -2248.29472, 526.55751],
+      reachable: [0.657, 1],
+    },
+  },
+  text: {
+    dark: {
+      coefficients: [0.89242, 0.02311, -0.44862, 2.34417, -0.06084, -2.63844],
+      reachable: [0, 0.5],
+    },
+    light: {
+      coefficients: [-2004.67048, 6664.47299, -6060.70202, -1792.61209, 5133.82359, -1939.85583],
+      reachable: [0.894, 1],
+    },
+  },
+  textOnPanel: {
+    dark: {
+      coefficients: [0.86713, 0.05232, -0.89428, 4.79014, -5.5432, 1.75023],
+      reachable: [0, 0.542],
+    },
+    light: {
+      coefficients: [-8570.89457, 43954.60805, -90084.00702, 92220.6791, -47152.15802, 9632.27113],
+      reachable: [0.867, 1],
     },
   },
   thinking0: {
@@ -204,16 +242,6 @@ const LEVELS = {
       reachable: [0.643, 1],
     },
   },
-  subtle: {
-    dark: {
-      coefficients: [0.56762, -0.02475, -0.5383, 5.12628, -7.10931, 3.17324],
-      reachable: [0, 0.848],
-    },
-    light: {
-      coefficients: [-232.85459, 1376.54473, -3249.11801, 3827.91186, -2248.29472, 526.55751],
-      reachable: [0.657, 1],
-    },
-  },
   thumb: {
     dark: {
       coefficients: [0.60323, 0.00278, -0.73328, 5.57157, -7.68067, 3.46933],
@@ -224,44 +252,14 @@ const LEVELS = {
       reachable: [0.586, 1],
     },
   },
-  readable: {
+  track: {
     dark: {
-      coefficients: [0.66937, 0.04704, -1.06871, 6.43941, -8.9332, 4.17229],
-      reachable: [0, 0.77],
+      coefficients: [0.39028, -0.23015, 0.83573, 2.43829, -4.38292, 2.01582],
+      reachable: [0, 0.946],
     },
     light: {
-      coefficients: [-1554.52576, 8733.56817, -19604.93507, 21977.72696, -12300.99599, 2749.81288],
-      reachable: [0.751, 1],
-    },
-  },
-  emphasis: {
-    dark: {
-      coefficients: [0.7303, 0.07695, -1.31626, 7.1681, -10.14436, 4.92846],
-      reachable: [0, 0.712],
-    },
-    light: {
-      coefficients: [-4948.31942, 26870.91986, -58334.48399, 63280.17197, -34298.01053, 7430.30146],
-      reachable: [0.811, 1],
-    },
-  },
-  textOnPanel: {
-    dark: {
-      coefficients: [0.86713, 0.05232, -0.89428, 4.79014, -5.5432, 1.75023],
-      reachable: [0, 0.542],
-    },
-    light: {
-      coefficients: [-8570.89457, 43954.60805, -90084.00702, 92220.6791, -47152.15802, 9632.27113],
-      reachable: [0.867, 1],
-    },
-  },
-  text: {
-    dark: {
-      coefficients: [0.89242, 0.02311, -0.44862, 2.34417, -0.06084, -2.63844],
-      reachable: [0, 0.5],
-    },
-    light: {
-      coefficients: [-2004.67048, 6664.47299, -6060.70202, -1792.61209, 5133.82359, -1939.85583],
-      reachable: [0.894, 1],
+      coefficients: [-5.24921, 38.37322, -107.28833, 152.10005, -106.17127, 29.18061],
+      reachable: [0.368, 1],
     },
   },
 } satisfies Record<string, Record<ThemeAppearance, Curve>>;
@@ -298,46 +296,46 @@ const THINKING: [ThemeColor, Level][] = [
 ];
 
 const each = (tokens: ThemeToken[], on: Surface[], level: Level): Rule[] =>
-  tokens.map((token) => ({ token, on, level }));
+  tokens.map((token) => ({ level, on, token }));
 
 const RULES: Rule[] = [
   ...each(PANELS, ["background"], "panel"),
-  { token: "text", on: ["background"], level: "text" },
-  { token: "text", on: ["selectedBg"], level: "textOnPanel" },
-  { token: "userMessageText", on: ["userMessageBg"], level: "textOnPanel" },
-  { token: "toolTitle", on: TOOL_PANELS, level: "textOnPanel" },
+  { level: "text", on: ["background"], token: "text" },
+  { level: "textOnPanel", on: ["selectedBg"], token: "text" },
+  { level: "textOnPanel", on: ["userMessageBg"], token: "userMessageText" },
+  { level: "textOnPanel", on: TOOL_PANELS, token: "toolTitle" },
   ...each(
     ["accent", "success", "error", "warning"],
     ["background", "selectedBg", ...TOOL_PANELS],
     "readable",
   ),
   {
+    level: "readable",
+    on: ["background", "selectedBg", "customMessageBg", ...TOOL_PANELS],
     token: "muted",
-    on: ["background", "selectedBg", "customMessageBg", ...TOOL_PANELS],
-    level: "readable",
   },
   {
-    token: "dim",
-    on: ["background", "selectedBg", "customMessageBg", ...TOOL_PANELS],
     level: "subtle",
+    on: ["background", "selectedBg", "customMessageBg", ...TOOL_PANELS],
+    token: "dim",
   },
-  { token: "thinkingText", on: ["background"], level: "readable" },
-  { token: "customMessageText", on: ["customMessageBg", ...TOOL_PANELS], level: "readable" },
+  { level: "readable", on: ["background"], token: "thinkingText" },
+  { level: "readable", on: ["customMessageBg", ...TOOL_PANELS], token: "customMessageText" },
   {
-    token: "customMessageLabel",
-    on: ["background", "customMessageBg", "selectedBg", ...TOOL_PANELS],
     level: "readable",
+    on: ["background", "customMessageBg", "selectedBg", ...TOOL_PANELS],
+    token: "customMessageLabel",
   },
-  { token: "toolOutput", on: ["background", ...TOOL_PANELS], level: "readable" },
+  { level: "readable", on: ["background", ...TOOL_PANELS], token: "toolOutput" },
   ...each(
     ["mdHeading", "mdLink", "mdLinkUrl", "mdCode", "mdQuote", "mdCodeBlockBorder", "mdListBullet"],
     ["background", ...MESSAGE_PANELS],
     "readable",
   ),
   {
-    token: "mdCodeBlock",
-    on: ["background", ...MESSAGE_PANELS, ...TOOL_PANELS],
     level: "readable",
+    on: ["background", ...MESSAGE_PANELS, ...TOOL_PANELS],
+    token: "mdCodeBlock",
   },
   ...each(
     ["toolDiffAdded", "toolDiffRemoved", "toolDiffContext"],
@@ -359,16 +357,16 @@ const RULES: Rule[] = [
     ["background", ...MESSAGE_PANELS, ...TOOL_PANELS],
     "readable",
   ),
-  { token: "searchMatchText", on: ["searchMatchBg"], level: "readable" },
+  { level: "readable", on: ["searchMatchBg"], token: "searchMatchText" },
   ...each(["bashMode", "border", "borderAccent"], ["background"], "readable"),
-  { token: "borderMuted", on: ["background"], level: "subtle" },
+  { level: "subtle", on: ["background"], token: "borderMuted" },
   ...each(["mdQuoteBorder", "mdHr"], ["background", ...MESSAGE_PANELS, ...TOOL_PANELS], "readable"),
-  { token: "scrollbarTrack", on: ["background"], level: "track" },
-  { token: "scrollbarThumb", on: ["scrollbarTrack"], level: "thumb" },
+  { level: "track", on: ["background"], token: "scrollbarTrack" },
+  { level: "thumb", on: ["scrollbarTrack"], token: "scrollbarThumb" },
   ...THINKING.map(([token, level]): Rule => ({
-    token,
-    on: ["background"],
     level,
+    on: ["background"],
+    token,
   })),
 ];
 
@@ -395,9 +393,9 @@ const SOLVE_ORDER: ThemeToken[] = (() => {
 })();
 
 export interface SystemThemeInput {
-  foreground?: RgbColor | undefined;
-  background?: RgbColor | undefined;
-  palette?: RgbColor[] | undefined;
+  foreground?: tuiTypes.RgbColor | undefined;
+  background?: tuiTypes.RgbColor | undefined;
+  palette?: tuiTypes.RgbColor[] | undefined;
   saturation?: number;
   appearanceHint?: ThemeAppearance;
 }
@@ -408,11 +406,11 @@ export interface SystemThemeColors {
   appearance: ThemeAppearance | undefined;
 }
 
-function oklabLightness(color: RgbColor): number {
+function oklabLightness(color: tuiTypes.RgbColor): number {
   return colorToOklch(rgbColor(color.r, color.g, color.b)).l;
 }
 
-export function relativeLuminance({ r, g, b }: RgbColor): number {
+export function relativeLuminance({ r, g, b }: tuiTypes.RgbColor): number {
   const linear = (channel: number) => {
     const value = channel / 255;
     return value <= 0.04045 ? value / 12.92 : ((value + 0.055) / 1.055) ** 2.4;
@@ -421,37 +419,40 @@ export function relativeLuminance({ r, g, b }: RgbColor): number {
 }
 
 export const wcagContrast: {
-  (second: RgbColor): (first: RgbColor) => number;
-  (first: RgbColor, second: RgbColor): number;
-} = dual(2, (first: RgbColor, second: RgbColor): number => {
+  (second: tuiTypes.RgbColor): (first: tuiTypes.RgbColor) => number;
+  (first: tuiTypes.RgbColor, second: tuiTypes.RgbColor): number;
+} = dual(2, (first: tuiTypes.RgbColor, second: tuiTypes.RgbColor): number => {
   const a = relativeLuminance(first);
   const b = relativeLuminance(second);
   return (Math.max(a, b) + 0.05) / (Math.min(a, b) + 0.05);
 });
 
 export const terminalAppearance: {
-  (foreground: RgbColor | undefined): (background: RgbColor) => ThemeAppearance;
-  (background: RgbColor, foreground: RgbColor | undefined): ThemeAppearance;
-} = dual(2, (background: RgbColor, foreground: RgbColor | undefined): ThemeAppearance => {
-  const white = { r: 255, g: 255, b: 255 };
-  const black = { r: 0, g: 0, b: 0 };
-  const whiteContrast = wcagContrast(white, background);
-  const blackContrast = wcagContrast(black, background);
-  if (foreground !== undefined) {
-    const foregroundL = oklabLightness(foreground);
-    const backgroundL = oklabLightness(background);
-    if (Math.abs(foregroundL - backgroundL) > 0.05) {
-      const appearance = foregroundL > backgroundL ? "dark" : "light";
-      const best = appearance === "dark" ? whiteContrast : blackContrast;
-      if (best >= TEXT_MINIMUM_WCAG_CONTRAST) return appearance;
+  (foreground: tuiTypes.RgbColor | undefined): (background: tuiTypes.RgbColor) => ThemeAppearance;
+  (background: tuiTypes.RgbColor, foreground: tuiTypes.RgbColor | undefined): ThemeAppearance;
+} = dual(
+  2,
+  (background: tuiTypes.RgbColor, foreground: tuiTypes.RgbColor | undefined): ThemeAppearance => {
+    const white = { b: 255, g: 255, r: 255 };
+    const black = { b: 0, g: 0, r: 0 };
+    const whiteContrast = wcagContrast(white, background);
+    const blackContrast = wcagContrast(black, background);
+    if (foreground !== undefined) {
+      const foregroundL = oklabLightness(foreground);
+      const backgroundL = oklabLightness(background);
+      if (Math.abs(foregroundL - backgroundL) > 0.05) {
+        const appearance = foregroundL > backgroundL ? "dark" : "light";
+        const best = appearance === "dark" ? whiteContrast : blackContrast;
+        if (best >= TEXT_MINIMUM_WCAG_CONTRAST) return appearance;
+      }
     }
-  }
-  return whiteContrast >= blackContrast ? "dark" : "light";
-});
+    return whiteContrast >= blackContrast ? "dark" : "light";
+  },
+);
 
 const clamp = (value: number, min: number, max: number) => Math.min(max, Math.max(min, value));
 
-function hexOf({ r, g, b }: RgbColor): string {
+function hexOf({ r, g, b }: tuiTypes.RgbColor): string {
   return `#${[r, g, b].map((channel) => Math.round(channel).toString(16).padStart(2, "0")).join("")}`;
 }
 
@@ -511,16 +512,16 @@ export function generateSystemThemeColors(input: SystemThemeInput): SystemThemeC
     }
     if (text !== undefined) result[token] = hexOf(withTextContrast(text, surfaces, lighter));
   }
-  return { colors: result, dim: [], appearance };
+  return { appearance, colors: result, dim: [] };
 }
 
 function generateSystemThemeColorsSurfacesOf2(
   input: SystemThemeInput,
-  background: RgbColor,
-  foreground: RgbColor | undefined,
+  background: tuiTypes.RgbColor,
+  foreground: tuiTypes.RgbColor | undefined,
   saturation: number,
 ): {
-  surfacesOf: (token: ThemeToken) => RgbColor[];
+  surfacesOf: (token: ThemeToken) => tuiTypes.RgbColor[];
   solved: Map<
     | "accent"
     | "border"
@@ -571,7 +572,7 @@ function generateSystemThemeColorsSurfacesOf2(
     | "thinkingMax"
     | "bashMode"
     | Surface,
-    RgbColor
+    tuiTypes.RgbColor
   >;
   target: (level: Level, surfaceL: number, t: number) => number | undefined;
   relaxation: number;
@@ -662,17 +663,17 @@ function generateSystemThemeColorsSurfacesOf2(
     relaxation = high;
   }
   const { surfacesOf, solved, result } = generateSystemThemeColorsSurfacesOf(colors, background);
-  return { surfacesOf, solved, target, relaxation, lighter, result, appearance };
+  return { appearance, lighter, relaxation, result, solved, surfacesOf, target };
 }
 
 function generateSystemThemeColorsPaint(
   input: SystemThemeInput,
-  background: RgbColor,
-  foreground: RgbColor | undefined,
+  background: tuiTypes.RgbColor,
+  foreground: tuiTypes.RgbColor | undefined,
   saturation: number,
 ): {
-  paint: (token: ThemeToken, oklabL: number) => RgbColor;
-  readable: (color: RgbColor) => boolean;
+  paint: (token: ThemeToken, oklabL: number) => tuiTypes.RgbColor;
+  readable: (color: tuiTypes.RgbColor) => boolean;
   backgroundL: number;
   target: (level: Level, surfaceL: number, t: number) => number | undefined;
   lighter: boolean;
@@ -685,7 +686,7 @@ function generateSystemThemeColorsPaint(
   const extreme = lighter ? 1 : 0;
   const backgroundL = oklabLightness(background);
 
-  const paint = (token: ThemeToken, oklabL: number): RgbColor => {
+  const paint = (token: ThemeToken, oklabL: number): tuiTypes.RgbColor => {
     const lightness = oklabToOkhslLightness(oklabL);
     const family: Family = FAMILIES[TOKEN_FAMILIES[token]];
     const source = palette?.[TOKEN_SLOTS[token] ?? family.slot];
@@ -713,17 +714,17 @@ function generateSystemThemeColorsPaint(
     return surfaceL + compressed * (1 - Math.max(0, t - 1));
   };
 
-  const extremeText = lighter ? { r: 255, g: 255, b: 255 } : { r: 0, g: 0, b: 0 };
-  const readable = (color: RgbColor) =>
+  const extremeText = lighter ? { b: 255, g: 255, r: 255 } : { b: 0, g: 0, r: 0 };
+  const readable = (color: tuiTypes.RgbColor) =>
     wcagContrast(extremeText, color) >= TEXT_MINIMUM_WCAG_CONTRAST;
-  return { paint, readable, backgroundL, target, lighter, appearance };
+  return { appearance, backgroundL, lighter, paint, readable, target };
 }
 
 function generateSystemThemeColorsColors(
-  paint: (token: ThemeToken, oklabL: number) => RgbColor,
-  readable: (color: RgbColor) => boolean,
+  paint: (token: ThemeToken, oklabL: number) => tuiTypes.RgbColor,
+  readable: (color: tuiTypes.RgbColor) => boolean,
   backgroundL: number,
-  background: RgbColor,
+  background: tuiTypes.RgbColor,
   target: (level: Level, surfaceL: number, t: number) => number | undefined,
   lighter: boolean,
 ): {
@@ -778,13 +779,13 @@ function generateSystemThemeColorsColors(
         | "thinkingMax"
         | "bashMode"
         | Surface,
-        RgbColor
+        tuiTypes.RgbColor
       >
     | undefined;
-  solve: (t: number) => Map<Surface | ThemeToken, RgbColor> | undefined;
+  solve: (t: number) => Map<Surface | ThemeToken, tuiTypes.RgbColor> | undefined;
   relaxation: number;
 } {
-  const limitPanel = (token: ThemeToken, l: number): RgbColor => {
+  const limitPanel = (token: ThemeToken, l: number): tuiTypes.RgbColor => {
     const color = paint(token, l);
     if (readable(color)) return color;
     let [low, high] = [backgroundL, l];
@@ -796,8 +797,8 @@ function generateSystemThemeColorsColors(
     return paint(token, low);
   };
 
-  const solve = (t: number): Map<Surface | ThemeToken, RgbColor> | undefined => {
-    const colors = new Map<Surface | ThemeToken, RgbColor>([["background", background]]);
+  const solve = (t: number): Map<Surface | ThemeToken, tuiTypes.RgbColor> | undefined => {
+    const colors = new Map<Surface | ThemeToken, tuiTypes.RgbColor>([["background", background]]);
     for (const token of SOLVE_ORDER) {
       const targets: number[] = [];
       for (const rule of RULES) {
@@ -816,7 +817,7 @@ function generateSystemThemeColorsColors(
 
   let relaxation = 0;
   let colors = solve(0);
-  return { colors, solve, relaxation };
+  return { colors, relaxation, solve };
 }
 
 function generateSystemThemeColorsSurfacesOf(
@@ -871,12 +872,12 @@ function generateSystemThemeColorsSurfacesOf(
         | "thinkingMax"
         | "bashMode"
         | Surface,
-        RgbColor
+        tuiTypes.RgbColor
       >
     | undefined,
-  background: RgbColor,
+  background: tuiTypes.RgbColor,
 ): {
-  surfacesOf: (token: ThemeToken) => RgbColor[];
+  surfacesOf: (token: ThemeToken) => tuiTypes.RgbColor[];
   solved: Map<
     | "accent"
     | "border"
@@ -927,7 +928,7 @@ function generateSystemThemeColorsSurfacesOf(
     | "thinkingMax"
     | "bashMode"
     | Surface,
-    RgbColor
+    tuiTypes.RgbColor
   >;
   result: Record<
     | "accent"
@@ -989,7 +990,7 @@ function generateSystemThemeColorsSurfacesOf(
     string | number
   >;
 } {
-  const solved = colors ?? new Map<Surface | ThemeToken, RgbColor>();
+  const solved = colors ?? new Map<Surface | ThemeToken, tuiTypes.RgbColor>();
   const surfacesOf = (token: ThemeToken) =>
     RULES.filter((rule) => rule.token === token).flatMap((rule) =>
       rule.on.map((surface) => solved.get(surface) ?? background),
@@ -1000,18 +1001,18 @@ function generateSystemThemeColorsSurfacesOf(
     const color = solved.get(token);
     result[token] = color === undefined ? "" : hexOf(color);
   }
-  return { surfacesOf, solved, result };
+  return { result, solved, surfacesOf };
 }
 
-function okhslOf({ r, g, b }: RgbColor): OkhslChannels {
+function okhslOf({ r, g, b }: tuiTypes.RgbColor): tuiTypes.OkhslChannels {
   return colorToOkhsl(rgbColor(r, g, b));
 }
 
-interface SourceColor extends OkhslChannels {
+interface SourceColor extends tuiTypes.OkhslChannels {
   chroma: number;
 }
 
-function sourceOf(color: RgbColor): SourceColor {
+function sourceOf(color: tuiTypes.RgbColor): SourceColor {
   return { ...okhslOf(color), chroma: colorToOklch(rgbColor(color.r, color.g, color.b)).c };
 }
 
@@ -1020,7 +1021,7 @@ function anchored(
   family: Family,
   lightness: number,
   saturation: number,
-): RgbColor {
+): tuiTypes.RgbColor {
   const anchor = saturationCurve(family, source.l);
   const falloff = anchor > 0 ? Math.min(1, saturationCurve(family, lightness) / anchor) : 1;
   const color = okhslColor(source.h, source.s * falloff * saturation, lightness);
@@ -1029,8 +1030,12 @@ function anchored(
   return c <= cap ? color : colorToRgb(oklchColor(l, cap, source.h));
 }
 
-function withTextContrast(color: RgbColor, surfaces: RgbColor[], lighter: boolean): RgbColor {
-  const meets = (candidate: RgbColor) =>
+function withTextContrast(
+  color: tuiTypes.RgbColor,
+  surfaces: tuiTypes.RgbColor[],
+  lighter: boolean,
+): tuiTypes.RgbColor {
+  const meets = (candidate: tuiTypes.RgbColor) =>
     surfaces.every((surface) => wcagContrast(candidate, surface) >= TEXT_MINIMUM_WCAG_CONTRAST);
   if (meets(color)) return color;
   const { h, s, l } = okhslOf(color);
@@ -1062,5 +1067,5 @@ function indexedColors(
       !neutral && saturation > 0 ? (TOKEN_SLOTS[token] ?? FAMILIES[familyName].slot) : "";
     if (neutral && !FOREGROUND_TOKENS.includes(token as ThemeColor)) dim.push(token as ThemeColor);
   }
-  return { colors, dim, appearance };
+  return { appearance, colors, dim };
 }

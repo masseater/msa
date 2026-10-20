@@ -1,35 +1,35 @@
 import { Effect } from "effect";
 import type OpenAI from "openai";
-import type { ChatCompletionChunk } from "openai/resources/chat/completions.js";
-import type { Stream as OpenAIStream } from "openai/streaming";
 
-import { callHook } from "../utils/hooks.ts";
-import { providerRequestWithRetry } from "../utils/provider-retry.ts";
-import { createClient, getClientApiKey } from "./openai-completions-client.ts";
-import { buildParams } from "./openai-completions-params.ts";
+import hooks from "../utils/hooks.ts";
+import providerRetry from "../utils/provider-retry.ts";
+import openaiCompletionsClient from "./openai-completions-client.ts";
+import openaiCompletionsParams from "./openai-completions-params.ts";
+import type openaiCompletionsRequestTypes from "./openai-completions-request.types.ts";
 
-interface ChatStreamResult {
-  readonly data: OpenAIStream<ChatCompletionChunk>;
-  readonly response: Response;
-}
-
+const { buildParams } = openaiCompletionsParams;
+const { createClient, getClientApiKey } = openaiCompletionsClient;
+const { callHook } = hooks;
+const { providerRequestWithRetry } = providerRetry;
 type RequestStreamInput = Parameters<typeof buildParams>[0];
 
-function createRequestStream(input: RequestStreamInput): Effect.Effect<ChatStreamResult> {
+function createRequestStream(
+  input: RequestStreamInput,
+): Effect.Effect<openaiCompletionsRequestTypes.ChatStreamResult> {
   const { model, options, compat } = input;
   const apiKey = getClientApiKey({
-    provider: model.provider,
     apiKey: options?.apiKey,
     headers: options?.headers,
+    provider: model.provider,
   });
   const cacheSessionId = input.cacheRetention === "none" ? undefined : options?.sessionId;
   const client = createClient({
-    model,
     apiKey,
-    optionsHeaders: options?.headers,
-    fetch: options?.fetch,
-    sessionId: cacheSessionId,
     compat,
+    fetch: options?.fetch,
+    model,
+    optionsHeaders: options?.headers,
+    sessionId: cacheSessionId,
   });
   return Effect.gen(function* () {
     let params = buildParams(input);
@@ -53,4 +53,8 @@ function createRequestStream(input: RequestStreamInput): Effect.Effect<ChatStrea
   });
 }
 
-export { createRequestStream };
+const openaiCompletionsRequest = {
+  createRequestStream,
+};
+
+export default openaiCompletionsRequest;

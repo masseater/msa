@@ -3,16 +3,18 @@ import type { ResponseFunctionCallOutputItemList } from "openai/resources/respon
 import { Type } from "typebox";
 import { describe, expect, inject, it } from "vite-plus/test";
 
-import type { Api, Context, Model, StreamOptions, Tool } from "../src/compat.ts";
-import { complete } from "../src/compat.ts";
+import compat from "../src/compat.ts";
+import type compatTypes from "../src/compat.types.ts";
 import env from "./env.ts";
 import modelChoice from "./model-choice.ts";
 import redCircle from "./red-circle.ts";
 
+const { complete } = compat;
+
 const { hasEnv, hasValue } = env;
 const { chooseModel, usesApi } = modelChoice;
 
-type StreamOptionsWithExtras = StreamOptions & Record<string, unknown>;
+type StreamOptionsWithExtras = compatTypes.StreamOptions & Record<string, unknown>;
 type ResponseInputItem = { readonly role?: unknown; readonly type?: unknown } | null;
 type FunctionCallOutputItem = {
   readonly output: string | ResponseFunctionCallOutputItemList;
@@ -23,17 +25,16 @@ const openaiCodexToken = inject("storedApiKeys")["openai-codex"];
 const toolText = "A red circle with a diameter of 100 pixels.";
 
 const getImageSchema = Type.Object({});
-const getImageTool: Tool<typeof getImageSchema> = {
+const getImageTool: compatTypes.Tool<typeof getImageSchema> = {
   description: "Returns a red circle image with a short text description.",
   name: "get_circle_with_description",
   parameters: getImageSchema,
 };
 
-const answerWithToolImage = Effect.fn("answerWithToolImage")(function* <TApi extends Api>(
-  model: Model<TApi>,
-  options: StreamOptionsWithExtras,
-) {
-  const context: Context = {
+const answerWithToolImage = Effect.fn("answerWithToolImage")(function* <
+  TApi extends compatTypes.Api,
+>(model: compatTypes.Model<TApi>, options: StreamOptionsWithExtras) {
+  const context: compatTypes.Context = {
     messages: [
       {
         content:
@@ -95,7 +96,10 @@ const expectImageInFunctionCallOutput = (input: ResponseInputItem[]) => {
 };
 
 const sendsToolResultImages =
-  <TApi extends Api>(model: Model<TApi>, options: StreamOptionsWithExtras) =>
+  <TApi extends compatTypes.Api>(
+    model: compatTypes.Model<TApi>,
+    options: StreamOptionsWithExtras,
+  ) =>
   () =>
     Effect.runPromise(
       Effect.gen(function* () {
@@ -115,7 +119,7 @@ const sendsToolResultImages =
 const openaiModel = chooseModel(
   "openai",
   "image-capable Responses reasoning",
-  (model): model is Model<"openai-responses"> =>
+  (model): model is compatTypes.Model<"openai-responses"> =>
     usesApi("openai-responses")(model) && model.input.includes("image") && model.reasoning,
 );
 const codexModel = chooseModel("openai-codex", "image-capable", (model) =>

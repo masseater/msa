@@ -1,5 +1,5 @@
 import testing from "@msa/testing";
-import { setKeybindings } from "@msa/tui";
+import tui from "@msa/tui";
 import { beforeAll, beforeEach, describe, expect, it } from "vite-plus/test";
 
 import { KeybindingsManager } from "../src/core/keybindings.ts";
@@ -7,6 +7,8 @@ import { OAuthSelectorComponent } from "../src/modes/interactive/components/oaut
 import { LoginFlow, type LoginFlowHost } from "../src/modes/interactive/login-flow.ts";
 import { initTheme } from "../src/modes/interactive/theme/theme.ts";
 import { stripAnsi } from "../src/utils/ansi.ts";
+
+const { setKeybindings } = tui;
 
 const { awaited, runTest } = testing;
 

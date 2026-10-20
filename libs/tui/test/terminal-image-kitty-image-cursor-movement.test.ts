@@ -2,14 +2,15 @@ import assert from "node:assert";
 import { homedir } from "node:os";
 import { afterEach, beforeEach, describe, it } from "node:test";
 
-import { Image } from "../src/components/image.ts";
-import { pathOperations } from "../src/platform.ts";
-import {
-  resetCapabilitiesCache,
-  setCapabilities,
-  setCellDimensions,
-} from "../src/terminal-capabilities.ts";
-import {
+import imageModule from "../src/components/image.ts";
+import platform from "../src/platform.ts";
+import terminalCapabilities from "../src/terminal-capabilities.ts";
+import terminalImageKitty from "../src/terminal-image-kitty.ts";
+import terminalImage from "../src/terminal-image.ts";
+import utils from "../src/utils.ts";
+
+const { pathOperations } = platform;
+const {
   cropKittyImageLine,
   deleteAllKittyImages,
   deleteAllKittyPlacements,
@@ -19,9 +20,11 @@ import {
   getKittyImagePlacement,
   getKittyImagePlacementRows,
   registerKittyImageMetadata,
-} from "../src/terminal-image-kitty.ts";
-import { renderImage } from "../src/terminal-image.ts";
-import { visibleWidth } from "../src/utils.ts";
+} = terminalImageKitty;
+const { resetCapabilitiesCache, setCapabilities, setCellDimensions } = terminalCapabilities;
+const { renderImage } = terminalImage;
+const { Image } = imageModule;
+const { visibleWidth } = utils;
 
 const { join } = pathOperations;
 

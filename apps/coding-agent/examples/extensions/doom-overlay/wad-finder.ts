@@ -2,9 +2,11 @@ import { fileURLToPath } from "node:url";
 import { gunzipSync } from "node:zlib";
 
 import { NodeServices } from "@effect/platform-node";
-import { readProcessEnv } from "@msa/ai/utils/env";
+import env from "@msa/ai/utils/env";
 import { Data, Effect, FileSystem, Layer, ManagedRuntime, Path } from "effect";
 import { FetchHttpClient, HttpClient } from "effect/http";
+
+const { readProcessEnv } = env;
 
 const runtime = ManagedRuntime.make(Layer.mergeAll(NodeServices.layer, FetchHttpClient.layer));
 const pathService = runtime.runSync(Path.Path);

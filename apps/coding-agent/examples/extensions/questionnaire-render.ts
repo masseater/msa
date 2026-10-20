@@ -1,7 +1,9 @@
 import type { Theme } from "@msa/coding-agent";
-import { visibleWidth, wrapTextWithAnsi } from "@msa/tui";
+import tui from "@msa/tui";
 
 import type { QuestionnaireState, RenderOption } from "./questionnaire-types.ts";
+
+const { visibleWidth, wrapTextWithAnsi } = tui;
 
 const currentQuestion = (state: QuestionnaireState) => state.questions[state.currentTab];
 
@@ -11,7 +13,7 @@ const currentOptions = (state: QuestionnaireState): RenderOption[] => {
 
   const options: RenderOption[] = [...question.options];
   if (question.allowOther) {
-    options.push({ value: "__other__", label: "Type something.", isOther: true });
+    options.push({ isOther: true, label: "Type something.", value: "__other__" });
   }
   return options;
 };

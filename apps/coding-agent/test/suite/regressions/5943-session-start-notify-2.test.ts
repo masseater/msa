@@ -1,4 +1,4 @@
-import { fauxAssistantMessage } from "@msa/ai";
+import ai from "@msa/ai";
 import { Effect } from "effect";
 import { describe, expect, it, vi } from "vite-plus/test";
 
@@ -6,6 +6,8 @@ import { initTheme } from "../../../src/modes/interactive/theme/theme.ts";
 import harnessModule from "../harness.ts";
 import SessionStartNotifySupport from "./5943-session-start-notify-support.ts";
 import type SessionStartNotifySupportTypes from "./5943-session-start-notify-support.types.ts";
+
+const { fauxAssistantMessage } = ai;
 
 const { createReloadCommandContext, getMessageText, interactiveModePrototype } =
   SessionStartNotifySupport;

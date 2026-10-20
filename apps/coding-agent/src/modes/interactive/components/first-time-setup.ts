@@ -1,10 +1,12 @@
-import { Container, getKeybindings, Spacer, Text } from "@msa/tui";
+import tui from "@msa/tui";
 
 import { APP_NAME } from "../../../config.ts";
 import { SYSTEM_THEME_NAME } from "../theme/system-theme.ts";
 import { theme } from "../theme/theme.ts";
 import { DynamicBorder } from "./dynamic-border.ts";
 import { keyHint, rawKeyHint } from "./keybinding-hints.ts";
+
+const { Container, Spacer, Text, getKeybindings } = tui;
 
 export interface FirstTimeSetupResult {
   theme: string;
@@ -18,14 +20,14 @@ export interface FirstTimeSetupOptions {
 }
 
 const THEME_OPTIONS: Array<{ value: string; label: string }> = [
-  { value: SYSTEM_THEME_NAME, label: "System (matches your terminal colors)" },
-  { value: "dark", label: "Dark" },
-  { value: "light", label: "Light" },
+  { label: "System (matches your terminal colors)", value: SYSTEM_THEME_NAME },
+  { label: "Dark", value: "dark" },
+  { label: "Light", value: "light" },
 ];
 
 const ANALYTICS_OPTIONS: Array<{ value: boolean; label: string }> = [
-  { value: true, label: "Share anonymous usage data" },
-  { value: false, label: "Don't share" },
+  { label: "Share anonymous usage data", value: true },
+  { label: "Don't share", value: false },
 ];
 
 const SETUP_LOGO_LINES = ["██████", "██  ██", "████  ██", "██    ██"];
@@ -150,8 +152,8 @@ export class FirstTimeSetupComponent extends Container {
         const analyticsOption = ANALYTICS_OPTIONS[this.analyticsIndex];
         if (themeOption === undefined || analyticsOption === undefined) return;
         this.options.onSubmit({
-          theme: themeOption.value,
           shareAnalytics: analyticsOption.value,
+          theme: themeOption.value,
         });
       }
     } else if (kb.matches(keyData, "tui.select.cancel")) {

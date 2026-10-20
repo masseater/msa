@@ -1,20 +1,16 @@
-import {
-  type Api,
-  type Context,
-  calculateCost,
-  type Model,
-  type ModelsSimpleStreamOptions,
-  type SimpleStreamOptions,
-  type Usage,
-} from "@msa/ai";
-import { getProviderEnvValue } from "@msa/ai/utils/provider-env";
+import ai from "@msa/ai";
+import type aiTypes from "@msa/ai/index.types";
+import providerEnv from "@msa/ai/utils/provider-env";
 import * as Effect from "effect/Effect";
 
 import { awaited, awaitingWith } from "./awaiting.ts";
 import type { ModelRuntime } from "./model-runtime.ts";
-import { nowMs, schedule, type Scheduled } from "./platform.ts";
+import { type Scheduled, nowMs, schedule } from "./platform.ts";
 import type { SessionEntry, SessionManager, UsageEntry } from "./session-manager.ts";
 import type { CacheWarmingMode } from "./settings-manager.ts";
+
+const { getProviderEnvValue } = providerEnv;
+const { calculateCost } = ai;
 
 const MAX_WARMING_AGE_MS = 60 * 60_000;
 const MAX_IDLE_WARMING_AGE_MS = 30 * 60_000;
@@ -27,8 +23,8 @@ export function getCacheWarmingDelayMs(ttlMs: number): number | undefined {
 }
 
 export function getPromptCacheTtlMs(
-  model: Model<Api>,
-  options: SimpleStreamOptions | undefined,
+  model: aiTypes.Model<aiTypes.Api>,
+  options: aiTypes.SimpleStreamOptions | undefined,
 ): number | undefined {
   const retention =
     options?.cacheRetention ??
@@ -38,9 +34,12 @@ export function getPromptCacheTtlMs(
   return seconds === undefined ? undefined : seconds * 1000;
 }
 
-export function isReplayable(model: Model<Api>, options: SimpleStreamOptions | undefined): boolean {
+export function isReplayable(
+  model: aiTypes.Model<aiTypes.Api>,
+  options: aiTypes.SimpleStreamOptions | undefined,
+): boolean {
   if (options?.reasoning === undefined || model.api !== "anthropic-messages") return true;
-  return (model as Model<"anthropic-messages">).compat?.forceAdaptiveThinking === true;
+  return (model as aiTypes.Model<"anthropic-messages">).compat?.forceAdaptiveThinking === true;
 }
 
 function lastPromptTokens(entries: SessionEntry[]): number {
@@ -55,16 +54,16 @@ function lastPromptTokens(entries: SessionEntry[]): number {
 }
 
 function price(
-  model: Model<Api>,
-  tokens: Partial<Pick<Usage, "input" | "output" | "cacheRead" | "cacheWrite">>,
+  model: aiTypes.Model<aiTypes.Api>,
+  tokens: Partial<Pick<aiTypes.Usage, "input" | "output" | "cacheRead" | "cacheWrite">>,
 ): number {
-  const usage: Usage = {
-    input: 0,
-    output: 0,
+  const usage: aiTypes.Usage = {
     cacheRead: 0,
     cacheWrite: 0,
+    cost: { cacheRead: 0, cacheWrite: 0, input: 0, output: 0, total: 0 },
+    input: 0,
+    output: 0,
     totalTokens: 0,
-    cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0, total: 0 },
     ...tokens,
   };
   return calculateCost(model, usage).total;
@@ -102,9 +101,9 @@ export interface CacheWarmingStatus {
 }
 
 export interface CacheWarmRequest {
-  model: Model<Api>;
-  context: Context;
-  options: ModelsSimpleStreamOptions;
+  model: aiTypes.Model<aiTypes.Api>;
+  context: aiTypes.Context;
+  options: aiTypes.ModelsSimpleStreamOptions;
 }
 
 interface ActiveRun extends CacheWarmRequest {
@@ -140,24 +139,24 @@ export class CacheWarmer {
     this.sessionManager = sessionManager;
     this.getMode = getMode;
     this.decide = decide;
-    this.inactive = { state: "inactive", reason: "waiting for first request" };
+    this.inactive = { reason: "waiting for first request", state: "inactive" };
   }
 
   get status(): CacheWarmingStatus {
-    if (this.getMode() === "off") return { state: "inactive", reason: "cache warming disabled" };
+    if (this.getMode() === "off") return { reason: "cache warming disabled", state: "inactive" };
     const run = this.run;
     if (run === undefined) return this.inactive;
-    if (!run.isCurrent()) return { state: "inactive", reason: "conversation context changed" };
+    if (!run.isCurrent()) return { reason: "conversation context changed", state: "inactive" };
     const decision = this.evaluate(run);
     const refreshing = run.timer === undefined;
     if (!decision.economicsAvailable && !refreshing) {
-      return { state: "inactive", reason: "cache economics unavailable" };
+      return { reason: "cache economics unavailable", state: "inactive" };
     }
     return {
-      state: refreshing ? "refreshing" : "scheduled",
-      nextWarmAt: run.nextWarmAt,
       decision,
       extensionOverride: run.extensionOverride,
+      nextWarmAt: run.nextWarmAt,
+      state: refreshing ? "refreshing" : "scheduled",
     };
   }
 
@@ -188,15 +187,15 @@ export class CacheWarmer {
     }
     this.run = {
       ...request,
-      isCurrent,
-      ttlMs,
+      controller: new AbortController(),
       delayMs,
+      extensionOverride: false,
+      isCurrent,
+      nextWarmAt: 0,
+      phase: "streaming",
       refreshDeadlineAt: 0,
       startedAt: nowMs(),
-      controller: new AbortController(),
-      phase: "streaming",
-      nextWarmAt: 0,
-      extensionOverride: false,
+      ttlMs,
     };
     this.schedule(this.run);
   }
@@ -239,7 +238,7 @@ export class CacheWarmer {
     stopped?: Pick<CacheWarmingStatus, "decision" | "extensionOverride">,
   ): void {
     this.clearRun();
-    this.inactive = { state: "inactive", reason, ...stopped };
+    this.inactive = { reason, state: "inactive", ...stopped };
   }
 
   private schedule(run: ActiveRun): void {
@@ -271,11 +270,11 @@ export class CacheWarmer {
         try {
           action = yield* awaited(
             this.decide({
+              action,
+              continuationProbability,
+              missCost,
               type: "cache_warming_decision",
               warmCost,
-              missCost,
-              continuationProbability,
-              action,
             }),
           );
         } catch {}
@@ -297,8 +296,8 @@ export class CacheWarmer {
             this.models
               .streamSimple(run.model, run.context, {
                 ...run.options,
-                maxTokens: 1,
                 maxRetries: 0,
+                maxTokens: 1,
                 signal: run.controller.signal,
               })
               .result(),
@@ -356,13 +355,13 @@ export class CacheWarmer {
     const economicsAvailable = promptTokens > 0 && (cacheHitCost > 0 || cacheMissCost > 0);
     const expectedSavings = continuationProbability * missCost - warmCost;
     return {
+      action: expectedSavings >= CACHE_WARMING_MINIMUM_EXPECTED_SAVINGS ? "warm" : "stop",
+      continuationProbability,
+      economicsAvailable,
+      expectedSavings,
+      missCost,
       phase: run.phase,
       warmCost,
-      missCost,
-      continuationProbability,
-      expectedSavings,
-      economicsAvailable,
-      action: expectedSavings >= CACHE_WARMING_MINIMUM_EXPECTED_SAVINGS ? "warm" : "stop",
     };
   }
 }

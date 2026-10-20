@@ -1,6 +1,8 @@
 import { describe, expect, it } from "vite-plus/test";
 
-import { renderDeclarations, renderToolSample, renderToolSignature } from "../src/index.ts";
+import codemode from "../src/index.ts";
+
+const { renderDeclarations, renderToolSample, renderToolSignature } = codemode;
 
 const execute = () => undefined;
 

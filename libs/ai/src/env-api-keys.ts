@@ -1,15 +1,17 @@
 import { Function } from "effect";
 
-import type { ProviderEnv } from "./types.ts";
-import { getProviderEnvValue } from "./utils/provider-env.ts";
+import type typesModule from "./types.types.ts";
+import providerEnv from "./utils/provider-env.ts";
 
-export const ANTHROPIC_AUTH_TOKEN_ENV = "ANTHROPIC_AUTH_TOKEN";
-export const ANTHROPIC_API_KEY_ENV = "ANTHROPIC_API_KEY";
-export const ANTHROPIC_FEDERATION_RULE_ID_ENV = "ANTHROPIC_FEDERATION_RULE_ID";
-export const ANTHROPIC_ORGANIZATION_ID_ENV = "ANTHROPIC_ORGANIZATION_ID";
-export const ANTHROPIC_SERVICE_ACCOUNT_ID_ENV = "ANTHROPIC_SERVICE_ACCOUNT_ID";
-export const ANTHROPIC_IDENTITY_TOKEN_FILE_ENV = "ANTHROPIC_IDENTITY_TOKEN_FILE";
-export const ANTHROPIC_WORKSPACE_ID_ENV = "ANTHROPIC_WORKSPACE_ID";
+const { getProviderEnvValue } = providerEnv;
+
+const ANTHROPIC_AUTH_TOKEN_ENV = "ANTHROPIC_AUTH_TOKEN";
+const ANTHROPIC_API_KEY_ENV = "ANTHROPIC_API_KEY";
+const ANTHROPIC_FEDERATION_RULE_ID_ENV = "ANTHROPIC_FEDERATION_RULE_ID";
+const ANTHROPIC_ORGANIZATION_ID_ENV = "ANTHROPIC_ORGANIZATION_ID";
+const ANTHROPIC_SERVICE_ACCOUNT_ID_ENV = "ANTHROPIC_SERVICE_ACCOUNT_ID";
+const ANTHROPIC_IDENTITY_TOKEN_FILE_ENV = "ANTHROPIC_IDENTITY_TOKEN_FILE";
+const ANTHROPIC_WORKSPACE_ID_ENV = "ANTHROPIC_WORKSPACE_ID";
 
 function getApiKeyEnvVars(provider: string): readonly string[] | undefined {
   if (provider === "anthropic-api") {
@@ -18,21 +20,21 @@ function getApiKeyEnvVars(provider: string): readonly string[] | undefined {
 
   const envMap: Record<string, string> = {
     openai: "OPENAI_API_KEY",
-    openrouter: "OPENROUTER_API_KEY",
     opencode: "OPENCODE_API_KEY",
     "opencode-go": "OPENCODE_API_KEY",
+    openrouter: "OPENROUTER_API_KEY",
   };
 
   const envVar = envMap[provider];
   return envVar !== undefined && envVar !== "" ? [envVar] : undefined;
 }
 
-const hasEnvValue = (name: string, env: ProviderEnv | undefined): boolean => {
+const hasEnvValue = (name: string, env: typesModule.ProviderEnv | undefined): boolean => {
   const value = getProviderEnvValue(name, env);
   return value !== undefined && value !== "";
 };
 
-const findKeys = (provider: string, env?: ProviderEnv): string[] | undefined => {
+const findKeys = (provider: string, env?: typesModule.ProviderEnv): string[] | undefined => {
   const envVars = getApiKeyEnvVars(provider);
   if (envVars === undefined) return undefined;
 
@@ -42,12 +44,12 @@ const findKeys = (provider: string, env?: ProviderEnv): string[] | undefined => 
 
 const isProviderFirst = (args: IArguments): boolean => typeof args[0] === "string";
 
-export const findEnvKeys: {
-  (env?: ProviderEnv): (provider: string) => string[] | undefined;
-  (provider: string, env?: ProviderEnv): string[] | undefined;
+const findEnvKeys: {
+  (env?: typesModule.ProviderEnv): (provider: string) => string[] | undefined;
+  (provider: string, env?: typesModule.ProviderEnv): string[] | undefined;
 } = Function.dual(isProviderFirst, findKeys);
 
-const getKey = (provider: string, env?: ProviderEnv): string | undefined => {
+const getKey = (provider: string, env?: typesModule.ProviderEnv): string | undefined => {
   const envKeys = findKeys(provider, env);
   if (envKeys?.[0] !== undefined && envKeys[0] !== "") {
     const apiKeyEnv =
@@ -59,7 +61,21 @@ const getKey = (provider: string, env?: ProviderEnv): string | undefined => {
   return undefined;
 };
 
-export const getEnvApiKey: {
-  (env?: ProviderEnv): (provider: string) => string | undefined;
-  (provider: string, env?: ProviderEnv): string | undefined;
+const getEnvApiKey: {
+  (env?: typesModule.ProviderEnv): (provider: string) => string | undefined;
+  (provider: string, env?: typesModule.ProviderEnv): string | undefined;
 } = Function.dual(isProviderFirst, getKey);
+
+const envApiKeys = {
+  ANTHROPIC_API_KEY_ENV,
+  ANTHROPIC_AUTH_TOKEN_ENV,
+  ANTHROPIC_FEDERATION_RULE_ID_ENV,
+  ANTHROPIC_IDENTITY_TOKEN_FILE_ENV,
+  ANTHROPIC_ORGANIZATION_ID_ENV,
+  ANTHROPIC_SERVICE_ACCOUNT_ID_ENV,
+  ANTHROPIC_WORKSPACE_ID_ENV,
+  findEnvKeys,
+  getEnvApiKey,
+};
+
+export default envApiKeys;

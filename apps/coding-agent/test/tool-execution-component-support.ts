@@ -1,5 +1,5 @@
 import testing from "@msa/testing";
-import type { TUI } from "@msa/tui";
+import type tuiTypes from "@msa/tui/index.types";
 import { Type } from "typebox";
 
 import type { ToolDefinition } from "../src/core/extensions/types.ts";
@@ -25,10 +25,10 @@ function createBaseToolDefinition(name = "custom_tool"): ToolDefinition {
 const TINY_JPEG =
   "/9j/4AAQSkZJRgABAQAAAQABAAD/2wBDAAMCAgMCAgMDAwMEAwMEBQgFBQQEBQoHBwYIDAoMDAsKCwsNDhIQDQ4RDgsLEBYQERMUFRUVDA8XGBYUGBIUFRT/2wBDAQMEBAUEBQkFBQkUDQsNFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBT/wAARCAACAAIDAREAAhEBAxEB/8QAFAABAAAAAAAAAAAAAAAAAAAACf/EABQQAQAAAAAAAAAAAAAAAAAAAAD/xAAVAQEBAAAAAAAAAAAAAAAAAAAGCf/EABQRAQAAAAAAAAAAAAAAAAAAAAD/2gAMAwEAAhEDEQA/AD3VTB3/2Q==";
 
-function createFakeTui(): TUI {
+function createFakeTui(): tuiTypes.TUI {
   return {
     requestRender: () => {},
-  } as unknown as TUI;
+  } as unknown as tuiTypes.TUI;
 }
 
 const toolExecutionComponentSupport = {

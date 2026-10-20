@@ -1,7 +1,7 @@
 import { Effect } from "effect";
 import { describe, expect, it, vi } from "vite-plus/test";
 
-import type { Model } from "../src/types.ts";
+import type typesModule from "../src/types.types.ts";
 import modelChoice from "./model-choice.ts";
 import openaiCompletionsToolChoiceSupport from "./openai-completions-tool-choice-support.ts";
 
@@ -15,16 +15,16 @@ const { directCompletionsModel, mockState, promptModel, resetMockStateBeforeEach
 
 const openRouterReasoning = (
   wanted: string,
-  accepts: (model: Model<"openai-completions">) => boolean,
+  accepts: (model: typesModule.Model<"openai-completions">) => boolean,
 ) =>
   chooseModel(
     "openrouter",
     wanted,
-    (model): model is Model<"openai-completions"> =>
+    (model): model is typesModule.Model<"openai-completions"> =>
       usesApi("openai-completions")(model) && model.reasoning && accepts(model),
   );
 
-const instructionRole = (model: Model<"openai-completions">) =>
+const instructionRole = (model: typesModule.Model<"openai-completions">) =>
   Effect.gen(function* () {
     const { payload } = yield* promptModel(model, "Hi", { systemPrompt: "Follow instructions." });
     return payload.messages?.[0]?.["role"];

@@ -5,19 +5,14 @@ import type {
   ChatCompletionToolMessageParam,
 } from "openai/resources/chat/completions.js";
 
-import type { CacheRetention } from "../types.ts";
-import type {
-  ChatCompletionInstructionMessageParam,
-  ChatCompletionTextPartWithCacheControl,
-  ChatCompletionToolWithCacheControl,
-  OpenAICompatCacheControl,
-  ResolvedOpenAICompletionsCompat,
-} from "./openai-completions-types.ts";
+import type typesModule from "../types.types.ts";
+import type openaiCompletionsCacheTypes from "./openai-completions-cache.types.ts";
+import type openaiCompletionsTypesModule from "./openai-completions-types.types.ts";
 
 function getCompatCacheControl(input: {
-  compat: ResolvedOpenAICompletionsCompat;
-  cacheRetention: CacheRetention;
-}): OpenAICompatCacheControl | undefined {
+  compat: openaiCompletionsTypesModule.ResolvedOpenAICompletionsCompat;
+  cacheRetention: typesModule.CacheRetention;
+}): openaiCompletionsTypesModule.OpenAICompatCacheControl | undefined {
   const { compat, cacheRetention } = input;
   if (compat.cacheControlFormat !== "anthropic" || cacheRetention === "none") {
     return undefined;
@@ -29,11 +24,11 @@ function getCompatCacheControl(input: {
 
 function addCacheControlToTextContent(
   message:
-    | ChatCompletionInstructionMessageParam
+    | openaiCompletionsTypesModule.ChatCompletionInstructionMessageParam
     | ChatCompletionAssistantMessageParam
     | ChatCompletionToolMessageParam
     | Extract<ChatCompletionMessageParam, { role: "user" }>,
-  cacheControl: OpenAICompatCacheControl,
+  cacheControl: openaiCompletionsTypesModule.OpenAICompatCacheControl,
 ): boolean {
   const content = message.content;
   if (typeof content === "string") {
@@ -42,11 +37,11 @@ function addCacheControlToTextContent(
     }
     message.content = [
       {
-        type: "text",
-        text: content,
         cache_control: cacheControl,
+        text: content,
+        type: "text",
       },
-    ] as ChatCompletionTextPartWithCacheControl[];
+    ] as openaiCompletionsTypesModule.ChatCompletionTextPartWithCacheControl[];
     return true;
   }
 
@@ -57,7 +52,7 @@ function addCacheControlToTextContent(
   for (let i = content.length - 1; i >= 0; i--) {
     const part = content[i];
     if (part?.type === "text") {
-      const textPart = part as ChatCompletionTextPartWithCacheControl;
+      const textPart = part as openaiCompletionsTypesModule.ChatCompletionTextPartWithCacheControl;
       textPart.cache_control = cacheControl;
       return true;
     }
@@ -67,15 +62,15 @@ function addCacheControlToTextContent(
 }
 
 function addCacheControlToInstructionMessage(
-  message: ChatCompletionInstructionMessageParam,
-  cacheControl: OpenAICompatCacheControl,
+  message: openaiCompletionsTypesModule.ChatCompletionInstructionMessageParam,
+  cacheControl: openaiCompletionsTypesModule.OpenAICompatCacheControl,
 ): boolean {
   return addCacheControlToTextContent(message, cacheControl);
 }
 
 function addCacheControlToMessage(
   message: ChatCompletionMessageParam,
-  cacheControl: OpenAICompatCacheControl,
+  cacheControl: openaiCompletionsTypesModule.OpenAICompatCacheControl,
 ): boolean {
   if (message.role === "user" || message.role === "assistant" || message.role === "tool") {
     return addCacheControlToTextContent(message, cacheControl);
@@ -85,7 +80,7 @@ function addCacheControlToMessage(
 
 function addCacheControlToSystemPrompt(
   messages: ChatCompletionMessageParam[],
-  cacheControl: OpenAICompatCacheControl,
+  cacheControl: openaiCompletionsTypesModule.OpenAICompatCacheControl,
 ): void {
   for (const message of messages) {
     if (message.role === "system" || message.role === "developer") {
@@ -97,7 +92,7 @@ function addCacheControlToSystemPrompt(
 
 function addCacheControlToLastConversationMessage(
   messages: ChatCompletionMessageParam[],
-  cacheControl: OpenAICompatCacheControl,
+  cacheControl: openaiCompletionsTypesModule.OpenAICompatCacheControl,
 ): void {
   for (const message of messages.toReversed()) {
     if (message.role === "user" || message.role === "assistant" || message.role === "tool") {
@@ -110,27 +105,27 @@ function addCacheControlToLastConversationMessage(
 
 function addCacheControlToLastTool(
   tools: OpenAI.Chat.Completions.ChatCompletionTool[] | undefined,
-  cacheControl: OpenAICompatCacheControl,
+  cacheControl: openaiCompletionsTypesModule.OpenAICompatCacheControl,
 ): void {
   if (tools === undefined || tools.length === 0) {
     return;
   }
 
-  const lastTool = tools.at(-1) as ChatCompletionToolWithCacheControl;
+  const lastTool = tools.at(-1) as openaiCompletionsTypesModule.ChatCompletionToolWithCacheControl;
   lastTool.cache_control = cacheControl;
 }
-
-interface ApplyCacheControlInput {
-  readonly messages: ChatCompletionMessageParam[];
-  readonly tools: OpenAI.Chat.Completions.ChatCompletionTool[] | undefined;
-  readonly cacheControl: OpenAICompatCacheControl;
-}
-
-function applyAnthropicCacheControl(input: ApplyCacheControlInput): void {
+function applyAnthropicCacheControl(
+  input: openaiCompletionsCacheTypes.ApplyCacheControlInput,
+): void {
   const { messages, tools, cacheControl } = input;
   addCacheControlToSystemPrompt(messages, cacheControl);
   addCacheControlToLastTool(tools, cacheControl);
   addCacheControlToLastConversationMessage(messages, cacheControl);
 }
 
-export { applyAnthropicCacheControl, getCompatCacheControl };
+const openaiCompletionsCache = {
+  applyAnthropicCacheControl,
+  getCompatCacheControl,
+};
+
+export default openaiCompletionsCache;

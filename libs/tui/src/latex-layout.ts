@@ -1,33 +1,9 @@
 import { dual } from "effect/Function";
 
-import { visibleWidth } from "./utils.ts";
+import type latexLayoutTypes from "./latex-layout.types.ts";
+import utils from "./utils.ts";
 
-interface FractionNode {
-  type: "fraction";
-  numerator: string;
-  denominator: string;
-}
-
-interface OperatorNode {
-  type: "operator";
-  operator: string;
-  lower?: string | undefined;
-  upper?: string | undefined;
-}
-
-interface ScriptNode {
-  type: "script";
-  lower?: string | undefined;
-  upper?: string | undefined;
-}
-
-export interface MatrixNode {
-  type: "matrix";
-  lines: string[];
-  baseline: number;
-}
-
-export type LayoutNode = FractionNode | OperatorNode | ScriptNode | MatrixNode;
+const { visibleWidth } = utils;
 
 interface Layout {
   lines: string[];
@@ -35,13 +11,13 @@ interface Layout {
   baseline: number;
 }
 
-export const LAYOUT_MARKER_START = "\u{f0000}";
+const LAYOUT_MARKER_START = "\u{f0000}";
 const LAYOUT_MARKER_END = "\u{f0001}";
 const LAYOUT_MARKER_PATTERN = /\u{f0000}(\d+)\u{f0001}/gu;
-export const TRAILING_LAYOUT_MARKER_PATTERN = /\u{f0000}(\d+)\u{f0001}$/u;
-export const PROTECTED_SPACE = "\u{f0002}";
+const TRAILING_LAYOUT_MARKER_PATTERN = /\u{f0000}(\d+)\u{f0001}$/u;
+const PROTECTED_SPACE = "\u{f0002}";
 
-export function layoutMarker(index: number): string {
+function layoutMarker(index: number): string {
   return `${LAYOUT_MARKER_START}${index}${LAYOUT_MARKER_END}`;
 }
 
@@ -52,12 +28,12 @@ function padLayoutLine(line: string, width: number, centered = false): string {
 }
 
 function textLayout(text: string): Layout {
-  return { lines: [text], width: visibleWidth(text), baseline: 0 };
+  return { baseline: 0, lines: [text], width: visibleWidth(text) };
 }
 
 function joinLayouts(layouts: readonly Layout[]): Layout {
   if (layouts.length === 0) {
-    return { lines: [""], width: 0, baseline: 0 };
+    return { baseline: 0, lines: [""], width: 0 };
   }
   const baseline = Math.max(...layouts.map((layout) => layout.baseline));
   const below = Math.max(...layouts.map((layout) => layout.lines.length - layout.baseline - 1));
@@ -74,29 +50,32 @@ function joinLayouts(layouts: readonly Layout[]): Layout {
     lines.push(line.trimEnd());
   }
   return {
+    baseline,
     lines,
     width: layouts.reduce((width, layout) => width + layout.width, 0),
-    baseline,
   };
 }
 
-function fractionLayout(node: FractionNode, nodes: readonly LayoutNode[]): Layout {
+function fractionLayout(
+  node: latexLayoutTypes.FractionNode,
+  nodes: readonly latexLayoutTypes.LayoutNode[],
+): Layout {
   const numerator = renderLayout(node.numerator, nodes);
   const denominator = renderLayout(node.denominator, nodes);
   const contentWidth = Math.max(numerator.width, denominator.width, 1);
   const width = contentWidth + 2;
   return {
+    baseline: numerator.lines.length,
     lines: [
       ...numerator.lines.map((line) => padLayoutLine(line, width, true)),
       ` ${"─".repeat(contentWidth)} `,
       ...denominator.lines.map((line) => padLayoutLine(line, width, true)),
     ],
     width,
-    baseline: numerator.lines.length,
   };
 }
 
-function operatorLayout(node: OperatorNode): Layout {
+function operatorLayout(node: latexLayoutTypes.OperatorNode): Layout {
   const contentWidth = Math.max(
     visibleWidth(node.operator),
     node.lower === undefined ? 0 : visibleWidth(node.lower),
@@ -106,43 +85,49 @@ function operatorLayout(node: OperatorNode): Layout {
     (row): row is string => row !== undefined,
   );
   return {
+    baseline: node.upper === undefined ? 0 : 1,
     lines: rows.map((row) => `${padLayoutLine(row, contentWidth, true)} `),
     width: contentWidth + 1,
-    baseline: node.upper === undefined ? 0 : 1,
   };
 }
 
-function scriptLayout(node: ScriptNode, nodes: readonly LayoutNode[]): Layout {
+function scriptLayout(
+  node: latexLayoutTypes.ScriptNode,
+  nodes: readonly latexLayoutTypes.LayoutNode[],
+): Layout {
   const upper = node.upper === undefined ? undefined : renderLayout(node.upper, nodes);
   const lower = node.lower === undefined ? undefined : renderLayout(node.lower, nodes);
   const width = Math.max(upper?.width ?? 0, lower?.width ?? 0);
   return {
+    baseline: upper?.lines.length ?? 0,
     lines: [
       ...(upper?.lines.map((line) => padLayoutLine(line, width)) ?? []),
       " ".repeat(width),
       ...(lower?.lines.map((line) => padLayoutLine(line, width)) ?? []),
     ],
     width,
-    baseline: upper?.lines.length ?? 0,
   };
 }
 
-function nodeLayout(node: LayoutNode, nodes: readonly LayoutNode[]): Layout {
+function nodeLayout(
+  node: latexLayoutTypes.LayoutNode,
+  nodes: readonly latexLayoutTypes.LayoutNode[],
+): Layout {
   if (node.type === "fraction") return fractionLayout(node, nodes);
   if (node.type === "operator") return operatorLayout(node);
   if (node.type === "script") return scriptLayout(node, nodes);
   const width = Math.max(0, ...node.lines.map((line) => visibleWidth(line)));
   return {
+    baseline: node.baseline,
     lines: node.lines.map((line) => padLayoutLine(line, width)),
     width,
-    baseline: node.baseline,
   };
 }
 
 function textBetweenNodes(
   sliced: string,
-  previousNode: LayoutNode | undefined,
-  node: LayoutNode,
+  previousNode: latexLayoutTypes.LayoutNode | undefined,
+  node: latexLayoutTypes.LayoutNode,
 ): string {
   const trimmed = (previousNode === undefined ? sliced : sliced.trimStart()).trimEnd();
   const preserveLeadingSpace = previousNode?.type === "matrix" && /^\s/u.test(sliced);
@@ -153,15 +138,21 @@ function textBetweenNodes(
   return `${preserveLeadingSpace ? " " : ""}${trimmed}${preserveTrailingSpace ? " " : ""}`;
 }
 
-function trailingText(sliced: string, previousNode: LayoutNode | undefined): string {
+function trailingText(
+  sliced: string,
+  previousNode: latexLayoutTypes.LayoutNode | undefined,
+): string {
   const trimmed = previousNode === undefined ? sliced : sliced.trimStart();
   return previousNode?.type === "matrix" && /^\s/u.test(sliced) ? ` ${trimmed}` : trimmed;
 }
 
-function renderLayoutLine(sourceLine: string, nodes: readonly LayoutNode[]): Layout {
+function renderLayoutLine(
+  sourceLine: string,
+  nodes: readonly latexLayoutTypes.LayoutNode[],
+): Layout {
   const layouts: Layout[] = [];
   let position = 0;
-  let previousNode: LayoutNode | undefined;
+  let previousNode: latexLayoutTypes.LayoutNode | undefined;
   for (const match of sourceLine.matchAll(LAYOUT_MARKER_PATTERN)) {
     const index = match.index;
     const node = nodes[Number(match[1])];
@@ -183,10 +174,10 @@ function renderLayoutLine(sourceLine: string, nodes: readonly LayoutNode[]): Lay
   return joinLayouts(layouts);
 }
 
-export const renderLayout: {
-  (source: string, nodes: readonly LayoutNode[]): Layout;
-  (nodes: readonly LayoutNode[]): (source: string) => Layout;
-} = dual(2, (source: string, nodes: readonly LayoutNode[]): Layout => {
+const renderLayout: {
+  (source: string, nodes: readonly latexLayoutTypes.LayoutNode[]): Layout;
+  (nodes: readonly latexLayoutTypes.LayoutNode[]): (source: string) => Layout;
+} = dual(2, (source: string, nodes: readonly latexLayoutTypes.LayoutNode[]): Layout => {
   const renderedLines: string[] = [];
   let firstBaseline = 0;
   for (const sourceLine of source.split("\n")) {
@@ -197,8 +188,18 @@ export const renderLayout: {
     renderedLines.push(...lineLayout.lines);
   }
   return {
+    baseline: firstBaseline,
     lines: renderedLines,
     width: Math.max(0, ...renderedLines.map((line) => visibleWidth(line))),
-    baseline: firstBaseline,
   };
 });
+
+const latexLayout = {
+  LAYOUT_MARKER_START,
+  PROTECTED_SPACE,
+  TRAILING_LAYOUT_MARKER_PATTERN,
+  layoutMarker,
+  renderLayout,
+};
+
+export default latexLayout;

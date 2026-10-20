@@ -1,7 +1,9 @@
 import { Cause, Console, Data, Effect } from "effect";
 
-import { httpRequest } from "../../src/utils/http.ts";
+import http from "../../src/utils/http.ts";
 import type upstreamTypes from "./upstream.types.ts";
+
+const { httpRequest } = http;
 
 class UpstreamError extends Data.TaggedError("UpstreamError")<{
   readonly message: string;

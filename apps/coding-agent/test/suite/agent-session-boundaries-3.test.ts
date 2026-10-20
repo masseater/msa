@@ -1,5 +1,5 @@
-import type { AgentTool } from "@msa/agent-core";
-import { fauxAssistantMessage, fauxToolCall } from "@msa/ai";
+import type agentTypes from "@msa/agent-core/index.types";
+import ai from "@msa/ai";
 import { Effect } from "effect";
 import { Type } from "typebox";
 import { afterEach, describe, expect, it } from "vite-plus/test";
@@ -7,12 +7,14 @@ import { afterEach, describe, expect, it } from "vite-plus/test";
 import agentSessionBoundariesSupport from "./agent-session-boundaries-support.ts";
 import harnessModule from "./harness.ts";
 
+const { fauxAssistantMessage, fauxToolCall } = ai;
+
 const { harnesses } = agentSessionBoundariesSupport;
 
 const { createHarness } = harnessModule;
 
 const doesNotLetAnInvalidExplicit = Effect.gen(function* () {
-  const tool: AgentTool = {
+  const tool: agentTypes.AgentTool = {
     description: "Noop",
     execute: () => Promise.resolve({ content: [{ text: "done", type: "text" }], details: {} }),
     label: "Noop",

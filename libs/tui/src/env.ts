@@ -2,7 +2,7 @@ import { Config, ConfigProvider, Effect, Option } from "effect";
 
 const envOverrides = new Map<string, string | undefined>();
 
-export const readEnv = (name: string): string | undefined =>
+const readEnv = (name: string): string | undefined =>
   envOverrides.has(name)
     ? envOverrides.get(name)
     : Effect.runSync(
@@ -11,9 +11,9 @@ export const readEnv = (name: string): string | undefined =>
           .pipe(Effect.map(Option.getOrUndefined)),
       );
 
-export const isEnvSet = (name: string): boolean => (readEnv(name) ?? "") !== "";
+const isEnvSet = (name: string): boolean => (readEnv(name) ?? "") !== "";
 
-export const overrideEnv = (vars: Readonly<Record<string, string | undefined>>): (() => void) => {
+const overrideEnv = (vars: Readonly<Record<string, string | undefined>>): (() => void) => {
   const previous = Object.keys(vars).map(
     (name) => [name, envOverrides.has(name), envOverrides.get(name)] as const,
   );
@@ -25,3 +25,11 @@ export const overrideEnv = (vars: Readonly<Record<string, string | undefined>>):
     }
   };
 };
+
+const env = {
+  isEnvSet,
+  overrideEnv,
+  readEnv,
+};
+
+export default env;

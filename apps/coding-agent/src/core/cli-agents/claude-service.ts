@@ -23,8 +23,8 @@ async function withLabels(accounts: Account[]) {
     const state = describeLogin(status);
     return {
       account,
-      loggedIn: status.loggedIn,
       label: state ? `${account.name} (${state})` : account.name,
+      loggedIn: status.loggedIn,
     };
   });
 }
@@ -44,13 +44,6 @@ async function chooseAccount(
 
 export const claudeCodeService: ExternalService = {
   id: "claude-code",
-  name: "Claude Code",
-  purpose: "Claude models through the claude-subs provider",
-  async status() {
-    if (!claudeExecutable()) return { installed: false, install: INSTALL_COMMAND };
-    const accounts = await withLabels(loginAccounts());
-    return { installed: true, signedIn: accounts.some((entry) => entry.loggedIn) };
-  },
   async login(interaction) {
     const account = await chooseAccount(interaction, await withLabels(loginAccounts()));
     if (!account) throw new Error("No Claude account to sign in");
@@ -75,5 +68,12 @@ export const claudeCodeService: ExternalService = {
           );
     const account = accounts.find((entry) => entry.label === choice)?.account;
     if (account) await logoutAccount(account);
+  },
+  name: "Claude Code",
+  purpose: "Claude models through the claude-subs provider",
+  async status() {
+    if (!claudeExecutable()) return { installed: false, install: INSTALL_COMMAND };
+    const accounts = await withLabels(loginAccounts());
+    return { installed: true, signedIn: accounts.some((entry) => entry.loggedIn) };
   },
 };

@@ -1,13 +1,16 @@
 import { Effect } from "effect";
 import { describe, expect, it, vi } from "vite-plus/test";
 
-import { stream as streamAnthropic } from "../src/api/anthropic-messages.ts";
-import { stream } from "../src/compat.ts";
-import type { Model, StreamOptions } from "../src/types.ts";
+import anthropicMessages from "../src/api/anthropic-messages.ts";
+import compatModule from "../src/compat.ts";
+import type typesModule from "../src/types.types.ts";
 import cacheRetentionSupport from "./cache-retention-support.ts";
 import type cacheRetentionSupportTypes from "./cache-retention-support.types.ts";
 import env from "./env.ts";
 import modelChoice from "./model-choice.ts";
+
+const { stream } = compatModule;
+const { stream: streamAnthropic } = anthropicMessages;
 
 const { capturePayload, context, isolateCacheRetentionEnv } = cacheRetentionSupport;
 const { hasEnv } = env;
@@ -28,8 +31,8 @@ const captureLive = capturePayload<AnthropicCachePayload>((onPayload) =>
 );
 
 const captureFake = (
-  target: Model<"anthropic-messages">,
-  options: Omit<StreamOptions, "onPayload"> = {},
+  target: typesModule.Model<"anthropic-messages">,
+  options: Omit<typesModule.StreamOptions, "onPayload"> = {},
 ) =>
   capturePayload<AnthropicCachePayload>((onPayload) =>
     streamAnthropic(target, context, { apiKey: "fake-key", ...options, onPayload }),

@@ -1,6 +1,7 @@
-import type { Api, Model, ModelsRefreshResult } from "@msa/ai";
+import type aiTypes from "@msa/ai/index.types";
 import testing from "@msa/testing";
-import { type TUI, setKeybindings } from "@msa/tui";
+import tui from "@msa/tui";
+import type tuiTypes from "@msa/tui/index.types";
 import { Effect } from "effect";
 import { afterEach, beforeAll, beforeEach, describe, expect, it, vi } from "vite-plus/test";
 
@@ -9,6 +10,8 @@ import { InteractiveMode } from "../../../src/modes/interactive/interactive-mode
 import tuiKit from "../../tui-kit.ts";
 import harnessModule from "../harness.ts";
 import type harnessTypes from "../harness.types.ts";
+
+const { setKeybindings } = tui;
 
 const { KeybindingsManager, initTheme, stripAnsi } = tuiKit;
 
@@ -25,16 +28,19 @@ type SelectorFactory = (close: () => void) => {
   dispose?: () => void;
 };
 
-function openSelector(harness: harnessTypes.Harness, initialModels: readonly Model<Api>[]) {
+function openSelector(
+  harness: harnessTypes.Harness,
+  initialModels: readonly aiTypes.Model<aiTypes.Api>[],
+) {
   let snapshot = initialModels;
-  let finishRefresh: ((result: ModelsRefreshResult) => void) | undefined;
+  let finishRefresh: ((result: aiTypes.ModelsRefreshResult) => void) | undefined;
   let refreshSignal: AbortSignal | undefined;
   let selector: ScopedModelsSelectorComponent | undefined;
   let dispose: (() => void) | undefined;
   const done = vi.fn();
   vi.spyOn(harness.session.modelRuntime, "getAvailableSnapshot").mockImplementation(() => snapshot);
   vi.spyOn(harness.session.modelRuntime, "refresh").mockImplementation((options) => {
-    const refresh = deferredPromise<ModelsRefreshResult>();
+    const refresh = deferredPromise<aiTypes.ModelsRefreshResult>();
     refreshSignal = options?.signal;
     finishRefresh = (value) => refresh.resolve(value);
     return refresh.promise;
@@ -53,14 +59,14 @@ function openSelector(harness: harnessTypes.Harness, initialModels: readonly Mod
     },
     session: harness.session,
     settingsManager: harness.settingsManager,
-    ui: { requestRender: vi.fn() } as unknown as TUI,
+    ui: { requestRender: vi.fn() } as unknown as tuiTypes.TUI,
     updateAvailableProviderCount: vi.fn(),
   };
 
   showModelsSelector.call(context);
   if (selector === undefined) throw new Error("Expected scoped-model selector to open");
   return {
-    complete(models: readonly Model<Api>[], result: ModelsRefreshResult) {
+    complete(models: readonly aiTypes.Model<aiTypes.Api>[], result: aiTypes.ModelsRefreshResult) {
       snapshot = models;
       if (finishRefresh === undefined) throw new Error("Expected model refresh to start");
       finishRefresh(result);

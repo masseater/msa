@@ -2,11 +2,15 @@ import * as NodeServices from "@effect/platform-node/NodeServices";
 import { Effect, FileSystem, ManagedRuntime, Path } from "effect";
 import { afterEach, describe, expect, it, vi } from "vite-plus/test";
 
-import { stream as streamAnthropic } from "../src/api/anthropic-messages.ts";
-import type { Model } from "../src/types.ts";
-import { currentTimeMillis } from "../src/utils/clock.ts";
-import { normalizeContext } from "../src/utils/transcript.ts";
+import anthropicMessages from "../src/api/anthropic-messages.ts";
+import type typesModule from "../src/types.types.ts";
+import clock from "../src/utils/clock.ts";
+import transcript from "../src/utils/transcript.ts";
 import anthropicSseParsingSupport from "./anthropic-sse-parsing-support.ts";
+
+const { normalizeContext } = transcript;
+const { currentTimeMillis } = clock;
+const { stream: streamAnthropic } = anthropicMessages;
 
 const { createSseResponse } = anthropicSseParsingSupport;
 
@@ -55,7 +59,7 @@ const context = normalizeContext({
   systemPrompt: "System prompt.",
 });
 
-const anthropicModel: Model<"anthropic-messages"> = {
+const anthropicModel: typesModule.Model<"anthropic-messages"> = {
   api: "anthropic-messages",
   baseUrl: "https://api.anthropic.com",
   contextWindow: 100000,

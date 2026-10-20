@@ -1,12 +1,18 @@
 import { describe, expect, it } from "vite-plus/test";
 
-import { fauxAssistantMessage } from "../src/providers/faux.ts";
-import { withOpenCodeSessionHeader } from "../src/providers/opencode-headers.ts";
-import type { Api, Model, ProviderStreams, StreamOptions } from "../src/types.ts";
-import { AssistantMessageEventStream } from "../src/utils/event-stream.ts";
-import { normalizeContext } from "../src/utils/transcript.ts";
+import faux from "../src/providers/faux.ts";
+import opencodeHeaders from "../src/providers/opencode-headers.ts";
+import type typesModule from "../src/types.types.ts";
+import eventStream from "../src/utils/event-stream.ts";
+import type eventStreamTypes from "../src/utils/event-stream.types.ts";
+import transcript from "../src/utils/transcript.ts";
 
-const model: Model<Api> = {
+const { normalizeContext } = transcript;
+const { AssistantMessageEventStream } = eventStream;
+const { fauxAssistantMessage } = faux;
+const { withOpenCodeSessionHeader } = opencodeHeaders;
+
+const model: typesModule.Model<typesModule.Api> = {
   api: "test-api",
   baseUrl: "https://opencode.ai/zen/v1",
   contextWindow: 1000,
@@ -20,7 +26,7 @@ const model: Model<Api> = {
 };
 const context = normalizeContext({ messages: [{ content: "hi", role: "user", timestamp: 0 }] });
 
-function completedStream(): AssistantMessageEventStream {
+function completedStream(): eventStreamTypes.AssistantMessageEventStream {
   const stream = new AssistantMessageEventStream();
   const message = fauxAssistantMessage("ok");
   stream.push({ partial: message, type: "start" });
@@ -29,7 +35,9 @@ function completedStream(): AssistantMessageEventStream {
   return stream;
 }
 
-function recordingStreams(capture: (options: StreamOptions | undefined) => void): ProviderStreams {
+function recordingStreams(
+  capture: (options: typesModule.StreamOptions | undefined) => void,
+): typesModule.ProviderStreams {
   return {
     stream: (_model, _context, options) => {
       capture(options);
@@ -46,7 +54,7 @@ describe("OpenCode provider headers", () => {
   it.each(["stream", "streamSimple"] as const)(
     "maps sessionId for %s requests even without cache retention",
     (method) => {
-      let captured: StreamOptions | undefined;
+      let captured: typesModule.StreamOptions | undefined;
       const streams = withOpenCodeSessionHeader(
         recordingStreams((options) => {
           captured = options;
@@ -66,7 +74,7 @@ describe("OpenCode provider headers", () => {
     },
     { expected: { "X-OpenCode-Session": null }, headers: { "X-OpenCode-Session": null } },
   ] as const)("preserves a case-insensitive caller override", ({ headers, expected }) => {
-    let captured: StreamOptions | undefined;
+    let captured: typesModule.StreamOptions | undefined;
     const streams = withOpenCodeSessionHeader(
       recordingStreams((options) => {
         captured = options;
@@ -79,7 +87,7 @@ describe("OpenCode provider headers", () => {
   });
 
   it("does not fabricate a session header when sessionId is absent", () => {
-    let captured: StreamOptions | undefined;
+    let captured: typesModule.StreamOptions | undefined;
     const streams = withOpenCodeSessionHeader(
       recordingStreams((options) => {
         captured = options;

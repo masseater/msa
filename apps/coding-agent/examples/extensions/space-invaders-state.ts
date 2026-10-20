@@ -54,12 +54,12 @@ export interface Counters {
 
 const createShields = (): Shield[] =>
   [8, 22, 36, 50].map((x) => ({
-    x,
     segments: [
       [true, true, true, true],
       [true, true, true, true],
       [true, false, false, true],
     ],
+    x,
   }));
 
 const createAliens = (): Alien[] => {
@@ -67,7 +67,7 @@ const createAliens = (): Alien[] => {
   for (let row = 0; row < ALIEN_ROWS; row++) {
     const type = row === 0 ? 2 : row < 3 ? 1 : 0;
     for (let col = 0; col < ALIEN_COLS; col++) {
-      aliens.push({ x: 4 + col * 5, y: ALIEN_START_Y + row * 2, type, alive: true });
+      aliens.push({ alive: true, type, x: 4 + col * 5, y: ALIEN_START_Y + row * 2 });
     }
   }
   return aliens;
@@ -80,20 +80,20 @@ export const createInitialState = (
 });
 
 const initialFields = (highScore: number, level: number): GameState => ({
-  player: { x: Math.floor(GAME_WIDTH / 2), lives: 3 },
-  aliens: createAliens(),
   alienDirection: 1,
+  alienDropping: false,
   alienMoveCounter: 0,
   alienMoveDelay: Math.max(5, 20 - level * 2),
-  alienDropping: false,
+  alienShootCounter: 0,
+  aliens: createAliens(),
   bullets: [],
-  shields: createShields(),
-  score: 0,
+  gameOver: false,
   highScore,
   level,
-  gameOver: false,
+  player: { lives: 3, x: Math.floor(GAME_WIDTH / 2) },
+  score: 0,
+  shields: createShields(),
   victory: false,
-  alienShootCounter: 0,
 });
 
 const movePlayer = (state: GameState, keys: KeyState, counters: Counters): void => {
@@ -116,7 +116,7 @@ const shootBullet = (state: GameState, keys: KeyState, counters: Counters): void
   const playerBullets = state.bullets.filter((b) => b.direction === -1);
   if (playerBullets.length >= 2) return;
 
-  state.bullets.push({ x: state.player.x, y: PLAYER_Y - 1, direction: -1 });
+  state.bullets.push({ direction: -1, x: state.player.x, y: PLAYER_Y - 1 });
   counters.fireCooldown = 8;
 };
 
@@ -193,7 +193,7 @@ const alienShoot = (state: GameState): void => {
 
   const shooter = shooters[randomInt(shooters.length)];
   if (shooter !== undefined) {
-    state.bullets.push({ x: shooter.x, y: shooter.y + 1, direction: 1 });
+    state.bullets.push({ direction: 1, x: shooter.x, y: shooter.y + 1 });
   }
 };
 

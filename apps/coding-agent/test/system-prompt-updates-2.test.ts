@@ -1,11 +1,5 @@
-import {
-  type TranscriptContext,
-  fauxAssistantMessage,
-  fauxToolCall,
-  getCurrentSystemMessage,
-  getCurrentSystemPrompt,
-  getSystemMessageText,
-} from "@msa/ai";
+import ai from "@msa/ai";
+import type aiTypes from "@msa/ai/index.types";
 import testing from "@msa/testing";
 import { Effect } from "effect";
 import { Type } from "typebox";
@@ -13,6 +7,14 @@ import { describe, expect, test } from "vite-plus/test";
 
 import type { ExtensionFactory } from "../src/index.ts";
 import harnessModule from "./suite/harness.ts";
+
+const {
+  fauxAssistantMessage,
+  fauxToolCall,
+  getCurrentSystemMessage,
+  getCurrentSystemPrompt,
+  getSystemMessageText,
+} = ai;
 
 const { createHarness } = harnessModule;
 
@@ -34,12 +36,14 @@ const aForcedPromptIsSentAsThePart1 = () =>
 const aForcedPromptIsSentAsThe = Effect.gen(function* () {
   const { harness } = yield* aForcedPromptIsSentAsThePart1();
   try {
-    const requests: TranscriptContext[] = [];
+    const requests: aiTypes.TranscriptContext[] = [];
     harness.setResponses(
-      ["one", "two", "three", "four"].map((text) => (providerContext: TranscriptContext) => {
-        requests.push(providerContext);
-        return fauxAssistantMessage(text);
-      }),
+      ["one", "two", "three", "four"].map(
+        (text) => (providerContext: aiTypes.TranscriptContext) => {
+          requests.push(providerContext);
+          return fauxAssistantMessage(text);
+        },
+      ),
     );
     for (const text of ["one", "two", "three", "four"])
       yield* awaited(harness.session.prompt(text));
@@ -97,15 +101,15 @@ const promptedToolsExtension: ExtensionFactory = (msa) => {
 };
 
 const recordRequests = (
-  requests: TranscriptContext[],
+  requests: aiTypes.TranscriptContext[],
   replies: ReadonlyArray<ReturnType<typeof fauxAssistantMessage>>,
 ) =>
-  replies.map((reply) => (providerContext: TranscriptContext) => {
+  replies.map((reply) => (providerContext: aiTypes.TranscriptContext) => {
     requests.push(providerContext);
     return reply;
   });
 
-const expectInitialSystemMessage = (request: TranscriptContext | undefined) => {
+const expectInitialSystemMessage = (request: aiTypes.TranscriptContext | undefined) => {
   expect(Object.keys(request ?? {})).toEqual(["messages"]);
   const initial = request?.messages[0];
   if (initial?.role !== "system") throw new Error("expected initial system message");
@@ -121,7 +125,7 @@ const setactivetoolsEmitsPromptSectionsAndToolChanges = Effect.gen(function* () 
     }),
   );
   try {
-    const requests: TranscriptContext[] = [];
+    const requests: aiTypes.TranscriptContext[] = [];
     harness.setResponses(
       recordRequests(requests, [
         fauxAssistantMessage("first"),
@@ -189,7 +193,7 @@ const setactivetoolsInBeforeAgentStartControlsThe = Effect.gen(function* () {
     }),
   );
   try {
-    const requests: TranscriptContext[] = [];
+    const requests: aiTypes.TranscriptContext[] = [];
     harness.setResponses([
       (providerContext) => {
         requests.push(providerContext);

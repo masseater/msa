@@ -1,5 +1,5 @@
-import { McpAuthRequiredError, McpHttpError } from "@msa/mcp";
-import { createInMemoryTransportPair } from "@msa/mcp/testing";
+import mcp from "@msa/mcp";
+import testingModule from "@msa/mcp/testing";
 import testing from "@msa/testing";
 import { Effect } from "effect";
 import { describe, expect, it } from "vite-plus/test";
@@ -12,6 +12,9 @@ import {
   createDefaultTransport,
 } from "../src/extensions/mcp/runtime.ts";
 import mcpConnectionSupport from "./mcp-connection-support.ts";
+
+const { createInMemoryTransportPair } = testingModule;
+const { McpAuthRequiredError, McpHttpError } = mcp;
 
 const {
   awaited,

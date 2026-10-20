@@ -1,9 +1,11 @@
 import { Effect } from "effect";
 import { afterEach, vi } from "vite-plus/test";
 
-import { openRouterOAuth } from "../src/auth/oauth/openrouter.ts";
+import openrouter from "../src/auth/oauth/openrouter.ts";
 import jsonCodec from "./json-codec.ts";
 import loopbackFetch from "./loopback-fetch.ts";
+
+const { openRouterOAuth } = openrouter;
 
 const { decodeJson } = jsonCodec;
 

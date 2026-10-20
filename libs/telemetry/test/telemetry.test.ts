@@ -1,20 +1,17 @@
 import { Effect } from "effect";
 import { describe, expect, expectTypeOf, it } from "vite-plus/test";
 
-import {
+import telemetry from "../src/index.ts";
+import type telemetryTypes from "../src/index.types.ts";
+import support from "../src/testing/support.ts";
+
+const {
   InMemoryTelemetryContext,
   NOOP_TELEMETRY_CONTEXT,
-  type SchemaTelemetrySpan,
-  type SpanAttributes,
-  type SpanOptions,
-  type SpanStatus,
-  type TelemetrySchemaSpanStartAttributes,
-  type TelemetrySpan,
-  type TypedSpanStarter,
   createTypedSpanStarter,
   defineTelemetrySchema,
-} from "../src/index.ts";
-import { rejectWith, rejectsWithSameValue } from "../src/testing/support.ts";
+} = telemetry;
+const { rejectWith, rejectsWithSameValue } = support;
 
 type Accepts<Callable, Args extends readonly unknown[]> = Callable extends (
   ...args: Args
@@ -108,7 +105,7 @@ const requestSchema = defineTelemetrySchema({
   version: 3,
 } as const);
 
-type OperationSpan = SchemaTelemetrySpan<typeof operationDefinition, "operation">;
+type OperationSpan = telemetryTypes.SchemaTelemetrySpan<typeof operationDefinition, "operation">;
 
 function checkSchemaSpanTypes(span: OperationSpan): void {
   span.addEvent("result", { outcome: "ok" });
@@ -125,7 +122,9 @@ function checkSchemaSpanTypes(span: OperationSpan): void {
   >().toEqualTypeOf<false>();
 }
 
-function checkCombinedStarterTypes(telemetryContext: InMemoryTelemetryContext): void {
+function checkCombinedStarterTypes(
+  telemetryContext: telemetryTypes.InMemoryTelemetryContext,
+): void {
   const startSpan = createTypedSpanStarter(telemetryContext, [rootOperationSchema, requestSchema]);
   type Start = typeof startSpan;
   expectTypeOf<
@@ -133,7 +132,8 @@ function checkCombinedStarterTypes(telemetryContext: InMemoryTelemetryContext): 
   >().toEqualTypeOf<false>();
   expectTypeOf<Accepts<Start, ["unknown", {}, Callback]>>().toEqualTypeOf<false>();
 
-  const requestStarter: TypedSpanStarter<readonly [typeof requestSchema]> = startSpan;
+  const requestStarter: telemetryTypes.TypedSpanStarter<readonly [typeof requestSchema]> =
+    startSpan;
   const extraRequestAttributes = { provider: "example", unknown: true } as const;
   type ExtraRequestAttributes = typeof extraRequestAttributes;
   expectTypeOf<
@@ -153,7 +153,7 @@ function checkCombinedStarterTypes(telemetryContext: InMemoryTelemetryContext): 
   expectTypeOf<
     Accepts<
       typeof createTypedSpanStarter<DuplicateSchemas>,
-      [InMemoryTelemetryContext, DuplicateSchemas]
+      [telemetryTypes.InMemoryTelemetryContext, DuplicateSchemas]
     >
   >().toEqualTypeOf<false>();
 }
@@ -192,7 +192,9 @@ describe("telemetry schemas", () => {
     const schema = defineTelemetrySchema(operationDefinition);
     expect(schema).toBe(operationDefinition);
     expect(() => JSON.stringify(schema)).not.toThrow();
-    expectTypeOf<TelemetrySchemaSpanStartAttributes<typeof schema, "operation">>().toMatchTypeOf<{
+    expectTypeOf<
+      telemetryTypes.TelemetrySchemaSpanStartAttributes<typeof schema, "operation">
+    >().toMatchTypeOf<{
       kind: "read" | "write";
     }>();
     expectTypeOf(checkSchemaSpanTypes).toBeFunction();
@@ -223,7 +225,7 @@ describe("telemetry schemas", () => {
 const admitsNoopCallbacks = Effect.gen(function* () {
   const runPromise = Effect.runPromiseWith(yield* Effect.context());
   let admitted = false;
-  let firstSpan: TelemetrySpan | undefined;
+  let firstSpan: telemetryTypes.TelemetrySpan | undefined;
   const result = NOOP_TELEMETRY_CONTEXT.startSpan({ name: "first" }, (span) => {
     admitted = true;
     firstSpan = span;
@@ -258,13 +260,13 @@ const preservesNoopRejections = Effect.gen(function* () {
 });
 
 function ignoreNoopPayloads(): Promise<void> {
-  const options = unreadable<SpanOptions>({
+  const options = unreadable<telemetryTypes.SpanOptions>({
     attributes: { secret: "prompt content" },
     name: "operation",
   });
   return NOOP_TELEMETRY_CONTEXT.startSpan(options, (span) => {
-    const attributes = unreadable<SpanAttributes>({ secret: "content" });
-    const status = unreadable<SpanStatus>({ status: "ok" });
+    const attributes = unreadable<telemetryTypes.SpanAttributes>({ secret: "content" });
+    const status = unreadable<telemetryTypes.SpanStatus>({ status: "ok" });
     expect(() => span.addEvent("event", attributes)).not.toThrow();
     expect(() => span.setAttributes(attributes)).not.toThrow();
     expect(() => span.setStatus(status)).not.toThrow();

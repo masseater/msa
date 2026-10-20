@@ -1,7 +1,10 @@
-import { type Component, matchesKey, visibleWidth } from "@msa/tui";
+import tuiModule from "@msa/tui";
+import type tuiTypes from "@msa/tui/index.types";
 
 import { type GameState, getCell } from "./tic-tac-toe-game.ts";
 import { centerPad, renderVisualBoard } from "./tic-tac-toe-render.ts";
+
+const { matchesKey, visibleWidth } = tuiModule;
 
 const ESC = "\x1b[";
 const reset = `${ESC}0m`;
@@ -53,7 +56,7 @@ const footerLine = (state: GameState): string => {
   return dim("Agent is thinking...");
 };
 
-export class TicTacToeComponent implements Component {
+export class TicTacToeComponent implements tuiTypes.Component {
   private state: GameState;
   private onClose: () => void;
   private onUserPlay: (row: number, col: number) => void;
@@ -113,7 +116,7 @@ export class TicTacToeComponent implements Component {
       this.tui.requestRender();
     } else if (matchesKey(data, "return") || data === " ") {
       const { userCursorRow, userCursorCol } = this.state;
-      if (getCell({ board: this.state.board, row: userCursorRow, col: userCursorCol }) === " ") {
+      if (getCell({ board: this.state.board, col: userCursorCol, row: userCursorRow }) === " ") {
         this.onUserPlay(userCursorRow, userCursorCol);
       }
     }
@@ -135,7 +138,7 @@ export class TicTacToeComponent implements Component {
     lines.push(statusLine(this.state, width));
     lines.push("");
     lines.push("");
-    lines.push(...renderVisualBoard({ state: this.state, maxWidth: width }));
+    lines.push(...renderVisualBoard({ maxWidth: width, state: this.state }));
     lines.push("");
     lines.push("");
     lines.push(centerPad({ content: footerLine(this.state), width }));

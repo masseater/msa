@@ -1,7 +1,7 @@
 import { pathToFileURL } from "node:url";
 
-import type { ImageContent, TextContent } from "@msa/ai";
-import { getCapabilities, getImageDimensions, hyperlink, imageFallback } from "@msa/tui";
+import type aiTypes from "@msa/ai/index.types";
+import tui from "@msa/tui";
 import { Effect, type Fiber, Function as Fn, Predicate } from "effect";
 
 import type { Theme } from "../../modes/interactive/theme/theme.ts";
@@ -10,6 +10,8 @@ import { abbreviateHomePath, resolvePath } from "../../utils/paths.ts";
 import { sanitizeBinaryOutput } from "../../utils/shell.ts";
 import type { ToolRenderContext } from "../extensions/types.ts";
 import { currentTimeMillis, platformRuntime } from "../platform/index.ts";
+
+const { getCapabilities, getImageDimensions, hyperlink, imageFallback } = tui;
 
 export function shortenPath(path: unknown): string {
   if (typeof path !== "string") return "";
@@ -97,7 +99,7 @@ export const getTextOutput: {
 });
 
 export type ToolRenderResultLike<TDetails> = {
-  content: (TextContent | ImageContent)[];
+  content: (aiTypes.TextContent | aiTypes.ImageContent)[];
   details: TDetails;
 };
 

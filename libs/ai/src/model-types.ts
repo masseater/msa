@@ -1,72 +1,60 @@
-import type { AnthropicMessagesCompat } from "./providers/compat-schema.ts";
-import type {
-  ModelCost,
-  ModelInputLimits,
-  ModelInputModality,
-  ModelPromptCache,
-  ThinkingLevelMap,
-} from "./providers/model-schema.ts";
-import type {
-  OpenAICompletionsCompat,
-  OpenAIResponsesCompat,
-} from "./providers/openai-compat-schema.ts";
-import type {
-  Api,
-  ClassifierApi,
-  ImageApi,
-  ProviderId,
-  SamplingParams,
-  SamplingParamsByThinkingLevel,
-} from "./types.ts";
+import type compatSchemaTypes from "./providers/compat-schema.types.ts";
+import type modelSchemaTypes from "./providers/model-schema.types.ts";
+import type openaiCompatSchemaTypes from "./providers/openai-compat-schema.types.ts";
+import type typesModule from "./types.types.ts";
 
-export interface BaseModel<TApi extends string> {
-  id: string;
-  name: string;
-  api: TApi;
-  provider: ProviderId;
-  baseUrl: string;
-  input: ModelInputModality[];
-  inputLimits?: ModelInputLimits;
-  cost: ModelCost;
-  headers?: Record<string, string>;
+declare namespace modelTypesModule {
+  interface BaseModel<TApi extends string> {
+    id: string;
+    name: string;
+    api: TApi;
+    provider: typesModule.ProviderId;
+    baseUrl: string;
+    input: modelSchemaTypes.ModelInputModality[];
+    inputLimits?: modelSchemaTypes.ModelInputLimits;
+    cost: modelSchemaTypes.ModelCost;
+    headers?: Record<string, string>;
+  }
+
+  interface Model<TApi extends typesModule.Api> extends BaseModel<TApi> {
+    type?: "chat";
+    reasoning: boolean;
+    thinkingLevelMap?: modelSchemaTypes.ThinkingLevelMap;
+    promptCache?: modelSchemaTypes.ModelPromptCache;
+    contextWindow: number;
+    maxTokens: number;
+    samplingParams?: typesModule.SamplingParams;
+    samplingParamsByThinkingLevel?: typesModule.SamplingParamsByThinkingLevel;
+    compat?:
+      | (TApi extends "openai-completions"
+          ? openaiCompatSchemaTypes.OpenAICompletionsCompat
+          : TApi extends "openai-responses" | "openai-codex-responses"
+            ? openaiCompatSchemaTypes.OpenAIResponsesCompat
+            : TApi extends "anthropic-messages"
+              ? compatSchemaTypes.AnthropicMessagesCompat
+              : never)
+      | undefined;
+  }
+
+  interface ImageModel<TApi extends typesModule.ImageApi> extends BaseModel<TApi> {
+    type: "image";
+    output: ("text" | "image")[];
+  }
+
+  interface ClassifierModel<TApi extends typesModule.ClassifierApi> extends BaseModel<TApi> {
+    type: "classifier";
+    contextWindow: number;
+  }
+
+  interface ModelTypeMap {
+    chat: Model<typesModule.Api>;
+    image: ImageModel<typesModule.ImageApi>;
+    classifier: ClassifierModel<typesModule.ClassifierApi>;
+  }
+
+  type ModelType = keyof ModelTypeMap;
+
+  type AnyModel = ModelTypeMap[ModelType];
 }
 
-export interface Model<TApi extends Api> extends BaseModel<TApi> {
-  type?: "chat";
-  reasoning: boolean;
-  thinkingLevelMap?: ThinkingLevelMap;
-  promptCache?: ModelPromptCache;
-  contextWindow: number;
-  maxTokens: number;
-  samplingParams?: SamplingParams;
-  samplingParamsByThinkingLevel?: SamplingParamsByThinkingLevel;
-  compat?:
-    | (TApi extends "openai-completions"
-        ? OpenAICompletionsCompat
-        : TApi extends "openai-responses" | "openai-codex-responses"
-          ? OpenAIResponsesCompat
-          : TApi extends "anthropic-messages"
-            ? AnthropicMessagesCompat
-            : never)
-    | undefined;
-}
-
-export interface ImageModel<TApi extends ImageApi> extends BaseModel<TApi> {
-  type: "image";
-  output: ("text" | "image")[];
-}
-
-export interface ClassifierModel<TApi extends ClassifierApi> extends BaseModel<TApi> {
-  type: "classifier";
-  contextWindow: number;
-}
-
-export interface ModelTypeMap {
-  chat: Model<Api>;
-  image: ImageModel<ImageApi>;
-  classifier: ClassifierModel<ClassifierApi>;
-}
-
-export type ModelType = keyof ModelTypeMap;
-
-export type AnyModel = ModelTypeMap[ModelType];
+export type { modelTypesModule as default };

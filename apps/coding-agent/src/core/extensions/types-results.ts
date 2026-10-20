@@ -1,5 +1,5 @@
-import type { AgentMessage } from "@msa/agent-core";
-import type { ImageContent, JsonValue, TextContent, Usage } from "@msa/ai";
+import type agentTypes from "@msa/agent-core/index.types";
+import type aiTypes from "@msa/ai/index.types";
 
 import type { BashResult } from "../bash-executor.ts";
 import type { CacheWarmingDecisionEvent } from "../cache-warmer.ts";
@@ -78,7 +78,7 @@ export type ExtensionEvent =
   | ToolResultEvent;
 
 export interface ContextEventResult {
-  messages?: AgentMessage[];
+  messages?: agentTypes.AgentMessage[];
 }
 
 export type TurnEndEventResult = BoundaryResult;
@@ -108,15 +108,15 @@ export type UserBashEventResult =
     };
 
 export interface ToolResultEventResult {
-  content?: (TextContent | ImageContent)[] | undefined;
+  content?: (aiTypes.TextContent | aiTypes.ImageContent)[] | undefined;
   details?: unknown;
-  structuredContent?: JsonValue | undefined;
+  structuredContent?: aiTypes.JsonValue | undefined;
   isError?: boolean | undefined;
-  usage?: Usage | undefined;
+  usage?: aiTypes.Usage | undefined;
 }
 
 export interface MessageEndEventResult {
-  message?: AgentMessage;
+  message?: agentTypes.AgentMessage;
 }
 
 export interface BeforeAgentStartEventResult {
@@ -143,7 +143,7 @@ export interface SessionBeforeTreeResult {
   summary?: {
     summary: string;
     details?: unknown;
-    usage?: Usage;
+    usage?: aiTypes.Usage;
   };
   customInstructions?: string;
   replaceInstructions?: boolean;

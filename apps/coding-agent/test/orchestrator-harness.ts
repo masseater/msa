@@ -1,8 +1,9 @@
 import { tmpdir } from "node:os";
 
-import type { AgentMessage, ThinkingLevel } from "@msa/agent-core";
-import { type Api, type Model, fauxAssistantMessage } from "@msa/ai";
-import { InMemoryTelemetryContext } from "@msa/telemetry";
+import type agentTypes from "@msa/agent-core/index.types";
+import ai from "@msa/ai";
+import type aiTypes from "@msa/ai/index.types";
+import telemetryModule from "@msa/telemetry";
 import testing from "@msa/testing";
 import { Effect } from "effect";
 
@@ -14,9 +15,13 @@ import {
 } from "../src/core/orchestrator/orchestrator.ts";
 import type orchestratorHarnessTypes from "./orchestrator-harness.types.ts";
 
+const { fauxAssistantMessage } = ai;
+
+const { InMemoryTelemetryContext } = telemetryModule;
+
 const { joinPath } = testing;
 
-function model(provider: string, id: string): Model<Api> {
+function model(provider: string, id: string): aiTypes.Model<aiTypes.Api> {
   return {
     api: "faux",
     baseUrl: "",
@@ -35,15 +40,15 @@ const MODELS = [model("sub", "fable"), model("fast", "flash"), model("fast", "ti
 
 class FakeWorker implements WorkerSession {
   isStreaming = false;
-  messages: AgentMessage[] = [];
+  messages: agentTypes.AgentMessage[] = [];
   sessionFile: string;
   prompts: string[] = [];
   steered: string[] = [];
-  model: Model<any>;
-  thinkingLevel: ThinkingLevel;
+  model: aiTypes.Model<any>;
+  thinkingLevel: agentTypes.ThinkingLevel;
   telemetry: CreateWorkerOptions["telemetry"];
   isRetrying = false;
-  state: { streamingMessage?: AgentMessage } = {};
+  state: { streamingMessage?: agentTypes.AgentMessage } = {};
   private readonly pending: Array<{
     resolve: (reply: string) => void;
     reject: (error: unknown) => void;
@@ -85,12 +90,12 @@ class FakeWorker implements WorkerSession {
     return Promise.resolve();
   };
 
-  setModel = (next: Model<any>) => {
+  setModel = (next: aiTypes.Model<any>) => {
     this.model = next;
     return Promise.resolve();
   };
 
-  setThinkingLevel = (level: ThinkingLevel) => {
+  setThinkingLevel = (level: agentTypes.ThinkingLevel) => {
     this.thinkingLevel = level;
   };
 

@@ -1,7 +1,7 @@
 import { Effect } from "effect";
 import { describe, it } from "vite-plus/test";
 
-import type { Model } from "../src/compat.ts";
+import type compatTypes from "../src/compat.types.ts";
 import env from "./env.ts";
 import imageToolResultSupport from "./image-tool-result-support.ts";
 import modelChoice from "./model-choice.ts";
@@ -17,7 +17,7 @@ describe("Tool Results with Images", () => {
     () => {
       const { compat: _compat, ...baseModel } = chooseModel("openai", "direct OpenAI");
       void _compat;
-      const llm: Model<"openai-completions"> = {
+      const llm: compatTypes.Model<"openai-completions"> = {
         ...baseModel,
         api: "openai-completions",
       };

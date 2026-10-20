@@ -1,4 +1,4 @@
-import type { AssistantMessage } from "@msa/ai";
+import type aiTypes from "@msa/ai/index.types";
 import {
   type AgentSession,
   AgentSessionRuntime,
@@ -18,9 +18,9 @@ import { RecordingTerminal } from "./recording-terminal.ts";
 const CONTEXT_WINDOW = 272_000;
 const BUILT_IN_CONTEXT_PATTERN = /\d+(?:\.\d+)?%\/272k(?: \(auto\))?/u;
 const CONTEXT_FIXTURES = [
-  { percent: 42.2, expectedBar: "████░░░░░░ 42%" },
-  { percent: 65, expectedBar: "███████░░░ 65%" },
-  { percent: 120, expectedBar: "██████████ 100%" },
+  { expectedBar: "████░░░░░░ 42%", percent: 42.2 },
+  { expectedBar: "███████░░░ 65%", percent: 65 },
+  { expectedBar: "██████████ 100%", percent: 120 },
 ] as const;
 
 type TuiFooterOutput = {
@@ -45,24 +45,24 @@ function createContextMessage(
   model: NonNullable<AgentSession["model"]>,
   percent: number,
   timestamp: number,
-): AssistantMessage {
+): aiTypes.AssistantMessage {
   const tokens = Math.round((model.contextWindow * percent) / 100);
   return {
-    role: "assistant",
-    content: [{ type: "text", text: "Context usage fixture" }],
     api: model.api,
-    provider: model.provider,
+    content: [{ type: "text", text: "Context usage fixture" }],
     model: model.id,
-    usage: {
-      input: tokens,
-      output: 0,
-      cacheRead: 0,
-      cacheWrite: 0,
-      totalTokens: tokens,
-      cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0, total: 0 },
-    },
+    provider: model.provider,
+    role: "assistant",
     stopReason: "stop",
     timestamp,
+    usage: {
+      cacheRead: 0,
+      cacheWrite: 0,
+      cost: { cacheRead: 0, cacheWrite: 0, input: 0, output: 0, total: 0 },
+      input: tokens,
+      output: 0,
+      totalTokens: tokens,
+    },
   };
 }
 
@@ -73,20 +73,20 @@ const createOracleRuntime = (
 ) =>
   Effect.gen(function* () {
     const services: AgentSessionServices = {
-      cwd: session.sessionManager.getCwd(),
       agentDir,
-      modelRuntime: session.modelRuntime,
-      settingsManager: session.settingsManager,
-      resourceLoader: session.resourceLoader,
+      cwd: session.sessionManager.getCwd(),
       diagnostics: [],
+      modelRuntime: session.modelRuntime,
+      resourceLoader: session.resourceLoader,
+      settingsManager: session.settingsManager,
     };
     const { session: oracleSession } = yield* Effect.promise(() =>
       createAgentSessionFromServices({
+        model,
+        noTools: "all",
         services,
         sessionManager: SessionManager.inMemory(services.cwd),
-        model,
         thinkingLevel: "high",
-        noTools: "all",
       }),
     );
     const runtime = new AgentSessionRuntime(oracleSession, services, () =>
@@ -107,12 +107,12 @@ const observeFooter = (
     oracleSession.sessionManager.appendMessage({
       ...createContextMessage(model, 0, now),
       usage: {
-        input: 106_000,
-        output: 5_800,
         cacheRead: 606_000,
         cacheWrite: 0,
+        cost: { cacheRead: 0, cacheWrite: 0, input: 1.008, output: 0, total: 1.008 },
+        input: 106_000,
+        output: 5_800,
         totalTokens: 717_800,
-        cost: { input: 1.008, output: 0, cacheRead: 0, cacheWrite: 0, total: 1.008 },
       },
     });
     let builtInStatusLine: string | null = null;
@@ -127,15 +127,15 @@ const observeFooter = (
           renders.flatMap(lines).find((line) => BUILT_IN_CONTEXT_PATTERN.test(line)) ?? null;
       }
       observations.push({
+        contextUsage: oracleSession.getContextUsage() ?? null,
         percent,
         renderedOutput: renders.at(-1) ?? "",
-        contextUsage: oracleSession.getContextUsage() ?? null,
       });
     }
     return {
       builtInStatusLine,
-      observations,
       extensionErrors: session.resourceLoader.getExtensions().errors.map(({ error }) => error),
+      observations,
     };
   });
 
@@ -151,7 +151,7 @@ const inspectContextFooter = (
     const model = { ...activeModel, contextWindow: CONTEXT_WINDOW };
     const { oracleSession, runtime } = yield* createOracleRuntime(session, agentDir, model);
     const terminal = new RecordingTerminal();
-    const mode = new InteractiveMode(runtime, { tuiMode: "regular", terminal });
+    const mode = new InteractiveMode(runtime, { terminal, tuiMode: "regular" });
     const disposeRuntime = Effect.promise(() => runtime.dispose());
     return yield* observeFooter(session, oracleSession, model, mode, terminal).pipe(
       Effect.ensuring(
@@ -174,7 +174,7 @@ const checkFixture = (
 ): Effect.Effect<FixtureCheck> =>
   Effect.gen(function* () {
     const { percent, expectedBar } = fixture;
-    const invalid: FixtureCheck = { valid: false, similarity: undefined };
+    const invalid: FixtureCheck = { similarity: undefined, valid: false };
     const observation = output.observations[index];
     if (observation === undefined || observation.percent !== percent) return invalid;
     let valid =
@@ -191,13 +191,13 @@ const checkFixture = (
     for (const { expectedBar: otherBar } of CONTEXT_FIXTURES) {
       if (otherBar !== expectedBar && normalized.includes(otherBar)) valid = false;
     }
-    if (reference === undefined) return { valid, similarity: undefined };
+    if (reference === undefined) return { similarity: undefined, valid };
     const result = yield* Effect.promise(() =>
       Promise.resolve(
         Levenshtein({ expected: reference, output: normalized.replace(expectedBar, "{context}") }),
       ),
     );
-    return { valid, similarity: result.score ?? undefined };
+    return { similarity: result.score ?? undefined, valid };
   });
 
 const judgeFooter = (output: TuiFooterOutput) =>
@@ -221,13 +221,13 @@ const judgeFooter = (output: TuiFooterOutput) =>
     const retained =
       similarities.length === CONTEXT_FIXTURES.length ? Math.min(...similarities) : 0;
     return {
-      score: valid ? 1 : 0,
       metadata: {
         rationale: valid
           ? `Footer retained ${Math.round(retained * 100)}% of the built-in status text.`
           : "Context progress behavior was incorrect.",
         retainedPercent: Math.round(retained * 100),
       },
+      score: valid ? 1 : 0,
     };
   });
 
@@ -238,14 +238,14 @@ const contextFooterJudge = createJudge<MsaCodingAgentInput, TuiFooterOutput>(
 
 describeEval(
   "Customize the interactive context footer",
-  { harness, judges: [contextFooterJudge], judgeThreshold: null },
+  { harness, judgeThreshold: null, judges: [contextFooterJudge] },
   (it) => {
     it("replaces numeric context usage with a progress bar", ({ run }) =>
       run([
         {
-          type: "prompt",
           content:
             "Change the msa footer replacing the built-in context info, e.g. `42.2%/272k (auto)`, with a ten-cell progress bar to make it show ████░░░░░░ 42% instead. Clamp percentages to the 0-100 range. Just replace the context. Otherwise leave everything else the same.",
+          type: "prompt",
         },
         { type: "reload" },
       ]));

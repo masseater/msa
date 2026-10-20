@@ -1,13 +1,14 @@
 import { Cause, Effect, Fiber, Stream } from "effect";
 
-import { CodexStreamError, codexProtocolError, requestAbortedError } from "./openai-codex-error.ts";
-import type { CodexRawEvent } from "./openai-codex-sse.ts";
-import type { WebSocketLike, WebSocketListener } from "./openai-codex-ws-constructor.ts";
-import {
-  closeWebSocket,
-  extractWebSocketCloseError,
-  extractWebSocketError,
-} from "./openai-codex-ws-socket.ts";
+import openaiCodexError from "./openai-codex-error.ts";
+import type openaiCodexErrorTypes from "./openai-codex-error.types.ts";
+import type openaiCodexSseTypes from "./openai-codex-sse.types.ts";
+import type openaiCodexWsConstructorTypes from "./openai-codex-ws-constructor.types.ts";
+import type openaiCodexWsInboxTypes from "./openai-codex-ws-inbox.types.ts";
+import openaiCodexWsSocket from "./openai-codex-ws-socket.ts";
+
+const { CodexStreamError, codexProtocolError, requestAbortedError } = openaiCodexError;
+const { closeWebSocket, extractWebSocketCloseError, extractWebSocketError } = openaiCodexWsSocket;
 
 const CODEX_WEBSOCKET_COMPLETION_TYPES = new Set([
   "response.completed",
@@ -16,18 +17,11 @@ const CODEX_WEBSOCKET_COMPLETION_TYPES = new Set([
 ]);
 
 interface InboxState {
-  readonly queue: CodexRawEvent[];
+  readonly queue: openaiCodexSseTypes.CodexRawEvent[];
   pending: (() => void) | null;
   done: boolean;
   failed: unknown;
   sawCompletion: boolean;
-}
-
-export interface CodexWebSocketReader {
-  readonly socket: WebSocketLike;
-  readonly onListening: () => void;
-  readonly signal: AbortSignal | undefined;
-  readonly idleTimeoutMs: number | undefined;
 }
 
 function wake(state: InboxState): void {
@@ -60,11 +54,11 @@ function decodeWebSocketData(data: unknown): Effect.Effect<string | null> {
   return Effect.succeed(null);
 }
 
-function parseMessage(text: string): CodexRawEvent {
+function parseMessage(text: string): openaiCodexSseTypes.CodexRawEvent {
   try {
-    return JSON.parse(text) as CodexRawEvent;
+    return JSON.parse(text) as openaiCodexSseTypes.CodexRawEvent;
   } catch (cause) {
-    throw codexProtocolError({ source: "WebSocket", cause, payload: text });
+    throw codexProtocolError({ cause, payload: text, source: "WebSocket" });
   }
 }
 
@@ -80,13 +74,13 @@ function accept(state: InboxState, text: string | null): void {
   wake(state);
 }
 
-const asProtocolError = (cause: unknown): CodexStreamError =>
+const asProtocolError = (cause: unknown): openaiCodexErrorTypes.CodexStreamError =>
   cause instanceof CodexStreamError
     ? cause
-    : codexProtocolError({ source: "WebSocket", cause, payload: null });
+    : codexProtocolError({ cause, payload: null, source: "WebSocket" });
 
 function inboxListeners(state: InboxState) {
-  const message: WebSocketListener = (event) => {
+  const message: openaiCodexWsConstructorTypes.WebSocketListener = (event) => {
     if (typeof event !== "object" || event === null || !("data" in event)) return;
     Effect.runFork(
       decodeWebSocketData((event as { data?: unknown }).data).pipe(
@@ -95,22 +89,26 @@ function inboxListeners(state: InboxState) {
       ),
     );
   };
-  const error: WebSocketListener = (event) => fail(state, extractWebSocketError(event));
-  const close: WebSocketListener = (event) => {
+  const error: openaiCodexWsConstructorTypes.WebSocketListener = (event) =>
+    fail(state, extractWebSocketError(event));
+  const close: openaiCodexWsConstructorTypes.WebSocketListener = (event) => {
     if (!state.sawCompletion && state.failed === null) {
       state.failed = extractWebSocketCloseError(event);
     }
     state.done = true;
     wake(state);
   };
-  return { message, error, close, abort: () => fail(state, requestAbortedError()) };
+  return { abort: () => fail(state, requestAbortedError()), close, error, message };
 }
 
 const interruptTimer = (timer: Fiber.Fiber<void> | undefined): void => {
   if (timer !== undefined) Effect.runFork(Fiber.interrupt(timer));
 };
 
-function waitForWake(state: InboxState, reader: CodexWebSocketReader): Effect.Effect<void> {
+function waitForWake(
+  state: InboxState,
+  reader: openaiCodexWsInboxTypes.CodexWebSocketReader,
+): Effect.Effect<void> {
   const { idleTimeoutMs, socket } = reader;
   return Effect.callback<void>((resume) => {
     let idleTimer: Fiber.Fiber<void> | undefined;
@@ -138,8 +136,8 @@ function waitForWake(state: InboxState, reader: CodexWebSocketReader): Effect.Ef
 
 function takeNext(
   state: InboxState,
-  reader: CodexWebSocketReader,
-): Effect.Effect<CodexRawEvent, Cause.Done> {
+  reader: openaiCodexWsInboxTypes.CodexWebSocketReader,
+): Effect.Effect<openaiCodexSseTypes.CodexRawEvent, Cause.Done> {
   return Effect.suspend(() => {
     if (reader.signal?.aborted === true) return Effect.die(requestAbortedError());
     const next = state.queue.shift();
@@ -154,12 +152,12 @@ function takeNext(
   });
 }
 
-function openInbox(reader: CodexWebSocketReader) {
+function openInbox(reader: openaiCodexWsInboxTypes.CodexWebSocketReader) {
   const state: InboxState = {
-    queue: [],
-    pending: null,
     done: false,
     failed: null,
+    pending: null,
+    queue: [],
     sawCompletion: false,
   };
   const { socket, signal } = reader;
@@ -175,15 +173,21 @@ function openInbox(reader: CodexWebSocketReader) {
     socket.removeEventListener("close", listeners.close);
     signal?.removeEventListener("abort", listeners.abort);
   };
-  return { take: takeNext(state, reader), close };
+  return { close, take: takeNext(state, reader) };
 }
 
-export const readCodexWebSocketEvents = (
-  reader: CodexWebSocketReader,
-): Stream.Stream<CodexRawEvent> =>
+const readCodexWebSocketEvents = (
+  reader: openaiCodexWsInboxTypes.CodexWebSocketReader,
+): Stream.Stream<openaiCodexSseTypes.CodexRawEvent> =>
   Stream.unwrap(
     Effect.acquireRelease(
       Effect.sync(() => openInbox(reader)),
       (inbox) => Effect.sync(inbox.close),
     ).pipe(Effect.map((inbox) => Stream.fromEffectRepeat(inbox.take))),
   );
+
+const openaiCodexWsInbox = {
+  readCodexWebSocketEvents,
+};
+
+export default openaiCodexWsInbox;

@@ -2,12 +2,16 @@ import { Effect, Stream } from "effect";
 import type { ResponseStreamEvent } from "openai/resources/responses/responses.js";
 import { describe, expect, it, vi } from "vite-plus/test";
 
-import { processResponsesStream } from "../src/api/openai-responses-stream.ts";
-import type { AssistantMessage, AssistantMessageEvent, Model } from "../src/types.ts";
-import { currentTimeMillis } from "../src/utils/clock.ts";
-import { AssistantMessageEventStream } from "../src/utils/event-stream.ts";
+import openaiResponsesStream from "../src/api/openai-responses-stream.ts";
+import type typesModule from "../src/types.types.ts";
+import clock from "../src/utils/clock.ts";
+import eventStream from "../src/utils/event-stream.ts";
 
-function createOutput(model: Model<"openai-responses">): AssistantMessage {
+const { currentTimeMillis } = clock;
+const { AssistantMessageEventStream } = eventStream;
+const { processResponsesStream } = openaiResponsesStream;
+
+function createOutput(model: typesModule.Model<"openai-responses">): typesModule.AssistantMessage {
   return {
     api: model.api,
     content: [],
@@ -77,7 +81,7 @@ describe("openai responses partialJson cleanup", () => {
   it("removes partialJson from persisted tool-call blocks at output_item.done", () =>
     Effect.runPromise(
       Effect.gen(function* () {
-        const model: Model<"openai-responses"> = {
+        const model: typesModule.Model<"openai-responses"> = {
           api: "openai-responses",
           baseUrl: "https://api.openai.com/v1",
           contextWindow: 400000,
@@ -110,7 +114,9 @@ describe("openai responses partialJson cleanup", () => {
         expect(persistedToolCall.arguments).toEqual({ content: "updated", path: "README.md" });
         expect("partialJson" in persistedToolCall).toBe(false);
 
-        const emittedEvents = pushSpy.mock.calls.map(([event]) => event as AssistantMessageEvent);
+        const emittedEvents = pushSpy.mock.calls.map(
+          ([event]) => event as typesModule.AssistantMessageEvent,
+        );
         const toolCallEnd = emittedEvents.find((event) => event.type === "toolcall_end");
         expect(toolCallEnd).toBeDefined();
         if (toolCallEnd === undefined || toolCallEnd.type !== "toolcall_end") {
@@ -126,7 +132,7 @@ describe("openai responses partialJson cleanup", () => {
   it("marks malformed final arguments instead of keeping the parsed prefix", () =>
     Effect.runPromise(
       Effect.gen(function* () {
-        const model: Model<"openai-responses"> = {
+        const model: typesModule.Model<"openai-responses"> = {
           api: "openai-responses",
           baseUrl: "https://api.openai.com/v1",
           contextWindow: 400000,

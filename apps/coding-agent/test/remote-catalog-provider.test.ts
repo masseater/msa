@@ -1,4 +1,4 @@
-import { InMemoryModelsStore, createModels } from "@msa/ai";
+import ai from "@msa/ai";
 import testing from "@msa/testing";
 import { Effect } from "effect";
 import { afterEach, describe, expect, it, vi } from "vite-plus/test";
@@ -7,6 +7,8 @@ import { VERSION } from "../src/config.ts";
 import { REMOTE_CATALOG_MODEL_TYPES } from "../src/core/remote-catalog-provider.ts";
 import remoteCatalogProviderSupport from "./remote-catalog-provider-support.ts";
 import remoteCatalogProviderSupport2 from "./remote-catalog-provider-support2.ts";
+
+const { InMemoryModelsStore, createModels } = ai;
 
 const { testProvider } = remoteCatalogProviderSupport2;
 

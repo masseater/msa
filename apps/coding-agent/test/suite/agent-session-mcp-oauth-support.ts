@@ -1,12 +1,14 @@
 import { type AddressInfo, createServer } from "node:net";
 
-import { fauxAssistantMessage, fauxToolCall } from "@msa/ai";
-import type { ToolResultMessage } from "@msa/ai/compat";
+import ai from "@msa/ai";
+import type compatTypes from "@msa/ai/compat.types";
 import { Effect } from "effect";
 
 import type harnessTypes from "./harness.types.ts";
 
-function callWhoami(harness: harnessTypes.Harness): Promise<ToolResultMessage> {
+const { fauxAssistantMessage, fauxToolCall } = ai;
+
+function callWhoami(harness: harnessTypes.Harness): Promise<compatTypes.ToolResultMessage> {
   return Effect.runPromise(
     Effect.gen(function* () {
       harness.setResponses([
@@ -19,7 +21,7 @@ function callWhoami(harness: harnessTypes.Harness): Promise<ToolResultMessage> {
       yield* Effect.promise(() => harness.session.prompt("who am i"));
       const result = harness.session.messages
         .slice(before)
-        .find((message): message is ToolResultMessage => message.role === "toolResult");
+        .find((message): message is compatTypes.ToolResultMessage => message.role === "toolResult");
       if (result === undefined) throw new Error("no tool result");
       return result;
     }),

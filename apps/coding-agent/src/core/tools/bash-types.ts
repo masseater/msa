@@ -14,19 +14,19 @@ export const bashSchema = Type.Object({
 });
 
 export const bashToolSystemPromptContribution = {
-  snippet: "Execute bash commands (ls, grep, find, etc.)",
   guidelines: [
     "You can inspect MSA_* environment variables for current model and session details.",
   ],
+  snippet: "Execute bash commands (ls, grep, find, etc.)",
 } as const;
 
 export type BashToolInput = Static<typeof bashSchema>;
 
 export const bashOutputSchema = Type.Object({
+  exit_code: Type.Number(),
+  full_output_path: Type.Optional(Type.String({ description: "Full output, when truncated" })),
   output: Type.String({ description: "Combined stdout and stderr, possibly truncated" }),
   truncated: Type.Boolean(),
-  full_output_path: Type.Optional(Type.String({ description: "Full output, when truncated" })),
-  exit_code: Type.Number(),
   wall_time_seconds: Type.Number(),
 });
 

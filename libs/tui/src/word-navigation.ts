@@ -1,21 +1,20 @@
 import { dual } from "effect/Function";
 
-import { isWhitespaceChar, PUNCTUATION_REGEX } from "./text-boundaries.ts";
-import { getWordSegmenter } from "./utils.ts";
+import textBoundaries from "./text-boundaries.ts";
+import utils from "./utils.ts";
+import type wordNavigationTypes from "./word-navigation.types.ts";
+
+const { getWordSegmenter } = utils;
+const { PUNCTUATION_REGEX, isWhitespaceChar } = textBoundaries;
 
 const wordSegmenter = getWordSegmenter();
 
-export interface WordNavigationOptions {
-  segment?: (text: string) => Iterable<Intl.SegmentData>;
-  isAtomicSegment?: (segment: string) => boolean;
-}
-
-export const findWordBackward: {
-  (text: string, cursor: number, options?: WordNavigationOptions): number;
-  (cursor: number, options?: WordNavigationOptions): (text: string) => number;
+const findWordBackward: {
+  (text: string, cursor: number, options?: wordNavigationTypes.WordNavigationOptions): number;
+  (cursor: number, options?: wordNavigationTypes.WordNavigationOptions): (text: string) => number;
 } = dual(
   (args) => typeof args[0] === "string",
-  (text: string, cursor: number, options?: WordNavigationOptions): number => {
+  (text: string, cursor: number, options?: wordNavigationTypes.WordNavigationOptions): number => {
     if (cursor <= 0) return 0;
 
     const textBeforeCursor = text.slice(0, cursor);
@@ -65,12 +64,12 @@ export const findWordBackward: {
   },
 );
 
-export const findWordForward: {
-  (text: string, cursor: number, options?: WordNavigationOptions): number;
-  (cursor: number, options?: WordNavigationOptions): (text: string) => number;
+const findWordForward: {
+  (text: string, cursor: number, options?: wordNavigationTypes.WordNavigationOptions): number;
+  (cursor: number, options?: wordNavigationTypes.WordNavigationOptions): (text: string) => number;
 } = dual(
   (args) => typeof args[0] === "string",
-  (text: string, cursor: number, options?: WordNavigationOptions): number => {
+  (text: string, cursor: number, options?: wordNavigationTypes.WordNavigationOptions): number => {
     if (cursor >= text.length) return text.length;
 
     const textAfterCursor = text.slice(cursor);
@@ -112,3 +111,10 @@ export const findWordForward: {
     return newCursor;
   },
 );
+
+const wordNavigation = {
+  findWordBackward,
+  findWordForward,
+};
+
+export default wordNavigation;

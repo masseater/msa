@@ -1,9 +1,11 @@
 import assert from "node:assert";
 import { describe, it } from "node:test";
 
-import { Editor } from "../src/components/editor.ts";
+import Editor from "../src/components/editor.ts";
 import editorHelpers from "./editor-helpers.ts";
-import { defaultEditorTheme } from "./test-themes.ts";
+import testThemes from "./test-themes.ts";
+
+const { defaultEditorTheme } = testThemes;
 
 const { createTestTUI, positionCursor } = editorHelpers;
 

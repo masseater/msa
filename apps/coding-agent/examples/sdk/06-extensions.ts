@@ -1,15 +1,15 @@
 import {
-  createAgentSession,
   DefaultResourceLoader,
-  getAgentDir,
   SessionManager,
+  createAgentSession,
+  getAgentDir,
 } from "@msa/coding-agent";
 import { Console, Effect } from "effect";
 
 const resourceLoader = new DefaultResourceLoader({
-  cwd: process.cwd(),
-  agentDir: getAgentDir(),
   additionalExtensionPaths: ["./my-logging-extension.ts", "./my-safety-extension.ts"],
+  agentDir: getAgentDir(),
+  cwd: process.cwd(),
   extensionFactories: [
     (msa) => {
       msa.on("agent_start", () => {

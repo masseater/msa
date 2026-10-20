@@ -1,5 +1,5 @@
 import testing from "@msa/testing";
-import type { Box, TuiMouseEvent } from "@msa/tui";
+import type tuiTypes from "@msa/tui/index.types";
 import { beforeAll, describe, expect, test } from "vite-plus/test";
 
 import { BranchSummaryMessageComponent } from "../src/modes/interactive/components/branch-summary-message.ts";
@@ -12,15 +12,15 @@ const { currentTimeMillis } = testing;
 
 const WIDTH = 80;
 
-function renderText(component: Box): string {
+function renderText(component: tuiTypes.Box): string {
   return stripAnsi(component.render(WIDTH).join("\n"));
 }
 
-function clickRow(component: Box, marker: string): void {
+function clickRow(component: tuiTypes.Box, marker: string): void {
   const lines = component.render(WIDTH);
   const row = lines.findIndex((line) => stripAnsi(line).includes(marker));
   expect(row).toBeGreaterThanOrEqual(0);
-  const event: TuiMouseEvent = {
+  const event: tuiTypes.TuiMouseEvent = {
     alt: false,
     button: "left",
     clickCount: 1,

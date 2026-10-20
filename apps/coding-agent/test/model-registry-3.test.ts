@@ -1,4 +1,4 @@
-import type { AnthropicMessagesCompat, OpenAICompletionsCompat } from "@msa/ai/compat";
+import type compatTypes from "@msa/ai/compat.types";
 import testing from "@msa/testing";
 import { Effect } from "effect";
 import { afterEach, beforeEach, describe, expect, test, vi } from "vite-plus/test";
@@ -42,7 +42,7 @@ const providerLevelCompatAppliesToBuiltIn = () =>
 
       expect(models.length).toBeGreaterThan(0);
       for (const model of models) {
-        const compat = model.compat as OpenAICompletionsCompat | undefined;
+        const compat = model.compat as compatTypes.OpenAICompletionsCompat | undefined;
         expect(compat?.supportsUsageInStreaming).toBe(false);
         expect(compat?.supportsStrictMode).toBe(false);
       }
@@ -80,7 +80,7 @@ const modelSchemaAcceptsThinkinglevelmapAndCompatSchema = () =>
 
       const registry = yield* awaited(createModelRegistry(authStorage, modelsJsonPath));
       const model = registry.find("demo", "demo-model");
-      const compat = model?.compat as OpenAICompletionsCompat | undefined;
+      const compat = model?.compat as compatTypes.OpenAICompletionsCompat | undefined;
 
       expect(registry.getError()).toBeUndefined();
       expect(model?.thinkingLevelMap).toEqual({ high: "max", minimal: null });
@@ -119,7 +119,7 @@ const compatSchemaAcceptsChatTemplateThinkingConfiguration = () =>
 
       const registry = yield* awaited(createModelRegistry(authStorage, modelsJsonPath));
       const kwargsCompat = registry.find("demo", "kwargs-model")?.compat as
-        | OpenAICompletionsCompat
+        | compatTypes.OpenAICompletionsCompat
         | undefined;
 
       expect(registry.getError()).toBeUndefined();
@@ -157,7 +157,7 @@ const compatSchemaAcceptsAnthropicEagerToolInput = () =>
 
       const registry = yield* awaited(createModelRegistry(authStorage, modelsJsonPath));
       const compat = registry.find("demo", "demo-model")?.compat as
-        | AnthropicMessagesCompat
+        | compatTypes.AnthropicMessagesCompat
         | undefined;
 
       expect(registry.getError()).toBeUndefined();
@@ -191,7 +191,7 @@ const compatSchemaAcceptsLongCacheRetentionFlag = () =>
 
       const registry = yield* awaited(createModelRegistry(authStorage, modelsJsonPath));
       const compat = registry.find("demo", "demo-model")?.compat as
-        | AnthropicMessagesCompat
+        | compatTypes.AnthropicMessagesCompat
         | undefined;
 
       expect(registry.getError()).toBeUndefined();

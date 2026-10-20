@@ -1,9 +1,9 @@
-import type { OpenRouterModel } from "../src/providers/openrouter-api.ts";
-import type { ClassifierModel, ImageModel, Model } from "../src/types.ts";
+import type openrouterApiTypes from "../src/providers/openrouter-api.types.ts";
+import type typesModule from "../src/types.types.ts";
 import type openrouterReasoningOptionsTypes from "./openrouter-reasoning-options.types.ts";
 
 declare namespace openrouterCatalogTypes {
-  interface OpenRouterModelListItem extends OpenRouterModel {
+  interface OpenRouterModelListItem extends openrouterApiTypes.OpenRouterModel {
     name: string;
     supported_parameters?: string[];
     architecture?: { modality?: string; input_modalities?: string[]; output_modalities?: string[] };
@@ -11,9 +11,9 @@ declare namespace openrouterCatalogTypes {
   }
 
   interface OpenRouterCatalog {
-    chat: Model<"anthropic-messages" | "openai-completions">[];
-    images: ImageModel<"openrouter-images">[];
-    classifiers: ClassifierModel<"typesafe-system-one">[];
+    chat: typesModule.Model<"anthropic-messages" | "openai-completions">[];
+    images: typesModule.ImageModel<"openrouter-images">[];
+    classifiers: typesModule.ClassifierModel<"typesafe-system-one">[];
   }
 }
 

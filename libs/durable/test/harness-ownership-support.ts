@@ -1,4 +1,4 @@
-import { type AssistantMessage, type FauxResponseStep } from "@msa/ai";
+import type aiTypes from "@msa/ai/index.types";
 import durable from "@msa/durable";
 import type durableTypes from "@msa/durable/index.types";
 import memory from "@msa/durable/storage/memory";
@@ -199,14 +199,14 @@ const ownedChild: {
   ): ReturnType<typeof ownedChildImpl>;
 } = dual((args) => typeof args[0] === "object" && args[0] !== null, ownedChildImpl);
 
-function gated(message: AssistantMessage): {
-  step: FauxResponseStep;
+function gated(message: aiTypes.AssistantMessage): {
+  step: aiTypes.FauxResponseStep;
   reached: Promise<void>;
   release: () => void;
 } {
   const reached = deferred();
   const gateInner = deferred();
-  const step: FauxResponseStep = (_request, options) =>
+  const step: aiTypes.FauxResponseStep = (_request, options) =>
     Effect.runPromise(
       Effect.gen(function* () {
         reached.resolve();

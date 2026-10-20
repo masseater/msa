@@ -3,15 +3,22 @@ import { createInterface } from "node:readline";
 import * as NodeFileSystem from "@effect/platform-node/NodeFileSystem";
 import { Console, Effect, FileSystem, ManagedRuntime, Schema } from "effect";
 
-import type { AuthEvent, AuthPrompt, Provider } from "./index.ts";
-import { builtinProviders } from "./providers/all.ts";
-import { randomUuid } from "./utils/crypto.ts";
-import { toErrorMessage } from "./utils/errors.ts";
+import type aiTypes from "./index.types.ts";
+import all from "./providers/all.ts";
+import cryptoModule from "./utils/crypto.ts";
+import errors from "./utils/errors.ts";
+
+const { builtinProviders } = all;
+const { randomUuid } = cryptoModule;
+const { toErrorMessage } = errors;
 
 const AUTH_FILE = "auth.json";
 const PROVIDERS = builtinProviders().filter(
-  (provider): provider is Provider & { auth: { oauth: NonNullable<Provider["auth"]["oauth"]> } } =>
-    provider.auth.oauth !== undefined,
+  (
+    provider,
+  ): provider is aiTypes.Provider & {
+    auth: { oauth: NonNullable<aiTypes.Provider["auth"]["oauth"]> };
+  } => provider.auth.oauth !== undefined,
 );
 
 type Readline = ReturnType<typeof createInterface>;
@@ -41,7 +48,10 @@ const saveAuth = Effect.fn("saveAuth")(function* (auth: Readonly<Record<string, 
   yield* fs.writeFileString(AUTH_FILE, yield* encodeAuthFile(auth));
 }, Effect.orDie);
 
-const answerPrompt = Effect.fn("answerPrompt")(function* (rl: Readline, authPrompt: AuthPrompt) {
+const answerPrompt = Effect.fn("answerPrompt")(function* (
+  rl: Readline,
+  authPrompt: aiTypes.AuthPrompt,
+) {
   if (authPrompt.type === "select") {
     yield* Console.log(`\n${authPrompt.message}`);
     for (const [index, option] of authPrompt.options.entries()) {
@@ -59,7 +69,7 @@ const answerPrompt = Effect.fn("answerPrompt")(function* (rl: Readline, authProm
   return yield* prompt(rl, `${authPrompt.message}${placeholder}: `);
 });
 
-const showAuthEvent = (event: AuthEvent): Effect.Effect<void> => {
+const showAuthEvent = (event: aiTypes.AuthEvent): Effect.Effect<void> => {
   switch (event.type) {
     case "auth_url":
       return Effect.andThen(
@@ -90,9 +100,9 @@ const login = Effect.fn("login")(function* (providerId: string) {
   const credential = yield* Effect.promise(() =>
     provider.auth.oauth.login(
       {
-        signal: new AbortController().signal,
-        prompt: (authPrompt) => Effect.runPromiseWith(context)(answerPrompt(rl, authPrompt)),
         notify: (event) => Effect.runSyncWith(context)(showAuthEvent(event)),
+        prompt: (authPrompt) => Effect.runPromiseWith(context)(answerPrompt(rl, authPrompt)),
+        signal: new AbortController().signal,
       },
       { getDeviceId: randomUuid },
     ),

@@ -13,7 +13,7 @@ const timingNamespaces = new Map<TimingLabel, TimingNamespace>();
 
 export function resetTimings(namespace: TimingLabel = "main"): void {
   if (!ENABLED) return;
-  timingNamespaces.set(namespace, { timings: [], lastTime: nowMs() });
+  timingNamespaces.set(namespace, { lastTime: nowMs(), timings: [] });
 }
 
 export function time(label: string, namespace: TimingLabel = "main"): void {

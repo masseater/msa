@@ -1,43 +1,30 @@
-import { EventStream } from "@msa/ai";
-import type { AssistantMessage } from "@msa/ai";
+import ai from "@msa/ai";
+import type aiTypes from "@msa/ai/index.types";
 import { Effect, Function } from "effect";
 
-import {
-  type AgentEventSink,
-  continuationError,
-  emitTo,
-  runContinuation,
-  runPrompt,
-} from "./loop-run.ts";
-import {
-  prepareToolCall,
-  executeAndFinalize,
-  type ToolCallHooks,
-  type ToolUpdateSink,
-} from "./tool-call.ts";
-import type {
-  AgentContext,
-  AgentEvent,
-  AgentLoopConfig,
-  AgentMessage,
-  AgentTool,
-  AgentToolCall,
-  AgentToolCallOutcome,
-  StreamFn,
-} from "./types.ts";
+import type agentLoopTypes from "./agent-loop.types.ts";
+import loopRun from "./loop-run.ts";
+import type loopRunTypes from "./loop-run.types.ts";
+import toolCallModule from "./tool-call.ts";
+import type typesModule from "./types.ts";
 
-export type { AgentEventSink } from "./loop-run.ts";
-export type { ToolCallHooks } from "./tool-call.ts";
+const { EventStream } = ai;
 
-const createAgentStream = (): EventStream<AgentEvent, AgentMessage[]> =>
-  new EventStream<AgentEvent, AgentMessage[]>(
-    (event: AgentEvent) => event.type === "agent_end",
-    (event: AgentEvent) => (event.type === "agent_end" ? event.messages : []),
+const { continuationError, emitTo, runContinuation, runPrompt } = loopRun;
+const { executeAndFinalize, prepareToolCall } = toolCallModule;
+
+const createAgentStream = (): aiTypes.EventStream<
+  typesModule.AgentEvent,
+  typesModule.AgentMessage[]
+> =>
+  new EventStream<typesModule.AgentEvent, typesModule.AgentMessage[]>(
+    (event: typesModule.AgentEvent) => event.type === "agent_end",
+    (event: typesModule.AgentEvent) => (event.type === "agent_end" ? event.messages : []),
   );
 
 const streamRun = (
-  run: (emit: AgentEventSink) => Effect.Effect<AgentMessage[]>,
-): EventStream<AgentEvent, AgentMessage[]> => {
+  run: (emit: loopRunTypes.AgentEventSink) => Effect.Effect<typesModule.AgentMessage[]>,
+): aiTypes.EventStream<typesModule.AgentEvent, typesModule.AgentMessage[]> => {
   const stream = createAgentStream();
   Effect.runFork(
     Effect.flatMap(
@@ -53,157 +40,171 @@ const streamRun = (
   return stream;
 };
 
-const isContext = (value: unknown): value is AgentContext =>
+const isContext = (value: unknown): value is typesModule.AgentContext =>
   typeof value === "object" && value !== null && "messages" in value;
 
-export const agentLoop: {
+const agentLoop: {
   (
-    context: AgentContext,
-    config: AgentLoopConfig,
+    context: typesModule.AgentContext,
+    config: typesModule.AgentLoopConfig,
     signal: AbortSignal | undefined,
-    streamFn: StreamFn,
-  ): (prompts: AgentMessage[]) => EventStream<AgentEvent, AgentMessage[]>;
+    streamFn: typesModule.StreamFn,
+  ): (
+    prompts: typesModule.AgentMessage[],
+  ) => aiTypes.EventStream<typesModule.AgentEvent, typesModule.AgentMessage[]>;
   (
-    prompts: AgentMessage[],
-    context: AgentContext,
-    config: AgentLoopConfig,
+    prompts: typesModule.AgentMessage[],
+    context: typesModule.AgentContext,
+    config: typesModule.AgentLoopConfig,
     signal: AbortSignal | undefined,
-    streamFn: StreamFn,
-  ): EventStream<AgentEvent, AgentMessage[]>;
+    streamFn: typesModule.StreamFn,
+  ): aiTypes.EventStream<typesModule.AgentEvent, typesModule.AgentMessage[]>;
 } = Function.dual(
   (args) => Array.isArray(args[0]),
   (
-    prompts: AgentMessage[],
-    context: AgentContext,
-    config: AgentLoopConfig,
+    prompts: typesModule.AgentMessage[],
+    context: typesModule.AgentContext,
+    config: typesModule.AgentLoopConfig,
     signal: AbortSignal | undefined,
-    streamFn: StreamFn | undefined,
-  ): EventStream<AgentEvent, AgentMessage[]> =>
+    streamFn: typesModule.StreamFn | undefined,
+  ): aiTypes.EventStream<typesModule.AgentEvent, typesModule.AgentMessage[]> =>
     streamRun((sink) =>
-      runPrompt({ prompts, context, config, emit: emitTo(sink), signal, streamFn }),
+      runPrompt({ config, context, emit: emitTo(sink), prompts, signal, streamFn }),
     ),
 );
 
-export const agentLoopContinue: {
+const agentLoopContinue: {
   (
-    config: AgentLoopConfig,
+    config: typesModule.AgentLoopConfig,
     signal: AbortSignal | undefined,
-    streamFn: StreamFn,
-  ): (context: AgentContext) => EventStream<AgentEvent, AgentMessage[]>;
+    streamFn: typesModule.StreamFn,
+  ): (
+    context: typesModule.AgentContext,
+  ) => aiTypes.EventStream<typesModule.AgentEvent, typesModule.AgentMessage[]>;
   (
-    context: AgentContext,
-    config: AgentLoopConfig,
+    context: typesModule.AgentContext,
+    config: typesModule.AgentLoopConfig,
     signal: AbortSignal | undefined,
-    streamFn: StreamFn,
-  ): EventStream<AgentEvent, AgentMessage[]>;
+    streamFn: typesModule.StreamFn,
+  ): aiTypes.EventStream<typesModule.AgentEvent, typesModule.AgentMessage[]>;
 } = Function.dual(
   (args) => isContext(args[0]),
   (
-    context: AgentContext,
-    config: AgentLoopConfig,
+    context: typesModule.AgentContext,
+    config: typesModule.AgentLoopConfig,
     signal: AbortSignal | undefined,
-    streamFn: StreamFn | undefined,
-  ): EventStream<AgentEvent, AgentMessage[]> => {
+    streamFn: typesModule.StreamFn | undefined,
+  ): aiTypes.EventStream<typesModule.AgentEvent, typesModule.AgentMessage[]> => {
     const error = continuationError(context);
     if (error !== undefined) throw error;
     return streamRun((sink) =>
-      runContinuation({ context, config, emit: emitTo(sink), signal, streamFn }),
+      runContinuation({ config, context, emit: emitTo(sink), signal, streamFn }),
     );
   },
 );
 
-export const runAgentLoop: {
+const runAgentLoop: {
   (
-    context: AgentContext,
-    config: AgentLoopConfig,
-    emit: AgentEventSink,
+    context: typesModule.AgentContext,
+    config: typesModule.AgentLoopConfig,
+    emit: loopRunTypes.AgentEventSink,
     signal: AbortSignal | undefined,
-    streamFn: StreamFn,
-  ): (prompts: AgentMessage[]) => Promise<AgentMessage[]>;
+    streamFn: typesModule.StreamFn,
+  ): (prompts: typesModule.AgentMessage[]) => Promise<typesModule.AgentMessage[]>;
   (
-    prompts: AgentMessage[],
-    context: AgentContext,
-    config: AgentLoopConfig,
-    emit: AgentEventSink,
+    prompts: typesModule.AgentMessage[],
+    context: typesModule.AgentContext,
+    config: typesModule.AgentLoopConfig,
+    emit: loopRunTypes.AgentEventSink,
     signal: AbortSignal | undefined,
-    streamFn: StreamFn,
-  ): Promise<AgentMessage[]>;
+    streamFn: typesModule.StreamFn,
+  ): Promise<typesModule.AgentMessage[]>;
 } = Function.dual(
   (args) => Array.isArray(args[0]),
   (
-    prompts: AgentMessage[],
-    context: AgentContext,
-    config: AgentLoopConfig,
-    emit: AgentEventSink,
+    prompts: typesModule.AgentMessage[],
+    context: typesModule.AgentContext,
+    config: typesModule.AgentLoopConfig,
+    emit: loopRunTypes.AgentEventSink,
     signal: AbortSignal | undefined,
-    streamFn: StreamFn | undefined,
-  ): Promise<AgentMessage[]> =>
+    streamFn: typesModule.StreamFn | undefined,
+  ): Promise<typesModule.AgentMessage[]> =>
     Effect.runPromise(
-      runPrompt({ prompts, context, config, emit: emitTo(emit), signal, streamFn }),
+      runPrompt({ config, context, emit: emitTo(emit), prompts, signal, streamFn }),
     ),
 );
 
-export const runAgentLoopContinue: {
+const runAgentLoopContinue: {
   (
-    config: AgentLoopConfig,
-    emit: AgentEventSink,
+    config: typesModule.AgentLoopConfig,
+    emit: loopRunTypes.AgentEventSink,
     signal: AbortSignal | undefined,
-    streamFn: StreamFn,
-  ): (context: AgentContext) => Promise<AgentMessage[]>;
+    streamFn: typesModule.StreamFn,
+  ): (context: typesModule.AgentContext) => Promise<typesModule.AgentMessage[]>;
   (
-    context: AgentContext,
-    config: AgentLoopConfig,
-    emit: AgentEventSink,
+    context: typesModule.AgentContext,
+    config: typesModule.AgentLoopConfig,
+    emit: loopRunTypes.AgentEventSink,
     signal: AbortSignal | undefined,
-    streamFn: StreamFn,
-  ): Promise<AgentMessage[]>;
+    streamFn: typesModule.StreamFn,
+  ): Promise<typesModule.AgentMessage[]>;
 } = Function.dual(
   (args) => isContext(args[0]),
   (
-    context: AgentContext,
-    config: AgentLoopConfig,
-    emit: AgentEventSink,
+    context: typesModule.AgentContext,
+    config: typesModule.AgentLoopConfig,
+    emit: loopRunTypes.AgentEventSink,
     signal: AbortSignal | undefined,
-    streamFn: StreamFn | undefined,
-  ): Promise<AgentMessage[]> =>
-    Effect.runPromise(runContinuation({ context, config, emit: emitTo(emit), signal, streamFn })),
+    streamFn: typesModule.StreamFn | undefined,
+  ): Promise<typesModule.AgentMessage[]> =>
+    Effect.runPromise(runContinuation({ config, context, emit: emitTo(emit), signal, streamFn })),
 );
 
-export interface RunToolCallOptions extends ToolCallHooks {
-  tools: readonly AgentTool<any>[];
-  assistantMessage: AssistantMessage;
-  context: AgentContext;
-  signal?: AbortSignal;
-  onUpdate?: ToolUpdateSink;
-}
-
 const runToolCallEffect = (
-  toolCall: AgentToolCall,
-  options: RunToolCallOptions,
-): Effect.Effect<AgentToolCallOutcome> =>
+  toolCall: typesModule.AgentToolCall,
+  options: agentLoopTypes.RunToolCallOptions,
+): Effect.Effect<typesModule.AgentToolCallOutcome> =>
   Effect.gen(function* () {
     const site = {
-      context: options.context,
       assistantMessage: options.assistantMessage,
+      context: options.context,
       hooks: options,
       signal: options.signal,
     };
     const preparation = yield* prepareToolCall({ ...site, toolCall, tools: options.tools });
     if (preparation.kind === "immediate") {
-      return { toolCall, result: preparation.result, isError: preparation.isError };
+      return { isError: preparation.isError, result: preparation.result, toolCall };
     }
     return yield* executeAndFinalize({
       ...site,
-      prepared: preparation,
       onUpdate: options.onUpdate ?? (() => undefined),
+      prepared: preparation,
     });
   });
 
-export const runToolCall: {
-  (options: RunToolCallOptions): (toolCall: AgentToolCall) => Promise<AgentToolCallOutcome>;
-  (toolCall: AgentToolCall, options: RunToolCallOptions): Promise<AgentToolCallOutcome>;
+const runToolCall: {
+  (
+    options: agentLoopTypes.RunToolCallOptions,
+  ): (toolCall: typesModule.AgentToolCall) => Promise<typesModule.AgentToolCallOutcome>;
+  (
+    toolCall: typesModule.AgentToolCall,
+    options: agentLoopTypes.RunToolCallOptions,
+  ): Promise<typesModule.AgentToolCallOutcome>;
 } = Function.dual(
   2,
-  (toolCall: AgentToolCall, options: RunToolCallOptions): Promise<AgentToolCallOutcome> =>
+  (
+    toolCall: typesModule.AgentToolCall,
+    options: agentLoopTypes.RunToolCallOptions,
+  ): Promise<typesModule.AgentToolCallOutcome> =>
     Effect.runPromise(runToolCallEffect(toolCall, options)),
 );
+
+const agentLoopModule = {
+  agentLoop,
+  agentLoopContinue,
+  runAgentLoop,
+  runAgentLoopContinue,
+  runToolCall,
+};
+
+export default agentLoopModule;

@@ -1,12 +1,14 @@
+import testing from "@msa/testing";
 import { Effect, Fiber } from "effect";
 import { afterEach, describe, expect, it } from "vite-plus/test";
 
-import { authorizeMcp } from "../src/oauth/index.ts";
-import helpers from "./helpers.ts";
+import oauth from "../src/oauth/index.ts";
 import oauthSupport from "./oauth-support.ts";
 import type oauthSupportTypes from "./oauth-support.types.ts";
 
-const { closeServers, listen } = helpers;
+const { authorizeMcp } = oauth;
+
+const { closeServers, listen } = testing;
 const { TestOAuthProvider, authorizationServerMetadata, originalError } = oauthSupport;
 
 const abortController = (): AbortController => new AbortController();

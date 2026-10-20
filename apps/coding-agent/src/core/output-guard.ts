@@ -74,9 +74,9 @@ export function takeOverStdout(): void {
   }) as typeof process.stdout.write;
 
   stdoutTakeoverState = {
-    rawStdoutWrite,
-    rawStderrWrite,
     originalStdoutWrite,
+    rawStderrWrite,
+    rawStdoutWrite,
   };
 }
 

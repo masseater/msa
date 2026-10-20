@@ -7,7 +7,7 @@ const abortReason = (signal: AbortSignal): unknown => {
   return error;
 };
 
-export const waitForAbort = (signal: AbortSignal): Effect.Effect<void> =>
+const waitForAbort = (signal: AbortSignal): Effect.Effect<void> =>
   Effect.callback<void>((resume) => {
     const onAbort = () => resume(Effect.void);
     if (signal.aborted) {
@@ -18,7 +18,7 @@ export const waitForAbort = (signal: AbortSignal): Effect.Effect<void> =>
     return Effect.sync(() => signal.removeEventListener("abort", onAbort));
   });
 
-export const dieOnAbort: {
+const dieOnAbort: {
   (reason: (signal: AbortSignal) => unknown): (signal: AbortSignal) => Effect.Effect<never>;
   (signal: AbortSignal, reason: (signal: AbortSignal) => unknown): Effect.Effect<never>;
 } = Function.dual(
@@ -27,7 +27,7 @@ export const dieOnAbort: {
     waitForAbort(signal).pipe(Effect.flatMap(() => Effect.die(reason(signal)))),
 );
 
-export const sleepUnlessAborted: {
+const sleepUnlessAborted: {
   (
     signal: AbortSignal | undefined,
     reason: (signal: AbortSignal) => unknown,
@@ -51,10 +51,10 @@ export const sleepUnlessAborted: {
         ),
 );
 
-export const operationSignal = (signal?: AbortSignal): AbortSignal =>
+const operationSignal = (signal?: AbortSignal): AbortSignal =>
   signal ?? new AbortController().signal;
 
-export const abortable: {
+const abortable: {
   (signal: AbortSignal): <A>(effect: Effect.Effect<A>) => Effect.Effect<A>;
   <A>(effect: Effect.Effect<A>, signal: AbortSignal): Effect.Effect<A>;
 } = Function.dual(2, <A>(effect: Effect.Effect<A>, signal: AbortSignal): Effect.Effect<A> =>
@@ -64,7 +64,7 @@ export const abortable: {
   }),
 );
 
-export const raceWithAbortSignal: {
+const raceWithAbortSignal: {
   (signal: AbortSignal): <T>(operation: Promise<T>) => Promise<T>;
   <T>(operation: Promise<T>, signal: AbortSignal): Promise<T>;
 } = Function.dual(2, <T>(operation: Promise<T>, signal: AbortSignal): Promise<T> =>
@@ -75,3 +75,14 @@ export const raceWithAbortSignal: {
     ),
   ),
 );
+
+const abort = {
+  abortable,
+  dieOnAbort,
+  operationSignal,
+  raceWithAbortSignal,
+  sleepUnlessAborted,
+  waitForAbort,
+};
+
+export default abort;

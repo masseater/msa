@@ -1,18 +1,18 @@
 import assert from "node:assert";
 import { describe, it } from "node:test";
 
-import { overrideEnv } from "../src/env.ts";
-import {
-  getCellDimensions,
-  resetCapabilitiesCache,
-  setCellDimensions,
-} from "../src/terminal-capabilities.ts";
-import type { Component } from "../src/tui-component.ts";
-import type { TUI } from "../src/tui-interface.ts";
-import { TuiMainScreen } from "../src/tui-main-screen.ts";
-import { VirtualTerminal } from "./virtual-terminal.ts";
+import env from "../src/env.ts";
+import terminalCapabilities from "../src/terminal-capabilities.ts";
+import type tuiComponentTypes from "../src/tui-component.types.ts";
+import type tuiInterfaceTypes from "../src/tui-interface.types.ts";
+import TuiMainScreen from "../src/tui-main-screen.ts";
+import virtualTerminal from "./virtual-terminal.ts";
 
-class InputRecorder implements Component {
+const { overrideEnv } = env;
+const { getCellDimensions, resetCapabilitiesCache, setCellDimensions } = terminalCapabilities;
+const { VirtualTerminal } = virtualTerminal;
+
+class InputRecorder implements tuiComponentTypes.Component {
   readonly inputs: string[] = [];
 
   render(): string[] {
@@ -46,7 +46,7 @@ describe("TUI cell size responses", () => {
   it("forwards bare escape even when a cell size query was sent at startup", () => {
     withImageTerminal(() => {
       const terminal = new VirtualTerminal(80, 24);
-      const tui: TUI = new TuiMainScreen(terminal);
+      const tui: tuiInterfaceTypes.TUI = new TuiMainScreen(terminal);
       const recorder = new InputRecorder();
 
       tui.setFocus(recorder);
@@ -64,7 +64,7 @@ describe("TUI cell size responses", () => {
       setCellDimensions({ heightPx: 18, widthPx: 9 });
 
       const terminal = new VirtualTerminal(80, 24);
-      const tui: TUI = new TuiMainScreen(terminal);
+      const tui: tuiInterfaceTypes.TUI = new TuiMainScreen(terminal);
       const recorder = new InputRecorder();
 
       tui.setFocus(recorder);

@@ -1,10 +1,14 @@
 import { Effect } from "effect";
 import { describe, expect, it } from "vite-plus/test";
 
-import { InMemoryCredentialStore } from "../src/auth/credential-store.ts";
-import { createModels } from "../src/models.ts";
-import { currentTimeMillis } from "../src/utils/clock.ts";
+import credentialStore from "../src/auth/credential-store.ts";
+import modelsModule from "../src/models.ts";
+import clock from "../src/utils/clock.ts";
 import modelsRuntimeSupport from "./models-runtime-support.ts";
+
+const { InMemoryCredentialStore } = credentialStore;
+const { createModels } = modelsModule;
+const { currentTimeMillis } = clock;
 
 const { envKeyAuth, storeCredential, testModel, testOAuth, testProvider } = modelsRuntimeSupport;
 const resolvesAuthStoredCredentialOwnsThe = () =>

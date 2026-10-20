@@ -1,5 +1,5 @@
 import * as NodeRuntime from "@effect/platform-node/NodeRuntime";
-import { createModels, fauxAssistantMessage, fauxProvider, fauxToolCall } from "@msa/ai";
+import ai from "@msa/ai";
 import contextModule from "@msa/chord/context";
 import durable from "@msa/durable";
 import harnessModule from "@msa/durable/harness";
@@ -9,6 +9,8 @@ import { Console, Effect } from "effect";
 import node from "../../src/env/node.ts";
 import toolsModule from "../../src/tools/index.ts";
 import support from "../support.ts";
+
+const { createModels, fauxAssistantMessage, fauxProvider, fauxToolCall } = ai;
 
 const { BACKGROUND_CONTEXT } = contextModule;
 

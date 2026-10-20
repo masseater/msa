@@ -5,9 +5,9 @@ import mcpExtension from "./mcp/index.ts";
 import toolSearchExtension from "./tool-search/index.ts";
 
 export const builtInExtensions: InlineExtension[] = [
-  { name: "llama.cpp", factory: llamaExtension, builtin: true },
+  { builtin: true, factory: llamaExtension, name: "llama.cpp" },
 
-  { name: "codemode", factory: codemodeExtension, replaceable: true, builtin: true },
-  { name: "tool-search", factory: toolSearchExtension, replaceable: true, builtin: true },
-  { name: "mcp", factory: mcpExtension, replaceable: true, builtin: true },
+  { builtin: true, factory: codemodeExtension, name: "codemode", replaceable: true },
+  { builtin: true, factory: toolSearchExtension, name: "tool-search", replaceable: true },
+  { builtin: true, factory: mcpExtension, name: "mcp", replaceable: true },
 ];

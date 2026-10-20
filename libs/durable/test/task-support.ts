@@ -1,4 +1,4 @@
-import { createModels } from "@msa/ai";
+import ai from "@msa/ai";
 import durable from "@msa/durable";
 import harnessModule from "@msa/durable/harness";
 import type harnessTypes from "@msa/durable/harness.types";
@@ -8,6 +8,8 @@ import { Effect } from "effect";
 import clockModule from "../src/clock.ts";
 import effectSupport from "./effect-support.ts";
 import sessionSupport from "./session-support.ts";
+
+const { createModels } = ai;
 
 const { currentTimeMillis } = clockModule;
 const { Harness, createRegistry } = harnessModule;

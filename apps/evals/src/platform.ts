@@ -38,12 +38,12 @@ export type PathOperations = {
 };
 
 export const pathOperations: PathOperations = {
-  join: (...segments) => nodePath.join(...segments),
-  dirname: (path) => nodePath.dirname(path),
-  resolve: (...segments) => nodePath.resolve(...segments),
-  relative: (from, to) => nodePath.relative(from, to),
-  isAbsolute: (path) => nodePath.isAbsolute(path),
   basename: (path, suffix) => nodePath.basename(path, suffix),
+  dirname: (path) => nodePath.dirname(path),
+  isAbsolute: (path) => nodePath.isAbsolute(path),
+  join: (...segments) => nodePath.join(...segments),
+  relative: (from, to) => nodePath.relative(from, to),
+  resolve: (...segments) => nodePath.resolve(...segments),
   separator: nodePath.sep,
 };
 
@@ -70,48 +70,30 @@ const entryKind = (
 export type ReadProbe = "readable" | "unreadable";
 
 export const files = {
-  makeTempDirectory: (prefix: string): Effect.Effect<string> =>
-    useFileSystem((fileSystem) => fileSystem.makeTempDirectory({ prefix })),
-  makeDirectory: (path: string, mode?: number): Effect.Effect<void> =>
-    useFileSystem((fileSystem) => fileSystem.makeDirectory(path, { recursive: true, mode })),
-  writeFileString: (path: string, content: string, mode?: number): Effect.Effect<void> =>
-    useFileSystem((fileSystem) => fileSystem.writeFileString(path, content, { mode })),
-  readFileString: (path: string): Effect.Effect<string> =>
-    useFileSystem((fileSystem) => fileSystem.readFileString(path)),
-  remove: (path: string): Effect.Effect<void> =>
-    useFileSystem((fileSystem) => fileSystem.remove(path, { recursive: true, force: true })),
-  exists: (path: string): Effect.Effect<boolean> =>
-    useFileSystem((fileSystem) => fileSystem.exists(path)),
-  readDirectory: (path: string): Effect.Effect<string[]> =>
-    useFileSystem((fileSystem) => fileSystem.readDirectory(path)),
-  readDirectoryIfPresent: (path: string): Effect.Effect<Option.Option<string[]>> =>
-    useFileSystem((fileSystem) =>
-      fileSystem.readDirectory(path).pipe(
-        Effect.asSome,
-        Effect.catchIf(
-          (error) => Predicate.isTagged(error.reason, "NotFound"),
-          () => Effect.succeedNone,
-        ),
-      ),
-    ),
-  glob: (pattern: string, root: string): Effect.Effect<string[]> =>
-    useFileSystem((fileSystem) => fileSystem.glob(pattern, { root })),
+  chmod: (path: string, mode: number): Effect.Effect<void> =>
+    useFileSystem((fileSystem) => fileSystem.chmod(path, mode)),
+  chown: (path: string, uid: number, gid: number): Effect.Effect<void> =>
+    useFileSystem((fileSystem) => fileSystem.chown(path, uid, gid)),
   copy: (from: string, to: string): Effect.Effect<void> =>
     useFileSystem((fileSystem) => fileSystem.copy(from, to)),
   copyFile: (from: string, to: string): Effect.Effect<void> =>
     useFileSystem((fileSystem) => fileSystem.copyFile(from, to)),
+  exists: (path: string): Effect.Effect<boolean> =>
+    useFileSystem((fileSystem) => fileSystem.exists(path)),
+  glob: (pattern: string, root: string): Effect.Effect<string[]> =>
+    useFileSystem((fileSystem) => fileSystem.glob(pattern, { root })),
+  kind: (path: string): Effect.Effect<EntryKind> =>
+    useFileSystem((fileSystem) => entryKind(fileSystem, path)),
+  makeDirectory: (path: string, mode?: number): Effect.Effect<void> =>
+    useFileSystem((fileSystem) => fileSystem.makeDirectory(path, { recursive: true, mode })),
+  makeTempDirectory: (prefix: string): Effect.Effect<string> =>
+    useFileSystem((fileSystem) => fileSystem.makeTempDirectory({ prefix })),
   ownership: (path: string): Effect.Effect<{ uid: number | undefined; mode: number }> =>
     useFileSystem((fileSystem) =>
       fileSystem
         .stat(path)
         .pipe(Effect.map((info) => ({ uid: Option.getOrUndefined(info.uid), mode: info.mode }))),
     ),
-  kind: (path: string): Effect.Effect<EntryKind> =>
-    useFileSystem((fileSystem) => entryKind(fileSystem, path)),
-  chmod: (path: string, mode: number): Effect.Effect<void> =>
-    useFileSystem((fileSystem) => fileSystem.chmod(path, mode)),
-  chown: (path: string, uid: number, gid: number): Effect.Effect<void> =>
-    useFileSystem((fileSystem) => fileSystem.chown(path, uid, gid)),
   probeRead: (path: string): Effect.Effect<ReadProbe> =>
     useFileSystem((fileSystem) =>
       fileSystem.readFile(path).pipe(
@@ -124,6 +106,24 @@ export const files = {
         ),
       ),
     ),
+  readDirectory: (path: string): Effect.Effect<string[]> =>
+    useFileSystem((fileSystem) => fileSystem.readDirectory(path)),
+  readDirectoryIfPresent: (path: string): Effect.Effect<Option.Option<string[]>> =>
+    useFileSystem((fileSystem) =>
+      fileSystem.readDirectory(path).pipe(
+        Effect.asSome,
+        Effect.catchIf(
+          (error) => Predicate.isTagged(error.reason, "NotFound"),
+          () => Effect.succeedNone,
+        ),
+      ),
+    ),
+  readFileString: (path: string): Effect.Effect<string> =>
+    useFileSystem((fileSystem) => fileSystem.readFileString(path)),
+  remove: (path: string): Effect.Effect<void> =>
+    useFileSystem((fileSystem) => fileSystem.remove(path, { recursive: true, force: true })),
+  writeFileString: (path: string, content: string, mode?: number): Effect.Effect<void> =>
+    useFileSystem((fileSystem) => fileSystem.writeFileString(path, content, { mode })),
 };
 
 export const sha256Hex = (text: string): Effect.Effect<string> =>
@@ -137,7 +137,7 @@ export const randomUuid: Effect.Effect<string> = provideNodeServices(
 
 export type CommandResult = { readonly status: number; readonly stdout: string };
 
-const STDOUT_MODES = { inherit: "inherit", capture: "pipe", ignore: "ignore" } as const;
+const STDOUT_MODES = { capture: "pipe", ignore: "ignore", inherit: "inherit" } as const;
 
 export type CommandOutputMode = "inherit" | "capture" | "ignore";
 
@@ -173,9 +173,9 @@ export const runCommand: {
               cwd: options.cwd,
               env: options.env,
               extendEnv: true,
+              stderr: options.output === "ignore" ? "ignore" : "inherit",
               stdin: options.output === "inherit" ? "inherit" : "ignore",
               stdout: STDOUT_MODES[options.output],
-              stderr: options.output === "ignore" ? "ignore" : "inherit",
             }),
           );
           const [stdout, exitCode] = yield* Effect.all(

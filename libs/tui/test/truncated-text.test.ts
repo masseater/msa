@@ -3,9 +3,12 @@ import { describe, it } from "node:test";
 
 import { Chalk } from "chalk";
 
-import { stripStyleSequences } from "../src/ansi-sequences.ts";
-import { TruncatedText } from "../src/components/truncated-text.ts";
-import { visibleWidth } from "../src/utils.ts";
+import ansiSequences from "../src/ansi-sequences.ts";
+import TruncatedText from "../src/components/truncated-text.ts";
+import utils from "../src/utils.ts";
+
+const { visibleWidth } = utils;
+const { stripStyleSequences } = ansiSequences;
 
 const chalk = new Chalk({ level: 3 });
 

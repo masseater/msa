@@ -1,17 +1,21 @@
 import type { ResponseCreateParamsStreaming } from "openai/resources/responses/responses.js";
 
-import type { CacheRetention, Model, TranscriptContext } from "../types.ts";
-import { resolveTranscriptTools } from "../utils/transcript.ts";
-import { clampOpenAIPromptCacheKey } from "./openai-prompt-cache.ts";
-import {
-  isChatGPTSignIn,
-  type OpenAIResponsesOptions,
-  type ResolvedResponsesCompat,
-  resolveCacheRetention,
-} from "./openai-responses-config.ts";
-import { convertResponsesMessages } from "./openai-responses-messages.ts";
-import { applyReasoningParams } from "./openai-responses-reasoning.ts";
-import { convertResponsesTools } from "./openai-responses-tools.ts";
+import type typesModule from "../types.types.ts";
+import transcript from "../utils/transcript.ts";
+import openaiPromptCache from "./openai-prompt-cache.ts";
+import openaiResponsesConfig from "./openai-responses-config.ts";
+import type openaiResponsesConfigTypes from "./openai-responses-config.types.ts";
+import openaiResponsesMessages from "./openai-responses-messages.ts";
+import type openaiResponsesParamsTypes from "./openai-responses-params.types.ts";
+import openaiResponsesReasoning from "./openai-responses-reasoning.ts";
+import openaiResponsesTools from "./openai-responses-tools.ts";
+
+const { convertResponsesMessages } = openaiResponsesMessages;
+const { isChatGPTSignIn, resolveCacheRetention } = openaiResponsesConfig;
+const { clampOpenAIPromptCacheKey } = openaiPromptCache;
+const { resolveTranscriptTools } = transcript;
+const { convertResponsesTools } = openaiResponsesTools;
+const { applyReasoningParams } = openaiResponsesReasoning;
 
 const OPENAI_TOOL_CALL_PROVIDERS = new Set(["openai", "openai-codex", "opencode"]);
 const OPENAI_RESPONSES_MIN_OUTPUT_TOKENS = 16;
@@ -23,23 +27,14 @@ type CacheParams = Pick<
 >;
 
 function promptCacheParams(
-  compat: ResolvedResponsesCompat,
-  cacheRetention: CacheRetention,
+  compat: openaiResponsesConfigTypes.ResolvedResponsesCompat,
+  cacheRetention: typesModule.CacheRetention,
 ): CacheParams {
   const explicit = compat.supportsExplicitPromptCacheMode;
   const long = cacheRetention === "long" && compat.supportsLongCacheRetention;
   if (!explicit) return long ? { prompt_cache_retention: "24h" } : {};
   if (cacheRetention === "none") return { prompt_cache_options: { mode: "explicit" } };
   return long ? { prompt_cache_options: { ttl: "30m" } } : {};
-}
-
-export interface OpenAIResponsesParamsRequest {
-  readonly model: Model<"openai-responses">;
-  readonly context: TranscriptContext;
-  readonly options: OpenAIResponsesOptions | undefined;
-  readonly compat: ResolvedResponsesCompat;
-  readonly grammarToolInputProperties: ReadonlyMap<string, string>;
-  readonly configurationUpdateEffort: string | undefined;
 }
 
 function baseParams({
@@ -49,18 +44,18 @@ function baseParams({
   compat,
   grammarToolInputProperties,
   configurationUpdateEffort,
-}: OpenAIResponsesParamsRequest): ResponseCreateParamsStreaming {
+}: openaiResponsesParamsTypes.OpenAIResponsesParamsRequest): ResponseCreateParamsStreaming {
   const toolOptions = {
-    supportsStrictMode: compat.supportsStrictMode,
     supportsOpenAIGrammarTools: compat.supportsOpenAIGrammarTools,
+    supportsStrictMode: compat.supportsStrictMode,
   };
   const input = convertResponsesMessages(model, context, OPENAI_TOOL_CALL_PROVIDERS, {
+    configurationUpdateEffort,
     grammarToolInputProperties,
-    supportsMidConvoSystemMessages: compat.supportsMidConvoSystemMessages,
     supportsAdditionalTools: compat.supportsAdditionalTools,
+    supportsMidConvoSystemMessages: compat.supportsMidConvoSystemMessages,
     supportsToolSearch: compat.supportsToolSearch,
     toolOptions,
-    configurationUpdateEffort,
   });
   const cacheRetention = resolveCacheRetention(options);
   const promptCacheKey =
@@ -70,18 +65,18 @@ function baseParams({
     compat.supportsAdditionalTools || compat.supportsToolSearch,
   );
   return {
-    model: model.id,
     input,
+    model: model.id,
+    store: false,
     stream: true,
     ...(promptCacheKey === undefined ? {} : { prompt_cache_key: promptCacheKey }),
     ...(isChatGPTSignIn(model)(options?.apiKey) ? {} : promptCacheParams(compat, cacheRetention)),
-    store: false,
     ...(requestTools.length > 0 ? { tools: convertResponsesTools(requestTools, toolOptions) } : {}),
   };
 }
 
 function requestLimits(
-  request: OpenAIResponsesParamsRequest,
+  request: openaiResponsesParamsTypes.OpenAIResponsesParamsRequest,
 ): Partial<ResponseCreateParamsStreaming> {
   const { model, options, compat } = request;
   const fullApi = !isChatGPTSignIn(model)(options?.apiKey);
@@ -102,16 +97,22 @@ function requestLimits(
   };
 }
 
-export function buildOpenAIResponsesParams(
-  request: OpenAIResponsesParamsRequest,
+function buildOpenAIResponsesParams(
+  request: openaiResponsesParamsTypes.OpenAIResponsesParamsRequest,
 ): ResponseCreateParamsStreaming {
   const { model, options, configurationUpdateEffort } = request;
   const params = { ...baseParams(request), ...requestLimits(request) };
   applyReasoningParams(params)({
-    model,
-    options,
     effortOverride:
       configurationUpdateEffort === undefined ? undefined : CONFIGURATION_UPDATE_REQUEST_EFFORT,
+    model,
+    options,
   });
   return params;
 }
+
+const openaiResponsesParams = {
+  buildOpenAIResponsesParams,
+};
+
+export default openaiResponsesParams;

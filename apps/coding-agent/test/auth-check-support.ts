@@ -1,11 +1,13 @@
 import { tmpdir } from "node:os";
 
-import { InMemoryModelsStore } from "@msa/ai";
+import ai from "@msa/ai";
 import testing from "@msa/testing";
 import { Effect } from "effect";
 
 import { AuthStorage, ReadOnlyAuthStorage } from "../src/core/auth-storage.ts";
 import { ModelRuntime } from "../src/core/model-runtime.ts";
+
+const { InMemoryModelsStore } = ai;
 
 const {
   awaited,

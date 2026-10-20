@@ -1,13 +1,4 @@
-import type {
-  AssistantMessage,
-  JsonObject,
-  Model,
-  StopReason,
-  TextContent,
-  ThinkingContent,
-  ToolCall,
-  Usage,
-} from "@msa/ai";
+import type aiTypes from "@msa/ai/index.types";
 import testing from "@msa/testing";
 
 import type fauxModelTypes from "./faux-model.types.ts";
@@ -18,7 +9,7 @@ const FAUX_PROVIDER = "faux";
 const FAUX_MODEL_ID = "faux-1";
 const FAUX_API = "anthropic-messages" as const;
 
-const fauxModel: Model<typeof FAUX_API> = {
+const fauxModel: aiTypes.Model<typeof FAUX_API> = {
   api: FAUX_API,
   baseUrl: "http://localhost:0",
   contextWindow: 128000,
@@ -34,7 +25,7 @@ const fauxModel: Model<typeof FAUX_API> = {
 const normalizeResponse = (input: fauxModelTypes.FauxResponseInput): fauxModelTypes.FauxResponse =>
   typeof input === "string" ? { text: input } : input;
 
-const buildUsage = (partial?: Partial<Usage>): Usage => {
+const buildUsage = (partial?: Partial<aiTypes.Usage>): aiTypes.Usage => {
   const input = partial?.input ?? 100;
   const output = partial?.output ?? 50;
   const cacheRead = partial?.cacheRead ?? 0;
@@ -52,8 +43,8 @@ const buildUsage = (partial?: Partial<Usage>): Usage => {
 let toolCallIdCounter = 0;
 
 const buildToolCalls = (
-  toolCalls: ReadonlyArray<{ id?: string; name: string; args: JsonObject }>,
-): ToolCall[] =>
+  toolCalls: ReadonlyArray<{ id?: string; name: string; args: aiTypes.JsonObject }>,
+): aiTypes.ToolCall[] =>
   toolCalls.map((toolCall) => ({
     arguments: toolCall.args,
     id: toolCall.id ?? `faux_tc_${++toolCallIdCounter}`,
@@ -63,8 +54,8 @@ const buildToolCalls = (
 
 const buildContent = (
   resp: fauxModelTypes.FauxResponse,
-): (TextContent | ThinkingContent | ToolCall)[] => {
-  const content: (TextContent | ThinkingContent | ToolCall)[] = [];
+): (aiTypes.TextContent | aiTypes.ThinkingContent | aiTypes.ToolCall)[] => {
+  const content: (aiTypes.TextContent | aiTypes.ThinkingContent | aiTypes.ToolCall)[] = [];
   if (resp.thinking !== undefined) content.push({ thinking: resp.thinking, type: "thinking" });
   if (resp.text !== undefined) content.push({ text: resp.text, type: "text" });
   if (resp.toolCalls !== undefined) content.push(...buildToolCalls(resp.toolCalls));
@@ -72,14 +63,14 @@ const buildContent = (
   return content;
 };
 
-const buildStopReason = (resp: fauxModelTypes.FauxResponse): StopReason => {
+const buildStopReason = (resp: fauxModelTypes.FauxResponse): aiTypes.StopReason => {
   if (resp.stopReason !== undefined) return resp.stopReason;
   if (resp.error !== undefined) return "error";
   if (resp.toolCalls !== undefined && resp.toolCalls.length > 0) return "toolUse";
   return "stop";
 };
 
-const buildAssistantMessage = (resp: fauxModelTypes.FauxResponse): AssistantMessage => ({
+const buildAssistantMessage = (resp: fauxModelTypes.FauxResponse): aiTypes.AssistantMessage => ({
   api: FAUX_API,
   content: buildContent(resp),
   model: resp.model?.id ?? FAUX_MODEL_ID,

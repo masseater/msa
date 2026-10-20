@@ -4,8 +4,10 @@ import modelData from "../scripts/model-data.ts";
 import type modelDataTypes from "../scripts/model-data.types.ts";
 import scriptFiles from "../scripts/script-files.ts";
 import type scriptFilesTypes from "../scripts/script-files.types.ts";
-import { encodeJson } from "../src/utils/json-codec.ts";
+import jsonCodec from "../src/utils/json-codec.ts";
 import type modelDataFixtureTypes from "./model-data-fixture.types.ts";
+
+const { encodeJson } = jsonCodec;
 
 const { MODEL_DATA_MANIFEST_FILE, MODEL_DATA_SCHEMA_VERSION, createModelDataManifest } = modelData;
 const { ScriptFiles, scriptFilesLayer } = scriptFiles;
@@ -22,8 +24,7 @@ const failureMessage = <A, E extends { readonly message: string }, R>(
   effect: Effect.Effect<A, E, R>,
 ): Effect.Effect<string, A, R> => Effect.map(Effect.flip(effect), (error) => error.message);
 
-const AGGREGATOR_SOURCE =
-  'import { TEST_PROVIDER_CLASSIFIER_MODELS, TEST_PROVIDER_IMAGE_MODELS, TEST_PROVIDER_MODELS } from "./providers/test-provider.models.ts";\n';
+const AGGREGATOR_SOURCE = 'import testProviderModels from "./providers/test-provider.models.ts";\n';
 
 const writeFile = (path: string, content: string) =>
   ScriptFiles.use((files) => files.writeText({ content, path }));

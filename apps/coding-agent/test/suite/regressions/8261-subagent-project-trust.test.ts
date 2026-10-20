@@ -1,5 +1,5 @@
 import * as NodeServices from "@effect/platform-node/NodeServices";
-import { fauxAssistantMessage, fauxToolCall } from "@msa/ai";
+import ai from "@msa/ai";
 import testing from "@msa/testing";
 import { Effect, FileSystem, ManagedRuntime } from "effect";
 import { describe, expect, it, vi } from "vite-plus/test";
@@ -7,6 +7,8 @@ import { describe, expect, it, vi } from "vite-plus/test";
 import subagentExtension from "../../../examples/extensions/subagent/index.ts";
 import type { ExtensionUIContext } from "../../../src/core/extensions/index.ts";
 import harnessModule from "../harness.ts";
+
+const { fauxAssistantMessage, fauxToolCall } = ai;
 
 const { createHarness, getMessageText } = harnessModule;
 

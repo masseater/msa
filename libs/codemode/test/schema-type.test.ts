@@ -1,6 +1,8 @@
 import { describe, expect, it } from "vite-plus/test";
 
-import { schemaToType, schemaToTypeWithin } from "../src/index.ts";
+import codemode from "../src/index.ts";
+
+const { schemaToType, schemaToTypeWithin } = codemode;
 
 function rendersPrimitivesLiteralsAndUnions(): void {
   expect(schemaToType({ type: "string" })).toBe("string");

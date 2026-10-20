@@ -1,4 +1,4 @@
-import type { Api, Model } from "@msa/ai";
+import type aiTypes from "@msa/ai/index.types";
 import testing from "@msa/testing";
 import { Effect } from "effect";
 
@@ -13,8 +13,8 @@ import { InMemoryCodingAgentModelsStore } from "../src/core/models-store.ts";
 
 const { awaited, joinPath, makeTempDir, removeDirs, runTest, toJsonText, writeTextFile } = testing;
 
-function model(provider: string, id: string): Model<Api> {
-  return { id, name: id, provider } as unknown as Model<Api>;
+function model(provider: string, id: string): aiTypes.Model<aiTypes.Api> {
+  return { id, name: id, provider } as unknown as aiTypes.Model<aiTypes.Api>;
 }
 
 function policy(allow: string[], deny: string[]): ModelPolicy {

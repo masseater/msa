@@ -1,10 +1,10 @@
-import type { ImageContent, TextContent } from "@msa/ai";
-import type { CodemodeOutputItem, CodemodeResult } from "@msa/codemode/portable";
+import type aiTypes from "@msa/ai/index.types";
+import type portableTypes from "@msa/codemode/portable.types";
 import { Effect } from "effect";
 
 import type outputTypes from "./output.types.ts";
 
-type Item = TextContent | ImageContent;
+type Item = aiTypes.TextContent | aiTypes.ImageContent;
 
 type Limits = { readonly maxBytes: number; readonly maxLines: number };
 const LINE_MARGIN = 100;
@@ -24,7 +24,7 @@ function valueText(value: unknown): string {
   return JSON.stringify(value) ?? String(value);
 }
 
-function formatItems(output: readonly CodemodeOutputItem[]): Item[] {
+function formatItems(output: readonly portableTypes.CodemodeOutputItem[]): Item[] {
   const total = output.filter((item) => item.type === "text" && item.console !== true).length;
   const items: Item[] = [];
   const consoleLines: string[] = [];
@@ -84,7 +84,7 @@ const truncate = Effect.fnUntraced(function* (
   write: outputTypes.OutputFile,
 ) {
   const texts = items
-    .filter((item): item is TextContent => item.type === "text")
+    .filter((item): item is aiTypes.TextContent => item.type === "text")
     .map((item) => item.text);
   const combined = texts.join("\n");
   const budget = Math.min(maxTokens * CHARS_PER_TOKEN, Math.floor(limits.maxBytes / 4));
@@ -114,7 +114,7 @@ const truncate = Effect.fnUntraced(function* (
 });
 
 const imageLabel = Effect.fnUntraced(function* (
-  { data, mimeType }: ImageContent,
+  { data, mimeType }: aiTypes.ImageContent,
   index: number,
   write: outputTypes.OutputFile,
 ) {
@@ -131,7 +131,7 @@ const saveImages = Effect.fnUntraced(function* (
   items: readonly Item[],
   write: outputTypes.OutputFile,
 ) {
-  const images = new Map<string, ImageContent>();
+  const images = new Map<string, aiTypes.ImageContent>();
   for (const item of items) {
     if (item.type === "image" && !images.has(item.data)) images.set(item.data, item);
   }
@@ -147,7 +147,7 @@ const saveImages = Effect.fnUntraced(function* (
 });
 
 function formatError(
-  result: Extract<CodemodeResult, { ok: false }>,
+  result: Extract<portableTypes.CodemodeResult, { ok: false }>,
   calls: readonly { name: string; status: string }[],
 ) {
   const { error } = result;
@@ -167,7 +167,7 @@ function formatError(
 }
 
 const formatResult = Effect.fnUntraced(function* (
-  result: CodemodeResult,
+  result: portableTypes.CodemodeResult,
   options: {
     readonly generatedImages: number;
     readonly wallMs: number;

@@ -1,4 +1,5 @@
-import { type TUI, visibleWidth } from "@msa/tui";
+import tuiModule from "@msa/tui";
+import type tuiTypes from "@msa/tui/index.types";
 import { afterEach, describe, expect, it, vi } from "vite-plus/test";
 
 import { KeybindingsManager } from "../src/core/keybindings.ts";
@@ -13,6 +14,8 @@ import {
 import { getEditorTheme, initTheme, theme } from "../src/modes/interactive/theme/theme.ts";
 import { stripAnsi } from "../src/utils/ansi.ts";
 
+const { visibleWidth } = tuiModule;
+
 const keepsIdleStatusAtTheSameHeight = () => {
   const idleStatus = new IdleStatus();
 
@@ -26,7 +29,7 @@ const keepsTheTopBorderUnchangedUnlessThe = () => {
   const tui = {
     requestRender: vi.fn(),
     terminal: { rows: 10 },
-  } as unknown as TUI;
+  } as unknown as tuiTypes.TUI;
   const editor = new CustomEditor(tui, getEditorTheme(), KeybindingsManager.create());
   const indicator = new WorkingStatusIndicator(tui, "Working");
   editor.setWorkingStatusIndicator(indicator);
@@ -43,7 +46,7 @@ const embedsTheWorkingIndicatorWhenTheEditor = () => {
   const tui = {
     requestRender: vi.fn(),
     terminal: { rows: 10 },
-  } as unknown as TUI;
+  } as unknown as tuiTypes.TUI;
   const editor = new CustomEditor(tui, getEditorTheme(), KeybindingsManager.create(), {
     embedWorkingStatus: true,
   });
@@ -64,7 +67,7 @@ const embedsTheWorkingIndicatorWhenTheEditor = () => {
 const embedsCompactionSummaryAndRetryLabelsWithin = () => {
   initTheme("dark");
   vi.useFakeTimers();
-  const tui = { requestRender: vi.fn(), terminal: { rows: 10 } } as unknown as TUI;
+  const tui = { requestRender: vi.fn(), terminal: { rows: 10 } } as unknown as tuiTypes.TUI;
   const editor = new CustomEditor(tui, getEditorTheme(), KeybindingsManager.create(), {
     embedWorkingStatus: true,
   });
@@ -97,7 +100,7 @@ const disposesRetryCountdownUpdates = () => {
   initTheme("dark");
   vi.useFakeTimers();
   const requestRender = vi.fn();
-  const tui = { requestRender } as unknown as TUI;
+  const tui = { requestRender } as unknown as tuiTypes.TUI;
   const indicator = new RetryStatusIndicator(tui, 1, 3, 1000);
   const callsBeforeDispose = requestRender.mock.calls.length;
 

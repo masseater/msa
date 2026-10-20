@@ -3,13 +3,20 @@ import { describe, it } from "node:test";
 
 import { Effect } from "effect";
 
-import { flushBackgroundFileWrites } from "../src/file-log.ts";
-import { type TUI, TuiMainScreen } from "../src/index.ts";
-import { pathOperations } from "../src/platform.ts";
+import type tuiTypes from "../src/index.types.ts";
+import platform from "../src/platform.ts";
 import testPlatform from "./test-platform.ts";
+import tuiRenderDebugLoggingKit from "./tui-render-debug-logging-kit.ts";
 import tuiRenderHelpers from "./tui-render-helpers.ts";
 import TestComponent from "./tui-render-test-component.ts";
-import { VirtualTerminal } from "./virtual-terminal.ts";
+import virtualTerminal from "./virtual-terminal.ts";
+
+const { fileLog, src: tuiModule } = tuiRenderDebugLoggingKit;
+
+const { VirtualTerminal } = virtualTerminal;
+const { TuiMainScreen } = tuiModule;
+const { flushBackgroundFileWrites } = fileLog;
+const { pathOperations } = platform;
 
 const { makeTempDirectory, readFileString, removeRecursive } = testPlatform;
 const { withEnv } = tuiRenderHelpers;
@@ -23,7 +30,7 @@ describe("TUI debug logging", () => {
           { MSA_TUI_DEBUG_REDRAW: "1" },
           Effect.gen(function* () {
             const terminal = new VirtualTerminal(40, 10);
-            const tui: TUI = new TuiMainScreen(terminal, undefined, logDir);
+            const tui: tuiTypes.TUI = new TuiMainScreen(terminal, undefined, logDir);
             const component = new TestComponent();
             tui.addChild(component);
             component.lines = ["test"];

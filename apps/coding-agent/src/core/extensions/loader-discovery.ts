@@ -106,7 +106,7 @@ const discover = ({ configuredPaths, cwd, agentDir = getAgentDir() }: DiscoveryI
       const resolved = resolvePath(p, resolvedCwd, { normalizeUnicodeSpaces: true });
       addPaths(yield* configuredEntries(resolved));
     }
-    return { resolvedCwd, allPaths };
+    return { allPaths, resolvedCwd };
   });
 
 export const discoverExtensionPaths = (

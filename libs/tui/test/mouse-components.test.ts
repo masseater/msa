@@ -3,11 +3,14 @@ import { describe, it } from "node:test";
 
 import { Effect } from "effect";
 
-import { Input, SelectList, SettingsList, TuiAltScreen } from "../src/index.ts";
+import tuiModule from "../src/index.ts";
 import mouseAwareComponentsCases1 from "./mouse-components-cases-helpers.ts";
 import mouseComponentsHelpers from "./mouse-components-helpers.ts";
 import InputOverlay from "./mouse-components-input-overlay.ts";
-import { VirtualTerminal } from "./virtual-terminal.ts";
+import virtualTerminal from "./virtual-terminal.ts";
+
+const { Input, SelectList, SettingsList, TuiAltScreen } = tuiModule;
+const { VirtualTerminal } = virtualTerminal;
 
 const { mouse, selectTheme, settingsTheme } = mouseComponentsHelpers;
 

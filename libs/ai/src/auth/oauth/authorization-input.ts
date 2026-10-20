@@ -1,9 +1,6 @@
-export interface AuthorizationInput {
-  readonly code?: string | undefined;
-  readonly state?: string | undefined;
-}
+import type authorizationInputTypes from "./authorization-input.types.ts";
 
-export const parseAuthorizationInput = (input: string): AuthorizationInput => {
+const parseAuthorizationInput = (input: string): authorizationInputTypes.AuthorizationInput => {
   const value = input.trim();
   if (value === "") return {};
 
@@ -30,3 +27,9 @@ export const parseAuthorizationInput = (input: string): AuthorizationInput => {
 
   return { code: value };
 };
+
+const authorizationInput = {
+  parseAuthorizationInput,
+};
+
+export default authorizationInput;

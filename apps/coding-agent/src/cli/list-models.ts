@@ -1,5 +1,5 @@
-import type { Api, Model } from "@msa/ai";
-import { fuzzyFilter } from "@msa/tui";
+import type aiTypes from "@msa/ai/index.types";
+import tui from "@msa/tui";
 import chalk from "chalk";
 import * as Effect from "effect/Effect";
 import { dual } from "effect/Function";
@@ -9,6 +9,8 @@ import { awaited, awaiting } from "../core/awaiting.ts";
 import { hiddenModelsByPolicy } from "../core/model-policy.ts";
 import type { ModelRuntime } from "../core/model-runtime.ts";
 import { writeError, writeLog } from "../core/platform.ts";
+
+const { fuzzyFilter } = tui;
 
 function formatTokenCount(count: number): string {
   if (count >= 1_000_000) {
@@ -45,7 +47,7 @@ function listModelsImpl(
         return;
       }
 
-      let filteredModels: Model<Api>[] = models;
+      let filteredModels: aiTypes.Model<aiTypes.Api>[] = models;
       if (searchPattern !== undefined && searchPattern !== "") {
         filteredModels = fuzzyFilter(models, searchPattern, (m) => `${m.provider} ${m.id}`);
       }
@@ -62,30 +64,30 @@ function listModelsImpl(
       });
 
       const rows = filteredModels.map((m) => ({
-        provider: m.provider,
-        model: m.id,
         context: formatTokenCount(m.contextWindow),
-        maxOut: formatTokenCount(m.maxTokens),
-        thinking: m.reasoning ? "yes" : "no",
         images: m.input.includes("image") ? "yes" : "no",
+        maxOut: formatTokenCount(m.maxTokens),
+        model: m.id,
+        provider: m.provider,
+        thinking: m.reasoning ? "yes" : "no",
       }));
 
       const headers = {
-        provider: "provider",
-        model: "model",
         context: "context",
-        maxOut: "max-out",
-        thinking: "thinking",
         images: "images",
+        maxOut: "max-out",
+        model: "model",
+        provider: "provider",
+        thinking: "thinking",
       };
 
       const widths = {
-        provider: Math.max(headers.provider.length, ...rows.map((r) => r.provider.length)),
-        model: Math.max(headers.model.length, ...rows.map((r) => r.model.length)),
         context: Math.max(headers.context.length, ...rows.map((r) => r.context.length)),
-        maxOut: Math.max(headers.maxOut.length, ...rows.map((r) => r.maxOut.length)),
-        thinking: Math.max(headers.thinking.length, ...rows.map((r) => r.thinking.length)),
         images: Math.max(headers.images.length, ...rows.map((r) => r.images.length)),
+        maxOut: Math.max(headers.maxOut.length, ...rows.map((r) => r.maxOut.length)),
+        model: Math.max(headers.model.length, ...rows.map((r) => r.model.length)),
+        provider: Math.max(headers.provider.length, ...rows.map((r) => r.provider.length)),
+        thinking: Math.max(headers.thinking.length, ...rows.map((r) => r.thinking.length)),
       };
 
       const headerLine = [

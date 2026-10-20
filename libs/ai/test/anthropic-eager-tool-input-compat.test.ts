@@ -2,17 +2,21 @@ import { Effect } from "effect";
 import { Type } from "typebox";
 import { describe, expect, it } from "vite-plus/test";
 
-import { stream as streamAnthropic } from "../src/api/anthropic-messages.ts";
-import type { Context, Model, Tool } from "../src/types.ts";
-import { currentTimeMillis } from "../src/utils/clock.ts";
-import { normalizeContext } from "../src/utils/transcript.ts";
+import anthropicMessages from "../src/api/anthropic-messages.ts";
+import type typesModule from "../src/types.types.ts";
+import clock from "../src/utils/clock.ts";
+import transcript from "../src/utils/transcript.ts";
 import jsonCodec from "./json-codec.ts";
+
+const { currentTimeMillis } = clock;
+const { stream: streamAnthropic } = anthropicMessages;
+const { normalizeContext } = transcript;
 
 const { decodeJson } = jsonCodec;
 
 const createModel = (
-  compat?: Model<"anthropic-messages">["compat"],
-): Model<"anthropic-messages"> => ({
+  compat?: typesModule.Model<"anthropic-messages">["compat"],
+): typesModule.Model<"anthropic-messages"> => ({
   api: "anthropic-messages",
   baseUrl: "https://anthropic.test",
   compat: { forceAdaptiveThinking: true, ...compat },
@@ -26,20 +30,20 @@ const createModel = (
   reasoning: true,
 });
 
-const lookupTool: Tool = {
+const lookupTool: typesModule.Tool = {
   description: "Look up a value",
   name: "lookup",
   parameters: Type.Object({ value: Type.String() }),
 };
 
-const createContext = (tools: Tool[]): Context => ({
+const createContext = (tools: typesModule.Tool[]): typesModule.Context => ({
   messages: [{ content: "Use the tool", role: "user", timestamp: currentTimeMillis() }],
   ...(tools.length > 0 ? { tools } : {}),
 });
 
 const captureAnthropicRequest = (
-  compat: Model<"anthropic-messages">["compat"],
-  tools: Tool[] = [lookupTool],
+  compat: typesModule.Model<"anthropic-messages">["compat"],
+  tools: typesModule.Tool[] = [lookupTool],
 ) =>
   Effect.gen(function* () {
     const captured: { request?: Request } = {};

@@ -1,9 +1,13 @@
 import assert from "node:assert";
 import { describe, it } from "node:test";
 
-import { AltScreenSearchComponent } from "../src/alt-screen-search-component.ts";
-import { AltScreenSearchIndex, findAltScreenSearchMatches } from "../src/alt-screen-search.ts";
-import { stripTerminalSequences, visibleWidth } from "../src/utils.ts";
+import AltScreenSearchComponent from "../src/alt-screen-search-component.ts";
+import altScreenSearch from "../src/alt-screen-search.ts";
+import utils from "../src/utils.ts";
+
+const { AltScreenSearchIndex, findAltScreenSearchMatches } = altScreenSearch;
+
+const { stripTerminalSequences, visibleWidth } = utils;
 
 describe("TuiAltScreen", () => {
   searchesNormalizedRenderedTranscriptText();

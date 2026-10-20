@@ -1,5 +1,5 @@
 import testing from "@msa/testing";
-import { resetCapabilitiesCache, setCapabilities } from "@msa/tui";
+import tui from "@msa/tui";
 import { Effect } from "effect";
 import { afterEach, beforeEach, describe, expect, it } from "vite-plus/test";
 
@@ -15,6 +15,8 @@ import {
   renderHighlightedHtml,
   supportsLanguage,
 } from "../src/utils/syntax-highlight.ts";
+
+const { resetCapabilitiesCache, setCapabilities } = tui;
 
 const { awaited, runTest } = testing;
 

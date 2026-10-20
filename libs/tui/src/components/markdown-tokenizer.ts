@@ -1,6 +1,8 @@
 import { Marked, type Token, Tokenizer, type TokenizerExtension, type Tokens } from "marked";
 
-export const RESET_STYLE = "\x1b[0m";
+import type markdownTokenizerTypes from "./markdown-tokenizer.types.ts";
+
+const RESET_STYLE = "\x1b[0m";
 
 const STRICT_STRIKETHROUGH_REGEX = /^(~~)(?=[^\s~])((?:\\.|[^\\])*?(?:\\.|[^\s~\\]))\1(?=[^~]|$)/u;
 
@@ -13,18 +15,12 @@ class StrictStrikethroughTokenizer extends Tokenizer {
     }
 
     return {
-      type: "del",
       raw: match[0],
       text,
       tokens: this.lexer.inlineTokens(text),
+      type: "del",
     };
   }
-}
-
-export interface LatexToken extends Tokens.Generic {
-  type: "latex" | "latexBlock";
-  text: string;
-  pending?: boolean;
 }
 
 function isEscaped(source: string, index: number): boolean {
@@ -47,7 +43,7 @@ function looksLikePendingDollarMath(source: string): boolean {
   return /\\[A-Za-z]+|[_^=+*/<>()[\]|±≤≥≠≈∈→⇒∞∫∑√-]/u.test(source);
 }
 
-function tokenizeInlineLatex(source: string): LatexToken | undefined {
+function tokenizeInlineLatex(source: string): markdownTokenizerTypes.LatexToken | undefined {
   let opening: string;
   let closing: string;
   if (source.startsWith("$$")) {
@@ -82,7 +78,7 @@ function tokenizeInlineLatex(source: string): LatexToken | undefined {
   if (closingIndex < 0) {
     const pendingSource = source.slice(opening.length);
     if (opening.startsWith("\\") || looksLikePendingDollarMath(pendingSource)) {
-      return { type: "latex", raw: source, text: pendingSource, pending: true };
+      return { pending: true, raw: source, text: pendingSource, type: "latex" };
     }
     return undefined;
   }
@@ -93,23 +89,23 @@ function tokenizeInlineLatex(source: string): LatexToken | undefined {
   }
 
   const raw = source.slice(0, closingIndex + closing.length);
-  return { type: "latex", raw, text };
+  return { raw, text, type: "latex" };
 }
 
-function tokenizeBlockLatex(source: string): LatexToken | undefined {
+function tokenizeBlockLatex(source: string): markdownTokenizerTypes.LatexToken | undefined {
   const dollarMatch = /^ {0,3}\$\$[ \t]*(?:\n)?([\s\S]*?)\$\$[ \t]*(?:\n|$)/u.exec(source);
   if (dollarMatch?.[1] !== undefined && dollarMatch?.[1] !== "") {
-    return { type: "latexBlock", raw: dollarMatch[0], text: dollarMatch[1].trim() };
+    return { raw: dollarMatch[0], text: dollarMatch[1].trim(), type: "latexBlock" };
   }
 
   const bracketMatch = /^ {0,3}\\\[[ \t]*(?:\n)?([\s\S]*?)\\\][ \t]*(?:\n|$)/u.exec(source);
   if (bracketMatch?.[1] !== undefined && bracketMatch?.[1] !== "") {
-    return { type: "latexBlock", raw: bracketMatch[0], text: bracketMatch[1].trim() };
+    return { raw: bracketMatch[0], text: bracketMatch[1].trim(), type: "latexBlock" };
   }
 
   const pendingBracket = /^ {0,3}\\\[[ \t]*(?:\n)?([\s\S]*)$/u.exec(source);
   if (pendingBracket?.[1] !== undefined) {
-    return { type: "latexBlock", raw: pendingBracket[0], text: pendingBracket[1], pending: true };
+    return { pending: true, raw: pendingBracket[0], text: pendingBracket[1], type: "latexBlock" };
   }
   const pendingDollar = /^ {0,3}\$\$[ \t]*(?:\n)?([\s\S]*)$/u.exec(source);
   if (
@@ -117,15 +113,15 @@ function tokenizeBlockLatex(source: string): LatexToken | undefined {
     pendingDollar?.[1] !== "" &&
     looksLikePendingDollarMath(pendingDollar[1])
   ) {
-    return { type: "latexBlock", raw: pendingDollar[0], text: pendingDollar[1], pending: true };
+    return { pending: true, raw: pendingDollar[0], text: pendingDollar[1], type: "latexBlock" };
   }
   return undefined;
 }
 
 const LATEX_MARKDOWN_EXTENSIONS: readonly TokenizerExtension[] = [
   {
-    name: "latexBlock",
     level: "block",
+    name: "latexBlock",
     start(source) {
       const match = /(?:^|\n) {0,3}(?:\$\$|\\\[)/u.exec(source);
       return match === null ? undefined : match.index + (match[0].startsWith("\n") ? 1 : 0);
@@ -133,8 +129,8 @@ const LATEX_MARKDOWN_EXTENSIONS: readonly TokenizerExtension[] = [
     tokenizer: tokenizeBlockLatex,
   },
   {
-    name: "latex",
     level: "inline",
+    name: "latex",
     start(source) {
       const indices = [source.indexOf("$"), source.indexOf("\\("), source.indexOf("\\[")].filter(
         (index) => index >= 0,
@@ -145,7 +141,7 @@ const LATEX_MARKDOWN_EXTENSIONS: readonly TokenizerExtension[] = [
   },
 ];
 
-export function trimPartialClosingFences(tokens: readonly Token[]): void {
+function trimPartialClosingFences(tokens: readonly Token[]): void {
   const token = tokens[tokens.length - 1];
   if (token?.type === "list") {
     trimPartialClosingFences(token.items[token.items.length - 1]?.tokens ?? []);
@@ -175,8 +171,16 @@ export function trimPartialClosingFences(tokens: readonly Token[]): void {
   token.text = token.text.slice(0, -lastLine.length).replace(/\n$/u, "");
 }
 
-export const markdownParser = new Marked();
+const markdownParser = new Marked();
 markdownParser.setOptions({
   tokenizer: new StrictStrikethroughTokenizer(),
 });
 markdownParser.use({ extensions: [...LATEX_MARKDOWN_EXTENSIONS] });
+
+const markdownTokenizer = {
+  RESET_STYLE,
+  markdownParser,
+  trimPartialClosingFences,
+};
+
+export default markdownTokenizer;

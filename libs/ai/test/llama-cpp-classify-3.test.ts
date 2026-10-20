@@ -1,9 +1,11 @@
 import { Effect } from "effect";
 import { describe, expect, it } from "vite-plus/test";
 
-import { classify } from "../src/api/llama-cpp-classify.ts";
-import type { ClassifierContext } from "../src/types.ts";
+import llamaCppClassify from "../src/api/llama-cpp-classify.ts";
+import type typesModule from "../src/types.types.ts";
 import llamaCppClassifySupport from "./llama-cpp-classify-support.ts";
+
+const { classify } = llamaCppClassify;
 
 const { charTokens, fakeServer, model } = llamaCppClassifySupport;
 const closesAReasoningBlockTheTemplate = () =>
@@ -72,7 +74,7 @@ const cachesLabelTokensPerServerAnd = () =>
     Effect.gen(function* () {
       const classifierModel = model();
       const server = fakeServer();
-      const questions: ClassifierContext["questions"] = {
+      const questions: typesModule.ClassifierContext["questions"] = {
         pick: { criteria: { a: "", b: "" }, instructions: "Pick", type: "choice" },
       };
       yield* Effect.promise(() =>

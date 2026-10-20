@@ -1,5 +1,6 @@
 import testing from "@msa/testing";
-import { Container, type TUI, Text, TuiMainScreen } from "@msa/tui";
+import tuiModule from "@msa/tui";
+import type tuiTypes from "@msa/tui/index.types";
 import { Effect } from "effect";
 import { afterEach, beforeAll, describe, expect, it } from "vite-plus/test";
 
@@ -8,6 +9,8 @@ import { createEditToolDefinition } from "../src/core/tools/edit.ts";
 import { ToolExecutionComponent } from "../src/modes/interactive/components/tool-execution.ts";
 import { initTheme } from "../src/modes/interactive/theme/theme.ts";
 import editToolNoFullRedrawSupport from "./edit-tool-no-full-redraw-support.ts";
+
+const { Container, Text, TuiMainScreen } = tuiModule;
 
 const { FakeTerminal, createLargeEdits, tempDirs, waitForRender, waitForRenderedText } =
   editToolNoFullRedrawSupport;
@@ -33,7 +36,7 @@ const partPart1 = () =>
     }
 
     const terminal = new FakeTerminal();
-    const tui: TUI = new TuiMainScreen(terminal);
+    const tui: tuiTypes.TUI = new TuiMainScreen(terminal);
     const root = new Container();
     for (let i = 0; i < 200; i++) {
       root.addChild(new Text(`history ${i}`, 0, 0));

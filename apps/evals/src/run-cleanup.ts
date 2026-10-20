@@ -1,8 +1,8 @@
 import { Cause, Effect, Exit, Option } from "effect";
 import {
-  attachHarnessRunToError,
   type HarnessContext,
   type JsonValue,
+  attachHarnessRunToError,
   normalizeHarnessRun,
 } from "vitest-evals/harness";
 

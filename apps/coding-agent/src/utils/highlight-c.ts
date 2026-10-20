@@ -11,9 +11,9 @@ export const cLanguages = {
   c,
   cpp,
   csharp,
+  dart,
+  go,
   java,
   kotlin,
   swift,
-  dart,
-  go,
 };

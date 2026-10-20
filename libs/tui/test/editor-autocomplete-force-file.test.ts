@@ -3,10 +3,12 @@ import { describe, it } from "node:test";
 
 import { Effect } from "effect";
 
-import type { AutocompleteProvider } from "../src/autocomplete.ts";
-import { Editor } from "../src/components/editor.ts";
+import type autocompleteTypes from "../src/autocomplete.types.ts";
+import Editor from "../src/components/editor.ts";
 import editorHelpers from "./editor-helpers.ts";
-import { defaultEditorTheme } from "./test-themes.ts";
+import testThemes from "./test-themes.ts";
+
+const { defaultEditorTheme } = testThemes;
 
 const { applyCompletion, createTestTUI, flushAutocomplete, typeText } = editorHelpers;
 
@@ -24,7 +26,7 @@ function autoAppliesSingleForceFile(): void {
       Effect.gen(function* () {
         const editor = new Editor(createTestTUI(), defaultEditorTheme);
 
-        const mockProvider: AutocompleteProvider = {
+        const mockProvider: autocompleteTypes.AutocompleteProvider = {
           applyCompletion,
           getSuggestions: (lines, _cursorLine, cursorCol, options) => {
             if (options.force !== true) {
@@ -64,7 +66,7 @@ function showsMenuForceFileHas(): void {
       Effect.gen(function* () {
         const editor = new Editor(createTestTUI(), defaultEditorTheme);
 
-        const mockProvider: AutocompleteProvider = {
+        const mockProvider: autocompleteTypes.AutocompleteProvider = {
           applyCompletion,
           getSuggestions: (lines, _cursorLine, cursorCol, options) => {
             if (options.force !== true) {
@@ -132,7 +134,7 @@ function keepsSuggestionsOpenTypingForce(): void {
     ));
 }
 
-function forceModeFileProvider(): AutocompleteProvider {
+function forceModeFileProvider(): autocompleteTypes.AutocompleteProvider {
   const allFiles = [
     { label: "readme.md", value: "readme.md" },
     { label: "package.json", value: "package.json" },

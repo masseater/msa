@@ -1,4 +1,4 @@
-import type { AssistantMessage, Message, Usage } from "@msa/ai";
+import type aiTypes from "@msa/ai/index.types";
 import type chordTypes from "@msa/chord/index.types";
 
 import type inboxTypes from "./inbox.types.ts";
@@ -13,7 +13,7 @@ declare namespace eventsTypesModule {
     readonly after: viewTypesModule.ConversationView;
   };
 
-  type Block = AssistantMessage["content"][number];
+  type Block = aiTypes.AssistantMessage["content"][number];
 
   type QueuedItem = { id: typesModule.SubmissionId; mode: inboxTypes.InboxItem["mode"] };
 
@@ -33,7 +33,7 @@ declare namespace eventsTypesModule {
         delta: string;
       }
     | { type: "block"; contentIndex: number; block: Block }
-    | { type: "message"; message: AssistantMessage };
+    | { type: "message"; message: aiTypes.AssistantMessage };
 
   type SnapshotEvent = {
     type: "snapshot";
@@ -41,7 +41,7 @@ declare namespace eventsTypesModule {
     run?: { inputs: readonly typesModule.SubmissionId[] };
     generation?: {
       attempt: number;
-      message?: AssistantMessage;
+      message?: aiTypes.AssistantMessage;
       retry?: { at: number; error: string };
       deferred?: { pollAt: number };
     };
@@ -60,8 +60,8 @@ declare namespace eventsTypesModule {
     | { type: "run_end"; inputs: readonly typesModule.SubmissionId[] }
     | { type: "turn_start" }
     | { type: "turn_end" }
-    | { type: "message_start"; message: Message }
-    | { type: "message_update"; usage: Usage; changes: readonly MessageChange[] }
+    | { type: "message_start"; message: aiTypes.Message }
+    | { type: "message_update"; usage: aiTypes.Usage; changes: readonly MessageChange[] }
     | { type: "message_end"; entry: typesModule.EntryRecord }
     | ({ type: "tool_execution_start"; args: typesModule.JsonObject } & ToolEventCall)
     | ({

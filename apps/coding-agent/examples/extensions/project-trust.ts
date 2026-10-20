@@ -21,10 +21,10 @@ const decideTrust = (ctx: ProjectTrustContext, choice: string | undefined) =>
           : `Recorded demo note: ${note}`,
         "info",
       );
-      return { trusted: "yes", remember: true } as const;
+      return { remember: true, trusted: "yes" } as const;
     }
     if (choice === "Trust and remember") {
-      return { trusted: "yes", remember: true } as const;
+      return { remember: true, trusted: "yes" } as const;
     }
     if (choice === "Trust this session") {
       return { trusted: "yes" } as const;

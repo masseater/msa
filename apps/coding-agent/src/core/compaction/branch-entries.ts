@@ -1,4 +1,4 @@
-import type { AgentMessage } from "@msa/agent-core";
+import type agentTypes from "@msa/agent-core/index.types";
 import { Function as Fn } from "effect";
 
 import {
@@ -8,10 +8,10 @@ import {
 } from "../messages.ts";
 import type { ReadonlySessionManager, SessionEntry } from "../session-manager.ts";
 import { estimateTokens } from "./compaction-tokens.ts";
-import { createFileOps, extractFileOpsFromMessage, type FileOperations } from "./utils.ts";
+import { type FileOperations, createFileOps, extractFileOpsFromMessage } from "./utils.ts";
 
 export interface BranchPreparation {
-  messages: AgentMessage[];
+  messages: agentTypes.AgentMessage[];
   fileOps: FileOperations;
   totalTokens: number;
 }
@@ -32,7 +32,7 @@ const collectEntriesImpl = (
   targetId: string,
 ): CollectEntriesResult => {
   if (oldLeafId === null || oldLeafId === "") {
-    return { entries: [], commonAncestorId: null };
+    return { commonAncestorId: null, entries: [] };
   }
 
   const oldPath = new Set(session.getBranch(oldLeafId).map((e) => e.id));
@@ -59,7 +59,7 @@ const collectEntriesImpl = (
 
   entries.reverse();
 
-  return { entries, commonAncestorId };
+  return { commonAncestorId, entries };
 };
 
 export const collectEntriesForBranchSummary: {
@@ -74,7 +74,7 @@ export const collectEntriesForBranchSummary: {
   ): CollectEntriesResult;
 } = Fn.dual(3, collectEntriesImpl);
 
-function getMessageFromEntry(entry: SessionEntry): AgentMessage | undefined {
+function getMessageFromEntry(entry: SessionEntry): agentTypes.AgentMessage | undefined {
   switch (entry.type) {
     case "message":
       if (entry.message.role === "toolResult") return undefined;
@@ -131,7 +131,7 @@ const prepareBranchEntriesImpl = (
   entries: SessionEntry[],
   tokenBudget: number = 0,
 ): BranchPreparation => {
-  const messages: AgentMessage[] = [];
+  const messages: agentTypes.AgentMessage[] = [];
   const fileOps = createFileOps();
   let totalTokens = 0;
 
@@ -161,7 +161,7 @@ const prepareBranchEntriesImpl = (
     totalTokens += tokens;
   }
 
-  return { messages, fileOps, totalTokens };
+  return { fileOps, messages, totalTokens };
 };
 
 export const prepareBranchEntries: {

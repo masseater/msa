@@ -1,11 +1,14 @@
 import { Clock, Effect } from "effect";
 import { afterEach, beforeEach, vi } from "vite-plus/test";
 
-import { stream as streamOpenAICompletions } from "../src/api/openai-completions.ts";
-import { normalizeContext } from "../src/compat.ts";
-import type { Model } from "../src/types.ts";
+import openaiCompletions from "../src/api/openai-completions.ts";
+import compatModule from "../src/compat.ts";
+import type typesModule from "../src/types.types.ts";
 import modelChoice from "./model-choice.ts";
 import openaiCompletionsPromptCacheMock from "./openai-completions-prompt-cache-mock.ts";
+
+const { stream: streamOpenAICompletions } = openaiCompletions;
+const { normalizeContext } = compatModule;
 
 const { chooseModel } = modelChoice;
 const { mockState } = openaiCompletionsPromptCacheMock;
@@ -13,11 +16,11 @@ const { mockState } = openaiCompletionsPromptCacheMock;
 const openAIModel = chooseModel("openai", "direct OpenAI");
 
 function createModel(
-  overrides: Partial<Model<"openai-completions">> = {},
-): Model<"openai-completions"> {
+  overrides: Partial<typesModule.Model<"openai-completions">> = {},
+): typesModule.Model<"openai-completions"> {
   const { compat: _compat, ...baseModel } = openAIModel;
   return {
-    ...(baseModel as Omit<Model<"openai-completions">, "api">),
+    ...(baseModel as Omit<typesModule.Model<"openai-completions">, "api">),
     api: "openai-completions",
     ...overrides,
   };
@@ -29,7 +32,7 @@ const captureRequest = Effect.fn("captureRequest")(function* (
     sessionId?: string;
     headers?: Record<string, string>;
   },
-  model: Model<"openai-completions"> = createModel(),
+  model: typesModule.Model<"openai-completions"> = createModel(),
 ) {
   const currentTime = yield* Clock.currentTimeMillis;
   yield* Effect.promise(() =>

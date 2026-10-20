@@ -35,17 +35,17 @@ export function createInitialState(): GameState {
   const startX = Math.floor(GAME_WIDTH / 2);
   const startY = Math.floor(GAME_HEIGHT / 2);
   return {
+    direction: "right",
+    food: spawnFood([{ x: startX, y: startY }]),
+    gameOver: false,
+    highScore: 0,
+    nextDirection: "right",
+    score: 0,
     snake: [
       { x: startX, y: startY },
       { x: startX - 1, y: startY },
       { x: startX - 2, y: startY },
     ],
-    food: spawnFood([{ x: startX, y: startY }]),
-    direction: "right",
-    nextDirection: "right",
-    score: 0,
-    gameOver: false,
-    highScore: 0,
   };
 }
 

@@ -12,24 +12,24 @@ interface ReplanRow {
 
 function toRecord(row: ReplanRow): ReplanRecord {
   return {
+    after: JSON.parse(row.after_state) as ReplanChanges,
+    createdAt: row.created_at,
     id: row.id,
     project: row.project,
     reason: row.reason,
-    after: JSON.parse(row.after_state) as ReplanChanges,
-    createdAt: row.created_at,
   };
 }
 
 function toView(record: ReplanRecord): ReplanView {
   return {
-    id: record.id,
-    reason: record.reason,
-    createdAt: record.createdAt,
-    stopped: record.after.stopped,
     created: record.after.created,
+    createdAt: record.createdAt,
     dropped: record.after.dropped,
+    id: record.id,
     kept: record.after.kept,
+    reason: record.reason,
     rewired: record.after.rewired,
+    stopped: record.after.stopped,
   };
 }
 

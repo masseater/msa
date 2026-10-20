@@ -1,13 +1,5 @@
-import {
-  type Component,
-  type Focusable,
-  getKeybindings,
-  Input,
-  matchesKey,
-  truncateToWidth,
-  visibleWidth,
-  wrapTextWithAnsi,
-} from "@msa/tui";
+import tui from "@msa/tui";
+import type tuiTypes from "@msa/tui/index.types";
 
 import type { MemoryService } from "../../../core/memory/memory.ts";
 import type { MemoryKind, MemoryRecord } from "../../../core/memory/store.ts";
@@ -15,24 +7,26 @@ import { toErrorMessage } from "../../../utils/errors.ts";
 import { formatAge } from "../../../utils/text.ts";
 import { theme } from "../theme/theme.ts";
 import { rawKeyHint } from "./keybinding-hints.ts";
-import { fitView, type ViewFrame } from "./scroll-window.ts";
+import { type ViewFrame, fitView } from "./scroll-window.ts";
+
+const { Input, getKeybindings, matchesKey, truncateToWidth, visibleWidth, wrapTextWithAnsi } = tui;
 
 const LIST_LIMIT = 200;
 
 const SEARCH_LIMIT = 50;
 
 const KIND_GLYPH: Record<MemoryKind, string> = {
-  fact: "●",
-  preference: "◆",
   decision: "▲",
+  fact: "●",
   note: "○",
+  preference: "◆",
 };
 
 const KIND_COLOR: Record<MemoryKind, "accent" | "success" | "warning" | "muted"> = {
-  fact: "accent",
-  preference: "success",
   decision: "warning",
+  fact: "accent",
   note: "muted",
+  preference: "success",
 };
 
 function glyph(record: MemoryRecord): string {
@@ -58,7 +52,7 @@ export interface MemoryViewOptions {
   maxHeight: () => number;
 }
 
-export class MemoryView implements Component, Focusable {
+export class MemoryView implements tuiTypes.Component, tuiTypes.Focusable {
   readonly wantsViewportKeys = true;
   private readonly options: MemoryViewOptions;
   private records: MemoryRecord[];
@@ -67,8 +61,8 @@ export class MemoryView implements Component, Focusable {
   private query: string | undefined;
   private busy = false;
   private inputMode: "search" | "add" | undefined;
-  private readonly searchInput = new Input({ prompt: "› ", placeholder: "Search memories" });
-  private readonly addInput = new Input({ prompt: "› ", placeholder: "Memory to remember" });
+  private readonly searchInput = new Input({ placeholder: "Search memories", prompt: "› " });
+  private readonly addInput = new Input({ placeholder: "Memory to remember", prompt: "› " });
 
   private scroll = 0;
 
@@ -84,7 +78,7 @@ export class MemoryView implements Component, Focusable {
     }
   }
 
-  private activeInput(): Input {
+  private activeInput(): tuiTypes.Input {
     return this.inputMode === "add" ? this.addInput : this.searchInput;
   }
 
@@ -182,28 +176,27 @@ export class MemoryView implements Component, Focusable {
     }
     if (this.inputMode === "search") {
       return {
-        header,
         body,
         footer: [
           "",
           ...this.searchInput.render(width),
           ` ${rawKeyHint("enter", "search")}  ${rawKeyHint("esc", "cancel")}`,
         ],
+        header,
       };
     }
     if (this.inputMode === "add") {
       return {
-        header,
         body,
         footer: [
           "",
           ...this.addInput.render(width),
           ` ${rawKeyHint("enter", "save")}  ${rawKeyHint("esc", "cancel")}`,
         ],
+        header,
       };
     }
     return {
-      header,
       body,
       cursorLine,
       footer: [
@@ -219,6 +212,7 @@ export class MemoryView implements Component, Focusable {
           .filter(Boolean)
           .join("  ")}`,
       ],
+      header,
     };
   }
 
@@ -249,9 +243,9 @@ export class MemoryView implements Component, Focusable {
     );
     detail("embedding", record.embeddingModel ?? "none (keyword search only)");
     return {
-      header,
       body,
       footer: ["", ` ${[rawKeyHint("d", "forget"), rawKeyHint("esc", "back")].join("  ")}`],
+      header,
     };
   }
 

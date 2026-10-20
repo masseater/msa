@@ -1,8 +1,11 @@
-import { fauxAssistantMessage } from "@msa/ai";
+import ai from "@msa/ai";
 import { Effect } from "effect";
 import { afterEach, describe, expect, it, vi } from "vite-plus/test";
 
 import agentSessionMcpSupport from "./agent-session-mcp-support.ts";
+
+const { fauxAssistantMessage } = ai;
+
 const { harnesses4, loadDocsSearch, setup4 } = agentSessionMcpSupport;
 
 const doesNotActivateRestoredToolsThat = Effect.gen(function* () {

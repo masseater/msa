@@ -1,4 +1,4 @@
-import type { ToolCall } from "@msa/ai";
+import type aiTypes from "@msa/ai/index.types";
 import type chordTypes from "@msa/chord/index.types";
 import json from "@msa/chord/json";
 import { Effect } from "effect";
@@ -22,7 +22,7 @@ const { NestedCallDoc } = toolTypes;
 const reuseExisting = Effect.fnUntraced(function* (
   tx: typesModule.Tx,
   existing: typesModule.TaskId<toolNestedTypes.ToolTaskResult>,
-  call: ToolCall,
+  call: aiTypes.ToolCall,
   name: string,
 ) {
   const record = yield* Effect.promise(() => tx.task(existing));
@@ -41,7 +41,7 @@ const reuseExisting = Effect.fnUntraced(function* (
 const createNested = Effect.fnUntraced(function* (
   tx: typesModule.Tx,
   runtime: toolNestedTypes.ToolRuntime,
-  call: ToolCall,
+  call: aiTypes.ToolCall,
   input: {
     readonly parentCallId: string;
     readonly name: string;
@@ -86,7 +86,7 @@ const startNestedCall = Effect.fnUntraced(function* (
   options: toolNestedTypes.NestedOptions,
   context: chordTypes.Context,
 ) {
-  const call: ToolCall = {
+  const call: aiTypes.ToolCall = {
     arguments: copyJson(args, { omitUndefinedProperties: true }) as typesModule.JsonObject,
     id: `${parentCallId}/${options.key}`,
     name,

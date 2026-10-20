@@ -1,5 +1,5 @@
 import * as NodeRuntime from "@effect/platform-node/NodeRuntime";
-import { createModels } from "@msa/ai/models";
+import modelsModule from "@msa/ai/models";
 import contextModule from "@msa/chord/context";
 import { Console, Effect } from "effect";
 
@@ -9,6 +9,8 @@ import durable from "../../src/index.ts";
 import type durableTypes from "../../src/index.types.ts";
 import nodeModule from "../../src/storage/sqlite/node.ts";
 import testSupport from "../support.ts";
+
+const { createModels } = modelsModule;
 
 const { BACKGROUND_CONTEXT } = contextModule;
 

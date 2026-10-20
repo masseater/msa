@@ -3,7 +3,7 @@ import { describe, test } from "node:test";
 
 import { Effect } from "effect";
 
-import { CombinedAutocompleteProvider } from "../src/autocomplete.ts";
+import CombinedAutocompleteProvider from "../src/autocomplete.ts";
 import autocompleteHelpers from "./autocomplete-helpers.ts";
 import type autocompleteHelpersTypes from "./autocomplete-helpers.types.ts";
 

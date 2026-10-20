@@ -16,21 +16,21 @@ export const STREAM_API_DOCUMENTATION = `${JSON.stringify(
   {
     name: "Acme Streaming API",
     request: {
-      method: "POST",
-      path: "/generate",
-      headers: { "content-type": "application/json", "x-acme-key": "resolved credential" },
       body: {
-        model: STREAM_MODEL_ID,
         messages: [{ role: "user", content: "Hello" }],
+        model: STREAM_MODEL_ID,
         stream: true,
       },
+      headers: { "content-type": "application/json", "x-acme-key": "resolved credential" },
+      method: "POST",
+      path: "/generate",
     },
     response: {
       contentType: "application/x-ndjson",
       events: [
-        { type: "text_delta", text: "Hello" },
-        { type: "usage", input_tokens: 3, output_tokens: 2 },
-        { type: "done", reason: "stop" },
+        { text: "Hello", type: "text_delta" },
+        { input_tokens: 3, output_tokens: 2, type: "usage" },
+        { reason: "stop", type: "done" },
       ],
     },
   },
@@ -47,7 +47,7 @@ function isRecord(value: unknown): value is Record<string, unknown> {
 }
 
 function rejectRequest(status: number, message: string): Response {
-  return new Response(message, { status, headers: { "content-type": "text/plain" } });
+  return new Response(message, { headers: { "content-type": "text/plain" }, status });
 }
 
 const decodeJson = Schema.decodeEffect(Schema.fromJsonString(Schema.Unknown));
@@ -85,21 +85,21 @@ function streamResponse(
   probe.validRequestReceived = prompt === STREAM_PROBE_PROMPT;
   return new Response(
     lines([
-      { type: "text_delta", text: "ACME_" },
-      { type: "text_delta", text: "STREAM_OK" },
-      { type: "usage", input_tokens: 4, output_tokens: 3 },
-      { type: "done", reason: "stop" },
+      { text: "ACME_", type: "text_delta" },
+      { text: "STREAM_OK", type: "text_delta" },
+      { input_tokens: 4, output_tokens: 3, type: "usage" },
+      { reason: "stop", type: "done" },
     ]),
-    { status: 200, headers: { "content-type": "application/x-ndjson" } },
+    { headers: { "content-type": "application/x-ndjson" }, status: 200 },
   );
 }
 
 const chunk = (fields: Record<string, unknown>): string =>
   `data: ${JSON.stringify({
-    id: "chatcmpl-acme",
-    object: "chat.completion.chunk",
     created: 0,
+    id: "chatcmpl-acme",
     model: OPENAI_MODEL_ID,
+    object: "chat.completion.chunk",
     ...fields,
   })}\n\n`;
 
@@ -120,20 +120,20 @@ function openAiResponse(
     chunk({
       choices: [
         {
-          index: 0,
-          delta: { role: "assistant", content: OPENAI_PROBE_RESPONSE },
+          delta: { content: OPENAI_PROBE_RESPONSE, role: "assistant" },
           finish_reason: null,
+          index: 0,
         },
       ],
     }) +
     chunk({
-      choices: [{ index: 0, delta: {}, finish_reason: "stop" }],
-      usage: { prompt_tokens: 3, completion_tokens: 2 },
+      choices: [{ delta: {}, finish_reason: "stop", index: 0 }],
+      usage: { completion_tokens: 2, prompt_tokens: 3 },
     }) +
     "data: [DONE]\n\n";
   return new Response(body, {
+    headers: { "cache-control": "no-cache", "content-type": "text/event-stream" },
     status: 200,
-    headers: { "content-type": "text/event-stream", "cache-control": "no-cache" },
   });
 }
 
@@ -195,13 +195,13 @@ export function createAcmeServer(mode: ServerMode): AcmeServer {
   });
 
   return {
-    start,
-    stop,
+    baseUrl: () => `${serverOrigin}/v1`,
+    origin: () => serverOrigin,
     reset() {
       probe.validRequestReceived = false;
     },
-    origin: () => serverOrigin,
-    baseUrl: () => `${serverOrigin}/v1`,
+    start,
+    stop,
     validRequestReceived: () => probe.validRequestReceived,
   };
 }

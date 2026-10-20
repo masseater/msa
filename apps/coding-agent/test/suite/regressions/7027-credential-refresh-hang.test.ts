@@ -1,4 +1,4 @@
-import type { Model, Provider } from "@msa/ai";
+import type aiTypes from "@msa/ai/index.types";
 import testing from "@msa/testing";
 import { Effect } from "effect";
 import { afterEach, describe, expect, it, vi } from "vite-plus/test";
@@ -15,7 +15,7 @@ const { createHarness } = harnessModule;
 
 const { deferredPromise, gate } = testing;
 
-const dynamicModel: Model<"openai-completions"> = {
+const dynamicModel: aiTypes.Model<"openai-completions"> = {
   api: "openai-completions",
   baseUrl: "https://example.test/v1",
   contextWindow: 1000,
@@ -34,7 +34,7 @@ const doesNotHoldLoginBehindAnPart1 = () =>
   Effect.gen(function* () {
     const runPromise = Effect.runPromiseWith(yield* Effect.context<never>());
     const networkStarted = gate();
-    const provider: Provider<"openai-completions"> = {
+    const provider: aiTypes.Provider<"openai-completions"> = {
       auth: {
         apiKey: {
           check: ({ credential }) =>

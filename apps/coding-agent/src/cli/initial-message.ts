@@ -1,17 +1,17 @@
-import type { ImageContent } from "@msa/ai";
+import type aiTypes from "@msa/ai/index.types";
 
 import type { Args } from "./args.ts";
 
 export interface InitialMessageInput {
   parsed: Args;
   fileText?: string | undefined;
-  fileImages?: ImageContent[] | undefined;
+  fileImages?: aiTypes.ImageContent[] | undefined;
   stdinContent?: string | undefined;
 }
 
 export interface InitialMessageResult {
   initialMessage?: string | undefined;
-  initialImages?: ImageContent[] | undefined;
+  initialImages?: aiTypes.ImageContent[] | undefined;
 }
 
 export function buildInitialMessage({
@@ -34,7 +34,7 @@ export function buildInitialMessage({
   }
 
   return {
-    initialMessage: parts.length > 0 ? parts.join("") : undefined,
     initialImages: fileImages !== undefined && fileImages.length > 0 ? fileImages : undefined,
+    initialMessage: parts.length > 0 ? parts.join("") : undefined,
   };
 }

@@ -3,10 +3,13 @@ import { describe, it } from "node:test";
 
 import { Effect } from "effect";
 
-import { Image, TuiAltScreen } from "../src/index.ts";
-import { encodeKitty, registerKittyImageMetadata } from "../src/terminal-image-kitty.ts";
+import tuiModule from "../src/index.ts";
+import terminalImageKitty from "../src/terminal-image-kitty.ts";
 import tuiAltScreenHelpers from "./tui-alt-screen-helpers.ts";
 import RecordingTerminal from "./tui-alt-screen-recording-terminal.ts";
+
+const { Image, TuiAltScreen } = tuiModule;
+const { encodeKitty, registerKittyImageMetadata } = terminalImageKitty;
 
 const { someWriteSince, withCapabilities } = tuiAltScreenHelpers;
 

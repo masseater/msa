@@ -1,21 +1,18 @@
-import {
-  type AssistantMessage,
-  type Message,
-  type Model,
-  type Models,
-  Type,
-  normalizeContext,
-  uuidv7,
-} from "@msa/ai";
-import { builtinModels } from "@msa/ai/providers/all";
+import ai from "@msa/ai";
+import type aiTypes from "@msa/ai/index.types";
+import all from "@msa/ai/providers/all";
 import durable from "@msa/durable";
 import harnessModule from "@msa/durable/harness";
 import memory from "@msa/durable/storage/memory";
 import { Effect } from "effect";
 import { describe, expect, inject, it } from "vite-plus/test";
 
-import { streamSimple as streamSimpleAnthropic } from "../../ai/src/api/anthropic-messages.ts";
+import anthropicMessages from "../../ai/src/api/anthropic-messages.ts";
 import support from "./support.ts";
+
+const { Type, normalizeContext, uuidv7 } = ai;
+const { builtinModels } = all;
+const { streamSimple: streamSimpleAnthropic } = anthropicMessages;
 
 const { AssistantEntry, defineExtension, defineTool, hook } = durable;
 const { GenerationTask, Harness, createRegistry } = harnessModule;
@@ -54,7 +51,7 @@ const second = defineTool({
   parameters: Parameters,
 });
 
-function committedOrder(messages: readonly Message[]): Message[] {
+function committedOrder(messages: readonly aiTypes.Message[]): aiTypes.Message[] {
   if (messages[0]?.role !== "system") return [...messages];
   const [system, ...rest] = messages;
   const users = rest.findIndex((message) => message.role !== "user");
@@ -62,25 +59,29 @@ function committedOrder(messages: readonly Message[]): Message[] {
   return [...rest.slice(0, at), system!, ...rest.slice(at)];
 }
 
-function anthropicModels(token: string): Models {
+function anthropicModels(token: string): aiTypes.Models {
   const base = builtinModels();
   return new Proxy(base, {
     get(target, property) {
       if (property === "streamSimple") {
         return (
-          model: Parameters<Models["streamSimple"]>[0],
-          request: Parameters<Models["streamSimple"]>[1],
-          options?: Parameters<Models["streamSimple"]>[2],
+          model: Parameters<aiTypes.Models["streamSimple"]>[0],
+          request: Parameters<aiTypes.Models["streamSimple"]>[1],
+          options?: Parameters<aiTypes.Models["streamSimple"]>[2],
         ) =>
-          streamSimpleAnthropic(model as Model<"anthropic-messages">, normalizeContext(request), {
-            ...options,
-            apiKey: token,
-          });
+          streamSimpleAnthropic(
+            model as aiTypes.Model<"anthropic-messages">,
+            normalizeContext(request),
+            {
+              ...options,
+              apiKey: token,
+            },
+          );
       }
       const value = Reflect.get(target, property, target);
       return typeof value === "function" ? value.bind(target) : value;
     },
-  }) as Models;
+  }) as aiTypes.Models;
 }
 
 function probeRegistry() {
@@ -134,7 +135,7 @@ const cacheReadAfterToolChange = Effect.fn("cacheReadAfterToolChange")(function*
       }),
     );
     harness.resume();
-    const ask = (text: string): Promise<AssistantMessage> =>
+    const ask = (text: string): Promise<aiTypes.AssistantMessage> =>
       runPromise(
         Effect.gen(function* () {
           const settled = yield* awaited(
@@ -147,7 +148,7 @@ const cacheReadAfterToolChange = Effect.fn("cacheReadAfterToolChange")(function*
           const record = yield* awaited(
             harness.commit((tx) => tx.entry(AssistantEntry, settled.answer), context),
           );
-          const message = record?.model?.[0] as AssistantMessage | undefined;
+          const message = record?.model?.[0] as aiTypes.AssistantMessage | undefined;
           expect(message?.stopReason, message?.errorMessage).toBe("stop");
           return message!;
         }),

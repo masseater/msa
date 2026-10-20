@@ -1,4 +1,4 @@
-import { type AssistantMessage } from "@msa/ai";
+import type aiTypes from "@msa/ai/index.types";
 import durable from "@msa/durable";
 import { Effect } from "effect";
 import { afterEach, describe, expect, it } from "vite-plus/test";
@@ -52,7 +52,7 @@ const keepsUsageTotals = Effect.gen(function* () {
   opened.harness.resume();
   yield* awaited(opened.harness.waitForIdle(context));
   const assistants = (yield* allEntries(opened.root)).flatMap((entry) =>
-    entry.kind === "msa.assistant" ? [entry.model![0] as AssistantMessage] : [],
+    entry.kind === "msa.assistant" ? [entry.model![0] as aiTypes.AssistantMessage] : [],
   );
   expect(assistants.map((message) => message.stopReason)).toEqual(["stop", "aborted", "stop"]);
   const total = (yield* awaited(opened.harness.usage(context))).models["faux/faux-1"]!;

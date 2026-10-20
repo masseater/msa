@@ -1,23 +1,18 @@
 import * as NodeRuntime from "@effect/platform-node/NodeRuntime";
-import {
-  type AssistantMessage,
-  type FauxResponseStep,
-  Type,
-  createModels,
-  fauxAssistantMessage,
-  fauxProvider,
-  fauxText,
-  fauxToolCall,
-} from "@msa/ai";
-import { openaiProvider } from "@msa/ai/providers/openai";
+import ai from "@msa/ai";
+import type aiTypes from "@msa/ai/index.types";
+import openai from "@msa/ai/providers/openai";
 import type chordTypes from "@msa/chord/index.types";
-import durable from "@msa/durable";
-import harnessModule from "@msa/durable/harness";
 import type durableTypes from "@msa/durable/index.types";
-import memory from "@msa/durable/storage/memory";
 import { Console, Effect } from "effect";
 
 import support from "../support.ts";
+import exampleSubagentForegroundKit from "./22-subagent-foreground-kit.ts";
+
+const { durable, harnessModule, memory } = exampleSubagentForegroundKit;
+
+const { Type, createModels, fauxAssistantMessage, fauxProvider, fauxText, fauxToolCall } = ai;
+const { openaiProvider } = openai;
 
 const { AssistantEntry, configure, defineExtension, defineTool } = durable;
 const { Harness, createRegistry, watchEvents } = harnessModule;
@@ -33,7 +28,7 @@ const answerText = Effect.fn("answerText")(function* (
   callContext: chordTypes.Context,
 ) {
   const entry = yield* awaited(api.commit((tx) => tx.entry(AssistantEntry, answer), callContext));
-  const message = entry?.model?.[0] as AssistantMessage;
+  const message = entry?.model?.[0] as aiTypes.AssistantMessage;
   return message.content.flatMap((c) => (c.type === "text" ? [c.text] : [])).join("");
 });
 
@@ -113,7 +108,7 @@ if (environmentVariable("OPENAI_API_KEY", true) === undefined) {
     fauxAssistantMessage([delegate], { stopReason: "toolUse" }),
     fauxAssistantMessage([fauxText("2, 3, and 5.")]),
     fauxAssistantMessage([fauxText("The subagent says: 2, 3, and 5.")]),
-  ] satisfies FauxResponseStep[]);
+  ] satisfies aiTypes.FauxResponseStep[]);
 } else {
   models.setProvider(openaiProvider());
 }
@@ -128,7 +123,7 @@ const mainStep1 = Effect.gen(function* () {
 
   const print = (indent: string, event: durableTypes.AgentEvent): void => {
     if (event.type === "message_end" && event.entry.kind === "msa.assistant") {
-      const message = event.entry.model?.[0] as AssistantMessage;
+      const message = event.entry.model?.[0] as aiTypes.AssistantMessage;
       const text = message.content.flatMap((c) => (c.type === "text" ? [c.text] : [])).join("");
       if (text !== "") runSync(Console.log(`${indent}assistant: ${text}`));
     } else if (event.type === "tool_execution_start") {

@@ -1,4 +1,4 @@
-import type { AutocompleteItem, Component } from "@msa/tui";
+import type tuiTypes from "@msa/tui/index.types";
 
 import type { Theme } from "../../modes/interactive/theme/theme.ts";
 import type { CustomMessage } from "../messages.ts";
@@ -27,13 +27,13 @@ export type MessageRenderer<T = unknown> = (
   message: CustomMessage<T>,
   options: MessageRenderOptions,
   theme: Theme,
-) => Component | undefined;
+) => tuiTypes.Component | undefined;
 
 export type EntryRenderer<T = unknown> = (
   entry: CustomEntry<T>,
   options: EntryRenderOptions,
   theme: Theme,
-) => Component | undefined;
+) => tuiTypes.Component | undefined;
 
 export interface RegisteredCommand {
   name: string;
@@ -41,7 +41,7 @@ export interface RegisteredCommand {
   description?: string;
   getArgumentCompletions?: (
     argumentPrefix: string,
-  ) => AutocompleteItem[] | null | Promise<AutocompleteItem[] | null>;
+  ) => tuiTypes.AutocompleteItem[] | null | Promise<tuiTypes.AutocompleteItem[] | null>;
   handler: (args: string, ctx: ExtensionCommandContext) => Promise<void>;
 }
 

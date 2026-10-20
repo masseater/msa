@@ -1,4 +1,4 @@
-import type { ModelsRefreshResult } from "@msa/ai";
+import type aiTypes from "@msa/ai/index.types";
 import { dual } from "effect/Function";
 
 import type { ModelRuntime } from "../../core/model-runtime.ts";
@@ -8,14 +8,17 @@ type ModelCatalogRuntime = Pick<ModelRuntime, "refresh">;
 
 interface ActiveModelCatalogRefresh {
   controller: AbortController;
-  promise: Promise<ModelsRefreshResult>;
+  promise: Promise<aiTypes.ModelsRefreshResult>;
   waiters: number;
 }
 
 class ModelCatalogRefreshCoordinator {
   private readonly activeByRuntime = new WeakMap<ModelCatalogRuntime, ActiveModelCatalogRefresh>();
 
-  refresh(modelRuntime: ModelCatalogRuntime, signal: AbortSignal): Promise<ModelsRefreshResult> {
+  refresh(
+    modelRuntime: ModelCatalogRuntime,
+    signal: AbortSignal,
+  ): Promise<aiTypes.ModelsRefreshResult> {
     signal.throwIfAborted();
     let active = this.activeByRuntime.get(modelRuntime);
     if (active === undefined) {
@@ -45,10 +48,12 @@ class ModelCatalogRefreshCoordinator {
 const modelCatalogRefreshCoordinator = new ModelCatalogRefreshCoordinator();
 
 export const refreshModelCatalogs: {
-  (signal: AbortSignal): (modelRuntime: ModelCatalogRuntime) => Promise<ModelsRefreshResult>;
-  (modelRuntime: ModelCatalogRuntime, signal: AbortSignal): Promise<ModelsRefreshResult>;
+  (
+    signal: AbortSignal,
+  ): (modelRuntime: ModelCatalogRuntime) => Promise<aiTypes.ModelsRefreshResult>;
+  (modelRuntime: ModelCatalogRuntime, signal: AbortSignal): Promise<aiTypes.ModelsRefreshResult>;
 } = dual(
   2,
-  (modelRuntime: ModelCatalogRuntime, signal: AbortSignal): Promise<ModelsRefreshResult> =>
+  (modelRuntime: ModelCatalogRuntime, signal: AbortSignal): Promise<aiTypes.ModelsRefreshResult> =>
     modelCatalogRefreshCoordinator.refresh(modelRuntime, signal),
 );

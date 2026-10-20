@@ -1,8 +1,11 @@
-import { Container, Markdown, type MarkdownTheme } from "@msa/tui";
+import tui from "@msa/tui";
+import type tuiTypes from "@msa/tui/index.types";
 
 import type { MarkdownTransformer } from "../../../core/extensions/types.ts";
 import { getMarkdownTheme, theme } from "../theme/theme.ts";
 import { createMarkdownTransform } from "./markdown-transform.ts";
+
+const { Container, Markdown } = tui;
 
 const OSC133_ZONE_START = "\x1b]133;A\x07";
 const OSC133_ZONE_END = "\x1b]133;B\x07";
@@ -10,13 +13,13 @@ const OSC133_ZONE_FINAL = "\x1b]133;C\x07";
 
 export class UserMessageComponent extends Container {
   private text: string;
-  private markdownTheme: MarkdownTheme;
+  private markdownTheme: tuiTypes.MarkdownTheme;
   private outputPad: number;
   private markdownTransformers: readonly MarkdownTransformer[];
 
   constructor(
     text: string,
-    markdownTheme: MarkdownTheme = getMarkdownTheme(),
+    markdownTheme: tuiTypes.MarkdownTheme = getMarkdownTheme(),
     outputPad = 1,
     markdownTransformers: readonly MarkdownTransformer[] = [],
   ) {
@@ -42,12 +45,12 @@ export class UserMessageComponent extends Container {
         1,
         this.markdownTheme,
         {
-          color: (content: string) => theme.fg("userMessageText", content),
           bgColor: (content: string) => theme.bg("userMessageBg", content),
+          color: (content: string) => theme.fg("userMessageText", content),
         },
         {
-          preserveOrderedListMarkers: true,
           preserveBackslashEscapes: true,
+          preserveOrderedListMarkers: true,
           transform: createMarkdownTransform("user", false, this.markdownTransformers),
         },
       ),

@@ -1,41 +1,41 @@
-import type {
-  AutocompleteItem,
-  AutocompleteProvider,
-  AutocompleteSuggestions,
-} from "../autocomplete.ts";
-import type { KeybindingsManager } from "../keybindings.ts";
-import { cjkBreakRegex } from "../text-boundaries.ts";
-import {
-  type AutocompleteRequestOptions,
-  AutocompleteRequests,
-} from "./editor-autocomplete-requests.ts";
-import {
-  AutocompleteTriggers,
-  bestAutocompleteMatchIndex,
-} from "./editor-autocomplete-triggers.ts";
-import type { EditorDocument } from "./editor-document.ts";
-import { SelectList, type SelectListLayoutOptions, type SelectListTheme } from "./select-list.ts";
+import type autocompleteTypes from "../autocomplete.types.ts";
+import type keybindingsTypes from "../keybindings.types.ts";
+import textBoundaries from "../text-boundaries.ts";
+import AutocompleteRequests from "./editor-autocomplete-requests.ts";
+import type editorAutocompleteRequestsTypes from "./editor-autocomplete-requests.types.ts";
+import editorAutocompleteTriggers from "./editor-autocomplete-triggers.ts";
+import type editorDocumentTypes from "./editor-document.types.ts";
+import SelectList from "./select-list.ts";
+import type selectListTypes from "./select-list.types.ts";
 
-const SLASH_COMMAND_SELECT_LIST_LAYOUT: SelectListLayoutOptions = {
-  minPrimaryColumnWidth: 12,
+const { AutocompleteTriggers, bestAutocompleteMatchIndex } = editorAutocompleteTriggers;
+
+const { cjkBreakRegex } = textBoundaries;
+
+const SLASH_COMMAND_SELECT_LIST_LAYOUT: selectListTypes.SelectListLayoutOptions = {
   maxPrimaryColumnWidth: 32,
+  minPrimaryColumnWidth: 12,
 };
 
-export class EditorAutocomplete {
+export default class EditorAutocomplete {
   maxVisible: number;
-  readonly doc: EditorDocument;
-  private readonly theme: SelectListTheme;
+  readonly doc: editorDocumentTypes.EditorDocument;
+  private readonly theme: selectListTypes.SelectListTheme;
   private readonly requestRender: () => void;
   private readonly triggers = new AutocompleteTriggers();
-  private readonly requests: AutocompleteRequests;
-  private currentProvider: AutocompleteProvider | undefined;
-  private list: SelectList | undefined;
+  private readonly requests: editorAutocompleteRequestsTypes.AutocompleteRequests;
+  private currentProvider: autocompleteTypes.AutocompleteProvider | undefined;
+  private list: selectListTypes.SelectList | undefined;
   private state: "regular" | "force" | null = null;
   private prefix = "";
 
   constructor(
-    doc: EditorDocument,
-    options: { theme: SelectListTheme; maxVisible: number; requestRender: () => void },
+    doc: editorDocumentTypes.EditorDocument,
+    options: {
+      theme: selectListTypes.SelectListTheme;
+      maxVisible: number;
+      requestRender: () => void;
+    },
   ) {
     this.doc = doc;
     this.theme = options.theme;
@@ -44,11 +44,11 @@ export class EditorAutocomplete {
     this.requests = new AutocompleteRequests(this);
   }
 
-  provider(): AutocompleteProvider | undefined {
+  provider(): autocompleteTypes.AutocompleteProvider | undefined {
     return this.currentProvider;
   }
 
-  setProvider(provider: AutocompleteProvider): void {
+  setProvider(provider: autocompleteTypes.AutocompleteProvider): void {
     this.cancel();
     this.currentProvider = provider;
     this.triggers.set(provider.triggerCharacters ?? []);
@@ -58,7 +58,7 @@ export class EditorAutocomplete {
     return this.state !== null;
   }
 
-  visibleList(): SelectList | undefined {
+  visibleList(): selectListTypes.SelectList | undefined {
     return this.state === null ? undefined : this.list;
   }
 
@@ -71,7 +71,7 @@ export class EditorAutocomplete {
 
   refreshIfOpen(): void {
     if (this.state === null || this.currentProvider === undefined) return;
-    this.request({ force: this.state === "force", explicitTab: false });
+    this.request({ explicitTab: false, force: this.state === "force" });
   }
 
   afterInsert(char: string): void {
@@ -89,7 +89,7 @@ export class EditorAutocomplete {
     }
     const textBeforeCursor = this.doc.textBeforeCursor();
     if (this.isInSlashCommandContext(textBeforeCursor) || this.triggers.matches(textBeforeCursor)) {
-      this.request({ force: false, explicitTab: false });
+      this.request({ explicitTab: false, force: false });
     }
   }
 
@@ -98,10 +98,10 @@ export class EditorAutocomplete {
     const beforeCursor = this.doc.textBeforeCursor();
     const slashCommand =
       this.isInSlashCommandContext(beforeCursor) && !beforeCursor.trimStart().includes(" ");
-    this.request({ force: !slashCommand, explicitTab: true });
+    this.request({ explicitTab: true, force: !slashCommand });
   }
 
-  handleKey(data: string, kb: KeybindingsManager): boolean {
+  handleKey(data: string, kb: keybindingsTypes.KeybindingsManager): boolean {
     const list = this.visibleList();
     if (list === undefined) return false;
     if (kb.matches(data, "tui.select.cancel")) {
@@ -125,9 +125,9 @@ export class EditorAutocomplete {
   }
 
   deliver(
-    provider: AutocompleteProvider,
-    suggestions: AutocompleteSuggestions | null,
-    options: AutocompleteRequestOptions,
+    provider: autocompleteTypes.AutocompleteProvider,
+    suggestions: autocompleteTypes.AutocompleteSuggestions | null,
+    options: editorAutocompleteRequestsTypes.AutocompleteRequestOptions,
   ): void {
     if (
       suggestions === null ||
@@ -154,7 +154,11 @@ export class EditorAutocomplete {
     this.requestRender();
   }
 
-  private applyItem(provider: AutocompleteProvider, item: AutocompleteItem, prefix: string): void {
+  private applyItem(
+    provider: autocompleteTypes.AutocompleteProvider,
+    item: autocompleteTypes.AutocompleteItem,
+    prefix: string,
+  ): void {
     this.doc.pushUndoSnapshot();
     this.doc.lastAction = null;
     const { state } = this.doc;
@@ -163,7 +167,10 @@ export class EditorAutocomplete {
     );
   }
 
-  private createList(prefix: string, items: AutocompleteItem[]): SelectList {
+  private createList(
+    prefix: string,
+    items: autocompleteTypes.AutocompleteItem[],
+  ): selectListTypes.SelectList {
     const layout = prefix.startsWith("/") ? SLASH_COMMAND_SELECT_LIST_LAYOUT : undefined;
     const list = new SelectList(items, this.maxVisible, this.theme, layout);
     list.onSelect = (selected) => {
@@ -191,13 +198,13 @@ export class EditorAutocomplete {
 
   private autoTrigger(char: string): void {
     if (char === "/" && this.isAtStartOfMessage()) {
-      this.request({ force: false, explicitTab: false });
+      this.request({ explicitTab: false, force: false });
       return;
     }
     const textBeforeCursor = this.doc.textBeforeCursor();
     if (this.triggers.isTriggerCharacter(char)) {
       if (this.triggers.matches(textBeforeCursor)) {
-        this.request({ force: false, explicitTab: false });
+        this.request({ explicitTab: false, force: false });
       }
       return;
     }
@@ -205,11 +212,11 @@ export class EditorAutocomplete {
       (/[a-zA-Z0-9.\-_]/u.test(char) || cjkBreakRegex.test(char)) &&
       (this.isInSlashCommandContext(textBeforeCursor) || this.triggers.matches(textBeforeCursor))
     ) {
-      this.request({ force: false, explicitTab: false });
+      this.request({ explicitTab: false, force: false });
     }
   }
 
-  private request(options: AutocompleteRequestOptions): void {
+  private request(options: editorAutocompleteRequestsTypes.AutocompleteRequestOptions): void {
     const provider = this.currentProvider;
     if (provider === undefined) return;
     if (options.force) {

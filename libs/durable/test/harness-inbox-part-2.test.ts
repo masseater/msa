@@ -1,4 +1,4 @@
-import { Type, fauxAssistantMessage, fauxToolCall } from "@msa/ai";
+import ai from "@msa/ai";
 import durable from "@msa/durable";
 import harnessModule from "@msa/durable/harness";
 import memory from "@msa/durable/storage/memory";
@@ -7,6 +7,8 @@ import { afterEach, describe, expect, it } from "vite-plus/test";
 
 import harnessInboxSupport from "./harness-inbox-support.ts";
 import support from "./support.ts";
+
+const { Type, fauxAssistantMessage, fauxToolCall } = ai;
 
 const { GenerationTask } = harnessModule;
 const { MemoryStorage } = memory;

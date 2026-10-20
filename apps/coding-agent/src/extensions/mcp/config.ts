@@ -116,7 +116,7 @@ function readConfigFile(path: string, scope: "global" | "project", state: McpCon
       errors.push(`${path}: server "${name}": auth is only allowed in the global mcp.json`);
       continue;
     }
-    servers.set(name, { name, config, source: path, scope });
+    servers.set(name, { config, name, scope, source: path });
   }
 }
 
@@ -125,7 +125,7 @@ export function loadMcpConfig(options: {
   cwd: string;
   projectTrusted: boolean;
 }): LoadedMcpConfig {
-  const state: McpConfigState = { servers: new Map(), errors: [] };
+  const state: McpConfigState = { errors: [], servers: new Map() };
   readConfigFile(join(options.agentDir, "mcp.json"), "global", state);
   const projectConfig = options.projectTrusted
     ? join(options.cwd, CONFIG_DIR_NAME, "mcp.json")

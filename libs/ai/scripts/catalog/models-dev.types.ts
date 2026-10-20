@@ -1,4 +1,4 @@
-import type { Api, Model } from "../../src/types.ts";
+import type typesModule from "../../src/types.types.ts";
 import type modelsDevReasoningOptionsTypes from "../models-dev-reasoning-options.types.ts";
 
 declare namespace modelsDevTypes {
@@ -45,7 +45,7 @@ declare namespace modelsDevTypes {
 
   type ModelsDevCatalog = Record<string, ModelsDevProvider>;
 
-  type ThinkingLevelMap = NonNullable<Model<any>["thinkingLevelMap"]>;
+  type ThinkingLevelMap = NonNullable<typesModule.Model<any>["thinkingLevelMap"]>;
 
   type ReasoningOptionsRegistry = Map<
     string,
@@ -63,12 +63,14 @@ declare namespace modelsDevTypes {
   }
 
   interface ModelsDevModelSpec extends ModelsDevEntry {
-    readonly api: Api;
+    readonly api: typesModule.Api;
     readonly provider: string;
     readonly baseUrl: string;
-    readonly compat?: Model<Api>["compat"];
+    readonly compat?: typesModule.Model<typesModule.Api>["compat"];
     readonly thinkingLevelMap?: ThinkingLevelMap | undefined;
-    readonly overrides?: Partial<Pick<Model<Api>, "input" | "cost" | "reasoning" | "headers">>;
+    readonly overrides?: Partial<
+      Pick<typesModule.Model<typesModule.Api>, "input" | "cost" | "reasoning" | "headers">
+    >;
   }
 }
 

@@ -5,17 +5,21 @@ import type {
   ResponseStreamEvent,
 } from "openai/resources/responses/responses.js";
 
-import type { AssistantMessage, Model, Usage } from "../types.ts";
-import { formatThrownValue } from "../utils/diagnostics.ts";
-import type { AssistantMessageEventStream } from "../utils/event-stream.ts";
-import { callHook } from "../utils/hooks.ts";
-import { CodexStreamError } from "./openai-codex-error.ts";
-import type { OpenAICodexResponsesOptions } from "./openai-codex-options.ts";
-import type { CodexRawEvent } from "./openai-codex-sse.ts";
-import { processResponsesStream } from "./openai-responses-stream.ts";
+import type typesModule from "../types.types.ts";
+import diagnosticsModule from "../utils/diagnostics.ts";
+import hooks from "../utils/hooks.ts";
+import openaiCodexError from "./openai-codex-error.ts";
+import type openaiCodexErrorTypes from "./openai-codex-error.types.ts";
+import type openaiCodexEventsTypes from "./openai-codex-events.types.ts";
+import type openaiCodexSseTypes from "./openai-codex-sse.types.ts";
+import openaiResponsesStream from "./openai-responses-stream.ts";
+
+const { CodexStreamError } = openaiCodexError;
+const { formatThrownValue } = diagnosticsModule;
+const { callHook } = hooks;
+const { processResponsesStream } = openaiResponsesStream;
 
 type ServiceTier = ResponseCreateParamsStreaming["service_tier"] | undefined;
-type CodexModel = Model<"openai-codex-responses">;
 
 const CODEX_RESPONSE_STATUSES: ReadonlySet<unknown> = new Set<ResponseStatus>([
   "completed",
@@ -31,7 +35,9 @@ const TERMINAL_TYPES = new Set(["response.done", "response.completed", "response
 const stringField = (source: Record<string, unknown> | undefined, key: string) =>
   typeof source?.[key] === "string" ? source[key] : undefined;
 
-function apiError(event: CodexRawEvent): CodexStreamError {
+function apiError(
+  event: openaiCodexSseTypes.CodexRawEvent,
+): openaiCodexErrorTypes.CodexStreamError {
   const nested =
     typeof event["error"] === "object" && event["error"] !== null
       ? (event["error"] as Record<string, unknown>)
@@ -39,32 +45,37 @@ function apiError(event: CodexRawEvent): CodexStreamError {
   const code = stringField(event, "code") ?? stringField(nested, "code");
   const message = stringField(event, "message") ?? stringField(nested, "message");
   return new CodexStreamError({
-    message: `Codex error: ${message || code || JSON.stringify(event)}`,
-    kind: "api",
     code,
+    kind: "api",
+    message: `Codex error: ${message || code || JSON.stringify(event)}`,
     payload: event,
   });
 }
 
-function failedResponseError(event: CodexRawEvent): CodexStreamError {
+function failedResponseError(
+  event: openaiCodexSseTypes.CodexRawEvent,
+): openaiCodexErrorTypes.CodexStreamError {
   const error = (event as { response?: { error?: { code?: string; message?: string } } }).response
     ?.error;
   return new CodexStreamError({
-    message: error?.message || "Codex response failed",
-    kind: "api",
     code: error?.code,
+    kind: "api",
+    message: error?.message || "Codex response failed",
     payload: event,
   });
 }
 
-function completedEvent(event: CodexRawEvent, output: AssistantMessage): ResponseStreamEvent {
+function completedEvent(
+  event: openaiCodexSseTypes.CodexRawEvent,
+  output: typesModule.AssistantMessage,
+): ResponseStreamEvent {
   const response = (event as { response?: { status?: unknown; end_turn?: unknown } }).response;
   if (typeof response?.end_turn === "boolean") output.endTurn = response.end_turn;
   const status = CODEX_RESPONSE_STATUSES.has(response?.status) ? response?.status : undefined;
   return {
     ...event,
-    type: "response.completed",
     response: response === undefined ? response : { ...response, status },
+    type: "response.completed",
   } as ResponseStreamEvent;
 }
 
@@ -77,8 +88,8 @@ function isResponseStreamEvent(event: unknown): event is ResponseStreamEvent {
 }
 
 function mapCodexEvent(
-  event: CodexRawEvent,
-  output: AssistantMessage,
+  event: openaiCodexSseTypes.CodexRawEvent,
+  output: typesModule.AssistantMessage,
 ): ResponseStreamEvent | undefined {
   const type = stringField(event, "type");
   if (type === undefined || type === "") return undefined;
@@ -88,16 +99,19 @@ function mapCodexEvent(
   return isResponseStreamEvent(event) ? event : undefined;
 }
 
-function serviceTierCostMultiplier(modelId: string, serviceTier: ServiceTier): number {
-  if (serviceTier === "flex") return 0.5;
-  if (serviceTier === "priority") return modelId === "gpt-5.5" ? 2.5 : 2;
+function serviceTierCostMultiplier(
+  model: openaiCodexEventsTypes.CodexModel,
+  serviceTier: ServiceTier,
+): number {
+  if (serviceTier === "flex") return model.cost.serviceTiers?.flex ?? 1;
+  if (serviceTier === "priority") return model.cost.serviceTiers?.priority ?? 1;
   return 1;
 }
 
 const applyServiceTierPricing =
-  (model: CodexModel) =>
-  (usage: Usage, serviceTier: ServiceTier): void => {
-    const multiplier = serviceTierCostMultiplier(model.id, serviceTier);
+  (model: openaiCodexEventsTypes.CodexModel) =>
+  (usage: typesModule.Usage, serviceTier: ServiceTier): void => {
+    const multiplier = serviceTierCostMultiplier(model, serviceTier);
     if (multiplier === 1) return;
     const cost = usage.cost;
     cost.input *= multiplier;
@@ -112,24 +126,19 @@ function resolveCodexServiceTier(response: ServiceTier, request: ServiceTier): S
   return response ?? request;
 }
 
-export interface CodexEventsRun {
-  readonly model: CodexModel;
-  readonly output: AssistantMessage;
-  readonly events: AssistantMessageEventStream;
-  readonly options: OpenAICodexResponsesOptions | undefined;
-  readonly grammarToolInputProperties: ReadonlyMap<string, string>;
-}
-
-function callbackError(error: unknown): CodexStreamError {
+function callbackError(error: unknown): openaiCodexErrorTypes.CodexStreamError {
   return new CodexStreamError({
-    message: formatThrownValue(error),
-    kind: "callback",
     cause: error,
+    kind: "callback",
+    message: formatThrownValue(error),
   });
 }
 
-export function processCodexEvents(run: CodexEventsRun) {
-  return (rawEvents: Stream.Stream<CodexRawEvent>, onFirst: () => void): Effect.Effect<void> => {
+function processCodexEvents(run: openaiCodexEventsTypes.CodexEventsRun) {
+  return (
+    rawEvents: Stream.Stream<openaiCodexSseTypes.CodexRawEvent>,
+    onFirst: () => void,
+  ): Effect.Effect<void> => {
     const { model, output, options } = run;
     const events = rawEvents.pipe(
       Stream.mapEffect((event) =>
@@ -143,10 +152,16 @@ export function processCodexEvents(run: CodexEventsRun) {
       Stream.onFirst(() => Effect.sync(onFirst)),
     );
     return processResponsesStream(events, output, run.events, model, {
-      serviceTier: options?.serviceTier,
+      applyServiceTierPricing: applyServiceTierPricing(model),
       grammarToolInputProperties: run.grammarToolInputProperties,
       resolveServiceTier: resolveCodexServiceTier,
-      applyServiceTierPricing: applyServiceTierPricing(model),
+      serviceTier: options?.serviceTier,
     });
   };
 }
+
+const openaiCodexEvents = {
+  processCodexEvents,
+};
+
+export default openaiCodexEvents;

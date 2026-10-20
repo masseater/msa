@@ -1,12 +1,15 @@
-import { Container, type Focusable, fuzzyFilter, Input, Spacer, Text, type TUI } from "@msa/tui";
+import tuiModule from "@msa/tui";
+import type tuiTypes from "@msa/tui/index.types";
 import { Effect } from "effect";
 
 import { awaited, awaitingWith } from "../../core/awaiting.ts";
 import type { KeybindingsManager } from "../../core/keybindings.ts";
-import { schedule, type Scheduled } from "../../core/platform.ts";
+import { type Scheduled, schedule } from "../../core/platform.ts";
 import type { Theme } from "../../modes/interactive/theme/theme.ts";
 import { toErrorMessage } from "../../utils/errors.ts";
 import type { HuggingFaceModel } from "./huggingface.ts";
+
+const { Container, Input, Spacer, Text, fuzzyFilter } = tuiModule;
 
 function compactCount(value: number): string {
   if (value >= 1_000_000) return `${(value / 1_000_000).toFixed(value >= 10_000_000 ? 0 : 1)}M`;
@@ -14,8 +17,8 @@ function compactCount(value: number): string {
   return String(value);
 }
 
-export class HuggingFaceSearch extends Container implements Focusable {
-  private readonly tui: TUI;
+export class HuggingFaceSearch extends Container implements tuiTypes.Focusable {
+  private readonly tui: tuiTypes.TUI;
   private readonly theme: Theme;
   private readonly keybindings: KeybindingsManager;
   private readonly search: (query: string, signal: AbortSignal) => Promise<HuggingFaceModel[]>;
@@ -34,7 +37,7 @@ export class HuggingFaceSearch extends Container implements Focusable {
   private isFocused = false;
 
   constructor(
-    tui: TUI,
+    tui: tuiTypes.TUI,
     theme: Theme,
     keybindings: KeybindingsManager,
     search: (query: string, signal: AbortSignal) => Promise<HuggingFaceModel[]>,

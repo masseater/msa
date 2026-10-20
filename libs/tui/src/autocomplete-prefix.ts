@@ -1,22 +1,13 @@
-import { autocompleteBoundaryRegex, autocompleteSeparatorRegex } from "./text-boundaries.ts";
+import type autocompletePrefixTypes from "./autocomplete-prefix.types.ts";
+import textBoundaries from "./text-boundaries.ts";
+
+const { autocompleteBoundaryRegex, autocompleteSeparatorRegex } = textBoundaries;
 
 const PATH_DELIMITERS = new Set([" ", "\t", '"', "'", "="]);
 const tokenStartRegex = new RegExp(`${autocompleteBoundaryRegex.source}$`, "u");
-const PATH_WRAPPERS: Record<string, string> = { "(": ")", "[": "]", "{": "}", "<": ">", "`": "`" };
+const PATH_WRAPPERS: Record<string, string> = { "(": ")", "<": ">", "[": "]", "`": "`", "{": "}" };
 
-export interface ParsedPathPrefix {
-  rawPrefix: string;
-  isAtPrefix: boolean;
-  isQuotedPrefix: boolean;
-}
-
-export interface CompletionValueInput {
-  path: string;
-  isAtPrefix: boolean;
-  isQuotedPrefix: boolean;
-}
-
-export function toDisplayPath(value: string): string {
+function toDisplayPath(value: string): string {
   return value.replace(/\\/gu, "/");
 }
 
@@ -95,20 +86,20 @@ function lastToken(text: string): string {
   );
 }
 
-export function parsePathPrefix(prefix: string): ParsedPathPrefix {
+function parsePathPrefix(prefix: string): autocompletePrefixTypes.ParsedPathPrefix {
   if (prefix.startsWith('@"')) {
-    return { rawPrefix: prefix.slice(2), isAtPrefix: true, isQuotedPrefix: true };
+    return { isAtPrefix: true, isQuotedPrefix: true, rawPrefix: prefix.slice(2) };
   }
   if (prefix.startsWith('"')) {
-    return { rawPrefix: prefix.slice(1), isAtPrefix: false, isQuotedPrefix: true };
+    return { isAtPrefix: false, isQuotedPrefix: true, rawPrefix: prefix.slice(1) };
   }
   if (prefix.startsWith("@")) {
-    return { rawPrefix: prefix.slice(1), isAtPrefix: true, isQuotedPrefix: false };
+    return { isAtPrefix: true, isQuotedPrefix: false, rawPrefix: prefix.slice(1) };
   }
-  return { rawPrefix: prefix, isAtPrefix: false, isQuotedPrefix: false };
+  return { isAtPrefix: false, isQuotedPrefix: false, rawPrefix: prefix };
 }
 
-export function buildCompletionValue(input: CompletionValueInput): string {
+function buildCompletionValue(input: autocompletePrefixTypes.CompletionValueInput): string {
   const needsQuotes = input.isQuotedPrefix || autocompleteSeparatorRegex.test(input.path);
   const prefix = input.isAtPrefix ? "@" : "";
 
@@ -121,7 +112,7 @@ export function buildCompletionValue(input: CompletionValueInput): string {
   return `${openQuote}${input.path}${closeQuote}`;
 }
 
-export function extractAtPrefix(text: string): string | null {
+function extractAtPrefix(text: string): string | null {
   const quotedPrefix = extractQuotedPrefix(text);
   if (quotedPrefix?.startsWith('@"') === true) {
     return quotedPrefix;
@@ -135,7 +126,7 @@ export function extractAtPrefix(text: string): string | null {
   return null;
 }
 
-export function extractPathPrefix(text: string): string | null {
+function extractPathPrefix(text: string): string | null {
   const quotedPrefix = extractQuotedPrefix(text);
   if (quotedPrefix !== null && quotedPrefix !== "") {
     return quotedPrefix;
@@ -154,10 +145,21 @@ export function extractPathPrefix(text: string): string | null {
   return null;
 }
 
-export function extractForcedPathPrefix(text: string): string {
+function extractForcedPathPrefix(text: string): string {
   const quotedPrefix = extractQuotedPrefix(text);
   if (quotedPrefix !== null && quotedPrefix !== "") {
     return quotedPrefix;
   }
   return lastToken(text);
 }
+
+const autocompletePrefix = {
+  buildCompletionValue,
+  extractAtPrefix,
+  extractForcedPathPrefix,
+  extractPathPrefix,
+  parsePathPrefix,
+  toDisplayPath,
+};
+
+export default autocompletePrefix;

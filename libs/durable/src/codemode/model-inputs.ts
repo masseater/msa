@@ -1,4 +1,4 @@
-import type { ClassifierContext, ImagesContext } from "@msa/ai";
+import type aiTypes from "@msa/ai/index.types";
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === "object" && value !== null && !Array.isArray(value);
@@ -70,7 +70,7 @@ function checkQuestion(id: string, question: unknown, fail: Fail): void {
   }
 }
 
-function checkClassifierContext(context: unknown): ClassifierContext {
+function checkClassifierContext(context: unknown): aiTypes.ClassifierContext {
   const fail: Fail = (problem) =>
     new Error(`models.classify() ${problem}. Expected context: ${CLASSIFIER_CONTEXT_SHAPE}.`);
   if (!isRecord(context))
@@ -85,10 +85,10 @@ function checkClassifierContext(context: unknown): ClassifierContext {
     );
   }
   for (const [id, question] of Object.entries(questions)) checkQuestion(id, question, fail);
-  return context as unknown as ClassifierContext;
+  return context as unknown as aiTypes.ClassifierContext;
 }
 
-function checkImagesContext(context: unknown): ImagesContext {
+function checkImagesContext(context: unknown): aiTypes.ImagesContext {
   const fail = (problem: string) =>
     new Error(
       `models.generateImages() ${problem}. Expected context: { input: [{ type: "text", text: <prompt> }, ...optional { type: "image", data: <base64>, mimeType } references] }.`,
@@ -112,7 +112,7 @@ function checkImagesContext(context: unknown): ImagesContext {
       `context.input[${index}] must be a text or image block, got ${describeValue(block)}`,
     );
   });
-  return context as unknown as ImagesContext;
+  return context as unknown as aiTypes.ImagesContext;
 }
 
 const modelInputs = {

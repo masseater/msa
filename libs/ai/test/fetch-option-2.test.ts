@@ -1,10 +1,13 @@
 import { Effect } from "effect";
 import { afterEach, describe, expect, it, vi } from "vite-plus/test";
 
-import { streamSimple as streamGoogleGenerativeAI } from "../src/api/google-generative-ai.ts";
-import { streamSimple as streamOpenAICodexResponses } from "../src/api/openai-codex-responses.ts";
+import googleGenerativeAi from "../src/api/google-generative-ai.ts";
+import openaiCodexResponses from "../src/api/openai-codex-responses.ts";
 import fetchOptionSupport from "./fetch-option-support.ts";
 import jsonCodec from "./json-codec.ts";
+
+const { streamSimple: streamOpenAICodexResponses } = openaiCodexResponses;
+const { streamSimple: streamGoogleGenerativeAI } = googleGenerativeAi;
 
 const { context, createModel, mockFetches } = fetchOptionSupport;
 

@@ -1,4 +1,4 @@
-import { Type } from "@msa/ai";
+import ai from "@msa/ai";
 import type chordTypes from "@msa/chord/index.types";
 import harness from "@msa/durable/harness";
 import type durableTypes from "@msa/durable/index.types";
@@ -8,6 +8,8 @@ import { dual } from "effect/Function";
 import durableKit from "./durable-kit.ts";
 import effectSupport from "./effect-support.ts";
 import type specUsageNamesTypes from "./spec-usage-names.ts";
+
+const { Type } = ai;
 
 const { clock: clockModule, durable, tools: toolsModule } = durableKit;
 

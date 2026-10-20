@@ -1,8 +1,13 @@
-import { KillRing } from "../kill-ring.ts";
-import { isWhitespaceChar } from "../text-boundaries.ts";
-import { UndoStack } from "../undo-stack.ts";
-import { getGraphemeSegmenter } from "../utils.ts";
-import { findWordBackward, findWordForward } from "../word-navigation.ts";
+import KillRing from "../kill-ring.ts";
+import textBoundaries from "../text-boundaries.ts";
+import UndoStack from "../undo-stack.ts";
+import utils from "../utils.ts";
+import wordNavigation from "../word-navigation.ts";
+
+const { getGraphemeSegmenter } = utils;
+
+const { isWhitespaceChar } = textBoundaries;
+const { findWordBackward, findWordForward } = wordNavigation;
 
 const segmenter = getGraphemeSegmenter();
 
@@ -11,7 +16,7 @@ interface InputState {
   cursor: number;
 }
 
-export class InputTextField {
+export default class InputTextField {
   protected value: string = "";
   protected cursor: number = 0;
 
@@ -96,7 +101,7 @@ export class InputTextField {
     if (this.cursor === 0) return;
     this.pushUndo();
     const deletedText = this.value.slice(0, this.cursor);
-    this.killRing.push(deletedText, { prepend: true, accumulate: this.lastAction === "kill" });
+    this.killRing.push(deletedText, { accumulate: this.lastAction === "kill", prepend: true });
     this.lastAction = "kill";
     this.value = this.value.slice(this.cursor);
     this.cursor = 0;
@@ -106,7 +111,7 @@ export class InputTextField {
     if (this.cursor >= this.value.length) return;
     this.pushUndo();
     const deletedText = this.value.slice(this.cursor);
-    this.killRing.push(deletedText, { prepend: false, accumulate: this.lastAction === "kill" });
+    this.killRing.push(deletedText, { accumulate: this.lastAction === "kill", prepend: false });
     this.lastAction = "kill";
     this.value = this.value.slice(0, this.cursor);
   }
@@ -124,7 +129,7 @@ export class InputTextField {
     this.cursor = oldCursor;
 
     const deletedText = this.value.slice(deleteFrom, this.cursor);
-    this.killRing.push(deletedText, { prepend: true, accumulate: wasKill });
+    this.killRing.push(deletedText, { accumulate: wasKill, prepend: true });
     this.lastAction = "kill";
 
     this.value = this.value.slice(0, deleteFrom) + this.value.slice(this.cursor);
@@ -144,7 +149,7 @@ export class InputTextField {
     this.cursor = oldCursor;
 
     const deletedText = this.value.slice(this.cursor, deleteTo);
-    this.killRing.push(deletedText, { prepend: false, accumulate: wasKill });
+    this.killRing.push(deletedText, { accumulate: wasKill, prepend: false });
     this.lastAction = "kill";
 
     this.value = this.value.slice(0, this.cursor) + this.value.slice(deleteTo);
@@ -178,7 +183,7 @@ export class InputTextField {
   }
 
   protected pushUndo(): void {
-    this.undoStack.push({ value: this.value, cursor: this.cursor });
+    this.undoStack.push({ cursor: this.cursor, value: this.value });
   }
 
   protected undo(): void {

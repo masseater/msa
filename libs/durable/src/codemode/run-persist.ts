@@ -1,6 +1,6 @@
 import chord from "@msa/chord";
 import type chordTypes from "@msa/chord/index.types";
-import type { CodemodeResult } from "@msa/codemode/portable";
+import type portableTypes from "@msa/codemode/portable.types";
 import { Effect } from "effect";
 
 import type typesModule from "../harness/types.types.ts";
@@ -39,7 +39,7 @@ const decideRun = Effect.fnUntraced(function* (
   return result;
 });
 
-const storeWrites = (result: CodemodeResult) => {
+const storeWrites = (result: portableTypes.CodemodeResult) => {
   const writes = result.ok ? result.storeWrites : undefined;
   return writes !== undefined && (Object.keys(writes.set).length > 0 || writes.delete.length > 0)
     ? writes
@@ -50,7 +50,7 @@ const completeRun = Effect.fnUntraced(function* (
   api: typesModule.ToolExecutionApi,
   context: chordTypes.Context,
   start: runDocsTypes.Start,
-  outcome: { readonly result: CodemodeResult; readonly generatedImages: number },
+  outcome: { readonly result: portableTypes.CodemodeResult; readonly generatedImages: number },
   details: runPersistTypes.CodemodeToolDetails,
 ) {
   const { result } = outcome;

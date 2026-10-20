@@ -1,8 +1,11 @@
 import { Clock, DateTime, Effect } from "effect";
 import { afterEach, describe, expect, it, vi } from "vite-plus/test";
 
-import { pollOAuthDeviceCodeFlow } from "../src/auth/oauth/device-code.ts";
-import { currentTimeMillis } from "../src/utils/clock.ts";
+import deviceCode from "../src/auth/oauth/device-code.ts";
+import clock from "../src/utils/clock.ts";
+
+const { currentTimeMillis } = clock;
+const { pollOAuthDeviceCodeFlow } = deviceCode;
 
 const neverAbortedSignal = new AbortController().signal;
 

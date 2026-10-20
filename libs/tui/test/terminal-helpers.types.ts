@@ -1,8 +1,8 @@
-import type { ProcessTerminal } from "../src/terminal.ts";
+import type terminalTypes from "../src/terminal.types.ts";
 
 declare namespace terminalHelpersTypes {
   type NegotiationHarness = {
-    terminal: ProcessTerminal;
+    terminal: terminalTypes.ProcessTerminal;
     writes: string[];
     send(data: string): void;
     getInput(): string | undefined;

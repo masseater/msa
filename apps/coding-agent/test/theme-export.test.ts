@@ -1,12 +1,14 @@
 import { fileURLToPath } from "url";
 
 import testing from "@msa/testing";
-import { colorToHex, okhslColor } from "@msa/tui";
+import tui from "@msa/tui";
 import { Effect } from "effect";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vite-plus/test";
 
 import { readEnv } from "../src/core/process-env.ts";
 import { getThemeExportColors } from "../src/modes/interactive/theme/theme.ts";
+
+const { colorToHex, okhslColor } = tui;
 
 const {
   joinPath,

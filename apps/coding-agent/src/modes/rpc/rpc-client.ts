@@ -1,7 +1,7 @@
 import { type ChildProcess, spawn } from "node:child_process";
 
-import type { AgentMessage, ThinkingLevel } from "@msa/agent-core";
-import type { ImageContent } from "@msa/ai";
+import type agentTypes from "@msa/agent-core/index.types";
+import type aiTypes from "@msa/ai/index.types";
 import { Effect } from "effect";
 
 import type {
@@ -176,43 +176,43 @@ export class RpcClient {
 
   prompt(
     message: string,
-    images?: ImageContent[],
+    images?: aiTypes.ImageContent[],
     streamingBehavior?: "steer" | "followUp",
   ): Promise<PromptDisposition> {
     return Effect.runPromise(
       awaitingWith(function* () {
         const response = yield* awaited(
-          this.send({ type: "prompt", message, images, streamingBehavior }),
+          this.send({ images, message, streamingBehavior, type: "prompt" }),
         );
         return this.getData<{ disposition: PromptDisposition }>(response).disposition;
       }, this),
     );
   }
 
-  ask(message: string, images?: ImageContent[]): Promise<PromptDisposition> {
+  ask(message: string, images?: aiTypes.ImageContent[]): Promise<PromptDisposition> {
     return Effect.runPromise(
       awaitingWith(function* () {
         const response = yield* awaited(
-          this.send({ type: "prompt", message, images, mode: "ask" }),
+          this.send({ images, message, mode: "ask", type: "prompt" }),
         );
         return this.getData<{ disposition: PromptDisposition }>(response).disposition;
       }, this),
     );
   }
 
-  steer(message: string, images?: ImageContent[]): Promise<QueuedInputDisposition> {
+  steer(message: string, images?: aiTypes.ImageContent[]): Promise<QueuedInputDisposition> {
     return Effect.runPromise(
       awaitingWith(function* () {
-        const response = yield* awaited(this.send({ type: "steer", message, images }));
+        const response = yield* awaited(this.send({ images, message, type: "steer" }));
         return this.getData<{ disposition: QueuedInputDisposition }>(response).disposition;
       }, this),
     );
   }
 
-  followUp(message: string, images?: ImageContent[]): Promise<QueuedInputDisposition> {
+  followUp(message: string, images?: aiTypes.ImageContent[]): Promise<QueuedInputDisposition> {
     return Effect.runPromise(
       awaitingWith(function* () {
-        const response = yield* awaited(this.send({ type: "follow_up", message, images }));
+        const response = yield* awaited(this.send({ images, message, type: "follow_up" }));
         return this.getData<{ disposition: QueuedInputDisposition }>(response).disposition;
       }, this),
     );
@@ -238,7 +238,7 @@ export class RpcClient {
   newSession(parentSession?: string): Promise<{ cancelled: boolean }> {
     return Effect.runPromise(
       awaitingWith(function* () {
-        const response = yield* awaited(this.send({ type: "new_session", parentSession }));
+        const response = yield* awaited(this.send({ parentSession, type: "new_session" }));
         return this.getData(response);
       }, this),
     );
@@ -256,7 +256,7 @@ export class RpcClient {
   setModel(provider: string, modelId: string): Promise<{ provider: string; id: string }> {
     return Effect.runPromise(
       awaitingWith(function* () {
-        const response = yield* awaited(this.send({ type: "set_model", provider, modelId }));
+        const response = yield* awaited(this.send({ modelId, provider, type: "set_model" }));
         return this.getData(response);
       }, this),
     );
@@ -264,7 +264,7 @@ export class RpcClient {
 
   cycleModel(): Promise<{
     model: { provider: string; id: string };
-    thinkingLevel: ThinkingLevel;
+    thinkingLevel: agentTypes.ThinkingLevel;
     isScoped: boolean;
   } | null> {
     return Effect.runPromise(
@@ -284,15 +284,15 @@ export class RpcClient {
     );
   }
 
-  setThinkingLevel(level: ThinkingLevel): Promise<void> {
+  setThinkingLevel(level: agentTypes.ThinkingLevel): Promise<void> {
     return Effect.runPromise(
       awaitingWith(function* () {
-        yield* awaited(this.send({ type: "set_thinking_level", level }));
+        yield* awaited(this.send({ level, type: "set_thinking_level" }));
       }, this),
     );
   }
 
-  cycleThinkingLevel(): Promise<{ level: ThinkingLevel } | null> {
+  cycleThinkingLevel(): Promise<{ level: agentTypes.ThinkingLevel } | null> {
     return Effect.runPromise(
       awaitingWith(function* () {
         const response = yield* awaited(this.send({ type: "cycle_thinking_level" }));
@@ -301,11 +301,11 @@ export class RpcClient {
     );
   }
 
-  getAvailableThinkingLevels(): Promise<ThinkingLevel[]> {
+  getAvailableThinkingLevels(): Promise<agentTypes.ThinkingLevel[]> {
     return Effect.runPromise(
       awaitingWith(function* () {
         const response = yield* awaited(this.send({ type: "get_available_thinking_levels" }));
-        return this.getData<{ levels: ThinkingLevel[] }>(response).levels;
+        return this.getData<{ levels: agentTypes.ThinkingLevel[] }>(response).levels;
       }, this),
     );
   }
@@ -313,7 +313,7 @@ export class RpcClient {
   setSteeringMode(mode: "all" | "one-at-a-time"): Promise<void> {
     return Effect.runPromise(
       awaitingWith(function* () {
-        yield* awaited(this.send({ type: "set_steering_mode", mode }));
+        yield* awaited(this.send({ mode, type: "set_steering_mode" }));
       }, this),
     );
   }
@@ -321,7 +321,7 @@ export class RpcClient {
   setFollowUpMode(mode: "all" | "one-at-a-time"): Promise<void> {
     return Effect.runPromise(
       awaitingWith(function* () {
-        yield* awaited(this.send({ type: "set_follow_up_mode", mode }));
+        yield* awaited(this.send({ mode, type: "set_follow_up_mode" }));
       }, this),
     );
   }
@@ -329,7 +329,7 @@ export class RpcClient {
   compact(customInstructions?: string): Promise<CompactionResult> {
     return Effect.runPromise(
       awaitingWith(function* () {
-        const response = yield* awaited(this.send({ type: "compact", customInstructions }));
+        const response = yield* awaited(this.send({ customInstructions, type: "compact" }));
         return this.getData(response);
       }, this),
     );
@@ -337,13 +337,13 @@ export class RpcClient {
 
   setAutoCompaction(enabled: boolean): Effect.Effect<void> {
     return awaitingWith(function* () {
-      yield* awaited(this.send({ type: "set_auto_compaction", enabled }));
+      yield* awaited(this.send({ enabled, type: "set_auto_compaction" }));
     }, this);
   }
 
   setAutoRetry(enabled: boolean): Effect.Effect<void> {
     return awaitingWith(function* () {
-      yield* awaited(this.send({ type: "set_auto_retry", enabled }));
+      yield* awaited(this.send({ enabled, type: "set_auto_retry" }));
     }, this);
   }
 
@@ -358,7 +358,7 @@ export class RpcClient {
   bash(command: string): Promise<BashResult> {
     return Effect.runPromise(
       awaitingWith(function* () {
-        const response = yield* awaited(this.send({ type: "bash", command }));
+        const response = yield* awaited(this.send({ command, type: "bash" }));
         return this.getData(response);
       }, this),
     );
@@ -384,7 +384,7 @@ export class RpcClient {
   exportHtml(outputPath?: string): Promise<{ path: string }> {
     return Effect.runPromise(
       awaitingWith(function* () {
-        const response = yield* awaited(this.send({ type: "export_html", outputPath }));
+        const response = yield* awaited(this.send({ outputPath, type: "export_html" }));
         return this.getData(response);
       }, this),
     );
@@ -393,7 +393,7 @@ export class RpcClient {
   switchSession(sessionPath: string): Promise<{ cancelled: boolean }> {
     return Effect.runPromise(
       awaitingWith(function* () {
-        const response = yield* awaited(this.send({ type: "switch_session", sessionPath }));
+        const response = yield* awaited(this.send({ sessionPath, type: "switch_session" }));
         return this.getData(response);
       }, this),
     );
@@ -402,7 +402,7 @@ export class RpcClient {
   fork(entryId: string): Promise<{ text: string; cancelled: boolean }> {
     return Effect.runPromise(
       awaitingWith(function* () {
-        const response = yield* awaited(this.send({ type: "fork", entryId }));
+        const response = yield* awaited(this.send({ entryId, type: "fork" }));
         return this.getData(response);
       }, this),
     );
@@ -428,7 +428,7 @@ export class RpcClient {
   getEntries(since?: string): Promise<{ entries: SessionEntry[]; leafId: string | null }> {
     return Effect.runPromise(
       awaitingWith(function* () {
-        const response = yield* awaited(this.send({ type: "get_entries", since }));
+        const response = yield* awaited(this.send({ since, type: "get_entries" }));
         return this.getData<{ entries: SessionEntry[]; leafId: string | null }>(response);
       }, this),
     );
@@ -455,15 +455,15 @@ export class RpcClient {
   setSessionName(name: string): Promise<void> {
     return Effect.runPromise(
       awaitingWith(function* () {
-        yield* awaited(this.send({ type: "set_session_name", name }));
+        yield* awaited(this.send({ name, type: "set_session_name" }));
       }, this),
     );
   }
 
-  getMessages(): Effect.Effect<AgentMessage[]> {
+  getMessages(): Effect.Effect<agentTypes.AgentMessage[]> {
     return awaitingWith(function* () {
       const response = yield* awaited(this.send({ type: "get_messages" }));
-      return this.getData<{ messages: AgentMessage[] }>(response).messages;
+      return this.getData<{ messages: agentTypes.AgentMessage[] }>(response).messages;
     }, this);
   }
 
@@ -515,7 +515,7 @@ export class RpcClient {
 
   promptAndWait(
     message: string,
-    images?: ImageContent[],
+    images?: aiTypes.ImageContent[],
     timeout = 60000,
   ): Promise<JsonAgentSessionEvent[]> {
     return Effect.runPromise(
@@ -589,8 +589,8 @@ export class RpcClient {
 
         return Effect.callback<RpcResponse>((resume) => {
           this.pendingRequests.set(id, {
-            resolve: (response) => resume(Effect.succeed(response)),
             reject: (error) => resume(Effect.die(error)),
+            resolve: (response) => resume(Effect.succeed(response)),
           });
 
           try {

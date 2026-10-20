@@ -1,12 +1,5 @@
-import {
-  type AnyModel,
-  getModelType,
-  isModelType,
-  type ModelsStoreEntry,
-  type ModelType,
-  type Provider,
-  type RefreshModelsContext,
-} from "@msa/ai";
+import ai from "@msa/ai";
+import type aiTypes from "@msa/ai/index.types";
 import * as Effect from "effect/Effect";
 
 import { VERSION } from "../config.ts";
@@ -15,19 +8,26 @@ import { getMsaUserAgent } from "../utils/user-agent.ts";
 import { awaited, awaiting, performed } from "./awaiting.ts";
 import { nowMs } from "./platform.ts";
 
+const { getModelType, isModelType } = ai;
+
 const DEFAULT_CATALOG_BASE_URL = "https://pi.dev";
 const REMOTE_CATALOG_ATTEMPT_TIMEOUT_MS = 4_000;
 export const REMOTE_CATALOG_REFRESH_INTERVAL_MS = 4 * 60 * 60 * 1000;
-export const REMOTE_CATALOG_MODEL_TYPES: readonly ModelType[] = ["chat", "image", "classifier"];
+export const REMOTE_CATALOG_MODEL_TYPES: readonly aiTypes.ModelType[] = [
+  "chat",
+  "image",
+  "classifier",
+];
 
 function isSupportedModelType(model: { type?: unknown }): boolean {
   return (
     model.type === undefined ||
-    (typeof model.type === "string" && REMOTE_CATALOG_MODEL_TYPES.includes(model.type as ModelType))
+    (typeof model.type === "string" &&
+      REMOTE_CATALOG_MODEL_TYPES.includes(model.type as aiTypes.ModelType))
   );
 }
 
-function mergeModels<TModel extends AnyModel>(
+function mergeModels<TModel extends aiTypes.AnyModel>(
   baseline: readonly TModel[],
   dynamic: readonly TModel[],
 ): TModel[] {
@@ -37,7 +37,7 @@ function mergeModels<TModel extends AnyModel>(
   return [...merged.values()];
 }
 
-function parseCatalog(providerId: string, value: unknown): AnyModel[] {
+function parseCatalog(providerId: string, value: unknown): aiTypes.AnyModel[] {
   const entries = Array.isArray(value)
     ? value
     : typeof value === "object" &&
@@ -55,19 +55,19 @@ function parseCatalog(providerId: string, value: unknown): AnyModel[] {
         typeof entry === "object" && entry !== null && "id" in entry,
     )
     .filter(isSupportedModelType)
-    .map((model) => Object.assign(model, { provider: providerId }) as unknown as AnyModel);
+    .map((model) => Object.assign(model, { provider: providerId }) as unknown as aiTypes.AnyModel);
 }
 
 function readCatalog(
   providerId: string,
   response: Response,
-): Effect.Effect<{ models: AnyModel[]; lastModified: number; etag?: string }> {
+): Effect.Effect<{ models: aiTypes.AnyModel[]; lastModified: number; etag?: string }> {
   return awaiting(function* () {
     const lastModified = Date.parse(response.headers.get("last-modified") ?? "");
     const etag = response.headers.get("etag");
     return {
-      models: parseCatalog(providerId, yield* awaited(response.json())),
       lastModified: Number.isNaN(lastModified) ? 0 : lastModified,
+      models: parseCatalog(providerId, yield* awaited(response.json())),
       ...(etag === null ? {} : { etag }),
     };
   });
@@ -81,9 +81,9 @@ function isNewer(lastModified: number | undefined, localGeneratedAt: number | un
 }
 
 function remoteModels(
-  entry: ModelsStoreEntry | undefined,
+  entry: aiTypes.ModelsStoreEntry | undefined,
   localGeneratedAt: number | undefined,
-): readonly AnyModel[] {
+): readonly aiTypes.AnyModel[] {
   return entry !== undefined && isNewer(entry.lastModified, localGeneratedAt) ? entry.models : [];
 }
 
@@ -99,8 +99,8 @@ function requestCatalog(
     url,
     {
       headers: {
-        accept: "application/json",
         "User-Agent": getMsaUserAgent(VERSION),
+        accept: "application/json",
         ...(validator !== undefined && validator !== "" ? { "if-none-match": validator } : {}),
       },
       signal,
@@ -110,26 +110,26 @@ function requestCatalog(
 }
 
 export type PersonalizeCatalog = (
-  catalog: readonly AnyModel[],
-  context: RefreshModelsContext,
-) => Promise<readonly AnyModel[]>;
+  catalog: readonly aiTypes.AnyModel[],
+  context: aiTypes.RefreshModelsContext,
+) => Promise<readonly aiTypes.AnyModel[]>;
 
 export function withRemoteCatalog(
-  provider: Provider,
+  provider: aiTypes.Provider,
   catalogBaseUrl: string = DEFAULT_CATALOG_BASE_URL,
   localGeneratedAt?: number,
-): Provider {
-  let dynamicModels: readonly AnyModel[] = [];
+): aiTypes.Provider {
+  let dynamicModels: readonly aiTypes.AnyModel[] = [];
 
   return {
     ...provider,
+    getAllModels: () =>
+      mergeModels(provider.getAllModels?.() ?? provider.getModels(), dynamicModels),
     getModels: () =>
       mergeModels(
         provider.getModels(),
         dynamicModels.filter((model) => isModelType(model, "chat")),
       ),
-    getAllModels: () =>
-      mergeModels(provider.getAllModels?.() ?? provider.getModels(), dynamicModels),
     refreshModels: (context) =>
       Effect.runPromise(
         awaiting(function* () {
@@ -170,7 +170,9 @@ export function withRemoteCatalog(
             return;
           }
           if (response.status === 404 || response.status === 501) {
-            const { etag: _etag, ...withoutEtag }: ModelsStoreEntry = stored ?? { models: [] };
+            const { etag: _etag, ...withoutEtag }: aiTypes.ModelsStoreEntry = stored ?? {
+              models: [],
+            };
             yield* awaited(
               context.publish({ persist: { ...withoutEtag, checkedAt, lastModified: 0 } }),
             );
@@ -184,7 +186,7 @@ export function withRemoteCatalog(
           }
           const catalog = yield* performed(readCatalog(provider.id, response));
           if (context.signal.aborted) return;
-          const entry: ModelsStoreEntry = { ...catalog, checkedAt };
+          const entry: aiTypes.ModelsStoreEntry = { ...catalog, checkedAt };
           const published = remoteModels(entry, localGeneratedAt);
           yield* awaited(
             context.publish({
@@ -200,21 +202,21 @@ export function withRemoteCatalog(
 }
 
 export function withPersonalizedCatalog(
-  provider: Provider,
+  provider: aiTypes.Provider,
   personalize: PersonalizeCatalog,
   catalogBaseUrl: string = DEFAULT_CATALOG_BASE_URL,
   localGeneratedAt?: number,
-): Provider {
-  let personalModels: readonly AnyModel[] = [];
-  const builtinModels = (): readonly AnyModel[] =>
+): aiTypes.Provider {
+  let personalModels: readonly aiTypes.AnyModel[] = [];
+  const builtinModels = (): readonly aiTypes.AnyModel[] =>
     provider.getAllModels?.() ?? provider.getModels();
-  const getAllModels = (): readonly AnyModel[] =>
+  const getAllModels = (): readonly aiTypes.AnyModel[] =>
     personalModels.length > 0 ? personalModels : builtinModels();
 
   return {
     ...provider,
-    getModels: () => getAllModels().filter((model) => isModelType(model, "chat")),
     getAllModels,
+    getModels: () => getAllModels().filter((model) => isModelType(model, "chat")),
     refreshModels: (context) =>
       Effect.runPromise(
         awaiting(function* () {
@@ -238,7 +240,7 @@ export function withPersonalizedCatalog(
             requestCatalog(provider.id, catalogBaseUrl, context.signal),
           );
           if (context.signal.aborted) return;
-          let remote: readonly AnyModel[] = [];
+          let remote: readonly aiTypes.AnyModel[] = [];
           if (response.status !== 404 && response.status !== 501) {
             if (!response.ok)
               throw new Error(

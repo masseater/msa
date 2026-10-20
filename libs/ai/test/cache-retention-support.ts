@@ -1,10 +1,14 @@
 import { Data, Effect, Stream } from "effect";
 import { afterEach, beforeEach, vi } from "vite-plus/test";
 
-import { type AssistantMessageEventStream, normalizeContext } from "../src/compat.ts";
-import type { Model } from "../src/types.ts";
-import { currentTimeMillis } from "../src/utils/clock.ts";
+import compatModule from "../src/compat.ts";
+import type compatTypes from "../src/compat.types.ts";
+import type typesModule from "../src/types.types.ts";
+import clock from "../src/utils/clock.ts";
 import env from "./env.ts";
+
+const { normalizeContext } = compatModule;
+const { currentTimeMillis } = clock;
 
 const { envValue } = env;
 
@@ -19,7 +23,7 @@ const context = normalizeContext({
 });
 
 const capturePayload = <TPayload>(
-  start: (onPayload: (payload: unknown) => never) => AssistantMessageEventStream,
+  start: (onPayload: (payload: unknown) => never) => compatTypes.AssistantMessageEventStream,
 ): Effect.Effect<TPayload | undefined> =>
   Effect.gen(function* () {
     const captured: { value: TPayload | undefined } = { value: undefined };
@@ -46,8 +50,8 @@ const isolateCacheRetentionEnv = (): void => {
 };
 
 const createCompletionsModel = (
-  compat?: Model<"openai-completions">["compat"],
-): Model<"openai-completions"> => ({
+  compat?: typesModule.Model<"openai-completions">["compat"],
+): typesModule.Model<"openai-completions"> => ({
   api: "openai-completions",
   baseUrl: "https://my-proxy.example.com/v1",
   compat,

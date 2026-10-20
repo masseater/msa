@@ -1,14 +1,16 @@
 import { Effect } from "effect";
 import { dual } from "effect/Function";
 
-import type { AutocompleteProvider, AutocompleteSuggestions } from "../src/autocomplete-types.ts";
-import { Editor } from "../src/components/editor.ts";
-import { type TUI } from "../src/tui-interface.ts";
-import { TuiMainScreen } from "../src/tui-main-screen.ts";
+import type autocompleteTypesModule from "../src/autocomplete-types.ts";
+import type editorTypes from "../src/components/editor.types.ts";
+import type tuiInterfaceTypes from "../src/tui-interface.types.ts";
+import TuiMainScreen from "../src/tui-main-screen.ts";
 import type editorHelpersTypes from "./editor-helpers.types.ts";
-import { VirtualTerminal } from "./virtual-terminal.ts";
+import virtualTerminal from "./virtual-terminal.ts";
 
-function createTestTUI(cols = 80): TUI {
+const { VirtualTerminal } = virtualTerminal;
+
+function createTestTUI(cols = 80): tuiInterfaceTypes.TUI {
   return new TuiMainScreen(new VirtualTerminal(cols, 24));
 }
 
@@ -57,16 +59,16 @@ const flushAutocomplete: Effect.Effect<void> = Effect.promise(() => Promise.reso
 );
 
 const positionCursor: {
-  (editor: Editor, line: number, col: number): void;
-  (line: number, col: number): (editor: Editor) => void;
-} = dual(3, (editor: Editor, line: number, col: number): void => {
+  (editor: editorTypes.Editor, line: number, col: number): void;
+  (line: number, col: number): (editor: editorTypes.Editor) => void;
+} = dual(3, (editor: editorTypes.Editor, line: number, col: number): void => {
   for (let i = 0; i < 20; i++) editor.handleInput("\x1b[A");
   for (let i = 0; i < line; i++) editor.handleInput("\x1b[B");
   editor.handleInput("\x01");
   for (let i = 0; i < col; i++) editor.handleInput("\x1b[C");
 });
 
-function pasteWithMarker(editor: Editor): string {
+function pasteWithMarker(editor: editorTypes.Editor): string {
   const bigContent = "line\n".repeat(20).trimEnd();
   editor.handleInput(`\x1b[200~${bigContent}\x1b[201~`);
   return editor.getText();
@@ -83,9 +85,12 @@ const typeText: {
   for (const char of text) target.handleInput(char);
 });
 
-function settlingProvider(provider: AutocompleteProvider): editorHelpersTypes.SettlingProvider {
-  let pending: Promise<AutocompleteSuggestions | null> = Promise.resolve(null);
-  const tracked: AutocompleteProvider = {
+function settlingProvider(
+  provider: autocompleteTypesModule.AutocompleteProvider,
+): editorHelpersTypes.SettlingProvider {
+  let pending: Promise<autocompleteTypesModule.AutocompleteSuggestions | null> =
+    Promise.resolve(null);
+  const tracked: autocompleteTypesModule.AutocompleteProvider = {
     ...(provider.triggerCharacters === undefined
       ? {}
       : { triggerCharacters: provider.triggerCharacters }),

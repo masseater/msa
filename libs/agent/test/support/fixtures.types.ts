@@ -1,37 +1,31 @@
-import type { TranscriptContext } from "@msa/ai";
+import type aiTypes from "@msa/ai/index.types";
 import type { TSchema } from "typebox";
 
-import type {
-  AgentEvent,
-  AgentMessage,
-  AgentTool,
-  AgentToolCall,
-  StreamFn,
-} from "../../src/types.ts";
+import type typesModule from "../../src/types.ts";
 
 declare namespace fixturesTypes {
   interface CallSpec {
     readonly id: string;
     readonly name?: string;
-    readonly args?: AgentToolCall["arguments"];
+    readonly args?: typesModule.AgentToolCall["arguments"];
   }
 
   interface Script {
-    readonly streamFn: StreamFn;
+    readonly streamFn: typesModule.StreamFn;
     readonly calls: () => number;
-    readonly contexts: TranscriptContext[];
+    readonly contexts: aiTypes.TranscriptContext[];
   }
 
   interface EchoOptions<T extends TSchema> {
     readonly name?: string;
     readonly parameters?: T;
-    readonly executionMode?: AgentTool["executionMode"];
-    readonly run: AgentTool<T, any>["execute"];
+    readonly executionMode?: typesModule.AgentTool["executionMode"];
+    readonly run: typesModule.AgentTool<T, any>["execute"];
   }
 
   interface Collected {
-    readonly events: AgentEvent[];
-    readonly messages: AgentMessage[];
+    readonly events: typesModule.AgentEvent[];
+    readonly messages: typesModule.AgentMessage[];
   }
 }
 

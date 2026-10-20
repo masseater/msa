@@ -3,11 +3,13 @@ import { describe, test } from "node:test";
 
 import { Effect } from "effect";
 
-import { CombinedAutocompleteProvider } from "../src/autocomplete.ts";
-import { pathOperations } from "../src/platform.ts";
+import CombinedAutocompleteProvider from "../src/autocomplete.ts";
+import platform from "../src/platform.ts";
 import autocompleteHelpers from "./autocomplete-helpers.ts";
 import type autocompleteHelpersTypes from "./autocomplete-helpers.types.ts";
 import testPlatform from "./test-platform.ts";
+
+const { pathOperations } = platform;
 
 const { getSuggestions, withFd, requireFdPath, setupFolder, useTempWorkspace } =
   autocompleteHelpers;

@@ -1,22 +1,18 @@
-import {
-  type AssistantMessage,
-  type FauxResponseStep,
-  type ToolResultMessage,
-  Type,
-  fauxAssistantMessage,
-  fauxText,
-  fauxToolCall,
-} from "@msa/ai";
+import ai from "@msa/ai";
+import type aiTypes from "@msa/ai/index.types";
 import type chordTypes from "@msa/chord/index.types";
 import durable from "@msa/durable";
 import memory from "@msa/durable/storage/memory";
 import { Effect } from "effect";
 import { dual } from "effect/Function";
 
-import chatSupport from "./chat-support.ts";
-import effectSupport from "./effect-support.ts";
+import harnessToolsSupportKit from "./harness-tools-support-kit.ts";
 import type harnessToolsSupportTypes from "./harness-tools-support.types.ts";
 import sessionSupport from "./session-support.ts";
+
+const { chatSupport, effectSupport } = harnessToolsSupportKit;
+
+const { Type, fauxAssistantMessage, fauxText, fauxToolCall } = ai;
 
 const { ToolResultEntry, defineTool } = durable;
 const { MemoryStorage } = memory;
@@ -55,7 +51,7 @@ const tool: {
 
 function calls(
   ...list: readonly (readonly [string, Record<string, chordTypes.JsonValue>, string])[]
-): AssistantMessage {
+): aiTypes.AssistantMessage {
   return fauxAssistantMessage(
     list.map(([name, args, id]) => fauxToolCall(name, args, { id })),
     { stopReason: "toolUse" },
@@ -66,7 +62,7 @@ const DONE = fauxAssistantMessage([fauxText("done")]);
 
 const run = Effect.fn("run")(function* (
   setup: ReturnType<typeof chatSupport.chatSetup>,
-  responses: FauxResponseStep[],
+  responses: aiTypes.FauxResponseStep[],
   prepare?: (
     harness: harnessToolsSupportTypes.Harness,
     root: harnessToolsSupportTypes.Conversation,
@@ -82,13 +78,15 @@ const run = Effect.fn("run")(function* (
   return { entries: yield* allEntries(root), harness, root, status: settled.status };
 });
 
-function results(entries: readonly harnessToolsSupportTypes.EntryRecord[]): ToolResultMessage[] {
+function results(
+  entries: readonly harnessToolsSupportTypes.EntryRecord[],
+): aiTypes.ToolResultMessage[] {
   return entries
     .filter((entry) => ToolResultEntry.is(entry))
-    .map((entry) => entry.model![0] as ToolResultMessage);
+    .map((entry) => entry.model![0] as aiTypes.ToolResultMessage);
 }
 
-function resultText(message: ToolResultMessage): string {
+function resultText(message: aiTypes.ToolResultMessage): string {
   return message.content
     .map((item) => (item.type === "text" ? item.text : `[${item.type}]`))
     .join("|");

@@ -6,32 +6,38 @@ import type {
   ResponseReasoningItem,
 } from "openai/resources/responses/responses.js";
 
-import type { Api } from "../types.ts";
-import { parseToolCallArguments } from "../utils/json-parse.ts";
-import { encodeTextSignatureV1 } from "./openai-responses-signature.ts";
-import {
+import type typesModule from "../types.types.ts";
+import jsonParse from "../utils/json-parse.ts";
+import openaiResponsesSignature from "./openai-responses-signature.ts";
+import openaiResponsesStreamState from "./openai-responses-stream-state.ts";
+import type openaiResponsesStreamStateTypes from "./openai-responses-stream-state.types.ts";
+
+const { encodeTextSignatureV1 } = openaiResponsesSignature;
+const { parseToolCallArguments } = jsonParse;
+const {
   appendCustomToolCallInput,
   applyMessagePhaseStopReason,
   customToolCallInput,
   openSlot,
   pushToolCallDelta,
-  type ResponsesOutputSlot,
-  type ResponsesStreamState,
-  type ToolCallOutputSlot,
-} from "./openai-responses-stream-state.ts";
+} = openaiResponsesStreamState;
 
-type SlotOf<TType extends ResponsesOutputSlot["type"]> = Extract<
-  ResponsesOutputSlot,
+type SlotOf<TType extends openaiResponsesStreamStateTypes.ResponsesOutputSlot["type"]> = Extract<
+  openaiResponsesStreamStateTypes.ResponsesOutputSlot,
   { type: TType }
 >;
 
-interface Completion<TApi extends Api, TItem, TType extends ResponsesOutputSlot["type"]> {
-  readonly state: ResponsesStreamState<TApi>;
+interface Completion<
+  TApi extends typesModule.Api,
+  TItem,
+  TType extends openaiResponsesStreamStateTypes.ResponsesOutputSlot["type"],
+> {
+  readonly state: openaiResponsesStreamStateTypes.ResponsesStreamState<TApi>;
   readonly item: TItem;
   readonly slot: SlotOf<TType>;
 }
 
-function finishThinking<TApi extends Api>({
+function finishThinking<TApi extends typesModule.Api>({
   state,
   item,
   slot,
@@ -42,14 +48,14 @@ function finishThinking<TApi extends Api>({
   slot.block.thinkingSignature = JSON.stringify(item);
   state.reasoningBlocksById.set(item.id, slot.block);
   state.stream.push({
-    type: "thinking_end",
-    contentIndex: slot.contentIndex,
     content: slot.block.thinking,
+    contentIndex: slot.contentIndex,
     partial: state.output,
+    type: "thinking_end",
   });
 }
 
-function finishText<TApi extends Api>({
+function finishText<TApi extends typesModule.Api>({
   state,
   item,
   slot,
@@ -58,26 +64,26 @@ function finishText<TApi extends Api>({
     item.content?.map((c) => (c.type === "output_text" ? c.text : c.refusal)).join("") || "";
   slot.block.textSignature = encodeTextSignatureV1({ id: item.id, phase: item.phase ?? undefined });
   state.stream.push({
-    type: "text_end",
-    contentIndex: slot.contentIndex,
     content: slot.block.text,
+    contentIndex: slot.contentIndex,
     partial: state.output,
+    type: "text_end",
   });
 }
 
-function endToolCall<TApi extends Api>(
-  state: ResponsesStreamState<TApi>,
-  slot: ToolCallOutputSlot,
+function endToolCall<TApi extends typesModule.Api>(
+  state: openaiResponsesStreamStateTypes.ResponsesStreamState<TApi>,
+  slot: openaiResponsesStreamStateTypes.ToolCallOutputSlot,
 ): void {
   state.stream.push({
-    type: "toolcall_end",
     contentIndex: slot.contentIndex,
-    toolCall: slot.block,
     partial: state.output,
+    toolCall: slot.block,
+    type: "toolcall_end",
   });
 }
 
-function finishFunctionCall<TApi extends Api>({
+function finishFunctionCall<TApi extends typesModule.Api>({
   state,
   item,
   slot,
@@ -88,7 +94,7 @@ function finishFunctionCall<TApi extends Api>({
   endToolCall(state, slot);
 }
 
-function finishCustomToolCall<TApi extends Api>({
+function finishCustomToolCall<TApi extends typesModule.Api>({
   state,
   item,
   slot,
@@ -96,38 +102,46 @@ function finishCustomToolCall<TApi extends Api>({
   const nextInput = item.input ?? customToolCallInput(slot.block);
   pushToolCallDelta(state)(
     slot,
-    appendCustomToolCallInput({ block: slot.block, nextInput, close: true }),
+    appendCustomToolCallInput({ block: slot.block, close: true, nextInput }),
   );
   if (item.namespace !== undefined) slot.block.namespace = item.namespace;
   delete slot.block.customInput;
   endToolCall(state, slot);
 }
 
-function finishItem<TApi extends Api>(
-  state: ResponsesStreamState<TApi>,
+function finishItem<TApi extends typesModule.Api>(
+  state: openaiResponsesStreamStateTypes.ResponsesStreamState<TApi>,
   item: ResponseOutputItem,
-  slot: ResponsesOutputSlot,
+  slot: openaiResponsesStreamStateTypes.ResponsesOutputSlot,
 ): boolean {
   if (item.type === "reasoning" && slot.type === "thinking") {
-    finishThinking({ state, item, slot });
+    finishThinking({ item, slot, state });
   } else if (item.type === "message" && slot.type === "text") {
-    finishText({ state, item, slot });
+    finishText({ item, slot, state });
   } else if (item.type === "function_call" && slot.type === "toolCall") {
     if (slot.block.partialJson === undefined) return false;
-    finishFunctionCall({ state, item, slot });
+    finishFunctionCall({ item, slot, state });
   } else if (item.type === "custom_tool_call" && slot.type === "toolCall") {
     if (slot.block.customInput === undefined) return false;
-    finishCustomToolCall({ state, item, slot });
+    finishCustomToolCall({ item, slot, state });
   } else {
     return false;
   }
   return true;
 }
 
-export function completeOutputItem<TApi extends Api>(state: ResponsesStreamState<TApi>) {
+function completeOutputItem<TApi extends typesModule.Api>(
+  state: openaiResponsesStreamStateTypes.ResponsesStreamState<TApi>,
+) {
   return (outputIndex: number, item: ResponseOutputItem): void => {
     applyMessagePhaseStopReason(state.output)(item);
     const slot = state.slots.get(outputIndex) ?? openSlot(state)(outputIndex, item);
     if (slot !== undefined && finishItem(state, item, slot)) state.slots.delete(outputIndex);
   };
 }
+
+const openaiResponsesItemDone = {
+  completeOutputItem,
+};
+
+export default openaiResponsesItemDone;

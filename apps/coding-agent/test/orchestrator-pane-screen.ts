@@ -1,5 +1,5 @@
 import testing from "@msa/testing";
-import { Container, setKeybindings } from "@msa/tui";
+import tui from "@msa/tui";
 
 import { KeybindingsManager } from "../src/core/keybindings.ts";
 import type { Orchestrator } from "../src/core/orchestrator/orchestrator.ts";
@@ -8,6 +8,8 @@ import { TasksView } from "../src/modes/interactive/components/tasks-view.ts";
 import { EditorSlot } from "../src/modes/interactive/editor-slot.ts";
 import { getEditorTheme, initTheme } from "../src/modes/interactive/theme/theme.ts";
 import orchestratorPaneFixtures from "./orchestrator-pane-fixtures.ts";
+
+const { Container, setKeybindings } = tui;
 
 const { awaited, runTest } = testing;
 

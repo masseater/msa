@@ -17,6 +17,9 @@ export interface EventBusController extends EventBus {
 export function createEventBus(): EventBusController {
   const emitter = new EventEmitter();
   return {
+    clear: () => {
+      emitter.removeAllListeners();
+    },
     emit: (channel, data) => {
       emitter.emit(channel, data);
     },
@@ -33,9 +36,6 @@ export function createEventBus(): EventBusController {
         );
       emitter.on(channel, safeHandler);
       return () => emitter.off(channel, safeHandler);
-    },
-    clear: () => {
-      emitter.removeAllListeners();
     },
   };
 }

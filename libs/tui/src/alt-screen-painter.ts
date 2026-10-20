@@ -1,40 +1,22 @@
-import {
-  type AltScreenFrameInput,
-  buildAltScreenFrame,
-  compositeFlashes,
-} from "./alt-screen-frame.ts";
-import { KittyImageCache } from "./alt-screen-kitty-cache.ts";
-import type { AltScreenPointer } from "./alt-screen-pointer.ts";
-import type { AltScreenSearchController } from "./alt-screen-search-controller.ts";
-import { fitLinesToWidth } from "./alt-screen-terminal-modes.ts";
-import type { AltScreenView } from "./alt-screen-view.ts";
-import { stripOsc133ZonePrefix } from "./ansi-sequences.ts";
-import type { ScrollView } from "./components/scroll-view.ts";
-import { type LayoutFrame, renderLayoutFrame } from "./layout.ts";
-import type { Component } from "./tui-component.ts";
+import altScreenFrame from "./alt-screen-frame.ts";
+import KittyImageCache from "./alt-screen-kitty-cache.ts";
+import type altScreenPainterTypes from "./alt-screen-painter.types.ts";
+import altScreenTerminalModes from "./alt-screen-terminal-modes.ts";
+import ansiSequences from "./ansi-sequences.ts";
+import type scrollViewTypes from "./components/scroll-view.types.ts";
+import layoutModule from "./layout.ts";
+import type layoutTypes from "./layout.types.ts";
 
-export interface PainterHost {
-  readonly view: AltScreenView;
-  readonly implicitScrollView: ScrollView;
-  readonly search: AltScreenSearchController;
-  readonly pointer: AltScreenPointer;
-  layoutRoot(): Component | undefined;
-  imageProtocol(): AltScreenFrameInput["imageProtocol"];
-  showHardwareCursor(): boolean;
-  renderFlashes(width: number): string[];
-  resolveFakeCursors(lines: string[]): string[];
-  compositeOverlays(lines: string[], width: number, height: number): string[];
-  extractCursorPosition(lines: string[], height: number): { row: number; col: number } | null;
-  applyLineResets(lines: string[]): string[];
-  onFullRedraw(): void;
-  write(data: string): void;
-}
+const { fitLinesToWidth } = altScreenTerminalModes;
+const { buildAltScreenFrame, compositeFlashes } = altScreenFrame;
+const { renderLayoutFrame } = layoutModule;
+const { stripOsc133ZonePrefix } = ansiSequences;
 
-export class AltScreenPainter {
+export default class AltScreenPainter {
   readonly kittyImages = new KittyImageCache();
-  private readonly host: PainterHost;
+  private readonly host: altScreenPainterTypes.PainterHost;
 
-  constructor(host: PainterHost) {
+  constructor(host: altScreenPainterTypes.PainterHost) {
     this.host = host;
   }
 
@@ -46,16 +28,16 @@ export class AltScreenPainter {
     const lines = fitLinesToWidth(host.applyLineResets(screen), width);
     const { frame } = host.view;
     const output = buildAltScreenFrame({
-      screen: lines,
-      previousScreen: frame.previousScreen,
-      previousWidth: frame.previousScreenWidth,
-      previousHeight: frame.previousScreenHeight,
-      width,
+      cursor,
       height,
       imageProtocol: host.imageProtocol(),
       kittyImages: this.kittyImages,
-      cursor,
+      previousHeight: frame.previousScreenHeight,
+      previousScreen: frame.previousScreen,
+      previousWidth: frame.previousScreenWidth,
+      screen: lines,
       showHardwareCursor: host.showHardwareCursor(),
+      width,
     });
     if (output.fullRedraw) host.onFullRedraw();
     host.write(output.buffer);
@@ -65,11 +47,11 @@ export class AltScreenPainter {
     frame.currentLayout = layout;
   }
 
-  private scrollViewOf(layout: LayoutFrame): ScrollView {
+  private scrollViewOf(layout: layoutTypes.LayoutFrame): scrollViewTypes.ScrollView {
     return layout.primaryScrollView ?? this.host.implicitScrollView;
   }
 
-  private renderLayout(width: number, height: number): LayoutFrame {
+  private renderLayout(width: number, height: number): layoutTypes.LayoutFrame {
     const { host } = this;
     const root = host.layoutRoot() ?? host.implicitScrollView;
     const requestRender = (): void => host.view.requestRender();
@@ -79,7 +61,7 @@ export class AltScreenPainter {
       : layout;
   }
 
-  private compose(layout: LayoutFrame, width: number, height: number): string[] {
+  private compose(layout: layoutTypes.LayoutFrame, width: number, height: number): string[] {
     const { host } = this;
     const scrollView = this.scrollViewOf(layout);
     let screen = host.resolveFakeCursors(layout.lines.map((line) => stripOsc133ZonePrefix(line)));
@@ -88,6 +70,6 @@ export class AltScreenPainter {
     screen = host.compositeOverlays(screen, width, height);
     if (screen.length > height) screen = screen.slice(screen.length - height);
     screen = host.pointer.selection.apply(screen, layout);
-    return compositeFlashes(screen, host.renderFlashes(width), { width, height });
+    return compositeFlashes(screen, host.renderFlashes(width), { height, width });
   }
 }

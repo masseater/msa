@@ -1,4 +1,5 @@
-import { type ImageModel, InMemoryModelsStore } from "@msa/ai";
+import ai from "@msa/ai";
+import type aiTypes from "@msa/ai/index.types";
 import testing from "@msa/testing";
 import { Effect } from "effect";
 import { afterEach, describe, expect, it, vi } from "vite-plus/test";
@@ -9,13 +10,15 @@ import {
 } from "../src/core/remote-catalog-provider.ts";
 import remoteCatalogProviderSupport from "./remote-catalog-provider-support.ts";
 
+const { InMemoryModelsStore } = ai;
+
 const { builtinProvider, model, refreshProvider } = remoteCatalogProviderSupport;
 
 const { awaited, runTest } = testing;
 
 afterEach(() => vi.restoreAllMocks());
 
-const imageModel: ImageModel<"openrouter-images"> = {
+const imageModel: aiTypes.ImageModel<"openrouter-images"> = {
   api: "openrouter-images" as const,
   baseUrl: "https://example.test/v1",
   cost: { cacheRead: 0, cacheWrite: 0, input: 0, output: 0 },

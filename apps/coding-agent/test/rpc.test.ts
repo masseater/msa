@@ -1,4 +1,4 @@
-import type { AgentEvent } from "@msa/agent-core";
+import type agentTypes from "@msa/agent-core/index.types";
 import testing from "@msa/testing";
 import { Effect } from "effect";
 import { describe, expect, test } from "vite-plus/test";
@@ -172,7 +172,7 @@ describe.skipIf(
 
             const messageEndEvents = events.filter(
               (event) => event.type === "message_end",
-            ) as AgentEvent[];
+            ) as agentTypes.AgentEvent[];
             const assistantMessage = messageEndEvents.find(
               (event) => event.type === "message_end" && event.message?.role === "assistant",
             ) as any;

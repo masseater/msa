@@ -1,6 +1,6 @@
 import testing from "@msa/testing";
-import type { Component, TUI } from "@msa/tui";
-import { Container, Text } from "@msa/tui";
+import tuiModule from "@msa/tui";
+import type tuiTypes from "@msa/tui/index.types";
 import { Effect } from "effect";
 import { describe, expect, it, vi } from "vite-plus/test";
 
@@ -19,6 +19,8 @@ import {
 } from "../src/modes/interactive/interactive-mode.ts";
 import { initTheme } from "../src/modes/interactive/theme/theme.ts";
 import interactiveTuiSupport from "./interactive-tui-support.ts";
+
+const { Container, Text } = tuiModule;
 
 const { RecordingTerminal } = interactiveTuiSupport;
 
@@ -87,12 +89,12 @@ type StatusEditor = {
 type ClearStatusContext = {
   activeStatusIndicator: { kind: StatusIndicatorKind; dispose: () => void } | undefined;
   activeWorkingIndicatorEmbedded: boolean;
-  statusContainer: Container;
+  statusContainer: tuiTypes.Container;
   defaultEditor: StatusEditor;
   editor: Partial<StatusEditor>;
   options: { tuiMode?: TuiMode };
   ui: { getClearOnShrink: () => boolean };
-  idleStatus: Component;
+  idleStatus: tuiTypes.Component;
   setEditorWorkingStatusIndicator(indicator: StatusIndicator | undefined): boolean;
 };
 
@@ -112,7 +114,7 @@ describe("clear-on-shrink status spacing", () => {
     "routes every status through the editor opt-in (%s)",
     (embedWorkingStatus) => {
       initTheme("dark");
-      const tui = { requestRender: vi.fn() } as unknown as TUI;
+      const tui = { requestRender: vi.fn() } as unknown as tuiTypes.TUI;
       const editor: StatusEditor = { embedWorkingStatus, setWorkingStatusIndicator: vi.fn() };
       const context: ClearStatusContext = {
         activeStatusIndicator: undefined,

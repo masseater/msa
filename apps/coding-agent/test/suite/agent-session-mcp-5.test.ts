@@ -1,5 +1,5 @@
-import { fauxAssistantMessage, fauxToolCall } from "@msa/ai";
-import type { ToolResultMessage } from "@msa/ai/compat";
+import ai from "@msa/ai";
+import type compatTypes from "@msa/ai/compat.types";
 import testing from "@msa/testing";
 import { Effect } from "effect";
 import { afterEach, describe, expect, it } from "vite-plus/test";
@@ -8,6 +8,8 @@ import { TOOL_SEARCH_DESCRIPTION } from "../../src/extensions/tool-search/tool.t
 import agentSessionMcpSupport from "./agent-session-mcp-support.ts";
 import harnessModule from "./harness.ts";
 import type harnessTypes from "./harness.types.ts";
+
+const { fauxAssistantMessage, fauxToolCall } = ai;
 
 const { declaredToolNames, harnesses, nestedToolNames, serversSection, setup } =
   agentSessionMcpSupport;
@@ -57,7 +59,7 @@ const listsAndReadsResourcesWithCodexStep1 = (harness: harnessTypes.Harness, cal
       server: "docs",
     });
     const results = harness.session.messages.filter(
-      (message): message is ToolResultMessage =>
+      (message): message is compatTypes.ToolResultMessage =>
         message.role === "toolResult" && message.toolName === "read_mcp_resource",
     );
     expect(getMessageText(results[0])).toBe("# docs://pages/setup");

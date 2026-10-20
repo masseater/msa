@@ -1,5 +1,5 @@
-import type { AssistantMessage, ToolCall } from "@msa/ai";
-import { isContextOverflow } from "@msa/ai/utils/overflow";
+import type aiTypes from "@msa/ai/index.types";
+import overflowModule from "@msa/ai/utils/overflow";
 import type chordTypes from "@msa/chord/index.types";
 import { Effect } from "effect";
 
@@ -9,10 +9,12 @@ import generationRetry from "./generation-retry.ts";
 import generationTools from "./generation-tools.ts";
 import type generationTypesModule from "./generation-types.types.ts";
 
+const { isContextOverflow } = overflowModule;
+
 const classify = Effect.fnUntraced(function* (
   runtime: generationTypesModule.GenerationRuntime,
   request: generationTypesModule.GenerationRequest,
-  message: AssistantMessage,
+  message: aiTypes.AssistantMessage,
   context: chordTypes.Context,
 ) {
   runtime.signal.throwIfAborted();
@@ -27,7 +29,7 @@ const classify = Effect.fnUntraced(function* (
     runtime.hooks.each("afterResponse", (hook) => hook(message, runtime, context)),
   );
   const calls = message.content.filter(
-    (content): content is ToolCall => content.type === "toolCall",
+    (content): content is aiTypes.ToolCall => content.type === "toolCall",
   );
   if (message.stopReason === "toolUse" && calls.length > 0)
     return yield* generationTools.startToolRound(runtime, request, message, calls, context);

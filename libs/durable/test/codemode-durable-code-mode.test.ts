@@ -1,4 +1,4 @@
-import { CodemodeSandbox } from "@msa/codemode";
+import codemodeModule from "@msa/codemode";
 import durable from "@msa/durable";
 import harnessModule from "@msa/durable/harness";
 import { Effect } from "effect";
@@ -9,6 +9,8 @@ import codemodeChatSupport from "./codemode-chat-support.ts";
 import type codemodeDurableCodeModeTestTypes from "./codemode-durable-code-mode.test.types.ts";
 import codemodeSupport from "./codemode-support.ts";
 import support from "./support.ts";
+
+const { CodemodeSandbox } = codemodeModule;
 
 const { CodemodeJournalDoc, CodemodeRunDoc, createCodemodeTool } = codemode;
 const { ToolResultEntry } = durable;

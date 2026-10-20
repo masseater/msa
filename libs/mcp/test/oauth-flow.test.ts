@@ -1,19 +1,24 @@
+import testing from "@msa/testing";
 import { Effect } from "effect";
 import { afterEach, describe, expect, it } from "vite-plus/test";
 
-import { McpClient, StreamableHttpTransport } from "../src/index.ts";
-import {
-  McpOAuthAuthorizationRequiredError,
-  OAuthCallbackServer,
-  adaptOAuthProvider,
-  authorizeMcp,
-} from "../src/oauth/index.ts";
-import helpers from "./helpers.ts";
+import mcp from "../src/index.ts";
+import type mcpTypes from "../src/index.types.ts";
+import oauth from "../src/oauth/index.ts";
+import type oauthTypes from "../src/oauth/index.types.ts";
 import oauthSupport from "./oauth-support.ts";
 import type oauthSupportTypes from "./oauth-support.types.ts";
 import webFetch from "./web-fetch.ts";
 
-const { closeServers, listen, readBody, readMessage } = helpers;
+const { McpClient, StreamableHttpTransport } = mcp;
+const {
+  McpOAuthAuthorizationRequiredError,
+  OAuthCallbackServer,
+  adaptOAuthProvider,
+  authorizeMcp,
+} = oauth;
+
+const { closeServers, listen, readBody, readMessage } = testing;
 const { TestOAuthProvider, authorizationServerMetadata, endWith, sendJson } = oauthSupport;
 
 interface FlowState {
@@ -125,7 +130,7 @@ const flowServer = (state: FlowState) => (request: Request, origin: string) => {
 const connectPromise = (
   origin: string,
   provider: oauthSupportTypes.TestOAuthProvider,
-  client: McpClient,
+  client: mcpTypes.McpClient,
 ) =>
   client.connect(
     new StreamableHttpTransport({
@@ -139,7 +144,7 @@ const connectPromise = (
 const connectClient = (
   origin: string,
   provider: oauthSupportTypes.TestOAuthProvider,
-  client: McpClient,
+  client: mcpTypes.McpClient,
 ) => Effect.promise(() => connectPromise(origin, provider, client));
 
 const newClient = () => new McpClient({ name: "oauth-test", version: "1.0.0" });
@@ -147,7 +152,7 @@ const newClient = () => new McpClient({ name: "oauth-test", version: "1.0.0" });
 const completeAuthorization = (
   origin: string,
   provider: oauthSupportTypes.TestOAuthProvider,
-  callback: OAuthCallbackServer,
+  callback: oauthTypes.OAuthCallbackServer,
 ) =>
   Effect.gen(function* () {
     const callbackResult = callback.waitForCallback("expected-state");

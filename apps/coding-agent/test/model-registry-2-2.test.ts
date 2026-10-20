@@ -1,4 +1,4 @@
-import type { OpenAICompletionsCompat } from "@msa/ai/compat";
+import type compatTypes from "@msa/ai/compat.types";
 import testing from "@msa/testing";
 import { Effect } from "effect";
 import { afterEach, beforeEach, describe, expect, test, vi } from "vite-plus/test";
@@ -48,7 +48,7 @@ const providerLevelCompatAppliesToCustomModels = () =>
 
       const registry = yield* awaited(createModelRegistry(authStorage, modelsJsonPath));
       const compat = registry.find("demo", "demo-model")?.compat as
-        | OpenAICompletionsCompat
+        | compatTypes.OpenAICompletionsCompat
         | undefined;
 
       expect(compat?.supportsUsageInStreaming).toBe(false);
@@ -87,7 +87,7 @@ const modelLevelCompatOverridesProviderLevelCompat = () =>
 
       const registry = yield* awaited(createModelRegistry(authStorage, modelsJsonPath));
       const compat = registry.find("demo", "demo-model")?.compat as
-        | OpenAICompletionsCompat
+        | compatTypes.OpenAICompletionsCompat
         | undefined;
 
       expect(compat?.supportsUsageInStreaming).toBe(true);

@@ -1,7 +1,7 @@
 import { Effect } from "effect";
 import { describe, expect, test } from "vite-plus/test";
 
-import type { Model } from "../src/types.ts";
+import type typesModule from "../src/types.types.ts";
 import modelChoice from "./model-choice.ts";
 import transcriptToolChangesSupport from "./transcript-tool-changes-support.ts";
 
@@ -39,7 +39,7 @@ const keepsOpenRouterKimiK3AdditionsIn = () =>
 const keepsKimiK2SystemTextInline = () =>
   Effect.runPromise(
     Effect.gen(function* () {
-      const model: Model<"openai-completions"> = {
+      const model: typesModule.Model<"openai-completions"> = {
         ...modelBase,
         api: "openai-completions",
         compat: { supportsDeveloperRole: false, supportsMidConvoSystemMessages: true },
@@ -72,7 +72,7 @@ const keepsKimiK2SystemTextInline = () =>
 const foldsOpenAICompatibleUpdatesIntoThe = () =>
   Effect.runPromise(
     Effect.gen(function* () {
-      const model: Model<"openai-completions"> = {
+      const model: typesModule.Model<"openai-completions"> = {
         ...modelBase,
         api: "openai-completions",
         id: "custom-model",

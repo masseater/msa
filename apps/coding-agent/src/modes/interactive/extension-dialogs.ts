@@ -1,4 +1,4 @@
-import type { Component, TUI } from "@msa/tui";
+import type tuiTypes from "@msa/tui/index.types";
 import { Effect } from "effect";
 
 import { awaited, awaitingWith } from "../../core/awaiting.ts";
@@ -10,10 +10,10 @@ import { ExtensionSelectorComponent } from "./components/extension-selector.ts";
 import type { EditorSlot } from "./editor-slot.ts";
 import type { BlockedStatus, ProgramStatusReporter } from "./program-status-reporter.ts";
 
-type Dialog = Component & { dispose?(): void };
+type Dialog = tuiTypes.Component & { dispose?(): void };
 
 export interface ExtensionDialogsHost {
-  readonly ui: TUI;
+  readonly ui: tuiTypes.TUI;
   readonly editorSlot: EditorSlot;
   readonly programStatus: ProgramStatusReporter;
   readonly keybindings: KeybindingsManager;
@@ -43,9 +43,9 @@ export class ExtensionDialogs {
           (option) => finish(option),
           () => finish(undefined),
           {
-            tui: this.host.ui,
-            timeout: opts?.timeout,
             onToggleToolsExpanded: () => this.host.toggleToolsExpanded(),
+            timeout: opts?.timeout,
+            tui: this.host.ui,
           },
         ),
       blocked,
@@ -79,7 +79,7 @@ export class ExtensionDialogs {
           placeholder,
           (value) => finish(value),
           () => finish(undefined),
-          { tui: this.host.ui, timeout: opts?.timeout },
+          { timeout: opts?.timeout, tui: this.host.ui },
         ),
       { kind: "question", message: title },
       opts?.signal,

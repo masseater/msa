@@ -1,24 +1,26 @@
-import type { TextContent } from "@msa/ai";
-import type { Component } from "@msa/tui";
-import { Box, Container, Markdown, type MarkdownTheme, Spacer, Text } from "@msa/tui";
+import type aiTypes from "@msa/ai/index.types";
+import tui from "@msa/tui";
+import type tuiTypes from "@msa/tui/index.types";
 
 import type { MessageRenderer } from "../../../core/extensions/types.ts";
 import type { CustomMessage } from "../../../core/messages.ts";
 import { getMarkdownTheme, theme } from "../theme/theme.ts";
 
+const { Box, Container, Markdown, Spacer, Text } = tui;
+
 export class CustomMessageComponent extends Container {
   private message: CustomMessage<unknown>;
   private customRenderer?: MessageRenderer | undefined;
-  private box: Box;
-  private customComponent?: Component | undefined;
-  private markdownTheme: MarkdownTheme;
+  private box: tuiTypes.Box;
+  private customComponent?: tuiTypes.Component | undefined;
+  private markdownTheme: tuiTypes.MarkdownTheme;
   private expandedState = false;
   private outputPad: number;
 
   constructor(
     message: CustomMessage<unknown>,
     customRenderer?: MessageRenderer,
-    markdownTheme: MarkdownTheme = getMarkdownTheme(),
+    markdownTheme: tuiTypes.MarkdownTheme = getMarkdownTheme(),
     outputPad = 1,
   ) {
     super();
@@ -88,7 +90,7 @@ export class CustomMessageComponent extends Container {
       text = this.message.content;
     } else {
       text = this.message.content
-        .filter((c): c is TextContent => c.type === "text")
+        .filter((c): c is aiTypes.TextContent => c.type === "text")
         .map((c) => c.text)
         .join("\n");
     }

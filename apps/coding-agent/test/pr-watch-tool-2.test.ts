@@ -1,7 +1,9 @@
-import { InMemoryTelemetryContext, NOOP_TELEMETRY_CONTEXT } from "@msa/telemetry";
+import telemetryModule from "@msa/telemetry";
 import { describe, expect, it } from "vite-plus/test";
 
 import { PR_WATCH_MESSAGE_TYPE, createPrWatchHost } from "../src/core/pr-watch/session-host.ts";
+
+const { InMemoryTelemetryContext, NOOP_TELEMETRY_CONTEXT } = telemetryModule;
 
 const sendsAChangeAsAMessageThat = () => {
   const sent: Array<{ message: unknown; options: unknown }> = [];

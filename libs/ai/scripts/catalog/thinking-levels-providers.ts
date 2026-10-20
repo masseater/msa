@@ -1,4 +1,4 @@
-import type { Model } from "../../src/types.ts";
+import type typesModule from "../../src/types.types.ts";
 import thinkingMaps from "./thinking-maps.ts";
 
 const { mergeThinkingLevelMap } = thinkingMaps;
@@ -23,7 +23,7 @@ function supportsOpenAiXhigh(modelId: string): boolean {
   );
 }
 
-function applyHostedThinkingLevels(model: Model<any>): void {
+function applyHostedThinkingLevels(model: typesModule.Model<any>): void {
   if (model.provider === "openai-codex" && supportsOpenAiXhigh(model.id)) {
     mergeThinkingLevelMap(model, { minimal: "low" });
   }
@@ -35,7 +35,7 @@ function applyHostedThinkingLevels(model: Model<any>): void {
   }
 }
 
-function applyGatewayThinkingLevels(model: Model<any>): void {
+function applyGatewayThinkingLevels(model: typesModule.Model<any>): void {
   if (model.provider === "opencode-go" && model.id === "glm-5.2") {
     mergeThinkingLevelMap(model, OPENCODE_GO_GLM52_THINKING_LEVEL_MAP);
   }

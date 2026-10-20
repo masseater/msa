@@ -23,7 +23,7 @@ function splitScpLikeRef(url: string): { repo: string; ref?: string } | undefine
   const repoPath = pathWithMaybeRef.slice(0, refSeparator);
   const ref = pathWithMaybeRef.slice(refSeparator + 1);
   if (repoPath === "" || ref === "") return { repo: url };
-  return { repo: `git@${scpLikeMatch[1] ?? ""}:${repoPath}`, ref };
+  return { ref, repo: `git@${scpLikeMatch[1] ?? ""}:${repoPath}` };
 }
 
 function splitUrlRef(url: string): { repo: string; ref?: string } | undefined {
@@ -37,7 +37,7 @@ function splitUrlRef(url: string): { repo: string; ref?: string } | undefined {
     const ref = pathWithMaybeRef.slice(refSeparator + 1);
     if (repoPath === "" || ref === "") return { repo: url };
     parsed.pathname = `/${repoPath}`;
-    return { repo: parsed.toString().replace(/\/$/u, ""), ref };
+    return { ref, repo: parsed.toString().replace(/\/$/u, "") };
   } catch {
     return { repo: url };
   }
@@ -53,7 +53,7 @@ function splitShorthandRef(url: string): { repo: string; ref?: string } {
   const repoPath = pathWithMaybeRef.slice(0, refSeparator);
   const ref = pathWithMaybeRef.slice(refSeparator + 1);
   if (repoPath === "" || ref === "") return { repo: url };
-  return { repo: `${host}/${repoPath}`, ref };
+  return { ref, repo: `${host}/${repoPath}` };
 }
 
 function splitRef(url: string): { repo: string; ref?: string } {
@@ -106,12 +106,12 @@ function buildGitSource(args: {
   }
 
   return {
-    type: "git",
-    repo: args.repo,
     host: args.host,
     path: normalizedPath,
-    ref: args.ref,
     pinned: Boolean(args.ref),
+    ref: args.ref,
+    repo: args.repo,
+    type: "git",
   };
 }
 
@@ -151,7 +151,7 @@ function parseGenericGitUrl(url: string): GitSource | null {
     repo = `https://${repoWithoutRef}`;
   }
 
-  return buildGitSource({ repo, host, path, ref });
+  return buildGitSource({ host, path, ref, repo });
 }
 
 export function parseGitUrl(source: string): GitSource | null {
@@ -182,10 +182,10 @@ export function parseGitUrl(source: string): GitSource | null {
         !split.repo.startsWith("git://") &&
         !split.repo.startsWith("git@");
       return buildGitSource({
-        repo: useHttpsPrefix ? `https://${split.repo}` : split.repo,
         host: info.domain || "",
         path: `${info.user}/${info.project}`,
         ref: info.committish || split.ref || undefined,
+        repo: useHttpsPrefix ? `https://${split.repo}` : split.repo,
       });
     }
   }
@@ -201,10 +201,10 @@ export function parseGitUrl(source: string): GitSource | null {
         continue;
       }
       return buildGitSource({
-        repo: `https://${split.repo}`,
         host: info.domain || "",
         path: `${info.user}/${info.project}`,
         ref: info.committish || split.ref || undefined,
+        repo: `https://${split.repo}`,
       });
     }
   }

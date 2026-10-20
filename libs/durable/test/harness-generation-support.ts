@@ -1,4 +1,5 @@
-import { type Models, fauxAssistantMessage } from "@msa/ai";
+import ai from "@msa/ai";
+import type aiTypes from "@msa/ai/index.types";
 import durable from "@msa/durable";
 import type harnessTypes from "@msa/durable/harness.types";
 import type durableTypes from "@msa/durable/index.types";
@@ -9,18 +10,23 @@ import chatSupport from "./chat-support.ts";
 import effectSupport from "./effect-support.ts";
 import sessionSupport from "./session-support.ts";
 
+const { fauxAssistantMessage } = ai;
+
 const { LiveDoc } = durable;
 
 const { waitFor } = chatSupport;
 const { awaited } = effectSupport;
 const { context } = sessionSupport;
 
-function heldStreamImpl(start: unknown, final: unknown): ReturnType<Models["streamSimple"]> {
+function heldStreamImpl(
+  start: unknown,
+  final: unknown,
+): ReturnType<aiTypes.Models["streamSimple"]> {
   const events = Stream.concat(Stream.make(start), Stream.fromEffectDrain(Effect.sleep(300)));
   return {
     [Symbol.asyncIterator]: () => Stream.toAsyncIterable(events)[Symbol.asyncIterator](),
     result: () => Promise.resolve(final),
-  } as unknown as ReturnType<Models["streamSimple"]>;
+  } as unknown as ReturnType<aiTypes.Models["streamSimple"]>;
 }
 
 const heldStream: {
@@ -28,7 +34,7 @@ const heldStream: {
   (start: unknown, final: unknown): ReturnType<typeof heldStreamImpl>;
 } = dual(2, heldStreamImpl);
 
-const invalidFinalStream = (): ReturnType<Models["streamSimple"]> =>
+const invalidFinalStream = (): ReturnType<aiTypes.Models["streamSimple"]> =>
   heldStream(
     { partial: fauxAssistantMessage("partial", { stopReason: "pending" }), type: "start" },
     { ...fauxAssistantMessage("final"), invalid: () => {} },
@@ -70,7 +76,10 @@ const runTask = Effect.fn("runTask")(function* (
   return taskId!;
 });
 
-function withStreamImpl(models: Models, streamSimple: Models["streamSimple"]): Models {
+function withStreamImpl(
+  models: aiTypes.Models,
+  streamSimple: aiTypes.Models["streamSimple"],
+): aiTypes.Models {
   return new Proxy(models, {
     get(target, property) {
       if (property === "streamSimple") return streamSimple;
@@ -81,8 +90,13 @@ function withStreamImpl(models: Models, streamSimple: Models["streamSimple"]): M
 }
 
 const withStream: {
-  (streamSimple: Models["streamSimple"]): (models: Models) => ReturnType<typeof withStreamImpl>;
-  (models: Models, streamSimple: Models["streamSimple"]): ReturnType<typeof withStreamImpl>;
+  (
+    streamSimple: aiTypes.Models["streamSimple"],
+  ): (models: aiTypes.Models) => ReturnType<typeof withStreamImpl>;
+  (
+    models: aiTypes.Models,
+    streamSimple: aiTypes.Models["streamSimple"],
+  ): ReturnType<typeof withStreamImpl>;
 } = dual(2, withStreamImpl);
 
 function livePublications(harness: harnessTypes.Harness): durableTypes.LiveState[] {

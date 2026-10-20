@@ -1,56 +1,51 @@
-import { copyToClipboard } from "./alt-screen-clipboard.ts";
-import {
-  focusEvent,
-  isMouseSequence,
-  parseSgrMouseEvent,
-  parseWheelEvent,
-} from "./alt-screen-mouse-protocol.ts";
-import { AltScreenPainter } from "./alt-screen-painter.ts";
-import { AltScreenPointer } from "./alt-screen-pointer.ts";
-import { AltScreenSearchController } from "./alt-screen-search-controller.ts";
-import { handleViewportKey, type ViewportKeyTarget } from "./alt-screen-viewport-keys.ts";
-import type { Terminal } from "./terminal-protocol.ts";
-import { AltScreenTuiBase } from "./tui-alt-screen-base.ts";
-import type { WheelScrollLines } from "./wheel-scroll.ts";
+import type altScreenPainterTypes from "./alt-screen-painter.types.ts";
+import type altScreenPointerTypes from "./alt-screen-pointer.types.ts";
+import type altScreenSearchControllerTypes from "./alt-screen-search-controller.types.ts";
+import altScreenViewportKeys from "./alt-screen-viewport-keys.ts";
+import type altScreenViewportKeysTypes from "./alt-screen-viewport-keys.types.ts";
+import type terminalProtocolTypes from "./terminal-protocol.types.ts";
+import AltScreenTuiBase from "./tui-alt-screen-base.ts";
+import tuiAltScreenKit from "./tui-alt-screen-kit.ts";
+import type tuiAltScreenTypes from "./tui-alt-screen.types.ts";
+import type wheelScrollTypes from "./wheel-scroll.types.ts";
 
-export interface TuiAltScreenOptions {
-  wheelScrollLines?: WheelScrollLines;
-  mouse?: boolean;
-  searchMatchStyle?: (text: string) => string;
-  searchCurrentMatchStyle?: (text: string) => string;
-  searchNavigationButtonStyle?: (text: string, hovered: boolean) => string;
-  scrollToEndIndicator?: () => string;
-  openUrl?: (url: string) => void;
-  onRightClickPaste?: () => void;
-  copyOnSelect?: boolean;
-  copySelection?: (text: string) => Promise<boolean | string>;
-}
+const {
+  altScreenClipboard,
+  altScreenMouseProtocol,
+  AltScreenPainter,
+  AltScreenPointer,
+  AltScreenSearchController,
+} = tuiAltScreenKit;
 
-export class TuiAltScreen extends AltScreenTuiBase {
-  private readonly search: AltScreenSearchController;
-  private readonly pointer: AltScreenPointer;
-  private readonly painter: AltScreenPainter;
+const { copyToClipboard } = altScreenClipboard;
+const { focusEvent, isMouseSequence, parseSgrMouseEvent, parseWheelEvent } = altScreenMouseProtocol;
+const { handleViewportKey } = altScreenViewportKeys;
+
+export default class TuiAltScreen extends AltScreenTuiBase {
+  private readonly search: altScreenSearchControllerTypes.AltScreenSearchController;
+  private readonly pointer: altScreenPointerTypes.AltScreenPointer;
+  private readonly painter: altScreenPainterTypes.AltScreenPainter;
   private readonly copySelection: ((text: string) => Promise<boolean | string>) | undefined;
-  private readonly viewportKeys: ViewportKeyTarget;
+  private readonly viewportKeys: altScreenViewportKeysTypes.ViewportKeyTarget;
   private copyOnSelect: boolean;
 
   constructor(
-    terminal: Terminal,
+    terminal: terminalProtocolTypes.Terminal,
     showHardwareCursor?: boolean,
     logDirectory?: string,
-    options: TuiAltScreenOptions = {},
+    options: tuiAltScreenTypes.TuiAltScreenOptions = {},
   ) {
     super(terminal, showHardwareCursor, logDirectory, options.mouse ?? true);
     this.copyOnSelect = options.copyOnSelect ?? true;
     this.copySelection = options.copySelection;
     this.search = new AltScreenSearchController({
-      view: this.view,
-      styles: {
-        match: options.searchMatchStyle ?? ((text) => `\x1b[4m${text}\x1b[24m`),
-        current: options.searchCurrentMatchStyle ?? ((text) => `\x1b[1;7m${text}\x1b[22;27m`),
-      },
       navigationButtonStyle: options.searchNavigationButtonStyle ?? ((text) => text),
       showOverlay: (component, overlayOptions) => this.showOverlay(component, overlayOptions),
+      styles: {
+        current: options.searchCurrentMatchStyle ?? ((text) => `\x1b[1;7m${text}\x1b[22;27m`),
+        match: options.searchMatchStyle ?? ((text) => `\x1b[4m${text}\x1b[24m`),
+      },
+      view: this.view,
     });
     this.pointer = this.createPointer(options);
     this.painter = this.createPainter();
@@ -58,7 +53,7 @@ export class TuiAltScreen extends AltScreenTuiBase {
     this.addInputListener((data) => this.handleViewportInput(data));
   }
 
-  setWheelScrollLines(lines: WheelScrollLines): void {
+  setWheelScrollLines(lines: wheelScrollTypes.WheelScrollLines): void {
     this.pointer.setWheelScrollLines(lines);
   }
 
@@ -79,8 +74,8 @@ export class TuiAltScreen extends AltScreenTuiBase {
     if (text === undefined || text === "") return Promise.resolve(false);
     return copyToClipboard(text, {
       copySelection: this.copySelection,
-      write: (data) => this.terminal.write(data),
       flash: (message, durationMs) => this.flash(message, durationMs),
+      write: (data) => this.terminal.write(data),
     });
   }
 
@@ -106,59 +101,61 @@ export class TuiAltScreen extends AltScreenTuiBase {
     this.painter.paint(Math.max(1, this.terminal.columns), Math.max(1, this.terminal.rows));
   }
 
-  private createPointer(options: TuiAltScreenOptions): AltScreenPointer {
+  private createPointer(
+    options: tuiAltScreenTypes.TuiAltScreenOptions,
+  ): altScreenPointerTypes.AltScreenPointer {
     return new AltScreenPointer({
-      view: this.view,
-      search: this.search,
-      resolveFocusTarget: (component) => this.resolveMouseFocusTarget(component),
-      focusedComponent: () => this.getFocusedComponent(),
-      setFocus: (component) => this.setFocus(component),
-      dispatchToOverlay: (event) => this.dispatchMouseToOverlay(event),
-      scrollToBottom: () => this.scrollToBottom(),
-      openUrl: options.openUrl,
-      onRightClickPaste: options.onRightClickPaste,
-      scrollToEndIndicator: options.scrollToEndIndicator,
-      wheelScrollLines: options.wheelScrollLines ?? 1,
       copyOnSelect: () => this.copyOnSelect,
       copySelection: () => void this.copyActiveSelectionToClipboard(),
+      dispatchToOverlay: (event) => this.dispatchMouseToOverlay(event),
+      focusedComponent: () => this.getFocusedComponent(),
+      onRightClickPaste: options.onRightClickPaste,
+      openUrl: options.openUrl,
+      resolveFocusTarget: (component) => this.resolveMouseFocusTarget(component),
+      scrollToBottom: () => this.scrollToBottom(),
+      scrollToEndIndicator: options.scrollToEndIndicator,
+      search: this.search,
+      setFocus: (component) => this.setFocus(component),
+      view: this.view,
+      wheelScrollLines: options.wheelScrollLines ?? 1,
     });
   }
 
-  private createPainter(): AltScreenPainter {
+  private createPainter(): altScreenPainterTypes.AltScreenPainter {
     return new AltScreenPainter({
-      view: this.view,
-      implicitScrollView: this.implicitScrollView,
-      search: this.search,
-      pointer: this.pointer,
-      layoutRoot: () => this.layoutRoot,
-      imageProtocol: () => this.images.protocol,
-      showHardwareCursor: () => this.getShowHardwareCursor(),
-      renderFlashes: (width) => this.flashes.render(width),
-      resolveFakeCursors: (lines) => this.resolveFakeCursors(lines),
+      applyLineResets: (lines) => this.applyLineResets(lines),
       compositeOverlays: (lines, width, height) => this.compositeOverlays(lines, width, height),
       extractCursorPosition: (lines, height) => this.extractCursorPosition(lines, height),
-      applyLineResets: (lines) => this.applyLineResets(lines),
+      imageProtocol: () => this.images.protocol,
+      implicitScrollView: this.implicitScrollView,
+      layoutRoot: () => this.layoutRoot,
       onFullRedraw: () => {
         this.fullRedrawCount += 1;
       },
+      pointer: this.pointer,
+      renderFlashes: (width) => this.flashes.render(width),
+      resolveFakeCursors: (lines) => this.resolveFakeCursors(lines),
+      search: this.search,
+      showHardwareCursor: () => this.getShowHardwareCursor(),
+      view: this.view,
       write: (data) => this.terminal.write(data),
     });
   }
 
-  private createViewportKeys(): ViewportKeyTarget {
+  private createViewportKeys(): altScreenViewportKeysTypes.ViewportKeyTarget {
     return {
-      toggleSearch: () => this.search.toggle(),
+      closeSearch: () => this.search.close(),
       isSearchFocused: () => this.search.isFocused(),
       navigateSearch: (direction) => this.search.navigate(direction),
-      closeSearch: () => this.search.close(),
+      scrollBy: (lines) => this.scrollBy(lines),
+      scrollToBottom: () => this.scrollToBottom(),
+      scrollToPrompt: (direction) => this.scrollToPrompt(direction),
+      scrollToTop: () => this.scrollToTop(),
       shouldDeferToOverlay: () =>
         (this.isOverlayFocused() && !this.search.isFocused()) ||
         this.getFocusedComponent()?.wantsViewportKeys === true,
+      toggleSearch: () => this.search.toggle(),
       viewportHeight: () => this.getPrimaryScrollView().viewportHeight,
-      scrollBy: (lines) => this.scrollBy(lines),
-      scrollToPrompt: (direction) => this.scrollToPrompt(direction),
-      scrollToTop: () => this.scrollToTop(),
-      scrollToBottom: () => this.scrollToBottom(),
     };
   }
 

@@ -1,15 +1,11 @@
-import { Type } from "@msa/ai";
-import { defineTool, type ExtensionAPI } from "@msa/coding-agent";
+import ai from "@msa/ai";
+import { type ExtensionAPI, defineTool } from "@msa/coding-agent";
 import { Effect } from "effect";
 
-const helloTool = defineTool({
-  name: "hello",
-  label: "Hello",
-  description: "A simple greeting tool",
-  parameters: Type.Object({
-    name: Type.String({ description: "Name to greet" }),
-  }),
+const { Type } = ai;
 
+const helloTool = defineTool({
+  description: "A simple greeting tool",
   execute: (_toolCallId, params) =>
     Effect.runPromise(
       Effect.succeed({
@@ -17,6 +13,11 @@ const helloTool = defineTool({
         details: { greeted: params.name },
       }),
     ),
+  label: "Hello",
+  name: "hello",
+  parameters: Type.Object({
+    name: Type.String({ description: "Name to greet" }),
+  }),
 });
 
 export default function (msa: ExtensionAPI) {

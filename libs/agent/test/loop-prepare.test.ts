@@ -2,9 +2,11 @@ import { Effect } from "effect";
 import { Type } from "typebox";
 import { describe, expect, it } from "vite-plus/test";
 
-import { agentLoop, runAgentLoop } from "../src/agent-loop.ts";
-import type { AgentLoopConfig, AgentMessage, StreamFn } from "../src/types.ts";
+import agentLoopModule from "../src/agent-loop.ts";
+import type typesModule from "../src/types.ts";
 import fixtures from "./support/fixtures.ts";
+
+const { agentLoop, runAgentLoop } = agentLoopModule;
 
 const {
   collect,
@@ -30,7 +32,7 @@ const noop = tool({
 const replacementModel = { ...createModel(), id: "replacement", name: "replacement" };
 
 const expectReplaced =
-  (canonical: AgentMessage): StreamFn =>
+  (canonical: typesModule.AgentMessage): typesModule.StreamFn =>
   (model, context, options) => {
     expect(model).toBe(replacementModel);
     expect(context.messages).toEqual([canonical]);
@@ -41,10 +43,10 @@ const expectReplaced =
 const replacesInitialRequest = Effect.gen(function* () {
   const canonicalMessage = createUserMessage("canonical projection");
   const steeringMessage = createUserMessage("steering");
-  const completedMessages: AgentMessage[] = [];
+  const completedMessages: typesModule.AgentMessage[] = [];
   let steeringDelivered = false;
   let prepareCalls = 0;
-  const config: AgentLoopConfig = {
+  const config: typesModule.AgentLoopConfig = {
     convertToLlm: identityConverter,
     getSteeringMessages: () => {
       if (steeringDelivered) return Promise.resolve([]);
@@ -79,11 +81,11 @@ const replacesInitialRequest = Effect.gen(function* () {
 });
 
 const noSteeringPollAfterPrepare = Effect.gen(function* () {
-  const queued: AgentMessage[] = [];
+  const queued: typesModule.AgentMessage[] = [];
   const lateSteering = createUserMessage("late steering");
   let requestPreparations = 0;
   let steeringPolls = 0;
-  const config: AgentLoopConfig = {
+  const config: typesModule.AgentLoopConfig = {
     convertToLlm: identityConverter,
     getSteeringMessages: () => {
       steeringPolls++;
@@ -114,7 +116,7 @@ const noSteeringPollAfterPrepare = Effect.gen(function* () {
 
 const usesNextTurnSnapshot = Effect.gen(function* () {
   let prepareCalls = 0;
-  const config: AgentLoopConfig = {
+  const config: typesModule.AgentLoopConfig = {
     convertToLlm: identityConverter,
     model: createModel(),
     prepareNextTurn: ({ context }) => {
@@ -151,9 +153,9 @@ const usesNextTurnSnapshot = Effect.gen(function* () {
 });
 
 const steeringDuringNextTurn = Effect.gen(function* () {
-  const queued: AgentMessage[] = [];
+  const queued: typesModule.AgentMessage[] = [];
   const lateSteering = createUserMessage("late steering");
-  const config: AgentLoopConfig = {
+  const config: typesModule.AgentLoopConfig = {
     convertToLlm: identityConverter,
     getSteeringMessages: () => Promise.resolve(queued.splice(0)),
     model: createModel(),
@@ -190,7 +192,7 @@ const expectedEvents = [
 const endWithFinalizedTurn = Effect.gen(function* () {
   const polls = { followUps: 0, steering: 0 };
   const seen: { ids: string[]; roles: string[] } = { ids: [], roles: [] };
-  const config: AgentLoopConfig = {
+  const config: typesModule.AgentLoopConfig = {
     convertToLlm: identityConverter,
     finishTurn: ({ message, toolResults, context }) => {
       expect(message.role).toBe("assistant");

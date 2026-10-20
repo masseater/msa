@@ -1,12 +1,18 @@
 import { Effect } from "effect";
 import { describe, expect, it } from "vite-plus/test";
 
-import { InMemoryCredentialStore } from "../src/auth/credential-store.ts";
-import { InMemoryModelsStore } from "../src/models-store.ts";
-import { type Provider, createModels, createProvider } from "../src/models.ts";
-import type { Api, Model } from "../src/types.ts";
-import { AssistantMessageEventStream } from "../src/utils/event-stream.ts";
+import credentialStore from "../src/auth/credential-store.ts";
+import InMemoryModelsStore from "../src/models-store.ts";
+import modelsModule from "../src/models.ts";
+import type modelsTypes from "../src/models.types.ts";
+import type typesModule from "../src/types.types.ts";
+import eventStream from "../src/utils/event-stream.ts";
 import modelsRuntimeSupport from "./models-runtime-support.ts";
+
+const { InMemoryCredentialStore } = credentialStore;
+
+const { createModels, createProvider } = modelsModule;
+const { AssistantMessageEventStream } = eventStream;
 
 const { envKeyAuth, storeCredential, testModel, testProvider } = modelsRuntimeSupport;
 const persistsDynamicCatalogsAndRestoresThem = () =>
@@ -16,7 +22,7 @@ const persistsDynamicCatalogsAndRestoresThem = () =>
       const modelsStore = new InMemoryModelsStore();
       yield* storeCredential(credentials, "dynamic", { key: "key", type: "api_key" });
       const createDynamicProvider = (
-        fetchModels: (() => Promise<readonly Model<Api>[]>) | undefined,
+        fetchModels: (() => Promise<readonly typesModule.Model<typesModule.Api>[]>) | undefined,
       ) =>
         createProvider({
           api: {
@@ -92,7 +98,7 @@ const passesTheRegisteredProviderSBase = () =>
   Effect.runPromise(
     Effect.gen(function* () {
       const baseUrls: (string | undefined)[] = [];
-      const inner: Provider = {
+      const inner: modelsTypes.Provider = {
         ...testProvider({
           id: "dynamic",
           refreshModels: (refreshContext) => {

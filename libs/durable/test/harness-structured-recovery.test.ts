@@ -1,4 +1,4 @@
-import { Type, fauxAssistantMessage, fauxText } from "@msa/ai";
+import ai from "@msa/ai";
 import type durableTypes from "@msa/durable/index.types";
 import memory from "@msa/durable/storage/memory";
 import { Effect } from "effect";
@@ -9,6 +9,8 @@ import harnessStructuredEvents from "./harness-structured-events.ts";
 import harnessStructuredRecoveryCases from "./harness-structured-recovery-cases.ts";
 import harnessStructuredSupport from "./harness-structured-support.ts";
 import support from "./support.ts";
+
+const { Type, fauxAssistantMessage, fauxText } = ai;
 
 const { durable, sqliteNode: node } = durableKit;
 

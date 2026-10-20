@@ -1,5 +1,5 @@
 import testing from "@msa/testing";
-import type { TUI, TerminalColors } from "@msa/tui";
+import type tuiTypes from "@msa/tui/index.types";
 import { Effect } from "effect";
 import { vi } from "vite-plus/test";
 
@@ -10,14 +10,14 @@ import type themeControllerSupportTypes from "./theme-controller-support.types.t
 
 const { awaited, runTest } = testing;
 
-const DARK: TerminalColors = {
+const DARK: tuiTypes.TerminalColors = {
   background: { b: 54, g: 42, r: 40 },
   foreground: { b: 242, g: 248, r: 248 },
 };
 
 function createUi() {
   const queryTerminalColors = vi.fn(
-    (_options: themeControllerSupportTypes.ColorQueryOptions): Promise<TerminalColors> =>
+    (_options: themeControllerSupportTypes.ColorQueryOptions): Promise<tuiTypes.TerminalColors> =>
       runTest(awaited({})),
   );
   const setTerminalColorSchemeNotifications = vi.fn<(enabled: boolean) => void>();
@@ -32,7 +32,7 @@ function createUi() {
     queryTerminalColors,
     requestRender: vi.fn(),
     setTerminalColorSchemeNotifications,
-  } as unknown as TUI;
+  } as unknown as tuiTypes.TUI;
   return {
     emitTerminalColorScheme: (terminalTheme: TerminalTheme) =>
       terminalColorSchemeListener?.(terminalTheme),
@@ -44,7 +44,7 @@ function createUi() {
 }
 
 function createController(
-  ui: TUI,
+  ui: tuiTypes.TUI,
   getSettingsManager: () => SettingsManager,
   initialThemeSetting?: string,
 ) {

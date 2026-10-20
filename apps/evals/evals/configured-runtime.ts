@@ -1,13 +1,10 @@
 import * as NodePath from "@effect/platform-node/NodePath";
-import {
-  type Api,
-  type Context,
-  contentText,
-  type Model,
-  type ModelsSimpleStreamOptions,
-} from "@msa/ai";
+import ai from "@msa/ai";
+import type aiTypes from "@msa/ai/index.types";
 import { ModelRuntime } from "@msa/coding-agent";
 import { Cause, Effect, Exit, Function, ManagedRuntime, Path } from "effect";
+
+const { contentText } = ai;
 
 type ModelFields = {
   id: string;
@@ -37,26 +34,26 @@ export type AddedModelOutput = {
 export type ProviderScenario = {
   providerId: string;
   modelId: string;
-  createContext(): Context;
-  options?: ModelsSimpleStreamOptions;
+  createContext(): aiTypes.Context;
+  options?: aiTypes.ModelsSimpleStreamOptions;
   validRequestReceived(): boolean;
 };
 
-function modelFields(model: Model<Api>): ModelFields {
+function modelFields(model: aiTypes.Model<aiTypes.Api>): ModelFields {
   return {
+    contextWindow: model.contextWindow,
+    cost: {
+      cacheRead: model.cost.cacheRead,
+      cacheWrite: model.cost.cacheWrite,
+      input: model.cost.input,
+      output: model.cost.output,
+    },
     id: model.id,
+    input: [...model.input],
+    maxTokens: model.maxTokens,
     name: model.name,
     provider: model.provider,
     reasoning: model.reasoning,
-    input: [...model.input],
-    cost: {
-      input: model.cost.input,
-      output: model.cost.output,
-      cacheRead: model.cost.cacheRead,
-      cacheWrite: model.cost.cacheWrite,
-    },
-    contextWindow: model.contextWindow,
-    maxTokens: model.maxTokens,
   };
 }
 
@@ -68,10 +65,10 @@ const nodePath = ManagedRuntime.make(NodePath.layer).runSync(Path.Path);
 export const loadConfiguredModelRuntime = (agentDir: string): Effect.Effect<ModelRuntime> =>
   Effect.promise(() =>
     ModelRuntime.create({
-      modelsPath: nodePath.join(agentDir, "models.json"),
-      authPath: nodePath.join(agentDir, "auth.json"),
-      modelsStorePath: nodePath.join(agentDir, "models-store.json"),
       allowModelNetwork: false,
+      authPath: nodePath.join(agentDir, "auth.json"),
+      modelsPath: nodePath.join(agentDir, "models.json"),
+      modelsStorePath: nodePath.join(agentDir, "models-store.json"),
     }),
   );
 
@@ -80,7 +77,7 @@ const failure = (error: string): { result: { error: string } } => ({ result: { e
 const completeProbe = (
   runtime: ModelRuntime,
   scenario: ProviderScenario,
-  model: Model<Api>,
+  model: aiTypes.Model<aiTypes.Api>,
 ): Effect.Effect<ProviderRuntimeOutput> =>
   Effect.promise(() =>
     runtime.completeSimple(model, scenario.createContext(), scenario.options),
@@ -91,14 +88,14 @@ const completeProbe = (
         ? failure(errorMessage(Cause.squash(exit.cause)))
         : {
             result: {
-              validRequestReceived: scenario.validRequestReceived(),
               model: modelFields(model),
               response: {
-                text: contentText(exit.value.content, "\n"),
-                stopReason: exit.value.stopReason,
                 inputTokens: exit.value.usage.input,
                 outputTokens: exit.value.usage.output,
+                stopReason: exit.value.stopReason,
+                text: contentText(exit.value.content, "\n"),
               },
+              validRequestReceived: scenario.validRequestReceived(),
             },
           },
     ),
@@ -134,7 +131,7 @@ export const inspectAddedModel: {
   (runtime: ModelRuntime, providerId: string, modelId: string): Effect.Effect<AddedModelOutput> =>
     Effect.gen(function* () {
       const pristineRuntime = yield* Effect.promise(() =>
-        ModelRuntime.create({ modelsPath: null, allowModelNetwork: false }),
+        ModelRuntime.create({ allowModelNetwork: false, modelsPath: null }),
       );
       const pristineProvider = pristineRuntime.getProvider(providerId);
       if (pristineProvider === undefined) {
@@ -155,10 +152,10 @@ export const inspectAddedModel: {
       }
       return {
         result: {
-          model: modelFields(model),
           existingModelsPreserved: existingModelIds.every(
             (id) => runtime.getModel(providerId, id) !== undefined,
           ),
+          model: modelFields(model),
         },
       };
     }),

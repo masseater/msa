@@ -1,4 +1,4 @@
-import { createWriteStream, type WriteStream } from "node:fs";
+import { type WriteStream, createWriteStream } from "node:fs";
 import { tmpdir } from "node:os";
 
 import * as Effect from "effect/Effect";
@@ -24,7 +24,7 @@ function writeOutputFileImpl(
     awaiting(function* () {
       const path = createOutputFilePath(prefix, extension);
 
-      yield* awaited(writeFile({ path, data, mode: OUTPUT_FILE_MODE, flag: "wx" }));
+      yield* awaited(writeFile({ data, flag: "wx", mode: OUTPUT_FILE_MODE, path }));
       return path;
     }),
   );
@@ -42,7 +42,7 @@ export interface OutputFileStream {
 
 function createOutputFileStreamImpl(prefix: string, extension: string): OutputFileStream {
   const path = createOutputFilePath(prefix, extension);
-  return { path, stream: createWriteStream(path, { mode: OUTPUT_FILE_MODE, flags: "wx" }) };
+  return { path, stream: createWriteStream(path, { flags: "wx", mode: OUTPUT_FILE_MODE }) };
 }
 
 export const createOutputFileStream: {

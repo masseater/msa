@@ -1,11 +1,14 @@
 import { Clock, Effect, Function } from "effect";
 
-import { httpRequest } from "../../utils/http.ts";
-import type { OAuthCredential } from "../types.ts";
+import http from "../../utils/http.ts";
+import type typesModule from "../types.ts";
+import type openaiChatgptTokenTypes from "./openai-chatgpt-token.types.ts";
+
+const { httpRequest } = http;
 
 const TOKEN_URL = "https://auth.openai.com/api/accounts/oauth/token";
-export const RESOURCE = "https://api.openai.com/v1";
-export const DIRECT_TOKEN_SCOPE = "chatgpt.tokens.use.direct";
+const RESOURCE = "https://api.openai.com/v1";
+const DIRECT_TOKEN_SCOPE = "chatgpt.tokens.use.direct";
 const EXPIRY_MARGIN_MS = 3 * 60 * 1000;
 
 interface TokenResponse {
@@ -19,14 +22,14 @@ interface TokenResponse {
 const requestToken = (body: URLSearchParams, signal: AbortSignal): Effect.Effect<TokenResponse> =>
   Effect.gen(function* () {
     const reply = yield* httpRequest({
-      url: TOKEN_URL,
-      method: "POST",
+      body: body.toString(),
       headers: {
         accept: "application/json",
         "content-type": "application/x-www-form-urlencoded",
       },
-      body: body.toString(),
+      method: "POST",
       signal,
+      url: TOKEN_URL,
     });
     if (!reply.ok) {
       const responseBody = yield* reply.text.pipe(Effect.catchDefect(() => Effect.succeed("")));
@@ -52,7 +55,7 @@ const requireTokenString = (
 const credentialFromTokenResponse = (
   token: TokenResponse,
   clientId: string,
-): Effect.Effect<OAuthCredential> =>
+): Effect.Effect<typesModule.OAuthCredential> =>
   Effect.gen(function* () {
     const access = yield* requireTokenString(token.access_token, "access_token");
     const refresh = yield* requireTokenString(token.refresh_token, "refresh_token");
@@ -72,37 +75,29 @@ const credentialFromTokenResponse = (
     }
     const now = yield* Clock.currentTimeMillis;
     return {
-      type: "oauth",
       access,
-      refresh,
-      expires: now + expiresIn * 1000 - EXPIRY_MARGIN_MS,
       clientId,
+      expires: now + expiresIn * 1000 - EXPIRY_MARGIN_MS,
+      refresh,
       scopes,
+      type: "oauth",
     };
   });
 
-export interface ChatGPTCodeExchange {
-  readonly code: string;
-  readonly verifier: string;
-  readonly clientId: string;
-  readonly redirectUri: string;
-  readonly signal: AbortSignal;
-}
-
-export const exchangeAuthorizationCode = ({
+const exchangeAuthorizationCode = ({
   code,
   verifier,
   clientId,
   redirectUri,
   signal,
-}: ChatGPTCodeExchange): Effect.Effect<OAuthCredential> =>
+}: openaiChatgptTokenTypes.ChatGPTCodeExchange): Effect.Effect<typesModule.OAuthCredential> =>
   Effect.gen(function* () {
     const token = yield* requestToken(
       new URLSearchParams({
-        grant_type: "authorization_code",
         client_id: clientId,
         code,
         code_verifier: verifier,
+        grant_type: "authorization_code",
         redirect_uri: redirectUri,
         resource: RESOURCE,
       }),
@@ -117,9 +112,9 @@ export const exchangeAuthorizationCode = ({
   });
 
 const refresh = (
-  credential: OAuthCredential,
+  credential: typesModule.OAuthCredential,
   signal: AbortSignal,
-): Effect.Effect<OAuthCredential> =>
+): Effect.Effect<typesModule.OAuthCredential> =>
   Effect.gen(function* () {
     const clientId = credential["clientId"];
     if (typeof clientId !== "string" || clientId.trim().length === 0) {
@@ -131,8 +126,8 @@ const refresh = (
     }
     const token = yield* requestToken(
       new URLSearchParams({
-        grant_type: "refresh_token",
         client_id: clientId,
+        grant_type: "refresh_token",
         refresh_token: credential.refresh,
         resource: RESOURCE,
       }),
@@ -141,7 +136,21 @@ const refresh = (
     return yield* credentialFromTokenResponse(token, clientId);
   });
 
-export const refreshAccessToken: {
-  (signal: AbortSignal): (credential: OAuthCredential) => Effect.Effect<OAuthCredential>;
-  (credential: OAuthCredential, signal: AbortSignal): Effect.Effect<OAuthCredential>;
+const refreshAccessToken: {
+  (
+    signal: AbortSignal,
+  ): (credential: typesModule.OAuthCredential) => Effect.Effect<typesModule.OAuthCredential>;
+  (
+    credential: typesModule.OAuthCredential,
+    signal: AbortSignal,
+  ): Effect.Effect<typesModule.OAuthCredential>;
 } = Function.dual(2, refresh);
+
+const openaiChatgptToken = {
+  DIRECT_TOKEN_SCOPE,
+  RESOURCE,
+  exchangeAuthorizationCode,
+  refreshAccessToken,
+};
+
+export default openaiChatgptToken;

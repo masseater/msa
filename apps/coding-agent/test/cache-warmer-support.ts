@@ -1,13 +1,6 @@
-import {
-  type Api,
-  type AssistantMessage,
-  type AssistantMessageEventStream,
-  type Model,
-  type ModelsSimpleStreamOptions,
-  type Usage,
-  normalizeContext,
-} from "@msa/ai";
-import { getBuiltinModel } from "@msa/ai/providers/all";
+import ai from "@msa/ai";
+import type aiTypes from "@msa/ai/index.types";
+import all from "@msa/ai/providers/all";
 import testing from "@msa/testing";
 import { Effect } from "effect";
 import { vi } from "vite-plus/test";
@@ -21,21 +14,24 @@ import {
 import { type SessionEntry, SessionManager, type UsageEntry } from "../src/core/session-manager.ts";
 import type { CacheWarmingMode } from "../src/core/settings-manager.ts";
 
+const { getBuiltinModel } = all;
+const { normalizeContext } = ai;
+
 const { awaited, isoFromMillis, runTest } = testing;
 
-const adaptiveModel: Model<Api> = {
+const adaptiveModel: aiTypes.Model<aiTypes.Api> = {
   ...getBuiltinModel("anthropic-api", "claude-opus-4-6"),
   promptCache: { long: 3600, short: 300 },
 };
 
-const budgetModel: Model<Api> = {
+const budgetModel: aiTypes.Model<aiTypes.Api> = {
   ...getBuiltinModel("anthropic-api", "claude-sonnet-4-5"),
   promptCache: { long: 3600, short: 300 },
 };
 
-const { promptCache: _adaptivePromptCache }: Model<Api> = adaptiveModel;
+const { promptCache: _adaptivePromptCache }: aiTypes.Model<aiTypes.Api> = adaptiveModel;
 
-const warmUsage: Usage = {
+const warmUsage: aiTypes.Usage = {
   cacheRead: 100,
   cacheWrite: 0,
   cost: { cacheRead: 0.01, cacheWrite: 0, input: 0, output: 0, total: 0.01 },
@@ -45,9 +41,9 @@ const warmUsage: Usage = {
 };
 
 function response(
-  model: Model<Api>,
-  stopReason: AssistantMessage["stopReason"] = "length",
-): AssistantMessage {
+  model: aiTypes.Model<aiTypes.Api>,
+  stopReason: aiTypes.AssistantMessage["stopReason"] = "length",
+): aiTypes.AssistantMessage {
   return {
     api: model.api,
     content: [],
@@ -82,13 +78,16 @@ function branchWithPrompt(promptTokens: number): SessionEntry[] {
 
 function fakeRuntime(
   options: {
-    result?: (model: Model<Api>) => Promise<AssistantMessage>;
+    result?: (model: aiTypes.Model<aiTypes.Api>) => Promise<aiTypes.AssistantMessage>;
     decide?: (event: CacheWarmingDecisionEvent) => CacheWarmingAction | Promise<CacheWarmingAction>;
     mode?: CacheWarmingMode;
     branch?: SessionEntry[];
   } = {},
 ) {
-  const calls: Array<{ model: Model<Api>; options: ModelsSimpleStreamOptions | undefined }> = [];
+  const calls: Array<{
+    model: aiTypes.Model<aiTypes.Api>;
+    options: aiTypes.ModelsSimpleStreamOptions | undefined;
+  }> = [];
   const events: CacheWarmingDecisionEvent[] = [];
   const warmedEntries: UsageEntry[] = [];
   const usageManager = SessionManager.inMemory();
@@ -103,8 +102,10 @@ function fakeRuntime(
         calls.push({ model, options: streamOptions });
         return {
           result: () =>
-            (options.result ?? ((m: Model<Api>) => runTest(awaited(response(m)))))(model),
-        } as unknown as AssistantMessageEventStream;
+            (options.result ?? ((m: aiTypes.Model<aiTypes.Api>) => runTest(awaited(response(m)))))(
+              model,
+            ),
+        } as unknown as aiTypes.AssistantMessageEventStream;
       },
     },
     { appendUsage, getBranch: () => state.branch },
@@ -122,8 +123,8 @@ function fakeRuntime(
 }
 
 function request(
-  model: Model<Api> = adaptiveModel,
-  options: ModelsSimpleStreamOptions = {},
+  model: aiTypes.Model<aiTypes.Api> = adaptiveModel,
+  options: aiTypes.ModelsSimpleStreamOptions = {},
 ): CacheWarmRequest {
   return { context: normalizeContext({ messages: [] }), model, options };
 }

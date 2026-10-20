@@ -1,4 +1,5 @@
-import { type Api, type Model, fauxAssistantMessage } from "@msa/ai";
+import ai from "@msa/ai";
+import type aiTypes from "@msa/ai/index.types";
 import { describe, expect, it } from "vite-plus/test";
 
 import {
@@ -8,7 +9,14 @@ import {
   pickEvaluatorModel,
 } from "../src/core/goal.ts";
 
-function model(provider: string, id: string, input: number, output: number): Model<Api> {
+const { fauxAssistantMessage } = ai;
+
+function model(
+  provider: string,
+  id: string,
+  input: number,
+  output: number,
+): aiTypes.Model<aiTypes.Api> {
   return {
     api: "faux",
     baseUrl: "",

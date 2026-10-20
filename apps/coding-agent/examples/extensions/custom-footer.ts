@@ -1,15 +1,19 @@
-import type { AssistantMessage } from "@msa/ai";
+import type aiTypes from "@msa/ai/index.types";
 import type {
   ExtensionAPI,
   ExtensionContext,
   ReadonlyFooterDataProvider,
   Theme,
 } from "@msa/coding-agent";
-import { type TUI, truncateToWidth, visibleWidth } from "@msa/tui";
+import tuiModule from "@msa/tui";
+import type tuiTypes from "@msa/tui/index.types";
 import { Effect } from "effect";
 
+const { truncateToWidth, visibleWidth } = tuiModule;
+
 const makeFooter =
-  (ctx: ExtensionContext) => (tui: TUI, theme: Theme, footerData: ReadonlyFooterDataProvider) => {
+  (ctx: ExtensionContext) =>
+  (tui: tuiTypes.TUI, theme: Theme, footerData: ReadonlyFooterDataProvider) => {
     const unsub = footerData.onBranchChange(() => tui.requestRender());
 
     return {
@@ -21,7 +25,7 @@ const makeFooter =
         let cost = 0;
         for (const e of ctx.sessionManager.getBranch()) {
           if (e.type === "message" && e.message.role === "assistant") {
-            const m = e.message as AssistantMessage;
+            const m = e.message as aiTypes.AssistantMessage;
             input += m.usage.input;
             output += m.usage.output;
             cost += m.usage.cost.total;

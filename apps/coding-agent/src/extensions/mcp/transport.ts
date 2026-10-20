@@ -1,11 +1,7 @@
 import { homedir } from "node:os";
 
-import {
-  type AuthProvider,
-  type McpTransport,
-  StdioTransport,
-  StreamableHttpTransport,
-} from "@msa/mcp";
+import mcp from "@msa/mcp";
+import type mcpTypes from "@msa/mcp/index.types";
 import { dual } from "effect/Function";
 
 import { join, resolve } from "../../core/platform-node.ts";
@@ -14,6 +10,8 @@ import {
   resolveHeadersOrThrow,
 } from "../../core/resolve-config-value.ts";
 import type { McpServerEntry } from "./config.ts";
+
+const { StdioTransport, StreamableHttpTransport } = mcp;
 
 function expandHome(value: string): string {
   if (value === "~") return homedir();
@@ -26,8 +24,8 @@ function expandHome(value: string): string {
 function createDefaultTransportImpl(
   entry: McpServerEntry,
   cwd: string,
-  authProvider: AuthProvider | undefined,
-): McpTransport {
+  authProvider: mcpTypes.AuthProvider | undefined,
+): mcpTypes.McpTransport {
   const { config, name } = entry;
   if ("url" in config) {
     const headers = resolveHeadersOrThrow(config.headers, `MCP server "${name}"`);
@@ -51,6 +49,13 @@ function createDefaultTransportImpl(
 }
 
 export const createDefaultTransport: {
-  (entry: McpServerEntry, cwd: string, authProvider: AuthProvider | undefined): McpTransport;
-  (cwd: string, authProvider: AuthProvider | undefined): (entry: McpServerEntry) => McpTransport;
+  (
+    entry: McpServerEntry,
+    cwd: string,
+    authProvider: mcpTypes.AuthProvider | undefined,
+  ): mcpTypes.McpTransport;
+  (
+    cwd: string,
+    authProvider: mcpTypes.AuthProvider | undefined,
+  ): (entry: McpServerEntry) => mcpTypes.McpTransport;
 } = dual((args: IArguments) => args.length >= 3, createDefaultTransportImpl);

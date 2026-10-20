@@ -1,7 +1,10 @@
-import { getKeybindings, type Keybinding, type KeyId } from "@msa/tui";
+import tui from "@msa/tui";
+import type tuiTypes from "@msa/tui/index.types";
 import { dual } from "effect/Function";
 
 import { theme } from "../theme/theme.ts";
+
+const { getKeybindings } = tui;
 
 export interface KeyTextFormatOptions {
   capitalize?: boolean;
@@ -32,25 +35,25 @@ export const formatKeyText: {
       .join("/"),
 );
 
-function formatKeys(keys: KeyId[], options: KeyTextFormatOptions = {}): string {
+function formatKeys(keys: tuiTypes.KeyId[], options: KeyTextFormatOptions = {}): string {
   if (keys.length === 0) return "";
   return formatKeyText(keys.join("/"), options);
 }
 
-export function keyText(keybinding: Keybinding): string {
+export function keyText(keybinding: tuiTypes.Keybinding): string {
   return formatKeys(getKeybindings().getKeys(keybinding));
 }
 
-export function keyDisplayText(keybinding: Keybinding): string {
+export function keyDisplayText(keybinding: tuiTypes.Keybinding): string {
   return formatKeys(getKeybindings().getKeys(keybinding), { capitalize: true });
 }
 
 export const keyHint: {
-  (description: string): (keybinding: Keybinding) => string;
-  (keybinding: Keybinding, description: string): string;
+  (description: string): (keybinding: tuiTypes.Keybinding) => string;
+  (keybinding: tuiTypes.Keybinding, description: string): string;
 } = dual(
   2,
-  (keybinding: Keybinding, description: string): string =>
+  (keybinding: tuiTypes.Keybinding, description: string): string =>
     theme.fg("dim", keyText(keybinding)) + theme.fg("muted", ` ${description}`),
 );
 

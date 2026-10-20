@@ -1,14 +1,13 @@
 import assert from "node:assert";
 import { describe, it } from "node:test";
 
-import {
-  detectCapabilities,
-  getCapabilities,
-  resetCapabilitiesCache,
-  setCapabilityOverrides,
-} from "../src/terminal-capabilities.ts";
-import { isImageLine } from "../src/terminal-image-kitty.ts";
+import terminalCapabilities from "../src/terminal-capabilities.ts";
+import terminalImageKitty from "../src/terminal-image-kitty.ts";
 import terminalImageHelpers from "./terminal-image-helpers.ts";
+
+const { isImageLine } = terminalImageKitty;
+const { detectCapabilities, getCapabilities, resetCapabilitiesCache, setCapabilityOverrides } =
+  terminalCapabilities;
 
 const { withEnv } = terminalImageHelpers;
 

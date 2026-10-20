@@ -1,4 +1,4 @@
-import { getModel } from "@msa/ai/compat";
+import compat from "@msa/ai/compat";
 import testing from "@msa/testing";
 import { Effect } from "effect";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vite-plus/test";
@@ -9,6 +9,8 @@ import { createAgentSession } from "../src/core/sdk.ts";
 import { SessionManager } from "../src/core/session-manager.ts";
 import { SettingsManager } from "../src/core/settings-manager.ts";
 import webToolsSupport from "./web-tools-support.ts";
+
+const { getModel } = compat;
 
 const { fakeTreg } = webToolsSupport;
 

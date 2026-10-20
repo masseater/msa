@@ -1,4 +1,4 @@
-import type { ModelsRefreshOptions, ModelsRefreshResult } from "@msa/ai";
+import type aiTypes from "@msa/ai/index.types";
 import testing from "@msa/testing";
 import { Deferred, Effect } from "effect";
 import { describe, expect, it, vi } from "vite-plus/test";
@@ -22,7 +22,7 @@ function createDeferred<T>(): DeferredResult<T> {
   };
 }
 
-function successfulRefresh(): ModelsRefreshResult {
+function successfulRefresh(): aiTypes.ModelsRefreshResult {
   return { aborted: false, errors: new Map() };
 }
 
@@ -31,7 +31,7 @@ const abortsAnAbandonedRefreshAndAllowsA = () =>
     Effect.gen(function* () {
       const refreshSignals: AbortSignal[] = [];
       const runtime = {
-        refresh: vi.fn((options?: ModelsRefreshOptions) => {
+        refresh: vi.fn((options?: aiTypes.ModelsRefreshOptions) => {
           if (options?.signal !== undefined) refreshSignals.push(options.signal);
           return runTest(Effect.never);
         }),
@@ -55,8 +55,10 @@ describe("interactive model catalog refresh", () => {
   it("shares one runtime refresh between concurrent callers", () =>
     runTest(
       Effect.gen(function* () {
-        const deferred = createDeferred<ModelsRefreshResult>();
-        const runtime = { refresh: vi.fn((_options?: ModelsRefreshOptions) => deferred.promise) };
+        const deferred = createDeferred<aiTypes.ModelsRefreshResult>();
+        const runtime = {
+          refresh: vi.fn((_options?: aiTypes.ModelsRefreshOptions) => deferred.promise),
+        };
         const firstController = abortController();
         const secondController = abortController();
 
@@ -73,10 +75,10 @@ describe("interactive model catalog refresh", () => {
   it("keeps the shared refresh alive when one caller stops waiting", () =>
     runTest(
       Effect.gen(function* () {
-        const deferred = createDeferred<ModelsRefreshResult>();
+        const deferred = createDeferred<aiTypes.ModelsRefreshResult>();
         let refreshSignal: AbortSignal | undefined;
         const runtime = {
-          refresh: vi.fn((options?: ModelsRefreshOptions) => {
+          refresh: vi.fn((options?: aiTypes.ModelsRefreshOptions) => {
             refreshSignal = options?.signal;
             return deferred.promise;
           }),

@@ -1,5 +1,5 @@
-import type { FauxModelDefinition, FauxProviderRegistration, Model } from "@msa/ai/compat";
-import { registerFauxProvider } from "@msa/ai/compat";
+import compat from "@msa/ai/compat";
+import type compatTypes from "@msa/ai/compat.types";
 import testing from "@msa/testing";
 import { Effect } from "effect";
 
@@ -7,12 +7,16 @@ import { AuthStorage } from "../../../src/core/auth-storage.ts";
 import type { ModelRegistry } from "../../../src/core/model-registry.ts";
 import modelRuntimeTestUtils from "../../model-runtime-test-utils.ts";
 
+const { registerFauxProvider } = compat;
+
 const { createInMemoryModelRegistry, createModelRegistry } = modelRuntimeTestUtils;
 
 const { joinPath, toJsonText, writeTextFile } = testing;
 
-function createFauxProvider(models: FauxModelDefinition[] | undefined): FauxProviderRegistration {
-  const provider: FauxProviderRegistration = registerFauxProvider(
+function createFauxProvider(
+  models: compatTypes.FauxModelDefinition[] | undefined,
+): compatTypes.FauxProviderRegistration {
+  const provider: compatTypes.FauxProviderRegistration = registerFauxProvider(
     models === undefined ? {} : { models },
   );
   provider.setResponses([]);
@@ -43,8 +47,8 @@ function writeModelsJson(entry: {
 
 function registerFauxModels(entry: {
   modelRegistry: ModelRegistry;
-  model: Model<string>;
-  fauxProvider: FauxProviderRegistration;
+  model: compatTypes.Model<string>;
+  fauxProvider: compatTypes.FauxProviderRegistration;
 }): void {
   const { modelRegistry, model, fauxProvider } = entry;
   modelRegistry.registerProvider(model.provider, {

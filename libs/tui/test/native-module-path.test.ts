@@ -2,8 +2,11 @@ import assert from "node:assert";
 import { describe, it } from "node:test";
 import { pathToFileURL } from "node:url";
 
-import { getNativeModuleCandidates } from "../src/native-module-path.ts";
-import { pathOperations } from "../src/platform.ts";
+import nativeModulePath from "../src/native-module-path.ts";
+import platform from "../src/platform.ts";
+
+const { pathOperations } = platform;
+const { getNativeModuleCandidates } = nativeModulePath;
 
 const { dirname, join, resolve } = pathOperations;
 

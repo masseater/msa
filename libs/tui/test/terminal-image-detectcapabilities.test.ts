@@ -1,9 +1,12 @@
 import assert from "node:assert";
 import { describe, it } from "node:test";
 
-import { detectCapabilities } from "../src/terminal-capabilities.ts";
-import { encodeITerm2 } from "../src/terminal-image.ts";
+import terminalCapabilities from "../src/terminal-capabilities.ts";
+import terminalImage from "../src/terminal-image.ts";
 import terminalImageHelpers from "./terminal-image-helpers.ts";
+
+const { detectCapabilities } = terminalCapabilities;
+const { encodeITerm2 } = terminalImage;
 
 const { withEnv } = terminalImageHelpers;
 

@@ -1,21 +1,23 @@
 import { Clock, Effect } from "effect";
 
-import type { SgrMouseEvent } from "./alt-screen-mouse-protocol.ts";
-import { SelectionAutoScroll } from "./alt-screen-selection-autoscroll.ts";
-import { selectionPointAt, selectionSourceLine } from "./alt-screen-selection-points.ts";
-import {
-  lineSelection,
-  orderedSelection,
-  paintSelection,
-  type SelectionPoint,
-  type SelectionRange,
-  selectedText,
-  wordSelection,
-} from "./alt-screen-selection-text.ts";
-import type { AltScreenView } from "./alt-screen-view.ts";
-import type { ScrollView } from "./components/scroll-view.ts";
-import { getScrollViewBox, getScrollViewsAt, type LayoutFrame } from "./layout.ts";
-import { getOsc8LinkAtColumn } from "./text-slice.ts";
+import type altScreenMouseProtocolTypes from "./alt-screen-mouse-protocol.types.ts";
+import type altScreenSelectionAutoscrollTypes from "./alt-screen-selection-autoscroll.types.ts";
+import altScreenSelectionKit from "./alt-screen-selection-kit.ts";
+import type altScreenSelectionTextTypes from "./alt-screen-selection-text.types.ts";
+import type altScreenSelectionTypes from "./alt-screen-selection.types.ts";
+import type scrollViewTypes from "./components/scroll-view.types.ts";
+import layoutModule from "./layout.ts";
+import type layoutTypes from "./layout.types.ts";
+import textSlice from "./text-slice.ts";
+
+const { SelectionAutoScroll, altScreenSelectionPoints, altScreenSelectionText } =
+  altScreenSelectionKit;
+
+const { lineSelection, orderedSelection, paintSelection, selectedText, wordSelection } =
+  altScreenSelectionText;
+const { getScrollViewBox, getScrollViewsAt } = layoutModule;
+const { selectionPointAt, selectionSourceLine } = altScreenSelectionPoints;
+const { getOsc8LinkAtColumn } = textSlice;
 
 const DOUBLE_CLICK_INTERVAL_MS = 500;
 
@@ -25,40 +27,32 @@ interface ClickTarget {
   timestamp: number;
   count: number;
   row: number;
-  scrollView?: ScrollView | undefined;
+  scrollView?: scrollViewTypes.ScrollView | undefined;
   wordStart: number;
   wordEnd: number;
 }
 
-export interface SelectionHost {
-  readonly view: AltScreenView;
-  openUrl: ((url: string) => void) | undefined;
-  copyOnSelect(): boolean;
-  copySelection(): void;
-  dispatchClick(event: SgrMouseEvent, clickCount: number): boolean | undefined;
-}
-
-export class AltScreenSelection {
-  private readonly host: SelectionHost;
-  private readonly autoScroll: SelectionAutoScroll;
-  private anchor: SelectionPoint | undefined;
-  private focus: SelectionPoint | undefined;
+export default class AltScreenSelection {
+  private readonly host: altScreenSelectionTypes.SelectionHost;
+  private readonly autoScroll: altScreenSelectionAutoscrollTypes.SelectionAutoScroll;
+  private anchor: altScreenSelectionTextTypes.SelectionPoint | undefined;
+  private focus: altScreenSelectionTextTypes.SelectionPoint | undefined;
   private granularity: SelectionGranularity = "character";
-  private initialRange: SelectionRange | undefined;
+  private initialRange: altScreenSelectionTextTypes.SelectionRange | undefined;
   private lastClick: ClickTarget | undefined;
   private pressActive = false;
   private dragged = false;
   private pressedUrl: string | undefined;
 
-  constructor(host: SelectionHost) {
+  constructor(host: altScreenSelectionTypes.SelectionHost) {
     this.host = host;
     this.autoScroll = new SelectionAutoScroll({
-      view: host.view,
       anchorScrollView: () => this.anchor?.scrollView,
       onScroll: (point) => {
         if (point !== undefined) this.updateFocus(point);
         host.view.requestRender();
       },
+      view: host.view,
     });
   }
 
@@ -98,7 +92,7 @@ export class AltScreenSelection {
     this.lastClick = undefined;
   }
 
-  bounds(): SelectionRange | undefined {
+  bounds(): altScreenSelectionTextTypes.SelectionRange | undefined {
     if (this.anchor === undefined || this.focus === undefined) return undefined;
     return orderedSelection(this.anchor, this.focus);
   }
@@ -117,41 +111,43 @@ export class AltScreenSelection {
     return selectedText(sourceLines, selection);
   }
 
-  apply(screen: string[], layout: LayoutFrame | undefined): string[] {
+  apply(screen: string[], layout: layoutTypes.LayoutFrame | undefined): string[] {
     const selection = this.bounds();
     if (selection === undefined) return screen;
     const scrollView = selection.start.scrollView;
     const columns = this.host.view.columns();
     if (scrollView === undefined) {
       return paintSelection(screen, {
-        selection,
-        minRow: 0,
+        maxColumn: columns,
         maxRow: screen.length - 1,
         minColumn: 0,
-        maxColumn: columns,
+        minRow: 0,
+        selection,
       });
     }
     const box = layout === undefined ? undefined : getScrollViewBox(layout, scrollView);
     if (box === undefined) return screen;
-    const toScreen = (point: SelectionPoint): SelectionPoint => ({
+    const toScreen = (
+      point: altScreenSelectionTextTypes.SelectionPoint,
+    ): altScreenSelectionTextTypes.SelectionPoint => ({
       ...point,
-      row: box.rect.y + point.row - scrollView.scrollTop,
       col: box.rect.x + point.col,
+      row: box.rect.y + point.row - scrollView.scrollTop,
     });
     return paintSelection(screen, {
-      selection: { start: toScreen(selection.start), end: toScreen(selection.end) },
-      minRow: Math.max(0, box.rect.y, box.clip.y),
+      maxColumn: Math.min(columns, box.rect.x + box.rect.width, box.clip.x + box.clip.width),
       maxRow: Math.min(
         screen.length - 1,
         box.rect.y + box.rect.height - 1,
         box.clip.y + box.clip.height - 1,
       ),
       minColumn: Math.max(0, box.rect.x, box.clip.x),
-      maxColumn: Math.min(columns, box.rect.x + box.rect.width, box.clip.x + box.clip.width),
+      minRow: Math.max(0, box.rect.y, box.clip.y),
+      selection: { end: toScreen(selection.end), start: toScreen(selection.start) },
     });
   }
 
-  handleMouse(event: SgrMouseEvent): void {
+  handleMouse(event: altScreenMouseProtocolTypes.SgrMouseEvent): void {
     const button = event.button & 3;
     if (button !== 0 && !(event.release && button === 3)) return;
     if (event.release) {
@@ -163,11 +159,14 @@ export class AltScreenSelection {
     }
   }
 
-  private pointAt(event: SgrMouseEvent, scrollView: ScrollView | undefined): SelectionPoint {
-    return selectionPointAt(this.host.view, { x: event.x, y: event.y, scrollView });
+  private pointAt(
+    event: altScreenMouseProtocolTypes.SgrMouseEvent,
+    scrollView: scrollViewTypes.ScrollView | undefined,
+  ): altScreenSelectionTextTypes.SelectionPoint {
+    return selectionPointAt(this.host.view, { scrollView, x: event.x, y: event.y });
   }
 
-  private handleRelease(event: SgrMouseEvent): void {
+  private handleRelease(event: altScreenMouseProtocolTypes.SgrMouseEvent): void {
     if (!this.pressActive) return;
     this.stopPress();
     const anchor = this.anchor;
@@ -203,7 +202,7 @@ export class AltScreenSelection {
     this.host.view.requestRender();
   }
 
-  private handleDrag(event: SgrMouseEvent): void {
+  private handleDrag(event: altScreenMouseProtocolTypes.SgrMouseEvent): void {
     if (!this.pressActive || this.anchor === undefined) return;
     const point = this.pointAt(event, this.anchor.scrollView);
     this.dragged = true;
@@ -214,7 +213,7 @@ export class AltScreenSelection {
     this.host.view.requestRender();
   }
 
-  private handlePress(event: SgrMouseEvent): void {
+  private handlePress(event: altScreenMouseProtocolTypes.SgrMouseEvent): void {
     this.autoScroll.stop();
     this.pressActive = true;
     const { view } = this.host;
@@ -244,7 +243,7 @@ export class AltScreenSelection {
     view.requestRender();
   }
 
-  private updateFocus(point: SelectionPoint): void {
+  private updateFocus(point: altScreenSelectionTextTypes.SelectionPoint): void {
     const initial = this.initialRange;
     if (this.granularity === "character" || initial === undefined) {
       this.focus = point;
@@ -261,7 +260,10 @@ export class AltScreenSelection {
     this.focus = targetBeforeInitial ? range.start : range.end;
   }
 
-  private clickCount(point: SelectionPoint, word: SelectionRange | undefined): number {
+  private clickCount(
+    point: altScreenSelectionTextTypes.SelectionPoint,
+    word: altScreenSelectionTextTypes.SelectionRange | undefined,
+  ): number {
     const now = Effect.runSync(Clock.currentTimeMillis);
     const previous = this.lastClick;
     const count =
@@ -278,12 +280,12 @@ export class AltScreenSelection {
       word === undefined
         ? undefined
         : {
-            timestamp: now,
             count,
             row: point.row,
             scrollView: point.scrollView,
-            wordStart: word.start.col,
+            timestamp: now,
             wordEnd: word.end.col,
+            wordStart: word.start.col,
           };
     return count;
   }

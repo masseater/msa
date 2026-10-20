@@ -52,11 +52,11 @@ export function classifyCaseStatus(
 
 function taskIdentity(task: EvalTask): EvalRunIdentity {
   return {
-    evalSet: task.evalSet,
     caseId: task.caseId,
-    variant: task.variant,
+    evalSet: task.evalSet,
     model: task.model,
     runNumber: task.runNumber,
+    variant: task.variant,
   };
 }
 
@@ -85,7 +85,7 @@ const persistSession = (
 const loadReport = (reportPath: string): Effect.Effect<LoadedReport | undefined> =>
   Effect.promise(() =>
     Promise.all([readReportWorkspace([reportPath]), readVitestJsonReportFile(reportPath)]).then(
-      ([{ workspace }, rawReport]): LoadedReport => ({ workspace, rawReport }),
+      ([{ workspace }, rawReport]): LoadedReport => ({ rawReport, workspace }),
       () => undefined,
     ),
   );
@@ -114,19 +114,19 @@ function selectCase(task: EvalTask, loaded: LoadedReport): SelectedCase {
   }
   const run = caseResult.harness?.run;
   if (run === undefined) return errored;
-  return { kind: "case", caseResult, run, statusOutcome };
+  return { caseResult, kind: "case", run, statusOutcome };
 }
 
 function readMetrics(run: NonNullable<ReportCase["harness"]>["run"]): EvalMetrics {
   return {
-    inputTokens: optionalMetric(run?.usage.inputTokens, "inputTokens"),
-    outputTokens: optionalMetric(run?.usage.outputTokens, "outputTokens"),
     cacheReadTokens: optionalMetric(run?.usage.metadata?.["cacheReadTokens"], "cacheReadTokens"),
     cacheWriteTokens: optionalMetric(run?.usage.metadata?.["cacheWriteTokens"], "cacheWriteTokens"),
-    totalTokens: optionalMetric(run?.usage.totalTokens, "totalTokens"),
+    estimatedCostUsd: optionalMetric(run?.usage.metadata?.["estimatedCostUsd"], "estimatedCostUsd"),
+    inputTokens: optionalMetric(run?.usage.inputTokens, "inputTokens"),
+    outputTokens: optionalMetric(run?.usage.outputTokens, "outputTokens"),
     toolCalls: optionalMetric(run?.usage.toolCalls, "toolCalls"),
     totalMs: optionalMetric(run?.timings?.totalMs, "totalMs"),
-    estimatedCostUsd: optionalMetric(run?.usage.metadata?.["estimatedCostUsd"], "estimatedCostUsd"),
+    totalTokens: optionalMetric(run?.usage.totalTokens, "totalTokens"),
   };
 }
 

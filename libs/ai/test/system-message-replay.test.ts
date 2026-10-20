@@ -1,9 +1,11 @@
 import { Type } from "typebox";
 import { describe, expect, test } from "vite-plus/test";
 
-import type { Message, Tool, TranscriptContext } from "../src/types.ts";
-import { getSystemMessageText, renderSystemMessageUpdate } from "../src/utils/text.ts";
-import {
+import type typesModule from "../src/types.types.ts";
+import textModule from "../src/utils/text.ts";
+import transcriptModule from "../src/utils/transcript.ts";
+
+const {
   collapseSystemMessages,
   declarationsEqual,
   getCurrentSystemMessage,
@@ -12,9 +14,10 @@ import {
   hasNonAdditiveToolChanges,
   hasToolRedefinitions,
   normalizeContext,
-} from "../src/utils/transcript.ts";
+} = transcriptModule;
+const { getSystemMessageText, renderSystemMessageUpdate } = textModule;
 
-function tool(name: string, description = `${name} tool`): Tool {
+function tool(name: string, description = `${name} tool`): typesModule.Tool {
   return { description, name, parameters: Type.Object({}) };
 }
 
@@ -76,7 +79,7 @@ describe("system message replay", () => {
 
 describe("system message replay", () => {
   test("a late full patch on a transcript without a leading message replays as the prompt", () => {
-    const context: TranscriptContext = normalizeContext({
+    const context: typesModule.TranscriptContext = normalizeContext({
       messages: [
         { content: "old session", role: "user", timestamp: 1 },
         {
@@ -113,7 +116,7 @@ describe("system message replay", () => {
   });
 
   test("normalizes the legacy prompt and tool fields into a leading system message", () => {
-    const messages: Message[] = [{ content: "hi", role: "user", timestamp: 1 }];
+    const messages: typesModule.Message[] = [{ content: "hi", role: "user", timestamp: 1 }];
     expect(normalizeContext({ messages })).toEqual({ messages });
     expect(normalizeContext({ messages, systemPrompt: "", tools: [] })).toEqual({ messages });
     expect(
@@ -125,12 +128,18 @@ describe("system message replay", () => {
   });
 
   test("compares tool declarations without executable or undefined fields", () => {
-    const executable = { ...tool("a"), constrainedSampling: undefined, execute: () => {} } as Tool;
+    const executable = {
+      ...tool("a"),
+      constrainedSampling: undefined,
+      execute: () => {},
+    } as typesModule.Tool;
     expect(declarationsEqual(executable, tool("a"))).toBe(true);
     expect(declarationsEqual(tool("a"), tool("a", "changed"))).toBe(false);
     expect(declarationsEqual(tool("a"), { ...tool("a"), constrainedSampling: false })).toBe(false);
   });
+});
 
+describe("system message replay", () => {
   test("tool state changes treat changed definitions as removal plus addition", () => {
     const changes = getToolStateChanges([tool("a"), tool("b")], [tool("b", "changed"), tool("c")]);
     expect(changes).toEqual({
@@ -142,9 +151,7 @@ describe("system message replay", () => {
       toolsRemoved: [],
     });
   });
-});
 
-describe("system message replay", () => {
   test("detects non-additive tool history and redefinitions", () => {
     expect(hasNonAdditiveToolChanges(transcript.messages)).toBe(true);
     expect(hasToolRedefinitions(transcript.messages)).toBe(false);

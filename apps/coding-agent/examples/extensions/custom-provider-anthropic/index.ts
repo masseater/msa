@@ -5,10 +5,9 @@ import { streamCustomAnthropic } from "./stream.ts";
 
 export default function (msa: ExtensionAPI) {
   msa.registerProvider("custom-anthropic", {
-    baseUrl: "https://api.anthropic.com",
-    apiKey: "$CUSTOM_ANTHROPIC_API_KEY",
     api: "custom-anthropic-api",
-
+    apiKey: "$CUSTOM_ANTHROPIC_API_KEY",
+    baseUrl: "https://api.anthropic.com",
     models: [
       {
         id: "claude-opus-4-5",
@@ -29,14 +28,12 @@ export default function (msa: ExtensionAPI) {
         maxTokens: 64000,
       },
     ],
-
     oauth: {
-      name: "Custom Anthropic (Claude Pro/Max)",
-      login: loginAnthropic,
-      refreshToken: refreshAnthropicToken,
       getApiKey: (cred) => cred.access,
+      login: loginAnthropic,
+      name: "Custom Anthropic (Claude Pro/Max)",
+      refreshToken: refreshAnthropicToken,
     },
-
     streamSimple: streamCustomAnthropic,
   });
 }

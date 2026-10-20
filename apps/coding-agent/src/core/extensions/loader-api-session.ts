@@ -1,4 +1,4 @@
-import { execCommand, type ExecOptions } from "../exec.ts";
+import { type ExecOptions, execCommand } from "../exec.ts";
 import type { ApiScope, HandlerFn } from "./loader-scope.ts";
 import type { ExtensionAPI } from "./types.ts";
 
@@ -10,6 +10,19 @@ export const eventMembers = ({
   isLoading,
   loadingUnsubscribers,
 }: ApiScope) => ({
+  events: {
+    emit(channel: string, data: unknown) {
+      assertActive();
+      eventBus.emit(channel, data);
+    },
+    on(channel: string, handler: (data: unknown) => void) {
+      assertActive();
+      const unsubscribe = runtime.trackEventBusSubscription(eventBus.on(channel, handler));
+      if (isLoading()) loadingUnsubscribers.push(unsubscribe);
+      return unsubscribe;
+    },
+  },
+
   on(event: string, handler: HandlerFn): () => void {
     assertActive();
     const registeredHandler: HandlerFn = (...args) => handler(...args);
@@ -26,22 +39,19 @@ export const eventMembers = ({
       if (handlers.length === 0) extension.handlers.delete(event);
     };
   },
-
-  events: {
-    emit(channel: string, data: unknown) {
-      assertActive();
-      eventBus.emit(channel, data);
-    },
-    on(channel: string, handler: (data: unknown) => void) {
-      assertActive();
-      const unsubscribe = runtime.trackEventBusSubscription(eventBus.on(channel, handler));
-      if (isLoading()) loadingUnsubscribers.push(unsubscribe);
-      return unsubscribe;
-    },
-  },
 });
 
 export const messageMembers = ({ runtime, assertActive }: ApiScope): Partial<ExtensionAPI> => ({
+  appendEntry(customType: string, data?: unknown): void {
+    assertActive();
+    runtime.appendEntry(customType, data);
+  },
+
+  getSessionName(): string | undefined {
+    assertActive();
+    return runtime.getSessionName();
+  },
+
   sendMessage(message, options): void {
     assertActive();
     runtime.sendMessage(message, options);
@@ -52,24 +62,14 @@ export const messageMembers = ({ runtime, assertActive }: ApiScope): Partial<Ext
     runtime.sendUserMessage(content, options);
   },
 
-  appendEntry(customType: string, data?: unknown): void {
+  setLabel(entryId: string, label: string | undefined): void {
     assertActive();
-    runtime.appendEntry(customType, data);
+    runtime.setLabel(entryId, label);
   },
 
   setSessionName(name: string): void {
     assertActive();
     runtime.setSessionName(name);
-  },
-
-  getSessionName(): string | undefined {
-    assertActive();
-    return runtime.getSessionName();
-  },
-
-  setLabel(entryId: string, label: string | undefined): void {
-    assertActive();
-    runtime.setLabel(entryId, label);
   },
 });
 
@@ -89,9 +89,19 @@ export const stateMembers = ({ runtime, cwd, assertActive }: ApiScope): Partial<
     return runtime.getAllTools();
   },
 
+  getCommands() {
+    assertActive();
+    return runtime.getCommands();
+  },
+
   getSettings() {
     assertActive();
     return runtime.getSettings();
+  },
+
+  getThinkingLevel() {
+    assertActive();
+    return runtime.getThinkingLevel();
   },
 
   setActiveTools(toolNames: string[]): void {
@@ -99,19 +109,9 @@ export const stateMembers = ({ runtime, cwd, assertActive }: ApiScope): Partial<
     runtime.setActiveTools(toolNames);
   },
 
-  getCommands() {
-    assertActive();
-    return runtime.getCommands();
-  },
-
   setModel(model) {
     assertActive();
     return runtime.setModel(model);
-  },
-
-  getThinkingLevel() {
-    assertActive();
-    return runtime.getThinkingLevel();
   },
 
   setThinkingLevel(level) {

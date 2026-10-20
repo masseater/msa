@@ -1,4 +1,4 @@
-import type { KeyId } from "@msa/tui";
+import type tuiTypes from "@msa/tui/index.types";
 
 import type { ExternalService } from "../external-services.ts";
 import type { SourceInfo } from "../source-info.ts";
@@ -28,7 +28,7 @@ export interface Extension {
   entryRenderers?: Map<string, EntryRenderer>;
   commands: Map<string, RegisteredCommand>;
   flags: Map<string, ExtensionFlag>;
-  shortcuts: Map<KeyId, ExtensionShortcut>;
+  shortcuts: Map<tuiTypes.KeyId, ExtensionShortcut>;
 }
 
 export interface LoadExtensionsResult {

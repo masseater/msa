@@ -3,15 +3,14 @@ import { type Static, Type } from "typebox";
 
 import type { ToolDefinition } from "../extensions/types.ts";
 import { fromPromise, platformRuntime, unwrapForeign } from "../platform/index.ts";
-import { callTreg, pickString, rows, type TregOptions } from "../treg.ts";
+import { type TregOptions, callTreg, pickString, rows } from "../treg.ts";
 import { webSearchRenderers } from "./renderers/web.ts";
-import { DEFAULT_MAX_BYTES, formatSize, type TruncationResult, truncateHead } from "./truncate.ts";
+import { DEFAULT_MAX_BYTES, type TruncationResult, formatSize, truncateHead } from "./truncate.ts";
 
 const DEFAULT_LIMIT = 8;
 const MAX_LIMIT = 20;
 
 const webSearchSchema = Type.Object({
-  query: Type.String({ description: "What to search the web for." }),
   limit: Type.Optional(
     Type.Integer({
       minimum: 1,
@@ -19,6 +18,7 @@ const webSearchSchema = Type.Object({
       description: `Maximum number of results (default: ${DEFAULT_LIMIT}).`,
     }),
   ),
+  query: Type.String({ description: "What to search the web for." }),
 });
 
 export type WebSearchToolInput = Static<typeof webSearchSchema>;
@@ -57,7 +57,7 @@ const searchWeb = Effect.fn("webSearch")(function* (
   signal: AbortSignal | undefined,
 ) {
   const result = yield* fromPromise(() =>
-    callTreg(options, "treg.web.search", { q: query, limit }, signal),
+    callTreg(options, "treg.web.search", { limit, q: query }, signal),
   );
   const found = rows(result.output, "results");
   const details: WebSearchToolDetails = {
@@ -74,7 +74,7 @@ const searchWeb = Effect.fn("webSearch")(function* (
     ...(result.costMicro === undefined ? {} : { costMicro: result.costMicro }),
   };
   if (found.length === 0) {
-    return { content: [{ type: "text" as const, text: "No results found." }], details };
+    return { content: [{ text: "No results found.", type: "text" as const }], details };
   }
   const truncation = truncateHead(found.map(formatRow).join("\n\n"), {
     maxLines: Number.MAX_SAFE_INTEGER,
@@ -84,27 +84,27 @@ const searchWeb = Effect.fn("webSearch")(function* (
     text += `\n\n[${formatSize(DEFAULT_MAX_BYTES)} limit reached]`;
     details.truncation = truncation;
   }
-  return { content: [{ type: "text" as const, text }], details };
+  return { content: [{ text, type: "text" as const }], details };
 });
 
 export function createWebSearchToolDefinition(
   options: TregOptions,
 ): ToolDefinition<typeof webSearchSchema, WebSearchToolDetails> {
   return {
-    name: "web_search",
-    label: "web search",
+    annotations: { openWorldHint: true, readOnlyHint: true },
     description: `Search the web. Returns each result's title, URL and snippet. Output is truncated to ${DEFAULT_MAX_BYTES / 1024}KB.`,
-    promptSnippet: "Search the web for current information",
-    promptGuidelines: [
-      "Use web_search for information that may have changed after your training data or that the workspace does not have, then read the few best results with web_fetch; cite the URLs you rely on.",
-    ],
-    parameters: webSearchSchema,
-    annotations: { readOnlyHint: true, openWorldHint: true },
-    executionMode: "parallel",
     execute: (_toolCallId, params, signal) =>
       platformRuntime.runPromise(
         unwrapForeign(searchWeb(options, params.query, params.limit ?? DEFAULT_LIMIT, signal)),
       ),
+    executionMode: "parallel",
+    label: "web search",
+    name: "web_search",
+    parameters: webSearchSchema,
+    promptGuidelines: [
+      "Use web_search for information that may have changed after your training data or that the workspace does not have, then read the few best results with web_fetch; cite the URLs you rely on.",
+    ],
+    promptSnippet: "Search the web for current information",
     ...webSearchRenderers,
   };
 }

@@ -30,7 +30,7 @@ export function parseMemoryCommand(text: string): MemoryCommand | undefined {
     case "search":
       return tail === "" ? { kind: "status" } : { kind: "search", query: tail };
     case "forget":
-      return tail === "" ? { kind: "status" } : { kind: "forget", id: tail };
+      return tail === "" ? { kind: "status" } : { id: tail, kind: "forget" };
     default:
       return { kind: "search", query: args };
   }

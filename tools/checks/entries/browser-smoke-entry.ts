@@ -1,7 +1,12 @@
-import { Agent, streamProxy } from "@msa/agent-core";
-import { Type, createAssistantMessageEventStream } from "@msa/ai";
-import { complete, getModels, getProviders, streamSimple } from "@msa/ai/compat";
+import agentModule from "@msa/agent-core";
+import ai from "@msa/ai";
+import compat from "@msa/ai/compat";
 import chord from "@msa/chord";
+
+const { complete, getModels, getProviders, streamSimple } = compat;
+const { Type, createAssistantMessageEventStream } = ai;
+
+const { Agent, streamProxy } = agentModule;
 
 const { createHost, memoryLinkPair, replicatedState } = chord;
 

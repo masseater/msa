@@ -1,33 +1,29 @@
 import { Effect } from "effect";
 
-import type { AuthContext } from "../src/auth/types.ts";
-import { type Provider, createProvider } from "../src/models.ts";
-import type {
-  AnyModel,
-  Api,
-  AssistantImages,
-  ImageApi,
-  ImageModel,
-  ImagesContext,
-  ImagesOptions,
-  Model,
-} from "../src/types.ts";
-import { currentTimeMillis } from "../src/utils/clock.ts";
-import { AssistantMessageEventStream } from "../src/utils/event-stream.ts";
+import type typesModuleModule from "../src/auth/types.ts";
+import modelsModule from "../src/models.ts";
+import type modelsTypes from "../src/models.types.ts";
+import type typesModule from "../src/types.types.ts";
+import clock from "../src/utils/clock.ts";
+import eventStream from "../src/utils/event-stream.ts";
+
+const { currentTimeMillis } = clock;
+const { createProvider } = modelsModule;
+const { AssistantMessageEventStream } = eventStream;
 
 interface GenerateCall {
-  model: ImageModel<ImageApi>;
-  options: ImagesOptions | undefined;
+  model: typesModule.ImageModel<typesModule.ImageApi>;
+  options: typesModule.ImagesOptions | undefined;
 }
 
-function fakeAuthContext(env: Record<string, string>): AuthContext {
+function fakeAuthContext(env: Record<string, string>): typesModuleModule.AuthContext {
   return {
     env: (name) => Promise.resolve(env[name]),
     fileExists: () => Promise.resolve(false),
   };
 }
 
-function imageModel(provider: string, id: string): ImageModel<ImageApi> {
+function imageModel(provider: string, id: string): typesModule.ImageModel<typesModule.ImageApi> {
   return {
     api: "test-images",
     baseUrl: "https://example.test/v1",
@@ -41,7 +37,7 @@ function imageModel(provider: string, id: string): ImageModel<ImageApi> {
   };
 }
 
-function chatModel(provider: string, id: string): Model<Api> {
+function chatModel(provider: string, id: string): typesModule.Model<typesModule.Api> {
   return {
     api: "test-chat",
     baseUrl: "https://example.test/v1",
@@ -56,7 +52,9 @@ function chatModel(provider: string, id: string): Model<Api> {
   };
 }
 
-function okResult(model: ImageModel<ImageApi>): AssistantImages {
+function okResult(
+  model: typesModule.ImageModel<typesModule.ImageApi>,
+): typesModule.AssistantImages {
   return {
     api: model.api,
     model: model.id,
@@ -69,15 +67,15 @@ function okResult(model: ImageModel<ImageApi>): AssistantImages {
 
 function testProvider(input: {
   id: string;
-  models?: AnyModel[];
+  models?: typesModule.AnyModel[];
   envVar?: string;
   calls?: GenerateCall[];
   images?: Record<string, boolean>;
-}): Provider {
+}): modelsTypes.Provider {
   const generateImages = (
-    model: ImageModel<ImageApi>,
-    _context: ImagesContext,
-    options?: ImagesOptions,
+    model: typesModule.ImageModel<typesModule.ImageApi>,
+    _context: typesModule.ImagesContext,
+    options?: typesModule.ImagesOptions,
   ) => {
     input.calls?.push({ model, options });
     return Promise.resolve(okResult(model));
@@ -116,7 +114,7 @@ function testProvider(input: {
   });
 }
 
-const context: ImagesContext = { input: [{ text: "a red circle", type: "text" }] };
+const context: typesModule.ImagesContext = { input: [{ text: "a red circle", type: "text" }] };
 
 const imagesModelsSupport = {
   chatModel,

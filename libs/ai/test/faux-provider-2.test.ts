@@ -1,16 +1,12 @@
 import { Clock, Effect } from "effect";
 import { afterEach, describe, expect, it } from "vite-plus/test";
 
-import {
-  Type,
-  complete,
-  fauxAssistantMessage,
-  registerFauxProvider,
-  stream,
-} from "../src/compat.ts";
-import type { Context } from "../src/types.ts";
+import compat from "../src/compat.ts";
+import type typesModule from "../src/types.types.ts";
 import fauxProviderSupport from "./faux-provider-support.ts";
 import jsonCodec from "./json-codec.ts";
+
+const { Type, complete, fauxAssistantMessage, registerFauxProvider, stream } = compat;
 
 const { collectEvents, registrations } = fauxProviderSupport;
 
@@ -123,7 +119,7 @@ const estimatesPromptAndOutputTokensFromStep1 = () =>
       name: "echo",
       parameters: Type.Object({ text: Type.String() }),
     };
-    const context: Context = {
+    const context: typesModule.Context = {
       messages: [
         {
           content: [

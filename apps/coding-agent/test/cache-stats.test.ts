@@ -1,4 +1,4 @@
-import type { AssistantMessage } from "@msa/ai";
+import type aiTypes from "@msa/ai/index.types";
 import { DateTime } from "effect";
 import { describe, expect, it } from "vite-plus/test";
 
@@ -23,7 +23,7 @@ function assistant(options: {
   cost?: Partial<typeof zeroCost>;
   model?: string;
   timestamp?: number;
-}): AssistantMessage {
+}): aiTypes.AssistantMessage {
   return {
     api: "anthropic-messages",
     content: [],
@@ -40,10 +40,10 @@ function assistant(options: {
       output: 10,
       totalTokens: 0,
     },
-  } as AssistantMessage;
+  } as aiTypes.AssistantMessage;
 }
 
-function entry(message: AssistantMessage): SessionEntry {
+function entry(message: aiTypes.AssistantMessage): SessionEntry {
   return { id: "x", message, parentId: null, timestamp: "", type: "message" } as SessionEntry;
 }
 

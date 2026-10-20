@@ -6,10 +6,10 @@ import {
   type BashToolDetails,
   type BashToolInput,
   type BashToolOptions,
-  createLocalShellOperations,
-  createShellToolDefinition,
   type ShellToolConfig,
   type createBashTool,
+  createLocalShellOperations,
+  createShellToolDefinition,
 } from "./bash.ts";
 import { type CwdFactory, cwdFactory, wrapToolDefinition } from "./tool-definition-wrapper.ts";
 
@@ -17,10 +17,10 @@ const UTF8_OUTPUT_PREFIX =
   "try { [Console]::OutputEncoding=[System.Text.Encoding]::UTF8 } catch {}\n";
 
 export const powershellToolSystemPromptContribution = {
-  snippet: "Execute PowerShell commands",
   guidelines: [
     "You can inspect MSA_* environment variables for current model and session details.",
   ],
+  snippet: "Execute PowerShell commands",
 } as const;
 
 export type PowerShellOperations = BashOperations;
@@ -43,12 +43,12 @@ export function createLocalPowerShellOperations(): PowerShellOperations {
 }
 
 const powershellToolConfig: ShellToolConfig = {
-  name: "powershell",
   label: "powershell",
-  shellName: "PowerShell",
+  name: "powershell",
   prompt: "PS>",
-  promptSnippet: powershellToolSystemPromptContribution.snippet,
   promptGuidelines: powershellToolSystemPromptContribution.guidelines,
+  promptSnippet: powershellToolSystemPromptContribution.snippet,
+  shellName: "PowerShell",
   tempFilePrefix: "msa-powershell",
 };
 
@@ -69,8 +69,8 @@ export const createPowerShellTool: CwdFactory<
   const definition = createPowerShellToolDefinition(cwd, options);
   const tool = wrapToolDefinition(definition);
   Object.assign(tool, {
-    promptSnippet: definition.promptSnippet,
     promptGuidelines: definition.promptGuidelines,
+    promptSnippet: definition.promptSnippet,
   });
   return tool;
 });

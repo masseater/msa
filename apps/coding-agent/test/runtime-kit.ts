@@ -1,4 +1,4 @@
-import { fauxAssistantMessage, registerFauxProvider } from "@msa/ai/compat";
+import compat from "@msa/ai/compat";
 import testing from "@msa/testing";
 import { Effect } from "effect";
 
@@ -14,6 +14,8 @@ import { ModelRuntime } from "../src/core/model-runtime.ts";
 import { SessionManager } from "../src/core/session-manager.ts";
 import type { ExtensionAPI, ExtensionFactory } from "../src/index.ts";
 import type runtimeKitTypes from "./runtime-kit.types.ts";
+
+const { fauxAssistantMessage, registerFauxProvider } = compat;
 
 const { awaited, joinPath, makeDirectory, makeTempDir, removeDir, runTest } = testing;
 

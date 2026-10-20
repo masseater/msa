@@ -1,25 +1,14 @@
-import { escapeSequences, matchStringSequence } from "./ansi-sequences.ts";
+import ansiSequences from "./ansi-sequences.ts";
+import type terminalColorsTypes from "./terminal-colors.types.ts";
 
-export interface RgbColor {
-  r: number;
-  g: number;
-  b: number;
-}
+const { escapeSequences, matchStringSequence } = ansiSequences;
 
-export type TerminalColorScheme = "dark" | "light";
-
-export interface TerminalColors {
-  foreground?: RgbColor | undefined;
-  background?: RgbColor | undefined;
-  palette?: RgbColor[] | undefined;
-}
-
-function hexToRgb(hex: string): RgbColor {
+function hexToRgb(hex: string): terminalColorsTypes.RgbColor {
   const normalized = hex.startsWith("#") ? hex.slice(1) : hex;
   const r = parseInt(normalized.slice(0, 2), 16);
   const g = parseInt(normalized.slice(2, 4), 16);
   const b = parseInt(normalized.slice(4, 6), 16);
-  return { r, g, b };
+  return { b, g, r };
 }
 
 function parseOscHexChannel(channel: string): number | undefined {
@@ -33,20 +22,20 @@ function parseOscHexChannel(channel: string): number | undefined {
   return Math.round((parseInt(channel, 16) / max) * 255);
 }
 
-export type OscColorTarget = "foreground" | "background" | number;
-
 const OSC_COLOR_RESPONSE_BODY = /^(?:(1[01])|4;(\d{1,3}));(.*)$/isu;
 const COLOR_SCHEME_BODY = /^\?997;(1|2)$/u;
 
-export function parseOscColorResponse(
+function parseOscColorResponse(
   data: string,
-): { target: OscColorTarget; rgb: RgbColor | undefined } | undefined {
+):
+  | { target: terminalColorsTypes.OscColorTarget; rgb: terminalColorsTypes.RgbColor | undefined }
+  | undefined {
   const [, dynamicColor, paletteIndex, value] =
-    matchStringSequence({ data, kind: "osc", body: OSC_COLOR_RESPONSE_BODY })?.groups ?? [];
+    matchStringSequence({ body: OSC_COLOR_RESPONSE_BODY, data, kind: "osc" })?.groups ?? [];
   if (value === undefined) {
     return undefined;
   }
-  let target: OscColorTarget;
+  let target: terminalColorsTypes.OscColorTarget;
   if (dynamicColor === "10") {
     target = "foreground";
   } else if (dynamicColor === "11") {
@@ -56,10 +45,10 @@ export function parseOscColorResponse(
   } else {
     target = Number.parseInt(paletteIndex, 10);
   }
-  return { target, rgb: parseOscColorValue(value) };
+  return { rgb: parseOscColorValue(value), target };
 }
 
-function parseOscColorValue(rawValue: string): RgbColor | undefined {
+function parseOscColorValue(rawValue: string): terminalColorsTypes.RgbColor | undefined {
   const value = rawValue.trim();
   if (value.startsWith("#")) {
     const hex = value.slice(1);
@@ -70,7 +59,7 @@ function parseOscColorValue(rawValue: string): RgbColor | undefined {
       const r = parseOscHexChannel(hex.slice(0, 4));
       const g = parseOscHexChannel(hex.slice(4, 8));
       const b = parseOscHexChannel(hex.slice(8, 12));
-      return r !== undefined && g !== undefined && b !== undefined ? { r, g, b } : undefined;
+      return r !== undefined && g !== undefined && b !== undefined ? { b, g, r } : undefined;
     }
     return undefined;
   }
@@ -83,10 +72,12 @@ function parseOscColorValue(rawValue: string): RgbColor | undefined {
   const r = parseOscHexChannel(red);
   const g = parseOscHexChannel(green);
   const b = parseOscHexChannel(blue);
-  return r !== undefined && g !== undefined && b !== undefined ? { r, g, b } : undefined;
+  return r !== undefined && g !== undefined && b !== undefined ? { b, g, r } : undefined;
 }
 
-export function parseTerminalColorSchemeReport(data: string): TerminalColorScheme | undefined {
+function parseTerminalColorSchemeReport(
+  data: string,
+): terminalColorsTypes.TerminalColorScheme | undefined {
   const sequences = escapeSequences(data);
   const consumed = sequences.reduce((total, sequence) => total + sequence.raw.length, 0);
   if (sequences.length === 0 || consumed !== data.length) {
@@ -102,3 +93,10 @@ export function parseTerminalColorSchemeReport(data: string): TerminalColorSchem
   }
   return reports[reports.length - 1]?.[1] === "2" ? "light" : "dark";
 }
+
+const terminalColors = {
+  parseOscColorResponse,
+  parseTerminalColorSchemeReport,
+};
+
+export default terminalColors;

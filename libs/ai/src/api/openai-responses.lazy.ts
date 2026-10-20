@@ -1,5 +1,13 @@
-import type { ProviderStreams } from "../types.ts";
-import { lazyApi } from "./lazy.ts";
+import type typesModule from "../types.types.ts";
+import lazy from "./lazy.ts";
 
-export const openAIResponsesApi = (): ProviderStreams =>
-  lazyApi(() => import("./openai-responses.ts"));
+const { lazyApi } = lazy;
+
+const openAIResponsesApi = (): typesModule.ProviderStreams =>
+  lazyApi(() => import("./openai-responses.ts").then((module) => module.default));
+
+const openaiResponsesLazy = {
+  openAIResponsesApi,
+};
+
+export default openaiResponsesLazy;

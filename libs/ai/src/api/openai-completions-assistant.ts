@@ -3,27 +3,25 @@ import type {
   ChatCompletionMessageToolCall,
 } from "openai/resources/chat/completions.js";
 
-import type { Message, ThinkingContent, ToolCall } from "../types.ts";
-import { sanitizeSurrogates } from "../utils/sanitize-unicode.ts";
-import { getGrammarToolInput } from "./constrained-sampling.ts";
-import {
-  isTextContentBlock,
-  isThinkingContentBlock,
-  isToolCallBlock,
-  type ConvertState,
-} from "./openai-completions-convert-state.ts";
-import {
+import type typesModule from "../types.types.ts";
+import sanitizeUnicode from "../utils/sanitize-unicode.ts";
+import constrainedSampling from "./constrained-sampling.ts";
+import openaiCompletionsConvertState from "./openai-completions-convert-state.ts";
+import type openaiCompletionsConvertStateTypes from "./openai-completions-convert-state.types.ts";
+import openaiCompletionsReasoning from "./openai-completions-reasoning.ts";
+import type openaiCompletionsTypesModule from "./openai-completions-types.types.ts";
+
+const { isTextContentBlock, isThinkingContentBlock, isToolCallBlock } =
+  openaiCompletionsConvertState;
+const { sanitizeSurrogates } = sanitizeUnicode;
+const {
   isOpenAICompletionsReasoningField,
   parseLegacyEncryptedReasoningDetail,
   parseOpenAIReasoningDetails,
-} from "./openai-completions-reasoning.ts";
-import type {
-  ChatCompletionAssistantMessageParamWithReasoning,
-  OpenAIEncryptedReasoningDetail,
-  OpenAIReasoningDetail,
-} from "./openai-completions-types.ts";
+} = openaiCompletionsReasoning;
+const { getGrammarToolInput } = constrainedSampling;
 
-type AssistantMessage = Extract<Message, { role: "assistant" }>;
+type AssistantMessage = Extract<typesModule.Message, { role: "assistant" }>;
 
 function assistantTextParts(msg: AssistantMessage): ChatCompletionContentPartText[] {
   return msg.content
@@ -32,16 +30,18 @@ function assistantTextParts(msg: AssistantMessage): ChatCompletionContentPartTex
     .map(
       (block) =>
         ({
-          type: "text",
           text: sanitizeSurrogates(block.text),
+          type: "text",
         }) satisfies ChatCompletionContentPartText,
     );
 }
 
 interface AssistantReasoning {
-  readonly thinkingBlocks: ThinkingContent[];
-  readonly toolCalls: ToolCall[];
-  readonly preservedReasoningDetails: OpenAIReasoningDetail[] | undefined;
+  readonly thinkingBlocks: typesModule.ThinkingContent[];
+  readonly toolCalls: typesModule.ToolCall[];
+  readonly preservedReasoningDetails:
+    | openaiCompletionsTypesModule.OpenAIReasoningDetail[]
+    | undefined;
 }
 
 function collectAssistantReasoning(msg: AssistantMessage): AssistantReasoning {
@@ -52,28 +52,31 @@ function collectAssistantReasoning(msg: AssistantMessage): AssistantReasoning {
     .find((details) => details !== undefined);
   const legacyReasoningDetails = toolCalls
     .map((toolCall) => parseLegacyEncryptedReasoningDetail(toolCall.thoughtSignature))
-    .filter((detail): detail is OpenAIEncryptedReasoningDetail => detail !== undefined);
+    .filter(
+      (detail): detail is openaiCompletionsTypesModule.OpenAIEncryptedReasoningDetail =>
+        detail !== undefined,
+    );
   const preservedReasoningDetails =
     signedReasoningDetails ??
     (legacyReasoningDetails.length > 0 ? legacyReasoningDetails : undefined);
-  return { thinkingBlocks, toolCalls, preservedReasoningDetails };
+  return { preservedReasoningDetails, thinkingBlocks, toolCalls };
 }
 
 function applyThinkingText(
-  assistantMsg: ChatCompletionAssistantMessageParamWithReasoning,
+  assistantMsg: openaiCompletionsTypesModule.ChatCompletionAssistantMessageParamWithReasoning,
   textParts: ChatCompletionContentPartText[],
-  thinkingBlocks: ThinkingContent[],
+  thinkingBlocks: typesModule.ThinkingContent[],
 ): void {
   const thinkingText = thinkingBlocks
     .map((block) => sanitizeSurrogates(block.thinking))
     .join("\n\n");
-  assistantMsg.content = [{ type: "text", text: thinkingText }, ...textParts];
+  assistantMsg.content = [{ text: thinkingText, type: "text" }, ...textParts];
 }
 
 function applyThinkingSignature(
-  state: ConvertState,
-  assistantMsg: ChatCompletionAssistantMessageParamWithReasoning,
-  thinkingBlocks: ThinkingContent[],
+  state: openaiCompletionsConvertStateTypes.ConvertState,
+  assistantMsg: openaiCompletionsTypesModule.ChatCompletionAssistantMessageParamWithReasoning,
+  thinkingBlocks: typesModule.ThinkingContent[],
 ): void {
   const [firstThinkingBlock] = thinkingBlocks;
   if (firstThinkingBlock === undefined) return;
@@ -87,8 +90,8 @@ function applyThinkingSignature(
 }
 
 function applyThinking(
-  state: ConvertState,
-  assistantMsg: ChatCompletionAssistantMessageParamWithReasoning,
+  state: openaiCompletionsConvertStateTypes.ConvertState,
+  assistantMsg: openaiCompletionsTypesModule.ChatCompletionAssistantMessageParamWithReasoning,
   textParts: ChatCompletionContentPartText[],
   assistantText: string,
   reasoning: AssistantReasoning,
@@ -113,32 +116,35 @@ function applyThinking(
   applyThinkingSignature(state, assistantMsg, nonEmptyThinkingBlocks);
 }
 
-function toToolCall(state: ConvertState, toolCall: ToolCall): ChatCompletionMessageToolCall {
+function toToolCall(
+  state: openaiCompletionsConvertStateTypes.ConvertState,
+  toolCall: typesModule.ToolCall,
+): ChatCompletionMessageToolCall {
   const customInputProperty = state.options?.grammarToolInputProperties?.get(toolCall.name);
   if (customInputProperty !== undefined) {
     return {
-      id: toolCall.id,
-      type: "custom",
       custom: {
-        name: toolCall.name,
         input: sanitizeSurrogates(
           getGrammarToolInput(toolCall.name, toolCall.arguments, customInputProperty),
         ),
+        name: toolCall.name,
       },
+      id: toolCall.id,
+      type: "custom",
     };
   }
   return {
+    function: {
+      arguments: JSON.stringify(toolCall.arguments),
+      name: toolCall.name,
+    },
     id: toolCall.id,
     type: "function",
-    function: {
-      name: toolCall.name,
-      arguments: JSON.stringify(toolCall.arguments),
-    },
   };
 }
 
 function hasAssistantContent(
-  assistantMsg: ChatCompletionAssistantMessageParamWithReasoning,
+  assistantMsg: openaiCompletionsTypesModule.ChatCompletionAssistantMessageParamWithReasoning,
 ): boolean {
   const content = assistantMsg.content;
   if (content !== null && content !== undefined) {
@@ -148,14 +154,15 @@ function hasAssistantContent(
 }
 
 function buildAssistantMessage(input: {
-  state: ConvertState;
+  state: openaiCompletionsConvertStateTypes.ConvertState;
   msg: AssistantMessage;
-}): ChatCompletionAssistantMessageParamWithReasoning | undefined {
+}): openaiCompletionsTypesModule.ChatCompletionAssistantMessageParamWithReasoning | undefined {
   const { state, msg } = input;
-  const assistantMsg: ChatCompletionAssistantMessageParamWithReasoning = {
-    role: "assistant",
-    content: state.compat.requiresAssistantAfterToolResult ? "" : null,
-  };
+  const assistantMsg: openaiCompletionsTypesModule.ChatCompletionAssistantMessageParamWithReasoning =
+    {
+      content: state.compat.requiresAssistantAfterToolResult ? "" : null,
+      role: "assistant",
+    };
   const textParts = assistantTextParts(msg);
   const assistantText = textParts.map((part) => part.text).join("");
   const reasoning = collectAssistantReasoning(msg);
@@ -176,4 +183,8 @@ function buildAssistantMessage(input: {
   return hasAssistantContent(assistantMsg) ? assistantMsg : undefined;
 }
 
-export { buildAssistantMessage };
+const openaiCompletionsAssistant = {
+  buildAssistantMessage,
+};
+
+export default openaiCompletionsAssistant;

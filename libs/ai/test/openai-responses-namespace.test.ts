@@ -2,14 +2,19 @@ import { Effect, Stream } from "effect";
 import type { ResponseStreamEvent } from "openai/resources/responses/responses.js";
 import { describe, expect, it } from "vite-plus/test";
 
-import { convertResponsesMessages } from "../src/api/openai-responses-messages.ts";
-import { processResponsesStream } from "../src/api/openai-responses-stream.ts";
-import type { Api, AssistantMessage, Model, ToolCall } from "../src/types.ts";
-import { currentTimeMillis } from "../src/utils/clock.ts";
-import { AssistantMessageEventStream } from "../src/utils/event-stream.ts";
-import { normalizeContext } from "../src/utils/transcript.ts";
+import openaiResponsesMessages from "../src/api/openai-responses-messages.ts";
+import openaiResponsesStream from "../src/api/openai-responses-stream.ts";
+import type typesModule from "../src/types.types.ts";
+import clock from "../src/utils/clock.ts";
+import eventStream from "../src/utils/event-stream.ts";
+import transcript from "../src/utils/transcript.ts";
 
-const model: Model<"openai-responses"> = {
+const { processResponsesStream } = openaiResponsesStream;
+const { AssistantMessageEventStream } = eventStream;
+const { convertResponsesMessages } = openaiResponsesMessages;
+const { normalizeContext } = transcript;
+
+const model: typesModule.Model<"openai-responses"> = {
   api: "openai-responses",
   baseUrl: "https://api.openai.com/v1",
   contextWindow: 400000,
@@ -22,7 +27,7 @@ const model: Model<"openai-responses"> = {
   reasoning: true,
 };
 
-function createOutput(): AssistantMessage {
+function createOutput(): typesModule.AssistantMessage {
   return {
     api: model.api,
     content: [],
@@ -30,7 +35,7 @@ function createOutput(): AssistantMessage {
     provider: model.provider,
     role: "assistant",
     stopReason: "pending",
-    timestamp: currentTimeMillis(),
+    timestamp: clock.currentTimeMillis(),
     usage: {
       cacheRead: 0,
       cacheWrite: 0,
@@ -120,7 +125,7 @@ function createCustomToolCallEvents(): AsyncIterable<ResponseStreamEvent> {
   );
 }
 
-function getToolCall(output: AssistantMessage): ToolCall {
+function getToolCall(output: typesModule.AssistantMessage): typesModule.ToolCall {
   const block = output.content[0];
   if (block === undefined || block.type !== "toolCall") throw new Error("Expected toolCall block");
   return block;
@@ -243,7 +248,7 @@ describe("OpenAI Responses tool-call namespaces", () => {
         type: "toolCall",
       },
     );
-    const targetModels: Model<Api>[] = [
+    const targetModels: typesModule.Model<typesModule.Api>[] = [
       { ...model, id: "gpt-5.2", name: "GPT-5.2" },
       { ...model, provider: "opencode" },
       {

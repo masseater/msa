@@ -1,91 +1,56 @@
 import { Function } from "effect";
 
-import {
-  createFauxCore,
-  type FauxProviderRegistration,
-  type RegisterFauxProviderOptions,
-} from "./providers/faux.ts";
-import type {
-  Api,
-  AssistantMessageEventStream,
-  Model,
-  SimpleStreamOptions,
-  StreamFunction,
-  StreamOptions,
-  TranscriptContext,
-} from "./types.ts";
-import { nextRandom } from "./utils/random.ts";
+import type apiProviderRegistryTypes from "./api-provider-registry.types.ts";
+import faux from "./providers/faux.ts";
+import type fauxTypes from "./providers/faux.types.ts";
+import type typesModule from "./types.types.ts";
+import random from "./utils/random.ts";
 
-export type ApiStreamFunction = (
-  model: Model<Api>,
-  context: TranscriptContext,
-  options?: StreamOptions,
-) => AssistantMessageEventStream;
-
-export type ApiStreamSimpleFunction = (
-  model: Model<Api>,
-  context: TranscriptContext,
-  options?: SimpleStreamOptions,
-) => AssistantMessageEventStream;
-
-export interface ApiProvider<
-  TApi extends Api = Api,
-  TOptions extends StreamOptions = StreamOptions,
-> {
-  api: TApi;
-  stream: StreamFunction<TApi, TOptions>;
-  streamSimple: StreamFunction<TApi, SimpleStreamOptions>;
-}
-
-interface ApiProviderInternal {
-  api: Api;
-  stream: ApiStreamFunction;
-  streamSimple: ApiStreamSimpleFunction;
-}
-
+const { createFauxCore } = faux;
+const { nextRandom } = random;
 type RegisteredApiProvider = {
-  provider: ApiProviderInternal;
+  provider: apiProviderRegistryTypes.ApiProviderInternal;
   sourceId?: string | undefined;
 };
 
 const apiProviderRegistry = new Map<string, RegisteredApiProvider>();
 
-function wrapStream<TApi extends Api, TOptions extends StreamOptions>(
+function wrapStream<TApi extends typesModule.Api, TOptions extends typesModule.StreamOptions>(
   api: TApi,
-  streamFn: StreamFunction<TApi, TOptions>,
-): ApiStreamFunction {
+  streamFn: typesModule.StreamFunction<TApi, TOptions>,
+): apiProviderRegistryTypes.ApiStreamFunction {
   return (model, context, options) => {
     if (model.api !== api) {
       throw new Error(`Mismatched api: ${model.api} expected ${api}`);
     }
-    return streamFn(model as Model<TApi>, context, options as TOptions);
+    return streamFn(model as typesModule.Model<TApi>, context, options as TOptions);
   };
 }
 
-function wrapStreamSimple<TApi extends Api>(
+function wrapStreamSimple<TApi extends typesModule.Api>(
   api: TApi,
-  streamSimpleFn: StreamFunction<TApi, SimpleStreamOptions>,
-): ApiStreamSimpleFunction {
+  streamSimpleFn: typesModule.StreamFunction<TApi, typesModule.SimpleStreamOptions>,
+): apiProviderRegistryTypes.ApiStreamSimpleFunction {
   return (model, context, options) => {
     if (model.api !== api) {
       throw new Error(`Mismatched api: ${model.api} expected ${api}`);
     }
-    return streamSimpleFn(model as Model<TApi>, context, options);
+    return streamSimpleFn(model as typesModule.Model<TApi>, context, options);
   };
 }
 
-export const registerApiProvider: {
-  <TApi extends Api, TOptions extends StreamOptions>(
+const registerApiProvider: {
+  <TApi extends typesModule.Api, TOptions extends typesModule.StreamOptions>(
     sourceId?: string,
-  ): (provider: ApiProvider<TApi, TOptions>) => void;
-  <TApi extends Api, TOptions extends StreamOptions>(
-    provider: ApiProvider<TApi, TOptions>,
+  ): (provider: apiProviderRegistryTypes.ApiProvider<TApi, TOptions>) => void;
+  <TApi extends typesModule.Api, TOptions extends typesModule.StreamOptions>(
+    provider: apiProviderRegistryTypes.ApiProvider<TApi, TOptions>,
     sourceId?: string,
   ): void;
 } = Function.dual(
   (args) => typeof args[0] === "object" && args[0] !== null,
-  function <TApi extends Api, TOptions extends StreamOptions>(
-    provider: ApiProvider<TApi, TOptions>,
+  function <TApi extends typesModule.Api, TOptions extends typesModule.StreamOptions>(
+    provider: apiProviderRegistryTypes.ApiProvider<TApi, TOptions>,
     sourceId?: string,
   ): void {
     apiProviderRegistry.set(provider.api, {
@@ -99,15 +64,17 @@ export const registerApiProvider: {
   },
 );
 
-export function getApiProvider(api: Api): ApiProviderInternal | undefined {
+function getApiProvider(
+  api: typesModule.Api,
+): apiProviderRegistryTypes.ApiProviderInternal | undefined {
   return apiProviderRegistry.get(api)?.provider;
 }
 
-export function getApiProviders(): ApiProviderInternal[] {
+function getApiProviders(): apiProviderRegistryTypes.ApiProviderInternal[] {
   return Array.from(apiProviderRegistry.values(), (entry) => entry.provider);
 }
 
-export function unregisterApiProviders(sourceId: string): void {
+function unregisterApiProviders(sourceId: string): void {
   for (const [api, entry] of apiProviderRegistry.entries()) {
     if (entry.sourceId === sourceId) {
       apiProviderRegistry.delete(api);
@@ -115,13 +82,13 @@ export function unregisterApiProviders(sourceId: string): void {
   }
 }
 
-export function clearApiProviders(): void {
+function clearApiProviders(): void {
   apiProviderRegistry.clear();
 }
 
-export function registerFauxProvider(
-  options: RegisterFauxProviderOptions = {},
-): FauxProviderRegistration {
+function registerFauxProvider(
+  options: fauxTypes.RegisterFauxProviderOptions = {},
+): fauxTypes.FauxProviderRegistration {
   const core = createFauxCore(options);
   const sourceId = `faux-provider-${nextRandom().toString(36).slice(2, 10)}`;
   registerApiProvider(
@@ -130,14 +97,25 @@ export function registerFauxProvider(
   );
   return {
     api: core.api,
-    models: core.models,
-    getModel: core.getModel,
-    state: core.state,
-    setResponses: core.setResponses,
     appendResponses: core.appendResponses,
+    getModel: core.getModel,
     getPendingResponseCount: core.getPendingResponseCount,
+    models: core.models,
+    setResponses: core.setResponses,
+    state: core.state,
     unregister() {
       unregisterApiProviders(sourceId);
     },
   };
 }
+
+const apiProviderRegistryModule = {
+  clearApiProviders,
+  getApiProvider,
+  getApiProviders,
+  registerApiProvider,
+  registerFauxProvider,
+  unregisterApiProviders,
+};
+
+export default apiProviderRegistryModule;

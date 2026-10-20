@@ -1,8 +1,8 @@
 import { Effect, FileSystem } from "effect";
 
 import {
-  createOutputFileStream,
   type OutputFileStream as OutputFile,
+  createOutputFileStream,
 } from "../../utils/output-files.ts";
 import { platformRuntime, rethrowCause } from "../platform/index.ts";
 import {
@@ -136,8 +136,8 @@ export class OutputAccumulator {
 
   snapshot(options: { persistIfTruncated?: boolean } = {}): OutputSnapshot {
     const tailTruncation = truncateTail(this.getSnapshotText(), {
-      maxLines: this.maxLines,
       maxBytes: this.maxBytes,
+      maxLines: this.maxLines,
     });
     const truncated = this.totalLines > this.maxLines || this.totalDecodedBytes > this.maxBytes;
     const truncatedBy = truncated
@@ -145,12 +145,12 @@ export class OutputAccumulator {
       : null;
     const truncation: TruncationResult = {
       ...tailTruncation,
+      maxBytes: this.maxBytes,
+      maxLines: this.maxLines,
+      totalBytes: this.totalDecodedBytes,
+      totalLines: this.totalLines,
       truncated,
       truncatedBy,
-      totalLines: this.totalLines,
-      totalBytes: this.totalDecodedBytes,
-      maxLines: this.maxLines,
-      maxBytes: this.maxBytes,
     };
 
     if (options.persistIfTruncated === true && truncation.truncated) {
@@ -159,8 +159,8 @@ export class OutputAccumulator {
 
     return {
       content: truncation.content,
-      truncation,
       fullOutputPath: this.tempFilePath,
+      truncation,
     };
   }
 

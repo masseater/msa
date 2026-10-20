@@ -1,20 +1,22 @@
-import type { AgentMessage } from "@msa/agent-core";
-import { getCurrentSystemMessage } from "@msa/ai";
-import type { AssistantMessage, SystemMessage, Usage } from "@msa/ai/compat";
+import type agentTypes from "@msa/agent-core/index.types";
+import ai from "@msa/ai";
+import type compatTypes from "@msa/ai/compat.types";
 import { Function as Fn } from "effect";
 
 import type { SessionEntry, SessionProjection } from "../session-manager.ts";
 import type { CompactionSettings } from "./compaction-types.ts";
 
-export function calculateContextTokens(usage: Usage): number {
+const { getCurrentSystemMessage } = ai;
+
+export function calculateContextTokens(usage: compatTypes.Usage): number {
   return usage.totalTokens > 0
     ? usage.totalTokens
     : usage.input + usage.output + usage.cacheRead + usage.cacheWrite;
 }
 
-function getAssistantUsage(msg: AgentMessage): Usage | undefined {
+function getAssistantUsage(msg: agentTypes.AgentMessage): compatTypes.Usage | undefined {
   if (msg.role === "assistant" && "usage" in msg) {
-    const assistantMsg = msg as AssistantMessage;
+    const assistantMsg = msg as compatTypes.AssistantMessage;
     if (
       assistantMsg.stopReason !== "aborted" &&
       assistantMsg.stopReason !== "error" &&
@@ -27,7 +29,7 @@ function getAssistantUsage(msg: AgentMessage): Usage | undefined {
   return undefined;
 }
 
-export function getLastAssistantUsage(entries: SessionEntry[]): Usage | undefined {
+export function getLastAssistantUsage(entries: SessionEntry[]): compatTypes.Usage | undefined {
   for (let i = entries.length - 1; i >= 0; i--) {
     const entry = entries[i];
     if (entry?.type === "message") {
@@ -46,18 +48,18 @@ export interface ContextUsageEstimate {
 }
 
 function getLastAssistantUsageInfo(
-  messages: AgentMessage[],
-): { usage: Usage; index: number } | undefined {
+  messages: agentTypes.AgentMessage[],
+): { usage: compatTypes.Usage; index: number } | undefined {
   for (let i = messages.length - 1; i >= 0; i--) {
     const message = messages[i];
     if (message === undefined) continue;
     const usage = getAssistantUsage(message);
-    if (usage !== undefined) return { usage, index: i };
+    if (usage !== undefined) return { index: i, usage };
   }
   return undefined;
 }
 
-export function estimateContextTokens(messages: AgentMessage[]): ContextUsageEstimate {
+export function estimateContextTokens(messages: agentTypes.AgentMessage[]): ContextUsageEstimate {
   const usageInfo = getLastAssistantUsageInfo(messages);
 
   if (usageInfo === undefined) {
@@ -66,10 +68,10 @@ export function estimateContextTokens(messages: AgentMessage[]): ContextUsageEst
       estimated += estimateTokens(message);
     }
     return {
-      tokens: estimated,
-      usageTokens: 0,
-      trailingTokens: estimated,
       lastUsageIndex: null,
+      tokens: estimated,
+      trailingTokens: estimated,
+      usageTokens: 0,
     };
   }
 
@@ -80,10 +82,10 @@ export function estimateContextTokens(messages: AgentMessage[]): ContextUsageEst
   }
 
   return {
-    tokens: usageTokens + trailingTokens,
-    usageTokens,
-    trailingTokens,
     lastUsageIndex: usageInfo.index,
+    tokens: usageTokens + trailingTokens,
+    trailingTokens,
+    usageTokens,
   };
 }
 
@@ -124,7 +126,7 @@ const estimateProjectedContextTokensImpl = (
   for (const message of projection.messages) {
     if (message.role !== "system") tokens += estimateTokens(message);
   }
-  return { tokens, usageTokens: 0, trailingTokens: tokens, lastUsageIndex: null };
+  return { lastUsageIndex: null, tokens, trailingTokens: tokens, usageTokens: 0 };
 };
 
 export const estimateProjectedContextTokens: {
@@ -166,12 +168,12 @@ function estimateTextAndImageContentChars(
   return chars;
 }
 
-export function estimateTokens(message: AgentMessage): number {
+export function estimateTokens(message: agentTypes.AgentMessage): number {
   let chars = 0;
 
   switch (message.role) {
     case "system": {
-      const system = message as SystemMessage;
+      const system = message as compatTypes.SystemMessage;
       chars = estimateTextAndImageContentChars(system.content);
       if (system.sections !== undefined) {
         for (const section of Object.values(system.sections)) {
@@ -188,7 +190,7 @@ export function estimateTokens(message: AgentMessage): number {
       return Math.ceil(chars / 4);
     }
     case "assistant": {
-      const assistant = message as AssistantMessage;
+      const assistant = message as compatTypes.AssistantMessage;
       for (const block of assistant.content) {
         if (block.type === "text") {
           chars += block.text.length;

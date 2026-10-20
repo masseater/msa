@@ -1,4 +1,4 @@
-import type { CredentialStore } from "@msa/ai";
+import type aiTypes from "@msa/ai/index.types";
 import * as Effect from "effect/Effect";
 import { dual } from "effect/Function";
 
@@ -33,7 +33,7 @@ function checkProviderAuthImpl(
       const { provider: cliProvider, model: cliModel } = validateAuthCommandArgs(args, "check");
       let provider = cliProvider;
       if (cliModel !== undefined && cliModel !== "") {
-        const resolved = resolveCliModel({ cliProvider, cliModel, modelRuntime });
+        const resolved = resolveCliModel({ cliModel, cliProvider, modelRuntime });
         if (
           (resolved.error !== undefined && resolved.error !== "") ||
           resolved.model === undefined
@@ -45,21 +45,21 @@ function checkProviderAuthImpl(
       if (provider === undefined || provider === "")
         throw new AuthCommandError("Unable to resolve an auth provider");
       if (modelRuntime.getError() !== undefined) {
-        return { status: "invalid", provider, reason: "invalid_state" };
+        return { provider, reason: "invalid_state", status: "invalid" };
       }
       if (modelRuntime.getProvider(provider) === undefined) {
-        return { status: "not_ready", provider, reason: "provider_not_found" };
+        return { provider, reason: "provider_not_found", status: "not_ready" };
       }
       try {
         const auth = yield* awaited(modelRuntime.checkAuth(provider));
         if (auth === undefined)
-          return { status: "not_ready", provider, reason: "credentials_not_configured" };
+          return { provider, reason: "credentials_not_configured", status: "not_ready" };
         if (options.refresh && (yield* awaited(modelRuntime.getAuth(provider))) === undefined) {
-          return { status: "not_ready", provider, reason: "credentials_not_configured" };
+          return { provider, reason: "credentials_not_configured", status: "not_ready" };
         }
-        return { status: "ready", provider, authType: auth.type };
+        return { authType: auth.type, provider, status: "ready" };
       } catch {
-        return { status: "invalid", provider, reason: "invalid_state" };
+        return { provider, reason: "invalid_state", status: "invalid" };
       }
     }),
   );
@@ -80,7 +80,7 @@ export const checkProviderAuth: {
 function getProviderCredentialImpl(
   providerId: string,
   modelRuntime: ModelRuntime,
-  credentials: CredentialStore,
+  credentials: aiTypes.CredentialStore,
   options: { refresh: boolean },
 ): Promise<string | undefined> {
   return Effect.runPromise(
@@ -96,24 +96,26 @@ export const getProviderCredential: {
   (
     providerId: string,
     modelRuntime: ModelRuntime,
-    credentials: CredentialStore,
+    credentials: aiTypes.CredentialStore,
     options: { refresh: boolean },
   ): Promise<string | undefined>;
   (
     modelRuntime: ModelRuntime,
-    credentials: CredentialStore,
+    credentials: aiTypes.CredentialStore,
     options: { refresh: boolean },
   ): (providerId: string) => Promise<string | undefined>;
 } = dual((args: IArguments) => args.length >= 4, getProviderCredentialImpl);
 
-export function createAuthCheckModelRuntime(credentials: CredentialStore): Promise<ModelRuntime> {
+export function createAuthCheckModelRuntime(
+  credentials: aiTypes.CredentialStore,
+): Promise<ModelRuntime> {
   return Effect.runPromise(
     awaiting(function* () {
       return yield* awaited(
         ModelRuntime.create({
+          allowModelNetwork: false,
           credentials,
           modelsStore: new InMemoryCodingAgentModelsStore(),
-          allowModelNetwork: false,
           refreshOnCreate: false,
         }),
       );

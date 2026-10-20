@@ -5,46 +5,42 @@ import type {
   ResponseInputText,
 } from "openai/resources/responses/responses.js";
 
-import type {
-  Api,
-  ImageContent,
-  Model,
-  TextContent,
-  ToolResultMessage,
-  UserMessage,
-} from "../types.ts";
-import { sanitizeSurrogates } from "../utils/sanitize-unicode.ts";
+import type typesModule from "../types.types.ts";
+import sanitizeUnicode from "../utils/sanitize-unicode.ts";
+import type openaiResponsesUserInputTypes from "./openai-responses-user-input.types.ts";
+
+const { sanitizeSurrogates } = sanitizeUnicode;
 
 const inputText = (text: string): ResponseInputText => ({
-  type: "input_text",
   text: sanitizeSurrogates(text),
+  type: "input_text",
 });
 
-const inputImage = (image: ImageContent): ResponseInputImage => ({
-  type: "input_image",
+const inputImage = (image: typesModule.ImageContent): ResponseInputImage => ({
   detail: "auto",
   image_url: `data:${image.mimeType};base64,${image.data}`,
+  type: "input_image",
 });
 
-export function convertUserMessage(message: UserMessage): ResponseInputItem | undefined {
+function convertUserMessage(message: typesModule.UserMessage): ResponseInputItem | undefined {
   if (typeof message.content === "string") {
-    return { role: "user", content: [inputText(message.content)] };
+    return { content: [inputText(message.content)], role: "user" };
   }
   const content = message.content.map((item): ResponseInputContent =>
     item.type === "text" ? inputText(item.text) : inputImage(item),
   );
-  return content.length === 0 ? undefined : { role: "user", content };
+  return content.length === 0 ? undefined : { content, role: "user" };
 }
 
-function toolResultOutput<TApi extends Api>(
-  model: Model<TApi>,
-  content: readonly (TextContent | ImageContent)[],
+function toolResultOutput<TApi extends typesModule.Api>(
+  model: typesModule.Model<TApi>,
+  content: readonly (typesModule.TextContent | typesModule.ImageContent)[],
 ): string | Array<ResponseInputText | ResponseInputImage> {
   const text = content
-    .filter((c): c is TextContent => c.type === "text")
+    .filter((c): c is typesModule.TextContent => c.type === "text")
     .map((c) => c.text)
     .join("\n");
-  const images = content.filter((c): c is ImageContent => c.type === "image");
+  const images = content.filter((c): c is typesModule.ImageContent => c.type === "image");
   if (images.length > 0 && model.input.includes("image")) {
     return [...(text.length > 0 ? [inputText(text)] : []), ...images.map(inputImage)];
   }
@@ -52,20 +48,21 @@ function toolResultOutput<TApi extends Api>(
   return images.length > 0 ? "(see attached image)" : "(no tool output)";
 }
 
-export interface ToolResultConversion<TApi extends Api> {
-  readonly model: Model<TApi>;
-  readonly message: ToolResultMessage;
-  readonly grammarToolInputProperties: ReadonlyMap<string, string> | undefined;
-}
-
-export function convertToolResultMessage<TApi extends Api>({
+function convertToolResultMessage<TApi extends typesModule.Api>({
   model,
   message,
   grammarToolInputProperties,
-}: ToolResultConversion<TApi>): ResponseInputItem {
+}: openaiResponsesUserInputTypes.ToolResultConversion<TApi>): ResponseInputItem {
   const [callId = ""] = message.toolCallId.split("|");
   const output = toolResultOutput(model, message.content);
   return grammarToolInputProperties?.has(message.toolName) === true
-    ? { type: "custom_tool_call_output", call_id: callId, output }
-    : { type: "function_call_output", call_id: callId, output };
+    ? { call_id: callId, output, type: "custom_tool_call_output" }
+    : { call_id: callId, output, type: "function_call_output" };
 }
+
+const openaiResponsesUserInput = {
+  convertToolResultMessage,
+  convertUserMessage,
+};
+
+export default openaiResponsesUserInput;

@@ -1,24 +1,21 @@
-import {
-  type Model,
-  fauxAssistantMessage,
-  fauxText,
-  fauxThinking,
-  fauxToolCall,
-} from "@msa/ai/compat";
+import compat from "@msa/ai/compat";
+import type compatTypes from "@msa/ai/compat.types";
 import { Effect } from "effect";
 import { describe, expect, it } from "vite-plus/test";
 
-import type { AgentEvent } from "../src/index.ts";
+import type agentTypes from "../src/index.types.ts";
 import fauxModule from "./support/faux.ts";
 import type fauxTypes from "./support/faux.types.ts";
 import calculate from "./utils/calculate.ts";
+
+const { fauxAssistantMessage, fauxText, fauxThinking, fauxToolCall } = compat;
 
 const { expectAssistant, fauxAgent, textOf, useFaux } = fauxModule;
 const { calculateTool } = calculate;
 
 const createFaux = useFaux();
 
-const basicPrompt = (model: Model<string>) =>
+const basicPrompt = (model: compatTypes.Model<string>) =>
   Effect.gen(function* () {
     const agent = fauxAgent({
       model,
@@ -34,14 +31,14 @@ const basicPrompt = (model: Model<string>) =>
     expect(textOf(expectAssistant(agent.state.messages[2]))).toContain("4");
   });
 
-const toolExecution = (model: Model<string>) =>
+const toolExecution = (model: compatTypes.Model<string>) =>
   Effect.gen(function* () {
     const agent = fauxAgent({
       model,
       systemPrompt: "You are a helpful assistant. Always use the calculator tool for math.",
       tools: [calculateTool],
     });
-    const pending: Array<{ type: AgentEvent["type"]; ids: string[] }> = [];
+    const pending: Array<{ type: agentTypes.AgentEvent["type"]; ids: string[] }> = [];
     agent.subscribe((event) => {
       if (event.type === "tool_execution_start" || event.type === "tool_execution_end") {
         pending.push({ ids: [...agent.state.pendingToolCalls], type: event.type });
@@ -61,7 +58,7 @@ const toolExecution = (model: Model<string>) =>
     ]);
   });
 
-const abortExecution = (model: Model<string>) =>
+const abortExecution = (model: compatTypes.Model<string>) =>
   Effect.gen(function* () {
     const agent = fauxAgent({ model });
     const prompt = agent.prompt("Count slowly from 1 to 20.");
@@ -86,10 +83,10 @@ const lifecycleTypes = [
   "agent_end",
 ];
 
-const stateUpdates = (model: Model<string>) =>
+const stateUpdates = (model: compatTypes.Model<string>) =>
   Effect.gen(function* () {
     const agent = fauxAgent({ model });
-    const events: AgentEvent["type"][] = [];
+    const events: agentTypes.AgentEvent["type"][] = [];
     agent.subscribe((event) => {
       events.push(event.type);
     });
@@ -102,7 +99,7 @@ const stateUpdates = (model: Model<string>) =>
     expect(agent.state.messages.length).toBe(3);
   });
 
-const multiTurnConversation = (model: Model<string>) =>
+const multiTurnConversation = (model: compatTypes.Model<string>) =>
   Effect.gen(function* () {
     const agent = fauxAgent({ model });
     yield* Effect.promise(() => agent.prompt("My name is Alice."));
@@ -135,7 +132,7 @@ type FauxResponses = Parameters<ReturnType<typeof createFaux>["setResponses"]>[0
 const withFaux =
   (
     responses: FauxResponses,
-    run: (model: Model<string>) => Effect.Effect<void>,
+    run: (model: compatTypes.Model<string>) => Effect.Effect<void>,
     options: fauxTypes.FauxOptions = {},
   ) =>
   () => {

@@ -1,11 +1,14 @@
 import { fileURLToPath } from "node:url";
 
-import { ProcessTerminal, type TUI, TuiMainScreen } from "@msa/tui";
+import tuiModule from "@msa/tui";
+import type tuiTypes from "@msa/tui/index.types";
 import { Console, Effect } from "effect";
 
 import { startAgent } from "./rpc-ui/agent-process.ts";
 import { UiController } from "./rpc-ui/controller.ts";
 import { showWelcome } from "./rpc-ui/slash-commands.ts";
+
+const { ProcessTerminal, TuiMainScreen } = tuiModule;
 
 const here = fileURLToPath(new URL(".", import.meta.url));
 const extensionPath = `${here}extensions/rpc-demo.ts`;
@@ -38,11 +41,10 @@ const handleExit =
 const main = () =>
   Effect.gen(function* () {
     const terminal = new ProcessTerminal();
-    const tui: TUI = new TuiMainScreen(terminal);
+    const tui: tuiTypes.TUI = new TuiMainScreen(terminal);
 
     let controller: UiController | undefined;
     const agent = startAgent({
-      command: "node",
       args: [
         cliPath,
         "--mode",
@@ -52,11 +54,12 @@ const main = () =>
         "--extension",
         extensionPath,
       ],
+      command: "node",
+      onExit: handleExit(terminal, () => agent),
       onLine: (line) => {
         const data = parseLine(line);
         if (data !== undefined) controller?.handleAgentEvent(data);
       },
-      onExit: handleExit(terminal, () => agent),
     });
 
     yield* Effect.sleep(500);

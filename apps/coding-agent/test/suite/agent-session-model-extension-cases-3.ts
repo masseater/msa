@@ -1,10 +1,12 @@
-import { fauxAssistantMessage, getCurrentSystemPrompt } from "@msa/ai";
+import ai from "@msa/ai";
 import { Effect } from "effect";
 import { expect } from "vite-plus/test";
 
 import type { BuildSystemPromptOptions, ExtensionAPI } from "../../src/index.ts";
 import agentSessionModelExtensionCases1 from "./agent-session-model-extension-cases-1.ts";
 import harnessModule from "./harness.ts";
+
+const { fauxAssistantMessage, getCurrentSystemPrompt } = ai;
 
 const { createHarness } = harnessModule;
 const { harnesses } = agentSessionModelExtensionCases1;

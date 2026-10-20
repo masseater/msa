@@ -2,15 +2,20 @@ import { Effect } from "effect";
 import { describe, expect, it } from "vite-plus/test";
 
 import getOpenRouterThinkingLevelMap from "../scripts/openrouter-reasoning-options.ts";
-import { streamSimple } from "../src/api/openai-completions.ts";
-import type { Model, ThinkingLevelMap } from "../src/types.ts";
-import { normalizeContext } from "../src/utils/transcript.ts";
+import openaiCompletions from "../src/api/openai-completions.ts";
+import type typesModule from "../src/types.types.ts";
+import transcript from "../src/utils/transcript.ts";
+
+const { normalizeContext } = transcript;
+const { streamSimple } = openaiCompletions;
 
 const context = normalizeContext({
   messages: [{ content: "Hello", role: "user", timestamp: 0 }],
 });
 
-function openRouterModel(thinkingLevelMap?: ThinkingLevelMap): Model<"openai-completions"> {
+function openRouterModel(
+  thinkingLevelMap?: typesModule.ThinkingLevelMap,
+): typesModule.Model<"openai-completions"> {
   return {
     api: "openai-completions",
     baseUrl: "https://example.invalid/v1",
@@ -28,7 +33,7 @@ function openRouterModel(thinkingLevelMap?: ThinkingLevelMap): Model<"openai-com
 }
 
 const capturePayload = Effect.fn("capturePayload")(function* (
-  model: Model<"openai-completions">,
+  model: typesModule.Model<"openai-completions">,
   reasoning?: "low",
 ) {
   let payload: { reasoning?: { effort?: string } } | undefined;

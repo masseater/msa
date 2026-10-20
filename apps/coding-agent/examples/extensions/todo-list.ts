@@ -1,5 +1,7 @@
 import type { Theme } from "@msa/coding-agent";
-import { matchesKey, truncateToWidth } from "@msa/tui";
+import tui from "@msa/tui";
+
+const { matchesKey, truncateToWidth } = tui;
 
 export interface Todo {
   id: number;

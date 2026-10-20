@@ -1,4 +1,4 @@
-import type { AgentTool } from "@msa/agent-core";
+import type agentTypes from "@msa/agent-core/index.types";
 import { Effect, FileSystem } from "effect";
 
 import { detectSupportedImageMimeTypeFromFile } from "../../utils/mime.ts";
@@ -13,14 +13,14 @@ import {
 } from "../platform/index.ts";
 import { resolveReadPathAsync } from "./path-utils.ts";
 import {
+  type ReadOperations,
+  type ReadToolDetails,
+  type ReadToolOptions,
   readDescription,
   readImageContent,
-  type ReadOperations,
   readOutputSchema,
   readSchema,
   readTextContent,
-  type ReadToolDetails,
-  type ReadToolOptions,
   readToolSystemPromptContribution,
   toReadOutput,
 } from "./read-content.ts";
@@ -28,15 +28,20 @@ import { readRenderers } from "./renderers/read.ts";
 import { type CwdFactory, cwdFactory, wrapToolDefinition } from "./tool-definition-wrapper.ts";
 
 export {
+  readToolSystemPromptContribution,
   type ReadOperations,
   type ReadToolDetails,
   type ReadToolInput,
   type ReadToolOptions,
   type ReadToolOutput,
-  readToolSystemPromptContribution,
 } from "./read-content.ts";
 
 const defaultReadOperations: ReadOperations = {
+  access: (path) =>
+    platformRuntime.runPromise(
+      rethrowCause(FileSystem.FileSystem.use((fs) => fs.access(path, { readable: true }))),
+    ),
+  detectImageMimeType: detectSupportedImageMimeTypeFromFile,
   readFile: (path) =>
     platformRuntime.runPromise(
       rethrowCause(
@@ -45,11 +50,6 @@ const defaultReadOperations: ReadOperations = {
         ),
       ),
     ),
-  access: (path) =>
-    platformRuntime.runPromise(
-      rethrowCause(FileSystem.FileSystem.use((fs) => fs.access(path, { readable: true }))),
-    ),
-  detectImageMimeType: detectSupportedImageMimeTypeFromFile,
 };
 
 interface ReadRequest {
@@ -71,21 +71,21 @@ const readFileTool = Effect.fn("read")(function* (request: ReadRequest) {
   const mimeType = yield* fromPromise(() => ops.detectImageMimeType?.(absolutePath));
   if (mimeType !== undefined && mimeType !== null && mimeType !== "") {
     const content = yield* readImageContent({
-      ops,
       absolutePath,
-      mimeType,
       autoResizeImages: options?.autoResizeImages ?? true,
-      resizeOptions: ctx?.model?.inputLimits?.images?.resize ?? options?.resizeOptions,
+      mimeType,
       model: ctx?.model,
+      ops,
+      resizeOptions: ctx?.model?.inputLimits?.images?.resize ?? options?.resizeOptions,
     });
     return { content, details: undefined as ReadToolDetails | undefined };
   }
   const buffer = yield* fromPromise(() => ops.readFile(absolutePath));
   return yield* readTextContent({
     buffer,
-    path: request.path,
-    offset: request.offset,
     limit: request.limit,
+    offset: request.offset,
+    path: request.path,
   });
 });
 
@@ -95,15 +95,9 @@ const createReadToolDefinitionImpl = (
 ): ToolDefinition<typeof readSchema, ReadToolDetails | undefined> => {
   const ops = options?.operations ?? defaultReadOperations;
   return {
-    name: "read",
-    label: "read",
-    description: readDescription,
-    promptSnippet: readToolSystemPromptContribution.snippet,
-    promptGuidelines: [...readToolSystemPromptContribution.guidelines],
-    parameters: readSchema,
     annotations: { readOnlyHint: true },
-    outputSchema: readOutputSchema,
-    constrainedSampling: { type: "json_schema", strict: "prefer" },
+    constrainedSampling: { strict: "prefer", type: "json_schema" },
+    description: readDescription,
     execute: (
       _toolCallId,
       { path, offset, limit }: { path: string; offset?: number; limit?: number },
@@ -123,6 +117,12 @@ const createReadToolDefinitionImpl = (
           ),
         ),
       ),
+    label: "read",
+    name: "read",
+    outputSchema: readOutputSchema,
+    parameters: readSchema,
+    promptGuidelines: [...readToolSystemPromptContribution.guidelines],
+    promptSnippet: readToolSystemPromptContribution.snippet,
     ...readRenderers,
   };
 };
@@ -132,6 +132,7 @@ export const createReadToolDefinition: CwdFactory<
   ToolDefinition<typeof readSchema, ReadToolDetails | undefined>
 > = cwdFactory(createReadToolDefinitionImpl);
 
-export const createReadTool: CwdFactory<ReadToolOptions, AgentTool<typeof readSchema>> = cwdFactory(
-  (cwd, options) => wrapToolDefinition(createReadToolDefinitionImpl(cwd, options)),
-);
+export const createReadTool: CwdFactory<
+  ReadToolOptions,
+  agentTypes.AgentTool<typeof readSchema>
+> = cwdFactory((cwd, options) => wrapToolDefinition(createReadToolDefinitionImpl(cwd, options)));

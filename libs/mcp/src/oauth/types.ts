@@ -1,85 +1,7 @@
-import { isObject } from "../protocol/jsonrpc.ts";
+import jsonrpcModule from "../protocol/jsonrpc.ts";
+import type typesModule from "./types.types.ts";
 
-export interface OAuthProtectedResourceMetadata {
-  resource: string;
-  authorization_servers?: string[];
-  scopes_supported?: string[];
-  [key: string]: unknown;
-}
-
-export interface AuthorizationServerMetadata {
-  issuer: string;
-  authorization_endpoint: string;
-  token_endpoint: string;
-  registration_endpoint?: string;
-  scopes_supported?: string[];
-  response_types_supported: string[];
-  grant_types_supported?: string[];
-  token_endpoint_auth_methods_supported?: string[];
-  code_challenge_methods_supported?: string[];
-  client_id_metadata_document_supported?: boolean;
-  authorization_response_iss_parameter_supported?: boolean;
-  [key: string]: unknown;
-}
-
-export interface OAuthTokens {
-  access_token: string;
-  token_type: string;
-  expires_in?: number;
-  scope?: string;
-  refresh_token?: string;
-  id_token?: string;
-}
-
-export interface OAuthClientMetadata {
-  redirect_uris: string[];
-  token_endpoint_auth_method?: string;
-  grant_types?: string[];
-  response_types?: string[];
-  application_type?: string;
-  client_name?: string;
-  client_uri?: string;
-  logo_uri?: string;
-  scope?: string;
-  contacts?: string[];
-  tos_uri?: string;
-  policy_uri?: string;
-  jwks_uri?: string;
-  jwks?: unknown;
-  software_id?: string;
-  software_version?: string;
-  software_statement?: string;
-}
-
-export interface OAuthClientInformation {
-  client_id: string;
-  client_secret?: string;
-  client_id_issued_at?: number;
-  client_secret_expires_at?: number;
-}
-
-export type OAuthClientInformationFull = OAuthClientInformation & OAuthClientMetadata;
-export type OAuthClientInformationMixed = OAuthClientInformation | OAuthClientInformationFull;
-
-export interface OAuthDiscoveryState {
-  authorizationServerUrl: string;
-  authorizationServerMetadata?: AuthorizationServerMetadata | undefined;
-  resourceMetadata?: OAuthProtectedResourceMetadata | undefined;
-  resourceMetadataUrl?: string | undefined;
-}
-
-export interface OAuthServerInfo {
-  authorizationServerUrl: string;
-  authorizationServerMetadata?: AuthorizationServerMetadata | undefined;
-  resourceMetadata?: OAuthProtectedResourceMetadata | undefined;
-}
-
-export interface OAuthChallenge {
-  resourceMetadataUrl?: URL | undefined;
-  scope?: string | undefined;
-  error?: string | undefined;
-  errorDescription?: string | undefined;
-}
+const { isObject } = jsonrpcModule;
 
 function object(value: unknown, name: string): Record<string, unknown> {
   if (!isObject(value)) throw new Error(`Invalid ${name}`);
@@ -132,20 +54,22 @@ function optionalUrl(value: unknown, name: string): string | undefined {
   return absent(value) ? undefined : safeUrl(value, name);
 }
 
-export function parseProtectedResourceMetadata(value: unknown): OAuthProtectedResourceMetadata {
+function parseProtectedResourceMetadata(
+  value: unknown,
+): typesModule.OAuthProtectedResourceMetadata {
   const input = object(value, "OAuth protected resource metadata");
   return compact({
     ...input,
-    resource: safeUrl(input["resource"], "OAuth protected resource metadata resource"),
     authorization_servers: optionalStrings(
       input["authorization_servers"],
       "authorization_servers",
     )?.map((url) => safeUrl(url, "authorization server URL")),
+    resource: safeUrl(input["resource"], "OAuth protected resource metadata resource"),
     scopes_supported: optionalStrings(input["scopes_supported"], "scopes_supported"),
   });
 }
 
-export function parseAuthorizationServerMetadata(value: unknown): AuthorizationServerMetadata {
+function parseAuthorizationServerMetadata(value: unknown): typesModule.AuthorizationServerMetadata {
   const input = object(value, "authorization server metadata");
   const responseTypes = optionalStrings(
     input["response_types_supported"],
@@ -154,54 +78,54 @@ export function parseAuthorizationServerMetadata(value: unknown): AuthorizationS
   if (responseTypes === undefined) throw new Error("Invalid response_types_supported");
   return compact({
     ...input,
-    issuer: safeUrl(input["issuer"], "authorization server issuer"),
     authorization_endpoint: safeUrl(input["authorization_endpoint"], "authorization endpoint"),
-    token_endpoint: safeUrl(input["token_endpoint"], "token endpoint"),
-    registration_endpoint: optionalUrl(input["registration_endpoint"], "registration endpoint"),
-    scopes_supported: optionalStrings(input["scopes_supported"], "scopes_supported"),
-    response_types_supported: responseTypes,
-    grant_types_supported: optionalStrings(input["grant_types_supported"], "grant_types_supported"),
-    token_endpoint_auth_methods_supported: optionalStrings(
-      input["token_endpoint_auth_methods_supported"],
-      "token_endpoint_auth_methods_supported",
-    ),
-    code_challenge_methods_supported: optionalStrings(
-      input["code_challenge_methods_supported"],
-      "code_challenge_methods_supported",
-    ),
-    client_id_metadata_document_supported:
-      typeof input["client_id_metadata_document_supported"] === "boolean"
-        ? input["client_id_metadata_document_supported"]
-        : undefined,
     authorization_response_iss_parameter_supported:
       typeof input["authorization_response_iss_parameter_supported"] === "boolean"
         ? input["authorization_response_iss_parameter_supported"]
         : undefined,
+    client_id_metadata_document_supported:
+      typeof input["client_id_metadata_document_supported"] === "boolean"
+        ? input["client_id_metadata_document_supported"]
+        : undefined,
+    code_challenge_methods_supported: optionalStrings(
+      input["code_challenge_methods_supported"],
+      "code_challenge_methods_supported",
+    ),
+    grant_types_supported: optionalStrings(input["grant_types_supported"], "grant_types_supported"),
+    issuer: safeUrl(input["issuer"], "authorization server issuer"),
+    registration_endpoint: optionalUrl(input["registration_endpoint"], "registration endpoint"),
+    response_types_supported: responseTypes,
+    scopes_supported: optionalStrings(input["scopes_supported"], "scopes_supported"),
+    token_endpoint: safeUrl(input["token_endpoint"], "token endpoint"),
+    token_endpoint_auth_methods_supported: optionalStrings(
+      input["token_endpoint_auth_methods_supported"],
+      "token_endpoint_auth_methods_supported",
+    ),
   });
 }
 
-export function parseOAuthTokens(value: unknown): OAuthTokens {
+function parseOAuthTokens(value: unknown): typesModule.OAuthTokens {
   const input = object(value, "OAuth token response");
   const expires = absent(input["expires_in"]) ? undefined : Number(input["expires_in"]);
   if (expires !== undefined && !Number.isFinite(expires)) throw new Error("Invalid expires_in");
   return compact({
     access_token: requiredString(input["access_token"], "access_token"),
-    token_type: requiredString(input["token_type"], "token_type"),
     expires_in: expires,
-    scope: optionalString(input["scope"], "scope"),
-    refresh_token: optionalString(input["refresh_token"], "refresh_token"),
     id_token: optionalString(input["id_token"], "id_token"),
+    refresh_token: optionalString(input["refresh_token"], "refresh_token"),
+    scope: optionalString(input["scope"], "scope"),
+    token_type: requiredString(input["token_type"], "token_type"),
   });
 }
 
-export function parseClientInformation(value: unknown): OAuthClientInformationFull {
+function parseClientInformation(value: unknown): typesModule.OAuthClientInformationFull {
   const input = object(value, "OAuth client registration response");
   return compact({
-    ...(input as unknown as OAuthClientMetadata),
+    ...(input as unknown as typesModule.OAuthClientMetadata),
     client_id: requiredString(input["client_id"], "client_id"),
-    client_secret: optionalString(input["client_secret"], "client_secret"),
     client_id_issued_at:
       typeof input["client_id_issued_at"] === "number" ? input["client_id_issued_at"] : undefined,
+    client_secret: optionalString(input["client_secret"], "client_secret"),
     client_secret_expires_at:
       typeof input["client_secret_expires_at"] === "number"
         ? input["client_secret_expires_at"]
@@ -209,3 +133,12 @@ export function parseClientInformation(value: unknown): OAuthClientInformationFu
     redirect_uris: optionalStrings(input["redirect_uris"], "redirect_uris") ?? [],
   });
 }
+
+const types = {
+  parseAuthorizationServerMetadata,
+  parseClientInformation,
+  parseOAuthTokens,
+  parseProtectedResourceMetadata,
+};
+
+export default types;

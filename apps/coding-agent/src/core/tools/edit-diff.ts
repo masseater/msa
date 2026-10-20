@@ -6,9 +6,9 @@ import { splitBom } from "../../utils/text.ts";
 import { platformRuntime } from "../platform/index.ts";
 import { type EditDiffResult, generateDiffString } from "./diff-format.ts";
 import {
+  type MatchedEdit,
   applyReplacements,
   applyReplacementsPreservingUnchangedLines,
-  type MatchedEdit,
 } from "./edit-replacements.ts";
 import {
   detectLineEnding,
@@ -46,11 +46,11 @@ export const fuzzyFindText: {
   const exactIndex = content.indexOf(oldText);
   if (exactIndex !== -1) {
     return {
+      contentForReplacement: content,
       found: true,
       index: exactIndex,
       matchLength: oldText.length,
       usedFuzzyMatch: false,
-      contentForReplacement: content,
     };
   }
 
@@ -60,20 +60,20 @@ export const fuzzyFindText: {
 
   if (fuzzyIndex === -1) {
     return {
+      contentForReplacement: content,
       found: false,
       index: -1,
       matchLength: 0,
       usedFuzzyMatch: false,
-      contentForReplacement: content,
     };
   }
 
   return {
+    contentForReplacement: fuzzyContent,
     found: true,
     index: fuzzyIndex,
     matchLength: fuzzyOldText.length,
     usedFuzzyMatch: true,
-    contentForReplacement: fuzzyContent,
   };
 });
 
@@ -135,7 +135,7 @@ function matchEdits(
 ): MatchedEdit[] {
   const totalEdits = normalizedEdits.length;
   return normalizedEdits.map((edit, editIndex) => {
-    const location = { path, editIndex, totalEdits };
+    const location = { editIndex, path, totalEdits };
     const matchResult = fuzzyFindText(replacementBaseContent, edit.oldText);
     if (!matchResult.found) throw getNotFoundError(location);
     const occurrences = countOccurrences(replacementBaseContent, edit.oldText);
@@ -166,13 +166,13 @@ function applyEditsImpl(
   path: string,
 ): AppliedEditsResult {
   const normalizedEdits = edits.map((edit) => ({
-    oldText: normalizeToLF(edit.oldText),
     newText: normalizeToLF(edit.newText),
+    oldText: normalizeToLF(edit.oldText),
   }));
 
   for (const [i, edit] of normalizedEdits.entries()) {
     if (edit.oldText.length === 0) {
-      throw getEmptyOldTextError({ path, editIndex: i, totalEdits: normalizedEdits.length });
+      throw getEmptyOldTextError({ editIndex: i, path, totalEdits: normalizedEdits.length });
     }
   }
 
@@ -189,8 +189,8 @@ function applyEditsImpl(
 
   const newContent = usedFuzzyMatch
     ? applyReplacementsPreservingUnchangedLines({
-        originalContent: normalizedContent,
         baseContent: replacementBaseContent,
+        originalContent: normalizedContent,
         replacements: matchedEdits,
       })
     : applyReplacements({ content: replacementBaseContent, replacements: matchedEdits });

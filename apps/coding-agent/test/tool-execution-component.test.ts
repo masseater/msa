@@ -1,5 +1,5 @@
 import testing from "@msa/testing";
-import { Text, resetCapabilitiesCache, setCapabilities } from "@msa/tui";
+import tui from "@msa/tui";
 import { Effect } from "effect";
 import { afterEach, beforeAll, describe, expect, test, vi } from "vite-plus/test";
 
@@ -9,6 +9,8 @@ import { ToolExecutionComponent } from "../src/modes/interactive/components/tool
 import { initTheme } from "../src/modes/interactive/theme/theme.ts";
 import { stripAnsi } from "../src/utils/ansi.ts";
 import toolExecutionComponentSupport from "./tool-execution-component-support.ts";
+
+const { Text, resetCapabilitiesCache, setCapabilities } = tui;
 
 const { TINY_JPEG, createBaseToolDefinition, createFakeTui } = toolExecutionComponentSupport;
 

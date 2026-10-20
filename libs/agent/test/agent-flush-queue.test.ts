@@ -1,15 +1,20 @@
-import { createAssistantMessageEventStream } from "@msa/ai/compat";
+import compat from "@msa/ai/compat";
 import { Effect } from "effect";
 import { Type } from "typebox";
 import { describe, expect, it } from "vite-plus/test";
 
-import { Agent, type AgentTool } from "../src/index.ts";
+import agentModule from "../src/index.ts";
+import type agentTypes from "../src/index.types.ts";
 import fixtures from "./support/fixtures.ts";
+
+const { createAssistantMessageEventStream } = compat;
+
+const { Agent } = agentModule;
 
 const { createUserMessage, respond, textMessage, toolCallMessage } = fixtures;
 
 interface QueuedRun {
-  readonly agent: Agent;
+  readonly agent: agentTypes.Agent;
   readonly flushed: readonly (number | undefined)[];
   readonly requests: readonly string[][];
 }
@@ -24,12 +29,14 @@ const userTexts = (messages: readonly { role: string; content: unknown }[]): str
     );
   });
 
-const runWithQueuedDuringTool = (queue: (agent: Agent) => number | undefined): QueuedRun => {
+const runWithQueuedDuringTool = (
+  queue: (agent: agentTypes.Agent) => number | undefined,
+): QueuedRun => {
   const requests: string[][] = [];
   const flushed: (number | undefined)[] = [];
   const schema = Type.Object({});
-  const holder: { agent?: Agent } = {};
-  const tool: AgentTool<typeof schema> = {
+  const holder: { agent?: agentTypes.Agent } = {};
+  const tool: agentTypes.AgentTool<typeof schema> = {
     description: "Noop tool",
     execute: () => {
       if (holder.agent !== undefined) flushed.push(queue(holder.agent));
@@ -54,7 +61,9 @@ const runWithQueuedDuringTool = (queue: (agent: Agent) => number | undefined): Q
   return { agent, flushed, requests };
 };
 
-const promptStart = (queue: (agent: Agent) => number | undefined): Effect.Effect<QueuedRun> =>
+const promptStart = (
+  queue: (agent: agentTypes.Agent) => number | undefined,
+): Effect.Effect<QueuedRun> =>
   Effect.suspend(() => {
     const run = runWithQueuedDuringTool(queue);
     return Effect.as(

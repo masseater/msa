@@ -39,8 +39,8 @@ export function findPodman(path: string | undefined): string | undefined {
 
 function podman(binary: string, args: readonly string[]): Effect.Effect<string, PodmanError> {
   return Effect.tryPromise({
-    try: (signal) => execCommand(binary, [...args], process.cwd(), { signal }),
     catch: (error) => new PodmanError({ message: String(error) }),
+    try: (signal) => execCommand(binary, [...args], process.cwd(), { signal }),
   }).pipe(
     Effect.flatMap((result) =>
       result.code === 0

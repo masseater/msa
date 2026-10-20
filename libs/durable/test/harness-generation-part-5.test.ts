@@ -1,4 +1,5 @@
-import { type Message, type SimpleStreamOptions, fauxAssistantMessage } from "@msa/ai";
+import ai from "@msa/ai";
+import type aiTypes from "@msa/ai/index.types";
 import durable from "@msa/durable";
 import harnessModule from "@msa/durable/harness";
 import type durableTypes from "@msa/durable/index.types";
@@ -8,6 +9,8 @@ import { describe, expect, it } from "vite-plus/test";
 
 import harnessGenerationSupport from "./harness-generation-support.ts";
 import testSupport from "./support.ts";
+
+const { fauxAssistantMessage } = ai;
 
 const { MemoryStorage } = memory;
 const { ProviderDoc } = durable;
@@ -23,7 +26,10 @@ const keepsProviderSessionStep1 = Effect.gen(function* () {
 
   const setup = chatSetup();
   const seen = new Map<string, string[]>();
-  const capture = (request: { messages: readonly Message[] }, options?: SimpleStreamOptions) => {
+  const capture = (
+    request: { messages: readonly aiTypes.Message[] },
+    options?: aiTypes.SimpleStreamOptions,
+  ) => {
     const message = request.messages.findLast((candidate) => candidate.role === "user");
     const content = message?.role === "user" ? message.content : undefined;
     const text = typeof content === "string" ? content : "";

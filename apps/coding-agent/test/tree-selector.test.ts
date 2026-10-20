@@ -1,7 +1,7 @@
 import { stripVTControlCharacters } from "node:util";
 
 import testing from "@msa/testing";
-import { setKeybindings, visibleWidth } from "@msa/tui";
+import tui from "@msa/tui";
 import { beforeAll, beforeEach, describe, expect, test } from "vite-plus/test";
 
 import { KeybindingsManager } from "../src/core/keybindings.ts";
@@ -9,6 +9,8 @@ import type { ModelChangeEntry, SessionEntry } from "../src/core/session-manager
 import { TreeSelectorComponent } from "../src/modes/interactive/components/tree-selector.ts";
 import { initTheme } from "../src/modes/interactive/theme/theme.ts";
 import treeSelectorSupport from "./tree-selector-support.ts";
+
+const { setKeybindings, visibleWidth } = tui;
 
 const { assistantMessage, buildTree, userMessage } = treeSelectorSupport;
 

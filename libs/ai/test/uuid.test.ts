@@ -1,6 +1,8 @@
 import { afterEach, describe, expect, it, vi } from "vite-plus/test";
 
-import { uuidv7 } from "../src/utils/uuid.ts";
+import uuidModule from "../src/utils/uuid.ts";
+
+const { uuidv7 } = uuidModule;
 
 const UUID_V7_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-7[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/u;
 const TIMESTAMP = 0x0123456789ab;

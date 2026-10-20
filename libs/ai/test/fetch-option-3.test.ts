@@ -1,9 +1,11 @@
 import { Effect } from "effect";
 import { afterEach, describe, expect, it, vi } from "vite-plus/test";
 
-import { streamSimple as streamGoogleGenerativeAI } from "../src/api/google-generative-ai.ts";
-import type { FetchFunction } from "../src/types.ts";
+import googleGenerativeAi from "../src/api/google-generative-ai.ts";
+import type typesModule from "../src/types.types.ts";
 import fetchOptionSupport from "./fetch-option-support.ts";
+
+const { streamSimple: streamGoogleGenerativeAI } = googleGenerativeAi;
 
 const { context, createModel } = fetchOptionSupport;
 
@@ -15,7 +17,7 @@ describe("fetch stream option", () => {
   it("allows the Google adapter to receive globalThis.fetch explicitly", () =>
     Effect.runPromise(
       Effect.gen(function* () {
-        const ambient = vi.fn<FetchFunction>(() =>
+        const ambient = vi.fn<typesModule.FetchFunction>(() =>
           Promise.resolve(
             new Response(JSON.stringify({ error: { message: "upstream rejected request" } }), {
               headers: { "content-type": "application/json" },

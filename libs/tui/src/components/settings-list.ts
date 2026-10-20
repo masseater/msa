@@ -1,43 +1,40 @@
-import { fuzzyFilter } from "../fuzzy.ts";
-import { getKeybindings } from "../keybindings.ts";
-import { truncateToWidth } from "../text-truncate.ts";
-import { wrapTextWithAnsi } from "../text-wrap.ts";
-import type { Component, TuiMouseEvent, TuiMouseEventResult } from "../tui-component.ts";
-import { visibleWidth } from "../utils.ts";
-import { Input } from "./input.ts";
-import {
-  type SettingItem,
-  type SettingsListOptions,
-  type SettingsListTheme,
-  settingsHint,
-  visibleItemRange,
-} from "./settings-list-items.ts";
+import fuzzy from "../fuzzy.ts";
+import keybindingsModule from "../keybindings.ts";
+import textTruncate from "../text-truncate.ts";
+import type tuiComponentTypes from "../tui-component.types.ts";
+import Input from "./input.ts";
+import type inputTypes from "./input.types.ts";
+import settingsListItems from "./settings-list-items.ts";
+import type settingsListItemsTypes from "./settings-list-items.types.ts";
 
-export type { SettingItem, SettingsListOptions, SettingsListTheme };
+const { truncateToWidth } = textTruncate;
+const { descriptionLines, settingItemLine, settingsHint, visibleItemRange } = settingsListItems;
+const { getKeybindings } = keybindingsModule;
+const { fuzzyFilter } = fuzzy;
 
-export class SettingsList implements Component {
-  private items: SettingItem[];
-  private filteredItems: SettingItem[];
-  private theme: SettingsListTheme;
+export default class SettingsList implements tuiComponentTypes.Component {
+  private items: settingsListItemsTypes.SettingItem[];
+  private filteredItems: settingsListItemsTypes.SettingItem[];
+  private theme: settingsListItemsTypes.SettingsListTheme;
   private selectedIndex = 0;
   private mousePressedIndex: number | undefined;
   private maxVisible: number;
   private onChange: (id: string, newValue: string) => void;
   private onCancel: () => void;
-  private searchInput?: Input;
+  private searchInput?: inputTypes.Input;
   private searchEnabled: boolean;
 
-  private submenuComponent: Component | null = null;
+  private submenuComponent: tuiComponentTypes.Component | null = null;
   private submenuItemIndex: number | null = null;
   private navigateAfterClose: string | null = null;
 
   constructor(
-    items: SettingItem[],
+    items: settingsListItemsTypes.SettingItem[],
     maxVisible: number,
-    theme: SettingsListTheme,
+    theme: settingsListItemsTypes.SettingsListTheme,
     onChange: (id: string, newValue: string) => void,
     onCancel: () => void,
-    options: SettingsListOptions = {},
+    options: settingsListItemsTypes.SettingsListOptions = {},
   ) {
     this.items = items;
     this.filteredItems = items;
@@ -88,9 +85,7 @@ export class SettingsList implements Component {
 
     if (this.items.length === 0) {
       lines.push(this.theme.hint("  No settings available"));
-      if (this.searchEnabled) {
-        this.addHintLine(lines, width);
-      }
+      if (this.searchEnabled) this.addHintLine(lines, width);
       return lines;
     }
 
@@ -102,15 +97,16 @@ export class SettingsList implements Component {
     }
 
     const { startIndex, endIndex } = visibleItemRange({
-      selectedIndex: this.selectedIndex,
-      maxVisible: this.maxVisible,
       itemCount: displayItems.length,
+      maxVisible: this.maxVisible,
+      selectedIndex: this.selectedIndex,
     });
 
     for (let i = startIndex; i < endIndex; i++) {
       const item = displayItems[i];
       if (item === undefined) continue;
-      lines.push(this.renderItemLine(item, i === this.selectedIndex, width));
+      const line = { isSelected: i === this.selectedIndex, item };
+      lines.push(settingItemLine(this.theme, this.items, line, width));
     }
 
     if (startIndex > 0 || endIndex < displayItems.length) {
@@ -118,45 +114,15 @@ export class SettingsList implements Component {
       lines.push(this.theme.hint(truncateToWidth(scrollText, width - 2, "")));
     }
 
-    this.addDescriptionLines(lines, displayItems[this.selectedIndex], width);
+    lines.push(...descriptionLines(this.theme, displayItems[this.selectedIndex], width));
     this.addHintLine(lines, width);
 
     return lines;
   }
 
-  private renderItemLine(item: SettingItem, isSelected: boolean, width: number): string {
-    const maxLabelWidth = Math.min(
-      36,
-      Math.max(...this.items.map((each) => visibleWidth(each.label))),
-    );
-    const prefix = isSelected ? this.theme.cursor : "  ";
-    const labelPadded =
-      item.label + " ".repeat(Math.max(0, maxLabelWidth - visibleWidth(item.label)));
-    const labelText = this.theme.label(labelPadded, isSelected);
-
-    const separator = "  ";
-    const usedWidth = visibleWidth(prefix) + maxLabelWidth + visibleWidth(separator);
-    const valueText = this.theme.value(
-      truncateToWidth(item.currentValue, width - usedWidth - 2, ""),
-      isSelected,
-    );
-
-    return truncateToWidth(prefix + labelText + separator + valueText, width);
-  }
-
-  private addDescriptionLines(
-    lines: string[],
-    selectedItem: SettingItem | undefined,
-    width: number,
-  ): void {
-    if (selectedItem?.description === undefined || selectedItem.description === "") return;
-    lines.push("");
-    for (const line of wrapTextWithAnsi(selectedItem.description, width - 4)) {
-      lines.push(this.theme.description(`  ${line}`));
-    }
-  }
-
-  handleMouse(event: TuiMouseEvent): TuiMouseEventResult | undefined {
+  handleMouse(
+    event: tuiComponentTypes.TuiMouseEvent,
+  ): tuiComponentTypes.TuiMouseEventResult | undefined {
     if (this.submenuComponent !== null) {
       const result = this.submenuComponent.handleMouse?.(event);
       return result === undefined ? undefined : { ...result, focus: true };
@@ -170,6 +136,12 @@ export class SettingsList implements Component {
       if (event.y === 1) return undefined;
     }
 
+    return this.#handleListMouse(event);
+  }
+
+  #handleListMouse(
+    event: tuiComponentTypes.TuiMouseEvent,
+  ): tuiComponentTypes.TuiMouseEventResult | undefined {
     const displayItems = this.getDisplayItems();
     if (displayItems.length === 0) return undefined;
     if (event.type === "wheel" && event.wheelDelta !== undefined && event.wheelDelta !== 0) {
@@ -186,16 +158,16 @@ export class SettingsList implements Component {
 
     const rowOffset = this.searchEnabled ? 2 : 0;
     const { startIndex, endIndex } = visibleItemRange({
-      selectedIndex: this.selectedIndex,
-      maxVisible: this.maxVisible,
       itemCount: displayItems.length,
+      maxVisible: this.maxVisible,
+      selectedIndex: this.selectedIndex,
     });
     const itemIndex = startIndex + event.y - rowOffset;
     if (itemIndex < startIndex || itemIndex >= endIndex) return undefined;
     if (event.type === "press") {
       this.mousePressedIndex = itemIndex;
       this.selectedIndex = itemIndex;
-      return { handled: true, focus: true };
+      return { focus: true, handled: true };
     }
     if (event.type === "click") {
       this.selectedIndex = this.mousePressedIndex ?? itemIndex;
@@ -235,7 +207,7 @@ export class SettingsList implements Component {
     }
   }
 
-  private getDisplayItems(): SettingItem[] {
+  private getDisplayItems(): settingsListItemsTypes.SettingItem[] {
     return this.searchEnabled ? this.filteredItems : this.items;
   }
 

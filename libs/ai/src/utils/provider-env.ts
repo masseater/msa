@@ -1,7 +1,9 @@
 import { Function } from "effect";
 
-import type { ProviderEnv } from "../types.ts";
-import { readProcessEnv } from "./env.ts";
+import type typesModule from "../types.types.ts";
+import envModule from "./env.ts";
+
+const { readProcessEnv } = envModule;
 
 let procEnvCache: Map<string, string> | null = null;
 
@@ -37,13 +39,19 @@ function getBunSandboxEnvValue(name: string): string | undefined {
 const nonEmpty = (value: string | undefined): string | undefined =>
   value === undefined || value === "" ? undefined : value;
 
-export const getProviderEnvValue: {
-  (env?: ProviderEnv): (name: string) => string | undefined;
-  (name: string, env?: ProviderEnv): string | undefined;
+const getProviderEnvValue: {
+  (env?: typesModule.ProviderEnv): (name: string) => string | undefined;
+  (name: string, env?: typesModule.ProviderEnv): string | undefined;
 } = Function.dual(
   (args) => typeof args[0] === "string",
-  (name: string, env?: ProviderEnv): string | undefined =>
+  (name: string, env?: typesModule.ProviderEnv): string | undefined =>
     nonEmpty(env?.[name]) ??
     nonEmpty(typeof process === "undefined" ? undefined : readProcessEnv(name)) ??
     nonEmpty(getBunSandboxEnvValue(name)),
 );
+
+const providerEnv = {
+  getProviderEnvValue,
+};
+
+export default providerEnv;

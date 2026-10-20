@@ -1,12 +1,11 @@
 import assert from "node:assert";
 import { describe, it, mock } from "node:test";
 
-import {
-  normalizeAppleTerminalInput,
-  normalizeNativeShiftEnterInput,
-  resolveEscapeTimeoutMs,
-} from "../src/terminal-protocol.ts";
+import terminalProtocol from "../src/terminal-protocol.ts";
 import terminalHelpers from "./terminal-helpers.ts";
+
+const { normalizeAppleTerminalInput, normalizeNativeShiftEnterInput, resolveEscapeTimeoutMs } =
+  terminalProtocol;
 
 const { setupNegotiation, withOverride, working } = terminalHelpers;
 

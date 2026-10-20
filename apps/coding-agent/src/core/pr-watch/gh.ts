@@ -3,7 +3,7 @@ import { Data, Effect } from "effect";
 import { toErrorMessage } from "../../utils/errors.ts";
 import { findExecutableOnPath } from "../../utils/shell.ts";
 import { type ExecResult, execCommand } from "../exec.ts";
-import { parsePrView, type PrSnapshot, type PrWatchTarget } from "./snapshot.ts";
+import { type PrSnapshot, type PrWatchTarget, parsePrView } from "./snapshot.ts";
 
 export type PrWatchFailure = "missing" | "auth" | "not-found" | "rate-limit" | "other";
 
@@ -119,8 +119,8 @@ export function makeGh(options: PrWatchGhOptions): PrWatchGh {
       return Effect.fail(new PrWatchGhError({ kind: "missing", message: "gh is not on PATH" }));
     }
     return Effect.tryPromise({
-      try: () => run(args),
       catch: (cause) => new PrWatchGhError({ kind: "other", message: toErrorMessage(cause) }),
+      try: () => run(args),
     }).pipe(
       Effect.filterOrFail(
         (result) => result.code === 0,
@@ -130,6 +130,19 @@ export function makeGh(options: PrWatchGhOptions): PrWatchGh {
   };
 
   return {
+    behind: (target, baseRefName, headRefOid) =>
+      exec(ghCompareArgs(target, baseRefName, headRefOid)).pipe(
+        Effect.flatMap((result) => {
+          const behindBy = Number.parseInt(result.stdout.trim(), 10);
+          if (Number.isFinite(behindBy)) return Effect.succeed(behindBy);
+          return Effect.fail(
+            new PrWatchGhError({
+              kind: "other",
+              message: "gh api compare printed no behind_by count",
+            }),
+          );
+        }),
+      ),
     view: (target) =>
       exec(ghPrViewArgs(target)).pipe(
         Effect.flatMap((result) => {
@@ -143,19 +156,6 @@ export function makeGh(options: PrWatchGhOptions): PrWatchGh {
             );
           }
           return Effect.succeed(snapshot);
-        }),
-      ),
-    behind: (target, baseRefName, headRefOid) =>
-      exec(ghCompareArgs(target, baseRefName, headRefOid)).pipe(
-        Effect.flatMap((result) => {
-          const behindBy = Number.parseInt(result.stdout.trim(), 10);
-          if (Number.isFinite(behindBy)) return Effect.succeed(behindBy);
-          return Effect.fail(
-            new PrWatchGhError({
-              kind: "other",
-              message: "gh api compare printed no behind_by count",
-            }),
-          );
         }),
       ),
   };

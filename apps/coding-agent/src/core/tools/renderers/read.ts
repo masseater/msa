@@ -1,11 +1,12 @@
-import type { ImageContent, TextContent } from "@msa/ai";
-import { Text } from "@msa/tui";
+import type aiTypes from "@msa/ai/index.types";
+import tui from "@msa/tui";
+import type tuiTypes from "@msa/tui/index.types";
 
 import { expandHint, keyText } from "../../../modes/interactive/components/keybinding-hints.ts";
 import {
+  type Theme,
   getLanguageFromPath,
   highlightCode,
-  type Theme,
 } from "../../../modes/interactive/theme/theme.ts";
 import type { ToolDefinition, ToolRenderResultOptions } from "../../extensions/types.ts";
 import type { ReadToolDetails } from "../read-content.ts";
@@ -21,6 +22,8 @@ import {
   type CompactReadClassification,
   getCompactReadClassification,
 } from "./read-classification.ts";
+
+const { Text } = tui;
 
 type ReadRenderArgs = { path?: string; file_path?: string; offset?: unknown; limit?: unknown };
 function styledReadLineRange(args: ReadRenderArgs | undefined, theme: Theme): string {
@@ -63,7 +66,10 @@ function formatCompactReadCall(
 }
 function formatReadResult(
   args: ReadRenderArgs | undefined,
-  result: { content: (TextContent | ImageContent)[]; details?: ReadToolDetails | undefined },
+  result: {
+    content: (aiTypes.TextContent | aiTypes.ImageContent)[];
+    details?: ReadToolDetails | undefined;
+  },
   options: ToolRenderResultOptions,
   theme: Theme,
   showImages: boolean,
@@ -110,7 +116,7 @@ export const readRenderers: Pick<
 > = {
   renderCall(rawArgs, theme, context) {
     const args = rawArgs as ReadRenderArgs | undefined;
-    const text = (context.lastComponent as Text | undefined) ?? new Text("", 0, 0);
+    const text = (context.lastComponent as tuiTypes.Text | undefined) ?? new Text("", 0, 0);
     const classification = context.expanded
       ? undefined
       : getCompactReadClassification({ args, cwd: context.cwd });
@@ -122,7 +128,7 @@ export const readRenderers: Pick<
     return text;
   },
   renderResult(result, options, theme, context) {
-    const text = (context.lastComponent as Text | undefined) ?? new Text("", 0, 0);
+    const text = (context.lastComponent as tuiTypes.Text | undefined) ?? new Text("", 0, 0);
     text.setText(
       formatReadResult(
         context.args as ReadRenderArgs | undefined,

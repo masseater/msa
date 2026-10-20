@@ -1,4 +1,4 @@
-import { Type } from "@msa/ai";
+import ai from "@msa/ai";
 import durable from "@msa/durable";
 import memory from "@msa/durable/storage/memory";
 import { Effect } from "effect";
@@ -9,6 +9,8 @@ import effectSupport from "./effect-support.ts";
 import harnessSupport from "./harness-support.ts";
 import sessionSupport from "./session-support.ts";
 import toolSearchSupport from "./tool-search-support.ts";
+
+const { Type } = ai;
 
 const { MemoryStorage } = memory;
 const { AgentDoc, defineTool } = durable;

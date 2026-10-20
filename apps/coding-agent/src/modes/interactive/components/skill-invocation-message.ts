@@ -1,17 +1,20 @@
-import { Box, Container, Markdown, type MarkdownTheme, MouseRegion, Text } from "@msa/tui";
+import tui from "@msa/tui";
+import type tuiTypes from "@msa/tui/index.types";
 
 import type { ParsedSkillBlock } from "../../../core/agent-session.ts";
 import { getMarkdownTheme, theme } from "../theme/theme.ts";
 import { keyText } from "./keybinding-hints.ts";
 
+const { Box, Container, Markdown, MouseRegion, Text } = tui;
+
 export class SkillInvocationMessageComponent extends Box {
   private expanded = false;
   private skillBlock: ParsedSkillBlock;
-  private markdownTheme: MarkdownTheme;
+  private markdownTheme: tuiTypes.MarkdownTheme;
 
   constructor(
     skillBlock: ParsedSkillBlock,
-    markdownTheme: MarkdownTheme = getMarkdownTheme(),
+    markdownTheme: tuiTypes.MarkdownTheme = getMarkdownTheme(),
     outputPad = 1,
   ) {
     super(outputPad, 1, (t) => theme.bg("customMessageBg", t));

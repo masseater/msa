@@ -7,10 +7,10 @@ import type { LoadExtensionsResult, ProjectTrustContext } from "./extensions/typ
 import { SETTINGS_DEFAULTS } from "./settings-defaults.ts";
 import type { DefaultProjectTrust } from "./settings-manager.ts";
 import {
-  getProjectTrustOptions,
-  hasTrustRequiringProjectResources,
   type ProjectTrustOption,
   type ProjectTrustStore,
+  getProjectTrustOptions,
+  hasTrustRequiringProjectResources,
 } from "./trust-manager.ts";
 
 export type AppMode = "interactive" | "print" | "json" | "rpc";
@@ -68,7 +68,7 @@ export function resolveProjectTrusted(options: ResolveProjectTrustedOptions): Pr
         const { result, errors } = yield* awaited(
           emitProjectTrustEvent(
             options.extensionsResult,
-            { type: "project_trust", cwd: options.cwd },
+            { cwd: options.cwd, type: "project_trust" },
             options.projectTrustContext,
           ),
         );

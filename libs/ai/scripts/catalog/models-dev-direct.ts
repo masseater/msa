@@ -1,4 +1,4 @@
-import type { Api, Model } from "../../src/types.ts";
+import type typesModule from "../../src/types.types.ts";
 import modelsDev from "./models-dev.ts";
 import type modelsDevTypes from "./models-dev.types.ts";
 
@@ -7,7 +7,7 @@ const { modelsDevModel, toolModels } = modelsDev;
 interface DirectProvider {
   readonly source: string;
   readonly provider: string;
-  readonly api: Api;
+  readonly api: typesModule.Api;
   readonly baseUrl: string;
   readonly excludes?: (id: string) => boolean;
 }
@@ -33,7 +33,7 @@ const DIRECT_PROVIDERS: readonly DirectProvider[] = [
 function directProviderModels(
   { data, remember }: modelsDevTypes.ModelsDevSource,
   direct: DirectProvider,
-): Model<Api>[] {
+): typesModule.Model<typesModule.Api>[] {
   return toolModels(data[direct.source])
     .filter(([id]) => direct.excludes?.(id) !== true)
     .map(([id, source]) => {
@@ -48,7 +48,9 @@ function directProviderModels(
     });
 }
 
-function directModels(source: modelsDevTypes.ModelsDevSource): Model<Api>[] {
+function directModels(
+  source: modelsDevTypes.ModelsDevSource,
+): typesModule.Model<typesModule.Api>[] {
   return DIRECT_PROVIDERS.flatMap((direct) => directProviderModels(source, direct));
 }
 

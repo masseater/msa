@@ -1,4 +1,4 @@
-import { getCurrentSystemPrompt } from "@msa/ai/utils/transcript";
+import transcript from "@msa/ai/utils/transcript";
 import { Effect } from "effect";
 import type { HarnessContext, JsonValue } from "vitest-evals/harness";
 
@@ -9,6 +9,8 @@ import type { MsaCodingAgentInput } from "./harness-types.ts";
 import type { AgentRunContext, Options, RunState } from "./run-types.ts";
 import { enterToolSandbox } from "./sandbox.ts";
 import { verifySystemPrompt } from "./system-prompt.ts";
+
+const { getCurrentSystemPrompt } = transcript;
 
 export const executeAgentRun = <TOutput extends JsonValue>({
   state,
@@ -27,30 +29,30 @@ export const executeAgentRun = <TOutput extends JsonValue>({
   Effect.gen(function* () {
     const { input, signal, setArtifact, options } = request;
     const { host, paths, extensionFactories } = context;
-    const prepared = yield* prepareModel({ options, paths, host });
+    const prepared = yield* prepareModel({ host, options, paths });
     const { session, sessionManager } = yield* openSession({
-      state,
+      extensionFactories,
       options,
       paths,
       prepared,
-      extensionFactories,
       signal,
+      state,
     });
     setArtifact("runId", sessionManager.getSessionId());
-    yield* assertOnlyInlineExtensions({ session, extensionFactories });
+    yield* assertOnlyInlineExtensions({ extensionFactories, session });
     yield* enterToolSandbox(paths.root, host.sandboxIdentity);
-    const response = yield* runSteps({ session, input, signal });
+    const response = yield* runSteps({ input, session, signal });
     const systemPrompt = state.forcedSystemPrompt ?? getCurrentSystemPrompt(session.messages);
     const diagnostics = yield* collectDiagnostics({
-      session,
       model: prepared.model,
+      session,
       systemPrompt,
     });
     state.diagnostics = diagnostics;
     yield* Effect.sync(() => verifySystemPrompt(systemPrompt, options));
     const output =
       "output" in options
-        ? yield* options.output({ response, session, systemPrompt, agentDir: paths.agentDir })
+        ? yield* options.output({ agentDir: paths.agentDir, response, session, systemPrompt })
         : response;
     state.result = { output, ...diagnostics };
   });

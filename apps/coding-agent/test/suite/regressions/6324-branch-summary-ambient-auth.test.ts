@@ -1,4 +1,4 @@
-import { createAssistantMessageEventStream } from "@msa/ai";
+import ai from "@msa/ai";
 import testing from "@msa/testing";
 import { Effect } from "effect";
 import { afterEach, describe, expect, it } from "vite-plus/test";
@@ -6,6 +6,8 @@ import { afterEach, describe, expect, it } from "vite-plus/test";
 import utilities from "../../utilities.ts";
 import harnessModule from "../harness.ts";
 import type harnessTypes from "../harness.types.ts";
+
+const { createAssistantMessageEventStream } = ai;
 
 const { createHarness } = harnessModule;
 const { assistantMsg, userMsg } = utilities;

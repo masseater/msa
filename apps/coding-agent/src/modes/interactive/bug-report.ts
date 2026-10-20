@@ -1,4 +1,4 @@
-import type { Container, TUI } from "@msa/tui";
+import type tuiTypes from "@msa/tui/index.types";
 import { Effect } from "effect";
 import { dual } from "effect/Function";
 
@@ -26,7 +26,7 @@ import { theme } from "./theme/theme.ts";
 
 interface BugReportContext {
   session: AgentSession;
-  ui: TUI;
+  ui: tuiTypes.TUI;
   editorSlot: EditorSlot;
   keybindings: KeybindingsManager;
   showStatus: (message: string) => void;
@@ -39,7 +39,7 @@ interface BugReportOptions {
   includeSummary: boolean;
 }
 
-type Overlay = Container & { dispose?: () => void };
+type Overlay = tuiTypes.Container & { dispose?: () => void };
 
 const DISCLAIMER =
   "The report is written to a zip archive in the current directory. It includes your msa version, operating system, the current model and provider configuration (without API keys), loaded extensions, settings, and provider error diagnostics from this session.";
@@ -157,6 +157,7 @@ function buildBundle(
 ): BugReportBundle {
   const extensions = session.resourceLoader.getExtensions();
   return {
+    diagnostics: collectBugReportDiagnostics(session.sessionManager, readCrashLog()),
     metadata: collectBugReportMetadata({
       hint: options.hint,
       sessionId: session.sessionId,
@@ -172,13 +173,12 @@ function buildBundle(
       globalSettings: session.settingsManager.getGlobalSettings(),
       projectSettings: session.settingsManager.getProjectSettings(),
     }),
-    diagnostics: collectBugReportDiagnostics(session.sessionManager, readCrashLog()),
-    summary,
     sessionJsonl: options.includeSession
       ? serializeSessionBranch(session.sessionManager, (parentId, timestamp) =>
           createShareTrailingEntries(session, parentId, timestamp),
         )
       : undefined,
+    summary,
   };
 }
 
@@ -202,9 +202,9 @@ function recordInSession(
   delivery: Pick<BugReportSessionEntryData, "delivery" | "path">,
 ): void {
   session.sessionManager.appendCustomEntry(BUG_REPORT_CUSTOM_ENTRY_TYPE, {
-    id: bundle.metadata.id,
     createdAt: bundle.metadata.createdAt,
     hint: bundle.metadata.hint,
+    id: bundle.metadata.id,
     sessionIncluded: bundle.metadata.session.included,
     summaryIncluded: bundle.metadata.session.summaryIncluded,
     ...delivery,
@@ -254,8 +254,8 @@ function choose(
         resume(Effect.succeed(value));
       };
       component = new ExtensionSelectorComponent(title, options, finish, () => finish(), {
-        tui: context.ui,
         description,
+        tui: context.ui,
       });
       showOverlay(context, component);
     }),

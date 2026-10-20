@@ -1,12 +1,12 @@
 import testing from "@msa/testing";
-import { type Terminal } from "@msa/tui";
+import type tuiTypes from "@msa/tui/index.types";
 import { Effect } from "effect";
 
 import { type Edit } from "../src/core/tools/edit-diff.ts";
 
 const { awaited, currentTimeMillis, runTest } = testing;
 
-class FakeTerminal implements Terminal {
+class FakeTerminal implements tuiTypes.Terminal {
   columns = 80;
   rows = 24;
   kittyProtocolActive = true;

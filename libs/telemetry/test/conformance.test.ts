@@ -1,15 +1,17 @@
 import { Effect } from "effect";
 import { describe, expect, it } from "vite-plus/test";
 
-import { InMemoryTelemetryContext, type SpanAttributes } from "../src/index.ts";
-import {
-  type TelemetryAdapterFixture,
-  createTelemetryAdapterConformance,
-} from "../src/testing/index.ts";
+import telemetry from "../src/index.ts";
+import type telemetryTypes from "../src/index.types.ts";
+import testing from "../src/testing/index.ts";
+import type testingTypes from "../src/testing/index.types.ts";
+
+const { createTelemetryAdapterConformance } = testing;
+const { InMemoryTelemetryContext } = telemetry;
 
 const conformance = createTelemetryAdapterConformance(() => {
   const context = new InMemoryTelemetryContext();
-  return Promise.resolve<TelemetryAdapterFixture>({
+  return Promise.resolve<testingTypes.TelemetryAdapterFixture>({
     [Symbol.asyncDispose]: () => Promise.resolve(),
     context,
     getLogs: () => Promise.resolve(context.getLogs()),
@@ -36,8 +38,8 @@ const detachedSnapshots = Effect.gen(function* () {
   const [first] = context.getSpans();
   expect(first?.settled).toBe(true);
   expect(first?.endSequence).toBe(1);
-  (first!.attributes as SpanAttributes)["tags"] = ["mutated"];
-  (first!.events[0]!.attributes as SpanAttributes)["value"] = 2;
+  (first!.attributes as telemetryTypes.SpanAttributes)["tags"] = ["mutated"];
+  (first!.events[0]!.attributes as telemetryTypes.SpanAttributes)["value"] = 2;
 
   const [second] = context.getSpans();
   expect(second?.attributes).toEqual({ tags: ["initial"] });

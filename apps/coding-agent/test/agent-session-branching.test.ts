@@ -1,6 +1,6 @@
 import { tmpdir } from "node:os";
 
-import { getModel } from "@msa/ai/compat";
+import compat from "@msa/ai/compat";
 import testing from "@msa/testing";
 import { Effect } from "effect";
 import { afterEach, beforeEach, describe, expect, it } from "vite-plus/test";
@@ -16,6 +16,8 @@ import type { AgentSession } from "../src/core/agent-session.ts";
 import { AuthStorage } from "../src/core/auth-storage.ts";
 import { SessionManager } from "../src/core/session-manager.ts";
 import utilities from "./utilities.ts";
+
+const { getModel } = compat;
 
 const { API_KEY } = utilities;
 

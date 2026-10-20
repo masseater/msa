@@ -1,4 +1,4 @@
-import type { ToolCall } from "@msa/ai";
+import type aiTypes from "@msa/ai/index.types";
 import type chordTypes from "@msa/chord/index.types";
 import { Cause, Effect } from "effect";
 
@@ -31,7 +31,9 @@ const readCalls = Effect.fnUntraced(function* (
   const message = entry?.model?.[0];
   const calls =
     message?.role === "assistant"
-      ? message.content.filter((content): content is ToolCall => content.type === "toolCall")
+      ? message.content.filter(
+          (content): content is aiTypes.ToolCall => content.type === "toolCall",
+        )
       : [];
   return callIds.flatMap((id) => calls.filter((call) => call.id === id).slice(0, 1));
 });

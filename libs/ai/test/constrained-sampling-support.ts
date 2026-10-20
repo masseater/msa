@@ -1,6 +1,6 @@
-import type { AssistantMessage, Model } from "../src/types.ts";
+import type typesModule from "../src/types.types.ts";
 
-function makeModel(): Model<"openai-responses"> {
+function makeModel(): typesModule.Model<"openai-responses"> {
   return {
     api: "openai-responses",
     baseUrl: "https://api.openai.com/v1",
@@ -15,7 +15,7 @@ function makeModel(): Model<"openai-responses"> {
   };
 }
 
-function makeUsage(): AssistantMessage["usage"] {
+function makeUsage(): typesModule.AssistantMessage["usage"] {
   return {
     cacheRead: 0,
     cacheWrite: 0,

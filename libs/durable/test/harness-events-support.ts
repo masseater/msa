@@ -1,4 +1,4 @@
-import { type AssistantMessage } from "@msa/ai";
+import type aiTypes from "@msa/ai/index.types";
 import harnessModule from "@msa/durable/harness";
 import type durableTypes from "@msa/durable/index.types";
 import { Effect } from "effect";
@@ -32,9 +32,9 @@ const drained = Effect.fn("drained")(function* () {
 });
 
 function applyChangesImpl(
-  message: AssistantMessage,
+  message: aiTypes.AssistantMessage,
   changes: readonly durableTypes.MessageChange[],
-): AssistantMessage {
+): aiTypes.AssistantMessage {
   let next = structuredClone(message);
   for (const change of changes) {
     if (change.type === "message") next = structuredClone(change.message);
@@ -64,9 +64,9 @@ function applyChangesImpl(
 const applyChanges: {
   (
     changes: readonly durableTypes.MessageChange[],
-  ): (message: AssistantMessage) => ReturnType<typeof applyChangesImpl>;
+  ): (message: aiTypes.AssistantMessage) => ReturnType<typeof applyChangesImpl>;
   (
-    message: AssistantMessage,
+    message: aiTypes.AssistantMessage,
     changes: readonly durableTypes.MessageChange[],
   ): ReturnType<typeof applyChangesImpl>;
 } = dual(2, applyChangesImpl);

@@ -17,11 +17,11 @@ export function serializeSessionBranch(
 ): string {
   const timestamp = nowIso();
   const header: SessionHeader = {
-    type: "session",
-    version: CURRENT_SESSION_VERSION,
+    cwd: sessionManager.getCwd(),
     id: sessionManager.getSessionId(),
     timestamp,
-    cwd: sessionManager.getCwd(),
+    type: "session",
+    version: CURRENT_SESSION_VERSION,
   };
   const entries: object[] = [header];
   let parentId: string | null = null;

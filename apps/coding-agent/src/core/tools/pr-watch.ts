@@ -13,17 +13,17 @@ const prWatchSchema = Type.Object({
     description:
       "watch: start watching a pull request in the background; stop: stop watching one; list: show the watched pull requests and their last state",
   }),
+  intervalSeconds: Type.Optional(
+    Type.Number({
+      description:
+        "Seconds between checks (action: watch). Default: the prWatch.intervalSeconds setting",
+    }),
+  ),
   number: Type.Optional(Type.Number({ description: "Pull request number (actions: watch, stop)" })),
   repository: Type.Optional(
     Type.String({
       description:
         "owner/repo of the pull request. Default: the GitHub repository of the working directory",
-    }),
-  ),
-  intervalSeconds: Type.Optional(
-    Type.Number({
-      description:
-        "Seconds between checks (action: watch). Default: the prWatch.intervalSeconds setting",
     }),
   ),
 });
@@ -42,11 +42,11 @@ export interface PrWatchToolDetails {
 }
 
 export const prWatchToolSystemPromptContribution = {
-  snippet:
-    "Watch a GitHub pull request in the background and report CI, review, merge, close, and conflict changes to this session",
   guidelines: [
     "Use pr_watch instead of polling a pull request with gh: it returns immediately and reports each change once",
   ],
+  snippet:
+    "Watch a GitHub pull request in the background and report CI, review, merge, close, and conflict changes to this session",
 } as const;
 
 const MIN_INTERVAL_MS = 5_000;
@@ -97,13 +97,8 @@ export function createPrWatchToolDefinition(
   service: PrWatch,
 ): ToolDefinition<typeof prWatchSchema, PrWatchToolDetails> {
   const prWatch: ToolDefinition<typeof prWatchSchema, PrWatchToolDetails> = {
-    name: "pr_watch",
-    label: "pr_watch",
     description:
       "Watch a GitHub pull request in the background through the gh CLI and report changes to this session: CI finished, a review arrived, it was merged or closed, or it conflicts with its base. Registering returns at once, and registering the same pull request twice keeps one watch. Watches live and die with this session.",
-    promptSnippet: prWatchToolSystemPromptContribution.snippet,
-    promptGuidelines: [...prWatchToolSystemPromptContribution.guidelines],
-    parameters: prWatchSchema,
     execute(_toolCallId, params): Promise<AgentToolResult<PrWatchToolDetails>> {
       return Effect.runPromise(
         Effect.sync(() => {
@@ -123,14 +118,19 @@ export function createPrWatchToolDefinition(
         }),
       );
     },
+    label: "pr_watch",
+    name: "pr_watch",
+    parameters: prWatchSchema,
+    promptGuidelines: [...prWatchToolSystemPromptContribution.guidelines],
+    promptSnippet: prWatchToolSystemPromptContribution.snippet,
   };
   return {
     ...prWatch,
     readOnlyVariant: readOnlyVariantOf(prWatch, {
       actions: ["list"],
-      parameters: prWatchReadSchema,
       description:
         "Show the pull requests this session watches and their last state. Starting or stopping a watch is not available here.",
+      parameters: prWatchReadSchema,
       promptSnippet: "List the pull requests this session watches",
     }),
   };

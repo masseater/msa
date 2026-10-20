@@ -1,12 +1,16 @@
 import { Effect } from "effect";
 import { describe, expect, it } from "vite-plus/test";
 
-import { stream as streamAnthropic } from "../src/api/anthropic-messages.ts";
-import { transformMessages } from "../src/api/transform-messages.ts";
-import { normalizeContext } from "../src/compat.ts";
-import type { Api, Model } from "../src/types.ts";
+import anthropicMessages from "../src/api/anthropic-messages.ts";
+import transformMessagesModule from "../src/api/transform-messages.ts";
+import compat from "../src/compat.ts";
+import type typesModule from "../src/types.types.ts";
 import anthropicSseParsingSupport from "./anthropic-sse-parsing-support.ts";
 import modelChoice from "./model-choice.ts";
+
+const { stream: streamAnthropic } = anthropicMessages;
+const { normalizeContext } = compat;
+const { transformMessages } = transformMessagesModule;
 
 const { chooseModel, usesApi } = modelChoice;
 
@@ -22,7 +26,7 @@ const forwardsParsedProviderStreamEventsIn = () =>
       const effectContext = yield* Effect.context();
       const model = chooseModel("anthropic-api", "Messages", usesApi("anthropic-messages"));
       const providerEvents: unknown[] = [];
-      const eventModels: Model<Api>[] = [];
+      const eventModels: typesModule.Model<typesModule.Api>[] = [];
       const result = yield* Effect.promise(() =>
         streamAnthropic(
           model,

@@ -1,4 +1,4 @@
-import { InMemoryCredentialStore } from "@msa/ai";
+import ai from "@msa/ai";
 import testing from "@msa/testing";
 import { Effect } from "effect";
 import { afterAll, beforeAll, describe, expect, it, vi } from "vite-plus/test";
@@ -8,6 +8,8 @@ import { ModelRuntime } from "../src/core/model-runtime.ts";
 import modelCatalogProtocol from "./model-catalog-protocol.ts";
 import type modelCatalogProtocolTypes from "./model-catalog-protocol.types.ts";
 import testNetworkEnv from "./test-network-env.ts";
+
+const { InMemoryCredentialStore } = ai;
 
 const {
   MODEL_CATALOG_INDEX_KEY,

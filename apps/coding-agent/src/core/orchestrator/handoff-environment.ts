@@ -11,10 +11,10 @@ const COMMAND_TIMEOUT_MS = 30_000;
 const LIST_LIMIT = 100;
 
 const PullList = Schema.Struct({
-  number: Schema.Finite,
-  title: Schema.String,
   headRefName: Schema.String,
   isDraft: Schema.Boolean,
+  number: Schema.Finite,
+  title: Schema.String,
 }).pipe(Schema.Array, Schema.fromJsonString);
 
 const IssueList = Schema.Struct({ number: Schema.Finite, title: Schema.String }).pipe(
@@ -54,9 +54,9 @@ async function pullsOf(cwd: string): Promise<readonly HandoffItem[] | undefined>
   const decoded = Schema.decodeOption(PullList)(json);
   if (Option.isNone(decoded)) return undefined;
   return decoded.value.map((pull) => ({
+    detail: `（${pull.headRefName}${pull.isDraft ? "、draft" : ""}）`,
     number: pull.number,
     title: pull.title,
-    detail: `（${pull.headRefName}${pull.isDraft ? "、draft" : ""}）`,
   }));
 }
 
@@ -74,7 +74,7 @@ async function issuesOf(cwd: string): Promise<readonly HandoffItem[] | undefined
   if (json === undefined) return undefined;
   const decoded = Schema.decodeOption(IssueList)(json);
   if (Option.isNone(decoded)) return undefined;
-  return decoded.value.map((issue) => ({ number: issue.number, title: issue.title, detail: "" }));
+  return decoded.value.map((issue) => ({ detail: "", number: issue.number, title: issue.title }));
 }
 
 export async function gatherEnvironment(cwd: string, version: string): Promise<HandoffEnvironment> {
@@ -85,11 +85,11 @@ export async function gatherEnvironment(cwd: string, version: string): Promise<H
     issuesOf(cwd),
   ]);
   return {
-    version,
-    cwd,
-    repository,
     branch: state.branch === "-" ? undefined : state.branch,
-    pulls,
+    cwd,
     issues,
+    pulls,
+    repository,
+    version,
   };
 }

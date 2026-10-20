@@ -1,12 +1,5 @@
-import {
-  type Api,
-  type AssistantMessage,
-  type Model,
-  type ProviderHeaders,
-  type SimpleStreamOptions,
-  createAssistantMessageEventStream,
-  normalizeContext,
-} from "@msa/ai";
+import ai from "@msa/ai";
+import type aiTypes from "@msa/ai/index.types";
 import testing from "@msa/testing";
 import { Effect } from "effect";
 
@@ -16,6 +9,8 @@ import { SessionManager } from "../src/core/session-manager.ts";
 import { SettingsManager } from "../src/core/settings-manager.ts";
 import modelRuntimeTestUtils from "./model-runtime-test-utils.ts";
 import type sdkOpenrouterAttributionSupportTypes from "./sdk-openrouter-attribution-support.types.ts";
+
+const { createAssistantMessageEventStream, normalizeContext } = ai;
 
 const { awaited, currentTimeMillis, joinPath, makeDirectory, makeTempDir, removePath, runTest } =
   testing;
@@ -36,7 +31,11 @@ const cleanupDirs = Effect.suspend(() =>
   dirs.tempDir === "" ? Effect.void : removePath(dirs.tempDir),
 );
 
-function createModel(provider: string, baseUrl: string, id = `${provider}-test-model`): Model<Api> {
+function createModel(
+  provider: string,
+  baseUrl: string,
+  id = `${provider}-test-model`,
+): aiTypes.Model<aiTypes.Api> {
   return {
     api: "openai-completions" as const,
     baseUrl,
@@ -53,7 +52,7 @@ function createModel(provider: string, baseUrl: string, id = `${provider}-test-m
 
 function createDoneStream() {
   const stream = createAssistantMessageEventStream();
-  const message: AssistantMessage = {
+  const message: aiTypes.AssistantMessage = {
     api: "openai-completions" as const,
     content: [{ text: "ok", type: "text" as const }],
     model: "capture-model",
@@ -89,9 +88,9 @@ const sessionManagerFor = (options: sdkOpenrouterAttributionSupportTypes.Capture
 };
 
 const capturingRegistry = Effect.fn("capturingRegistry")(function* (
-  model: Model<Api>,
+  model: aiTypes.Model<aiTypes.Api>,
   options: sdkOpenrouterAttributionSupportTypes.CaptureOptions,
-  capture: { options?: SimpleStreamOptions | undefined },
+  capture: { options?: aiTypes.SimpleStreamOptions | undefined },
 ) {
   const authStorage = AuthStorage.inMemory({
     [model.provider]: { key: "test-api-key", type: "api_key" as const },
@@ -109,12 +108,12 @@ const capturingRegistry = Effect.fn("capturingRegistry")(function* (
 });
 
 const captureHeaders = (
-  model: Model<Api>,
+  model: aiTypes.Model<aiTypes.Api>,
   options: sdkOpenrouterAttributionSupportTypes.CaptureOptions = {},
-): Promise<ProviderHeaders | undefined> =>
+): Promise<aiTypes.ProviderHeaders | undefined> =>
   runTest(
     Effect.gen(function* () {
-      const capture: { options?: SimpleStreamOptions | undefined } = {};
+      const capture: { options?: aiTypes.SimpleStreamOptions | undefined } = {};
       const modelRegistry = yield* capturingRegistry(model, options, capture);
       const { session } = yield* awaited(
         createAgentSession({

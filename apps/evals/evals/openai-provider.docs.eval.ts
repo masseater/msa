@@ -1,16 +1,16 @@
 import { Effect } from "effect";
 import { afterAll, beforeAll, beforeEach } from "vite-plus/test";
-import { describeEval, StructuredOutputJudge } from "vitest-evals";
+import { StructuredOutputJudge, describeEval } from "vitest-evals";
 
 import { createMsaDocumentationEvalHarness } from "../src/harness.ts";
 import {
-  createAcmeServer,
   OPENAI_MODEL_ID,
   OPENAI_PROBE_PROMPT,
   OPENAI_PROBE_RESPONSE,
   OPENAI_PROVIDER_ID,
+  createAcmeServer,
 } from "./acme-server.ts";
-import { inspectProvider, type ProviderRuntimeOutput } from "./configured-runtime.ts";
+import { type ProviderRuntimeOutput, inspectProvider } from "./configured-runtime.ts";
 
 const server = createAcmeServer("openai");
 
@@ -20,46 +20,46 @@ afterAll(() => Effect.runPromise(server.stop));
 
 const expected: ProviderRuntimeOutput = {
   result: {
-    validRequestReceived: true,
     model: {
+      contextWindow: 32768,
+      cost: { cacheRead: 0, cacheWrite: 0, input: 0, output: 0 },
       id: OPENAI_MODEL_ID,
+      input: ["text"],
+      maxTokens: 4096,
       name: "Acme Chat",
       provider: OPENAI_PROVIDER_ID,
       reasoning: false,
-      input: ["text"],
-      cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0 },
-      contextWindow: 32768,
-      maxTokens: 4096,
     },
-    response: { text: OPENAI_PROBE_RESPONSE, stopReason: "stop", inputTokens: 3, outputTokens: 2 },
+    response: { inputTokens: 3, outputTokens: 2, stopReason: "stop", text: OPENAI_PROBE_RESPONSE },
+    validRequestReceived: true,
   },
 };
 
 const harness = createMsaDocumentationEvalHarness({
   output: ({ session }) =>
     inspectProvider(session.modelRuntime, {
-      providerId: OPENAI_PROVIDER_ID,
-      modelId: OPENAI_MODEL_ID,
       createContext: () => ({
         messages: [{ role: "user", content: OPENAI_PROBE_PROMPT, timestamp: 0 }],
       }),
+      modelId: OPENAI_MODEL_ID,
       options: { env: { ACME_API_KEY: "resolved-acme-key" }, maxTokens: 32 },
+      providerId: OPENAI_PROVIDER_ID,
       validRequestReceived: server.validRequestReceived,
     }),
 });
-const judge = StructuredOutputJudge({ expected, match: "strict", allowExtras: false });
+const judge = StructuredOutputJudge({ allowExtras: false, expected, match: "strict" });
 
 describeEval(
   "Add OpenAI-compatible provider",
-  { harness, judges: [judge], judgeThreshold: null },
+  { harness, judgeThreshold: null, judges: [judge] },
   (it) => {
     it("configures a provider that works through msa", ({ run }) =>
       run([
         {
-          type: "prompt",
           content: `Configure this running msa installation with Acme as a provider. Do not create project-local configuration. Its provider ID is ${OPENAI_PROVIDER_ID}, its API is at ${server.baseUrl()}, and it uses OpenAI Chat Completions. Read its API key from the ACME_API_KEY environment variable.
 
 The provider offers one model, ${OPENAI_MODEL_ID}, shown as “Acme Chat”. It accepts text, does not support reasoning, has a 32,768-token context window and a 4,096-token maximum output, and has no usage cost.`,
+          type: "prompt",
         },
         { type: "reload" },
       ]));

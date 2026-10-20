@@ -1,19 +1,15 @@
 import { dual } from "effect/Function";
 
-import { deleteKittyImage, isImageLine } from "./terminal-image-kitty.ts";
-import { extractKittyImageIds, extractKittyImageRows } from "./tui-main-screen-support.ts";
-import { visibleWidth } from "./utils.ts";
+import terminalImageKitty from "./terminal-image-kitty.ts";
+import type tuiMainScreenKittyTypes from "./tui-main-screen-kitty.types.ts";
+import tuiMainScreenSupport from "./tui-main-screen-support.ts";
+import utils from "./utils.ts";
 
-export interface LineRange {
-  firstChanged: number;
-  lastChanged: number;
-}
+const { extractKittyImageIds, extractKittyImageRows } = tuiMainScreenSupport;
+const { deleteKittyImage, isImageLine } = terminalImageKitty;
+const { visibleWidth } = utils;
 
-export interface ChangedRange extends LineRange {
-  appendStart: boolean;
-}
-
-export function collectKittyImageIds(lines: readonly string[]): Set<number> {
+function collectKittyImageIds(lines: readonly string[]): Set<number> {
   const ids = new Set<number>();
   for (const line of lines) {
     for (const id of extractKittyImageIds(line)) {
@@ -23,7 +19,7 @@ export function collectKittyImageIds(lines: readonly string[]): Set<number> {
   return ids;
 }
 
-export function deleteKittyImages(ids: Iterable<number>): string {
+function deleteKittyImages(ids: Iterable<number>): string {
   let buffer = "";
   for (const id of ids) {
     buffer += deleteKittyImage(id);
@@ -31,7 +27,7 @@ export function deleteKittyImages(ids: Iterable<number>): string {
   return buffer;
 }
 
-export const getKittyImageReservedRows: {
+const getKittyImageReservedRows: {
   (lines: readonly string[], index: number, maxIndex?: number): number;
   (index: number, maxIndex?: number): (lines: readonly string[]) => number;
 } = dual(
@@ -51,7 +47,11 @@ export const getKittyImageReservedRows: {
   },
 );
 
-function expandForLines(lines: readonly string[], original: LineRange, expanded: LineRange): void {
+function expandForLines(
+  lines: readonly string[],
+  original: tuiMainScreenKittyTypes.LineRange,
+  expanded: tuiMainScreenKittyTypes.LineRange,
+): void {
   for (const [i, line] of lines.entries()) {
     if (extractKittyImageIds(line).length === 0) continue;
     const blockEnd = i + getKittyImageReservedRows(lines, i) - 1;
@@ -65,12 +65,23 @@ function expandForLines(lines: readonly string[], original: LineRange, expanded:
   }
 }
 
-export const expandChangedRangeForKittyImages: {
-  (previousLines: readonly string[], newLines: readonly string[], range: LineRange): LineRange;
-  (newLines: readonly string[], range: LineRange): (previousLines: readonly string[]) => LineRange;
+const expandChangedRangeForKittyImages: {
+  (
+    previousLines: readonly string[],
+    newLines: readonly string[],
+    range: tuiMainScreenKittyTypes.LineRange,
+  ): tuiMainScreenKittyTypes.LineRange;
+  (
+    newLines: readonly string[],
+    range: tuiMainScreenKittyTypes.LineRange,
+  ): (previousLines: readonly string[]) => tuiMainScreenKittyTypes.LineRange;
 } = dual(
   3,
-  (previousLines: readonly string[], newLines: readonly string[], range: LineRange): LineRange => {
+  (
+    previousLines: readonly string[],
+    newLines: readonly string[],
+    range: tuiMainScreenKittyTypes.LineRange,
+  ): tuiMainScreenKittyTypes.LineRange => {
     const expanded = { ...range };
     expandForLines(previousLines, range, expanded);
     expandForLines(newLines, range, expanded);
@@ -78,29 +89,40 @@ export const expandChangedRangeForKittyImages: {
   },
 );
 
-export const deleteChangedKittyImages: {
-  (previousLines: readonly string[], range: LineRange): string;
-  (range: LineRange): (previousLines: readonly string[]) => string;
-} = dual(2, (previousLines: readonly string[], range: LineRange): string => {
-  const { firstChanged, lastChanged } = range;
-  if (firstChanged < 0 || lastChanged < firstChanged) return "";
-
-  const ids = new Set<number>();
-  const maxLine = Math.min(lastChanged, previousLines.length - 1);
-  for (let i = firstChanged; i <= maxLine; i++) {
-    for (const id of extractKittyImageIds(previousLines[i] ?? "")) {
-      ids.add(id);
-    }
-  }
-  return deleteKittyImages(ids);
-});
-
-export const changedRange: {
-  (previousLines: readonly string[], newLines: readonly string[]): ChangedRange | undefined;
-  (newLines: readonly string[]): (previousLines: readonly string[]) => ChangedRange | undefined;
+const deleteChangedKittyImages: {
+  (previousLines: readonly string[], range: tuiMainScreenKittyTypes.LineRange): string;
+  (range: tuiMainScreenKittyTypes.LineRange): (previousLines: readonly string[]) => string;
 } = dual(
   2,
-  (previousLines: readonly string[], newLines: readonly string[]): ChangedRange | undefined => {
+  (previousLines: readonly string[], range: tuiMainScreenKittyTypes.LineRange): string => {
+    const { firstChanged, lastChanged } = range;
+    if (firstChanged < 0 || lastChanged < firstChanged) return "";
+
+    const ids = new Set<number>();
+    const maxLine = Math.min(lastChanged, previousLines.length - 1);
+    for (let i = firstChanged; i <= maxLine; i++) {
+      for (const id of extractKittyImageIds(previousLines[i] ?? "")) {
+        ids.add(id);
+      }
+    }
+    return deleteKittyImages(ids);
+  },
+);
+
+const changedRange: {
+  (
+    previousLines: readonly string[],
+    newLines: readonly string[],
+  ): tuiMainScreenKittyTypes.ChangedRange | undefined;
+  (
+    newLines: readonly string[],
+  ): (previousLines: readonly string[]) => tuiMainScreenKittyTypes.ChangedRange | undefined;
+} = dual(
+  2,
+  (
+    previousLines: readonly string[],
+    newLines: readonly string[],
+  ): tuiMainScreenKittyTypes.ChangedRange | undefined => {
     let firstChanged = -1;
     let lastChanged = -1;
     const maxLines = Math.max(newLines.length, previousLines.length);
@@ -127,3 +149,14 @@ export const changedRange: {
     return { ...expanded, appendStart };
   },
 );
+
+const tuiMainScreenKitty = {
+  changedRange,
+  collectKittyImageIds,
+  deleteChangedKittyImages,
+  deleteKittyImages,
+  expandChangedRangeForKittyImages,
+  getKittyImageReservedRows,
+};
+
+export default tuiMainScreenKitty;

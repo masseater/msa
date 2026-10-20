@@ -1,19 +1,16 @@
-import { type AssistantMessage, type AssistantMessageEvent, normalizeContext } from "@msa/ai";
+import ai from "@msa/ai";
+import type aiTypes from "@msa/ai/index.types";
 import { Effect, Stream } from "effect";
 
-import { call } from "./call.ts";
-import type { Emit } from "./tool-batch.ts";
-import type { AgentContext, AgentLoopConfig, StreamFn } from "./types.ts";
+import type assistantResponseTypes from "./assistant-response.types.ts";
+import callModule from "./call.ts";
+import type typesModule from "./types.ts";
 
-export interface AssistantRequest {
-  readonly context: AgentContext;
-  readonly config: AgentLoopConfig;
-  readonly signal: AbortSignal | undefined;
-  readonly emit: Emit;
-  readonly streamFunction: StreamFn;
-}
+const { normalizeContext } = ai;
 
-const resolveApiKey = (config: AgentLoopConfig): Effect.Effect<string | undefined> => {
+const { call } = callModule;
+
+const resolveApiKey = (config: typesModule.AgentLoopConfig): Effect.Effect<string | undefined> => {
   const { getApiKey } = config;
   if (getApiKey === undefined) return Effect.succeed(config.apiKey);
   return Effect.map(
@@ -22,7 +19,12 @@ const resolveApiKey = (config: AgentLoopConfig): Effect.Effect<string | undefine
   );
 };
 
-const openResponse = ({ context, config, signal, streamFunction }: AssistantRequest) =>
+const openResponse = ({
+  context,
+  config,
+  signal,
+  streamFunction,
+}: assistantResponseTypes.AssistantRequest) =>
   Effect.gen(function* () {
     const { transformContext } = config;
     const messages =
@@ -42,42 +44,42 @@ const openResponse = ({ context, config, signal, streamFunction }: AssistantRequ
     );
   });
 
-type PartialState = { message: AssistantMessage | undefined; added: boolean };
+type PartialState = { message: aiTypes.AssistantMessage | undefined; added: boolean };
 
-type TerminalEvent = Extract<AssistantMessageEvent, { type: "done" | "error" }>;
+type TerminalEvent = Extract<aiTypes.AssistantMessageEvent, { type: "done" | "error" }>;
 
-const isTerminal = (event: AssistantMessageEvent): event is TerminalEvent =>
+const isTerminal = (event: aiTypes.AssistantMessageEvent): event is TerminalEvent =>
   event.type === "done" || event.type === "error";
 
 const onEvent = (
-  request: AssistantRequest,
+  request: assistantResponseTypes.AssistantRequest,
   partial: PartialState,
-  event: AssistantMessageEvent,
+  event: aiTypes.AssistantMessageEvent,
 ): Effect.Effect<void> => {
   const { context, emit } = request;
   if (event.type === "start") {
     partial.message = event.partial;
     context.messages.push(event.partial);
     partial.added = true;
-    return emit({ type: "message_start", message: { ...event.partial } });
+    return emit({ message: { ...event.partial }, type: "message_start" });
   }
   if (isTerminal(event) || partial.message === undefined) return Effect.void;
   partial.message = event.partial;
   context.messages[context.messages.length - 1] = event.partial;
   return emit({
-    type: "message_update",
     assistantMessageEvent: event,
     message: { ...event.partial },
+    type: "message_update",
   });
 };
 
-export const streamAssistantResponse = (
-  request: AssistantRequest,
-): Effect.Effect<AssistantMessage> =>
+const streamAssistantResponse = (
+  request: assistantResponseTypes.AssistantRequest,
+): Effect.Effect<aiTypes.AssistantMessage> =>
   Effect.gen(function* () {
     const { context, config, emit } = request;
     const response = yield* openResponse(request);
-    const partial: PartialState = { message: undefined, added: false };
+    const partial: PartialState = { added: false, message: undefined };
     yield* Stream.fromAsyncIterable(response, (error) => error).pipe(
       Stream.takeUntil(isTerminal),
       Stream.runForEach((event) => onEvent(request, partial, event)),
@@ -90,8 +92,14 @@ export const streamAssistantResponse = (
       context.messages[context.messages.length - 1] = finalMessage;
     } else {
       context.messages.push(finalMessage);
-      yield* emit({ type: "message_start", message: { ...finalMessage } });
+      yield* emit({ message: { ...finalMessage }, type: "message_start" });
     }
-    yield* emit({ type: "message_end", message: finalMessage });
+    yield* emit({ message: finalMessage, type: "message_end" });
     return finalMessage;
   });
+
+const assistantResponse = {
+  streamAssistantResponse,
+};
+
+export default assistantResponse;

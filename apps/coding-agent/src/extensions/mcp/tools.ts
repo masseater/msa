@@ -1,13 +1,9 @@
-import type { AgentToolResult } from "@msa/agent-core";
-import type { ImageContent, JsonValue, TextContent } from "@msa/ai";
-import {
-  type CallToolResult,
-  type ContentBlock,
-  type McpRequestOptions,
-  type Tool as McpTool,
-  toLlmContent,
-} from "@msa/mcp";
-import { Container, Spacer, Text } from "@msa/tui";
+import type agentTypes from "@msa/agent-core/index.types";
+import type aiTypes from "@msa/ai/index.types";
+import mcp from "@msa/mcp";
+import type mcpTypes from "@msa/mcp/index.types";
+import tui from "@msa/tui";
+import type tuiTypes from "@msa/tui/index.types";
 import * as Effect from "effect/Effect";
 import { dual } from "effect/Function";
 import type { TSchema } from "typebox";
@@ -32,6 +28,10 @@ import { collapsedOutput } from "../../modes/interactive/components/visual-trunc
 import { toErrorMessage } from "../../utils/errors.ts";
 import { writeOutputFile } from "../../utils/output-files.ts";
 import type { McpExposure } from "./config.ts";
+
+const { Container, Spacer, Text } = tui;
+
+const { toLlmContent } = mcp;
 
 export function toToolExposure(exposure: McpExposure): ToolExposure {
   return exposure === "codemode" ? "deferred" : exposure;
@@ -60,8 +60,8 @@ export interface McpToolCaller {
   callTool(
     name: string,
     args: Record<string, unknown>,
-    options: McpRequestOptions,
-  ): Promise<CallToolResult>;
+    options: mcpTypes.McpRequestOptions,
+  ): Promise<mcpTypes.CallToolResult>;
 }
 
 function createMcpToolNameImpl(
@@ -80,23 +80,23 @@ export const createMcpToolName: {
   (tool: string, isTaken?: (name: string) => boolean): (server: string) => string;
 } = dual((args: IArguments) => args.length >= 2, createMcpToolNameImpl);
 
-function textOf(content: readonly (TextContent | ImageContent)[]): string {
+function textOf(content: readonly (aiTypes.TextContent | aiTypes.ImageContent)[]): string {
   return content
-    .filter((block): block is TextContent => block.type === "text")
+    .filter((block): block is aiTypes.TextContent => block.type === "text")
     .map((block) => block.text)
     .join("\n");
 }
 
 const CONTENT_BLOCK_SCHEMA = {
-  type: "object",
+  additionalProperties: true,
   properties: {
-    type: { enum: ["text", "image", "audio", "resource_link", "resource"] },
-    text: { type: "string" },
     data: { type: "string" },
     mimeType: { type: "string" },
+    text: { type: "string" },
+    type: { enum: ["text", "image", "audio", "resource_link", "resource"] },
   },
   required: ["type"],
-  additionalProperties: true,
+  type: "object",
 };
 
 const SCHEMA_DATA_KEYWORDS: ReadonlySet<string> = new Set(["const", "enum", "default", "examples"]);
@@ -142,26 +142,26 @@ export function createMcpResultSchema(
   structuredContentSchema: Record<string, unknown> | undefined,
 ): TSchema {
   return {
-    type: "object",
+    additionalProperties: true,
     properties: {
-      content: { type: "array", items: CONTENT_BLOCK_SCHEMA },
+      content: { items: CONTENT_BLOCK_SCHEMA, type: "array" },
+
+      isError: { type: "boolean" },
 
       structuredContent:
         structuredContentSchema === undefined
           ? {}
           : relocateSchema(structuredContentSchema, "#/properties/structuredContent"),
-      isError: { type: "boolean" },
     },
     required: ["content"],
-
-    additionalProperties: true,
+    type: "object",
   } as unknown as TSchema;
 }
 
 function limitMcpContentImpl(
-  content: (TextContent | ImageContent)[],
+  content: (aiTypes.TextContent | aiTypes.ImageContent)[],
   saveOutput: McpOutputSaver = saveToTempFile,
-): Promise<{ content: (TextContent | ImageContent)[]; fullOutputPath?: string }> {
+): Promise<{ content: (aiTypes.TextContent | aiTypes.ImageContent)[]; fullOutputPath?: string }> {
   return Effect.runPromise(
     awaiting(function* () {
       const combined = textOf(content);
@@ -178,7 +178,7 @@ function limitMcpContentImpl(
       const tokens = Math.ceil(truncation.totalBytes / 4);
       const text = `Warning: truncated output (original token count: ${tokens})\nTotal output lines: ${truncation.totalLines}\n\n${truncation.content}\n\n${where}`;
       return {
-        content: [{ type: "text", text }, ...content.filter((block) => block.type === "image")],
+        content: [{ text, type: "text" }, ...content.filter((block) => block.type === "image")],
         ...(fullOutputPath !== undefined && fullOutputPath !== "" ? { fullOutputPath } : {}),
       };
     }),
@@ -187,14 +187,15 @@ function limitMcpContentImpl(
 
 export const limitMcpContent: {
   (
-    content: (TextContent | ImageContent)[],
+    content: (aiTypes.TextContent | aiTypes.ImageContent)[],
     saveOutput?: McpOutputSaver,
-  ): Promise<{ content: (TextContent | ImageContent)[]; fullOutputPath?: string }>;
-  (
-    saveOutput?: McpOutputSaver,
-  ): (
-    content: (TextContent | ImageContent)[],
-  ) => Promise<{ content: (TextContent | ImageContent)[]; fullOutputPath?: string }>;
+  ): Promise<{ content: (aiTypes.TextContent | aiTypes.ImageContent)[]; fullOutputPath?: string }>;
+  (saveOutput?: McpOutputSaver): (
+    content: (aiTypes.TextContent | aiTypes.ImageContent)[],
+  ) => Promise<{
+    content: (aiTypes.TextContent | aiTypes.ImageContent)[];
+    fullOutputPath?: string;
+  }>;
 } = dual((args: IArguments) => args.length >= 1, limitMcpContentImpl);
 
 export interface ConvertMcpResultOptions {
@@ -221,9 +222,9 @@ function isTextMimeType(mimeType: string | undefined): boolean {
 
 function blockToContent(
   server: string,
-  block: ContentBlock,
+  block: mcpTypes.ContentBlock,
   options: ConvertMcpResultOptions,
-): Promise<(TextContent | ImageContent)[]> {
+): Promise<(aiTypes.TextContent | aiTypes.ImageContent)[]> {
   return Effect.runPromise(
     awaiting(function* () {
       if (block.type === "resource_link") {
@@ -241,8 +242,8 @@ function blockToContent(
             : "";
         return [
           {
-            type: "text",
             text: `[Resource ${block.uri} "${block.title ?? block.name}"${details.length > 0 ? ` (${details.join(", ")})` : ""}${description}${read}]`,
+            type: "text",
           },
         ];
       }
@@ -253,19 +254,19 @@ function blockToContent(
       ) {
         const { uri, mimeType, blob } = block.resource;
         const data = Buffer.from(blob, "base64");
-        if (isTextMimeType(mimeType)) return [{ type: "text", text: data.toString("utf8") }];
+        if (isTextMimeType(mimeType)) return [{ text: data.toString("utf8"), type: "text" }];
         const kind = `${mimeType ?? "unknown type"}, ${formatSize(data.length)}`;
         try {
           const path = yield* awaited(
             (options.saveOutput ?? saveToTempFile)(data, extensionOf(uri)),
           );
-          return [{ type: "text", text: `[Binary resource ${uri} (${kind}) saved to ${path}]` }];
+          return [{ text: `[Binary resource ${uri} (${kind}) saved to ${path}]`, type: "text" }];
         } catch (error) {
           const reason = toErrorMessage(error);
           return [
             {
-              type: "text",
               text: `[Binary resource ${uri} (${kind}) could not be saved: ${reason}]`,
+              type: "text",
             },
           ];
         }
@@ -277,9 +278,9 @@ function blockToContent(
 
 function toModelContentImpl(
   server: string,
-  blocks: readonly ContentBlock[],
+  blocks: readonly mcpTypes.ContentBlock[],
   options: ConvertMcpResultOptions = {},
-): Promise<(TextContent | ImageContent)[]> {
+): Promise<(aiTypes.TextContent | aiTypes.ImageContent)[]> {
   return Effect.runPromise(
     awaiting(function* () {
       return (yield* awaited(
@@ -292,29 +293,29 @@ function toModelContentImpl(
 export const toModelContent: {
   (
     server: string,
-    blocks: readonly ContentBlock[],
+    blocks: readonly mcpTypes.ContentBlock[],
     options?: ConvertMcpResultOptions,
-  ): Promise<(TextContent | ImageContent)[]>;
+  ): Promise<(aiTypes.TextContent | aiTypes.ImageContent)[]>;
   (
-    blocks: readonly ContentBlock[],
+    blocks: readonly mcpTypes.ContentBlock[],
     options?: ConvertMcpResultOptions,
-  ): (server: string) => Promise<(TextContent | ImageContent)[]>;
+  ): (server: string) => Promise<(aiTypes.TextContent | aiTypes.ImageContent)[]>;
 } = dual((args: IArguments) => args.length >= 2, toModelContentImpl);
 
 function convertMcpResultImpl(
   server: string,
   tool: string,
-  result: CallToolResult,
+  result: mcpTypes.CallToolResult,
   options: ConvertMcpResultOptions = {},
-): Promise<AgentToolResult<McpToolDetails>> {
+): Promise<agentTypes.AgentToolResult<McpToolDetails>> {
   return Effect.runPromise(
     awaiting(function* () {
-      const converted: (TextContent | ImageContent)[] =
+      const converted: (aiTypes.TextContent | aiTypes.ImageContent)[] =
         result.content.length > 0
           ? yield* awaited(toModelContent(server, result.content, options))
           : toLlmContent(result);
       if (result.isError === true && textOf(converted) === "") {
-        converted.push({ type: "text", text: `MCP tool ${server}/${tool} returned an error` });
+        converted.push({ text: `MCP tool ${server}/${tool} returned an error`, type: "text" });
       }
       const { content, fullOutputPath } = yield* awaited(
         limitMcpContent(converted, options.saveOutput),
@@ -327,7 +328,7 @@ function convertMcpResultImpl(
           tool,
           ...(fullOutputPath !== undefined && fullOutputPath !== "" ? { fullOutputPath } : {}),
         },
-        structuredContent: scriptResult as unknown as JsonValue,
+        structuredContent: scriptResult as unknown as aiTypes.JsonValue,
         ...(result.isError === true ? { isError: true } : {}),
       };
     }),
@@ -338,14 +339,14 @@ export const convertMcpResult: {
   (
     server: string,
     tool: string,
-    result: CallToolResult,
+    result: mcpTypes.CallToolResult,
     options?: ConvertMcpResultOptions,
-  ): Promise<AgentToolResult<McpToolDetails>>;
+  ): Promise<agentTypes.AgentToolResult<McpToolDetails>>;
   (
     tool: string,
-    result: CallToolResult,
+    result: mcpTypes.CallToolResult,
     options?: ConvertMcpResultOptions,
-  ): (server: string) => Promise<AgentToolResult<McpToolDetails>>;
+  ): (server: string) => Promise<agentTypes.AgentToolResult<McpToolDetails>>;
 } = dual((args: IArguments) => args.length >= 3, convertMcpResultImpl);
 
 function toParameters(schema: Record<string, unknown>): TSchema {
@@ -363,7 +364,7 @@ const ANNOTATION_HINTS = [
   "openWorldHint",
 ] as const;
 
-function toToolAnnotations(tool: McpTool): ToolAnnotations | undefined {
+function toToolAnnotations(tool: mcpTypes.Tool): ToolAnnotations | undefined {
   const annotations: ToolAnnotations = {};
   for (const hint of ANNOTATION_HINTS) {
     const value = tool.annotations?.[hint];
@@ -374,7 +375,7 @@ function toToolAnnotations(tool: McpTool): ToolAnnotations | undefined {
 
 export function createMcpToolDefinition(options: {
   server: string;
-  tool: McpTool;
+  tool: mcpTypes.Tool;
   name: string;
   exposure: McpExposure;
   namespace: ToolNamespace;
@@ -404,7 +405,6 @@ export function createMcpToolDefinition(options: {
           const result = yield* awaited(
             client.callTool(tool.name, (params ?? {}) as Record<string, unknown>, {
               ...(signal === undefined ? {} : { signal }),
-              timeoutMs: options.timeoutMs,
               onProgress: (progress) => {
                 const total = progress.total === undefined ? "" : `/${progress.total}`;
                 const text = progress.message ?? `Progress ${progress.progress}${total}`;
@@ -413,6 +413,7 @@ export function createMcpToolDefinition(options: {
                   details: { server, tool: tool.name },
                 });
               },
+              timeoutMs: options.timeoutMs,
             }),
           );
           return yield* awaited(
@@ -429,12 +430,13 @@ export function createMcpToolDefinition(options: {
 export function createMcpToolRenderers(label: string): ToolRenderers {
   return {
     renderCall(args, theme, context) {
-      const component = (context.lastComponent as Text | undefined) ?? new Text("", 0, 0);
+      const component = (context.lastComponent as tuiTypes.Text | undefined) ?? new Text("", 0, 0);
       component.setText(formatToolCallWithArgs(label, args, theme, context.expanded));
       return component;
     },
     renderResult(result, options, theme, context) {
-      const component = (context.lastComponent as Container | undefined) ?? new Container();
+      const component =
+        (context.lastComponent as tuiTypes.Container | undefined) ?? new Container();
       component.clear();
       const output = getTextOutput(result, context.showImages).trim();
       if (output === "") return component;

@@ -1,4 +1,5 @@
-import { type Model, fauxAssistantMessage } from "@msa/ai";
+import ai from "@msa/ai";
+import type aiTypes from "@msa/ai/index.types";
 import testing from "@msa/testing";
 import { Effect } from "effect";
 import { afterEach, beforeEach, describe, expect, it, onTestFinished } from "vite-plus/test";
@@ -9,6 +10,8 @@ import { SessionManager } from "../src/core/session-manager.ts";
 import utilities from "./utilities.ts";
 import virtualModelsSupport from "./virtual-models-support.ts";
 
+const { fauxAssistantMessage } = ai;
+
 const { assistantFrom, createRuntime } = virtualModelsSupport;
 
 const { createTestResourceLoader } = utilities;
@@ -17,7 +20,7 @@ const { awaited, makeTempDir, removePath, runTest } = testing;
 
 let tempDir: string;
 
-function resume(runtime: ModelRuntime, model?: Model<string>) {
+function resume(runtime: ModelRuntime, model?: aiTypes.Model<string>) {
   return runTest(
     Effect.gen(function* () {
       const sessionManager = SessionManager.inMemory(tempDir);
@@ -132,7 +135,7 @@ const resumesTheSelectionMadeBeforeTreeNavigation = () =>
       const { runtime, faux, virtual } = yield* awaited(createRuntime());
       faux.setResponses(Array.from({ length: 6 }, () => fauxAssistantMessage("ok")));
       const large = runtime.getModel("faux", "large")!;
-      const open = (sessionManager: SessionManager, model?: Model<string>) =>
+      const open = (sessionManager: SessionManager, model?: aiTypes.Model<string>) =>
         effectRunPromise(
           Effect.gen(function* () {
             const resourceLoader = createTestResourceLoader();

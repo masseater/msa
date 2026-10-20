@@ -1,4 +1,4 @@
-import type { Api, Model, ModelCost } from "../../src/types.ts";
+import type typesModule from "../../src/types.types.ts";
 import modelsDev from "./models-dev.ts";
 
 const { roundCost } = modelsDev;
@@ -31,7 +31,21 @@ const OPENAI_LONG_CONTEXT_PRICING_MODEL_IDS = new Set([
   "gpt-6.1-sol",
 ]);
 
-function withOpenAiLongContextPricing(cost: Model<Api>["cost"]): Model<Api>["cost"] {
+const OPENAI_SERVICE_TIERS = { flex: 0.5, priority: 2 } satisfies NonNullable<
+  typesModule.ModelCost["serviceTiers"]
+>;
+
+const OPENAI_PRIORITY_SURCHARGED_MODEL_IDS = new Set(["gpt-5.5"]);
+
+function openAiServiceTiers(modelId: string): NonNullable<typesModule.ModelCost["serviceTiers"]> {
+  return OPENAI_PRIORITY_SURCHARGED_MODEL_IDS.has(modelId)
+    ? { ...OPENAI_SERVICE_TIERS, priority: 2.5 }
+    : OPENAI_SERVICE_TIERS;
+}
+
+function withOpenAiLongContextPricing(
+  cost: typesModule.Model<typesModule.Api>["cost"],
+): typesModule.Model<typesModule.Api>["cost"] {
   return {
     ...cost,
     tiers: [
@@ -54,9 +68,10 @@ const OPENAI_STANDARD_COSTS = {
   "gpt-6-luna": { cacheRead: 0.01, cacheWrite: 0.125, input: 0.1, output: 0.5 },
   "gpt-6-sol": { cacheRead: 0.2, cacheWrite: 2.5, input: 2, output: 10 },
   "gpt-6.1-sol": { cacheRead: 0.1, cacheWrite: 2.5, input: 2, output: 10 },
-} satisfies Record<string, ModelCost>;
+} satisfies Record<string, typesModule.ModelCost>;
 
-const OPENAI_STANDARD_COSTS_BY_ID: Readonly<Record<string, ModelCost>> = OPENAI_STANDARD_COSTS;
+const OPENAI_STANDARD_COSTS_BY_ID: Readonly<Record<string, typesModule.ModelCost>> =
+  OPENAI_STANDARD_COSTS;
 
 const openaiPricing = {
   OPENAI_LONG_CONTEXT_INPUT_THRESHOLD,
@@ -64,6 +79,7 @@ const openaiPricing = {
   OPENAI_SHORT_CONTEXT_CAPPED_MODEL_IDS,
   OPENAI_STANDARD_COSTS,
   OPENAI_STANDARD_COSTS_BY_ID,
+  openAiServiceTiers,
   withOpenAiLongContextPricing,
 };
 

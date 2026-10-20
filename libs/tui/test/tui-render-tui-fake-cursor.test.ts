@@ -3,20 +3,23 @@ import { describe, it } from "node:test";
 
 import { Effect } from "effect";
 
-import { Input } from "../src/components/input.ts";
-import { sliceByColumn } from "../src/text-slice.ts";
-import { CURSOR_MARKER, renderFakeCursor } from "../src/tui-component.ts";
-import { type TUI } from "../src/tui-interface.ts";
-import { TuiMainScreen } from "../src/tui-main-screen.ts";
+import Input from "../src/components/input.ts";
+import textSlice from "../src/text-slice.ts";
+import tuiComponent from "../src/tui-component.ts";
+import type tuiInterfaceTypes from "../src/tui-interface.types.ts";
+import TuiMainScreen from "../src/tui-main-screen.ts";
 import LoggingVirtualTerminal from "./tui-render-logging-virtual-terminal.ts";
 import TestComponent from "./tui-render-test-component.ts";
+
+const { sliceByColumn } = textSlice;
+const { CURSOR_MARKER, renderFakeCursor } = tuiComponent;
 
 describe("TUI fake cursor", () => {
   it("draws the focused fake cursor in reverse video and omits it when the hardware cursor is shown", () =>
     Effect.runPromise(
       Effect.gen(function* () {
         const terminal = new LoggingVirtualTerminal(20, 5);
-        const tui: TUI = new TuiMainScreen(terminal);
+        const tui: tuiInterfaceTypes.TUI = new TuiMainScreen(terminal);
         const input = new Input();
         input.setValue("abc");
         tui.addChild(input);
@@ -39,7 +42,7 @@ describe("TUI fake cursor", () => {
     Effect.runPromise(
       Effect.gen(function* () {
         const terminal = new LoggingVirtualTerminal(20, 5);
-        const tui: TUI = new TuiMainScreen(terminal, true);
+        const tui: tuiInterfaceTypes.TUI = new TuiMainScreen(terminal, true);
         const input = new Input();
         input.setValue("abc");
         tui.addChild(input);
@@ -56,7 +59,7 @@ describe("TUI fake cursor", () => {
     Effect.runPromise(
       Effect.gen(function* () {
         const terminal = new LoggingVirtualTerminal(20, 5);
-        const tui: TUI = new TuiMainScreen(terminal, true);
+        const tui: tuiInterfaceTypes.TUI = new TuiMainScreen(terminal, true);
         const base = new TestComponent();
         base.lines = [sliceByColumn(`ab${CURSOR_MARKER}${renderFakeCursor("c")}def`, 0, 3, true)];
         tui.addChild(base);
@@ -73,7 +76,7 @@ describe("TUI fake cursor", () => {
       Effect.gen(function* () {
         for (const showHardwareCursor of [false, true]) {
           const terminal = new LoggingVirtualTerminal(20, 5);
-          const tui: TUI = new TuiMainScreen(terminal, showHardwareCursor);
+          const tui: tuiInterfaceTypes.TUI = new TuiMainScreen(terminal, showHardwareCursor);
           const base = new TestComponent();
           base.lines = [`abc${CURSOR_MARKER}${renderFakeCursor("d")}ef`];
           tui.addChild(base);

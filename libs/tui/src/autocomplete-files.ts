@@ -2,23 +2,23 @@ import { homedir } from "node:os";
 
 import { Effect } from "effect";
 
-import { buildCompletionValue, parsePathPrefix, toDisplayPath } from "./autocomplete-prefix.ts";
-import type { AutocompleteItem } from "./autocomplete-types.ts";
-import { Platform, pathOperations } from "./platform.ts";
+import type autocompleteFilesTypes from "./autocomplete-files.types.ts";
+import autocompletePrefix from "./autocomplete-prefix.ts";
+import type autocompleteTypesModule from "./autocomplete-types.ts";
+import platformModule from "./platform.ts";
+import type platformTypes from "./platform.types.ts";
+
+const { Platform, pathOperations } = platformModule;
+const { buildCompletionValue, parsePathPrefix, toDisplayPath } = autocompletePrefix;
 
 const { basename, dirname, join } = pathOperations;
-
-export interface FileSuggestionContext {
-  basePath: string;
-  prefix: string;
-}
 
 interface SearchLocation {
   searchDir: string;
   searchPrefix: string;
 }
 
-export function expandHomePath(path: string): string {
+function expandHomePath(path: string): string {
   if (path.startsWith("~/")) {
     const expandedPath = join(homedir(), path.slice(2));
     return path.endsWith("/") && !expandedPath.endsWith("/") ? `${expandedPath}/` : expandedPath;
@@ -84,7 +84,10 @@ function relativeEntryPath(displayPrefix: string, name: string): string {
   return displayPrefix.startsWith("~") ? `~/${name}` : name;
 }
 
-function compareDirectoriesFirst(a: AutocompleteItem, b: AutocompleteItem): number {
+function compareDirectoriesFirst(
+  a: autocompleteTypesModule.AutocompleteItem,
+  b: autocompleteTypesModule.AutocompleteItem,
+): number {
   const aIsDir = a.label.endsWith("/");
   const bIsDir = b.label.endsWith("/");
   if (aIsDir && !bIsDir) return -1;
@@ -95,27 +98,27 @@ function compareDirectoriesFirst(a: AutocompleteItem, b: AutocompleteItem): numb
 function suggestionFor(
   rawPrefix: string,
   flags: { isAtPrefix: boolean; isQuotedPrefix: boolean },
-): (entry: { name: string; isDirectory: boolean }) => AutocompleteItem {
+): (entry: { name: string; isDirectory: boolean }) => autocompleteTypesModule.AutocompleteItem {
   return ({ name, isDirectory }) => {
     const relativePath = toDisplayPath(relativeEntryPath(rawPrefix, name));
     return {
+      label: name + (isDirectory ? "/" : ""),
       value: buildCompletionValue({
         path: isDirectory ? `${relativePath}/` : relativePath,
         ...flags,
       }),
-      label: name + (isDirectory ? "/" : ""),
     };
   };
 }
 
-export function getFileSuggestions(
-  context: FileSuggestionContext,
-): Effect.Effect<AutocompleteItem[], never, Platform> {
+function getFileSuggestions(
+  context: autocompleteFilesTypes.FileSuggestionContext,
+): Effect.Effect<autocompleteTypesModule.AutocompleteItem[], never, platformTypes.Platform> {
   const { rawPrefix, isAtPrefix, isQuotedPrefix } = parsePathPrefix(context.prefix);
   const { searchDir, searchPrefix } = resolveSearchLocation({
     basePath: context.basePath,
-    rawPrefix,
     isAtPrefix,
+    rawPrefix,
   });
   return Effect.gen(function* () {
     const platform = yield* Platform;
@@ -125,10 +128,17 @@ export function getFileSuggestions(
       (name) =>
         platform
           .isDirectory(join(searchDir, name))
-          .pipe(Effect.map((isDirectory) => ({ name, isDirectory }))),
+          .pipe(Effect.map((isDirectory) => ({ isDirectory, name }))),
     );
     return entries
       .map(suggestionFor(rawPrefix, { isAtPrefix, isQuotedPrefix }))
       .sort(compareDirectoriesFirst);
-  }).pipe(Effect.orElseSucceed((): AutocompleteItem[] => []));
+  }).pipe(Effect.orElseSucceed((): autocompleteTypesModule.AutocompleteItem[] => []));
 }
+
+const autocompleteFiles = {
+  expandHomePath,
+  getFileSuggestions,
+};
+
+export default autocompleteFiles;

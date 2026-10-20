@@ -1,8 +1,8 @@
 import {
   existsSync,
   mkdirSync,
-  readdirSync,
   readFileSync,
+  readdirSync,
   renameSync,
   rmSync,
   writeFileSync,
@@ -31,7 +31,7 @@ function migrateApiKeys(
 ): void {
   for (const [provider, key] of Object.entries(apiKeys)) {
     if (migrated[provider] !== undefined || typeof key !== "string") continue;
-    migrated[provider] = { type: "api_key", key };
+    migrated[provider] = { key, type: "api_key" };
     providers.push(provider);
   }
 }
@@ -355,5 +355,5 @@ export function runMigrations(cwd: string): {
   migrateKeybindingsConfigFile();
   migrateRenamedProviders();
   const deprecationWarnings = migrateExtensionSystem(cwd);
-  return { migratedAuthProviders, deprecationWarnings };
+  return { deprecationWarnings, migratedAuthProviders };
 }

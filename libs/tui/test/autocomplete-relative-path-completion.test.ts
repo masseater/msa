@@ -3,15 +3,18 @@ import { describe, test } from "node:test";
 
 import { Effect } from "effect";
 
-import { CombinedAutocompleteProvider } from "../src/autocomplete.ts";
+import CombinedAutocompleteProvider from "../src/autocomplete.ts";
+import type autocompleteTypes from "../src/autocomplete.types.ts";
 import autocompleteHelpers from "./autocomplete-helpers.ts";
 import type autocompleteHelpersTypes from "./autocomplete-helpers.types.ts";
-import { toJson } from "./effect-helpers.ts";
+import effectHelpers from "./effect-helpers.ts";
+
+const { toJson } = effectHelpers;
 
 const { getSuggestions, setupFolder, useTempDirectory } = autocompleteHelpers;
 
 const assertQuotedBoundary = (
-  provider: CombinedAutocompleteProvider,
+  provider: autocompleteTypes.CombinedAutocompleteProvider,
   directory: string,
   separator: string,
 ): Effect.Effect<void> =>

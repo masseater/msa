@@ -1,4 +1,4 @@
-import type { AgentTool } from "@msa/agent-core";
+import type agentTypes from "@msa/agent-core/index.types";
 import testing from "@msa/testing";
 import { Type } from "typebox";
 import { describe, expect, it } from "vite-plus/test";
@@ -17,7 +17,7 @@ function tool(
   name: string,
   description: string,
   properties: Record<string, unknown> = {},
-): AgentTool {
+): agentTypes.AgentTool {
   return {
     description,
     execute: () => runTest(awaited({ content: [], details: undefined })),

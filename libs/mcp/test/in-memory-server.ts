@@ -1,18 +1,17 @@
 import { Effect } from "effect";
 
-import {
-  type JsonRpcMessage,
-  type JsonRpcRequest,
-  LATEST_PROTOCOL_VERSION,
-  McpClient,
-  McpError,
-} from "../src/index.ts";
-import { type InMemoryTransport, createInMemoryTransportPair } from "../src/testing/index.ts";
+import mcp from "../src/index.ts";
+import type mcpTypes from "../src/index.types.ts";
+import testing from "../src/testing/index.ts";
+import type testingTypes from "../src/testing/index.types.ts";
 import type inMemoryServerTypes from "./in-memory-server.types.ts";
 
+const { LATEST_PROTOCOL_VERSION, McpClient, McpError } = mcp;
+const { createInMemoryTransportPair } = testing;
+
 const respond = (
-  transport: InMemoryTransport,
-  request: JsonRpcRequest,
+  transport: testingTypes.InMemoryTransport,
+  request: mcpTypes.JsonRpcRequest,
   handler: inMemoryServerTypes.TestHandler | undefined,
 ): Effect.Effect<void> =>
   (handler === undefined
@@ -36,12 +35,12 @@ const respond = (
 const createServer = Effect.fn("createServer")(function* () {
   const pair = createInMemoryTransportPair();
   const handlers = new Map<string, inMemoryServerTypes.TestHandler>();
-  const messages: JsonRpcMessage[] = [];
+  const messages: mcpTypes.JsonRpcMessage[] = [];
   const context = yield* Effect.context();
   pair.server.onMessage((message) => {
     messages.push(message);
     if (!("id" in message) || !("method" in message)) return;
-    const request = message as JsonRpcRequest;
+    const request = message as mcpTypes.JsonRpcRequest;
     const handler = handlers.get(request.method);
     queueMicrotask(() => {
       Effect.runForkWith(context)(respond(pair.server, request, handler));

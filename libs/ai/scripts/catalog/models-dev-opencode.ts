@@ -1,9 +1,4 @@
-import type {
-  Api,
-  Model,
-  OpenAICompletionsCompat,
-  OpenAIResponsesCompat,
-} from "../../src/types.ts";
+import type typesModule from "../../src/types.types.ts";
 import getEffortThinkingLevelMap from "../models-dev-reasoning-options.ts";
 import modelsDev from "./models-dev.ts";
 import type modelsDevTypes from "./models-dev.types.ts";
@@ -12,7 +7,7 @@ import thinkingMaps from "./thinking-maps.ts";
 const { modelsDevModel, toolModels } = modelsDev;
 const { getGoogleThinkingLevelMap } = thinkingMaps;
 
-type OpenCodeCompat = OpenAICompletionsCompat | OpenAIResponsesCompat;
+type OpenCodeCompat = typesModule.OpenAICompletionsCompat | typesModule.OpenAIResponsesCompat;
 
 interface OpenCodeVariant {
   readonly key: string;
@@ -21,7 +16,7 @@ interface OpenCodeVariant {
 }
 
 interface OpenCodeRoute {
-  readonly api: Api;
+  readonly api: typesModule.Api;
   readonly baseUrl: string;
   readonly compat: OpenCodeCompat | undefined;
 }
@@ -106,7 +101,7 @@ function openCodeThinkingLevelMap(
 function openCodeVariantModels(
   { data, remember }: modelsDevTypes.ModelsDevSource,
   variant: OpenCodeVariant,
-): Model<Api>[] {
+): typesModule.Model<typesModule.Api>[] {
   return toolModels(data[variant.key])
     .filter(([, source]) => source.status !== "deprecated")
     .map(([id, source]) => {
@@ -125,7 +120,9 @@ function openCodeVariantModels(
     });
 }
 
-function openCodeModels(source: modelsDevTypes.ModelsDevSource): Model<Api>[] {
+function openCodeModels(
+  source: modelsDevTypes.ModelsDevSource,
+): typesModule.Model<typesModule.Api>[] {
   return OPENCODE_VARIANTS.flatMap((variant) => openCodeVariantModels(source, variant));
 }
 

@@ -1,5 +1,5 @@
 import testing from "@msa/testing";
-import { setKeybindings } from "@msa/tui";
+import tui from "@msa/tui";
 import { Effect } from "effect";
 import { beforeAll, beforeEach, describe, expect, it, vi } from "vite-plus/test";
 
@@ -7,6 +7,8 @@ import { KeybindingsManager } from "../src/core/keybindings.ts";
 import type { SessionInfo } from "../src/core/session-manager.ts";
 import { SessionSelectorComponent } from "../src/modes/interactive/components/session-selector.ts";
 import { initTheme } from "../src/modes/interactive/theme/theme.ts";
+
+const { setKeybindings } = tui;
 
 const { awaited, dateFromMillis, runTest, sleep } = testing;
 

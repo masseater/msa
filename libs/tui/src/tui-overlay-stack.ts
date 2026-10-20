@@ -1,26 +1,17 @@
-import { sliceByColumn } from "./text-slice.ts";
-import {
-  type Component,
-  compositeTuiLine,
-  dispatchMouseEvent,
-  type TuiMouseDispatchResult,
-  type TuiMouseEvent,
-} from "./tui-component.ts";
-import type { OverlayBounds } from "./tui-interface.ts";
-import { type OverlayOptions, resolveOverlayLayout } from "./tui-overlay-layout.ts";
-import { visibleWidth } from "./utils.ts";
+import textSlice from "./text-slice.ts";
+import tuiComponent from "./tui-component.ts";
+import type tuiComponentTypes from "./tui-component.types.ts";
+import tuiOverlayLayout from "./tui-overlay-layout.ts";
+import type tuiOverlayStackTypes from "./tui-overlay-stack.types.ts";
+import utils from "./utils.ts";
 
-export type OverlayStackEntry = {
-  component: Component;
-  options?: OverlayOptions;
-  preFocus: Component | null;
-  hidden: boolean;
-  focusOrder: number;
-  bounds?: OverlayBounds | undefined;
-};
+const { compositeTuiLine, dispatchMouseEvent } = tuiComponent;
+const { resolveOverlayLayout } = tuiOverlayLayout;
+const { visibleWidth } = utils;
+const { sliceByColumn } = textSlice;
 
 type RenderedOverlayLayout = {
-  entry: OverlayStackEntry;
+  entry: tuiOverlayStackTypes.OverlayStackEntry;
   row: number;
   col: number;
   width: number;
@@ -29,33 +20,10 @@ type RenderedOverlayLayout = {
 
 type RenderedOverlay = RenderedOverlayLayout & { lines: string[] };
 
-type OverlayBlockedFocusResume =
-  | { status: "restore-overlay" }
-  | { status: "focus-target"; target: Component | null };
-type EligibleOverlayFocusRestoreState = { status: "eligible"; overlay: OverlayStackEntry };
-export type BlockedOverlayFocusRestoreState = {
-  status: "blocked";
-  overlay: OverlayStackEntry;
-  blockedBy: Component;
-  resume: OverlayBlockedFocusResume;
-};
-type ActiveOverlayFocusRestoreState =
-  | EligibleOverlayFocusRestoreState
-  | BlockedOverlayFocusRestoreState;
-export type OverlayFocusRestoreState = { status: "inactive" } | ActiveOverlayFocusRestoreState;
-
-export interface OverlayViewport {
-  readonly columns: number;
-  readonly rows: number;
-}
-
-export interface OverlayFrame {
-  termWidth: number;
-  termHeight: number;
-  resolveFakeCursors: (lines: string[]) => string[];
-}
-
-function containsPoint(layout: RenderedOverlayLayout, event: TuiMouseEvent): boolean {
+function containsPoint(
+  layout: RenderedOverlayLayout,
+  event: tuiComponentTypes.TuiMouseEvent,
+): boolean {
   return (
     event.screenX >= layout.col &&
     event.screenX < layout.col + layout.width &&
@@ -64,14 +32,14 @@ function containsPoint(layout: RenderedOverlayLayout, event: TuiMouseEvent): boo
   );
 }
 
-export class OverlayStack {
-  entries: OverlayStackEntry[] = [];
-  restore: OverlayFocusRestoreState = { status: "inactive" };
+export default class OverlayStack {
+  entries: tuiOverlayStackTypes.OverlayStackEntry[] = [];
+  restore: tuiOverlayStackTypes.OverlayFocusRestoreState = { status: "inactive" };
   private renderedLayouts: RenderedOverlayLayout[] = [];
   private focusOrderCounter = 0;
-  private readonly viewport: () => OverlayViewport;
+  private readonly viewport: () => tuiOverlayStackTypes.OverlayViewport;
 
-  constructor(viewport: () => OverlayViewport) {
+  constructor(viewport: () => tuiOverlayStackTypes.OverlayViewport) {
     this.viewport = viewport;
   }
 
@@ -79,7 +47,7 @@ export class OverlayStack {
     return ++this.focusOrderCounter;
   }
 
-  isVisible(entry: OverlayStackEntry): boolean {
+  isVisible(entry: tuiOverlayStackTypes.OverlayStackEntry): boolean {
     if (entry.hidden) return false;
     if (entry.options?.visible !== undefined) {
       const { columns, rows } = this.viewport();
@@ -88,21 +56,23 @@ export class OverlayStack {
     return true;
   }
 
-  isLive(entry: OverlayStackEntry): boolean {
+  isLive(entry: tuiOverlayStackTypes.OverlayStackEntry): boolean {
     return this.entries.includes(entry) && this.isVisible(entry);
   }
 
-  hasComponent(component: Component | null): boolean {
+  hasComponent(component: tuiComponentTypes.Component | null): boolean {
     return component !== null && this.entries.some((entry) => entry.component === component);
   }
 
-  findVisible(component: Component | null): OverlayStackEntry | undefined {
+  findVisible(
+    component: tuiComponentTypes.Component | null,
+  ): tuiOverlayStackTypes.OverlayStackEntry | undefined {
     if (component === null) return undefined;
     return this.entries.find((entry) => entry.component === component && this.isVisible(entry));
   }
 
-  getTopmostVisible(): OverlayStackEntry | undefined {
-    let topmost: OverlayStackEntry | undefined;
+  getTopmostVisible(): tuiOverlayStackTypes.OverlayStackEntry | undefined {
+    let topmost: tuiOverlayStackTypes.OverlayStackEntry | undefined;
     for (const overlay of this.entries) {
       if (overlay.options?.nonCapturing === true || !this.isVisible(overlay)) continue;
       if (topmost === undefined || overlay.focusOrder > topmost.focusOrder) {
@@ -116,19 +86,21 @@ export class OverlayStack {
     this.restore = { status: "inactive" };
   }
 
-  clearRestoreFor(overlay: OverlayStackEntry): void {
+  clearRestoreFor(overlay: tuiOverlayStackTypes.OverlayStackEntry): void {
     if (this.restore.status !== "inactive" && this.restore.overlay === overlay) {
       this.clearRestore();
     }
   }
 
-  resolveBlockedResume(restoreState: BlockedOverlayFocusRestoreState): Component | null {
+  resolveBlockedResume(
+    restoreState: tuiOverlayStackTypes.BlockedOverlayFocusRestoreState,
+  ): tuiComponentTypes.Component | null {
     if (restoreState.resume.status === "restore-overlay") return restoreState.overlay.component;
     this.clearRestore();
     return restoreState.resume.target;
   }
 
-  getVisibleRestore(): OverlayFocusRestoreState {
+  getVisibleRestore(): tuiOverlayStackTypes.OverlayFocusRestoreState {
     const restoreState = this.restore;
     if (restoreState.status === "inactive") return restoreState;
     if (!this.isLive(restoreState.overlay)) {
@@ -137,8 +109,11 @@ export class OverlayStack {
     return restoreState;
   }
 
-  isFocusAncestor(entry: OverlayStackEntry, component: Component): boolean {
-    const visited = new Set<Component>();
+  isFocusAncestor(
+    entry: tuiOverlayStackTypes.OverlayStackEntry,
+    component: tuiComponentTypes.Component,
+  ): boolean {
+    const visited = new Set<tuiComponentTypes.Component>();
     let current = entry.preFocus;
     while (current !== null && !visited.has(current)) {
       visited.add(current);
@@ -148,7 +123,7 @@ export class OverlayStack {
     return false;
   }
 
-  remove(entry: OverlayStackEntry): boolean {
+  remove(entry: tuiOverlayStackTypes.OverlayStackEntry): boolean {
     const index = this.entries.indexOf(entry);
     if (index === -1) return false;
     this.clearRestoreFor(entry);
@@ -161,15 +136,18 @@ export class OverlayStack {
     return true;
   }
 
-  dispatchMouse(event: TuiMouseEvent): { hit: boolean; result?: TuiMouseDispatchResult } {
+  dispatchMouse(event: tuiComponentTypes.TuiMouseEvent): {
+    hit: boolean;
+    result?: tuiComponentTypes.TuiMouseDispatchResult;
+  } {
     const layout = this.renderedLayouts.findLast((candidate) => containsPoint(candidate, event));
     if (layout === undefined) return { hit: false };
     const result = dispatchMouseEvent(layout.entry.component, {
       ...event,
+      height: layout.height,
+      width: layout.width,
       x: event.screenX - layout.col,
       y: event.screenY - layout.row,
-      width: layout.width,
-      height: layout.height,
     });
     if (result === undefined) return { hit: true };
     return {
@@ -178,7 +156,7 @@ export class OverlayStack {
     };
   }
 
-  composite(lines: string[], frame: OverlayFrame): string[] {
+  composite(lines: string[], frame: tuiOverlayStackTypes.OverlayFrame): string[] {
     if (this.entries.length === 0) {
       this.renderedLayouts = [];
       return lines;
@@ -188,11 +166,11 @@ export class OverlayStack {
 
     const rendered = this.renderVisible(frame);
     this.renderedLayouts = rendered.map(({ entry, row, col, width, height }) => ({
-      entry,
-      row,
       col,
-      width,
+      entry,
       height,
+      row,
+      width,
     }));
 
     const minLinesNeeded = rendered.reduce(
@@ -210,7 +188,7 @@ export class OverlayStack {
     return result;
   }
 
-  private renderVisible(frame: OverlayFrame): RenderedOverlay[] {
+  private renderVisible(frame: tuiOverlayStackTypes.OverlayFrame): RenderedOverlay[] {
     const visibleEntries = this.entries.filter((entry) => this.isVisible(entry));
     visibleEntries.sort((a, b) => a.focusOrder - b.focusOrder);
     return visibleEntries.map((entry) => {
@@ -231,12 +209,12 @@ export class OverlayStack {
         frame.termWidth,
         frame.termHeight,
       );
-      entry.bounds = { row, col, width, height: overlayLines.length };
-      return { entry, lines: overlayLines, row, col, width, height: overlayLines.length };
+      entry.bounds = { col, height: overlayLines.length, row, width };
+      return { col, entry, height: overlayLines.length, lines: overlayLines, row, width };
     });
   }
 
-  private findPreFocus(component: Component): Component | null {
+  private findPreFocus(component: tuiComponentTypes.Component): tuiComponentTypes.Component | null {
     return this.entries.find((overlay) => overlay.component === component)?.preFocus ?? null;
   }
 }

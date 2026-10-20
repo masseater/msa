@@ -1,6 +1,8 @@
 import { Clock, DateTime, Effect, Function, Option, Random } from "effect";
 
-import { sleepUnlessAborted } from "./abort.ts";
+import abort from "./abort.ts";
+
+const { sleepUnlessAborted } = abort;
 
 const DEFAULT_MAX_RETRY_DELAY_MS = 60_000;
 
@@ -125,18 +127,18 @@ const attemptProviderRequest = <T>(
     ),
   );
 
-export const retryProviderEffect: {
+const retryProviderEffect: {
   (options?: ProviderRetryOptions): <T>(request: Effect.Effect<T>) => Effect.Effect<T>;
   <T>(request: Effect.Effect<T>, options?: ProviderRetryOptions): Effect.Effect<T>;
 } = Function.dual(
   (args) => Effect.isEffect(args[0]),
   <T>(request: Effect.Effect<T>, options: ProviderRetryOptions = {}): Effect.Effect<T> => {
     const maxRetries = options.maxRetries ?? 0;
-    return attemptProviderRequest({ request, options, maxRetries }, maxRetries);
+    return attemptProviderRequest({ maxRetries, options, request }, maxRetries);
   },
 );
 
-export const providerRequestWithRetry: {
+const providerRequestWithRetry: {
   (options?: ProviderRetryOptions): <T>(request: () => Promise<T>) => Effect.Effect<T>;
   <T>(request: () => Promise<T>, options?: ProviderRetryOptions): Effect.Effect<T>;
 } = Function.dual(
@@ -148,7 +150,7 @@ export const providerRequestWithRetry: {
     ),
 );
 
-export const retryProviderRequest: {
+const retryProviderRequest: {
   (options?: ProviderRetryOptions): <T>(request: () => Promise<T>) => Promise<T>;
   <T>(request: () => Promise<T>, options?: ProviderRetryOptions): Promise<T>;
 } = Function.dual(
@@ -156,3 +158,11 @@ export const retryProviderRequest: {
   <T>(request: () => Promise<T>, options?: ProviderRetryOptions): Promise<T> =>
     Effect.runPromise(providerRequestWithRetry(request, options)),
 );
+
+const providerRetry = {
+  providerRequestWithRetry,
+  retryProviderEffect,
+  retryProviderRequest,
+};
+
+export default providerRetry;

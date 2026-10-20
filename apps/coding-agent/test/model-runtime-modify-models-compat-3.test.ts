@@ -1,10 +1,13 @@
-import { InMemoryModelsStore, type Model } from "@msa/ai";
+import ai from "@msa/ai";
+import type aiTypes from "@msa/ai/index.types";
 import testing from "@msa/testing";
 import { Effect } from "effect";
 import { describe, expect, it } from "vite-plus/test";
 
 import { AuthStorage } from "../src/core/auth-storage.ts";
 import { ModelRuntime } from "../src/core/model-runtime.ts";
+
+const { InMemoryModelsStore } = ai;
 
 const {
   awaited,
@@ -17,7 +20,7 @@ const {
   writeTextFile,
 } = testing;
 
-function model(id: string): Model<"openai-completions"> {
+function model(id: string): aiTypes.Model<"openai-completions"> {
   return {
     api: "openai-completions" as const,
     baseUrl: "https://example.test/v1",

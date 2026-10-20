@@ -1,5 +1,5 @@
-import type { AssistantMessage } from "@msa/ai";
-import { isRetryableAssistantError, retryDelayMs } from "@msa/ai/utils/retry";
+import type aiTypes from "@msa/ai/index.types";
+import retryModule from "@msa/ai/utils/retry";
 import type chordTypes from "@msa/chord/index.types";
 import { Effect } from "effect";
 
@@ -10,13 +10,17 @@ import type generationTypesModule from "./generation-types.types.ts";
 import liveModule from "./live.ts";
 import type typesModule from "./types.types.ts";
 
+const { isRetryableAssistantError, retryDelayMs } = retryModule;
+
 const { DEFAULT_POLL_AFTER_MS } = generationTypes;
 const { commitTask } = bridge;
 const { LiveDoc, endRun } = liveModule;
 const deferPoll = Effect.fnUntraced(function* (
   runtime: generationTypesModule.GenerationRuntime,
   request: generationTypesModule.GenerationRequest,
-  message: AssistantMessage & { deferred: NonNullable<AssistantMessage["deferred"]> },
+  message: aiTypes.AssistantMessage & {
+    deferred: NonNullable<aiTypes.AssistantMessage["deferred"]>;
+  },
   context: chordTypes.Context,
 ) {
   const { attempt, compacted, model: ref, cutoff } = request;
@@ -49,7 +53,7 @@ const deferPoll = Effect.fnUntraced(function* (
 const settleModelError = Effect.fnUntraced(function* (
   runtime: generationTypesModule.GenerationRuntime,
   request: generationTypesModule.GenerationRequest,
-  message: AssistantMessage,
+  message: aiTypes.AssistantMessage,
   overflow: boolean,
   context: chordTypes.Context,
 ) {

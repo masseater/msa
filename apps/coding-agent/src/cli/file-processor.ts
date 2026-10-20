@@ -1,4 +1,4 @@
-import type { ImageContent } from "@msa/ai";
+import type aiTypes from "@msa/ai/index.types";
 import chalk from "chalk";
 import * as Effect from "effect/Effect";
 import { dual } from "effect/Function";
@@ -15,7 +15,7 @@ import { stripBom } from "../utils/text.ts";
 
 export interface ProcessedFiles {
   text: string;
-  images: ImageContent[];
+  images: aiTypes.ImageContent[];
 }
 
 export interface ProcessFileOptions {
@@ -30,7 +30,7 @@ function processFileArgumentsImpl(
     awaiting(function* () {
       const autoResizeImages = options?.autoResizeImages ?? true;
       let text = "";
-      const images: ImageContent[] = [];
+      const images: aiTypes.ImageContent[] = [];
 
       for (const fileArg of fileArgs) {
         const absolutePath = resolve(yield* awaited(resolveReadPath(fileArg, process.cwd())));
@@ -58,10 +58,10 @@ function processFileArgumentsImpl(
             continue;
           }
 
-          const attachment: ImageContent = {
-            type: "image",
-            mimeType: processed.mimeType,
+          const attachment: aiTypes.ImageContent = {
             data: processed.data,
+            mimeType: processed.mimeType,
+            type: "image",
           };
           images.push(attachment);
 
@@ -82,7 +82,7 @@ function processFileArgumentsImpl(
         }
       }
 
-      return { text, images };
+      return { images, text };
     }),
   );
 }

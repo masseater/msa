@@ -8,7 +8,7 @@ function parseDiffLine(line: string): { prefix: string; lineNum: string; content
   if (match === null) return null;
   const [, prefix, lineNum, content] = match;
   if (prefix === undefined || lineNum === undefined || content === undefined) return null;
-  return { prefix, lineNum, content };
+  return { content, lineNum, prefix };
 }
 
 function replaceTabs(text: string): string {
@@ -55,7 +55,7 @@ function renderIntraLineDiff(
     }
   }
 
-  return { removedLine, addedLine };
+  return { addedLine, removedLine };
 }
 
 export interface RenderDiffOptions {
@@ -90,7 +90,7 @@ export const renderDiff: {
           if (next === undefined) break;
           const p = parseDiffLine(next);
           if (p === null || p.prefix !== "-") break;
-          removedLines.push({ lineNum: p.lineNum, content: p.content });
+          removedLines.push({ content: p.content, lineNum: p.lineNum });
           i++;
         }
 
@@ -100,7 +100,7 @@ export const renderDiff: {
           if (next === undefined) break;
           const p = parseDiffLine(next);
           if (p === null || p.prefix !== "+") break;
-          addedLines.push({ lineNum: p.lineNum, content: p.content });
+          addedLines.push({ content: p.content, lineNum: p.lineNum });
           i++;
         }
 

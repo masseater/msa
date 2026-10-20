@@ -1,9 +1,11 @@
 import { Effect } from "effect";
 import { describe, expect, it } from "vite-plus/test";
 
-import { type ModelsStore } from "../src/models-store.ts";
-import { createModels } from "../src/models.ts";
+import type modelsStoreTypes from "../src/models-store.types.ts";
+import modelsModule from "../src/models.ts";
 import modelsRuntimeSupport from "./models-runtime-support.ts";
+
+const { createModels } = modelsModule;
 
 const { envKeyAuth, testModel, testProvider } = modelsRuntimeSupport;
 const alwaysGivesProvidersAConcreteSignal = () =>
@@ -34,7 +36,7 @@ const bindsModelStoreWaitsToThe = () =>
     Effect.gen(function* () {
       const effectContext = yield* Effect.context();
       const storageSignals: (AbortSignal | undefined)[] = [];
-      const store: ModelsStore = {
+      const store: modelsStoreTypes.ModelsStore = {
         delete: (_providerId, options) => {
           storageSignals.push(options?.signal);
 

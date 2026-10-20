@@ -1,4 +1,4 @@
-import { getAgentDir, type InlineExtension } from "@msa/coding-agent";
+import { type InlineExtension, getAgentDir } from "@msa/coding-agent";
 import { Effect } from "effect";
 import type { JsonValue } from "vitest-evals/harness";
 
@@ -15,8 +15,6 @@ const systemPromptTransform = <TOutput extends JsonValue>(
   if (transform === undefined) return [];
   return [
     {
-      name: "eval-system-prompt-transform",
-      hidden: true,
       factory: (msa) => {
         msa.on("before_agent_start", ({ systemPrompt }) => {
           const forced = transform(systemPrompt);
@@ -24,23 +22,25 @@ const systemPromptTransform = <TOutput extends JsonValue>(
           return { systemPrompt: forced };
         });
       },
+      hidden: true,
+      name: "eval-system-prompt-transform",
     },
   ];
 };
 
 const resolveHost = <TOutput extends JsonValue>(options: Options<TOutput>): HostSelection => ({
+  authPath: pathOperations.join(getAgentDir(), "auth.json"),
+  sandboxIdentity: resolveSandboxIdentity(),
   selection: resolveModelSelection(options.model, {
     MSA_PROVIDER: readEnv("MSA_PROVIDER"),
     MSA_MODEL: readEnv("MSA_MODEL"),
   }),
-  authPath: pathOperations.join(getAgentDir(), "auth.json"),
-  sandboxIdentity: resolveSandboxIdentity(),
 });
 
 const pathsUnder = (root: string): RunPaths => ({
+  agentDir: pathOperations.join(root, "agent"),
   root,
   workspace: pathOperations.join(root, "workspace"),
-  agentDir: pathOperations.join(root, "agent"),
 });
 
 export const createRunContext = <TOutput extends JsonValue>(options: Options<TOutput>) =>
@@ -48,14 +48,14 @@ export const createRunContext = <TOutput extends JsonValue>(options: Options<TOu
     const host = resolveHost(options);
     const paths = pathsUnder(yield* files.makeTempDirectory("msa-eval-"));
     const state: RunState<TOutput> = {
-      forcedSystemPrompt: undefined,
-      sessionManager: undefined,
-      session: undefined,
-      result: undefined,
       diagnostics: undefined,
+      forcedSystemPrompt: undefined,
+      result: undefined,
+      session: undefined,
+      sessionManager: undefined,
     };
     const extensionFactories = systemPromptTransform(options, (prompt) => {
       state.forcedSystemPrompt = prompt;
     });
-    return { host, paths, state, extensionFactories };
+    return { extensionFactories, host, paths, state };
   });

@@ -1,11 +1,14 @@
 import { Data, Effect, Stream } from "effect";
 import { describe, expect, it } from "vite-plus/test";
 
-import { streamSimple } from "../src/compat.ts";
-import type { Context, Model, SimpleStreamOptions } from "../src/types.ts";
-import { currentTimeMillis } from "../src/utils/clock.ts";
+import compat from "../src/compat.ts";
+import type typesModule from "../src/types.types.ts";
+import clock from "../src/utils/clock.ts";
 import env from "./env.ts";
 import modelChoice from "./model-choice.ts";
+
+const { currentTimeMillis } = clock;
+const { streamSimple } = compat;
 
 const { envValue } = env;
 const { chooseModel, compatValue, modelsWhere, usesApi } = modelChoice;
@@ -17,18 +20,18 @@ interface AnthropicThinkingPayload {
 
 class PayloadCaptured extends Data.TaggedError("PayloadCaptured")<{ readonly message: string }> {}
 
-function makePayloadCaptureContext(): Context {
+function makePayloadCaptureContext(): typesModule.Context {
   return {
     messages: [{ content: "Hello", role: "user", timestamp: currentTimeMillis() }],
   };
 }
 
 const capturePayload = Effect.fn("capturePayload")(function* (
-  model: Model<"anthropic-messages">,
-  options?: SimpleStreamOptions,
+  model: typesModule.Model<"anthropic-messages">,
+  options?: typesModule.SimpleStreamOptions,
 ) {
   let capturedPayload: AnthropicThinkingPayload | undefined;
-  const payloadCaptureModel: Model<"anthropic-messages"> = {
+  const payloadCaptureModel: typesModule.Model<"anthropic-messages"> = {
     ...model,
     baseUrl: "http://127.0.0.1:9",
   };
@@ -58,7 +61,7 @@ interface RunResult {
   contentTypes: string[];
 }
 
-function makeE2EContext(): Context {
+function makeE2EContext(): typesModule.Context {
   return {
     messages: [
       {
@@ -76,7 +79,7 @@ function countPongs(text: string): number {
   return text.match(/\bpong\b/giu)?.length ?? 0;
 }
 
-function runWithoutReasoning(model: Model<"anthropic-messages">): Promise<RunResult> {
+function runWithoutReasoning(model: typesModule.Model<"anthropic-messages">): Promise<RunResult> {
   return Effect.runPromise(
     Effect.gen(function* () {
       const s = streamSimple(model, makeE2EContext(), {
@@ -121,22 +124,22 @@ function runWithoutReasoning(model: Model<"anthropic-messages">): Promise<RunRes
   );
 }
 
-const anthropicMessages = (accepts: (model: Model<"anthropic-messages">) => boolean) =>
+const anthropicMessages = (accepts: (model: typesModule.Model<"anthropic-messages">) => boolean) =>
   modelsWhere(
     "anthropic-api",
     (model) =>
       usesApi("anthropic-messages")(model) &&
       model.reasoning &&
-      accepts(model as Model<"anthropic-messages">),
-  ) as Model<"anthropic-messages">[];
+      accepts(model as typesModule.Model<"anthropic-messages">),
+  ) as typesModule.Model<"anthropic-messages">[];
 
-const adaptive = (model: Model<"anthropic-messages">) =>
+const adaptive = (model: typesModule.Model<"anthropic-messages">) =>
   compatValue(model, "forceAdaptiveThinking") === true &&
   compatValue(model, "supportsMidConvoEffort") !== true;
-const offMapping = (model: Model<"anthropic-messages">) =>
+const offMapping = (model: typesModule.Model<"anthropic-messages">) =>
   (model.thinkingLevelMap as Record<string, string | null> | undefined)?.["off"];
 
-const disablesThinkingWhenOff = (model: Model<"anthropic-messages">) =>
+const disablesThinkingWhenOff = (model: typesModule.Model<"anthropic-messages">) =>
   Effect.runPromise(
     Effect.gen(function* () {
       const payload = yield* capturePayload(model);
@@ -145,7 +148,7 @@ const disablesThinkingWhenOff = (model: Model<"anthropic-messages">) =>
     }),
   );
 
-const omitsThinkingWhenOffIsUnsupported = (model: Model<"anthropic-messages">) =>
+const omitsThinkingWhenOffIsUnsupported = (model: typesModule.Model<"anthropic-messages">) =>
   Effect.runPromise(
     Effect.gen(function* () {
       const payload = yield* capturePayload(model);
@@ -154,14 +157,15 @@ const omitsThinkingWhenOffIsUnsupported = (model: Model<"anthropic-messages">) =
     }),
   );
 
-const usesAdaptiveEffort = (reasoning: "high" | "xhigh") => (model: Model<"anthropic-messages">) =>
-  Effect.runPromise(
-    Effect.gen(function* () {
-      const payload = yield* capturePayload(model, { reasoning });
-      expect(payload.thinking).toEqual({ display: "summarized", type: "adaptive" });
-      expect(payload.output_config).toEqual({ effort: reasoning });
-    }),
-  );
+const usesAdaptiveEffort =
+  (reasoning: "high" | "xhigh") => (model: typesModule.Model<"anthropic-messages">) =>
+    Effect.runPromise(
+      Effect.gen(function* () {
+        const payload = yield* capturePayload(model, { reasoning });
+        expect(payload.thinking).toEqual({ display: "summarized", type: "adaptive" });
+        expect(payload.output_config).toEqual({ effort: reasoning });
+      }),
+    );
 
 describe("Anthropic thinking disable payload", () => {
   it.for(anthropicMessages((model) => model.thinkingLevelMap === undefined))(

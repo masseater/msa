@@ -1,26 +1,29 @@
 import type { ResponseCreateParamsStreaming } from "openai/resources/responses/responses.js";
 
-import type { Model, Usage } from "../types.ts";
+import type typesModule from "../types.types.ts";
 
 type ServiceTier = ResponseCreateParamsStreaming["service_tier"] | undefined;
 
-function serviceTierCostMultiplier(modelId: string, serviceTier: ServiceTier): number {
+function serviceTierCostMultiplier(
+  tiers: typesModule.Model<"openai-responses">["cost"]["serviceTiers"],
+  serviceTier: ServiceTier,
+): number {
   switch (serviceTier) {
     case "flex":
-      return 0.5;
+      return tiers?.flex ?? 1;
     case "priority":
     case "fast":
-      return modelId === "gpt-5.5" ? 2.5 : 2;
+      return tiers?.priority ?? 1;
     default:
       return 1;
   }
 }
 
-export function serviceTierPricing(
-  model: Pick<Model<"openai-responses">, "id">,
-): (usage: Usage, serviceTier: ServiceTier) => void {
+function serviceTierPricing(
+  model: Pick<typesModule.Model<"openai-responses">, "cost">,
+): (usage: typesModule.Usage, serviceTier: ServiceTier) => void {
   return (usage, serviceTier) => {
-    const multiplier = serviceTierCostMultiplier(model.id, serviceTier);
+    const multiplier = serviceTierCostMultiplier(model.cost.serviceTiers, serviceTier);
     if (multiplier === 1) return;
     const cost = usage.cost;
     cost.input *= multiplier;
@@ -30,3 +33,9 @@ export function serviceTierPricing(
     cost.total = cost.input + cost.output + cost.cacheRead + cost.cacheWrite;
   };
 }
+
+const openaiResponsesPricing = {
+  serviceTierPricing,
+};
+
+export default openaiResponsesPricing;

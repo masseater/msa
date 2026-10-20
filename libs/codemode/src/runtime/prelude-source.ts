@@ -1,32 +1,34 @@
 import * as Cause from "effect/Cause";
 
-import { PRELUDE_HEAD } from "./bridge.ts";
+import bridge from "./bridge.ts";
 
-export function errorMessage(error: unknown): string {
+const { PRELUDE_HEAD } = bridge;
+
+function errorMessage(error: unknown): string {
   return error instanceof Error ? error.message : String(error);
 }
 
-export function causeMessage(cause: Cause.Cause<unknown>): string {
+function causeMessage(cause: Cause.Cause<unknown>): string {
   return errorMessage(cause.pipe(Cause.squash));
 }
 
-export function parseJson(text: string): unknown {
+function parseJson(text: string): unknown {
   return JSON.parse(text);
 }
 
-export function stringifyJson(value: unknown): string | undefined {
+function stringifyJson(value: unknown): string | undefined {
   return value === undefined ? undefined : JSON.stringify(value);
 }
 
-export const MAX_STORE_VALUE_CHARS = 256 * 1024;
-export const MAX_STORE_TOTAL_CHARS = 1024 * 1024;
-export const MAX_OUTPUT_CHARS = 16 * 1024 * 1024;
-export const MAX_OUTPUT_ITEMS = 100_000;
+const MAX_STORE_VALUE_CHARS = 256 * 1024;
+const MAX_STORE_TOTAL_CHARS = 1024 * 1024;
+const MAX_OUTPUT_CHARS = 16 * 1024 * 1024;
+const MAX_OUTPUT_ITEMS = 100_000;
 
 const IMAGE_HELPER_EXPECTS =
   'image expects a non-empty image URL string, an object with image_url, or an image block { type: "image", data, mimeType }';
 
-export const PRELUDE_SOURCE: string = `${PRELUDE_HEAD}	// key -> JSON text. Sizes count key and JSON characters.
+const PRELUDE_SOURCE: string = `${PRELUDE_HEAD}	// key -> JSON text. Sizes count key and JSON characters.
 	const stored = new Map(Object.entries(parse(storeJson)));
 	const writes = new Map();
 	let storedChars = 0;
@@ -276,3 +278,17 @@ export const PRELUDE_SOURCE: string = `${PRELUDE_HEAD}	// key -> JSON text. Size
 		},
 	};
 })`;
+
+const preludeSource = {
+  MAX_OUTPUT_CHARS,
+  MAX_OUTPUT_ITEMS,
+  MAX_STORE_TOTAL_CHARS,
+  MAX_STORE_VALUE_CHARS,
+  PRELUDE_SOURCE,
+  causeMessage,
+  errorMessage,
+  parseJson,
+  stringifyJson,
+};
+
+export default preludeSource;

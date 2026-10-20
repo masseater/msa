@@ -1,5 +1,7 @@
-import { Agent, type AgentTool, type StreamFn } from "@msa/agent-core";
-import { type AssistantMessage, createAssistantMessageEventStream, getModel } from "@msa/ai/compat";
+import agentModule from "@msa/agent-core";
+import type agentTypes from "@msa/agent-core/index.types";
+import compat from "@msa/ai/compat";
+import type compatTypes from "@msa/ai/compat.types";
 import testing from "@msa/testing";
 import { Effect } from "effect";
 
@@ -9,6 +11,10 @@ import { SettingsManager } from "../src/core/settings-manager.ts";
 import modelRuntimeTestUtils from "./model-runtime-test-utils.ts";
 import type sessionKitTypes from "./session-kit.types.ts";
 import utilities from "./utilities.ts";
+
+const { createAssistantMessageEventStream, getModel } = compat;
+
+const { Agent } = agentModule;
 
 const {
   awaited,
@@ -27,8 +33,8 @@ type AssistantStream = ReturnType<typeof createAssistantMessageEventStream>;
 
 const assistantMessage = (
   text: string,
-  overrides: Partial<AssistantMessage> = {},
-): AssistantMessage => ({
+  overrides: Partial<compatTypes.AssistantMessage> = {},
+): compatTypes.AssistantMessage => ({
   api: "anthropic-messages",
   content: [{ text, type: "text" }],
   model: "mock",
@@ -63,7 +69,7 @@ const textOf = (content: unknown): string =>
 const userTexts = (messages: readonly { role: string; content?: unknown }[]): string[] =>
   messages.filter((message) => message.role === "user").map((message) => textOf(message.content));
 
-const reply = (stream: AssistantStream, message: AssistantMessage): void => {
+const reply = (stream: AssistantStream, message: compatTypes.AssistantMessage): void => {
   stream.push({ partial: { ...message, content: [] }, type: "start" });
   stream.push({
     message,
@@ -90,7 +96,7 @@ const replyWhenAborted = (stream: AssistantStream, signal: AbortSignal | undefin
 };
 
 const streamWith =
-  (respond: sessionKitTypes.Responder): StreamFn =>
+  (respond: sessionKitTypes.Responder): agentTypes.StreamFn =>
   (_model, context, options) => {
     const stream = createAssistantMessageEventStream();
     queueMicrotask(() => respond({ context, signal: options?.signal, stream }));
@@ -118,7 +124,7 @@ const resourceLoaderFor = (
 const createAgentSession = Effect.fn("createAgentSession")(function* (
   options: sessionKitTypes.SessionOptions,
 ) {
-  const tools: AgentTool[] = options.tools ?? options.agentTools ?? [];
+  const tools: agentTypes.AgentTool[] = options.tools ?? options.agentTools ?? [];
   const agent = new Agent({
     getApiKey: () => options.apiKey ?? "test-key",
     initialState: {

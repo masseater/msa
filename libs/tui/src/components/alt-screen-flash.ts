@@ -1,16 +1,20 @@
-import { type CancelDelay, runAfter } from "../delay.ts";
-import { truncateToWidth } from "../text-truncate.ts";
-import type { Component } from "../tui-component.ts";
+import delay from "../delay.ts";
+import type delayTypes from "../delay.types.ts";
+import textTruncate from "../text-truncate.ts";
+import type tuiComponentTypes from "../tui-component.types.ts";
+
+const { runAfter } = delay;
+const { truncateToWidth } = textTruncate;
 
 const DEFAULT_DURATION_MS = 1000;
 
 interface FlashEntry {
   id: number;
   message: string;
-  cancel: CancelDelay;
+  cancel: delayTypes.CancelDelay;
 }
 
-export class AltScreenFlashContainer implements Component {
+export default class AltScreenFlashContainer implements tuiComponentTypes.Component {
   private readonly entries: FlashEntry[] = [];
   private nextId = 0;
   private readonly requestRender: () => void;
@@ -27,7 +31,7 @@ export class AltScreenFlashContainer implements Component {
       this.entries.splice(index, 1);
       this.requestRender();
     });
-    this.entries.push({ id, message, cancel });
+    this.entries.push({ cancel, id, message });
     this.requestRender();
   }
 

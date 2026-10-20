@@ -1,4 +1,4 @@
-import type { ClassifierContext, ClassifierModel, ClassifierQuestion } from "../src/types.ts";
+import type typesModule from "../src/types.types.ts";
 
 interface RecordedRequest {
   url: string;
@@ -14,7 +14,7 @@ interface FakeServerOptions {
 
 let serverCount = 0;
 
-function model(): ClassifierModel<"llama-cpp-classify"> {
+function model(): typesModule.ClassifierModel<"llama-cpp-classify"> {
   serverCount++;
   return {
     api: "llama-cpp-classify",
@@ -74,8 +74,8 @@ function fakeServer(options: FakeServerOptions = {}) {
   return { fetch, requests };
 }
 
-const context: ClassifierContext = {
-  questions: Object.fromEntries<ClassifierQuestion>([
+const context: typesModule.ClassifierContext = {
+  questions: Object.fromEntries<typesModule.ClassifierQuestion>([
     [
       "team",
       {

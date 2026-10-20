@@ -1,25 +1,21 @@
 import { dual } from "effect/Function";
 
-import { toCodemodeIdentifier } from "./runtime/bridge.ts";
-import { schemaToType, schemaToTypeWithin } from "./schema-type.ts";
-import type { CodemodeJsonSchema, CodemodeTool } from "./types.ts";
+import type declarationsTypes from "./declarations.types.ts";
+import bridge from "./runtime/bridge.ts";
+import schemaType from "./schema-type.ts";
+import type typesModule from "./types.ts";
 
-export { schemaToType, schemaToTypeWithin, toCodemodeIdentifier };
+const { schemaToType, schemaToTypeWithin } = schemaType;
+const { toCodemodeIdentifier } = bridge;
 
 const INDENT = "  ";
-export const DEFAULT_INPUT_SCHEMA_MAX_CHARS = 16_000;
+const DEFAULT_INPUT_SCHEMA_MAX_CHARS = 16_000;
 
-export interface RenderDeclarationsOptions {
-  tools?: readonly CodemodeTool[];
-  globals?: readonly CodemodeTool[];
-}
-
-export interface RenderToolOptions {
-  inputMaxChars?: number;
-}
-
-type SignatureTool = Pick<CodemodeTool, "name" | "inputSchema" | "outputSchema">;
-type SampleTool = Pick<CodemodeTool, "name" | "description" | "inputSchema" | "outputSchema">;
+type SignatureTool = Pick<typesModule.CodemodeTool, "name" | "inputSchema" | "outputSchema">;
+type SampleTool = Pick<
+  typesModule.CodemodeTool,
+  "name" | "description" | "inputSchema" | "outputSchema"
+>;
 
 function docComment(description: string | undefined, indent: string): string {
   const text = description?.trim();
@@ -29,7 +25,7 @@ function docComment(description: string | undefined, indent: string): string {
   return `${indent}/**\n${lines.map((line) => `${indent} *${line === "" ? "" : ` ${line}`}`).join("\n")}\n${indent} */\n`;
 }
 
-export function renderToolOutputType(schema: CodemodeJsonSchema | undefined): string {
+function renderToolOutputType(schema: typesModule.CodemodeJsonSchema | undefined): string {
   return schema === undefined ? "unknown" : schemaToType(schema);
 }
 
@@ -38,7 +34,10 @@ const isTool = (args: IArguments | readonly unknown[]): boolean => {
   return typeof first === "object" && first !== null && "name" in first;
 };
 
-const signatureOf = (tool: SignatureTool, options: RenderToolOptions = {}): string => {
+const signatureOf = (
+  tool: SignatureTool,
+  options: declarationsTypes.RenderToolOptions = {},
+): string => {
   const input =
     tool.inputSchema === undefined
       ? "unknown"
@@ -49,22 +48,22 @@ const signatureOf = (tool: SignatureTool, options: RenderToolOptions = {}): stri
   return `${toCodemodeIdentifier(tool.name)}(args: ${input}): Promise<${renderToolOutputType(tool.outputSchema)}>;`;
 };
 
-export const renderToolSignature: {
-  (options?: RenderToolOptions): (tool: SignatureTool) => string;
-  (tool: SignatureTool, options?: RenderToolOptions): string;
+const renderToolSignature: {
+  (options?: declarationsTypes.RenderToolOptions): (tool: SignatureTool) => string;
+  (tool: SignatureTool, options?: declarationsTypes.RenderToolOptions): string;
 } = dual(isTool, signatureOf);
 
-const sampleOf = (tool: SampleTool, options: RenderToolOptions = {}): string => {
+const sampleOf = (tool: SampleTool, options: declarationsTypes.RenderToolOptions = {}): string => {
   const declaration = `declare const tools: { ${signatureOf(tool, options)} };`;
   return `${tool.description?.trim() ?? ""}\n\ncodemode tool declaration:\n\`\`\`ts\n${declaration}\n\`\`\``;
 };
 
-export const renderToolSample: {
-  (options?: RenderToolOptions): (tool: SampleTool) => string;
-  (tool: SampleTool, options?: RenderToolOptions): string;
+const renderToolSample: {
+  (options?: declarationsTypes.RenderToolOptions): (tool: SampleTool) => string;
+  (tool: SampleTool, options?: declarationsTypes.RenderToolOptions): string;
 } = dual(isTool, sampleOf);
 
-function renderGlobal(head: string, global: CodemodeTool, indent: string): string {
+function renderGlobal(head: string, global: typesModule.CodemodeTool, indent: string): string {
   if (global.signature !== undefined) {
     return `${docComment(global.description, indent)}${indent}${head}${global.signature};`;
   }
@@ -73,7 +72,7 @@ function renderGlobal(head: string, global: CodemodeTool, indent: string): strin
   return `${docComment(global.description, indent)}${indent}${head}(args: ${input}): Promise<${output}>;`;
 }
 
-function renderGlobals(globals: readonly CodemodeTool[]): string[] {
+function renderGlobals(globals: readonly typesModule.CodemodeTool[]): string[] {
   const sections: string[] = [];
   const namespaces = new Map<string, string[]>();
   for (const global of globals) {
@@ -93,7 +92,7 @@ function renderGlobals(globals: readonly CodemodeTool[]): string[] {
   return sections;
 }
 
-export function renderDeclarations(options: RenderDeclarationsOptions): string {
+function renderDeclarations(options: declarationsTypes.RenderDeclarationsOptions): string {
   const sections: string[] = [];
   const tools = options.tools ?? [];
   if (tools.length > 0) {
@@ -105,3 +104,16 @@ export function renderDeclarations(options: RenderDeclarationsOptions): string {
   sections.push(...renderGlobals(options.globals ?? []));
   return sections.join("\n\n");
 }
+
+const declarations = {
+  DEFAULT_INPUT_SCHEMA_MAX_CHARS,
+  renderDeclarations,
+  renderToolOutputType,
+  renderToolSample,
+  renderToolSignature,
+  schemaToType: schemaType.schemaToType,
+  schemaToTypeWithin: schemaType.schemaToTypeWithin,
+  toCodemodeIdentifier: bridge.toCodemodeIdentifier,
+};
+
+export default declarations;

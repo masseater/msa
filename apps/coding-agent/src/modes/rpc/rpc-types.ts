@@ -1,5 +1,5 @@
-import type { AgentMessage, ThinkingLevel } from "@msa/agent-core";
-import type { ImageContent, Model } from "@msa/ai";
+import type agentTypes from "@msa/agent-core/index.types";
+import type aiTypes from "@msa/ai/index.types";
 
 import type {
   PromptDisposition,
@@ -19,17 +19,22 @@ export type RpcCommand =
       id?: string | undefined;
       type: "prompt";
       message: string;
-      images?: ImageContent[] | undefined;
+      images?: aiTypes.ImageContent[] | undefined;
       streamingBehavior?: "steer" | "followUp" | undefined;
 
       mode?: PromptMode | undefined;
     }
-  | { id?: string | undefined; type: "steer"; message: string; images?: ImageContent[] | undefined }
+  | {
+      id?: string | undefined;
+      type: "steer";
+      message: string;
+      images?: aiTypes.ImageContent[] | undefined;
+    }
   | {
       id?: string | undefined;
       type: "follow_up";
       message: string;
-      images?: ImageContent[] | undefined;
+      images?: aiTypes.ImageContent[] | undefined;
     }
   | { id?: string | undefined; type: "abort" }
   | { id?: string | undefined; type: "clear_queue" }
@@ -38,7 +43,7 @@ export type RpcCommand =
   | { id?: string | undefined; type: "set_model"; provider: string; modelId: string }
   | { id?: string | undefined; type: "cycle_model" }
   | { id?: string | undefined; type: "get_available_models" }
-  | { id?: string | undefined; type: "set_thinking_level"; level: ThinkingLevel }
+  | { id?: string | undefined; type: "set_thinking_level"; level: agentTypes.ThinkingLevel }
   | { id?: string | undefined; type: "cycle_thinking_level" }
   | { id?: string | undefined; type: "get_available_thinking_levels" }
   | { id?: string | undefined; type: "set_steering_mode"; mode: "all" | "one-at-a-time" }
@@ -75,8 +80,8 @@ export interface RpcSlashCommand {
 }
 
 export interface RpcSessionState {
-  model?: Model<any> | undefined;
-  thinkingLevel: ThinkingLevel;
+  model?: aiTypes.Model<any> | undefined;
+  thinkingLevel: agentTypes.ThinkingLevel;
   isStreaming: boolean;
   isCompacting: boolean;
   steeringMode: "all" | "one-at-a-time";
@@ -140,21 +145,25 @@ export type RpcResponse =
       type: "response";
       command: "set_model";
       success: true;
-      data: Model<any>;
+      data: aiTypes.Model<any>;
     }
   | {
       id?: string | undefined;
       type: "response";
       command: "cycle_model";
       success: true;
-      data: { model: Model<any>; thinkingLevel: ThinkingLevel; isScoped: boolean } | null;
+      data: {
+        model: aiTypes.Model<any>;
+        thinkingLevel: agentTypes.ThinkingLevel;
+        isScoped: boolean;
+      } | null;
     }
   | {
       id?: string | undefined;
       type: "response";
       command: "get_available_models";
       success: true;
-      data: { models: Model<any>[] };
+      data: { models: aiTypes.Model<any>[] };
     }
   | { id?: string | undefined; type: "response"; command: "set_thinking_level"; success: true }
   | {
@@ -162,14 +171,14 @@ export type RpcResponse =
       type: "response";
       command: "cycle_thinking_level";
       success: true;
-      data: { level: ThinkingLevel } | null;
+      data: { level: agentTypes.ThinkingLevel } | null;
     }
   | {
       id?: string | undefined;
       type: "response";
       command: "get_available_thinking_levels";
       success: true;
-      data: { levels: ThinkingLevel[] };
+      data: { levels: agentTypes.ThinkingLevel[] };
     }
   | { id?: string | undefined; type: "response"; command: "set_steering_mode"; success: true }
   | { id?: string | undefined; type: "response"; command: "set_follow_up_mode"; success: true }
@@ -254,7 +263,7 @@ export type RpcResponse =
       type: "response";
       command: "get_messages";
       success: true;
-      data: { messages: AgentMessage[] };
+      data: { messages: agentTypes.AgentMessage[] };
     }
   | {
       id?: string | undefined;

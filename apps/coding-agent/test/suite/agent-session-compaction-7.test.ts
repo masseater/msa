@@ -1,12 +1,6 @@
-import type { AgentMessage } from "@msa/agent-core";
-import {
-  type SimpleStreamOptions,
-  type TranscriptContext,
-  createAssistantMessageEventStream,
-  fauxAssistantMessage,
-  getCurrentSystemPrompt,
-  getCurrentTools,
-} from "@msa/ai";
+import type agentTypes from "@msa/agent-core/index.types";
+import ai from "@msa/ai";
+import type aiTypes from "@msa/ai/index.types";
 import testing from "@msa/testing";
 import { Effect } from "effect";
 import { afterEach, describe, expect, it, vi } from "vite-plus/test";
@@ -14,6 +8,13 @@ import { afterEach, describe, expect, it, vi } from "vite-plus/test";
 import agentSessionCompactionSupport from "./agent-session-compaction-support.ts";
 import agentSessionCompactionSupport2 from "./agent-session-compaction-support2.ts";
 import harnessModule from "./harness.ts";
+
+const {
+  createAssistantMessageEventStream,
+  fauxAssistantMessage,
+  getCurrentSystemPrompt,
+  getCurrentTools,
+} = ai;
 
 const { afterEachHook } = agentSessionCompactionSupport2;
 
@@ -59,8 +60,8 @@ const manuallyCompactsWithProviderResolvedBearer = Effect.gen(function* () {
   });
   seedCompactableSession(harness);
   const summaryResponse = (
-    _context: TranscriptContext,
-    options: SimpleStreamOptions | undefined,
+    _context: aiTypes.TranscriptContext,
+    options: aiTypes.SimpleStreamOptions | undefined,
   ) => {
     expect(options?.apiKey).toBeUndefined();
     expect(options?.headers).toEqual({ Authorization: "Bearer ambient-token" });
@@ -81,13 +82,15 @@ const usesTheStandaloneCompactionRequestContext = Effect.gen(function* () {
   harnesses.push(harness);
   seedCompactableSession(harness);
 
-  const transformContext = vi.fn((messages: AgentMessage[]) => Promise.resolve(messages));
+  const transformContext = vi.fn((messages: agentTypes.AgentMessage[]) =>
+    Promise.resolve(messages),
+  );
   harness.session.agent.transformContext = transformContext;
   harness.session.agent.sessionId = "active-routing-session";
   harness.session.agent.transport = "websocket";
 
-  let requestContext: TranscriptContext | undefined;
-  let requestOptions: SimpleStreamOptions | undefined;
+  let requestContext: aiTypes.TranscriptContext | undefined;
+  let requestOptions: aiTypes.SimpleStreamOptions | undefined;
   useSummaryStreamFn(harness, "standalone summary", (context, options) => {
     requestContext = context;
     requestOptions = options;

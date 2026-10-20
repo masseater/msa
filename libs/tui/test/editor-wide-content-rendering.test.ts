@@ -2,11 +2,16 @@ import assert from "node:assert";
 import { describe, it } from "node:test";
 import { stripVTControlCharacters } from "node:util";
 
-import { wordWrapLine } from "../src/components/editor-wrap.ts";
-import { Editor } from "../src/components/editor.ts";
-import { visibleWidth } from "../src/utils.ts";
+import editorWrap from "../src/components/editor-wrap.ts";
+import Editor from "../src/components/editor.ts";
+import utils from "../src/utils.ts";
 import editorHelpers from "./editor-helpers.ts";
-import { defaultEditorTheme } from "./test-themes.ts";
+import testThemes from "./test-themes.ts";
+
+const { wordWrapLine } = editorWrap;
+const { visibleWidth } = utils;
+
+const { defaultEditorTheme } = testThemes;
 
 const { createTestTUI } = editorHelpers;
 

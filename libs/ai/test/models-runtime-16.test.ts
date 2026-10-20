@@ -1,23 +1,25 @@
 import { Effect } from "effect";
 import { describe, expect, it } from "vite-plus/test";
 
-import type { ApiKeyAuth } from "../src/auth/types.ts";
-import { createModels } from "../src/models.ts";
-import type { Api, Model, StreamOptions } from "../src/types.ts";
+import type typesModuleModule from "../src/auth/types.ts";
+import modelsModule from "../src/models.ts";
+import type typesModule from "../src/types.types.ts";
 import modelsRuntimeSupport from "./models-runtime-support.ts";
+
+const { createModels } = modelsModule;
 
 const { context, envKeyAuth, testModel, testProvider } = modelsRuntimeSupport;
 
 interface ProviderCall {
-  model: Model<Api>;
-  options: StreamOptions | undefined;
+  model: typesModule.Model<typesModule.Api>;
+  options: typesModule.StreamOptions | undefined;
 }
 
 const mergesResolvedAuthIntoStreamOptions = () =>
   Effect.runPromise(
     Effect.gen(function* () {
       const calls: ProviderCall[] = [];
-      const apiKey: ApiKeyAuth = {
+      const apiKey: typesModuleModule.ApiKeyAuth = {
         name: "Test",
         resolve: () =>
           Promise.resolve({

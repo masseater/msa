@@ -1,4 +1,4 @@
-import type { Model } from "@msa/ai";
+import type aiTypes from "@msa/ai/index.types";
 import { describe, expect, test } from "vite-plus/test";
 
 import { EMPTY_MODEL_POLICY } from "../src/core/model-policy.ts";
@@ -37,7 +37,7 @@ const gateway = {
 const registry2 = (configured: string[]) =>
   policyFreeRuntime([direct, openrouter, gateway], (provider) => configured.includes(provider));
 
-const neuralwattModel: Model<"anthropic-messages"> = {
+const neuralwattModel: aiTypes.Model<"anthropic-messages"> = {
   api: "anthropic-messages" as const,
   baseUrl: "https://api.neuralwatt.com",
   contextWindow: 128000,

@@ -1,10 +1,16 @@
 import { describe, expect, it } from "vite-plus/test";
 
-import type { AssistantMessage } from "../src/types.ts";
-import { currentTimeMillis } from "../src/utils/clock.ts";
-import { isContextOverflow, isRecoverableLength } from "../src/utils/overflow.ts";
+import type typesModule from "../src/types.types.ts";
+import clock from "../src/utils/clock.ts";
+import overflow from "../src/utils/overflow.ts";
 
-function createErrorMessage(errorMessage: string, provider = "ollama"): AssistantMessage {
+const { currentTimeMillis } = clock;
+const { isContextOverflow, isRecoverableLength } = overflow;
+
+function createErrorMessage(
+  errorMessage: string,
+  provider = "ollama",
+): typesModule.AssistantMessage {
   return {
     api: "openai-completions",
     content: [],
@@ -122,10 +128,10 @@ describe("isContextOverflow", () => {
     cacheRead: number;
     output: number;
     cacheWrite?: number;
-    api?: AssistantMessage["api"];
+    api?: typesModule.AssistantMessage["api"];
     provider?: string;
     model?: string;
-  }): AssistantMessage {
+  }): typesModule.AssistantMessage {
     const cacheWrite = options.cacheWrite ?? 0;
     return {
       api: options.api ?? "openai-completions",
@@ -163,10 +169,10 @@ describe("isContextOverflow", () => {
     cacheRead: number;
     output: number;
     cacheWrite?: number;
-    api?: AssistantMessage["api"];
+    api?: typesModule.AssistantMessage["api"];
     provider?: string;
     model?: string;
-  }): AssistantMessage {
+  }): typesModule.AssistantMessage {
     const cacheWrite = options.cacheWrite ?? 0;
     return {
       api: options.api ?? "openai-completions",
@@ -211,10 +217,10 @@ describe("isContextOverflow", () => {
     cacheRead: number;
     output: number;
     cacheWrite?: number;
-    api?: AssistantMessage["api"];
+    api?: typesModule.AssistantMessage["api"];
     provider?: string;
     model?: string;
-  }): AssistantMessage {
+  }): typesModule.AssistantMessage {
     const cacheWrite = options.cacheWrite ?? 0;
     return {
       api: options.api ?? "openai-completions",
@@ -246,10 +252,10 @@ describe("isContextOverflow", () => {
     cacheRead: number;
     output: number;
     cacheWrite?: number;
-    api?: AssistantMessage["api"];
+    api?: typesModule.AssistantMessage["api"];
     provider?: string;
     model?: string;
-  }): AssistantMessage {
+  }): typesModule.AssistantMessage {
     const cacheWrite = options.cacheWrite ?? 0;
     return {
       api: options.api ?? "openai-completions",

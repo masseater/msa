@@ -1,8 +1,10 @@
 import { NodeServices } from "@effect/platform-node";
-import { readProcessEnv } from "@msa/ai/utils/env";
+import env from "@msa/ai/utils/env";
 import type { ExtensionAPI } from "@msa/coding-agent";
 import { Effect, ManagedRuntime } from "effect";
 import { ChildProcess, ChildProcessSpawner } from "effect/process";
+
+const { readProcessEnv } = env;
 
 const runtime = ManagedRuntime.make(NodeServices.layer);
 

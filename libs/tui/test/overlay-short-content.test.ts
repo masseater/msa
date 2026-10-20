@@ -3,18 +3,20 @@ import { describe, it } from "node:test";
 
 import { Console, Effect } from "effect";
 
-import type { TUI } from "../src/tui-interface.ts";
-import { TuiMainScreen } from "../src/tui-main-screen.ts";
+import type tuiInterfaceTypes from "../src/tui-interface.types.ts";
+import TuiMainScreen from "../src/tui-main-screen.ts";
 import SimpleContent from "./overlay-short-content-simple-content.ts";
 import SimpleOverlay from "./overlay-short-content-simple-overlay.ts";
-import { VirtualTerminal } from "./virtual-terminal.ts";
+import virtualTerminal from "./virtual-terminal.ts";
+
+const { VirtualTerminal } = virtualTerminal;
 
 describe("TUI overlay with short content", () => {
   it("should render overlay when content is shorter than terminal height", () =>
     Effect.runPromise(
       Effect.gen(function* () {
         const terminal = new VirtualTerminal(80, 24);
-        const tui: TUI = new TuiMainScreen(terminal);
+        const tui: tuiInterfaceTypes.TUI = new TuiMainScreen(terminal);
 
         tui.addChild(new SimpleContent(["Line 1", "Line 2", "Line 3"]));
 

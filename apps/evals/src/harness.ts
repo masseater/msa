@@ -1,5 +1,5 @@
 import { Cause, Effect, Exit } from "effect";
-import { createHarness, type Harness, type JsonValue } from "vitest-evals/harness";
+import { type Harness, type JsonValue, createHarness } from "vitest-evals/harness";
 
 import type {
   MsaCodingAgentHarnessOptions,
@@ -32,7 +32,7 @@ export function createMsaCodingAgentHarness<TOutput extends JsonValue>(
   return createHarness<MsaCodingAgentInput, string | TOutput>({
     name: options.name ?? "msa-coding-agent",
     run: ({ input, signal, setArtifact }) =>
-      settle(runMsaCodingAgent({ input, signal, setArtifact, options })),
+      settle(runMsaCodingAgent({ input, options, setArtifact, signal })),
   });
 }
 

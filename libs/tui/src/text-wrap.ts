@@ -1,15 +1,20 @@
 import { dual } from "effect/Function";
 
-import { AnsiCodeTracker, updateTrackerFromText } from "./ansi-tracker.ts";
-import { cjkBreakRegex } from "./text-boundaries.ts";
-import {
+import ansiTracker from "./ansi-tracker.ts";
+import type ansiTrackerTypes from "./ansi-tracker.types.ts";
+import textBoundaries from "./text-boundaries.ts";
+import utils from "./utils.ts";
+
+const {
   ansiCodeLength,
   extractAnsiCode,
   getGraphemeSegmenter,
   isPrintableAscii,
   textUnits,
   visibleWidth,
-} from "./utils.ts";
+} = utils;
+const { cjkBreakRegex } = textBoundaries;
+const { AnsiCodeTracker, updateTrackerFromText } = ansiTracker;
 
 interface TokenState {
   tokens: string[];
@@ -22,7 +27,7 @@ interface WrapState {
   wrapped: string[];
   line: string;
   lineWidth: number;
-  readonly tracker: AnsiCodeTracker;
+  readonly tracker: ansiTrackerTypes.AnsiCodeTracker;
   readonly width: number;
 }
 
@@ -83,7 +88,7 @@ function nextAnsiStart(text: string, from: number): number {
 }
 
 function splitIntoTokensWithAnsi(text: string): string[] {
-  const state: TokenState = { tokens: [], current: "", pendingAnsi: "", currentKind: null };
+  const state: TokenState = { current: "", currentKind: null, pendingAnsi: "", tokens: [] };
   let i = 0;
   while (i < text.length) {
     const ansiResult = extractAnsiCode(text, i);
@@ -103,11 +108,15 @@ function splitIntoTokensWithAnsi(text: string): string[] {
   return finishTokens(state);
 }
 
-function withLineEndReset(line: string, tracker: AnsiCodeTracker): string {
+function withLineEndReset(line: string, tracker: ansiTrackerTypes.AnsiCodeTracker): string {
   return line + tracker.getLineEndReset();
 }
 
-function breakLongWord(word: string, width: number, tracker: AnsiCodeTracker): string[] {
+function breakLongWord(
+  word: string,
+  width: number,
+  tracker: ansiTrackerTypes.AnsiCodeTracker,
+): string[] {
   const lines: string[] = [];
   let currentLine = tracker.getActiveCodes();
   let currentWidth = 0;
@@ -168,11 +177,11 @@ function wrapSingleLine(line: string, width: number): string[] {
   }
 
   const state: WrapState = {
-    wrapped: [],
     line: "",
     lineWidth: 0,
     tracker: new AnsiCodeTracker(),
     width,
+    wrapped: [],
   };
   for (const token of splitIntoTokensWithAnsi(line)) {
     const tokenWidth = visibleWidth(token);
@@ -191,7 +200,7 @@ function wrapSingleLine(line: string, width: number): string[] {
     : [""];
 }
 
-export const wrapTextWithAnsi: {
+const wrapTextWithAnsi: {
   (text: string, width: number): string[];
   (width: number): (text: string) => string[];
 } = dual(2, (text: string, width: number): string[] => {
@@ -215,7 +224,7 @@ export const wrapTextWithAnsi: {
   return result.length > 0 ? result : [""];
 });
 
-export const applyBackgroundToLine: {
+const applyBackgroundToLine: {
   (line: string, width: number, bgFn: (text: string) => string): string;
   (width: number, bgFn: (text: string) => string): (line: string) => string;
 } = dual(3, (line: string, width: number, bgFn: (text: string) => string): string => {
@@ -226,3 +235,10 @@ export const applyBackgroundToLine: {
   const withPadding = line + padding;
   return bgFn(withPadding);
 });
+
+const textWrap = {
+  applyBackgroundToLine,
+  wrapTextWithAnsi,
+};
+
+export default textWrap;

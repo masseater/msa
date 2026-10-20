@@ -1,6 +1,8 @@
 import { describe, expect, it } from "vite-plus/test";
 
-import { isThinkingPart, retainThoughtSignature } from "../src/api/google-messages.ts";
+import googleMessages from "../src/api/google-messages.ts";
+
+const { isThinkingPart, retainThoughtSignature } = googleMessages;
 
 describe("Google thinking detection (thoughtSignature)", () => {
   it("treats part.thought === true as thinking", () => {

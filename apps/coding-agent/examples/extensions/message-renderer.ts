@@ -1,6 +1,8 @@
 import type { ExtensionAPI } from "@msa/coding-agent";
-import { Box, Text } from "@msa/tui";
+import tui from "@msa/tui";
 import { Clock, DateTime, Effect } from "effect";
+
+const { Box, Text } = tui;
 
 export default function (msa: ExtensionAPI) {
   msa.registerMessageRenderer("status-update", (message, { expanded, outputPad }, theme) => {
@@ -37,10 +39,10 @@ export default function (msa: ExtensionAPI) {
           }
 
           msa.sendMessage({
-            customType: "status-update",
             content,
-            display: true,
+            customType: "status-update",
             details: { level, timestamp: Effect.runSync(Clock.currentTimeMillis) },
+            display: true,
           });
         }),
       ),

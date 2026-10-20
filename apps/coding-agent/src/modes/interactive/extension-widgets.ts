@@ -1,22 +1,25 @@
-import { type Component, Container, Spacer, Text, type TUI } from "@msa/tui";
+import tuiModule from "@msa/tui";
+import type tuiTypes from "@msa/tui/index.types";
 
 import type { ExtensionWidgetOptions } from "../../core/extensions/index.ts";
 import { ThemedText } from "./components/themed-text.ts";
 import { type Theme, theme } from "./theme/theme.ts";
 
-type Widget = Component & { dispose?(): void };
-export type WidgetContent = string[] | ((tui: TUI, thm: Theme) => Widget);
+const { Container, Spacer, Text } = tuiModule;
+
+type Widget = tuiTypes.Component & { dispose?(): void };
+export type WidgetContent = string[] | ((tui: tuiTypes.TUI, thm: Theme) => Widget);
 
 const MAX_WIDGET_LINES = 10;
 
 export class ExtensionWidgets {
   readonly above = new Container();
   readonly below = new Container();
-  private readonly ui: TUI;
+  private readonly ui: tuiTypes.TUI;
   private readonly aboveWidgets = new Map<string, Widget>();
   private readonly belowWidgets = new Map<string, Widget>();
 
-  constructor(ui: TUI) {
+  constructor(ui: tuiTypes.TUI) {
     this.ui = ui;
     this.fill();
   }
@@ -56,7 +59,7 @@ export class ExtensionWidgets {
   }
 }
 
-function createTextWidget(lines: readonly string[]): Container {
+function createTextWidget(lines: readonly string[]): tuiTypes.Container {
   const container = new Container();
   for (const line of lines.slice(0, MAX_WIDGET_LINES)) {
     container.addChild(new Text(line, 1, 0));

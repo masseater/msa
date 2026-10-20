@@ -4,7 +4,7 @@ import { Effect, Exit, Layer, ManagedRuntime, Schedule, Scope, Stream } from "ef
 import { HttpClient, type HttpClientResponse } from "effect/http";
 import { ChildProcess } from "effect/process";
 
-import type { Model } from "../src/types.ts";
+import type typesModule from "../src/types.types.ts";
 import env from "./env.ts";
 
 const { hasEnv } = env;
@@ -13,7 +13,7 @@ const runtime = ManagedRuntime.make(Layer.mergeAll(NodeServices.layer, NodeHttpC
 
 const OLLAMA_MODEL = "gpt-oss:20b";
 
-const ollamaModel: Model<"openai-completions"> = {
+const ollamaModel: typesModule.Model<"openai-completions"> = {
   api: "openai-completions",
   baseUrl: "http://localhost:11434/v1",
   contextWindow: 128000,
@@ -30,7 +30,7 @@ const localModel = (
   provider: string,
   baseUrl: string,
   contextWindow: number,
-): Model<"openai-completions"> => ({
+): typesModule.Model<"openai-completions"> => ({
   api: "openai-completions",
   baseUrl,
   contextWindow,

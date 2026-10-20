@@ -1,4 +1,4 @@
-import type { KeyId } from "@msa/tui";
+import type tuiTypes from "@msa/tui/index.types";
 
 import type { KeybindingsConfig } from "../keybindings.ts";
 
@@ -24,7 +24,7 @@ const RESERVED_KEYBINDINGS_FOR_EXTENSION_CONFLICTS = [
 ] as const;
 
 export type BuiltInKeyBindings = Partial<
-  Record<KeyId, { keybinding: string; restrictOverride: boolean }>
+  Record<tuiTypes.KeyId, { keybinding: string; restrictOverride: boolean }>
 >;
 
 export const buildBuiltinKeybindings = (
@@ -38,7 +38,7 @@ export const buildBuiltinKeybindings = (
       RESERVED_KEYBINDINGS_FOR_EXTENSION_CONFLICTS as readonly string[]
     ).includes(keybinding);
     for (const key of keyList) {
-      const normalizedKey = key.toLowerCase() as KeyId;
+      const normalizedKey = key.toLowerCase() as tuiTypes.KeyId;
       const existing = builtinKeybindings[normalizedKey];
       if (existing?.restrictOverride === true && !restrictOverride) continue;
       builtinKeybindings[normalizedKey] = {

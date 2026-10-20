@@ -1,6 +1,8 @@
 import { describe, expect, it } from "vite-plus/test";
 
-import { parseStreamingJson, parseToolCallArguments } from "../src/utils/json-parse.ts";
+import jsonParse from "../src/utils/json-parse.ts";
+
+const { parseStreamingJson, parseToolCallArguments } = jsonParse;
 
 describe("parseStreamingJson", () => {
   it("keeps invalid \\u escapes as literal text without dropping fields", () => {

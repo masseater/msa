@@ -1,4 +1,4 @@
-import { getModel } from "@msa/ai/compat";
+import compat from "@msa/ai/compat";
 import testing from "@msa/testing";
 import { Effect } from "effect";
 import { Type } from "typebox";
@@ -8,6 +8,8 @@ import { type InlineExtension, createAgentSession } from "../src/core/sdk.ts";
 import { SessionManager } from "../src/core/session-manager.ts";
 import { SettingsManager } from "../src/core/settings-manager.ts";
 import type defaultToolsSettingSupportTypes from "./default-tools-setting-support.types.ts";
+
+const { getModel } = compat;
 
 const { awaited, joinPath, makeDirectory, makeTempDir, removePath, runTest, writeJsonFile } =
   testing;

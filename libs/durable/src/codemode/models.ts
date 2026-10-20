@@ -1,4 +1,4 @@
-import type { AnyModel, ModelType, ModelTypeMap, Models, Usage } from "@msa/ai";
+import type aiTypes from "@msa/ai/index.types";
 import type chordTypes from "@msa/chord/index.types";
 import { Effect } from "effect";
 import { Type } from "typebox";
@@ -27,7 +27,11 @@ const CATALOG_GLOBALS = [
 
 const MAX_CONCURRENT_MODEL_CALLS = 4;
 
-const MODEL_TYPES: ReadonlySet<string> = new Set<ModelType>(["chat", "image", "classifier"]);
+const MODEL_TYPES: ReadonlySet<string> = new Set<aiTypes.ModelType>([
+  "chat",
+  "image",
+  "classifier",
+]);
 
 const MODELS_DESCRIPTION = [
   "`models` (all functions return promises):",
@@ -41,8 +45,8 @@ function withArticle(word: string): string {
   return `${/^[aeiou]/u.test(word) ? "an" : "a"} ${word}`;
 }
 
-function toModelType(value: unknown): ModelType {
-  if (typeof value === "string" && MODEL_TYPES.has(value)) return value as ModelType;
+function toModelType(value: unknown): aiTypes.ModelType {
+  if (typeof value === "string" && MODEL_TYPES.has(value)) return value as aiTypes.ModelType;
   throw new Error(
     `Unknown model type ${JSON.stringify(value)}. Use "chat", "image", or "classifier".`,
   );
@@ -54,7 +58,7 @@ function toProvider(value: unknown): string | undefined {
   return value;
 }
 
-function toModelInfo(model: AnyModel): chordTypes.JsonValue {
+function toModelInfo(model: aiTypes.AnyModel): chordTypes.JsonValue {
   const info: Record<string, unknown> = { ...model };
   delete info["headers"];
   return JSON.parse(JSON.stringify(info)) as chordTypes.JsonValue;
@@ -63,7 +67,7 @@ function toModelInfo(model: AnyModel): chordTypes.JsonValue {
 const catalogCall = Effect.fnUntraced(function* (
   name: string,
   args: unknown,
-  models: Models,
+  models: aiTypes.Models,
   context: chordTypes.Context,
 ) {
   const list = Array.isArray(args) ? args : [];
@@ -93,8 +97,8 @@ function resolveModel<TType extends "classifier" | "image">(
   name: string,
   type: TType,
   model: unknown,
-  models: Models,
-): ModelTypeMap[TType] {
+  models: aiTypes.Models,
+): aiTypes.ModelTypeMap[TType] {
   const listHint = `List the ${type} models you can use with models.getAvailableOfType("${type}").`;
   if (
     !isRecord(model) ||
@@ -114,7 +118,8 @@ function resolveModel<TType extends "classifier" | "image">(
   if (resolved !== undefined) return resolved;
   const actualType = [...MODEL_TYPES].find(
     (other) =>
-      other !== type && models.getModelOfType(other as ModelType, provider, id) !== undefined,
+      other !== type &&
+      models.getModelOfType(other as aiTypes.ModelType, provider, id) !== undefined,
   );
   throw new Error(
     actualType === undefined
@@ -127,7 +132,7 @@ const ModelCallParameters = Type.Object({ context: Type.Unknown(), model: Type.U
 
 function modelResult(
   label: string,
-  result: { stopReason: string; errorMessage?: string; usage?: Usage },
+  result: { stopReason: string; errorMessage?: string; usage?: aiTypes.Usage },
   value: unknown,
 ) {
   const ok = result.stopReason === "stop";

@@ -1,10 +1,5 @@
-import type {
-  ClassifierContext,
-  ClassifierModel,
-  ClassifierQuestion,
-  ImageContent,
-} from "../src/types.ts";
-const model: ClassifierModel<"openai-decisions"> = {
+import type typesModule from "../src/types.types.ts";
+const model: typesModule.ClassifierModel<"openai-decisions"> = {
   api: "openai-decisions",
   baseUrl: "https://api.openai.com/v1",
   contextWindow: 922000,
@@ -22,8 +17,8 @@ const model: ClassifierModel<"openai-decisions"> = {
   type: "classifier",
 };
 
-const context: ClassifierContext = {
-  questions: Object.fromEntries<ClassifierQuestion>([
+const context: typesModule.ClassifierContext = {
+  questions: Object.fromEntries<typesModule.ClassifierQuestion>([
     [
       "category",
       {
@@ -88,7 +83,7 @@ const wireUsage = {
   total_tokens: 164,
 };
 
-const image: ImageContent = { data: "aW1hZ2U=", mimeType: "image/png", type: "image" };
+const image: typesModule.ImageContent = { data: "aW1hZ2U=", mimeType: "image/png", type: "image" };
 
 const openaiDecisionsSupport = {
   context,

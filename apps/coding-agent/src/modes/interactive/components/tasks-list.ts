@@ -1,9 +1,11 @@
-import { truncateToWidth, visibleWidth } from "@msa/tui";
+import tui from "@msa/tui";
 
 import type { Orchestrator } from "../../../core/orchestrator/orchestrator.ts";
 import type { TaskSnapshot } from "../../../core/orchestrator/types.ts";
 import { theme } from "../theme/theme.ts";
 import { type TasksViewState, viewHelpers } from "./tasks-view-helpers.ts";
+
+const { truncateToWidth, visibleWidth } = tui;
 
 const { finished, glyph, roundTasks } = viewHelpers;
 
@@ -59,9 +61,9 @@ function taskRow(task: TaskSnapshot, options: TaskRowOptions): string {
 }
 
 export const taskList = {
-  shownTasks,
-  selectedTask,
   moveSelection,
   moveSelectionBy,
+  selectedTask,
+  shownTasks,
   taskRow,
 };

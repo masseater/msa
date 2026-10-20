@@ -102,22 +102,29 @@ ${PAGE_STYLE}
 </html>`;
 }
 
-export function oauthSuccessHtml(message: string): string {
+function oauthSuccessHtml(message: string): string {
   return renderPage({
-    title: "Authentication successful",
     heading: "Authentication successful",
     message,
+    title: "Authentication successful",
   });
 }
 
-export const oauthErrorHtml: {
+const oauthErrorHtml: {
   (details: string | undefined): (message: string) => string;
   (message: string, details: string | undefined): string;
 } = Function.dual(2, function (message: string, details: string | undefined): string {
   return renderPage({
-    title: "Authentication failed",
+    details,
     heading: "Authentication failed",
     message,
-    details,
+    title: "Authentication failed",
   });
 });
+
+const oauthPage = {
+  oauthErrorHtml,
+  oauthSuccessHtml,
+};
+
+export default oauthPage;

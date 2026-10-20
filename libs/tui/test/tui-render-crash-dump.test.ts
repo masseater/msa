@@ -3,8 +3,10 @@ import { describe, it } from "node:test";
 
 import { Effect } from "effect";
 
-import { pathOperations } from "../src/platform.ts";
+import platform from "../src/platform.ts";
 import testPlatform from "./test-platform.ts";
+
+const { pathOperations } = platform;
 
 const { makeTempDirectory, readFileString, removeRecursive, runCommand } = testPlatform;
 

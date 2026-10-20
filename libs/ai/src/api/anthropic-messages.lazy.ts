@@ -1,5 +1,15 @@
-import type { ProviderStreams } from "../types.ts";
-import { lazyApi } from "./lazy.ts";
+import type typesModule from "../types.types.ts";
+import lazy from "./lazy.ts";
 
-export const anthropicMessagesApi = (): ProviderStreams =>
-  lazyApi(() => import("./anthropic-messages.ts"), { countTokens: true });
+const { lazyApi } = lazy;
+
+const anthropicMessagesApi = (): typesModule.ProviderStreams =>
+  lazyApi(() => import("./anthropic-messages.ts").then((module) => module.default), {
+    countTokens: true,
+  });
+
+const anthropicMessagesLazy = {
+  anthropicMessagesApi,
+};
+
+export default anthropicMessagesLazy;

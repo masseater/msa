@@ -1,13 +1,16 @@
 import { beforeAll, describe, expect, test, vi } from "vite-plus/test";
 
-import { Container } from "../../../libs/tui/src/tui-component.ts";
+import tuiComponent from "../../../libs/tui/src/tui-component.ts";
+import type tuiComponentTypes from "../../../libs/tui/src/tui-component.types.ts";
 import { InteractiveMode } from "../src/modes/interactive/interactive-mode.ts";
 import { initTheme } from "../src/modes/interactive/theme/theme.ts";
 import interactiveModeStatusSupport from "./interactive-mode-status-support.ts";
 
+const { Container } = tuiComponent;
+
 const { normalizeRenderedOutput } = interactiveModeStatusSupport;
 
-function renderLastLine(container: Container, width = 120): string {
+function renderLastLine(container: tuiComponentTypes.Container, width = 120): string {
   const last = container.children[container.children.length - 1];
   if (!(last !== undefined)) return "";
   return last.render(width).join("\n");

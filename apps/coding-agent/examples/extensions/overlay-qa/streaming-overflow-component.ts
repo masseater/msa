@@ -1,11 +1,13 @@
 import { NodeServices } from "@effect/platform-node";
 import type { Theme } from "@msa/coding-agent";
-import type { TUI } from "@msa/tui";
-import { matchesKey, truncateToWidth, visibleWidth } from "@msa/tui";
+import tuiModule from "@msa/tui";
+import type tuiTypes from "@msa/tui/index.types";
 import { Effect, ManagedRuntime, Stream } from "effect";
 import { ChildProcess, ChildProcessSpawner } from "effect/process";
 
 import { BaseOverlay } from "./base-overlay.ts";
+
+const { matchesKey, truncateToWidth, visibleWidth } = tuiModule;
 
 const runtime = ManagedRuntime.make(NodeServices.layer);
 
@@ -34,7 +36,7 @@ const STREAM_SCRIPT = `
 			`;
 
 export class StreamingOverflowComponent extends BaseOverlay {
-  private tui: TUI;
+  private tui: tuiTypes.TUI;
   private lines: string[] = [];
   private fiber: { interruptUnsafe: () => void } | undefined;
   private scrollOffset = 0;
@@ -43,7 +45,7 @@ export class StreamingOverflowComponent extends BaseOverlay {
   private disposed = false;
   private done: () => void;
 
-  constructor(tui: TUI, theme: Theme, done: () => void) {
+  constructor(tui: tuiTypes.TUI, theme: Theme, done: () => void) {
     super(theme);
     this.tui = tui;
     this.done = done;

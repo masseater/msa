@@ -1,9 +1,9 @@
-import type { AgentMessage, StreamFn, ThinkingLevel } from "@msa/agent-core";
-import type { RetryCallbacks, RetryPolicy } from "@msa/ai";
-import type { Model, Usage } from "@msa/ai/compat";
+import type agentTypes from "@msa/agent-core/index.types";
+import type compatTypes from "@msa/ai/compat.types";
+import type aiTypes from "@msa/ai/index.types";
 import { Effect, Function as Fn } from "effect";
 
-import { platformRuntime, ToolFailure, unwrapForeign } from "../platform/index.ts";
+import { ToolFailure, platformRuntime, unwrapForeign } from "../platform/index.ts";
 import { combineUsage } from "../usage-totals.ts";
 import { generateTurnPrefixSummary, summaryWithUsage } from "./compaction-summary.ts";
 import type {
@@ -14,23 +14,23 @@ import type {
 import { computeFileLists, formatFileOperations } from "./utils.ts";
 
 type CompactRest = [
-  model: Model<any>,
+  model: compatTypes.Model<any>,
   apiKey: string | undefined,
   headers?: Record<string, string>,
   customInstructions?: string,
   signal?: AbortSignal,
-  thinkingLevel?: ThinkingLevel,
-  streamFn?: StreamFn,
+  thinkingLevel?: agentTypes.ThinkingLevel,
+  streamFn?: agentTypes.StreamFn,
   env?: Record<string, string>,
-  retry?: RetryPolicy,
-  callbacks?: RetryCallbacks,
+  retry?: aiTypes.RetryPolicy,
+  callbacks?: aiTypes.RetryCallbacks,
   sessionId?: string,
 ];
 
 interface SplitTurnInput {
   preparation: CompactionPreparation;
   rest: CompactRest;
-  summarize: (messages: AgentMessage[]) => ReturnType<typeof summaryWithUsage>;
+  summarize: (messages: agentTypes.AgentMessage[]) => ReturnType<typeof summaryWithUsage>;
 }
 
 const summarizeSplitTurn = ({ preparation, rest, summarize }: SplitTurnInput) =>
@@ -50,25 +50,25 @@ const summarizeSplitTurn = ({ preparation, rest, summarize }: SplitTurnInput) =>
     ] = rest;
     const { messagesToSummarize, turnPrefixMessages, previousSummary, settings } = preparation;
     let historyText = previousSummary ?? "No prior history.";
-    let historyUsage: Usage | undefined;
+    let historyUsage: compatTypes.Usage | undefined;
     if (messagesToSummarize.length > 0) {
       const historyResult = yield* summarize(messagesToSummarize);
       historyText = historyResult.text;
       historyUsage = historyResult.usage;
     }
     const turnPrefixResult = yield* generateTurnPrefixSummary({
+      apiKey,
+      callbacks,
+      env,
+      headers,
       messages: turnPrefixMessages,
       model,
       reserveTokens: settings.reserveTokens,
-      apiKey,
-      headers,
-      env,
-      signal,
-      thinkingLevel,
-      streamFn,
       retry,
-      callbacks,
       sessionId,
+      signal,
+      streamFn,
+      thinkingLevel,
     });
     return {
       text: `${historyText}\n\n---\n\n**Turn Context (split turn):**\n\n${turnPrefixResult.text}`,
@@ -93,7 +93,7 @@ const summarizerFor = (preparation: CompactionPreparation, rest: CompactRest) =>
     callbacks,
     sessionId,
   ] = rest;
-  return (messages: AgentMessage[]) =>
+  return (messages: agentTypes.AgentMessage[]) =>
     summaryWithUsage(
       messages,
       model,
@@ -129,11 +129,11 @@ const compactEffect = Effect.fn("compact")(function* (
     });
   }
   const result: CompactionResult = {
-    summary: text + formatFileOperations(readFiles, modifiedFiles),
+    details: { readFiles, modifiedFiles } as CompactionDetails,
     firstKeptEntryId: preparation.firstKeptEntryId,
+    summary: text + formatFileOperations(readFiles, modifiedFiles),
     tokensBefore: preparation.tokensBefore,
     usage,
-    details: { readFiles, modifiedFiles } as CompactionDetails,
   };
   return result;
 });

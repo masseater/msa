@@ -1,7 +1,9 @@
-import { createAssistantMessageEventStream } from "@msa/ai/compat";
-import type { AssistantMessage, JsonObject, Model } from "@msa/ai/compat";
+import compat from "@msa/ai/compat";
+import type compatTypes from "@msa/ai/compat.types";
 
 import { nowMs } from "../../core/platform.ts";
+
+const { createAssistantMessageEventStream } = compat;
 
 export interface Usage {
   input: number;
@@ -13,25 +15,25 @@ export interface Usage {
 
 export type ReplyBuilder = ReturnType<typeof createReply>;
 
-export function createReply(model: Model<string>) {
+export function createReply(model: compatTypes.Model<string>) {
   const stream = createAssistantMessageEventStream();
-  const message: AssistantMessage = {
-    role: "assistant",
-    content: [],
+  const message: compatTypes.AssistantMessage = {
     api: model.api,
-    provider: model.provider,
+    content: [],
     model: model.id,
-    usage: {
-      input: 0,
-      output: 0,
-      cacheRead: 0,
-      cacheWrite: 0,
-      totalTokens: 0,
-      cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0, total: 0 },
-    },
+    provider: model.provider,
+    role: "assistant",
     stopReason: "pending",
     timestamp: nowMs(),
-  } as AssistantMessage;
+    usage: {
+      cacheRead: 0,
+      cacheWrite: 0,
+      cost: { cacheRead: 0, cacheWrite: 0, input: 0, output: 0, total: 0 },
+      input: 0,
+      output: 0,
+      totalTokens: 0,
+    },
+  } as compatTypes.AssistantMessage;
 
   let started = false;
   let ended = false;
@@ -40,7 +42,7 @@ export function createReply(model: Model<string>) {
   const start = () => {
     if (started) return;
     started = true;
-    stream.push({ type: "start", partial: message });
+    stream.push({ partial: message, type: "start" });
   };
 
   const block = (key: string, kind: "text" | "thinking") => {
@@ -51,11 +53,11 @@ export function createReply(model: Model<string>) {
       entry = { index: message.content.length, kind };
       message.content.push(
         (kind === "text"
-          ? { type: "text", text: "" }
-          : { type: "thinking", thinking: "" }) as AssistantMessage["content"][number],
+          ? { text: "", type: "text" }
+          : { thinking: "", type: "thinking" }) as compatTypes.AssistantMessage["content"][number],
       );
       open.set(mapKey, entry);
-      stream.push({ type: `${kind}_start`, contentIndex: entry.index, partial: message });
+      stream.push({ contentIndex: entry.index, partial: message, type: `${kind}_start` });
     }
     return entry.index;
   };
@@ -64,10 +66,10 @@ export function createReply(model: Model<string>) {
     for (const { index, kind } of open.values()) {
       const content = message.content[index] as { text?: string; thinking?: string };
       stream.push({
-        type: `${kind}_end`,
-        contentIndex: index,
         content: (kind === "text" ? content.text : content.thinking) ?? "",
+        contentIndex: index,
         partial: message,
+        type: `${kind}_end`,
       });
     }
     open.clear();
@@ -77,7 +79,7 @@ export function createReply(model: Model<string>) {
     if (delta === "") return;
     const index = block(key, "text");
     (message.content[index] as { text: string }).text += delta;
-    stream.push({ type: "text_delta", contentIndex: index, delta, partial: message });
+    stream.push({ contentIndex: index, delta, partial: message, type: "text_delta" });
   };
 
   const finalizeUsage = () => {
@@ -86,51 +88,6 @@ export function createReply(model: Model<string>) {
   };
 
   return {
-    stream,
-    message,
-    get hasContent() {
-      return message.content.length > 0;
-    },
-
-    setText(key: string, full: string) {
-      const current = open.get(`text:${key}`);
-      const have =
-        current === undefined ? "" : (message.content[current.index] as { text: string }).text;
-      if (full.length > have.length && full.startsWith(have))
-        appendText(key, full.slice(have.length));
-    },
-    appendText,
-    appendThinking(key: string, delta: string) {
-      if (delta === "") return;
-      const index = block(key, "thinking");
-      (message.content[index] as { thinking: string }).thinking += delta;
-      stream.push({ type: "thinking_delta", contentIndex: index, delta, partial: message });
-    },
-    toolCall(id: string, name: string, args: JsonObject) {
-      closeBlocks();
-      start();
-      const index = message.content.length;
-      const call = {
-        type: "toolCall",
-        id,
-        name,
-        arguments: args,
-      } as AssistantMessage["content"][number];
-      message.content.push(call);
-      stream.push({ type: "toolcall_start", contentIndex: index, partial: message });
-      stream.push({
-        type: "toolcall_delta",
-        contentIndex: index,
-        delta: JSON.stringify(args),
-        partial: message,
-      });
-      stream.push({
-        type: "toolcall_end",
-        contentIndex: index,
-        toolCall: call as never,
-        partial: message,
-      });
-    },
     addUsage(usage: Partial<Usage>) {
       message.usage.input += usage.input ?? 0;
       message.usage.output += usage.output ?? 0;
@@ -140,8 +97,12 @@ export function createReply(model: Model<string>) {
         message.usage.reasoning = (message.usage.reasoning ?? 0) + usage.reasoning;
       }
     },
-    replaceUsage(usage: Usage) {
-      Object.assign(message.usage, usage);
+    appendText,
+    appendThinking(key: string, delta: string) {
+      if (delta === "") return;
+      const index = block(key, "thinking");
+      (message.content[index] as { thinking: string }).thinking += delta;
+      stream.push({ type: "thinking_delta", contentIndex: index, delta, partial: message });
     },
     done(reason: "stop" | "toolUse" | "length") {
       if (ended) return;
@@ -164,6 +125,46 @@ export function createReply(model: Model<string>) {
       message.errorMessage = errorMessage;
       stream.push({ type: "error", reason, error: message });
       stream.end();
+    },
+    get hasContent() {
+      return message.content.length > 0;
+    },
+    message,
+    replaceUsage(usage: Usage) {
+      Object.assign(message.usage, usage);
+    },
+    setText(key: string, full: string) {
+      const current = open.get(`text:${key}`);
+      const have =
+        current === undefined ? "" : (message.content[current.index] as { text: string }).text;
+      if (full.length > have.length && full.startsWith(have))
+        appendText(key, full.slice(have.length));
+    },
+    stream,
+    toolCall(id: string, name: string, args: compatTypes.JsonObject) {
+      closeBlocks();
+      start();
+      const index = message.content.length;
+      const call = {
+        type: "toolCall",
+        id,
+        name,
+        arguments: args,
+      } as compatTypes.AssistantMessage["content"][number];
+      message.content.push(call);
+      stream.push({ type: "toolcall_start", contentIndex: index, partial: message });
+      stream.push({
+        type: "toolcall_delta",
+        contentIndex: index,
+        delta: JSON.stringify(args),
+        partial: message,
+      });
+      stream.push({
+        type: "toolcall_end",
+        contentIndex: index,
+        toolCall: call as never,
+        partial: message,
+      });
     },
   };
 }

@@ -1,4 +1,4 @@
-import type { CacheRetention, Message, Models, Transport, UserMessage } from "@msa/ai";
+import type aiTypes from "@msa/ai/index.types";
 import type chordTypes from "@msa/chord/index.types";
 
 import type envTypes from "../env/index.types.ts";
@@ -14,7 +14,7 @@ declare namespace typesCoreTypes {
     readonly provider: string;
     readonly modelId: string;
   };
-  type UserInput = UserMessage["content"];
+  type UserInput = aiTypes.UserMessage["content"];
   type InputEntry = { readonly kind: string; readonly data?: chordTypes.JsonValue };
   type SubmissionDraft = {
     readonly requestId?: string;
@@ -84,13 +84,13 @@ declare namespace typesCoreTypes {
     readonly init?: ConversationInit;
   };
   type ConversationStreamOptions = {
-    transport?: Transport;
+    transport?: aiTypes.Transport;
     timeoutMs?: number;
     maxRetries?: number;
     maxRetryDelayMs?: number;
     headers?: Record<string, string>;
     metadata?: typesModuleSourceTypes.JsonObject;
-    cacheRetention?: CacheRetention;
+    cacheRetention?: aiTypes.CacheRetention;
     deferred?: boolean | { window?: "15m" | "1h" | "24h" };
   };
   type ConversationRetryPolicy = {
@@ -146,7 +146,7 @@ declare namespace typesCoreTypes {
   type HarnessOptions<
     Tool extends typesToolsTypes.ToolRegistration = typesToolsTypes.ToolRegistration,
   > = {
-    readonly models: Models;
+    readonly models: aiTypes.Models;
     readonly registry: typesRegistryTypes.RegistryReader<Tool>;
     readonly settings?: HarnessSettings;
     readonly env?: (
@@ -186,8 +186,8 @@ declare namespace typesCoreTypes {
   type ContextView = {
     readonly head: typesModuleSourceTypes.EntryRecord | undefined;
     readonly entries: readonly typesModuleSourceTypes.EntryRecord[];
-    readonly contributions: readonly (readonly Message[])[];
-    readonly messages: readonly Message[];
+    readonly contributions: readonly (readonly aiTypes.Message[])[];
+    readonly messages: readonly aiTypes.Message[];
   };
   interface Conversation {
     readonly id: typesModuleSourceTypes.ConversationId;
