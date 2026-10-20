@@ -1,7 +1,6 @@
 import * as NodeRuntime from "@effect/platform-node/NodeRuntime";
 import { createModels } from "@msa/ai/models";
 import { fauxAssistantMessage, fauxProvider, fauxText, fauxToolCall } from "@msa/ai/providers/faux";
-import { BACKGROUND_CONTEXT as context } from "@msa/chord/context";
 import { Console, Effect, Fiber } from "effect";
 
 import { Harness } from "../src/harness/index.ts";
@@ -11,17 +10,16 @@ import {
   ToolResultEntry,
   type ToolTaskInput,
 } from "../src/index.ts";
-import {
-  directorySize,
-  heapAfterGc,
-  meterCommits,
-  noWrites,
-  openBenchStorage,
-  requireGc,
-  type Written,
-} from "./bench-support.ts";
-import { registryFor, type Scenario } from "./nested-images-bench-tools.ts";
-import { awaited, sampleEvery, toJsonText, makeTempDir, removeDir } from "./support.ts";
+import benchSupport from "./bench-support.ts";
+import registryFor from "./nested-images-bench-tools.ts";
+import type nestedImagesBenchToolsTypes from "./nested-images-bench-tools.types.ts";
+import support from "./support.ts";
+
+const { directorySize, heapAfterGc, meterCommits, noWrites, openBenchStorage, requireGc } =
+  benchSupport;
+const { awaited, context, makeTempDir, removeDir, sampleEvery, toJsonText } = support;
+
+type Written = Record<StorageWrite["type"], number>;
 
 type Result = {
   commits: number;
@@ -51,35 +49,39 @@ type Meter = {
 
 function newMeter(): Meter {
   const meter: Meter = {
-    peakHeap: 0,
-    storedLive: 0,
     commits: 0,
-    written: noWrites(),
+    peakHeap: 0,
     sample: () => {
       meter.peakHeap = Math.max(meter.peakHeap, process.memoryUsage().heapUsed);
     },
+    storedLive: 0,
+    written: noWrites(),
   };
   return meter;
 }
 
-function scenarioModels(scenario: Scenario, directory: string, meter: Meter) {
+function scenarioModels(
+  scenario: nestedImagesBenchToolsTypes.Scenario,
+  directory: string,
+  meter: Meter,
+) {
   const faux = fauxProvider();
   const models = createModels();
   models.setProvider(faux.provider);
   const registry = registryFor(scenario, {
-    sample: meter.sample,
     beforeReturn: () =>
       Effect.runPromise(
         Effect.gen(function* () {
           meter.storedLive = yield* directorySize(directory);
         }),
       ),
+    sample: meter.sample,
   });
   return { faux, models, registry };
 }
 
 const openMetered = Effect.fn("openMetered")(function* (
-  scenario: Scenario,
+  scenario: nestedImagesBenchToolsTypes.Scenario,
   directory: string,
   meter: Meter,
   { faux, models, registry }: ReturnType<typeof scenarioModels>,
@@ -89,7 +91,7 @@ const openMetered = Effect.fn("openMetered")(function* (
   const harness = yield* awaited(Harness.open(storage, { models, registry }, context));
   const root = yield* awaited(
     harness.root(context, {
-      agent: { model: { provider: "faux", modelId: "faux-1" } },
+      agent: { model: { modelId: "faux-1", provider: "faux" } },
     }),
   );
   faux.setResponses([
@@ -105,7 +107,7 @@ const runScript = Effect.fn("runScript")(function* (
   root: Effect.Success<ReturnType<typeof openMetered>>["root"],
 ) {
   const settled = yield* awaited(
-    (yield* awaited(root.submit({ type: "input", content: "run" }, context))).wait(context),
+    (yield* awaited(root.submit({ content: "run", type: "input" }, context))).wait(context),
   );
   if (settled.status !== "done") throw new Error(`run: ${settled.status}`);
   const latest = (yield* awaited(root.entries({}, 10, undefined, context))).items;
@@ -122,7 +124,7 @@ function writtenSince(written: Written, before: Written): Written {
 }
 
 const reopenAndScan = Effect.fn("reopenAndScan")(function* (
-  scenario: Scenario,
+  scenario: nestedImagesBenchToolsTypes.Scenario,
   directory: string,
   { models, registry }: ReturnType<typeof scenarioModels>,
   baseHeap: number,
@@ -133,7 +135,7 @@ const reopenAndScan = Effect.fn("reopenAndScan")(function* (
   const reopened = yield* awaited(Harness.open(reopenedStorage, { models, registry }, context));
   const reopenedHeap = heapAfterGc() - baseHeap;
   const storedReopened = yield* directorySize(directory);
-  const tasks = { nestedTasks: 0, largestTask: 0 };
+  const tasks = { largestTask: 0, nestedTasks: 0 };
   const scan = (cursor?: Parameters<Storage["scanTasks"]>[2]): Promise<void> =>
     runPromise(
       Effect.gen(function* () {
@@ -153,7 +155,7 @@ const reopenAndScan = Effect.fn("reopenAndScan")(function* (
 });
 
 const measureScenario = Effect.fn("measureScenario")(function* (
-  scenario: Scenario,
+  scenario: nestedImagesBenchToolsTypes.Scenario,
   directory: string,
 ) {
   const meter = newMeter();
@@ -179,20 +181,22 @@ const measureScenario = Effect.fn("measureScenario")(function* (
   const reopened = yield* reopenAndScan(scenario, directory, setup, baseHeap);
   const result: Result = {
     commits: meter.commits - before.commits,
+    idleHeap,
     ms,
-    written: delta,
-    storedLive: meter.storedLive,
-    storedRun,
-    storedClosed,
     peakHeap: meter.peakHeap - baseHeap,
     settledHeap,
-    idleHeap,
+    storedClosed,
+    storedLive: meter.storedLive,
+    storedRun,
+    written: delta,
     ...reopened,
   };
   return result;
 });
 
-const runScenario = Effect.fn("runScenario")(function* (scenario: Scenario) {
+const runScenario = Effect.fn("runScenario")(function* (
+  scenario: nestedImagesBenchToolsTypes.Scenario,
+) {
   const directory = yield* makeTempDir("msa-durable-images-bench-");
   return yield* Effect.suspend(() => measureScenario(scenario, directory)).pipe(
     Effect.ensuring(Effect.asVoid(Effect.suspend(() => removeDir(directory)))),
@@ -219,7 +223,7 @@ const main = Effect.fn("main")(function* () {
   for (const count of counts) {
     for (const backend of ["sqlite", "jsonl"] as const) {
       for (const variant of ["inline", "reference"] as const) {
-        const result = yield* runScenario({ backend, variant, count, bytes });
+        const result = yield* runScenario({ backend, bytes, count, variant });
         const all = Object.values(result.written).reduce((sum, value) => sum + value, 0);
         const written = result.written;
         yield* Console.log(

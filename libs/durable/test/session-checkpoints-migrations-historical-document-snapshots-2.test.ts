@@ -2,24 +2,25 @@ import { defineDoc } from "@msa/durable";
 import { Effect } from "effect";
 import { describe, expect, it } from "vite-plus/test";
 
-import { awaited } from "./effect-support.ts";
-import {
-  V1Doc,
-  V2Doc,
-} from "./session-checkpoints-migrations-historical-document-snapshots-cases.ts";
-import { documentWrites } from "./session-checkpoints-migrations-support.ts";
-import { context, createConversation, openTestSession } from "./session-support.ts";
+import effectSupport from "./effect-support.ts";
+import sessionCheckpointsMigrationsHistoricalDocumentSnapshotsCases from "./session-checkpoints-migrations-historical-document-snapshots-cases.ts";
+import documentWrites from "./session-checkpoints-migrations-support.ts";
+import sessionSupport from "./session-support.ts";
+
+const { awaited } = effectSupport;
+const { V1Doc, V2Doc } = sessionCheckpointsMigrationsHistoricalDocumentSnapshotsCases;
+const { context, createConversation, openTestSession } = sessionSupport;
 
 const selectsIncarnationAliveStep1 = Effect.gen(function* () {
   const runPromise = Effect.runPromiseWith(yield* Effect.context<never>());
 
   const Doc = defineDoc<{ value: string }>({
-    kind: "history.incarnation",
-    version: 1,
-    scope: "conversation",
-    history: "rewindable",
     fork: "asOf",
+    history: "rewindable",
     initial: () => ({ value: "initial" }),
+    kind: "history.incarnation",
+    scope: "conversation",
+    version: 1,
   });
   const { session } = openTestSession();
   const conversationId = yield* awaited(createConversation(session));
@@ -39,16 +40,17 @@ const selectsIncarnationAliveStep1 = Effect.gen(function* () {
       (tx) =>
         runPromise(
           Effect.gen(function* () {
-            const createdAt = (yield* awaited(tx.appendEntry(conversationId, { kind: "create" })))
-              .id;
+            const createdAtInner = (yield* awaited(
+              tx.appendEntry(conversationId, { kind: "create" }),
+            )).id;
             (yield* awaited(tx.doc(Doc, conversationId))).value = "old";
-            return createdAt;
+            return createdAtInner;
           }),
         ),
       context,
     ),
   );
-  return { runPromise, Doc, session, conversationId, beforeCreation, createdAt };
+  return { Doc, beforeCreation, conversationId, createdAt, runPromise, session };
 });
 
 const selectsIncarnationAliveStep2 = Effect.gen(function* () {
@@ -59,10 +61,11 @@ const selectsIncarnationAliveStep2 = Effect.gen(function* () {
       (tx) =>
         runPromise(
           Effect.gen(function* () {
-            const retiredAt = (yield* awaited(tx.appendEntry(conversationId, { kind: "retire" })))
-              .id;
+            const retiredAtInner = (yield* awaited(
+              tx.appendEntry(conversationId, { kind: "retire" }),
+            )).id;
             yield* awaited(tx.retireDoc(Doc, conversationId));
-            return retiredAt;
+            return retiredAtInner;
           }),
         ),
       context,
@@ -73,11 +76,11 @@ const selectsIncarnationAliveStep2 = Effect.gen(function* () {
       (tx) =>
         runPromise(
           Effect.gen(function* () {
-            const recreatedAt = (yield* awaited(
+            const recreatedAtInner = (yield* awaited(
               tx.appendEntry(conversationId, { kind: "recreate" }),
             )).id;
             (yield* awaited(tx.doc(Doc, conversationId))).value = "new";
-            return recreatedAt;
+            return recreatedAtInner;
           }),
         ),
       context,
@@ -96,7 +99,7 @@ const selectsIncarnationAliveStep2 = Effect.gen(function* () {
   expect(yield* awaited(session.snapshotAsOf(Doc, conversationId, recreatedAt, context))).toEqual({
     value: "new",
   });
-  return { Doc, session, conversationId, recreatedAt };
+  return { Doc, conversationId, recreatedAt, session };
 });
 
 const selectsIncarnationAlive = Effect.gen(function* () {
@@ -135,8 +138,8 @@ const migratesDocumentCached = Effect.gen(function* () {
   );
   const write = documentWrites(storage.commits.at(-1)!)[0]!;
   expect(write).toMatchObject({
+    content: { kind: "base", value: { names: ["first", "second"] }, version: 2 },
     type: "document.change",
-    content: { version: 2, kind: "base", value: { names: ["first", "second"] } },
   });
   yield* awaited(expect(session.snapshot(V1Doc, context)).rejects.toThrow("newer version 2"));
 });

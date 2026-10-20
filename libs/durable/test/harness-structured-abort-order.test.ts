@@ -2,28 +2,33 @@ import { type Harness, type TaskId } from "@msa/durable";
 import { Effect } from "effect";
 import { afterEach, describe, expect, it } from "vite-plus/test";
 
-import { awaited } from "./effect-support.ts";
-import {
-  state,
-  outcomeOf,
-  open,
+import effectSupport from "./effect-support.ts";
+import harnessStructuredSupport from "./harness-structured-support.ts";
+import type harnessStructuredSupportTypes from "./harness-structured-support.types.ts";
+import platformSupport from "./platform-support.ts";
+import sessionSupport from "./session-support.ts";
+
+const { awaited } = effectSupport;
+const {
+  OWN_CONVERSATION,
+  Unregistered,
+  behaviors,
+  directories,
   gate,
   gates,
-  until,
-  start,
-  behaviors,
   log,
-  OWN_CONVERSATION,
+  open,
   openNodes,
-  type Opened,
-  Unregistered,
-  waitOn,
-  spawn,
+  outcomeOf,
   script,
-  directories,
-} from "./harness-structured-support.ts";
-import { removeDir } from "./platform-support.ts";
-import { context } from "./session-support.ts";
+  spawn,
+  start,
+  state,
+  until,
+  waitOn,
+} = harnessStructuredSupport;
+const { removeDir } = platformSupport;
+const { context } = sessionSupport;
 
 afterEach(() =>
   Effect.runPromise(
@@ -40,6 +45,17 @@ afterEach(() =>
 function chain(harness: () => Harness, name: string, child: string): { id?: TaskId } {
   const found: { id?: TaskId } = {};
   script(name, {
+    abort: (runtime, ctx) =>
+      Effect.runPromise(
+        Effect.gen(function* () {
+          log.push(
+            `${name} saw ${(yield* awaited(harness().getTask(found.id!, context)))!.state.status}`,
+          );
+          yield* awaited(
+            runtime.commit(() => ({ outcome: { status: "aborted" }, status: "terminal" }), ctx),
+          );
+        }),
+      ),
     run: (runtime, ctx) =>
       runtime.commit(
         (tx) =>
@@ -51,23 +67,12 @@ function chain(harness: () => Harness, name: string, child: string): { id?: Task
           ),
         ctx,
       ),
-    abort: (runtime, ctx) =>
-      Effect.runPromise(
-        Effect.gen(function* () {
-          log.push(
-            `${name} saw ${(yield* awaited(harness().getTask(found.id!, context)))!.state.status}`,
-          );
-          yield* awaited(
-            runtime.commit(() => ({ status: "terminal", outcome: { status: "aborted" } }), ctx),
-          );
-        }),
-      ),
   });
   return found;
 }
 
 const runsAbortHandlers = Effect.gen(function* () {
-  let opened: Opened | undefined;
+  let opened: harnessStructuredSupportTypes.Opened | undefined;
   const b = chain(() => opened!.harness, "a", "b");
   const c = chain(() => opened!.harness, "b", "c");
   opened = yield* openNodes();
@@ -129,7 +134,7 @@ const reportsAbortMarked = Effect.gen(function* () {
         Effect.gen(function* () {
           yield* awaited(gate("abort.child").promise);
           yield* awaited(
-            runtime.commit(() => ({ status: "terminal", outcome: { status: "aborted" } }), ctx),
+            runtime.commit(() => ({ outcome: { status: "aborted" }, status: "terminal" }), ctx),
           );
         }),
       ),
@@ -173,8 +178,8 @@ const faultsAbortHandler = Effect.gen(function* () {
   yield* until(() => log.includes("run:parent"));
   yield* awaited(harness.abortTask(parent, context));
   expect((yield* awaited(harness.waitForTask(parent, context))).state.outcome).toMatchObject({
-    status: "faulted",
     error: { message: expect.stringContaining("cannot wait") },
+    status: "faulted",
   });
   yield* awaited(harness.close(context));
 });
@@ -195,10 +200,10 @@ const orphansBlockedTask = Effect.gen(function* () {
       (tx) =>
         runPromise(
           Effect.gen(function* () {
-            const owner = yield* awaited(
+            const ownerInner = yield* awaited(
               tx.createTask(Unregistered, { name: "owner" }, OWN_CONVERSATION),
             );
-            return { owner, child: yield* awaited(spawn(tx, owner, "child")) };
+            return { child: yield* awaited(spawn(tx, ownerInner, "child")), owner: ownerInner };
           }),
         ),
       context,
@@ -208,8 +213,8 @@ const orphansBlockedTask = Effect.gen(function* () {
   expect(yield* awaited(harness.abortTask(owner, context))).toBe("marked");
   expect(yield* awaited(outcomeOf(harness, child))).toBe("aborted");
   expect((yield* awaited(harness.waitForTask(owner, context))).state.outcome).toEqual({
-    status: "orphaned",
     reason: "missing_task",
+    status: "orphaned",
   });
   yield* awaited(harness.close(context));
 });

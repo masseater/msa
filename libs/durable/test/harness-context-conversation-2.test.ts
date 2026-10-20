@@ -1,11 +1,16 @@
-import { defineTask, type Conversation } from "@msa/durable";
+import { type Conversation, defineTask } from "@msa/durable";
 import { Effect } from "effect";
 import { afterEach, describe, expect, it, vi } from "vite-plus/test";
 
-import { awaited } from "./effect-support.ts";
-import { countingSetup, ABORTED, DONE, probeTask } from "./harness-context-support.ts";
-import { addTask, user } from "./harness-support.ts";
-import { context } from "./session-support.ts";
+import effectSupport from "./effect-support.ts";
+import harnessContextSupport from "./harness-context-support.ts";
+import harnessSupport from "./harness-support.ts";
+import sessionSupport from "./session-support.ts";
+
+const { awaited } = effectSupport;
+const { ABORTED, DONE, countingSetup, probeTask } = harnessContextSupport;
+const { addTask, user } = harnessSupport;
+const { context } = sessionSupport;
 
 afterEach(() => {
   vi.useRealTimers();
@@ -15,9 +20,12 @@ type Read = Parameters<typeof probeTask>[0];
 
 function childReadTask(root: Conversation, read: Read) {
   return defineTask<Record<string, never>, { phase: "run" }, null>({
-    name: "test.context-child",
-    version: 1,
+    abort: (_task, runtime, taskContext) =>
+      Effect.runPromise(
+        Effect.asVoid(Effect.suspend(() => awaited(runtime.commit(() => ABORTED, taskContext)))),
+      ),
     initial: () => ({ phase: "run" }),
+    name: "test.context-child",
     phases: {
       run: (_task, runtime, taskContext) =>
         Effect.runPromise(
@@ -36,19 +44,26 @@ function childReadTask(root: Conversation, read: Read) {
           }),
         ),
     },
-    abort: (_task, runtime, taskContext) =>
-      Effect.runPromise(
-        Effect.asVoid(Effect.suspend(() => awaited(runtime.commit(() => ABORTED, taskContext)))),
-      ),
+    version: 1,
   });
 }
 
 function parentReadTask(root: Conversation, read: Read, Child: ReturnType<typeof childReadTask>) {
   return defineTask<Record<string, never>, { phase: "start" } | { phase: "after" }, null>({
-    name: "test.context-parent",
-    version: 1,
+    abort: (_task, runtime, taskContext) =>
+      Effect.runPromise(
+        Effect.asVoid(Effect.suspend(() => awaited(runtime.commit(() => ABORTED, taskContext)))),
+      ),
     initial: () => ({ phase: "start" }),
+    name: "test.context-parent",
     phases: {
+      after: (_task, runtime, taskContext) =>
+        Effect.runPromise(
+          Effect.gen(function* () {
+            yield* awaited(read("after", () => runtime.context(root.id, taskContext), taskContext));
+            yield* awaited(runtime.commit(() => DONE, taskContext));
+          }),
+        ),
       start: (_task, runtime, taskContext) =>
         Effect.runPromise(
           Effect.gen(function* () {
@@ -63,33 +78,23 @@ function parentReadTask(root: Conversation, read: Read, Child: ReturnType<typeof
                       Child,
                       {},
                       {
-                        ownership: { kind: "task", taskId: runtime.taskId },
                         conversationId: root.id,
+                        ownership: { kind: "task", taskId: runtime.taskId },
                       },
                     )
                     .then((child) => ({
-                      status: "waiting",
                       checkpoint: { phase: "after" },
                       on: [child],
                       policy: "allSettled",
+                      status: "waiting",
                     })),
                 taskContext,
               ),
             );
           }),
         ),
-      after: (_task, runtime, taskContext) =>
-        Effect.runPromise(
-          Effect.gen(function* () {
-            yield* awaited(read("after", () => runtime.context(root.id, taskContext), taskContext));
-            yield* awaited(runtime.commit(() => DONE, taskContext));
-          }),
-        ),
     },
-    abort: (_task, runtime, taskContext) =>
-      Effect.runPromise(
-        Effect.asVoid(Effect.suspend(() => awaited(runtime.commit(() => ABORTED, taskContext)))),
-      ),
+    version: 1,
   });
 }
 
@@ -113,7 +118,7 @@ const keepsConversationContext = Effect.gen(function* () {
   const Probe = probeTask(read);
   for (const task of [Child, Parent, Probe]) addTask(registry, task);
   harness.resume();
-  const options = { ownership: { kind: "conversation" }, conversationId: root.id } as const;
+  const options = { conversationId: root.id, ownership: { kind: "conversation" } } as const;
   const parent = yield* awaited(
     harness.commit((tx) => tx.createTask(Parent, {}, options), context),
   );
@@ -136,7 +141,7 @@ const keepsConversationContext = Effect.gen(function* () {
   yield* awaited(probe("idle"));
   clock += 600_000;
   yield* awaited(probe("expired"));
-  expect(rows).toEqual({ parent: 22, child: 2, after: 1, idle: 1, expired: 23 });
+  expect(rows).toEqual({ after: 1, child: 2, expired: 23, idle: 1, parent: 22 });
   yield* awaited(harness.close(context));
 });
 

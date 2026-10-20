@@ -1,20 +1,25 @@
 import { defineDoc } from "@msa/durable";
 
-export type V1 = { name: string };
+import type sessionCheckpointsMigrationsHistoricalDocumentSnapshotsCasesTypes from "./session-checkpoints-migrations-historical-document-snapshots-cases.types.ts";
 
-export type V2 = { names: string[] };
-
-export const V1Doc = defineDoc<V1>({
-  kind: "cache.versioned",
-  version: 1,
-  scope: "session",
+const V1Doc = defineDoc<sessionCheckpointsMigrationsHistoricalDocumentSnapshotsCasesTypes.V1>({
   initial: () => ({ name: "first" }),
+  kind: "cache.versioned",
+  scope: "session",
+  version: 1,
 });
 
-export const V2Doc = defineDoc<V2>({
-  kind: "cache.versioned",
-  version: 2,
-  scope: "session",
+const V2Doc = defineDoc<sessionCheckpointsMigrationsHistoricalDocumentSnapshotsCasesTypes.V2>({
   initial: () => ({ names: [] }),
+  kind: "cache.versioned",
   migrate: (value) => ({ names: [value["name"] as string] }),
+  scope: "session",
+  version: 2,
 });
+
+const sessionCheckpointsMigrationsHistoricalDocumentSnapshotsCases = {
+  V1Doc,
+  V2Doc,
+};
+
+export default sessionCheckpointsMigrationsHistoricalDocumentSnapshotsCases;

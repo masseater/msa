@@ -6,22 +6,25 @@ import {
   seedStorageWriteBenchmark,
 } from "@msa/durable/testing";
 import { Effect } from "effect";
-import { afterAll, describe, expect, test } from "vite-plus/test";
+import { type TestContext, afterAll, describe, expect, test } from "vite-plus/test";
 
 import { openNodeJsonlStorage } from "../src/storage/jsonl/node.ts";
 import { MemoryStorage } from "../src/storage/memory.ts";
 import { openNodeSqliteStorage } from "../src/storage/sqlite/node.ts";
 import type { EntryId, Storage } from "../src/types.ts";
-import { awaited } from "./effect-support.ts";
-import { copyFile, copyPath, makeTempFile, removeDirs } from "./platform-support.ts";
+import effectSupport from "./effect-support.ts";
+import platformSupport from "./platform-support.ts";
+
+const { awaited } = effectSupport;
+const { copyFile, copyPath, makeTempFile, removeDirs } = platformSupport;
 
 const STORAGE_BENCHMARK_BACKENDS = ["memory", "sqlite", "jsonl"] as const;
 type StorageBenchmarkBackend = (typeof STORAGE_BENCHMARK_BACKENDS)[number];
 type PersistentBackend = Exclude<StorageBenchmarkBackend, "memory">;
 
-const READ_OPTIONS = { time: 300, iterations: 10, warmupTime: 75, warmupIterations: 3 } as const;
-const WRITE_OPTIONS = { time: 0, iterations: 20, warmupTime: 0, warmupIterations: 5 } as const;
-const REOPEN_OPTIONS = { time: 0, iterations: 20, warmupTime: 0, warmupIterations: 3 } as const;
+const READ_OPTIONS = { iterations: 10, time: 300, warmupIterations: 3, warmupTime: 75 } as const;
+const WRITE_OPTIONS = { iterations: 20, time: 0, warmupIterations: 5, warmupTime: 0 } as const;
+const REOPEN_OPTIONS = { iterations: 20, time: 0, warmupIterations: 3, warmupTime: 0 } as const;
 
 type Fixture = {
   readonly backend: StorageBenchmarkBackend;
@@ -107,7 +110,7 @@ const seedReads = Effect.gen(function* () {
     readFixtures,
     (fixture) =>
       awaited(seedStorageBenchmark(fixture.storage)).pipe(
-        Effect.map((dataset) => ({ fixture, dataset })),
+        Effect.map((dataset) => ({ dataset, fixture })),
       ),
     { concurrency: "unbounded" },
   );
@@ -155,8 +158,8 @@ const seedReopenFixture = Effect.fn("seedReopenFixture")(function* (backend: Per
   );
   const fixture: ReopenFixture = {
     backend,
-    path: seedPath,
     firstEntryId: dataset.firstEntryId,
+    path: seedPath,
     samples,
   };
   const validation = yield* reopenAndRead(backend, seedPath, dataset.firstEntryId);
@@ -165,10 +168,14 @@ const seedReopenFixture = Effect.fn("seedReopenFixture")(function* (backend: Per
   return fixture;
 });
 
-const reads = await Effect.runPromise(seedReads);
-const writePools = await Effect.runPromise(seedWrites);
-const reopenFixtures = await Effect.runPromise(
-  Effect.forEach(["sqlite", "jsonl"] as const, seedReopenFixture),
+type BenchContext = Pick<TestContext, "bench">;
+
+const PERSISTENT_BACKENDS = ["sqlite", "jsonl"] as const;
+
+const reads = Effect.runSync(Effect.cached(seedReads));
+const writePools = Effect.runSync(Effect.cached(seedWrites));
+const reopenFixtures = Effect.runSync(
+  Effect.cached(Effect.forEach(PERSISTENT_BACKENDS, seedReopenFixture)),
 );
 
 const nextWriteFixture = (pool: Fixture[]): Fixture => {
@@ -183,45 +190,64 @@ const nextReopenSample = (fixture: ReopenFixture): string => {
   return path;
 };
 
-for (const scenario of STORAGE_READ_BENCHMARKS) {
-  describe(scenario.name, () => {
-    for (const { fixture, dataset } of reads) {
-      test(fixture.backend, ({ bench }) =>
-        bench(fixture.backend, () =>
-          Effect.runPromise(awaited(scenario.run(fixture.storage, dataset))),
-        ).run(READ_OPTIONS),
-      );
-    }
+const seededRead = (backend: StorageBenchmarkBackend) =>
+  Effect.flatMap(reads, (seeded) => {
+    const read = seeded.find(({ fixture }) => fixture.backend === backend);
+    return read === undefined
+      ? Effect.die(new Error(`No ${backend} read fixture`))
+      : Effect.succeed(read);
   });
-}
 
-for (const scenario of STORAGE_WRITE_BENCHMARKS) {
-  describe(scenario.name, () => {
-    for (const backend of STORAGE_BENCHMARK_BACKENDS) {
-      const pool = writePools.get(`${scenario.name}:${backend}`)!;
-      test(backend, ({ bench }) =>
-        bench(backend, () =>
-          Effect.runPromise(
-            Effect.suspend(() => awaited(scenario.run(nextWriteFixture(pool).storage))),
-          ),
-        ).run(WRITE_OPTIONS),
-      );
-    }
-  });
-}
+const readBench =
+  (scenario: (typeof STORAGE_READ_BENCHMARKS)[number], backend: StorageBenchmarkBackend) =>
+  ({ bench }: BenchContext) =>
+    Effect.runPromise(seededRead(backend)).then(({ dataset, fixture }) =>
+      bench(backend, () => Effect.runPromise(awaited(scenario.run(fixture.storage, dataset)))).run(
+        READ_OPTIONS,
+      ),
+    );
 
-describe("reopen and first exact read", () => {
-  for (const fixture of reopenFixtures) {
-    test(fixture.backend, ({ bench }) =>
-      bench(fixture.backend, () =>
+const writeBench =
+  (scenario: (typeof STORAGE_WRITE_BENCHMARKS)[number], backend: StorageBenchmarkBackend) =>
+  ({ bench }: BenchContext) =>
+    Effect.runPromise(writePools).then((pools) => {
+      const pool = pools.get(`${scenario.name}:${backend}`) ?? [];
+      return bench(backend, () =>
+        Effect.runPromise(
+          Effect.suspend(() => awaited(scenario.run(nextWriteFixture(pool).storage))),
+        ),
+      ).run(WRITE_OPTIONS);
+    });
+
+const reopenBench =
+  (index: number) =>
+  ({ bench }: BenchContext) =>
+    Effect.runPromise(reopenFixtures).then((reopenable) => {
+      const fixture = reopenable[index];
+      if (fixture === undefined) throw new Error("Missing reopen fixture");
+      return bench(fixture.backend, () =>
         Effect.runPromise(
           Effect.suspend(() =>
             reopenAndRead(fixture.backend, nextReopenSample(fixture), fixture.firstEntryId),
           ).pipe(Effect.map((result) => reopenedStorages.push(result.storage))),
         ),
-      ).run(REOPEN_OPTIONS),
-    );
-  }
+      ).run(REOPEN_OPTIONS);
+    });
+
+for (const scenario of STORAGE_READ_BENCHMARKS) {
+  describe(scenario.name, () => {
+    for (const backend of STORAGE_BENCHMARK_BACKENDS) test(backend, readBench(scenario, backend));
+  });
+}
+
+for (const scenario of STORAGE_WRITE_BENCHMARKS) {
+  describe(scenario.name, () => {
+    for (const backend of STORAGE_BENCHMARK_BACKENDS) test(backend, writeBench(scenario, backend));
+  });
+}
+
+describe("reopen and first exact read", () => {
+  for (const [index, backend] of PERSISTENT_BACKENDS.entries()) test(backend, reopenBench(index));
 });
 
 afterAll(() =>

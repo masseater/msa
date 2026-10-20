@@ -1,21 +1,17 @@
 import { createModels } from "@msa/ai";
-import { defineTask, type RegistryReader } from "@msa/durable";
-import { createRegistry, Harness } from "@msa/durable/harness";
+import { type RegistryReader, defineTask } from "@msa/durable";
+import { Harness, createRegistry } from "@msa/durable/harness";
 import { MemoryStorage } from "@msa/durable/storage/memory";
 import { Effect } from "effect";
 import { describe, expect, it } from "vite-plus/test";
 
-import { start, oneStep, openRoot } from "./harness-tasks-support.ts";
-import {
-  awaited,
-  addTask,
-  ControlledStorage,
-  context,
-  flush,
-  completed,
-  deferred,
-  eventually,
-} from "./support.ts";
+import harnessTasksSupport from "./harness-tasks-support.ts";
+import support from "./support.ts";
+import type supportTypes from "./support.types.ts";
+
+const { oneStep, openRoot, start } = harnessTasksSupport;
+const { ControlledStorage, addTask, awaited, completed, context, deferred, eventually, flush } =
+  support;
 
 function sealingTask() {
   const phases: string[] = [];
@@ -36,16 +32,16 @@ function sealingTask() {
     subscribe: (listener) => registry.subscribe(listener),
   };
   const Two = defineTask<null, { phase: "one" } | { phase: "two" }, null>({
-    name: "test.close-in-step",
-    version: 1,
+    abort: () => Promise.resolve(),
     initial: () => ({ phase: "one" }),
+    name: "test.close-in-step",
     phases: {
       one: (_task, runtime, ctx) =>
         Effect.runPromise(
           Effect.gen(function* () {
             phases.push("one");
             yield* awaited(
-              runtime.commit(() => ({ status: "running", checkpoint: { phase: "two" } }), ctx),
+              runtime.commit(() => ({ checkpoint: { phase: "two" }, status: "running" }), ctx),
             );
             state.closeOnSnapshot = true;
           }),
@@ -56,10 +52,10 @@ function sealingTask() {
         return Promise.resolve();
       },
     },
-    abort: () => Promise.resolve(),
+    version: 1,
   });
   addTask(registry, Two);
-  return { phases, state, reader, Two };
+  return { Two, phases, reader, state };
 }
 
 const startsNoAbort = Effect.gen(function* () {
@@ -86,7 +82,7 @@ const startsNoAbort = Effect.gen(function* () {
   expect(ran).toBe(false);
   const writes = storage.commits.at(-1)!.filter((write) => write.type === "task");
   expect(writes).toMatchObject([
-    { value: { id, abortRequested: true, state: { status: "running" } } },
+    { value: { abortRequested: true, id, state: { status: "running" } } },
   ]);
 });
 
@@ -100,18 +96,18 @@ const rejectsRuntimeCommit = Effect.gen(function* () {
 
   const storage = new ControlledStorage();
   let queued: Promise<unknown> | undefined;
-  let held: ReturnType<ControlledStorage["holdCommits"]> | undefined;
+  let held: ReturnType<supportTypes.ControlledStorage["holdCommits"]> | undefined;
   let harnessRef: Effect.Success<ReturnType<typeof openRoot>>["harness"] | undefined;
   const proceed = deferred();
   const Queued = oneStep("test.close-queued-commit", (_task, runtime) =>
     runPromise(
       Effect.gen(function* () {
-        const runPromise = Effect.runPromiseWith(yield* Effect.context<never>());
+        const runNested = Effect.runPromiseWith(yield* Effect.context<never>());
 
         held = storage.holdCommits();
         void harnessRef!.commit(
           (tx) =>
-            runPromise(
+            runNested(
               Effect.asVoid(
                 Effect.suspend(() =>
                   awaited(tx.appendEntry(runtime.conversationId, { kind: "blocker" })),

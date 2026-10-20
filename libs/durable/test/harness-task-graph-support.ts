@@ -1,19 +1,18 @@
-import { defineTask, type TaskGraph, type TaskId } from "@msa/durable";
+import { type TaskGraph, defineTask } from "@msa/durable";
 import { Effect } from "effect";
 
-import { awaited } from "./effect-support.ts";
-import { completed } from "./task-support.ts";
+import effectSupport from "./effect-support.ts";
+import type harnessTaskGraphSupportTypes from "./harness-task-graph-support.types.ts";
+import taskSupport from "./task-support.ts";
 
-export type ParentState =
-  | { phase: "spawn" }
-  | { phase: "join"; child: TaskId }
-  | { phase: "finish" };
+const { awaited } = effectSupport;
+const { completed } = taskSupport;
 
-export function graphChild(gates: { readonly child: Promise<void>; readonly late: Promise<void> }) {
+function graphChild(gates: { readonly child: Promise<void>; readonly late: Promise<void> }) {
   return defineTask<{ late: boolean }, { phase: "work" }, null>({
-    name: "test.graph-child",
-    version: 1,
+    abort: () => Promise.resolve(),
     initial: () => ({ phase: "work" }),
+    name: "test.graph-child",
     phases: {
       work: (task, runtime, ctx) =>
         Effect.runPromise(
@@ -23,16 +22,25 @@ export function graphChild(gates: { readonly child: Promise<void>; readonly late
           }),
         ),
     },
-    abort: () => Promise.resolve(),
+    version: 1,
   });
 }
 
 function graphParent(Child: ReturnType<typeof graphChild>) {
-  return defineTask<null, ParentState, null>({
-    name: "test.graph-parent",
-    version: 1,
+  return defineTask<null, harnessTaskGraphSupportTypes.ParentState, null>({
+    abort: () => Promise.resolve(),
     initial: () => ({ phase: "spawn" }),
+    name: "test.graph-parent",
     phases: {
+      finish: (_task, runtime, ctx) => runtime.commit(() => completed(null), ctx),
+      join: (task, runtime, ctx) =>
+        runtime.commit(
+          (tx) =>
+            tx
+              .createTask(Child, { late: true }, { ownership: { kind: "task", taskId: task.id } })
+              .then(() => ({ checkpoint: { phase: "finish" }, status: "running" }) as const),
+          ctx,
+        ),
       spawn: (task, runtime, ctx) =>
         Effect.runPromise(
           Effect.gen(function* () {
@@ -53,10 +61,10 @@ function graphParent(Child: ReturnType<typeof graphChild>) {
                   tx.createTask(Child, { late: false }, { ownership }).then(
                     (child) =>
                       ({
-                        status: "waiting",
-                        checkpoint: { phase: "join", child },
+                        checkpoint: { child, phase: "join" },
                         on: [child],
                         policy: "allSettled",
+                        status: "waiting",
                       }) as const,
                   ),
                 ctx,
@@ -64,29 +72,28 @@ function graphParent(Child: ReturnType<typeof graphChild>) {
             );
           }),
         ),
-      join: (task, runtime, ctx) =>
-        runtime.commit(
-          (tx) =>
-            tx
-              .createTask(Child, { late: true }, { ownership: { kind: "task", taskId: task.id } })
-              .then(() => ({ status: "running", checkpoint: { phase: "finish" } }) as const),
-          ctx,
-        ),
-      finish: (_task, runtime, ctx) => runtime.commit(() => completed(null), ctx),
     },
-    abort: () => Promise.resolve(),
+    version: 1,
   });
 }
 
-export function family(gates: { readonly child: Promise<void>; readonly late: Promise<void> }) {
+function family(gates: { readonly child: Promise<void>; readonly late: Promise<void> }) {
   const Child = graphChild(gates);
-  return { Parent: graphParent(Child), Child };
+  return { Child, Parent: graphParent(Child) };
 }
 
-export function statuses(graph: TaskGraph): Record<string, string> {
+function statuses(graph: TaskGraph): Record<string, string> {
   return Object.fromEntries(
     Object.values(graph.tasks).map(
       (node) => [`${node.kind}#${node.id}`, node.state.status] as const,
     ),
   );
 }
+
+const harnessTaskGraphSupport = {
+  family,
+  graphChild,
+  statuses,
+};
+
+export default harnessTaskGraphSupport;

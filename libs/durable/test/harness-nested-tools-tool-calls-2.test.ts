@@ -10,30 +10,24 @@ import { Effect } from "effect";
 import { afterEach, describe, expect, it } from "vite-plus/test";
 
 import { openNodeSqliteStorage } from "../src/storage/sqlite/node.ts";
-import {
-  directories,
-  results,
-  toolTasks,
-  runOnce,
-  text,
-  DONE,
-  call,
-  tool,
-  echoTool,
-} from "./harness-nested-tools-support.ts";
-import {
-  allEntries,
-  chatSetup,
-  openChat,
+import harnessNestedToolsSupport from "./harness-nested-tools-support.ts";
+import support from "./support.ts";
+
+const { DONE, call, directories, echoTool, results, runOnce, text, tool, toolTasks } =
+  harnessNestedToolsSupport;
+const {
   abortController,
-  awaited,
-  addTool,
-  makeTempFile,
-  removeDir,
-  context,
   aborted,
+  addTool,
+  allEntries,
+  awaited,
+  chatSetup,
+  context,
   deferred,
-} from "./support.ts";
+  makeTempFile,
+  openChat,
+  removeDir,
+} = support;
 
 afterEach(() =>
   Effect.runPromise(
@@ -75,15 +69,15 @@ const abortsNestedCalls = Effect.gen(function* () {
   );
   setup.faux.setResponses([call("batch"), DONE]);
   const { harness, root } = yield* openChat(new MemoryStorage(), setup);
-  const submission = yield* awaited(root.submit({ type: "input", content: "go" }, context));
+  const submission = yield* awaited(root.submit({ content: "go", type: "input" }, context));
   yield* awaited(running.promise);
   yield* awaited(root.abort(context));
   expect((yield* awaited(submission.wait(context))).status).toBe("unanswered");
   const [parent, child] = yield* toolTasks(harness);
   const outcome = (record: typeof parent) =>
     record!.state.status === "terminal" ? record!.state.outcome : undefined;
-  expect(outcome(child)).toMatchObject({ status: "aborted", result: { kind: "nested" } });
-  expect(outcome(parent)).toMatchObject({ status: "aborted", result: { kind: "model" } });
+  expect(outcome(child)).toMatchObject({ result: { kind: "nested" }, status: "aborted" });
+  expect(outcome(parent)).toMatchObject({ result: { kind: "model" }, status: "aborted" });
   expect(yield* awaited(harness.snapshot(LiveDoc, root.id, context))).toEqual({});
   yield* awaited(harness.close(context));
 });
@@ -120,7 +114,7 @@ const abortsRunningNested = Effect.gen(function* () {
   expect(status).toBe("done");
   expect(text(results(entries)[0])).toContain("caller failed");
   const [, child] = yield* toolTasks(harness);
-  expect(child!.state).toMatchObject({ status: "terminal", outcome: { status: "aborted" } });
+  expect(child!.state).toMatchObject({ outcome: { status: "aborted" }, status: "terminal" });
   yield* awaited(harness.close(context));
 });
 
@@ -137,7 +131,7 @@ const reattachesReplaySafeStep1 = Effect.gen(function* () {
   const echo = echoTool();
   addTool(setup.registry, echo.registration);
   const blocked = deferred();
-  return { runPromise, path, setup, echo, blocked };
+  return { blocked, echo, path, runPromise, setup };
 });
 
 const reattachesReplaySafe = Effect.gen(function* () {
@@ -158,7 +152,7 @@ const reattachesReplaySafe = Effect.gen(function* () {
             }
             const second = yield* awaited(api.executeTool("echo", { text: "b" }, callContext));
             return {
-              output: [{ type: "text", text: `run ${runs}: ${text(first)}, ${text(second)}` }],
+              output: [{ text: `run ${runs}: ${text(first)}, ${text(second)}`, type: "text" }],
             };
           }),
         ),
@@ -167,7 +161,7 @@ const reattachesReplaySafe = Effect.gen(function* () {
   );
   setup.faux.setResponses([call("batch"), DONE]);
   let opened = yield* openChat(yield* awaited(openNodeSqliteStorage(path)), setup);
-  const id = (yield* awaited(opened.root.submit({ type: "input", content: "go" }, context))).id;
+  const id = (yield* awaited(opened.root.submit({ content: "go", type: "input" }, context))).id;
   yield* awaited(blocked.promise);
   yield* awaited(opened.harness.close(context));
 
@@ -207,7 +201,7 @@ const stopsOnlyWait = Effect.gen(function* () {
         Effect.gen(function* () {
           cancel.abort(new Error("cancelled"));
           yield* awaited(release.promise);
-          return { output: [{ type: "text", text: "slow done" }] };
+          return { output: [{ text: "slow done", type: "text" }] };
         }),
       ),
     ),

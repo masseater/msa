@@ -4,20 +4,25 @@ import { MemoryStorage } from "@msa/durable/storage/memory";
 import { Effect } from "effect";
 import { afterEach, describe, expect, it } from "vite-plus/test";
 
-import { createIn, directories, type Step, versioned } from "./harness-tasks-recovery-support.ts";
-import {
-  awaited,
-  addTask,
-  removeDir,
+import harnessTasksRecoverySupport from "./harness-tasks-recovery-support.ts";
+import type harnessTasksRecoverySupportTypes from "./harness-tasks-recovery-support.types.ts";
+import support from "./support.ts";
+import type supportTypes from "./support.types.ts";
+
+const { createIn, directories, versioned } = harnessTasksRecoverySupport;
+const {
   ControlledStorage,
-  context,
-  flush,
   abortMarked,
   abortedWith,
+  addTask,
+  awaited,
+  context,
   deferred,
   eventually,
+  flush,
   openTasks,
-} from "./support.ts";
+  removeDir,
+} = support;
 
 afterEach(() =>
   Effect.runPromise(
@@ -31,10 +36,17 @@ afterEach(() =>
 type Log = string[];
 
 function crashTask(log: Log, options: { blockAbort: boolean }) {
-  return defineTask<null, Step, null>({
-    name: "test.crash",
-    version: 1,
+  return defineTask<null, harnessTasksRecoverySupportTypes.Step, null>({
+    abort: (_task, runtime, ctx) =>
+      Effect.runPromise(
+        Effect.gen(function* () {
+          log.push("abort");
+          if (options.blockAbort) return yield* Effect.never;
+          yield* awaited(runtime.commit(() => abortedWith("recovered"), ctx));
+        }),
+      ),
     initial: () => ({ phase: "run" }),
+    name: "test.crash",
     phases: {
       run: () =>
         Effect.runPromise(
@@ -44,18 +56,11 @@ function crashTask(log: Log, options: { blockAbort: boolean }) {
           }),
         ),
     },
-    abort: (_task, runtime, ctx) =>
-      Effect.runPromise(
-        Effect.gen(function* () {
-          log.push("abort");
-          if (options.blockAbort) return yield* Effect.never;
-          yield* awaited(runtime.commit(() => abortedWith("recovered"), ctx));
-        }),
-      ),
+    version: 1,
   });
 }
 
-const recover = Effect.fn("recover")(function* (storage: ControlledStorage, log: Log) {
+const recover = Effect.fn("recover")(function* (storage: supportTypes.ControlledStorage, log: Log) {
   storage.crash();
   const { harness } = yield* openTasks(storage, [crashTask(log, { blockAbort: false })]);
   const page = yield* awaited(
@@ -70,7 +75,7 @@ const crashedRun = Effect.fn("crashedRun")(function* (log: Log) {
   const id = yield* createIn(harness, crashTask(log, { blockAbort: true }));
   harness.resume();
   yield* eventually(() => log.length === 1);
-  return { storage, harness, id };
+  return { harness, id, storage };
 });
 
 const crashMarkCommit = Effect.gen(function* () {
@@ -107,8 +112,8 @@ const crashMarkRun = Effect.gen(function* () {
   });
   recovered.harness.resume();
   expect((yield* awaited(recovered.harness.waitForTask(id, context))).state.outcome).toEqual({
-    status: "aborted",
     reason: "recovered",
+    status: "aborted",
   });
   expect(log).toEqual(["run", "abort"]);
   yield* awaited(recovered.harness.close(context));
@@ -138,8 +143,8 @@ const crashAbortHandler = Effect.gen(function* () {
   const recovered = yield* recover(storage, log);
   recovered.harness.resume();
   expect((yield* awaited(recovered.harness.waitForTask(id, context))).state.outcome).toEqual({
-    status: "aborted",
     reason: "recovered",
+    status: "aborted",
   });
   expect(log).toEqual(["abort", "abort"]);
   yield* awaited(recovered.harness.close(context));
@@ -157,11 +162,7 @@ const crashAbortOutcome = Effect.gen(function* () {
   const storage = new ControlledStorage();
   const reached = deferred();
   const proceed = deferred();
-  const Crash = defineTask<null, Step, null>({
-    name: "test.crash",
-    version: 1,
-    initial: () => ({ phase: "run" }),
-    phases: { run: () => Promise.resolve() },
+  const Crash = defineTask<null, harnessTasksRecoverySupportTypes.Step, null>({
     abort: (_task, runtime, ctx) =>
       runPromise(
         Effect.gen(function* () {
@@ -171,6 +172,10 @@ const crashAbortOutcome = Effect.gen(function* () {
           yield* awaited(runtime.commit(() => abortedWith("lost"), ctx));
         }),
       ),
+    initial: () => ({ phase: "run" }),
+    name: "test.crash",
+    phases: { run: () => Promise.resolve() },
+    version: 1,
   });
   const { harness } = yield* openTasks(storage, [Crash]);
   const id = yield* createIn(harness, Crash);
@@ -183,8 +188,8 @@ const crashAbortOutcome = Effect.gen(function* () {
   const recovered = yield* recover(storage, log);
   recovered.harness.resume();
   expect((yield* awaited(recovered.harness.waitForTask(id, context))).state.outcome).toEqual({
-    status: "aborted",
     reason: "recovered",
+    status: "aborted",
   });
   expect(log).toEqual(["abort", "abort"]);
   yield* awaited(recovered.harness.close(context));
@@ -209,8 +214,8 @@ const crashTerminalOutcome = Effect.gen(function* () {
   yield* flush;
   expect(log).toEqual(["abort"]);
   expect((yield* awaited(recovered.harness.getTask(id, context)))?.state).toEqual({
+    outcome: { reason: "recovered", status: "aborted" },
     status: "terminal",
-    outcome: { status: "aborted", reason: "recovered" },
   });
   yield* awaited(recovered.harness.close(context));
 });
@@ -254,8 +259,8 @@ const keepsTaskMissing = Effect.gen(function* () {
   addTask(registry, V1);
   yield* awaited(idle);
   expect((yield* awaited(harness.getTask(id, context)))?.state).toEqual({
+    outcome: { result: "v1", status: "completed" },
     status: "terminal",
-    outcome: { status: "completed", result: "v1" },
   });
   yield* awaited(harness.close(context));
 });
@@ -270,8 +275,8 @@ const keepsTaskStored = Effect.gen(function* () {
   expect((yield* awaited(harness.getTask(id, context)))?.state.status).toBe("pending");
   addTask(registry, versioned(2, "new"));
   expect((yield* awaited(harness.waitForTask(id, context))).state.outcome).toEqual({
-    status: "completed",
     result: "new",
+    status: "completed",
   });
   yield* awaited(harness.close(context));
 });

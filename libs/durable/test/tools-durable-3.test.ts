@@ -4,8 +4,11 @@ import { afterAll, describe, expect, it } from "vite-plus/test";
 
 import { getOrThrow } from "../src/env/index.ts";
 import { createBashTool } from "../src/tools/index.ts";
-import { awaited } from "./effect-support.ts";
-import { createEnv, run, removeTempDirs } from "./tools-support.ts";
+import effectSupport from "./effect-support.ts";
+import toolsSupport from "./tools-support.ts";
+
+const { awaited } = effectSupport;
+const { createEnv, removeTempDirs, run } = toolsSupport;
 
 afterAll(() => Effect.runPromise(removeTempDirs));
 

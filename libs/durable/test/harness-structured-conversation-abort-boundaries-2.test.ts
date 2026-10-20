@@ -1,31 +1,18 @@
-import { fauxAssistantMessage, fauxText, Type } from "@msa/ai";
-import { type AgentEvent, defineTool, type Harness, LiveDoc } from "@msa/durable";
+import { Type, fauxAssistantMessage, fauxText } from "@msa/ai";
+import { type AgentEvent, type Harness, LiveDoc, defineTool } from "@msa/durable";
 import { GenerationTask } from "@msa/durable/harness";
 import { MemoryStorage } from "@msa/durable/storage/memory";
 import { Effect } from "effect";
 import { afterEach, describe, expect, it } from "vite-plus/test";
 
-import { toolCalls, blockingTool, labels, listen } from "./harness-structured-events.ts";
-import {
-  open,
-  gates,
-  Node,
-  behaviors,
-  log,
-  owned,
-  directories,
-} from "./harness-structured-support.ts";
-import {
-  chatSetup,
-  openChat,
-  waitFor,
-  awaited,
-  addHooks,
-  addTask,
-  addTool,
-  removeDir,
-  context,
-} from "./support.ts";
+import harnessStructuredEvents from "./harness-structured-events.ts";
+import harnessStructuredSupport from "./harness-structured-support.ts";
+import support from "./support.ts";
+
+const { blockingTool, labels, listen, toolCalls } = harnessStructuredEvents;
+const { Node, behaviors, directories, gates, log, open, owned } = harnessStructuredSupport;
+const { addHooks, addTask, addTool, awaited, chatSetup, context, openChat, removeDir, waitFor } =
+  support;
 
 afterEach(() =>
   Effect.runPromise(
@@ -47,7 +34,7 @@ const endsAbortedSequential = Effect.gen(function* () {
   setup.faux.setResponses([toolCalls(["one", "c1"], ["two", "c2"], ["two", "c3"])]);
   const { harness, root } = yield* openChat(new MemoryStorage(), setup);
   const { stream, events } = yield* listen(harness, root);
-  const submission = yield* awaited(root.submit({ type: "input", content: "go" }, context));
+  const submission = yield* awaited(root.submit({ content: "go", type: "input" }, context));
   yield* awaited(one.started);
   yield* awaited(
     harness.abortTask(
@@ -82,10 +69,10 @@ const emitsOneTurnStep1 = Effect.gen(function* () {
   addTool(
     setup.registry,
     defineTool({
-      name: "noop",
       description: "Does nothing",
-      parameters: Type.Object({}),
       execute: () => Promise.resolve({ output: [] }),
+      name: "noop",
+      parameters: Type.Object({}),
     }),
   );
   let opened: Harness | undefined;
@@ -109,7 +96,7 @@ const emitsOneTurnStep1 = Effect.gen(function* () {
   opened = harness;
   const early = yield* listen(harness, root);
   yield* awaited(
-    (yield* awaited(root.submit({ type: "input", content: "go" }, context))).wait(context),
+    (yield* awaited(root.submit({ content: "go", type: "input" }, context))).wait(context),
   );
   const late = yield* listen(harness, root);
   open("hooked");
@@ -118,7 +105,7 @@ const emitsOneTurnStep1 = Effect.gen(function* () {
   )).items;
   yield* awaited(harness.waitForTask(first!.id, context));
   yield* awaited(root.commit((tx) => tx.appendEntry(root.id, { kind: "note" }), context));
-  return { harness, early, late };
+  return { early, harness, late };
 });
 
 const emitsOneTurn = Effect.gen(function* () {

@@ -1,12 +1,15 @@
 import { createModels } from "@msa/ai";
 import { AgentDoc, defineExtension, defineTask } from "@msa/durable";
-import { createRegistry, Harness } from "@msa/durable/harness";
+import { Harness, createRegistry } from "@msa/durable/harness";
 import { MemoryStorage } from "@msa/durable/storage/memory";
 import { Effect } from "effect";
 import { afterEach, describe, expect, it } from "vite-plus/test";
 
-import { directories, append, NoteDoc } from "./harness-conversations-support.ts";
-import { awaited, openHarness, tool, removeDir, context } from "./support.ts";
+import harnessConversationsSupport from "./harness-conversations-support.ts";
+import support from "./support.ts";
+
+const { NoteDoc, append, directories } = harnessConversationsSupport;
+const { awaited, context, openHarness, removeDir, tool } = support;
 
 afterEach(() =>
   Effect.runPromise(
@@ -23,11 +26,11 @@ const bindsCommitsTask = Effect.gen(function* () {
     harness.createConversation({ ownership: { kind: "ownerless" } }, context),
   );
   const task = defineTask<{ n: number }, { phase: "run" }, null>({
-    name: "test.work",
-    version: 1,
-    initial: () => ({ phase: "run" }),
-    phases: { run: () => Promise.resolve() },
     abort: () => Promise.resolve(),
+    initial: () => ({ phase: "run" }),
+    name: "test.work",
+    phases: { run: () => Promise.resolve() },
+    version: 1,
   });
   const taskId = yield* awaited(
     conversation.commit(
@@ -61,8 +64,6 @@ const runsConversationCreatedEveryStep1 = Effect.gen(function* () {
     Harness.open(
       new MemoryStorage(),
       {
-        models: createModels(),
-        registry: createRegistry(),
         conversationCreated: (tx, conversation) =>
           runPromise(
             Effect.gen(function* () {
@@ -74,6 +75,8 @@ const runsConversationCreatedEveryStep1 = Effect.gen(function* () {
               if (agent.cwd === "/fail") throw new Error("no");
             }),
           ),
+        models: createModels(),
+        registry: createRegistry(),
       },
       context,
     ),
@@ -89,7 +92,7 @@ const runsConversationCreatedEveryStep1 = Effect.gen(function* () {
         ),
     }),
   );
-  return { runPromise, seen, harness, root };
+  return { harness, root, runPromise, seen };
 });
 
 const runsConversationCreatedEvery = Effect.gen(function* () {
@@ -160,17 +163,17 @@ const replacesWholeFields = Effect.gen(function* () {
 
   yield* awaited(
     root.configure(
-      { model: { provider: "openai", modelId: "gpt" }, thinkingLevel: "medium" },
+      { model: { modelId: "gpt", provider: "openai" }, thinkingLevel: "medium" },
       context,
     ),
   );
-  yield* awaited(root.configure({ model: undefined, instructions: "Be terse." }, context));
+  yield* awaited(root.configure({ instructions: "Be terse.", model: undefined }, context));
   expect(yield* awaited(stored())).toEqual({
-    model: { provider: "openai", modelId: "gpt" },
-    thinkingLevel: "medium",
     instructions: "Be terse.",
+    model: { modelId: "gpt", provider: "openai" },
+    thinkingLevel: "medium",
   });
-  yield* awaited(root.configure({ model: null, instructions: null }, context));
+  yield* awaited(root.configure({ instructions: null, model: null }, context));
   expect(yield* awaited(stored())).toEqual({ thinkingLevel: "medium" });
 
   yield* awaited(root.configure({ tools: { remove: [edit] } }, context));

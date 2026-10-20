@@ -5,8 +5,11 @@ import { DEFAULT_IMAGE_LIMITS } from "@msa/durable/tools";
 import { Effect } from "effect";
 import { expect, it } from "vite-plus/test";
 
-import { awaited } from "./effect-support.ts";
-import { readBytes } from "./platform-support.ts";
+import effectSupport from "./effect-support.ts";
+import platformSupport from "./platform-support.ts";
+
+const { awaited } = effectSupport;
+const { readBytes } = platformSupport;
 
 it("createPhotonImages takes a compiled WebAssembly module, as Cloudflare Workers pass it", () =>
   Effect.runPromise(

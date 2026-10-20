@@ -3,12 +3,17 @@ import { Effect } from "effect";
 import { afterAll, beforeAll, describe, expect, it } from "vite-plus/test";
 
 import { DEFAULT_IMAGE_LIMITS } from "../src/tools/image.ts";
-import { awaited } from "./effect-support.ts";
-import { bmp, encode, setUpImages } from "./tools-images-fixtures-support.ts";
-import { removeImageDirectory } from "./tools-images-support.ts";
+import effectSupport from "./effect-support.ts";
+import toolsImagesFixturesSupport from "./tools-images-fixtures-support.ts";
+import toolsImagesSupport from "./tools-images-support.ts";
+
+const { awaited } = effectSupport;
+const { bmp, encode, setUpImages } = toolsImagesFixturesSupport;
+const { prepareImageDirectory, removeImageDirectory } = toolsImagesSupport;
 
 beforeAll(() => Effect.runPromise(Effect.asVoid(Effect.suspend(() => setUpImages()))));
 
+beforeAll(prepareImageDirectory);
 afterAll(removeImageDirectory);
 
 const preparesConcurrentImages = Effect.gen(function* () {
@@ -21,7 +26,7 @@ const preparesConcurrentImages = Effect.gen(function* () {
     ]),
   );
   expect(results[0]?.mimeType).toBe("image/png");
-  expect(results[1]?.resized?.to).toEqual({ width: 2000, height: 500 });
+  expect(results[1]?.resized?.to).toEqual({ height: 500, width: 2000 });
   expect(results[2]).toBeUndefined();
   yield* Effect.sleep(100);
   expect(

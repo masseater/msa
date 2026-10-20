@@ -3,11 +3,17 @@ import { ToolTask } from "@msa/durable/harness";
 import { Effect } from "effect";
 import { describe, expect, it } from "vite-plus/test";
 
-import { allEntries, chatSetup } from "./chat-support.ts";
-import { awaited } from "./effect-support.ts";
-import { addTool } from "./harness-support.ts";
-import { DONE, calls, run, tool } from "./harness-tools-support.ts";
-import { context } from "./session-support.ts";
+import chatSupport from "./chat-support.ts";
+import effectSupport from "./effect-support.ts";
+import harnessSupport from "./harness-support.ts";
+import harnessToolsSupport from "./harness-tools-support.ts";
+import sessionSupport from "./session-support.ts";
+
+const { allEntries, chatSetup } = chatSupport;
+const { awaited } = effectSupport;
+const { addTool } = harnessSupport;
+const { DONE, calls, run, tool } = harnessToolsSupport;
+const { context } = sessionSupport;
 
 function selectedHookExtensions() {
   const setup = chatSetup();
@@ -17,12 +23,12 @@ function selectedHookExtensions() {
     tools: [tool("echo", () => Promise.resolve({ output: [] }))],
   });
   const Audit = defineExtension({
-    name: "audit",
     hooks: [hook(ToolTask, { beforeTool: (_call, api) => void calledIn.push(api.conversationId) })],
+    name: "audit",
   });
   setup.registry.install(Echo);
   setup.registry.install(Audit);
-  return { setup, calledIn, Echo, Audit };
+  return { Audit, Echo, calledIn, setup };
 }
 
 const runsHooksSelectedStep1 = Effect.gen(function* () {
@@ -33,11 +39,11 @@ const runsHooksSelectedStep1 = Effect.gen(function* () {
   const first = yield* run(setup, [DONE]);
   yield* awaited(first.root.configure({ extensions: { add: [Audit] } }, context));
   const owner = defineTask<Record<string, never>, { phase: "never" }, null>({
-    name: "test.owner",
-    version: 1,
-    initial: () => ({ phase: "never" }),
-    phases: { never: () => Promise.resolve() },
     abort: () => Promise.resolve(),
+    initial: () => ({ phase: "never" }),
+    name: "test.owner",
+    phases: { never: () => Promise.resolve() },
+    version: 1,
   });
   const childId = yield* awaited(
     first.harness.commit(
@@ -48,7 +54,7 @@ const runsHooksSelectedStep1 = Effect.gen(function* () {
               tx.createTask(
                 owner,
                 {},
-                { ownership: { kind: "conversation" }, conversationId: first.root.id },
+                { conversationId: first.root.id, ownership: { kind: "conversation" } },
               ),
             );
             return (yield* awaited(tx.createConversation({ ownership: { kind: "task", taskId } })))
@@ -62,13 +68,13 @@ const runsHooksSelectedStep1 = Effect.gen(function* () {
   const other = yield* awaited(
     first.harness.createConversation(
       {
+        agent: { model: { modelId: "faux-1", provider: "faux" } },
         ownership: { kind: "ownerless" },
-        agent: { model: { provider: "faux", modelId: "faux-1" } },
       },
       context,
     ),
   );
-  return { setup, calledIn, first, child, other };
+  return { calledIn, child, first, other, setup };
 });
 
 const runsHooksSelected = Effect.gen(function* () {
@@ -76,7 +82,7 @@ const runsHooksSelected = Effect.gen(function* () {
   for (const conversation of [first.root, child, other]) {
     setup.faux.setResponses([calls(["echo", {}, "c1"]), DONE]);
     yield* awaited(
-      (yield* awaited(conversation.submit({ type: "input", content: "go" }, context))).wait(
+      (yield* awaited(conversation.submit({ content: "go", type: "input" }, context))).wait(
         context,
       ),
     );
@@ -94,11 +100,11 @@ const appliesAddToolsTerminates = Effect.gen(function* () {
   const runPromise = Effect.runPromiseWith(yield* Effect.context<never>());
 
   const setup = chatSetup();
-  const stop = tool("stop", () => Promise.resolve({ output: [], control: { terminate: true } }));
+  const stop = tool("stop", () => Promise.resolve({ control: { terminate: true }, output: [] }));
   const grow = tool("grow", () =>
     Promise.resolve({
-      output: [],
       control: { addTools: ["extra", "stop"] },
+      output: [],
     }),
   );
   addTool(setup.registry, stop);
@@ -123,7 +129,7 @@ const appliesAddToolsTerminates = Effect.gen(function* () {
 
   setup.faux.setResponses([calls(["stop", {}, "c1"], ["grow", {}, "c2"]), DONE]);
   const second = yield* awaited(
-    (yield* awaited(first.root.submit({ type: "input", content: "again" }, context))).wait(context),
+    (yield* awaited(first.root.submit({ content: "again", type: "input" }, context))).wait(context),
   );
   expect(second.status).toBe("done");
   expect((yield* allEntries(first.root)).at(-1)!.kind).toBe("msa.assistant");

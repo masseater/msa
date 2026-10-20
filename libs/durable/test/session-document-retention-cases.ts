@@ -1,10 +1,12 @@
 import { defineDoc } from "@msa/durable";
 
-import { type Counter } from "./session-document-retention-support.ts";
+import type sessionDocumentRetentionSupportTypes from "./session-document-retention-support.types.ts";
 
-export const SessionCounterDoc = defineDoc<Counter>({
-  kind: "test.retention.session-counter",
-  version: 1,
-  scope: "session",
+const SessionCounterDoc = defineDoc<sessionDocumentRetentionSupportTypes.Counter>({
   initial: () => ({ count: 0 }),
+  kind: "test.retention.session-counter",
+  scope: "session",
+  version: 1,
 });
+
+export default SessionCounterDoc;

@@ -4,22 +4,26 @@ import { afterEach, describe, expect, it } from "vite-plus/test";
 
 import { NodeExecutionEnv } from "../src/env/node.ts";
 import type { DocumentId, TaskId } from "../src/types.ts";
-import { awaited } from "./effect-support.ts";
-import {
-  fileExists,
-  terminalTask,
-  readLines,
-  sessionDocument,
-  pendingTask,
-  createRoot,
+import effectSupport from "./effect-support.ts";
+import jsonlStorageSupport from "./jsonl-storage-support.ts";
+import platformSupport from "./platform-support.ts";
+
+const { awaited } = effectSupport;
+const {
+  InstrumentedEnv,
   context,
+  createRoot,
+  fileExists,
   openStorage,
   openStorages,
+  pendingTask,
+  readLines,
+  sessionDocument,
   tempDirectories,
   tempDirectory,
-  InstrumentedEnv,
-} from "./jsonl-storage-support.ts";
-import { listDirectory, joinPath, removeDir } from "./platform-support.ts";
+  terminalTask,
+} = jsonlStorageSupport;
+const { joinPath, listDirectory, removeDir } = platformSupport;
 
 afterEach(() =>
   Effect.runPromise(
@@ -42,15 +46,15 @@ const instrumentedDocument = Effect.fn("instrumentedDocument")(function* () {
     storage.commit(
       [
         {
-          type: "document.create",
+          content: { kind: "base", value: { count: 0 }, version: 1 },
           record: sessionDocument(id),
-          content: { kind: "base", version: 1, value: { count: 0 } },
+          type: "document.create",
         },
       ],
       context,
     ),
   );
-  return { directory, env, storage, id };
+  return { directory, env, id, storage };
 });
 
 const fsyncedDocument = Effect.fn("fsyncedDocument")(function* () {
@@ -63,15 +67,15 @@ const fsyncedDocument = Effect.fn("fsyncedDocument")(function* () {
     storage.commit(
       [
         {
-          type: "document.create",
+          content: { kind: "base", value: { count: 0 }, version: 1 },
           record: sessionDocument(id),
-          content: { kind: "base", version: 1, value: { count: 0 } },
+          type: "document.create",
         },
       ],
       context,
     ),
   );
-  return { directory, env, storage, id };
+  return { directory, env, id, storage };
 });
 
 const recoversDocumentRetirementCases = ["before", "after"] as const;
@@ -90,17 +94,17 @@ const recoversDocumentRetirement = Effect.fn("recoversDocumentRetirement")(funct
       [
         { type: "task", value: pendingTask(taskId) },
         {
-          type: "document.create",
+          content: { kind: "base", value: { count: 1 }, version: 1 },
           record: { id, kind: "task.document", scope: { kind: "task", taskId } },
-          content: { kind: "base", version: 1, value: { count: 1 } },
+          type: "document.create",
         },
       ],
       context,
     ),
   );
-  env.fail({ operation: "remove", call: 1, mode });
+  env.fail({ call: 1, mode, operation: "remove" });
   yield* awaited(
-    expect(storage.commit([{ type: "document.retire", id }], context)).resolves.toBe(3),
+    expect(storage.commit([{ id, type: "document.retire" }], context)).resolves.toBe(3),
   );
   expect(yield* awaited(storage.document(id, "current", context))).toBeUndefined();
   yield* awaited(storage.close(context));
@@ -125,15 +129,15 @@ const defersReclamationAuthorizing = Effect.fn("defersReclamationAuthorizing")(f
   mode: (typeof defersReclamationAuthorizingCases)[number],
 ) {
   const { directory, env, storage, id } = yield* instrumentedDocument();
-  env.fail({ operation: "flush", call: 2, mode });
+  env.fail({ call: 2, mode, operation: "flush" });
   yield* awaited(
     expect(
       storage.commit(
         [
           {
-            type: "document.change",
+            content: { kind: "base", value: { count: 2 }, version: 1 },
             id,
-            content: { kind: "base", version: 1, value: { count: 2 } },
+            type: "document.change",
           },
         ],
         context,
@@ -153,7 +157,7 @@ const defersReclamationAuthorizing = Effect.fn("defersReclamationAuthorizing")(f
   yield* awaited(storage.close(context));
 
   const recoveryEnv = new InstrumentedEnv({ cwd: directory });
-  recoveryEnv.fail({ operation: "flush", call: 1, mode });
+  recoveryEnv.fail({ call: 1, mode, operation: "flush" });
   const deferred = yield* openStorage(directory, recoveryEnv, { fsync: true });
   expect((yield* awaited(deferred.document(id, "current", context)))?.value).toEqual({
     count: 2,
@@ -184,15 +188,15 @@ const keepsCommittedBase = Effect.fn("keepsCommittedBase")(function* (
   mode: (typeof keepsCommittedBaseCases)[number],
 ) {
   const { directory, env, storage, id } = yield* fsyncedDocument();
-  env.fail({ operation: "flush", call: 3, mode });
+  env.fail({ call: 3, mode, operation: "flush" });
   yield* awaited(
     expect(
       storage.commit(
         [
           {
-            type: "document.change",
+            content: { kind: "base", value: { count: 2 }, version: 1 },
             id,
-            content: { kind: "base", version: 1, value: { count: 2 } },
+            type: "document.change",
           },
         ],
         context,
@@ -204,9 +208,9 @@ const keepsCommittedBase = Effect.fn("keepsCommittedBase")(function* (
     storage.commit(
       [
         {
-          type: "document.change",
+          content: { kind: "delta", ops: [["s", ["count"], 3]], version: 1 },
           id,
-          content: { kind: "delta", version: 1, ops: [["s", ["count"], 3]] },
+          type: "document.change",
         },
       ],
       context,
@@ -241,7 +245,7 @@ const recoversTerminalTask = Effect.fn("recoversTerminalTask")(function* (
   yield* createRoot(storage);
   const id = yield* awaited(storage.mintId<TaskId<JsonValue>>());
   yield* awaited(storage.commit([{ type: "task", value: pendingTask(id) }], context));
-  env.fail({ operation: "remove", call: 1, mode });
+  env.fail({ call: 1, mode, operation: "remove" });
   yield* awaited(
     expect(storage.commit([{ type: "task", value: terminalTask(id) }], context)).resolves.toBe(3),
   );

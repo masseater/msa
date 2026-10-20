@@ -4,18 +4,13 @@ import { MemoryStorage } from "@msa/durable/storage/memory";
 import { Effect } from "effect";
 import { describe, expect, it } from "vite-plus/test";
 
-import { MOUNTED, answer } from "./harness-view-cases.ts";
-import { committed, replay, drained, record, fresh } from "./harness-view-support.ts";
-import {
-  allEntries,
-  chatSetup,
-  openChat,
-  waitFor,
-  awaited,
-  context,
-  aborted,
-  deferred,
-} from "./support.ts";
+import harnessViewCases from "./harness-view-cases.ts";
+import harnessViewSupport from "./harness-view-support.ts";
+import support from "./support.ts";
+
+const { MOUNTED, answer } = harnessViewCases;
+const { committed, drained, fresh, record, replay } = harnessViewSupport;
+const { aborted, allEntries, awaited, chatSetup, context, deferred, openChat, waitFor } = support;
 
 function touches(harness: Harness, conversation: Conversation): { count: number } {
   const counter = { count: 0 };
@@ -38,7 +33,7 @@ const hydratesActiveEntries = Effect.gen(function* () {
   setup.faux.setResponses([answer("hello")]);
   const { harness, root } = yield* openChat(new MemoryStorage(), setup);
   yield* awaited(
-    (yield* awaited(root.submit({ type: "input", content: "hi" }, context))).wait(context),
+    (yield* awaited(root.submit({ content: "hi", type: "input" }, context))).wait(context),
   );
   const view = yield* fresh(root);
   expect(view.conversation).toEqual({ id: root.id });
@@ -70,7 +65,7 @@ const publishesOneFrame = Effect.gen(function* () {
   const { harness, root } = yield* openChat(new MemoryStorage(), setup);
   const { initial, frames, stop } = yield* awaited(record(root));
   const touching = touches(harness, root);
-  const submission = yield* awaited(root.submit({ type: "input", content: "hi" }, context));
+  const submission = yield* awaited(root.submit({ content: "hi", type: "input" }, context));
   yield* waitFor(() =>
     frames.some((frame) => (frame.value.docs["msa.live"] as { generation?: unknown }).generation),
   );
@@ -129,7 +124,7 @@ const cutsEntriesHead = Effect.gen(function* () {
   yield* awaited(note("c"));
   const { initial, frames, stop } = yield* awaited(record(root));
   const summary = yield* awaited(
-    root.commit((tx) => tx.appendEntry(root.id, { kind: "summary", head: b.id }), context),
+    root.commit((tx) => tx.appendEntry(root.id, { head: b.id, kind: "summary" }), context),
   );
   yield* awaited(note("d"));
   yield* awaited(root.reset(undefined, context));
@@ -158,7 +153,7 @@ const keepsOnlyMounted = Effect.gen(function* () {
   yield* awaited(root.reset(undefined, context));
   const { frames, stop } = yield* awaited(record(root));
   yield* awaited(
-    root.commit((tx) => tx.appendEntry(root.id, { kind: "summary", head: old.id }), context),
+    root.commit((tx) => tx.appendEntry(root.id, { head: old.id, kind: "summary" }), context),
   );
   yield* drained();
   expect(frames[0]!.value.entries.map((entry) => entry.kind)).toEqual(["summary"]);
@@ -174,7 +169,7 @@ const cutsForkView = Effect.gen(function* () {
   const fork = yield* awaited(root.fork(b.id, { ownership: { kind: "ownerless" } }, context));
   const { initial, frames, stop } = yield* awaited(record(fork));
   yield* awaited(
-    fork.commit((tx) => tx.appendEntry(fork.id, { kind: "summary", head: b.id }), context),
+    fork.commit((tx) => tx.appendEntry(fork.id, { head: b.id, kind: "summary" }), context),
   );
   yield* drained();
   expect(initial.entries.map((entry) => entry.id)).toEqual([a.id, b.id]);
@@ -192,7 +187,7 @@ const showsForkInherited = Effect.gen(function* () {
   const fork = yield* awaited(root.fork(first.id, { ownership: { kind: "ownerless" } }, context));
   const { initial, frames, stop } = yield* awaited(record(fork));
   expect(initial.entries.map((entry) => entry.kind)).toEqual(["first"]);
-  expect(initial.conversation.parent).toEqual({ conversationId: root.id, at: first.id });
+  expect(initial.conversation.parent).toEqual({ at: first.id, conversationId: root.id });
   yield* awaited(root.commit((tx) => tx.appendEntry(root.id, { kind: "parent" }), context));
   yield* awaited(fork.commit((tx) => tx.appendEntry(fork.id, { kind: "child" }), context));
   yield* drained();

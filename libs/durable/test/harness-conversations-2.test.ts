@@ -3,11 +3,17 @@ import { MemoryStorage } from "@msa/durable/storage/memory";
 import { Effect } from "effect";
 import { afterEach, describe, expect, it } from "vite-plus/test";
 
-import { awaited } from "./effect-support.ts";
-import { directories, append, allEntries } from "./harness-conversations-support.ts";
-import { addTool, openHarness, tool, user } from "./harness-support.ts";
-import { removeDir } from "./platform-support.ts";
-import { context } from "./session-support.ts";
+import effectSupport from "./effect-support.ts";
+import harnessConversationsSupport from "./harness-conversations-support.ts";
+import harnessSupport from "./harness-support.ts";
+import platformSupport from "./platform-support.ts";
+import sessionSupport from "./session-support.ts";
+
+const { awaited } = effectSupport;
+const { allEntries, append, directories } = harnessConversationsSupport;
+const { addTool, openHarness, tool, user } = harnessSupport;
+const { removeDir } = platformSupport;
+const { context } = sessionSupport;
 
 afterEach(() =>
   Effect.runPromise(
@@ -42,7 +48,6 @@ const forksConcreteEntryStep1 = Effect.gen(function* () {
     root.fork(
       at.id,
       {
-        ownership: { kind: "ownerless" },
         agent: { thinkingLevel: "minimal", tools: [legacy] },
         init: (tx, id) =>
           runPromise(
@@ -50,6 +55,7 @@ const forksConcreteEntryStep1 = Effect.gen(function* () {
               expect((yield* awaited(tx.doc(AgentDoc, id))).thinkingLevel).toBe("minimal");
             }),
           ),
+        ownership: { kind: "ownerless" },
       },
       context,
     ),
@@ -62,7 +68,7 @@ const forksConcreteEntryStep1 = Effect.gen(function* () {
     thinkingLevel: "high",
     tools: ["read"],
   });
-  return { harness, root, at };
+  return { at, harness, root };
 });
 
 const forksConcreteEntry = Effect.gen(function* () {
@@ -120,7 +126,7 @@ const paginatesForkAware = Effect.gen(function* () {
   expect(yield* allEntries(grandchild, "ascending")).toEqual(["r1", "r2", "c1", "g1"]);
   const bounded = yield* awaited(
     grandchild.entries(
-      { minEntryId: r2!.id, maxEntryId: c1.id, conversationId: root.id } as never,
+      { conversationId: root.id, maxEntryId: c1.id, minEntryId: r2!.id } as never,
       10,
       undefined,
       context,

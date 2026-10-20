@@ -1,7 +1,12 @@
 import { expect, expectTypeOf, it } from "vite-plus/test";
 
 import { createBashTool, createEditTool, createReadTool } from "../src/tools/index.ts";
-import {
+import specUsageExtensions from "./spec-usage-extensions.ts";
+import type specUsageNamesTypes from "./spec-usage-names.ts";
+import specUsageSequences from "./spec-usage-sequences.ts";
+import taskSequences from "./spec-usage-task-sequences.ts";
+
+const {
   bashExtensions,
   chatExtension,
   followTask,
@@ -10,24 +15,22 @@ import {
   promptExtensions,
   subagentExtension,
   subagentTools,
-} from "./spec-usage-extensions.ts";
-import type { SpecNames } from "./spec-usage-names.ts";
-import { containerSequence, hostSequence, setupSequences } from "./spec-usage-sequences.ts";
-import { taskSequences } from "./spec-usage-task-sequences.ts";
+} = specUsageExtensions;
+const { containerSequence, hostSequence, setupSequences } = specUsageSequences;
 
-function examples(names: SpecNames) {
+function examples(names: specUsageNamesTypes.SpecNames) {
   const tools = {
-    readTool: createReadTool(),
-    editTool: createEditTool(),
     bashTool: createBashTool(),
+    editTool: createEditTool(),
+    readTool: createReadTool(),
   };
   const extensions = {
     ...promptExtensions(names),
     ...bashExtensions(names, tools.bashTool),
     ...planMode(names),
+    Chat: chatExtension(),
     Subagent: subagentExtension(names),
     SubagentTools: subagentTools(names),
-    Chat: chatExtension(),
   };
   const Payment = paymentTask(names);
   const sequences = {
@@ -36,7 +39,7 @@ function examples(names: SpecNames) {
     ...hostSequence(names, tools, extensions),
     ...taskSequences(names, extensions.SubagentTools, followTask()),
   };
-  return { sequences, Payment };
+  return { Payment, sequences };
 }
 
 it("compiles the spec's usage examples", () => {

@@ -2,46 +2,49 @@ import { defineDoc } from "@msa/durable";
 import { Effect } from "effect";
 import { describe, expect, it } from "vite-plus/test";
 
-import { awaited } from "./effect-support.ts";
-import { context, openTestSession } from "./session-support.ts";
+import effectSupport from "./effect-support.ts";
+import sessionSupport from "./session-support.ts";
+
+const { awaited } = effectSupport;
+const { context, openTestSession } = sessionSupport;
 
 const leavesUnaccessedOlderStep1 = Effect.gen(function* () {
   const runPromise = Effect.runPromiseWith(yield* Effect.context<never>());
 
   const FirstV1 = defineDoc<{ count: number }>({
-    kind: "migration.lazy.first",
-    version: 1,
-    scope: "session",
     initial: () => ({ count: 1 }),
+    kind: "migration.lazy.first",
+    scope: "session",
+    version: 1,
   });
   const SecondV1 = defineDoc<{ count: number }>({
-    kind: "migration.lazy.second",
-    version: 1,
-    scope: "session",
     initial: () => ({ count: 2 }),
+    kind: "migration.lazy.second",
+    scope: "session",
+    version: 1,
   });
-  return { runPromise, FirstV1, SecondV1 };
+  return { FirstV1, SecondV1, runPromise };
 });
 
 const leavesUnaccessedOlder = Effect.gen(function* () {
   const { runPromise, FirstV1, SecondV1 } = yield* leavesUnaccessedOlderStep1;
   let secondMigrations = 0;
   const FirstV2 = defineDoc<{ count: number }>({
-    kind: "migration.lazy.first",
-    version: 2,
-    scope: "session",
     initial: () => ({ count: 0 }),
+    kind: "migration.lazy.first",
     migrate: (value) => ({ count: value["count"] as number }),
+    scope: "session",
+    version: 2,
   });
   defineDoc<{ count: number }>({
-    kind: "migration.lazy.second",
-    version: 2,
-    scope: "session",
     initial: () => ({ count: 0 }),
+    kind: "migration.lazy.second",
     migrate: (value) => {
       secondMigrations++;
       return { count: value["count"] as number };
     },
+    scope: "session",
+    version: 2,
   });
   const { session, storage } = openTestSession();
   yield* awaited(

@@ -1,21 +1,16 @@
-import { fauxAssistantMessage, fauxText, fauxToolCall, Type } from "@msa/ai";
-import { type ConversationId, defineTool, LiveDoc, type TaskId } from "@msa/durable";
+import { Type, fauxAssistantMessage, fauxText, fauxToolCall } from "@msa/ai";
+import { type ConversationId, LiveDoc, type TaskId, defineTool } from "@msa/durable";
 import { MemoryStorage } from "@msa/durable/storage/memory";
 import { Effect } from "effect";
 import { afterEach, describe, expect, it } from "vite-plus/test";
 
-import { spawnFauxChild } from "./harness-ownership-children.ts";
-import { directories, gated, gates, runs } from "./harness-ownership-support.ts";
-import {
-  chatSetup,
-  openChat,
-  awaited,
-  addTool,
-  removeDir,
-  context,
-  aborted,
-  deferred,
-} from "./support.ts";
+import harnessOwnershipChildren from "./harness-ownership-children.ts";
+import harnessOwnershipSupport from "./harness-ownership-support.ts";
+import support from "./support.ts";
+
+const { spawnFauxChild } = harnessOwnershipChildren;
+const { directories, gated, gates, runs } = harnessOwnershipSupport;
+const { aborted, addTool, awaited, chatSetup, context, deferred, openChat, removeDir } = support;
 
 afterEach(() =>
   Effect.runPromise(
@@ -36,9 +31,7 @@ function delegateLate() {
   addTool(
     setup.registry,
     defineTool({
-      name: "delegate",
       description: "Delegates late",
-      parameters: Type.Object({}),
       execute: (_args, api, callContext) =>
         Effect.runPromise(
           Effect.gen(function* () {
@@ -63,18 +56,20 @@ function delegateLate() {
             const handle = (yield* awaited(api.conversation(child, callContext)))!;
             ready.resolve({ child, taskId: api.taskId });
             yield* awaited(go.promise);
-            const submitting = handle.submit({ type: "input", content: "late" }, context);
+            const submitting = handle.submit({ content: "late", type: "input" }, context);
             submitting.catch(() => {});
             queued.resolve({ submitting });
             return yield* awaited(aborted(callContext.abortSignal!));
           }),
         ),
+      name: "delegate",
+      parameters: Type.Object({}),
     }),
   );
   setup.faux.setResponses([
     fauxAssistantMessage([fauxToolCall("delegate", {}, { id: "c1" })], { stopReason: "toolUse" }),
   ]);
-  return { setup, ready, go, queued };
+  return { go, queued, ready, setup };
 }
 
 function delegateToGatedChild() {
@@ -84,16 +79,14 @@ function delegateToGatedChild() {
   addTool(
     setup.registry,
     defineTool({
-      name: "delegate",
       description: "Delegates",
-      parameters: Type.Object({}),
       execute: (_args, api, callContext) =>
         Effect.runPromise(
           Effect.gen(function* () {
             spawned.child = yield* spawnFauxChild(api, callContext);
             const submission = yield* awaited(
               (yield* awaited(api.conversation(spawned.child, callContext)))!.submit(
-                { type: "input", content: "child task" },
+                { content: "child task", type: "input" },
                 callContext,
               ),
             );
@@ -102,9 +95,11 @@ function delegateToGatedChild() {
                 Effect.sync(() => toolWait.resolve((error as Error).message)),
               ),
             );
-            return { output: [{ type: "text", text: settled.status }] };
+            return { output: [{ text: settled.status, type: "text" }] };
           }),
         ),
+      name: "delegate",
+      parameters: Type.Object({}),
     }),
   );
   const childRun = gated(fauxAssistantMessage([fauxText("never")]));
@@ -112,7 +107,7 @@ function delegateToGatedChild() {
     fauxAssistantMessage([fauxToolCall("delegate", {}, { id: "c1" })], { stopReason: "toolUse" }),
     childRun.step,
   ]);
-  return { setup, spawned, toolWait, childRun };
+  return { childRun, setup, spawned, toolWait };
 }
 
 const rejectsHandleOperation = Effect.gen(function* () {
@@ -120,7 +115,7 @@ const rejectsHandleOperation = Effect.gen(function* () {
 
   const { setup, ready, go, queued } = delegateLate();
   const { harness, root } = yield* openChat(new MemoryStorage(), setup);
-  yield* awaited(root.submit({ type: "input", content: "go" }, context));
+  yield* awaited(root.submit({ content: "go", type: "input" }, context));
   const { child, taskId } = yield* awaited(ready.promise);
   const release = deferred();
   const holding = root.commit(
@@ -147,12 +142,12 @@ const rejectsHandleOperation = Effect.gen(function* () {
 const abortsSubagentRun = Effect.gen(function* () {
   const { setup, spawned, toolWait, childRun } = delegateToGatedChild();
   const { harness, root } = yield* openChat(new MemoryStorage(), setup);
-  const input = yield* awaited(root.submit({ type: "input", content: "go" }, context));
+  const input = yield* awaited(root.submit({ content: "go", type: "input" }, context));
   yield* awaited(childRun.reached);
   yield* awaited(root.abort(context));
   expect(yield* awaited(input.wait(context))).toMatchObject({
-    status: "unanswered",
     reason: "aborted",
+    status: "unanswered",
   });
   expect(yield* awaited(toolWait.promise)).toBeTruthy();
   const childConversation = (yield* awaited(harness.conversation(spawned.child!, context)))!;

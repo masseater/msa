@@ -4,27 +4,12 @@ import { Effect } from "effect";
 import { afterEach, describe, expect, it } from "vite-plus/test";
 
 import { openNodeSqliteStorage } from "../src/storage/sqlite/node.ts";
-import {
-  text,
-  BLOCKING,
-  history,
-  turn,
-  sqlitePath,
-  directories,
-  script,
-  live,
-  open,
-  kinds,
-} from "./harness-compaction-support.ts";
-import {
-  chatSetup,
-  openChat,
-  waitFor,
-  awaited,
-  addSection,
-  removeDir,
-  context,
-} from "./support.ts";
+import harnessCompactionSupport from "./harness-compaction-support.ts";
+import support from "./support.ts";
+
+const { BLOCKING, directories, history, kinds, live, open, script, sqlitePath, text, turn } =
+  harnessCompactionSupport;
+const { addSection, awaited, chatSetup, context, openChat, removeDir, waitFor } = support;
 
 afterEach(() =>
   Effect.runPromise(
@@ -79,8 +64,8 @@ const survivesReopenBlockedStep1 = Effect.gen(function* () {
             const taskId = yield* awaited(
               tx.createTask(newer, { reason: "manual" }, { ownership: { kind: "conversation" } }),
             );
-            const live = yield* awaited(tx.doc(LiveDoc, root.id));
-            live.compactions = [{ taskId, reason: "manual", blocking: false, attempt: 1 }];
+            const liveInner = yield* awaited(tx.doc(LiveDoc, root.id));
+            liveInner.compactions = [{ attempt: 1, blocking: false, reason: "manual", taskId }];
             return taskId;
           }),
         ),
@@ -90,7 +75,7 @@ const survivesReopenBlockedStep1 = Effect.gen(function* () {
   yield* awaited(harness.close(context));
   ({ harness, root } = yield* openChat(yield* awaited(openNodeSqliteStorage(path)), setup));
   harness.resume();
-  const chat = { harness, root, setup, faux: script(setup) };
+  const chat = { faux: script(setup), harness, root, setup };
   const events: AgentEvent[] = [];
   const stream = yield* awaited(watchEvents(chat.harness, chat.root.id, context));
   stream.start((batch) => {
@@ -104,14 +89,14 @@ const survivesReopenBlockedStep1 = Effect.gen(function* () {
     reason: "task_too_old",
   });
   yield* awaited(chat.harness.abortTask(id, context));
-  return { id, chat, events, stream };
+  return { chat, events, id, stream };
 });
 
 const survivesReopenBlocked = Effect.gen(function* () {
   const { id, chat, events, stream } = yield* survivesReopenBlockedStep1;
   expect((yield* awaited(chat.harness.waitForTask(id, context))).state.outcome).toEqual({
-    status: "orphaned",
     reason: "task_too_old",
+    status: "orphaned",
   });
   expect((yield* awaited(live(chat))).compactions).toBeUndefined();
   yield* waitFor(() => events.some((event) => event.type === "compaction_end"));

@@ -9,7 +9,9 @@ import {
   type DurableObjectSqliteStorage,
   openDurableObjectSqliteStorage,
 } from "../src/storage/sqlite/cloudflare.ts";
-import { awaited } from "./effect-support.ts";
+import effectSupport from "./effect-support.ts";
+
+const { awaited } = effectSupport;
 
 type SqlValue = ArrayBuffer | string | number | null;
 

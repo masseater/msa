@@ -5,18 +5,20 @@ import { Console, Effect } from "effect";
 import { defineDoc } from "../../src/index.ts";
 import { createSession } from "../../src/session/index.ts";
 import { MemoryStorage } from "../../src/storage/memory.ts";
-import { awaited } from "../effect-support.ts";
+import effectSupport from "../effect-support.ts";
+
+const { awaited } = effectSupport;
 
 const context = BACKGROUND_CONTEXT;
 const session = createSession(new MemoryStorage());
 
 const Notes = defineDoc<{ text: string }>({
-  kind: "example.notes",
-  version: 1,
-  scope: "conversation",
-  history: "rewindable",
   fork: "asOf",
+  history: "rewindable",
   initial: () => ({ text: "" }),
+  kind: "example.notes",
+  scope: "conversation",
+  version: 1,
 });
 
 const main = Effect.gen(function* () {

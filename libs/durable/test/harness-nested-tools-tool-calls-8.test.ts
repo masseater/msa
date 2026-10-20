@@ -3,15 +3,11 @@ import { MemoryStorage } from "@msa/durable/storage/memory";
 import { Effect } from "effect";
 import { afterEach, describe, expect, it } from "vite-plus/test";
 
-import {
-  directories,
-  runOnce,
-  DONE,
-  call,
-  tool,
-  echoTool,
-} from "./harness-nested-tools-support.ts";
-import { chatSetup, openChat, awaited, addTool, removeDir, context, deferred } from "./support.ts";
+import harnessNestedToolsSupport from "./harness-nested-tools-support.ts";
+import support from "./support.ts";
+
+const { DONE, call, directories, echoTool, runOnce, tool } = harnessNestedToolsSupport;
+const { addTool, awaited, chatSetup, context, deferred, openChat, removeDir } = support;
 
 afterEach(() =>
   Effect.runPromise(
@@ -85,7 +81,7 @@ const findsEachNestedStep1 = Effect.gen(function* () {
   );
   const before = deferred();
   const checked = deferred();
-  return { runPromise, setup, before, checked };
+  return { before, checked, runPromise, setup };
 });
 
 const findsEachNested = Effect.gen(function* () {
@@ -115,11 +111,11 @@ const findsEachNested = Effect.gen(function* () {
   );
   setup.faux.setResponses([call("batch"), DONE]);
   const { harness, root } = yield* openChat(new MemoryStorage(), setup);
-  const submission = yield* awaited(root.submit({ type: "input", content: "go" }, context));
+  const submission = yield* awaited(root.submit({ content: "go", type: "input" }, context));
   yield* awaited(before.promise);
   const done = {
     status: "done",
-    summary: { isError: false, durationMs: expect.any(Number) },
+    summary: { durationMs: expect.any(Number), isError: false },
   };
   expect(slots).toEqual(
     ["c1/1", "c1/2", "c1/3", "c1/4"].map((callId) => Object.assign({ callId }, done)),

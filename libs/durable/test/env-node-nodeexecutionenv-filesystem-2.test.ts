@@ -4,14 +4,21 @@ import { afterEach, describe, expect, it, vi } from "vite-plus/test";
 
 import { getOrThrow } from "../src/env/index.ts";
 import { NodeExecutionEnv } from "../src/env/node.ts";
-import { abortController, awaited } from "./effect-support.ts";
-import {
-  type NodeFileHandle,
-  cleanUpEnvTests,
-  createTempDir,
-  fileHandlePrototype,
-} from "./env-node-support.ts";
-import { joinPath } from "./platform-support.ts";
+import effectSupport from "./effect-support.ts";
+import envNodeSupport from "./env-node-support.ts";
+import type envNodeSupportTypes from "./env-node-support.types.ts";
+import platformSupport from "./platform-support.ts";
+
+vi.mock("node:fs/promises", (importOriginal) =>
+  Promise.all([
+    importOriginal<{ readonly open: unknown }>(),
+    import("./node-fs-promises-capture.ts"),
+  ]).then(([actual, capture]) => capture.default.captureFsPromises(actual)),
+);
+
+const { abortController, awaited } = effectSupport;
+const { cleanUpEnvTests, createTempDir, fileHandlePrototype } = envNodeSupport;
+const { joinPath } = platformSupport;
 
 afterEach(() => Effect.runPromise(cleanUpEnvTests), 15_000);
 
@@ -26,12 +33,12 @@ const decodesMultiByte = Effect.gen(function* () {
   );
   yield* Effect.gen(function* () {
     expect(getOrThrow(yield* awaited(reader.readLine(BACKGROUND_CONTEXT)))).toEqual({
-      text: first,
       terminated: true,
+      text: first,
     });
     expect(getOrThrow(yield* awaited(reader.readLine(BACKGROUND_CONTEXT)))).toEqual({
-      text: second,
       terminated: false,
+      text: second,
     });
     expect(getOrThrow(yield* awaited(reader.readLine(BACKGROUND_CONTEXT)))).toBeUndefined();
   }).pipe(Effect.ensuring(Effect.suspend(() => awaited(reader.close(BACKGROUND_CONTEXT)))));
@@ -53,7 +60,7 @@ const rejectsReadCancelled = Effect.gen(function* () {
   const { promise: started, resolve: markStarted } = Promise.withResolvers<void>();
   const { promise: gate, resolve: release } = Promise.withResolvers<void>();
   vi.spyOn(prototype, "read").mockImplementationOnce(function (
-    this: NodeFileHandle,
+    this: envNodeSupportTypes.NodeFileHandle,
     ...args: unknown[]
   ) {
     return runPromise(
@@ -63,7 +70,7 @@ const rejectsReadCancelled = Effect.gen(function* () {
         return yield* awaited(Reflect.apply(read, this, args));
       }),
     );
-  } as unknown as NodeFileHandle["read"]);
+  } as unknown as envNodeSupportTypes.NodeFileHandle["read"]);
 
   const reader = getOrThrow(
     yield* awaited(env.openTextLineReader("lines.txt", BACKGROUND_CONTEXT)),
@@ -74,14 +81,14 @@ const rejectsReadCancelled = Effect.gen(function* () {
     yield* awaited(started);
     controller.abort();
     release();
-    expect(yield* awaited(pending)).toMatchObject({ ok: false, error: { code: "aborted" } });
+    expect(yield* awaited(pending)).toMatchObject({ error: { code: "aborted" }, ok: false });
     expect(getOrThrow(yield* awaited(reader.readLine(BACKGROUND_CONTEXT)))).toEqual({
-      text: "one",
       terminated: true,
+      text: "one",
     });
     expect(getOrThrow(yield* awaited(reader.readLine(BACKGROUND_CONTEXT)))).toEqual({
-      text: "two",
       terminated: true,
+      text: "two",
     });
     expect(getOrThrow(yield* awaited(reader.readLine(BACKGROUND_CONTEXT)))).toBeUndefined();
   }).pipe(Effect.ensuring(Effect.suspend(() => awaited(reader.close(BACKGROUND_CONTEXT)))));

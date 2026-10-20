@@ -1,11 +1,14 @@
-import { AgentDoc, configure, defineTask, LiveDoc, ProviderDoc } from "@msa/durable";
+import { AgentDoc, LiveDoc, ProviderDoc, configure, defineTask } from "@msa/durable";
 import { createSession } from "@msa/durable/session";
 import { MemoryStorage } from "@msa/durable/storage/memory";
 import { Effect } from "effect";
 import { afterEach, describe, expect, it } from "vite-plus/test";
 
-import { directories, UUID_V7, NoteDoc } from "./harness-conversations-support.ts";
-import { awaited, openHarness, user, removeDir, ControlledStorage, context } from "./support.ts";
+import harnessConversationsSupport from "./harness-conversations-support.ts";
+import support from "./support.ts";
+
+const { NoteDoc, UUID_V7, directories } = harnessConversationsSupport;
+const { ControlledStorage, awaited, context, openHarness, removeDir, user } = support;
 
 afterEach(() =>
   Effect.runPromise(
@@ -23,18 +26,18 @@ const txCreatedConversations = Effect.fn("txCreatedConversations")(function* () 
   const root = yield* awaited(
     harness.root(context, {
       agent: {
-        model: { provider: "faux", modelId: "m" },
-        instructions: "Main role.",
         cwd: "/repo",
+        instructions: "Main role.",
+        model: { modelId: "m", provider: "faux" },
       },
     }),
   );
   const owner = defineTask<Record<string, never>, { phase: "never" }, null>({
-    name: "test.owner",
-    version: 1,
-    initial: () => ({ phase: "never" }),
-    phases: { never: () => Promise.resolve() },
     abort: () => Promise.resolve(),
+    initial: () => ({ phase: "never" }),
+    name: "test.owner",
+    phases: { never: () => Promise.resolve() },
+    version: 1,
   });
   const ids = yield* awaited(
     root.commit(
@@ -52,13 +55,13 @@ const txCreatedConversations = Effect.fn("txCreatedConversations")(function* () 
             );
             expect((yield* awaited(tx.doc(AgentDoc, owned.id))).cwd).toBe("/repo");
             yield* awaited(configure(tx, owned.id, { cwd: "/worktree" }));
-            return { taskId, plain: plain.id, owned: owned.id };
+            return { owned: owned.id, plain: plain.id, taskId };
           }),
         ),
       context,
     ),
   );
-  return { harness, root, ids };
+  return { harness, ids, root };
 });
 
 const givesConversationsCreatedStep1 = Effect.gen(function* () {
@@ -74,9 +77,9 @@ const givesConversationsCreatedStep1 = Effect.gen(function* () {
     (yield* awaited(harness.snapshot(ProviderDoc, root.id, context)))?.sessionId,
   );
   expect(yield* awaited(harness.snapshot(AgentDoc, ids.owned, context))).toEqual({
-    model: { provider: "faux", modelId: "m" },
-    instructions: "Main role.",
     cwd: "/worktree",
+    instructions: "Main role.",
+    model: { modelId: "m", provider: "faux" },
   });
 
   yield* awaited(root.configure({ thinkingLevel: "high" }, context));
@@ -95,7 +98,7 @@ const givesConversationsCreatedStep1 = Effect.gen(function* () {
       context,
     ),
   );
-  return { runPromise, harness, root, ids, at };
+  return { at, harness, ids, root, runPromise };
 });
 
 const givesConversationsCreated = Effect.gen(function* () {

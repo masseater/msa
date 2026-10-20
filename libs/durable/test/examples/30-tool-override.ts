@@ -6,23 +6,25 @@ import {
   fauxProvider,
   fauxToolCall,
 } from "@msa/ai";
-import { type Conversation, defineExtension, ToolResultEntry, wrapTool } from "@msa/durable";
-import { createRegistry, Harness } from "@msa/durable/harness";
+import { type Conversation, ToolResultEntry, defineExtension, wrapTool } from "@msa/durable";
+import { Harness, createRegistry } from "@msa/durable/harness";
 import { MemoryStorage } from "@msa/durable/storage/memory";
 import { Console, Effect } from "effect";
 
 import { NodeExecutionEnv } from "../../src/env/node.ts";
 import { CodingTools, createBashTool } from "../../src/tools/index.ts";
-import {
-  writeText,
-  removeDir,
-  makeTempDir,
-  makeDirectory,
-  joinPath,
-  awaited,
+import support from "../support.ts";
+
+const {
   BACKGROUND_CONTEXT,
+  awaited,
   currentTimeMillis,
-} from "../support.ts";
+  joinPath,
+  makeDirectory,
+  makeTempDir,
+  removeDir,
+  writeText,
+} = support;
 
 const context = BACKGROUND_CONTEXT;
 
@@ -84,24 +86,24 @@ const mainStep1 = Effect.gen(function* () {
     Harness.open(
       new MemoryStorage(),
       {
+        env: () => new NodeExecutionEnv({ cwd: project }),
         models,
         registry,
         settings: { extensions: [CodingTools, Timing] },
-        env: () => new NodeExecutionEnv({ cwd: project }),
       },
       context,
     ),
   );
-  const model = { provider: "faux", modelId: "faux-1" };
+  const model = { modelId: "faux-1", provider: "faux" };
   const plain = yield* awaited(harness.root(context, { agent: { model } }));
-  return { project, harness, model, plain };
+  return { harness, model, plain, project };
 });
 
 const main = Effect.gen(function* () {
   const { project, harness, model, plain } = yield* mainStep1;
   const python = yield* awaited(
     harness.createConversation(
-      { ownership: { kind: "ownerless" }, agent: { model, extensions: { add: [Venv] } } },
+      { agent: { extensions: { add: [Venv] }, model }, ownership: { kind: "ownerless" } },
       context,
     ),
   );
@@ -109,7 +111,7 @@ const main = Effect.gen(function* () {
   const probeBash = Effect.fn("probeBash")(function* (conversation: Conversation) {
     yield* awaited(
       (yield* awaited(
-        conversation.submit({ type: "input", content: "Which venv?" }, context),
+        conversation.submit({ content: "Which venv?", type: "input" }, context),
       )).wait(context),
     );
     const page = yield* awaited(conversation.entries({}, 10, undefined, context));

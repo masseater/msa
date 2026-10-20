@@ -5,10 +5,13 @@ import { afterAll, describe, expect, it } from "vite-plus/test";
 import { getOrThrow } from "../src/env/index.ts";
 import { withFileMutationQueue } from "../src/tools/env.ts";
 import { createEditTool, createWriteTool } from "../src/tools/index.ts";
-import { abortController, awaited, makeDirectory, makeSymlink } from "./support.ts";
-import { BlockingEditExecutionEnv } from "./tools-blocking-edit-env-support.ts";
-import { SlowReadExecutionEnv } from "./tools-slow-read-env-support.ts";
-import {
+import support from "./support.ts";
+import BlockingEditExecutionEnv from "./tools-blocking-edit-env-support.ts";
+import SlowReadExecutionEnv from "./tools-slow-read-env-support.ts";
+import toolsSupport from "./tools-support.ts";
+
+const { abortController, awaited, makeDirectory, makeSymlink } = support;
+const {
   BlockingWriteExecutionEnv,
   createEnv,
   createTempDir,
@@ -16,7 +19,7 @@ import {
   delay,
   removeTempDirs,
   run,
-} from "./tools-support.ts";
+} = toolsSupport;
 
 afterAll(() => Effect.runPromise(removeTempDirs));
 
@@ -28,11 +31,11 @@ const matchesAllEdits = Effect.gen(function* () {
       run(
         createEditTool(),
         {
-          path: "edit.txt",
           edits: [
-            { oldText: "one\ntwo\n", newText: "ONE\nTWO\n" },
-            { oldText: "two\nthree\n", newText: "TWO\nTHREE\n" },
+            { newText: "ONE\nTWO\n", oldText: "one\ntwo\n" },
+            { newText: "TWO\nTHREE\n", oldText: "two\nthree\n" },
           ],
+          path: "edit.txt",
         },
         env,
       ),
@@ -49,12 +52,12 @@ const rejectsMissingDuplicate = Effect.gen(function* () {
   const tool = createEditTool();
   yield* awaited(
     expect(
-      run(tool, { path: "edit.txt", edits: [{ oldText: "bar", newText: "baz" }] }, env),
+      run(tool, { edits: [{ newText: "baz", oldText: "bar" }], path: "edit.txt" }, env),
     ).rejects.toThrow(/Could not find the exact text/u),
   );
   yield* awaited(
     expect(
-      run(tool, { path: "edit.txt", edits: [{ oldText: "foo", newText: "bar" }] }, env),
+      run(tool, { edits: [{ newText: "bar", oldText: "foo" }], path: "edit.txt" }, env),
     ).rejects.toThrow(/Found 3 occurrences/u),
   );
 });
@@ -76,7 +79,7 @@ const keepsMutationQueue = Effect.gen(function* () {
   const controller = abortController();
   const firstEdit = run(
     tool,
-    { path: "file.txt", edits: [{ oldText: "alpha", newText: "ALPHA" }] },
+    { edits: [{ newText: "ALPHA", oldText: "alpha" }], path: "file.txt" },
     env,
     withAbortSignal(controller.signal, BACKGROUND_CONTEXT),
   );
@@ -84,7 +87,7 @@ const keepsMutationQueue = Effect.gen(function* () {
   controller.abort();
   const secondEdit = run(
     tool,
-    { path: "file.txt", edits: [{ oldText: "beta", newText: "BETA" }] },
+    { edits: [{ newText: "BETA", oldText: "beta" }], path: "file.txt" },
     env,
   );
   yield* awaited(delay(20));
@@ -107,8 +110,8 @@ const serializesConcurrentEdits = Effect.gen(function* () {
   const tool = createEditTool();
   yield* awaited(
     Promise.all([
-      run(tool, { path: "target.txt", edits: [{ oldText: "alpha", newText: "ALPHA" }] }, env),
-      run(tool, { path: "link.txt", edits: [{ oldText: "beta", newText: "BETA" }] }, env),
+      run(tool, { edits: [{ newText: "ALPHA", oldText: "alpha" }], path: "target.txt" }, env),
+      run(tool, { edits: [{ newText: "BETA", oldText: "beta" }], path: "link.txt" }, env),
     ]),
   );
   expect(getOrThrow(yield* awaited(env.readTextFile("target.txt", BACKGROUND_CONTEXT)))).toBe(
@@ -134,8 +137,8 @@ const serializesEditsOne = Effect.gen(function* () {
   const tool = createEditTool();
   yield* awaited(
     Promise.all([
-      run(tool, { path: "file.txt", edits: [{ oldText: "alpha", newText: "ALPHA" }] }, first),
-      run(tool, { path: "file.txt", edits: [{ oldText: "beta", newText: "BETA" }] }, second),
+      run(tool, { edits: [{ newText: "ALPHA", oldText: "alpha" }], path: "file.txt" }, first),
+      run(tool, { edits: [{ newText: "BETA", oldText: "beta" }], path: "file.txt" }, second),
     ]),
   );
   expect(getOrThrow(yield* awaited(first.readTextFile("file.txt", BACKGROUND_CONTEXT)))).toBe(
@@ -148,9 +151,9 @@ const serializesNewFile = Effect.gen(function* () {
   yield* makeDirectory(`${env.cwd}/real`);
   yield* makeSymlink(`${env.cwd}/real`, `${env.cwd}/link`);
   const tool = createWriteTool();
-  const first = run(tool, { path: "link/new.txt", content: "first\n" }, env);
+  const first = run(tool, { content: "first\n", path: "link/new.txt" }, env);
   yield* awaited(env.firstWriteStarted.promise);
-  const second = run(tool, { path: "real/new.txt", content: "second\n" }, env);
+  const second = run(tool, { content: "second\n", path: "real/new.txt" }, env);
   yield* awaited(delay(20));
   expect(env.secondWriteStarted).toBe(false);
   env.finishFirstWrite.resolve();

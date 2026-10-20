@@ -2,9 +2,13 @@ import { Effect } from "effect";
 import { afterEach, describe, expect, it } from "vite-plus/test";
 
 import { CodemodeJournalDoc, CodemodeRunDoc } from "../src/codemode/codemode.ts";
-import { codemodeChat } from "./codemode-chat-support.ts";
-import { restart, nestedCount, removeDirectories } from "./codemode-support.ts";
-import { awaited, context, eventually } from "./support.ts";
+import codemodeChatSupport from "./codemode-chat-support.ts";
+import codemodeSupport from "./codemode-support.ts";
+import support from "./support.ts";
+
+const { codemodeChat } = codemodeChatSupport;
+const { nestedCount, removeDirectories, restart } = codemodeSupport;
+const { awaited, context, eventually } = support;
 
 afterEach(removeDirectories);
 
@@ -43,7 +47,7 @@ const checksRerunCalls = Effect.gen(function* () {
 });
 
 const endsCallRerun = Effect.gen(function* () {
-  const chat = codemodeChat({ globals: [{ name: "pick", execute: () => Promise.resolve(1) }] });
+  const chat = codemodeChat({ globals: [{ execute: () => Promise.resolve(1), name: "pick" }] });
   const { harness, result } = yield* restart(
     chat,
     `if (load("k")) { await pick(); await tools.echo({ text: "new" }); } else { await tools.hold({}); }`,
@@ -80,7 +84,7 @@ describe("durable code mode", () => {
 });
 
 const endsCallRerunFirst = Effect.gen(function* () {
-  const chat = codemodeChat({ globals: [{ name: "pick", execute: () => Promise.resolve(1) }] });
+  const chat = codemodeChat({ globals: [{ execute: () => Promise.resolve(1), name: "pick" }] });
   const { harness, result } = yield* restart(
     chat,
     `const k = load("k");

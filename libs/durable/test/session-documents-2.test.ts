@@ -2,23 +2,20 @@ import type { Draft } from "@msa/chord";
 import { Effect } from "effect";
 import { describe, expect, it } from "vite-plus/test";
 
-import { awaited } from "./effect-support.ts";
-import {
-  setupLive,
-  LiveDoc,
-  liveInitCount,
-  type Live,
-  MemberDoc,
-  seeds,
-  CounterDoc,
-} from "./session-documents-support.ts";
-import { context, createConversation, flush, openTestSession } from "./session-support.ts";
+import effectSupport from "./effect-support.ts";
+import sessionDocumentsSupport from "./session-documents-support.ts";
+import type sessionDocumentsSupportTypes from "./session-documents-support.types.ts";
+import sessionSupport from "./session-support.ts";
+
+const { awaited } = effectSupport;
+const { CounterDoc, LiveDoc, MemberDoc, liveInits, seeds, setupLive } = sessionDocumentsSupport;
+const { context, createConversation, flush, openTestSession } = sessionSupport;
 
 const revokesEscapedDrafts = Effect.gen(function* () {
   const runPromise = Effect.runPromiseWith(yield* Effect.context<never>());
 
   const { session, conversationId } = yield* setupLive();
-  let escaped: Draft<Live> | undefined;
+  let escaped: Draft<sessionDocumentsSupportTypes.Live> | undefined;
   let items: Draft<string[]> | undefined;
   yield* awaited(
     session.commit(
@@ -101,7 +98,7 @@ const memoizesConcurrentDuplicate = Effect.gen(function* () {
 
   const { session, storage } = openTestSession();
   const conversationId = yield* awaited(createConversation(session));
-  const initCount = liveInitCount;
+  const initCount = liveInits.count;
   const mints = storage.mintCount;
   yield* awaited(
     session.commit(
@@ -119,7 +116,7 @@ const memoizesConcurrentDuplicate = Effect.gen(function* () {
       context,
     ),
   );
-  expect(liveInitCount).toBe(initCount + 1);
+  expect(liveInits.count).toBe(initCount + 1);
   expect(storage.mintCount).toBe(mints + 1);
   expect(storage.commits.at(-1)!.filter((write) => write.type === "document.create")).toHaveLength(
     1,
@@ -159,12 +156,12 @@ const usesFirstFamily = Effect.gen(function* () {
   );
   expect(seeds).toEqual(["first", "fourth"]);
   expect(yield* awaited(session.snapshot(MemberDoc, "k", context))).toEqual({
-    seed: "first",
     hits: 2,
+    seed: "first",
   });
   expect(yield* awaited(session.snapshot(MemberDoc, "other", context))).toEqual({
-    seed: "fourth",
     hits: 1,
+    seed: "fourth",
   });
 });
 

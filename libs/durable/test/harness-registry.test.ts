@@ -6,46 +6,47 @@ import {
   wrapSection,
   wrapTool,
 } from "@msa/durable";
-import { CompactionTask, createRegistry, GenerationTask, ToolTask } from "@msa/durable/harness";
+import { CompactionTask, GenerationTask, ToolTask, createRegistry } from "@msa/durable/harness";
 import { describe, expect, it } from "vite-plus/test";
 
 import { resolveSettings } from "../src/harness/agent.ts";
-import { names, snapshot } from "./harness-registry-cases.ts";
-import {
-  Skills,
-  type AppTool,
-  read,
-  tool,
-  bash,
-  edit,
-  Coding,
-  resolve,
-} from "./harness-registry-support.ts";
+import harnessRegistryCases from "./harness-registry-cases.ts";
+import harnessRegistrySupport from "./harness-registry-support.ts";
+import type harnessRegistrySupportTypes from "./harness-registry-support.types.ts";
+
+const { names, snapshot } = harnessRegistryCases;
+const { Coding, Skills, bash, edit, read, resolve, tool } = harnessRegistrySupport;
 
 function task(name: string, version = 1) {
   return defineTask<undefined, { phase: "run" }, null>({
-    name,
-    version,
-    initial: () => ({ phase: "run" }),
-    phases: { run: () => Promise.resolve() },
     abort: () => Promise.resolve(),
+    initial: () => ({ phase: "run" }),
+    name,
+    phases: { run: () => Promise.resolve() },
+    version,
   });
 }
 
 describe("registry", () => {
   it("installs, replaces in place, and uninstalls extensions by name", () => {
-    const registry = createRegistry<AppTool>();
+    const registry = createRegistry<harnessRegistrySupportTypes.AppTool>();
     const listener: string[] = [];
     registry.subscribe(() => listener.push(names(registry.snapshot().installed()).join(",")));
-    const a = defineExtension<AppTool>({
+    const a = defineExtension<harnessRegistrySupportTypes.AppTool>({
       name: "a",
       tools: [tool("read", { snippet: "Read files" })],
     });
-    const b = defineExtension<AppTool>({ name: "b", tools: [tool("read"), tool("bash")] });
+    const b = defineExtension<harnessRegistrySupportTypes.AppTool>({
+      name: "b",
+      tools: [tool("read"), tool("bash")],
+    });
     registry.install(a);
     registry.install(b);
     const before = registry.snapshot();
-    const a2 = defineExtension<AppTool>({ name: "a", tools: [tool("grep")] });
+    const a2 = defineExtension<harnessRegistrySupportTypes.AppTool>({
+      name: "a",
+      tools: [tool("grep")],
+    });
     registry.install(a2);
     expect(names(registry.snapshot().installed())).toEqual(["a", "b"]);
     expect(registry.snapshot().extension("a")).toBe(a2);
@@ -53,7 +54,7 @@ describe("registry", () => {
       registry
         .snapshot()
         .tools()
-        .map(({ extension, tool }) => `${tool.name}@${extension.name}`),
+        .map(({ extension, tool: toolInner }) => `${toolInner.name}@${extension.name}`),
     ).toEqual(["grep@a", "read@b", "bash@b"]);
     expect(before.extension("a")).toBe(a);
     expect(before.tools()[0]!.tool.snippet).toBe("Read files");
@@ -112,11 +113,11 @@ describe("registry", () => {
 describe("settings", () => {
   it("keeps the default of a progress interval given as undefined", () => {
     expect(
-      resolveSettings({ progress: { partialIntervalMs: undefined, outputIntervalMs: 250 } })
+      resolveSettings({ progress: { outputIntervalMs: 250, partialIntervalMs: undefined } })
         .progress,
     ).toEqual({
-      partialIntervalMs: 100,
       outputIntervalMs: 250,
+      partialIntervalMs: 100,
     });
   });
 });
@@ -140,7 +141,7 @@ describe("agent resolution", () => {
   });
 
   it("skips uninstalled names and resolves them again once they are installed", () => {
-    const local = createRegistry<AppTool>();
+    const local = createRegistry<harnessRegistrySupportTypes.AppTool>();
     local.install(Coding);
     const state: AgentState = { extensions: ["coding", "skills"] };
     expect(names(resolve(state, local.snapshot()).extensions)).toEqual(["coding"]);
@@ -151,11 +152,14 @@ describe("agent resolution", () => {
 
 describe("agent resolution", () => {
   it("replaces same-name tools in place, wraps the winner, then applies the filter", () => {
-    const local = createRegistry<AppTool>();
+    const local = createRegistry<harnessRegistrySupportTypes.AppTool>();
     const venvBash = tool("bash", { description: "venv bash" });
     const calls: string[] = [];
-    const Venv = defineExtension<AppTool>({ name: "venv", tools: [venvBash] });
-    const Timing = defineExtension<AppTool>({
+    const Venv = defineExtension<harnessRegistrySupportTypes.AppTool>({
+      name: "venv",
+      tools: [venvBash],
+    });
+    const Timing = defineExtension<harnessRegistrySupportTypes.AppTool>({
       name: "timing",
       wraps: [
         wrapTool(bash, (inner) => ({ ...inner, description: `${inner.description} (timed)` })),
@@ -188,8 +192,8 @@ describe("agent resolution", () => {
 
 describe("agent resolution", () => {
   it("drops a tool or section whose wrapper throws or renames it and reports the failure", () => {
-    const local = createRegistry<AppTool>();
-    const Broken = defineExtension<AppTool>({
+    const local = createRegistry<harnessRegistrySupportTypes.AppTool>();
+    const Broken = defineExtension<harnessRegistrySupportTypes.AppTool>({
       name: "broken",
       wraps: [
         wrapTool(read, () => {

@@ -1,31 +1,37 @@
-import type { Context, JsonValue } from "@msa/chord";
 import { BACKGROUND_CONTEXT } from "@msa/chord/context";
 import { Effect } from "effect";
 import { dual } from "effect/Function";
 
-import { err, FileError, type FileSystem, type Result } from "../src/env/index.ts";
+import { FileError, type FileSystem, type Result, err } from "../src/env/index.ts";
 import { NodeExecutionEnv } from "../src/env/node.ts";
 import { JsonlStorage } from "../src/storage/jsonl/index.ts";
-import type { DocumentCreate, DocumentId, Storage, TaskId, TaskRecord } from "../src/types.ts";
-import { ROOT_CONVERSATION_ID } from "../src/types.ts";
-import { awaited } from "./effect-support.ts";
-import { basenameOf, makeTempDir, pathExists, readText } from "./platform-support.ts";
+import {
+  type DocumentCreate,
+  type DocumentId,
+  ROOT_CONVERSATION_ID,
+  type Storage,
+  type TaskId,
+} from "../src/types.ts";
+import effectSupport from "./effect-support.ts";
+import type jsonlStorageSupportTypes from "./jsonl-storage-support.types.ts";
+import platformSupport from "./platform-support.ts";
 
-export const context = BACKGROUND_CONTEXT;
+const { awaited } = effectSupport;
+const { basenameOf, makeTempDir, pathExists, readText } = platformSupport;
 
-export type StoredTask = TaskRecord<JsonValue, JsonValue, JsonValue>;
+const context = BACKGROUND_CONTEXT;
 
-export const tempDirectories = new Set<string>();
+const tempDirectories = new Set<string>();
 
-export const openStorages = new Set<JsonlStorage>();
+const openStorages = new Set<JsonlStorage>();
 
-export const tempDirectory = Effect.fn("tempDirectory")(function* (prefix = "msa-durable-jsonl-") {
+const tempDirectory = Effect.fn("tempDirectory")(function* (prefix = "msa-durable-jsonl-") {
   const directory = yield* makeTempDir(prefix);
   tempDirectories.add(directory);
   return directory;
 });
 
-export const openStorage = Effect.fn("openStorage")(function* (
+const openStorage = Effect.fn("openStorage")(function* (
   directory: string,
   fs: FileSystem = new NodeExecutionEnv({ cwd: directory }),
   options: { readonly fsync?: boolean } = {},
@@ -35,38 +41,48 @@ export const openStorage = Effect.fn("openStorage")(function* (
   return storage;
 });
 
-function pendingTaskImpl(id: TaskId<JsonValue>, phase = "ready"): StoredTask {
+function pendingTaskImpl(
+  id: TaskId<jsonlStorageSupportTypes.JsonValue>,
+  phase = "ready",
+): jsonlStorageSupportTypes.StoredTask {
   return {
-    id,
-    conversationId: ROOT_CONVERSATION_ID,
-    kind: "test.task",
-    version: 1,
-    input: null,
-    state: { status: "pending", checkpoint: { phase } },
-    background: false,
     abortRequested: false,
+    background: false,
+    conversationId: ROOT_CONVERSATION_ID,
+    id,
+    input: null,
+    kind: "test.task",
+    state: { checkpoint: { phase }, status: "pending" },
+    version: 1,
   };
 }
 
-export const pendingTask: {
-  (phase?: string): (id: TaskId<JsonValue>) => ReturnType<typeof pendingTaskImpl>;
-  (id: TaskId<JsonValue>, phase?: string): ReturnType<typeof pendingTaskImpl>;
+const pendingTask: {
+  (
+    phase?: string,
+  ): (id: TaskId<jsonlStorageSupportTypes.JsonValue>) => ReturnType<typeof pendingTaskImpl>;
+  (
+    id: TaskId<jsonlStorageSupportTypes.JsonValue>,
+    phase?: string,
+  ): ReturnType<typeof pendingTaskImpl>;
 } = dual((args) => typeof args[0] === "number", pendingTaskImpl);
 
-export function terminalTask(id: TaskId<JsonValue>): StoredTask {
+function terminalTask(
+  id: TaskId<jsonlStorageSupportTypes.JsonValue>,
+): jsonlStorageSupportTypes.StoredTask {
   return {
-    id,
-    conversationId: ROOT_CONVERSATION_ID,
-    kind: "test.task",
-    version: 1,
-    input: null,
-    state: { status: "terminal", outcome: { status: "completed", result: null } },
-    background: false,
     abortRequested: false,
+    background: false,
+    conversationId: ROOT_CONVERSATION_ID,
+    id,
+    input: null,
+    kind: "test.task",
+    state: { outcome: { result: null, status: "completed" }, status: "terminal" },
+    version: 1,
   };
 }
 
-export const createRoot = Effect.fn("createRoot")(function* (storage: Storage) {
+const createRoot = Effect.fn("createRoot")(function* (storage: Storage) {
   yield* awaited(
     storage.commit([{ type: "conversation", value: { id: ROOT_CONVERSATION_ID } }], context),
   );
@@ -76,27 +92,21 @@ function sessionDocumentImpl(id: DocumentId, kind = "test.document"): DocumentCr
   return { id, kind, scope: { kind: "session" } };
 }
 
-export const sessionDocument: {
+const sessionDocument: {
   (kind?: string): (id: DocumentId) => ReturnType<typeof sessionDocumentImpl>;
   (id: DocumentId, kind?: string): ReturnType<typeof sessionDocumentImpl>;
 } = dual((args) => typeof args[0] === "number", sessionDocumentImpl);
 
-export type Failure = {
-  readonly operation: "append" | "flush" | "write" | "rename" | "remove";
-  readonly call: number;
-  readonly mode: "before" | "after" | "short";
-};
-
-export class InstrumentedEnv extends NodeExecutionEnv {
+class InstrumentedEnv extends NodeExecutionEnv {
   readonly operations: string[] = [];
-  private failure: Failure | undefined;
+  private failure: jsonlStorageSupportTypes.Failure | undefined;
   private appendCalls = 0;
   private flushCalls = 0;
   private writeCalls = 0;
   private renameCalls = 0;
   private removeCalls = 0;
 
-  fail(failure: Failure): void {
+  fail(failure: jsonlStorageSupportTypes.Failure): void {
     this.failure = failure;
     this.resetObservations();
   }
@@ -118,7 +128,7 @@ export class InstrumentedEnv extends NodeExecutionEnv {
   override appendFile(
     path: string,
     content: string | Uint8Array,
-    appendContext: Context,
+    appendContext: jsonlStorageSupportTypes.Context,
   ): Promise<Result<void, FileError>> {
     const superAppendFile = super.appendFile.bind(this);
     return Effect.runPromise(
@@ -145,7 +155,10 @@ export class InstrumentedEnv extends NodeExecutionEnv {
     );
   }
 
-  override flushFile(path: string, flushContext: Context): Promise<Result<void, FileError>> {
+  override flushFile(
+    path: string,
+    flushContext: jsonlStorageSupportTypes.Context,
+  ): Promise<Result<void, FileError>> {
     const superFlushFile = super.flushFile.bind(this);
     return Effect.runPromise(
       Effect.gen({ self: this }, function* () {
@@ -167,7 +180,7 @@ export class InstrumentedEnv extends NodeExecutionEnv {
   override writeFile(
     path: string,
     content: string | Uint8Array,
-    writeContext: Context,
+    writeContext: jsonlStorageSupportTypes.Context,
   ): Promise<Result<void, FileError>> {
     const superWriteFile = super.writeFile.bind(this);
     return Effect.runPromise(
@@ -197,7 +210,7 @@ export class InstrumentedEnv extends NodeExecutionEnv {
   override renameFile(
     sourcePath: string,
     destinationPath: string,
-    renameContext: Context,
+    renameContext: jsonlStorageSupportTypes.Context,
   ): Promise<Result<void, FileError>> {
     const superRenameFile = super.renameFile.bind(this);
     return Effect.runPromise(
@@ -222,7 +235,7 @@ export class InstrumentedEnv extends NodeExecutionEnv {
   override remove(
     path: string,
     options: { recursive?: boolean; force?: boolean } | undefined,
-    removeContext: Context,
+    removeContext: jsonlStorageSupportTypes.Context,
   ): Promise<Result<void, FileError>> {
     const superRemove = super.remove.bind(this);
     return Effect.runPromise(
@@ -243,9 +256,26 @@ export class InstrumentedEnv extends NodeExecutionEnv {
   }
 }
 
-export const readLines = Effect.fn("readLines")(function* (path: string) {
+const readLines = Effect.fn("readLines")(function* (path: string) {
   const text = yield* readText(path);
   return text === "" ? [] : text.trimEnd().split("\n");
 });
 
-export const fileExists = pathExists;
+const fileExists = pathExists;
+
+const jsonlStorageSupport = {
+  InstrumentedEnv,
+  context,
+  createRoot,
+  fileExists,
+  openStorage,
+  openStorages,
+  pendingTask,
+  readLines,
+  sessionDocument,
+  tempDirectories,
+  tempDirectory,
+  terminalTask,
+};
+
+export default jsonlStorageSupport;

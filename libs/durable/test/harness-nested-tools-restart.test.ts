@@ -1,33 +1,26 @@
 import type { Context } from "@msa/chord";
-import { type AgentEvent, defineExtension, defineTask, type Harness, LiveDoc } from "@msa/durable";
+import { type AgentEvent, type Harness, LiveDoc, defineExtension, defineTask } from "@msa/durable";
 import { ToolTask, watchEvents } from "@msa/durable/harness";
 import { Effect } from "effect";
 import { afterEach, describe, expect, it } from "vite-plus/test";
 
-import {
-  spawnThroughBatch,
+import harnessNestedToolsRestartSupport from "./harness-nested-tools-restart-support.ts";
+import support from "./support.ts";
+
+const {
   DONE,
   call,
-  tool,
-  Parameters,
-  directories,
-  sqlitePath,
-  results,
   codes,
+  directories,
   nestedTasks,
   restartDuring,
-} from "./harness-nested-tools-restart-support.ts";
-import {
-  allEntries,
-  chatSetup,
-  awaited,
-  addHooks,
-  addTool,
-  removeDir,
-  context,
-  aborted,
-  deferred,
-} from "./support.ts";
+  results,
+  spawnThroughBatch,
+  sqlitePath,
+  tool,
+} = harnessNestedToolsRestartSupport;
+const { aborted, addHooks, addTool, allEntries, awaited, chatSetup, context, deferred, removeDir } =
+  support;
 
 afterEach(() =>
   Effect.runPromise(
@@ -57,7 +50,7 @@ const replayUnsafeBatchStep1 = Effect.fn("replayUnsafeBatchStep1")(function* () 
 
   const path = yield* sqlitePath();
   const setup = chatSetup();
-  const runs = { started: 0, gated: 0 };
+  const runs = { gated: 0, started: 0 };
   const running = deferred();
   const gated = deferred();
   addTool(
@@ -91,7 +84,7 @@ const replayUnsafeBatchStep1 = Effect.fn("replayUnsafeBatchStep1")(function* () 
       return Promise.resolve(aborted(hookContext.abortSignal!));
     },
   });
-  return { runPromise, path, setup, runs, running, gated };
+  return { gated, path, runPromise, running, runs, setup };
 });
 
 const replayUnsafeBatch = Effect.fn("replayUnsafeBatch")(function* () {
@@ -110,7 +103,7 @@ const replayUnsafeBatch = Effect.fn("replayUnsafeBatch")(function* () {
     ),
   );
   setup.faux.setResponses([call("batch"), DONE]);
-  return { path, setup, runs, running, gated };
+  return { gated, path, running, runs, setup };
 });
 
 const abandonsReplayUnsafe = Effect.gen(function* () {
@@ -128,23 +121,23 @@ const abandonsReplayUnsafe = Effect.gen(function* () {
   ).toBe("done");
   yield* awaited(opened.harness.waitForIdle(context));
   yield* awaited(stop());
-  expect(runs).toEqual({ started: 1, gated: 0 });
+  expect(runs).toEqual({ gated: 0, started: 1 });
   const [started, gate] = yield* nestedTasks(opened.harness);
   for (const task of [started, gate]) {
     expect(task).toMatchObject({
       abandonOnRestart: true,
-      abortRequested: true,
       abortReason: "restart",
+      abortRequested: true,
     });
-    expect(task!.state).toMatchObject({ status: "terminal", outcome: { status: "aborted" } });
+    expect(task!.state).toMatchObject({ outcome: { status: "aborted" }, status: "terminal" });
   }
   const end = (callId: string) => ends.find((event) => event.toolCallId === callId)?.result;
   expect(codes(end("c1/1"))).toEqual(["interrupted"]);
-  expect(end("c1/1")).toMatchObject({ isError: true, details: { step: 1 } });
+  expect(end("c1/1")).toMatchObject({ details: { step: 1 }, isError: true });
   expect(end("c1/1")).not.toHaveProperty("structuredOutput");
   expect(codes(end("c1/2"))).toEqual(["abandoned"]);
   const [result] = results(yield* allEntries(opened.root));
-  expect(result).toMatchObject({ toolCallId: "c1", isError: true });
+  expect(result).toMatchObject({ isError: true, toolCallId: "c1" });
   expect(yield* awaited(opened.harness.snapshot(LiveDoc, opened.root.id, context))).toEqual({});
   yield* awaited(opened.harness.close(context));
 });
@@ -163,9 +156,20 @@ const abandonsWorkAbandonedStep1 = Effect.gen(function* () {
   const aborts: (string | undefined)[] = [];
   const started = deferred();
   const Worker = defineTask<null, { phase: "work" }, null>({
-    name: "test.worker",
-    version: 1,
+    abort: (task, runtime, abortContext) =>
+      runPromise(
+        Effect.gen(function* () {
+          aborts.push(task.abortReason);
+          yield* awaited(
+            runtime.commit(
+              () => ({ outcome: { status: "aborted" }, status: "terminal" }),
+              abortContext,
+            ),
+          );
+        }),
+      ),
     initial: () => ({ phase: "work" }),
+    name: "test.worker",
     phases: {
       work: (_task, runtime) =>
         runPromise(
@@ -176,18 +180,7 @@ const abandonsWorkAbandonedStep1 = Effect.gen(function* () {
           }),
         ),
     },
-    abort: (task, runtime, abortContext) =>
-      runPromise(
-        Effect.gen(function* () {
-          aborts.push(task.abortReason);
-          yield* awaited(
-            runtime.commit(
-              () => ({ status: "terminal", outcome: { status: "aborted" } }),
-              abortContext,
-            ),
-          );
-        }),
-      ),
+    version: 1,
   });
   setup.registry.install(defineExtension({ name: "worker", tasks: [Worker] }));
   const spawned = spawnThroughBatch(setup, Worker);
@@ -198,7 +191,7 @@ const abandonsWorkAbandonedStep1 = Effect.gen(function* () {
       .status,
   ).toBe("done");
   yield* awaited(opened.harness.waitForIdle(context));
-  return { phases, aborts, spawned, opened };
+  return { aborts, opened, phases, spawned };
 });
 
 const abandonsWorkAbandoned = Effect.gen(function* () {
@@ -206,8 +199,8 @@ const abandonsWorkAbandoned = Effect.gen(function* () {
   expect(phases).toEqual(["work"]);
   expect(aborts).toEqual(["restart"]);
   expect((yield* awaited(opened.harness.getTask(spawned.worker!, context)))?.state).toMatchObject({
-    status: "terminal",
     outcome: { status: "aborted" },
+    status: "terminal",
   });
   yield* awaited(opened.harness.close(context));
 });

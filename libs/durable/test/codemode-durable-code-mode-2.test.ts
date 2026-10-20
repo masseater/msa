@@ -4,59 +4,55 @@ import { Effect } from "effect";
 import { afterEach, describe, expect, it } from "vite-plus/test";
 
 import { CodemodeRunDoc } from "../src/codemode/codemode.ts";
-import { codemodeChat, tool } from "./codemode-chat-support.ts";
-import {
+import codemodeChatSupport from "./codemode-chat-support.ts";
+import codemodeSupport from "./codemode-support.ts";
+import support from "./support.ts";
+
+const { codemodeChat, tool } = codemodeChatSupport;
+const {
+  DONE,
+  nestedCount,
+  openStoredChat,
+  removeDirectories,
   restart,
   resultText,
-  DONE,
   script,
   sqlitePath,
-  nestedCount,
-  removeDirectories,
-  openStoredChat,
-} from "./codemode-support.ts";
-import {
-  openChat,
-  awaited,
-  addTool,
-  ControlledStorage,
-  context,
-  aborted,
-  eventually,
-} from "./support.ts";
+} = codemodeSupport;
+const { ControlledStorage, aborted, addTool, awaited, context, eventually, openChat } = support;
 
 afterEach(removeDirectories);
 
 function schemaErrorToolsChat() {
   const chat = codemodeChat();
-  const Exit = Type.Object({ output: Type.String(), exitCode: Type.Number() });
+  const Exit = Type.Object({ exitCode: Type.Number(), output: Type.String() });
   addTool(
     chat.setup.registry,
     defineTool({
-      name: "run",
       description: "run",
-      parameters: Type.Object({}),
-      structuredOutputSchema: Exit,
       execute: () =>
         Promise.resolve({
-          output: [{ type: "text", text: "no matches" }],
-          structuredOutput: { output: "no matches", exitCode: 1 },
           isError: true,
+          output: [{ text: "no matches", type: "text" }],
+          structuredOutput: { exitCode: 1, output: "no matches" },
         }),
+      name: "run",
+      parameters: Type.Object({}),
+      structuredOutputSchema: Exit,
     }),
   );
   addTool(
     chat.setup.registry,
     defineTool({
-      name: "denied",
       description: "denied",
-      parameters: Type.Object({}),
-      structuredOutputSchema: Exit,
       execute: () =>
         Promise.resolve({
-          output: [{ type: "text", text: "permission denied" }],
           isError: true,
+          output: [{ text: "permission denied", type: "text" }],
         }),
+      name: "denied",
+      parameters: Type.Object({}),
+      structuredOutputSchema: Exit,
     }),
   );
   chat.holds.block = false;
@@ -69,9 +65,9 @@ const checksEveryCall = Effect.gen(function* () {
   const chat = codemodeChat({
     globals: [
       {
-        name: "forever",
         execute: (_args, _api, callContext) =>
           runPromise(Effect.suspend(() => awaited(aborted(callContext.abortSignal!)))),
+        name: "forever",
       },
     ],
   });
@@ -82,12 +78,12 @@ const checksEveryCall = Effect.gen(function* () {
 			await tools.hold({ id: k ? 2 : 1 });`,
     (opened, task) =>
       Effect.gen(function* () {
-        const runPromise = Effect.runPromiseWith(yield* Effect.context<never>());
+        const runNested = Effect.runPromiseWith(yield* Effect.context<never>());
 
         yield* awaited(
           opened.commit(
             (tx) =>
-              runPromise(
+              runNested(
                 Effect.gen(function* () {
                   const run = yield* awaited(tx.doc(CodemodeRunDoc, task));
                   run.start!.store = { k: true };
@@ -107,13 +103,13 @@ const checksEveryCall = Effect.gen(function* () {
 
 const keepsGlobalUndefined = Effect.gen(function* () {
   const chat = codemodeChat({
-    globals: [{ name: "nothing", execute: () => Promise.resolve(undefined) }],
+    globals: [{ execute: () => Promise.resolve(undefined), name: "nothing" }],
   });
   const { harness, result } = yield* restart(
     chat,
     `const before = await nothing(); await tools.hold({}); return [before === undefined, (await nothing()) === undefined];`,
   );
-  expect(result).toEqual({ text: "[true,true]", isError: false });
+  expect(result).toEqual({ isError: false, text: "[true,true]" });
   yield* awaited(harness.close(context));
 });
 
@@ -131,8 +127,8 @@ const rejectsFailedTool = Effect.gen(function* () {
     chat.setup.registry,
     tool("fails", () =>
       Promise.resolve({
-        output: [{ type: "text", text: "permission denied" }],
         isError: true,
+        output: [{ text: "permission denied", type: "text" }],
       }),
     ),
   );
@@ -143,11 +139,11 @@ const rejectsFailedTool = Effect.gen(function* () {
   ]);
   const { harness, root } = yield* openStoredChat(yield* sqlitePath(), chat.setup);
   yield* awaited(
-    (yield* awaited(root.submit({ type: "input", content: "go" }, context))).wait(context),
+    (yield* awaited(root.submit({ content: "go", type: "input" }, context))).wait(context),
   );
   expect(yield* resultText(chat.setup, root)).toEqual({
-    text: '["permission denied","permission denied"]',
     isError: false,
+    text: '["permission denied","permission denied"]',
   });
   yield* awaited(harness.close(context));
 });
@@ -169,11 +165,11 @@ const resolvesSchemaTool = Effect.gen(function* () {
   ]);
   const { harness, root } = yield* openStoredChat(yield* sqlitePath(), chat.setup);
   yield* awaited(
-    (yield* awaited(root.submit({ type: "input", content: "go" }, context))).wait(context),
+    (yield* awaited(root.submit({ content: "go", type: "input" }, context))).wait(context),
   );
   expect(yield* resultText(chat.setup, root)).toEqual({
-    text: '[1,"no matches",["permission denied",null]]',
     isError: false,
+    text: '[1,"no matches",["permission denied",null]]',
   });
   yield* awaited(harness.close(context));
 });
@@ -190,16 +186,16 @@ const resolvesSchemaLess = Effect.gen(function* () {
   addTool(
     chat.setup.registry,
     defineTool({
-      name: "picture",
       description: "picture",
-      parameters: Type.Object({ caption: Type.Boolean() }),
       execute: (args) =>
         Promise.resolve({
           output: [
-            ...(args.caption ? [{ type: "text" as const, text: "a cat" }] : []),
-            { type: "image" as const, data: PNG, mimeType: "image/png" },
+            ...(args.caption ? [{ text: "a cat", type: "text" as const }] : []),
+            { data: PNG, mimeType: "image/png", type: "image" as const },
           ],
         }),
+      name: "picture",
+      parameters: Type.Object({ caption: Type.Boolean() }),
     }),
   );
   chat.holds.block = false;
@@ -211,11 +207,11 @@ const resolvesSchemaLess = Effect.gen(function* () {
   ]);
   const { harness, root } = yield* openStoredChat(yield* sqlitePath(), chat.setup);
   yield* awaited(
-    (yield* awaited(root.submit({ type: "input", content: "go" }, context))).wait(context),
+    (yield* awaited(root.submit({ content: "go", type: "input" }, context))).wait(context),
   );
   expect(yield* resultText(chat.setup, root)).toEqual({
-    text: '["a cat",""]',
     isError: false,
+    text: '["a cat",""]',
   });
   yield* awaited(harness.close(context));
 });
@@ -231,26 +227,26 @@ const deliversResultOnly = Effect.gen(function* () {
   const chat = codemodeChat({
     globals: [
       {
-        name: "first",
         execute: () => {
           seen.push("first");
           storage.failNextCommit(new Error("lost"));
           return Promise.resolve(1);
         },
+        name: "first",
       },
       {
-        name: "second",
         execute: () => {
           seen.push("second");
           return Promise.resolve(2);
         },
+        name: "second",
       },
     ],
   });
   chat.holds.block = false;
   chat.setup.faux.setResponses([script(`await first(); await second();`), DONE]);
   const { harness, root } = yield* openChat(storage, chat.setup);
-  yield* awaited(root.submit({ type: "input", content: "go" }, context));
+  yield* awaited(root.submit({ content: "go", type: "input" }, context));
   yield* eventually(() => seen.includes("first"));
   yield* Effect.sleep(100);
   expect(seen).toEqual(["first"]);

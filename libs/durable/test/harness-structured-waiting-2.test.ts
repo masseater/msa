@@ -2,28 +2,34 @@ import { type TaskId } from "@msa/durable";
 import { Effect } from "effect";
 import { afterEach, describe, expect, it } from "vite-plus/test";
 
-import { awaited } from "./effect-support.ts";
-import {
-  state,
-  outcomeOf,
-  open,
-  gates,
-  until,
-  start,
+import effectSupport from "./effect-support.ts";
+import harnessStructuredSupport from "./harness-structured-support.ts";
+import platformSupport from "./platform-support.ts";
+import sessionSupport from "./session-support.ts";
+import taskSupport from "./task-support.ts";
+
+const { awaited } = effectSupport;
+const {
   Node,
-  end,
-  behaviors,
-  log,
   OWN_CONVERSATION,
-  openNodes,
-  waitOn,
-  spawn,
-  script,
+  behaviors,
   directories,
-} from "./harness-structured-support.ts";
-import { removeDir } from "./platform-support.ts";
-import { context } from "./session-support.ts";
-import { deferred, settled } from "./task-support.ts";
+  end,
+  gates,
+  log,
+  open,
+  openNodes,
+  outcomeOf,
+  script,
+  spawn,
+  start,
+  state,
+  until,
+  waitOn,
+} = harnessStructuredSupport;
+const { removeDir } = platformSupport;
+const { context } = sessionSupport;
+const { deferred, settled } = taskSupport;
 
 afterEach(() =>
   Effect.runPromise(
@@ -63,7 +69,7 @@ const followsNoWaitStep1 = Effect.gen(function* () {
           yield* awaited(cleanup.promise);
           yield* awaited(
             runtime.commit(
-              () => ({ status: "terminal", outcome: { status: "aborted", result: "c" } }),
+              () => ({ outcome: { result: "c", status: "aborted" }, status: "terminal" }),
               ctx,
             ),
           );
@@ -72,6 +78,7 @@ const followsNoWaitStep1 = Effect.gen(function* () {
   });
   const aWaits = deferred();
   script("a", {
+    resume: (runtime, ctx) => runtime.commit(() => end("completed", "a"), ctx),
     run: (runtime, ctx) =>
       runPromise(
         Effect.gen(function* () {
@@ -79,9 +86,8 @@ const followsNoWaitStep1 = Effect.gen(function* () {
           yield* awaited(runtime.commit(() => waitOn([ids["b"]!], "allSettled"), ctx));
         }),
       ),
-    resume: (runtime, ctx) => runtime.commit(() => end("completed", "a"), ctx),
   });
-  return { runPromise, harness, root, ids, cleanup, aWaits };
+  return { aWaits, cleanup, harness, ids, root, runPromise };
 });
 
 const followsNoWait = Effect.gen(function* () {
@@ -176,26 +182,6 @@ const keepsRunningPhasesStep1 = Effect.gen(function* () {
   const { harness, root } = yield* openNodes();
   const ids: TaskId[] = [];
   script("parent", {
-    run: (runtime, ctx) =>
-      runPromise(
-        Effect.gen(function* () {
-          const runPromise = Effect.runPromiseWith(yield* Effect.context<never>());
-
-          yield* awaited(
-            runtime.commit(
-              (tx) =>
-                runPromise(
-                  Effect.gen(function* () {
-                    for (const name of ["a", "b", "c"])
-                      ids.push(yield* awaited(spawn(tx, runtime.taskId, name)));
-                    return { status: "running", checkpoint: { phase: "resume", round: 0 } };
-                  }),
-                ),
-              ctx,
-            ),
-          );
-        }),
-      ),
     resume: (runtime, ctx, round) =>
       runPromise(
         Effect.gen(function* () {
@@ -209,10 +195,30 @@ const keepsRunningPhasesStep1 = Effect.gen(function* () {
           yield* awaited(runtime.commit(() => end("completed", "parent"), ctx));
         }),
       ),
+    run: (runtime, ctx) =>
+      runPromise(
+        Effect.gen(function* () {
+          const runNested = Effect.runPromiseWith(yield* Effect.context<never>());
+
+          yield* awaited(
+            runtime.commit(
+              (tx) =>
+                runNested(
+                  Effect.gen(function* () {
+                    for (const name of ["a", "b", "c"])
+                      ids.push(yield* awaited(spawn(tx, runtime.taskId, name)));
+                    return { checkpoint: { phase: "resume", round: 0 }, status: "running" };
+                  }),
+                ),
+              ctx,
+            ),
+          );
+        }),
+      ),
   });
   const parent = yield* awaited(start(root, "parent"));
   yield* until(() => log.includes("round:0"));
-  return { runPromise, harness, ids, parent };
+  return { harness, ids, parent, runPromise };
 });
 
 const keepsRunningPhases = Effect.gen(function* () {

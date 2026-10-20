@@ -2,29 +2,29 @@ import * as NodeRuntime from "@effect/platform-node/NodeRuntime";
 import { Type, createModels, fauxAssistantMessage, fauxProvider, fauxToolCall } from "@msa/ai";
 import { BACKGROUND_CONTEXT } from "@msa/chord/context";
 import { defineDoc, defineExtension, defineTool, section } from "@msa/durable";
-import { createRegistry, Harness } from "@msa/durable/harness";
+import { Harness, createRegistry } from "@msa/durable/harness";
 import { MemoryStorage } from "@msa/durable/storage/memory";
 import { Console, Effect } from "effect";
 
 import { NodeExecutionEnv } from "../../src/env/node.ts";
 import { CodingTools, createReadTool } from "../../src/tools/index.ts";
-import { awaited, joinPath, makeTempDir, removeDir, writeText } from "../support.ts";
+import support from "../support.ts";
+
+const { awaited, joinPath, makeTempDir, removeDir, writeText } = support;
 
 const context = BACKGROUND_CONTEXT;
 
 const PlanDoc = defineDoc<{ steps: string[] }>({
-  kind: "app.plan",
-  version: 1,
-  scope: "conversation",
-  history: "rewindable",
   fork: "asOf",
+  history: "rewindable",
   initial: () => ({ steps: [] }),
+  kind: "app.plan",
+  scope: "conversation",
+  version: 1,
 });
 
 const submitPlan = defineTool({
-  name: "submit_plan",
   description: "Submit the plan as a list of steps.",
-  parameters: Type.Object({ steps: Type.Array(Type.String()) }),
   execute: (args, api, callContext) =>
     Effect.runPromise(
       Effect.gen(function* () {
@@ -42,22 +42,24 @@ const submitPlan = defineTool({
           ),
         );
         return {
-          output: [{ type: "text", text: "Plan submitted." }],
           control: { terminate: true },
+          output: [{ text: "Plan submitted.", type: "text" }],
         };
       }),
     ),
+  name: "submit_plan",
+  parameters: Type.Object({ steps: Type.Array(Type.String()) }),
 });
 
 const Plan = defineExtension({
   name: "plan",
-  tools: [submitPlan],
   sections: [
     section(
       "plan_mode",
       () => "You are in plan mode. Read the code, then call submit_plan. Change nothing.",
     ),
   ],
+  tools: [submitPlan],
 });
 
 const read = createReadTool();
@@ -93,17 +95,17 @@ const mainStep1 = Effect.gen(function* () {
     Harness.open(
       new MemoryStorage(),
       {
+        env: () => new NodeExecutionEnv({ cwd: directory }),
         models,
         registry,
         settings: { extensions: [CodingTools] },
-        env: () => new NodeExecutionEnv({ cwd: directory }),
       },
       context,
     ),
   );
   const root = yield* awaited(
     harness.root(context, {
-      agent: { model: { provider: "faux", modelId: "faux-1" } },
+      agent: { model: { modelId: "faux-1", provider: "faux" } },
     }),
   );
   return { directory, harness, root };
@@ -120,7 +122,7 @@ const main = Effect.gen(function* () {
   yield* Console.log("plan mode tools:", yield* tools());
   yield* awaited(
     (yield* awaited(
-      root.submit({ type: "input", content: "Make the port configurable." }, context),
+      root.submit({ content: "Make the port configurable.", type: "input" }, context),
     )).wait(context),
   );
   yield* Console.log("plan:", (yield* awaited(harness.snapshot(PlanDoc, root.id, context)))?.steps);
@@ -128,16 +130,16 @@ const main = Effect.gen(function* () {
   yield* awaited(root.configure(leavePlanMode, context));
   yield* Console.log("tools again:", yield* tools());
   yield* awaited(
-    (yield* awaited(root.submit({ type: "input", content: "Go ahead." }, context))).wait(context),
+    (yield* awaited(root.submit({ content: "Go ahead.", type: "input" }, context))).wait(context),
   );
 
   const { messages } = yield* awaited(root.context(context));
   for (const message of messages) {
     if (message.role !== "system") continue;
     yield* Console.log("system:", {
-      sections: message.sections,
       added: message.toolsAdded?.map((tool) => tool.name),
       removed: message.toolsRemoved?.map((tool) => tool.name),
+      sections: message.sections,
     });
   }
 

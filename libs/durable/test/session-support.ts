@@ -1,5 +1,5 @@
 import type { Context } from "@msa/chord";
-import { BACKGROUND_CONTEXT } from "@msa/chord/context";
+import { BACKGROUND_CONTEXT, withAbortSignal as withAbortSignalModule } from "@msa/chord/context";
 import type {
   CommitPublication,
   ConversationId,
@@ -17,22 +17,17 @@ import { Effect } from "effect";
 
 import { currentTimeMillis } from "../src/clock.ts";
 import { SessionImpl } from "../src/session/session.ts";
-import { awaited } from "./effect-support.ts";
+import effectSupport from "./effect-support.ts";
+import type sessionSupportTypes from "./session-support.types.ts";
+const { awaited } = effectSupport;
 
-export { BACKGROUND_CONTEXT, withAbortSignal } from "@msa/chord/context";
-
-export const context: Context = BACKGROUND_CONTEXT;
+const context: Context = BACKGROUND_CONTEXT;
 
 type Deferred = PromiseWithResolvers<void>;
 
 const deferred = (): Deferred => Promise.withResolvers<void>();
 
-export type Gate = {
-  readonly entered: Promise<void>;
-  release(): void;
-};
-
-export class ControlledStorage extends MemoryStorage {
+class ControlledStorage extends MemoryStorage {
   readonly admittedCommits: (readonly StorageWrite[])[] = [];
   readonly commits: (readonly StorageWrite[])[] = [];
   mintCount = 0;
@@ -41,14 +36,14 @@ export class ControlledStorage extends MemoryStorage {
   #findGate: { gate: Deferred; entered: Deferred } | undefined;
   #commitFailure: Error | undefined;
 
-  holdCommits(): Gate {
-    const held = { gate: deferred(), entered: deferred() };
+  holdCommits(): sessionSupportTypes.Gate {
+    const held = { entered: deferred(), gate: deferred() };
     this.#commitGate = held;
     return { entered: held.entered.promise, release: () => this.#release("commit", held) };
   }
 
-  holdFindDocument(): Gate {
-    const held = { gate: deferred(), entered: deferred() };
+  holdFindDocument(): sessionSupportTypes.Gate {
+    const held = { entered: deferred(), gate: deferred() };
     this.#findGate = held;
     return { entered: held.entered.promise, release: () => this.#release("find", held) };
   }
@@ -122,7 +117,7 @@ export class ControlledStorage extends MemoryStorage {
   }
 }
 
-export function openTestSession(): {
+function openTestSession(): {
   readonly storage: ControlledStorage;
   readonly session: SessionImpl;
   readonly publications: CommitPublication[];
@@ -133,10 +128,10 @@ export function openTestSession(): {
   session.subscribeCommits((publication) => {
     publications.push(publication);
   });
-  return { storage, session, publications };
+  return { publications, session, storage };
 }
 
-export function documentChanges(
+function documentChanges(
   publication: CommitPublication,
 ): readonly Extract<DocumentCommitChange, { readonly type: "document" }>[] {
   return publication.changes.filter(
@@ -145,7 +140,7 @@ export function documentChanges(
   );
 }
 
-export function documentCopyChanges(
+function documentCopyChanges(
   publication: CommitPublication,
 ): readonly Extract<DocumentCommitChange, { readonly type: "document.copy" }>[] {
   return publication.changes.filter(
@@ -154,7 +149,7 @@ export function documentCopyChanges(
   );
 }
 
-export function createConversation(session: SessionImpl): Promise<ConversationId> {
+function createConversation(session: SessionImpl): Promise<ConversationId> {
   return Promise.resolve(
     session.commit(
       (tx) =>
@@ -168,4 +163,18 @@ export function createConversation(session: SessionImpl): Promise<ConversationId
   );
 }
 
-export const flush: Effect.Effect<void> = Effect.sleep(1);
+const flush: Effect.Effect<void> = Effect.sleep(1);
+
+const sessionSupport = {
+  BACKGROUND_CONTEXT,
+  ControlledStorage,
+  context,
+  createConversation,
+  documentChanges,
+  documentCopyChanges,
+  flush,
+  openTestSession,
+  withAbortSignal: withAbortSignalModule,
+};
+
+export default sessionSupport;

@@ -3,10 +3,15 @@ import { Effect } from "effect";
 import { describe, expect, it } from "vite-plus/test";
 
 import { NodeExecutionEnv } from "../src/env/node.ts";
-import { run, modelsChat } from "./codemode-models-support.ts";
-import { fromJsonText, awaited } from "./effect-support.ts";
-import { makeTempDir, removeDir } from "./platform-support.ts";
-import { deferred } from "./task-support.ts";
+import codemodeModelsSupport from "./codemode-models-support.ts";
+import effectSupport from "./effect-support.ts";
+import platformSupport from "./platform-support.ts";
+import taskSupport from "./task-support.ts";
+
+const { modelsChat, run } = codemodeModelsSupport;
+const { awaited, fromJsonText } = effectSupport;
+const { makeTempDir, removeDir } = platformSupport;
+const { deferred } = taskSupport;
 
 const readsModelCatalog = Effect.gen(function* () {
   const chat = modelsChat();

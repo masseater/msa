@@ -1,26 +1,32 @@
-import { type AssistantMessage, fauxAssistantMessage, fauxText, fauxToolCall, Type } from "@msa/ai";
+import { type AssistantMessage, Type, fauxAssistantMessage, fauxText, fauxToolCall } from "@msa/ai";
 import {
   AgentDoc,
   type Conversation,
-  defineTool,
   type NestedToolExecutionResult,
   type ToolRegistration,
+  defineTool,
 } from "@msa/durable";
 import { MemoryStorage } from "@msa/durable/storage/memory";
 import { Effect } from "effect";
 import { describe, expect, it } from "vite-plus/test";
 
-import { type ChatSetup, chatSetup, openChat } from "./chat-support.ts";
-import { toJsonText, awaited } from "./effect-support.ts";
-import { addTool } from "./harness-support.ts";
-import { context } from "./session-support.ts";
+import chatSupport from "./chat-support.ts";
+import type chatSupportTypes from "./chat-support.types.ts";
+import effectSupport from "./effect-support.ts";
+import harnessSupport from "./harness-support.ts";
+import sessionSupport from "./session-support.ts";
+
+const { chatSetup, openChat } = chatSupport;
+const { awaited, toJsonText } = effectSupport;
+const { addTool } = harnessSupport;
+const { context } = sessionSupport;
 
 function tool(name: string, extra: Partial<ToolRegistration> = {}): ToolRegistration {
   return defineTool({
-    name,
     description: name,
+    execute: () => Promise.resolve({ output: [{ text: `${name} ran`, type: "text" }] }),
+    name,
     parameters: Type.Object({}),
-    execute: () => Promise.resolve({ output: [{ type: "text", text: `${name} ran` }] }),
     ...extra,
   });
 }
@@ -34,9 +40,7 @@ function call(name: string, id = "c1"): AssistantMessage {
 function prober(names: readonly string[]) {
   const received = new Map<string, NestedToolExecutionResult>();
   const registration = defineTool({
-    name: "probe",
     description: "probe",
-    parameters: Type.Object({}),
     execute: (_args, api, callContext) =>
       Effect.runPromise(
         Effect.gen(function* () {
@@ -45,8 +49,10 @@ function prober(names: readonly string[]) {
           return {};
         }),
       ),
+    name: "probe",
+    parameters: Type.Object({}),
   });
-  return { registration, received };
+  return { received, registration };
 }
 
 const offered = Effect.fn("offered")(function* (root: Conversation) {
@@ -57,7 +63,7 @@ const callable = Effect.fn("callable")(function* (root: Conversation) {
   return (yield* awaited(root.agent(context))).callable.map((each) => each.name);
 });
 
-function setupWith(tools: readonly ToolRegistration[]): Promise<ChatSetup> {
+function setupWith(tools: readonly ToolRegistration[]): Promise<chatSupportTypes.ChatSetup> {
   const setup = chatSetup();
   for (const each of tools) addTool(setup.registry, each);
   return Promise.resolve(setup);
@@ -74,7 +80,7 @@ const offersModelOnly = Effect.gen(function* () {
   expect(yield* offered(root)).toEqual(["script", "both", "probe"]);
   expect(yield* callable(root)).toEqual(["hidden", "both", "probe"]);
   yield* awaited(
-    (yield* awaited(root.submit({ type: "input", content: "go" }, context))).wait(context),
+    (yield* awaited(root.submit({ content: "go", type: "input" }, context))).wait(context),
   );
   expect(probe.received.get("script")?.diagnostics[0]?.code).toBe("tool_unavailable");
   expect(probe.received.get("hidden")).toMatchObject({
@@ -99,7 +105,7 @@ const narrowsWhatModel = Effect.gen(function* () {
   expect(yield* offered(root)).toEqual(["probe"]);
   expect(yield* callable(root)).toEqual(["read", "bash", "probe"]);
   yield* awaited(
-    (yield* awaited(root.submit({ type: "input", content: "go" }, context))).wait(context),
+    (yield* awaited(root.submit({ content: "go", type: "input" }, context))).wait(context),
   );
   expect(probe.received.get("read")?.isError).toBe(false);
   expect(probe.received.get("bash")?.isError).toBe(false);
@@ -130,12 +136,12 @@ const neverOffersTool = Effect.gen(function* () {
   setup.faux.setResponses([call("probe"), DONE]);
   const { harness, root } = yield* openChat(new MemoryStorage(), setup);
   yield* awaited(
-    root.configure({ tools: { remove: [bash] }, modelTools: [bash, probe.registration] }, context),
+    root.configure({ modelTools: [bash, probe.registration], tools: { remove: [bash] } }, context),
   );
   expect(yield* offered(root)).toEqual(["probe"]);
   expect(yield* callable(root)).toEqual(["read", "probe"]);
   yield* awaited(
-    (yield* awaited(root.submit({ type: "input", content: "go" }, context))).wait(context),
+    (yield* awaited(root.submit({ content: "go", type: "input" }, context))).wait(context),
   );
   expect(probe.received.get("bash")?.diagnostics[0]?.code).toBe("tool_unavailable");
   yield* awaited(harness.close(context));
@@ -149,7 +155,7 @@ const answersModelIssued = Effect.gen(function* () {
   const { harness, root } = yield* openChat(new MemoryStorage(), setup);
   yield* awaited(root.configure({ modelTools: [read] }, context));
   yield* awaited(
-    (yield* awaited(root.submit({ type: "input", content: "go" }, context))).wait(context),
+    (yield* awaited(root.submit({ content: "go", type: "input" }, context))).wait(context),
   );
   const entries = yield* awaited(root.entries({}, 100, undefined, context));
   const result = entries.items.find((entry) => entry.kind === "msa.tool-result");
@@ -168,14 +174,14 @@ describe("who may call a tool", () => {
 const appliesAddToolsModelTools = Effect.gen(function* () {
   const extra = tool("extra");
   const grow = tool("grow", {
-    execute: () => Promise.resolve({ output: [], control: { addTools: ["extra"] } }),
+    execute: () => Promise.resolve({ control: { addTools: ["extra"] }, output: [] }),
   });
   const setup = yield* awaited(setupWith([extra, grow]));
   setup.faux.setResponses([call("grow"), DONE]);
   const { harness, root } = yield* openChat(new MemoryStorage(), setup);
   yield* awaited(root.configure({ modelTools: [grow] }, context));
   yield* awaited(
-    (yield* awaited(root.submit({ type: "input", content: "go" }, context))).wait(context),
+    (yield* awaited(root.submit({ content: "go", type: "input" }, context))).wait(context),
   );
   expect((yield* awaited(harness.snapshot(AgentDoc, root.id, context)))?.modelTools).toEqual([
     "grow",

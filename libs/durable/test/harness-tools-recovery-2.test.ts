@@ -2,29 +2,13 @@ import { GenerationTask } from "@msa/durable/harness";
 import { Effect } from "effect";
 import { afterEach, describe, expect, it } from "vite-plus/test";
 
-import {
-  DONE,
-  call,
-  text,
-  results,
-  toolTaskId,
-  open,
-  tool,
-  blockingTool,
-  directories,
-  sqlitePath,
-} from "./harness-tools-recovery-support.ts";
-import {
-  allEntries,
-  chatSetup,
-  awaited,
-  addHooks,
-  addTool,
-  removeDir,
-  context,
-  aborted,
-  deferred,
-} from "./support.ts";
+import harnessToolsRecoverySupport from "./harness-tools-recovery-support.ts";
+import support from "./support.ts";
+
+const { DONE, blockingTool, call, directories, open, results, sqlitePath, text, tool, toolTaskId } =
+  harnessToolsRecoverySupport;
+const { aborted, addHooks, addTool, allEntries, awaited, chatSetup, context, deferred, removeDir } =
+  support;
 
 afterEach(() =>
   Effect.runPromise(
@@ -60,7 +44,7 @@ const rerunsGenerationTools = Effect.gen(function* () {
   });
   setup.faux.setResponses([call("work"), DONE]);
   let opened = yield* open(path, setup);
-  const id = (yield* awaited(opened.root.submit({ type: "input", content: "go" }, context))).id;
+  const id = (yield* awaited(opened.root.submit({ content: "go", type: "input" }, context))).id;
   yield* awaited(reached.promise);
   yield* awaited(opened.harness.close(context));
 
@@ -92,14 +76,14 @@ const answersAbortedTool = Effect.gen(function* () {
   addTool(setup.registry, registration);
   setup.faux.setResponses([call("work"), DONE]);
   const opened = yield* open(path, setup);
-  const submission = yield* awaited(opened.root.submit({ type: "input", content: "go" }, context));
+  const submission = yield* awaited(opened.root.submit({ content: "go", type: "input" }, context));
   yield* awaited(started.promise);
   const taskId = yield* toolTaskId(opened.harness);
   expect(yield* awaited(opened.harness.abortTask(taskId, context))).toBe("marked");
   expect((yield* awaited(opened.harness.waitForTask(taskId, context))).state.outcome).toMatchObject(
     {
-      status: "aborted",
       result: { entryId: expect.any(Number) },
+      status: "aborted",
     },
   );
   expect((yield* awaited(submission.wait(context))).status).toBe("done");

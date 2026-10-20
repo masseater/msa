@@ -5,15 +5,17 @@ import { Type } from "typebox";
 
 import { createRegistry } from "../src/harness/index.ts";
 import {
-  defineExtension,
-  defineTool,
   type JsonObject,
   NestedCallDoc,
   type TaskId,
   type ToolTaskInput,
+  defineExtension,
+  defineTool,
 } from "../src/index.ts";
-import { type Backend } from "./bench-support.ts";
-import { toJsonText, awaited } from "./effect-support.ts";
+import effectSupport from "./effect-support.ts";
+import type nestedImagesBenchToolsTypes from "./nested-images-bench-tools.types.ts";
+
+const { awaited, toJsonText } = effectSupport;
 
 const randomBytes = (length: number): Uint8Array => {
   const bytes = new Uint8Array(length);
@@ -22,42 +24,36 @@ const randomBytes = (length: number): Uint8Array => {
   return bytes;
 };
 
-type Variant = "inline" | "reference";
-
-export type Scenario = { backend: Backend; variant: Variant; count: number; bytes: number };
-
 type Probe = { sample: () => void; beforeReturn: () => Promise<void> };
 
 const ImageArgument = Type.Object({
-  type: Type.Literal("image"),
-  mimeType: Type.String(),
   data: Type.Optional(Type.String()),
+  mimeType: Type.String(),
   source: Type.Optional(Type.Object({ taskId: Type.Number() })),
+  type: Type.Literal("image"),
 });
 
-function readImageTool(scenario: Scenario) {
+function readImageTool(scenario: nestedImagesBenchToolsTypes.Scenario) {
   return defineTool({
-    name: "read_image",
     description: "Read an image",
-    parameters: Type.Object({ n: Type.Number() }),
     execute: () =>
       Promise.resolve({
         output: [
           {
-            type: "image",
             data: Buffer.from(randomBytes((scenario.bytes / 4) * 3)).toString("base64"),
             mimeType: "image/png",
+            type: "image",
           },
         ],
       }),
+    name: "read_image",
+    parameters: Type.Object({ n: Type.Number() }),
   });
 }
 
-function classifyTool(scenario: Scenario) {
+function classifyTool(scenario: nestedImagesBenchToolsTypes.Scenario) {
   return defineTool({
-    name: "classify",
     description: "Classify images",
-    parameters: Type.Object({ images: Type.Array(ImageArgument) }),
     execute: (args, api, callContext) =>
       Effect.runPromise(
         Effect.gen(function* () {
@@ -82,18 +78,18 @@ function classifyTool(scenario: Scenario) {
             if (data?.length !== scenario.bytes)
               throw new Error(`Image has ${data?.length} characters`);
           }
-          return { output: [{ type: "text", text: "ok" }] };
+          return { output: [{ text: "ok", type: "text" }] };
         }),
       ),
+    name: "classify",
+    parameters: Type.Object({ images: Type.Array(ImageArgument) }),
   });
 }
 
-function scriptTool(scenario: Scenario, probe: Probe) {
+function scriptTool(scenario: nestedImagesBenchToolsTypes.Scenario, probe: Probe) {
   return defineTool({
-    name: "script",
-    description: "Read and classify images",
-    parameters: Type.Object({ count: Type.Number() }),
     callers: ["model"],
+    description: "Read and classify images",
     execute: (args, api, callContext) =>
       Effect.runPromise(
         Effect.gen(function* () {
@@ -103,8 +99,8 @@ function scriptTool(scenario: Scenario, probe: Probe) {
             const image = read.structuredOutput as unknown as ImageContent;
             const argument: JsonObject =
               scenario.variant === "inline"
-                ? { type: "image", data: image.data, mimeType: image.mimeType }
-                : { type: "image", source: { taskId: read.taskId }, mimeType: image.mimeType };
+                ? { data: image.data, mimeType: image.mimeType, type: "image" }
+                : { mimeType: image.mimeType, source: { taskId: read.taskId }, type: "image" };
             const classified = yield* awaited(
               api.executeTool("classify", { images: [argument] }, callContext, {
                 key: `classify${n}`,
@@ -115,20 +111,29 @@ function scriptTool(scenario: Scenario, probe: Probe) {
             probe.sample();
           }
           yield* awaited(probe.beforeReturn());
-          return { output: [{ type: "text", text: `classified ${args.count}` }] };
+          return { output: [{ text: `classified ${args.count}`, type: "text" }] };
         }),
       ),
+    name: "script",
+    parameters: Type.Object({ count: Type.Number() }),
   });
 }
 
-function registryForImpl(scenario: Scenario, probe: Probe) {
+function registryForImpl(scenario: nestedImagesBenchToolsTypes.Scenario, probe: Probe) {
   const registry = createRegistry();
   const tools = [readImageTool(scenario), classifyTool(scenario), scriptTool(scenario, probe)];
   registry.install(defineExtension({ name: "bench", tools }));
   return registry;
 }
 
-export const registryFor: {
-  (probe: Probe): (scenario: Scenario) => ReturnType<typeof registryForImpl>;
-  (scenario: Scenario, probe: Probe): ReturnType<typeof registryForImpl>;
+const registryFor: {
+  (
+    probe: Probe,
+  ): (scenario: nestedImagesBenchToolsTypes.Scenario) => ReturnType<typeof registryForImpl>;
+  (
+    scenario: nestedImagesBenchToolsTypes.Scenario,
+    probe: Probe,
+  ): ReturnType<typeof registryForImpl>;
 } = dual(2, registryForImpl);
+
+export default registryFor;

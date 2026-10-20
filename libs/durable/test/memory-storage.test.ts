@@ -6,7 +6,9 @@ import { describe, expect, it } from "vite-plus/test";
 import { idFromNumber, seqFromNumber } from "../src/ids.ts";
 import { MemoryStorage } from "../src/storage/memory.ts";
 import { type EntryId, ROOT_CONVERSATION_ID } from "../src/types.ts";
-import { awaited } from "./effect-support.ts";
+import effectSupport from "./effect-support.ts";
+
+const { awaited } = effectSupport;
 
 registerStorageConformance({ describe, expect, it }, "MemoryStorage", (use) =>
   use(new MemoryStorage()),
@@ -27,10 +29,10 @@ it("does not expose retained state through a prepared commit", () =>
         {
           type: "entry",
           value: {
-            id: entryId,
             conversationId: ROOT_CONVERSATION_ID,
-            kind: "test",
             data: { nested: [1] },
+            id: entryId,
+            kind: "test",
           },
         },
       ]);

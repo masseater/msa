@@ -1,14 +1,19 @@
-import { createModels, type Message } from "@msa/ai";
-import { defineTask, type EntryRecord, type Storage } from "@msa/durable";
-import { createRegistry, Harness } from "@msa/durable/harness";
+import { type Message, createModels } from "@msa/ai";
+import { type EntryRecord, type Storage, defineTask } from "@msa/durable";
+import { Harness, createRegistry } from "@msa/durable/harness";
 import { MemoryStorage } from "@msa/durable/storage/memory";
 import { Effect } from "effect";
 import { afterEach, describe, expect, it, vi } from "vite-plus/test";
 
-import { awaited } from "./effect-support.ts";
-import { countingSetup, runInRoot, ABORTED, DONE, probeTask } from "./harness-context-support.ts";
-import { addTask, user } from "./harness-support.ts";
-import { context } from "./session-support.ts";
+import effectSupport from "./effect-support.ts";
+import harnessContextSupport from "./harness-context-support.ts";
+import harnessSupport from "./harness-support.ts";
+import sessionSupport from "./session-support.ts";
+
+const { awaited } = effectSupport;
+const { ABORTED, DONE, countingSetup, probeTask, runInRoot } = harnessContextSupport;
+const { addTask, user } = harnessSupport;
+const { context } = sessionSupport;
 
 afterEach(() => {
   vi.useRealTimers();
@@ -91,9 +96,10 @@ const lateContextTask = (options: {
   readonly seen: { late?: Promise<unknown> };
 }) =>
   defineTask<Record<string, never>, { phase: "run" }, null>({
-    name: "test.context-late",
-    version: 1,
+    abort: (_task, runtime, taskContext) =>
+      runtime.commit(() => ABORTED, taskContext).then(() => undefined),
     initial: () => ({ phase: "run" }),
+    name: "test.context-late",
     phases: {
       run: (_task, runtime, taskContext) => {
         options.hold.scan = options.scan;
@@ -103,8 +109,7 @@ const lateContextTask = (options: {
         return runtime.commit(() => DONE, taskContext).then(() => undefined);
       },
     },
-    abort: (_task, runtime, taskContext) =>
-      runtime.commit(() => ABORTED, taskContext).then(() => undefined),
+    version: 1,
   });
 
 const doesNotKeep = Effect.gen(function* () {
@@ -116,7 +121,7 @@ const doesNotKeep = Effect.gen(function* () {
   const scans = Promise.withResolvers<void>();
   const probeStart = Promise.withResolvers<void>();
   const seen: { late?: Promise<unknown> } = {};
-  const Late = lateContextTask({ hold, scan: scans.promise, root, seen });
+  const Late = lateContextTask({ hold, root, scan: scans.promise, seen });
   const rows: Record<string, number> = {};
   const Probe = probeTask((name, load) =>
     runPromise(
@@ -130,7 +135,7 @@ const doesNotKeep = Effect.gen(function* () {
   );
   for (const task of [Late, Probe]) addTask(registry, task);
   harness.resume();
-  const options = { ownership: { kind: "conversation" }, conversationId: root.id } as const;
+  const options = { conversationId: root.id, ownership: { kind: "conversation" } } as const;
   const lateId = yield* awaited(harness.commit((tx) => tx.createTask(Late, {}, options), context));
   expect((yield* awaited(harness.waitForTask(lateId, context))).state.outcome).toEqual(
     DONE.outcome,
@@ -172,7 +177,7 @@ const dropsIdleConversation = Effect.gen(function* () {
   );
   addTask(registry, Probe);
   harness.resume();
-  const options = { ownership: { kind: "conversation" }, conversationId: root.id } as const;
+  const options = { conversationId: root.id, ownership: { kind: "conversation" } } as const;
   const probe = (name: string) =>
     runPromise(
       Effect.gen(function* () {
@@ -218,7 +223,7 @@ const dropsConversationContext = Effect.gen(function* () {
   );
   addTask(registry, Probe);
   harness.resume();
-  const options = { ownership: { kind: "conversation" }, conversationId: root.id } as const;
+  const options = { conversationId: root.id, ownership: { kind: "conversation" } } as const;
   for (const name of ["first", "second"]) {
     const id = yield* awaited(
       harness.commit((tx) => tx.createTask(Probe, { name }, options), context),

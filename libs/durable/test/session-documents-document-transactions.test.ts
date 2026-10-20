@@ -1,48 +1,47 @@
 import type { JsonValue } from "@msa/chord";
-import { defineDoc, type JsonObject, type TaskId } from "@msa/durable";
+import { type JsonObject, type TaskId, defineDoc } from "@msa/durable";
 import { DateTime, Effect } from "effect";
 import { describe, expect, it } from "vite-plus/test";
 
 import { idFromNumber } from "../src/ids.ts";
-import { awaited } from "./effect-support.ts";
-import {
-  setupLive,
-  LiveDoc,
-  type Live,
-  CounterDoc,
-  type Counter,
-} from "./session-documents-support.ts";
-import { context, createConversation, openTestSession } from "./session-support.ts";
+import effectSupport from "./effect-support.ts";
+import sessionDocumentsSupport from "./session-documents-support.ts";
+import type sessionDocumentsSupportTypes from "./session-documents-support.types.ts";
+import sessionSupport from "./session-support.ts";
 
-const RewindableLiveDoc = defineDoc<Live>({
-  kind: "test.live",
-  version: 1,
-  scope: "conversation",
-  history: "rewindable",
+const { awaited } = effectSupport;
+const { CounterDoc, LiveDoc, setupLive } = sessionDocumentsSupport;
+const { context, createConversation, openTestSession } = sessionSupport;
+
+const RewindableLiveDoc = defineDoc<sessionDocumentsSupportTypes.Live>({
   fork: "asOf",
+  history: "rewindable",
   initial: () => ({ items: [], nested: { count: 0 }, other: { label: "x" } }),
+  kind: "test.live",
+  scope: "conversation",
+  version: 1,
 });
 
-const LiveDocV2 = defineDoc<Live>({
-  kind: "test.live",
-  version: 2,
-  scope: "conversation",
-  history: "latest",
+const LiveDocV2 = defineDoc<sessionDocumentsSupportTypes.Live>({
   fork: "initial",
+  history: "latest",
   initial: () => ({ items: [], nested: { count: 0 }, other: { label: "x" } }),
+  kind: "test.live",
+  scope: "conversation",
+  version: 2,
 });
 
 const doesNotInitialize = Effect.gen(function* () {
   const { session, storage } = openTestSession();
   let initialized = 0;
-  const LateDoc = defineDoc<Counter>({
-    kind: "test.late",
-    version: 1,
-    scope: "session",
+  const LateDoc = defineDoc<sessionDocumentsSupportTypes.Counter>({
     initial: () => {
       initialized++;
       return { count: 0 };
     },
+    kind: "test.late",
+    scope: "session",
+    version: 1,
   });
   const gate = storage.holdFindDocument();
   const mints = storage.mintCount;
@@ -144,10 +143,10 @@ const rejectsNonJson = Effect.gen(function* () {
   const { session, storage } = openTestSession();
   const conversationId = yield* awaited(createConversation(session));
   const DateDoc = defineDoc<JsonObject>({
-    kind: "test.date",
-    version: 1,
-    scope: "session",
     initial: () => ({ at: DateTime.toDateUtc(DateTime.nowUnsafe()) }) as unknown as JsonObject,
+    kind: "test.date",
+    scope: "session",
+    version: 1,
   });
   yield* awaited(
     expect(
@@ -208,14 +207,14 @@ const rollsBackPreparedStep1 = Effect.gen(function* () {
               (yield* awaited(tx.doc(LiveDoc, conversationId))).message = "lost";
               (yield* awaited(tx.doc(CounterDoc))).count = 2;
               tx.setTask({
-                id: idFromNumber<TaskId<JsonValue>>(999),
-                conversationId,
-                kind: "missing",
-                version: 1,
-                input: null,
-                background: false,
                 abortRequested: false,
-                state: { status: "pending", checkpoint: { phase: "start" } },
+                background: false,
+                conversationId,
+                id: idFromNumber<TaskId<JsonValue>>(999),
+                input: null,
+                kind: "missing",
+                state: { checkpoint: { phase: "start" }, status: "pending" },
+                version: 1,
               });
             }),
           ),
@@ -225,7 +224,7 @@ const rollsBackPreparedStep1 = Effect.gen(function* () {
   );
   expect(storage.commits.length).toBe(commits);
   expect(yield* awaited(session.snapshot(LiveDoc, conversationId, context))).toBe(live);
-  return { runPromise, session, conversationId, counter };
+  return { conversationId, counter, runPromise, session };
 });
 
 const rollsBackPrepared = Effect.gen(function* () {

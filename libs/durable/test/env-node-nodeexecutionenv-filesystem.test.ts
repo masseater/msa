@@ -4,15 +4,21 @@ import { afterEach, describe, expect, it, vi } from "vite-plus/test";
 
 import { getOrThrow } from "../src/env/index.ts";
 import { NodeExecutionEnv } from "../src/env/node.ts";
-import { awaited } from "./effect-support.ts";
-import {
-  type NodeFileHandle,
-  cleanUpEnvTests,
-  createTempDir,
-  fileHandlePrototype,
-  abortedContext,
-} from "./env-node-support.ts";
-import { joinPath } from "./platform-support.ts";
+import effectSupport from "./effect-support.ts";
+import envNodeSupport from "./env-node-support.ts";
+import type envNodeSupportTypes from "./env-node-support.types.ts";
+import platformSupport from "./platform-support.ts";
+
+vi.mock("node:fs/promises", (importOriginal) =>
+  Promise.all([
+    importOriginal<{ readonly open: unknown }>(),
+    import("./node-fs-promises-capture.ts"),
+  ]).then(([actual, capture]) => capture.default.captureFsPromises(actual)),
+);
+
+const { awaited } = effectSupport;
+const { abortedContext, cleanUpEnvTests, createTempDir, fileHandlePrototype } = envNodeSupport;
+const { joinPath } = platformSupport;
 
 afterEach(() => Effect.runPromise(cleanUpEnvTests), 15_000);
 
@@ -44,7 +50,7 @@ const returnsAbortedResults = Effect.gen(function* () {
     ]),
   );
   for (const result of results) {
-    expect(result).toMatchObject({ ok: false, error: { code: "aborted" } });
+    expect(result).toMatchObject({ error: { code: "aborted" }, ok: false });
   }
   expect(getOrThrow(yield* awaited(env.readTextFile("file.txt", BACKGROUND_CONTEXT)))).toBe(
     "hello",
@@ -85,8 +91,8 @@ const rejectsInvalidTruncation = Effect.gen(function* () {
   getOrThrow(yield* awaited(env.writeFile("file.txt", "hello", BACKGROUND_CONTEXT)));
   for (const size of [-1, 1.5, Number.NaN, Number.POSITIVE_INFINITY, Number.MAX_SAFE_INTEGER + 1]) {
     expect(yield* awaited(env.truncateFile("file.txt", size, BACKGROUND_CONTEXT))).toMatchObject({
-      ok: false,
       error: { code: "invalid", path: joinPath(root, "file.txt") },
+      ok: false,
     });
   }
   expect(getOrThrow(yield* awaited(env.readTextFile("file.txt", BACKGROUND_CONTEXT)))).toBe(
@@ -94,8 +100,8 @@ const rejectsInvalidTruncation = Effect.gen(function* () {
   );
 
   expect(yield* awaited(env.truncateFile("missing.txt", 0, BACKGROUND_CONTEXT))).toMatchObject({
-    ok: false,
     error: { code: "not_found", path: joinPath(root, "missing.txt") },
+    ok: false,
   });
   expect(getOrThrow(yield* awaited(env.exists("missing.txt", BACKGROUND_CONTEXT)))).toBe(false);
 });
@@ -118,15 +124,15 @@ const flushesExistingFiles = Effect.gen(function* () {
   );
 
   expect(yield* awaited(env.flushFile("missing.txt", BACKGROUND_CONTEXT))).toMatchObject({
-    ok: false,
     error: { code: "not_found", path: joinPath(root, "missing.txt") },
+    ok: false,
   });
   expect(getOrThrow(yield* awaited(env.exists("missing.txt", BACKGROUND_CONTEXT)))).toBe(false);
 
   getOrThrow(yield* awaited(env.createDir("dir", undefined, BACKGROUND_CONTEXT)));
   expect(yield* awaited(env.flushFile("dir", BACKGROUND_CONTEXT))).toMatchObject({
-    ok: false,
     error: { code: "is_directory" },
+    ok: false,
   });
 });
 
@@ -136,8 +142,10 @@ const syncsThroughOpened = Effect.gen(function* () {
   getOrThrow(yield* awaited(env.writeFile("file.txt", "durable", BACKGROUND_CONTEXT)));
   const prototype = yield* fileHandlePrototype(joinPath(root, "file.txt"));
   const originalSync = prototype.sync;
-  const synced: NodeFileHandle[] = [];
-  const sync = vi.spyOn(prototype, "sync").mockImplementation(function (this: NodeFileHandle) {
+  const synced: envNodeSupportTypes.NodeFileHandle[] = [];
+  const sync = vi.spyOn(prototype, "sync").mockImplementation(function (
+    this: envNodeSupportTypes.NodeFileHandle,
+  ) {
     synced.push(this);
     return Reflect.apply(originalSync, this, []);
   });
@@ -146,17 +154,17 @@ const syncsThroughOpened = Effect.gen(function* () {
   expect(sync).toHaveBeenCalledTimes(1);
   expect(synced[0]?.fd).toBe(-1);
 
-  sync.mockImplementationOnce(function (this: NodeFileHandle) {
+  sync.mockImplementationOnce(function (this: envNodeSupportTypes.NodeFileHandle) {
     synced.push(this);
     return Promise.reject(Object.assign(new Error("EIO: i/o error, fsync"), { code: "EIO" }));
   });
   expect(yield* awaited(env.flushFile("file.txt", BACKGROUND_CONTEXT))).toMatchObject({
-    ok: false,
     error: {
       code: "unknown",
-      path: joinPath(root, "file.txt"),
       message: "EIO: i/o error, fsync",
+      path: joinPath(root, "file.txt"),
     },
+    ok: false,
   });
   expect(sync).toHaveBeenCalledTimes(2);
   expect(synced[1]?.fd).toBe(-1);
@@ -204,10 +212,10 @@ const reportsWhetherEach = Effect.gen(function* () {
       );
     yield* awaited(readAll());
     expect(lines).toEqual([
-      { text: "one\r", terminated: true },
-      { text: "", terminated: true },
-      { text: "two", terminated: true },
-      { text: "partial", terminated: false },
+      { terminated: true, text: "one\r" },
+      { terminated: true, text: "" },
+      { terminated: true, text: "two" },
+      { terminated: false, text: "partial" },
     ]);
     expect(getOrThrow(yield* awaited(reader.readLine(BACKGROUND_CONTEXT)))).toBeUndefined();
   }).pipe(
@@ -229,8 +237,8 @@ const returnsNoLines = Effect.gen(function* () {
     yield* awaited(env.openTextLineReader("newline.txt", BACKGROUND_CONTEXT)),
   );
   expect(getOrThrow(yield* awaited(newline.readLine(BACKGROUND_CONTEXT)))).toEqual({
-    text: "",
     terminated: true,
+    text: "",
   });
   expect(getOrThrow(yield* awaited(newline.readLine(BACKGROUND_CONTEXT)))).toBeUndefined();
   yield* awaited(newline.close(BACKGROUND_CONTEXT));

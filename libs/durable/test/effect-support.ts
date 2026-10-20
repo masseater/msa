@@ -1,11 +1,11 @@
 import { Cause, type Duration, Effect, Exit, Schema } from "effect";
 
-export { currentTimeMillis } from "../src/clock.ts";
+import { currentTimeMillis as currentTimeMillisModule } from "../src/clock.ts";
 
-export const awaited = <A>(value: A | PromiseLike<A>): Effect.Effect<A> =>
+const awaited = <A>(value: A | PromiseLike<A>): Effect.Effect<A> =>
   Effect.promise(() => Promise.resolve(value));
 
-export const pollUntil = Effect.fn("pollUntil")(function* (
+const pollUntil = Effect.fn("pollUntil")(function* (
   check: Effect.Effect<boolean>,
   attempts: number,
   interval: Duration.Input,
@@ -16,7 +16,7 @@ export const pollUntil = Effect.fn("pollUntil")(function* (
   }
 });
 
-export const failure = <A, E>(effect: Effect.Effect<A, E>): Effect.Effect<unknown> =>
+const failure = <A, E>(effect: Effect.Effect<A, E>): Effect.Effect<unknown> =>
   Effect.exit(effect).pipe(
     Effect.flatMap((exit) =>
       Exit.isSuccess(exit)
@@ -25,21 +25,32 @@ export const failure = <A, E>(effect: Effect.Effect<A, E>): Effect.Effect<unknow
     ),
   );
 
-export const abortController = (): AbortController => new AbortController();
+const abortController = (): AbortController => new AbortController();
 
 const jsonText = Schema.fromJsonString(Schema.Unknown);
 const encodeJsonText = Schema.encodeUnknownEffect(jsonText);
 const decodeJsonText = Schema.decodeUnknownEffect(jsonText);
 
-export const toJsonText = (value: unknown): Effect.Effect<string> =>
-  Effect.orDie(encodeJsonText(value));
+const toJsonText = (value: unknown): Effect.Effect<string> => Effect.orDie(encodeJsonText(value));
 
-export const fromJsonText = (text: string): Effect.Effect<unknown> =>
-  Effect.orDie(decodeJsonText(text));
+const fromJsonText = (text: string): Effect.Effect<unknown> => Effect.orDie(decodeJsonText(text));
 
-export const sampleEvery = Effect.fn("sampleEvery")(function* (
+const sampleEvery = Effect.fn("sampleEvery")(function* (
   interval: Duration.Input,
   sample: () => void,
 ) {
   return yield* Effect.forkChild(Effect.forever(Effect.delay(Effect.sync(sample), interval)));
 });
+
+const effectSupport = {
+  abortController,
+  awaited,
+  currentTimeMillis: currentTimeMillisModule,
+  failure,
+  fromJsonText,
+  pollUntil,
+  sampleEvery,
+  toJsonText,
+};
+
+export default effectSupport;

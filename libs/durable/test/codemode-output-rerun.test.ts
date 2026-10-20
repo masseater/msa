@@ -3,21 +3,28 @@ import { Effect } from "effect";
 import { afterEach, describe, expect, it } from "vite-plus/test";
 
 import { NodeExecutionEnv } from "../src/env/node.ts";
-import { codemodeChat } from "./codemode-chat-support.ts";
-import {
+import codemodeChatSupport from "./codemode-chat-support.ts";
+import codemodeSupport from "./codemode-support.ts";
+import effectSupport from "./effect-support.ts";
+import platformSupport from "./platform-support.ts";
+import sessionSupport from "./session-support.ts";
+import taskSupport from "./task-support.ts";
+
+const { codemodeChat } = codemodeChatSupport;
+const {
   DONE,
+  directories,
+  envDirectory,
+  openStoredChat,
+  removeDirectories,
+  resultDetails,
   script,
   sqlitePath,
-  directories,
-  removeDirectories,
-  openStoredChat,
-  envDirectory,
-  resultDetails,
-} from "./codemode-support.ts";
-import { awaited } from "./effect-support.ts";
-import { listDirectory, dirnameOf } from "./platform-support.ts";
-import { context } from "./session-support.ts";
-import { aborted, deferred } from "./task-support.ts";
+} = codemodeSupport;
+const { awaited } = effectSupport;
+const { dirnameOf, listDirectory } = platformSupport;
+const { context } = sessionSupport;
+const { aborted, deferred } = taskSupport;
 
 afterEach(removeDirectories);
 
@@ -48,7 +55,7 @@ const writesResultFiles = Effect.gen(function* () {
   let opened = yield* openStoredChat(storage, chat.setup, {
     env: new CrashAfterWrite({ cwd }),
   });
-  const id = (yield* awaited(opened.root.submit({ type: "input", content: "go" }, context))).id;
+  const id = (yield* awaited(opened.root.submit({ content: "go", type: "input" }, context))).id;
   const first = yield* awaited(written.promise);
   yield* awaited(opened.harness.close(context));
   opened = yield* openStoredChat(storage, chat.setup, {

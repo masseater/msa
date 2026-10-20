@@ -1,32 +1,33 @@
 import { createModels } from "@msa/ai";
 import {
   type AnyTask,
-  defineExtension,
   type HarnessSettings,
   type Registry,
   type RegistryReader,
   type Storage,
   type TaskId,
+  defineExtension,
 } from "@msa/durable";
-import { createRegistry, Harness } from "@msa/durable/harness";
+import { Harness, createRegistry } from "@msa/durable/harness";
 import { Effect } from "effect";
 
 import { currentTimeMillis } from "../src/clock.ts";
-import { awaited } from "./effect-support.ts";
-import { context, flush } from "./session-support.ts";
+import effectSupport from "./effect-support.ts";
+import sessionSupport from "./session-support.ts";
 
-export type Deferred<T = void> = PromiseWithResolvers<T>;
+const { awaited } = effectSupport;
+const { context, flush } = sessionSupport;
 
-export const deferred = <T = void>(): Deferred<T> => Promise.withResolvers<T>();
+const deferred = <T = void>(): PromiseWithResolvers<T> => Promise.withResolvers<T>();
 
-export function aborted(signal: AbortSignal): Promise<never> {
+function aborted(signal: AbortSignal): Promise<never> {
   const { promise, reject } = Promise.withResolvers<never>();
   if (signal.aborted) reject(signal.reason);
   signal.addEventListener("abort", () => reject(signal.reason), { once: true });
   return promise;
 }
 
-export const eventually = Effect.fn("eventually")(function* (
+const eventually = Effect.fn("eventually")(function* (
   check: () => boolean | Promise<boolean>,
   timeoutMs = 4_000,
 ) {
@@ -37,11 +38,11 @@ export const eventually = Effect.fn("eventually")(function* (
   }
 });
 
-export const abortMarked = Effect.fn("abortMarked")(function* (harness: Harness, id: TaskId) {
+const abortMarked = Effect.fn("abortMarked")(function* (harness: Harness, id: TaskId) {
   while ((yield* awaited(harness.getTask(id, context)))?.abortRequested !== true) yield* flush;
 });
 
-export const settled = Effect.fn("settled")(function* (promise: Promise<unknown>) {
+const settled = Effect.fn("settled")(function* (promise: Promise<unknown>) {
   let done = false;
   promise.then(
     () => {
@@ -57,7 +58,7 @@ export const settled = Effect.fn("settled")(function* (promise: Promise<unknown>
   return done;
 });
 
-export const openTasks = Effect.fn("openTasks")(function* (
+const openTasks = Effect.fn("openTasks")(function* (
   storage: Storage,
   tasks: readonly AnyTask[],
   options: {
@@ -74,8 +75,8 @@ export const openTasks = Effect.fn("openTasks")(function* (
       storage,
       {
         models: createModels(),
-        registry,
         onReport: (error) => reports.push(error),
+        registry,
         ...(options.now === undefined ? {} : { now: options.now }),
         ...(options.settings === undefined ? {} : { settings: options.settings }),
       },
@@ -85,15 +86,15 @@ export const openTasks = Effect.fn("openTasks")(function* (
   return { harness, registry, reports };
 });
 
-export function completed<R>(result: R) {
-  return { status: "terminal", outcome: { status: "completed", result } } as const;
+function completed<R>(result: R) {
+  return { outcome: { result, status: "completed" }, status: "terminal" } as const;
 }
 
-export function abortedWith(reason: string) {
-  return { status: "terminal", outcome: { status: "aborted", reason } } as const;
+function abortedWith(reason: string) {
+  return { outcome: { reason, status: "aborted" }, status: "terminal" } as const;
 }
 
-export function countingReader(registry: Registry): RegistryReader & { subscriptions(): number } {
+function countingReader(registry: Registry): RegistryReader & { subscriptions(): number } {
   let count = 0;
   return {
     snapshot: () => registry.snapshot(),
@@ -111,3 +112,17 @@ export function countingReader(registry: Registry): RegistryReader & { subscript
     subscriptions: () => count,
   };
 }
+
+const taskSupport = {
+  abortMarked,
+  aborted,
+  abortedWith,
+  completed,
+  countingReader,
+  deferred,
+  eventually,
+  openTasks,
+  settled,
+};
+
+export default taskSupport;

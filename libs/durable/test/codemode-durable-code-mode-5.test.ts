@@ -3,9 +3,13 @@ import { afterEach, describe, expect, it } from "vite-plus/test";
 
 import { currentTimeMillis } from "../src/clock.ts";
 import { CodemodeRunDoc } from "../src/codemode/codemode.ts";
-import { codemodeChat } from "./codemode-chat-support.ts";
-import { restart, removeDirectories } from "./codemode-support.ts";
-import { awaited, context } from "./support.ts";
+import codemodeChatSupport from "./codemode-chat-support.ts";
+import codemodeSupport from "./codemode-support.ts";
+import support from "./support.ts";
+
+const { codemodeChat } = codemodeChatSupport;
+const { removeDirectories, restart } = codemodeSupport;
+const { awaited, context } = support;
 
 afterEach(removeDirectories);
 

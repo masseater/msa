@@ -1,33 +1,27 @@
-import { fauxAssistantMessage, fauxToolCall, Type } from "@msa/ai";
-import { defineTool, LiveDoc } from "@msa/durable";
+import { Type, fauxAssistantMessage, fauxToolCall } from "@msa/ai";
+import { LiveDoc, defineTool } from "@msa/durable";
 import { GenerationTask } from "@msa/durable/harness";
 import { MemoryStorage } from "@msa/durable/storage/memory";
 import { Effect } from "effect";
 import { afterEach, describe, expect, it } from "vite-plus/test";
 
-import {
-  directories,
-  toolRunning,
-  HOLD,
-  holdTool,
-  transcript,
-  status,
-  queuedNote,
-  answer,
-  gated,
-} from "./harness-inbox-support.ts";
-import {
-  allEntries,
-  chatSetup,
-  openChat,
-  waitFor,
-  awaited,
+import harnessInboxSupport from "./harness-inbox-support.ts";
+import support from "./support.ts";
+
+const { HOLD, answer, directories, gated, holdTool, queuedNote, status, toolRunning, transcript } =
+  harnessInboxSupport;
+const {
   addHooks,
   addTool,
-  removeDir,
+  allEntries,
+  awaited,
+  chatSetup,
   context,
   deferred,
-} from "./support.ts";
+  openChat,
+  removeDir,
+  waitFor,
+} = support;
 
 afterEach(() =>
   Effect.runPromise(
@@ -47,9 +41,9 @@ const keepsOnYieldContinuation = Effect.gen(function* () {
     onYield: () => (yields++ === 0 ? { continue: "more" } : undefined),
   });
   const { harness, root } = yield* openChat(new MemoryStorage(), setup);
-  const input = yield* awaited(root.submit({ type: "input", content: "a" }, context));
+  const input = yield* awaited(root.submit({ content: "a", type: "input" }, context));
   yield* awaited(first.reached);
-  const write = yield* awaited(root.submit({ type: "write", entry: queuedNote("w") }, context));
+  const write = yield* awaited(root.submit({ entry: queuedNote("w"), type: "write" }, context));
   first.release();
   yield* awaited(input.wait(context));
   const entries = yield* allEntries(root);
@@ -61,8 +55,8 @@ const keepsOnYieldContinuation = Effect.gen(function* () {
     "msa.assistant:second",
   ]);
   expect(yield* awaited(status(input))).toMatchObject({
-    status: "done",
     answer: entries.at(-1)!.id,
+    status: "done",
   });
   expect(yield* awaited(status(write))).toMatchObject({ status: "done" });
   yield* awaited(harness.close(context));
@@ -74,7 +68,7 @@ const dropsOnYieldContinuation = Effect.gen(function* () {
   setup.faux.setResponses([first.step]);
   addHooks(setup.registry, GenerationTask, { onYield: () => ({ continue: "more" }) });
   const { harness, root } = yield* openChat(new MemoryStorage(), setup);
-  const input = yield* awaited(root.submit({ type: "input", content: "a" }, context));
+  const input = yield* awaited(root.submit({ content: "a", type: "input" }, context));
   yield* awaited(first.reached);
   yield* awaited(root.reset(undefined, context));
   first.release();
@@ -105,14 +99,14 @@ const addsEverySteer = Effect.gen(function* () {
   setup.faux.setResponses([HOLD, answer("after tools"), answer("follow-up")]);
   const { harness, root } = yield* openChat(new MemoryStorage(), setup);
   setup.settings.steeringMode = "all";
-  const input = yield* awaited(root.submit({ type: "input", content: "a" }, context));
+  const input = yield* awaited(root.submit({ content: "a", type: "input" }, context));
   yield* toolRunning(harness, root);
   const s1 = yield* awaited(
-    root.submit({ type: "input", content: "s1", whenBusy: "steer" }, context),
+    root.submit({ content: "s1", type: "input", whenBusy: "steer" }, context),
   );
-  const f = yield* awaited(root.submit({ type: "input", content: "f" }, context));
+  const f = yield* awaited(root.submit({ content: "f", type: "input" }, context));
   const s2 = yield* awaited(
-    root.submit({ type: "input", content: "s2", whenBusy: "steer" }, context),
+    root.submit({ content: "s2", type: "input", whenBusy: "steer" }, context),
   );
   gate.resolve();
   yield* awaited(f.wait(context));
@@ -130,8 +124,8 @@ const addsEverySteer = Effect.gen(function* () {
   const answers = entries.filter((entry) => entry.kind === "msa.assistant");
   for (const submission of [input, s1, s2]) {
     expect(yield* awaited(status(submission))).toMatchObject({
-      status: "done",
       answer: answers[1]!.id,
+      status: "done",
     });
   }
   yield* awaited(harness.close(context));
@@ -145,23 +139,23 @@ describe("inbox", () => {
 const queuesIdleSteer = Effect.gen(function* () {
   const setup = chatSetup();
   const failing = gated(
-    fauxAssistantMessage([], { stopReason: "error", errorMessage: "invalid request" }),
+    fauxAssistantMessage([], { errorMessage: "invalid request", stopReason: "error" }),
   );
   setup.faux.setResponses([failing.step, answer("both")]);
   const { harness, root } = yield* openChat(new MemoryStorage(), setup);
-  const input = yield* awaited(root.submit({ type: "input", content: "a" }, context));
+  const input = yield* awaited(root.submit({ content: "a", type: "input" }, context));
   yield* awaited(failing.reached);
-  const f = yield* awaited(root.submit({ type: "input", content: "f" }, context));
+  const f = yield* awaited(root.submit({ content: "f", type: "input" }, context));
   failing.release();
   yield* awaited(input.wait(context));
   yield* awaited(harness.waitForIdle(context));
   const steer = yield* awaited(
-    root.submit({ type: "input", content: "s", whenBusy: "steer" }, context),
+    root.submit({ content: "s", type: "input", whenBusy: "steer" }, context),
   );
   const settled = yield* awaited(steer.wait(context));
   expect(yield* awaited(status(f))).toMatchObject({
-    status: "done",
     answer: settled.status === "done" && settled.answer,
+    status: "done",
   });
   expect(transcript(yield* allEntries(root)).slice(-3)).toEqual([
     "msa.user:f",
@@ -179,16 +173,16 @@ describe("inbox", () => {
 const startsQueuedFollow = Effect.gen(function* () {
   const setup = chatSetup();
   const gate = deferred();
-  holdTool(setup, gate, { output: [], control: { terminate: true } });
+  holdTool(setup, gate, { control: { terminate: true }, output: [] });
   setup.faux.setResponses([HOLD, answer("follow-up")]);
   const { harness, root } = yield* openChat(new MemoryStorage(), setup);
-  const input = yield* awaited(root.submit({ type: "input", content: "a" }, context));
+  const input = yield* awaited(root.submit({ content: "a", type: "input" }, context));
   yield* toolRunning(harness, root);
-  const f = yield* awaited(root.submit({ type: "input", content: "f" }, context));
+  const f = yield* awaited(root.submit({ content: "f", type: "input" }, context));
   gate.resolve();
   yield* awaited(f.wait(context));
   const calling = (yield* allEntries(root)).find((entry) => entry.kind === "msa.assistant")!;
-  expect(yield* awaited(status(input))).toMatchObject({ status: "done", answer: calling.id });
+  expect(yield* awaited(status(input))).toMatchObject({ answer: calling.id, status: "done" });
   expect(transcript(yield* allEntries(root))).toEqual([
     "msa.user:a",
     "msa.assistant",
@@ -210,20 +204,20 @@ const writesLastHandoffStep1 = Effect.gen(function* () {
   const setup = chatSetup();
   const firstGate = deferred();
   const secondGate = deferred();
-  holdTool(setup, firstGate, { output: [], control: { handoff: "one" } });
+  holdTool(setup, firstGate, { control: { handoff: "one" }, output: [] });
   addTool(
     setup.registry,
     defineTool({
-      name: "later",
       description: "Finishes first",
-      parameters: Type.Object({}),
       execute: () =>
         runPromise(
           Effect.gen(function* () {
             yield* awaited(secondGate.promise);
-            return { output: [], control: { handoff: "two" } };
+            return { control: { handoff: "two" }, output: [] };
           }),
         ),
+      name: "later",
+      parameters: Type.Object({}),
     }),
   );
   const round = fauxAssistantMessage(
@@ -232,9 +226,9 @@ const writesLastHandoffStep1 = Effect.gen(function* () {
   );
   setup.faux.setResponses([round, answer("follow-up")]);
   const { harness, root } = yield* openChat(new MemoryStorage(), setup);
-  const input = yield* awaited(root.submit({ type: "input", content: "a" }, context));
+  const input = yield* awaited(root.submit({ content: "a", type: "input" }, context));
   yield* toolRunning(harness, root);
-  const f = yield* awaited(root.submit({ type: "input", content: "f" }, context));
+  const f = yield* awaited(root.submit({ content: "f", type: "input" }, context));
   secondGate.resolve();
   yield* waitFor(
     Effect.gen(function* () {
@@ -245,7 +239,7 @@ const writesLastHandoffStep1 = Effect.gen(function* () {
   );
   firstGate.resolve();
   yield* awaited(f.wait(context));
-  return { harness, root, input };
+  return { harness, input, root };
 });
 
 const writesLastHandoff = Effect.gen(function* () {

@@ -3,15 +3,17 @@ import { Effect } from "effect";
 
 import {
   ExecutionError,
-  err,
   type Result,
   type ShellExecOptions,
   type ShellExecResult,
+  err,
 } from "../src/env/index.ts";
 import { NodeExecutionEnv } from "../src/env/node.ts";
-import { createTempDir } from "./tools-support.ts";
+import toolsSupport from "./tools-support.ts";
 
-export const programsEnv = Effect.fn("programsEnv")(function* (
+const { createTempDir } = toolsSupport;
+
+const programsEnv = Effect.fn("programsEnv")(function* (
   installed: readonly string[],
   output: string,
   exitCode = 0,
@@ -33,5 +35,7 @@ export const programsEnv = Effect.fn("programsEnv")(function* (
       return Promise.resolve({ ok: true, value: { exitCode } });
     }
   }
-  return { env: new ProgramsEnv({ cwd: yield* createTempDir }), commands };
+  return { commands, env: new ProgramsEnv({ cwd: yield* createTempDir }) };
 });
+
+export default programsEnv;

@@ -8,18 +8,12 @@ import { ToolTask } from "@msa/durable/harness";
 import { Effect } from "effect";
 import { afterEach, describe, expect, it } from "vite-plus/test";
 
-import {
-  DONE,
-  call,
-  tool,
-  directories,
-  sqlitePath,
-  codes,
-  nestedTasks,
-  restartDuring,
-  open,
-} from "./harness-nested-tools-restart-support.ts";
-import { chatSetup, awaited, addTool, removeDir, context, aborted, deferred } from "./support.ts";
+import harnessNestedToolsRestartSupport from "./harness-nested-tools-restart-support.ts";
+import support from "./support.ts";
+
+const { DONE, call, codes, directories, nestedTasks, open, restartDuring, sqlitePath, tool } =
+  harnessNestedToolsRestartSupport;
+const { aborted, addTool, awaited, chatSetup, context, deferred, removeDir } = support;
 
 afterEach(() =>
   Effect.runPromise(
@@ -56,7 +50,7 @@ const replaySafeBatch = Effect.fn("replaySafeBatch")(function* () {
 
   const path = yield* sqlitePath();
   const setup = chatSetup();
-  const runs = { safe: 0, unsafe: 0, caller: 0 };
+  const runs = { caller: 0, safe: 0, unsafe: 0 };
   const running = { safe: deferred(), unsafe: deferred() };
   addTool(
     setup.registry,
@@ -70,7 +64,7 @@ const replaySafeBatch = Effect.fn("replaySafeBatch")(function* () {
               running.safe.resolve();
               return yield* awaited(aborted(callContext.abortSignal!));
             }
-            return { output: [{ type: "text", text: `safe run ${runs.safe}` }] };
+            return { output: [{ text: `safe run ${runs.safe}`, type: "text" }] };
           }),
         ),
       { replay: "safe" },
@@ -84,7 +78,7 @@ const replaySafeBatch = Effect.fn("replaySafeBatch")(function* () {
       return Promise.resolve(aborted(callContext.abortSignal!));
     }),
   );
-  return { path, setup, runs, running };
+  return { path, running, runs, setup };
 });
 
 const marksNothingReopened = Effect.gen(function* () {
@@ -113,7 +107,7 @@ const marksNothingReopened = Effect.gen(function* () {
   );
   setup.faux.setResponses([call("batch"), DONE]);
   let opened = yield* open(path, setup);
-  yield* awaited(opened.root.submit({ type: "input", content: "go" }, context));
+  yield* awaited(opened.root.submit({ content: "go", type: "input" }, context));
   yield* awaited(running.promise);
   yield* awaited(opened.harness.close(context));
 
@@ -170,7 +164,7 @@ const letsReplaySafe = Effect.gen(function* () {
     (yield* awaited((yield* awaited(opened.harness.submission(id, context)))!.wait(context)))
       .status,
   ).toBe("done");
-  expect(runs).toEqual({ safe: 2, unsafe: 1, caller: 2 });
+  expect(runs).toEqual({ caller: 2, safe: 2, unsafe: 1 });
   expect(yield* nestedTasks(opened.harness)).toHaveLength(2);
   for (const task of yield* nestedTasks(opened.harness)) {
     expect(task.abandonOnRestart).toBeUndefined();
@@ -195,7 +189,7 @@ const clearsSlotsNested = Effect.gen(function* () {
   let attempts = 0;
   addTool(
     setup.registry,
-    tool("quick", () => Promise.resolve({ output: [{ type: "text", text: "ok" }] })),
+    tool("quick", () => Promise.resolve({ output: [{ text: "ok", type: "text" }] })),
   );
   addTool(
     setup.registry,
@@ -210,7 +204,7 @@ const clearsSlotsNested = Effect.gen(function* () {
               finished.resolve();
               return yield* awaited(aborted(callContext.abortSignal!));
             }
-            return { output: [{ type: "text", text: "done" }] };
+            return { output: [{ text: "done", type: "text" }] };
           }),
         ),
       { replay: "safe" },
@@ -218,7 +212,7 @@ const clearsSlotsNested = Effect.gen(function* () {
   );
   setup.faux.setResponses([call("caller"), DONE]);
   let opened = yield* open(path, setup);
-  const id = (yield* awaited(opened.root.submit({ type: "input", content: "go" }, context))).id;
+  const id = (yield* awaited(opened.root.submit({ content: "go", type: "input" }, context))).id;
   yield* awaited(finished.promise);
   expect(
     (yield* awaited(opened.harness.snapshot(LiveDoc, opened.root.id, context)))?.nestedTools,
@@ -270,7 +264,7 @@ const abortsNestedCall = Effect.gen(function* () {
             attempts++;
             if (attempts === 1)
               yield* awaited(api.executeTool("slow", {}, callContext, { key: "slow" }));
-            return { output: [{ type: "text", text: "done" }] };
+            return { output: [{ text: "done", type: "text" }] };
           }),
         ),
       { replay: "safe" },
@@ -286,8 +280,8 @@ const abortsNestedCall = Effect.gen(function* () {
   expect(attempts).toBe(2);
   const [leftover] = yield* nestedTasks(opened.harness);
   expect(leftover?.state).toMatchObject({
-    status: "terminal",
     outcome: { status: "aborted" },
+    status: "terminal",
   });
   yield* awaited(opened.harness.close(context));
 });

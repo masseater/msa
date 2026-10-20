@@ -1,22 +1,26 @@
-import { type AssistantMessage, fauxAssistantMessage, type Message } from "@msa/ai";
+import { type AssistantMessage, type Message, fauxAssistantMessage } from "@msa/ai";
 import { LiveDoc } from "@msa/durable";
 import { Effect } from "effect";
 import { afterEach, describe, expect, it } from "vite-plus/test";
 
-import { runTaskId, checkpoint } from "./harness-generation-recovery-cases.ts";
-import { open, directories, sqlitePath } from "./harness-generation-recovery-support.ts";
-import {
+import harnessGenerationRecoveryCases from "./harness-generation-recovery-cases.ts";
+import harnessGenerationRecoverySupport from "./harness-generation-recovery-support.ts";
+import support from "./support.ts";
+
+const { checkpoint, runTaskId } = harnessGenerationRecoveryCases;
+const { directories, open, sqlitePath } = harnessGenerationRecoverySupport;
+const {
+  aborted,
+  addSection,
   allEntries,
+  awaited,
   chatSetup,
+  context,
+  deferred,
+  removeDir,
   textOf,
   waitFor,
-  awaited,
-  addSection,
-  removeDir,
-  context,
-  aborted,
-  deferred,
-} from "./support.ts";
+} = support;
 
 afterEach(() =>
   Effect.runPromise(
@@ -48,11 +52,11 @@ const interruptedBeforePartial = Effect.fn("interruptedBeforePartial")(function*
   const opened = yield* open(path, setup);
   setup.settings.stream = { timeoutMs: 1234 };
   opened.harness.resume();
-  const id = (yield* awaited(opened.root.submit({ type: "input", content: "hi" }, context))).id;
+  const id = (yield* awaited(opened.root.submit({ content: "hi", type: "input" }, context))).id;
   yield* awaited(reached.promise);
   const taskId = yield* runTaskId(opened.harness);
   yield* awaited(opened.harness.close(context));
-  return { path, setup, sent, timeouts, id, taskId };
+  return { id, path, sent, setup, taskId, timeouts };
 });
 
 const rerunsPreparationInterrupted = Effect.gen(function* () {
@@ -77,13 +81,13 @@ const rerunsPreparationInterrupted = Effect.gen(function* () {
   setup.faux.setResponses([fauxAssistantMessage("answer")]);
   let opened = yield* open(path, setup);
   opened.harness.resume();
-  const id = (yield* awaited(opened.root.submit({ type: "input", content: "hi" }, context))).id;
+  const id = (yield* awaited(opened.root.submit({ content: "hi", type: "input" }, context))).id;
   yield* awaited(reached.promise);
   const taskId = yield* runTaskId(opened.harness);
   yield* awaited(opened.harness.close(context));
 
   opened = yield* open(path, setup);
-  expect(yield* checkpoint(opened.harness, taskId)).toEqual({ phase: "prepare", attempt: 1 });
+  expect(yield* checkpoint(opened.harness, taskId)).toEqual({ attempt: 1, phase: "prepare" });
   opened.harness.resume();
   expect(
     (yield* awaited((yield* awaited(opened.harness.submission(id, context)))!.wait(context)))
@@ -107,10 +111,10 @@ const resendsRequestInterrupted = Effect.gen(function* () {
 
   const reopened = yield* open(path, setup);
   expect(yield* checkpoint(reopened.harness, taskId)).toMatchObject({
-    phase: "request",
     attempt: 1,
-    thinkingLevel: "off",
+    phase: "request",
     streamOptions: { timeoutMs: 1234 },
+    thinkingLevel: "off",
   });
   setup.settings.stream = { timeoutMs: 999 };
   expect(
@@ -140,7 +144,7 @@ describe("generation recovery", () => {
 
 const convertsCommittedPartial = Effect.gen(function* () {
   const path = yield* sqlitePath();
-  const slow = chatSetup({ tokensPerSecond: 20, tokenSize: { min: 1, max: 1 } });
+  const slow = chatSetup({ tokenSize: { max: 1, min: 1 }, tokensPerSecond: 20 });
   slow.faux.setResponses([fauxAssistantMessage("z".repeat(400))]);
   let opened = yield* open(path, slow);
   opened.harness.resume();
@@ -151,7 +155,7 @@ const convertsCommittedPartial = Effect.gen(function* () {
 
     return Promise.resolve();
   });
-  const id = (yield* awaited(opened.root.submit({ type: "input", content: "hi" }, context))).id;
+  const id = (yield* awaited(opened.root.submit({ content: "hi", type: "input" }, context))).id;
   yield* waitFor(() => watched !== undefined);
   yield* awaited(opened.harness.close(context));
 
@@ -196,7 +200,7 @@ const resumesRetryBackoffStep1 = Effect.gen(function* () {
 
   const path = yield* sqlitePath();
   const setup = chatSetup();
-  return { runPromise, path, setup };
+  return { path, runPromise, setup };
 });
 
 const resumesRetryBackoff = Effect.gen(function* () {
@@ -205,15 +209,15 @@ const resumesRetryBackoff = Effect.gen(function* () {
   setup.now = () => now;
   setup.faux.setResponses([
     fauxAssistantMessage([], {
-      stopReason: "error",
       errorMessage: "503 Service Unavailable",
+      stopReason: "error",
     }),
     fauxAssistantMessage("recovered"),
   ]);
   let opened = yield* open(path, setup);
   opened.harness.resume();
-  setup.settings.retry = { enabled: true, maxRetries: 2, baseDelayMs: 60_000 };
-  const id = (yield* awaited(opened.root.submit({ type: "input", content: "hi" }, context))).id;
+  setup.settings.retry = { baseDelayMs: 60_000, enabled: true, maxRetries: 2 };
+  const id = (yield* awaited(opened.root.submit({ content: "hi", type: "input" }, context))).id;
   yield* waitFor(
     Effect.gen(function* () {
       const live = yield* awaited(opened.harness.snapshot(LiveDoc, opened.root.id, context));
@@ -225,13 +229,13 @@ const resumesRetryBackoff = Effect.gen(function* () {
 
   opened = yield* open(path, setup);
   expect(yield* checkpoint(opened.harness, taskId)).toEqual({
-    phase: "retry",
     attempt: 1,
+    phase: "retry",
     until: 61_000,
   });
   expect(yield* awaited(opened.harness.snapshot(LiveDoc, opened.root.id, context))).toEqual({
-    run: { taskId, inputs: [id] },
     generation: { attempt: 1, retry: { at: 61_000, error: "503 Service Unavailable" } },
+    run: { inputs: [id], taskId },
   });
   now = 61_000;
   opened.harness.resume();

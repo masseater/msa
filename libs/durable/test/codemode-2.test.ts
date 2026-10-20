@@ -2,9 +2,13 @@ import { Effect } from "effect";
 import { afterEach, describe, expect, it } from "vite-plus/test";
 
 import { CodemodeJournalDoc, CodemodeRunDoc } from "../src/codemode/codemode.ts";
-import { codemodeChat } from "./codemode-chat-support.ts";
-import { restart, directories, nestedCount } from "./codemode-support.ts";
-import { awaited, removeDir, context, eventually } from "./support.ts";
+import codemodeChatSupport from "./codemode-chat-support.ts";
+import codemodeSupport from "./codemode-support.ts";
+import support from "./support.ts";
+
+const { codemodeChat } = codemodeChatSupport;
+const { directories, nestedCount, restart } = codemodeSupport;
+const { awaited, context, eventually, removeDir } = support;
 
 afterEach(() =>
   Effect.runPromise(
@@ -16,7 +20,7 @@ afterEach(() =>
 );
 
 const endsCallResumedScript = Effect.gen(function* () {
-  const chat = codemodeChat({ globals: [{ name: "next", execute: () => Promise.resolve(1) }] });
+  const chat = codemodeChat({ globals: [{ execute: () => Promise.resolve(1), name: "next" }] });
   const { harness, result } = yield* restart(
     chat,
     `await next(); await tools.hold({});`,

@@ -1,30 +1,33 @@
-import { defineDoc, type JsonObject } from "@msa/durable";
+import { type JsonObject, defineDoc } from "@msa/durable";
 import { DateTime, Effect } from "effect";
 import { describe, expect, it } from "vite-plus/test";
 
-import { awaited } from "./effect-support.ts";
-import { documentWrites } from "./session-checkpoints-migrations-support.ts";
-import { context, documentChanges, flush, openTestSession } from "./session-support.ts";
+import effectSupport from "./effect-support.ts";
+import documentWrites from "./session-checkpoints-migrations-support.ts";
+import sessionSupport from "./session-support.ts";
+
+const { awaited } = effectSupport;
+const { context, documentChanges, flush, openTestSession } = sessionSupport;
 
 function rollbackMigrationDocs() {
   const Old = defineDoc<{ count: number }>({
-    kind: "migration.rollback",
-    version: 1,
-    scope: "session",
     initial: () => ({ count: 1 }),
+    kind: "migration.rollback",
+    scope: "session",
+    version: 1,
   });
   const calls: { migrations: number } = { migrations: 0 };
   const Current = defineDoc<{ count: number; migrated: boolean }>({
-    kind: "migration.rollback",
-    version: 2,
-    scope: "session",
     initial: () => ({ count: 0, migrated: false }),
+    kind: "migration.rollback",
     migrate: (value) => {
       calls.migrations++;
       return { count: value["count"] as number, migrated: true };
     },
+    scope: "session",
+    version: 2,
   });
-  return { Old, calls, Current };
+  return { Current, Old, calls };
 }
 
 const rollsMigrationEditsStep1 = Effect.gen(function* () {
@@ -70,15 +73,15 @@ const rollsMigrationEditsStep1 = Effect.gen(function* () {
       context,
     ),
   );
-  return { calls, Current, session, storage, publications };
+  return { Current, calls, publications, session, storage };
 });
 
 const rollsMigrationEdits = Effect.gen(function* () {
   const { calls, Current, session, storage, publications } = yield* rollsMigrationEditsStep1;
   expect(documentWrites(storage.commits.at(-1)!)).toEqual([
     expect.objectContaining({
+      content: { kind: "base", value: { count: 9, migrated: false }, version: 2 },
       type: "document.change",
-      content: { kind: "base", version: 2, value: { count: 9, migrated: false } },
     }),
   ]);
   yield* flush;
@@ -100,23 +103,23 @@ describe("Session document migrations", () => {
 
 const strictChecksMigration = Effect.gen(function* () {
   const Old = defineDoc<{ count: number }>({
-    kind: "migration.invalid",
-    version: 1,
-    scope: "session",
     initial: () => ({ count: 1 }),
+    kind: "migration.invalid",
+    scope: "session",
+    version: 1,
   });
   const Invalid = defineDoc<JsonObject>({
-    kind: "migration.invalid",
-    version: 2,
-    scope: "session",
     initial: () => ({}),
+    kind: "migration.invalid",
     migrate: () => ({ invalid: DateTime.toDateUtc(DateTime.nowUnsafe()) }) as unknown as JsonObject,
+    scope: "session",
+    version: 2,
   });
   const Other = defineDoc<{ ok: boolean }>({
-    kind: "migration.invalid.other",
-    version: 1,
-    scope: "session",
     initial: () => ({ ok: true }),
+    kind: "migration.invalid.other",
+    scope: "session",
+    version: 1,
   });
   const { session, storage } = openTestSession();
   yield* awaited(session.commit((tx) => tx.doc(Old).then(() => undefined), context));
@@ -140,22 +143,22 @@ describe("Session document migrations", () => {
 
 const rejectsNewerStored = Effect.gen(function* () {
   const V2 = defineDoc<{ count: number }>({
-    kind: "migration.compatibility",
-    version: 2,
-    scope: "session",
     initial: () => ({ count: 2 }),
+    kind: "migration.compatibility",
+    scope: "session",
+    version: 2,
   });
   const V1 = defineDoc<{ count: number }>({
-    kind: "migration.compatibility",
-    version: 1,
-    scope: "session",
     initial: () => ({ count: 1 }),
+    kind: "migration.compatibility",
+    scope: "session",
+    version: 1,
   });
   const V3WithoutMigration = defineDoc<{ count: number }>({
-    kind: "migration.compatibility",
-    version: 3,
-    scope: "session",
     initial: () => ({ count: 3 }),
+    kind: "migration.compatibility",
+    scope: "session",
+    version: 3,
   });
   const { session, storage } = openTestSession();
   yield* awaited(session.commit((tx) => tx.doc(V2).then(() => undefined), context));
@@ -190,20 +193,20 @@ const persistsRequiredMigration = Effect.gen(function* () {
   const runPromise = Effect.runPromiseWith(yield* Effect.context<never>());
 
   const Old = defineDoc<{ count: number }>({
-    kind: "migration.retire",
-    version: 1,
-    scope: "session",
     initial: () => ({ count: 1 }),
+    kind: "migration.retire",
+    scope: "session",
+    version: 1,
   });
   const Current = defineDoc<{ count: number }>({
-    kind: "migration.retire",
-    version: 2,
-    scope: "session",
-    initial: () => ({ count: 0 }),
-    migrate: (value) => ({ count: value["count"] as number }),
     checkpointWhen: () => {
       throw new Error("must not run");
     },
+    initial: () => ({ count: 0 }),
+    kind: "migration.retire",
+    migrate: (value) => ({ count: value["count"] as number }),
+    scope: "session",
+    version: 2,
   });
   const { session, storage } = openTestSession();
   yield* awaited(session.commit((tx) => tx.doc(Old).then(() => undefined), context));
@@ -222,8 +225,8 @@ const persistsRequiredMigration = Effect.gen(function* () {
   );
   expect(documentWrites(storage.commits.at(-1)!)).toEqual([
     expect.objectContaining({
+      content: { kind: "base", value: { count: 1 }, version: 2 },
       type: "document.change",
-      content: { kind: "base", version: 2, value: { count: 1 } },
     }),
     expect.objectContaining({ type: "document.retire" }),
   ]);

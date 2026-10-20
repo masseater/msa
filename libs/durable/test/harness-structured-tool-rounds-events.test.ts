@@ -1,36 +1,31 @@
-import { fauxAssistantMessage, fauxText, Type } from "@msa/ai";
+import { Type, fauxAssistantMessage, fauxText } from "@msa/ai";
 import type { JsonValue } from "@msa/chord";
-import { defineTool, LiveDoc } from "@msa/durable";
+import { LiveDoc, defineTool } from "@msa/durable";
 import { MemoryStorage } from "@msa/durable/storage/memory";
 import { Effect } from "effect";
 import { afterEach, describe, expect, it } from "vite-plus/test";
 
-import { toolCalls, labels, listen } from "./harness-structured-events.ts";
-import {
-  state,
-  outcomeOf,
-  open,
+import harnessStructuredEvents from "./harness-structured-events.ts";
+import harnessStructuredSupport from "./harness-structured-support.ts";
+import support from "./support.ts";
+
+const { labels, listen, toolCalls } = harnessStructuredEvents;
+const {
+  Node,
+  OWN_CONVERSATION,
+  behaviors,
+  directories,
   gate,
   gates,
-  Node,
-  behaviors,
   log,
-  OWN_CONVERSATION,
+  open,
+  outcomeOf,
   owned,
   script,
-  directories,
-} from "./harness-structured-support.ts";
-import {
-  chatSetup,
-  openChat,
-  waitFor,
-  awaited,
-  addTask,
-  addTool,
-  removeDir,
-  context,
-  settled,
-} from "./support.ts";
+  state,
+} = harnessStructuredSupport;
+const { addTask, addTool, awaited, chatSetup, context, openChat, removeDir, settled, waitFor } =
+  support;
 
 afterEach(() =>
   Effect.runPromise(
@@ -52,18 +47,16 @@ const letsToolOwnsStep1 = Effect.gen(function* () {
   addTool(
     setup.registry,
     defineTool({
-      name: "delegate",
       description: "Starts work in a conversation it owns",
-      parameters: Type.Object({}),
       execute: (_args, api, callContext) =>
         runPromise(
           Effect.gen(function* () {
-            const runPromise = Effect.runPromiseWith(yield* Effect.context<never>());
+            const runNested = Effect.runPromiseWith(yield* Effect.context<never>());
 
             yield* awaited(
               api.commit(
                 (tx) =>
-                  runPromise(
+                  runNested(
                     Effect.gen(function* () {
                       const child = yield* awaited(
                         tx.createConversation({
@@ -82,9 +75,11 @@ const letsToolOwnsStep1 = Effect.gen(function* () {
                 callContext,
               ),
             );
-            return { output: [{ type: "text", text: "started" }] };
+            return { output: [{ text: "started", type: "text" }] };
           }),
         ),
+      name: "delegate",
+      parameters: Type.Object({}),
     }),
   );
   return { runPromise, setup };
@@ -98,7 +93,7 @@ const letsToolOwns = Effect.gen(function* () {
   ]);
   const { harness, root } = yield* openChat(new MemoryStorage(), setup);
   const { stream, events } = yield* listen(harness, root);
-  const submission = yield* awaited(root.submit({ type: "input", content: "go" }, context));
+  const submission = yield* awaited(root.submit({ content: "go", type: "input" }, context));
   yield* waitFor(
     Effect.gen(function* () {
       return (
@@ -136,7 +131,7 @@ const holdsFaultedToolStep1 = Effect.gen(function* () {
         Effect.gen(function* () {
           yield* awaited(gate("abort.held").promise);
           yield* awaited(
-            runtime.commit(() => ({ status: "terminal", outcome: { status: "aborted" } }), ctx),
+            runtime.commit(() => ({ outcome: { status: "aborted" }, status: "terminal" }), ctx),
           );
         }),
       ),
@@ -144,9 +139,7 @@ const holdsFaultedToolStep1 = Effect.gen(function* () {
   addTool(
     setup.registry,
     defineTool({
-      name: "broken",
       description: "Starts owned work, then returns a result that is not strict JSON",
-      parameters: Type.Object({}),
       execute: (_args, api, callContext) =>
         runPromise(
           Effect.gen(function* () {
@@ -156,26 +149,28 @@ const holdsFaultedToolStep1 = Effect.gen(function* () {
                 callContext,
               ),
             );
-            return { output: [], details: { fn: (() => 1) as unknown as JsonValue } };
+            return { details: { fn: (() => 1) as unknown as JsonValue }, output: [] };
           }),
         ),
+      name: "broken",
+      parameters: Type.Object({}),
     }),
   );
   setup.faux.setResponses([toolCalls(["broken", "c1"]), fauxAssistantMessage([fauxText("done")])]);
   const { harness, root } = yield* openChat(new MemoryStorage(), setup);
   const { stream, events } = yield* listen(harness, root);
-  const submission = yield* awaited(root.submit({ type: "input", content: "go" }, context));
+  const submission = yield* awaited(root.submit({ content: "go", type: "input" }, context));
   yield* waitFor(() => log.includes("abort:held"));
   const live = (yield* awaited(harness.snapshot(LiveDoc, root.id, context)))!;
   const tool = live.tools![0]!.taskId!;
-  return { harness, stream, events, submission, live, tool };
+  return { events, harness, live, stream, submission, tool };
 });
 
 const holdsFaultedTool = Effect.gen(function* () {
   const { harness, stream, events, submission, live, tool } = yield* holdsFaultedToolStep1;
   expect(yield* state(harness, tool)).toMatchObject({
-    status: "completing",
     outcome: { status: "faulted" },
+    status: "completing",
   });
   expect(live.tools![0]!.status).not.toBe("done");
   expect(events.some((event) => event.type === "task_failed")).toBe(false);

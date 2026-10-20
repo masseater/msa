@@ -5,29 +5,43 @@ import { fauxAssistantMessage, fauxProvider, fauxToolCall } from "@msa/ai/provid
 import { BACKGROUND_CONTEXT } from "@msa/chord/context";
 import { Console, Effect } from "effect";
 
-import { createRegistry, Harness } from "../../src/harness/index.ts";
+import { Harness, createRegistry } from "../../src/harness/index.ts";
 import { defineDoc, defineExtension, defineTool, section } from "../../src/index.ts";
 import { MemoryStorage } from "../../src/storage/memory.ts";
-import { awaited } from "../effect-support.ts";
+import effectSupport from "../effect-support.ts";
+
+const { awaited } = effectSupport;
 
 const context = BACKGROUND_CONTEXT;
 
 const Todos = defineDoc<{ items: string[] }>({
-  kind: "example.todos",
-  version: 1,
-  scope: "conversation",
-  history: "rewindable",
   fork: "asOf",
+  history: "rewindable",
   initial: () => ({ items: [] }),
+  kind: "example.todos",
+  scope: "conversation",
+  version: 1,
 });
 
 const Todo = defineExtension({
   name: "todo",
+  sections: [
+    section("todos", (input, renderContext) =>
+      Effect.runPromise(
+        Effect.gen(function* () {
+          const todos = yield* awaited(
+            input.read.snapshot(Todos, input.conversationId, renderContext),
+          );
+          return todos === undefined || todos.items.length === 0
+            ? undefined
+            : todos.items.join("\n");
+        }),
+      ),
+    ),
+  ],
   tools: [
     defineTool({
-      name: "todo",
       description: "Add an item to your todo list",
-      parameters: Type.Object({ item: Type.String() }),
       execute: (args, api, callContext) =>
         Effect.runPromise(
           Effect.gen(function* () {
@@ -44,24 +58,12 @@ const Todo = defineExtension({
                 callContext,
               ),
             );
-            return { output: [{ type: "text", text: `added ${args.item}` }] };
+            return { output: [{ text: `added ${args.item}`, type: "text" }] };
           }),
         ),
+      name: "todo",
+      parameters: Type.Object({ item: Type.String() }),
     }),
-  ],
-  sections: [
-    section("todos", (input, renderContext) =>
-      Effect.runPromise(
-        Effect.gen(function* () {
-          const todos = yield* awaited(
-            input.read.snapshot(Todos, input.conversationId, renderContext),
-          );
-          return todos === undefined || todos.items.length === 0
-            ? undefined
-            : todos.items.join("\n");
-        }),
-      ),
-    ),
   ],
 });
 
@@ -75,7 +77,7 @@ const main = Effect.gen(function* () {
   const harness = yield* awaited(Harness.open(new MemoryStorage(), { models, registry }, context));
   const root = yield* awaited(
     harness.root(context, {
-      agent: { model: { provider: "faux", modelId: "faux-1" } },
+      agent: { model: { modelId: "faux-1", provider: "faux" } },
     }),
   );
 
@@ -88,13 +90,13 @@ const main = Effect.gen(function* () {
   ]);
   yield* awaited(
     (yield* awaited(
-      root.submit({ type: "input", content: "Remember to fix the build." }, context),
+      root.submit({ content: "Remember to fix the build.", type: "input" }, context),
     )).wait(context),
   );
   yield* Console.log("todos:", yield* awaited(harness.snapshot(Todos, root.id, context)));
 
   yield* awaited(
-    (yield* awaited(root.submit({ type: "input", content: "What is next?" }, context))).wait(
+    (yield* awaited(root.submit({ content: "What is next?", type: "input" }, context))).wait(
       context,
     ),
   );

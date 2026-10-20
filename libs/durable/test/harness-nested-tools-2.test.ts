@@ -3,18 +3,12 @@ import { ToolTask } from "@msa/durable/harness";
 import { Effect } from "effect";
 import { afterEach, describe, expect, it } from "vite-plus/test";
 
-import {
-  directories,
-  results,
-  toolTasks,
-  runOnce,
-  text,
-  DONE,
-  call,
-  tool,
-  echoTool,
-} from "./harness-nested-tools-support.ts";
-import { chatSetup, awaited, addHooks, addTool, removeDir, context } from "./support.ts";
+import harnessNestedToolsSupport from "./harness-nested-tools-support.ts";
+import support from "./support.ts";
+
+const { DONE, call, directories, echoTool, results, runOnce, text, tool, toolTasks } =
+  harnessNestedToolsSupport;
+const { addHooks, addTool, awaited, chatSetup, context, removeDir } = support;
 
 afterEach(() =>
   Effect.runPromise(
@@ -33,16 +27,16 @@ const runsToolHooks = Effect.gen(function* () {
   addTool(setup.registry, echo.registration);
   const parents: ToolHookCall["parent"][] = [];
   addHooks(setup.registry, ToolTask, {
+    afterTool: (hookCall, result) =>
+      hookCall.parent === undefined
+        ? undefined
+        : { ...result, output: [{ text: "rewritten", type: "text" }] },
     beforeTool: (hookCall) => {
       parents.push(hookCall.parent);
       return hookCall.parent !== undefined && hookCall.arguments["text"] === "secret"
         ? { block: "no secrets" }
         : undefined;
     },
-    afterTool: (hookCall, result) =>
-      hookCall.parent === undefined
-        ? undefined
-        : { ...result, output: [{ type: "text", text: "rewritten" }] },
   });
   const nested: NestedToolExecutionResult[] = [];
   addTool(
@@ -61,12 +55,12 @@ const runsToolHooks = Effect.gen(function* () {
   const [parent] = yield* toolTasks(harness);
   expect(parents).toEqual([
     undefined,
-    { taskId: parent!.id, callId: "c1" },
-    { taskId: parent!.id, callId: "c1" },
+    { callId: "c1", taskId: parent!.id },
+    { callId: "c1", taskId: parent!.id },
   ]);
   expect(nested[0]).toMatchObject({
+    diagnostics: [{ code: "blocked", message: "Tool call blocked: no secrets", severity: "error" }],
     isError: true,
-    diagnostics: [{ severity: "error", code: "blocked", message: "Tool call blocked: no secrets" }],
   });
   expect(text(nested[1])).toBe("rewritten");
   expect(echo.state.runs).toBe(1);

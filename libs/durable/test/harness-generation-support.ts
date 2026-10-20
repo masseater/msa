@@ -1,4 +1,4 @@
-import { fauxAssistantMessage, type Models } from "@msa/ai";
+import { type Models, fauxAssistantMessage } from "@msa/ai";
 import {
   type CommitPublication,
   type Conversation,
@@ -10,9 +10,13 @@ import { Harness } from "@msa/durable/harness";
 import { Effect, Stream } from "effect";
 import { dual } from "effect/Function";
 
-import { waitFor } from "./chat-support.ts";
-import { awaited } from "./effect-support.ts";
-import { context } from "./session-support.ts";
+import chatSupport from "./chat-support.ts";
+import effectSupport from "./effect-support.ts";
+import sessionSupport from "./session-support.ts";
+
+const { waitFor } = chatSupport;
+const { awaited } = effectSupport;
+const { context } = sessionSupport;
 
 function heldStreamImpl(start: unknown, final: unknown): ReturnType<Models["streamSimple"]> {
   const events = Stream.concat(Stream.make(start), Stream.fromEffectDrain(Effect.sleep(300)));
@@ -22,20 +26,20 @@ function heldStreamImpl(start: unknown, final: unknown): ReturnType<Models["stre
   } as unknown as ReturnType<Models["streamSimple"]>;
 }
 
-export const heldStream: {
+const heldStream: {
   (final: unknown): (start: unknown) => ReturnType<typeof heldStreamImpl>;
   (start: unknown, final: unknown): ReturnType<typeof heldStreamImpl>;
 } = dual(2, heldStreamImpl);
 
-export const invalidFinalStream = (): ReturnType<Models["streamSimple"]> =>
+const invalidFinalStream = (): ReturnType<Models["streamSimple"]> =>
   heldStream(
-    { type: "start", partial: fauxAssistantMessage("partial", { stopReason: "pending" }) },
+    { partial: fauxAssistantMessage("partial", { stopReason: "pending" }), type: "start" },
     { ...fauxAssistantMessage("final"), invalid: () => {} },
   );
 
-export const ERROR_503 = fauxAssistantMessage([], {
-  stopReason: "error",
+const ERROR_503 = fauxAssistantMessage([], {
   errorMessage: "503 Service Unavailable",
+  stopReason: "error",
 });
 
 function liveImpl(
@@ -45,15 +49,12 @@ function liveImpl(
   return Promise.resolve(harness.snapshot(LiveDoc, conversation.id, context));
 }
 
-export const live: {
+const live: {
   (conversation: Conversation): (harness: Harness) => ReturnType<typeof liveImpl>;
   (harness: Harness, conversation: Conversation): ReturnType<typeof liveImpl>;
 } = dual(2, liveImpl);
 
-export const runTask = Effect.fn("runTask")(function* (
-  harness: Harness,
-  conversation: Conversation,
-) {
+const runTask = Effect.fn("runTask")(function* (harness: Harness, conversation: Conversation) {
   let taskId: TaskId | undefined;
   yield* waitFor(
     Effect.gen(function* () {
@@ -74,12 +75,12 @@ function withStreamImpl(models: Models, streamSimple: Models["streamSimple"]): M
   });
 }
 
-export const withStream: {
+const withStream: {
   (streamSimple: Models["streamSimple"]): (models: Models) => ReturnType<typeof withStreamImpl>;
   (models: Models, streamSimple: Models["streamSimple"]): ReturnType<typeof withStreamImpl>;
 } = dual(2, withStreamImpl);
 
-export function livePublications(harness: Harness): LiveState[] {
+function livePublications(harness: Harness): LiveState[] {
   const values: LiveState[] = [];
   harness.subscribeCommits((publication: CommitPublication) => {
     for (const change of publication.changes) {
@@ -94,3 +95,15 @@ export function livePublications(harness: Harness): LiveState[] {
   });
   return values;
 }
+
+const harnessGenerationSupport = {
+  ERROR_503,
+  heldStream,
+  invalidFinalStream,
+  live,
+  livePublications,
+  runTask,
+  withStream,
+};
+
+export default harnessGenerationSupport;

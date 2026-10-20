@@ -6,18 +6,21 @@ import { afterAll, describe, expect, it } from "vite-plus/test";
 import {
   type ExecutionEnv,
   ExecutionError,
-  getOrThrow,
   type Result,
   type ShellExecOptions,
   type ShellExecResult,
   type ShellOutputSkip,
   type ShellOutputWindow,
+  getOrThrow,
 } from "../src/env/index.ts";
 import { NodeExecutionEnv } from "../src/env/node.ts";
 import { createBashTool, createPowerShellTool } from "../src/tools/index.ts";
 import { DEFAULT_MAX_LINES } from "../src/truncate.ts";
-import { BACKGROUND_CONTEXT, withAbortSignal, abortController, awaited } from "./support.ts";
-import {
+import support from "./support.ts";
+import toolsSupport from "./tools-support.ts";
+
+const { BACKGROUND_CONTEXT, abortController, awaited, withAbortSignal } = support;
+const {
   TRUNCATED_OUTPUT_LINES,
   TimeoutOutputExecutionEnv,
   createEnv,
@@ -26,18 +29,18 @@ import {
   removeTempDirs,
   run,
   runFailing,
-} from "./tools-support.ts";
+} = toolsSupport;
 
 afterAll(() => Effect.runPromise(removeTempDirs));
 
 const passesRetainedWindow = Effect.gen(function* () {
   const window: ShellOutputWindow = {
+    bytesPerSecond: 1024,
     maxBytes: 4,
     maxLines: 1,
     minIntervalMs: 100,
-    bytesPerSecond: 1024,
   };
-  const skipped: ShellOutputSkip = { bytes: 6, newlines: 2, endsWithNewline: true };
+  const skipped: ShellOutputSkip = { bytes: 6, endsWithNewline: true, newlines: 2 };
   let received: ShellOutputWindow | undefined;
   class SkippingEnv extends NodeExecutionEnv {
     override exec(
@@ -46,16 +49,16 @@ const passesRetainedWindow = Effect.gen(function* () {
       context: Context,
     ): Promise<Result<ShellExecResult, ExecutionError>> {
       received = options?.window;
-      options?.onOutput?.("tail\n", context, { stream: "stdout", skipped });
+      options?.onOutput?.("tail\n", context, { skipped, stream: "stdout" });
       return Promise.resolve({ ok: true, value: { exitCode: 0 } });
     }
   }
   const calls: [string, ShellOutputSkip | undefined][] = [];
   const api = {
     ...fakeApi(new SkippingEnv({ cwd: yield* createTempDir })).api,
-    outputWindow: window,
     output: (chunk: string | Uint8Array, skip?: ShellOutputSkip) =>
       calls.push([String(chunk), skip]),
+    outputWindow: window,
   } as ToolExecutionApi;
   yield* awaited(createBashTool().execute({ command: "anything" }, api, BACKGROUND_CONTEXT));
   expect(received).toEqual(window);
@@ -94,9 +97,9 @@ const streamsCombinedStdout = Effect.gen(function* () {
   expect(result.streamed.join("")).toContain("err");
   expect(result.output).toBeUndefined();
   expect(result.structuredOutput).toEqual({
+    exitCode: 0,
     output: result.streamed.join(""),
     truncated: false,
-    exitCode: 0,
   });
 });
 
@@ -105,9 +108,9 @@ const answersNonzeroExit = Effect.gen(function* () {
   const tool = createBashTool();
   const failed = yield* awaited(run(tool, { command: "printf failed; exit 7" }, env));
   expect(failed).toMatchObject({
-    isError: true,
-    structuredOutput: { output: "failed", truncated: false, exitCode: 7 },
     diagnostics: [{ code: "exit_code", message: "Command exited with code 7" }],
+    isError: true,
+    structuredOutput: { exitCode: 7, output: "failed", truncated: false },
   });
   expect(failed.streamed.join("")).toBe("failed");
   const slow = yield* runFailing(tool, { command: "sleep 2", timeout: 0.01 }, env);

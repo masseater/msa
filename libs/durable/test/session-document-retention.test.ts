@@ -4,16 +4,12 @@ import { Effect } from "effect";
 import { describe, expect, it } from "vite-plus/test";
 
 import { SessionImpl } from "../src/session/session.ts";
-import { SessionCounterDoc } from "./session-document-retention-cases.ts";
-import { settleLine, CounterDoc, bump, open } from "./session-document-retention-support.ts";
-import {
-  currentTimeMillis,
-  awaited,
-  context,
-  createConversation,
-  deferred,
-  eventually,
-} from "./support.ts";
+import SessionCounterDoc from "./session-document-retention-cases.ts";
+import sessionDocumentRetentionSupport from "./session-document-retention-support.ts";
+import support from "./support.ts";
+
+const { CounterDoc, bump, open, settleLine } = sessionDocumentRetentionSupport;
+const { awaited, context, createConversation, currentTimeMillis, deferred, eventually } = support;
 
 const evictsUnattachedDocument = Effect.gen(function* () {
   const runPromise = Effect.runPromiseWith(yield* Effect.context<never>());

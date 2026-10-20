@@ -1,32 +1,23 @@
-import { defineDoc, type HarnessSettings } from "@msa/durable";
+import { type HarnessSettings, defineDoc } from "@msa/durable";
 import { MemoryStorage } from "@msa/durable/storage/memory";
 import { Effect } from "effect";
 import { describe, expect, it, onTestFinished, vi } from "vite-plus/test";
 
 import { SessionImpl, setDefaultDocumentRetention } from "../src/session/session.ts";
-import {
-  settleLine,
-  type Counter,
-  bump,
-  open,
-  defaultForRun,
-} from "./session-document-retention-support.ts";
-import {
-  chatSetup,
-  openChat,
-  awaited,
-  context,
-  createConversation,
-  eventually,
-} from "./support.ts";
+import sessionDocumentRetentionSupport from "./session-document-retention-support.ts";
+import type sessionDocumentRetentionSupportTypes from "./session-document-retention-support.types.ts";
+import support from "./support.ts";
 
-const TestDoc = defineDoc<Counter>({
-  kind: "test.retention.harness",
-  version: 1,
-  scope: "conversation",
-  history: "latest",
+const { bump, defaultForRun, open, settleLine } = sessionDocumentRetentionSupport;
+const { awaited, chatSetup, context, createConversation, eventually, openChat } = support;
+
+const TestDoc = defineDoc<sessionDocumentRetentionSupportTypes.Counter>({
   fork: "initial",
+  history: "latest",
   initial: () => ({ count: 0 }),
+  kind: "test.retention.harness",
+  scope: "conversation",
+  version: 1,
 });
 
 const keepsNoTimer = Effect.gen(function* () {

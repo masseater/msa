@@ -1,10 +1,12 @@
 import type { Context } from "@msa/chord";
-import { configure, type ToolExecutionApi } from "@msa/durable";
+import { type ToolExecutionApi, configure } from "@msa/durable";
 import { Effect } from "effect";
 
-import { awaited } from "./effect-support.ts";
+import effectSupport from "./effect-support.ts";
 
-export const spawnFauxChild = Effect.fn("spawnFauxChild")(function* (
+const { awaited } = effectSupport;
+
+const spawnFauxChild = Effect.fn("spawnFauxChild")(function* (
   api: ToolExecutionApi,
   callContext: Context,
 ) {
@@ -14,7 +16,7 @@ export const spawnFauxChild = Effect.fn("spawnFauxChild")(function* (
         tx
           .createConversation({ ownership: { kind: "task", taskId: api.taskId } })
           .then((created) =>
-            configure(tx, created.id, { model: { provider: "faux", modelId: "faux-1" } }).then(
+            configure(tx, created.id, { model: { modelId: "faux-1", provider: "faux" } }).then(
               () => created.id,
             ),
           ),
@@ -23,7 +25,7 @@ export const spawnFauxChild = Effect.fn("spawnFauxChild")(function* (
   );
 });
 
-export const reuseFauxChild = Effect.fn("reuseFauxChild")(function* (
+const reuseFauxChild = Effect.fn("reuseFauxChild")(function* (
   api: ToolExecutionApi,
   callContext: Context,
 ) {
@@ -40,7 +42,7 @@ export const reuseFauxChild = Effect.fn("reuseFauxChild")(function* (
               tx.createConversation({ ownership: { kind: "task", taskId: api.taskId } }),
             );
             yield* awaited(
-              configure(tx, created.id, { model: { provider: "faux", modelId: "faux-1" } }),
+              configure(tx, created.id, { model: { modelId: "faux-1", provider: "faux" } }),
             );
             return created.id;
           }),
@@ -49,3 +51,10 @@ export const reuseFauxChild = Effect.fn("reuseFauxChild")(function* (
     ),
   );
 });
+
+const harnessOwnershipChildren = {
+  reuseFauxChild,
+  spawnFauxChild,
+};
+
+export default harnessOwnershipChildren;

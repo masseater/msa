@@ -1,55 +1,41 @@
 import {
-  createModels,
-  type FauxProviderHandle,
   type FauxResponseStep,
-  fauxProvider,
   type Message,
-  type Models,
   type RegisterFauxProviderOptions,
+  createModels,
+  fauxProvider,
 } from "@msa/ai";
 import type { Context } from "@msa/chord";
-import type {
-  Conversation,
-  HarnessOptions,
-  HarnessSettings,
-  Registry,
-  Storage,
-  ToolRegistration,
-} from "@msa/durable";
-import { createRegistry, Harness } from "@msa/durable/harness";
+import type { Conversation, HarnessOptions, Storage, ToolRegistration } from "@msa/durable";
+import { Harness, createRegistry } from "@msa/durable/harness";
 import { Effect } from "effect";
 
 import { currentTimeMillis } from "../src/clock.ts";
 import type { ExecutionEnv } from "../src/env/index.ts";
-import { awaited } from "./effect-support.ts";
-import { context } from "./session-support.ts";
+import type chatSupportTypes from "./chat-support.types.ts";
+import effectSupport from "./effect-support.ts";
+import sessionSupport from "./session-support.ts";
 
-export type ChatSetup = {
-  readonly faux: FauxProviderHandle;
-  readonly models: Models;
-  readonly registry: Registry;
-  readonly reports: unknown[];
-  readonly settings: { -readonly [K in keyof HarnessSettings]: HarnessSettings[K] };
-  now: () => number;
-};
+const { awaited } = effectSupport;
+const { context } = sessionSupport;
 
-export function chatSetup(options: RegisterFauxProviderOptions = {}): ChatSetup {
+function chatSetup(options: RegisterFauxProviderOptions = {}): chatSupportTypes.ChatSetup {
   const faux = fauxProvider(options);
   const models = createModels();
   models.setProvider(faux.provider);
   return {
     faux,
     models,
+    now: () => currentTimeMillis(),
     registry: createRegistry(),
     reports: [],
     settings: {},
-    now: () => currentTimeMillis(),
   };
 }
 
-export const openChat = Effect.fn("openChat")(function* (
+const openChat = Effect.fn("openChat")(function* (
   storage: Storage,
-  setup: ChatSetup,
+  setup: chatSupportTypes.ChatSetup,
   options: { readonly env?: ExecutionEnv | NonNullable<HarnessOptions["env"]> } = {},
 ) {
   const harness = yield* awaited(
@@ -73,13 +59,13 @@ export const openChat = Effect.fn("openChat")(function* (
   );
   const root = yield* awaited(
     harness.root(context, {
-      agent: { model: { provider: "faux", modelId: "faux-1" } },
+      agent: { model: { modelId: "faux-1", provider: "faux" } },
     }),
   );
   return { harness, root };
 });
 
-export const allEntries = Effect.fn("allEntries")(function* (
+const allEntries = Effect.fn("allEntries")(function* (
   conversation: Conversation,
   callContext: Context = context,
 ) {
@@ -87,7 +73,7 @@ export const allEntries = Effect.fn("allEntries")(function* (
   return [...page.items].reverse();
 });
 
-export function textOf(message: Message | undefined): string | undefined {
+function textOf(message: Message | undefined): string | undefined {
   if (message === undefined) return undefined;
   if (message.role === "system") return undefined;
   if (typeof message.content === "string") return message.content;
@@ -95,9 +81,7 @@ export function textOf(message: Message | undefined): string | undefined {
   return text?.type === "text" ? text.text : undefined;
 }
 
-export type Check = Effect.Effect<boolean> | (() => boolean | Promise<boolean>);
-
-export const waitFor = Effect.fn("waitFor")(function* (check: Check, timeoutMs = 5000) {
+const waitFor = Effect.fn("waitFor")(function* (check: chatSupportTypes.Check, timeoutMs = 5000) {
   const probe = Effect.isEffect(check) ? check : Effect.suspend(() => awaited(check()));
   const deadline = currentTimeMillis() + timeoutMs;
   while (!(yield* probe)) {
@@ -106,7 +90,7 @@ export const waitFor = Effect.fn("waitFor")(function* (check: Check, timeoutMs =
   }
 });
 
-export function unanswered(): { readonly step: FauxResponseStep; readonly reached: Promise<void> } {
+function unanswered(): { readonly step: FauxResponseStep; readonly reached: Promise<void> } {
   const { promise: reached, resolve: reach } = Promise.withResolvers<void>();
   const step: FauxResponseStep = (_context, options) => {
     reach();
@@ -115,10 +99,10 @@ export function unanswered(): { readonly step: FauxResponseStep; readonly reache
     signal.addEventListener("abort", () => reject(signal.reason), { once: true });
     return promise;
   };
-  return { step, reached };
+  return { reached, step };
 }
 
-export function toolsNamed(setup: ChatSetup, ...names: string[]): ToolRegistration[] {
+function toolsNamed(setup: chatSupportTypes.ChatSetup, ...names: string[]): ToolRegistration[] {
   const installed = setup.registry.snapshot().tools();
   return names.map((name) => {
     const found = installed.find(({ tool }) => tool.name === name);
@@ -126,3 +110,15 @@ export function toolsNamed(setup: ChatSetup, ...names: string[]): ToolRegistrati
     return found.tool;
   });
 }
+
+const chatSupport = {
+  allEntries,
+  chatSetup,
+  openChat,
+  textOf,
+  toolsNamed,
+  unanswered,
+  waitFor,
+};
+
+export default chatSupport;

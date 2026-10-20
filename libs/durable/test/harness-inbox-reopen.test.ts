@@ -2,11 +2,17 @@ import { Effect } from "effect";
 import { afterEach, describe, expect, it } from "vite-plus/test";
 
 import { openNodeSqliteStorage } from "../src/storage/sqlite/node.ts";
-import { allEntries, chatSetup, openChat } from "./chat-support.ts";
-import { awaited } from "./effect-support.ts";
-import { directories, transcript, answer, gated } from "./harness-inbox-support.ts";
-import { makeTempFile, removeDir } from "./platform-support.ts";
-import { context } from "./session-support.ts";
+import chatSupport from "./chat-support.ts";
+import effectSupport from "./effect-support.ts";
+import harnessInboxSupport from "./harness-inbox-support.ts";
+import platformSupport from "./platform-support.ts";
+import sessionSupport from "./session-support.ts";
+
+const { allEntries, chatSetup, openChat } = chatSupport;
+const { awaited } = effectSupport;
+const { answer, directories, gated, transcript } = harnessInboxSupport;
+const { makeTempFile, removeDir } = platformSupport;
+const { context } = sessionSupport;
 
 afterEach(() =>
   Effect.runPromise(
@@ -24,9 +30,9 @@ const keepsQueuedSubmissions = Effect.gen(function* () {
   const first = gated(answer("first"));
   setup.faux.setResponses([first.step, answer("first again"), answer("f")]);
   let opened = yield* openChat(yield* awaited(openNodeSqliteStorage(path)), setup);
-  yield* awaited(opened.root.submit({ type: "input", content: "a" }, context));
+  yield* awaited(opened.root.submit({ content: "a", type: "input" }, context));
   yield* awaited(first.reached);
-  const f = (yield* awaited(opened.root.submit({ type: "input", content: "f" }, context))).id;
+  const f = (yield* awaited(opened.root.submit({ content: "f", type: "input" }, context))).id;
   yield* awaited(opened.harness.close(context));
 
   opened = yield* openChat(yield* awaited(openNodeSqliteStorage(path)), setup);

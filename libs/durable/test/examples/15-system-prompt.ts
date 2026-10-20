@@ -5,16 +5,18 @@ import { BACKGROUND_CONTEXT } from "@msa/chord/context";
 import { Console, Effect } from "effect";
 
 import { NodeExecutionEnv } from "../../src/env/node.ts";
-import { createRegistry, Harness } from "../../src/harness/index.ts";
+import { Harness, createRegistry } from "../../src/harness/index.ts";
 import {
   type Conversation,
-  defineExtension,
   SystemEntry,
+  defineExtension,
   section,
   wrapSection,
 } from "../../src/index.ts";
 import { MemoryStorage } from "../../src/storage/memory.ts";
-import { awaited } from "../effect-support.ts";
+import effectSupport from "../effect-support.ts";
+
+const { awaited } = effectSupport;
 
 const context = BACKGROUND_CONTEXT;
 const faux = fauxProvider();
@@ -60,21 +62,21 @@ const env = ({ cwd = "/" }: { readonly cwd?: string }) => new NodeExecutionEnv({
 
 const mainStep1 = Effect.gen(function* () {
   const harness = yield* awaited(
-    Harness.open(new MemoryStorage(), { models, registry, env }, context),
+    Harness.open(new MemoryStorage(), { env, models, registry }, context),
   );
-  const model = { provider: "faux", modelId: "faux-1" };
-  const root = yield* awaited(harness.root(context, { agent: { model, cwd: "/repo" } }));
+  const model = { modelId: "faux-1", provider: "faux" };
+  const root = yield* awaited(harness.root(context, { agent: { cwd: "/repo", model } }));
 
   const subagent = yield* awaited(
     harness.createConversation(
       {
-        ownership: { kind: "ownerless" },
         agent: {
-          model,
           cwd: "/repo",
           extensions: { remove: [AgentsMd] },
           instructions: "Only read; never edit files.",
+          model,
         },
+        ownership: { kind: "ownerless" },
       },
       context,
     ),
@@ -88,12 +90,12 @@ const mainStep1 = Effect.gen(function* () {
   });
 
   yield* awaited(
-    (yield* awaited(root.submit({ type: "input", content: "Fix the build." }, context))).wait(
+    (yield* awaited(root.submit({ content: "Fix the build.", type: "input" }, context))).wait(
       context,
     ),
   );
   yield* awaited(
-    (yield* awaited(subagent.submit({ type: "input", content: "Read the logs." }, context))).wait(
+    (yield* awaited(subagent.submit({ content: "Read the logs.", type: "input" }, context))).wait(
       context,
     ),
   );
@@ -107,7 +109,7 @@ const mainStep1 = Effect.gen(function* () {
 const main = Effect.gen(function* () {
   const { harness, root, systemEntries } = yield* mainStep1;
   yield* awaited(
-    (yield* awaited(root.submit({ type: "input", content: "Now the package." }, context))).wait(
+    (yield* awaited(root.submit({ content: "Now the package.", type: "input" }, context))).wait(
       context,
     ),
   );

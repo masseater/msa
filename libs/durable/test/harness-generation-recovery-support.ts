@@ -1,18 +1,31 @@
 import { Effect } from "effect";
 
 import { openNodeSqliteStorage } from "../src/storage/sqlite/node.ts";
-import { type ChatSetup, openChat } from "./chat-support.ts";
-import { awaited } from "./effect-support.ts";
-import { joinPath, makeTempDir } from "./platform-support.ts";
+import chatSupport from "./chat-support.ts";
+import type chatSupportTypes from "./chat-support.types.ts";
+import effectSupport from "./effect-support.ts";
+import platformSupport from "./platform-support.ts";
 
-export const directories = new Set<string>();
+const { openChat } = chatSupport;
+const { awaited } = effectSupport;
+const { joinPath, makeTempDir } = platformSupport;
 
-export const sqlitePath = Effect.fn("sqlitePath")(function* () {
+const directories = new Set<string>();
+
+const sqlitePath = Effect.fn("sqlitePath")(function* () {
   const directory = yield* makeTempDir("msa-durable-generation-");
   directories.add(directory);
   return joinPath(directory, "session.sqlite");
 });
 
-export const open = Effect.fn("open")(function* (path: string, setup: ChatSetup) {
+const open = Effect.fn("open")(function* (path: string, setup: chatSupportTypes.ChatSetup) {
   return yield* openChat(yield* awaited(openNodeSqliteStorage(path)), setup);
 });
+
+const harnessGenerationRecoverySupport = {
+  directories,
+  open,
+  sqlitePath,
+};
+
+export default harnessGenerationRecoverySupport;

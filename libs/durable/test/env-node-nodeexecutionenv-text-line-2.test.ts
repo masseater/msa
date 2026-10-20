@@ -5,14 +5,14 @@ import { afterEach, describe, expect, it } from "vite-plus/test";
 import { currentTimeMillis } from "../src/clock.ts";
 import { getOrThrow } from "../src/env/index.ts";
 import { NodeExecutionEnv } from "../src/env/node.ts";
-import { abortController, awaited } from "./effect-support.ts";
-import {
-  cleanUpEnvTests,
-  createTempDir,
-  collectShellOutput,
-  toBashSingleQuotedArg,
-} from "./env-node-support.ts";
-import { joinPath, pathExists, readText, runCommand } from "./platform-support.ts";
+import effectSupport from "./effect-support.ts";
+import envNodeSupport from "./env-node-support.ts";
+import platformSupport from "./platform-support.ts";
+
+const { abortController, awaited } = effectSupport;
+const { cleanUpEnvTests, collectShellOutput, createTempDir, toBashSingleQuotedArg } =
+  envNodeSupport;
+const { joinPath, pathExists, readText, runCommand } = platformSupport;
 
 const waitFor = Effect.fn("waitFor")(function* (
   condition: Effect.Effect<boolean>,

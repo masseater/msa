@@ -2,27 +2,33 @@ import { type ConversationId, type TaskId } from "@msa/durable";
 import { Effect } from "effect";
 import { afterEach, describe, expect, it } from "vite-plus/test";
 
-import { awaited } from "./effect-support.ts";
-import {
-  state,
-  outcomeOf,
-  open,
-  gates,
-  until,
-  start,
+import effectSupport from "./effect-support.ts";
+import harnessStructuredSupport from "./harness-structured-support.ts";
+import platformSupport from "./platform-support.ts";
+import sessionSupport from "./session-support.ts";
+import taskSupport from "./task-support.ts";
+
+const { awaited } = effectSupport;
+const {
   Node,
-  behaviors,
-  log,
   OWN_CONVERSATION,
-  openNodes,
-  waitOn,
-  spawn,
-  script,
+  behaviors,
   directories,
-} from "./harness-structured-support.ts";
-import { removeDir } from "./platform-support.ts";
-import { context } from "./session-support.ts";
-import { aborted } from "./task-support.ts";
+  gates,
+  log,
+  open,
+  openNodes,
+  outcomeOf,
+  script,
+  spawn,
+  start,
+  state,
+  until,
+  waitOn,
+} = harnessStructuredSupport;
+const { removeDir } = platformSupport;
+const { context } = sessionSupport;
+const { aborted } = taskSupport;
 
 afterEach(() =>
   Effect.runPromise(
@@ -54,22 +60,23 @@ const cascadesThroughTaskStep1 = Effect.gen(function* () {
         ctx,
       ),
   });
-  return { runPromise, harness, root };
+  return { harness, root, runPromise };
 });
 
 const cascadesThroughTask = Effect.gen(function* () {
   const { runPromise, harness, root } = yield* cascadesThroughTaskStep1;
   let x: TaskId | undefined;
   script("b", {
+    resume: (runtime) => runPromise(Effect.suspend(() => awaited(aborted(runtime.signal)))),
     run: (runtime, ctx) =>
       runPromise(
         Effect.gen(function* () {
-          const runPromise = Effect.runPromiseWith(yield* Effect.context<never>());
+          const runNested3 = Effect.runPromiseWith(yield* Effect.context<never>());
 
           yield* awaited(
             runtime.commit(
               (tx) =>
-                runPromise(
+                runNested3(
                   Effect.gen(function* () {
                     const conversation = yield* awaited(
                       tx.createConversation({
@@ -83,7 +90,7 @@ const cascadesThroughTask = Effect.gen(function* () {
                         { ...OWN_CONVERSATION, conversationId: conversation.id },
                       ),
                     );
-                    return { status: "running", checkpoint: { phase: "resume", round: 1 } };
+                    return { checkpoint: { phase: "resume", round: 1 }, status: "running" };
                   }),
                 ),
               ctx,
@@ -91,7 +98,6 @@ const cascadesThroughTask = Effect.gen(function* () {
           );
         }),
       ),
-    resume: (runtime) => runPromise(Effect.suspend(() => awaited(aborted(runtime.signal)))),
   });
   const a = yield* awaited(start(root, "a"));
   yield* until(() => log.includes("run:x"));
@@ -116,7 +122,7 @@ const keepsBackgroundWorkStep1 = Effect.gen(function* () {
 
   const { harness, root } = yield* openNodes();
   const foreground = yield* awaited(start(root, "foreground"));
-  return { runPromise, harness, root, foreground };
+  return { foreground, harness, root, runPromise };
 });
 
 const keepsBackgroundWork = Effect.gen(function* () {
@@ -127,12 +133,12 @@ const keepsBackgroundWork = Effect.gen(function* () {
     run: (runtime, ctx) =>
       runPromise(
         Effect.gen(function* () {
-          const runPromise = Effect.runPromiseWith(yield* Effect.context<never>());
+          const runNested2 = Effect.runPromiseWith(yield* Effect.context<never>());
 
           yield* awaited(
             runtime.commit(
               (tx) =>
-                runPromise(
+                runNested2(
                   Effect.gen(function* () {
                     child = yield* awaited(spawn(tx, runtime.taskId, "child"));
                     const conversation = yield* awaited(
@@ -181,22 +187,23 @@ const neverCascadesTerminal = Effect.gen(function* () {
   const { harness, root } = yield* openNodes();
   let conversation: ConversationId | undefined;
   script("agent", {
+    resume: (runtime) => runPromise(Effect.suspend(() => awaited(aborted(runtime.signal)))),
     run: (runtime, ctx) =>
       runPromise(
         Effect.gen(function* () {
-          const runPromise = Effect.runPromiseWith(yield* Effect.context<never>());
+          const runNested = Effect.runPromiseWith(yield* Effect.context<never>());
 
           yield* awaited(
             runtime.commit(
               (tx) =>
-                runPromise(
+                runNested(
                   Effect.gen(function* () {
                     conversation = (yield* awaited(
                       tx.createConversation({
                         ownership: { kind: "task", taskId: runtime.taskId },
                       }),
                     )).id;
-                    return { status: "running", checkpoint: { phase: "resume", round: 1 } };
+                    return { checkpoint: { phase: "resume", round: 1 }, status: "running" };
                   }),
                 ),
               ctx,
@@ -204,7 +211,6 @@ const neverCascadesTerminal = Effect.gen(function* () {
           );
         }),
       ),
-    resume: (runtime) => runPromise(Effect.suspend(() => awaited(aborted(runtime.signal)))),
   });
   const agent = yield* awaited(start(root, "agent"));
   yield* until(() => log.includes("resume:agent"));

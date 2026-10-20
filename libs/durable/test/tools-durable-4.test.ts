@@ -4,14 +4,11 @@ import { afterAll, describe, expect, it } from "vite-plus/test";
 
 import { getOrThrow } from "../src/env/index.ts";
 import { createEditTool, createWriteTool } from "../src/tools/index.ts";
-import { awaited, makeSymlink } from "./support.ts";
-import {
-  BlockingWriteExecutionEnv,
-  createEnv,
-  createTempDir,
-  removeTempDirs,
-  run,
-} from "./tools-support.ts";
+import support from "./support.ts";
+import toolsSupport from "./tools-support.ts";
+
+const { awaited, makeSymlink } = support;
+const { BlockingWriteExecutionEnv, createEnv, createTempDir, removeTempDirs, run } = toolsSupport;
 
 afterAll(() => Effect.runPromise(removeTempDirs));
 
@@ -23,9 +20,9 @@ const doesNotSerialize = Effect.gen(function* () {
   const local = new BlockingWriteExecutionEnv({ cwd: dir });
   const other = new OtherFileSystem({ cwd: dir });
   const tool = createWriteTool();
-  const blocked = run(tool, { path: "file.txt", content: "first\n" }, local);
+  const blocked = run(tool, { content: "first\n", path: "file.txt" }, local);
   yield* awaited(local.firstWriteStarted.promise);
-  yield* awaited(run(tool, { path: "file.txt", content: "second\n" }, other));
+  yield* awaited(run(tool, { content: "second\n", path: "file.txt" }, other));
   expect(other.secondWriteStarted).toBe(true);
   local.finishFirstWrite.resolve();
   yield* awaited(blocked);
@@ -38,7 +35,7 @@ const editsRegularFiles = Effect.gen(function* () {
   yield* awaited(
     run(
       createEditTool(),
-      { path: "link.txt", edits: [{ oldText: "before", newText: "after" }] },
+      { edits: [{ newText: "after", oldText: "before" }], path: "link.txt" },
       env,
     ),
   );
@@ -51,7 +48,7 @@ const preservesBomCrlf = Effect.gen(function* () {
   const env = yield* createEnv;
   getOrThrow(yield* awaited(env.writeFile("edit.txt", "\uFEFFone\r\ntwo\r\n", BACKGROUND_CONTEXT)));
   yield* awaited(
-    run(createEditTool(), { path: "edit.txt", edits: [{ oldText: "two", newText: "TWO" }] }, env),
+    run(createEditTool(), { edits: [{ newText: "TWO", oldText: "two" }], path: "edit.txt" }, env),
   );
   expect(getOrThrow(yield* awaited(env.readTextFile("edit.txt", BACKGROUND_CONTEXT)))).toBe(
     "\uFEFFone\r\nTWO\r\n",

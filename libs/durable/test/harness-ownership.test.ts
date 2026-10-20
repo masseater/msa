@@ -2,22 +2,28 @@ import { type TaskId } from "@msa/durable";
 import { Effect } from "effect";
 import { afterEach, describe, expect, it } from "vite-plus/test";
 
-import { awaited } from "./effect-support.ts";
-import {
+import effectSupport from "./effect-support.ts";
+import harnessOwnershipSupport from "./harness-ownership-support.ts";
+import platformSupport from "./platform-support.ts";
+import sessionSupport from "./session-support.ts";
+import taskSupport from "./task-support.ts";
+
+const { awaited } = effectSupport;
+const {
+  Hold,
   directories,
+  gates,
+  open,
+  openHarness,
+  ownedChild,
+  runs,
+  setEntriesDuring,
   status,
   waitUntil,
-  open,
-  gates,
-  ownedChild,
-  Hold,
-  runs,
-  openHarness,
-  setEntriesDuring,
-} from "./harness-ownership-support.ts";
-import { removeDir } from "./platform-support.ts";
-import { context } from "./session-support.ts";
-import { settled } from "./task-support.ts";
+} = harnessOwnershipSupport;
+const { removeDir } = platformSupport;
+const { context } = sessionSupport;
+const { settled } = taskSupport;
 
 afterEach(() =>
   Effect.runPromise(
@@ -58,22 +64,22 @@ const holdsOwnerWorkStep1 = Effect.gen(function* () {
       (tx) =>
         runPromise(
           Effect.gen(function* () {
-            const owner = yield* awaited(
+            const ownerInner = yield* awaited(
               tx.createTask(Hold, { name: "owner" }, { ownership: { kind: "conversation" } }),
             );
-            const child = yield* awaited(
+            const childInner = yield* awaited(
               tx.createTask(
                 Hold,
                 { name: "child" },
-                { ownership: { kind: "task", taskId: owner } },
+                { ownership: { kind: "task", taskId: ownerInner } },
               ),
             );
-            const conversation = yield* awaited(
+            const conversationInner = yield* awaited(
               tx.createConversation({
-                ownership: { kind: "task", taskId: child },
+                ownership: { kind: "task", taskId: childInner },
               }),
             );
-            return { owner, child, conversation: conversation.id };
+            return { child: childInner, conversation: conversationInner.id, owner: ownerInner };
           }),
         ),
       context,
@@ -139,9 +145,9 @@ const cascadesThroughEnded = Effect.gen(function* () {
                 Hold,
                 { name: "c" },
                 {
-                  ownership: { kind: "conversation" },
-                  conversationId: conversation.id,
                   background: true,
+                  conversationId: conversation.id,
+                  ownership: { kind: "conversation" },
                 },
               ),
             );
@@ -214,7 +220,7 @@ const keepsOwnershipQueriesStep1 = Effect.gen(function* () {
     );
     tasks.push(...ids);
   }
-  return { runPromise, harness, owner, chains, tasks };
+  return { chains, harness, owner, runPromise, tasks };
 });
 
 const keepsOwnershipQueries = Effect.gen(function* () {

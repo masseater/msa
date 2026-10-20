@@ -1,87 +1,66 @@
 import type { Context } from "@msa/chord";
 import {
   type Conversation,
-  defineTask,
   type Harness,
   type JoinPolicy,
-  type NextTaskState,
-  type Registry,
   type Storage,
   type TaskId,
   type TaskOptions,
-  type TaskRuntime,
   type Tx,
+  defineTask,
 } from "@msa/durable";
 import { MemoryStorage } from "@msa/durable/storage/memory";
 import { Effect } from "effect";
 import { dual } from "effect/Function";
 
-import {
-  type Check,
-  waitFor,
-  awaited,
-  joinPath,
-  makeTempDir,
-  context,
-  aborted,
-  type Deferred,
-  deferred,
-  openTasks,
-} from "./support.ts";
+import type harnessStructuredSupportTypes from "./harness-structured-support.types.ts";
+import support from "./support.ts";
 
-export type NodeInput = { name: string };
+const { aborted, awaited, context, deferred, joinPath, makeTempDir, openTasks, waitFor } = support;
 
-export type NodeCheckpoint = { phase: "run" } | { phase: "resume"; round: number };
+const behaviors = new Map<string, harnessStructuredSupportTypes.Behavior>();
 
-export type NodeRuntime = TaskRuntime<NodeInput, NodeCheckpoint, string, object>;
+const gates = new Map<string, PromiseWithResolvers<harnessStructuredSupportTypes.Ending>>();
 
-export type Next = NextTaskState<NodeCheckpoint, string>;
+const log: string[] = [];
 
-export type Behavior = {
-  run?(runtime: NodeRuntime, ctx: Context): Promise<void>;
-  resume?(runtime: NodeRuntime, ctx: Context, round: number): Promise<void>;
-  abort?(runtime: NodeRuntime, ctx: Context): Promise<void>;
-};
-
-export type Ending = "completed" | "failed" | "throw";
-
-export const behaviors = new Map<string, Behavior>();
-
-export const gates = new Map<string, Deferred<Ending>>();
-
-export const log: string[] = [];
-
-export function gate(name: string): Deferred<Ending> {
+function gate(name: string): PromiseWithResolvers<harnessStructuredSupportTypes.Ending> {
   let found = gates.get(name);
   if (found === undefined) {
-    found = deferred<Ending>();
+    found = deferred<harnessStructuredSupportTypes.Ending>();
     gates.set(name, found);
   }
   return found;
 }
 
-function openImpl(name: string, ending: Ending = "completed"): void {
+function openImpl(name: string, ending: harnessStructuredSupportTypes.Ending = "completed"): void {
   gate(name).resolve(ending);
 }
 
-export const open: {
-  (ending?: Ending): (name: string) => ReturnType<typeof openImpl>;
-  (name: string, ending?: Ending): ReturnType<typeof openImpl>;
+const open: {
+  (ending?: harnessStructuredSupportTypes.Ending): (name: string) => ReturnType<typeof openImpl>;
+  (name: string, ending?: harnessStructuredSupportTypes.Ending): ReturnType<typeof openImpl>;
 } = dual(
   (args) => args.length === 2 || !["completed", "failed", "throw"].includes(args[0]),
   openImpl,
 );
 
-function scriptImpl(name: string, behavior: Behavior): void {
+function scriptImpl(name: string, behavior: harnessStructuredSupportTypes.Behavior): void {
   behaviors.set(name, behavior);
 }
 
-export const script: {
-  (behavior: Behavior): (name: string) => ReturnType<typeof scriptImpl>;
-  (name: string, behavior: Behavior): ReturnType<typeof scriptImpl>;
+const script: {
+  (
+    behavior: harnessStructuredSupportTypes.Behavior,
+  ): (name: string) => ReturnType<typeof scriptImpl>;
+  (name: string, behavior: harnessStructuredSupportTypes.Behavior): ReturnType<typeof scriptImpl>;
 } = dual(2, scriptImpl);
 
-function defaultRunImpl(runtime: NodeRuntime, ctx: Context, name: string): Promise<void> {
+function defaultRunImpl(
+  runtime: harnessStructuredSupportTypes.NodeRuntime,
+  ctx: Context,
+  name: string,
+): Promise<void> {
   return Effect.runPromise(
     Effect.gen(function* () {
       const ending = yield* awaited(Promise.race([gate(name).promise, aborted(runtime.signal)]));
@@ -91,38 +70,52 @@ function defaultRunImpl(runtime: NodeRuntime, ctx: Context, name: string): Promi
   );
 }
 
-export const defaultRun: {
-  (ctx: Context, name: string): (runtime: NodeRuntime) => ReturnType<typeof defaultRunImpl>;
-  (runtime: NodeRuntime, ctx: Context, name: string): ReturnType<typeof defaultRunImpl>;
+const defaultRun: {
+  (
+    ctx: Context,
+    name: string,
+  ): (runtime: harnessStructuredSupportTypes.NodeRuntime) => ReturnType<typeof defaultRunImpl>;
+  (
+    runtime: harnessStructuredSupportTypes.NodeRuntime,
+    ctx: Context,
+    name: string,
+  ): ReturnType<typeof defaultRunImpl>;
 } = dual(3, defaultRunImpl);
 
-function endImpl(ending: "completed" | "failed", name: string): Next {
+function endImpl(ending: "completed" | "failed", name: string): harnessStructuredSupportTypes.Next {
   return ending === "completed"
-    ? { status: "terminal", outcome: { status: "completed", result: name } }
-    : { status: "terminal", outcome: { status: "failed", error: { message: `${name} failed` } } };
+    ? { outcome: { result: name, status: "completed" }, status: "terminal" }
+    : { outcome: { error: { message: `${name} failed` }, status: "failed" }, status: "terminal" };
 }
 
-export const end: {
+const end: {
   (name: string): (ending: "completed" | "failed") => ReturnType<typeof endImpl>;
   (ending: "completed" | "failed", name: string): ReturnType<typeof endImpl>;
 } = dual(2, endImpl);
 
-export const Node = defineTask<NodeInput, NodeCheckpoint, string>({
-  name: "test.node",
-  version: 1,
+const Node = defineTask<
+  harnessStructuredSupportTypes.NodeInput,
+  harnessStructuredSupportTypes.NodeCheckpoint,
+  string
+>({
+  abort: (task, runtime, ctx) =>
+    Effect.runPromise(
+      Effect.gen(function* () {
+        const name = task.input.name;
+        log.push(`abort:${name}`);
+        const behavior = behaviors.get(name)?.abort;
+        if (behavior !== undefined) return yield* awaited(behavior(runtime, ctx));
+        yield* awaited(
+          runtime.commit(
+            () => ({ outcome: { result: name, status: "aborted" }, status: "terminal" }),
+            ctx,
+          ),
+        );
+      }),
+    ),
   initial: () => ({ phase: "run" }),
+  name: "test.node",
   phases: {
-    run: (task, runtime, ctx) =>
-      Effect.runPromise(
-        Effect.gen(function* () {
-          const name = task.input.name;
-          log.push(`run:${name}`);
-          const behavior = behaviors.get(name)?.run;
-          yield* awaited(
-            behavior === undefined ? defaultRun(runtime, ctx, name) : behavior(runtime, ctx),
-          );
-        }),
-      ),
     resume: (task, runtime, ctx) =>
       Effect.runPromise(
         Effect.gen(function* () {
@@ -134,35 +127,32 @@ export const Node = defineTask<NodeInput, NodeCheckpoint, string>({
           yield* awaited(runtime.commit(() => end("completed", name), ctx));
         }),
       ),
+    run: (task, runtime, ctx) =>
+      Effect.runPromise(
+        Effect.gen(function* () {
+          const name = task.input.name;
+          log.push(`run:${name}`);
+          const behavior = behaviors.get(name)?.run;
+          yield* awaited(
+            behavior === undefined ? defaultRun(runtime, ctx, name) : behavior(runtime, ctx),
+          );
+        }),
+      ),
   },
-  abort: (task, runtime, ctx) =>
-    Effect.runPromise(
-      Effect.gen(function* () {
-        const name = task.input.name;
-        log.push(`abort:${name}`);
-        const behavior = behaviors.get(name)?.abort;
-        if (behavior !== undefined) return yield* awaited(behavior(runtime, ctx));
-        yield* awaited(
-          runtime.commit(
-            () => ({ status: "terminal", outcome: { status: "aborted", result: name } }),
-            ctx,
-          ),
-        );
-      }),
-    ),
-});
-
-export const Unregistered = defineTask<NodeInput, { phase: "run" }, string>({
-  name: "test.unregistered",
   version: 1,
-  initial: () => ({ phase: "run" }),
-  phases: { run: () => Promise.resolve() },
-  abort: () => Promise.resolve(),
 });
 
-export const OWN_CONVERSATION: TaskOptions = { ownership: { kind: "conversation" } };
+const Unregistered = defineTask<harnessStructuredSupportTypes.NodeInput, { phase: "run" }, string>({
+  abort: () => Promise.resolve(),
+  initial: () => ({ phase: "run" }),
+  name: "test.unregistered",
+  phases: { run: () => Promise.resolve() },
+  version: 1,
+});
 
-export function owned(owner: TaskId): TaskOptions {
+const OWN_CONVERSATION: TaskOptions = { ownership: { kind: "conversation" } };
+
+function owned(owner: TaskId): TaskOptions {
   return { ownership: { kind: "task", taskId: owner } };
 }
 
@@ -170,16 +160,20 @@ function spawnImpl(tx: Tx, owner: TaskId, name: string): Promise<TaskId<string>>
   return tx.createTask(Node, { name }, owned(owner));
 }
 
-export const spawn: {
+const spawn: {
   (owner: TaskId, name: string): (tx: Tx) => ReturnType<typeof spawnImpl>;
   (tx: Tx, owner: TaskId, name: string): ReturnType<typeof spawnImpl>;
 } = dual(3, spawnImpl);
 
-function waitOnImpl(on: readonly TaskId[], policy: JoinPolicy, round = 1): Next {
-  return { status: "waiting", checkpoint: { phase: "resume", round }, on, policy };
+function waitOnImpl(
+  on: readonly TaskId[],
+  policy: JoinPolicy,
+  round = 1,
+): harnessStructuredSupportTypes.Next {
+  return { checkpoint: { phase: "resume", round }, on, policy, status: "waiting" };
 }
 
-export const waitOn: {
+const waitOn: {
   (policy: JoinPolicy, round?: number): (on: readonly TaskId[]) => ReturnType<typeof waitOnImpl>;
   (on: readonly TaskId[], policy: JoinPolicy, round?: number): ReturnType<typeof waitOnImpl>;
 } = dual((args) => typeof args[0] === "object" && args[0] !== null, waitOnImpl);
@@ -194,7 +188,7 @@ function startImpl(
   );
 }
 
-export const start: {
+const start: {
   (
     name: string,
     options?: TaskOptions,
@@ -202,21 +196,14 @@ export const start: {
   (conversation: Conversation, name: string, options?: TaskOptions): ReturnType<typeof startImpl>;
 } = dual((args) => typeof args[0] === "object" && args[0] !== null, startImpl);
 
-export type Opened = {
-  harness: Harness;
-  root: Conversation;
-  registry: Registry;
-  reports: unknown[];
-};
-
-export const openNodes = Effect.fn("openNodes")(function* (storage: Storage = new MemoryStorage()) {
+const openNodes = Effect.fn("openNodes")(function* (storage: Storage = new MemoryStorage()) {
   const opened = yield* openTasks(storage, [Node]);
   const root = yield* awaited(opened.harness.root(context));
   opened.harness.resume();
   return { ...opened, root };
 });
 
-export const state = Effect.fn("state")(function* (harness: Harness, id: TaskId) {
+const state = Effect.fn("state")(function* (harness: Harness, id: TaskId) {
   return (yield* awaited(harness.getTask(id, context)))!.state;
 });
 
@@ -228,18 +215,18 @@ function outcomeOfImpl(harness: Harness, id: TaskId): Promise<string> {
   );
 }
 
-export const outcomeOf: {
+const outcomeOf: {
   (id: TaskId): (harness: Harness) => ReturnType<typeof outcomeOfImpl>;
   (harness: Harness, id: TaskId): ReturnType<typeof outcomeOfImpl>;
 } = dual(2, outcomeOfImpl);
 
-export const until = Effect.fn("until")(function* (check: Check) {
+const until = Effect.fn("until")(function* (check: Parameters<typeof waitFor>[0]) {
   yield* waitFor(check);
 });
 
-export const directories = new Set<string>();
+const directories = new Set<string>();
 
-export const sqlitePath = Effect.fn("sqlitePath")(function* () {
+const sqlitePath = Effect.fn("sqlitePath")(function* () {
   const directory = yield* makeTempDir("msa-durable-structured-");
   directories.add(directory);
   return joinPath(directory, "session.sqlite");
@@ -248,6 +235,15 @@ export const sqlitePath = Effect.fn("sqlitePath")(function* () {
 function parentOfImpl(parent: string, children: readonly string[], policy: JoinPolicy) {
   const found = { ids: [] as TaskId<string>[], outcomes: [] as string[] };
   script(parent, {
+    resume: (runtime, ctx) =>
+      Effect.runPromise(
+        Effect.gen(function* () {
+          found.outcomes = (yield* awaited(runtime.outcomes(found.ids, ctx))).map(
+            (outcome) => outcome.status,
+          );
+          yield* awaited(runtime.commit(() => end("completed", parent), ctx));
+        }),
+      ),
     run: (runtime, ctx) =>
       runtime.commit(
         (tx) =>
@@ -260,20 +256,11 @@ function parentOfImpl(parent: string, children: readonly string[], policy: JoinP
           ),
         ctx,
       ),
-    resume: (runtime, ctx) =>
-      Effect.runPromise(
-        Effect.gen(function* () {
-          found.outcomes = (yield* awaited(runtime.outcomes(found.ids, ctx))).map(
-            (outcome) => outcome.status,
-          );
-          yield* awaited(runtime.commit(() => end("completed", parent), ctx));
-        }),
-      ),
   });
   return found;
 }
 
-export const parentOf: {
+const parentOf: {
   (
     children: readonly string[],
     policy: JoinPolicy,
@@ -284,3 +271,30 @@ export const parentOf: {
     policy: JoinPolicy,
   ): ReturnType<typeof parentOfImpl>;
 } = dual(3, parentOfImpl);
+
+const harnessStructuredSupport = {
+  Node,
+  OWN_CONVERSATION,
+  Unregistered,
+  behaviors,
+  defaultRun,
+  directories,
+  end,
+  gate,
+  gates,
+  log,
+  open,
+  openNodes,
+  outcomeOf,
+  owned,
+  parentOf,
+  script,
+  spawn,
+  sqlitePath,
+  start,
+  state,
+  until,
+  waitOn,
+};
+
+export default harnessStructuredSupport;

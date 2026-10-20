@@ -2,18 +2,22 @@ import { Effect } from "effect";
 import { afterEach, describe, expect, it } from "vite-plus/test";
 
 import type { DocumentId } from "../src/types.ts";
-import { awaited } from "./effect-support.ts";
-import {
-  readLines,
-  sessionDocument,
-  createRoot,
+import effectSupport from "./effect-support.ts";
+import jsonlStorageSupport from "./jsonl-storage-support.ts";
+import platformSupport from "./platform-support.ts";
+
+const { awaited } = effectSupport;
+const {
   context,
+  createRoot,
   openStorage,
   openStorages,
+  readLines,
+  sessionDocument,
   tempDirectories,
   tempDirectory,
-} from "./jsonl-storage-support.ts";
-import { joinPath, removeDir } from "./platform-support.ts";
+} = jsonlStorageSupport;
+const { joinPath, removeDir } = platformSupport;
 
 afterEach(() =>
   Effect.runPromise(
@@ -35,9 +39,9 @@ const appendsLaterDeltas = Effect.gen(function* () {
     storage.commit(
       [
         {
-          type: "document.create",
+          content: { kind: "base", value: { count: 0 }, version: 1 },
           record: sessionDocument(id),
-          content: { kind: "base", version: 1, value: { count: 0 } },
+          type: "document.create",
         },
       ],
       context,
@@ -47,9 +51,9 @@ const appendsLaterDeltas = Effect.gen(function* () {
     storage.commit(
       [
         {
-          type: "document.change",
+          content: { kind: "base", value: { count: 10 }, version: 1 },
           id,
-          content: { kind: "base", version: 1, value: { count: 10 } },
+          type: "document.change",
         },
       ],
       context,
@@ -59,9 +63,9 @@ const appendsLaterDeltas = Effect.gen(function* () {
     storage.commit(
       [
         {
-          type: "document.change",
+          content: { kind: "delta", ops: [["s", ["count"], 11]], version: 1 },
           id,
-          content: { kind: "delta", version: 1, ops: [["s", ["count"], 11]] },
+          type: "document.change",
         },
       ],
       context,

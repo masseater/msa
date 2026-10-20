@@ -8,15 +8,14 @@ import {
 import { Effect } from "effect";
 import { describe, expect, it } from "vite-plus/test";
 
-import { abortController, awaited } from "./effect-support.ts";
-import { context, flush } from "./session-support.ts";
-import {
-  StateDoc,
-  createState,
-  deferred,
-  type State,
-  writeState,
-} from "./session-watches-support.ts";
+import effectSupport from "./effect-support.ts";
+import sessionSupport from "./session-support.ts";
+import sessionWatchesSupport from "./session-watches-support.ts";
+import type sessionWatchesSupportTypes from "./session-watches-support.types.ts";
+
+const { abortController, awaited } = effectSupport;
+const { context, flush } = sessionSupport;
+const { StateDoc, createState, deferred, writeState } = sessionWatchesSupport;
 
 const neverFoldsFlightStep1 = Effect.gen(function* () {
   const runPromise = Effect.runPromiseWith(yield* Effect.context<never>());
@@ -29,7 +28,7 @@ const neverFoldsFlightStep1 = Effect.gen(function* () {
   watch.start((value, ops) =>
     runPromise(
       Effect.gen(function* () {
-        deliveries.push({ value: value?.value ?? -1, ops });
+        deliveries.push({ ops, value: value?.value ?? -1 });
         if (deliveries.length === 1) {
           entered.resolve();
           yield* awaited(release.promise);
@@ -46,7 +45,7 @@ const neverFoldsFlightStep1 = Effect.gen(function* () {
       state.value = value;
     });
   }
-  return { watch, release, deliveries };
+  return { deliveries, release, watch };
 });
 
 const neverFoldsFlight = Effect.gen(function* () {
@@ -54,7 +53,7 @@ const neverFoldsFlight = Effect.gen(function* () {
   release.resolve();
   yield* flush;
   expect(deliveries[0]!.value).toBe(1);
-  expect(deliveries[1]).toEqual({ value: 102, ops: [["r", watch.value]] });
+  expect(deliveries[1]).toEqual({ ops: [["r", watch.value]], value: 102 });
   expect(deliveries).toHaveLength(2);
   yield* awaited(watch.stop());
 });
@@ -68,14 +67,17 @@ const foldsRetirementOverflow = Effect.gen(function* () {
     });
   }
   yield* awaited(session.commit((tx) => tx.retireDoc(StateDoc), context));
-  const deliveries: Array<{ value: Readonly<State> | null; ops: unknown }> = [];
+  const deliveries: Array<{
+    value: Readonly<sessionWatchesSupportTypes.State> | null;
+    ops: unknown;
+  }> = [];
   watch.start((value, ops) => {
-    deliveries.push({ value, ops });
+    deliveries.push({ ops, value });
 
     return Promise.resolve();
   });
   expect(yield* awaited(watch.closed)).toEqual({ reason: "retired" });
-  expect(deliveries).toEqual([{ value: null, ops: [["r", null]] }]);
+  expect(deliveries).toEqual([{ ops: [["r", null]], value: null }]);
 });
 
 describe("Session document watches", () => {

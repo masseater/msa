@@ -1,12 +1,17 @@
-import { defineTask, type TaskId, type TaskInspection } from "@msa/durable";
+import { type Task, type TaskId, type TaskInspection, defineTask } from "@msa/durable";
 import { MemoryStorage } from "@msa/durable/storage/memory";
 import { Effect } from "effect";
 import { describe, expect, it } from "vite-plus/test";
 
-import { chatSetup, openChat, unanswered, waitFor } from "./chat-support.ts";
-import { awaited } from "./effect-support.ts";
-import { context } from "./session-support.ts";
-import { completed, type Deferred, deferred, eventually, openTasks } from "./task-support.ts";
+import chatSupport from "./chat-support.ts";
+import effectSupport from "./effect-support.ts";
+import sessionSupport from "./session-support.ts";
+import taskSupport from "./task-support.ts";
+
+const { chatSetup, openChat, unanswered, waitFor } = chatSupport;
+const { awaited } = effectSupport;
+const { context } = sessionSupport;
+const { completed, deferred, eventually, openTasks } = taskSupport;
 
 type Step = { phase: "run" };
 
@@ -17,9 +22,9 @@ function task(
 ) {
   const migrate = options.migrate;
   return defineTask<null, Step, null>({
-    name,
-    version,
+    abort: () => Promise.resolve(),
     initial: () => ({ phase: "run" }),
+    name,
     phases: {
       run: (_task, runtime, ctx) =>
         Effect.runPromise(
@@ -29,13 +34,13 @@ function task(
           }),
         ),
     },
-    abort: () => Promise.resolve(),
+    version,
     ...(migrate === undefined
       ? {}
       : {
           migrate: () => {
             migrate();
-            return { input: null, checkpoint: { phase: "run" as const } };
+            return { checkpoint: { phase: "run" as const }, input: null };
           },
         }),
   });
@@ -52,10 +57,11 @@ type Gated = { gateId?: TaskId };
 
 function dependentOn(gated: Gated) {
   return defineTask<null, { phase: "wait" } | { phase: "done" }, null>({
-    name: "test.dependent",
-    version: 1,
+    abort: () => Promise.resolve(),
     initial: () => ({ phase: "wait" }),
+    name: "test.dependent",
     phases: {
+      done: (_task, runtime, ctx) => Promise.resolve(runtime.commit(() => completed(null), ctx)),
       wait: (_task, runtime, ctx) =>
         Effect.runPromise(
           Effect.gen(function* () {
@@ -63,19 +69,18 @@ function dependentOn(gated: Gated) {
             yield* awaited(
               runtime.commit(
                 () => ({
-                  status: "waiting",
                   checkpoint,
                   on: [gated.gateId!],
                   policy: "allSettled",
+                  status: "waiting",
                 }),
                 ctx,
               ),
             );
           }),
         ),
-      done: (_task, runtime, ctx) => Promise.resolve(runtime.commit(() => completed(null), ctx)),
     },
-    abort: () => Promise.resolve(),
+    version: 1,
   });
 }
 
@@ -102,7 +107,9 @@ function registeredTasks(
   ];
 }
 
-const openInspectedStep1 = Effect.fn("openInspectedStep1")(function* (gate: Deferred<void>) {
+const openInspectedStep1 = Effect.fn("openInspectedStep1")(function* (
+  gate: PromiseWithResolvers<void>,
+) {
   const runPromise = Effect.runPromiseWith(yield* Effect.context<never>());
 
   const Gate = task("test.gate", 1, { gate: gate.promise });
@@ -114,10 +121,10 @@ const openInspectedStep1 = Effect.fn("openInspectedStep1")(function* (gate: Defe
     registeredTasks(Gate, Dependent, counts),
   );
   const root = yield* awaited(harness.root(context));
-  return { runPromise, Gate, gated, Dependent, counts, harness, root };
+  return { Dependent, Gate, counts, gated, harness, root, runPromise };
 });
 
-const openInspected = Effect.fn("openInspected")(function* (gate: Deferred<void>) {
+const openInspected = Effect.fn("openInspected")(function* (gate: PromiseWithResolvers<void>) {
   const { runPromise, Gate, gated, Dependent, counts, harness, root } =
     yield* openInspectedStep1(gate);
   const ids = yield* awaited(
@@ -125,47 +132,24 @@ const openInspected = Effect.fn("openInspected")(function* (gate: Deferred<void>
       (tx) =>
         runPromise(
           Effect.gen(function* () {
-            const gateId = yield* awaited(
-              tx.createTask(Gate, null, { ownership: { kind: "conversation" } }),
-            );
+            const created = <Checkpoint extends { phase: string }, Result>(
+              definition: Task<null, Checkpoint, Result, object>,
+            ) => awaited(tx.createTask(definition, null, { ownership: { kind: "conversation" } }));
+            const gateId = yield* created(Gate);
             gated.gateId = gateId;
-            return {
-              gate: gateId,
-              dependent: yield* awaited(
-                tx.createTask(Dependent, null, { ownership: { kind: "conversation" } }),
-              ),
-              migrating: yield* awaited(
-                tx.createTask(task("test.migrating", 1), null, {
-                  ownership: { kind: "conversation" },
-                }),
-              ),
-              noMigration: yield* awaited(
-                tx.createTask(task("test.no-migration", 1), null, {
-                  ownership: { kind: "conversation" },
-                }),
-              ),
-              failing: yield* awaited(
-                tx.createTask(task("test.failing", 1), null, {
-                  ownership: { kind: "conversation" },
-                }),
-              ),
-              tooOld: yield* awaited(
-                tx.createTask(task("test.too-old", 2), null, {
-                  ownership: { kind: "conversation" },
-                }),
-              ),
-              missing: yield* awaited(
-                tx.createTask(task("test.missing", 1), null, {
-                  ownership: { kind: "conversation" },
-                }),
-              ),
-            };
+            const dependent = yield* created(Dependent);
+            const migrating = yield* created(task("test.migrating", 1));
+            const noMigration = yield* created(task("test.no-migration", 1));
+            const failing = yield* created(task("test.failing", 1));
+            const tooOld = yield* created(task("test.too-old", 2));
+            const missing = yield* created(task("test.missing", 1));
+            return { dependent, failing, gate: gateId, migrating, missing, noMigration, tooOld };
           }),
         ),
       context,
     ),
   );
-  return { harness, ids, counts };
+  return { counts, harness, ids };
 });
 
 function expectPausedStates(
@@ -175,15 +159,23 @@ function expectPausedStates(
   ids: Effect.Success<ReturnType<typeof openInspected>>["ids"],
 ) {
   expect(paused.scheduling).toBe("paused");
-  expect(paused.tasks.map((entry) => entry.record.id)).toEqual(Object.values(ids));
+  expect(paused.tasks.map((entry) => entry.record.id)).toEqual([
+    ids.gate,
+    ids.dependent,
+    ids.migrating,
+    ids.noMigration,
+    ids.failing,
+    ids.tooOld,
+    ids.missing,
+  ]);
   expect(stateOf(paused.tasks, ids.gate)).toEqual({ kind: "ready", migrates: false });
   expect(stateOf(paused.tasks, ids.dependent)).toEqual({ kind: "ready", migrates: false });
   expect(stateOf(paused.tasks, ids.migrating)).toEqual({ kind: "ready", migrates: true });
   expect(stateOf(paused.tasks, ids.failing)).toEqual({ kind: "ready", migrates: true });
   expect(stateOf(paused.tasks, ids.noMigration)).toMatchObject({
+    error: new Error("Task test.no-migration version 2 has no migration from 1"),
     kind: "blocked",
     reason: "migration_failed",
-    error: new Error("Task test.no-migration version 2 has no migration from 1"),
   });
   expect(stateOf(paused.tasks, ids.tooOld)).toEqual({ kind: "blocked", reason: "task_too_old" });
   expect(stateOf(paused.tasks, ids.missing)).toEqual({ kind: "blocked", reason: "missing_task" });
@@ -215,9 +207,9 @@ const derivesEveryLive = Effect.gen(function* () {
   expect(stateOf(running.tasks, ids.gate)).toEqual({ kind: "running" });
   expect(stateOf(running.tasks, ids.migrating)).toBeUndefined();
   expect(stateOf(running.tasks, ids.failing)).toEqual({
+    error: new Error("cannot migrate"),
     kind: "blocked",
     reason: "migration_failed",
-    error: new Error("cannot migrate"),
   });
 
   gate.resolve();
@@ -245,8 +237,8 @@ const listsUnsettledSubmissions = Effect.gen(function* () {
   const other = yield* awaited(
     harness.createConversation({ ownership: { kind: "ownerless" } }, context),
   );
-  yield* awaited(other.submit({ type: "write", entry: { kind: "note" } }, context));
-  const input = yield* awaited(root.submit({ type: "input", content: "hi" }, context));
+  yield* awaited(other.submit({ entry: { kind: "note" }, type: "write" }, context));
+  const input = yield* awaited(root.submit({ content: "hi", type: "input" }, context));
   yield* awaited(busy.reached);
 
   const inspection = yield* awaited(harness.inspect(context));

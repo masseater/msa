@@ -3,24 +3,30 @@ import { Effect } from "effect";
 import { afterEach, describe, expect, it } from "vite-plus/test";
 
 import { openNodeSqliteStorage } from "../src/storage/sqlite/node.ts";
-import { awaited } from "./effect-support.ts";
-import {
-  status,
-  sizes,
-  subagentCycle,
+import effectSupport from "./effect-support.ts";
+import harnessSchedulerRetentionSupport from "./harness-scheduler-retention-support.ts";
+import platformSupport from "./platform-support.ts";
+import sessionSupport from "./session-support.ts";
+import taskSupport from "./task-support.ts";
+
+const { awaited } = effectSupport;
+const {
+  Hold,
+  Spawner,
+  directories,
   gate,
   gates,
-  Hold,
-  runs,
-  directories,
-  sqlitePath,
   open,
   rejections,
-  Spawner,
-} from "./harness-scheduler-retention-support.ts";
-import { removeDir } from "./platform-support.ts";
-import { context } from "./session-support.ts";
-import { eventually } from "./task-support.ts";
+  runs,
+  sizes,
+  sqlitePath,
+  status,
+  subagentCycle,
+} = harnessSchedulerRetentionSupport;
+const { removeDir } = platformSupport;
+const { context } = sessionSupport;
+const { eventually } = taskSupport;
 
 afterEach(() =>
   Effect.runPromise(
@@ -34,7 +40,7 @@ afterEach(() =>
 );
 
 function countReads(storage: Storage): { tasks: number; conversations: number } {
-  const reads = { tasks: 0, conversations: 0 };
+  const reads = { conversations: 0, tasks: 0 };
   const task = storage.task.bind(storage);
   const conversation = storage.conversation.bind(storage);
   storage.task = (id, readContext) => {
@@ -94,7 +100,7 @@ const holdsLiveOwnerStep1 = Effect.gen(function* () {
             const c = yield* awaited(
               tx.createConversation({ ownership: { kind: "task", taskId: a } }),
             );
-            return { p, b, a, c: c.id };
+            return { a, b, c: c.id, p };
           }),
         ),
       context,
@@ -113,7 +119,7 @@ const holdsLiveOwnerStep1 = Effect.gen(function* () {
     ),
   );
   gate("p").resolve();
-  return { runPromise, reads, harness, tree, before, loaded, d };
+  return { before, d, harness, loaded, reads, runPromise, tree };
 });
 
 const holdsLiveOwner = Effect.gen(function* () {
@@ -152,7 +158,7 @@ const holdsOwnerWorkStep1 = Effect.gen(function* () {
             const p = yield* awaited(
               tx.createTask(
                 Spawner,
-                { name: "p", into: 0 },
+                { into: 0, name: "p" },
                 { ownership: { kind: "conversation" } },
               ),
             );
@@ -165,13 +171,13 @@ const holdsOwnerWorkStep1 = Effect.gen(function* () {
             const c = yield* awaited(
               tx.createConversation({ ownership: { kind: "task", taskId: a } }),
             );
-            return { p, b, c: c.id };
+            return { b, c: c.id, p };
           }),
         ),
       context,
     ),
   );
-  return { runPromise, harness, root, tree };
+  return { harness, root, runPromise, tree };
 });
 
 const holdsOwnerWork = Effect.gen(function* () {
@@ -184,7 +190,7 @@ const holdsOwnerWork = Effect.gen(function* () {
             const record = (yield* awaited(tx.task(tree.p)))!;
             (tx as unknown as { setTask(value: unknown): void }).setTask({
               ...record,
-              input: { name: "p", into: tree.c },
+              input: { into: tree.c, name: "p" },
             });
           }),
         ),
@@ -236,7 +242,7 @@ const withdrawsInputQueuedStep1 = Effect.gen(function* () {
             const keep = yield* awaited(
               tx.createTask(Hold, { name: "keep" }, { ownership: { kind: "task", taskId: p } }),
             );
-            return { p, b, c: c.id, keep };
+            return { b, c: c.id, keep, p };
           }),
         ),
       context,
@@ -250,15 +256,15 @@ const withdrawsInputQueuedStep1 = Effect.gen(function* () {
       (tx) =>
         runPromise(
           Effect.gen(function* () {
-            (yield* awaited(tx.doc(LiveDoc, tree.c))).run = { taskId: tree.keep, inputs: [] };
+            (yield* awaited(tx.doc(LiveDoc, tree.c))).run = { inputs: [], taskId: tree.keep };
           }),
         ),
       context,
     ),
   );
-  const queued = (yield* awaited(c.submit({ type: "input", content: "later" }, context))).id;
+  const queued = (yield* awaited(c.submit({ content: "later", type: "input" }, context))).id;
   yield* awaited(harness.abortTask(tree.p, context));
-  return { runPromise, harness, tree, queued };
+  return { harness, queued, runPromise, tree };
 });
 
 const withdrawsInputQueued = Effect.gen(function* () {

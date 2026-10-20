@@ -3,23 +3,28 @@ import { createModels } from "@msa/ai/models";
 import { BACKGROUND_CONTEXT as context } from "@msa/chord/context";
 import { Console, Effect } from "effect";
 
-import { createRegistry, Harness } from "../src/harness/index.ts";
+import { Harness, createRegistry } from "../src/harness/index.ts";
 import {
   type ConversationId,
-  defineExtension,
-  defineTask,
   LiveDoc,
   UsageDoc,
+  defineExtension,
+  defineTask,
 } from "../src/index.ts";
 import type { SessionImpl } from "../src/session/session.ts";
 import { openNodeSqliteStorage } from "../src/storage/sqlite/node.ts";
-import { retainedBytes } from "./heap-retained.ts";
-import { awaited, joinPath, makeTempDir, removeDir } from "./support.ts";
+import retainedBytes from "./heap-retained.ts";
+import support from "./support.ts";
+
+const { awaited, joinPath, makeTempDir, removeDir } = support;
 
 const Work = defineTask<null, { phase: "work" }, null>({
-  name: "bench.work",
-  version: 1,
+  abort: (_task, runtime, ctx) =>
+    Promise.resolve(
+      runtime.commit(() => ({ outcome: { status: "aborted" }, status: "terminal" }), ctx),
+    ),
   initial: () => ({ phase: "work" }),
+  name: "bench.work",
   phases: {
     work: (_task, runtime, ctx) =>
       Promise.resolve(
@@ -30,17 +35,14 @@ const Work = defineTask<null, { phase: "work" }, null>({
                 (yield* awaited(tx.doc(UsageDoc, runtime.conversationId))).tools["bench"] = {
                   input: 1,
                 } as never;
-                return { status: "terminal", outcome: { status: "completed", result: null } };
+                return { outcome: { result: null, status: "completed" }, status: "terminal" };
               }),
             ),
           ctx,
         ),
       ),
   },
-  abort: (_task, runtime, ctx) =>
-    Promise.resolve(
-      runtime.commit(() => ({ status: "terminal", outcome: { status: "aborted" } }), ctx),
-    ),
+  version: 1,
 });
 
 const openBenchHarness = Effect.fn("openBenchHarness")(function* (
@@ -81,7 +83,7 @@ function cycler(harness: Harness) {
           throw new Error(`task ${task} ${settled.state.outcome.status}`);
       }),
     );
-  return { seen, cycle };
+  return { cycle, seen };
 }
 
 const run = Effect.fn("run")(function* (conversations: number, documentRetentionMs: number) {
@@ -106,7 +108,7 @@ const run = Effect.fn("run")(function* (conversations: number, documentRetention
       yield* awaited(harness.snapshot(LiveDoc, seen.first!, context));
     const readUs = Math.round(((performance.now() - readStarted) / 100) * 1000);
     yield* awaited(harness.close(context));
-    return { ms, heap, cached, readUs };
+    return { cached, heap, ms, readUs };
   }).pipe(Effect.ensuring(removeDir(directory)));
 });
 

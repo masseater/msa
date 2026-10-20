@@ -3,21 +3,18 @@ import { MemoryStorage } from "@msa/durable/storage/memory";
 import { Effect } from "effect";
 import { describe, expect, it } from "vite-plus/test";
 
-import { allEntries, chatSetup, openChat, textOf } from "./chat-support.ts";
-import { awaited } from "./effect-support.ts";
-import {
-  inboxItems,
-  mention,
-  toolRunning,
-  answer,
-  HOLD,
-  holdTool,
-  gated,
-  transcript,
-  requestLog,
-} from "./harness-input-entries-support.ts";
-import { context } from "./session-support.ts";
-import { deferred } from "./task-support.ts";
+import chatSupport from "./chat-support.ts";
+import effectSupport from "./effect-support.ts";
+import harnessInputEntriesSupport from "./harness-input-entries-support.ts";
+import sessionSupport from "./session-support.ts";
+import taskSupport from "./task-support.ts";
+
+const { allEntries, chatSetup, openChat, textOf } = chatSupport;
+const { awaited } = effectSupport;
+const { HOLD, answer, gated, holdTool, inboxItems, mention, requestLog, toolRunning, transcript } =
+  harnessInputEntriesSupport;
+const { context } = sessionSupport;
+const { deferred } = taskSupport;
 
 const queuedBusyInputsStep1 = Effect.fn("queuedBusyInputsStep1")(function* () {
   const setup = chatSetup();
@@ -25,43 +22,43 @@ const queuedBusyInputsStep1 = Effect.fn("queuedBusyInputsStep1")(function* () {
   holdTool(setup, gate);
   setup.faux.setResponses([HOLD, answer("after tools"), answer("follow-up")]);
   const { harness, root } = yield* openChat(new MemoryStorage(), setup);
-  const input = yield* awaited(root.submit({ type: "input", content: "a" }, context));
+  const input = yield* awaited(root.submit({ content: "a", type: "input" }, context));
   yield* toolRunning(harness, root);
   const steer = yield* awaited(
     root.submit(
-      { type: "input", content: "s", entry: mention("s"), whenBusy: "steer", requestId: "r-s" },
+      { content: "s", entry: mention("s"), requestId: "r-s", type: "input", whenBusy: "steer" },
       context,
     ),
   );
   const followUp = yield* awaited(
     root.submit(
-      { type: "input", content: "f", entry: { kind: "p2.input" }, whenBusy: "followUp" },
+      { content: "f", entry: { kind: "p2.input" }, type: "input", whenBusy: "followUp" },
       context,
     ),
   );
   expect(yield* inboxItems(harness, root)).toEqual([
     {
+      content: "s",
+      entry: { data: { author: "ann", text: "s" }, kind: "chat.mention" },
       id: steer.id,
       mode: "steer",
-      content: "s",
-      entry: { kind: "chat.mention", data: { author: "ann", text: "s" } },
     },
-    { id: followUp.id, mode: "followUp", content: "f", entry: { kind: "p2.input" } },
+    { content: "f", entry: { kind: "p2.input" }, id: followUp.id, mode: "followUp" },
   ]);
   const again = yield* awaited(
     root.submit(
       {
-        type: "input",
         content: "other",
         entry: mention("other"),
-        whenBusy: "steer",
         requestId: "r-s",
+        type: "input",
+        whenBusy: "steer",
       },
       context,
     ),
   );
   expect(again.id).toBe(steer.id);
-  return { gate, harness, root, input, steer, followUp };
+  return { followUp, gate, harness, input, root, steer };
 });
 
 const queuedBusyInputs = Effect.fn("queuedBusyInputs")(function* () {
@@ -69,13 +66,13 @@ const queuedBusyInputs = Effect.fn("queuedBusyInputs")(function* () {
   yield* awaited(
     expect(
       root.submit(
-        { type: "input", content: "x", entry: mention("x"), whenBusy: "reject" },
+        { content: "x", entry: mention("x"), type: "input", whenBusy: "reject" },
         context,
       ),
     ).rejects.toBeInstanceOf(ConversationBusy),
   );
   expect(yield* inboxItems(harness, root)).toHaveLength(2);
-  return { gate, harness, root, input, steer, followUp };
+  return { followUp, gate, harness, input, root, steer };
 });
 
 const placesIdleInput = Effect.gen(function* () {
@@ -85,7 +82,7 @@ const placesIdleInput = Effect.gen(function* () {
   setup.faux.setResponses([requestLog(requests, answer("hi ann"))]);
   const { harness, root } = yield* openChat(new MemoryStorage(), setup);
   const submission = yield* awaited(
-    root.submit({ type: "input", content: "ann: hi", entry: mention("hi") }, context),
+    root.submit({ content: "ann: hi", entry: mention("hi"), type: "input" }, context),
   );
   const settled = yield* awaited(submission.wait(context));
   const entries = yield* allEntries(root);
@@ -94,11 +91,11 @@ const placesIdleInput = Effect.gen(function* () {
     ["msa.assistant", "hi ann"],
   ]);
   const placed = entries.find((entry) => entry.kind === "chat.mention")!;
-  expect(placed.model).toEqual([{ role: "user", content: "ann: hi", timestamp: 42 }]);
+  expect(placed.model).toEqual([{ content: "ann: hi", role: "user", timestamp: 42 }]);
   expect(settled).toMatchObject({
-    status: "done",
-    entry: placed.id,
     answer: entries.at(-1)!.id,
+    entry: placed.id,
+    status: "done",
   });
   expect(requests).toEqual([["user:ann: hi"]]);
   const view = yield* awaited(root.context(context, { at: placed.id }));
@@ -112,9 +109,9 @@ const rejectsInputEntry = Effect.gen(function* () {
   const before = (yield* allEntries(root)).length;
   for (const kind of [123, "", "msa.user", "msa.compaction"]) {
     const draft = {
-      type: "input",
       content: "x",
       entry: { kind },
+      type: "input",
     } as unknown as SubmissionDraft;
     yield* awaited(
       expect(root.submit(draft, context)).rejects.toThrow("An input entry's kind must be"),
@@ -141,22 +138,22 @@ const takesOnlyKind = Effect.gen(function* () {
   setup.faux.setResponses([answer("idle"), first.step, answer("queued")]);
   const { harness, root } = yield* openChat(new MemoryStorage(), setup);
   const extra = {
-    kind: "chat.mention",
-    model: [{ role: "user", content: "forged", timestamp: 0 }],
+    edits: [{ action: "omit", target: 1 }],
     head: "self",
-    edits: [{ target: 1, action: "omit" }],
+    kind: "chat.mention",
+    model: [{ content: "forged", role: "user", timestamp: 0 }],
   };
   const draft = (content: string) =>
-    ({ type: "input", content, entry: extra }) as unknown as SubmissionDraft;
+    ({ content, entry: extra, type: "input" }) as unknown as SubmissionDraft;
   yield* awaited((yield* awaited(root.submit(draft("idle"), context))).wait(context));
-  yield* awaited(root.submit({ type: "input", content: "a" }, context));
+  yield* awaited(root.submit({ content: "a", type: "input" }, context));
   yield* awaited(first.reached);
   const queued = yield* awaited(root.submit(draft("later"), context));
   expect((yield* inboxItems(harness, root)).at(-1)).toEqual({
-    id: queued.id,
-    mode: "followUp",
     content: "later",
     entry: { kind: "chat.mention" },
+    id: queued.id,
+    mode: "followUp",
   });
   first.release();
   yield* awaited(queued.wait(context));
@@ -198,18 +195,18 @@ const queuesBusyInputs = Effect.gen(function* () {
   const answers = entries.filter((entry) => entry.kind === "msa.assistant");
   const placed = (kind: string) => entries.find((entry) => entry.kind === kind)!.id;
   expect(yield* awaited(input.status(context))).toMatchObject({
-    status: "done",
     answer: answers[1]!.id,
+    status: "done",
   });
   expect(yield* awaited(steer.status(context))).toMatchObject({
-    status: "done",
-    entry: placed("chat.mention"),
     answer: answers[1]!.id,
+    entry: placed("chat.mention"),
+    status: "done",
   });
   expect(yield* awaited(followUp.status(context))).toMatchObject({
-    status: "done",
-    entry: placed("p2.input"),
     answer: answers[2]!.id,
+    entry: placed("p2.input"),
+    status: "done",
   });
   yield* awaited(harness.close(context));
 });
@@ -224,26 +221,26 @@ const withdrawsQueuedInputs = Effect.gen(function* () {
   const first = gated(answer("first"));
   setup.faux.setResponses([first.step]);
   const { harness, root } = yield* openChat(new MemoryStorage(), setup);
-  const input = yield* awaited(root.submit({ type: "input", content: "a" }, context));
+  const input = yield* awaited(root.submit({ content: "a", type: "input" }, context));
   yield* awaited(first.reached);
   const withdrawn = yield* awaited(
-    root.submit({ type: "input", content: "w", entry: mention("w") }, context),
+    root.submit({ content: "w", entry: mention("w"), type: "input" }, context),
   );
   const aborted = yield* awaited(
-    root.submit({ type: "input", content: "x", entry: mention("x") }, context),
+    root.submit({ content: "x", entry: mention("x"), type: "input" }, context),
   );
   expect(yield* awaited(withdrawn.abort(context))).toBe("aborted");
   expect((yield* inboxItems(harness, root)).map((item) => item.id)).toEqual([aborted.id]);
   yield* awaited(root.abort(context));
   for (const submission of [withdrawn, aborted]) {
     expect(yield* awaited(submission.wait(context))).toMatchObject({
-      status: "unanswered",
       reason: "aborted",
+      status: "unanswered",
     });
   }
   expect(yield* awaited(input.wait(context))).toMatchObject({
-    status: "unanswered",
     reason: "aborted",
+    status: "unanswered",
   });
   expect(yield* inboxItems(harness, root)).toEqual([]);
   expect((yield* allEntries(root)).some((entry) => entry.kind === "chat.mention")).toBe(false);

@@ -2,19 +2,16 @@ import { Effect } from "effect";
 import { afterEach, describe, expect, it } from "vite-plus/test";
 
 import { openNodeSqliteStorage } from "../src/storage/sqlite/node.ts";
-import { awaited } from "./effect-support.ts";
-import {
-  directories,
-  status,
-  waitUntil,
-  open,
-  gates,
-  Hold,
-  runs,
-  openHarness,
-} from "./harness-ownership-support.ts";
-import { joinPath, makeTempDir, removeDir } from "./platform-support.ts";
-import { context } from "./session-support.ts";
+import effectSupport from "./effect-support.ts";
+import harnessOwnershipSupport from "./harness-ownership-support.ts";
+import platformSupport from "./platform-support.ts";
+import sessionSupport from "./session-support.ts";
+
+const { awaited } = effectSupport;
+const { Hold, directories, gates, open, openHarness, runs, status, waitUntil } =
+  harnessOwnershipSupport;
+const { joinPath, makeTempDir, removeDir } = platformSupport;
+const { context } = sessionSupport;
 
 afterEach(() =>
   Effect.runPromise(
@@ -37,10 +34,10 @@ const tracksOwnershipChains = Effect.gen(function* () {
       (tx) =>
         runPromise(
           Effect.gen(function* () {
-            const top = yield* awaited(
+            const topInner = yield* awaited(
               tx.createTask(Hold, { name: "top" }, { ownership: { kind: "conversation" } }),
             );
-            let owner = top;
+            let owner = topInner;
             for (const n of Array.from({ length: depth }, (_, i) => i)) {
               owner = yield* awaited(
                 tx.createTask(
@@ -50,10 +47,10 @@ const tracksOwnershipChains = Effect.gen(function* () {
                 ),
               );
             }
-            const leaf = yield* awaited(
+            const leafInner = yield* awaited(
               tx.createTask(Hold, { name: "leaf" }, { ownership: { kind: "task", taskId: owner } }),
             );
-            return { top, leaf };
+            return { leaf: leafInner, top: topInner };
           }),
         ),
       context,
@@ -108,7 +105,7 @@ const holdsOwnerWorkCommitStep1 = Effect.gen(function* () {
             const c = yield* awaited(
               tx.createConversation({ ownership: { kind: "task", taskId: a } }),
             );
-            return { p, a, b, c: c.id };
+            return { a, b, c: c.id, p };
           }),
         ),
       context,
@@ -128,7 +125,7 @@ const holdsOwnerWorkCommitStep1 = Effect.gen(function* () {
     ),
   );
   open("p", "completed");
-  return { opened, tree, d };
+  return { d, opened, tree };
 });
 
 const holdsOwnerWorkCommit = Effect.gen(function* () {
@@ -174,7 +171,7 @@ const holdsOwnerWorkCreated = Effect.gen(function* () {
             const c = yield* awaited(
               tx.createConversation({ ownership: { kind: "task", taskId: a } }),
             );
-            return { p, a, b, c: c.id };
+            return { a, b, c: c.id, p };
           }),
         ),
       context,

@@ -4,15 +4,18 @@ import { afterEach, describe, expect, it } from "vite-plus/test";
 
 import { idFromNumber } from "../src/ids.ts";
 import {
-  applySqliteMigrations,
   CURRENT_SQLITE_SCHEMA_VERSION,
   SQLITE_MIGRATIONS,
   type SqliteMigration,
+  applySqliteMigrations,
 } from "../src/storage/sqlite/index.ts";
 import { openNodeSqliteDatabase, openNodeSqliteStorage } from "../src/storage/sqlite/node.ts";
 import { type EntryId, ROOT_CONVERSATION_ID } from "../src/types.ts";
-import { toJsonText, awaited } from "./effect-support.ts";
-import { joinPath, makeTempDir, removeDir } from "./platform-support.ts";
+import effectSupport from "./effect-support.ts";
+import platformSupport from "./platform-support.ts";
+
+const { awaited, toJsonText } = effectSupport;
+const { joinPath, makeTempDir, removeDir } = platformSupport;
 
 const directories = new Set<string>();
 
@@ -41,10 +44,10 @@ const storedBeforeMigration = Effect.fn("storedBeforeMigration")(function* () {
         {
           type: "entry",
           value: {
-            id: idFromNumber<EntryId>(2),
             conversationId: ROOT_CONVERSATION_ID,
-            kind: "retained",
             data: { retained: true },
+            id: idFromNumber<EntryId>(2),
+            kind: "retained",
           },
         },
       ],
@@ -105,17 +108,17 @@ const rollsInitialBootstrap = Effect.gen(function* () {
   const database = yield* awaited(openNodeSqliteDatabase(yield* databasePath()));
   yield* Effect.gen(function* () {
     const first: SqliteMigration = {
-      version: 1,
       statements: [
         "CREATE TABLE migration_first (value TEXT) STRICT",
         "INSERT INTO migration_first (value) VALUES ('retained')",
       ],
+      version: 1,
     };
     const failed: readonly SqliteMigration[] = [
       first,
       {
-        version: 2,
         statements: ["CREATE TABLE migration_second (value TEXT) STRICT", "THIS IS NOT SQL"],
+        version: 2,
       },
     ];
     yield* awaited(expect(applySqliteMigrations(database, failed)).rejects.toThrow());
@@ -130,7 +133,7 @@ const rollsInitialBootstrap = Effect.gen(function* () {
     yield* awaited(
       applySqliteMigrations(database, [
         first,
-        { version: 2, statements: ["CREATE TABLE migration_second (value TEXT) STRICT"] },
+        { statements: ["CREATE TABLE migration_second (value TEXT) STRICT"], version: 2 },
       ]),
     );
     expect(
@@ -157,8 +160,8 @@ const rollsFailedMigrationStep1 = Effect.gen(function* () {
   const failedMigrations: readonly SqliteMigration[] = [
     ...SQLITE_MIGRATIONS,
     {
-      version: nextVersion,
       statements: ["CREATE TABLE migration_probe (value TEXT) STRICT", "THIS IS NOT SQL"],
+      version: nextVersion,
     },
   ];
   yield* awaited(expect(applySqliteMigrations(database, failedMigrations)).rejects.toThrow());
@@ -178,8 +181,8 @@ const rollsFailedMigrationStep1 = Effect.gen(function* () {
   const successfulMigrations: readonly SqliteMigration[] = [
     ...SQLITE_MIGRATIONS,
     {
-      version: nextVersion,
       statements: ["CREATE TABLE migration_probe (value TEXT) STRICT"],
+      version: nextVersion,
     },
   ];
   yield* awaited(applySqliteMigrations(database, successfulMigrations));
@@ -196,13 +199,13 @@ const rollsFailedMigration = Effect.gen(function* () {
   expect(
     yield* awaited(database.get("SELECT record, commit_seq FROM entries WHERE id = 2")),
   ).toEqual({
-    record: yield* toJsonText({
-      id: 2,
-      conversationId: ROOT_CONVERSATION_ID,
-      kind: "retained",
-      data: { retained: true },
-    }),
     commit_seq: 1,
+    record: yield* toJsonText({
+      conversationId: ROOT_CONVERSATION_ID,
+      data: { retained: true },
+      id: 2,
+      kind: "retained",
+    }),
   });
   expect(
     yield* awaited(

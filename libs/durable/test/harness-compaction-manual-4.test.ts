@@ -1,21 +1,24 @@
 import { Effect } from "effect";
 import { afterEach, describe, expect, it } from "vite-plus/test";
 
-import {
-  text,
-  summary,
+import harnessCompactionSupport from "./harness-compaction-support.ts";
+import support from "./support.ts";
+
+const {
   answer,
-  gated,
-  history,
   directories,
   failure,
   firstUserText,
-  userText,
+  gated,
+  history,
+  kinds,
   open,
   result,
-  kinds,
-} from "./harness-compaction-support.ts";
-import { awaited, removeDir, context, deferred } from "./support.ts";
+  summary,
+  text,
+  userText,
+} = harnessCompactionSupport;
+const { awaited, context, deferred, removeDir } = support;
 
 afterEach(() =>
   Effect.runPromise(
@@ -32,10 +35,10 @@ const runsFollowUps = Effect.gen(function* () {
   const gate = deferred();
   const reached = deferred();
   chat.faux.agent.push(gated(gate, failure("bad request"), reached));
-  const failed = yield* awaited(chat.root.submit({ type: "input", content: "fails" }, context));
+  const failed = yield* awaited(chat.root.submit({ content: "fails", type: "input" }, context));
   yield* awaited(reached.promise);
   const followUp = yield* awaited(
-    chat.root.submit({ type: "input", content: "follow-up" }, context),
+    chat.root.submit({ content: "follow-up", type: "input" }, context),
   );
   gate.resolve();
   expect((yield* awaited(failed.wait(context))).status).toBe("unanswered");
@@ -68,8 +71,8 @@ const settlesStaleReset = Effect.gen(function* () {
       (yield* awaited(chat.harness.submission(submissionId!, context)))!.status(context),
     ),
   ).toMatchObject({
-    status: "unanswered",
     reason: "stale",
+    status: "unanswered",
   });
   expect((yield* kinds(chat.root)).at(-1)).toBe("msa.reset");
   yield* awaited(chat.harness.close(context));
@@ -94,7 +97,7 @@ const doesNotMake = Effect.gen(function* () {
   const answerGate = deferred();
   const answerReached = deferred();
   chat.faux.agent.push(gated(answerGate, answer("a4"), answerReached));
-  const input = yield* awaited(chat.root.submit({ type: "input", content: "u4" }, context));
+  const input = yield* awaited(chat.root.submit({ content: "u4", type: "input" }, context));
   expect((yield* awaited(input.status(context))).status).toBe("placed");
   yield* awaited(answerReached.promise);
   expect(firstUserText(chat.faux.agentRequests.at(-1)!.messages)).toBe(text("u1", 100));

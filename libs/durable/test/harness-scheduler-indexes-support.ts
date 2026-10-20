@@ -1,14 +1,19 @@
-import { defineTask, type Harness, type TaskId, type TaskRuntime } from "@msa/durable";
+import { type Harness, type TaskId, type TaskRuntime, defineTask } from "@msa/durable";
 import { Effect } from "effect";
 
-import { awaited } from "./effect-support.ts";
-import { joinPath, makeTempDir } from "./platform-support.ts";
-import { context } from "./session-support.ts";
-import { aborted, type Deferred, deferred } from "./task-support.ts";
+import effectSupport from "./effect-support.ts";
+import platformSupport from "./platform-support.ts";
+import sessionSupport from "./session-support.ts";
+import taskSupport from "./task-support.ts";
 
-export const gates = new Map<string, Deferred<void>>();
+const { awaited } = effectSupport;
+const { joinPath, makeTempDir } = platformSupport;
+const { context } = sessionSupport;
+const { aborted, deferred } = taskSupport;
 
-export function gate(name: string): Deferred<void> {
+const gates = new Map<string, PromiseWithResolvers<void>>();
+
+function gate(name: string): PromiseWithResolvers<void> {
   let found = gates.get(name);
   if (found === undefined) {
     found = deferred<void>();
@@ -17,10 +22,13 @@ export function gate(name: string): Deferred<void> {
   return found;
 }
 
-export const Hold = defineTask<{ name: string }, { phase: "hold" }, null>({
-  name: "test.index.hold",
-  version: 1,
+const Hold = defineTask<{ name: string }, { phase: "hold" }, null>({
+  abort: (_task, runtime, ctx) =>
+    Promise.resolve(
+      runtime.commit(() => ({ outcome: { status: "aborted" }, status: "terminal" }), ctx),
+    ),
   initial: () => ({ phase: "hold" }),
+  name: "test.index.hold",
   phases: {
     hold: (task, runtime, ctx) =>
       Effect.runPromise(
@@ -31,34 +39,44 @@ export const Hold = defineTask<{ name: string }, { phase: "hold" }, null>({
           if (opened !== true) return;
           yield* awaited(
             runtime.commit(
-              () => ({ status: "terminal", outcome: { status: "completed", result: null } }),
+              () => ({ outcome: { result: null, status: "completed" }, status: "terminal" }),
               ctx,
             ),
           );
         }),
       ),
   },
-  abort: (_task, runtime, ctx) =>
-    Promise.resolve(
-      runtime.commit(() => ({ status: "terminal", outcome: { status: "aborted" } }), ctx),
-    ),
+  version: 1,
 });
 
-export const owned = new Map<string, TaskId[]>();
+const owned = new Map<string, TaskId[]>();
 
-export const runtimes = new Map<
+const runtimes = new Map<
   string,
   Pick<TaskRuntime<unknown, unknown, unknown, object>, "ownedTasks">
 >();
 
-export const directories: string[] = [];
+const directories: string[] = [];
 
-export const sqlitePath = Effect.fn("sqlitePath")(function* () {
+const sqlitePath = Effect.fn("sqlitePath")(function* () {
   const directory = yield* makeTempDir("msa-durable-indexes-");
   directories.push(directory);
   return joinPath(directory, "session.sqlite");
 });
 
-export const state = Effect.fn("state")(function* (harness: Harness, id: TaskId) {
+const state = Effect.fn("state")(function* (harness: Harness, id: TaskId) {
   return (yield* awaited(harness.getTask(id, context)))!;
 });
+
+const harnessSchedulerIndexesSupport = {
+  Hold,
+  directories,
+  gate,
+  gates,
+  owned,
+  runtimes,
+  sqlitePath,
+  state,
+};
+
+export default harnessSchedulerIndexesSupport;

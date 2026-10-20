@@ -2,20 +2,18 @@ import { Effect } from "effect";
 import { afterEach, describe, expect, it } from "vite-plus/test";
 
 import { openNodeSqliteStorage } from "../src/storage/sqlite/node.ts";
-import { awaited } from "./effect-support.ts";
-import {
-  gate,
-  gates,
-  Hold,
-  runs,
-  directories,
-  sqlitePath,
-  open,
-  rejections,
-} from "./harness-scheduler-retention-support.ts";
-import { removeDir } from "./platform-support.ts";
-import { context } from "./session-support.ts";
-import { deferred, eventually, settled } from "./task-support.ts";
+import effectSupport from "./effect-support.ts";
+import harnessSchedulerRetentionSupport from "./harness-scheduler-retention-support.ts";
+import platformSupport from "./platform-support.ts";
+import sessionSupport from "./session-support.ts";
+import taskSupport from "./task-support.ts";
+
+const { awaited } = effectSupport;
+const { Hold, directories, gate, gates, open, rejections, runs, sqlitePath } =
+  harnessSchedulerRetentionSupport;
+const { removeDir } = platformSupport;
+const { context } = sessionSupport;
+const { deferred, eventually, settled } = taskSupport;
 
 afterEach(() =>
   Effect.runPromise(
@@ -49,7 +47,7 @@ const abortsWorkCreatedStep1 = Effect.gen(function* () {
             const keep = yield* awaited(
               tx.createTask(Hold, { name: "keep" }, { ownership: { kind: "task", taskId: p } }),
             );
-            return { p, b, c: c.id, keep };
+            return { b, c: c.id, keep, p };
           }),
         ),
       context,
@@ -72,7 +70,7 @@ const abortsWorkCreatedStep1 = Effect.gen(function* () {
       context,
     ),
   );
-  return { runPromise, harness, tree };
+  return { harness, runPromise, tree };
 });
 
 const abortsWorkCreated = Effect.gen(function* () {
@@ -143,7 +141,7 @@ const keepsScopeBusyStep1 = Effect.gen(function* () {
     );
   const c = (yield* awaited(harness.conversation(tree.c, context)))!;
   holding = true;
-  return { harness, held, reached, c };
+  return { c, harness, held, reached };
 });
 
 const keepsScopeBusy = Effect.gen(function* () {

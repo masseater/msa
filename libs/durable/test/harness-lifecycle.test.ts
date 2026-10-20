@@ -1,39 +1,42 @@
-import { createModels, fauxAssistantMessage, fauxText, fauxToolCall, Type } from "@msa/ai";
+import { Type, createModels, fauxAssistantMessage, fauxText, fauxToolCall } from "@msa/ai";
 import type { Context, JsonValue } from "@msa/chord";
-import { type ConversationId, defineTool, type Storage, type TaskId } from "@msa/durable";
-import { createRegistry, GenerationTask, Harness } from "@msa/durable/harness";
+import { type ConversationId, type Storage, type TaskId, defineTool } from "@msa/durable";
+import { GenerationTask, Harness, createRegistry } from "@msa/durable/harness";
 import { MemoryStorage } from "@msa/durable/storage/memory";
 import { Effect } from "effect";
 import { describe, expect, it } from "vite-plus/test";
 
-import { start, oneStep, storageOpen, withSignal } from "./harness-lifecycle-support.ts";
-import {
-  chatSetup,
-  openChat,
+import harnessLifecycleSupport from "./harness-lifecycle-support.ts";
+import support from "./support.ts";
+
+const { oneStep, start, storageOpen, withSignal } = harnessLifecycleSupport;
+const {
+  ControlledStorage,
   abortController,
-  awaited,
   addHooks,
   addTool,
-  ControlledStorage,
+  awaited,
+  chatSetup,
   context,
   countingReader,
   deferred,
+  openChat,
   openTasks,
   settled,
-} from "./support.ts";
+} = support;
 
 const seedRunningTask = Effect.fn("seedRunningTask")(function* (storage: Storage) {
   const conversationId = yield* awaited(storage.mintId<ConversationId>());
   const id = yield* awaited(storage.mintId<TaskId<JsonValue>>());
-  const state = { status: "running", checkpoint: { phase: "run" } } as const;
+  const state = { checkpoint: { phase: "run" }, status: "running" } as const;
   const task = {
-    id,
-    conversationId,
-    kind: "test.seeded",
-    version: 1,
-    input: null,
     background: false,
+    conversationId,
+    id,
+    input: null,
+    kind: "test.seeded",
     state,
+    version: 1,
   };
   yield* awaited(
     storage.commit(
@@ -88,8 +91,8 @@ const rethrowsOpenError = Effect.gen(function* () {
     storage,
     {
       models: createModels(),
-      registry: createRegistry(),
       onReport: (error) => reports.push(error),
+      registry: createRegistry(),
     },
     context,
   );
@@ -156,11 +159,11 @@ const stubbornSetup = (where: "tool" | "hook") => {
   addTool(
     setup.registry,
     defineTool({
-      name: "wait",
       description: "wait",
-      parameters: Type.Object({}),
       execute: () =>
         (where === "tool" ? stubborn() : Promise.resolve()).then(() => ({ output: [] })),
+      name: "wait",
+      parameters: Type.Object({}),
     }),
   );
   addHooks(setup.registry, GenerationTask, {
@@ -170,14 +173,14 @@ const stubbornSetup = (where: "tool" | "hook") => {
     fauxAssistantMessage([fauxToolCall("wait", {}, { id: "c1" })], { stopReason: "toolUse" }),
     fauxAssistantMessage([fauxText("done")]),
   ]);
-  return { setup, storage, reached, gate, observed };
+  return { gate, observed, reached, setup, storage };
 };
 
 const joinsToolExecute = Effect.gen(function* () {
   for (const where of ["tool", "hook"] as const) {
     const { setup, storage, reached, gate, observed } = stubbornSetup(where);
     const { harness, root } = yield* openChat(storage, setup);
-    yield* awaited(root.submit({ type: "input", content: "go" }, context));
+    yield* awaited(root.submit({ content: "go", type: "input" }, context));
     yield* awaited(reached.promise);
     const closing = harness.close(context);
     expect(yield* settled(closing)).toBe(false);

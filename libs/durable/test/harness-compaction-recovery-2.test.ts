@@ -2,23 +2,26 @@ import { CompactionTask } from "@msa/durable/harness";
 import { Effect } from "effect";
 import { afterEach, describe, expect, it } from "vite-plus/test";
 
-import {
-  text,
-  summary,
-  answer,
-  gated,
+import harnessCompactionSupport from "./harness-compaction-support.ts";
+import support from "./support.ts";
+
+const {
   BLOCKING,
-  history,
-  turn,
-  directories,
   MANUAL,
+  answer,
+  directories,
   failure,
-  userText,
+  gated,
+  history,
   open,
   result,
+  summary,
+  text,
+  turn,
   user,
-} from "./harness-compaction-support.ts";
-import { allEntries, waitFor, awaited, addHooks, removeDir, context, deferred } from "./support.ts";
+  userText,
+} = harnessCompactionSupport;
+const { addHooks, allEntries, awaited, context, deferred, removeDir, waitFor } = support;
 
 afterEach(() =>
   Effect.runPromise(
@@ -41,7 +44,7 @@ const keepsFullRetry = Effect.gen(function* () {
     answer("finally"),
   );
   const input = yield* awaited(
-    chat.root.submit({ type: "input", content: text("u4", 100) }, context),
+    chat.root.submit({ content: text("u4", 100), type: "input" }, context),
   );
   expect((yield* awaited(input.wait(context))).status).toBe("done");
   yield* awaited(chat.harness.close(context));
@@ -56,9 +59,9 @@ const losesApplicationEdit = Effect.gen(function* () {
   chat.faux.summaries.push(gated(gate, summary(), reached));
   const id = yield* awaited(chat.root.compact(undefined, context));
   yield* awaited(reached.promise);
-  const edit = { target: u1!.id, action: "replace", messages: [user("REDACTED")] } as const;
+  const edit = { action: "replace", messages: [user("REDACTED")], target: u1!.id } as const;
   yield* awaited(
-    chat.root.submit({ type: "write", entry: { kind: "app.redact", edits: [edit] } }, context),
+    chat.root.submit({ entry: { edits: [edit], kind: "app.redact" }, type: "write" }, context),
   );
   gate.resolve();
   yield* awaited(result(chat, id));

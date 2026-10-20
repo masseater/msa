@@ -9,19 +9,21 @@ import {
 import { Effect } from "effect";
 import { afterEach, describe, expect, it } from "vite-plus/test";
 
-import { directories } from "./harness-submissions-support.ts";
-import {
-  allEntries,
-  chatSetup,
-  openChat,
-  unanswered,
-  abortController,
-  awaited,
-  removeDir,
+import directories from "./harness-submissions-support.ts";
+import support from "./support.ts";
+
+const {
   ControlledStorage,
+  abortController,
+  allEntries,
+  awaited,
+  chatSetup,
   context,
   deferred,
-} from "./support.ts";
+  openChat,
+  removeDir,
+  unanswered,
+} = support;
 
 afterEach(() =>
   Effect.runPromise(
@@ -35,19 +37,19 @@ afterEach(() =>
 const appendsIdleWrite = Effect.gen(function* () {
   const { harness, root } = yield* openChat(new ControlledStorage(), chatSetup());
   const submission = yield* awaited(
-    root.submit({ type: "write", entry: { kind: "note", data: { text: "x" } } }, context),
+    root.submit({ entry: { data: { text: "x" }, kind: "note" }, type: "write" }, context),
   );
   const settled = yield* awaited(submission.wait(context));
   expect(settled).toEqual({
-    id: submission.id,
     conversationId: root.id,
-    type: "write",
-    status: "done",
     entry: expect.any(Number),
+    id: submission.id,
+    status: "done",
+    type: "write",
   });
   const entries = yield* allEntries(root);
   expect(entries).toEqual([
-    { id: settled.entry, conversationId: root.id, kind: "note", data: { text: "x" } },
+    { conversationId: root.id, data: { text: "x" }, id: settled.entry, kind: "note" },
   ]);
   expect(yield* awaited(harness.snapshot(LiveDoc, root.id, context))).toEqual({});
   const tasks = yield* awaited(
@@ -69,12 +71,12 @@ const placesIdleInput = Effect.gen(function* () {
   const busy = unanswered();
   setup.faux.setResponses([busy.step]);
   const { harness, root } = yield* openChat(storage, setup);
-  const submission = yield* awaited(root.submit({ type: "input", content: "hi" }, context));
+  const submission = yield* awaited(root.submit({ content: "hi", type: "input" }, context));
   yield* awaited(busy.reached);
   const record = yield* awaited(submission.status(context));
   if (record.status !== "placed") throw new Error(`Unexpected ${record.status}`);
   const entry = yield* awaited(root.commit((tx) => tx.entry(UserEntry, record.entry), context));
-  expect(entry?.model).toEqual([{ role: "user", content: "hi", timestamp: 42 }]);
+  expect(entry?.model).toEqual([{ content: "hi", role: "user", timestamp: 42 }]);
   const live = yield* awaited(harness.snapshot(LiveDoc, root.id, context));
   expect(live?.run?.inputs).toEqual([submission.id]);
   expect((yield* awaited(harness.getTask(live!.run!.taskId, context)))?.kind).toBe(
@@ -82,7 +84,7 @@ const placesIdleInput = Effect.gen(function* () {
   );
 
   const commits = storage.commits.length;
-  const rejected = root.submit({ type: "input", content: "again", whenBusy: "reject" }, context);
+  const rejected = root.submit({ content: "again", type: "input", whenBusy: "reject" }, context);
   yield* awaited(expect(rejected).rejects.toBeInstanceOf(ConversationBusy));
   yield* awaited(expect(rejected).rejects.toMatchObject({ conversationId: root.id }));
   expect(storage.commits.length).toBe(commits);
@@ -101,18 +103,18 @@ const deduplicatesRequestIDs = Effect.gen(function* () {
   setup.faux.setResponses([busy.step]);
   const { harness, root } = yield* openChat(storage, setup);
   const first = yield* awaited(
-    root.submit({ type: "input", content: "hi", requestId: "r1" }, context),
+    root.submit({ content: "hi", requestId: "r1", type: "input" }, context),
   );
   yield* awaited(busy.reached);
   const commits = storage.commits.length;
   const again = yield* awaited(
-    root.submit({ type: "input", content: "different", requestId: "r1" }, context),
+    root.submit({ content: "different", requestId: "r1", type: "input" }, context),
   );
   expect(again.id).toBe(first.id);
   expect(storage.commits.length).toBe(commits);
   yield* awaited(
     expect(
-      root.submit({ type: "write", entry: { kind: "note" }, requestId: "r1" }, context),
+      root.submit({ entry: { kind: "note" }, requestId: "r1", type: "write" }, context),
     ).rejects.toThrow("Request r1 already identifies a submission of type input"),
   );
   expect(yield* awaited(first.status(context))).toMatchObject({
@@ -124,12 +126,12 @@ const deduplicatesRequestIDs = Effect.gen(function* () {
     harness.createConversation({ ownership: { kind: "ownerless" } }, context),
   );
   const write = yield* awaited(
-    other.submit({ type: "write", entry: { kind: "note" }, requestId: "r1" }, context),
+    other.submit({ entry: { kind: "note" }, requestId: "r1", type: "write" }, context),
   );
   expect(write.id).not.toBe(first.id);
   expect(
     (yield* awaited(
-      other.submit({ type: "write", entry: { kind: "note" }, requestId: "r1" }, context),
+      other.submit({ entry: { kind: "note" }, requestId: "r1", type: "write" }, context),
     )).id,
   ).toBe(write.id);
   yield* awaited(harness.close(context));
@@ -155,7 +157,7 @@ const reportsAbortResults = Effect.gen(function* () {
       ),
   ]);
   const { harness, root } = yield* openChat(new ControlledStorage(), setup);
-  const submission = yield* awaited(root.submit({ type: "input", content: "hi" }, context));
+  const submission = yield* awaited(root.submit({ content: "hi", type: "input" }, context));
   expect(yield* awaited(submission.abort(context))).toBe("already_placed");
   expect(yield* awaited(harness.abortSubmission(submission.id, context, root.id))).toBe(
     "already_placed",
@@ -182,7 +184,7 @@ const cancelsOnlyWait = Effect.gen(function* () {
   const setup = chatSetup();
   setup.faux.setResponses([unanswered().step]);
   const { harness, root } = yield* openChat(new ControlledStorage(), setup);
-  const submission = yield* awaited(root.submit({ type: "input", content: "hi" }, context));
+  const submission = yield* awaited(root.submit({ content: "hi", type: "input" }, context));
   const controller = abortController();
   const cancelled = submission.wait({ ...context, abortSignal: controller.signal });
   const pending = submission.wait(context);
@@ -227,7 +229,7 @@ const rejectsWaitSubmission = Effect.gen(function* () {
   const setup = chatSetup();
   setup.faux.setResponses([unanswered().step]);
   const { harness, root } = yield* openChat(new HeldReads(), setup);
-  const submission = yield* awaited(root.submit({ type: "input", content: "hi" }, context));
+  const submission = yield* awaited(root.submit({ content: "hi", type: "input" }, context));
   hold = true;
   const waiting = submission.wait(context);
   yield* awaited(entered.promise);

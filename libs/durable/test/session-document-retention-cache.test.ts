@@ -4,24 +4,21 @@ import { describe, expect, it, onTestFinished } from "vite-plus/test";
 
 import { currentTimeMillis } from "../src/clock.ts";
 import { SessionImpl, setDefaultDocumentRetention } from "../src/session/session.ts";
-import {
-  settleLine,
-  type Counter,
-  CounterDoc,
-  bump,
-  open,
-  defaultForRun,
-} from "./session-document-retention-support.ts";
-import { awaited, ControlledStorage, context, createConversation, eventually } from "./support.ts";
+import sessionDocumentRetentionSupport from "./session-document-retention-support.ts";
+import type sessionDocumentRetentionSupportTypes from "./session-document-retention-support.types.ts";
+import support from "./support.ts";
 
-const Failing = defineDoc<Counter>({
-  kind: "test.retention.failing",
-  version: 1,
-  scope: "session",
-  initial: () => ({ count: 0 }),
+const { CounterDoc, bump, defaultForRun, open, settleLine } = sessionDocumentRetentionSupport;
+const { ControlledStorage, awaited, context, createConversation, eventually } = support;
+
+const Failing = defineDoc<sessionDocumentRetentionSupportTypes.Counter>({
   checkpointWhen: () => {
     throw new Error("checkpoint failed");
   },
+  initial: () => ({ count: 0 }),
+  kind: "test.retention.failing",
+  scope: "session",
+  version: 1,
 });
 
 const evictsCommitSettlement = Effect.gen(function* () {
@@ -131,7 +128,7 @@ const leavesNoPin = Effect.gen(function* () {
   gate.release();
   yield* awaited(expect(attaching).rejects.toThrow());
   yield* awaited(closing);
-  expect(session.documentCacheSizes).toMatchObject({ cached: 0, idle: 0, attached: 0 });
+  expect(session.documentCacheSizes).toMatchObject({ attached: 0, cached: 0, idle: 0 });
 });
 
 describe("document cache retention", () => {
@@ -173,21 +170,21 @@ describe("document cache retention", () => {
 
 const migratesDocumentAgain = Effect.gen(function* () {
   const V1 = defineDoc<{ count: number }>({
-    kind: "test.retention.migrating",
-    version: 1,
-    scope: "session",
     initial: () => ({ count: 1 }),
+    kind: "test.retention.migrating",
+    scope: "session",
+    version: 1,
   });
   let migrations = 0;
   const V2 = defineDoc<{ count: number; migrated: boolean }>({
-    kind: "test.retention.migrating",
-    version: 2,
-    scope: "session",
     initial: () => ({ count: 0, migrated: true }),
+    kind: "test.retention.migrating",
     migrate: (value) => {
       migrations++;
       return { count: (value as { count: number }).count, migrated: true };
     },
+    scope: "session",
+    version: 2,
   });
   const { session } = open(0);
   yield* awaited(session.commit((tx) => tx.doc(V1).then(() => undefined), context));

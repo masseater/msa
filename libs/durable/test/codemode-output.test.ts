@@ -3,10 +3,15 @@ import { defineTool } from "@msa/durable";
 import { Effect } from "effect";
 import { afterEach, describe, expect, it } from "vite-plus/test";
 
-import { codemodeChat } from "./codemode-chat-support.ts";
-import { runScript, removeDirectories } from "./codemode-support.ts";
-import { addTool } from "./harness-support.ts";
-import { readText, readBytes } from "./platform-support.ts";
+import codemodeChatSupport from "./codemode-chat-support.ts";
+import codemodeSupport from "./codemode-support.ts";
+import harnessSupport from "./harness-support.ts";
+import platformSupport from "./platform-support.ts";
+
+const { codemodeChat } = codemodeChatSupport;
+const { removeDirectories, runScript } = codemodeSupport;
+const { addTool } = harnessSupport;
+const { readBytes, readText } = platformSupport;
 
 afterEach(removeDirectories);
 
@@ -77,11 +82,11 @@ const callsDeferredTool = Effect.gen(function* () {
   addTool(
     chat.setup.registry,
     defineTool({
-      name: "later",
-      description: "A deferred tool",
-      parameters: Type.Object({}),
       deferred: true,
-      execute: () => Promise.resolve({ output: [{ type: "text", text: "later ran" }] }),
+      description: "A deferred tool",
+      execute: () => Promise.resolve({ output: [{ text: "later ran", type: "text" }] }),
+      name: "later",
+      parameters: Type.Object({}),
     }),
   );
   const { text } = yield* runScript(

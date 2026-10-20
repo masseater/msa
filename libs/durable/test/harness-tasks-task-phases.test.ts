@@ -1,36 +1,29 @@
 import { Type } from "@msa/ai";
-import { defineTask, defineTool, type RegistrySnapshot, type TaskId } from "@msa/durable";
+import { type RegistrySnapshot, type TaskId, defineTask, defineTool } from "@msa/durable";
 import { Effect } from "effect";
 import { describe, expect, it } from "vite-plus/test";
 
-import { awaited } from "./effect-support.ts";
-import { addTool } from "./harness-support.ts";
-import { start, oneStep, gated, openRoot } from "./harness-tasks-support.ts";
-import { context, flush } from "./session-support.ts";
-import { abortedWith, completed, deferred, eventually } from "./task-support.ts";
+import effectSupport from "./effect-support.ts";
+import harnessSupport from "./harness-support.ts";
+import harnessTasksSupport from "./harness-tasks-support.ts";
+import sessionSupport from "./session-support.ts";
+import taskSupport from "./task-support.ts";
+
+const { awaited } = effectSupport;
+const { addTool } = harnessSupport;
+const { gated, oneStep, openRoot, start } = harnessTasksSupport;
+const { context, flush } = sessionSupport;
+const { abortedWith, completed, deferred, eventually } = taskSupport;
 
 function waiterTasks() {
   const gate = deferred();
   const order: string[] = [];
   const waiting: { on: TaskId[]; outcomes: string[] } = { on: [], outcomes: [] };
   const Waiter = defineTask<null, { phase: "wait" } | { phase: "resume" }, null>({
-    name: "test.waiter",
-    version: 1,
+    abort: (_task, runtime, ctx) => Promise.resolve(runtime.commit(() => abortedWith("test"), ctx)),
     initial: () => ({ phase: "wait" }),
+    name: "test.waiter",
     phases: {
-      wait: (_task, runtime, ctx) =>
-        Effect.runPromise(
-          Effect.gen(function* () {
-            order.push("wait");
-            const checkpoint = { phase: "resume" } as const;
-            yield* awaited(
-              runtime.commit(
-                () => ({ status: "waiting", checkpoint, on: waiting.on, policy: "allSettled" }),
-                ctx,
-              ),
-            );
-          }),
-        ),
       resume: (_task, runtime, ctx) =>
         Effect.runPromise(
           Effect.gen(function* () {
@@ -41,8 +34,21 @@ function waiterTasks() {
             yield* awaited(runtime.commit(() => completed(null), ctx));
           }),
         ),
+      wait: (_task, runtime, ctx) =>
+        Effect.runPromise(
+          Effect.gen(function* () {
+            order.push("wait");
+            const checkpoint = { phase: "resume" } as const;
+            yield* awaited(
+              runtime.commit(
+                () => ({ checkpoint, on: waiting.on, policy: "allSettled", status: "waiting" }),
+                ctx,
+              ),
+            );
+          }),
+        ),
     },
-    abort: (_task, runtime, ctx) => Promise.resolve(runtime.commit(() => abortedWith("test"), ctx)),
+    version: 1,
   });
   const First = oneStep("test.first", (_task, runtime, ctx) =>
     Effect.runPromise(
@@ -57,30 +63,30 @@ function waiterTasks() {
     order.push("faulting");
     return Promise.reject(new Error("fails"));
   });
-  return { gate, order, waiting, Waiter, First, Faulting };
+  return { Faulting, First, Waiter, gate, order, waiting };
 }
 
 function timedWaiter() {
   const timing: { clock: number; on: TaskId[] } = { clock: 1_000, on: [] };
   const gate = deferred();
   const Waiter = defineTask<null, { phase: "wait" } | { phase: "resume" }, null>({
-    name: "test.timed-waiter",
-    version: 1,
+    abort: (_task, runtime, ctx) => Promise.resolve(runtime.commit(() => abortedWith("test"), ctx)),
     initial: () => ({ phase: "wait" }),
+    name: "test.timed-waiter",
     phases: {
+      resume: (_task, runtime, ctx) => runtime.commit(() => completed(null), ctx),
       wait: (_task, runtime, ctx) => {
         const checkpoint = { phase: "resume" } as const;
         return runtime.commit(
-          () => ({ status: "waiting", checkpoint, on: timing.on, policy: "allSettled" }),
+          () => ({ checkpoint, on: timing.on, policy: "allSettled", status: "waiting" }),
           ctx,
         );
       },
-      resume: (_task, runtime, ctx) => runtime.commit(() => completed(null), ctx),
     },
-    abort: (_task, runtime, ctx) => Promise.resolve(runtime.commit(() => abortedWith("test"), ctx)),
+    version: 1,
   });
   const Held = gated("test.timed-held", gate.promise);
-  return { timing, gate, Waiter, Held };
+  return { Held, Waiter, gate, timing };
 }
 
 function snapshotTask() {
@@ -89,9 +95,9 @@ function snapshotTask() {
   const entered = deferred();
   const tools = (snapshot: RegistrySnapshot) => snapshot.tools().map(({ tool }) => tool.name);
   const Snapshots = defineTask<null, { phase: "a" } | { phase: "b" }, null>({
-    name: "test.snapshots",
-    version: 1,
+    abort: () => Promise.resolve(),
     initial: () => ({ phase: "a" }),
+    name: "test.snapshots",
     phases: {
       a: (_task, runtime, ctx) =>
         Effect.runPromise(
@@ -101,25 +107,25 @@ function snapshotTask() {
             yield* awaited(phaseGate.promise);
             seen.push({
               phase: "a",
-              tools: tools(runtime.registry),
               same: runtime.registry === before,
+              tools: tools(runtime.registry),
             });
             yield* awaited(
-              runtime.commit(() => ({ status: "running", checkpoint: { phase: "b" } }), ctx),
+              runtime.commit(() => ({ checkpoint: { phase: "b" }, status: "running" }), ctx),
             );
           }),
         ),
       b: (_task, runtime, ctx) =>
         Effect.runPromise(
           Effect.gen(function* () {
-            seen.push({ phase: "b", tools: tools(runtime.registry), same: true });
+            seen.push({ phase: "b", same: true, tools: tools(runtime.registry) });
             yield* awaited(runtime.commit(() => completed(null), ctx));
           }),
         ),
     },
-    abort: () => Promise.resolve(),
+    version: 1,
   });
-  return { seen, phaseGate, entered, Snapshots };
+  return { Snapshots, entered, phaseGate, seen };
 }
 
 const resumesWaitingTask = Effect.gen(function* () {
@@ -139,8 +145,8 @@ const resumesWaitingTask = Effect.gen(function* () {
   yield* flush;
   expect(order.sort()).toEqual(["faulting", "first", "wait"]);
   expect((yield* awaited(harness.getTask(waiter, context)))?.state).toMatchObject({
-    status: "waiting",
     on: waiting.on,
+    status: "waiting",
   });
   gate.resolve();
   yield* awaited(harness.waitForTask(waiter, context));
@@ -224,17 +230,17 @@ const keepsOneRegistry = Effect.gen(function* () {
   addTool(
     registry,
     defineTool({
-      name: "late",
       description: "late",
-      parameters: Type.Object({}),
       execute: () => Promise.resolve({}),
+      name: "late",
+      parameters: Type.Object({}),
     }),
   );
   phaseGate.resolve();
   yield* awaited(harness.waitForTask(id, context));
   expect(seen).toEqual([
-    { phase: "a", tools: [], same: true },
-    { phase: "b", tools: ["late"], same: true },
+    { phase: "a", same: true, tools: [] },
+    { phase: "b", same: true, tools: ["late"] },
   ]);
   yield* awaited(harness.close(context));
 });

@@ -1,34 +1,37 @@
 import {
   type AssistantMessage,
   type FauxResponseStep,
+  Type,
   fauxAssistantMessage,
   fauxText,
   fauxToolCall,
-  Type,
 } from "@msa/ai";
-import { type AgentEvent, defineTool, type LiveState } from "@msa/durable";
+import { type AgentEvent, type LiveState, defineTool } from "@msa/durable";
 import { watchEvents } from "@msa/durable/harness";
 import { MemoryStorage } from "@msa/durable/storage/memory";
 import { Effect } from "effect";
 import { describe, expect, it } from "vite-plus/test";
 
-import { listen, drained } from "./harness-events-support.ts";
-import {
-  type ChatSetup,
+import harnessEventsSupport from "./harness-events-support.ts";
+import support from "./support.ts";
+import type supportTypes from "./support.types.ts";
+
+const { drained, listen } = harnessEventsSupport;
+const {
+  aborted,
+  addTool,
+  awaited,
   chatSetup,
+  context,
+  deferred,
+  documentChanges,
   openChat,
   textOf,
   waitFor,
-  awaited,
-  addTool,
-  context,
-  documentChanges,
-  aborted,
-  deferred,
-} from "./support.ts";
+} = support;
 
-function slow(): ChatSetup {
-  return chatSetup({ tokensPerSecond: 400, tokenSize: { min: 1, max: 1 } });
+function slow(): supportTypes.ChatSetup {
+  return chatSetup({ tokenSize: { max: 1, min: 1 }, tokensPerSecond: 400 });
 }
 
 function streamedText(events: readonly AgentEvent[]): string {
@@ -59,7 +62,7 @@ const streamingRun = Effect.fn("streamingRun")(function* () {
   setup.faux.setResponses([fauxAssistantMessage([fauxText(text)])]);
   const { harness, root } = yield* openChat(new MemoryStorage(), setup);
   const { stream, events } = yield* listen(harness, root);
-  expect(stream.snapshot).toMatchObject({ type: "snapshot", entries: [], tools: [], inbox: [] });
+  expect(stream.snapshot).toMatchObject({ entries: [], inbox: [], tools: [], type: "snapshot" });
   const partials: string[] = [];
   harness.subscribeCommits((publication) => {
     for (const change of documentChanges(publication)) {
@@ -70,7 +73,7 @@ const streamingRun = Effect.fn("streamingRun")(function* () {
         partials.push(textOf(message) ?? "");
     }
   });
-  return { text, harness, root, stream, events, partials };
+  return { events, harness, partials, root, stream, text };
 });
 
 const toolOutputRun = Effect.fn("toolOutputRun")(function* () {
@@ -81,9 +84,7 @@ const toolOutputRun = Effect.fn("toolOutputRun")(function* () {
   addTool(
     setup.registry,
     defineTool({
-      name: "print",
       description: "Prints",
-      parameters: Type.Object({ n: Type.Number() }),
       execute: (_args, api) =>
         runPromise(
           Effect.gen(function* () {
@@ -94,6 +95,8 @@ const toolOutputRun = Effect.fn("toolOutputRun")(function* () {
             return {};
           }),
         ),
+      name: "print",
+      parameters: Type.Object({ n: Type.Number() }),
     }),
   );
   setup.faux.setResponses([
@@ -104,12 +107,12 @@ const toolOutputRun = Effect.fn("toolOutputRun")(function* () {
   ]);
   const { harness, root } = yield* openChat(new MemoryStorage(), setup);
   const { stream, events } = yield* listen(harness, root);
-  return { gate, harness, root, stream, events };
+  return { events, gate, harness, root, stream };
 });
 
 const streamsRunLifecycle = Effect.gen(function* () {
   const { text, harness, root, stream, events, partials } = yield* streamingRun();
-  const submission = yield* awaited(root.submit({ type: "input", content: "hi" }, context));
+  const submission = yield* awaited(root.submit({ content: "hi", type: "input" }, context));
   yield* awaited(submission.wait(context));
   yield* drained();
   const all = events();
@@ -131,8 +134,8 @@ const streamsRunLifecycle = Effect.gen(function* () {
     "usage_changed",
   ]);
   expect(all.find((event) => event.type === "run_start")).toEqual({
-    type: "run_start",
     inputs: [submission.id],
+    type: "run_start",
   });
   const rebuilt = all.flatMap((event, index) =>
     (event.type === "message_start" && event.message.role === "assistant") ||
@@ -155,7 +158,7 @@ describe("agent events", () => {
 
 const reportsToolStart = Effect.gen(function* () {
   const { gate, harness, root, stream, events } = yield* toolOutputRun();
-  const submission = yield* awaited(root.submit({ type: "input", content: "go" }, context));
+  const submission = yield* awaited(root.submit({ content: "go", type: "input" }, context));
   const output = (): string => {
     let text = "";
     for (const event of events()) {
@@ -171,17 +174,17 @@ const reportsToolStart = Effect.gen(function* () {
   yield* drained();
   const tool = events().filter((event) => event.type.startsWith("tool_execution"));
   expect(tool[0]).toEqual({
-    type: "tool_execution_start",
+    args: { n: 1 },
+    taskId: expect.any(Number),
     toolCallId: "c1",
     toolName: "print",
-    taskId: expect.any(Number),
-    args: { n: 1 },
+    type: "tool_execution_start",
   });
   const end = tool.at(-1)!;
   expect(end).toMatchObject({
-    type: "tool_execution_end",
-    toolCallId: "c1",
     entry: { kind: "msa.tool-result" },
+    toolCallId: "c1",
+    type: "tool_execution_end",
   });
   const all = events();
   const endIndex = all.indexOf(end);
@@ -217,18 +220,18 @@ const reportsQueuedSubmissions = Effect.gen(function* () {
       }),
     );
   const error = fauxAssistantMessage([], {
-    stopReason: "error",
     errorMessage: "503 Service Unavailable",
+    stopReason: "error",
   });
   setup.faux.setResponses([held, error, fauxAssistantMessage([fauxText("second")])]);
   const { harness, root } = yield* openChat(new MemoryStorage(), setup);
-  setup.settings.retry = { enabled: true, maxRetries: 1, baseDelayMs: 1 };
+  setup.settings.retry = { baseDelayMs: 1, enabled: true, maxRetries: 1 };
   const { stream, events } = yield* listen(harness, root);
-  yield* awaited(root.submit({ type: "input", content: "a" }, context));
-  const followUp = yield* awaited(root.submit({ type: "input", content: "f" }, context));
+  yield* awaited(root.submit({ content: "a", type: "input" }, context));
+  const followUp = yield* awaited(root.submit({ content: "f", type: "input" }, context));
   yield* drained();
   expect(events().filter((event) => event.type === "inbox_update")).toEqual([
-    { type: "inbox_update", items: [{ id: followUp.id, mode: "followUp" }] },
+    { items: [{ id: followUp.id, mode: "followUp" }], type: "inbox_update" },
   ]);
   release.resolve();
   yield* awaited(followUp.wait(context));

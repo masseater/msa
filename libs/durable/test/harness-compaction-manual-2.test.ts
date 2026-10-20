@@ -2,23 +2,26 @@ import { UsageDoc } from "@msa/durable";
 import { Effect } from "effect";
 import { afterEach, describe, expect, it } from "vite-plus/test";
 
-import {
-  text,
-  summary,
+import harnessCompactionSupport from "./harness-compaction-support.ts";
+import support from "./support.ts";
+
+const {
+  MANUAL,
   answer,
+  directories,
+  firstUserText,
   gated,
   history,
-  turn,
-  directories,
-  MANUAL,
+  kinds,
   live,
-  firstUserText,
-  userText,
   open,
   result,
-  kinds,
-} from "./harness-compaction-support.ts";
-import { awaited, removeDir, context, deferred } from "./support.ts";
+  summary,
+  text,
+  turn,
+  userText,
+} = harnessCompactionSupport;
+const { awaited, context, deferred, removeDir } = support;
 
 afterEach(() =>
   Effect.runPromise(
@@ -58,8 +61,8 @@ const countsSpendSummary = Effect.gen(function* () {
     ),
   ))!;
   expect(yield* awaited(submission.status(context))).toMatchObject({
-    status: "unanswered",
     reason: "stale",
+    status: "unanswered",
   });
   expect(yield* awaited(input())).toBeGreaterThan(before);
   expect((yield* kinds(chat.root)).includes("msa.compaction")).toBe(false);
@@ -91,8 +94,8 @@ const letsCompactionCuts = Effect.gen(function* () {
       (yield* awaited(chat.harness.submission(submissionId!, context)))!.status(context),
     ),
   ).toMatchObject({
-    status: "unanswered",
     reason: "stale",
+    status: "unanswered",
   });
   expect(firstUserText((yield* awaited(chat.root.context(context))).messages)).toContain("SECOND");
   yield* awaited(chat.harness.close(context));
@@ -149,7 +152,7 @@ describe("manual compaction", () => {
           const reached = deferred();
           chat.faux.agent.push(gated(gate, answer("done"), reached));
           const input = yield* awaited(
-            chat.root.submit({ type: "input", content: "busy" }, context),
+            chat.root.submit({ content: "busy", type: "input" }, context),
           );
           yield* awaited(reached.promise);
           const submissions = [];
@@ -195,7 +198,7 @@ const abortedConversationAbort = Effect.gen(function* () {
   const gate = deferred();
   const busy = deferred();
   chat.faux.agent.push(gated(gate, answer("never"), busy));
-  yield* awaited(chat.root.submit({ type: "input", content: "busy" }, context));
+  yield* awaited(chat.root.submit({ content: "busy", type: "input" }, context));
   yield* awaited(busy.promise);
   chat.faux.summaries.push(summary());
   const queued = yield* awaited(
@@ -208,8 +211,8 @@ const abortedConversationAbort = Effect.gen(function* () {
   expect(yield* awaited(submission.abort(context))).toBe("aborted");
   yield* turn(chat, "next", "ok");
   expect(yield* awaited(submission.status(context))).toMatchObject({
-    status: "unanswered",
     reason: "aborted",
+    status: "unanswered",
   });
   expect((yield* kinds(chat.root)).includes("msa.compaction")).toBe(false);
   yield* awaited(chat.harness.close(context));

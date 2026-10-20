@@ -15,18 +15,20 @@ import {
   type AgentEvent,
   AssistantEntry,
   type ConversationId,
-  configure,
-  defineExtension,
-  defineTool,
   type EntryId,
   type Extension,
   type ToolExecutionApi,
+  configure,
+  defineExtension,
+  defineTool,
 } from "@msa/durable";
-import { createRegistry, Harness, watchEvents } from "@msa/durable/harness";
+import { Harness, createRegistry, watchEvents } from "@msa/durable/harness";
 import { MemoryStorage } from "@msa/durable/storage/memory";
 import { Console, Effect } from "effect";
 
-import { BACKGROUND_CONTEXT, environmentVariable, awaited } from "../support.ts";
+import support from "../support.ts";
+
+const { BACKGROUND_CONTEXT, awaited, environmentVariable } = support;
 
 const context = BACKGROUND_CONTEXT;
 
@@ -44,12 +46,7 @@ const Subagent: Extension = defineExtension({
   name: "subagent",
   tools: [
     defineTool({
-      name: "subagent",
       description: "Delegate a self-contained task to a subagent and get its answer back.",
-      parameters: Type.Object({
-        task: Type.String({ description: "What the subagent should do" }),
-      }),
-      replay: "safe",
       execute: (args, api, callContext) =>
         Effect.runPromise(
           Effect.gen(function* () {
@@ -83,9 +80,9 @@ const Subagent: Extension = defineExtension({
 
             const handle = (yield* awaited(api.conversation(child, callContext)))!;
             const request = {
-              type: "input",
               content: task,
               requestId: `subagent:${api.taskId}`,
+              type: "input",
             } as const;
             const settled = yield* awaited(
               (yield* awaited(handle.submit(request, callContext))).wait(callContext),
@@ -94,19 +91,24 @@ const Subagent: Extension = defineExtension({
               throw new Error(`Subagent failed: ${settled.status}`);
             }
             const text = yield* answerText(api, settled.answer, callContext);
-            return { output: [{ type: "text", text }], details: { conversationId: child } };
+            return { details: { conversationId: child }, output: [{ text, type: "text" }] };
           }),
         ),
+      name: "subagent",
+      parameters: Type.Object({
+        task: Type.String({ description: "What the subagent should do" }),
+      }),
+      replay: "safe",
     }),
   ],
 });
 
 const models = createModels();
-let model = { provider: "openai", modelId: "gpt-6-sol" };
+let model = { modelId: "gpt-6-sol", provider: "openai" };
 if (environmentVariable("OPENAI_API_KEY", true) === undefined) {
   const faux = fauxProvider();
   models.setProvider(faux.provider);
-  model = { provider: "faux", modelId: "faux-1" };
+  model = { modelId: "faux-1", provider: "faux" };
   const delegate = fauxToolCall(
     "subagent",
     { task: "Name three prime numbers." },
@@ -167,8 +169,8 @@ const main = Effect.gen(function* () {
   const submission = yield* awaited(
     root.submit(
       {
-        type: "input",
         content: "Use the subagent tool to find three prime numbers, then tell me what it said.",
+        type: "input",
       },
       context,
     ),

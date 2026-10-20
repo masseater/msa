@@ -1,32 +1,29 @@
 import * as NodeRuntime from "@effect/platform-node/NodeRuntime";
 import { createModels } from "@msa/ai/models";
 import { fauxAssistantMessage, fauxProvider, fauxText, fauxToolCall } from "@msa/ai/providers/faux";
-import { BACKGROUND_CONTEXT as context } from "@msa/chord/context";
 import { Console, Effect, Fiber } from "effect";
 import { Type } from "typebox";
 
-import { createRegistry, Harness } from "../src/harness/index.ts";
+import { Harness, createRegistry } from "../src/harness/index.ts";
 import {
   type Conversation,
-  defineExtension,
-  defineTool,
   type StorageWrite,
   ToolResultEntry,
+  defineExtension,
+  defineTool,
 } from "../src/index.ts";
-import {
-  type Backend,
-  directorySize,
-  heapAfterGc,
-  meterCommits,
-  noWrites,
-  openBenchStorage,
-  requireGc,
-  type Written,
-} from "./bench-support.ts";
-import { awaited, sampleEvery, makeTempDir, removeDir } from "./support.ts";
+import benchSupport from "./bench-support.ts";
+import type benchSupportTypes from "./bench-support.types.ts";
+import support from "./support.ts";
+
+const { directorySize, heapAfterGc, meterCommits, noWrites, openBenchStorage, requireGc } =
+  benchSupport;
+const { awaited, context, makeTempDir, removeDir, sampleEvery } = support;
+
+type Written = Record<StorageWrite["type"], number>;
 
 type Scenario = {
-  backend: Backend;
+  backend: benchSupportTypes.Backend;
   calls: number;
   depth: 1 | 2;
   bytes: number;
@@ -51,9 +48,7 @@ const FAN_OUT = 10;
 function blobTool(scenario: Scenario) {
   const chunk = `${"x".repeat(scenario.bytes / CHUNKS - 1)}\n`;
   return defineTool({
-    name: "blob",
     description: "Stream a blob",
-    parameters: Type.Object({ n: Type.Number() }),
     execute: (_args, api) =>
       Effect.runPromise(
         Effect.gen(function* () {
@@ -64,26 +59,28 @@ function blobTool(scenario: Scenario) {
           return {};
         }),
       ),
+    name: "blob",
+    parameters: Type.Object({ n: Type.Number() }),
   });
 }
 
 function fanOut(name: string, target: string, options: { readonly progress?: false }) {
   return defineTool({
-    name,
     description: `Call ${target} in parallel`,
-    parameters: Type.Object({ count: Type.Number() }),
     execute: (args, api, callContext) =>
       Effect.runPromise(
         Effect.gen(function* () {
           const calls = Array.from({ length: args.count }, (_, n) =>
-            api.executeTool(target, { n, count: FAN_OUT }, callContext, options),
+            api.executeTool(target, { count: FAN_OUT, n }, callContext, options),
           );
           const failed = (yield* awaited(Promise.all(calls))).filter(
             (result) => result.isError,
           ).length;
-          return { output: [{ type: "text", text: `${failed} failed` }], isError: failed > 0 };
+          return { isError: failed > 0, output: [{ text: `${failed} failed`, type: "text" }] };
         }),
       ),
+    name,
+    parameters: Type.Object({ count: Type.Number() }),
   });
 }
 
@@ -113,10 +110,10 @@ const openMetered = Effect.fn("openMetered")(function* (scenario: Scenario, dire
   const harness = yield* awaited(Harness.open(storage, { models, registry }, context));
   const root = yield* awaited(
     harness.root(context, {
-      agent: { model: { provider: "faux", modelId: "faux-1" } },
+      agent: { model: { modelId: "faux-1", provider: "faux" } },
     }),
   );
-  return { faux, meter, harness, root };
+  return { faux, harness, meter, root };
 });
 
 const measureRun = Effect.fn("measureRun")(function* (
@@ -142,7 +139,7 @@ const measureRun = Effect.fn("measureRun")(function* (
   });
   const started = performance.now();
   const settled = yield* awaited(
-    (yield* awaited(root.submit({ type: "input", content: `run ${run}` }, context))).wait(context),
+    (yield* awaited(root.submit({ content: `run ${run}`, type: "input" }, context))).wait(context),
   );
   if (settled.status !== "done") throw new Error(`run ${run}: ${settled.status}`);
   yield* assertToolsSucceeded(root, run);
@@ -155,11 +152,11 @@ const measureRun = Effect.fn("measureRun")(function* (
   }
   return {
     commits: meter.commits - before.commits,
-    written: delta,
-    storedBytes: yield* directorySize(directory),
+    heldHeap: heapAfterGc() - baseHeap,
     ms,
     peakHeap: heap.peak - baseHeap,
-    heldHeap: heapAfterGc() - baseHeap,
+    storedBytes: yield* directorySize(directory),
+    written: delta,
   };
 });
 
@@ -170,10 +167,10 @@ const runScenario = Effect.fn("runScenario")(function* (scenario: Scenario) {
     const perRun: Run[] = [];
     const baseHeap = heapAfterGc();
     for (const run of Array.from({ length: scenario.runs }, (_, i) => i)) {
-      perRun.push(yield* measureRun(scenario, directory, opened, { run, baseHeap }));
+      perRun.push(yield* measureRun(scenario, directory, opened, { baseHeap, run }));
     }
     yield* awaited(opened.harness.close(context));
-    return { perRun, closedBytes: yield* directorySize(directory) };
+    return { closedBytes: yield* directorySize(directory), perRun };
   }).pipe(Effect.ensuring(Effect.asVoid(Effect.suspend(() => removeDir(directory)))));
 });
 
@@ -223,9 +220,9 @@ function streamingScenarios(): Scenario[] {
       [2, 50].flatMap((gapMs) =>
         [true, false].map((progress) => ({
           backend,
+          bytes,
           calls: 200,
           depth: 1 as const,
-          bytes,
           gapMs,
           progress,
           runs: 3,
@@ -240,9 +237,9 @@ function nestingScenarios(): Scenario[] {
     [200, 2000].flatMap((calls) =>
       ([1, 2] as const).map((depth) => ({
         backend,
+        bytes: 1024,
         calls,
         depth,
-        bytes: 1024,
         gapMs: 2,
         progress: false,
         runs: 3,

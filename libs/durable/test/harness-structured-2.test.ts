@@ -2,29 +2,34 @@ import { type TaskId } from "@msa/durable";
 import { Effect } from "effect";
 import { afterEach, describe, expect, it } from "vite-plus/test";
 
-import { awaited } from "./effect-support.ts";
-import {
-  state,
-  outcomeOf,
-  open,
+import effectSupport from "./effect-support.ts";
+import harnessStructuredSupport from "./harness-structured-support.ts";
+import platformSupport from "./platform-support.ts";
+import sessionSupport from "./session-support.ts";
+
+const { awaited } = effectSupport;
+const {
+  Unregistered,
+  behaviors,
+  directories,
+  end,
   gate,
   gates,
-  until,
-  start,
-  end,
-  behaviors,
   log,
+  open,
   openNodes,
-  Unregistered,
-  waitOn,
-  parentOf,
-  spawn,
+  outcomeOf,
   owned,
+  parentOf,
   script,
-  directories,
-} from "./harness-structured-support.ts";
-import { removeDir } from "./platform-support.ts";
-import { context } from "./session-support.ts";
+  spawn,
+  start,
+  state,
+  until,
+  waitOn,
+} = harnessStructuredSupport;
+const { removeDir } = platformSupport;
+const { context } = sessionSupport;
 
 afterEach(() =>
   Effect.runPromise(
@@ -44,18 +49,19 @@ const heldFailureTreeStep1 = Effect.fn("heldFailureTreeStep1")(function* () {
   const { harness, root } = yield* openNodes();
   const found = { ids: [] as TaskId[] };
   script("p1", {
+    resume: (runtime, ctx) => runtime.commit(() => end("failed", "p1"), ctx),
     run: (runtime, ctx) =>
       runPromise(
         Effect.gen(function* () {
-          const runPromise = Effect.runPromiseWith(yield* Effect.context<never>());
+          const runNested = Effect.runPromiseWith(yield* Effect.context<never>());
 
           yield* awaited(
             runtime.commit(
               (tx) =>
-                runPromise(
+                runNested(
                   Effect.gen(function* () {
                     yield* awaited(spawn(tx, runtime.taskId, "grandchild"));
-                    return { status: "running", checkpoint: { phase: "resume", round: 1 } };
+                    return { checkpoint: { phase: "resume", round: 1 }, status: "running" };
                   }),
                 ),
               ctx,
@@ -63,7 +69,6 @@ const heldFailureTreeStep1 = Effect.fn("heldFailureTreeStep1")(function* () {
           );
         }),
       ),
-    resume: (runtime, ctx) => runtime.commit(() => end("failed", "p1"), ctx),
   });
   script("grandchild", {
     abort: (runtime, ctx) =>
@@ -71,13 +76,13 @@ const heldFailureTreeStep1 = Effect.fn("heldFailureTreeStep1")(function* () {
         Effect.gen(function* () {
           yield* awaited(gate("abort.grandchild").promise);
           yield* awaited(
-            runtime.commit(() => ({ status: "terminal", outcome: { status: "aborted" } }), ctx),
+            runtime.commit(() => ({ outcome: { status: "aborted" }, status: "terminal" }), ctx),
           );
         }),
       ),
   });
   const spawned: { outside?: TaskId } = {};
-  return { runPromise, harness, root, found, spawned };
+  return { found, harness, root, runPromise, spawned };
 });
 
 const heldFailureTree = Effect.fn("heldFailureTree")(function* () {
@@ -97,7 +102,7 @@ const heldFailureTree = Effect.fn("heldFailureTree")(function* () {
         ctx,
       ),
   });
-  return { harness, root, found, spawned };
+  return { found, harness, root, spawned };
 });
 
 const resumesOnceEveryStep1 = Effect.gen(function* () {
@@ -106,6 +111,15 @@ const resumesOnceEveryStep1 = Effect.gen(function* () {
   const { harness, root } = yield* openNodes();
   const found = { ids: [] as TaskId[], outcomes: [] as string[] };
   script("parent", {
+    resume: (runtime, ctx) =>
+      runPromise(
+        Effect.gen(function* () {
+          found.outcomes = (yield* awaited(runtime.outcomes(found.ids, ctx))).map(
+            (outcome) => outcome.status,
+          );
+          yield* awaited(runtime.commit(() => end("completed", "parent"), ctx));
+        }),
+      ),
     run: (runtime, ctx) =>
       runtime.commit(
         (tx) =>
@@ -123,15 +137,6 @@ const resumesOnceEveryStep1 = Effect.gen(function* () {
           ),
         ctx,
       ),
-    resume: (runtime, ctx) =>
-      runPromise(
-        Effect.gen(function* () {
-          found.outcomes = (yield* awaited(runtime.outcomes(found.ids, ctx))).map(
-            (outcome) => outcome.status,
-          );
-          yield* awaited(runtime.commit(() => end("completed", "parent"), ctx));
-        }),
-      ),
   });
   const parent = yield* awaited(start(root, "parent"));
   yield* until(() => found.ids.length === 5);
@@ -142,7 +147,7 @@ const resumesOnceEveryStep1 = Effect.gen(function* () {
   );
   open("ok");
   open("fails", "failed");
-  return { harness, found, parent };
+  return { found, harness, parent };
 });
 
 const resumesOnceEvery = Effect.gen(function* () {
@@ -202,8 +207,8 @@ const failsFastHeld = Effect.gen(function* () {
   yield* until(() => found.ids.length === 2);
   expect(yield* awaited(outcomeOf(harness, found.ids[1]!))).toBe("aborted");
   expect(yield* state(harness, found.ids[0]!)).toMatchObject({
-    status: "completing",
     outcome: { status: "failed" },
+    status: "completing",
   });
   expect((yield* state(harness, parent)).status).toBe("waiting");
   open("abort.grandchild");

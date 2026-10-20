@@ -3,29 +3,12 @@ import { CompactionTask, watchEvents } from "@msa/durable/harness";
 import { Effect } from "effect";
 import { afterEach, describe, expect, it } from "vite-plus/test";
 
-import {
-  summary,
-  gated,
-  history,
-  directories,
-  live,
-  failure,
-  firstUserText,
-  open,
-  result,
-  kinds,
-} from "./harness-compaction-support.ts";
-import {
-  allEntries,
-  waitFor,
-  awaited,
-  addHooks,
-  addTask,
-  removeDir,
-  context,
-  type Deferred,
-  deferred,
-} from "./support.ts";
+import harnessCompactionSupport from "./harness-compaction-support.ts";
+import support from "./support.ts";
+
+const { directories, failure, firstUserText, gated, history, kinds, live, open, result, summary } =
+  harnessCompactionSupport;
+const { addHooks, addTask, allEntries, awaited, context, deferred, removeDir, waitFor } = support;
 
 afterEach(() =>
   Effect.runPromise(
@@ -58,8 +41,8 @@ const settlesStaleFork = Effect.gen(function* () {
     ),
   ))!;
   expect(yield* awaited(submission.status(context))).toMatchObject({
-    status: "unanswered",
     reason: "stale",
+    status: "unanswered",
   });
   expect((yield* awaited(fork.context(context))).head?.kind).toBe("msa.reset");
   yield* awaited(chat.harness.close(context));
@@ -76,7 +59,7 @@ const placesOlderQueued = Effect.gen(function* () {
   const gate = deferred();
   const reached = deferred();
   chat.faux.agent.push(gated(gate, failure("bad request"), reached));
-  const failed = yield* awaited(chat.root.submit({ type: "input", content: "fails" }, context));
+  const failed = yield* awaited(chat.root.submit({ content: "fails", type: "input" }, context));
   yield* awaited(reached.promise);
   chat.faux.summaries.push(summary("OLDER"));
   const older = yield* awaited(result(chat, yield* awaited(chat.root.compact(undefined, context))));
@@ -115,12 +98,12 @@ const placesHookSummaryStep1 = Effect.gen(function* () {
     beforeCompact: (_compaction, api, hookContext) =>
       runPromise(
         Effect.gen(function* () {
-          const runPromise = Effect.runPromiseWith(yield* Effect.context<never>());
+          const runNested = Effect.runPromiseWith(yield* Effect.context<never>());
 
           yield* awaited(
             chat.harness.commit(
               (tx) =>
-                runPromise(
+                runNested(
                   Effect.asVoid(
                     Effect.suspend(() =>
                       awaited(
@@ -128,8 +111,8 @@ const placesHookSummaryStep1 = Effect.gen(function* () {
                           Child,
                           {},
                           {
-                            ownership: { kind: "task", taskId: api.taskId },
                             conversationId: chat.root.id,
+                            ownership: { kind: "task", taskId: api.taskId },
                           },
                         ),
                       ),
@@ -173,7 +156,7 @@ const removesStatusFaulted = Effect.gen(function* () {
     result(chat, yield* awaited(chat.root.compact(undefined, context))),
   );
   chat.setup.models.getModel = getModel;
-  expect(outcome).toMatchObject({ status: "faulted", error: { message: "models broke" } });
+  expect(outcome).toMatchObject({ error: { message: "models broke" }, status: "faulted" });
   expect((yield* awaited(live(chat))).compactions).toBeUndefined();
   yield* awaited(chat.harness.close(context));
 });
@@ -185,11 +168,23 @@ describe("compaction estimates and interactions", () => {
   it("removes the status of a faulted compaction", () => Effect.runPromise(removesStatusFaulted));
 });
 
-function defineChildTask(gate: Deferred) {
+function defineChildTask(gate: PromiseWithResolvers<void>) {
   return defineTask<Record<string, never>, { phase: "run" }, null>({
-    name: "test.child",
-    version: 1,
+    abort: (_task, runtime, taskContext) =>
+      Effect.runPromise(
+        Effect.asVoid(
+          Effect.suspend(() =>
+            awaited(
+              runtime.commit(
+                () => ({ outcome: { status: "aborted" }, status: "terminal" }),
+                taskContext,
+              ),
+            ),
+          ),
+        ),
+      ),
     initial: () => ({ phase: "run" }),
+    name: "test.child",
     phases: {
       run: (_task, runtime, taskContext) =>
         Effect.runPromise(
@@ -197,33 +192,21 @@ function defineChildTask(gate: Deferred) {
             yield* awaited(gate.promise);
             yield* awaited(
               runtime.commit(
-                () => ({ status: "terminal", outcome: { status: "completed", result: null } }),
+                () => ({ outcome: { result: null, status: "completed" }, status: "terminal" }),
                 taskContext,
               ),
             );
           }),
         ),
     },
-    abort: (_task, runtime, taskContext) =>
-      Effect.runPromise(
-        Effect.asVoid(
-          Effect.suspend(() =>
-            awaited(
-              runtime.commit(
-                () => ({ status: "terminal", outcome: { status: "aborted" } }),
-                taskContext,
-              ),
-            ),
-          ),
-        ),
-      ),
+    version: 1,
   });
 }
 
 const reportsStartEnd = Effect.gen(function* () {
   const chat = yield* open();
   yield* history(chat);
-  chat.setup.settings.retry = { enabled: true, maxRetries: 2, baseDelayMs: 60_000 };
+  chat.setup.settings.retry = { baseDelayMs: 60_000, enabled: true, maxRetries: 2 };
   const events: AgentEvent[] = [];
   const stream = yield* awaited(watchEvents(chat.harness, chat.root.id, context));
   stream.start((batch) => {
@@ -241,19 +224,19 @@ const reportsStartEnd = Effect.gen(function* () {
   const late = yield* awaited(watchEvents(chat.harness, chat.root.id, context));
   expect(late.snapshot.compactions).toEqual([
     {
-      taskId: id,
-      reason: "manual",
-      blocking: false,
       attempt: 1,
+      blocking: false,
+      reason: "manual",
       retry: { at: expect.any(Number), error: "overloaded" },
+      taskId: id,
     },
   ]);
   yield* awaited(late.stop());
   yield* awaited(chat.harness.abortTask(id, context));
   yield* waitFor(() => events.some((event) => event.type === "compaction_end"));
   expect(events.filter((event) => event.type.startsWith("compaction_"))).toEqual([
-    { type: "compaction_start", taskId: id, reason: "manual", blocking: false },
-    { type: "compaction_end", taskId: id, reason: "manual" },
+    { blocking: false, reason: "manual", taskId: id, type: "compaction_start" },
+    { reason: "manual", taskId: id, type: "compaction_end" },
   ]);
   yield* awaited(stream.stop());
   yield* awaited(chat.harness.close(context));

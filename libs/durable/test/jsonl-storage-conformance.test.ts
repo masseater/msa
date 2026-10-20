@@ -7,14 +7,11 @@ import { NodeExecutionEnv } from "../src/env/node.ts";
 import { idFromNumber } from "../src/ids.ts";
 import { JsonlStorage } from "../src/storage/jsonl/index.ts";
 import type { ConversationId, EntryId, Id, Seq, Storage, StorageWrite } from "../src/types.ts";
-import {
-  context,
-  openStorage,
-  openStorages,
-  tempDirectories,
-  tempDirectory,
-} from "./jsonl-storage-support.ts";
-import { awaited, removeDir } from "./support.ts";
+import jsonlStorageSupport from "./jsonl-storage-support.ts";
+import support from "./support.ts";
+
+const { context, openStorage, openStorages, tempDirectories, tempDirectory } = jsonlStorageSupport;
+const { awaited, removeDir } = support;
 
 afterEach(() =>
   Effect.runPromise(

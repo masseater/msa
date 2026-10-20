@@ -2,9 +2,13 @@ import { StorageRequestError, type TaskId } from "@msa/durable";
 import { Effect } from "effect";
 import { describe, expect, it } from "vite-plus/test";
 
-import { awaited } from "./effect-support.ts";
-import { FailingCalls, started } from "./harness-storage-failure-support.ts";
-import { ControlledStorage, context } from "./session-support.ts";
+import effectSupport from "./effect-support.ts";
+import harnessStorageFailureSupport from "./harness-storage-failure-support.ts";
+import sessionSupport from "./session-support.ts";
+
+const { awaited } = effectSupport;
+const { FailingCalls, started } = harnessStorageFailureSupport;
+const { ControlledStorage, context } = sessionSupport;
 
 const failsFailedId = Effect.gen(function* () {
   const storage = new FailingCalls();
@@ -15,7 +19,7 @@ const failsFailedId = Effect.gen(function* () {
       storage.error,
     ),
   );
-  expect(yield* awaited(harness.closed)).toEqual({ reason: "failed", error: storage.error });
+  expect(yield* awaited(harness.closed)).toEqual({ error: storage.error, reason: "failed" });
   yield* awaited(harness.close(context));
 });
 
@@ -38,7 +42,7 @@ const doesNotCommit = Effect.gen(function* () {
           ),
         context,
       ),
-    ).rejects.toMatchObject({ name: "SessionFailed", cause: storage.error }),
+    ).rejects.toMatchObject({ cause: storage.error, name: "SessionFailed" }),
   );
   expect(storage.admittedCommits.length).toBe(written);
   yield* awaited(harness.close(context));
@@ -54,7 +58,7 @@ const failsStorageRequestErrorCommit = Effect.gen(function* () {
       rejection,
     ),
   );
-  expect(yield* awaited(harness.closed)).toEqual({ reason: "failed", error: rejection });
+  expect(yield* awaited(harness.closed)).toEqual({ error: rejection, reason: "failed" });
   yield* awaited(harness.close(context));
 });
 

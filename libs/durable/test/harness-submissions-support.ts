@@ -1,1 +1,3 @@
-export const directories = new Set<string>();
+const directories = new Set<string>();
+
+export default directories;

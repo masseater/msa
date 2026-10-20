@@ -1,14 +1,17 @@
 import { createRequire } from "node:module";
 
 import { createNodePhotonImages } from "@msa/durable/images/node";
-import { initSync, PhotonImage } from "@silvia-odwyer/photon/photon_rs.js";
+import { PhotonImage, initSync } from "@silvia-odwyer/photon/photon_rs.js";
 import { Effect } from "effect";
 import { dual } from "effect/Function";
 
-import { awaited } from "./effect-support.ts";
-import { readBytes } from "./platform-support.ts";
+import effectSupport from "./effect-support.ts";
+import platformSupport from "./platform-support.ts";
 
-export const setUpImages = Effect.fn("setUpImages")(function* () {
+const { awaited } = effectSupport;
+const { readBytes } = platformSupport;
+
+const setUpImages = Effect.fn("setUpImages")(function* () {
   const module = yield* readBytes(
     createRequire(import.meta.url).resolve("@silvia-odwyer/photon/photon_rs_bg.wasm"),
   );
@@ -23,7 +26,7 @@ function pixelsImpl(width: number, height: number): Uint8Array {
   return rgba;
 }
 
-export const pixels: {
+const pixels: {
   (height: number): (width: number) => ReturnType<typeof pixelsImpl>;
   (width: number, height: number): ReturnType<typeof pixelsImpl>;
 } = dual(2, pixelsImpl);
@@ -42,7 +45,7 @@ function encodeRgbaImpl(
   }
 }
 
-export const encodeRgba: {
+const encodeRgba: {
   (
     width: number,
     height: number,
@@ -60,7 +63,7 @@ function encodeImpl(width: number, height: number, format: "png" | "jpeg"): Uint
   return encodeRgba(pixels(width, height), width, height, format);
 }
 
-export const encode: {
+const encode: {
   (height: number, format: "png" | "jpeg"): (width: number) => ReturnType<typeof encodeImpl>;
   (width: number, height: number, format: "png" | "jpeg"): ReturnType<typeof encodeImpl>;
 } = dual(3, encodeImpl);
@@ -75,7 +78,7 @@ function noisyPngImpl(width: number, height: number): Uint8Array {
   return encodeRgba(rgba, width, height, "png");
 }
 
-export const noisyPng: {
+const noisyPng: {
   (height: number): (width: number) => ReturnType<typeof noisyPngImpl>;
   (width: number, height: number): ReturnType<typeof noisyPngImpl>;
 } = dual(2, noisyPngImpl);
@@ -98,7 +101,7 @@ function bmpImpl(width: number, height: number): Uint8Array {
   return bytes;
 }
 
-export const bmp: {
+const bmp: {
   (height: number): (width: number) => ReturnType<typeof bmpImpl>;
   (width: number, height: number): ReturnType<typeof bmpImpl>;
 } = dual(2, bmpImpl);
@@ -112,7 +115,7 @@ function gifImpl(width: number, height: number): Uint8Array {
   return bytes;
 }
 
-export const gif: {
+const gif: {
   (height: number): (width: number) => ReturnType<typeof gifImpl>;
   (width: number, height: number): ReturnType<typeof gifImpl>;
 } = dual(2, gifImpl);
@@ -131,12 +134,12 @@ function tiffImpl(orientation: number, littleEndian: boolean): number[] {
   return [...bytes];
 }
 
-export const tiff: {
+const tiff: {
   (littleEndian: boolean): (orientation: number) => ReturnType<typeof tiffImpl>;
   (orientation: number, littleEndian: boolean): ReturnType<typeof tiffImpl>;
 } = dual(2, tiffImpl);
 
-export const EXIF_HEADER = [0x45, 0x78, 0x69, 0x66, 0, 0];
+const EXIF_HEADER = [0x45, 0x78, 0x69, 0x66, 0, 0];
 
 function withOrientationImpl(
   jpeg: Uint8Array,
@@ -152,7 +155,7 @@ function withOrientationImpl(
   return new Uint8Array([...jpeg.subarray(0, 2), ...app0, ...app1, ...jpeg.subarray(2)]);
 }
 
-export const withOrientation: {
+const withOrientation: {
   (
     orientation: number,
     options?: { little?: boolean; app0?: boolean },
@@ -164,11 +167,27 @@ export const withOrientation: {
   ): ReturnType<typeof withOrientationImpl>;
 } = dual((args) => typeof args[0] === "object" && args[0] !== null, withOrientationImpl);
 
-export function decodedImage(data: string): { width: number; height: number; rgba: Uint8Array } {
+function decodedImage(data: string): { width: number; height: number; rgba: Uint8Array } {
   const image = PhotonImage.new_from_byteslice(Uint8Array.from(Buffer.from(data, "base64")));
   try {
-    return { width: image.get_width(), height: image.get_height(), rgba: image.get_raw_pixels() };
+    return { height: image.get_height(), rgba: image.get_raw_pixels(), width: image.get_width() };
   } finally {
     image.free();
   }
 }
+
+const toolsImagesFixturesSupport = {
+  EXIF_HEADER,
+  bmp,
+  decodedImage,
+  encode,
+  encodeRgba,
+  gif,
+  noisyPng,
+  pixels,
+  setUpImages,
+  tiff,
+  withOrientation,
+};
+
+export default toolsImagesFixturesSupport;

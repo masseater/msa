@@ -1,33 +1,28 @@
 import { createModels } from "@msa/ai";
-import { defineTask, type TaskId, type TaskRuntime } from "@msa/durable";
-import { createRegistry, Harness } from "@msa/durable/harness";
+import { type TaskId, type TaskRuntime, defineTask } from "@msa/durable";
+import { Harness, createRegistry } from "@msa/durable/harness";
 import { Effect } from "effect";
 import { afterEach, describe, expect, it } from "vite-plus/test";
 
-import {
-  startHandover,
-  createIn,
-  type OpenHarness,
-  handoverTask,
-  type Handover,
-  type Gates,
-  directories,
-  type Step,
-} from "./harness-tasks-recovery-support.ts";
-import {
-  awaited,
-  addTask,
-  removeDir,
+import harnessTasksRecoverySupport from "./harness-tasks-recovery-support.ts";
+import type harnessTasksRecoverySupportTypes from "./harness-tasks-recovery-support.types.ts";
+import support from "./support.ts";
+import type supportTypes from "./support.types.ts";
+
+const { createIn, directories, handoverTask, startHandover } = harnessTasksRecoverySupport;
+const {
   ControlledStorage,
-  context,
-  flush,
+  addTask,
+  awaited,
   completed,
+  context,
   countingReader,
-  type Deferred,
   deferred,
   eventually,
+  flush,
   openTasks,
-} from "./support.ts";
+  removeDir,
+} = support;
 
 afterEach(() =>
   Effect.runPromise(
@@ -66,16 +61,20 @@ describe("definition handover", () => {
 });
 
 type HandoverSeen = {
-  held?: ReturnType<ControlledStorage["holdCommits"]>;
-  oldRuntime?: TaskRuntime<null, Handover, null, object>;
-  harness?: OpenHarness;
+  held?: ReturnType<supportTypes.ControlledStorage["holdCommits"]>;
+  oldRuntime?: TaskRuntime<null, harnessTasksRecoverySupportTypes.Handover, null, object>;
+  harness?: harnessTasksRecoverySupportTypes.OpenHarness;
 };
 
-const queuedHandoverTask = (gate: Deferred, storage: ControlledStorage, seen: HandoverSeen) =>
-  defineTask<null, Handover, null>({
-    name: "test.handover",
-    version: 1,
+const queuedHandoverTask = (
+  gate: PromiseWithResolvers<void>,
+  storage: supportTypes.ControlledStorage,
+  seen: HandoverSeen,
+) =>
+  defineTask<null, harnessTasksRecoverySupportTypes.Handover, null>({
+    abort: () => Promise.resolve(),
     initial: () => ({ phase: "a" }),
+    name: "test.handover",
     phases: {
       a: (task, runtime, ctx) =>
         Effect.runPromise(
@@ -83,7 +82,7 @@ const queuedHandoverTask = (gate: Deferred, storage: ControlledStorage, seen: Ha
             seen.oldRuntime = runtime;
             yield* awaited(gate.promise);
             yield* awaited(
-              runtime.commit(() => ({ status: "running", checkpoint: { phase: "b" } }), ctx),
+              runtime.commit(() => ({ checkpoint: { phase: "b" }, status: "running" }), ctx),
             );
             seen.held = storage.holdCommits();
             void seen.harness!.commit(
@@ -96,7 +95,7 @@ const queuedHandoverTask = (gate: Deferred, storage: ControlledStorage, seen: Ha
       b: () => Promise.resolve(),
       c: () => Promise.resolve(),
     },
-    abort: () => Promise.resolve(),
+    version: 1,
   });
 
 const rejectsRuntimeCommit = Effect.gen(function* () {
@@ -134,8 +133,8 @@ const preservesAbortMark = Effect.gen(function* () {
   const log: string[] = [];
   const gate = deferred();
   const storage = new ControlledStorage();
-  let held: ReturnType<ControlledStorage["holdCommits"]> | undefined;
-  const gates: Gates = {
+  let held: ReturnType<supportTypes.ControlledStorage["holdCommits"]> | undefined;
+  const gates: harnessTasksRecoverySupportTypes.Gates = {
     a: gate.promise,
     onEnd: () => {
       held ??= storage.holdCommits();
@@ -150,8 +149,8 @@ const preservesAbortMark = Effect.gen(function* () {
   held!.release();
   expect(yield* awaited(aborting)).toBe("marked");
   expect((yield* awaited(harness.waitForTask(id, context))).state.outcome).toEqual({
-    status: "aborted",
     reason: "new",
+    status: "aborted",
   });
   const states = storage.commits.flatMap((writes) =>
     writes.flatMap((write) =>
@@ -183,10 +182,10 @@ const releasesRegistrySubscription = Effect.gen(function* () {
 
   const storage = new ControlledStorage();
   const log: string[] = [];
-  const Stuck = defineTask<null, Step, null>({
-    name: "test.stuck",
-    version: 1,
+  const Stuck = defineTask<null, harnessTasksRecoverySupportTypes.Step, null>({
+    abort: () => Promise.resolve(),
     initial: () => ({ phase: "run" }),
+    name: "test.stuck",
     phases: {
       run: () =>
         runPromise(
@@ -196,7 +195,7 @@ const releasesRegistrySubscription = Effect.gen(function* () {
           }),
         ),
     },
-    abort: () => Promise.resolve(),
+    version: 1,
   });
   const first = yield* openTasks(storage, [Stuck]);
   yield* createIn(first.harness, Stuck);

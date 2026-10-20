@@ -4,10 +4,15 @@ import { Effect } from "effect";
 import { describe, expect, it } from "vite-plus/test";
 
 import type { SessionImpl } from "../src/session/session.ts";
-import { abortController, awaited } from "./effect-support.ts";
-import { oneStep, withSignal } from "./harness-lifecycle-support.ts";
-import { ControlledStorage, context, flush } from "./session-support.ts";
-import { openTasks } from "./task-support.ts";
+import effectSupport from "./effect-support.ts";
+import harnessLifecycleSupport from "./harness-lifecycle-support.ts";
+import sessionSupport from "./session-support.ts";
+import taskSupport from "./task-support.ts";
+
+const { abortController, awaited } = effectSupport;
+const { oneStep, withSignal } = harnessLifecycleSupport;
+const { ControlledStorage, context, flush } = sessionSupport;
+const { openTasks } = taskSupport;
 
 function unloadDocuments(harness: Harness): Promise<void> {
   return (harness as unknown as SessionImpl).unloadDocuments();
@@ -17,10 +22,10 @@ const observedNotesStep1 = Effect.fn("observedNotesStep1")(function* () {
   const runPromise = Effect.runPromiseWith(yield* Effect.context<never>());
 
   const Notes = defineDoc<{ text: string }>({
-    kind: "test.close-frames",
-    version: 1,
-    scope: "session",
     initial: () => ({ text: "" }),
+    kind: "test.close-frames",
+    scope: "session",
+    version: 1,
   });
   const storage = new ControlledStorage();
   const { harness } = yield* openTasks(storage, []);
@@ -45,16 +50,16 @@ const observedNotesStep1 = Effect.fn("observedNotesStep1")(function* () {
   const frames: string[] = [];
   return {
     Notes,
-    storage,
-    harness,
-    root,
     docState,
     docWatch,
-    viewState,
-    viewWatch,
+    frames,
     graphState,
     graphWatch,
-    frames,
+    harness,
+    root,
+    storage,
+    viewState,
+    viewWatch,
   };
 });
 
@@ -88,18 +93,18 @@ const observedNotes = Effect.fn("observedNotes")(function* () {
   const viewValue = viewState.value;
   return {
     Notes,
-    storage,
-    harness,
-    root,
     docState,
+    docValue,
     docWatch,
-    viewState,
-    viewWatch,
+    frames,
     graphState,
     graphWatch,
-    frames,
-    docValue,
+    harness,
+    root,
+    storage,
+    viewState,
     viewValue,
+    viewWatch,
   };
 });
 
@@ -107,10 +112,10 @@ const countedSubscriptions = Effect.fn("countedSubscriptions")(function* () {
   const runPromise = Effect.runPromiseWith(yield* Effect.context<never>());
 
   const Notes = defineDoc<{ text: string }>({
-    kind: "test.cancelled-watch",
-    version: 1,
-    scope: "session",
     initial: () => ({ text: "" }),
+    kind: "test.cancelled-watch",
+    scope: "session",
+    version: 1,
   });
   const storage = new ControlledStorage();
   const { harness } = yield* openTasks(storage, []);
@@ -138,7 +143,7 @@ const countedSubscriptions = Effect.fn("countedSubscriptions")(function* () {
       unsubscribe();
     };
   };
-  return { Notes, storage, harness, root, counted };
+  return { Notes, counted, harness, root, storage };
 });
 
 const publishesNoFrameStep1 = Effect.gen(function* () {
@@ -162,21 +167,21 @@ const publishesNoFrameStep1 = Effect.gen(function* () {
 
   const held = storage.holdCommits();
   return {
-    runPromise,
     Notes,
-    storage,
-    harness,
-    root,
     docState,
+    docValue,
     docWatch,
-    viewState,
-    viewWatch,
+    frames,
     graphState,
     graphWatch,
-    frames,
-    docValue,
-    viewValue,
+    harness,
     held,
+    root,
+    runPromise,
+    storage,
+    viewState,
+    viewValue,
+    viewWatch,
   };
 });
 
@@ -206,8 +211,8 @@ const publishesNoFrame = Effect.gen(function* () {
           yield* awaited(tx.appendEntry(root.id, { kind: "note" }));
           yield* awaited(
             tx.createTask(oneStep("test.close-graph"), null, {
-              ownership: { kind: "conversation" },
               conversationId: root.id,
+              ownership: { kind: "conversation" },
             }),
           );
         }),

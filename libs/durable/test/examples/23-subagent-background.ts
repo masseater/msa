@@ -9,47 +9,44 @@ import {
 } from "@msa/ai";
 import { openaiProvider } from "@msa/ai/providers/openai";
 import { type AgentEvent, LiveDoc } from "@msa/durable";
-import { createRegistry, Harness, watchEvents } from "@msa/durable/harness";
+import { Harness, createRegistry, watchEvents } from "@msa/durable/harness";
 import { Console, Effect } from "effect";
 
 import { openNodeSqliteStorage } from "../../src/storage/sqlite/node.ts";
-import {
-  removeDir,
-  makeTempDir,
-  joinPath,
-  awaited,
-  BACKGROUND_CONTEXT,
-  environmentVariable,
-} from "../support.ts";
-import { Subagents, textOf, SubagentTools } from "./subagent-background-tools.ts";
+import support from "../support.ts";
+import subagentBackgroundTools from "./subagent-background-tools.ts";
+
+const { BACKGROUND_CONTEXT, awaited, environmentVariable, joinPath, makeTempDir, removeDir } =
+  support;
+const { SubagentTools, Subagents, textOf } = subagentBackgroundTools;
 
 const context = BACKGROUND_CONTEXT;
 
 const models = createModels();
-let model = { provider: "openai", modelId: "gpt-6-sol" };
+let model = { modelId: "gpt-6-sol", provider: "openai" };
 if (environmentVariable("OPENAI_API_KEY", true) === undefined) {
   const faux = fauxProvider({ tokensPerSecond: 50 });
   models.setProvider(faux.provider);
-  model = { provider: "faux", modelId: "faux-1" };
+  model = { modelId: "faux-1", provider: "faux" };
   const call = (input: Record<string, string>) =>
     fauxAssistantMessage([fauxToolCall("subagent", input)], { stopReason: "toolUse" });
   const answer = (text: string) => fauxAssistantMessage([fauxText(text)]);
   const route: FauxResponseStep = (request) => {
     const last = request.messages.findLast((message) => message.role !== "system")!;
     const content =
-      typeof last.content === "string" ? [{ type: "text", text: last.content }] : last.content;
+      typeof last.content === "string" ? [{ text: last.content, type: "text" }] : last.content;
     const text = content.flatMap((part) => (part.type === "text" ? [part.text] : [])).join("");
     if (last.role === "toolResult") return answer(`OK. ${text}`);
     if (text.includes("Start a subagent")) {
-      return call({ action: "spawn", name: "reader", message: "Summarize the plot of Moby Dick." });
+      return call({ action: "spawn", message: "Summarize the plot of Moby Dick.", name: "reader" });
     }
     if (text.includes("whale's name"))
-      return call({ action: "send", name: "reader", message: "What is the whale called?" });
+      return call({ action: "send", message: "What is the whale called?", name: "reader" });
     if (text.includes("every chapter")) {
       return call({
         action: "send",
-        name: "reader",
         message: "Now go through all chapters in detail.",
+        name: "reader",
       });
     }
     if (text.includes("Stop reader")) return call({ action: "stop", name: "reader" });
@@ -132,7 +129,7 @@ const follow = Effect.fn("follow")(function* ({ harness, root }: Session) {
 
 const say = Effect.fn("say")(function* ({ root }: Session, text: string) {
   yield* awaited(
-    (yield* awaited(root.submit({ type: "input", content: text }, context))).wait(context),
+    (yield* awaited(root.submit({ content: text, type: "input" }, context))).wait(context),
   );
 });
 
@@ -178,7 +175,7 @@ const converse = Effect.fn("converse")(function* (session: Session) {
 
   const before = yield* reporterCount(session);
   yield* awaited(
-    session.root.submit({ type: "input", content: "Ask reader for the whale's name." }, context),
+    session.root.submit({ content: "Ask reader for the whale's name.", type: "input" }, context),
   );
   yield* until(Effect.map(reporterCount(session), (count) => count > before));
 });

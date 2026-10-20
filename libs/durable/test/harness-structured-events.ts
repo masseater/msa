@@ -6,33 +6,38 @@ import { Effect } from "effect";
 import { dual } from "effect/Function";
 import { Type } from "typebox";
 
-import { awaited } from "./effect-support.ts";
-import { script, spawn } from "./harness-structured-support.ts";
-import { context } from "./session-support.ts";
-import { aborted, deferred } from "./task-support.ts";
+import effectSupport from "./effect-support.ts";
+import harnessStructuredSupport from "./harness-structured-support.ts";
+import sessionSupport from "./session-support.ts";
+import taskSupport from "./task-support.ts";
 
-export function blockingTool(name: string): {
+const { awaited } = effectSupport;
+const { script, spawn } = harnessStructuredSupport;
+const { context } = sessionSupport;
+const { aborted, deferred } = taskSupport;
+
+function blockingTool(name: string): {
   started: Promise<void>;
   registration: ToolRegistration;
 } {
   const started = deferred();
   return {
-    started: started.promise,
     registration: defineTool({
-      name,
       description: `The ${name} tool`,
-      parameters: Type.Object({}),
-      executionMode: "sequential",
       execute: (_args, api, callContext) => {
         api.output("partial");
         started.resolve();
         return Promise.resolve(aborted(callContext.abortSignal!));
       },
+      executionMode: "sequential",
+      name,
+      parameters: Type.Object({}),
     }),
+    started: started.promise,
   };
 }
 
-export function toolCalls(...ids: readonly [string, string][]) {
+function toolCalls(...ids: readonly [string, string][]) {
   return fauxAssistantMessage(
     ids.map(([name, id]) => fauxToolCall(name, {}, { id })),
     { stopReason: "toolUse" },
@@ -53,7 +58,7 @@ function spawnAndFinishImpl(name: string, child: string): { id?: TaskId } {
                 runPromise(
                   Effect.gen(function* () {
                     found.id = yield* awaited(spawn(tx, runtime.taskId, child));
-                    return { status: "running", checkpoint: { phase: "resume", round: 1 } };
+                    return { checkpoint: { phase: "resume", round: 1 }, status: "running" };
                   }),
                 ),
               ctx,
@@ -65,12 +70,12 @@ function spawnAndFinishImpl(name: string, child: string): { id?: TaskId } {
   return found;
 }
 
-export const spawnAndFinish: {
+const spawnAndFinish: {
   (child: string): (name: string) => ReturnType<typeof spawnAndFinishImpl>;
   (name: string, child: string): ReturnType<typeof spawnAndFinishImpl>;
 } = dual(2, spawnAndFinishImpl);
 
-export const listen = Effect.fn("listen")(function* (harness: Harness, conversation: Conversation) {
+const listen = Effect.fn("listen")(function* (harness: Harness, conversation: Conversation) {
   const stream = yield* awaited(watchEvents(harness, conversation.id, context));
   const events: AgentEvent[] = [];
   stream.start((batch) => {
@@ -78,10 +83,10 @@ export const listen = Effect.fn("listen")(function* (harness: Harness, conversat
 
     return Promise.resolve();
   });
-  return { stream, events };
+  return { events, stream };
 });
 
-export function labels(events: readonly AgentEvent[]): string[] {
+function labels(events: readonly AgentEvent[]): string[] {
   return events.flatMap((event) => {
     if (event.type === "tool_execution_end")
       return [`end:${event.toolCallId}:${event.entry !== undefined}`];
@@ -96,3 +101,13 @@ export function labels(events: readonly AgentEvent[]): string[] {
     return [];
   });
 }
+
+const harnessStructuredEvents = {
+  blockingTool,
+  labels,
+  listen,
+  spawnAndFinish,
+  toolCalls,
+};
+
+export default harnessStructuredEvents;

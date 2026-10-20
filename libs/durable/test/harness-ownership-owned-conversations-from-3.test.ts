@@ -1,20 +1,16 @@
-import { fauxAssistantMessage, fauxText, fauxToolCall, Type } from "@msa/ai";
+import { Type, fauxAssistantMessage, fauxText, fauxToolCall } from "@msa/ai";
 import { type ConversationId, defineTool } from "@msa/durable";
 import { Effect } from "effect";
 import { afterEach, describe, expect, it } from "vite-plus/test";
 
 import { openNodeSqliteStorage } from "../src/storage/sqlite/node.ts";
-import { reuseFauxChild } from "./harness-ownership-children.ts";
-import { directories, gates, runs, gated } from "./harness-ownership-support.ts";
-import {
-  chatSetup,
-  openChat,
-  awaited,
-  addTool,
-  makeTempFile,
-  removeDir,
-  context,
-} from "./support.ts";
+import harnessOwnershipChildren from "./harness-ownership-children.ts";
+import harnessOwnershipSupport from "./harness-ownership-support.ts";
+import support from "./support.ts";
+
+const { reuseFauxChild } = harnessOwnershipChildren;
+const { directories, gated, gates, runs } = harnessOwnershipSupport;
+const { addTool, awaited, chatSetup, context, makeTempFile, openChat, removeDir } = support;
 
 afterEach(() =>
   Effect.runPromise(
@@ -37,27 +33,27 @@ const replaySafeSubagent = Effect.fn("replaySafeSubagent")(function* () {
   addTool(
     setup.registry,
     defineTool({
-      name: "subagent",
       description: "Delegates",
-      parameters: Type.Object({}),
-      replay: "safe",
       execute: (_args, api, callContext) =>
         runPromise(
           Effect.gen(function* () {
             const child = yield* reuseFauxChild(api, callContext);
             children.push(child);
             const request = {
-              type: "input",
               content: "child task",
               requestId: `subagent:${api.taskId}`,
+              type: "input",
             } as const;
             const submission = yield* awaited(
               (yield* awaited(api.conversation(child, callContext)))!.submit(request, callContext),
             );
             const settled = yield* awaited(submission.wait(callContext));
-            return { output: [{ type: "text", text: settled.status }] };
+            return { output: [{ text: settled.status, type: "text" }] };
           }),
         ),
+      name: "subagent",
+      parameters: Type.Object({}),
+      replay: "safe",
     }),
   );
   const childRun = gated(fauxAssistantMessage([fauxText("never")]));
@@ -65,13 +61,13 @@ const replaySafeSubagent = Effect.fn("replaySafeSubagent")(function* () {
     fauxAssistantMessage([fauxToolCall("subagent", {}, { id: "c1" })], { stopReason: "toolUse" }),
     childRun.step,
   ]);
-  return { path, children, setup, childRun };
+  return { childRun, children, path, setup };
 });
 
 const rerunsReplaySafe = Effect.gen(function* () {
   const { path, children, setup, childRun } = yield* replaySafeSubagent();
   let opened = yield* openChat(yield* awaited(openNodeSqliteStorage(path)), setup);
-  const input = (yield* awaited(opened.root.submit({ type: "input", content: "go" }, context))).id;
+  const input = (yield* awaited(opened.root.submit({ content: "go", type: "input" }, context))).id;
   yield* awaited(childRun.reached);
   yield* awaited(opened.harness.close(context));
 

@@ -1,34 +1,37 @@
-import { fauxAssistantMessage, fauxText, fauxToolCall, Type } from "@msa/ai";
+import { Type, fauxAssistantMessage, fauxText, fauxToolCall } from "@msa/ai";
 import type { Draft } from "@msa/chord";
 import {
   AgentDoc,
   type AgentEvent,
   type AgentEventStream,
-  defineTool,
   LiveDoc,
   type LiveState,
   type SnapshotEvent,
   UsageDoc,
+  defineTool,
 } from "@msa/durable";
 import { watchEvents } from "@msa/durable/harness";
 import { MemoryStorage } from "@msa/durable/storage/memory";
 import { Effect } from "effect";
 import { describe, expect, it } from "vite-plus/test";
 
-import { type LiveMessage } from "./harness-events-agent-2-cases.ts";
-import { listen, drained, applyChanges } from "./harness-events-support.ts";
-import {
-  chatSetup,
-  openChat,
-  waitFor,
+import type harnessEventsAgent2CasesTypes from "./harness-events-agent-2-cases.ts";
+import harnessEventsSupport from "./harness-events-support.ts";
+import support from "./support.ts";
+
+const { applyChanges, drained, listen } = harnessEventsSupport;
+const {
   abortController,
-  awaited,
-  fromJsonText,
-  toJsonText,
   addTool,
+  awaited,
+  chatSetup,
   context,
   deferred,
-} from "./support.ts";
+  fromJsonText,
+  openChat,
+  toJsonText,
+  waitFor,
+} = support;
 
 const liveChangeSequenceStep1 = Effect.fn("liveChangeSequenceStep1")(function* () {
   const runPromise = Effect.runPromiseWith(yield* Effect.context<never>());
@@ -47,7 +50,7 @@ const liveChangeSequenceStep1 = Effect.fn("liveChangeSequenceStep1")(function* (
     );
   const partial = (yield* fromJsonText(
     yield* toJsonText(fauxAssistantMessage([fauxText("partial")])),
-  )) as LiveMessage;
+  )) as harnessEventsAgent2CasesTypes.LiveMessage;
   yield* awaited(
     change((live) => {
       live.generation = { attempt: 1, message: partial };
@@ -68,7 +71,7 @@ const liveChangeSequenceStep1 = Effect.fn("liveChangeSequenceStep1")(function* (
       live.generation!.deferred!.pollAt = 2;
     }),
   );
-  return { harness, root, stream, batches, change, partial };
+  return { batches, change, harness, partial, root, stream };
 });
 
 const liveChangeSequence = Effect.fn("liveChangeSequence")(function* () {
@@ -76,7 +79,7 @@ const liveChangeSequence = Effect.fn("liveChangeSequence")(function* () {
   yield* awaited(
     change((live) => {
       live.tools = [
-        { callId: "c1", name: "t", status: "running", details: { n: 1 }, diagnostics: [] },
+        { callId: "c1", details: { n: 1 }, diagnostics: [], name: "t", status: "running" },
       ];
     }),
   );
@@ -91,7 +94,7 @@ const liveChangeSequence = Effect.fn("liveChangeSequence")(function* () {
       live.tools![0]!.status = "done";
     }),
   );
-  return { harness, root, stream, batches, partial };
+  return { batches, harness, partial, root, stream };
 });
 
 const reportsSteerWithout = Effect.gen(function* () {
@@ -102,9 +105,7 @@ const reportsSteerWithout = Effect.gen(function* () {
   addTool(
     setup.registry,
     defineTool({
-      name: "hold",
       description: "Waits",
-      parameters: Type.Object({}),
       execute: () =>
         runPromise(
           Effect.gen(function* () {
@@ -112,6 +113,8 @@ const reportsSteerWithout = Effect.gen(function* () {
             return {};
           }),
         ),
+      name: "hold",
+      parameters: Type.Object({}),
     }),
   );
   setup.faux.setResponses([
@@ -123,9 +126,9 @@ const reportsSteerWithout = Effect.gen(function* () {
     harness.createConversation({ ownership: { kind: "ownerless" } }, context),
   );
   const { stream, events, batches } = yield* listen(harness, root);
-  const input = yield* awaited(root.submit({ type: "input", content: "a" }, context));
+  const input = yield* awaited(root.submit({ content: "a", type: "input" }, context));
   yield* waitFor(() => events().some((event) => event.type === "tool_execution_start"));
-  yield* awaited(root.submit({ type: "input", content: "s", whenBusy: "steer" }, context));
+  yield* awaited(root.submit({ content: "s", type: "input", whenBusy: "steer" }, context));
   const before = batches.length;
   yield* awaited(other.commit((tx) => tx.appendEntry(other.id, { kind: "note" }), context));
   yield* drained();
@@ -185,7 +188,9 @@ const appliesDeltasOverflowStep1 = Effect.gen(function* () {
           Effect.gen(function* () {
             (yield* awaited(tx.doc(LiveDoc, root.id))).generation = {
               attempt: 1,
-              message: (yield* fromJsonText(yield* toJsonText(partial))) as LiveMessage,
+              message: (yield* fromJsonText(
+                yield* toJsonText(partial),
+              )) as harnessEventsAgent2CasesTypes.LiveMessage,
             };
           }),
         ),
@@ -204,7 +209,7 @@ const appliesDeltasOverflowStep1 = Effect.gen(function* () {
   yield* drained();
   const snapshot = batches[0]![0] as SnapshotEvent;
   expect(snapshot.type).toBe("snapshot");
-  return { runPromise, harness, root, stream, batches, snapshot };
+  return { batches, harness, root, runPromise, snapshot, stream };
 });
 
 const appliesDeltasOverflow = Effect.gen(function* () {
@@ -228,9 +233,9 @@ const appliesDeltasOverflow = Effect.gen(function* () {
   yield* drained();
   const update = batches.at(-1)![0]!;
   if (update.type !== "message_update") throw new Error(`Unexpected ${update.type}`);
-  expect(update.changes).toEqual([{ type: "text_delta", contentIndex: 0, delta: "lo" }]);
+  expect(update.changes).toEqual([{ contentIndex: 0, delta: "lo", type: "text_delta" }]);
   const rebuilt = applyChanges(snapshot.generation!.message!, update.changes);
-  expect(rebuilt.content).toEqual([{ type: "text", text: "hello" }]);
+  expect(rebuilt.content).toEqual([{ text: "hello", type: "text" }]);
   yield* awaited(stream.stop());
   yield* awaited(harness.close(context));
 });
@@ -246,23 +251,23 @@ const reportsUsageOnly = Effect.gen(function* () {
   yield* awaited(root.commit((tx) => tx.retireDoc(AgentDoc, root.id), context));
   yield* drained();
   expect(batches.map((batch) => batch.filter((event) => event.type !== "task_failed"))).toEqual([
-    [{ type: "message_start", message: partial }],
-    [{ type: "message_update", usage: { ...partial.usage, input: 42 }, changes: [] }],
-    [{ type: "deferred_poll", pollAt: 1 }],
-    [{ type: "deferred_poll", pollAt: 2 }],
-    [{ type: "tool_execution_start", toolCallId: "c1", toolName: "t", args: {} }],
+    [{ message: partial, type: "message_start" }],
+    [{ changes: [], type: "message_update", usage: { ...partial.usage, input: 42 } }],
+    [{ pollAt: 1, type: "deferred_poll" }],
+    [{ pollAt: 2, type: "deferred_poll" }],
+    [{ args: {}, toolCallId: "c1", toolName: "t", type: "tool_execution_start" }],
     [
       {
-        type: "tool_execution_update",
-        toolCallId: "c1",
-        toolName: "t",
         details: null,
         diagnostics: [],
+        toolCallId: "c1",
+        toolName: "t",
+        type: "tool_execution_update",
       },
     ],
-    [{ type: "tool_execution_end", toolCallId: "c1", toolName: "t" }],
+    [{ toolCallId: "c1", toolName: "t", type: "tool_execution_end" }],
     [{ type: "usage_changed", usage: { models: {}, tools: {} } }],
-    [{ type: "agent_changed", agent: {} }],
+    [{ agent: {}, type: "agent_changed" }],
   ]);
   yield* awaited(stream.stop());
   yield* awaited(harness.close(context));

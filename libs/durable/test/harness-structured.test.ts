@@ -2,31 +2,37 @@ import { type ConversationId, type TaskId, type TaskOptions } from "@msa/durable
 import { Effect } from "effect";
 import { afterEach, describe, expect, it } from "vite-plus/test";
 
-import { awaited } from "./effect-support.ts";
-import {
-  state,
-  outcomeOf,
-  open,
+import effectSupport from "./effect-support.ts";
+import harnessStructuredSupport from "./harness-structured-support.ts";
+import type harnessStructuredSupportTypes from "./harness-structured-support.types.ts";
+import platformSupport from "./platform-support.ts";
+import sessionSupport from "./session-support.ts";
+import taskSupport from "./task-support.ts";
+
+const { awaited } = effectSupport;
+const {
+  Node,
+  OWN_CONVERSATION,
+  behaviors,
+  directories,
+  end,
   gate,
   gates,
-  until,
-  start,
-  Node,
-  end,
-  type NodeInput,
-  behaviors,
   log,
-  OWN_CONVERSATION,
+  open,
   openNodes,
-  waitOn,
-  spawn,
+  outcomeOf,
   owned,
   script,
-  directories,
-} from "./harness-structured-support.ts";
-import { removeDir } from "./platform-support.ts";
-import { context } from "./session-support.ts";
-import { settled } from "./task-support.ts";
+  spawn,
+  start,
+  state,
+  until,
+  waitOn,
+} = harnessStructuredSupport;
+const { removeDir } = platformSupport;
+const { context } = sessionSupport;
+const { settled } = taskSupport;
 
 afterEach(() =>
   Effect.runPromise(
@@ -61,7 +67,7 @@ const createsChildOwner = Effect.gen(function* () {
   const parent = yield* awaited(start(root, "parent"));
   yield* until(() => child !== undefined);
   const record = (yield* awaited(harness.getTask(child!, context)))!;
-  expect(record).toMatchObject({ owner: parent, conversationId: root.id, background: false });
+  expect(record).toMatchObject({ background: false, conversationId: root.id, owner: parent });
   expect((yield* awaited(harness.getTask(parent, context)))!.owner).toBeUndefined();
   open("child");
   expect(yield* awaited(outcomeOf(harness, parent))).toBe("completed");
@@ -110,15 +116,15 @@ const rejectsNewOwnedStep1 = Effect.gen(function* () {
     run: (runtime, ctx) =>
       runPromise(
         Effect.gen(function* () {
-          const runPromise = Effect.runPromiseWith(yield* Effect.context<never>());
+          const runNested = Effect.runPromiseWith(yield* Effect.context<never>());
 
           yield* awaited(
             runtime.commit(
               (tx) =>
-                runPromise(
+                runNested(
                   Effect.gen(function* () {
                     yield* awaited(spawn(tx, runtime.taskId, "child"));
-                    return { status: "running", checkpoint: { phase: "resume", round: 1 } };
+                    return { checkpoint: { phase: "resume", round: 1 }, status: "running" };
                   }),
                 ),
               ctx,
@@ -144,7 +150,7 @@ const rejectsNewOwnedStep1 = Effect.gen(function* () {
   open("child");
   yield* awaited(harness.waitForTask(parent, context));
   yield* awaited(expect(createChild()).rejects.toThrow("is terminal"));
-  return { runPromise, harness, root, createConversation };
+  return { createConversation, harness, root, runPromise };
 });
 
 const rejectsNewOwned = Effect.gen(function* () {
@@ -157,7 +163,7 @@ const rejectsNewOwned = Effect.gen(function* () {
         Effect.gen(function* () {
           yield* awaited(gate("abort.slow").promise);
           yield* awaited(
-            runtime.commit(() => ({ status: "terminal", outcome: { status: "aborted" } }), ctx),
+            runtime.commit(() => ({ outcome: { status: "aborted" }, status: "terminal" }), ctx),
           );
         }),
       ),
@@ -199,35 +205,22 @@ const cannotCreateChildStep1 = Effect.gen(function* () {
   });
   const eager = yield* awaited(start(root, "eager"));
   expect((yield* awaited(harness.waitForTask(eager, context))).state.outcome).toMatchObject({
-    status: "faulted",
     error: { message: expect.stringContaining("is completing") },
+    status: "faulted",
   });
   const nodes = yield* awaited(
     harness.commit((tx) => tx.scanTasks({ kind: "test.node" }, 20), context),
   );
-  expect(nodes.items.map((task) => (task.input as NodeInput).name)).toEqual(["eager"]);
-  return { runPromise, harness, root };
+  expect(
+    nodes.items.map((task) => (task.input as harnessStructuredSupportTypes.NodeInput).name),
+  ).toEqual(["eager"]);
+  return { harness, root, runPromise };
 });
 
 const cannotCreateChild = Effect.gen(function* () {
   const { runPromise, harness, root } = yield* cannotCreateChildStep1;
   let child: ConversationId | undefined;
   script("host", {
-    run: (runtime, ctx) =>
-      runtime.commit(
-        (tx) =>
-          runPromise(
-            Effect.gen(function* () {
-              child = (yield* awaited(
-                tx.createConversation({
-                  ownership: { kind: "task", taskId: runtime.taskId },
-                }),
-              )).id;
-              return { status: "running", checkpoint: { phase: "resume", round: 1 } };
-            }),
-          ),
-        ctx,
-      ),
     resume: (runtime, ctx) =>
       runtime.commit(
         (tx) =>
@@ -241,6 +234,21 @@ const cannotCreateChild = Effect.gen(function* () {
                 ),
               );
               return end("completed", "host");
+            }),
+          ),
+        ctx,
+      ),
+    run: (runtime, ctx) =>
+      runtime.commit(
+        (tx) =>
+          runPromise(
+            Effect.gen(function* () {
+              child = (yield* awaited(
+                tx.createConversation({
+                  ownership: { kind: "task", taskId: runtime.taskId },
+                }),
+              )).id;
+              return { checkpoint: { phase: "resume", round: 1 }, status: "running" };
             }),
           ),
         ctx,

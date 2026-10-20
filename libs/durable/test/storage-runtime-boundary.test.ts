@@ -3,7 +3,9 @@ import { fileURLToPath } from "node:url";
 import { Effect } from "effect";
 import { describe, expect, it } from "vite-plus/test";
 
-import { dirnameOf, readText, resolvePath } from "./platform-support.ts";
+import platformSupport from "./platform-support.ts";
+
+const { dirnameOf, readText, resolvePath } = platformSupport;
 
 const sourceRoot = fileURLToPath(new URL("../src", import.meta.url));
 

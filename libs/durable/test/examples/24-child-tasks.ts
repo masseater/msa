@@ -4,18 +4,21 @@ import { BACKGROUND_CONTEXT } from "@msa/chord/context";
 import { Console, Effect } from "effect";
 
 import { currentTimeMillis } from "../../src/clock.ts";
-import { createRegistry, Harness } from "../../src/harness/index.ts";
+import { Harness, createRegistry } from "../../src/harness/index.ts";
 import {
   type Conversation,
-  defineExtension,
-  defineTask,
   type TaskGraph,
   type TaskGraphNode,
   type TaskId,
+  defineExtension,
+  defineTask,
 } from "../../src/index.ts";
 import { openNodeSqliteStorage } from "../../src/storage/sqlite/node.ts";
-import { awaited } from "../effect-support.ts";
-import { joinPath, makeTempDir, removeDir } from "../platform-support.ts";
+import effectSupport from "../effect-support.ts";
+import platformSupport from "../platform-support.ts";
+
+const { awaited } = effectSupport;
+const { joinPath, makeTempDir, removeDir } = platformSupport;
 
 const context = BACKGROUND_CONTEXT;
 
@@ -24,9 +27,21 @@ const charged = new Set<string>();
 type PaymentInput = { card: string };
 type PaymentResult = { card: string };
 const Payment = defineTask<PaymentInput, { phase: "charge"; at: number }, PaymentResult>({
+  abort: (task, runtime, taskContext) =>
+    Effect.runPromise(
+      Effect.gen(function* () {
+        const refunded = charged.delete(task.input.card);
+        yield* Console.log(`  payment ${task.input.card} aborted${refunded ? ", refunded" : ""}`);
+        yield* awaited(
+          runtime.commit(
+            () => ({ outcome: { status: "aborted" }, status: "terminal" }),
+            taskContext,
+          ),
+        );
+      }),
+    ),
+  initial: () => ({ at: currentTimeMillis() + 100, phase: "charge" }),
   name: "example.payment",
-  version: 1,
-  initial: () => ({ phase: "charge", at: currentTimeMillis() + 100 }),
   phases: {
     charge: (task, runtime, taskContext) =>
       Effect.runPromise(
@@ -36,7 +51,7 @@ const Payment = defineTask<PaymentInput, { phase: "charge"; at: number }, Paymen
             const error = { message: `${card} declined` };
             yield* awaited(
               runtime.commit(
-                () => ({ status: "terminal", outcome: { status: "failed", error } }),
+                () => ({ outcome: { error, status: "failed" }, status: "terminal" }),
                 taskContext,
               ),
             );
@@ -46,34 +61,55 @@ const Payment = defineTask<PaymentInput, { phase: "charge"; at: number }, Paymen
           yield* awaited(runtime.sleep(task.state.checkpoint.at, taskContext));
           yield* awaited(
             runtime.commit(
-              () => ({ status: "terminal", outcome: { status: "completed", result: { card } } }),
+              () => ({ outcome: { result: { card }, status: "completed" }, status: "terminal" }),
               taskContext,
             ),
           );
         }),
       ),
   },
-  abort: (task, runtime, taskContext) =>
+  version: 1,
+});
+
+type CheckoutState = { phase: "pay" } | { phase: "decide"; payments: TaskId<PaymentResult>[] };
+const Checkout = defineTask<{ cards: string[] }, CheckoutState, string>({
+  abort: (_task, runtime, taskContext) =>
     Effect.runPromise(
       Effect.gen(function* () {
-        const refunded = charged.delete(task.input.card);
-        yield* Console.log(`  payment ${task.input.card} aborted${refunded ? ", refunded" : ""}`);
+        yield* Console.log("  checkout aborted");
         yield* awaited(
           runtime.commit(
-            () => ({ status: "terminal", outcome: { status: "aborted" } }),
+            () => ({ outcome: { status: "aborted" }, status: "terminal" }),
             taskContext,
           ),
         );
       }),
     ),
-});
-
-type CheckoutState = { phase: "pay" } | { phase: "decide"; payments: TaskId<PaymentResult>[] };
-const Checkout = defineTask<{ cards: string[] }, CheckoutState, string>({
-  name: "example.checkout",
-  version: 1,
   initial: () => ({ phase: "pay" }),
+  name: "example.checkout",
   phases: {
+    decide: (task, runtime, taskContext) =>
+      Effect.runPromise(
+        Effect.gen(function* () {
+          const outcomes = yield* awaited(
+            runtime.outcomes(task.state.checkpoint.payments, taskContext),
+          );
+          yield* Console.log(`  payments: ${outcomes.map((outcome) => outcome.status).join(", ")}`);
+          const paid = outcomes.every((outcome) => outcome.status === "completed");
+          yield* awaited(
+            runtime.commit(
+              () =>
+                paid
+                  ? { outcome: { result: "order placed", status: "completed" }, status: "terminal" }
+                  : {
+                      outcome: { error: { message: "payment failed" }, status: "failed" },
+                      status: "terminal",
+                    },
+              taskContext,
+            ),
+          );
+        }),
+      ),
     pay: (task, runtime, taskContext) =>
       Effect.runPromise(
         Effect.gen(function* () {
@@ -97,10 +133,10 @@ const Checkout = defineTask<{ cards: string[] }, CheckoutState, string>({
                       );
                     }
                     return {
-                      status: "waiting",
-                      checkpoint: { phase: "decide", payments },
+                      checkpoint: { payments, phase: "decide" },
                       on: payments,
                       policy: "failFast",
+                      status: "waiting",
                     };
                   }),
                 ),
@@ -109,41 +145,8 @@ const Checkout = defineTask<{ cards: string[] }, CheckoutState, string>({
           );
         }),
       ),
-    decide: (task, runtime, taskContext) =>
-      Effect.runPromise(
-        Effect.gen(function* () {
-          const outcomes = yield* awaited(
-            runtime.outcomes(task.state.checkpoint.payments, taskContext),
-          );
-          yield* Console.log(`  payments: ${outcomes.map((outcome) => outcome.status).join(", ")}`);
-          const paid = outcomes.every((outcome) => outcome.status === "completed");
-          yield* awaited(
-            runtime.commit(
-              () =>
-                paid
-                  ? { status: "terminal", outcome: { status: "completed", result: "order placed" } }
-                  : {
-                      status: "terminal",
-                      outcome: { status: "failed", error: { message: "payment failed" } },
-                    },
-              taskContext,
-            ),
-          );
-        }),
-      ),
   },
-  abort: (_task, runtime, taskContext) =>
-    Effect.runPromise(
-      Effect.gen(function* () {
-        yield* Console.log("  checkout aborted");
-        yield* awaited(
-          runtime.commit(
-            () => ({ status: "terminal", outcome: { status: "aborted" } }),
-            taskContext,
-          ),
-        );
-      }),
-    ),
+  version: 1,
 });
 
 const registry = createRegistry();
@@ -180,7 +183,7 @@ const mainStep1 = Effect.gen(function* () {
       (tx) => tx.createTask(Checkout, { cards }, { ownership: { kind: "conversation" } }),
       context,
     );
-  return { directory, open, printGraph, checkout };
+  return { checkout, directory, open, printGraph };
 });
 
 const main = Effect.gen(function* () {

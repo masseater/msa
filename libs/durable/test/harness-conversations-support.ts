@@ -1,22 +1,26 @@
-import { type Conversation, defineDoc, type EntryRecord, type ScanOrder } from "@msa/durable";
+import { type Conversation, type EntryRecord, type ScanOrder, defineDoc } from "@msa/durable";
 import { Effect } from "effect";
 import { dual } from "effect/Function";
 
-import { awaited } from "./effect-support.ts";
-import { user } from "./harness-support.ts";
-import { context } from "./session-support.ts";
+import effectSupport from "./effect-support.ts";
+import harnessSupport from "./harness-support.ts";
+import sessionSupport from "./session-support.ts";
 
-export const directories = new Set<string>();
+const { awaited } = effectSupport;
+const { user } = harnessSupport;
+const { context } = sessionSupport;
 
-export const UUID_V7 = /^[0-9a-f]{8}-[0-9a-f]{4}-7[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/u;
+const directories = new Set<string>();
 
-export const NoteDoc = defineDoc<{ text: string }>({
-  kind: "test.note",
-  version: 1,
-  scope: "conversation",
-  history: "rewindable",
+const UUID_V7 = /^[0-9a-f]{8}-[0-9a-f]{4}-7[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/u;
+
+const NoteDoc = defineDoc<{ text: string }>({
   fork: "asOf",
+  history: "rewindable",
   initial: () => ({ text: "" }),
+  kind: "test.note",
+  scope: "conversation",
+  version: 1,
 });
 
 function appendImpl(conversation: Conversation, text: string): Promise<EntryRecord> {
@@ -28,12 +32,12 @@ function appendImpl(conversation: Conversation, text: string): Promise<EntryReco
   );
 }
 
-export const append: {
+const append: {
   (text: string): (conversation: Conversation) => ReturnType<typeof appendImpl>;
   (conversation: Conversation, text: string): ReturnType<typeof appendImpl>;
 } = dual(2, appendImpl);
 
-export const allEntries = Effect.fn("allEntries")(function* (
+const allEntries = Effect.fn("allEntries")(function* (
   conversation: Conversation,
   order?: ScanOrder,
   start?: Parameters<Conversation["entries"]>[2],
@@ -52,3 +56,13 @@ export const allEntries = Effect.fn("allEntries")(function* (
   } while (cursor !== undefined);
   return texts;
 });
+
+const harnessConversationsSupport = {
+  NoteDoc,
+  UUID_V7,
+  allEntries,
+  append,
+  directories,
+};
+
+export default harnessConversationsSupport;

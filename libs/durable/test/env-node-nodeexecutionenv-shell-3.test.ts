@@ -4,9 +4,13 @@ import { afterEach, describe, expect, it } from "vite-plus/test";
 
 import { getOrThrow } from "../src/env/index.ts";
 import { NodeExecutionEnv } from "../src/env/node.ts";
-import { toJsonText, awaited } from "./effect-support.ts";
-import { cleanUpEnvTests, tempDirs, createTempDir } from "./env-node-support.ts";
-import { joinPath } from "./platform-support.ts";
+import effectSupport from "./effect-support.ts";
+import envNodeSupport from "./env-node-support.ts";
+import platformSupport from "./platform-support.ts";
+
+const { awaited, toJsonText } = effectSupport;
+const { cleanUpEnvTests, createTempDir, tempDirs } = envNodeSupport;
+const { joinPath } = platformSupport;
 
 afterEach(() => Effect.runPromise(cleanUpEnvTests), 15_000);
 

@@ -1,42 +1,44 @@
-import { fauxAssistantMessage, fauxToolCall, Type } from "@msa/ai";
-import { type CompactionResult, defineTool, type TaskId } from "@msa/durable";
+import { Type, fauxAssistantMessage, fauxToolCall } from "@msa/ai";
+import { type CompactionResult, type TaskId, defineTool } from "@msa/durable";
 import { CompactionTask } from "@msa/durable/harness";
 import { Effect } from "effect";
 import { afterEach, describe, expect, it } from "vite-plus/test";
 
-import {
-  compactionTasks,
-  type Chat,
-  text,
-  summary,
-  answer,
-  gated,
+import harnessCompactionSupport from "./harness-compaction-support.ts";
+import type harnessCompactionSupportTypes from "./harness-compaction-support.types.ts";
+import support from "./support.ts";
+
+const {
+  BACKGROUND,
   BLOCKING,
-  history,
-  turn,
-  directories,
+  ENABLED,
   MANUAL,
   OVERFLOW,
-  BACKGROUND,
+  answer,
+  compactionTasks,
+  directories,
   failure,
   firstUserText,
+  gated,
+  history,
+  kinds,
   open,
   result,
-  kinds,
-  ENABLED,
-} from "./harness-compaction-support.ts";
-import {
-  chatSetup,
-  toolsNamed,
-  awaited,
+  summary,
+  text,
+  turn,
+} = harnessCompactionSupport;
+const {
   addHooks,
   addSection,
   addTool,
-  removeDir,
+  awaited,
+  chatSetup,
   context,
-  type Deferred,
   deferred,
-} from "./support.ts";
+  removeDir,
+  toolsNamed,
+} = support;
 
 afterEach(() =>
   Effect.runPromise(
@@ -47,19 +49,19 @@ afterEach(() =>
   ),
 );
 
-function slowTool(reached: Deferred<void>, gate: Deferred<void>) {
+function slowTool(reached: PromiseWithResolvers<void>, gate: PromiseWithResolvers<void>) {
   return defineTool({
-    name: "slow",
     description: "slow",
-    parameters: Type.Object({}),
     execute: () =>
       Effect.runPromise(
         Effect.gen(function* () {
           reached.resolve();
           yield* awaited(gate.promise);
-          return { output: [{ type: "text", text: text("result", 200) }] };
+          return { output: [{ text: text("result", 200), type: "text" }] };
         }),
       ),
+    name: "slow",
+    parameters: Type.Object({}),
   });
 }
 
@@ -70,12 +72,12 @@ const failsSecondOverflow = Effect.gen(function* () {
   chat.faux.summaries.push(summary());
   chat.faux.agent.push(failure(OVERFLOW), failure(OVERFLOW));
   const input = yield* awaited(
-    chat.root.submit({ type: "input", content: text("u4", 100) }, context),
+    chat.root.submit({ content: text("u4", 100), type: "input" }, context),
   );
   expect(yield* awaited(input.wait(context))).toMatchObject({
-    status: "unanswered",
-    reason: "model_error",
     detail: OVERFLOW,
+    reason: "model_error",
+    status: "unanswered",
   });
   expect((yield* kinds(chat.root)).filter((kind) => kind === "msa.compaction")).toHaveLength(1);
   expect((yield* kinds(chat.root)).at(-1)).toBe("msa.assistant");
@@ -87,11 +89,11 @@ const failsWithoutCompacting = Effect.gen(function* () {
   yield* history(chat);
   chat.faux.agent.push(failure(`overloaded: ${OVERFLOW}`));
   const input = yield* awaited(
-    chat.root.submit({ type: "input", content: text("u4", 100) }, context),
+    chat.root.submit({ content: text("u4", 100), type: "input" }, context),
   );
   expect(yield* awaited(input.wait(context))).toMatchObject({
-    status: "unanswered",
     reason: "model_error",
+    status: "unanswered",
   });
   expect(chat.faux.agentRequests).toHaveLength(4);
   expect(chat.faux.summaryRequests).toHaveLength(0);
@@ -105,11 +107,11 @@ const failsBlockingThreshold = Effect.gen(function* () {
   chat.faux.summaries.push(summary());
   chat.faux.agent.push(failure(OVERFLOW));
   const input = yield* awaited(
-    chat.root.submit({ type: "input", content: text("u4", 200) }, context),
+    chat.root.submit({ content: text("u4", 200), type: "input" }, context),
   );
   expect(yield* awaited(input.wait(context))).toMatchObject({
-    status: "unanswered",
     reason: "model_error",
+    status: "unanswered",
   });
   expect(chat.faux.summaryRequests).toHaveLength(1);
   yield* awaited(chat.harness.close(context));
@@ -129,14 +131,19 @@ describe("overflow compaction", () => {
   for (const [name, prepare, requests] of [
     [
       "declines",
-      (chat: Chat) =>
+      (chat: harnessCompactionSupportTypes.Chat) =>
         addHooks(chat.setup.registry, CompactionTask, { beforeCompact: () => ({ decline: true }) }),
       0,
     ],
-    ["fails", (chat: Chat) => chat.faux.summaries.push(failure("bad request")), 1],
+    [
+      "fails",
+      (chat: harnessCompactionSupportTypes.Chat) =>
+        chat.faux.summaries.push(failure("bad request")),
+      1,
+    ],
     [
       "cannot cut",
-      (chat: Chat) => {
+      (chat: harnessCompactionSupportTypes.Chat) => {
         chat.setup.settings.compaction = { ...ENABLED, keepRecentTokens: 100_000 };
       },
       0,
@@ -151,12 +158,12 @@ describe("overflow compaction", () => {
           yield* awaited(prepare(chat));
           chat.faux.agent.push(failure(OVERFLOW));
           const input = yield* awaited(
-            chat.root.submit({ type: "input", content: text("u4", 100) }, context),
+            chat.root.submit({ content: text("u4", 100), type: "input" }, context),
           );
           expect(yield* awaited(input.wait(context))).toMatchObject({
-            status: "unanswered",
-            reason: "model_error",
             detail: OVERFLOW,
+            reason: "model_error",
+            status: "unanswered",
           });
           expect(chat.faux.summaryRequests).toHaveLength(requests);
           yield* awaited(chat.harness.close(context));
@@ -171,7 +178,7 @@ describe("compaction estimates and interactions", () => {
       Effect.runPromise(
         Effect.gen(function* () {
           const setup = chatSetup({
-            models: [{ id: "faux-1", contextWindow: 2000, maxTokens: 900 }],
+            models: [{ contextWindow: 2000, id: "faux-1", maxTokens: 900 }],
           });
           if (clock === "fixed") setup.now = () => 1_000;
           const chat = yield* open({ contextWindow: 2000 }, setup);
@@ -191,7 +198,7 @@ describe("compaction estimates and interactions", () => {
           const summaryReached = deferred();
           chat.faux.summaries.push(gated(summaryGate, summary(), summaryReached));
           const input = yield* awaited(
-            chat.root.submit({ type: "input", content: text("u4", 50) }, context),
+            chat.root.submit({ content: text("u4", 50), type: "input" }, context),
           );
           yield* awaited(Promise.all([toolReached.promise, summaryReached.promise]));
           const [background] = yield* compactionTasks(chat);
@@ -237,7 +244,7 @@ const rebaselinesSystemPrompt = Effect.gen(function* () {
     .messages.filter((message) => message.role === "system");
   expect(systems).toHaveLength(1);
   expect(systems[0]).toMatchObject({
-    sections: { preamble: "You are helpful.", mood: "terse" },
+    sections: { mood: "terse", preamble: "You are helpful." },
   });
   yield* awaited(chat.harness.close(context));
 });

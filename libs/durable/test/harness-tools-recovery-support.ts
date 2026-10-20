@@ -1,40 +1,33 @@
 import {
   type AssistantMessage,
+  type ToolResultMessage,
+  Type,
   fauxAssistantMessage,
   fauxText,
   fauxToolCall,
-  type ToolResultMessage,
-  Type,
 } from "@msa/ai";
 import {
-  defineTool,
   type EntryRecord,
   type Harness,
   LiveDoc,
   type TaskId,
   type ToolRegistration,
   ToolResultEntry,
+  defineTool,
 } from "@msa/durable";
 import { Effect } from "effect";
 import { dual } from "effect/Function";
 
 import type { ExecutionEnv } from "../src/env/index.ts";
 import { openNodeSqliteStorage } from "../src/storage/sqlite/node.ts";
-import {
-  type ChatSetup,
-  openChat,
-  waitFor,
-  awaited,
-  makeTempFile,
-  removeDir,
-  context,
-  aborted,
-  deferred,
-} from "./support.ts";
+import support from "./support.ts";
+import type supportTypes from "./support.types.ts";
 
-export const directories = new Set<string>();
+const { aborted, awaited, context, deferred, makeTempFile, openChat, removeDir, waitFor } = support;
 
-export function removeDirectories(): Promise<void> {
+const directories = new Set<string>();
+
+function removeDirectories(): Promise<void> {
   return Effect.runPromise(
     Effect.gen(function* () {
       for (const directory of directories) yield* removeDir(directory);
@@ -43,15 +36,15 @@ export function removeDirectories(): Promise<void> {
   );
 }
 
-export const sqlitePath = Effect.fn("sqlitePath")(function* () {
+const sqlitePath = Effect.fn("sqlitePath")(function* () {
   const { directory, path } = yield* makeTempFile("msa-durable-tools-", "session.sqlite");
   directories.add(directory);
   return path;
 });
 
-export const open = Effect.fn("open")(function* (
+const open = Effect.fn("open")(function* (
   path: string,
-  setup: ChatSetup,
+  setup: supportTypes.ChatSetup,
   env?: ExecutionEnv,
 ) {
   const opened = yield* openChat(
@@ -68,10 +61,10 @@ function toolImpl(
   execute: ToolRegistration["execute"],
   extra: Partial<ToolRegistration> = {},
 ): ToolRegistration {
-  return defineTool({ name, description: name, parameters: Type.Object({}), execute, ...extra });
+  return defineTool({ description: name, execute, name, parameters: Type.Object({}), ...extra });
 }
 
-export const tool: {
+const tool: {
   (
     execute: ToolRegistration["execute"],
     extra?: Partial<ToolRegistration>,
@@ -83,23 +76,23 @@ export const tool: {
   ): ReturnType<typeof toolImpl>;
 } = dual((args) => typeof args[0] === "string", toolImpl);
 
-export function call(name: string): AssistantMessage {
+function call(name: string): AssistantMessage {
   return fauxAssistantMessage([fauxToolCall(name, {}, { id: "c1" })], { stopReason: "toolUse" });
 }
 
-export const DONE = fauxAssistantMessage([fauxText("done")]);
+const DONE = fauxAssistantMessage([fauxText("done")]);
 
-export function results(entries: readonly EntryRecord[]): ToolResultMessage[] {
+function results(entries: readonly EntryRecord[]): ToolResultMessage[] {
   return entries
     .filter((entry) => ToolResultEntry.is(entry))
     .map((entry) => entry.model![0] as ToolResultMessage);
 }
 
-export function text(message: ToolResultMessage | undefined): string {
+function text(message: ToolResultMessage | undefined): string {
   return (message?.content ?? []).map((item) => (item.type === "text" ? item.text : "")).join("|");
 }
 
-export const toolTaskId = Effect.fn("toolTaskId")(function* (harness: Harness) {
+const toolTaskId = Effect.fn("toolTaskId")(function* (harness: Harness) {
   let id: TaskId | undefined;
   yield* waitFor(
     Effect.gen(function* () {
@@ -112,7 +105,7 @@ export const toolTaskId = Effect.fn("toolTaskId")(function* (harness: Harness) {
 
 function blockingToolImpl(name: string, extra: Partial<ToolRegistration> = {}) {
   const started = deferred();
-  const state = { runs: 0, blocking: 1 };
+  const state = { blocking: 1, runs: 0 };
   const registration = tool(
     name,
     (_args, api, callContext) =>
@@ -133,7 +126,23 @@ function blockingToolImpl(name: string, extra: Partial<ToolRegistration> = {}) {
   return { registration, started, state };
 }
 
-export const blockingTool: {
+const blockingTool: {
   (extra?: Partial<ToolRegistration>): (name: string) => ReturnType<typeof blockingToolImpl>;
   (name: string, extra?: Partial<ToolRegistration>): ReturnType<typeof blockingToolImpl>;
 } = dual((args) => typeof args[0] === "string", blockingToolImpl);
+
+const harnessToolsRecoverySupport = {
+  DONE,
+  blockingTool,
+  call,
+  directories,
+  open,
+  removeDirectories,
+  results,
+  sqlitePath,
+  text,
+  tool,
+  toolTaskId,
+};
+
+export default harnessToolsRecoverySupport;

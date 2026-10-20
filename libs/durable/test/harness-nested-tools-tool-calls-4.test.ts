@@ -9,18 +9,12 @@ import { MemoryStorage } from "@msa/durable/storage/memory";
 import { Effect } from "effect";
 import { afterEach, describe, expect, it } from "vite-plus/test";
 
-import { directories, toolTasks, DONE, call, tool } from "./harness-nested-tools-support.ts";
-import {
-  chatSetup,
-  openChat,
-  awaited,
-  addHooks,
-  addTool,
-  removeDir,
-  context,
-  aborted,
-  deferred,
-} from "./support.ts";
+import harnessNestedToolsSupport from "./harness-nested-tools-support.ts";
+import support from "./support.ts";
+
+const { DONE, call, directories, tool, toolTasks } = harnessNestedToolsSupport;
+const { aborted, addHooks, addTool, awaited, chatSetup, context, deferred, openChat, removeDir } =
+  support;
 
 afterEach(() =>
   Effect.runPromise(
@@ -73,7 +67,7 @@ function gatedLargeArgumentsBatch() {
     ),
   );
   setup.faux.setResponses([call("batch"), DONE]);
-  return { setup, hookEntered, hookRelease, running, release, large };
+  return { hookEntered, hookRelease, large, release, running, setup };
 }
 
 const commitsOnlyStatusStep1 = Effect.gen(function* () {
@@ -88,7 +82,7 @@ const commitsOnlyStatusStep1 = Effect.gen(function* () {
       runPromise(
         Effect.gen(function* () {
           api.output("line\n");
-          api.diagnostic({ severity: "info", message: "note" });
+          api.diagnostic({ message: "note", severity: "info" });
           yield* awaited(api.details({ step: 1 }, callContext));
           running.resolve();
           yield* awaited(release.promise);
@@ -97,7 +91,7 @@ const commitsOnlyStatusStep1 = Effect.gen(function* () {
       ),
     ),
   );
-  return { runPromise, setup, running, release };
+  return { release, runPromise, running, setup };
 });
 
 const commitsOnlyStatus = Effect.gen(function* () {
@@ -116,24 +110,24 @@ const commitsOnlyStatus = Effect.gen(function* () {
   );
   setup.faux.setResponses([call("batch"), DONE]);
   const { harness, root } = yield* openChat(new MemoryStorage(), setup);
-  const submission = yield* awaited(root.submit({ type: "input", content: "go" }, context));
+  const submission = yield* awaited(root.submit({ content: "go", type: "input" }, context));
   yield* awaited(running.promise);
   const [slot] = (yield* awaited(harness.snapshot(LiveDoc, root.id, context)))!.nestedTools!;
   expect(slot).toEqual({
+    arguments: {},
     callId: "c1/1",
+    name: "chatty",
     parentCallId: "c1",
     parentTaskId: expect.any(Number),
-    name: "chatty",
-    taskId: expect.any(Number),
-    arguments: {},
     status: "running",
+    taskId: expect.any(Number),
   });
   release.resolve();
   yield* awaited(submission.wait(context));
   expect(result).toMatchObject({
-    structuredOutput: "line\n",
     details: { step: 1 },
-    diagnostics: [{ severity: "info", message: "note" }],
+    diagnostics: [{ message: "note", severity: "info" }],
+    structuredOutput: "line\n",
   });
   yield* awaited(harness.close(context));
 });
@@ -154,7 +148,7 @@ const losesRunningOutputStep1 = Effect.gen(function* () {
       runPromise(
         Effect.gen(function* () {
           api.output("line\n");
-          api.diagnostic({ severity: "info", message: "note" });
+          api.diagnostic({ message: "note", severity: "info" });
           yield* awaited(api.details({ step: 1 }, callContext));
           running.resolve();
           return yield* awaited(aborted(callContext.abortSignal!));
@@ -184,10 +178,10 @@ const losesRunningOutputStep1 = Effect.gen(function* () {
     return Promise.resolve();
   });
   yield* awaited(
-    (yield* awaited(root.submit({ type: "input", content: "go" }, context))).wait(context),
+    (yield* awaited(root.submit({ content: "go", type: "input" }, context))).wait(context),
   );
   yield* awaited(harness.waitForIdle(context));
-  return { harness, stream, ends };
+  return { ends, harness, stream };
 });
 
 const losesRunningOutput = Effect.gen(function* () {
@@ -221,7 +215,7 @@ const showsNestedCall = Effect.gen(function* () {
 
     return Promise.resolve();
   });
-  const submission = yield* awaited(root.submit({ type: "input", content: "go" }, context));
+  const submission = yield* awaited(root.submit({ content: "go", type: "input" }, context));
   const slot = () =>
     runPromise(
       Effect.gen(function* () {
@@ -230,14 +224,14 @@ const showsNestedCall = Effect.gen(function* () {
     );
   yield* awaited(hookEntered.promise);
   expect(yield* awaited(slot())).toMatchObject({
-    status: "pending",
     arguments: { text: "asked" },
+    status: "pending",
   });
   hookRelease.resolve();
   yield* awaited(running.promise);
   expect(yield* awaited(slot())).toMatchObject({
-    status: "running",
     arguments: { text: large },
+    status: "running",
   });
   release.resolve();
   yield* awaited(submission.wait(context));

@@ -2,39 +2,32 @@ import * as NodeRuntime from "@effect/platform-node/NodeRuntime";
 import { createModels, fauxAssistantMessage, fauxProvider, fauxText, fauxToolCall } from "@msa/ai";
 import { CodemodeSandbox } from "@msa/codemode";
 import { defineExtension, defineTool } from "@msa/durable";
-import { createRegistry, Harness } from "@msa/durable/harness";
+import { Harness, createRegistry } from "@msa/durable/harness";
 import { Console, Effect } from "effect";
 import { Type } from "typebox";
 
 import { createCodemodeTool } from "../src/codemode/codemode.ts";
 import { openNodeSqliteStorage } from "../src/storage/sqlite/node.ts";
-import {
-  removeDir,
-  makeTempDir,
-  joinPath,
-  awaited,
-  BACKGROUND_CONTEXT as context,
-} from "./support.ts";
+import support from "./support.ts";
+
+const { BACKGROUND_CONTEXT: context, awaited, joinPath, makeTempDir, removeDir } = support;
 
 type Shape = "sequential" | "parallel";
 
 const echo = defineTool({
-  name: "echo",
   description: "echo",
+  execute: (args) => Promise.resolve({ output: [{ text: String(args.i), type: "text" }] }),
+  name: "echo",
   parameters: Type.Object({ i: Type.Number() }),
-  execute: (args) => Promise.resolve({ output: [{ type: "text", text: String(args.i) }] }),
 });
 
 const plain = defineTool({
-  name: "plain",
   description: "plain",
-  parameters: Type.Object({ n: Type.Number(), shape: Type.String() }),
-  replay: "safe",
   execute: (args, api, callContext) =>
     Effect.runPromise(
       Effect.gen(function* () {
         if (args.shape === "sequential") {
-          for (const i of Array.from({ length: args.n }, (_, i) => i))
+          for (const i of Array.from({ length: args.n }, (_, iInner) => iInner))
             yield* awaited(api.executeTool("echo", { i }, callContext));
         } else {
           yield* awaited(
@@ -43,9 +36,12 @@ const plain = defineTool({
             ),
           );
         }
-        return { output: [{ type: "text", text: "done" }] };
+        return { output: [{ text: "done", type: "text" }] };
       }),
     ),
+  name: "plain",
+  parameters: Type.Object({ n: Type.Number(), shape: Type.String() }),
+  replay: "safe",
 });
 
 const run = Effect.fn("run")(function* (mode: "codemode" | "plain", shape: Shape, n: number) {
@@ -77,7 +73,7 @@ const run = Effect.fn("run")(function* (mode: "codemode" | "plain", shape: Shape
     );
     const root = yield* awaited(
       harness.root(context, {
-        agent: { model: { provider: "faux", modelId: "faux-1" } },
+        agent: { model: { modelId: "faux-1", provider: "faux" } },
       }),
     );
     let commits = 0;
@@ -86,12 +82,12 @@ const run = Effect.fn("run")(function* (mode: "codemode" | "plain", shape: Shape
     });
     const started = performance.now();
     yield* awaited(
-      (yield* awaited(root.submit({ type: "input", content: "go" }, context))).wait(context),
+      (yield* awaited(root.submit({ content: "go", type: "input" }, context))).wait(context),
     );
     const ms = performance.now() - started;
     yield* awaited(harness.close(context));
     yield* awaited(sandbox.close());
-    return { ms, commits };
+    return { commits, ms };
   }).pipe(Effect.ensuring(Effect.asVoid(Effect.suspend(() => removeDir(directory)))));
 });
 

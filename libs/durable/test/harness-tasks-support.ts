@@ -1,60 +1,57 @@
 import type { Context } from "@msa/chord";
-import {
-  type Conversation,
-  defineTask,
-  type Task,
-  type TaskId,
-  type TaskRuntime,
-} from "@msa/durable";
+import { type Conversation, type Task, type TaskId, defineTask } from "@msa/durable";
 import { MemoryStorage } from "@msa/durable/storage/memory";
 import { Effect } from "effect";
 import { dual } from "effect/Function";
 
-import { awaited } from "./effect-support.ts";
-import { context } from "./session-support.ts";
-import { abortMarked, abortedWith, completed, openTasks } from "./task-support.ts";
+import effectSupport from "./effect-support.ts";
+import type harnessTasksSupportTypes from "./harness-tasks-support.types.ts";
+import sessionSupport from "./session-support.ts";
+import taskSupport from "./task-support.ts";
 
-export type Step = { phase: "run" };
-
-export type StepRuntime<R> = TaskRuntime<null, Step, R, object>;
+const { awaited } = effectSupport;
+const { context } = sessionSupport;
+const { abortMarked, abortedWith, completed, openTasks } = taskSupport;
 
 function oneStepImpl<R = null>(
   name: string,
   run: (
     task: { readonly id: TaskId<R> },
-    runtime: StepRuntime<R>,
+    runtime: harnessTasksSupportTypes.StepRuntime<R>,
     context: Context,
   ) => Promise<void>,
-  abort: (runtime: StepRuntime<R>, context: Context) => Promise<void> = (runtime, ctx) =>
-    runtime.commit(() => abortedWith("test"), ctx),
-): Task<null, Step, R, object> {
-  return defineTask<null, Step, R>({
-    name,
-    version: 1,
-    initial: () => ({ phase: "run" }),
-    phases: { run: (task, runtime, ctx) => run(task, runtime, ctx) },
+  abort: (runtime: harnessTasksSupportTypes.StepRuntime<R>, context: Context) => Promise<void> = (
+    runtime,
+    ctx,
+  ) => runtime.commit(() => abortedWith("test"), ctx),
+): Task<null, harnessTasksSupportTypes.Step, R, object> {
+  return defineTask<null, harnessTasksSupportTypes.Step, R>({
     abort: (_task, runtime, ctx) => abort(runtime, ctx),
+    initial: () => ({ phase: "run" }),
+    name,
+    phases: { run: (task, runtime, ctx) => run(task, runtime, ctx) },
+    version: 1,
   });
 }
 
-export const oneStep: {
+const oneStep: {
   <R = null>(
     run: (
       task: { readonly id: TaskId<R> },
-      runtime: StepRuntime<R>,
+      runtime: harnessTasksSupportTypes.StepRuntime<R>,
       context: Context,
     ) => Promise<void>,
-    abort?: (runtime: StepRuntime<R>, context: Context) => Promise<void>,
-  ): (name: string) => Task<null, Step, R, object>;
+    abort?: (runtime: harnessTasksSupportTypes.StepRuntime<R>, context: Context) => Promise<void>,
+  ): (name: string) => Task<null, harnessTasksSupportTypes.Step, R, object>;
   <R = null>(
     name: string,
     run: (
       task: { readonly id: TaskId<R> },
-      runtime: StepRuntime<R>,
+      runtime: harnessTasksSupportTypes.StepRuntime<R>,
       context: Context,
     ) => Promise<void>,
-    abort?: (runtime: StepRuntime<R>, context: Context) => Promise<void>,
-  ): Task<null, Step, R, object>;
+    abort?: (runtime: harnessTasksSupportTypes.StepRuntime<R>, context: Context) => Promise<void>,
+  ): Task<null, harnessTasksSupportTypes.Step, R, object>;
 } = dual((args) => typeof args[0] === "string", oneStepImpl);
 
 function gatedImpl(name: string, gate: Promise<void>) {
@@ -68,7 +65,7 @@ function gatedImpl(name: string, gate: Promise<void>) {
   );
 }
 
-export const gated: {
+const gated: {
   (gate: Promise<void>): (name: string) => ReturnType<typeof gatedImpl>;
   (name: string, gate: Promise<void>): ReturnType<typeof gatedImpl>;
 } = dual(2, gatedImpl);
@@ -86,7 +83,7 @@ function startImpl<R>(
   );
 }
 
-export const start: {
+const start: {
   <R>(
     task: ReturnType<typeof oneStep<R>>,
     options?: { readonly background?: boolean },
@@ -98,7 +95,7 @@ export const start: {
   ): Promise<TaskId<R>>;
 } = dual((args) => !("definition" in args[0]), startImpl);
 
-export const openRoot = Effect.fn("openRoot")(function* (
+const openRoot = Effect.fn("openRoot")(function* (
   tasks: Parameters<typeof openTasks>[1],
   options: Parameters<typeof openTasks>[2] & { readonly storage?: MemoryStorage } = {},
 ) {
@@ -107,7 +104,7 @@ export const openRoot = Effect.fn("openRoot")(function* (
   return { ...opened, root };
 });
 
-export const markDurably = Effect.fn("markDurably")(function* (
+const markDurably = Effect.fn("markDurably")(function* (
   harness: Effect.Success<ReturnType<typeof openRoot>>["harness"],
   id: TaskId,
 ) {
@@ -116,6 +113,17 @@ export const markDurably = Effect.fn("markDurably")(function* (
   return { aborting };
 });
 
-export function withSignal(signal: AbortSignal): Context {
+function withSignal(signal: AbortSignal): Context {
   return { ...context, abortSignal: signal };
 }
+
+const harnessTasksSupport = {
+  gated,
+  markDurably,
+  oneStep,
+  openRoot,
+  start,
+  withSignal,
+};
+
+export default harnessTasksSupport;

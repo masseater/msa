@@ -4,8 +4,11 @@ import { afterEach, describe, expect, it, vi } from "vite-plus/test";
 
 import { getOrThrow } from "../src/env/index.ts";
 import { NodeExecutionEnv } from "../src/env/node.ts";
-import { awaited } from "./effect-support.ts";
-import { joinPath, makeTempDir, removeDirs } from "./platform-support.ts";
+import effectSupport from "./effect-support.ts";
+import platformSupport from "./platform-support.ts";
+
+const { awaited } = effectSupport;
+const { joinPath, makeTempDir, removeDirs } = platformSupport;
 
 const SPILL_WRITE_DELAY_MS = 600;
 const spill = vi.hoisted(() => ({ rejectedWrites: 0 }));
@@ -14,37 +17,39 @@ type SpillStream = { write: (...args: unknown[]) => boolean };
 type FsModule = { createWriteStream: (path: unknown, options?: unknown) => SpillStream };
 
 vi.mock("node:fs", (importOriginal) =>
-  Promise.all([importOriginal<FsModule>(), import("effect")]).then(([actual, { Effect }]) => {
-    const delayed = (stream: SpillStream, key: string): void => {
-      const original: unknown = Reflect.get(stream, key);
-      if (typeof original !== "function") return;
-      Reflect.set(stream, key, (...args: unknown[]) =>
-        Effect.runFork(
-          Effect.sleep(SPILL_WRITE_DELAY_MS).pipe(
-            Effect.andThen(Effect.sync(() => Reflect.apply(original, stream, args))),
+  Promise.all([importOriginal<FsModule>(), import("effect")]).then(
+    ([actual, { Effect: EffectInner }]) => {
+      const delayed = (stream: SpillStream, key: string): void => {
+        const original: unknown = Reflect.get(stream, key);
+        if (typeof original !== "function") return;
+        Reflect.set(stream, key, (...args: unknown[]) =>
+          EffectInner.runFork(
+            EffectInner.sleep(SPILL_WRITE_DELAY_MS).pipe(
+              EffectInner.andThen(EffectInner.sync(() => Reflect.apply(original, stream, args))),
+            ),
           ),
-        ),
-      );
-    };
-    return {
-      ...actual,
-      createWriteStream: (path: unknown, options?: unknown) => {
-        const stream = actual.createWriteStream(
-          path,
-          typeof options === "object" ? { ...options, highWaterMark: 1 } : { highWaterMark: 1 },
         );
-        delayed(stream, "_write");
-        delayed(stream, "_writev");
-        const write = stream.write.bind(stream);
-        stream.write = (...args: unknown[]) => {
-          const accepted = write(...args);
-          if (!accepted) spill.rejectedWrites++;
-          return accepted;
-        };
-        return stream;
-      },
-    };
-  }),
+      };
+      return {
+        ...actual,
+        createWriteStream: (path: unknown, options?: unknown) => {
+          const stream = actual.createWriteStream(
+            path,
+            typeof options === "object" ? { ...options, highWaterMark: 1 } : { highWaterMark: 1 },
+          );
+          delayed(stream, "_write");
+          delayed(stream, "_writev");
+          const write = stream.write.bind(stream);
+          stream.write = (...args: unknown[]) => {
+            const accepted = write(...args);
+            if (!accepted) spill.rejectedWrites++;
+            return accepted;
+          };
+          return stream;
+        },
+      };
+    },
+  ),
 );
 
 const tempDirs: string[] = [];
@@ -71,10 +76,10 @@ describe("NodeExecutionEnv spill backpressure", () => {
               env.exec(
                 command,
                 {
-                  spill: { afterBytes: 10, afterLines: 10 },
                   onOutput: (text) => {
                     output += text;
                   },
+                  spill: { afterBytes: 10, afterLines: 10 },
                 },
                 BACKGROUND_CONTEXT,
               ),

@@ -2,27 +2,30 @@ import type { CompactionResult, TaskId } from "@msa/durable";
 import { Effect } from "effect";
 import { afterEach, describe, expect, it } from "vite-plus/test";
 
-import {
-  compactionTasks,
-  text,
-  summary,
-  answer,
-  gated,
-  history,
-  turn,
-  directories,
-  OVERFLOW,
+import harnessCompactionSupport from "./harness-compaction-support.ts";
+import support from "./support.ts";
+
+const {
   BACKGROUND,
-  live,
+  ENABLED,
+  OVERFLOW,
+  answer,
+  compactionTasks,
+  directories,
   failure,
   firstUserText,
-  userText,
+  gated,
+  history,
+  kinds,
+  live,
   open,
   result,
-  kinds,
-  ENABLED,
-} from "./harness-compaction-support.ts";
-import { allEntries, awaited, removeDir, context, deferred } from "./support.ts";
+  summary,
+  text,
+  turn,
+  userText,
+} = harnessCompactionSupport;
+const { allEntries, awaited, context, deferred, removeDir } = support;
 
 afterEach(() =>
   Effect.runPromise(
@@ -56,8 +59,8 @@ const winsOverBackground = Effect.gen(function* () {
       (yield* awaited(chat.harness.submission(submissionId!, context)))!.status(context),
     ),
   ).toMatchObject({
-    status: "unanswered",
     reason: "stale",
+    status: "unanswered",
   });
   yield* awaited(chat.harness.close(context));
 });
@@ -85,7 +88,7 @@ const compactsRetriesSame = Effect.gen(function* () {
     ),
   );
   const input = yield* awaited(
-    chat.root.submit({ type: "input", content: text("u4", 100) }, context),
+    chat.root.submit({ content: text("u4", 100), type: "input" }, context),
   );
   expect((yield* awaited(input.wait(context))).status).toBe("done");
   expect(attempt).toBe(1);

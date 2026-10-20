@@ -7,20 +7,22 @@ import {
   type AnyTask,
   type CompactionResult,
   type Conversation,
-  defineExtension,
-  defineTask,
   type Extension,
   type Harness,
   type HookApi,
   type HooksOf,
-  hook,
   type SettledTask,
   type SubmissionDraft,
   type TaskDefinition,
   type TaskRuntime,
+  defineExtension,
+  defineTask,
+  hook,
 } from "../src/index.ts";
-import { awaited } from "./effect-support.ts";
-import type { LiteralFits } from "./type-support.ts";
+import effectSupport from "./effect-support.ts";
+import type typeSupportTypes from "./type-support.ts";
+
+const { awaited } = effectSupport;
 
 declare const callContext: Context;
 
@@ -29,9 +31,9 @@ type Hooks = {
 };
 type Checkpoint = { phase: "plan"; steps: number } | { phase: "run"; step: number };
 const Stepper = defineTask<{ steps: number }, Checkpoint, { ran: number }, Hooks>({
-  name: "test.stepper",
-  version: 1,
+  abort: () => Promise.resolve(),
   initial: (input) => ({ phase: "plan", steps: input.steps }),
+  name: "test.stepper",
   phases: {
     plan: (task, runtime, context) =>
       Effect.runPromise(
@@ -40,7 +42,7 @@ const Stepper = defineTask<{ steps: number }, Checkpoint, { ran: number }, Hooks
           expectTypeOf(task.input.steps).toEqualTypeOf<number>();
           yield* awaited(
             runtime.commit(
-              () => ({ status: "running", checkpoint: { phase: "run", step: 0 } }),
+              () => ({ checkpoint: { phase: "run", step: 0 }, status: "running" }),
               context,
             ),
           );
@@ -57,14 +59,14 @@ const Stepper = defineTask<{ steps: number }, Checkpoint, { ran: number }, Hooks
           );
           yield* awaited(
             runtime.commit(
-              () => ({ status: "terminal", outcome: { status: "completed", result: { ran: 1 } } }),
+              () => ({ outcome: { result: { ran: 1 }, status: "completed" }, status: "terminal" }),
               context,
             ),
           );
         }),
       ),
   },
-  abort: () => Promise.resolve(),
+  version: 1,
 });
 
 function typedWaits(
@@ -101,22 +103,22 @@ function typedWaits(
 function submissionDraftFailures() {
   type Note = { kind: "note" };
   expectTypeOf<
-    LiteralFits<
+    typeSupportTypes.LiteralFits<
       { type: "input"; content: "hi"; entry: { kind: "note"; model: [] } },
       SubmissionDraft
     >
   >().toEqualTypeOf<false>();
   expectTypeOf<
-    LiteralFits<{ type: "input"; content: "hi"; entry: Note }, SubmissionDraft>
+    typeSupportTypes.LiteralFits<{ type: "input"; content: "hi"; entry: Note }, SubmissionDraft>
   >().toEqualTypeOf<true>();
   expectTypeOf<
-    LiteralFits<{ type: "write"; entry: Note; content: "hi" }, SubmissionDraft>
+    typeSupportTypes.LiteralFits<{ type: "write"; entry: Note; content: "hi" }, SubmissionDraft>
   >().toEqualTypeOf<false>();
   expectTypeOf<
-    LiteralFits<{ type: "write"; entry: Note; whenBusy: "steer" }, SubmissionDraft>
+    typeSupportTypes.LiteralFits<{ type: "write"; entry: Note; whenBusy: "steer" }, SubmissionDraft>
   >().toEqualTypeOf<false>();
   expectTypeOf<
-    LiteralFits<{ type: "write"; entry: Note }, SubmissionDraft>
+    typeSupportTypes.LiteralFits<{ type: "write"; entry: Note }, SubmissionDraft>
   >().toEqualTypeOf<true>();
 }
 
@@ -126,18 +128,22 @@ function taskDefinitionFailures() {
   type Phases = TaskDefinition<null, Checkpoint, null, object>["phases"];
   expectTypeOf<{ beforeStep: (step: string) => undefined }>().not.toExtend<StepperHooks>();
   expectTypeOf<{ beforeStep: (step: number) => undefined }>().toExtend<StepperHooks>();
-  expectTypeOf<LiteralFits<{ afterStep: () => undefined }, StepperHooks>>().toEqualTypeOf<false>();
+  expectTypeOf<
+    typeSupportTypes.LiteralFits<{ afterStep: () => undefined }, StepperHooks>
+  >().toEqualTypeOf<false>();
   expectTypeOf<{ steps: "two" }>().not.toExtend<StepperInput>();
   expectTypeOf<{ steps: 2 }>().toExtend<StepperInput>();
-  expectTypeOf<LiteralFits<{ plan: () => Promise<void> }, Phases>>().toEqualTypeOf<false>();
   expectTypeOf<
-    LiteralFits<{ plan: () => Promise<void>; run: () => Promise<void> }, Phases>
+    typeSupportTypes.LiteralFits<{ plan: () => Promise<void> }, Phases>
+  >().toEqualTypeOf<false>();
+  expectTypeOf<
+    typeSupportTypes.LiteralFits<{ plan: () => Promise<void>; run: () => Promise<void> }, Phases>
   >().toEqualTypeOf<true>();
 }
 
 it("types submissions, task waits, compaction, and tasks erased into extensions", () => {
-  const input = { type: "input", content: "hi", whenBusy: "steer" } satisfies SubmissionDraft;
-  const write = { type: "write", entry: { kind: "note" } } satisfies SubmissionDraft;
+  const input = { content: "hi", type: "input", whenBusy: "steer" } satisfies SubmissionDraft;
+  const write = { entry: { kind: "note" }, type: "write" } satisfies SubmissionDraft;
   expectTypeOf(input.type).toEqualTypeOf<"input">();
   expectTypeOf(write.type).toEqualTypeOf<"write">();
 
@@ -147,9 +153,9 @@ it("types submissions, task waits, compaction, and tasks erased into extensions"
   });
   const erased: AnyTask = Stepper;
   const extension: Extension = defineExtension({
+    hooks: [registration],
     name: "stepper",
     tasks: [Stepper],
-    hooks: [registration],
   });
   void [erased, extension];
 

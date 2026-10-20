@@ -4,10 +4,14 @@ import { watchEvents } from "@msa/durable/harness";
 import { Effect } from "effect";
 import { dual } from "effect/Function";
 
-import { awaited } from "./effect-support.ts";
-import { context } from "./session-support.ts";
+import effectSupport from "./effect-support.ts";
+import type harnessEventsSupportTypes from "./harness-events-support.types.ts";
+import sessionSupport from "./session-support.ts";
 
-export const listen = Effect.fn("listen")(function* (harness: Harness, conversation: Conversation) {
+const { awaited } = effectSupport;
+const { context } = sessionSupport;
+
+const listen = Effect.fn("listen")(function* (harness: Harness, conversation: Conversation) {
   const stream = yield* awaited(watchEvents(harness, conversation.id, context));
   const batches: AgentEvent[][] = [];
   stream.start((events) => {
@@ -15,14 +19,12 @@ export const listen = Effect.fn("listen")(function* (harness: Harness, conversat
 
     return Promise.resolve();
   });
-  return { stream, batches, events: () => batches.flat() };
+  return { batches, events: () => batches.flat(), stream };
 });
 
-export const drained = Effect.fn("drained")(function* () {
+const drained = Effect.fn("drained")(function* () {
   yield* Effect.sleep(1);
 });
-
-export type Mutable = { [key: string]: unknown };
 
 function applyChangesImpl(
   message: AssistantMessage,
@@ -36,14 +38,17 @@ function applyChangesImpl(
     else if (change.type.endsWith("_start") && "block" in change) {
       next.content.splice(change.contentIndex, 0, structuredClone(change.block));
     } else if (change.type === "text_delta" || change.type === "thinking_delta") {
-      const block = next.content[change.contentIndex] as unknown as Mutable;
+      const block = next.content[
+        change.contentIndex
+      ] as unknown as harnessEventsSupportTypes.Mutable;
       const field = change.type === "text_delta" ? "text" : "thinking";
       block[field] = `${block[field] as string}${change.delta}`;
     } else if (change.type === "toolcall_delta") {
-      let target = (next.content[change.contentIndex] as unknown as Mutable)[
-        "arguments"
-      ] as Mutable;
-      for (const segment of change.path.slice(0, -1)) target = target[segment] as Mutable;
+      let target = (
+        next.content[change.contentIndex] as unknown as harnessEventsSupportTypes.Mutable
+      )["arguments"] as harnessEventsSupportTypes.Mutable;
+      for (const segment of change.path.slice(0, -1))
+        target = target[segment] as harnessEventsSupportTypes.Mutable;
       const last = change.path.at(-1)!;
       target[last] = `${target[last] as string}${change.delta}`;
     }
@@ -51,7 +56,7 @@ function applyChangesImpl(
   return next;
 }
 
-export const applyChanges: {
+const applyChanges: {
   (
     changes: readonly MessageChange[],
   ): (message: AssistantMessage) => ReturnType<typeof applyChangesImpl>;
@@ -60,3 +65,11 @@ export const applyChanges: {
     changes: readonly MessageChange[],
   ): ReturnType<typeof applyChangesImpl>;
 } = dual(2, applyChangesImpl);
+
+const harnessEventsSupport = {
+  applyChanges,
+  drained,
+  listen,
+};
+
+export default harnessEventsSupport;

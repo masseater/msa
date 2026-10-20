@@ -1,12 +1,14 @@
 import * as NodeRuntime from "@effect/platform-node/NodeRuntime";
 import { type Message, createModels } from "@msa/ai";
 import { openaiProvider } from "@msa/ai/providers/openai";
-import { AssistantEntry, defineExtension, LiveDoc, section } from "@msa/durable";
-import { createRegistry, Harness } from "@msa/durable/harness";
+import { AssistantEntry, LiveDoc, defineExtension, section } from "@msa/durable";
+import { Harness, createRegistry } from "@msa/durable/harness";
 import { MemoryStorage } from "@msa/durable/storage/memory";
 import { Console, Effect } from "effect";
 
-import { BACKGROUND_CONTEXT, environmentVariable, awaited } from "../support.ts";
+import support from "../support.ts";
+
+const { BACKGROUND_CONTEXT, awaited, environmentVariable } = support;
 
 const context = BACKGROUND_CONTEXT;
 
@@ -23,7 +25,7 @@ const openHarness = Effect.gen(function* () {
   const harness = yield* awaited(Harness.open(new MemoryStorage(), { models, registry }, context));
   const root = yield* awaited(
     harness.root(context, {
-      agent: { model: { provider: "openai", modelId: "gpt-6-sol" }, thinkingLevel: "high" },
+      agent: { model: { modelId: "gpt-6-sol", provider: "openai" }, thinkingLevel: "high" },
     }),
   );
   return { harness, root };
@@ -52,7 +54,7 @@ const askForPoem = Effect.gen(function* () {
   harness.resume();
   process.stdout.write("answer: ");
   const poem = yield* awaited(
-    root.submit({ type: "input", content: "Write a long poem" }, context),
+    root.submit({ content: "Write a long poem", type: "input" }, context),
   );
   const settledPoem = yield* awaited(poem.wait(context));
   yield* awaited(liveWatch.stop());

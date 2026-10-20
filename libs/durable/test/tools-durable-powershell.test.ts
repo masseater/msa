@@ -2,9 +2,12 @@ import { Effect } from "effect";
 import { afterAll, describe, expect, it } from "vite-plus/test";
 
 import { createPowerShellTool } from "../src/tools/index.ts";
-import { awaited } from "./effect-support.ts";
-import { programsEnv } from "./tools-programs-env-support.ts";
-import { run, runFailing, removeTempDirs } from "./tools-support.ts";
+import effectSupport from "./effect-support.ts";
+import programsEnv from "./tools-programs-env-support.ts";
+import toolsSupport from "./tools-support.ts";
+
+const { awaited } = effectSupport;
+const { removeTempDirs, run, runFailing } = toolsSupport;
 
 afterAll(() => Effect.runPromise(removeTempDirs));
 
@@ -45,9 +48,9 @@ const answersNonzeroExit = Effect.gen(function* () {
   const { env } = yield* programsEnv(["pwsh"], "partial", 3);
   const result = yield* awaited(run(createPowerShellTool(), { command: "exit 3" }, env));
   expect(result).toMatchObject({
+    diagnostics: [{ code: "exit_code", message: "Command exited with code 3", severity: "error" }],
     isError: true,
-    structuredOutput: { output: "partial", truncated: false, exitCode: 3 },
-    diagnostics: [{ severity: "error", code: "exit_code", message: "Command exited with code 3" }],
+    structuredOutput: { exitCode: 3, output: "partial", truncated: false },
   });
   expect(result.streamed.join("")).toBe("partial");
 });

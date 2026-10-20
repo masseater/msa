@@ -3,21 +3,16 @@ import { Effect } from "effect";
 import { afterEach, describe, expect, it } from "vite-plus/test";
 
 import { openNodeSqliteStorage } from "../src/storage/sqlite/node.ts";
-import { abortController, awaited } from "./effect-support.ts";
-import {
-  directories,
-  status,
-  waitUntil,
-  open,
-  gates,
-  ownedChild,
-  Hold,
-  runs,
-  openHarness,
-  Waiter,
-} from "./harness-ownership-support.ts";
-import { joinPath, makeTempDir, removeDir } from "./platform-support.ts";
-import { context } from "./session-support.ts";
+import effectSupport from "./effect-support.ts";
+import harnessOwnershipSupport from "./harness-ownership-support.ts";
+import platformSupport from "./platform-support.ts";
+import sessionSupport from "./session-support.ts";
+
+const { abortController, awaited } = effectSupport;
+const { Hold, Waiter, directories, gates, open, openHarness, ownedChild, runs, status, waitUntil } =
+  harnessOwnershipSupport;
+const { joinPath, makeTempDir, removeDir } = platformSupport;
+const { context } = sessionSupport;
 
 afterEach(() =>
   Effect.runPromise(
@@ -87,23 +82,23 @@ const abortsWaitingChildStep1 = Effect.gen(function* () {
       (tx) =>
         runPromise(
           Effect.gen(function* () {
-            const owner = yield* awaited(
+            const ownerInner = yield* awaited(
               tx.createTask(Hold, { name: "owner" }, { ownership: { kind: "conversation" } }),
             );
             const child = yield* awaited(
-              tx.createConversation({ ownership: { kind: "task", taskId: owner } }),
+              tx.createConversation({ ownership: { kind: "task", taskId: ownerInner } }),
             );
-            const dependency = yield* awaited(
+            const dependencyInner = yield* awaited(
               tx.createTask(Hold, { name: "dependency" }, { ownership: { kind: "conversation" } }),
             );
-            const blocked = yield* awaited(
+            const blockedInner = yield* awaited(
               tx.createTask(
                 Waiter,
-                { on: [dependency] },
-                { ownership: { kind: "conversation" }, conversationId: child.id },
+                { on: [dependencyInner] },
+                { conversationId: child.id, ownership: { kind: "conversation" } },
               ),
             );
-            return { owner, dependency, blocked };
+            return { blocked: blockedInner, dependency: dependencyInner, owner: ownerInner };
           }),
         ),
       context,
@@ -115,7 +110,7 @@ const abortsWaitingChildStep1 = Effect.gen(function* () {
       return (yield* status(harness, blocked)).status === "waiting";
     }),
   );
-  return { runPromise, harness, root, owner, dependency, blocked };
+  return { blocked, dependency, harness, owner, root, runPromise };
 });
 
 const abortsWaitingChild = Effect.gen(function* () {
@@ -131,7 +126,7 @@ const abortsWaitingChild = Effect.gen(function* () {
             const marked = (yield* awaited(tx.task(owner)))!;
             setTask({
               ...completedDependency,
-              state: { status: "terminal", outcome: { status: "completed", result: null } },
+              state: { outcome: { result: null, status: "completed" }, status: "terminal" },
             });
             setTask({ ...marked, abortRequested: true });
           }),
@@ -156,7 +151,7 @@ const appliesMarksFoundStep1 = Effect.gen(function* () {
   const directory = yield* makeTempDir("msa-durable-ownership-");
   directories.add(directory);
   const path = joinPath(directory, "session.sqlite");
-  return { runPromise, path };
+  return { path, runPromise };
 });
 
 const appliesMarksFound = Effect.gen(function* () {

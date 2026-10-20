@@ -1,22 +1,25 @@
-import { defineExtension, ToolResultEntry } from "@msa/durable";
+import { ToolResultEntry, defineExtension } from "@msa/durable";
 import { MemoryStorage } from "@msa/durable/storage/memory";
 import { Effect } from "effect";
 import { describe, expect, it } from "vite-plus/test";
 
 import { NodeExecutionEnv } from "../src/env/node.ts";
 import { createBashTool, createEditTool, createReadTool } from "../src/tools/index.ts";
-import { resultText, results, DONE, calls } from "./harness-tools-support.ts";
-import {
-  allEntries,
-  chatSetup,
-  openChat,
-  awaited,
+import harnessToolsSupport from "./harness-tools-support.ts";
+import support from "./support.ts";
+
+const { DONE, calls, resultText, results } = harnessToolsSupport;
+const {
   addTool,
+  allEntries,
+  awaited,
+  chatSetup,
+  context,
+  openChat,
+  readTempFile,
   withTempDir,
   writeTempFile,
-  readTempFile,
-  context,
-} from "./support.ts";
+} = support;
 
 const answersFailingCommand = Effect.asVoid(
   Effect.suspend(() =>
@@ -29,7 +32,7 @@ const answersFailingCommand = Effect.asVoid(
         const env = new NodeExecutionEnv({ cwd: directory });
         const { harness, root } = yield* openChat(new MemoryStorage(), setup, { env });
         yield* awaited(
-          (yield* awaited(root.submit({ type: "input", content: "go" }, context))).wait(context),
+          (yield* awaited(root.submit({ content: "go", type: "input" }, context))).wait(context),
         );
         const entry = (yield* allEntries(root)).find((candidate) => ToolResultEntry.is(candidate))!;
         const [result] = results([entry]);
@@ -70,7 +73,7 @@ const readsEditsRuns = Effect.asVoid(
           calls(["read", { path: "notes.txt" }, "r"]),
           calls([
             "edit",
-            { path: "notes.txt", edits: [{ oldText: "world", newText: "durable" }] },
+            { edits: [{ newText: "durable", oldText: "world" }], path: "notes.txt" },
             "e",
           ]),
           calls(["bash", { command: "cat notes.txt" }, "b"]),
@@ -79,7 +82,7 @@ const readsEditsRuns = Effect.asVoid(
         const env = new NodeExecutionEnv({ cwd: directory });
         const { harness, root } = yield* openChat(new MemoryStorage(), setup, { env });
         const settled = yield* awaited(
-          (yield* awaited(root.submit({ type: "input", content: "go" }, context))).wait(context),
+          (yield* awaited(root.submit({ content: "go", type: "input" }, context))).wait(context),
         );
         expect(settled.status).toBe("done");
         const entries = yield* allEntries(root);

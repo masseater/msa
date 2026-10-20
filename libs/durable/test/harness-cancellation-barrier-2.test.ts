@@ -4,10 +4,14 @@ import { MemoryStorage } from "@msa/durable/storage/memory";
 import { Effect } from "effect";
 import { describe, expect, it } from "vite-plus/test";
 
-import { awaited } from "./effect-support.ts";
-import { Dormant } from "./harness-cancellation-barrier-cases.ts";
-import { context } from "./session-support.ts";
-import { eventually, openTasks } from "./task-support.ts";
+import effectSupport from "./effect-support.ts";
+import Dormant from "./harness-cancellation-barrier-cases.ts";
+import sessionSupport from "./session-support.ts";
+import taskSupport from "./task-support.ts";
+
+const { awaited } = effectSupport;
+const { context } = sessionSupport;
+const { eventually, openTasks } = taskSupport;
 
 const restartMarkedTree = Effect.fn("restartMarkedTree")(function* () {
   const storage = new MemoryStorage();
@@ -29,8 +33,8 @@ const restartMarkedTree = Effect.fn("restartMarkedTree")(function* () {
     session.commit(
       (tx) =>
         tx.createTask(Dormant, null, {
-          ownership: { kind: "task", taskId: top },
           abandonOnRestart: true,
+          ownership: { kind: "task", taskId: top },
         }),
       context,
     ),
@@ -45,7 +49,7 @@ const restartMarkedTree = Effect.fn("restartMarkedTree")(function* () {
       context,
     ),
   );
-  return { storage, top, middle, leaf };
+  return { leaf, middle, storage, top };
 });
 
 const upgradesRestartMarks = Effect.gen(function* () {
@@ -99,9 +103,9 @@ const marksFlaggedTask = Effect.gen(function* () {
     session.commit(
       (tx) =>
         tx.createTask(Dormant, null, {
+          abandonOnRestart: true,
           conversationId: conversation.id,
           ownership: { kind: "conversation" },
-          abandonOnRestart: true,
         }),
       context,
     ),
@@ -114,8 +118,8 @@ const marksFlaggedTask = Effect.gen(function* () {
   );
   const record = (yield* awaited(storage.task(holder, context)))!;
   const completing = {
+    outcome: { result: null, status: "completed" },
     status: "completing",
-    outcome: { status: "completed", result: null },
   } as const;
   yield* awaited(
     storage.commit(

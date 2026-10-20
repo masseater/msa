@@ -4,16 +4,20 @@ import * as NodeRuntime from "@effect/platform-node/NodeRuntime";
 import { STORAGE_MEMORY_SCALES } from "@msa/durable/testing";
 import { Console, Effect } from "effect";
 
-import { fromJsonText } from "./effect-support.ts";
-import { runCommandOrFail } from "./platform-support.ts";
-import {
-  type MemorySnapshot,
-  runWorker,
-  STORAGE_BENCHMARK_BACKENDS,
-  type StorageMemoryResult,
-} from "./storage-memory-worker.ts";
+import effectSupport from "./effect-support.ts";
+import platformSupport from "./platform-support.ts";
+import storageMemoryWorker from "./storage-memory-worker.ts";
+import type storageMemoryWorkerTypes from "./storage-memory-worker.types.ts";
 
-function delta(after: MemorySnapshot, before: MemorySnapshot, field: keyof MemorySnapshot): number {
+const { fromJsonText } = effectSupport;
+const { runCommandOrFail } = platformSupport;
+const { STORAGE_BENCHMARK_BACKENDS, runWorker } = storageMemoryWorker;
+
+function delta(
+  after: storageMemoryWorkerTypes.MemorySnapshot,
+  before: storageMemoryWorkerTypes.MemorySnapshot,
+  field: keyof storageMemoryWorkerTypes.MemorySnapshot,
+): number {
   return after[field] - before[field];
 }
 
@@ -22,7 +26,7 @@ function mebibytes(bytes: number): string {
 }
 
 const runWorkers = Effect.fn("runWorkers")(function* (workerPath: string) {
-  const results: StorageMemoryResult[] = [];
+  const results: storageMemoryWorkerTypes.StorageMemoryResult[] = [];
   for (const backend of STORAGE_BENCHMARK_BACKENDS) {
     for (const scale of STORAGE_MEMORY_SCALES) {
       const stdout = yield* runCommandOrFail(
@@ -40,36 +44,36 @@ const runWorkers = Effect.fn("runWorkers")(function* (workerPath: string) {
           cwd: fileURLToPath(new URL("..", import.meta.url)),
         },
       );
-      results.push((yield* fromJsonText(stdout)) as StorageMemoryResult);
+      results.push((yield* fromJsonText(stdout)) as storageMemoryWorkerTypes.StorageMemoryResult);
     }
   }
   return results;
 });
 
-function summaryRow(result: StorageMemoryResult) {
+function summaryRow(result: storageMemoryWorkerTypes.StorageMemoryResult) {
   return {
-    backend: result.backend,
-    scale: result.scale,
-    "heap after seed MiB": mebibytes(delta(result.postSeed, result.baseline, "heapUsed")),
-    "RSS after seed MiB": mebibytes(delta(result.postSeed, result.baseline, "rss")),
-    "external after seed MiB": mebibytes(delta(result.postSeed, result.baseline, "external")),
-    "heap after reads MiB": mebibytes(delta(result.postRead, result.postSeed, "heapUsed")),
     "JS heap bytes/primary record": Math.round(
       delta(result.postSeed, result.baseline, "heapUsed") / result.recordCount,
     ),
-    "disk main MiB": result.disk === undefined ? "-" : mebibytes(result.disk.mainBytes),
+    "RSS after seed MiB": mebibytes(delta(result.postSeed, result.baseline, "rss")),
+    backend: result.backend,
     "disk auxiliary MiB": result.disk === undefined ? "-" : mebibytes(result.disk.auxiliaryBytes),
-    "disk total MiB":
-      result.disk === undefined
-        ? "-"
-        : mebibytes(result.disk.mainBytes + result.disk.auxiliaryBytes),
-    "disk files": result.disk?.fileCount ?? "-",
     "disk detail":
       result.disk === undefined
         ? "-"
         : result.disk.kind === "sqlite"
           ? `pages/free ${result.disk.pageCount}/${result.disk.freelistCount}`
           : `documents/tasks ${result.disk.documentFiles}/${result.disk.taskFiles}`,
+    "disk files": result.disk?.fileCount ?? "-",
+    "disk main MiB": result.disk === undefined ? "-" : mebibytes(result.disk.mainBytes),
+    "disk total MiB":
+      result.disk === undefined
+        ? "-"
+        : mebibytes(result.disk.mainBytes + result.disk.auxiliaryBytes),
+    "external after seed MiB": mebibytes(delta(result.postSeed, result.baseline, "external")),
+    "heap after reads MiB": mebibytes(delta(result.postRead, result.postSeed, "heapUsed")),
+    "heap after seed MiB": mebibytes(delta(result.postSeed, result.baseline, "heapUsed")),
+    scale: result.scale,
   };
 }
 

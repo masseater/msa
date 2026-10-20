@@ -2,10 +2,16 @@ import { defineTask } from "@msa/durable";
 import { Effect } from "effect";
 import { describe, expect, it } from "vite-plus/test";
 
-import { abortController, awaited } from "./effect-support.ts";
-import { start, oneStep, withSignal, openRoot, markDurably } from "./harness-tasks-support.ts";
-import { ControlledStorage, context, flush } from "./session-support.ts";
-import { abortMarked, aborted, abortedWith, deferred, eventually } from "./task-support.ts";
+import effectSupport from "./effect-support.ts";
+import harnessTasksSupport from "./harness-tasks-support.ts";
+import sessionSupport from "./session-support.ts";
+import type sessionSupportTypes from "./session-support.types.ts";
+import taskSupport from "./task-support.ts";
+
+const { abortController, awaited } = effectSupport;
+const { markDurably, oneStep, openRoot, start, withSignal } = harnessTasksSupport;
+const { ControlledStorage, context, flush } = sessionSupport;
+const { abortMarked, aborted, abortedWith, deferred, eventually } = taskSupport;
 
 const doesNotSignal = Effect.gen(function* () {
   const runPromise = Effect.runPromiseWith(yield* Effect.context<never>());
@@ -43,8 +49,8 @@ const doesNotSignal = Effect.gen(function* () {
   expect(yield* awaited(harness.abortTask(id, context))).toBe("marked");
   proceed.resolve();
   expect((yield* awaited(harness.waitForTask(id, context))).state.outcome).toEqual({
-    status: "aborted",
     reason: "once",
+    status: "aborted",
   });
   expect(abortSignalled).toBe(false);
   expect(aborts).toBe(1);
@@ -76,8 +82,8 @@ const keepsTerminalOutcome = Effect.gen(function* () {
   yield* flush;
   yield* awaited(harness.abortTask(id, context));
   expect((yield* awaited(harness.waitForTask(id, context))).state.outcome).toEqual({
-    status: "aborted",
     reason: "done",
+    status: "aborted",
   });
   yield* awaited(harness.close(context));
 });
@@ -104,8 +110,8 @@ const neverStartsPhase = Effect.gen(function* () {
   held.release();
   expect(yield* awaited(aborting)).toBe("marked");
   expect((yield* awaited(harness.waitForTask(id, context))).state.outcome).toEqual({
-    status: "aborted",
     reason: "test",
+    status: "aborted",
   });
   expect(ran).toBe(false);
   yield* awaited(harness.close(context));
@@ -124,7 +130,7 @@ const letsAbortMark = Effect.gen(function* () {
 
   const storage = new ControlledStorage();
   let marking: Promise<unknown> | undefined;
-  let held: ReturnType<ControlledStorage["holdCommits"]> | undefined;
+  let held: ReturnType<sessionSupportTypes.ControlledStorage["holdCommits"]> | undefined;
   let harnessRef: Effect.Success<ReturnType<typeof openRoot>>["harness"] | undefined;
   const Racing = oneStep("test.racing-fault", (task) =>
     runPromise(
@@ -145,8 +151,8 @@ const letsAbortMark = Effect.gen(function* () {
   yield* flush;
   held!.release();
   expect((yield* awaited(harness.waitForTask(id, context))).state.outcome).toEqual({
-    status: "aborted",
     reason: "test",
+    status: "aborted",
   });
   expect(yield* awaited(marking)).toBe("marked");
   yield* awaited(harness.close(context));
@@ -162,16 +168,20 @@ function twoPhaseTask() {
   const phases: string[] = [];
   const seen: { abortRan: boolean } = { abortRan: false };
   const Two = defineTask<null, { phase: "one" } | { phase: "two" }, null>({
-    name: "test.two",
-    version: 1,
+    abort: () => {
+      seen.abortRan = true;
+
+      return Promise.resolve();
+    },
     initial: () => ({ phase: "one" }),
+    name: "test.two",
     phases: {
       one: (_task, runtime, ctx) =>
         Effect.runPromise(
           Effect.gen(function* () {
             phases.push("one");
             yield* awaited(
-              runtime.commit(() => ({ status: "running", checkpoint: { phase: "two" } }), ctx),
+              runtime.commit(() => ({ checkpoint: { phase: "two" }, status: "running" }), ctx),
             );
             reached.resolve();
             yield* awaited(proceed.promise);
@@ -183,13 +193,9 @@ function twoPhaseTask() {
         return Promise.resolve();
       },
     },
-    abort: () => {
-      seen.abortRan = true;
-
-      return Promise.resolve();
-    },
+    version: 1,
   });
-  return { reached, proceed, phases, seen, Two };
+  return { Two, phases, proceed, reached, seen };
 }
 
 const stopsWithoutOutcomes = Effect.gen(function* () {
@@ -213,7 +219,7 @@ const stopsWithoutOutcomes = Effect.gen(function* () {
   expect(seen.abortRan).toBe(false);
   expect(record).toMatchObject({
     abortRequested: true,
-    state: { status: "running", checkpoint: { phase: "two" } },
+    state: { checkpoint: { phase: "two" }, status: "running" },
   });
   yield* awaited(expect(harness.commit(() => {}, context)).rejects.toThrow("closed"));
 });

@@ -1,18 +1,15 @@
 import { Effect } from "effect";
 import { afterEach, describe, expect, it } from "vite-plus/test";
 
-import { awaited } from "./effect-support.ts";
-import {
-  summary,
-  directories,
-  MANUAL,
-  userText,
-  open,
-  result,
-  user,
-} from "./harness-compaction-support.ts";
-import { removeDir } from "./platform-support.ts";
-import { context } from "./session-support.ts";
+import effectSupport from "./effect-support.ts";
+import harnessCompactionSupport from "./harness-compaction-support.ts";
+import platformSupport from "./platform-support.ts";
+import sessionSupport from "./session-support.ts";
+
+const { awaited } = effectSupport;
+const { MANUAL, directories, open, result, summary, user, userText } = harnessCompactionSupport;
+const { removeDir } = platformSupport;
+const { context } = sessionSupport;
 
 afterEach(() =>
   Effect.runPromise(
@@ -40,9 +37,9 @@ const applyEditsCarriedStep1 = Effect.gen(function* () {
             );
             yield* awaited(
               tx.appendEntry(chat.root.id, {
-                kind: "app.head",
+                edits: [{ action: "omit", target: b.id }],
                 head: a.id,
-                edits: [{ target: b.id, action: "omit" }],
+                kind: "app.head",
               }),
             );
             const c = yield* awaited(
@@ -50,8 +47,8 @@ const applyEditsCarriedStep1 = Effect.gen(function* () {
             );
             yield* awaited(
               tx.appendEntry(chat.root.id, {
-                kind: "app.head",
                 head: a.id,
+                kind: "app.head",
                 model: [user("H")],
               }),
             );

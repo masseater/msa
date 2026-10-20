@@ -4,10 +4,15 @@ import { MemoryStorage } from "@msa/durable/storage/memory";
 import { Effect } from "effect";
 import { describe, expect, it } from "vite-plus/test";
 
-import { allEntries, chatSetup, openChat } from "./chat-support.ts";
-import { awaited } from "./effect-support.ts";
-import { addSection } from "./harness-support.ts";
-import { context } from "./session-support.ts";
+import chatSupport from "./chat-support.ts";
+import effectSupport from "./effect-support.ts";
+import harnessSupport from "./harness-support.ts";
+import sessionSupport from "./session-support.ts";
+
+const { allEntries, chatSetup, openChat } = chatSupport;
+const { awaited } = effectSupport;
+const { addSection } = harnessSupport;
+const { context } = sessionSupport;
 
 const reportsSectionWrapper = Effect.gen(function* () {
   const setup = chatSetup();
@@ -27,7 +32,7 @@ const reportsSectionWrapper = Effect.gen(function* () {
   harness.resume();
   expect(
     (yield* awaited(
-      (yield* awaited(root.submit({ type: "input", content: "hi" }, context))).wait(context),
+      (yield* awaited(root.submit({ content: "hi", type: "input" }, context))).wait(context),
     )).status,
   ).toBe("done");
   expect(setup.reports).toContainEqual(new Error("wrapper failed"));
@@ -46,26 +51,26 @@ describe("generation", () => {
 const failsNonRetryable = Effect.gen(function* () {
   const setup = chatSetup();
   setup.faux.setResponses([
-    fauxAssistantMessage([], { stopReason: "error", errorMessage: "Invalid request" }),
+    fauxAssistantMessage([], { errorMessage: "Invalid request", stopReason: "error" }),
     fauxAssistantMessage("never"),
   ]);
   const { harness, root } = yield* openChat(new MemoryStorage(), setup);
   harness.resume();
   const settled = yield* awaited(
-    (yield* awaited(root.submit({ type: "input", content: "hi" }, context))).wait(context),
+    (yield* awaited(root.submit({ content: "hi", type: "input" }, context))).wait(context),
   );
   expect(settled).toMatchObject({
-    status: "unanswered",
-    reason: "model_error",
     detail: "Invalid request",
+    reason: "model_error",
+    status: "unanswered",
   });
   const tasks = yield* awaited(
     harness.commit((tx) => tx.scanTasks({ conversationId: root.id }, 10), context),
   );
   expect(tasks.items[0]!.state).toMatchObject({
     outcome: {
+      error: { detail: { reason: "model_error" }, message: "Invalid request" },
       status: "failed",
-      error: { message: "Invalid request", detail: { reason: "model_error" } },
     },
   });
   yield* awaited(harness.close(context));

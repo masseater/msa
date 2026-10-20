@@ -1,31 +1,19 @@
-import { fauxAssistantMessage, fauxText, fauxToolCall, Type } from "@msa/ai";
+import { Type, fauxAssistantMessage, fauxText, fauxToolCall } from "@msa/ai";
 import { type AgentEvent, type ConversationId, defineDoc, defineTool } from "@msa/durable";
 import { watchEvents } from "@msa/durable/harness";
 import { MemoryStorage } from "@msa/durable/storage/memory";
 import { Effect } from "effect";
 import { describe, expect, it } from "vite-plus/test";
 
-import {
-  settleLine,
-  type Counter,
-  CounterDoc,
-  bump,
-  open,
-} from "./session-document-retention-support.ts";
-import {
-  chatSetup,
-  openChat,
-  awaited,
-  addTool,
-  context,
-  createConversation,
-  eventually,
-} from "./support.ts";
+import sessionDocumentRetentionSupport from "./session-document-retention-support.ts";
+import type sessionDocumentRetentionSupportTypes from "./session-document-retention-support.types.ts";
+import support from "./support.ts";
+
+const { CounterDoc, bump, open, settleLine } = sessionDocumentRetentionSupport;
+const { addTool, awaited, chatSetup, context, createConversation, eventually, openChat } = support;
 
 const stepsTool = defineTool({
-  name: "steps",
   description: "Streams three steps",
-  parameters: Type.Object({}),
   execute: (_args, api) =>
     Effect.runPromise(
       Effect.gen(function* () {
@@ -36,6 +24,8 @@ const stepsTool = defineTool({
         return {};
       }),
     ),
+  name: "steps",
+  parameters: Type.Object({}),
 });
 
 const eventsWithRetention = Effect.fn("eventsWithRetention")(function* (
@@ -58,7 +48,7 @@ const eventsWithRetention = Effect.fn("eventsWithRetention")(function* (
     return Promise.resolve();
   });
   yield* awaited(
-    (yield* awaited(root.submit({ type: "input", content: "go" }, context))).wait(context),
+    (yield* awaited(root.submit({ content: "go", type: "input" }, context))).wait(context),
   );
   yield* awaited(harness.waitForIdle(context));
   yield* awaited(stream.stop());
@@ -80,18 +70,21 @@ describe("document cache retention", () => {
 const keepsReloadedNewer = Effect.gen(function* () {
   const runPromise = Effect.runPromiseWith(yield* Effect.context<never>());
 
-  const V1 = defineDoc<Counter>({
-    kind: "test.retention.versioned",
-    version: 1,
-    scope: "session",
+  const V1 = defineDoc<sessionDocumentRetentionSupportTypes.Counter>({
     initial: () => ({ count: 3 }),
-  });
-  const V2 = defineDoc<Counter & { v2: true }>({
     kind: "test.retention.versioned",
-    version: 2,
     scope: "session",
+    version: 1,
+  });
+  const V2 = defineDoc<sessionDocumentRetentionSupportTypes.Counter & { v2: true }>({
     initial: () => ({ count: 0, v2: true }),
-    migrate: (value) => ({ count: (value as Counter).count, v2: true }),
+    kind: "test.retention.versioned",
+    migrate: (value) => ({
+      count: (value as sessionDocumentRetentionSupportTypes.Counter).count,
+      v2: true,
+    }),
+    scope: "session",
+    version: 2,
   });
   const { session, sizes } = open(0);
   yield* awaited(session.commit((tx) => tx.doc(V1).then(() => undefined), context));

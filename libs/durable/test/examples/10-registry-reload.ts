@@ -4,20 +4,22 @@ import { createModels } from "@msa/ai/models";
 import { BACKGROUND_CONTEXT } from "@msa/chord/context";
 import { Console, Effect } from "effect";
 
-import { createRegistry, Harness } from "../../src/harness/index.ts";
+import { Harness, createRegistry } from "../../src/harness/index.ts";
 import { defineExtension, defineTool, wrapTool } from "../../src/index.ts";
 import { MemoryStorage } from "../../src/storage/memory.ts";
-import { awaited } from "../effect-support.ts";
+import effectSupport from "../effect-support.ts";
+
+const { awaited } = effectSupport;
 
 const context = BACKGROUND_CONTEXT;
 
 function exampleTool(name: string, description: string) {
   return defineTool({
-    name,
     description,
-    parameters: Type.Object({ path: Type.String() }),
     execute: (args) =>
-      Promise.resolve({ output: [{ type: "text", text: `${name} ${args.path}` }] }),
+      Promise.resolve({ output: [{ text: `${name} ${args.path}`, type: "text" }] }),
+    name,
+    parameters: Type.Object({ path: Type.String() }),
   });
 }
 

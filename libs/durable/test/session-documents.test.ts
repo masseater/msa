@@ -2,21 +2,14 @@ import type { Draft } from "@msa/chord";
 import { Effect } from "effect";
 import { describe, expect, it } from "vite-plus/test";
 
-import { awaited } from "./effect-support.ts";
-import {
-  setupLive,
-  LiveDoc,
-  type Live,
-  MemberDoc,
-  CounterDoc,
-} from "./session-documents-support.ts";
-import {
-  context,
-  createConversation,
-  documentChanges,
-  flush,
-  openTestSession,
-} from "./session-support.ts";
+import effectSupport from "./effect-support.ts";
+import sessionDocumentsSupport from "./session-documents-support.ts";
+import type sessionDocumentsSupportTypes from "./session-documents-support.types.ts";
+import sessionSupport from "./session-support.ts";
+
+const { awaited } = effectSupport;
+const { CounterDoc, LiveDoc, MemberDoc, setupLive } = sessionDocumentsSupport;
+const { context, createConversation, documentChanges, flush, openTestSession } = sessionSupport;
 
 const createsInitialBase = Effect.gen(function* () {
   const runPromise = Effect.runPromiseWith(yield* Effect.context<never>());
@@ -38,23 +31,23 @@ const createsInitialBase = Effect.gen(function* () {
   const writes = storage.commits.at(-1)!;
   expect(writes).toHaveLength(1);
   expect(writes[0]).toMatchObject({
-    type: "document.create",
-    record: {
-      kind: "test.live",
-      scope: { kind: "conversation", conversationId },
-      history: "latest",
-      fork: "initial",
-    },
     content: {
       kind: "base",
+      value: { items: [], message: "hello", nested: { count: 0 } },
       version: 1,
-      value: { message: "hello", items: [], nested: { count: 0 } },
     },
+    record: {
+      fork: "initial",
+      history: "latest",
+      kind: "test.live",
+      scope: { conversationId, kind: "conversation" },
+    },
+    type: "document.create",
   });
   const snapshot = yield* awaited(session.snapshot(LiveDoc, conversationId, context));
   expect(snapshot).toEqual({
-    message: "hello",
     items: [],
+    message: "hello",
     nested: { count: 0 },
     other: { label: "x" },
   });
@@ -162,14 +155,17 @@ const copiesAssignedValues = Effect.gen(function* () {
           Effect.gen(function* () {
             const live = yield* awaited(tx.doc(LiveDoc, conversationId));
             live.other = value;
-            (live as Draft<Live> & { copy?: { label: string } }).copy = value;
+            (live as Draft<sessionDocumentsSupportTypes.Live> & { copy?: { label: string } }).copy =
+              value;
             value.label = "mutated";
           }),
         ),
       context,
     ),
   );
-  const snapshot = (yield* awaited(session.snapshot(LiveDoc, conversationId, context))) as Live & {
+  const snapshot = (yield* awaited(
+    session.snapshot(LiveDoc, conversationId, context),
+  )) as sessionDocumentsSupportTypes.Live & {
     copy: { label: string };
   };
   expect(snapshot.other).toEqual({ label: "shared" });
@@ -231,7 +227,7 @@ const writesPublishesReplayable = Effect.gen(function* () {
   );
   yield* flush;
   const writes = storage.commits.at(-1)!;
-  expect(writes[0]).toMatchObject({ type: "document.change", content: { kind: "delta" } });
+  expect(writes[0]).toMatchObject({ content: { kind: "delta" }, type: "document.change" });
   const after = (yield* awaited(session.snapshot(LiveDoc, conversationId, context)))!;
   expect(after).toEqual(before);
   expect(after).not.toBe(before);

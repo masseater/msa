@@ -3,10 +3,16 @@ import { type TaskId } from "@msa/durable";
 import { Effect } from "effect";
 import { describe, expect, it } from "vite-plus/test";
 
-import { awaited } from "./effect-support.ts";
-import { start, oneStep, type StepRuntime, gated, openRoot } from "./harness-tasks-support.ts";
-import { context } from "./session-support.ts";
-import { aborted, deferred, eventually } from "./task-support.ts";
+import effectSupport from "./effect-support.ts";
+import harnessTasksSupport from "./harness-tasks-support.ts";
+import type harnessTasksSupportTypes from "./harness-tasks-support.types.ts";
+import sessionSupport from "./session-support.ts";
+import taskSupport from "./task-support.ts";
+
+const { awaited } = effectSupport;
+const { gated, oneStep, openRoot, start } = harnessTasksSupport;
+const { context } = sessionSupport;
+const { aborted, deferred, eventually } = taskSupport;
 
 const signalsJoinsRun = Effect.gen(function* () {
   const runPromise = Effect.runPromiseWith(yield* Effect.context<never>());
@@ -35,8 +41,8 @@ const signalsJoinsRun = Effect.gen(function* () {
   expect(runEnded).toBe(true);
   expect(yield* awaited(harness.abortTask(id, context))).toBe("marked");
   expect((yield* awaited(harness.waitForTask(id, context))).state.outcome).toEqual({
-    status: "aborted",
     reason: "test",
+    status: "aborted",
   });
   yield* awaited(harness.close(context));
 });
@@ -52,13 +58,17 @@ const abortsWaitingWorkStep1 = Effect.gen(function* () {
   const gate = deferred();
   const First = gated("test.dependency", gate.promise);
   let first: TaskId | undefined;
-  const wait = (_task: unknown, runtime: StepRuntime<null>, ctx: Context): Promise<void> =>
+  const wait = (
+    _task: unknown,
+    runtime: harnessTasksSupportTypes.StepRuntime<null>,
+    ctx: Context,
+  ): Promise<void> =>
     runPromise(
       Effect.gen(function* () {
         const checkpoint = { phase: "run" } as const;
         yield* awaited(
           runtime.commit(
-            () => ({ status: "waiting", checkpoint, on: [first!], policy: "allSettled" }),
+            () => ({ checkpoint, on: [first!], policy: "allSettled", status: "waiting" }),
             ctx,
           ),
         );
@@ -89,18 +99,18 @@ const abortsWaitingWorkStep1 = Effect.gen(function* () {
   );
   yield* awaited(harness.abortTask(lazy, context));
   yield* awaited(harness.abortTask(throwing, context));
-  return { gate, first, harness, lazy, throwing };
+  return { first, gate, harness, lazy, throwing };
 });
 
 const abortsWaitingWork = Effect.gen(function* () {
   const { gate, first, harness, lazy, throwing } = yield* abortsWaitingWorkStep1;
   expect((yield* awaited(harness.waitForTask(lazy, context))).state.outcome).toEqual({
-    status: "faulted",
     error: { message: `Abort handler of task ${lazy} returned without a terminal outcome` },
+    status: "faulted",
   });
   expect((yield* awaited(harness.waitForTask(throwing, context))).state.outcome).toEqual({
-    status: "faulted",
     error: { message: "abort failed" },
+    status: "faulted",
   });
   expect((yield* awaited(harness.getTask(first, context)))?.state.status).toBe("running");
   gate.resolve();

@@ -2,23 +2,29 @@ import { Effect } from "effect";
 import { afterEach, describe, expect, it } from "vite-plus/test";
 
 import { openNodeSqliteStorage } from "../src/storage/sqlite/node.ts";
-import { awaited } from "./effect-support.ts";
-import {
-  status,
-  sizes,
+import effectSupport from "./effect-support.ts";
+import harnessSchedulerRetentionSupport from "./harness-scheduler-retention-support.ts";
+import platformSupport from "./platform-support.ts";
+import sessionSupport from "./session-support.ts";
+import taskSupport from "./task-support.ts";
+
+const { awaited } = effectSupport;
+const {
+  Hold,
+  Rejected,
+  directories,
   gate,
   gates,
-  Hold,
-  runs,
-  directories,
-  sqlitePath,
   open,
-  Rejected,
   rejections,
-} from "./harness-scheduler-retention-support.ts";
-import { removeDir } from "./platform-support.ts";
-import { context } from "./session-support.ts";
-import { eventually } from "./task-support.ts";
+  runs,
+  sizes,
+  sqlitePath,
+  status,
+} = harnessSchedulerRetentionSupport;
+const { removeDir } = platformSupport;
+const { context } = sessionSupport;
+const { eventually } = taskSupport;
 
 afterEach(() =>
   Effect.runPromise(
@@ -54,13 +60,13 @@ const keepsChainOneStep1 = Effect.gen(function* () {
                 Hold,
                 { name: "old" },
                 {
-                  ownership: { kind: "conversation" },
-                  conversationId: c.id,
                   background: true,
+                  conversationId: c.id,
+                  ownership: { kind: "conversation" },
                 },
               ),
             );
-            return { p, b, c: c.id, old };
+            return { b, c: c.id, old, p };
           }),
         ),
       context,
@@ -68,7 +74,7 @@ const keepsChainOneStep1 = Effect.gen(function* () {
   );
   gate("b").resolve();
   yield* awaited(harness.waitForTask(tree.b, context));
-  return { runPromise, harness, tree };
+  return { harness, runPromise, tree };
 });
 
 const keepsChainOne = Effect.gen(function* () {
@@ -83,12 +89,12 @@ const keepsChainOne = Effect.gen(function* () {
               tx.createTask(
                 Hold,
                 { name: "new" },
-                { ownership: { kind: "conversation" }, conversationId: tree.c },
+                { conversationId: tree.c, ownership: { kind: "conversation" } },
               ),
             );
             (tx as unknown as { setTask(value: unknown): void }).setTask({
               ...old,
-              state: { status: "terminal", outcome: { status: "completed", result: null } },
+              state: { outcome: { result: null, status: "completed" }, status: "terminal" },
             });
             return id;
           }),
@@ -135,7 +141,7 @@ const dropsWhatRejected = Effect.gen(function* () {
             const c = yield* awaited(
               tx.createConversation({ ownership: { kind: "task", taskId: b } }),
             );
-            return { p, b, c: c.id };
+            return { b, c: c.id, p };
           }),
         ),
       context,
@@ -191,7 +197,7 @@ const dropsWhatRead = Effect.gen(function* () {
               tx.createTask(
                 Hold,
                 { name: "d" },
-                { ownership: { kind: "conversation" }, conversationId: c.id },
+                { conversationId: c.id, ownership: { kind: "conversation" } },
               ),
             );
             return { b, d };
@@ -217,7 +223,7 @@ const dropsWhatRead = Effect.gen(function* () {
   yield* awaited(opened.harness.waitForTask(tree.d, context));
   yield* awaited(opened.harness.waitForTask(tree.b, context));
   yield* eventually(() => sizes(opened.harness).dropQueue === 0);
-  expect(sizes(opened.harness)).toMatchObject({ settled: 0, below: 0, unloaded: 0 });
+  expect(sizes(opened.harness)).toMatchObject({ below: 0, settled: 0, unloaded: 0 });
   yield* awaited(opened.harness.close(context));
 });
 

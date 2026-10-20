@@ -8,13 +8,15 @@ import {
 } from "@msa/ai";
 import { BACKGROUND_CONTEXT } from "@msa/chord/context";
 import { AssistantEntry, defineExtension, hook, section } from "@msa/durable";
-import { createRegistry, GenerationTask, Harness } from "@msa/durable/harness";
+import { GenerationTask, Harness, createRegistry } from "@msa/durable/harness";
 import { MemoryStorage } from "@msa/durable/storage/memory";
 import { Console, Effect } from "effect";
 
 import { NodeExecutionEnv } from "../../src/env/node.ts";
 import { CodingTools, createReadTool } from "../../src/tools/index.ts";
-import { awaited, joinPath, makeTempDir, removeDir, writeText } from "../support.ts";
+import support from "../support.ts";
+
+const { awaited, joinPath, makeTempDir, removeDir, writeText } = support;
 
 const context = BACKGROUND_CONTEXT;
 const textOf = (message: AssistantMessage) =>
@@ -22,10 +24,6 @@ const textOf = (message: AssistantMessage) =>
 
 const DONE = "No further findings.";
 const Reviewer = defineExtension({
-  name: "reviewer",
-  sections: [
-    section("role", () => `You review diffs. Report problems as a list. Never edit files.`),
-  ],
   hooks: [
     hook(GenerationTask, {
       onYield: (answer) =>
@@ -35,6 +33,10 @@ const Reviewer = defineExtension({
               continue: `Look again for anything you missed. Say "${DONE}" when there is nothing left.`,
             },
     }),
+  ],
+  name: "reviewer",
+  sections: [
+    section("role", () => `You review diffs. Report problems as a list. Never edit files.`),
   ],
 });
 
@@ -58,31 +60,31 @@ const mainStep1 = Effect.gen(function* () {
     Harness.open(
       new MemoryStorage(),
       {
+        env: ({ cwd = process.cwd() }) => new NodeExecutionEnv({ cwd }),
         models,
         registry,
         settings: { extensions: [CodingTools] },
-        env: ({ cwd = process.cwd() }) => new NodeExecutionEnv({ cwd }),
       },
       context,
     ),
   );
-  yield* awaited(harness.root(context, { agent: { model: { provider: "faux", modelId: "big" } } }));
+  yield* awaited(harness.root(context, { agent: { model: { modelId: "big", provider: "faux" } } }));
 
   const reviewer = yield* awaited(
     harness.createConversation(
       {
-        ownership: { kind: "ownerless" },
         agent: {
-          model: { provider: "faux", modelId: "small" },
-          extensions: [CodingTools, Reviewer],
-          tools: [createReadTool()],
           cwd: worktree,
+          extensions: [CodingTools, Reviewer],
+          model: { modelId: "small", provider: "faux" },
+          tools: [createReadTool()],
         },
+        ownership: { kind: "ownerless" },
       },
       context,
     ),
   );
-  return { worktree, harness, reviewer };
+  return { harness, reviewer, worktree };
 });
 
 const main = Effect.gen(function* () {
@@ -97,7 +99,7 @@ const main = Effect.gen(function* () {
   );
 
   yield* awaited(
-    (yield* awaited(reviewer.submit({ type: "input", content: "Review user.ts." }, context))).wait(
+    (yield* awaited(reviewer.submit({ content: "Review user.ts.", type: "input" }, context))).wait(
       context,
     ),
   );

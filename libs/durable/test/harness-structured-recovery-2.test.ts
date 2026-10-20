@@ -1,20 +1,16 @@
 import { type ToolResultMessage } from "@msa/ai";
-import { defineTool, LiveDoc, ToolResultEntry } from "@msa/durable";
+import { LiveDoc, ToolResultEntry, defineTool } from "@msa/durable";
 import { MemoryStorage } from "@msa/durable/storage/memory";
 import { Effect } from "effect";
 import { afterEach, describe, expect, it } from "vite-plus/test";
 
-import { toolCalls, blockingTool } from "./harness-structured-events.ts";
-import { gates, behaviors, log, directories } from "./harness-structured-support.ts";
-import {
-  allEntries,
-  chatSetup,
-  openChat,
-  awaited,
-  addTool,
-  removeDir,
-  context,
-} from "./support.ts";
+import harnessStructuredEvents from "./harness-structured-events.ts";
+import harnessStructuredSupport from "./harness-structured-support.ts";
+import support from "./support.ts";
+
+const { blockingTool, toolCalls } = harnessStructuredEvents;
+const { behaviors, directories, gates, log } = harnessStructuredSupport;
+const { addTool, allEntries, awaited, chatSetup, context, openChat, removeDir } = support;
 
 afterEach(() =>
   Effect.runPromise(
@@ -36,13 +32,13 @@ const abortsParallelRound = Effect.gen(function* () {
   addTool(setup.registry, defineTool({ ...two.registration, executionMode: "parallel" }));
   setup.faux.setResponses([toolCalls(["one", "c1"], ["two", "c2"])]);
   const { harness, root } = yield* openChat(new MemoryStorage(), setup);
-  const submission = yield* awaited(root.submit({ type: "input", content: "go" }, context));
+  const submission = yield* awaited(root.submit({ content: "go", type: "input" }, context));
   yield* awaited(Promise.all([one.started, two.started]));
   const generation = (yield* awaited(harness.snapshot(LiveDoc, root.id, context)))!.run!.taskId;
   yield* awaited(harness.abortTask(generation, context));
   expect(yield* awaited(submission.wait(context))).toMatchObject({
-    status: "unanswered",
     reason: "aborted",
+    status: "unanswered",
   });
   const results = (yield* allEntries(root)).filter((entry) => ToolResultEntry.is(entry));
   expect(results.map((entry) => (entry.model![0] as ToolResultMessage).toolCallId)).toEqual([

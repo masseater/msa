@@ -1,55 +1,58 @@
-import { defineDoc, type EntryId } from "@msa/durable";
+import { type EntryId, defineDoc } from "@msa/durable";
 import { Effect } from "effect";
 import { describe, expect, it } from "vite-plus/test";
 
-import { awaited } from "./effect-support.ts";
-import { context, createConversation, openTestSession } from "./session-support.ts";
+import effectSupport from "./effect-support.ts";
+import sessionSupport from "./session-support.ts";
+
+const { awaited } = effectSupport;
+const { context, createConversation, openTestSession } = sessionSupport;
 
 function ancestorDocs() {
   const AsOf = defineDoc<{ value: string }>({
-    kind: "fork.ancestry.as-of",
-    version: 1,
-    scope: "conversation",
-    history: "rewindable",
     fork: "asOf",
+    history: "rewindable",
     initial: () => ({ value: "initial" }),
+    kind: "fork.ancestry.as-of",
+    scope: "conversation",
+    version: 1,
   });
   const Current = defineDoc<{ value: string }>({
-    kind: "fork.ancestry.current",
-    version: 1,
-    scope: "conversation",
-    history: "latest",
     fork: "current",
+    history: "latest",
     initial: () => ({ value: "initial" }),
+    kind: "fork.ancestry.current",
+    scope: "conversation",
+    version: 1,
   });
   return { AsOf, Current };
 }
 
 function storedVersionDocs() {
   const V1 = defineDoc<{ count: number }>({
-    kind: "fork.stored-version",
-    version: 1,
-    scope: "conversation",
-    history: "rewindable",
     fork: "asOf",
+    history: "rewindable",
     initial: () => ({ count: 1 }),
+    kind: "fork.stored-version",
+    scope: "conversation",
+    version: 1,
   });
   const fork: { migrations: number; forkAt?: EntryId } = { migrations: 0 };
   const V3 = defineDoc<{ count: number; migrated: boolean }>({
-    kind: "fork.stored-version",
-    version: 3,
-    scope: "conversation",
-    history: "rewindable",
     fork: "asOf",
+    history: "rewindable",
     initial: () => ({ count: 0, migrated: false }),
+    kind: "fork.stored-version",
     migrate: (value, fromVersion) => {
       expect(fromVersion).toBe(1);
       fork.migrations++;
       return { count: value["count"] as number, migrated: true };
     },
+    scope: "conversation",
+    version: 3,
   });
   const { session, storage } = openTestSession();
-  return { V1, fork, V3, session, storage };
+  return { V1, V3, fork, session, storage };
 }
 
 const selectsEntryOwningStep1 = Effect.gen(function* () {
@@ -63,10 +66,10 @@ const selectsEntryOwningStep1 = Effect.gen(function* () {
       (tx) =>
         runPromise(
           Effect.gen(function* () {
-            const inherited = (yield* awaited(tx.appendEntry(rootId, { kind: "root" }))).id;
+            const inheritedInner = (yield* awaited(tx.appendEntry(rootId, { kind: "root" }))).id;
             (yield* awaited(tx.doc(AsOf, rootId))).value = "root-at-entry";
             (yield* awaited(tx.doc(Current, rootId))).value = "root-current";
-            return inherited;
+            return inheritedInner;
           }),
         ),
       context,
@@ -83,16 +86,17 @@ const selectsEntryOwningStep1 = Effect.gen(function* () {
       (tx) =>
         runPromise(
           Effect.gen(function* () {
-            const parentEntry = (yield* awaited(tx.appendEntry(parent.id, { kind: "parent" }))).id;
+            const parentEntryInner = (yield* awaited(tx.appendEntry(parent.id, { kind: "parent" })))
+              .id;
             (yield* awaited(tx.doc(AsOf, parent.id))).value = "parent-at-own-entry";
             (yield* awaited(tx.doc(Current, parent.id))).value = "parent-current";
-            return parentEntry;
+            return parentEntryInner;
           }),
         ),
       context,
     ),
   );
-  return { AsOf, Current, session, inherited, parent, parentEntry };
+  return { AsOf, Current, inherited, parent, parentEntry, session };
 });
 
 const selectsEntryOwning = Effect.gen(function* () {
@@ -162,13 +166,13 @@ const copiesStoredValue = Effect.gen(function* () {
   expect(fork.migrations).toBe(1);
   const childRecord = yield* awaited(
     storage.findDocument(
-      { kind: V1.definition.kind, scope: { kind: "conversation", conversationId: child.id } },
+      { kind: V1.definition.kind, scope: { conversationId: child.id, kind: "conversation" } },
       "current",
       context,
     ),
   );
   const childStored = yield* awaited(storage.document(childRecord!.id, "current", context));
-  expect(childStored).toMatchObject({ version: 1, value: { count: 1 } });
+  expect(childStored).toMatchObject({ value: { count: 1 }, version: 1 });
   expect(yield* awaited(session.snapshot(V3, child.id, context))).toEqual({
     count: 1,
     migrated: true,

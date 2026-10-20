@@ -1,15 +1,13 @@
 import { Effect } from "effect";
 import { describe, expect, it } from "vite-plus/test";
 
-import { awaited } from "./effect-support.ts";
-import {
-  context,
-  createConversation,
-  documentChanges,
-  flush,
-  openTestSession,
-} from "./session-support.ts";
-import { WorkTask, createTask, ProgressDoc, StepDoc, terminal } from "./session-tables-support.ts";
+import effectSupport from "./effect-support.ts";
+import sessionSupport from "./session-support.ts";
+import sessionTablesSupport from "./session-tables-support.ts";
+
+const { awaited } = effectSupport;
+const { context, createConversation, documentChanges, flush, openTestSession } = sessionSupport;
+const { ProgressDoc, StepDoc, WorkTask, createTask, terminal } = sessionTablesSupport;
 
 const replacesTaskRecords = Effect.gen(function* () {
   const runPromise = Effect.runPromiseWith(yield* Effect.context<never>());
@@ -24,15 +22,15 @@ const replacesTaskRecords = Effect.gen(function* () {
           Effect.gen(function* () {
             const task = (yield* awaited(tx.task(taskId)))!;
             tx.setTask({
-              id: task.id,
-              conversationId: task.conversationId,
-              kind: task.kind,
-              version: task.version,
-              input: task.input,
-              background: task.background,
               abortRequested: task.abortRequested,
-              state: { status: "running", checkpoint: { phase: "next", step: 2 } },
+              background: task.background,
+              conversationId: task.conversationId,
+              id: task.id,
+              input: task.input,
+              kind: task.kind,
               memos: { choice: "b" },
+              state: { checkpoint: { phase: "next", step: 2 }, status: "running" },
+              version: task.version,
             });
           }),
         ),
@@ -40,8 +38,8 @@ const replacesTaskRecords = Effect.gen(function* () {
     ),
   );
   expect(yield* awaited(storage.task(taskId, context))).toMatchObject({
-    state: { status: "running", checkpoint: { phase: "next", step: 2 } },
     memos: { choice: "b" },
+    state: { checkpoint: { phase: "next", step: 2 }, status: "running" },
   });
 });
 
@@ -63,7 +61,7 @@ const createsTaskDocumentStep1 = Effect.gen(function* () {
               tx.createTask(
                 WorkTask,
                 { path: "a" },
-                { ownership: { kind: "conversation" }, conversationId },
+                { conversationId, ownership: { kind: "conversation" } },
               ),
             );
             (yield* awaited(tx.doc(ProgressDoc, createdTaskId))).lines.push("created");
@@ -85,7 +83,7 @@ const createsTaskDocumentStep1 = Effect.gen(function* () {
   );
   expect(documents).toHaveLength(2);
   for (const document of documents) expect(document.conversationId).toBe(conversationId);
-  return { runPromise, session, publications, conversationId, taskId };
+  return { conversationId, publications, runPromise, session, taskId };
 });
 
 const createsTaskDocument = Effect.gen(function* () {

@@ -1,7 +1,14 @@
 import { type AssistantMessage, fauxAssistantMessage, fauxText } from "@msa/ai";
 
-export const MOUNTED = ["msa.agent", "msa.inbox", "msa.live", "msa.provider", "msa.usage"];
+const MOUNTED = ["msa.agent", "msa.inbox", "msa.live", "msa.provider", "msa.usage"];
 
-export function answer(text: string): AssistantMessage {
+function answer(text: string): AssistantMessage {
   return fauxAssistantMessage([fauxText(text)]);
 }
+
+const harnessViewCases = {
+  MOUNTED,
+  answer,
+};
+
+export default harnessViewCases;

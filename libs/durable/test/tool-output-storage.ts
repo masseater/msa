@@ -6,20 +6,22 @@ import type { Storage } from "../src/index.ts";
 import { openNodeJsonlStorage } from "../src/storage/jsonl/node.ts";
 import { MemoryStorage } from "../src/storage/memory.ts";
 import { openNodeSqliteStorage } from "../src/storage/sqlite/node.ts";
-import { awaited } from "./effect-support.ts";
-import { fileSize, joinPath, listDirectory, pathExists } from "./platform-support.ts";
+import effectSupport from "./effect-support.ts";
+import platformSupport from "./platform-support.ts";
+import type toolOutputStorageTypes from "./tool-output-storage.types.ts";
 
-export type Backend = "memory" | "sqlite" | "jsonl";
+const { awaited } = effectSupport;
+const { fileSize, joinPath, listDirectory, pathExists } = platformSupport;
 
-function openStorageImpl(backend: Backend, path: string): Promise<Storage> {
+function openStorageImpl(backend: toolOutputStorageTypes.Backend, path: string): Promise<Storage> {
   if (backend === "memory") return Promise.resolve(new MemoryStorage());
   if (backend === "sqlite") return Promise.resolve(openNodeSqliteStorage(path));
   return Promise.resolve(openNodeJsonlStorage(path, context));
 }
 
-export const openStorage: {
-  (path: string): (backend: Backend) => ReturnType<typeof openStorageImpl>;
-  (backend: Backend, path: string): ReturnType<typeof openStorageImpl>;
+const openStorage: {
+  (path: string): (backend: toolOutputStorageTypes.Backend) => ReturnType<typeof openStorageImpl>;
+  (backend: toolOutputStorageTypes.Backend, path: string): ReturnType<typeof openStorageImpl>;
 } = dual(2, openStorageImpl);
 
 function timedImpl(storage: Storage, latencies: number[]): Storage {
@@ -46,12 +48,15 @@ function timedImpl(storage: Storage, latencies: number[]): Storage {
   });
 }
 
-export const timed: {
+const timed: {
   (latencies: number[]): (storage: Storage) => ReturnType<typeof timedImpl>;
   (storage: Storage, latencies: number[]): ReturnType<typeof timedImpl>;
 } = dual(2, timedImpl);
 
-export const footprint = Effect.fn("footprint")(function* (backend: Backend, path: string) {
+const footprint = Effect.fn("footprint")(function* (
+  backend: toolOutputStorageTypes.Backend,
+  path: string,
+) {
   if (backend === "sqlite") {
     let bytes = 0;
     for (const suffix of ["", "-wal", "-shm"])
@@ -62,3 +67,11 @@ export const footprint = Effect.fn("footprint")(function* (backend: Backend, pat
   for (const file of yield* listDirectory(path)) bytes += yield* fileSize(joinPath(path, file));
   return Math.round(bytes / 1024);
 });
+
+const toolOutputStorage = {
+  footprint,
+  openStorage,
+  timed,
+};
+
+export default toolOutputStorage;

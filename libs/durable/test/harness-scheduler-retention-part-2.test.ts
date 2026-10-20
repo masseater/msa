@@ -1,21 +1,20 @@
-import { defineTask, type TaskId } from "@msa/durable";
+import { type TaskId, defineTask } from "@msa/durable";
 import { Effect } from "effect";
 import { afterEach, describe, expect, it } from "vite-plus/test";
 
 import { openNodeSqliteStorage } from "../src/storage/sqlite/node.ts";
-import { awaited } from "./effect-support.ts";
-import {
-  gate,
-  gates,
-  Hold,
-  runs,
-  directories,
-  sqlitePath,
-  rejections,
-} from "./harness-scheduler-retention-support.ts";
-import { removeDir } from "./platform-support.ts";
-import { context } from "./session-support.ts";
-import { openTasks } from "./task-support.ts";
+import effectSupport from "./effect-support.ts";
+import harnessSchedulerRetentionSupport from "./harness-scheduler-retention-support.ts";
+import platformSupport from "./platform-support.ts";
+import sessionSupport from "./session-support.ts";
+import taskSupport from "./task-support.ts";
+
+const { awaited } = effectSupport;
+const { Hold, directories, gate, gates, rejections, runs, sqlitePath } =
+  harnessSchedulerRetentionSupport;
+const { removeDir } = platformSupport;
+const { context } = sessionSupport;
+const { openTasks } = taskSupport;
 
 afterEach(() =>
   Effect.runPromise(
@@ -73,32 +72,32 @@ describe("scheduler retention", () => {
 });
 
 const Waiter = defineTask<{ on: TaskId[] }, { phase: "wait" } | { phase: "done" }, null>({
-  name: "test.retention.waiter",
-  version: 1,
+  abort: (_task, runtime, ctx) =>
+    Promise.resolve(
+      runtime.commit(() => ({ outcome: { status: "aborted" }, status: "terminal" }), ctx),
+    ),
   initial: () => ({ phase: "wait" }),
+  name: "test.retention.waiter",
   phases: {
+    done: (_task, runtime, ctx) =>
+      Promise.resolve(
+        runtime.commit(
+          () => ({ outcome: { result: null, status: "completed" }, status: "terminal" }),
+          ctx,
+        ),
+      ),
     wait: (task, runtime, ctx) =>
       Promise.resolve(
         runtime.commit(
           () => ({
-            status: "waiting",
             checkpoint: { phase: "done" },
             on: task.input.on,
             policy: "allSettled",
+            status: "waiting",
           }),
           ctx,
         ),
       ),
-    done: (_task, runtime, ctx) =>
-      Promise.resolve(
-        runtime.commit(
-          () => ({ status: "terminal", outcome: { status: "completed", result: null } }),
-          ctx,
-        ),
-      ),
   },
-  abort: (_task, runtime, ctx) =>
-    Promise.resolve(
-      runtime.commit(() => ({ status: "terminal", outcome: { status: "aborted" } }), ctx),
-    ),
+  version: 1,
 });

@@ -4,21 +4,25 @@ import { afterEach, describe, expect, it } from "vite-plus/test";
 
 import type { DocumentId, TaskId } from "../src/types.ts";
 import { ROOT_CONVERSATION_ID } from "../src/types.ts";
-import { awaited } from "./effect-support.ts";
-import {
-  fileExists,
-  terminalTask,
-  readLines,
-  sessionDocument,
-  pendingTask,
-  createRoot,
+import effectSupport from "./effect-support.ts";
+import jsonlStorageSupport from "./jsonl-storage-support.ts";
+import platformSupport from "./platform-support.ts";
+
+const { awaited } = effectSupport;
+const {
   context,
+  createRoot,
+  fileExists,
   openStorage,
   openStorages,
+  pendingTask,
+  readLines,
+  sessionDocument,
   tempDirectories,
   tempDirectory,
-} from "./jsonl-storage-support.ts";
-import { appendBytes, fileSize, joinPath, removeDir } from "./platform-support.ts";
+  terminalTask,
+} = jsonlStorageSupport;
+const { appendBytes, fileSize, joinPath, removeDir } = platformSupport;
 
 afterEach(() =>
   Effect.runPromise(
@@ -37,19 +41,19 @@ const rewindableHistory = Effect.fn("rewindableHistory")(function* () {
   yield* createRoot(storage);
   const id = yield* awaited(storage.mintId<DocumentId>());
   const record = {
+    fork: "asOf" as const,
+    history: "rewindable" as const,
     id,
     kind: "rewindable",
-    scope: { kind: "conversation" as const, conversationId: ROOT_CONVERSATION_ID },
-    history: "rewindable" as const,
-    fork: "asOf" as const,
+    scope: { conversationId: ROOT_CONVERSATION_ID, kind: "conversation" as const },
   };
   const createdAt = yield* awaited(
     storage.commit(
       [
         {
-          type: "document.create",
+          content: { kind: "base", value: { count: 0 }, version: 1 },
           record,
-          content: { kind: "base", version: 1, value: { count: 0 } },
+          type: "document.create",
         },
       ],
       context,
@@ -59,9 +63,9 @@ const rewindableHistory = Effect.fn("rewindableHistory")(function* () {
     storage.commit(
       [
         {
-          type: "document.change",
+          content: { kind: "delta", ops: [["s", ["count"], 1]], version: 1 },
           id,
-          content: { kind: "delta", version: 1, ops: [["s", ["count"], 1]] },
+          type: "document.change",
         },
       ],
       context,
@@ -71,15 +75,15 @@ const rewindableHistory = Effect.fn("rewindableHistory")(function* () {
     storage.commit(
       [
         {
-          type: "document.change",
+          content: { kind: "base", value: { count: 2 }, version: 1 },
           id,
-          content: { kind: "base", version: 1, value: { count: 2 } },
+          type: "document.change",
         },
       ],
       context,
     ),
   );
-  return { directory, storage, id, createdAt, changedAt };
+  return { changedAt, createdAt, directory, id, storage };
 });
 
 const retiredSidecars = Effect.fn("retiredSidecars")(function* () {
@@ -95,25 +99,25 @@ const retiredSidecars = Effect.fn("retiredSidecars")(function* () {
       [
         { type: "task", value: pendingTask(taskId) },
         {
-          type: "document.create",
+          content: { kind: "base", value: {}, version: 1 },
           record: sessionDocument(sessionId, "session"),
-          content: { kind: "base", version: 1, value: {} },
+          type: "document.create",
         },
         {
-          type: "document.create",
+          content: { kind: "base", value: {}, version: 1 },
           record: {
+            fork: "current",
+            history: "latest",
             id: latestId,
             kind: "latest",
-            scope: { kind: "conversation", conversationId: ROOT_CONVERSATION_ID },
-            history: "latest",
-            fork: "current",
+            scope: { conversationId: ROOT_CONVERSATION_ID, kind: "conversation" },
           },
-          content: { kind: "base", version: 1, value: {} },
+          type: "document.create",
         },
         {
-          type: "document.create",
+          content: { kind: "base", value: {}, version: 1 },
           record: { id: taskDocumentId, kind: "task", scope: { kind: "task", taskId } },
-          content: { kind: "base", version: 1, value: {} },
+          type: "document.create",
         },
       ],
       context,
@@ -122,20 +126,20 @@ const retiredSidecars = Effect.fn("retiredSidecars")(function* () {
   const retiredAt = yield* awaited(
     storage.commit(
       [
-        { type: "document.retire", id: sessionId },
-        { type: "document.retire", id: latestId },
-        { type: "document.retire", id: taskDocumentId },
+        { id: sessionId, type: "document.retire" },
+        { id: latestId, type: "document.retire" },
+        { id: taskDocumentId, type: "document.retire" },
         { type: "task", value: terminalTask(taskId) },
       ],
       context,
     ),
   );
-  return { directory, taskId, sessionId, latestId, taskDocumentId, createdAt, retiredAt };
+  return { createdAt, directory, latestId, retiredAt, sessionId, taskDocumentId, taskId };
 });
 
 const neverReclaimsRewindable = Effect.gen(function* () {
   const { directory, storage, id, createdAt, changedAt } = yield* rewindableHistory();
-  yield* awaited(storage.commit([{ type: "document.retire", id }], context));
+  yield* awaited(storage.commit([{ id, type: "document.retire" }], context));
 
   expect(yield* readLines(joinPath(directory, `doc-${id}.jsonl`))).toHaveLength(3);
   const reopened = yield* openStorage(directory);
@@ -170,7 +174,7 @@ const reclaimsRetiredTask = Effect.gen(function* () {
     yield* awaited(
       reopened.findDocument({ kind: "session", scope: { kind: "session" } }, createdAt, context),
     ),
-  ).toMatchObject({ id: sessionId, createdAt, retiredAt });
+  ).toMatchObject({ createdAt, id: sessionId, retiredAt });
   expect(
     yield* awaited(
       reopened.findDocument({ kind: "session", scope: { kind: "session" } }, retiredAt, context),
@@ -195,9 +199,9 @@ const truncatesTornUtf = Effect.gen(function* () {
     storage.commit(
       [
         {
-          type: "document.create",
+          content: { kind: "base", value: { text: "kept" }, version: 1 },
           record: sessionDocument(documentId),
-          content: { kind: "base", version: 1, value: { text: "kept" } },
+          type: "document.create",
         },
       ],
       context,
@@ -219,9 +223,9 @@ const truncatesTornUtf = Effect.gen(function* () {
       reopened.commit(
         [
           {
-            type: "document.change",
+            content: { kind: "delta", ops: [], version: 1 },
             id: documentId,
-            content: { kind: "delta", version: 1, ops: [] },
+            type: "document.change",
           },
         ],
         context,

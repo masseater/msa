@@ -3,29 +3,29 @@ import { ToolTask } from "@msa/durable/harness";
 import { Effect } from "effect";
 import { describe, expect, it } from "vite-plus/test";
 
-import { type ChatSetup, chatSetup } from "./chat-support.ts";
-import { awaited } from "./effect-support.ts";
-import { addHooks, addTool } from "./harness-support.ts";
-import {
-  resultText,
-  results,
-  DONE,
-  calls,
-  run,
-  tool,
-  type Execute,
-} from "./harness-tools-support.ts";
-import { context } from "./session-support.ts";
+import chatSupport from "./chat-support.ts";
+import effectSupport from "./effect-support.ts";
+import harnessSupport from "./harness-support.ts";
+import harnessToolsSupport from "./harness-tools-support.ts";
+import sessionSupport from "./session-support.ts";
+
+const { chatSetup } = chatSupport;
+
+type ToolExecute = Parameters<typeof harnessToolsSupport.tool>[1];
+const { awaited } = effectSupport;
+const { addHooks, addTool } = harnessSupport;
+const { DONE, calls, resultText, results, run, tool } = harnessToolsSupport;
+const { context } = sessionSupport;
 
 const trace = Effect.fn("trace")(function* (
-  setup: ChatSetup,
+  setup: ReturnType<typeof chatSetup>,
   prepare?: (root: Conversation) => Promise<void>,
 ) {
   const runPromise = Effect.runPromiseWith(yield* Effect.context<never>());
 
   const events: string[] = [];
   const slow =
-    (name: string): Execute =>
+    (name: string): ToolExecute =>
     () =>
       runPromise(
         Effect.gen(function* () {
@@ -109,10 +109,10 @@ const usesRetainedOutput = Effect.gen(function* () {
           Effect.gen(function* () {
             api.output("line 1\n");
             api.output(new TextEncoder().encode("line 2\nline 3\n"));
-            api.diagnostic({ severity: "info", message: "from api" });
+            api.diagnostic({ message: "from api", severity: "info" });
             yield* awaited(api.details({ step: 1 }, context));
             yield* awaited(api.details({ step: 2 }, context));
-            return { diagnostics: [{ severity: "warn", message: "from result" }] };
+            return { diagnostics: [{ message: "from result", severity: "warn" }] };
           }),
         ),
       { outputLimits: { maxLines: 2 } },
@@ -146,7 +146,7 @@ const offersTailWindow = Effect.gen(function* () {
       (_args, api) => {
         windows.push(api.outputWindow);
         api.output("dropped\n");
-        api.output("x\ny\n", { bytes: 8, newlines: 1, endsWithNewline: true });
+        api.output("x\ny\n", { bytes: 8, endsWithNewline: true, newlines: 1 });
         return Promise.resolve({});
       },
       { outputLimits: { maxLines: 1, retain: "tail" } },
@@ -168,10 +168,10 @@ const offersTailWindow = Effect.gen(function* () {
     DONE,
   ]);
   expect(windows).toContainEqual({
+    bytesPerSecond: 100 * 1024,
     maxBytes: 50 * 1024,
     maxLines: 1,
     minIntervalMs: 250,
-    bytesPerSecond: 100 * 1024,
   });
   expect(windows).toContainEqual(undefined);
   expect(resultText(results(entries).find((result) => result.toolCallId === "c1")!)).toBe(
@@ -187,14 +187,14 @@ describe("tool results", () => {
 
 const boundsExplicitText = Effect.gen(function* () {
   const setup = chatSetup();
-  const image = { type: "image", data: "AAAA", mimeType: "image/png" } as const;
+  const image = { data: "AAAA", mimeType: "image/png", type: "image" } as const;
   addTool(
     setup.registry,
     tool(
       "big",
       () =>
         Promise.resolve({
-          output: [{ type: "text", text: "a\nb\n" }, image, { type: "text", text: "c\nd\n" }],
+          output: [{ text: "a\nb\n", type: "text" }, image, { text: "c\nd\n", type: "text" }],
         }),
       { outputLimits: { maxLines: 2, retain: "tail" } },
     ),

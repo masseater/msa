@@ -2,48 +2,51 @@ import { defineDoc } from "@msa/durable";
 import { Effect } from "effect";
 import { describe, expect, it } from "vite-plus/test";
 
-import { awaited } from "./effect-support.ts";
-import { context, flush, openTestSession } from "./session-support.ts";
+import effectSupport from "./effect-support.ts";
+import sessionSupport from "./session-support.ts";
+
+const { awaited } = effectSupport;
+const { context, flush, openTestSession } = sessionSupport;
 
 function throwingCheckpointDocs() {
   const state: { throwCheckpoint: boolean; firstCalls: number } = {
-    throwCheckpoint: true,
     firstCalls: 0,
+    throwCheckpoint: true,
   };
   const First = defineDoc<{ count: number }>({
-    kind: "checkpoint.rollback.first",
-    version: 1,
-    scope: "session",
-    initial: () => ({ count: 0 }),
     checkpointWhen: () => {
       state.firstCalls++;
       return false;
     },
+    initial: () => ({ count: 0 }),
+    kind: "checkpoint.rollback.first",
+    scope: "session",
+    version: 1,
   });
   const Second = defineDoc<{ count: number }>({
-    kind: "checkpoint.rollback.second",
-    version: 1,
-    scope: "session",
-    initial: () => ({ count: 0 }),
     checkpointWhen: () => {
       if (state.throwCheckpoint) throw new Error("checkpoint failed");
       return false;
     },
+    initial: () => ({ count: 0 }),
+    kind: "checkpoint.rollback.second",
+    scope: "session",
+    version: 1,
   });
-  return { state, First, Second };
+  return { First, Second, state };
 }
 
 const skipsPredicateEmpty = Effect.gen(function* () {
   let calls = 0;
   const Doc = defineDoc<{ items: string[] }>({
-    kind: "checkpoint.no-op",
-    version: 1,
-    scope: "session",
-    initial: () => ({ items: ["a", "b"] }),
     checkpointWhen: () => {
       calls++;
       return false;
     },
+    initial: () => ({ items: ["a", "b"] }),
+    kind: "checkpoint.no-op",
+    scope: "session",
+    version: 1,
   });
   const { session, storage } = openTestSession();
   yield* awaited(session.commit((tx) => tx.doc(Doc).then(() => undefined), context));
@@ -76,8 +79,8 @@ const skipsPredicateEmpty = Effect.gen(function* () {
   );
   expect(calls).toBe(1);
   expect(storage.commits.at(-1)![0]).toMatchObject({
-    type: "document.change",
     content: { kind: "delta" },
+    type: "document.change",
   });
 });
 
@@ -109,17 +112,17 @@ const rollsBackEveryStep1 = Effect.gen(function* () {
   const commits = storage.commits.length;
   const published = publications.length;
   return {
-    runPromise,
-    state,
     First,
     Second,
-    session,
-    storage,
-    publications,
-    first,
-    second,
     commits,
+    first,
+    publications,
     published,
+    runPromise,
+    second,
+    session,
+    state,
+    storage,
   };
 });
 
@@ -159,7 +162,7 @@ const rollsBackEveryStep2 = Effect.gen(function* () {
   expect(yield* awaited(session.snapshot(Second, context))).toBe(second);
 
   state.throwCheckpoint = false;
-  return { runPromise, First, Second, session };
+  return { First, Second, runPromise, session };
 });
 
 const rollsBackEvery = Effect.gen(function* () {

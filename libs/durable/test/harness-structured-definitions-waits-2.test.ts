@@ -1,26 +1,32 @@
 import { Effect } from "effect";
 import { afterEach, describe, expect, it } from "vite-plus/test";
 
-import { awaited } from "./effect-support.ts";
-import { spawnAndFinish } from "./harness-structured-events.ts";
-import {
-  state,
-  outcomeOf,
-  open,
+import effectSupport from "./effect-support.ts";
+import harnessStructuredEvents from "./harness-structured-events.ts";
+import harnessStructuredSupport from "./harness-structured-support.ts";
+import platformSupport from "./platform-support.ts";
+import sessionSupport from "./session-support.ts";
+
+const { awaited } = effectSupport;
+const { spawnAndFinish } = harnessStructuredEvents;
+const {
+  Node,
+  OWN_CONVERSATION,
+  behaviors,
+  directories,
   gate,
   gates,
-  until,
-  start,
-  Node,
-  behaviors,
   log,
-  OWN_CONVERSATION,
+  open,
   openNodes,
+  outcomeOf,
   script,
-  directories,
-} from "./harness-structured-support.ts";
-import { removeDir } from "./platform-support.ts";
-import { context } from "./session-support.ts";
+  start,
+  state,
+  until,
+} = harnessStructuredSupport;
+const { removeDir } = platformSupport;
+const { context } = sessionSupport;
 
 afterEach(() =>
   Effect.runPromise(
@@ -61,7 +67,7 @@ const marksAwaitsOnly = Effect.gen(function* () {
         Effect.gen(function* () {
           yield* awaited(gate("abort.first").promise);
           yield* awaited(
-            runtime.commit(() => ({ status: "terminal", outcome: { status: "aborted" } }), ctx),
+            runtime.commit(() => ({ outcome: { status: "aborted" }, status: "terminal" }), ctx),
           );
         }),
       ),
@@ -102,7 +108,7 @@ const stopsCascadeUnmarkedStep1 = Effect.gen(function* () {
         Effect.gen(function* () {
           yield* awaited(gate("abort.owner").promise);
           yield* awaited(
-            runtime.commit(() => ({ status: "terminal", outcome: { status: "aborted" } }), ctx),
+            runtime.commit(() => ({ outcome: { status: "aborted" }, status: "terminal" }), ctx),
           );
         }),
       ),
@@ -120,7 +126,7 @@ const stopsCascadeUnmarkedStep1 = Effect.gen(function* () {
               tx.createTask(
                 Node,
                 { name: "background" },
-                { ...OWN_CONVERSATION, conversationId: outer.id, background: true },
+                { ...OWN_CONVERSATION, background: true, conversationId: outer.id },
               ),
             );
             const inner = yield* awaited(
@@ -128,7 +134,7 @@ const stopsCascadeUnmarkedStep1 = Effect.gen(function* () {
                 ownership: { kind: "task", taskId: background },
               }),
             );
-            return { owner, outer: outer.id, background, inner: inner.id };
+            return { background, inner: inner.id, outer: outer.id, owner };
           }),
         ),
       context,

@@ -2,27 +2,33 @@ import { type TaskId } from "@msa/durable";
 import { Effect } from "effect";
 import { afterEach, describe, expect, it } from "vite-plus/test";
 
-import { toJsonText, awaited } from "./effect-support.ts";
-import {
-  state,
-  outcomeOf,
-  open,
-  gates,
-  until,
-  start,
+import effectSupport from "./effect-support.ts";
+import harnessStructuredSupport from "./harness-structured-support.ts";
+import platformSupport from "./platform-support.ts";
+import sessionSupport from "./session-support.ts";
+import taskSupport from "./task-support.ts";
+
+const { awaited, toJsonText } = effectSupport;
+const {
   Node,
-  behaviors,
-  log,
   OWN_CONVERSATION,
-  openNodes,
-  waitOn,
-  spawn,
-  script,
+  behaviors,
   directories,
-} from "./harness-structured-support.ts";
-import { removeDir } from "./platform-support.ts";
-import { context } from "./session-support.ts";
-import { deferred } from "./task-support.ts";
+  gates,
+  log,
+  open,
+  openNodes,
+  outcomeOf,
+  script,
+  spawn,
+  start,
+  state,
+  until,
+  waitOn,
+} = harnessStructuredSupport;
+const { removeDir } = platformSupport;
+const { context } = sessionSupport;
+const { deferred } = taskSupport;
 
 afterEach(() =>
   Effect.runPromise(
@@ -57,8 +63,8 @@ const letsBackgroundTask = Effect.gen(function* () {
             );
             const options = {
               ...OWN_CONVERSATION,
-              conversationId: conversation.id,
               background: true,
+              conversationId: conversation.id,
             };
             return yield* awaited(tx.createTask(Node, { name: "background" }, options));
           }),
@@ -94,7 +100,7 @@ const rejectsCycleHoldStep1 = Effect.gen(function* () {
           runPromise(
             Effect.gen(function* () {
               ids["worker"] = yield* awaited(spawn(tx, runtime.taskId, "worker"));
-              return { status: "running", checkpoint: { phase: "resume", round: 1 } };
+              return { checkpoint: { phase: "resume", round: 1 }, status: "running" };
             }),
           ),
         ctx,
@@ -119,7 +125,7 @@ const rejectsCycleHoldStep1 = Effect.gen(function* () {
       ),
   });
   ids["orchestrator"] = yield* awaited(start(root, "orchestrator"));
-  return { harness, root, ids };
+  return { harness, ids, root };
 });
 
 const rejectsCycleHold = Effect.gen(function* () {

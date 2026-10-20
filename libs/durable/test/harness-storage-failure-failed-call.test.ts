@@ -1,13 +1,16 @@
 import { createModels } from "@msa/ai";
 import type { Context } from "@msa/chord";
-import { defineExtension, defineTask, LiveDoc } from "@msa/durable";
-import { createRegistry, Harness } from "@msa/durable/harness";
+import { LiveDoc, defineExtension, defineTask } from "@msa/durable";
+import { Harness, createRegistry } from "@msa/durable/harness";
 import { MemoryStorage } from "@msa/durable/storage/memory";
 import { Effect } from "effect";
 import { describe, expect, it } from "vite-plus/test";
 
-import { started } from "./harness-storage-failure-support.ts";
-import { abortController, awaited, ControlledStorage, context, deferred } from "./support.ts";
+import harnessStorageFailureSupport from "./harness-storage-failure-support.ts";
+import support from "./support.ts";
+
+const { started } = harnessStorageFailureSupport;
+const { ControlledStorage, abortController, awaited, context, deferred } = support;
 
 const stubbornRunHarness = Effect.fn("stubbornRunHarness")(function* () {
   const runPromise = Effect.runPromiseWith(yield* Effect.context<never>());
@@ -15,9 +18,9 @@ const stubbornRunHarness = Effect.fn("stubbornRunHarness")(function* () {
   const release = deferred();
   const entered = deferred();
   const Stubborn = defineTask<null, { phase: "work" }, null>({
-    name: "test.stubborn",
-    version: 1,
+    abort: () => Promise.resolve(),
     initial: () => ({ phase: "work" }),
+    name: "test.stubborn",
     phases: {
       work: () =>
         runPromise(
@@ -27,7 +30,7 @@ const stubbornRunHarness = Effect.fn("stubbornRunHarness")(function* () {
           }),
         ),
     },
-    abort: () => Promise.resolve(),
+    version: 1,
   });
   const storage = new ControlledStorage();
   const registry = createRegistry();
@@ -38,16 +41,16 @@ const stubbornRunHarness = Effect.fn("stubbornRunHarness")(function* () {
       storage,
       {
         models: createModels(),
-        registry,
         onReport: () => {
           reentry.reentered ??= harness.waitForIdle(context);
         },
+        registry,
       },
       context,
     ),
   );
   const root = yield* awaited(harness.root(context));
-  return { release, entered, Stubborn, storage, reentry, harness, root };
+  return { Stubborn, entered, harness, reentry, release, root, storage };
 });
 
 const failsOnlyCall = Effect.gen(function* () {
@@ -111,7 +114,7 @@ const failsThrowOwn = Effect.gen(function* () {
       root.commit((tx) => tx.appendEntry(root.id, { kind: "note" }), context),
     ).resolves.toBeDefined(),
   );
-  expect(yield* awaited(harness.closed)).toEqual({ reason: "failed", error: bug });
+  expect(yield* awaited(harness.closed)).toEqual({ error: bug, reason: "failed" });
   expect(reports).toEqual([bug]);
   yield* awaited(harness.close(context));
 });
@@ -128,7 +131,7 @@ const failsStorageError = Effect.gen(function* () {
   held.release();
   yield* awaited(expect(committing).rejects.toBe(failure));
   yield* awaited(closing);
-  expect(yield* awaited(harness.closed)).toEqual({ reason: "failed", error: failure });
+  expect(yield* awaited(harness.closed)).toEqual({ error: failure, reason: "failed" });
   expect(reports).toEqual([failure]);
 });
 
@@ -163,11 +166,11 @@ const endsAbortJoins = Effect.gen(function* () {
       failure,
     ),
   );
-  yield* awaited(expect(aborting).rejects.toMatchObject({ name: "SessionFailed", cause: failure }));
+  yield* awaited(expect(aborting).rejects.toMatchObject({ cause: failure, name: "SessionFailed" }));
   yield* awaited(
     expect(reentry.reentered).rejects.toMatchObject({
-      name: "SessionFailed",
       cause: failure,
+      name: "SessionFailed",
     }),
   );
   release.resolve();
@@ -224,7 +227,7 @@ const reportsListenerOnReport = Effect.gen(function* () {
     const rejecting = yield* awaited(
       Harness.open(
         new MemoryStorage(),
-        { models: createModels(), registry, onReport: asyncThrow },
+        { models: createModels(), onReport: asyncThrow, registry },
         context,
       ),
     );

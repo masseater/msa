@@ -2,10 +2,15 @@ import { defineTask } from "@msa/durable";
 import { Effect } from "effect";
 import { describe, expect, it } from "vite-plus/test";
 
-import { awaited } from "./effect-support.ts";
-import { start, oneStep, openRoot } from "./harness-tasks-support.ts";
-import { context } from "./session-support.ts";
-import { completed, eventually } from "./task-support.ts";
+import effectSupport from "./effect-support.ts";
+import harnessTasksSupport from "./harness-tasks-support.ts";
+import sessionSupport from "./session-support.ts";
+import taskSupport from "./task-support.ts";
+
+const { awaited } = effectSupport;
+const { oneStep, openRoot, start } = harnessTasksSupport;
+const { context } = sessionSupport;
+const { completed, eventually } = taskSupport;
 
 const continuesOneInvocation = Effect.gen(function* () {
   const runPromise = Effect.runPromiseWith(yield* Effect.context<never>());
@@ -13,9 +18,9 @@ const continuesOneInvocation = Effect.gen(function* () {
   const seen: number[] = [];
   const runtimes = new Set<unknown>();
   const Counter = defineTask<{ to: number }, { phase: "count"; n: number }, number>({
+    abort: () => Promise.resolve(),
+    initial: () => ({ n: 0, phase: "count" }),
     name: "test.counter",
-    version: 1,
-    initial: () => ({ phase: "count", n: 0 }),
     phases: {
       count: (task, runtime, ctx) =>
         runPromise(
@@ -27,13 +32,13 @@ const continuesOneInvocation = Effect.gen(function* () {
                 const n = current.state.checkpoint.n + 1;
                 return n === task.input.to
                   ? completed(n)
-                  : { status: "running", checkpoint: { phase: "count", n } };
+                  : { checkpoint: { n, phase: "count" }, status: "running" };
               }, ctx),
             );
           }),
         ),
     },
-    abort: () => Promise.resolve(),
+    version: 1,
   });
   const { harness, root } = yield* openRoot([Counter]);
   const id = yield* awaited(
@@ -85,16 +90,16 @@ const faultsPhaseWithout = Effect.gen(function* () {
   );
   expect(outcomes).toEqual([
     {
-      status: "faulted",
       error: { message: "Task test.idle phase run returned without durable progress" },
+      status: "faulted",
     },
     {
-      status: "faulted",
       error: {
         message: "Task test.document-only phase run returned without durable progress",
       },
+      status: "faulted",
     },
-    { status: "faulted", error: { message: "boom" } },
+    { error: { message: "boom" }, status: "faulted" },
   ]);
   yield* awaited(harness.close(context));
 });
@@ -123,8 +128,8 @@ const keepsCommittedTerminal = Effect.gen(function* () {
   const id = yield* awaited(start(root, Done));
   harness.resume();
   expect((yield* awaited(harness.waitForTask(id, context))).state.outcome).toEqual({
-    status: "completed",
     result: "ok",
+    status: "completed",
   });
   yield* eventually(() => lateCommit !== undefined);
   expect(String(lateCommit)).toContain(`Task ${id} is terminal`);
@@ -140,9 +145,9 @@ const comparesCheckpointsValue = Effect.gen(function* () {
   const runPromise = Effect.runPromiseWith(yield* Effect.context<never>());
 
   const Collect = defineTask<null, { phase: "collect"; items: string[] }, null>({
+    abort: () => Promise.resolve(),
+    initial: () => ({ items: [], phase: "collect" }),
     name: "test.collect",
-    version: 1,
-    initial: () => ({ phase: "collect", items: [] }),
     phases: {
       collect: (task, runtime, ctx) =>
         runPromise(
@@ -151,14 +156,14 @@ const comparesCheckpointsValue = Effect.gen(function* () {
             const next = items.length < 2 ? [...items, `item${items.length}`] : [...items];
             yield* awaited(
               runtime.commit(
-                () => ({ status: "running", checkpoint: { phase: "collect", items: next } }),
+                () => ({ checkpoint: { items: next, phase: "collect" }, status: "running" }),
                 ctx,
               ),
             );
           }),
         ),
     },
-    abort: () => Promise.resolve(),
+    version: 1,
   });
   const { harness, root } = yield* openRoot([Collect]);
   const id = yield* awaited(
@@ -169,8 +174,8 @@ const comparesCheckpointsValue = Effect.gen(function* () {
   );
   harness.resume();
   expect((yield* awaited(harness.waitForTask(id, context))).state.outcome).toEqual({
-    status: "faulted",
     error: { message: "Task test.collect phase collect returned without durable progress" },
+    status: "faulted",
   });
   yield* awaited(harness.close(context));
 });

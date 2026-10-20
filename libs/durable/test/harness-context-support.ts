@@ -1,34 +1,37 @@
-import { createModels, type Message } from "@msa/ai";
-import type { Context } from "@msa/chord";
+import { type Message, createModels } from "@msa/ai";
 import {
   type ContextView,
-  defineTask,
   type EntryDraft,
   type EntryRecord,
   type HarnessSettings,
   type Storage,
-  type TaskRuntime,
+  defineTask,
 } from "@msa/durable";
-import { createRegistry, Harness } from "@msa/durable/harness";
+import { Harness, createRegistry } from "@msa/durable/harness";
 import { MemoryStorage } from "@msa/durable/storage/memory";
 import { Effect } from "effect";
 import { expect } from "vite-plus/test";
 
-import { awaited } from "./effect-support.ts";
-import { addTask, assistant, openHarness, user } from "./harness-support.ts";
-import { context } from "./session-support.ts";
+import effectSupport from "./effect-support.ts";
+import type harnessContextSupportTypes from "./harness-context-support.types.ts";
+import harnessSupport from "./harness-support.ts";
+import sessionSupport from "./session-support.ts";
 
-export const setup = Effect.fn("setup")(function* () {
+const { awaited } = effectSupport;
+const { addTask, assistant, openHarness, user } = harnessSupport;
+const { context } = sessionSupport;
+
+const setup = Effect.fn("setup")(function* () {
   const { harness } = yield* openHarness(new MemoryStorage());
   const root = yield* awaited(harness.root(context));
   const append = (draft: EntryDraft): Promise<EntryRecord> =>
     root.commit((tx) => tx.appendEntry(root.id, draft), context);
   const message = (model: Message, kind = "message"): Promise<EntryRecord> =>
     append({ kind, model: [model] });
-  return { harness, root, append, message };
+  return { append, harness, message, root };
 });
 
-export const countingSetup = Effect.fn("countingSetup")(function* (
+const countingSetup = Effect.fn("countingSetup")(function* (
   options: { readonly settings?: HarnessSettings; readonly now?: () => number } = {},
 ) {
   const runPromise = Effect.runPromiseWith(yield* Effect.context<never>());
@@ -74,24 +77,26 @@ export const countingSetup = Effect.fn("countingSetup")(function* (
       ),
     );
   }
-  return { harness, registry, root, first, scanned, hold };
+  return { first, harness, hold, registry, root, scanned };
 });
 
-export type Counting = Effect.Success<ReturnType<typeof countingSetup>>;
-
-export type RunRuntime = TaskRuntime<Record<string, never>, { phase: "run" }, null, object>;
-
-export const runInRoot = Effect.fn("runInRoot")(function* (
-  { harness, registry, root }: Pick<Counting, "harness" | "registry" | "root">,
+const runInRoot = Effect.fn("runInRoot")(function* (
+  { harness, registry, root }: harnessContextSupportTypes.RootHandles,
   name: string,
-  run: (runtime: RunRuntime, taskContext: Context) => Promise<void>,
+  run: (
+    runtime: harnessContextSupportTypes.RunRuntime,
+    taskContext: harnessContextSupportTypes.Context,
+  ) => Promise<void>,
 ) {
   const runPromise = Effect.runPromiseWith(yield* Effect.context<never>());
 
   const Run = defineTask<Record<string, never>, { phase: "run" }, null>({
-    name,
-    version: 1,
+    abort: (_task, runtime, taskContext) =>
+      runPromise(
+        Effect.asVoid(Effect.suspend(() => awaited(runtime.commit(() => ABORTED, taskContext)))),
+      ),
     initial: () => ({ phase: "run" }),
+    name,
     phases: {
       run: (_task, runtime, taskContext) =>
         runPromise(
@@ -101,34 +106,38 @@ export const runInRoot = Effect.fn("runInRoot")(function* (
           }),
         ),
     },
-    abort: (_task, runtime, taskContext) =>
-      runPromise(
-        Effect.asVoid(Effect.suspend(() => awaited(runtime.commit(() => ABORTED, taskContext)))),
-      ),
+    version: 1,
   });
   addTask(registry, Run);
   harness.resume();
   const id = yield* awaited(
     harness.commit(
       (tx) =>
-        tx.createTask(Run, {}, { ownership: { kind: "conversation" }, conversationId: root.id }),
+        tx.createTask(Run, {}, { conversationId: root.id, ownership: { kind: "conversation" } }),
       context,
     ),
   );
   expect((yield* awaited(harness.waitForTask(id, context))).state.outcome).toEqual(DONE.outcome);
 });
 
-export const DONE = { status: "terminal", outcome: { status: "completed", result: null } } as const;
+const DONE = { outcome: { result: null, status: "completed" }, status: "terminal" } as const;
 
-export const ABORTED = { status: "terminal", outcome: { status: "aborted" } } as const;
+const ABORTED = { outcome: { status: "aborted" }, status: "terminal" } as const;
 
-export function probeTask(
-  read: (name: string, load: () => Promise<ContextView>, taskContext: Context) => Promise<void>,
+function probeTask(
+  read: (
+    name: string,
+    load: () => Promise<ContextView>,
+    taskContext: harnessContextSupportTypes.Context,
+  ) => Promise<void>,
 ) {
   return defineTask<{ name: string }, { phase: "run" }, null>({
-    name: "test.context-probe",
-    version: 1,
+    abort: (_task, runtime, taskContext) =>
+      Effect.runPromise(
+        Effect.asVoid(Effect.suspend(() => awaited(runtime.commit(() => ABORTED, taskContext)))),
+      ),
     initial: () => ({ phase: "run" }),
+    name: "test.context-probe",
     phases: {
       run: (task, runtime, taskContext) =>
         Effect.runPromise(
@@ -144,9 +153,17 @@ export function probeTask(
           }),
         ),
     },
-    abort: (_task, runtime, taskContext) =>
-      Effect.runPromise(
-        Effect.asVoid(Effect.suspend(() => awaited(runtime.commit(() => ABORTED, taskContext)))),
-      ),
+    version: 1,
   });
 }
+
+const harnessContextSupport = {
+  ABORTED,
+  DONE,
+  countingSetup,
+  probeTask,
+  runInRoot,
+  setup,
+};
+
+export default harnessContextSupport;

@@ -4,19 +4,25 @@ import { BACKGROUND_CONTEXT } from "@msa/chord/context";
 import { Console, Effect } from "effect";
 
 import { currentTimeMillis } from "../../src/clock.ts";
-import { createRegistry, Harness } from "../../src/harness/index.ts";
+import { Harness, createRegistry } from "../../src/harness/index.ts";
 import { defineExtension, defineTask } from "../../src/index.ts";
 import { openNodeSqliteStorage } from "../../src/storage/sqlite/node.ts";
-import { awaited } from "../effect-support.ts";
-import { joinPath, makeTempDir, removeDir } from "../platform-support.ts";
+import effectSupport from "../effect-support.ts";
+import platformSupport from "../platform-support.ts";
+
+const { awaited } = effectSupport;
+const { joinPath, makeTempDir, removeDir } = platformSupport;
 
 const context = BACKGROUND_CONTEXT;
 
 let reachedTick = (_n: number): void => {};
 const Ticker = defineTask<{ to: number }, { phase: "tick"; n: number }, string>({
+  abort: (_task, runtime, taskContext) =>
+    Promise.resolve(
+      runtime.commit(() => ({ outcome: { status: "aborted" }, status: "terminal" }), taskContext),
+    ).then(() => undefined),
+  initial: () => ({ n: 1, phase: "tick" }),
   name: "example.ticker",
-  version: 1,
-  initial: () => ({ phase: "tick", n: 1 }),
   phases: {
     tick: (task, runtime, taskContext) =>
       Effect.runPromise(
@@ -32,10 +38,10 @@ const Ticker = defineTask<{ to: number }, { phase: "tick"; n: number }, string>(
               () =>
                 n === task.input.to
                   ? {
+                      outcome: { result: `counted to ${n}`, status: "completed" },
                       status: "terminal",
-                      outcome: { status: "completed", result: `counted to ${n}` },
                     }
-                  : { status: "running", checkpoint: { phase: "tick", n: n + 1 } },
+                  : { checkpoint: { n: n + 1, phase: "tick" }, status: "running" },
               taskContext,
             ),
           );
@@ -43,10 +49,7 @@ const Ticker = defineTask<{ to: number }, { phase: "tick"; n: number }, string>(
         }),
       ),
   },
-  abort: (_task, runtime, taskContext) =>
-    Promise.resolve(
-      runtime.commit(() => ({ status: "terminal", outcome: { status: "aborted" } }), taskContext),
-    ).then(() => undefined),
+  version: 1,
 });
 const registry = createRegistry();
 registry.install(defineExtension({ name: "ticker", tasks: [Ticker] }));

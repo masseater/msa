@@ -1,20 +1,17 @@
 import { runInNewContext } from "node:vm";
 
 import { createModels } from "@msa/ai";
-import { defineExtension, defineTask, LiveDoc } from "@msa/durable";
-import { createRegistry, Harness } from "@msa/durable/harness";
+import { LiveDoc, defineExtension, defineTask } from "@msa/durable";
+import { Harness, createRegistry } from "@msa/durable/harness";
 import { MemoryStorage } from "@msa/durable/storage/memory";
 import { Effect } from "effect";
 import { describe, expect, it } from "vite-plus/test";
 
-import {
-  contained,
-  running,
-  safeNow,
-  started,
-  Waiting,
-} from "./harness-storage-failure-support.ts";
-import { awaited, context, openTasks } from "./support.ts";
+import harnessStorageFailureSupport from "./harness-storage-failure-support.ts";
+import support from "./support.ts";
+
+const { Waiting, contained, running, safeNow, started } = harnessStorageFailureSupport;
+const { awaited, context, openTasks } = support;
 
 const containsFulfilledThenable = Effect.gen(function* () {
   const unhandled: unknown[] = [];
@@ -90,7 +87,7 @@ const reportsThrowingWatch = Effect.gen(function* () {
       context,
     ),
   );
-  expect(yield* awaited(watch.closed)).toEqual({ reason: "listener_error", error: failure });
+  expect(yield* awaited(watch.closed)).toEqual({ error: failure, reason: "listener_error" });
   expect(reports).toEqual([failure]);
   yield* awaited(harness.close(context));
 });
@@ -105,13 +102,13 @@ const faultsOnlyTask = Effect.gen(function* () {
 
   const unformattable = Object.create(null) as object;
   const Throws = defineTask<null, { phase: "work" }, null>({
-    name: "test.throws-unformattable",
-    version: 1,
+    abort: () => Promise.resolve(),
     initial: () => ({ phase: "work" }),
+    name: "test.throws-unformattable",
     phases: {
       work: () => Promise.reject(unformattable),
     },
-    abort: () => Promise.resolve(),
+    version: 1,
   });
   const opened = yield* openTasks(new MemoryStorage(), [Throws]);
   const root = yield* awaited(opened.harness.root(context));
@@ -125,8 +122,8 @@ const faultsOnlyTask = Effect.gen(function* () {
   );
   opened.harness.resume();
   expect((yield* awaited(opened.harness.waitForTask(id, context))).state.outcome).toEqual({
-    status: "faulted",
     error: { message: "[object Object]" },
+    status: "faulted",
   });
   yield* awaited(
     root.commit(
@@ -161,13 +158,13 @@ const keepsWorkingOnReport = Effect.gen(function* () {
       new MemoryStorage(),
       {
         models: createModels(),
-        registry,
         now: () => {
           throw new Error("clock broke");
         },
         onReport: () => {
           throw new Error("report broke");
         },
+        registry,
       },
       context,
     ),

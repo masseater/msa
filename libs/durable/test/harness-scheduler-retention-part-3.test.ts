@@ -3,22 +3,18 @@ import { Effect } from "effect";
 import { afterEach, describe, expect, it } from "vite-plus/test";
 
 import { openNodeSqliteStorage } from "../src/storage/sqlite/node.ts";
-import { awaited } from "./effect-support.ts";
-import {
-  sizes,
-  subagentCycle,
-  gate,
-  gates,
-  Hold,
-  runs,
-  directories,
-  sqlitePath,
-  open,
-  rejections,
-} from "./harness-scheduler-retention-support.ts";
-import { removeDir } from "./platform-support.ts";
-import { context } from "./session-support.ts";
-import { eventually } from "./task-support.ts";
+import effectSupport from "./effect-support.ts";
+import harnessSchedulerRetentionSupport from "./harness-scheduler-retention-support.ts";
+import platformSupport from "./platform-support.ts";
+import sessionSupport from "./session-support.ts";
+import taskSupport from "./task-support.ts";
+
+const { awaited } = effectSupport;
+const { Hold, directories, gate, gates, open, rejections, runs, sizes, sqlitePath, subagentCycle } =
+  harnessSchedulerRetentionSupport;
+const { removeDir } = platformSupport;
+const { context } = sessionSupport;
+const { eventually } = taskSupport;
 
 afterEach(() =>
   Effect.runPromise(
@@ -55,7 +51,7 @@ const endedLevelsTree = Effect.fn("endedLevelsTree")(function* () {
             const keep = yield* awaited(
               tx.createTask(Hold, { name: "keep" }, { ownership: { kind: "task", taskId: p } }),
             );
-            return { p, b, c: c.id, keep };
+            return { b, c: c.id, keep, p };
           }),
         ),
       context,
@@ -77,13 +73,13 @@ const withdrawsInputQueuedStep1 = Effect.gen(function* () {
       (tx) =>
         runPromise(
           Effect.gen(function* () {
-            (yield* awaited(tx.doc(LiveDoc, tree.c))).run = { taskId: tree.keep, inputs: [] };
+            (yield* awaited(tx.doc(LiveDoc, tree.c))).run = { inputs: [], taskId: tree.keep };
           }),
         ),
       context,
     ),
   );
-  const queued = (yield* awaited(c.submit({ type: "input", content: "later" }, context))).id;
+  const queued = (yield* awaited(c.submit({ content: "later", type: "input" }, context))).id;
   yield* eventually(() => sizes(harness).dropQueue === 0);
   yield* awaited(
     harness.commit(
@@ -94,8 +90,8 @@ const withdrawsInputQueuedStep1 = Effect.gen(function* () {
             (tx as unknown as { setTask(value: unknown): void }).setTask({
               ...record,
               state: {
+                outcome: { error: { message: "x" }, status: "failed" },
                 status: "completing",
-                outcome: { status: "failed", error: { message: "x" } },
               },
             });
           }),
@@ -103,7 +99,7 @@ const withdrawsInputQueuedStep1 = Effect.gen(function* () {
       context,
     ),
   );
-  return { runPromise, harness, queued };
+  return { harness, queued, runPromise };
 });
 
 const withdrawsInputQueued = Effect.gen(function* () {
@@ -142,11 +138,11 @@ const forgets20000 = Effect.gen(function* () {
       (tx) =>
         runPromise(
           Effect.gen(function* () {
-            const links: TaskId[] = [];
+            const linksInner: TaskId[] = [];
             let owner = yield* awaited(
               tx.createTask(Hold, { name: "link0" }, { ownership: { kind: "conversation" } }),
             );
-            links.push(owner);
+            linksInner.push(owner);
             for (const n of Array.from({ length: depth - 1 }, (_, i) => 1 + i)) {
               owner = yield* awaited(
                 tx.createTask(
@@ -155,12 +151,12 @@ const forgets20000 = Effect.gen(function* () {
                   { ownership: { kind: "task", taskId: owner } },
                 ),
               );
-              links.push(owner);
+              linksInner.push(owner);
             }
-            const leaf = yield* awaited(
+            const leafInner = yield* awaited(
               tx.createTask(Hold, { name: "leaf" }, { ownership: { kind: "task", taskId: owner } }),
             );
-            return { links, leaf };
+            return { leaf: leafInner, links: linksInner };
           }),
         ),
       context,
@@ -227,14 +223,14 @@ const doesNotScan = Effect.gen(function* () {
       (tx) =>
         runPromise(
           Effect.gen(function* () {
-            (yield* awaited(tx.doc(LiveDoc, root.id))).run = { taskId: busy, inputs: [] };
+            (yield* awaited(tx.doc(LiveDoc, root.id))).run = { inputs: [], taskId: busy };
           }),
         ),
       context,
     ),
   );
   const before = scans;
-  yield* awaited(root.submit({ type: "input", content: "queued" }, context));
+  yield* awaited(root.submit({ content: "queued", type: "input" }, context));
   yield* Effect.sleep(20);
   expect(scans).toBe(before);
   gate("busy").resolve();

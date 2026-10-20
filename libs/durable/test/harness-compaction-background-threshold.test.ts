@@ -3,25 +3,28 @@ import { CompactionTask, watchEvents } from "@msa/durable/harness";
 import { Effect } from "effect";
 import { afterEach, describe, expect, it } from "vite-plus/test";
 
-import {
-  compactionTasks,
-  text,
-  summary,
-  answer,
-  gated,
-  BLOCKING,
-  history,
-  turn,
-  directories,
+import harnessCompactionSupport from "./harness-compaction-support.ts";
+import support from "./support.ts";
+
+const {
   BACKGROUND,
-  live,
+  BLOCKING,
+  answer,
+  compactionTasks,
+  directories,
   failure,
   firstUserText,
+  gated,
+  history,
+  kinds,
+  live,
   open,
   result,
-  kinds,
-} from "./harness-compaction-support.ts";
-import { waitFor, awaited, addHooks, addSection, removeDir, context, deferred } from "./support.ts";
+  summary,
+  text,
+  turn,
+} = harnessCompactionSupport;
+const { addHooks, addSection, awaited, context, deferred, removeDir, waitFor } = support;
 
 afterEach(() =>
   Effect.runPromise(
@@ -67,23 +70,23 @@ const waitsCompactionAppends = Effect.gen(function* () {
   chat.faux.summaries.push(gated(gate, summary(), reached));
   chat.faux.agent.push(answer("a4"));
   const input = yield* awaited(
-    chat.root.submit({ type: "input", content: text("u4", 200) }, context),
+    chat.root.submit({ content: text("u4", 200), type: "input" }, context),
   );
   yield* awaited(reached.promise);
   const [child] = yield* compactionTasks(chat);
   const generation = (yield* awaited(live(chat))).run!.taskId;
   expect(child).toMatchObject({
-    owner: generation,
     background: false,
     input: { reason: "threshold" },
+    owner: generation,
   });
   expect((yield* awaited(chat.harness.getTask(generation, context)))?.state).toMatchObject({
-    status: "waiting",
+    checkpoint: { attempt: 1, compacted: child!.id, phase: "prepare" },
     on: [child!.id],
-    checkpoint: { phase: "prepare", attempt: 1, compacted: child!.id },
+    status: "waiting",
   });
   expect((yield* awaited(live(chat))).compactions).toEqual([
-    { taskId: child!.id, reason: "threshold", blocking: true, attempt: 1 },
+    { attempt: 1, blocking: true, reason: "threshold", taskId: child!.id },
   ]);
   expect((yield* kinds(chat.root)).at(-1)).toBe("msa.user");
   gate.resolve();
@@ -101,7 +104,7 @@ const waitsCompactionAppends = Effect.gen(function* () {
   const systems = request.filter((message) => message.role === "system");
   expect(systems).toHaveLength(1);
   expect(systems[0]).toMatchObject({
-    sections: { preamble: "You are helpful.", extra: "<extra>\nEXTRA\n</extra>" },
+    sections: { extra: "<extra>\nEXTRA\n</extra>", preamble: "You are helpful." },
   });
   yield* awaited(chat.harness.close(context));
 });
@@ -141,20 +144,20 @@ const failsRunCompaction = Effect.gen(function* () {
   chat.faux.summaries.push(failure("bad request"));
   const requests = chat.faux.agentRequests.length;
   const input = yield* awaited(
-    chat.root.submit({ type: "input", content: text("u4", 200) }, context),
+    chat.root.submit({ content: text("u4", 200), type: "input" }, context),
   );
   expect(yield* awaited(input.wait(context))).toMatchObject({
-    status: "unanswered",
-    reason: "model_error",
     detail: "Compaction failed: Summarization failed: bad request",
+    reason: "model_error",
+    status: "unanswered",
   });
   expect(chat.faux.agentRequests).toHaveLength(requests);
   expect((yield* kinds(chat.root)).at(-1)).toBe("msa.user");
   const state = yield* awaited(live(chat));
   expect(state.compactions).toBeUndefined();
   expect(state.compactionFailure).toMatchObject({
-    reason: "threshold",
     error: "Summarization failed: bad request",
+    reason: "threshold",
   });
   yield* awaited(chat.harness.close(context));
 });
@@ -178,15 +181,15 @@ const failsRunCompactionAborted = Effect.gen(function* () {
   chat.faux.summaries.push(gated(deferred(), summary(), reached));
   const requests = chat.faux.agentRequests.length;
   const input = yield* awaited(
-    chat.root.submit({ type: "input", content: text("u4", 200) }, context),
+    chat.root.submit({ content: text("u4", 200), type: "input" }, context),
   );
   yield* awaited(reached.promise);
   const [child] = yield* compactionTasks(chat);
   yield* awaited(chat.harness.abortTask(child!.id, context));
   expect(yield* awaited(input.wait(context))).toMatchObject({
-    status: "unanswered",
-    reason: "model_error",
     detail: "Compaction was aborted",
+    reason: "model_error",
+    status: "unanswered",
   });
   expect(chat.faux.agentRequests).toHaveLength(requests);
   expect((yield* kinds(chat.root)).includes("msa.compaction")).toBe(false);
@@ -213,14 +216,14 @@ const abortedGenerationEsc = Effect.gen(function* () {
     return Promise.resolve();
   });
   const input = yield* awaited(
-    chat.root.submit({ type: "input", content: text("u4", 200) }, context),
+    chat.root.submit({ content: text("u4", 200), type: "input" }, context),
   );
   yield* awaited(reached.promise);
   const [child] = yield* compactionTasks(chat);
   yield* awaited(chat.root.abort(context));
   expect(yield* awaited(input.wait(context))).toMatchObject({
-    status: "unanswered",
     reason: "aborted",
+    status: "unanswered",
   });
   expect((yield* awaited(chat.harness.getTask(child!.id, context)))?.state).toMatchObject({
     outcome: { status: "aborted" },

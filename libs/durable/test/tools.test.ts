@@ -5,23 +5,20 @@ import { getOrThrow } from "../src/env/index.ts";
 import { NodeExecutionEnv } from "../src/env/node.ts";
 import { detectSupportedImageMimeType } from "../src/tools/image.ts";
 import { createReadTool, createWriteTool } from "../src/tools/index.ts";
-import {
-  appendTempFile,
-  awaited,
-  abortController,
-  BACKGROUND_CONTEXT,
-  withAbortSignal,
-} from "./support.ts";
-import { diagnosticText } from "./tools-cases.ts";
-import {
-  textOutput,
+import support from "./support.ts";
+import diagnosticText from "./tools-cases.ts";
+import toolsSupport from "./tools-support.ts";
+
+const { BACKGROUND_CONTEXT, abortController, appendTempFile, awaited, withAbortSignal } = support;
+const {
+  BlockingWriteExecutionEnv,
   createEnv,
   createTempDir,
-  run,
   delay,
-  BlockingWriteExecutionEnv,
   removeTempDirs,
-} from "./tools-support.ts";
+  run,
+  textOutput,
+} = toolsSupport;
 
 afterAll(() => Effect.runPromise(removeTempDirs));
 
@@ -52,7 +49,7 @@ const readsTextOffsets = Effect.gen(function* () {
     ),
   );
   const result = yield* awaited(
-    run(createReadTool(), { path: "test.txt", offset: 41, limit: 20 }, env),
+    run(createReadTool(), { limit: 20, offset: 41, path: "test.txt" }, env),
   );
   const output = textOutput(result);
   expect(output).not.toContain("Line 40");
@@ -78,10 +75,10 @@ const truncatesLargeText = Effect.gen(function* () {
   expect(diagnosticText(result)).toBe("Showing lines 1-2000 of 2500. Use offset=2001 to continue.");
   expect(result.diagnostics?.[0]?.code).toBe("truncated");
   expect((result.details as { truncation?: unknown } | undefined)?.truncation).toMatchObject({
+    outputLines: 2000,
+    totalLines: 2500,
     truncated: true,
     truncatedBy: "lines",
-    totalLines: 2500,
-    outputLines: 2000,
   });
 });
 
@@ -126,10 +123,10 @@ const showsStartLine = Effect.gen(function* () {
     "Line 1 is 78.1KB, exceeds the 50.0KB limit; showing its first 50.0KB. Use bash: sed -n '1p' long.txt | tail -c +51201",
   );
   expect((result.details as { truncation: object }).truncation).toMatchObject({
-    truncated: true,
     firstLineExceedsLimit: true,
     outputBytes: 51_200,
     outputLines: 1,
+    truncated: true,
   });
   expect(result.details).not.toHaveProperty("truncation.content");
 });
@@ -138,7 +135,7 @@ const rejectsOffsetsBeyond = Effect.gen(function* () {
   const env = yield* createEnv;
   getOrThrow(yield* awaited(env.writeFile("short.txt", "one\ntwo\nthree", BACKGROUND_CONTEXT)));
   yield* awaited(
-    expect(run(createReadTool(), { path: "short.txt", offset: 100 }, env)).rejects.toThrow(
+    expect(run(createReadTool(), { offset: 100, path: "short.txt" }, env)).rejects.toThrow(
       "Offset 100 is beyond end of file (3 lines total)",
     ),
   );
@@ -178,7 +175,7 @@ const readsLogGrows = Effect.gen(function* () {
         return opened;
       }),
     );
-  const result = yield* awaited(run(createReadTool(), { path: "app.log", limit: 2 }, growing));
+  const result = yield* awaited(run(createReadTool(), { limit: 2, path: "app.log" }, growing));
   expect(textOutput(result)).toBe("one\ntwo");
 });
 
@@ -192,7 +189,7 @@ const returnsImagesContent = Effect.gen(function* () {
     ),
   );
   const result = yield* awaited(run(createReadTool(), { path: "image.txt" }, env));
-  expect(result.output).toEqual([{ type: "image", data, mimeType: "image/png" }]);
+  expect(result.output).toEqual([{ data, mimeType: "image/png", type: "image" }]);
   expect(result.isError).toBeUndefined();
   expect(diagnosticText(result)).toBe("Read image file [image/png].");
 });
@@ -209,7 +206,7 @@ describe("durable tools", () => {
 const writesFilesCreates = Effect.gen(function* () {
   const env = yield* createEnv;
   const result = yield* awaited(
-    run(createWriteTool(), { path: "nested/dir/file.txt", content: "hello" }, env),
+    run(createWriteTool(), { content: "hello", path: "nested/dir/file.txt" }, env),
   );
   expect(textOutput(result)).toBe("Successfully wrote to nested/dir/file.txt");
   expect(
@@ -223,13 +220,13 @@ const keepsMutationQueue = Effect.gen(function* () {
   const controller = abortController();
   const firstWrite = run(
     tool,
-    { path: "file.txt", content: "first\n" },
+    { content: "first\n", path: "file.txt" },
     env,
     withAbortSignal(controller.signal, BACKGROUND_CONTEXT),
   );
   yield* awaited(env.firstWriteStarted.promise);
   controller.abort();
-  const secondWrite = run(tool, { path: "file.txt", content: "second\n" }, env);
+  const secondWrite = run(tool, { content: "second\n", path: "file.txt" }, env);
   yield* awaited(delay(20));
   expect(env.secondWriteStarted).toBe(false);
   env.finishFirstWrite.resolve();

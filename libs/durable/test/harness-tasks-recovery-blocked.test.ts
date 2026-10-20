@@ -1,32 +1,29 @@
 import { Type } from "@msa/ai";
-import { defineDoc, defineTask, defineTool, type Registry } from "@msa/durable";
+import { type Registry, defineDoc, defineTask, defineTool } from "@msa/durable";
 import { createRegistry } from "@msa/durable/harness";
 import { MemoryStorage } from "@msa/durable/storage/memory";
 import { Effect } from "effect";
 import { afterEach, describe, expect, it } from "vite-plus/test";
 
 import { openNodeSqliteStorage } from "../src/storage/sqlite/node.ts";
-import {
-  startHandover,
-  createIn,
-  handoverTask,
-  sqlitePath,
-  directories,
-  type Step,
-  versioned,
-} from "./harness-tasks-recovery-support.ts";
-import {
-  awaited,
+import harnessTasksRecoverySupport from "./harness-tasks-recovery-support.ts";
+import type harnessTasksRecoverySupportTypes from "./harness-tasks-recovery-support.types.ts";
+import support from "./support.ts";
+
+const { createIn, directories, handoverTask, sqlitePath, startHandover, versioned } =
+  harnessTasksRecoverySupport;
+const {
+  aborted,
   addTask,
   addTool,
-  removeDir,
+  awaited,
   context,
-  flush,
-  aborted,
   deferred,
   eventually,
+  flush,
   openTasks,
-} from "./support.ts";
+  removeDir,
+} = support;
 
 afterEach(() =>
   Effect.runPromise(
@@ -55,7 +52,7 @@ const failedMigrationTask = Effect.fn("failedMigrationTask")(function* () {
   const reopened = yield* openTasks(yield* awaited(openNodeSqliteStorage(path)), [], { registry });
   reopened.harness.resume();
   yield* eventually(() => reopened.reports.length === 1);
-  return { id, registry, counted, reopened };
+  return { counted, id, registry, reopened };
 });
 
 const migratesReservationLeaves = Effect.gen(function* () {
@@ -63,10 +60,10 @@ const migratesReservationLeaves = Effect.gen(function* () {
   addTool(
     registry,
     defineTool({
-      name: "unrelated",
       description: "unrelated",
-      parameters: Type.Object({}),
       execute: () => Promise.resolve({}),
+      name: "unrelated",
+      parameters: Type.Object({}),
     }),
   );
   yield* flush;
@@ -74,8 +71,8 @@ const migratesReservationLeaves = Effect.gen(function* () {
   expect(reopened.reports).toHaveLength(1);
   expect(String(reopened.reports[0])).toContain("cannot migrate");
   expect(yield* awaited(reopened.harness.getTask(id, context))).toMatchObject({
+    state: { checkpoint: { phase: "run" }, status: "pending" },
     version: 1,
-    state: { status: "pending", checkpoint: { phase: "run" } },
   });
 
   const migrations: number[] = [];
@@ -83,13 +80,13 @@ const migratesReservationLeaves = Effect.gen(function* () {
     registry,
     versioned(2, "v2", (_input, checkpoint, fromVersion) => {
       migrations.push(fromVersion);
-      return { input: null, checkpoint: checkpoint as Step };
+      return { checkpoint: checkpoint as harnessTasksRecoverySupportTypes.Step, input: null };
     }),
   );
   const receipt = yield* awaited(reopened.harness.waitForTask(id, context));
   expect(receipt).toMatchObject({
+    state: { outcome: { result: "v2", status: "completed" } },
     version: 2,
-    state: { outcome: { status: "completed", result: "v2" } },
   });
   expect(migrations).toEqual([1]);
   yield* awaited(reopened.harness.close(context));
@@ -110,8 +107,8 @@ const blocksOlderRecord = Effect.gen(function* () {
   yield* eventually(() => opened.reports.length === 1);
   expect(String(opened.reports[0])).toContain("has no migration from 1");
   expect(yield* awaited(opened.harness.getTask(id, context))).toMatchObject({
-    version: 1,
     state: { status: "pending" },
+    version: 1,
   });
   yield* awaited(opened.harness.close(context));
 });
@@ -120,10 +117,10 @@ const settlesAbortedBlocked = Effect.gen(function* () {
   const runPromise = Effect.runPromiseWith(yield* Effect.context<never>());
 
   const Scratch = defineDoc<{ n: number }>({
-    kind: "test.orphan-scratch",
-    version: 1,
-    scope: "task",
     initial: () => ({ n: 0 }),
+    kind: "test.orphan-scratch",
+    scope: "task",
+    version: 1,
   });
   const { harness } = yield* openTasks(new MemoryStorage(), []);
   const root = yield* awaited(harness.root(context));
@@ -146,8 +143,8 @@ const settlesAbortedBlocked = Effect.gen(function* () {
   );
   expect(yield* awaited(harness.abortTask(id, context))).toBe("marked");
   expect((yield* awaited(harness.getTask(id, context)))?.state).toEqual({
+    outcome: { reason: "missing_task", status: "orphaned" },
     status: "terminal",
-    outcome: { status: "orphaned", reason: "missing_task" },
   });
   expect(yield* awaited(harness.snapshot(Scratch, id, context))).toBeUndefined();
   yield* awaited(harness.close(context));
@@ -165,10 +162,10 @@ const orphansMarkedTask = Effect.gen(function* () {
   const runPromise = Effect.runPromiseWith(yield* Effect.context<never>());
 
   const reached = deferred();
-  const Running = defineTask<null, Step, null>({
-    name: "test.vanishing",
-    version: 1,
+  const Running = defineTask<null, harnessTasksRecoverySupportTypes.Step, null>({
+    abort: () => Promise.reject(new Error("must not run")),
     initial: () => ({ phase: "run" }),
+    name: "test.vanishing",
     phases: {
       run: (_task, runtime) =>
         runPromise(
@@ -178,7 +175,7 @@ const orphansMarkedTask = Effect.gen(function* () {
           }),
         ),
     },
-    abort: () => Promise.reject(new Error("must not run")),
+    version: 1,
   });
   const registry = createRegistry();
   const registration = addTask(registry, Running);
@@ -189,8 +186,8 @@ const orphansMarkedTask = Effect.gen(function* () {
   registration.dispose();
   expect(yield* awaited(harness.abortTask(id, context))).toBe("marked");
   expect((yield* awaited(harness.waitForTask(id, context))).state.outcome).toEqual({
-    status: "orphaned",
     reason: "missing_task",
+    status: "orphaned",
   });
   yield* awaited(harness.close(context));
 });
@@ -216,8 +213,8 @@ const orphansReopenedAbort = Effect.gen(function* () {
   opened.harness.resume();
   yield* awaited(idle);
   expect((yield* awaited(opened.harness.getTask(id, context)))?.state).toEqual({
+    outcome: { reason: "missing_task", status: "orphaned" },
     status: "terminal",
-    outcome: { status: "orphaned", reason: "missing_task" },
   });
   yield* awaited(opened.harness.close(context));
 });

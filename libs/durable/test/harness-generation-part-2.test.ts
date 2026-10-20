@@ -1,39 +1,28 @@
-import { fauxAssistantMessage, type Message, type Models, type SystemMessage } from "@msa/ai";
+import { type Message, type Models, type SystemMessage, fauxAssistantMessage } from "@msa/ai";
 import { type Conversation, defineDoc } from "@msa/durable";
 import { MemoryStorage } from "@msa/durable/storage/memory";
 import { Effect } from "effect";
 import { describe, expect, it } from "vite-plus/test";
 
 import { resolveSettings } from "../src/harness/agent.ts";
-import {
-  heldStream,
-  invalidFinalStream,
-  livePublications,
-  live,
-  withStream,
-} from "./harness-generation-support.ts";
-import {
-  allEntries,
-  type ChatSetup,
-  chatSetup,
-  openChat,
-  textOf,
-  waitFor,
-  awaited,
-  addSection,
-  context,
-} from "./support.ts";
+import harnessGenerationSupport from "./harness-generation-support.ts";
+import support from "./support.ts";
+import type supportTypes from "./support.types.ts";
+
+const { heldStream, invalidFinalStream, live, livePublications, withStream } =
+  harnessGenerationSupport;
+const { addSection, allEntries, awaited, chatSetup, context, openChat, textOf, waitFor } = support;
 
 const documentSectionsChat = Effect.fn("documentSectionsChat")(function* () {
   const runPromise = Effect.runPromiseWith(yield* Effect.context<never>());
 
   const Agent = defineDoc<{ cwd: string; kind: string }>({
-    kind: "test.agent",
-    version: 1,
-    scope: "conversation",
-    history: "latest",
     fork: "current",
+    history: "latest",
     initial: () => ({ cwd: "/", kind: "main" }),
+    kind: "test.agent",
+    scope: "conversation",
+    version: 1,
   });
   const setup = chatSetup();
   addSection(setup.registry, "cwd", (input, ctx) =>
@@ -61,30 +50,30 @@ const documentSectionsChat = Effect.fn("documentSectionsChat")(function* () {
 describe("generation", () => {
   it("resolves settings over the built-in defaults", () => {
     expect(resolveSettings(undefined)).toEqual({
-      stream: {},
-      retry: { enabled: true, maxRetries: 3, baseDelayMs: 2000, maxAgentDelayMs: 60000 },
       compaction: {
-        enabled: true,
-        reserveTokens: 16384,
-        keepRecentTokens: 20000,
         backgroundTokens: 32768,
+        enabled: true,
+        keepRecentTokens: 20000,
+        reserveTokens: 16384,
       },
-      progress: { partialIntervalMs: 100, outputIntervalMs: 100 },
-      toolExecution: "parallel",
-      steeringMode: "one-at-a-time",
-      followUpMode: "one-at-a-time",
       contextRetentionMs: 600_000,
       documentRetentionMs: expect.any(Number),
+      followUpMode: "one-at-a-time",
+      progress: { outputIntervalMs: 100, partialIntervalMs: 100 },
+      retry: { baseDelayMs: 2000, enabled: true, maxAgentDelayMs: 60000, maxRetries: 3 },
+      steeringMode: "one-at-a-time",
+      stream: {},
+      toolExecution: "parallel",
     });
     expect(
-      resolveSettings({ retry: { enabled: false }, compaction: { backgroundTokens: 0 } }),
+      resolveSettings({ compaction: { backgroundTokens: 0 }, retry: { enabled: false } }),
     ).toMatchObject({
-      retry: { enabled: false, maxRetries: 3, baseDelayMs: 2000 },
-      compaction: { enabled: true, backgroundTokens: 0 },
+      compaction: { backgroundTokens: 0, enabled: true },
+      retry: { baseDelayMs: 2000, enabled: false, maxRetries: 3 },
     });
     expect(resolveSettings({ progress: { outputIntervalMs: 500 } }).progress).toEqual({
-      partialIntervalMs: 100,
       outputIntervalMs: 500,
+      partialIntervalMs: 100,
     });
   });
 });
@@ -94,22 +83,22 @@ const commitsPartialsNo = Effect.gen(function* () {
 
   const shortStream = (): ReturnType<Models["streamSimple"]> =>
     heldStream(
-      { type: "start", partial: fauxAssistantMessage("partial", { stopReason: "pending" }) },
+      { partial: fauxAssistantMessage("partial", { stopReason: "pending" }), type: "start" },
       fauxAssistantMessage("final"),
     );
-  const publishedPartial = (settings: ChatSetup["settings"]): Promise<boolean> =>
+  const publishedPartial = (settings: supportTypes.ChatSetup["settings"]): Promise<boolean> =>
     runPromise(
       Effect.gen(function* () {
         const base = chatSetup();
-        const setup: ChatSetup = {
+        const setup: supportTypes.ChatSetup = {
           ...base,
-          settings,
           models: withStream(base.models, shortStream),
+          settings,
         };
         const { harness, root } = yield* openChat(new MemoryStorage(), setup);
         const values = livePublications(harness);
         harness.resume();
-        const submission = yield* awaited(root.submit({ type: "input", content: "hi" }, context));
+        const submission = yield* awaited(root.submit({ content: "hi", type: "input" }, context));
         expect(yield* awaited(submission.wait(context))).toMatchObject({ status: "done" });
         yield* awaited(harness.close(context));
         return values.some((value) => textOf(value.generation?.message as Message) === "partial");
@@ -142,8 +131,7 @@ const rendersSectionsReadStep1 = Effect.gen(function* () {
   const sub = yield* awaited(
     harness.createConversation(
       {
-        ownership: { kind: "ownerless" },
-        agent: { model: { provider: "faux", modelId: "faux-1" } },
+        agent: { model: { modelId: "faux-1", provider: "faux" } },
         init: (tx, id) =>
           runPromise(
             Effect.gen(function* () {
@@ -152,18 +140,19 @@ const rendersSectionsReadStep1 = Effect.gen(function* () {
               agent.cwd = "/sub";
             }),
           ),
+        ownership: { kind: "ownerless" },
       },
       context,
     ),
   );
   harness.resume();
   yield* awaited(
-    (yield* awaited(root.submit({ type: "input", content: "one" }, context))).wait(context),
+    (yield* awaited(root.submit({ content: "one", type: "input" }, context))).wait(context),
   );
   yield* awaited(
-    (yield* awaited(sub.submit({ type: "input", content: "two" }, context))).wait(context),
+    (yield* awaited(sub.submit({ content: "two", type: "input" }, context))).wait(context),
   );
-  return { runPromise, harness, root, sub };
+  return { harness, root, runPromise, sub };
 });
 
 const rendersSectionsRead = Effect.gen(function* () {
@@ -176,11 +165,11 @@ const rendersSectionsRead = Effect.gen(function* () {
       }),
     );
   expect(yield* awaited(sections(root))).toMatchObject({
-    sections: { cwd: "<cwd>\n/repo\n</cwd>", agents: "<agents>\nRead AGENTS.md\n</agents>" },
+    sections: { agents: "<agents>\nRead AGENTS.md\n</agents>", cwd: "<cwd>\n/repo\n</cwd>" },
   });
   expect((yield* awaited(sections(sub))) as SystemMessage).toEqual({
-    role: "system",
     content: "",
+    role: "system",
     sections: { cwd: "<cwd>\n/sub\n</cwd>" },
     timestamp: expect.any(Number),
   });
@@ -195,21 +184,24 @@ describe("generation", () => {
 const commitsNoPartial = Effect.gen(function* () {
   const base = chatSetup();
   const handle = {
-    provider: "faux",
-    modelId: "faux-1",
     api: "faux",
     id: "handle-1",
+    modelId: "faux-1",
     pollAfterMs: 60_000,
+    provider: "faux",
   };
   const deferredStream = (): ReturnType<Models["streamSimple"]> =>
     heldStream(
-      { type: "start", partial: fauxAssistantMessage([], { stopReason: "pending" }) },
-      fauxAssistantMessage([], { stopReason: "deferred", deferred: handle }),
+      { partial: fauxAssistantMessage([], { stopReason: "pending" }), type: "start" },
+      fauxAssistantMessage([], { deferred: handle, stopReason: "deferred" }),
     );
-  const setup: ChatSetup = { ...base, models: withStream(base.models, deferredStream) };
+  const setup: supportTypes.ChatSetup = {
+    ...base,
+    models: withStream(base.models, deferredStream),
+  };
   const { harness, root } = yield* openChat(new MemoryStorage(), setup);
   const values = livePublications(harness);
-  const submission = yield* awaited(root.submit({ type: "input", content: "hi" }, context));
+  const submission = yield* awaited(root.submit({ content: "hi", type: "input" }, context));
   yield* waitFor(
     Effect.gen(function* () {
       return (yield* awaited(live(harness, root)))?.generation?.deferred !== undefined;
@@ -218,8 +210,8 @@ const commitsNoPartial = Effect.gen(function* () {
   expect(values.some((value) => value.generation?.message !== undefined)).toBe(false);
   yield* awaited(harness.abortTask((yield* awaited(live(harness, root)))!.run!.taskId, context));
   expect(yield* awaited(submission.wait(context))).toMatchObject({
-    status: "unanswered",
     reason: "aborted",
+    status: "unanswered",
   });
   expect((yield* allEntries(root)).map((entry) => entry.kind)).toEqual(["msa.user"]);
   yield* awaited(harness.close(context));
@@ -232,15 +224,18 @@ describe("generation", () => {
 
 const faultsRunTask = Effect.gen(function* () {
   const base = chatSetup();
-  const setup: ChatSetup = { ...base, models: withStream(base.models, invalidFinalStream) };
+  const setup: supportTypes.ChatSetup = {
+    ...base,
+    models: withStream(base.models, invalidFinalStream),
+  };
   const { harness, root } = yield* openChat(new MemoryStorage(), setup);
   const values = livePublications(harness);
   harness.resume();
-  const submission = yield* awaited(root.submit({ type: "input", content: "hi" }, context));
+  const submission = yield* awaited(root.submit({ content: "hi", type: "input" }, context));
   expect(yield* awaited(submission.wait(context))).toMatchObject({
-    status: "unanswered",
-    reason: "faulted",
     detail: expect.stringContaining("non-JSON function"),
+    reason: "faulted",
+    status: "unanswered",
   });
   expect(values.some((value) => textOf(value.generation?.message as Message) === "partial")).toBe(
     true,
@@ -254,8 +249,8 @@ const faultsRunTask = Effect.gen(function* () {
     harness.commit((tx) => tx.scanTasks({ conversationId: root.id }, 10), context),
   );
   expect(tasks.items[0]!.state).toMatchObject({
-    status: "terminal",
     outcome: { status: "faulted" },
+    status: "terminal",
   });
   yield* awaited(harness.close(context));
 });

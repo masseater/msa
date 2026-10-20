@@ -1,11 +1,17 @@
 import { Effect } from "effect";
 import { afterEach, describe, expect, it } from "vite-plus/test";
 
-import { codemodeChat, tool } from "./codemode-chat-support.ts";
-import { directories, runScript } from "./codemode-support.ts";
-import { fromJsonText } from "./effect-support.ts";
-import { addTool } from "./harness-support.ts";
-import { removeDir } from "./platform-support.ts";
+import codemodeChatSupport from "./codemode-chat-support.ts";
+import codemodeSupport from "./codemode-support.ts";
+import effectSupport from "./effect-support.ts";
+import harnessSupport from "./harness-support.ts";
+import platformSupport from "./platform-support.ts";
+
+const { codemodeChat, tool } = codemodeChatSupport;
+const { directories, runScript } = codemodeSupport;
+const { fromJsonText } = effectSupport;
+const { addTool } = harnessSupport;
+const { removeDir } = platformSupport;
 
 afterEach(() =>
   Effect.runPromise(
@@ -19,7 +25,7 @@ afterEach(() =>
 const findsToolsSearchTools = Effect.gen(function* () {
   const chat = codemodeChat({
     globals: [],
-    namespaces: [{ name: "github", description: "GitHub MCP server", prefix: "mcp__github__" }],
+    namespaces: [{ description: "GitHub MCP server", name: "github", prefix: "mcp__github__" }],
   });
   addTool(
     chat.setup.registry,
@@ -43,16 +49,16 @@ const findsToolsSearchTools = Effect.gen(function* () {
       text.replace(/^Script completed\nWall time [\d.]+ seconds\nOutput:\n/u, ""),
     ),
   ).toEqual({
+    all: true,
+    described: true,
     found: ["mcp__github__list_issues"],
     inNamespace: [],
-    described: true,
     missing: null,
     namespace: {
-      name: "github",
       description: "GitHub MCP server",
+      name: "github",
       tools: ["mcp__github__list_issues"],
     },
-    all: true,
   });
 });
 

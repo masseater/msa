@@ -4,23 +4,12 @@ import { MemoryStorage } from "@msa/durable/storage/memory";
 import { Effect } from "effect";
 import { afterEach, describe, expect, it } from "vite-plus/test";
 
-import {
-  startHandover,
-  createIn,
-  handoverTask,
-  directories,
-} from "./harness-tasks-recovery-support.ts";
-import {
-  awaited,
-  addTask,
-  removeDir,
-  context,
-  flush,
-  completed,
-  deferred,
-  eventually,
-  openTasks,
-} from "./support.ts";
+import harnessTasksRecoverySupport from "./harness-tasks-recovery-support.ts";
+import support from "./support.ts";
+
+const { createIn, directories, handoverTask, startHandover } = harnessTasksRecoverySupport;
+const { addTask, awaited, completed, context, deferred, eventually, flush, openTasks, removeDir } =
+  support;
 
 afterEach(() =>
   Effect.runPromise(
@@ -40,9 +29,9 @@ const keepsMemosAcross = Effect.gen(function* () {
   const reached = deferred();
   const memoTask = (label: string) =>
     defineTask<null, Memoed, string>({
-      name: "test.handover-memo",
-      version: 1,
+      abort: () => Promise.resolve(),
       initial: () => ({ phase: "a" }),
+      name: "test.handover-memo",
       phases: {
         a: (_task, runtime, ctx) =>
           runPromise(
@@ -51,7 +40,7 @@ const keepsMemosAcross = Effect.gen(function* () {
               reached.resolve();
               yield* awaited(gate.promise);
               yield* awaited(
-                runtime.commit(() => ({ status: "running", checkpoint: { phase: "b" } }), ctx),
+                runtime.commit(() => ({ checkpoint: { phase: "b" }, status: "running" }), ctx),
               );
             }),
           ),
@@ -64,7 +53,7 @@ const keepsMemosAcross = Effect.gen(function* () {
             }),
           ),
       },
-      abort: () => Promise.resolve(),
+      version: 1,
     });
   const registry = createRegistry();
   addTask(registry, memoTask("old"));
@@ -75,7 +64,7 @@ const keepsMemosAcross = Effect.gen(function* () {
   addTask(registry, memoTask("new"));
   gate.resolve();
   const receipt = yield* awaited(harness.waitForTask(id, context));
-  expect(receipt.state.outcome).toEqual({ status: "completed", result: "old" });
+  expect(receipt.state.outcome).toEqual({ result: "old", status: "completed" });
   expect(log).toEqual(["new:b old"]);
   yield* awaited(harness.close(context));
 });
@@ -91,7 +80,7 @@ const handsOverNewer = Effect.gen(function* () {
   addTask(
     registry,
     handoverTask("v2", 2, log, {
-      migrate: () => ({ input: null, checkpoint: { phase: "c" } }),
+      migrate: () => ({ checkpoint: { phase: "c" }, input: null }),
     }),
   );
   gate.resolve();
@@ -117,8 +106,8 @@ const handsOverNewerVersion = Effect.gen(function* () {
   yield* eventually(() => reports.length === 1);
   yield* flush;
   expect(yield* awaited(harness.getTask(id, context))).toMatchObject({
+    state: { checkpoint: { phase: "b" }, status: "pending" },
     version: 1,
-    state: { status: "pending", checkpoint: { phase: "b" } },
   });
   expect(log).toEqual(["old:a start", "old:a end"]);
   yield* awaited(harness.close(context));

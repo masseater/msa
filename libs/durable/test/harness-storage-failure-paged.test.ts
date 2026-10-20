@@ -3,10 +3,15 @@ import { MemoryStorage } from "@msa/durable/storage/memory";
 import { Effect } from "effect";
 import { describe, expect, it } from "vite-plus/test";
 
-import { awaited } from "./effect-support.ts";
-import { started } from "./harness-storage-failure-support.ts";
-import { ControlledStorage, context } from "./session-support.ts";
-import { deferred } from "./task-support.ts";
+import effectSupport from "./effect-support.ts";
+import harnessStorageFailureSupport from "./harness-storage-failure-support.ts";
+import sessionSupport from "./session-support.ts";
+import taskSupport from "./task-support.ts";
+
+const { awaited } = effectSupport;
+const { started } = harnessStorageFailureSupport;
+const { ControlledStorage, context } = sessionSupport;
+const { deferred } = taskSupport;
 
 const closesBackendOnly = Effect.gen(function* () {
   const runPromise = Effect.runPromiseWith(yield* Effect.context<never>());

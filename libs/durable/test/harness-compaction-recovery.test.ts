@@ -3,28 +3,31 @@ import { Effect } from "effect";
 import { afterEach, describe, expect, it } from "vite-plus/test";
 
 import { currentTimeMillis } from "../src/clock.ts";
-import {
-  type Chat,
-  text,
-  summary,
-  answer,
-  gated,
+import harnessCompactionSupport from "./harness-compaction-support.ts";
+import type harnessCompactionSupportTypes from "./harness-compaction-support.types.ts";
+import support from "./support.ts";
+
+const {
   BLOCKING,
-  history,
-  turn,
-  sqlitePath,
+  answer,
   directories,
-  first,
-  reopen,
-  live,
   failure,
+  first,
   firstUserText,
-  userText,
-  open,
-  result,
+  gated,
+  history,
   kinds,
-} from "./harness-compaction-support.ts";
-import { waitFor, awaited, removeDir, context, deferred } from "./support.ts";
+  live,
+  open,
+  reopen,
+  result,
+  sqlitePath,
+  summary,
+  text,
+  turn,
+  userText,
+} = harnessCompactionSupport;
+const { awaited, context, deferred, removeDir, waitFor } = support;
 
 afterEach(() =>
   Effect.runPromise(
@@ -76,7 +79,7 @@ const resumesRetryBackoff = Effect.gen(function* () {
   let chat = yield* awaited(first(path));
   let now = currentTimeMillis();
   chat.setup.now = () => now;
-  chat.setup.settings.retry = { enabled: true, maxRetries: 2, baseDelayMs: 60_000 };
+  chat.setup.settings.retry = { baseDelayMs: 60_000, enabled: true, maxRetries: 2 };
   chat.faux.summaries.push(failure("overloaded"));
   const id = yield* awaited(chat.root.compact(undefined, context));
   yield* waitFor(
@@ -85,7 +88,7 @@ const resumesRetryBackoff = Effect.gen(function* () {
     }),
   );
   expect((yield* awaited(chat.harness.getTask(id, context)))?.state).toMatchObject({
-    checkpoint: { phase: "retry", attempt: 1 },
+    checkpoint: { attempt: 1, phase: "retry" },
   });
   yield* awaited(chat.harness.close(context));
   now += 120_000;
@@ -104,7 +107,7 @@ const keepsGenerationWaiting = Effect.gen(function* () {
   chat.faux.summaries.push(gated(deferred(), summary(), reached));
   chat.setup.settings.compaction = { ...BLOCKING, reserveTokens: 128_000 - 700 };
   const input = yield* awaited(
-    chat.root.submit({ type: "input", content: text("u4", 200) }, context),
+    chat.root.submit({ content: text("u4", 200), type: "input" }, context),
   );
   yield* awaited(reached.promise);
   yield* awaited(chat.harness.close(context));
@@ -135,7 +138,7 @@ const keepsQueuedSummary = Effect.gen(function* () {
   let chat = yield* awaited(first(path));
   const reached = deferred();
   chat.faux.agent.push(gated(deferred(), answer("never"), reached));
-  const input = yield* awaited(chat.root.submit({ type: "input", content: "busy" }, context));
+  const input = yield* awaited(chat.root.submit({ content: "busy", type: "input" }, context));
   yield* awaited(reached.promise);
   chat.faux.summaries.push(summary());
   const outcome = yield* awaited(
@@ -162,7 +165,10 @@ describe("compaction recovery", () => {
     Effect.runPromise(keepsQueuedSummary));
 });
 
-const queuedSummary = Effect.fn("queuedSummary")(function* (chat: Chat, content = "SUMMARY") {
+const queuedSummary = Effect.fn("queuedSummary")(function* (
+  chat: harnessCompactionSupportTypes.Chat,
+  content = "SUMMARY",
+) {
   chat.faux.summaries.push(summary(content));
   const outcome = yield* awaited(
     result(chat, yield* awaited(chat.root.compact(undefined, context))),
@@ -175,11 +181,14 @@ const queuedSummary = Effect.fn("queuedSummary")(function* (chat: Chat, content 
   ))!;
 });
 
-const busy = Effect.fn("busy")(function* (chat: Chat, reply = answer("done")) {
+const busy = Effect.fn("busy")(function* (
+  chat: harnessCompactionSupportTypes.Chat,
+  reply = answer("done"),
+) {
   const gate = deferred();
   const reached = deferred();
   chat.faux.agent.push(gated(gate, reply, reached));
-  const input = yield* awaited(chat.root.submit({ type: "input", content: "busy" }, context));
+  const input = yield* awaited(chat.root.submit({ content: "busy", type: "input" }, context));
   yield* awaited(reached.promise);
   return { input, release: () => gate.resolve() };
 });

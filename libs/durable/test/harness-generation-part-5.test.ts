@@ -1,14 +1,19 @@
-import { fauxAssistantMessage, type Message, type SimpleStreamOptions } from "@msa/ai";
+import { type Message, type SimpleStreamOptions, fauxAssistantMessage } from "@msa/ai";
 import { type HarnessSettings, ProviderDoc } from "@msa/durable";
 import { Harness } from "@msa/durable/harness";
 import { MemoryStorage } from "@msa/durable/storage/memory";
 import { Effect } from "effect";
 import { describe, expect, it } from "vite-plus/test";
 
-import { chatSetup, openChat } from "./chat-support.ts";
-import { awaited } from "./effect-support.ts";
-import { ERROR_503 } from "./harness-generation-support.ts";
-import { context } from "./session-support.ts";
+import chatSupport from "./chat-support.ts";
+import effectSupport from "./effect-support.ts";
+import harnessGenerationSupport from "./harness-generation-support.ts";
+import sessionSupport from "./session-support.ts";
+
+const { chatSetup, openChat } = chatSupport;
+const { awaited } = effectSupport;
+const { ERROR_503 } = harnessGenerationSupport;
+const { context } = sessionSupport;
 
 const keepsProviderSessionStep1 = Effect.gen(function* () {
   const runPromise = Effect.runPromiseWith(yield* Effect.context<never>());
@@ -29,8 +34,8 @@ const keepsProviderSessionStep1 = Effect.gen(function* () {
   const child = yield* awaited(
     harness.createConversation(
       {
+        agent: { model: { modelId: "faux-1", provider: "faux" } },
         ownership: { kind: "ownerless" },
-        agent: { model: { provider: "faux", modelId: "faux-1" } },
       },
       context,
     ),
@@ -43,7 +48,7 @@ const keepsProviderSessionStep1 = Effect.gen(function* () {
           Effect.gen(function* () {
             yield* awaited(
               (yield* awaited(
-                conversation.submit({ type: "input", content: `first-${index}` }, context),
+                conversation.submit({ content: `first-${index}`, type: "input" }, context),
               )).wait(context),
             );
           }),
@@ -51,7 +56,7 @@ const keepsProviderSessionStep1 = Effect.gen(function* () {
       ),
     ),
   );
-  return { runPromise, seen, harness, root, child };
+  return { child, harness, root, runPromise, seen };
 });
 
 const keepsProviderSession = Effect.gen(function* () {
@@ -63,7 +68,7 @@ const keepsProviderSession = Effect.gen(function* () {
           Effect.gen(function* () {
             yield* awaited(
               (yield* awaited(
-                conversation.submit({ type: "input", content: `second-${index}` }, context),
+                conversation.submit({ content: `second-${index}`, type: "input" }, context),
               )).wait(context),
             );
           }),
@@ -100,7 +105,7 @@ const createsPersistsProvider = Effect.gen(function* () {
   expect(yield* awaited(harness.snapshot(ProviderDoc, root.id, context))).toBeUndefined();
   harness.resume();
   yield* awaited(
-    (yield* awaited(root.submit({ type: "input", content: "legacy" }, context))).wait(context),
+    (yield* awaited(root.submit({ content: "legacy", type: "input" }, context))).wait(context),
   );
   const stored = yield* awaited(harness.snapshot(ProviderDoc, root.id, context));
   expect(stored?.sessionId).toMatch(
@@ -131,10 +136,10 @@ const readsSettingsThrough = Effect.gen(function* () {
     },
   ]);
   const settings: HarnessSettings = {
+    retry: { baseDelayMs: 1 },
     get stream() {
       return { timeoutMs };
     },
-    retry: { baseDelayMs: 1 },
   };
   const harness = yield* awaited(
     Harness.open(
@@ -145,13 +150,13 @@ const readsSettingsThrough = Effect.gen(function* () {
   );
   const root = yield* awaited(
     harness.root(context, {
-      agent: { model: { provider: "faux", modelId: "faux-1" } },
+      agent: { model: { modelId: "faux-1", provider: "faux" } },
     }),
   );
   harness.resume();
   expect(
     (yield* awaited(
-      (yield* awaited(root.submit({ type: "input", content: "hi" }, context))).wait(context),
+      (yield* awaited(root.submit({ content: "hi", type: "input" }, context))).wait(context),
     )).status,
   ).toBe("done");
   expect(seen).toEqual([111, 222]);

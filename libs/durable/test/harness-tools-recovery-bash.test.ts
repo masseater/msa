@@ -5,15 +5,11 @@ import { afterEach, describe, expect, it } from "vite-plus/test";
 
 import { NodeExecutionEnv } from "../src/env/node.ts";
 import { createBashTool } from "../src/tools/index.ts";
-import {
-  DONE,
-  text,
-  results,
-  open,
-  sqlitePath,
-  removeDirectories,
-} from "./harness-tools-recovery-support.ts";
-import { allEntries, chatSetup, waitFor, awaited, addTool, dirnameOf, context } from "./support.ts";
+import harnessToolsRecoverySupport from "./harness-tools-recovery-support.ts";
+import support from "./support.ts";
+
+const { DONE, open, removeDirectories, results, sqlitePath, text } = harnessToolsRecoverySupport;
+const { addTool, allEntries, awaited, chatSetup, context, dirnameOf, waitFor } = support;
 
 afterEach(removeDirectories);
 
@@ -32,7 +28,7 @@ const answersRealBash = Effect.gen(function* () {
     DONE,
   ]);
   let opened = yield* open(path, setup, env);
-  const id = (yield* awaited(opened.root.submit({ type: "input", content: "go" }, context))).id;
+  const id = (yield* awaited(opened.root.submit({ content: "go", type: "input" }, context))).id;
   yield* waitFor(
     Effect.gen(function* () {
       const slot = (yield* awaited(opened.harness.snapshot(LiveDoc, opened.root.id, context)))

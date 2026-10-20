@@ -1,37 +1,18 @@
-import { configure, defineDoc, type HarnessSettings, type TaskId, type Tx } from "@msa/durable";
-import { createRegistry, Harness } from "@msa/durable/harness";
+import { type HarnessSettings, type TaskId, type Tx, configure, defineDoc } from "@msa/durable";
+import { Harness, createRegistry } from "@msa/durable/harness";
 import { Effect } from "effect";
 import { dual } from "effect/Function";
 
-import { CodingTools, type createEditTool, type createReadTool } from "../src/tools/index.ts";
-import { awaited } from "./effect-support.ts";
-import type {
-  bashExtensions,
-  chatExtension,
-  planMode,
-  promptExtensions,
-  subagentExtension,
-  subagentTools,
-} from "./spec-usage-extensions.ts";
-import type { SettingsManager, SpecNames } from "./spec-usage-names.ts";
+import { CodingTools } from "../src/tools/index.ts";
+import effectSupport from "./effect-support.ts";
+import type specUsageNamesTypes from "./spec-usage-names.ts";
+import type specUsageSequencesTypes from "./spec-usage-sequences.types.ts";
 
-export type SpecTools = {
-  readonly readTool: ReturnType<typeof createReadTool>;
-  readonly editTool: ReturnType<typeof createEditTool>;
-  readonly bashTool: SpecBashTool;
-};
-type SpecBashTool = Parameters<typeof bashExtensions>[1];
-export type SpecExtensions = ReturnType<typeof promptExtensions> &
-  ReturnType<typeof bashExtensions> &
-  ReturnType<typeof planMode> & {
-    readonly Subagent: ReturnType<typeof subagentExtension>;
-    readonly SubagentTools: ReturnType<typeof subagentTools>;
-    readonly Chat: ReturnType<typeof chatExtension>;
-  };
+const { awaited } = effectSupport;
 
 function setupSequencesImpl(
-  { haiku, worktree, manager }: SpecNames,
-  readTool: SpecTools["readTool"],
+  { haiku, worktree, manager }: specUsageNamesTypes.SpecNames,
+  readTool: specUsageSequencesTypes.SpecTools["readTool"],
 ) {
   return {
     childInToolCommit: (tx: Tx, api: { readonly taskId: TaskId }) =>
@@ -43,16 +24,16 @@ function setupSequencesImpl(
             }),
           );
           yield* awaited(
-            configure(tx, child.id, { model: haiku, tools: [readTool], cwd: worktree }),
+            configure(tx, child.id, { cwd: worktree, model: haiku, tools: [readTool] }),
           );
         }),
       ),
 
     liveSettings: () => {
       class UserSettings implements HarnessSettings {
-        readonly manager: SettingsManager;
-        constructor(manager: SettingsManager) {
-          this.manager = manager;
+        readonly manager: specUsageNamesTypes.SettingsManager;
+        constructor(managerInner: specUsageNamesTypes.SettingsManager) {
+          this.manager = managerInner;
         }
         get stream() {
           return { timeoutMs: this.manager.get("timeoutMs") };
@@ -67,12 +48,23 @@ function setupSequencesImpl(
   };
 }
 
-export const setupSequences: {
-  (readTool: SpecTools["readTool"]): (arg0: SpecNames) => ReturnType<typeof setupSequencesImpl>;
-  (arg0: SpecNames, readTool: SpecTools["readTool"]): ReturnType<typeof setupSequencesImpl>;
+const setupSequences: {
+  (
+    readTool: specUsageSequencesTypes.SpecTools["readTool"],
+  ): (arg0: specUsageNamesTypes.SpecNames) => ReturnType<typeof setupSequencesImpl>;
+  (
+    arg0: specUsageNamesTypes.SpecNames,
+    readTool: specUsageSequencesTypes.SpecTools["readTool"],
+  ): ReturnType<typeof setupSequencesImpl>;
 } = dual(2, setupSequencesImpl);
 
-export function containerSequence({ storage, models, localEnv, containers, context }: SpecNames) {
+function containerSequence({
+  storage,
+  models,
+  localEnv,
+  containers,
+  context,
+}: specUsageNamesTypes.SpecNames) {
   return {
     containerEnv: () =>
       Effect.runPromise(
@@ -81,32 +73,32 @@ export function containerSequence({ storage, models, localEnv, containers, conte
 
           const registry = createRegistry();
           const ContainerDoc = defineDoc<{ image: string }>({
-            kind: "app.container",
-            version: 1,
-            scope: "conversation",
-            history: "latest",
             fork: "current",
+            history: "latest",
             initial: () => ({ image: "node:22" }),
+            kind: "app.container",
+            scope: "conversation",
+            version: 1,
           });
           const harness = yield* awaited(
             Harness.open(
               storage,
               {
-                models,
-                registry,
-                env: ({ conversationId, cwd, read }, context) =>
+                env: ({ conversationId, cwd, read }, contextInner) =>
                   runPromise(
                     Effect.gen(function* () {
                       const container = yield* awaited(
-                        read.snapshot(ContainerDoc, conversationId, context),
+                        read.snapshot(ContainerDoc, conversationId, contextInner),
                       );
                       return yield* awaited(
                         container === undefined
                           ? localEnv(cwd ?? process.cwd())
-                          : containers.env(container.image, cwd ?? "/work", context),
+                          : containers.env(container.image, cwd ?? "/work", contextInner),
                       );
                     }),
                   ),
+                models,
+                registry,
               },
               context,
             ),
@@ -118,8 +110,8 @@ export function containerSequence({ storage, models, localEnv, containers, conte
 }
 
 const openHost = Effect.fn("openHost")(function* (
-  { storage, models, localEnv, sonnet, context }: SpecNames,
-  { Coding, ContextFiles, Skills, Permissions, Reviewer }: SpecExtensions,
+  { storage, models, localEnv, sonnet, context }: specUsageNamesTypes.SpecNames,
+  { Coding, ContextFiles, Skills, Permissions, Reviewer }: specUsageSequencesTypes.SpecExtensions,
 ) {
   const registry = createRegistry();
   for (const extension of [CodingTools, Coding, ContextFiles, Skills, Permissions, Reviewer]) {
@@ -129,24 +121,33 @@ const openHost = Effect.fn("openHost")(function* (
     Harness.open(
       storage,
       {
+        env: ({ cwd }) => localEnv(cwd ?? process.cwd()),
         models,
         registry,
         settings: { extensions: [CodingTools, Coding, ContextFiles, Skills, Permissions] },
-        env: ({ cwd }) => localEnv(cwd ?? process.cwd()),
       },
       context,
     ),
   );
   const root = yield* awaited(
-    harness.root(context, { agent: { model: sonnet, cwd: process.cwd() } }),
+    harness.root(context, { agent: { cwd: process.cwd(), model: sonnet } }),
   );
-  return { registry, harness, root };
+  return { harness, registry, root };
 });
 
 const reloadHost = Effect.fn("reloadHost")(function* (
-  { context }: SpecNames,
-  { editTool, bashTool }: SpecTools,
-  { Timing, Venv, PlanMode, PlanModeDoc, Subagent, Chat, SkillsV2, Skills }: SpecExtensions,
+  { context }: specUsageNamesTypes.SpecNames,
+  { editTool, bashTool }: specUsageSequencesTypes.SpecTools,
+  {
+    Timing,
+    Venv,
+    PlanMode,
+    PlanModeDoc,
+    Subagent,
+    Chat,
+    SkillsV2,
+    Skills,
+  }: specUsageSequencesTypes.SpecExtensions,
   { registry, root }: Effect.Success<ReturnType<typeof openHost>>,
 ) {
   const runPromise = Effect.runPromiseWith(yield* Effect.context<never>());
@@ -179,7 +180,11 @@ const reloadHost = Effect.fn("reloadHost")(function* (
   registry.uninstall(Skills);
 });
 
-function hostSequenceImpl(names: SpecNames, tools: SpecTools, extensions: SpecExtensions) {
+function hostSequenceImpl(
+  names: specUsageNamesTypes.SpecNames,
+  tools: specUsageSequencesTypes.SpecTools,
+  extensions: specUsageSequencesTypes.SpecExtensions,
+) {
   return {
     host: () =>
       Effect.runPromise(
@@ -192,14 +197,22 @@ function hostSequenceImpl(names: SpecNames, tools: SpecTools, extensions: SpecEx
   };
 }
 
-export const hostSequence: {
+const hostSequence: {
   (
-    tools: SpecTools,
-    extensions: SpecExtensions,
-  ): (names: SpecNames) => ReturnType<typeof hostSequenceImpl>;
+    tools: specUsageSequencesTypes.SpecTools,
+    extensions: specUsageSequencesTypes.SpecExtensions,
+  ): (names: specUsageNamesTypes.SpecNames) => ReturnType<typeof hostSequenceImpl>;
   (
-    names: SpecNames,
-    tools: SpecTools,
-    extensions: SpecExtensions,
+    names: specUsageNamesTypes.SpecNames,
+    tools: specUsageSequencesTypes.SpecTools,
+    extensions: specUsageSequencesTypes.SpecExtensions,
   ): ReturnType<typeof hostSequenceImpl>;
 } = dual(3, hostSequenceImpl);
+
+const specUsageSequences = {
+  containerSequence,
+  hostSequence,
+  setupSequences,
+};
+
+export default specUsageSequences;

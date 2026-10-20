@@ -1,33 +1,28 @@
 import { Type } from "@msa/ai";
 import type { JsonValue } from "@msa/chord";
 import {
-  defineTool,
   NestedCallDoc,
   type NestedCallState,
   type NestedToolExecutionResult,
   type ToolExecutionResult,
+  defineTool,
 } from "@msa/durable";
 import { watchEvents } from "@msa/durable/harness";
 import { MemoryStorage } from "@msa/durable/storage/memory";
 import { Effect } from "effect";
 import { describe, expect, it } from "vite-plus/test";
 
-import {
-  direct,
-  DONE,
-  call,
-  Count,
-  returning,
-  codes,
-  nested,
-} from "./harness-structured-output-support.ts";
-import { chatSetup, openChat, toJsonText, awaited, addTool, context } from "./support.ts";
+import harnessStructuredOutputSupport from "./harness-structured-output-support.ts";
+import support from "./support.ts";
+
+const { Count, DONE, call, codes, direct, nested, returning } = harnessStructuredOutputSupport;
+const { addTool, awaited, chatSetup, context, openChat, toJsonText } = support;
 
 const probingStructuredTools = Effect.fn("probingStructuredTools")(function* () {
   const runPromise = Effect.runPromiseWith(yield* Effect.context<never>());
 
   const setup = chatSetup();
-  addTool(setup.registry, returning("plain", { output: [{ type: "text", text: "a" }] }));
+  addTool(setup.registry, returning("plain", { output: [{ text: "a", type: "text" }] }));
   addTool(
     setup.registry,
     returning("nothing", { structuredOutput: null }, { structuredOutputSchema: Type.Null() }),
@@ -36,9 +31,7 @@ const probingStructuredTools = Effect.fn("probingStructuredTools")(function* () 
   addTool(
     setup.registry,
     defineTool({
-      name: "probe",
       description: "probe",
-      parameters: Type.Object({}),
       execute: (_args, api, callContext) =>
         runPromise(
           Effect.gen(function* () {
@@ -47,17 +40,19 @@ const probingStructuredTools = Effect.fn("probingStructuredTools")(function* () 
             return {};
           }),
         ),
+      name: "probe",
+      parameters: Type.Object({}),
     }),
   );
   setup.faux.setResponses([call("probe"), DONE]);
   const storage = new MemoryStorage();
   const { harness, root } = yield* openChat(storage, setup);
-  return { received, harness, root };
+  return { harness, received, root };
 });
 
 const givesCallersSchema = Effect.gen(function* () {
-  const text = { type: "text" as const, text: "one" };
-  const image = { type: "image" as const, data: "AAAA", mimeType: "image/png" };
+  const text = { text: "one", type: "text" as const };
+  const image = { data: "AAAA", mimeType: "image/png", type: "image" as const };
   const cases: [output: (typeof text | typeof image)[], value: JsonValue][] = [
     [[text], "one"],
     [[image], image],
@@ -76,11 +71,11 @@ const givesCallersSchema = Effect.gen(function* () {
     addTool(setup.registry, returning("plain", { output }));
     const received = yield* nested(setup, "plain");
     expect(received).toEqual({
-      taskId: received.taskId,
-      structuredOutput: value,
-      isError: false,
       diagnostics: [],
       durationMs: received.durationMs,
+      isError: false,
+      structuredOutput: value,
+      taskId: received.taskId,
     });
   }
 });
@@ -92,8 +87,8 @@ const givesCallersBounded = Effect.gen(function* () {
     returning(
       "long",
       {
-        output: [{ type: "text", text: "a\nb\nc" }],
-        diagnostics: [{ severity: "info", message: "note" }],
+        diagnostics: [{ message: "note", severity: "info" }],
+        output: [{ text: "a\nb\nc", type: "text" }],
       },
       { outputLimits: { maxLines: 1 } },
     ),
@@ -135,14 +130,14 @@ const storesExactlyWhat = Effect.gen(function* () {
     return Promise.resolve();
   });
   yield* awaited(
-    (yield* awaited(root.submit({ type: "input", content: "go" }, context))).wait(context),
+    (yield* awaited(root.submit({ content: "go", type: "input" }, context))).wait(context),
   );
   yield* awaited(harness.waitForIdle(context));
   yield* awaited(stream.stop());
   yield* awaited(harness.close(context));
 
-  expect(received[0]).toMatchObject({ structuredOutput: "a", isError: false });
-  expect(received[1]).toMatchObject({ structuredOutput: null, isError: false });
+  expect(received[0]).toMatchObject({ isError: false, structuredOutput: "a" });
+  expect(received[1]).toMatchObject({ isError: false, structuredOutput: null });
   expect(received[0]).not.toHaveProperty("output");
   expect(stored).toEqual(received);
   expect(ends).toEqual(received);
@@ -156,21 +151,21 @@ describe("structured output", () => {
 const givesCallersSchemaTool = Effect.gen(function* () {
   const setup = chatSetup();
   const result = {
-    output: [{ type: "text" as const, text: "3 things" }],
+    output: [{ text: "3 things", type: "text" as const }],
     structuredOutput: { count: 3 },
   };
   addTool(setup.registry, returning("counter", result, { structuredOutputSchema: Count }));
   expect(yield* nested(setup, "counter")).toMatchObject({
-    structuredOutput: { count: 3 },
     isError: false,
+    structuredOutput: { count: 3 },
   });
 
   const modelSetup = chatSetup();
   addTool(modelSetup.registry, returning("counter", result, { structuredOutputSchema: Count }));
   const stored = yield* direct(modelSetup, "counter");
   expect(stored).toMatchObject({
+    content: [{ text: "3 things", type: "text" }],
     isError: false,
-    content: [{ type: "text", text: "3 things" }],
   });
   expect(stored).not.toHaveProperty("structuredOutput");
 });

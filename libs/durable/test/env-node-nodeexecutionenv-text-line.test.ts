@@ -5,9 +5,13 @@ import { afterEach, describe, expect, it, vi } from "vite-plus/test";
 import { getOrThrow } from "../src/env/index.ts";
 import { environmentVariable } from "../src/env/node-process.ts";
 import { NodeExecutionEnv } from "../src/env/node.ts";
-import { awaited } from "./effect-support.ts";
-import { cleanUpEnvTests, createTempDir, collectShellOutput } from "./env-node-support.ts";
-import { changeMode, joinPath, pathDelimiter, readText, realPath } from "./platform-support.ts";
+import effectSupport from "./effect-support.ts";
+import envNodeSupport from "./env-node-support.ts";
+import platformSupport from "./platform-support.ts";
+
+const { awaited } = effectSupport;
+const { cleanUpEnvTests, collectShellOutput, createTempDir } = envNodeSupport;
+const { changeMode, joinPath, pathDelimiter, readText, realPath } = platformSupport;
 
 afterEach(() => Effect.runPromise(cleanUpEnvTests), 15_000);
 
@@ -21,8 +25,8 @@ const rejectsReadsClose = Effect.gen(function* () {
   yield* awaited(reader.close(BACKGROUND_CONTEXT));
   yield* awaited(expect(reader.close(BACKGROUND_CONTEXT)).resolves.toBeUndefined());
   expect(yield* awaited(reader.readLine(BACKGROUND_CONTEXT))).toMatchObject({
-    ok: false,
     error: { code: "invalid", path: joinPath(root, "lines.txt") },
+    ok: false,
   });
 });
 
@@ -30,8 +34,8 @@ const reportsMissingFiles = Effect.gen(function* () {
   const root = yield* createTempDir;
   const env = new NodeExecutionEnv({ cwd: root });
   expect(yield* awaited(env.openTextLineReader("missing.txt", BACKGROUND_CONTEXT))).toMatchObject({
-    ok: false,
     error: { code: "not_found", path: joinPath(root, "missing.txt") },
+    ok: false,
   });
 });
 
@@ -79,9 +83,9 @@ describe("NodeExecutionEnv shell", () => {
           const env = new NodeExecutionEnv({
             cwd: root,
             shellEnv: {
-              MSA_SESSION_FILE: "/stale/parent.jsonl",
               MSA_CODING_AGENT: "true",
               MSA_NODE_ENV_PRESERVED_TEST: "preserved",
+              MSA_SESSION_FILE: "/stale/parent.jsonl",
             },
           });
           const collected = yield* awaited(
@@ -114,7 +118,7 @@ const canReplaceRather = Effect.gen(function* () {
       collectShellOutput(
         env,
         `printf '%s:%s:%s' "\${${inheritedKey}-}" "\${${configuredKey}-}" "\${${explicitKey}-}"`,
-        { inheritEnv: false, env: { [explicitKey]: "explicit" } },
+        { env: { [explicitKey]: "explicit" }, inheritEnv: false },
         BACKGROUND_CONTEXT,
       ),
     );

@@ -5,18 +5,13 @@ import { Effect } from "effect";
 import { afterEach, describe, expect, it } from "vite-plus/test";
 
 import { openNodeSqliteStorage } from "../src/storage/sqlite/node.ts";
-import { directories, results, text, call, echoTool } from "./harness-nested-tools-support.ts";
-import {
-  allEntries,
-  type ChatSetup,
-  chatSetup,
-  openChat,
-  awaited,
-  addTool,
-  makeTempFile,
-  removeDir,
-  context,
-} from "./support.ts";
+import harnessNestedToolsSupport from "./harness-nested-tools-support.ts";
+import support from "./support.ts";
+import type supportTypes from "./support.types.ts";
+
+const { call, directories, echoTool, results, text } = harnessNestedToolsSupport;
+const { addTool, allEntries, awaited, chatSetup, context, makeTempFile, openChat, removeDir } =
+  support;
 
 afterEach(() =>
   Effect.runPromise(
@@ -28,7 +23,7 @@ afterEach(() =>
 );
 
 const storeVersion1 = Effect.fn("storeVersion1")(function* (
-  setup: ChatSetup,
+  setup: supportTypes.ChatSetup,
   checkpoint: JsonValue,
 ) {
   const runPromise = Effect.runPromiseWith(yield* Effect.context<never>());
@@ -49,7 +44,7 @@ const storeVersion1 = Effect.fn("storeVersion1")(function* (
             return yield* awaited(
               tx.createTask(
                 ToolTask,
-                { kind: "model", assistant: entry.id, callId: "c1" },
+                { assistant: entry.id, callId: "c1", kind: "model" },
                 { ownership: { kind: "conversation" } },
               ),
             );
@@ -65,12 +60,12 @@ const storeVersion1 = Effect.fn("storeVersion1")(function* (
   const state = { ...record.state, checkpoint } as typeof record.state;
   yield* awaited(
     storage.commit(
-      [{ type: "task", value: { ...record, version: 1, input, state } as typeof record }],
+      [{ type: "task", value: { ...record, input, state, version: 1 } as typeof record }],
       context,
     ),
   );
   yield* awaited(storage.close(context));
-  return { path, id };
+  return { id, path };
 });
 
 const migratesPendingVersion = Effect.gen(function* () {
@@ -83,10 +78,10 @@ const migratesPendingVersion = Effect.gen(function* () {
   harness.resume();
   const settled = yield* awaited(harness.waitForTask(id, context));
   expect(settled.version).toBe(2);
-  expect(settled.input).toMatchObject({ kind: "model", callId: "c1" });
+  expect(settled.input).toMatchObject({ callId: "c1", kind: "model" });
   expect(settled.state.outcome).toMatchObject({
-    status: "completed",
     result: { kind: "model" },
+    status: "completed",
   });
   expect(echo.state.runs).toBe(1);
   const [result] = results(yield* allEntries(root));
@@ -98,19 +93,19 @@ const migratesVersion1 = Effect.gen(function* () {
   const setup = chatSetup();
   const echo = echoTool();
   addTool(setup.registry, echo.registration);
-  const intent = { phase: "execute", arguments: { text: "old" }, replay: "unsafe" };
+  const intent = { arguments: { text: "old" }, phase: "execute", replay: "unsafe" };
   const { path, id } = yield* storeVersion1(setup, intent);
   const { harness, root } = yield* openChat(yield* awaited(openNodeSqliteStorage(path)), setup);
   harness.resume();
   const settled = yield* awaited(harness.waitForTask(id, context));
   expect(settled.version).toBe(2);
   expect(settled.state.outcome).toMatchObject({
-    status: "failed",
     result: { kind: "model" },
+    status: "failed",
   });
   expect(echo.state.runs).toBe(0);
   const [result] = results(yield* allEntries(root));
-  expect(result).toMatchObject({ toolCallId: "c1", isError: true });
+  expect(result).toMatchObject({ isError: true, toolCallId: "c1" });
   expect(text(result)).toContain("Tool echo was interrupted");
   yield* awaited(harness.close(context));
 });

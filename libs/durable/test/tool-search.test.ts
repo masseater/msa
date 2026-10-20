@@ -1,88 +1,29 @@
-import { type AssistantMessage, fauxAssistantMessage, fauxText, fauxToolCall, Type } from "@msa/ai";
-import {
-  AgentDoc,
-  type Conversation,
-  defineExtension,
-  defineTool,
-  type EntryRecord,
-  type JsonObject,
-  type ToolRegistration,
-} from "@msa/durable";
+import { Type } from "@msa/ai";
+import { AgentDoc, defineTool } from "@msa/durable";
 import { MemoryStorage } from "@msa/durable/storage/memory";
 import { Effect } from "effect";
 import { describe, expect, it } from "vite-plus/test";
 
-import { createToolSearchExtension } from "../src/tool-search/index.ts";
-import { allEntries, type ChatSetup, chatSetup, openChat } from "./chat-support.ts";
-import { awaited } from "./effect-support.ts";
-import { addTool } from "./harness-support.ts";
-import { context } from "./session-support.ts";
+import chatSupport from "./chat-support.ts";
+import effectSupport from "./effect-support.ts";
+import harnessSupport from "./harness-support.ts";
+import sessionSupport from "./session-support.ts";
+import toolSearchSupport from "./tool-search-support.ts";
 
-function tool(
-  name: string,
-  description: string,
-  extra: Partial<ToolRegistration> = {},
-): ToolRegistration {
-  return defineTool({
-    name,
-    description,
-    parameters: Type.Object({
-      number: Type.Optional(Type.Number({ description: "Issue number" })),
-    }),
-    execute: () => Promise.resolve({ output: [{ type: "text", text: `${name} ran` }] }),
-    ...extra,
-  });
-}
+const { DONE, call, offered, setup, systemMessages, toolResultTexts } = toolSearchSupport;
 
-const DONE = fauxAssistantMessage([fauxText("done")]);
+const { allEntries, openChat } = chatSupport;
 
-function call(name: string, args: JsonObject = {}, id = "c1"): AssistantMessage {
-  return fauxAssistantMessage([fauxToolCall(name, args, { id })], { stopReason: "toolUse" });
-}
+const { awaited } = effectSupport;
 
-function setup(): ChatSetup {
-  const chat = chatSetup();
-  addTool(chat.registry, tool("alpha", "Alpha tool"));
-  addTool(
-    chat.registry,
-    tool("github_get_issue", "Get a GitHub issue by number", { deferred: true }),
-  );
-  addTool(
-    chat.registry,
-    tool("github_list_repos", "List the repositories of a user", { deferred: true }),
-  );
-  addTool(chat.registry, tool("omega", "Omega tool"));
-  chat.registry.install(createToolSearchExtension());
-  return chat;
-}
+const { addTool } = harnessSupport;
 
-const offered = Effect.fn("offered")(function* (root: Conversation) {
-  return (yield* awaited(root.agent(context))).tools.map((each) => each.name);
-});
-
-function systemMessages(entries: readonly EntryRecord[]) {
-  return entries
-    .filter((entry) => entry.kind === "msa.system")
-    .map(
-      (entry) =>
-        entry.model![0] as { toolsAdded?: { name: string }[]; toolsRemoved?: { name: string }[] },
-    );
-}
-
-function toolResultTexts(entries: readonly EntryRecord[]): string[] {
-  return entries
-    .filter((entry) => entry.kind === "msa.tool-result")
-    .map((entry) =>
-      (entry.model![0] as { content: { text?: string }[] }).content
-        .map((item) => item.text)
-        .join(""),
-    );
-}
+const { context } = sessionSupport;
 
 const offersDeferredTool = Effect.gen(function* () {
   const chat = setup();
   chat.faux.setResponses([
-    call("tool_search", { query: "github issue", limit: 1 }),
+    call("tool_search", { limit: 1, query: "github issue" }),
     call("github_get_issue", { number: 42 }, "c2"),
     DONE,
   ]);
@@ -96,7 +37,7 @@ const offersDeferredTool = Effect.gen(function* () {
     "github_get_issue",
   );
   yield* awaited(
-    (yield* awaited(root.submit({ type: "input", content: "go" }, context))).wait(context),
+    (yield* awaited(root.submit({ content: "go", type: "input" }, context))).wait(context),
   );
   const entries = yield* allEntries(root);
   const [search, issue] = toolResultTexts(entries);
@@ -122,21 +63,16 @@ const offersDeferredTool = Effect.gen(function* () {
   yield* awaited(harness.close(context));
 });
 
-describe("deferred tools and tool_search", () => {
-  it("offers a deferred tool only once tool_search loads it, by appending its declaration", () =>
-    Effect.runPromise(offersDeferredTool));
-});
-
 const appendsEachLoaded = Effect.gen(function* () {
   const chat = setup();
   chat.faux.setResponses([
-    call("tool_search", { query: "repositories", limit: 1 }),
-    call("tool_search", { query: "issue", limit: 1 }, "c2"),
+    call("tool_search", { limit: 1, query: "repositories" }),
+    call("tool_search", { limit: 1, query: "issue" }, "c2"),
     DONE,
   ]);
   const { harness, root } = yield* openChat(new MemoryStorage(), chat);
   yield* awaited(
-    (yield* awaited(root.submit({ type: "input", content: "go" }, context))).wait(context),
+    (yield* awaited(root.submit({ content: "go", type: "input" }, context))).wait(context),
   );
   expect(yield* offered(root)).toEqual([
     "alpha",
@@ -154,28 +90,23 @@ const appendsEachLoaded = Effect.gen(function* () {
   yield* awaited(harness.close(context));
 });
 
-describe("deferred tools and tool_search", () => {
-  it("appends each loaded tool in load order, not registry order", () =>
-    Effect.runPromise(appendsEachLoaded));
-});
-
 const recordsLoadsName = Effect.gen(function* () {
   const chat = setup();
   const grow = defineTool({
-    name: "grow",
     description: "grow",
-    parameters: Type.Object({}),
     execute: () =>
       Promise.resolve({
-        output: [],
         control: { addTools: ["github_get_issue", "alpha", "ghost"] },
+        output: [],
       }),
+    name: "grow",
+    parameters: Type.Object({}),
   });
   addTool(chat.registry, grow);
   chat.faux.setResponses([call("grow"), DONE, call("grow"), DONE]);
   const { harness, root } = yield* openChat(new MemoryStorage(), chat);
   yield* awaited(
-    (yield* awaited(root.submit({ type: "input", content: "go" }, context))).wait(context),
+    (yield* awaited(root.submit({ content: "go", type: "input" }, context))).wait(context),
   );
   expect((yield* awaited(harness.snapshot(AgentDoc, root.id, context)))?.modelTools).toEqual({
     add: ["github_get_issue", "alpha", "ghost"],
@@ -191,11 +122,11 @@ const recordsLoadsName = Effect.gen(function* () {
     (each) => each.name === "github_get_issue",
   );
   yield* awaited(
-    root.configure({ modelTools: { remove: [getIssue!], add: [getIssue!] } }, context),
+    root.configure({ modelTools: { add: [getIssue!], remove: [getIssue!] } }, context),
   );
   expect(yield* offered(root)).not.toContain("github_get_issue");
   yield* awaited(
-    (yield* awaited(root.submit({ type: "input", content: "again" }, context))).wait(context),
+    (yield* awaited(root.submit({ content: "again", type: "input" }, context))).wait(context),
   );
   expect((yield* awaited(harness.snapshot(AgentDoc, root.id, context)))?.modelTools).toEqual({
     add: ["github_get_issue", "alpha", "ghost"],
@@ -205,93 +136,16 @@ const recordsLoadsName = Effect.gen(function* () {
 });
 
 describe("deferred tools and tool_search", () => {
+  it("offers a deferred tool only once tool_search loads it, by appending its declaration", () =>
+    Effect.runPromise(offersDeferredTool));
+});
+
+describe("deferred tools and tool_search", () => {
+  it("appends each loaded tool in load order, not registry order", () =>
+    Effect.runPromise(appendsEachLoaded));
+});
+
+describe("deferred tools and tool_search", () => {
   it("records loads by name: unknown and non-deferred names change nothing, remove wins, and a load lifts it", () =>
     Effect.runPromise(recordsLoadsName));
-});
-
-const keepsLoadedTool = Effect.gen(function* () {
-  const chat = setup();
-  const issue = tool("github_get_issue", "Get a GitHub issue by number", { deferred: true });
-  chat.faux.setResponses([call("tool_search", { query: "github issue", limit: 1 }), DONE]);
-  const { harness, root } = yield* openChat(new MemoryStorage(), chat);
-  yield* awaited(
-    (yield* awaited(root.submit({ type: "input", content: "go" }, context))).wait(context),
-  );
-  chat.registry.install(defineExtension({ name: "tool:github_get_issue", tools: [] }));
-  expect(yield* offered(root)).not.toContain("github_get_issue");
-  chat.registry.install(defineExtension({ name: "tool:github_get_issue", tools: [issue] }));
-  expect(yield* offered(root)).toContain("github_get_issue");
-  const alpha = (yield* awaited(root.agent(context))).tools.find((each) => each.name === "alpha")!;
-  const search = (yield* awaited(root.agent(context))).tools.find(
-    (each) => each.name === "tool_search",
-  )!;
-  yield* awaited(root.configure({ modelTools: [alpha, search] }, context));
-  chat.faux.setResponses([call("tool_search", { query: "repositories", limit: 1 }), DONE]);
-  yield* awaited(
-    (yield* awaited(root.submit({ type: "input", content: "more" }, context))).wait(context),
-  );
-  expect((yield* awaited(harness.snapshot(AgentDoc, root.id, context)))?.modelTools).toEqual([
-    "alpha",
-    "tool_search",
-    "github_list_repos",
-  ]);
-  yield* awaited(harness.close(context));
-});
-
-describe("deferred tools and tool_search", () => {
-  it("keeps a loaded tool when its extension is gone for a while, and appends to an explicit array", () =>
-    Effect.runPromise(keepsLoadedTool));
-});
-
-const keepsLoadedTools = Effect.gen(function* () {
-  const chat = setup();
-  chat.faux.setResponses([call("tool_search", { query: "github issue", limit: 1 }), DONE]);
-  const { harness, root } = yield* openChat(new MemoryStorage(), chat);
-  yield* awaited(
-    (yield* awaited(root.submit({ type: "input", content: "go" }, context))).wait(context),
-  );
-  const entries = yield* allEntries(root);
-  const before = yield* awaited(
-    root.fork(entries[0]!.id, { ownership: { kind: "ownerless" } }, context),
-  );
-  const after = yield* awaited(
-    root.fork(entries.at(-1)!.id, { ownership: { kind: "ownerless" } }, context),
-  );
-  expect(yield* offered(before)).not.toContain("github_get_issue");
-  expect(yield* offered(after)).toContain("github_get_issue");
-  yield* awaited(root.reset(undefined, context));
-  chat.faux.setResponses([DONE]);
-  yield* awaited(
-    (yield* awaited(root.submit({ type: "input", content: "fresh" }, context))).wait(context),
-  );
-  const baseline = systemMessages(yield* allEntries(root)).at(-1)!;
-  expect(baseline.toolsAdded!.map((each) => each.name)).toEqual([
-    "alpha",
-    "omega",
-    "tool_search",
-    "github_get_issue",
-  ]);
-  yield* awaited(harness.close(context));
-});
-
-const findsNothingUnrelated = Effect.gen(function* () {
-  const chat = setup();
-  chat.faux.setResponses([call("tool_search", { query: "weather forecast" }), DONE]);
-  const { harness, root } = yield* openChat(new MemoryStorage(), chat);
-  yield* awaited(
-    (yield* awaited(root.submit({ type: "input", content: "go" }, context))).wait(context),
-  );
-  expect(toolResultTexts(yield* allEntries(root))).toEqual(["No matching tools found."]);
-  expect(
-    (yield* awaited(harness.snapshot(AgentDoc, root.id, context)))?.modelTools,
-  ).toBeUndefined();
-  yield* awaited(harness.close(context));
-});
-
-describe("deferred tools and tool_search", () => {
-  it("keeps loaded tools per branch and in the baseline after a reset", () =>
-    Effect.runPromise(keepsLoadedTools));
-
-  it("finds nothing for an unrelated query and loads nothing", () =>
-    Effect.runPromise(findsNothingUnrelated));
 });

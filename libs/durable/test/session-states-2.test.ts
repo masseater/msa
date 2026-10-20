@@ -2,20 +2,24 @@ import { defineDoc } from "@msa/durable";
 import { Effect } from "effect";
 import { describe, expect, it } from "vite-plus/test";
 
-import { awaited } from "./effect-support.ts";
-import { StateDoc, createState } from "./session-states-cases.ts";
-import { context, createConversation, flush, openTestSession } from "./session-support.ts";
+import effectSupport from "./effect-support.ts";
+import sessionStatesCases from "./session-states-cases.ts";
+import sessionSupport from "./session-support.ts";
+
+const { awaited } = effectSupport;
+const { StateDoc, createState } = sessionStatesCases;
+const { context, createConversation, flush, openTestSession } = sessionSupport;
 
 const coldLoadsDefinition = Effect.gen(function* () {
   const runPromise = Effect.runPromiseWith(yield* Effect.context<never>());
 
   const Copied = defineDoc<{ value: number }>({
-    kind: "state.copied",
-    version: 1,
-    scope: "conversation",
-    history: "latest",
     fork: "current",
+    history: "latest",
     initial: () => ({ value: 0 }),
+    kind: "state.copied",
+    scope: "conversation",
+    version: 1,
   });
   const { session, storage } = openTestSession();
   const parentId = yield* awaited(createConversation(session));
@@ -60,24 +64,24 @@ const hydratesMigratedTracker = Effect.gen(function* () {
   const runPromise = Effect.runPromiseWith(yield* Effect.context<never>());
 
   const Old = defineDoc<{ value: number }>({
-    kind: "state.migration",
-    version: 1,
-    scope: "session",
     initial: () => ({ value: 3 }),
+    kind: "state.migration",
+    scope: "session",
+    version: 1,
   });
   const Current = defineDoc<{ value: number; migrated: boolean }>({
+    initial: () => ({ migrated: false, value: 0 }),
     kind: "state.migration",
-    version: 2,
+    migrate: (value) => ({ migrated: true, value: value["value"] as number }),
     scope: "session",
-    initial: () => ({ value: 0, migrated: false }),
-    migrate: (value) => ({ value: value["value"] as number, migrated: true }),
+    version: 2,
   });
   const { session, storage } = openTestSession();
   yield* awaited(session.commit((tx) => tx.doc(Old).then(() => undefined), context));
   yield* awaited(session.unloadDocuments());
   const commits = storage.commits.length;
   const state = (yield* awaited(session.documentState(Current, context)))!;
-  expect(state.value).toEqual({ value: 3, migrated: true });
+  expect(state.value).toEqual({ migrated: true, value: 3 });
   expect(storage.commits).toHaveLength(commits);
   const baseline = state.value;
 
@@ -97,7 +101,7 @@ const hydratesMigratedTracker = Effect.gen(function* () {
     ),
   );
   yield* flush;
-  expect(state.value).toEqual({ value: 4, migrated: true });
+  expect(state.value).toEqual({ migrated: true, value: 4 });
   state.dispose();
 });
 

@@ -2,10 +2,15 @@ import { type TaskId } from "@msa/durable";
 import { Effect } from "effect";
 import { describe, expect, it } from "vite-plus/test";
 
-import { abortController, awaited } from "./effect-support.ts";
-import { start, oneStep, withSignal, openRoot } from "./harness-tasks-support.ts";
-import { ControlledStorage, context } from "./session-support.ts";
-import { completed, eventually, settled } from "./task-support.ts";
+import effectSupport from "./effect-support.ts";
+import harnessTasksSupport from "./harness-tasks-support.ts";
+import sessionSupport from "./session-support.ts";
+import taskSupport from "./task-support.ts";
+
+const { abortController, awaited } = effectSupport;
+const { oneStep, openRoot, start, withSignal } = harnessTasksSupport;
+const { ControlledStorage, context } = sessionSupport;
+const { completed, eventually, settled } = taskSupport;
 
 const failsHarnessFailed = Effect.gen(function* () {
   const runPromise = Effect.runPromiseWith(yield* Effect.context<never>());
@@ -27,17 +32,17 @@ const failsHarnessFailed = Effect.gen(function* () {
   storage.failNextCommit(failure);
   harness.resume();
   const end = yield* awaited(harness.closed);
-  expect(end).toEqual({ reason: "failed", error: failure });
+  expect(end).toEqual({ error: failure, reason: "failed" });
   expect(reports).toEqual([failure]);
-  yield* awaited(expect(waiting).rejects.toMatchObject({ name: "SessionFailed", cause: failure }));
+  yield* awaited(expect(waiting).rejects.toMatchObject({ cause: failure, name: "SessionFailed" }));
   yield* awaited(
     expect(harness.getTask(id, context)).rejects.toMatchObject({
-      name: "SessionFailed",
       cause: failure,
+      name: "SessionFailed",
     }),
   );
   yield* awaited(
-    expect(root.submit({ type: "input", content: "x" }, context)).rejects.toMatchObject({
+    expect(root.submit({ content: "x", type: "input" }, context)).rejects.toMatchObject({
       name: "SessionFailed",
     }),
   );
@@ -70,7 +75,7 @@ const failsHarnessInstead = Effect.gen(function* () {
   const { harness, root, reports } = yield* openRoot([Throws], { storage });
   const id = yield* awaited(start(root, Throws));
   harness.resume();
-  expect(yield* awaited(harness.closed)).toEqual({ reason: "failed", error: failure });
+  expect(yield* awaited(harness.closed)).toEqual({ error: failure, reason: "failed" });
   expect(runs).toBe(1);
   expect(reports).toEqual([failure]);
   yield* awaited(harness.close(context));
@@ -78,8 +83,8 @@ const failsHarnessInstead = Effect.gen(function* () {
   const reopened = yield* openRoot([Throws], { storage: storage.reopen() });
   reopened.harness.resume();
   expect((yield* awaited(reopened.harness.waitForTask(id, context))).state.outcome).toEqual({
-    status: "faulted",
     error: { message: "boom" },
+    status: "faulted",
   });
   expect(runs).toBe(2);
   yield* awaited(reopened.harness.close(context));

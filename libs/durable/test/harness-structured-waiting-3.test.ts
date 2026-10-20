@@ -1,34 +1,40 @@
-import { type ConversationId, defineDoc, type TaskId } from "@msa/durable";
+import { type ConversationId, type TaskId, defineDoc } from "@msa/durable";
 import { Effect } from "effect";
 import { afterEach, describe, expect, it } from "vite-plus/test";
 
-import { awaited } from "./effect-support.ts";
-import {
-  state,
-  outcomeOf,
-  open,
-  gates,
-  until,
-  start,
+import effectSupport from "./effect-support.ts";
+import harnessStructuredSupport from "./harness-structured-support.ts";
+import platformSupport from "./platform-support.ts";
+import sessionSupport from "./session-support.ts";
+import taskSupport from "./task-support.ts";
+
+const { awaited } = effectSupport;
+const {
   Node,
-  end,
-  behaviors,
-  log,
   OWN_CONVERSATION,
-  openNodes,
-  spawn,
-  script,
+  behaviors,
   directories,
-} from "./harness-structured-support.ts";
-import { removeDir } from "./platform-support.ts";
-import { context } from "./session-support.ts";
-import { settled } from "./task-support.ts";
+  end,
+  gates,
+  log,
+  open,
+  openNodes,
+  outcomeOf,
+  script,
+  spawn,
+  start,
+  state,
+  until,
+} = harnessStructuredSupport;
+const { removeDir } = platformSupport;
+const { context } = sessionSupport;
+const { settled } = taskSupport;
 
 const TaskNotes = defineDoc<{ text: string }>({
-  kind: "test.task-notes",
-  version: 1,
-  scope: "task",
   initial: () => ({ text: "" }),
+  kind: "test.task-notes",
+  scope: "task",
+  version: 1,
 });
 
 afterEach(() =>
@@ -58,7 +64,7 @@ const holdsFinishedTask = Effect.gen(function* () {
             })
             .then((spawned) => {
               child = spawned;
-              return { status: "running", checkpoint: { phase: "resume", round: 1 } } as const;
+              return { checkpoint: { phase: "resume", round: 1 }, status: "running" } as const;
             }),
         ctx,
       ),
@@ -66,8 +72,8 @@ const holdsFinishedTask = Effect.gen(function* () {
   const parent = yield* awaited(start(root, "parent"));
   yield* until(Effect.map(state(harness, parent), (current) => current.status === "completing"));
   expect(yield* state(harness, parent)).toEqual({
+    outcome: { result: "parent", status: "completed" },
     status: "completing",
-    outcome: { status: "completed", result: "parent" },
   });
   const waiter = harness.waitForTask(parent, context);
   expect(yield* settled(waiter)).toBe(false);
@@ -83,8 +89,8 @@ const holdsFinishedTask = Effect.gen(function* () {
   expect(yield* settled(root.waitForIdle(context))).toBe(false);
   open("child");
   expect((yield* awaited(waiter)).state.outcome).toEqual({
-    status: "completed",
     result: "parent",
+    status: "completed",
   });
   expect(yield* awaited(harness.snapshot(TaskNotes, parent, context))).toBeUndefined();
   yield* awaited(root.waitForIdle(context));
@@ -101,7 +107,7 @@ const keepsHoldingOrdinaryStep1 = Effect.gen(function* () {
   const runPromise = Effect.runPromiseWith(yield* Effect.context<never>());
 
   const { harness, root } = yield* openNodes();
-  return { runPromise, harness, root };
+  return { harness, root, runPromise };
 });
 
 const keepsHoldingOrdinaryStep2 = Effect.gen(function* () {
@@ -126,7 +132,7 @@ const keepsHoldingOrdinaryStep2 = Effect.gen(function* () {
                     { ...OWN_CONVERSATION, conversationId: conversation },
                   ),
                 );
-                return { status: "running", checkpoint: { phase: "resume", round: 1 } };
+                return { checkpoint: { phase: "resume", round: 1 }, status: "running" };
               }),
             ),
           ctx,
@@ -140,7 +146,7 @@ const keepsHoldingOrdinaryStep2 = Effect.gen(function* () {
     }),
   );
   const child = (yield* awaited(harness.conversation(conversation!, context)))!;
-  return { harness, parent, child };
+  return { child, harness, parent };
 });
 
 const keepsHoldingOrdinary = Effect.gen(function* () {
@@ -172,19 +178,6 @@ const abortsWorkBelow = Effect.fn("abortsWorkBelow")(function* (
   const { harness, root } = yield* openNodes();
   let child: TaskId | undefined;
   script("parent", {
-    run: (runtime, ctx) =>
-      runtime
-        .commit(
-          (tx) =>
-            runPromise(
-              Effect.gen(function* () {
-                child = yield* awaited(spawn(tx, runtime.taskId, "child"));
-                return { status: "running", checkpoint: { phase: "resume", round: 1 } };
-              }),
-            ),
-          ctx,
-        )
-        .then(() => undefined),
     resume: (runtime, ctx) =>
       runPromise(
         Effect.gen(function* () {
@@ -192,6 +185,19 @@ const abortsWorkBelow = Effect.fn("abortsWorkBelow")(function* (
           yield* awaited(runtime.commit(() => end("failed", "parent"), ctx));
         }),
       ),
+    run: (runtime, ctx) =>
+      runtime
+        .commit(
+          (tx) =>
+            runPromise(
+              Effect.gen(function* () {
+                child = yield* awaited(spawn(tx, runtime.taskId, "child"));
+                return { checkpoint: { phase: "resume", round: 1 }, status: "running" };
+              }),
+            ),
+          ctx,
+        )
+        .then(() => undefined),
   });
   const parent = yield* awaited(start(root, "parent"));
   yield* until(() => child !== undefined);
@@ -222,7 +228,7 @@ const onlyMarksCompleting = Effect.gen(function* () {
             runPromise(
               Effect.gen(function* () {
                 child = yield* awaited(spawn(tx, runtime.taskId, "child"));
-                return { status: "running", checkpoint: { phase: "resume", round: 1 } };
+                return { checkpoint: { phase: "resume", round: 1 }, status: "running" };
               }),
             ),
           ctx,
@@ -238,7 +244,7 @@ const onlyMarksCompleting = Effect.gen(function* () {
   expect(yield* awaited(harness.abortTask(parent, context))).toBe("marked");
   expect(yield* awaited(outcomeOf(harness, child!))).toBe("aborted");
   const settledParent = yield* awaited(harness.waitForTask(parent, context));
-  expect(settledParent.state.outcome).toEqual({ status: "completed", result: "parent" });
+  expect(settledParent.state.outcome).toEqual({ result: "parent", status: "completed" });
   expect(settledParent.abortRequested).toBe(true);
   expect(log).not.toContain("abort:parent");
   expect(yield* awaited(harness.abortTask(parent, context))).toBe("terminal");

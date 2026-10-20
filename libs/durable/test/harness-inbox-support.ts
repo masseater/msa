@@ -1,14 +1,13 @@
 import {
   type AssistantMessage,
   type FauxResponseStep,
+  Type,
   fauxAssistantMessage,
   fauxText,
   fauxToolCall,
-  Type,
 } from "@msa/ai";
 import {
   type Conversation,
-  defineTool,
   type EntryRecord,
   type Harness,
   InboxDoc,
@@ -16,23 +15,31 @@ import {
   type Submission,
   type SubmissionRecord,
   type ToolExecutionResult,
+  defineTool,
 } from "@msa/durable";
 import { Effect } from "effect";
 import { dual } from "effect/Function";
 
-import { type ChatSetup, textOf, waitFor } from "./chat-support.ts";
-import { awaited } from "./effect-support.ts";
-import { addTool } from "./harness-support.ts";
-import { context } from "./session-support.ts";
-import { aborted, type Deferred, deferred } from "./task-support.ts";
+import chatSupport from "./chat-support.ts";
+import type chatSupportTypes from "./chat-support.types.ts";
+import effectSupport from "./effect-support.ts";
+import harnessSupport from "./harness-support.ts";
+import sessionSupport from "./session-support.ts";
+import taskSupport from "./task-support.ts";
 
-export const directories = new Set<string>();
+const { textOf, waitFor } = chatSupport;
+const { awaited } = effectSupport;
+const { addTool } = harnessSupport;
+const { context } = sessionSupport;
+const { aborted, deferred } = taskSupport;
 
-export function answer(text: string): AssistantMessage {
+const directories = new Set<string>();
+
+function answer(text: string): AssistantMessage {
   return fauxAssistantMessage([fauxText(text)]);
 }
 
-export function gated(message: AssistantMessage): {
+function gated(message: AssistantMessage): {
   step: FauxResponseStep;
   reached: Promise<void>;
   release: () => void;
@@ -47,20 +54,18 @@ export function gated(message: AssistantMessage): {
         return message;
       }),
     );
-  return { step, reached: reached.promise, release: () => gate.resolve() };
+  return { reached: reached.promise, release: () => gate.resolve(), step };
 }
 
 function holdToolImpl(
-  setup: ChatSetup,
-  gate: Deferred,
+  setup: chatSupportTypes.ChatSetup,
+  gate: PromiseWithResolvers<void>,
   result: ToolExecutionResult = { output: [] },
 ): void {
   addTool(
     setup.registry,
     defineTool({
-      name: "hold",
       description: "Waits for the test",
-      parameters: Type.Object({}),
       execute: () =>
         Effect.runPromise(
           Effect.gen(function* () {
@@ -68,31 +73,37 @@ function holdToolImpl(
             return result;
           }),
         ),
+      name: "hold",
+      parameters: Type.Object({}),
     }),
   );
 }
 
-export const holdTool: {
+const holdTool: {
   (
-    gate: Deferred,
+    gate: PromiseWithResolvers<void>,
     result?: ToolExecutionResult,
-  ): (setup: ChatSetup) => ReturnType<typeof holdToolImpl>;
-  (setup: ChatSetup, gate: Deferred, result?: ToolExecutionResult): ReturnType<typeof holdToolImpl>;
+  ): (setup: chatSupportTypes.ChatSetup) => ReturnType<typeof holdToolImpl>;
+  (
+    setup: chatSupportTypes.ChatSetup,
+    gate: PromiseWithResolvers<void>,
+    result?: ToolExecutionResult,
+  ): ReturnType<typeof holdToolImpl>;
 } = dual((args) => "registry" in args[0], holdToolImpl);
 
-export function queuedNote(text: string) {
-  return { kind: "note", model: [{ role: "user", content: text, timestamp: 0 }] } as const;
+function queuedNote(text: string) {
+  return { kind: "note", model: [{ content: text, role: "user", timestamp: 0 }] } as const;
 }
 
-export const HOLD = fauxAssistantMessage([fauxToolCall("hold", {}, { id: "c1" })], {
+const HOLD = fauxAssistantMessage([fauxToolCall("hold", {}, { id: "c1" })], {
   stopReason: "toolUse",
 });
 
-export function status(submission: Submission): Promise<SubmissionRecord> {
+function status(submission: Submission): Promise<SubmissionRecord> {
   return Promise.resolve(submission.status(context));
 }
 
-export function transcript(entries: readonly EntryRecord[]): string[] {
+function transcript(entries: readonly EntryRecord[]): string[] {
   return entries
     .filter((entry) => entry.kind !== "msa.system")
     .map((entry) => {
@@ -102,17 +113,14 @@ export function transcript(entries: readonly EntryRecord[]): string[] {
     });
 }
 
-export const inbox = Effect.fn("inbox")(function* (harness: Harness, root: Conversation) {
+const inbox = Effect.fn("inbox")(function* (harness: Harness, root: Conversation) {
   return (yield* awaited(harness.snapshot(InboxDoc, root.id, context)))!.items.map((item) => [
     item.id,
     item.mode,
   ]);
 });
 
-export const toolRunning = Effect.fn("toolRunning")(function* (
-  harness: Harness,
-  root: Conversation,
-) {
+const toolRunning = Effect.fn("toolRunning")(function* (harness: Harness, root: Conversation) {
   yield* waitFor(
     Effect.gen(function* () {
       return (
@@ -122,3 +130,18 @@ export const toolRunning = Effect.fn("toolRunning")(function* (
     }),
   );
 });
+
+const harnessInboxSupport = {
+  HOLD,
+  answer,
+  directories,
+  gated,
+  holdTool,
+  inbox,
+  queuedNote,
+  status,
+  toolRunning,
+  transcript,
+};
+
+export default harnessInboxSupport;

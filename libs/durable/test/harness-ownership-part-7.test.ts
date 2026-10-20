@@ -2,21 +2,26 @@ import { type TaskId } from "@msa/durable";
 import { Effect } from "effect";
 import { afterEach, describe, expect, it } from "vite-plus/test";
 
-import { awaited } from "./effect-support.ts";
-import {
+import effectSupport from "./effect-support.ts";
+import harnessOwnershipSupport from "./harness-ownership-support.ts";
+import platformSupport from "./platform-support.ts";
+import sessionSupport from "./session-support.ts";
+
+const { awaited } = effectSupport;
+const {
+  Hold,
+  Spawner,
   directories,
+  gates,
+  open,
+  openHarness,
+  runs,
+  setEntriesDuring,
   status,
   waitUntil,
-  open,
-  gates,
-  Hold,
-  runs,
-  openHarness,
-  Spawner,
-  setEntriesDuring,
-} from "./harness-ownership-support.ts";
-import { removeDir } from "./platform-support.ts";
-import { context } from "./session-support.ts";
+} = harnessOwnershipSupport;
+const { removeDir } = platformSupport;
+const { context } = sessionSupport;
 
 afterEach(() =>
   Effect.runPromise(
@@ -54,10 +59,10 @@ const openOwnedTree = Effect.fn("openOwnedTree")(function* () {
               tx.createTask(
                 Hold,
                 { name: "z" },
-                { ownership: { kind: "conversation" }, conversationId: c.id, background: true },
+                { background: true, conversationId: c.id, ownership: { kind: "conversation" } },
               ),
             );
-            return { p, a, b, c: c.id, z };
+            return { a, b, c: c.id, p, z };
           }),
         ),
       context,
@@ -76,7 +81,7 @@ const openHeldSiblings = Effect.fn("openHeldSiblings")(function* () {
       (tx) =>
         runPromise(
           Effect.gen(function* () {
-            const top = yield* awaited(
+            const topInner = yield* awaited(
               tx.createTask(Hold, { name: "top" }, { ownership: { kind: "conversation" } }),
             );
             const siblings: TaskId[] = [];
@@ -86,15 +91,15 @@ const openHeldSiblings = Effect.fn("openHeldSiblings")(function* () {
                   tx.createTask(
                     Hold,
                     { name: `s${n}` },
-                    { ownership: { kind: "task", taskId: top } },
+                    { ownership: { kind: "task", taskId: topInner } },
                   ),
                 ),
               );
             }
-            const leaves: TaskId[] = [];
+            const leavesInner: TaskId[] = [];
             for (const n of Array.from({ length: count }, (_, i) => count - 1 - i)) {
               const owner = siblings[n]!;
-              leaves.push(
+              leavesInner.push(
                 yield* awaited(
                   tx.createTask(
                     Hold,
@@ -104,13 +109,13 @@ const openHeldSiblings = Effect.fn("openHeldSiblings")(function* () {
                 ),
               );
             }
-            return { top, leaves };
+            return { leaves: leavesInner, top: topInner };
           }),
         ),
       context,
     ),
   );
-  return { harness, root, count, top, leaves };
+  return { count, harness, leaves, root, top };
 });
 
 describe("ownership", () => {
@@ -185,7 +190,7 @@ const finalizesManyHeld = Effect.gen(function* () {
             for (const record of records) {
               (tx as unknown as { setTask(value: unknown): void }).setTask({
                 ...record,
-                state: { status: "terminal", outcome: { status: "completed", result: null } },
+                state: { outcome: { result: null, status: "completed" }, status: "terminal" },
               });
             }
           }),
@@ -215,12 +220,12 @@ const rejectsConversationCreated = Effect.gen(function* () {
     ),
   );
   expect((yield* awaited(harness.waitForTask(spawner, context))).state.outcome).toEqual({
-    status: "faulted",
     error: {
       message: expect.stringMatching(
         new RegExp(`^Conversation owner task ${spawner} is (completing|terminal)$`, "u"),
       ),
     },
+    status: "faulted",
   });
   yield* awaited(harness.close(context));
 });

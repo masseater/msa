@@ -4,19 +4,21 @@ import { createModels } from "@msa/ai/models";
 import { BACKGROUND_CONTEXT } from "@msa/chord/context";
 import { Console, Effect } from "effect";
 
-import { createRegistry, Harness } from "../../src/harness/index.ts";
+import { Harness, createRegistry } from "../../src/harness/index.ts";
 import { AgentDoc, defineDoc, defineExtension, defineTool } from "../../src/index.ts";
 import { MemoryStorage } from "../../src/storage/memory.ts";
-import { awaited } from "../effect-support.ts";
+import effectSupport from "../effect-support.ts";
+
+const { awaited } = effectSupport;
 
 const context = BACKGROUND_CONTEXT;
 
 const read = defineTool({
-  name: "read",
   description: "Read a file",
-  parameters: Type.Object({ path: Type.String() }),
   execute: (args) =>
-    Promise.resolve({ output: [{ type: "text", text: `contents of ${args.path}` }] }),
+    Promise.resolve({ output: [{ text: `contents of ${args.path}`, type: "text" }] }),
+  name: "read",
+  parameters: Type.Object({ path: Type.String() }),
 });
 const Files = defineExtension({ name: "files", tools: [read] });
 const registry = createRegistry();
@@ -30,12 +32,12 @@ const main = Effect.gen(function* () {
   );
 
   const Notes = defineDoc<{ text: string }>({
-    kind: "example.notes",
-    version: 1,
-    scope: "conversation",
-    history: "rewindable",
     fork: "asOf",
+    history: "rewindable",
     initial: () => ({ text: "" }),
+    kind: "example.notes",
+    scope: "conversation",
+    version: 1,
   });
 
   const root = yield* awaited(

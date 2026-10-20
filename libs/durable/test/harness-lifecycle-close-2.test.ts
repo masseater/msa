@@ -1,12 +1,17 @@
-import { defineDoc, type TaskId } from "@msa/durable";
+import { type TaskId, defineDoc } from "@msa/durable";
 import { Effect } from "effect";
 import { describe, expect, it } from "vite-plus/test";
 
-import { awaited } from "./effect-support.ts";
-import { paused } from "./harness-lifecycle-close-2-cases.ts";
-import { start, oneStep } from "./harness-lifecycle-support.ts";
-import { ControlledStorage, context, flush } from "./session-support.ts";
-import { eventually, openTasks } from "./task-support.ts";
+import effectSupport from "./effect-support.ts";
+import paused from "./harness-lifecycle-close-2-cases.ts";
+import harnessLifecycleSupport from "./harness-lifecycle-support.ts";
+import sessionSupport from "./session-support.ts";
+import taskSupport from "./task-support.ts";
+
+const { awaited } = effectSupport;
+const { oneStep, start } = harnessLifecycleSupport;
+const { ControlledStorage, context, flush } = sessionSupport;
+const { eventually, openTasks } = taskSupport;
 
 const closingWithQueuedWorkStep1 = Effect.fn("closingWithQueuedWorkStep1")(function* () {
   const storage = new ControlledStorage();
@@ -16,7 +21,7 @@ const closingWithQueuedWorkStep1 = Effect.fn("closingWithQueuedWorkStep1")(funct
     root.commit((tx) => tx.appendEntry(root.id, { kind: "note" }), context),
   );
   const submission = yield* awaited(
-    root.submit({ type: "write", entry: { kind: "note" } }, context),
+    root.submit({ entry: { kind: "note" }, type: "write" }, context),
   );
 
   const held = storage.holdCommits();
@@ -27,58 +32,58 @@ const closingWithQueuedWorkStep1 = Effect.fn("closingWithQueuedWorkStep1")(funct
   yield* awaited(held.entered);
   const queuedInspect = harness.inspect(context);
   const closing = harness.close(context);
-  return { harness, root, entry, submission, held, blocking, queuedInspect, closing };
+  return { blocking, closing, entry, harness, held, queuedInspect, root, submission };
 });
 
 const closingWithQueuedWork = Effect.fn("closingWithQueuedWork")(function* () {
   const { harness, root, entry, submission, held, blocking, queuedInspect, closing } =
     yield* closingWithQueuedWorkStep1();
   const operations: Record<string, () => Promise<unknown>> = {
-    submit: () => root.submit({ type: "input", content: "x" }, context),
-    agent: () => root.agent(context),
-    configure: () => root.configure({ thinkingLevel: "low" }, context),
-    commit: () => root.commit(() => {}, context),
-    context: () => root.context(context),
-    entries: () => root.entries({}, 10, undefined, context),
-    fork: () => root.fork(entry.id, { ownership: { kind: "ownerless" } }, context),
-    compact: () => root.compact(undefined, context),
-    reset: () => root.reset(undefined, context),
     abort: () => root.abort(context),
-    conversationIdle: () => root.waitForIdle(context),
-    viewState: () => root.viewState(context),
-    watch: () => root.watch(context),
-    taskGraph: () => harness.taskGraph(context),
-    watchTaskGraph: () => harness.watchTaskGraph(context),
-    status: () => submission.status(context),
-    wait: () => submission.wait(context),
     abortSubmission: () => submission.abort(context),
-    root: () => harness.root(context),
+    abortTask: () => harness.abortTask(1 as TaskId, context),
+    agent: () => root.agent(context),
+    commit: () => root.commit(() => {}, context),
+    compact: () => root.compact(undefined, context),
+    configure: () => root.configure({ thinkingLevel: "low" }, context),
+    context: () => root.context(context),
     conversation: () => harness.conversation(root.id, context),
+    conversationIdle: () => root.waitForIdle(context),
     createConversation: () =>
       harness.createConversation({ ownership: { kind: "ownerless" } }, context),
+    entries: () => root.entries({}, 10, undefined, context),
+    fork: () => root.fork(entry.id, { ownership: { kind: "ownerless" } }, context),
     getTask: () => harness.getTask(1 as TaskId, context),
-    inspect: () => harness.inspect(context),
-    submission: () => harness.submission(submission.id, context),
-    abortTask: () => harness.abortTask(1 as TaskId, context),
-    waitForTask: () => harness.waitForTask(1 as TaskId, context),
     harnessIdle: () => harness.waitForIdle(context),
+    inspect: () => harness.inspect(context),
+    reset: () => root.reset(undefined, context),
+    root: () => harness.root(context),
+    status: () => submission.status(context),
+    submission: () => harness.submission(submission.id, context),
+    submit: () => root.submit({ content: "x", type: "input" }, context),
+    taskGraph: () => harness.taskGraph(context),
     usage: () => harness.usage(context),
+    viewState: () => root.viewState(context),
+    wait: () => submission.wait(context),
+    waitForTask: () => harness.waitForTask(1 as TaskId, context),
+    watch: () => root.watch(context),
+    watchTaskGraph: () => harness.watchTaskGraph(context),
   };
-  return { harness, held, blocking, queuedInspect, closing, operations };
+  return { blocking, closing, harness, held, operations, queuedInspect };
 });
 
 const queuedAtSeal = Effect.fn("queuedAtSeal")(function* () {
   const Notes = defineDoc<{ text: string }>({
-    kind: "test.queued-at-seal",
-    version: 1,
-    scope: "session",
     initial: () => ({ text: "" }),
+    kind: "test.queued-at-seal",
+    scope: "session",
+    version: 1,
   });
   const Absent = defineDoc<{ text: string }>({
-    kind: "test.queued-absent",
-    version: 1,
-    scope: "session",
     initial: () => ({ text: "" }),
+    kind: "test.queued-absent",
+    scope: "session",
+    version: 1,
   });
   const Pending = oneStep("test.queued-pending");
   const storage = new ControlledStorage();
@@ -86,7 +91,7 @@ const queuedAtSeal = Effect.fn("queuedAtSeal")(function* () {
   const root = yield* awaited(harness.root(context));
   yield* awaited(harness.commit((tx) => tx.doc(Notes).then(() => undefined), context));
   const taskId = yield* awaited(start(root, Pending));
-  const write = yield* awaited(root.submit({ type: "write", entry: { kind: "note" } }, context));
+  const write = yield* awaited(root.submit({ entry: { kind: "note" }, type: "write" }, context));
   yield* awaited(write.wait(context));
 
   const held = storage.holdCommits();
@@ -101,19 +106,19 @@ const queuedAtSeal = Effect.fn("queuedAtSeal")(function* () {
       (error: unknown) => (/closed/u.test(String(error)) ? "closed" : String(error)),
     );
   const queued = {
-    context: settle(root.context(context)),
-    snapshot: settle(harness.snapshot(Notes, context)),
-    settledWait: settle(write.wait(context)),
-    absentWatch: settle(harness.watchDoc(Absent, context)),
     absentState: settle(harness.documentState(Absent, context)),
-    waitForTask: settle(harness.waitForTask(taskId, context)),
+    absentWatch: settle(harness.watchDoc(Absent, context)),
+    context: settle(root.context(context)),
     documentState: settle(harness.documentState(Notes, context)),
-    watchDoc: settle(harness.watchDoc(Notes, context)),
-    viewState: settle(root.viewState(context)),
-    watch: settle(root.watch(context)),
+    settledWait: settle(write.wait(context)),
+    snapshot: settle(harness.snapshot(Notes, context)),
     taskGraph: settle(harness.taskGraph(context)),
+    viewState: settle(root.viewState(context)),
+    waitForTask: settle(harness.waitForTask(taskId, context)),
+    watch: settle(root.watch(context)),
+    watchDoc: settle(harness.watchDoc(Notes, context)),
   };
-  return { harness, held, blocking, queued };
+  return { blocking, harness, held, queued };
 });
 
 const rejectsConversationHarness = Effect.gen(function* () {
@@ -146,17 +151,17 @@ const completesReadsQueued = Effect.gen(function* () {
   const outcomes: Record<string, string> = {};
   for (const [name, outcome] of Object.entries(queued)) outcomes[name] = yield* awaited(outcome);
   expect(outcomes).toEqual({
-    context: "resolved",
-    snapshot: "resolved",
-    settledWait: "resolved",
-    absentWatch: "undefined",
     absentState: "undefined",
-    waitForTask: "closed",
+    absentWatch: "undefined",
+    context: "resolved",
     documentState: "closed",
-    watchDoc: "closed",
-    viewState: "closed",
-    watch: "closed",
+    settledWait: "resolved",
+    snapshot: "resolved",
     taskGraph: "closed",
+    viewState: "closed",
+    waitForTask: "closed",
+    watch: "closed",
+    watchDoc: "closed",
   });
   yield* awaited(closing);
 });
@@ -172,10 +177,10 @@ describe("Harness close", () => {
 const neverSchedulesRead = Effect.gen(function* () {
   const { harness, root, id, submissionId, ran } = yield* paused();
   const Notes = defineDoc<{ text: string }>({
-    kind: "test.viewer-notes",
-    version: 1,
-    scope: "session",
     initial: () => ({ text: "" }),
+    kind: "test.viewer-notes",
+    scope: "session",
+    version: 1,
   });
   yield* awaited(harness.commit((tx) => tx.doc(Notes).then(() => undefined), context));
   yield* awaited(harness.inspect(context));
@@ -212,10 +217,10 @@ const schedulesEveryProgress = Effect.gen(function* () {
     string,
     (opened: Effect.Success<ReturnType<typeof paused>>) => Promise<unknown>
   > = {
-    submit: ({ root }) => root.submit({ type: "write", entry: { kind: "note" } }, context),
-    compact: ({ root }) => root.compact(undefined, context),
     abort: ({ root }) => root.abort(context),
+    compact: ({ root }) => root.compact(undefined, context),
     conversationIdle: ({ root }) => root.waitForIdle(context),
+    harnessIdle: ({ harness }) => harness.waitForIdle(context),
     submissionWait: ({ harness, submissionId }) =>
       runPromise(
         Effect.gen(function* () {
@@ -224,8 +229,8 @@ const schedulesEveryProgress = Effect.gen(function* () {
           );
         }),
       ),
+    submit: ({ root }) => root.submit({ entry: { kind: "note" }, type: "write" }, context),
     waitForTask: ({ harness, id }) => harness.waitForTask(id, context),
-    harnessIdle: ({ harness }) => harness.waitForIdle(context),
   };
   for (const [name, call] of Object.entries(calls)) {
     const opened = yield* paused();

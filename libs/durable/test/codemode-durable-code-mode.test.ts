@@ -10,27 +10,23 @@ import {
   type CodemodeToolDetails,
   createCodemodeTool,
 } from "../src/codemode/codemode.ts";
-import { codemodeChat, tool } from "./codemode-chat-support.ts";
-import {
-  resultText,
-  scriptTask,
+import codemodeChatSupport from "./codemode-chat-support.ts";
+import codemodeSupport from "./codemode-support.ts";
+import support from "./support.ts";
+
+const { codemodeChat, tool } = codemodeChatSupport;
+const {
   DONE,
-  script,
-  sqlitePath,
   nestedCount,
-  removeDirectories,
   openStoredChat,
-} from "./codemode-support.ts";
-import {
-  allEntries,
-  openChat,
-  awaited,
-  addTool,
-  ControlledStorage,
-  context,
-  deferred,
-  eventually,
-} from "./support.ts";
+  removeDirectories,
+  resultText,
+  script,
+  scriptTask,
+  sqlitePath,
+} = codemodeSupport;
+const { ControlledStorage, addTool, allEntries, awaited, context, deferred, eventually, openChat } =
+  support;
 
 afterEach(removeDirectories);
 
@@ -44,7 +40,7 @@ const recordsCountLive = Effect.gen(function* () {
     DONE,
   ]);
   let opened = yield* openStoredChat(path, chat.setup);
-  const id = (yield* awaited(opened.root.submit({ type: "input", content: "go" }, context))).id;
+  const id = (yield* awaited(opened.root.submit({ content: "go", type: "input" }, context))).id;
   yield* awaited(chat.holds.reached.promise);
   yield* awaited(opened.harness.close(context));
   chat.holds.reached = deferred();
@@ -95,8 +91,8 @@ const listsScriptTool = Effect.gen(function* () {
     chat.setup.registry,
     tool("fails", () =>
       Promise.resolve({
-        output: [{ type: "text", text: "permission denied" }],
         isError: true,
+        output: [{ text: "permission denied", type: "text" }],
       }),
     ),
   );
@@ -108,14 +104,14 @@ const listsScriptTool = Effect.gen(function* () {
   ]);
   const { harness, root } = yield* openStoredChat(yield* sqlitePath(), chat.setup);
   yield* awaited(
-    (yield* awaited(root.submit({ type: "input", content: "go" }, context))).wait(context),
+    (yield* awaited(root.submit({ content: "go", type: "input" }, context))).wait(context),
   );
   const entry = (yield* allEntries(root)).find((candidate) => ToolResultEntry.is(candidate))!;
   const details = (entry.model![0] as { details?: CodemodeToolDetails }).details;
   expect(details?.calls).toMatchObject([
-    { id: 1, name: "echo", args: '{"text":"a"}', status: "ok" },
-    { id: 2, name: "fails", args: "{}", status: "error", error: "permission denied" },
-    { id: 3, name: "hold", args: '{"id":9}', status: "cancelled" },
+    { args: '{"text":"a"}', id: 1, name: "echo", status: "ok" },
+    { args: "{}", error: "permission denied", id: 2, name: "fails", status: "error" },
+    { args: '{"id":9}', id: 3, name: "hold", status: "cancelled" },
   ]);
   expect(details?.calls[0]?.durationMs).toBeGreaterThanOrEqual(0);
   yield* awaited(harness.close(context));
@@ -134,7 +130,7 @@ const storesNoOutcome = Effect.gen(function* () {
     DONE,
   ]);
   let opened = yield* openStoredChat(path, chat.setup);
-  const id = (yield* awaited(opened.root.submit({ type: "input", content: "go" }, context))).id;
+  const id = (yield* awaited(opened.root.submit({ content: "go", type: "input" }, context))).id;
   yield* awaited(chat.holds.reached.promise);
   const task = yield* scriptTask(opened.harness);
   yield* awaited(chat.sandbox.close());
@@ -157,8 +153,8 @@ const storesNoOutcome = Effect.gen(function* () {
       .status,
   ).toBe("done");
   expect(yield* resultText(chat.setup, opened.root)).toEqual({
-    text: "done",
     isError: false,
+    text: "done",
   });
   expect(Object.fromEntries(chat.echo)).toEqual({ a: 1 });
   yield* awaited(opened.harness.close(context));
@@ -177,9 +173,9 @@ const abortsCallStill = Effect.gen(function* () {
   ]);
   const { harness, root } = yield* openStoredChat(yield* sqlitePath(), chat.setup);
   yield* awaited(
-    (yield* awaited(root.submit({ type: "input", content: "go" }, context))).wait(context),
+    (yield* awaited(root.submit({ content: "go", type: "input" }, context))).wait(context),
   );
-  expect(yield* resultText(chat.setup, root)).toEqual({ text: "1", isError: false });
+  expect(yield* resultText(chat.setup, root)).toEqual({ isError: false, text: "1" });
   const tasks = (yield* awaited(
     harness.commit((tx) => tx.scanTasks({ kind: ToolTask.definition.name }, 100), context),
   )).items;
@@ -189,7 +185,7 @@ const abortsCallStill = Effect.gen(function* () {
       (task.input as { call: { name: string } }).call.name === "hold",
   )!;
   expect(chat.holds.runs).toBe(1);
-  expect(hold.state).toMatchObject({ status: "terminal", outcome: { status: "aborted" } });
+  expect(hold.state).toMatchObject({ outcome: { status: "aborted" }, status: "terminal" });
   yield* awaited(harness.close(context));
 });
 
@@ -204,9 +200,9 @@ const admitsNoCall = Effect.gen(function* () {
   chat.setup.faux.setResponses([script(`tools.echo({ text: "late" }); return 1;`), DONE]);
   const { harness, root } = yield* openChat(storage, chat.setup);
   yield* awaited(
-    (yield* awaited(root.submit({ type: "input", content: "go" }, context))).wait(context),
+    (yield* awaited(root.submit({ content: "go", type: "input" }, context))).wait(context),
   );
-  expect(yield* resultText(chat.setup, root)).toEqual({ text: "1", isError: false });
+  expect(yield* resultText(chat.setup, root)).toEqual({ isError: false, text: "1" });
   expect(chat.echo.size).toBe(0);
   expect(yield* nestedCount(harness)).toBe(0);
   yield* awaited(harness.close(context));

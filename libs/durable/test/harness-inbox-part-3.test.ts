@@ -1,8 +1,8 @@
 import {
   type AssistantMessage,
-  fauxAssistantMessage,
   type ToolResultMessage,
   type Usage,
+  fauxAssistantMessage,
 } from "@msa/ai";
 import type { Op } from "@msa/chord/delta";
 import { InboxDoc, type InboxState, LiveDoc, UsageDoc } from "@msa/durable";
@@ -12,18 +12,21 @@ import { Effect } from "effect";
 import { describe, expect, it } from "vite-plus/test";
 
 import { recordUsage } from "../src/harness/usage.ts";
-import { HOLD, holdTool, answer, gated } from "./harness-inbox-support.ts";
-import {
+import harnessInboxSupport from "./harness-inbox-support.ts";
+import support from "./support.ts";
+
+const { HOLD, answer, gated, holdTool } = harnessInboxSupport;
+const {
+  addHooks,
   allEntries,
+  awaited,
   chatSetup,
+  context,
+  deferred,
+  documentChanges,
   openChat,
   waitFor,
-  awaited,
-  addHooks,
-  context,
-  documentChanges,
-  deferred,
-} from "./support.ts";
+} = support;
 
 const storesInboxBase = Effect.gen(function* () {
   const written: { kind: "base" | "delta"; empty: boolean }[] = [];
@@ -37,7 +40,7 @@ const storesInboxBase = Effect.gen(function* () {
         if (write.type !== "document.change" || write.id !== inboxId) continue;
         const content = write.content;
         const empty = content.kind === "base" && (content.value as InboxState).items.length === 0;
-        written.push({ kind: content.kind, empty });
+        written.push({ empty, kind: content.kind });
       }
       return Promise.resolve(super.commit(writes, callContext));
     }
@@ -50,17 +53,17 @@ const storesInboxBase = Effect.gen(function* () {
     for (const change of documentChanges(publication))
       if (change.record.kind === "msa.inbox") inboxId = change.record.id;
   });
-  const input = yield* awaited(root.submit({ type: "input", content: "a" }, context));
+  const input = yield* awaited(root.submit({ content: "a", type: "input" }, context));
   yield* awaited(first.reached);
-  yield* awaited(root.submit({ type: "input", content: "f1" }, context));
-  const f2 = yield* awaited(root.submit({ type: "input", content: "f2" }, context));
+  yield* awaited(root.submit({ content: "f1", type: "input" }, context));
+  const f2 = yield* awaited(root.submit({ content: "f2", type: "input" }, context));
   first.release();
   yield* awaited(input.wait(context));
   yield* awaited(f2.wait(context));
   expect(written).toEqual([
-    { kind: "delta", empty: false },
-    { kind: "delta", empty: false },
-    { kind: "base", empty: true },
+    { empty: false, kind: "delta" },
+    { empty: false, kind: "delta" },
+    { empty: true, kind: "base" },
   ]);
   yield* awaited(harness.close(context));
 });
@@ -71,7 +74,7 @@ describe("inbox", () => {
 
   it("keeps a complete inbox base exactly while it is empty, and a usage base on every change", () => {
     const info = { deltasSinceBase: 1000 } as never;
-    const item = { id: 1 as never, mode: "followUp", content: "x" } as const;
+    const item = { content: "x", id: 1 as never, mode: "followUp" } as const;
     expect(InboxDoc.definition.checkpointWhen!({ items: [] }, [], info)).toBe(true);
     expect(InboxDoc.definition.checkpointWhen!({ items: [item] }, [], info)).toBe(false);
     expect(UsageDoc.definition.checkpointWhen!({ models: {}, tools: {} }, [], info)).toBe(true);
@@ -79,14 +82,14 @@ describe("inbox", () => {
 });
 
 const retryingUsageChat = Effect.fn("retryingUsageChat")(function* () {
-  const setup = chatSetup({ tokensPerSecond: 200, tokenSize: { min: 1, max: 1 } });
+  const setup = chatSetup({ tokenSize: { max: 1, min: 1 }, tokensPerSecond: 200 });
   const spent: Usage = {
-    input: 5,
-    output: 0,
     cacheRead: 0,
     cacheWrite: 0,
+    cost: { cacheRead: 0, cacheWrite: 0, input: 0, output: 0, total: 0 },
+    input: 5,
+    output: 0,
     totalTokens: 5,
-    cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0, total: 0 },
   };
   const gate = deferred();
   gate.resolve();
@@ -95,23 +98,23 @@ const retryingUsageChat = Effect.fn("retryingUsageChat")(function* () {
     afterTool: (_call, result) => ({ ...result, usage: spent }),
   });
   const retryable = fauxAssistantMessage([], {
-    stopReason: "error",
     errorMessage: "503 Service Unavailable",
+    stopReason: "error",
   });
   setup.faux.setResponses([retryable, HOLD, answer("done"), answer("x".repeat(400))]);
   const { harness, root } = yield* openChat(new MemoryStorage(), setup);
-  return { setup, spent, harness, root };
+  return { harness, root, setup, spent };
 });
 
 const totalsAssistantUsageStep1 = Effect.gen(function* () {
   const setup = chatSetup();
   const spent: Usage = {
-    input: 1,
-    output: 2,
     cacheRead: 3,
     cacheWrite: 4,
+    cost: { cacheRead: 0.3, cacheWrite: 0.4, input: 0.1, output: 0.2, total: 1 },
+    input: 1,
+    output: 2,
     totalTokens: 10,
-    cost: { input: 0.1, output: 0.2, cacheRead: 0.3, cacheWrite: 0.4, total: 1 },
   };
   const gate = deferred();
   gate.resolve();
@@ -119,7 +122,7 @@ const totalsAssistantUsageStep1 = Effect.gen(function* () {
   setup.faux.setResponses([HOLD, answer("done"), answer("other")]);
   const { harness, root } = yield* openChat(new MemoryStorage(), setup);
   yield* awaited(
-    (yield* awaited(root.submit({ type: "input", content: "a" }, context))).wait(context),
+    (yield* awaited(root.submit({ content: "a", type: "input" }, context))).wait(context),
   );
   const entries = yield* allEntries(root);
   const assistants = entries.flatMap((entry) =>
@@ -147,13 +150,13 @@ const totalsAssistantUsageStep1 = Effect.gen(function* () {
     models: {},
     tools: {},
   });
-  return { spent, harness, expected, fork };
+  return { expected, fork, harness, spent };
 });
 
 const totalsAssistantUsage = Effect.gen(function* () {
   const { spent, harness, expected, fork } = yield* totalsAssistantUsageStep1;
   yield* awaited(
-    (yield* awaited(fork.submit({ type: "input", content: "b" }, context))).wait(context),
+    (yield* awaited(fork.submit({ content: "b", type: "input" }, context))).wait(context),
   );
   const forkUsage = (yield* awaited(harness.snapshot(UsageDoc, fork.id, context)))!.models[
     "faux/faux-1"
@@ -171,15 +174,15 @@ describe("usage", () => {
 
 const countsFailedAttempts = Effect.gen(function* () {
   const { setup, spent, harness, root } = yield* retryingUsageChat();
-  setup.settings.retry = { enabled: true, maxRetries: 1, baseDelayMs: 1 };
+  setup.settings.retry = { baseDelayMs: 1, enabled: true, maxRetries: 1 };
   yield* awaited(
-    (yield* awaited(root.submit({ type: "input", content: "a" }, context))).wait(context),
+    (yield* awaited(root.submit({ content: "a", type: "input" }, context))).wait(context),
   );
   expect((yield* awaited(harness.snapshot(UsageDoc, root.id, context)))!.tools).toEqual({
     hold: spent,
   });
 
-  const input = yield* awaited(root.submit({ type: "input", content: "b" }, context));
+  const input = yield* awaited(root.submit({ content: "b", type: "input" }, context));
   yield* waitFor(
     Effect.gen(function* () {
       return (
@@ -220,12 +223,12 @@ const keepsToolsNamed = Effect.gen(function* () {
   const runPromise = Effect.runPromiseWith(yield* Effect.context<never>());
   const { harness, root } = yield* openChat(new MemoryStorage(), chatSetup());
   const usage: Usage = {
-    input: 1,
-    output: 1,
     cacheRead: 0,
     cacheWrite: 0,
+    cost: { cacheRead: 0, cacheWrite: 0, input: 0, output: 0, total: 0 },
+    input: 1,
+    output: 1,
     totalTokens: 2,
-    cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0, total: 0 },
   };
   const names = ["constructor", "__proto__", "toString"];
   for (const name of names) {
@@ -261,10 +264,10 @@ const recordsUsageNumeric = Effect.gen(function* () {
     }
   });
   yield* awaited(
-    (yield* awaited(root.submit({ type: "input", content: "a" }, context))).wait(context),
+    (yield* awaited(root.submit({ content: "a", type: "input" }, context))).wait(context),
   );
   yield* awaited(
-    (yield* awaited(root.submit({ type: "input", content: "b" }, context))).wait(context),
+    (yield* awaited(root.submit({ content: "b", type: "input" }, context))).wait(context),
   );
   expect(commits).toHaveLength(2);
   expect(commits[0]!.ops).toEqual([["s", ["models", "faux/faux-1"], expect.any(Object)]]);

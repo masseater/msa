@@ -1,23 +1,26 @@
-import { fauxAssistantMessage, fauxToolCall, Type } from "@msa/ai";
-import { defineTool, ProviderDoc } from "@msa/durable";
+import { Type, fauxAssistantMessage, fauxToolCall } from "@msa/ai";
+import { ProviderDoc, defineTool } from "@msa/durable";
 import { CompactionTask } from "@msa/durable/harness";
 import { Effect } from "effect";
 import { afterEach, describe, expect, it } from "vite-plus/test";
 
-import {
-  summary,
-  answer,
-  history,
-  directories,
+import harnessCompactionSupport from "./harness-compaction-support.ts";
+import support from "./support.ts";
+
+const {
   MANUAL,
+  answer,
   compactionInput,
-  live,
+  directories,
   failure,
+  history,
+  kinds,
+  live,
   open,
   result,
-  kinds,
-} from "./harness-compaction-support.ts";
-import { toolsNamed, awaited, addHooks, addTool, removeDir, context } from "./support.ts";
+  summary,
+} = harnessCompactionSupport;
+const { addHooks, addTool, awaited, context, removeDir, toolsNamed } = support;
 
 afterEach(() =>
   Effect.runPromise(
@@ -35,8 +38,8 @@ const completesWithoutSummary = Effect.gen(function* () {
   expect(
     yield* awaited(result(chat, yield* awaited(chat.root.compact(undefined, context)))),
   ).toEqual({
-    status: "completed",
     result: {},
+    status: "completed",
   });
   expect(chat.faux.summaryRequests).toHaveLength(0);
   yield* awaited(chat.harness.close(context));
@@ -50,8 +53,8 @@ const failsNoModel = Effect.gen(function* () {
     result(chat, yield* awaited(chat.root.compact(undefined, context))),
   );
   expect(outcome).toMatchObject({
-    status: "failed",
     error: { detail: { reason: "no_model" } },
+    status: "failed",
   });
   expect((yield* awaited(live(chat))).compactions).toBeUndefined();
   yield* awaited(chat.harness.close(context));
@@ -86,7 +89,7 @@ const retriesRetryableErrorStep1 = Effect.gen(function* () {
   const chat = yield* open();
   yield* history(chat);
   yield* awaited(chat.root.configure({ thinkingLevel: "high" }, context));
-  chat.setup.settings.stream = { timeoutMs: 1234, deferred: true };
+  chat.setup.settings.stream = { deferred: true, timeoutMs: 1234 };
   chat.faux.summaries.push(() =>
     runPromise(
       Effect.gen(function* () {
@@ -108,7 +111,7 @@ const retriesRetryableErrorStep1 = Effect.gen(function* () {
     ),
   );
   expect(chat.faux.summaryRequests).toHaveLength(2);
-  return { once, chat, twice };
+  return { chat, once, twice };
 });
 
 const retriesRetryableError = Effect.gen(function* () {
@@ -118,10 +121,10 @@ const retriesRetryableError = Effect.gen(function* () {
     .sessionId;
   for (const request of chat.faux.summaryRequests) {
     expect(request.options).toMatchObject({
-      reasoning: "high",
-      timeoutMs: 1234,
       cacheRetention: "none",
+      reasoning: "high",
       sessionId,
+      timeoutMs: 1234,
     });
     expect(request.options?.deferred).toBeUndefined();
   }
@@ -160,10 +163,10 @@ const capsMaxTokensModel = Effect.gen(function* () {
   addTool(
     chat.setup.registry,
     defineTool({
-      name: "read",
       description: "read",
-      parameters: Type.Object({}),
       execute: () => Promise.resolve({ output: [] }),
+      name: "read",
+      parameters: Type.Object({}),
     }),
   );
   yield* awaited(chat.root.configure({ tools: toolsNamed(chat.setup, "read") }, context));
@@ -216,8 +219,8 @@ describe("compaction outcomes", () => {
             result(chat, yield* awaited(chat.root.compact(undefined, context))),
           );
           expect(outcome).toMatchObject({
+            error: { detail: { reason: "model_error" }, message },
             status: "failed",
-            error: { message, detail: { reason: "model_error" } },
           });
           expect(chat.faux.summaryRequests).toHaveLength(name === "retries run out" ? 3 : 1);
           expect((yield* awaited(live(chat))).compactions).toBeUndefined();

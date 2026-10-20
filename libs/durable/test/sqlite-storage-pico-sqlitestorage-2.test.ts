@@ -5,17 +5,14 @@ import { afterEach, describe, expect, it } from "vite-plus/test";
 
 import type { DocumentId, EntryId } from "../src/types.ts";
 import { ROOT_CONVERSATION_ID } from "../src/types.ts";
-import { awaited } from "./effect-support.ts";
-import { fileSize, removeDir } from "./platform-support.ts";
-import {
-  entry,
-  createRoot,
-  context,
-  tempDirectories,
-  openStorages,
-  createSqliteStorage,
-  scalar,
-} from "./sqlite-storage-support.ts";
+import effectSupport from "./effect-support.ts";
+import platformSupport from "./platform-support.ts";
+import sqliteStorageSupport from "./sqlite-storage-support.ts";
+
+const { awaited } = effectSupport;
+const { fileSize, removeDir } = platformSupport;
+const { context, createRoot, createSqliteStorage, entry, openStorages, scalar, tempDirectories } =
+  sqliteStorageSupport;
 
 afterEach(() =>
   Effect.runPromise(
@@ -37,9 +34,9 @@ const largeReplacedDocument = Effect.fn("largeReplacedDocument")(function* () {
     storage.commit(
       [
         {
-          type: "document.create",
+          content: { kind: "base", value: { text: large }, version: 1 },
           record: { id, kind: "reuse", scope: { kind: "session" } },
-          content: { kind: "base", version: 1, value: { text: large } },
+          type: "document.create",
         },
       ],
       context,
@@ -49,15 +46,15 @@ const largeReplacedDocument = Effect.fn("largeReplacedDocument")(function* () {
     storage.commit(
       [
         {
-          type: "document.change",
+          content: { kind: "base", value: { text: "small" }, version: 1 },
           id,
-          content: { kind: "base", version: 1, value: { text: "small" } },
+          type: "document.change",
         },
       ],
       context,
     ),
   );
-  return { storage, path, id, large };
+  return { id, large, path, storage };
 });
 
 const representativeRows = Effect.fn("representativeRows")(function* () {
@@ -79,7 +76,7 @@ const representativeRows = Effect.fn("representativeRows")(function* () {
       ),
     );
   }
-  return { storage, path };
+  return { path, storage };
 });
 
 const autoCheckpointsWal = Effect.gen(function* () {
@@ -92,8 +89,8 @@ const autoCheckpointsWal = Effect.gen(function* () {
           {
             type: "entry",
             value: entry(yield* awaited(storage.mintId<EntryId>()), ROOT_CONVERSATION_ID, {
-              text: "x".repeat(32 * 1024),
               index,
+              text: "x".repeat(32 * 1024),
             }),
           },
         ],
@@ -142,9 +139,9 @@ const reusesPagesReleased = Effect.gen(function* () {
     storage.commit(
       [
         {
-          type: "document.change",
+          content: { kind: "base", value: { text: large }, version: 1 },
           id,
-          content: { kind: "base", version: 1, value: { text: large } },
+          type: "document.change",
         },
       ],
       context,
@@ -176,15 +173,15 @@ const keepsRepresentativeRow = Effect.gen(function* () {
     storage.commit(
       [
         {
-          type: "document.create",
+          content: { kind: "base", value: { count: 0 }, version: 1 },
           record: {
+            fork: "asOf",
+            history: "rewindable",
             id: documentId,
             kind: "size.history",
-            scope: { kind: "conversation", conversationId: ROOT_CONVERSATION_ID },
-            history: "rewindable",
-            fork: "asOf",
+            scope: { conversationId: ROOT_CONVERSATION_ID, kind: "conversation" },
           },
-          content: { kind: "base", version: 1, value: { count: 0 } },
+          type: "document.create",
         },
       ],
       context,
@@ -195,9 +192,9 @@ const keepsRepresentativeRow = Effect.gen(function* () {
       storage.commit(
         [
           {
-            type: "document.change",
+            content: { kind: "delta", ops: [["s", ["count"], count]], version: 1 },
             id: documentId,
-            content: { kind: "delta", version: 1, ops: [["s", ["count"], count]] },
+            type: "document.change",
           },
         ],
         context,

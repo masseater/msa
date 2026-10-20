@@ -3,12 +3,19 @@ import { AssistantEntry, LiveDoc } from "@msa/durable";
 import { Effect } from "effect";
 import { afterEach, describe, expect, it } from "vite-plus/test";
 
-import { type ChatSetup, chatSetup, textOf, unanswered, waitFor } from "./chat-support.ts";
-import { awaited } from "./effect-support.ts";
-import { open, directories, sqlitePath } from "./harness-generation-recovery-support.ts";
-import { addSection } from "./harness-support.ts";
-import { removeDir } from "./platform-support.ts";
-import { context } from "./session-support.ts";
+import chatSupport from "./chat-support.ts";
+import effectSupport from "./effect-support.ts";
+import harnessGenerationRecoverySupport from "./harness-generation-recovery-support.ts";
+import harnessSupport from "./harness-support.ts";
+import platformSupport from "./platform-support.ts";
+import sessionSupport from "./session-support.ts";
+
+const { chatSetup, textOf, unanswered, waitFor } = chatSupport;
+const { awaited } = effectSupport;
+const { directories, open, sqlitePath } = harnessGenerationRecoverySupport;
+const { addSection } = harnessSupport;
+const { removeDir } = platformSupport;
+const { context } = sessionSupport;
 
 afterEach(() =>
   Effect.runPromise(
@@ -26,7 +33,7 @@ const failsNoModelStep1 = Effect.gen(function* () {
   const setup = chatSetup({ deferred: { pollAfterMs: 60_000 } });
   const busy = unanswered();
   setup.faux.setResponses([busy.step, fauxAssistantMessage("deferred")]);
-  return { runPromise, path, setup, busy };
+  return { busy, path, runPromise, setup };
 });
 
 const failsNoModel = Effect.gen(function* () {
@@ -34,26 +41,26 @@ const failsNoModel = Effect.gen(function* () {
   let opened = yield* open(path, setup);
   opened.harness.resume();
   const requesting = (yield* awaited(
-    opened.root.submit({ type: "input", content: "one" }, context),
+    opened.root.submit({ content: "one", type: "input" }, context),
   )).id;
   yield* awaited(busy.reached);
   yield* awaited(opened.harness.close(context));
 
-  const empty: ChatSetup = { ...setup, models: createModels() };
+  const empty: ReturnType<typeof chatSetup> = { ...setup, models: createModels() };
   opened = yield* open(path, empty);
   opened.harness.resume();
   expect(
     yield* awaited((yield* awaited(opened.harness.submission(requesting, context)))!.wait(context)),
   ).toMatchObject({
-    status: "unanswered",
     reason: "no_model",
+    status: "unanswered",
   });
   yield* awaited(opened.harness.close(context));
 
   opened = yield* open(path, setup);
   setup.settings.stream = { deferred: true };
   opened.harness.resume();
-  const polling = (yield* awaited(opened.root.submit({ type: "input", content: "two" }, context)))
+  const polling = (yield* awaited(opened.root.submit({ content: "two", type: "input" }, context)))
     .id;
   yield* waitFor(
     Effect.gen(function* () {
@@ -68,8 +75,8 @@ const failsNoModel = Effect.gen(function* () {
   expect(
     yield* awaited((yield* awaited(opened.harness.submission(polling, context)))!.wait(context)),
   ).toMatchObject({
-    status: "unanswered",
     reason: "no_model",
+    status: "unanswered",
   });
   yield* awaited(opened.harness.close(context));
 });
@@ -87,7 +94,7 @@ const runsPrintStyle = Effect.gen(function* () {
   let opened = yield* open(path, setup);
   opened.harness.resume();
   const submission = yield* awaited(
-    opened.root.submit({ type: "input", content: "answer?" }, context),
+    opened.root.submit({ content: "answer?", type: "input" }, context),
   );
   const settled = yield* awaited(submission.wait(context));
   if (settled.status !== "done" || settled.type !== "input")

@@ -1,20 +1,15 @@
 import { fauxAssistantMessage, fauxText } from "@msa/ai";
-import { type ConversationId, configure, defineDoc, defineTask, type EntryId } from "@msa/durable";
+import { type ConversationId, type EntryId, configure, defineDoc, defineTask } from "@msa/durable";
 import { Effect } from "effect";
 import { afterEach, describe, expect, it } from "vite-plus/test";
 
 import { openNodeSqliteStorage } from "../src/storage/sqlite/node.ts";
-import { directories, gates, runs, gated } from "./harness-ownership-support.ts";
-import {
-  chatSetup,
-  openChat,
-  awaited,
-  addTask,
-  joinPath,
-  makeTempDir,
-  removeDir,
-  context,
-} from "./support.ts";
+import harnessOwnershipSupport from "./harness-ownership-support.ts";
+import support from "./support.ts";
+
+const { directories, gated, gates, runs } = harnessOwnershipSupport;
+const { addTask, awaited, chatSetup, context, joinPath, makeTempDir, openChat, removeDir } =
+  support;
 
 afterEach(() =>
   Effect.runPromise(
@@ -34,22 +29,23 @@ const supervisorSetupStep1 = Effect.fn("supervisorSetupStep1")(function* () {
   directories.add(directory);
   const path = joinPath(directory, "session.sqlite");
   const Children = defineDoc<{ child?: ConversationId }>({
-    kind: "test.children",
-    version: 1,
-    scope: "conversation",
-    history: "latest",
     fork: "initial",
+    history: "latest",
     initial: () => ({}),
+    kind: "test.children",
+    scope: "conversation",
+    version: 1,
   });
-  return { runPromise, path, Children };
+  return { Children, path, runPromise };
 });
 
 const supervisorSetup = Effect.fn("supervisorSetup")(function* () {
   const { runPromise, path, Children } = yield* supervisorSetupStep1();
   const Supervisor = defineTask<{ parent: ConversationId }, { phase: "run" }, { answer: EntryId }>({
-    name: "test.supervisor",
-    version: 1,
+    abort: (_task, runtime, ctx) =>
+      runtime.commit(() => ({ outcome: { status: "aborted" }, status: "terminal" }), ctx),
     initial: () => ({ phase: "run" }),
+    name: "test.supervisor",
     phases: {
       run: (task, runtime, ctx) =>
         runPromise(
@@ -57,7 +53,7 @@ const supervisorSetup = Effect.fn("supervisorSetup")(function* () {
             const id = (yield* awaited(runtime.snapshot(Children, task.input.parent, ctx)))!.child!;
             const child = (yield* awaited(runtime.conversation(id, ctx)))!;
             const submission = yield* awaited(
-              child.submit({ type: "input", content: "work", requestId: "stable" }, ctx),
+              child.submit({ content: "work", requestId: "stable", type: "input" }, ctx),
             );
             const settled = yield* awaited(submission.wait(ctx));
             if (settled.status !== "done" || settled.type !== "input")
@@ -65,8 +61,8 @@ const supervisorSetup = Effect.fn("supervisorSetup")(function* () {
             yield* awaited(
               runtime.commit(
                 () => ({
+                  outcome: { result: { answer: settled.answer }, status: "completed" },
                   status: "terminal",
-                  outcome: { status: "completed", result: { answer: settled.answer } },
                 }),
                 ctx,
               ),
@@ -74,14 +70,13 @@ const supervisorSetup = Effect.fn("supervisorSetup")(function* () {
           }),
         ),
     },
-    abort: (_task, runtime, ctx) =>
-      runtime.commit(() => ({ status: "terminal", outcome: { status: "aborted" } }), ctx),
+    version: 1,
   });
   const setup = chatSetup();
   addTask(setup.registry, Supervisor);
   const first = gated(fauxAssistantMessage([fauxText("never")]));
   setup.faux.setResponses([first.step, fauxAssistantMessage([fauxText("answer")])]);
-  return { path, Children, Supervisor, setup, first };
+  return { Children, Supervisor, first, path, setup };
 });
 
 const letsBackgroundSupervisor = Effect.gen(function* () {
@@ -95,23 +90,23 @@ const letsBackgroundSupervisor = Effect.gen(function* () {
       (tx) =>
         runPromise(
           Effect.gen(function* () {
-            const supervisor = yield* awaited(
+            const supervisorInner = yield* awaited(
               tx.createTask(
                 Supervisor,
                 { parent: root.id },
-                { ownership: { kind: "conversation" }, background: true },
+                { background: true, ownership: { kind: "conversation" } },
               ),
             );
             const created = yield* awaited(
               tx.createConversation({
-                ownership: { kind: "task", taskId: supervisor },
+                ownership: { kind: "task", taskId: supervisorInner },
               }),
             );
             yield* awaited(
-              configure(tx, created.id, { model: { provider: "faux", modelId: "faux-1" } }),
+              configure(tx, created.id, { model: { modelId: "faux-1", provider: "faux" } }),
             );
             (yield* awaited(tx.doc(Children, root.id))).child = created.id;
-            return { supervisor, child: created.id };
+            return { child: created.id, supervisor: supervisorInner };
           }),
         ),
       context,

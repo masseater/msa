@@ -2,19 +2,25 @@ import { defineDoc } from "@msa/durable";
 import { Effect } from "effect";
 import { describe, expect, it } from "vite-plus/test";
 
-import { awaited } from "./effect-support.ts";
-import { start, oneStep, openRoot } from "./harness-tasks-support.ts";
-import { ControlledStorage, context, flush } from "./session-support.ts";
-import { deferred, eventually } from "./task-support.ts";
+import effectSupport from "./effect-support.ts";
+import harnessTasksSupport from "./harness-tasks-support.ts";
+import sessionSupport from "./session-support.ts";
+import type sessionSupportTypes from "./session-support.types.ts";
+import taskSupport from "./task-support.ts";
+
+const { awaited } = effectSupport;
+const { oneStep, openRoot, start } = harnessTasksSupport;
+const { ControlledStorage, context, flush } = sessionSupport;
+const { deferred, eventually } = taskSupport;
 
 const sealsAdmissionSignalling = Effect.gen(function* () {
   const runPromise = Effect.runPromiseWith(yield* Effect.context<never>());
 
   const Notes = defineDoc<{ text: string }>({
-    kind: "test.close-notes",
-    version: 1,
-    scope: "session",
     initial: () => ({ text: "" }),
+    kind: "test.close-notes",
+    scope: "session",
+    version: 1,
   });
   const reached = deferred();
   let fromListener: Promise<unknown> | undefined;
@@ -62,7 +68,7 @@ const writesNoFault = Effect.gen(function* () {
   const runPromise = Effect.runPromiseWith(yield* Effect.context<never>());
 
   const storage = new ControlledStorage();
-  let held: ReturnType<ControlledStorage["holdCommits"]> | undefined;
+  let held: ReturnType<sessionSupportTypes.ControlledStorage["holdCommits"]> | undefined;
   let harnessRef: Effect.Success<ReturnType<typeof openRoot>>["harness"] | undefined;
   const Throws = oneStep("test.close-fault", (_task, runtime) => {
     held = storage.holdCommits();

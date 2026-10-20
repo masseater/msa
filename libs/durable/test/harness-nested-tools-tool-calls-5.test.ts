@@ -6,8 +6,11 @@ import { MemoryStorage } from "@msa/durable/storage/memory";
 import { Effect } from "effect";
 import { describe, expect, it } from "vite-plus/test";
 
-import { toolTasks, runOnce, DONE, call, tool, echoTool } from "./harness-nested-tools-support.ts";
-import { chatSetup, openChat, awaited, addTool, context, deferred } from "./support.ts";
+import harnessNestedToolsSupport from "./harness-nested-tools-support.ts";
+import support from "./support.ts";
+
+const { DONE, call, echoTool, runOnce, tool, toolTasks } = harnessNestedToolsSupport;
+const { addTool, awaited, chatSetup, context, deferred, openChat } = support;
 
 function summarizedTools() {
   const setup = chatSetup();
@@ -17,21 +20,21 @@ function summarizedTools() {
     setup.registry,
     tool("verbose", () =>
       Promise.resolve({
-        output: [{ type: "text", text: "ignored" }],
+        diagnostics: [{ message: "e".repeat(600), severity: "error" }],
         isError: true,
-        diagnostics: [{ severity: "error", message: "e".repeat(600) }],
+        output: [{ text: "ignored", type: "text" }],
       }),
     ),
   );
   const usage: Usage = {
-    input: 1,
-    output: 2,
     cacheRead: 0,
     cacheWrite: 0,
+    cost: { cacheRead: 0, cacheWrite: 0, input: 0.1, output: 0.2, total: 0.3 },
+    input: 1,
+    output: 2,
     totalTokens: 3,
-    cost: { input: 0.1, output: 0.2, cacheRead: 0, cacheWrite: 0, total: 0.3 },
   };
-  return { setup, release, checked, usage };
+  return { checked, release, setup, usage };
 }
 
 function summarizedBatch() {
@@ -45,11 +48,11 @@ function summarizedBatch() {
     setup.registry,
     tool("broken", () =>
       Promise.resolve({
-        output: [
-          { type: "text", text: "bad image" },
-          { type: "image", data: "AAAA", mimeType: "image/png" },
-        ],
         isError: true,
+        output: [
+          { text: "bad image", type: "text" },
+          { data: "AAAA", mimeType: "image/png", type: "image" },
+        ],
       }),
     ),
   );
@@ -71,7 +74,7 @@ function summarizedBatch() {
     ),
   );
   setup.faux.setResponses([call("batch"), DONE]);
-  return { setup, release, checked, usage };
+  return { checked, release, setup, usage };
 }
 
 const givesCallersResult = Effect.gen(function* () {
@@ -97,20 +100,20 @@ const givesCallersResult = Effect.gen(function* () {
   setup.faux.setResponses([call("batch"), DONE]);
   const { harness, root } = yield* openChat(new MemoryStorage(), setup);
   yield* awaited(
-    (yield* awaited(root.submit({ type: "input", content: "go" }, context))).wait(context),
+    (yield* awaited(root.submit({ content: "go", type: "input" }, context))).wait(context),
   );
   const [, child] = yield* toolTasks(harness);
-  expect(child!.state).toMatchObject({ status: "terminal", outcome: { status: "faulted" } });
+  expect(child!.state).toMatchObject({ outcome: { status: "faulted" }, status: "terminal" });
   expect(result).toEqual({
-    taskId: child!.id,
-    isError: true,
     diagnostics: [
       {
-        severity: "error",
         code: "faulted",
         message: expect.stringContaining("Tool echo failed"),
+        severity: "error",
       },
     ],
+    isError: true,
+    taskId: child!.id,
   });
   yield* awaited(harness.close(context));
 });
@@ -145,9 +148,9 @@ const givesCallersWhat = Effect.gen(function* () {
   );
   const { harness } = yield* runOnce(setup, [call("batch"), DONE]);
   expect(result).toMatchObject({
+    diagnostics: [{ code: "tool_error", message: "broke" }],
     isError: true,
     structuredOutput: "half way\n",
-    diagnostics: [{ code: "tool_error", message: "broke" }],
   });
   yield* awaited(harness.close(context));
 });
@@ -160,34 +163,34 @@ describe("nested tool calls", () => {
 const showsFinishedNested = Effect.gen(function* () {
   const { setup, release, checked, usage } = summarizedBatch();
   const { harness, root } = yield* openChat(new MemoryStorage(), setup);
-  const submission = yield* awaited(root.submit({ type: "input", content: "go" }, context));
+  const submission = yield* awaited(root.submit({ content: "go", type: "input" }, context));
   yield* awaited(checked.promise);
   const slots = (yield* awaited(harness.snapshot(LiveDoc, root.id, context)))!.nestedTools!;
   expect(slots.map(({ callId, status, summary }) => ({ callId, status, summary }))).toEqual([
     {
       callId: "c1/1",
       status: "done",
-      summary: { isError: false, durationMs: expect.any(Number) },
+      summary: { durationMs: expect.any(Number), isError: false },
     },
     {
       callId: "c1/2",
       status: "done",
-      summary: { isError: true, error: "Tool missing is not available" },
+      summary: { error: "Tool missing is not available", isError: true },
     },
     {
       callId: "c1/3",
       status: "done",
-      summary: { isError: false, durationMs: expect.any(Number), usage },
+      summary: { durationMs: expect.any(Number), isError: false, usage },
     },
     {
       callId: "c1/4",
       status: "done",
-      summary: { isError: true, durationMs: expect.any(Number), error: "bad image" },
+      summary: { durationMs: expect.any(Number), error: "bad image", isError: true },
     },
     {
       callId: "c1/5",
       status: "done",
-      summary: { isError: true, durationMs: expect.any(Number), error: "e".repeat(500) },
+      summary: { durationMs: expect.any(Number), error: "e".repeat(500), isError: true },
     },
   ]);
   release.resolve();
@@ -203,8 +206,8 @@ describe("nested tool calls", () => {
   it("migrates version 1 tool task input to a model-issued call", () => {
     const migrate = ToolTask.definition.migrate!;
     expect(migrate({ assistant: 3, callId: "c1" }, { phase: "call" }, 1)).toEqual({
-      input: { kind: "model", assistant: 3, callId: "c1" },
       checkpoint: { phase: "call" },
+      input: { assistant: 3, callId: "c1", kind: "model" },
     });
   });
 });

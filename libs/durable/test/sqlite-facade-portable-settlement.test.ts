@@ -7,7 +7,9 @@ import type { SqliteDatabase, SqliteExecutor, SqliteValue } from "../src/storage
 import { SqliteStorage } from "../src/storage/sqlite/index.ts";
 import { NodeSqliteDatabase, openNodeSqliteDatabase } from "../src/storage/sqlite/node.ts";
 import { type DocumentId, type EntryId, ROOT_CONVERSATION_ID } from "../src/types.ts";
-import { awaited } from "./effect-support.ts";
+import effectSupport from "./effect-support.ts";
+
+const { awaited } = effectSupport;
 
 type SettlementMode = "immediate" | "delay" | "reject";
 
@@ -81,8 +83,8 @@ const expectDelayedCommit = Effect.fn("expectDelayedCommit")(function* (
       {
         type: "entry",
         value: {
-          id: idFromNumber<EntryId>(100),
           conversationId: ROOT_CONVERSATION_ID,
+          id: idFromNumber<EntryId>(100),
           kind: "settled",
         },
       },
@@ -112,8 +114,8 @@ const expectRejectedCommit = Effect.fn("expectRejectedCommit")(function* (
       {
         type: "entry",
         value: {
-          id: idFromNumber<EntryId>(200),
           conversationId: ROOT_CONVERSATION_ID,
+          id: idFromNumber<EntryId>(200),
           kind: "rejected",
         },
       },
@@ -221,9 +223,9 @@ const readsDocumentOne = Effect.gen(function* () {
       storage.commit(
         [
           {
-            type: "document.create",
+            content: { kind: "base", value: { value: 1 }, version: 1 },
             record: { id, kind: "replaced", scope: { kind: "session" } },
-            content: { kind: "base", version: 1, value: { value: 1 } },
+            type: "document.create",
           },
         ],
         BACKGROUND_CONTEXT,
@@ -239,9 +241,9 @@ const readsDocumentOne = Effect.gen(function* () {
     const replace = storage.commit(
       [
         {
-          type: "document.change",
+          content: { kind: "base", value: { value: 2 }, version: 1 },
           id,
-          content: { kind: "base", version: 1, value: { value: 2 } },
+          type: "document.change",
         },
       ],
       BACKGROUND_CONTEXT,

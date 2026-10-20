@@ -5,13 +5,17 @@ import { Effect } from "effect";
 import { describe, expect, it } from "vite-plus/test";
 
 import { planSystemEntries } from "../src/harness/prompt.ts";
-import { awaited } from "./effect-support.ts";
-import { marker, root } from "./harness-prompt-support.ts";
-import { context } from "./session-support.ts";
+import effectSupport from "./effect-support.ts";
+import harnessPromptSupport from "./harness-prompt-support.ts";
+import sessionSupport from "./session-support.ts";
+
+const { awaited } = effectSupport;
+const { marker, root } = harnessPromptSupport;
+const { context } = sessionSupport;
 
 const declaration = (name: string, description = name): Tool => ({
-  name,
   description,
+  name,
   parameters: Type.Object({}),
 });
 
@@ -66,13 +70,13 @@ const addsRemovesReplaces = Effect.gen(function* () {
   expect(yield* applyTools(conversation, [a, b, c])).toEqual([{ added: ["c"] }]);
   expect(yield* applyTools(conversation, [a, c])).toEqual([{ removed: ["b"] }]);
   const c2 = declaration("c", "changed");
-  expect(yield* applyTools(conversation, [a, c2])).toEqual([{ removed: ["c"], added: ["c"] }]);
+  expect(yield* applyTools(conversation, [a, c2])).toEqual([{ added: ["c"], removed: ["c"] }]);
   const a2 = declaration("a", "changed");
   expect(yield* applyTools(conversation, [a2, c2])).toEqual([
-    { removed: ["a", "c"], added: ["a", "c"] },
+    { added: ["a", "c"], removed: ["a", "c"] },
   ]);
   expect(yield* applyTools(conversation, [c2, a2])).toEqual([
-    { removed: ["a", "c"], added: ["c", "a"] },
+    { added: ["c", "a"], removed: ["a", "c"] },
   ]);
   expect(yield* applyTools(conversation, [])).toEqual([{ removed: ["c", "a"] }]);
 });
@@ -80,16 +84,20 @@ const addsRemovesReplaces = Effect.gen(function* () {
 const putsToolChanges = Effect.gen(function* () {
   const conversation = yield* root();
   const [a, b] = [declaration("a"), declaration("b")];
+  const reordered = Object.fromEntries([
+    ["y", "2"],
+    ["x", "1"],
+  ]);
   expect(yield* applyTools(conversation, [a], { x: "1", y: "2" })).toEqual([
     { added: ["a"], sections: { x: "1", y: "2" } },
   ]);
-  expect(yield* applyTools(conversation, [a, b], { y: "2", x: "1" })).toEqual([
+  expect(yield* applyTools(conversation, [a, b], reordered)).toEqual([
     { sections: { x: null, y: null } },
-    { added: ["b"], sections: { y: "2", x: "1" } },
+    { added: ["b"], sections: reordered },
   ]);
   yield* awaited(marker(conversation, "self"));
-  expect(yield* applyTools(conversation, [a, b], { y: "2", x: "1" })).toEqual([
-    { added: ["a", "b"], sections: { y: "2", x: "1" } },
+  expect(yield* applyTools(conversation, [a, b], reordered)).toEqual([
+    { added: ["a", "b"], sections: reordered },
   ]);
 });
 

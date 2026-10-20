@@ -4,10 +4,13 @@ import { Effect } from "effect";
 
 import { type FileError, type Result } from "../src/env/index.ts";
 import { NodeExecutionEnv } from "../src/env/node.ts";
-import { awaited } from "./effect-support.ts";
-import { deferred } from "./tools-support.ts";
+import effectSupport from "./effect-support.ts";
+import toolsSupport from "./tools-support.ts";
 
-export class BlockingEditExecutionEnv extends NodeExecutionEnv {
+const { awaited } = effectSupport;
+const { deferred } = toolsSupport;
+
+class BlockingEditExecutionEnv extends NodeExecutionEnv {
   readonly firstEditWriteStarted = deferred();
   readonly finishFirstEditWrite = deferred();
   firstEditWriteSettled = false;
@@ -36,3 +39,5 @@ export class BlockingEditExecutionEnv extends NodeExecutionEnv {
     );
   }
 }
+
+export default BlockingEditExecutionEnv;

@@ -4,14 +4,13 @@ import { afterEach, describe, expect, it } from "vite-plus/test";
 
 import { getOrThrow } from "../src/env/index.ts";
 import { NodeExecutionEnv } from "../src/env/node.ts";
-import { toJsonText, awaited } from "./effect-support.ts";
-import {
-  cleanUpEnvTests,
-  tempDirs,
-  createTempDir,
-  collectShellOutput,
-} from "./env-node-support.ts";
-import { joinPath } from "./platform-support.ts";
+import effectSupport from "./effect-support.ts";
+import envNodeSupport from "./env-node-support.ts";
+import platformSupport from "./platform-support.ts";
+
+const { awaited, toJsonText } = effectSupport;
+const { cleanUpEnvTests, collectShellOutput, createTempDir, tempDirs } = envNodeSupport;
+const { joinPath } = platformSupport;
 
 class FailingSpillExecutionEnv extends NodeExecutionEnv {
   override createTempFile(
@@ -36,13 +35,13 @@ const reportsSpillCommand = Effect.gen(function* () {
   const result = yield* awaited(
     env.exec(
       "printf 12345678901234567890; sleep 5",
-      { timeout: 0.3, spill: { afterBytes: 10, afterLines: 10 } },
+      { spill: { afterBytes: 10, afterLines: 10 }, timeout: 0.3 },
       BACKGROUND_CONTEXT,
     ),
   );
   expect(result).toMatchObject({
-    ok: false,
     error: { code: "timeout", spillPath: expect.any(String) },
+    ok: false,
   });
   const spillPath = (result as { error: { spillPath: string } }).error.spillPath;
   tempDirs.push(joinPath(spillPath, ".."));
@@ -64,11 +63,11 @@ const failsRatherSilently = Effect.gen(function* () {
     ),
   );
   expect(result).toMatchObject({
-    ok: false,
     error: {
       code: "unknown",
       message: expect.stringContaining("Failed to preserve complete shell output"),
     },
+    ok: false,
   });
 });
 

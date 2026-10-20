@@ -2,31 +2,18 @@ import { DatabaseSync } from "node:sqlite";
 
 import { Effect } from "effect";
 
-import { fileSize, isFile, joinPath, listDirectory, pathExists } from "./platform-support.ts";
+import platformSupport from "./platform-support.ts";
+import type storageDiskFootprintTypes from "./storage-disk-footprint.types.ts";
 
-export type DiskFootprint =
-  | {
-      readonly kind: "sqlite";
-      readonly mainBytes: number;
-      readonly auxiliaryBytes: number;
-      readonly fileCount: number;
-      readonly pageCount: number;
-      readonly freelistCount: number;
-    }
-  | {
-      readonly kind: "jsonl";
-      readonly mainBytes: number;
-      readonly auxiliaryBytes: number;
-      readonly fileCount: number;
-      readonly documentFiles: number;
-      readonly taskFiles: number;
-    };
+const { fileSize, isFile, joinPath, listDirectory, pathExists } = platformSupport;
 
 const sizeOrZero = Effect.fn("sizeOrZero")(function* (path: string) {
   return (yield* pathExists(path)) ? yield* fileSize(path) : 0;
 });
 
-function sqliteMetrics(path: string): Extract<DiskFootprint, { readonly kind: "sqlite" }> {
+function sqliteMetrics(
+  path: string,
+): Extract<storageDiskFootprintTypes.DiskFootprint, { readonly kind: "sqlite" }> {
   const database = new DatabaseSync(path, { readOnly: true });
   try {
     const pageCount = database
@@ -40,12 +27,12 @@ function sqliteMetrics(path: string): Extract<DiskFootprint, { readonly kind: "s
       readonly value: number;
     };
     return {
-      kind: "sqlite",
-      mainBytes: 0,
       auxiliaryBytes: 0,
       fileCount: 0,
-      pageCount: pageCount.value,
       freelistCount: freelistCount.value,
+      kind: "sqlite",
+      mainBytes: 0,
+      pageCount: pageCount.value,
     };
   } finally {
     database.close();
@@ -69,31 +56,33 @@ const jsonlMetrics = Effect.fn("jsonlMetrics")(function* (directory: string) {
     if (name.startsWith("doc-") && name.endsWith(".jsonl")) documentFiles++;
     if (name.startsWith("task-") && name.endsWith(".jsonl")) taskFiles++;
   }
-  const footprint: DiskFootprint = {
+  const footprint: storageDiskFootprintTypes.DiskFootprint = {
+    auxiliaryBytes,
+    documentFiles,
+    fileCount,
     kind: "jsonl",
     mainBytes,
-    auxiliaryBytes,
-    fileCount,
-    documentFiles,
     taskFiles,
   };
   return footprint;
 });
 
-export const diskFootprint = Effect.fn("diskFootprint")(function* (
+const diskFootprint = Effect.fn("diskFootprint")(function* (
   backend: "memory" | "sqlite" | "jsonl",
   path: string | undefined,
 ) {
-  let disk: DiskFootprint | undefined;
+  let disk: storageDiskFootprintTypes.DiskFootprint | undefined;
   if (path !== undefined && backend === "sqlite") {
     disk = {
       ...sqliteMetrics(path),
-      mainBytes: yield* sizeOrZero(path),
       auxiliaryBytes: (yield* sizeOrZero(`${path}-wal`)) + (yield* sizeOrZero(`${path}-shm`)),
       fileCount: 3,
+      mainBytes: yield* sizeOrZero(path),
     };
   } else if (path !== undefined) {
     disk = yield* jsonlMetrics(path);
   }
   return disk;
 });
+
+export default diskFootprint;

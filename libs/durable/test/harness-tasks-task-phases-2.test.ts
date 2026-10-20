@@ -1,14 +1,20 @@
 import type { Context } from "@msa/chord";
 import { withCancel } from "@msa/chord/context";
-import { defineTask, type TaskRuntime } from "@msa/durable";
+import { type TaskRuntime, defineTask } from "@msa/durable";
 import { Effect } from "effect";
 import { describe, expect, it } from "vite-plus/test";
 
-import { awaited } from "./effect-support.ts";
-import { addHooks } from "./harness-support.ts";
-import { start, oneStep, openRoot } from "./harness-tasks-support.ts";
-import { context } from "./session-support.ts";
-import { completed, deferred } from "./task-support.ts";
+import effectSupport from "./effect-support.ts";
+import harnessSupport from "./harness-support.ts";
+import harnessTasksSupport from "./harness-tasks-support.ts";
+import sessionSupport from "./session-support.ts";
+import taskSupport from "./task-support.ts";
+
+const { awaited } = effectSupport;
+const { addHooks } = harnessSupport;
+const { oneStep, openRoot, start } = harnessTasksSupport;
+const { context } = sessionSupport;
+const { completed, deferred } = taskSupport;
 
 type PingHooks = { ping(): void };
 type PingRuntime = TaskRuntime<null, { phase: string }, null, PingHooks>;
@@ -33,9 +39,9 @@ function pingPhases() {
   const waitingAfterUse = deferred();
   const observe = observer(pings, seen);
   const Phases = defineTask<null, { phase: "a" } | { phase: "b" }, null, PingHooks>({
-    name: "test.agent-phases",
-    version: 1,
+    abort: () => Promise.resolve(),
     initial: () => ({ phase: "a" }),
+    name: "test.agent-phases",
     phases: {
       a: (_task, runtime, ctx) =>
         Effect.runPromise(
@@ -48,7 +54,7 @@ function pingPhases() {
             const second = yield* observe(runtime, ctx, "a");
             second.entry.same = second.agent === first.agent;
             yield* awaited(
-              runtime.commit(() => ({ status: "running", checkpoint: { phase: "b" } }), ctx),
+              runtime.commit(() => ({ checkpoint: { phase: "b" }, status: "running" }), ctx),
             );
           }),
         ),
@@ -60,9 +66,9 @@ function pingPhases() {
           }),
         ),
     },
-    abort: () => Promise.resolve(),
+    version: 1,
   });
-  return { pings, seen, beforeUse, afterUse, waitingBeforeUse, waitingAfterUse, Phases };
+  return { Phases, afterUse, beforeUse, pings, seen, waitingAfterUse, waitingBeforeUse };
 }
 
 const resolvesAgentFirst = Effect.gen(function* () {
@@ -89,7 +95,7 @@ const resolvesAgentFirst = Effect.gen(function* () {
   yield* awaited(harness.waitForTask(id, context));
   expect(seen).toEqual([
     { phase: "a", pings: ["before"], thinking: "low" },
-    { phase: "a", pings: ["before"], thinking: "low", same: true },
+    { phase: "a", pings: ["before"], same: true, thinking: "low" },
     { phase: "b", pings: ["before", "late"], thinking: "high" },
   ]);
   yield* awaited(harness.close(context));

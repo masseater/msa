@@ -1,9 +1,13 @@
 import { Effect } from "effect";
 import { describe, expect, it } from "vite-plus/test";
 
-import { awaited } from "./effect-support.ts";
-import { setupLive, LiveDoc, MemberDoc } from "./session-documents-support.ts";
-import { context, documentChanges, flush, openTestSession } from "./session-support.ts";
+import effectSupport from "./effect-support.ts";
+import sessionDocumentsSupport from "./session-documents-support.ts";
+import sessionSupport from "./session-support.ts";
+
+const { awaited } = effectSupport;
+const { LiveDoc, MemberDoc, setupLive } = sessionDocumentsSupport;
+const { context, documentChanges, flush, openTestSession } = sessionSupport;
 
 const retiresWithoutAcquisitionStep1 = Effect.gen(function* () {
   const runPromise = Effect.runPromiseWith(yield* Effect.context<never>());
@@ -28,11 +32,11 @@ const retiresWithoutAcquisitionStep1 = Effect.gen(function* () {
   );
   const existingWrites = storage.commits.at(-1)!;
   expect(existingWrites).toHaveLength(2);
-  expect(existingWrites).toContainEqual({ type: "document.retire", id: oldId });
+  expect(existingWrites).toContainEqual({ id: oldId, type: "document.retire" });
   expect(existingWrites).toContainEqual(
     expect.objectContaining({
-      type: "document.create",
       record: expect.objectContaining({ kind: "test.live" }),
+      type: "document.create",
     }),
   );
   return { runPromise, session, storage };
@@ -58,8 +62,8 @@ const retiresWithoutAcquisition = Effect.gen(function* () {
   expect(absentWrites.filter((write) => write.type === "document.retire")).toHaveLength(0);
   expect(absentWrites.filter((write) => write.type === "document.create")).toHaveLength(1);
   expect(yield* awaited(session.snapshot(MemberDoc, "absent", context))).toEqual({
-    seed: "seed",
     hits: 1,
+    seed: "seed",
   });
 });
 
@@ -91,11 +95,11 @@ const retiresExistingIncarnationStep1 = Effect.gen(function* () {
   const firstWrites = storage.commits.at(-1)!;
   expect(firstWrites).toHaveLength(2);
   expect(firstWrites).toContainEqual({
-    type: "document.change",
-    id: oldId,
     content: expect.objectContaining({ kind: "delta" }),
+    id: oldId,
+    type: "document.change",
   });
-  expect(firstWrites).toContainEqual({ type: "document.retire", id: oldId });
+  expect(firstWrites).toContainEqual({ id: oldId, type: "document.retire" });
   expect(yield* awaited(session.snapshot(LiveDoc, conversationId, context))).toBeUndefined();
 
   yield* awaited(
@@ -111,7 +115,7 @@ const retiresExistingIncarnationStep1 = Effect.gen(function* () {
   );
   yield* flush;
   const secondId = documentChanges(publications.at(-1)!)[0]!.record.id;
-  return { runPromise, session, storage, conversationId, secondId };
+  return { conversationId, runPromise, secondId, session, storage };
 });
 
 const retiresExistingIncarnation = Effect.gen(function* () {
@@ -135,11 +139,11 @@ const retiresExistingIncarnation = Effect.gen(function* () {
   );
   const writes = storage.commits.at(-1)!;
   expect(writes).toHaveLength(2);
-  expect(writes).toContainEqual({ type: "document.retire", id: secondId });
+  expect(writes).toContainEqual({ id: secondId, type: "document.retire" });
   expect(writes).toContainEqual(
     expect.objectContaining({
-      type: "document.create",
       record: expect.objectContaining({ kind: "test.live" }),
+      type: "document.create",
     }),
   );
   expect((yield* awaited(session.snapshot(LiveDoc, conversationId, context)))!.message).toBe(
@@ -265,7 +269,7 @@ const settlesAdmittedCommits = Effect.gen(function* () {
   const stored = yield* awaited(
     storage
       .findDocument(
-        { kind: "test.live", scope: { kind: "conversation", conversationId } },
+        { kind: "test.live", scope: { conversationId, kind: "conversation" } },
         "current",
         context,
       )

@@ -3,19 +3,21 @@ import { Effect } from "effect";
 
 import {
   ExecutionError,
-  err,
-  getOrThrow,
   type Result,
   type ShellExecOptions,
   type ShellExecResult,
+  err,
+  getOrThrow,
 } from "../src/env/index.ts";
 import { NodeExecutionEnv } from "../src/env/node.ts";
 import { DEFAULT_MAX_LINES } from "../src/truncate.ts";
-import { awaited } from "./effect-support.ts";
+import effectSupport from "./effect-support.ts";
 
-export const TRUNCATED_OUTPUT_LINES = DEFAULT_MAX_LINES + 1;
+const { awaited } = effectSupport;
 
-export class TimeoutOutputExecutionEnv extends NodeExecutionEnv {
+const TRUNCATED_OUTPUT_LINES = DEFAULT_MAX_LINES + 1;
+
+class TimeoutOutputExecutionEnv extends NodeExecutionEnv {
   override exec(
     _command: string | readonly string[],
     options: ShellExecOptions | undefined,
@@ -36,3 +38,10 @@ export class TimeoutOutputExecutionEnv extends NodeExecutionEnv {
     );
   }
 }
+
+const toolsTimeoutEnvSupport = {
+  TRUNCATED_OUTPUT_LINES,
+  TimeoutOutputExecutionEnv,
+};
+
+export default toolsTimeoutEnvSupport;

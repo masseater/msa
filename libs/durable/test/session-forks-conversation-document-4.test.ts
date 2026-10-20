@@ -2,30 +2,33 @@ import { type ConversationId, defineDoc } from "@msa/durable";
 import { Effect } from "effect";
 import { describe, expect, it } from "vite-plus/test";
 
-import { awaited } from "./effect-support.ts";
-import { context, createConversation, flush, openTestSession } from "./session-support.ts";
+import effectSupport from "./effect-support.ts";
+import sessionSupport from "./session-support.ts";
+
+const { awaited } = effectSupport;
+const { context, createConversation, flush, openTestSession } = sessionSupport;
 
 function failingCheckpointDocs() {
   const Copied = defineDoc<{ value: string }>({
-    kind: "fork.rollback.copied",
-    version: 1,
-    scope: "conversation",
-    history: "rewindable",
     fork: "asOf",
+    history: "rewindable",
     initial: () => ({ value: "copied" }),
+    kind: "fork.rollback.copied",
+    scope: "conversation",
+    version: 1,
   });
   const toggle: { failCheckpoint: boolean } = { failCheckpoint: true };
   const Failure = defineDoc<{ count: number }>({
-    kind: "fork.rollback.failure",
-    version: 1,
-    scope: "session",
-    initial: () => ({ count: 0 }),
     checkpointWhen: () => {
       if (toggle.failCheckpoint) throw new Error("checkpoint failed");
       return false;
     },
+    initial: () => ({ count: 0 }),
+    kind: "fork.rollback.failure",
+    scope: "session",
+    version: 1,
   });
-  return { Copied, toggle, Failure };
+  return { Copied, Failure, toggle };
 }
 
 const rollsEveryCopiedStep1 = Effect.gen(function* () {
@@ -39,10 +42,10 @@ const rollsEveryCopiedStep1 = Effect.gen(function* () {
       (tx) =>
         runPromise(
           Effect.gen(function* () {
-            const forkAt = (yield* awaited(tx.appendEntry(parentId, { kind: "point" }))).id;
+            const forkAtInner3 = (yield* awaited(tx.appendEntry(parentId, { kind: "point" }))).id;
             yield* awaited(tx.doc(Copied, parentId));
             yield* awaited(tx.doc(Failure));
-            return forkAt;
+            return forkAtInner3;
           }),
         ),
       context,
@@ -72,7 +75,7 @@ const rollsEveryCopiedStep1 = Effect.gen(function* () {
   expect(storage.commits).toHaveLength(commits);
   expect(publications).toHaveLength(published);
   expect(yield* awaited(storage.conversation(childId, context))).toBeUndefined();
-  return { runPromise, Copied, toggle, Failure, session, parentId };
+  return { Copied, Failure, parentId, runPromise, session, toggle };
 });
 
 const rollsEveryCopied = Effect.gen(function* () {
@@ -104,16 +107,16 @@ const failsSessionRejectedStep1 = Effect.gen(function* () {
   const runPromise = Effect.runPromiseWith(yield* Effect.context<never>());
 
   const Doc = defineDoc<{ value: string }>({
-    kind: "fork.storage-rejected",
-    version: 1,
-    scope: "conversation",
-    history: "rewindable",
     fork: "asOf",
+    history: "rewindable",
     initial: () => ({ value: "source" }),
+    kind: "fork.storage-rejected",
+    scope: "conversation",
+    version: 1,
   });
   const { session, storage } = openTestSession();
   const parentId = yield* awaited(createConversation(session));
-  return { runPromise, Doc, session, storage, parentId };
+  return { Doc, parentId, runPromise, session, storage };
 });
 
 const failsSessionRejected = Effect.gen(function* () {
@@ -123,9 +126,9 @@ const failsSessionRejected = Effect.gen(function* () {
       (tx) =>
         runPromise(
           Effect.gen(function* () {
-            const forkAt = (yield* awaited(tx.appendEntry(parentId, { kind: "point" }))).id;
+            const forkAtInner2 = (yield* awaited(tx.appendEntry(parentId, { kind: "point" }))).id;
             yield* awaited(tx.doc(Doc, parentId));
-            return forkAt;
+            return forkAtInner2;
           }),
         ),
       context,
@@ -152,9 +155,9 @@ const failsSessionRejected = Effect.gen(function* () {
   yield* awaited(
     expect(
       session.commit((tx) => tx.createConversation({ ownership: { kind: "ownerless" } }), context),
-    ).rejects.toMatchObject({ name: "SessionFailed", cause: rejection }),
+    ).rejects.toMatchObject({ cause: rejection, name: "SessionFailed" }),
   );
-  expect(yield* awaited(session.closed)).toEqual({ reason: "failed", error: rejection });
+  expect(yield* awaited(session.closed)).toEqual({ error: rejection, reason: "failed" });
   expect(yield* awaited(storage.reopen().conversation(rejectedChildId, context))).toBeUndefined();
 });
 
@@ -167,12 +170,12 @@ const retiresCopiedDocumentStep1 = Effect.gen(function* () {
   const runPromise = Effect.runPromiseWith(yield* Effect.context<never>());
 
   const Doc = defineDoc<{ value: string }>({
-    kind: "fork.retire-recreate",
-    version: 1,
-    scope: "conversation",
-    history: "rewindable",
     fork: "asOf",
+    history: "rewindable",
     initial: () => ({ value: "fresh" }),
+    kind: "fork.retire-recreate",
+    scope: "conversation",
+    version: 1,
   });
   const { session, storage } = openTestSession();
   const parentId = yield* awaited(createConversation(session));
@@ -181,9 +184,9 @@ const retiresCopiedDocumentStep1 = Effect.gen(function* () {
       (tx) =>
         runPromise(
           Effect.gen(function* () {
-            const forkAt = (yield* awaited(tx.appendEntry(parentId, { kind: "point" }))).id;
+            const forkAtInner = (yield* awaited(tx.appendEntry(parentId, { kind: "point" }))).id;
             (yield* awaited(tx.doc(Doc, parentId))).value = "copied";
-            return forkAt;
+            return forkAtInner;
           }),
         ),
       context,
@@ -207,7 +210,7 @@ const retiresCopiedDocumentStep1 = Effect.gen(function* () {
       context,
     ),
   );
-  return { Doc, session, storage, child };
+  return { Doc, child, session, storage };
 });
 
 const retiresCopiedDocument = Effect.gen(function* () {

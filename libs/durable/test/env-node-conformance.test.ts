@@ -3,18 +3,15 @@ import { Effect } from "effect";
 import { afterEach, describe, expect, it } from "vite-plus/test";
 
 import { currentTimeMillis } from "../src/clock.ts";
-import { getOrThrow, type WatchChange } from "../src/env/index.ts";
+import { type WatchChange, getOrThrow } from "../src/env/index.ts";
 import { environmentVariable } from "../src/env/node-process.ts";
 import { NodeExecutionEnv } from "../src/env/node.ts";
 import { registerEnvConformance } from "../src/testing/index.ts";
-import { awaited } from "./effect-support.ts";
-import {
-  joinPath,
-  makeTempDir,
-  removeDirRetrying,
-  runCommandOrFail,
-  writeBytes,
-} from "./platform-support.ts";
+import effectSupport from "./effect-support.ts";
+import platformSupport from "./platform-support.ts";
+
+const { awaited } = effectSupport;
+const { joinPath, makeTempDir, removeDirRetrying, runCommandOrFail, writeBytes } = platformSupport;
 
 const windows = process.platform === "win32";
 const gitBash = joinPath(
@@ -62,8 +59,8 @@ const refusesTreeOver = withEnvDir("msa-durable-env-watch-", (cwd) =>
     expect(
       yield* awaited(env.watch([{ path: "tree", recursive: true }], () => {}, context)),
     ).toMatchObject({
-      ok: false,
       error: { code: "invalid" },
+      ok: false,
     });
 
     getOrThrow(yield* awaited(env.remove("tree/c", { recursive: true }, context)));
@@ -129,7 +126,7 @@ describe("NodeExecutionEnv readers", () => {
         const result = yield* awaited(
           new NodeExecutionEnv({ cwd }).openBinaryReader("pipe", undefined, context),
         );
-        expect(result).toMatchObject({ ok: false, error: { code: "invalid" } });
+        expect(result).toMatchObject({ error: { code: "invalid" }, ok: false });
       }),
     ),
   );

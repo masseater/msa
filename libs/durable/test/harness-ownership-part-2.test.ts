@@ -2,22 +2,18 @@ import { Effect } from "effect";
 import { afterEach, describe, expect, it } from "vite-plus/test";
 
 import { openNodeSqliteStorage } from "../src/storage/sqlite/node.ts";
-import { awaited } from "./effect-support.ts";
-import {
-  directories,
-  status,
-  waitUntil,
-  open,
-  gates,
-  ownedChild,
-  Hold,
-  runs,
-  openHarness,
-  busy,
-} from "./harness-ownership-support.ts";
-import { joinPath, makeTempDir, removeDir } from "./platform-support.ts";
-import { context } from "./session-support.ts";
-import { settled } from "./task-support.ts";
+import effectSupport from "./effect-support.ts";
+import harnessOwnershipSupport from "./harness-ownership-support.ts";
+import platformSupport from "./platform-support.ts";
+import sessionSupport from "./session-support.ts";
+import taskSupport from "./task-support.ts";
+
+const { awaited } = effectSupport;
+const { Hold, busy, directories, gates, open, openHarness, ownedChild, runs, status, waitUntil } =
+  harnessOwnershipSupport;
+const { joinPath, makeTempDir, removeDir } = platformSupport;
+const { context } = sessionSupport;
+const { settled } = taskSupport;
 
 afterEach(() =>
   Effect.runPromise(
@@ -31,7 +27,7 @@ afterEach(() =>
 );
 
 function queuedNote(text: string) {
-  return { kind: "note", model: [{ role: "user", content: text, timestamp: 0 }] } as const;
+  return { kind: "note", model: [{ content: text, role: "user", timestamp: 0 }] } as const;
 }
 
 const stopsIdleTraversal = Effect.gen(function* () {
@@ -52,7 +48,7 @@ const cascadesAbortMark = Effect.gen(function* () {
   const deeper = yield* awaited(ownedChild(nested!, "deeper"));
   const shielded = yield* awaited(ownedChild(nested!, "shielded", { background: true }));
   yield* busy(nested!, tree.inner);
-  const queued = (yield* awaited(nested!.submit({ type: "input", content: "later" }, context))).id;
+  const queued = (yield* awaited(nested!.submit({ content: "later", type: "input" }, context))).id;
   expect(yield* awaited(harness.abortTask(tree.owner, context))).toBe("marked");
   for (const id of [tree.owner, tree.inner, deeper.owner, deeper.inner]) {
     expect((yield* awaited(harness.waitForTask(id, context))).state.outcome.status).toBe("aborted");
@@ -62,8 +58,8 @@ const cascadesAbortMark = Effect.gen(function* () {
   expect(
     yield* awaited((yield* awaited(harness.submission(queued, context)))!.status(context)),
   ).toMatchObject({
-    status: "unanswered",
     reason: "aborted",
+    status: "unanswered",
   });
   yield* awaited(harness.abortTask(shielded.owner, context));
   yield* awaited(harness.close(context));
@@ -124,8 +120,8 @@ const abortsConversationQueued = Effect.gen(function* () {
   const foreground = yield* awaited(ownedChild(root, "foreground"));
   const background = yield* awaited(ownedChild(root, "background", { background: true }));
   yield* busy(root, foreground.owner);
-  const input = (yield* awaited(root.submit({ type: "input", content: "later" }, context))).id;
-  const write = (yield* awaited(root.submit({ type: "write", entry: queuedNote("w") }, context)))
+  const input = (yield* awaited(root.submit({ content: "later", type: "input" }, context))).id;
+  const write = (yield* awaited(root.submit({ entry: queuedNote("w"), type: "write" }, context)))
     .id;
   yield* awaited(root.abort(context));
   for (const id of [foreground.owner, foreground.inner]) {
@@ -193,9 +189,9 @@ const withdrawsQueuedInputs = Effect.gen(function* () {
   const child = (yield* awaited(harness.conversation(tree.child, context)))!;
   yield* busy(root, tree.owner);
   yield* busy(child, tree.inner);
-  const own = (yield* awaited(root.submit({ type: "input", content: "own" }, context))).id;
-  const below = (yield* awaited(child.submit({ type: "input", content: "below" }, context))).id;
-  const write = (yield* awaited(child.submit({ type: "write", entry: queuedNote("w") }, context)))
+  const own = (yield* awaited(root.submit({ content: "own", type: "input" }, context))).id;
+  const below = (yield* awaited(child.submit({ content: "below", type: "input" }, context))).id;
+  const write = (yield* awaited(child.submit({ entry: queuedNote("w"), type: "write" }, context)))
     .id;
   yield* awaited(harness.abortTask(tree.owner, context));
   yield* awaited(harness.waitForTask(tree.inner, context));

@@ -11,25 +11,27 @@ import { dual } from "effect/Function";
 
 import { type ExecutionEnv, type FileError, type Result } from "../src/env/index.ts";
 import { NodeExecutionEnv } from "../src/env/node.ts";
-import { awaited } from "./effect-support.ts";
-import { makeTempDir, removeDirs } from "./platform-support.ts";
+import effectSupport from "./effect-support.ts";
+import platformSupport from "./platform-support.ts";
+import toolsTimeoutEnvSupport from "./tools-timeout-env-support.ts";
 
-export const tempDirs: string[] = [];
+const { awaited } = effectSupport;
+const { makeTempDir, removeDirs } = platformSupport;
 
-export const createTempDir: Effect.Effect<string> = makeTempDir("msa-durable-tools-").pipe(
+const tempDirs: string[] = [];
+
+const createTempDir: Effect.Effect<string> = makeTempDir("msa-durable-tools-").pipe(
   Effect.tap((dir) => Effect.sync(() => tempDirs.push(dir))),
 );
 
-export const removeTempDirs: Effect.Effect<void> = Effect.suspend(() =>
-  removeDirs(tempDirs.splice(0)),
-);
+const removeTempDirs: Effect.Effect<void> = Effect.suspend(() => removeDirs(tempDirs.splice(0)));
 
-export const createEnv: Effect.Effect<NodeExecutionEnv> = Effect.map(
+const createEnv: Effect.Effect<NodeExecutionEnv> = Effect.map(
   createTempDir,
   (cwd) => new NodeExecutionEnv({ cwd }),
 );
 
-export function fakeApi(env: ExecutionEnv | undefined): {
+function fakeApi(env: ExecutionEnv | undefined): {
   api: ToolExecutionApi;
   output: string[];
   diagnostics: ToolDiagnostic[];
@@ -37,18 +39,18 @@ export function fakeApi(env: ExecutionEnv | undefined): {
   const output: string[] = [];
   const diagnostics: ToolDiagnostic[] = [];
   const api = {
-    taskId: 1,
-    conversationId: 1,
+    agent: () => Promise.resolve({}),
     callId: "call",
+    conversationId: 1,
+    details: () => Promise.resolve(),
+    diagnostic: (diagnostic: ToolDiagnostic) => diagnostics.push(diagnostic),
     env,
     output: (chunk: string | Uint8Array) =>
       output.push(typeof chunk === "string" ? chunk : new TextDecoder().decode(chunk)),
     retainedOutput: () => ({ text: output.join(""), truncated: false }),
-    diagnostic: (diagnostic: ToolDiagnostic) => diagnostics.push(diagnostic),
-    details: () => Promise.resolve(),
-    agent: () => Promise.resolve({}),
+    taskId: 1,
   } as unknown as ToolExecutionApi;
-  return { api, output, diagnostics };
+  return { api, diagnostics, output };
 }
 
 function runImpl(
@@ -62,14 +64,14 @@ function runImpl(
       const { api, output, diagnostics } = fakeApi(env);
       return {
         ...(yield* awaited(tool.execute(args, api, context))),
-        streamed: output,
         reported: diagnostics,
+        streamed: output,
       };
     }),
   );
 }
 
-export const run: {
+const run: {
   (
     args: JsonValue,
     env: ExecutionEnv | undefined,
@@ -86,7 +88,7 @@ export const run: {
   runImpl,
 );
 
-export const runFailing = Effect.fn("runFailing")(function* (
+const runFailing = Effect.fn("runFailing")(function* (
   tool: ToolRegistration,
   args: JsonValue,
   env: ExecutionEnv,
@@ -94,23 +96,23 @@ export const runFailing = Effect.fn("runFailing")(function* (
   const { api, output, diagnostics } = fakeApi(env);
   const exit = yield* Effect.exit(awaited(tool.execute(args, api, BACKGROUND_CONTEXT)));
   if (Exit.isSuccess(exit)) throw new Error("Expected the tool to throw");
-  return { error: Cause.squash(exit.cause) as Error, streamed: output, reported: diagnostics };
+  return { error: Cause.squash(exit.cause) as Error, reported: diagnostics, streamed: output };
 });
 
-export function textOutput(result: ToolExecutionResult): string {
+function textOutput(result: ToolExecutionResult): string {
   return (result.output ?? [])
     .flatMap((part) => (part.type === "text" ? [part.text] : []))
     .join("\n");
 }
 
-export function deferred(): { promise: Promise<void>; resolve: () => void } {
+function deferred(): { promise: Promise<void>; resolve: () => void } {
   const { promise, resolve } = Promise.withResolvers<void>();
   return { promise, resolve };
 }
 
-export const delay = (ms: number): Promise<void> => Effect.runPromise(Effect.sleep(ms));
+const delay = (ms: number): Promise<void> => Effect.runPromise(Effect.sleep(ms));
 
-export class BlockingWriteExecutionEnv extends NodeExecutionEnv {
+class BlockingWriteExecutionEnv extends NodeExecutionEnv {
   readonly firstWriteStarted = deferred();
   readonly finishFirstWrite = deferred();
   secondWriteStarted = false;
@@ -135,4 +137,20 @@ export class BlockingWriteExecutionEnv extends NodeExecutionEnv {
   }
 }
 
-export { TimeoutOutputExecutionEnv, TRUNCATED_OUTPUT_LINES } from "./tools-timeout-env-support.ts";
+const toolsSupport = {
+  BlockingWriteExecutionEnv,
+  TRUNCATED_OUTPUT_LINES: toolsTimeoutEnvSupport.TRUNCATED_OUTPUT_LINES,
+  TimeoutOutputExecutionEnv: toolsTimeoutEnvSupport.TimeoutOutputExecutionEnv,
+  createEnv,
+  createTempDir,
+  deferred,
+  delay,
+  fakeApi,
+  removeTempDirs,
+  run,
+  runFailing,
+  tempDirs,
+  textOutput,
+};
+
+export default toolsSupport;

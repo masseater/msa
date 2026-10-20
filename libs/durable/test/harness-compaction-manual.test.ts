@@ -1,31 +1,15 @@
-import { fauxAssistantMessage, fauxToolCall, Type } from "@msa/ai";
-import { defineTool, ProviderDoc, UsageDoc } from "@msa/durable";
+import { Type, fauxAssistantMessage, fauxToolCall } from "@msa/ai";
+import { ProviderDoc, UsageDoc, defineTool } from "@msa/durable";
 import { Effect } from "effect";
 import { afterEach, describe, expect, it } from "vite-plus/test";
 
-import {
-  type Chat,
-  text,
-  summary,
-  answer,
-  gated,
-  history,
-  turn,
-  directories,
-  userText,
-  open,
-  result,
-  kinds,
-} from "./harness-compaction-support.ts";
-import {
-  allEntries,
-  toolsNamed,
-  awaited,
-  addTool,
-  removeDir,
-  context,
-  deferred,
-} from "./support.ts";
+import harnessCompactionSupport from "./harness-compaction-support.ts";
+import type harnessCompactionSupportTypes from "./harness-compaction-support.types.ts";
+import support from "./support.ts";
+
+const { answer, directories, gated, history, kinds, open, result, summary, text, turn, userText } =
+  harnessCompactionSupport;
+const { addTool, allEntries, awaited, context, deferred, removeDir, toolsNamed } = support;
 
 afterEach(() =>
   Effect.runPromise(
@@ -36,7 +20,9 @@ afterEach(() =>
   ),
 );
 
-const expectSummaryRequest = Effect.fn("expectSummaryRequest")(function* (chat: Chat) {
+const expectSummaryRequest = Effect.fn("expectSummaryRequest")(function* (
+  chat: harnessCompactionSupportTypes.Chat,
+) {
   const request = chat.faux.summaryRequests[0]!;
   expect(request.messages).toHaveLength(2);
   const prompt = userText(request.messages[1]);
@@ -55,7 +41,7 @@ const expectSummaryRequest = Effect.fn("expectSummaryRequest")(function* (chat: 
 });
 
 const expectSummarizerSpendOnce = Effect.fn("expectSummarizerSpendOnce")(function* (
-  chat: Chat,
+  chat: harnessCompactionSupportTypes.Chat,
   usageBefore: { readonly input: number },
 ) {
   const usage = (yield* awaited(chat.harness.snapshot(UsageDoc, chat.root.id, context)))!.models[
@@ -95,9 +81,9 @@ const placesSummaryOnce = Effect.gen(function* () {
   const marker = after.at(-1)!;
   const u3 = before.find((record) => userText(record.model?.[0]).startsWith("u3"))!;
   expect(marker).toMatchObject({
-    kind: "msa.compaction",
-    head: u3.id,
     data: { reason: "manual" },
+    head: u3.id,
+    kind: "msa.compaction",
   });
   expect(placed.status === "done" && placed.entry).toBe(marker.id);
   expect(userText(marker.model?.[0])).toBe(
@@ -141,7 +127,7 @@ const keepsWorkingBusy = Effect.gen(function* () {
   const gate = deferred();
   const reached = deferred();
   chat.faux.agent.push(gated(gate, answer("late answer"), reached));
-  const input = yield* awaited(chat.root.submit({ type: "input", content: "busy" }, context));
+  const input = yield* awaited(chat.root.submit({ content: "busy", type: "input" }, context));
   yield* awaited(reached.promise);
   chat.faux.summaries.push(summary());
   const outcome = yield* awaited(
@@ -180,10 +166,10 @@ const placesQueuedSummary = Effect.gen(function* () {
   addTool(
     chat.setup.registry,
     defineTool({
-      name: "wait",
       description: "wait",
+      execute: () => Promise.resolve({ output: [{ text: "waited", type: "text" }] }),
+      name: "wait",
       parameters: Type.Object({}),
-      execute: () => Promise.resolve({ output: [{ type: "text", text: "waited" }] }),
     }),
   );
   yield* awaited(chat.root.configure({ tools: toolsNamed(chat.setup, "wait") }, context));
@@ -198,7 +184,7 @@ const placesQueuedSummary = Effect.gen(function* () {
     ),
   );
   chat.faux.agent.push(answer("after tools"));
-  const input = yield* awaited(chat.root.submit({ type: "input", content: "use a tool" }, context));
+  const input = yield* awaited(chat.root.submit({ content: "use a tool", type: "input" }, context));
   yield* awaited(reached.promise);
   chat.faux.summaries.push(summary());
   yield* awaited(result(chat, yield* awaited(chat.root.compact(undefined, context))));

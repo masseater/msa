@@ -1,18 +1,16 @@
-import { defineTask, type TaskId } from "@msa/durable";
+import { type TaskId, defineTask } from "@msa/durable";
 import { Effect } from "effect";
 import { describe, expect, it } from "vite-plus/test";
 
-import { abortController, awaited } from "./effect-support.ts";
-import {
-  start,
-  oneStep,
-  gated,
-  withSignal,
-  openRoot,
-  markDurably,
-} from "./harness-tasks-support.ts";
-import { ControlledStorage, context, flush } from "./session-support.ts";
-import { aborted, abortedWith, completed, deferred } from "./task-support.ts";
+import effectSupport from "./effect-support.ts";
+import harnessTasksSupport from "./harness-tasks-support.ts";
+import sessionSupport from "./session-support.ts";
+import taskSupport from "./task-support.ts";
+
+const { abortController, awaited } = effectSupport;
+const { gated, markDurably, oneStep, openRoot, start, withSignal } = harnessTasksSupport;
+const { ControlledStorage, context, flush } = sessionSupport;
+const { aborted, abortedWith, completed, deferred } = taskSupport;
 
 const pagesNewestTasks = Effect.gen(function* () {
   const Idle = oneStep("test.idle", () => Promise.resolve());
@@ -158,7 +156,7 @@ function markedTask() {
         }),
       ),
   );
-  return { reached, errors, seen, abortRuntimes, Marked };
+  return { Marked, abortRuntimes, errors, reached, seen };
 }
 
 const rejectsRunCommits = Effect.gen(function* () {
@@ -169,8 +167,8 @@ const rejectsRunCommits = Effect.gen(function* () {
   yield* awaited(reached.promise);
   expect(yield* awaited(harness.abortTask(id, context))).toBe("marked");
   expect((yield* awaited(harness.waitForTask(id, context))).state.outcome).toEqual({
-    status: "aborted",
     reason: "mark",
+    status: "aborted",
   });
   expect(seen.memoRead).toBe(1);
   expect(errors).toEqual([
@@ -194,16 +192,22 @@ const startsNoFurtherStep1 = Effect.gen(function* () {
   const proceed = deferred();
   const phases: string[] = [];
   const Two = defineTask<null, { phase: "one" } | { phase: "two" }, null>({
-    name: "test.mark-boundary",
-    version: 1,
+    abort: (_task, runtime, ctx) =>
+      runPromise(
+        Effect.gen(function* () {
+          phases.push("abort");
+          yield* awaited(runtime.commit(() => abortedWith("boundary"), ctx));
+        }),
+      ),
     initial: () => ({ phase: "one" }),
+    name: "test.mark-boundary",
     phases: {
       one: (_task, runtime, ctx) =>
         runPromise(
           Effect.gen(function* () {
             phases.push("one");
             yield* awaited(
-              runtime.commit(() => ({ status: "running", checkpoint: { phase: "two" } }), ctx),
+              runtime.commit(() => ({ checkpoint: { phase: "two" }, status: "running" }), ctx),
             );
             reached.resolve();
             yield* awaited(proceed.promise);
@@ -215,13 +219,7 @@ const startsNoFurtherStep1 = Effect.gen(function* () {
         return Promise.resolve();
       },
     },
-    abort: (_task, runtime, ctx) =>
-      runPromise(
-        Effect.gen(function* () {
-          phases.push("abort");
-          yield* awaited(runtime.commit(() => abortedWith("boundary"), ctx));
-        }),
-      ),
+    version: 1,
   });
   const { harness, root } = yield* openRoot([Two]);
   const id = yield* awaited(
@@ -231,15 +229,15 @@ const startsNoFurtherStep1 = Effect.gen(function* () {
   yield* awaited(reached.promise);
   const { aborting } = yield* markDurably(harness, id);
   proceed.resolve();
-  return { phases, harness, id, aborting };
+  return { aborting, harness, id, phases };
 });
 
 const startsNoFurther = Effect.gen(function* () {
   const { phases, harness, id, aborting } = yield* startsNoFurtherStep1;
   expect(yield* awaited(aborting)).toBe("marked");
   expect((yield* awaited(harness.waitForTask(id, context))).state.outcome).toEqual({
-    status: "aborted",
     reason: "boundary",
+    status: "aborted",
   });
   expect(phases).toEqual(["one", "abort"]);
   yield* awaited(harness.close(context));

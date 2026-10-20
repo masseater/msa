@@ -4,26 +4,29 @@ import { watchEvents } from "@msa/durable/harness";
 import { Effect } from "effect";
 import { afterEach, describe, expect, it } from "vite-plus/test";
 
-import {
-  compactionTasks,
-  text,
-  summary,
-  answer,
-  gated,
+import harnessCompactionSupport from "./harness-compaction-support.ts";
+import support from "./support.ts";
+
+const {
+  BACKGROUND,
   BLOCKING,
-  history,
-  turn,
-  directories,
   MANUAL,
   OVERFLOW,
-  BACKGROUND,
-  live,
+  answer,
+  compactionTasks,
+  directories,
   failure,
+  gated,
+  history,
+  kinds,
+  live,
   open,
   result,
-  kinds,
-} from "./harness-compaction-support.ts";
-import { waitFor, awaited, addSection, removeDir, context, deferred } from "./support.ts";
+  summary,
+  text,
+  turn,
+} = harnessCompactionSupport;
+const { addSection, awaited, context, deferred, removeDir, waitFor } = support;
 
 afterEach(() =>
   Effect.runPromise(
@@ -59,7 +62,7 @@ const doesNotStart = Effect.gen(function* () {
   chat.faux.summaries.push(gated(deferred(), summary(), reached));
   chat.faux.agent.push(answer("a4"));
   const input = yield* awaited(
-    chat.root.submit({ type: "input", content: text("u4", 100) }, context),
+    chat.root.submit({ content: text("u4", 100), type: "input" }, context),
   );
   yield* awaited(rendering.promise);
   const manual = yield* awaited(chat.root.compact(undefined, context));
@@ -104,20 +107,20 @@ const failsRunBlocking = Effect.gen(function* () {
     throw new Error("no credentials");
   };
   const input = yield* awaited(
-    chat.root.submit({ type: "input", content: text("u4", 200) }, context),
+    chat.root.submit({ content: text("u4", 200), type: "input" }, context),
   );
   expect(yield* awaited(input.wait(context))).toMatchObject({
-    status: "unanswered",
-    reason: "model_error",
     detail: "Compaction failed: no credentials",
+    reason: "model_error",
+    status: "unanswered",
   });
   chat.setup.models.completeSimple = completeSimple;
   expect((yield* kinds(chat.root)).includes("msa.compaction")).toBe(false);
   const state = yield* awaited(live(chat));
   expect(state.compactions).toBeUndefined();
   expect(state.compactionFailure).toMatchObject({
-    reason: "threshold",
     error: "no credentials",
+    reason: "threshold",
   });
   yield* awaited(chat.harness.close(context));
 });
@@ -132,7 +135,7 @@ const failsOverflowRun = Effect.gen(function* () {
     else chat.faux.summaries.push(failure("prompt is too long for the summary"));
     chat.faux.agent.push(failure(OVERFLOW));
     const input = yield* awaited(
-      chat.root.submit({ type: "input", content: text("u4", 100) }, context),
+      chat.root.submit({ content: text("u4", 100), type: "input" }, context),
     );
     if (how === "abort") {
       yield* awaited(reached.promise);
@@ -140,9 +143,9 @@ const failsOverflowRun = Effect.gen(function* () {
       yield* awaited(chat.harness.abortTask(child!.id, context));
     }
     expect(yield* awaited(input.wait(context))).toMatchObject({
-      status: "unanswered",
-      reason: "model_error",
       detail: OVERFLOW,
+      reason: "model_error",
+      status: "unanswered",
     });
     expect((yield* awaited(live(chat))).compactions).toBeUndefined();
     yield* awaited(chat.harness.close(context));
@@ -162,9 +165,9 @@ const treatsLengthStop = Effect.gen(function* () {
   yield* history(chat);
   chat.setup.settings.compaction = { ...MANUAL, enabled: true };
   chat.faux.agent.push(
-    fauxAssistantMessage("cut short", { stopReason: "length", errorMessage: OVERFLOW }),
+    fauxAssistantMessage("cut short", { errorMessage: OVERFLOW, stopReason: "length" }),
   );
-  const input = yield* awaited(chat.root.submit({ type: "input", content: "go" }, context));
+  const input = yield* awaited(chat.root.submit({ content: "go", type: "input" }, context));
   expect((yield* awaited(input.wait(context))).status).toBe("done");
   expect(chat.faux.summaryRequests).toHaveLength(0);
   yield* awaited(chat.harness.close(context));

@@ -1,19 +1,18 @@
 import type { Context } from "@msa/chord";
-import { defineTask, LiveDoc } from "@msa/durable";
+import { LiveDoc, defineTask } from "@msa/durable";
 import { watchEvents } from "@msa/durable/harness";
 import { Effect } from "effect";
 import { describe, expect, it } from "vite-plus/test";
 
-import { awaited } from "./effect-support.ts";
-import {
-  FailingCalls,
-  running,
-  signals,
-  Waiting,
-  started,
-} from "./harness-storage-failure-support.ts";
-import { ControlledStorage, context } from "./session-support.ts";
-import { deferred, openTasks } from "./task-support.ts";
+import effectSupport from "./effect-support.ts";
+import harnessStorageFailureSupport from "./harness-storage-failure-support.ts";
+import sessionSupport from "./session-support.ts";
+import taskSupport from "./task-support.ts";
+
+const { awaited } = effectSupport;
+const { FailingCalls, Waiting, running, signals, started } = harnessStorageFailureSupport;
+const { ControlledStorage, context } = sessionSupport;
+const { deferred, openTasks } = taskSupport;
 
 const endsEverythingFirst = Effect.gen(function* () {
   const storage = new ControlledStorage();
@@ -40,17 +39,17 @@ const endsEverythingFirst = Effect.gen(function* () {
     ),
   );
 
-  const failed = { name: "SessionFailed", cause: failure };
+  const failed = { cause: failure, name: "SessionFailed" };
   yield* awaited(expect(task).rejects.toMatchObject(failed));
   yield* awaited(expect(idle).rejects.toMatchObject(failed));
-  expect(yield* awaited(watch.closed)).toEqual({ reason: "session_failed", error: failure });
-  expect(yield* awaited(stream.closed)).toEqual({ reason: "session_failed", error: failure });
+  expect(yield* awaited(watch.closed)).toEqual({ error: failure, reason: "session_failed" });
+  expect(yield* awaited(stream.closed)).toEqual({ error: failure, reason: "session_failed" });
   yield* awaited(expect(harness.getTask(id, context)).rejects.toMatchObject(failed));
   yield* awaited(expect(harness.waitForIdle(context)).rejects.toMatchObject(failed));
   yield* awaited(
-    expect(root.submit({ type: "input", content: "x" }, context)).rejects.toMatchObject(failed),
+    expect(root.submit({ content: "x", type: "input" }, context)).rejects.toMatchObject(failed),
   );
-  expect(yield* awaited(harness.closed)).toEqual({ reason: "failed", error: failure });
+  expect(yield* awaited(harness.closed)).toEqual({ error: failure, reason: "failed" });
   expect(signals).toEqual(["aborted"]);
   expect(reports).toEqual([failure]);
   yield* awaited(harness.close(context));
@@ -67,7 +66,7 @@ const failsReadOff = Effect.gen(function* () {
   yield* awaited(root.commit((tx) => tx.appendEntry(root.id, { kind: "note" }), context));
   storage.failing.add("scanRange");
   yield* awaited(expect(root.context(context)).rejects.toBe(storage.error));
-  expect(yield* awaited(harness.closed)).toEqual({ reason: "failed", error: storage.error });
+  expect(yield* awaited(harness.closed)).toEqual({ error: storage.error, reason: "failed" });
   expect(reports).toEqual([storage.error]);
   yield* awaited(harness.close(context));
 });
@@ -95,9 +94,9 @@ const endsStorageCalls = Effect.gen(function* () {
   expect(closed).toBe(false);
   release.resolve();
   yield* awaited(
-    expect(reading).rejects.toMatchObject({ name: "SessionFailed", cause: storage.error }),
+    expect(reading).rejects.toMatchObject({ cause: storage.error, name: "SessionFailed" }),
   );
-  expect(yield* awaited(harness.closed)).toEqual({ reason: "failed", error: storage.error });
+  expect(yield* awaited(harness.closed)).toEqual({ error: storage.error, reason: "failed" });
   yield* awaited(harness.close(context));
 });
 
@@ -127,8 +126,8 @@ const failsStorageCannot = Effect.gen(function* () {
   const healthy = yield* started(new FailingClose());
   yield* awaited(expect(healthy.harness.close(context)).rejects.toBe(closeError));
   expect(yield* awaited(healthy.harness.closed)).toEqual({
-    reason: "failed",
     error: closeError,
+    reason: "failed",
   });
   expect(healthy.reports).toEqual([closeError]);
 
@@ -141,7 +140,7 @@ const failsStorageCannot = Effect.gen(function* () {
       failed.root.commit((tx) => tx.appendEntry(failed.root.id, { kind: "note" }), context),
     ).rejects.toBe(failure),
   );
-  expect(yield* awaited(failed.harness.closed)).toEqual({ reason: "failed", error: failure });
+  expect(yield* awaited(failed.harness.closed)).toEqual({ error: failure, reason: "failed" });
   expect(failed.reports).toEqual([failure]);
 });
 
@@ -155,7 +154,7 @@ const rejectsHarnessOwn = Effect.gen(function* () {
       failure,
     ),
   );
-  const failed = { name: "SessionFailed", cause: failure };
+  const failed = { cause: failure, name: "SessionFailed" };
   expect(() => harness.resume()).toThrow(expect.objectContaining(failed));
   yield* awaited(expect(harness.root(context)).rejects.toMatchObject(failed));
   yield* awaited(expect(harness.conversation(root.id, context)).rejects.toMatchObject(failed));
@@ -181,9 +180,9 @@ const endsWhatTaskStep1 = Effect.gen(function* () {
   const ends: unknown[] = [];
   const watching = deferred();
   const Watcher = defineTask<null, { phase: "work" }, null>({
-    name: "test.watcher",
-    version: 1,
+    abort: () => Promise.resolve(),
     initial: () => ({ phase: "work" }),
+    name: "test.watcher",
     phases: {
       work: (_task, runtime, phaseContext) =>
         runPromise(
@@ -203,7 +202,7 @@ const endsWhatTaskStep1 = Effect.gen(function* () {
           }),
         ),
     },
-    abort: () => Promise.resolve(),
+    version: 1,
   });
   const storage = new ControlledStorage();
   const opened = yield* openTasks(storage, [Watcher]);
@@ -218,7 +217,7 @@ const endsWhatTaskStep1 = Effect.gen(function* () {
   yield* awaited(watching.promise);
   const failure = new Error("disk gone");
   storage.failNextCommit(failure);
-  return { ends, opened, root, failure };
+  return { ends, failure, opened, root };
 });
 
 const endsWhatTask = Effect.gen(function* () {
@@ -229,7 +228,7 @@ const endsWhatTask = Effect.gen(function* () {
     ),
   );
   yield* awaited(opened.harness.closed);
-  expect(ends).toEqual([{ reason: "session_failed", error: failure }, "SessionFailed"]);
+  expect(ends).toEqual([{ error: failure, reason: "session_failed" }, "SessionFailed"]);
   yield* awaited(opened.harness.close(context));
 });
 

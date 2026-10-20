@@ -3,10 +3,12 @@ import { createSession } from "@msa/durable/session";
 import { Effect } from "effect";
 
 import { openNodeSqliteStorage } from "../src/storage/sqlite/node.ts";
-import { Node, OWN_CONVERSATION, spawn } from "./harness-structured-support.ts";
-import { awaited, context } from "./support.ts";
+import type harnessStructuredRecoveryCasesTypes from "./harness-structured-recovery-cases.types.ts";
+import harnessStructuredSupport from "./harness-structured-support.ts";
+import support from "./support.ts";
 
-export type Seeded = { parent: TaskId; children: TaskId[] };
+const { Node, OWN_CONVERSATION, spawn } = harnessStructuredSupport;
+const { awaited, context } = support;
 
 const seedStep1 = Effect.fn("seedStep1")(function* (path: string, children: readonly string[]) {
   const runPromise = Effect.runPromiseWith(yield* Effect.context<never>());
@@ -29,19 +31,22 @@ const seedStep1 = Effect.fn("seedStep1")(function* (path: string, children: read
             );
             const ids: TaskId[] = [];
             for (const name of children) ids.push(yield* awaited(spawn(tx, parent, name)));
-            return { parent, children: ids };
+            return { children: ids, parent };
           }),
         ),
       context,
     ),
   );
-  return { runPromise, session, seeded };
+  return { runPromise, seeded, session };
 });
 
-export const seed = Effect.fn("seed")(function* (
+const seed = Effect.fn("seed")(function* (
   path: string,
   children: readonly string[],
-  edit: (set: (id: TaskId, patch: object) => Promise<void>, seeded: Seeded) => Promise<void>,
+  edit: (
+    set: (id: TaskId, patch: object) => Promise<void>,
+    seeded: harnessStructuredRecoveryCasesTypes.Seeded,
+  ) => Promise<void>,
 ) {
   const { runPromise, session, seeded } = yield* seedStep1(path, children);
   yield* awaited(
@@ -49,12 +54,12 @@ export const seed = Effect.fn("seed")(function* (
       (id, patch) =>
         runPromise(
           Effect.gen(function* () {
-            const runPromise = Effect.runPromiseWith(yield* Effect.context<never>());
+            const runNested = Effect.runPromiseWith(yield* Effect.context<never>());
 
             yield* awaited(
               session.commit(
                 (tx) =>
-                  runPromise(
+                  runNested(
                     Effect.gen(function* () {
                       const record = (yield* awaited(tx.task(id)))!;
                       (tx as unknown as { setTask(value: unknown): void }).setTask({
@@ -75,4 +80,11 @@ export const seed = Effect.fn("seed")(function* (
   return seeded;
 });
 
-export const COMPLETED = { status: "terminal", outcome: { status: "completed", result: "done" } };
+const COMPLETED = { outcome: { result: "done", status: "completed" }, status: "terminal" };
+
+const harnessStructuredRecoveryCases = {
+  COMPLETED,
+  seed,
+};
+
+export default harnessStructuredRecoveryCases;

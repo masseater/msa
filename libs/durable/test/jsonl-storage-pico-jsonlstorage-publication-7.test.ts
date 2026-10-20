@@ -2,20 +2,24 @@ import { Effect } from "effect";
 import { afterEach, describe, expect, it } from "vite-plus/test";
 
 import type { DocumentId } from "../src/types.ts";
-import { awaited } from "./effect-support.ts";
-import {
-  readLines,
-  sessionDocument,
-  createRoot,
+import effectSupport from "./effect-support.ts";
+import jsonlStorageSupport from "./jsonl-storage-support.ts";
+import type jsonlStorageSupportTypes from "./jsonl-storage-support.types.ts";
+import platformSupport from "./platform-support.ts";
+
+const { awaited } = effectSupport;
+const {
+  InstrumentedEnv,
   context,
+  createRoot,
   openStorage,
   openStorages,
+  readLines,
+  sessionDocument,
   tempDirectories,
   tempDirectory,
-  InstrumentedEnv,
-  type Failure,
-} from "./jsonl-storage-support.ts";
-import { listDirectory, joinPath, removeDir } from "./platform-support.ts";
+} = jsonlStorageSupport;
+const { joinPath, listDirectory, removeDir } = platformSupport;
 
 afterEach(() =>
   Effect.runPromise(
@@ -38,9 +42,9 @@ const documentWithDelta = Effect.fn("documentWithDelta")(function* () {
     storage.commit(
       [
         {
-          type: "document.create",
+          content: { kind: "base", value: { count: 0 }, version: 1 },
           record: sessionDocument(id),
-          content: { kind: "base", version: 1, value: { count: 0 } },
+          type: "document.create",
         },
       ],
       context,
@@ -50,25 +54,25 @@ const documentWithDelta = Effect.fn("documentWithDelta")(function* () {
     storage.commit(
       [
         {
-          type: "document.change",
+          content: { kind: "delta", ops: [["s", ["count"], 1]], version: 1 },
           id,
-          content: { kind: "delta", version: 1, ops: [["s", ["count"], 1]] },
+          type: "document.change",
         },
       ],
       context,
     ),
   );
-  return { directory, env, storage, id };
+  return { directory, env, id, storage };
 });
 
 describe("Pico JsonlStorage publication and recovery", () => {
   for (const failure of [
-    { operation: "write", call: 1, mode: "before" },
-    { operation: "write", call: 1, mode: "short" },
-    { operation: "write", call: 1, mode: "after" },
-    { operation: "rename", call: 1, mode: "before" },
-    { operation: "rename", call: 1, mode: "after" },
-  ] as const satisfies readonly Failure[]) {
+    { call: 1, mode: "before", operation: "write" },
+    { call: 1, mode: "short", operation: "write" },
+    { call: 1, mode: "after", operation: "write" },
+    { call: 1, mode: "before", operation: "rename" },
+    { call: 1, mode: "after", operation: "rename" },
+  ] as const satisfies readonly jsonlStorageSupportTypes.Failure[]) {
     it(`recovers a committed base across reclaim ${failure.operation} ${failure.mode}`, () =>
       Effect.runPromise(
         Effect.gen(function* () {
@@ -80,9 +84,9 @@ describe("Pico JsonlStorage publication and recovery", () => {
               storage.commit(
                 [
                   {
-                    type: "document.change",
+                    content: { kind: "base", value: { count: 2 }, version: 1 },
                     id,
-                    content: { kind: "base", version: 1, value: { count: 2 } },
+                    type: "document.change",
                   },
                 ],
                 context,

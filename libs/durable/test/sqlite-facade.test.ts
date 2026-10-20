@@ -8,7 +8,9 @@ import { idFromNumber } from "../src/ids.ts";
 import { SqliteStorage } from "../src/storage/sqlite/index.ts";
 import { NodeSqliteDatabase, openNodeSqliteDatabase } from "../src/storage/sqlite/node.ts";
 import { type EntryId, ROOT_CONVERSATION_ID } from "../src/types.ts";
-import { awaited } from "./effect-support.ts";
+import effectSupport from "./effect-support.ts";
+
+const { awaited } = effectSupport;
 
 class PrepareCountingDatabaseSync extends DatabaseSync {
   private readonly prepareCounts = new Map<string, number>();
@@ -42,8 +44,8 @@ const preparesEachStorage = Effect.gen(function* () {
       Array.from({ length: 100 }, (_, index) => ({
         type: "entry" as const,
         value: {
-          id: idFromNumber<EntryId>(index + 2),
           conversationId: ROOT_CONVERSATION_ID,
+          id: idFromNumber<EntryId>(index + 2),
           kind: "cached",
         },
       })),
@@ -56,8 +58,8 @@ const preparesEachStorage = Effect.gen(function* () {
         {
           type: "entry",
           value: {
-            id: idFromNumber<EntryId>(102),
             conversationId: ROOT_CONVERSATION_ID,
+            id: idFromNumber<EntryId>(102),
             kind: "cached-again",
           },
         },

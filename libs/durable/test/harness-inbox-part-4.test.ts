@@ -4,8 +4,11 @@ import { MemoryStorage } from "@msa/durable/storage/memory";
 import { Effect } from "effect";
 import { afterEach, describe, expect, it } from "vite-plus/test";
 
-import { directories, inbox, status, answer, gated } from "./harness-inbox-support.ts";
-import { chatSetup, openChat, awaited, removeDir, context, documentChanges } from "./support.ts";
+import harnessInboxSupport from "./harness-inbox-support.ts";
+import support from "./support.ts";
+
+const { answer, directories, gated, inbox, status } = harnessInboxSupport;
+const { awaited, chatSetup, context, documentChanges, openChat, removeDir } = support;
 
 afterEach(() =>
   Effect.runPromise(
@@ -21,14 +24,14 @@ const leavesInboxAlone = Effect.gen(function* () {
   const first = gated(answer("never"));
   setup.faux.setResponses([first.step]);
   const { harness, root } = yield* openChat(new MemoryStorage(), setup);
-  const input = yield* awaited(root.submit({ type: "input", content: "a" }, context));
+  const input = yield* awaited(root.submit({ content: "a", type: "input" }, context));
   yield* awaited(first.reached);
-  const f = yield* awaited(root.submit({ type: "input", content: "f" }, context));
+  const f = yield* awaited(root.submit({ content: "f", type: "input" }, context));
   const taskId = (yield* awaited(harness.snapshot(LiveDoc, root.id, context)))!.run!.taskId;
   yield* awaited(harness.abortTask(taskId, context));
   expect(yield* awaited(input.wait(context))).toMatchObject({
-    status: "unanswered",
     reason: "aborted",
+    status: "unanswered",
   });
   yield* awaited(harness.waitForIdle(context));
   expect((yield* awaited(status(f))).status).toBe("queued");
@@ -41,13 +44,13 @@ const returnsQueuedSubmission = Effect.gen(function* () {
   const first = gated(answer("first"));
   setup.faux.setResponses([first.step]);
   const { harness, root } = yield* openChat(new MemoryStorage(), setup);
-  yield* awaited(root.submit({ type: "input", content: "a" }, context));
+  yield* awaited(root.submit({ content: "a", type: "input" }, context));
   yield* awaited(first.reached);
   const queued = yield* awaited(
-    root.submit({ type: "input", content: "f", requestId: "r" }, context),
+    root.submit({ content: "f", requestId: "r", type: "input" }, context),
   );
   const again = yield* awaited(
-    root.submit({ type: "input", content: "f", requestId: "r" }, context),
+    root.submit({ content: "f", requestId: "r", type: "input" }, context),
   );
   expect(again.id).toBe(queued.id);
   expect(yield* inbox(harness, root)).toEqual([[queued.id, "followUp"]]);
@@ -67,11 +70,11 @@ const withdrawsMiddleItem = Effect.gen(function* () {
   const first = gated(answer("first"));
   setup.faux.setResponses([first.step]);
   const { harness, root } = yield* openChat(new MemoryStorage(), setup);
-  yield* awaited(root.submit({ type: "input", content: "a" }, context));
+  yield* awaited(root.submit({ content: "a", type: "input" }, context));
   yield* awaited(first.reached);
   const items = [];
   for (const text of ["x", "y", "z"])
-    items.push(yield* awaited(root.submit({ type: "input", content: text }, context)));
+    items.push(yield* awaited(root.submit({ content: text, type: "input" }, context)));
   const ops: Op[][] = [];
   harness.subscribeCommits((publication) => {
     for (const change of documentChanges(publication)) {

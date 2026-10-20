@@ -5,25 +5,29 @@ import { Effect } from "effect";
 import { afterEach, describe, expect, it } from "vite-plus/test";
 
 import { openNodeSqliteStorage } from "../src/storage/sqlite/node.ts";
-import { spawnAndFinish } from "./harness-structured-events.ts";
-import {
-  state,
-  outcomeOf,
-  open,
-  gates,
-  until,
-  start,
+import harnessStructuredEvents from "./harness-structured-events.ts";
+import harnessStructuredSupport from "./harness-structured-support.ts";
+import support from "./support.ts";
+
+const { spawnAndFinish } = harnessStructuredEvents;
+const {
   Node,
-  behaviors,
-  log,
   OWN_CONVERSATION,
+  behaviors,
+  directories,
+  gates,
+  log,
+  open,
   openNodes,
+  outcomeOf,
   parentOf,
   script,
-  directories,
   sqlitePath,
-} from "./harness-structured-support.ts";
-import { awaited, removeDir, ControlledStorage, context, openTasks, settled } from "./support.ts";
+  start,
+  state,
+  until,
+} = harnessStructuredSupport;
+const { ControlledStorage, awaited, context, openTasks, removeDir, settled } = support;
 
 afterEach(() =>
   Effect.runPromise(
@@ -69,7 +73,7 @@ const failsHarnessFailed = Effect.gen(function* () {
   );
   reject = parent;
   open("child");
-  expect(yield* awaited(harness.closed)).toEqual({ reason: "failed", error: failure });
+  expect(yield* awaited(harness.closed)).toEqual({ error: failure, reason: "failed" });
   expect(reports).toEqual([failure]);
   yield* awaited(harness.close(context));
   const reopened = yield* openNodes(storage.reopen());
@@ -112,13 +116,13 @@ const showsAbortMarkedStep1 = Effect.gen(function* () {
                 { ...OWN_CONVERSATION, conversationId: child.id },
               ),
             );
-            return { owner, inner };
+            return { inner, owner };
           }),
         ),
       context,
     ),
   );
-  return { runPromise, path, session, tree };
+  return { path, runPromise, session, tree };
 });
 
 const showsAbortMarked = Effect.gen(function* () {
@@ -160,7 +164,7 @@ const keepsRootBusyStep1 = Effect.gen(function* () {
   const runPromise = Effect.runPromiseWith(yield* Effect.context<never>());
 
   const path = yield* sqlitePath();
-  return { runPromise, path };
+  return { path, runPromise };
 });
 
 const keepsRootBusy = Effect.gen(function* () {
@@ -170,12 +174,12 @@ const keepsRootBusy = Effect.gen(function* () {
     run: (runtime, ctx) =>
       runPromise(
         Effect.gen(function* () {
-          const runPromise = Effect.runPromiseWith(yield* Effect.context<never>());
+          const runNested2 = Effect.runPromiseWith(yield* Effect.context<never>());
 
           yield* awaited(
             runtime.commit(
               (tx) =>
-                runPromise(
+                runNested2(
                   Effect.gen(function* () {
                     const conversation = yield* awaited(
                       tx.createConversation({
@@ -189,7 +193,7 @@ const keepsRootBusy = Effect.gen(function* () {
                         { ...OWN_CONVERSATION, conversationId: conversation.id },
                       ),
                     );
-                    return { status: "running", checkpoint: { phase: "resume", round: 1 } };
+                    return { checkpoint: { phase: "resume", round: 1 }, status: "running" };
                   }),
                 ),
               ctx,
@@ -222,7 +226,7 @@ const keepsFinishedBackgroundStep1 = Effect.gen(function* () {
   const runPromise = Effect.runPromiseWith(yield* Effect.context<never>());
 
   const path = yield* sqlitePath();
-  return { runPromise, path };
+  return { path, runPromise };
 });
 
 const keepsFinishedBackgroundStep2 = Effect.gen(function* () {
@@ -232,19 +236,19 @@ const keepsFinishedBackgroundStep2 = Effect.gen(function* () {
     run: (runtime, ctx) =>
       runPromise(
         Effect.gen(function* () {
-          const runPromise = Effect.runPromiseWith(yield* Effect.context<never>());
+          const runNested = Effect.runPromiseWith(yield* Effect.context<never>());
 
           yield* awaited(
             runtime.commit(
               (tx) =>
-                runPromise(
+                runNested(
                   Effect.gen(function* () {
                     conversation = (yield* awaited(
                       tx.createConversation({
                         ownership: { kind: "task", taskId: runtime.taskId },
                       }),
                     )).id;
-                    return { status: "running", checkpoint: { phase: "resume", round: 1 } };
+                    return { checkpoint: { phase: "resume", round: 1 }, status: "running" };
                   }),
                 ),
               ctx,
@@ -269,7 +273,7 @@ const keepsFinishedBackgroundStep2 = Effect.gen(function* () {
     start((yield* awaited(opened.harness.conversation(conversation!, context)))!, "below"),
   );
   yield* until(() => log.includes("run:below"));
-  return { opened, below };
+  return { below, opened };
 });
 
 const keepsFinishedBackground = Effect.gen(function* () {

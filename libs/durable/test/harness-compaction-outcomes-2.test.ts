@@ -3,24 +3,27 @@ import { watchEvents } from "@msa/durable/harness";
 import { Effect } from "effect";
 import { afterEach, describe, expect, it } from "vite-plus/test";
 
-import {
-  compactionTasks,
-  text,
-  summary,
-  gated,
-  history,
-  turn,
-  directories,
-  MANUAL,
+import harnessCompactionSupport from "./harness-compaction-support.ts";
+import support from "./support.ts";
+
+const {
   BACKGROUND,
-  live,
+  MANUAL,
+  compactionTasks,
+  directories,
   failure,
   firstUserText,
+  gated,
+  history,
+  kinds,
+  live,
   open,
   result,
-  kinds,
-} from "./harness-compaction-support.ts";
-import { waitFor, awaited, removeDir, context, deferred } from "./support.ts";
+  summary,
+  text,
+  turn,
+} = harnessCompactionSupport;
+const { awaited, context, deferred, removeDir, waitFor } = support;
 
 afterEach(() =>
   Effect.runPromise(
@@ -44,7 +47,7 @@ const startsAboveBackground = Effect.gen(function* () {
   expect(task).toMatchObject({ background: true, input: { reason: "threshold" } });
   expect(task!.owner).toBeUndefined();
   expect((yield* awaited(live(chat))).compactions).toEqual([
-    { taskId: task!.id, reason: "threshold", blocking: false, attempt: 1 },
+    { attempt: 1, blocking: false, reason: "threshold", taskId: task!.id },
   ]);
   yield* awaited(chat.root.waitForIdle(context));
   yield* awaited(chat.root.abort(context));
@@ -115,14 +118,14 @@ const recordsFailureMsa = Effect.gen(function* () {
   yield* waitFor(() => events.some((event) => event.type === "compaction_end"));
   const recorded = (yield* awaited(live(chat))).compactionFailure;
   expect(recorded).toMatchObject({
-    reason: "threshold",
     error: "Summarization failed: bad request",
+    reason: "threshold",
   });
   expect(events.find((event) => event.type === "compaction_end")).toEqual({
-    type: "compaction_end",
-    taskId: recorded!.taskId,
-    reason: "threshold",
     error: "Summarization failed: bad request",
+    reason: "threshold",
+    taskId: recorded!.taskId,
+    type: "compaction_end",
   });
   const reopened = yield* awaited(watchEvents(chat.harness, chat.root.id, context));
   expect(reopened.snapshot.compactionFailure).toEqual(recorded);

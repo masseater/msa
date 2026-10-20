@@ -5,10 +5,12 @@ import { fauxAssistantMessage, fauxProvider } from "@msa/ai/providers/faux";
 import { BACKGROUND_CONTEXT } from "@msa/chord/context";
 import { Console, Effect } from "effect";
 
-import { createRegistry, Harness } from "../../src/harness/index.ts";
+import { Harness, createRegistry } from "../../src/harness/index.ts";
 import { InboxDoc, type Submission } from "../../src/index.ts";
 import { MemoryStorage } from "../../src/storage/memory.ts";
-import { awaited } from "../effect-support.ts";
+import effectSupport from "../effect-support.ts";
+
+const { awaited } = effectSupport;
 
 const context = BACKGROUND_CONTEXT;
 
@@ -37,23 +39,23 @@ const mainStep1 = Effect.gen(function* () {
   );
   const root = yield* awaited(
     harness.root(context, {
-      agent: { model: { provider: "faux", modelId: "faux-1" } },
+      agent: { model: { modelId: "faux-1", provider: "faux" } },
     }),
   );
 
-  const first = yield* awaited(root.submit({ type: "input", content: "First question" }, context));
+  const first = yield* awaited(root.submit({ content: "First question", type: "input" }, context));
 
-  const followUp = yield* awaited(root.submit({ type: "input", content: "A follow-up" }, context));
+  const followUp = yield* awaited(root.submit({ content: "A follow-up", type: "input" }, context));
   const steer = yield* awaited(
-    root.submit({ type: "input", content: "A steer", whenBusy: "steer" }, context),
+    root.submit({ content: "A steer", type: "input", whenBusy: "steer" }, context),
   );
   const note = yield* awaited(
-    root.submit({ type: "write", entry: { kind: "app.note", data: "noted while busy" } }, context),
+    root.submit({ entry: { data: "noted while busy", kind: "app.note" }, type: "write" }, context),
   );
-  const withdrawn = yield* awaited(root.submit({ type: "input", content: "Never mind" }, context));
+  const withdrawn = yield* awaited(root.submit({ content: "Never mind", type: "input" }, context));
   yield* awaited(
     root
-      .submit({ type: "input", content: "Now or never", whenBusy: "reject" }, context)
+      .submit({ content: "Now or never", type: "input", whenBusy: "reject" }, context)
       .catch((error: Error) => {
         runSync(Console.log("rejected:", error.message));
       }),
@@ -67,7 +69,7 @@ const mainStep1 = Effect.gen(function* () {
   );
 
   release();
-  return { harness, root, first, followUp, steer, note, withdrawn };
+  return { first, followUp, harness, note, root, steer, withdrawn };
 });
 
 const main = Effect.gen(function* () {

@@ -4,8 +4,11 @@ import { afterAll, describe, expect, it } from "vite-plus/test";
 
 import { getOrThrow } from "../src/env/index.ts";
 import { createEditTool } from "../src/tools/index.ts";
-import { awaited, BACKGROUND_CONTEXT } from "./support.ts";
-import { textOutput, createEnv, run, removeTempDirs } from "./tools-support.ts";
+import support from "./support.ts";
+import toolsSupport from "./tools-support.ts";
+
+const { BACKGROUND_CONTEXT, awaited } = support;
+const { createEnv, removeTempDirs, run, textOutput } = toolsSupport;
 
 afterAll(() => Effect.runPromise(removeTempDirs));
 
@@ -17,11 +20,11 @@ const appliesDisjointEdits = Effect.gen(function* () {
     run(
       createEditTool(),
       {
-        path: "edit.txt",
         edits: [
-          { oldText: "alpha\n", newText: "ALPHA\n" },
-          { oldText: "gamma\n", newText: "GAMMA\n" },
+          { newText: "ALPHA\n", oldText: "alpha\n" },
+          { newText: "GAMMA\n", oldText: "gamma\n" },
         ],
+        path: "edit.txt",
       },
       env,
     ),
@@ -43,20 +46,20 @@ describe("durable tools", () => {
 
     it("repairs edits sent as a JSON string, a single object, or top-level oldText/newText without mutating them", () => {
       const prepare = createEditTool().prepareArguments!;
-      const edit = { oldText: "a", newText: "b" };
-      const asString = { path: "f", edits: JSON.stringify([edit]) };
-      expect(prepare(asString)).toEqual({ path: "f", edits: [edit] });
+      const edit = { newText: "b", oldText: "a" };
+      const asString = { edits: JSON.stringify([edit]), path: "f" };
+      expect(prepare(asString)).toEqual({ edits: [edit], path: "f" });
       expect(asString.edits).toBe(JSON.stringify([edit]));
-      expect(prepare({ path: "f", edits: JSON.stringify(edit) })).toEqual({
-        path: "f",
+      expect(prepare({ edits: JSON.stringify(edit), path: "f" })).toEqual({
         edits: [edit],
-      });
-      expect(prepare({ path: "f", edits: edit })).toEqual({ path: "f", edits: [edit] });
-      expect(prepare({ path: "f", edits: [edit], oldText: "c", newText: "d" })).toEqual({
         path: "f",
-        edits: [edit, { oldText: "c", newText: "d" }],
       });
-      expect(prepare({ path: "f", edits: "not json" })).toEqual({ path: "f", edits: "not json" });
+      expect(prepare({ edits: edit, path: "f" })).toEqual({ edits: [edit], path: "f" });
+      expect(prepare({ edits: [edit], newText: "d", oldText: "c", path: "f" })).toEqual({
+        edits: [edit, { newText: "d", oldText: "c" }],
+        path: "f",
+      });
+      expect(prepare({ edits: "not json", path: "f" })).toEqual({ edits: "not json", path: "f" });
     });
   });
 });

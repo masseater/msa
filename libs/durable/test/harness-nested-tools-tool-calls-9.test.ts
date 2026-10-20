@@ -4,8 +4,11 @@ import { MemoryStorage } from "@msa/durable/storage/memory";
 import { Effect } from "effect";
 import { afterEach, describe, expect, it } from "vite-plus/test";
 
-import { directories, toolTasks, text, DONE, call, tool } from "./harness-nested-tools-support.ts";
-import { chatSetup, openChat, awaited, addTool, removeDir, context, deferred } from "./support.ts";
+import harnessNestedToolsSupport from "./harness-nested-tools-support.ts";
+import support from "./support.ts";
+
+const { DONE, call, directories, text, tool, toolTasks } = harnessNestedToolsSupport;
+const { addTool, awaited, chatSetup, context, deferred, openChat, removeDir } = support;
 
 afterEach(() =>
   Effect.runPromise(
@@ -29,7 +32,7 @@ function slowNestedBatch() {
           yield* awaited(api.details({ step: 1 }, callContext));
           running.resolve();
           yield* awaited(release.promise);
-          return { output: [{ type: "text", text: "slow done" }] };
+          return { output: [{ text: "slow done", type: "text" }] };
         }),
       ),
     ),
@@ -40,13 +43,13 @@ function slowNestedBatch() {
       Effect.runPromise(
         Effect.gen(function* () {
           const result = yield* awaited(api.executeTool("slow", {}, callContext));
-          return { output: [{ type: "text", text: text(result) }] };
+          return { output: [{ text: text(result), type: "text" }] };
         }),
       ),
     ),
   );
   setup.faux.setResponses([call("batch"), DONE]);
-  return { setup, release, running };
+  return { release, running, setup };
 }
 
 const openSlowNestedBatch = Effect.fn("openSlowNestedBatch")(function* () {
@@ -60,28 +63,28 @@ const openSlowNestedBatch = Effect.fn("openSlowNestedBatch")(function* () {
 
     return Promise.resolve();
   });
-  return { release, running, harness, root, stream, events };
+  return { events, harness, release, root, running, stream };
 });
 
 const slowNestedCallRunning = Effect.fn("slowNestedCallRunning")(function* () {
   const { release, running, harness, root, stream, events } = yield* openSlowNestedBatch();
-  const submission = yield* awaited(root.submit({ type: "input", content: "go" }, context));
+  const submission = yield* awaited(root.submit({ content: "go", type: "input" }, context));
   yield* awaited(running.promise);
   const live = yield* awaited(harness.snapshot(LiveDoc, root.id, context));
   expect(live?.nestedTools).toEqual([
     {
+      arguments: {},
       callId: "c1/1",
+      details: { step: 1 },
+      name: "slow",
+      output: "working\n",
       parentCallId: "c1",
       parentTaskId: expect.any(Number),
-      name: "slow",
-      taskId: expect.any(Number),
-      arguments: {},
       status: "running",
-      output: "working\n",
-      details: { step: 1 },
+      taskId: expect.any(Number),
     },
   ]);
-  return { release, harness, root, stream, events, submission };
+  return { events, harness, release, root, stream, submission };
 });
 
 const reportsNestedCalls = Effect.gen(function* () {
@@ -105,13 +108,13 @@ const reportsNestedCalls = Effect.gen(function* () {
     (event) => event.type === "tool_execution_end" && event.toolCallId === "c1/1",
   );
   expect(nestedEnd).toMatchObject({
-    result: { structuredOutput: "slow done", isError: false },
+    result: { isError: false, structuredOutput: "slow done" },
   });
   const [parent, child] = yield* toolTasks(harness);
   const parentEnd = events.find(
     (event) => event.type === "tool_execution_end" && event.toolCallId === "c1",
   );
-  expect(nestedEnd).toMatchObject({ taskId: child!.id, parentTaskId: parent!.id });
+  expect(nestedEnd).toMatchObject({ parentTaskId: parent!.id, taskId: child!.id });
   expect(parentEnd).toMatchObject({ taskId: parent!.id });
   expect(parentEnd).not.toHaveProperty("parentTaskId");
   expect(

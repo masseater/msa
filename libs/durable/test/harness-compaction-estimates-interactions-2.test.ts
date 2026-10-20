@@ -3,23 +3,26 @@ import { CompactionTask } from "@msa/durable/harness";
 import { Effect } from "effect";
 import { afterEach, describe, expect, it } from "vite-plus/test";
 
-import {
-  text,
-  summary,
+import harnessCompactionSupport from "./harness-compaction-support.ts";
+import support from "./support.ts";
+
+const {
+  MANUAL,
+  OVERFLOW,
+  directories,
+  failure,
+  first,
   gated,
   history,
-  sqlitePath,
-  directories,
-  first,
-  MANUAL,
-  reopen,
-  OVERFLOW,
   live,
-  failure,
   open,
+  reopen,
   result,
-} from "./harness-compaction-support.ts";
-import { allEntries, awaited, addHooks, removeDir, context, aborted, deferred } from "./support.ts";
+  sqlitePath,
+  summary,
+  text,
+} = harnessCompactionSupport;
+const { aborted, addHooks, allEntries, awaited, context, deferred, removeDir } = support;
 
 afterEach(() =>
   Effect.runPromise(
@@ -33,15 +36,15 @@ afterEach(() =>
 const listsConcurrentCompactions = Effect.gen(function* () {
   const chat = yield* open();
   yield* history(chat);
-  const first = deferred();
+  const firstInner = deferred();
   const second = deferred();
   chat.faux.summaries.push(
-    gated(deferred(), summary(), first),
+    gated(deferred(), summary(), firstInner),
     gated(deferred(), summary(), second),
   );
   const a = yield* awaited(chat.root.compact(undefined, context));
   const b = yield* awaited(chat.root.compact(undefined, context));
-  yield* awaited(Promise.all([first.promise, second.promise]));
+  yield* awaited(Promise.all([firstInner.promise, second.promise]));
   expect((yield* awaited(live(chat))).compactions?.map((status) => status.taskId)).toEqual([a, b]);
   yield* awaited(chat.root.abort(context));
   expect((yield* awaited(live(chat))).compactions).toBeUndefined();
@@ -79,13 +82,13 @@ const failsOverflowRun = Effect.gen(function* () {
   chat.faux.summaries.push(gated(deferred(), summary(), reached));
   chat.faux.agent.push(failure(OVERFLOW));
   const input = yield* awaited(
-    chat.root.submit({ type: "input", content: text("u4", 100) }, context),
+    chat.root.submit({ content: text("u4", 100), type: "input" }, context),
   );
   yield* awaited(reached.promise);
   const generation = (yield* awaited(live(chat))).run!.taskId;
   expect((yield* awaited(chat.harness.getTask(generation, context)))?.state).toMatchObject({
+    checkpoint: { overflow: OVERFLOW, phase: "prepare" },
     status: "waiting",
-    checkpoint: { phase: "prepare", overflow: OVERFLOW },
   });
   yield* awaited(chat.harness.close(context));
   chat = yield* reopen(path, chat.setup, chat.faux);
@@ -94,9 +97,9 @@ const failsOverflowRun = Effect.gen(function* () {
     (yield* awaited(chat.harness.submission(input.id, context)))!.wait(context),
   );
   expect(settled).toMatchObject({
-    status: "unanswered",
-    reason: "model_error",
     detail: OVERFLOW,
+    reason: "model_error",
+    status: "unanswered",
   });
   yield* awaited(chat.harness.close(context));
 });

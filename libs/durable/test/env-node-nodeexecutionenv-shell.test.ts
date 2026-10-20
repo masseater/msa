@@ -4,15 +4,19 @@ import { afterEach, describe, expect, it, vi } from "vite-plus/test";
 
 import { getOrThrow } from "../src/env/index.ts";
 import { NodeExecutionEnv } from "../src/env/node.ts";
-import { toJsonText, abortController, awaited } from "./effect-support.ts";
-import {
-  cleanUpEnvTests,
-  createTempDir,
+import effectSupport from "./effect-support.ts";
+import envNodeSupport from "./env-node-support.ts";
+import platformSupport from "./platform-support.ts";
+
+const { abortController, awaited, toJsonText } = effectSupport;
+const {
   abortedContext,
+  cleanUpEnvTests,
   collectShellOutput,
+  createTempDir,
   toBashSingleQuotedArg,
-} from "./env-node-support.ts";
-import { joinPath, pathExists, readText } from "./platform-support.ts";
+} = envNodeSupport;
+const { joinPath, pathExists, readText } = platformSupport;
 
 afterEach(() => Effect.runPromise(cleanUpEnvTests), 15_000);
 
@@ -24,7 +28,7 @@ const fakeWindowsShell = Effect.gen(function* () {
   const platformDescriptor = Object.getOwnPropertyDescriptor(process, "platform");
   vi.stubEnv("SystemRoot", "/definitely/missing/windows");
   Object.defineProperty(process, "platform", { configurable: true, value: "win32" });
-  return { pidFile, controller, env, platformDescriptor };
+  return { controller, env, pidFile, platformDescriptor };
 });
 
 const streamsCombinedStdout = Effect.gen(function* () {
@@ -60,11 +64,11 @@ const reportsMissingWorking = Effect.gen(function* () {
   const result = yield* awaited(env.exec("printf ok", undefined, BACKGROUND_CONTEXT));
 
   expect(result).toMatchObject({
-    ok: false,
     error: {
       code: "spawn_error",
       message: expect.stringContaining("Working directory does not exist"),
     },
+    ok: false,
   });
 });
 
@@ -102,8 +106,8 @@ const rejectsInvalidTimeouts = Effect.gen(function* () {
     expect(
       yield* awaited(env.exec("touch spawned", { timeout }, BACKGROUND_CONTEXT)),
     ).toMatchObject({
-      ok: false,
       error: { code: "timeout", message: expect.stringContaining("Invalid timeout") },
+      ok: false,
     });
   }
   expect(getOrThrow(yield* awaited(env.exists("spawned", BACKGROUND_CONTEXT)))).toBe(false);
@@ -181,8 +185,8 @@ const returnsAbortedResult = Effect.gen(function* () {
   const root = yield* createTempDir;
   const env = new NodeExecutionEnv({ cwd: root });
   expect(yield* awaited(env.exec("touch spawned", undefined, abortedContext()))).toMatchObject({
-    ok: false,
     error: { code: "aborted" },
+    ok: false,
   });
   expect(getOrThrow(yield* awaited(env.exists("spawned", BACKGROUND_CONTEXT)))).toBe(false);
 
@@ -231,7 +235,7 @@ describe("NodeExecutionEnv shell", () => {
             process.kill(pid, "SIGKILL");
 
             const result = yield* awaited(execution);
-            expect(result).toMatchObject({ ok: false, error: { code: "aborted" } });
+            expect(result).toMatchObject({ error: { code: "aborted" }, ok: false });
           }).pipe(
             Effect.ensuring(
               Effect.gen(function* () {

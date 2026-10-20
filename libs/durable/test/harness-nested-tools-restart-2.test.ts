@@ -2,21 +2,11 @@ import { defineExtension, defineTask } from "@msa/durable";
 import { Effect } from "effect";
 import { afterEach, describe, expect, it } from "vite-plus/test";
 
-import {
-  spawnThroughBatch,
-  directories,
-  sqlitePath,
-  open,
-} from "./harness-nested-tools-restart-support.ts";
-import {
-  chatSetup,
-  awaited,
-  removeDir,
-  context,
-  aborted,
-  deferred,
-  eventually,
-} from "./support.ts";
+import harnessNestedToolsRestartSupport from "./harness-nested-tools-restart-support.ts";
+import support from "./support.ts";
+
+const { directories, open, spawnThroughBatch, sqlitePath } = harnessNestedToolsRestartSupport;
+const { aborted, awaited, chatSetup, context, deferred, eventually, removeDir } = support;
 
 afterEach(() =>
   Effect.runPromise(
@@ -35,9 +25,20 @@ const lateWorkerSetup = Effect.fn("lateWorkerSetup")(function* () {
   const aborts: (string | undefined)[] = [];
   const started = deferred();
   const Worker = defineTask<null, { phase: "work" }, null>({
-    name: "test.late",
-    version: 1,
+    abort: (task, runtime, abortContext) =>
+      runPromise(
+        Effect.gen(function* () {
+          aborts.push(task.abortReason);
+          yield* awaited(
+            runtime.commit(
+              () => ({ outcome: { status: "aborted" }, status: "terminal" }),
+              abortContext,
+            ),
+          );
+        }),
+      ),
     initial: () => ({ phase: "work" }),
+    name: "test.late",
     phases: {
       work: (_task, runtime) =>
         runPromise(
@@ -47,22 +48,11 @@ const lateWorkerSetup = Effect.fn("lateWorkerSetup")(function* () {
           }),
         ),
     },
-    abort: (task, runtime, abortContext) =>
-      runPromise(
-        Effect.gen(function* () {
-          aborts.push(task.abortReason);
-          yield* awaited(
-            runtime.commit(
-              () => ({ status: "terminal", outcome: { status: "aborted" } }),
-              abortContext,
-            ),
-          );
-        }),
-      ),
+    version: 1,
   });
   const extension = defineExtension({ name: "late", tasks: [Worker] });
   setup.registry.install(extension);
-  return { path, setup, aborts, started, Worker, extension };
+  return { Worker, aborts, extension, path, setup, started };
 });
 
 const keepsAbandonedTask = Effect.gen(function* () {
@@ -71,7 +61,7 @@ const keepsAbandonedTask = Effect.gen(function* () {
   const { path, setup, aborts, started, Worker, extension } = yield* lateWorkerSetup();
   const spawned = spawnThroughBatch(setup, Worker);
   let opened = yield* open(path, setup);
-  const id = (yield* awaited(opened.root.submit({ type: "input", content: "go" }, context))).id;
+  const id = (yield* awaited(opened.root.submit({ content: "go", type: "input" }, context))).id;
   yield* awaited(started.promise);
   yield* awaited(opened.harness.close(context));
 
@@ -99,8 +89,8 @@ const keepsAbandonedTask = Effect.gen(function* () {
   ).toBe("done");
   expect(aborts).toEqual(["restart"]);
   expect((yield* awaited(opened.harness.getTask(spawned.worker!, context)))?.state).toMatchObject({
-    status: "terminal",
     outcome: { status: "aborted" },
+    status: "terminal",
   });
   yield* awaited(opened.harness.close(context));
 });
@@ -117,9 +107,21 @@ const orphansAbandonedTaskStep1 = Effect.gen(function* () {
   const setup = chatSetup();
   const started = deferred();
   const Worker = defineTask<null, { phase: "work" }, null>({
-    name: "test.gone",
-    version: 1,
+    abort: (_task, runtime, abortContext) =>
+      runPromise(
+        Effect.asVoid(
+          Effect.suspend(() =>
+            awaited(
+              runtime.commit(
+                () => ({ outcome: { status: "aborted" }, status: "terminal" }),
+                abortContext,
+              ),
+            ),
+          ),
+        ),
+      ),
     initial: () => ({ phase: "work" }),
+    name: "test.gone",
     phases: {
       work: (_task, runtime) =>
         runPromise(
@@ -129,30 +131,18 @@ const orphansAbandonedTaskStep1 = Effect.gen(function* () {
           }),
         ),
     },
-    abort: (_task, runtime, abortContext) =>
-      runPromise(
-        Effect.asVoid(
-          Effect.suspend(() =>
-            awaited(
-              runtime.commit(
-                () => ({ status: "terminal", outcome: { status: "aborted" } }),
-                abortContext,
-              ),
-            ),
-          ),
-        ),
-      ),
+    version: 1,
   });
   const extension = defineExtension({ name: "gone", tasks: [Worker] });
   setup.registry.install(extension);
   const spawned = spawnThroughBatch(setup, Worker);
-  return { runPromise, path, setup, started, extension, spawned };
+  return { extension, path, runPromise, setup, spawned, started };
 });
 
 const orphansAbandonedTask = Effect.gen(function* () {
   const { runPromise, path, setup, started, extension, spawned } = yield* orphansAbandonedTaskStep1;
   let opened = yield* open(path, setup);
-  const id = (yield* awaited(opened.root.submit({ type: "input", content: "go" }, context))).id;
+  const id = (yield* awaited(opened.root.submit({ content: "go", type: "input" }, context))).id;
   yield* awaited(started.promise);
   yield* awaited(opened.harness.close(context));
 
@@ -169,8 +159,8 @@ const orphansAbandonedTask = Effect.gen(function* () {
   );
   yield* awaited(opened.root.abort(context));
   expect((yield* awaited(opened.harness.getTask(spawned.worker!, context)))?.state).toMatchObject({
+    outcome: { reason: "missing_task", status: "orphaned" },
     status: "terminal",
-    outcome: { status: "orphaned", reason: "missing_task" },
   });
   expect(
     (yield* awaited((yield* awaited(opened.harness.submission(id, context)))!.wait(context)))

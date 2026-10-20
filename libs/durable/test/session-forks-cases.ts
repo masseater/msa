@@ -2,13 +2,14 @@ import { type ConversationId, defineDoc, defineDocFamily } from "@msa/durable";
 import { dual } from "effect/Function";
 import { expect } from "vite-plus/test";
 
-import { documentCopies } from "./session-forks-support.ts";
-import { documentCopyChanges, openTestSession } from "./session-support.ts";
+import type sessionForksCasesTypes from "./session-forks-cases.types.ts";
+import documentCopies from "./session-forks-support.ts";
+import sessionSupport from "./session-support.ts";
 
-export type TestSession = ReturnType<typeof openTestSession>;
+const { documentCopyChanges } = sessionSupport;
 
 function expectCopiesIntoImpl(
-  { storage, publications }: Pick<TestSession, "storage" | "publications">,
+  { storage, publications }: Pick<sessionForksCasesTypes.TestSession, "storage" | "publications">,
   childId: ConversationId,
   count: number,
 ): void {
@@ -32,60 +33,67 @@ function expectCopiesIntoImpl(
   }
 }
 
-export const expectCopiesInto: {
+const expectCopiesInto: {
   (
     childId: ConversationId,
     count: number,
-  ): (session: Pick<TestSession, "storage" | "publications">) => void;
+  ): (session: Pick<sessionForksCasesTypes.TestSession, "storage" | "publications">) => void;
   (
-    session: Pick<TestSession, "storage" | "publications">,
+    session: Pick<sessionForksCasesTypes.TestSession, "storage" | "publications">,
     childId: ConversationId,
     count: number,
   ): void;
 } = dual(3, expectCopiesIntoImpl);
 
-export function forkPolicyDocs() {
+function forkPolicyDocs() {
   const AsOf = defineDoc<{ value: string }>({
-    kind: "fork.policies.as-of",
-    version: 1,
-    scope: "conversation",
-    history: "rewindable",
     fork: "asOf",
+    history: "rewindable",
     initial: () => ({ value: "as-initial" }),
+    kind: "fork.policies.as-of",
+    scope: "conversation",
+    version: 1,
   });
   const Current = defineDoc<{ value: string }>({
-    kind: "fork.policies.current",
-    version: 1,
-    scope: "conversation",
-    history: "latest",
     fork: "current",
+    history: "latest",
     initial: () => ({ value: "current-initial" }),
+    kind: "fork.policies.current",
+    scope: "conversation",
+    version: 1,
   });
   const Initial = defineDoc<{ value: string }>({
-    kind: "fork.policies.initial",
-    version: 1,
-    scope: "conversation",
-    history: "latest",
     fork: "initial",
+    history: "latest",
     initial: () => ({ value: "fresh" }),
+    kind: "fork.policies.initial",
+    scope: "conversation",
+    version: 1,
   });
   const AsOfFamily = defineDocFamily<{ value: string }, string>({
-    kind: "fork.policies.as-of-family",
-    version: 1,
     family: true,
-    scope: "conversation",
-    history: "rewindable",
     fork: "asOf",
+    history: "rewindable",
     initial: (seed) => ({ value: seed }),
+    kind: "fork.policies.as-of-family",
+    scope: "conversation",
+    version: 1,
   });
   const CurrentFamily = defineDocFamily<{ value: string }, string>({
-    kind: "fork.policies.current-family",
-    version: 1,
     family: true,
-    scope: "conversation",
-    history: "latest",
     fork: "current",
+    history: "latest",
     initial: (seed) => ({ value: seed }),
+    kind: "fork.policies.current-family",
+    scope: "conversation",
+    version: 1,
   });
-  return { AsOf, Current, Initial, AsOfFamily, CurrentFamily };
+  return { AsOf, AsOfFamily, Current, CurrentFamily, Initial };
 }
+
+const sessionForksCases = {
+  expectCopiesInto,
+  forkPolicyDocs,
+};
+
+export default sessionForksCases;

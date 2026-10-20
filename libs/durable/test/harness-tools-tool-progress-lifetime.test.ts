@@ -1,32 +1,26 @@
-import { defineTask, LiveDoc } from "@msa/durable";
+import { LiveDoc, defineTask } from "@msa/durable";
 import { ToolTask } from "@msa/durable/harness";
 import { MemoryStorage } from "@msa/durable/storage/memory";
 import { Effect } from "effect";
 import { describe, expect, it } from "vite-plus/test";
 
-import { resultText, results, DONE, calls, run, tool } from "./harness-tools-support.ts";
-import {
-  allEntries,
-  chatSetup,
-  openChat,
-  awaited,
-  addHooks,
-  addTool,
-  context,
-  aborted,
-  deferred,
-} from "./support.ts";
+import harnessToolsSupport from "./harness-tools-support.ts";
+import support from "./support.ts";
+
+const { DONE, calls, resultText, results, run, tool } = harnessToolsSupport;
+const { aborted, addHooks, addTool, allEntries, awaited, chatSetup, context, deferred, openChat } =
+  support;
 
 const rejectsInvocationBound = Effect.gen(function* () {
   const runPromise = Effect.runPromiseWith(yield* Effect.context<never>());
 
   const setup = chatSetup();
   const never = defineTask<Record<string, never>, { phase: "never" }, null>({
-    name: "test.never",
-    version: 1,
-    initial: () => ({ phase: "never" }),
-    phases: { never: () => Promise.resolve() },
     abort: () => Promise.resolve(),
+    initial: () => ({ phase: "never" }),
+    name: "test.never",
+    phases: { never: () => Promise.resolve() },
+    version: 1,
   });
   let wait!: Promise<unknown>;
   let watchClosed!: Promise<unknown>;
@@ -84,7 +78,7 @@ const rejectsDetailsStill = Effect.gen(function* () {
   });
   setup.faux.setResponses([calls(["slow", {}, "c1"]), DONE]);
   const { harness, root } = yield* openChat(new MemoryStorage(), setup);
-  const submission = yield* awaited(root.submit({ type: "input", content: "go" }, context));
+  const submission = yield* awaited(root.submit({ content: "go", type: "input" }, context));
   yield* awaited(inAfterTool.promise);
   const taskId = (yield* awaited(harness.snapshot(LiveDoc, root.id, context)))!.tools![0]!.taskId!;
   yield* awaited(harness.abortTask(taskId, context));
@@ -119,7 +113,7 @@ const answersAbortedTool = Effect.gen(function* () {
   );
   setup.faux.setResponses([calls(["slow", {}, "c1"]), DONE]);
   const { harness, root } = yield* openChat(new MemoryStorage(), setup);
-  const submission = yield* awaited(root.submit({ type: "input", content: "go" }, context));
+  const submission = yield* awaited(root.submit({ content: "go", type: "input" }, context));
   yield* awaited(buffered);
   const taskId = (yield* awaited(harness.snapshot(LiveDoc, root.id, context)))!.tools![0]!.taskId!;
   yield* awaited(harness.abortTask(taskId, context));

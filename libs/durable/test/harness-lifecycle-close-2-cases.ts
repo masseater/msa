@@ -1,12 +1,17 @@
 import { MemoryStorage } from "@msa/durable/storage/memory";
 import { Effect } from "effect";
 
-import { awaited } from "./effect-support.ts";
-import { start, oneStep } from "./harness-lifecycle-support.ts";
-import { context } from "./session-support.ts";
-import { openTasks } from "./task-support.ts";
+import effectSupport from "./effect-support.ts";
+import harnessLifecycleSupport from "./harness-lifecycle-support.ts";
+import sessionSupport from "./session-support.ts";
+import taskSupport from "./task-support.ts";
 
-export const paused = Effect.fn("paused")(function* () {
+const { awaited } = effectSupport;
+const { oneStep, start } = harnessLifecycleSupport;
+const { context } = sessionSupport;
+const { openTasks } = taskSupport;
+
+const paused = Effect.fn("paused")(function* () {
   const runPromise = Effect.runPromiseWith(yield* Effect.context<never>());
 
   let ran = false;
@@ -24,12 +29,14 @@ export const paused = Effect.fn("paused")(function* () {
         runPromise(
           Effect.gen(function* () {
             return (yield* awaited(
-              tx.createSubmission({ conversationId: root.id, type: "write", status: "queued" }),
+              tx.createSubmission({ conversationId: root.id, status: "queued", type: "write" }),
             )).id;
           }),
         ),
       context,
     ),
   );
-  return { harness, root, id, submissionId, ran: () => ran };
+  return { harness, id, ran: () => ran, root, submissionId };
 });
+
+export default paused;

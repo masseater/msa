@@ -1,9 +1,13 @@
 import { Effect } from "effect";
 import { describe, expect, it } from "vite-plus/test";
 
-import { awaited } from "./effect-support.ts";
-import { expectCopiesInto, forkPolicyDocs } from "./session-forks-cases.ts";
-import { context, createConversation, flush, openTestSession } from "./session-support.ts";
+import effectSupport from "./effect-support.ts";
+import sessionForksCases from "./session-forks-cases.ts";
+import sessionSupport from "./session-support.ts";
+
+const { awaited } = effectSupport;
+const { expectCopiesInto, forkPolicyDocs } = sessionForksCases;
+const { context, createConversation, flush, openTestSession } = sessionSupport;
 
 const forkWithEveryPolicyStep1 = Effect.fn("forkWithEveryPolicyStep1")(function* () {
   const runPromise = Effect.runPromiseWith(yield* Effect.context<never>());
@@ -16,7 +20,8 @@ const forkWithEveryPolicyStep1 = Effect.fn("forkWithEveryPolicyStep1")(function*
       (tx) =>
         runPromise(
           Effect.gen(function* () {
-            const forkAt = (yield* awaited(tx.appendEntry(parentId, { kind: "fork-point" }))).id;
+            const forkAtInner = (yield* awaited(tx.appendEntry(parentId, { kind: "fork-point" })))
+              .id;
             (yield* awaited(tx.doc(AsOf, parentId))).value = "as-at-fork";
             (yield* awaited(tx.doc(Current, parentId))).value = "current-at-fork";
             (yield* awaited(tx.doc(Initial, parentId))).value = "parent-only";
@@ -24,24 +29,24 @@ const forkWithEveryPolicyStep1 = Effect.fn("forkWithEveryPolicyStep1")(function*
             (yield* awaited(tx.doc(AsOfFamily, parentId, "b", "unused"))).value = "family-as-b";
             (yield* awaited(tx.doc(CurrentFamily, parentId, "a", "unused"))).value =
               "family-current-a";
-            return forkAt;
+            return forkAtInner;
           }),
         ),
       context,
     ),
   );
   return {
-    runPromise,
     AsOf,
-    Current,
-    Initial,
     AsOfFamily,
+    Current,
     CurrentFamily,
+    Initial,
+    forkAt,
+    parentId,
+    publications,
+    runPromise,
     session,
     storage,
-    publications,
-    parentId,
-    forkAt,
   };
 });
 
@@ -78,16 +83,16 @@ const forkWithEveryPolicyStep2 = Effect.fn("forkWithEveryPolicyStep2")(function*
   const documentReads = storage.documentReadCount;
   return {
     AsOf,
-    Current,
-    Initial,
     AsOfFamily,
+    Current,
     CurrentFamily,
+    Initial,
+    documentReads,
+    forkAt,
+    parentId,
+    publications,
     session,
     storage,
-    publications,
-    parentId,
-    forkAt,
-    documentReads,
   };
 });
 
@@ -115,15 +120,15 @@ const forkWithEveryPolicy = Effect.fn("forkWithEveryPolicy")(function* () {
   expect(storage.documentReadCount).toBe(documentReads);
   return {
     AsOf,
-    Current,
-    Initial,
     AsOfFamily,
+    Current,
     CurrentFamily,
+    Initial,
+    child,
+    parentId,
+    publications,
     session,
     storage,
-    publications,
-    parentId,
-    child,
   };
 });
 
@@ -161,13 +166,13 @@ const copiesCurrentSingletonStep1 = Effect.gen(function* () {
   const { AsOf, Initial, session, storage, publications, parentId, child } = forked;
   yield* expectForkedSnapshots(forked);
 
-  expectCopiesInto({ storage, publications }, child.id, 5);
+  expectCopiesInto({ publications, storage }, child.id, 5);
 
   const parentRecord = yield* awaited(
     storage.findDocument(
       {
         kind: AsOf.definition.kind,
-        scope: { kind: "conversation", conversationId: parentId },
+        scope: { conversationId: parentId, kind: "conversation" },
       },
       "current",
       context,
@@ -177,7 +182,7 @@ const copiesCurrentSingletonStep1 = Effect.gen(function* () {
     storage.findDocument(
       {
         kind: AsOf.definition.kind,
-        scope: { kind: "conversation", conversationId: child.id },
+        scope: { conversationId: child.id, kind: "conversation" },
       },
       "current",
       context,
@@ -196,7 +201,7 @@ const copiesCurrentSingletonStep1 = Effect.gen(function* () {
       context,
     ),
   );
-  return { runPromise, AsOf, Initial, session, parentId, child };
+  return { AsOf, Initial, child, parentId, runPromise, session };
 });
 
 const copiesCurrentSingleton = Effect.gen(function* () {

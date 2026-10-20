@@ -2,9 +2,11 @@ import { Session } from "node:inspector/promises";
 
 import { Effect } from "effect";
 
-import { fromJsonText, awaited } from "./effect-support.ts";
+import effectSupport from "./effect-support.ts";
 
-export const retainedBytes = Effect.fn("retainedBytes")(function* () {
+const { awaited, fromJsonText } = effectSupport;
+
+const retainedBytes = Effect.fn("retainedBytes")(function* () {
   const inspector = new Session();
   inspector.connect();
   const chunks: string[] = [];
@@ -32,3 +34,5 @@ export const retainedBytes = Effect.fn("retainedBytes")(function* () {
     total += snapshot.nodes[index]!;
   return total;
 });
+
+export default retainedBytes;

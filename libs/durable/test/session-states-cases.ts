@@ -1,21 +1,30 @@
 import { defineDoc } from "@msa/durable";
 import { Effect } from "effect";
 
-import { awaited } from "./effect-support.ts";
-import { context, flush, openTestSession } from "./session-support.ts";
+import effectSupport from "./effect-support.ts";
+import type sessionStatesCasesTypes from "./session-states-cases.types.ts";
+import sessionSupport from "./session-support.ts";
 
-export type State = { value: number; retained: { label: string } };
+const { awaited } = effectSupport;
+const { context, flush, openTestSession } = sessionSupport;
 
-export const StateDoc = defineDoc<State>({
+const StateDoc = defineDoc<sessionStatesCasesTypes.State>({
+  initial: () => ({ retained: { label: "stable" }, value: 0 }),
   kind: "state.state",
-  version: 1,
   scope: "session",
-  initial: () => ({ value: 0, retained: { label: "stable" } }),
+  version: 1,
 });
 
-export const createState = Effect.fn("createState")(function* () {
+const createState = Effect.fn("createState")(function* () {
   const harness = openTestSession();
   yield* awaited(harness.session.commit((tx) => tx.doc(StateDoc).then(() => undefined), context));
   yield* flush;
   return harness;
 });
+
+const sessionStatesCases = {
+  StateDoc,
+  createState,
+};
+
+export default sessionStatesCases;

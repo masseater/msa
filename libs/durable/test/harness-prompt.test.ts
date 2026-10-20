@@ -1,12 +1,12 @@
 import { type SystemMessage } from "@msa/ai";
 import {
   type Conversation,
-  defineExtension,
   type EntryId,
   type PromptInput,
   type PromptSection,
   SystemEntry,
   type ToolRegistration,
+  defineExtension,
   wrapSection,
 } from "@msa/durable";
 import { createRegistry } from "@msa/durable/harness";
@@ -15,8 +15,11 @@ import { describe, expect, it } from "vite-plus/test";
 
 import { resolveAgent, resolveSettings } from "../src/harness/agent.ts";
 import { planSystemEntries, renderSections, replaySections } from "../src/harness/prompt.ts";
-import { marker, root } from "./harness-prompt-support.ts";
-import { abortController, awaited, failure, addSection, user, context } from "./support.ts";
+import harnessPromptSupport from "./harness-prompt-support.ts";
+import support from "./support.ts";
+
+const { marker, root } = harnessPromptSupport;
+const { abortController, addSection, awaited, context, failure, user } = support;
 
 type Planned = {
   readonly sections: Record<string, string | null>;
@@ -51,14 +54,14 @@ const apply = Effect.fn("apply")(function* (
   expect([...replayed]).toEqual(Object.entries(desired));
   return drafts.map((draft): Planned => {
     const message = draft.model![0] as SystemMessage;
-    expect(message).toMatchObject({ role: "system", content: "", timestamp: 7 });
+    expect(message).toMatchObject({ content: "", role: "system", timestamp: 7 });
     const omit = draft.edits?.map((edit) => {
       expect(edit.action).toBe("omit");
       return edit.target;
     });
     return omit === undefined
       ? { sections: message.sections! }
-      : { sections: message.sections!, omit };
+      : { omit, sections: message.sections! };
   });
 });
 
@@ -72,21 +75,21 @@ function section(key: string, render: PromptSection<ToolRegistration>["render"],
 }
 
 const input: PromptInput<ToolRegistration> = {
-  conversationId: 1 as never,
   agent: {
-    thinkingLevel: "off",
-    extensions: [],
-    tools: [],
     callable: [],
     deferred: [],
+    extensions: [],
     sections: [],
+    thinkingLevel: "off",
+    tools: [],
   },
+  conversationId: 1 as never,
   env: undefined,
-  shown: {},
   read: {
     snapshot: () => Promise.resolve(undefined),
     snapshotAsOf: () => Promise.resolve(undefined),
   },
+  shown: {},
 };
 
 function sectionRegistry() {
@@ -190,15 +193,15 @@ const emitsMinimalValue = Effect.gen(function* () {
 describe("system prompt preparation", () => {
   it("replays sections in place, deletes on null, and appends re-additions", () => {
     const system = (sections: Record<string, string | null>): SystemMessage => ({
-      role: "system",
       content: "",
+      role: "system",
       sections,
       timestamp: 1,
     });
     const shown = replaySections([
       system({ a: "1", b: "2", c: "3" }),
       user("x"),
-      system({ b: "20", a: null }),
+      system({ a: null, b: "20" }),
       system({ a: "10" }),
     ]);
     expect([...shown]).toEqual([
@@ -215,9 +218,13 @@ describe("system prompt preparation", () => {
 const rewritesOrderOnly = Effect.gen(function* () {
   const conversation = yield* root();
   yield* apply(conversation, { a: "1", b: "2" });
-  expect(yield* apply(conversation, { b: "2", a: "1" })).toEqual([
+  const reordered = Object.fromEntries([
+    ["b", "2"],
+    ["a", "1"],
+  ]);
+  expect(yield* apply(conversation, reordered)).toEqual([
     { sections: { a: null, b: null } },
-    { sections: { b: "2", a: "1" } },
+    { sections: reordered },
   ]);
   const readded = yield* root();
   yield* apply(readded, { a: "1", b: "2", c: "3" });
@@ -241,14 +248,14 @@ const rebaselinesHeadMarker = Effect.gen(function* () {
   const delta = yield* lastSystemId(conversation);
   yield* awaited(marker(conversation, delta));
   expect(yield* apply(conversation, { a: "1", b: "20" })).toEqual([
-    { sections: { a: "1", b: "20" }, omit: [delta] },
+    { omit: [delta], sections: { a: "1", b: "20" } },
   ]);
   const baseline = yield* lastSystemId(conversation);
   expect(yield* apply(conversation, { a: "1", b: "21" })).toEqual([{ sections: { b: "21" } }]);
   const after = yield* lastSystemId(conversation);
   yield* awaited(marker(conversation, delta));
   expect(yield* apply(conversation, { a: "1", b: "21" })).toEqual([
-    { sections: { a: "1", b: "21" }, omit: [delta, baseline, after] },
+    { omit: [delta, baseline, after], sections: { a: "1", b: "21" } },
   ]);
 });
 
@@ -266,7 +273,7 @@ const writesCompletePost = Effect.gen(function* () {
   const baseline = yield* lastSystemId(conversation);
   yield* awaited(marker(conversation, baseline));
   expect(yield* apply(conversation, { a: "1" })).toEqual([
-    { sections: { a: "1" }, omit: [baseline] },
+    { omit: [baseline], sections: { a: "1" } },
   ]);
   yield* awaited(marker(conversation, "self"));
   expect(yield* apply(conversation, {})).toEqual([{ sections: {} }]);

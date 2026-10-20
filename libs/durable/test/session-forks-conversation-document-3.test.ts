@@ -1,44 +1,41 @@
-import { defineDoc, defineDocFamily, defineTask, type EntryId, type TaskId } from "@msa/durable";
+import { type EntryId, type TaskId, defineDoc, defineDocFamily, defineTask } from "@msa/durable";
 import { Effect } from "effect";
 import { describe, expect, it } from "vite-plus/test";
 
-import { awaited } from "./effect-support.ts";
-import { documentCopies } from "./session-forks-support.ts";
-import {
-  context,
-  createConversation,
-  documentCopyChanges,
-  flush,
-  openTestSession,
-} from "./session-support.ts";
+import effectSupport from "./effect-support.ts";
+import documentCopies from "./session-forks-support.ts";
+import sessionSupport from "./session-support.ts";
+
+const { awaited } = effectSupport;
+const { context, createConversation, documentCopyChanges, flush, openTestSession } = sessionSupport;
 
 function scopedDocsAndWork() {
   const Copied = defineDoc<{ value: string }>({
-    kind: "fork.scope.conversation",
-    version: 1,
-    scope: "conversation",
-    history: "latest",
     fork: "current",
+    history: "latest",
     initial: () => ({ value: "conversation" }),
+    kind: "fork.scope.conversation",
+    scope: "conversation",
+    version: 1,
   });
   const SessionOnly = defineDoc<{ value: string }>({
-    kind: "fork.scope.session",
-    version: 1,
-    scope: "session",
     initial: () => ({ value: "session" }),
+    kind: "fork.scope.session",
+    scope: "session",
+    version: 1,
   });
   const TaskOnly = defineDoc<{ value: string }>({
-    kind: "fork.scope.task",
-    version: 1,
-    scope: "task",
     initial: () => ({ value: "task" }),
+    kind: "fork.scope.task",
+    scope: "task",
+    version: 1,
   });
   const Work = defineTask<null, { phase: "start" }, null>({
-    name: "fork.scope.work",
-    version: 1,
-    initial: () => ({ phase: "start" }),
-    phases: { start: () => Promise.resolve() },
     abort: () => Promise.resolve(),
+    initial: () => ({ phase: "start" }),
+    name: "fork.scope.work",
+    phases: { start: () => Promise.resolve() },
+    version: 1,
   });
   return { Copied, SessionOnly, TaskOnly, Work };
 }
@@ -59,8 +56,8 @@ const copiesOnlyConversation = Effect.gen(function* () {
             forkAt = (yield* awaited(tx.appendEntry(parentId, { kind: "point" }))).id;
             taskId = yield* awaited(
               tx.createTask(Work, null, {
-                ownership: { kind: "conversation" },
                 conversationId: parentId,
+                ownership: { kind: "conversation" },
               }),
             );
             yield* awaited(tx.doc(Copied, parentId));
@@ -103,13 +100,13 @@ const copiesEveryFamilyStep1 = Effect.gen(function* () {
   const runPromise = Effect.runPromiseWith(yield* Effect.context<never>());
 
   const Family = defineDocFamily<{ value: number }, number>({
-    kind: "fork.pagination",
-    version: 1,
     family: true,
-    scope: "conversation",
-    history: "latest",
     fork: "current",
+    history: "latest",
     initial: (seed) => ({ value: seed }),
+    kind: "fork.pagination",
+    scope: "conversation",
+    version: 1,
   });
   const { session, storage } = openTestSession();
   const parentId = yield* awaited(createConversation(session));
@@ -124,7 +121,7 @@ const copiesEveryFamilyStep1 = Effect.gen(function* () {
       context,
     ),
   );
-  return { runPromise, Family, session, storage, parentId, forkAt };
+  return { Family, forkAt, parentId, runPromise, session, storage };
 });
 
 const copiesEveryFamily = Effect.gen(function* () {
@@ -134,12 +131,12 @@ const copiesEveryFamily = Effect.gen(function* () {
       (tx) =>
         runPromise(
           Effect.gen(function* () {
-            const runPromise = Effect.runPromiseWith(yield* Effect.context<never>());
+            const runNested = Effect.runPromiseWith(yield* Effect.context<never>());
 
             yield* awaited(
               Promise.all(
                 Array.from({ length: 260 }, (_, index) =>
-                  runPromise(
+                  runNested(
                     Effect.asVoid(
                       Effect.suspend(() =>
                         awaited(tx.doc(Family, parentId, `member-${index}`, index)),

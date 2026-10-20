@@ -1,33 +1,22 @@
-import { fauxAssistantMessage, fauxText, fauxToolCall, Type } from "@msa/ai";
+import { Type, fauxAssistantMessage, fauxText, fauxToolCall } from "@msa/ai";
 import {
   type ConversationHandle,
   type ConversationId,
-  defineTool,
   type Submission,
   type TaskId,
+  defineTool,
 } from "@msa/durable";
 import { MemoryStorage } from "@msa/durable/storage/memory";
 import { Effect } from "effect";
 import { afterEach, describe, expect, it } from "vite-plus/test";
 
-import { spawnFauxChild } from "./harness-ownership-children.ts";
-import {
-  directories,
-  gates,
-  open,
-  openHarness,
-  ownedChild,
-  runs,
-} from "./harness-ownership-support.ts";
-import {
-  chatSetup,
-  openChat,
-  awaited,
-  addTool,
-  removeDir,
-  ControlledStorage,
-  context,
-} from "./support.ts";
+import harnessOwnershipChildren from "./harness-ownership-children.ts";
+import harnessOwnershipSupport from "./harness-ownership-support.ts";
+import support from "./support.ts";
+
+const { spawnFauxChild } = harnessOwnershipChildren;
+const { directories, gates, open, openHarness, ownedChild, runs } = harnessOwnershipSupport;
+const { ControlledStorage, addTool, awaited, chatSetup, context, openChat, removeDir } = support;
 
 afterEach(() =>
   Effect.runPromise(
@@ -64,7 +53,7 @@ const failsHarnessFailed = Effect.gen(function* () {
   const tree = yield* awaited(ownedChild(root, "owner"));
   failMark = tree.inner;
   open("owner", "failed");
-  expect(yield* awaited(harness.closed)).toEqual({ reason: "failed", error: failure });
+  expect(yield* awaited(harness.closed)).toEqual({ error: failure, reason: "failed" });
   expect(reports).toEqual([failure]);
   yield* awaited(harness.close(context));
   const reopened = yield* openHarness(storage.reopen());
@@ -89,9 +78,7 @@ function delegateThroughHandle() {
   addTool(
     setup.registry,
     defineTool({
-      name: "delegate",
       description: "Delegates",
-      parameters: Type.Object({}),
       execute: (_args, api, callContext) =>
         Effect.runPromise(
           Effect.gen(function* () {
@@ -100,14 +87,16 @@ function delegateThroughHandle() {
             got.handle = (yield* awaited(api.conversation(child, callContext)))!;
             got.submission = yield* awaited(
               got.handle.submit(
-                { type: "input", content: "child task", requestId: "child" },
+                { content: "child task", requestId: "child", type: "input" },
                 callContext,
               ),
             );
             const settled = yield* awaited(got.submission.wait(callContext));
-            return { output: [{ type: "text", text: settled.status }] };
+            return { output: [{ text: settled.status, type: "text" }] };
           }),
         ),
+      name: "delegate",
+      parameters: Type.Object({}),
     }),
   );
   setup.faux.setResponses([
@@ -115,18 +104,18 @@ function delegateThroughHandle() {
     fauxAssistantMessage([fauxText("child answer")]),
     fauxAssistantMessage([fauxText("done")]),
   ]);
-  return { setup, got };
+  return { got, setup };
 }
 
 const givesToolInvocation = Effect.gen(function* () {
   const { setup, got } = delegateThroughHandle();
   const { harness, root } = yield* openChat(new MemoryStorage(), setup);
   yield* awaited(
-    (yield* awaited(root.submit({ type: "input", content: "go" }, context))).wait(context),
+    (yield* awaited(root.submit({ content: "go", type: "input" }, context))).wait(context),
   );
   expect(got.missing).toBeUndefined();
   yield* awaited(
-    expect(got.handle!.submit({ type: "input", content: "again" }, context)).rejects.toThrow(
+    expect(got.handle!.submit({ content: "again", type: "input" }, context)).rejects.toThrow(
       "invocation has ended",
     ),
   );

@@ -1,4 +1,4 @@
-import { applyImmutable, type Op } from "@msa/chord/delta";
+import { applyImmutable } from "@msa/chord/delta";
 import {
   AgentDoc,
   type Conversation,
@@ -13,38 +13,40 @@ import { Effect } from "effect";
 import { dual } from "effect/Function";
 import { expect } from "vite-plus/test";
 
-import { awaited } from "./effect-support.ts";
-import { context } from "./session-support.ts";
+import effectSupport from "./effect-support.ts";
+import type harnessViewSupportTypes from "./harness-view-support.types.ts";
+import sessionSupport from "./session-support.ts";
 
-export type Frame = { value: ConversationView; ops: readonly Op[] };
+const { awaited } = effectSupport;
+const { context } = sessionSupport;
 
-export function record(conversation: Conversation) {
+function record(conversation: Conversation) {
   return Effect.runPromise(
     Effect.gen(function* () {
       const watch = yield* awaited(conversation.watch(context));
       const initial = watch.value;
-      const frames: Frame[] = [];
+      const frames: harnessViewSupportTypes.Frame[] = [];
       watch.start((value, ops) => {
-        frames.push({ value, ops });
+        frames.push({ ops, value });
 
         return Promise.resolve();
       });
-      return { initial, frames, stop: () => watch.stop() };
+      return { frames, initial, stop: () => watch.stop() };
     }),
   );
 }
 
-export const fresh = Effect.fn("fresh")(function* (conversation: Conversation) {
+const fresh = Effect.fn("fresh")(function* (conversation: Conversation) {
   const state = yield* awaited(conversation.viewState(context));
   const value = state.value;
   state.dispose();
   return value;
 });
 
-export const committed = Effect.fn("committed")(function* (
+const committed = Effect.fn("committed")(function* (
   harness: Harness,
   conversation: Conversation,
-  record: ConversationView["conversation"],
+  recordInner: ConversationView["conversation"],
 ) {
   const docs: Record<string, unknown> = {};
   for (const token of [AgentDoc, LiveDoc, InboxDoc, ProviderDoc, UsageDoc] as const) {
@@ -54,13 +56,16 @@ export const committed = Effect.fn("committed")(function* (
     if (value !== undefined) docs[token.definition.kind] = value;
   }
   return {
-    conversation: record,
-    entries: (yield* awaited(conversation.context(context))).entries,
+    conversation: recordInner,
     docs,
+    entries: (yield* awaited(conversation.context(context))).entries,
   };
 });
 
-function replayImpl(initial: ConversationView, frames: readonly Frame[]): ConversationView {
+function replayImpl(
+  initial: ConversationView,
+  frames: readonly harnessViewSupportTypes.Frame[],
+): ConversationView {
   let value = initial;
   for (const frame of frames) {
     value = applyImmutable(value, frame.ops);
@@ -69,11 +74,26 @@ function replayImpl(initial: ConversationView, frames: readonly Frame[]): Conver
   return value;
 }
 
-export const replay: {
-  (frames: readonly Frame[]): (initial: ConversationView) => ReturnType<typeof replayImpl>;
-  (initial: ConversationView, frames: readonly Frame[]): ReturnType<typeof replayImpl>;
+const replay: {
+  (
+    frames: readonly harnessViewSupportTypes.Frame[],
+  ): (initial: ConversationView) => ReturnType<typeof replayImpl>;
+  (
+    initial: ConversationView,
+    frames: readonly harnessViewSupportTypes.Frame[],
+  ): ReturnType<typeof replayImpl>;
 } = dual(2, replayImpl);
 
-export const drained = Effect.fn("drained")(function* () {
+const drained = Effect.fn("drained")(function* () {
   yield* Effect.sleep(1);
 });
+
+const harnessViewSupport = {
+  committed,
+  drained,
+  fresh,
+  record,
+  replay,
+};
+
+export default harnessViewSupport;

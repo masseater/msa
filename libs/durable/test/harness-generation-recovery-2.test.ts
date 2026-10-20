@@ -3,9 +3,13 @@ import { AssistantEntry, LiveDoc } from "@msa/durable";
 import { Effect } from "effect";
 import { afterEach, describe, expect, it } from "vite-plus/test";
 
-import { runTaskId, checkpoint } from "./harness-generation-recovery-cases.ts";
-import { open, directories, sqlitePath } from "./harness-generation-recovery-support.ts";
-import { chatSetup, textOf, waitFor, awaited, removeDir, context } from "./support.ts";
+import harnessGenerationRecoveryCases from "./harness-generation-recovery-cases.ts";
+import harnessGenerationRecoverySupport from "./harness-generation-recovery-support.ts";
+import support from "./support.ts";
+
+const { checkpoint, runTaskId } = harnessGenerationRecoveryCases;
+const { directories, open, sqlitePath } = harnessGenerationRecoverySupport;
+const { awaited, chatSetup, context, removeDir, textOf, waitFor } = support;
 
 afterEach(() =>
   Effect.runPromise(
@@ -25,7 +29,7 @@ const resumesPollingDeferred = Effect.gen(function* () {
   let opened = yield* open(path, setup);
   opened.harness.resume();
   setup.settings.stream = { deferred: true };
-  const id = (yield* awaited(opened.root.submit({ type: "input", content: "hi" }, context))).id;
+  const id = (yield* awaited(opened.root.submit({ content: "hi", type: "input" }, context))).id;
   yield* waitFor(
     Effect.gen(function* () {
       const live = yield* awaited(opened.harness.snapshot(LiveDoc, opened.root.id, context));
@@ -37,8 +41,8 @@ const resumesPollingDeferred = Effect.gen(function* () {
 
   opened = yield* open(path, setup);
   expect(yield* checkpoint(opened.harness, taskId)).toMatchObject({
-    phase: "poll",
     attempt: 1,
+    phase: "poll",
     pollAt: 61_000,
   });
   now = 61_000;

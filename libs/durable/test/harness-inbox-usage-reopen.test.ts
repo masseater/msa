@@ -4,11 +4,17 @@ import { Effect } from "effect";
 import { afterEach, describe, expect, it } from "vite-plus/test";
 
 import { openNodeSqliteStorage } from "../src/storage/sqlite/node.ts";
-import { allEntries, chatSetup, openChat, waitFor } from "./chat-support.ts";
-import { awaited } from "./effect-support.ts";
-import { directories, answer } from "./harness-inbox-support.ts";
-import { makeTempFile, removeDir } from "./platform-support.ts";
-import { context } from "./session-support.ts";
+import chatSupport from "./chat-support.ts";
+import effectSupport from "./effect-support.ts";
+import harnessInboxSupport from "./harness-inbox-support.ts";
+import platformSupport from "./platform-support.ts";
+import sessionSupport from "./session-support.ts";
+
+const { allEntries, chatSetup, openChat, waitFor } = chatSupport;
+const { awaited } = effectSupport;
+const { answer, directories } = harnessInboxSupport;
+const { makeTempFile, removeDir } = platformSupport;
+const { context } = sessionSupport;
 
 afterEach(() =>
   Effect.runPromise(
@@ -22,13 +28,13 @@ afterEach(() =>
 const keepsUsageTotals = Effect.gen(function* () {
   const { directory, path } = yield* makeTempFile("msa-durable-usage-", "session.sqlite");
   directories.add(directory);
-  const setup = chatSetup({ tokensPerSecond: 200, tokenSize: { min: 1, max: 1 } });
+  const setup = chatSetup({ tokenSize: { max: 1, min: 1 }, tokensPerSecond: 200 });
   setup.faux.setResponses([answer("first"), answer("x".repeat(400)), answer("again")]);
   let opened = yield* openChat(yield* awaited(openNodeSqliteStorage(path)), setup);
   yield* awaited(
-    (yield* awaited(opened.root.submit({ type: "input", content: "a" }, context))).wait(context),
+    (yield* awaited(opened.root.submit({ content: "a", type: "input" }, context))).wait(context),
   );
-  yield* awaited(opened.root.submit({ type: "input", content: "b" }, context));
+  yield* awaited(opened.root.submit({ content: "b", type: "input" }, context));
   const live = opened.harness;
   yield* waitFor(
     Effect.gen(function* () {

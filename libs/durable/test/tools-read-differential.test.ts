@@ -8,7 +8,9 @@ import type { ToolDiagnostic, ToolExecutionApi } from "../src/harness/types.ts";
 import { detectSupportedImageMimeType } from "../src/tools/image.ts";
 import { createReadTool } from "../src/tools/read.ts";
 import { DEFAULT_MAX_BYTES, formatSize, truncateHead } from "../src/truncate.ts";
-import { awaited, makeTempDir, removeDirs, writeTempFile } from "./support.ts";
+import support from "./support.ts";
+
+const { awaited, makeTempDir, removeDirs, writeTempFile } = support;
 
 function selectLines(allLines: readonly string[], startLine: number, limit: number | undefined) {
   let selectedContent: string;
@@ -45,9 +47,9 @@ function truncationNotice(
     const end = characterEnd(lineBytes, DEFAULT_MAX_BYTES);
     outputText = new TextDecoder().decode(lineBytes.subarray(0, end));
     diagnostics.push({
-      severity: "warn",
       code: "truncated",
       message: `Line ${startLineDisplay} is ${formatSize(lineBytes.byteLength)}, exceeds the ${formatSize(DEFAULT_MAX_BYTES)} limit; showing its first ${formatSize(end)}. Use bash: sed -n '${startLineDisplay}p' ${path} | tail -c +${end + 1}`,
+      severity: "warn",
     });
     details = { truncation: { ...truncation, outputBytes: end, outputLines: 1 } };
   } else if (truncation.truncated) {
@@ -56,20 +58,20 @@ function truncationNotice(
     const limitText =
       truncation.truncatedBy === "lines" ? "" : ` (${formatSize(DEFAULT_MAX_BYTES)} limit)`;
     diagnostics.push({
-      severity: "info",
       code: "truncated",
       message: `Showing lines ${startLineDisplay}-${endLineDisplay} of ${totalFileLines}${limitText}. Use offset=${nextOffset} to continue.`,
+      severity: "info",
     });
     details = { truncation };
   } else if (userLimitedLines !== undefined && startLine + userLimitedLines < allLines.length) {
     const remaining = allLines.length - (startLine + userLimitedLines);
     const nextOffset = startLine + userLimitedLines + 1;
     diagnostics.push({
-      severity: "info",
       message: `${remaining} more lines in file. Use offset=${nextOffset} to continue.`,
+      severity: "info",
     });
   }
-  return { outputText, details, diagnostics };
+  return { details, diagnostics, outputText };
 }
 
 function referenceRead(
@@ -81,8 +83,8 @@ function referenceRead(
   const mimeType = detectSupportedImageMimeType(bytes);
   if (mimeType !== undefined && mimeType !== "") {
     return {
-      output: [{ type: "image", data: Buffer.from(bytes).toString("base64"), mimeType }],
-      diagnostics: [{ severity: "info", code: "image", message: `Read image file [${mimeType}].` }],
+      diagnostics: [{ code: "image", message: `Read image file [${mimeType}].`, severity: "info" }],
+      output: [{ data: Buffer.from(bytes).toString("base64"), mimeType, type: "image" }],
     };
   }
   const textContent = new TextDecoder().decode(bytes);
@@ -99,7 +101,7 @@ function referenceRead(
     path,
   );
   return {
-    output: outputText === "" ? [] : [{ type: "text", text: outputText }],
+    output: outputText === "" ? [] : [{ text: outputText, type: "text" }],
     ...(details === undefined ? {} : { details }),
     diagnostics,
   };
@@ -152,12 +154,12 @@ const LIMITS = [undefined, 0, 1, 2, -3, -1e20, 1.5, 7, 2000, 2500, 1e20, Number.
 
 function apiFor(env: NodeExecutionEnv): ToolExecutionApi {
   return {
+    agent: () => Promise.resolve({}),
+    details: () => Promise.resolve(),
+    diagnostic: () => {},
     env,
     output: () => {},
     outputWindow: undefined,
-    diagnostic: () => {},
-    details: () => Promise.resolve(),
-    agent: () => Promise.resolve({}),
   } as unknown as ToolExecutionApi;
 }
 

@@ -4,8 +4,11 @@ import { Effect } from "effect";
 import { describe, expect, it } from "vite-plus/test";
 
 import { formatSize, truncateHead } from "../src/truncate.ts";
-import { fromJsonText, toJsonText } from "./effect-support.ts";
-import { runCommandOrFail } from "./platform-support.ts";
+import effectSupport from "./effect-support.ts";
+import platformSupport from "./platform-support.ts";
+
+const { fromJsonText, toJsonText } = effectSupport;
+const { runCommandOrFail } = platformSupport;
 
 const encoder = new TextEncoder();
 
@@ -62,27 +65,27 @@ describe("truncate utilities", () => {
     const content = `${Array.from({ length: 3 }, () => "line").join("\n")}\n`;
     const head = truncateHead(content, { maxBytes: 100, maxLines: 3 });
 
-    expect(head).toMatchObject({ truncated: false, totalLines: 3, outputLines: 3 });
+    expect(head).toMatchObject({ outputLines: 3, totalLines: 3, truncated: false });
   });
 
   it("truncates head by line limits", () => {
     const content = "one\ntwo\nthree\nfour";
     expect(truncateHead(content, { maxBytes: 100, maxLines: 2 })).toMatchObject({
       content: "one\ntwo",
+      outputLines: 2,
+      totalLines: 4,
       truncated: true,
       truncatedBy: "lines",
-      totalLines: 4,
-      outputLines: 2,
     });
   });
 
   it("reports bytes when only a trailing newline exceeds limits at the line cap", () => {
     expect(truncateHead("hello\nworld\n", { maxBytes: 11, maxLines: 2 })).toMatchObject({
       content: "hello\nworld",
+      outputLines: 2,
+      totalLines: 2,
       truncated: true,
       truncatedBy: "bytes",
-      totalLines: 2,
-      outputLines: 2,
     });
   });
 

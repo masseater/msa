@@ -4,18 +4,20 @@ import { Effect } from "effect";
 import { afterEach, describe, expect, it } from "vite-plus/test";
 
 import { openNodeSqliteStorage } from "../src/storage/sqlite/node.ts";
-import { directories } from "./harness-submissions-support.ts";
-import {
-  chatSetup,
-  openChat,
-  unanswered,
+import directories from "./harness-submissions-support.ts";
+import support from "./support.ts";
+
+const {
+  ControlledStorage,
   awaited,
+  chatSetup,
+  context,
   joinPath,
   makeTempDir,
+  openChat,
   removeDir,
-  ControlledStorage,
-  context,
-} from "./support.ts";
+  unanswered,
+} = support;
 
 afterEach(() =>
   Effect.runPromise(
@@ -39,7 +41,7 @@ const reacquiresSubmissionReopen = Effect.gen(function* () {
   setup.faux.setResponses([busy.step, fauxAssistantMessage("after reopen")]);
   let opened = yield* openChat(yield* awaited(openNodeSqliteStorage(path)), setup);
   const id = (yield* awaited(
-    opened.root.submit({ type: "input", content: "hi", requestId: "print" }, context),
+    opened.root.submit({ content: "hi", requestId: "print", type: "input" }, context),
   )).id;
   yield* awaited(busy.reached);
   yield* awaited(opened.harness.close(context));
@@ -58,7 +60,7 @@ const reacquiresSubmissionReopen = Effect.gen(function* () {
     yield* awaited((yield* awaited(opened.harness.submission(id, context)))!.wait(context)),
   ).toEqual(settled);
   const again = yield* awaited(
-    opened.root.submit({ type: "input", content: "hi", requestId: "print" }, context),
+    opened.root.submit({ content: "hi", requestId: "print", type: "input" }, context),
   );
   expect(again.id).toBe(id);
   yield* awaited(opened.harness.close(context));
@@ -75,7 +77,7 @@ const enablesSchedulingCaller = Effect.gen(function* () {
   const { harness, root } = yield* openChat(new ControlledStorage(), setup);
   expect(
     (yield* awaited(
-      (yield* awaited(root.submit({ type: "input", content: "hi" }, context))).wait(context),
+      (yield* awaited(root.submit({ content: "hi", type: "input" }, context))).wait(context),
     )).status,
   ).toBe("done");
   yield* awaited(harness.close(context));

@@ -4,9 +4,11 @@ import { createModels } from "@msa/ai/models";
 import { BACKGROUND_CONTEXT } from "@msa/chord/context";
 import { Console, Effect } from "effect";
 
-import { createRegistry, Harness } from "../../src/harness/index.ts";
+import { Harness, createRegistry } from "../../src/harness/index.ts";
 import { MemoryStorage } from "../../src/storage/memory.ts";
-import { awaited } from "../effect-support.ts";
+import effectSupport from "../effect-support.ts";
+
+const { awaited } = effectSupport;
 
 const context = BACKGROUND_CONTEXT;
 
@@ -25,39 +27,39 @@ const mainStep1 = Effect.gen(function* () {
     stopReason?: StopReason,
   ): AssistantMessage {
     return {
-      role: "assistant",
-      content: [
-        { type: "text", text },
-        ...calls.map((id) => ({ type: "toolCall" as const, id, name: "read", arguments: {} })),
-      ],
       api: "example",
-      provider: "example",
+      content: [
+        { text, type: "text" },
+        ...calls.map((id) => ({ arguments: {}, id, name: "read", type: "toolCall" as const })),
+      ],
       model: "example",
-      usage: {
-        input: 0,
-        output: 0,
-        cacheRead: 0,
-        cacheWrite: 0,
-        totalTokens: 0,
-        cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0, total: 0 },
-      },
+      provider: "example",
+      role: "assistant",
       stopReason: stopReason ?? (calls.length > 0 ? "toolUse" : "stop"),
       timestamp: 2,
+      usage: {
+        cacheRead: 0,
+        cacheWrite: 0,
+        cost: { cacheRead: 0, cacheWrite: 0, input: 0, output: 0, total: 0 },
+        input: 0,
+        output: 0,
+        totalTokens: 0,
+      },
     };
   }
-  return { harness, assistantMessage };
+  return { assistantMessage, harness };
 });
 
 const mainStep2 = Effect.gen(function* () {
   const { harness, assistantMessage } = yield* mainStep1;
   function toolResultMessage(id: string): ToolResultMessage {
     return {
+      content: [{ text: `file ${id}`, type: "text" }],
+      isError: false,
       role: "toolResult",
+      timestamp: 3,
       toolCallId: id,
       toolName: "read",
-      content: [{ type: "text", text: `file ${id}` }],
-      isError: false,
-      timestamp: 3,
     };
   }
 
@@ -83,21 +85,21 @@ const mainStep2 = Effect.gen(function* () {
   );
   const say = (kind: string, ...model: Message[]) =>
     transcript.commit((tx) => tx.appendEntry(transcript.id, { kind, model }), context);
-  return { harness, assistantMessage, toolResultMessage, show, transcript, say };
+  return { assistantMessage, harness, say, show, toolResultMessage, transcript };
 });
 
 const mainStep3 = Effect.gen(function* () {
   const { harness, assistantMessage, toolResultMessage, show, transcript, say } = yield* mainStep2;
   const question = yield* awaited(
-    say("message", { role: "user", content: "read a and b", timestamp: 1 }),
+    say("message", { content: "read a and b", role: "user", timestamp: 1 }),
   );
   yield* awaited(say("message", assistantMessage("I crashed", [], "aborted")));
   const calls = yield* awaited(say("message", assistantMessage("reading", ["a", "b"])));
   yield* awaited(say("message", toolResultMessage("b")));
   yield* awaited(
     say("msa.system", {
-      role: "system",
       content: "",
+      role: "system",
       sections: { cwd: "<cwd>/repo</cwd>" },
       timestamp: 4,
     }),
@@ -108,26 +110,26 @@ const mainStep3 = Effect.gen(function* () {
     transcript.commit(
       (tx) =>
         tx.appendEntry(transcript.id, {
-          kind: "edit",
           data: "user fixed a typo",
           edits: [
             {
-              target: question.id,
               action: "replace",
-              messages: [{ role: "user", content: "read files a and b", timestamp: 1 }],
+              messages: [{ content: "read files a and b", role: "user", timestamp: 1 }],
+              target: question.id,
             },
           ],
+          kind: "edit",
         }),
       context,
     ),
   );
   yield* awaited(
     transcript.commit(
-      (tx) => tx.appendEntry(transcript.id, { kind: "note", data: "display only" }),
+      (tx) => tx.appendEntry(transcript.id, { data: "display only", kind: "note" }),
       context,
     ),
   );
-  return { harness, show, transcript, calls };
+  return { calls, harness, show, transcript };
 });
 
 const main = Effect.gen(function* () {
@@ -148,9 +150,9 @@ const main = Effect.gen(function* () {
     transcript.commit(
       (tx) =>
         tx.appendEntry(transcript.id, {
-          kind: "summary",
           head: "self",
-          model: [{ role: "user", content: "Summary: a and b are fine.", timestamp: 5 }],
+          kind: "summary",
+          model: [{ content: "Summary: a and b are fine.", role: "user", timestamp: 5 }],
         }),
       context,
     ),

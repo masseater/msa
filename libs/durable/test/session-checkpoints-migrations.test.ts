@@ -1,81 +1,84 @@
 import type { Op } from "@msa/chord/delta";
-import { defineDoc, type JsonObject, type StorageWrite } from "@msa/durable";
+import { type JsonObject, type StorageWrite, defineDoc } from "@msa/durable";
 import { Effect } from "effect";
 import { describe, expect, it } from "vite-plus/test";
 
-import { awaited } from "./effect-support.ts";
-import { documentWrites } from "./session-checkpoints-migrations-support.ts";
-import { context, documentChanges, flush, openTestSession } from "./session-support.ts";
+import effectSupport from "./effect-support.ts";
+import documentWrites from "./session-checkpoints-migrations-support.ts";
+import sessionSupport from "./session-support.ts";
+
+const { awaited } = effectSupport;
+const { context, documentChanges, flush, openTestSession } = sessionSupport;
 
 function checkpointDocs() {
   const calls: { value: Readonly<JsonObject>; ops: readonly Op[] }[] = [];
   const falseCalls: { value: Readonly<JsonObject>; ops: readonly Op[] }[] = [];
   const BaseDoc = defineDoc<{ items: string[] }>({
-    kind: "checkpoint.base",
-    version: 1,
-    scope: "session",
-    initial: () => ({ items: [] }),
     checkpointWhen: (value, ops) => {
-      calls.push({ value, ops });
+      calls.push({ ops, value });
       return true;
     },
+    initial: () => ({ items: [] }),
+    kind: "checkpoint.base",
+    scope: "session",
+    version: 1,
   });
   const DeltaDoc = defineDoc<{ count: number }>({
-    kind: "checkpoint.delta",
-    version: 1,
-    scope: "session",
-    initial: () => ({ count: 0 }),
     checkpointWhen: (value, ops) => {
-      falseCalls.push({ value, ops });
+      falseCalls.push({ ops, value });
       return false;
     },
+    initial: () => ({ count: 0 }),
+    kind: "checkpoint.delta",
+    scope: "session",
+    version: 1,
   });
   const DefaultDoc = defineDoc<{ count: number }>({
-    kind: "checkpoint.default",
-    version: 1,
-    scope: "session",
     initial: () => ({ count: 0 }),
+    kind: "checkpoint.default",
+    scope: "session",
+    version: 1,
   });
-  return { calls, falseCalls, BaseDoc, DeltaDoc, DefaultDoc };
+  return { BaseDoc, DefaultDoc, DeltaDoc, calls, falseCalls };
 }
 
 function countingDocVersions() {
   const seen: number[] = [];
   const V1 = defineDoc<{ count: number }>({
-    kind: "checkpoint.deltas-since-base",
-    version: 1,
-    scope: "session",
-    initial: () => ({ count: 0 }),
     checkpointWhen: (_value, _ops, info) => {
       seen.push(info.deltasSinceBase);
       return info.deltasSinceBase >= 2;
     },
+    initial: () => ({ count: 0 }),
+    kind: "checkpoint.deltas-since-base",
+    scope: "session",
+    version: 1,
   });
   const V2 = defineDoc<{ count: number }>({
-    kind: "checkpoint.deltas-since-base",
-    version: 2,
-    scope: "session",
-    initial: () => ({ count: 0 }),
-    migrate: (value) => ({ count: value["count"] as number }),
     checkpointWhen: (_value, _ops, info) => {
       seen.push(info.deltasSinceBase);
       return false;
     },
+    initial: () => ({ count: 0 }),
+    kind: "checkpoint.deltas-since-base",
+    migrate: (value) => ({ count: value["count"] as number }),
+    scope: "session",
+    version: 2,
   });
-  return { seen, V1, V2 };
+  return { V1, V2, seen };
 }
 
 const callsCheckpointWhenDefinition = Effect.gen(function* () {
   const runPromise = Effect.runPromiseWith(yield* Effect.context<never>());
 
   const Doc = defineDoc<{ count: number }>({
-    kind: "checkpoint.receiver",
-    version: 1,
-    scope: "session",
-    initial: () => ({ count: 0 }),
     checkpointWhen(value) {
       return value.count === this.initial().count + 2;
     },
+    initial: () => ({ count: 0 }),
+    kind: "checkpoint.receiver",
+    scope: "session",
+    version: 1,
   });
   const { session, storage } = openTestSession();
   for (const count of [0, 1, 2]) {
@@ -146,7 +149,7 @@ const selectsBasesOnlyStep1 = Effect.gen(function* () {
     .filter((write) => write.type === "document.change");
   expect(writes.map((write) => write.content.kind)).toEqual(["base", "delta", "delta"]);
   expect(calls).toHaveLength(1);
-  return { calls, falseCalls, BaseDoc, DeltaDoc, session, publications, writes };
+  return { BaseDoc, DeltaDoc, calls, falseCalls, publications, session, writes };
 });
 
 const selectsBasesOnly = Effect.gen(function* () {
@@ -184,12 +187,12 @@ const passesStoredDelta = Effect.gen(function* () {
   const increment = (token: typeof V1): Promise<void> =>
     runPromise(
       Effect.gen(function* () {
-        const runPromise = Effect.runPromiseWith(yield* Effect.context<never>());
+        const runNested = Effect.runPromiseWith(yield* Effect.context<never>());
 
         yield* awaited(
           session.commit(
             (tx) =>
-              runPromise(
+              runNested(
                 Effect.gen(function* () {
                   (yield* awaited(tx.doc(token))).count++;
                 }),

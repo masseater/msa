@@ -5,23 +5,25 @@ import { Console, Effect } from "effect";
 import { defineDoc, defineDocFamily } from "../src/documents.ts";
 import { createSession } from "../src/session/create-session.ts";
 import { MemoryStorage } from "../src/storage/memory.ts";
-import { awaited } from "./effect-support.ts";
+import effectSupport from "./effect-support.ts";
+
+const { awaited } = effectSupport;
 
 type Entry = { key: string; issued: number; at: number };
 
 const Journal = defineDoc<{ entries: Entry[] }>({
-  kind: "bench.journal",
-  version: 1,
-  scope: "session",
   initial: () => ({ entries: [] }),
+  kind: "bench.journal",
+  scope: "session",
+  version: 1,
 });
 
 const Member = defineDocFamily<{ issued: number; at: number }, null>({
-  kind: "bench.member",
-  version: 1,
-  scope: "session",
   family: true,
-  initial: () => ({ issued: 0, at: 0 }),
+  initial: () => ({ at: 0, issued: 0 }),
+  kind: "bench.member",
+  scope: "session",
+  version: 1,
 });
 
 const run = Effect.fn("run")(function* (kind: "array" | "family", n: number) {
@@ -29,16 +31,16 @@ const run = Effect.fn("run")(function* (kind: "array" | "family", n: number) {
 
   const session = createSession(new MemoryStorage());
   const started = performance.now();
-  for (const i of Array.from({ length: n }, (_, i) => i)) {
+  for (const i of Array.from({ length: n }, (_, iInner) => iInner)) {
     yield* awaited(
       session.commit(
         (tx) =>
           runPromise(
             Effect.gen(function* () {
               if (kind === "array")
-                (yield* awaited(tx.doc(Journal))).entries.push({ key: `c${i}`, issued: i, at: i });
+                (yield* awaited(tx.doc(Journal))).entries.push({ at: i, issued: i, key: `c${i}` });
               else
-                Object.assign(yield* awaited(tx.doc(Member, `c${i}`, null)), { issued: i, at: i });
+                Object.assign(yield* awaited(tx.doc(Member, `c${i}`, null)), { at: i, issued: i });
             }),
           ),
         context,

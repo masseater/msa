@@ -1,20 +1,23 @@
-import { defineDoc, type EntryId } from "@msa/durable";
+import { type EntryId, defineDoc } from "@msa/durable";
 import { Effect } from "effect";
 import { describe, expect, it } from "vite-plus/test";
 
-import { awaited } from "./effect-support.ts";
-import { context, createConversation, openTestSession } from "./session-support.ts";
+import effectSupport from "./effect-support.ts";
+import sessionSupport from "./session-support.ts";
+
+const { awaited } = effectSupport;
+const { context, createConversation, openTestSession } = sessionSupport;
 
 const usesFinalDocument = Effect.gen(function* () {
   const runPromise = Effect.runPromiseWith(yield* Effect.context<never>());
 
   const Doc = defineDoc<{ value: string }>({
-    kind: "fork.same-commit",
-    version: 1,
-    scope: "conversation",
-    history: "rewindable",
     fork: "asOf",
+    history: "rewindable",
     initial: () => ({ value: "initial" }),
+    kind: "fork.same-commit",
+    scope: "conversation",
+    version: 1,
   });
   const { session } = openTestSession();
   const parentId = yield* awaited(createConversation(session));
@@ -26,8 +29,9 @@ const usesFinalDocument = Effect.gen(function* () {
           Effect.gen(function* () {
             forkAt = (yield* awaited(tx.appendEntry(parentId, { kind: "included" }))).id;
             (yield* awaited(tx.doc(Doc, parentId))).value = "final-state-of-commit";
-            const excluded = (yield* awaited(tx.appendEntry(parentId, { kind: "excluded" }))).id;
-            return excluded;
+            const excludedInner = (yield* awaited(tx.appendEntry(parentId, { kind: "excluded" })))
+              .id;
+            return excludedInner;
           }),
         ),
       context,

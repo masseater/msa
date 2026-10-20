@@ -98,9 +98,9 @@ describe("LineScanner", () => {
         expect(decode(scan.lastLineStart, lastEnd), message).toBe(lines[lastLine]);
       } else {
         expect(scan, message).toMatchObject({
-          start: file.length,
           end: file.length,
           selectedBytes: 0,
+          start: file.length,
         });
       }
     }

@@ -1,6 +1,6 @@
 import { type StorageWrite } from "@msa/durable";
 
-export function documentWrites(writes: readonly StorageWrite[]): readonly StorageWrite[] {
+function documentWrites(writes: readonly StorageWrite[]): readonly StorageWrite[] {
   return writes.filter(
     (write) =>
       write.type === "document.create" ||
@@ -8,3 +8,5 @@ export function documentWrites(writes: readonly StorageWrite[]): readonly Storag
       write.type === "document.retire",
   );
 }
+
+export default documentWrites;

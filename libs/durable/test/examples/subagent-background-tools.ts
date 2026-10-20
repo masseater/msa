@@ -5,49 +5,51 @@ import { Effect } from "effect";
 import {
   AssistantEntry,
   type ConversationId,
-  configure,
-  defineDoc,
-  defineExtension,
-  defineTask,
-  defineTool,
   type EntryId,
   LiveDoc,
   type TaskId,
   type ToolExecutionApi,
   type Tx,
+  configure,
+  defineDoc,
+  defineExtension,
+  defineTask,
+  defineTool,
 } from "../../src/index.ts";
-import { awaited } from "../effect-support.ts";
+import effectSupport from "../effect-support.ts";
+
+const { awaited } = effectSupport;
 
 type Subagent = {
   conversationId: ConversationId;
   reported: EntryId[];
 };
 
-export const Subagents = defineDoc<{
+const Subagents = defineDoc<{
   agents: Record<string, Subagent>;
   reporters: Record<string, TaskId>;
 }>({
-  kind: "app.subagents",
-  version: 1,
-  scope: "conversation",
-  history: "latest",
   fork: "initial",
+  history: "latest",
   initial: () => ({ agents: {}, reporters: {} }),
+  kind: "app.subagents",
+  scope: "conversation",
+  version: 1,
 });
 
 const Anchor = defineTask<null, { phase: "done" }, null>({
-  name: "app.subagent-anchor",
-  version: 1,
+  abort: (_anchor, runtime, taskContext) =>
+    runtime.commit(() => ({ outcome: { status: "aborted" }, status: "terminal" }), taskContext),
   initial: () => ({ phase: "done" }),
+  name: "app.subagent-anchor",
   phases: {
     done: (_anchor, runtime, taskContext) =>
       runtime.commit(
-        () => ({ status: "terminal", outcome: { status: "completed", result: null } }),
+        () => ({ outcome: { result: null, status: "completed" }, status: "terminal" }),
         taskContext,
       ),
   },
-  abort: (_anchor, runtime, taskContext) =>
-    runtime.commit(() => ({ status: "terminal", outcome: { status: "aborted" } }), taskContext),
+  version: 1,
 });
 
 type ReporterInput = {
@@ -61,14 +63,15 @@ type ReporterState = { phase: "deliver" } | { phase: "report"; report?: string }
 
 const next = (report?: string) =>
   ({
-    status: "running",
     checkpoint: { phase: "report", ...(report === undefined ? {} : { report }) },
+    status: "running",
   }) as const;
 
 const Reporter = defineTask<ReporterInput, ReporterState, null>({
-  name: "app.subagent-reporter",
-  version: 1,
+  abort: (_reporter, runtime, taskContext) =>
+    runtime.commit(() => ({ outcome: { status: "aborted" }, status: "terminal" }), taskContext),
   initial: () => ({ phase: "deliver" }),
+  name: "app.subagent-reporter",
   phases: {
     deliver: (reporter, runtime, taskContext) =>
       Effect.runPromise(
@@ -78,8 +81,8 @@ const Reporter = defineTask<ReporterInput, ReporterState, null>({
           const { name, conversationId, message, followUp } = reporter.input;
           const subagent = (yield* awaited(runtime.conversation(conversationId, taskContext)))!;
           const request = {
-            type: "input",
             content: message,
+            type: "input",
             whenBusy: followUp ? "followUp" : "steer",
           } as const;
           const submission = yield* awaited(
@@ -121,25 +124,24 @@ const Reporter = defineTask<ReporterInput, ReporterState, null>({
             const main = (yield* awaited(
               runtime.conversation(runtime.conversationId, taskContext),
             ))!;
-            const input = { type: "input", content: report, whenBusy: "followUp" } as const;
+            const input = { content: report, type: "input", whenBusy: "followUp" } as const;
             yield* awaited(
               main.submit({ ...input, requestId: `subagent-report:${reporter.id}` }, taskContext),
             );
           }
           yield* awaited(
             runtime.commit(
-              () => ({ status: "terminal", outcome: { status: "completed", result: null } }),
+              () => ({ outcome: { result: null, status: "completed" }, status: "terminal" }),
               taskContext,
             ),
           );
         }),
       ),
   },
-  abort: (_reporter, runtime, taskContext) =>
-    runtime.commit(() => ({ status: "terminal", outcome: { status: "aborted" } }), taskContext),
+  version: 1,
 });
 
-export function textOf(message: AssistantMessage | undefined): string {
+function textOf(message: AssistantMessage | undefined): string {
   return (message?.content ?? []).flatMap((c) => (c.type === "text" ? [c.text] : [])).join("");
 }
 
@@ -174,7 +176,7 @@ function startReporter(
   return Effect.runPromise(
     Effect.gen(function* () {
       const state = yield* awaited(tx.doc(Subagents, api.conversationId));
-      const background = { ownership: { kind: "conversation" }, background: true } as const;
+      const background = { background: true, ownership: { kind: "conversation" } } as const;
       if (action === "spawn") {
         if (Object.hasOwn(state.agents, name)) return `${name} already exists; use send.`;
         const anchor = yield* awaited(tx.createTask(Anchor, null, background));
@@ -191,10 +193,10 @@ function startReporter(
       }
       const conversationId = state.agents[name]!.conversationId;
       const input = {
-        name,
         conversationId,
-        message,
         followUp: action === "send" && followUp === true,
+        message,
+        name,
       };
       state.reporters[api.taskId] = yield* awaited(tx.createTask(Reporter, input, background));
       return action === "send" ? `Sent to ${name}.` : `Started ${name}.`;
@@ -203,32 +205,19 @@ function startReporter(
 }
 
 const subagentTool = defineTool({
-  name: "subagent",
   description:
     "Manage persistent subagents that work in the background. Actions: spawn (name, message), send (name, message; " +
     "followUp: true queues it after the current answer instead of steering), stop (name: aborts its current work), " +
     "status (name, or all subagents without one). Answers are reported back to you when they arrive.",
-  parameters: Type.Object({
-    action: Type.Union([
-      Type.Literal("spawn"),
-      Type.Literal("send"),
-      Type.Literal("stop"),
-      Type.Literal("status"),
-    ]),
-    name: Type.Optional(Type.String()),
-    message: Type.Optional(Type.String()),
-    followUp: Type.Optional(Type.Boolean()),
-  }),
-  replay: "unsafe",
   execute: (args, api, callContext) =>
     Effect.runPromise(
       Effect.gen(function* () {
         const { action, name, message, followUp } = args;
         const reply = (text: string, conversationId?: ConversationId) => ({
-          content: [{ type: "text" as const, text }],
+          content: [{ text, type: "text" as const }],
           ...(conversationId === undefined || name === undefined
             ? {}
-            : { details: { name, conversationId } }),
+            : { details: { conversationId, name } }),
         });
         const registry = (yield* awaited(
           api.snapshot(Subagents, api.conversationId, callContext),
@@ -255,7 +244,7 @@ const subagentTool = defineTool({
 
         const result = yield* awaited(
           api.commit(
-            (tx) => startReporter(tx, api, { action, name, message, followUp }),
+            (tx) => startReporter(tx, api, { action, followUp, message, name }),
             callContext,
           ),
         );
@@ -264,10 +253,31 @@ const subagentTool = defineTool({
         return reply(result, current?.conversationId);
       }),
     ),
+  name: "subagent",
+  parameters: Type.Object({
+    action: Type.Union([
+      Type.Literal("spawn"),
+      Type.Literal("send"),
+      Type.Literal("stop"),
+      Type.Literal("status"),
+    ]),
+    followUp: Type.Optional(Type.Boolean()),
+    message: Type.Optional(Type.String()),
+    name: Type.Optional(Type.String()),
+  }),
+  replay: "unsafe",
 });
 
-export const SubagentTools = defineExtension({
+const SubagentTools = defineExtension({
   name: "subagent-tools",
   tasks: [Anchor, Reporter],
   tools: [subagentTool],
 });
+
+const subagentBackgroundTools = {
+  SubagentTools,
+  Subagents,
+  textOf,
+};
+
+export default subagentBackgroundTools;

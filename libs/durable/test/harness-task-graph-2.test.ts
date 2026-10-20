@@ -1,9 +1,11 @@
-import { defineTask, type EntryId } from "@msa/durable";
+import { type EntryId, defineTask } from "@msa/durable";
 import { MemoryStorage } from "@msa/durable/storage/memory";
 import { Effect } from "effect";
 import { describe, expect, it } from "vite-plus/test";
 
-import { awaited, context, completed, deferred, eventually, openTasks } from "./support.ts";
+import support from "./support.ts";
+
+const { awaited, completed, context, deferred, eventually, openTasks } = support;
 
 const listsOwnedConversationsStep1 = Effect.gen(function* () {
   const runPromise = Effect.runPromiseWith(yield* Effect.context<never>());
@@ -11,19 +13,19 @@ const listsOwnedConversationsStep1 = Effect.gen(function* () {
   const gate = deferred();
   const created: number[] = [];
   const Spawner = defineTask<{ at: EntryId }, { phase: "spawn" }, null>({
-    name: "test.graph-spawner",
-    version: 1,
+    abort: () => Promise.resolve(),
     initial: () => ({ phase: "spawn" }),
+    name: "test.graph-spawner",
     phases: {
       spawn: (task, runtime, ctx) =>
         runPromise(
           Effect.gen(function* () {
-            const runPromise = Effect.runPromiseWith(yield* Effect.context<never>());
+            const runNested = Effect.runPromiseWith(yield* Effect.context<never>());
 
             yield* awaited(
               runtime.commit(
                 (tx) =>
-                  runPromise(
+                  runNested(
                     Effect.gen(function* () {
                       const ownership = { kind: "task", taskId: task.id } as const;
                       const [forked, fresh] = yield* awaited(
@@ -46,10 +48,10 @@ const listsOwnedConversationsStep1 = Effect.gen(function* () {
           }),
         ),
     },
-    abort: () => Promise.resolve(),
+    version: 1,
   });
   const { harness } = yield* openTasks(new MemoryStorage(), [Spawner]);
-  return { runPromise, gate, created, Spawner, harness };
+  return { Spawner, created, gate, harness, runPromise };
 });
 
 const listsOwnedConversations = Effect.gen(function* () {

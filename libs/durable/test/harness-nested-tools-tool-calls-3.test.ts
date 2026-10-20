@@ -4,28 +4,13 @@ import { MemoryStorage } from "@msa/durable/storage/memory";
 import { Effect } from "effect";
 import { afterEach, describe, expect, it } from "vite-plus/test";
 
-import {
-  directories,
-  results,
-  toolTasks,
-  runOnce,
-  text,
-  DONE,
-  call,
-  tool,
-  echoTool,
-} from "./harness-nested-tools-support.ts";
-import {
-  allEntries,
-  chatSetup,
-  openChat,
-  awaited,
-  addTool,
-  removeDir,
-  context,
-  aborted,
-  deferred,
-} from "./support.ts";
+import harnessNestedToolsSupport from "./harness-nested-tools-support.ts";
+import support from "./support.ts";
+
+const { DONE, call, directories, echoTool, results, runOnce, text, tool, toolTasks } =
+  harnessNestedToolsSupport;
+const { aborted, addTool, allEntries, awaited, chatSetup, context, deferred, openChat, removeDir } =
+  support;
 
 afterEach(() =>
   Effect.runPromise(
@@ -63,7 +48,7 @@ const abortsNestedCall = Effect.gen(function* () {
     const input = task.input as ToolTaskInput;
     return input.kind === "nested" && input.call.name === "hang";
   });
-  expect(late!.state).toMatchObject({ status: "terminal", outcome: { status: "aborted" } });
+  expect(late!.state).toMatchObject({ outcome: { status: "aborted" }, status: "terminal" });
   expect(yield* awaited(harness.snapshot(LiveDoc, root.id, context))).toEqual({});
   yield* awaited(harness.close(context));
 });
@@ -189,7 +174,7 @@ const runsNestedCallsStep1 = Effect.gen(function* () {
           const result = yield* awaited(
             api.executeTool("echo", { text: "deep" }, callContext, { key: "x" }),
           );
-          return { output: [{ type: "text", text: text(result) }] };
+          return { output: [{ text: text(result), type: "text" }] };
         }),
       ),
     ),
@@ -200,7 +185,7 @@ const runsNestedCallsStep1 = Effect.gen(function* () {
       runPromise(
         Effect.gen(function* () {
           const result = yield* awaited(api.executeTool("inner", {}, callContext));
-          return { output: [{ type: "text", text: text(result) }] };
+          return { output: [{ text: text(result), type: "text" }] };
         }),
       ),
     ),
@@ -224,7 +209,7 @@ const runsNestedCallsStep1 = Effect.gen(function* () {
 const runsNestedCalls = Effect.gen(function* () {
   const { harness, root, stream, tools } = yield* runsNestedCallsStep1;
   yield* awaited(
-    (yield* awaited(root.submit({ type: "input", content: "go" }, context))).wait(context),
+    (yield* awaited(root.submit({ content: "go", type: "input" }, context))).wait(context),
   );
   yield* awaited(harness.waitForIdle(context));
   yield* awaited(stream.stop());

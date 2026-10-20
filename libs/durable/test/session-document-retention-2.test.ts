@@ -3,34 +3,34 @@ import { Effect } from "effect";
 import { describe, expect, it } from "vite-plus/test";
 
 import { SessionImpl } from "../src/session/session.ts";
-import { awaited } from "./effect-support.ts";
-import {
-  settleLine,
-  type Counter,
-  CounterDoc,
-  bump,
-  open,
-} from "./session-document-retention-support.ts";
-import { ControlledStorage, context, createConversation } from "./session-support.ts";
-import { eventually } from "./task-support.ts";
+import effectSupport from "./effect-support.ts";
+import sessionDocumentRetentionSupport from "./session-document-retention-support.ts";
+import type sessionDocumentRetentionSupportTypes from "./session-document-retention-support.types.ts";
+import sessionSupport from "./session-support.ts";
+import taskSupport from "./task-support.ts";
 
-const RewindableDoc = defineDoc<Counter>({
-  kind: "test.retention.rewindable",
-  version: 1,
-  scope: "conversation",
-  history: "rewindable",
+const { awaited } = effectSupport;
+const { CounterDoc, bump, open, settleLine } = sessionDocumentRetentionSupport;
+const { ControlledStorage, context, createConversation } = sessionSupport;
+const { eventually } = taskSupport;
+
+const RewindableDoc = defineDoc<sessionDocumentRetentionSupportTypes.Counter>({
   fork: "asOf",
+  history: "rewindable",
   initial: () => ({ count: 0 }),
+  kind: "test.retention.rewindable",
+  scope: "conversation",
+  version: 1,
 });
 
 const EventDoc = defineDocFamily<{ seq: number }, number>({
-  kind: "test.retention.event",
-  version: 1,
-  scope: "conversation",
-  history: "latest",
-  fork: "initial",
   family: true,
+  fork: "initial",
+  history: "latest",
   initial: (seq) => ({ seq }),
+  kind: "test.retention.event",
+  scope: "conversation",
+  version: 1,
 });
 
 const keepsHistoryForksStep1 = Effect.gen(function* () {
@@ -44,7 +44,7 @@ const keepsHistoryForksStep1 = Effect.gen(function* () {
         runPromise(
           Effect.gen(function* () {
             (yield* awaited(tx.doc(RewindableDoc, conversationId))).count = 1;
-            return (yield* awaited(tx.appendEntry(conversationId, { kind: "note", data: null })))
+            return (yield* awaited(tx.appendEntry(conversationId, { data: null, kind: "note" })))
               .id;
           }),
         ),
@@ -58,7 +58,7 @@ const keepsHistoryForksStep1 = Effect.gen(function* () {
         runPromise(
           Effect.gen(function* () {
             (yield* awaited(tx.doc(RewindableDoc, conversationId))).count = 2;
-            return (yield* awaited(tx.appendEntry(conversationId, { kind: "note", data: null })))
+            return (yield* awaited(tx.appendEntry(conversationId, { data: null, kind: "note" })))
               .id;
           }),
         ),
@@ -76,7 +76,7 @@ const keepsHistoryForksStep1 = Effect.gen(function* () {
   ).toEqual({
     count: 2,
   });
-  return { runPromise, session, conversationId, first };
+  return { conversationId, first, runPromise, session };
 });
 
 const keepsHistoryForks = Effect.gen(function* () {
@@ -159,7 +159,7 @@ const keepsCacheLong = Effect.gen(function* () {
 });
 
 const neverChangesOutcome = Effect.gen(function* () {
-  const clock = { now: 1_000, fail: false };
+  const clock = { fail: false, now: 1_000 };
   const storage = new ControlledStorage();
   const session = new SessionImpl(
     storage,

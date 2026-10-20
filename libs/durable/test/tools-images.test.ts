@@ -4,24 +4,22 @@ import { afterAll, beforeAll, describe, expect, it } from "vite-plus/test";
 
 import { DEFAULT_IMAGE_LIMITS, type ImageProcessor, toBase64 } from "../src/tools/image.ts";
 import { createReadTool } from "../src/tools/read.ts";
-import { awaited, failure, appendBytes, joinPath } from "./support.ts";
-import {
-  bmp,
-  decodedImage,
-  encode,
-  gif,
-  noisyPng,
-  setUpImages,
-  withOrientation,
-} from "./tools-images-fixtures-support.ts";
-import {
+import support from "./support.ts";
+import toolsImagesFixturesSupport from "./tools-images-fixtures-support.ts";
+import toolsImagesSupport from "./tools-images-support.ts";
+
+const { appendBytes, awaited, failure, joinPath } = support;
+const { bmp, decodedImage, encode, gif, noisyPng, setUpImages, withOrientation } =
+  toolsImagesFixturesSupport;
+const {
   directory,
   messages,
   onlyImage,
+  prepareImageDirectory,
   read,
   readEnv,
   removeImageDirectory,
-} from "./tools-images-support.ts";
+} = toolsImagesSupport;
 
 let processor: ImageProcessor;
 
@@ -33,25 +31,26 @@ beforeAll(() =>
   ),
 );
 
+beforeAll(prepareImageDirectory);
 afterAll(removeImageDirectory);
 
 const returnsSupportedImage = Effect.gen(function* () {
   const png = encode(8, 6, "png");
   const result = yield* read("a.png", png);
-  expect(result.output).toEqual([{ type: "image", data: toBase64(png), mimeType: "image/png" }]);
+  expect(result.output).toEqual([{ data: toBase64(png), mimeType: "image/png", type: "image" }]);
   expect(messages(result)).toEqual(["Read image file [image/png]."]);
   const tiny = yield* read("a.gif", gif(1, 1));
   expect(onlyImage(tiny)).toEqual({
-    type: "image",
     data: toBase64(gif(1, 1)),
     mimeType: "image/gif",
+    type: "image",
   });
 });
 
 const refusesImageToo = Effect.gen(function* () {
   const { env, reads } = readEnv();
   const result = yield* read("big.png", noisyPng(1100, 1100), { env });
-  expect(result).toMatchObject({ output: [], isError: true });
+  expect(result).toMatchObject({ isError: true, output: [] });
   expect(messages(result)[0]).toMatch(
     /^big\.png is an image \(image\/png\) of .*, too large to send/u,
   );
@@ -60,7 +59,7 @@ const refusesImageToo = Effect.gen(function* () {
 
 const refusesImageWider = Effect.gen(function* () {
   const wide = yield* read("wide.png", encode(2001, 2, "png"));
-  expect(wide).toMatchObject({ output: [], isError: true });
+  expect(wide).toMatchObject({ isError: true, output: [] });
   expect(messages(wide)).toEqual([
     "wide.png is an image (image/png) of 2001x2, larger than 2000x2000, and no image processor is configured to shrink it",
   ]);
@@ -72,7 +71,7 @@ const refusesImageWider = Effect.gen(function* () {
 
 const refusesFormatNeeds = Effect.gen(function* () {
   const result = yield* read("a.bmp", bmp(4, 4));
-  expect(result).toMatchObject({ output: [], isError: true });
+  expect(result).toMatchObject({ isError: true, output: [] });
   expect(messages(result)).toEqual([
     "a.bmp is an image (image/bmp) that needs converting, and no image processor is configured",
   ]);
@@ -103,8 +102,8 @@ const appliesModelImage = Effect.gen(function* () {
   const png = encode(8, 6, "png");
   const refused = yield* read("a.png", png, { resize: { maxWidth: 4 } });
   expect(messages(refused)[0]).toMatch(/of 8x6, larger than 4x2000,/u);
-  const resized = yield* read("a.png", png, { resize: { maxWidth: 4 }, images: processor });
-  expect(decodedImage(onlyImage(resized).data)).toMatchObject({ width: 4, height: 3 });
+  const resized = yield* read("a.png", png, { images: processor, resize: { maxWidth: 4 } });
+  expect(decodedImage(onlyImage(resized).data)).toMatchObject({ height: 3, width: 4 });
 });
 
 describe("read of images, without an image processor", () => {
@@ -161,7 +160,7 @@ describe("read of an image that changes while it is read", () => {
 const passesImageNeeds = Effect.gen(function* () {
   const png = encode(8, 6, "png");
   const result = yield* read("a.png", png, { images: processor });
-  expect(result.output).toEqual([{ type: "image", data: toBase64(png), mimeType: "image/png" }]);
+  expect(result.output).toEqual([{ data: toBase64(png), mimeType: "image/png", type: "image" }]);
   expect(onlyImage(yield* read("a.gif", gif(1, 1), { images: processor })).mimeType).toBe(
     "image/gif",
   );
@@ -170,7 +169,7 @@ const passesImageNeeds = Effect.gen(function* () {
 const scalesImageDown = Effect.gen(function* () {
   const result = yield* read("wide.png", encode(4000, 1000, "png"), { images: processor });
   const block = onlyImage(result);
-  expect(decodedImage(block.data)).toMatchObject({ width: 2000, height: 500 });
+  expect(decodedImage(block.data)).toMatchObject({ height: 500, width: 2000 });
   expect(messages(result)).toEqual([
     `Read image file [${block.mimeType}]. Resized from 4000x1000 to 2000x500. Multiply coordinates by 2.00 to map them to the original.`,
   ]);
@@ -184,11 +183,11 @@ const reEncodesPng = Effect.gen(function* () {
     "Read image file [image/jpeg]. Converted from image/png to image/jpeg.",
   ]);
   expect(jpeg.data.length).toBeLessThanOrEqual(DEFAULT_IMAGE_LIMITS.maxBytes);
-  expect(decodedImage(jpeg.data)).toMatchObject({ width: 1100, height: 1100 });
+  expect(decodedImage(jpeg.data)).toMatchObject({ height: 1100, width: 1100 });
   const tight = { ...DEFAULT_IMAGE_LIMITS, maxBytes: 20_000 };
   const shrunk = yield* awaited(processor.prepare(noisyPng(400, 400), "image/png", tight));
   expect(shrunk!.data.length).toBeLessThanOrEqual(tight.maxBytes);
-  expect(shrunk!.resized?.from).toEqual({ width: 400, height: 400 });
+  expect(shrunk!.resized?.from).toEqual({ height: 400, width: 400 });
   expect(shrunk!.resized!.to.width).toBeLessThan(400);
 });
 
@@ -197,8 +196,8 @@ const keepsLeastOne = Effect.gen(function* () {
     processor.prepare(encode(6000, 2, "png"), "image/png", DEFAULT_IMAGE_LIMITS),
   );
   expect(result?.resized).toEqual({
-    from: { width: 6000, height: 2 },
-    to: { width: 2000, height: 1 },
+    from: { height: 2, width: 6000 },
+    to: { height: 1, width: 2000 },
   });
 });
 
@@ -236,7 +235,7 @@ const keepsJpegMust = Effect.gen(function* () {
 
 const convertsFormatProviders = Effect.gen(function* () {
   const result = yield* read("a.bmp", bmp(4, 4), { images: processor });
-  expect(result.output).toMatchObject([{ type: "image", mimeType: "image/png" }]);
+  expect(result.output).toMatchObject([{ mimeType: "image/png", type: "image" }]);
   expect(messages(result)).toEqual([
     "Read image file [image/png]. Converted from image/bmp to image/png.",
   ]);
@@ -245,7 +244,7 @@ const convertsFormatProviders = Effect.gen(function* () {
 const reportsBytesCannot = Effect.gen(function* () {
   const broken = new Uint8Array([...encode(4, 4, "png").subarray(0, 40)]);
   const result = yield* read("broken.png", broken, { images: processor });
-  expect(result).toMatchObject({ output: [], isError: true });
+  expect(result).toMatchObject({ isError: true, output: [] });
   expect(messages(result)).toEqual([
     "broken.png is an image (image/png) that cannot be prepared for the model",
   ]);
@@ -258,7 +257,7 @@ const whatCreateCodingToolsImages = Effect.gen(function* () {
   const result = yield* read("b.bmp", bmp(4, 4), {
     tool: tool as ReturnType<typeof createReadTool>,
   });
-  expect(result.output).toMatchObject([{ type: "image", mimeType: "image/png" }]);
+  expect(result.output).toMatchObject([{ mimeType: "image/png", type: "image" }]);
 });
 
 describe("read of images, with the Photon image processor", () => {

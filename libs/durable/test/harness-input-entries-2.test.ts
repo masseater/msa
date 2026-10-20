@@ -4,19 +4,18 @@ import { MemoryStorage } from "@msa/durable/storage/memory";
 import { Effect } from "effect";
 import { describe, expect, it } from "vite-plus/test";
 
-import { allEntries, chatSetup, openChat, waitFor } from "./chat-support.ts";
-import { awaited } from "./effect-support.ts";
-import {
-  inboxItems,
-  toolRunning,
-  answer,
-  HOLD,
-  holdTool,
-  transcript,
-  requestLog,
-} from "./harness-input-entries-support.ts";
-import { context } from "./session-support.ts";
-import { deferred } from "./task-support.ts";
+import chatSupport from "./chat-support.ts";
+import effectSupport from "./effect-support.ts";
+import harnessInputEntriesSupport from "./harness-input-entries-support.ts";
+import sessionSupport from "./session-support.ts";
+import taskSupport from "./task-support.ts";
+
+const { allEntries, chatSetup, openChat, waitFor } = chatSupport;
+const { awaited } = effectSupport;
+const { HOLD, answer, holdTool, inboxItems, requestLog, toolRunning, transcript } =
+  harnessInputEntriesSupport;
+const { context } = sessionSupport;
+const { deferred } = taskSupport;
 
 const watchedHeldChat = Effect.fn("watchedHeldChat")(function* () {
   const setup = chatSetup();
@@ -32,16 +31,16 @@ const watchedHeldChat = Effect.fn("watchedHeldChat")(function* () {
 
     return Promise.resolve();
   });
-  return { gate, requests, harness, root, events, stream };
+  return { events, gate, harness, requests, root, stream };
 });
 
 const appendsDataOnly = Effect.gen(function* () {
   const { gate, requests, harness, root, events, stream } = yield* watchedHeldChat();
-  const input = yield* awaited(root.submit({ type: "input", content: "a" }, context));
+  const input = yield* awaited(root.submit({ content: "a", type: "input" }, context));
   yield* toolRunning(harness, root);
-  const chat = { kind: "chat.message", data: { author: "bob", text: "lunch?" } };
+  const chat = { data: { author: "bob", text: "lunch?" }, kind: "chat.message" };
   const write = yield* awaited(
-    root.submit({ type: "write", entry: chat, requestId: "bob:1" }, context),
+    root.submit({ entry: chat, requestId: "bob:1", type: "write" }, context),
   );
   const settled = yield* awaited(write.status(context));
   expect(settled.status).toBe("done");
@@ -54,11 +53,11 @@ const appendsDataOnly = Effect.gen(function* () {
   yield* waitFor(() => events.some((event) => event.type === "entry_appended"));
   const appended = events.find((event) => event.type === "entry_appended");
   expect(appended).toMatchObject({
-    entry: { kind: "chat.message", id: settled.status === "done" && settled.entry },
+    entry: { id: settled.status === "done" && settled.entry, kind: "chat.message" },
   });
   expect(events.some((event) => event.type === "run_end")).toBe(false);
   expect(
-    (yield* awaited(root.submit({ type: "write", entry: chat, requestId: "bob:1" }, context))).id,
+    (yield* awaited(root.submit({ entry: chat, requestId: "bob:1", type: "write" }, context))).id,
   ).toBe(write.id);
 
   gate.resolve();

@@ -1,29 +1,32 @@
 import {
   type AssistantMessage,
   type FauxResponseStep,
+  Type,
   fauxAssistantMessage,
   fauxText,
   fauxThinking,
   fauxToolCall,
-  Type,
 } from "@msa/ai";
-import { defineTool, type Harness, LiveDoc, type LiveState } from "@msa/durable";
+import { type Harness, LiveDoc, type LiveState, defineTool } from "@msa/durable";
 import { MemoryStorage } from "@msa/durable/storage/memory";
 import { Effect } from "effect";
 import { describe, expect, it } from "vite-plus/test";
 
-import { listen, drained, applyChanges } from "./harness-events-support.ts";
-import {
+import harnessEventsSupport from "./harness-events-support.ts";
+import support from "./support.ts";
+
+const { applyChanges, drained, listen } = harnessEventsSupport;
+const {
+  aborted,
+  addTool,
+  awaited,
   chatSetup,
+  context,
+  deferred,
+  documentChanges,
   openChat,
   waitFor,
-  awaited,
-  addTool,
-  context,
-  documentChanges,
-  aborted,
-  deferred,
-} from "./support.ts";
+} = support;
 
 function partialsOf(harness: Harness): AssistantMessage[] {
   const partials: AssistantMessage[] = [];
@@ -46,10 +49,7 @@ const trimmingToolRun = Effect.fn("trimmingToolRun")(function* () {
   addTool(
     setup.registry,
     defineTool({
-      name: "tail",
       description: "Prints lines",
-      parameters: Type.Object({}),
-      outputLimits: { maxLines: 3, retain: "tail" },
       execute: (_args, api) =>
         runPromise(
           Effect.gen(function* () {
@@ -61,6 +61,9 @@ const trimmingToolRun = Effect.fn("trimmingToolRun")(function* () {
             return {};
           }),
         ),
+      name: "tail",
+      outputLimits: { maxLines: 3, retain: "tail" },
+      parameters: Type.Object({}),
     }),
   );
   setup.faux.setResponses([
@@ -78,7 +81,7 @@ const trimmingToolRun = Effect.fn("trimmingToolRun")(function* () {
     }
   });
   const { stream, events } = yield* listen(harness, root);
-  return { gate, harness, root, outputs, stream, events };
+  return { events, gate, harness, outputs, root, stream };
 });
 
 const neverRunCallSetup = Effect.fn("neverRunCallSetup")(function* () {
@@ -86,10 +89,10 @@ const neverRunCallSetup = Effect.fn("neverRunCallSetup")(function* () {
   addTool(
     setup.registry,
     defineTool({
-      name: "wait",
       description: "Waits until aborted",
-      parameters: Type.Object({}),
       execute: (_args, _api, callContext) => aborted(callContext.abortSignal!),
+      name: "wait",
+      parameters: Type.Object({}),
     }),
   );
   setup.faux.setResponses([
@@ -102,18 +105,18 @@ const neverRunCallSetup = Effect.fn("neverRunCallSetup")(function* () {
   ]);
   const { harness, root } = yield* openChat(new MemoryStorage(), setup);
   const { stream, events } = yield* listen(harness, root);
-  return { harness, root, stream, events };
+  return { events, harness, root, stream };
 });
 
 const rebuildsEveryCommitted = Effect.gen(function* () {
-  const setup = chatSetup({ tokensPerSecond: 150, tokenSize: { min: 1, max: 1 } });
+  const setup = chatSetup({ tokenSize: { max: 1, min: 1 }, tokensPerSecond: 150 });
   const message = fauxAssistantMessage(
     [
       fauxThinking("thinking about it ".repeat(10)),
       fauxText("some text ".repeat(10)),
       fauxToolCall(
         "missing",
-        { path: "a/long/path/".repeat(10), note: "x".repeat(60) },
+        { note: "x".repeat(60), path: "a/long/path/".repeat(10) },
         { id: "c1" },
       ),
     ],
@@ -124,7 +127,7 @@ const rebuildsEveryCommitted = Effect.gen(function* () {
   const partials = partialsOf(harness);
   const { stream, events } = yield* listen(harness, root);
   yield* awaited(
-    (yield* awaited(root.submit({ type: "input", content: "go" }, context))).wait(context),
+    (yield* awaited(root.submit({ content: "go", type: "input" }, context))).wait(context),
   );
   yield* drained();
   const rebuilt: AssistantMessage[] = [];
@@ -158,7 +161,7 @@ describe("agent events", () => {
 
 const rebuildsSlidingTail = Effect.gen(function* () {
   const { gate, harness, root, outputs, stream, events } = yield* trimmingToolRun();
-  const submission = yield* awaited(root.submit({ type: "input", content: "go" }, context));
+  const submission = yield* awaited(root.submit({ content: "go", type: "input" }, context));
   yield* waitFor(() => outputs.at(-1)?.endsWith("line 5\n") === true);
   gate.resolve();
   yield* awaited(submission.wait(context));
@@ -200,8 +203,8 @@ const emitsOneExact = Effect.gen(function* () {
     );
   setup.faux.setResponses([held, fauxAssistantMessage([fauxText("second")])]);
   const { harness, root } = yield* openChat(new MemoryStorage(), setup);
-  const input = yield* awaited(root.submit({ type: "input", content: "a" }, context));
-  const followUp = yield* awaited(root.submit({ type: "input", content: "f" }, context));
+  const input = yield* awaited(root.submit({ content: "a", type: "input" }, context));
+  const followUp = yield* awaited(root.submit({ content: "f", type: "input" }, context));
   const { stream, batches } = yield* listen(harness, root);
   release.resolve();
   yield* awaited(followUp.wait(context));
@@ -235,7 +238,7 @@ describe("agent events", () => {
 
 const endsCallNever = Effect.gen(function* () {
   const { harness, root, stream, events } = yield* neverRunCallSetup();
-  const submission = yield* awaited(root.submit({ type: "input", content: "go" }, context));
+  const submission = yield* awaited(root.submit({ content: "go", type: "input" }, context));
   yield* waitFor(() => events().some((event) => event.type === "tool_execution_start"));
   yield* awaited(
     harness.abortTask(

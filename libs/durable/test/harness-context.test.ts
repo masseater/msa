@@ -2,10 +2,15 @@ import { type EntryId, type EntryRecord } from "@msa/durable";
 import { Effect } from "effect";
 import { afterEach, describe, expect, it, vi } from "vite-plus/test";
 
-import { awaited } from "./effect-support.ts";
-import { setup } from "./harness-context-support.ts";
-import { assistant, describeMessage, system, toolResult, user } from "./harness-support.ts";
-import { context } from "./session-support.ts";
+import effectSupport from "./effect-support.ts";
+import harnessContextSupport from "./harness-context-support.ts";
+import harnessSupport from "./harness-support.ts";
+import sessionSupport from "./session-support.ts";
+
+const { awaited } = effectSupport;
+const { setup } = harnessContextSupport;
+const { assistant, describeMessage, system, toolResult, user } = harnessSupport;
+const { context } = sessionSupport;
 
 function ids(entries: readonly EntryRecord[]): EntryId[] {
   return entries.map((entry) => entry.id);
@@ -18,7 +23,7 @@ afterEach(() => {
 const returnsWholeTranscript = Effect.gen(function* () {
   const { root, append, message } = yield* setup();
   const first = yield* awaited(message(user("hi")));
-  const note = yield* awaited(append({ kind: "note", data: { text: "display only" } }));
+  const note = yield* awaited(append({ data: { text: "display only" }, kind: "note" }));
   const answer = yield* awaited(message(assistant("hello")));
   const view = yield* awaited(root.context(context));
   expect(view.head).toBeUndefined();
@@ -51,7 +56,7 @@ const resolvesSelfHeads = Effect.gen(function* () {
   const { root, append, message } = yield* setup();
   yield* awaited(message(user("old")));
   const reset = yield* awaited(
-    append({ kind: "reset", head: "self", model: [user("fresh start")] }),
+    append({ head: "self", kind: "reset", model: [user("fresh start")] }),
   );
   expect(reset.head).toBe(reset.id);
   const after = yield* awaited(message(assistant("after reset")));
@@ -61,7 +66,7 @@ const resolvesSelfHeads = Effect.gen(function* () {
   expect(view.messages.map(describeMessage)).toEqual(["user:fresh start", "assistant:after reset"]);
 
   const summary = yield* awaited(
-    append({ kind: "summary", head: after.id, model: [user("summary")] }),
+    append({ head: after.id, kind: "summary", model: [user("summary")] }),
   );
   const tail = yield* awaited(message(user("next")));
   view = yield* awaited(root.context(context));
@@ -85,29 +90,29 @@ const appliesNewestEdit = Effect.gen(function* () {
   const second = yield* awaited(message(user("second")));
   yield* awaited(
     append({
+      edits: [{ action: "replace", messages: [user("first v2")], target: first.id }],
       kind: "edit",
-      edits: [{ target: first.id, action: "replace", messages: [user("first v2")] }],
     }),
   );
   yield* awaited(
     append({
+      edits: [{ action: "replace", messages: [user("first v3")], target: first.id }],
       kind: "edit",
-      edits: [{ target: first.id, action: "replace", messages: [user("first v3")] }],
     }),
   );
-  yield* awaited(append({ kind: "edit", edits: [{ target: second.id, action: "omit" }] }));
+  yield* awaited(append({ edits: [{ action: "omit", target: second.id }], kind: "edit" }));
   let view = yield* awaited(root.context(context));
   expect(view.entries).toHaveLength(5);
   expect(view.messages.map(describeMessage)).toEqual(["user:first v3"]);
 
-  const reset = yield* awaited(append({ kind: "reset", head: second.id }));
+  const reset = yield* awaited(append({ head: second.id, kind: "reset" }));
   view = yield* awaited(root.context(context));
   expect(view.head?.id).toBe(reset.id);
   expect(view.messages.map(describeMessage)).toEqual([]);
   yield* awaited(
     append({
+      edits: [{ action: "replace", messages: [user("second v2")], target: second.id }],
       kind: "edit",
-      edits: [{ target: second.id, action: "replace", messages: [user("second v2")] }],
     }),
   );
   view = yield* awaited(root.context(context));
@@ -169,7 +174,7 @@ const leadsSystemMessage = Effect.gen(function* () {
     "system:preamble",
   ]);
 
-  yield* awaited(append({ kind: "reset", head: "self", model: [user("handoff")] }));
+  yield* awaited(append({ head: "self", kind: "reset", model: [user("handoff")] }));
   yield* awaited(message(system({ preamble: "Baseline." }), "msa.system"));
   view = yield* awaited(root.context(context));
   expect(view.messages.map(describeMessage)).toEqual(["system:preamble", "user:handoff"]);
@@ -187,7 +192,7 @@ const leadsBaselineCompaction = Effect.gen(function* () {
   yield* awaited(message(assistant("calling", { calls: ["a"] })));
   yield* awaited(message(toolResult("a")));
   yield* awaited(message(assistant("answer")));
-  yield* awaited(append({ kind: "summary", head: kept.id, model: [user("summary")] }));
+  yield* awaited(append({ head: kept.id, kind: "summary", model: [user("summary")] }));
   yield* awaited(message(user("next")));
   yield* awaited(message(system({ preamble: "Baseline." }), "msa.system"));
   let view = yield* awaited(root.context(context));
@@ -251,7 +256,7 @@ const keepsSystemMessages = Effect.gen(function* () {
   const kept = yield* awaited(message(user("kept")));
   yield* awaited(message(assistant("kept answer")));
   yield* awaited(message(system({ mode: "plan" }), "host.note"));
-  yield* awaited(append({ kind: "summary", head: kept.id, model: [user("summary")] }));
+  yield* awaited(append({ head: kept.id, kind: "summary", model: [user("summary")] }));
   yield* awaited(message(user("next")));
   yield* awaited(message(system({ preamble: "Baseline." }), "msa.system"));
   view = yield* awaited(root.context(context));

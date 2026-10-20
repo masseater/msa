@@ -2,11 +2,17 @@ import { MemoryStorage } from "@msa/durable/storage/memory";
 import { Effect } from "effect";
 import { describe, expect, it } from "vite-plus/test";
 
-import { awaited } from "./effect-support.ts";
-import { start, oneStep } from "./harness-lifecycle-support.ts";
-import { addTask } from "./harness-support.ts";
-import { context } from "./session-support.ts";
-import { openTasks } from "./task-support.ts";
+import effectSupport from "./effect-support.ts";
+import harnessLifecycleSupport from "./harness-lifecycle-support.ts";
+import harnessSupport from "./harness-support.ts";
+import sessionSupport from "./session-support.ts";
+import taskSupport from "./task-support.ts";
+
+const { awaited } = effectSupport;
+const { oneStep, start } = harnessLifecycleSupport;
+const { addTask } = harnessSupport;
+const { context } = sessionSupport;
+const { openTasks } = taskSupport;
 
 const runsWhatRegistry = Effect.gen(function* () {
   const log: string[] = [];

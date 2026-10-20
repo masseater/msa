@@ -1,27 +1,28 @@
-import { defineTask, type TaskId, type Tx } from "@msa/durable";
+import { type TaskId, type Tx, defineTask } from "@msa/durable";
 import { Effect } from "effect";
 import { afterEach, describe, expect, it } from "vite-plus/test";
 
 import { openNodeSqliteStorage } from "../src/storage/sqlite/node.ts";
-import { awaited } from "./effect-support.ts";
-import {
-  runtimes,
-  owned,
-  state,
-  directories,
-  sqlitePath,
-  gates,
-  gate,
-  Hold,
-} from "./harness-scheduler-indexes-support.ts";
-import { removeDir } from "./platform-support.ts";
-import { context } from "./session-support.ts";
-import { aborted, eventually, openTasks } from "./task-support.ts";
+import effectSupport from "./effect-support.ts";
+import harnessSchedulerIndexesSupport from "./harness-scheduler-indexes-support.ts";
+import platformSupport from "./platform-support.ts";
+import sessionSupport from "./session-support.ts";
+import taskSupport from "./task-support.ts";
+
+const { awaited } = effectSupport;
+const { Hold, directories, gate, gates, owned, runtimes, sqlitePath, state } =
+  harnessSchedulerIndexesSupport;
+const { removeDir } = platformSupport;
+const { context } = sessionSupport;
+const { aborted, eventually, openTasks } = taskSupport;
 
 const Probe = defineTask<{ name: string }, { phase: "look" }, null>({
-  name: "test.index.probe",
-  version: 1,
+  abort: (_task, runtime, ctx) =>
+    Promise.resolve(
+      runtime.commit(() => ({ outcome: { status: "aborted" }, status: "terminal" }), ctx),
+    ),
   initial: () => ({ phase: "look" }),
+  name: "test.index.probe",
   phases: {
     look: (task, runtime, ctx) =>
       Effect.runPromise(
@@ -37,17 +38,14 @@ const Probe = defineTask<{ name: string }, { phase: "look" }, null>({
           yield* awaited(Promise.race([gate(task.input.name).promise, aborted(runtime.signal)]));
           yield* awaited(
             runtime.commit(
-              () => ({ status: "terminal", outcome: { status: "completed", result: null } }),
+              () => ({ outcome: { result: null, status: "completed" }, status: "terminal" }),
               ctx,
             ),
           );
         }),
       ),
   },
-  abort: (_task, runtime, ctx) =>
-    Promise.resolve(
-      runtime.commit(() => ({ status: "terminal", outcome: { status: "aborted" } }), ctx),
-    ),
+  version: 1,
 });
 
 afterEach(() =>
@@ -80,10 +78,10 @@ const seedProbeTree = (tx: Tx) =>
         tx.createTask(
           Hold,
           { name: "inside" },
-          { ownership: { kind: "conversation" }, conversationId: child.id },
+          { conversationId: child.id, ownership: { kind: "conversation" } },
         ),
       );
-      return { probe, first, ends, second };
+      return { ends, first, probe, second };
     }),
   );
 
@@ -95,7 +93,7 @@ const ownedTasksBeforeReopen = Effect.fn("ownedTasksBeforeReopen")(function* () 
   const ids = yield* awaited(root.commit(seedProbeTree, context));
   gate("ends").resolve();
   yield* awaited(opened.harness.waitForTask(ids.ends, context));
-  return { path, opened, ids };
+  return { ids, opened, path };
 });
 
 const listsLiveTasks = Effect.gen(function* () {

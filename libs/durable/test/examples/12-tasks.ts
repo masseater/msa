@@ -3,36 +3,34 @@ import { createModels } from "@msa/ai/models";
 import { BACKGROUND_CONTEXT } from "@msa/chord/context";
 import { Console, Effect } from "effect";
 
-import { createRegistry, Harness } from "../../src/harness/index.ts";
+import { Harness, createRegistry } from "../../src/harness/index.ts";
 import { defineExtension, defineTask } from "../../src/index.ts";
 import { MemoryStorage } from "../../src/storage/memory.ts";
-import { awaited } from "../effect-support.ts";
+import effectSupport from "../effect-support.ts";
+
+const { awaited } = effectSupport;
 
 const context = BACKGROUND_CONTEXT;
 
 const payments = new Map<string, number>();
 type PaymentState = { phase: "prepare" } | { phase: "charge"; key: string };
 const Payment = defineTask<{ amount: number }, PaymentState, { receipt: number }>({
-  name: "example.payment",
-  version: 1,
-  initial: () => ({ phase: "prepare" }),
-  phases: {
-    prepare: (task, runtime, taskContext) =>
-      Effect.runPromise(
-        Effect.asVoid(
-          Effect.suspend(() =>
-            awaited(
-              runtime.commit(
-                () => ({
-                  status: "running",
-                  checkpoint: { phase: "charge", key: `payment-${task.id}` },
-                }),
-                taskContext,
-              ),
+  abort: (_task, runtime, taskContext) =>
+    Effect.runPromise(
+      Effect.asVoid(
+        Effect.suspend(() =>
+          awaited(
+            runtime.commit(
+              () => ({ outcome: { status: "aborted" }, status: "terminal" }),
+              taskContext,
             ),
           ),
         ),
       ),
+    ),
+  initial: () => ({ phase: "prepare" }),
+  name: "example.payment",
+  phases: {
     charge: (task, runtime, taskContext) =>
       Effect.runPromise(
         Effect.gen(function* () {
@@ -41,26 +39,30 @@ const Payment = defineTask<{ amount: number }, PaymentState, { receipt: number }
           const receipt = payments.get(key)!;
           yield* awaited(
             runtime.commit(
-              () => ({ status: "terminal", outcome: { status: "completed", result: { receipt } } }),
+              () => ({ outcome: { result: { receipt }, status: "completed" }, status: "terminal" }),
               taskContext,
             ),
           );
         }),
       ),
-  },
-  abort: (_task, runtime, taskContext) =>
-    Effect.runPromise(
-      Effect.asVoid(
-        Effect.suspend(() =>
-          awaited(
-            runtime.commit(
-              () => ({ status: "terminal", outcome: { status: "aborted" } }),
-              taskContext,
+    prepare: (task, runtime, taskContext) =>
+      Effect.runPromise(
+        Effect.asVoid(
+          Effect.suspend(() =>
+            awaited(
+              runtime.commit(
+                () => ({
+                  checkpoint: { key: `payment-${task.id}`, phase: "charge" },
+                  status: "running",
+                }),
+                taskContext,
+              ),
             ),
           ),
         ),
       ),
-    ),
+  },
+  version: 1,
 });
 
 const registry = createRegistry();

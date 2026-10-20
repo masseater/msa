@@ -4,27 +4,23 @@ import { Effect } from "effect";
 import { afterEach, describe, expect, it } from "vite-plus/test";
 
 import { openNodeSqliteStorage } from "../src/storage/sqlite/node.ts";
-import { awaited } from "./effect-support.ts";
-import {
-  directories,
-  waitUntil,
-  open,
-  gates,
-  ownedChild,
-  Hold,
-  runs,
-  openHarness,
-  busy,
-} from "./harness-ownership-support.ts";
-import { joinPath, makeTempDir, removeDir } from "./platform-support.ts";
-import { context } from "./session-support.ts";
+import effectSupport from "./effect-support.ts";
+import harnessOwnershipSupport from "./harness-ownership-support.ts";
+import platformSupport from "./platform-support.ts";
+import sessionSupport from "./session-support.ts";
+
+const { awaited } = effectSupport;
+const { Hold, busy, directories, gates, open, openHarness, ownedChild, runs, waitUntil } =
+  harnessOwnershipSupport;
+const { joinPath, makeTempDir, removeDir } = platformSupport;
+const { context } = sessionSupport;
 
 const Unregistered = defineTask<{ name: string }, { phase: "hold" }, null>({
-  name: "test.unregistered",
-  version: 1,
-  initial: () => ({ phase: "hold" }),
-  phases: { hold: () => Promise.resolve() },
   abort: () => Promise.resolve(),
+  initial: () => ({ phase: "hold" }),
+  name: "test.unregistered",
+  phases: { hold: () => Promise.resolve() },
+  version: 1,
 });
 
 afterEach(() =>
@@ -57,21 +53,21 @@ const orphanBelowOwner = Effect.fn("orphanBelowOwner")(function* () {
               tx.createTask(
                 Hold,
                 { name: "gone" },
-                { ownership: { kind: "conversation" }, conversationId: root.id },
+                { conversationId: root.id, ownership: { kind: "conversation" } },
               ),
             );
             const child = yield* awaited(
               tx.createConversation({ ownership: { kind: "task", taskId: owner } }),
             );
             return {
-              owner,
               inner: yield* awaited(
                 tx.createTask(
                   Hold,
                   { name: "orphan" },
-                  { ownership: { kind: "conversation" }, conversationId: child.id },
+                  { conversationId: child.id, ownership: { kind: "conversation" } },
                 ),
               ),
+              owner,
             };
           }),
         ),
@@ -85,9 +81,9 @@ const crashCases = [
   [
     "a held failed owner",
     false,
-    { status: "completing", outcome: { status: "failed", error: { message: "crash" } } },
+    { outcome: { error: { message: "crash" }, status: "failed" }, status: "completing" },
   ],
-  ["an abort-marked owner", true, { status: "pending", checkpoint: { phase: "hold" } }],
+  ["an abort-marked owner", true, { checkpoint: { phase: "hold" }, status: "pending" }],
 ] as const;
 
 const derivesMarksCrash = Effect.fn("derivesMarksCrash")(function* (
@@ -131,10 +127,10 @@ const withdrawsInputQueued = Effect.gen(function* () {
       return (yield* awaited(harness.getTask(tree.inner, context)))!.abortRequested;
     }),
   );
-  const late = yield* awaited(child.submit({ type: "input", content: "late" }, context));
+  const late = yield* awaited(child.submit({ content: "late", type: "input" }, context));
   expect(yield* awaited(late.wait(context))).toMatchObject({
-    status: "unanswered",
     reason: "aborted",
+    status: "unanswered",
   });
   open("abort.owner.inner", "completed");
   yield* awaited(harness.waitForTask(tree.owner, context));
@@ -194,7 +190,7 @@ const cascadesOwnerScheduler = Effect.gen(function* () {
       (tx) =>
         runPromise(
           Effect.gen(function* () {
-            const owner = yield* awaited(
+            const ownerInner = yield* awaited(
               tx.createTask(
                 Unregistered,
                 { name: "unregistered" },
@@ -202,17 +198,17 @@ const cascadesOwnerScheduler = Effect.gen(function* () {
               ),
             );
             const child = yield* awaited(
-              tx.createConversation({ ownership: { kind: "task", taskId: owner } }),
+              tx.createConversation({ ownership: { kind: "task", taskId: ownerInner } }),
             );
             return {
-              owner,
               inner: yield* awaited(
                 tx.createTask(
                   Hold,
                   { name: "below" },
-                  { ownership: { kind: "conversation" }, conversationId: child.id },
+                  { conversationId: child.id, ownership: { kind: "conversation" } },
                 ),
               ),
+              owner: ownerInner,
             };
           }),
         ),
@@ -221,8 +217,8 @@ const cascadesOwnerScheduler = Effect.gen(function* () {
   );
   expect(yield* awaited(harness.abortTask(owner, context))).toBe("marked");
   expect((yield* awaited(harness.waitForTask(owner, context))).state.outcome).toEqual({
-    status: "orphaned",
     reason: "missing_task",
+    status: "orphaned",
   });
   expect((yield* awaited(harness.waitForTask(inner, context))).state.outcome.status).toBe(
     "aborted",

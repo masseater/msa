@@ -5,22 +5,26 @@ import { afterEach, describe, expect, it } from "vite-plus/test";
 import { openNodeJsonlStorage } from "../src/storage/jsonl/node.ts";
 import type { DocumentId, EntryId, TaskId } from "../src/types.ts";
 import { ROOT_CONVERSATION_ID } from "../src/types.ts";
-import { awaited } from "./effect-support.ts";
-import {
-  fileExists,
-  terminalTask,
-  readLines,
-  sessionDocument,
-  pendingTask,
-  createRoot,
+import effectSupport from "./effect-support.ts";
+import jsonlStorageSupport from "./jsonl-storage-support.ts";
+import platformSupport from "./platform-support.ts";
+
+const { awaited } = effectSupport;
+const {
+  InstrumentedEnv,
   context,
+  createRoot,
+  fileExists,
   openStorage,
   openStorages,
+  pendingTask,
+  readLines,
+  sessionDocument,
   tempDirectories,
   tempDirectory,
-  InstrumentedEnv,
-} from "./jsonl-storage-support.ts";
-import { fileSize, joinPath, readBytes, removeDir } from "./platform-support.ts";
+  terminalTask,
+} = jsonlStorageSupport;
+const { fileSize, joinPath, readBytes, removeDir } = platformSupport;
 
 afterEach(() =>
   Effect.runPromise(
@@ -44,9 +48,9 @@ const sidecarsBeforeReclamation = Effect.fn("sidecarsBeforeReclamation")(functio
     storage.commit(
       [
         {
-          type: "document.create",
+          content: { kind: "base", value: { count: 0 }, version: 1 },
           record: sessionDocument(documentId),
-          content: { kind: "base", version: 1, value: { count: 0 } },
+          type: "document.create",
         },
       ],
       context,
@@ -56,9 +60,9 @@ const sidecarsBeforeReclamation = Effect.fn("sidecarsBeforeReclamation")(functio
     storage.commit(
       [
         {
-          type: "document.change",
+          content: { kind: "delta", ops: [], version: 1 },
           id: documentId,
-          content: { kind: "delta", version: 1, ops: [] },
+          type: "document.change",
         },
       ],
       context,
@@ -68,15 +72,15 @@ const sidecarsBeforeReclamation = Effect.fn("sidecarsBeforeReclamation")(functio
     storage.commit(
       [
         {
-          type: "document.change",
+          content: { kind: "base", value: { count: 1 }, version: 1 },
           id: documentId,
-          content: { kind: "base", version: 1, value: { count: 1 } },
+          type: "document.change",
         },
       ],
       context,
     ),
   );
-  return { directory, storage, taskId, documentId };
+  return { directory, documentId, storage, taskId };
 });
 
 const opensThroughNode = Effect.gen(function* () {
@@ -93,7 +97,7 @@ const publishesEveryCommit = Effect.gen(function* () {
   expect(yield* readLines(joinPath(directory, `task-${taskId}.jsonl`))).toHaveLength(1);
   expect(yield* readLines(joinPath(directory, `doc-${documentId}.jsonl`))).toHaveLength(1);
 
-  yield* awaited(storage.commit([{ type: "document.retire", id: documentId }], context));
+  yield* awaited(storage.commit([{ id: documentId, type: "document.retire" }], context));
   yield* awaited(storage.commit([{ type: "task", value: terminalTask(taskId) }], context));
 
   expect(yield* readLines(joinPath(directory, "main.jsonl"))).toHaveLength(7);
@@ -146,7 +150,7 @@ const removesCompletePlus = Effect.gen(function* () {
   const storage = yield* openStorage(directory, env);
   yield* createRoot(storage);
   const taskId = yield* awaited(storage.mintId<TaskId<JsonValue>>());
-  env.fail({ operation: "append", call: 1, mode: "short" });
+  env.fail({ call: 1, mode: "short", operation: "append" });
   yield* awaited(
     expect(
       storage.commit(
@@ -189,10 +193,10 @@ const serializesCompleteCandidate = Effect.gen(function* () {
           {
             type: "entry",
             value: {
-              id,
               conversationId: ROOT_CONVERSATION_ID,
-              kind: "bad",
               data: 1n as unknown as JsonValue,
+              id,
+              kind: "bad",
             },
           },
         ],
@@ -208,7 +212,7 @@ const serializesCompleteCandidate = Effect.gen(function* () {
         [
           {
             type: "entry",
-            value: { id, conversationId: ROOT_CONVERSATION_ID, kind: "good" },
+            value: { conversationId: ROOT_CONVERSATION_ID, id, kind: "good" },
           },
         ],
         context,

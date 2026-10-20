@@ -3,10 +3,12 @@ import { createModels } from "@msa/ai/models";
 import { BACKGROUND_CONTEXT } from "@msa/chord/context";
 import { Console, Effect } from "effect";
 
-import { createRegistry, Harness } from "../../src/harness/index.ts";
+import { Harness, createRegistry } from "../../src/harness/index.ts";
 import { defineEntry } from "../../src/index.ts";
 import { MemoryStorage } from "../../src/storage/memory.ts";
-import { awaited } from "../effect-support.ts";
+import effectSupport from "../effect-support.ts";
+
+const { awaited } = effectSupport;
 
 const context = BACKGROUND_CONTEXT;
 
@@ -27,7 +29,7 @@ const main = Effect.gen(function* () {
       (tx) =>
         tx.appendEntry(Message, root.id, {
           data: { from: "example" },
-          model: [{ role: "user", content: "hello", timestamp: 1 }],
+          model: [{ content: "hello", role: "user", timestamp: 1 }],
         }),
       context,
     ),
@@ -36,7 +38,7 @@ const main = Effect.gen(function* () {
 
   const helper = yield* awaited(
     harness.createConversation(
-      { ownership: { kind: "ownerless" }, agent: { thinkingLevel: "minimal" } },
+      { agent: { thinkingLevel: "minimal" }, ownership: { kind: "ownerless" } },
       context,
     ),
   );

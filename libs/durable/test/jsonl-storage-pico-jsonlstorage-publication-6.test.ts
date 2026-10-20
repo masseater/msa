@@ -5,20 +5,24 @@ import { afterEach, describe, expect, it } from "vite-plus/test";
 import { NodeExecutionEnv } from "../src/env/node.ts";
 import { JsonlStorage } from "../src/storage/jsonl/index.ts";
 import type { DocumentId, TaskId } from "../src/types.ts";
-import { toJsonText, awaited } from "./effect-support.ts";
-import {
-  fileExists,
-  terminalTask,
-  sessionDocument,
-  pendingTask,
-  createRoot,
+import effectSupport from "./effect-support.ts";
+import jsonlStorageSupport from "./jsonl-storage-support.ts";
+import platformSupport from "./platform-support.ts";
+
+const { awaited, toJsonText } = effectSupport;
+const {
   context,
+  createRoot,
+  fileExists,
   openStorage,
   openStorages,
+  pendingTask,
+  sessionDocument,
   tempDirectories,
   tempDirectory,
-} from "./jsonl-storage-support.ts";
-import { appendText, joinPath, removeDir, writeText } from "./platform-support.ts";
+  terminalTask,
+} = jsonlStorageSupport;
+const { appendText, joinPath, removeDir, writeText } = platformSupport;
 
 afterEach(() =>
   Effect.runPromise(
@@ -44,10 +48,10 @@ const removesCompleteUnconfirmed = Effect.gen(function* () {
     sidecarPath,
     `${yield* toJsonText({
       format: 1,
-      type: "record",
-      seq: 4,
       ordinal: 0,
       payload: { type: "task", value: pendingTask(taskId, "stale") },
+      seq: 4,
+      type: "record",
     })}\n`,
   );
 
@@ -66,9 +70,9 @@ const failsOpenConfirmed = Effect.gen(function* () {
     storage.commit(
       [
         {
-          type: "document.create",
+          content: { kind: "base", value: {}, version: 1 },
           record: sessionDocument(documentId),
-          content: { kind: "base", version: 1, value: {} },
+          type: "document.create",
         },
       ],
       context,

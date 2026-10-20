@@ -5,31 +5,24 @@ import { afterEach, describe, expect, it } from "vite-plus/test";
 
 import { NodeExecutionEnv } from "../src/env/node.ts";
 import { openNodeSqliteStorage } from "../src/storage/sqlite/node.ts";
-import {
-  DONE,
-  call,
-  text,
-  results,
-  toolTaskId,
-  open,
-  tool,
-  blockingTool,
-  directories,
-  sqlitePath,
-} from "./harness-tools-recovery-support.ts";
-import {
-  allEntries,
-  chatSetup,
-  openChat,
-  awaited,
+import harnessToolsRecoverySupport from "./harness-tools-recovery-support.ts";
+import support from "./support.ts";
+import type supportTypes from "./support.types.ts";
+
+const { DONE, blockingTool, call, directories, open, results, sqlitePath, text, tool, toolTaskId } =
+  harnessToolsRecoverySupport;
+const {
+  aborted,
   addHooks,
   addTool,
-  type Installed,
-  removeDir,
+  allEntries,
+  awaited,
+  chatSetup,
   context,
-  aborted,
   deferred,
-} from "./support.ts";
+  openChat,
+  removeDir,
+} = support;
 
 afterEach(() =>
   Effect.runPromise(
@@ -70,7 +63,7 @@ function rerunningWorkChat(path: string) {
         return opened;
       }),
     );
-  return { cwds, started, reopen };
+  return { cwds, reopen, started };
 }
 
 const answersUnsafeTool = Effect.gen(function* () {
@@ -80,14 +73,14 @@ const answersUnsafeTool = Effect.gen(function* () {
   addTool(setup.registry, registration);
   setup.faux.setResponses([call("work"), DONE]);
   let opened = yield* open(path, setup);
-  const id = (yield* awaited(opened.root.submit({ type: "input", content: "go" }, context))).id;
+  const id = (yield* awaited(opened.root.submit({ content: "go", type: "input" }, context))).id;
   yield* awaited(started.promise);
   const taskId = yield* toolTaskId(opened.harness);
   yield* awaited(opened.harness.close(context));
 
   opened = yield* open(path, setup);
   expect((yield* awaited(opened.harness.getTask(taskId, context)))?.state).toMatchObject({
-    checkpoint: { phase: "execute", arguments: {}, replay: "unsafe" },
+    checkpoint: { arguments: {}, phase: "execute", replay: "unsafe" },
   });
   expect(
     (yield* awaited((yield* awaited(opened.harness.submission(id, context)))!.wait(context)))
@@ -95,7 +88,7 @@ const answersUnsafeTool = Effect.gen(function* () {
   ).toBe("done");
   expect(state.runs).toBe(1);
   const [result] = results(yield* allEntries(opened.root));
-  expect(result).toMatchObject({ isError: true, details: { run: 1 } });
+  expect(result).toMatchObject({ details: { run: 1 }, isError: true });
   expect(text(result)).toBe(
     "run 1\n|<harness>\n[error] Tool work was interrupted and may have partially run\n</harness>",
   );
@@ -118,10 +111,10 @@ const rerunsToolOnly = Effect.gen(function* () {
     const path = yield* sqlitePath();
     const setup = chatSetup();
     const blocking = blockingTool("work", { replay: stored });
-    const registration: Installed = addTool(setup.registry, blocking.registration);
+    const registration: supportTypes.Installed = addTool(setup.registry, blocking.registration);
     setup.faux.setResponses([call("work"), DONE]);
     let opened = yield* open(path, setup);
-    const id = (yield* awaited(opened.root.submit({ type: "input", content: "go" }, context))).id;
+    const id = (yield* awaited(opened.root.submit({ content: "go", type: "input" }, context))).id;
     yield* awaited(blocking.started.promise);
     yield* awaited(opened.harness.close(context));
 
@@ -151,7 +144,7 @@ const rerunsSafeTool = Effect.gen(function* () {
     const { cwds, started, reopen } = rerunningWorkChat(path);
     let opened = yield* awaited(reopen());
     yield* awaited(opened.root.configure({ cwd: "/one" }, context));
-    const id = (yield* awaited(opened.root.submit({ type: "input", content: "go" }, context))).id;
+    const id = (yield* awaited(opened.root.submit({ content: "go", type: "input" }, context))).id;
     yield* awaited(started.promise);
     yield* awaited(
       opened.root.configure(change === "cwd" ? { cwd: "/two" } : { extensions: [] }, context),
@@ -214,7 +207,7 @@ const rerunsBeforeToolInterrupted = Effect.gen(function* () {
   });
   setup.faux.setResponses([call("work"), DONE]);
   let opened = yield* open(path, setup);
-  const id = (yield* awaited(opened.root.submit({ type: "input", content: "go" }, context))).id;
+  const id = (yield* awaited(opened.root.submit({ content: "go", type: "input" }, context))).id;
   yield* awaited(reached.promise);
   yield* awaited(opened.harness.close(context));
 

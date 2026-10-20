@@ -3,17 +3,13 @@ import { afterEach, describe, expect, it } from "vite-plus/test";
 
 import { type CodemodeGlobal, CodemodeJournalDoc } from "../src/codemode/codemode.ts";
 import { openNodeSqliteStorage } from "../src/storage/sqlite/node.ts";
-import { codemodeChat } from "./codemode-chat-support.ts";
-import {
-  restart,
-  resultText,
-  DONE,
-  script,
-  sqlitePath,
-  directories,
-  nestedCount,
-} from "./codemode-support.ts";
-import { openChat, awaited, removeDir, context, eventually } from "./support.ts";
+import codemodeChatSupport from "./codemode-chat-support.ts";
+import codemodeSupport from "./codemode-support.ts";
+import support from "./support.ts";
+
+const { codemodeChat } = codemodeChatSupport;
+const { DONE, directories, nestedCount, restart, resultText, script, sqlitePath } = codemodeSupport;
+const { awaited, context, eventually, openChat, removeDir } = support;
 
 afterEach(() =>
   Effect.runPromise(
@@ -38,11 +34,11 @@ const runsScriptCalls = Effect.gen(function* () {
     chat.setup,
   );
   yield* awaited(
-    (yield* awaited(root.submit({ type: "input", content: "go" }, context))).wait(context),
+    (yield* awaited(root.submit({ content: "go", type: "input" }, context))).wait(context),
   );
   expect(yield* resultText(chat.setup, root)).toEqual({
-    text: '["echo a","echo b"]',
     isError: false,
+    text: '["echo a","echo b"]',
   });
   expect(yield* nestedCount(harness)).toBe(2);
   yield* awaited(harness.close(context));
@@ -57,7 +53,7 @@ const resumesScriptRestart = Effect.gen(function* () {
 			const b = await tools.echo({ text: "b" });
 			return [a, held, b, Date.now() > 0];`,
   );
-  expect(result).toEqual({ text: '["echo a","held 1","echo b",true]', isError: false });
+  expect(result).toEqual({ isError: false, text: '["echo a","held 1","echo b",true]' });
   expect(Object.fromEntries(chat.echo)).toEqual({ a: 1, b: 1 });
   expect(chat.vm.starts).toBe(2);
   expect(chat.holds.runs).toBe(2);
@@ -86,20 +82,20 @@ const replaysResultsOrder = Effect.gen(function* () {
     ),
   );
   const { harness, result } = yield* restart(chat, code);
-  expect(result).toEqual({ text: "[2,1]", isError: false });
+  expect(result).toEqual({ isError: false, text: "[2,1]" });
   expect(Object.fromEntries(chat.echo)).toEqual({ "2,1": 1 });
   yield* awaited(harness.close(context));
 });
 
 const journalsGlobalsTheir = Effect.gen(function* () {
   let counter = 0;
-  const globals: CodemodeGlobal[] = [{ name: "next", execute: () => Promise.resolve(++counter) }];
+  const globals: CodemodeGlobal[] = [{ execute: () => Promise.resolve(++counter), name: "next" }];
   const chat = codemodeChat({ globals: globals });
   const { harness, result } = yield* restart(
     chat,
     `const n = await next(); await tools.hold({}); return [n, await next()];`,
   );
-  expect(result).toEqual({ text: "[1,2]", isError: false });
+  expect(result).toEqual({ isError: false, text: "[1,2]" });
   expect(counter).toBe(2);
   yield* awaited(harness.close(context));
 });

@@ -4,17 +4,19 @@ import { createModels } from "@msa/ai/models";
 import { BACKGROUND_CONTEXT } from "@msa/chord/context";
 import { Console, Effect } from "effect";
 
-import { createRegistry, Harness } from "../../src/harness/index.ts";
+import { Harness, createRegistry } from "../../src/harness/index.ts";
 import {
   AgentDoc,
+  type HarnessSettings,
+  type ToolRegistration,
   defineExtension,
   defineTool,
-  type HarnessSettings,
   section,
-  type ToolRegistration,
 } from "../../src/index.ts";
 import { MemoryStorage } from "../../src/storage/memory.ts";
-import { awaited } from "../effect-support.ts";
+import effectSupport from "../effect-support.ts";
+
+const { awaited } = effectSupport;
 
 const context = BACKGROUND_CONTEXT;
 
@@ -22,11 +24,11 @@ type AppTool = ToolRegistration & { readonly snippet?: string };
 
 function exampleTool(name: string, description: string): AppTool {
   const tool = defineTool({
-    name,
     description,
-    parameters: Type.Object({ path: Type.String() }),
     execute: (args) =>
-      Promise.resolve({ output: [{ type: "text", text: `${name} ${args.path}` }] }),
+      Promise.resolve({ output: [{ text: `${name} ${args.path}`, type: "text" }] }),
+    name,
+    parameters: Type.Object({ path: Type.String() }),
   });
   return { ...tool, snippet: `Use ${name} for files.` };
 }
@@ -50,10 +52,10 @@ registry.install(Snippets);
 
 let timeoutMs = 60_000;
 const settings: HarnessSettings = {
+  retry: { maxRetries: 5 },
   get stream() {
     return { timeoutMs };
   },
-  retry: { maxRetries: 5 },
   toolExecution: "sequential",
 };
 
@@ -71,7 +73,7 @@ const main = Effect.gen(function* () {
   yield* awaited(
     root.configure(
       {
-        model: { provider: "anthropic", modelId: "claude-sonnet-4-5" },
+        model: { modelId: "claude-sonnet-4-5", provider: "anthropic" },
         thinkingLevel: "high",
         tools: [write, read],
       },

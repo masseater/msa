@@ -1,0 +1,13 @@
+import type { EntryRecord } from "@msa/durable";
+
+declare namespace harnessContextConversation3CasesTypes {
+  type RandomTranscript = {
+    seed: number;
+    next: number;
+    readonly written: EntryRecord[];
+    readonly calls: string[];
+    readonly seen: Map<string, number>;
+  };
+}
+
+export type { harnessContextConversation3CasesTypes as default };

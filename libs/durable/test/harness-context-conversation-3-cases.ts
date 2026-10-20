@@ -1,44 +1,49 @@
 import type { Context } from "@msa/chord";
-import { type Conversation, type EntryDraft, type EntryRecord } from "@msa/durable";
+import { type Conversation, type EntryDraft } from "@msa/durable";
 import { Effect } from "effect";
 import { dual } from "effect/Function";
 
-import { awaited } from "./effect-support.ts";
-import type { RunRuntime } from "./harness-context-support.ts";
-import { assistant, system, toolResult, user } from "./harness-support.ts";
+import effectSupport from "./effect-support.ts";
+import type harnessContextConversation3CasesTypes from "./harness-context-conversation-3-cases.types.ts";
+import type harnessContextSupportTypes from "./harness-context-support.types.ts";
+import harnessSupport from "./harness-support.ts";
 
-export type RandomTranscript = {
-  seed: number;
-  next: number;
-  readonly written: EntryRecord[];
-  readonly calls: string[];
-  readonly seen: Map<string, number>;
-};
+const { awaited } = effectSupport;
+const { assistant, system, toolResult, user } = harnessSupport;
 
-export function randomTranscript(): RandomTranscript {
-  return { seed: 7, next: 0, written: [], calls: [], seen: new Map() };
+function randomTranscript(): harnessContextConversation3CasesTypes.RandomTranscript {
+  return { calls: [], next: 0, seed: 7, seen: new Map(), written: [] };
 }
 
-function randomImpl(transcript: RandomTranscript, n: number): number {
+function randomImpl(
+  transcript: harnessContextConversation3CasesTypes.RandomTranscript,
+  n: number,
+): number {
   transcript.seed = (Math.imul(transcript.seed, 1_664_525) + 1_013_904_223) >>> 0;
   return Math.floor((transcript.seed / 2 ** 32) * n);
 }
 
-export const random: {
-  (n: number): (transcript: RandomTranscript) => number;
-  (transcript: RandomTranscript, n: number): number;
+const random: {
+  (n: number): (transcript: harnessContextConversation3CasesTypes.RandomTranscript) => number;
+  (transcript: harnessContextConversation3CasesTypes.RandomTranscript, n: number): number;
 } = dual(2, randomImpl);
 
-function countImpl(transcript: RandomTranscript, category: string): void {
+function countImpl(
+  transcript: harnessContextConversation3CasesTypes.RandomTranscript,
+  category: string,
+): void {
   transcript.seen.set(category, (transcript.seen.get(category) ?? 0) + 1);
 }
 
-export const count: {
-  (category: string): (transcript: RandomTranscript) => void;
-  (transcript: RandomTranscript, category: string): void;
+const count: {
+  (category: string): (transcript: harnessContextConversation3CasesTypes.RandomTranscript) => void;
+  (transcript: harnessContextConversation3CasesTypes.RandomTranscript, category: string): void;
 } = dual(2, countImpl);
 
-function randomMessageDraft(t: RandomTranscript, pick: number): EntryDraft | undefined {
+function randomMessageDraft(
+  t: harnessContextConversation3CasesTypes.RandomTranscript,
+  pick: number,
+): EntryDraft | undefined {
   if (pick < 3) {
     count(t, "user");
     return { kind: "message", model: [user(`u${t.next++}`)] };
@@ -71,12 +76,15 @@ function randomMessageDraft(t: RandomTranscript, pick: number): EntryDraft | und
   }
   if (pick < 10) {
     count(t, "note");
-    return { kind: "note", data: { n: t.next++ } };
+    return { data: { n: t.next++ }, kind: "note" };
   }
   return undefined;
 }
 
-function randomEditDraft(t: RandomTranscript, pick: number): EntryDraft {
+function randomEditDraft(
+  t: harnessContextConversation3CasesTypes.RandomTranscript,
+  pick: number,
+): EntryDraft {
   const target = t.written[random(t, t.written.length)];
   if (pick < 12 && target !== undefined) {
     const omit = random(t, 2) === 0;
@@ -84,24 +92,24 @@ function randomEditDraft(t: RandomTranscript, pick: number): EntryDraft {
     const action = omit
       ? { action: "omit" as const }
       : { action: "replace" as const, messages: [user(`r${t.next++}`)] };
-    return { kind: "edit", edits: [{ target: target.id, ...action }] };
+    return { edits: [{ target: target.id, ...action }], kind: "edit" };
   }
   if (pick < 13 && target !== undefined) {
     count(t, "head");
-    return { kind: "summary", head: target.id, model: [user(`h${t.next++}`)] };
+    return { head: target.id, kind: "summary", model: [user(`h${t.next++}`)] };
   }
   count(t, "user");
   return { kind: "message", model: [user(`u${t.next++}`)] };
 }
 
-export function randomDraft(t: RandomTranscript): EntryDraft {
+function randomDraft(t: harnessContextConversation3CasesTypes.RandomTranscript): EntryDraft {
   const pick = random(t, 14);
   return randomMessageDraft(t, pick) ?? randomEditDraft(t, pick);
 }
 
 function appendRandomImpl(
-  t: RandomTranscript,
-  runtime: RunRuntime,
+  t: harnessContextConversation3CasesTypes.RandomTranscript,
+  runtime: harnessContextSupportTypes.RunRuntime,
   taskContext: Context,
   conversationId: Conversation["id"],
 ) {
@@ -120,16 +128,26 @@ function appendRandomImpl(
   );
 }
 
-export const appendRandom: {
+const appendRandom: {
   (
-    runtime: RunRuntime,
+    runtime: harnessContextSupportTypes.RunRuntime,
     taskContext: Context,
     conversationId: Conversation["id"],
-  ): (t: RandomTranscript) => Promise<void>;
+  ): (t: harnessContextConversation3CasesTypes.RandomTranscript) => Promise<void>;
   (
-    t: RandomTranscript,
-    runtime: RunRuntime,
+    t: harnessContextConversation3CasesTypes.RandomTranscript,
+    runtime: harnessContextSupportTypes.RunRuntime,
     taskContext: Context,
     conversationId: Conversation["id"],
   ): Promise<void>;
 } = dual(4, appendRandomImpl);
+
+const harnessContextConversation3Cases = {
+  appendRandom,
+  count,
+  random,
+  randomDraft,
+  randomTranscript,
+};
+
+export default harnessContextConversation3Cases;

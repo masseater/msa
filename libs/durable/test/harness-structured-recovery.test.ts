@@ -1,35 +1,32 @@
-import { fauxAssistantMessage, fauxText, Type } from "@msa/ai";
-import { defineTool, type TaskId } from "@msa/durable";
+import { Type, fauxAssistantMessage, fauxText } from "@msa/ai";
+import { type TaskId, defineTool } from "@msa/durable";
 import { MemoryStorage } from "@msa/durable/storage/memory";
 import { Effect } from "effect";
 import { afterEach, describe, expect, it } from "vite-plus/test";
 
 import { openNodeSqliteStorage } from "../src/storage/sqlite/node.ts";
-import { toolCalls } from "./harness-structured-events.ts";
-import { seed, COMPLETED } from "./harness-structured-recovery-cases.ts";
-import {
-  state,
-  outcomeOf,
-  open,
-  gates,
-  until,
-  start,
+import harnessStructuredEvents from "./harness-structured-events.ts";
+import harnessStructuredRecoveryCases from "./harness-structured-recovery-cases.ts";
+import harnessStructuredSupport from "./harness-structured-support.ts";
+import support from "./support.ts";
+
+const { toolCalls } = harnessStructuredEvents;
+const { COMPLETED, seed } = harnessStructuredRecoveryCases;
+const {
   behaviors,
-  log,
-  openNodes,
-  parentOf,
   directories,
+  gates,
+  log,
+  open,
+  openNodes,
+  outcomeOf,
+  parentOf,
   sqlitePath,
-} from "./harness-structured-support.ts";
-import {
-  allEntries,
-  chatSetup,
-  openChat,
-  awaited,
-  addTool,
-  removeDir,
-  context,
-} from "./support.ts";
+  start,
+  state,
+  until,
+} = harnessStructuredSupport;
+const { addTool, allEntries, awaited, chatSetup, context, openChat, removeDir } = support;
 
 afterEach(() =>
   Effect.runPromise(
@@ -44,30 +41,33 @@ afterEach(() =>
 );
 
 const FAILED = {
+  outcome: { error: { message: "declined" }, status: "failed" },
   status: "terminal",
-  outcome: { status: "failed", error: { message: "declined" } },
 };
 
 const resumesParentAwaited = Effect.gen(function* () {
   const runPromise = Effect.runPromiseWith(yield* Effect.context<never>());
 
   const path = yield* sqlitePath();
-  const { parent, children } = yield* seed(path, ["c1"], (set, { parent, children }) =>
-    runPromise(
-      Effect.gen(function* () {
-        yield* awaited(set(children[0]!, { state: COMPLETED }));
-        yield* awaited(
-          set(parent, {
-            state: {
-              status: "waiting",
-              checkpoint: { phase: "resume", round: 1 },
-              on: children,
-              policy: "allSettled",
-            },
-          }),
-        );
-      }),
-    ),
+  const { parent, children } = yield* seed(
+    path,
+    ["c1"],
+    (set, { parent: parentInner5, children: childrenInner4 }) =>
+      runPromise(
+        Effect.gen(function* () {
+          yield* awaited(set(childrenInner4[0]!, { state: COMPLETED }));
+          yield* awaited(
+            set(parentInner5, {
+              state: {
+                checkpoint: { phase: "resume", round: 1 },
+                on: childrenInner4,
+                policy: "allSettled",
+                status: "waiting",
+              },
+            }),
+          );
+        }),
+      ),
   );
   const { harness } = yield* openNodes(yield* awaited(openNodeSqliteStorage(path)));
   expect(yield* awaited(outcomeOf(harness, parent))).toBe("completed");
@@ -80,22 +80,25 @@ const marksFailFastSiblings = Effect.gen(function* () {
   const runPromise = Effect.runPromiseWith(yield* Effect.context<never>());
 
   const path = yield* sqlitePath();
-  const { parent, children } = yield* seed(path, ["c1", "c2"], (set, { parent, children }) =>
-    runPromise(
-      Effect.gen(function* () {
-        yield* awaited(set(children[0]!, { state: FAILED }));
-        yield* awaited(
-          set(parent, {
-            state: {
-              status: "waiting",
-              checkpoint: { phase: "resume", round: 1 },
-              on: children,
-              policy: "failFast",
-            },
-          }),
-        );
-      }),
-    ),
+  const { parent, children } = yield* seed(
+    path,
+    ["c1", "c2"],
+    (set, { parent: parentInner4, children: childrenInner3 }) =>
+      runPromise(
+        Effect.gen(function* () {
+          yield* awaited(set(childrenInner3[0]!, { state: FAILED }));
+          yield* awaited(
+            set(parentInner4, {
+              state: {
+                checkpoint: { phase: "resume", round: 1 },
+                on: childrenInner3,
+                policy: "failFast",
+                status: "waiting",
+              },
+            }),
+          );
+        }),
+      ),
   );
   const { harness } = yield* openNodes(yield* awaited(openNodeSqliteStorage(path)));
   expect(yield* awaited(outcomeOf(harness, children[1]!))).toBe("aborted");
@@ -116,9 +119,9 @@ const finalizesHeldOutcome = Effect.gen(function* () {
   const runPromise = Effect.runPromiseWith(yield* Effect.context<never>());
 
   const path = yield* sqlitePath();
-  const held = { status: "completing", outcome: { status: "completed", result: "parent" } };
-  const { parent, children } = yield* seed(path, ["c1"], (set, { parent }) =>
-    runPromise(Effect.asVoid(Effect.suspend(() => awaited(set(parent, { state: held }))))),
+  const held = { outcome: { result: "parent", status: "completed" }, status: "completing" };
+  const { parent, children } = yield* seed(path, ["c1"], (set, { parent: parentInner3 }) =>
+    runPromise(Effect.asVoid(Effect.suspend(() => awaited(set(parentInner3, { state: held }))))),
   );
   let opened = yield* openNodes(yield* awaited(openNodeSqliteStorage(path)));
   yield* until(() => log.includes("run:c1"));
@@ -132,13 +135,16 @@ const finalizesHeldOutcome = Effect.gen(function* () {
   yield* awaited(opened.harness.close(context));
 
   const drained = yield* sqlitePath();
-  const second = yield* seed(drained, ["c1"], (set, { parent, children }) =>
-    runPromise(
-      Effect.gen(function* () {
-        yield* awaited(set(children[0]!, { state: COMPLETED }));
-        yield* awaited(set(parent, { state: held }));
-      }),
-    ),
+  const second = yield* seed(
+    drained,
+    ["c1"],
+    (set, { parent: parentInner2, children: childrenInner2 }) =>
+      runPromise(
+        Effect.gen(function* () {
+          yield* awaited(set(childrenInner2[0]!, { state: COMPLETED }));
+          yield* awaited(set(parentInner2, { state: held }));
+        }),
+      ),
   );
   opened = yield* openNodes(yield* awaited(openNodeSqliteStorage(drained)));
   expect(yield* awaited(outcomeOf(opened.harness, second.parent))).toBe("completed");
@@ -149,24 +155,27 @@ const resumesBottomUp = Effect.gen(function* () {
   const runPromise = Effect.runPromiseWith(yield* Effect.context<never>());
 
   const path = yield* sqlitePath();
-  const { parent, children } = yield* seed(path, ["c1"], (set, { parent, children }) =>
-    runPromise(
-      Effect.asVoid(
-        Effect.suspend(() =>
-          awaited(
-            set(parent, {
-              abortRequested: true,
-              state: {
-                status: "waiting",
-                checkpoint: { phase: "resume", round: 1 },
-                on: children,
-                policy: "allSettled",
-              },
-            }),
+  const { parent, children } = yield* seed(
+    path,
+    ["c1"],
+    (set, { parent: parentInner, children: childrenInner }) =>
+      runPromise(
+        Effect.asVoid(
+          Effect.suspend(() =>
+            awaited(
+              set(parentInner, {
+                abortRequested: true,
+                state: {
+                  checkpoint: { phase: "resume", round: 1 },
+                  on: childrenInner,
+                  policy: "allSettled",
+                  status: "waiting",
+                },
+              }),
+            ),
           ),
         ),
       ),
-    ),
   );
   const { harness } = yield* openNodes(yield* awaited(openNodeSqliteStorage(path)));
   expect(yield* awaited(outcomeOf(harness, parent))).toBe("aborted");
@@ -219,10 +228,10 @@ const ownsToolTasks = Effect.gen(function* () {
   addTool(
     setup.registry,
     defineTool({
-      name: "noop",
       description: "Does nothing",
-      parameters: Type.Object({}),
       execute: () => Promise.resolve({ output: [] }),
+      name: "noop",
+      parameters: Type.Object({}),
     }),
   );
   setup.faux.setResponses([
@@ -232,7 +241,7 @@ const ownsToolTasks = Effect.gen(function* () {
   const { harness, root } = yield* openChat(new MemoryStorage(), setup);
   expect(
     (yield* awaited(
-      (yield* awaited(root.submit({ type: "input", content: "go" }, context))).wait(context),
+      (yield* awaited(root.submit({ content: "go", type: "input" }, context))).wait(context),
     )).status,
   ).toBe("done");
   const tasks = (yield* awaited(
@@ -247,8 +256,8 @@ const ownsToolTasks = Effect.gen(function* () {
   expect(second!.owner).toBeUndefined();
   const assistant = (yield* allEntries(root)).find((entry) => entry.kind === "msa.assistant")!;
   expect(first!.state).toEqual({
+    outcome: { result: { entryId: assistant.id }, status: "completed" },
     status: "terminal",
-    outcome: { status: "completed", result: { entryId: assistant.id } },
   });
   yield* awaited(harness.close(context));
 });

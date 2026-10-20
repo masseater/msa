@@ -10,46 +10,37 @@ import { Console, Effect } from "effect";
 import { openNodeJsonlStorage } from "../src/storage/jsonl/node.ts";
 import { MemoryStorage } from "../src/storage/memory.ts";
 import { openNodeSqliteStorage } from "../src/storage/sqlite/node.ts";
-import type { Storage } from "../src/types.ts";
-import { toJsonText, awaited } from "./effect-support.ts";
-import { makeTempFile, removeDir } from "./platform-support.ts";
-import { type DiskFootprint, diskFootprint } from "./storage-disk-footprint.ts";
+import effectSupport from "./effect-support.ts";
+import platformSupport from "./platform-support.ts";
+import diskFootprint from "./storage-disk-footprint.ts";
+import type storageMemoryWorkerTypes from "./storage-memory-worker.types.ts";
 
-export const STORAGE_BENCHMARK_BACKENDS = ["memory", "sqlite", "jsonl"] as const;
+const { awaited, toJsonText } = effectSupport;
+const { makeTempFile, removeDir } = platformSupport;
 
-type StorageBenchmarkBackend = (typeof STORAGE_BENCHMARK_BACKENDS)[number];
-
-export type MemorySnapshot = {
-  readonly heapUsed: number;
-  readonly rss: number;
-  readonly external: number;
-};
-
-export type StorageMemoryResult = {
-  readonly backend: StorageBenchmarkBackend;
-  readonly scale: string;
-  readonly recordCount: number;
-  readonly baseline: MemorySnapshot;
-  readonly postSeed: MemorySnapshot;
-  readonly postRead: MemorySnapshot;
-  readonly disk?: DiskFootprint;
-};
+const STORAGE_BENCHMARK_BACKENDS: readonly storageMemoryWorkerTypes.StorageBenchmarkBackend[] = [
+  "memory",
+  "sqlite",
+  "jsonl",
+];
 
 function collectGarbage(): void {
   if (globalThis.gc === undefined)
-    throw new Error("Storage memory measurement requires Node.js --expose-gc");
+    throw new Error(
+      "storageMemoryWorkerTypes.Storage memory measurement requires Node.js --expose-gc",
+    );
   for (let index = 0; index < 3; index++) globalThis.gc();
 }
 
-function snapshot(): MemorySnapshot {
+function snapshot(): storageMemoryWorkerTypes.MemorySnapshot {
   const usage = process.memoryUsage();
-  return { heapUsed: usage.heapUsed, rss: usage.rss, external: usage.external };
+  return { external: usage.external, heapUsed: usage.heapUsed, rss: usage.rss };
 }
 
 const openBenchmarkStorage = Effect.fn("openBenchmarkStorage")(function* (
-  backend: StorageBenchmarkBackend,
+  backend: storageMemoryWorkerTypes.StorageBenchmarkBackend,
 ) {
-  let storage: Storage;
+  let storage: storageMemoryWorkerTypes.Storage;
   let directory: string | undefined;
   let path: string | undefined;
   if (backend === "memory") {
@@ -62,11 +53,11 @@ const openBenchmarkStorage = Effect.fn("openBenchmarkStorage")(function* (
         ? yield* awaited(openNodeSqliteStorage(path))
         : yield* awaited(openNodeJsonlStorage(path, BACKGROUND_CONTEXT));
   }
-  return { storage, directory, path };
+  return { directory, path, storage };
 });
 
 const readEveryScenario = Effect.fn("readEveryScenario")(function* (
-  storage: Storage,
+  storage: storageMemoryWorkerTypes.Storage,
   dataset: Awaited<ReturnType<typeof seedStorageBenchmark>>,
 ) {
   let checksum = 0;
@@ -80,11 +71,12 @@ const readEveryScenario = Effect.fn("readEveryScenario")(function* (
     for (const scenario of STORAGE_READ_BENCHMARKS)
       checksum += yield* awaited(scenario.run(storage, dataset));
   }
-  if (!Number.isFinite(checksum)) throw new Error("Storage memory read checksum is invalid");
+  if (!Number.isFinite(checksum))
+    throw new Error("storageMemoryWorkerTypes.Storage memory read checksum is invalid");
 });
 
-export const runWorker = Effect.fn("runWorker")(function* (
-  backend: StorageBenchmarkBackend,
+const runWorker = Effect.fn("runWorker")(function* (
+  backend: storageMemoryWorkerTypes.StorageBenchmarkBackend,
   scale: StorageBenchmarkScale,
 ) {
   const { storage, directory, path } = yield* openBenchmarkStorage(backend);
@@ -103,12 +95,12 @@ export const runWorker = Effect.fn("runWorker")(function* (
     yield* Console.log(
       yield* toJsonText({
         backend,
-        scale: scale.name,
-        recordCount,
         baseline,
-        postSeed,
-        postRead,
         disk,
+        postRead,
+        postSeed,
+        recordCount,
+        scale: scale.name,
       }),
     );
   }).pipe(
@@ -120,3 +112,10 @@ export const runWorker = Effect.fn("runWorker")(function* (
     ),
   );
 });
+
+const storageMemoryWorker = {
+  STORAGE_BENCHMARK_BACKENDS,
+  runWorker,
+};
+
+export default storageMemoryWorker;

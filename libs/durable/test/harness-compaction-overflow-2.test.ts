@@ -3,18 +3,12 @@ import { CompactionTask } from "@msa/durable/harness";
 import { Effect } from "effect";
 import { afterEach, describe, expect, it } from "vite-plus/test";
 
-import {
-  text,
-  summary,
-  history,
-  directories,
-  firstUserText,
-  userText,
-  open,
-  result,
-  kinds,
-} from "./harness-compaction-support.ts";
-import { allEntries, awaited, addHooks, removeDir, context } from "./support.ts";
+import harnessCompactionSupport from "./harness-compaction-support.ts";
+import support from "./support.ts";
+
+const { directories, firstUserText, history, kinds, open, result, summary, text, userText } =
+  harnessCompactionSupport;
+const { addHooks, allEntries, awaited, context, removeDir } = support;
 
 afterEach(() =>
   Effect.runPromise(
@@ -32,17 +26,17 @@ const summarizesReplacedEntry = Effect.gen(function* () {
   yield* awaited(
     chat.root.submit(
       {
-        type: "write",
         entry: {
-          kind: "app.redact",
           edits: [
             {
-              target: u1!.id,
               action: "replace",
-              messages: [{ role: "user", content: "REDACTED", timestamp: 0 }],
+              messages: [{ content: "REDACTED", role: "user", timestamp: 0 }],
+              target: u1!.id,
             },
           ],
+          kind: "app.redact",
         },
+        type: "write",
       },
       context,
     ),
@@ -84,9 +78,9 @@ const compactsForkCut = Effect.gen(function* () {
   const u3 = entries.find((record) => userText(record.model?.[0]).startsWith("u3"))!;
   const view = yield* awaited(fork.context(context));
   expect(view.head).toMatchObject({
-    kind: "msa.compaction",
-    head: u3.id,
     conversationId: fork.id,
+    head: u3.id,
+    kind: "msa.compaction",
   });
   expect(view.messages.slice(1).map(userText)).toEqual([text("u3", 100), text("a3", 100)]);
   expect((yield* kinds(chat.root)).includes("msa.compaction")).toBe(false);

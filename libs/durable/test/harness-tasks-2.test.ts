@@ -1,26 +1,32 @@
 import type { Context } from "@msa/chord";
 import {
-  defineDoc,
-  defineEntry,
-  defineTask,
   type EntryId,
   type TaskId,
   type TaskRuntime,
+  defineDoc,
+  defineEntry,
+  defineTask,
 } from "@msa/durable";
 import { Effect } from "effect";
 import { describe, expect, it } from "vite-plus/test";
 
-import { awaited } from "./effect-support.ts";
-import { user } from "./harness-support.ts";
-import { oneStep, openRoot } from "./harness-tasks-support.ts";
-import { context } from "./session-support.ts";
-import { completed } from "./task-support.ts";
+import effectSupport from "./effect-support.ts";
+import harnessSupport from "./harness-support.ts";
+import harnessTasksSupport from "./harness-tasks-support.ts";
+import sessionSupport from "./session-support.ts";
+import taskSupport from "./task-support.ts";
+
+const { awaited } = effectSupport;
+const { user } = harnessSupport;
+const { oneStep, openRoot } = harnessTasksSupport;
+const { context } = sessionSupport;
+const { completed } = taskSupport;
 
 const Progress = defineDoc<{ lines: string[] }>({
-  kind: "test.task-progress",
-  version: 1,
-  scope: "task",
   initial: () => ({ lines: [] }),
+  kind: "test.task-progress",
+  scope: "task",
+  version: 1,
 });
 
 const Answer = defineEntry("answer");
@@ -44,32 +50,10 @@ type MemoRuntime = Pick<TaskRuntime<null, { phase: string }, never, object>, "me
 
 const seen: { childId?: TaskId; progressSeen?: unknown } = {};
 const Writer = defineTask<null, { phase: "write" } | { phase: "answer" }, { entryId: EntryId }>({
-  name: "test.writer",
-  version: 1,
+  abort: () => Promise.resolve(),
   initial: () => ({ phase: "write" }),
+  name: "test.writer",
   phases: {
-    write: (task, runtime, ctx) =>
-      Effect.runPromise(
-        Effect.gen(function* () {
-          yield* checkMemos(runtime, ctx);
-          yield* awaited(
-            runtime.commit(
-              (tx) =>
-                tx
-                  .doc(Progress, task.id)
-                  .then((progress) => {
-                    progress.lines.push("wrote");
-                    return tx.createTask(Child, null, { ownership: { kind: "conversation" } });
-                  })
-                  .then((childId) => {
-                    seen.childId = childId;
-                    return { status: "running", checkpoint: { phase: "answer" } } as const;
-                  }),
-              ctx,
-            ),
-          );
-        }),
-      ),
     answer: (task, runtime, ctx) =>
       Effect.runPromise(
         Effect.gen(function* () {
@@ -95,8 +79,30 @@ const Writer = defineTask<null, { phase: "write" } | { phase: "answer" }, { entr
           );
         }),
       ),
+    write: (task, runtime, ctx) =>
+      Effect.runPromise(
+        Effect.gen(function* () {
+          yield* checkMemos(runtime, ctx);
+          yield* awaited(
+            runtime.commit(
+              (tx) =>
+                tx
+                  .doc(Progress, task.id)
+                  .then((progress) => {
+                    progress.lines.push("wrote");
+                    return tx.createTask(Child, null, { ownership: { kind: "conversation" } });
+                  })
+                  .then((childId) => {
+                    seen.childId = childId;
+                    return { checkpoint: { phase: "answer" }, status: "running" } as const;
+                  }),
+              ctx,
+            ),
+          );
+        }),
+      ),
   },
-  abort: () => Promise.resolve(),
+  version: 1,
 });
 
 const commitsResultsEntries = Effect.gen(function* () {

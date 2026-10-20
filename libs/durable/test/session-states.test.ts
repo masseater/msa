@@ -2,16 +2,21 @@ import { defineDocFamily } from "@msa/durable";
 import { Effect } from "effect";
 import { describe, expect, it } from "vite-plus/test";
 
-import { awaited } from "./effect-support.ts";
-import { type State, StateDoc, createState } from "./session-states-cases.ts";
-import { context, documentChanges, flush, openTestSession } from "./session-support.ts";
+import effectSupport from "./effect-support.ts";
+import sessionStatesCases from "./session-states-cases.ts";
+import type sessionStatesCasesTypes from "./session-states-cases.types.ts";
+import sessionSupport from "./session-support.ts";
+
+const { awaited } = effectSupport;
+const { StateDoc, createState } = sessionStatesCases;
+const { context, documentChanges, flush, openTestSession } = sessionSupport;
 
 const FamilyDoc = defineDocFamily<{ value: number }, string>({
-  kind: "state.family",
-  version: 1,
   family: true,
-  scope: "session",
   initial: (seed) => ({ value: seed.length }),
+  kind: "state.family",
+  scope: "session",
+  version: 1,
 });
 
 const neverCreatesAbsent = Effect.gen(function* () {
@@ -29,9 +34,12 @@ const returnsImmediatelyHydrated = Effect.gen(function* () {
   const { session } = yield* createState();
   const baseline = (yield* awaited(session.snapshot(StateDoc, context)))!;
   const state = (yield* awaited(session.documentState(StateDoc, context)))!;
-  const deliveries: Array<{ value: Readonly<State> | null; sequence: number }> = [];
+  const deliveries: Array<{
+    value: Readonly<sessionStatesCasesTypes.State> | null;
+    sequence: number;
+  }> = [];
   state.subscribe((value, _context, delivery) =>
-    deliveries.push({ value, sequence: delivery.sequence }),
+    deliveries.push({ sequence: delivery.sequence, value }),
   );
   expect(state.value).toBe(baseline);
 

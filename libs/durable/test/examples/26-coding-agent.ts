@@ -7,14 +7,16 @@ import {
   fauxToolCall,
 } from "@msa/ai";
 import { BACKGROUND_CONTEXT } from "@msa/chord/context";
-import { defineExtension, type HarnessSettings, section, ToolResultEntry } from "@msa/durable";
-import { createRegistry, Harness } from "@msa/durable/harness";
+import { type HarnessSettings, ToolResultEntry, defineExtension, section } from "@msa/durable";
+import { Harness, createRegistry } from "@msa/durable/harness";
 import { MemoryStorage } from "@msa/durable/storage/memory";
 import { Console, Effect } from "effect";
 
 import { NodeExecutionEnv } from "../../src/env/node.ts";
 import { CodingTools } from "../../src/tools/index.ts";
-import { awaited, joinPath, makeDirectory, makeTempDir, removeDir } from "../support.ts";
+import support from "../support.ts";
+
+const { awaited, joinPath, makeDirectory, makeTempDir, removeDir } = support;
 
 const context = BACKGROUND_CONTEXT;
 
@@ -35,13 +37,13 @@ const mainStep1 = Effect.gen(function* () {
   registry.install(CodingTools);
   registry.install(Coding);
 
-  const userSettings = { parallelTools: true, maxRetries: 3 };
+  const userSettings = { maxRetries: 3, parallelTools: true };
   const settings: HarnessSettings = {
-    get toolExecution() {
-      return userSettings.parallelTools ? "parallel" : "sequential";
-    },
     get retry() {
       return { maxRetries: userSettings.maxRetries };
+    },
+    get toolExecution() {
+      return userSettings.parallelTools ? "parallel" : "sequential";
     },
   };
 
@@ -55,14 +57,14 @@ const mainStep1 = Effect.gen(function* () {
   faux.setResponses([pwd(), fauxAssistantMessage("Done."), pwd(), fauxAssistantMessage("Done.")]);
 
   const harness = yield* awaited(
-    Harness.open(new MemoryStorage(), { models, registry, settings, env }, context),
+    Harness.open(new MemoryStorage(), { env, models, registry, settings }, context),
   );
   const root = yield* awaited(
     harness.root(context, {
-      agent: { model: { provider: "faux", modelId: "faux-1" }, cwd: workspace },
+      agent: { cwd: workspace, model: { modelId: "faux-1", provider: "faux" } },
     }),
   );
-  return { workspace, userSettings, harness, root };
+  return { harness, root, userSettings, workspace };
 });
 
 const main = Effect.gen(function* () {
@@ -75,7 +77,7 @@ const main = Effect.gen(function* () {
   });
 
   yield* awaited(
-    (yield* awaited(root.submit({ type: "input", content: "Where are we?" }, context))).wait(
+    (yield* awaited(root.submit({ content: "Where are we?", type: "input" }, context))).wait(
       context,
     ),
   );
@@ -84,7 +86,7 @@ const main = Effect.gen(function* () {
   yield* awaited(root.configure({ cwd: joinPath(workspace, "app") }, context));
   userSettings.parallelTools = false;
   yield* awaited(
-    (yield* awaited(root.submit({ type: "input", content: "And now?" }, context))).wait(context),
+    (yield* awaited(root.submit({ content: "And now?", type: "input" }, context))).wait(context),
   );
   yield* Console.log("bash ran in:", yield* lastBashOutput());
 

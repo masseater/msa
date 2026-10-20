@@ -5,18 +5,20 @@ import { Console, Effect } from "effect";
 import { defineDoc } from "../../src/index.ts";
 import { createSession } from "../../src/session/index.ts";
 import { MemoryStorage } from "../../src/storage/memory.ts";
-import { awaited } from "../effect-support.ts";
+import effectSupport from "../effect-support.ts";
+
+const { awaited } = effectSupport;
 
 const context = BACKGROUND_CONTEXT;
 const session = createSession(new MemoryStorage());
 
 const Notes = defineDoc<{ text: string }>({
-  kind: "example.notes",
-  version: 1,
-  scope: "conversation",
-  history: "rewindable",
   fork: "asOf",
+  history: "rewindable",
   initial: () => ({ text: "" }),
+  kind: "example.notes",
+  scope: "conversation",
+  version: 1,
 });
 
 const main = Effect.gen(function* () {
@@ -31,7 +33,7 @@ const main = Effect.gen(function* () {
       (tx) =>
         runPromise(
           Effect.gen(function* () {
-            const entry = yield* awaited(tx.appendEntry(chat.id, { kind: "note", data: "hello" }));
+            const entry = yield* awaited(tx.appendEntry(chat.id, { data: "hello", kind: "note" }));
             (yield* awaited(tx.doc(Notes, chat.id))).text = "after hello";
             return entry;
           }),
@@ -46,7 +48,7 @@ const main = Effect.gen(function* () {
         runPromise(
           Effect.gen(function* () {
             const entry = yield* awaited(
-              tx.appendEntry(chat.id, { kind: "note", data: "goodbye" }),
+              tx.appendEntry(chat.id, { data: "goodbye", kind: "note" }),
             );
             (yield* awaited(tx.doc(Notes, chat.id))).text = "after goodbye";
             return entry;

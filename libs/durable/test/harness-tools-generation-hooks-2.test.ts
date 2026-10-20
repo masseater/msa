@@ -4,21 +4,24 @@ import { Effect } from "effect";
 import { describe, expect, it } from "vite-plus/test";
 
 import { NodeExecutionEnv } from "../src/env/node.ts";
-import { resultText, results, DONE, calls, run, tool } from "./harness-tools-support.ts";
-import { chatSetup, openChat, awaited, addTask, addTool, context } from "./support.ts";
+import harnessToolsSupport from "./harness-tools-support.ts";
+import support from "./support.ts";
+
+const { DONE, calls, resultText, results, run, tool } = harnessToolsSupport;
+const { addTask, addTool, awaited, chatSetup, context, openChat } = support;
 
 const child = defineTask<{ n: number }, { phase: "run" }, number>({
-  name: "test.child",
-  version: 1,
+  abort: () => Promise.resolve(),
   initial: () => ({ phase: "run" }),
+  name: "test.child",
   phases: {
     run: (task, runtime, callContext) =>
       runtime.commit(
-        () => ({ status: "terminal", outcome: { status: "completed", result: task.input.n * 2 } }),
+        () => ({ outcome: { result: task.input.n * 2, status: "completed" }, status: "terminal" }),
         callContext,
       ),
   },
-  abort: () => Promise.resolve(),
+  version: 1,
 });
 
 function probingToolSetup() {
@@ -35,7 +38,7 @@ function probingToolSetup() {
           api.commit(
             (tx) =>
               configure(tx, api.conversationId, { cwd: "/" }).then(() =>
-                tx.appendEntry(api.conversationId, { kind: "test.note", data: api.callId }),
+                tx.appendEntry(api.conversationId, { data: api.callId, kind: "test.note" }),
               ),
             context,
           ),
@@ -55,7 +58,7 @@ function probingToolSetup() {
     ),
   );
   addTool(setup.registry, probe);
-  return { setup, seen };
+  return { seen, setup };
 }
 
 const buildsEnvironmentPer = Effect.gen(function* () {
@@ -71,9 +74,9 @@ const buildsEnvironmentPer = Effect.gen(function* () {
   });
   yield* awaited(root.configure({ cwd: "/tmp" }, context));
   yield* awaited(
-    (yield* awaited(root.submit({ type: "input", content: "go" }, context))).wait(context),
+    (yield* awaited(root.submit({ content: "go", type: "input" }, context))).wait(context),
   );
-  const outcome = { status: "completed", result: 42 };
+  const outcome = { result: 42, status: "completed" };
   const call = (cwd: string) => [cwd, ["probe"], true, true, 1, 1, outcome];
   expect(seen).toEqual([...call("/tmp"), ...call("/")]);
   expect(targets).toContainEqual([root.id, "/tmp"]);
@@ -85,7 +88,7 @@ const answersThrowingEnvironment = Effect.gen(function* () {
   const setup = chatSetup();
   addTool(
     setup.registry,
-    tool("probe", () => Promise.resolve({ output: [{ type: "text", text: "ran" }] })),
+    tool("probe", () => Promise.resolve({ output: [{ text: "ran", type: "text" }] })),
   );
   const { harness, entries } = yield* run(setup, [calls(["probe", {}, "c1"]), DONE], undefined, {
     env: () => {

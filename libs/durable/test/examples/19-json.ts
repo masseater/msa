@@ -2,13 +2,15 @@ import * as NodeRuntime from "@effect/platform-node/NodeRuntime";
 import { createModels, fauxAssistantMessage, fauxProvider, fauxText, fauxToolCall } from "@msa/ai";
 import { openaiProvider } from "@msa/ai/providers/openai";
 import { defineExtension, section } from "@msa/durable";
-import { createRegistry, Harness, watchEvents } from "@msa/durable/harness";
+import { Harness, createRegistry, watchEvents } from "@msa/durable/harness";
 import { Console, Effect } from "effect";
 
 import { NodeExecutionEnv } from "../../src/env/node.ts";
 import { createBashTool, createReadTool } from "../../src/tools/index.ts";
-import { awaited, BACKGROUND_CONTEXT, environmentVariable } from "../support.ts";
-import { openJsonExampleStorage } from "./json-storage.ts";
+import support from "../support.ts";
+import openJsonExampleStorage from "./json-storage.ts";
+
+const { BACKGROUND_CONTEXT, awaited, environmentVariable } = support;
 
 const context = BACKGROUND_CONTEXT;
 const args = process.argv.slice(2);
@@ -25,11 +27,11 @@ const mainStep1 = Effect.gen(function* () {
   const print = (value: unknown): void => void process.stdout.write(`${JSON.stringify(value)}\n`);
 
   const models = createModels();
-  let model = { provider: "openai", modelId: "gpt-6-sol" };
+  let model = { modelId: "gpt-6-sol", provider: "openai" };
   if (environmentVariable("OPENAI_API_KEY", true) === undefined) {
     const faux = fauxProvider({ tokensPerSecond: 200 });
     models.setProvider(faux.provider);
-    model = { provider: "faux", modelId: "faux-1" };
+    model = { modelId: "faux-1", provider: "faux" };
     faux.setResponses([
       fauxAssistantMessage([fauxToolCall("bash", { command: "ls" }, { id: "call-1" })], {
         stopReason: "toolUse",
@@ -46,16 +48,16 @@ const mainStep1 = Effect.gen(function* () {
   registry.install(
     defineExtension({
       name: "coding",
-      tools: [createReadTool(), createBashTool()],
       sections: [section("preamble", () => "You are a concise coding assistant.", { tag: false })],
+      tools: [createReadTool(), createBashTool()],
     }),
   );
   const env = new NodeExecutionEnv({ cwd: process.cwd() });
   const harness = yield* awaited(
-    Harness.open(storage, { models, registry, env: () => env }, context),
+    Harness.open(storage, { env: () => env, models, registry }, context),
   );
   const root = yield* awaited(harness.root(context, { agent: { model } }));
-  return { location, print, harness, root };
+  return { harness, location, print, root };
 });
 
 const main = Effect.gen(function* () {
@@ -77,7 +79,7 @@ const main = Effect.gen(function* () {
     stop = () => watch.stop();
   }
 
-  const submission = yield* awaited(root.submit({ type: "input", content: prompt }, context));
+  const submission = yield* awaited(root.submit({ content: prompt, type: "input" }, context));
   yield* awaited(submission.wait(context));
   yield* awaited(harness.waitForIdle(context));
   yield* Effect.sleep(1);

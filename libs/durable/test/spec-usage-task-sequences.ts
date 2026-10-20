@@ -1,21 +1,27 @@
-import { configure, LiveDoc, type Tx } from "@msa/durable";
+import { LiveDoc, type Tx, configure } from "@msa/durable";
 import { Effect } from "effect";
 import { dual } from "effect/Function";
 
-import { awaited } from "./effect-support.ts";
-import type { followTask } from "./spec-usage-extensions.ts";
-import type { SpecNames } from "./spec-usage-names.ts";
-import type { SpecExtensions } from "./spec-usage-sequences.ts";
+import effectSupport from "./effect-support.ts";
+import specUsageExtensions from "./spec-usage-extensions.ts";
+import type specUsageNamesTypes from "./spec-usage-names.ts";
+import type specUsageSequencesTypes from "./spec-usage-sequences.types.ts";
+
+const { awaited } = effectSupport;
+const { followTask } = specUsageExtensions;
 
 const spawnSubagent =
-  ({ Anchor, name }: SpecNames, SubagentTools: SpecExtensions["SubagentTools"]) =>
+  (
+    { Anchor, name }: specUsageNamesTypes.SpecNames,
+    SubagentTools: specUsageSequencesTypes.SpecExtensions["SubagentTools"],
+  ) =>
   (tx: Tx) =>
     Effect.runPromise(
       Effect.gen(function* () {
         const anchor = yield* awaited(
           tx.createTask(Anchor, null, {
-            ownership: { kind: "conversation" },
             background: true,
+            ownership: { kind: "conversation" },
           }),
         );
         const child = yield* awaited(
@@ -32,7 +38,7 @@ const spawnSubagent =
 
 const tableRulesSequence =
   (
-    { session, conversationId, message, context }: SpecNames,
+    { session, conversationId, message, context }: specUsageNamesTypes.SpecNames,
     Follow: ReturnType<typeof followTask>,
   ) =>
   () =>
@@ -54,7 +60,7 @@ const tableRulesSequence =
                     tx.createTask(
                       Follow,
                       {},
-                      { ownership: { kind: "conversation" }, conversationId },
+                      { conversationId, ownership: { kind: "conversation" } },
                     ),
                   );
                   void conversation;
@@ -67,14 +73,12 @@ const tableRulesSequence =
     );
 
 function taskSequencesImpl(
-  names: SpecNames,
-  SubagentTools: SpecExtensions["SubagentTools"],
+  names: specUsageNamesTypes.SpecNames,
+  SubagentTools: specUsageSequencesTypes.SpecExtensions["SubagentTools"],
   Follow: ReturnType<typeof followTask>,
 ) {
   const { session, conversationId, context } = names;
   return {
-    spawn: spawnSubagent(names, SubagentTools),
-    tableRules: tableRulesSequence(names, Follow),
     revokedDraft: () =>
       session
         .commit((tx) => tx.doc(LiveDoc, conversationId).then((escaped) => escaped), context)
@@ -82,17 +86,21 @@ function taskSequencesImpl(
           escaped!.generation = { attempt: 1 };
           return undefined;
         }),
+    spawn: spawnSubagent(names, SubagentTools),
+    tableRules: tableRulesSequence(names, Follow),
   };
 }
 
-export const taskSequences: {
+const taskSequences: {
   (
-    SubagentTools: SpecExtensions["SubagentTools"],
+    SubagentTools: specUsageSequencesTypes.SpecExtensions["SubagentTools"],
     Follow: ReturnType<typeof followTask>,
-  ): (arg0: SpecNames) => ReturnType<typeof taskSequencesImpl>;
+  ): (arg0: specUsageNamesTypes.SpecNames) => ReturnType<typeof taskSequencesImpl>;
   (
-    arg0: SpecNames,
-    SubagentTools: SpecExtensions["SubagentTools"],
+    arg0: specUsageNamesTypes.SpecNames,
+    SubagentTools: specUsageSequencesTypes.SpecExtensions["SubagentTools"],
     Follow: ReturnType<typeof followTask>,
   ): ReturnType<typeof taskSequencesImpl>;
 } = dual(3, taskSequencesImpl);
+
+export default taskSequences;

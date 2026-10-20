@@ -1,25 +1,24 @@
 import {
   type AssistantMessage,
-  fauxAssistantMessage,
   type Message,
   type SimpleStreamOptions,
+  fauxAssistantMessage,
 } from "@msa/ai";
 import { AssistantEntry, ProviderDoc } from "@msa/durable";
 import { MemoryStorage } from "@msa/durable/storage/memory";
 import { Effect } from "effect";
 import { describe, expect, it } from "vite-plus/test";
 
-import {
-  allEntries,
-  type ChatSetup,
-  chatSetup,
-  openChat,
-  textOf,
-  waitFor,
-} from "./chat-support.ts";
-import { awaited } from "./effect-support.ts";
-import { livePublications, runTask, live } from "./harness-generation-support.ts";
-import { context } from "./session-support.ts";
+import chatSupport from "./chat-support.ts";
+import type chatSupportTypes from "./chat-support.types.ts";
+import effectSupport from "./effect-support.ts";
+import harnessGenerationSupport from "./harness-generation-support.ts";
+import sessionSupport from "./session-support.ts";
+
+const { allEntries, chatSetup, openChat, textOf, waitFor } = chatSupport;
+const { awaited } = effectSupport;
+const { live, livePublications, runTask } = harnessGenerationSupport;
+const { context } = sessionSupport;
 
 const pollsDeferredResponse = Effect.gen(function* () {
   const setup = chatSetup({ deferred: { pendingFetches: 1, pollAfterMs: 1 } });
@@ -29,7 +28,7 @@ const pollsDeferredResponse = Effect.gen(function* () {
   const values = livePublications(harness);
   harness.resume();
   const settled = yield* awaited(
-    (yield* awaited(root.submit({ type: "input", content: "hi" }, context))).wait(context),
+    (yield* awaited(root.submit({ content: "hi", type: "input" }, context))).wait(context),
   );
   if (settled.status !== "done" || settled.type !== "input")
     throw new Error(`Unexpected ${settled.status}`);
@@ -51,11 +50,11 @@ describe("generation", () => {
 });
 
 const convertsCommittedPartial = Effect.gen(function* () {
-  const setup = chatSetup({ tokensPerSecond: 20, tokenSize: { min: 1, max: 1 } });
+  const setup = chatSetup({ tokenSize: { max: 1, min: 1 }, tokensPerSecond: 20 });
   setup.faux.setResponses([fauxAssistantMessage("x".repeat(400))]);
   const { harness, root } = yield* openChat(new MemoryStorage(), setup);
   harness.resume();
-  const submission = yield* awaited(root.submit({ type: "input", content: "hi" }, context));
+  const submission = yield* awaited(root.submit({ content: "hi", type: "input" }, context));
   const taskId = yield* runTask(harness, root);
   yield* waitFor(
     Effect.gen(function* () {
@@ -67,8 +66,8 @@ const convertsCommittedPartial = Effect.gen(function* () {
   const partial = (yield* awaited(live(harness, root)))!.generation!.message!;
   expect(yield* awaited(harness.abortTask(taskId, context))).toBe("marked");
   expect(yield* awaited(submission.wait(context))).toMatchObject({
-    status: "unanswered",
     reason: "aborted",
+    status: "unanswered",
   });
   const entries = yield* allEntries(root);
   expect(entries.map((entry) => entry.kind)).toEqual(["msa.user", "msa.assistant"]);
@@ -88,7 +87,7 @@ const cancelsDeferredResponse = Effect.gen(function* () {
   setup.settings.stream = { deferred: true };
   const { harness, root } = yield* openChat(new MemoryStorage(), setup);
   harness.resume();
-  const submission = yield* awaited(root.submit({ type: "input", content: "hi" }, context));
+  const submission = yield* awaited(root.submit({ content: "hi", type: "input" }, context));
   const taskId = yield* runTask(harness, root);
   yield* waitFor(
     Effect.gen(function* () {
@@ -97,8 +96,8 @@ const cancelsDeferredResponse = Effect.gen(function* () {
   );
   yield* awaited(harness.abortTask(taskId, context));
   expect(yield* awaited(submission.wait(context))).toMatchObject({
-    status: "unanswered",
     reason: "aborted",
+    status: "unanswered",
   });
   expect(setup.faux.state.cancelledDeferred).toHaveLength(1);
   expect(yield* awaited(live(harness, root))).toEqual({});
@@ -124,11 +123,11 @@ const reportsFailedDeferred = Effect.gen(function* () {
       return typeof value === "function" ? value.bind(target) : value;
     },
   });
-  const setup: ChatSetup = { ...base, models };
+  const setup: chatSupportTypes.ChatSetup = { ...base, models };
   setup.settings.stream = { deferred: true };
   const { harness, root } = yield* openChat(new MemoryStorage(), setup);
   harness.resume();
-  const submission = yield* awaited(root.submit({ type: "input", content: "hi" }, context));
+  const submission = yield* awaited(root.submit({ content: "hi", type: "input" }, context));
   const taskId = yield* runTask(harness, root);
   yield* waitFor(
     Effect.gen(function* () {
@@ -137,8 +136,8 @@ const reportsFailedDeferred = Effect.gen(function* () {
   );
   yield* awaited(harness.abortTask(taskId, context));
   expect(yield* awaited(submission.wait(context))).toMatchObject({
-    status: "unanswered",
     reason: "aborted",
+    status: "unanswered",
   });
   expect(setup.reports).toContainEqual(new Error("cancel failed"));
   expect(yield* awaited(live(harness, root))).toEqual({});
@@ -163,28 +162,28 @@ const forwardsStreamOptions = Effect.gen(function* () {
       return fauxAssistantMessage("b");
     },
   ]);
-  setup.settings.stream = { timeoutMs: 1234, headers: { "x-test": "1" } };
+  setup.settings.stream = { headers: { "x-test": "1" }, timeoutMs: 1234 };
   const { harness, root } = yield* openChat(new MemoryStorage(), setup);
   yield* awaited(root.configure({ thinkingLevel: "high" }, context));
   harness.resume();
   yield* awaited(
-    (yield* awaited(root.submit({ type: "input", content: "one" }, context))).wait(context),
+    (yield* awaited(root.submit({ content: "one", type: "input" }, context))).wait(context),
   );
   yield* awaited(root.configure({ thinkingLevel: null }, context));
   setup.settings.stream = { timeoutMs: 99 };
   yield* awaited(
-    (yield* awaited(root.submit({ type: "input", content: "two" }, context))).wait(context),
+    (yield* awaited(root.submit({ content: "two", type: "input" }, context))).wait(context),
   );
   const sessionId = (yield* awaited(harness.snapshot(ProviderDoc, root.id, context)))!.sessionId;
   expect(seen[0]).toMatchObject({
-    timeoutMs: 1234,
     headers: { "x-test": "1" },
     reasoning: "high",
     sessionId,
+    timeoutMs: 1234,
   });
   expect(seen[0]!.signal).toBeInstanceOf(AbortSignal);
   expect(seen[1]!.reasoning).toBeUndefined();
-  expect(seen[1]).toMatchObject({ timeoutMs: 99, sessionId });
+  expect(seen[1]).toMatchObject({ sessionId, timeoutMs: 99 });
   expect(seen[1]!.headers).toBeUndefined();
   yield* awaited(harness.close(context));
 });

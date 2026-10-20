@@ -5,49 +5,41 @@ import { vi } from "vite-plus/test";
 
 import { type ShellExecOptions } from "../src/env/index.ts";
 import { NodeExecutionEnv } from "../src/env/node.ts";
-import { awaited } from "./effect-support.ts";
-import { makeTempDir, removeDirRetrying, restoreWritable } from "./platform-support.ts";
+import effectSupport from "./effect-support.ts";
+import type envNodeSupportTypes from "./env-node-support.types.ts";
+import nodeFsPromisesCapture from "./node-fs-promises-capture.ts";
+import platformSupport from "./platform-support.ts";
 
-export const tempDirs: string[] = [];
+const { awaited } = effectSupport;
+const { openFile } = nodeFsPromisesCapture;
+const { makeTempDir, removeDirRetrying, restoreWritable } = platformSupport;
 
-export const chmodRestorePaths: string[] = [];
+const tempDirs: string[] = [];
 
-export const createTempDir: Effect.Effect<string> = makeTempDir("msa-durable-env-").pipe(
+const chmodRestorePaths: string[] = [];
+
+const createTempDir: Effect.Effect<string> = makeTempDir("msa-durable-env-").pipe(
   Effect.tap((dir) => Effect.sync(() => tempDirs.push(dir))),
 );
 
-export const removeTempDir = removeDirRetrying;
+const removeTempDir = removeDirRetrying;
 
-export const cleanUpEnvTests: Effect.Effect<void> = Effect.gen(function* () {
+const cleanUpEnvTests: Effect.Effect<void> = Effect.gen(function* () {
   vi.restoreAllMocks();
   yield* Effect.forEach(chmodRestorePaths.splice(0), restoreWritable, { discard: true });
   yield* Effect.forEach(tempDirs.splice(0), removeTempDir, { discard: true });
 });
 
-export function abortedContext() {
+function abortedContext() {
   const controller = new AbortController();
   controller.abort();
   return withAbortSignal(controller.signal, BACKGROUND_CONTEXT);
 }
 
-export interface NodeFileHandle {
-  readonly fd: number;
-  sync(): Promise<void>;
-  read(...args: unknown[]): Promise<unknown>;
-  close(): Promise<void>;
-}
-
-type FsPromises = {
-  open(path: string, flags: string): Promise<NodeFileHandle>;
-};
-
-const nodeFsPromises = (): FsPromises =>
-  (process.getBuiltinModule as (id: string) => unknown)("node:fs/promises") as FsPromises;
-
-export const fileHandlePrototype = Effect.fn("fileHandlePrototype")(function* (path: string) {
-  const handle = yield* awaited(nodeFsPromises().open(path, "r"));
+const fileHandlePrototype = Effect.fn("fileHandlePrototype")(function* (path: string) {
+  const handle = yield* awaited(openFile(path, "r"));
   yield* awaited(handle.close());
-  return Object.getPrototypeOf(handle) as NodeFileHandle;
+  return Object.getPrototypeOf(handle) as envNodeSupportTypes.NodeFileHandle;
 });
 
 function collectShellOutputImpl(
@@ -71,12 +63,12 @@ function collectShellOutputImpl(
           context,
         ),
       );
-      return { result, output };
+      return { output, result };
     }),
   );
 }
 
-export const collectShellOutput: {
+const collectShellOutput: {
   (
     command: string,
     options: ShellExecOptions | undefined,
@@ -90,6 +82,20 @@ export const collectShellOutput: {
   ): ReturnType<typeof collectShellOutputImpl>;
 } = dual(4, collectShellOutputImpl);
 
-export function toBashSingleQuotedArg(value: string): string {
+function toBashSingleQuotedArg(value: string): string {
   return `'${value.replace(/\\/gu, "/").replace(/'/gu, `'"'"'`)}'`;
 }
+
+const envNodeSupport = {
+  abortedContext,
+  chmodRestorePaths,
+  cleanUpEnvTests,
+  collectShellOutput,
+  createTempDir,
+  fileHandlePrototype,
+  removeTempDir,
+  tempDirs,
+  toBashSingleQuotedArg,
+};
+
+export default envNodeSupport;

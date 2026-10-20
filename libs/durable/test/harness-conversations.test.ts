@@ -10,17 +10,17 @@ import { Effect } from "effect";
 import { afterEach, describe, expect, it } from "vite-plus/test";
 
 import { openNodeSqliteStorage } from "../src/storage/sqlite/node.ts";
-import { awaited } from "./effect-support.ts";
-import {
-  directories,
-  append,
-  allEntries,
-  UUID_V7,
-  NoteDoc,
-} from "./harness-conversations-support.ts";
-import { addTool, openHarness, tool, user } from "./harness-support.ts";
-import { joinPath, makeTempDir, removeDir } from "./platform-support.ts";
-import { ControlledStorage, context } from "./session-support.ts";
+import effectSupport from "./effect-support.ts";
+import harnessConversationsSupport from "./harness-conversations-support.ts";
+import harnessSupport from "./harness-support.ts";
+import platformSupport from "./platform-support.ts";
+import sessionSupport from "./session-support.ts";
+
+const { awaited } = effectSupport;
+const { NoteDoc, UUID_V7, allEntries, append, directories } = harnessConversationsSupport;
+const { addTool, openHarness, tool, user } = harnessSupport;
+const { joinPath, makeTempDir, removeDir } = platformSupport;
+const { ControlledStorage, context } = sessionSupport;
 
 const sqlitePath = Effect.fn("sqlitePath")(function* () {
   const directory = yield* makeTempDir("msa-durable-harness-");
@@ -44,7 +44,7 @@ const closedConversations = Effect.fn("closedConversations")(function* () {
   const first = yield* openHarness(yield* awaited(openNodeSqliteStorage(path)), ["read"]);
   const root = yield* awaited(first.harness.root(context));
   yield* awaited(
-    root.configure({ model: { provider: "anthropic", modelId: "claude" }, cwd: "/repo" }, context),
+    root.configure({ cwd: "/repo", model: { modelId: "claude", provider: "anthropic" } }, context),
   );
   const entry = yield* awaited(append(root, "hello"));
   const child = yield* awaited(
@@ -67,7 +67,7 @@ const closedConversations = Effect.fn("closedConversations")(function* () {
   expect(new Set(providerSessionIds).size).toBe(3);
   yield* awaited(first.harness.close(context));
   yield* awaited(expect(root.agent(context)).rejects.toThrow());
-  return { path, root, child, fork, providerSessionIds };
+  return { child, fork, path, providerSessionIds, root };
 });
 
 const createsRootLazilyStep1 = Effect.gen(function* () {
@@ -112,7 +112,7 @@ const createsRootLazilyStep1 = Effect.gen(function* () {
   expect(yield* awaited(harness.snapshot(NoteDoc, root.id, context))).toEqual({
     text: "root note",
   });
-  return { storage, harness, root };
+  return { harness, root, storage };
 });
 
 const createsRootLazily = Effect.gen(function* () {
@@ -144,8 +144,8 @@ const keepsRootConversation = Effect.gen(function* () {
   );
   expect(reopened.id).toBe(ROOT_CONVERSATION_ID);
   expect(yield* awaited(reopened.agent(context))).toMatchObject({
-    model: { provider: "anthropic", modelId: "claude" },
     cwd: "/repo",
+    model: { modelId: "claude", provider: "anthropic" },
     tools: [],
   });
   expect(yield* allEntries(reopened)).toEqual(["hello"]);
@@ -166,8 +166,8 @@ const keepsRootConversation = Effect.gen(function* () {
   const reopenedFork = yield* awaited(second.harness.conversation(fork.id, context));
   expect(yield* allEntries(reopenedFork!)).toEqual(["hello"]);
   expect((yield* awaited(reopenedFork!.agent(context))).model).toEqual({
-    provider: "anthropic",
     modelId: "claude",
+    provider: "anthropic",
   });
   expect(
     yield* awaited(second.harness.conversation(999 as ConversationId, context)),
@@ -188,7 +188,6 @@ const createsIndependentConversationsStep1 = Effect.gen(function* () {
   const created = yield* awaited(
     harness.createConversation(
       {
-        ownership: { kind: "ownerless" },
         init: (tx, id) =>
           runPromise(
             Effect.asVoid(
@@ -197,6 +196,7 @@ const createsIndependentConversationsStep1 = Effect.gen(function* () {
               ),
             ),
           ),
+        ownership: { kind: "ownerless" },
       },
       context,
     ),
@@ -209,11 +209,11 @@ const createsIndependentConversationsStep1 = Effect.gen(function* () {
     expect(
       harness.createConversation(
         {
-          ownership: { kind: "ownerless" },
           agent: { thinkingLevel: "high" },
           init: () => {
             throw new Error("init failed");
           },
+          ownership: { kind: "ownerless" },
         },
         context,
       ),
@@ -222,7 +222,7 @@ const createsIndependentConversationsStep1 = Effect.gen(function* () {
   expect(storage.commits).toHaveLength(before);
 
   addTool(registry, tool("bash"));
-  return { runPromise, harness, created };
+  return { created, harness, runPromise };
 });
 
 const createsIndependentConversations = Effect.gen(function* () {

@@ -2,8 +2,11 @@ import { MemoryStorage } from "@msa/durable/storage/memory";
 import { Effect } from "effect";
 import { afterEach, describe, expect, it } from "vite-plus/test";
 
-import { directories, transcript, inbox, status, answer, gated } from "./harness-inbox-support.ts";
-import { allEntries, chatSetup, openChat, awaited, removeDir, context } from "./support.ts";
+import harnessInboxSupport from "./harness-inbox-support.ts";
+import support from "./support.ts";
+
+const { answer, directories, gated, inbox, status, transcript } = harnessInboxSupport;
+const { allEntries, awaited, chatSetup, context, openChat, removeDir } = support;
 
 afterEach(() =>
   Effect.runPromise(
@@ -19,7 +22,7 @@ const placesQueuedReset = Effect.gen(function* () {
   const first = gated(answer("first"));
   setup.faux.setResponses([first.step]);
   const { harness, root } = yield* openChat(new MemoryStorage(), setup);
-  const input = yield* awaited(root.submit({ type: "input", content: "a" }, context));
+  const input = yield* awaited(root.submit({ content: "a", type: "input" }, context));
   yield* awaited(first.reached);
   yield* awaited(root.reset("handoff", context));
   first.release();
@@ -32,7 +35,7 @@ const placesQueuedReset = Effect.gen(function* () {
     "msa.reset:handoff",
   ]);
   expect((yield* awaited(root.context(context))).messages).toEqual([
-    { role: "user", content: "handoff", timestamp: expect.any(Number) },
+    { content: "handoff", role: "user", timestamp: expect.any(Number) },
   ]);
   yield* awaited(harness.close(context));
 });
@@ -50,7 +53,7 @@ const resetsIdleConversation = Effect.gen(function* () {
   yield* awaited(root.reset("carry on", context));
   view = yield* awaited(root.context(context));
   expect(view.head?.head).toBe(view.head?.id);
-  expect(view.messages).toEqual([{ role: "user", content: "carry on", timestamp: 7 }]);
+  expect(view.messages).toEqual([{ content: "carry on", role: "user", timestamp: 7 }]);
   yield* awaited(harness.close(context));
 });
 
@@ -72,27 +75,27 @@ const makesQueuedHead = Effect.gen(function* () {
   );
   yield* awaited(root.reset(undefined, context));
   const reset = (yield* awaited(root.context(context))).head!;
-  const input = yield* awaited(root.submit({ type: "input", content: "a" }, context));
+  const input = yield* awaited(root.submit({ content: "a", type: "input" }, context));
   yield* awaited(first.reached);
   const stale = yield* awaited(
-    root.submit({ type: "write", entry: { kind: "summary", head: old.id } }, context),
+    root.submit({ entry: { head: old.id, kind: "summary" }, type: "write" }, context),
   );
   const fresh = yield* awaited(
-    root.submit({ type: "write", entry: { kind: "summary", head: reset.id } }, context),
+    root.submit({ entry: { head: reset.id, kind: "summary" }, type: "write" }, context),
   );
   first.release();
   yield* awaited(input.wait(context));
   expect(yield* awaited(status(stale))).toMatchObject({
-    status: "unanswered",
     reason: "stale",
+    status: "unanswered",
   });
   expect(yield* awaited(status(fresh))).toMatchObject({ status: "done" });
   expect(yield* inbox(harness, root)).toEqual([]);
 
   const inside = (yield* allEntries(root)).find((entry) => entry.kind === "msa.user")!;
-  const second = yield* awaited(root.submit({ type: "input", content: "b" }, context));
+  const second = yield* awaited(root.submit({ content: "b", type: "input" }, context));
   const kept = yield* awaited(
-    root.submit({ type: "write", entry: { kind: "summary", head: inside.id } }, context),
+    root.submit({ entry: { head: inside.id, kind: "summary" }, type: "write" }, context),
   );
   yield* awaited(second.wait(context));
   expect(yield* awaited(status(kept))).toMatchObject({ status: "done" });

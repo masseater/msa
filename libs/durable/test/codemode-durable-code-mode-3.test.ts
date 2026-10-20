@@ -4,17 +4,14 @@ import { Effect } from "effect";
 import { afterEach, describe, expect, it } from "vite-plus/test";
 
 import { CodemodeRunDoc } from "../src/codemode/codemode.ts";
-import { codemodeChat } from "./codemode-chat-support.ts";
-import {
-  resultText,
-  scriptTask,
-  DONE,
-  script,
-  sqlitePath,
-  removeDirectories,
-  openStoredChat,
-} from "./codemode-support.ts";
-import { allEntries, awaited, addHooks, context, aborted, deferred } from "./support.ts";
+import codemodeChatSupport from "./codemode-chat-support.ts";
+import codemodeSupport from "./codemode-support.ts";
+import support from "./support.ts";
+
+const { codemodeChat } = codemodeChatSupport;
+const { DONE, openStoredChat, removeDirectories, resultText, script, scriptTask, sqlitePath } =
+  codemodeSupport;
+const { aborted, addHooks, allEntries, awaited, context, deferred } = support;
 
 afterEach(removeDirectories);
 
@@ -37,7 +34,7 @@ const returnsDecidedOutcome = Effect.gen(function* () {
       ),
   });
   let opened = yield* openStoredChat(path, chat.setup);
-  const id = (yield* awaited(opened.root.submit({ type: "input", content: "go" }, context))).id;
+  const id = (yield* awaited(opened.root.submit({ content: "go", type: "input" }, context))).id;
   yield* awaited(stopped.reached.promise);
   const task = yield* scriptTask(opened.harness);
   expect(
@@ -52,8 +49,8 @@ const returnsDecidedOutcome = Effect.gen(function* () {
       .status,
   ).toBe("done");
   expect(yield* resultText(chat.setup, opened.root)).toEqual({
-    text: "first",
     isError: false,
+    text: "first",
   });
   expect(chat.vm.starts).toBe(1);
   yield* awaited(opened.harness.close(context));
@@ -75,11 +72,11 @@ const keepsStoreValues = Effect.gen(function* () {
   ]);
   const { harness, root } = yield* openStoredChat(yield* sqlitePath(), chat.setup);
   yield* awaited(
-    (yield* awaited(root.submit({ type: "input", content: "first" }, context))).wait(context),
+    (yield* awaited(root.submit({ content: "first", type: "input" }, context))).wait(context),
   );
   const firstUser = (yield* allEntries(root)).find((entry) => entry.kind === "msa.user")!;
   yield* awaited(
-    (yield* awaited(root.submit({ type: "input", content: "second" }, context))).wait(context),
+    (yield* awaited(root.submit({ content: "second", type: "input" }, context))).wait(context),
   );
   const results = (yield* allEntries(root)).filter((entry) => ToolResultEntry.is(entry));
   const texts = results.map(
@@ -91,7 +88,7 @@ const keepsStoreValues = Effect.gen(function* () {
     root.fork(firstUser.id, { ownership: { kind: "ownerless" } }, context),
   );
   yield* awaited(
-    (yield* awaited(fork.submit({ type: "input", content: "fork" }, context))).wait(context),
+    (yield* awaited(fork.submit({ content: "fork", type: "input" }, context))).wait(context),
   );
   const forkResult = (yield* allEntries(fork)).filter((entry) => ToolResultEntry.is(entry)).at(-1)!;
   expect((forkResult.model![0] as { content: { text: string }[] }).content[1]!.text).toBe("[null]");
@@ -111,7 +108,6 @@ const journalsResultsFinish = Effect.gen(function* () {
   const chat = codemodeChat({
     globals: [
       {
-        name: "wait",
         execute: () =>
           runPromise(
             Effect.gen(function* () {
@@ -120,6 +116,7 @@ const journalsResultsFinish = Effect.gen(function* () {
               return null;
             }),
           ),
+        name: "wait",
       },
     ],
   });
@@ -137,9 +134,9 @@ const journalsResultsFinish = Effect.gen(function* () {
     }
   });
   yield* awaited(
-    (yield* awaited(root.submit({ type: "input", content: "go" }, context))).wait(context),
+    (yield* awaited(root.submit({ content: "go", type: "input" }, context))).wait(context),
   );
-  expect(yield* resultText(chat.setup, root)).toEqual({ text: "50", isError: false });
+  expect(yield* resultText(chat.setup, root)).toEqual({ isError: false, text: "50" });
   expect(journalCommits).toBeLessThan(10);
   yield* awaited(harness.close(context));
 });

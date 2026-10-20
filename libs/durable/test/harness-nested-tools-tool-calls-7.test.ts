@@ -3,17 +3,11 @@ import { MemoryStorage } from "@msa/durable/storage/memory";
 import { Effect } from "effect";
 import { afterEach, describe, expect, it } from "vite-plus/test";
 
-import { directories, DONE, call, tool } from "./harness-nested-tools-support.ts";
-import {
-  chatSetup,
-  openChat,
-  awaited,
-  addTool,
-  removeDir,
-  context,
-  deferred,
-  eventually,
-} from "./support.ts";
+import harnessNestedToolsSupport from "./harness-nested-tools-support.ts";
+import support from "./support.ts";
+
+const { DONE, call, directories, tool } = harnessNestedToolsSupport;
+const { addTool, awaited, chatSetup, context, deferred, eventually, openChat, removeDir } = support;
 
 afterEach(() =>
   Effect.runPromise(
@@ -62,13 +56,13 @@ function twoWritingNestedCalls() {
     ),
   );
   setup.faux.setResponses([call("batch"), DONE]);
-  return { setup, release, running, wrote };
+  return { release, running, setup, wrote };
 }
 
 const reportsOutputSeveral = Effect.gen(function* () {
   const { setup, release, running, wrote } = twoWritingNestedCalls();
   const { harness, root } = yield* openChat(new MemoryStorage(), setup);
-  const submission = yield* awaited(root.submit({ type: "input", content: "go" }, context));
+  const submission = yield* awaited(root.submit({ content: "go", type: "input" }, context));
   yield* awaited(Promise.all([running.one.promise, running.two.promise]));
   const stream = yield* awaited(watchEvents(harness, root.id, context));
   expect(stream.snapshot.nestedTools.map((slot) => [slot.callId, slot.status])).toEqual([

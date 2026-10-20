@@ -1,7 +1,7 @@
-import { type AssistantMessage, fauxAssistantMessage, fauxText, Type } from "@msa/ai";
+import { type AssistantMessage, Type, fauxAssistantMessage, fauxText } from "@msa/ai";
 import { CodemodeSandbox } from "@msa/codemode";
 import { CODEMODE_SOURCE_GRAMMAR } from "@msa/codemode/source";
-import { defineTool, type ToolRegistration } from "@msa/durable";
+import { type ToolRegistration, defineTool } from "@msa/durable";
 import { MemoryStorage } from "@msa/durable/storage/memory";
 import { Effect } from "effect";
 import { describe, expect, it } from "vite-plus/test";
@@ -12,7 +12,9 @@ import {
   codemodeDescription,
   codemodeSection,
 } from "../src/codemode/describe.ts";
-import { allEntries, chatSetup, openChat, awaited, context } from "./support.ts";
+import support from "./support.ts";
+
+const { allEntries, awaited, chatSetup, context, openChat } = support;
 
 function tool(
   name: string,
@@ -20,17 +22,17 @@ function tool(
   extra: Partial<ToolRegistration> = {},
 ): ToolRegistration {
   return defineTool({
-    name,
     description,
-    parameters: Type.Object({ path: Type.String({ description: "File path" }) }),
     execute: () => Promise.resolve({ output: [] }),
+    name,
+    parameters: Type.Object({ path: Type.String({ description: "File path" }) }),
     ...extra,
   });
 }
 
 const GITHUB: CodemodeNamespace = {
-  name: "github",
   description: "GitHub MCP server",
+  name: "github",
   prefix: "mcp__github__",
 };
 
@@ -78,7 +80,7 @@ describe("code mode description and section", () => {
 const rendersSectionConversation = Effect.gen(function* () {
   const setup = chatSetup();
   setup.registry.install(
-    createCodemodeExtension({ sandbox: new CodemodeSandbox(), namespaces: [GITHUB] }),
+    createCodemodeExtension({ namespaces: [GITHUB], sandbox: new CodemodeSandbox() }),
   );
   setup.registry.install({
     name: "tools",
@@ -91,7 +93,7 @@ const rendersSectionConversation = Effect.gen(function* () {
   setup.faux.setResponses([fauxAssistantMessage([fauxText("hi")]) as AssistantMessage]);
   const { harness, root } = yield* openChat(new MemoryStorage(), setup);
   yield* awaited(
-    (yield* awaited(root.submit({ type: "input", content: "go" }, context))).wait(context),
+    (yield* awaited(root.submit({ content: "go", type: "input" }, context))).wait(context),
   );
   const system = (yield* allEntries(root)).find((entry) => entry.kind === "msa.system")!;
   const sections = (system.model![0] as { sections?: Record<string, string> }).sections!;

@@ -2,29 +2,35 @@ import { type JoinPolicy, type TaskId } from "@msa/durable";
 import { Effect } from "effect";
 import { afterEach, describe, expect, it } from "vite-plus/test";
 
-import { awaited } from "./effect-support.ts";
-import { spawnAndFinish } from "./harness-structured-events.ts";
-import {
-  state,
-  outcomeOf,
-  open,
-  gates,
-  until,
-  start,
+import effectSupport from "./effect-support.ts";
+import harnessStructuredEvents from "./harness-structured-events.ts";
+import harnessStructuredSupport from "./harness-structured-support.ts";
+import type harnessStructuredSupportTypes from "./harness-structured-support.types.ts";
+import platformSupport from "./platform-support.ts";
+import sessionSupport from "./session-support.ts";
+
+const { awaited } = effectSupport;
+const { spawnAndFinish } = harnessStructuredEvents;
+const {
   Node,
-  end,
-  type NodeRuntime,
-  behaviors,
-  log,
   OWN_CONVERSATION,
-  openNodes,
-  waitOn,
-  spawn,
-  script,
+  behaviors,
   directories,
-} from "./harness-structured-support.ts";
-import { removeDir } from "./platform-support.ts";
-import { context } from "./session-support.ts";
+  end,
+  gates,
+  log,
+  open,
+  openNodes,
+  outcomeOf,
+  script,
+  spawn,
+  start,
+  state,
+  until,
+  waitOn,
+} = harnessStructuredSupport;
+const { removeDir } = platformSupport;
+const { context } = sessionSupport;
 
 afterEach(() =>
   Effect.runPromise(
@@ -48,7 +54,6 @@ const waitsAllSettledTasks = Effect.gen(function* () {
   const live = yield* awaited(start(root, "live"));
   let outcomes: string[] = [];
   script("parent", {
-    run: (runtime, ctx) => runtime.commit(() => waitOn([done, live], "allSettled"), ctx),
     resume: (runtime, ctx) =>
       runPromise(
         Effect.gen(function* () {
@@ -58,6 +63,7 @@ const waitsAllSettledTasks = Effect.gen(function* () {
           yield* awaited(runtime.commit(() => end("completed", "parent"), ctx));
         }),
       ),
+    run: (runtime, ctx) => runtime.commit(() => waitOn([done, live], "allSettled"), ctx),
   });
   const parent = yield* awaited(start(root, "parent"));
   yield* until(
@@ -76,12 +82,18 @@ describe("waiting", () => {
     Effect.runPromise(waitsAllSettledTasks));
 });
 
-const rejectsWaitsItself = Effect.gen(function* () {
-  const runPromise = Effect.runPromiseWith(yield* Effect.context<never>());
+type Nodes = Effect.Success<ReturnType<typeof openNodes>>;
 
-  const { harness, root } = yield* openNodes();
-  const other = yield* awaited(start(root, "other"));
-  const cases: [string, (runtime: NodeRuntime) => readonly TaskId[], JoinPolicy, string][] = [
+const expectInvalidWaitsFault = Effect.fn("expectInvalidWaitsFault")(function* (
+  { harness, root }: Nodes,
+  other: TaskId,
+) {
+  const cases: [
+    string,
+    (runtime: harnessStructuredSupportTypes.NodeRuntime) => readonly TaskId[],
+    JoinPolicy,
+    string,
+  ][] = [
     ["self", (runtime) => [runtime.taskId], "allSettled", "is a wait cycle"],
     ["missing", () => [999_999 as TaskId], "allSettled", "does not exist"],
     ["foreign", () => [other], "failFast", "only on tasks it owns"],
@@ -92,14 +104,20 @@ const rejectsWaitsItself = Effect.gen(function* () {
     });
     const id = yield* awaited(start(root, name));
     expect((yield* awaited(harness.waitForTask(id, context))).state.outcome).toMatchObject({
-      status: "faulted",
       error: { message: expect.stringContaining(message) },
+      status: "faulted",
     });
   }
-  let child: TaskId | undefined;
-  let parent: TaskId | undefined;
+});
+
+const expectOwnerWaitCycle = Effect.fn("expectOwnerWaitCycle")(function* ({
+  harness,
+  root,
+}: Nodes) {
+  const runPromise = Effect.runPromiseWith(yield* Effect.context<never>());
+  const ids: { child?: TaskId; parent?: TaskId } = {};
   script("child", {
-    run: (runtime, ctx) => runtime.commit(() => waitOn([parent!], "allSettled"), ctx),
+    run: (runtime, ctx) => runtime.commit(() => waitOn([ids.parent!], "allSettled"), ctx),
   });
   script("parent", {
     run: (runtime, ctx) =>
@@ -107,23 +125,30 @@ const rejectsWaitsItself = Effect.gen(function* () {
         (tx) =>
           runPromise(
             Effect.gen(function* () {
-              child = yield* awaited(spawn(tx, runtime.taskId, "child"));
-              return waitOn([child], "allSettled");
+              ids.child = yield* awaited(spawn(tx, runtime.taskId, "child"));
+              return waitOn([ids.child], "allSettled");
             }),
           ),
         ctx,
       ),
   });
-  parent = yield* awaited(start(root, "parent"));
-  expect((yield* awaited(harness.waitForTask(parent, context))).state.outcome.status).toBe(
+  ids.parent = yield* awaited(start(root, "parent"));
+  expect((yield* awaited(harness.waitForTask(ids.parent, context))).state.outcome.status).toBe(
     "completed",
   );
-  expect((yield* awaited(harness.waitForTask(child!, context))).state.outcome).toMatchObject({
-    status: "faulted",
+  expect((yield* awaited(harness.waitForTask(ids.child!, context))).state.outcome).toMatchObject({
     error: { message: expect.stringContaining("is a wait cycle") },
+    status: "faulted",
   });
+});
+
+const rejectsWaitsItself = Effect.gen(function* () {
+  const nodes = yield* openNodes();
+  const other = yield* awaited(start(nodes.root, "other"));
+  yield* expectInvalidWaitsFault(nodes, other);
+  yield* expectOwnerWaitCycle(nodes);
   open("other");
-  yield* awaited(harness.close(context));
+  yield* awaited(nodes.harness.close(context));
 });
 
 describe("waiting", () => {

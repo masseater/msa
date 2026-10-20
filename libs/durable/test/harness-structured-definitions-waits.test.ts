@@ -1,28 +1,35 @@
-import { defineTask, type TaskId } from "@msa/durable";
+import { type TaskId, defineTask } from "@msa/durable";
 import { Effect } from "effect";
 import { afterEach, describe, expect, it } from "vite-plus/test";
 
-import { awaited } from "./effect-support.ts";
-import { spawnAndFinish } from "./harness-structured-events.ts";
-import {
-  state,
-  outcomeOf,
-  open,
-  gates,
-  until,
-  start,
-  behaviors,
-  log,
+import effectSupport from "./effect-support.ts";
+import harnessStructuredEvents from "./harness-structured-events.ts";
+import harnessStructuredSupport from "./harness-structured-support.ts";
+import harnessSupport from "./harness-support.ts";
+import platformSupport from "./platform-support.ts";
+import sessionSupport from "./session-support.ts";
+
+const { awaited } = effectSupport;
+const { spawnAndFinish } = harnessStructuredEvents;
+const {
   OWN_CONVERSATION,
-  openNodes,
-  waitOn,
-  spawn,
-  script,
+  behaviors,
   directories,
-} from "./harness-structured-support.ts";
-import { addTask } from "./harness-support.ts";
-import { removeDir } from "./platform-support.ts";
-import { context } from "./session-support.ts";
+  gates,
+  log,
+  open,
+  openNodes,
+  outcomeOf,
+  script,
+  spawn,
+  start,
+  state,
+  until,
+  waitOn,
+} = harnessStructuredSupport;
+const { addTask } = harnessSupport;
+const { removeDir } = platformSupport;
+const { context } = sessionSupport;
 
 afterEach(() =>
   Effect.runPromise(
@@ -42,38 +49,38 @@ function versioned(version: 1 | 2) {
     { phase: "wait" } | { phase: "resume" } | { phase: "migrated" },
     string
   >({
-    name: "test.versioned",
-    version,
+    abort: (_task, runtime, ctx) =>
+      runtime.commit(() => ({ outcome: { status: "aborted" }, status: "terminal" }), ctx),
     initial: () => ({ phase: "wait" }),
+    name: "test.versioned",
     phases: {
-      wait: (task, runtime, ctx) =>
+      migrated: (_task, runtime, ctx) =>
         runtime.commit(
-          () => ({
-            status: "waiting",
-            checkpoint: { phase: "resume" },
-            on: task.input.on,
-            policy: "allSettled",
-          }),
+          () => ({ outcome: { result: "v2", status: "completed" }, status: "terminal" }),
           ctx,
         ),
       resume: (_task, runtime, ctx) =>
         runtime.commit(
-          () => ({ status: "terminal", outcome: { status: "completed", result: "v1" } }),
+          () => ({ outcome: { result: "v1", status: "completed" }, status: "terminal" }),
           ctx,
         ),
-      migrated: (_task, runtime, ctx) =>
+      wait: (task, runtime, ctx) =>
         runtime.commit(
-          () => ({ status: "terminal", outcome: { status: "completed", result: "v2" } }),
+          () => ({
+            checkpoint: { phase: "resume" },
+            on: task.input.on,
+            policy: "allSettled",
+            status: "waiting",
+          }),
           ctx,
         ),
     },
-    abort: (_task, runtime, ctx) =>
-      runtime.commit(() => ({ status: "terminal", outcome: { status: "aborted" } }), ctx),
+    version,
     ...(version === 2
       ? {
           migrate: (input: unknown) => ({
-            input: input as { on: TaskId[] },
             checkpoint: { phase: "migrated" as const },
+            input: input as { on: TaskId[] },
           }),
         }
       : {}),
@@ -109,8 +116,8 @@ const keepsWaitingTask = Effect.gen(function* () {
   expect((yield* state(harness, waiter)).status).toBe("waiting");
   addTask(registry, versioned(2));
   expect((yield* awaited(harness.waitForTask(waiter, context))).state.outcome).toEqual({
-    status: "completed",
     result: "v2",
+    status: "completed",
   });
   yield* awaited(harness.close(context));
 });
@@ -130,8 +137,8 @@ const orphansAbortedWaiting = Effect.gen(function* () {
   registration.dispose();
   expect(yield* awaited(harness.abortTask(waiter, context))).toBe("marked");
   expect((yield* state(harness, waiter)).outcome).toEqual({
-    status: "orphaned",
     reason: "missing_task",
+    status: "orphaned",
   });
   expect((yield* state(harness, other)).status).toBe("running");
   open("other");
@@ -150,26 +157,30 @@ const neverMigratesHeldStep1 = Effect.gen(function* () {
   const runPromise = Effect.runPromiseWith(yield* Effect.context<never>());
 
   const { harness, root, registry, reports } = yield* openNodes();
-  return { runPromise, harness, root, registry, reports };
+  return { harness, registry, reports, root, runPromise };
 });
 
 const neverMigratesHeldStep2 = Effect.gen(function* () {
   const { runPromise, harness, root, registry, reports } = yield* neverMigratesHeldStep1;
   const holder = (version: number) =>
     defineTask<null, { phase: "run" }, string>({
-      name: "test.holder",
-      version,
+      abort: (_task, runtime, ctx) =>
+        runtime.commit(() => ({ outcome: { status: "aborted" }, status: "terminal" }), ctx),
       initial: () => ({ phase: "run" }),
+      migrate: () => {
+        throw new Error("never migrates");
+      },
+      name: "test.holder",
       phases: {
         run: (task, runtime, ctx) =>
           runPromise(
             Effect.gen(function* () {
-              const runPromise = Effect.runPromiseWith(yield* Effect.context<never>());
+              const runNested = Effect.runPromiseWith(yield* Effect.context<never>());
 
               yield* awaited(
                 runtime.commit(
                   (tx) =>
-                    runPromise(
+                    runNested(
                       Effect.gen(function* () {
                         yield* awaited(spawn(tx, task.id, "child"));
                         return undefined;
@@ -181,8 +192,8 @@ const neverMigratesHeldStep2 = Effect.gen(function* () {
               yield* awaited(
                 runtime.commit(
                   () => ({
+                    outcome: { result: "held", status: "completed" },
                     status: "terminal",
-                    outcome: { status: "completed", result: "held" },
                   }),
                   ctx,
                 ),
@@ -190,14 +201,10 @@ const neverMigratesHeldStep2 = Effect.gen(function* () {
             }),
           ),
       },
-      abort: (_task, runtime, ctx) =>
-        runtime.commit(() => ({ status: "terminal", outcome: { status: "aborted" } }), ctx),
-      migrate: () => {
-        throw new Error("never migrates");
-      },
+      version,
     });
   addTask(registry, holder(1));
-  return { runPromise, harness, root, registry, reports, holder };
+  return { harness, holder, registry, reports, root, runPromise };
 });
 
 const neverMigratesHeld = Effect.gen(function* () {
@@ -213,7 +220,7 @@ const neverMigratesHeld = Effect.gen(function* () {
   addTask(registry, holder(2));
   open("child");
   const settledParent = yield* awaited(harness.waitForTask(parent, context));
-  expect(settledParent.state.outcome).toEqual({ status: "completed", result: "held" });
+  expect(settledParent.state.outcome).toEqual({ result: "held", status: "completed" });
   expect(settledParent.version).toBe(1);
   expect(reports).toEqual([]);
   yield* awaited(harness.close(context));

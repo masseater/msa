@@ -113,7 +113,6 @@ const llamaCppClassifySupport = {
   context,
   fakeServer,
   model,
-  serverCount,
 };
 
 export default llamaCppClassifySupport;

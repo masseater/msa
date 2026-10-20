@@ -7,22 +7,24 @@ import {
   fauxText,
   fauxToolCall,
 } from "@msa/ai";
-import { AssistantEntry, defineExtension, hook, ToolResultEntry } from "@msa/durable";
-import { createRegistry, Harness, ToolTask } from "@msa/durable/harness";
+import { AssistantEntry, ToolResultEntry, defineExtension, hook } from "@msa/durable";
+import { Harness, ToolTask, createRegistry } from "@msa/durable/harness";
 import { Console, Effect } from "effect";
 
 import { NodeExecutionEnv } from "../../src/env/node.ts";
 import { openNodeJsonlStorage } from "../../src/storage/jsonl/node.ts";
 import { type BashToolInput, CodingTools } from "../../src/tools/index.ts";
-import {
-  readTempFile,
-  writeTempFile,
-  makeTempDir,
-  awaited,
-  toJsonText,
+import support from "../support.ts";
+
+const {
   BACKGROUND_CONTEXT,
+  awaited,
   currentTimeMillis,
-} from "../support.ts";
+  makeTempDir,
+  readTempFile,
+  toJsonText,
+  writeTempFile,
+} = support;
 
 const context = BACKGROUND_CONTEXT;
 
@@ -39,7 +41,7 @@ const mainStep1 = Effect.gen(function* () {
     fauxAssistantMessage([fauxToolCall(name, args, { id })], { stopReason: "toolUse" });
   faux.setResponses([
     toolCall("read", { path: "notes.txt" }, "r"),
-    toolCall("edit", { path: "notes.txt", edits: [{ oldText: "world", newText: "durable" }] }, "e"),
+    toolCall("edit", { edits: [{ newText: "durable", oldText: "world" }], path: "notes.txt" }, "e"),
     toolCall("bash", { command: "cat notes.txt" }, "b"),
     toolCall("bash", { command: "cat /tmp/1gb.txt" }, "c"),
     fauxAssistantMessage([fauxText("The file now greets durable.")]),
@@ -49,20 +51,20 @@ const mainStep1 = Effect.gen(function* () {
     call.name === "bash" && (call.arguments as BashToolInput).command.includes("1gb.txt");
   let start = 0;
   const Timing = defineExtension({
-    name: "timing",
     hooks: [
       hook(ToolTask, {
-        beforeTool: (call) => {
-          if (isBigCat(call)) start = currentTimeMillis();
-          return undefined;
-        },
         afterTool: (call) => {
           if (isBigCat(call))
             runSync(Console.log(`cat /tmp/1gb.txt took ${currentTimeMillis() - start} ms`));
           return undefined;
         },
+        beforeTool: (call) => {
+          if (isBigCat(call)) start = currentTimeMillis();
+          return undefined;
+        },
       }),
     ],
+    name: "timing",
   });
   const registry = createRegistry();
   registry.install(CodingTools);
@@ -78,22 +80,22 @@ const main = Effect.gen(function* () {
     Harness.open(
       storage,
       {
+        env: (target) => new NodeExecutionEnv({ cwd: target.cwd ?? process.cwd() }),
         models,
         registry,
-        env: (target) => new NodeExecutionEnv({ cwd: target.cwd ?? process.cwd() }),
       },
       context,
     ),
   );
   const root = yield* awaited(
     harness.root(context, {
-      agent: { model: { provider: "faux", modelId: "faux-1" }, cwd: directory },
+      agent: { cwd: directory, model: { modelId: "faux-1", provider: "faux" } },
     }),
   );
 
   const settled = yield* awaited(
     (yield* awaited(
-      root.submit({ type: "input", content: "Greet durable instead." }, context),
+      root.submit({ content: "Greet durable instead.", type: "input" }, context),
     )).wait(context),
   );
   yield* Console.log("status:", settled.status);

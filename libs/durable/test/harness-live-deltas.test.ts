@@ -1,12 +1,15 @@
-import { fauxAssistantMessage, fauxText, fauxToolCall, Type } from "@msa/ai";
+import { Type, fauxAssistantMessage, fauxText, fauxToolCall } from "@msa/ai";
 import type { Op } from "@msa/chord/delta";
 import { defineTool } from "@msa/durable";
 import { MemoryStorage } from "@msa/durable/storage/memory";
 import { Effect } from "effect";
 import { describe, expect, it } from "vite-plus/test";
 
-import { OUTPUT, live, drive } from "./harness-live-deltas-support.ts";
-import { chatSetup, openChat, awaited, addTool, context, documentChanges } from "./support.ts";
+import harnessLiveDeltasSupport from "./harness-live-deltas-support.ts";
+import support from "./support.ts";
+
+const { OUTPUT, drive, live } = harnessLiveDeltasSupport;
+const { addTool, awaited, chatSetup, context, documentChanges, openChat } = support;
 
 function isOutput(op: Op): boolean {
   return JSON.stringify(op[1]) === JSON.stringify(OUTPUT);
@@ -17,10 +20,10 @@ const singleToolChat = Effect.fn("singleToolChat")(function* () {
   addTool(
     setup.registry,
     defineTool({
-      name: "noop",
       description: "noop",
-      parameters: Type.Object({}),
       execute: () => Promise.resolve({ output: [] }),
+      name: "noop",
+      parameters: Type.Object({}),
     }),
   );
   setup.faux.setResponses([
@@ -34,13 +37,13 @@ const singleToolChat = Effect.fn("singleToolChat")(function* () {
       if (change.record.kind === "msa.live" && change.ops.length > 0) commits.push([...change.ops]);
     }
   });
-  return { harness, root, commits };
+  return { commits, harness, root };
 });
 
 const handsGenerationOver = Effect.gen(function* () {
   const { harness, root, commits } = yield* singleToolChat();
   yield* awaited(
-    (yield* awaited(root.submit({ type: "input", content: "go" }, context))).wait(context),
+    (yield* awaited(root.submit({ content: "go", type: "input" }, context))).wait(context),
   );
   const tasks = yield* awaited(
     harness.commit((tx) => tx.scanTasks({ conversationId: root.id }, 20), context),
@@ -52,11 +55,11 @@ const handsGenerationOver = Effect.gen(function* () {
   const entries = yield* awaited(root.entries({}, 10, undefined, context));
   const result = entries.items.find((entry) => entry.kind === "msa.tool-result")!.id;
   expect(commits).toEqual([
-    [["s", ["run"], { taskId: firstGeneration, inputs: [expect.any(Number)] }]],
+    [["s", ["run"], { inputs: [expect.any(Number)], taskId: firstGeneration }]],
     [["s", ["generation"], { attempt: 1 }]],
     expect.arrayContaining([
       ["d", ["generation"]],
-      ["s", ["tools"], [{ callId: "c1", name: "noop", taskId: tool, status: "pending" }]],
+      ["s", ["tools"], [{ callId: "c1", name: "noop", status: "pending", taskId: tool }]],
     ]),
     [["s", ["tools", 0, "status"], "running"]],
     expect.arrayContaining([
@@ -162,10 +165,10 @@ describe("msa.live deltas", () => {
 const diffsDetailsLeaf = Effect.gen(function* () {
   const run = yield* drive();
   const details = ["tools", 0, "details"];
-  expect(yield* awaited(run.step((api) => api.details({ step: 1, log: "a" }, context)))).toEqual([
-    ["s", details, { step: 1, log: "a" }],
+  expect(yield* awaited(run.step((api) => api.details({ log: "a", step: 1 }, context)))).toEqual([
+    ["s", details, { log: "a", step: 1 }],
   ]);
-  expect(yield* awaited(run.step((api) => api.details({ step: 2, log: "ab" }, context)))).toEqual(
+  expect(yield* awaited(run.step((api) => api.details({ log: "ab", step: 2 }, context)))).toEqual(
     expect.arrayContaining([
       ["s", [...details, "step"], 2],
       ["a", [...details, "log"], "b"],
@@ -175,8 +178,8 @@ const diffsDetailsLeaf = Effect.gen(function* () {
     ["d", [...details, "log"]],
   ]);
   const diagnostics = ["tools", 0, "diagnostics"];
-  const first = { severity: "info", message: "first" } as const;
-  const second = { severity: "warn", message: "second" } as const;
+  const first = { message: "first", severity: "info" } as const;
+  const second = { message: "second", severity: "warn" } as const;
   expect(yield* awaited(run.step((api) => api.diagnostic(first)))).toEqual([
     ["s", diagnostics, [first]],
   ]);

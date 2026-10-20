@@ -2,51 +2,54 @@ import { defineDoc } from "@msa/durable";
 import { Effect } from "effect";
 import { describe, expect, it } from "vite-plus/test";
 
-import { awaited } from "./effect-support.ts";
-import { context, createConversation, openTestSession } from "./session-support.ts";
+import effectSupport from "./effect-support.ts";
+import sessionSupport from "./session-support.ts";
+
+const { awaited } = effectSupport;
+const { context, createConversation, openTestSession } = sessionSupport;
 
 function sourceWriteDocs() {
   const Current = defineDoc<{ value: string }>({
-    kind: "fork.same-transaction-current",
-    version: 1,
-    scope: "conversation",
-    history: "latest",
     fork: "current",
+    history: "latest",
     initial: () => ({ value: "committed" }),
+    kind: "fork.same-transaction-current",
+    scope: "conversation",
+    version: 1,
   });
   const AsOf = defineDoc<{ value: string }>({
-    kind: "fork.same-transaction-as-of",
-    version: 1,
-    scope: "conversation",
-    history: "rewindable",
     fork: "asOf",
+    history: "rewindable",
     initial: () => ({ value: "committed" }),
+    kind: "fork.same-transaction-as-of",
+    scope: "conversation",
+    version: 1,
   });
-  return { Current, AsOf };
+  return { AsOf, Current };
 }
 
 const rejectsDuplicateCurrentStep1 = Effect.gen(function* () {
   const runPromise = Effect.runPromiseWith(yield* Effect.context<never>());
 
   const AsOf = defineDoc<{ value: string }>({
-    kind: "fork.duplicate-policy",
-    version: 1,
-    scope: "conversation",
-    history: "rewindable",
     fork: "asOf",
+    history: "rewindable",
     initial: () => ({ value: "as-of" }),
+    kind: "fork.duplicate-policy",
+    scope: "conversation",
+    version: 1,
   });
   const Current = defineDoc<{ value: string }>({
-    kind: "fork.duplicate-policy",
-    version: 1,
-    scope: "conversation",
-    history: "latest",
     fork: "current",
+    history: "latest",
     initial: () => ({ value: "current" }),
+    kind: "fork.duplicate-policy",
+    scope: "conversation",
+    version: 1,
   });
   const { session, storage } = openTestSession();
   const parentId = yield* awaited(createConversation(session));
-  return { runPromise, AsOf, Current, session, storage, parentId };
+  return { AsOf, Current, parentId, runPromise, session, storage };
 });
 
 const rejectsDuplicateCurrent = Effect.gen(function* () {
@@ -57,9 +60,9 @@ const rejectsDuplicateCurrent = Effect.gen(function* () {
       (tx) =>
         runPromise(
           Effect.gen(function* () {
-            const oldAt = (yield* awaited(tx.appendEntry(parentId, { kind: "old" }))).id;
+            const oldAtInner = (yield* awaited(tx.appendEntry(parentId, { kind: "old" }))).id;
             yield* awaited(tx.doc(AsOf, parentId));
-            return oldAt;
+            return oldAtInner;
           }),
         ),
       context,
@@ -99,10 +102,10 @@ const rejectsCurrentSourceStep1 = Effect.gen(function* () {
       (tx) =>
         runPromise(
           Effect.gen(function* () {
-            const forkAt = (yield* awaited(tx.appendEntry(parentId, { kind: "point" }))).id;
+            const forkAtInner = (yield* awaited(tx.appendEntry(parentId, { kind: "point" }))).id;
             yield* awaited(tx.doc(Current, parentId));
             yield* awaited(tx.doc(AsOf, parentId));
-            return forkAt;
+            return forkAtInner;
           }),
         ),
       context,
@@ -125,7 +128,7 @@ const rejectsCurrentSourceStep1 = Effect.gen(function* () {
       ),
     ).rejects.toThrow("Cannot change fork source document"),
   );
-  return { runPromise, Current, AsOf, session, storage, parentId, forkAt, commits };
+  return { AsOf, Current, commits, forkAt, parentId, runPromise, session, storage };
 });
 
 const rejectsCurrentSource = Effect.gen(function* () {

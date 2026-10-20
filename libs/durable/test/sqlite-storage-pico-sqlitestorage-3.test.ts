@@ -4,15 +4,14 @@ import { Effect } from "effect";
 import { afterEach, describe, expect, it } from "vite-plus/test";
 
 import type { DocumentId } from "../src/types.ts";
-import { fromJsonText, awaited } from "./effect-support.ts";
-import { removeDir } from "./platform-support.ts";
-import {
-  createRoot,
-  context,
-  tempDirectories,
-  openStorages,
-  createSqliteStorage,
-} from "./sqlite-storage-support.ts";
+import effectSupport from "./effect-support.ts";
+import platformSupport from "./platform-support.ts";
+import sqliteStorageSupport from "./sqlite-storage-support.ts";
+
+const { awaited, fromJsonText } = effectSupport;
+const { removeDir } = platformSupport;
+const { context, createRoot, createSqliteStorage, openStorages, tempDirectories } =
+  sqliteStorageSupport;
 
 afterEach(() =>
   Effect.runPromise(
@@ -45,9 +44,9 @@ const checkpointedRevisions = Effect.fn("checkpointedRevisions")(function* () {
     storage.commit(
       [
         {
-          type: "document.create",
+          content: { kind: "base", value: { count: 0 }, version: 1 },
           record: { id, kind: "latest", scope: { kind: "session" } },
-          content: { kind: "base", version: 1, value: { count: 0 } },
+          type: "document.create",
         },
       ],
       context,
@@ -58,16 +57,16 @@ const checkpointedRevisions = Effect.fn("checkpointedRevisions")(function* () {
       storage.commit(
         [
           {
-            type: "document.change",
+            content: { kind: "delta", ops: [["s", ["count"], count]], version: 1 },
             id,
-            content: { kind: "delta", version: 1, ops: [["s", ["count"], count]] },
+            type: "document.change",
           },
         ],
         context,
       ),
     );
   }
-  return { storage, path, id };
+  return { id, path, storage };
 });
 
 const reclaimsCurrentOnly = Effect.gen(function* () {
@@ -88,9 +87,9 @@ const reclaimsCurrentOnly = Effect.gen(function* () {
     storage.commit(
       [
         {
-          type: "document.change",
+          content: { kind: "base", value: { count: 11 }, version: 1 },
           id,
-          content: { kind: "base", version: 1, value: { count: 11 } },
+          type: "document.change",
         },
       ],
       context,
@@ -101,16 +100,16 @@ const reclaimsCurrentOnly = Effect.gen(function* () {
     storage.commit(
       [
         {
-          type: "document.change",
+          content: { kind: "delta", ops: [["r", { count: 12 }]], version: 1 },
           id,
-          content: { kind: "delta", version: 1, ops: [["r", { count: 12 }]] },
+          type: "document.change",
         },
       ],
       context,
     ),
   );
   expect(revisionCount(path, id)).toBe(2);
-  yield* awaited(storage.commit([{ type: "document.retire", id }], context));
+  yield* awaited(storage.commit([{ id, type: "document.retire" }], context));
   expect(revisionCount(path, id)).toBe(0);
 });
 

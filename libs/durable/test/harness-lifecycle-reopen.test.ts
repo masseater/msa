@@ -2,11 +2,17 @@ import { Effect } from "effect";
 import { describe, expect, it } from "vite-plus/test";
 
 import { openNodeSqliteStorage } from "../src/storage/sqlite/node.ts";
-import { awaited } from "./effect-support.ts";
-import { start, oneStep } from "./harness-lifecycle-support.ts";
-import { makeTempFile, removeDir } from "./platform-support.ts";
-import { context } from "./session-support.ts";
-import { deferred, eventually, openTasks, settled } from "./task-support.ts";
+import effectSupport from "./effect-support.ts";
+import harnessLifecycleSupport from "./harness-lifecycle-support.ts";
+import platformSupport from "./platform-support.ts";
+import sessionSupport from "./session-support.ts";
+import taskSupport from "./task-support.ts";
+
+const { awaited } = effectSupport;
+const { oneStep, start } = harnessLifecycleSupport;
+const { makeTempFile, removeDir } = platformSupport;
+const { context } = sessionSupport;
+const { deferred, eventually, openTasks, settled } = taskSupport;
 
 const letsNewHarness = Effect.gen(function* () {
   const runPromise = Effect.runPromiseWith(yield* Effect.context<never>());

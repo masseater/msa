@@ -3,24 +3,24 @@ import { type ContextView, type EntryDraft, type EntryId } from "@msa/durable";
 import { Effect } from "effect";
 import { afterEach, describe, expect, it, vi } from "vite-plus/test";
 
-import { awaited } from "./effect-support.ts";
-import {
-  setup,
-  countingSetup,
-  type Counting,
-  type RunRuntime,
-  runInRoot,
-} from "./harness-context-support.ts";
-import { assistant, describeMessage, system, toolResult, user } from "./harness-support.ts";
-import { context } from "./session-support.ts";
+import effectSupport from "./effect-support.ts";
+import harnessContextSupport from "./harness-context-support.ts";
+import type harnessContextSupportTypes from "./harness-context-support.types.ts";
+import harnessSupport from "./harness-support.ts";
+import sessionSupport from "./session-support.ts";
+
+const { awaited } = effectSupport;
+const { countingSetup, runInRoot, setup } = harnessContextSupport;
+const { assistant, describeMessage, system, toolResult, user } = harnessSupport;
+const { context } = sessionSupport;
 
 afterEach(() => {
   vi.useRealTimers();
 });
 
 function checkExtendedReads(
-  { root, first, scanned }: Counting,
-  runtime: RunRuntime,
+  { root, first, scanned }: harnessContextSupportTypes.Counting,
+  runtime: harnessContextSupportTypes.RunRuntime,
   taskContext: Context,
 ): Promise<void> {
   return Effect.runPromise(
@@ -36,20 +36,20 @@ function checkExtendedReads(
             const view = yield* awaited(
               runtime.context(root.id, taskContext, at === undefined ? {} : { at }),
             );
-            return { view, rows: scanned.rows - before };
+            return { rows: scanned.rows - before, view };
           }),
         );
       const initial = yield* awaited(read());
       expect(initial.view).toEqual(yield* awaited(root.context(taskContext)));
 
       yield* awaited(write({ kind: "message", model: [user("new")] }));
-      yield* awaited(write({ kind: "note", data: { text: "display only" } }));
+      yield* awaited(write({ data: { text: "display only" }, kind: "note" }));
       yield* awaited(write({ kind: "message", model: [assistant("answer")] }));
       const extended = yield* awaited(read());
       expect(extended.rows).toBe(4);
       expect(extended.view).toEqual(yield* awaited(root.context(taskContext)));
 
-      yield* awaited(write({ kind: "edit", edits: [{ target: first.id, action: "omit" }] }));
+      yield* awaited(write({ edits: [{ action: "omit", target: first.id }], kind: "edit" }));
       const edited = yield* awaited(read());
       expect(edited.rows).toBe(2);
       expect(edited.view).toEqual(yield* awaited(root.context(taskContext)));
@@ -59,7 +59,7 @@ function checkExtendedReads(
       expect(cutoff.rows).toBe(0);
       expect(cutoff.view).toEqual(extended.view);
 
-      yield* awaited(write({ kind: "reset", head: "self", model: [user("fresh")] }));
+      yield* awaited(write({ head: "self", kind: "reset", model: [user("fresh")] }));
       const reset = yield* awaited(read());
       expect(reset.view).toEqual(yield* awaited(root.context(taskContext)));
       expect(reset.view.messages.map(describeMessage)).toEqual(["user:fresh"]);
@@ -72,7 +72,7 @@ const summaryOverRetainedSystem = Effect.fn("summaryOverRetainedSystem")(functio
   const kept = yield* awaited(message(user("kept")));
   yield* awaited(message(assistant("answer")));
   const retained = yield* awaited(message(system({ cwd: "/repo" }), "msa.system"));
-  yield* awaited(append({ kind: "summary", head: kept.id, model: [user("summary")] }));
+  yield* awaited(append({ head: kept.id, kind: "summary", model: [user("summary")] }));
   yield* awaited(message(user("next")));
   const view = yield* awaited(root.context(context));
   expect(view.messages.map(describeMessage)).toEqual([
@@ -82,7 +82,7 @@ const summaryOverRetainedSystem = Effect.fn("summaryOverRetainedSystem")(functio
     "system:cwd",
     "user:next",
   ]);
-  return { root, message, append, retained };
+  return { append, message, retained, root };
 });
 
 const baselineOverRetainedSystem = Effect.fn("baselineOverRetainedSystem")(function* () {
@@ -90,14 +90,14 @@ const baselineOverRetainedSystem = Effect.fn("baselineOverRetainedSystem")(funct
 
   const baseline = yield* awaited(
     append({
+      edits: [{ action: "omit", target: retained.id }],
       kind: "msa.system",
       model: [system({ preamble: "Baseline." })],
-      edits: [{ target: retained.id, action: "omit" }],
     }),
   );
   yield* awaited(message(assistant("done")));
   yield* awaited(message(system({ preamble: null }), "msa.system"));
-  return { root, append, baseline };
+  return { append, baseline, root };
 });
 
 const doesNotLead = Effect.gen(function* () {
@@ -106,7 +106,7 @@ const doesNotLead = Effect.gen(function* () {
   yield* awaited(message(user("first")));
   yield* awaited(message(assistant("answer")));
   yield* awaited(message(system({ legacy: null }), "msa.system"));
-  yield* awaited(append({ kind: "edit", edits: [{ target: host.id, action: "omit" }] }));
+  yield* awaited(append({ edits: [{ action: "omit", target: host.id }], kind: "edit" }));
   let view = yield* awaited(root.context(context));
   expect(view.messages.map(describeMessage)).toEqual([
     "user:first",
@@ -118,22 +118,22 @@ const doesNotLead = Effect.gen(function* () {
   const first = yield* awaited(other.message(user("first")));
   yield* awaited(
     other.append({
-      kind: "edit",
       edits: [
         {
-          target: first.id,
           action: "replace",
           messages: [user("first"), system({ note: "Note." })],
+          target: first.id,
         },
       ],
+      kind: "edit",
     }),
   );
   yield* awaited(other.message(assistant("answer")));
   yield* awaited(other.message(system({ note: null }), "msa.system"));
   yield* awaited(
     other.append({
+      edits: [{ action: "replace", messages: [user("first")], target: first.id }],
       kind: "edit",
-      edits: [{ target: first.id, action: "replace", messages: [user("first")] }],
     }),
   );
   view = yield* awaited(other.root.context(context));
@@ -162,7 +162,7 @@ const doesNotLeadRetained = Effect.gen(function* () {
     "system:preamble",
   ]);
 
-  yield* awaited(append({ kind: "edit", edits: [{ target: baseline.id, action: "omit" }] }));
+  yield* awaited(append({ edits: [{ action: "omit", target: baseline.id }], kind: "edit" }));
   view = yield* awaited(root.context(context));
   expect(view.messages.map(describeMessage)).toEqual([
     "user:summary",
@@ -175,8 +175,8 @@ const doesNotLeadRetained = Effect.gen(function* () {
 
   yield* awaited(
     append({
+      edits: [{ action: "replace", messages: [system({ other: "Other." })], target: baseline.id }],
       kind: "edit",
-      edits: [{ target: baseline.id, action: "replace", messages: [system({ other: "Other." })] }],
     }),
   );
   view = yield* awaited(root.context(context));
@@ -212,13 +212,13 @@ const synthesizesMissingTool = Effect.gen(function* () {
   ]);
   const missing = childView.messages[2]!;
   expect(missing).toMatchObject({
+    details: { reason: "missing_result" },
     role: "toolResult",
     toolName: "tool-x",
-    details: { reason: "missing_result" },
   });
 
   yield* awaited(
-    root.commit((tx) => tx.appendEntry(root.id, { kind: "reset", head: second.id }), context),
+    root.commit((tx) => tx.appendEntry(root.id, { head: second.id, kind: "reset" }), context),
   );
   const parentView = yield* awaited(root.context(context));
   expect(parentView.messages.map(describeMessage)).toEqual([]);
@@ -238,12 +238,12 @@ const readsContextEarlier = Effect.gen(function* () {
   yield* awaited(message(toolResult("y")));
   const edit = yield* awaited(
     append({
+      edits: [{ action: "replace", messages: [user("first v2")], target: first.id }],
       kind: "edit",
-      edits: [{ target: first.id, action: "replace", messages: [user("first v2")] }],
     }),
   );
   const reset = yield* awaited(
-    append({ kind: "reset", head: "self", model: [user("fresh start")] }),
+    append({ head: "self", kind: "reset", model: [user("fresh start")] }),
   );
   const tail = yield* awaited(message(assistant("after reset")));
 

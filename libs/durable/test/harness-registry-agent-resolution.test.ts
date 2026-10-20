@@ -1,23 +1,31 @@
 import { defineExtension, hook } from "@msa/durable";
-import { createRegistry, GenerationTask, ToolTask } from "@msa/durable/harness";
+import { GenerationTask, ToolTask, createRegistry } from "@msa/durable/harness";
 import { describe, expect, it } from "vite-plus/test";
 
 import { agentHooks } from "../src/harness/agent.ts";
-import { type AppTool, resolve } from "./harness-registry-support.ts";
+import harnessRegistrySupport from "./harness-registry-support.ts";
+import type harnessRegistrySupportTypes from "./harness-registry-support.types.ts";
+
+const { resolve } = harnessRegistrySupport;
 
 describe("agent resolution", () => {
   it("collects hooks of the selected extensions in extension order and applies field defaults", () => {
-    const local = createRegistry<AppTool>();
+    const local = createRegistry<harnessRegistrySupportTypes.AppTool>();
     const first = { beforeTool: () => undefined };
     const second = { beforeTool: () => undefined };
     const onYield = { onYield: () => undefined };
     local.install(
-      defineExtension<AppTool>({
-        name: "a",
+      defineExtension<harnessRegistrySupportTypes.AppTool>({
         hooks: [hook(ToolTask, first), hook(GenerationTask, onYield)],
+        name: "a",
       }),
     );
-    local.install(defineExtension<AppTool>({ name: "b", hooks: [hook(ToolTask, second)] }));
+    local.install(
+      defineExtension<harnessRegistrySupportTypes.AppTool>({
+        hooks: [hook(ToolTask, second)],
+        name: "b",
+      }),
+    );
     expect(agentHooks(resolve(undefined, local.snapshot()), "msa.tool")).toEqual([first, second]);
     expect(agentHooks(resolve({ extensions: ["b", "a"] }, local.snapshot()), "msa.tool")).toEqual([
       second,
@@ -33,9 +41,9 @@ describe("agent resolution", () => {
     expect(defaults.cwd).toBeUndefined();
     expect(
       resolve(
-        { model: { provider: "p", modelId: "m" }, thinkingLevel: "high", cwd: "/w" },
+        { cwd: "/w", model: { modelId: "m", provider: "p" }, thinkingLevel: "high" },
         local.snapshot(),
       ),
-    ).toMatchObject({ model: { provider: "p", modelId: "m" }, thinkingLevel: "high", cwd: "/w" });
+    ).toMatchObject({ cwd: "/w", model: { modelId: "m", provider: "p" }, thinkingLevel: "high" });
   });
 });

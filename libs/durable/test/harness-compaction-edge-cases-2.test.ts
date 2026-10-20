@@ -2,33 +2,28 @@ import { type CompactionResult, type TaskId, UsageDoc } from "@msa/durable";
 import { Effect } from "effect";
 import { afterEach, describe, expect, it } from "vite-plus/test";
 
-import {
-  compactionTasks,
-  text,
-  summary,
-  answer,
-  gated,
-  history,
-  turn,
-  directories,
+import harnessCompactionSupport from "./harness-compaction-support.ts";
+import support from "./support.ts";
+
+const {
   BACKGROUND,
-  live,
+  answer,
+  compactionTasks,
+  directories,
   failure,
   firstUserText,
-  userText,
+  gated,
+  history,
+  kinds,
+  live,
   open,
   result,
-  kinds,
-} from "./harness-compaction-support.ts";
-import {
-  openChat,
-  waitFor,
-  awaited,
-  removeDir,
-  ControlledStorage,
-  context,
-  deferred,
-} from "./support.ts";
+  summary,
+  text,
+  turn,
+  userText,
+} = harnessCompactionSupport;
+const { ControlledStorage, awaited, context, deferred, openChat, removeDir, waitFor } = support;
 
 afterEach(() =>
   Effect.runPromise(
@@ -43,7 +38,7 @@ const keepsBackgroundSummaryStep1 = Effect.gen(function* () {
   const chat = yield* open({ contextWindow: 2000 });
   yield* history(chat);
   chat.setup.settings.compaction = BACKGROUND;
-  chat.setup.settings.retry = { enabled: true, maxRetries: 2, baseDelayMs: 300 };
+  chat.setup.settings.retry = { baseDelayMs: 300, enabled: true, maxRetries: 2 };
   const summaryGate = deferred();
   const summaryReached = deferred();
   chat.faux.summaries.push(gated(summaryGate, summary("BACKGROUND"), summaryReached));
@@ -55,7 +50,7 @@ const keepsBackgroundSummaryStep1 = Effect.gen(function* () {
   });
   chat.faux.agent.push(answer("a4"));
   const input = yield* awaited(
-    chat.root.submit({ type: "input", content: text("u4", 100) }, context),
+    chat.root.submit({ content: text("u4", 100), type: "input" }, context),
   );
   yield* awaited(Promise.all([failed.promise, summaryReached.promise]));
   yield* waitFor(
@@ -75,8 +70,8 @@ const keepsBackgroundSummaryStep1 = Effect.gen(function* () {
   expect((yield* awaited(submission.status(context))).status).toBe("queued");
   chat.setup.settings.compaction = {
     ...BACKGROUND,
-    reserveTokens: 1500,
     keepRecentTokens: 50,
+    reserveTokens: 1500,
   };
   expect((yield* awaited(input.wait(context))).status).toBe("done");
   return { chat, submission };
@@ -86,8 +81,8 @@ const keepsBackgroundSummary = Effect.gen(function* () {
   const { chat, submission } = yield* keepsBackgroundSummaryStep1;
   expect(firstUserText(chat.faux.agentRequests.at(-1)!.messages)).toContain("BLOCKING");
   expect(yield* awaited(submission.wait(context))).toMatchObject({
-    status: "unanswered",
     reason: "stale",
+    status: "unanswered",
   });
   yield* awaited(chat.harness.close(context));
 });
@@ -130,13 +125,13 @@ const leavesNoUsage = Effect.gen(function* () {
       }),
     );
   const before = yield* awaited(usage());
-  const failure = new Error("disk gone");
+  const failureInner = new Error("disk gone");
   chat.faux.summaries.push(() => {
-    storage.failNextCommit(failure);
+    storage.failNextCommit(failureInner);
     return Promise.resolve(summary());
   });
   const id = yield* awaited(chat.root.compact(undefined, context));
-  expect(yield* awaited(chat.harness.closed)).toEqual({ reason: "failed", error: failure });
+  expect(yield* awaited(chat.harness.closed)).toEqual({ error: failureInner, reason: "failed" });
   yield* awaited(chat.harness.close(context));
   storage.reopen();
   expect(

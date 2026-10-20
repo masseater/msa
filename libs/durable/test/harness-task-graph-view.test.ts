@@ -3,10 +3,15 @@ import { MemoryStorage } from "@msa/durable/storage/memory";
 import { Effect } from "effect";
 import { describe, expect, it } from "vite-plus/test";
 
-import { abortController, awaited } from "./effect-support.ts";
-import { family } from "./harness-task-graph-support.ts";
-import { ControlledStorage, context, flush } from "./session-support.ts";
-import { completed, deferred, openTasks } from "./task-support.ts";
+import effectSupport from "./effect-support.ts";
+import harnessTaskGraphSupport from "./harness-task-graph-support.ts";
+import sessionSupport from "./session-support.ts";
+import taskSupport from "./task-support.ts";
+
+const { abortController, awaited } = effectSupport;
+const { family } = harnessTaskGraphSupport;
+const { ControlledStorage, context, flush } = sessionSupport;
+const { completed, deferred, openTasks } = taskSupport;
 
 function gatesNever() {
   const never = Effect.runPromise(Effect.never);
@@ -17,9 +22,9 @@ function memoTask() {
   const gate = deferred();
   const reached = deferred();
   const Memo = defineTask<null, { phase: "work" }, null>({
-    name: "test.graph-memo",
-    version: 1,
+    abort: () => Promise.resolve(),
     initial: () => ({ phase: "work" }),
+    name: "test.graph-memo",
     phases: {
       work: (_task, runtime, ctx) =>
         Effect.runPromise(
@@ -31,9 +36,9 @@ function memoTask() {
           }),
         ),
     },
-    abort: () => Promise.resolve(),
+    version: 1,
   });
-  return { gate, reached, Memo };
+  return { Memo, gate, reached };
 }
 
 const registersNothingAcquisition = Effect.gen(function* () {

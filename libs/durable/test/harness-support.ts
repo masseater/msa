@@ -7,37 +7,41 @@ import type {
   ToolResultMessage,
   UserMessage,
 } from "@msa/ai";
-import { createModels, Type } from "@msa/ai";
+import { Type, createModels } from "@msa/ai";
 import {
   type AnyTask,
-  defineExtension,
-  defineTool,
   type Extension,
   type HooksOf,
-  hook,
   type PromptSection,
   type Registry,
   type Storage,
-  section,
   type ToolRegistration,
+  defineExtension,
+  defineTool,
+  hook,
+  section,
 } from "@msa/durable";
-import { createRegistry, Harness } from "@msa/durable/harness";
+import { Harness, createRegistry } from "@msa/durable/harness";
 import { Effect } from "effect";
 import { dual } from "effect/Function";
 
-import { awaited } from "./effect-support.ts";
-import { context } from "./session-support.ts";
+import effectSupport from "./effect-support.ts";
+import type harnessSupportTypes from "./harness-support.types.ts";
+import sessionSupport from "./session-support.ts";
 
-export function tool(name: string): ToolRegistration {
+const { awaited } = effectSupport;
+const { context } = sessionSupport;
+
+function tool(name: string): ToolRegistration {
   return defineTool({
-    name,
     description: `${name} tool`,
-    parameters: Type.Object({}),
     execute: () => Promise.resolve({ output: [] }),
+    name,
+    parameters: Type.Object({}),
   });
 }
 
-export const openHarness = Effect.fn("openHarness")(function* (
+const openHarness = Effect.fn("openHarness")(function* (
   storage: Storage,
   toolNames: readonly string[] = [],
   options: { readonly registry?: Registry; readonly onReport?: (error: unknown) => void } = {},
@@ -61,8 +65,8 @@ export const openHarness = Effect.fn("openHarness")(function* (
   return { harness, registry };
 });
 
-export function user(text: string): UserMessage {
-  return { role: "user", content: text, timestamp: 1 };
+function user(text: string): UserMessage {
+  return { content: text, role: "user", timestamp: 1 };
 }
 
 function assistantImpl(
@@ -70,31 +74,31 @@ function assistantImpl(
   options: { readonly calls?: readonly string[]; readonly stopReason?: StopReason } = {},
 ): AssistantMessage {
   const calls: ToolCall[] = (options.calls ?? []).map((id) => ({
-    type: "toolCall",
+    arguments: {},
     id,
     name: `tool-${id}`,
-    arguments: {},
+    type: "toolCall",
   }));
   return {
-    role: "assistant",
-    content: [{ type: "text", text }, ...calls],
     api: "faux",
-    provider: "faux",
+    content: [{ text, type: "text" }, ...calls],
     model: "faux",
-    usage: {
-      input: 0,
-      output: 0,
-      cacheRead: 0,
-      cacheWrite: 0,
-      totalTokens: 0,
-      cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0, total: 0 },
-    },
+    provider: "faux",
+    role: "assistant",
     stopReason: options.stopReason ?? (calls.length > 0 ? "toolUse" : "stop"),
     timestamp: 2,
+    usage: {
+      cacheRead: 0,
+      cacheWrite: 0,
+      cost: { cacheRead: 0, cacheWrite: 0, input: 0, output: 0, total: 0 },
+      input: 0,
+      output: 0,
+      totalTokens: 0,
+    },
   };
 }
 
-export const assistant: {
+const assistant: {
   (options?: {
     readonly calls?: readonly string[];
     readonly stopReason?: StopReason;
@@ -105,22 +109,22 @@ export const assistant: {
   ): ReturnType<typeof assistantImpl>;
 } = dual((args) => typeof args[0] === "string", assistantImpl);
 
-export function toolResult(id: string): ToolResultMessage {
+function toolResult(id: string): ToolResultMessage {
   return {
+    content: [{ text: `result ${id}`, type: "text" }],
+    isError: false,
     role: "toolResult",
+    timestamp: 3,
     toolCallId: id,
     toolName: `tool-${id}`,
-    content: [{ type: "text", text: `result ${id}` }],
-    isError: false,
-    timestamp: 3,
   };
 }
 
-export function system(sections: Record<string, string | null>): SystemMessage {
-  return { role: "system", content: "", sections, timestamp: 4 };
+function system(sections: Record<string, string | null>): SystemMessage {
+  return { content: "", role: "system", sections, timestamp: 4 };
 }
 
-export function describeMessage(message: Message): string {
+function describeMessage(message: Message): string {
   switch (message.role) {
     case "user":
       return `user:${message.content as string}`;
@@ -137,36 +141,42 @@ export function describeMessage(message: Message): string {
   }
 }
 
-export type Installed = { dispose(): void };
-
 function installOne<Tool extends ToolRegistration>(
   registry: Registry<Tool>,
   extension: Extension<Tool>,
-): Installed {
+): harnessSupportTypes.Installed {
   registry.install(extension);
   return { dispose: () => registry.uninstall(extension) };
 }
 
 function addToolImpl<Tool extends ToolRegistration>(
   registry: Registry<Tool>,
-  tool: Tool,
-): Installed {
-  return installOne(registry, defineExtension<Tool>({ name: `tool:${tool.name}`, tools: [tool] }));
+  toolInner: Tool,
+): harnessSupportTypes.Installed {
+  return installOne(
+    registry,
+    defineExtension<Tool>({ name: `tool:${toolInner.name}`, tools: [toolInner] }),
+  );
 }
 
-export const addTool: {
-  <Tool extends ToolRegistration>(tool: Tool): (registry: Registry<Tool>) => Installed;
-  <Tool extends ToolRegistration>(registry: Registry<Tool>, tool: Tool): Installed;
+const addTool: {
+  <Tool extends ToolRegistration>(
+    tool: Tool,
+  ): (registry: Registry<Tool>) => harnessSupportTypes.Installed;
+  <Tool extends ToolRegistration>(
+    registry: Registry<Tool>,
+    tool: Tool,
+  ): harnessSupportTypes.Installed;
 } = dual(2, addToolImpl);
 
-function addTaskImpl(registry: Registry, task: AnyTask): Installed {
+function addTaskImpl(registry: Registry, task: AnyTask): harnessSupportTypes.Installed {
   return installOne(
     registry,
     defineExtension({ name: `task:${task.definition.name}`, tasks: [task] }),
   );
 }
 
-export const addTask: {
+const addTask: {
   (task: AnyTask): (registry: Registry) => ReturnType<typeof addTaskImpl>;
   (registry: Registry, task: AnyTask): ReturnType<typeof addTaskImpl>;
 } = dual(2, addTaskImpl);
@@ -177,16 +187,23 @@ function addHooksImpl<K extends AnyTask>(
   registry: Registry,
   task: K,
   handlers: Partial<HooksOf<K>>,
-): Installed {
+): harnessSupportTypes.Installed {
   return installOne(
     registry,
-    defineExtension({ name: `hooks:${++hookExtensions}`, hooks: [hook(task, handlers)] }),
+    defineExtension({ hooks: [hook(task, handlers)], name: `hooks:${++hookExtensions}` }),
   );
 }
 
-export const addHooks: {
-  <K extends AnyTask>(task: K, handlers: Partial<HooksOf<K>>): (registry: Registry) => Installed;
-  <K extends AnyTask>(registry: Registry, task: K, handlers: Partial<HooksOf<K>>): Installed;
+const addHooks: {
+  <K extends AnyTask>(
+    task: K,
+    handlers: Partial<HooksOf<K>>,
+  ): (registry: Registry) => harnessSupportTypes.Installed;
+  <K extends AnyTask>(
+    registry: Registry,
+    task: K,
+    handlers: Partial<HooksOf<K>>,
+  ): harnessSupportTypes.Installed;
 } = dual(3, addHooksImpl);
 
 function addSectionImpl(
@@ -194,23 +211,39 @@ function addSectionImpl(
   key: string,
   render: PromptSection["render"],
   options?: { readonly tag?: boolean },
-): Installed {
+): harnessSupportTypes.Installed {
   return installOne(
     registry,
     defineExtension({ name: `section:${key}`, sections: [section(key, render, options)] }),
   );
 }
 
-export const addSection: {
+const addSection: {
   (
     key: string,
     render: PromptSection["render"],
     options?: { readonly tag?: boolean },
-  ): (registry: Registry) => Installed;
+  ): (registry: Registry) => harnessSupportTypes.Installed;
   (
     registry: Registry,
     key: string,
     render: PromptSection["render"],
     options?: { readonly tag?: boolean },
-  ): Installed;
+  ): harnessSupportTypes.Installed;
 } = dual((args) => typeof args[1] === "string", addSectionImpl);
+
+const harnessSupport = {
+  addHooks,
+  addSection,
+  addTask,
+  addTool,
+  assistant,
+  describeMessage,
+  openHarness,
+  system,
+  tool,
+  toolResult,
+  user,
+};
+
+export default harnessSupport;

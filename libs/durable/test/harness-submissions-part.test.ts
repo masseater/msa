@@ -1,20 +1,25 @@
 import {
   AssistantEntry,
-  defineEntry,
   type EntryId,
   type SubmissionCreate,
   type SubmissionId,
   UserEntry,
+  defineEntry,
 } from "@msa/durable";
 import { Effect } from "effect";
 import { afterEach, describe, expect, it } from "vite-plus/test";
 
 import type { SessionImpl } from "../src/session/session.ts";
-import { chatSetup, openChat } from "./chat-support.ts";
-import { awaited } from "./effect-support.ts";
-import { directories } from "./harness-submissions-support.ts";
-import { removeDir } from "./platform-support.ts";
-import { ControlledStorage, context } from "./session-support.ts";
+import chatSupport from "./chat-support.ts";
+import effectSupport from "./effect-support.ts";
+import directories from "./harness-submissions-support.ts";
+import platformSupport from "./platform-support.ts";
+import sessionSupport from "./session-support.ts";
+
+const { chatSetup, openChat } = chatSupport;
+const { awaited } = effectSupport;
+const { removeDir } = platformSupport;
+const { ControlledStorage, context } = sessionSupport;
 
 afterEach(() =>
   Effect.runPromise(
@@ -52,12 +57,12 @@ const settlesSubmissionsTheirStep1 = Effect.gen(function* () {
       context,
     );
   const queued = yield* awaited(
-    create({ conversationId: root.id, type: "input", status: "queued" }),
+    create({ conversationId: root.id, status: "queued", type: "input" }),
   );
   const write = yield* awaited(
-    create({ conversationId: root.id, type: "write", status: "queued" }),
+    create({ conversationId: root.id, status: "queued", type: "write" }),
   );
-  const answer = { status: "done", answer: entry } as const;
+  const answer = { answer: entry, status: "done" } as const;
   yield* awaited(
     expect(root.commit((tx) => tx.settleSubmission(queued, answer), context)).rejects.toThrow(
       "is not a placed input",
@@ -68,7 +73,7 @@ const settlesSubmissionsTheirStep1 = Effect.gen(function* () {
       "is not a placed input",
     ),
   );
-  return { runPromise, harness, root, session, entry, answer };
+  return { answer, entry, harness, root, runPromise, session };
 });
 
 const settlesSubmissionsTheir = Effect.gen(function* () {
@@ -76,7 +81,7 @@ const settlesSubmissionsTheir = Effect.gen(function* () {
   yield* awaited(
     expect(
       root.commit(
-        (tx) => tx.settleSubmission(999_999 as SubmissionId, { status: "unanswered", reason: "x" }),
+        (tx) => tx.settleSubmission(999_999 as SubmissionId, { reason: "x", status: "unanswered" }),
         context,
       ),
     ).rejects.toThrow("does not exist"),
@@ -90,13 +95,13 @@ const settlesSubmissionsTheir = Effect.gen(function* () {
             const { id } = yield* awaited(
               tx.createSubmission({
                 conversationId: root.id,
-                type: "input",
-                status: "placed",
                 entry,
+                status: "placed",
+                type: "input",
               }),
             );
             tx.settleSubmission(id, answer);
-            tx.settleSubmission(id, { status: "unanswered", reason: "late" });
+            tx.settleSubmission(id, { reason: "late", status: "unanswered" });
             return id;
           }),
         ),
@@ -106,9 +111,9 @@ const settlesSubmissionsTheir = Effect.gen(function* () {
   expect(
     yield* awaited((yield* awaited(harness.submission(placed, context)))!.status(context)),
   ).toMatchObject({
-    status: "done",
-    entry,
     answer: entry,
+    entry,
+    status: "done",
   });
   yield* awaited(harness.close(context));
 });
@@ -128,10 +133,10 @@ const appendsReadsTyped = Effect.gen(function* () {
   const n: number = counter.data.n;
   expect(n).toBe(1);
   expect(counter).toEqual({
-    id: counter.id,
     conversationId: root.id,
-    kind: "app.counter",
     data: { n: 1 },
+    id: counter.id,
+    kind: "app.counter",
   });
   const marker = yield* awaited(root.commit((tx) => tx.appendEntry(Marker, root.id, {}), context));
   expect(marker.kind).toBe("app.marker");

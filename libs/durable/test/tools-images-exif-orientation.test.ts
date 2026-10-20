@@ -5,24 +5,29 @@ import { afterAll, beforeAll, describe, expect, it } from "vite-plus/test";
 import { exifOrientation } from "../src/images/exif.ts";
 import {
   DEFAULT_IMAGE_LIMITS,
-  imageDimensions,
   type ImageProcessor,
+  imageDimensions,
   toBase64,
 } from "../src/tools/image.ts";
-import { awaited, sampleEvery, toJsonText } from "./effect-support.ts";
-import { runCommand } from "./platform-support.ts";
-import {
+import effectSupport from "./effect-support.ts";
+import platformSupport from "./platform-support.ts";
+import toolsImagesFixturesSupport from "./tools-images-fixtures-support.ts";
+import toolsImagesSupport from "./tools-images-support.ts";
+
+const { awaited, sampleEvery, toJsonText } = effectSupport;
+const { runCommand } = platformSupport;
+const {
+  EXIF_HEADER,
   decodedImage,
   encode,
   encodeRgba,
-  EXIF_HEADER,
   gif,
   noisyPng,
   setUpImages,
   tiff,
   withOrientation,
-} from "./tools-images-fixtures-support.ts";
-import { removeImageDirectory } from "./tools-images-support.ts";
+} = toolsImagesFixturesSupport;
+const { prepareImageDirectory, removeImageDirectory } = toolsImagesSupport;
 
 let processor: ImageProcessor;
 
@@ -34,6 +39,7 @@ beforeAll(() =>
   ),
 );
 
+beforeAll(prepareImageDirectory);
 afterAll(removeImageDirectory);
 
 type Rgb = readonly [number, number, number];
@@ -53,7 +59,7 @@ function blocks(
       );
     }
   }
-  return { rgba, width, height };
+  return { height, rgba, width };
 }
 
 function webp(type: string, data: number[]): Uint8Array {
@@ -138,9 +144,9 @@ describe("EXIF orientation", () => {
           );
           const image = decodedImage(prepared!.data);
           const expected = upright[orientation]!;
-          expect({ width: image.width, height: image.height }).toEqual({
-            width: expected[0]!.length * 16,
+          expect({ height: image.height, width: image.width }).toEqual({
             height: expected.length * 16,
+            width: expected[0]!.length * 16,
           });
           const seen = expected.map((row, by) =>
             row.map((_, bx) => {
@@ -173,23 +179,23 @@ describe("EXIF orientation", () => {
 
 describe("imageDimensions", () => {
   it("reads the size each format declares in its header", () => {
-    expect(imageDimensions(encode(7, 5, "png"), "image/png")).toEqual({ width: 7, height: 5 });
-    expect(imageDimensions(encode(7, 5, "jpeg"), "image/jpeg")).toEqual({ width: 7, height: 5 });
+    expect(imageDimensions(encode(7, 5, "png"), "image/png")).toEqual({ height: 5, width: 7 });
+    expect(imageDimensions(encode(7, 5, "jpeg"), "image/jpeg")).toEqual({ height: 5, width: 7 });
     expect(
       imageDimensions(withOrientation(encode(7, 5, "jpeg"), 6, { app0: true }), "image/jpeg"),
     ).toEqual({
-      width: 7,
       height: 5,
+      width: 7,
     });
-    expect(imageDimensions(gif(300, 200), "image/gif")).toEqual({ width: 300, height: 200 });
+    expect(imageDimensions(gif(300, 200), "image/gif")).toEqual({ height: 200, width: 300 });
     expect(
       imageDimensions(
         webp("VP8 ", [0, 0, 0, 0x9d, 0x01, 0x2a, 0x2c, 0x01, 0xc8, 0x00]),
         "image/webp",
       ),
     ).toEqual({
-      width: 300,
       height: 200,
+      width: 300,
     });
     const bits = 299 | (199 << 14);
     expect(
@@ -197,12 +203,12 @@ describe("imageDimensions", () => {
         webp("VP8L", [0x2f, bits & 0xff, (bits >> 8) & 0xff, (bits >> 16) & 0xff, bits >>> 24]),
         "image/webp",
       ),
-    ).toEqual({ width: 300, height: 200 });
+    ).toEqual({ height: 200, width: 300 });
     expect(
       imageDimensions(webp("VP8X", [0, 0, 0, 0, 0x2b, 0x01, 0, 0xc7, 0, 0]), "image/webp"),
     ).toEqual({
-      width: 300,
       height: 200,
+      width: 300,
     });
     expect(imageDimensions(new Uint8Array([0xff, 0xd8, 0xff]), "image/jpeg")).toBeUndefined();
   });
@@ -277,7 +283,7 @@ const givesSameResult = Effect.gen(function* () {
     (yield* awaited(createNodePhotonImages({ worker: false }))).prepare(png, "image/png", limits),
   );
   expect(threaded?.mimeType).toBe("image/jpeg");
-  expect(threaded?.resized?.from).toEqual({ width: 200, height: 200 });
+  expect(threaded?.resized?.from).toEqual({ height: 200, width: 200 });
   expect(threaded).toEqual(inline);
   expect(png).toEqual(copy);
 });

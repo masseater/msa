@@ -3,9 +3,13 @@ import { Effect } from "effect";
 import { describe, expect, it } from "vite-plus/test";
 
 import { idFromNumber } from "../src/ids.ts";
-import { awaited } from "./effect-support.ts";
-import { context, createConversation, openTestSession } from "./session-support.ts";
-import { WorkTask, createTask, terminal } from "./session-tables-support.ts";
+import effectSupport from "./effect-support.ts";
+import sessionSupport from "./session-support.ts";
+import sessionTablesSupport from "./session-tables-support.ts";
+
+const { awaited } = effectSupport;
+const { context, createConversation, openTestSession } = sessionSupport;
+const { WorkTask, createTask, terminal } = sessionTablesSupport;
 
 const expectMissingOwnerRejected = Effect.fn("expectMissingOwnerRejected")(function* (
   session: ReturnType<typeof openTestSession>["session"],
@@ -39,21 +43,21 @@ const expectAbortMarkedOwnerRejected = Effect.fn("expectAbortMarkedOwnerRejected
                 tx.createTask(
                   WorkTask,
                   { path: "aborting" },
-                  { ownership: { kind: "conversation" }, conversationId: parentId },
+                  { conversationId: parentId, ownership: { kind: "conversation" } },
                 ),
               );
               rejectedChildId = (yield* awaited(
                 tx.createConversation({ ownership: { kind: "task", taskId: supervisorId } }),
               )).id;
               tx.setTask({
-                id: supervisorId,
-                conversationId: parentId,
-                kind: WorkTask.definition.name,
-                version: WorkTask.definition.version,
-                input: { path: "aborting" },
-                background: false,
                 abortRequested: true,
-                state: { status: "pending", checkpoint: { phase: "start" } },
+                background: false,
+                conversationId: parentId,
+                id: supervisorId,
+                input: { path: "aborting" },
+                kind: WorkTask.definition.name,
+                state: { checkpoint: { phase: "start" }, status: "pending" },
+                version: WorkTask.definition.version,
               });
             }),
           ),
@@ -82,24 +86,24 @@ const expectTerminalOwnerRejected = Effect.fn("expectTerminalOwnerRejected")(fun
                 tx.createTask(
                   WorkTask,
                   { path: "terminal" },
-                  { ownership: { kind: "conversation" }, conversationId: parentId },
+                  { conversationId: parentId, ownership: { kind: "conversation" } },
                 ),
               );
               yield* awaited(
                 tx.createConversation({ ownership: { kind: "task", taskId: supervisorId } }),
               );
               tx.setTask({
-                id: supervisorId,
-                conversationId: parentId,
-                kind: WorkTask.definition.name,
-                version: WorkTask.definition.version,
-                input: { path: "terminal" },
-                background: false,
                 abortRequested: false,
+                background: false,
+                conversationId: parentId,
+                id: supervisorId,
+                input: { path: "terminal" },
+                kind: WorkTask.definition.name,
                 state: {
+                  outcome: { result: { ok: true }, status: "completed" },
                   status: "terminal",
-                  outcome: { status: "completed", result: { ok: true } },
                 },
+                version: WorkTask.definition.version,
               });
             }),
           ),
@@ -152,19 +156,19 @@ const rejectsMissingTerminal = Effect.gen(function* () {
                 tx.createTask(
                   WorkTask,
                   { path: "move" },
-                  { ownership: { kind: "conversation" }, conversationId: parentId },
+                  { conversationId: parentId, ownership: { kind: "conversation" } },
                 ),
               );
               movedStagedTaskId = taskId;
               tx.setTask({
-                id: taskId,
-                conversationId: idFromNumber<ConversationId>(998),
-                kind: WorkTask.definition.name,
-                version: WorkTask.definition.version,
-                input: { path: "move" },
-                background: false,
                 abortRequested: false,
-                state: { status: "pending", checkpoint: { phase: "start" } },
+                background: false,
+                conversationId: idFromNumber<ConversationId>(998),
+                id: taskId,
+                input: { path: "move" },
+                kind: WorkTask.definition.name,
+                state: { checkpoint: { phase: "start" }, status: "pending" },
+                version: WorkTask.definition.version,
               });
             }),
           ),
@@ -197,7 +201,7 @@ const takesOwnershipTable = Effect.gen(function* () {
         runPromise(
           Effect.gen(function* () {
             const created = yield* awaited(
-              tx.appendEntry(conversationId, { kind: "data", data: payload }),
+              tx.appendEntry(conversationId, { data: payload, kind: "data" }),
             );
             payload.nested.value = 2;
             return created;
@@ -211,7 +215,7 @@ const takesOwnershipTable = Effect.gen(function* () {
   });
   const omitted = yield* awaited(
     session.commit(
-      (tx) => tx.appendEntry(conversationId, { kind: "omitted", data: undefined }),
+      (tx) => tx.appendEntry(conversationId, { data: undefined, kind: "omitted" }),
       context,
     ),
   );
@@ -226,7 +230,7 @@ const takesOwnershipTable = Effect.gen(function* () {
       session.commit(
         (tx) =>
           tx
-            .appendEntry(conversationId, { kind: "invalid", data: Number.NaN })
+            .appendEntry(conversationId, { data: Number.NaN, kind: "invalid" })
             .then(() => undefined),
         context,
       ),

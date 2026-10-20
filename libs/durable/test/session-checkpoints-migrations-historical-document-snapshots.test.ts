@@ -1,42 +1,45 @@
-import { defineDoc, defineDocFamily, type EntryId } from "@msa/durable";
+import { type EntryId, defineDoc, defineDocFamily } from "@msa/durable";
 import { Effect } from "effect";
 import { describe, expect, it } from "vite-plus/test";
 
-import { awaited } from "./effect-support.ts";
-import { context, createConversation, openTestSession } from "./session-support.ts";
+import effectSupport from "./effect-support.ts";
+import sessionSupport from "./session-support.ts";
+
+const { awaited } = effectSupport;
+const { context, createConversation, openTestSession } = sessionSupport;
 
 function rewindableMigrationDocs() {
   const V1 = defineDoc<{ count: number }>({
-    kind: "history.migration",
-    version: 1,
-    scope: "conversation",
-    history: "rewindable",
     fork: "asOf",
+    history: "rewindable",
     initial: () => ({ count: 0 }),
+    kind: "history.migration",
+    scope: "conversation",
+    version: 1,
   });
   const Family = defineDocFamily<{ seed: string; count: number }, string>({
-    kind: "history.family",
-    version: 1,
     family: true,
-    scope: "conversation",
-    history: "rewindable",
     fork: "asOf",
-    initial: (seed) => ({ seed, count: 0 }),
+    history: "rewindable",
+    initial: (seed) => ({ count: 0, seed }),
+    kind: "history.family",
+    scope: "conversation",
+    version: 1,
   });
   const migrations: number[] = [];
   const V3 = defineDoc<{ count: number; version: number }>({
-    kind: "history.migration",
-    version: 3,
-    scope: "conversation",
-    history: "rewindable",
     fork: "asOf",
+    history: "rewindable",
     initial: () => ({ count: 0, version: 3 }),
+    kind: "history.migration",
     migrate: (value, fromVersion) => {
       migrations.push(fromVersion);
       return { count: value["count"] as number, version: 3 };
     },
+    scope: "conversation",
+    version: 3,
   });
-  return { V1, Family, migrations, V3 };
+  return { Family, V1, V3, migrations };
 }
 
 const migratedRewindableHistory = Effect.fn("migratedRewindableHistory")(function* () {
@@ -83,7 +86,7 @@ const migratedRewindableHistory = Effect.fn("migratedRewindableHistory")(functio
   });
   expect(migrations).toEqual([1]);
   expect(storage.commits).toHaveLength(commits);
-  return { Family, migrations, V3, session, storage, conversationId, entries };
+  return { Family, V3, conversationId, entries, migrations, session, storage };
 });
 
 const migratedEveryHistoricalValueStep1 = Effect.fn("migratedEveryHistoricalValueStep1")(
@@ -109,8 +112,8 @@ const migratedEveryHistoricalValueStep1 = Effect.fn("migratedEveryHistoricalValu
     );
     expect(storage.commits.at(-1)!).toContainEqual(
       expect.objectContaining({
-        type: "document.change",
         content: expect.objectContaining({ kind: "base", version: 3 }),
+        type: "document.change",
       }),
     );
 
@@ -126,7 +129,7 @@ const migratedEveryHistoricalValueStep1 = Effect.fn("migratedEveryHistoricalValu
       count: 2,
       version: 3,
     });
-    return { runPromise, Family, migrations, V3, session, conversationId, entries };
+    return { Family, V3, conversationId, entries, migrations, runPromise, session };
   },
 );
 
@@ -145,8 +148,8 @@ const migratedEveryHistoricalValue = Effect.fn("migratedEveryHistoricalValue")(f
       session.snapshotAsOf(Family, conversationId, "member", entries.firstEntry!, context),
     ),
   ).toEqual({
-    seed: "seed",
     count: 1,
+    seed: "seed",
   });
 
   const childId = yield* awaited(
@@ -164,7 +167,7 @@ const migratedEveryHistoricalValue = Effect.fn("migratedEveryHistoricalValue")(f
       context,
     ),
   );
-  return { Family, V3, session, entries, childId };
+  return { Family, V3, childId, entries, session };
 });
 
 const migratesCurrentHistorical = Effect.gen(function* () {
@@ -180,8 +183,8 @@ const migratesCurrentHistorical = Effect.gen(function* () {
   expect(
     yield* awaited(session.snapshotAsOf(Family, childId, "member", entries.firstEntry!, context)),
   ).toEqual({
-    seed: "seed",
     count: 1,
+    seed: "seed",
   });
   yield* awaited(
     expect(session.snapshotAsOf(V3, childId, entries.thirdEntry!, context)).rejects.toThrow(

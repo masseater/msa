@@ -3,20 +3,25 @@ import { createRegistry } from "@msa/durable/harness";
 import { Effect } from "effect";
 import { describe, expect, it } from "vite-plus/test";
 
-import { awaited } from "./effect-support.ts";
-import { Skills, type AppTool, Coding, resolve } from "./harness-registry-support.ts";
-import { context } from "./session-support.ts";
+import effectSupport from "./effect-support.ts";
+import harnessRegistrySupport from "./harness-registry-support.ts";
+import type harnessRegistrySupportTypes from "./harness-registry-support.types.ts";
+import sessionSupport from "./session-support.ts";
+
+const { awaited } = effectSupport;
+const { Coding, Skills, resolve } = harnessRegistrySupport;
+const { context } = sessionSupport;
 
 function rendered(agent: ReturnType<typeof resolve>): Promise<[string, string | undefined][]> {
   const input = {
-    conversationId: 1 as never,
     agent,
+    conversationId: 1 as never,
     env: undefined,
-    shown: {},
     read: {
       snapshot: () => Promise.resolve(undefined),
       snapshotAsOf: () => Promise.resolve(undefined),
     },
+    shown: {},
   };
   return Promise.resolve(
     Promise.all(
@@ -37,8 +42,8 @@ function rendered(agent: ReturnType<typeof resolve>): Promise<[string, string | 
 const ordersSectionsExtension = Effect.gen(function* () {
   const runPromise = Effect.runPromiseWith(yield* Effect.context<never>());
 
-  const local = createRegistry<AppTool>();
-  const Override = defineExtension<AppTool>({
+  const local = createRegistry<harnessRegistrySupportTypes.AppTool>();
+  const Override = defineExtension<harnessRegistrySupportTypes.AppTool>({
     name: "override",
     sections: [section("preamble", () => "You review.", { tag: false })],
     wraps: [

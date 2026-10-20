@@ -1,11 +1,14 @@
-import { AgentDoc, defineExtension, hook, LiveDoc, section } from "@msa/durable";
+import { AgentDoc, LiveDoc, defineExtension, hook, section } from "@msa/durable";
 import { GenerationTask } from "@msa/durable/harness";
 import { MemoryStorage } from "@msa/durable/storage/memory";
 import { Effect } from "effect";
 import { describe, expect, it } from "vite-plus/test";
 
-import { resultText, results, DONE, calls, run, tool } from "./harness-tools-support.ts";
-import { allEntries, chatSetup, openChat, awaited, addTool, context, deferred } from "./support.ts";
+import harnessToolsSupport from "./harness-tools-support.ts";
+import support from "./support.ts";
+
+const { DONE, calls, resultText, results, run, tool } = harnessToolsSupport;
+const { addTool, allEntries, awaited, chatSetup, context, deferred, openChat } = support;
 
 const appliesDefaultOutput = Effect.gen(function* () {
   const setup = chatSetup();
@@ -48,7 +51,7 @@ const sanitizesRunningOutput = Effect.gen(function* () {
   );
   addTool(
     setup.registry,
-    tool("explicit", () => Promise.resolve({ output: [{ type: "text", text: "c\u001bd" }] })),
+    tool("explicit", () => Promise.resolve({ output: [{ text: "c\u001bd", type: "text" }] })),
   );
   const { harness, entries } = yield* run(setup, [
     calls(["noisy", {}, "c1"], ["explicit", {}, "c2"]),
@@ -74,8 +77,8 @@ const dropsControlKeys = Effect.gen(function* () {
     setup.registry,
     tool("grow", () =>
       Promise.resolve({
-        output: [],
         control: { addTools: ["extra"], terminate: undefined },
+        output: [],
       }),
     ),
   );
@@ -103,7 +106,7 @@ const usesExplicitNull = Effect.gen(function* () {
       runPromise(
         Effect.gen(function* () {
           yield* awaited(api.details({ old: 1 }, context));
-          return { output: [], details: null };
+          return { details: null, output: [] };
         }),
       ),
     ),
@@ -163,18 +166,18 @@ const finishesCallUnder = Effect.gen(function* () {
       Effect.gen(function* () {
         release();
         yield* awaited(finished);
-        return { output: [{ type: "text", text: "v1" }] };
+        return { output: [{ text: "v1", type: "text" }] };
       }),
     ),
   );
   addTool(setup.registry, v1);
   setup.faux.setResponses([calls(["work", {}, "c1"]), DONE]);
   const { harness, root } = yield* openChat(new MemoryStorage(), setup);
-  const submission = yield* awaited(root.submit({ type: "input", content: "go" }, context));
+  const submission = yield* awaited(root.submit({ content: "go", type: "input" }, context));
   yield* awaited(started);
   addTool(
     setup.registry,
-    tool("work", () => Promise.resolve({ output: [{ type: "text", text: "v2" }] })),
+    tool("work", () => Promise.resolve({ output: [{ text: "v2", type: "text" }] })),
   );
   finish();
   yield* awaited(submission.wait(context));
@@ -194,9 +197,9 @@ const usesSectionHook = Effect.gen(function* () {
   const requests: string[] = [];
   const prompt = (version: string) =>
     defineExtension({
+      hooks: [hook(GenerationTask, { beforeRequest: () => void requests.push(version) })],
       name: "prompt",
       sections: [section("mode", () => version)],
-      hooks: [hook(GenerationTask, { beforeRequest: () => void requests.push(version) })],
     });
   setup.registry.install(prompt("v1"));
   const running = deferred();
@@ -215,7 +218,7 @@ const usesSectionHook = Effect.gen(function* () {
   );
   setup.faux.setResponses([calls(["work", {}, "c1"]), DONE]);
   const { harness, root } = yield* openChat(new MemoryStorage(), setup);
-  const submission = yield* awaited(root.submit({ type: "input", content: "go" }, context));
+  const submission = yield* awaited(root.submit({ content: "go", type: "input" }, context));
   yield* awaited(running.promise);
   setup.registry.install(prompt("v2"));
   reloaded.resolve();

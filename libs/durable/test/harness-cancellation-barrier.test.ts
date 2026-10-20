@@ -1,14 +1,18 @@
 import type { Context } from "@msa/chord";
-import { defineTask, type StorageWrite, type TaskId } from "@msa/durable";
+import { type StorageWrite, type TaskId, defineTask } from "@msa/durable";
 import { createSession } from "@msa/durable/session";
 import { MemoryStorage } from "@msa/durable/storage/memory";
 import { Effect } from "effect";
 import { describe, expect, it } from "vite-plus/test";
 
-import { awaited } from "./effect-support.ts";
-import { Dormant } from "./harness-cancellation-barrier-cases.ts";
-import { context, flush } from "./session-support.ts";
-import { aborted, deferred, eventually, openTasks } from "./task-support.ts";
+import effectSupport from "./effect-support.ts";
+import Dormant from "./harness-cancellation-barrier-cases.ts";
+import sessionSupport from "./session-support.ts";
+import taskSupport from "./task-support.ts";
+
+const { awaited } = effectSupport;
+const { context, flush } = sessionSupport;
+const { aborted, deferred, eventually, openTasks } = taskSupport;
 
 class HoldMarks extends MemoryStorage {
   target: TaskId | undefined;
@@ -39,9 +43,21 @@ function holdingChildSetup() {
   const advance = deferred();
   const progress: { ranNext: boolean } = { ranNext: false };
   const Child = defineTask<null, { phase: "first" } | { phase: "next" }, null>({
-    name: "test.child",
-    version: 1,
+    abort: (_task, runtime, abortContext) =>
+      Effect.runPromise(
+        Effect.asVoid(
+          Effect.suspend(() =>
+            awaited(
+              runtime.commit(
+                () => ({ outcome: { status: "aborted" }, status: "terminal" }),
+                abortContext,
+              ),
+            ),
+          ),
+        ),
+      ),
     initial: () => ({ phase: "first" }),
+    name: "test.child",
     phases: {
       first: (_task, runtime, phaseContext) =>
         Effect.runPromise(
@@ -50,7 +66,7 @@ function holdingChildSetup() {
             yield* awaited(advance.promise);
             yield* awaited(
               runtime.commit(
-                () => ({ status: "running", checkpoint: { phase: "next" } }),
+                () => ({ checkpoint: { phase: "next" }, status: "running" }),
                 phaseContext,
               ),
             );
@@ -64,21 +80,9 @@ function holdingChildSetup() {
           }),
         ),
     },
-    abort: (_task, runtime, abortContext) =>
-      Effect.runPromise(
-        Effect.asVoid(
-          Effect.suspend(() =>
-            awaited(
-              runtime.commit(
-                () => ({ status: "terminal", outcome: { status: "aborted" } }),
-                abortContext,
-              ),
-            ),
-          ),
-        ),
-      ),
+    version: 1,
   });
-  return { storage, entered, advance, progress, Child };
+  return { Child, advance, entered, progress, storage };
 }
 
 const failFastOverRestartStore = Effect.fn("failFastOverRestartStore")(function* () {
@@ -112,12 +116,12 @@ const failFastOverRestartStore = Effect.fn("failFastOverRestartStore")(function*
   const owner = (yield* awaited(storage.task(parent, context)))!;
   const failedRecord = (yield* awaited(storage.task(failed, context)))!;
   const waiting = {
-    status: "waiting",
     checkpoint: { phase: "work" },
     on: [failed, child],
     policy: "failFast",
+    status: "waiting",
   } as const;
-  return { storage, child, owner, failedRecord, waiting };
+  return { child, failedRecord, owner, storage, waiting };
 });
 
 const doesNotStart = Effect.gen(function* () {
@@ -171,19 +175,19 @@ const letsFailFastRequest = Effect.gen(function* () {
   const runPromise = Effect.runPromiseWith(yield* Effect.context<never>());
 
   const { storage, child, owner, failedRecord, waiting } = yield* failFastOverRestartStore();
-  const failure = { status: "failed", error: { message: "failed" } } as const;
+  const failure = { error: { message: "failed" }, status: "failed" } as const;
   yield* awaited(
     storage.commit(
       [
         {
           type: "task",
-          value: { ...owner, abortRequested: true, abortReason: "restart", state: waiting },
+          value: { ...owner, abortReason: "restart", abortRequested: true, state: waiting },
         },
         {
           type: "task",
           value: {
             ...failedRecord,
-            state: { status: "terminal", outcome: failure },
+            state: { outcome: failure, status: "terminal" },
           } as typeof failedRecord,
         },
       ],
@@ -201,7 +205,7 @@ const letsFailFastRequest = Effect.gen(function* () {
       ),
     );
     expect((yield* awaited(harness.getTask(child, context)))?.state).toMatchObject({
-      outcome: { status: "orphaned", reason: "missing_task" },
+      outcome: { reason: "missing_task", status: "orphaned" },
     });
   }).pipe(Effect.ensuring(Effect.asVoid(Effect.suspend(() => awaited(harness.close(context))))));
 });

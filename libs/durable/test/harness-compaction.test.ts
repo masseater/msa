@@ -1,12 +1,15 @@
-import { type AssistantMessage, fauxAssistantMessage, fauxToolCall, type Message } from "@msa/ai";
+import { type AssistantMessage, type Message, fauxAssistantMessage, fauxToolCall } from "@msa/ai";
 import { type ContextView, type EntryRecord } from "@msa/durable";
 import { Effect } from "effect";
 import { afterEach, describe, expect, it } from "vite-plus/test";
 
 import { selectCut, serializeConversation } from "../src/harness/compaction.ts";
 import { orderToolResults } from "../src/harness/context.ts";
-import { text, directories, user } from "./harness-compaction-support.ts";
-import { removeDir } from "./platform-support.ts";
+import harnessCompactionSupport from "./harness-compaction-support.ts";
+import platformSupport from "./platform-support.ts";
+
+const { directories, text, user } = harnessCompactionSupport;
+const { removeDir } = platformSupport;
 
 afterEach(() =>
   Effect.runPromise(
@@ -21,8 +24,8 @@ let nextId = 1;
 
 function entry(kind: string, model: Message[], head?: number): EntryRecord {
   return {
-    id: nextId++,
     conversationId: 1,
+    id: nextId++,
     kind,
     model,
     ...(head === undefined ? {} : { head }),
@@ -36,19 +39,19 @@ const assistant = (
 ) =>
   ({
     ...fauxAssistantMessage([
-      { type: "text", text: content },
+      { text: content, type: "text" },
       ...calls.map((id) => fauxToolCall("read", {}, { id })),
     ]),
     stopReason,
   }) as AssistantMessage;
 
 const toolResult = (callId: string, content: string): Message => ({
+  content: [{ text: content, type: "text" }],
+  isError: false,
   role: "toolResult",
+  timestamp: 0,
   toolCallId: callId,
   toolName: "read",
-  content: [{ type: "text", text: content }],
-  isError: false,
-  timestamp: 0,
 });
 
 function view(entries: EntryRecord[], head?: EntryRecord): ContextView {
@@ -60,7 +63,7 @@ function view(entries: EntryRecord[], head?: EntryRecord): ContextView {
         !["error", "aborted", "deferred"].includes(message.stopReason),
     ),
   );
-  return { head, entries: all, contributions, messages: orderToolResults(contributions.flat()) };
+  return { contributions, entries: all, head, messages: orderToolResults(contributions.flat()) };
 }
 
 describe("range selection", () => {
@@ -124,7 +127,7 @@ describe("range selection", () => {
       entry("msa.user", [user(text("u1", 100))]),
       entry("msa.assistant", [assistant(text("a1", 100))]),
       entry("msa.system", [
-        { role: "system", content: "", sections: { s: text("s", 100) }, timestamp: 0 },
+        { content: "", role: "system", sections: { s: text("s", 100) }, timestamp: 0 },
       ]),
       entry("msa.assistant", [assistant(text("err", 100), [], "error")]),
       entry("msa.assistant", [assistant(text("stopped", 100), [], "aborted")]),
@@ -191,12 +194,12 @@ describe("serialization", () => {
   it("writes a transcript, truncates tool results, and omits system messages and thinking", () => {
     const call = fauxToolCall("read", { path: "a.ts" }, { id: "c" });
     const messages: Message[] = [
-      { role: "system", content: "", sections: { s: "hidden" }, timestamp: 0 },
+      { content: "", role: "system", sections: { s: "hidden" }, timestamp: 0 },
       user("hello"),
       {
         ...fauxAssistantMessage([
-          { type: "thinking", thinking: "hmm" },
-          { type: "text", text: "sure" },
+          { thinking: "hmm", type: "thinking" },
+          { text: "sure", type: "text" },
           call,
         ]),
       },

@@ -4,15 +4,14 @@ import { defineDoc } from "@msa/durable";
 import { Effect } from "effect";
 import { describe, expect, it } from "vite-plus/test";
 
-import { awaited } from "./effect-support.ts";
-import { context, flush, openTestSession } from "./session-support.ts";
-import {
-  StateDoc,
-  createState,
-  deferred,
-  type State,
-  writeState,
-} from "./session-watches-support.ts";
+import effectSupport from "./effect-support.ts";
+import sessionSupport from "./session-support.ts";
+import sessionWatchesSupport from "./session-watches-support.ts";
+import type sessionWatchesSupportTypes from "./session-watches-support.types.ts";
+
+const { awaited } = effectSupport;
+const { context, flush, openTestSession } = sessionSupport;
+const { StateDoc, createState, deferred, writeState } = sessionWatchesSupport;
 
 const sessionCloseStops = Effect.gen(function* () {
   const runPromise = Effect.runPromiseWith(yield* Effect.context<never>());
@@ -75,24 +74,24 @@ const hydratesMigrationWithout = Effect.gen(function* () {
   const runPromise = Effect.runPromiseWith(yield* Effect.context<never>());
 
   const Old = defineDoc<{ value: number }>({
-    kind: "watch.migration",
-    version: 1,
-    scope: "session",
     initial: () => ({ value: 3 }),
+    kind: "watch.migration",
+    scope: "session",
+    version: 1,
   });
   const Current = defineDoc<{ value: number; migrated: boolean }>({
+    initial: () => ({ migrated: false, value: 0 }),
     kind: "watch.migration",
-    version: 2,
+    migrate: (value) => ({ migrated: true, value: value["value"] as number }),
     scope: "session",
-    initial: () => ({ value: 0, migrated: false }),
-    migrate: (value) => ({ value: value["value"] as number, migrated: true }),
+    version: 2,
   });
   const { session, storage } = openTestSession();
   yield* awaited(session.commit((tx) => tx.doc(Old).then(() => undefined), context));
   yield* awaited(session.unloadDocuments());
   const commits = storage.commits.length;
   const watch = (yield* awaited(session.watchDoc(Current, context)))!;
-  expect(watch.value).toEqual({ value: 3, migrated: true });
+  expect(watch.value).toEqual({ migrated: true, value: 3 });
   expect(storage.commits).toHaveLength(commits);
   const values: number[] = [];
   watch.start((value) => {
@@ -129,7 +128,7 @@ const canReplayEvery = Effect.gen(function* () {
 
   const { session } = yield* createState();
   const watch = (yield* awaited(session.watchDoc(StateDoc, context)))!;
-  let replica: Readonly<State> | null = watch.value;
+  let replica: Readonly<sessionWatchesSupportTypes.State> | null = watch.value;
   watch.start((value, ops) => {
     replica = applyImmutable(replica, ops);
     expect(replica).toEqual(value);

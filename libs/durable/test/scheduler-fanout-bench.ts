@@ -5,10 +5,12 @@ import { BACKGROUND_CONTEXT as context } from "@msa/chord/context";
 import { Console, Effect } from "effect";
 import { Type } from "typebox";
 
-import { createRegistry, Harness } from "../src/harness/index.ts";
-import { defineExtension, defineTool, ToolResultEntry } from "../src/index.ts";
+import { Harness, createRegistry } from "../src/harness/index.ts";
+import { ToolResultEntry, defineExtension, defineTool } from "../src/index.ts";
 import { MemoryStorage } from "../src/storage/memory.ts";
-import { awaited } from "./effect-support.ts";
+import effectSupport from "./effect-support.ts";
+
+const { awaited } = effectSupport;
 
 function fanModels() {
   const faux = fauxProvider();
@@ -16,15 +18,13 @@ function fanModels() {
   models.setProvider(faux.provider);
   const registry = createRegistry();
   const leaf = defineTool({
-    name: "leaf",
     description: "Return at once",
+    execute: () => Promise.resolve({ output: [{ text: "ok", type: "text" }] }),
+    name: "leaf",
     parameters: Type.Object({ n: Type.Number() }),
-    execute: () => Promise.resolve({ output: [{ type: "text", text: "ok" }] }),
   });
   const fan = defineTool({
-    name: "fan",
     description: "Call leaf in parallel",
-    parameters: Type.Object({ count: Type.Number() }),
     execute: (args, api, callContext) =>
       Effect.runPromise(
         Effect.gen(function* () {
@@ -36,9 +36,11 @@ function fanModels() {
             ),
           );
           const failed = results.filter((result) => result.isError).length;
-          return { output: [{ type: "text", text: `${failed} failed` }], isError: failed > 0 };
+          return { isError: failed > 0, output: [{ text: `${failed} failed`, type: "text" }] };
         }),
       ),
+    name: "fan",
+    parameters: Type.Object({ count: Type.Number() }),
   });
   registry.install(defineExtension({ name: "bench", tools: [leaf, fan] }));
   return { faux, models, registry };
@@ -56,7 +58,7 @@ const run = Effect.fn("run")(function* (calls: number) {
   const harness = yield* awaited(Harness.open(storage, { models, registry }, context));
   const root = yield* awaited(
     harness.root(context, {
-      agent: { model: { provider: "faux", modelId: "faux-1" } },
+      agent: { model: { modelId: "faux-1", provider: "faux" } },
     }),
   );
   faux.setResponses([
@@ -67,7 +69,7 @@ const run = Effect.fn("run")(function* (calls: number) {
   ]);
   const started = performance.now();
   const settled = yield* awaited(
-    (yield* awaited(root.submit({ type: "input", content: "go" }, context))).wait(context),
+    (yield* awaited(root.submit({ content: "go", type: "input" }, context))).wait(context),
   );
   if (settled.status !== "done") throw new Error(`run: ${settled.status}`);
   yield* awaited(harness.waitForIdle(context));
@@ -76,7 +78,7 @@ const run = Effect.fn("run")(function* (calls: number) {
   const result = page.items.find((entry) => ToolResultEntry.is(entry))?.model?.[0];
   if (result?.role !== "toolResult" || result.isError) throw new Error(`run: nested calls failed`);
   yield* awaited(harness.close(context));
-  return { ms, commits };
+  return { commits, ms };
 });
 
 const sizes = process.argv.slice(2).map(Number);

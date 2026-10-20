@@ -3,10 +3,16 @@ import { MemoryStorage } from "@msa/durable/storage/memory";
 import { Effect } from "effect";
 import { describe, expect, it } from "vite-plus/test";
 
-import { chatSetup, openChat } from "./chat-support.ts";
-import { awaited } from "./effect-support.ts";
-import { type Frame, drained, record, fresh } from "./harness-view-support.ts";
-import { context } from "./session-support.ts";
+import chatSupport from "./chat-support.ts";
+import effectSupport from "./effect-support.ts";
+import harnessViewSupport from "./harness-view-support.ts";
+import type harnessViewSupportTypes from "./harness-view-support.types.ts";
+import sessionSupport from "./session-support.ts";
+
+const { chatSetup, openChat } = chatSupport;
+const { awaited } = effectSupport;
+const { drained, fresh, record } = harnessViewSupport;
+const { context } = sessionSupport;
 
 const unmountsRetiredDocument = Effect.gen(function* () {
   const runPromise = Effect.runPromiseWith(yield* Effect.context<never>());
@@ -41,9 +47,9 @@ const replacesUndeliveredFrames = Effect.gen(function* () {
   for (const _ of Array.from({ length: 101 })) {
     yield* awaited(root.commit((tx) => tx.appendEntry(root.id, { kind: "note" }), context));
   }
-  const frames: Frame[] = [];
+  const frames: harnessViewSupportTypes.Frame[] = [];
   watch.start((value, ops) => {
-    frames.push({ value, ops });
+    frames.push({ ops, value });
 
     return Promise.resolve();
   });

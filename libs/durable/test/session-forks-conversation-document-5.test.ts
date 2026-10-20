@@ -1,15 +1,12 @@
-import { defineDoc, type EntryId, type StorageWrite } from "@msa/durable";
+import { type EntryId, type StorageWrite, defineDoc } from "@msa/durable";
 import { Effect } from "effect";
 import { describe, expect, it } from "vite-plus/test";
 
-import { awaited } from "./effect-support.ts";
-import {
-  context,
-  createConversation,
-  documentChanges,
-  flush,
-  openTestSession,
-} from "./session-support.ts";
+import effectSupport from "./effect-support.ts";
+import sessionSupport from "./session-support.ts";
+
+const { awaited } = effectSupport;
+const { context, createConversation, documentChanges, flush, openTestSession } = sessionSupport;
 
 function documentCreates(writes: readonly StorageWrite[]) {
   return writes.filter((write) => write.type === "document.create");
@@ -17,28 +14,28 @@ function documentCreates(writes: readonly StorageWrite[]) {
 
 function migratingDocs() {
   const V1 = defineDoc<{ count: number }>({
-    kind: "fork.override",
-    version: 1,
-    scope: "conversation",
-    history: "rewindable",
     fork: "asOf",
+    history: "rewindable",
     initial: () => ({ count: 2 }),
+    kind: "fork.override",
+    scope: "conversation",
+    version: 1,
   });
   const calls: { checkpoints: number } = { checkpoints: 0 };
   const V2 = defineDoc<{ count: number; migrated: boolean }>({
-    kind: "fork.override",
-    version: 2,
-    scope: "conversation",
-    history: "rewindable",
-    fork: "asOf",
-    initial: () => ({ count: 0, migrated: false }),
-    migrate: (value) => ({ count: value["count"] as number, migrated: true }),
     checkpointWhen: () => {
       calls.checkpoints++;
       return false;
     },
+    fork: "asOf",
+    history: "rewindable",
+    initial: () => ({ count: 0, migrated: false }),
+    kind: "fork.override",
+    migrate: (value) => ({ count: value["count"] as number, migrated: true }),
+    scope: "conversation",
+    version: 2,
   });
-  return { V1, calls, V2 };
+  return { V1, V2, calls };
 }
 
 const coalescesTypedMigrationStep1 = Effect.gen(function* () {
@@ -52,9 +49,9 @@ const coalescesTypedMigrationStep1 = Effect.gen(function* () {
       (tx) =>
         runPromise(
           Effect.gen(function* () {
-            const forkAt = (yield* awaited(tx.appendEntry(parentId, { kind: "point" }))).id;
+            const forkAtInner = (yield* awaited(tx.appendEntry(parentId, { kind: "point" }))).id;
             yield* awaited(tx.doc(V1, parentId));
-            return forkAt;
+            return forkAtInner;
           }),
         ),
       context,
@@ -63,16 +60,16 @@ const coalescesTypedMigrationStep1 = Effect.gen(function* () {
 
   const documentReads = storage.documentReadCount;
   return {
-    runPromise,
     V1,
-    calls,
     V2,
+    calls,
+    documentReads,
+    forkAt,
+    parentId,
+    publications,
+    runPromise,
     session,
     storage,
-    publications,
-    parentId,
-    forkAt,
-    documentReads,
   };
 });
 
@@ -113,12 +110,12 @@ const coalescesTypedMigrationStep2 = Effect.gen(function* () {
   expect(creates).toHaveLength(1);
   expect(creates[0]!.content).toMatchObject({
     kind: "base",
-    version: 2,
     value: { count: 9, migrated: true },
+    version: 2,
   });
   expect(calls.checkpoints).toBe(0);
   expect(documentChanges(publications.at(-1)!)).toMatchObject([{ version: 2 }]);
-  return { V1, V2, session, storage, parentId, child };
+  return { V1, V2, child, parentId, session, storage };
 });
 
 const coalescesTypedMigration = Effect.gen(function* () {
@@ -129,7 +126,7 @@ const coalescesTypedMigration = Effect.gen(function* () {
   });
   const parentRecord = yield* awaited(
     storage.findDocument(
-      { kind: V1.definition.kind, scope: { kind: "conversation", conversationId: parentId } },
+      { kind: V1.definition.kind, scope: { conversationId: parentId, kind: "conversation" } },
       "current",
       context,
     ),
@@ -146,12 +143,12 @@ const copiesIncarnationAliveStep1 = Effect.gen(function* () {
   const runPromise = Effect.runPromiseWith(yield* Effect.context<never>());
 
   const Doc = defineDoc<{ value: string }>({
-    kind: "fork.incarnations",
-    version: 1,
-    scope: "conversation",
-    history: "rewindable",
     fork: "asOf",
+    history: "rewindable",
     initial: () => ({ value: "initial" }),
+    kind: "fork.incarnations",
+    scope: "conversation",
+    version: 1,
   });
   const { session } = openTestSession();
   const parentId = yield* awaited(createConversation(session));
@@ -160,9 +157,9 @@ const copiesIncarnationAliveStep1 = Effect.gen(function* () {
       (tx) =>
         runPromise(
           Effect.gen(function* () {
-            const oldAt = (yield* awaited(tx.appendEntry(parentId, { kind: "old" }))).id;
+            const oldAtInner = (yield* awaited(tx.appendEntry(parentId, { kind: "old" }))).id;
             (yield* awaited(tx.doc(Doc, parentId))).value = "old";
-            return oldAt;
+            return oldAtInner;
           }),
         ),
       context,
@@ -173,15 +170,16 @@ const copiesIncarnationAliveStep1 = Effect.gen(function* () {
       (tx) =>
         runPromise(
           Effect.gen(function* () {
-            const retiredAt = (yield* awaited(tx.appendEntry(parentId, { kind: "retired" }))).id;
+            const retiredAtInner = (yield* awaited(tx.appendEntry(parentId, { kind: "retired" })))
+              .id;
             yield* awaited(tx.retireDoc(Doc, parentId));
-            return retiredAt;
+            return retiredAtInner;
           }),
         ),
       context,
     ),
   );
-  return { runPromise, Doc, session, parentId, oldAt, retiredAt };
+  return { Doc, oldAt, parentId, retiredAt, runPromise, session };
 });
 
 const copiesIncarnationAlive = Effect.gen(function* () {
@@ -192,9 +190,9 @@ const copiesIncarnationAlive = Effect.gen(function* () {
       (tx) =>
         runPromise(
           Effect.gen(function* () {
-            const newAt = (yield* awaited(tx.appendEntry(parentId, { kind: "new" }))).id;
+            const newAtInner = (yield* awaited(tx.appendEntry(parentId, { kind: "new" }))).id;
             (yield* awaited(tx.doc(Doc, parentId))).value = "new";
-            return newAt;
+            return newAtInner;
           }),
         ),
       context,
@@ -245,8 +243,8 @@ const rejectsInvisibleFork = Effect.gen(function* () {
         runPromise(
           Effect.gen(function* () {
             visible = (yield* awaited(tx.appendEntry(rootId, { kind: "visible" }))).id;
-            const hidden = (yield* awaited(tx.appendEntry(rootId, { kind: "hidden" }))).id;
-            return hidden;
+            const hiddenInner = (yield* awaited(tx.appendEntry(rootId, { kind: "hidden" }))).id;
+            return hiddenInner;
           }),
         ),
       context,

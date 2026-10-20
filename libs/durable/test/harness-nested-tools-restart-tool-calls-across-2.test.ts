@@ -1,23 +1,23 @@
-import { defineExtension, defineTask, type TaskId } from "@msa/durable";
+import { type TaskId, defineExtension, defineTask } from "@msa/durable";
 import { Effect } from "effect";
 import { afterEach, describe, expect, it } from "vite-plus/test";
 
-import { allEntries, type ChatSetup, chatSetup } from "./chat-support.ts";
-import { toJsonText, awaited } from "./effect-support.ts";
-import {
-  DONE,
-  call,
-  tool,
-  directories,
-  sqlitePath,
-  results,
-  nestedTasks,
-  restartDuring,
-} from "./harness-nested-tools-restart-support.ts";
-import { addTool } from "./harness-support.ts";
-import { removeDir } from "./platform-support.ts";
-import { context } from "./session-support.ts";
-import { aborted, deferred } from "./task-support.ts";
+import chatSupport from "./chat-support.ts";
+import effectSupport from "./effect-support.ts";
+import harnessNestedToolsRestartSupport from "./harness-nested-tools-restart-support.ts";
+import harnessSupport from "./harness-support.ts";
+import platformSupport from "./platform-support.ts";
+import sessionSupport from "./session-support.ts";
+import taskSupport from "./task-support.ts";
+
+const { allEntries, chatSetup } = chatSupport;
+const { awaited, toJsonText } = effectSupport;
+const { DONE, call, directories, nestedTasks, restartDuring, results, sqlitePath, tool } =
+  harnessNestedToolsRestartSupport;
+const { addTool } = harnessSupport;
+const { removeDir } = platformSupport;
+const { context } = sessionSupport;
+const { aborted, deferred } = taskSupport;
 
 afterEach(() =>
   Effect.runPromise(
@@ -28,7 +28,7 @@ afterEach(() =>
   ),
 );
 
-function reattachingBatch(setup: ChatSetup, order: "same" | "swapped") {
+function reattachingBatch(setup: ReturnType<typeof chatSetup>, order: "same" | "swapped") {
   const runs: string[] = [];
   const blocked = deferred();
   const last: { seen: string[] } = { seen: [] };
@@ -37,7 +37,7 @@ function reattachingBatch(setup: ChatSetup, order: "same" | "swapped") {
     setup.registry,
     tool("echo", (args) => {
       runs.push(args.text ?? "");
-      return Promise.resolve({ output: [{ type: "text", text: `echo ${args.text}` }] });
+      return Promise.resolve({ output: [{ text: `echo ${args.text}`, type: "text" }] });
     }),
   );
   addTool(
@@ -67,7 +67,7 @@ function reattachingBatch(setup: ChatSetup, order: "same" | "swapped") {
     ),
   );
   setup.faux.setResponses([call("batch"), DONE]);
-  return { runs, blocked, last };
+  return { blocked, last, runs };
 }
 
 const backgroundWorkSetup = Effect.fn("backgroundWorkSetup")(function* () {
@@ -77,9 +77,12 @@ const backgroundWorkSetup = Effect.fn("backgroundWorkSetup")(function* () {
   const setup = chatSetup();
   const started = deferred();
   const Background = defineTask<null, { phase: "work" }, null>({
-    name: "test.background",
-    version: 1,
+    abort: (_task, runtime, abortContext) =>
+      runtime
+        .commit(() => ({ outcome: { status: "aborted" }, status: "terminal" }), abortContext)
+        .then(() => undefined),
     initial: () => ({ phase: "work" }),
+    name: "test.background",
     phases: {
       work: (_task, runtime) =>
         runPromise(
@@ -89,13 +92,10 @@ const backgroundWorkSetup = Effect.fn("backgroundWorkSetup")(function* () {
           }),
         ),
     },
-    abort: (_task, runtime, abortContext) =>
-      runtime
-        .commit(() => ({ status: "terminal", outcome: { status: "aborted" } }), abortContext)
-        .then(() => undefined),
+    version: 1,
   });
   setup.registry.install(defineExtension({ name: "background", tasks: [Background] }));
-  return { path, setup, started, Background };
+  return { Background, path, setup, started };
 });
 
 const reattachesReplaySafe = Effect.gen(function* () {
@@ -137,9 +137,20 @@ const abandonsChildTasksStep1 = Effect.gen(function* () {
   const phases: string[] = [];
   const started = deferred();
   const Worker = defineTask<null, { phase: "work" }, null>({
-    name: "test.direct-worker",
-    version: 1,
+    abort: (task, runtime, abortContext) =>
+      runPromise(
+        Effect.gen(function* () {
+          phases.push(`abort ${task.abortReason}`);
+          yield* awaited(
+            runtime.commit(
+              () => ({ outcome: { status: "aborted" }, status: "terminal" }),
+              abortContext,
+            ),
+          );
+        }),
+      ),
     initial: () => ({ phase: "work" }),
+    name: "test.direct-worker",
     phases: {
       work: (_task, runtime) =>
         runPromise(
@@ -150,21 +161,10 @@ const abandonsChildTasksStep1 = Effect.gen(function* () {
           }),
         ),
     },
-    abort: (task, runtime, abortContext) =>
-      runPromise(
-        Effect.gen(function* () {
-          phases.push(`abort ${task.abortReason}`);
-          yield* awaited(
-            runtime.commit(
-              () => ({ status: "terminal", outcome: { status: "aborted" } }),
-              abortContext,
-            ),
-          );
-        }),
-      ),
+    version: 1,
   });
   setup.registry.install(defineExtension({ name: "direct-worker", tasks: [Worker] }));
-  return { runPromise, path, setup, phases, started, Worker };
+  return { Worker, path, phases, runPromise, setup, started };
 });
 
 const abandonsChildTasks = Effect.gen(function* () {
@@ -222,9 +222,9 @@ const backgroundSpawnTool = (
                   );
                   return yield* awaited(
                     tx.createTask(Background, null, {
+                      background: true,
                       conversationId: child.id,
                       ownership: { kind: "conversation" },
-                      background: true,
                     }),
                   );
                 }),

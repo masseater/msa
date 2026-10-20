@@ -1,14 +1,14 @@
 import { Type } from "@msa/ai";
 import type { Context } from "@msa/chord";
 import {
+  type EntryId,
+  type Extension,
+  type ToolExecutionApi,
   configure,
   defineDoc,
   defineExtension,
   defineTask,
   defineTool,
-  type EntryId,
-  type Extension,
-  type ToolExecutionApi,
   hook,
   section,
   wrapTool,
@@ -19,15 +19,17 @@ import { dual } from "effect/Function";
 
 import { currentTimeMillis } from "../src/clock.ts";
 import { createBashTool } from "../src/tools/index.ts";
-import { awaited } from "./effect-support.ts";
-import type { SpecNames } from "./spec-usage-names.ts";
+import effectSupport from "./effect-support.ts";
+import type specUsageNamesTypes from "./spec-usage-names.ts";
 
-export function promptExtensions({
+const { awaited } = effectSupport;
+
+function promptExtensions({
   renderAgentsMd,
   renderSkills,
   isDangerous,
   requestSecondPass,
-}: SpecNames) {
+}: specUsageNamesTypes.SpecNames) {
   const ContextFiles = defineExtension({
     name: "context-files",
     sections: [section("agents-md", renderAgentsMd)],
@@ -42,25 +44,28 @@ export function promptExtensions({
     ],
   });
   const Permissions = defineExtension({
-    name: "permissions",
     hooks: [
       hook(ToolTask, {
         beforeTool: (call) =>
           Promise.resolve(isDangerous(call) ? { block: "Needs approval" } : undefined),
       }),
     ],
+    name: "permissions",
   });
   const Reviewer = defineExtension({
+    hooks: [hook(GenerationTask, { onYield: requestSecondPass })],
     name: "reviewer",
     sections: [
       section("role", () => "You review diffs. Report problems as a list. Never edit files."),
     ],
-    hooks: [hook(GenerationTask, { onYield: requestSecondPass })],
   });
-  return { ContextFiles, Skills, SkillsV2, Coding, Permissions, Reviewer };
+  return { Coding, ContextFiles, Permissions, Reviewer, Skills, SkillsV2 };
 }
 
-function bashExtensionsImpl({ metrics }: SpecNames, bashTool: ReturnType<typeof createBashTool>) {
+function bashExtensionsImpl(
+  { metrics }: specUsageNamesTypes.SpecNames,
+  bashTool: ReturnType<typeof createBashTool>,
+) {
   const Timing = defineExtension({
     name: "timing",
     wraps: [
@@ -89,27 +94,26 @@ function bashExtensionsImpl({ metrics }: SpecNames, bashTool: ReturnType<typeof 
   return { Timing, Venv };
 }
 
-export const bashExtensions: {
+const bashExtensions: {
   (
     bashTool: ReturnType<typeof createBashTool>,
-  ): (arg0: SpecNames) => ReturnType<typeof bashExtensionsImpl>;
+  ): (arg0: specUsageNamesTypes.SpecNames) => ReturnType<typeof bashExtensionsImpl>;
   (
-    arg0: SpecNames,
+    arg0: specUsageNamesTypes.SpecNames,
     bashTool: ReturnType<typeof createBashTool>,
   ): ReturnType<typeof bashExtensionsImpl>;
 } = dual(2, bashExtensionsImpl);
 
-export function planMode({ writes }: SpecNames) {
+function planMode({ writes }: specUsageNamesTypes.SpecNames) {
   const PlanModeDoc = defineDoc<{ enabled: boolean }>({
-    kind: "app.plan-mode",
-    version: 1,
-    scope: "conversation",
-    history: "latest",
     fork: "current",
+    history: "latest",
     initial: () => ({ enabled: false }),
+    kind: "app.plan-mode",
+    scope: "conversation",
+    version: 1,
   });
   const PlanMode = defineExtension({
-    name: "plan-mode",
     hooks: [
       hook(ToolTask, {
         beforeTool: (call, api, context) =>
@@ -123,8 +127,9 @@ export function planMode({ writes }: SpecNames) {
           ),
       }),
     ],
+    name: "plan-mode",
   });
-  return { PlanModeDoc, PlanMode };
+  return { PlanMode, PlanModeDoc };
 }
 
 const childWithout = Effect.fn("childWithout")(function* (
@@ -153,15 +158,12 @@ const childWithout = Effect.fn("childWithout")(function* (
   );
 });
 
-export function subagentExtension({ answerText }: SpecNames) {
+function subagentExtension({ answerText }: specUsageNamesTypes.SpecNames) {
   const Subagent: Extension = defineExtension({
     name: "subagent",
     tools: [
       defineTool({
-        name: "subagent",
         description: "Delegate a self-contained task to a subagent and get its answer back.",
-        parameters: Type.Object({ task: Type.String() }),
-        replay: "safe",
         execute: (args, api, context) =>
           Effect.runPromise(
             Effect.gen(function* () {
@@ -170,9 +172,9 @@ export function subagentExtension({ answerText }: SpecNames) {
               yield* awaited(api.details({ conversationId: child }, context));
               const handle = (yield* awaited(api.conversation(child, context)))!;
               const request = {
-                type: "input",
                 content: task,
                 requestId: `subagent:${api.taskId}`,
+                type: "input",
               } as const;
               const settled = yield* awaited(
                 (yield* awaited(handle.submit(request, context))).wait(context),
@@ -181,18 +183,21 @@ export function subagentExtension({ answerText }: SpecNames) {
                 throw new Error(`Subagent failed: ${settled.status}`);
               return {
                 output: [
-                  { type: "text", text: yield* awaited(answerText(api, settled.answer, context)) },
+                  { text: yield* awaited(answerText(api, settled.answer, context)), type: "text" },
                 ],
               };
             }),
           ),
+        name: "subagent",
+        parameters: Type.Object({ task: Type.String() }),
+        replay: "safe",
       }),
     ],
   });
   return Subagent;
 }
 
-export function subagentTools({ Anchor, Reporter, subagentTool }: SpecNames) {
+function subagentTools({ Anchor, Reporter, subagentTool }: specUsageNamesTypes.SpecNames) {
   return defineExtension({
     name: "subagent-tools",
     tasks: [Anchor, Reporter],
@@ -200,7 +205,7 @@ export function subagentTools({ Anchor, Reporter, subagentTool }: SpecNames) {
   });
 }
 
-export function chatExtension() {
+function chatExtension() {
   return defineExtension({
     name: "chat",
     sections: [section("preamble", () => "You are a helpful assistant.", { tag: false })],
@@ -209,25 +214,23 @@ export function chatExtension() {
 
 type Charge = { phase: "prepare" } | { phase: "charge"; key: string };
 
-export function paymentTask({ newKey, payments, receiptEntry }: SpecNames) {
+function paymentTask({ newKey, payments, receiptEntry }: specUsageNamesTypes.SpecNames) {
   return defineTask<null, Charge, { entryId: EntryId }>({
-    name: "app.payment",
-    version: 1,
-    initial: () => ({ phase: "prepare" }),
-    phases: {
-      prepare: (_task, runtime, context) =>
-        Effect.runPromise(
-          Effect.asVoid(
-            Effect.suspend(() =>
-              awaited(
-                runtime.commit(
-                  () => ({ status: "running", checkpoint: { phase: "charge", key: newKey() } }),
-                  context,
-                ),
-              ),
+    abort: (task, runtime, context) =>
+      Effect.runPromise(
+        Effect.gen(function* () {
+          yield* awaited(payments.cancel(task.state.checkpoint));
+          yield* awaited(
+            runtime.commit(
+              () => ({ outcome: { reason: "user", status: "aborted" }, status: "terminal" }),
+              context,
             ),
-          ),
-        ),
+          );
+        }),
+      ),
+    initial: () => ({ phase: "prepare" }),
+    name: "app.payment",
+    phases: {
       charge: (task, runtime, context) =>
         Effect.runPromise(
           Effect.gen(function* () {
@@ -236,36 +239,51 @@ export function paymentTask({ newKey, payments, receiptEntry }: SpecNames) {
               runtime.commit(
                 (tx, current) =>
                   tx.appendEntry(current.conversationId, receiptEntry(receipt)).then((entry) => ({
+                    outcome: { result: { entryId: entry.id }, status: "completed" },
                     status: "terminal",
-                    outcome: { status: "completed", result: { entryId: entry.id } },
                   })),
                 context,
               ),
             );
           }),
         ),
-    },
-    abort: (task, runtime, context) =>
-      Effect.runPromise(
-        Effect.gen(function* () {
-          yield* awaited(payments.cancel(task.state.checkpoint));
-          yield* awaited(
-            runtime.commit(
-              () => ({ status: "terminal", outcome: { status: "aborted", reason: "user" } }),
-              context,
+      prepare: (_task, runtime, context) =>
+        Effect.runPromise(
+          Effect.asVoid(
+            Effect.suspend(() =>
+              awaited(
+                runtime.commit(
+                  () => ({ checkpoint: { key: newKey(), phase: "charge" }, status: "running" }),
+                  context,
+                ),
+              ),
             ),
-          );
-        }),
-      ),
+          ),
+        ),
+    },
+    version: 1,
   });
 }
 
-export function followTask() {
+function followTask() {
   return defineTask<object, { phase: "follow" }, null>({
-    name: "app.follow",
-    version: 1,
-    initial: () => ({ phase: "follow" }),
-    phases: { follow: () => Promise.resolve() },
     abort: () => Promise.resolve(),
+    initial: () => ({ phase: "follow" }),
+    name: "app.follow",
+    phases: { follow: () => Promise.resolve() },
+    version: 1,
   });
 }
+
+const specUsageExtensions = {
+  bashExtensions,
+  chatExtension,
+  followTask,
+  paymentTask,
+  planMode,
+  promptExtensions,
+  subagentExtension,
+  subagentTools,
+};
+
+export default specUsageExtensions;

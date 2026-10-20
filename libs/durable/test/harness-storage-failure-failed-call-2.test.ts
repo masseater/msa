@@ -3,8 +3,11 @@ import { Effect } from "effect";
 import { describe, expect, it } from "vite-plus/test";
 
 import { conversationViews } from "../src/harness/view.ts";
-import { started } from "./harness-storage-failure-support.ts";
-import { awaited, context } from "./support.ts";
+import harnessStorageFailureSupport from "./harness-storage-failure-support.ts";
+import support from "./support.ts";
+
+const { started } = harnessStorageFailureSupport;
+const { awaited, context } = support;
 
 const reportsThrowingCommit = Effect.gen(function* () {
   const storage = new MemoryStorage();
@@ -44,10 +47,10 @@ const keepsFeedingOther = Effect.gen(function* () {
       root.id,
       () =>
         Promise.resolve({
+          closeSession: () => {},
           publication: () => {
             throw failure;
           },
-          closeSession: () => {},
         }),
       context,
     ),

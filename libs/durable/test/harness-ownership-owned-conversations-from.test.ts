@@ -1,24 +1,28 @@
-import { fauxAssistantMessage, fauxText, fauxToolCall, Type } from "@msa/ai";
-import { defineTool, type TaskId } from "@msa/durable";
+import { Type, fauxAssistantMessage, fauxText, fauxToolCall } from "@msa/ai";
+import { type TaskId, defineTool } from "@msa/durable";
 import { MemoryStorage } from "@msa/durable/storage/memory";
 import { Effect } from "effect";
 import { afterEach, describe, expect, it } from "vite-plus/test";
 
 import { openNodeSqliteStorage } from "../src/storage/sqlite/node.ts";
-import { spawnFauxChild } from "./harness-ownership-children.ts";
-import { Hold, directories, gated, gates, runs } from "./harness-ownership-support.ts";
-import {
-  chatSetup,
-  openChat,
-  awaited,
+import harnessOwnershipChildren from "./harness-ownership-children.ts";
+import harnessOwnershipSupport from "./harness-ownership-support.ts";
+import support from "./support.ts";
+
+const { spawnFauxChild } = harnessOwnershipChildren;
+const { Hold, directories, gated, gates, runs } = harnessOwnershipSupport;
+const {
+  aborted,
   addTask,
   addTool,
-  makeTempFile,
-  removeDir,
+  awaited,
+  chatSetup,
   context,
-  aborted,
   deferred,
-} from "./support.ts";
+  makeTempFile,
+  openChat,
+  removeDir,
+} = support;
 
 afterEach(() =>
   Effect.runPromise(
@@ -43,9 +47,7 @@ const spawningTool = Effect.fn("spawningTool")(function* () {
   addTool(
     setup.registry,
     defineTool({
-      name: "spawn",
       description: "Starts owned work, then throws or hangs",
-      parameters: Type.Object({ mode: Type.String() }),
       execute: (args, api, callContext) =>
         runPromise(
           Effect.gen(function* () {
@@ -58,7 +60,7 @@ const spawningTool = Effect.fn("spawningTool")(function* () {
                       tx.createTask(
                         Hold,
                         { name: `child.${api.callId}` },
-                        { ownership: { kind: "conversation" }, conversationId: created.id },
+                        { conversationId: created.id, ownership: { kind: "conversation" } },
                       ),
                     ),
                 callContext,
@@ -70,6 +72,8 @@ const spawningTool = Effect.fn("spawningTool")(function* () {
             return yield* awaited(aborted(callContext.abortSignal!));
           }),
         ),
+      name: "spawn",
+      parameters: Type.Object({ mode: Type.String() }),
     }),
   );
   const call = (mode: string, id: string) =>
@@ -79,7 +83,7 @@ const spawningTool = Effect.fn("spawningTool")(function* () {
     fauxAssistantMessage([fauxText("after throw")]),
     call("hang", "c2"),
   ]);
-  return { path, children, toolRunning, setup };
+  return { children, path, setup, toolRunning };
 });
 
 const letsRunningTool = Effect.gen(function* () {
@@ -90,23 +94,23 @@ const letsRunningTool = Effect.gen(function* () {
   addTool(
     setup.registry,
     defineTool({
-      name: "delegate",
       description: "Delegates and cancels",
-      parameters: Type.Object({}),
       execute: (_args, api, callContext) =>
         runPromise(
           Effect.gen(function* () {
             const child = yield* spawnFauxChild(api, callContext);
             const handle = (yield* awaited(api.conversation(child, callContext)))!;
             const submission = yield* awaited(
-              handle.submit({ type: "input", content: "child task" }, callContext),
+              handle.submit({ content: "child task", type: "input" }, callContext),
             );
             yield* awaited(childRun.reached);
             yield* awaited(handle.abort(callContext));
             const settledChild = yield* awaited(submission.wait(callContext));
-            return { output: [{ type: "text", text: `child ${settledChild.status}` }] };
+            return { output: [{ text: `child ${settledChild.status}`, type: "text" }] };
           }),
         ),
+      name: "delegate",
+      parameters: Type.Object({}),
     }),
   );
   setup.faux.setResponses([
@@ -119,7 +123,7 @@ const letsRunningTool = Effect.gen(function* () {
   const { harness, root } = yield* openChat(new MemoryStorage(), setup);
   expect(
     (yield* awaited(
-      (yield* awaited(root.submit({ type: "input", content: "go" }, context))).wait(context),
+      (yield* awaited(root.submit({ content: "go", type: "input" }, context))).wait(context),
     )).status,
   ).toBe("done");
   yield* awaited(harness.close(context));
@@ -135,7 +139,7 @@ const abortsChildrenTool = Effect.gen(function* () {
   let opened = yield* openChat(yield* awaited(openNodeSqliteStorage(path)), setup);
   expect(
     (yield* awaited(
-      (yield* awaited(opened.root.submit({ type: "input", content: "one" }, context))).wait(
+      (yield* awaited(opened.root.submit({ content: "one", type: "input" }, context))).wait(
         context,
       ),
     )).status,
@@ -144,7 +148,7 @@ const abortsChildrenTool = Effect.gen(function* () {
     (yield* awaited(opened.harness.waitForTask(children[0]!, context))).state.outcome.status,
   ).toBe("aborted");
 
-  const second = (yield* awaited(opened.root.submit({ type: "input", content: "two" }, context)))
+  const second = (yield* awaited(opened.root.submit({ content: "two", type: "input" }, context)))
     .id;
   yield* awaited(toolRunning.promise);
   yield* awaited(opened.harness.close(context));

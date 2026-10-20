@@ -5,31 +5,25 @@ import { MemoryStorage } from "@msa/durable/storage/memory";
 import { Effect } from "effect";
 import { afterEach, describe, expect, it } from "vite-plus/test";
 
-import {
-  text,
-  summary,
+import harnessCompactionSupport from "./harness-compaction-support.ts";
+import support from "./support.ts";
+
+const {
+  MANUAL,
+  directories,
+  firstUserText,
   gated,
   history,
-  turn,
-  directories,
-  MANUAL,
-  script,
   live,
-  firstUserText,
-  userText,
   open,
   result,
-} from "./harness-compaction-support.ts";
-import {
-  chatSetup,
-  openChat,
-  waitFor,
-  awaited,
-  addHooks,
-  removeDir,
-  context,
-  deferred,
-} from "./support.ts";
+  script,
+  summary,
+  text,
+  turn,
+  userText,
+} = harnessCompactionSupport;
+const { addHooks, awaited, chatSetup, context, deferred, openChat, removeDir, waitFor } = support;
 
 afterEach(() =>
   Effect.runPromise(
@@ -73,7 +67,7 @@ const enablesSchedulingRight = Effect.gen(function* () {
     }),
   );
   expect((yield* awaited(harness.getTask(id, context)))?.state).toMatchObject({
-    outcome: { status: "completed", result: {} },
+    outcome: { result: {}, status: "completed" },
   });
   expect(faux.summaryRequests).toHaveLength(0);
   yield* awaited(harness.close(context));
@@ -91,7 +85,7 @@ const completesWithoutSummary = Effect.gen(function* () {
   const outcome = yield* awaited(
     result(chat, yield* awaited(chat.root.compact(undefined, context))),
   );
-  expect(outcome).toEqual({ status: "completed", result: {} });
+  expect(outcome).toEqual({ result: {}, status: "completed" });
   expect(chat.faux.summaryRequests).toHaveLength(0);
   expect((yield* awaited(live(chat))).compactions).toBeUndefined();
   yield* awaited(chat.harness.close(context));
@@ -130,7 +124,7 @@ const asksBeforeCompactFirst = Effect.gen(function* () {
     messages: Message[];
     firstKept: number;
   };
-  expect(compaction).toMatchObject({ reason: "manual", instructions: "why" });
+  expect(compaction).toMatchObject({ instructions: "why", reason: "manual" });
   expect(compaction.entries.map((record) => record.kind)).toEqual([
     "msa.user",
     "msa.system",

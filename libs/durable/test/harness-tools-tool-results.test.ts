@@ -4,11 +4,17 @@ import { GenerationTask, ToolTask } from "@msa/durable/harness";
 import { Effect } from "effect";
 import { describe, expect, it } from "vite-plus/test";
 
-import { chatSetup } from "./chat-support.ts";
-import { awaited } from "./effect-support.ts";
-import { addHooks, addTool } from "./harness-support.ts";
-import { resultText, results, DONE, calls, run, tool } from "./harness-tools-support.ts";
-import { context } from "./session-support.ts";
+import chatSupport from "./chat-support.ts";
+import effectSupport from "./effect-support.ts";
+import harnessSupport from "./harness-support.ts";
+import harnessToolsSupport from "./harness-tools-support.ts";
+import sessionSupport from "./session-support.ts";
+
+const { chatSetup } = chatSupport;
+const { awaited } = effectSupport;
+const { addHooks, addTool } = harnessSupport;
+const { DONE, calls, resultText, results, run, tool } = harnessToolsSupport;
+const { context } = sessionSupport;
 
 function validatingToolSetup() {
   const setup = chatSetup();
@@ -28,7 +34,7 @@ function validatingToolSetup() {
       return { arguments: { text: `${call.arguments["text"]}!` } };
     },
   });
-  return { setup, seen };
+  return { seen, setup };
 }
 
 const validatesArgumentsBeforeTool = Effect.gen(function* () {
@@ -150,10 +156,10 @@ const chainsAfterToolReplacements = Effect.gen(function* () {
   const setup = chatSetup();
   addTool(
     setup.registry,
-    tool("echo", () => Promise.resolve({ output: [{ type: "text", text: "raw" }] })),
+    tool("echo", () => Promise.resolve({ output: [{ text: "raw", type: "text" }] })),
   );
   addHooks(setup.registry, ToolTask, {
-    afterTool: (_call, result) => ({ ...result, output: [{ type: "text", text: "first" }] }),
+    afterTool: (_call, result) => ({ ...result, output: [{ text: "first", type: "text" }] }),
   });
   addHooks(setup.registry, ToolTask, {
     afterTool: (_call, result) => ({

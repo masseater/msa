@@ -3,9 +3,15 @@ import { Effect } from "effect";
 import { describe, expect, it } from "vite-plus/test";
 
 import { idFromNumber } from "../src/ids.ts";
-import { awaited } from "./effect-support.ts";
-import { context, createConversation, flush, openTestSession } from "./session-support.ts";
-import { WorkTask, createTask, NotesDoc } from "./session-tables-support.ts";
+import effectSupport from "./effect-support.ts";
+import sessionSupport from "./session-support.ts";
+import sessionTablesSupport from "./session-tables-support.ts";
+
+const { awaited } = effectSupport;
+
+const { context, createConversation, flush, openTestSession } = sessionSupport;
+
+const { NotesDoc, WorkTask, createTask } = sessionTablesSupport;
 
 const mintedRecords = Effect.fn("mintedRecords")(function* () {
   const runPromise = Effect.runPromiseWith(yield* Effect.context<never>());
@@ -20,19 +26,19 @@ const mintedRecords = Effect.fn("mintedRecords")(function* () {
               tx.createConversation({ ownership: { kind: "ownerless" } }),
             );
             const first = yield* awaited(
-              tx.appendEntry(conversation.id, { kind: "note", data: "one" }),
+              tx.appendEntry(conversation.id, { data: "one", kind: "note" }),
             );
             const headed = yield* awaited(
-              tx.appendEntry(conversation.id, { kind: "summary", head: "self" }),
+              tx.appendEntry(conversation.id, { head: "self", kind: "summary" }),
             );
             const task = yield* awaited(
               tx.createTask(
                 WorkTask,
                 { path: "x" },
                 {
-                  ownership: { kind: "conversation" },
-                  conversationId: conversation.id,
                   background: true,
+                  conversationId: conversation.id,
+                  ownership: { kind: "conversation" },
                 },
               ),
             );
@@ -42,14 +48,14 @@ const mintedRecords = Effect.fn("mintedRecords")(function* () {
       context,
     ),
   );
-  return { session, storage, publications, created };
+  return { created, publications, session, storage };
 });
 
 const distinctMintedRecords = Effect.fn("distinctMintedRecords")(function* () {
   const { session, storage, publications, created } = yield* mintedRecords();
   const ids = [created.conversation.id, created.first.id, created.headed.id, created.task];
   expect(new Set(ids).size).toBe(4);
-  return { session, storage, publications, created };
+  return { created, publications, session, storage };
 });
 
 const allowsTableReads = Effect.gen(function* () {
@@ -130,14 +136,6 @@ const passesCallerSelected = Effect.gen(function* () {
   );
 });
 
-describe("Session transaction tables", () => {
-  it("allows table reads only before the first table write", () =>
-    Effect.runPromise(allowsTableReads));
-
-  it("passes caller-selected limits and cursors through table scans", () =>
-    Effect.runPromise(passesCallerSelected));
-});
-
 const treatsSynchronousSetTask = Effect.gen(function* () {
   const runPromise = Effect.runPromiseWith(yield* Effect.context<never>());
 
@@ -159,32 +157,27 @@ const treatsSynchronousSetTask = Effect.gen(function* () {
   );
 });
 
-describe("Session transaction tables", () => {
-  it("treats synchronous setTask as the first table write", () =>
-    Effect.runPromise(treatsSynchronousSetTask));
-});
-
 const createsConversationsEntriesStep1 = Effect.gen(function* () {
   const { session, storage, publications, created } = yield* distinctMintedRecords();
   expect(created.headed.head).toBe(created.headed.id);
   expect(created.first).toEqual({
-    id: created.first.id,
     conversationId: created.conversation.id,
-    kind: "note",
     data: "one",
+    id: created.first.id,
+    kind: "note",
   });
   expect((yield* awaited(storage.entry(created.headed.id, context)))!.entry).toEqual(
     created.headed,
   );
   expect(yield* awaited(storage.task(created.task, context))).toEqual({
-    id: created.task,
-    conversationId: created.conversation.id,
-    kind: "test.work",
-    version: 1,
-    input: { path: "x" },
-    background: true,
     abortRequested: false,
-    state: { status: "pending", checkpoint: { phase: "start" } },
+    background: true,
+    conversationId: created.conversation.id,
+    id: created.task,
+    input: { path: "x" },
+    kind: "test.work",
+    state: { checkpoint: { phase: "start" }, status: "pending" },
+    version: 1,
   });
   yield* flush;
   const changes = publications.at(-1)!.changes;
@@ -224,74 +217,19 @@ const createsConversationsEntries = Effect.gen(function* () {
 });
 
 describe("Session transaction tables", () => {
-  it("creates conversations, entries, and tasks with minted IDs", () =>
-    Effect.runPromise(createsConversationsEntries));
-});
+  it("allows table reads only before the first table write", () =>
+    Effect.runPromise(allowsTableReads));
 
-const createsConversationExplicitlyStep1 = Effect.gen(function* () {
-  const runPromise = Effect.runPromiseWith(yield* Effect.context<never>());
-
-  const { session, storage } = openTestSession();
-  const parentId = yield* awaited(createConversation(session));
-  const created = yield* awaited(
-    session.commit(
-      (tx) =>
-        runPromise(
-          Effect.gen(function* () {
-            const supervisorId = yield* awaited(
-              tx.createTask(
-                WorkTask,
-                { path: "background" },
-                {
-                  ownership: { kind: "conversation" },
-                  conversationId: parentId,
-                  background: true,
-                },
-              ),
-            );
-            const child = yield* awaited(
-              tx.createConversation({
-                ownership: { kind: "task", taskId: supervisorId },
-              }),
-            );
-            return { supervisorId, child };
-          }),
-        ),
-      context,
-    ),
-  );
-
-  expect(created.child.owner).toEqual({
-    conversationId: parentId,
-    taskId: created.supervisorId,
-  });
-  expect(yield* awaited(storage.conversation(created.child.id, context))).toEqual(created.child);
-  return { runPromise, session, storage, parentId, created };
-});
-
-const createsConversationExplicitly = Effect.gen(function* () {
-  const { runPromise, session, storage, parentId, created } =
-    yield* createsConversationExplicitlyStep1;
-  yield* awaited(
-    expect(
-      session.commitWith(
-        (tx) =>
-          runPromise(
-            Effect.gen(function* () {
-              const supervisor = (yield* awaited(tx.task(created.supervisorId)))!;
-              tx.setTask({ ...supervisor, conversationId: created.child.id });
-            }),
-          ),
-        context,
-      ),
-    ).rejects.toThrow(`Task ${created.supervisorId} cannot change conversations`),
-  );
-  expect((yield* awaited(storage.task(created.supervisorId, context)))?.conversationId).toBe(
-    parentId,
-  );
+  it("passes caller-selected limits and cursors through table scans", () =>
+    Effect.runPromise(passesCallerSelected));
 });
 
 describe("Session transaction tables", () => {
-  it("creates a conversation with an explicitly staged task owner", () =>
-    Effect.runPromise(createsConversationExplicitly));
+  it("treats synchronous setTask as the first table write", () =>
+    Effect.runPromise(treatsSynchronousSetTask));
+});
+
+describe("Session transaction tables", () => {
+  it("creates conversations, entries, and tasks with minted IDs", () =>
+    Effect.runPromise(createsConversationsEntries));
 });

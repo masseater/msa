@@ -1,16 +1,18 @@
 import { Type } from "@msa/ai";
 import { type CodemodeRun, CodemodeSandbox } from "@msa/codemode";
-import { defineTool, type ToolRegistration } from "@msa/durable";
+import { type ToolRegistration, defineTool } from "@msa/durable";
 import { Effect } from "effect";
 import { dual } from "effect/Function";
 
 import { type CodemodeGlobal, createCodemodeTool } from "../src/codemode/codemode.ts";
 import type { CodemodeNamespace } from "../src/codemode/describe.ts";
-import { chatSetup, awaited, addTool, aborted, type Deferred, deferred } from "./support.ts";
+import support from "./support.ts";
 
-export const Parameters = Type.Object({
-  text: Type.Optional(Type.String()),
+const { aborted, addTool, awaited, chatSetup, deferred } = support;
+
+const Parameters = Type.Object({
   id: Type.Optional(Type.Number()),
+  text: Type.Optional(Type.String()),
 });
 
 function toolImpl(
@@ -18,10 +20,10 @@ function toolImpl(
   execute: ToolRegistration<typeof Parameters>["execute"],
   replay: "safe" | "unsafe" = "unsafe",
 ) {
-  return defineTool({ name, description: name, parameters: Parameters, execute, replay });
+  return defineTool({ description: name, execute, name, parameters: Parameters, replay });
 }
 
-export const tool: {
+const tool: {
   (
     execute: ToolRegistration<typeof Parameters>["execute"],
     replay?: "safe" | "unsafe",
@@ -33,7 +35,7 @@ export const tool: {
   ): ReturnType<typeof toolImpl>;
 } = dual((args) => typeof args[0] === "string", toolImpl);
 
-export function countingSandbox() {
+function countingSandbox() {
   const sandbox = new CodemodeSandbox({ memoryLimitBytes: 64 * 1024 * 1024 });
   const vm: { starts: number; onStart?: (run: CodemodeRun) => void } = { starts: 0 };
   const start = sandbox.start.bind(sandbox);
@@ -46,19 +48,19 @@ export function countingSandbox() {
   return { sandbox, vm };
 }
 
-export function addEchoTool(registry: ReturnType<typeof chatSetup>["registry"]) {
+function addEchoTool(registry: ReturnType<typeof chatSetup>["registry"]) {
   const echo = new Map<string, number>();
   addTool(
     registry,
     tool("echo", (args) => {
       echo.set(args.text ?? "", (echo.get(args.text ?? "") ?? 0) + 1);
-      return Promise.resolve({ output: [{ type: "text", text: `echo ${args.text ?? ""}` }] });
+      return Promise.resolve({ output: [{ text: `echo ${args.text ?? ""}`, type: "text" }] });
     }),
   );
   return echo;
 }
 
-export function addHoldTool(registry: ReturnType<typeof chatSetup>["registry"]) {
+function addHoldTool(registry: ReturnType<typeof chatSetup>["registry"]) {
   const holds = { block: true, reached: deferred(), runs: 0 };
   addTool(
     registry,
@@ -72,7 +74,7 @@ export function addHoldTool(registry: ReturnType<typeof chatSetup>["registry"]) 
               holds.reached.resolve();
               return yield* awaited(aborted(callContext.abortSignal!));
             }
-            return { output: [{ type: "text", text: `held ${args.id ?? ""}` }] };
+            return { output: [{ text: `held ${args.id ?? ""}`, type: "text" }] };
           }),
         ),
       "safe",
@@ -81,7 +83,7 @@ export function addHoldTool(registry: ReturnType<typeof chatSetup>["registry"]) 
   return holds;
 }
 
-export function addPauseTool(registry: ReturnType<typeof chatSetup>["registry"]) {
+function addPauseTool(registry: ReturnType<typeof chatSetup>["registry"]) {
   const pauses = { block: true, reached: deferred() };
   addTool(
     registry,
@@ -94,7 +96,7 @@ export function addPauseTool(registry: ReturnType<typeof chatSetup>["registry"])
               pauses.reached.resolve();
               return yield* awaited(aborted(callContext.abortSignal!));
             }
-            return { output: [{ type: "text", text: "paused" }] };
+            return { output: [{ text: "paused", type: "text" }] };
           }),
         ),
       "safe",
@@ -103,8 +105,8 @@ export function addPauseTool(registry: ReturnType<typeof chatSetup>["registry"])
   return pauses;
 }
 
-export function addSlowTool(registry: ReturnType<typeof chatSetup>["registry"]) {
-  const gates = new Map<number, Deferred>();
+function addSlowTool(registry: ReturnType<typeof chatSetup>["registry"]) {
+  const gates = new Map<number, PromiseWithResolvers<void>>();
   const finished: number[] = [];
   const slows = {
     finished,
@@ -122,7 +124,7 @@ export function addSlowTool(registry: ReturnType<typeof chatSetup>["registry"]) 
         Effect.gen(function* () {
           yield* awaited(slows.gate(args.id ?? 0).promise);
           finished.push(args.id ?? 0);
-          return { output: [{ type: "text", text: `slow ${args.id}` }] };
+          return { output: [{ text: `slow ${args.id}`, type: "text" }] };
         }),
       ),
     ),
@@ -130,16 +132,29 @@ export function addSlowTool(registry: ReturnType<typeof chatSetup>["registry"]) 
   return slows;
 }
 
-export function codemodeChat({
+function codemodeChat({
   globals = [],
   namespaces = [],
 }: { readonly globals?: CodemodeGlobal[]; readonly namespaces?: CodemodeNamespace[] } = {}) {
   const setup = chatSetup();
   const { sandbox, vm } = countingSandbox();
-  addTool(setup.registry, createCodemodeTool({ sandbox, globals, namespaces }));
+  addTool(setup.registry, createCodemodeTool({ globals, namespaces, sandbox }));
   const echo = addEchoTool(setup.registry);
   const holds = addHoldTool(setup.registry);
   const pauses = addPauseTool(setup.registry);
   const slows = addSlowTool(setup.registry);
-  return { setup, sandbox, vm, echo, holds, pauses, slows };
+  return { echo, holds, pauses, sandbox, setup, slows, vm };
 }
+
+const codemodeChatSupport = {
+  Parameters,
+  addEchoTool,
+  addHoldTool,
+  addPauseTool,
+  addSlowTool,
+  codemodeChat,
+  countingSandbox,
+  tool,
+};
+
+export default codemodeChatSupport;

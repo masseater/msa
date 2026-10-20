@@ -1,46 +1,40 @@
-import { fauxAssistantMessage, fauxText, type ToolResultMessage, Type } from "@msa/ai";
+import { type ToolResultMessage, Type, fauxAssistantMessage, fauxText } from "@msa/ai";
 import {
   type AgentEvent,
-  defineTool,
   type Harness,
   LiveDoc,
   type TaskId,
   ToolResultEntry,
+  defineTool,
 } from "@msa/durable";
 import { GenerationTask, watchEvents } from "@msa/durable/harness";
 import { MemoryStorage } from "@msa/durable/storage/memory";
 import { Effect } from "effect";
 import { afterEach, describe, expect, it } from "vite-plus/test";
 
-import { invalidFinalStream } from "./harness-generation-support.ts";
-import { toolCalls, blockingTool } from "./harness-structured-events.ts";
-import {
-  state,
-  outcomeOf,
-  open,
-  gate,
-  gates,
-  Node,
-  behaviors,
-  log,
-  owned,
-  script,
-  directories,
-} from "./harness-structured-support.ts";
-import {
-  allEntries,
-  chatSetup,
-  openChat,
-  waitFor,
-  awaited,
+import harnessGenerationSupport from "./harness-generation-support.ts";
+import harnessStructuredEvents from "./harness-structured-events.ts";
+import harnessStructuredSupport from "./harness-structured-support.ts";
+import support from "./support.ts";
+
+const { invalidFinalStream } = harnessGenerationSupport;
+const { blockingTool, toolCalls } = harnessStructuredEvents;
+const { Node, behaviors, directories, gate, gates, log, open, outcomeOf, owned, script, state } =
+  harnessStructuredSupport;
+const {
+  ControlledStorage,
   addHooks,
   addTask,
   addTool,
-  removeDir,
-  ControlledStorage,
+  allEntries,
+  awaited,
+  chatSetup,
   context,
+  openChat,
+  removeDir,
   settled,
-} from "./support.ts";
+  waitFor,
+} = support;
 
 afterEach(() =>
   Effect.runPromise(
@@ -88,13 +82,13 @@ const faultedGenerationSetupStep1 = Effect.fn("faultedGenerationSetupStep1")(fun
         Effect.gen(function* () {
           yield* awaited(gate("abort.hooked").promise);
           yield* awaited(
-            runtime.commit(() => ({ status: "terminal", outcome: { status: "aborted" } }), ctx),
+            runtime.commit(() => ({ outcome: { status: "aborted" }, status: "terminal" }), ctx),
           );
         }),
       ),
   });
   const failure = new Error("disk gone");
-  return { setup, faulted, failure };
+  return { failure, faulted, setup };
 });
 
 const faultedGenerationSetup = Effect.fn("faultedGenerationSetup")(function* () {
@@ -119,7 +113,7 @@ const faultedGenerationSetup = Effect.fn("faultedGenerationSetup")(function* () 
   }
   const storage = new Failing();
   const { harness, root } = yield* openChat(storage, setup);
-  return { setup, faulted, failure, storage, harness, root };
+  return { failure, faulted, harness, root, setup, storage };
 });
 
 const answersUnstartedCalls = Effect.gen(function* () {
@@ -129,7 +123,7 @@ const answersUnstartedCalls = Effect.gen(function* () {
   addTool(setup.registry, defineTool({ ...blockingTool("two").registration, name: "two" }));
   setup.faux.setResponses([toolCalls(["one", "c1"], ["two", "c2"], ["two", "c3"])]);
   const { harness, root } = yield* openChat(new MemoryStorage(), setup);
-  const submission = yield* awaited(root.submit({ type: "input", content: "go" }, context));
+  const submission = yield* awaited(root.submit({ content: "go", type: "input" }, context));
   yield* awaited(one.started);
   expect(
     (yield* awaited(harness.snapshot(LiveDoc, root.id, context)))!.tools!.map(
@@ -139,8 +133,8 @@ const answersUnstartedCalls = Effect.gen(function* () {
   const generation = (yield* awaited(harness.snapshot(LiveDoc, root.id, context)))!.run!.taskId;
   yield* awaited(harness.abortTask(generation, context));
   expect(yield* awaited(submission.wait(context))).toMatchObject({
-    status: "unanswered",
     reason: "aborted",
+    status: "unanswered",
   });
   const results = (yield* allEntries(root))
     .filter((entry) => ToolResultEntry.is(entry))
@@ -148,7 +142,7 @@ const answersUnstartedCalls = Effect.gen(function* () {
   expect(results.map((result) => result.toolCallId)).toEqual(["c1", "c2", "c3"]);
   expect(results.map((result) => result.isError)).toEqual([true, true, true]);
   expect(results[1]!.content).toEqual([
-    { type: "text", text: "<harness>\n[error] Tool two was aborted\n</harness>" },
+    { text: "<harness>\n[error] Tool two was aborted\n</harness>", type: "text" },
   ]);
   const tools = (yield* awaited(
     harness.commit(
@@ -173,10 +167,10 @@ const endsTurnGenerationStep1 = Effect.gen(function* () {
   addTool(
     setup.registry,
     defineTool({
-      name: "noop",
       description: "Does nothing",
-      parameters: Type.Object({}),
       execute: () => Promise.resolve({ output: [] }),
+      name: "noop",
+      parameters: Type.Object({}),
     }),
   );
   let opened: Harness | undefined;
@@ -206,9 +200,9 @@ const endsTurnGenerationStep1 = Effect.gen(function* () {
     return Promise.resolve();
   });
   yield* awaited(
-    (yield* awaited(root.submit({ type: "input", content: "go" }, context))).wait(context),
+    (yield* awaited(root.submit({ content: "go", type: "input" }, context))).wait(context),
   );
-  return { harness, stream, events };
+  return { events, harness, stream };
 });
 
 const endsTurnGeneration = Effect.gen(function* () {
@@ -236,7 +230,7 @@ describe("tool rounds", () => {
 const keepsRunControlStep1 = Effect.gen(function* () {
   const { setup, faulted, failure, storage, harness, root } = yield* faultedGenerationSetup();
   faulted.opened = harness;
-  const submission = yield* awaited(root.submit({ type: "input", content: "hi" }, context));
+  const submission = yield* awaited(root.submit({ content: "hi", type: "input" }, context));
   yield* waitFor(
     Effect.gen(function* () {
       const generation = (yield* awaited(harness.snapshot(LiveDoc, root.id, context)))?.run?.taskId;
@@ -247,8 +241,8 @@ const keepsRunControlStep1 = Effect.gen(function* () {
   );
   const generation = (yield* awaited(harness.snapshot(LiveDoc, root.id, context)))!.run!.taskId;
   expect(yield* state(harness, generation)).toMatchObject({
-    status: "completing",
     outcome: { status: "faulted" },
+    status: "completing",
   });
   expect(yield* settled(submission.wait(context))).toBe(false);
   expect((yield* awaited(harness.snapshot(LiveDoc, root.id, context)))!.run?.taskId).toBe(
@@ -257,11 +251,11 @@ const keepsRunControlStep1 = Effect.gen(function* () {
   yield* waitFor(() => log.includes("abort:hooked"));
   faulted.reject = generation;
   open("abort.hooked");
-  expect(yield* awaited(harness.closed)).toEqual({ reason: "failed", error: failure });
+  expect(yield* awaited(harness.closed)).toEqual({ error: failure, reason: "failed" });
   yield* awaited(
     expect(submission.wait(context)).rejects.toMatchObject({
-      name: "SessionFailed",
       cause: failure,
+      name: "SessionFailed",
     }),
   );
   yield* awaited(harness.close(context));
@@ -269,8 +263,8 @@ const keepsRunControlStep1 = Effect.gen(function* () {
   faulted.opened = reopened.harness;
   const again = (yield* awaited(reopened.harness.submission(submission.id, context)))!;
   expect(yield* awaited(again.wait(context))).toMatchObject({
-    status: "unanswered",
     reason: "faulted",
+    status: "unanswered",
   });
   return { reopened };
 });

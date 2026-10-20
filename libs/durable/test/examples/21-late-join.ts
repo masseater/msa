@@ -5,10 +5,12 @@ import { fauxAssistantMessage, fauxProvider, fauxText, fauxToolCall } from "@msa
 import { BACKGROUND_CONTEXT } from "@msa/chord/context";
 import { Console, Effect } from "effect";
 
-import { createRegistry, Harness, watchEvents } from "../../src/harness/index.ts";
-import { type AgentEvent, defineExtension, defineTool, type LiveState } from "../../src/index.ts";
+import { Harness, createRegistry, watchEvents } from "../../src/harness/index.ts";
+import { type AgentEvent, type LiveState, defineExtension, defineTool } from "../../src/index.ts";
 import { MemoryStorage } from "../../src/storage/memory.ts";
-import { toJsonText, awaited } from "../effect-support.ts";
+import effectSupport from "../effect-support.ts";
+
+const { awaited, toJsonText } = effectSupport;
 
 const context = BACKGROUND_CONTEXT;
 const pause = (ms: number) => Effect.sleep(ms);
@@ -19,9 +21,7 @@ registry.install(
     name: "count",
     tools: [
       defineTool({
-        name: "count",
         description: "Counts to ten",
-        parameters: Type.Object({}),
         execute: (_args, api) =>
           Effect.runPromise(
             Effect.gen(function* () {
@@ -32,11 +32,13 @@ registry.install(
               return {};
             }),
           ),
+        name: "count",
+        parameters: Type.Object({}),
       }),
     ],
   }),
 );
-const faux = fauxProvider({ tokensPerSecond: 40, tokenSize: { min: 1, max: 1 } });
+const faux = fauxProvider({ tokenSize: { max: 1, min: 1 }, tokensPerSecond: 40 });
 faux.setResponses([
   fauxAssistantMessage([fauxToolCall("count", {}, { id: "call-1" })], { stopReason: "toolUse" }),
   fauxAssistantMessage([fauxText("Counted to ten, and this answer streams slowly.")]),
@@ -50,12 +52,12 @@ const mainStep1 = Effect.gen(function* () {
   const harness = yield* awaited(Harness.open(new MemoryStorage(), { models, registry }, context));
   const root = yield* awaited(
     harness.root(context, {
-      agent: { model: { provider: "faux", modelId: "faux-1" } },
+      agent: { model: { modelId: "faux-1", provider: "faux" } },
     }),
   );
 
   const submission = yield* awaited(
-    root.submit({ type: "input", content: "Count to ten, then tell me." }, context),
+    root.submit({ content: "Count to ten, then tell me.", type: "input" }, context),
   );
   yield* pause(500);
 
@@ -81,7 +83,7 @@ const mainStep1 = Effect.gen(function* () {
     "snapshot tools:",
     stream.snapshot.tools.map((slot) => `${slot.name} ${slot.status}`),
   );
-  return { runSync, harness, submission, view, stream };
+  return { harness, runSync, stream, submission, view };
 });
 
 const main = Effect.gen(function* () {

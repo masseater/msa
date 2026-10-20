@@ -4,8 +4,11 @@ import { GenerationTask, ToolTask } from "@msa/durable/harness";
 import { Effect } from "effect";
 import { describe, expect, it } from "vite-plus/test";
 
-import { DONE, calls, run, tool } from "./harness-tools-support.ts";
-import { chatSetup, textOf, awaited, addHooks, addTool, context } from "./support.ts";
+import harnessToolsSupport from "./harness-tools-support.ts";
+import support from "./support.ts";
+
+const { DONE, calls, run, tool } = harnessToolsSupport;
+const { addHooks, addTool, awaited, chatSetup, context, textOf } = support;
 
 const replacesRequestMessages = Effect.gen(function* () {
   const setup = chatSetup();
@@ -18,7 +21,7 @@ const replacesRequestMessages = Effect.gen(function* () {
   };
   addHooks(setup.registry, GenerationTask, {
     beforeRequest: ({ messages }) => ({
-      messages: [...messages, { role: "user", content: "injected", timestamp: 0 }],
+      messages: [...messages, { content: "injected", role: "user", timestamp: 0 }],
     }),
   });
   const responses: string[] = [];
@@ -28,7 +31,7 @@ const replacesRequestMessages = Effect.gen(function* () {
   let yields = 0;
   addHooks(setup.registry, GenerationTask, {
     onYield: () =>
-      yields++ === 0 ? { continue: [{ type: "text", text: "keep going" }] } : undefined,
+      yields++ === 0 ? { continue: [{ text: "keep going", type: "text" }] } : undefined,
   });
   const { harness, entries, status } = yield* run(setup, [record, record]);
   expect(status).toBe("done");
@@ -84,8 +87,8 @@ const keepsRunInput = Effect.gen(function* () {
   expect(
     yield* awaited((yield* awaited(harness.submission(input!, context)))!.status(context)),
   ).toMatchObject({
-    status: "done",
     answer: answers[1]!.id,
+    status: "done",
   });
   yield* awaited(harness.close(context));
 });

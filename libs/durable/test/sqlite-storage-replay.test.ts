@@ -4,8 +4,11 @@ import type { DocumentId } from "@msa/durable";
 import { Effect } from "effect";
 import { describe, expect, it } from "vite-plus/test";
 
-import { createRoot, createSqliteStorage } from "./sqlite-storage-support.ts";
-import { awaited, context } from "./support.ts";
+import sqliteStorageSupport from "./sqlite-storage-support.ts";
+import support from "./support.ts";
+
+const { createRoot, createSqliteStorage } = sqliteStorageSupport;
+const { awaited, context } = support;
 
 const replacedDocumentStep1 = Effect.fn("replacedDocumentStep1")(function* () {
   const { storage, path } = yield* createSqliteStorage();
@@ -15,9 +18,9 @@ const replacedDocumentStep1 = Effect.fn("replacedDocumentStep1")(function* () {
     storage.commit(
       [
         {
-          type: "document.create",
+          content: { kind: "base", value: { nested: { value: 1 }, rows: [] }, version: 1 },
           record: { id, kind: "replay", scope: { kind: "session" } },
-          content: { kind: "base", version: 1, value: { nested: { value: 1 }, rows: [] } },
+          type: "document.create",
         },
       ],
       context,
@@ -27,19 +30,19 @@ const replacedDocumentStep1 = Effect.fn("replacedDocumentStep1")(function* () {
     storage.commit(
       [
         {
-          type: "document.change",
-          id,
           content: {
             kind: "delta",
-            version: 1,
             ops: [["r", { nested: { value: 2 }, rows: [{ id: 1 }] }]],
+            version: 1,
           },
+          id,
+          type: "document.change",
         },
       ],
       context,
     ),
   );
-  return { storage, path, id };
+  return { id, path, storage };
 });
 
 const replacedDocument = Effect.fn("replacedDocument")(function* () {
@@ -48,23 +51,23 @@ const replacedDocument = Effect.fn("replacedDocument")(function* () {
     storage.commit(
       [
         {
-          type: "document.change",
-          id,
           content: {
             kind: "delta",
-            version: 1,
             ops: [
               ["s", ["nested", "value"], 3],
               ["p", ["rows"], 1, 0, [{ id: 2 }]],
               ["m", ["rows"], [1, 0]],
             ],
+            version: 1,
           },
+          id,
+          type: "document.change",
         },
       ],
       context,
     ),
   );
-  return { storage, path, id };
+  return { id, path, storage };
 });
 
 const rejectsDocumentRequired = Effect.gen(function* () {
@@ -75,9 +78,9 @@ const rejectsDocumentRequired = Effect.gen(function* () {
     storage.commit(
       [
         {
-          type: "document.create",
+          content: { kind: "base", value: { retained: true }, version: 1 },
           record: { id, kind: "corrupt", scope: { kind: "session" } },
-          content: { kind: "base", version: 1, value: { retained: true } },
+          type: "document.create",
         },
       ],
       context,
@@ -107,9 +110,9 @@ const replaysDetachedRoot = Effect.gen(function* () {
     storage.commit(
       [
         {
-          type: "document.change",
+          content: { kind: "delta", ops: [["s", ["nested", "value"], 4]], version: 1 },
           id,
-          content: { kind: "delta", version: 1, ops: [["s", ["nested", "value"], 4]] },
+          type: "document.change",
         },
       ],
       context,

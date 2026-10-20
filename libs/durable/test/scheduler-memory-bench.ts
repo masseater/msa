@@ -4,23 +4,28 @@ import { BACKGROUND_CONTEXT as context } from "@msa/chord/context";
 import { Console, Effect } from "effect";
 
 import { SCHEDULER_INDEX_SIZES } from "../src/harness/harness.ts";
-import { createRegistry, Harness } from "../src/harness/index.ts";
+import { Harness, createRegistry } from "../src/harness/index.ts";
 import {
   type Conversation,
   type ConversationId,
+  type TaskId,
   defineExtension,
   defineTask,
-  type TaskId,
 } from "../src/index.ts";
 import { openNodeSqliteStorage } from "../src/storage/sqlite/node.ts";
-import { retainedBytes } from "./heap-retained.ts";
-import { toJsonText, awaited, joinPath, makeTempDir, removeDir } from "./support.ts";
+import retainedBytes from "./heap-retained.ts";
+import support from "./support.ts";
+
+const { awaited, joinPath, makeTempDir, removeDir, toJsonText } = support;
 
 const waiting = new Map<string, () => void>();
 const Hold = defineTask<{ name: string }, { phase: "hold" }, null>({
-  name: "bench.hold",
-  version: 1,
+  abort: (_task, runtime, ctx) =>
+    Promise.resolve(
+      runtime.commit(() => ({ outcome: { status: "aborted" }, status: "terminal" }), ctx),
+    ),
   initial: () => ({ phase: "hold" }),
+  name: "bench.hold",
   phases: {
     hold: (task, runtime, ctx) =>
       Effect.runPromise(
@@ -30,17 +35,14 @@ const Hold = defineTask<{ name: string }, { phase: "hold" }, null>({
           yield* awaited(promise);
           yield* awaited(
             runtime.commit(
-              () => ({ status: "terminal", outcome: { status: "completed", result: null } }),
+              () => ({ outcome: { result: null, status: "completed" }, status: "terminal" }),
               ctx,
             ),
           );
         }),
       ),
   },
-  abort: (_task, runtime, ctx) =>
-    Promise.resolve(
-      runtime.commit(() => ({ status: "terminal", outcome: { status: "aborted" } }), ctx),
-    ),
+  version: 1,
 });
 
 const release = Effect.fn("release")(function* (name: string) {
@@ -71,7 +73,7 @@ const countingStorage = Effect.fn("countingStorage")(function* (directory: strin
     reads.count++;
     return conversation(id, readContext);
   };
-  return { storage, reads };
+  return { reads, storage };
 });
 
 const subagentCycle = Effect.fn("subagentCycle")(function* (
@@ -87,24 +89,24 @@ const subagentCycle = Effect.fn("subagentCycle")(function* (
       (tx) =>
         runPromise(
           Effect.gen(function* () {
-            const tool = yield* awaited(
+            const toolInner = yield* awaited(
               tx.createTask(
                 Hold,
                 { name: `tool${n}` },
                 { ownership: { kind: "task", taskId: parent } },
               ),
             );
-            const child = yield* awaited(
-              tx.createConversation({ ownership: { kind: "task", taskId: tool } }),
+            const childInner = yield* awaited(
+              tx.createConversation({ ownership: { kind: "task", taskId: toolInner } }),
             );
-            const inner = yield* awaited(
+            const innerInner = yield* awaited(
               tx.createTask(
                 Hold,
                 { name: `inner${n}` },
-                { ownership: { kind: "conversation" }, conversationId: child.id },
+                { conversationId: childInner.id, ownership: { kind: "conversation" } },
               ),
             );
-            return { tool, inner, child: child.id };
+            return { child: childInner.id, inner: innerInner, tool: toolInner };
           }),
         ),
       context,
@@ -158,7 +160,7 @@ const run = Effect.fn("run")(function* (cycles: number) {
     yield* release("parent");
     yield* awaited(harness.waitForTask(parent, context));
     yield* awaited(harness.close(context));
-    return { ms, sizes, heap: heapAfter - heapBefore, lateReads };
+    return { heap: heapAfter - heapBefore, lateReads, ms, sizes };
   }).pipe(Effect.ensuring(removeDir(directory)));
 });
 

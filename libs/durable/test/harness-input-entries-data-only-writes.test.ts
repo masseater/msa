@@ -5,36 +5,32 @@ import { Effect } from "effect";
 import { describe, expect, it } from "vite-plus/test";
 
 import { openNodeSqliteStorage } from "../src/storage/sqlite/node.ts";
-import {
-  inboxItems,
-  mention,
-  answer,
-  gated,
-  transcript,
-  requestLog,
-} from "./harness-input-entries-support.ts";
-import {
-  allEntries,
-  chatSetup,
-  openChat,
-  awaited,
+import harnessInputEntriesSupport from "./harness-input-entries-support.ts";
+import support from "./support.ts";
+
+const { answer, gated, inboxItems, mention, requestLog, transcript } = harnessInputEntriesSupport;
+const {
   addSection,
-  makeTempFile,
-  removeDir,
+  allEntries,
+  awaited,
+  chatSetup,
   context,
   deferred,
-} from "./support.ts";
+  makeTempFile,
+  openChat,
+  removeDir,
+} = support;
 
 const queuesDataOnly = Effect.gen(function* () {
   const setup = chatSetup();
   const first = gated(answer("first"));
   setup.faux.setResponses([first.step]);
   const { harness, root } = yield* openChat(new MemoryStorage(), setup);
-  const input = yield* awaited(root.submit({ type: "input", content: "a" }, context));
+  const input = yield* awaited(root.submit({ content: "a", type: "input" }, context));
   yield* awaited(first.reached);
   yield* awaited(root.reset(undefined, context));
   const chat = yield* awaited(
-    root.submit({ type: "write", entry: { kind: "chat.message", data: "hi" } }, context),
+    root.submit({ entry: { data: "hi", kind: "chat.message" }, type: "write" }, context),
   );
   expect((yield* awaited(chat.status(context))).status).toBe("queued");
   first.release();
@@ -48,7 +44,7 @@ const queuesDataOnly = Effect.gen(function* () {
     "chat.message",
   ]);
   const later = yield* awaited(
-    root.submit({ type: "write", entry: { kind: "chat.message", data: "again" } }, context),
+    root.submit({ entry: { data: "again", kind: "chat.message" }, type: "write" }, context),
   );
   expect((yield* awaited(later.status(context))).status).toBe("done");
   yield* awaited(harness.close(context));
@@ -84,12 +80,12 @@ const leavesRequestUnchanged = Effect.gen(function* () {
   ]);
   const { harness, root } = yield* openChat(new MemoryStorage(), setup);
   yield* awaited(
-    (yield* awaited(root.submit({ type: "input", content: "a" }, context))).wait(context),
+    (yield* awaited(root.submit({ content: "a", type: "input" }, context))).wait(context),
   );
-  const second = yield* awaited(root.submit({ type: "input", content: "b" }, context));
+  const second = yield* awaited(root.submit({ content: "b", type: "input" }, context));
   yield* awaited(rendering.promise);
   yield* awaited(
-    root.submit({ type: "write", entry: { kind: "chat.message", data: "hi" } }, context),
+    root.submit({ entry: { data: "hi", kind: "chat.message" }, type: "write" }, context),
   );
   render.resolve();
   yield* awaited(second.wait(context));
@@ -114,23 +110,23 @@ describe("data-only writes", () => {
 const appendsDataOnly = Effect.gen(function* () {
   const setup = chatSetup();
   const failing = gated(
-    fauxAssistantMessage([], { stopReason: "error", errorMessage: "invalid request" }),
+    fauxAssistantMessage([], { errorMessage: "invalid request", stopReason: "error" }),
   );
   setup.faux.setResponses([failing.step, answer("for f")]);
   const { harness, root } = yield* openChat(new MemoryStorage(), setup);
-  const input = yield* awaited(root.submit({ type: "input", content: "a" }, context));
+  const input = yield* awaited(root.submit({ content: "a", type: "input" }, context));
   yield* awaited(failing.reached);
   const f = yield* awaited(
-    root.submit({ type: "input", content: "f", entry: mention("f") }, context),
+    root.submit({ content: "f", entry: mention("f"), type: "input" }, context),
   );
   failing.release();
   expect(yield* awaited(input.wait(context))).toMatchObject({
-    status: "unanswered",
     reason: "model_error",
+    status: "unanswered",
   });
   yield* awaited(harness.waitForIdle(context));
   const note = yield* awaited(
-    root.submit({ type: "write", entry: { kind: "note", data: "n" } }, context),
+    root.submit({ entry: { data: "n", kind: "note" }, type: "write" }, context),
   );
   expect((yield* awaited(note.status(context))).status).toBe("done");
   yield* awaited(harness.waitForIdle(context));
@@ -138,7 +134,7 @@ const appendsDataOnly = Effect.gen(function* () {
   expect((yield* inboxItems(harness, root)).map((item) => item.id)).toEqual([f.id]);
   expect(yield* awaited(harness.snapshot(LiveDoc, root.id, context))).toEqual({});
   expect(setup.faux.state.callCount).toBe(1);
-  const g = yield* awaited(root.submit({ type: "input", content: "g" }, context));
+  const g = yield* awaited(root.submit({ content: "g", type: "input" }, context));
   yield* awaited(g.wait(context));
   expect(transcript(yield* allEntries(root)).filter(([kind]) => kind !== "msa.assistant")).toEqual([
     ["msa.user", "a"],
@@ -161,10 +157,10 @@ const keepsQueuedInput = Effect.gen(function* () {
     const first = gated(answer("first"));
     setup.faux.setResponses([first.step, answer("first again"), answer("for f")]);
     let opened = yield* openChat(yield* awaited(openNodeSqliteStorage(path)), setup);
-    yield* awaited(opened.root.submit({ type: "input", content: "a" }, context));
+    yield* awaited(opened.root.submit({ content: "a", type: "input" }, context));
     yield* awaited(first.reached);
     const f = (yield* awaited(
-      opened.root.submit({ type: "input", content: "f", entry: mention("f") }, context),
+      opened.root.submit({ content: "f", entry: mention("f"), type: "input" }, context),
     )).id;
     yield* awaited(opened.harness.close(context));
 
@@ -178,10 +174,10 @@ const keepsQueuedInput = Effect.gen(function* () {
       (yield* awaited(opened.harness.submission(f, context)))!.wait(context),
     );
     const placed = (yield* allEntries(opened.root)).find((entry) => entry.kind === "chat.mention")!;
-    expect(settled).toMatchObject({ status: "done", entry: placed.id });
+    expect(settled).toMatchObject({ entry: placed.id, status: "done" });
     expect(placed).toMatchObject({
       data: mention("f").data,
-      model: [{ role: "user", content: "f" }],
+      model: [{ content: "f", role: "user" }],
     });
     yield* awaited(opened.harness.close(context));
   }).pipe(Effect.ensuring(Effect.asVoid(Effect.suspend(() => removeDir(directory)))));
@@ -197,14 +193,14 @@ const appendsDataOnlyWrite = Effect.gen(function* () {
   const first = gated(answer("first"));
   setup.faux.setResponses([first.step, answer("second")]);
   const { harness, root } = yield* openChat(new MemoryStorage(), setup);
-  const input = yield* awaited(root.submit({ type: "input", content: "a" }, context));
+  const input = yield* awaited(root.submit({ content: "a", type: "input" }, context));
   yield* awaited(first.reached);
-  const followUp = yield* awaited(root.submit({ type: "input", content: "f" }, context));
+  const followUp = yield* awaited(root.submit({ content: "f", type: "input" }, context));
   const model = yield* awaited(
     root.submit(
       {
+        entry: { kind: "note", model: [{ content: "m", role: "user", timestamp: 0 }] },
         type: "write",
-        entry: { kind: "note", model: [{ role: "user", content: "m", timestamp: 0 }] },
       },
       context,
     ),
@@ -213,14 +209,14 @@ const appendsDataOnlyWrite = Effect.gen(function* () {
   const edit = yield* awaited(
     root.submit(
       {
+        entry: { edits: [{ action: "omit", target: target.id }], kind: "redact" },
         type: "write",
-        entry: { kind: "redact", edits: [{ target: target.id, action: "omit" }] },
       },
       context,
     ),
   );
   const note = yield* awaited(
-    root.submit({ type: "write", entry: { kind: "note", data: "n" } }, context),
+    root.submit({ entry: { data: "n", kind: "note" }, type: "write" }, context),
   );
   expect((yield* awaited(note.status(context))).status).toBe("done");
   expect((yield* inboxItems(harness, root)).map((item) => [item.id, item.mode])).toEqual([

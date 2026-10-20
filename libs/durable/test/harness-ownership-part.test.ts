@@ -2,20 +2,18 @@ import { type TaskId } from "@msa/durable";
 import { Effect } from "effect";
 import { afterEach, describe, expect, it } from "vite-plus/test";
 
-import { awaited } from "./effect-support.ts";
-import {
-  directories,
-  status,
-  waitUntil,
-  open,
-  gates,
-  Hold,
-  runs,
-  openHarness,
-} from "./harness-ownership-support.ts";
-import { removeDir } from "./platform-support.ts";
-import { context } from "./session-support.ts";
-import { settled } from "./task-support.ts";
+import effectSupport from "./effect-support.ts";
+import harnessOwnershipSupport from "./harness-ownership-support.ts";
+import platformSupport from "./platform-support.ts";
+import sessionSupport from "./session-support.ts";
+import taskSupport from "./task-support.ts";
+
+const { awaited } = effectSupport;
+const { Hold, directories, gates, open, openHarness, runs, status, waitUntil } =
+  harnessOwnershipSupport;
+const { removeDir } = platformSupport;
+const { context } = sessionSupport;
+const { settled } = taskSupport;
 
 afterEach(() =>
   Effect.runPromise(
@@ -59,7 +57,7 @@ const endedBridge = Effect.fn("endedBridge")(function* (depth: number) {
             const c = yield* awaited(
               tx.createConversation({ ownership: { kind: "task", taskId: owner } }),
             );
-            return { p, links, c: c.id };
+            return { c: c.id, links, p };
           }),
         ),
       context,
@@ -73,7 +71,7 @@ const endedBridge = Effect.fn("endedBridge")(function* (depth: number) {
       (tx) => tx.createTask(Hold, { name }, { ownership: { kind: "conversation" } }),
       context,
     );
-  return { harness, root, p: tree.p, create };
+  return { create, harness, p: tree.p, root };
 });
 
 describe("ownership", () => {
@@ -138,7 +136,7 @@ const reachesWorkBelowStep1 = Effect.gen(function* () {
               tx.createTask(
                 Hold,
                 { name: "x" },
-                { ownership: { kind: "conversation" }, conversationId: c.id },
+                { conversationId: c.id, ownership: { kind: "conversation" } },
               ),
             );
             const a = yield* awaited(
@@ -147,7 +145,7 @@ const reachesWorkBelowStep1 = Effect.gen(function* () {
             const c2 = yield* awaited(
               tx.createConversation({ ownership: { kind: "task", taskId: a } }),
             );
-            return { p, b, x, c2: c2.id };
+            return { b, c2: c2.id, p, x };
           }),
         ),
       context,
@@ -158,7 +156,7 @@ const reachesWorkBelowStep1 = Effect.gen(function* () {
   open("b", "completed");
   yield* awaited(harness.waitForTask(tree.b, context));
   const c2 = (yield* awaited(harness.conversation(tree.c2, context)))!;
-  return { harness, root, tree, c2 };
+  return { c2, harness, root, tree };
 });
 
 const reachesWorkBelow = Effect.gen(function* () {

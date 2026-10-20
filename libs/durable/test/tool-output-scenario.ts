@@ -1,38 +1,30 @@
 import { createModels, fauxAssistantMessage, fauxProvider, fauxText, fauxToolCall } from "@msa/ai";
-import { BACKGROUND_CONTEXT as context } from "@msa/chord/context";
-import { defineTool, LiveDoc, type Conversation } from "@msa/durable";
-import { createRegistry, Harness } from "@msa/durable/harness";
+import { type Conversation, LiveDoc, defineTool } from "@msa/durable";
+import { Harness, createRegistry } from "@msa/durable/harness";
 import { Effect } from "effect";
 import { Type } from "typebox";
 
 import { NodeExecutionEnv } from "../src/env/node.ts";
 import { createBashTool } from "../src/tools/index.ts";
-import { awaited, addTool, makeTempFile, removeDir, tempPath, type TempFile } from "./support.ts";
-import { type Backend, footprint, openStorage, timed } from "./tool-output-storage.ts";
+import support from "./support.ts";
+import type toolOutputScenarioTypes from "./tool-output-scenario.types.ts";
+import toolOutputStorage from "./tool-output-storage.ts";
 
-type Rate = "low" | "normal" | "high";
-
-export type Scenario =
-  | {
-      kind: "rate";
-      backend: Backend;
-      rate: Rate;
-      retain: "head" | "tail";
-      tools: number;
-      seconds?: number;
-    }
-  | { kind: "firehose"; backend: Backend; retain: "head" | "tail"; repetitive?: boolean }
-  | { kind: "cat"; backend: Backend };
+const { addTool, awaited, context, makeTempFile, removeDir, tempPath } = support;
+const { footprint, openStorage, timed } = toolOutputStorage;
 
 const RATE_SECONDS = 3;
-export const GIB = 1 << 30;
-export const LINE = "The quick brown fox jumps over the lazy dog. Unique identifier";
-export const BIG_FILE = tempPath("msa-durable-bench-1gib.txt");
+const GIB = 1 << 30;
+const LINE = "The quick brown fox jumps over the lazy dog. Unique identifier";
+const BIG_FILE = tempPath("msa-durable-bench-1gib.txt");
 
-const RATES: Record<Rate, { readonly lines: number; readonly pauseMs: number }> = {
+const RATES: Record<
+  toolOutputScenarioTypes.Rate,
+  { readonly lines: number; readonly pauseMs: number }
+> = {
+  high: { lines: 800, pauseMs: 0 },
   low: { lines: 1, pauseMs: 200 },
   normal: { lines: 25, pauseMs: 50 },
-  high: { lines: 800, pauseMs: 0 },
 };
 
 type Metrics = {
@@ -52,13 +44,13 @@ type Metrics = {
 const pause = (pauseMs: number): Effect.Effect<void> =>
   pauseMs === 0 ? Effect.yieldNow : Effect.sleep(pauseMs);
 
-function emitTool(scenario: Exclude<Scenario, { kind: "cat" }>, flags: { readonly stop: boolean }) {
+function emitTool(
+  scenario: Exclude<toolOutputScenarioTypes.Scenario, { kind: "cat" }>,
+  flags: { readonly stop: boolean },
+) {
   const rate = scenario.kind === "rate" ? RATES[scenario.rate] : RATES.high;
   return defineTool({
-    name: "emit",
     description: "",
-    parameters: Type.Object({}),
-    outputLimits: { retain: scenario.retain },
     execute: (_args, api, callContext) =>
       Effect.runPromise(
         Effect.gen(function* () {
@@ -88,10 +80,16 @@ function emitTool(scenario: Exclude<Scenario, { kind: "cat" }>, flags: { readonl
           return {};
         }),
       ),
+    name: "emit",
+    outputLimits: { retain: scenario.retain },
+    parameters: Type.Object({}),
   });
 }
 
-function scenarioModels(scenario: Scenario, flags: { readonly stop: boolean }) {
+function scenarioModels(
+  scenario: toolOutputScenarioTypes.Scenario,
+  flags: { readonly stop: boolean },
+) {
   const faux = fauxProvider();
   const models = createModels();
   models.setProvider(faux.provider);
@@ -138,7 +136,7 @@ type Opened = {
 };
 
 const finishRate = Effect.fn("finishRate")(function* (
-  scenario: Scenario & { kind: "rate" },
+  scenario: toolOutputScenarioTypes.Scenario & { kind: "rate" },
   flags: { stop: boolean },
   { path, reopen, observe }: Opened,
   {
@@ -172,8 +170,8 @@ const finishRate = Effect.fn("finishRate")(function* (
 });
 
 const measureScenario = Effect.fn("measureScenario")(function* (
-  scenario: Scenario,
-  { directory, path }: TempFile,
+  scenario: toolOutputScenarioTypes.Scenario,
+  { directory, path }: Effect.Success<ReturnType<typeof support.makeTempFile>>,
 ) {
   const runPromise = Effect.runPromiseWith(yield* Effect.context<never>());
 
@@ -188,7 +186,7 @@ const measureScenario = Effect.fn("measureScenario")(function* (
         return yield* awaited(
           Harness.open(
             timed(yield* awaited(openStorage(scenario.backend, path)), latencies),
-            { models, registry, env },
+            { env, models, registry },
             context,
           ),
         );
@@ -197,19 +195,19 @@ const measureScenario = Effect.fn("measureScenario")(function* (
   let harness = yield* awaited(reopen());
   const root = yield* awaited(
     harness.root(context, {
-      agent: { model: { provider: "faux", modelId: "faux-1" } },
+      agent: { model: { modelId: "faux-1", provider: "faux" } },
     }),
   );
   const { counts, observe } = liveObserver();
   observe(harness);
   const started = performance.now();
-  const submission = yield* awaited(root.submit({ type: "input", content: "go" }, context));
+  const submission = yield* awaited(root.submit({ content: "go", type: "input" }, context));
   const metrics: Partial<Metrics> = {};
   if (scenario.kind === "rate") {
     harness = yield* finishRate(
       scenario,
       flags,
-      { path, reopen, observe },
+      { observe, path, reopen },
       { harness, root, submission },
       metrics,
     );
@@ -219,7 +217,7 @@ const measureScenario = Effect.fn("measureScenario")(function* (
   const ms = Math.round(performance.now() - started);
   if (scenario.backend !== "memory") metrics.finalKiB = yield* footprint(scenario.backend, path);
   yield* awaited(harness.close(context));
-  return summarize({ ms, counts, latencies, metrics });
+  return summarize({ counts, latencies, metrics, ms });
 });
 
 function summarize({
@@ -237,20 +235,22 @@ function summarize({
   const gc = (globalThis as { gc?: () => void }).gc;
   gc?.();
   return {
-    ms,
-    liveCommits: counts.liveCommits,
-    liveOpKiB: Math.round(counts.liveOpBytes / 1024),
-    outputSets: counts.outputSets,
     commitP50Ms: round(latencies[Math.floor(latencies.length * 0.5)] ?? 0),
     commitP99Ms: round(latencies[Math.floor(latencies.length * 0.99)] ?? 0),
+    liveCommits: counts.liveCommits,
+    liveOpKiB: Math.round(counts.liveOpBytes / 1024),
+    ms,
+    outputSets: counts.outputSets,
     ...metrics,
-    peakRssMiB: Math.round(process.resourceUsage().maxRSS / 1024),
     heapAfterGcMiB:
       gc === undefined ? undefined : Math.round(process.memoryUsage().heapUsed / 2 ** 20),
+    peakRssMiB: Math.round(process.resourceUsage().maxRSS / 1024),
   };
 }
 
-export const runScenario = Effect.fn("runScenario")(function* (scenario: Scenario) {
+const runScenario = Effect.fn("runScenario")(function* (
+  scenario: toolOutputScenarioTypes.Scenario,
+) {
   const name = scenario.backend === "sqlite" ? "session.sqlite" : "session";
   const temp = yield* makeTempFile("msa-durable-tool-bench-", name);
   const { directory } = temp;
@@ -268,3 +268,12 @@ function lines(prefix: string, first: number, count: number): string {
 function round(value: number): number {
   return Math.round(value * 100) / 100;
 }
+
+const toolOutputScenario = {
+  BIG_FILE,
+  GIB,
+  LINE,
+  runScenario,
+};
+
+export default toolOutputScenario;

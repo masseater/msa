@@ -1,13 +1,16 @@
 import { Type } from "@msa/ai";
-import { defineTool, type NestedToolExecutionResult } from "@msa/durable";
+import { type NestedToolExecutionResult, defineTool } from "@msa/durable";
 import { MemoryStorage } from "@msa/durable/storage/memory";
 import { Effect } from "effect";
 import { describe, expect, it } from "vite-plus/test";
 
 import { NodeExecutionEnv } from "../src/env/node.ts";
 import { createBashTool } from "../src/tools/index.ts";
-import { DONE, call, codes } from "./harness-structured-output-support.ts";
-import { chatSetup, openChat, awaited, addTool, withTempDir, context } from "./support.ts";
+import harnessStructuredOutputSupport from "./harness-structured-output-support.ts";
+import support from "./support.ts";
+
+const { DONE, call, codes } = harnessStructuredOutputSupport;
+const { addTool, awaited, chatSetup, context, openChat, withTempDir } = support;
 
 const givesCallersBash = Effect.gen(function* () {
   const runPromise = Effect.runPromiseWith(yield* Effect.context<never>());
@@ -20,9 +23,7 @@ const givesCallersBash = Effect.gen(function* () {
       addTool(
         setup.registry,
         defineTool({
-          name: "probe",
           description: "probe",
-          parameters: Type.Object({}),
           execute: (_args, api, callContext) =>
             runPromise(
               Effect.gen(function* () {
@@ -37,22 +38,24 @@ const givesCallersBash = Effect.gen(function* () {
                 return {};
               }),
             ),
+          name: "probe",
+          parameters: Type.Object({}),
         }),
       );
       setup.faux.setResponses([call("probe"), DONE]);
       const env = new NodeExecutionEnv({ cwd: directory });
       const { harness, root } = yield* openChat(new MemoryStorage(), setup, { env });
       yield* awaited(
-        (yield* awaited(root.submit({ type: "input", content: "go" }, context))).wait(context),
+        (yield* awaited(root.submit({ content: "go", type: "input" }, context))).wait(context),
       );
       yield* awaited(harness.close(context));
       expect(received[0]).toMatchObject({
         isError: false,
-        structuredOutput: { output: "ok", truncated: false, exitCode: 0 },
+        structuredOutput: { exitCode: 0, output: "ok", truncated: false },
       });
       expect(received[1]).toMatchObject({
         isError: true,
-        structuredOutput: { output: "bad", truncated: false, exitCode: 4 },
+        structuredOutput: { exitCode: 4, output: "bad", truncated: false },
       });
       expect(codes(received[1]!)).toEqual(["exit_code"]);
     }),

@@ -7,18 +7,22 @@ import { afterEach, describe, expect, it } from "vite-plus/test";
 import { openNodeSqliteStorage } from "../src/storage/sqlite/node.ts";
 import type { DocumentCreate, DocumentId, EntryId, TaskId } from "../src/types.ts";
 import { ROOT_CONVERSATION_ID } from "../src/types.ts";
-import { awaited } from "./effect-support.ts";
-import { removeDir } from "./platform-support.ts";
-import {
-  pendingTask,
-  entry,
-  createRoot,
+import effectSupport from "./effect-support.ts";
+import platformSupport from "./platform-support.ts";
+import sqliteStorageSupport from "./sqlite-storage-support.ts";
+
+const { awaited } = effectSupport;
+const { removeDir } = platformSupport;
+const {
   context,
-  tempDirectories,
-  openStorages,
+  createRoot,
   createSqliteStorage,
+  entry,
+  openStorages,
+  pendingTask,
   scalar,
-} from "./sqlite-storage-support.ts";
+  tempDirectories,
+} = sqliteStorageSupport;
 
 afterEach(() =>
   Effect.runPromise(
@@ -132,25 +136,25 @@ const reconstructsRecentAncientStep1 = Effect.gen(function* () {
   yield* awaited(createRoot(storage));
   const id = yield* awaited(storage.mintId<DocumentId>());
   const record = {
+    fork: "asOf",
+    history: "rewindable",
     id,
     kind: "history",
-    scope: { kind: "conversation", conversationId: ROOT_CONVERSATION_ID },
-    history: "rewindable",
-    fork: "asOf",
+    scope: { conversationId: ROOT_CONVERSATION_ID, kind: "conversation" },
   } satisfies DocumentCreate;
   const createdAt = yield* awaited(
     storage.commit(
       [
         {
-          type: "document.create",
+          content: { kind: "base", value: { count: 0 }, version: 1 },
           record,
-          content: { kind: "base", version: 1, value: { count: 0 } },
+          type: "document.create",
         },
       ],
       context,
     ),
   );
-  return { storage, path, id, createdAt };
+  return { createdAt, id, path, storage };
 });
 
 const reconstructsRecentAncient = Effect.gen(function* () {
@@ -162,12 +166,12 @@ const reconstructsRecentAncient = Effect.gen(function* () {
       storage.commit(
         [
           {
-            type: "document.change",
-            id,
             content:
               count === 20
-                ? { kind: "base", version: 1, value: { count } }
-                : { kind: "delta", version: 1, ops: [["s", ["count"], count]] },
+                ? { kind: "base", value: { count }, version: 1 }
+                : { kind: "delta", ops: [["s", ["count"], count]], version: 1 },
+            id,
+            type: "document.change",
           },
         ],
         context,

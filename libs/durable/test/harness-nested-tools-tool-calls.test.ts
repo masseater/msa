@@ -1,37 +1,23 @@
 import { Type, type Usage } from "@msa/ai";
 import {
   type AgentEvent,
-  defineTool,
   LiveDoc,
   type NestedToolExecutionResult,
   UsageDoc,
+  defineTool,
 } from "@msa/durable";
 import { watchEvents } from "@msa/durable/harness";
 import { MemoryStorage } from "@msa/durable/storage/memory";
 import { Effect } from "effect";
 import { afterEach, describe, expect, it } from "vite-plus/test";
 
-import {
-  directories,
-  results,
-  toolTasks,
-  runOnce,
-  text,
-  DONE,
-  call,
-  tool,
-} from "./harness-nested-tools-support.ts";
-import {
-  allEntries,
-  chatSetup,
-  openChat,
-  awaited,
-  addTool,
-  removeDir,
-  context,
-  aborted,
-  deferred,
-} from "./support.ts";
+import harnessNestedToolsSupport from "./harness-nested-tools-support.ts";
+import support from "./support.ts";
+
+const { DONE, call, directories, results, runOnce, text, tool, toolTasks } =
+  harnessNestedToolsSupport;
+const { aborted, addTool, allEntries, awaited, chatSetup, context, deferred, openChat, removeDir } =
+  support;
 
 afterEach(() =>
   Effect.runPromise(
@@ -67,7 +53,7 @@ function batchLeavingCallRunning() {
           left.abandoned = api.executeTool("hang", {}, callContext);
           left.abandoned.catch(() => {});
           yield* awaited(running.promise);
-          return { output: [{ type: "text", text: "returned early" }] };
+          return { output: [{ text: "returned early", type: "text" }] };
         }),
       ),
     ),
@@ -84,13 +70,13 @@ const matchesReusedKey = Effect.gen(function* () {
   addTool(
     setup.registry,
     defineTool({
-      name: "pair",
       description: "pair",
-      parameters: Type.Object({ a: Type.String(), b: Type.String() }),
       execute: (args) => {
         runs++;
-        return Promise.resolve({ output: [{ type: "text", text: `${args.a}${args.b}` }] });
+        return Promise.resolve({ output: [{ text: `${args.a}${args.b}`, type: "text" }] });
       },
+      name: "pair",
+      parameters: Type.Object({ a: Type.String(), b: Type.String() }),
     }),
   );
   const nested: NestedToolExecutionResult[] = [];
@@ -103,7 +89,7 @@ const matchesReusedKey = Effect.gen(function* () {
             yield* awaited(api.executeTool("pair", { a: "x", b: "y" }, callContext, { key: "k" })),
           );
           nested.push(
-            yield* awaited(api.executeTool("pair", { b: "y", a: "x" }, callContext, { key: "k" })),
+            yield* awaited(api.executeTool("pair", { a: "x", b: "y" }, callContext, { key: "k" })),
           );
           return {};
         }),
@@ -132,7 +118,7 @@ const abortsNestedCalls = Effect.gen(function* () {
     return Promise.resolve();
   });
   const settled = yield* awaited(
-    (yield* awaited(root.submit({ type: "input", content: "go" }, context))).wait(context),
+    (yield* awaited(root.submit({ content: "go", type: "input" }, context))).wait(context),
   );
   expect(settled.status).toBe("done");
   yield* awaited(harness.waitForIdle(context));
@@ -141,13 +127,13 @@ const abortsNestedCalls = Effect.gen(function* () {
   expect(text(result)).toBe("returned early");
   const [, child] = yield* toolTasks(harness);
   expect(child!.state).toMatchObject({
+    outcome: { result: { kind: "nested" }, status: "aborted" },
     status: "terminal",
-    outcome: { status: "aborted", result: { kind: "nested" } },
   });
   const childEnd = ends.find(
     (event) => event.type === "tool_execution_end" && event.toolCallId === "c1/1",
   );
-  expect(childEnd).toMatchObject({ result: { isError: true, details: { step: 1 } } });
+  expect(childEnd).toMatchObject({ result: { details: { step: 1 }, isError: true } });
   expect((childEnd as { result?: NestedToolExecutionResult }).result).not.toHaveProperty(
     "structuredOutput",
   );
@@ -174,12 +160,12 @@ const recordsNestedCall = Effect.gen(function* () {
 
   const setup = chatSetup();
   const usage: Usage = {
-    input: 1,
-    output: 2,
     cacheRead: 0,
     cacheWrite: 0,
+    cost: { cacheRead: 0, cacheWrite: 0, input: 0.1, output: 0.2, total: 0.3 },
+    input: 1,
+    output: 2,
     totalTokens: 3,
-    cost: { input: 0.1, output: 0.2, cacheRead: 0, cacheWrite: 0, total: 0.3 },
   };
   addTool(
     setup.registry,

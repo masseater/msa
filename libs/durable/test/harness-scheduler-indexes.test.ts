@@ -4,20 +4,18 @@ import { Effect } from "effect";
 import { afterEach, describe, expect, it } from "vite-plus/test";
 
 import { openNodeSqliteStorage } from "../src/storage/sqlite/node.ts";
-import { awaited } from "./effect-support.ts";
-import {
-  runtimes,
-  owned,
-  state,
-  directories,
-  sqlitePath,
-  gates,
-  gate,
-  Hold,
-} from "./harness-scheduler-indexes-support.ts";
-import { removeDir } from "./platform-support.ts";
-import { context } from "./session-support.ts";
-import { deferred, eventually, openTasks, settled } from "./task-support.ts";
+import effectSupport from "./effect-support.ts";
+import harnessSchedulerIndexesSupport from "./harness-scheduler-indexes-support.ts";
+import platformSupport from "./platform-support.ts";
+import sessionSupport from "./session-support.ts";
+import taskSupport from "./task-support.ts";
+
+const { awaited } = effectSupport;
+const { Hold, directories, gate, gates, owned, runtimes, sqlitePath, state } =
+  harnessSchedulerIndexesSupport;
+const { removeDir } = platformSupport;
+const { context } = sessionSupport;
+const { deferred, eventually, openTasks, settled } = taskSupport;
 
 afterEach(() =>
   Effect.runPromise(
@@ -60,13 +58,13 @@ const cancellingOwnersStoreStep1 = Effect.fn("cancellingOwnersStoreStep1")(funct
                 { ownership: { kind: "task", taskId: middle } },
               ),
             );
-            return { top, middle, leaf };
+            return { leaf, middle, top };
           }),
         ),
       context,
     ),
   );
-  return { runPromise, path, session, ids };
+  return { ids, path, runPromise, session };
 });
 
 const cancellingOwnersStore = Effect.fn("cancellingOwnersStore")(function* () {
@@ -80,14 +78,14 @@ const cancellingOwnersStore = Effect.fn("cancellingOwnersStore")(function* () {
             const middle = (yield* awaited(tx.task(ids.middle)))!;
             const set = (tx as unknown as { setTask(value: unknown): void }).setTask.bind(tx);
             set({ ...top, abortRequested: true });
-            set({ ...middle, abortRequested: true, abortReason: "restart" });
+            set({ ...middle, abortReason: "restart", abortRequested: true });
           }),
         ),
       context,
     ),
   );
   yield* awaited(session.close(context));
-  return { path, ids };
+  return { ids, path };
 });
 
 const takesCascadeReason = Effect.gen(function* () {
@@ -140,27 +138,31 @@ const finalizesChainHeldStep1 = Effect.gen(function* () {
       (tx) =>
         runPromise(
           Effect.gen(function* () {
-            const top = yield* awaited(
+            const topInner = yield* awaited(
               tx.createTask(Hold, { name: "top" }, { ownership: { kind: "conversation" } }),
             );
-            const middle = yield* awaited(
-              tx.createTask(Hold, { name: "middle" }, { ownership: { kind: "task", taskId: top } }),
+            const middleInner = yield* awaited(
+              tx.createTask(
+                Hold,
+                { name: "middle" },
+                { ownership: { kind: "task", taskId: topInner } },
+              ),
             );
-            const leaf = yield* awaited(
+            const leafInner = yield* awaited(
               tx.createTask(
                 Hold,
                 { name: "leaf" },
-                { ownership: { kind: "task", taskId: middle } },
+                { ownership: { kind: "task", taskId: middleInner } },
               ),
             );
-            return { top, middle, leaf };
+            return { leaf: leafInner, middle: middleInner, top: topInner };
           }),
         ),
       context,
     ),
   );
   gate("top").resolve();
-  return { runPromise, endedIn, harness, top, middle, leaf };
+  return { endedIn, harness, leaf, middle, runPromise, top };
 });
 
 const finalizesChainHeld = Effect.gen(function* () {
@@ -206,13 +208,13 @@ const keepsScopeBusyStep1 = Effect.gen(function* () {
       (tx) =>
         runPromise(
           Effect.gen(function* () {
-            const owner = yield* awaited(
+            const ownerInner = yield* awaited(
               tx.createTask(Hold, { name: "owner" }, { ownership: { kind: "conversation" } }),
             );
-            const child = yield* awaited(
-              tx.createConversation({ ownership: { kind: "task", taskId: owner } }),
+            const childInner = yield* awaited(
+              tx.createConversation({ ownership: { kind: "task", taskId: ownerInner } }),
             );
-            return { owner, child: child.id };
+            return { child: childInner.id, owner: ownerInner };
           }),
         ),
       context,
@@ -232,7 +234,7 @@ const keepsScopeBusyStep1 = Effect.gen(function* () {
   const storage = yield* awaited(openNodeSqliteStorage(path));
   const read = storage.conversation.bind(storage);
   const held = deferred<void>();
-  return { runPromise, child, inner, storage, read, held };
+  return { child, held, inner, read, runPromise, storage };
 });
 
 const keepsScopeBusy = Effect.gen(function* () {

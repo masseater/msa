@@ -2,23 +2,26 @@ import { defineDoc } from "@msa/durable";
 import { Effect } from "effect";
 import { describe, expect, it } from "vite-plus/test";
 
-import { awaited } from "./effect-support.ts";
-import { documentWrites } from "./session-checkpoints-migrations-support.ts";
-import { context, documentChanges, flush, openTestSession } from "./session-support.ts";
+import effectSupport from "./effect-support.ts";
+import documentWrites from "./session-checkpoints-migrations-support.ts";
+import sessionSupport from "./session-support.ts";
+
+const { awaited } = effectSupport;
+const { context, documentChanges, flush, openTestSession } = sessionSupport;
 
 const persistsRepeatedFalse = Effect.gen(function* () {
   const runPromise = Effect.runPromiseWith(yield* Effect.context<never>());
 
   let calls = 0;
   const Doc = defineDoc<{ values: number[] }>({
-    kind: "checkpoint.tail",
-    version: 1,
-    scope: "session",
-    initial: () => ({ values: [] }),
     checkpointWhen: () => {
       calls++;
       return false;
     },
+    initial: () => ({ values: [] }),
+    kind: "checkpoint.tail",
+    scope: "session",
+    version: 1,
   });
   const { session, storage } = openTestSession();
   yield* awaited(session.commit((tx) => tx.doc(Doc).then(() => undefined), context));
@@ -56,11 +59,11 @@ const keepsPreparedRoot = Effect.gen(function* () {
   const initial: Record<string, number> = {};
   for (let index = 0; index < 4_100; index++) initial[`field${index}`] = 0;
   const Doc = defineDoc<Record<string, number>>({
-    kind: "checkpoint.root-replacement",
-    version: 1,
-    scope: "session",
-    initial: () => initial,
     checkpointWhen: () => false,
+    initial: () => initial,
+    kind: "checkpoint.root-replacement",
+    scope: "session",
+    version: 1,
   });
   const { session, storage } = openTestSession();
   yield* awaited(session.commit((tx) => tx.doc(Doc).then(() => undefined), context));
@@ -97,14 +100,14 @@ const usesOrdinaryCheckpoint = Effect.gen(function* () {
 
   let calls = 0;
   const Doc = defineDoc<{ count: number }>({
-    kind: "checkpoint.retire",
-    version: 1,
-    scope: "session",
-    initial: () => ({ count: 0 }),
     checkpointWhen: () => {
       calls++;
       return true;
     },
+    initial: () => ({ count: 0 }),
+    kind: "checkpoint.retire",
+    scope: "session",
+    version: 1,
   });
   const { session, storage } = openTestSession();
   yield* awaited(session.commit((tx) => tx.doc(Doc).then(() => undefined), context));
@@ -123,8 +126,8 @@ const usesOrdinaryCheckpoint = Effect.gen(function* () {
   expect(calls).toBe(1);
   expect(documentWrites(storage.commits.at(-1)!)).toEqual([
     expect.objectContaining({
-      type: "document.change",
       content: expect.objectContaining({ kind: "base" }),
+      type: "document.change",
     }),
     expect.objectContaining({ type: "document.retire" }),
   ]);
@@ -137,27 +140,27 @@ describe("Session document checkpoints", () => {
 
 const migratedBaseSession = Effect.fn("migratedBaseSession")(function* () {
   const Old = defineDoc<{ count: number }>({
-    kind: "migration.transition",
-    version: 1,
-    scope: "session",
     initial: () => ({ count: 4 }),
+    kind: "migration.transition",
+    scope: "session",
+    version: 1,
   });
   const calls: { checkpoints: number } = { checkpoints: 0 };
   const Current = defineDoc<{ count: number }>({
-    kind: "migration.transition",
-    version: 3,
-    scope: "session",
-    initial: () => ({ count: 0 }),
-    migrate: (value, fromVersion) => ({ count: (value["count"] as number) + fromVersion - 1 }),
     checkpointWhen: () => {
       calls.checkpoints++;
       return false;
     },
+    initial: () => ({ count: 0 }),
+    kind: "migration.transition",
+    migrate: (value, fromVersion) => ({ count: (value["count"] as number) + fromVersion - 1 }),
+    scope: "session",
+    version: 3,
   });
   const { session, storage, publications } = openTestSession();
   yield* awaited(session.commit((tx) => tx.doc(Old).then(() => undefined), context));
   yield* awaited(session.unloadDocuments());
-  return { Old, calls, Current, session, storage, publications };
+  return { Current, Old, calls, publications, session, storage };
 });
 
 const watchedMigratedBase = Effect.fn("watchedMigratedBase")(function* () {
@@ -165,34 +168,34 @@ const watchedMigratedBase = Effect.fn("watchedMigratedBase")(function* () {
   const watch = (yield* awaited(session.watchDoc(Old, context)))!;
   const frames: unknown[] = [];
   watch.start((value, ops) => {
-    frames.push({ value, ops });
+    frames.push({ ops, value });
 
     return Promise.resolve();
   });
-  return { calls, Current, session, storage, publications, watch, frames };
+  return { Current, calls, frames, publications, session, storage, watch };
 });
 
 const migratesReadOnly = Effect.gen(function* () {
   type CurrentValue = { count: number; labels: string[] };
   const Old = defineDoc<{ count: number }>({
-    kind: "migration.read-only",
-    version: 1,
-    scope: "session",
     initial: () => ({ count: 2 }),
+    kind: "migration.read-only",
+    scope: "session",
+    version: 1,
   });
   let calls = 0;
   let retained: CurrentValue | undefined;
   const Current = defineDoc<CurrentValue>({
-    kind: "migration.read-only",
-    version: 3,
-    scope: "session",
     initial: () => ({ count: 0, labels: [] }),
+    kind: "migration.read-only",
     migrate: (value, fromVersion) => {
       expect(fromVersion).toBe(1);
       calls++;
       retained = { count: value["count"] as number, labels: ["migrated"] };
       return retained;
     },
+    scope: "session",
+    version: 3,
   });
   const { session, storage } = openTestSession();
   yield* awaited(session.commit((tx) => tx.doc(Old).then(() => undefined), context));
@@ -238,14 +241,14 @@ const writesRequiredBase = Effect.gen(function* () {
   yield* awaited(session.commit((tx) => tx.doc(Current).then(() => undefined), context));
   yield* flush;
   expect(storage.commits.at(-1)![0]).toMatchObject({
+    content: { kind: "base", value: { count: 4 }, version: 3 },
     type: "document.change",
-    content: { kind: "base", version: 3, value: { count: 4 } },
   });
   expect(calls.checkpoints).toBe(0);
   expect(documentChanges(publications.at(-1)!)).toMatchObject([
-    { version: 3, value: { count: 4 }, ops: [] },
+    { ops: [], value: { count: 4 }, version: 3 },
   ]);
-  expect(frames).toEqual([{ value: { count: 4 }, ops: [["r", { count: 4 }]] }]);
+  expect(frames).toEqual([{ ops: [["r", { count: 4 }]], value: { count: 4 } }]);
   expect(currentFrames).toEqual([]);
   yield* awaited(watch.stop());
   yield* awaited(current.stop());
@@ -263,8 +266,8 @@ const writesRequiredBase = Effect.gen(function* () {
     ),
   );
   expect(storage.commits.at(-1)![0]).toMatchObject({
-    type: "document.change",
     content: { kind: "delta", version: 3 },
+    type: "document.change",
   });
   expect(calls.checkpoints).toBe(1);
   yield* awaited(session.unloadDocuments());

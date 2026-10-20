@@ -3,21 +3,20 @@ import { withCancel } from "@msa/chord/context";
 import { Effect } from "effect";
 import { describe, expect, it } from "vite-plus/test";
 
-import { awaited } from "./effect-support.ts";
-import { context, flush } from "./session-support.ts";
-import {
-  StateDoc,
-  createState,
-  deferred,
-  type State,
-  writeState,
-} from "./session-watches-support.ts";
+import effectSupport from "./effect-support.ts";
+import sessionSupport from "./session-support.ts";
+import sessionWatchesSupport from "./session-watches-support.ts";
+import type sessionWatchesSupportTypes from "./session-watches-support.types.ts";
+
+const { awaited } = effectSupport;
+const { context, flush } = sessionSupport;
+const { StateDoc, createState, deferred, writeState } = sessionWatchesSupport;
 
 const keepsEarlierImmutable = Effect.gen(function* () {
   const { session } = yield* createState();
   const watch = (yield* awaited(session.watchDoc(StateDoc, context)))!;
   const initial = watch.value;
-  let delivered: Readonly<State> | null | undefined;
+  let delivered: Readonly<sessionWatchesSupportTypes.State> | null | undefined;
   watch.start((value) => {
     delivered = value;
 
@@ -39,7 +38,7 @@ const deliversRetirementDoes = Effect.gen(function* () {
 
   const { session } = yield* createState();
   const oldWatch = (yield* awaited(session.watchDoc(StateDoc, context)))!;
-  const values: Array<Readonly<State> | null> = [];
+  const values: Array<Readonly<sessionWatchesSupportTypes.State> | null> = [];
   oldWatch.start((value) => {
     values.push(value);
 

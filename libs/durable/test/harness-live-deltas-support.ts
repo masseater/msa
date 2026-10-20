@@ -1,23 +1,26 @@
-import { fauxAssistantMessage, fauxText, fauxToolCall, Type } from "@msa/ai";
-import type { Op } from "@msa/chord/delta";
+import { Type, fauxAssistantMessage, fauxText, fauxToolCall } from "@msa/ai";
 import {
-  defineTool,
   type Harness,
   LiveDoc,
   type LiveState,
   type ToolExecutionApi,
   type ToolRegistration,
+  defineTool,
 } from "@msa/durable";
 import { MemoryStorage } from "@msa/durable/storage/memory";
 import { Effect } from "effect";
 import { dual } from "effect/Function";
 
-import { chatSetup, openChat, waitFor } from "./chat-support.ts";
-import { awaited } from "./effect-support.ts";
-import { addTool } from "./harness-support.ts";
-import { context, documentChanges } from "./session-support.ts";
+import chatSupport from "./chat-support.ts";
+import effectSupport from "./effect-support.ts";
+import type harnessLiveDeltasSupportTypes from "./harness-live-deltas-support.types.ts";
+import harnessSupport from "./harness-support.ts";
+import sessionSupport from "./session-support.ts";
 
-export type Action = (api: ToolExecutionApi) => void | Promise<void>;
+const { chatSetup, openChat, waitFor } = chatSupport;
+const { awaited } = effectSupport;
+const { addTool } = harnessSupport;
+const { context, documentChanges } = sessionSupport;
 
 function drivenToolImpl(
   outputLimits: NonNullable<ToolRegistration["outputLimits"]>,
@@ -25,10 +28,7 @@ function drivenToolImpl(
   waker: { wake?: () => void },
 ) {
   return defineTool({
-    name: "drive",
     description: "Driven by the test",
-    parameters: Type.Object({}),
-    outputLimits,
     execute: (_args, api, callContext) => {
       const next = (): Promise<Record<string, never>> =>
         Effect.runPromise(
@@ -48,10 +48,13 @@ function drivenToolImpl(
         );
       return next();
     },
+    name: "drive",
+    outputLimits,
+    parameters: Type.Object({}),
   });
 }
 
-export const drivenTool: {
+const drivenTool: {
   (
     actions: ((api: ToolExecutionApi) => Promise<boolean>)[],
     waker: { wake?: () => void },
@@ -79,13 +82,13 @@ const driveStep1 = Effect.fn("driveStep1")(function* (
     fauxAssistantMessage([fauxText("done")]),
   ]);
   const { harness, root } = yield* openChat(new MemoryStorage(), setup);
-  const commits: Op[][] = [];
+  const commits: harnessLiveDeltasSupportTypes.Op[][] = [];
   harness.subscribeCommits((publication) => {
     for (const change of documentChanges(publication)) {
       if (change.record.kind === "msa.live" && change.ops.length > 0) commits.push([...change.ops]);
     }
   });
-  const submission = yield* awaited(root.submit({ type: "input", content: "go" }, context));
+  const submission = yield* awaited(root.submit({ content: "go", type: "input" }, context));
   yield* waitFor(
     Effect.gen(function* () {
       return (yield* awaited(live(harness)))?.tools?.[0]?.status === "running";
@@ -95,24 +98,36 @@ const driveStep1 = Effect.fn("driveStep1")(function* (
     actions.push(action);
     waker.wake?.();
   };
-  return { runPromise, harness, commits, submission, push };
+  return { commits, harness, push, runPromise, submission };
 });
 
-export const drive = Effect.fn("drive")(function* (
+const drive = Effect.fn("drive")(function* (
   outputLimits: NonNullable<ToolRegistration["outputLimits"]> = {},
 ) {
   const { runPromise, harness, commits, submission, push } = yield* driveStep1(outputLimits);
   return {
-    harness,
     commits,
-    step(action: Action): Promise<readonly Op[]> {
+    finish(): Promise<readonly harnessLiveDeltasSupportTypes.Op[][]> {
       return runPromise(
         Effect.gen(function* () {
-          const runPromise = Effect.runPromiseWith(yield* Effect.context<never>());
+          const before = commits.length;
+          push(() => Promise.resolve(false));
+          yield* awaited(submission.wait(context));
+          return commits.slice(before);
+        }),
+      );
+    },
+    harness,
+    step(
+      action: harnessLiveDeltasSupportTypes.Action,
+    ): Promise<readonly harnessLiveDeltasSupportTypes.Op[]> {
+      return runPromise(
+        Effect.gen(function* () {
+          const runNested = Effect.runPromiseWith(yield* Effect.context<never>());
 
           const before = commits.length;
           push((api) =>
-            runPromise(
+            runNested(
               Effect.gen(function* () {
                 yield* awaited(action(api));
                 return true;
@@ -124,21 +139,20 @@ export const drive = Effect.fn("drive")(function* (
         }),
       );
     },
-    finish(): Promise<readonly Op[][]> {
-      return runPromise(
-        Effect.gen(function* () {
-          const before = commits.length;
-          push(() => Promise.resolve(false));
-          yield* awaited(submission.wait(context));
-          return commits.slice(before);
-        }),
-      );
-    },
   };
 });
 
-export function live(harness: Harness): Promise<Readonly<LiveState> | undefined> {
+function live(harness: Harness): Promise<Readonly<LiveState> | undefined> {
   return harness.snapshot(LiveDoc, 1 as never, context);
 }
 
-export const OUTPUT = ["tools", 0, "output"];
+const OUTPUT = ["tools", 0, "output"];
+
+const harnessLiveDeltasSupport = {
+  OUTPUT,
+  drive,
+  drivenTool,
+  live,
+};
+
+export default harnessLiveDeltasSupport;

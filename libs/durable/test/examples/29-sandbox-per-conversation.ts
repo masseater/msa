@@ -2,30 +2,32 @@ import * as NodeRuntime from "@effect/platform-node/NodeRuntime";
 import { createModels, fauxAssistantMessage, fauxProvider, fauxToolCall } from "@msa/ai";
 import { BACKGROUND_CONTEXT } from "@msa/chord/context";
 import { defineDoc } from "@msa/durable";
-import { createRegistry, Harness } from "@msa/durable/harness";
+import { Harness, createRegistry } from "@msa/durable/harness";
 import { MemoryStorage } from "@msa/durable/storage/memory";
 import { Console, Effect } from "effect";
 
 import { NodeExecutionEnv } from "../../src/env/node.ts";
 import { CodingTools } from "../../src/tools/index.ts";
-import { awaited, joinPath, makeTempDir, readText, removeDir } from "../support.ts";
+import support from "../support.ts";
+
+const { awaited, joinPath, makeTempDir, readText, removeDir } = support;
 
 const context = BACKGROUND_CONTEXT;
 
 const Sandbox = defineDoc<{ path?: string }>({
-  kind: "app.sandbox",
-  version: 1,
-  scope: "conversation",
-  history: "latest",
   fork: "initial",
+  history: "latest",
   initial: () => ({}),
+  kind: "app.sandbox",
+  scope: "conversation",
+  version: 1,
 });
 
 const faux = fauxProvider();
 const models = createModels();
 models.setProvider(faux.provider);
 const note = (text: string) =>
-  fauxAssistantMessage(fauxToolCall("write", { path: "note.txt", content: text }), {
+  fauxAssistantMessage(fauxToolCall("write", { content: text, path: "note.txt" }), {
     stopReason: "toolUse",
   });
 faux.setResponses([
@@ -45,8 +47,6 @@ const mainStep1 = Effect.gen(function* () {
     Harness.open(
       new MemoryStorage(),
       {
-        models,
-        registry,
         env: ({ conversationId, read }, envContext) =>
           runPromise(
             Effect.gen(function* () {
@@ -56,12 +56,14 @@ const mainStep1 = Effect.gen(function* () {
                 : new NodeExecutionEnv({ cwd: sandbox.path });
             }),
           ),
+        models,
+        registry,
       },
       context,
     ),
   );
 
-  const model = { provider: "faux", modelId: "faux-1" };
+  const model = { modelId: "faux-1", provider: "faux" };
   return { harness, model };
 });
 
@@ -74,7 +76,6 @@ const main = Effect.gen(function* () {
     const conversation = yield* awaited(
       harness.createConversation(
         {
-          ownership: { kind: "ownerless" },
           agent: { model },
           init: (tx, id) =>
             runPromise(
@@ -82,6 +83,7 @@ const main = Effect.gen(function* () {
                 (yield* awaited(tx.doc(Sandbox, id))).path = path;
               }),
             ),
+          ownership: { kind: "ownerless" },
         },
         context,
       ),
@@ -93,12 +95,12 @@ const main = Effect.gen(function* () {
   const bob = yield* conversationFor("bob");
   yield* awaited(
     (yield* awaited(
-      alice.conversation.submit({ type: "input", content: "Leave a note." }, context),
+      alice.conversation.submit({ content: "Leave a note.", type: "input" }, context),
     )).wait(context),
   );
   yield* awaited(
     (yield* awaited(
-      bob.conversation.submit({ type: "input", content: "Leave a note." }, context),
+      bob.conversation.submit({ content: "Leave a note.", type: "input" }, context),
     )).wait(context),
   );
   yield* Console.log("alice's sandbox:", yield* readText(joinPath(alice.path, "note.txt")));

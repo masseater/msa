@@ -2,9 +2,14 @@ import type { Draft } from "@msa/chord";
 import { Effect } from "effect";
 import { describe, expect, it } from "vite-plus/test";
 
-import { awaited } from "./effect-support.ts";
-import { setupLive, LiveDoc, type Live } from "./session-documents-support.ts";
-import { context, documentChanges, flush } from "./session-support.ts";
+import effectSupport from "./effect-support.ts";
+import sessionDocumentsSupport from "./session-documents-support.ts";
+import type sessionDocumentsSupportTypes from "./session-documents-support.types.ts";
+import sessionSupport from "./session-support.ts";
+
+const { awaited } = effectSupport;
+const { LiveDoc, setupLive } = sessionDocumentsSupport;
+const { context, documentChanges, flush } = sessionSupport;
 
 const failsSessionStorage = Effect.gen(function* () {
   const runPromise = Effect.runPromiseWith(yield* Effect.context<never>());
@@ -85,7 +90,7 @@ const retiresDocumentsCreatesStep1 = Effect.gen(function* () {
   const { session, storage, publications, conversationId } = yield* setupLive();
   yield* flush;
   const oldId = documentChanges(publications.at(-1)!)[0]!.record.id;
-  let replacement: Draft<Live> | undefined;
+  let replacement: Draft<sessionDocumentsSupportTypes.Live> | undefined;
   yield* awaited(
     session.commit(
       (tx) =>
@@ -104,26 +109,26 @@ const retiresDocumentsCreatesStep1 = Effect.gen(function* () {
   );
   const writes = storage.commits.at(-1)!;
   expect(writes).toHaveLength(3);
-  expect(writes).toContainEqual(expect.objectContaining({ type: "document.change", id: oldId }));
-  expect(writes).toContainEqual({ type: "document.retire", id: oldId });
+  expect(writes).toContainEqual(expect.objectContaining({ id: oldId, type: "document.change" }));
+  expect(writes).toContainEqual({ id: oldId, type: "document.retire" });
   expect(writes).toContainEqual(
     expect.objectContaining({
-      type: "document.create",
       record: expect.objectContaining({ kind: "test.live" }),
+      type: "document.create",
     }),
   );
   yield* flush;
   const publication = publications.at(-1)!;
   const [retired, created] = documentChanges(publication);
-  expect(retired).toMatchObject({ record: { id: oldId }, value: null, ops: [] });
+  expect(retired).toMatchObject({ ops: [], record: { id: oldId }, value: null });
   expect(retired!.record.retiredAt).toBe(publication.seq);
   expect(created!.record.id).not.toBe(oldId);
   expect(created!.record.createdAt).toBe(publication.seq);
-  expect(created).toMatchObject({ value: { message: "new", items: [] }, ops: [] });
+  expect(created).toMatchObject({ ops: [], value: { items: [], message: "new" } });
   expect(yield* awaited(session.snapshot(LiveDoc, conversationId, context))).toBe(created!.value);
 
   yield* awaited(session.commit((tx) => tx.retireDoc(LiveDoc, conversationId), context));
-  return { session, storage, conversationId };
+  return { conversationId, session, storage };
 });
 
 const retiresDocumentsCreates = Effect.gen(function* () {

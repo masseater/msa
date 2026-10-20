@@ -3,15 +3,13 @@ import { Effect } from "effect";
 import { describe, expect, it } from "vite-plus/test";
 
 import { idFromNumber } from "../src/ids.ts";
-import { awaited } from "./effect-support.ts";
-import {
-  context,
-  createConversation,
-  documentChanges,
-  flush,
-  openTestSession,
-} from "./session-support.ts";
-import { createTask, ProgressDoc, NotesDoc, StepDoc, terminal } from "./session-tables-support.ts";
+import effectSupport from "./effect-support.ts";
+import sessionSupport from "./session-support.ts";
+import sessionTablesSupport from "./session-tables-support.ts";
+
+const { awaited } = effectSupport;
+const { context, createConversation, documentChanges, flush, openTestSession } = sessionSupport;
+const { NotesDoc, ProgressDoc, StepDoc, createTask, terminal } = sessionTablesSupport;
 
 const retiresTaskDocumentsStep1 = Effect.gen(function* () {
   const runPromise = Effect.runPromiseWith(yield* Effect.context<never>());
@@ -48,7 +46,7 @@ const retiresTaskDocumentsStep1 = Effect.gen(function* () {
     ),
   );
   const writes = storage.commits.at(-1)!;
-  return { runPromise, session, storage, publications, conversationId, taskId, published, writes };
+  return { conversationId, publications, published, runPromise, session, storage, taskId, writes };
 });
 
 const retiresTaskDocumentsStep2 = Effect.gen(function* () {
@@ -73,7 +71,7 @@ const retiresTaskDocumentsStep2 = Effect.gen(function* () {
   expect(yield* awaited(session.snapshot(StepDoc, taskId, "committed", context))).toBeUndefined();
   const alive = yield* awaited(
     storage.scanDocuments(
-      { scope: { kind: "task", taskId }, at: "current" },
+      { at: "current", scope: { kind: "task", taskId } },
       10,
       undefined,
       context,

@@ -6,7 +6,9 @@ import { idFromNumber } from "../src/ids.ts";
 import { SqliteStorage } from "../src/storage/sqlite/index.ts";
 import { openNodeSqliteDatabase } from "../src/storage/sqlite/node.ts";
 import { type EntryId, ROOT_CONVERSATION_ID } from "../src/types.ts";
-import { awaited } from "./effect-support.ts";
+import effectSupport from "./effect-support.ts";
+
+const { awaited } = effectSupport;
 
 const queuesDatabaseCalls = Effect.gen(function* () {
   const runPromise = Effect.runPromiseWith(yield* Effect.context<never>());
@@ -46,7 +48,7 @@ const letsAdmittedMulti = Effect.gen(function* () {
         { type: "conversation", value: { id: ROOT_CONVERSATION_ID } },
         {
           type: "entry",
-          value: { id: entryId, conversationId: ROOT_CONVERSATION_ID, kind: "probe" },
+          value: { conversationId: ROOT_CONVERSATION_ID, id: entryId, kind: "probe" },
         },
       ],
       BACKGROUND_CONTEXT,

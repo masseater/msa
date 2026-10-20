@@ -5,34 +5,36 @@ import { Console, Effect } from "effect";
 import { type ConversationId, defineDoc, defineTask } from "../../src/index.ts";
 import { createSession } from "../../src/session/index.ts";
 import { MemoryStorage } from "../../src/storage/memory.ts";
-import { awaited } from "../effect-support.ts";
+import effectSupport from "../effect-support.ts";
+
+const { awaited } = effectSupport;
 
 const context = BACKGROUND_CONTEXT;
 const session = createSession(new MemoryStorage());
 
 const Supervisor = defineTask<null, { phase: "ready" }, null>({
-  name: "example.supervisor",
-  version: 1,
-  initial: () => ({ phase: "ready" }),
-  phases: { ready: () => Promise.resolve() },
   abort: () => Promise.resolve(),
+  initial: () => ({ phase: "ready" }),
+  name: "example.supervisor",
+  phases: { ready: () => Promise.resolve() },
+  version: 1,
 });
 
 const AgentRegistry = defineDoc<{
   agents: Record<string, { conversationId: ConversationId; requestId: string }>;
 }>({
-  kind: "example.agent-registry",
-  version: 1,
-  scope: "conversation",
-  history: "latest",
   fork: "initial",
+  history: "latest",
   initial: () => ({ agents: {} }),
+  kind: "example.agent-registry",
+  scope: "conversation",
+  version: 1,
 });
 
 const main = Effect.gen(function* () {
   const runPromise = Effect.runPromiseWith(yield* Effect.context<never>());
 
-  const main = yield* awaited(
+  const mainInner = yield* awaited(
     session.commit((tx) => tx.createConversation({ ownership: { kind: "ownerless" } }), context),
   );
 
@@ -43,9 +45,9 @@ const main = Effect.gen(function* () {
           Effect.gen(function* () {
             const supervisorId = yield* awaited(
               tx.createTask(Supervisor, null, {
-                ownership: { kind: "conversation" },
-                conversationId: main.id,
                 background: true,
+                conversationId: mainInner.id,
+                ownership: { kind: "conversation" },
               }),
             );
 
@@ -53,11 +55,11 @@ const main = Effect.gen(function* () {
               tx.createConversation({ ownership: { kind: "task", taskId: supervisorId } }),
             );
 
-            (yield* awaited(tx.doc(AgentRegistry, main.id))).agents["researcher"] = {
+            (yield* awaited(tx.doc(AgentRegistry, mainInner.id))).agents["researcher"] = {
               conversationId: child.id,
               requestId: `researcher:first-message:${supervisorId}`,
             };
-            return { supervisorId, child };
+            return { child, supervisorId };
           }),
         ),
       context,
@@ -68,7 +70,7 @@ const main = Effect.gen(function* () {
   yield* Console.log("child conversation:", setup.child);
   yield* Console.log(
     "registry:",
-    yield* awaited(session.snapshot(AgentRegistry, main.id, context)),
+    yield* awaited(session.snapshot(AgentRegistry, mainInner.id, context)),
   );
 
   yield* awaited(session.close(context));

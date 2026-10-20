@@ -5,10 +5,12 @@ import { fauxAssistantMessage, fauxProvider, fauxToolCall } from "@msa/ai/provid
 import { BACKGROUND_CONTEXT } from "@msa/chord/context";
 import { Console, Effect } from "effect";
 
-import { createRegistry, Harness } from "../../src/harness/index.ts";
-import { defineExtension, defineTool, ToolResultEntry } from "../../src/index.ts";
+import { Harness, createRegistry } from "../../src/harness/index.ts";
+import { ToolResultEntry, defineExtension, defineTool } from "../../src/index.ts";
 import { openNodeSqliteStorage } from "../../src/storage/sqlite/node.ts";
-import { awaited, joinPath, makeTempDir, removeDir } from "../support.ts";
+import support from "../support.ts";
+
+const { awaited, joinPath, makeTempDir, removeDir } = support;
 
 const context = BACKGROUND_CONTEXT;
 
@@ -19,17 +21,17 @@ function loadVersioned(version: string) {
     name: "versioned",
     tools: [
       defineTool({
-        name: "version",
         description: "Report the tool's code version",
-        parameters: Type.Object({}),
         execute: () =>
           Effect.runPromise(
             Effect.gen(function* () {
               started();
               yield* awaited(gate);
-              return { output: [{ type: "text", text: version }] };
+              return { output: [{ text: version, type: "text" }] };
             }),
           ),
+        name: "version",
+        parameters: Type.Object({}),
       }),
     ],
   });
@@ -69,8 +71,8 @@ const mainStep2 = Effect.gen(function* () {
   let root = yield* awaited(
     harness.root(context, {
       agent: {
-        model: { provider: "faux", modelId: "faux-1" },
         extensions: [loadVersioned("v1")],
+        model: { modelId: "faux-1", provider: "faux" },
       },
     }),
   );
@@ -87,7 +89,7 @@ const mainStep2 = Effect.gen(function* () {
   const { promise: running, resolve: start } = Promise.withResolvers<void>();
   started = start;
   const submission = yield* awaited(
-    root.submit({ type: "input", content: "Which version?" }, context),
+    root.submit({ content: "Which version?", type: "input" }, context),
   );
   yield* awaited(running);
   registry.install(loadVersioned("v2"));
@@ -95,7 +97,7 @@ const mainStep2 = Effect.gen(function* () {
   yield* awaited(submission.wait(context));
   yield* Console.log("call running during the reload:", yield* lastResult());
   yield* awaited(
-    (yield* awaited(root.submit({ type: "input", content: "And now?" }, context))).wait(context),
+    (yield* awaited(root.submit({ content: "And now?", type: "input" }, context))).wait(context),
   );
   yield* Console.log("next call:", yield* lastResult());
   yield* awaited(harness.close(context));
@@ -103,7 +105,7 @@ const mainStep2 = Effect.gen(function* () {
   registry = createRegistry();
   harness = yield* open(registry);
   root = yield* awaited(harness.root(context));
-  return { directory, registry, harness, root };
+  return { directory, harness, registry, root };
 });
 
 const main = Effect.gen(function* () {

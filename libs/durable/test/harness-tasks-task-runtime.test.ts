@@ -3,10 +3,16 @@ import { Effect } from "effect";
 import { describe, expect, it } from "vite-plus/test";
 
 import { currentTimeMillis } from "../src/clock.ts";
-import { abortController, awaited } from "./effect-support.ts";
-import { start, oneStep, withSignal, openRoot } from "./harness-tasks-support.ts";
-import { ControlledStorage, context } from "./session-support.ts";
-import { completed, deferred, eventually, settled } from "./task-support.ts";
+import effectSupport from "./effect-support.ts";
+import harnessTasksSupport from "./harness-tasks-support.ts";
+import sessionSupport from "./session-support.ts";
+import type sessionSupportTypes from "./session-support.types.ts";
+import taskSupport from "./task-support.ts";
+
+const { abortController, awaited } = effectSupport;
+const { oneStep, openRoot, start, withSignal } = harnessTasksSupport;
+const { ControlledStorage, context } = sessionSupport;
+const { completed, deferred, eventually, settled } = taskSupport;
 
 const ordersRuntimeCommits = Effect.gen(function* () {
   const runPromise = Effect.runPromiseWith(yield* Effect.context<never>());
@@ -14,7 +20,7 @@ const ordersRuntimeCommits = Effect.gen(function* () {
   const storage = new ControlledStorage();
   let before: Promise<void> | undefined;
   let after: Promise<void> | undefined;
-  let held: ReturnType<ControlledStorage["holdCommits"]> | undefined;
+  let held: ReturnType<sessionSupportTypes.ControlledStorage["holdCommits"]> | undefined;
   let harnessRef: Effect.Success<ReturnType<typeof openRoot>>["harness"] | undefined;
   const Detached = oneStep<string>("test.detached", (_task, runtime) => {
     held = storage.holdCommits();
@@ -45,8 +51,8 @@ const ordersRuntimeCommits = Effect.gen(function* () {
   held!.release();
   yield* awaited(before);
   expect((yield* awaited(harness.waitForTask(id, context))).state.outcome).toEqual({
-    status: "completed",
     result: "before",
+    status: "completed",
   });
   yield* awaited(expect(after).rejects.toThrow(/invocation has ended|is terminal/u));
   yield* awaited(harness.close(context));
@@ -58,10 +64,10 @@ describe("task runtime", () => {
 });
 
 const LateNotes = defineDoc<{ text: string }>({
-  kind: "test.late-watch",
-  version: 1,
-  scope: "session",
   initial: () => ({ text: "" }),
+  kind: "test.late-watch",
+  scope: "session",
+  version: 1,
 });
 
 const stopsWatchAcquisition = Effect.gen(function* () {
@@ -69,7 +75,7 @@ const stopsWatchAcquisition = Effect.gen(function* () {
 
   const storage = new ControlledStorage();
   let watching: Promise<unknown> | undefined;
-  let held: ReturnType<ControlledStorage["holdCommits"]> | undefined;
+  let held: ReturnType<sessionSupportTypes.ControlledStorage["holdCommits"]> | undefined;
   let harnessRef: Effect.Success<ReturnType<typeof openRoot>>["harness"] | undefined;
   const Late = oneStep("test.late-watch", (_task, runtime) => {
     held = storage.holdCommits();
@@ -171,10 +177,15 @@ const rejectsSleepInvocation = Effect.gen(function* () {
     runPromise(
       Effect.gen(function* () {
         const controller = abortController();
-        const sleeping = runtime.sleep(currentTimeMillis() + 60_000, withSignal(controller.signal));
+        const sleepingInner = runtime.sleep(
+          currentTimeMillis() + 60_000,
+          withSignal(controller.signal),
+        );
         controller.abort(new Error("stop sleeping"));
         yield* awaited(
-          sleeping.catch((error: unknown) => results.push(`cancelled:${(error as Error).message}`)),
+          sleepingInner.catch((error: unknown) =>
+            results.push(`cancelled:${(error as Error).message}`),
+          ),
         );
         yield* awaited(runtime.commit(() => completed(null), ctx));
       }),
@@ -188,8 +199,8 @@ const rejectsSleepInvocation = Effect.gen(function* () {
   yield* awaited(sleeping.promise);
   yield* awaited(harness.abortTask(signalled, context));
   expect((yield* awaited(harness.waitForTask(signalled, context))).state.outcome).toEqual({
-    status: "aborted",
     reason: "test",
+    status: "aborted",
   });
   expect(results).toEqual(["cancelled:stop sleeping", "signalled:AbortError"]);
   yield* awaited(harness.close(context));

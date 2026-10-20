@@ -9,23 +9,25 @@ import {
 } from "@msa/ai";
 import { openaiProvider } from "@msa/ai/providers/openai";
 import { AssistantEntry, defineExtension, section } from "@msa/durable";
-import { createRegistry, Harness } from "@msa/durable/harness";
+import { Harness, createRegistry } from "@msa/durable/harness";
 import { MemoryStorage } from "@msa/durable/storage/memory";
 import { Console, Effect } from "effect";
 
 import { NodeExecutionEnv } from "../../src/env/node.ts";
 import { createBashTool, createReadTool } from "../../src/tools/index.ts";
-import { BACKGROUND_CONTEXT, environmentVariable, awaited } from "../support.ts";
+import support from "../support.ts";
+
+const { BACKGROUND_CONTEXT, awaited, environmentVariable } = support;
 
 const context = BACKGROUND_CONTEXT;
 const prompt = process.argv[2] ?? "What is in this directory?";
 
 const models = createModels();
-let model = { provider: "openai", modelId: "gpt-6-sol" };
+let model = { modelId: "gpt-6-sol", provider: "openai" };
 if (environmentVariable("OPENAI_API_KEY", true) === undefined) {
   const faux = fauxProvider();
   models.setProvider(faux.provider);
-  model = { provider: "faux", modelId: "faux-1" };
+  model = { modelId: "faux-1", provider: "faux" };
   faux.setResponses([
     fauxAssistantMessage([fauxToolCall("bash", { command: "ls" }, { id: "call-1" })], {
       stopReason: "toolUse",
@@ -42,19 +44,19 @@ const registry = createRegistry();
 registry.install(
   defineExtension({
     name: "coding",
-    tools: [createReadTool(), createBashTool()],
     sections: [section("preamble", () => "You are a concise coding assistant.", { tag: false })],
+    tools: [createReadTool(), createBashTool()],
   }),
 );
 const env = new NodeExecutionEnv({ cwd: process.cwd() });
 
 const main = Effect.gen(function* () {
   const harness = yield* awaited(
-    Harness.open(new MemoryStorage(), { models, registry, env: () => env }, context),
+    Harness.open(new MemoryStorage(), { env: () => env, models, registry }, context),
   );
   const root = yield* awaited(harness.root(context, { agent: { model } }));
 
-  const submission = yield* awaited(root.submit({ type: "input", content: prompt }, context));
+  const submission = yield* awaited(root.submit({ content: prompt, type: "input" }, context));
   const settled = yield* awaited(submission.wait(context));
   if (settled.status === "done" && settled.type === "input") {
     const entry = yield* awaited(

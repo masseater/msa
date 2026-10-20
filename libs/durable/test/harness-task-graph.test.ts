@@ -1,25 +1,28 @@
 import type { JsonValue } from "@msa/chord";
-import { applyImmutable, type Op } from "@msa/chord/delta";
-import { type ConversationId, defineTask, type TaskGraph, type TaskId } from "@msa/durable";
+import { type Op, applyImmutable } from "@msa/chord/delta";
+import { type ConversationId, type TaskGraph, type TaskId, defineTask } from "@msa/durable";
 import { MemoryStorage } from "@msa/durable/storage/memory";
 import { Effect } from "effect";
 import { describe, expect, it } from "vite-plus/test";
 
 import { openNodeSqliteStorage } from "../src/storage/sqlite/node.ts";
-import { statuses, family } from "./harness-task-graph-support.ts";
-import {
-  awaited,
-  joinPath,
-  makeTempDir,
-  removeDir,
-  context,
-  flush,
+import harnessTaskGraphSupport from "./harness-task-graph-support.ts";
+import support from "./support.ts";
+
+const { family, statuses } = harnessTaskGraphSupport;
+const {
   aborted,
+  awaited,
   completed,
+  context,
   deferred,
   eventually,
+  flush,
+  joinPath,
+  makeTempDir,
   openTasks,
-} from "./support.ts";
+  removeDir,
+} = support;
 
 type GraphHarness = Effect.Success<ReturnType<typeof openTasks>>["harness"];
 
@@ -52,18 +55,18 @@ const observedGraph = Effect.fn("observedGraph")(function* (harness: GraphHarnes
     Object.values(view.graph.value.tasks)
       .find((node) => node.kind === "test.graph-child")
       ?.id.toString() ?? "";
-  return { seen, view, rebuild, childId };
+  return { childId, rebuild, seen, view };
 });
 
 function expectPendingParent(graph: TaskGraph, parent: TaskId, conversationId: ConversationId) {
   expect(graph.tasks[String(parent)]).toEqual({
+    abortRequested: false,
+    background: false,
+    conversationId,
+    conversations: [],
     id: parent,
     kind: "test.graph-parent",
-    conversationId,
-    background: false,
-    abortRequested: false,
-    state: { status: "pending", phase: "spawn" },
-    conversations: [],
+    state: { phase: "spawn", status: "pending" },
   });
 }
 
@@ -76,14 +79,14 @@ function expectWaitingParent(
   const first = Number(childId) as TaskId;
   const parentNode = graph.tasks[String(parent)]!;
   expect(parentNode.state).toEqual({
-    status: "waiting",
-    phase: "join",
     on: [first],
+    phase: "join",
     policy: "allSettled",
+    status: "waiting",
   });
   expect(parentNode.conversations).toHaveLength(2);
   expect([...parentNode.conversations].sort((a, b) => a - b)).toEqual(parentNode.conversations);
-  expect(graph.tasks[String(first)]).toMatchObject({ owner: parent, conversationId });
+  expect(graph.tasks[String(first)]).toMatchObject({ conversationId, owner: parent });
   return { first, parentNode };
 }
 
@@ -100,9 +103,21 @@ const committedGraphTasksStep1 = Effect.fn("committedGraphTasksStep1")(function*
   const path = joinPath(directory, "session.sqlite");
   const gate = deferred();
   const Work = defineTask<null, { phase: "work" }, null>({
-    name: "test.graph-work",
-    version: 1,
+    abort: (_task, runtime, ctx) =>
+      runPromise(
+        Effect.asVoid(
+          Effect.suspend(() =>
+            awaited(
+              runtime.commit(
+                () => ({ outcome: { reason: "test", status: "aborted" }, status: "terminal" }),
+                ctx,
+              ),
+            ),
+          ),
+        ),
+      ),
     initial: () => ({ phase: "work" }),
+    name: "test.graph-work",
     phases: {
       work: (_task, runtime, ctx) =>
         runPromise(
@@ -112,23 +127,11 @@ const committedGraphTasksStep1 = Effect.fn("committedGraphTasksStep1")(function*
           }),
         ),
     },
-    abort: (_task, runtime, ctx) =>
-      runPromise(
-        Effect.asVoid(
-          Effect.suspend(() =>
-            awaited(
-              runtime.commit(
-                () => ({ status: "terminal", outcome: { status: "aborted", reason: "test" } }),
-                ctx,
-              ),
-            ),
-          ),
-        ),
-      ),
+    version: 1,
   });
   const first = yield* openTasks(yield* awaited(openNodeSqliteStorage(path)), [Work]);
   const firstRoot = yield* awaited(first.harness.root(context));
-  return { runPromise, directory, path, gate, Work, first, firstRoot };
+  return { Work, directory, first, firstRoot, gate, path, runPromise };
 });
 
 const committedGraphTasks = Effect.fn("committedGraphTasks")(function* () {
@@ -139,21 +142,21 @@ const committedGraphTasks = Effect.fn("committedGraphTasks")(function* () {
       (tx) =>
         runPromise(
           Effect.gen(function* () {
-            const foreground = yield* awaited(
+            const foregroundInner = yield* awaited(
               tx.createTask(Work, null, { ownership: { kind: "conversation" } }),
             );
-            const background = yield* awaited(
+            const backgroundInner = yield* awaited(
               tx.createTask(Work, null, {
-                ownership: { kind: "conversation" },
                 background: true,
+                ownership: { kind: "conversation" },
               }),
             );
-            const owned = yield* awaited(
+            const ownedInner = yield* awaited(
               tx.createConversation({
-                ownership: { kind: "task", taskId: foreground },
+                ownership: { kind: "task", taskId: foregroundInner },
               }),
             );
-            return [foreground, background, owned.id] as const;
+            return [foregroundInner, backgroundInner, ownedInner.id] as const;
           }),
         ),
       context,
@@ -175,7 +178,7 @@ const committedGraphTasks = Effect.fn("committedGraphTasks")(function* () {
     [`test.graph-work#${background}`]: "running",
   });
   yield* awaited(first.harness.close(context));
-  return { directory, path, gate, Work, foreground, background, owned };
+  return { Work, background, directory, foreground, gate, owned, path };
 });
 
 const followsEveryLive = Effect.gen(function* () {
@@ -211,8 +214,8 @@ const followsEveryLive = Effect.gen(function* () {
   child.resolve();
   yield* eventually(() => view.graph.value.tasks[String(parent)]?.state.status === "completing");
   expect(view.graph.value.tasks[String(parent)]!.state).toEqual({
-    status: "completing",
     outcome: "completed",
+    status: "completing",
   });
   expect(view.graph.value.tasks[String(first)]).toBeUndefined();
   expect(view.graph.value.tasks[String(parent)]!.conversations).toEqual(parentNode.conversations);

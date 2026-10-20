@@ -1,13 +1,19 @@
-import { defineDoc, LiveDoc } from "@msa/durable";
+import { LiveDoc, defineDoc } from "@msa/durable";
 import { MemoryStorage } from "@msa/durable/storage/memory";
 import { Effect } from "effect";
 import { describe, expect, it } from "vite-plus/test";
 
-import { chatSetup, openChat } from "./chat-support.ts";
-import { abortController, awaited } from "./effect-support.ts";
-import { committed, replay, drained, record } from "./harness-view-support.ts";
-import { context } from "./session-support.ts";
-import { deferred } from "./task-support.ts";
+import chatSupport from "./chat-support.ts";
+import effectSupport from "./effect-support.ts";
+import harnessViewSupport from "./harness-view-support.ts";
+import sessionSupport from "./session-support.ts";
+import taskSupport from "./task-support.ts";
+
+const { chatSetup, openChat } = chatSupport;
+const { abortController, awaited } = effectSupport;
+const { committed, drained, record, replay } = harnessViewSupport;
+const { context } = sessionSupport;
+const { deferred } = taskSupport;
 
 const rejectsAcquisitionCancelled = Effect.gen(function* () {
   const runPromise = Effect.runPromiseWith(yield* Effect.context<never>());
@@ -19,7 +25,7 @@ const rejectsAcquisitionCancelled = Effect.gen(function* () {
       () => runPromise(Effect.asVoid(Effect.suspend(() => awaited(release.promise)))),
       context,
     );
-    return { release: () => release.resolve(), blocking };
+    return { blocking, release: () => release.resolve() };
   };
   let held = hold();
   const controller = abortController();
@@ -68,12 +74,12 @@ const publishesOneFrame = Effect.gen(function* () {
 
   const { harness, root } = yield* openChat(new MemoryStorage(), chatSetup());
   const Other = defineDoc<{ n: number }>({
-    kind: "app.other",
-    version: 1,
-    scope: "conversation",
-    history: "latest",
     fork: "initial",
+    history: "latest",
     initial: () => ({ n: 0 }),
+    kind: "app.other",
+    scope: "conversation",
+    version: 1,
   });
   const { initial, frames, stop } = yield* awaited(record(root));
   yield* awaited(

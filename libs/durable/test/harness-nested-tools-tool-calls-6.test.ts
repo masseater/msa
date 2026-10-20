@@ -3,29 +3,23 @@ import { Effect } from "effect";
 import { afterEach, describe, expect, it } from "vite-plus/test";
 
 import { openNodeSqliteStorage } from "../src/storage/sqlite/node.ts";
-import {
-  directories,
-  results,
-  toolTasks,
-  runOnce,
-  text,
-  DONE,
-  call,
-  tool,
-  echoTool,
-} from "./harness-nested-tools-support.ts";
-import {
-  allEntries,
-  chatSetup,
-  openChat,
-  awaited,
-  addTool,
-  makeTempFile,
-  removeDir,
-  context,
+import harnessNestedToolsSupport from "./harness-nested-tools-support.ts";
+import support from "./support.ts";
+
+const { DONE, call, directories, echoTool, results, runOnce, text, tool, toolTasks } =
+  harnessNestedToolsSupport;
+const {
   aborted,
+  addTool,
+  allEntries,
+  awaited,
+  chatSetup,
+  context,
   deferred,
-} from "./support.ts";
+  makeTempFile,
+  openChat,
+  removeDir,
+} = support;
 
 afterEach(() =>
   Effect.runPromise(
@@ -70,13 +64,13 @@ const interruptedCleanupBatch = Effect.fn("interruptedCleanupBatch")(function* (
         Effect.gen(function* () {
           void api.executeTool("hang", {}, callContext).catch(() => {});
           yield* awaited(running.promise);
-          return { output: [{ type: "text", text: "returned early" }] };
+          return { output: [{ text: "returned early", type: "text" }] };
         }),
       ),
     ),
   );
   setup.faux.setResponses([call("batch"), DONE]);
-  return { path, setup, cleaning, release, counts };
+  return { cleaning, counts, path, release, setup };
 });
 
 const admitsOneNested = Effect.gen(function* () {
@@ -112,7 +106,7 @@ const admitsOneNested = Effect.gen(function* () {
 const abortsLeftRunning = Effect.gen(function* () {
   const { path, setup, cleaning, release, counts } = yield* interruptedCleanupBatch();
   let opened = yield* openChat(yield* awaited(openNodeSqliteStorage(path)), setup);
-  const id = (yield* awaited(opened.root.submit({ type: "input", content: "go" }, context))).id;
+  const id = (yield* awaited(opened.root.submit({ content: "go", type: "input" }, context))).id;
   yield* awaited(cleaning.promise);
   const closed = opened.harness.close(context);
   release.resolve();
@@ -126,10 +120,10 @@ const abortsLeftRunning = Effect.gen(function* () {
   ).toBe("done");
   yield* awaited(opened.harness.waitForIdle(context));
   const [result] = results(yield* allEntries(opened.root));
-  expect(result).toMatchObject({ toolCallId: "c1", isError: true });
+  expect(result).toMatchObject({ isError: true, toolCallId: "c1" });
   expect(text(result)).toContain("Tool batch was interrupted");
   const [, child] = yield* toolTasks(opened.harness);
-  expect(child!.state).toMatchObject({ status: "terminal", outcome: { status: "aborted" } });
+  expect(child!.state).toMatchObject({ outcome: { status: "aborted" }, status: "terminal" });
   expect(counts.hangRuns).toBe(1);
   expect(yield* awaited(opened.harness.snapshot(LiveDoc, opened.root.id, context))).toEqual({});
   yield* awaited(opened.harness.close(context));

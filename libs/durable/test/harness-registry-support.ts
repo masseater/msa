@@ -1,51 +1,54 @@
 import { Type } from "@msa/ai";
 import {
   type AgentState,
-  defineExtension,
   type HarnessSettings,
   type RegistrySnapshot,
+  defineExtension,
   section,
-  type ToolRegistration,
 } from "@msa/durable";
 import { dual } from "effect/Function";
 
 import { resolveAgent, resolveSettings } from "../src/harness/agent.ts";
+import type harnessRegistrySupportTypes from "./harness-registry-support.types.ts";
 
-export type AppTool = ToolRegistration & { readonly snippet?: string };
-
-function toolImpl(name: string, extra: Partial<AppTool> = {}): AppTool {
+function toolImpl(
+  name: string,
+  extra: Partial<harnessRegistrySupportTypes.AppTool> = {},
+): harnessRegistrySupportTypes.AppTool {
   return {
-    name,
     description: `${name} tool`,
-    parameters: Type.Object({}),
     execute: () => Promise.resolve({ output: [] }),
+    name,
+    parameters: Type.Object({}),
     ...extra,
   };
 }
 
-export const tool: {
-  (extra?: Partial<AppTool>): (name: string) => ReturnType<typeof toolImpl>;
-  (name: string, extra?: Partial<AppTool>): ReturnType<typeof toolImpl>;
+const tool: {
+  (
+    extra?: Partial<harnessRegistrySupportTypes.AppTool>,
+  ): (name: string) => ReturnType<typeof toolImpl>;
+  (name: string, extra?: Partial<harnessRegistrySupportTypes.AppTool>): ReturnType<typeof toolImpl>;
 } = dual((args) => typeof args[0] === "string", toolImpl);
 
 function resolveImpl(
   state: AgentState | undefined,
-  snapshot: RegistrySnapshot<AppTool>,
+  snapshot: RegistrySnapshot<harnessRegistrySupportTypes.AppTool>,
   settings: HarnessSettings = {},
   reports: unknown[] = [],
 ) {
   return resolveAgent(state, snapshot, resolveSettings(settings), (error) => reports.push(error));
 }
 
-export const resolve: {
+const resolve: {
   (
-    snapshot: RegistrySnapshot<AppTool>,
+    snapshot: RegistrySnapshot<harnessRegistrySupportTypes.AppTool>,
     settings?: HarnessSettings,
     reports?: unknown[],
   ): (state: AgentState | undefined) => ReturnType<typeof resolveImpl>;
   (
     state: AgentState | undefined,
-    snapshot: RegistrySnapshot<AppTool>,
+    snapshot: RegistrySnapshot<harnessRegistrySupportTypes.AppTool>,
     settings?: HarnessSettings,
     reports?: unknown[],
   ): ReturnType<typeof resolveImpl>;
@@ -54,19 +57,31 @@ export const resolve: {
   resolveImpl,
 );
 
-export const read = tool("read");
+const read = tool("read");
 
-export const bash = tool("bash");
+const bash = tool("bash");
 
-export const edit = tool("edit");
+const edit = tool("edit");
 
-export const Coding = defineExtension<AppTool>({
+const Coding = defineExtension<harnessRegistrySupportTypes.AppTool>({
   name: "coding",
-  tools: [read, bash, edit],
   sections: [section("preamble", () => "You code.", { tag: false }), section("cwd", () => "/repo")],
+  tools: [read, bash, edit],
 });
 
-export const Skills = defineExtension<AppTool>({
+const Skills = defineExtension<harnessRegistrySupportTypes.AppTool>({
   name: "skills",
   sections: [section("skills", () => "S")],
 });
+
+const harnessRegistrySupport = {
+  Coding,
+  Skills,
+  bash,
+  edit,
+  read,
+  resolve,
+  tool,
+};
+
+export default harnessRegistrySupport;

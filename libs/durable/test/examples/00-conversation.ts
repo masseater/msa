@@ -4,7 +4,9 @@ import { Console, Effect } from "effect";
 
 import { createSession } from "../../src/session/index.ts";
 import { MemoryStorage } from "../../src/storage/memory.ts";
-import { awaited } from "../effect-support.ts";
+import effectSupport from "../effect-support.ts";
+
+const { awaited } = effectSupport;
 
 const session = createSession(new MemoryStorage());
 

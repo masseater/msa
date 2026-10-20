@@ -5,18 +5,22 @@ import {
   type ConversationId,
   type EntryId,
   type Id,
+  ROOT_CONVERSATION_ID,
   type Seq,
   type Storage,
   type StorageWrite,
   type TaskId,
-  ROOT_CONVERSATION_ID,
 } from "@msa/durable";
 import { registerStorageConformance } from "@msa/durable/testing";
 import { Effect } from "effect";
 import { afterEach, describe, expect, it } from "vite-plus/test";
 
 import { idFromNumber } from "../src/ids.ts";
-import {
+import sqliteStorageSupport from "./sqlite-storage-support.ts";
+import type sqliteStorageSupportTypes from "./sqlite-storage-support.types.ts";
+import support from "./support.ts";
+
+const {
   context,
   createRoot,
   createSqliteStorage,
@@ -25,10 +29,8 @@ import {
   openStorages,
   pendingTask,
   tempDirectories,
-  type NodeSqliteStorageOptions,
-  type SqliteStorage,
-} from "./sqlite-storage-support.ts";
-import { awaited, makeTempFile, removeDir } from "./support.ts";
+} = sqliteStorageSupport;
+const { awaited, makeTempFile, removeDir } = support;
 
 afterEach(() =>
   Effect.runPromise(
@@ -42,12 +44,16 @@ afterEach(() =>
 );
 
 class ReopeningStorage implements Storage {
-  private current: SqliteStorage;
+  private current: sqliteStorageSupportTypes.SqliteStorage;
   private readonly path: string;
-  private readonly options: NodeSqliteStorageOptions;
+  private readonly options: sqliteStorageSupportTypes.NodeSqliteStorageOptions;
   private closed = false;
 
-  constructor(current: SqliteStorage, path: string, options: NodeSqliteStorageOptions = {}) {
+  constructor(
+    current: sqliteStorageSupportTypes.SqliteStorage,
+    path: string,
+    options: sqliteStorageSupportTypes.NodeSqliteStorageOptions = {},
+  ) {
     this.current = current;
     this.path = path;
     this.options = options;
@@ -181,8 +187,8 @@ const persistsRecordsSequence = Effect.gen(function* () {
   const reopened = yield* awaited(openNodeSqliteStorage(path));
   openStorages.add(reopened);
   expect(yield* awaited(reopened.entry(entryId, context))).toEqual({
-    entry: entry(entryId, ROOT_CONVERSATION_ID, undefined),
     commitSeq: 2,
+    entry: entry(entryId, ROOT_CONVERSATION_ID, undefined),
   });
   expect(yield* awaited(reopened.mintId<EntryId>())).toBe(entryId + 1);
   expect(

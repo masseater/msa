@@ -9,18 +9,12 @@ import { MemoryStorage } from "@msa/durable/storage/memory";
 import { Effect } from "effect";
 import { afterEach, describe, expect, it } from "vite-plus/test";
 
-import {
-  directories,
-  results,
-  toolTasks,
-  runOnce,
-  text,
-  DONE,
-  call,
-  tool,
-  echoTool,
-} from "./harness-nested-tools-support.ts";
-import { chatSetup, openChat, awaited, addTool, removeDir, context, deferred } from "./support.ts";
+import harnessNestedToolsSupport from "./harness-nested-tools-support.ts";
+import support from "./support.ts";
+
+const { DONE, call, directories, echoTool, results, runOnce, text, tool, toolTasks } =
+  harnessNestedToolsSupport;
+const { addTool, awaited, chatSetup, context, deferred, openChat, removeDir } = support;
 
 afterEach(() =>
   Effect.runPromise(
@@ -60,18 +54,18 @@ const storesOneDocument = Effect.gen(function* () {
   storage.commit = (writes, commitContext) => {
     for (const write of writes) {
       if (write.type === "document.create")
-        written.push({ kind: write.record.kind, key: write.record.key });
+        written.push({ key: write.record.key, kind: write.record.kind });
     }
     return commit(writes, commitContext);
   };
   const { harness, root } = yield* openChat(storage, setup);
   yield* awaited(
-    (yield* awaited(root.submit({ type: "input", content: "go" }, context))).wait(context),
+    (yield* awaited(root.submit({ content: "go", type: "input" }, context))).wait(context),
   );
   const nested = written.filter((write) => write.kind.startsWith("msa.tool."));
   expect(nested).toEqual([
-    { kind: NestedCallDoc.definition.kind, key: "1" },
-    { kind: NestedCallDoc.definition.kind, key: "named" },
+    { key: "1", kind: NestedCallDoc.definition.kind },
+    { key: "named", kind: NestedCallDoc.definition.kind },
   ]);
   yield* awaited(harness.close(context));
 });
@@ -89,7 +83,7 @@ const rejectsNestedCallStep1 = Effect.gen(function* () {
   addTool(setup.registry, echo.registration);
   const started = deferred();
   const marked = deferred();
-  return { runPromise, setup, started, marked };
+  return { marked, runPromise, setup, started };
 });
 
 const rejectsNestedCall = Effect.gen(function* () {
@@ -118,7 +112,7 @@ const rejectsNestedCall = Effect.gen(function* () {
   );
   setup.faux.setResponses([call("late"), DONE]);
   const { harness, root } = yield* openChat(new MemoryStorage(), setup);
-  const submission = yield* awaited(root.submit({ type: "input", content: "go" }, context));
+  const submission = yield* awaited(root.submit({ content: "go", type: "input" }, context));
   yield* awaited(started.promise);
   yield* awaited(
     harness.commit(
@@ -160,7 +154,7 @@ const runsNestedCall = Effect.gen(function* () {
       runPromise(
         Effect.gen(function* () {
           nested = yield* awaited(api.executeTool("echo", { text: "a" }, callContext));
-          return { output: [{ type: "text", text: `got ${text(nested)}` }] };
+          return { output: [{ text: `got ${text(nested)}`, type: "text" }] };
         }),
       ),
     ),
@@ -169,28 +163,28 @@ const runsNestedCall = Effect.gen(function* () {
   expect(status).toBe("done");
   const [parent, child] = yield* toolTasks(harness);
   expect(nested).toEqual({
-    taskId: child!.id,
-    structuredOutput: "echo a",
-    isError: false,
     diagnostics: [],
     durationMs: expect.any(Number),
+    isError: false,
+    structuredOutput: "echo a",
+    taskId: child!.id,
   });
   expect(results(entries).map((result) => [result.toolCallId, text(result)])).toEqual([
     ["c1", "got echo a"],
   ]);
   expect(results(entries)[0]).not.toHaveProperty("nestedCalls");
-  expect(parent!.input).toMatchObject({ kind: "model", callId: "c1" });
+  expect(parent!.input).toMatchObject({ callId: "c1", kind: "model" });
   expect(child!.owner).toBe(parent!.id);
   expect(child!.input as ToolTaskInput).toEqual({
+    call: { arguments: { text: "a" }, id: "c1/1", name: "echo", type: "toolCall" },
+    key: "1",
     kind: "nested",
     parent: parent!.id,
     parentCallId: "c1",
-    key: "1",
-    call: { type: "toolCall", id: "c1/1", name: "echo", arguments: { text: "a" } },
   });
   expect(child!.state).toEqual({
+    outcome: { result: { kind: "nested" }, status: "completed" },
     status: "terminal",
-    outcome: { status: "completed", result: { kind: "nested" } },
   });
   expect(yield* awaited(harness.snapshot(NestedCallDoc, parent!.id, "1", context))).toBeUndefined();
   expect(yield* awaited(harness.snapshot(LiveDoc, root.id, context))).toEqual({});
@@ -210,7 +204,7 @@ const givesEachNested = Effect.gen(function* () {
   addTool(
     setup.registry,
     tool("who", (_args, api) => {
-      seen.push({ taskId: api.taskId, callId: api.callId });
+      seen.push({ callId: api.callId, taskId: api.taskId });
       return Promise.resolve({});
     }),
   );

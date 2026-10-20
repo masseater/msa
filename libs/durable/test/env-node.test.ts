@@ -7,9 +7,13 @@ import { afterEach, describe, expect, it } from "vite-plus/test";
 
 import { FileError, getOrThrow } from "../src/env/index.ts";
 import { NodeExecutionEnv } from "../src/env/node.ts";
-import { awaited } from "./effect-support.ts";
-import { cleanUpEnvTests, tempDirs, createTempDir } from "./env-node-support.ts";
-import { joinPath, makeSymlink, pathExists, realPath } from "./platform-support.ts";
+import effectSupport from "./effect-support.ts";
+import envNodeSupport from "./env-node-support.ts";
+import platformSupport from "./platform-support.ts";
+
+const { awaited } = effectSupport;
+const { cleanUpEnvTests, createTempDir, tempDirs } = envNodeSupport;
+const { joinPath, makeSymlink, pathExists, realPath } = platformSupport;
 
 afterEach(() => Effect.runPromise(cleanUpEnvTests), 15_000);
 
@@ -44,9 +48,9 @@ const readsWritesLists = Effect.gen(function* () {
   const entries = getOrThrow(yield* awaited(env.listDir("nested/child", BACKGROUND_CONTEXT)));
   expect(entries).toHaveLength(1);
   expect(entries[0]).toMatchObject({
+    kind: "file",
     name: "file.txt",
     path: joinPath(root, "nested/child/file.txt"),
-    kind: "file",
     size: 5,
   });
   expect(typeof entries[0]!.mtimeMs).toBe("number");
@@ -86,27 +90,27 @@ const returnsFileInfoFiles = Effect.gen(function* () {
   yield* makeSymlink(joinPath(root, "dir"), joinPath(root, "dir-link"));
 
   expect(getOrThrow(yield* awaited(env.fileInfo("dir", BACKGROUND_CONTEXT)))).toMatchObject({
+    kind: "directory",
     name: "dir",
     path: joinPath(root, "dir"),
-    kind: "directory",
   });
   expect(
     getOrThrow(yield* awaited(env.fileInfo("dir/file.txt", BACKGROUND_CONTEXT))),
   ).toMatchObject({
+    kind: "file",
     name: "file.txt",
     path: joinPath(root, "dir/file.txt"),
-    kind: "file",
     size: 5,
   });
   expect(getOrThrow(yield* awaited(env.fileInfo("file-link", BACKGROUND_CONTEXT)))).toMatchObject({
+    kind: "symlink",
     name: "file-link",
     path: joinPath(root, "file-link"),
-    kind: "symlink",
   });
   expect(getOrThrow(yield* awaited(env.fileInfo("dir-link", BACKGROUND_CONTEXT)))).toMatchObject({
+    kind: "symlink",
     name: "dir-link",
     path: joinPath(root, "dir-link"),
-    kind: "symlink",
   });
   expect(getOrThrow(yield* awaited(env.canonicalPath("file-link", BACKGROUND_CONTEXT)))).toBe(
     yield* realPath(joinPath(root, "dir/file.txt")),
@@ -129,11 +133,11 @@ const listsSymlinksSymlinks = Effect.gen(function* () {
   const entries = getOrThrow(yield* awaited(env.listDir(".", BACKGROUND_CONTEXT)));
   expect(
     entries
-      .map((entry) => ({ name: entry.name, kind: entry.kind }))
+      .map((entry) => ({ kind: entry.kind, name: entry.name }))
       .sort((a, b) => a.name.localeCompare(b.name)),
   ).toEqual([
-    { name: "link.txt", kind: "symlink" },
-    { name: "target.txt", kind: "file" },
+    { kind: "symlink", name: "link.txt" },
+    { kind: "file", name: "target.txt" },
   ]);
 });
 
@@ -154,8 +158,8 @@ const returnsFileErrorMissing = Effect.gen(function* () {
   if (!info.ok) {
     expect(info.error).toBeInstanceOf(FileError);
     expect(info.error).toMatchObject({
-      name: "FileError",
       code: "not_found",
+      name: "FileError",
       path: joinPath(root, "missing.txt"),
     });
   }
@@ -228,11 +232,11 @@ const reportsSourcePath = Effect.gen(function* () {
   );
 
   expect(result).toMatchObject({
-    ok: false,
     error: {
       code: "not_found",
       path: joinPath(root, "missing-source.txt"),
     },
+    ok: false,
   });
   expect(getOrThrow(yield* awaited(env.readTextFile("destination.txt", BACKGROUND_CONTEXT)))).toBe(
     "unchanged",

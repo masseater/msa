@@ -1,26 +1,19 @@
-import { fauxAssistantMessage, fauxText, fauxToolCall, Type } from "@msa/ai";
+import { Type, fauxAssistantMessage, fauxText, fauxToolCall } from "@msa/ai";
 import type { Op } from "@msa/chord/delta";
-import { type CommitPublication, defineTool, LiveDoc, type LiveState } from "@msa/durable";
+import { type CommitPublication, LiveDoc, type LiveState, defineTool } from "@msa/durable";
 import { MemoryStorage } from "@msa/durable/storage/memory";
 import { Effect } from "effect";
 import { describe, expect, it } from "vite-plus/test";
 
-import { OUTPUT, live, drive } from "./harness-live-deltas-support.ts";
-import {
-  chatSetup,
-  openChat,
-  waitFor,
-  awaited,
-  addTool,
-  context,
-  documentChanges,
-} from "./support.ts";
+import harnessLiveDeltasSupport from "./harness-live-deltas-support.ts";
+import support from "./support.ts";
+
+const { OUTPUT, drive, live } = harnessLiveDeltasSupport;
+const { addTool, awaited, chatSetup, context, documentChanges, openChat, waitFor } = support;
 
 const slowOutputTool = (name: string) =>
   defineTool({
-    name,
     description: name,
-    parameters: Type.Object({}),
     execute: (_args, api) =>
       Effect.runPromise(
         Effect.gen(function* () {
@@ -30,25 +23,27 @@ const slowOutputTool = (name: string) =>
           return {};
         }),
       ),
+    name,
+    parameters: Type.Object({}),
   });
 
 function recordingChatSetup() {
   const written = new Map<number, "base" | "delta">();
-  const live: { liveId?: number } = {};
+  const liveInner2: { liveId?: number } = {};
   class RecordingStorage extends MemoryStorage {
     override commit(
       writes: Parameters<MemoryStorage["commit"]>[0],
-      context: Parameters<MemoryStorage["commit"]>[1],
+      contextInner: Parameters<MemoryStorage["commit"]>[1],
     ) {
       const superCommit = super.commit.bind(this);
       return Effect.runPromise(
         Effect.gen(function* () {
           let kind: "base" | "delta" | undefined;
           for (const write of writes) {
-            if (write.type === "document.change" && write.id === live.liveId)
+            if (write.type === "document.change" && write.id === liveInner2.liveId)
               kind = write.content.kind;
           }
-          const seq = yield* awaited(superCommit(writes, context));
+          const seq = yield* awaited(superCommit(writes, contextInner));
           if (kind !== undefined) written.set(seq, kind);
           return seq;
         }),
@@ -67,11 +62,11 @@ function recordingChatSetup() {
     fauxAssistantMessage([fauxText("done")]),
   ]);
   setup.settings.toolExecution = "sequential";
-  return { written, live, RecordingStorage, setup };
+  return { RecordingStorage, live: liveInner2, setup, written };
 }
 
 const streamsPartialText = Effect.gen(function* () {
-  const setup = chatSetup({ tokensPerSecond: 400, tokenSize: { min: 4, max: 4 } });
+  const setup = chatSetup({ tokenSize: { max: 4, min: 4 }, tokensPerSecond: 400 });
   setup.faux.setResponses([fauxAssistantMessage([fauxText("word ".repeat(250))])]);
   const { harness, root } = yield* openChat(new MemoryStorage(), setup);
   const commits: Op[][] = [];
@@ -81,7 +76,7 @@ const streamsPartialText = Effect.gen(function* () {
     }
   });
   yield* awaited(
-    (yield* awaited(root.submit({ type: "input", content: "go" }, context))).wait(context),
+    (yield* awaited(root.submit({ content: "go", type: "input" }, context))).wait(context),
   );
   const partials = commits.slice(2, -1);
   expect(partials.length).toBeGreaterThan(2);
@@ -95,18 +90,18 @@ const streamsPartialText = Effect.gen(function* () {
 });
 
 const storesCompleteBase = Effect.gen(function* () {
-  const { written, live, RecordingStorage, setup } = recordingChatSetup();
+  const { written, live: liveInner, RecordingStorage, setup } = recordingChatSetup();
   const { harness, root } = yield* openChat(new RecordingStorage(), setup);
   const values = new Map<number, LiveState>();
   harness.subscribeCommits((publication) => {
     for (const change of documentChanges(publication)) {
       if (change.record.kind !== "msa.live") continue;
-      live.liveId = change.record.id;
+      liveInner.liveId = change.record.id;
       if (change.value !== null) values.set(publication.seq, change.value as LiveState);
     }
   });
   yield* awaited(
-    (yield* awaited(root.submit({ type: "input", content: "go" }, context))).wait(context),
+    (yield* awaited(root.submit({ content: "go", type: "input" }, context))).wait(context),
   );
   const nothingRuns = (value: LiveState) =>
     value.generation === undefined &&
@@ -132,10 +127,10 @@ const startsCallsRequest = Effect.gen(function* () {
   addTool(
     setup.registry,
     defineTool({
-      name: "bad",
       description: "bad",
+      execute: () => Promise.resolve({ details: { fn: (() => 1) as never }, output: [] }),
+      name: "bad",
       parameters: Type.Object({}),
-      execute: () => Promise.resolve({ output: [], details: { fn: (() => 1) as never } }),
     }),
   );
   setup.faux.setResponses([
@@ -155,7 +150,7 @@ const startsCallsRequest = Effect.gen(function* () {
     }
   });
   yield* awaited(
-    (yield* awaited(root.submit({ type: "input", content: "go" }, context))).wait(context),
+    (yield* awaited(root.submit({ content: "go", type: "input" }, context))).wait(context),
   );
   const entries = yield* awaited(root.entries({}, 10, undefined, context));
   const ghostResult = entries.items.find((entry) => entry.kind === "msa.tool-result")!.id;
@@ -164,8 +159,8 @@ const startsCallsRequest = Effect.gen(function* () {
     "s",
     ["tools"],
     [
-      { callId: "g", name: "ghost", status: "done", entry: ghostResult },
-      { callId: "b", name: "bad", taskId: expect.any(Number), status: "pending" },
+      { callId: "g", entry: ghostResult, name: "ghost", status: "done" },
+      { callId: "b", name: "bad", status: "pending", taskId: expect.any(Number) },
     ],
   ]);
   expect(commits).toContainEqual([["s", ["tools", 1, "status"], "done"]]);
@@ -182,10 +177,10 @@ const commitsToolCalling = Effect.gen(function* () {
   addTool(
     setup.registry,
     defineTool({
-      name: "noop",
       description: "noop",
-      parameters: Type.Object({}),
       execute: () => Promise.resolve({ output: [] }),
+      name: "noop",
+      parameters: Type.Object({}),
     }),
   );
   setup.faux.setResponses([
@@ -210,7 +205,7 @@ const commitsToolCalling = Effect.gen(function* () {
     }
   });
   yield* awaited(
-    (yield* awaited(root.submit({ type: "input", content: "go" }, context))).wait(context),
+    (yield* awaited(root.submit({ content: "go", type: "input" }, context))).wait(context),
   );
   const changes = handover!.changes;
   const kinds = changes.flatMap((change) =>
@@ -262,9 +257,9 @@ describe("msa.live deltas", () => {
     const base = (value: LiveState) =>
       LiveDoc.definition.checkpointWhen!(value, [], { deltasSinceBase: 1000 } as never);
     const slot = (status: "pending" | "running" | "done") => ({ callId: "c", name: "n", status });
-    const run = { taskId: 1 as never, inputs: [] };
+    const run = { inputs: [], taskId: 1 as never };
     expect(base({})).toBe(true);
-    expect(base({ run, generation: { attempt: 1 } })).toBe(false);
+    expect(base({ generation: { attempt: 1 }, run })).toBe(false);
     expect(base({ run, tools: [slot("pending"), slot("done")] })).toBe(true);
     expect(base({ run, tools: [slot("done"), slot("running")] })).toBe(false);
     expect(base({ run })).toBe(true);

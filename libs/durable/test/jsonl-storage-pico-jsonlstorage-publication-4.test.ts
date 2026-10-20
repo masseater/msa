@@ -4,26 +4,23 @@ import { afterEach, describe, expect, it } from "vite-plus/test";
 import { NodeExecutionEnv } from "../src/env/node.ts";
 import { JsonlStorage } from "../src/storage/jsonl/index.ts";
 import type { DocumentId } from "../src/types.ts";
-import { toJsonText, fromJsonText, awaited } from "./effect-support.ts";
-import {
-  readLines,
-  sessionDocument,
-  createRoot,
+import effectSupport from "./effect-support.ts";
+import jsonlStorageSupport from "./jsonl-storage-support.ts";
+import platformSupport from "./platform-support.ts";
+
+const { awaited, fromJsonText, toJsonText } = effectSupport;
+const {
   context,
+  createRoot,
   openStorage,
   openStorages,
+  readLines,
+  sessionDocument,
   tempDirectories,
   tempDirectory,
-} from "./jsonl-storage-support.ts";
-import {
-  appendBytes,
-  appendText,
-  joinPath,
-  readBytes,
-  readText,
-  removeDir,
-  writeText,
-} from "./platform-support.ts";
+} = jsonlStorageSupport;
+const { appendBytes, appendText, joinPath, readBytes, readText, removeDir, writeText } =
+  platformSupport;
 
 afterEach(() =>
   Effect.runPromise(
@@ -45,9 +42,9 @@ const rejectsConfirmedRecord = Effect.gen(function* () {
     storage.commit(
       [
         {
-          type: "document.create",
+          content: { kind: "base", value: { count: 0 }, version: 1 },
           record: sessionDocument(documentId),
-          content: { kind: "base", version: 1, value: { count: 0 } },
+          type: "document.create",
         },
       ],
       context,
@@ -57,9 +54,9 @@ const rejectsConfirmedRecord = Effect.gen(function* () {
     storage.commit(
       [
         {
-          type: "document.change",
+          content: { kind: "delta", ops: [["s", ["count"], 1]], version: 1 },
           id: documentId,
-          content: { kind: "delta", version: 1, ops: [["s", ["count"], 1]] },
+          type: "document.change",
         },
       ],
       context,
@@ -69,14 +66,14 @@ const rejectsConfirmedRecord = Effect.gen(function* () {
   const [first, second] = yield* readLines(path);
   const unconfirmed = yield* toJsonText({
     format: 1,
-    type: "record",
-    seq: 2,
     ordinal: 999,
     payload: {
-      type: "document",
+      content: { kind: "delta", ops: [], version: 1 },
       id: documentId,
-      content: { kind: "delta", version: 1, ops: [] },
+      type: "document",
     },
+    seq: 2,
+    type: "record",
   });
   yield* writeText(path, `${first}\n${unconfirmed}\n${second}\n`);
   yield* awaited(
@@ -114,9 +111,9 @@ const rejectsStructurallyInvalid = Effect.gen(function* () {
     storage.commit(
       [
         {
-          type: "document.create",
+          content: { kind: "base", value: {}, version: 1 },
           record: sessionDocument(documentId),
-          content: { kind: "base", version: 1, value: {} },
+          type: "document.create",
         },
       ],
       context,

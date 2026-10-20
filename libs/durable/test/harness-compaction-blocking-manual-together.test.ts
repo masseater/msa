@@ -4,23 +4,26 @@ import { watchEvents } from "@msa/durable/harness";
 import { Effect } from "effect";
 import { afterEach, describe, expect, it } from "vite-plus/test";
 
-import {
-  blockingRun,
-  summary,
+import harnessCompactionSupport from "./harness-compaction-support.ts";
+import support from "./support.ts";
+
+const {
   answer,
-  gated,
-  history,
-  turn,
+  blockingRun,
   directories,
-  live,
   failure,
   firstUserText,
-  userText,
+  gated,
+  history,
+  kinds,
+  live,
   open,
   result,
-  kinds,
-} from "./harness-compaction-support.ts";
-import { allEntries, chatSetup, awaited, removeDir, context, deferred } from "./support.ts";
+  summary,
+  turn,
+  userText,
+} = harnessCompactionSupport;
+const { allEntries, awaited, chatSetup, context, deferred, removeDir } = support;
 
 afterEach(() =>
   Effect.runPromise(
@@ -72,8 +75,8 @@ const findsNothingCompact = Effect.gen(function* () {
   expect(
     yield* awaited(result(chat, yield* awaited(chat.root.compact(undefined, context)))),
   ).toEqual({
-    status: "completed",
     result: {},
+    status: "completed",
   });
   expect(chat.faux.summaryRequests).toHaveLength(1);
   answerGate.resolve();
@@ -102,8 +105,8 @@ const abortsRunBoth = Effect.gen(function* () {
   ]);
   yield* awaited(chat.root.abort(context));
   expect(yield* awaited(run.input.wait(context))).toMatchObject({
-    status: "unanswered",
     reason: "aborted",
+    status: "unanswered",
   });
   expect((yield* awaited(result(chat, run.blocking))).status).toBe("aborted");
   expect((yield* awaited(result(chat, manual))).status).toBe("aborted");
@@ -119,7 +122,7 @@ const placesSummarySurvived = Effect.gen(function* () {
   yield* history(chat);
   const reached = deferred();
   chat.faux.agent.push(gated(deferred(), answer("never"), reached));
-  const busy = yield* awaited(chat.root.submit({ type: "input", content: "busy" }, context));
+  const busy = yield* awaited(chat.root.submit({ content: "busy", type: "input" }, context));
   yield* awaited(reached.promise);
   chat.faux.summaries.push(summary());
   const outcome = yield* awaited(
@@ -133,8 +136,8 @@ const placesSummarySurvived = Effect.gen(function* () {
   ))!;
   yield* awaited(chat.root.abort(context));
   expect(yield* awaited(busy.wait(context))).toMatchObject({
-    status: "unanswered",
     reason: "aborted",
+    status: "unanswered",
   });
   expect((yield* awaited(submission.status(context))).status).toBe("queued");
   yield* turn(chat, "u5", "a5");
@@ -160,8 +163,8 @@ const keepsPinnedModel = Effect.gen(function* () {
 
   const setup = chatSetup({
     models: [
-      { id: "faux-1", contextWindow: 100_000, maxTokens: 900 },
-      { id: "faux-2", contextWindow: 100_000, maxTokens: 900 },
+      { contextWindow: 100_000, id: "faux-1", maxTokens: 900 },
+      { contextWindow: 100_000, id: "faux-2", maxTokens: 900 },
     ],
   });
   const chat = yield* open({}, setup);
@@ -171,7 +174,7 @@ const keepsPinnedModel = Effect.gen(function* () {
     runPromise(
       Effect.gen(function* () {
         yield* awaited(
-          chat.root.configure({ model: { provider: "faux", modelId: "faux-2" } }, context),
+          chat.root.configure({ model: { modelId: "faux-2", provider: "faux" } }, context),
         );
         return failure("overloaded");
       }),
@@ -204,7 +207,7 @@ const showsLateJoiner = Effect.gen(function* () {
   yield* awaited(reached.promise);
   const stream = yield* awaited(watchEvents(chat.harness, chat.root.id, context));
   expect(stream.snapshot.compactions).toEqual([
-    { taskId: id, reason: "manual", blocking: false, attempt: 1 },
+    { attempt: 1, blocking: false, reason: "manual", taskId: id },
   ]);
   yield* awaited(stream.stop());
   yield* awaited(chat.harness.abortTask(id, context));
@@ -233,13 +236,13 @@ describe("compaction pinning, silent overflow, and late policy changes", () => {
           const chat = yield* open({ contextWindow: 300 });
           yield* history(chat);
           chat.setup.settings.compaction = {
-            enabled: true,
-            reserveTokens: -100_000,
-            keepRecentTokens: 150,
             backgroundTokens: 0,
+            enabled: true,
+            keepRecentTokens: 150,
+            reserveTokens: -100_000,
           };
           chat.faux.agent.push(response);
-          const input = yield* awaited(chat.root.submit({ type: "input", content: "go" }, context));
+          const input = yield* awaited(chat.root.submit({ content: "go", type: "input" }, context));
           expect((yield* awaited(input.wait(context))).status).toBe("done");
           const [last] = (yield* allEntries(chat.root)).slice(-1);
           const message = last!.model![0] as AssistantMessage;

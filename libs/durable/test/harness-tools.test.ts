@@ -4,19 +4,19 @@ import { ToolTask } from "@msa/durable/harness";
 import { Effect } from "effect";
 import { describe, expect, it } from "vite-plus/test";
 
-import { allEntries, chatSetup } from "./chat-support.ts";
-import { awaited } from "./effect-support.ts";
-import { addHooks, addTool, type Installed } from "./harness-support.ts";
-import {
-  resultText,
-  results,
-  DONE,
-  calls,
-  run,
-  tool,
-  type Execute,
-} from "./harness-tools-support.ts";
-import { context } from "./session-support.ts";
+import chatSupport from "./chat-support.ts";
+import effectSupport from "./effect-support.ts";
+import harnessSupport from "./harness-support.ts";
+import harnessToolsSupport from "./harness-tools-support.ts";
+import sessionSupport from "./session-support.ts";
+
+const { allEntries, chatSetup } = chatSupport;
+
+type ToolExecute = Parameters<typeof harnessToolsSupport.tool>[1];
+const { awaited } = effectSupport;
+const { addHooks, addTool } = harnessSupport;
+const { DONE, calls, resultText, results, run, tool } = harnessToolsSupport;
+const { context } = sessionSupport;
 
 const runsInputTool = Effect.gen(function* () {
   const setup = chatSetup();
@@ -24,7 +24,7 @@ const runsInputTool = Effect.gen(function* () {
     setup.registry,
     tool("echo", (args) =>
       Promise.resolve({
-        output: [{ type: "text", text: `echo ${args.text}` }],
+        output: [{ text: `echo ${args.text}`, type: "text" }],
       }),
     ),
   );
@@ -42,10 +42,10 @@ const runsInputTool = Effect.gen(function* () {
   ]);
   const system = entries[1]!.model![0] as SystemMessage;
   expect(system.toolsAdded).toEqual([
-    { name: "echo", description: "The echo tool", parameters: expect.any(Object) },
+    { description: "The echo tool", name: "echo", parameters: expect.any(Object) },
   ]);
   const [result] = results(entries);
-  expect(result).toMatchObject({ toolCallId: "c1", toolName: "echo", isError: false });
+  expect(result).toMatchObject({ isError: false, toolCallId: "c1", toolName: "echo" });
   expect(resultText(result!)).toBe("echo hi");
   expect(ToolResultEntry.is(entries[3]) && entries[3].data).toEqual({ diagnostics: [] });
   expect(entries[3]!.byTaskId).toBeDefined();
@@ -98,15 +98,15 @@ const answersCallsTools = Effect.gen(function* () {
   ]);
   expect(status).toBe("done");
   const [ghost, echo] = results(entries);
-  expect(ghost).toMatchObject({ toolCallId: "c1", isError: true });
+  expect(ghost).toMatchObject({ isError: true, toolCallId: "c1" });
   expect(resultText(ghost!)).toBe("<harness>\n[error] Tool ghost is not available\n</harness>");
-  expect(echo).toMatchObject({ toolCallId: "c2", isError: false });
+  expect(echo).toMatchObject({ isError: false, toolCallId: "c2" });
   const ghostEntry = entries.find(
     (entry) => ToolResultEntry.is(entry) && entry.model![0]!.role === "toolResult",
   );
   expect(ghostEntry?.data).toEqual({
     diagnostics: [
-      { severity: "error", code: "tool_unavailable", message: "Tool ghost is not available" },
+      { code: "tool_unavailable", message: "Tool ghost is not available", severity: "error" },
     ],
   });
   const tasks = yield* awaited(
@@ -168,7 +168,7 @@ const removesUnregisteredActive = Effect.gen(function* () {
   registration.dispose();
   setup.faux.setResponses([calls(["echo", {}, "c1"]), DONE]);
   const second = yield* awaited(
-    (yield* awaited(first.root.submit({ type: "input", content: "again" }, context))).wait(context),
+    (yield* awaited(first.root.submit({ content: "again", type: "input" }, context))).wait(context),
   );
   expect(second.status).toBe("done");
   let entries = yield* allEntries(first.root);
@@ -181,7 +181,7 @@ const removesUnregisteredActive = Effect.gen(function* () {
   addTool(setup.registry, echo);
   setup.faux.setResponses([DONE]);
   yield* awaited(
-    (yield* awaited(first.root.submit({ type: "input", content: "back" }, context))).wait(context),
+    (yield* awaited(first.root.submit({ content: "back", type: "input" }, context))).wait(context),
   );
   entries = yield* allEntries(first.root);
   const addition = entries.filter((entry) => entry.kind === "msa.system").at(-1)!
@@ -197,7 +197,7 @@ describe("tool round", () => {
 
 const producesToolUnavailable = Effect.gen(function* () {
   const setup = chatSetup();
-  let second!: Installed;
+  let second!: ReturnType<typeof addTool>;
   addTool(
     setup.registry,
     tool(
@@ -211,7 +211,7 @@ const producesToolUnavailable = Effect.gen(function* () {
   );
   second = addTool(
     setup.registry,
-    tool("second", () => Promise.resolve({ output: [{ type: "text", text: "ran" }] })),
+    tool("second", () => Promise.resolve({ output: [{ text: "ran", type: "text" }] })),
   );
   const { harness, entries, status } = yield* run(setup, [
     calls(["first", {}, "c1"], ["second", {}, "c2"]),
@@ -234,7 +234,7 @@ const readsExecutionMode = Effect.gen(function* () {
   const setup = chatSetup();
   const events: string[] = [];
   const slow =
-    (name: string): Execute =>
+    (name: string): ToolExecute =>
     () =>
       runPromise(
         Effect.gen(function* () {

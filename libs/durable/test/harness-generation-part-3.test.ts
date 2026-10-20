@@ -1,22 +1,26 @@
 import type { RegistrySnapshot } from "@msa/durable";
-import { createRegistry, Harness } from "@msa/durable/harness";
+import { Harness, createRegistry } from "@msa/durable/harness";
 import { MemoryStorage } from "@msa/durable/storage/memory";
 import { Effect } from "effect";
 import { describe, expect, it } from "vite-plus/test";
 
-import { chatSetup } from "./chat-support.ts";
-import { awaited } from "./effect-support.ts";
-import { context } from "./session-support.ts";
+import chatSupport from "./chat-support.ts";
+import effectSupport from "./effect-support.ts";
+import sessionSupport from "./session-support.ts";
+
+const { chatSetup } = chatSupport;
+const { awaited } = effectSupport;
+const { context } = sessionSupport;
 
 const rejectsRegistryWithout = Effect.gen(function* () {
   const empty = createRegistry().snapshot();
   const snapshot: RegistrySnapshot = {
-    installed: () => [],
     extension: () => undefined,
-    tools: () => [],
+    installed: () => [],
     sections: () => [],
-    tasks: () => empty.tasks().filter((task) => task.definition.name !== "msa.generation"),
     task: (name) => (name === "msa.generation" ? undefined : empty.task(name)),
+    tasks: () => empty.tasks().filter((task) => task.definition.name !== "msa.generation"),
+    tools: () => [],
   };
   yield* awaited(
     expect(

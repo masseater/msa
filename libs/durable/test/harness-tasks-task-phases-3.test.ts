@@ -3,31 +3,38 @@ import { defineDoc } from "@msa/durable";
 import { Effect } from "effect";
 import { describe, expect, it } from "vite-plus/test";
 
-import { awaited } from "./effect-support.ts";
-import { user } from "./harness-support.ts";
-import { start, oneStep, type StepRuntime, openRoot } from "./harness-tasks-support.ts";
-import { context, flush } from "./session-support.ts";
-import { completed } from "./task-support.ts";
+import effectSupport from "./effect-support.ts";
+import harnessSupport from "./harness-support.ts";
+import harnessTasksSupport from "./harness-tasks-support.ts";
+import type harnessTasksSupportTypes from "./harness-tasks-support.types.ts";
+import sessionSupport from "./session-support.ts";
+import taskSupport from "./task-support.ts";
+
+const { awaited } = effectSupport;
+const { user } = harnessSupport;
+const { oneStep, openRoot, start } = harnessTasksSupport;
+const { context, flush } = sessionSupport;
+const { completed } = taskSupport;
 
 function watcherTask() {
   const Notes = defineDoc<{ text: string }>({
-    kind: "test.task-notes",
-    version: 1,
-    scope: "session",
     initial: () => ({ text: "" }),
+    kind: "test.task-notes",
+    scope: "session",
+    version: 1,
   });
   const seen: {
-    captured?: StepRuntime<null>;
+    captured?: harnessTasksSupportTypes.StepRuntime<null>;
     watchClosed?: Promise<unknown>;
     absent: unknown;
     handlerContext?: Context;
   } = { absent: "unset" };
   const delivered: string[] = [];
   const Absent = defineDoc<{ text: string }>({
-    kind: "test.task-absent",
-    version: 1,
-    scope: "session",
     initial: () => ({ text: "" }),
+    kind: "test.task-absent",
+    scope: "session",
+    version: 1,
   });
   const Watcher = oneStep("test.watcher", (_task, runtime, ctx) =>
     Effect.runPromise(
@@ -46,7 +53,7 @@ function watcherTask() {
       }),
     ),
   );
-  return { Notes, seen, delivered, Watcher };
+  return { Notes, Watcher, delivered, seen };
 }
 
 const rejectsRuntimeOperations = Effect.gen(function* () {
@@ -103,16 +110,16 @@ describe("task runtime", () => {
 });
 
 const RuntimeNotes = defineDoc<{ text: string }>({
-  kind: "test.runtime-notes",
-  version: 1,
-  scope: "conversation",
-  history: "rewindable",
   fork: "asOf",
+  history: "rewindable",
   initial: () => ({ text: "" }),
+  kind: "test.runtime-notes",
+  scope: "conversation",
+  version: 1,
 });
 
 const readThroughRuntime = Effect.fn("readThroughRuntime")(function* (
-  runtime: StepRuntime<null>,
+  runtime: harnessTasksSupportTypes.StepRuntime<null>,
   ctx: Context,
 ) {
   const id = runtime.conversationId;
@@ -131,7 +138,7 @@ const readsCommittedDocuments = Effect.gen(function* () {
   const runPromise = Effect.runPromiseWith(yield* Effect.context<never>());
 
   const seen: unknown[] = [];
-  let captured: StepRuntime<null> | undefined;
+  let captured: harnessTasksSupportTypes.StepRuntime<null> | undefined;
   const Reader = oneStep("test.reader", (_task, runtime, ctx) =>
     runPromise(
       Effect.gen(function* () {

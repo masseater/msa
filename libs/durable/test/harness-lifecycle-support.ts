@@ -1,19 +1,22 @@
 import type { Context } from "@msa/chord";
-import { type Conversation, defineTask, type Storage, type TaskId } from "@msa/durable";
+import { type Conversation, type Storage, type TaskId, defineTask } from "@msa/durable";
 import { Effect } from "effect";
 import { dual } from "effect/Function";
 
-import { awaited } from "./effect-support.ts";
-import { context } from "./session-support.ts";
-import { completed } from "./task-support.ts";
+import effectSupport from "./effect-support.ts";
+import type harnessLifecycleSupportTypes from "./harness-lifecycle-support.types.ts";
+import sessionSupport from "./session-support.ts";
+import taskSupport from "./task-support.ts";
 
-export type Step = { phase: "run" };
+const { awaited } = effectSupport;
+const { context } = sessionSupport;
+const { completed } = taskSupport;
 
 function oneStepImpl(name: string, run: () => Promise<void> = () => Promise.resolve()) {
-  return defineTask<null, Step, null>({
-    name,
-    version: 1,
+  return defineTask<null, harnessLifecycleSupportTypes.Step, null>({
+    abort: () => Promise.resolve(),
     initial: () => ({ phase: "run" }),
+    name,
     phases: {
       run: (_task, runtime, ctx) =>
         Effect.runPromise(
@@ -23,11 +26,11 @@ function oneStepImpl(name: string, run: () => Promise<void> = () => Promise.reso
           }),
         ),
     },
-    abort: () => Promise.resolve(),
+    version: 1,
   });
 }
 
-export const oneStep: {
+const oneStep: {
   (run?: () => Promise<void>): (name: string) => ReturnType<typeof oneStepImpl>;
   (name: string, run?: () => Promise<void>): ReturnType<typeof oneStepImpl>;
 } = dual((args) => typeof args[0] === "string", oneStepImpl);
@@ -38,12 +41,12 @@ function startImpl(
   background = false,
 ): Promise<TaskId> {
   return conversation.commit(
-    (tx) => tx.createTask(task, null, { ownership: { kind: "conversation" }, background }),
+    (tx) => tx.createTask(task, null, { background, ownership: { kind: "conversation" } }),
     context,
   );
 }
 
-export const start: {
+const start: {
   (
     task: ReturnType<typeof oneStep>,
     background?: boolean,
@@ -55,11 +58,11 @@ export const start: {
   ): ReturnType<typeof startImpl>;
 } = dual((args) => !("definition" in args[0]), startImpl);
 
-export function withSignal(signal: AbortSignal): Context {
+function withSignal(signal: AbortSignal): Context {
   return { ...context, abortSignal: signal };
 }
 
-export function storageOpen(storage: Storage): Promise<boolean> {
+function storageOpen(storage: Storage): Promise<boolean> {
   return Promise.resolve(
     storage.task(1 as TaskId, context).then(
       () => true,
@@ -67,3 +70,12 @@ export function storageOpen(storage: Storage): Promise<boolean> {
     ),
   );
 }
+
+const harnessLifecycleSupport = {
+  oneStep,
+  start,
+  storageOpen,
+  withSignal,
+};
+
+export default harnessLifecycleSupport;

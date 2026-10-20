@@ -4,21 +4,25 @@ import { afterEach, describe, expect, it } from "vite-plus/test";
 
 import type { DocumentId, EntryId, TaskId } from "../src/types.ts";
 import { ROOT_CONVERSATION_ID } from "../src/types.ts";
-import { awaited } from "./effect-support.ts";
-import {
-  terminalTask,
-  sessionDocument,
-  pendingTask,
-  createRoot,
+import effectSupport from "./effect-support.ts";
+import jsonlStorageSupport from "./jsonl-storage-support.ts";
+import type jsonlStorageSupportTypes from "./jsonl-storage-support.types.ts";
+import platformSupport from "./platform-support.ts";
+
+const { awaited } = effectSupport;
+const {
+  InstrumentedEnv,
   context,
+  createRoot,
   openStorage,
   openStorages,
+  pendingTask,
+  sessionDocument,
   tempDirectories,
   tempDirectory,
-  InstrumentedEnv,
-  type Failure,
-} from "./jsonl-storage-support.ts";
-import { removeDir } from "./platform-support.ts";
+  terminalTask,
+} = jsonlStorageSupport;
+const { removeDir } = platformSupport;
 
 afterEach(() =>
   Effect.runPromise(
@@ -43,14 +47,14 @@ const expectCreateFlushOrder = Effect.fn("expectCreateFlushOrder")(function* (fs
     storage.commit(
       [
         {
-          type: "document.create",
+          content: { kind: "base", value: {}, version: 1 },
           record: sessionDocument(secondId, "second"),
-          content: { kind: "base", version: 1, value: {} },
+          type: "document.create",
         },
         {
-          type: "document.create",
+          content: { kind: "base", value: {}, version: 1 },
           record: sessionDocument(firstId, "first"),
-          content: { kind: "base", version: 1, value: {} },
+          type: "document.create",
         },
       ],
       context,
@@ -63,7 +67,7 @@ const expectCreateFlushOrder = Effect.fn("expectCreateFlushOrder")(function* (fs
     "append:main.jsonl",
   ];
   expect(env.operations).toEqual(expected);
-  return { env, storage, firstId };
+  return { env, firstId, storage };
 });
 
 type FlushOrderStore = Effect.Success<ReturnType<typeof expectCreateFlushOrder>>;
@@ -77,9 +81,9 @@ const expectReclaimFlushOrder = Effect.fn("expectReclaimFlushOrder")(function* (
     storage.commit(
       [
         {
-          type: "document.change",
+          content: { kind: "base", value: { checkpoint: true }, version: 1 },
           id: firstId,
-          content: { kind: "base", version: 1, value: { checkpoint: true } },
+          type: "document.change",
         },
       ],
       context,
@@ -102,8 +106,8 @@ const expectReclaimFlushOrder = Effect.fn("expectReclaimFlushOrder")(function* (
         {
           type: "entry",
           value: {
-            id: yield* awaited(storage.mintId<EntryId>()),
             conversationId: ROOT_CONVERSATION_ID,
+            id: yield* awaited(storage.mintId<EntryId>()),
             kind: "main-only",
           },
         },
@@ -130,15 +134,15 @@ const expectTaskSidecarRemoval = Effect.fn("expectTaskSidecarRemoval")(function*
 });
 
 const poisonsFailureAppendCases = [
-  { operation: "append", call: 1, mode: "before" },
-  { operation: "append", call: 1, mode: "after" },
-  { operation: "append", call: 1, mode: "short" },
-  { operation: "append", call: 2, mode: "before" },
-  { operation: "append", call: 2, mode: "after" },
-  { operation: "append", call: 3, mode: "before" },
-  { operation: "append", call: 3, mode: "short" },
-  { operation: "append", call: 3, mode: "after" },
-] as const satisfies readonly Failure[];
+  { call: 1, mode: "before", operation: "append" },
+  { call: 1, mode: "after", operation: "append" },
+  { call: 1, mode: "short", operation: "append" },
+  { call: 2, mode: "before", operation: "append" },
+  { call: 2, mode: "after", operation: "append" },
+  { call: 3, mode: "before", operation: "append" },
+  { call: 3, mode: "short", operation: "append" },
+  { call: 3, mode: "after", operation: "append" },
+] as const satisfies readonly jsonlStorageSupportTypes.Failure[];
 
 const poisonsFailureAppend = Effect.fn("poisonsFailureAppend")(function* (
   failure: (typeof poisonsFailureAppendCases)[number],
@@ -155,14 +159,14 @@ const poisonsFailureAppend = Effect.fn("poisonsFailureAppend")(function* (
       storage.commit(
         [
           {
-            type: "document.create",
+            content: { kind: "base", value: { text: "α" }, version: 1 },
             record: sessionDocument(firstId, "first"),
-            content: { kind: "base", version: 1, value: { text: "α" } },
+            type: "document.create",
           },
           {
-            type: "document.create",
+            content: { kind: "base", value: { text: "β" }, version: 1 },
             record: sessionDocument(secondId, "second"),
-            content: { kind: "base", version: 1, value: { text: "β" } },
+            type: "document.create",
           },
         ],
         context,
@@ -197,11 +201,11 @@ const ordersPublicationFlushes = Effect.gen(function* () {
 });
 
 const poisonsFailureFlushCases = [
-  { operation: "flush", call: 1, mode: "before" },
-  { operation: "flush", call: 1, mode: "after" },
-  { operation: "flush", call: 2, mode: "before" },
-  { operation: "flush", call: 2, mode: "after" },
-] as const satisfies readonly Failure[];
+  { call: 1, mode: "before", operation: "flush" },
+  { call: 1, mode: "after", operation: "flush" },
+  { call: 2, mode: "before", operation: "flush" },
+  { call: 2, mode: "after", operation: "flush" },
+] as const satisfies readonly jsonlStorageSupportTypes.Failure[];
 
 const poisonsFailureFlush = Effect.fn("poisonsFailureFlush")(function* (
   failure: (typeof poisonsFailureFlushCases)[number],
@@ -218,14 +222,14 @@ const poisonsFailureFlush = Effect.fn("poisonsFailureFlush")(function* (
       storage.commit(
         [
           {
-            type: "document.create",
+            content: { kind: "base", value: {}, version: 1 },
             record: sessionDocument(firstId, "flush.first"),
-            content: { kind: "base", version: 1, value: {} },
+            type: "document.create",
           },
           {
-            type: "document.create",
+            content: { kind: "base", value: {}, version: 1 },
             record: sessionDocument(secondId, "flush.second"),
-            content: { kind: "base", version: 1, value: {} },
+            type: "document.create",
           },
         ],
         context,

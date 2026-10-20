@@ -1,35 +1,36 @@
 import type { Context, JsonValue } from "@msa/chord";
-import { defineTask, type Task, type TaskRuntime } from "@msa/durable";
+import { type Task, type TaskRuntime, defineTask } from "@msa/durable";
 import { createRegistry } from "@msa/durable/harness";
 import { MemoryStorage } from "@msa/durable/storage/memory";
 import { Effect } from "effect";
 import { dual } from "effect/Function";
 
-import {
-  awaited,
+import type harnessTasksRecoverySupportTypes from "./harness-tasks-recovery-support.types.ts";
+import support from "./support.ts";
+
+const {
+  abortedWith,
   addTask,
+  awaited,
+  completed,
+  context,
+  eventually,
+  flush,
   joinPath,
   makeTempDir,
-  context,
-  flush,
-  abortedWith,
-  completed,
-  eventually,
   openTasks,
-} from "./support.ts";
+} = support;
 
-export const directories = new Set<string>();
+const directories = new Set<string>();
 
-export const sqlitePath = Effect.fn("sqlitePath")(function* () {
+const sqlitePath = Effect.fn("sqlitePath")(function* () {
   const directory = yield* makeTempDir("msa-durable-tasks-");
   directories.add(directory);
   return joinPath(directory, "session.sqlite");
 });
 
-export type OpenHarness = Effect.Success<ReturnType<typeof openTasks>>["harness"];
-
-export const createIn = Effect.fn("createIn")(function* <S extends { phase: string }, R>(
-  harness: OpenHarness,
+const createIn = Effect.fn("createIn")(function* <S extends { phase: string }, R>(
+  harness: harnessTasksRecoverySupportTypes.OpenHarness,
   task: Task<null, S, R, object>,
 ) {
   const root = yield* awaited(harness.root(context));
@@ -41,8 +42,6 @@ export const createIn = Effect.fn("createIn")(function* <S extends { phase: stri
   );
 });
 
-export type Step = { phase: "run" };
-
 function versionedImpl(
   version: number,
   result: string,
@@ -50,26 +49,26 @@ function versionedImpl(
     input: JsonValue,
     checkpoint: JsonValue,
     fromVersion: number,
-  ) => { input: null; checkpoint: Step },
+  ) => { input: null; checkpoint: harnessTasksRecoverySupportTypes.Step },
 ) {
-  return defineTask<null, Step, JsonValue>({
-    name: "test.versioned",
-    version,
-    initial: () => ({ phase: "run" }),
-    phases: { run: (_task, runtime, ctx) => runtime.commit(() => completed(result), ctx) },
+  return defineTask<null, harnessTasksRecoverySupportTypes.Step, JsonValue>({
     abort: (_task, runtime, ctx) => runtime.commit(() => abortedWith(result), ctx),
+    initial: () => ({ phase: "run" }),
+    name: "test.versioned",
+    phases: { run: (_task, runtime, ctx) => runtime.commit(() => completed(result), ctx) },
+    version,
     ...(migrate === undefined ? {} : { migrate }),
   });
 }
 
-export const versioned: {
+const versioned: {
   (
     result: string,
     migrate?: (
       input: JsonValue,
       checkpoint: JsonValue,
       fromVersion: number,
-    ) => { input: null; checkpoint: Step },
+    ) => { input: null; checkpoint: harnessTasksRecoverySupportTypes.Step },
   ): (version: number) => ReturnType<typeof versionedImpl>;
   (
     version: number,
@@ -78,44 +77,55 @@ export const versioned: {
       input: JsonValue,
       checkpoint: JsonValue,
       fromVersion: number,
-    ) => { input: null; checkpoint: Step },
+    ) => { input: null; checkpoint: harnessTasksRecoverySupportTypes.Step },
   ): ReturnType<typeof versionedImpl>;
 } = dual((args) => typeof args[0] === "number", versionedImpl);
 
-export type Handover = { phase: "a" } | { phase: "b" } | { phase: "c" };
-
-export type Gates = {
-  readonly a?: Promise<void>;
-  readonly b?: Promise<void>;
-  readonly onEnd?: () => void;
-};
+const handoverPhase =
+  (step: {
+    readonly gates: harnessTasksRecoverySupportTypes.Gates | undefined;
+    readonly label: string;
+    readonly log: string[];
+    readonly next: harnessTasksRecoverySupportTypes.Handover;
+    readonly phase: "a" | "b";
+  }) =>
+  (
+    _task: unknown,
+    runtime: TaskRuntime<null, harnessTasksRecoverySupportTypes.Handover, null, object>,
+    ctx: Context,
+  ) =>
+    Effect.runPromise(
+      Effect.gen(function* () {
+        step.log.push(`${step.label}:${step.phase} start`);
+        yield* awaited(step.gates?.[step.phase]);
+        yield* awaited(runtime.commit(() => ({ checkpoint: step.next, status: "running" }), ctx));
+        yield* flush;
+        step.gates?.onEnd?.();
+        step.log.push(`${step.label}:${step.phase} end`);
+      }),
+    );
 
 function handoverTaskImpl(
   label: string,
   version: number,
   log: string[],
   options: {
-    readonly gates?: Gates;
-    readonly migrate?: () => { input: null; checkpoint: Handover };
+    readonly gates?: harnessTasksRecoverySupportTypes.Gates;
+    readonly migrate?: () => { input: null; checkpoint: harnessTasksRecoverySupportTypes.Handover };
   } = {},
 ) {
-  const advance =
-    (phase: "a" | "b", next: Handover) =>
-    (_task: unknown, runtime: TaskRuntime<null, Handover, null, object>, ctx: Context) =>
+  const advance = (phase: "a" | "b", next: harnessTasksRecoverySupportTypes.Handover) =>
+    handoverPhase({ gates: options.gates, label, log, next, phase });
+  return defineTask<null, harnessTasksRecoverySupportTypes.Handover, null>({
+    abort: (_task, runtime, ctx) =>
       Effect.runPromise(
         Effect.gen(function* () {
-          log.push(`${label}:${phase} start`);
-          yield* awaited(options.gates?.[phase]);
-          yield* awaited(runtime.commit(() => ({ status: "running", checkpoint: next }), ctx));
-          yield* flush;
-          options.gates?.onEnd?.();
-          log.push(`${label}:${phase} end`);
+          log.push(`${label}:abort`);
+          yield* awaited(runtime.commit(() => abortedWith(label), ctx));
         }),
-      );
-  return defineTask<null, Handover, null>({
-    name: "test.handover",
-    version,
+      ),
     initial: () => ({ phase: "a" }),
+    name: "test.handover",
     phases: {
       a: advance("a", { phase: "b" }),
       b: advance("b", { phase: "c" }),
@@ -127,24 +137,21 @@ function handoverTaskImpl(
           }),
         ),
     },
-    abort: (_task, runtime, ctx) =>
-      Effect.runPromise(
-        Effect.gen(function* () {
-          log.push(`${label}:abort`);
-          yield* awaited(runtime.commit(() => abortedWith(label), ctx));
-        }),
-      ),
+    version,
     ...(options.migrate === undefined ? {} : { migrate: options.migrate }),
   });
 }
 
-export const handoverTask: {
+const handoverTask: {
   (
     version: number,
     log: string[],
     options?: {
-      readonly gates?: Gates;
-      readonly migrate?: () => { input: null; checkpoint: Handover };
+      readonly gates?: harnessTasksRecoverySupportTypes.Gates;
+      readonly migrate?: () => {
+        input: null;
+        checkpoint: harnessTasksRecoverySupportTypes.Handover;
+      };
     },
   ): (label: string) => ReturnType<typeof handoverTaskImpl>;
   (
@@ -152,15 +159,18 @@ export const handoverTask: {
     version: number,
     log: string[],
     options?: {
-      readonly gates?: Gates;
-      readonly migrate?: () => { input: null; checkpoint: Handover };
+      readonly gates?: harnessTasksRecoverySupportTypes.Gates;
+      readonly migrate?: () => {
+        input: null;
+        checkpoint: harnessTasksRecoverySupportTypes.Handover;
+      };
     },
   ): ReturnType<typeof handoverTaskImpl>;
 } = dual((args) => typeof args[0] === "string", handoverTaskImpl);
 
-export const startHandover = Effect.fn("startHandover")(function* (
+const startHandover = Effect.fn("startHandover")(function* (
   log: string[],
-  gates: Gates,
+  gates: harnessTasksRecoverySupportTypes.Gates,
   storage = new MemoryStorage(),
 ) {
   const registry = createRegistry();
@@ -169,5 +179,16 @@ export const startHandover = Effect.fn("startHandover")(function* (
   const id = yield* createIn(opened.harness, handoverTask("old", 1, log));
   opened.harness.resume();
   yield* eventually(() => log.length === 1);
-  return { ...opened, old, id };
+  return { ...opened, id, old };
 });
+
+const harnessTasksRecoverySupport = {
+  createIn,
+  directories,
+  handoverTask,
+  sqlitePath,
+  startHandover,
+  versioned,
+};
+
+export default harnessTasksRecoverySupport;

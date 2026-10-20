@@ -1,34 +1,30 @@
-import type { Context } from "@msa/chord";
-import { type EntryDraft, type EntryRecord, type Conversation } from "@msa/durable";
+import { type Conversation, type EntryDraft, type EntryRecord } from "@msa/durable";
 import { Effect } from "effect";
 import { afterEach, describe, expect, it, vi } from "vite-plus/test";
 
-import { awaited } from "./effect-support.ts";
-import {
-  appendRandom,
-  count,
-  random,
-  randomTranscript,
-  type RandomTranscript,
-} from "./harness-context-conversation-3-cases.ts";
-import {
-  countingSetup,
-  type Counting,
-  type RunRuntime,
-  runInRoot,
-} from "./harness-context-support.ts";
-import { assistant, describeMessage, system } from "./harness-support.ts";
-import { context } from "./session-support.ts";
+import effectSupport from "./effect-support.ts";
+import harnessContextConversation3Cases from "./harness-context-conversation-3-cases.ts";
+import type harnessContextConversation3CasesTypes from "./harness-context-conversation-3-cases.types.ts";
+import harnessContextSupport from "./harness-context-support.ts";
+import type harnessContextSupportTypes from "./harness-context-support.types.ts";
+import harnessSupport from "./harness-support.ts";
+import sessionSupport from "./session-support.ts";
+
+const { awaited } = effectSupport;
+const { appendRandom, count, random, randomTranscript } = harnessContextConversation3Cases;
+const { countingSetup, runInRoot } = harnessContextSupport;
+const { assistant, describeMessage, system } = harnessSupport;
+const { context } = sessionSupport;
 
 afterEach(() => {
   vi.useRealTimers();
 });
 
 const checkRandomExtendedReads = Effect.fn("checkRandomExtendedReads")(function* (
-  t: RandomTranscript,
+  t: harnessContextConversation3CasesTypes.RandomTranscript,
   root: Conversation,
-  runtime: RunRuntime,
-  taskContext: Context,
+  runtime: harnessContextSupportTypes.RunRuntime,
+  taskContext: harnessContextSupportTypes.Context,
 ) {
   for (const step of Array.from({ length: 150 }, (_, i) => i)) {
     yield* awaited(appendRandom(t, runtime, taskContext, root.id));
@@ -45,23 +41,23 @@ const checkRandomExtendedReads = Effect.fn("checkRandomExtendedReads")(function*
     }
     if (step % 10 === 9) {
       const at = t.written[random(t, t.written.length)]!.id;
-      const [whole, cut] = yield* awaited(
+      const [wholeInner, cut] = yield* awaited(
         Promise.all([
           runtime.context(root.id, taskContext),
           runtime.context(root.id, taskContext, { at }),
         ]),
       );
-      expect(whole).toEqual(yield* awaited(root.context(taskContext)));
+      expect(wholeInner).toEqual(yield* awaited(root.context(taskContext)));
       expect(cut).toEqual(yield* awaited(root.context(taskContext, { at })));
     }
   }
 });
 
 const checkRandomForkReads = Effect.fn("checkRandomForkReads")(function* (
-  t: RandomTranscript,
+  t: harnessContextConversation3CasesTypes.RandomTranscript,
   root: Conversation,
-  runtime: RunRuntime,
-  taskContext: Context,
+  runtime: harnessContextSupportTypes.RunRuntime,
+  taskContext: harnessContextSupportTypes.Context,
 ) {
   const fork = yield* awaited(
     root.fork(
@@ -78,7 +74,11 @@ const checkRandomForkReads = Effect.fn("checkRandomForkReads")(function* (
   }
 });
 
-function contextProbe({ root, scanned }: Counting, runtime: RunRuntime, taskContext: Context) {
+function contextProbe(
+  { root, scanned }: harnessContextSupportTypes.Counting,
+  runtime: harnessContextSupportTypes.RunRuntime,
+  taskContext: harnessContextSupportTypes.Context,
+) {
   const append = (conversationId: Conversation["id"], draft: EntryDraft) =>
     runtime.commit(
       (tx) =>
@@ -118,8 +118,8 @@ const checkBaselineAfterCachedAnswers = Effect.fn("checkBaselineAfterCachedAnswe
 
 const checkSystemBeforeBaseline = Effect.fn("checkSystemBeforeBaseline")(function* (
   { append, read }: ContextProbe,
-  { root, first }: Counting,
-  taskContext: Context,
+  { root, first }: harnessContextSupportTypes.Counting,
+  taskContext: harnessContextSupportTypes.Context,
 ) {
   const fork = yield* awaited(
     root.fork(first.id, { ownership: { kind: "ownerless" } }, taskContext),
@@ -144,9 +144,9 @@ const checkSystemBeforeBaseline = Effect.fn("checkSystemBeforeBaseline")(functio
 
 const checkOmittedSystemBeforeBaseline = Effect.fn("checkOmittedSystemBeforeBaseline")(function* (
   { append, read }: ContextProbe,
-  { root, first }: Counting,
-  runtime: RunRuntime,
-  taskContext: Context,
+  { root, first }: harnessContextSupportTypes.Counting,
+  runtime: harnessContextSupportTypes.RunRuntime,
+  taskContext: harnessContextSupportTypes.Context,
 ) {
   const runPromise = Effect.runPromiseWith(yield* Effect.context<never>());
 
@@ -173,7 +173,7 @@ const checkOmittedSystemBeforeBaseline = Effect.fn("checkOmittedSystemBeforeBase
     ),
   );
   yield* awaited(
-    append(omitted.id, { kind: "edit", edits: [{ target: host!.id, action: "omit" }] }),
+    append(omitted.id, { edits: [{ action: "omit", target: host!.id }], kind: "edit" }),
   );
   expect((yield* awaited(read(omitted))).messages).toEqual(["user:first", "assistant:answer"]);
   yield* awaited(append(omitted.id, { kind: "msa.system", model: [system({ legacy: null })] }));
@@ -184,8 +184,8 @@ const checkOmittedSystemBeforeBaseline = Effect.fn("checkOmittedSystemBeforeBase
 
 const checkEmptyFirstSystemEntry = Effect.fn("checkEmptyFirstSystemEntry")(function* (
   { append, read }: ContextProbe,
-  { root, first }: Counting,
-  taskContext: Context,
+  { root, first }: harnessContextSupportTypes.Counting,
+  taskContext: harnessContextSupportTypes.Context,
 ) {
   const empty = yield* awaited(
     root.fork(first.id, { ownership: { kind: "ownerless" } }, taskContext),

@@ -3,19 +3,19 @@ import { Effect } from "effect";
 import { afterEach, describe, expect, it } from "vite-plus/test";
 
 import { openNodeSqliteStorage } from "../src/storage/sqlite/node.ts";
-import { awaited } from "./effect-support.ts";
-import { createIn, sqlitePath, directories, type Step } from "./harness-tasks-recovery-support.ts";
-import { removeDir } from "./platform-support.ts";
-import { context, flush } from "./session-support.ts";
-import {
-  abortMarked,
-  aborted,
-  abortedWith,
-  completed,
-  deferred,
-  eventually,
-  openTasks,
-} from "./task-support.ts";
+import effectSupport from "./effect-support.ts";
+import harnessTasksRecoverySupport from "./harness-tasks-recovery-support.ts";
+import type harnessTasksRecoverySupportTypes from "./harness-tasks-recovery-support.types.ts";
+import platformSupport from "./platform-support.ts";
+import sessionSupport from "./session-support.ts";
+import taskSupport from "./task-support.ts";
+
+const { awaited } = effectSupport;
+const { createIn, directories, sqlitePath } = harnessTasksRecoverySupport;
+const { removeDir } = platformSupport;
+const { context, flush } = sessionSupport;
+const { abortMarked, aborted, abortedWith, completed, deferred, eventually, openTasks } =
+  taskSupport;
 
 afterEach(() =>
   Effect.runPromise(
@@ -41,25 +41,19 @@ type TransferState = { phase: "prepare" } | { phase: "apply"; key: string };
 
 function transferTask(service: TransferService, interrupt: { first: boolean }) {
   return defineTask<{ amount: number }, TransferState, { receipt: number }>({
-    name: "test.transfer",
-    version: 1,
-    initial: () => ({ phase: "prepare" }),
-    phases: {
-      prepare: (task, runtime, ctx) =>
-        Effect.runPromise(
-          Effect.gen(function* () {
-            yield* awaited(runtime.memo("requested", task.input.amount, ctx));
-            yield* awaited(
-              runtime.commit(
-                () => ({
-                  status: "running",
-                  checkpoint: { phase: "apply", key: `transfer-${task.id}` },
-                }),
-                ctx,
-              ),
-            );
-          }),
+    abort: (_task, runtime, ctx) =>
+      Effect.runPromise(
+        Effect.asVoid(
+          Effect.suspend(() =>
+            awaited(
+              runtime.commit(() => ({ outcome: { status: "aborted" }, status: "terminal" }), ctx),
+            ),
+          ),
         ),
+      ),
+    initial: () => ({ phase: "prepare" }),
+    name: "test.transfer",
+    phases: {
       apply: (task, runtime, ctx) =>
         Effect.runPromise(
           Effect.gen(function* () {
@@ -73,17 +67,23 @@ function transferTask(service: TransferService, interrupt: { first: boolean }) {
             yield* awaited(runtime.commit(() => completed({ receipt }), ctx));
           }),
         ),
-    },
-    abort: (_task, runtime, ctx) =>
-      Effect.runPromise(
-        Effect.asVoid(
-          Effect.suspend(() =>
-            awaited(
-              runtime.commit(() => ({ status: "terminal", outcome: { status: "aborted" } }), ctx),
-            ),
-          ),
+      prepare: (task, runtime, ctx) =>
+        Effect.runPromise(
+          Effect.gen(function* () {
+            yield* awaited(runtime.memo("requested", task.input.amount, ctx));
+            yield* awaited(
+              runtime.commit(
+                () => ({
+                  checkpoint: { key: `transfer-${task.id}`, phase: "apply" },
+                  status: "running",
+                }),
+                ctx,
+              ),
+            );
+          }),
         ),
-      ),
+    },
+    version: 1,
   });
 }
 
@@ -95,19 +95,7 @@ const abortMarkedAtClose = Effect.fn("abortMarkedAtClose")(function* () {
   const abortGate = { block: true };
   const abortReached = deferred();
   const runRelease = deferred();
-  const Abortable = defineTask<null, Step, null>({
-    name: "test.abortable",
-    version: 1,
-    initial: () => ({ phase: "run" }),
-    phases: {
-      run: () =>
-        runPromise(
-          Effect.gen(function* () {
-            log.push("run");
-            yield* awaited(runRelease.promise);
-          }),
-        ),
-    },
+  const Abortable = defineTask<null, harnessTasksRecoverySupportTypes.Step, null>({
     abort: (_task, runtime, ctx) =>
       runPromise(
         Effect.gen(function* () {
@@ -119,6 +107,18 @@ const abortMarkedAtClose = Effect.fn("abortMarkedAtClose")(function* () {
           yield* awaited(runtime.commit(() => abortedWith("stop"), ctx));
         }),
       ),
+    initial: () => ({ phase: "run" }),
+    name: "test.abortable",
+    phases: {
+      run: () =>
+        runPromise(
+          Effect.gen(function* () {
+            log.push("run");
+            yield* awaited(runRelease.promise);
+          }),
+        ),
+    },
+    version: 1,
   });
 
   const opened = yield* openTasks(yield* awaited(openNodeSqliteStorage(path)), [Abortable]);
@@ -132,7 +132,7 @@ const abortMarkedAtClose = Effect.fn("abortMarkedAtClose")(function* () {
   yield* awaited(closing);
   expect(yield* awaited(aborting)).toBe("marked");
   expect(log).toEqual(["run"]);
-  return { path, log, abortGate, abortReached, Abortable, id };
+  return { Abortable, abortGate, abortReached, id, log, path };
 });
 
 const resumesIntentEffect = Effect.gen(function* () {
@@ -156,12 +156,12 @@ const resumesIntentEffect = Effect.gen(function* () {
   expect(yield* awaited(second.harness.getTask(id, context))).toMatchObject({
     abortRequested: false,
     memos: { requested: 7 },
-    state: { status: "pending", checkpoint: { phase: "apply", key: `transfer-${id}` } },
+    state: { checkpoint: { key: `transfer-${id}`, phase: "apply" }, status: "pending" },
   });
   expect(service.calls).toBe(1);
   second.harness.resume();
   const receipt = yield* awaited(second.harness.waitForTask(id, context));
-  expect(receipt.state.outcome).toEqual({ status: "completed", result: { receipt: 70 } });
+  expect(receipt.state.outcome).toEqual({ result: { receipt: 70 }, status: "completed" });
   expect(service.calls).toBe(2);
   expect(service.applied.size).toBe(1);
   yield* awaited(second.harness.close(context));
@@ -236,8 +236,8 @@ const resumesAbortWork = Effect.gen(function* () {
   const unblocked = yield* openTasks(yield* awaited(openNodeSqliteStorage(path)), [Abortable]);
   unblocked.harness.resume();
   expect((yield* awaited(unblocked.harness.waitForTask(id, context))).state.outcome).toEqual({
-    status: "aborted",
     reason: "stop",
+    status: "aborted",
   });
   yield* awaited(unblocked.harness.close(context));
   expect(log).toEqual(["run", "abort", "abort"]);

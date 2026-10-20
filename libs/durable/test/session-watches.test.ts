@@ -1,15 +1,14 @@
 import { Effect } from "effect";
 import { describe, expect, it } from "vite-plus/test";
 
-import { awaited } from "./effect-support.ts";
-import { context, documentChanges, flush, openTestSession } from "./session-support.ts";
-import {
-  StateDoc,
-  createState,
-  deferred,
-  type State,
-  writeState,
-} from "./session-watches-support.ts";
+import effectSupport from "./effect-support.ts";
+import sessionSupport from "./session-support.ts";
+import sessionWatchesSupport from "./session-watches-support.ts";
+import type sessionWatchesSupportTypes from "./session-watches-support.types.ts";
+
+const { awaited } = effectSupport;
+const { context, documentChanges, flush, openTestSession } = sessionSupport;
+const { StateDoc, createState, deferred, writeState } = sessionWatchesSupport;
 
 const neverCreatesAbsent = Effect.gen(function* () {
   const { session, storage } = openTestSession();
@@ -36,16 +35,19 @@ const keepsAcquisitionRevisionStep1 = Effect.gen(function* () {
   expect(watch.value).toBe(initial);
 
   let inline = true;
-  const deliveries: Array<{ value: Readonly<State> | null; ops: unknown }> = [];
+  const deliveries: Array<{
+    value: Readonly<sessionWatchesSupportTypes.State> | null;
+    ops: unknown;
+  }> = [];
   watch.start((value, ops) => {
     expect(inline).toBe(false);
     expect(watch.value).toBe(value);
-    deliveries.push({ value, ops });
+    deliveries.push({ ops, value });
 
     return Promise.resolve();
   });
   inline = false;
-  return { watch, initial, firstPublished, secondPublished, deliveries };
+  return { deliveries, firstPublished, initial, secondPublished, watch };
 });
 
 const keepsAcquisitionRevision = Effect.gen(function* () {
@@ -77,7 +79,7 @@ const serializesCallbacksBuffersStep1 = Effect.gen(function* () {
   const entered = deferred();
   const release = deferred();
   const values: number[] = [];
-  return { runPromise, session, watch, entered, release, values };
+  return { entered, release, runPromise, session, values, watch };
 });
 
 const serializesCallbacksBuffers = Effect.gen(function* () {
@@ -161,12 +163,12 @@ const collapses101Pending = Effect.gen(function* () {
   }
   const deliveries: Array<{ value: number; ops: unknown }> = [];
   watch.start((value, ops) => {
-    deliveries.push({ value: value?.value ?? -1, ops });
+    deliveries.push({ ops, value: value?.value ?? -1 });
 
     return Promise.resolve();
   });
   yield* flush;
-  expect(deliveries).toEqual([{ value: 101, ops: [["r", watch.value]] }]);
+  expect(deliveries).toEqual([{ ops: [["r", watch.value]], value: 101 }]);
   yield* awaited(watch.stop());
 });
 
