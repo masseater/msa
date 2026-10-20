@@ -101,7 +101,7 @@ const entersRenameModeOnCtrlRAnd = () =>
       );
       yield* flushPromises;
 
-      selector.getSessionList().handleInput(CTRL_R);
+      selector.getSessionList().input.handleInput(CTRL_R);
       yield* flushPromises;
 
       const output = selector.render(120).join("\n");

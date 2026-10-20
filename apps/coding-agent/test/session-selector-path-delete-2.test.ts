@@ -43,8 +43,8 @@ const doesNotSwitchScopeBackToAll = () =>
       yield* flushPromises;
 
       const list = selector.getSessionList();
-      list.handleInput("\t");
-      list.handleInput("\t");
+      list.input.handleInput("\t");
+      list.input.handleInput("\t");
 
       allDeferred.resolve([makeSession({ id: "all" })]);
       yield* flushPromises;
@@ -85,9 +85,9 @@ const doesNotStartRedundantAllLoadsWhen = () =>
       yield* flushPromises;
 
       const list = selector.getSessionList();
-      list.handleInput("\t");
-      list.handleInput("\t");
-      list.handleInput("\t");
+      list.input.handleInput("\t");
+      list.input.handleInput("\t");
+      list.input.handleInput("\t");
 
       expect(allLoadCalls).toBe(1);
       expect(selector.getSessionList().getSelectedSessionPath()).toBe(allSessions[0]!.path);

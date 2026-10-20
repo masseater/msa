@@ -52,7 +52,7 @@ export default class SessionSelectorComponent extends tui.Container implements t
       return;
     }
 
-    this.sessionList.handleInput(data);
+    this.sessionList.input.handleInput(data);
   }
 
   get focused(): boolean {

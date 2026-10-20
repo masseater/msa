@@ -98,9 +98,9 @@ const showsAndRemovesAnEnabledModel = Effect.gen(function* () {
   const rendered = selector.render(100).join("\n");
   expect(stripAnsi(rendered)).toContain(`${unavailableId} [unavailable]`);
   expect(rendered).toContain(theme.strikethrough(unavailableId));
-  selector.handleInput("\r");
+  selector.input.handleInput("\r");
   expect(changes).toEqual([[availableId]]);
-  selector.handleInput("\x13");
+  selector.input.handleInput("\x13");
   expect(persisted).toEqual([[availableId]]);
 });
 
@@ -172,7 +172,7 @@ const doesNotClearAPartialScope = Effect.gen(function* () {
   yield* Effect.promise(() => showModelsSelector(context));
   const selector = getSelector();
   if (selector === undefined) throw new Error("Expected scoped-model selector to open");
-  selector.handleInput("\x1b[1;3B");
+  selector.input.handleInput("\x1b[1;3B");
 
   yield* Effect.promise(() =>
     vi.waitFor(() => {

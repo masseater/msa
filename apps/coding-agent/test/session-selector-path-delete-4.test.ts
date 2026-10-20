@@ -52,7 +52,7 @@ const treatsTheCurrentSessionAsActiveAcross = () =>
         errorMessage = message;
       };
 
-      list.handleInput(CTRL_D);
+      list.input.handleInput(CTRL_D);
 
       expect(confirmationChanges).toEqual([]);
       expect(errorMessage).toBe("Cannot delete the currently active session");

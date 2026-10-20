@@ -116,7 +116,7 @@ const cancelsTheBackgroundRefreshWhenThe = Effect.gen(function* () {
   const refresh = openSelector(harness, harness.models);
 
   expect(refresh.refreshSignal).toBeDefined();
-  refresh.selector.handleInput("\x1b");
+  refresh.selector.input.handleInput("\x1b");
   yield* Effect.promise(() => vi.waitFor(() => expect(refresh.refreshSignal?.aborted).toBe(true)));
   expect(refresh.done).toHaveBeenCalledOnce();
 });

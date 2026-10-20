@@ -40,8 +40,8 @@ const doesNotTreatCtrlBackspaceAsDelete = () =>
       const confirmationChanges: Array<string | null> = [];
       list.onDeleteConfirmationChange = (path) => confirmationChanges.push(path);
 
-      list.handleInput("a");
-      list.handleInput(CTRL_BACKSPACE);
+      list.input.handleInput("a");
+      list.input.handleInput(CTRL_BACKSPACE);
 
       expect(confirmationChanges).toEqual([]);
     }),
@@ -69,8 +69,8 @@ const entersConfirmationModeOnCtrlDEven = () =>
       const confirmationChanges: Array<string | null> = [];
       list.onDeleteConfirmationChange = (path) => confirmationChanges.push(path);
 
-      list.handleInput("a");
-      list.handleInput(CTRL_D);
+      list.input.handleInput("a");
+      list.input.handleInput(CTRL_D);
 
       expect(confirmationChanges).toEqual([sessions[0]!.path]);
     }),
@@ -106,10 +106,10 @@ const entersConfirmationModeOnCtrlBackspaceWhen = () =>
           }),
         );
 
-      list.handleInput(CTRL_BACKSPACE);
+      list.input.handleInput(CTRL_BACKSPACE);
       expect(confirmationChanges).toEqual([sessions[0]!.path]);
 
-      list.handleInput("\r");
+      list.input.handleInput("\r");
       expect(confirmationChanges).toEqual([sessions[0]!.path, null]);
       expect(deletedPath).toBe(sessions[0]!.path);
     }),

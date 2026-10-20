@@ -80,7 +80,7 @@ const marksEveryModelAfterEnablingAll = () =>
       ];
       const selector = yield* awaited(createSelector(models));
 
-      selector.handleInput("\x01");
+      selector.input.handleInput("\x01");
 
       expect(models.map((model) => model.enabled)).toEqual([true, true, true]);
       expect(getMarkerStates(selector, models)).toEqual([true, true, true]);
@@ -98,8 +98,8 @@ const disablesOnlyTheSelectedModelAfterEnabling = () =>
       ];
       const selector = yield* awaited(createSelector(models));
 
-      selector.handleInput("\x01");
-      selector.handleInput("\r");
+      selector.input.handleInput("\x01");
+      selector.input.handleInput("\r");
 
       expect(models.map((model) => model.enabled)).toEqual([false, true, true]);
       expect(getMarkerStates(selector, models)).toEqual([false, true, true]);
@@ -116,11 +116,11 @@ const enablesOnlyTheSelectedModelAfterClearing = () =>
       ];
       const selector = yield* awaited(createSelector(models));
 
-      selector.handleInput("\x18");
+      selector.input.handleInput("\x18");
       expect(models.map((model) => model.enabled)).toEqual([false, false, false]);
       expect(getMarkerStates(selector, models)).toEqual([false, false, false]);
 
-      selector.handleInput("\r");
+      selector.input.handleInput("\r");
       expect(models.map((model) => model.enabled)).toEqual([true, false, false]);
       expect(getMarkerStates(selector, models)).toEqual([true, false, false]);
     }),
@@ -136,11 +136,11 @@ const restoresTheAllEnabledStateAfterRe = () =>
       ];
       const selector = yield* awaited(createSelector(models));
 
-      selector.handleInput("\x01");
-      selector.handleInput("\r");
-      selector.handleInput("\x1b[B");
-      selector.handleInput("\x1b[B");
-      selector.handleInput("\r");
+      selector.input.handleInput("\x01");
+      selector.input.handleInput("\r");
+      selector.input.handleInput("\x1b[B");
+      selector.input.handleInput("\x1b[B");
+      selector.input.handleInput("\r");
 
       expect(models.map((model) => model.enabled)).toEqual([true, true, true]);
       expect(getMarkerStates(selector, models)).toEqual([true, true, true]);

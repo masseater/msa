@@ -54,7 +54,7 @@ const propagatesReorderedScopedModelsBackTo = Effect.gen(function* () {
     },
   );
 
-  selector.handleInput("\x1b[1;3B");
+  selector.input.handleInput("\x1b[1;3B");
 
   expect(changes).toEqual([[orderedIds[1], orderedIds[0], orderedIds[2]]]);
 });
