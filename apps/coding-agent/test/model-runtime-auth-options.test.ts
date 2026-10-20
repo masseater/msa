@@ -41,7 +41,7 @@ const scopesProviderAvailabilityReadsAndRecordsRefresh = () =>
         modify: (providerId, fn) => base.modify(providerId, fn),
         read: (providerId) => {
           reads.push(providerId);
-          if (failReads) throw new Error(`read failed for ${providerId}`);
+          if (failReads) return Promise.reject(new Error(`read failed for ${providerId}`));
           return base.read(providerId);
         },
       };
@@ -53,10 +53,10 @@ const scopesProviderAvailabilityReadsAndRecordsRefresh = () =>
 
       failReads = true;
       expect(yield* failure(awaited(runtime.getAvailable("anthropic-api")))).toMatchObject({
-        message: "Credential store read failed for anthropic",
+        message: "Credential store read failed for anthropic-api",
       });
       expect(runtime.getError()).toContain(
-        "Availability refresh: Credential store read failed for anthropic",
+        "Availability refresh: Credential store read failed for anthropic-api",
       );
 
       failReads = false;

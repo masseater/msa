@@ -1,7 +1,9 @@
 import { stripVTControlCharacters } from "node:util";
 
 import type agentTypes from "@msa/agent-core/index.types";
+import testing from "@msa/testing";
 import type tuiTypes from "@msa/tui/index.types";
+import { Effect } from "effect";
 import { afterEach, beforeAll, describe, expect, it, vi } from "vite-plus/test";
 
 import type { ToolRenderContext } from "../src/core/extensions/types.ts";
@@ -9,6 +11,8 @@ import { codemodeRenderers } from "../src/extensions/codemode/renderer.ts";
 import type { CodemodeToolDetails } from "../src/extensions/codemode/tool.ts";
 import { ToolExecutionComponent } from "../src/modes/interactive/components/tool-execution.ts";
 import { initTheme, theme } from "../src/modes/interactive/theme/theme.ts";
+
+const { runTest } = testing;
 
 function render(
   result: agentTypes.AgentToolResult<CodemodeToolDetails | undefined>,
@@ -125,32 +129,35 @@ const collapsesToTheLatestCallAndOne = () => {
   expect(text).not.toContain("second line");
 };
 
-const showsTheElapsedTimeWhileTheScript = () => {
-  vi.useFakeTimers();
-  vi.setSystemTime(0);
-  const tui = { requestRender: () => {} } as unknown as tuiTypes.TUI;
-  const component = new ToolExecutionComponent(
-    "codemode",
-    "call",
-    { code: "" },
-    {},
-    codemodeRenderers,
-    tui,
-    "/",
-  );
-  const text = () => stripVTControlCharacters(component.render(120).join("\n"));
-  component.markExecutionStarted();
-  component.updateResult({ content: [], details: { calls: [] }, isError: false }, true);
-  vi.advanceTimersByTime(3_000);
-  expect(text()).toContain("Elapsed 3.0s");
+const showsTheElapsedTimeWhileTheScript = () =>
+  runTest(
+    Effect.gen(function* () {
+      vi.useFakeTimers();
+      vi.setSystemTime(0);
+      const tui = { requestRender: () => {} } as unknown as tuiTypes.TUI;
+      const component = new ToolExecutionComponent(
+        "codemode",
+        "call",
+        { code: "" },
+        {},
+        codemodeRenderers,
+        tui,
+        "/",
+      );
+      const text = () => stripVTControlCharacters(component.render(120).join("\n"));
+      component.markExecutionStarted();
+      component.updateResult({ content: [], details: { calls: [] }, isError: false }, true);
+      yield* Effect.promise(() => vi.advanceTimersByTimeAsync(3_000));
+      expect(text()).toContain("Elapsed 3.0s");
 
-  component.updateResult(
-    { content: [], details: { calls: [] }, durationMs: 5_100, isError: false },
-    false,
+      component.updateResult(
+        { content: [], details: { calls: [] }, durationMs: 5_100, isError: false },
+        false,
+      );
+      expect(text()).toContain("Took 5.1s");
+      expect(text()).not.toContain("Elapsed");
+    }),
   );
-  expect(text()).toContain("Took 5.1s");
-  expect(text()).not.toContain("Elapsed");
-};
 
 describe("codemode renderer", () => {
   beforeAll(() => initTheme("dark"));

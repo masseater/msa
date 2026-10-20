@@ -38,7 +38,7 @@ export interface PresetStore {
   presets: PresetsConfig;
   activeName: string | undefined;
   active: Preset | undefined;
-  load(cwd: string): void;
+  load(cwd: string): Promise<void>;
   apply(name: string, preset: Preset, ctx: ExtensionContext): Promise<boolean>;
   clear(ctx: ExtensionContext): Promise<void>;
   restoreActive(name: string): void;
@@ -52,22 +52,25 @@ const fsService = runtime.runSync(FileSystem.FileSystem);
 
 const parsePresets = Schema.decodeUnknownOption(Schema.fromJsonString(PresetsSchema));
 
-const readPresets = (file: string): PresetsConfig => {
-  const content = runtime.runSync(fsService.readFileString(file).pipe(Effect.option));
-  if (Option.isNone(content)) return {};
+const readPresets = (file: string) =>
+  Effect.gen(function* () {
+    const content = yield* fsService.readFileString(file).pipe(Effect.option);
+    if (Option.isNone(content)) return {};
+    const parsed = parsePresets(content.value);
+    if (Option.isNone(parsed)) {
+      yield* Console.error(`Failed to load presets from ${file}`);
+      return {};
+    }
+    return parsed.value;
+  });
 
-  const parsed = parsePresets(content.value);
-  if (Option.isNone(parsed)) {
-    Effect.runSync(Console.error(`Failed to load presets from ${file}`));
-    return {};
-  }
-  return parsed.value;
-};
-
-const loadPresets = (cwd: string): PresetsConfig => ({
-  ...readPresets(pathService.join(getAgentDir(), "presets.json")),
-  ...readPresets(pathService.join(cwd, CONFIG_DIR_NAME, "presets.json")),
-});
+const loadPresets = (cwd: string) =>
+  Effect.gen(function* () {
+    const global = yield* readPresets(pathService.join(getAgentDir(), "presets.json"));
+    const project = yield* readPresets(pathService.join(cwd, CONFIG_DIR_NAME, "presets.json"));
+    const presets: PresetsConfig = { ...global, ...project };
+    return presets;
+  });
 
 const describePreset = (preset: Preset): string => {
   const parts: string[] = [];
@@ -225,9 +228,12 @@ export const createPresetStore = (msa: ExtensionAPI): PresetStore => {
     },
     apply: (name, preset, ctx) => runtime.runPromise(apply(msa, state, name, preset, ctx)),
     clear: (ctx) => runtime.runPromise(clearPreset(msa, state, ctx)),
-    load: (cwd) => {
-      state.presets = loadPresets(cwd);
-    },
+    load: (cwd) =>
+      runtime.runPromise(
+        Effect.map(loadPresets(cwd), (presets) => {
+          state.presets = presets;
+        }),
+      ),
     order: () => Object.keys(state.presets).sort(),
     get presets() {
       return state.presets;

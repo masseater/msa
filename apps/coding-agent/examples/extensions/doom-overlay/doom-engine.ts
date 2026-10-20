@@ -2,7 +2,7 @@ import { createRequire } from "node:module";
 import { fileURLToPath } from "node:url";
 
 import { NodeServices } from "@effect/platform-node";
-import { FileSystem, ManagedRuntime, Path } from "effect";
+import { Effect, FileSystem, ManagedRuntime, Path } from "effect";
 
 export interface DoomModule {
   _doomgeneric_Create: (argc: number, argv: number) => void;
@@ -33,12 +33,7 @@ const runtime = ManagedRuntime.make(NodeServices.layer);
 const pathService = runtime.runSync(Path.Path);
 const fsService = runtime.runSync(FileSystem.FileSystem);
 
-const readText = (file: string): string => runtime.runSync(fsService.readFileString(file));
-const readBytes = (file: string): Uint8Array => runtime.runSync(fsService.readFile(file));
-const fileExists = (file: string): boolean => runtime.runSync(fsService.exists(file));
-
-const loadDoomFactory = (buildDir: string, doomJsPath: string): DoomFactory => {
-  const doomJsCode = readText(doomJsPath);
+const loadDoomFactory = (buildDir: string, doomJsPath: string, doomJsCode: string): DoomFactory => {
   const moduleExports: { exports: unknown } = { exports: {} };
   const moduleFunc = new Function(
     "module",
@@ -89,24 +84,32 @@ export class DoomEngine {
     const buildDir = pathService.join(here, "doom", "build");
     const doomJsPath = pathService.join(buildDir, "doom.js");
 
-    if (!fileExists(doomJsPath)) {
-      return Promise.reject(
-        new Error(`WASM not found at ${doomJsPath}. Run ./doom/build.sh first`),
-      );
-    }
-
-    const wadArray = Array.from(readBytes(this.wadPath));
-    const createDoomModule = loadDoomFactory(buildDir, doomJsPath);
-
-    return createDoomModule(moduleConfig(buildDir, wadArray)).then((module) => {
-      this.module = module;
-      this.initDoom();
-      this.frameBufferPtr = module["_DG_GetFrameBuffer"]();
-      this.frameWidth = module["_DG_GetScreenWidth"]();
-      this.frameHeight = module["_DG_GetScreenHeight"]();
-      this.initialized = true;
-      return undefined;
-    });
+    const wadPath = this.wadPath;
+    return runtime
+      .runPromise(
+        Effect.gen(function* () {
+          if (!(yield* fsService.exists(doomJsPath).pipe(Effect.orElseSucceed(() => false)))) {
+            return yield* Effect.fail(
+              new Error(`WASM not found at ${doomJsPath}. Run ./doom/build.sh first`),
+            );
+          }
+          const doomJsCode = yield* fsService.readFileString(doomJsPath);
+          const wad = yield* fsService.readFile(wadPath);
+          return { doomJsCode, wadArray: Array.from(wad) };
+        }),
+      )
+      .then(({ doomJsCode, wadArray }) =>
+        loadDoomFactory(buildDir, doomJsPath, doomJsCode)(moduleConfig(buildDir, wadArray)),
+      )
+      .then((module) => {
+        this.module = module;
+        this.initDoom();
+        this.frameBufferPtr = module["_DG_GetFrameBuffer"]();
+        this.frameWidth = module["_DG_GetScreenWidth"]();
+        this.frameHeight = module["_DG_GetScreenHeight"]();
+        this.initialized = true;
+        return undefined;
+      });
   }
 
   private initDoom(): void {

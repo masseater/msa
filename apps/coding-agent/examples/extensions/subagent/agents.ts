@@ -42,38 +42,15 @@ function parseToolList(value: unknown): string[] | undefined {
   return tools.length > 0 ? tools : undefined;
 }
 
-function loadAgentsFromDir(dir: string, source: "user" | "project"): AgentConfig[] {
-  const agents: AgentConfig[] = [];
-
-  if (!runtime.runSync(fsService.exists(dir))) {
-    return agents;
-  }
-
-  let names: string[];
-  try {
-    names = runtime.runSync(fsService.readDirectory(dir));
-  } catch {
-    return agents;
-  }
-
-  for (const name of names) {
-    if (!name.endsWith(".md")) continue;
-
-    const filePath = pathService.join(dir, name);
-    let content: string;
-    try {
-      content = runtime.runSync(fsService.readFileString(filePath));
-    } catch {
-      continue;
-    }
-
-    const { frontmatter, body } = parseFrontmatter<AgentFrontmatter>(content);
-
+const readAgentFile = (filePath: string, source: "user" | "project") =>
+  Effect.gen(function* () {
+    const content = yield* fsService.readFileString(filePath).pipe(Effect.option);
+    if (Option.isNone(content)) return undefined;
+    const { frontmatter, body } = parseFrontmatter<AgentFrontmatter>(content.value);
     if (typeof frontmatter.name !== "string" || typeof frontmatter.description !== "string") {
-      continue;
+      return undefined;
     }
-
-    agents.push({
+    const agent: AgentConfig = {
       description: frontmatter.description,
       filePath,
       model: typeof frontmatter.model === "string" ? frontmatter.model : undefined,
@@ -81,56 +58,61 @@ function loadAgentsFromDir(dir: string, source: "user" | "project"): AgentConfig
       source,
       systemPrompt: body,
       tools: parseToolList(frontmatter.tools),
-    });
-  }
+    };
+    return agent;
+  });
 
-  return agents;
-}
+const loadAgentsFromDir = (dir: string, source: "user" | "project") =>
+  Effect.gen(function* () {
+    const names = yield* fsService.readDirectory(dir).pipe(Effect.orElseSucceed(() => []));
+    const agents = yield* Effect.forEach(
+      names.filter((name) => name.endsWith(".md")),
+      (name) => readAgentFile(pathService.join(dir, name), source),
+    );
+    return agents.filter((agent): agent is AgentConfig => agent !== undefined);
+  });
 
-function isDirectory(p: string): boolean {
-  const info = runtime.runSync(fsService.stat(p).pipe(Effect.option));
-  return Option.isSome(info) && info.value.type === "Directory";
-}
+const isDirectory = (p: string) =>
+  fsService.stat(p).pipe(
+    Effect.map((info) => info.type === "Directory"),
+    Effect.orElseSucceed(() => false),
+  );
 
-function findNearestProjectAgentsDir(cwd: string): string | null {
-  let currentDir = cwd;
-  while (true) {
-    const candidate = pathService.join(currentDir, CONFIG_DIR_NAME, "agents");
-    if (isDirectory(candidate)) return candidate;
+const findNearestProjectAgentsDir = (cwd: string) =>
+  Effect.gen(function* () {
+    let currentDir = cwd;
+    for (;;) {
+      const candidate = pathService.join(currentDir, CONFIG_DIR_NAME, "agents");
+      if (yield* isDirectory(candidate)) return candidate;
+      const parentDir = pathService.dirname(currentDir);
+      if (parentDir === currentDir) return null;
+      currentDir = parentDir;
+    }
+  });
 
-    const parentDir = pathService.dirname(currentDir);
-    if (parentDir === currentDir) return null;
-    currentDir = parentDir;
-  }
-}
+const discoverAgentsImpl = (cwd: string, scope: AgentScope) =>
+  Effect.gen(function* () {
+    const userDir = pathService.join(getAgentDir(), "agents");
+    const projectAgentsDir = yield* findNearestProjectAgentsDir(cwd);
+    const userAgents = scope === "project" ? [] : yield* loadAgentsFromDir(userDir, "user");
+    const projectAgents =
+      scope === "user" || projectAgentsDir === null || projectAgentsDir.length === 0
+        ? []
+        : yield* loadAgentsFromDir(projectAgentsDir, "project");
 
-function discoverAgentsImpl(cwd: string, scope: AgentScope): AgentDiscoveryResult {
-  const userDir = pathService.join(getAgentDir(), "agents");
-  const projectAgentsDir = findNearestProjectAgentsDir(cwd);
-
-  const userAgents = scope === "project" ? [] : loadAgentsFromDir(userDir, "user");
-  const projectAgents =
-    scope === "user" || projectAgentsDir === null || projectAgentsDir.length === 0
-      ? []
-      : loadAgentsFromDir(projectAgentsDir, "project");
-
-  const agentMap = new Map<string, AgentConfig>();
-
-  if (scope === "both") {
-    for (const agent of userAgents) agentMap.set(agent.name, agent);
-    for (const agent of projectAgents) agentMap.set(agent.name, agent);
-  } else if (scope === "user") {
-    for (const agent of userAgents) agentMap.set(agent.name, agent);
-  } else {
-    for (const agent of projectAgents) agentMap.set(agent.name, agent);
-  }
-
-  return { agents: Array.from(agentMap.values()), projectAgentsDir };
-}
+    const agentMap = new Map<string, AgentConfig>();
+    if (scope !== "project") for (const agent of userAgents) agentMap.set(agent.name, agent);
+    if (scope !== "user") for (const agent of projectAgents) agentMap.set(agent.name, agent);
+    const result: AgentDiscoveryResult = {
+      agents: Array.from(agentMap.values()),
+      projectAgentsDir,
+    };
+    return result;
+  });
 
 export const discoverAgents: {
-  (cwd: string, scope: AgentScope): AgentDiscoveryResult;
-  (scope: AgentScope): (cwd: string) => AgentDiscoveryResult;
+  (cwd: string, scope: AgentScope): Effect.Effect<AgentDiscoveryResult>;
+  (scope: AgentScope): (cwd: string) => Effect.Effect<AgentDiscoveryResult>;
 } = dual(2, discoverAgentsImpl);
 
 function formatAgentListImpl(

@@ -25,25 +25,21 @@ class WadDownloadError extends Data.TaggedError("WadDownloadError")<{
 const expandHome = (path: string): string =>
   pathService.resolve(path.replace(/^~/u, readProcessEnv("HOME") || ""));
 
-const exists = (path: string): boolean => runtime.runSync(fsService.exists(path));
+const exists = (path: string) => fsService.exists(path).pipe(Effect.orElseSucceed(() => false));
 
-export function findWadFile(customPath?: string): string | null {
-  if (customPath !== undefined && customPath.length > 0) {
-    const resolved = expandHome(customPath);
-    return exists(resolved) ? resolved : null;
-  }
-
-  if (exists(BUNDLED_WAD)) {
-    return BUNDLED_WAD;
-  }
-
-  for (const candidate of DEFAULT_WAD_PATHS) {
-    const resolved = expandHome(candidate);
-    if (exists(resolved)) return resolved;
-  }
-
-  return null;
-}
+const findWadFile = (customPath?: string) =>
+  Effect.gen(function* () {
+    if (customPath !== undefined && customPath.length > 0) {
+      const resolved = expandHome(customPath);
+      return (yield* exists(resolved)) ? resolved : null;
+    }
+    if (yield* exists(BUNDLED_WAD)) return BUNDLED_WAD;
+    for (const candidate of DEFAULT_WAD_PATHS) {
+      const resolved = expandHome(candidate);
+      if (yield* exists(resolved)) return resolved;
+    }
+    return null;
+  });
 
 const downloadWad = Effect.gen(function* () {
   const client = yield* HttpClient.HttpClient;
@@ -63,10 +59,11 @@ const downloadWad = Effect.gen(function* () {
   return BUNDLED_WAD;
 });
 
-export const ensureWadFile = (): Promise<string | null> => {
-  const existing = findWadFile();
-  if (existing !== null && existing.length > 0) {
-    return Promise.resolve(existing);
-  }
-  return runtime.runPromise(downloadWad.pipe(Effect.orElseSucceed(() => null)));
-};
+export const ensureWadFile = (): Promise<string | null> =>
+  runtime.runPromise(
+    Effect.gen(function* () {
+      const existing = yield* findWadFile();
+      if (existing !== null && existing.length > 0) return existing;
+      return yield* downloadWad.pipe(Effect.orElseSucceed(() => null));
+    }),
+  );

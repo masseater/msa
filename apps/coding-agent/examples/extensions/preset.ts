@@ -112,10 +112,9 @@ export default function presetExtension(msa: ExtensionAPI) {
     return undefined;
   });
 
-  msa.on("session_start", (_event, ctx) => {
-    store.load(ctx.cwd);
-    restoreFromBranch(msa, store, ctx);
-  });
+  msa.on("session_start", (_event, ctx) =>
+    store.load(ctx.cwd).then(() => restoreFromBranch(msa, store, ctx)),
+  );
 
   msa.on("turn_start", () => {
     const name = store.activeName;

@@ -78,7 +78,7 @@ const installExtensionRunner = (
       eventType === "tool_call" && handlers.emitToolCall !== undefined,
     invalidate: () => {},
   };
-  Reflect.set(session, "_extensionRunner", runner);
+  Reflect.set(session, "extensionRunnerInternal", runner);
 };
 
 const agentSessionConcurrentSupport = {

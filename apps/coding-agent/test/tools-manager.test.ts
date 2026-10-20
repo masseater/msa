@@ -30,7 +30,7 @@ const resolvesTheVersionFromTheReleasePage = () =>
   runTest(
     Effect.gen(function* () {
       const fetchMock = vi.fn(() =>
-        redirectResponse("https://github.com/sharkdp/fd/releases/tag/v10.4.2"),
+        Promise.resolve(redirectResponse("https://github.com/sharkdp/fd/releases/tag/v10.4.2")),
       );
       vi.stubGlobal("fetch", fetchMock);
 
@@ -47,7 +47,11 @@ const keepsTagsWithoutAVPrefixIntact = () =>
     Effect.gen(function* () {
       vi.stubGlobal(
         "fetch",
-        vi.fn(() => redirectResponse("https://github.com/BurntSushi/ripgrep/releases/tag/15.2.0")),
+        vi.fn(() =>
+          Promise.resolve(
+            redirectResponse("https://github.com/BurntSushi/ripgrep/releases/tag/15.2.0"),
+          ),
+        ),
       );
 
       expect(yield* awaited(getLatestVersion("BurntSushi/ripgrep"))).toBe("15.2.0");
@@ -59,7 +63,7 @@ const resolvesRelativeRedirectTargets = () =>
     Effect.gen(function* () {
       vi.stubGlobal(
         "fetch",
-        vi.fn(() => redirectResponse("/sharkdp/fd/releases/tag/v10.4.2")),
+        vi.fn(() => Promise.resolve(redirectResponse("/sharkdp/fd/releases/tag/v10.4.2"))),
       );
 
       expect(yield* awaited(getLatestVersion("sharkdp/fd"))).toBe("10.4.2");
@@ -75,7 +79,7 @@ const discardsTheRedirectResponseBody = () =>
       });
       vi.stubGlobal(
         "fetch",
-        vi.fn(() => response),
+        vi.fn(() => Promise.resolve(response)),
       );
 
       expect(yield* awaited(getLatestVersion("sharkdp/fd"))).toBe("10.4.2");
@@ -88,7 +92,7 @@ const failsClearlyWhenTheEndpointDoesNot = () =>
     Effect.gen(function* () {
       vi.stubGlobal(
         "fetch",
-        vi.fn(() => new Response("not found", { status: 404 })),
+        vi.fn(() => Promise.resolve(new Response("not found", { status: 404 }))),
       );
 
       expect(yield* failure(awaited(getLatestVersion("sharkdp/fd")))).toMatchObject({
@@ -102,7 +106,7 @@ const failsClearlyWhenTheRedirectDoesNot = () =>
     Effect.gen(function* () {
       vi.stubGlobal(
         "fetch",
-        vi.fn(() => redirectResponse("https://github.com/login")),
+        vi.fn(() => Promise.resolve(redirectResponse("https://github.com/login"))),
       );
 
       expect(yield* failure(awaited(getLatestVersion("sharkdp/fd")))).toMatchObject({
@@ -156,9 +160,7 @@ const surfacesTheErrorCauseChainWhenA = () =>
       const cause = new Error("connect ETIMEDOUT 140.82.113.3:443");
       vi.stubGlobal(
         "fetch",
-        vi.fn(() => {
-          throw new TypeError("fetch failed", { cause });
-        }),
+        vi.fn(() => Promise.reject(new TypeError("fetch failed", { cause }))),
       );
       const statuses: ToolStatus[] = [];
 

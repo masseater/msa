@@ -1,6 +1,4 @@
 import * as Clock from "effect/Clock";
-import * as Config from "effect/Config";
-import * as ConfigProvider from "effect/ConfigProvider";
 import * as Console from "effect/Console";
 import * as DateTime from "effect/DateTime";
 import * as Deferred from "effect/Deferred";
@@ -32,13 +30,7 @@ export const toEpochMs = (value: string | number): number =>
 export const toDate = (value: string | number): Date =>
   DateTime.toDate(Option.getOrElse(DateTime.make(value), () => DateTime.makeUnsafe(0)));
 
-export const readEnv = (name: string): string | undefined =>
-  Effect.runSync(
-    Config.String(name)
-      .pipe(Config.withDefault(undefined))
-      .parse(ConfigProvider.fromEnv({ preserveEmptyStrings: true }))
-      .pipe(Effect.orDie),
-  );
+export { readEnv } from "./process-env.ts";
 
 export const randomUnit = (): number => Effect.runSync(Random.next);
 

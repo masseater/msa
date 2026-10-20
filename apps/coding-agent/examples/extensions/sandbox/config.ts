@@ -37,17 +37,17 @@ const DEFAULT_CONFIG: SandboxConfig = {
 
 const parseConfig = Schema.decodeUnknownOption(Schema.fromJsonString(Schema.Json));
 
-const readConfigFile = (file: string): Partial<SandboxConfig> => {
-  const content = runtime.runSync(fsService.readFileString(file).pipe(Effect.option));
-  if (Option.isNone(content)) return {};
-
-  const parsed = parseConfig(content.value);
-  if (Option.isNone(parsed)) {
-    Effect.runSync(Console.error(`Warning: Could not parse ${file}`));
-    return {};
-  }
-  return parsed.value as Partial<SandboxConfig>;
-};
+const readConfigFile = (file: string) =>
+  Effect.gen(function* () {
+    const content = yield* fsService.readFileString(file).pipe(Effect.option);
+    if (Option.isNone(content)) return {};
+    const parsed = parseConfig(content.value);
+    if (Option.isNone(parsed)) {
+      yield* Console.error(`Warning: Could not parse ${file}`);
+      return {};
+    }
+    return parsed.value as Partial<SandboxConfig>;
+  });
 
 const deepMerge = (base: SandboxConfig, overrides: Partial<SandboxConfig>): SandboxConfig => {
   const result: SandboxConfig = { ...base };
@@ -79,11 +79,11 @@ const deepMerge = (base: SandboxConfig, overrides: Partial<SandboxConfig>): Sand
   return result;
 };
 
-export const loadConfig = (cwd: string): SandboxConfig =>
-  deepMerge(
-    deepMerge(
-      DEFAULT_CONFIG,
-      readConfigFile(pathService.join(getAgentDir(), "extensions", "sandbox.json")),
-    ),
-    readConfigFile(pathService.join(cwd, CONFIG_DIR_NAME, "sandbox.json")),
-  );
+export const loadConfig = (cwd: string): Effect.Effect<SandboxConfig> =>
+  Effect.gen(function* () {
+    const global = yield* readConfigFile(
+      pathService.join(getAgentDir(), "extensions", "sandbox.json"),
+    );
+    const project = yield* readConfigFile(pathService.join(cwd, CONFIG_DIR_NAME, "sandbox.json"));
+    return deepMerge(deepMerge(DEFAULT_CONFIG, global), project);
+  });

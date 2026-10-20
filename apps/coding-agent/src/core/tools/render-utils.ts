@@ -2,7 +2,7 @@ import { pathToFileURL } from "node:url";
 
 import type aiTypes from "@msa/ai/index.types";
 import tui from "@msa/tui";
-import { Effect, type Fiber, Function as Fn, Predicate } from "effect";
+import { Effect, type Fiber, Function as Fn, Predicate, Schedule } from "effect";
 
 import type { Theme } from "../../modes/interactive/theme/theme.ts";
 import { stripAnsi } from "../../utils/ansi.ts";
@@ -160,9 +160,10 @@ export function startToolTimer(context: ToolRenderContext<ToolTimerState>): void
 
 const startTicker = (context: ToolRenderContext<ToolTimerState>): Fiber.Fiber<never> =>
   platformRuntime.runFork(
-    Effect.sleep(1000).pipe(
-      Effect.andThen(Effect.sync(() => context.invalidate())),
-      Effect.forever,
+    Effect.sync(() => context.invalidate()).pipe(
+      Effect.delay(1000),
+      Effect.repeat(Schedule.fixed(1000)),
+      Effect.andThen(Effect.never),
     ),
   );
 

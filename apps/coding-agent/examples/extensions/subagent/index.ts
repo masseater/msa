@@ -26,7 +26,7 @@ export default function (msa: ExtensionAPI) {
       Effect.runPromise(
         Effect.gen(function* () {
           const agentScope = params.agentScope ?? "user";
-          const discovery = discoverAgents(ctx.cwd, agentScope);
+          const discovery = yield* discoverAgents(ctx.cwd, agentScope);
           const dispatchDefaults: DispatchDefaults = {
             model: ctx.model === undefined ? undefined : `${ctx.model.provider}/${ctx.model.id}`,
             thinkingLevel: ctx.thinkingLevel,

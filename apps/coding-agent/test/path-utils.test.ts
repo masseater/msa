@@ -4,8 +4,16 @@ import { afterEach, beforeEach, describe, expect, it } from "vite-plus/test";
 
 import { expandPath, resolveReadPath, resolveToCwd } from "../src/core/tools/path-utils.ts";
 
-const { joinPath, makeTempDir, removePath, resolvePath, runTest, tempRoot, writeTextFile } =
-  testing;
+const {
+  awaited,
+  joinPath,
+  makeTempDir,
+  removePath,
+  resolvePath,
+  runTest,
+  tempRoot,
+  writeTextFile,
+} = testing;
 
 let tempDir: string;
 
@@ -53,7 +61,7 @@ const shouldResolveExistingFilePath = () =>
       const fileName = "test-file.txt";
       yield* writeTextFile(joinPath(tempDir, fileName), "content");
 
-      const result = resolveReadPath(fileName, tempDir);
+      const result = yield* awaited(resolveReadPath(fileName, tempDir));
       expect(result).toBe(joinPath(tempDir, fileName));
     }),
   );
@@ -70,7 +78,7 @@ const shouldHandleNfcVsNfdUnicodeNormalization = () =>
 
       yield* writeTextFile(joinPath(tempDir, nfdFileName), "content");
 
-      const result = resolveReadPath(nfcFileName, tempDir);
+      const result = yield* awaited(resolveReadPath(nfcFileName, tempDir));
 
       expect(result).toContain(tempDir);
       expect(result).toMatch(/file.+\.txt$/u);
@@ -87,7 +95,7 @@ const shouldHandleCurlyQuotesVsStraightQuotes = () =>
 
       yield* writeTextFile(joinPath(tempDir, curlyQuoteName), "content");
 
-      const result = resolveReadPath(straightQuoteName, tempDir);
+      const result = yield* awaited(resolveReadPath(straightQuoteName, tempDir));
       expect(result).toBe(joinPath(tempDir, curlyQuoteName));
     }),
   );
@@ -102,7 +110,7 @@ const shouldHandleCombinedNfcCurlyQuoteFrench = () =>
 
       yield* writeTextFile(joinPath(tempDir, nfcCurlyName), "content");
 
-      const result = resolveReadPath(nfcStraightName, tempDir);
+      const result = yield* awaited(resolveReadPath(nfcStraightName, tempDir));
       expect(result).toBe(joinPath(tempDir, nfcCurlyName));
     }),
   );
@@ -115,7 +123,7 @@ const shouldHandleMacosScreenshotAmPmVariant = () =>
 
       yield* writeTextFile(joinPath(tempDir, macosName), "content");
 
-      const result = resolveReadPath(userName, tempDir);
+      const result = yield* awaited(resolveReadPath(userName, tempDir));
 
       expect(result).toBe(joinPath(tempDir, macosName));
     }),
@@ -129,7 +137,7 @@ const shouldHandleMacosScreenshotLowercaseAmPm = () =>
 
       yield* writeTextFile(joinPath(tempDir, macosName), "content");
 
-      const result = resolveReadPath(userName, tempDir);
+      const result = yield* awaited(resolveReadPath(userName, tempDir));
 
       expect(result).toBe(joinPath(tempDir, macosName));
     }),

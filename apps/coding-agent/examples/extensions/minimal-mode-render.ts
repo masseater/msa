@@ -212,7 +212,11 @@ const renderWriteResult: NonNullable<
 
 export const toolRenderers = {
   bash: { renderCall: renderBashCall, renderResult: renderBashResult },
-  edit: { renderCall: renderEditCall, renderResult: renderEditResult },
+  edit: {
+    renderCall: renderEditCall,
+    renderResult: renderEditResult,
+    renderShell: "default" as const,
+  },
   find: { renderCall: renderFindCall, renderResult: renderFindResult },
   grep: { renderCall: renderGrepCall, renderResult: renderGrepResult },
   ls: { renderCall: renderLsCall, renderResult: renderLsResult },

@@ -104,6 +104,10 @@ export default defineConfig({
         cache: false,
         command: "vp pm audit",
       },
+      "code-rules": {
+        command:
+          "ast-grep scan --rule tools/rules/no-sync-run-of-async-fs.yml apps libs tools .msa",
+      },
       "build-binaries": {
         cache: false,
         command: "node tools/build-binaries.ts",
@@ -145,6 +149,7 @@ export default defineConfig({
         dependsOn: [
           "syncpack",
           "actions-lint",
+          "code-rules",
           "mcp-conformance",
           "fallow-all",
           "audit",

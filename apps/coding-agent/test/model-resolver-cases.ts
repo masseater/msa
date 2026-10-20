@@ -2,18 +2,18 @@ import type modelResolverCasesTypes from "./model-resolver-cases.types.ts";
 
 const referenceCases: modelResolverCasesTypes.ReferenceCase[] = [
   {
-    expected: { model: "anthropic/claude-sonnet-4-5" },
+    expected: { model: "anthropic-api/claude-sonnet-4-5" },
     name: "exact id",
     text: "claude-sonnet-4-5",
   },
   { expected: { model: "openai/gpt-4o" }, name: "exact id is case-insensitive", text: "GPT-4O" },
   {
-    expected: { model: "anthropic/claude-sonnet-4-5" },
+    expected: { model: "anthropic-api/claude-sonnet-4-5" },
     name: "fuzzy prefers aliases over dated ids",
     text: "sonnet",
   },
   {
-    expected: { model: "anthropic/claude-sonnet-4-5", thinkingLevel: "high" },
+    expected: { model: "anthropic-api/claude-sonnet-4-5", thinkingLevel: "high" },
     name: "thinking suffix",
     text: "sonnet:high",
   },
@@ -96,45 +96,45 @@ const referenceCases: modelResolverCasesTypes.ReferenceCase[] = [
     usable: ["gw-a", "gw-b"],
   },
   {
-    expected: { model: "gw-b/anthropic/future" },
+    expected: { model: "gw-b/anthropic-api/future" },
     name: "provider prefix without a direct model selects the usable raw id",
-    text: "anthropic/future",
+    text: "anthropic-api/future",
     usable: ["gw-b"],
   },
   {
-    expected: { model: "anthropic/exact" },
+    expected: { model: "anthropic-api/exact" },
     name: "usable qualified match beats a usable raw id",
-    text: "anthropic/exact",
+    text: "anthropic-api/exact",
     usable: ["anthropic-api", "gw-a"],
   },
   {
-    expected: { model: "gw-a/anthropic/exact" },
+    expected: { model: "gw-a/anthropic-api/exact" },
     name: "usable raw id beats an unusable qualified match",
-    text: "anthropic/exact",
+    text: "anthropic-api/exact",
     usable: ["gw-a"],
   },
   {
-    expected: { model: "anthropic/exact" },
+    expected: { model: "anthropic-api/exact" },
     name: "unusable qualified match is kept when nothing is usable",
-    text: "anthropic/exact",
+    text: "anthropic-api/exact",
   },
 
   {
-    expected: { model: "anthropic/claude-opus-4-8" },
+    expected: { model: "anthropic-api/claude-opus-4-8" },
     name: "named provider's usable fuzzy match beats a raw id elsewhere",
-    text: "anthropic/claude-opus",
+    text: "anthropic-api/claude-opus",
     usable: ["anthropic-api"],
   },
   {
-    expected: { model: "gw-a/anthropic/claude-opus" },
+    expected: { model: "gw-a/anthropic-api/claude-opus" },
     name: "usable raw id beats the named provider's unusable fuzzy match",
-    text: "anthropic/claude-opus",
+    text: "anthropic-api/claude-opus",
     usable: ["gw-a"],
   },
   {
-    expected: { model: "anthropic/claude-opus-4-8" },
+    expected: { model: "anthropic-api/claude-opus-4-8" },
     name: "named provider's fuzzy match is kept when nothing is usable",
-    text: "anthropic/claude-opus",
+    text: "anthropic-api/claude-opus",
   },
   {
     expected: { model: "gw-b/gw-b/free" },
@@ -143,19 +143,22 @@ const referenceCases: modelResolverCasesTypes.ReferenceCase[] = [
   },
 
   {
-    expected: { model: "gw-a/anthropic/claude-opus-4.8" },
+    expected: { model: "gw-a/anthropic-api/claude-opus-4.8" },
     name: "fuzzy prefers usable providers",
     text: "opus",
     usable: ["gw-a"],
   },
   {
-    expected: { ambiguous: ["anthropic/claude-opus-4-8", "gw-b/claude-opus-4-8"], usableCount: 2 },
+    expected: {
+      ambiguous: ["anthropic-api/claude-opus-4-8", "gw-b/claude-opus-4-8"],
+      usableCount: 2,
+    },
     name: "fuzzy id tie across usable providers is ambiguous",
     text: "opus",
     usable: ["anthropic-api", "gw-a", "gw-b"],
   },
   {
-    expected: { model: "anthropic/claude-opus-4-8" },
+    expected: { model: "anthropic-api/claude-opus-4-8" },
     name: "fuzzy id tie resolves to the sole usable provider",
     text: "opus",
     usable: ["anthropic-api"],

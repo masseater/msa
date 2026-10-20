@@ -5,7 +5,7 @@ import { type BashOperations, createBashTool } from "@msa/coding-agent";
 import { Data, Effect, FileSystem, ManagedRuntime, Option, Stream } from "effect";
 import { ChildProcess, ChildProcessSpawner } from "effect/process";
 
-import { loadConfig } from "./config.ts";
+import { loadConfig, type SandboxConfig } from "./config.ts";
 
 const runtime = ManagedRuntime.make(NodeServices.layer);
 const fsService = runtime.runSync(FileSystem.FileSystem);
@@ -86,11 +86,13 @@ const runSandboxed = (request: SandboxExecRequest) =>
 
 const createSandboxedBashOps = (): BashOperations => ({
   exec: (command, cwd, { onData, signal, timeout }) => {
-    if (!runtime.runSync(fsService.exists(cwd))) {
-      return Promise.reject(new Error(`Working directory does not exist: ${cwd}`));
-    }
-
-    const effect = runSandboxed({ command, cwd, onData, signal, timeout });
+    const sandboxed = runSandboxed({ command, cwd, onData, signal, timeout });
+    const effect = Effect.gen(function* () {
+      if (!(yield* fsService.exists(cwd).pipe(Effect.orElseSucceed(() => false)))) {
+        return yield* Effect.fail(new Error(`Working directory does not exist: ${cwd}`));
+      }
+      return yield* sandboxed;
+    });
     return runtime.runPromise(
       signal === undefined ? effect : Effect.raceFirst(effect, abortEffect(signal)),
     );
@@ -129,7 +131,7 @@ const disabledReason = (
   return undefined;
 };
 
-const announceSandbox = (ctx: ExtensionContext, config: ReturnType<typeof loadConfig>): void => {
+const announceSandbox = (ctx: ExtensionContext, config: SandboxConfig): void => {
   const networkCount = config.network?.allowedDomains?.length ?? 0;
   const writeCount = config.filesystem?.allowWrite?.length ?? 0;
   ctx.ui.setStatus(
@@ -145,7 +147,7 @@ const initializeSandbox = (
   setEnabled: (enabled: boolean, initialized: boolean) => void,
 ) =>
   Effect.gen(function* () {
-    const config = loadConfig(ctx.cwd);
+    const config = yield* loadConfig(ctx.cwd);
     const reason = disabledReason(msa, config);
     if (reason !== undefined) {
       setEnabled(false, false);
@@ -186,14 +188,14 @@ const registerSandboxCommand = (msa: ExtensionAPI, getEnabled: () => boolean): v
   msa.registerCommand("sandbox", {
     description: "Show sandbox configuration",
     handler: (_args, ctx) =>
-      Effect.runPromise(
-        Effect.sync(() => {
+      runtime.runPromise(
+        Effect.gen(function* () {
           if (!getEnabled()) {
             ctx.ui.notify("Sandbox is disabled", "info");
             return;
           }
 
-          const config = loadConfig(ctx.cwd);
+          const config = yield* loadConfig(ctx.cwd);
           const lines = [
             "Sandbox Configuration:",
             "",

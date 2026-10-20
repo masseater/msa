@@ -100,7 +100,7 @@ const includesCacheWarmingUsageExactlyOnceWithout = () =>
         expect(stats.totalMessages).toBe(0);
         expect(sessionManager.buildSessionContext().messages).toEqual([]);
         expect(getUsageCostBreakdown(sessionManager.getEntries())).toEqual([
-          { cost: 0.01, key: `anthropic/${model.id}`, tokens: 100 },
+          { cost: 0.01, key: `${model.provider}/${model.id}`, tokens: 100 },
         ]);
       } finally {
         session.dispose();

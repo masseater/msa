@@ -25,44 +25,40 @@ export const mapWithConcurrencyLimit = <TIn, TOut>(request: {
   );
 };
 
-const writePromptToTempFile = (
-  agentName: string,
-  prompt: string,
-): { dir: string; filePath: string } => {
-  const tmpDir = runtime.runSync(fsService.makeTempDirectory({ prefix: "msa-subagent-" }));
-  const safeName = agentName.replace(/[^\w.-]+/gu, "_");
-  const filePath = pathService.join(tmpDir, `prompt-${safeName}.md`);
-  runtime.runSync(fsService.writeFileString(filePath, prompt, { mode: 0o600 }));
-  return { dir: tmpDir, filePath };
-};
+const writePromptToTempFile = (agentName: string, prompt: string) =>
+  Effect.gen(function* () {
+    const dir = yield* fsService.makeTempDirectory({ prefix: "msa-subagent-" });
+    const safeName = agentName.replace(/[^\w.-]+/gu, "_");
+    const filePath = pathService.join(dir, `prompt-${safeName}.md`);
+    yield* fsService.writeFileString(filePath, prompt, { mode: 0o600 });
+    return { dir, filePath };
+  });
 
-const removeTempPrompt = (dir: string | null, filePath: string | null): void => {
-  if (filePath !== null) {
-    runtime.runSync(fsService.remove(filePath).pipe(Effect.ignore));
-  }
-  if (dir !== null) {
-    runtime.runSync(fsService.remove(dir).pipe(Effect.ignore));
-  }
-};
+const removeTempPrompt = (tmp: { dir: string } | undefined) =>
+  tmp === undefined
+    ? Effect.void
+    : fsService.remove(tmp.dir, { recursive: true }).pipe(Effect.ignore);
 
-const getMsaInvocation = (args: string[]): { command: string; args: string[] } => {
-  const currentScript = process.argv[1];
-  const isBunVirtualScript = currentScript?.startsWith("/$bunfs/root/") ?? false;
-  if (
-    currentScript !== undefined &&
-    currentScript.length > 0 &&
-    !isBunVirtualScript &&
-    runtime.runSync(fsService.exists(currentScript))
-  ) {
-    return { args: [currentScript, ...args], command: process.execPath };
-  }
+const scriptExists = (currentScript: string | undefined) =>
+  currentScript === undefined ||
+  currentScript.length === 0 ||
+  currentScript.startsWith("/$bunfs/root/")
+    ? Effect.succeed(false)
+    : fsService.exists(currentScript).pipe(Effect.orElseSucceed(() => false));
 
-  const execName = pathService.basename(process.execPath).toLowerCase();
-  if (!/^(node|bun)(\.exe)?$/u.test(execName)) {
-    return { args, command: process.execPath };
-  }
-  return { args, command: "msa" };
-};
+const getMsaInvocation = (args: string[]) =>
+  Effect.gen(function* () {
+    const currentScript = process.argv[1];
+    if (currentScript !== undefined && (yield* scriptExists(currentScript))) {
+      return { args: [currentScript, ...args], command: process.execPath };
+    }
+
+    const execName = pathService.basename(process.execPath).toLowerCase();
+    if (!/^(node|bun)(\.exe)?$/u.test(execName)) {
+      return { args, command: process.execPath };
+    }
+    return { args, command: "msa" };
+  });
 
 const buildArgs = (
   agent: AgentConfig,
@@ -227,13 +223,7 @@ export const runSingleAgent = (request: RunSingleRequest): Promise<SingleResult>
   const agent = request.agents.find((a) => a.name === request.agentName);
   if (agent === undefined) return Promise.resolve(unknownAgentResult(request));
 
-  const tmp =
-    agent.systemPrompt.trim().length > 0
-      ? writePromptToTempFile(agent.name, agent.systemPrompt)
-      : undefined;
-  const args = buildArgs(agent, request.task, request.dispatchDefaults, tmp?.filePath);
   const currentResult = makeResult(request, agent);
-
   const emitUpdate = () => {
     request.onUpdate?.({
       content: [{ text: getFinalOutput(currentResult.messages) || "(running...)", type: "text" }],
@@ -241,20 +231,28 @@ export const runSingleAgent = (request: RunSingleRequest): Promise<SingleResult>
     });
   };
 
-  const invocation = getMsaInvocation(args);
-  return runtime
-    .runPromise(
-      runSubagentProcess({
-        args: invocation.args,
-        command: invocation.command,
-        cwd: request.cwd ?? request.defaultCwd,
-        onLine: (line) => applyEvent(currentResult, line, emitUpdate),
-        onStderr: (text) => {
-          currentResult.stderr += text;
-        },
-        signal: request.signal,
-      }),
-    )
-    .then((exitCode) => finishResult(currentResult, Number(exitCode), request.signal))
-    .finally(() => removeTempPrompt(tmp?.dir ?? null, tmp?.filePath ?? null));
+  return runtime.runPromise(
+    Effect.acquireUseRelease(
+      agent.systemPrompt.trim().length > 0
+        ? writePromptToTempFile(agent.name, agent.systemPrompt)
+        : Effect.succeed(undefined),
+      (tmp) =>
+        Effect.gen(function* () {
+          const args = buildArgs(agent, request.task, request.dispatchDefaults, tmp?.filePath);
+          const invocation = yield* getMsaInvocation(args);
+          const exitCode = yield* runSubagentProcess({
+            args: invocation.args,
+            command: invocation.command,
+            cwd: request.cwd ?? request.defaultCwd,
+            onLine: (line) => applyEvent(currentResult, line, emitUpdate),
+            onStderr: (text) => {
+              currentResult.stderr += text;
+            },
+            signal: request.signal,
+          });
+          return finishResult(currentResult, Number(exitCode), request.signal);
+        }),
+      removeTempPrompt,
+    ),
+  );
 };
