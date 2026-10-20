@@ -1,200 +1,85 @@
-import type agentTypes from "@msa/agent-core/index.types";
-import type aiTypes from "@msa/ai/index.types";
 import tui from "@msa/tui";
 import type tuiTypes from "@msa/tui/index.types";
 
-import experimental from "../../../core/experimental.ts";
-import goalModule from "../../../core/goal.ts";
-import platform from "../../../core/platform.ts";
-import summary from "../../../core/pr-watch/summary.ts";
-import type sessionManagerTypes from "../../../core/session-manager.types.ts";
-import usageTotalsModule from "../../../core/usage-totals.ts";
-import type usageTotalsTypes from "../../../core/usage-totals.types.ts";
+import type agentSessionTypes from "../../../core/agent-session.types.ts";
+import type footerDataProviderTypes from "../../../core/footer-data-provider.types.ts";
 import themeModule from "../theme/theme.ts";
+import footerHelpers from "./footer-helpers.ts";
 import type footerInternalTypes from "./footer-internal.types.ts";
-import FooterComponentLayer2 from "./footer-layer-2.ts";
-import tasksViewHelpers from "./tasks-view-helpers.ts";
-
-const { createUsageTotals } = usageTotalsModule;
+import FooterLines from "./footer/footer-lines.ts";
+import FooterStats from "./footer/footer-stats.ts";
+import FooterSummary from "./footer/footer-summary.ts";
 const { theme } = themeModule;
-const { truncateToWidth, visibleWidth } = tui;
-const { describeGoalIndicator } = goalModule;
-const { nowMs } = platform;
-const { describePrWatchIndicator } = summary;
-const { viewHelpers } = tasksViewHelpers;
-const { areExperimentalFeaturesEnabled } = experimental;
+const { truncateToWidth } = tui;
+const { sanitizeStatusText } = footerHelpers;
 
-export default class FooterComponent extends FooterComponentLayer2 implements tuiTypes.Component {
-  static getSessionStatsSessionManager(self: FooterComponent):
-    | { done: true; value: footerInternalTypes.SessionStats }
-    | {
-        done: false;
-        value: {
-          sessionManager: sessionManagerTypes.SessionManager;
-          usageTotals: usageTotalsTypes.UsageTotals;
-          sessionId: string;
-          leafId: string | null;
-          entryCount: number;
-          limitsModel: aiTypes.Model<any> | undefined;
-        };
-      } {
-    const sessionManager = self.session.sessionManager;
-    const entryCount = sessionManager.getEntryCount();
-    const sessionId = sessionManager.getSessionId();
-    const leafId = sessionManager.getLeafId();
-    const limitsModel = self.session.models.selection.routedModel?.model ?? self.session.model;
-    const cached = self.sessionStats;
-    if (
-      cached !== undefined &&
-      cached.session === self.session &&
-      cached.sessionId === sessionId &&
-      cached.leafId === leafId &&
-      cached.entryCount === entryCount &&
-      cached.limitsModel === limitsModel
-    ) {
-      return { done: true, value: cached };
-    }
+export default class FooterComponent implements tuiTypes.Component {
+  readonly stats: FooterStats;
+  readonly lines: FooterLines;
+  readonly summary: FooterSummary;
 
-    const usageTotals = createUsageTotals();
-    return {
-      done: false,
-      value: {
-        entryCount,
-        leafId,
-        limitsModel,
-        sessionId,
-        sessionManager,
-        usageTotals,
-      },
-    };
+  autoCompactEnabled = true;
+
+  session!: agentSessionTypes.AgentSession;
+
+  footerData!: footerDataProviderTypes.ReadonlyFooterDataProvider;
+
+  sessionStats?: footerInternalTypes.SessionStats;
+
+  setSession(session: agentSessionTypes.AgentSession): void {
+    this.session = session;
   }
 
-  static renderStatusLines(
-    self: FooterComponent,
-    statsParts: string[],
-    contextPercentStr: string,
-    state: agentTypes.AgentState,
-    width: number,
-    pwd: string,
-  ): { tasks: string | undefined; lines: string[] } {
-    const { remainder, dimStatsLeft } = FooterComponent.renderRemainder(
-      self,
+  setAutoCompactEnabled(enabled: boolean): void {
+    this.autoCompactEnabled = enabled;
+  }
+
+  invalidate(): void {}
+
+  dispose(): void {}
+
+  render(width: number): string[] {
+    const state = this.session.state;
+    const { usageTotals, latestCacheHitRate, contextUsage } = this.stats.getSessionStats();
+    const { statsParts, contextPercentStr, pwd } = this.summary.statsParts(
+      contextUsage,
+      state,
+      usageTotals,
+      latestCacheHitRate,
+    );
+    const { tasks, lines } = this.lines.renderStatusLines(
       statsParts,
       contextPercentStr,
       state,
       width,
+      pwd,
     );
-    const dimRemainder = theme.fg("dim", remainder);
-
-    const pwdLine = truncateToWidth(theme.fg("dim", pwd), width, theme.fg("dim", "..."));
-    const lines = [pwdLine, dimStatsLeft + dimRemainder];
-
-    const goal = self.session.integrations.goal.goal;
-    if (goal !== undefined) {
+    if (tasks !== undefined && tasks !== "") {
       lines.push(
-        truncateToWidth(
-          theme.fg("accent", describeGoalIndicator(goal, nowMs())),
-          width,
-          theme.fg("dim", "..."),
-        ),
+        truncateToWidth(`${tasks}  ${theme.fg("dim", "/tasks")}`, width, theme.fg("dim", "...")),
       );
     }
 
-    const prWatch = describePrWatchIndicator(self.session.integrations.prWatch.prWatch);
-    if (prWatch !== undefined && prWatch !== "") {
-      lines.push(truncateToWidth(theme.fg("dim", prWatch), width, theme.fg("dim", "...")));
+    const extensionStatuses = this.footerData.getExtensionStatuses();
+    if (extensionStatuses.size > 0) {
+      const sortedStatuses = Array.from(extensionStatuses.entries())
+        .sort(([a], [b]) => a.localeCompare(b))
+        .map(([, text]) => sanitizeStatusText(text));
+      const statusLine = sortedStatuses.join(" ");
+      lines.push(truncateToWidth(statusLine, width, theme.fg("dim", "...")));
     }
 
-    const tasks = viewHelpers.describeTaskCounts(
-      self.session.integrations.orchestration.orchestrator?.snapshot.tasks ?? [],
-    );
-    return { lines, tasks };
+    return lines;
   }
 
-  static renderRemainder(
-    self: FooterComponent,
-    statsParts: string[],
-    contextPercentStr: string,
-    state: agentTypes.AgentState,
-    width: number,
-  ): { remainder: string; dimStatsLeft: string } {
-    let { rightSide, rightSideWithoutProvider, statsLeftWidth, minPadding, statsLeft } =
-      FooterComponent.renderRightSide(self, statsParts, contextPercentStr, state, width);
-    if (self.footerData.getAvailableProviderCount() > 1 && state.model !== undefined) {
-      rightSide = `(${state.model!.provider}) ${rightSideWithoutProvider}`;
-      if (statsLeftWidth + minPadding + visibleWidth(rightSide) > width) {
-        rightSide = rightSideWithoutProvider;
-      }
-    }
-
-    const rightSideWidth = visibleWidth(rightSide);
-    const totalNeeded = statsLeftWidth + minPadding + rightSideWidth;
-
-    let statsLine: string;
-    if (totalNeeded <= width) {
-      const padding = " ".repeat(width - statsLeftWidth - rightSideWidth);
-      statsLine = statsLeft + padding + rightSide;
-    } else {
-      const availableForRight = width - statsLeftWidth - minPadding;
-      if (availableForRight > 0) {
-        const truncatedRight = truncateToWidth(rightSide, availableForRight, "");
-        const truncatedRightWidth = visibleWidth(truncatedRight);
-        const padding = " ".repeat(Math.max(0, width - statsLeftWidth - truncatedRightWidth));
-        statsLine = statsLeft + padding + truncatedRight;
-      } else {
-        statsLine = statsLeft;
-      }
-    }
-
-    const dimStatsLeft = theme.fg("dim", statsLeft);
-    const remainder = statsLine.slice(statsLeft.length);
-    return { dimStatsLeft, remainder };
-  }
-
-  static renderRightSide(
-    self: FooterComponent,
-    statsParts: any[],
-    contextPercentStr: string,
-    state: agentTypes.AgentState,
-    width: number,
-  ): {
-    rightSide: string;
-    rightSideWithoutProvider: string;
-    statsLeftWidth: number;
-    minPadding: 2;
-    statsLeft: string;
-  } {
-    statsParts.push(contextPercentStr);
-    if (areExperimentalFeaturesEnabled()) {
-      statsParts.push(`${theme.fg("dim", "•")} ${theme.bold(theme.fg("warning", "xp"))}`);
-    }
-
-    let statsLeft = statsParts.join(" ");
-
-    const modelName = state.model?.id || "no-model";
-
-    let statsLeftWidth = visibleWidth(statsLeft);
-
-    if (statsLeftWidth > width) {
-      statsLeft = truncateToWidth(statsLeft, width, "...");
-      statsLeftWidth = visibleWidth(statsLeft);
-    }
-
-    const minPadding = 2;
-
-    let rightSideWithoutProvider = modelName;
-    if (state.model?.reasoning) {
-      const thinkingLevel = state.thinkingLevel || "off";
-      rightSideWithoutProvider =
-        thinkingLevel === "off" ? `${modelName} • thinking off` : `${modelName} • ${thinkingLevel}`;
-    }
-    const routed = self.session.models.selection.routedModel;
-    if (routed !== undefined) {
-      const level = routed.thinkingLevel === undefined ? "" : ` • ${routed.thinkingLevel}`;
-      rightSideWithoutProvider += ` → ${routed.model.id}${level}`;
-    }
-
-    let rightSide = rightSideWithoutProvider;
-    return { minPadding, rightSide, rightSideWithoutProvider, statsLeft, statsLeftWidth };
+  constructor(
+    session: agentSessionTypes.AgentSession,
+    footerData: footerDataProviderTypes.ReadonlyFooterDataProvider,
+  ) {
+    this.stats = new FooterStats(this);
+    this.lines = new FooterLines(this);
+    this.summary = new FooterSummary(this);
+    this.session = session;
+    this.footerData = footerData;
   }
 }
