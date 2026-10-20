@@ -1,21 +1,21 @@
 import { describe, expect, it } from "vite-plus/test";
 
 import {
+  type Op,
   applyImmutable,
   assertValidOp,
   assertValidWireOp,
   decoder,
   diffRevisions,
   encoder,
-  type Op,
 } from "../src/delta/index.ts";
 import type { JsonValue } from "../src/json.ts";
-import { expectDiff } from "./fixtures/delta-diff.ts";
+import expectDiff from "./fixtures/delta-diff.ts";
 
 const emitsSetsAndDeletes = (): void => {
-  expectDiff({ keep: 1, change: 1, remove: true }, { keep: 1, change: 2, add: 3 }, [
-    ["s", ["change"], 2],
+  expectDiff({ change: 1, keep: 1, remove: true }, { add: 3, change: 2, keep: 1 }, [
     ["s", ["add"], 3],
+    ["s", ["change"], 2],
     ["d", ["remove"]],
   ]);
 };
@@ -185,12 +185,12 @@ const doesNotTreatCoincidentalIdOr = (): void => {
 };
 
 const combinesRemovalsAppendAndAShared = (): void => {
-  const a = { id: "a", stable: {}, detail: { text: "a" } };
-  const b = { id: "b", stable: {}, detail: { text: "b" } };
-  const c = { id: "c", stable: {}, detail: { text: "c" } };
-  const d = { id: "d", stable: {}, detail: { text: "d" } };
-  const changedC = { id: "c", stable: c.stable, detail: { text: "changed" } };
-  const appended = { id: "e", stable: {}, detail: { text: "e" } };
+  const a = { detail: { text: "a" }, id: "a", stable: {} };
+  const b = { detail: { text: "b" }, id: "b", stable: {} };
+  const c = { detail: { text: "c" }, id: "c", stable: {} };
+  const d = { detail: { text: "d" }, id: "d", stable: {} };
+  const changedC = { detail: { text: "changed" }, id: "c", stable: c.stable };
+  const appended = { detail: { text: "e" }, id: "e", stable: {} };
   expectDiff({ values: [a, b, c, d] }, { values: [a, changedC, d, appended] }, [
     ["p", ["values"], 1, 1, []],
     ["a", ["values", 1, "detail", "text"], "hanged"],

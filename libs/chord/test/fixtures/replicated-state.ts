@@ -5,11 +5,9 @@ import {
   type ReplicatedStateSource,
   type ReplicatedStateSourceAttachment,
 } from "../../src/index.ts";
-import { TestSourceAttachment } from "./replicated-state-attachment.ts";
+import TestSourceAttachment from "./replicated-state-attachment.ts";
 
-export type SourceValue = Readonly<{ value: number }>;
-
-export class TestSource<T> implements ReplicatedStateSource<T> {
+class TestSource<T> implements ReplicatedStateSource<T> {
   readonly attachments = new Set<TestSourceAttachment<T>>();
   onAttach: (() => void) | undefined;
   #value: T;
@@ -22,7 +20,7 @@ export class TestSource<T> implements ReplicatedStateSource<T> {
 
   attach(): ReplicatedStateSourceAttachment<T> {
     const attachment = new TestSourceAttachment(
-      Object.freeze({ value: this.#value, cursor: this.#cursor }),
+      Object.freeze({ cursor: this.#cursor, value: this.#value }),
       () => this.attachments.delete(attachment),
     );
     this.attachments.add(attachment);
@@ -38,7 +36,9 @@ export class TestSource<T> implements ReplicatedStateSource<T> {
   ): void {
     this.#value = value;
     this.#cursor = cursor;
-    const frame = Object.freeze({ cursor, value, ops, context });
+    const frame = Object.freeze({ context, cursor, ops, value });
     for (const attachment of [...this.attachments]) attachment.publish(frame);
   }
 }
+
+export default TestSource;

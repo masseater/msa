@@ -1,7 +1,9 @@
 import { describe, expect, it } from "vite-plus/test";
 
 import { track } from "../../src/delta/index.ts";
-import { replay, settle } from "../fixtures/tracker.ts";
+import trackerModule from "../fixtures/tracker.ts";
+
+const { replay, settle } = trackerModule;
 
 const coercingToOne = (values: number[]) =>
   ({

@@ -2,14 +2,14 @@ import { describe, expect, it } from "vite-plus/test";
 
 import { applyImmutable, diffRevisions } from "../src/delta/index.ts";
 import type { JsonValue } from "../src/json.ts";
-import { expectDiff } from "./fixtures/delta-diff.ts";
+import expectDiff from "./fixtures/delta-diff.ts";
 
 const keepsFortyThousandRowSparseEdits = (): void => {
-  const values = Array.from({ length: 40_000 }, (_, value) => ({ value, stable: { value } }));
+  const values = Array.from({ length: 40_000 }, (_, value) => ({ stable: { value }, value }));
   const after = values.slice();
   const changed: number[] = [];
   for (let index = 100; index < after.length; index += 400) {
-    after[index] = { value: -index, stable: values[index]!.stable };
+    after[index] = { stable: values[index]!.stable, value: -index };
     changed.push(index);
   }
   const operations = diffRevisions({ values }, { values: after });
@@ -19,7 +19,7 @@ const keepsFortyThousandRowSparseEdits = (): void => {
 };
 
 const keepsAReconstructedLargeArrayLeaf = (): void => {
-  const before = Array.from({ length: 1_000 }, (_, value) => ({ value, label: `row-${value}` }));
+  const before = Array.from({ length: 1_000 }, (_, value) => ({ label: `row-${value}`, value }));
   const after = structuredClone(before);
   after[700]!.label = "changed";
   const operations = diffRevisions({ values: before }, { values: after });
@@ -52,8 +52,8 @@ const keepsALargeRotationPayloadFree = (): void => {
 
 const encodesFiveHundredUnshiftsWithoutSnapshotting = (): void => {
   const retained = Array.from({ length: 10_000 }, (_, value) => ({
-    value,
     payload: "x".repeat(100),
+    value,
   }));
   const inserted = Array.from({ length: 500 }, (_, value) => ({ value: -value - 1 }));
   const operations = diffRevisions({ values: retained }, { values: [...inserted, ...retained] });

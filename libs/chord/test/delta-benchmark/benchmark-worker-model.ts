@@ -4,47 +4,12 @@ import { performance } from "node:perf_hooks";
 import { dual } from "effect/Function";
 
 import type { Draft } from "../../src/delta/draft.ts";
-import { applyImmutable, type Op, track } from "../../src/delta/index.ts";
+import { applyImmutable, track } from "../../src/delta/index.ts";
+import type benchmarkWorkerModelTypes from "./benchmark-worker-model.types.ts";
 
-export type Mode = "tracker";
-export type Scenario =
-  | "import"
-  | "committed-read"
-  | "draft-read"
-  | "sparse"
-  | "queue"
-  | "sort"
-  | "dense"
-  | "unshift"
-  | "watch-authority-control"
-  | "watch-live-borrowed"
-  | "watch-acquire-shared"
-  | "watch-acquire-detached"
-  | "watch-acquire-staggered"
-  | "watch-lag"
-  | "watch-catch-up"
-  | "watch-catch-up-coalesced"
-  | "watch-live-immutable";
-export type Row = { id: number; value: number; payload: string };
-export type Document = { rows: Row[] };
-export type PreparedLike = { readonly value: Readonly<Document>; readonly ops: readonly Op[] };
-export type ChangeLike = { readonly state: Draft<Document>; prepare(): PreparedLike };
-export type TrackerLike = {
-  readonly value: Document;
-  beginChange(): ChangeLike;
-  adopt(prepared: PreparedLike): void;
-};
-export type Frame = { readonly sequence: number; readonly ops: readonly Op[] };
-export type WatchReplica = {
-  value: Document;
-  readonly baseSequence: number;
-  sequence: number;
-  readonly queue: Frame[];
-};
-
-export const MiB = 1024 * 1024;
-export const MODES = new Set<Mode>(["tracker"]);
-export const SCENARIOS = new Set<Scenario>([
+const MiB = 1024 * 1024;
+const MODES = new Set<benchmarkWorkerModelTypes.Mode>(["tracker"]);
+const SCENARIOS = new Set<benchmarkWorkerModelTypes.Scenario>([
   "import",
   "committed-read",
   "draft-read",
@@ -63,7 +28,7 @@ export const SCENARIOS = new Set<Scenario>([
   "watch-catch-up-coalesced",
   "watch-live-immutable",
 ]);
-export const WATCH_SCENARIOS = new Set<Scenario>([
+const WATCH_SCENARIOS = new Set<benchmarkWorkerModelTypes.Scenario>([
   "watch-authority-control",
   "watch-live-borrowed",
   "watch-acquire-shared",
@@ -74,53 +39,40 @@ export const WATCH_SCENARIOS = new Set<Scenario>([
   "watch-catch-up-coalesced",
   "watch-live-immutable",
 ]);
-export function fixture(count: number): Document {
+function fixture(count: number): benchmarkWorkerModelTypes.Document {
   return {
-    rows: Array.from({ length: count }, (_, id) => ({ id, value: id, payload: `row-${id}` })),
+    rows: Array.from({ length: count }, (_, id) => ({ id, payload: `row-${id}`, value: id })),
   };
 }
 
-export function cloneTrusted<T>(value: T): T {
+function cloneTrusted<T>(value: T): T {
   if (value === null || typeof value !== "object") return value;
   if (Array.isArray(value)) return value.map((child) => cloneTrusted(child)) as T;
   const result = Object.create(Object.getPrototypeOf(value)) as Record<string, unknown>;
   for (const key of Object.keys(value)) {
     Object.defineProperty(result, key, {
+      configurable: true,
+      enumerable: true,
       value: cloneTrusted((value as Record<string, unknown>)[key]),
       writable: true,
-      enumerable: true,
-      configurable: true,
     });
   }
   return result as T;
 }
 
-export function sum(document: Document | Draft<Document>): number {
+function sum(
+  document: benchmarkWorkerModelTypes.Document | Draft<benchmarkWorkerModelTypes.Document>,
+): number {
   let checksum = 0;
   for (let index = 0; index < document.rows.length; index++)
     checksum += document.rows[index]!.value;
   return checksum;
 }
 
-export interface MutationMetrics {
-  readonly checksum: number;
-  readonly mutateMs: number;
-  readonly prepareMs: number;
-  readonly serializeMs: number;
-  readonly opBytes: number;
-  readonly operationCount: number;
-  readonly adoptMs: number;
-}
-
-export interface MutationRun {
-  readonly tracker: TrackerLike;
-  readonly scenario: Scenario;
-  readonly size: number;
-  readonly queueOperations: number;
-  readonly sample: () => void;
-}
-
-const mutateDraft = (state: Draft<Document>, run: MutationRun): number => {
+const mutateDraft = (
+  state: Draft<benchmarkWorkerModelTypes.Document>,
+  run: benchmarkWorkerModelTypes.MutationRun,
+): number => {
   const { scenario, size, queueOperations } = run;
   switch (scenario) {
     case "draft-read":
@@ -131,7 +83,7 @@ const mutateDraft = (state: Draft<Document>, run: MutationRun): number => {
     case "queue":
       for (let index = 0; index < queueOperations; index++) {
         state.rows.shift();
-        state.rows.push({ id: size + index, value: index, payload: "queue" });
+        state.rows.push({ id: size + index, payload: "queue", value: index });
       }
       return state.rows.length;
     case "sort":
@@ -143,8 +95,8 @@ const mutateDraft = (state: Draft<Document>, run: MutationRun): number => {
     case "unshift": {
       const inserted = Array.from({ length: 100_000 }, (_, id) => ({
         id: -id,
-        value: id,
         payload: "inserted",
+        value: id,
       }));
       Reflect.apply(state.rows.unshift, state.rows, inserted);
       return state.rows.length;
@@ -154,7 +106,9 @@ const mutateDraft = (state: Draft<Document>, run: MutationRun): number => {
   }
 };
 
-export const runMutationScenario = (run: MutationRun): MutationMetrics => {
+const runMutationScenario = (
+  run: benchmarkWorkerModelTypes.MutationRun,
+): benchmarkWorkerModelTypes.MutationMetrics => {
   const { tracker, sample } = run;
   const change = tracker.beginChange();
   const start = performance.now();
@@ -174,21 +128,12 @@ export const runMutationScenario = (run: MutationRun): MutationMetrics => {
   const adoptStart = performance.now();
   tracker.adopt(prepared);
   const adoptMs = performance.now() - adoptStart;
-  return { checksum, mutateMs, prepareMs, serializeMs, opBytes, operationCount, adoptMs };
+  return { adoptMs, checksum, mutateMs, opBytes, operationCount, prepareMs, serializeMs };
 };
 
-export interface WorkerArguments {
-  readonly mode: Mode;
-  readonly scenario: Scenario;
-  readonly size: number;
-  readonly trial: number;
-  readonly requestedWatchCount: number;
-  readonly requestedWatchUpdates: number;
-}
-
-export const parseArguments = (argv: readonly string[]): WorkerArguments => {
-  const mode = argv[2] as Mode;
-  const scenario = argv[3] as Scenario;
+const parseArguments = (argv: readonly string[]): benchmarkWorkerModelTypes.WorkerArguments => {
+  const mode = argv[2] as benchmarkWorkerModelTypes.Mode;
+  const scenario = argv[3] as benchmarkWorkerModelTypes.Scenario;
   if (!MODES.has(mode)) throw new Error(`Unknown benchmark mode ${mode}`);
   if (!SCENARIOS.has(scenario)) throw new Error(`Unknown benchmark scenario ${scenario}`);
   const requestedWatchCount = Number(argv[6] ?? 8);
@@ -199,10 +144,13 @@ export const parseArguments = (argv: readonly string[]): WorkerArguments => {
     throw new RangeError("Invalid watch update count");
   const size = Number(argv[4] ?? 100_000);
   const trial = Number(argv[5] ?? 0);
-  return { mode, scenario, size, trial, requestedWatchCount, requestedWatchUpdates };
+  return { mode, requestedWatchCount, requestedWatchUpdates, scenario, size, trial };
 };
 
-const assertDetachedImpl = (watchers: readonly WatchReplica[], value: Document): void => {
+const assertDetachedImpl = (
+  watchers: readonly benchmarkWorkerModelTypes.WatchReplica[],
+  value: benchmarkWorkerModelTypes.Document,
+): void => {
   for (let left = 0; left < watchers.length; left++) {
     assert.notEqual(watchers[left]!.value, value);
     for (let right = left + 1; right < watchers.length; right++) {
@@ -211,34 +159,66 @@ const assertDetachedImpl = (watchers: readonly WatchReplica[], value: Document):
   }
 };
 
-export const assertDetached: {
-  (value: Document): (watchers: readonly WatchReplica[]) => void;
-  (watchers: readonly WatchReplica[], value: Document): void;
+const assertDetached: {
+  (
+    value: benchmarkWorkerModelTypes.Document,
+  ): (watchers: readonly benchmarkWorkerModelTypes.WatchReplica[]) => void;
+  (
+    watchers: readonly benchmarkWorkerModelTypes.WatchReplica[],
+    value: benchmarkWorkerModelTypes.Document,
+  ): void;
 } = dual(2, assertDetachedImpl);
 
-const applyFrameImpl = (watcher: WatchReplica, frame: Frame): void => {
+const applyFrameImpl = (
+  watcher: benchmarkWorkerModelTypes.WatchReplica,
+  frame: benchmarkWorkerModelTypes.Frame,
+): void => {
   assert.equal(frame.sequence, watcher.sequence + 1);
   watcher.value = applyImmutable(watcher.value, frame.ops);
   watcher.sequence = frame.sequence;
 };
 
-export const applyFrame: {
-  (frame: Frame): (watcher: WatchReplica) => void;
-  (watcher: WatchReplica, frame: Frame): void;
+const applyFrame: {
+  (
+    frame: benchmarkWorkerModelTypes.Frame,
+  ): (watcher: benchmarkWorkerModelTypes.WatchReplica) => void;
+  (watcher: benchmarkWorkerModelTypes.WatchReplica, frame: benchmarkWorkerModelTypes.Frame): void;
 } = dual(2, applyFrameImpl);
 
 const importFixtureImpl = (
   size: number,
-  scenario: Scenario,
-): { readonly tracker: TrackerLike; readonly importMs: number } => {
+  scenario: benchmarkWorkerModelTypes.Scenario,
+): { readonly tracker: benchmarkWorkerModelTypes.TrackerLike; readonly importMs: number } => {
   const input = fixture(size);
   if (scenario === "sort") input.rows.reverse();
   const importStart = performance.now();
-  const imported = track(input) as TrackerLike;
-  return { tracker: imported, importMs: performance.now() - importStart };
+  const imported = track(input) as benchmarkWorkerModelTypes.TrackerLike;
+  return { importMs: performance.now() - importStart, tracker: imported };
 };
 
-export const importFixture: {
-  (scenario: Scenario): (size: number) => ReturnType<typeof importFixtureImpl>;
-  (size: number, scenario: Scenario): ReturnType<typeof importFixtureImpl>;
+const importFixture: {
+  (
+    scenario: benchmarkWorkerModelTypes.Scenario,
+  ): (size: number) => ReturnType<typeof importFixtureImpl>;
+  (
+    size: number,
+    scenario: benchmarkWorkerModelTypes.Scenario,
+  ): ReturnType<typeof importFixtureImpl>;
 } = dual(2, importFixtureImpl);
+
+const benchmarkWorkerModel = {
+  MODES,
+  MiB,
+  SCENARIOS,
+  WATCH_SCENARIOS,
+  applyFrame,
+  assertDetached,
+  cloneTrusted,
+  fixture,
+  importFixture,
+  parseArguments,
+  runMutationScenario,
+  sum,
+};
+
+export default benchmarkWorkerModel;

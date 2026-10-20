@@ -3,7 +3,9 @@ import { isProxy } from "node:util/types";
 import { describe, expect, it } from "vite-plus/test";
 
 import { type Draft, track } from "../../src/delta/index.ts";
-import { clone, expectAliasFree, replay, settle } from "../fixtures/tracker.ts";
+import trackerModule from "../fixtures/tracker.ts";
+
+const { clone, expectAliasFree, replay, settle } = trackerModule;
 
 const handlesNullSparseOverridesWithoutConfusing = (): void => {
   const tracker = track({
@@ -119,9 +121,9 @@ describe("delta tracker randomized transactions", () => {
     for (let seed = 1; seed <= 40; seed++) {
       const rng = random(seed);
       const initial: Document = {
-        values: Array.from({ length: 4 }, (_, id) => ({ id, score: 0 })),
-        text: "start",
         meta: { revision: 0 },
+        text: "start",
+        values: Array.from({ length: 4 }, (_, id) => ({ id, score: 0 })),
       };
       const tracker = track(initial);
       const expected = clone(initial);
@@ -161,7 +163,7 @@ describe("delta tracker randomized transactions", () => {
 const ordersManyReverseDepthObjectEdits = (): void => {
   type DeepNode = { value: number; next?: DeepNode };
   let initial: DeepNode = { value: 0 };
-  for (let depth = 0; depth < 512; depth++) initial = { value: 0, next: initial };
+  for (let depth = 0; depth < 512; depth++) initial = { next: initial, value: 0 };
   const tracker = track(initial);
   const change = tracker.beginChange();
   const nodes: Array<Draft<DeepNode>> = [];

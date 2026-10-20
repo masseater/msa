@@ -5,31 +5,33 @@ import { Type } from "typebox";
 import { describe, it } from "vite-plus/test";
 
 import {
-  createHost,
-  defineRegistry,
   type Facet,
   type FacetApi,
-  forbidden,
   type Host,
+  type Registry,
+  createHost,
+  defineRegistry,
+  forbidden,
   hostNamed,
   local,
   memoryLinkPair,
-  type Registry,
   remote,
 } from "../src/index.ts";
-import { latch, tick } from "./fixtures/timing.ts";
+import timing from "./fixtures/timing.ts";
+
+const { latch, tick } = timing;
 
 type Operation = "install" | "load";
 type Failure = "factory" | "dependency" | "resource";
 
 const unexpectedError = (error: unknown) => assert.fail(String(error));
-const Eager = local("ready.eager", { version: 1, input: Type.Object({}) });
-const Lazy = local("ready.lazy", { version: 1, input: Type.Object({}) });
+const Eager = local("ready.eager", { input: Type.Object({}), version: 1 });
+const Lazy = local("ready.lazy", { input: Type.Object({}), version: 1 });
 const Status = remote("ready.status", {
-  version: 1,
-  input: Type.Object({}),
   host: hostNamed("server"),
+  input: Type.Object({}),
   variants: { default: {} },
+  version: 1,
 });
 
 const apply = (host: Host, operation: Operation, facet: Facet): Promise<void> =>
@@ -53,12 +55,12 @@ const activationProbe = (): ActivationProbe => {
         Eager,
         (_input, _principal, self) => {
           self.resource("r", {
-            version: 1,
             open: () => {
               const gate = latch();
               opened = gate.open;
               return gate.promise;
             },
+            version: 1,
           });
           self.register(entries, { eager: "live" });
           return {};
@@ -71,12 +73,12 @@ const activationProbe = (): ActivationProbe => {
       });
     },
   };
-  return { facet, entries, open: () => opened(), lazyRuns: () => lazyRuns };
+  return { entries, facet, lazyRuns: () => lazyRuns, open: () => opened() };
 };
 
 const awaitsActivationAndRegistration = (operation: Operation) =>
   Effect.gen(function* () {
-    const host = createHost({ self: { kind: "host" }, onError: unexpectedError });
+    const host = createHost({ onError: unexpectedError, self: { kind: "host" } });
     const probe = activationProbe();
     let settled = false;
     yield* Effect.gen(function* () {
@@ -108,10 +110,10 @@ const failingFacet = (failure: Failure, cause: unknown): Facet => ({
         if (failure === "dependency") self.get(Lazy, {});
         if (failure === "resource")
           self.resource("r", {
-            version: 1,
             open: () => {
               throw cause;
             },
+            version: 1,
           });
         return {};
       },
@@ -124,8 +126,8 @@ const rejectsEagerFailure = (operation: Operation, failure: Failure) =>
   Effect.gen(function* () {
     const errors: unknown[] = [];
     const host = createHost({
-      self: { kind: "host" },
       onError: (error) => errors.push(error),
+      self: { kind: "host" },
     });
     const cause = forbidden(`${failure} failed`);
     const facet = failingFacet(failure, cause);
@@ -163,11 +165,11 @@ const workerProbe = (): WorkerProbe => {
         (_input, _principal, self) => {
           const status = self.get(Status, {});
           self.resource("r", {
-            version: 1,
             deps: [status],
             open: () => {
               reported = true;
             },
+            version: 1,
           });
           return {};
         },
@@ -175,18 +177,18 @@ const workerProbe = (): WorkerProbe => {
       );
     },
   };
-  return { facet, bootstrap: () => bootstrap, reported: () => reported };
+  return { bootstrap: () => bootstrap, facet, reported: () => reported };
 };
 
 const defersReadinessUntilAdmitted = (operation: Operation) =>
   Effect.gen(function* () {
-    const server = createHost({ self: { kind: "host" }, name: "server", onError: unexpectedError });
+    const server = createHost({ name: "server", onError: unexpectedError, self: { kind: "host" } });
     const [parent, upstream] = memoryLinkPair();
     const worker = createHost({
-      self: { kind: "host" },
       name: "worker",
-      upstream: { link: upstream, principal: { kind: "server" } },
       onError: unexpectedError,
+      self: { kind: "host" },
+      upstream: { link: upstream, principal: { kind: "server" } },
     });
     server.serve(Status, () => ({ variant: "default" }));
     const probe = workerProbe();

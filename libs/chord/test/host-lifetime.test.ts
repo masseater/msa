@@ -5,31 +5,34 @@ import { Type } from "typebox";
 import { describe, expectTypeOf, it } from "vite-plus/test";
 
 import {
-  createHost,
   type Host,
+  type Ref,
+  type ServeOptionsFor,
+  createHost,
   hostNamed,
   isChordError,
   local,
   method,
   opaque,
-  type Ref,
   remote,
-  type ServeOptionsFor,
 } from "../src/index.ts";
-import { quiet } from "./fixtures/host.ts";
-import { abortOf, tick } from "./fixtures/timing.ts";
+import hostModule from "./fixtures/host.ts";
+import timing from "./fixtures/timing.ts";
+
+const { quiet } = hostModule;
+const { abortOf, tick } = timing;
 
 const Store = local("t.store", {
-  version: 1,
   input: Type.Object({ scope: Type.Optional(Type.String({ default: "all" })) }),
   members: { seen: opaque<unknown>("t.seen@1") },
+  version: 1,
 });
 
 const everyGetReachesTheOneObject = Effect.gen(function* () {
   const host = createHost({
-    self: { kind: "host" },
-    principalKey: (principal) => JSON.stringify(principal),
     onError: () => {},
+    principalKey: (principal) => JSON.stringify(principal),
+    self: { kind: "host" },
   });
   const created: unknown[] = [];
   host.serve(
@@ -65,12 +68,12 @@ describe("host: lifetime", () => {
   it('serve refuses a lifetime "host" the type cannot have, at compile time and at runtime', () => {
     const host = quiet();
     const Remote = remote("t.remote-store", {
-      version: 1,
-      input: Type.Object({}),
       host: hostNamed("host"),
+      input: Type.Object({}),
       variants: { main: {} },
+      version: 1,
     });
-    const Keyed = local("t.keyed", { version: 1, input: Type.Object({ id: Type.String() }) });
+    const Keyed = local("t.keyed", { input: Type.Object({ id: Type.String() }), version: 1 });
     expectTypeOf<{ lifetime: "host" }>().not.toExtend<ServeOptionsFor<typeof Remote>>();
     expectTypeOf<{ lifetime: "host" }>().not.toExtend<ServeOptionsFor<typeof Keyed>>();
     expectTypeOf<{ lifetime: "host"; linger: 10 }>().not.toExtend<ServeOptionsFor<typeof Store>>();
@@ -84,8 +87,8 @@ describe("host: lifetime", () => {
     for (const [args, error] of refused)
       assert.throws(() => Reflect.apply(host.serve, host, args), error);
     const Optional = local("t.optional", {
-      version: 1,
       input: Type.Object({ id: Type.Optional(Type.String()) }),
+      version: 1,
     });
     host.serve(Optional, () => ({}), { lifetime: "host" });
     host.serve(Keyed, () => ({}), { lifetime: "referenced", linger: 10 });
@@ -101,9 +104,9 @@ const forcedDisposalMakesReferencesGoneAnd = Effect.gen(function* () {
   const host = quiet();
   let seenAbort = false;
   const Slow = local("t.inflight", {
-    version: 1,
     input: Type.Object({}),
     members: { wait: method() },
+    version: 1,
   });
   host.serve(Slow, () => ({
     wait: (ctx) =>
@@ -134,18 +137,18 @@ const forcedDisposalMakesReferencesGoneAnd = Effect.gen(function* () {
 });
 
 const Doc = remote("t.doc", {
-  version: 1,
-  input: Type.Object({ id: Type.String() }),
   host: hostNamed("host"),
+  input: Type.Object({ id: Type.String() }),
   variants: {
-    viewer: { state: { view: Type.Object({ text: Type.String() }) } },
     editor: {
-      state: { view: Type.Object({ text: Type.String() }) },
       methods: {
         edit: method(Type.Object({ text: Type.String() }), Type.Object({ ok: Type.Boolean() })),
       },
+      state: { view: Type.Object({ text: Type.String() }) },
     },
+    viewer: { state: { view: Type.Object({ text: Type.String() }) } },
   },
+  version: 1,
 });
 
 function serveDoc(host: Host, principals: unknown[] = []) {
@@ -154,26 +157,26 @@ function serveDoc(host: Host, principals: unknown[] = []) {
     const view = self.state("view", Type.Object({ text: Type.String() }), { text: "" });
     if ((principal as { role?: string }).role !== "editor") return { variant: "viewer", view };
     return {
-      variant: "editor",
-      view,
       edit: ({ text }, ctx) => {
         view.replace(ctx, { text });
         return text === "bad" ? ({ ok: "no" } as never) : { ok: true };
       },
+      variant: "editor",
+      view,
     };
   });
 }
 
 const keepsObjectsPerPrincipalKeyAnd = Effect.gen(function* () {
   const host = createHost({
-    self: { kind: "host" },
-    principalKey: (principal) => (principal as { user: string }).user,
     onError: () => {},
+    principalKey: (principal) => (principal as { user: string }).user,
+    self: { kind: "host" },
   });
   const principals: unknown[] = [];
   serveDoc(host, principals);
-  const viewer = host.hold(Doc, { id: "1" }, { principal: { user: "v", role: "viewer" } });
-  const editor = host.hold(Doc, { id: "1" }, { principal: { user: "e", role: "editor" } });
+  const viewer = host.hold(Doc, { id: "1" }, { principal: { role: "viewer", user: "v" } });
+  const editor = host.hold(Doc, { id: "1" }, { principal: { role: "editor", user: "e" } });
   yield* Effect.promise(() => Promise.all([viewer.ready, editor.ready]));
   assert.equal(principals.length, 2);
   assert.equal(viewer.variant, "viewer");

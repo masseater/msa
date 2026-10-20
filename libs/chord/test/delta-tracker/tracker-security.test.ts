@@ -1,12 +1,16 @@
 import { describe, expect, it } from "vite-plus/test";
 
 import { track } from "../../src/delta/index.ts";
-import { type JsonRecord, TrapSetter, trappedObject } from "../fixtures/prototypes.ts";
-import { replay, settle } from "../fixtures/tracker.ts";
+import prototypes from "../fixtures/prototypes.ts";
+import type prototypesTypes from "../fixtures/prototypes.types.ts";
+import trackerModule from "../fixtures/tracker.ts";
+
+const { TrapSetter, trappedObject } = prototypes;
+const { replay, settle } = trackerModule;
 
 const definesOwnPropertiesWithoutInvokingInherited = (): void => {
   for (const initial of [trappedObject(), new TrapSetter()]) {
-    const tracker = track<JsonRecord>(initial);
+    const tracker = track<prototypesTypes.JsonRecord>(initial);
     settle(tracker, (draft) => {
       draft["trap"] = 1;
     });
@@ -36,10 +40,10 @@ const supportsAMemorystorageStyleRecursiveClone = (): void => {
     const output: Record<string, unknown> = {};
     for (const key of Object.keys(value))
       Object.defineProperty(output, key, {
+        configurable: true,
+        enumerable: true,
         value: storageClone((value as Record<string, unknown>)[key]),
         writable: true,
-        enumerable: true,
-        configurable: true,
       });
     return output as T;
   };

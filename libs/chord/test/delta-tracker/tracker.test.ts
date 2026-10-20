@@ -4,7 +4,9 @@ import { Effect, Schema } from "effect";
 import { describe, expect, it } from "vite-plus/test";
 
 import { track } from "../../src/delta/index.ts";
-import { clone } from "../fixtures/tracker.ts";
+import trackerModule from "../fixtures/tracker.ts";
+
+const { clone } = trackerModule;
 
 const materializesAnImmutableNextRevisionAnd = (): void => {
   const initial = { count: 1, nested: { text: "a" }, values: [1] };
@@ -146,15 +148,15 @@ const adoptsObjectEditsAsOrdinaryFast = (): void => {
   expect(initial).toEqual({ first: 1, second: 2 });
   expect(tracker.value).toEqual({ first: 3, third: 4 });
   expect(Object.getOwnPropertyDescriptor(tracker.value, "third")).toEqual({
+    configurable: true,
+    enumerable: true,
     value: 4,
     writable: true,
-    enumerable: true,
-    configurable: true,
   });
 };
 
 const supportsAdoptThenPublishOrderingAnd = (): void => {
-  const tracker = track({ value: 0, nested: { count: 0 } });
+  const tracker = track({ nested: { count: 0 }, value: 0 });
   const change = tracker.beginChange();
   change.state.value = 1;
   change.state.nested.count = 1;
@@ -166,15 +168,15 @@ const supportsAdoptThenPublishOrderingAnd = (): void => {
   expect(operations).toHaveLength(2);
   expect(published).toBeDefined();
   expect(published).toBe(tracker.value);
-  expect(clone(published!)).toEqual({ value: 1, nested: { count: 1 } });
+  expect(clone(published!)).toEqual({ nested: { count: 1 }, value: 1 });
 
   const next = tracker.beginChange();
   next.state.value = 2;
   const nextPrepared = next.prepare();
   tracker.adopt(nextPrepared);
   expect(published).not.toBe(tracker.value);
-  expect(prepared.value).toEqual({ value: 1, nested: { count: 1 } });
-  expect(tracker.value).toEqual({ value: 2, nested: { count: 1 } });
+  expect(prepared.value).toEqual({ nested: { count: 1 }, value: 1 });
+  expect(tracker.value).toEqual({ nested: { count: 1 }, value: 2 });
 };
 
 const keepsReplacementBaseValueStructurallyCompatible = (): void => {

@@ -1,16 +1,11 @@
 import { dual } from "effect/Function";
 
 import { type NonEmptyPath, type Op, type Path, track } from "../../src/delta/index.ts";
-import type { Distribution } from "./conversation-view-model.ts";
-import type {
-  EntryKind,
-  JsonObject,
-  MountedKey,
-  TrackerLike,
-  TranscriptEntry,
-} from "./conversation-view-types.ts";
+import type conversationViewContentTypes from "./conversation-view-content.types.ts";
+import type conversationViewModelTypes from "./conversation-view-model.types.ts";
+import type conversationViewTypes from "./conversation-view-types.types.ts";
 
-export const payloadText: {
+const payloadText: {
   (seed: number): (length: number) => string;
   (length: number, seed: number): string;
 } = dual(2, (length: number, seed: number): string => {
@@ -25,47 +20,48 @@ export const payloadText: {
   return bytes.toString("ascii");
 });
 
-const entryData = (id: number, kind: EntryKind): JsonObject => {
+const entryData = (
+  id: number,
+  kind: conversationViewTypes.EntryKind,
+): conversationViewTypes.JsonObject => {
   switch (kind) {
     case "user":
-      return { role: "user", content: payloadText(2_400 + (id % 600), id), timestamp: id * 10 };
+      return { content: payloadText(2_400 + (id % 600), id), role: "user", timestamp: id * 10 };
     case "assistant":
       return {
-        role: "assistant",
-        content: [{ type: "text", text: payloadText(5_500 + (id % 2_000), id) }],
+        content: [{ text: payloadText(5_500 + (id % 2_000), id), type: "text" }],
         model: "claude-sonnet-provisional",
-        usage: { input: 2_048 + id, output: 512 + (id % 256), cached: id % 1_024 },
+        role: "assistant",
+        usage: { cached: id % 1_024, input: 2_048 + id, output: 512 + (id % 256) },
       };
     case "tool-result":
       return {
         callId: `call-${id}`,
-        tool: id % 2 === 0 ? "read" : "bash",
-        status: "completed",
         output: payloadText(11_000 + (id % 5_000), id),
+        status: "completed",
+        tool: id % 2 === 0 ? "read" : "bash",
       };
     case "application":
       return {
-        namespace: "pico5.provisional",
         event: "artifact.updated",
+        namespace: "pico5.provisional",
         payload: payloadText(3_200 + (id % 1_000), id),
       };
   }
 };
 
-export interface EntrySpec {
-  readonly id: number;
-  readonly parent: number | null;
-  readonly kind: EntryKind;
-}
-
-export const makeEntry = ({ id, parent, kind }: EntrySpec): TranscriptEntry => ({
+const makeEntry = ({
   id,
   parent,
   kind,
+}: conversationViewContentTypes.EntrySpec): conversationViewTypes.TranscriptEntry => ({
   data: entryData(id, kind),
+  id,
+  kind,
+  parent,
 });
 
-const entryCycle: readonly EntryKind[] = [
+const entryCycle: readonly conversationViewTypes.EntryKind[] = [
   "user",
   "assistant",
   "assistant",
@@ -75,15 +71,26 @@ const entryCycle: readonly EntryKind[] = [
   "tool-result",
 ];
 
-export const entryKindAt = (index: number): EntryKind => entryCycle[index % entryCycle.length]!;
+const entryKindAt = (index: number): conversationViewTypes.EntryKind =>
+  entryCycle[index % entryCycle.length]!;
 
-export const resolveActiveLineage: {
-  (head: number | null): (records: ReadonlyMap<number, TranscriptEntry>) => TranscriptEntry[];
-  (records: ReadonlyMap<number, TranscriptEntry>, head: number | null): TranscriptEntry[];
+const resolveActiveLineage: {
+  (
+    head: number | null,
+  ): (
+    records: ReadonlyMap<number, conversationViewTypes.TranscriptEntry>,
+  ) => conversationViewTypes.TranscriptEntry[];
+  (
+    records: ReadonlyMap<number, conversationViewTypes.TranscriptEntry>,
+    head: number | null,
+  ): conversationViewTypes.TranscriptEntry[];
 } = dual(
   2,
-  (records: ReadonlyMap<number, TranscriptEntry>, head: number | null): TranscriptEntry[] => {
-    const reversed: TranscriptEntry[] = [];
+  (
+    records: ReadonlyMap<number, conversationViewTypes.TranscriptEntry>,
+    head: number | null,
+  ): conversationViewTypes.TranscriptEntry[] => {
+    const reversed: conversationViewTypes.TranscriptEntry[] = [];
     const seen = new Set<number>();
     let current = head;
     while (current !== null) {
@@ -99,8 +106,8 @@ export const resolveActiveLineage: {
   },
 );
 
-export function createTracker<T extends object>(value: T): TrackerLike<T> {
-  return track(value) as unknown as TrackerLike<T>;
+function createTracker<T extends object>(value: T): conversationViewTypes.TrackerLike<T> {
+  return track(value) as unknown as conversationViewTypes.TrackerLike<T>;
 }
 
 const prefixOperation = (prefix: Path, operation: Op): Op => {
@@ -124,35 +131,59 @@ const prefixOperation = (prefix: Path, operation: Op): Op => {
   }
 };
 
-export const prefixDocumentOperations: {
-  (operations: readonly Op[]): (key: MountedKey) => Op[];
-  (key: MountedKey, operations: readonly Op[]): Op[];
-} = dual(2, (key: MountedKey, operations: readonly Op[]): Op[] => {
+const prefixDocumentOperations: {
+  (operations: readonly Op[]): (key: conversationViewTypes.MountedKey) => Op[];
+  (key: conversationViewTypes.MountedKey, operations: readonly Op[]): Op[];
+} = dual(2, (key: conversationViewTypes.MountedKey, operations: readonly Op[]): Op[] => {
   const prefix: Path = ["docs", key];
   return operations.map((operation) => prefixOperation(prefix, operation));
 });
 
-export const commonEntryPrefix: {
-  (right: readonly TranscriptEntry[]): (left: readonly TranscriptEntry[]) => number;
-  (left: readonly TranscriptEntry[], right: readonly TranscriptEntry[]): number;
-} = dual(2, (left: readonly TranscriptEntry[], right: readonly TranscriptEntry[]): number => {
-  let index = 0;
-  while (index < left.length && index < right.length && left[index]!.id === right[index]!.id)
-    index += 1;
-  return index;
-});
+const commonEntryPrefix: {
+  (
+    right: readonly conversationViewTypes.TranscriptEntry[],
+  ): (left: readonly conversationViewTypes.TranscriptEntry[]) => number;
+  (
+    left: readonly conversationViewTypes.TranscriptEntry[],
+    right: readonly conversationViewTypes.TranscriptEntry[],
+  ): number;
+} = dual(
+  2,
+  (
+    left: readonly conversationViewTypes.TranscriptEntry[],
+    right: readonly conversationViewTypes.TranscriptEntry[],
+  ): number => {
+    let index = 0;
+    while (index < left.length && index < right.length && left[index]!.id === right[index]!.id)
+      index += 1;
+    return index;
+  },
+);
 
-export function distribution(values: readonly number[]): Distribution {
+function distribution(values: readonly number[]): conversationViewModelTypes.Distribution {
   if (values.length === 0)
-    return { count: 0, totalMs: 0, medianMs: 0, p95Ms: 0, p99Ms: 0, minMs: 0, maxMs: 0 };
+    return { count: 0, maxMs: 0, medianMs: 0, minMs: 0, p95Ms: 0, p99Ms: 0, totalMs: 0 };
   const ordered = [...values].sort((left, right) => left - right);
   return {
     count: ordered.length,
-    totalMs: ordered.reduce((total, value) => total + value, 0),
+    maxMs: ordered.at(-1)!,
     medianMs: ordered[Math.floor(ordered.length / 2)]!,
+    minMs: ordered[0]!,
     p95Ms: ordered[Math.min(ordered.length - 1, Math.floor(ordered.length * 0.95))]!,
     p99Ms: ordered[Math.min(ordered.length - 1, Math.floor(ordered.length * 0.99))]!,
-    minMs: ordered[0]!,
-    maxMs: ordered.at(-1)!,
+    totalMs: ordered.reduce((total, value) => total + value, 0),
   };
 }
+
+const conversationViewContent = {
+  commonEntryPrefix,
+  createTracker,
+  distribution,
+  entryKindAt,
+  makeEntry,
+  payloadText,
+  prefixDocumentOperations,
+  resolveActiveLineage,
+};
+
+export default conversationViewContent;

@@ -14,31 +14,35 @@ import {
   method,
   remote,
 } from "../src/index.ts";
-import { CountingLink } from "./fixtures/counting.ts";
-import { abortController } from "./fixtures/review.ts";
-import { latch, ticks } from "./fixtures/timing.ts";
+import counting from "./fixtures/counting.ts";
+import review from "./fixtures/review.ts";
+import timing from "./fixtures/timing.ts";
+
+const { CountingLink } = counting;
+const { abortController } = review;
+const { latch, ticks } = timing;
 
 const aRemoteReferenceRefusesAForeign = Effect.gen(function* () {
   const RemoteTarget = remote("t.remote-target", {
-    version: 1,
-    input: Type.Object({}),
     host: hostNamed("server"),
-    variants: { main: { state: {}, methods: { hit: method() } } },
+    input: Type.Object({}),
+    variants: { main: { methods: { hit: method() }, state: {} } },
+    version: 1,
   });
   let hits = 0;
-  const server = createHost({ self: { kind: "host" }, name: "server", onError: () => {} });
+  const server = createHost({ name: "server", onError: () => {}, self: { kind: "host" } });
   server.serve(RemoteTarget, () => ({
-    variant: "main",
     hit: () => {
       hits++;
     },
+    variant: "main",
   }));
   const [down, up] = memoryLinkPair();
   server.accept(down, { kind: "host", name: "worker", principal: { worker: true } });
   const link = new CountingLink(up);
-  const worker = createHost({ self: { kind: "host" }, name: "worker", onError: () => {} });
+  const worker = createHost({ name: "worker", onError: () => {}, self: { kind: "host" } });
   worker.connect(link, { principal: { kind: "server" } });
-  const other = createHost({ self: { kind: "host" }, name: "other", onError: () => {} });
+  const other = createHost({ name: "other", onError: () => {}, self: { kind: "host" } });
   const target = worker.hold(RemoteTarget, {});
   yield* Effect.promise(() => target.ready);
   const foreign = yield* Effect.promise(() =>
@@ -46,8 +50,8 @@ const aRemoteReferenceRefusesAForeign = Effect.gen(function* () {
   );
   assert.ok(isChordError(foreign, "invalid") && foreign.reason === "foreign_ctx", String(foreign));
   const forged = {
-    rootId: "forged",
     codeVersion: 1,
+    rootId: "forged",
     signal: abortController().signal,
   } as unknown as Ctx;
   yield* Effect.promise(() =>
@@ -64,15 +68,15 @@ const aRemoteReferenceRefusesAForeign = Effect.gen(function* () {
 });
 
 const Target = local("t.target", {
-  version: 1,
   input: Type.Object({}),
   members: { hit: method() },
+  version: 1,
 });
 
 const anAbortedTaskCtxCannotStart = Effect.gen(function* () {
   const services = yield* Effect.context<never>();
-  const host = createHost({ self: { kind: "host" }, onError: () => {} });
-  const Runner = local("t.runner", { version: 1, input: Type.Object({}) });
+  const host = createHost({ onError: () => {}, self: { kind: "host" } });
+  const Runner = local("t.runner", { input: Type.Object({}), version: 1 });
   let hits = 0;
   const go = latch();
   let outcome: unknown;
@@ -107,8 +111,8 @@ const anAbortedTaskCtxCannotStart = Effect.gen(function* () {
 
 const anExpiredCtxAndAForeign = Effect.gen(function* () {
   const services = yield* Effect.context<never>();
-  const host = createHost({ self: { kind: "host" }, onError: () => {} });
-  const other = createHost({ self: { kind: "host" }, onError: () => {} });
+  const host = createHost({ onError: () => {}, self: { kind: "host" } });
+  const other = createHost({ onError: () => {}, self: { kind: "host" } });
   host.serve(Target, () => ({ hit: () => {} }));
   const target = host.hold(Target, {});
   yield* Effect.promise(() => target.ready);

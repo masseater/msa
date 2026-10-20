@@ -4,15 +4,18 @@ import { Effect } from "effect";
 import { Type } from "typebox";
 import { describe, it } from "vite-plus/test";
 
-import { type Ctx, defineRegistry, type Facet, isChordError, local, method } from "../src/index.ts";
-import { CountV1, Greeter, greeterFacet, quiet, until } from "./fixtures/reload.ts";
-import { latch, tick } from "./fixtures/timing.ts";
+import { type Ctx, type Facet, defineRegistry, isChordError, local, method } from "../src/index.ts";
+import reloadModule from "./fixtures/reload.ts";
+import timing from "./fixtures/timing.ts";
+
+const { CountV1, Greeter, greeterFacet, quiet, until } = reloadModule;
+const { latch, tick } = timing;
 
 const keepsRegistryTablesPerCodeVersion = Effect.gen(function* () {
   const services = yield* Effect.context<never>();
   const host = quiet();
   const Routes = defineRegistry<string>("t.reload-routes");
-  const Router = local("t.router", { version: 1, input: Type.Object({}) });
+  const Router = local("t.router", { input: Type.Object({}), version: 1 });
   const facet = (value: string): Facet => ({
     name: "router",
     setup: (api) =>
@@ -58,9 +61,9 @@ const aReloadCanAddAType = Effect.gen(function* () {
   const ref = host.hold(Greeter, {});
   yield* Effect.promise(() => ref.ready);
   const Clock = local("t.clock", {
-    version: 1,
     input: Type.Object({}),
     members: { now: method(undefined, Type.Number()) },
+    version: 1,
   });
   const clockFacet: Facet = {
     name: "clock",

@@ -28,7 +28,7 @@ const copiesStrictJsonWithoutRetainingAliases = (): void => {
 };
 
 const optionallyOmitsUndefinedObjectPropertiesWithout = (): void => {
-  const input = { kept: 1, omitted: undefined, nested: { omitted: undefined, kept: true } };
+  const input = { kept: 1, nested: { kept: true, omitted: undefined }, omitted: undefined };
   expect(() => copyJson(input)).toThrow(/strict JSON/u);
   expect(copyJson(input, { omitUndefinedProperties: true })).toEqual({
     kept: 1,
@@ -40,10 +40,10 @@ const optionallyOmitsUndefinedObjectPropertiesWithout = (): void => {
 const preservesNullPrototypesAndOwnProto = (): void => {
   const input = Object.create(null) as Record<string, unknown>;
   Object.defineProperty(input, "__proto__", {
-    value: { safe: true },
-    enumerable: true,
-    writable: true,
     configurable: true,
+    enumerable: true,
+    value: { safe: true },
+    writable: true,
   });
   const copied = copyJson(input) as Record<string, unknown>;
   expect(Object.getPrototypeOf(copied)).toBeNull();

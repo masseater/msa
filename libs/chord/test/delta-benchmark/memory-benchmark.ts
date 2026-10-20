@@ -3,8 +3,11 @@ import { fileURLToPath } from "node:url";
 
 import { Console, Effect, Exit } from "effect";
 
-import { decodeJson, encodeJson, encodePrettyJson } from "../fixtures/benchmark.ts";
-import { runNode, writeText } from "../fixtures/platform.ts";
+import benchmarkModule from "../fixtures/benchmark.ts";
+import platform from "../fixtures/platform.ts";
+
+const { decodeJson, encodeJson, encodePrettyJson } = benchmarkModule;
+const { runNode, writeText } = platform;
 
 type Mode = "tracker";
 type Scenario = "idle-control" | "sparse-burst" | "staggered-revisions" | "lagging-watches";
@@ -111,7 +114,7 @@ const runScenario = (mode: Mode, scenario: Scenario, trial: number) =>
       return;
     }
     const stderr = Exit.isSuccess(exit) ? exit.value.stderr : String(exit.cause);
-    const failure = { mode, scenario, trial, stderr } satisfies Failure;
+    const failure = { mode, scenario, stderr, trial } satisfies Failure;
     failures.push(failure);
     yield* Console.log(yield* encodeJson(failure));
   });
@@ -140,35 +143,35 @@ const summarize = () =>
         const samples = selected.map((result) => result[metric]);
         values[metric] = { median: median(samples), range: range(samples) };
       }
-      return { scenario, mode, metrics: values };
+      return { metrics: values, mode, scenario };
     }),
   );
 const output = `${tmpdir()}/chord-delta-memory-benchmark.json`;
-await Effect.runPromise(
+void Effect.runPromise(
   Effect.gen(function* () {
     yield* runScenarios;
     const summary = summarize();
     const report = {
+      failures,
       node: process.version,
+      results,
       size,
+      summary,
+      trials,
       updates,
       watchCount,
-      trials,
-      results,
-      failures,
-      summary,
     };
     yield* writeText(output, yield* encodePrettyJson(report));
     yield* Console.log(
       yield* encodeJson({
-        output,
+        failures: failures.length,
         node: process.version,
+        output,
         size,
+        summary,
+        trials,
         updates,
         watchCount,
-        trials,
-        failures: failures.length,
-        summary,
       }),
     );
   }),

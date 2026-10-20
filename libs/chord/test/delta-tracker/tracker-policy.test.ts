@@ -1,10 +1,12 @@
 import { describe, expect, it } from "vite-plus/test";
 
 import { decoder, encoder, track } from "../../src/delta/index.ts";
-import { clone, replay, settle } from "../fixtures/tracker.ts";
+import trackerModule from "../fixtures/tracker.ts";
+
+const { clone, replay, settle } = trackerModule;
 
 const supportsNativeReadsDescriptorsKeysIteration = (): void => {
-  const tracker = track({ values: [1, 2, 3], object: { a: 1 } as { a: number; b?: number } });
+  const tracker = track({ object: { a: 1 } as { a: number; b?: number }, values: [1, 2, 3] });
   const change = tracker.beginChange();
   change.state.values.splice(1, 1, 4, 5);
   change.state.object.b = 2;
@@ -16,8 +18,8 @@ const supportsNativeReadsDescriptorsKeysIteration = (): void => {
   expect(Object.getOwnPropertyDescriptor(change.state.values, "2")?.value).toBe(5);
   expect(Object.keys(change.state.object)).toEqual(["a", "b"]);
   expect(JSON.parse(JSON.stringify(change.state))).toEqual({
-    values: [1, 4, 5, 3],
     object: { a: 1, b: 2 },
+    values: [1, 4, 5, 3],
   });
   change.abort();
 };
@@ -25,39 +27,39 @@ const supportsNativeReadsDescriptorsKeysIteration = (): void => {
 const keepsDocumentKeysDistinctFromObject = (): void => {
   const tracker = track({
     object: {
-      context: 1,
       base: 2,
-      parent: 3,
+      context: 1,
       dirty: 4,
-      target: 5,
+      parent: 3,
       proxy: 6,
+      target: 5,
     },
   });
   const change = tracker.beginChange();
   change.state.object.context = 7;
   change.state.object.proxy = 8;
   expect(Object.keys(change.state.object)).toEqual([
-    "context",
     "base",
-    "parent",
+    "context",
     "dirty",
-    "target",
+    "parent",
     "proxy",
+    "target",
   ]);
   const prepared = change.prepare();
   expect(prepared.value.object).toEqual({
-    context: 7,
     base: 2,
-    parent: 3,
+    context: 7,
     dirty: 4,
-    target: 5,
+    parent: 3,
     proxy: 8,
+    target: 5,
   });
   tracker.adopt(prepared);
 };
 
 const keepsNativeCoercionSideEffectsAnd = (): void => {
-  const tracker = track({ text: "abcdefgh", values: [1, 2, 3], marker: 0 });
+  const tracker = track({ marker: 0, text: "abcdefgh", values: [1, 2, 3] });
   const change = tracker.beginChange();
   change.state.text = `${change.state.text.slice(3)}xyz`;
   change.state.values.splice(
@@ -71,7 +73,7 @@ const keepsNativeCoercionSideEffectsAnd = (): void => {
     4,
   );
   const prepared = change.prepare();
-  expect(prepared.value).toEqual({ text: "defghxyz", values: [1, 4, 3], marker: 1 });
+  expect(prepared.value).toEqual({ marker: 1, text: "defghxyz", values: [1, 4, 3] });
   expect(prepared.ops).toContainEqual(["t", ["text"], 3]);
   expect(prepared.ops).toContainEqual(["a", ["text"], "xyz"]);
   expect(replay(tracker.value, decoder().decode(encoder().encode(prepared.ops)))).toEqual(
@@ -107,7 +109,7 @@ const preservesNativeObjectKeyOrderAfter = (): void => {
 };
 
 const ordersNewIntegerLikeObjectKeys = (): void => {
-  const tracker = track({ object: { label: "x" } as Record<string, string>, first: "" });
+  const tracker = track({ first: "", object: { label: "x" } as Record<string, string> });
   const base = clone(tracker.value);
   const change = tracker.beginChange();
   change.state.object["2"] = "two";
@@ -127,7 +129,7 @@ const normalizesDeeplyEqualContainerAssignmentsBefore = (): void => {
   const initial = { child: { a: 1, b: 2 }, count: 0 };
   const tracker = track(initial);
   const change = tracker.beginChange();
-  change.state.child = { b: 2, a: 1 };
+  change.state.child = { a: 1, b: 2 };
   change.state.count = 1;
   const prepared = change.prepare();
   const replayed = replay(initial, prepared.ops);

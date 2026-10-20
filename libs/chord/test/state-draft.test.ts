@@ -1,7 +1,7 @@
 import { DateTime } from "effect";
 import { describe, expect, it } from "vite-plus/test";
 
-import { applyImmutable, type Draft, type JsonValue, track } from "../src/delta/index.ts";
+import { type Draft, type JsonValue, applyImmutable, track } from "../src/delta/index.ts";
 
 const copiesOnlyChangedBranches = (): void => {
   const tracker = track({
@@ -52,8 +52,8 @@ const copiesInsertedDraftValuesWithoutAliasing = (): void => {
 const keepsComparatorEditsWhenSortingObject = (): void => {
   const tracker = track({
     rows: [
-      { rank: 2, comparisons: 0 },
-      { rank: 1, comparisons: 0 },
+      { comparisons: 0, rank: 2 },
+      { comparisons: 0, rank: 1 },
     ],
   });
   const change = tracker.beginChange();

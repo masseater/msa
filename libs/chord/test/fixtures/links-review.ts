@@ -3,21 +3,24 @@ import { Type } from "typebox";
 
 import {
   type Ctx,
-  createHost,
   type Frame,
   type Host,
-  hostNamed,
   type Link,
+  PROTOCOL_VERSION,
+  createHost,
+  hostNamed,
   memoryLinkPair,
   method,
-  PROTOCOL_VERSION,
   remote,
 } from "../../src/index.ts";
-import { type Latch, latch, pollUntil } from "./timing.ts";
+import timing from "./timing.ts";
+import type timingTypes from "./timing.types.ts";
 
-export const until = pollUntil(100, Effect.sleep(2));
+const { latch, pollUntil } = timing;
 
-export class WatchedLink implements Link {
+const until = pollUntil(100, Effect.sleep(2));
+
+class WatchedLink implements Link {
   readonly inner: Link;
   readonly sent: Frame[] = [];
   closeOn: ((frame: Frame) => boolean) | undefined;
@@ -46,20 +49,20 @@ export class WatchedLink implements Link {
   }
 }
 
-export const Counter = remote("t.counter", {
-  version: 1,
-  input: Type.Object({ name: Type.String() }),
+const Counter = remote("t.counter", {
   host: hostNamed("session:S1"),
+  input: Type.Object({ name: Type.String() }),
   variants: {
     main: {
-      state: { count: Type.Object({ n: Type.Number() }) },
       methods: {
         add: method(Type.Number(), Type.Number()),
-        who: method(undefined, Type.Unknown()),
         slow: method(),
+        who: method(undefined, Type.Unknown()),
       },
+      state: { count: Type.Object({ n: Type.Number() }) },
     },
   },
+  version: 1,
 });
 
 const browserOn =
@@ -68,11 +71,11 @@ const browserOn =
     server.accept(down, { principal, ...(restamp === undefined ? {} : { restamp }) });
     return {
       host: createHost({
-        self: { kind: "host" },
-        name: "browser",
         kind: "client",
-        upstream: { link: up, principal: { kind: "server" } },
+        name: "browser",
         onError: () => {},
+        self: { kind: "host" },
+        upstream: { link: up, principal: { kind: "server" } },
       }),
       up,
     };
@@ -84,19 +87,19 @@ const rawOn = (server: Host) => (principal: unknown) => {
   const frames: Frame[] = [];
   raw.receive((frame) => frames.push(frame));
   raw.send({
-    t: "hello",
-    protocol: PROTOCOL_VERSION,
-    name: "raw",
-    kind: "client",
     codeVersion: 0,
+    kind: "client",
+    name: "raw",
+    protocol: PROTOCOL_VERSION,
+    t: "hello",
   });
-  return { raw, frames };
+  return { frames, raw };
 };
 
 interface CounterEnv {
   readonly principals: unknown[];
   readonly log: string[];
-  readonly slowGate: () => Latch;
+  readonly slowGate: () => timingTypes.Latch;
   readonly services: Context.Context<never>;
 }
 
@@ -105,21 +108,19 @@ const serveReviewCounter = (worker: Host, env: CounterEnv): void => {
   worker.serve(Counter, (input, principal, self) => {
     principals.push(principal);
     self.resource("probe", {
-      version: 1,
-      open: () => void log.push(`open ${input.name}`),
       close: () => void log.push(`close ${input.name}`),
+      open: () => void log.push(`open ${input.name}`),
+      version: 1,
     });
     const count = self.state("count", Type.Object({ n: Type.Number() }), { n: 0 });
     return {
-      variant: "main",
-      count,
       add: (delta: number, ctx: Ctx) => {
         count.change(ctx, (draft) => {
           draft.n += delta;
         });
         return count.value.n;
       },
-      who: () => principal,
+      count,
       slow: (ctx: Ctx) =>
         Effect.runPromiseWith(services)(
           Effect.gen(function* () {
@@ -127,28 +128,30 @@ const serveReviewCounter = (worker: Host, env: CounterEnv): void => {
             yield* Effect.promise(() => env.slowGate().promise);
           }),
         ),
+      variant: "main",
+      who: () => principal,
     };
   });
 };
 
-export function cluster() {
+function cluster() {
   const log: string[] = [];
   const principals: unknown[] = [];
-  const server = createHost({ self: { kind: "host" }, name: "server", onError: () => {} });
+  const server = createHost({ name: "server", onError: () => {}, self: { kind: "host" } });
   const workers = new Map<string, { host: Host; link: WatchedLink }>();
   const state = {
-    server,
+    browser: browserOn(server),
     log,
     principals,
-    workers,
-    resolveGate: undefined as Promise<void> | undefined,
-    slowGate: latch(),
-    browser: browserOn(server),
     raw: rawOn(server),
+    resolveGate: undefined as Promise<void> | undefined,
+    server,
+    slowGate: latch(),
+    workers,
   };
   server.route("session:", {
-    principal: (name) => ({ host: name }),
     authorize: () => true,
+    principal: (name) => ({ host: name }),
     resolve: (name) =>
       Effect.runPromise(
         Effect.gen(function* () {
@@ -159,12 +162,12 @@ export function cluster() {
           const [down, up] = memoryLinkPair();
           const link = new WatchedLink(down);
           const worker = createHost({
-            self: { kind: "host" },
             name,
-            upstream: { link: up, principal: { kind: "server" } },
             onError: () => {},
+            self: { kind: "host" },
+            upstream: { link: up, principal: { kind: "server" } },
           });
-          serveReviewCounter(worker, { principals, log, slowGate: () => state.slowGate, services });
+          serveReviewCounter(worker, { log, principals, services, slowGate: () => state.slowGate });
           workers.set(name, { host: worker, link });
           return link;
         }),
@@ -173,7 +176,7 @@ export function cluster() {
   return state;
 }
 
-export const internals = (host: Host) =>
+const internals = (host: Host) =>
   host as unknown as {
     connections: Set<{
       role: string;
@@ -184,3 +187,13 @@ export const internals = (host: Host) =>
     }>;
     reloading: boolean;
   };
+
+const linksReview = {
+  Counter,
+  WatchedLink,
+  cluster,
+  internals,
+  until,
+};
+
+export default linksReview;

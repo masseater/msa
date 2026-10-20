@@ -2,27 +2,24 @@ import assert from "node:assert/strict";
 
 import { Effect } from "effect";
 
-import { distribution } from "./conversation-view-content.ts";
-import {
-  type Distribution,
-  type PhaseName,
-  PROVISIONAL_SCHEMA,
-} from "./conversation-view-model.ts";
-import { ConversationViewSession } from "./conversation-view-session.ts";
-import { MOUNTED_KEYS, type Watch } from "./conversation-view-types.ts";
+import conversationViewContent from "./conversation-view-content.ts";
+import conversationViewModel from "./conversation-view-model.ts";
+import type conversationViewModelTypes from "./conversation-view-model.types.ts";
+import type conversationViewRunTypes from "./conversation-view-run.types.ts";
+import ConversationViewSession from "./conversation-view-session.ts";
+import conversationViewTypes from "./conversation-view-types.ts";
+import type conversationViewModuleTypes from "./conversation-view-types.types.ts";
 
-export interface FinalQueues {
-  readonly finalQueueReferences: number;
-  readonly finalQueuedOperationReferences: number;
-  readonly finalUniqueQueuedBatches: number;
-}
+const { distribution } = conversationViewContent;
+const { PROVISIONAL_SCHEMA } = conversationViewModel;
+const { MOUNTED_KEYS } = conversationViewTypes;
 
 const sumOf = <T extends object>(
-  watches: readonly Watch<T>[],
-  count: (watch: Watch<T>) => number,
+  watches: readonly conversationViewModuleTypes.Watch<T>[],
+  count: (watch: conversationViewModuleTypes.Watch<T>) => number,
 ): number => watches.reduce((total, watch) => total + count(watch), 0);
 
-export class ConversationViewRun extends ConversationViewSession {
+class ConversationViewRun extends ConversationViewSession {
   verify(): Effect.Effect<void> {
     return Effect.gen({ self: this }, function* () {
       assert.deepEqual(this.aggregate, this.rebuildExpectedView());
@@ -40,9 +37,10 @@ export class ConversationViewRun extends ConversationViewSession {
     });
   }
 
-  finalQueues(): FinalQueues {
-    const queueLength = (watch: Watch<object>) => watch.queue.length;
-    const pending = (watch: Watch<object>) => watch.pendingOperationCount;
+  finalQueues(): conversationViewRunTypes.FinalQueues {
+    const queueLength = (watch: conversationViewModuleTypes.Watch<object>) => watch.queue.length;
+    const pending = (watch: conversationViewModuleTypes.Watch<object>) =>
+      watch.pendingOperationCount;
     const final = {
       finalQueueReferences:
         sumOf(this.conversationWatches, queueLength) + sumOf(this.documentWatches, queueLength),
@@ -70,13 +68,16 @@ export class ConversationViewRun extends ConversationViewSession {
     assert.equal(this.queuedFrameRefCounts.size, 0);
   }
 
-  phaseDistributions(): Record<PhaseName, Distribution> {
+  phaseDistributions(): Record<
+    conversationViewModelTypes.PhaseName,
+    conversationViewModelTypes.Distribution
+  > {
     return Object.fromEntries(
-      (Object.keys(this.phaseSamples) as PhaseName[]).map((name) => [
+      (Object.keys(this.phaseSamples) as conversationViewModelTypes.PhaseName[]).map((name) => [
         name,
         distribution(this.phaseSamples[name]),
       ]),
-    ) as Record<PhaseName, Distribution>;
+    ) as Record<conversationViewModelTypes.PhaseName, conversationViewModelTypes.Distribution>;
   }
 
   checksum(): number {
@@ -92,47 +93,49 @@ export class ConversationViewRun extends ConversationViewSession {
   identity() {
     const { mode, scenario, trial, headlineEntries, commitTarget, config } = this.args;
     return {
-      mode,
-      scenario,
-      trial,
-      provisionalSchema: PROVISIONAL_SCHEMA,
-      headlineEntries,
       commitTarget,
-      initialAggregateBytes: this.initialAggregateBytes,
       conversationWatchCount: config.conversationWatchCount,
+      deliveryModel: "async-serialized-ops-only-no-consumer-apply",
       documentWatchCount: config.documentWatchCount,
+      headlineEntries,
+      initialAggregateBytes: this.initialAggregateBytes,
+      mode,
+      provisionalSchema: PROVISIONAL_SCHEMA,
       queueCapacity: config.queueCapacity ?? null,
       queueCapacityUnit: "pending-operations",
-      deliveryModel: "async-serialized-ops-only-no-consumer-apply",
+      scenario,
+      trial,
     } as const;
   }
 
-  counters(final: FinalQueues) {
+  counters(final: conversationViewRunTypes.FinalQueues) {
     return {
-      conversationSequence: this.conversationSequence,
-      documentSequences: this.documentSequences,
-      publishedAggregateBatches: this.publishedAggregateBatches,
-      publishedDocumentBatches: this.publishedDocumentBatches,
-      conversationRegistrations: this.conversationRegistrations,
-      documentRegistrations: this.documentRegistrations,
+      aggregateOperationBytes: this.aggregateOperationBytes,
+      aggregateOperationCount: this.aggregateOperationCount,
       conversationBaseBytes: this.conversationBaseBytes,
-      documentBaseBytes: this.documentBaseBytes,
-      noOpCommitCount: this.noOpCommitCount,
-      unmountedCommitCount: this.unmountedCommitCount,
-      resetCount: this.resetCount,
-      resetBytes: this.resetBytes,
+      conversationRegistrations: this.conversationRegistrations,
+      conversationSequence: this.conversationSequence,
       deliveryFrameReferences: this.deliveryFrameReferences,
       deliveryOperationReferences: this.deliveryOperationReferences,
-      aggregateOperationCount: this.aggregateOperationCount,
-      aggregateOperationBytes: this.aggregateOperationBytes,
-      documentOperationCount: this.documentOperationCount,
+      documentBaseBytes: this.documentBaseBytes,
       documentOperationBytes: this.documentOperationBytes,
+      documentOperationCount: this.documentOperationCount,
+      documentRegistrations: this.documentRegistrations,
+      documentSequences: this.documentSequences,
+      noOpCommitCount: this.noOpCommitCount,
+      peakPendingOperationsPerWatch: this.peakPendingOperationsPerWatch,
       peakQueueReferences: this.peakQueueReferences,
       peakQueuedOperationReferences: this.peakQueuedOperationReferences,
-      peakPendingOperationsPerWatch: this.peakPendingOperationsPerWatch,
       peakUniqueQueuedBatches: this.peakUniqueQueuedBatches,
+      publishedAggregateBatches: this.publishedAggregateBatches,
+      publishedDocumentBatches: this.publishedDocumentBatches,
+      resetBytes: this.resetBytes,
+      resetCount: this.resetCount,
+      unmountedCommitCount: this.unmountedCommitCount,
       ...final,
       phaseDistributions: this.phaseDistributions(),
     };
   }
 }
+
+export default ConversationViewRun;

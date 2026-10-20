@@ -3,7 +3,9 @@ import { isProxy } from "node:util/types";
 import { describe, expect, it } from "vite-plus/test";
 
 import { track } from "../../src/delta/index.ts";
-import { clone, replay } from "../fixtures/tracker.ts";
+import trackerModule from "../fixtures/tracker.ts";
+
+const { clone, replay } = trackerModule;
 
 const foldsPathologicalOperationCountsWithoutPayload = (): void => {
   const wide = Object.fromEntries(

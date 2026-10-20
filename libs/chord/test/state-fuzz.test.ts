@@ -1,6 +1,6 @@
 import { expect, it } from "vite-plus/test";
 
-import { applyImmutable, type Draft, type Op, track } from "../src/delta/index.ts";
+import { type Draft, type Op, applyImmutable, track } from "../src/delta/index.ts";
 
 type Item = { id: number; text: string; score: number };
 type Document = {
@@ -41,7 +41,7 @@ const random =
   };
 
 const mutate = (document: MutableDocument, choice: number, value: number): void => {
-  const item = (): Item => ({ id: value, text: `item-${value}`, score: value % 7 });
+  const item = (): Item => ({ id: value, score: value % 7, text: `item-${value}` });
   switch (choice) {
     case 0:
       document.text += `-${value}`;
@@ -95,9 +95,9 @@ it("converges across randomized prepared revisions", () => {
   for (let seed = 1; seed <= 100; seed++) {
     const rng = random(seed);
     const initial: Document = {
-      items: Array.from({ length: 4 }, (_, id) => ({ id, text: `item-${id}`, score: 0 })),
-      text: "start",
+      items: Array.from({ length: 4 }, (_, id) => ({ id, score: 0, text: `item-${id}` })),
       meta: { revision: 0 },
+      text: "start",
     };
     const tracker = track(initial);
     const expected = clone(initial);

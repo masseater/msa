@@ -5,38 +5,42 @@ import { Type } from "typebox";
 import { describe, it } from "vite-plus/test";
 
 import {
-  createHost,
-  defineRegistry,
   type Facet,
   type Host,
+  type Ref,
+  createHost,
+  defineRegistry,
   isChordError,
   local,
   method,
-  type Ref,
 } from "../src/index.ts";
-import { emitter } from "./fixtures/review.ts";
-import { type Latch, latch, tick, ticks } from "./fixtures/timing.ts";
+import review from "./fixtures/review.ts";
+import timing from "./fixtures/timing.ts";
+import type timingTypes from "./fixtures/timing.types.ts";
+
+const { emitter } = review;
+const { latch, tick, ticks } = timing;
 
 const Worker = local("t.busy", {
-  version: 1,
   input: Type.Object({ id: Type.String() }),
   members: { work: method(undefined, Type.Boolean()) },
+  version: 1,
 });
 
 const serveBusyWorker = (
   host: Host,
   log: string[],
-  gate: () => Latch,
+  gate: () => timingTypes.Latch,
   services: Context.Context<never>,
 ): void => {
   host.serve(Worker, ({ id }, _principal, self) => {
     const connResource = self.resource("conn", {
-      version: 1,
-      open: () => ({ closed: false }),
       close: (conn) => {
         conn.closed = true;
         log.push(`close ${id}`);
       },
+      open: () => ({ closed: false }),
+      version: 1,
     });
     return {
       work: () =>
@@ -55,7 +59,7 @@ const case5DisposalWaitsForRunningMethods = Effect.gen(function* () {
   const services = yield* Effect.context<never>();
   const log: string[] = [];
   let go = latch();
-  const host = createHost({ self: { kind: "host" }, onError: () => {} });
+  const host = createHost({ onError: () => {}, self: { kind: "host" } });
   serveBusyWorker(host, log, () => go, services);
   const released = host.hold(Worker, { id: "r" });
   const call = released.work();
@@ -86,20 +90,20 @@ const case5DisposalWaitsForRunningMethods = Effect.gen(function* () {
 
 const case6ARegistryConflictFoundWhile = Effect.gen(function* () {
   const errors: unknown[] = [];
-  const host = createHost({ self: { kind: "host" }, onError: (error) => errors.push(error) });
+  const host = createHost({ onError: (error) => errors.push(error), self: { kind: "host" } });
   const Routes = defineRegistry<string>("t.review-routes");
   const log: string[] = [];
   const types = ["t.eager-a", "t.eager-b"].map((name) =>
-    local(name, { version: 1, input: Type.Object({}) }),
+    local(name, { input: Type.Object({}), version: 1 }),
   );
   for (const type of types) {
     host.serve(
       type,
       (_input, _principal, self) => {
         self.resource("r", {
-          version: 1,
-          open: () => void log.push(`open ${type.name}`),
           close: () => void log.push(`close ${type.name}`),
+          open: () => void log.push(`open ${type.name}`),
+          version: 1,
         });
         self.register(Routes, { same: type.name });
         return {};
@@ -117,9 +121,9 @@ const case6ARegistryConflictFoundWhile = Effect.gen(function* () {
 });
 
 const Store = local("t.store", {
-  version: 1,
   input: Type.Object({}),
   members: { count: Type.Unknown() },
+  version: 1,
 });
 
 const migratedStore: Facet = {
@@ -130,14 +134,14 @@ const migratedStore: Facet = {
         "count",
         Type.Object({ total: Type.Number() }),
         { total: 0 },
-        { version: 2, migrate: (old) => ({ total: (old as { n: number }).n }) },
+        { migrate: (old) => ({ total: (old as { n: number }).n }), version: 2 },
       ),
     })),
 };
 
 const case4ARunningListenerHoldsA = Effect.gen(function* () {
   const services = yield* Effect.context<never>();
-  const host = createHost({ self: { kind: "host" }, onError: () => {} });
+  const host = createHost({ onError: () => {}, self: { kind: "host" } });
   const events = emitter<number>();
   const go = latch();
   const seen: unknown[] = [];
@@ -172,7 +176,7 @@ const case4ARunningListenerHoldsA = Effect.gen(function* () {
 });
 
 const case6ReleasingTheLastHoldWhile = Effect.gen(function* () {
-  const host = createHost({ self: { kind: "host" }, onError: () => {} });
+  const host = createHost({ onError: () => {}, self: { kind: "host" } });
   const log: string[] = [];
   let ref: Ref<typeof Store> | undefined;
   let runs = 0;
@@ -180,9 +184,9 @@ const case6ReleasingTheLastHoldWhile = Effect.gen(function* () {
     runs++;
     const count = self.state("count", Type.Number(), 0);
     self.resource("r", {
-      version: 1,
-      open: () => void log.push("open"),
       close: () => void log.push("close"),
+      open: () => void log.push("open"),
+      version: 1,
     });
     self.on("drop", count, () => ref?.release());
     return { count };

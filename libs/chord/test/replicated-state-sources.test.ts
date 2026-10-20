@@ -2,7 +2,8 @@ import { describe, expect, it } from "vite-plus/test";
 
 import { BACKGROUND_CONTEXT } from "../src/context/index.ts";
 import { replicatedState } from "../src/index.ts";
-import { TestSource, type SourceValue } from "./fixtures/replicated-state.ts";
+import TestSource from "./fixtures/replicated-state.ts";
+import type replicatedStateTypes from "./fixtures/replicated-state.types.ts";
 
 const capturesBeforeActivationAndDrainsQueued = (): void => {
   const initial = Object.freeze({ value: 0 });
@@ -10,25 +11,25 @@ const capturesBeforeActivationAndDrainsQueued = (): void => {
   const second = Object.freeze({ value: 2 });
   const firstOps = Object.freeze([["s", ["value"], 1] as const]);
   const secondOps = Object.freeze([["s", ["value"], 2] as const]);
-  const source = new TestSource<SourceValue>(initial, 10);
+  const source = new TestSource<replicatedStateTypes.SourceValue>(initial, 10);
   source.onAttach = () => {
     source.commit(first, firstOps);
     source.commit(second, secondOps);
   };
 
   const state = replicatedState(source);
-  const deliveries: Array<{ value: SourceValue; sequence: number }> = [];
+  const deliveries: Array<{ value: replicatedStateTypes.SourceValue; sequence: number }> = [];
   state.subscribe((value, _context, delivery) =>
-    deliveries.push({ value, sequence: delivery.sequence }),
+    deliveries.push({ sequence: delivery.sequence, value }),
   );
   expect(state.value).toBe(second);
-  expect(deliveries).toEqual([{ value: second, sequence: 2 }]);
+  expect(deliveries).toEqual([{ sequence: 2, value: second }]);
 };
 
 const hydratesAtSequenceZeroWhenAttaching = (): void => {
   const initial = Object.freeze({ value: 0 });
   const current = Object.freeze({ value: 1 });
-  const source = new TestSource<SourceValue>(initial, 40);
+  const source = new TestSource<replicatedStateTypes.SourceValue>(initial, 40);
   source.commit(current, Object.freeze([["s", ["value"], 1] as const]));
   const state = replicatedState(source);
   const deliveries: number[] = [];
@@ -38,11 +39,11 @@ const hydratesAtSequenceZeroWhenAttaching = (): void => {
 };
 
 const publishesExactSourceValuesWithoutApplying = (): void => {
-  const source = new TestSource<SourceValue>(Object.freeze({ value: 0 }));
+  const source = new TestSource<replicatedStateTypes.SourceValue>(Object.freeze({ value: 0 }));
   const state = replicatedState(source);
   const next = Object.freeze({ value: 1 });
   const ops = Object.freeze([["s", ["value"], 7] as const]);
-  let publishedValue: SourceValue | undefined;
+  let publishedValue: replicatedStateTypes.SourceValue | undefined;
   state.subscribe((value, _context, delivery) => {
     if (delivery.kind === "update") publishedValue = value;
   });
@@ -53,7 +54,7 @@ const publishesExactSourceValuesWithoutApplying = (): void => {
 };
 
 const buffersReentrantFramesAndSkipsUpdates = (): void => {
-  const source = new TestSource<SourceValue>(Object.freeze({ value: 0 }));
+  const source = new TestSource<replicatedStateTypes.SourceValue>(Object.freeze({ value: 0 }));
   const state = replicatedState(source);
   const received: number[] = [];
   const late: Array<{ kind: string; sequence: number; value: number }> = [];
@@ -76,7 +77,7 @@ const buffersReentrantFramesAndSkipsUpdates = (): void => {
 };
 
 const reportsListenerFailuresWithoutThrowingThem = (): void => {
-  const source = new TestSource<SourceValue>(Object.freeze({ value: 0 }));
+  const source = new TestSource<replicatedStateTypes.SourceValue>(Object.freeze({ value: 0 }));
   const errors: Error[] = [];
   const state = replicatedState(source, { onError: (error) => errors.push(error) });
   const received: number[] = [];
@@ -96,7 +97,7 @@ const reportsListenerFailuresWithoutThrowingThem = (): void => {
 };
 
 const reportsCursorGapsDisposesTheBroken = (): void => {
-  const source = new TestSource<SourceValue>(Object.freeze({ value: 0 }), 5);
+  const source = new TestSource<replicatedStateTypes.SourceValue>(Object.freeze({ value: 0 }), 5);
   const errors: Error[] = [];
   const state = replicatedState(source, { onError: (error) => errors.push(error) });
   source.commit(
@@ -118,7 +119,7 @@ const reportsCursorGapsDisposesTheBroken = (): void => {
 };
 
 const keepsAttachmentsIndependentAndDisposesEach = (): void => {
-  const source = new TestSource<SourceValue>(Object.freeze({ value: 0 }));
+  const source = new TestSource<replicatedStateTypes.SourceValue>(Object.freeze({ value: 0 }));
   const first = replicatedState(source);
   const second = replicatedState(source);
   expect(source.attachments.size).toBe(2);

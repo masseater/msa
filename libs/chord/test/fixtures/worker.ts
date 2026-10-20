@@ -2,8 +2,10 @@ import { Config, Effect, Option } from "effect";
 
 import { createHost, ipcLink } from "../../src/index.ts";
 import { childControl, parentChannel } from "../../src/manager.ts";
-import { Echo } from "./echo.ts";
-import { startNode, writeText } from "./platform.ts";
+import Echo from "./echo.ts";
+import platform from "./platform.ts";
+
+const { startNode, writeText } = platform;
 
 const control = childControl();
 
@@ -23,16 +25,16 @@ const serve = (mode: string) =>
     );
     const name = yield* Effect.orDie(Config.String("HOST_NAME").pipe(Config.withDefault("worker")));
     const host = createHost({
-      self: { kind: "host" },
       name,
-      upstream: { link: ipcLink(parentChannel()), principal: { kind: "server" } },
       onError: () => {},
+      self: { kind: "host" },
+      upstream: { link: ipcLink(parentChannel()), principal: { kind: "server" } },
     });
     const init = (yield* Effect.promise(() => control.init)) as { greeting: string };
     host.serve(Echo, () => ({
-      variant: "main",
       echo: (text: string) => `${init.greeting} ${text} from ${process.pid}`,
       pid: () => process.pid,
+      variant: "main",
     }));
     yield* recordGrandchild;
     const services = yield* Effect.context<never>();
@@ -57,4 +59,4 @@ const main = Effect.gen(function* () {
   return yield* exitSoon;
 });
 
-await Effect.runPromise(main);
+void Effect.runPromise(main);

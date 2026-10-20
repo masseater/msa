@@ -4,26 +4,23 @@ import { Type } from "typebox";
 
 import {
   type Ctx,
-  createHost,
   type Frame,
   type Host,
-  hostNamed,
   type Link,
+  createHost,
+  hostNamed,
   memoryLinkPair,
   method,
   remote,
 } from "../../src/index.ts";
-import { latch, pollUntil } from "./timing.ts";
+import type flowTypes from "./flow.types.ts";
+import timing from "./timing.ts";
 
-export const until = (check: () => boolean): Effect.Effect<void> =>
-  pollUntil(check, 200, Effect.sleep(2));
+const { latch, pollUntil } = timing;
 
-export interface FlowClient {
-  readonly host: Host;
-  readonly gate: AckGate;
-}
+const until = (check: () => boolean): Effect.Effect<void> => pollUntil(check, 200, Effect.sleep(2));
 
-export class AckGate implements Link {
+class AckGate implements Link {
   readonly inner: Link;
   readonly received: Frame[] = [];
   paused = false;
@@ -62,18 +59,18 @@ export class AckGate implements Link {
 
 const counterOn = (name: string, host: string) =>
   remote(name, {
-    version: 1,
-    input: Type.Object({}),
     host: hostNamed(host),
+    input: Type.Object({}),
     variants: {
       main: {
-        state: { count: Type.Object({ n: Type.Number() }) },
         methods: { add: method(Type.Number(), Type.Number()), wait: method() },
+        state: { count: Type.Object({ n: Type.Number() }) },
       },
     },
+    version: 1,
   });
-export const Counter = counterOn("t.flow-counter", "server");
-export const WorkerCounter = counterOn("t.flow-worker-counter", "w");
+const Counter = counterOn("t.flow-counter", "server");
+const WorkerCounter = counterOn("t.flow-worker-counter", "w");
 
 const waits = { release: () => {} };
 const waiting = () => {
@@ -86,11 +83,11 @@ const waiting = () => {
   return gate.promise;
 };
 
-export const resetWaiting = (): void => {
+const resetWaiting = (): void => {
   waits.release = () => {};
 };
 
-export const releaseWaiting = (): void => {
+const releaseWaiting = (): void => {
   waits.release();
 };
 
@@ -98,45 +95,59 @@ function serveCounterImpl(host: Host, type = Counter): void {
   host.serve(type, (_input, _principal, self) => {
     const count = self.state("count", Type.Object({ n: Type.Number() }), { n: 0 });
     return {
-      variant: "main",
-      count,
       add: (delta: number, ctx: Ctx) => {
         count.change(ctx, (draft) => {
           draft.n += delta;
         });
         return count.value.n;
       },
+      count,
+      variant: "main",
       wait: waiting,
     };
   });
 }
 
-function clientImpl(server: Host, window: number): FlowClient {
+function clientImpl(server: Host, window: number): flowTypes.FlowClient {
   const [down, up] = memoryLinkPair();
   server.accept(down, { principal: { user: "u" }, window });
   const gate = new AckGate(up);
   const host = createHost({
-    self: { kind: "host" },
-    name: "browser",
     kind: "client",
-    upstream: { link: gate, principal: { kind: "server" } },
+    name: "browser",
     onError: () => {},
+    self: { kind: "host" },
+    upstream: { link: gate, principal: { kind: "server" } },
   });
-  return { host, gate };
+  return { gate, host };
 }
 
-export const stateFrames = (frames: readonly Frame[]) =>
+const stateFrames = (frames: readonly Frame[]) =>
   frames.filter((frame): frame is Extract<Frame, { t: "state" }> => frame.t === "state");
 
 const isHost = (value: unknown): value is Host =>
   typeof (value as { serve?: unknown } | undefined)?.serve === "function";
 
-export const serveCounter: {
+const serveCounter: {
   (type?: typeof Counter): (host: Host) => void;
   (host: Host, type?: typeof Counter): void;
 } = dual((args: IArguments) => isHost(args[0]), serveCounterImpl);
 
-export const client: {
-  (window: number): (server: Host) => FlowClient;
-  (server: Host, window: number): FlowClient;
+const client: {
+  (window: number): (server: Host) => flowTypes.FlowClient;
+  (server: Host, window: number): flowTypes.FlowClient;
 } = dual(2, clientImpl);
+
+const flow = {
+  AckGate,
+  Counter,
+  WorkerCounter,
+  client,
+  releaseWaiting,
+  resetWaiting,
+  serveCounter,
+  stateFrames,
+  until,
+};
+
+export default flow;

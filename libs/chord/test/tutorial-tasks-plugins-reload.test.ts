@@ -6,34 +6,32 @@ import { it, onTestFinished } from "vite-plus/test";
 
 import {
   type Ctx,
-  createHost,
-  defineFacet,
-  defineRegistry,
   type Facet,
   type FacetApi,
   type Host,
+  type Ref,
+  createHost,
+  defineFacet,
+  defineRegistry,
   isChordError,
   local,
   method,
-  type Ref,
 } from "../src/index.ts";
-import {
-  type Principal,
-  Rows,
-  serveViews,
-  Todos,
-  TodoStore,
-  todoStore,
-} from "./fixtures/tutorial.ts";
+import tutorial from "./fixtures/tutorial.ts";
+import type tutorialTypes from "./fixtures/tutorial.types.ts";
+
+const { Rows, TodoStore, Todos, serveViews, todoStore } = tutorial;
+
+type Principal = tutorialTypes.Principal;
 
 const todoFactory = todoStore();
 
 const listenersAndTasks = Effect.gen(function* () {
   onTestFinished(() => host.close());
   const Activity = local("tutorial.activity", {
-    version: 1,
     input: Type.Object({}),
     members: { seen: Type.Number() },
+    version: 1,
   });
   const host = createHost({ self: "server" });
   host.serve(TodoStore, todoFactory);
@@ -68,7 +66,7 @@ const listenersAndTasks = Effect.gen(function* () {
 const plugins = Effect.gen(function* () {
   onTestFinished(() => host.close());
   const Actions = defineRegistry<(ctx: Ctx) => Promise<number>>("tutorial.actions");
-  const Menu = local("tutorial.menu", { version: 1, input: Type.Object({}) });
+  const Menu = local("tutorial.menu", { input: Type.Object({}), version: 1 });
   let click: (() => Promise<number>) | undefined;
   const storeFacet: Facet = {
     name: "todo-store",
@@ -142,29 +140,29 @@ const migrateRows = (host: Host, todos: Ref<typeof TodoStore>) =>
             api.serve(
               TodoStore,
               todoStore({
-                version: 2,
                 migrate: (old, from) => {
                   assert.equal(from, 1);
                   return (old as Static<typeof Rows>).map((todo) =>
                     Object.assign(todo, { text: todo.text.toUpperCase() }),
                   );
                 },
+                version: 2,
               }),
             ),
         },
       ]),
     );
     assert.equal(migrated.gated.length, 1);
-    assert.deepEqual(todos.rows.value, [{ text: "BUY MILK", done: false }]);
+    assert.deepEqual(todos.rows.value, [{ done: false, text: "BUY MILK" }]);
     assert.deepEqual(events, ["snap", "reset"]);
     stopEvents();
   });
 
 const { label: _label, ...members } = TodoStore.def.members;
 const RenamedStore = local("tutorial.todos", {
-  version: 2,
   input: TodoStore.def.input,
   members: { ...members, heading: method(undefined, Type.String()) },
+  version: 2,
 });
 
 const renameWithAdapter = (host: Host, todos: Ref<typeof TodoStore>) =>
@@ -212,7 +210,7 @@ const reloadKeepsTheList = Effect.gen(function* () {
 
 const fakeProvider = Effect.gen(function* () {
   onTestFinished(() => host.close());
-  const host = createHost<Principal>({ name: "server", self: "server", dev: true });
+  const host = createHost<Principal>({ dev: true, name: "server", self: "server" });
   const received: string[] = [];
   const fake: Facet = {
     name: "fake-store",

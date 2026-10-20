@@ -3,9 +3,14 @@ import { describe, expect, test, vi } from "vite-plus/test";
 
 import { BACKGROUND_CONTEXT } from "../src/context/index.ts";
 import { replicatedState } from "../src/index.ts";
-import { deferred, fixture, type Kind } from "./fixtures/replicated-state-delivery.ts";
+import replicatedStateDelivery from "./fixtures/replicated-state-delivery.ts";
+import type replicatedStateDeliveryTypes from "./fixtures/replicated-state-delivery.types.ts";
 
-const isolatesASynchronousHydrationFailureWithout = (kind: Kind): void => {
+const { deferred, fixture } = replicatedStateDelivery;
+
+const isolatesASynchronousHydrationFailureWithout = (
+  kind: replicatedStateDeliveryTypes.Kind,
+): void => {
   const errors: Error[] = [];
   const { state, publish } = fixture(kind, (error) => errors.push(error));
   const received: number[] = [];
@@ -21,7 +26,7 @@ const isolatesASynchronousHydrationFailureWithout = (kind: Kind): void => {
   expect(received).toEqual([0, 1]);
 };
 
-const observesHydrationRejectionSynchronousThrowAnd = (kind: Kind) =>
+const observesHydrationRejectionSynchronousThrowAnd = (kind: replicatedStateDeliveryTypes.Kind) =>
   Effect.gen(function* () {
     const errors: Error[] = [];
     const { state, publish } = fixture(kind, (error) => errors.push(error));
@@ -47,7 +52,7 @@ const observesHydrationRejectionSynchronousThrowAnd = (kind: Kind) =>
     expect(fast).toEqual([0, 1, 2, 3]);
   });
 
-const stillObservesACallbackRejectionAfter = (kind: Kind) =>
+const stillObservesACallbackRejectionAfter = (kind: replicatedStateDeliveryTypes.Kind) =>
   Effect.gen(function* () {
     const errors: Error[] = [];
     const { state, publish } = fixture(kind, (error) => errors.push(error));
@@ -66,7 +71,7 @@ const stillObservesACallbackRejectionAfter = (kind: Kind) =>
   });
 
 describe("attached listener errors", () => {
-  const kind: Kind = "attached";
+  const kind: replicatedStateDeliveryTypes.Kind = "attached";
   test("isolates a synchronous hydration failure without removing the subscription", () => {
     isolatesASynchronousHydrationFailureWithout(kind);
   });

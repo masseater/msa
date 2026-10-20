@@ -7,19 +7,19 @@ import { describe, expectTypeOf, it } from "vite-plus/test";
 import {
   type ConnectOptions,
   type Ctx,
-  createHost,
-  defineFacet,
   type FacetApi,
   type GetOptions,
   type Host,
   type HostOptions,
+  type PrincipalMatch,
+  type Route,
+  createHost,
+  defineFacet,
   hostNamed,
   local,
   memoryLinkPair,
   method,
-  type PrincipalMatch,
   remote,
-  type Route,
 } from "../src/index.ts";
 
 type KeysOf<U> = U extends (...args: never[]) => unknown
@@ -38,14 +38,14 @@ const principalKey = (principal: Principal): string =>
   principal.kind === "guest" ? `guest:${principal.id}` : principal.kind;
 
 const Who = local("t.who", {
-  version: 1,
   input: Type.Object({}),
   members: { who: method(undefined, Type.String()) },
+  version: 1,
 });
 
 const factoriesMethodsAndContextsSeeThe = Effect.gen(function* () {
   const services = yield* Effect.context<never>();
-  const host = createHost<Principal>({ self: { kind: "host" }, principalKey });
+  const host = createHost<Principal>({ principalKey, self: { kind: "host" } });
   const facet = defineFacet<Principal>((api) => {
     const plain: FacetApi = api;
     void plain;
@@ -63,10 +63,10 @@ const factoriesMethodsAndContextsSeeThe = Effect.gen(function* () {
     });
   });
   yield* Effect.promise(() => host.install({ name: "who", ...facet }));
-  const guest = host.hold(Who, {}, { principal: { kind: "guest", id: "g1" } });
+  const guest = host.hold(Who, {}, { principal: { id: "g1", kind: "guest" } });
   assert.equal(
     yield* Effect.promise(() =>
-      host.root((ctx) => guest.who(ctx), { principal: { kind: "guest", id: "g1" } }),
+      host.root((ctx) => guest.who(ctx), { principal: { id: "g1", kind: "guest" } }),
     ),
     "guest g1, called by host",
   );
@@ -93,7 +93,7 @@ const factoriesMethodsAndContextsSeeThe = Effect.gen(function* () {
 });
 
 const theHostSOwnPrincipalIs = Effect.gen(function* () {
-  const host = createHost<Principal>({ self: { kind: "host" }, principalKey });
+  const host = createHost<Principal>({ principalKey, self: { kind: "host" } });
   let created = 0;
   host.serve(Who, () => {
     created++;
@@ -111,22 +111,22 @@ const theHostSOwnPrincipalIs = Effect.gen(function* () {
 const aChildSParentActsAs = Effect.gen(function* () {
   const services = yield* Effect.context<never>();
   const Echo = remote("t.echo", {
-    version: 1,
-    input: Type.Object({}),
     host: hostNamed("worker"),
+    input: Type.Object({}),
     variants: { main: { methods: { who: method(undefined, Type.String()) } } },
+    version: 1,
   });
   const server = createHost<Principal>({
     name: "server",
-    self: { kind: "host" },
     principalKey,
+    self: { kind: "host" },
   });
   const [down, up] = memoryLinkPair();
   server.accept(down, { kind: "host", name: "worker", principal: { kind: "host" } });
   const worker = createHost<Principal>({
     name: "worker",
-    self: { kind: "host" },
     principalKey,
+    self: { kind: "host" },
     upstream: { link: up, principal: { kind: "server" } },
   });
   worker.serve(Echo, (_input, principal) => ({
@@ -134,18 +134,18 @@ const aChildSParentActsAs = Effect.gen(function* () {
     who: () => principalKey(principal),
   }));
   const [browserDown, browserUp] = memoryLinkPair();
-  server.accept(browserDown, { principal: { kind: "guest", id: "g1" } });
+  server.accept(browserDown, { principal: { id: "g1", kind: "guest" } });
   const browser = createHost<Principal>({
-    name: "browser",
     kind: "client",
+    name: "browser",
     self: { kind: "host" },
     upstream: { link: browserUp, principal: { kind: "server" } },
   });
   assert.equal(yield* Effect.promise(() => server.hold(Echo, {}).who()), "server");
   server.route("worker", {
     authorize: () => true,
-    resolve: () => Effect.runPromiseWith(services)(Effect.sync(() => down)),
     principal: () => ({ kind: "host" }),
+    resolve: () => Effect.runPromiseWith(services)(Effect.sync(() => down)),
   });
   assert.equal(yield* Effect.promise(() => browser.hold(Echo, {}).who()), "guest:g1");
   yield* Effect.promise(() => browser.close());

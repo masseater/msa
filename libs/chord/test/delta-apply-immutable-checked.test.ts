@@ -1,13 +1,15 @@
 import { describe, expect, it } from "vite-plus/test";
 
 import {
-  applyImmutable,
   type JsonValue,
   type Op,
   PathError,
   UnsafePathError,
+  applyImmutable,
 } from "../src/delta/index.ts";
-import { freezeDeep } from "./fixtures/delta-apply-immutable.ts";
+import deltaApplyImmutable from "./fixtures/delta-apply-immutable.ts";
+
+const { freezeDeep } = deltaApplyImmutable;
 
 const allowsOneImmutableBatchToFan = (): void => {
   const payload = freezeDeep({ nested: { value: 1 } });
@@ -61,7 +63,7 @@ const appendsToAnArrayNotYet = (): void => {
     [["p", ["list", 1.5], 0, 0, []], UnsafePathError],
     [["p", ["list", 0, "constructor"], 0, 0, []], UnsafePathError],
   ];
-  const document = freezeDeep({ values: [] as JsonValue[], list: [[1]], text: "a" });
+  const document = freezeDeep({ list: [[1]], text: "a", values: [] as JsonValue[] });
   for (const [op, error] of invalid)
     expect(() => applyImmutable(document, [op]), JSON.stringify(op)).toThrow(error);
   expect(applyImmutable(rootArray, [["p", [], 1, 0, [9]]])).toEqual([1, 9, 2]);

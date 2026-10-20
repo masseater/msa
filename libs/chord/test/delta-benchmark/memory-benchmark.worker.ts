@@ -1,11 +1,14 @@
 import { PerformanceObserver, performance } from "node:perf_hooks";
 
-import { Console, Effect } from "effect";
+import { Console, Effect, Schema } from "effect";
 
 import type { Draft } from "../../src/delta/draft.ts";
 import { type Op, track } from "../../src/delta/index.ts";
-import { collectGarbage } from "../fixtures/benchmark.ts";
-import { ticks } from "../fixtures/timing.ts";
+import benchmark from "../fixtures/benchmark.ts";
+import timing from "../fixtures/timing.ts";
+
+const { collectGarbage } = benchmark;
+const { ticks } = timing;
 
 const MiB = 1024 * 1024;
 
@@ -43,7 +46,7 @@ if (!Number.isSafeInteger(watchCount) || watchCount < 1)
 
 function fixture(count: number): Document {
   return {
-    rows: Array.from({ length: count }, (_, id) => ({ id, value: id, payload: `row-${id}` })),
+    rows: Array.from({ length: count }, (_, id) => ({ id, payload: `row-${id}`, value: id })),
   };
 }
 
@@ -72,110 +75,164 @@ const warmUp = (): void => {
   const warmupPrepared = warmupChange.prepare();
   warmup.adopt(warmupPrepared);
 };
-warmUp();
-await Effect.runPromise(collect);
-const processBaseline = process.memoryUsage();
-let tracker: TrackerLike | undefined = createTracker(fixture(size));
-await Effect.runPromise(collect);
-const ready = process.memoryUsage();
-let peakHeap = ready.heapUsed;
-let peakRss = ready.rss;
-let acquisitionMs = 0;
-let snapshots: Document[] = [];
-let gcCount = 0;
-let gcMs = 0;
-const observer = new PerformanceObserver((list) => {
-  for (const entry of list.getEntries()) {
-    gcCount += 1;
-    gcMs += entry.duration;
-  }
-});
-observer.observe({ entryTypes: ["gc"] });
 
-const samplePeak = (): void => {
-  const memory = process.memoryUsage();
-  peakHeap = Math.max(peakHeap, memory.heapUsed);
-  peakRss = Math.max(peakRss, memory.rss);
-};
-
-const acquire = (): void => {
-  const start = performance.now();
-  snapshots.push(acquireSnapshot(tracker!));
-  acquisitionMs += performance.now() - start;
-  samplePeak();
-};
-
-const workStart = performance.now();
-if (scenario === "idle-control") {
-  for (let update = 0; update < updates; update++) samplePeak();
-} else if (scenario === "sparse-burst") {
-  for (let update = 0; update < updates; update++) {
-    commitUpdate(tracker, update);
-    samplePeak();
-  }
-} else if (scenario === "staggered-revisions") {
-  for (let watcher = 0; watcher < watchCount; watcher++) {
-    acquire();
-    if (watcher + 1 < watchCount) commitUpdate(tracker, watcher);
-    samplePeak();
-  }
-} else {
-  for (let watcher = 0; watcher < watchCount; watcher++) acquire();
-  for (let update = 0; update < updates; update++) {
-    commitUpdate(tracker, update);
-    samplePeak();
-  }
+interface Measure {
+  acquisitionMs: number;
+  gcCount: number;
+  gcMs: number;
+  peakHeap: number;
+  peakRss: number;
+  snapshots: Document[];
 }
-const workMs = performance.now() - workStart;
-await Effect.runPromise(ticks(3));
-observer.disconnect();
-samplePeak();
-await Effect.runPromise(collect);
-const retained = process.memoryUsage();
-const checksum = tracker.value.rows[0]!.value + tracker.value.rows.at(-1)!.value + snapshots.length;
 
-snapshots = [];
-await Effect.runPromise(collect);
-const afterSnapshotRelease = process.memoryUsage();
-tracker = undefined;
-await Effect.runPromise(collect);
-const released = process.memoryUsage();
+interface Samples {
+  readonly afterSnapshotRelease: NodeJS.MemoryUsage;
+  readonly checksum: number;
+  readonly processBaseline: NodeJS.MemoryUsage;
+  readonly ready: NodeJS.MemoryUsage;
+  readonly released: NodeJS.MemoryUsage;
+  readonly retained: NodeJS.MemoryUsage;
+  readonly workMs: number;
+}
 
-await Effect.runPromise(
-  Console.log(
-    JSON.stringify({
-      mode,
-      scenario,
-      trial,
-      size,
-      updates:
-        scenario === "staggered-revisions"
-          ? watchCount - 1
-          : scenario === "idle-control"
-            ? 0
-            : updates,
-      watchCount:
-        scenario === "staggered-revisions" || scenario === "lagging-watches" ? watchCount : 0,
-      workMs,
-      acquisitionMs,
-      gcCount,
-      gcMs,
-      readyHeapMiB: (ready.heapUsed - processBaseline.heapUsed) / MiB,
-      readyRssMiB: (ready.rss - processBaseline.rss) / MiB,
-      peakOverReadyHeapMiB: (peakHeap - ready.heapUsed) / MiB,
-      peakOverProcessBaselineHeapMiB: (peakHeap - processBaseline.heapUsed) / MiB,
-      peakOverReadyRssMiB: (peakRss - ready.rss) / MiB,
-      retainedOverReadyHeapMiB: (retained.heapUsed - ready.heapUsed) / MiB,
-      retainedOverProcessBaselineHeapMiB: (retained.heapUsed - processBaseline.heapUsed) / MiB,
-      retainedOverReadyRssMiB: (retained.rss - ready.rss) / MiB,
-      snapshotRetainedHeapMiB: (retained.heapUsed - afterSnapshotRelease.heapUsed) / MiB,
-      afterSnapshotReleaseOverReadyHeapMiB: (afterSnapshotRelease.heapUsed - ready.heapUsed) / MiB,
-      afterSnapshotReleaseOverProcessBaselineHeapMiB:
-        (afterSnapshotRelease.heapUsed - processBaseline.heapUsed) / MiB,
-      releasedOverProcessBaselineHeapMiB: (released.heapUsed - processBaseline.heapUsed) / MiB,
-      releasedOverProcessBaselineRssMiB: (released.rss - processBaseline.rss) / MiB,
-      maxRssMiB: process.resourceUsage().maxRSS / 1024,
-      checksum,
-    }),
-  ),
-);
+const samplePeak = (measure: Measure): void => {
+  const memory = process.memoryUsage();
+  measure.peakHeap = Math.max(measure.peakHeap, memory.heapUsed);
+  measure.peakRss = Math.max(measure.peakRss, memory.rss);
+};
+
+const acquire = (measure: Measure, tracker: TrackerLike): void => {
+  const start = performance.now();
+  measure.snapshots.push(acquireSnapshot(tracker));
+  measure.acquisitionMs += performance.now() - start;
+  samplePeak(measure);
+};
+
+const observeGc = (measure: Measure): PerformanceObserver => {
+  const observer = new PerformanceObserver((list) => {
+    for (const entry of list.getEntries()) {
+      measure.gcCount += 1;
+      measure.gcMs += entry.duration;
+    }
+  });
+  observer.observe({ entryTypes: ["gc"] });
+  return observer;
+};
+
+const updateEach = (measure: Measure, tracker: TrackerLike): void => {
+  for (let update = 0; update < updates; update++) {
+    commitUpdate(tracker, update);
+    samplePeak(measure);
+  }
+};
+
+const runWork = (measure: Measure, tracker: TrackerLike): number => {
+  const workStart = performance.now();
+  if (scenario === "idle-control") {
+    for (let update = 0; update < updates; update++) samplePeak(measure);
+  } else if (scenario === "sparse-burst") {
+    updateEach(measure, tracker);
+  } else if (scenario === "staggered-revisions") {
+    for (let watcher = 0; watcher < watchCount; watcher++) {
+      acquire(measure, tracker);
+      if (watcher + 1 < watchCount) commitUpdate(tracker, watcher);
+      samplePeak(measure);
+    }
+  } else {
+    for (let watcher = 0; watcher < watchCount; watcher++) acquire(measure, tracker);
+    updateEach(measure, tracker);
+  }
+  return performance.now() - workStart;
+};
+
+const encodeLine = Schema.encodeEffect(Schema.fromJsonString(Schema.Unknown));
+
+const overMiB = (after: number, before: number): number => (after - before) / MiB;
+
+const report = (measure: Measure, samples: Samples): Effect.Effect<void> => {
+  const { afterSnapshotRelease, processBaseline, ready, released, retained } = samples;
+  const staggered = scenario === "staggered-revisions";
+  return Effect.flatMap(
+    Effect.orDie(
+      encodeLine({
+        acquisitionMs: measure.acquisitionMs,
+        afterSnapshotReleaseOverProcessBaselineHeapMiB: overMiB(
+          afterSnapshotRelease.heapUsed,
+          processBaseline.heapUsed,
+        ),
+        afterSnapshotReleaseOverReadyHeapMiB: overMiB(
+          afterSnapshotRelease.heapUsed,
+          ready.heapUsed,
+        ),
+        checksum: samples.checksum,
+        gcCount: measure.gcCount,
+        gcMs: measure.gcMs,
+        maxRssMiB: process.resourceUsage().maxRSS / 1024,
+        mode,
+        peakOverProcessBaselineHeapMiB: overMiB(measure.peakHeap, processBaseline.heapUsed),
+        peakOverReadyHeapMiB: overMiB(measure.peakHeap, ready.heapUsed),
+        peakOverReadyRssMiB: overMiB(measure.peakRss, ready.rss),
+        readyHeapMiB: overMiB(ready.heapUsed, processBaseline.heapUsed),
+        readyRssMiB: overMiB(ready.rss, processBaseline.rss),
+        releasedOverProcessBaselineHeapMiB: overMiB(released.heapUsed, processBaseline.heapUsed),
+        releasedOverProcessBaselineRssMiB: overMiB(released.rss, processBaseline.rss),
+        retainedOverProcessBaselineHeapMiB: overMiB(retained.heapUsed, processBaseline.heapUsed),
+        retainedOverReadyHeapMiB: overMiB(retained.heapUsed, ready.heapUsed),
+        retainedOverReadyRssMiB: overMiB(retained.rss, ready.rss),
+        scenario,
+        size,
+        snapshotRetainedHeapMiB: overMiB(retained.heapUsed, afterSnapshotRelease.heapUsed),
+        trial,
+        updates: staggered ? watchCount - 1 : scenario === "idle-control" ? 0 : updates,
+        watchCount: staggered || scenario === "lagging-watches" ? watchCount : 0,
+        workMs: samples.workMs,
+      }),
+    ),
+    (line) => Console.log(line),
+  );
+};
+
+const main = Effect.gen(function* () {
+  warmUp();
+  yield* collect;
+  const processBaseline = process.memoryUsage();
+  const held: { tracker: TrackerLike | undefined } = { tracker: createTracker(fixture(size)) };
+  yield* collect;
+  const ready = process.memoryUsage();
+  const measure: Measure = {
+    acquisitionMs: 0,
+    gcCount: 0,
+    gcMs: 0,
+    peakHeap: ready.heapUsed,
+    peakRss: ready.rss,
+    snapshots: [],
+  };
+  const observer = observeGc(measure);
+  const workMs = runWork(measure, held.tracker!);
+  yield* ticks(3);
+  observer.disconnect();
+  samplePeak(measure);
+  yield* collect;
+  const retained = process.memoryUsage();
+  const checksum =
+    held.tracker!.value.rows[0]!.value +
+    held.tracker!.value.rows.at(-1)!.value +
+    measure.snapshots.length;
+  measure.snapshots = [];
+  yield* collect;
+  const afterSnapshotRelease = process.memoryUsage();
+  held.tracker = undefined;
+  yield* collect;
+  const released = process.memoryUsage();
+  yield* report(measure, {
+    afterSnapshotRelease,
+    checksum,
+    processBaseline,
+    ready,
+    released,
+    retained,
+    workMs,
+  });
+});
+
+void Effect.runPromise(main);

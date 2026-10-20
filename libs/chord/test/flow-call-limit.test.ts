@@ -4,19 +4,21 @@ import { Effect } from "effect";
 import { describe, it } from "vite-plus/test";
 
 import { createHost, isChordError, memoryLinkPair } from "../src/index.ts";
-import { Counter, releaseWaiting, resetWaiting, serveCounter } from "./fixtures/flow.ts";
+import flow from "./fixtures/flow.ts";
+
+const { Counter, releaseWaiting, resetWaiting, serveCounter } = flow;
 
 const answersCallsBeyondMaxcallsAtOnce = Effect.gen(function* () {
-  const server = createHost({ self: { kind: "host" }, name: "server", onError: () => {} });
+  const server = createHost({ name: "server", onError: () => {}, self: { kind: "host" } });
   serveCounter(server);
   const [down, up] = memoryLinkPair();
-  server.accept(down, { principal: { user: "u" }, maxCalls: 2 });
+  server.accept(down, { maxCalls: 2, principal: { user: "u" } });
   const host = createHost({
-    self: { kind: "host" },
-    name: "browser",
     kind: "client",
-    upstream: { link: up, principal: { kind: "server" } },
+    name: "browser",
     onError: () => {},
+    self: { kind: "host" },
+    upstream: { link: up, principal: { kind: "server" } },
   });
   const counter = host.hold(Counter, {});
   yield* Effect.promise(() => counter.ready);

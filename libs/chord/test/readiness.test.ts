@@ -7,11 +7,11 @@ import { describe, it } from "vite-plus/test";
 import { createHost, forbidden, isChordError, local } from "../src/index.ts";
 
 const unexpectedError = (error: unknown) => assert.fail(String(error));
-const Eager = local("ready.eager", { version: 1, input: Type.Object({}) });
-const Lazy = local("ready.lazy", { version: 1, input: Type.Object({}) });
+const Eager = local("ready.eager", { input: Type.Object({}), version: 1 });
+const Lazy = local("ready.lazy", { input: Type.Object({}), version: 1 });
 
 const loadInstallsEveryFacetBeforeAwaiting = Effect.gen(function* () {
-  const host = createHost({ self: { kind: "host" }, onError: unexpectedError });
+  const host = createHost({ onError: unexpectedError, self: { kind: "host" } });
   yield* Effect.gen(function* () {
     yield* Effect.promise(() =>
       host.load([
@@ -35,7 +35,7 @@ const loadInstallsEveryFacetBeforeAwaiting = Effect.gen(function* () {
 });
 
 const missingEagerDependenciesRejectLoadInstead = Effect.gen(function* () {
-  const host = createHost({ self: { kind: "host" }, onError: () => {} });
+  const host = createHost({ onError: () => {}, self: { kind: "host" } });
   yield* Effect.promise(() =>
     assert.rejects(
       host.load([
@@ -58,8 +58,8 @@ const missingEagerDependenciesRejectLoadInstead = Effect.gen(function* () {
 });
 
 const readyIncludesDirectHostServesBut = Effect.gen(function* () {
-  const host = createHost({ self: { kind: "host" }, onError: () => {} });
-  const First = local("ready.first", { version: 1, input: Type.Object({}) });
+  const host = createHost({ onError: () => {}, self: { kind: "host" } });
+  const First = local("ready.first", { input: Type.Object({}), version: 1 });
   let created = 0;
   yield* Effect.gen(function* () {
     host.serve(

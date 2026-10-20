@@ -3,7 +3,9 @@ import { fileURLToPath } from "node:url";
 import { Effect, Schema } from "effect";
 import { describe, expect, test } from "vite-plus/test";
 
-import { listFiles, readText } from "./fixtures/platform.ts";
+import platform from "./fixtures/platform.ts";
+
+const { listFiles, readText } = platform;
 
 const packageDirectory = fileURLToPath(new URL("..", import.meta.url)).replace(/\/$/u, "");
 const sourceDirectory = `${packageDirectory}/src`;

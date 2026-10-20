@@ -2,7 +2,9 @@ import { Clock, Effect } from "effect";
 import { afterEach, describe, expect, it, vi } from "vite-plus/test";
 
 import { Progress } from "../src/progress.ts";
-import { latch } from "./fixtures/timing.ts";
+import timing from "./fixtures/timing.ts";
+
+const { latch } = timing;
 
 const commitsTheFirstChangeAtOnce = Effect.gen(function* () {
   const services = yield* Effect.context<never>();

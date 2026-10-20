@@ -6,8 +6,10 @@ import { Clock, type Context, Effect } from "effect";
 import { Type } from "typebox";
 import { describe, it } from "vite-plus/test";
 
-import { createHost, defineRegistry, type Facet, local, method } from "../src/index.ts";
-import { abortOf } from "./fixtures/timing.ts";
+import { type Facet, createHost, defineRegistry, local, method } from "../src/index.ts";
+import timing from "./fixtures/timing.ts";
+
+const { abortOf } = timing;
 
 setFlagsFromString("--expose-gc");
 const gc = runInNewContext("gc") as () => void;
@@ -17,11 +19,6 @@ function tracker() {
   const registry = new FinalizationRegistry<number>((id) => alive.delete(id));
   return {
     alive,
-    track<T extends object>(id: number, value: T): T {
-      alive.add(id);
-      registry.register(value, id);
-      return value;
-    },
     collect(expected: readonly number[], timeout = 5000): Promise<number[]> {
       const sorted = () => [...alive].sort((a, b) => a - b);
       return Effect.runPromise(
@@ -36,20 +33,25 @@ function tracker() {
         }),
       );
     },
+    track<T extends object>(id: number, value: T): T {
+      alive.add(id);
+      registry.register(value, id);
+      return value;
+    },
   };
 }
 
 const Store = local("t.gen-store", {
-  version: 1,
   input: Type.Object({}),
-  members: { get: method(undefined, Type.Number()), count: Type.Number() },
+  members: { count: Type.Number(), get: method(undefined, Type.Number()) },
+  version: 1,
 });
 const Routes = defineRegistry<() => number>("t.gen-routes");
 const RELOADS = 6;
 
 const aReferenceHeldAcrossReloadsKeeps = Effect.gen(function* () {
   const generations = tracker();
-  const host = createHost({ self: { kind: "host" }, onError: () => {} });
+  const host = createHost({ onError: () => {}, self: { kind: "host" } });
   const facet = (generation: number): Facet => {
     const sentinel = generations.track(generation, { generation });
     return {
@@ -75,7 +77,7 @@ const aReferenceHeldAcrossReloadsKeeps = Effect.gen(function* () {
 const aLifetimeHostObjectWithState = Effect.gen(function* () {
   const services = yield* Effect.context<never>();
   const generations = tracker();
-  const host = createHost({ self: { kind: "host" }, onError: () => {} });
+  const host = createHost({ onError: () => {}, self: { kind: "host" } });
   const facet = (generation: number): Facet => {
     const sentinel = generations.track(generation, { generation });
     return {
@@ -86,9 +88,9 @@ const aLifetimeHostObjectWithState = Effect.gen(function* () {
           (_input, _principal, self) => {
             const count = self.state("count", Type.Number(), 0);
             self.resource("conn", {
-              version: 1,
-              open: () => ({ open: true }),
               close: () => void sentinel.generation,
+              open: () => ({ open: true }),
+              version: 1,
             });
             self.on("count", count, () => void sentinel.generation);
             self.task((ctx) =>
@@ -154,7 +156,7 @@ const abortingStoreFacet = (
 const abortListenersThatCallsAndTasks = Effect.gen(function* () {
   const services = yield* Effect.context<never>();
   const generations = tracker();
-  const host = createHost({ self: { kind: "host" }, onError: () => {} });
+  const host = createHost({ onError: () => {}, self: { kind: "host" } });
   const facet = abortingStoreFacet(generations, services);
   yield* Effect.promise(() => host.install(facet(0)));
   for (let generation = 1; generation <= RELOADS; generation++) {
@@ -181,11 +183,11 @@ const disposedObjectsAreNotKeptOnce = Effect.gen(function* () {
   const services = yield* Effect.context<never>();
   const objects = tracker();
   const Item = local("t.gen-item", {
-    version: 1,
     input: Type.Object({ id: Type.Number() }),
     members: { id: method(undefined, Type.Number()) },
+    version: 1,
   });
-  const host = createHost({ self: { kind: "host" }, onError: () => {} });
+  const host = createHost({ onError: () => {}, self: { kind: "host" } });
   host.serve(Item, (input) => {
     const { id } = objects.track(input.id, input);
     return { id: () => id };

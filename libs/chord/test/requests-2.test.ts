@@ -7,9 +7,10 @@ import { describe, it } from "vite-plus/test";
 import { applyImmutable } from "../src/delta/index.ts";
 import {
   type Ctx,
-  createHost,
   type Facet,
   type FacetLoader,
+  type StateEvent,
+  createHost,
   hostNamed,
   isChordError,
   local,
@@ -17,20 +18,22 @@ import {
   method,
   opaque,
   remote,
-  type StateEvent,
 } from "../src/index.ts";
-import { until } from "./fixtures/requests.ts";
-import { latch, tick } from "./fixtures/timing.ts";
+import requests from "./fixtures/requests.ts";
+import timing from "./fixtures/timing.ts";
+
+const { until } = requests;
+const { latch, tick } = timing;
 
 const case4ReplaceDiffsANewRevision = Effect.gen(function* () {
   const Mirror = local("t.mirror", {
-    version: 1,
     input: Type.Object({}),
     members: { doc: Type.Unknown(), set: method(Type.Unknown()) },
+    version: 1,
   });
   const Doc = Type.Object({ entries: Type.Array(Type.String()), status: Type.String() });
   let lastOptions: { diff?: boolean } | undefined;
-  const host = createHost({ self: { kind: "host" }, onError: () => {} });
+  const host = createHost({ onError: () => {}, self: { kind: "host" } });
   host.serve(Mirror, (_input, _principal, self) => {
     const doc = self.state("doc", Doc, { entries: ["a", "b"], status: "idle" });
     return {
@@ -67,21 +70,21 @@ const case4ReplaceDiffsANewRevision = Effect.gen(function* () {
 });
 
 const Echo = remote("t.echo", {
-  version: 1,
-  input: Type.Object({}),
   host: hostNamed("server"),
+  input: Type.Object({}),
   variants: { main: { methods: { codeVersion: method(undefined, Type.Number()) } } },
+  version: 1,
 });
 
 const case5RootsOfAChildThat = Effect.gen(function* () {
   const services = yield* Effect.context<never>();
-  const server = createHost({ self: { kind: "host" }, name: "server", onError: () => {} });
+  const server = createHost({ name: "server", onError: () => {}, self: { kind: "host" } });
   const echoFacet: Facet = {
     name: "echo",
     setup: (api) =>
       api.serve(Echo, () => ({
-        variant: "main",
         codeVersion: (ctx: Ctx) => ctx.codeVersion,
+        variant: "main",
       })),
   };
   server.install(echoFacet);
@@ -90,10 +93,10 @@ const case5RootsOfAChildThat = Effect.gen(function* () {
   assert.equal(server.previousCodeVersion, undefined);
   const loader: FacetLoader = () => Effect.runPromiseWith(services)(Effect.sync(() => []));
   const worker = createHost({
-    self: { kind: "host" },
-    name: "session:S1",
     loader,
+    name: "session:S1",
     onError: () => {},
+    self: { kind: "host" },
   });
   const go = latch();
   const call = worker.root((ctx) =>
@@ -106,7 +109,7 @@ const case5RootsOfAChildThat = Effect.gen(function* () {
     ),
   );
   const [down, up] = memoryLinkPair();
-  server.accept(down, { principal: { worker: "S1" }, kind: "host", name: "session:S1" });
+  server.accept(down, { kind: "host", name: "session:S1", principal: { worker: "S1" } });
   worker.connect(up, { principal: { kind: "server" } });
   go.open();
   assert.equal(yield* Effect.promise(() => call), 2);
@@ -133,16 +136,15 @@ describe("application requests", () => {
       Effect.gen(function* () {
         const services = yield* Effect.context<never>();
         const Store = local("t.store", {
-          version: 1,
           input: Type.Object({}),
           members: { db: opaque<{ readonly queries: string[] }>("t.db@1") },
+          version: 1,
         });
         const gate = latch();
         const native = { queries: [] as string[] };
-        const host = createHost({ self: { kind: "host" }, onError: () => {} });
+        const host = createHost({ onError: () => {}, self: { kind: "host" } });
         host.serve(Store, (_input, _principal, self) => {
           const db = self.resource("db", {
-            version: 1,
             open: () =>
               Effect.runPromiseWith(services)(
                 Effect.gen(function* () {
@@ -150,6 +152,7 @@ describe("application requests", () => {
                   return native;
                 }),
               ),
+            version: 1,
           });
           return { db: self.expose(db) };
         });
@@ -159,7 +162,7 @@ describe("application requests", () => {
         yield* Effect.promise(() => ref.ready);
         assert.equal(ref.db, native);
 
-        const Other = local("t.other", { version: 1, input: Type.Object({}) });
+        const Other = local("t.other", { input: Type.Object({}), version: 1 });
         host.serve(Other, (_input, _principal, self) => {
           self.expose({ key: "x", value: 1 });
           return {};

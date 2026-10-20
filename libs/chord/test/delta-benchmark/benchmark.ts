@@ -3,8 +3,11 @@ import { fileURLToPath } from "node:url";
 
 import { Console, Effect, Exit } from "effect";
 
-import { decodeJson, encodeJson, encodePrettyJson } from "../fixtures/benchmark.ts";
-import { runNode, writeText } from "../fixtures/platform.ts";
+import benchmarkModule from "../fixtures/benchmark.ts";
+import platform from "../fixtures/platform.ts";
+
+const { decodeJson, encodeJson, encodePrettyJson } = benchmarkModule;
+const { runNode, writeText } = platform;
 
 type Mode = "tracker";
 type Scenario =
@@ -125,7 +128,7 @@ const runScenario = (mode: Mode, scenario: Scenario, trial: number) =>
       yield* Console.log(yield* encodeJson(result));
     } else {
       const stderr = Exit.isSuccess(exit) ? exit.value.stderr : String(exit.cause);
-      const failure = { mode, scenario, trial, stderr } satisfies Failure;
+      const failure = { mode, scenario, stderr, trial } satisfies Failure;
       failures.push(failure);
       yield* Console.log(yield* encodeJson(failure));
     }
@@ -188,43 +191,43 @@ const summarize = () =>
         ranges[metric] = range(values);
       }
       return {
-        mode,
-        scenario,
-        watchProfile: selected[0]?.watchProfile ?? null,
-        watchCount: selected[0]?.watchCount ?? 0,
-        watchUpdates: selected[0]?.watchUpdates ?? 0,
         averages,
         medians,
+        mode,
         ranges,
+        scenario,
+        watchCount: selected[0]?.watchCount ?? 0,
+        watchProfile: selected[0]?.watchProfile ?? null,
+        watchUpdates: selected[0]?.watchUpdates ?? 0,
       };
     }),
   );
 const output = `${tmpdir()}/chord-delta-benchmark.json`;
-await Effect.runPromise(
+void Effect.runPromise(
   Effect.gen(function* () {
     yield* runScenarios;
     const summary = summarize();
     const report = {
+      failures,
       node: process.version,
+      results,
       size,
+      summary,
       trials,
       watchCount,
       watchUpdates,
-      results,
-      failures,
-      summary,
     };
     yield* writeText(output, yield* encodePrettyJson(report));
     yield* Console.log(
       yield* encodeJson({
-        output,
+        failures: failures.length,
         node: process.version,
+        output,
         size,
+        summary,
         trials,
         watchCount,
         watchUpdates,
-        failures: failures.length,
-        summary,
       }),
     );
   }),

@@ -2,51 +2,51 @@ import assert from "node:assert/strict";
 
 import { Type } from "typebox";
 
-import { defineRegistry, type Facet, local, method, type Self } from "../../src/index.ts";
+import { type Facet, type Self, defineRegistry, local, method } from "../../src/index.ts";
 
-export const input = Type.Object({});
+const input = Type.Object({});
 
-export const flags = Type.Record(Type.String(), Type.Boolean());
+const flags = Type.Record(Type.String(), Type.Boolean());
 
-export const SwitchV1 = local("t.eager-switch", {
-  version: 1,
+const SwitchV1 = local("t.eager-switch", {
   input,
   members: {
     enabled: Type.Boolean(),
     set: method(Type.Boolean()),
   },
+  version: 1,
 });
 
-export const SwitchV2 = local("t.eager-switch", {
-  version: 2,
+const SwitchV2 = local("t.eager-switch", {
   input,
   members: {
     enabled: flags,
     set: method(Type.Object({ conversation: Type.Number(), enabled: Type.Boolean() })),
   },
+  version: 2,
 });
 
-export const SwitchV3 = local("t.eager-switch", {
-  version: 3,
+const SwitchV3 = local("t.eager-switch", {
   input,
   members: {
     enabled: flags,
     update: method(Type.Object({ conversation: Type.Number(), enabled: Type.Boolean() })),
   },
+  version: 3,
 });
 
-export const Read = defineRegistry<() => unknown>("t.eager-switch-read");
+const Read = defineRegistry<() => unknown>("t.eager-switch-read");
 
 const watchResource = (log: string[]) => (self: Self) =>
   self.resource("watch", {
-    version: 1,
+    close: () => {
+      log.push("close");
+    },
     open: () => {
       log.push("open");
       return null;
     },
-    close: () => {
-      log.push("close");
-    },
+    version: 1,
   });
 
 const switchV1 = (declareResource: (self: Self) => void): Facet => ({
@@ -81,11 +81,11 @@ const switchV2 = (declareResource: (self: Self) => void, valid: boolean): Facet 
           flags,
           {},
           {
-            version: 2,
             migrate: (old, from) => {
               assert.equal(from, 1);
               return valid ? { 1: old as boolean } : ("invalid migration" as never);
             },
+            version: 2,
           },
         );
         self.register(Read, { current: () => enabledState.value });
@@ -124,7 +124,7 @@ const switchV3 = (declareResource: (self: Self) => void): Facet => ({
     ),
 });
 
-export function switchFacets(log: string[]) {
+function switchFacets(log: string[]) {
   const declareResource = watchResource(log);
   return {
     v1: switchV1(declareResource),
@@ -133,24 +133,24 @@ export function switchFacets(log: string[]) {
   };
 }
 
-export const ReadV1 = local("t.eager-read", {
-  version: 1,
+const ReadV1 = local("t.eager-read", {
   input: Type.Object({}),
   members: { read: method(undefined, Type.String()) },
+  version: 1,
 });
 
-export const ReadV2 = local("t.eager-read", {
-  version: 2,
+const ReadV2 = local("t.eager-read", {
   input: Type.Object({}),
   members: { fetch: method(undefined, Type.String()) },
+  version: 2,
 });
 
-export const readerV1: Facet = {
+const readerV1: Facet = {
   name: "read",
   setup: (api) => api.serve(ReadV1, () => ({ read: () => "one" }), { lifetime: "host" }),
 };
 
-export const readerV2 = (adapt = false): Facet => ({
+const readerV2 = (adapt = false): Facet => ({
   name: "read",
   setup: (api) =>
     api.serve(ReadV2, () => ({ fetch: () => "two" }), {
@@ -160,3 +160,19 @@ export const readerV2 = (adapt = false): Facet => ({
         : {}),
     }),
 });
+
+const hostObjectsReload = {
+  Read,
+  ReadV1,
+  ReadV2,
+  SwitchV1,
+  SwitchV2,
+  SwitchV3,
+  flags,
+  input,
+  readerV1,
+  readerV2,
+  switchFacets,
+};
+
+export default hostObjectsReload;

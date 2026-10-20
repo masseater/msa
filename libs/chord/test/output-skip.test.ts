@@ -47,7 +47,7 @@ function randomChunk(next: () => number): string {
 function measure(text: string): OutputSkip {
   let newlines = 0;
   for (const character of text) if (character === "\n") newlines++;
-  return { bytes: Buffer.byteLength(text, "utf8"), newlines, endsWithNewline: text.endsWith("\n") };
+  return { bytes: Buffer.byteLength(text, "utf8"), endsWithNewline: text.endsWith("\n"), newlines };
 }
 
 function legalCuts(text: string, limits: OutputLimits): number[] {
@@ -144,13 +144,13 @@ describe("OutputBuffer skipped output", () => {
     full.push(omitted + kept);
     skipping.push(kept, measure(omitted));
     expect(skipping.snapshot()).toEqual(full.snapshot());
-    expect(skipping.snapshot()).toEqual({ text: "five\nsix", droppedBytes: 19, droppedLines: 4 });
+    expect(skipping.snapshot()).toEqual({ droppedBytes: 19, droppedLines: 4, text: "five\nsix" });
   });
 
   it("refuses skips for head retention", () => {
     const buffer = new OutputBuffer({ maxBytes: 10, maxLines: 2, retain: "head" });
     expect(() =>
-      buffer.push("x\ny\nz\n", { bytes: 3, newlines: 1, endsWithNewline: true }),
+      buffer.push("x\ny\nz\n", { bytes: 3, endsWithNewline: true, newlines: 1 }),
     ).toThrow("tail retention");
   });
 });

@@ -6,22 +6,25 @@ import { describe, it } from "vite-plus/test";
 
 import {
   type Ctx,
-  createHost,
   type Facet,
+  createHost,
   hostNamed,
   isChordError,
   local,
   method,
   remote,
 } from "../src/index.ts";
-import { Item } from "./fixtures/review.ts";
-import { latch, tick, ticks } from "./fixtures/timing.ts";
+import review from "./fixtures/review.ts";
+import timing from "./fixtures/timing.ts";
+
+const { Item } = review;
+const { latch, tick, ticks } = timing;
 
 const case7ObjectsOfTypesAReload = Effect.gen(function* () {
   const services = yield* Effect.context<never>();
-  const host = createHost({ self: { kind: "host" }, onError: () => {} });
+  const host = createHost({ onError: () => {}, self: { kind: "host" } });
   const log: string[] = [];
-  const Fresh = local("t.fresh", { version: 1, input: Type.Object({}) });
+  const Fresh = local("t.fresh", { input: Type.Object({}), version: 1 });
   host.install({
     name: "item",
     setup: (api) => api.serve(Item, () => ({ version: () => "v1" })),
@@ -61,28 +64,28 @@ const case7ObjectsOfTypesAReload = Effect.gen(function* () {
 });
 
 const case8ABreakingProviderChangeAnd = Effect.gen(function* () {
-  const host = createHost({ self: { kind: "host" }, onError: () => {} });
+  const host = createHost({ onError: () => {}, self: { kind: "host" } });
   const P1 = remote("t.provider", {
-    version: 1,
-    input: Type.Object({}),
     host: hostNamed("host"),
+    input: Type.Object({}),
     variants: { main: { methods: { get: method(undefined, Type.String()) } } },
+    version: 1,
   });
   const P2 = remote("t.provider", {
-    version: 2,
-    input: Type.Object({}),
     host: hostNamed("host"),
+    input: Type.Object({}),
     variants: { main: { methods: { fetch: method(undefined, Type.String()) } } },
+    version: 2,
   });
   const Consumer = local("t.consumer", {
-    version: 1,
     input: Type.Object({}),
     members: { ask: method(undefined, Type.String()) },
+    version: 1,
   });
   host.install({
     name: "both",
     setup: (api) => {
-      api.serve(P1, () => ({ variant: "main", get: () => "old" }));
+      api.serve(P1, () => ({ get: () => "old", variant: "main" }));
       api.serve(Consumer, (_input, _principal, self) => {
         const provider = self.get(P1, {});
         return { ask: (ctx: Ctx) => provider.get(ctx) };
@@ -96,7 +99,7 @@ const case8ABreakingProviderChangeAnd = Effect.gen(function* () {
       {
         name: "both",
         setup: (api) => {
-          api.serve(P2, () => ({ variant: "main", fetch: () => "new" }));
+          api.serve(P2, () => ({ fetch: () => "new", variant: "main" }));
           api.serve(Consumer, (_input, _principal, self) => {
             const provider = self.get(P2, {});
             return { ask: (ctx: Ctx) => provider.fetch(ctx) };
@@ -108,7 +111,7 @@ const case8ABreakingProviderChangeAnd = Effect.gen(function* () {
   assert.equal(yield* Effect.promise(() => consumer.ask()), "new");
 });
 
-const Dep = local("t.dep", { version: 1, input: Type.Object({}) });
+const Dep = local("t.dep", { input: Type.Object({}), version: 1 });
 
 const retirementFacet =
   (log: string[], services: Context.Context<never>) =>
@@ -117,9 +120,9 @@ const retirementFacet =
     setup: (api) => {
       api.serve(Dep, (_input, _principal, self) => {
         self.resource("r", {
-          version: 1,
-          open: () => {},
           close: () => void log.push("dep closed"),
+          open: () => {},
+          version: 1,
         });
         return {};
       });
@@ -127,8 +130,6 @@ const retirementFacet =
         if (withDecls) {
           self.get(Dep, {});
           self.resource("own", {
-            version: 1,
-            open: () => {},
             close: () =>
               Effect.runPromiseWith(services)(
                 Effect.gen(function* () {
@@ -136,6 +137,8 @@ const retirementFacet =
                   log.push("own closed");
                 }),
               ),
+            open: () => {},
+            version: 1,
           });
         }
         return { version: () => (withDecls ? "v1" : "v2") };
@@ -145,7 +148,7 @@ const retirementFacet =
 
 const case10RetirementClosesDroppedResourcesBefore = Effect.gen(function* () {
   const services = yield* Effect.context<never>();
-  const host = createHost({ self: { kind: "host" }, onError: () => {} });
+  const host = createHost({ onError: () => {}, self: { kind: "host" } });
   const log: string[] = [];
   const facet = retirementFacet(log, services);
   host.install(facet(true));
@@ -170,19 +173,19 @@ const case10RetirementClosesDroppedResourcesBefore = Effect.gen(function* () {
 });
 
 const Db = local("t.db", {
-  version: 1,
   input: Type.Object({}),
   members: { read: method(undefined, Type.Unknown()) },
+  version: 1,
 });
 
 const case7APrepareRerunCannotTouch = Effect.gen(function* () {
-  const host = createHost({ self: { kind: "host" }, onError: () => {} });
+  const host = createHost({ onError: () => {}, self: { kind: "host" } });
   const native = { mutated: false };
   const facet = (touch: boolean): Facet => ({
     name: "db",
     setup: (api) =>
       api.serve(Db, (_input, _principal, self) => {
-        const db = self.resource("db", { version: 1, open: () => native });
+        const db = self.resource("db", { open: () => native, version: 1 });
         if (touch) db.value.mutated = true;
         return { read: () => db.value };
       }),
@@ -199,7 +202,7 @@ const case7APrepareRerunCannotTouch = Effect.gen(function* () {
 
 const case9ExclusiveResourceAfterCloseFailure = (reopen: "works" | "fails") =>
   Effect.gen(function* () {
-    const host = createHost({ self: { kind: "host" }, onError: () => {} });
+    const host = createHost({ onError: () => {}, self: { kind: "host" } });
     const log: string[] = [];
     let opens = 0;
     const facet = (rev: number): Facet => ({
@@ -207,7 +210,10 @@ const case9ExclusiveResourceAfterCloseFailure = (reopen: "works" | "fails") =>
       setup: (api) =>
         api.serve(Db, (_input, _principal, self) => {
           const port = self.resource("port", {
-            version: rev,
+            close: () => {
+              log.push(`close ${rev}`);
+              throw new Error("close fails");
+            },
             exclusive: true,
             open: () => {
               if (rev === 2) throw new Error("new port fails");
@@ -215,10 +221,7 @@ const case9ExclusiveResourceAfterCloseFailure = (reopen: "works" | "fails") =>
               log.push(`open ${rev}`);
               return { rev };
             },
-            close: () => {
-              log.push(`close ${rev}`);
-              throw new Error("close fails");
-            },
+            version: rev,
           });
           return { read: () => port.value };
         }),

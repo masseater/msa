@@ -8,15 +8,18 @@ import { describe, it, vi } from "vite-plus/test";
 import { createHost, ipcLink, isChordError } from "../src/index.ts";
 import {
   type ControlMessage,
-  createHostManager,
   type Driver,
   type Exit,
+  createHostManager,
   forkDriver,
   processLock,
 } from "../src/manager.ts";
-import { Echo } from "./fixtures/echo.ts";
-import { makeDirectory, readText, removeAll } from "./fixtures/platform.ts";
-import { latch, tick } from "./fixtures/timing.ts";
+import Echo from "./fixtures/echo.ts";
+import platform from "./fixtures/platform.ts";
+import timing from "./fixtures/timing.ts";
+
+const { makeDirectory, readText, removeAll } = platform;
+const { latch, tick } = timing;
 
 const entry = fileURLToPath(new URL("./fixtures/worker.ts", import.meta.url));
 const scratch = (name: string) => `${tmpdir()}/chord2-${process.pid}-${name}`;
@@ -86,8 +89,8 @@ const startsAChildHostLinksIt = Effect.gen(function* () {
   const manager = createHostManager({ driver: driver() });
   const instance = yield* Effect.promise(() => manager.start());
   assert.equal(manager.status, "running");
-  const server = createHost({ self: { kind: "host" }, name: "server", onError: () => {} });
-  server.accept(instance.link, { principal: { worker: "w1" }, kind: "host", name: "w1" });
+  const server = createHost({ name: "server", onError: () => {}, self: { kind: "host" } });
+  server.accept(instance.link, { kind: "host", name: "w1", principal: { worker: "w1" } });
   const echo = server.hold(Echo, {});
   assert.equal(yield* Effect.promise(() => echo.echo("x")), `hi x from ${instance.pid}`);
   assert.equal(yield* Effect.promise(() => manager.start()), instance);
@@ -144,17 +147,17 @@ const idleforCountsFromTheBusyIdle = Effect.gen(function* () {
   const fake: Driver = {
     spawn: () =>
       Promise.resolve({
-        pid: 0,
+        exited: latch<Exit>().promise,
+        killTree: () => {},
         link: ipcLink({
           connected: false,
-          send: () => false,
-          on: () => undefined,
           off: () => undefined,
+          on: () => undefined,
+          send: () => false,
         }),
-        exited: latch<Exit>().promise,
-        send: () => {},
-        killTree: () => {},
         onControl: (listener) => listeners.add(listener),
+        pid: 0,
+        send: () => {},
       }),
   };
   const emit = (message: ControlMessage) => {
@@ -165,10 +168,10 @@ const idleforCountsFromTheBusyIdle = Effect.gen(function* () {
   for (let i = 0; i < 20 && listeners.size === 0; i++) yield* tick;
   emit({ type: "ready" });
   yield* Effect.promise(() => started);
-  emit({ type: "status", activeCalls: 1 });
+  emit({ activeCalls: 1, type: "status" });
   yield* Effect.sleep(120);
   assert.equal(manager.liveness.idleFor, 0);
-  emit({ type: "status", activeCalls: 0 });
+  emit({ activeCalls: 0, type: "status" });
   assert.ok(manager.liveness.idleFor < 60, `idleFor ${manager.liveness.idleFor}`);
 });
 
@@ -198,9 +201,9 @@ const reportsAFatalChildAsA = Effect.gen(function* () {
 const stopsAnIdleChildWhenKeepalive = Effect.gen(function* () {
   const exits: unknown[] = [];
   const manager = createHostManager({
+    checkInterval: 50,
     driver: driver(),
     keepAlive: (liveness) => !liveness.booting && liveness.idleFor < 150,
-    checkInterval: 50,
     onExit: (exit) => exits.push(exit),
   });
   yield* Effect.promise(() => manager.start());

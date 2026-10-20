@@ -29,7 +29,7 @@ asking for it again.
 
 ```ts
 const objectsLiveInsideHosts = Effect.gen(function* () {
-  const host = createHost({ self: "server", name: "todo-server" });
+  const host = createHost({ name: "todo-server", self: "server" });
   assert.equal(host.name, "todo-server");
   yield* Effect.promise(() => host.close());
 });
@@ -67,10 +67,10 @@ it is not an argument to `label`.
 <!-- example:02-contract -->
 
 ```ts
-export const TodoLabel = local("tutorial.todos", {
-  version: 1,
+const TodoLabel = local("tutorial.todos", {
   input: Type.Object({ list: Type.String() }),
   members: { label: method(undefined, Type.String()) },
+  version: 1,
 });
 ```
 
@@ -130,19 +130,19 @@ name, because it holds nothing a reload must keep.
 <!-- example:03-contract -->
 
 ```ts
-export const Todo = Type.Object({ text: Type.String(), done: Type.Boolean() });
-export const Rows = Type.Array(Todo);
-export const TodoStore = local("tutorial.todos", {
-  version: 1,
+const Todo = Type.Object({ done: Type.Boolean(), text: Type.String() });
+const Rows = Type.Array(Todo);
+const TodoStore = local("tutorial.todos", {
   input: Type.Object({ list: Type.String() }),
   members: {
-    label: method(undefined, Type.String()),
-    rows: Rows,
-    openCount: Type.Number(),
     add: method(Type.Object({ text: Type.String() })),
     finish: method(Type.Object({ index: Type.Integer() })),
+    label: method(undefined, Type.String()),
+    openCount: Type.Number(),
     reset: method(Rows),
+    rows: Rows,
   },
+  version: 1,
 });
 ```
 
@@ -158,18 +158,15 @@ context; changing the cell updates its readers and its derived count together.
 
 ```ts
 /** The store's factory; `options` versions its rows (section 9). */
-export const todoStore =
+const todoStore =
   (options?: StateOptions<Static<typeof Rows>>): Factory<typeof TodoStore> =>
   ({ list }, _principal, self) => {
     const rows = self.state("rows", Rows, [], options);
     const openCount = self.derive([rows], (todos) => todos.filter((todo) => !todo.done).length);
     return {
-      label: () => `Todos for ${list}`,
-      rows,
-      openCount,
       add: ({ text }, ctx) => {
         rows.change(ctx, (draft) => {
-          draft.push({ text, done: false });
+          draft.push({ done: false, text });
         });
       },
       finish: ({ index }, ctx) => {
@@ -179,9 +176,12 @@ export const todoStore =
           todo.done = true;
         });
       },
+      label: () => `Todos for ${list}`,
+      openCount,
       reset: (next, ctx) => {
         rows.replace(ctx, next, { diff: true });
       },
+      rows,
     };
   };
 ```
@@ -202,7 +202,7 @@ receive the same resulting value.
 ```ts
 const liveState = Effect.gen(function* () {
   onTestFinished(() => host.close());
-  const host = createHost({ self: "server", dev: true });
+  const host = createHost({ dev: true, self: "server" });
   host.serve(TodoStore, todoFactory);
   const todos = yield* Effect.promise(() => host.get(TodoStore, { list: "family" }));
   const counts: (number | undefined)[] = [];
@@ -252,15 +252,15 @@ to a declared resource, without reading the resource during the factory.
 <!-- example:04-contracts -->
 
 ```ts
-export const Database = local("tutorial.database", {
-  version: 1,
+const Database = local("tutorial.database", {
   input: Type.Object({}),
   members: { db: opaque<{ saved: string[] }>("tutorial.database@1") },
-});
-export const SavedTodos = local("tutorial.saved-todos", {
   version: 1,
+});
+const SavedTodos = local("tutorial.saved-todos", {
   input: Type.Object({ list: Type.String() }),
   members: { add: method(Type.Object({ text: Type.String() })) },
+  version: 1,
 });
 ```
 
@@ -282,12 +282,12 @@ const objectsUseObjects = Effect.gen(function* () {
   const closed = Promise.withResolvers<void>();
   host.serve(Database, (_input, _principal, self) => {
     const db = self.resource("db", {
-      version: 1,
+      close: () => closed.resolve(),
       open: () => {
         opens++;
         return { saved: [] as string[] };
       },
-      close: () => closed.resolve(),
+      version: 1,
     });
     return { db: self.expose(db) };
   });
@@ -359,36 +359,44 @@ puts every `Todos` object on the host named `server`. Section 6 uses that.
 <!-- example:05-views -->
 
 ```ts
-export const Todos = remote("tutorial.todo-view", {
-  version: 1,
-  input: Type.Object({ list: Type.String() }),
+const Todos = remote("tutorial.todo-view", {
   host: hostNamed("server"),
+  input: Type.Object({ list: Type.String() }),
   variants: {
-    viewer: { state: { rows: Rows } },
     editor: {
-      state: { rows: Rows },
       methods: { add: method(Type.Object({ text: Type.String() })) },
+      state: { rows: Rows },
     },
+    viewer: { state: { rows: Rows } },
   },
+  version: 1,
 });
+```
 
+<!-- example:05-principal -->
+
+```ts
 /** Who may ask: the owner, a guest, or the server's own code. */
-export type Principal = "owner" | "guest" | "server";
+type Principal = "owner" | "guest" | "server";
+```
 
-export function serveViews(api: Pick<Host<Principal>, "serve">): void {
+<!-- example:05-serve -->
+
+```ts
+function serveViews(api: Pick<Host<Principal>, "serve">): void {
   api.serve(Todos, ({ list }, principal, self) => {
     if (list !== "family") throw forbidden("This list is not shared");
     const store = self.get(TodoStore, { list });
     if (principal === "guest") {
-      return { variant: "viewer", rows: store.rows };
+      return { rows: store.rows, variant: "viewer" };
     }
     return {
-      variant: "editor",
-      rows: store.rows,
       add: ({ text }, ctx) => {
         if (text.trim().length === 0) throw invalid("args", "A todo needs text");
         return store.add({ text }, ctx);
       },
+      rows: store.rows,
+      variant: "editor",
     };
   });
 }
@@ -410,8 +418,8 @@ const principalViews = Effect.gen(function* () {
   onTestFinished(() => host.close());
   const host = createHost<Principal>({
     name: "server",
-    self: "server",
     principalKey: (principal) => principal,
+    self: "server",
   });
   host.serve(TodoStore, todoFactory);
   serveViews(host);
@@ -426,7 +434,7 @@ const principalViews = Effect.gen(function* () {
   yield* Effect.promise(() =>
     host.root((ctx) => owner.add({ text: "Buy milk" }, ctx), { principal: "owner" }),
   );
-  assert.deepEqual(guest.rows.value, [{ text: "Buy milk", done: false }]);
+  assert.deepEqual(guest.rows.value, [{ done: false, text: "Buy milk" }]);
   // A viewer has no add: TypeScript refuses it, and so does the provider.
   expectTypeOf(guest).not.toHaveProperty("add");
   yield* Effect.promise(() =>
@@ -481,15 +489,15 @@ principal })`).
 const overAMemoryLink = Effect.gen(function* () {
   onTestFinished(() => server.close());
   onTestFinished(() => browser.close());
-  const server = createHost<Principal>({ self: "server", name: "server" });
+  const server = createHost<Principal>({ name: "server", self: "server" });
   server.serve(TodoStore, todoFactory);
   serveViews(server);
   const [down, up] = memoryLinkPair();
-  server.accept(down, { principal: "owner", kind: "client" });
+  server.accept(down, { kind: "client", principal: "owner" });
   const browser = createHost({
-    self: "browser",
-    name: "browser",
     kind: "client",
+    name: "browser",
+    self: "browser",
     upstream: { link: up, principal: "server" },
   });
   const todos = yield* Effect.promise(() => browser.get(Todos, { list: "family" }));
@@ -501,14 +509,14 @@ const overAMemoryLink = Effect.gen(function* () {
   });
   yield* Effect.promise(() => browser.root((ctx) => todos.add({ text: "Buy milk" }, ctx)));
   yield* Effect.promise(() => updated.promise);
-  assert.deepEqual(todos.rows.value, [{ text: "Buy milk", done: false }]);
+  assert.deepEqual(todos.rows.value, [{ done: false, text: "Buy milk" }]);
   yield* Effect.promise(() =>
     // Deliberately bypass TypeScript to simulate a malformed caller.
     assert.rejects(todos.add({ text: 123 } as never), (error) => isChordError(error, "invalid")),
   );
   stop();
   // A held reference keeps its state without listeners.
-  assert.deepEqual(todos.rows.value, [{ text: "Buy milk", done: false }]);
+  assert.deepEqual(todos.rows.value, [{ done: false, text: "Buy milk" }]);
   todos.release();
 });
 ```
@@ -553,9 +561,9 @@ test; they are not stored application state.
 const listenersAndTasks = Effect.gen(function* () {
   onTestFinished(() => host.close());
   const Activity = local("tutorial.activity", {
-    version: 1,
     input: Type.Object({}),
     members: { seen: Type.Number() },
+    version: 1,
   });
   const host = createHost({ self: "server" });
   host.serve(TodoStore, todoFactory);
@@ -629,7 +637,7 @@ default lifetime, `"referenced"`, are still created only when referenced.
 const plugins = Effect.gen(function* () {
   onTestFinished(() => host.close());
   const Actions = defineRegistry<(ctx: Ctx) => Promise<number>>("tutorial.actions");
-  const Menu = local("tutorial.menu", { version: 1, input: Type.Object({}) });
+  const Menu = local("tutorial.menu", { input: Type.Object({}), version: 1 });
   let click: (() => Promise<number>) | undefined;
   const storeFacet: Facet = {
     name: "todo-store",
@@ -792,20 +800,20 @@ const migrateRows = (host: Host, todos: Ref<typeof TodoStore>) =>
             api.serve(
               TodoStore,
               todoStore({
-                version: 2,
                 migrate: (old, from) => {
                   assert.equal(from, 1);
                   return (old as Static<typeof Rows>).map((todo) =>
                     Object.assign(todo, { text: todo.text.toUpperCase() }),
                   );
                 },
+                version: 2,
               }),
             ),
         },
       ]),
     );
     assert.equal(migrated.gated.length, 1);
-    assert.deepEqual(todos.rows.value, [{ text: "BUY MILK", done: false }]);
+    assert.deepEqual(todos.rows.value, [{ done: false, text: "BUY MILK" }]);
     assert.deepEqual(events, ["snap", "reset"]);
     stopEvents();
   });
@@ -838,9 +846,9 @@ that version-1 consumers still expect.
 // Remove label from the new provider's contract: it is now called heading.
 const { label: _label, ...members } = TodoStore.def.members;
 const RenamedStore = local("tutorial.todos", {
-  version: 2,
   input: TodoStore.def.input,
   members: { ...members, heading: method(undefined, Type.String()) },
+  version: 2,
 });
 ```
 
@@ -907,7 +915,7 @@ Here the fake records what the editing view sends to the store.
 ```ts
 const fakeProvider = Effect.gen(function* () {
   onTestFinished(() => host.close());
-  const host = createHost<Principal>({ name: "server", self: "server", dev: true });
+  const host = createHost<Principal>({ dev: true, name: "server", self: "server" });
   const received: string[] = [];
   const fake: Facet = {
     name: "fake-store",
@@ -1022,15 +1030,15 @@ import { type Static, Type } from "typebox";
 
 import {
   type Factory,
-  forbidden,
   type Host,
+  type StateOptions,
+  forbidden,
   hostNamed,
   invalid,
   local,
   method,
   opaque,
   remote,
-  type StateOptions,
 } from "../../src/index.ts";
 ```
 
@@ -1045,16 +1053,12 @@ import { Effect } from "effect";
 import { expectTypeOf, it, onTestFinished } from "vite-plus/test";
 
 import { createHost, isChordError, memoryLinkPair } from "../src/index.ts";
-import {
-  Database,
-  type Principal,
-  SavedTodos,
-  serveViews,
-  TodoLabel,
-  Todos,
-  TodoStore,
-  todoStore,
-} from "./fixtures/tutorial.ts";
+import tutorial from "./fixtures/tutorial.ts";
+import type tutorialTypes from "./fixtures/tutorial.types.ts";
+
+const { Database, SavedTodos, TodoLabel, TodoStore, Todos, serveViews, todoStore } = tutorial;
+
+type Principal = tutorialTypes.Principal;
 ```
 
 and those in `test/tutorial-tasks-plugins-reload.test.ts` (7 to 11) import:
@@ -1070,25 +1074,23 @@ import { it, onTestFinished } from "vite-plus/test";
 
 import {
   type Ctx,
-  createHost,
-  defineFacet,
-  defineRegistry,
   type Facet,
   type FacetApi,
   type Host,
+  type Ref,
+  createHost,
+  defineFacet,
+  defineRegistry,
   isChordError,
   local,
   method,
-  type Ref,
 } from "../src/index.ts";
-import {
-  type Principal,
-  Rows,
-  serveViews,
-  Todos,
-  TodoStore,
-  todoStore,
-} from "./fixtures/tutorial.ts";
+import tutorial from "./fixtures/tutorial.ts";
+import type tutorialTypes from "./fixtures/tutorial.types.ts";
+
+const { Rows, TodoStore, Todos, serveViews, todoStore } = tutorial;
+
+type Principal = tutorialTypes.Principal;
 ```
 
 From `libs/chord`, run:

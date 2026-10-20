@@ -2,7 +2,9 @@ import { DateTime } from "effect";
 import { describe, expect, it } from "vite-plus/test";
 
 import { type Change, type JsonValue, track } from "../../src/delta/index.ts";
-import { clone, expectAliasFree, replay } from "../fixtures/tracker.ts";
+import trackerModule from "../fixtures/tracker.ts";
+
+const { clone, expectAliasFree, replay } = trackerModule;
 
 const clonesPropertyIndexPushUnshiftSplice = (): void => {
   const tracker = track({
@@ -97,7 +99,7 @@ const rejectsNonJsonScalars = (change: Change<Placements>): void => {
 };
 
 const rejectsNonStrictJsonPlacementsBefore = (): void => {
-  const initial: Placements = { optional: "remove", payload: null, number: 0, values: [1, 2] };
+  const initial: Placements = { number: 0, optional: "remove", payload: null, values: [1, 2] };
   const tracker = track(initial);
   const change = tracker.beginChange();
   rejectsNonJsonScalars(change);
@@ -112,8 +114,8 @@ const rejectsNonStrictJsonPlacementsBefore = (): void => {
   change.state.values.push({ valid: true });
   const prepared = change.prepare();
   expect(prepared.value).toEqual({
-    payload: { valid: true },
     number: 0,
+    payload: { valid: true },
     values: [1, 2, { valid: true }],
   });
   expect(Object.getPrototypeOf(prepared.value.payload)).toBeNull();
@@ -178,9 +180,9 @@ const deepClonesDraftSourcedPlacementsWithin = (): void => {
 
 const distinguishesRawCommittedReferencesFromDraft = (): void => {
   const tracker = track({
-    source: { value: 1 },
-    rawCopy: null as { value: number } | null,
     draftCopy: null as { value: number } | null,
+    rawCopy: null as { value: number } | null,
+    source: { value: 1 },
   });
   const raw = tracker.value.source;
   const change = tracker.beginChange();
@@ -189,9 +191,9 @@ const distinguishesRawCommittedReferencesFromDraft = (): void => {
   change.state.draftCopy = change.state.source;
   const prepared = change.prepare();
   expect(prepared.value).toEqual({
-    source: { value: 2 },
-    rawCopy: { value: 1 },
     draftCopy: { value: 2 },
+    rawCopy: { value: 1 },
+    source: { value: 2 },
   });
   tracker.adopt(prepared);
 };

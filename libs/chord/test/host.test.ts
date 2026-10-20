@@ -5,8 +5,11 @@ import { Type } from "typebox";
 import { describe, it } from "vite-plus/test";
 
 import { isChordError, local } from "../src/index.ts";
-import { Counter, quiet, serveCounter } from "./fixtures/host.ts";
-import { latch, tick } from "./fixtures/timing.ts";
+import hostModule from "./fixtures/host.ts";
+import timing from "./fixtures/timing.ts";
+
+const { Counter, quiet, serveCounter } = hostModule;
+const { latch, tick } = timing;
 
 const activatesGoesLiveBindsMembersLate = Effect.gen(function* () {
   const host = quiet();
@@ -67,19 +70,19 @@ const disposesAnAbandonedActivationOnceIt = Effect.gen(function* () {
   const host = quiet();
   const log: string[] = [];
   let release = () => {};
-  const Slow = local("t.slow", { version: 1, input: Type.Object({}) });
+  const Slow = local("t.slow", { input: Type.Object({}), version: 1 });
   host.serve(Slow, (_input, _principal, self) => {
     self.resource("r", {
-      version: 1,
+      close: () => {
+        log.push("closed");
+      },
       open: ({ signal }) => {
         const gate = latch<string>();
         release = () => gate.open("r");
         signal.addEventListener("abort", () => log.push("abort seen"));
         return gate.promise;
       },
-      close: () => {
-        log.push("closed");
-      },
+      version: 1,
     });
     return {};
   });
@@ -101,15 +104,15 @@ const disposesAnAbandonedActivationOnceIt = Effect.gen(function* () {
 const propagatesActivationFailuresToDependentsAnd = Effect.gen(function* () {
   const host = quiet();
   let fail = true;
-  const Leaf = local("t.leaf", { version: 1, input: Type.Object({}) });
-  const Parent = local("t.parent", { version: 1, input: Type.Object({}) });
+  const Leaf = local("t.leaf", { input: Type.Object({}), version: 1 });
+  const Parent = local("t.parent", { input: Type.Object({}), version: 1 });
   host.serve(Leaf, (_input, _principal, self) => {
     self.resource("r", {
-      version: 1,
       open: () => {
         if (fail) throw new Error("boom");
         return 1;
       },
+      version: 1,
     });
     return {};
   });
@@ -133,18 +136,18 @@ const propagatesActivationFailuresToDependentsAnd = Effect.gen(function* () {
 
 const unwindsDeclarationsWhenAFactoryThrows = Effect.gen(function* () {
   const host = quiet();
-  const Leaf = local("t.leaf2", { version: 1, input: Type.Object({}) });
-  const Bad = local("t.bad", { version: 1, input: Type.Object({ async: Type.Boolean() }) });
+  const Leaf = local("t.leaf2", { input: Type.Object({}), version: 1 });
+  const Bad = local("t.bad", { input: Type.Object({ async: Type.Boolean() }), version: 1 });
   let leafLive = 0;
   host.serve(Leaf, (_input, _principal, self) => {
     self.resource("r", {
-      version: 1,
-      open: () => {
-        leafLive++;
-      },
       close: () => {
         leafLive--;
       },
+      open: () => {
+        leafLive++;
+      },
+      version: 1,
     });
     return {};
   });
@@ -166,7 +169,7 @@ const unwindsDeclarationsWhenAFactoryThrows = Effect.gen(function* () {
 
 const rejectsDuplicateDeclarationNames = Effect.gen(function* () {
   const host = quiet();
-  const Dup = local("t.dup", { version: 1, input: Type.Object({}) });
+  const Dup = local("t.dup", { input: Type.Object({}), version: 1 });
   host.serve(Dup, (_input, _principal, self) => {
     self.state("a", Type.Object({}), {});
     self.state("a", Type.Object({}), {});
@@ -177,8 +180,8 @@ const rejectsDuplicateDeclarationNames = Effect.gen(function* () {
 
 const detectsHoldCycles = Effect.gen(function* () {
   const host = quiet();
-  const A = local("t.cycle-a", { version: 1, input: Type.Object({}) });
-  const B = local("t.cycle-b", { version: 1, input: Type.Object({}) });
+  const A = local("t.cycle-a", { input: Type.Object({}), version: 1 });
+  const B = local("t.cycle-b", { input: Type.Object({}), version: 1 });
   host.serve(A, (_input, _principal, self) => {
     self.get(B, {});
     return {};

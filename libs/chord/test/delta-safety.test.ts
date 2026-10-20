@@ -2,15 +2,17 @@ import { DateTime } from "effect";
 import { describe, expect, it } from "vite-plus/test";
 
 import {
+  type JsonValue,
+  type WireOp,
   apply,
   assertValidOp,
   assertValidWireOp,
   decoder,
-  type JsonValue,
   track,
-  type WireOp,
 } from "../src/delta/index.ts";
-import { trappedArray, trappedObject } from "./fixtures/prototypes.ts";
+import prototypes from "./fixtures/prototypes.ts";
+
+const { trappedArray, trappedObject } = prototypes;
 
 const rejectsConstructorWalksAndForbiddenInterned = (): void => {
   expect(() =>
@@ -39,10 +41,10 @@ const allowsReservedNamesInsideValuesWithout = (): void => {
 const importsOwnPropertiesWithoutInvokingInherited = (): void => {
   const root = trappedObject();
   Object.defineProperty(root, "trap", {
+    configurable: true,
+    enumerable: true,
     value: 1,
     writable: true,
-    enumerable: true,
-    configurable: true,
   });
   expect(() => track(root)).not.toThrow();
   expect(track({ values: trappedArray([1, 2]) }).value).toEqual({ values: [1, 2] });

@@ -1,8 +1,17 @@
 import { Effect } from "effect";
 import { Type } from "typebox";
 
-import { pollUntil } from "./timing.ts";
+import timing from "./timing.ts";
 
-export const until = pollUntil(100, Effect.sleep(2));
+const { pollUntil } = timing;
 
-export const View = Type.Object({ text: Type.String() });
+const until = pollUntil(100, Effect.sleep(2));
+
+const View = Type.Object({ text: Type.String() });
+
+const requests = {
+  View,
+  until,
+};
+
+export default requests;

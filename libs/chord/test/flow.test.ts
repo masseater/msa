@@ -4,23 +4,18 @@ import { Effect } from "effect";
 import { describe, it } from "vite-plus/test";
 
 import {
-  createHost,
   type Frame,
   type Link,
-  memoryLinkPair,
   PROTOCOL_VERSION,
+  createHost,
+  memoryLinkPair,
 } from "../src/index.ts";
-import {
-  client,
-  Counter,
-  serveCounter,
-  stateFrames,
-  until,
-  WorkerCounter,
-} from "./fixtures/flow.ts";
+import flow from "./fixtures/flow.ts";
+
+const { Counter, WorkerCounter, client, serveCounter, stateFrames, until } = flow;
 
 const holdsStateBackWhileTheWindow = Effect.gen(function* () {
-  const server = createHost({ self: { kind: "host" }, name: "server", onError: () => {} });
+  const server = createHost({ name: "server", onError: () => {}, self: { kind: "host" } });
   serveCounter(server);
   const { host, gate } = client(server, 200);
   const counter = host.hold(Counter, {});
@@ -48,7 +43,7 @@ const holdsStateBackWhileTheWindow = Effect.gen(function* () {
 });
 
 const replacesOpsThatOutgrowTheirSlot = Effect.gen(function* () {
-  const server = createHost({ self: { kind: "host" }, name: "server", onError: () => {} });
+  const server = createHost({ name: "server", onError: () => {}, self: { kind: "host" } });
   serveCounter(server);
   const { host, gate } = client(server, 64);
   const counter = host.hold(Counter, {});
@@ -72,7 +67,7 @@ const replacesOpsThatOutgrowTheirSlot = Effect.gen(function* () {
 });
 
 const dropsWhatWaitsForAReference = Effect.gen(function* () {
-  const server = createHost({ self: { kind: "host" }, name: "server", onError: () => {} });
+  const server = createHost({ name: "server", onError: () => {}, self: { kind: "host" } });
   serveCounter(server);
   const { host, gate } = client(server, 64);
   const counter = host.hold(Counter, {});
@@ -94,33 +89,33 @@ const dropsWhatWaitsForAReference = Effect.gen(function* () {
 
 const coalescesRelayedStateForTheOrigin = Effect.gen(function* () {
   const services = yield* Effect.context<never>();
-  const server = createHost({ self: { kind: "host" }, name: "server", onError: () => {} });
+  const server = createHost({ name: "server", onError: () => {}, self: { kind: "host" } });
   const toWorker: Frame[] = [];
   server.route("w", {
-    principal: (name) => ({ host: name }),
     authorize: () => true,
+    principal: (name) => ({ host: name }),
     resolve: (name) =>
       Effect.runPromiseWith(services)(
         Effect.sync(() => {
           const [down, up] = memoryLinkPair();
           const worker = createHost({
-            self: { kind: "host" },
             name,
-            upstream: { link: up, principal: { kind: "server" } },
             onError: () => {},
+            self: { kind: "host" },
+            upstream: { link: up, principal: { kind: "server" } },
           });
           serveCounter(worker, WorkerCounter);
           return {
+            close: (reason) => down.close(reason),
             get closed() {
               return down.closed;
             },
+            onClose: (handler) => down.onClose(handler),
+            receive: (handler) => down.receive(handler),
             send: (frame: Frame) => {
               toWorker.push(frame);
               return down.send(frame);
             },
-            receive: (handler) => down.receive(handler),
-            onClose: (handler) => down.onClose(handler),
-            close: (reason) => down.close(reason),
           } satisfies Link;
         }),
       ),
@@ -144,21 +139,21 @@ const coalescesRelayedStateForTheOrigin = Effect.gen(function* () {
 });
 
 const neitherWindowsNorAcknowledgesAPeer = Effect.gen(function* () {
-  const server = createHost({ self: { kind: "host" }, name: "server", onError: () => {} });
+  const server = createHost({ name: "server", onError: () => {}, self: { kind: "host" } });
   serveCounter(server);
   const [down, raw] = memoryLinkPair();
   server.accept(down, { principal: { user: "u" }, window: 1 });
   const frames: Frame[] = [];
   raw.receive((frame) => frames.push(frame));
   raw.send({
-    t: "hello",
-    protocol: PROTOCOL_VERSION,
-    name: "raw",
-    kind: "client",
     codeVersion: 0,
+    kind: "client",
+    name: "raw",
+    protocol: PROTOCOL_VERSION,
+    t: "hello",
   });
-  raw.send({ t: "hold", id: 1, at: "server", token: Counter.description, input: {} });
-  for (let i = 0; i < 5; i++) raw.send({ t: "call", id: 3 + i, hold: 1, member: "add", args: 1 });
+  raw.send({ at: "server", id: 1, input: {}, t: "hold", token: Counter.description });
+  for (let i = 0; i < 5; i++) raw.send({ args: 1, hold: 1, id: 3 + i, member: "add", t: "call" });
   yield* until(() => frames.filter((frame) => frame.t === "result").length === 5);
   yield* Effect.sleep(5);
   assert.equal(stateFrames(frames).length, 6, "the snapshot and one frame per change");
@@ -168,12 +163,12 @@ const neitherWindowsNorAcknowledgesAPeer = Effect.gen(function* () {
 });
 
 const closesTheLinkOnAnAcknowledgement = Effect.gen(function* () {
-  const server = createHost({ self: { kind: "host" }, name: "server", onError: () => {} });
+  const server = createHost({ name: "server", onError: () => {}, self: { kind: "host" } });
   const [down, raw] = memoryLinkPair();
   server.accept(down, { principal: { user: "u" } });
   raw.receive(() => {});
-  raw.send({ t: "hello", name: "raw", kind: "client", codeVersion: 0, acks: true });
-  raw.send({ t: "ack", n: 99 });
+  raw.send({ acks: true, codeVersion: 0, kind: "client", name: "raw", t: "hello" });
+  raw.send({ n: 99, t: "ack" });
   yield* until(() => raw.closed);
   yield* Effect.promise(() => server.close());
 });

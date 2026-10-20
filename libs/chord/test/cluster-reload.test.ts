@@ -4,9 +4,12 @@ import { Clock, type Context, Effect } from "effect";
 import { Type } from "typebox";
 import { describe, it, onTestFinished } from "vite-plus/test";
 
-import { createHost, type Facet, type Host, isChordError, memoryLinkPair } from "../src/index.ts";
-import { Greeter, greeterFacet, setup } from "./fixtures/cluster.ts";
-import { latch, tick } from "./fixtures/timing.ts";
+import { type Facet, type Host, createHost, isChordError, memoryLinkPair } from "../src/index.ts";
+import cluster from "./fixtures/cluster.ts";
+import timing from "./fixtures/timing.ts";
+
+const { Greeter, greeterFacet, setup } = cluster;
+const { latch, tick } = timing;
 
 const anAbortWhileAWorkerIs = Effect.gen(function* () {
   const services = yield* Effect.context<never>();
@@ -21,7 +24,7 @@ const anAbortWhileAWorkerIs = Effect.gen(function* () {
     setup: (api) =>
       api.serve(Greeter, (_input, _principal, self) => {
         self.resource("late", {
-          version: 1,
+          close: () => void log.push("closed"),
           open: () =>
             Effect.runPromiseWith(services)(
               Effect.gen(function* () {
@@ -29,10 +32,10 @@ const anAbortWhileAWorkerIs = Effect.gen(function* () {
                 log.push("opened");
               }),
             ),
-          close: () => void log.push("closed"),
+          version: 1,
         });
         const count = self.state("count", Type.Object({ n: Type.Number() }), { n: 0 });
-        return { variant: "main", count, greet: (name: string) => `slow ${name}` };
+        return { count, greet: (name: string) => `slow ${name}`, variant: "main" };
       }),
   };
   modules.set("greeter", slow);
@@ -57,9 +60,6 @@ const aChildThatSaysHelloWhile = Effect.gen(function* () {
   const modules = new Map<string, Facet>([["greeter", greeterFacet("v1")]]);
   const loading = latch();
   const server = createHost({
-    self: { kind: "host" },
-    name: "server",
-    onError: () => {},
     loader: (names) =>
       Effect.runPromiseWith(services)(
         Effect.gen(function* () {
@@ -67,20 +67,23 @@ const aChildThatSaysHelloWhile = Effect.gen(function* () {
           return names.map((name) => ({ name: String(name), setup: () => {} }));
         }),
       ),
+    name: "server",
+    onError: () => {},
+    self: { kind: "host" },
   });
   onTestFinished(() => server.close());
   const reloading = server.reload(["server-plugin"], { remote: { "session:": ["greeter"] } });
   const [down, up] = memoryLinkPair();
-  server.accept(down, { principal: { worker: "w" }, kind: "host", name: "session:S1" });
+  server.accept(down, { kind: "host", name: "session:S1", principal: { worker: "w" } });
   const worker = createHost({
-    self: { kind: "host" },
-    name: "session:S1",
-    upstream: { link: up, principal: { kind: "server" } },
     loader: (names) =>
       Effect.runPromiseWith(services)(
         Effect.sync(() => names.map((name) => modules.get(String(name))!)),
       ),
+    name: "session:S1",
     onError: () => {},
+    self: { kind: "host" },
+    upstream: { link: up, principal: { kind: "server" } },
   });
   onTestFinished(() => worker.close());
   worker.install(modules.get("greeter")!);
@@ -126,7 +129,7 @@ const aChildKeepsThePreviousCode = Effect.gen(function* () {
 const aChildReconciledAfterItsParent = Effect.gen(function* () {
   const services = yield* Effect.context<never>();
   const modules = new Map<string, Facet>([["greeter", greeterFacet("v1")]]);
-  const server = createHost({ self: { kind: "host" }, name: "server", onError: () => {} });
+  const server = createHost({ name: "server", onError: () => {}, self: { kind: "host" } });
   onTestFinished(() => server.close());
   const plugin = (): Facet => ({ name: "server-plugin", setup: () => {} });
   server.install(plugin());
@@ -134,16 +137,16 @@ const aChildReconciledAfterItsParent = Effect.gen(function* () {
   yield* Effect.promise(() => server.reload([plugin()]));
   assert.equal(server.previousCodeVersion, undefined);
   const [down, up] = memoryLinkPair();
-  server.accept(down, { principal: { worker: "w" }, kind: "host", name: "session:S1" });
+  server.accept(down, { kind: "host", name: "session:S1", principal: { worker: "w" } });
   const worker = createHost({
-    self: { kind: "host" },
-    name: "session:S1",
-    upstream: { link: up, principal: { kind: "server" } },
     loader: (names) =>
       Effect.runPromiseWith(services)(
         Effect.sync(() => names.map((name) => modules.get(String(name))!)),
       ),
+    name: "session:S1",
     onError: () => {},
+    self: { kind: "host" },
+    upstream: { link: up, principal: { kind: "server" } },
   });
   onTestFinished(() => worker.close());
   worker.install(modules.get("greeter")!);
@@ -171,11 +174,8 @@ const blockedWorker = (
   const workerLoading = latch();
   let blockWorker = true;
   const [down, up] = memoryLinkPair();
-  server.accept(down, { principal: { worker: "w" }, kind: "host", name: "session:S1" });
+  server.accept(down, { kind: "host", name: "session:S1", principal: { worker: "w" } });
   const worker = createHost({
-    self: { kind: "host" },
-    name: "session:S1",
-    upstream: { link: up, principal: { kind: "server" } },
     loader: (names) =>
       Effect.runPromiseWith(services)(
         Effect.gen(function* () {
@@ -183,16 +183,19 @@ const blockedWorker = (
           return names.map((name) => modules.get(String(name))!);
         }),
       ),
+    name: "session:S1",
     onError: () => {},
+    self: { kind: "host" },
+    upstream: { link: up, principal: { kind: "server" } },
   });
   onTestFinished(() => worker.close());
   worker.install(modules.get("greeter")!);
   return {
-    worker,
     releaseLoading: () => {
       blockWorker = false;
       workerLoading.open();
     },
+    worker,
   };
 };
 
@@ -202,9 +205,6 @@ const aReconciliationRunningWhenAReload = Effect.gen(function* () {
   const serverLoading = latch();
   let blockServer = false;
   const server = createHost({
-    self: { kind: "host" },
-    name: "server",
-    onError: () => {},
     loader: (names) =>
       Effect.runPromiseWith(services)(
         Effect.gen(function* () {
@@ -212,6 +212,9 @@ const aReconciliationRunningWhenAReload = Effect.gen(function* () {
           return names.map((name) => ({ name: String(name), setup: () => {} }));
         }),
       ),
+    name: "server",
+    onError: () => {},
+    self: { kind: "host" },
   });
   onTestFinished(() => server.close());
   server.install({ name: "server-plugin", setup: () => {} });

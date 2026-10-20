@@ -7,56 +7,61 @@ import { describe, it } from "vite-plus/test";
 import { HostImpl } from "../src/host.ts";
 import {
   type Ctx,
-  createHost,
   type Frame,
-  hostFamily,
   type Link,
+  PROTOCOL_VERSION,
+  createHost,
+  hostFamily,
   memoryLinkPair,
   method,
-  PROTOCOL_VERSION,
   remote,
 } from "../src/index.ts";
-import { Notes, setup, until } from "./fixtures/bindings.ts";
-import { CountingLink } from "./fixtures/counting.ts";
-import { latch } from "./fixtures/timing.ts";
+import bindings from "./fixtures/bindings.ts";
+import counting from "./fixtures/counting.ts";
+import type countingTypes from "./fixtures/counting.types.ts";
+import timing from "./fixtures/timing.ts";
+
+const { Notes, setup, until } = bindings;
+const { CountingLink } = counting;
+const { latch } = timing;
 
 const Counter = remote("t.e8-counter", {
-  version: 1,
-  input: Type.Object({ session: Type.String() }),
   host: hostFamily("session:", "session"),
-  variants: { main: { state: { n: Type.Number() }, methods: { add: method(Type.Number()) } } },
+  input: Type.Object({ session: Type.String() }),
+  variants: { main: { methods: { add: method(Type.Number()) }, state: { n: Type.Number() } } },
+  version: 1,
 });
 
 const serveSessionCounter = (created: HostImpl): void => {
   created.serve(Counter, (_input, _principal, self) => {
     const n = self.state("n", Type.Number(), 0);
     return {
-      variant: "main",
-      n,
       add: (delta: number, ctx: Ctx) => {
         n.replace(ctx, n.value + delta);
       },
+      n,
+      variant: "main",
     };
   });
 };
 
 function cluster() {
-  const server = createHost({ self: { kind: "host" }, name: "server", onError: () => {} });
+  const server = createHost({ name: "server", onError: () => {}, self: { kind: "host" } });
   let worker: HostImpl | undefined;
-  let toWorker: CountingLink | undefined;
+  let toWorker: countingTypes.CountingLink | undefined;
   server.route("session:", {
-    principal: (name) => ({ host: name }),
     authorize: () => true,
+    principal: (name) => ({ host: name }),
     resolve: (name) =>
       Effect.runPromise(
         Effect.sync(() => {
           if (toWorker !== undefined) return toWorker;
           const [down, up] = memoryLinkPair();
           const created = new HostImpl({
-            self: { kind: "host" },
             name,
-            upstream: { link: up, principal: { kind: "server" } },
             onError: () => {},
+            self: { kind: "host" },
+            upstream: { link: up, principal: { kind: "server" } },
           });
           serveSessionCounter(created);
           worker = created;
@@ -69,11 +74,11 @@ function cluster() {
     const [down, up] = memoryLinkPair();
     server.accept(down, { principal: { guest: "g" } });
     const host = createHost({
-      self: { kind: "host" },
-      name: "browser",
       kind: "client",
-      upstream: { link: up, principal: { kind: "server" } },
+      name: "browser",
       onError: () => {},
+      self: { kind: "host" },
+      upstream: { link: up, principal: { kind: "server" } },
     });
     return { host, up };
   };
@@ -81,7 +86,7 @@ function cluster() {
     [...(worker?.upstream?.served.values() ?? [])].map((served) =>
       served.kind === "local" ? served.origin : undefined,
     );
-  return { server, browser, origins, sentToWorker: () => toWorker?.sent ?? [] };
+  return { browser, origins, sentToWorker: () => toWorker?.sent ?? [], server };
 }
 
 const aRelayedHoldCarriesItsClient = Effect.gen(function* () {
@@ -121,19 +126,19 @@ const anOriginAClientSendsIs = Effect.gen(function* () {
   c.server.accept(down, { principal: { guest: "g" } });
   raw.receive(() => {});
   raw.send({
-    t: "hello",
-    protocol: PROTOCOL_VERSION,
-    name: "raw",
-    kind: "client",
     codeVersion: 0,
+    kind: "client",
+    name: "raw",
+    protocol: PROTOCOL_VERSION,
+    t: "hello",
   });
   raw.send({
-    t: "hold",
-    id: 1,
     at: "session:S1",
-    token: Counter.description,
+    id: 1,
     input: { session: "S1" },
     origin: "spoofed",
+    t: "hold",
+    token: Counter.description,
   });
   yield* until(() => c.sentToWorker().some((frame) => frame.t === "hold"));
   const hold = c.sentToWorker().find((frame) => frame.t === "hold");
@@ -161,7 +166,7 @@ const aVersion3PeerIsRefused = Effect.gen(function* () {
   const closed = latch<string>();
   (raw as Link).onClose(closed.open);
   raw.receive(() => {});
-  raw.send({ t: "hello", protocol: 3, name: "old", kind: "client", codeVersion: 0 });
+  raw.send({ codeVersion: 0, kind: "client", name: "old", protocol: 3, t: "hello" });
   assert.equal(yield* closed.wait, `protocol-version ${PROTOCOL_VERSION}`);
   assert.equal(PROTOCOL_VERSION, 4);
   yield* Effect.promise(() => browser.close());

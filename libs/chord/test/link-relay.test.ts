@@ -5,29 +5,26 @@ import { Type } from "typebox";
 import { describe, it } from "vite-plus/test";
 
 import {
-  createHost,
   type Frame,
+  PROTOCOL_VERSION,
+  createHost,
   hostNamed,
   isChordError,
   memoryLinkPair,
   method,
-  PROTOCOL_VERSION,
   remote,
 } from "../src/index.ts";
-import {
-  Counter,
-  SessionCounter,
-  cluster,
-  serveCounter,
-  serverWithWorker,
-} from "./fixtures/link.ts";
-import { tick } from "./fixtures/timing.ts";
+import linkModule from "./fixtures/link.ts";
+import timing from "./fixtures/timing.ts";
+
+const { Counter, SessionCounter, cluster, serveCounter, serverWithWorker } = linkModule;
+const { tick } = timing;
 
 const relaysBrowserServerWorkerTheWorker = Effect.gen(function* () {
   const c = cluster();
   const guest = { guest: "g1" };
   const browser = c.browser(guest);
-  const counter = browser.host.hold(SessionCounter, { session: "S1", name: "a" });
+  const counter = browser.host.hold(SessionCounter, { name: "a", session: "S1" });
   assert.equal(yield* Effect.promise(() => counter.add(3)), 3);
   assert.deepEqual(yield* Effect.promise(() => counter.who()), guest);
   const values: unknown[] = [];
@@ -45,21 +42,21 @@ const ignoresPayloadPrincipalsFromClientsAnd = Effect.gen(function* () {
   const frames: Frame[] = [];
   raw.receive((frame) => frames.push(frame));
   raw.send({
-    t: "hello",
-    protocol: PROTOCOL_VERSION,
-    name: "raw",
-    kind: "client",
     codeVersion: 0,
+    kind: "client",
+    name: "raw",
+    protocol: PROTOCOL_VERSION,
+    t: "hello",
   });
   raw.send({
-    t: "hold",
-    id: 1,
     at: "session:S1",
-    token: SessionCounter.description,
-    input: { session: "S1", name: "f" },
+    id: 1,
+    input: { name: "f", session: "S1" },
     principal: { owner: true },
+    t: "hold",
+    token: SessionCounter.description,
   });
-  raw.send({ t: "call", id: 2, hold: 1, member: "who", args: null });
+  raw.send({ args: null, hold: 1, id: 2, member: "who", t: "call" });
   for (let i = 0; i < 50 && !frames.some((frame) => frame.t === "result"); i++)
     yield* Effect.sleep(5);
   const result = frames.find((frame) => frame.t === "result");
@@ -70,14 +67,14 @@ const ignoresPayloadPrincipalsFromClientsAnd = Effect.gen(function* () {
   const childFrames: Frame[] = [];
   up.receive((frame) => childFrames.push(frame));
   up.send({
-    t: "hold",
-    id: 7,
     at: "server",
-    token: Counter.description,
+    id: 7,
     input: { name: "f" },
     principal: { owner: true },
+    t: "hold",
+    token: Counter.description,
   });
-  up.send({ t: "call", id: 8, hold: 7, member: "who", args: null });
+  up.send({ args: null, hold: 7, id: 8, member: "who", t: "call" });
   for (let i = 0; i < 50 && !childFrames.some((frame) => frame.t === "result"); i++)
     yield* Effect.sleep(5);
   const childResult = childFrames.find((frame) => frame.t === "result");
@@ -88,21 +85,21 @@ const ignoresPayloadPrincipalsFromClientsAnd = Effect.gen(function* () {
 
 const aRouteThatReturnsAnAlready = Effect.gen(function* () {
   const services = yield* Effect.context<never>();
-  const server = createHost({ self: { kind: "host" }, name: "server", onError: () => {} });
+  const server = createHost({ name: "server", onError: () => {}, self: { kind: "host" } });
   let attempt = 0;
   server.route("session:", {
-    principal: (name) => ({ host: name }),
     authorize: () => true,
+    principal: (name) => ({ host: name }),
     resolve: (name) =>
       Effect.runPromiseWith(services)(
         Effect.sync(() => {
           attempt++;
           const [down, up] = memoryLinkPair();
           const worker = createHost({
-            self: { kind: "host" },
             name,
-            upstream: { link: up, principal: { kind: "server" } },
             onError: () => {},
+            self: { kind: "host" },
+            upstream: { link: up, principal: { kind: "server" } },
           });
           serveCounter(worker);
           if (attempt === 1) down.close("worker exited");
@@ -110,11 +107,11 @@ const aRouteThatReturnsAnAlready = Effect.gen(function* () {
         }),
       ),
   });
-  const first = server.hold(SessionCounter, { session: "S1", name: "a" });
+  const first = server.hold(SessionCounter, { name: "a", session: "S1" });
   yield* Effect.promise(() =>
     assert.rejects(first.add(1), (error: Error) => /closed/u.test(error.message)),
   );
-  const second = server.hold(SessionCounter, { session: "S1", name: "a" });
+  const second = server.hold(SessionCounter, { name: "a", session: "S1" });
   assert.equal(yield* Effect.promise(() => second.add(2)), 2);
   assert.equal(attempt, 2);
 });
@@ -124,7 +121,7 @@ const authorizesBeforeResolvingAndAgainAfter = Effect.gen(function* () {
   c.allow = (principal) => (principal as { guest: string }).guest !== "blocked";
   const blocked = c.browser({ guest: "blocked" });
   yield* Effect.promise(() =>
-    assert.rejects(blocked.host.hold(SessionCounter, { session: "S1", name: "a" }).ready, (error) =>
+    assert.rejects(blocked.host.hold(SessionCounter, { name: "a", session: "S1" }).ready, (error) =>
       isChordError(error, "forbidden"),
     ),
   );
@@ -133,7 +130,7 @@ const authorizesBeforeResolvingAndAgainAfter = Effect.gen(function* () {
   c.allow = () => ++calls === 1;
   const flaky = c.browser({ guest: "flaky" });
   yield* Effect.promise(() =>
-    assert.rejects(flaky.host.hold(SessionCounter, { session: "S2", name: "a" }).ready, (error) =>
+    assert.rejects(flaky.host.hold(SessionCounter, { name: "a", session: "S2" }).ready, (error) =>
       isChordError(error, "forbidden"),
     ),
   );
@@ -144,8 +141,8 @@ const aBrowserDisconnectReleasesExactlyIts = Effect.gen(function* () {
   const c = cluster();
   const one = c.browser({ guest: "g1" });
   const two = c.browser({ guest: "g2" });
-  yield* Effect.promise(() => one.host.hold(SessionCounter, { session: "S1", name: "a" }).add(1));
-  const other = two.host.hold(SessionCounter, { session: "S1", name: "b" });
+  yield* Effect.promise(() => one.host.hold(SessionCounter, { name: "a", session: "S1" }).add(1));
+  const other = two.host.hold(SessionCounter, { name: "b", session: "S1" });
   yield* Effect.promise(() => other.add(1));
   one.up.close();
   for (let i = 0; i < 20 && !c.log.includes("close a"); i++) yield* tick;
@@ -158,7 +155,7 @@ const aDeadLinkNoPongsIs = Effect.gen(function* () {
   const c = cluster({ pingInterval: 10, pingTimeout: 40 });
   const browser = c.browser({ guest: "g1" });
   yield* Effect.promise(() =>
-    browser.host.hold(SessionCounter, { session: "S1", name: "a" }).add(1),
+    browser.host.hold(SessionCounter, { name: "a", session: "S1" }).add(1),
   );
   browser.up.sever();
   for (let i = 0; i < 40 && !c.log.includes("close a"); i++) yield* Effect.sleep(10);
@@ -167,13 +164,13 @@ const aDeadLinkNoPongsIs = Effect.gen(function* () {
 
 const checksContractTokensAcrossLinksContract = Effect.gen(function* () {
   const CounterV2 = remote("t.counter", {
-    version: 2,
-    input: Type.Object({ name: Type.String() }),
     host: hostNamed("server"),
+    input: Type.Object({ name: Type.String() }),
     variants: { main: { methods: { inc: method(undefined, Type.Number()) } } },
+    version: 2,
   });
   const { server, worker } = serverWithWorker();
-  server.serve(CounterV2, () => ({ variant: "main", inc: () => 1 }));
+  server.serve(CounterV2, () => ({ inc: () => 1, variant: "main" }));
   yield* Effect.promise(() =>
     assert.rejects(worker.hold(Counter, { name: "x" }).ready, (error) =>
       isChordError(error, "contract_mismatch"),
@@ -182,11 +179,11 @@ const checksContractTokensAcrossLinksContract = Effect.gen(function* () {
   const [down, up] = memoryLinkPair();
   server.accept(down, { principal: { guest: "g" } });
   const browser = createHost({
-    self: { kind: "host" },
-    name: "browser",
     kind: "client",
-    upstream: { link: up, principal: { kind: "server" } },
+    name: "browser",
     onError: () => {},
+    self: { kind: "host" },
+    upstream: { link: up, principal: { kind: "server" } },
   });
   yield* Effect.promise(() =>
     assert.rejects(browser.hold(Counter, { name: "x" }).ready, (error) =>
@@ -201,21 +198,21 @@ const invalidateprincipalReStampsTheLinkAnd = Effect.gen(function* () {
     { guest: "g1", revision: 1 },
     { restamp: (p) => ({ ...(p as object), revision: 2 }) },
   );
-  const counter = browser.host.hold(SessionCounter, { session: "S1", name: "a" });
+  const counter = browser.host.hold(SessionCounter, { name: "a", session: "S1" });
   yield* Effect.promise(() => counter.add(1));
   yield* Effect.promise(() => c.server.invalidatePrincipal({ guest: "g1" }));
   for (let i = 0; i < 20 && counter.status !== "gone"; i++) yield* tick;
   assert.equal(counter.status, "gone");
   for (let i = 0; i < 20 && !c.log.includes("close a"); i++) yield* tick;
   assert.ok(c.log.includes("close a"));
-  const again = browser.host.hold(SessionCounter, { session: "S1", name: "a" });
+  const again = browser.host.hold(SessionCounter, { name: "a", session: "S1" });
   assert.deepEqual(yield* Effect.promise(() => again.who()), { guest: "g1", revision: 2 });
 });
 
 const afterAReconnectStateSubscribersGet = Effect.gen(function* () {
   const c = cluster();
   const browser = c.browser({ guest: "g1" });
-  const counter = browser.host.hold(SessionCounter, { session: "S1", name: "r" });
+  const counter = browser.host.hold(SessionCounter, { name: "r", session: "S1" });
   const events: string[] = [];
   counter.count.events((event) => events.push(event.type));
   yield* Effect.promise(() => counter.add(2));

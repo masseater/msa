@@ -6,45 +6,48 @@ import { describe, it } from "vite-plus/test";
 
 import {
   type Ctx,
-  createHost,
   type Host,
+  createHost,
   hostNamed,
   isChordError,
   memoryLinkPair,
   remote,
 } from "../src/index.ts";
-import { CountingLink } from "./fixtures/counting.ts";
-import { latch, pollUntil } from "./fixtures/timing.ts";
+import counting from "./fixtures/counting.ts";
+import timing from "./fixtures/timing.ts";
+
+const { CountingLink } = counting;
+const { latch, pollUntil } = timing;
 
 const until = (check: () => boolean, attempts = 200) => pollUntil(check, attempts, Effect.sleep(2));
 
 const Slow = remote("t.e8-slow", {
-  version: 1,
-  input: Type.Object({}),
   host: hostNamed("server"),
+  input: Type.Object({}),
   variants: { main: { state: { n: Type.Number() } } },
+  version: 1,
 });
 
 function setup(readyTimeout?: number) {
   const gate = latch();
   const open = gate.open;
-  const server = createHost({ self: { kind: "host" }, name: "server", onError: () => {} });
+  const server = createHost({ name: "server", onError: () => {}, self: { kind: "host" } });
   server.serve(Slow, (_input, _principal, self) => {
-    self.resource("gate", { version: 1, open: () => gate.promise });
-    return { variant: "main", n: self.state("n", Type.Number(), 1) };
+    self.resource("gate", { open: () => gate.promise, version: 1 });
+    return { n: self.state("n", Type.Number(), 1), variant: "main" };
   });
   const [down, up] = memoryLinkPair();
   server.accept(down, { principal: { user: "u" } });
   const link = new CountingLink(up);
   const browser: Host = createHost({
-    self: { kind: "host" },
-    name: "browser",
     kind: "client",
-    upstream: { link, principal: { kind: "server" } },
+    name: "browser",
     onError: () => {},
+    self: { kind: "host" },
+    upstream: { link, principal: { kind: "server" } },
     ...(readyTimeout === undefined ? {} : { readyTimeout }),
   });
-  return { server, browser, link, open };
+  return { browser, link, open, server };
 }
 
 const abortController = (): AbortController => new AbortController();

@@ -1,7 +1,9 @@
 import { describe, expect, it } from "vite-plus/test";
 
 import { track } from "../../src/delta/index.ts";
-import { clone, replay, settle } from "../fixtures/tracker.ts";
+import trackerModule from "../fixtures/tracker.ts";
+
+const { clone, replay, settle } = trackerModule;
 
 const emitsOneInsertForAnAppend = (): void => {
   const tracker = track({ values: Array.from({ length: 10_000 }, (_, index) => index) });
@@ -155,9 +157,9 @@ const replaysIntroducedMovedThenEditedArray = (): void => {
 const combinesMovementAndEditsWithPermutation = (): void => {
   const tracker = track({
     values: [
-      { rank: 3, edited: 0 },
-      { rank: 1, edited: 0 },
-      { rank: 2, edited: 0 },
+      { edited: 0, rank: 3 },
+      { edited: 0, rank: 1 },
+      { edited: 0, rank: 2 },
     ],
   });
   const base = clone(tracker.value);
@@ -174,8 +176,8 @@ const combinesMovementAndEditsWithPermutation = (): void => {
 const keepsComparatorWritesAndStructurallyReentrant = (): void => {
   const tracker = track({
     values: [
-      { rank: 2, comparisons: 0 },
-      { rank: 1, comparisons: 0 },
+      { comparisons: 0, rank: 2 },
+      { comparisons: 0, rank: 1 },
     ],
   });
   const base = clone(tracker.value);
@@ -186,8 +188,8 @@ const keepsComparatorWritesAndStructurallyReentrant = (): void => {
     right.comparisons++;
     if (!appended) {
       appended = true;
-      change.state.values[0] = { rank: 9, comparisons: 0 };
-      change.state.values.push({ rank: 3, comparisons: 0 });
+      change.state.values[0] = { comparisons: 0, rank: 9 };
+      change.state.values.push({ comparisons: 0, rank: 3 });
     }
     return left.rank - right.rank;
   });

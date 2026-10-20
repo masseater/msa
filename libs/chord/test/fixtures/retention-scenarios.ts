@@ -3,31 +3,11 @@ import assert from "node:assert/strict";
 import { Effect } from "effect";
 
 import { track } from "../../src/delta/index.ts";
-import { collect, retainedSettledChanges } from "./retention.ts";
+import retention from "./retention.ts";
 
-export const largeProxyScenarios: Readonly<Record<string, Effect.Effect<void>>> = {
-  "retained-large-settled-proxy": Effect.gen(function* () {
-    const tracker = track({ rows: Array.from({ length: 100_000 }, (_, value) => ({ value })) });
-    const obsolete = new WeakRef(tracker.value.rows);
-    const commit = (): object => {
-      const change = tracker.beginChange();
-      const held = change.state.rows[0]!;
-      for (let index = 1; index < 5_000; index++)
-        assert.equal(change.state.rows[index]!.value, index);
-      held.value = -1;
-      const prepared = change.prepare();
-      tracker.adopt(prepared);
-      return held;
-    };
-    retainedSettledChanges.push(commit());
-    const replace = (): void => {
-      const replacement = tracker.prepareReplace({ rows: [{ value: 1 }] });
-      tracker.adopt(replacement);
-    };
-    replace();
-    yield* collect(obsolete);
-    assert.throws(() => (retainedSettledChanges[0] as { value: number }).value, /settled/u);
-  }),
+const { collect, retainedSettledChanges } = retention;
+
+const largeProxyScenarios: Readonly<Record<string, Effect.Effect<void>>> = {
   "retained-large-placement-proxies": Effect.gen(function* () {
     type Root = {
       child: { value: number };
@@ -39,10 +19,10 @@ export const largeProxyScenarios: Readonly<Record<string, Effect.Effect<void>>> 
     const run = (kind: "write" | "writes" | "insert" | "override"): WeakRef<object> => {
       const tracker = track<Root>({
         child: { value: 0 },
-        visited: Array.from({ length: 5_000 }, (_, value) => ({ value })),
         first: null,
-        second: null,
         rows: kind === "override" ? [null] : [],
+        second: null,
+        visited: Array.from({ length: 5_000 }, (_, value) => ({ value })),
       });
       const change = tracker.beginChange();
       for (const value of change.state.visited) assert.equal(value.value >= 0, true);
@@ -64,10 +44,10 @@ export const largeProxyScenarios: Readonly<Record<string, Effect.Effect<void>>> 
       tracker.adopt(prepared);
       const replacement = tracker.prepareReplace({
         child: { value: 1 },
-        visited: [],
         first: null,
-        second: null,
         rows: [],
+        second: null,
+        visited: [],
       });
       tracker.adopt(replacement);
       retainedSettledChanges.push(held);
@@ -78,22 +58,27 @@ export const largeProxyScenarios: Readonly<Record<string, Effect.Effect<void>>> 
     for (const held of retainedSettledChanges)
       assert.throws(() => Reflect.get(held, "length"), /settled/u);
   }),
-  "stale-unprepared-change": Effect.gen(function* () {
-    const tracker = track({
-      payload: { rows: Array.from({ length: 50_000 }, (_, value) => ({ value })) },
-    });
-    const stale = tracker.beginChange();
-    stale.state.payload.rows[0]!.value = -1;
-    const obsolete = new WeakRef(tracker.value.payload.rows);
+  "retained-large-settled-proxy": Effect.gen(function* () {
+    const tracker = track({ rows: Array.from({ length: 100_000 }, (_, value) => ({ value })) });
+    const obsolete = new WeakRef(tracker.value.rows);
+    const commit = (): object => {
+      const change = tracker.beginChange();
+      const held = change.state.rows[0]!;
+      for (let index = 1; index < 5_000; index++)
+        assert.equal(change.state.rows[index]!.value, index);
+      held.value = -1;
+      const prepared = change.prepare();
+      tracker.adopt(prepared);
+      return held;
+    };
+    retainedSettledChanges.push(commit());
     const replace = (): void => {
-      const winner = tracker.prepareReplace({ payload: { rows: [{ value: 1 }] } });
-      tracker.adopt(winner);
+      const replacement = tracker.prepareReplace({ rows: [{ value: 1 }] });
+      tracker.adopt(replacement);
     };
     replace();
-    assert.throws(() => stale.prepare(), /settled/u);
-    retainedSettledChanges.push(stale);
     yield* collect(obsolete);
-    assert.equal(retainedSettledChanges.length, 1);
+    assert.throws(() => (retainedSettledChanges[0] as { value: number }).value, /settled/u);
   }),
   "same-job-fast-cleanup": Effect.sync(() => {
     assert.ok(global.gc, "worker requires --expose-gc");
@@ -137,4 +122,23 @@ export const largeProxyScenarios: Readonly<Record<string, Effect.Effect<void>>> 
     assert.ok(retainedMiB < 8, `same-job folded operations retained ${retainedMiB.toFixed(2)} MiB`);
     assert.equal(tracker.value["field0"], 100);
   }),
+  "stale-unprepared-change": Effect.gen(function* () {
+    const tracker = track({
+      payload: { rows: Array.from({ length: 50_000 }, (_, value) => ({ value })) },
+    });
+    const stale = tracker.beginChange();
+    stale.state.payload.rows[0]!.value = -1;
+    const obsolete = new WeakRef(tracker.value.payload.rows);
+    const replace = (): void => {
+      const winner = tracker.prepareReplace({ payload: { rows: [{ value: 1 }] } });
+      tracker.adopt(winner);
+    };
+    replace();
+    assert.throws(() => stale.prepare(), /settled/u);
+    retainedSettledChanges.push(stale);
+    yield* collect(obsolete);
+    assert.equal(retainedSettledChanges.length, 1);
+  }),
 };
+
+export default largeProxyScenarios;

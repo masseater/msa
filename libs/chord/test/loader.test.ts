@@ -5,7 +5,9 @@ import { Effect } from "effect";
 import { describe, it } from "vite-plus/test";
 
 import { createHost } from "../src/index.ts";
-import { runNode } from "./fixtures/platform.ts";
+import platform from "./fixtures/platform.ts";
+
+const { runNode } = platform;
 
 const loadsFacetModulesAndReloadsThem = Effect.gen(function* () {
   const child = yield* runNode([fileURLToPath(new URL("./fixtures/loader.ts", import.meta.url))], {
@@ -15,7 +17,7 @@ const loadsFacetModulesAndReloadsThem = Effect.gen(function* () {
 });
 
 const needsAConfiguredLoaderForModules = Effect.gen(function* () {
-  const host = createHost({ self: { kind: "host" }, onError: () => {} });
+  const host = createHost({ onError: () => {}, self: { kind: "host" } });
   yield* Effect.promise(() =>
     assert.rejects(host.load(["./facet.ts"]), /createHost\(\{ loader \}\)/u),
   );

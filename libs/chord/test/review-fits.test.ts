@@ -51,11 +51,10 @@ const case11FitsHasNoFalsePositives = (): void => {
 };
 
 const case11ArgumentsAreStrippedToWhat = Effect.gen(function* () {
-  const host = createHost({ self: { kind: "host" }, onError: () => {} });
+  const host = createHost({ onError: () => {}, self: { kind: "host" } });
   const Strict = remote("t.strict", {
-    version: 1,
-    input: Type.Object({}),
     host: hostNamed("host"),
+    input: Type.Object({}),
     variants: {
       main: {
         methods: {
@@ -66,8 +65,9 @@ const case11ArgumentsAreStrippedToWhat = Effect.gen(function* () {
         },
       },
     },
+    version: 1,
   });
-  host.serve(Strict, () => ({ variant: "main", echo: (args) => args }));
+  host.serve(Strict, () => ({ echo: (args) => args, variant: "main" }));
   const ref = host.hold(Strict, {});
   assert.deepEqual(yield* Effect.promise(() => ref.echo({ a: "x", junk: 1 } as never)), {
     a: "x",

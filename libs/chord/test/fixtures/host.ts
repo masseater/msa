@@ -2,21 +2,23 @@ import { Effect } from "effect";
 import { dual } from "effect/Function";
 import { Type } from "typebox";
 
-import { createHost, type Host, local, method } from "../../src/index.ts";
-import { pollUntil, tick } from "./timing.ts";
+import { type Host, createHost, local, method } from "../../src/index.ts";
+import timing from "./timing.ts";
 
-export const quiet = (errors: unknown[] = []) =>
-  createHost({ self: { kind: "host" }, onError: (error) => errors.push(error) });
+const { pollUntil, tick } = timing;
 
-export const until = (check: () => boolean) => pollUntil(check, 200, tick);
+const quiet = (errors: unknown[] = []) =>
+  createHost({ onError: (error) => errors.push(error), self: { kind: "host" } });
 
-export const Counter = local("t.counter", {
-  version: 1,
+const until = (check: () => boolean) => pollUntil(check, 200, tick);
+
+const Counter = local("t.counter", {
   input: Type.Object({ name: Type.String() }),
   members: {
-    count: Type.Object({ n: Type.Number() }),
     add: method(Type.Number(), Type.Number()),
+    count: Type.Object({ n: Type.Number() }),
   },
+  version: 1,
 });
 
 function serveCounterImpl(host: Host, log: string[] = [], options: { linger?: number } = {}) {
@@ -26,7 +28,9 @@ function serveCounterImpl(host: Host, log: string[] = [], options: { linger?: nu
       log.push(`factory ${name}`);
       const count = self.state("count", Type.Object({ n: Type.Number() }), { n: 0 });
       const conn = self.resource("conn", {
-        version: 1,
+        close: () => {
+          log.push(`close ${name}`);
+        },
         open: () =>
           Effect.runPromise(
             Effect.sync(() => {
@@ -34,19 +38,17 @@ function serveCounterImpl(host: Host, log: string[] = [], options: { linger?: nu
               return { name };
             }),
           ),
-        close: () => {
-          log.push(`close ${name}`);
-        },
+        version: 1,
       });
       return {
-        count,
-        conn,
         add: (delta: number, ctx) => {
           count.change(ctx, (draft) => {
             draft.n += delta;
           });
           return count.value.n;
         },
+        conn,
+        count,
       };
     },
     options,
@@ -56,7 +58,16 @@ function serveCounterImpl(host: Host, log: string[] = [], options: { linger?: nu
 const isHost = (value: unknown): value is Host =>
   typeof (value as { serve?: unknown } | undefined)?.serve === "function";
 
-export const serveCounter: {
+const serveCounter: {
   (log?: string[], options?: { linger?: number }): (host: Host) => void;
   (host: Host, log?: string[], options?: { linger?: number }): void;
 } = dual((args: IArguments) => isHost(args[0]), serveCounterImpl);
+
+const hostModule = {
+  Counter,
+  quiet,
+  serveCounter,
+  until,
+};
+
+export default hostModule;

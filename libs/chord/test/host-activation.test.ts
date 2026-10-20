@@ -5,36 +5,39 @@ import { Type } from "typebox";
 import { describe, it } from "vite-plus/test";
 
 import { type Facet, isChordError, local, method } from "../src/index.ts";
-import { Counter, quiet, serveCounter, until } from "./fixtures/host.ts";
-import { tick } from "./fixtures/timing.ts";
+import hostModule from "./fixtures/host.ts";
+import timing from "./fixtures/timing.ts";
+
+const { Counter, quiet, serveCounter, until } = hostModule;
+const { tick } = timing;
 
 const closesResourcesInReverseOrderRuns = Effect.gen(function* () {
   const errors: unknown[] = [];
   const host = quiet(errors);
   const log: string[] = [];
-  const Multi = local("t.multi", { version: 1, input: Type.Object({}) });
+  const Multi = local("t.multi", { input: Type.Object({}), version: 1 });
   host.serve(Multi, (_input, _principal, self) => {
     const a = self.resource("a", {
-      version: 1,
-      open: () => "a",
       close: () => void log.push("close a"),
+      open: () => "a",
+      version: 1,
     });
     self.resource("b", {
-      version: 1,
-      deps: [a],
-      open: () => "b",
       close: () => {
         log.push("close b");
         throw new Error("b failed");
       },
+      deps: [a],
+      open: () => "b",
+      version: 1,
     });
     self.resource("c", {
-      version: 1,
-      open: () => "c",
       close: () => {
         log.push("close c");
         throw new Error("c failed");
       },
+      open: () => "c",
+      version: 1,
     });
     return {};
   });
@@ -79,9 +82,9 @@ describe("host: activation and lifetime", () => {
 
 const refusesASecondDeclarationOfOne = Effect.gen(function* () {
   const host = quiet();
-  const Twice = local("t.twice", { version: 1, input: Type.Object({ kind: Type.String() }) });
+  const Twice = local("t.twice", { input: Type.Object({ kind: Type.String() }), version: 1 });
   host.serve(Twice, ({ kind }, _principal, self) => {
-    const open = { version: 1, open: () => null };
+    const open = { open: () => null, version: 1 };
     self.state("x", Type.Number(), 0);
     self.resource("x", open);
     self.on("x", self.state("y", Type.Number(), 0), () => {});
@@ -107,23 +110,23 @@ const refusesASecondDeclarationOfOne = Effect.gen(function* () {
 const methodsWithoutArgumentsAreCalledWith = Effect.gen(function* () {
   const host = quiet();
   const Tool = local("t.tool", {
-    version: 1,
     input: Type.Object({}),
     members: {
-      ping: method(),
       count: method(undefined, Type.Number()),
       note: method(Type.String()),
+      ping: method(),
     },
+    version: 1,
   });
   const seen: unknown[] = [];
   host.serve(Tool, () => ({
-    ping: (ctx) => {
-      seen.push(typeof ctx.rootId);
-      return "ignored" as never;
-    },
     count: () => 3,
     note: (text, ctx) => {
       seen.push(text, typeof ctx.rootId);
+    },
+    ping: (ctx) => {
+      seen.push(typeof ctx.rootId);
+      return "ignored" as never;
     },
   }));
   const tool = host.hold(Tool, {});
@@ -137,9 +140,9 @@ const methodsWithoutArgumentsAreCalledWith = Effect.gen(function* () {
 const aListenerOnStateGetsThe = Effect.gen(function* () {
   const host = quiet();
   const Doubled = local("t.doubled", {
-    version: 1,
     input: Type.Object({}),
     members: { set: method(Type.Number()) },
+    version: 1,
   });
   const seen: number[] = [];
   const facet = (label: string): Facet => ({

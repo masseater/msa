@@ -1,13 +1,9 @@
 import { describe, expect, it } from "vite-plus/test";
 
-import { boundOutput, OutputBuffer, sanitizeOutput } from "../src/output.ts";
-import {
-  assertMatchesBufferTail,
-  bound,
-  head,
-  sampledByteLimits,
-  tail,
-} from "./fixtures/output.ts";
+import { OutputBuffer, boundOutput, sanitizeOutput } from "../src/output.ts";
+import output from "./fixtures/output.ts";
+
+const { assertMatchesBufferTail, bound, head, sampledByteLimits, tail } = output;
 
 const removesControlCharactersButKeepsTabs = (): void => {
   expect(sanitizeOutput("a\0b\tc\nd\re\u0007f\ufff9g\ufffbh😀")).toBe("ab\tc\ndefgh😀");
@@ -15,65 +11,65 @@ const removesControlCharactersButKeepsTabs = (): void => {
 
 const keepsOutputWithinTheLimitsUnchanged = (): void => {
   expect(bound("a\nb\n", head(2, 1000))).toEqual({
-    kept: "a\nb\n",
     droppedBytes: 0,
     droppedLines: 0,
+    kept: "a\nb\n",
   });
-  expect(bound("a\nb", tail(2, 1000))).toEqual({ kept: "a\nb", droppedBytes: 0, droppedLines: 0 });
-  expect(bound("", tail(2, 1000))).toEqual({ kept: "", droppedBytes: 0, droppedLines: 0 });
+  expect(bound("a\nb", tail(2, 1000))).toEqual({ droppedBytes: 0, droppedLines: 0, kept: "a\nb" });
+  expect(bound("", tail(2, 1000))).toEqual({ droppedBytes: 0, droppedLines: 0, kept: "" });
 };
 
 const keepsNothingWithAZeroLimit = (): void => {
-  expect(bound("ab\ncd\n", head(10, 0))).toEqual({ kept: "", droppedBytes: 6, droppedLines: 2 });
-  expect(bound("ab\ncd\n", tail(0, 1000))).toEqual({ kept: "", droppedBytes: 6, droppedLines: 2 });
+  expect(bound("ab\ncd\n", head(10, 0))).toEqual({ droppedBytes: 6, droppedLines: 2, kept: "" });
+  expect(bound("ab\ncd\n", tail(0, 1000))).toEqual({ droppedBytes: 6, droppedLines: 2, kept: "" });
 };
 
 const keepsExactSlicesOfWholeLines = (): void => {
   expect(bound("a\nb\nc\n", head(2, 1000))).toEqual({
-    kept: "a\nb\n",
     droppedBytes: 2,
     droppedLines: 1,
+    kept: "a\nb\n",
   });
   expect(bound("a\nb\nc\n", tail(2, 1000))).toEqual({
-    kept: "b\nc\n",
     droppedBytes: 2,
     droppedLines: 1,
+    kept: "b\nc\n",
   });
   expect(bound("a\nb\nc", tail(2, 1000))).toEqual({
-    kept: "b\nc",
     droppedBytes: 2,
     droppedLines: 1,
+    kept: "b\nc",
   });
   expect(bound("a\nb\nc\n\n", tail(3, 1000))).toEqual({
-    kept: "b\nc\n\n",
     droppedBytes: 2,
     droppedLines: 1,
+    kept: "b\nc\n\n",
   });
 };
 
 const cutsAtTheByteLimitOn = (): void => {
   expect(bound("aa\nbb\ncc\n", head(10, 7))).toEqual({
-    kept: "aa\nbb\n",
     droppedBytes: 3,
     droppedLines: 1,
+    kept: "aa\nbb\n",
   });
   expect(bound("aa\nbb\ncc\n", tail(10, 7))).toEqual({
-    kept: "bb\ncc\n",
     droppedBytes: 3,
     droppedLines: 1,
+    kept: "bb\ncc\n",
   });
 };
 
 const cutsASingleLineLongerThan = (): void => {
-  expect(bound("ééé\n", head(10, 5))).toEqual({ kept: "éé", droppedBytes: 3, droppedLines: 0 });
-  expect(bound("x\néééé", tail(10, 5))).toEqual({ kept: "éé", droppedBytes: 6, droppedLines: 1 });
+  expect(bound("ééé\n", head(10, 5))).toEqual({ droppedBytes: 3, droppedLines: 0, kept: "éé" });
+  expect(bound("x\néééé", tail(10, 5))).toEqual({ droppedBytes: 6, droppedLines: 1, kept: "éé" });
 };
 
 const keepsAUFeffAtThe = (): void => {
   expect(bound("x\ufeffa", tail(10, 4))).toEqual({
-    kept: "\ufeffa",
     droppedBytes: 1,
     droppedLines: 0,
+    kept: "\ufeffa",
   });
 };
 
@@ -161,15 +157,15 @@ const keepsExactTotalsAcrossChunksAnd = (): void => {
   buffer.push("a\nb\n");
   buffer.push(bytes.subarray(0, 2));
   buffer.push(bytes.subarray(2));
-  expect(buffer.snapshot()).toEqual({ text: "b\n😀\n", droppedBytes: 2, droppedLines: 1 });
+  expect(buffer.snapshot()).toEqual({ droppedBytes: 2, droppedLines: 1, text: "b\n😀\n" });
 };
 
 const sanitizesTheRetainedTextButCounts = (): void => {
   const buffer = new OutputBuffer(tail(1, 1000));
   buffer.push("a\u0007\n");
-  expect(buffer.snapshot()).toEqual({ text: "a\n", droppedBytes: 0, droppedLines: 0 });
+  expect(buffer.snapshot()).toEqual({ droppedBytes: 0, droppedLines: 0, text: "a\n" });
   buffer.push("b\u001b\n");
-  expect(buffer.snapshot()).toEqual({ text: "b\n", droppedBytes: 3, droppedLines: 1 });
+  expect(buffer.snapshot()).toEqual({ droppedBytes: 3, droppedLines: 1, text: "b\n" });
 };
 
 const dropsAByteOrderMarkOnly = (): void => {
@@ -204,9 +200,9 @@ const matchesBoundingTheWholeStreamWhen = (): void => {
       if (index % 5 !== 4) continue;
       const expected = boundOutput(stream, limits);
       expect(buffer.snapshot()).toEqual({
-        text: expected.text,
         droppedBytes: expected.droppedBytes,
         droppedLines: expected.droppedLines,
+        text: expected.text,
       });
     }
   }
@@ -217,9 +213,9 @@ const stopsStoringHeadOutputOnceThe = (): void => {
   for (let index = 0; index < 1000; index++) buffer.push(`line ${index}\n`);
   expect(buffer.storedBytes).toBeLessThan(20);
   expect(buffer.snapshot()).toEqual({
-    text: "line 0\nline 1\n",
     droppedBytes: 8876,
     droppedLines: 998,
+    text: "line 0\nline 1\n",
   });
 };
 

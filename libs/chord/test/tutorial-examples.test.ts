@@ -1,15 +1,9 @@
 import assert from "node:assert/strict";
-import { fileURLToPath } from "node:url";
 
-import { Effect } from "effect";
 import { it } from "vite-plus/test";
 
-import { readText } from "./fixtures/platform.ts";
+import tutorial from "../docs/tutorial.md?raw";
 
-const readSibling = (path: string): Promise<string> =>
-  Effect.runPromise(readText(fileURLToPath(new URL(path, import.meta.url))));
-
-const tutorial = await readSibling("../docs/tutorial.md");
 const printed = [...tutorial.matchAll(/<!-- example:([\w-]+) -->\n+```ts\n([\s\S]*?)\n```/gu)];
 function normalize(text: string): string {
   const tokens = (
@@ -22,12 +16,16 @@ function normalize(text: string): string {
     .filter((token, index) => !(token === "," && closers.has(tokens[index + 1] ?? "")))
     .join(" ");
 }
-const sources = [
-  "fixtures/tutorial.ts",
-  "tutorial.test.ts",
-  "tutorial-tasks-plugins-reload.test.ts",
-];
-const runnable = ` ${(await Promise.all(sources.map(readSibling))).map(normalize).join(" ")} `;
+const sources = import.meta.glob<string>(
+  [
+    "./fixtures/tutorial.ts",
+    "./fixtures/tutorial.types.ts",
+    "./tutorial.test.ts",
+    "./tutorial-tasks-plugins-reload.test.ts",
+  ],
+  { eager: true, import: "default", query: "?raw" },
+);
+const runnable = ` ${Object.values(sources).map(normalize).join(" ")} `;
 it("every TypeScript example in the tutorial is tracked under its own name", () => {
   assert.equal(new Set(printed.map((entry) => entry[1])).size, printed.length);
   assert.equal((tutorial.match(/```ts\n/gu) ?? []).length, printed.length);

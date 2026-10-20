@@ -3,59 +3,62 @@ import { Type } from "typebox";
 
 import {
   type Ctx,
-  createHost,
   type Host,
+  createHost,
   hostNamed,
   memoryLinkPair,
   method,
   remote,
 } from "../../src/index.ts";
-import { CountingLink } from "./counting.ts";
-import { pollUntil } from "./timing.ts";
+import counting from "./counting.ts";
+import timing from "./timing.ts";
 
-export const until = pollUntil(200, Effect.sleep(2));
+const { CountingLink } = counting;
+const { pollUntil } = timing;
 
-export const NoteSchema = Type.Array(Type.String());
+const until = pollUntil(200, Effect.sleep(2));
 
-export const Notes = remote("t.e8-notes", {
-  version: 1,
-  input: Type.Object({ list: Type.Optional(Type.String({ default: "main" })) }),
+const NoteSchema = Type.Array(Type.String());
+
+const Notes = remote("t.e8-notes", {
   host: hostNamed("server"),
+  input: Type.Object({ list: Type.Optional(Type.String({ default: "main" })) }),
   variants: {
     main: {
-      state: { notes: NoteSchema, title: Type.String() },
       methods: { add: method(Type.String()), rename: method(Type.String()) },
+      state: { notes: NoteSchema, title: Type.String() },
     },
   },
+  version: 1,
 });
 
-export function serveNotes(host: Host): void {
+function serveNotes(host: Host): void {
   host.serve(Notes, (_input, _principal, self) => {
     const notes = self.state("notes", NoteSchema, []);
     const title = self.state("title", Type.String(), "untitled");
     return {
-      variant: "main",
-      notes,
-      title,
       add: (text: string, ctx: Ctx) => {
         notes.change(ctx, (draft) => {
           draft.push(text);
         });
       },
+      notes,
       rename: (text: string, ctx: Ctx) => {
         title.replace(ctx, text);
       },
+      title,
+      variant: "main",
     };
   });
 }
 
-export function setup(
+function setup(
   options: {
     readonly window?: number;
     readonly linger?: { types?: Record<string, number>; cap?: number };
   } = {},
 ) {
-  const server = createHost({ self: { kind: "host" }, name: "server", onError: () => {} });
+  const server = createHost({ name: "server", onError: () => {}, self: { kind: "host" } });
   serveNotes(server);
   const [down, up] = memoryLinkPair();
   server.accept(down, {
@@ -65,12 +68,22 @@ export function setup(
   const link = new CountingLink(up);
   const errors: unknown[] = [];
   const browser = createHost({
-    self: { kind: "host" },
-    name: "browser",
     kind: "client",
-    upstream: { link, principal: { kind: "server" } },
+    name: "browser",
     onError: (error) => errors.push(error),
+    self: { kind: "host" },
+    upstream: { link, principal: { kind: "server" } },
     ...(options.linger === undefined ? {} : { linger: options.linger }),
   });
-  return { server, browser, link, errors };
+  return { browser, errors, link, server };
 }
+
+const bindings = {
+  NoteSchema,
+  Notes,
+  serveNotes,
+  setup,
+  until,
+};
+
+export default bindings;

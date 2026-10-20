@@ -4,7 +4,7 @@ import { apply, track } from "../src/delta/index.ts";
 
 const takesImmutableOwnershipOfTheImported = (): void => {
   const input = {
-    point: { x: 3, y: 7, pressure: 0.1 },
+    point: { pressure: 0.1, x: 3, y: 7 },
     rows: [{ values: [0, false, null, "text", { n: 1 }] }],
   };
   const tracker = track(input);
@@ -17,8 +17,8 @@ const takesImmutableOwnershipOfTheImported = (): void => {
 const preservesNullPrototypesInAnAlias = (): void => {
   type Dictionary = { enabled: boolean; child: { n: number } };
   const dictionary = Object.assign(Object.create(null) as Dictionary, {
-    enabled: true,
     child: { n: 1 },
+    enabled: true,
   });
   const tracker = track({
     dictionary,

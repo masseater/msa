@@ -1,13 +1,15 @@
 import { describe, expect, it } from "vite-plus/test";
 
 import { track } from "../../src/delta/index.ts";
-import { clone, expectAliasFree, replay } from "../fixtures/tracker.ts";
+import trackerModule from "../fixtures/tracker.ts";
+
+const { clone, expectAliasFree, replay } = trackerModule;
 
 const normalizesDuplicateEntriesCreatedByStructurally = (): void => {
   const tracker = track({
     values: [
-      { rank: 2, edited: 0, nested: { value: 0 } },
-      { rank: 1, edited: 0, nested: { value: 0 } },
+      { edited: 0, nested: { value: 0 }, rank: 2 },
+      { edited: 0, nested: { value: 0 }, rank: 1 },
     ],
   });
   const base = clone(tracker.value);
@@ -20,7 +22,7 @@ const normalizesDuplicateEntriesCreatedByStructurally = (): void => {
     right.nested.value = right.rank * 100;
     if (!inserted) {
       inserted = true;
-      change.state.values.unshift({ rank: 4, edited: 0, nested: { value: 0 } });
+      change.state.values.unshift({ edited: 0, nested: { value: 0 }, rank: 4 });
     }
     return left.rank - right.rank;
   });

@@ -135,10 +135,10 @@ const makesCompetingSameBasePreparationsStale = (): void => {
 };
 
 const emitsAnOwnedRootReplacementWithout = (): void => {
-  const rows = Array.from({ length: 10_000 }, (_, value) => ({ value, stable: { value } }));
+  const rows = Array.from({ length: 10_000 }, (_, value) => ({ stable: { value }, value }));
   const tracker = track({ rows });
   const replacement = { rows: tracker.value.rows.slice() };
-  replacement.rows[5_000] = { value: -1, stable: replacement.rows[5_000]!.stable };
+  replacement.rows[5_000] = { stable: replacement.rows[5_000]!.stable, value: -1 };
   const prepared = tracker.prepareReplace(replacement);
   expect(prepared.value).toBe(replacement);
   expect(prepared.ops).toEqual([["r", replacement]]);

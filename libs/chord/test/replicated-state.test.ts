@@ -83,14 +83,14 @@ const queuesListenerTriggeredChangesInSequence = (): void => {
   });
   state.subscribe((value, _context, delivery) => {
     if (delivery.kind === "update")
-      deliveries.push({ value: value.value, sequence: delivery.sequence });
+      deliveries.push({ sequence: delivery.sequence, value: value.value });
   });
   state.change(BACKGROUND_CONTEXT, (draft) => {
     draft.value = 1;
   });
   expect(deliveries).toEqual([
-    { value: 1, sequence: 1 },
-    { value: 2, sequence: 2 },
+    { sequence: 1, value: 1 },
+    { sequence: 2, value: 2 },
   ]);
   expect(lateDeliveries).toEqual([{ kind: "hydrate", sequence: 2 }]);
 };
@@ -153,12 +153,12 @@ const takesImmutableOwnershipOfAliasFree = (): void => {
 };
 
 const replacesAtomicallyAndIgnoresDeeplyEqual = (): void => {
-  const state = replicatedState({ value: { nested: 1 }, retained: { nested: 2 } });
+  const state = replicatedState({ retained: { nested: 2 }, value: { nested: 1 } });
   const previous = state.value;
-  state.replace(BACKGROUND_CONTEXT, { value: { nested: 1 }, retained: { nested: 2 } });
+  state.replace(BACKGROUND_CONTEXT, { retained: { nested: 2 }, value: { nested: 1 } });
   expect(state.value).toBe(previous);
   state.replace(BACKGROUND_CONTEXT, { ...state.value, value: { nested: 2 } });
-  expect(state.value).toEqual({ value: { nested: 2 }, retained: { nested: 2 } });
+  expect(state.value).toEqual({ retained: { nested: 2 }, value: { nested: 2 } });
   expect(state.value.retained).toBe(previous.retained);
 };
 

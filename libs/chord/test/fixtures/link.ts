@@ -4,38 +4,39 @@ import { Type } from "typebox";
 
 import {
   type Ctx,
-  createHost,
   type Host,
+  type Self,
+  createHost,
   hostFamily,
   hostNamed,
   memoryLinkPair,
   method,
   remote,
-  type Self,
 } from "../../src/index.ts";
+import type linkTypes from "./link.types.ts";
 
-export const counterVariants = {
+const counterVariants = {
   main: {
-    state: { count: Type.Object({ n: Type.Number() }) },
     methods: {
       add: method(Type.Number(), Type.Number()),
       who: method(undefined, Type.Unknown()),
     },
+    state: { count: Type.Object({ n: Type.Number() }) },
   },
 };
 
-export const Counter = remote("t.counter", {
-  version: 1,
-  input: Type.Object({ name: Type.String() }),
+const Counter = remote("t.counter", {
   host: hostNamed("server"),
+  input: Type.Object({ name: Type.String() }),
   variants: counterVariants,
+  version: 1,
 });
 
-export const SessionCounter = remote("t.session-counter", {
-  version: 1,
-  input: Type.Object({ session: Type.String(), name: Type.String() }),
+const SessionCounter = remote("t.session-counter", {
   host: hostFamily("session:", "session"),
+  input: Type.Object({ name: Type.String(), session: Type.String() }),
   variants: counterVariants,
+  version: 1,
 });
 
 function serveCounterImpl(host: Host, principals: unknown[] = []): void {
@@ -43,14 +44,14 @@ function serveCounterImpl(host: Host, principals: unknown[] = []): void {
     principals.push(principal);
     const count = self.state("count", Type.Object({ n: Type.Number() }), { n: 0 });
     return {
-      variant: "main" as const,
-      count,
       add: (delta: number, ctx: Ctx) => {
         count.change(ctx, (draft) => {
           draft.n += delta;
         });
         return count.value.n;
       },
+      count,
+      variant: "main" as const,
       who: () => principal,
     };
   };
@@ -59,41 +60,29 @@ function serveCounterImpl(host: Host, principals: unknown[] = []): void {
   else host.serve(SessionCounter, (_input, principal, self) => counter(principal, self));
 }
 
-export function serverWithWorker(workerName = "session:S1") {
+function serverWithWorker(workerName = "session:S1") {
   const errors: unknown[] = [];
   const server = createHost({
-    self: { kind: "host" },
     name: "server",
     onError: (error) => errors.push(error),
+    self: { kind: "host" },
   });
   const [down, up] = memoryLinkPair();
-  server.accept(down, { principal: { worker: workerName }, kind: "host", name: workerName });
+  server.accept(down, { kind: "host", name: workerName, principal: { worker: workerName } });
   const worker = createHost({
-    self: { kind: "host" },
     name: workerName,
-    upstream: { link: up, principal: { kind: "server" } },
     onError: (error) => errors.push(error),
+    self: { kind: "host" },
+    upstream: { link: up, principal: { kind: "server" } },
   });
-  return { server, worker, down, up, errors };
-}
-
-export interface Cluster {
-  readonly server: Host;
-  readonly workers: Map<string, Host>;
-  readonly log: string[];
-  browser(
-    principal: unknown,
-    options?: { restamp?: (principal: unknown) => unknown | undefined },
-  ): {
-    host: Host;
-    up: ReturnType<typeof memoryLinkPair>[1];
-    reconnect(): void;
-  };
-  allow: (principal: unknown, host: string) => boolean;
+  return { down, errors, server, up, worker };
 }
 
 const browserOf =
-  (server: Host, options: { pingInterval?: number; pingTimeout?: number }): Cluster["browser"] =>
+  (
+    server: Host,
+    options: { pingInterval?: number; pingTimeout?: number },
+  ): linkTypes.Cluster["browser"] =>
   (principal, browserOptions = {}) => {
     const [down, up] = memoryLinkPair();
     server.accept(down, {
@@ -102,13 +91,13 @@ const browserOf =
       ...options,
     });
     const host = createHost({
-      self: { kind: "host" },
-      name: "browser",
       kind: "client",
-      upstream: { link: up, principal: { kind: "server" }, ...options },
+      name: "browser",
       onError: () => {},
+      self: { kind: "host" },
+      upstream: { link: up, principal: { kind: "server" }, ...options },
     });
-    const ref = { host, up, reconnect: () => {} };
+    const ref = { host, reconnect: () => {}, up };
     ref.reconnect = () => {
       const [nextDown, nextUp] = memoryLinkPair();
       server.accept(nextDown, { principal });
@@ -121,48 +110,48 @@ const browserOf =
 const serveSessionCounter = (worker: Host, log: string[]): void => {
   worker.serve(SessionCounter, (input, principal, self) => {
     self.resource("probe", {
-      version: 1,
-      open: () => void log.push(`open ${input.name}`),
       close: () => void log.push(`close ${input.name}`),
+      open: () => void log.push(`open ${input.name}`),
+      version: 1,
     });
     const count = self.state("count", Type.Object({ n: Type.Number() }), { n: 0 });
     return {
-      variant: "main",
-      count,
       add: (delta: number, ctx: Ctx) => {
         count.change(ctx, (draft) => {
           draft.n += delta;
         });
         return count.value.n;
       },
+      count,
+      variant: "main",
       who: () => principal,
     };
   });
 };
 
-export function cluster(options: { pingInterval?: number; pingTimeout?: number } = {}): Cluster {
+function cluster(options: { pingInterval?: number; pingTimeout?: number } = {}): linkTypes.Cluster {
   const log: string[] = [];
-  const server = createHost({ self: { kind: "host" }, name: "server", onError: () => {} });
+  const server = createHost({ name: "server", onError: () => {}, self: { kind: "host" } });
   const workers = new Map<string, Host>();
-  const state: Cluster = {
-    server,
-    workers,
-    log,
+  const state: linkTypes.Cluster = {
     allow: () => true,
     browser: browserOf(server, options),
+    log,
+    server,
+    workers,
   };
   server.route("session:", {
-    principal: (name) => ({ host: name }),
     authorize: (principal, host) => state.allow(principal, host),
+    principal: (name) => ({ host: name }),
     resolve: (name) =>
       Effect.runPromise(
         Effect.sync(() => {
           const [down, up] = memoryLinkPair();
           const worker = createHost({
-            self: { kind: "host" },
             name,
-            upstream: { link: up, principal: { kind: "server" }, ...options },
             onError: () => {},
+            self: { kind: "host" },
+            upstream: { link: up, principal: { kind: "server" }, ...options },
           });
           serveSessionCounter(worker, log);
           workers.set(name, worker);
@@ -173,25 +162,38 @@ export function cluster(options: { pingInterval?: number; pingTimeout?: number }
   return state;
 }
 
-export const Big = remote("t.big", {
-  version: 1,
-  input: Type.Object({}),
+const Big = remote("t.big", {
   host: hostNamed("session:S1"),
+  input: Type.Object({}),
   variants: {
     main: {
-      state: { notes: Type.Array(Type.String()) },
       methods: { echo: method(Type.Array(Type.String()), Type.Array(Type.String())) },
+      state: { notes: Type.Array(Type.String()) },
     },
   },
+  version: 1,
 });
 
-export const large = (tag: string) =>
+const large = (tag: string) =>
   Array.from({ length: 40 }, (_, i) => `${tag}${i}:${"x".repeat(4000)}`);
 
-export const serveCounter: {
+const serveCounter: {
   (principals?: unknown[]): (host: Host) => void;
   (host: Host, principals?: unknown[]): void;
 } = dual(
   (args: IArguments) => typeof (args[0] as { serve?: unknown } | undefined)?.serve === "function",
   serveCounterImpl,
 );
+
+const linkModule = {
+  Big,
+  Counter,
+  SessionCounter,
+  cluster,
+  counterVariants,
+  large,
+  serveCounter,
+  serverWithWorker,
+};
+
+export default linkModule;

@@ -6,8 +6,8 @@ import { describe, it } from "vite-plus/test";
 
 import {
   type Ctx,
-  createHost,
   type Host,
+  createHost,
   hostNamed,
   isChordError,
   local,
@@ -17,63 +17,63 @@ import {
 } from "../src/index.ts";
 
 const Source = remote("t.e8-source", {
-  version: 1,
-  input: Type.Object({}),
   host: hostNamed("w"),
-  variants: { main: { state: { v: Type.String() }, methods: { set: method(Type.String()) } } },
+  input: Type.Object({}),
+  variants: { main: { methods: { set: method(Type.String()) }, state: { v: Type.String() } } },
+  version: 1,
 });
 
 const Forward = remote("t.e8-forward", {
-  version: 1,
-  input: Type.Object({ how: Type.String() }),
   host: hostNamed("server"),
-  variants: { main: { state: { v: Type.String(), size: Type.Number() } } },
+  input: Type.Object({ how: Type.String() }),
+  variants: { main: { state: { size: Type.Number(), v: Type.String() } } },
+  version: 1,
 });
 
 function serveSource(host: Host): void {
   host.serve(Source, (_input, _principal, self) => {
     const v = self.state("v", Type.String(), "from the worker");
     return {
-      variant: "main",
-      v,
       set: (text: string, ctx: Ctx) => {
         v.replace(ctx, text);
       },
+      v,
+      variant: "main",
     };
   });
 }
 
 function cluster(options: { readonly delay?: number; readonly readyTimeout?: number } = {}) {
   const server = createHost({
-    self: { kind: "host" },
     name: "server",
     onError: () => {},
+    self: { kind: "host" },
     ...(options.readyTimeout === undefined ? {} : { readyTimeout: options.readyTimeout }),
   });
   const [down, up] = memoryLinkPair();
   const worker = createHost({
-    self: { kind: "host" },
     name: "w",
-    upstream: { link: up, principal: { kind: "server" } },
     onError: () => {},
+    self: { kind: "host" },
+    upstream: { link: up, principal: { kind: "server" } },
     ...(options.readyTimeout === undefined ? {} : { readyTimeout: options.readyTimeout }),
   });
   const admit = () =>
-    server.accept(down, { principal: { kind: "worker" }, kind: "host", name: "w" });
+    server.accept(down, { kind: "host", name: "w", principal: { kind: "worker" } });
   if (options.delay === undefined) admit();
   else Effect.runFork(Effect.delay(Effect.sync(admit), options.delay));
   const browser = () => {
     const [down2, up2] = memoryLinkPair();
     server.accept(down2, { principal: { user: "u" } });
     return createHost({
-      self: { kind: "host" },
-      name: "browser",
       kind: "client",
-      upstream: { link: up2, principal: { kind: "server" } },
+      name: "browser",
       onError: () => {},
+      self: { kind: "host" },
+      upstream: { link: up2, principal: { kind: "server" } },
     });
   };
-  return { server, worker, browser };
+  return { browser, server, worker };
 }
 
 const anObjectThatForwardsAndDerives = Effect.gen(function* () {
@@ -83,9 +83,9 @@ const anObjectThatForwardsAndDerives = Effect.gen(function* () {
   c.server.serve(Forward, ({ how }, _principal, self) => {
     const source = how === "declared" ? self.get(Source, {}) : held;
     return {
-      variant: "main",
-      v: source.v,
       size: self.derive([source.v], (text) => text.length),
+      v: source.v,
+      variant: "main",
     };
   });
   const browser = c.browser();
@@ -103,16 +103,16 @@ const anObjectThatForwardsAndDerives = Effect.gen(function* () {
 });
 
 const aMemberReadInsideAFactory = Effect.gen(function* () {
-  const host = createHost({ self: { kind: "host" }, onError: () => {} });
+  const host = createHost({ onError: () => {}, self: { kind: "host" } });
   const Inner = local("t.e8-inner", {
-    version: 1,
     input: Type.Object({}),
     members: { n: Type.Number() },
+    version: 1,
   });
   const Outer = local("t.e8-outer", {
-    version: 1,
     input: Type.Object({}),
     members: { m: Type.Number() },
+    version: 1,
   });
   host.serve(Inner, (_input, _principal, self) => ({ n: self.state("n", Type.Number(), 7) }));
   const seen: unknown[] = [];
@@ -133,20 +133,20 @@ const aMemberReadInsideAFactory = Effect.gen(function* () {
 
 const aHostObjectOfAChild = Effect.gen(function* () {
   const Settings = remote("t.e8-settings", {
-    version: 1,
-    input: Type.Object({}),
     host: hostNamed("server"),
+    input: Type.Object({}),
     variants: { main: { state: { theme: Type.String() } } },
+    version: 1,
   });
   const Local = local("t.e8-boot", {
-    version: 1,
     input: Type.Object({}),
     members: { theme: Type.String() },
+    version: 1,
   });
   const c = cluster({ delay: 20 });
   c.server.serve(Settings, (_input, _principal, self) => ({
-    variant: "main",
     theme: self.state("theme", Type.String(), "dark"),
+    variant: "main",
   }));
   yield* Effect.promise(() =>
     c.worker.install(
@@ -175,16 +175,16 @@ const aHostObjectOfAChild = Effect.gen(function* () {
 
 const aReferenceCycleAcrossHostsFails = Effect.gen(function* () {
   const A = remote("t.e8-cycle-a", {
-    version: 1,
-    input: Type.Object({}),
     host: hostNamed("server"),
+    input: Type.Object({}),
     variants: { main: {} },
+    version: 1,
   });
   const B = remote("t.e8-cycle-b", {
-    version: 1,
-    input: Type.Object({}),
     host: hostNamed("w"),
+    input: Type.Object({}),
     variants: { main: {} },
+    version: 1,
   });
   const c = cluster({ readyTimeout: 50 });
   c.server.serve(A, (_input, _principal, self) => {

@@ -6,29 +6,32 @@ import { describe, it } from "vite-plus/test";
 
 import {
   type Ctx,
-  createHost,
   type Facet,
+  type Readable,
+  createHost,
   hostNamed,
   isChordError,
   memoryLinkPair,
   method,
-  type Readable,
   remote,
 } from "../src/index.ts";
-import { CountingLink, stateFrames } from "./fixtures/counting.ts";
-import { pollUntil } from "./fixtures/timing.ts";
+import counting from "./fixtures/counting.ts";
+import timing from "./fixtures/timing.ts";
+
+const { CountingLink, stateFrames } = counting;
+const { pollUntil } = timing;
 
 const until = (check: () => boolean, attempts = 200) => pollUntil(check, attempts, Effect.sleep(2));
 
 const Doc = remote("t.e8-doc", {
-  version: 1,
-  input: Type.Object({}),
   host: hostNamed("server"),
+  input: Type.Object({}),
   variants: {
-    a: { state: { x: Type.Number() }, methods: { bump: method() } },
-    b: { state: { x: Type.Number(), y: Type.String() }, methods: { bump: method() } },
-    c: { state: { y: Type.String() }, methods: { bump: method() } },
+    a: { methods: { bump: method() }, state: { x: Type.Number() } },
+    b: { methods: { bump: method() }, state: { x: Type.Number(), y: Type.String() } },
+    c: { methods: { bump: method() }, state: { y: Type.String() } },
   },
+  version: 1,
 });
 
 function docFacet(variant: "a" | "b" | "c"): Facet {
@@ -41,9 +44,9 @@ function docFacet(variant: "a" | "b" | "c"): Facet {
         const bump = (ctx: Ctx) => {
           x.replace(ctx, x.value + 1);
         };
-        if (variant === "a") return { variant, x, bump };
-        if (variant === "b") return { variant, x, y, bump };
-        return { variant, y, bump };
+        if (variant === "a") return { bump, variant, x };
+        if (variant === "b") return { bump, variant, x, y };
+        return { bump, variant, y };
       }),
   };
 }
@@ -56,18 +59,18 @@ type View = {
 const view = (ref: object): View => ref as unknown as View;
 
 function setup() {
-  const server = createHost({ self: { kind: "host" }, name: "server", onError: () => {} });
+  const server = createHost({ name: "server", onError: () => {}, self: { kind: "host" } });
   const [down, up] = memoryLinkPair();
   server.accept(down, { principal: { user: "u" } });
   const link = new CountingLink(up);
   const browser = createHost({
-    self: { kind: "host" },
-    name: "browser",
     kind: "client",
-    upstream: { link, principal: { kind: "server" } },
+    name: "browser",
     onError: () => {},
+    self: { kind: "host" },
+    upstream: { link, principal: { kind: "server" } },
   });
-  return { server, browser, link };
+  return { browser, link, server };
 }
 
 const aNewVariantSMembersArrive = Effect.gen(function* () {
@@ -122,16 +125,16 @@ describe("variants", () => {
 });
 
 const keepsTheLastValuesReadableSends = Effect.gen(function* () {
-  const server = createHost({ self: { kind: "host" }, name: "server", onError: () => {} });
+  const server = createHost({ name: "server", onError: () => {}, self: { kind: "host" } });
   yield* Effect.promise(() => server.install(docFacet("b")));
   const [down, up] = memoryLinkPair();
   server.accept(down, { principal: { user: "u" } });
   const browser = createHost({
-    self: { kind: "host" },
-    name: "browser",
     kind: "client",
-    upstream: { link: up, principal: { kind: "server" } },
+    name: "browser",
     onError: () => {},
+    self: { kind: "host" },
+    upstream: { link: up, principal: { kind: "server" } },
   });
   const doc = browser.hold(Doc, {});
   yield* Effect.promise(() => doc.ready);

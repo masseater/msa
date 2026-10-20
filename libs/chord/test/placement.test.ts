@@ -5,39 +5,41 @@ import { type Static, Type } from "typebox";
 import { describe, expectTypeOf, it } from "vite-plus/test";
 
 import {
-  bind,
-  createHost,
   type Facet,
   type Frame,
   type Host,
+  type Link,
+  PROTOCOL_VERSION,
+  type PlacementFor,
+  bind,
+  createHost,
   hostFamily,
   hostNamed,
   isChordError,
-  type Link,
   memoryLinkPair,
   method,
-  type PlacementFor,
-  PROTOCOL_VERSION,
   remote,
 } from "../src/index.ts";
-import { tick } from "./fixtures/timing.ts";
+import timing from "./fixtures/timing.ts";
+
+const { tick } = timing;
 
 const Note = remote("t.note", {
-  version: 1,
-  input: Type.Object({ session: Type.String(), id: Type.String() }),
   host: hostFamily("session:", "session"),
+  input: Type.Object({ id: Type.String(), session: Type.String() }),
   variants: { main: { methods: { where: method(undefined, Type.String()) } } },
+  version: 1,
 });
 
 const Catalog = remote("t.catalog", {
-  version: 1,
-  input: Type.Object({}),
   host: hostNamed("server"),
+  input: Type.Object({}),
   variants: { main: { methods: { where: method(undefined, Type.String()) } } },
+  version: 1,
 });
 
 function cluster() {
-  const server = createHost({ name: "server", self: "host", onError: () => {} });
+  const server = createHost({ name: "server", onError: () => {}, self: "host" });
   server.serve(Catalog, () => ({ variant: "main", where: () => "server" }));
   const children = new Map<string, Host>();
   const links = new Map<string, Link>();
@@ -47,13 +49,13 @@ function cluster() {
     server.accept(down, { kind: "host", name, principal: "server-side" });
     const host = createHost({
       name,
+      onError: () => {},
       self: "host",
       upstream: { link: up, principal: "server" },
-      onError: () => {},
     });
     host.serve(Note, ({ id }) => ({ variant: "main", where: () => `${host.name} ${id}` }));
     children.set(name, host);
-    return { host, down };
+    return { down, host };
   };
   const s1 = child("session:S1");
   const s2 = child("session:S2");
@@ -66,25 +68,25 @@ function cluster() {
     );
   server.route("session:", {
     authorize: () => true,
-    resolve: (name) => Effect.runPromise(Effect.sync(() => links.get(name)!)),
     principal: (name) => name,
+    resolve: (name) => Effect.runPromise(Effect.sync(() => links.get(name)!)),
   });
-  return { server, s1: s1.host, s2: s2.host, close };
+  return { close, s1: s1.host, s2: s2.host, server };
 }
 
 const aGetGoesWhereTheContract = Effect.gen(function* () {
   const { server, s1, close } = cluster();
   yield* tick;
   assert.equal(
-    yield* Effect.promise(() => server.hold(Note, { session: "S1", id: "a" }).where()),
+    yield* Effect.promise(() => server.hold(Note, { id: "a", session: "S1" }).where()),
     "session:S1 a",
   );
   assert.equal(
-    yield* Effect.promise(() => server.hold(Note, { session: "S2", id: "b" }).where()),
+    yield* Effect.promise(() => server.hold(Note, { id: "b", session: "S2" }).where()),
     "session:S2 b",
   );
   assert.equal(
-    yield* Effect.promise(() => s1.hold(Note, { session: "S1", id: "c" }).where()),
+    yield* Effect.promise(() => s1.hold(Note, { id: "c", session: "S1" }).where()),
     "session:S1 c",
   );
   assert.equal(yield* Effect.promise(() => s1.hold(Catalog, {}).where()), "server");
@@ -92,12 +94,12 @@ const aGetGoesWhereTheContract = Effect.gen(function* () {
 });
 
 const serveRefusesATypeTheHost = Effect.gen(function* () {
-  const host = createHost({ name: "session:S1", self: "host", onError: () => {} });
+  const host = createHost({ name: "session:S1", onError: () => {}, self: "host" });
   assert.throws(
     () => host.serve(Catalog, () => ({ variant: "main", where: () => "" })),
     /t\.catalog is declared for server, but session:S1 serves it/u,
   );
-  const server = createHost({ name: "server", self: "host", onError: () => {} });
+  const server = createHost({ name: "server", onError: () => {}, self: "host" });
   assert.throws(
     () => server.serve(Note, () => ({ variant: "main", where: () => "" })),
     /t\.note is declared for session:<session>, but server serves it/u,
@@ -128,13 +130,13 @@ const aHostRefusesAHoldIts = Effect.gen(function* () {
         const frames: Frame[] = [];
         raw.receive((frame) => frames.push(frame));
         raw.send({
-          t: "hello",
-          protocol: PROTOCOL_VERSION,
-          name: "raw",
-          kind: "client",
           codeVersion: 0,
+          kind: "client",
+          name: "raw",
+          protocol: PROTOCOL_VERSION,
+          t: "hello",
         });
-        raw.send({ t: "hold", id: 1, at: target, token: Note.description, input });
+        raw.send({ at: target, id: 1, input, t: "hold", token: Note.description });
         for (
           let i = 0;
           i < 50 && !frames.some((frame) => frame.t === "shape" || frame.t === "gone");
@@ -144,34 +146,34 @@ const aHostRefusesAHoldIts = Effect.gen(function* () {
         return frames.find((frame) => frame.t === "shape" || frame.t === "gone");
       }),
     );
-  const relayed = yield* Effect.promise(() => holds("session:S2", { session: "S1", id: "x" }));
+  const relayed = yield* Effect.promise(() => holds("session:S2", { id: "x", session: "S1" }));
   assert.equal(relayed?.t, "gone");
   assert.match(
     relayed?.t === "gone" ? relayed.error.message : "",
     /placement|does not live on session:S2/u,
   );
   assert.equal(
-    (yield* Effect.promise(() => holds("session:S1", { session: "S1", id: "x" })))?.t,
+    (yield* Effect.promise(() => holds("session:S1", { id: "x", session: "S1" })))?.t,
     "shape",
   );
-  const direct = yield* Effect.promise(() => holds("server", { session: "S1", id: "x" }));
+  const direct = yield* Effect.promise(() => holds("server", { id: "x", session: "S1" }));
   assert.equal(direct?.t, "gone");
   yield* Effect.promise(() => close());
 });
 
 const theHostComesFromTheNormalized = Effect.gen(function* () {
   const Doc = remote("t.doc-default", {
-    version: 1,
-    input: Type.Object({ session: Type.String({ default: "S1" }) }),
     host: hostFamily("session:", "session"),
+    input: Type.Object({ session: Type.String({ default: "S1" }) }),
     variants: { main: { methods: { where: method(undefined, Type.String()) } } },
+    version: 1,
   });
   const { server, s1, close } = cluster();
   s1.serve(Doc, () => ({ variant: "main", where: () => "session:S1" }));
   yield* tick;
   assert.equal(yield* Effect.promise(() => server.hold(Doc, {} as never).where()), "session:S1");
   assert.throws(
-    () => server.hold(Note, { session: "", id: "x" }),
+    () => server.hold(Note, { id: "x", session: "" }),
     /input field session names no host/u,
   );
   yield* Effect.promise(() => close());
@@ -180,24 +182,24 @@ const theHostComesFromTheNormalized = Effect.gen(function* () {
 const placementIsPartOfTheContract = Effect.gen(function* () {
   const at = (host: string) =>
     remote("t.moved", {
-      version: 1,
-      input: Type.Object({}),
       host: hostNamed(host),
+      input: Type.Object({}),
       variants: { main: { methods: { ping: method() } } },
+      version: 1,
     });
   assert.notEqual(at("server").fingerprint, at("session:S1").fingerprint);
-  const host = createHost({ name: "server", self: "host", onError: () => {} });
+  const host = createHost({ name: "server", onError: () => {}, self: "host" });
   const facet = (version: number, place: string): Facet => ({
     name: "moved",
     setup: (api) =>
       api.serve(
         remote("t.moved", {
-          version,
-          input: Type.Object({}),
           host: hostNamed(place),
+          input: Type.Object({}),
           variants: { main: { methods: { ping: method() } } },
+          version,
         }),
-        () => ({ variant: "main", ping: () => {} }),
+        () => ({ ping: () => {}, variant: "main" }),
         { accepts: { 1: (current) => current } },
       ),
   });
@@ -210,10 +212,10 @@ const placementIsPartOfTheContract = Effect.gen(function* () {
     ),
   );
   const moved = remote("t.moved", {
-    version: 2,
-    input: Type.Object({}),
     host: hostNamed("session:S1"),
+    input: Type.Object({}),
     variants: { main: { methods: { ping: method() } } },
+    version: 2,
   });
   assert.throws(
     () => bind(moved, { 1: (current) => current }, at("server")),
@@ -225,12 +227,12 @@ const placementIsPartOfTheContract = Effect.gen(function* () {
 
 const typesTheFamilySFieldIs = (): void => {
   const input = Type.Object({
-    session: Type.String(),
     count: Type.Number(),
     note: Type.Optional(Type.String()),
+    session: Type.String(),
   });
   const variants = { main: {} };
-  remote("t.ok", { version: 1, input, host: hostFamily("session:", "session"), variants });
+  remote("t.ok", { host: hostFamily("session:", "session"), input, variants, version: 1 });
   type Allowed = PlacementFor<Static<typeof input>>;
   expectTypeOf(hostFamily("session:", "session")).toExtend<Allowed>();
   expectTypeOf(hostFamily("session:", "sesion")).not.toExtend<Allowed>();
@@ -248,10 +250,10 @@ const typesTheFamilySFieldIs = (): void => {
   ] as const)
     Reflect.apply(remote, undefined, [
       name,
-      { version: 1, input, host: hostFamily("session:", key), variants },
+      { host: hostFamily("session:", key), input, variants, version: 1 },
     ]);
   assert.throws(
-    () => Reflect.apply(remote, undefined, ["t.nowhere", { version: 1, input, variants }]),
+    () => Reflect.apply(remote, undefined, ["t.nowhere", { input, variants, version: 1 }]),
     /needs `host`/u,
   );
   assert.throws(() => hostFamily("", "session"), /prefix/u);

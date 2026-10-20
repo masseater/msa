@@ -5,25 +5,27 @@ import { Effect } from "effect";
 
 import { applyImmutable } from "../../src/delta/index.ts";
 import { sha256Hex } from "../../src/platform.ts";
-import { cloneTrusted } from "./benchmark-worker-model.ts";
-import { ConversationViewState } from "./conversation-view-state.ts";
-import {
-  type ConversationView,
-  DOCUMENT_WATCH_KEYS,
-  type DeltaFrame,
-  type DocumentKey,
-  type DocumentWatch,
-  type Watch,
-  type WatchType,
-} from "./conversation-view-types.ts";
+import benchmarkWorkerModel from "./benchmark-worker-model.ts";
+import ConversationViewState from "./conversation-view-state.ts";
+import conversationViewTypes from "./conversation-view-types.ts";
+import type conversationViewModuleTypes from "./conversation-view-types.types.ts";
+
+const { cloneTrusted } = benchmarkWorkerModel;
+const { DOCUMENT_WATCH_KEYS } = conversationViewTypes;
 
 const snapshotText = (value: object): string => JSON.stringify(value);
 
-const isResetJump = (frame: DeltaFrame, previousSequence: number): boolean =>
+const isResetJump = (
+  frame: conversationViewModuleTypes.DeltaFrame,
+  previousSequence: number,
+): boolean =>
   frame.sequence > previousSequence + 1 && frame.ops.length === 1 && frame.ops[0]![0] === "r";
 
-export class ConversationViewWatches extends ConversationViewState {
-  serializeBaseSnapshot(watchType: WatchType, snapshot: object): string {
+class ConversationViewWatches extends ConversationViewState {
+  serializeBaseSnapshot(
+    watchType: conversationViewModuleTypes.WatchType,
+    snapshot: object,
+  ): string {
     const phase = watchType === "conversation" ? "conversationSerialize" : "documentSerialize";
     const start = performance.now();
     const encoded = snapshotText(snapshot);
@@ -46,8 +48,8 @@ export class ConversationViewWatches extends ConversationViewState {
     value: T,
     sequence: number,
     started: boolean,
-    watchType: WatchType,
-  ): Effect.Effect<Watch<T>> {
+    watchType: conversationViewModuleTypes.WatchType,
+  ): Effect.Effect<conversationViewModuleTypes.Watch<T>> {
     return Effect.gen({ self: this }, function* () {
       const phase = watchType === "conversation" ? "conversationAcquire" : "documentAcquire";
       const snapshot = this.captureSnapshot(value, phase);
@@ -55,12 +57,12 @@ export class ConversationViewWatches extends ConversationViewState {
       else this.documentRegistrations += 1;
       const baseHash = yield* sha256Hex(this.serializeBaseSnapshot(watchType, snapshot));
       return {
-        snapshot,
-        baseSequence: sequence,
         baseHash,
+        baseSequence: sequence,
         deliveredSequence: sequence,
         pendingOperationCount: 0,
         queue: [],
+        snapshot,
         started,
         watchType,
       };
@@ -76,7 +78,10 @@ export class ConversationViewWatches extends ConversationViewState {
     );
   }
 
-  registerDocumentWatch(key: DocumentKey, started: boolean): Effect.Effect<void> {
+  registerDocumentWatch(
+    key: conversationViewModuleTypes.DocumentKey,
+    started: boolean,
+  ): Effect.Effect<void> {
     const value = this.documentTrackers[key].value;
     return Effect.map(
       this.createWatch(value, this.documentSequences[key], started, "document"),
@@ -99,20 +104,26 @@ export class ConversationViewWatches extends ConversationViewState {
     });
   }
 
-  verifySnapshotUnchanged<T extends object>(watch: Watch<T>): Effect.Effect<void> {
+  verifySnapshotUnchanged<T extends object>(
+    watch: conversationViewModuleTypes.Watch<T>,
+  ): Effect.Effect<void> {
     return Effect.map(sha256Hex(snapshotText(watch.snapshot)), (hash) => {
       assert.equal(hash, watch.baseHash);
     });
   }
 
-  verifyAndDropConversationWatch(watch: Watch<ConversationView>): Effect.Effect<void> {
+  verifyAndDropConversationWatch(
+    watch: conversationViewModuleTypes.Watch<conversationViewModuleTypes.ConversationView>,
+  ): Effect.Effect<void> {
     return Effect.map(this.verifySnapshotUnchanged(watch), () => {
       if (watch.started) assert.equal(watch.deliveredSequence, this.conversationSequence);
       this.conversationWatches = this.conversationWatches.filter((other) => other !== watch);
     });
   }
 
-  verifyAndDropDocumentWatch(watch: DocumentWatch): Effect.Effect<void> {
+  verifyAndDropDocumentWatch(
+    watch: conversationViewModuleTypes.DocumentWatch,
+  ): Effect.Effect<void> {
     return Effect.map(this.verifySnapshotUnchanged(watch), () => {
       if (watch.started) assert.equal(watch.deliveredSequence, this.documentSequences[watch.key]);
       this.documentWatches = this.documentWatches.filter((other) => other !== watch);
@@ -135,7 +146,7 @@ export class ConversationViewWatches extends ConversationViewState {
   }
 
   replayWatch<T extends object>(
-    watch: Watch<T>,
+    watch: conversationViewModuleTypes.Watch<T>,
     expected: T,
     expectedSequence: number,
   ): Effect.Effect<void> {
@@ -156,7 +167,7 @@ export class ConversationViewWatches extends ConversationViewState {
     });
   }
 
-  forwardOpsOnly(frame: DeltaFrame): Effect.Effect<void> {
+  forwardOpsOnly(frame: conversationViewModuleTypes.DeltaFrame): Effect.Effect<void> {
     return Effect.map(
       Effect.promise(() => Promise.resolve()),
       () => {
@@ -166,7 +177,10 @@ export class ConversationViewWatches extends ConversationViewState {
     );
   }
 
-  drainWatch<T extends object>(watch: Watch<T>, expectedSequence: number): Effect.Effect<void> {
+  drainWatch<T extends object>(
+    watch: conversationViewModuleTypes.Watch<T>,
+    expectedSequence: number,
+  ): Effect.Effect<void> {
     return Effect.gen({ self: this }, function* () {
       if (!watch.started) return;
       for (const frame of watch.queue) {
@@ -193,3 +207,5 @@ export class ConversationViewWatches extends ConversationViewState {
     });
   }
 }
+
+export default ConversationViewWatches;

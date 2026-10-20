@@ -1,6 +1,6 @@
 import { dual } from "effect/Function";
 
-import { boundOutput, type OutputLimits } from "../../src/output.ts";
+import { type OutputLimits, boundOutput } from "../../src/output.ts";
 
 const headImpl = (maxLines: number, maxBytes: number): OutputLimits => ({
   maxBytes,
@@ -38,7 +38,7 @@ function assertMatchesBufferTailImpl(input: string, maxByteValues?: readonly num
   }
 }
 
-export function sampledByteLimits(input: string): number[] {
+function sampledByteLimits(input: string): number[] {
   const totalBytes = Buffer.byteLength(input, "utf8");
   const candidates = [
     0,
@@ -59,32 +59,43 @@ export function sampledByteLimits(input: string): number[] {
 
 function boundImpl(text: string, limits: OutputLimits) {
   const { text: kept, droppedBytes, droppedLines } = boundOutput(text, limits);
-  return { kept, droppedBytes, droppedLines };
+  return { droppedBytes, droppedLines, kept };
 }
 
-export const head: {
+const head: {
   (maxBytes: number): (maxLines: number) => OutputLimits;
   (maxLines: number, maxBytes: number): OutputLimits;
 } = dual(2, headImpl);
 
-export const tail: {
+const tail: {
   (maxBytes: number): (maxLines: number) => OutputLimits;
   (maxLines: number, maxBytes: number): OutputLimits;
 } = dual(2, tailImpl);
 
-export const bufferTail: {
+const bufferTail: {
   (maxBytes: number): (content: string) => string;
   (content: string, maxBytes: number): string;
 } = dual(2, bufferTailImpl);
 
-export const assertMatchesBufferTail: {
+const assertMatchesBufferTail: {
   (maxByteValues?: readonly number[]): (input: string) => void;
   (input: string, maxByteValues?: readonly number[]): void;
 } = dual((args: IArguments) => typeof args[0] === "string", assertMatchesBufferTailImpl);
 
 type Bounded = ReturnType<typeof boundImpl>;
 
-export const bound: {
+const bound: {
   (limits: OutputLimits): (text: string) => Bounded;
   (text: string, limits: OutputLimits): Bounded;
 } = dual(2, boundImpl);
+
+const outputModule = {
+  assertMatchesBufferTail,
+  bound,
+  bufferTail,
+  head,
+  sampledByteLimits,
+  tail,
+};
+
+export default outputModule;

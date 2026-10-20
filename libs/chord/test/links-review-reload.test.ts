@@ -6,9 +6,9 @@ import { describe, it } from "vite-plus/test";
 
 import {
   type Ctx,
-  createHost,
   type Facet,
   type FacetLoader,
+  createHost,
   hostNamed,
   isChordError,
   local,
@@ -16,21 +16,24 @@ import {
   method,
   remote,
 } from "../src/index.ts";
-import { WatchedLink, internals, until } from "./fixtures/links-review.ts";
-import { latch, tick } from "./fixtures/timing.ts";
+import linksReview from "./fixtures/links-review.ts";
+import timing from "./fixtures/timing.ts";
+
+const { WatchedLink, internals, until } = linksReview;
+const { latch, tick } = timing;
 
 const Greeter = remote("t.greeter", {
-  version: 1,
-  input: Type.Object({}),
   host: hostNamed("session:S1"),
+  input: Type.Object({}),
   variants: { main: { methods: { greet: method(Type.String(), Type.String()) } } },
+  version: 1,
 });
 const greeterFacet = (greeting: string): Facet => ({
   name: "greeter",
   setup: (api) =>
     api.serve(Greeter, () => ({
-      variant: "main",
       greet: (name: string) => `${greeting} ${name}`,
+      variant: "main",
     })),
 });
 
@@ -43,23 +46,23 @@ function setup(options: { slowLoad?: Promise<void> } = {}) {
         return names.map((name) => modules.get(String(name))!);
       }),
     );
-  const server = createHost({ self: { kind: "host" }, name: "server", onError: () => {} });
+  const server = createHost({ name: "server", onError: () => {}, self: { kind: "host" } });
   const connect = () => {
     const [down, up] = memoryLinkPair();
     const watched = new WatchedLink(down);
-    server.accept(watched, { principal: { worker: "w" }, kind: "host", name: "session:S1" });
-    return { watched, up };
+    server.accept(watched, { kind: "host", name: "session:S1", principal: { worker: "w" } });
+    return { up, watched };
   };
   const first = connect();
   const worker = createHost({
-    self: { kind: "host" },
-    name: "session:S1",
-    upstream: { link: first.up, principal: { kind: "server" } },
     loader,
+    name: "session:S1",
     onError: () => {},
+    self: { kind: "host" },
+    upstream: { link: first.up, principal: { kind: "server" } },
   });
   worker.install(modules.get("greeter")!);
-  return { server, worker, modules, link: first.watched, connect };
+  return { connect, link: first.watched, modules, server, worker };
 }
 
 const case3AnAbortWhileTheChild = Effect.gen(function* () {
@@ -98,7 +101,7 @@ const case4TasksTheCommitStartsCannot = Effect.gen(function* () {
   const { server, modules } = setup();
   yield* tick;
   const results: unknown[] = [];
-  const Caller = local("t.caller", { version: 1, input: Type.Object({}) });
+  const Caller = local("t.caller", { input: Type.Object({}), version: 1 });
   const callerFacet = (active: boolean): Facet => ({
     name: "caller",
     setup: (api) =>
@@ -156,30 +159,29 @@ const case6AServerRootThatBounces = Effect.gen(function* () {
   const { server, worker } = setup();
   yield* tick;
   const Echo = remote("t.echo2", {
-    version: 1,
-    input: Type.Object({}),
     host: hostNamed("server"),
+    input: Type.Object({}),
     variants: { main: { methods: { ping: method() } } },
+    version: 1,
   });
   const Bouncer = remote("t.bouncer", {
-    version: 1,
-    input: Type.Object({}),
     host: hostNamed("session:S1"),
+    input: Type.Object({}),
     variants: { main: { methods: { bounce: method() } } },
+    version: 1,
   });
   const echoFacet = (version: number): Facet => ({
     name: "echo",
     setup: (api) =>
       api.serve(Echo, (_input, _principal, self) => {
         self.state("n", Type.Number(), 0, { version });
-        return { variant: "main", ping: () => {} };
+        return { ping: () => {}, variant: "main" };
       }),
   });
   server.install(echoFacet(1));
   const echo = server.hold(Echo, {}, { principal: { worker: "w" } });
   yield* Effect.promise(() => echo.ready);
   worker.serve(Bouncer, () => ({
-    variant: "main",
     bounce: (ctx: Ctx) =>
       Effect.runPromiseWith(services)(
         Effect.gen(function* () {
@@ -187,6 +189,7 @@ const case6AServerRootThatBounces = Effect.gen(function* () {
           yield* Effect.promise(() => echoRef.ping(ctx));
         }),
       ),
+    variant: "main",
   }));
   yield* Effect.promise(() => server.root((ctx) => server.hold(Bouncer, {}).bounce(ctx)));
   yield* Effect.sleep(10);

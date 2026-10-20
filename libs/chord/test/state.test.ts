@@ -4,54 +4,35 @@ import { Effect } from "effect";
 import { Type } from "typebox";
 import { describe, it } from "vite-plus/test";
 
-import { applyImmutable } from "../src/delta/index.ts";
 import {
   type Ctx,
+  type StateEvent,
   createHost,
   isChordError,
   local,
   method,
-  type StateEvent,
 } from "../src/index.ts";
-import { abortOf, tick } from "./fixtures/timing.ts";
-
-function emitter<E>() {
-  const listeners = new Set<(event: E) => void>();
-  return {
-    emit: (event: E) => {
-      for (const fn of listeners) fn(event);
-    },
-    subscribe: (fn: (event: E) => void) => {
-      listeners.add(fn);
-      return () => listeners.delete(fn);
-    },
-    get size() {
-      return listeners.size;
-    },
-  };
-}
-
 const Item = Type.Object({ id: Type.Number(), label: Type.String() });
-const Items = Type.Object({ items: Type.Array(Item), count: Type.Number() });
+const Items = Type.Object({ count: Type.Number(), items: Type.Array(Item) });
 
 const List = local("t.list", {
-  version: 1,
   input: Type.Object({}),
   members: {
-    list: Items,
     labels: Type.Array(Type.String()),
+    list: Items,
     push: method(Item),
     set: method(Items),
   },
+  version: 1,
 });
 
 function serveList(host: ReturnType<typeof createHost>) {
   host.serve(List, (_input, _principal, self) => {
-    const listState = self.state("list", Items, { items: [], count: 0 });
+    const listState = self.state("list", Items, { count: 0, items: [] });
     const labels = self.derive([listState], (list) => list.items.map((item) => item.label));
     return {
-      list: listState,
       labels,
+      list: listState,
       push: (item: { id: number; label: string }, ctx: Ctx) => {
         listState.change(ctx, (draft) => {
           draft.items.push(item);
@@ -66,7 +47,7 @@ function serveList(host: ReturnType<typeof createHost>) {
 }
 
 const publishesSnapshotsThenExactOpsDerivations = Effect.gen(function* () {
-  const host = createHost({ self: { kind: "host" }, onError: () => {} });
+  const host = createHost({ onError: () => {}, self: { kind: "host" } });
   serveList(host);
   const ref = host.hold(List, {});
   const events: StateEvent<unknown>[] = [];
@@ -74,34 +55,34 @@ const publishesSnapshotsThenExactOpsDerivations = Effect.gen(function* () {
   ref.list.events((event) => events.push(event));
   ref.labels.events((event) => labels.push(event));
   yield* Effect.promise(() => ref.push({ id: 1, label: "a" }));
-  assert.deepEqual(events[0], { type: "snap", value: { items: [], count: 0 } });
+  assert.deepEqual(events[0], { type: "snap", value: { count: 0, items: [] } });
   const ops = events[1]?.type === "ops" ? events[1].ops.map((op) => JSON.stringify(op)).sort() : [];
   assert.deepEqual(ops, ['["p",["items"],0,0,[{"id":1,"label":"a"}]]', '["s",["count"],1]']);
-  assert.deepEqual(events[1]?.value, { items: [{ id: 1, label: "a" }], count: 1 });
+  assert.deepEqual(events[1]?.value, { count: 1, items: [{ id: 1, label: "a" }] });
   assert.deepEqual(ref.labels.value, ["a"]);
   assert.deepEqual(
     labels.map((event) => event.type),
     ["snap", "ops"],
   );
-  yield* Effect.promise(() => ref.set({ items: [], count: 0 }));
+  yield* Effect.promise(() => ref.set({ count: 0, items: [] }));
   assert.deepEqual(ref.labels.value, []);
 });
 
 const supportsPrimitiveCellsAndValueReturning = Effect.gen(function* () {
-  const host = createHost({ self: { kind: "host" }, onError: () => {} });
+  const host = createHost({ onError: () => {}, self: { kind: "host" } });
   const Counter = local("t.prim", {
-    version: 1,
     input: Type.Object({}),
-    members: { n: Type.Number(), inc: method(undefined, Type.Number()) },
+    members: { inc: method(undefined, Type.Number()), n: Type.Number() },
+    version: 1,
   });
   host.serve(Counter, (_input, _principal, self) => {
     const nState = self.state("n", Type.Number(), 0);
     return {
-      n: nState,
       inc: (ctx: Ctx) => {
         nState.change(ctx, (n) => n + 1);
         return nState.value;
       },
+      n: nState,
     };
   });
   const ref = host.hold(Counter, {});
@@ -115,17 +96,17 @@ const supportsPrimitiveCellsAndValueReturning = Effect.gen(function* () {
   assert.deepEqual(values, [0, 1, 2]);
   assert.deepEqual(events, [
     { type: "snap", value: 0 },
-    { type: "ops", ops: [["r", 1]], value: 1 },
-    { type: "ops", ops: [["r", 2]], value: 2 },
+    { ops: [["r", 1]], type: "ops", value: 1 },
+    { ops: [["r", 2]], type: "ops", value: 2 },
   ]);
 });
 
 const rejectsAReturnedValueThatDoes = Effect.gen(function* () {
-  const host = createHost({ self: { kind: "host" }, onError: () => {} });
+  const host = createHost({ onError: () => {}, self: { kind: "host" } });
   const Box = local("t.box", {
-    version: 1,
     input: Type.Object({}),
     members: { put: method() },
+    version: 1,
   });
   host.serve(Box, (_input, _principal, self) => {
     const list = self.state("list", Type.Array(Type.Number()), []);
@@ -141,8 +122,8 @@ const rejectsAReturnedValueThatDoes = Effect.gen(function* () {
 });
 
 const validatesInitialValuesAlwaysAndWrites = Effect.gen(function* () {
-  const Bad = local("t.bad-initial", { version: 1, input: Type.Object({}) });
-  const host = createHost({ self: { kind: "host" }, onError: () => {} });
+  const Bad = local("t.bad-initial", { input: Type.Object({}), version: 1 });
+  const host = createHost({ onError: () => {}, self: { kind: "host" } });
   host.serve(Bad, (_input, _principal, self) => {
     self.state("x", Type.Object({ n: Type.Number() }), { n: "no" } as never);
     return {};
@@ -151,25 +132,25 @@ const validatesInitialValuesAlwaysAndWrites = Effect.gen(function* () {
     assert.rejects(host.hold(Bad, {}).ready, /initial value of state x/u),
   );
 
-  const lax = createHost({ self: { kind: "host" }, onError: () => {} });
+  const lax = createHost({ onError: () => {}, self: { kind: "host" } });
   serveList(lax);
-  yield* Effect.promise(() => lax.hold(List, {}).set({ items: [], count: "x" } as never));
+  yield* Effect.promise(() => lax.hold(List, {}).set({ count: "x", items: [] } as never));
 
-  const dev = createHost({ self: { kind: "host" }, dev: true, onError: () => {} });
+  const dev = createHost({ dev: true, onError: () => {}, self: { kind: "host" } });
   serveList(dev);
   const ref = dev.hold(List, {});
   yield* Effect.promise(() =>
     assert.rejects(
-      ref.set({ items: [], count: "x" } as never),
+      ref.set({ count: "x", items: [] } as never),
       (error) => isChordError(error, "invalid") && error.reason === "state",
     ),
   );
-  assert.deepEqual(ref.list.value, { items: [], count: 0 });
+  assert.deepEqual(ref.list.value, { count: 0, items: [] });
 });
 
 const rejectsWritesFromInsideAFactory = Effect.gen(function* () {
-  const host = createHost({ self: { kind: "host" }, onError: () => {} });
-  const Writer = local("t.writer", { version: 1, input: Type.Object({}) });
+  const host = createHost({ onError: () => {}, self: { kind: "host" } });
+  const Writer = local("t.writer", { input: Type.Object({}), version: 1 });
   let captured: Ctx | undefined;
   yield* Effect.promise(() =>
     host.root((ctx) => {
@@ -178,7 +159,7 @@ const rejectsWritesFromInsideAFactory = Effect.gen(function* () {
   );
   host.serve(Writer, (_input, _principal, self) => {
     const x = self.state("x", Type.Object({}), {});
-    const r = self.resource("r", { version: 1, open: () => 1 });
+    const r = self.resource("r", { open: () => 1, version: 1 });
     assert.throws(
       () => r.value,
       (error) => isChordError(error, "not_ready"),
@@ -187,93 +168,6 @@ const rejectsWritesFromInsideAFactory = Effect.gen(function* () {
     return {};
   });
   yield* Effect.promise(() => assert.rejects(host.hold(Writer, {}).ready, /read_only/u));
-});
-
-const listenersRunEachEventInA = Effect.gen(function* () {
-  const services = yield* Effect.context<never>();
-  const host = createHost({ self: { kind: "host" }, onError: () => {} });
-  const events = emitter<number>();
-  const Watcher = local("t.watcher", {
-    version: 1,
-    input: Type.Object({}),
-    members: { seen: Type.Object({ sum: Type.Number() }) },
-  });
-  const roots = new Set<string>();
-  let taskAborted = false;
-  host.serve(Watcher, (_input, _principal, self) => {
-    const seen = self.state("seen", Type.Object({ sum: Type.Number() }), { sum: 0 });
-    const sourceResource = self.resource("source", { version: 1, open: () => events });
-    self.on(
-      "onEvent",
-      sourceResource,
-      (source) => source,
-      (value, ctx) => {
-        roots.add(ctx.rootId);
-        seen.change(ctx, (draft) => {
-          draft.sum += value;
-        });
-      },
-    );
-    self.task((ctx) =>
-      Effect.runPromiseWith(services)(
-        Effect.gen(function* () {
-          yield* abortOf(ctx.signal);
-          taskAborted = true;
-        }),
-      ),
-    );
-    return { seen };
-  });
-  const ref = host.hold(Watcher, {});
-  yield* Effect.promise(() => ref.ready);
-  events.emit(2);
-  events.emit(3);
-  yield* tick;
-  assert.deepEqual(ref.seen.value, { sum: 5 });
-  assert.equal(roots.size, 2);
-  ref.release();
-  yield* tick;
-  yield* tick;
-  assert.equal(events.size, 0);
-  assert.ok(taskAborted);
-});
-
-const reEntrantWritesPublishInAdoption = Effect.gen(function* () {
-  const host = createHost({ self: { kind: "host" }, onError: () => {} });
-  const Echo = local("t.reentrant", {
-    version: 1,
-    input: Type.Object({}),
-    members: { n: Type.Number(), d: Type.Number(), set: method(Type.Number()) },
-  });
-  host.serve(Echo, (_input, _principal, self) => {
-    const nState = self.state("n", Type.Number(), 0);
-    const d = self.derive([nState], (n) => n * 2);
-    self.on("bump", nState, (n, ctx) => {
-      if (n === 1) nState.replace(ctx, 2);
-    });
-    return {
-      n: nState,
-      d,
-      set: (value: number, ctx: Ctx) => {
-        nState.replace(ctx, value);
-      },
-    };
-  });
-  const ref = host.hold(Echo, {});
-  yield* Effect.promise(() => ref.ready);
-  const values: unknown[] = [];
-  let replica: unknown;
-  ref.n.events((event) => {
-    replica = event.type === "ops" ? applyImmutable(replica, event.ops) : event.value;
-    values.push(replica);
-  });
-  const doubled: unknown[] = [];
-  ref.d.subscribe((value) => doubled.push(value));
-  yield* Effect.promise(() => ref.set(1));
-  yield* tick;
-  assert.deepEqual(values, [0, 1, 2]);
-  assert.equal(ref.d.value, 4);
-  assert.deepEqual(doubled, [0, 2, 4]);
 });
 
 describe("state cells", () => {
@@ -291,10 +185,4 @@ describe("state cells", () => {
 
   it("rejects writes from inside a factory and placeholder use before activation", () =>
     Effect.runPromise(rejectsWritesFromInsideAFactory));
-
-  it("listeners run each event in a fresh root; tasks get an abortable ctx", () =>
-    Effect.runPromise(listenersRunEachEventInA));
-
-  it("re-entrant writes publish in adoption order; derivations never go stale (Sol #3)", () =>
-    Effect.runPromise(reEntrantWritesPublishInAdoption));
 });

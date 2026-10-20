@@ -5,16 +5,19 @@ import { Type } from "typebox";
 import { describe, expectTypeOf, it } from "vite-plus/test";
 
 import {
-  createHost,
   type Host,
+  createHost,
   hostNamed,
   isChordError,
   memoryLinkPair,
   method,
   remote,
 } from "../src/index.ts";
-import { Notes, setup, until } from "./fixtures/bindings.ts";
-import { stateFrames } from "./fixtures/counting.ts";
+import bindings from "./fixtures/bindings.ts";
+import counting from "./fixtures/counting.ts";
+
+const { Notes, setup, until } = bindings;
+const { stateFrames } = counting;
 
 const readingBeforeTheFirstHydrationThrows = Effect.gen(function* () {
   const { server, browser } = setup();
@@ -30,47 +33,47 @@ const readingBeforeTheFirstHydrationThrows = Effect.gen(function* () {
 });
 
 const Matrix = remote("t.e8-matrix", {
-  version: 1,
-  input: Type.Object({ variant: Type.String() }),
   host: hostNamed("server"),
+  input: Type.Object({ variant: Type.String() }),
   variants: {
-    values: {
-      state: { none: Type.Null(), empty: Type.Array(Type.String()), maybe: Type.Unknown() },
-    },
     bare: { methods: { ping: method(undefined, Type.String()) } },
     broken: { state: { n: Type.Number() } },
+    values: {
+      state: { empty: Type.Array(Type.String()), maybe: Type.Unknown(), none: Type.Null() },
+    },
   },
+  version: 1,
 });
 
 function serveMatrix(host: Host): void {
   host.serve(Matrix, ({ variant }, _principal, self) => {
-    if (variant === "bare") return { variant: "bare", ping: () => "pong" };
+    if (variant === "bare") return { ping: () => "pong", variant: "bare" };
     if (variant === "broken") {
       const source = self.state("source", Type.String(), "not a number");
-      return { variant: "broken", n: self.derive([source], (text) => text as unknown as number) };
+      return { n: self.derive([source], (text) => text as unknown as number), variant: "broken" };
     }
     const none = self.state("none", Type.Null(), null);
     const empty = self.state("empty", Type.Array(Type.String()), []);
     return {
-      variant: "values",
-      none,
       empty,
       maybe: self.derive([none], () => undefined as unknown),
+      none,
+      variant: "values",
     };
   });
 }
 
 const nullEmptyAndUndefinedValuesHydrate = Effect.gen(function* () {
-  const server = createHost({ self: { kind: "host" }, name: "server", onError: () => {} });
+  const server = createHost({ name: "server", onError: () => {}, self: { kind: "host" } });
   serveMatrix(server);
   const [down, up] = memoryLinkPair();
   server.accept(down, { principal: { user: "u" } });
   const browser = createHost({
-    self: { kind: "host" },
-    name: "browser",
     kind: "client",
-    upstream: { link: up, principal: { kind: "server" } },
+    name: "browser",
     onError: () => {},
+    self: { kind: "host" },
+    upstream: { link: up, principal: { kind: "server" } },
   });
   const values = yield* Effect.promise(() => browser.get(Matrix, { variant: "values" }));
   assert.ok(values.variant === "values");

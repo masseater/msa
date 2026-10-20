@@ -1,107 +1,104 @@
-import { payloadText } from "./conversation-view-content.ts";
-import type {
-  AuditDoc,
-  ConfigDoc,
-  DocumentKey,
-  InboxDoc,
-  InboxItem,
-  JsonObject,
-  LiveDoc,
-  PreferencesDoc,
-  TurnDoc,
-} from "./conversation-view-types.ts";
+import conversationViewContent from "./conversation-view-content.ts";
+import type conversationViewTypes from "./conversation-view-types.types.ts";
 
-const configDocument = (): ConfigDoc => {
+const { payloadText } = conversationViewContent;
+
+const configDocument = (): conversationViewTypes.ConfigDoc => {
   const sections = Array.from({ length: 32 }, (_, index) => ({
     id: `section-${index}`,
-    title: `Configuration section ${index}`,
     instructions: payloadText(1_850 + (index % 5) * 80, 10_000 + index),
+    title: `Configuration section ${index}`,
   }));
   const tools = Array.from({ length: 24 }, (_, index) => ({
-    name: `tool_${index}`,
     description: payloadText(320 + (index % 4) * 40, 20_000 + index),
     inputSchema: {
-      type: "object",
       properties: {
-        path: { type: "string", description: payloadText(120, 30_000 + index) },
-        query: { type: "string", description: payloadText(120, 31_000 + index) },
+        path: { description: payloadText(120, 30_000 + index), type: "string" },
+        query: { description: payloadText(120, 31_000 + index), type: "string" },
       },
       required: ["path"],
+      type: "object",
     },
+    name: `tool_${index}`,
   }));
   return {
-    schema: "pico5.doc.config.provisional.v0",
-    model: { provider: "anthropic", modelId: "claude-sonnet-provisional" },
-    thinkingLevel: "medium",
-    selectedTools: tools.slice(0, 12).map((tool) => tool.name),
-    sections,
-    tools,
-    temperature: 0.2,
+    model: { modelId: "claude-sonnet-provisional", provider: "anthropic" },
     revision: 0,
+    schema: "pico5.doc.config.provisional.v0",
+    sections,
+    selectedTools: tools.slice(0, 12).map((tool) => tool.name),
+    temperature: 0.2,
+    thinkingLevel: "medium",
+    tools,
   };
 };
 
-const inboxDocument = (): InboxDoc => ({
-  schema: "pico5.doc.inbox.provisional.v0",
-  items: Array.from({ length: 16 }, (_, index): InboxItem => ({
+const inboxDocument = (): conversationViewTypes.InboxDoc => ({
+  items: Array.from({ length: 16 }, (_, index): conversationViewTypes.InboxItem => ({
     id: index + 1,
     mode: index % 3 === 0 ? "steer" : "followUp",
     text: payloadText(960 + (index % 4) * 48, 40_000 + index),
   })),
   revision: 0,
+  schema: "pico5.doc.inbox.provisional.v0",
 });
 
-const turnDocument = (): TurnDoc => ({
+const turnDocument = (): conversationViewTypes.TurnDoc => ({
+  message: payloadText(640, 60_000),
+  revision: 0,
   schema: "pico5.doc.turn.provisional.v0",
   stage: "streaming",
-  message: payloadText(640, 60_000),
-  toolSlots: [{ callId: "initial-call-0", name: "read", status: "running", preview: "reading" }],
-  revision: 0,
+  toolSlots: [{ callId: "initial-call-0", name: "read", preview: "reading", status: "running" }],
 });
 
-const preferencesDocument = (): PreferencesDoc => ({
-  schema: "pico5.doc.preferences.provisional.v0",
-  theme: "dark",
-  keymap: "default",
+const preferencesDocument = (): conversationViewTypes.PreferencesDoc => ({
   compactTools: false,
-  fontScale: 1,
   editorProfile: payloadText(2_400, 70_000),
+  fontScale: 1,
+  keymap: "default",
+  revision: 0,
+  schema: "pico5.doc.preferences.provisional.v0",
   shortcuts: Object.fromEntries(
     Array.from({ length: 24 }, (_, index) => [
       `command.${index}`,
       `ctrl+${String.fromCharCode(97 + index)}`,
     ]),
   ),
-  revision: 0,
+  theme: "dark",
 });
 
-const liveDocument = (): LiveDoc => ({
+const liveDocument = (): conversationViewTypes.LiveDoc => ({
+  cost: 0.024,
+  generation: { attempt: 1, partial: payloadText(8_192, 80_000), stage: "streaming" },
+  heartbeat: 0,
   schema: "pico5.doc.live.provisional.v0",
   status: "streaming",
   tokens: 8_192,
-  cost: 0.024,
-  heartbeat: 0,
-  generation: { stage: "streaming", attempt: 1, partial: payloadText(8_192, 80_000) },
   tools: Array.from({ length: 8 }, (_, index) => ({
     callId: `initial-call-${index}`,
     name: index % 2 === 0 ? "read" : "bash",
-    status: index < 2 ? "running" : "waiting",
-    progress: index < 2 ? 0.25 : 0,
     output: payloadText(640 + index * 96, 50_000 + index),
+    progress: index < 2 ? 0.25 : 0,
+    status: index < 2 ? "running" : "waiting",
   })),
 });
 
-const auditDocument = (): AuditDoc => ({
-  schema: "pico5.doc.audit.unmounted.provisional.v0",
+const auditDocument = (): conversationViewTypes.AuditDoc => ({
   commits: 0,
   note: "",
+  schema: "pico5.doc.audit.unmounted.provisional.v0",
 });
 
-export const initialDocuments = (): Record<DocumentKey, JsonObject> => ({
+const initialDocuments = (): Record<
+  conversationViewTypes.DocumentKey,
+  conversationViewTypes.JsonObject
+> => ({
+  audit: auditDocument(),
   config: configDocument(),
   inbox: inboxDocument(),
-  turn: turnDocument(),
-  preferences: preferencesDocument(),
   live: liveDocument(),
-  audit: auditDocument(),
+  preferences: preferencesDocument(),
+  turn: turnDocument(),
 });
+
+export default initialDocuments;

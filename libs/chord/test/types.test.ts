@@ -5,33 +5,33 @@ import { describe, expectTypeOf, it } from "vite-plus/test";
 import {
   type Ctx,
   type Host,
+  type Readable,
+  type Ref,
   hostNamed,
   local,
   method,
-  type Readable,
-  type Ref,
   remote,
 } from "../src/index.ts";
 
 const Doc = remote("t.e8-types-doc", {
-  version: 1,
-  input: Type.Object({}),
   host: hostNamed("server"),
+  input: Type.Object({}),
   variants: {
+    editor: { methods: { edit: method(Type.String()) }, state: { text: Type.String() } },
     reader: { state: { text: Type.String() } },
-    editor: { state: { text: Type.String() }, methods: { edit: method(Type.String()) } },
   },
+  version: 1,
 });
 const Single = remote("t.e8-types-single", {
-  version: 1,
-  input: Type.Object({}),
   host: hostNamed("server"),
-  variants: { main: { state: { n: Type.Number() }, methods: { bump: method() } } },
+  input: Type.Object({}),
+  variants: { main: { methods: { bump: method() }, state: { n: Type.Number() } } },
+  version: 1,
 });
 const Local = local("t.e8-types-local", {
-  version: 1,
   input: Type.Object({}),
   members: { n: Type.Number() },
+  version: 1,
 });
 
 const stateMembersAreTOtherVariants = (): void => {

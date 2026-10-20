@@ -5,10 +5,10 @@ import { Type } from "typebox";
 import { describe, it } from "vite-plus/test";
 
 import {
-  createHost,
   type Facet,
   type FacetLoader,
   type Host,
+  createHost,
   hostNamed,
   local,
   memoryLinkPair,
@@ -16,23 +16,26 @@ import {
   opaque,
   remote,
 } from "../src/index.ts";
-import { until } from "./fixtures/requests.ts";
-import { tick } from "./fixtures/timing.ts";
+import requests from "./fixtures/requests.ts";
+import timing from "./fixtures/timing.ts";
+
+const { until } = requests;
+const { tick } = timing;
 
 const case7AClusterReloadReportsWhat = Effect.gen(function* () {
   const services = yield* Effect.context<never>();
   const Greeter = remote("t.greeter", {
-    version: 1,
-    input: Type.Object({}),
     host: hostNamed("session:S1"),
+    input: Type.Object({}),
     variants: { main: { methods: { greet: method(Type.String(), Type.String()) } } },
+    version: 1,
   });
   const greeter = (text: string): Facet => ({
     name: "greeter",
     setup: (api) =>
       api.serve(Greeter, () => ({
-        variant: "main",
         greet: (name: string) => `${text} ${name}`,
+        variant: "main",
       })),
   });
   const modules = new Map([["greeter", greeter("v1")]]);
@@ -40,15 +43,15 @@ const case7AClusterReloadReportsWhat = Effect.gen(function* () {
     Effect.runPromiseWith(services)(
       Effect.sync(() => names.map((name) => modules.get(String(name))!)),
     );
-  const server = createHost({ self: { kind: "host" }, name: "server", onError: () => {} });
+  const server = createHost({ name: "server", onError: () => {}, self: { kind: "host" } });
   const [down, up] = memoryLinkPair();
-  server.accept(down, { principal: { worker: "S1" }, kind: "host", name: "session:S1" });
+  server.accept(down, { kind: "host", name: "session:S1", principal: { worker: "S1" } });
   const worker = createHost({
-    self: { kind: "host" },
-    name: "session:S1",
-    upstream: { link: up, principal: { kind: "server" } },
     loader,
+    name: "session:S1",
     onError: () => {},
+    self: { kind: "host" },
+    upstream: { link: up, principal: { kind: "server" } },
   });
   worker.install(greeter("v1"));
   yield* tick;
@@ -67,32 +70,32 @@ const case7AClusterReloadReportsWhat = Effect.gen(function* () {
 
 const case8AHeldRemoteReferenceKeeps = Effect.gen(function* () {
   const Counter = remote("t.count8", {
-    version: 1,
-    input: Type.Object({}),
     host: hostNamed("server"),
+    input: Type.Object({}),
     variants: {
-      main: { state: { n: Type.Number() }, methods: { set: method(Type.Number()) } },
+      main: { methods: { set: method(Type.Number()) }, state: { n: Type.Number() } },
     },
+    version: 1,
   });
-  const server = createHost({ self: { kind: "host" }, name: "server", onError: () => {} });
+  const server = createHost({ name: "server", onError: () => {}, self: { kind: "host" } });
   server.serve(Counter, (_input, _principal, self) => {
     const n = self.state("n", Type.Number(), 0);
     return {
-      variant: "main",
       n,
       set: (value, ctx) => {
         n.replace(ctx, value);
       },
+      variant: "main",
     };
   });
   const [down, up] = memoryLinkPair();
   server.accept(down, { principal: { guest: "g" } });
   const browser = createHost({
-    self: { kind: "host" },
-    name: "browser",
     kind: "client",
-    upstream: { link: up, principal: { kind: "server" } },
+    name: "browser",
     onError: () => {},
+    self: { kind: "host" },
+    upstream: { link: up, principal: { kind: "server" } },
   });
   const counter = browser.hold(Counter, {});
   yield* Effect.promise(() => counter.ready);
@@ -111,12 +114,12 @@ const case8AHeldRemoteReferenceKeeps = Effect.gen(function* () {
 
 const case9ReferencesReportStatusChangesLive = Effect.gen(function* () {
   const Thing = remote("t.thing9", {
-    version: 1,
-    input: Type.Object({}),
     host: hostNamed("server"),
+    input: Type.Object({}),
     variants: { main: {} },
+    version: 1,
   });
-  const server = createHost({ self: { kind: "host" }, name: "server", onError: () => {} });
+  const server = createHost({ name: "server", onError: () => {}, self: { kind: "host" } });
   server.serve(Thing, () => ({ variant: "main" }));
   const localThing = server.hold(Thing, {}, { principal: { user: "u" } });
   const localStatus: unknown[] = [];
@@ -132,11 +135,11 @@ const case9ReferencesReportStatusChangesLive = Effect.gen(function* () {
   const [down, up] = memoryLinkPair();
   server.accept(down, { principal: { guest: "g" } });
   const browser = createHost({
-    self: { kind: "host" },
-    name: "browser",
     kind: "client",
-    upstream: { link: up, principal: { kind: "server" } },
+    name: "browser",
     onError: () => {},
+    self: { kind: "host" },
+    upstream: { link: up, principal: { kind: "server" } },
   });
   const remoteThing = browser.hold(Thing, {});
   const remoteStatus: string[] = [];
@@ -154,27 +157,25 @@ const case9ReferencesReportStatusChangesLive = Effect.gen(function* () {
 });
 
 const Remote = remote("t.remote10", {
-  version: 1,
-  input: Type.Object({}),
   host: hostNamed("server"),
+  input: Type.Object({}),
   variants: { main: { methods: { note: method(Type.String()) } } },
+  version: 1,
 });
 
 const Proc = local("t.proc", {
-  version: 1,
   input: Type.Object({}),
   members: { tracker: opaque<Set<string>>("t.tracker@1") },
+  version: 1,
 });
 
-const Chat = local("t.chat10", { version: 1, input: Type.Object({}) });
+const Chat = local("t.chat10", { input: Type.Object({}), version: 1 });
 
 const serveClosingChat = (worker: Host, log: string[], services: Context.Context<never>): void => {
   worker.serve(Chat, (_input, _principal, self) => {
     const proc = self.get(Proc, {});
     const upstream = self.get(Remote, {});
     self.resource("session", {
-      version: 1,
-      open: () => proc.tracker?.add("chat"),
       close: () =>
         Effect.runPromiseWith(services)(
           Effect.gen(function* () {
@@ -185,6 +186,8 @@ const serveClosingChat = (worker: Host, log: string[], services: Context.Context
             yield* Effect.promise(() => upstream.note("bye"));
           }),
         ),
+      open: () => proc.tracker?.add("chat"),
+      version: 1,
     });
     return {};
   });
@@ -193,28 +196,28 @@ const serveClosingChat = (worker: Host, log: string[], services: Context.Context
 const case10HostCloseDisposesHoldersBefore = Effect.gen(function* () {
   const services = yield* Effect.context<never>();
   const log: string[] = [];
-  const server = createHost({ self: { kind: "host" }, name: "server", onError: () => {} });
+  const server = createHost({ name: "server", onError: () => {}, self: { kind: "host" } });
   server.serve(Remote, () => ({
-    variant: "main",
     note: (text) => {
       log.push(`server: ${text}`);
     },
+    variant: "main",
   }));
   const [down, up] = memoryLinkPair();
-  server.accept(down, { principal: { worker: "w" }, kind: "host", name: "w" });
+  server.accept(down, { kind: "host", name: "w", principal: { worker: "w" } });
   const worker = createHost({
-    self: { kind: "host" },
     name: "w",
-    upstream: { link: up, principal: { kind: "server" } },
     onError: (error) => log.push(`error: ${String(error)}`),
+    self: { kind: "host" },
+    upstream: { link: up, principal: { kind: "server" } },
   });
   worker.serve(
     Proc,
     (_input, _principal, self) => {
       const tracker = self.resource("tracker", {
-        version: 1,
-        open: () => new Set<string>(),
         close: () => void log.push("proc closed"),
+        open: () => new Set<string>(),
+        version: 1,
       });
       return { tracker: self.expose(tracker) };
     },

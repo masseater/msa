@@ -6,32 +6,26 @@ import { onTestFinished, test } from "vite-plus/test";
 
 import { HostImpl } from "../src/host.ts";
 import {
-  createHost,
   type Facet,
+  createHost,
   isChordError,
   local,
   memoryLinkPair,
   method,
 } from "../src/index.ts";
-import {
-  Read,
-  ReadV1,
-  ReadV2,
-  SwitchV1,
-  SwitchV2,
-  SwitchV3,
-  readerV1,
-  readerV2,
-  switchFacets,
-} from "./fixtures/host-objects-reload.ts";
-import { tick } from "./fixtures/timing.ts";
+import hostObjectsReload from "./fixtures/host-objects-reload.ts";
+import timing from "./fixtures/timing.ts";
+
+const { Read, ReadV1, ReadV2, SwitchV1, SwitchV2, SwitchV3, readerV1, readerV2, switchFacets } =
+  hostObjectsReload;
+const { tick } = timing;
 
 const theHostSReferenceToA = Effect.gen(function* () {
   const errors: unknown[] = [];
   const host = new HostImpl({
-    self: { kind: "host" },
     dev: true,
     onError: (error) => errors.push(error),
+    self: { kind: "host" },
   });
   onTestFinished(() => host.close());
   const log: string[] = [];
@@ -78,10 +72,10 @@ test("the host's reference to a host object follows contract bumps at commit wit
 
 const externalOldVersionConsumersStillRefuse = Effect.gen(function* () {
   const host = new HostImpl({
-    self: { kind: "host" },
     onError: (error) => {
       throw error;
     },
+    self: { kind: "host" },
   });
   onTestFinished(() => host.close());
   yield* Effect.promise(() => host.load([readerV1]));
@@ -104,12 +98,12 @@ test("external old-version consumers still refuse a host object's upgrade withou
   Effect.runPromise(externalOldVersionConsumersStillRefuse));
 
 const objectOwnedOldVersionReferencesStill = Effect.gen(function* () {
-  const host = new HostImpl({ self: { kind: "host" }, onError: () => {} });
+  const host = new HostImpl({ onError: () => {}, self: { kind: "host" } });
   onTestFinished(() => host.close());
   const Consumer = local("t.eager-consumer", {
-    version: 1,
     input: Type.Object({}),
     members: { read: method(undefined, Type.String()) },
+    version: 1,
   });
   const oldConsumer: Facet = {
     name: "consumer",
@@ -143,13 +137,13 @@ test("object-owned old-version references still block a host object's upgrade un
   Effect.runPromise(objectOwnedOldVersionReferencesStill));
 
 const aForgottenContractBumpRemainsRefused = Effect.gen(function* () {
-  const host = new HostImpl({ self: { kind: "host" }, onError: () => {} });
+  const host = new HostImpl({ onError: () => {}, self: { kind: "host" } });
   onTestFinished(() => host.close());
   yield* Effect.promise(() => host.load([readerV1]));
   const incompatible = local(ReadV1.name, {
-    version: 1,
     input: Type.Object({}),
     members: { fetch: method(undefined, Type.String()) },
+    version: 1,
   });
   yield* Effect.promise(() =>
     assert.rejects(
@@ -175,12 +169,12 @@ const aClusterContractUpgradeRetokensThe = Effect.gen(function* () {
   const log: string[] = [];
   const facets = switchFacets(log);
   let valid = false;
-  const server = new HostImpl({ self: { kind: "host" }, onError: () => {} });
+  const server = new HostImpl({ onError: () => {}, self: { kind: "host" } });
   const worker = new HostImpl({
-    self: { kind: "host" },
+    loader: () => Effect.runPromiseWith(services)(Effect.sync(() => [facets.v2(valid)])),
     name: "worker",
     onError: () => {},
-    loader: () => Effect.runPromiseWith(services)(Effect.sync(() => [facets.v2(valid)])),
+    self: { kind: "host" },
   });
   onTestFinished(() =>
     Effect.runPromiseWith(services)(
@@ -220,8 +214,8 @@ test("a cluster contract upgrade retokens the server's and worker's references t
   Effect.runPromise(aClusterContractUpgradeRetokensThe));
 
 const aReloadThatChangesAType = Effect.gen(function* () {
-  const host = createHost({ self: { kind: "host" }, onError: () => {} });
-  const Kept = local("t.lifetime-change", { version: 1, input: Type.Object({}) });
+  const host = createHost({ onError: () => {}, self: { kind: "host" } });
+  const Kept = local("t.lifetime-change", { input: Type.Object({}), version: 1 });
   const log: string[] = [];
   const facet = (lifetime: "host" | "referenced"): Facet => ({
     name: "kept",
@@ -230,11 +224,11 @@ const aReloadThatChangesAType = Effect.gen(function* () {
         Kept,
         (_input, _principal, self) => {
           self.resource("life", {
-            version: 1,
-            open: () => log.push(`open ${lifetime}`),
             close: () => {
               log.push("close");
             },
+            open: () => log.push(`open ${lifetime}`),
+            version: 1,
           });
           return {};
         },

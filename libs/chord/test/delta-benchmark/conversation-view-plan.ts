@@ -1,26 +1,20 @@
 import type { Draft } from "../../src/delta/draft.ts";
-import { payloadText } from "./conversation-view-content.ts";
-import type { Scenario } from "./conversation-view-model.ts";
-import type {
-  AuditDoc,
-  CommitPlan,
-  ConfigDoc,
-  DocMutation,
-  DocumentKey,
-  InboxDoc,
-  JsonDraft,
-  LiveDoc,
-  PreferencesDoc,
-  TurnDoc,
-} from "./conversation-view-types.ts";
+import conversationViewContent from "./conversation-view-content.ts";
+import type conversationViewPlanTypes from "./conversation-view-plan.types.ts";
+import type conversationViewTypes from "./conversation-view-types.types.ts";
 
-const on = <T>(key: DocumentKey, mutate: (doc: Draft<T>) => void): DocMutation => ({
+const { payloadText } = conversationViewContent;
+
+const on = <T>(
+  key: conversationViewTypes.DocumentKey,
+  mutate: (doc: Draft<T>) => void,
+): conversationViewTypes.DocMutation => ({
   key,
-  mutate: (draft: JsonDraft) => mutate(draft as unknown as Draft<T>),
+  mutate: (draft: conversationViewTypes.JsonDraft) => mutate(draft as unknown as Draft<T>),
 });
 
-const streamChunk = (index: number): DocMutation[] => [
-  on<LiveDoc>("live", (live) => {
+const streamChunk = (index: number): conversationViewTypes.DocMutation[] => [
+  on<conversationViewTypes.LiveDoc>("live", (live) => {
     const limit = 4_096 + (index % 8) * 4_096;
     const chunk = payloadText(384 + (index % 5) * 64, 100_000 + index);
     live.generation.partial = `${live.generation.partial}${chunk}`.slice(-limit);
@@ -32,8 +26,8 @@ const streamChunk = (index: number): DocMutation[] => [
   }),
 ];
 
-const toolProgress = (index: number, cycle: number): DocMutation[] => [
-  on<LiveDoc>("live", (live) => {
+const toolProgress = (index: number, cycle: number): conversationViewTypes.DocMutation[] => [
+  on<conversationViewTypes.LiveDoc>("live", (live) => {
     const slot = live.tools[index % live.tools.length]!;
     slot.status = cycle % 4 === 0 ? "completed" : "running";
     slot.progress = Math.min(1, slot.progress + 0.125);
@@ -42,8 +36,8 @@ const toolProgress = (index: number, cycle: number): DocMutation[] => [
   }),
 ];
 
-const inboxPush = (index: number, cycle: number): DocMutation[] => [
-  on<InboxDoc>("inbox", (inbox) => {
+const inboxPush = (index: number, cycle: number): conversationViewTypes.DocMutation[] => [
+  on<conversationViewTypes.InboxDoc>("inbox", (inbox) => {
     inbox.items.push({
       id: 1_000_000 + index,
       mode: cycle % 2 === 0 ? "steer" : "followUp",
@@ -54,21 +48,21 @@ const inboxPush = (index: number, cycle: number): DocMutation[] => [
   }),
 ];
 
-const settlement = (index: number, cycle: number): DocMutation[] => [
-  on<LiveDoc>("live", (live) => {
+const settlement = (index: number, cycle: number): conversationViewTypes.DocMutation[] => [
+  on<conversationViewTypes.LiveDoc>("live", (live) => {
     live.status = cycle === 94 ? "admitting" : "ready";
     live.generation.stage = cycle === 94 ? "requesting" : "completed";
     live.heartbeat = index;
   }),
-  on<TurnDoc>("turn", (turn) => {
+  on<conversationViewTypes.TurnDoc>("turn", (turn) => {
     turn.stage = cycle === 94 ? "requesting" : "idle";
     turn.message = cycle === 94 ? payloadText(720, 130_000 + index) : "";
     turn.revision += 1;
   }),
 ];
 
-const configEdit = (index: number): DocMutation[] => [
-  on<ConfigDoc>("config", (configDoc) => {
+const configEdit = (index: number): conversationViewTypes.DocMutation[] => [
+  on<conversationViewTypes.ConfigDoc>("config", (configDoc) => {
     configDoc.thinkingLevel = index % 200 === 96 ? "high" : "medium";
     configDoc.temperature = 0.15 + (Math.floor(index / 100) % 4) * 0.05;
     const section = configDoc.sections[Math.floor(index / 100) % configDoc.sections.length]!;
@@ -77,14 +71,14 @@ const configEdit = (index: number): DocMutation[] => [
   }),
 ];
 
-const turnStage = (stage: string): DocMutation =>
-  on<TurnDoc>("turn", (turn) => {
+const turnStage = (stage: string): conversationViewTypes.DocMutation =>
+  on<conversationViewTypes.TurnDoc>("turn", (turn) => {
     turn.stage = stage;
     turn.revision += 1;
   });
 
-const preferencesEdit = (index: number): DocMutation[] => [
-  on<PreferencesDoc>("preferences", (preferences) => {
+const preferencesEdit = (index: number): conversationViewTypes.DocMutation[] => [
+  on<conversationViewTypes.PreferencesDoc>("preferences", (preferences) => {
     preferences.theme = index % 200 === 97 ? "dim" : "dark";
     preferences.compactTools = !preferences.compactTools;
     preferences.editorProfile = payloadText(2_400 + (index % 4) * 256, 150_000 + index);
@@ -93,8 +87,8 @@ const preferencesEdit = (index: number): DocMutation[] => [
   turnStage("configured"),
 ];
 
-const retry = (index: number): DocMutation[] => [
-  on<LiveDoc>("live", (live) => {
+const retry = (index: number): conversationViewTypes.DocMutation[] => [
+  on<conversationViewTypes.LiveDoc>("live", (live) => {
     live.status = "retrying";
     live.generation.stage = "retrying";
     live.generation.attempt += 1;
@@ -104,17 +98,17 @@ const retry = (index: number): DocMutation[] => [
   turnStage("retrying"),
 ];
 
-const unmountedOnly = (index: number): DocMutation[] => [
-  on<AuditDoc>("audit", (audit) => {
+const unmountedOnly = (index: number): conversationViewTypes.DocMutation[] => [
+  on<conversationViewTypes.AuditDoc>("audit", (audit) => {
     audit.commits += 1;
     audit.note = `unmounted-${index}`;
   }),
-  on<ConfigDoc>("config", (configDoc) => {
-    configDoc.model = { provider: configDoc.model.provider, modelId: configDoc.model.modelId };
+  on<conversationViewTypes.ConfigDoc>("config", (configDoc) => {
+    configDoc.model = { modelId: configDoc.model.modelId, provider: configDoc.model.provider };
   }),
 ];
 
-const mountedMutations = (index: number, cycle: number): DocMutation[] => {
+const mountedMutations = (index: number, cycle: number): conversationViewTypes.DocMutation[] => {
   if (cycle < 70) return streamChunk(index);
   if (cycle < 90) return toolProgress(index, cycle);
   if (cycle < 94) return inboxPush(index, cycle);
@@ -124,22 +118,22 @@ const mountedMutations = (index: number, cycle: number): DocMutation[] => {
   return retry(index);
 };
 
-export interface CommitRequest {
-  readonly index: number;
-  readonly scenario: Scenario;
-}
-
-export const planCommit = ({ index, scenario }: CommitRequest): CommitPlan => {
+const planCommit = ({
+  index,
+  scenario,
+}: conversationViewPlanTypes.CommitRequest): conversationViewTypes.CommitPlan => {
   const cycle = index % 100;
   if (cycle === 99) {
-    return { docs: unmountedOnly(index), unmountedOnly: true, expectedConversationNoop: true };
+    return { docs: unmountedOnly(index), expectedConversationNoop: true, unmountedOnly: true };
   }
   const settles = cycle === 94 || cycle === 95;
   return {
+    branch: scenario === "branch-head-replacement" && cycle === 95 && index >= 100,
     docs: mountedMutations(index, cycle),
     entryKind: settles ? (cycle === 94 ? "user" : "assistant") : undefined,
-    branch: scenario === "branch-head-replacement" && cycle === 95 && index >= 100,
-    unmountedOnly: false,
     expectedConversationNoop: false,
+    unmountedOnly: false,
   };
 };
+
+export default planCommit;

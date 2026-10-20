@@ -7,13 +7,16 @@ import { describe, it } from "vite-plus/test";
 import {
   type Ctx,
   type Facet,
+  type StateEvent,
   isChordError,
   local,
   method,
-  type StateEvent,
 } from "../src/index.ts";
-import { Greeter, greeterFacet, quiet, until } from "./fixtures/reload.ts";
-import { latch, tick } from "./fixtures/timing.ts";
+import reloadModule from "./fixtures/reload.ts";
+import timing from "./fixtures/timing.ts";
+
+const { Greeter, greeterFacet, quiet, until } = reloadModule;
+const { latch, tick } = timing;
 
 const compatibleReloadNoGatePinnedRoots = Effect.gen(function* () {
   const services = yield* Effect.context<never>();
@@ -60,25 +63,25 @@ const prepareRunsInRecordingModeWrites = Effect.gen(function* () {
   );
 
   const writing = greeterFacet({
-    greeting: "hi",
     extra: (self) => {
       const probe = self.state("probe", Type.Object({}), {});
       probe.replace(captured!, {});
     },
+    greeting: "hi",
   });
   yield* Effect.promise(() => assert.rejects(host.reload([writing]), /read_only/u));
 
   const log: string[] = [];
   const failing = greeterFacet({
-    greeting: "hi",
     extra: (self, input) => {
       self.resource("extra", {
-        version: 1,
-        open: () => void log.push(`open ${input.id}`),
         close: () => void log.push(`close ${input.id}`),
+        open: () => void log.push(`open ${input.id}`),
+        version: 1,
       });
       if (input.id === "b") throw new Error("b fails");
     },
+    greeting: "hi",
   });
   const codeVersion = host.codeVersion;
   yield* Effect.promise(() =>
@@ -99,8 +102,8 @@ const refusesAChangedCellSchemaWithout = Effect.gen(function* () {
   yield* Effect.promise(() => host.hold(Greeter, {}).ready);
   const changed = greeterFacet({
     greeting: "hi",
-    schema: Type.Object({ total: Type.Number() }),
     initial: { total: 0 },
+    schema: Type.Object({ total: Type.Number() }),
   });
   yield* Effect.promise(() =>
     assert.rejects(
@@ -133,18 +136,18 @@ const stateBumpGateMigrateOldFromversion = Effect.gen(function* () {
   );
   const froms: number[] = [];
   const v2 = greeterFacet({
-    greeting: "hi",
-    schema: Type.Object({ total: Type.Number() }),
-    initial: { total: 0 },
     bump: (draft) => {
       draft["total"] = (draft["total"] ?? 0) + 1;
     },
+    greeting: "hi",
+    initial: { total: 0 },
+    schema: Type.Object({ total: Type.Number() }),
     state: {
-      version: 2,
       migrate: (old, from) => {
         froms.push(from);
         return { total: (old as { n: number }).n } as never;
       },
+      version: 2,
     },
   });
   const report = yield* Effect.promise(() => host.reload([v2]));
@@ -162,9 +165,9 @@ const stateBumpGateMigrateOldFromversion = Effect.gen(function* () {
 const versionsArePerCellARaised = Effect.gen(function* () {
   const host = quiet();
   const Pair = local("t.pair", {
-    version: 1,
     input: Type.Object({}),
     members: { a: Type.Unknown(), b: Type.Unknown(), bump: method() },
+    version: 1,
   });
   const migrated: string[] = [];
   const facet = (version: number): Facet => ({
@@ -173,11 +176,11 @@ const versionsArePerCellARaised = Effect.gen(function* () {
       api.serve(Pair, (_input, _principal, self) => {
         const a = self.state("a", Type.Number(), 1);
         const b = self.state("b", Type.Number(), 1, {
-          version,
           migrate: (old, from) => {
             migrated.push(`b ${from}->${version}`);
             return (old as number) * 10;
           },
+          version,
         });
         return {
           a,

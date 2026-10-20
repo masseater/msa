@@ -10,7 +10,9 @@ function expectDiffImpl(before: JsonValue, after: JsonValue, expected: unknown):
   expect(applyImmutable(before, operations)).toEqual(after);
 }
 
-export const expectDiff: {
+const expectDiff: {
   (after: JsonValue, expected: unknown): (before: JsonValue) => void;
   (before: JsonValue, after: JsonValue, expected: unknown): void;
 } = dual(3, expectDiffImpl);
+
+export default expectDiff;

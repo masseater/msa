@@ -5,8 +5,11 @@ import { Type } from "typebox";
 import { describe, it } from "vite-plus/test";
 
 import { createHost, hostNamed, memoryLinkPair, remote } from "../src/index.ts";
-import { Counter, cluster, internals, until } from "./fixtures/links-review.ts";
-import { latch } from "./fixtures/timing.ts";
+import linksReview from "./fixtures/links-review.ts";
+import timing from "./fixtures/timing.ts";
+
+const { Counter, cluster, internals, until } = linksReview;
+const { latch } = timing;
 
 const case7ABrowserDisconnectCancelsIts = Effect.gen(function* () {
   const c = cluster();
@@ -29,13 +32,13 @@ const case9StateStoppedWhileTheRoute = Effect.gen(function* () {
   c.resolveGate = gate.promise;
   const { raw } = c.raw({ guest: "g" });
   raw.send({
-    t: "hold",
-    id: 1,
     at: "session:S1",
-    token: Counter.description,
+    id: 1,
     input: { name: "a" },
+    t: "hold",
+    token: Counter.description,
   });
-  raw.send({ t: "unsub", hold: 1 });
+  raw.send({ hold: 1, t: "unsub" });
   yield* Effect.sleep(5);
   gate.open();
   yield* until(
@@ -54,15 +57,15 @@ const case9AReleaseWhileTheRoute = Effect.gen(function* () {
   c.resolveGate = gate.promise;
   const { raw, frames } = c.raw({ guest: "g" });
   raw.send({
-    t: "hold",
-    id: 1,
     at: "session:S1",
-    token: Counter.description,
+    id: 1,
     input: { name: "a" },
+    t: "hold",
+    token: Counter.description,
   });
-  raw.send({ t: "call", id: 2, hold: 1, member: "add", args: 1 });
+  raw.send({ args: 1, hold: 1, id: 2, member: "add", t: "call" });
   yield* Effect.sleep(5);
-  raw.send({ t: "release", id: 1 });
+  raw.send({ id: 1, t: "release" });
   yield* until(() => frames.some((frame) => frame.t === "result" && frame.id === 2));
   const result = frames.find((frame) => frame.t === "result" && frame.id === 2);
   assert.ok(result?.t === "result" && result.error !== undefined);
@@ -102,21 +105,21 @@ const twoBrowsersShareOneWorkerConnection = Effect.gen(function* () {
 });
 
 const DocV1 = remote("t.doc", {
-  version: 1,
-  input: Type.Object({}),
   host: hostNamed("server"),
+  input: Type.Object({}),
   variants: { main: { state: { view: Type.Object({ text: Type.String() }) } } },
+  version: 1,
 });
 
 const DocV2 = remote("t.doc", {
-  version: 2,
-  input: Type.Object({}),
   host: hostNamed("server"),
+  input: Type.Object({}),
   variants: { main: { state: { view: Type.Object({ body: Type.String() }) } } },
+  version: 2,
 });
 
 const case11SnapshotsThroughAnAcceptsAdapter = Effect.gen(function* () {
-  const server = createHost({ self: { kind: "host" }, name: "server", onError: () => {} });
+  const server = createHost({ name: "server", onError: () => {}, self: { kind: "host" } });
   server.serve(
     DocV2,
     (_input, _principal, self) => ({
@@ -134,10 +137,6 @@ const case11SnapshotsThroughAnAcceptsAdapter = Effect.gen(function* () {
           return {
             variant: "main",
             view: {
-              get value() {
-                return map(view.value);
-              },
-              subscribe: (fn: (value: unknown) => void) => view.events(() => fn(map(view.value))),
               events: (fn: (event: unknown) => void) =>
                 view.events((event: { type: string }) =>
                   fn({
@@ -145,6 +144,10 @@ const case11SnapshotsThroughAnAcceptsAdapter = Effect.gen(function* () {
                     value: map(view.value),
                   }),
                 ),
+              subscribe: (fn: (value: unknown) => void) => view.events(() => fn(map(view.value))),
+              get value() {
+                return map(view.value);
+              },
             },
           };
         },
@@ -154,11 +157,11 @@ const case11SnapshotsThroughAnAcceptsAdapter = Effect.gen(function* () {
   const [down, up] = memoryLinkPair();
   server.accept(down, { principal: { guest: "g" } });
   const browser = createHost({
-    self: { kind: "host" },
-    name: "browser",
     kind: "client",
-    upstream: { link: up, principal: { kind: "server" } },
+    name: "browser",
     onError: () => {},
+    self: { kind: "host" },
+    upstream: { link: up, principal: { kind: "server" } },
   });
   const doc = browser.hold(DocV1, {});
   yield* Effect.promise(() => doc.ready);

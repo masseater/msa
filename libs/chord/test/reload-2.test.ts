@@ -5,8 +5,11 @@ import { Type } from "typebox";
 import { describe, it } from "vite-plus/test";
 
 import { type Ctx, type Facet, isChordError } from "../src/index.ts";
-import { CountV1, Greeter, greeterFacet, quiet } from "./fixtures/reload.ts";
-import { abortOf, latch, tick } from "./fixtures/timing.ts";
+import reloadModule from "./fixtures/reload.ts";
+import timing from "./fixtures/timing.ts";
+
+const { CountV1, Greeter, greeterFacet, quiet } = reloadModule;
+const { abortOf, latch, tick } = timing;
 
 const gateDeadlineReloadAbortsReportsBlocking = Effect.gen(function* () {
   const services = yield* Effect.context<never>();
@@ -64,18 +67,18 @@ const exclusiveResourcesAreReplacedAtThe = Effect.gen(function* () {
     setup: (api) =>
       api.serve(Greeter, (_input, _principal, self) => {
         const lock = self.resource("lock", {
-          version: rev,
+          close: () => void log.push(`close lock ${rev}`),
           exclusive: true,
           open: () => {
             log.push(`open lock ${rev}`);
             return rev;
           },
-          close: () => void log.push(`close lock ${rev}`),
+          version: rev,
         });
         self.resource("cache", {
-          version: rev,
-          open: () => void log.push(`open cache ${rev}`),
           close: () => void log.push(`close cache ${rev}`),
+          open: () => void log.push(`open cache ${rev}`),
+          version: rev,
         });
         const count = self.state("count", Type.Number(), 0);
         return { count, greet: (name: string) => `${lock.value} ${name}` };
@@ -138,9 +141,9 @@ const forcedRetirementAbortsTheLeftoverRoots = Effect.gen(function* () {
     setup: (api) =>
       api.serve(Greeter, (_input, _principal, self) => {
         const conn = self.resource("conn", {
-          version,
-          open: () => ({ version }),
           close: () => void log.push(`close ${version}`),
+          open: () => ({ version }),
+          version,
         });
         const count = self.state("count", CountV1, { n: 0 });
         return {
@@ -186,9 +189,9 @@ const aKeptResourceClosesWithThe = Effect.gen(function* () {
     setup: (api) =>
       api.serve(Greeter, (_input, _principal, self) => {
         self.resource("conn", {
-          version: 1,
-          open: () => ({}),
           close: () => void log.push(`close by ${label}`),
+          open: () => ({}),
+          version: 1,
         });
         const count = self.state("count", CountV1, { n: 0 });
         return { count, greet: (name: string) => `${label} ${name}` };

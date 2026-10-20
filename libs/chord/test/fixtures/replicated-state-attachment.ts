@@ -3,7 +3,7 @@ import type {
   ReplicatedStateSourceFrame,
 } from "../../src/index.ts";
 
-export class TestSourceAttachment<T> implements ReplicatedStateSourceAttachment<T> {
+class TestSourceAttachment<T> implements ReplicatedStateSourceAttachment<T> {
   readonly snapshot: { readonly value: T; readonly cursor: number };
   readonly #onDispose: () => void;
   readonly #buffer: ReplicatedStateSourceFrame<T>[] = [];
@@ -36,3 +36,5 @@ export class TestSourceAttachment<T> implements ReplicatedStateSourceAttachment<
     this.#onDispose();
   }
 }
+
+export default TestSourceAttachment;

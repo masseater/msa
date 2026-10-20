@@ -1,6 +1,7 @@
 import type { Frame, Link } from "../../src/index.ts";
+import type countingTypes from "./counting.types.ts";
 
-export class CountingLink implements Link {
+class CountingLink implements Link {
   readonly inner: Link;
   readonly sent: Frame[] = [];
   readonly received: Frame[] = [];
@@ -61,7 +62,12 @@ export class CountingLink implements Link {
   }
 }
 
-export type StateFrame = Extract<Frame, { t: "state" }>;
+const stateFrames = (frames: readonly Frame[]): countingTypes.StateFrame[] =>
+  frames.filter((frame): frame is countingTypes.StateFrame => frame.t === "state");
 
-export const stateFrames = (frames: readonly Frame[]): StateFrame[] =>
-  frames.filter((frame): frame is StateFrame => frame.t === "state");
+const counting = {
+  CountingLink,
+  stateFrames,
+};
+
+export default counting;

@@ -4,30 +4,33 @@ import { Effect } from "effect";
 import { Type } from "typebox";
 import { describe, it } from "vite-plus/test";
 
-import { createHost, type Frame, type IpcChannel, ipcLink, memoryLinkPair } from "../src/index.ts";
+import { type Frame, type IpcChannel, createHost, ipcLink, memoryLinkPair } from "../src/index.ts";
 import { Packed, unpack } from "../src/link.ts";
-import { Big, large } from "./fixtures/link.ts";
-import { tick } from "./fixtures/timing.ts";
+import linkModule from "./fixtures/link.ts";
+import timing from "./fixtures/timing.ts";
+
+const { Big, large } = linkModule;
+const { tick } = timing;
 
 const largeArgsResultsAndSnapshotsCross = Effect.gen(function* () {
   const services = yield* Effect.context<never>();
-  const server = createHost({ self: { kind: "host" }, name: "server", onError: () => {} });
+  const server = createHost({ name: "server", onError: () => {}, self: { kind: "host" } });
   server.route("session:", {
-    principal: (name) => ({ host: name }),
     authorize: () => true,
+    principal: (name) => ({ host: name }),
     resolve: (name) =>
       Effect.runPromiseWith(services)(
         Effect.sync(() => {
           const [down, up] = memoryLinkPair();
           const worker = createHost({
-            self: { kind: "host" },
             name,
-            upstream: { link: up, principal: { kind: "server" } },
             onError: () => {},
+            self: { kind: "host" },
+            upstream: { link: up, principal: { kind: "server" } },
           });
           worker.serve(Big, (_input, _principal, self) => {
             const notesState = self.state("notes", Type.Array(Type.String()), large("a"));
-            return { variant: "main", notes: notesState, echo: (notes: string[]) => notes };
+            return { echo: (notes: string[]) => notes, notes: notesState, variant: "main" };
           });
           return down;
         }),
@@ -36,11 +39,11 @@ const largeArgsResultsAndSnapshotsCross = Effect.gen(function* () {
   const [down, up] = memoryLinkPair();
   server.accept(down, { principal: { owner: true } });
   const browser = createHost({
-    self: { kind: "host" },
-    name: "browser",
     kind: "client",
-    upstream: { link: up, principal: { kind: "server" } },
+    name: "browser",
     onError: () => {},
+    self: { kind: "host" },
+    upstream: { link: up, principal: { kind: "server" } },
   });
   const big = browser.hold(Big, {});
   assert.deepEqual(yield* Effect.promise(() => big.echo(large("c"))), large("c"));
@@ -53,9 +56,9 @@ const onlyPayloadsAboveTheThresholdAre = Effect.gen(function* () {
   const [a, b] = memoryLinkPair();
   const frames: Frame[] = [];
   b.receive((frame) => frames.push(frame));
-  a.send({ t: "result", id: 1, value: large("v") });
-  a.send({ t: "result", id: 2, value: ["small"] });
-  a.send({ t: "state", hold: 3, m: "notes", as: "snap", value: large("s") });
+  a.send({ id: 1, t: "result", value: large("v") });
+  a.send({ id: 2, t: "result", value: ["small"] });
+  a.send({ as: "snap", hold: 3, m: "notes", t: "state", value: large("s") });
   for (let i = 0; i < 50 && frames.length < 3; i++) yield* tick;
   const [packed, small, snap] = frames;
   assert(packed?.t === "result" && packed.value instanceof Packed);
@@ -87,6 +90,8 @@ const aWriteThatFailsAfterThe = Effect.gen(function* () {
   const sent: unknown[] = [];
   const channel: IpcChannel = {
     connected: true,
+    off: () => undefined,
+    on: () => undefined,
     send: (message, callback) => {
       sent.push(message);
       const error = Object.assign(new Error("write EPIPE"), { code: "EPIPE" });
@@ -95,18 +100,16 @@ const aWriteThatFailsAfterThe = Effect.gen(function* () {
       process.nextTick(() => callback(error));
       return false;
     },
-    on: () => undefined,
-    off: () => undefined,
   };
   const link = ipcLink(channel);
   const reasons: string[] = [];
   link.onClose((reason) => reasons.push(reason));
-  link.send({ t: "ping", n: 1 });
+  link.send({ n: 1, t: "ping" });
   yield* tick;
   assert.equal(link.closed, true);
   assert.deepEqual(reasons, ["ipc send failed: EPIPE"]);
   assert.equal(sent.length, 1);
-  link.send({ t: "ping", n: 2 });
+  link.send({ n: 2, t: "ping" });
   assert.equal(sent.length, 1, "a closed link sends nothing more");
 });
 

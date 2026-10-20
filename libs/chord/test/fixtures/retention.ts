@@ -3,13 +3,15 @@ import assert from "node:assert/strict";
 import { Effect } from "effect";
 
 import { type Tracker, track } from "../../src/delta/index.ts";
-import { tick } from "./timing.ts";
+import timing from "./timing.ts";
 
-export const retainedSettledObjects: object[] = [];
-export const retainedLargePrepared: object[] = [];
-export const retainedSettledChanges: object[] = [];
+const { tick } = timing;
 
-export const collect = (ref: WeakRef<object>): Effect.Effect<void> =>
+const retainedSettledObjects: object[] = [];
+const retainedLargePrepared: object[] = [];
+const retainedSettledChanges: object[] = [];
+
+const collect = (ref: WeakRef<object>): Effect.Effect<void> =>
   Effect.gen(function* () {
     assert.ok(global.gc, "worker requires --expose-gc");
     for (let attempt = 0; attempt < 30; attempt++) {
@@ -20,7 +22,7 @@ export const collect = (ref: WeakRef<object>): Effect.Effect<void> =>
     assert.fail("released change data is still retained");
   });
 
-export function abortedPayload(
+function abortedPayload(
   tracker: Tracker<{ payload: { rows: { value: number }[] } | null }>,
 ): WeakRef<object> {
   const change = tracker.beginChange();
@@ -30,7 +32,7 @@ export function abortedPayload(
   return reference;
 }
 
-export function unadoptedPrepared(
+function unadoptedPrepared(
   tracker: Tracker<{ payload: { rows: { value: number }[] } | null }>,
 ): WeakRef<object> {
   const change = tracker.beginChange();
@@ -39,7 +41,7 @@ export function unadoptedPrepared(
   return new WeakRef(prepared.value.payload!.rows);
 }
 
-export function draftProxies(
+function draftProxies(
   tracker: Tracker<{ payload: { rows: { value: number }[] } | null }>,
 ): WeakRef<object> {
   const change = tracker.beginChange();
@@ -49,7 +51,7 @@ export function draftProxies(
   return reference;
 }
 
-export const assertRetained = (reference: WeakRef<object>): Effect.Effect<void> =>
+const assertRetained = (reference: WeakRef<object>): Effect.Effect<void> =>
   Effect.gen(function* () {
     assert.ok(global.gc, "worker requires --expose-gc");
     for (let attempt = 0; attempt < 5; attempt++) {
@@ -63,7 +65,7 @@ export const assertRetained = (reference: WeakRef<object>): Effect.Effect<void> 
     );
   });
 
-export function settledLifecycle(): { tracker: WeakRef<object>; future: WeakRef<object> } {
+function settledLifecycle(): { tracker: WeakRef<object>; future: WeakRef<object> } {
   const tracker = track<{ payload: { rows: { value: number }[] } | null }>({ payload: null });
   const change = tracker.beginChange();
   change.state.payload = { rows: [{ value: 1 }] };
@@ -76,7 +78,21 @@ export function settledLifecycle(): { tracker: WeakRef<object>; future: WeakRef<
   });
   tracker.adopt(futurePrepared);
   return {
-    tracker: new WeakRef(tracker),
     future: new WeakRef(futurePrepared.value.payload!.rows),
+    tracker: new WeakRef(tracker),
   };
 }
+
+const retention = {
+  abortedPayload,
+  assertRetained,
+  collect,
+  draftProxies,
+  retainedLargePrepared,
+  retainedSettledChanges,
+  retainedSettledObjects,
+  settledLifecycle,
+  unadoptedPrepared,
+};
+
+export default retention;

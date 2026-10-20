@@ -4,21 +4,17 @@ import { Effect } from "effect";
 import { expectTypeOf, it, onTestFinished } from "vite-plus/test";
 
 import { createHost, isChordError, memoryLinkPair } from "../src/index.ts";
-import {
-  Database,
-  type Principal,
-  SavedTodos,
-  serveViews,
-  TodoLabel,
-  Todos,
-  TodoStore,
-  todoStore,
-} from "./fixtures/tutorial.ts";
+import tutorial from "./fixtures/tutorial.ts";
+import type tutorialTypes from "./fixtures/tutorial.types.ts";
+
+const { Database, SavedTodos, TodoLabel, TodoStore, Todos, serveViews, todoStore } = tutorial;
+
+type Principal = tutorialTypes.Principal;
 
 const todoFactory = todoStore();
 
 const objectsLiveInsideHosts = Effect.gen(function* () {
-  const host = createHost({ self: "server", name: "todo-server" });
+  const host = createHost({ name: "todo-server", self: "server" });
   assert.equal(host.name, "todo-server");
   yield* Effect.promise(() => host.close());
 });
@@ -35,7 +31,7 @@ const firstObject = Effect.gen(function* () {
 
 const liveState = Effect.gen(function* () {
   onTestFinished(() => host.close());
-  const host = createHost({ self: "server", dev: true });
+  const host = createHost({ dev: true, self: "server" });
   host.serve(TodoStore, todoFactory);
   const todos = yield* Effect.promise(() => host.get(TodoStore, { list: "family" }));
   const counts: (number | undefined)[] = [];
@@ -61,12 +57,12 @@ const objectsUseObjects = Effect.gen(function* () {
   const closed = Promise.withResolvers<void>();
   host.serve(Database, (_input, _principal, self) => {
     const db = self.resource("db", {
-      version: 1,
+      close: () => closed.resolve(),
       open: () => {
         opens++;
         return { saved: [] as string[] };
       },
-      close: () => closed.resolve(),
+      version: 1,
     });
     return { db: self.expose(db) };
   });
@@ -103,8 +99,8 @@ const principalViews = Effect.gen(function* () {
   onTestFinished(() => host.close());
   const host = createHost<Principal>({
     name: "server",
-    self: "server",
     principalKey: (principal) => principal,
+    self: "server",
   });
   host.serve(TodoStore, todoFactory);
   serveViews(host);
@@ -119,7 +115,7 @@ const principalViews = Effect.gen(function* () {
   yield* Effect.promise(() =>
     host.root((ctx) => owner.add({ text: "Buy milk" }, ctx), { principal: "owner" }),
   );
-  assert.deepEqual(guest.rows.value, [{ text: "Buy milk", done: false }]);
+  assert.deepEqual(guest.rows.value, [{ done: false, text: "Buy milk" }]);
   expectTypeOf(guest).not.toHaveProperty("add");
   yield* Effect.promise(() =>
     assert.rejects(
@@ -135,15 +131,15 @@ const principalViews = Effect.gen(function* () {
 const overAMemoryLink = Effect.gen(function* () {
   onTestFinished(() => server.close());
   onTestFinished(() => browser.close());
-  const server = createHost<Principal>({ self: "server", name: "server" });
+  const server = createHost<Principal>({ name: "server", self: "server" });
   server.serve(TodoStore, todoFactory);
   serveViews(server);
   const [down, up] = memoryLinkPair();
-  server.accept(down, { principal: "owner", kind: "client" });
+  server.accept(down, { kind: "client", principal: "owner" });
   const browser = createHost({
-    self: "browser",
-    name: "browser",
     kind: "client",
+    name: "browser",
+    self: "browser",
     upstream: { link: up, principal: "server" },
   });
   const todos = yield* Effect.promise(() => browser.get(Todos, { list: "family" }));
@@ -155,12 +151,12 @@ const overAMemoryLink = Effect.gen(function* () {
   });
   yield* Effect.promise(() => browser.root((ctx) => todos.add({ text: "Buy milk" }, ctx)));
   yield* Effect.promise(() => updated.promise);
-  assert.deepEqual(todos.rows.value, [{ text: "Buy milk", done: false }]);
+  assert.deepEqual(todos.rows.value, [{ done: false, text: "Buy milk" }]);
   yield* Effect.promise(() =>
     assert.rejects(todos.add({ text: 123 } as never), (error) => isChordError(error, "invalid")),
   );
   stop();
-  assert.deepEqual(todos.rows.value, [{ text: "Buy milk", done: false }]);
+  assert.deepEqual(todos.rows.value, [{ done: false, text: "Buy milk" }]);
   todos.release();
 });
 

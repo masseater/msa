@@ -5,14 +5,18 @@ import { Type } from "typebox";
 import { describe, it } from "vite-plus/test";
 
 import { createHost, hostNamed, local, memoryLinkPair, method, remote } from "../src/index.ts";
-import { NoteSchema, Notes, setup, until } from "./fixtures/bindings.ts";
-import { CountingLink, stateFrames } from "./fixtures/counting.ts";
-import { tick } from "./fixtures/timing.ts";
+import bindings from "./fixtures/bindings.ts";
+import counting from "./fixtures/counting.ts";
+import timing from "./fixtures/timing.ts";
+
+const { NoteSchema, Notes, setup, until } = bindings;
+const { CountingLink, stateFrames } = counting;
+const { tick } = timing;
 
 const Panel = local("t.e8-panel", {
-  version: 1,
   input: Type.Object({}),
   members: { count: Type.Number() },
+  version: 1,
 });
 
 const nReferencesToOneObjectOne = Effect.gen(function* () {
@@ -105,7 +109,7 @@ const aLingeringBindingKeepsItsHold = Effect.gen(function* () {
 
 const atMostCapBindingsLingerThe = Effect.gen(function* () {
   const { server, browser, link } = setup({
-    linger: { types: { [Notes.name]: 10_000 }, cap: 1 },
+    linger: { cap: 1, types: { [Notes.name]: 10_000 } },
   });
   const a = yield* Effect.promise(() => browser.get(Notes, { list: "a" }));
   const b = yield* Effect.promise(() => browser.get(Notes, { list: "b" }));
@@ -132,26 +136,26 @@ describe("shared bindings: linger", () => {
 });
 
 const NotesV2 = remote("t.e8-notes", {
-  version: 2,
-  input: Type.Object({ list: Type.Optional(Type.String({ default: "main" })) }),
   host: hostNamed("server"),
+  input: Type.Object({ list: Type.Optional(Type.String({ default: "main" })) }),
   variants: {
     main: {
-      state: { notes: NoteSchema, title: Type.String() },
       methods: {
         add: method(Type.String()),
-        rename: method(Type.String()),
         clear: method(),
+        rename: method(Type.String()),
       },
+      state: { notes: NoteSchema, title: Type.String() },
     },
   },
+  version: 2,
 });
 
 const normalizedEqualInputsAndEqualPrincipal = Effect.gen(function* () {
   const server = createHost({
-    self: { kind: "host" },
     name: "server",
     onError: () => {},
+    self: { kind: "host" },
   });
   server.serve(
     NotesV2,
@@ -159,31 +163,31 @@ const normalizedEqualInputsAndEqualPrincipal = Effect.gen(function* () {
       const notes = self.state("notes", NoteSchema, []);
       const title = self.state("title", Type.String(), "untitled");
       return {
-        variant: "main",
-        notes,
-        title,
         add: () => {},
-        rename: () => {},
         clear: () => {},
+        notes,
+        rename: () => {},
+        title,
+        variant: "main",
       };
     },
     { accepts: { 1: (current) => current } },
   );
   const [down, up] = memoryLinkPair();
-  server.accept(down, { principal: { worker: "w" }, kind: "host", name: "session:w" });
+  server.accept(down, { kind: "host", name: "session:w", principal: { worker: "w" } });
   const link = new CountingLink(up);
   const worker = createHost<unknown>({
-    self: { kind: "host" },
     name: "session:w",
-    upstream: { link, principal: { kind: "server" } },
     onError: () => {},
+    self: { kind: "host" },
+    upstream: { link, principal: { kind: "server" } },
   });
   const refs = [
     worker.hold(Notes, {}),
     worker.hold(Notes, { list: "main" }),
-    worker.hold(Notes, {}, { principal: { user: "a", grant: 1 } }),
     worker.hold(Notes, {}, { principal: { grant: 1, user: "a" } }),
-    worker.hold(Notes, {}, { principal: { user: "a", grant: 2 } }),
+    worker.hold(Notes, {}, { principal: { grant: 1, user: "a" } }),
+    worker.hold(Notes, {}, { principal: { grant: 2, user: "a" } }),
     worker.hold(NotesV2, {}),
   ];
   yield* Effect.promise(() => Promise.all(refs.map((ref) => ref.ready)));

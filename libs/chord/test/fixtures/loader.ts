@@ -6,16 +6,18 @@ import { Type } from "typebox";
 
 import { createHost, local, method } from "../../src/index.ts";
 import { nodeLoader } from "../../src/loader.ts";
-import { makeDirectory, removeAll, writeText } from "./platform.ts";
+import platform from "./platform.ts";
+
+const { makeDirectory, removeAll, writeText } = platform;
 
 const dir = fileURLToPath(new URL(`../.tmp-plugins-${process.pid}/`, import.meta.url));
 const plugins = fileURLToPath(new URL(`../.tmp-plugins-${process.pid}-order/`, import.meta.url));
 const chord = new URL("../../src/index.ts", import.meta.url).href;
 
 const Hello = local("t.hello", {
-  version: 1,
   input: Type.Object({}),
   members: { greet: method(Type.String(), Type.String()) },
+  version: 1,
 });
 
 const facetSource = `
@@ -44,7 +46,7 @@ const reloadsWithFreshImports = Effect.gen(function* () {
   yield* makeDirectory(dir);
   yield* writeText(`${dir}facet.ts`, facetSource);
   yield* writeGreeting("v1");
-  const host = createHost({ self: { kind: "host" }, loader: nodeLoader, onError: () => {} });
+  const host = createHost({ loader: nodeLoader, onError: () => {}, self: { kind: "host" } });
   yield* Effect.promise(() => host.load([`${dir}facet.ts`]));
   const ref = host.hold(Hello, {});
   assert.equal(yield* Effect.promise(() => ref.greet("x")), "v1 x");
@@ -55,9 +57,9 @@ const reloadsWithFreshImports = Effect.gen(function* () {
   yield* Effect.promise(() => host.close());
 
   const Shared = local("t.shared", {
-    version: 1,
     input: Type.Object({}),
     members: { same: method(undefined, Type.Boolean()) },
+    version: 1,
   });
   yield* makeDirectory(`${plugins}a`);
   yield* makeDirectory(`${plugins}b`);
@@ -69,12 +71,12 @@ const reloadsWithFreshImports = Effect.gen(function* () {
       `const Shared = local("t.shared", { version: 1, input: Type.Object({}), members: { same: method(undefined, Type.Boolean()) } });\n` +
       `export default defineFacet((host) => host.serve(Shared, () => ({ same: async () => (await import(new URL("../b/facet.ts", import.meta.url).href)).own === state })));\n`,
   );
-  const ordered = createHost({ self: { kind: "host" }, loader: nodeLoader, onError: () => {} });
+  const ordered = createHost({ loader: nodeLoader, onError: () => {}, self: { kind: "host" } });
   yield* Effect.promise(() => ordered.load([`${plugins}a/facet.ts`, `${plugins}b/facet.ts`]));
   assert.equal(yield* Effect.promise(() => ordered.hold(Shared, {}).same()), true);
   yield* Effect.promise(() => ordered.close());
 });
 
-await Effect.runPromise(
+void Effect.runPromise(
   reloadsWithFreshImports.pipe(Effect.ensuring(Effect.andThen(removeAll(dir), removeAll(plugins)))),
 );

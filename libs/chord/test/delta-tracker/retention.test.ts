@@ -3,7 +3,9 @@ import { fileURLToPath } from "node:url";
 import { Effect } from "effect";
 import { describe, expect, it } from "vite-plus/test";
 
-import { runNode } from "../fixtures/platform.ts";
+import platform from "../fixtures/platform.ts";
+
+const { runNode } = platform;
 
 const validatesRetention = (scenario: string) =>
   Effect.gen(function* () {

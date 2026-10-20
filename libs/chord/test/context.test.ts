@@ -2,16 +2,18 @@ import { Effect } from "effect";
 import { describe, expect, it, vi } from "vite-plus/test";
 
 import {
-  awaitWithContext,
   BACKGROUND_CONTEXT,
-  createContextKey,
   TODO_CONTEXT,
+  awaitWithContext,
+  createContextKey,
   withAbortSignal,
   withCancel,
   withContextValue,
   withoutAbortSignal,
 } from "../src/context/index.ts";
-import { latch } from "./fixtures/timing.ts";
+import timing from "./fixtures/timing.ts";
+
+const { latch } = timing;
 
 const abortController = (): AbortController => new AbortController();
 

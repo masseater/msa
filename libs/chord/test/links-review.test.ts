@@ -6,36 +6,39 @@ import { describe, it } from "vite-plus/test";
 
 import {
   type Ctx,
-  createHost,
   type Facet,
+  PROTOCOL_VERSION,
+  createHost,
   hostNamed,
   isChordError,
   memoryLinkPair,
   method,
-  PROTOCOL_VERSION,
   remote,
 } from "../src/index.ts";
-import { Counter, cluster, until } from "./fixtures/links-review.ts";
-import { latch } from "./fixtures/timing.ts";
+import linksReview from "./fixtures/links-review.ts";
+import timing from "./fixtures/timing.ts";
+
+const { Counter, cluster, until } = linksReview;
+const { latch } = timing;
 
 const case1TheAcceptorDecidesWhatA = Effect.gen(function* () {
   const c = cluster();
   const [down, raw] = memoryLinkPair();
   c.server.accept(down, { principal: { guest: "g" } });
   raw.receive(() => {});
-  raw.send({ t: "hello", name: "session:S9", kind: "host", codeVersion: 1 });
+  raw.send({ codeVersion: 1, kind: "host", name: "session:S9", t: "hello" });
   yield* until(() => raw.closed);
   assert.throws(
-    () => c.server.accept(memoryLinkPair()[0], { principal: {}, kind: "host" }),
+    () => c.server.accept(memoryLinkPair()[0], { kind: "host", principal: {} }),
     /needs its name/u,
   );
 });
 
 const Echo = remote("t.echo", {
-  version: 1,
-  input: Type.Object({}),
   host: hostNamed("server"),
+  input: Type.Object({}),
   variants: { main: { methods: { root: method(undefined, Type.String()) } } },
+  version: 1,
 });
 
 const rootEchoFacet = (version: number): Facet => ({
@@ -43,21 +46,21 @@ const rootEchoFacet = (version: number): Facet => ({
   setup: (api) =>
     api.serve(Echo, (_input, _principal, self) => {
       self.state("n", Type.Number(), 0, { version });
-      return { variant: "main", root: (ctx: Ctx) => ctx.rootId };
+      return { root: (ctx: Ctx) => ctx.rootId, variant: "main" };
     }),
 });
 
 const case1RootEndIsHonoredOnly = Effect.gen(function* () {
   const services = yield* Effect.context<never>();
-  const server = createHost({ self: { kind: "host" }, name: "server", onError: () => {} });
+  const server = createHost({ name: "server", onError: () => {}, self: { kind: "host" } });
   server.install(rootEchoFacet(1));
   const [down, up] = memoryLinkPair();
-  server.accept(down, { principal: { worker: "w" }, kind: "host", name: "w" });
+  server.accept(down, { kind: "host", name: "w", principal: { worker: "w" } });
   const worker = createHost({
-    self: { kind: "host" },
     name: "w",
-    upstream: { link: up, principal: { kind: "server" } },
     onError: () => {},
+    self: { kind: "host" },
+    upstream: { link: up, principal: { kind: "server" } },
   });
   const go = latch();
   let rootId = "";
@@ -75,13 +78,13 @@ const case1RootEndIsHonoredOnly = Effect.gen(function* () {
   server.accept(clientDown, { principal: { guest: "g" } });
   raw.receive(() => {});
   raw.send({
-    t: "hello",
-    protocol: PROTOCOL_VERSION,
-    name: "raw",
-    kind: "client",
     codeVersion: 0,
+    kind: "client",
+    name: "raw",
+    protocol: PROTOCOL_VERSION,
+    t: "hello",
   });
-  raw.send({ t: "root_end", rootId });
+  raw.send({ rootId, t: "root_end" });
   yield* Effect.sleep(10);
   yield* Effect.promise(() =>
     assert.rejects(server.reload([rootEchoFacet(2)], { gateDeadline: 40 }), (error) => {
@@ -116,12 +119,12 @@ const case2ARevocationWhileTheRoute = Effect.gen(function* () {
 const case10MalformedFramesAndDuplicateIds = Effect.gen(function* () {
   const c = cluster();
   const first = c.raw({ guest: "g" });
-  first.raw.send({ t: "call", hold: 1 } as never);
+  first.raw.send({ hold: 1, t: "call" } as never);
   yield* until(() => first.raw.closed);
   const second = c.raw({ guest: "g" });
   const token = Counter.description;
-  second.raw.send({ t: "hold", id: 1, at: "session:S1", token, input: { name: "a" } });
-  second.raw.send({ t: "hold", id: 1, at: "session:S1", token, input: { name: "b" } });
+  second.raw.send({ at: "session:S1", id: 1, input: { name: "a" }, t: "hold", token });
+  second.raw.send({ at: "session:S1", id: 1, input: { name: "b" }, t: "hold", token });
   yield* until(() => second.raw.closed);
 });
 

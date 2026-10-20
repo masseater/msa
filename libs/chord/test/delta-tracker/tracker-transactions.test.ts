@@ -23,7 +23,7 @@ const keepsAbortedAndStaleMaterializedCandidates = (): void => {
 };
 
 const letsASettledChangeAbortIts = (): void => {
-  const tracker = track({ value: 0, nested: { value: 1 } });
+  const tracker = track({ nested: { value: 1 }, value: 0 });
   const change = tracker.beginChange();
   change.state.value = 1;
   const prepared = change.prepare();
@@ -31,7 +31,7 @@ const letsASettledChangeAbortIts = (): void => {
   change.abort();
   change.abort();
   expect(prepared.ops).toBe(operations);
-  expect(prepared.value).toEqual({ value: 1, nested: { value: 1 } });
+  expect(prepared.value).toEqual({ nested: { value: 1 }, value: 1 });
   expect(() => tracker.adopt(prepared)).toThrow(/aborted/u);
 };
 
@@ -50,7 +50,7 @@ type Inheriting = { value?: number; trackerInherited?: number };
 const readsDeletedOwnPropertiesAsAbsent = (): void => {
   const initial = Object.create(
     Object.create(Object.prototype, {
-      trackerInherited: { value: 7, writable: true, configurable: true },
+      trackerInherited: { configurable: true, value: 7, writable: true },
     }),
   ) as Inheriting;
   initial.value = 1;
@@ -70,8 +70,8 @@ const readsDeletedOwnPropertiesAsAbsent = (): void => {
 
 const detachesOldHandlesForDeeplyEqual = (): void => {
   const initial = {
-    object: { nested: { value: 1 } },
     array: [{ value: 1 }],
+    object: { nested: { value: 1 } },
     rows: [{ value: 1 }],
   };
   const tracker = track(initial);
@@ -89,8 +89,8 @@ const detachesOldHandlesForDeeplyEqual = (): void => {
   oldArray[0]!.value = 9;
   oldRow.value = 9;
   expect(change.state).toEqual({
-    object: { nested: { value: 1 } },
     array: [{ value: 1 }],
+    object: { nested: { value: 1 } },
     rows: [{ value: 1 }],
   });
   const prepared = change.prepare();
@@ -112,8 +112,8 @@ const normalizesADeeplyEqualReplacementWithout = (): void => {
 };
 
 const takesO1ImmutableOwnershipFor = (): void => {
-  const tracker = track({ value: 0, rows: [] as { value: number }[] });
-  const replacement = { value: 1, rows: [{ value: 2 }] };
+  const tracker = track({ rows: [] as { value: number }[], value: 0 });
+  const replacement = { rows: [{ value: 2 }], value: 1 };
   const prepared = tracker.prepareReplace(replacement);
   expect(prepared.base).toBe(tracker.value);
   expect(prepared.value).toBe(replacement);

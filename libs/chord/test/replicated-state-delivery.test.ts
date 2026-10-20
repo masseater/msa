@@ -3,9 +3,12 @@ import { describe, expect, test, vi } from "vite-plus/test";
 
 import { BACKGROUND_CONTEXT, withCancel } from "../src/context/index.ts";
 import { type Context, type ReplicatedStateDelivery } from "../src/index.ts";
-import { deferred, fixture, type Kind, type Value } from "./fixtures/replicated-state-delivery.ts";
+import replicatedStateDelivery from "./fixtures/replicated-state-delivery.ts";
+import type replicatedStateDeliveryTypes from "./fixtures/replicated-state-delivery.types.ts";
 
-const awaitsHydrationAndEachUpdateIndependently = (kind: Kind) =>
+const { deferred, fixture } = replicatedStateDelivery;
+
+const awaitsHydrationAndEachUpdateIndependently = (kind: replicatedStateDeliveryTypes.Kind) =>
   Effect.gen(function* () {
     const services = yield* Effect.context<never>();
     const { state, publish } = fixture(kind);
@@ -41,14 +44,18 @@ const awaitsHydrationAndEachUpdateIndependently = (kind: Kind) =>
     );
   });
 
-const excludesARunningUpdateFromOverflow = (kind: Kind) =>
+const excludesARunningUpdateFromOverflow = (kind: replicatedStateDeliveryTypes.Kind) =>
   Effect.gen(function* () {
     const { state, publish } = fixture(kind);
     const gate = deferred();
     const context = withCancel(BACKGROUND_CONTEXT).context;
-    const received: { value: Value; context: Context; delivery: ReplicatedStateDelivery }[] = [];
+    const received: {
+      value: replicatedStateDeliveryTypes.Value;
+      context: Context;
+      delivery: ReplicatedStateDelivery;
+    }[] = [];
     state.subscribe((value, deliveredContext, delivery) => {
-      received.push({ value, context: deliveredContext, delivery });
+      received.push({ context: deliveredContext, delivery, value });
       if (value.value === 1) return gate.promise;
       return undefined;
     });
@@ -66,7 +73,9 @@ const excludesARunningUpdateFromOverflow = (kind: Kind) =>
     expect(received[2]?.delivery).toEqual({ kind: "update", sequence: 102 });
   });
 
-const serializesReentrantHydrationAndUpdateCallbacks = (kind: Kind): void => {
+const serializesReentrantHydrationAndUpdateCallbacks = (
+  kind: replicatedStateDeliveryTypes.Kind,
+): void => {
   const { state, publish } = fixture(kind);
   const events: string[] = [];
   state.subscribe((value) => {
@@ -77,12 +86,12 @@ const serializesReentrantHydrationAndUpdateCallbacks = (kind: Kind): void => {
   expect(events).toEqual(["start:0", "end:0", "start:1", "end:1", "start:2", "end:2"]);
 };
 
-const treatsTwoSubscriptionsOfTheSame = (kind: Kind) =>
+const treatsTwoSubscriptionsOfTheSame = (kind: replicatedStateDeliveryTypes.Kind) =>
   Effect.gen(function* () {
     const { state, publish } = fixture(kind);
     const gate = deferred();
     const received: number[] = [];
-    const listener = (value: Value) => {
+    const listener = (value: replicatedStateDeliveryTypes.Value) => {
       received.push(value.value);
       if (value.value === 0) return gate.promise;
       return undefined;
@@ -98,7 +107,7 @@ const treatsTwoSubscriptionsOfTheSame = (kind: Kind) =>
     stopSecond();
   });
 
-const unsubscribeDropsQueuedCallbacksWithoutJoining = (kind: Kind) =>
+const unsubscribeDropsQueuedCallbacksWithoutJoining = (kind: replicatedStateDeliveryTypes.Kind) =>
   Effect.gen(function* () {
     const { state, publish } = fixture(kind);
     const gate = deferred();
@@ -125,44 +134,47 @@ const unsubscribeDropsQueuedCallbacksWithoutJoining = (kind: Kind) =>
     expect(received).toEqual([0, 1]);
   });
 
-describe.each<Kind>(["mutable", "attached"])("%s public delivery", (kind) => {
-  test("awaits hydration and each update independently of other subscribers", () =>
-    Effect.runPromise(awaitsHydrationAndEachUpdateIndependently(kind)));
+describe.each<replicatedStateDeliveryTypes.Kind>(["mutable", "attached"])(
+  "%s public delivery",
+  (kind) => {
+    test("awaits hydration and each update independently of other subscribers", () =>
+      Effect.runPromise(awaitsHydrationAndEachUpdateIndependently(kind)));
 
-  test.each([100, 101, 102, 201, 202])("bounds %i pending deliveries", (count) =>
-    Effect.runPromise(
-      Effect.gen(function* () {
-        const { state, publish } = fixture(kind);
-        const hydration = deferred();
-        const received: number[] = [];
-        state.subscribe((value) => {
-          received.push(value.value);
-          if (value.value === 0) return hydration.promise;
-          return undefined;
-        });
-        for (let value = 1; value <= count; value += 1) publish({ value }, BACKGROUND_CONTEXT);
-        expect(received).toEqual([0]);
-        hydration.resolve();
-        yield* Effect.promise(() => hydration.promise);
-        const first = Math.floor((count - 1) / 100) * 100 + 1;
-        expect(received).toEqual([
-          0,
-          ...Array.from({ length: count - first + 1 }, (_, index) => first + index),
-        ]);
-      }),
-    ),
-  );
+    test.each([100, 101, 102, 201, 202])("bounds %i pending deliveries", (count) =>
+      Effect.runPromise(
+        Effect.gen(function* () {
+          const { state, publish } = fixture(kind);
+          const hydration = deferred();
+          const received: number[] = [];
+          state.subscribe((value) => {
+            received.push(value.value);
+            if (value.value === 0) return hydration.promise;
+            return undefined;
+          });
+          for (let value = 1; value <= count; value += 1) publish({ value }, BACKGROUND_CONTEXT);
+          expect(received).toEqual([0]);
+          hydration.resolve();
+          yield* Effect.promise(() => hydration.promise);
+          const first = Math.floor((count - 1) / 100) * 100 + 1;
+          expect(received).toEqual([
+            0,
+            ...Array.from({ length: count - first + 1 }, (_, index) => first + index),
+          ]);
+        }),
+      ),
+    );
 
-  test("excludes a running update from overflow and retains exact value/context/delivery", () =>
-    Effect.runPromise(excludesARunningUpdateFromOverflow(kind)));
+    test("excludes a running update from overflow and retains exact value/context/delivery", () =>
+      Effect.runPromise(excludesARunningUpdateFromOverflow(kind)));
 
-  test("serializes reentrant hydration and update callbacks", () => {
-    serializesReentrantHydrationAndUpdateCallbacks(kind);
-  });
+    test("serializes reentrant hydration and update callbacks", () => {
+      serializesReentrantHydrationAndUpdateCallbacks(kind);
+    });
 
-  test("treats two subscriptions of the same callback independently", () =>
-    Effect.runPromise(treatsTwoSubscriptionsOfTheSame(kind)));
+    test("treats two subscriptions of the same callback independently", () =>
+      Effect.runPromise(treatsTwoSubscriptionsOfTheSame(kind)));
 
-  test("unsubscribe drops queued callbacks without joining or aborting the running callback", () =>
-    Effect.runPromise(unsubscribeDropsQueuedCallbacksWithoutJoining(kind)));
-});
+    test("unsubscribe drops queued callbacks without joining or aborting the running callback", () =>
+      Effect.runPromise(unsubscribeDropsQueuedCallbacksWithoutJoining(kind)));
+  },
+);

@@ -6,29 +6,31 @@ import { describe, it } from "vite-plus/test";
 import { WebSocketServer } from "ws";
 
 import {
+  type Host,
+  type WebSocketLike,
   acceptWebSockets,
   createHost,
-  type Host,
   hostNamed,
   inflateMessage,
   isChordError,
   method,
   remote,
-  type WebSocketLike,
   webSocketLink,
 } from "../src/index.ts";
-import { latch } from "./fixtures/timing.ts";
+import timing from "./fixtures/timing.ts";
+
+const { latch } = timing;
 
 const Board = remote("t.board", {
-  version: 1,
-  input: Type.Object({}),
   host: hostNamed("server"),
+  input: Type.Object({}),
   variants: {
     main: {
-      state: { notes: Type.Array(Type.String()) },
       methods: { add: method(Type.String()), who: method(undefined, Type.Unknown()) },
+      state: { notes: Type.Array(Type.String()) },
     },
   },
+  version: 1,
 });
 
 type Principal = (request: { readonly url?: string | undefined }) => unknown;
@@ -39,7 +41,7 @@ const withSocketServer = <A>(
   use: (port: number) => Effect.Effect<A>,
 ): Effect.Effect<A> =>
   Effect.gen(function* () {
-    const wss = new WebSocketServer({ port: 0, host: "127.0.0.1" });
+    const wss = new WebSocketServer({ host: "127.0.0.1", port: 0 });
     yield* Effect.callback<void>((resume) => {
       wss.once("listening", () => resume(Effect.void));
     });
@@ -55,27 +57,27 @@ const withSocketServer = <A>(
 
 const socketHost = (name: string, socket: WebSocket, client = true): Host =>
   createHost({
-    self: { kind: "host" },
     name,
-    ...(client ? { kind: "client" as const } : {}),
+    onError: () => {},
+    self: { kind: "host" },
     upstream: {
       link: webSocketLink(socket as unknown as WebSocketLike),
       principal: { kind: "server" },
     },
-    onError: () => {},
+    ...(client ? { kind: "client" as const } : {}),
   });
 
 const serveBoard = (server: Host): void => {
   server.serve(Board, (_input, principal, self) => {
     const notes = self.state("notes", Type.Array(Type.String()), []);
     return {
-      variant: "main",
-      notes,
       add: (text, ctx) => {
         notes.change(ctx, (draft) => {
           draft.push(text);
         });
       },
+      notes,
+      variant: "main",
       who: () => principal,
     };
   });
@@ -129,7 +131,7 @@ const refusesImpostorAndBadToken = (port: number) =>
   });
 
 const servesABrowserStyleClientOver = Effect.gen(function* () {
-  const server = createHost({ self: { kind: "host" }, name: "server", onError: () => {} });
+  const server = createHost({ name: "server", onError: () => {}, self: { kind: "host" } });
   serveBoard(server);
   yield* withSocketServer(server, byToken, (port) =>
     Effect.andThen(stampsAcceptedBrowser(port), refusesImpostorAndBadToken(port)),
@@ -183,10 +185,10 @@ const closesOnPackedClientMessage = (url: string) =>
 
 const largeSnapshotsAndResultsReachThe = Effect.gen(function* () {
   const notes = Array.from({ length: 40 }, (_, i) => `${i}:${"x".repeat(4000)}`);
-  const server = createHost({ self: { kind: "host" }, name: "server", onError: () => {} });
+  const server = createHost({ name: "server", onError: () => {}, self: { kind: "host" } });
   server.serve(Board, (_input, _principal, self) => {
     const state = self.state("notes", Type.Array(Type.String()), notes);
-    return { variant: "main", notes: state, add: () => {}, who: () => notes };
+    return { add: () => {}, notes: state, variant: "main", who: () => notes };
   });
   yield* withSocketServer(
     server,

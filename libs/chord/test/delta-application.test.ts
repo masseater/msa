@@ -1,6 +1,9 @@
 import { describe, expect, it } from "vite-plus/test";
 
 import {
+  type Op,
+  UnsafePathError,
+  type WireOp,
   apply,
   applyImmutable,
   assertValidOp,
@@ -8,9 +11,6 @@ import {
   decoder,
   encoder,
   isBase,
-  type Op,
-  UnsafePathError,
-  type WireOp,
 } from "../src/delta/index.ts";
 
 const appliesMutableAndImmutableOperations = (): void => {
@@ -19,15 +19,15 @@ const appliesMutableAndImmutableOperations = (): void => {
     ["p", ["values"], 1, 1, [3, 4]],
     ["s", ["nested", "value"], 2],
   ];
-  const base = { text: "a", values: [1, 2], nested: { value: 1 }, stable: { value: 9 } };
+  const base = { nested: { value: 1 }, stable: { value: 9 }, text: "a", values: [1, 2] };
   const immutable = applyImmutable(base, operations);
   expect(immutable).toEqual({
-    text: "ab",
-    values: [1, 3, 4],
     nested: { value: 2 },
     stable: { value: 9 },
+    text: "ab",
+    values: [1, 3, 4],
   });
-  expect(base).toEqual({ text: "a", values: [1, 2], nested: { value: 1 }, stable: { value: 9 } });
+  expect(base).toEqual({ nested: { value: 1 }, stable: { value: 9 }, text: "a", values: [1, 2] });
   expect(immutable.stable).toBe(base.stable);
   expect(apply(structuredClone(base), operations)).toEqual(immutable);
 };

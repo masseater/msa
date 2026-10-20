@@ -7,19 +7,23 @@ import { describe, it } from "vite-plus/test";
 import { HostImpl } from "../src/host.ts";
 import {
   type Ctx,
-  createHost,
   type Frame,
-  hostFamily,
   type Link,
+  createHost,
+  hostFamily,
   memoryLinkPair,
   method,
   remote,
 } from "../src/index.ts";
-import { CountingLink, stateFrames } from "./fixtures/counting.ts";
-import { Blob, client, serveBlob, until } from "./fixtures/flow-units.ts";
+import counting from "./fixtures/counting.ts";
+import type countingTypes from "./fixtures/counting.types.ts";
+import flowUnits from "./fixtures/flow-units.ts";
+
+const { CountingLink, stateFrames } = counting;
+const { Blob, client, serveBlob, until } = flowUnits;
 
 const withLargeStreamsWaitingBehindA = Effect.gen(function* () {
-  const server = createHost({ self: { kind: "host" }, name: "server", onError: () => {} });
+  const server = createHost({ name: "server", onError: () => {}, self: { kind: "host" } });
   serveBlob(server, (name) => (name === "small" ? 1 : 500));
   const { host, link } = client(server, 64 * 1024);
   const bigs = ["a", "b", "c"].map((name) => host.hold(Blob, { name }));
@@ -38,7 +42,7 @@ const withLargeStreamsWaitingBehindA = Effect.gen(function* () {
 });
 
 const aSnapshotLargerThanTheWindow = Effect.gen(function* () {
-  const server = createHost({ self: { kind: "host" }, name: "server", onError: () => {} });
+  const server = createHost({ name: "server", onError: () => {}, self: { kind: "host" } });
   serveBlob(server, () => 300);
   const { host, link } = client(server, 16 * 1024);
   link.paused = true;
@@ -53,29 +57,29 @@ const aSnapshotLargerThanTheWindow = Effect.gen(function* () {
 });
 
 const aLinkThatReportsNoSizes = Effect.gen(function* () {
-  const server = createHost({ self: { kind: "host" }, name: "server", onError: () => {} });
+  const server = createHost({ name: "server", onError: () => {}, self: { kind: "host" } });
   serveBlob(server, () => 1);
   const [down, up] = memoryLinkPair();
   const unsized: Link = {
+    close: (reason) => down.close(reason),
     get closed() {
       return down.closed;
     },
+    onClose: (handler) => down.onClose(handler),
+    receive: (handler) => down.receive(handler),
     send: (frame: Frame) => {
       down.send(frame);
       return undefined;
     },
-    receive: (handler) => down.receive(handler),
-    onClose: (handler) => down.onClose(handler),
-    close: (reason) => down.close(reason),
   };
   server.accept(unsized, { principal: { user: "u" }, window: 1 });
   const link = new CountingLink(up);
   const host = createHost({
-    self: { kind: "host" },
-    name: "worker",
     kind: "client",
-    upstream: { link, principal: { kind: "server" } },
+    name: "worker",
     onError: () => {},
+    self: { kind: "host" },
+    upstream: { link, principal: { kind: "server" } },
   });
   link.paused = true;
   const blob = host.hold(Blob, { name: "x" });
@@ -86,7 +90,7 @@ const aLinkThatReportsNoSizes = Effect.gen(function* () {
 });
 
 const waitingOpsStayUnderThePer = Effect.gen(function* () {
-  const server = createHost({ self: { kind: "host" }, name: "server", onError: () => {} });
+  const server = createHost({ name: "server", onError: () => {}, self: { kind: "host" } });
   serveBlob(server, () => 1);
   const cap = 8 * 1024;
   const { host, link, connection } = client(server, 1024, cap);
@@ -126,42 +130,42 @@ describe("flow control with units", () => {
 });
 
 const Counter = remote("t.e8-relayed", {
-  version: 1,
-  input: Type.Object({ session: Type.String() }),
   host: hostFamily("session:", "session"),
-  variants: { main: { state: { n: Type.Number() }, methods: { add: method(Type.Number()) } } },
+  input: Type.Object({ session: Type.String() }),
+  variants: { main: { methods: { add: method(Type.Number()) }, state: { n: Type.Number() } } },
+  version: 1,
 });
 
 const serveRelayedCounter = (created: HostImpl): void => {
   created.serve(Counter, (_input, _principal, self) => {
     const n = self.state("n", Type.Number(), 0);
     return {
-      variant: "main",
-      n,
       add: (delta: number, ctx: Ctx) => {
         n.replace(ctx, n.value + delta);
       },
+      n,
+      variant: "main",
     };
   });
 };
 
 function cluster() {
-  const server = createHost({ self: { kind: "host" }, name: "server", onError: () => {} });
+  const server = createHost({ name: "server", onError: () => {}, self: { kind: "host" } });
   let worker: HostImpl | undefined;
-  let toWorker: CountingLink | undefined;
+  let toWorker: countingTypes.CountingLink | undefined;
   server.route("session:", {
-    principal: (name) => ({ host: name }),
     authorize: () => true,
+    principal: (name) => ({ host: name }),
     resolve: (name) =>
       Effect.runPromise(
         Effect.sync(() => {
           if (toWorker !== undefined) return toWorker;
           const [down, up] = memoryLinkPair();
           const created = new HostImpl({
-            self: { kind: "host" },
             name,
-            upstream: { link: up, principal: { kind: "server" } },
             onError: () => {},
+            self: { kind: "host" },
+            upstream: { link: up, principal: { kind: "server" } },
           });
           serveRelayedCounter(created);
           worker = created;
@@ -174,15 +178,15 @@ function cluster() {
     const [down, up] = memoryLinkPair();
     server.accept(down, {
       principal,
-      ...(window === undefined ? {} : { window, pendingCap: window * 2 }),
+      ...(window === undefined ? {} : { pendingCap: window * 2, window }),
     });
     const link = new CountingLink(up);
     const host = createHost({
-      self: { kind: "host" },
-      name: "browser",
       kind: "client",
-      upstream: { link, principal: { kind: "server" } },
+      name: "browser",
       onError: () => {},
+      self: { kind: "host" },
+      upstream: { link, principal: { kind: "server" } },
     });
     return { host, link, up };
   };
@@ -191,7 +195,7 @@ function cluster() {
     [...(server as HostImpl).connections]
       .filter((connection) => connection.peer.kind === "host")
       .reduce((sum, connection) => sum + connection.relayedRefs.size, 0);
-  return { server, browser, served, relayed, toWorker: () => toWorker! };
+  return { browser, relayed, served, server, toWorker: () => toWorker! };
 }
 
 const eachOriginHoldIsOneDownstream = Effect.gen(function* () {

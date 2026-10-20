@@ -3,9 +3,12 @@ import assert from "node:assert/strict";
 import { type Context, Effect } from "effect";
 import { describe, it, onTestFinished } from "vite-plus/test";
 
-import { createHost, type Facet, type Host, isChordError, memoryLinkPair } from "../src/index.ts";
-import { Greeter, GreeterV2, ServerGreeter, greeterFacet, setup } from "./fixtures/cluster.ts";
-import { latch, tick } from "./fixtures/timing.ts";
+import { type Facet, type Host, createHost, isChordError, memoryLinkPair } from "../src/index.ts";
+import cluster from "./fixtures/cluster.ts";
+import timing from "./fixtures/timing.ts";
+
+const { Greeter, GreeterV2, ServerGreeter, greeterFacet, setup } = cluster;
+const { latch, tick } = timing;
 
 const preparesEveryHostCommitsTheServer = Effect.gen(function* () {
   const services = yield* Effect.context<never>();
@@ -79,7 +82,7 @@ const aWorkerGateBlockedPastIts = Effect.gen(function* () {
   modules.set("greeter", bumped);
   yield* Effect.promise(() =>
     assert.rejects(
-      server.reload([], { remote: { "session:": ["greeter"] }, gateDeadline: 30 }),
+      server.reload([], { gateDeadline: 30, remote: { "session:": ["greeter"] } }),
       (error) => {
         assert.ok(isChordError(error, "aborted") && error.reason === "gate_deadline");
         assert.match(error.message, /session:S1: .*blocking roots: server#\w+:\d+/u);
@@ -96,22 +99,22 @@ const aWorkerGateBlockedPastIts = Effect.gen(function* () {
 const coldWorkerIsReconciled = (server: Host, services: Context.Context<never>) =>
   Effect.gen(function* () {
     const cold = createHost({
-      self: { kind: "host" },
-      name: "session:cold",
       loader: () =>
         Effect.runPromiseWith(services)(
           Effect.sync(() => {
             assert.fail("Removed modules must not be imported");
           }),
         ),
+      name: "session:cold",
       onError: () => {},
+      self: { kind: "host" },
     });
     onTestFinished(() => cold.close());
     yield* Effect.promise(() => cold.install(greeterFacet("v1")));
     const old = cold.hold(Greeter, { session: "cold" });
     yield* Effect.promise(() => old.ready);
     const [down, up] = memoryLinkPair();
-    server.accept(down, { principal: { worker: "cold" }, kind: "host", name: "session:cold" });
+    server.accept(down, { kind: "host", name: "session:cold", principal: { worker: "cold" } });
     cold.connect(up, { principal: { kind: "server" } });
     for (let i = 0; i < 20 && old.status !== "gone"; i++) yield* tick;
     assert.equal(old.status, "gone");
@@ -126,21 +129,21 @@ const freshWorkerLoadsCurrentCode = (
 ) =>
   Effect.gen(function* () {
     const fresh = createHost({
-      self: { kind: "host" },
-      name: "session:fresh",
       loader: (names) =>
         Effect.runPromiseWith(services)(
           Effect.sync(() => names.map((name) => modules.get(String(name))!)),
         ),
+      name: "session:fresh",
       onError: () => {},
+      self: { kind: "host" },
     });
     onTestFinished(() => fresh.close());
     yield* Effect.promise(() => fresh.install(greeterFacet("v1")));
     const [freshDown, freshUp] = memoryLinkPair();
     server.accept(freshDown, {
-      principal: { worker: "fresh" },
       kind: "host",
       name: "session:fresh",
+      principal: { worker: "fresh" },
     });
     fresh.connect(freshUp, { principal: { kind: "server" } });
     assert.equal(
@@ -167,7 +170,7 @@ const removesFacetsFromServerAndWorkers = Effect.gen(function* () {
   assert.equal(yield* Effect.promise(() => onServer.greet("a")), "v1 a");
   assert.equal(yield* Effect.promise(() => child.greet("a")), "v1 a");
   yield* Effect.promise(() =>
-    server.reload([], { remove: ["greeter"], remoteRemove: { "session:": ["greeter"] } }),
+    server.reload([], { remoteRemove: { "session:": ["greeter"] }, remove: ["greeter"] }),
   );
   for (let i = 0; i < 20 && child.status !== "gone"; i++) yield* tick;
   assert.equal(onServer.status, "gone");
@@ -198,17 +201,17 @@ const browsersAreNotParticipantsTheySee = Effect.gen(function* () {
   const { server, modules, down: workerLink } = setup();
   server.route("session:", {
     authorize: () => true,
-    resolve: () => Effect.runPromiseWith(services)(Effect.sync(() => workerLink)),
     principal: (name) => ({ host: name }),
+    resolve: () => Effect.runPromiseWith(services)(Effect.sync(() => workerLink)),
   });
   const [down, up] = memoryLinkPair();
   server.accept(down, { principal: { guest: "g" } });
   const browser = createHost({
-    self: { kind: "host" },
-    name: "browser",
     kind: "client",
-    upstream: { link: up, principal: { kind: "server" } },
+    name: "browser",
     onError: () => {},
+    self: { kind: "host" },
+    upstream: { link: up, principal: { kind: "server" } },
   });
   const viewer = browser.hold(Greeter, { session: "S1" });
   assert.equal(yield* Effect.promise(() => viewer.greet("a")), "v1 a");
@@ -224,8 +227,8 @@ const browsersAreNotParticipantsTheySee = Effect.gen(function* () {
     name: "greeter",
     setup: (api) =>
       api.serve(GreeterV2, () => ({
-        variant: "main",
         hello: (name: string) => `hi ${name}`,
+        variant: "main",
       })),
   });
   yield* Effect.promise(() => server.reload([], { remote: { "session:": ["greeter"] } }));

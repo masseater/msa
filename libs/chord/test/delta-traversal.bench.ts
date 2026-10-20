@@ -6,15 +6,13 @@ import { Console, Effect, Exit } from "effect";
 
 import { track } from "../src/delta/index.ts";
 import { sha256Hex } from "../src/platform.ts";
-import {
-  collectGarbage,
-  decodeJson,
-  encodeJson,
-  encodePrettyJson,
-  nowIso,
-} from "./fixtures/benchmark.ts";
-import { readText, runNode, writeText } from "./fixtures/platform.ts";
-import { tick } from "./fixtures/timing.ts";
+import benchmark from "./fixtures/benchmark.ts";
+import platform from "./fixtures/platform.ts";
+import timing from "./fixtures/timing.ts";
+
+const { collectGarbage, decodeJson, encodeJson, encodePrettyJson, nowIso } = benchmark;
+const { readText, runNode, writeText } = platform;
+const { tick } = timing;
 
 type Point = { x: number; y: number; pressure: number };
 type Drawing = { strokes: { id: number; color: string; width: number; points: Point[] }[] };
@@ -25,14 +23,14 @@ const gc = Effect.andThen(collectGarbage(4), tick);
 function fixture(strokes: number, points: number): Drawing {
   return {
     strokes: Array.from({ length: strokes }, (_stroke, id) => ({
-      id,
       color: id % 2 === 1 ? "#405060" : "#102030",
-      width: 2,
+      id,
       points: Array.from({ length: points }, (_point, p) => ({
+        pressure: (p % 10) / 10,
         x: p * 3 + (id % 127),
         y: p * 7 + (id % 131),
-        pressure: (p % 10) / 10,
       })),
+      width: 2,
     })),
   };
 }
@@ -57,13 +55,13 @@ function setup(mode: Mode, input: Drawing): { state: Drawing; finish(): void } {
     const tracker = track(input);
     const change = tracker.beginChange();
     return {
-      state: change.state,
       finish() {
         tracker.adopt(change.prepare());
       },
+      state: change.state,
     };
   }
-  return { state: mode === "proxy" ? membrane(input) : input, finish() {} };
+  return { finish() {}, state: mode === "proxy" ? membrane(input) : input };
 }
 function prepare(mode: Mode, strokes: number, points: number) {
   return setup(mode, fixture(strokes, points));
@@ -142,20 +140,20 @@ const measure = (mode: Mode, strokes: number, points: number, trial: number) =>
     assert.equal(t.state.strokes.length, strokes);
     t.finish();
     return {
-      mode,
-      strokes,
-      points,
-      trial,
-      coldMs,
-      warmMs,
-      checksum,
-      readyMiB: (ready - empty) / MiB,
       afterColdMiB: (afterCold - empty) / MiB,
-      retainedMiB: (retained - empty) / MiB,
+      checksum,
+      coldMs,
       lazyProxyMiB: (afterCold - ready) / MiB,
-      sampledColdPeakMiB: (afterColdBeforeGc - empty) / MiB,
       maxRssMiB: process.resourceUsage().maxRSS / 1024,
+      mode,
+      points,
+      readyMiB: (ready - empty) / MiB,
+      retainedMiB: (retained - empty) / MiB,
+      sampledColdPeakMiB: (afterColdBeforeGc - empty) / MiB,
       sourceHashes: yield* sources,
+      strokes,
+      trial,
+      warmMs,
     };
   });
 type Measurement = Effect.Success<ReturnType<typeof measure>>;
@@ -209,11 +207,11 @@ const runTrial = (run: Run, config: Config) =>
         stdout: Exit.isSuccess(exit) ? exit.value.stdout : "",
       });
     const report = {
-      node: process.version,
       date: yield* nowIso,
-      sourceHashes: run.hashes,
-      results: run.results,
       failures: run.failures,
+      node: process.version,
+      results: run.results,
+      sourceHashes: run.hashes,
     };
     yield* writeText(run.output, yield* encodePrettyJson(report));
     yield* Console.log(`${config.trial} ${config.mode}: ${passed ? "ok" : "FAILED"}`);
@@ -224,16 +222,16 @@ const runAll = Effect.gen(function* () {
   const outIndex = process.argv.indexOf("--out");
   const output = outIndex < 0 ? "/tmp/delta-traversal.json" : argumentAfter(outIndex, "--out");
   const selected = parseModes();
-  const run: Run = { output, hashes: yield* sources, results: [], failures: [] };
+  const run: Run = { failures: [], hashes: yield* sources, output, results: [] };
   for (let trial = 0; trial < (quick ? 1 : 3); trial++) {
     const modes: Mode[] = trial % 2 === 1 ? ["delta", "proxy", "raw"] : ["raw", "proxy", "delta"];
     for (const mode of modes) {
       if (selected.has(mode))
-        yield* runTrial(run, { mode, strokes: quick ? 200 : 20000, points: 100, trial });
+        yield* runTrial(run, { mode, points: 100, strokes: quick ? 200 : 20000, trial });
     }
   }
   yield* Console.log(`Results: ${output}; failures: ${run.failures.length}`);
   if (run.failures.length > 0) process.exitCode = 1;
 });
 
-await Effect.runPromise(process.argv.includes("--worker") ? runWorker : runAll);
+void Effect.runPromise(process.argv.includes("--worker") ? runWorker : runAll);

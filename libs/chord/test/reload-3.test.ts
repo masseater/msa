@@ -5,16 +5,19 @@ import { Type } from "typebox";
 import { describe, it, onTestFinished, vi } from "vite-plus/test";
 
 import {
-  createHost,
   type Facet,
+  createHost,
   hostNamed,
   isChordError,
   local,
   method,
   remote,
 } from "../src/index.ts";
-import { CountV1, Greeter, quiet } from "./fixtures/reload.ts";
-import { abortOf, latch, tick } from "./fixtures/timing.ts";
+import reloadModule from "./fixtures/reload.ts";
+import timing from "./fixtures/timing.ts";
+
+const { CountV1, Greeter, quiet } = reloadModule;
+const { abortOf, latch, tick } = timing;
 
 const aTaskThatIgnoresItsAbort = Effect.gen(function* () {
   const services = yield* Effect.context<never>();
@@ -24,8 +27,8 @@ const aTaskThatIgnoresItsAbort = Effect.gen(function* () {
   });
   const errors: unknown[] = [];
   const host = createHost({
-    self: { kind: "host" },
     onError: (error) => errors.push(error),
+    self: { kind: "host" },
     taskStopDeadline: 30,
   });
   const log: string[] = [];
@@ -99,51 +102,51 @@ const aFacetSSignalAbortsWhen = Effect.gen(function* () {
 });
 
 const DocV1 = remote("t.rdoc", {
-  version: 1,
-  input: Type.Object({}),
   host: hostNamed("host"),
+  input: Type.Object({}),
   variants: {
     main: { methods: { read: method(undefined, Type.Object({ text: Type.String() })) } },
   },
+  version: 1,
 });
 
 const DocBroken = remote("t.rdoc", {
-  version: 1,
-  input: Type.Object({}),
   host: hostNamed("host"),
+  input: Type.Object({}),
   variants: {
     main: { methods: { read: method(undefined, Type.Object({ text: Type.Number() })) } },
   },
+  version: 1,
 });
 
 const DocV2 = remote("t.rdoc", {
-  version: 2,
-  input: Type.Object({}),
   host: hostNamed("host"),
+  input: Type.Object({}),
   variants: {
     main: { methods: { fetch: method(undefined, Type.Object({ body: Type.String() })) } },
   },
+  version: 2,
 });
 
 const checksContractsAtReloadForgottenBumps = Effect.gen(function* () {
   const host = quiet();
   host.install({
     name: "doc",
-    setup: (api) => api.serve(DocV1, () => ({ variant: "main", read: () => ({ text: "v1" }) })),
+    setup: (api) => api.serve(DocV1, () => ({ read: () => ({ text: "v1" }), variant: "main" })),
   });
   const consumer = host.hold(DocV1, {});
   assert.deepEqual(yield* Effect.promise(() => consumer.read()), { text: "v1" });
 
   const broken: Facet = {
     name: "doc",
-    setup: (api) => api.serve(DocBroken, () => ({ variant: "main", read: () => ({ text: 1 }) })),
+    setup: (api) => api.serve(DocBroken, () => ({ read: () => ({ text: 1 }), variant: "main" })),
   };
   yield* Effect.promise(() => assert.rejects(host.reload([broken]), /without a version bump/u));
 
   const fetch = () => ({ body: "v2" });
   const v2: Facet = {
     name: "doc",
-    setup: (api) => api.serve(DocV2, () => ({ variant: "main", fetch })),
+    setup: (api) => api.serve(DocV2, () => ({ fetch, variant: "main" })),
   };
   yield* Effect.promise(() =>
     assert.rejects(host.reload([v2]), (error) => isChordError(error, "contract_mismatch")),
@@ -152,13 +155,13 @@ const checksContractsAtReloadForgottenBumps = Effect.gen(function* () {
   const adapted: Facet = {
     name: "doc",
     setup: (api) =>
-      api.serve(DocV2, () => ({ variant: "main", fetch }), {
+      api.serve(DocV2, () => ({ fetch, variant: "main" }), {
         accepts: {
           1: (current) => ({
-            variant: "main",
             read: () => ({
               text: `${(current["fetch"] as typeof fetch)().body} via adapter`,
             }),
+            variant: "main",
           }),
         },
       }),
@@ -170,9 +173,9 @@ const checksContractsAtReloadForgottenBumps = Effect.gen(function* () {
 });
 
 const Sum = local("t.sum", {
-  version: 1,
   input: Type.Object({}),
   members: { sum: Type.Object({ v: Type.Number() }) },
+  version: 1,
 });
 
 interface NumberEvents {

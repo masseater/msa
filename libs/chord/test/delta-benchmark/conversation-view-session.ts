@@ -3,45 +3,41 @@ import { performance } from "node:perf_hooks";
 
 import { Effect } from "effect";
 
-import { applyImmutable, type JsonValue, type Op } from "../../src/delta/index.ts";
-import { cloneTrusted } from "./benchmark-worker-model.ts";
-import {
-  commonEntryPrefix,
-  makeEntry,
-  prefixDocumentOperations,
-  resolveActiveLineage,
-} from "./conversation-view-content.ts";
-import { planCommit } from "./conversation-view-plan.ts";
-import type {
-  ChangeLike,
-  CommitPlan,
-  DeltaFrame,
-  DocumentKey,
-  DocumentWatchFrame,
-  JsonObject,
-  PreparedLike,
-} from "./conversation-view-types.ts";
-import { ConversationViewWatches } from "./conversation-view-watches.ts";
+import { type JsonValue, type Op, applyImmutable } from "../../src/delta/index.ts";
+import benchmarkWorkerModel from "./benchmark-worker-model.ts";
+import conversationViewContent from "./conversation-view-content.ts";
+import planCommit from "./conversation-view-plan.ts";
+import type conversationViewTypes from "./conversation-view-types.types.ts";
+import ConversationViewWatches from "./conversation-view-watches.ts";
 
-type Pending = { readonly key: DocumentKey; readonly change: ChangeLike<JsonObject> };
-type PreparedChange = Pending & { readonly prepared: PreparedLike<JsonObject> };
+const { cloneTrusted } = benchmarkWorkerModel;
+const { commonEntryPrefix, makeEntry, prefixDocumentOperations, resolveActiveLineage } =
+  conversationViewContent;
+
+type Pending = {
+  readonly key: conversationViewTypes.DocumentKey;
+  readonly change: conversationViewTypes.ChangeLike<conversationViewTypes.JsonObject>;
+};
+type PreparedChange = Pending & {
+  readonly prepared: conversationViewTypes.PreparedLike<conversationViewTypes.JsonObject>;
+};
 type Publication = {
-  readonly aggregateFrame: DeltaFrame | undefined;
-  readonly documentFrames: readonly DocumentWatchFrame[];
+  readonly aggregateFrame: conversationViewTypes.DeltaFrame | undefined;
+  readonly documentFrames: readonly conversationViewTypes.DocumentWatchFrame[];
 };
 
-export class ConversationViewSession extends ConversationViewWatches {
+class ConversationViewSession extends ConversationViewWatches {
   queuedConversationFrames(): number {
     return this.conversationWatches.reduce((total, watch) => total + watch.queue.length, 0);
   }
 
-  mutate(plan: CommitPlan): Pending[] {
+  mutate(plan: conversationViewTypes.CommitPlan): Pending[] {
     const start = performance.now();
     const pending: Pending[] = [];
     for (const mutation of plan.docs) {
       const change = this.documentTrackers[mutation.key].beginChange();
       mutation.mutate(change.state);
-      pending.push({ key: mutation.key, change });
+      pending.push({ change, key: mutation.key });
     }
     if (plan.entryKind !== undefined) {
       let parent = this.head;
@@ -49,7 +45,7 @@ export class ConversationViewSession extends ConversationViewWatches {
         const active = resolveActiveLineage(this.records, this.head);
         parent = active[Math.max(0, active.length - 48)]?.id ?? null;
       }
-      const entry = makeEntry({ id: this.nextEntryId++, parent, kind: plan.entryKind });
+      const entry = makeEntry({ id: this.nextEntryId++, kind: plan.entryKind, parent });
       this.records.set(entry.id, entry);
       this.head = entry.id;
     }
@@ -60,8 +56,8 @@ export class ConversationViewSession extends ConversationViewWatches {
   prepareAndAdopt(pending: readonly Pending[]): PreparedChange[] {
     const prepareStart = performance.now();
     const prepared = pending.map(({ key, change }) => ({
-      key,
       change,
+      key,
       prepared: change.prepare(),
     }));
     this.phaseSamples.prepare.push(performance.now() - prepareStart);
@@ -71,8 +67,11 @@ export class ConversationViewSession extends ConversationViewWatches {
     return prepared;
   }
 
-  documentFrames(prepared: readonly PreparedChange[], aggregateOps: Op[]): DocumentWatchFrame[] {
-    const frames: DocumentWatchFrame[] = [];
+  documentFrames(
+    prepared: readonly PreparedChange[],
+    aggregateOps: Op[],
+  ): conversationViewTypes.DocumentWatchFrame[] {
+    const frames: conversationViewTypes.DocumentWatchFrame[] = [];
     for (const item of prepared) {
       if (item.prepared.ops.length === 0) continue;
       this.documentSequences[item.key] += 1;
@@ -80,8 +79,8 @@ export class ConversationViewSession extends ConversationViewWatches {
       this.documentOperationCount += documentOps.length;
       this.publishedDocumentBatches += 1;
       frames.push({
+        frame: { kind: "delta", ops: documentOps, sequence: this.documentSequences[item.key] },
         key: item.key,
-        frame: { kind: "delta", sequence: this.documentSequences[item.key], ops: documentOps },
       });
       if (item.key !== "audit")
         aggregateOps.push(...prefixDocumentOperations(item.key, documentOps));
@@ -104,23 +103,29 @@ export class ConversationViewSession extends ConversationViewWatches {
     aggregateOps.push(["s", ["conversation", "head"], this.head]);
   }
 
-  synthesize(plan: CommitPlan, prepared: readonly PreparedChange[]): Publication {
+  synthesize(
+    plan: conversationViewTypes.CommitPlan,
+    prepared: readonly PreparedChange[],
+  ): Publication {
     const start = performance.now();
     const aggregateOps: Op[] = [];
     const documentFrames = this.documentFrames(prepared, aggregateOps);
     if (plan.entryKind !== undefined) this.entryOperations(aggregateOps);
-    let aggregateFrame: DeltaFrame | undefined;
+    let aggregateFrame: conversationViewTypes.DeltaFrame | undefined;
     if (aggregateOps.length > 0) {
       this.conversationSequence += 1;
       this.aggregateOperationCount += aggregateOps.length;
       this.publishedAggregateBatches += 1;
-      aggregateFrame = { kind: "delta", sequence: this.conversationSequence, ops: aggregateOps };
+      aggregateFrame = { kind: "delta", ops: aggregateOps, sequence: this.conversationSequence };
     }
     this.phaseSamples.synthesize.push(performance.now() - start);
     return { aggregateFrame, documentFrames };
   }
 
-  project(plan: CommitPlan, prepared: readonly PreparedChange[]): Publication {
+  project(
+    plan: conversationViewTypes.CommitPlan,
+    prepared: readonly PreparedChange[],
+  ): Publication {
     const projectStart = performance.now();
     const publication = this.synthesize(plan, prepared);
     const applyStart = performance.now();
@@ -165,7 +170,7 @@ export class ConversationViewSession extends ConversationViewWatches {
     this.deferredResetFrames.length = 0;
   }
 
-  publish(plan: CommitPlan): Publication {
+  publish(plan: conversationViewTypes.CommitPlan): Publication {
     const sessionStart = performance.now();
     const prepared = this.prepareAndAdopt(this.mutate(plan));
     const publication = this.project(plan, prepared);
@@ -178,7 +183,11 @@ export class ConversationViewSession extends ConversationViewWatches {
     return publication;
   }
 
-  checkCommit(plan: CommitPlan, publication: Publication, before: readonly [number, number]): void {
+  checkCommit(
+    plan: conversationViewTypes.CommitPlan,
+    publication: Publication,
+    before: readonly [number, number],
+  ): void {
     if (plan.expectedConversationNoop) {
       this.noOpCommitCount += 1;
       assert.equal(publication.aggregateFrame, undefined);
@@ -204,3 +213,5 @@ export class ConversationViewSession extends ConversationViewWatches {
     });
   }
 }
+
+export default ConversationViewSession;

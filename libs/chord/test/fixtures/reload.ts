@@ -1,39 +1,23 @@
 import { Effect } from "effect";
 import { Type } from "typebox";
 
-import {
-  type Ctx,
-  createHost,
-  type Facet,
-  local,
-  method,
-  type Self,
-  type ServeOptions,
-  type StateOptions,
-} from "../../src/index.ts";
-import { tick } from "./timing.ts";
+import { type Ctx, type Facet, createHost, local, method } from "../../src/index.ts";
+import type reloadTypes from "./reload.types.ts";
+import timing from "./timing.ts";
 
-export const quiet = () => createHost({ self: { kind: "host" }, onError: () => {} });
+const { tick } = timing;
 
-export const Greeter = local("t.greeter", {
-  version: 1,
+const quiet = () => createHost({ onError: () => {}, self: { kind: "host" } });
+
+const Greeter = local("t.greeter", {
   input: Type.Object({ id: Type.Optional(Type.String({ default: "a" })) }),
-  members: { greet: method(Type.String(), Type.String()), count: Type.Unknown() },
+  members: { count: Type.Unknown(), greet: method(Type.String(), Type.String()) },
+  version: 1,
 });
 
-export const CountV1 = Type.Object({ n: Type.Number() });
+const CountV1 = Type.Object({ n: Type.Number() });
 
-export interface GreeterSpec {
-  readonly greeting: string;
-  readonly schema?: typeof CountV1 | ReturnType<typeof Type.Object>;
-  readonly initial?: object;
-  readonly bump?: (draft: Record<string, number>) => void;
-  readonly options?: ServeOptions;
-  readonly state?: StateOptions<never>;
-  readonly extra?: (self: Self, input: { id?: string }) => void;
-}
-
-export function greeterFacet(spec: GreeterSpec): Facet {
+function greeterFacet(spec: reloadTypes.GreeterSpec): Facet {
   return {
     name: "greeter",
     setup: (api) =>
@@ -67,7 +51,7 @@ export function greeterFacet(spec: GreeterSpec): Facet {
   };
 }
 
-export const until = (check: () => Promise<boolean>): Effect.Effect<void> =>
+const until = (check: () => Promise<boolean>): Effect.Effect<void> =>
   Effect.gen(function* () {
     for (let attempt = 0; attempt < 200; attempt++) {
       if (yield* Effect.promise(() => check())) return;
@@ -75,3 +59,13 @@ export const until = (check: () => Promise<boolean>): Effect.Effect<void> =>
     }
     throw new Error("condition not reached");
   });
+
+const reload = {
+  CountV1,
+  Greeter,
+  greeterFacet,
+  quiet,
+  until,
+};
+
+export default reload;

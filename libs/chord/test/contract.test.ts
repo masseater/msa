@@ -19,23 +19,23 @@ import { canonicalIdentity, fits, normalize } from "../src/schema.ts";
 const View = Type.Object({ text: Type.String() });
 
 const chatV1 = remote("t.chat", {
-  version: 1,
-  input: Type.Object({ session: Type.String(), conversation: Type.Number({ default: 0 }) }),
   host: hostFamily("session:", "session"),
+  input: Type.Object({ conversation: Type.Number({ default: 0 }), session: Type.String() }),
   variants: {
-    viewer: { state: { view: View } },
     participant: {
-      state: { view: View },
       methods: {
         send: method(Type.Object({ text: Type.String() }), Type.Object({ id: Type.Number() })),
       },
+      state: { view: View },
     },
+    viewer: { state: { view: View } },
   },
+  version: 1,
 });
 
 const normalizesInputAndOmitsDefaultsFrom = (): void => {
-  const a = normalize(chatV1.input, { session: "s", extra: 1 }, "input");
-  assert.deepEqual(a, { session: "s", conversation: 0 });
+  const a = normalize(chatV1.input, { extra: 1, session: "s" }, "input");
+  assert.deepEqual(a, { conversation: 0, session: "s" });
   const b = normalize(chatV1.input, { conversation: 0, session: "s" }, "input");
   assert.equal(canonicalIdentity(chatV1.input, a), canonicalIdentity(chatV1.input, b));
   assert.equal(canonicalIdentity(chatV1.input, a), '{"session":"s"}');
@@ -53,14 +53,14 @@ const fingerprintsAreStableAndDescriptionBased = (): void => {
 
 const rejectsReservedMemberNamesAndOpaque = (): void => {
   assert.throws(() =>
-    local("t.x", { version: 1, input: Type.Object({}), members: { status: method() } }),
+    local("t.x", { input: Type.Object({}), members: { status: method() }, version: 1 }),
   );
   assert.throws(() =>
     remote("t.x", {
       host: hostNamed("server"),
-      version: 1,
       input: Type.Object({}),
       variants: { a: { state: { h: opaque("x@1") as never } } },
+      version: 1,
     }),
   );
 };
@@ -71,13 +71,13 @@ const coversAdditiveChangesAndRefusesBreaking = (): void => {
     variants: {
       ...chatV1.def.variants,
       participant: {
-        state: { view: Type.Object({ text: Type.String(), extra: Type.Number() }) },
         methods: {
           send: method(
             Type.Object({ text: Type.String(), urgent: Type.Optional(Type.Boolean()) }),
-            Type.Object({ id: Type.Number(), at: Type.Number() }),
+            Type.Object({ at: Type.Number(), id: Type.Number() }),
           ),
         },
+        state: { view: Type.Object({ extra: Type.Number(), text: Type.String() }) },
       },
     },
   });
@@ -89,13 +89,13 @@ const coversAdditiveChangesAndRefusesBreaking = (): void => {
     variants: {
       ...chatV1.def.variants,
       participant: {
-        state: { view: View },
         methods: {
           send: method(
             Type.Object({ text: Type.String(), urgent: Type.Boolean() }),
             Type.Object({ id: Type.Number() }),
           ),
         },
+        state: { view: View },
       },
     },
   });
@@ -117,7 +117,7 @@ const coversAdditiveChangesAndRefusesBreaking = (): void => {
 
 const methodsWithoutArgumentsOrResultDescribed = (): void => {
   const of = (members: NonNullable<Parameters<typeof local>[1]["members"]>) =>
-    local("t.methods", { version: 1, input: Type.Object({}), members }).description;
+    local("t.methods", { input: Type.Object({}), members, version: 1 }).description;
   const none = of({ m: method() });
   assert.deepEqual(none.variants[""]?.["m"], { kind: "method" });
   const withArgs = of({ m: method(Type.String()) });
@@ -144,8 +144,8 @@ const methodsWithoutArgumentsOrResultDescribed = (): void => {
 const bindsOtherVersionsOnlyThroughAccepts = (): void => {
   const v2 = remote("t.chat", {
     ...chatV1.def,
-    version: 2,
     variants: { viewer: { state: { body: View } } },
+    version: 2,
   });
   assert.throws(
     () => bind(v2, undefined, chatV1),
@@ -160,12 +160,12 @@ const bindsOtherVersionsOnlyThroughAccepts = (): void => {
 
 const comparesOpaqueMembersByNameVersion = (): void => {
   const a = local("t.idx", {
-    version: 1,
     input: Type.Object({}),
     members: {
       harness: opaque("h@1"),
       onChange: method(Type.Function([Type.String()], Type.Void())),
     },
+    version: 1,
   });
   const b = local("t.idx", { ...a.def, members: { ...a.def.members, harness: opaque("h@2") } });
   assert.match(coverage(b.description, a.description) ?? "", /opaque/u);

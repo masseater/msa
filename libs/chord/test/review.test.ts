@@ -5,19 +5,22 @@ import { Type } from "typebox";
 import { describe, it } from "vite-plus/test";
 
 import {
-  createHost,
   type Facet,
+  createHost,
   hostNamed,
   isChordError,
   local,
   method,
   remote,
 } from "../src/index.ts";
-import { Item, emitter } from "./fixtures/review.ts";
-import { ticks } from "./fixtures/timing.ts";
+import review from "./fixtures/review.ts";
+import timing from "./fixtures/timing.ts";
+
+const { Item, emitter } = review;
+const { ticks } = timing;
 
 const case1AFailingListenerSubscriptionFails = Effect.gen(function* () {
-  const host = createHost({ self: { kind: "host" }, onError: () => {} });
+  const host = createHost({ onError: () => {}, self: { kind: "host" } });
   const sources = {
     a: emitter<number>(),
     b: emitter<number>({ failSubscribe: true }),
@@ -47,29 +50,29 @@ const case1AFailingListenerSubscriptionFails = Effect.gen(function* () {
 });
 
 const CountedV1 = remote("t.counted", {
-  version: 1,
-  input: Type.Object({}),
   host: hostNamed("host"),
+  input: Type.Object({}),
   variants: { main: { state: { count: Type.Object({ n: Type.Number() }) } } },
+  version: 1,
 });
 
 const CountedV2 = remote("t.counted", {
-  version: 2,
-  input: Type.Object({}),
   host: hostNamed("host"),
+  input: Type.Object({}),
   variants: { main: { state: { count: Type.Object({ total: Type.Number() }) } } },
+  version: 2,
 });
 
 const case2MigrationIsValidatedAgainstThe = Effect.gen(function* () {
-  const host = createHost({ self: { kind: "host" }, dev: true, onError: () => {} });
+  const host = createHost({ dev: true, onError: () => {}, self: { kind: "host" } });
   host.install({
     name: "counted",
     setup: (api) =>
       api.serve(
         CountedV1,
         (_input, _principal, self) => ({
-          variant: "main",
           count: self.state("count", Type.Object({ n: Type.Number() }), { n: 3 }),
+          variant: "main",
         }),
         { linger: 60_000 },
       ),
@@ -85,13 +88,13 @@ const case2MigrationIsValidatedAgainstThe = Effect.gen(function* () {
           api.serve(
             CountedV2,
             (_input, _principal, self) => ({
-              variant: "main",
               count: self.state(
                 "count",
                 Type.Object({ total: Type.Number() }),
                 { total: 0 },
-                { version: 2, migrate: (old) => ({ total: (old as { n: number }).n }) },
+                { migrate: (old) => ({ total: (old as { n: number }).n }), version: 2 },
               ),
+              variant: "main",
             }),
             { linger: 60_000 },
           ),
@@ -107,7 +110,7 @@ const case2MigrationIsValidatedAgainstThe = Effect.gen(function* () {
 });
 
 const case1ACommitThatStillFails = Effect.gen(function* () {
-  const host = createHost({ self: { kind: "host" }, onError: () => {} });
+  const host = createHost({ onError: () => {}, self: { kind: "host" } });
   host.install({
     name: "item",
     setup: (api) => api.serve(Item, () => ({ version: () => "v1" })),
@@ -137,11 +140,11 @@ const case1ACommitThatStillFails = Effect.gen(function* () {
 });
 
 const reentrantObserversCallingAnotherObjectDuring = Effect.gen(function* () {
-  const host = createHost({ self: { kind: "host" }, onError: () => {} });
+  const host = createHost({ onError: () => {}, self: { kind: "host" } });
   const Other = local("t.other", {
-    version: 1,
     input: Type.Object({}),
     members: { version: method(undefined, Type.String()) },
+    version: 1,
   });
   const facet = (version: string): Facet => ({
     name: "pair",

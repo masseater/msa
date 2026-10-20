@@ -2,50 +2,48 @@ import { type Static, Type } from "typebox";
 
 import {
   type Factory,
-  forbidden,
   type Host,
+  type StateOptions,
+  forbidden,
   hostNamed,
   invalid,
   local,
   method,
   opaque,
   remote,
-  type StateOptions,
 } from "../../src/index.ts";
+import type tutorialTypes from "./tutorial.types.ts";
 
-export const TodoLabel = local("tutorial.todos", {
-  version: 1,
+const TodoLabel = local("tutorial.todos", {
   input: Type.Object({ list: Type.String() }),
   members: { label: method(undefined, Type.String()) },
+  version: 1,
 });
 
-export const Todo = Type.Object({ text: Type.String(), done: Type.Boolean() });
-export const Rows = Type.Array(Todo);
-export const TodoStore = local("tutorial.todos", {
-  version: 1,
+const Todo = Type.Object({ done: Type.Boolean(), text: Type.String() });
+const Rows = Type.Array(Todo);
+const TodoStore = local("tutorial.todos", {
   input: Type.Object({ list: Type.String() }),
   members: {
-    label: method(undefined, Type.String()),
-    rows: Rows,
-    openCount: Type.Number(),
     add: method(Type.Object({ text: Type.String() })),
     finish: method(Type.Object({ index: Type.Integer() })),
+    label: method(undefined, Type.String()),
+    openCount: Type.Number(),
     reset: method(Rows),
+    rows: Rows,
   },
+  version: 1,
 });
 
-export const todoStore =
+const todoStore =
   (options?: StateOptions<Static<typeof Rows>>): Factory<typeof TodoStore> =>
   ({ list }, _principal, self) => {
     const rows = self.state("rows", Rows, [], options);
     const openCount = self.derive([rows], (todos) => todos.filter((todo) => !todo.done).length);
     return {
-      label: () => `Todos for ${list}`,
-      rows,
-      openCount,
       add: ({ text }, ctx) => {
         rows.change(ctx, (draft) => {
-          draft.push({ text, done: false });
+          draft.push({ done: false, text });
         });
       },
       finish: ({ index }, ctx) => {
@@ -55,52 +53,69 @@ export const todoStore =
           todo.done = true;
         });
       },
+      label: () => `Todos for ${list}`,
+      openCount,
       reset: (next, ctx) => {
         rows.replace(ctx, next, { diff: true });
       },
+      rows,
     };
   };
 
-export const Database = local("tutorial.database", {
-  version: 1,
+const Database = local("tutorial.database", {
   input: Type.Object({}),
   members: { db: opaque<{ saved: string[] }>("tutorial.database@1") },
-});
-export const SavedTodos = local("tutorial.saved-todos", {
   version: 1,
+});
+const SavedTodos = local("tutorial.saved-todos", {
   input: Type.Object({ list: Type.String() }),
   members: { add: method(Type.Object({ text: Type.String() })) },
-});
-
-export const Todos = remote("tutorial.todo-view", {
   version: 1,
-  input: Type.Object({ list: Type.String() }),
-  host: hostNamed("server"),
-  variants: {
-    viewer: { state: { rows: Rows } },
-    editor: {
-      state: { rows: Rows },
-      methods: { add: method(Type.Object({ text: Type.String() })) },
-    },
-  },
 });
 
-export type Principal = "owner" | "guest" | "server";
+const Todos = remote("tutorial.todo-view", {
+  host: hostNamed("server"),
+  input: Type.Object({ list: Type.String() }),
+  variants: {
+    editor: {
+      methods: { add: method(Type.Object({ text: Type.String() })) },
+      state: { rows: Rows },
+    },
+    viewer: { state: { rows: Rows } },
+  },
+  version: 1,
+});
 
-export function serveViews(api: Pick<Host<Principal>, "serve">): void {
+type Principal = tutorialTypes.Principal;
+
+function serveViews(api: Pick<Host<Principal>, "serve">): void {
   api.serve(Todos, ({ list }, principal, self) => {
     if (list !== "family") throw forbidden("This list is not shared");
     const store = self.get(TodoStore, { list });
     if (principal === "guest") {
-      return { variant: "viewer", rows: store.rows };
+      return { rows: store.rows, variant: "viewer" };
     }
     return {
-      variant: "editor",
-      rows: store.rows,
       add: ({ text }, ctx) => {
         if (text.trim().length === 0) throw invalid("args", "A todo needs text");
         return store.add({ text }, ctx);
       },
+      rows: store.rows,
+      variant: "editor",
     };
   });
 }
+
+const tutorial = {
+  Database,
+  Rows,
+  SavedTodos,
+  Todo,
+  TodoLabel,
+  TodoStore,
+  Todos,
+  serveViews,
+  todoStore,
+};
+
+export default tutorial;

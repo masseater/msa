@@ -6,7 +6,9 @@ import { describe, it, vi } from "vite-plus/test";
 
 import type * as delta from "../src/delta/index.ts";
 import { type Ctx, createHost, hostNamed, memoryLinkPair, method, remote } from "../src/index.ts";
-import { CountingLink, stateFrames } from "./fixtures/counting.ts";
+import counting from "./fixtures/counting.ts";
+
+const { CountingLink, stateFrames } = counting;
 
 const counts = vi.hoisted(() => ({ encoders: 0, encodes: 0 }));
 
@@ -32,26 +34,26 @@ vi.mock("../src/delta/index.ts", (importOriginal) =>
 );
 
 const List = remote("t.e8-cost", {
-  version: 1,
-  input: Type.Object({}),
   host: hostNamed("server"),
+  input: Type.Object({}),
   variants: {
-    main: { state: { items: Type.Array(Type.String()) }, methods: { add: method(Type.String()) } },
+    main: { methods: { add: method(Type.String()) }, state: { items: Type.Array(Type.String()) } },
   },
+  version: 1,
 });
 
 const oneChangeToKClientsK = Effect.gen(function* () {
-  const server = createHost({ self: { kind: "host" }, name: "server", onError: () => {} });
+  const server = createHost({ name: "server", onError: () => {}, self: { kind: "host" } });
   server.serve(List, (_input, _principal, self) => {
     const items = self.state("items", Type.Array(Type.String()), []);
     return {
-      variant: "main",
-      items,
       add: (text: string, ctx: Ctx) => {
         items.change(ctx, (draft) => {
           draft.push(text);
         });
       },
+      items,
+      variant: "main",
     };
   });
   const K = 4;
@@ -60,11 +62,11 @@ const oneChangeToKClientsK = Effect.gen(function* () {
     server.accept(down, { principal: { user: "u" } });
     const link = new CountingLink(up);
     const host = createHost({
-      self: { kind: "host" },
-      name: `browser${i}`,
       kind: "client",
-      upstream: { link, principal: { kind: "server" } },
+      name: `browser${i}`,
       onError: () => {},
+      self: { kind: "host" },
+      upstream: { link, principal: { kind: "server" } },
     });
     return { host, link, ref: host.hold(List, {}) };
   });

@@ -1,8 +1,11 @@
 import { Console, Effect } from "effect";
 
-import { collectGarbage, encodeJson } from "../fixtures/benchmark.ts";
-import { ConversationViewRun } from "./conversation-view-run.ts";
-import { MiB, parseWorkerArguments } from "./conversation-view-types.ts";
+import benchmark from "../fixtures/benchmark.ts";
+import ConversationViewRun from "./conversation-view-run.ts";
+import conversationViewTypes from "./conversation-view-types.ts";
+
+const { collectGarbage, encodeJson } = benchmark;
+const { MiB, parseWorkerArguments } = conversationViewTypes;
 
 const args = parseWorkerArguments(process.argv);
 
@@ -34,17 +37,17 @@ const main = Effect.gen(function* () {
     ...run.identity(),
     ...run.counters(final),
     authorityReadyMiB: (baselineHeap - processBaselineHeap) / MiB,
-    postAcquireRetainedMiB,
-    postWorkRetainedMiB,
-    postVerificationRetainedMiB,
-    releaseHeapMiB: retainedMiB(releasedHeap),
-    releaseTotalMiB: (releasedHeap - processBaselineHeap) / MiB,
+    checksum: run.checksum(),
+    maxRssMiB: process.resourceUsage().maxRSS / 1024,
     peakHeapMiB: retainedMiB(run.peakHeap),
     peakTotalHeapMiB: (run.peakHeap - processBaselineHeap) / MiB,
-    maxRssMiB: process.resourceUsage().maxRSS / 1024,
-    checksum: run.checksum(),
+    postAcquireRetainedMiB,
+    postVerificationRetainedMiB,
+    postWorkRetainedMiB,
+    releaseHeapMiB: retainedMiB(releasedHeap),
+    releaseTotalMiB: (releasedHeap - processBaselineHeap) / MiB,
   });
   yield* Console.log(line);
 });
 
-await Effect.runPromise(main);
+void Effect.runPromise(main);

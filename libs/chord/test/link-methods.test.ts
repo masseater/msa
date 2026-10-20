@@ -5,43 +5,46 @@ import { Type } from "typebox";
 import { describe, it } from "vite-plus/test";
 
 import {
-  createHost,
   type Frame,
+  PROTOCOL_VERSION,
+  createHost,
   hostNamed,
   memoryLinkPair,
   method,
-  PROTOCOL_VERSION,
   remote,
 } from "../src/index.ts";
-import { Counter, serveCounter } from "./fixtures/link.ts";
-import { tick } from "./fixtures/timing.ts";
+import linkModule from "./fixtures/link.ts";
+import timing from "./fixtures/timing.ts";
+
+const { Counter, serveCounter } = linkModule;
+const { tick } = timing;
 
 const Tool = remote("t.tool", {
-  version: 1,
-  input: Type.Object({}),
   host: hostNamed("server"),
+  input: Type.Object({}),
   variants: {
     main: {
       methods: {
-        ping: method(),
         count: method(undefined, Type.Number()),
         note: method(Type.String()),
+        ping: method(),
       },
     },
   },
+  version: 1,
 });
 
 const travelWithoutArgsAndWithoutA = Effect.gen(function* () {
-  const server = createHost({ self: { kind: "host" }, name: "server", onError: () => {} });
+  const server = createHost({ name: "server", onError: () => {}, self: { kind: "host" } });
   const notes: string[] = [];
   server.serve(Tool, () => ({
-    variant: "main",
-    ping: () => {},
     count: () => 2,
     note: (text) => {
       notes.push(text);
       return "dropped" as never;
     },
+    ping: () => {},
+    variant: "main",
   }));
   const [down, up] = memoryLinkPair();
   server.accept(down, { principal: { guest: "g" } });
@@ -52,11 +55,11 @@ const travelWithoutArgsAndWithoutA = Effect.gen(function* () {
     return send(frame);
   };
   const browser = createHost({
-    self: { kind: "host" },
-    name: "browser",
     kind: "client",
-    upstream: { link: up, principal: { kind: "server" } },
+    name: "browser",
     onError: () => {},
+    self: { kind: "host" },
+    upstream: { link: up, principal: { kind: "server" } },
   });
   const tool = browser.hold(Tool, {});
   yield* Effect.promise(() => tool.ready);
@@ -81,20 +84,20 @@ describe("links: methods without arguments or result", () => {
 const mismatches = () => {
   const seen: { local: number; peer: number | undefined }[] = [];
   return {
-    seen,
     onProtocolMismatch: (versions: { local: number; peer: number | undefined }) =>
       seen.push(versions),
+    seen,
   };
 };
 
 const aPeerWithoutAProtocolVersion = Effect.gen(function* () {
-  const server = createHost({ self: { kind: "host" }, name: "server", onError: () => {} });
+  const server = createHost({ name: "server", onError: () => {}, self: { kind: "host" } });
   serveCounter(server);
   const accepted = mismatches();
   const [down, raw] = memoryLinkPair();
   server.accept(down, {
-    principal: { guest: "g" },
     onProtocolMismatch: accepted.onProtocolMismatch,
+    principal: { guest: "g" },
   });
   const frames: Frame[] = [];
   let closed: string | undefined;
@@ -102,13 +105,13 @@ const aPeerWithoutAProtocolVersion = Effect.gen(function* () {
   raw.onClose((reason) => {
     closed = reason;
   });
-  raw.send({ t: "hello", name: "old", kind: "client", codeVersion: 0 });
+  raw.send({ codeVersion: 0, kind: "client", name: "old", t: "hello" });
   raw.send({
-    t: "hold",
-    id: 1,
     at: "server",
-    token: Counter.description,
+    id: 1,
     input: { name: "c" },
+    t: "hold",
+    token: Counter.description,
   });
   yield* tick;
   assert.deepEqual(accepted.seen, [{ local: PROTOCOL_VERSION, peer: 1 }]);
@@ -121,21 +124,21 @@ const aClientLearnsThatItsServer = Effect.gen(function* () {
   const client = mismatches();
   const [down, up] = memoryLinkPair();
   const browser = createHost({
-    self: { kind: "host" },
-    name: "browser",
     kind: "client",
+    name: "browser",
     onError: () => {},
+    self: { kind: "host" },
   });
   browser.connect(up, {
-    principal: { kind: "server" },
     onProtocolMismatch: client.onProtocolMismatch,
+    principal: { kind: "server" },
   });
   down.send({
-    t: "hello",
-    protocol: PROTOCOL_VERSION + 1,
-    name: "server",
-    kind: "host",
     codeVersion: 1,
+    kind: "host",
+    name: "server",
+    protocol: PROTOCOL_VERSION + 1,
+    t: "hello",
   });
   yield* tick;
   assert.deepEqual(client.seen, [{ local: PROTOCOL_VERSION, peer: PROTOCOL_VERSION + 1 }]);
@@ -144,14 +147,14 @@ const aClientLearnsThatItsServer = Effect.gen(function* () {
   const told = mismatches();
   const [down2, up2] = memoryLinkPair();
   const other = createHost({
-    self: { kind: "host" },
-    name: "browser",
     kind: "client",
+    name: "browser",
     onError: () => {},
+    self: { kind: "host" },
   });
   other.connect(up2, {
-    principal: { kind: "server" },
     onProtocolMismatch: told.onProtocolMismatch,
+    principal: { kind: "server" },
   });
   down2.close(`protocol-version ${PROTOCOL_VERSION + 1}`);
   yield* tick;
@@ -160,21 +163,21 @@ const aClientLearnsThatItsServer = Effect.gen(function* () {
 
 const peersOfTheSameVersionTalk = Effect.gen(function* () {
   const both = mismatches();
-  const server = createHost({ self: { kind: "host" }, name: "server", onError: () => {} });
+  const server = createHost({ name: "server", onError: () => {}, self: { kind: "host" } });
   const [down, up] = memoryLinkPair();
   server.accept(down, {
-    principal: { guest: "g" },
     onProtocolMismatch: both.onProtocolMismatch,
+    principal: { guest: "g" },
   });
   const browser = createHost({
-    self: { kind: "host" },
-    name: "browser",
     kind: "client",
+    name: "browser",
     onError: () => {},
+    self: { kind: "host" },
   });
   browser.connect(up, {
-    principal: { kind: "server" },
     onProtocolMismatch: both.onProtocolMismatch,
+    principal: { kind: "server" },
   });
   yield* tick;
   up.close("bye");

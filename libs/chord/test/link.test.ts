@@ -3,9 +3,12 @@ import assert from "node:assert/strict";
 import { Effect } from "effect";
 import { describe, it } from "vite-plus/test";
 
-import { isChordError, type StateEvent } from "../src/index.ts";
-import { Counter, SessionCounter, serveCounter, serverWithWorker } from "./fixtures/link.ts";
-import { tick } from "./fixtures/timing.ts";
+import { type StateEvent, isChordError } from "../src/index.ts";
+import link from "./fixtures/link.ts";
+import timing from "./fixtures/timing.ts";
+
+const { Counter, SessionCounter, serveCounter, serverWithWorker } = link;
+const { tick } = timing;
 
 const aChildCallsTheServerThe = Effect.gen(function* () {
   const services = yield* Effect.context<never>();
@@ -55,7 +58,7 @@ const theServerReachesAConnectedChild = Effect.gen(function* () {
   const principals: unknown[] = [];
   serveCounter(worker, principals);
   yield* tick;
-  const counter = server.hold(SessionCounter, { session: "w1", name: "x" });
+  const counter = server.hold(SessionCounter, { name: "x", session: "w1" });
   assert.equal(yield* Effect.promise(() => counter.add(5)), 5);
   assert.deepEqual(principals, [{ kind: "server" }]);
 });

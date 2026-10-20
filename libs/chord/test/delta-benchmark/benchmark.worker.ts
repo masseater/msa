@@ -1,294 +1,229 @@
 import assert from "node:assert/strict";
 import { performance } from "node:perf_hooks";
 
-import { Console, Effect } from "effect";
+import { Console, Effect, Schema } from "effect";
 
-import { applyImmutable } from "../../src/delta/index.ts";
-import { collectGarbage } from "../fixtures/benchmark.ts";
-import {
-  applyFrame,
-  assertDetached,
-  cloneTrusted,
-  type Document,
-  type Frame,
-  importFixture,
-  MiB,
-  parseArguments,
-  runMutationScenario,
-  sum,
-  WATCH_SCENARIOS,
-  type WatchReplica,
-} from "./benchmark-worker-model.ts";
+import benchmarkRun from "./benchmark-run.ts";
+import type benchmarkRunTypes from "./benchmark-run.types.ts";
+import benchmarkWorkerModel from "./benchmark-worker-model.ts";
+const {
+  acquireDetachedWatches,
+  acquireOneWatch,
+  acquireSharedWatches,
+  assertWatchConvergence,
+  commitWatchUpdate,
+  deliverToListeners,
+  drainWatchQueues,
+  drainWatchQueuesCoalesced,
+  enqueueFrame,
+  gc,
+  heapUsed,
+  publishUpdates,
+  retainedFromBaseline,
+  samplePeak,
+  timed,
+} = benchmarkRun;
+
+const { MiB, WATCH_SCENARIOS, importFixture, parseArguments, runMutationScenario, sum } =
+  benchmarkWorkerModel;
 
 const { mode, scenario, size, trial, requestedWatchCount, requestedWatchUpdates } = parseArguments(
   process.argv,
 );
 
-const gc = collectGarbage(3);
-
-await Effect.runPromise(gc);
-const baselineHeap = process.memoryUsage().heapUsed;
-const { tracker, importMs } = importFixture(size, scenario);
-await Effect.runPromise(gc);
-const readyHeap = process.memoryUsage().heapUsed;
-let peakHeap = readyHeap;
-let mutateMs = 0;
-let prepareMs = 0;
-let serializeMs = 0;
-let adoptMs = 0;
-let acquireMs = 0;
-let enqueueMs = 0;
-let deliveryMs = 0;
-let opBytes = 0;
-let operationCount = 0;
-let checksum = 0;
-let authoritySequence = 0;
-let postAcquireRetainedMiB = 0;
-let postLagRetainedMiB = 0;
-let postDeliveryRetainedMiB = 0;
-let sampledAcquireMiB = 0;
-const watchers: WatchReplica[] = [];
-const borrowedListeners: Array<(value: Document, sequence: number) => number> = [];
-const queueOperations = Math.min(size, 1_000);
-const watchCount = WATCH_SCENARIOS.has(scenario) ? requestedWatchCount : 0;
-const watchUpdateTarget = WATCH_SCENARIOS.has(scenario) ? requestedWatchUpdates : 0;
-
-const samplePeak = (): void => {
-  peakHeap = Math.max(peakHeap, process.memoryUsage().heapUsed);
-};
-
-const retainedFromBaseline = (): Promise<number> =>
-  Effect.runPromise(Effect.map(gc, () => (process.memoryUsage().heapUsed - baselineHeap) / MiB));
-
-const createWatch = (value: Document): WatchReplica => ({
-  value,
-  baseSequence: authoritySequence,
-  sequence: authoritySequence,
-  queue: [],
-});
-
-const timedAcquire = (acquire: () => void): void => {
-  const beforeHeap = process.memoryUsage().heapUsed;
-  const start = performance.now();
-  acquire();
-  acquireMs += performance.now() - start;
-  sampledAcquireMiB = Math.max(
-    sampledAcquireMiB,
-    (process.memoryUsage().heapUsed - beforeHeap) / MiB,
-  );
-};
-
-const acquireSharedWatches = (): void => {
-  timedAcquire(() => {
-    const base = tracker.value;
-    watchers.push(...Array.from({ length: watchCount }, () => createWatch(base)));
+const committedRead = (run: benchmarkRunTypes.Run): Effect.Effect<void> =>
+  Effect.sync(() => {
+    run.metrics.mutateMs = timed(run, () => {
+      run.metrics.checksum = sum(run.tracker.value);
+    });
   });
-  for (const watcher of watchers) assert.equal(watcher.value, tracker.value);
-  samplePeak();
-};
 
-const acquireDetachedWatches = (): void => {
-  timedAcquire(() => {
-    watchers.push(
-      ...Array.from({ length: watchCount }, () => createWatch(cloneTrusted(tracker.value))),
+const watchAuthorityControl = (run: benchmarkRunTypes.Run): Effect.Effect<void> =>
+  Effect.gen(function* () {
+    for (let update = 0; update < run.watchUpdateTarget; update++) commitWatchUpdate(run, update);
+    run.metrics.postDeliveryRetainedMiB = yield* retainedFromBaseline(run);
+    run.metrics.checksum = sum(run.tracker.value);
+  });
+
+const watchLiveBorrowed = (run: benchmarkRunTypes.Run): Effect.Effect<void> =>
+  Effect.gen(function* () {
+    const { metrics } = run;
+    const start = performance.now();
+    run.listeners.push(
+      ...Array.from(
+        { length: run.watchCount },
+        (): benchmarkRunTypes.Listener => (value, sequence) => value.rows[0]!.value + sequence,
+      ),
+    );
+    deliverToListeners(run);
+    metrics.acquireMs = performance.now() - start;
+    metrics.postAcquireRetainedMiB = yield* retainedFromBaseline(run);
+    for (let update = 0; update < run.watchUpdateTarget; update++) {
+      commitWatchUpdate(run, update);
+      metrics.deliveryMs += timed(run, () => deliverToListeners(run));
+    }
+    metrics.postDeliveryRetainedMiB = yield* retainedFromBaseline(run);
+  });
+
+const watchAcquire = (run: benchmarkRunTypes.Run): Effect.Effect<void> =>
+  Effect.gen(function* () {
+    if (scenario === "watch-acquire-shared") acquireSharedWatches(run);
+    else acquireDetachedWatches(run);
+    run.metrics.postAcquireRetainedMiB = yield* retainedFromBaseline(run);
+    run.metrics.checksum = sum(run.watchers[0]!.value) + run.watchers.length;
+  });
+
+const watchAcquireStaggered = (run: benchmarkRunTypes.Run): Effect.Effect<void> =>
+  Effect.gen(function* () {
+    for (let watcher = 0; watcher < run.watchCount; watcher++) {
+      acquireOneWatch(run);
+      if (watcher + 1 === run.watchCount) break;
+      enqueueFrame(run, commitWatchUpdate(run, watcher));
+    }
+    for (const [index, watcher] of run.watchers.entries()) {
+      assert.equal(watcher.baseSequence, index);
+      assert.equal(watcher.queue.length, run.watchCount - index - 1);
+    }
+    run.metrics.postAcquireRetainedMiB = yield* retainedFromBaseline(run);
+    drainWatchQueues(run, false);
+    assertWatchConvergence(run);
+    run.metrics.postDeliveryRetainedMiB = yield* retainedFromBaseline(run);
+    run.metrics.checksum = sum(run.watchers[0]!.value) + sum(run.watchers.at(-1)!.value);
+  });
+
+const watchLag = (run: benchmarkRunTypes.Run): Effect.Effect<void> =>
+  Effect.gen(function* () {
+    acquireSharedWatches(run);
+    run.metrics.postAcquireRetainedMiB = yield* retainedFromBaseline(run);
+    publishUpdates(run);
+    run.metrics.postLagRetainedMiB = yield* retainedFromBaseline(run);
+    if (scenario === "watch-catch-up-coalesced") drainWatchQueuesCoalesced(run);
+    else if (scenario !== "watch-live-immutable")
+      drainWatchQueues(run, scenario === "watch-catch-up");
+    assertWatchConvergence(run);
+    run.metrics.postDeliveryRetainedMiB = yield* retainedFromBaseline(run);
+    run.metrics.checksum = sum(run.watchers[0]!.value) + sum(run.tracker.value);
+  });
+
+const LAG_SCENARIOS = new Set([
+  "watch-catch-up",
+  "watch-catch-up-coalesced",
+  "watch-lag",
+  "watch-live-immutable",
+]);
+
+const mutate = (run: benchmarkRunTypes.Run): Effect.Effect<void> =>
+  Effect.sync(() => {
+    Object.assign(
+      run.metrics,
+      runMutationScenario({
+        queueOperations: Math.min(size, 1_000),
+        sample: () => samplePeak(run),
+        scenario,
+        size,
+        tracker: run.tracker,
+      }),
     );
   });
-  assertDetached(watchers, tracker.value);
-  samplePeak();
+
+const runScenario = (run: benchmarkRunTypes.Run): Effect.Effect<void> => {
+  if (scenario === "committed-read") return committedRead(run);
+  if (scenario === "watch-authority-control") return watchAuthorityControl(run);
+  if (scenario === "watch-live-borrowed") return watchLiveBorrowed(run);
+  if (scenario === "watch-acquire-shared" || scenario === "watch-acquire-detached")
+    return watchAcquire(run);
+  if (scenario === "watch-acquire-staggered") return watchAcquireStaggered(run);
+  if (LAG_SCENARIOS.has(scenario)) return watchLag(run);
+  return scenario === "import" ? Effect.void : mutate(run);
 };
 
-const acquireOneWatch = (): void => {
-  timedAcquire(() => {
-    watchers.push(createWatch(tracker.value));
+const encodeLine = Schema.encodeEffect(Schema.fromJsonString(Schema.Unknown));
+
+const report = (run: benchmarkRunTypes.Run, importMs: number): Effect.Effect<void> =>
+  Effect.gen(function* () {
+    const { metrics } = run;
+    const scenarioWorkMs =
+      metrics.mutateMs +
+      metrics.prepareMs +
+      metrics.serializeMs +
+      metrics.adoptMs +
+      metrics.acquireMs +
+      metrics.enqueueMs +
+      metrics.deliveryMs;
+    samplePeak(run);
+    yield* gc;
+    const retainedHeap = heapUsed();
+    const watchCount = run.watchers.length + run.listeners.length;
+    const queuedBatchReferences = run.watchers.reduce((total, w) => total + w.queue.length, 0);
+    run.watchers.length = 0;
+    run.listeners.length = 0;
+    yield* gc;
+    const { authoritySequence, peakHeap, ...measured } = metrics;
+    const line = yield* Effect.orDie(
+      encodeLine({
+        ...measured,
+        importMs,
+        maxRssMiB: process.resourceUsage().maxRSS / 1024,
+        mode,
+        queueOperations: Math.min(size, 1_000),
+        queuedBatchReferences,
+        readyMiB: (run.readyHeap - run.baselineHeap) / MiB,
+        releasedRetainedMiB: (heapUsed() - run.baselineHeap) / MiB,
+        retainedMiB: (retainedHeap - run.baselineHeap) / MiB,
+        retainedOverReadyMiB: (retainedHeap - run.readyHeap) / MiB,
+        sampledTransientMiB: (peakHeap - run.readyHeap) / MiB,
+        scenario,
+        scenarioWorkMs,
+        size,
+        trial,
+        watchCount,
+        watchProfile: WATCH_SCENARIOS.has(scenario) ? "local-sparse-array-leaf" : null,
+        watchUpdates: authoritySequence,
+      }),
+    );
+    yield* Console.log(line);
   });
-  samplePeak();
-};
 
-const commitWatchUpdate = (update: number): Frame => {
-  const change = tracker.beginChange();
-  const row = ((update + 1) * 997) % size;
-  const mutateStart = performance.now();
-  change.state.rows[row]!.value = -update - 1;
-  mutateMs += performance.now() - mutateStart;
-  samplePeak();
-  const prepareStart = performance.now();
-  const prepared = change.prepare();
-  prepareMs += performance.now() - prepareStart;
-  samplePeak();
-  const operations = prepared.ops;
-  operationCount += operations.length;
-  const adoptStart = performance.now();
-  tracker.adopt(prepared);
-  adoptMs += performance.now() - adoptStart;
-  samplePeak();
-  authoritySequence += 1;
-  return { sequence: authoritySequence, ops: operations };
-};
+const createMetrics = (readyHeap: number): benchmarkRunTypes.Metrics => ({
+  acquireMs: 0,
+  adoptMs: 0,
+  authoritySequence: 0,
+  checksum: 0,
+  deliveryMs: 0,
+  enqueueMs: 0,
+  mutateMs: 0,
+  opBytes: 0,
+  operationCount: 0,
+  peakHeap: readyHeap,
+  postAcquireRetainedMiB: 0,
+  postDeliveryRetainedMiB: 0,
+  postLagRetainedMiB: 0,
+  prepareMs: 0,
+  sampledAcquireMiB: 0,
+  serializeMs: 0,
+});
 
-const enqueueFrame = (frame: Frame): void => {
-  const start = performance.now();
-  for (const watcher of watchers) {
-    assert.equal(frame.sequence, watcher.sequence + watcher.queue.length + 1);
-    watcher.queue.push(frame);
-  }
-  enqueueMs += performance.now() - start;
-};
+const main = Effect.gen(function* () {
+  yield* gc;
+  const baselineHeap = heapUsed();
+  const { tracker, importMs } = importFixture(size, scenario);
+  yield* gc;
+  const readyHeap = heapUsed();
+  const watching = WATCH_SCENARIOS.has(scenario);
+  const run: benchmarkRunTypes.Run = {
+    baselineHeap,
+    listeners: [],
+    metrics: createMetrics(readyHeap),
+    readyHeap,
+    scenario,
+    size,
+    tracker,
+    watchCount: watching ? requestedWatchCount : 0,
+    watchUpdateTarget: watching ? requestedWatchUpdates : 0,
+    watchers: [],
+  };
+  yield* runScenario(run);
+  yield* report(run, importMs);
+});
 
-const drainWatchQueues = (measure: boolean): void => {
-  const start = performance.now();
-  for (const watcher of watchers) {
-    for (const frame of watcher.queue) applyFrame(watcher, frame);
-    watcher.queue.length = 0;
-    samplePeak();
-  }
-  if (measure) deliveryMs += performance.now() - start;
-};
-
-const drainWatchQueuesCoalesced = (): void => {
-  const start = performance.now();
-  for (const watcher of watchers) {
-    const operations = watcher.queue.flatMap((frame) => frame.ops);
-    watcher.value = applyImmutable(watcher.value, operations);
-    watcher.sequence = watcher.queue.at(-1)?.sequence ?? watcher.sequence;
-    watcher.queue.length = 0;
-    samplePeak();
-  }
-  deliveryMs += performance.now() - start;
-};
-
-const assertWatchConvergence = (): void => {
-  for (const watcher of watchers) {
-    assert.equal(watcher.sequence, authoritySequence);
-    assert.deepEqual(watcher.value, tracker.value);
-  }
-};
-
-if (scenario === "committed-read") {
-  const start = performance.now();
-  checksum = sum(tracker.value);
-  mutateMs = performance.now() - start;
-  samplePeak();
-} else if (scenario === "watch-authority-control") {
-  for (let update = 0; update < watchUpdateTarget; update++) commitWatchUpdate(update);
-  postDeliveryRetainedMiB = await retainedFromBaseline();
-  checksum = sum(tracker.value);
-} else if (scenario === "watch-live-borrowed") {
-  const start = performance.now();
-  borrowedListeners.push(
-    ...Array.from(
-      { length: watchCount },
-      () => (value: Document, sequence: number) => value.rows[0]!.value + sequence,
-    ),
-  );
-  for (const listener of borrowedListeners) checksum += listener(tracker.value, authoritySequence);
-  acquireMs = performance.now() - start;
-  postAcquireRetainedMiB = await retainedFromBaseline();
-  for (let update = 0; update < watchUpdateTarget; update++) {
-    commitWatchUpdate(update);
-    const deliveryStart = performance.now();
-    for (const listener of borrowedListeners)
-      checksum += listener(tracker.value, authoritySequence);
-    deliveryMs += performance.now() - deliveryStart;
-    samplePeak();
-  }
-  postDeliveryRetainedMiB = await retainedFromBaseline();
-} else if (scenario === "watch-acquire-shared" || scenario === "watch-acquire-detached") {
-  if (scenario === "watch-acquire-shared") acquireSharedWatches();
-  else acquireDetachedWatches();
-  postAcquireRetainedMiB = await retainedFromBaseline();
-  checksum = sum(watchers[0]!.value) + watchers.length;
-} else if (scenario === "watch-acquire-staggered") {
-  for (let watcher = 0; watcher < watchCount; watcher++) {
-    acquireOneWatch();
-    if (watcher + 1 === watchCount) break;
-    const frame = commitWatchUpdate(watcher);
-    enqueueFrame(frame);
-  }
-  for (let watcher = 0; watcher < watchers.length; watcher++) {
-    assert.equal(watchers[watcher]!.baseSequence, watcher);
-    assert.equal(watchers[watcher]!.queue.length, watchCount - watcher - 1);
-  }
-  postAcquireRetainedMiB = await retainedFromBaseline();
-  drainWatchQueues(false);
-  assertWatchConvergence();
-  postDeliveryRetainedMiB = await retainedFromBaseline();
-  checksum = sum(watchers[0]!.value) + sum(watchers.at(-1)!.value);
-} else if (
-  scenario === "watch-lag" ||
-  scenario === "watch-catch-up" ||
-  scenario === "watch-catch-up-coalesced" ||
-  scenario === "watch-live-immutable"
-) {
-  acquireSharedWatches();
-  postAcquireRetainedMiB = await retainedFromBaseline();
-  for (let update = 0; update < watchUpdateTarget; update++) {
-    const frame = commitWatchUpdate(update);
-    if (scenario === "watch-live-immutable") {
-      const start = performance.now();
-      for (const watcher of watchers) applyFrame(watcher, frame);
-      deliveryMs += performance.now() - start;
-      samplePeak();
-    } else enqueueFrame(frame);
-  }
-  postLagRetainedMiB = await retainedFromBaseline();
-  if (scenario === "watch-catch-up-coalesced") drainWatchQueuesCoalesced();
-  else if (scenario !== "watch-live-immutable") drainWatchQueues(scenario === "watch-catch-up");
-  assertWatchConvergence();
-  postDeliveryRetainedMiB = await retainedFromBaseline();
-  checksum = sum(watchers[0]!.value) + sum(tracker.value);
-} else if (scenario !== "import") {
-  ({ checksum, mutateMs, prepareMs, serializeMs, opBytes, operationCount, adoptMs } =
-    runMutationScenario({ tracker, scenario, size, queueOperations, sample: samplePeak }));
-}
-
-const scenarioWorkMs =
-  mutateMs + prepareMs + serializeMs + adoptMs + acquireMs + enqueueMs + deliveryMs;
-samplePeak();
-await Effect.runPromise(gc);
-const retainedHeap = process.memoryUsage().heapUsed;
-const retainedMiB = (retainedHeap - baselineHeap) / MiB;
-const retainedOverReadyMiB = (retainedHeap - readyHeap) / MiB;
-const watcherRoots = watchers.length;
-const queuedBatchReferences = watchers.reduce((total, watcher) => total + watcher.queue.length, 0);
-const listenerCount = borrowedListeners.length;
-watchers.length = 0;
-borrowedListeners.length = 0;
-await Effect.runPromise(gc);
-const releasedRetainedMiB = (process.memoryUsage().heapUsed - baselineHeap) / MiB;
-await Effect.runPromise(
-  Console.log(
-    JSON.stringify({
-      mode,
-      scenario,
-      size,
-      trial,
-      queueOperations,
-      watchProfile: WATCH_SCENARIOS.has(scenario) ? "local-sparse-array-leaf" : null,
-      watchCount: watcherRoots + listenerCount,
-      watchUpdates: authoritySequence,
-      queuedBatchReferences,
-      importMs,
-      mutateMs,
-      prepareMs,
-      serializeMs,
-      adoptMs,
-      acquireMs,
-      enqueueMs,
-      deliveryMs,
-      scenarioWorkMs,
-      opBytes,
-      operationCount,
-      checksum,
-      readyMiB: (readyHeap - baselineHeap) / MiB,
-      sampledAcquireMiB,
-      sampledTransientMiB: (peakHeap - readyHeap) / MiB,
-      retainedMiB,
-      retainedOverReadyMiB,
-      postAcquireRetainedMiB,
-      postLagRetainedMiB,
-      postDeliveryRetainedMiB,
-      releasedRetainedMiB,
-      maxRssMiB: process.resourceUsage().maxRSS / 1024,
-    }),
-  ),
-);
+void Effect.runPromise(main);

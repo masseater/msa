@@ -6,44 +6,47 @@ import { describe, it } from "vite-plus/test";
 
 import {
   type Ctx,
+  type Facet,
+  type FacetApi,
   createHost,
   defineFacet,
   defineRegistry,
-  type Facet,
-  type FacetApi,
   hostNamed,
   local,
   memoryLinkPair,
   method,
   remote,
 } from "../src/index.ts";
-import { View, until } from "./fixtures/requests.ts";
-import { tick } from "./fixtures/timing.ts";
+import requests from "./fixtures/requests.ts";
+import timing from "./fixtures/timing.ts";
+
+const { View, until } = requests;
+const { tick } = timing;
 
 const Conv = remote("t.conv", {
-  version: 1,
-  input: Type.Object({}),
   host: hostNamed("server"),
-  variants: { main: { state: { view: View }, methods: { set: method(Type.String()) } } },
+  input: Type.Object({}),
+  variants: { main: { methods: { set: method(Type.String()) }, state: { view: View } } },
+  version: 1,
 });
 
 const Chat = remote("t.chat", {
-  version: 1,
-  input: Type.Object({}),
   host: hostNamed("server"),
+  input: Type.Object({}),
   variants: { viewer: { state: { view: View } } },
+  version: 1,
 });
 
 const case1AHeldObjectSState = Effect.gen(function* () {
-  const server = createHost({ self: { kind: "host" }, name: "server", onError: () => {} });
+  const server = createHost({ name: "server", onError: () => {}, self: { kind: "host" } });
   server.serve(Conv, (_input, _principal, self) => {
     const view = self.state("view", View, { text: "" });
     return {
-      variant: "main",
-      view,
       set: (text, ctx) => {
         view.replace(ctx, { text });
       },
+      variant: "main",
+      view,
     };
   });
   server.serve(Chat, (_input, _principal, self) => {
@@ -62,11 +65,11 @@ const case1AHeldObjectSState = Effect.gen(function* () {
   const [down, up] = memoryLinkPair();
   server.accept(down, { principal: { guest: "g" } });
   const browser = createHost({
-    self: { kind: "host" },
-    name: "browser",
     kind: "client",
-    upstream: { link: up, principal: { kind: "server" } },
+    name: "browser",
     onError: () => {},
+    self: { kind: "host" },
+    upstream: { link: up, principal: { kind: "server" } },
   });
   const remoteChat = browser.hold(Chat, {});
   yield* Effect.promise(() => remoteChat.ready);
@@ -76,12 +79,12 @@ const case1AHeldObjectSState = Effect.gen(function* () {
 
 const Config = defineRegistry<string>("t.config");
 
-const Settings = local("t.settings", { version: 1, input: Type.Object({}) });
+const Settings = local("t.settings", { input: Type.Object({}), version: 1 });
 
 const Reader = local("t.reader", {
-  version: 1,
   input: Type.Object({}),
   members: { read: method(undefined, Type.String()) },
+  version: 1,
 });
 
 const capturingConfigFacet =
@@ -120,7 +123,7 @@ const case2FacetsReachTheirOwnHost = Effect.gen(function* () {
   const services = yield* Effect.context<never>();
   const captured: FacetApi[] = [];
   const facet = capturingConfigFacet(captured);
-  const host = createHost({ self: { kind: "host" }, name: "worker", onError: () => {} });
+  const host = createHost({ name: "worker", onError: () => {}, self: { kind: "host" } });
   host.install(facet("v1"));
   yield* Effect.sleep(5);
   const api = captured[0]!;
@@ -134,9 +137,9 @@ const case2FacetsReachTheirOwnHost = Effect.gen(function* () {
 
 const case3AListenerKeepsItsSubscription = Effect.gen(function* () {
   const Watcher = local("t.watcher", {
-    version: 1,
     input: Type.Object({}),
     members: { seen: Type.Array(Type.String()) },
+    version: 1,
   });
   let subscribers = 0;
   let emit = (_event: string) => {};
@@ -155,7 +158,7 @@ const case3AListenerKeepsItsSubscription = Effect.gen(function* () {
     setup: (api) =>
       api.serve(Watcher, (_input, _principal, self) => {
         const seen = self.state("seen", Type.Array(Type.String()), []);
-        const watchResource = self.resource("watch", { version: 1, open: () => single });
+        const watchResource = self.resource("watch", { open: () => single, version: 1 });
         self.on(
           "events",
           watchResource,
@@ -165,7 +168,7 @@ const case3AListenerKeepsItsSubscription = Effect.gen(function* () {
         return { seen };
       }),
   });
-  const host = createHost({ self: { kind: "host" }, onError: () => {} });
+  const host = createHost({ onError: () => {}, self: { kind: "host" } });
   host.install(facet("v1"));
   const ref = host.hold(Watcher, {});
   yield* Effect.promise(() => ref.ready);
@@ -179,7 +182,7 @@ const case3AListenerKeepsItsSubscription = Effect.gen(function* () {
 });
 
 const case3AChangedSelectResubscribes = Effect.gen(function* () {
-  const Watcher = local("t.watcher2", { version: 1, input: Type.Object({}) });
+  const Watcher = local("t.watcher2", { input: Type.Object({}), version: 1 });
   let subscribes = 0;
   const source = {
     subscribe: () => {
@@ -191,12 +194,12 @@ const case3AChangedSelectResubscribes = Effect.gen(function* () {
     name: "watcher2",
     setup: (api) =>
       api.serve(Watcher, (_input, _principal, self) => {
-        const sResource = self.resource("s", { version: 1, open: () => source });
+        const sResource = self.resource("s", { open: () => source, version: 1 });
         self.on("s", sResource, selectText ? (s) => s : (value) => value, () => {});
         return {};
       }),
   });
-  const host = createHost({ self: { kind: "host" }, onError: () => {} });
+  const host = createHost({ onError: () => {}, self: { kind: "host" } });
   host.install(facet(true));
   yield* Effect.promise(() => host.hold(Watcher, {}).ready);
   yield* Effect.promise(() => host.reload([facet(true)]));

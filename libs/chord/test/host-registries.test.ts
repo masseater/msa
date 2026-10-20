@@ -13,8 +13,11 @@ import {
   local,
   method,
 } from "../src/index.ts";
-import { quiet } from "./fixtures/host.ts";
-import { tick } from "./fixtures/timing.ts";
+import hostModule from "./fixtures/host.ts";
+import timing from "./fixtures/timing.ts";
+
+const { quiet } = hostModule;
+const { tick } = timing;
 
 const Routes = defineRegistry<string>("t.routes");
 
@@ -23,7 +26,7 @@ const rejectsConflictingRegistrations = Effect.gen(function* () {
   const host = quiet(errors);
   for (const name of ["t.conflict-a", "t.conflict-b"]) {
     host.serve(
-      local(name, { version: 1, input: Type.Object({}) }),
+      local(name, { input: Type.Object({}), version: 1 }),
       (_input, _principal, self) => {
         self.register(Routes, { same: name });
         return {};
@@ -41,8 +44,8 @@ describe("host: registries", () => {
     Effect.runPromise(
       Effect.gen(function* () {
         const host = quiet();
-        const RoutesA = local("t.routes-a", { version: 1, input: Type.Object({}) });
-        const RoutesB = local("t.routes-b", { version: 1, input: Type.Object({}) });
+        const RoutesA = local("t.routes-a", { input: Type.Object({}), version: 1 });
+        const RoutesB = local("t.routes-b", { input: Type.Object({}), version: 1 });
         host.serve(
           RoutesA,
           (_input, _principal, self) => {
@@ -67,7 +70,7 @@ describe("host: registries", () => {
         assert.equal(host.registry(Routes).get("GET /b"), "b");
         assert.deepEqual(tables.at(-1), ["GET /a", "GET /c", "GET /b"]);
 
-        const Lazy = local("t.lazy-register", { version: 1, input: Type.Object({}) });
+        const Lazy = local("t.lazy-register", { input: Type.Object({}), version: 1 });
         host.serve(Lazy, (_input, _principal, self) => {
           self.register(Routes, { x: "x" });
           return {};
@@ -87,20 +90,20 @@ describe("host: registries", () => {
 const ctxGetActsAsTheRoot = Effect.gen(function* () {
   const services = yield* Effect.context<never>();
   const host = createHost({
-    self: { kind: "host" },
-    principalKey: (principal) => JSON.stringify(principal),
     onError: () => {},
+    principalKey: (principal) => JSON.stringify(principal),
+    self: { kind: "host" },
   });
   const seen: unknown[] = [];
   const Who = local("t.who", {
-    version: 1,
     input: Type.Object({}),
     members: { ping: method() },
+    version: 1,
   });
   const Front = local("t.front", {
-    version: 1,
     input: Type.Object({}),
     members: { relay: method() },
+    version: 1,
   });
   host.serve(Who, (_input, principal) => {
     seen.push(principal);
@@ -137,8 +140,8 @@ const ctxGetActsAsTheRoot = Effect.gen(function* () {
 
 const aChorderrorFromAFactoryKeeps = Effect.gen(function* () {
   const host = quiet();
-  const Secret = local("t.secret", { version: 1, input: Type.Object({}) });
-  const Page = local("t.page", { version: 1, input: Type.Object({}) });
+  const Secret = local("t.secret", { input: Type.Object({}), version: 1 });
+  const Page = local("t.page", { input: Type.Object({}), version: 1 });
   host.serve(Secret, () => {
     throw forbidden("not for you");
   });
@@ -152,14 +155,14 @@ const aChorderrorFromAFactoryKeeps = Effect.gen(function* () {
 });
 
 const Source = local("t.source", {
-  version: 1,
   input: Type.Object({}),
   members: { n: Type.Number(), set: method(Type.Number()) },
+  version: 1,
 });
 const Mirror = local("t.mirror", {
-  version: 1,
   input: Type.Object({}),
   members: { copy: Type.Number(), doubled: Type.Number() },
+  version: 1,
 });
 
 const referenceStateMembersAreSourcesFor = Effect.gen(function* () {
@@ -197,7 +200,7 @@ const callingAReferenceInsideAFactory = Effect.gen(function* () {
     n: self.state("n", Type.Number(), 0),
     set: () => {},
   }));
-  const Eager = local("t.eager-call", { version: 1, input: Type.Object({}) });
+  const Eager = local("t.eager-call", { input: Type.Object({}), version: 1 });
   host.serve(Eager, (_input, _principal, self) => {
     const source = self.get(Source, {});
     void source.set(1);

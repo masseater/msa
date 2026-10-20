@@ -2,48 +2,44 @@ import assert from "node:assert/strict";
 import { performance } from "node:perf_hooks";
 
 import type { JsonValue } from "../../src/delta/index.ts";
-import { cloneTrusted } from "./benchmark-worker-model.ts";
-import {
-  createTracker,
-  entryKindAt,
-  makeEntry,
-  resolveActiveLineage,
-} from "./conversation-view-content.ts";
-import { initialDocuments } from "./conversation-view-documents.ts";
-import { type PhaseName, phaseNames, PROVISIONAL_SCHEMA } from "./conversation-view-model.ts";
-import {
-  type ConversationView,
-  type DeltaFrame,
-  type DocumentKey,
-  type DocumentWatch,
-  type JsonObject,
-  MOUNTED_KEYS,
-  type MountedKey,
-  type PhaseSamples,
-  type TrackerLike,
-  type TranscriptEntry,
-  type Watch,
-  type WorkerArguments,
-} from "./conversation-view-types.ts";
+import benchmarkWorkerModel from "./benchmark-worker-model.ts";
+import conversationViewContent from "./conversation-view-content.ts";
+import initialDocuments from "./conversation-view-documents.ts";
+import conversationViewModel from "./conversation-view-model.ts";
+import type conversationViewModelTypes from "./conversation-view-model.types.ts";
+import conversationViewTypes from "./conversation-view-types.ts";
+import type conversationViewModuleTypes from "./conversation-view-types.types.ts";
 
-const emptySamples = (): PhaseSamples =>
-  Object.fromEntries(phaseNames.map((name): [PhaseName, number[]] => [name, []])) as PhaseSamples;
+const { cloneTrusted } = benchmarkWorkerModel;
+const { createTracker, entryKindAt, makeEntry, resolveActiveLineage } = conversationViewContent;
+const { PROVISIONAL_SCHEMA, phaseNames } = conversationViewModel;
+const { MOUNTED_KEYS } = conversationViewTypes;
 
-export class ConversationViewState {
+const emptySamples = (): conversationViewModuleTypes.PhaseSamples =>
+  Object.fromEntries(
+    phaseNames.map((name): [conversationViewModelTypes.PhaseName, number[]] => [name, []]),
+  ) as conversationViewModuleTypes.PhaseSamples;
+
+class ConversationViewState {
   readonly phaseSamples = emptySamples();
-  readonly records = new Map<number, TranscriptEntry>();
+  readonly records = new Map<number, conversationViewModuleTypes.TranscriptEntry>();
   head: number | null = null;
   nextEntryId = 1;
-  readonly documentTrackers: Record<DocumentKey, TrackerLike<JsonObject>>;
-  aggregate: ConversationView;
+  readonly documentTrackers: Record<
+    conversationViewModuleTypes.DocumentKey,
+    conversationViewModuleTypes.TrackerLike<conversationViewModuleTypes.JsonObject>
+  >;
+  aggregate: conversationViewModuleTypes.ConversationView;
   readonly initialAggregateBytes: number;
   conversationSequence = 0;
-  readonly documentSequences: Record<DocumentKey, number>;
-  conversationWatches: Array<Watch<ConversationView>> = [];
-  documentWatches: DocumentWatch[] = [];
+  readonly documentSequences: Record<conversationViewModuleTypes.DocumentKey, number>;
+  conversationWatches: Array<
+    conversationViewModuleTypes.Watch<conversationViewModuleTypes.ConversationView>
+  > = [];
+  documentWatches: conversationViewModuleTypes.DocumentWatch[] = [];
   queuedFrameReferences = 0;
   queuedOperationReferences = 0;
-  readonly queuedFrameRefCounts = new Map<DeltaFrame, number>();
+  readonly queuedFrameRefCounts = new Map<conversationViewModuleTypes.DeltaFrame, number>();
   peakQueueReferences = 0;
   peakQueuedOperationReferences = 0;
   peakPendingOperationsPerWatch = 0;
@@ -67,42 +63,50 @@ export class ConversationViewState {
   unmountedPublicationViolations = 0;
   sessionCommitCount = 0;
   peakHeap: number;
-  readonly deferredResetFrames: DeltaFrame[] = [];
+  readonly deferredResetFrames: conversationViewModuleTypes.DeltaFrame[] = [];
 
-  readonly args: WorkerArguments;
+  readonly args: conversationViewModuleTypes.WorkerArguments;
 
-  constructor(args: WorkerArguments) {
+  constructor(args: conversationViewModuleTypes.WorkerArguments) {
     this.args = args;
     for (let index = 0; index < args.headlineEntries; index++) {
       const entry = makeEntry({
         id: this.nextEntryId++,
-        parent: this.head,
         kind: entryKindAt(index),
+        parent: this.head,
       });
       this.records.set(entry.id, entry);
       this.head = entry.id;
     }
-    const documents = Object.entries(initialDocuments()) as Array<[DocumentKey, JsonObject]>;
+    const documents = Object.entries(initialDocuments()) as Array<
+      [conversationViewModuleTypes.DocumentKey, conversationViewModuleTypes.JsonObject]
+    >;
     this.documentTrackers = Object.fromEntries(
       documents.map(([key, value]) => [key, createTracker(value)]),
-    ) as Record<DocumentKey, TrackerLike<JsonObject>>;
+    ) as Record<
+      conversationViewModuleTypes.DocumentKey,
+      conversationViewModuleTypes.TrackerLike<conversationViewModuleTypes.JsonObject>
+    >;
     this.aggregate = this.rebuildExpectedView();
     this.initialAggregateBytes = Buffer.byteLength(JSON.stringify(this.aggregate));
     this.documentSequences = Object.fromEntries(documents.map(([key]) => [key, 0])) as Record<
-      DocumentKey,
+      conversationViewModuleTypes.DocumentKey,
       number
     >;
     this.peakHeap = process.memoryUsage().heapUsed;
   }
 
-  rebuildExpectedView(): ConversationView {
-    const docs = {} as Record<MountedKey, JsonObject>;
+  rebuildExpectedView(): conversationViewModuleTypes.ConversationView {
+    const docs = {} as Record<
+      conversationViewModuleTypes.MountedKey,
+      conversationViewModuleTypes.JsonObject
+    >;
     for (const key of MOUNTED_KEYS) docs[key] = cloneTrusted(this.documentTrackers[key].value);
     return {
-      schema: PROVISIONAL_SCHEMA,
-      conversation: { id: "conversation-1", head: this.head },
+      conversation: { head: this.head, id: "conversation-1" },
       docs,
       entries: cloneTrusted(resolveActiveLineage(this.records, this.head)),
+      schema: PROVISIONAL_SCHEMA,
     };
   }
 
@@ -110,7 +114,7 @@ export class ConversationViewState {
     this.peakHeap = Math.max(this.peakHeap, process.memoryUsage().heapUsed);
   }
 
-  clearWatchQueue<T extends object>(watch: Watch<T>): void {
+  clearWatchQueue<T extends object>(watch: conversationViewModuleTypes.Watch<T>): void {
     this.queuedFrameReferences -= watch.queue.length;
     this.queuedOperationReferences -= watch.pendingOperationCount;
     for (const frame of watch.queue) {
@@ -122,7 +126,10 @@ export class ConversationViewState {
     watch.pendingOperationCount = 0;
   }
 
-  retainQueuedFrame<T extends object>(watch: Watch<T>, frame: DeltaFrame): void {
+  retainQueuedFrame<T extends object>(
+    watch: conversationViewModuleTypes.Watch<T>,
+    frame: conversationViewModuleTypes.DeltaFrame,
+  ): void {
     watch.queue.push(frame);
     watch.pendingOperationCount += frame.ops.length;
     this.queuedFrameReferences += 1;
@@ -130,22 +137,30 @@ export class ConversationViewState {
     this.queuedFrameRefCounts.set(frame, (this.queuedFrameRefCounts.get(frame) ?? 0) + 1);
   }
 
-  resetWatch<T extends object>(watch: Watch<T>, value: T, sequence: number): void {
+  resetWatch<T extends object>(
+    watch: conversationViewModuleTypes.Watch<T>,
+    value: T,
+    sequence: number,
+  ): void {
     this.clearWatchQueue(watch);
     const cloneStart = performance.now();
     const resetValue = value;
     this.phaseSamples.resetClone.push(performance.now() - cloneStart);
-    const frame: DeltaFrame = {
+    const frame: conversationViewModuleTypes.DeltaFrame = {
       kind: "delta",
-      sequence,
       ops: [["r", resetValue as unknown as JsonValue]],
+      sequence,
     };
     this.retainQueuedFrame(watch, frame);
     this.deferredResetFrames.push(frame);
     this.resetCount += 1;
   }
 
-  enqueueWatch<T extends object>(watch: Watch<T>, frame: DeltaFrame, current: T): void {
+  enqueueWatch<T extends object>(
+    watch: conversationViewModuleTypes.Watch<T>,
+    frame: conversationViewModuleTypes.DeltaFrame,
+    current: T,
+  ): void {
     const previous = watch.queue.at(-1)?.sequence ?? watch.deliveredSequence;
     assert.equal(frame.sequence, previous + 1);
     const capacity = this.args.config.queueCapacity;
@@ -170,7 +185,9 @@ export class ConversationViewState {
     this.samplePendingOperations(this.documentWatches);
   }
 
-  samplePendingOperations<T extends object>(watches: readonly Watch<T>[]): void {
+  samplePendingOperations<T extends object>(
+    watches: readonly conversationViewModuleTypes.Watch<T>[],
+  ): void {
     for (const watch of watches) {
       this.peakPendingOperationsPerWatch = Math.max(
         this.peakPendingOperationsPerWatch,
@@ -179,3 +196,5 @@ export class ConversationViewState {
     }
   }
 }
+
+export default ConversationViewState;

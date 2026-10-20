@@ -1,29 +1,28 @@
 import type { JsonValue } from "../../src/delta/index.ts";
-
-export type JsonRecord = Record<string, JsonValue>;
+import type prototypesTypes from "./prototypes.types.ts";
 
 const throwingSetter = (message: string): PropertyDescriptor => ({
+  configurable: true,
   get() {
     return undefined;
   },
   set() {
     throw new Error(message);
   },
-  configurable: true,
 });
 
-export const trappedObject = (): JsonRecord =>
+const trappedObject = (): prototypesTypes.JsonRecord =>
   Object.create(
     Object.create(Object.prototype, { trap: throwingSetter("inherited setter ran") }),
-  ) as JsonRecord;
+  ) as prototypesTypes.JsonRecord;
 
-export const trappedArray = (values: readonly JsonValue[]): JsonValue[] =>
+const trappedArray = (values: readonly JsonValue[]): JsonValue[] =>
   Object.setPrototypeOf(
     [...values],
     Object.create(Array.prototype, { 0: throwingSetter("inherited array setter ran") }),
   ) as JsonValue[];
 
-export class TrapSetter {
+class TrapSetter {
   [key: string]: JsonValue;
 
   get trap(): JsonValue {
@@ -34,3 +33,11 @@ export class TrapSetter {
     throw new Error("inherited setter ran");
   }
 }
+
+const prototypes = {
+  TrapSetter,
+  trappedArray,
+  trappedObject,
+};
+
+export default prototypes;

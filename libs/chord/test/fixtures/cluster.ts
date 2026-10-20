@@ -4,48 +4,48 @@ import { Type } from "typebox";
 
 import {
   type Ctx,
-  createHost,
   type Facet,
   type FacetLoader,
   type Frame,
+  type Link,
+  type Self,
+  createHost,
   hostFamily,
   hostNamed,
-  type Link,
   memoryLinkPair,
   method,
   remote,
-  type Self,
 } from "../../src/index.ts";
 
-export const Greeter = remote("t.greeter", {
-  version: 1,
-  input: Type.Object({ session: Type.String() }),
+const Greeter = remote("t.greeter", {
   host: hostFamily("session:", "session"),
+  input: Type.Object({ session: Type.String() }),
   variants: {
     main: {
-      state: { count: Type.Object({ n: Type.Number() }) },
       methods: { greet: method(Type.String(), Type.String()) },
+      state: { count: Type.Object({ n: Type.Number() }) },
     },
   },
+  version: 1,
 });
 
-export const GreeterV2 = remote("t.greeter", {
-  version: 2,
-  input: Type.Object({ session: Type.String() }),
+const GreeterV2 = remote("t.greeter", {
   host: hostFamily("session:", "session"),
+  input: Type.Object({ session: Type.String() }),
   variants: { main: { methods: { hello: method(Type.String(), Type.String()) } } },
+  version: 2,
 });
 
-export const ServerGreeter = remote("t.server-greeter", {
-  version: 1,
-  input: Type.Object({}),
+const ServerGreeter = remote("t.server-greeter", {
   host: hostNamed("server"),
+  input: Type.Object({}),
   variants: {
     main: {
-      state: { count: Type.Object({ n: Type.Number() }) },
       methods: { greet: method(Type.String(), Type.String()) },
+      state: { count: Type.Object({ n: Type.Number() }) },
     },
   },
+  version: 1,
 });
 
 type GreeterOptions = { fail?: boolean; stateVersion?: number };
@@ -63,7 +63,6 @@ function greeterFacetImpl(greeting: string, options: GreeterOptions = {}): Facet
           { version: options.stateVersion ?? 1 },
         );
         return {
-          variant: "main" as const,
           count,
           greet: (name: string, ctx: Ctx) => {
             count.change(ctx, (draft) => {
@@ -71,6 +70,7 @@ function greeterFacetImpl(greeting: string, options: GreeterOptions = {}): Facet
             });
             return `${greeting} ${name}`;
           },
+          variant: "main" as const,
         };
       };
       if (api.name === "server")
@@ -82,47 +82,59 @@ function greeterFacetImpl(greeting: string, options: GreeterOptions = {}): Facet
 
 function droppingImpl(link: Link, drop: (frame: Frame) => boolean): Link {
   return {
+    close: (reason) => link.close(reason),
     get closed() {
       return link.closed;
     },
-    send: (frame) => (drop(frame) ? undefined : link.send(frame)),
-    receive: (handler) => link.receive(handler),
     onClose: (handler) => link.onClose(handler),
-    close: (reason) => link.close(reason),
+    receive: (handler) => link.receive(handler),
+    send: (frame) => (drop(frame) ? undefined : link.send(frame)),
   };
 }
 
-export const Ping = remote("t.cluster-ping", {
-  version: 1,
-  input: Type.Object({}),
+const Ping = remote("t.cluster-ping", {
   host: hostNamed("server"),
+  input: Type.Object({}),
   variants: { main: { methods: { ping: method(undefined, Type.String()) } } },
+  version: 1,
 });
 
-export function setup() {
+function setup() {
   const modules = new Map<string, Facet>([["greeter", greeterFacet("v1")]]);
   const loader: FacetLoader = (names) =>
     Effect.runPromise(Effect.sync(() => names.map((name) => modules.get(String(name))!)));
-  const server = createHost({ self: { kind: "host" }, name: "server", onError: () => {} });
+  const server = createHost({ name: "server", onError: () => {}, self: { kind: "host" } });
   const [down, up] = memoryLinkPair();
-  server.accept(down, { principal: { worker: "w" }, kind: "host", name: "session:S1" });
+  server.accept(down, { kind: "host", name: "session:S1", principal: { worker: "w" } });
   const worker = createHost({
-    self: { kind: "host" },
-    name: "session:S1",
-    upstream: { link: up, principal: { kind: "server" } },
     loader,
+    name: "session:S1",
     onError: () => {},
+    self: { kind: "host" },
+    upstream: { link: up, principal: { kind: "server" } },
   });
   worker.install(modules.get("greeter")!);
-  return { server, worker, modules, down };
+  return { down, modules, server, worker };
 }
 
-export const greeterFacet: {
+const greeterFacet: {
   (options?: GreeterOptions): (greeting: string) => Facet;
   (greeting: string, options?: GreeterOptions): Facet;
 } = dual((args: IArguments) => typeof args[0] === "string", greeterFacetImpl);
 
-export const dropping: {
+const dropping: {
   (drop: (frame: Frame) => boolean): (link: Link) => Link;
   (link: Link, drop: (frame: Frame) => boolean): Link;
 } = dual(2, droppingImpl);
+
+const cluster = {
+  Greeter,
+  GreeterV2,
+  Ping,
+  ServerGreeter,
+  dropping,
+  greeterFacet,
+  setup,
+};
+
+export default cluster;

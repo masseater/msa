@@ -1,37 +1,39 @@
 import { describe, expect, it } from "vite-plus/test";
 
 import {
+  type Op,
+  PathError,
+  UnsafePathError,
   apply,
   applyImmutable,
   applyImmutableBatches,
-  type Op,
-  PathError,
   track,
-  UnsafePathError,
 } from "../src/delta/index.ts";
-import { clone, freezeDeep } from "./fixtures/delta-apply-immutable.ts";
+import deltaApplyImmutable from "./fixtures/delta-apply-immutable.ts";
+
+const { clone, freezeDeep } = deltaApplyImmutable;
 
 const touchedContainers = () => {
   const shared = freezeDeep({ nested: { value: 1 } });
   const untouched = freezeDeep({ value: 9 });
   const rowPayload = freezeDeep({ id: 4, label: "placed" });
   const base = freezeDeep({
-    text: "abcdef",
-    stable: { value: 7 },
     branch: { value: 1 },
     copy: null as { value: number } | null,
-    placed: null as typeof shared | null,
-    untouched: null as typeof untouched | null,
     left: null as typeof shared | null,
-    right: null as typeof shared | null,
     meta: { count: 0, obsolete: true },
+    placed: null as typeof shared | null,
+    right: null as typeof shared | null,
     rows: [
       { id: 1, label: "one" },
       { id: 2, label: "two" },
       { id: 3, label: "three" },
     ],
+    stable: { value: 7 },
+    text: "abcdef",
+    untouched: null as typeof untouched | null,
   });
-  return { shared, untouched, rowPayload, base };
+  return { base, rowPayload, shared, untouched };
 };
 
 const copiesEachTouchedContainerOnceWhile = (): void => {
@@ -101,8 +103,8 @@ const protectsRootReplacementPayloadsBeforeLater = (): void => {
 
 const sharesOnePrivateCopyOnWrite = (): void => {
   const base = freezeDeep({
-    text: "abcdef",
     meta: { count: 0 },
+    text: "abcdef",
     values: [
       { id: 1, value: 1 },
       { id: 2, value: 2 },
@@ -144,9 +146,9 @@ const sharesOnePrivateCopyOnWrite = (): void => {
 const handlesTrackerProducedBatchesAcrossArbitrary = (): void => {
   type Document = { text: string; values: { id: number; score: number }[]; revision: number };
   const initial: Document = {
+    revision: 0,
     text: "start",
     values: Array.from({ length: 8 }, (_, id) => ({ id, score: 0 })),
-    revision: 0,
   };
   const tracker = track(initial);
   const batches: Array<readonly Op[]> = [];
