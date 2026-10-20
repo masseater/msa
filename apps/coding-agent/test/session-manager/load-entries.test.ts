@@ -1,4 +1,4 @@
-import { currentTimeMillis } from "@msa/testing";
+import testing from "@msa/testing";
 import { describe, expect, it } from "vite-plus/test";
 
 import type {
@@ -8,12 +8,14 @@ import type {
 } from "../../src/core/session-manager.ts";
 import { SessionManager } from "../../src/core/session-manager.ts";
 
+const { currentTimeMillis } = testing;
+
 const UUID_V7_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-7[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/u;
 
 function userMessage(text: string) {
   return {
+    content: [{ text, type: "text" as const }],
     role: "user" as const,
-    content: [{ type: "text" as const, text }],
     timestamp: currentTimeMillis(),
   };
 }
@@ -145,11 +147,11 @@ const takesTheSessionIdentityFromA = () => {
   const body = storedEntries((source) => source.appendMessage(userMessage("hello")));
   const entries: FileEntry[] = [
     {
-      type: "session",
-      version: 3,
+      cwd: "/stored",
       id: "stored-session",
       timestamp: "2026-01-01T00:00:00Z",
-      cwd: "/stored",
+      type: "session",
+      version: 3,
     },
     ...body,
   ];
@@ -163,18 +165,18 @@ const takesTheSessionIdentityFromA = () => {
 const migratesEntriesRestoredWithAnOlder = () => {
   const entries: FileEntry[] = [
     {
-      type: "session",
-      version: 2,
+      cwd: "/project",
       id: "v2-session",
       timestamp: "2026-01-01T00:00:00Z",
-      cwd: "/project",
+      type: "session",
+      version: 2,
     },
     {
-      type: "message",
       id: "abc12345",
+      message: { content: "from a hook", role: "hookMessage", timestamp: 1 },
       parentId: null,
       timestamp: "2026-01-01T00:00:01Z",
-      message: { role: "hookMessage", content: "from a hook", timestamp: 1 },
+      type: "message",
     } as unknown as SessionMessageEntry,
   ];
 
@@ -189,11 +191,11 @@ const migratesEntriesRestoredWithAnOlder = () => {
 const adoptsHeaderlessEntriesAsCurrentVersion = () => {
   const entries: SessionEntry[] = [
     {
-      type: "message",
       id: "abc12345",
+      message: { content: "from a hook", role: "hookMessage", timestamp: 1 },
       parentId: null,
       timestamp: "2026-01-01T00:00:01Z",
-      message: { role: "hookMessage", content: "from a hook", timestamp: 1 },
+      type: "message",
     } as unknown as SessionMessageEntry,
   ];
 

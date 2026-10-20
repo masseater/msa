@@ -1,31 +1,34 @@
-import {
-  awaited,
-  runTest,
-  toJsonText,
-  fromJsonText,
-  readTextFile,
-  writeTextFile,
-  makeDirectory,
-  joinPath,
-} from "@msa/testing";
+import testing from "@msa/testing";
 import { Effect } from "effect";
-import { beforeEach, afterEach, describe, expect, it, vi } from "vite-plus/test";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vite-plus/test";
 
 import { ProjectTrustStore } from "../src/core/trust-manager.ts";
 import { main } from "../src/main.ts";
-import {
-  type PackageTestState,
-  realpathSync,
-  setupPackageTest,
-  teardownPackageTest,
-} from "./package-command-paths-support.ts";
+import packageCommandPathsSupport from "./package-command-paths-support.ts";
+import type packageCommandPathsSupportTypes from "./package-command-paths-support.types.ts";
 
-let state: PackageTestState;
+const { setupPackageTest, teardownPackageTest } = packageCommandPathsSupport;
+
+const {
+  awaited,
+  fromJsonText,
+  joinPath,
+  makeDirectory,
+  readTextFile,
+  realPath,
+  runTest,
+  toJsonText,
+  writeTextFile,
+} = testing;
+
+let state: packageCommandPathsSupportTypes.PackageTestState;
 let agentDir = "";
 let projectDir = "";
 let packageDir = "";
 
-const assignState = (next: PackageTestState): PackageTestState => {
+const assignState = (
+  next: packageCommandPathsSupportTypes.PackageTestState,
+): packageCommandPathsSupportTypes.PackageTestState => {
   state = next;
   agentDir = next.agentDir;
   projectDir = next.projectDir;
@@ -33,142 +36,163 @@ const assignState = (next: PackageTestState): PackageTestState => {
   return next;
 };
 
+const shouldPersistGlobalRelativeLocalPackagePaths = () =>
+  runTest(
+    Effect.gen(function* () {
+      const relativePkgDir = joinPath(projectDir, "packages", "local-package");
+      yield* makeDirectory(relativePkgDir);
+
+      yield* awaited(main(["install", "./packages/local-package"]));
+
+      const settingsPath = joinPath(agentDir, "settings.json");
+      const settings = (yield* fromJsonText(yield* readTextFile(settingsPath))) as {
+        packages?: string[];
+      };
+      expect(settings.packages?.length).toBe(1);
+      const stored = settings.packages?.[0] ?? "";
+      const resolvedFromSettings = yield* realPath(joinPath(agentDir, stored));
+      expect(resolvedFromSettings).toBe(yield* realPath(relativePkgDir));
+    }),
+  );
+
+const shouldRemoveLocalPackagesUsingAPath = () =>
+  runTest(
+    Effect.gen(function* () {
+      yield* awaited(main(["install", `${packageDir}/`]));
+
+      const settingsPath = joinPath(agentDir, "settings.json");
+      const installedSettings = (yield* fromJsonText(yield* readTextFile(settingsPath))) as {
+        packages?: string[];
+      };
+      expect(installedSettings.packages?.length).toBe(1);
+
+      yield* awaited(main(["remove", `${packageDir}/`]));
+
+      const removedSettings = (yield* fromJsonText(yield* readTextFile(settingsPath))) as {
+        packages?: string[];
+      };
+      expect(removedSettings.packages ?? []).toHaveLength(0);
+    }),
+  );
+
+const skipsUntrustedProjectPackageSettings = () =>
+  runTest(
+    Effect.gen(function* () {
+      yield* makeDirectory(joinPath(projectDir, ".msa"));
+      yield* writeTextFile(
+        joinPath(projectDir, ".msa", "settings.json"),
+        yield* toJsonText({ packages: ["npm:@project/pkg"] }),
+      );
+      const logSpy = vi.spyOn(console, "log").mockImplementation(() => {});
+
+      try {
+        yield* awaited(expect(main(["list"])).resolves.toBeUndefined());
+
+        const stdout = logSpy.mock.calls.map(([message]) => String(message)).join("\n");
+        expect(stdout).toContain("No packages installed.");
+        expect(stdout).not.toContain("Project packages:");
+      } finally {
+        logSpy.mockRestore();
+      }
+    }),
+  );
+
+const usesRememberedProjectTrustForList = () =>
+  runTest(
+    Effect.gen(function* () {
+      yield* makeDirectory(joinPath(projectDir, ".msa"));
+      yield* writeTextFile(
+        joinPath(projectDir, ".msa", "settings.json"),
+        yield* toJsonText({ packages: ["npm:@project/pkg"] }),
+      );
+      new ProjectTrustStore(agentDir).set(projectDir, true);
+      const logSpy = vi.spyOn(console, "log").mockImplementation(() => {});
+
+      try {
+        yield* awaited(expect(main(["list"])).resolves.toBeUndefined());
+
+        const stdout = logSpy.mock.calls.map(([message]) => String(message)).join("\n");
+        expect(stdout).toContain("Project packages:");
+        expect(stdout).toContain("npm:@project/pkg");
+        expect(stdout).not.toContain("No packages installed.");
+        expect(process.exitCode).toBeUndefined();
+      } finally {
+        logSpy.mockRestore();
+      }
+    }),
+  );
+
+const overridesRememberedTrustForListWithNo = () =>
+  runTest(
+    Effect.gen(function* () {
+      yield* makeDirectory(joinPath(projectDir, ".msa"));
+      yield* writeTextFile(
+        joinPath(projectDir, ".msa", "settings.json"),
+        yield* toJsonText({ packages: ["npm:@project/pkg"] }),
+      );
+      new ProjectTrustStore(agentDir).set(projectDir, true);
+      const logSpy = vi.spyOn(console, "log").mockImplementation(() => {});
+
+      try {
+        yield* awaited(expect(main(["list", "--no-approve"])).resolves.toBeUndefined());
+
+        const stdout = logSpy.mock.calls.map(([message]) => String(message)).join("\n");
+        expect(stdout).toContain("No packages installed.");
+        expect(stdout).not.toContain("Project packages:");
+        expect(process.exitCode).toBeUndefined();
+      } finally {
+        logSpy.mockRestore();
+      }
+    }),
+  );
+
+const approvesProjectTrustForListWithApprove = () =>
+  runTest(
+    Effect.gen(function* () {
+      yield* makeDirectory(joinPath(projectDir, ".msa"));
+      yield* writeTextFile(
+        joinPath(projectDir, ".msa", "settings.json"),
+        yield* toJsonText({ packages: ["npm:@project/pkg"] }),
+      );
+      const logSpy = vi.spyOn(console, "log").mockImplementation(() => {});
+
+      try {
+        yield* awaited(expect(main(["list", "--approve"])).resolves.toBeUndefined());
+
+        const stdout = logSpy.mock.calls.map(([message]) => String(message)).join("\n");
+        expect(stdout).toContain("Project packages:");
+        expect(stdout).toContain("npm:@project/pkg");
+        expect(stdout).not.toContain("No packages installed.");
+        expect(process.exitCode).toBeUndefined();
+      } finally {
+        logSpy.mockRestore();
+      }
+    }),
+  );
+
 describe("package commands", () => {
   beforeEach(() => runTest(setupPackageTest).then(assignState));
 
   afterEach(() => runTest(teardownPackageTest(state)));
 
-  it("should persist global relative local package paths relative to settings.json", () =>
-    runTest(
-      Effect.gen(function* () {
-        const relativePkgDir = joinPath(projectDir, "packages", "local-package");
-        yield* makeDirectory(relativePkgDir);
+  it(
+    "should persist global relative local package paths relative to settings.json",
+    shouldPersistGlobalRelativeLocalPackagePaths,
+  );
 
-        yield* awaited(main(["install", "./packages/local-package"]));
+  it(
+    "should remove local packages using a path with a trailing slash",
+    shouldRemoveLocalPackagesUsingAPath,
+  );
 
-        const settingsPath = joinPath(agentDir, "settings.json");
-        const settings = (yield* fromJsonText(yield* readTextFile(settingsPath))) as {
-          packages?: string[];
-        };
-        expect(settings.packages?.length).toBe(1);
-        const stored = settings.packages?.[0] ?? "";
-        const resolvedFromSettings = realpathSync(joinPath(agentDir, stored));
-        expect(resolvedFromSettings).toBe(realpathSync(relativePkgDir));
-      }),
-    ));
+  it("skips untrusted project package settings", skipsUntrustedProjectPackageSettings);
 
-  it("should remove local packages using a path with a trailing slash", () =>
-    runTest(
-      Effect.gen(function* () {
-        yield* awaited(main(["install", `${packageDir}/`]));
+  it("uses remembered project trust for list", usesRememberedProjectTrustForList);
 
-        const settingsPath = joinPath(agentDir, "settings.json");
-        const installedSettings = (yield* fromJsonText(yield* readTextFile(settingsPath))) as {
-          packages?: string[];
-        };
-        expect(installedSettings.packages?.length).toBe(1);
+  it(
+    "overrides remembered trust for list with --no-approve",
+    overridesRememberedTrustForListWithNo,
+  );
 
-        yield* awaited(main(["remove", `${packageDir}/`]));
-
-        const removedSettings = (yield* fromJsonText(yield* readTextFile(settingsPath))) as {
-          packages?: string[];
-        };
-        expect(removedSettings.packages ?? []).toHaveLength(0);
-      }),
-    ));
-
-  it("skips untrusted project package settings", () =>
-    runTest(
-      Effect.gen(function* () {
-        yield* makeDirectory(joinPath(projectDir, ".msa"));
-        yield* writeTextFile(
-          joinPath(projectDir, ".msa", "settings.json"),
-          yield* toJsonText({ packages: ["npm:@project/pkg"] }),
-        );
-        const logSpy = vi.spyOn(console, "log").mockImplementation(() => {});
-
-        try {
-          yield* awaited(expect(main(["list"])).resolves.toBeUndefined());
-
-          const stdout = logSpy.mock.calls.map(([message]) => String(message)).join("\n");
-          expect(stdout).toContain("No packages installed.");
-          expect(stdout).not.toContain("Project packages:");
-        } finally {
-          logSpy.mockRestore();
-        }
-      }),
-    ));
-
-  it("uses remembered project trust for list", () =>
-    runTest(
-      Effect.gen(function* () {
-        yield* makeDirectory(joinPath(projectDir, ".msa"));
-        yield* writeTextFile(
-          joinPath(projectDir, ".msa", "settings.json"),
-          yield* toJsonText({ packages: ["npm:@project/pkg"] }),
-        );
-        new ProjectTrustStore(agentDir).set(projectDir, true);
-        const logSpy = vi.spyOn(console, "log").mockImplementation(() => {});
-
-        try {
-          yield* awaited(expect(main(["list"])).resolves.toBeUndefined());
-
-          const stdout = logSpy.mock.calls.map(([message]) => String(message)).join("\n");
-          expect(stdout).toContain("Project packages:");
-          expect(stdout).toContain("npm:@project/pkg");
-          expect(stdout).not.toContain("No packages installed.");
-          expect(process.exitCode).toBeUndefined();
-        } finally {
-          logSpy.mockRestore();
-        }
-      }),
-    ));
-
-  it("overrides remembered trust for list with --no-approve", () =>
-    runTest(
-      Effect.gen(function* () {
-        yield* makeDirectory(joinPath(projectDir, ".msa"));
-        yield* writeTextFile(
-          joinPath(projectDir, ".msa", "settings.json"),
-          yield* toJsonText({ packages: ["npm:@project/pkg"] }),
-        );
-        new ProjectTrustStore(agentDir).set(projectDir, true);
-        const logSpy = vi.spyOn(console, "log").mockImplementation(() => {});
-
-        try {
-          yield* awaited(expect(main(["list", "--no-approve"])).resolves.toBeUndefined());
-
-          const stdout = logSpy.mock.calls.map(([message]) => String(message)).join("\n");
-          expect(stdout).toContain("No packages installed.");
-          expect(stdout).not.toContain("Project packages:");
-          expect(process.exitCode).toBeUndefined();
-        } finally {
-          logSpy.mockRestore();
-        }
-      }),
-    ));
-
-  it("approves project trust for list with --approve", () =>
-    runTest(
-      Effect.gen(function* () {
-        yield* makeDirectory(joinPath(projectDir, ".msa"));
-        yield* writeTextFile(
-          joinPath(projectDir, ".msa", "settings.json"),
-          yield* toJsonText({ packages: ["npm:@project/pkg"] }),
-        );
-        const logSpy = vi.spyOn(console, "log").mockImplementation(() => {});
-
-        try {
-          yield* awaited(expect(main(["list", "--approve"])).resolves.toBeUndefined());
-
-          const stdout = logSpy.mock.calls.map(([message]) => String(message)).join("\n");
-          expect(stdout).toContain("Project packages:");
-          expect(stdout).toContain("npm:@project/pkg");
-          expect(stdout).not.toContain("No packages installed.");
-          expect(process.exitCode).toBeUndefined();
-        } finally {
-          logSpy.mockRestore();
-        }
-      }),
-    ));
+  it("approves project trust for list with --approve", approvesProjectTrustForListWithApprove);
 });

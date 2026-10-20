@@ -1,21 +1,31 @@
 import type { Api, Model, ModelsRefreshResult } from "@msa/ai";
-import { deferredPromise } from "@msa/testing";
-import { setKeybindings, type TUI } from "@msa/tui";
+import testing from "@msa/testing";
+import { type TUI, setKeybindings } from "@msa/tui";
 import { Effect } from "effect";
 import { afterEach, beforeAll, beforeEach, describe, expect, it, vi } from "vite-plus/test";
 
-import { KeybindingsManager } from "../../../src/core/keybindings.ts";
 import type { ScopedModelsSelectorComponent } from "../../../src/modes/interactive/components/scoped-models-selector.ts";
 import { InteractiveMode } from "../../../src/modes/interactive/interactive-mode.ts";
-import { initTheme } from "../../../src/modes/interactive/theme/theme.ts";
-import { stripAnsi } from "../../../src/utils/ansi.ts";
-import { createHarness, type Harness } from "../harness.ts";
+import tuiKit from "../../tui-kit.ts";
+import harnessModule from "../harness.ts";
+import type harnessTypes from "../harness.types.ts";
+
+const { KeybindingsManager, initTheme, stripAnsi } = tuiKit;
+
+const { createHarness } = harnessModule;
+
+const { deferredPromise } = testing;
 
 const showModelsSelector = Reflect.get(InteractiveMode.prototype, "showModelsSelector") as (
   this: object,
 ) => void;
 
-function openSelector(harness: Harness, initialModels: readonly Model<Api>[]) {
+type SelectorFactory = (close: () => void) => {
+  component: ScopedModelsSelectorComponent;
+  dispose?: () => void;
+};
+
+function openSelector(harness: harnessTypes.Harness, initialModels: readonly Model<Api>[]) {
   let snapshot = initialModels;
   let finishRefresh: ((result: ModelsRefreshResult) => void) | undefined;
   let refreshSignal: AbortSignal | undefined;
@@ -30,15 +40,8 @@ function openSelector(harness: Harness, initialModels: readonly Model<Api>[]) {
     return refresh.promise;
   });
   const context = {
-    session: harness.session,
-    settingsManager: harness.settingsManager,
     editorSlot: {
-      showSelector: (
-        factory: (close: () => void) => {
-          component: ScopedModelsSelectorComponent;
-          dispose?: () => void;
-        },
-      ) => {
+      showSelector: (factory: SelectorFactory) => {
         const close = () => {
           dispose?.();
           done();
@@ -48,27 +51,29 @@ function openSelector(harness: Harness, initialModels: readonly Model<Api>[]) {
         dispose = created.dispose;
       },
     },
-    updateAvailableProviderCount: vi.fn(),
+    session: harness.session,
+    settingsManager: harness.settingsManager,
     ui: { requestRender: vi.fn() } as unknown as TUI,
+    updateAvailableProviderCount: vi.fn(),
   };
 
   showModelsSelector.call(context);
   if (selector === undefined) throw new Error("Expected scoped-model selector to open");
   return {
-    done,
-    get refreshSignal() {
-      return refreshSignal;
-    },
-    selector,
     complete(models: readonly Model<Api>[], result: ModelsRefreshResult) {
       snapshot = models;
       if (finishRefresh === undefined) throw new Error("Expected model refresh to start");
       finishRefresh(result);
     },
+    done,
+    get refreshSignal() {
+      return refreshSignal;
+    },
+    selector,
   };
 }
 
-let harness: Harness | undefined;
+let harness: harnessTypes.Harness | undefined;
 
 const rendersCachedModelsImmediatelyAndUpdates = Effect.gen(function* () {
   harness = yield* Effect.promise(() =>
@@ -108,6 +113,12 @@ const cancelsTheBackgroundRefreshWhenThe = Effect.gen(function* () {
   expect(refresh.done).toHaveBeenCalledOnce();
 });
 
+const rendersCachedModelsImmediatelyAndUpdatesAfter = () =>
+  Effect.runPromise(rendersCachedModelsImmediatelyAndUpdates);
+
+const cancelsTheBackgroundRefreshWhenTheSelector = () =>
+  Effect.runPromise(cancelsTheBackgroundRefreshWhenThe);
+
 describe("issue #7153 scoped models refresh", () => {
   beforeAll(() => initTheme("dark"));
   beforeEach(() => setKeybindings(new KeybindingsManager()));
@@ -115,8 +126,12 @@ describe("issue #7153 scoped models refresh", () => {
     harness?.cleanup();
     vi.restoreAllMocks();
   });
-  it("renders cached models immediately and updates after background refresh", () =>
-    Effect.runPromise(rendersCachedModelsImmediatelyAndUpdates));
-  it("cancels the background refresh when the selector closes", () =>
-    Effect.runPromise(cancelsTheBackgroundRefreshWhenThe));
+  it(
+    "renders cached models immediately and updates after background refresh",
+    rendersCachedModelsImmediatelyAndUpdatesAfter,
+  );
+  it(
+    "cancels the background refresh when the selector closes",
+    cancelsTheBackgroundRefreshWhenTheSelector,
+  );
 });

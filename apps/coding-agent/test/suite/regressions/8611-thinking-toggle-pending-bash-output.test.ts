@@ -36,7 +36,7 @@ const preservesPartialBashOutput = () => {
     process.cwd(),
   );
   component.markExecutionStarted();
-  component.updateResult({ content: [{ type: "text", text: "first" }], isError: false }, true);
+  component.updateResult({ content: [{ text: "first", type: "text" }], isError: false }, true);
   chatContainer.addChild(component);
 
   const updateThinkingBlockVisibility = Reflect.get(
@@ -48,15 +48,15 @@ const preservesPartialBashOutput = () => {
     "toggleThinkingBlockVisibility",
   ) as ToggleThinkingBlockVisibility;
   const fakeThis = {
+    chatComponents: Reflect.get(InteractiveMode.prototype, "chatComponents"),
+    chatContainer,
     hideThinkingBlock: false,
     settingsManager: { setHideThinkingBlock: vi.fn() },
-    chatContainer,
+    showStatus: vi.fn(),
     ui,
-    chatComponents: Reflect.get(InteractiveMode.prototype, "chatComponents"),
     updateThinkingBlockVisibility() {
       updateThinkingBlockVisibility.call(this);
     },
-    showStatus: vi.fn(),
   };
 
   expect(renderChat(chatContainer)).toContain("first");

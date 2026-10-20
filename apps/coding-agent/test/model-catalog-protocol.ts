@@ -1,61 +1,55 @@
 import { Function } from "effect";
 
-import { comparePiVersions, parsePiVersion, requirePiVersion } from "./pi-version.ts";
-import type { ParsedPiVersion } from "./pi-version.ts";
+import type modelCatalogProtocolTypes from "./model-catalog-protocol.types.ts";
+import piVersionModule from "./pi-version.ts";
+import type piVersionTypes from "./pi-version.types.ts";
 
-export const MODEL_CATALOG_SCHEMA_VERSION = 1;
-export const MODEL_CATALOG_PREFIX = `models/v${MODEL_CATALOG_SCHEMA_VERSION}`;
-export const MODEL_CATALOG_INDEX_KEY = `${MODEL_CATALOG_PREFIX}/index.json`;
-export const MODEL_CATALOG_REVISION_RE = /^sha256-[0-9a-f]{64}$/u;
+const { comparePiVersions, parsePiVersion, requirePiVersion } = piVersionModule;
+
+const MODEL_CATALOG_SCHEMA_VERSION = 1;
+const MODEL_CATALOG_PREFIX = `models/v${MODEL_CATALOG_SCHEMA_VERSION}`;
+const MODEL_CATALOG_INDEX_KEY = `${MODEL_CATALOG_PREFIX}/index.json`;
+const MODEL_CATALOG_REVISION_RE = /^sha256-[0-9a-f]{64}$/u;
 
 const PI_USER_AGENT_RE = /^pi\/([^\s()]+)(?: \([^;()]+(?:;\s*[^;()]+(?:;\s*[^()]+)?)?\))?$/iu;
 const MODEL_TYPE_RE = /^[A-Za-z0-9][A-Za-z0-9._-]*$/u;
 
-export type ModelCatalogArtifact = "models.json" | "models.all.json" | "providers.json";
-
-export type ModelCatalogRepresentation = "legacy" | "typed";
-
-export type ModelCatalogIndexEntry = {
-  minimumPiVersion: string;
-  revision: string;
-};
-
-export type ModelCatalogIndex = {
-  schemaVersion: number;
-  defaultRevision: string;
-  catalogs: ModelCatalogIndexEntry[];
-};
-
-export type ModelCatalogRequest =
-  | { kind: "catalog"; piVersion: string | undefined; representation: ModelCatalogRepresentation }
-  | { kind: "redirect"; location: string }
-  | { kind: "invalid"; error: string };
-
-export const getModelCatalogArtifactKey: {
-  (artifact: ModelCatalogArtifact): (revision: string) => string;
-  (revision: string, artifact: ModelCatalogArtifact): string;
+const getModelCatalogArtifactKey: {
+  (artifact: modelCatalogProtocolTypes.ModelCatalogArtifact): (revision: string) => string;
+  (revision: string, artifact: modelCatalogProtocolTypes.ModelCatalogArtifact): string;
 } = Function.dual(
   2,
-  (revision: string, artifact: ModelCatalogArtifact): string =>
+  (revision: string, artifact: modelCatalogProtocolTypes.ModelCatalogArtifact): string =>
     `${MODEL_CATALOG_PREFIX}/revisions/${revision}/${artifact}`,
 );
 
-export const getModelCatalogProviderKey: {
-  (provider: string, representation: ModelCatalogRepresentation): (revision: string) => string;
-  (revision: string, provider: string, representation: ModelCatalogRepresentation): string;
+const getModelCatalogProviderKey: {
+  (
+    provider: string,
+    representation: modelCatalogProtocolTypes.ModelCatalogRepresentation,
+  ): (revision: string) => string;
+  (
+    revision: string,
+    provider: string,
+    representation: modelCatalogProtocolTypes.ModelCatalogRepresentation,
+  ): string;
 } = Function.dual(
   3,
-  (revision: string, provider: string, representation: ModelCatalogRepresentation): string => {
+  (
+    revision: string,
+    provider: string,
+    representation: modelCatalogProtocolTypes.ModelCatalogRepresentation,
+  ): string => {
     const suffix = representation === "typed" ? ".all.json" : ".json";
     return `${MODEL_CATALOG_PREFIX}/revisions/${revision}/providers/${provider}${suffix}`;
   },
 );
 
-export function isValidModelCatalogPiVersion(version: string): boolean {
+function isValidModelCatalogPiVersion(version: string): boolean {
   return parsePiVersion(version) !== undefined;
 }
 
-export const compareModelCatalogPiVersions: {
+const compareModelCatalogPiVersions: {
   (right: string): (left: string) => number;
   (left: string, right: string): number;
 } = Function.dual(2, (left: string, right: string): number =>
@@ -66,9 +60,9 @@ function isValidTypeList(types: string): boolean {
   return types !== "" && types.split(",").every((type) => MODEL_TYPE_RE.test(type));
 }
 
-export function parseModelCatalogRepresentation(
+function parseModelCatalogRepresentation(
   types: string | null | undefined,
-): ModelCatalogRepresentation | undefined {
+): modelCatalogProtocolTypes.ModelCatalogRepresentation | undefined {
   if (types === undefined || types === null) {
     return "legacy";
   }
@@ -82,10 +76,10 @@ const validPiVersion = (version: string | undefined): string | undefined =>
   version !== undefined && isValidModelCatalogPiVersion(version) ? version : undefined;
 
 const requestWithoutPiVersion = (options: {
-  readonly representation: ModelCatalogRepresentation;
+  readonly representation: modelCatalogProtocolTypes.ModelCatalogRepresentation;
   readonly requestUrl: URL;
   readonly userAgent: string | null | undefined;
-}): ModelCatalogRequest => {
+}): modelCatalogProtocolTypes.ModelCatalogRequest => {
   const { representation, requestUrl } = options;
   const version = validPiVersion(userAgentVersion(options.userAgent));
   if (version === undefined) {
@@ -97,20 +91,20 @@ const requestWithoutPiVersion = (options: {
 
 const requestWithPiVersion = (
   piVersion: string,
-  representation: ModelCatalogRepresentation,
-): ModelCatalogRequest =>
+  representation: modelCatalogProtocolTypes.ModelCatalogRepresentation,
+): modelCatalogProtocolTypes.ModelCatalogRequest =>
   isValidModelCatalogPiVersion(piVersion)
     ? { kind: "catalog", piVersion, representation }
-    : { kind: "invalid", error: "Invalid Pi version." };
+    : { error: "Invalid Pi version.", kind: "invalid" };
 
 const parseRequest = (
   url: string | URL,
   userAgent: string | null | undefined,
-): ModelCatalogRequest => {
+): modelCatalogProtocolTypes.ModelCatalogRequest => {
   const requestUrl = new URL(url);
   const representation = parseModelCatalogRepresentation(requestUrl.searchParams.get("types"));
   if (representation === undefined) {
-    return { kind: "invalid", error: "Invalid model types." };
+    return { error: "Invalid model types.", kind: "invalid" };
   }
   const piVersion = requestUrl.searchParams.get("pi-version");
   return piVersion === null
@@ -118,15 +112,20 @@ const parseRequest = (
     : requestWithPiVersion(piVersion, representation);
 };
 
-export const parseModelCatalogRequest: {
-  (userAgent: string | null | undefined): (url: string | URL) => ModelCatalogRequest;
-  (url: string | URL, userAgent: string | null | undefined): ModelCatalogRequest;
+const parseModelCatalogRequest: {
+  (
+    userAgent: string | null | undefined,
+  ): (url: string | URL) => modelCatalogProtocolTypes.ModelCatalogRequest;
+  (
+    url: string | URL,
+    userAgent: string | null | undefined,
+  ): modelCatalogProtocolTypes.ModelCatalogRequest;
 } = Function.dual(2, parseRequest);
 
 const selectCatalog = (
-  index: ModelCatalogIndex,
+  index: modelCatalogProtocolTypes.ModelCatalogIndex,
   piVersion: string | undefined,
-): ModelCatalogIndexEntry | undefined => {
+): modelCatalogProtocolTypes.ModelCatalogIndexEntry | undefined => {
   if (piVersion === undefined) {
     return index.catalogs.find((catalog) => catalog.revision === index.defaultRevision);
   }
@@ -137,9 +136,16 @@ const selectCatalog = (
     : newestCompatibleCatalog(index.catalogs, requestedVersion);
 };
 
-export const selectModelCatalog: {
-  (piVersion: string | undefined): (index: ModelCatalogIndex) => ModelCatalogIndexEntry | undefined;
-  (index: ModelCatalogIndex, piVersion: string | undefined): ModelCatalogIndexEntry | undefined;
+const selectModelCatalog: {
+  (
+    piVersion: string | undefined,
+  ): (
+    index: modelCatalogProtocolTypes.ModelCatalogIndex,
+  ) => modelCatalogProtocolTypes.ModelCatalogIndexEntry | undefined;
+  (
+    index: modelCatalogProtocolTypes.ModelCatalogIndex,
+    piVersion: string | undefined,
+  ): modelCatalogProtocolTypes.ModelCatalogIndexEntry | undefined;
 } = Function.dual(2, selectCatalog);
 
 function isObjectValue(value: unknown): value is object {
@@ -158,7 +164,9 @@ function isPiVersion(value: unknown): value is string {
   return typeof value === "string" && parsePiVersion(value) !== undefined;
 }
 
-function hasEntryFields(catalog: object): catalog is ModelCatalogIndexEntry {
+function hasEntryFields(
+  catalog: object,
+): catalog is modelCatalogProtocolTypes.ModelCatalogIndexEntry {
   return (
     "minimumPiVersion" in catalog &&
     isPiVersion(catalog.minimumPiVersion) &&
@@ -167,11 +175,15 @@ function hasEntryFields(catalog: object): catalog is ModelCatalogIndexEntry {
   );
 }
 
-function isIndexEntry(catalog: unknown): catalog is ModelCatalogIndexEntry {
+function isIndexEntry(
+  catalog: unknown,
+): catalog is modelCatalogProtocolTypes.ModelCatalogIndexEntry {
   return isObjectValue(catalog) && hasEntryFields(catalog);
 }
 
-function isCatalogList(catalogs: unknown): catalogs is ModelCatalogIndexEntry[] {
+function isCatalogList(
+  catalogs: unknown,
+): catalogs is modelCatalogProtocolTypes.ModelCatalogIndexEntry[] {
   return Array.isArray(catalogs) && catalogs.length > 0 && catalogs.every(isIndexEntry);
 }
 
@@ -184,7 +196,7 @@ function hasDefaultRevision(value: object): value is { readonly defaultRevision:
 }
 
 function hasCatalogs(value: { readonly defaultRevision: string }): value is {
-  readonly catalogs: ModelCatalogIndexEntry[];
+  readonly catalogs: modelCatalogProtocolTypes.ModelCatalogIndexEntry[];
   readonly defaultRevision: string;
 } {
   return (
@@ -194,7 +206,7 @@ function hasCatalogs(value: { readonly defaultRevision: string }): value is {
   );
 }
 
-function isModelCatalogIndex(value: unknown): value is ModelCatalogIndex {
+function isModelCatalogIndex(value: unknown): value is modelCatalogProtocolTypes.ModelCatalogIndex {
   return (
     isPlainObject(value) &&
     hasSchemaVersion(value) &&
@@ -203,25 +215,25 @@ function isModelCatalogIndex(value: unknown): value is ModelCatalogIndex {
   );
 }
 
-export function parseModelCatalogIndex(value: unknown): ModelCatalogIndex {
+function parseModelCatalogIndex(value: unknown): modelCatalogProtocolTypes.ModelCatalogIndex {
   if (!isModelCatalogIndex(value)) {
     throw new Error(`Model catalog index is invalid: ${MODEL_CATALOG_INDEX_KEY}`);
   }
 
   return {
-    schemaVersion: value.schemaVersion,
-    defaultRevision: value.defaultRevision,
     catalogs: value.catalogs.map(({ minimumPiVersion, revision }) => ({
       minimumPiVersion,
       revision,
     })),
+    defaultRevision: value.defaultRevision,
+    schemaVersion: value.schemaVersion,
   };
 }
 
 function isBetterCandidate(
-  minimumVersion: ParsedPiVersion,
-  requestedVersion: ParsedPiVersion,
-  selectedVersion: ParsedPiVersion | undefined,
+  minimumVersion: piVersionTypes.ParsedPiVersion,
+  requestedVersion: piVersionTypes.ParsedPiVersion,
+  selectedVersion: piVersionTypes.ParsedPiVersion | undefined,
 ): boolean {
   return (
     comparePiVersions(minimumVersion, requestedVersion) <= 0 &&
@@ -230,11 +242,11 @@ function isBetterCandidate(
 }
 
 function newestCompatibleCatalog(
-  catalogs: ReadonlyArray<ModelCatalogIndexEntry>,
-  requestedVersion: ParsedPiVersion,
-): ModelCatalogIndexEntry | undefined {
-  let selected: ModelCatalogIndexEntry | undefined;
-  let selectedVersion: ParsedPiVersion | undefined;
+  catalogs: ReadonlyArray<modelCatalogProtocolTypes.ModelCatalogIndexEntry>,
+  requestedVersion: piVersionTypes.ParsedPiVersion,
+): modelCatalogProtocolTypes.ModelCatalogIndexEntry | undefined {
+  let selected: modelCatalogProtocolTypes.ModelCatalogIndexEntry | undefined;
+  let selectedVersion: piVersionTypes.ParsedPiVersion | undefined;
   for (const catalog of catalogs) {
     const minimumVersion = requirePiVersion(catalog.minimumPiVersion);
     if (isBetterCandidate(minimumVersion, requestedVersion, selectedVersion)) {
@@ -244,3 +256,20 @@ function newestCompatibleCatalog(
   }
   return selected;
 }
+
+const modelCatalogProtocol = {
+  MODEL_CATALOG_INDEX_KEY,
+  MODEL_CATALOG_PREFIX,
+  MODEL_CATALOG_REVISION_RE,
+  MODEL_CATALOG_SCHEMA_VERSION,
+  compareModelCatalogPiVersions,
+  getModelCatalogArtifactKey,
+  getModelCatalogProviderKey,
+  isValidModelCatalogPiVersion,
+  parseModelCatalogIndex,
+  parseModelCatalogRepresentation,
+  parseModelCatalogRequest,
+  selectModelCatalog,
+};
+
+export default modelCatalogProtocol;

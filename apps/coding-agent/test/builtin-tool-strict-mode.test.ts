@@ -1,5 +1,5 @@
 import { getModel } from "@msa/ai/compat";
-import { awaited, joinPath, makeTempDir, removePath, runTest, writeTextFile } from "@msa/testing";
+import testing from "@msa/testing";
 import { Effect } from "effect";
 import { afterEach, describe, expect, it, vi } from "vite-plus/test";
 
@@ -10,7 +10,56 @@ import { SettingsManager } from "../src/core/settings-manager.ts";
 import { createAllToolDefinitions, createAllTools } from "../src/core/tools/index.ts";
 import { wrapToolDefinition } from "../src/core/tools/tool-definition-wrapper.ts";
 
+const { awaited, joinPath, makeTempDir, removePath, runTest, writeTextFile } = testing;
+
 const strictToolNames = ["read", "bash", "powershell", "edit", "write"] as const;
+
+const preservesExplicitOptOutsWhenWrappingDefinitions = () => {
+  const definitions = createAllToolDefinitions(process.cwd());
+  for (const name of strictToolNames) {
+    const definition = definitions[name];
+    const override = { ...definition, constrainedSampling: false as const };
+    expect(wrapToolDefinition(override).constrainedSampling).toBe(false);
+    expect(override.execute).toBe(definition.execute);
+    expect(override.prepareArguments).toBe(definition.prepareArguments);
+    expect(override.renderCall).toBe(definition.renderCall);
+    expect(override.renderResult).toBe(definition.renderResult);
+    expect(override.promptGuidelines).toBe(definition.promptGuidelines);
+    expect(definition.constrainedSampling).toEqual({
+      strict: "prefer",
+      type: "json_schema" as const,
+    });
+  }
+};
+
+const partPart1 = (input: { readonly activeTools: string[] }) =>
+  Effect.gen(function* () {
+    const { activeTools } = input;
+    const cwd = yield* makeTempDir("msa-non-strict-tools-");
+    const agentDir = joinPath(cwd, "agent");
+    const settingsManager = SettingsManager.inMemory({ defaultTools: activeTools });
+    const resourceLoader = new DefaultResourceLoader({
+      agentDir,
+      cwd,
+      extensionFactories: [
+        (msa) => {
+          msa.on("session_start", () => {
+            const definitions = createAllToolDefinitions(cwd);
+            for (const name of strictToolNames) {
+              msa.registerTool({ ...definitions[name], constrainedSampling: false });
+            }
+            msa.setActiveTools(activeTools);
+          });
+        },
+      ],
+      noExtensions: true,
+      noPromptTemplates: true,
+      noSkills: true,
+      noThemes: true,
+      settingsManager,
+    });
+    return { agentDir, cwd, resourceLoader, settingsManager };
+  });
 
 describe("strict built-in tools", () => {
   afterEach(() => vi.unstubAllEnvs());
@@ -23,8 +72,8 @@ describe("strict built-in tools", () => {
       const tools = createAllTools(process.cwd());
       for (const name of strictToolNames) {
         expect(definitions[name].constrainedSampling).toEqual({
-          type: "json_schema" as const,
           strict: "prefer",
+          type: "json_schema" as const,
         });
         expect(tools[name].constrainedSampling).toEqual(definitions[name].constrainedSampling);
       }
@@ -37,62 +86,33 @@ describe("strict built-in tools", () => {
     },
   );
 
-  it("preserves explicit opt-outs when wrapping definitions for execution", () => {
-    const definitions = createAllToolDefinitions(process.cwd());
-    for (const name of strictToolNames) {
-      const definition = definitions[name];
-      const override = { ...definition, constrainedSampling: false as const };
-      expect(wrapToolDefinition(override).constrainedSampling).toBe(false);
-      expect(override.execute).toBe(definition.execute);
-      expect(override.prepareArguments).toBe(definition.prepareArguments);
-      expect(override.renderCall).toBe(definition.renderCall);
-      expect(override.renderResult).toBe(definition.renderResult);
-      expect(override.promptGuidelines).toBe(definition.promptGuidelines);
-      expect(definition.constrainedSampling).toEqual({
-        type: "json_schema" as const,
-        strict: "prefer",
-      });
-    }
-  });
+  it(
+    "preserves explicit opt-outs when wrapping definitions for execution",
+    preservesExplicitOptOutsWhenWrappingDefinitions,
+  );
+});
+
+describe("strict built-in tools", () => {
+  afterEach(() => vi.unstubAllEnvs());
 
   it.each([{ activeTools: [] }, { activeTools: ["read"] }, { activeTools: [...strictToolNames] }])(
     "allows extensions to re-register tools without strict sampling: $activeTools",
     ({ activeTools }) =>
       runTest(
         Effect.gen(function* () {
-          const cwd = yield* makeTempDir("msa-non-strict-tools-");
-          const agentDir = joinPath(cwd, "agent");
-          const settingsManager = SettingsManager.inMemory({ defaultTools: activeTools });
-          const resourceLoader = new DefaultResourceLoader({
-            cwd,
-            agentDir,
-            settingsManager,
-            noExtensions: true,
-            noSkills: true,
-            noPromptTemplates: true,
-            noThemes: true,
-            extensionFactories: [
-              (msa) => {
-                msa.on("session_start", () => {
-                  const definitions = createAllToolDefinitions(cwd);
-                  for (const name of strictToolNames) {
-                    msa.registerTool({ ...definitions[name], constrainedSampling: false });
-                  }
-                  msa.setActiveTools(activeTools);
-                });
-              },
-            ],
+          const { agentDir, cwd, resourceLoader, settingsManager } = yield* partPart1({
+            activeTools,
           });
           try {
             yield* awaited(resourceLoader.reload());
             const { session } = yield* awaited(
               createAgentSession({
-                cwd,
                 agentDir,
+                cwd,
                 model: getModel("anthropic-api", "claude-sonnet-4-5"),
-                settingsManager,
-                sessionManager: SessionManager.inMemory(cwd),
                 resourceLoader,
+                sessionManager: SessionManager.inMemory(cwd),
+                settingsManager,
               }),
             );
             try {
@@ -110,7 +130,7 @@ describe("strict built-in tools", () => {
                 yield* writeTextFile(joinPath(cwd, "sample.txt"), "still works");
                 const read = session.agent.state.tools.find((tool) => tool.name === "read")!;
                 const result = yield* awaited(read.execute("read-test", { path: "sample.txt" }));
-                expect(result.content).toEqual([{ type: "text" as const, text: "still works" }]);
+                expect(result.content).toEqual([{ text: "still works", type: "text" as const }]);
               }
             } finally {
               session.dispose();

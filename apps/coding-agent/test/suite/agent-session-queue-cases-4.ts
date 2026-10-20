@@ -3,10 +3,13 @@ import type { ExtensionAPI } from "@msa/coding-agent";
 import { Effect } from "effect";
 import { expect } from "vite-plus/test";
 
-import { harnesses } from "./agent-session-queue-cases-1.ts";
-import { createHarness, getUserTexts } from "./harness.ts";
+import agentSessionQueueCases1 from "./agent-session-queue-cases-1.ts";
+import harnessModule from "./harness.ts";
 
-export const deliversFollowUpsQueuedDuringAgent = Effect.gen(function* () {
+const { createHarness, getUserTexts } = harnessModule;
+const { harnesses } = agentSessionQueueCases1;
+
+const deliversFollowUpsQueuedDuringAgent = Effect.gen(function* () {
   const runPromise = Effect.runPromiseWith(yield* Effect.context<never>());
   let sent = false;
   const harness = yield* Effect.promise(() =>
@@ -35,3 +38,9 @@ export const deliversFollowUpsQueuedDuringAgent = Effect.gen(function* () {
 
   expect(getUserTexts(harness)).toEqual(["hello", "conflict report"]);
 });
+
+const agentSessionQueueCases4 = {
+  deliversFollowUpsQueuedDuringAgent,
+};
+
+export default agentSessionQueueCases4;

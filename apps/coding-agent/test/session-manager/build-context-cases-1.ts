@@ -2,49 +2,49 @@ import { expect } from "vite-plus/test";
 
 import {
   type BranchSummaryEntry,
-  buildContextEntries,
-  buildSessionContext,
   type CompactionEntry,
   type CustomEntry,
   type ModelChangeEntry,
   type SessionEntry,
   type SessionMessageEntry,
   type ThinkingLevelChangeEntry,
+  buildContextEntries,
+  buildSessionContext,
 } from "../../src/core/session-manager.ts";
 
-export const msg = (entry: {
+const msg = (entry: {
   id: string;
   parentId: string | null;
   role: "user" | "assistant";
   text: string;
 }): SessionMessageEntry => {
   const { id, parentId, role, text } = entry;
-  const base = { type: "message" as const, id, parentId, timestamp: "2025-01-01T00:00:00Z" };
+  const base = { id, parentId, timestamp: "2025-01-01T00:00:00Z", type: "message" as const };
   if (role === "user") {
-    return { ...base, message: { role, content: text, timestamp: 1 } };
+    return { ...base, message: { content: text, role, timestamp: 1 } };
   }
   return {
     ...base,
     message: {
-      role,
-      content: [{ type: "text", text }],
       api: "anthropic-messages",
-      provider: "anthropic",
+      content: [{ text, type: "text" }],
       model: "claude-test",
-      usage: {
-        input: 1,
-        output: 1,
-        cacheRead: 0,
-        cacheWrite: 0,
-        totalTokens: 2,
-        cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0, total: 0 },
-      },
+      provider: "anthropic",
+      role,
       stopReason: "stop",
       timestamp: 1,
+      usage: {
+        cacheRead: 0,
+        cacheWrite: 0,
+        cost: { cacheRead: 0, cacheWrite: 0, input: 0, output: 0, total: 0 },
+        input: 1,
+        output: 1,
+        totalTokens: 2,
+      },
     },
   };
 };
-export const compaction = (entry: {
+const compaction = (entry: {
   id: string;
   parentId: string | null;
   summary: string;
@@ -52,16 +52,16 @@ export const compaction = (entry: {
 }): CompactionEntry => {
   const { id, parentId, summary, firstKeptEntryId } = entry;
   return {
-    type: "compaction",
+    firstKeptEntryId,
     id,
     parentId,
-    timestamp: "2025-01-01T00:00:00Z",
     summary,
-    firstKeptEntryId,
+    timestamp: "2025-01-01T00:00:00Z",
     tokensBefore: 1000,
+    type: "compaction",
   };
 };
-export const branchSummary = (entry: {
+const branchSummary = (entry: {
   id: string;
   parentId: string | null;
   summary: string;
@@ -69,38 +69,38 @@ export const branchSummary = (entry: {
 }): BranchSummaryEntry => {
   const { id, parentId, summary, fromId } = entry;
   return {
-    type: "branch_summary",
+    fromId,
     id,
     parentId,
-    timestamp: "2025-01-01T00:00:00Z",
     summary,
-    fromId,
+    timestamp: "2025-01-01T00:00:00Z",
+    type: "branch_summary",
   };
 };
-export const custom = (entry: {
+const custom = (entry: {
   id: string;
   parentId: string | null;
   customType: string;
   data?: unknown;
 }): CustomEntry => {
   const { id, parentId, customType, data } = entry;
-  return { type: "custom", id, parentId, timestamp: "2025-01-01T00:00:00Z", customType, data };
+  return { customType, data, id, parentId, timestamp: "2025-01-01T00:00:00Z", type: "custom" };
 };
-export const thinkingLevel = (entry: {
+const thinkingLevel = (entry: {
   id: string;
   parentId: string | null;
   level: string;
 }): ThinkingLevelChangeEntry => {
   const { id, parentId, level } = entry;
   return {
-    type: "thinking_level_change",
     id,
     parentId,
-    timestamp: "2025-01-01T00:00:00Z",
     thinkingLevel: level,
+    timestamp: "2025-01-01T00:00:00Z",
+    type: "thinking_level_change",
   };
 };
-export const modelChange = (entry: {
+const modelChange = (entry: {
   id: string;
   parentId: string | null;
   provider: string;
@@ -108,15 +108,15 @@ export const modelChange = (entry: {
 }): ModelChangeEntry => {
   const { id, parentId, provider, modelId } = entry;
   return {
-    type: "model_change",
     id,
-    parentId,
-    timestamp: "2025-01-01T00:00:00Z",
-    provider,
     modelId,
+    parentId,
+    provider,
+    timestamp: "2025-01-01T00:00:00Z",
+    type: "model_change",
   };
 };
-export const simpleConversation = () => {
+const simpleConversation = () => {
   const entries: SessionEntry[] = [
     msg({ id: "1", parentId: null, role: "user", text: "hello" }),
     msg({ id: "2", parentId: "1", role: "assistant", text: "hi there" }),
@@ -127,45 +127,45 @@ export const simpleConversation = () => {
   expect(ctx.messages).toHaveLength(4);
   expect(ctx.messages.map((m) => m.role)).toEqual(["user", "assistant", "user", "assistant"]);
 };
-export const tracksThinkingLevelChanges = () => {
+const tracksThinkingLevelChanges = () => {
   const entries: SessionEntry[] = [
     msg({ id: "1", parentId: null, role: "user", text: "hello" }),
-    thinkingLevel({ id: "2", parentId: "1", level: "high" }),
+    thinkingLevel({ id: "2", level: "high", parentId: "1" }),
     msg({ id: "3", parentId: "2", role: "assistant", text: "thinking hard" }),
   ];
   const ctx = buildSessionContext(entries);
   expect(ctx.thinkingLevel).toBe("high");
   expect(ctx.messages).toHaveLength(2);
 };
-export const tracksModelFromAssistantMessage = () => {
+const tracksModelFromAssistantMessage = () => {
   const entries: SessionEntry[] = [
     msg({ id: "1", parentId: null, role: "user", text: "hello" }),
     msg({ id: "2", parentId: "1", role: "assistant", text: "hi" }),
   ];
   const ctx = buildSessionContext(entries);
-  expect(ctx.model).toEqual({ provider: "anthropic", modelId: "claude-test" });
+  expect(ctx.model).toEqual({ modelId: "claude-test", provider: "anthropic" });
 };
-export const tracksModelFromModelChangeEntry = () => {
+const tracksModelFromModelChangeEntry = () => {
   const entries: SessionEntry[] = [
     msg({ id: "1", parentId: null, role: "user", text: "hello" }),
-    modelChange({ id: "2", parentId: "1", provider: "openai", modelId: "gpt-4" }),
+    modelChange({ id: "2", modelId: "gpt-4", parentId: "1", provider: "openai" }),
     msg({ id: "3", parentId: "2", role: "assistant", text: "hi" }),
   ];
   const ctx = buildSessionContext(entries);
 
-  expect(ctx.model).toEqual({ provider: "anthropic", modelId: "claude-test" });
+  expect(ctx.model).toEqual({ modelId: "claude-test", provider: "anthropic" });
 };
-export const includesSummaryBeforeKeptMessages = () => {
+const includesSummaryBeforeKeptMessages = () => {
   const entries: SessionEntry[] = [
     msg({ id: "1", parentId: null, role: "user", text: "first" }),
     msg({ id: "2", parentId: "1", role: "assistant", text: "response1" }),
     msg({ id: "3", parentId: "2", role: "user", text: "second" }),
     msg({ id: "4", parentId: "3", role: "assistant", text: "response2" }),
     compaction({
+      firstKeptEntryId: "3",
       id: "5",
       parentId: "4",
       summary: "Summary of first two turns",
-      firstKeptEntryId: "3",
     }),
     msg({ id: "6", parentId: "5", role: "user", text: "third" }),
     msg({ id: "7", parentId: "6", role: "assistant", text: "response3" }),
@@ -179,11 +179,11 @@ export const includesSummaryBeforeKeptMessages = () => {
   expect((ctx.messages[3] as any).content).toBe("third");
   expect((ctx.messages[4] as any).content[0].text).toBe("response3");
 };
-export const handlesCompactionKeepingFromFirstMessage = () => {
+const handlesCompactionKeepingFromFirstMessage = () => {
   const entries: SessionEntry[] = [
     msg({ id: "1", parentId: null, role: "user", text: "first" }),
     msg({ id: "2", parentId: "1", role: "assistant", text: "response" }),
-    compaction({ id: "3", parentId: "2", summary: "Empty summary", firstKeptEntryId: "1" }),
+    compaction({ firstKeptEntryId: "1", id: "3", parentId: "2", summary: "Empty summary" }),
     msg({ id: "4", parentId: "3", role: "user", text: "second" }),
   ];
   const ctx = buildSessionContext(entries);
@@ -191,14 +191,14 @@ export const handlesCompactionKeepingFromFirstMessage = () => {
   expect(ctx.messages).toHaveLength(4);
   expect((ctx.messages[0] as any).summary).toContain("Empty summary");
 };
-export const multipleCompactionsUsesLatest = () => {
+const multipleCompactionsUsesLatest = () => {
   const entries: SessionEntry[] = [
     msg({ id: "1", parentId: null, role: "user", text: "a" }),
     msg({ id: "2", parentId: "1", role: "assistant", text: "b" }),
-    compaction({ id: "3", parentId: "2", summary: "First summary", firstKeptEntryId: "1" }),
+    compaction({ firstKeptEntryId: "1", id: "3", parentId: "2", summary: "First summary" }),
     msg({ id: "4", parentId: "3", role: "user", text: "c" }),
     msg({ id: "5", parentId: "4", role: "assistant", text: "d" }),
-    compaction({ id: "6", parentId: "5", summary: "Second summary", firstKeptEntryId: "4" }),
+    compaction({ firstKeptEntryId: "4", id: "6", parentId: "5", summary: "Second summary" }),
     msg({ id: "7", parentId: "6", role: "user", text: "e" }),
   ];
   const ctx = buildSessionContext(entries);
@@ -206,15 +206,15 @@ export const multipleCompactionsUsesLatest = () => {
   expect(ctx.messages).toHaveLength(4);
   expect((ctx.messages[0] as any).summary).toContain("Second summary");
 };
-export const buildcontextentriesReturnsCompactionAwareEntriesIncluding = () => {
+const buildcontextentriesReturnsCompactionAwareEntriesIncluding = () => {
   const entries: SessionEntry[] = [
     msg({ id: "1", parentId: null, role: "user", text: "first" }),
-    custom({ id: "2", parentId: "1", customType: "old-state", data: { hidden: true } }),
+    custom({ customType: "old-state", data: { hidden: true }, id: "2", parentId: "1" }),
     msg({ id: "3", parentId: "2", role: "assistant", text: "response1" }),
-    custom({ id: "4", parentId: "3", customType: "kept-card", data: { title: "Kept" } }),
+    custom({ customType: "kept-card", data: { title: "Kept" }, id: "4", parentId: "3" }),
     msg({ id: "5", parentId: "4", role: "user", text: "second" }),
-    compaction({ id: "6", parentId: "5", summary: "Summary", firstKeptEntryId: "4" }),
-    custom({ id: "7", parentId: "6", customType: "after-card", data: { title: "After" } }),
+    compaction({ firstKeptEntryId: "4", id: "6", parentId: "5", summary: "Summary" }),
+    custom({ customType: "after-card", data: { title: "After" }, id: "7", parentId: "6" }),
     msg({ id: "8", parentId: "7", role: "assistant", text: "response2" }),
   ];
 
@@ -226,20 +226,20 @@ export const buildcontextentriesReturnsCompactionAwareEntriesIncluding = () => {
     "assistant",
   ]);
 };
-export const keepsSettingsFromTheFullPath = () => {
+const keepsSettingsFromTheFullPath = () => {
   const entries: SessionEntry[] = [
     msg({ id: "1", parentId: null, role: "user", text: "first" }),
-    thinkingLevel({ id: "2", parentId: "1", level: "high" }),
+    thinkingLevel({ id: "2", level: "high", parentId: "1" }),
     msg({ id: "3", parentId: "2", role: "assistant", text: "response1" }),
     msg({ id: "4", parentId: "3", role: "user", text: "second" }),
-    compaction({ id: "5", parentId: "4", summary: "Summary", firstKeptEntryId: "4" }),
+    compaction({ firstKeptEntryId: "4", id: "5", parentId: "4", summary: "Summary" }),
   ];
 
   const ctx = buildSessionContext(entries);
   expect(ctx.thinkingLevel).toBe("high");
   expect(ctx.messages.map((message) => message.role)).toEqual(["compactionSummary", "user"]);
 };
-export const followsPathToSpecifiedLeaf = () => {
+const followsPathToSpecifiedLeaf = () => {
   const entries: SessionEntry[] = [
     msg({ id: "1", parentId: null, role: "user", text: "start" }),
     msg({ id: "2", parentId: "1", role: "assistant", text: "response" }),
@@ -255,3 +255,24 @@ export const followsPathToSpecifiedLeaf = () => {
   expect(ctxB.messages).toHaveLength(3);
   expect((ctxB.messages[2] as any).content).toBe("branch B");
 };
+
+const buildContextCases1 = {
+  branchSummary,
+  buildcontextentriesReturnsCompactionAwareEntriesIncluding,
+  compaction,
+  custom,
+  followsPathToSpecifiedLeaf,
+  handlesCompactionKeepingFromFirstMessage,
+  includesSummaryBeforeKeptMessages,
+  keepsSettingsFromTheFullPath,
+  modelChange,
+  msg,
+  multipleCompactionsUsesLatest,
+  simpleConversation,
+  thinkingLevel,
+  tracksModelFromAssistantMessage,
+  tracksModelFromModelChangeEntry,
+  tracksThinkingLevelChanges,
+};
+
+export default buildContextCases1;

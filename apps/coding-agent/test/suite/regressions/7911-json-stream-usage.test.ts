@@ -3,9 +3,12 @@ import { Effect } from "effect";
 import { afterEach, describe, expect, it } from "vite-plus/test";
 
 import { toJsonEvent } from "../../../src/modes/json-event.ts";
-import { createHarness, type Harness } from "../harness.ts";
+import harnessModule from "../harness.ts";
+import type harnessTypes from "../harness.types.ts";
 
-let harness!: Harness;
+const { createHarness } = harnessModule;
+
+let harness!: harnessTypes.Harness;
 
 const includesCumulativeUsageWithoutCumulativeMessage = Effect.gen(function* () {
   harness = yield* Effect.promise(() => createHarness());
@@ -26,10 +29,15 @@ const includesCumulativeUsageWithoutCumulativeMessage = Effect.gen(function* () 
   expect(wireUpdate.assistantMessageEvent).not.toHaveProperty("partial");
 });
 
+const includesCumulativeUsageWithoutCumulativeMessageSnapshots = () =>
+  Effect.runPromise(includesCumulativeUsageWithoutCumulativeMessage);
+
 describe("regression #7911: JSON message updates retain usage", () => {
   afterEach(() => {
     harness?.cleanup();
   });
-  it("includes cumulative usage without cumulative message snapshots", () =>
-    Effect.runPromise(includesCumulativeUsageWithoutCumulativeMessage));
+  it(
+    "includes cumulative usage without cumulative message snapshots",
+    includesCumulativeUsageWithoutCumulativeMessageSnapshots,
+  );
 });

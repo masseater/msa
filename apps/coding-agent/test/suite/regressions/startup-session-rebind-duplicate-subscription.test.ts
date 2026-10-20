@@ -1,8 +1,10 @@
-import { gate } from "@msa/testing";
+import testing from "@msa/testing";
 import { Effect } from "effect";
 import { describe, expect, it, vi } from "vite-plus/test";
 
 import { InteractiveMode } from "../../../src/modes/interactive/interactive-mode.ts";
+
+const { gate } = testing;
 
 type RebindContext = {
   session: object;
@@ -39,14 +41,14 @@ const doesNotSubscribeFromTheStale = Effect.gen(function* () {
   let bindCount = 0;
 
   const context: RebindContext = {
-    session: startupSession,
     applyRuntimeSettings: () => {},
-    programStatus: { reset: () => {} },
-    renderCurrentSessionState: () => {},
     bindCurrentSessionExtensions: () => {
       bindCount += 1;
       return bindCount === 1 ? startupBind : replacementBind;
     },
+    programStatus: { reset: () => {} },
+    renderCurrentSessionState: () => {},
+    session: startupSession,
     subscribeToAgent,
     updateAvailableProviderCount: () => runPromise(Effect.sync(() => {})),
     updateEditorBorderColor: () => {},
@@ -77,7 +79,8 @@ const doesNotSubscribeFromTheStale = Effect.gen(function* () {
   expect(updateTerminalTitle).toHaveBeenCalledTimes(1);
 });
 
+const doesNotSubscribeFromTheStaleStartup = () => Effect.runPromise(doesNotSubscribeFromTheStale);
+
 describe("overlapping startup and replacement session rebinds", () => {
-  it("does not subscribe from the stale startup rebind", () =>
-    Effect.runPromise(doesNotSubscribeFromTheStale));
+  it("does not subscribe from the stale startup rebind", doesNotSubscribeFromTheStaleStartup);
 });

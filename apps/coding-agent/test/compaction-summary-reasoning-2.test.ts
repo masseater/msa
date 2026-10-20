@@ -1,6 +1,6 @@
 import type { AgentMessage } from "@msa/agent-core";
 import { type AssistantMessage, type Model } from "@msa/ai";
-import { awaited, runTest, currentTimeMillis } from "@msa/testing";
+import testing from "@msa/testing";
 import { Effect } from "effect";
 import { beforeEach, describe, expect, it, vi } from "vite-plus/test";
 
@@ -10,15 +10,17 @@ import {
   generateSummary,
 } from "../src/core/compaction/index.ts";
 
+const { awaited, currentTimeMillis, runTest } = testing;
+
 const { completeSimpleMock } = vi.hoisted(() => ({
   completeSimpleMock: vi.fn(),
 }));
 
 vi.mock("@msa/ai/compat", (importOriginal) =>
-  runTest(
+  testing.runTest(
     Effect.gen(function* () {
-      const actual = yield* awaited(importOriginal<typeof import("@msa/ai/compat")>());
-      return yield* awaited({
+      const actual = yield* testing.awaited(importOriginal<typeof import("@msa/ai/compat")>());
+      return yield* testing.awaited({
         ...actual,
         completeSimple: completeSimpleMock,
       });
@@ -32,128 +34,145 @@ function createModel(
   compat?: Model<"anthropic-messages">["compat"],
 ): Model<"anthropic-messages"> {
   return {
-    id: reasoning ? "reasoning-model" : "non-reasoning-model",
-    name: reasoning ? "Reasoning Model" : "Non-reasoning Model",
     api: "anthropic-messages" as const,
-    provider: "anthropic-api",
     baseUrl: "https://api.anthropic.com",
-    reasoning,
-    input: ["text"],
-    cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0 },
     contextWindow: 200000,
+    cost: { cacheRead: 0, cacheWrite: 0, input: 0, output: 0 },
+    id: reasoning ? "reasoning-model" : "non-reasoning-model",
+    input: ["text"],
     maxTokens,
+    name: reasoning ? "Reasoning Model" : "Non-reasoning Model",
+    provider: "anthropic-api",
+    reasoning,
     ...(compat === undefined ? {} : { compat }),
   };
 }
 
 const mockSummaryResponse: AssistantMessage = {
-  role: "assistant",
-  content: [{ type: "text" as const, text: "## Goal\nTest summary" }],
   api: "anthropic-messages" as const,
-  provider: "anthropic-api",
+  content: [{ text: "## Goal\nTest summary", type: "text" as const }],
   model: "claude-sonnet-4-5",
-  usage: {
-    input: 10,
-    output: 10,
-    cacheRead: 0,
-    cacheWrite: 0,
-    totalTokens: 20,
-    cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0, total: 0 },
-  },
+  provider: "anthropic-api",
+  role: "assistant",
   stopReason: "stop",
   timestamp: currentTimeMillis(),
+  usage: {
+    cacheRead: 0,
+    cacheWrite: 0,
+    cost: { cacheRead: 0, cacheWrite: 0, input: 0, output: 0, total: 0 },
+    input: 10,
+    output: 10,
+    totalTokens: 20,
+  },
 };
 const messages: AgentMessage[] = [
-  { role: "user", content: "Summarize this.", timestamp: currentTimeMillis() },
+  { content: "Summarize this.", role: "user", timestamp: currentTimeMillis() },
 ];
+
+const doesNotSetReasoningForNonReasoning = () =>
+  runTest(
+    Effect.gen(function* () {
+      yield* awaited(
+        generateSummary(
+          messages,
+          createModel(false),
+          2000,
+          "test-key",
+          undefined,
+          undefined,
+          undefined,
+          undefined,
+          "medium",
+        ),
+      );
+
+      expect(completeSimpleMock).toHaveBeenCalledTimes(1);
+      expect(completeSimpleMock.mock.calls[0]?.[2]).toMatchObject({
+        apiKey: "test-key",
+      });
+      expect(completeSimpleMock.mock.calls[0]?.[2]).not.toHaveProperty("reasoning");
+    }),
+  );
+
+const leavesAnthropicRefusalFallbackHandlingToMsa = () =>
+  runTest(
+    Effect.gen(function* () {
+      yield* awaited(
+        generateSummary(
+          messages,
+          createModel(true, 8192, {
+            allowedFallbackModels: [
+              {
+                cost: { cacheRead: 0.5, cacheWrite: 6.25, input: 5, output: 25 },
+                model: "claude-opus-4-8",
+                provider: "anthropic-api",
+              },
+            ],
+          }),
+          2000,
+          "test-key",
+        ),
+      );
+
+      expect(completeSimpleMock).toHaveBeenCalledTimes(1);
+      expect(completeSimpleMock.mock.calls[0]?.[2]).not.toHaveProperty("refusalFallbacks");
+    }),
+  );
+
+const doesNotSetAnthropicRefusalFallbackFor = () =>
+  runTest(
+    Effect.gen(function* () {
+      yield* awaited(generateSummary(messages, createModel(true), 2000, "test-key"));
+
+      expect(completeSimpleMock).toHaveBeenCalledTimes(1);
+      expect(completeSimpleMock.mock.calls[0]?.[2]).not.toHaveProperty("refusalFallbacks");
+    }),
+  );
+
+const clampsCompactionSummaryMaxtokensToTheModel = () =>
+  runTest(
+    Effect.gen(function* () {
+      const preparation: CompactionPreparation = {
+        fileOps: { edited: new Set(), read: new Set(), written: new Set() },
+        firstKeptEntryId: "entry-keep",
+        isSplitTurn: true,
+        messagesToSummarize: messages,
+        settings: { enabled: true, keepRecentTokens: 20000, reserveTokens: 500000 },
+        tokensBefore: 600000,
+        turnPrefixMessages: messages,
+      };
+
+      const result = yield* awaited(compact(preparation, createModel(false, 128000), "test-key"));
+
+      expect(result.usage).toEqual({
+        ...mockSummaryResponse.usage,
+        cost: { cacheRead: 0, cacheWrite: 0, input: 0, output: 0, total: 0 },
+        input: 20,
+        output: 20,
+        totalTokens: 40,
+      });
+      expect(completeSimpleMock.mock.calls.map((call) => call[2]?.maxTokens)).toEqual([
+        128000, 128000,
+      ]);
+    }),
+  );
 
 describe("generateSummary reasoning options", () => {
   beforeEach(() => {
     completeSimpleMock.mockReset();
     completeSimpleMock.mockResolvedValue(mockSummaryResponse);
   });
-  it("does not set reasoning for non-reasoning models", () =>
-    runTest(
-      Effect.gen(function* () {
-        yield* awaited(
-          generateSummary(
-            messages,
-            createModel(false),
-            2000,
-            "test-key",
-            undefined,
-            undefined,
-            undefined,
-            undefined,
-            "medium",
-          ),
-        );
-
-        expect(completeSimpleMock).toHaveBeenCalledTimes(1);
-        expect(completeSimpleMock.mock.calls[0]?.[2]).toMatchObject({
-          apiKey: "test-key",
-        });
-        expect(completeSimpleMock.mock.calls[0]?.[2]).not.toHaveProperty("reasoning");
-      }),
-    ));
-  it("leaves Anthropic refusal fallback handling to msa-ai model metadata", () =>
-    runTest(
-      Effect.gen(function* () {
-        yield* awaited(
-          generateSummary(
-            messages,
-            createModel(true, 8192, {
-              allowedFallbackModels: [
-                {
-                  provider: "anthropic-api",
-                  model: "claude-opus-4-8",
-                  cost: { input: 5, output: 25, cacheRead: 0.5, cacheWrite: 6.25 },
-                },
-              ],
-            }),
-            2000,
-            "test-key",
-          ),
-        );
-
-        expect(completeSimpleMock).toHaveBeenCalledTimes(1);
-        expect(completeSimpleMock.mock.calls[0]?.[2]).not.toHaveProperty("refusalFallbacks");
-      }),
-    ));
-  it("does not set Anthropic refusal fallback for models without allowed fallback targets", () =>
-    runTest(
-      Effect.gen(function* () {
-        yield* awaited(generateSummary(messages, createModel(true), 2000, "test-key"));
-
-        expect(completeSimpleMock).toHaveBeenCalledTimes(1);
-        expect(completeSimpleMock.mock.calls[0]?.[2]).not.toHaveProperty("refusalFallbacks");
-      }),
-    ));
-  it("clamps compaction summary maxTokens to the model output cap", () =>
-    runTest(
-      Effect.gen(function* () {
-        const preparation: CompactionPreparation = {
-          firstKeptEntryId: "entry-keep",
-          messagesToSummarize: messages,
-          turnPrefixMessages: messages,
-          isSplitTurn: true,
-          tokensBefore: 600000,
-          fileOps: { read: new Set(), written: new Set(), edited: new Set() },
-          settings: { enabled: true, reserveTokens: 500000, keepRecentTokens: 20000 },
-        };
-
-        const result = yield* awaited(compact(preparation, createModel(false, 128000), "test-key"));
-
-        expect(result.usage).toEqual({
-          ...mockSummaryResponse.usage,
-          input: 20,
-          output: 20,
-          totalTokens: 40,
-          cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0, total: 0 },
-        });
-        expect(completeSimpleMock.mock.calls.map((call) => call[2]?.maxTokens)).toEqual([
-          128000, 128000,
-        ]);
-      }),
-    ));
+  it("does not set reasoning for non-reasoning models", doesNotSetReasoningForNonReasoning);
+  it(
+    "leaves Anthropic refusal fallback handling to msa-ai model metadata",
+    leavesAnthropicRefusalFallbackHandlingToMsa,
+  );
+  it(
+    "does not set Anthropic refusal fallback for models without allowed fallback targets",
+    doesNotSetAnthropicRefusalFallbackFor,
+  );
+  it(
+    "clamps compaction summary maxTokens to the model output cap",
+    clampsCompactionSummaryMaxtokensToTheModel,
+  );
 });

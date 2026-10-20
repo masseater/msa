@@ -4,25 +4,25 @@ import { type FileEntry, migrateSessionEntries } from "../../src/core/session-ma
 
 const shouldAddIdParentidToV1 = () => {
   const entries: FileEntry[] = [
-    { type: "session", id: "sess-1", timestamp: "2025-01-01T00:00:00Z", cwd: "/tmp" },
+    { cwd: "/tmp", id: "sess-1", timestamp: "2025-01-01T00:00:00Z", type: "session" },
     {
-      type: "message",
+      message: { content: "hi", role: "user", timestamp: 1 },
       timestamp: "2025-01-01T00:00:01Z",
-      message: { role: "user", content: "hi", timestamp: 1 },
+      type: "message",
     },
     {
-      type: "message",
-      timestamp: "2025-01-01T00:00:02Z",
       message: {
-        role: "assistant",
-        content: [{ type: "text", text: "hello" }],
         api: "test",
-        provider: "test",
+        content: [{ text: "hello", type: "text" }],
         model: "test",
-        usage: { input: 1, output: 1, cacheRead: 0, cacheWrite: 0 },
+        provider: "test",
+        role: "assistant",
         stopReason: "stop",
         timestamp: 2,
+        usage: { cacheRead: 0, cacheWrite: 0, input: 1, output: 1 },
       },
+      timestamp: "2025-01-01T00:00:02Z",
+      type: "message",
     },
   ] as FileEntry[];
 
@@ -44,29 +44,29 @@ const shouldAddIdParentidToV1 = () => {
 
 const shouldBeIdempotentSkipAlreadyMigrated = () => {
   const entries: FileEntry[] = [
-    { type: "session", id: "sess-1", version: 2, timestamp: "2025-01-01T00:00:00Z", cwd: "/tmp" },
+    { cwd: "/tmp", id: "sess-1", timestamp: "2025-01-01T00:00:00Z", type: "session", version: 2 },
     {
-      type: "message",
       id: "abc12345",
+      message: { content: "hi", role: "user", timestamp: 1 },
       parentId: null,
       timestamp: "2025-01-01T00:00:01Z",
-      message: { role: "user", content: "hi", timestamp: 1 },
+      type: "message",
     },
     {
-      type: "message",
       id: "def67890",
-      parentId: "abc12345",
-      timestamp: "2025-01-01T00:00:02Z",
       message: {
-        role: "assistant",
-        content: [{ type: "text", text: "hello" }],
         api: "test",
-        provider: "test",
+        content: [{ text: "hello", type: "text" }],
         model: "test",
-        usage: { input: 1, output: 1, cacheRead: 0, cacheWrite: 0 },
+        provider: "test",
+        role: "assistant",
         stopReason: "stop",
         timestamp: 2,
+        usage: { cacheRead: 0, cacheWrite: 0, input: 1, output: 1 },
       },
+      parentId: "abc12345",
+      timestamp: "2025-01-01T00:00:02Z",
+      type: "message",
     },
   ] as FileEntry[];
 

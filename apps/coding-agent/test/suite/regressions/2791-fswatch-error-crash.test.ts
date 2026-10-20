@@ -1,29 +1,30 @@
 import * as NodeServices from "@effect/platform-node/NodeServices";
-import { fromJsonText, joinPath, toJsonText } from "@msa/testing";
+import testing from "@msa/testing";
 import { Cause, Effect, Exit, FileSystem, ManagedRuntime, Stream } from "effect";
 import { ChildProcess } from "effect/process";
 import { afterEach, beforeEach, describe, expect, it } from "vite-plus/test";
 
 import { envSnapshot } from "../../../src/core/process-env.ts";
 
+const { fromJsonText, joinPath, toJsonText } = testing;
+
 const runtime = ManagedRuntime.make(NodeServices.layer);
 const fs = runtime.runSync(FileSystem.FileSystem.useSync((service) => service));
 
 let tempRoot: string;
 
-const processShouldSurviveAnErrorEvent = () =>
-  runtime.runPromise(
-    Effect.gen(function* () {
-      const themeModulePath = joinPath(
-        __dirname,
-        "../../../src/modes/interactive/theme/theme.ts",
-      ).replace(/\\/gu, "/");
-      const agentDir = joinPath(tempRoot, "agent").replace(/\\/gu, "/");
+const processShouldSurviveAnErrorEventPart1 = () =>
+  Effect.gen(function* () {
+    const themeModulePath = joinPath(
+      __dirname,
+      "../../../src/modes/interactive/theme/theme.ts",
+    ).replace(/\\/gu, "/");
+    const agentDir = joinPath(tempRoot, "agent").replace(/\\/gu, "/");
 
-      const scriptPath = joinPath(tempRoot, "test-watcher-error.mts");
-      yield* fs.writeFileString(
-        scriptPath,
-        `
+    const scriptPath = joinPath(tempRoot, "test-watcher-error.mts");
+    yield* fs.writeFileString(
+      scriptPath,
+      `
 import { setTheme, stopThemeWatcher } from "${themeModulePath}";
 process.env.MSA_CODING_AGENT_DIR = "${agentDir}";
 
@@ -55,7 +56,14 @@ try {
 stopThemeWatcher();
 process.exit(0);
 `,
-      );
+    );
+    return { agentDir, scriptPath };
+  });
+
+const processShouldSurviveAnErrorEvent = () =>
+  runtime.runPromise(
+    Effect.gen(function* () {
+      const { agentDir, scriptPath } = yield* processShouldSurviveAnErrorEventPart1();
 
       let stderr: string;
       let exitCode: number;
@@ -63,9 +71,9 @@ process.exit(0);
         Effect.gen(function* () {
           const handle = yield* ChildProcess.make(process.execPath, [scriptPath], {
             env: { ...envSnapshot(), MSA_CODING_AGENT_DIR: agentDir },
+            stderr: "pipe",
             stdin: "ignore",
             stdout: "pipe",
-            stderr: "pipe",
           });
           const [stderrText, code] = yield* Effect.all(
             [handle.stderr.pipe(Stream.decodeText(), Stream.mkString), handle.exitCode],
@@ -87,28 +95,29 @@ process.exit(0);
     }),
   );
 
-describe("issue #2791 fs.watch error event crashes process", () => {
-  beforeEach(() =>
-    runtime.runPromise(
-      Effect.gen(function* () {
-        tempRoot = yield* fs.makeTempDirectory({ prefix: "msa-2791-" });
-        const agentDir = joinPath(tempRoot, "agent");
-        const themesDir = joinPath(agentDir, "themes");
-        yield* fs.makeDirectory(themesDir, { recursive: true });
+const beforeEachHook = () =>
+  runtime.runPromise(
+    Effect.gen(function* () {
+      tempRoot = yield* fs.makeTempDirectory({ prefix: "msa-2791-" });
+      const agentDir = joinPath(tempRoot, "agent");
+      const themesDir = joinPath(agentDir, "themes");
+      yield* fs.makeDirectory(themesDir, { recursive: true });
 
-        const darkThemePath = joinPath(__dirname, "../../../src/modes/interactive/theme/dark.json");
-        const darkTheme = (yield* fromJsonText(yield* fs.readFileString(darkThemePath))) as {
-          name: string;
-        };
-        darkTheme.name = "custom-test";
-        yield* fs.writeFileString(
-          joinPath(themesDir, "custom-test.json"),
-          yield* toJsonText(darkTheme),
-        );
-      }),
-    ),
+      const darkThemePath = joinPath(__dirname, "../../../src/modes/interactive/theme/dark.json");
+      const darkTheme = (yield* fromJsonText(yield* fs.readFileString(darkThemePath))) as {
+        name: string;
+      };
+      darkTheme.name = "custom-test";
+      yield* fs.writeFileString(
+        joinPath(themesDir, "custom-test.json"),
+        yield* toJsonText(darkTheme),
+      );
+    }),
   );
-  afterEach(() => runtime.runPromise(fs.remove(tempRoot, { recursive: true, force: true })));
+
+describe("issue #2791 fs.watch error event crashes process", () => {
+  beforeEach(beforeEachHook);
+  afterEach(() => runtime.runPromise(fs.remove(tempRoot, { force: true, recursive: true })));
   it(
     "process should survive an error event on the theme FSWatcher",
     processShouldSurviveAnErrorEvent,

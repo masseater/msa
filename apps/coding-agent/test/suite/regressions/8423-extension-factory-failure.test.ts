@@ -1,4 +1,4 @@
-import { gate } from "@msa/testing";
+import testing from "@msa/testing";
 import { Effect } from "effect";
 import { describe, expect, it } from "vite-plus/test";
 
@@ -9,9 +9,11 @@ import {
 } from "../../../src/core/extensions/loader.ts";
 import type { ExtensionAPI, ProviderConfig } from "../../../src/core/extensions/types.ts";
 
+const { gate } = testing;
+
 const providerConfig = {
-  baseUrl: "https://provider.test/v1",
   apiKey: "provider-test-key",
+  baseUrl: "https://provider.test/v1",
 } satisfies ProviderConfig;
 
 const discardsRuntimeChangesAndDisablesThe = Effect.gen(function* () {
@@ -38,7 +40,7 @@ const discardsRuntimeChangesAndDisablesThe = Effect.gen(function* () {
           msa.events.on("factory-failure", () => {
             eventCalls++;
           });
-          msa.registerFlag("failed-flag", { type: "boolean", default: true });
+          msa.registerFlag("failed-flag", { default: true, type: "boolean" });
           flagDuringLoad = msa.getFlag("failed-flag");
           msa.unregisterProvider("working-provider");
           msa.registerProvider("failed-provider", providerConfig);
@@ -60,7 +62,7 @@ const discardsRuntimeChangesAndDisablesThe = Effect.gen(function* () {
   ]);
   expect(eventCalls).toBe(0);
   expect(capturedApi).toBeDefined();
-  expect(() => capturedApi?.registerFlag("late-flag", { type: "boolean", default: true })).toThrow(
+  expect(() => capturedApi?.registerFlag("late-flag", { default: true, type: "boolean" })).toThrow(
     'Extension "<failing>" failed to load and its API is no longer active.',
   );
 });
@@ -102,9 +104,19 @@ const doesNotDiscardAConcurrentlyLoaded = Effect.gen(function* () {
   ]);
 });
 
+const discardsRuntimeChangesAndDisablesTheFailed = () =>
+  Effect.runPromise(discardsRuntimeChangesAndDisablesThe);
+
+const doesNotDiscardAConcurrentlyLoadedFactory = () =>
+  Effect.runPromise(doesNotDiscardAConcurrentlyLoaded);
+
 describe("issue #8423 extension factory failure", () => {
-  it("discards runtime changes and disables the failed API", () =>
-    Effect.runPromise(discardsRuntimeChangesAndDisablesThe));
-  it("does not discard a concurrently loaded factory's provider", () =>
-    Effect.runPromise(doesNotDiscardAConcurrentlyLoaded));
+  it(
+    "discards runtime changes and disables the failed API",
+    discardsRuntimeChangesAndDisablesTheFailed,
+  );
+  it(
+    "does not discard a concurrently loaded factory's provider",
+    doesNotDiscardAConcurrentlyLoadedFactory,
+  );
 });

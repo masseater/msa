@@ -2,9 +2,12 @@ import { Effect } from "effect";
 import { afterEach, describe, expect, it } from "vite-plus/test";
 
 import type { ExtensionAPI } from "../../../src/index.ts";
-import { createHarness, type Harness } from "../harness.ts";
+import harnessModule from "../harness.ts";
+import type harnessTypes from "../harness.types.ts";
 
-const harnesses: Harness[] = [];
+const { createHarness } = harnessModule;
+
+const harnesses: harnessTypes.Harness[] = [];
 
 const emitsSessionInfoChangedWhenAgentsession = Effect.gen(function* () {
   const harness = yield* Effect.promise(() => createHarness());
@@ -62,16 +65,30 @@ const emitsSessionInfoChangedToExtensions = Effect.gen(function* () {
   expect(events).toEqual([{ name: "first" }, { name: "second" }]);
 });
 
+const emitsSessionInfoChangedWhenAgentsessionSetsessionname = () =>
+  Effect.runPromise(emitsSessionInfoChangedWhenAgentsession);
+
+const emitsSessionInfoChangedWhenAnExtension = () =>
+  Effect.runPromise(emitsSessionInfoChangedWhenAn);
+
+const emitsSessionInfoChangedToExtensions2 = () =>
+  Effect.runPromise(emitsSessionInfoChangedToExtensions);
+
+const afterEachHook = () => {
+  while (harnesses.length > 0) {
+    harnesses.pop()?.cleanup();
+  }
+};
+
 describe("regression #3686: session name changes emit an event", () => {
-  afterEach(() => {
-    while (harnesses.length > 0) {
-      harnesses.pop()?.cleanup();
-    }
-  });
-  it("emits session_info_changed when AgentSession.setSessionName is called", () =>
-    Effect.runPromise(emitsSessionInfoChangedWhenAgentsession));
-  it("emits session_info_changed when an extension calls msa.setSessionName", () =>
-    Effect.runPromise(emitsSessionInfoChangedWhenAn));
-  it("emits session_info_changed to extensions", () =>
-    Effect.runPromise(emitsSessionInfoChangedToExtensions));
+  afterEach(afterEachHook);
+  it(
+    "emits session_info_changed when AgentSession.setSessionName is called",
+    emitsSessionInfoChangedWhenAgentsessionSetsessionname,
+  );
+  it(
+    "emits session_info_changed when an extension calls msa.setSessionName",
+    emitsSessionInfoChangedWhenAnExtension,
+  );
+  it("emits session_info_changed to extensions", emitsSessionInfoChangedToExtensions2);
 });

@@ -4,7 +4,10 @@ import { Effect } from "effect";
 import { Type } from "typebox";
 import { afterEach, describe, expect, it, vi } from "vite-plus/test";
 
-import { createHarness, type Harness } from "./harness.ts";
+import harnessModule from "./harness.ts";
+import type harnessTypes from "./harness.types.ts";
+
+const { createHarness } = harnessModule;
 
 const normalizeToolResultImages = vi.hoisted(() =>
   vi.fn((content: unknown[]) => Promise.resolve(content)),
@@ -15,33 +18,33 @@ const TINY_PNG_BASE64 =
   "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8DwHwAFBQIAX8jx0gAAAABJRU5ErkJggg==";
 
 const screenshotTool: AgentTool = {
-  name: "screenshot",
-  label: "Screenshot",
   description: "Return a screenshot",
-  parameters: Type.Object({}),
   execute: () =>
     Promise.resolve({
       content: [
-        { type: "text", text: "captured" },
-        { type: "image", data: TINY_PNG_BASE64, mimeType: "image/png" },
+        { text: "captured", type: "text" },
+        { data: TINY_PNG_BASE64, mimeType: "image/png", type: "image" },
       ],
       details: {},
     }),
+  label: "Screenshot",
+  name: "screenshot",
+  parameters: Type.Object({}),
 };
 
-const harnesses: Harness[] = [];
+const harnesses: harnessTypes.Harness[] = [];
 
 const passesImageSettingsAndTheCurrent = Effect.gen(function* () {
   const resizeOptions = {
-    maxWidth: 1200,
-    maxHeight: 1000,
-    maxBytes: 500000,
     jpegQuality: 70,
+    maxBytes: 500000,
+    maxHeight: 1000,
+    maxWidth: 1200,
   };
   const harness = yield* Effect.promise(() =>
     createHarness({
-      tools: [screenshotTool],
       settings: { images: { autoResize: false } },
+      tools: [screenshotTool],
     }),
   );
   harnesses.push(harness);
@@ -60,13 +63,20 @@ const passesImageSettingsAndTheCurrent = Effect.gen(function* () {
   });
 });
 
+const passesImageSettingsAndTheCurrentModel = () =>
+  Effect.runPromise(passesImageSettingsAndTheCurrent);
+
+const afterEachHook = () => {
+  normalizeToolResultImages.mockClear();
+  while (harnesses.length > 0) {
+    harnesses.pop()?.cleanup();
+  }
+};
+
 describe("AgentSession tool result images", () => {
-  afterEach(() => {
-    normalizeToolResultImages.mockClear();
-    while (harnesses.length > 0) {
-      harnesses.pop()?.cleanup();
-    }
-  });
-  it("passes image settings and the current model profile to tool result normalization", () =>
-    Effect.runPromise(passesImageSettingsAndTheCurrent));
+  afterEach(afterEachHook);
+  it(
+    "passes image settings and the current model profile to tool result normalization",
+    passesImageSettingsAndTheCurrentModel,
+  );
 });

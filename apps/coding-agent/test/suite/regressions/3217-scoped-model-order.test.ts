@@ -1,14 +1,17 @@
-import { setKeybindings, type TUI } from "@msa/tui";
+import { type TUI, setKeybindings } from "@msa/tui";
 import { Effect } from "effect";
 import { afterEach, beforeAll, beforeEach, describe, expect, it, vi } from "vite-plus/test";
 
 import type { Model } from "../../../../../libs/ai/src/model-types.ts";
-import { KeybindingsManager } from "../../../src/core/keybindings.ts";
 import { ModelSelectorComponent } from "../../../src/modes/interactive/components/model-selector.ts";
 import { ScopedModelsSelectorComponent } from "../../../src/modes/interactive/components/scoped-models-selector.ts";
-import { initTheme } from "../../../src/modes/interactive/theme/theme.ts";
-import { stripAnsi } from "../../../src/utils/ansi.ts";
-import { createHarness, type Harness } from "../harness.ts";
+import tuiKit from "../../tui-kit.ts";
+import harnessModule from "../harness.ts";
+import type harnessTypes from "../harness.types.ts";
+
+const { KeybindingsManager, initTheme, stripAnsi } = tuiKit;
+
+const { createHarness } = harnessModule;
 
 function createFakeTui(): TUI {
   return {
@@ -16,7 +19,7 @@ function createFakeTui(): TUI {
   } as unknown as TUI;
 }
 
-const harnesses: Harness[] = [];
+const harnesses: harnessTypes.Harness[] = [];
 
 const propagatesReorderedScopedModelsBackTo = Effect.gen(function* () {
   const harness = yield* Effect.promise(() =>
@@ -38,11 +41,11 @@ const propagatesReorderedScopedModelsBackTo = Effect.gen(function* () {
       enabledModelIds: orderedIds,
     },
     {
+      onCancel: () => {},
       onChange: (enabledModelIds) => {
         changes.push(enabledModelIds);
       },
       onPersist: () => {},
-      onCancel: () => {},
     },
   );
 
@@ -80,10 +83,10 @@ const preservesScopedModelOrderInThe = Effect.gen(function* () {
       expect(rendered).toContain("Model catalogs refreshed.");
     }),
   );
-  return yield* preservesScopedModelOrderInThePart2(modelOne, modelTwo, modelThree, selector);
+  return yield* preservesScopedModelOrderInTheStep1(modelOne, modelTwo, modelThree, selector);
 });
 
-const preservesScopedModelOrderInThePart2 = (
+const preservesScopedModelOrderInTheStep1 = (
   modelOne: Model<string>,
   modelTwo: Model<string>,
   modelThree: Model<string>,
@@ -103,6 +106,17 @@ const preservesScopedModelOrderInThePart2 = (
     expect(orderedIds).toEqual([modelTwo.id, modelOne.id, modelThree.id]);
   });
 
+const propagatesReorderedScopedModelsBackToThe = () =>
+  Effect.runPromise(propagatesReorderedScopedModelsBackTo);
+
+const preservesScopedModelOrderInTheModel = () => Effect.runPromise(preservesScopedModelOrderInThe);
+
+const afterEachHook = () => {
+  while (harnesses.length > 0) {
+    harnesses.pop()?.cleanup();
+  }
+};
+
 describe("issue #3217 scoped model ordering", () => {
   beforeAll(() => {
     initTheme("dark");
@@ -110,13 +124,10 @@ describe("issue #3217 scoped model ordering", () => {
   beforeEach(() => {
     setKeybindings(new KeybindingsManager());
   });
-  afterEach(() => {
-    while (harnesses.length > 0) {
-      harnesses.pop()?.cleanup();
-    }
-  });
-  it("propagates reordered scoped models back to the session state", () =>
-    Effect.runPromise(propagatesReorderedScopedModelsBackTo));
-  it("preserves scoped model order in the /model scoped tab", () =>
-    Effect.runPromise(preservesScopedModelOrderInThe));
+  afterEach(afterEachHook);
+  it(
+    "propagates reordered scoped models back to the session state",
+    propagatesReorderedScopedModelsBackToThe,
+  );
+  it("preserves scoped model order in the /model scoped tab", preservesScopedModelOrderInTheModel);
 });

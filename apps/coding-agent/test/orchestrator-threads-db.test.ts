@@ -1,24 +1,21 @@
-import { mkdtempSync, rmSync } from "node:fs";
-import { tmpdir } from "node:os";
-import { join } from "node:path";
 import { DatabaseSync } from "node:sqlite";
 
+import testing from "@msa/testing";
+import { Effect } from "effect";
 import { afterEach, expect, it } from "vite-plus/test";
 
 import { store } from "../src/core/orchestrator/store.ts";
 
+const { joinPath, makeTempDir, removeDirs, runTest } = testing;
+
 const directories: string[] = [];
 
-afterEach(() => {
-  for (const directory of directories.splice(0)) {
-    rmSync(directory, { recursive: true, force: true });
-  }
-});
+afterEach(() => runTest(removeDirs(directories.splice(0))));
 
-function legacyDatabase(): string {
-  const directory = mkdtempSync(join(tmpdir(), "msa-orchestrator-threads-"));
+const legacyDatabase = Effect.fn("legacyDatabase")(function* () {
+  const directory = yield* makeTempDir("msa-orchestrator-threads-");
   directories.push(directory);
-  const path = join(directory, "orchestrator.db");
+  const path = joinPath(directory, "orchestrator.db");
   const legacy = new DatabaseSync(path);
   legacy.exec(`
     CREATE TABLE tasks (
@@ -60,18 +57,18 @@ function legacyDatabase(): string {
   `);
   legacy.close();
   return path;
-}
+});
 
-it("carries the threads, their assignments, reports, read notes, and limit over from sessions", () => {
-  const database = store.openDatabase(legacyDatabase());
+const carriesTheThreadsTheirAssignmentsReportsRead = Effect.gen(function* () {
+  const database = store.openDatabase(yield* legacyDatabase());
 
   expect(store.getThread(database, "s-1")).toMatchObject({
     model: "fast/flash",
-    status: "completed",
     sessionFile: "/repo/worker.jsonl",
+    status: "completed",
   });
   expect(store.assignmentsOfThread(database, "s-1")).toEqual([
-    { taskId: "t-1", threadId: "s-1", role: "worker", createdAt: 1 },
+    { createdAt: 1, role: "worker", taskId: "t-1", threadId: "s-1" },
   ]);
   expect(store.searchReports(database, "p", "parser", 10)).toMatchObject([
     { report: { id: "rep-1", threadId: "s-1" }, threadModel: "fast/flash" },
@@ -85,16 +82,22 @@ it("carries the threads, their assignments, reports, read notes, and limit over 
   database.close();
 });
 
-it("opens a migrated database again without changing it", () => {
-  const path = legacyDatabase();
+it("carries the threads, their assignments, reports, read notes, and limit over from sessions", () =>
+  runTest(carriesTheThreadsTheirAssignmentsReportsRead));
+
+const opensAMigratedDatabaseAgainWithoutChanging = Effect.gen(function* () {
+  const path = yield* legacyDatabase();
   store.openDatabase(path).close();
   const database = store.openDatabase(path);
   expect(store.listThreads(database, "p").map((thread) => thread.id)).toEqual(["s-1"]);
   database.close();
 });
 
-it("opens a migrated database that an older msa reopened and gave an empty sessions table", () => {
-  const path = legacyDatabase();
+it("opens a migrated database again without changing it", () =>
+  runTest(opensAMigratedDatabaseAgainWithoutChanging));
+
+const opensAMigratedDatabaseThatAnOlder = Effect.gen(function* () {
+  const path = yield* legacyDatabase();
   store.openDatabase(path).close();
   const older = new DatabaseSync(path);
   older.exec(`
@@ -119,8 +122,11 @@ it("opens a migrated database that an older msa reopened and gave an empty sessi
   database.close();
 });
 
-it("refuses a database written by a newer msa and leaves it untouched", () => {
-  const path = legacyDatabase();
+it("opens a migrated database that an older msa reopened and gave an empty sessions table", () =>
+  runTest(opensAMigratedDatabaseThatAnOlder));
+
+const refusesADatabaseWrittenByANewer = Effect.gen(function* () {
+  const path = yield* legacyDatabase();
   const newer = new DatabaseSync(path);
   newer.exec("PRAGMA user_version = 99");
   newer.close();
@@ -134,3 +140,6 @@ it("refuses a database written by a newer msa and leaves it untouched", () => {
   expect(tables).toEqual([]);
   untouched.close();
 });
+
+it("refuses a database written by a newer msa and leaves it untouched", () =>
+  runTest(refusesADatabaseWrittenByANewer));

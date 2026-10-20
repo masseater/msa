@@ -2,10 +2,13 @@ import { fauxAssistantMessage, fauxToolCall } from "@msa/ai";
 import { Effect } from "effect";
 import { expect } from "vite-plus/test";
 
-import { createWaitingHarness, harnesses } from "./agent-session-queue-cases-1.ts";
-import { createHarness, getAssistantTexts, getMessageText } from "./harness.ts";
+import agentSessionQueueCases1 from "./agent-session-queue-cases-1.ts";
+import harnessModule from "./harness.ts";
 
-export const deliversAllFollowUpMessagesIn = Effect.gen(function* () {
+const { createWaitingHarness, harnesses } = agentSessionQueueCases1;
+const { createHarness, getAssistantTexts, getMessageText } = harnessModule;
+
+const deliversAllFollowUpMessagesIn = Effect.gen(function* () {
   const waiting = yield* Effect.promise(() => createWaitingHarness());
   const { harness, waitForToolStart, promptPromise, releaseToolExecution } = waiting;
   harnesses.push(harness);
@@ -36,7 +39,7 @@ export const deliversAllFollowUpMessagesIn = Effect.gen(function* () {
     "batched follow-up response",
   ]);
 });
-export const queuesCustomMessagesWithDeliverasSteer = Effect.gen(function* () {
+const queuesCustomMessagesWithDeliverasSteer = Effect.gen(function* () {
   const waiting = yield* Effect.promise(() => createWaitingHarness());
   const { harness, waitForToolStart, promptPromise, releaseToolExecution } = waiting;
   harnesses.push(harness);
@@ -59,10 +62,10 @@ export const queuesCustomMessagesWithDeliverasSteer = Effect.gen(function* () {
   yield* Effect.promise(() =>
     harness.session.sendCustomMessage(
       {
-        customType: "queue-test",
         content: "steer custom",
-        display: true,
+        customType: "queue-test",
         details: { value: 1 },
+        display: true,
       },
       { deliverAs: "steer" },
     ),
@@ -77,7 +80,7 @@ export const queuesCustomMessagesWithDeliverasSteer = Effect.gen(function* () {
     ),
   ).toBe(true);
 });
-export const queuesCustomMessagesWithDeliverasFollowup = Effect.gen(function* () {
+const queuesCustomMessagesWithDeliverasFollowup = Effect.gen(function* () {
   const waiting = yield* Effect.promise(() => createWaitingHarness());
   const { harness, waitForToolStart, promptPromise, releaseToolExecution } = waiting;
   harnesses.push(harness);
@@ -101,10 +104,10 @@ export const queuesCustomMessagesWithDeliverasFollowup = Effect.gen(function* ()
   yield* Effect.promise(() =>
     harness.session.sendCustomMessage(
       {
-        customType: "queue-test",
         content: "follow-up custom",
-        display: true,
+        customType: "queue-test",
         details: { value: 1 },
+        display: true,
       },
       { deliverAs: "followUp" },
     ),
@@ -119,14 +122,14 @@ export const queuesCustomMessagesWithDeliverasFollowup = Effect.gen(function* ()
     ),
   ).toBe(true);
 });
-export const injectsNextturnCustomMessagesIntoThe = Effect.gen(function* () {
+const injectsNextturnCustomMessagesIntoThe = Effect.gen(function* () {
   const harness = yield* Effect.promise(() => createHarness());
   harnesses.push(harness);
   let sawCustomMessage = false;
 
   yield* Effect.promise(() =>
     harness.session.sendCustomMessage(
-      { customType: "next-turn", content: "carry this", display: true, details: {} },
+      { content: "carry this", customType: "next-turn", details: {}, display: true },
       { deliverAs: "nextTurn" },
     ),
   );
@@ -153,7 +156,7 @@ export const injectsNextturnCustomMessagesIntoThe = Effect.gen(function* () {
     "assistant",
   ]);
 });
-export const updatesPendingmessagecountAndRemovesQueuedText = Effect.gen(function* () {
+const updatesPendingmessagecountAndRemovesQueuedText = Effect.gen(function* () {
   const waiting = yield* Effect.promise(() => createWaitingHarness());
   const { harness, waitForToolStart, promptPromise, releaseToolExecution } = waiting;
   harnesses.push(harness);
@@ -183,7 +186,7 @@ export const updatesPendingmessagecountAndRemovesQueuedText = Effect.gen(functio
   expect(countsAtQueuedMessageStart).toEqual([0]);
   expect(harness.session.pendingMessageCount).toBe(0);
 });
-export const throwsWhenQueueingAnExtensionCommand = Effect.gen(function* () {
+const throwsWhenQueueingAnExtensionCommand = Effect.gen(function* () {
   const runPromise = Effect.runPromiseWith(yield* Effect.context<never>());
   const harness = yield* Effect.promise(() =>
     createHarness({
@@ -205,7 +208,7 @@ export const throwsWhenQueueingAnExtensionCommand = Effect.gen(function* () {
     ),
   );
 });
-export const throwsWhenQueueingAnExtensionCommand2 = Effect.gen(function* () {
+const throwsWhenQueueingAnExtensionCommand2 = Effect.gen(function* () {
   const runPromise = Effect.runPromiseWith(yield* Effect.context<never>());
   const harness = yield* Effect.promise(() =>
     createHarness({
@@ -227,3 +230,15 @@ export const throwsWhenQueueingAnExtensionCommand2 = Effect.gen(function* () {
     ),
   );
 });
+
+const agentSessionQueueCases3 = {
+  deliversAllFollowUpMessagesIn,
+  injectsNextturnCustomMessagesIntoThe,
+  queuesCustomMessagesWithDeliverasFollowup,
+  queuesCustomMessagesWithDeliverasSteer,
+  throwsWhenQueueingAnExtensionCommand,
+  throwsWhenQueueingAnExtensionCommand2,
+  updatesPendingmessagecountAndRemovesQueuedText,
+};
+
+export default agentSessionQueueCases3;

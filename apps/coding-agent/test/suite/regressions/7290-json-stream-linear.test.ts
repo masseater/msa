@@ -3,9 +3,12 @@ import { Effect } from "effect";
 import { afterEach, describe, expect, it } from "vite-plus/test";
 
 import { toJsonEvent } from "../../../src/modes/json-event.ts";
-import { createHarness, type Harness } from "../harness.ts";
+import harnessModule from "../harness.ts";
+import type harnessTypes from "../harness.types.ts";
 
-const harnesses: Harness[] = [];
+const { createHarness } = harnessModule;
+
+const harnesses: harnessTypes.Harness[] = [];
 
 function measureUpdateBytes(text: string): Promise<number> {
   return Effect.runPromise(
@@ -41,12 +44,19 @@ const emitsDeltaOnlyMessageUpdatesWhose = Effect.gen(function* () {
   expect(largeBytes / smallBytes).toBeLessThan(2.2);
 });
 
+const emitsDeltaOnlyMessageUpdatesWhoseSize = () =>
+  Effect.runPromise(emitsDeltaOnlyMessageUpdatesWhose);
+
+const afterEachHook = () => {
+  while (harnesses.length > 0) {
+    harnesses.pop()?.cleanup();
+  }
+};
+
 describe("regression #7290: JSON event streams stay linear", () => {
-  afterEach(() => {
-    while (harnesses.length > 0) {
-      harnesses.pop()?.cleanup();
-    }
-  });
-  it("emits delta-only message updates whose size scales linearly", () =>
-    Effect.runPromise(emitsDeltaOnlyMessageUpdatesWhose));
+  afterEach(afterEachHook);
+  it(
+    "emits delta-only message updates whose size scales linearly",
+    emitsDeltaOnlyMessageUpdatesWhoseSize,
+  );
 });

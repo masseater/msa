@@ -5,7 +5,7 @@ import { type LabelEntry, SessionManager } from "../../src/core/session-manager.
 const setsAndGetsLabels = () => {
   const session = SessionManager.inMemory();
 
-  const msgId = session.appendMessage({ role: "user", content: "hello", timestamp: 1 });
+  const msgId = session.appendMessage({ content: "hello", role: "user", timestamp: 1 });
 
   expect(session.getLabel(msgId)).toBeUndefined();
 
@@ -23,7 +23,7 @@ const setsAndGetsLabels = () => {
 const clearsLabelsWithUndefined = () => {
   const session = SessionManager.inMemory();
 
-  const msgId = session.appendMessage({ role: "user", content: "hello", timestamp: 1 });
+  const msgId = session.appendMessage({ content: "hello", role: "user", timestamp: 1 });
 
   session.appendLabelChange(msgId, "checkpoint");
   expect(session.getLabel(msgId)).toBe("checkpoint");
@@ -35,7 +35,7 @@ const clearsLabelsWithUndefined = () => {
 const lastLabelWins = () => {
   const session = SessionManager.inMemory();
 
-  const msgId = session.appendMessage({ role: "user", content: "hello", timestamp: 1 });
+  const msgId = session.appendMessage({ content: "hello", role: "user", timestamp: 1 });
 
   session.appendLabelChange(msgId, "first");
   session.appendLabelChange(msgId, "second");
@@ -53,23 +53,23 @@ const lastLabelWins = () => {
 const labelsAreIncludedInTreeNodes = () => {
   const session = SessionManager.inMemory();
 
-  const msg1Id = session.appendMessage({ role: "user", content: "hello", timestamp: 1 });
+  const msg1Id = session.appendMessage({ content: "hello", role: "user", timestamp: 1 });
   const msg2Id = session.appendMessage({
-    role: "assistant",
-    content: [{ type: "text", text: "hi" }],
     api: "anthropic-messages",
-    provider: "anthropic-api",
+    content: [{ text: "hi", type: "text" }],
     model: "test",
-    usage: {
-      input: 1,
-      output: 1,
-      cacheRead: 0,
-      cacheWrite: 0,
-      totalTokens: 2,
-      cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0, total: 0 },
-    },
+    provider: "anthropic-api",
+    role: "assistant",
     stopReason: "stop",
     timestamp: 2,
+    usage: {
+      cacheRead: 0,
+      cacheWrite: 0,
+      cost: { cacheRead: 0, cacheWrite: 0, input: 0, output: 0, total: 0 },
+      input: 1,
+      output: 1,
+      totalTokens: 2,
+    },
   });
 
   const msg1LabelId = session.appendLabelChange(msg1Id, "start");
@@ -92,23 +92,23 @@ const labelsAreIncludedInTreeNodes = () => {
 const labelsArePreservedInCreatebranchedsession = () => {
   const session = SessionManager.inMemory();
 
-  const msg1Id = session.appendMessage({ role: "user", content: "hello", timestamp: 1 });
+  const msg1Id = session.appendMessage({ content: "hello", role: "user", timestamp: 1 });
   const msg2Id = session.appendMessage({
-    role: "assistant",
-    content: [{ type: "text", text: "hi" }],
     api: "anthropic-messages",
-    provider: "anthropic-api",
+    content: [{ text: "hi", type: "text" }],
     model: "test",
-    usage: {
-      input: 1,
-      output: 1,
-      cacheRead: 0,
-      cacheWrite: 0,
-      totalTokens: 2,
-      cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0, total: 0 },
-    },
+    provider: "anthropic-api",
+    role: "assistant",
     stopReason: "stop",
     timestamp: 2,
+    usage: {
+      cacheRead: 0,
+      cacheWrite: 0,
+      cost: { cacheRead: 0, cacheWrite: 0, input: 0, output: 0, total: 0 },
+      input: 1,
+      output: 1,
+      totalTokens: 2,
+    },
   });
 
   const msg1LabelId = session.appendLabelChange(msg1Id, "important");
@@ -136,10 +136,10 @@ const labelsArePreservedInCreatebranchedsession = () => {
 const rewiresChildrenOfRemovedLabelsWhen = () => {
   const session = SessionManager.inMemory();
 
-  const msg1Id = session.appendMessage({ role: "user", content: "hello", timestamp: 1 });
+  const msg1Id = session.appendMessage({ content: "hello", role: "user", timestamp: 1 });
   session.appendLabelChange(msg1Id, "checkpoint");
   const modelChangeId = session.appendModelChange("anthropic-api", "claude-test");
-  const msg2Id = session.appendMessage({ role: "user", content: "followup", timestamp: 2 });
+  const msg2Id = session.appendMessage({ content: "followup", role: "user", timestamp: 2 });
 
   session.createBranchedSession(msg2Id);
 
@@ -149,25 +149,25 @@ const rewiresChildrenOfRemovedLabelsWhen = () => {
 const labelsNotOnPathAreNot = () => {
   const session = SessionManager.inMemory();
 
-  const msg1Id = session.appendMessage({ role: "user", content: "hello", timestamp: 1 });
+  const msg1Id = session.appendMessage({ content: "hello", role: "user", timestamp: 1 });
   const msg2Id = session.appendMessage({
-    role: "assistant",
-    content: [{ type: "text", text: "hi" }],
     api: "anthropic-messages",
-    provider: "anthropic-api",
+    content: [{ text: "hi", type: "text" }],
     model: "test",
-    usage: {
-      input: 1,
-      output: 1,
-      cacheRead: 0,
-      cacheWrite: 0,
-      totalTokens: 2,
-      cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0, total: 0 },
-    },
+    provider: "anthropic-api",
+    role: "assistant",
     stopReason: "stop",
     timestamp: 2,
+    usage: {
+      cacheRead: 0,
+      cacheWrite: 0,
+      cost: { cacheRead: 0, cacheWrite: 0, input: 0, output: 0, total: 0 },
+      input: 1,
+      output: 1,
+      totalTokens: 2,
+    },
   });
-  const msg3Id = session.appendMessage({ role: "user", content: "followup", timestamp: 3 });
+  const msg3Id = session.appendMessage({ content: "followup", role: "user", timestamp: 3 });
 
   session.appendLabelChange(msg1Id, "first");
   session.appendLabelChange(msg2Id, "second");
@@ -183,7 +183,7 @@ const labelsNotOnPathAreNot = () => {
 const labelsAreNotIncludedInBuildsessioncontext = () => {
   const session = SessionManager.inMemory();
 
-  const msgId = session.appendMessage({ role: "user", content: "hello", timestamp: 1 });
+  const msgId = session.appendMessage({ content: "hello", role: "user", timestamp: 1 });
   session.appendLabelChange(msgId, "checkpoint");
 
   const ctx = session.buildSessionContext();

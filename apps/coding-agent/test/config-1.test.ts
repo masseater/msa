@@ -1,16 +1,11 @@
-import {
-  joinPath,
-  makeDirectory,
-  makeTempDir,
-  removePath,
-  runTest,
-  writeTextFile,
-} from "@msa/testing";
+import testing from "@msa/testing";
 import { Effect } from "effect";
 import { afterEach, describe, expect, test, vi } from "vite-plus/test";
 
 import { findNodePackageDir } from "../src/config.ts";
 import { readEnv } from "../src/core/process-env.ts";
+
+const { joinPath, makeDirectory, makeTempDir, removePath, runTest, writeTextFile } = testing;
 
 const execPathDescriptor = Object.getOwnPropertyDescriptor(process, "execPath");
 const originalPath = readEnv("PATH");
@@ -39,18 +34,20 @@ afterEach(() =>
   ),
 );
 
-describe("findNodePackageDir", () => {
-  test("skips binary metadata copied into dist", () =>
-    runTest(
-      Effect.gen(function* () {
-        tempDir = yield* makeTempDir("msa-package-dir-");
-        const distDir = joinPath(tempDir, "dist");
-        const bundleDir = joinPath(distDir, "bundle");
-        yield* makeDirectory(bundleDir);
-        yield* writeTextFile(joinPath(tempDir, "package.json"), "{}");
-        yield* writeTextFile(joinPath(distDir, "package.json"), "{}");
+const skipsBinaryMetadataCopiedIntoDist = () =>
+  runTest(
+    Effect.gen(function* () {
+      tempDir = yield* makeTempDir("msa-package-dir-");
+      const distDir = joinPath(tempDir, "dist");
+      const bundleDir = joinPath(distDir, "bundle");
+      yield* makeDirectory(bundleDir);
+      yield* writeTextFile(joinPath(tempDir, "package.json"), "{}");
+      yield* writeTextFile(joinPath(distDir, "package.json"), "{}");
 
-        expect(findNodePackageDir(bundleDir)).toBe(tempDir);
-      }),
-    ));
+      expect(findNodePackageDir(bundleDir)).toBe(tempDir);
+    }),
+  );
+
+describe("findNodePackageDir", () => {
+  test("skips binary metadata copied into dist", skipsBinaryMetadataCopiedIntoDist);
 });

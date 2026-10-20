@@ -1,50 +1,62 @@
 import type { AgentTool } from "@msa/agent-core";
 import { fauxAssistantMessage, fauxToolCall } from "@msa/ai";
-import { gate } from "@msa/testing";
+import testing from "@msa/testing";
 import { Effect } from "effect";
 import { Type } from "typebox";
 import { afterEach, describe, expect, it } from "vite-plus/test";
 
-import { createHarness, type Harness } from "../harness.ts";
+import harnessModule from "../harness.ts";
+import type harnessTypes from "../harness.types.ts";
+
+const { createHarness } = harnessModule;
+
+const { gate } = testing;
 
 function createNoopTool(): AgentTool {
   return {
-    name: "noop",
-    label: "No-op",
     description: "Return immediately",
+    execute: () => Promise.resolve({ content: [{ text: "done", type: "text" }], details: {} }),
+    label: "No-op",
+    name: "noop",
     parameters: Type.Object({}),
-    execute: () => Promise.resolve({ content: [{ type: "text", text: "done" }], details: {} }),
   };
 }
 
-const harnesses: Harness[] = [];
+const harnesses: harnessTypes.Harness[] = [];
+
+const persistsTheAbortedResponseBeforeRunningPart1 = () =>
+  Effect.gen(function* () {
+    const runPromise = Effect.runPromiseWith(yield* Effect.context<never>());
+    const secondResponseStarted = gate();
+    const secondResponseReleased = gate();
+
+    const harness = yield* Effect.promise(() =>
+      createHarness({
+        extensionFactories: [
+          (msa) => {
+            msa.on("session_before_compact", (event) =>
+              Promise.resolve({
+                compaction: {
+                  details: {},
+                  firstKeptEntryId: event.preparation.firstKeptEntryId,
+                  summary: `${event.reason} summary`,
+                  tokensBefore: event.preparation.tokensBefore,
+                },
+              }),
+            );
+          },
+        ],
+        models: [{ contextWindow: 1000, id: "faux-1", maxTokens: 1000 }],
+        settings: { compaction: { enabled: true, keepRecentTokens: 2, reserveTokens: 200 } },
+        tools: [createNoopTool()],
+      }),
+    );
+    return { harness, runPromise, secondResponseReleased, secondResponseStarted };
+  });
 
 const persistsTheAbortedResponseBeforeRunning = Effect.gen(function* () {
-  const runPromise = Effect.runPromiseWith(yield* Effect.context<never>());
-  const secondResponseStarted = gate();
-  const secondResponseReleased = gate();
-
-  const harness = yield* Effect.promise(() =>
-    createHarness({
-      models: [{ id: "faux-1", contextWindow: 1000, maxTokens: 1000 }],
-      settings: { compaction: { enabled: true, reserveTokens: 200, keepRecentTokens: 2 } },
-      tools: [createNoopTool()],
-      extensionFactories: [
-        (msa) => {
-          msa.on("session_before_compact", (event) =>
-            Promise.resolve({
-              compaction: {
-                summary: `${event.reason} summary`,
-                firstKeptEntryId: event.preparation.firstKeptEntryId,
-                tokensBefore: event.preparation.tokensBefore,
-                details: {},
-              },
-            }),
-          );
-        },
-      ],
-    }),
-  );
+  const { harness, runPromise, secondResponseReleased, secondResponseStarted } =
+    yield* persistsTheAbortedResponseBeforeRunningPart1();
   harnesses.push(harness);
   harness.setResponses([
     fauxAssistantMessage(fauxToolCall("noop", {}), { stopReason: "toolUse" }),
@@ -83,12 +95,19 @@ const persistsTheAbortedResponseBeforeRunning = Effect.gen(function* () {
   expect(entries.filter((entry) => entry.type === "compaction")).toHaveLength(1);
 });
 
+const persistsTheAbortedResponseBeforeRunningThe = () =>
+  Effect.runPromise(persistsTheAbortedResponseBeforeRunning);
+
+const afterEachHook = () => {
+  while (harnesses.length > 0) {
+    harnesses.pop()?.cleanup();
+  }
+};
+
 describe("issue #7253: manual compaction during an active response", () => {
-  afterEach(() => {
-    while (harnesses.length > 0) {
-      harnesses.pop()?.cleanup();
-    }
-  });
-  it("persists the aborted response before running the requested manual compaction", () =>
-    Effect.runPromise(persistsTheAbortedResponseBeforeRunning));
+  afterEach(afterEachHook);
+  it(
+    "persists the aborted response before running the requested manual compaction",
+    persistsTheAbortedResponseBeforeRunningThe,
+  );
 });

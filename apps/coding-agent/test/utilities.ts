@@ -1,94 +1,61 @@
-import * as NodeServices from "@effect/platform-node/NodeServices";
-import { Agent } from "@msa/agent-core";
-import { getModel, streamSimple } from "@msa/ai/compat";
-import { currentTimeMillis, joinPath } from "@msa/testing";
-import { Config, Effect, FileSystem, Function, ManagedRuntime, Option } from "effect";
+import testing from "@msa/testing";
+import { Config, Effect, Function, Option } from "effect";
 
-import { AgentSession } from "../src/core/agent-session.ts";
-import { AuthStorage } from "../src/core/auth-storage.ts";
 import { createEventBus } from "../src/core/event-bus.ts";
 import type {
   Extension,
-  ExtensionFactory,
   InlineExtension,
   LoadExtensionsResult,
 } from "../src/core/extensions/index.ts";
 import { createExtensionRuntime, loadExtensionFromFactory } from "../src/core/extensions/loader.ts";
 import type { ResourceLoader } from "../src/core/resource-loader.ts";
-import { SessionManager } from "../src/core/session-manager.ts";
-import { SettingsManager } from "../src/core/settings-manager.ts";
-import { createCodingTools } from "../src/index.ts";
-import { createModelRegistry, getModelRuntime } from "./model-runtime-test-utils.ts";
+import type utilitiesTypes from "./utilities.types.ts";
 
-const runtime = ManagedRuntime.make(NodeServices.layer);
-const fs = runtime.runSync(FileSystem.FileSystem.useSync((service) => service));
+const { currentTimeMillis, fromJsonText, readTextFile, runTest } = testing;
 
 const readEnv = (name: string): string | undefined =>
   Option.getOrUndefined(Effect.runSync(Config.option(Config.String(name))));
 
-export const API_KEY = readEnv("ANTHROPIC_OAUTH_TOKEN") ?? readEnv("ANTHROPIC_API_KEY");
+const API_KEY = readEnv("ANTHROPIC_OAUTH_TOKEN") ?? readEnv("ANTHROPIC_API_KEY");
 
-export function userMsg(text: string) {
-  return { role: "user" as const, content: text, timestamp: currentTimeMillis() };
+function userMsg(text: string) {
+  return { content: text, role: "user" as const, timestamp: currentTimeMillis() };
 }
 
-export function assistantMsg(text: string) {
+function assistantMsg(text: string) {
   return {
-    role: "assistant" as const,
-    content: [{ type: "text" as const, text }],
     api: "anthropic-messages" as const,
-    provider: "anthropic-api",
+    content: [{ text, type: "text" as const }],
     model: "test",
-    usage: {
-      input: 1,
-      output: 1,
-      cacheRead: 0,
-      cacheWrite: 0,
-      totalTokens: 2,
-      cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0, total: 0 },
-    },
+    provider: "anthropic-api",
+    role: "assistant" as const,
     stopReason: "stop" as const,
     timestamp: currentTimeMillis(),
+    usage: {
+      cacheRead: 0,
+      cacheWrite: 0,
+      cost: { cacheRead: 0, cacheWrite: 0, input: 0, output: 0, total: 0 },
+      input: 1,
+      output: 1,
+      totalTokens: 2,
+    },
   };
 }
 
-export function readSessionFileRoles(file: string): Promise<string[]> {
-  return runtime.runPromise(
-    fs.readFileString(file).pipe(
-      Effect.map((content) =>
-        content
-          .trim()
-          .split("\n")
-          .map((line) => {
-            const record = JSON.parse(line) as { message?: { role?: string }; type?: string };
-            return record.message?.role ?? record.type ?? "";
-          }),
-      ),
+const roleOf = (line: string) =>
+  Effect.map(fromJsonText(line), (value) => {
+    const record = value as { message?: { role?: string }; type?: string };
+    return record.message?.role ?? record.type ?? "";
+  });
+
+const readSessionFileRoles = (file: string): Promise<string[]> =>
+  runTest(
+    Effect.flatMap(readTextFile(file), (content) =>
+      Effect.forEach(content.trim().split("\n"), roleOf),
     ),
   );
-}
 
-export interface TestSessionOptions {
-  inMemory?: boolean;
-
-  systemPrompt?: string;
-
-  settingsOverrides?: Record<string, unknown>;
-}
-
-export interface TestSessionContext {
-  session: AgentSession;
-  sessionManager: SessionManager;
-  tempDir: string;
-  cleanup: () => void;
-}
-
-export interface CreateTestExtensionsResultInput {
-  factory: ExtensionFactory;
-  path?: string;
-}
-
-type TestExtensionInput = InlineExtension | CreateTestExtensionsResultInput;
+type TestExtensionInput = InlineExtension | utilitiesTypes.CreateTestExtensionsResultInput;
 
 const createTestExtensionsResultImpl = (
   inputs: TestExtensionInput[],
@@ -96,7 +63,7 @@ const createTestExtensionsResultImpl = (
 ): Promise<LoadExtensionsResult> =>
   Effect.runPromise(
     Effect.gen(function* () {
-      const runtime = createExtensionRuntime();
+      const extensionRuntime = createExtensionRuntime();
       const eventBus = createEventBus();
       const extensions: Extension[] = [];
 
@@ -114,20 +81,20 @@ const createTestExtensionsResultImpl = (
 
         extensions.push(
           yield* Effect.promise(() =>
-            loadExtensionFromFactory(factory, cwd, eventBus, runtime, extensionPath),
+            loadExtensionFromFactory(factory, cwd, eventBus, extensionRuntime, extensionPath),
           ),
         );
       }
 
       return {
-        extensions,
         errors: [],
-        runtime,
+        extensions,
+        runtime: extensionRuntime,
       };
     }),
   );
 
-export const createTestExtensionsResult: {
+const createTestExtensionsResult: {
   (cwd?: string): (inputs: TestExtensionInput[]) => Promise<LoadExtensionsResult>;
   (inputs: TestExtensionInput[], cwd?: string): Promise<LoadExtensionsResult>;
 } = Function.dual(
@@ -135,85 +102,37 @@ export const createTestExtensionsResult: {
   createTestExtensionsResultImpl,
 );
 
-export interface CreateTestResourceLoaderOptions {
-  extensionsResult?: LoadExtensionsResult;
-}
-
-export function createTestResourceLoader(
-  options: CreateTestResourceLoaderOptions = {},
+function createTestResourceLoader(
+  options: utilitiesTypes.CreateTestResourceLoaderOptions = {},
 ): ResourceLoader {
   const extensionsResult = options.extensionsResult ?? {
-    extensions: [],
     errors: [],
+    extensions: options.extensions ?? [],
     runtime: createExtensionRuntime(),
   };
 
   return {
-    getExtensions: () => extensionsResult,
-    getSkills: () => ({ skills: [], diagnostics: [] }),
-    getPrompts: () => ({ prompts: [], diagnostics: [] }),
-    getThemes: () => ({ themes: [], diagnostics: [] }),
+    extendResources: () => {},
     getAgentsFiles: () => ({ agentsFiles: [] }),
-    getSystemPrompt: () => undefined,
-    getSystemPromptSource: () => undefined,
     getAppendSystemPrompt: () => [],
     getAppendSystemPromptSources: () => [],
-    extendResources: () => {},
-    reload: () => Effect.runPromise(Effect.sync(() => {})),
+    getExtensions: () => extensionsResult,
+    getPrompts: () => ({ diagnostics: [], prompts: [] }),
+    getSkills: () => ({ diagnostics: [], skills: [] }),
+    getSystemPrompt: () => undefined,
+    getSystemPromptSource: () => undefined,
+    getThemes: () => ({ diagnostics: [], themes: [] }),
+    reload: () => Promise.resolve(),
   };
 }
 
-export function createTestSession(options: TestSessionOptions = {}): Promise<TestSessionContext> {
-  return Effect.runPromise(
-    Effect.gen(function* () {
-      const tempDir = yield* fs.makeTempDirectory({ prefix: `msa-test-` });
-      yield* fs.makeDirectory(tempDir, { recursive: true });
+const utilities = {
+  API_KEY,
+  assistantMsg,
+  createTestExtensionsResult,
+  createTestResourceLoader,
+  readSessionFileRoles,
+  userMsg,
+};
 
-      const model = getModel("anthropic-api", "claude-sonnet-4-5")!;
-      const agent = new Agent({
-        getApiKey: () => API_KEY,
-        initialState: {
-          model,
-          systemPrompt:
-            options.systemPrompt ?? "You are a helpful assistant. Be extremely concise.",
-          tools: createCodingTools(process.cwd()),
-        },
-        streamFn: streamSimple,
-      });
-
-      const sessionManager =
-        options.inMemory === true ? SessionManager.inMemory() : SessionManager.create(tempDir);
-      const settingsManager = SettingsManager.create(tempDir, tempDir);
-
-      if (options.settingsOverrides !== undefined) {
-        settingsManager.applyOverrides(options.settingsOverrides);
-      }
-
-      const authStorage = AuthStorage.create(joinPath(tempDir, "auth.json"));
-      const modelRegistry = yield* Effect.promise(() => createModelRegistry(authStorage, tempDir));
-
-      const session = new AgentSession({
-        agent,
-        sessionManager,
-        settingsManager,
-        cwd: tempDir,
-        modelRuntime: getModelRuntime(modelRegistry),
-        resourceLoader: createTestResourceLoader(),
-      });
-
-      session.subscribe(() => {});
-
-      const cleanup = () =>
-        runtime.runPromise(
-          Effect.gen(function* () {
-            session.dispose();
-            if (tempDir !== "" && (yield* fs.exists(tempDir))) {
-              yield* fs.remove(tempDir, { recursive: true });
-            }
-          }),
-        );
-
-      return { session, sessionManager, tempDir, cleanup };
-    }),
-  );
-}
+export default utilities;

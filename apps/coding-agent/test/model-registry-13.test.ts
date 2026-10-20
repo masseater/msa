@@ -1,6 +1,19 @@
 import { createProvider } from "@msa/ai";
 import type { Model } from "@msa/ai/compat";
-import {
+import testing from "@msa/testing";
+import { Effect } from "effect";
+import { afterEach, beforeEach, describe, expect, test, vi } from "vite-plus/test";
+
+import { AuthStorage } from "../src/core/auth-storage.ts";
+import { ModelConfig } from "../src/core/model-config.ts";
+import { type ModelRegistry, clearApiKeyCache } from "../src/core/model-registry.ts";
+import modelRegistrySupport from "./model-registry-support.ts";
+import modelRuntimeTestUtils from "./model-runtime-test-utils.ts";
+
+const { makeGate } = modelRegistrySupport;
+const { createModelRegistry } = modelRuntimeTestUtils;
+
+const {
   awaited,
   joinPath,
   makeTempDir,
@@ -8,223 +21,238 @@ import {
   readTextFile,
   removePath,
   runTest,
+  writeJsonFile,
   writeTextFile,
-} from "@msa/testing";
-import { Effect } from "effect";
-import { afterEach, beforeEach, describe, expect, test, vi } from "vite-plus/test";
+} = testing;
 
-import { AuthStorage } from "../src/core/auth-storage.ts";
-import { ModelConfig } from "../src/core/model-config.ts";
-import { clearApiKeyCache, type ModelRegistry } from "../src/core/model-registry.ts";
-import { nodeFs, makeGate } from "./model-registry-support.ts";
-import { createModelRegistry } from "./model-runtime-test-utils.ts";
+let tempDir: string;
 
-describe("ModelRegistry", () => {
-  let tempDir: string;
+let modelsJsonPath: string;
 
-  let modelsJsonPath: string;
+let authStorage: AuthStorage;
 
-  let authStorage: AuthStorage;
+function toShPath(value: string): string {
+  return value.replace(/\\/gu, "/").replace(/"/gu, '\\"');
+}
 
-  function toShPath(value: string): string {
-    return value.replace(/\\/gu, "/").replace(/"/gu, '\\"');
-  }
+const writeRawModelsJson = (providers: Record<string, unknown>) =>
+  writeJsonFile(modelsJsonPath, { providers });
 
-  function writeRawModelsJson(providers: Record<string, unknown>) {
-    nodeFs.writeFileSync(modelsJsonPath, JSON.stringify({ providers }));
-  }
-
-  function providerWithApiKey(apiKey: string) {
-    return {
-      baseUrl: "https://example.com/v1",
-      apiKey,
-      api: "anthropic-messages",
-      models: [
-        {
-          id: "test-model",
-          name: "Test Model",
-          reasoning: false,
-          input: ["text"],
-          cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0 },
-          contextWindow: 100000,
-          maxTokens: 8000,
-        },
-      ],
-    };
-  }
-
-  const filteredChatModel = (id: string): Model<"openai-completions"> => ({
-    id,
-    name: id,
-    api: "openai-completions",
-    provider: "filtered-provider",
-    baseUrl: "https://provider.test/v1",
-    reasoning: false,
-    input: ["text"],
-    cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0 },
-    contextWindow: 1000,
-    maxTokens: 100,
-  });
-
-  const createLimitedKeyRegistry = (): Promise<ModelRegistry> =>
-    runTest(
-      Effect.gen(function* () {
-        const effectRunPromise = Effect.runPromiseWith(yield* Effect.context<never>());
-
-        yield* awaited(
-          authStorage.modify("filtered-provider", () =>
-            effectRunPromise(
-              awaited({
-                type: "api_key",
-                key: "limited-key",
-              }),
-            ),
-          ),
-        );
-        return yield* awaited(createModelRegistry(authStorage, modelsJsonPath));
-      }),
-    );
-
-  const registerFilteredProvider = (registry: ModelRegistry, onResolve: () => void): void => {
-    registry.registerProvider(
-      createProvider({
-        id: "filtered-provider",
-        auth: {
-          apiKey: {
-            name: "Filtered",
-            resolve: ({ credential }) =>
-              runTest(
-                Effect.gen(function* () {
-                  onResolve();
-                  return yield* awaited(
-                    credential?.key === undefined || credential.key === ""
-                      ? undefined
-                      : { auth: { apiKey: credential.key } },
-                  );
-                }),
-              ),
-          },
-        },
-        models: [filteredChatModel("allowed"), filteredChatModel("denied")],
-        filterModels: (models, credential) =>
-          credential?.type === "api_key" && credential.key === "limited-key"
-            ? models.filter((m) => m.id === "allowed")
-            : models,
-        api: {
-          stream: () => {
-            throw new Error("not used");
-          },
-          streamSimple: () => {
-            throw new Error("not used");
-          },
-        },
-      }),
-    );
+function providerWithApiKey(apiKey: string) {
+  return {
+    api: "anthropic-messages",
+    apiKey,
+    baseUrl: "https://example.com/v1",
+    models: [
+      {
+        contextWindow: 100000,
+        cost: { cacheRead: 0, cacheWrite: 0, input: 0, output: 0 },
+        id: "test-model",
+        input: ["text"],
+        maxTokens: 8000,
+        name: "Test Model",
+        reasoning: false,
+      },
+    ],
   };
+}
 
-  const filteredAvailableIds = (registry: ModelRegistry): string[] =>
-    registry
-      .getAvailable()
-      .filter((m) => m.provider === "filtered-provider")
-      .map((m) => m.id);
+const filteredChatModel = (id: string): Model<"openai-completions"> => ({
+  api: "openai-completions",
+  baseUrl: "https://provider.test/v1",
+  contextWindow: 1000,
+  cost: { cacheRead: 0, cacheWrite: 0, input: 0, output: 0 },
+  id,
+  input: ["text"],
+  maxTokens: 100,
+  name: id,
+  provider: "filtered-provider",
+  reasoning: false,
+});
 
-  beforeEach(() =>
-    runTest(makeTempDir(`msa-test-model-registry-${randomSuffixSync()}-`)).then((dir) => {
-      tempDir = dir;
-      modelsJsonPath = joinPath(tempDir, "models.json");
-      authStorage = AuthStorage.inMemory();
-      return dir;
+const createLimitedKeyRegistry = (): Promise<ModelRegistry> =>
+  runTest(
+    Effect.gen(function* () {
+      const effectRunPromise = Effect.runPromiseWith(yield* Effect.context<never>());
+
+      yield* awaited(
+        authStorage.modify("filtered-provider", () =>
+          effectRunPromise(
+            awaited({
+              key: "limited-key",
+              type: "api_key",
+            }),
+          ),
+        ),
+      );
+      return yield* awaited(createModelRegistry(authStorage, modelsJsonPath));
     }),
   );
 
-  afterEach(() => {
-    clearApiKeyCache();
-    vi.restoreAllMocks();
-    return runTest(removePath(tempDir));
+const registerFilteredProvider = (registry: ModelRegistry, onResolve: () => void): void => {
+  registry.registerProvider(
+    createProvider({
+      api: {
+        stream: () => {
+          throw new Error("not used");
+        },
+        streamSimple: () => {
+          throw new Error("not used");
+        },
+      },
+      auth: {
+        apiKey: {
+          name: "Filtered",
+          resolve: ({ credential }) =>
+            runTest(
+              Effect.gen(function* () {
+                onResolve();
+                return yield* awaited(
+                  credential?.key === undefined || credential.key === ""
+                    ? undefined
+                    : { auth: { apiKey: credential.key } },
+                );
+              }),
+            ),
+        },
+      },
+      filterModels: (models, credential) =>
+        credential?.type === "api_key" && credential.key === "limited-key"
+          ? models.filter((m) => m.id === "allowed")
+          : models,
+      id: "filtered-provider",
+      models: [filteredChatModel("allowed"), filteredChatModel("denied")],
+    }),
+  );
+};
+
+const filteredAvailableIds = (registry: ModelRegistry): string[] =>
+  registry
+    .getAvailable()
+    .filter((m) => m.provider === "filtered-provider")
+    .map((m) => m.id);
+
+const providerAuthStatusReportsCommandApikeyValues = () =>
+  runTest(
+    Effect.gen(function* () {
+      const counterFile = joinPath(tempDir, "status-counter");
+      yield* writeTextFile(counterFile, "0");
+      const counterPath = toShPath(counterFile);
+      const command = `!sh -c 'echo 1 > "${counterPath}"; echo key-value'`;
+      yield* writeRawModelsJson({
+        "custom-provider": providerWithApiKey(command),
+      });
+
+      const registry = yield* awaited(createModelRegistry(authStorage, modelsJsonPath));
+
+      expect(registry.getProviderAuthStatus("custom-provider")).toEqual({
+        configured: true,
+        source: "models_json_command",
+      });
+      expect(yield* readTextFile(counterFile)).toBe("0");
+    }),
+  );
+
+const getavailableDoesNotExecuteCommandBackedApikey = () =>
+  runTest(
+    Effect.gen(function* () {
+      const counterFile = joinPath(tempDir, "counter");
+      yield* writeTextFile(counterFile, "0");
+
+      const counterPath = toShPath(counterFile);
+      const command = `!sh -c 'count=$(cat "${counterPath}"); echo $((count + 1)) > "${counterPath}"; echo "key-value"'`;
+      yield* writeRawModelsJson({
+        "custom-provider": providerWithApiKey(command),
+      });
+
+      const registry = yield* awaited(createModelRegistry(authStorage, modelsJsonPath));
+      const available = registry.getAvailable();
+
+      expect(available.some((m) => m.provider === "custom-provider")).toBe(true);
+      const count = parseInt((yield* readTextFile(counterFile)).trim(), 10);
+      expect(count).toBe(0);
+    }),
+  );
+
+const getavailableAppliesTheProviderSCredentialSpecific = () =>
+  runTest(
+    Effect.gen(function* () {
+      const registry = yield* awaited(createLimitedKeyRegistry());
+      registerFilteredProvider(registry, () => {});
+      yield* awaited(registry.refresh());
+
+      expect(filteredAvailableIds(registry)).toEqual(["allowed"]);
+    }),
+  );
+
+const aBackgroundRefreshThatLandsDuringAn = () =>
+  runTest(
+    Effect.gen(function* () {
+      const effectRunPromise = Effect.runPromiseWith(yield* Effect.context<never>());
+
+      const config = yield* awaited(ModelConfig.load(modelsJsonPath));
+      const background = makeGate();
+      const releaseBackground = () => {
+        background.open();
+      };
+      const registry = yield* awaited(createLimitedKeyRegistry());
+      vi.spyOn(ModelConfig, "load")
+        .mockImplementationOnce(() =>
+          effectRunPromise(
+            Effect.gen(function* () {
+              yield* background.promise;
+              return yield* awaited(config);
+            }),
+          ),
+        )
+        .mockImplementationOnce(() => effectRunPromise(awaited(config)));
+      registerFilteredProvider(registry, () => releaseBackground());
+      yield* awaited(registry.refresh());
+
+      expect(filteredAvailableIds(registry)).toEqual(["allowed"]);
+    }),
+  );
+
+const beforeEachHook = () =>
+  runTest(makeTempDir(`msa-test-model-registry-${randomSuffixSync()}-`)).then((dir) => {
+    tempDir = dir;
+    modelsJsonPath = joinPath(tempDir, "models.json");
+    authStorage = AuthStorage.inMemory();
+    return dir;
   });
+
+const afterEachHook = () => {
+  clearApiKeyCache();
+  vi.restoreAllMocks();
+  return runTest(removePath(tempDir));
+};
+
+describe("ModelRegistry", () => {
+  beforeEach(beforeEachHook);
+
+  afterEach(afterEachHook);
 
   describe("API key resolution", () => {
     describe("request-time resolution", () => {
-      test("provider auth status reports command apiKey values from models.json without executing them", () =>
-        runTest(
-          Effect.gen(function* () {
-            const counterFile = joinPath(tempDir, "status-counter");
-            yield* writeTextFile(counterFile, "0");
-            const counterPath = toShPath(counterFile);
-            const command = `!sh -c 'echo 1 > "${counterPath}"; echo key-value'`;
-            writeRawModelsJson({
-              "custom-provider": providerWithApiKey(command),
-            });
+      test(
+        "provider auth status reports command apiKey values from models.json without executing them",
+        providerAuthStatusReportsCommandApikeyValues,
+      );
 
-            const registry = yield* awaited(createModelRegistry(authStorage, modelsJsonPath));
+      test(
+        "getAvailable does not execute command-backed apiKey resolution",
+        getavailableDoesNotExecuteCommandBackedApikey,
+      );
 
-            expect(registry.getProviderAuthStatus("custom-provider")).toEqual({
-              configured: true,
-              source: "models_json_command",
-            });
-            expect(yield* readTextFile(counterFile)).toBe("0");
-          }),
-        ));
+      test(
+        "getAvailable applies the provider's credential-specific filterModels",
+        getavailableAppliesTheProviderSCredentialSpecific,
+      );
 
-      test("getAvailable does not execute command-backed apiKey resolution", () =>
-        runTest(
-          Effect.gen(function* () {
-            const counterFile = joinPath(tempDir, "counter");
-            yield* writeTextFile(counterFile, "0");
-
-            const counterPath = toShPath(counterFile);
-            const command = `!sh -c 'count=$(cat "${counterPath}"); echo $((count + 1)) > "${counterPath}"; echo "key-value"'`;
-            writeRawModelsJson({
-              "custom-provider": providerWithApiKey(command),
-            });
-
-            const registry = yield* awaited(createModelRegistry(authStorage, modelsJsonPath));
-            const available = registry.getAvailable();
-
-            expect(available.some((m) => m.provider === "custom-provider")).toBe(true);
-            const count = parseInt((yield* readTextFile(counterFile)).trim(), 10);
-            expect(count).toBe(0);
-          }),
-        ));
-
-      test("getAvailable applies the provider's credential-specific filterModels", () =>
-        runTest(
-          Effect.gen(function* () {
-            const registry = yield* awaited(createLimitedKeyRegistry());
-            registerFilteredProvider(registry, () => {});
-            yield* awaited(registry.refresh());
-
-            expect(filteredAvailableIds(registry)).toEqual(["allowed"]);
-          }),
-        ));
-
-      test("a background refresh that lands during an awaited refresh keeps filterModels", () =>
-        runTest(
-          Effect.gen(function* () {
-            const effectRunPromise = Effect.runPromiseWith(yield* Effect.context<never>());
-
-            const config = yield* awaited(ModelConfig.load(modelsJsonPath));
-            const background = makeGate();
-            const releaseBackground = () => {
-              background.open();
-            };
-            const registry = yield* awaited(createLimitedKeyRegistry());
-            vi.spyOn(ModelConfig, "load")
-              .mockImplementationOnce(() =>
-                effectRunPromise(
-                  Effect.gen(function* () {
-                    yield* background.promise;
-                    return yield* awaited(config);
-                  }),
-                ),
-              )
-              .mockImplementationOnce(() => effectRunPromise(awaited(config)));
-            registerFilteredProvider(registry, () => releaseBackground());
-            yield* awaited(registry.refresh());
-
-            expect(filteredAvailableIds(registry)).toEqual(["allowed"]);
-          }),
-        ));
+      test(
+        "a background refresh that lands during an awaited refresh keeps filterModels",
+        aBackgroundRefreshThatLandsDuringAn,
+      );
     });
   });
 });

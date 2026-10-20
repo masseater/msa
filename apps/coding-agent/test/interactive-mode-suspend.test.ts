@@ -31,12 +31,12 @@ describe("InteractiveMode.handleCtrlZ", () => {
 
   test("shows a status message and skips suspend on Windows", () => {
     const ui: FakeUi = {
+      requestRender: vi.fn(),
       start: vi.fn(),
       stop: vi.fn(),
-      requestRender: vi.fn(),
     };
     const showStatus = vi.fn();
-    const context: HandleCtrlZThis & { showStatus: (message: string) => void } = { ui, showStatus };
+    const context: HandleCtrlZThis & { showStatus: (message: string) => void } = { showStatus, ui };
     const platformDescriptor = Object.getOwnPropertyDescriptor(process, "platform");
     Object.defineProperty(process, "platform", {
       configurable: true,
@@ -62,71 +62,97 @@ describe("InteractiveMode.handleCtrlZ", () => {
     expect(processOnceSpy).not.toHaveBeenCalledWith("SIGCONT", expect.any(Function));
     expect(processKillSpy).not.toHaveBeenCalled();
   });
+});
+
+const partPart1 = () => {
+  const ui: FakeUi = {
+    requestRender: vi.fn(),
+    start: vi.fn(),
+    stop: vi.fn(),
+  };
+  const context: HandleCtrlZThis = { ui };
+  const keepAliveHandle = {} as ReturnType<typeof setInterval>;
+  return { context, keepAliveHandle, ui };
+};
+
+const captureSignalHandlers = () => {
+  const handlers: { sigcont?: ProcessSignalHandler; sigint?: ProcessSignalHandler } = {};
+  const processOnSpy = vi.spyOn(process, "on").mockImplementation(((
+    event: string,
+    listener: () => void,
+  ) => {
+    if (event === "SIGINT") handlers.sigint = listener;
+    return process;
+  }) as typeof process.on);
+  const processOnceSpy = vi.spyOn(process, "once").mockImplementation(((
+    event: string,
+    listener: () => void,
+  ) => {
+    if (event === "SIGCONT") handlers.sigcont = listener;
+    return process;
+  }) as typeof process.once);
+  return { handlers, processOnSpy, processOnceSpy };
+};
+
+const partPart2 = (input: {
+  readonly context: HandleCtrlZThis;
+  readonly keepAliveHandle: NodeJS.Timeout;
+  readonly ui: FakeUi;
+}) => {
+  const { context, keepAliveHandle, ui } = input;
+
+  const setIntervalSpy = vi.spyOn(globalThis, "setInterval").mockReturnValue(keepAliveHandle);
+  const clearIntervalSpy = vi
+    .spyOn(globalThis, "clearInterval")
+    .mockImplementation(() => undefined);
+  const { handlers, processOnSpy, processOnceSpy } = captureSignalHandlers();
+  const removeListenerSpy = vi
+    .spyOn(process, "removeListener")
+    .mockImplementation(
+      ((_event: string, _listener: () => void) => process) as typeof process.removeListener,
+    );
+  const processKillSpy = vi.spyOn(process, "kill").mockImplementation(() => true);
+
+  callHandleCtrlZ(context);
+
+  expect(setIntervalSpy).toHaveBeenCalledWith(expect.any(Function), 2 ** 30);
+  expect(processOnSpy).toHaveBeenCalledWith("SIGINT", expect.any(Function));
+  expect(processOnceSpy).toHaveBeenCalledWith("SIGCONT", expect.any(Function));
+  expect(ui.stop).toHaveBeenCalledTimes(1);
+  expect(processKillSpy).toHaveBeenCalledWith(0, "SIGTSTP");
+  expect(handlers.sigint).toBeDefined();
+  expect(handlers.sigcont).toBeDefined();
+
+  handlers.sigcont?.();
+
+  expect(clearIntervalSpy).toHaveBeenCalledWith(keepAliveHandle);
+  expect(removeListenerSpy).toHaveBeenCalledWith("SIGINT", handlers.sigint);
+};
+
+describe("InteractiveMode.handleCtrlZ", () => {
+  afterEach(() => {
+    vi.restoreAllMocks();
+  });
 
   test("keeps the process alive while suspended and restores the TUI on SIGCONT", () => {
-    const ui: FakeUi = {
-      start: vi.fn(),
-      stop: vi.fn(),
-      requestRender: vi.fn(),
-    };
-    const context: HandleCtrlZThis = { ui };
-    const keepAliveHandle = {} as ReturnType<typeof setInterval>;
+    const { context, keepAliveHandle, ui } = partPart1();
 
-    let sigintHandler: ProcessSignalHandler | undefined;
-    let sigcontHandler: ProcessSignalHandler | undefined;
-
-    const setIntervalSpy = vi.spyOn(globalThis, "setInterval").mockReturnValue(keepAliveHandle);
-    const clearIntervalSpy = vi
-      .spyOn(globalThis, "clearInterval")
-      .mockImplementation(() => undefined);
-    const processOnSpy = vi.spyOn(process, "on").mockImplementation(((
-      event: string,
-      listener: () => void,
-    ) => {
-      if (event === "SIGINT") {
-        sigintHandler = listener;
-      }
-      return process;
-    }) as typeof process.on);
-    const processOnceSpy = vi.spyOn(process, "once").mockImplementation(((
-      event: string,
-      listener: () => void,
-    ) => {
-      if (event === "SIGCONT") {
-        sigcontHandler = listener;
-      }
-      return process;
-    }) as typeof process.once);
-    const removeListenerSpy = vi
-      .spyOn(process, "removeListener")
-      .mockImplementation(
-        ((_event: string, _listener: () => void) => process) as typeof process.removeListener,
-      );
-    const processKillSpy = vi.spyOn(process, "kill").mockImplementation(() => true);
-
-    callHandleCtrlZ(context);
-
-    expect(setIntervalSpy).toHaveBeenCalledWith(expect.any(Function), 2 ** 30);
-    expect(processOnSpy).toHaveBeenCalledWith("SIGINT", expect.any(Function));
-    expect(processOnceSpy).toHaveBeenCalledWith("SIGCONT", expect.any(Function));
-    expect(ui.stop).toHaveBeenCalledTimes(1);
-    expect(processKillSpy).toHaveBeenCalledWith(0, "SIGTSTP");
-    expect(sigintHandler).toBeDefined();
-    expect(sigcontHandler).toBeDefined();
-
-    sigcontHandler?.();
-
-    expect(clearIntervalSpy).toHaveBeenCalledWith(keepAliveHandle);
-    expect(removeListenerSpy).toHaveBeenCalledWith("SIGINT", sigintHandler);
+    partPart2({ context, keepAliveHandle, ui });
     expect(ui.start).toHaveBeenCalledTimes(1);
     expect(ui.requestRender).toHaveBeenCalledWith(true);
+  });
+});
+
+describe("InteractiveMode.handleCtrlZ", () => {
+  afterEach(() => {
+    vi.restoreAllMocks();
   });
 
   test("cleans up the temporary handlers if suspension fails", () => {
     const ui: FakeUi = {
+      requestRender: vi.fn(),
       start: vi.fn(),
       stop: vi.fn(),
-      requestRender: vi.fn(),
     };
     const context: HandleCtrlZThis = { ui };
     const keepAliveHandle = {} as ReturnType<typeof setInterval>;

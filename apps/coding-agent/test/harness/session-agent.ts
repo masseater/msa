@@ -1,49 +1,41 @@
-import type { AgentTool } from "@msa/agent-core";
 import { Agent } from "@msa/agent-core";
 import type { Model } from "@msa/ai";
 import { Effect } from "effect";
 
 import { AuthStorage } from "../../src/core/auth-storage.ts";
-import type { Settings } from "../../src/core/settings-manager.ts";
-import { createInMemoryModelRegistry, getModelRuntime } from "../model-runtime-test-utils.ts";
-import type { FauxResponseInput } from "./faux-model.ts";
-import { createFauxStreamFn } from "./faux-stream.ts";
+import modelRuntimeTestUtils from "../model-runtime-test-utils.ts";
+import fauxStream from "./faux-stream.ts";
+import type sessionAgentTypes from "./session-agent.types.ts";
 
-export interface AgentBuildInput {
-  readonly model: Model<any>;
-  readonly systemPrompt: string;
-  readonly tools: ReadonlyArray<AgentTool>;
-  readonly responses: FauxResponseInput[];
-  readonly tempDir: string;
-  readonly settings: Partial<Settings> | undefined;
-}
+const { createInMemoryModelRegistry, getModelRuntime } = modelRuntimeTestUtils;
+const { createFauxStreamFn } = fauxStream;
 
 const registerProvider = Effect.fn("registerProvider")(function* (model: Model<any>) {
   const authStorage = AuthStorage.inMemory({
-    [model.provider]: { type: "api_key", key: "faux-key" },
+    [model.provider]: { key: "faux-key", type: "api_key" },
   });
   const modelRegistry = yield* Effect.promise(() => createInMemoryModelRegistry(authStorage));
   modelRegistry.registerProvider(model.provider, {
-    baseUrl: model.baseUrl,
     api: model.api,
+    baseUrl: model.baseUrl,
     models: [
       {
-        id: model.id,
-        name: model.name,
         api: model.api,
-        reasoning: model.reasoning,
-        input: model.input,
-        cost: model.cost,
-        contextWindow: model.contextWindow,
-        maxTokens: model.maxTokens,
         baseUrl: model.baseUrl,
+        contextWindow: model.contextWindow,
+        cost: model.cost,
+        id: model.id,
+        input: model.input,
+        maxTokens: model.maxTokens,
+        name: model.name,
+        reasoning: model.reasoning,
       },
     ],
   });
   return getModelRuntime(modelRegistry);
 });
 
-export const buildAgent = Effect.fn("buildAgent")(function* (input: AgentBuildInput) {
+const buildAgent = Effect.fn("buildAgent")(function* (input: sessionAgentTypes.AgentBuildInput) {
   const { streamFn, state } = createFauxStreamFn(input.responses);
   const agent = new Agent({
     getApiKey: () => "faux-key",
@@ -57,3 +49,9 @@ export const buildAgent = Effect.fn("buildAgent")(function* (input: AgentBuildIn
   const modelRuntime = yield* registerProvider(input.model);
   return { agent, faux: state, modelRuntime };
 });
+
+const sessionAgent = {
+  buildAgent,
+};
+
+export default sessionAgent;

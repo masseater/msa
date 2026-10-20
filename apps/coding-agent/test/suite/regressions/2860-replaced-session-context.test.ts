@@ -1,29 +1,16 @@
-import * as NodeServices from "@effect/platform-node/NodeServices";
-import { fauxAssistantMessage, registerFauxProvider } from "@msa/ai/compat";
-import { joinPath } from "@msa/testing";
-import { Effect, Exit, FileSystem, ManagedRuntime } from "effect";
+import testing from "@msa/testing";
+import { Effect, Exit } from "effect";
 import { afterEach, describe, expect, it } from "vite-plus/test";
 
-import {
-  type CreateAgentSessionRuntimeFactory,
-  createAgentSessionFromServices,
-  createAgentSessionRuntime,
-  createAgentSessionServices,
-} from "../../../src/core/agent-session-runtime.ts";
 import type { AgentSession } from "../../../src/core/agent-session.ts";
-import { AuthStorage } from "../../../src/core/auth-storage.ts";
-import { ModelRuntime } from "../../../src/core/model-runtime.ts";
-import { SessionManager } from "../../../src/core/session-manager.ts";
-import type {
-  ExtensionAPI,
-  ExtensionCommandContext,
-  ExtensionFactory,
-} from "../../../src/index.ts";
+import type { ReplacedSessionContext } from "../../../src/core/extensions/index.ts";
+import type { ExtensionAPI, ExtensionCommandContext } from "../../../src/index.ts";
+import runtimeKit from "../../runtime-kit.ts";
 
-const runtime = ManagedRuntime.make(NodeServices.layer);
-const fs = runtime.runSync(FileSystem.FileSystem.useSync((service) => service));
+const { awaited, runTest } = testing;
+const { createFauxRuntime, disposeRuntimes } = runtimeKit;
 
-function getText(message: AgentSession["messages"][number]): string {
+const textOf = (message: AgentSession["messages"][number]): string => {
   if (!("content" in message)) {
     return "";
   }
@@ -33,277 +20,115 @@ function getText(message: AgentSession["messages"][number]): string {
         .filter((part): part is { type: "text"; text: string } => part.type === "text")
         .map((part) => part.text)
         .join("");
+};
+
+const transcript = (session: AgentSession): string[] =>
+  session.messages
+    .filter((message) => message.role !== "system")
+    .map((message) => `${message.role}:${textOf(message)}`);
+
+interface ReproState {
+  events: string[];
+  oldCtx?: ExtensionCommandContext;
+  oldMsa?: ExtensionAPI;
+  oldSessionFile?: string | undefined;
+  replacementSessionFile?: string | undefined;
+  staleCtxThrows: boolean;
+  staleMsaThrows: boolean;
 }
 
-const cleanups: Array<() => Promise<void> | void> = [];
-
-function createRuntimeForTest(extensionFactory: ExtensionFactory, responses: string[]) {
-  return Effect.runPromise(
+const onReplaced = (state: ReproState, instance: number) => (replacedCtx: ReplacedSessionContext) =>
+  runTest(
     Effect.gen(function* () {
-      const runPromise = Effect.runPromiseWith(yield* Effect.context<never>());
-      const tempDir = yield* fs.makeTempDirectory({ prefix: `msa-2860-` });
-      yield* fs.makeDirectory(tempDir, { recursive: true });
-
-      const faux = registerFauxProvider({
-        models: [{ id: "faux-1", reasoning: false }],
-      });
-      faux.setResponses(responses.map((response) => fauxAssistantMessage(response)));
-
-      const authStorage = AuthStorage.inMemory();
-      yield* Effect.promise(() =>
-        authStorage.modify(faux.getModel().provider, () =>
-          Promise.resolve({
-            type: "api_key",
-            key: "faux-key",
-          }),
-        ),
+      state.events.push(`with:${instance}`);
+      state.replacementSessionFile = replacedCtx.sessionManager.getSessionFile();
+      const staleCtx = yield* Effect.exit(
+        Effect.sync(() => state.oldCtx?.sessionManager.getSessionFile()),
       );
-      const modelRuntime = yield* Effect.promise(() =>
-        ModelRuntime.create({
-          credentials: authStorage,
-          modelsPath: joinPath(tempDir, "models.json"),
-        }),
+      state.staleCtxThrows = Exit.isFailure(staleCtx);
+      const staleMsa = yield* Effect.exit(
+        Effect.sync(() => state.oldMsa?.sendUserMessage("stale message")),
       );
-
-      const createRuntime: CreateAgentSessionRuntimeFactory = ({
-        cwd,
-        sessionManager,
-        sessionStartEvent,
-      }) =>
-        runPromise(
-          Effect.gen(function* () {
-            const services = yield* Effect.promise(() =>
-              createAgentSessionServices({
-                cwd,
-                agentDir: tempDir,
-                modelRuntime,
-                resourceLoaderOptions: {
-                  extensionFactories: [
-                    (msa: ExtensionAPI) => {
-                      msa.registerProvider(faux.getModel().provider, {
-                        baseUrl: faux.getModel().baseUrl,
-                        apiKey: "faux-key",
-                        api: faux.api,
-                        models: faux.models.map((registeredModel) => ({
-                          id: registeredModel.id,
-                          name: registeredModel.name,
-                          api: registeredModel.api,
-                          reasoning: registeredModel.reasoning,
-                          input: registeredModel.input,
-                          cost: registeredModel.cost,
-                          contextWindow: registeredModel.contextWindow,
-                          maxTokens: registeredModel.maxTokens,
-                        })),
-                      });
-                      extensionFactory(msa);
-                    },
-                  ],
-                  noSkills: true,
-                  noPromptTemplates: true,
-                  noThemes: true,
-                },
-              }),
-            );
-            return {
-              ...(yield* Effect.promise(() =>
-                createAgentSessionFromServices({
-                  services,
-                  sessionManager,
-                  ...(sessionStartEvent === undefined ? {} : { sessionStartEvent }),
-                  model: faux.getModel(),
-                }),
-              )),
-              services,
-              diagnostics: services.diagnostics,
-            };
-          }),
-        );
-
-      const runtime = yield* Effect.promise(() =>
-        createAgentSessionRuntime(createRuntime, {
-          cwd: tempDir,
-          agentDir: tempDir,
-          sessionManager: SessionManager.create(tempDir),
-        }),
-      );
-
-      const rebindSession = (): Promise<void> =>
-        runPromise(
-          Effect.gen(function* () {
-            const session = runtime.session;
-            yield* Effect.promise(() =>
-              session.bindExtensions({
-                commandContextActions: {
-                  waitForIdle: () => session.agent.waitForIdle(),
-                  newSession: (options) => Promise.resolve(runtime.newSession(options)),
-                  fork: (entryId, options) =>
-                    runPromise(
-                      Effect.gen(function* () {
-                        const result = yield* Effect.promise(() => runtime.fork(entryId, options));
-                        return { cancelled: result.cancelled };
-                      }),
-                    ),
-                  navigateTree: (targetId, options) =>
-                    runPromise(
-                      Effect.gen(function* () {
-                        const result = yield* Effect.promise(() =>
-                          session.navigateTree(targetId, {
-                            ...(options?.summarize === undefined
-                              ? {}
-                              : { summarize: options.summarize }),
-                            ...(options?.customInstructions === undefined
-                              ? {}
-                              : { customInstructions: options.customInstructions }),
-                            ...(options?.replaceInstructions === undefined
-                              ? {}
-                              : { replaceInstructions: options.replaceInstructions }),
-                            ...(options?.label === undefined ? {} : { label: options.label }),
-                          }),
-                        );
-                        return { cancelled: result.cancelled };
-                      }),
-                    ),
-                  switchSession: (sessionPath, options) =>
-                    Promise.resolve(runtime.switchSession(sessionPath, options)),
-                  reload: () => session.reload(),
-                },
-              }),
-            );
-          }),
-        );
-
-      runtime.setRebindSession(() => rebindSession());
-      yield* Effect.promise(() => rebindSession());
-
-      cleanups.push(() =>
-        runPromise(
-          Effect.gen(function* () {
-            yield* Effect.promise(() => runtime.dispose());
-            faux.unregister();
-            if (yield* fs.exists(tempDir)) {
-              yield* fs.remove(tempDir, { recursive: true, force: true });
-            }
-          }),
-        ),
-      );
-
-      return { runtime, faux };
+      state.staleMsaThrows = Exit.isFailure(staleMsa);
+      yield* awaited(replacedCtx.sendUserMessage("Hello from the new session!"));
     }),
   );
-}
 
-const rebindsBeforeWithsessionTargetsTheReplacement = Effect.gen(function* () {
-  const runPromise = Effect.runPromiseWith(yield* Effect.context<never>());
-  const events: string[] = [];
-  let oldCtx: ExtensionCommandContext | undefined;
-  let oldPi: ExtensionAPI | undefined;
-  let oldSessionFile: string | undefined;
-  let staleCtxThrows = false;
-  let staleMsaThrows = false;
-  let replacementSessionFile: string | undefined;
+const reproExtension = (state: ReproState) => {
   let instanceId = 0;
-  const { runtime } = yield* Effect.promise(() =>
-    createRuntimeForTest(
-      (msa) => {
-        const currentInstance = ++instanceId;
-        msa.on("session_start", () => {
-          events.push(`start:${currentInstance}`);
-        });
-        msa.on("session_shutdown", () => {
-          events.push(`shutdown:${currentInstance}`);
-        });
-        msa.registerCommand("repro", {
-          description: "repro",
-          handler: (_args, ctx) =>
-            runPromise(
-              Effect.gen(function* () {
-                oldCtx = ctx;
-                oldPi = msa;
-                oldSessionFile = ctx.sessionManager.getSessionFile();
-                yield* Effect.promise(() =>
-                  ctx.newSession({
-                    ...(oldSessionFile === undefined ? {} : { parentSession: oldSessionFile }),
-                    withSession: (replacedCtx) =>
-                      runPromise(
-                        Effect.gen(function* () {
-                          events.push(`with:${currentInstance}`);
-                          replacementSessionFile = replacedCtx.sessionManager.getSessionFile();
-                          const staleCtxExit = yield* Effect.exit(
-                            Effect.sync(() => oldCtx?.sessionManager.getSessionFile()),
-                          );
-                          if (Exit.isFailure(staleCtxExit)) staleCtxThrows = true;
-                          const staleMsaExit = yield* Effect.exit(
-                            Effect.sync(() => oldPi?.sendUserMessage("stale message")),
-                          );
-                          if (Exit.isFailure(staleMsaExit)) staleMsaThrows = true;
-                          yield* Effect.promise(() =>
-                            replacedCtx.sendUserMessage("Hello from the new session!"),
-                          );
-                        }),
-                      ),
-                  }),
-                );
-              }),
-            ),
-        });
+  return (msa: ExtensionAPI) => {
+    instanceId += 1;
+    const instance = instanceId;
+    msa.on("session_start", () => {
+      state.events.push(`start:${instance}`);
+    });
+    msa.on("session_shutdown", () => {
+      state.events.push(`shutdown:${instance}`);
+    });
+    msa.registerCommand("repro", {
+      description: "repro",
+      handler: (_args, ctx) => {
+        state.oldCtx = ctx;
+        state.oldMsa = msa;
+        state.oldSessionFile = ctx.sessionManager.getSessionFile();
+        return ctx
+          .newSession({
+            ...(state.oldSessionFile === undefined ? {} : { parentSession: state.oldSessionFile }),
+            withSession: onReplaced(state, instance),
+          })
+          .then(() => undefined);
       },
-      ["hello reply"],
-    ),
-  );
+    });
+  };
+};
 
-  expect(events).toEqual(["start:1"]);
-
-  yield* Effect.promise(() => runtime.session.prompt("/repro"));
-
-  expect(events).toEqual(["start:1", "shutdown:1", "start:2", "with:1"]);
-  expect(replacementSessionFile).toBeDefined();
-  expect(replacementSessionFile).not.toBe(oldSessionFile);
-  expect(staleCtxThrows).toBe(true);
-  expect(staleMsaThrows).toBe(true);
-  expect(
-    runtime.session.messages
-      .filter((message) => message.role !== "system")
-      .map((message) => `${message.role}:${getText(message)}`),
-  ).toEqual(["user:Hello from the new session!", "assistant:hello reply"]);
+const rebindsBeforeWithSession = Effect.gen(function* () {
+  const state: ReproState = { events: [], staleCtxThrows: false, staleMsaThrows: false };
+  const { runtime } = yield* createFauxRuntime({
+    commandActions: true,
+    extensionFactory: reproExtension(state),
+    responses: ["hello reply"],
+  });
+  expect(state.events).toEqual(["start:1"]);
+  yield* awaited(runtime.session.prompt("/repro"));
+  expect(state.events).toEqual(["start:1", "shutdown:1", "start:2", "with:1"]);
+  expect(state.replacementSessionFile).toBeDefined();
+  expect(state.replacementSessionFile).not.toBe(state.oldSessionFile);
+  expect(state.staleCtxThrows).toBe(true);
+  expect(state.staleMsaThrows).toBe(true);
+  expect(transcript(runtime.session)).toEqual([
+    "user:Hello from the new session!",
+    "assistant:hello reply",
+  ]);
 });
 
-const supportsWithsessionForFork = Effect.gen(function* () {
-  const runPromise = Effect.runPromiseWith(yield* Effect.context<never>());
-  const { runtime } = yield* Effect.promise(() =>
-    createRuntimeForTest(
-      (msa) => {
-        msa.registerCommand("fork-it", {
-          description: "fork-it",
-          handler: (_args, ctx) =>
-            runPromise(
-              Effect.gen(function* () {
-                const leafId = ctx.sessionManager.getLeafId();
-                if (leafId === null || leafId === "") {
-                  throw new Error("Missing leaf id");
-                }
-                yield* Effect.promise(() =>
-                  ctx.fork(leafId, {
-                    position: "at",
-                    withSession: (replacedCtx) =>
-                      replacedCtx.sendUserMessage("fork callback message"),
-                  }),
-                );
-              }),
-            ),
-        });
-      },
-      ["seed reply", "fork reply"],
-    ),
-  );
+const forkExtension = (msa: ExtensionAPI) => {
+  msa.registerCommand("fork-it", {
+    description: "fork-it",
+    handler: (_args, ctx) => {
+      const leafId = ctx.sessionManager.getLeafId();
+      if (leafId === null || leafId === "") {
+        return Promise.reject(new Error("Missing leaf id"));
+      }
+      return ctx
+        .fork(leafId, {
+          position: "at",
+          withSession: (replacedCtx) => replacedCtx.sendUserMessage("fork callback message"),
+        })
+        .then(() => undefined);
+    },
+  });
+};
 
-  yield* Effect.promise(() => runtime.session.prompt("seed"));
-  yield* Effect.promise(() => runtime.session.prompt("/fork-it"));
-
-  expect(
-    runtime.session.messages
-      .filter((message) => message.role !== "system")
-      .map((message) => `${message.role}:${getText(message)}`),
-  ).toEqual([
+const supportsWithSessionForFork = Effect.gen(function* () {
+  const { runtime } = yield* createFauxRuntime({
+    commandActions: true,
+    extensionFactory: forkExtension,
+    responses: ["seed reply", "fork reply"],
+  });
+  yield* awaited(runtime.session.prompt("seed"));
+  yield* awaited(runtime.session.prompt("/fork-it"));
+  expect(transcript(runtime.session)).toEqual([
     "user:seed",
     "assistant:seed reply",
     "user:fork callback message",
@@ -311,44 +136,38 @@ const supportsWithsessionForFork = Effect.gen(function* () {
   ]);
 });
 
-const supportsWithsessionForSwitchsession = Effect.gen(function* () {
-  let targetSessionPath = "";
-  const { runtime } = yield* Effect.promise(() =>
-    createRuntimeForTest(
-      (msa) => {
-        msa.registerCommand("switch-it", {
-          description: "switch-it",
-          handler: (_args, ctx) =>
-            ctx
-              .switchSession(targetSessionPath, {
-                withSession: (replacedCtx) =>
-                  Promise.resolve(replacedCtx.sendUserMessage("switch callback message")).then(
-                    () => undefined,
-                  ),
-              })
-              .then(() => undefined),
-        });
-      },
-      ["root reply", "target reply", "switch reply"],
-    ),
-  );
+const switchExtension = (target: { path: string }) => (msa: ExtensionAPI) => {
+  msa.registerCommand("switch-it", {
+    description: "switch-it",
+    handler: (_args, ctx) =>
+      ctx
+        .switchSession(target.path, {
+          withSession: (replacedCtx) =>
+            Promise.resolve(replacedCtx.sendUserMessage("switch callback message")).then(
+              () => undefined,
+            ),
+        })
+        .then(() => undefined),
+  });
+};
 
-  yield* Effect.promise(() => runtime.session.prompt("root"));
-  const originalSessionPath = runtime.session.sessionFile;
-  const newSessionResult = yield* Effect.promise(() => runtime.newSession());
-  expect(newSessionResult.cancelled).toBe(false);
-  yield* Effect.promise(() => runtime.session.prompt("target"));
-  targetSessionPath = runtime.session.sessionFile!;
-  yield* Effect.promise(() => runtime.switchSession(originalSessionPath!));
-
-  yield* Effect.promise(() => runtime.session.prompt("/switch-it"));
-
-  expect(runtime.session.sessionFile).toBe(targetSessionPath);
-  expect(
-    runtime.session.messages
-      .filter((message) => message.role !== "system")
-      .map((message) => `${message.role}:${getText(message)}`),
-  ).toEqual([
+const supportsWithSessionForSwitch = Effect.gen(function* () {
+  const target = { path: "" };
+  const { runtime } = yield* createFauxRuntime({
+    commandActions: true,
+    extensionFactory: switchExtension(target),
+    responses: ["root reply", "target reply", "switch reply"],
+  });
+  yield* awaited(runtime.session.prompt("root"));
+  const originalSessionPath = runtime.session.sessionFile ?? "";
+  const created = yield* awaited(runtime.newSession());
+  expect(created.cancelled).toBe(false);
+  yield* awaited(runtime.session.prompt("target"));
+  target.path = runtime.session.sessionFile ?? "";
+  yield* awaited(runtime.switchSession(originalSessionPath));
+  yield* awaited(runtime.session.prompt("/switch-it"));
+  expect(runtime.session.sessionFile).toBe(target.path);
+  expect(transcript(runtime.session)).toEqual([
     "user:target",
     "assistant:target reply",
     "user:switch callback message",
@@ -357,18 +176,9 @@ const supportsWithsessionForSwitchsession = Effect.gen(function* () {
 });
 
 describe("regression #2860: replaced session callbacks", () => {
-  afterEach(() =>
-    Effect.runPromise(
-      Effect.gen(function* () {
-        while (cleanups.length > 0) {
-          yield* Effect.promise(() => Promise.resolve(cleanups.pop()?.()));
-        }
-      }),
-    ),
-  );
+  afterEach(() => runTest(disposeRuntimes));
   it("rebinds before withSession, targets the replacement session, and invalidates stale msa/ctx", () =>
-    Effect.runPromise(rebindsBeforeWithsessionTargetsTheReplacement));
-  it("supports withSession for fork", () => Effect.runPromise(supportsWithsessionForFork));
-  it("supports withSession for switchSession", () =>
-    Effect.runPromise(supportsWithsessionForSwitchsession));
+    runTest(rebindsBeforeWithSession));
+  it("supports withSession for fork", () => runTest(supportsWithSessionForFork));
+  it("supports withSession for switchSession", () => runTest(supportsWithSessionForSwitch));
 });

@@ -1,17 +1,18 @@
-import { awaited, runTest } from "@msa/testing";
+import testing from "@msa/testing";
 import type { NativeClipboard } from "@msa/tui";
 import { Effect } from "effect";
 import { afterEach, beforeEach, describe, expect, test, vi } from "vite-plus/test";
 
 import { readClipboardText } from "../src/utils/clipboard.ts";
 
+const { awaited, runTest } = testing;
+
 const mocks = vi.hoisted(() => ({
   clipboard: {
-    getText: vi.fn<NativeClipboard["getText"]>(),
     getImage: vi.fn<NativeClipboard["getImage"]>(),
+    getText: vi.fn<NativeClipboard["getText"]>(),
     setText: vi.fn<(text: string) => Promise<void>>(),
   },
-  getNativeClipboard: vi.fn<() => NativeClipboard | undefined>(),
   command:
     vi.fn<
       (
@@ -20,6 +21,7 @@ const mocks = vi.hoisted(() => ({
         options?: { input?: string; timeoutMs?: number },
       ) => Promise<Buffer | undefined>
     >(),
+  getNativeClipboard: vi.fn<() => NativeClipboard | undefined>(),
   platform: vi.fn<() => NodeJS.Platform>(),
 }));
 vi.mock("@msa/tui", () => ({ getNativeClipboard: mocks.getNativeClipboard }));
@@ -69,16 +71,29 @@ afterEach(() => {
   vi.unstubAllEnvs();
 });
 
-describe("readClipboardText", () => {
+const awaitsNativeClipboardTextAndCatchesRejected = Effect.gen(function* () {
+  mocks.clipboard.getText.mockResolvedValue("clipboard text");
+  yield* awaited(expect(readClipboardText()).resolves.toBe("clipboard text"));
+  mocks.clipboard.getText.mockRejectedValue(new Error("clipboard unavailable"));
+  yield* awaited(expect(readClipboardText()).resolves.toBeNull());
+});
+
+const fallsBackToX11ToolsWhenWl = Effect.gen(function* () {
+  const effectRunPromise = Effect.runPromiseWith(yield* Effect.context<never>());
+
+  mocks.platform.mockReturnValue("linux");
+  vi.stubEnv("WAYLAND_DISPLAY", "wayland-0");
+  vi.stubEnv("DISPLAY", ":0");
+  mocks.command.mockImplementation((name) =>
+    effectRunPromise(awaited(name === "wl-paste" ? undefined : Buffer.from("X11 text"))),
+  );
+  yield* awaited(expect(readClipboardText()).resolves.toBe("X11 text"));
+  expect(mocks.getNativeClipboard).not.toHaveBeenCalled();
+});
+
+const stepStep = () => {
   test("awaits native clipboard text and catches rejected reads", () =>
-    runTest(
-      Effect.gen(function* () {
-        mocks.clipboard.getText.mockResolvedValue("clipboard text");
-        yield* awaited(expect(readClipboardText()).resolves.toBe("clipboard text"));
-        mocks.clipboard.getText.mockRejectedValue(new Error("clipboard unavailable"));
-        yield* awaited(expect(readClipboardText()).resolves.toBeNull());
-      }),
-    ));
+    runTest(awaitsNativeClipboardTextAndCatchesRejected));
   for (const [env, command, args, calls] of [
     ["WAYLAND_DISPLAY", "wl-paste", ["--no-newline", "--type", "text"], ["wl-paste"]],
     ["DISPLAY", "xclip", ["-selection", "clipboard", "-out"], ["xclip"]],
@@ -123,6 +138,10 @@ describe("readClipboardText", () => {
         }),
       ),
   );
+};
+
+describe("readClipboardText", () => {
+  stepStep();
   test.each(["clipboard text", ""])(
     "Termux reads termux-clipboard-get result %j on Android",
     (text) =>
@@ -140,18 +159,5 @@ describe("readClipboardText", () => {
       ),
   );
   test("falls back to X11 tools when wl-paste is unavailable", () =>
-    runTest(
-      Effect.gen(function* () {
-        const effectRunPromise = Effect.runPromiseWith(yield* Effect.context<never>());
-
-        mocks.platform.mockReturnValue("linux");
-        vi.stubEnv("WAYLAND_DISPLAY", "wayland-0");
-        vi.stubEnv("DISPLAY", ":0");
-        mocks.command.mockImplementation((name) =>
-          effectRunPromise(awaited(name === "wl-paste" ? undefined : Buffer.from("X11 text"))),
-        );
-        yield* awaited(expect(readClipboardText()).resolves.toBe("X11 text"));
-        expect(mocks.getNativeClipboard).not.toHaveBeenCalled();
-      }),
-    ));
+    runTest(fallsBackToX11ToolsWhenWl));
 });

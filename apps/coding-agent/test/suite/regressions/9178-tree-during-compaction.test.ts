@@ -1,47 +1,60 @@
-import { gate } from "@msa/testing";
+import testing from "@msa/testing";
 import { Effect } from "effect";
 import { afterEach, describe, expect, it } from "vite-plus/test";
 
-import { assistantMsg, userMsg } from "../../utilities.ts";
-import { createHarness, getMessageText, type Harness } from "../harness.ts";
+import utilities from "../../utilities.ts";
+import harnessModule from "../harness.ts";
+import type harnessTypes from "../harness.types.ts";
+
+const { createHarness, getMessageText } = harnessModule;
+const { assistantMsg, userMsg } = utilities;
+
+const { gate } = testing;
 
 function createDeferred(): { promise: Promise<void>; resolve: () => void } {
   const promise = gate();
   return { promise, resolve: () => promise.release() };
 }
 
-let harness!: Harness;
+let harness!: harnessTypes.Harness;
+
+const rejectsNavigationBeforeTheActiveLeafPart1 = () =>
+  Effect.gen(function* () {
+    const runPromise = Effect.runPromiseWith(yield* Effect.context<never>());
+    const compactionStarted = createDeferred();
+    const compactionReleased = createDeferred();
+
+    harness = yield* Effect.promise(() =>
+      createHarness({
+        extensionFactories: [
+          (msa) => {
+            msa.on("session_before_compact", (event) =>
+              runPromise(
+                Effect.gen(function* () {
+                  compactionStarted.resolve();
+                  yield* Effect.promise(() => compactionReleased.promise);
+                  return {
+                    compaction: {
+                      details: {},
+                      firstKeptEntryId: event.preparation.firstKeptEntryId,
+                      summary: "summary",
+                      tokensBefore: event.preparation.tokensBefore,
+                    },
+                  };
+                }),
+              ),
+            );
+          },
+        ],
+        settings: { compaction: { keepRecentTokens: 1 } },
+      }),
+    );
+    return { compactionReleased, compactionStarted };
+  });
 
 const rejectsNavigationBeforeTheActiveLeaf = Effect.gen(function* () {
-  const runPromise = Effect.runPromiseWith(yield* Effect.context<never>());
-  const compactionStarted = createDeferred();
-  const compactionReleased = createDeferred();
-
-  harness = yield* Effect.promise(() =>
-    createHarness({
-      settings: { compaction: { keepRecentTokens: 1 } },
-      extensionFactories: [
-        (msa) => {
-          msa.on("session_before_compact", (event) =>
-            runPromise(
-              Effect.gen(function* () {
-                compactionStarted.resolve();
-                yield* Effect.promise(() => compactionReleased.promise);
-                return {
-                  compaction: {
-                    summary: "summary",
-                    firstKeptEntryId: event.preparation.firstKeptEntryId,
-                    tokensBefore: event.preparation.tokensBefore,
-                    details: {},
-                  },
-                };
-              }),
-            ),
-          );
-        },
-      ],
-    }),
-  );
+  const { compactionReleased, compactionStarted } =
+    yield* rejectsNavigationBeforeTheActiveLeafPart1();
 
   harness.sessionManager.appendMessage(userMsg("first user"));
   const navigationTargetId = harness.sessionManager.appendMessage(assistantMsg("first assistant"));
@@ -68,8 +81,8 @@ const rejectsNavigationBeforeTheActiveLeaf = Effect.gen(function* () {
   yield* Effect.promise(() => compactionPromise);
 
   expect(harness.sessionManager.getEntries().at(-1)).toMatchObject({
-    type: "compaction",
     parentId: originalLeafId,
+    type: "compaction",
   });
   expect(harness.session.messages.map(getMessageText)).toContain("second assistant");
 });
@@ -117,10 +130,20 @@ const rejectsASecondNavigationWhileThe = Effect.gen(function* () {
   expect(harness.sessionManager.getLeafId()).toBe(firstTargetId);
 });
 
+const rejectsNavigationBeforeTheActiveLeafCan = () =>
+  Effect.runPromise(rejectsNavigationBeforeTheActiveLeaf);
+
+const rejectsASecondNavigationWhileTheFirst = () =>
+  Effect.runPromise(rejectsASecondNavigationWhileThe);
+
 describe("issue #9178: tree navigation during manual compaction", () => {
   afterEach(() => harness?.cleanup());
-  it("rejects navigation before the active leaf can change", () =>
-    Effect.runPromise(rejectsNavigationBeforeTheActiveLeaf));
-  it("rejects a second navigation while the first is waiting", () =>
-    Effect.runPromise(rejectsASecondNavigationWhileThe));
+  it(
+    "rejects navigation before the active leaf can change",
+    rejectsNavigationBeforeTheActiveLeafCan,
+  );
+  it(
+    "rejects a second navigation while the first is waiting",
+    rejectsASecondNavigationWhileTheFirst,
+  );
 });

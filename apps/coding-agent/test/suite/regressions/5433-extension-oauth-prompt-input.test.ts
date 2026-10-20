@@ -1,10 +1,10 @@
-import { setKeybindings, type TUI } from "@msa/tui";
+import { type TUI, setKeybindings } from "@msa/tui";
+import { Effect } from "effect";
+import { beforeAll, beforeEach, describe, expect, test, vi } from "vite-plus/test";
 const APC_SEQUENCE = new RegExp(
   `${String.fromCharCode(27)}_[^${String.fromCharCode(7)}]*${String.fromCharCode(7)}`,
   "gu",
 );
-import { Effect } from "effect";
-import { beforeAll, beforeEach, describe, expect, test, vi } from "vite-plus/test";
 
 import { KeybindingsManager } from "../../../src/core/keybindings.ts";
 import { LoginDialogComponent } from "../../../src/modes/interactive/components/login-dialog.ts";
@@ -114,6 +114,12 @@ const keepsPreviousManualInputStableWhen = Effect.gen(function* () {
   yield* Effect.promise(() => expect(prompt).resolves.toBe("second-secret-demo"));
 });
 
+const keepsPreviousPromptInputStableWhenA = () =>
+  Effect.runPromise(keepsPreviousPromptInputStableWhen);
+
+const keepsPreviousManualInputStableWhenA = () =>
+  Effect.runPromise(keepsPreviousManualInputStableWhen);
+
 describe("LoginDialogComponent OAuth prompts", () => {
   beforeAll(() => {
     initTheme("dark");
@@ -121,14 +127,18 @@ describe("LoginDialogComponent OAuth prompts", () => {
   beforeEach(() => {
     setKeybindings(new KeybindingsManager());
   });
-  test("keeps previous prompt input stable when a later prompt is active", () =>
-    Effect.runPromise(keepsPreviousPromptInputStableWhen));
+  test(
+    "keeps previous prompt input stable when a later prompt is active",
+    keepsPreviousPromptInputStableWhenA,
+  );
   test("preserves auth instructions when showing a prompt", preservesAuthInstructionsWhenShowingA);
   test(
     "preserves neutral information and links when showing a prompt",
     preservesNeutralInformationAndLinksWhen,
   );
   test("preserves setup details when showing a prompt", preservesSetupDetailsWhenShowingA);
-  test("keeps previous manual input stable when a later prompt is active", () =>
-    Effect.runPromise(keepsPreviousManualInputStableWhen));
+  test(
+    "keeps previous manual input stable when a later prompt is active",
+    keepsPreviousManualInputStableWhenA,
+  );
 });

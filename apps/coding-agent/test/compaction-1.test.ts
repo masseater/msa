@@ -5,22 +5,29 @@ import { calculateContextTokens } from "../src/core/compaction/index.ts";
 
 function createMockUsage(input: number, output: number, cacheRead = 0, cacheWrite = 0): Usage {
   return {
-    input,
-    output,
     cacheRead,
     cacheWrite,
+    cost: { cacheRead: 0, cacheWrite: 0, input: 0, output: 0, total: 0 },
+    input,
+    output,
     totalTokens: input + output + cacheRead + cacheWrite,
-    cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0, total: 0 },
   };
 }
 
+const shouldCalculateTotalContextTokensFromUsage = () => {
+  const usage = createMockUsage(1000, 500, 200, 100);
+  expect(calculateContextTokens(usage)).toBe(1800);
+};
+
+const shouldHandleZeroValues = () => {
+  const usage = createMockUsage(0, 0, 0, 0);
+  expect(calculateContextTokens(usage)).toBe(0);
+};
+
 describe("Token calculation", () => {
-  it("should calculate total context tokens from usage", () => {
-    const usage = createMockUsage(1000, 500, 200, 100);
-    expect(calculateContextTokens(usage)).toBe(1800);
-  });
-  it("should handle zero values", () => {
-    const usage = createMockUsage(0, 0, 0, 0);
-    expect(calculateContextTokens(usage)).toBe(0);
-  });
+  it(
+    "should calculate total context tokens from usage",
+    shouldCalculateTotalContextTokensFromUsage,
+  );
+  it("should handle zero values", shouldHandleZeroValues);
 });

@@ -3,123 +3,140 @@ import { tmpdir } from "node:os";
 import type { Api, Model } from "@msa/ai";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vite-plus/test";
 
+const resizeImageMock = vi.hoisted(() =>
+  vi.fn((_bytes: Uint8Array, _mimeType: string, _options?: unknown): Promise<null> =>
+    Promise.resolve(null),
+  ),
+);
+
 vi.mock("../src/utils/image-resize.js", () => ({
-  resizeImage: vi.fn(),
   formatDimensionNote: vi.fn(() => undefined),
+  resizeImage: resizeImageMock,
 }));
 
-import {
-  awaited,
-  runTest,
-  currentTimeMillis,
-  writeBytesFile,
-  joinPath,
-  makeDirectory,
-  removePath,
-} from "@msa/testing";
+import testing from "@msa/testing";
 import { Effect } from "effect";
 
 import { processFileArguments } from "../src/cli/file-processor.ts";
 import type { ExtensionToolContext } from "../src/core/extensions/types.ts";
 import { createReadTool, createReadToolDefinition } from "../src/core/tools/read.ts";
-import { resizeImage } from "../src/utils/image-resize.ts";
+
+const { awaited, currentTimeMillis, joinPath, makeDirectory, removePath, runTest, writeBytesFile } =
+  testing;
 
 const TINY_PNG_BASE64 =
   "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8DwHwAFBQIAX8jx0gAAAABJRU5ErkJggg==";
 
-describe("image resize callers", () => {
-  let testDir: string;
+let testDir: string;
 
-  beforeEach(() =>
-    runTest(
-      Effect.gen(function* () {
-        testDir = joinPath(tmpdir(), `image-resize-callers-${currentTimeMillis()}`);
-        yield* makeDirectory(testDir);
-        vi.mocked(resizeImage).mockReset();
-        vi.mocked(resizeImage).mockResolvedValue(null);
-      }),
-    ),
+const readToolReturnsTextOnlyOutputWhen = () =>
+  runTest(
+    Effect.gen(function* () {
+      const imagePath = joinPath(testDir, "test.png");
+      yield* writeBytesFile(imagePath, Buffer.from(TINY_PNG_BASE64, "base64"));
+
+      const tool = createReadTool(testDir);
+      const result = yield* awaited(tool.execute("test-read-image", { path: imagePath }));
+
+      expect(result.content).toHaveLength(1);
+      expect(result.content[0]?.type).toBe("text");
+      expect((result.content[0] as { type: "text"; text: string }).text).toContain("Image omitted");
+    }),
   );
+
+const fileProcessorOmitsImageAttachmentsWhenAuto = () =>
+  runTest(
+    Effect.gen(function* () {
+      const imagePath = joinPath(testDir, "test.png");
+      yield* writeBytesFile(imagePath, Buffer.from(TINY_PNG_BASE64, "base64"));
+
+      const result = yield* awaited(processFileArguments([imagePath]));
+
+      expect(result.images).toHaveLength(0);
+      expect(result.text).toContain("Image omitted");
+    }),
+  );
+
+const passesTheCurrentModelResizeProfileTo = () =>
+  runTest(
+    Effect.gen(function* () {
+      const imagePath = joinPath(testDir, "test.png");
+      yield* writeBytesFile(imagePath, Buffer.from(TINY_PNG_BASE64, "base64"));
+      const resize = { jpegQuality: 70, maxBytes: 500000, maxHeight: 1000, maxWidth: 1234 };
+      const model: Model<Api> = {
+        api: "test" as const,
+        baseUrl: "https://example.com",
+        contextWindow: 1000,
+        cost: { cacheRead: 0, cacheWrite: 0, input: 0, output: 0 },
+        id: "vision-model",
+        input: ["text", "image"],
+        inputLimits: { images: { resize } },
+        maxTokens: 100,
+        name: "Vision model",
+        provider: "test",
+        reasoning: false,
+      };
+      const ctx = { cwd: testDir, model } as unknown as ExtensionToolContext;
+
+      yield* awaited(
+        createReadToolDefinition(testDir).execute(
+          "test-read-model-profile",
+          { path: imagePath },
+          undefined,
+          undefined,
+          ctx,
+        ),
+      );
+
+      expect(resizeImageMock).toHaveBeenCalledWith(expect.any(Uint8Array), "image/png", resize);
+    }),
+  );
+
+const canDeferResizingFileAttachmentsUntilPrompt = () =>
+  runTest(
+    Effect.gen(function* () {
+      const imagePath = joinPath(testDir, "test.png");
+      yield* writeBytesFile(imagePath, Buffer.from(TINY_PNG_BASE64, "base64"));
+
+      const result = yield* awaited(processFileArguments([imagePath], { autoResizeImages: false }));
+
+      expect(result.images).toHaveLength(1);
+      expect(resizeImageMock).not.toHaveBeenCalled();
+    }),
+  );
+
+const beforeEachHook = () =>
+  runTest(
+    Effect.gen(function* () {
+      testDir = joinPath(tmpdir(), `image-resize-callers-${currentTimeMillis()}`);
+      yield* makeDirectory(testDir);
+      resizeImageMock.mockReset();
+      resizeImageMock.mockResolvedValue(null);
+    }),
+  );
+
+describe("image resize callers", () => {
+  beforeEach(beforeEachHook);
 
   afterEach(() => runTest(removePath(testDir)));
 
-  it("read tool returns text-only output when auto-resize cannot produce a safe image", () =>
-    runTest(
-      Effect.gen(function* () {
-        const imagePath = joinPath(testDir, "test.png");
-        yield* writeBytesFile(imagePath, Buffer.from(TINY_PNG_BASE64, "base64"));
+  it(
+    "read tool returns text-only output when auto-resize cannot produce a safe image",
+    readToolReturnsTextOnlyOutputWhen,
+  );
 
-        const tool = createReadTool(testDir);
-        const result = yield* awaited(tool.execute("test-read-image", { path: imagePath }));
+  it(
+    "file processor omits image attachments when auto-resize cannot produce a safe image",
+    fileProcessorOmitsImageAttachmentsWhenAuto,
+  );
 
-        expect(result.content).toHaveLength(1);
-        expect(result.content[0]?.type).toBe("text");
-        expect((result.content[0] as { type: "text"; text: string }).text).toContain(
-          "Image omitted",
-        );
-      }),
-    ));
+  it(
+    "passes the current model resize profile to the read tool",
+    passesTheCurrentModelResizeProfileTo,
+  );
 
-  it("file processor omits image attachments when auto-resize cannot produce a safe image", () =>
-    runTest(
-      Effect.gen(function* () {
-        const imagePath = joinPath(testDir, "test.png");
-        yield* writeBytesFile(imagePath, Buffer.from(TINY_PNG_BASE64, "base64"));
-
-        const result = yield* awaited(processFileArguments([imagePath]));
-
-        expect(result.images).toHaveLength(0);
-        expect(result.text).toContain("Image omitted");
-      }),
-    ));
-
-  it("passes the current model resize profile to the read tool", () =>
-    runTest(
-      Effect.gen(function* () {
-        const imagePath = joinPath(testDir, "test.png");
-        yield* writeBytesFile(imagePath, Buffer.from(TINY_PNG_BASE64, "base64"));
-        const resize = { maxWidth: 1234, maxHeight: 1000, maxBytes: 500000, jpegQuality: 70 };
-        const model: Model<Api> = {
-          id: "vision-model",
-          name: "Vision model",
-          api: "test" as const,
-          provider: "test",
-          baseUrl: "https://example.com",
-          reasoning: false,
-          input: ["text", "image"],
-          inputLimits: { images: { resize } },
-          cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0 },
-          contextWindow: 1000,
-          maxTokens: 100,
-        };
-        const ctx = { cwd: testDir, model } as unknown as ExtensionToolContext;
-
-        yield* awaited(
-          createReadToolDefinition(testDir).execute(
-            "test-read-model-profile",
-            { path: imagePath },
-            undefined,
-            undefined,
-            ctx,
-          ),
-        );
-
-        expect(resizeImage).toHaveBeenCalledWith(expect.any(Uint8Array), "image/png", resize);
-      }),
-    ));
-
-  it("can defer resizing file attachments until prompt dispatch", () =>
-    runTest(
-      Effect.gen(function* () {
-        const imagePath = joinPath(testDir, "test.png");
-        yield* writeBytesFile(imagePath, Buffer.from(TINY_PNG_BASE64, "base64"));
-
-        const result = yield* awaited(
-          processFileArguments([imagePath], { autoResizeImages: false }),
-        );
-
-        expect(result.images).toHaveLength(1);
-        expect(resizeImage).not.toHaveBeenCalled();
-      }),
-    ));
+  it(
+    "can defer resizing file attachments until prompt dispatch",
+    canDeferResizingFileAttachmentsUntilPrompt,
+  );
 });

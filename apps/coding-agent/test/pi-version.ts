@@ -1,10 +1,10 @@
 import { Function } from "effect";
 
+import type piVersionTypes from "./pi-version.types.ts";
+
 const PI_VERSION_RE = /^v?(\d+)\.(\d+)\.(\d+)(?:-([0-9A-Za-z.-]+))?(?:\+[0-9A-Za-z.-]+)?$/u;
 
-type ParsedPiVersion = readonly [major: number, minor: number, patch: number, prerelease: string];
-
-function requirePiVersion(version: string): ParsedPiVersion {
+function requirePiVersion(version: string): piVersionTypes.ParsedPiVersion {
   const parsed = parsePiVersion(version);
   if (parsed === undefined) {
     throw new Error(`Invalid Pi version: ${version}`);
@@ -12,7 +12,7 @@ function requirePiVersion(version: string): ParsedPiVersion {
   return parsed;
 }
 
-function parsePiVersion(version: string): ParsedPiVersion | undefined {
+function parsePiVersion(version: string): piVersionTypes.ParsedPiVersion | undefined {
   const match = PI_VERSION_RE.exec(version.trim());
   if (match === null) {
     return undefined;
@@ -28,7 +28,10 @@ const CORE_VERSION_INDICES = [0, 1, 2] as const;
 
 const NUMERIC_IDENTIFIER = /^\d+$/u;
 
-function compareCoreVersions(left: ParsedPiVersion, right: ParsedPiVersion): number {
+function compareCoreVersions(
+  left: piVersionTypes.ParsedPiVersion,
+  right: piVersionTypes.ParsedPiVersion,
+): number {
   const index = CORE_VERSION_INDICES.find((position) => left[position] !== right[position]);
   return index === undefined ? 0 : left[index] - right[index];
 }
@@ -67,12 +70,20 @@ function comparePrereleases(left: string, right: string): number {
 }
 
 const comparePiVersions: {
-  (right: ParsedPiVersion): (left: ParsedPiVersion) => number;
-  (left: ParsedPiVersion, right: ParsedPiVersion): number;
-} = Function.dual(2, (left: ParsedPiVersion, right: ParsedPiVersion): number => {
-  const core = compareCoreVersions(left, right);
-  return core === 0 ? comparePrereleases(left[3], right[3]) : core;
-});
+  (right: piVersionTypes.ParsedPiVersion): (left: piVersionTypes.ParsedPiVersion) => number;
+  (left: piVersionTypes.ParsedPiVersion, right: piVersionTypes.ParsedPiVersion): number;
+} = Function.dual(
+  2,
+  (left: piVersionTypes.ParsedPiVersion, right: piVersionTypes.ParsedPiVersion): number => {
+    const core = compareCoreVersions(left, right);
+    return core === 0 ? comparePrereleases(left[3], right[3]) : core;
+  },
+);
 
-export type { ParsedPiVersion };
-export { comparePiVersions, parsePiVersion, requirePiVersion };
+const piVersion = {
+  comparePiVersions,
+  parsePiVersion,
+  requirePiVersion,
+};
+
+export default piVersion;

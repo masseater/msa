@@ -1,8 +1,10 @@
-import { awaited, runTest } from "@msa/testing";
+import testing from "@msa/testing";
 import { Effect } from "effect";
 import { describe, expect, it, vi } from "vite-plus/test";
 
 import { InteractiveMode } from "../src/modes/interactive/interactive-mode.ts";
+
+const { awaited, runTest } = testing;
 
 type SubmitContext = {
   defaultEditor: { onSubmit?: (text: string) => void };
@@ -46,14 +48,14 @@ function createSubmitContext(): SubmitContext {
       addToHistory: vi.fn(),
       setText: vi.fn(),
     },
-    session: {
-      isCompacting: false,
-      isStreaming: false,
-      isBashRunning: false,
-      prompt: vi.fn(() => runTest(Effect.sync(() => {}))),
-    },
     flushPendingBashComponents: vi.fn(),
     pendingUserInputs: [],
+    session: {
+      isBashRunning: false,
+      isCompacting: false,
+      isStreaming: false,
+      prompt: vi.fn(() => runTest(Effect.sync(() => {}))),
+    },
   };
 }
 

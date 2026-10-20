@@ -1,6 +1,6 @@
 import * as NodeServices from "@effect/platform-node/NodeServices";
 import { getModel } from "@msa/ai/compat";
-import { joinPath } from "@msa/testing";
+import testing from "@msa/testing";
 import { Effect, FileSystem, ManagedRuntime } from "effect";
 import { Type } from "typebox";
 import { afterEach, beforeEach, describe, expect, it } from "vite-plus/test";
@@ -9,6 +9,8 @@ import { DefaultResourceLoader } from "../../../src/core/resource-loader.ts";
 import { createAgentSession } from "../../../src/core/sdk.ts";
 import { SessionManager } from "../../../src/core/session-manager.ts";
 import { SettingsManager } from "../../../src/core/settings-manager.ts";
+
+const { joinPath } = testing;
 
 const runtime = ManagedRuntime.make(NodeServices.layer);
 const fs = runtime.runSync(FileSystem.FileSystem.useSync((service) => service));
@@ -23,38 +25,38 @@ function createSession(allowedToolNames?: string[]) {
       const settingsManager = SettingsManager.create(tempDir, agentDir);
       const sessionManager = SessionManager.inMemory(tempDir);
       const resourceLoader = new DefaultResourceLoader({
-        cwd: tempDir,
         agentDir,
-        settingsManager,
+        cwd: tempDir,
         extensionFactories: [
           (msa) => {
             msa.on("session_start", () => {
               msa.registerTool({
-                name: "dynamic_tool",
-                label: "Dynamic Tool",
                 description: "Tool registered from session_start",
-                promptSnippet: "Run dynamic test behavior",
-                parameters: Type.Object({}),
                 execute: () =>
                   Promise.resolve({
-                    content: [{ type: "text", text: "ok" }],
+                    content: [{ text: "ok", type: "text" }],
                     details: {},
                   }),
+                label: "Dynamic Tool",
+                name: "dynamic_tool",
+                parameters: Type.Object({}),
+                promptSnippet: "Run dynamic test behavior",
               });
             });
           },
         ],
+        settingsManager,
       });
       yield* Effect.promise(() => resourceLoader.reload());
 
       const { session } = yield* Effect.promise(() =>
         createAgentSession({
-          cwd: tempDir,
           agentDir,
+          cwd: tempDir,
           model: getModel("anthropic-api", "claude-sonnet-4-5")!,
-          settingsManager,
-          sessionManager,
           resourceLoader,
+          sessionManager,
+          settingsManager,
           ...(allowedToolNames === undefined ? {} : { tools: allowedToolNames }),
         }),
       );
@@ -91,27 +93,36 @@ const disablesAllToolsWhenTheAllowlist = Effect.gen(function* () {
   session.dispose();
 });
 
+const allowsOnlyExplicitlyListedBuiltInAnd = () =>
+  Effect.runPromise(allowsOnlyExplicitlyListedBuiltIn);
+
+const disablesAllToolsWhenTheAllowlistIs = () =>
+  Effect.runPromise(disablesAllToolsWhenTheAllowlist);
+
+const beforeEachHook = () =>
+  runtime.runPromise(
+    Effect.gen(function* () {
+      tempDir = yield* fs.makeTempDirectory({ prefix: `msa-tools-filter-` });
+      agentDir = joinPath(tempDir, "agent");
+      yield* fs.makeDirectory(agentDir, { recursive: true });
+    }),
+  );
+
+const afterEachHook = () =>
+  runtime.runPromise(
+    Effect.gen(function* () {
+      if (tempDir !== "" && (yield* fs.exists(tempDir))) {
+        yield* fs.remove(tempDir, { force: true, recursive: true });
+      }
+    }),
+  );
+
 describe("regression #2835: tool allowlists filter extension tools", () => {
-  beforeEach(() =>
-    runtime.runPromise(
-      Effect.gen(function* () {
-        tempDir = yield* fs.makeTempDirectory({ prefix: `msa-tools-filter-` });
-        agentDir = joinPath(tempDir, "agent");
-        yield* fs.makeDirectory(agentDir, { recursive: true });
-      }),
-    ),
+  beforeEach(beforeEachHook);
+  afterEach(afterEachHook);
+  it(
+    "allows only explicitly listed built-in and extension tools",
+    allowsOnlyExplicitlyListedBuiltInAnd,
   );
-  afterEach(() =>
-    runtime.runPromise(
-      Effect.gen(function* () {
-        if (tempDir !== "" && (yield* fs.exists(tempDir))) {
-          yield* fs.remove(tempDir, { recursive: true, force: true });
-        }
-      }),
-    ),
-  );
-  it("allows only explicitly listed built-in and extension tools", () =>
-    Effect.runPromise(allowsOnlyExplicitlyListedBuiltIn));
-  it("disables all tools when the allowlist is empty", () =>
-    Effect.runPromise(disablesAllToolsWhenTheAllowlist));
+  it("disables all tools when the allowlist is empty", disablesAllToolsWhenTheAllowlistIs);
 });

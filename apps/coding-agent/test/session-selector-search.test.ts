@@ -1,197 +1,229 @@
-import { dateFromMillis } from "@msa/testing";
+import testing from "@msa/testing";
 import { describe, expect, it } from "vite-plus/test";
 
 import type { SessionInfo } from "../src/core/session-manager.ts";
 import { filterAndSortSessions } from "../src/modes/interactive/components/session-selector-search.ts";
 
+const { dateFromMillis } = testing;
+
 function makeSession(
   overrides: Partial<SessionInfo> & { id: string; modified: Date; allMessagesText: string },
 ): SessionInfo {
   return {
-    path: `/tmp/${overrides.id}.jsonl`,
-    id: overrides.id,
     cwd: overrides.cwd ?? "",
+    id: overrides.id,
+    path: `/tmp/${overrides.id}.jsonl`,
     ...(overrides.name === undefined ? {} : { name: overrides.name }),
-    created: overrides.created ?? dateFromMillis(0),
-    modified: overrides.modified,
-    messageCount: overrides.messageCount ?? 1,
-    firstMessage: overrides.firstMessage ?? "(no messages)",
     allMessagesText: overrides.allMessagesText,
+    created: overrides.created ?? dateFromMillis(0),
+    firstMessage: overrides.firstMessage ?? "(no messages)",
+    messageCount: overrides.messageCount ?? 1,
+    modified: overrides.modified,
   };
 }
 
+const sessions2: SessionInfo[] = [
+  makeSession({
+    allMessagesText: "blueberry",
+    id: "named1",
+    modified: dateFromMillis("2026-01-03T00:00:00.000Z"),
+    name: "My Project",
+  }),
+  makeSession({
+    allMessagesText: "blueberry",
+    id: "named2",
+    modified: dateFromMillis("2026-01-02T00:00:00.000Z"),
+    name: "Another Named",
+  }),
+  makeSession({
+    allMessagesText: "blueberry",
+    id: "other1",
+    modified: dateFromMillis("2026-01-04T00:00:00.000Z"),
+  }),
+  makeSession({
+    allMessagesText: "blueberry",
+    id: "other2",
+    modified: dateFromMillis("2026-01-01T00:00:00.000Z"),
+  }),
+];
+
+const filtersByQuotedPhraseWithWhitespaceNormalization = () => {
+  const sessions: SessionInfo[] = [
+    makeSession({
+      allMessagesText: "node\n\n   cve was discussed",
+      id: "a",
+      modified: dateFromMillis("2026-01-01T00:00:00.000Z"),
+    }),
+    makeSession({
+      allMessagesText: "node something else",
+      id: "b",
+      modified: dateFromMillis("2026-01-02T00:00:00.000Z"),
+    }),
+  ];
+
+  const result = filterAndSortSessions(sessions, '"node cve"', "recent");
+  expect(result.map((s) => s.id)).toEqual(["a"]);
+};
+
+const filtersByRegexReAndIsCase = () => {
+  const sessions: SessionInfo[] = [
+    makeSession({
+      allMessagesText: "Brave is great",
+      id: "a",
+      modified: dateFromMillis("2026-01-02T00:00:00.000Z"),
+    }),
+    makeSession({
+      allMessagesText: "bravery is not the same",
+      id: "b",
+      modified: dateFromMillis("2026-01-03T00:00:00.000Z"),
+    }),
+  ];
+
+  const result = filterAndSortSessions(sessions, "re:\\bbrave\\b", "recent");
+  expect(result.map((s) => s.id)).toEqual(["a"]);
+};
+
+const recentSortPreservesInputOrder = () => {
+  const sessions: SessionInfo[] = [
+    makeSession({
+      allMessagesText: "brave",
+      id: "newer",
+      modified: dateFromMillis("2026-01-03T00:00:00.000Z"),
+    }),
+    makeSession({
+      allMessagesText: "brave",
+      id: "older",
+      modified: dateFromMillis("2026-01-01T00:00:00.000Z"),
+    }),
+    makeSession({
+      allMessagesText: "something else",
+      id: "nomatch",
+      modified: dateFromMillis("2026-01-04T00:00:00.000Z"),
+    }),
+  ];
+
+  const result = filterAndSortSessions(sessions, '"brave"', "recent");
+  expect(result.map((s) => s.id)).toEqual(["newer", "older"]);
+};
+
+const relevanceSortOrdersByScoreAndTie = () => {
+  const sessions: SessionInfo[] = [
+    makeSession({
+      allMessagesText: "xxxx brave",
+      id: "late",
+      modified: dateFromMillis("2026-01-03T00:00:00.000Z"),
+    }),
+    makeSession({
+      allMessagesText: "brave xxxx",
+      id: "early",
+      modified: dateFromMillis("2026-01-01T00:00:00.000Z"),
+    }),
+  ];
+
+  const result1 = filterAndSortSessions(sessions, '"brave"', "relevance");
+  expect(result1.map((s) => s.id)).toEqual(["early", "late"]);
+
+  const tieSessions: SessionInfo[] = [
+    makeSession({
+      allMessagesText: "brave",
+      id: "newer",
+      modified: dateFromMillis("2026-01-03T00:00:00.000Z"),
+    }),
+    makeSession({
+      allMessagesText: "brave",
+      id: "older",
+      modified: dateFromMillis("2026-01-01T00:00:00.000Z"),
+    }),
+  ];
+
+  const result2 = filterAndSortSessions(tieSessions, '"brave"', "relevance");
+  expect(result2.map((s) => s.id)).toEqual(["newer", "older"]);
+};
+
+const returnsEmptyListForInvalidRegex = () => {
+  const sessions: SessionInfo[] = [
+    makeSession({
+      allMessagesText: "brave",
+      id: "a",
+      modified: dateFromMillis("2026-01-01T00:00:00.000Z"),
+    }),
+  ];
+
+  const result = filterAndSortSessions(sessions, "re:(", "recent");
+  expect(result).toEqual([]);
+};
+
+const returnsAllSessionsWhenNamefilterIsAll = () => {
+  const result = filterAndSortSessions(sessions2, "", "recent", "all");
+  expect(result.map((session) => session.id)).toEqual(["named1", "named2", "other1", "other2"]);
+};
+
+const returnsOnlyNamedSessionsWhenNamefilterIs = () => {
+  const result = filterAndSortSessions(sessions2, "", "recent", "named");
+  expect(result.map((session) => session.id)).toEqual(["named1", "named2"]);
+};
+
+const appliesNameFilterBeforeSearchQuery = () => {
+  const result = filterAndSortSessions(sessions2, "blueberry", "recent", "named");
+  expect(result.map((session) => session.id)).toEqual(["named1", "named2"]);
+};
+
+const excludesWhitespaceOnlyNamesFromNamedFilter = () => {
+  const sessionsWithWhitespace: SessionInfo[] = [
+    makeSession({
+      allMessagesText: "test",
+      id: "whitespace",
+      modified: dateFromMillis("2026-01-01T00:00:00.000Z"),
+      name: "   ",
+    }),
+    makeSession({
+      allMessagesText: "test",
+      id: "empty",
+      modified: dateFromMillis("2026-01-02T00:00:00.000Z"),
+      name: "",
+    }),
+    makeSession({
+      allMessagesText: "test",
+      id: "named",
+      modified: dateFromMillis("2026-01-03T00:00:00.000Z"),
+      name: "Real Name",
+    }),
+  ];
+
+  const result = filterAndSortSessions(sessionsWithWhitespace, "", "recent", "named");
+  expect(result.map((session) => session.id)).toEqual(["named"]);
+};
+
 describe("session selector search", () => {
-  it("filters by quoted phrase with whitespace normalization", () => {
-    const sessions: SessionInfo[] = [
-      makeSession({
-        id: "a",
-        modified: dateFromMillis("2026-01-01T00:00:00.000Z"),
-        allMessagesText: "node\n\n   cve was discussed",
-      }),
-      makeSession({
-        id: "b",
-        modified: dateFromMillis("2026-01-02T00:00:00.000Z"),
-        allMessagesText: "node something else",
-      }),
-    ];
+  it(
+    "filters by quoted phrase with whitespace normalization",
+    filtersByQuotedPhraseWithWhitespaceNormalization,
+  );
 
-    const result = filterAndSortSessions(sessions, '"node cve"', "recent");
-    expect(result.map((s) => s.id)).toEqual(["a"]);
-  });
+  it("filters by regex (re:) and is case-insensitive", filtersByRegexReAndIsCase);
 
-  it("filters by regex (re:) and is case-insensitive", () => {
-    const sessions: SessionInfo[] = [
-      makeSession({
-        id: "a",
-        modified: dateFromMillis("2026-01-02T00:00:00.000Z"),
-        allMessagesText: "Brave is great",
-      }),
-      makeSession({
-        id: "b",
-        modified: dateFromMillis("2026-01-03T00:00:00.000Z"),
-        allMessagesText: "bravery is not the same",
-      }),
-    ];
+  it("recent sort preserves input order", recentSortPreservesInputOrder);
 
-    const result = filterAndSortSessions(sessions, "re:\\bbrave\\b", "recent");
-    expect(result.map((s) => s.id)).toEqual(["a"]);
-  });
+  it(
+    "relevance sort orders by score and tie-breaks by modified desc",
+    relevanceSortOrdersByScoreAndTie,
+  );
 
-  it("recent sort preserves input order", () => {
-    const sessions: SessionInfo[] = [
-      makeSession({
-        id: "newer",
-        modified: dateFromMillis("2026-01-03T00:00:00.000Z"),
-        allMessagesText: "brave",
-      }),
-      makeSession({
-        id: "older",
-        modified: dateFromMillis("2026-01-01T00:00:00.000Z"),
-        allMessagesText: "brave",
-      }),
-      makeSession({
-        id: "nomatch",
-        modified: dateFromMillis("2026-01-04T00:00:00.000Z"),
-        allMessagesText: "something else",
-      }),
-    ];
-
-    const result = filterAndSortSessions(sessions, '"brave"', "recent");
-    expect(result.map((s) => s.id)).toEqual(["newer", "older"]);
-  });
-
-  it("relevance sort orders by score and tie-breaks by modified desc", () => {
-    const sessions: SessionInfo[] = [
-      makeSession({
-        id: "late",
-        modified: dateFromMillis("2026-01-03T00:00:00.000Z"),
-        allMessagesText: "xxxx brave",
-      }),
-      makeSession({
-        id: "early",
-        modified: dateFromMillis("2026-01-01T00:00:00.000Z"),
-        allMessagesText: "brave xxxx",
-      }),
-    ];
-
-    const result1 = filterAndSortSessions(sessions, '"brave"', "relevance");
-    expect(result1.map((s) => s.id)).toEqual(["early", "late"]);
-
-    const tieSessions: SessionInfo[] = [
-      makeSession({
-        id: "newer",
-        modified: dateFromMillis("2026-01-03T00:00:00.000Z"),
-        allMessagesText: "brave",
-      }),
-      makeSession({
-        id: "older",
-        modified: dateFromMillis("2026-01-01T00:00:00.000Z"),
-        allMessagesText: "brave",
-      }),
-    ];
-
-    const result2 = filterAndSortSessions(tieSessions, '"brave"', "relevance");
-    expect(result2.map((s) => s.id)).toEqual(["newer", "older"]);
-  });
-
-  it("returns empty list for invalid regex", () => {
-    const sessions: SessionInfo[] = [
-      makeSession({
-        id: "a",
-        modified: dateFromMillis("2026-01-01T00:00:00.000Z"),
-        allMessagesText: "brave",
-      }),
-    ];
-
-    const result = filterAndSortSessions(sessions, "re:(", "recent");
-    expect(result).toEqual([]);
-  });
+  it("returns empty list for invalid regex", returnsEmptyListForInvalidRegex);
 
   describe("name filter", () => {
-    const sessions: SessionInfo[] = [
-      makeSession({
-        id: "named1",
-        name: "My Project",
-        modified: dateFromMillis("2026-01-03T00:00:00.000Z"),
-        allMessagesText: "blueberry",
-      }),
-      makeSession({
-        id: "named2",
-        name: "Another Named",
-        modified: dateFromMillis("2026-01-02T00:00:00.000Z"),
-        allMessagesText: "blueberry",
-      }),
-      makeSession({
-        id: "other1",
-        modified: dateFromMillis("2026-01-04T00:00:00.000Z"),
-        allMessagesText: "blueberry",
-      }),
-      makeSession({
-        id: "other2",
-        modified: dateFromMillis("2026-01-01T00:00:00.000Z"),
-        allMessagesText: "blueberry",
-      }),
-    ];
+    it("returns all sessions when nameFilter is 'all'", returnsAllSessionsWhenNamefilterIsAll);
 
-    it("returns all sessions when nameFilter is 'all'", () => {
-      const result = filterAndSortSessions(sessions, "", "recent", "all");
-      expect(result.map((session) => session.id)).toEqual(["named1", "named2", "other1", "other2"]);
-    });
+    it(
+      "returns only named sessions when nameFilter is 'named'",
+      returnsOnlyNamedSessionsWhenNamefilterIs,
+    );
 
-    it("returns only named sessions when nameFilter is 'named'", () => {
-      const result = filterAndSortSessions(sessions, "", "recent", "named");
-      expect(result.map((session) => session.id)).toEqual(["named1", "named2"]);
-    });
+    it("applies name filter before search query", appliesNameFilterBeforeSearchQuery);
 
-    it("applies name filter before search query", () => {
-      const result = filterAndSortSessions(sessions, "blueberry", "recent", "named");
-      expect(result.map((session) => session.id)).toEqual(["named1", "named2"]);
-    });
-
-    it("excludes whitespace-only names from named filter", () => {
-      const sessionsWithWhitespace: SessionInfo[] = [
-        makeSession({
-          id: "whitespace",
-          name: "   ",
-          modified: dateFromMillis("2026-01-01T00:00:00.000Z"),
-          allMessagesText: "test",
-        }),
-        makeSession({
-          id: "empty",
-          name: "",
-          modified: dateFromMillis("2026-01-02T00:00:00.000Z"),
-          allMessagesText: "test",
-        }),
-        makeSession({
-          id: "named",
-          name: "Real Name",
-          modified: dateFromMillis("2026-01-03T00:00:00.000Z"),
-          allMessagesText: "test",
-        }),
-      ];
-
-      const result = filterAndSortSessions(sessionsWithWhitespace, "", "recent", "named");
-      expect(result.map((session) => session.id)).toEqual(["named"]);
-    });
+    it(
+      "excludes whitespace-only names from named filter",
+      excludesWhitespaceOnlyNamesFromNamedFilter,
+    );
   });
 });

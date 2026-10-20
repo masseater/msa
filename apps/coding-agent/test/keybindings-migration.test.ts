@@ -1,11 +1,4 @@
-import {
-  joinPath,
-  makeTempDir,
-  readJsonFile,
-  removeDirs,
-  runTest,
-  writeJsonFile,
-} from "@msa/testing";
+import testing from "@msa/testing";
 import { Effect } from "effect";
 import { afterEach, describe, expect, it } from "vite-plus/test";
 
@@ -13,6 +6,8 @@ import { ENV_AGENT_DIR } from "../src/config.ts";
 import { KeybindingsManager } from "../src/core/keybindings.ts";
 import { withEnv } from "../src/core/process-env.ts";
 import { runMigrations } from "../src/migrations.ts";
+
+const { joinPath, makeTempDir, readJsonFile, removeDirs, runTest, writeJsonFile } = testing;
 
 const tempDirs: string[] = [];
 
@@ -33,51 +28,60 @@ const migrate = (agentDir: string): Effect.Effect<void> =>
 const migratedBindings = (agentDir: string): Effect.Effect<unknown> =>
   readJsonFile(joinPath(agentDir, "keybindings.json"));
 
+const rewritesOldKeyNamesToNamespacedIds = () =>
+  runTest(
+    Effect.gen(function* () {
+      const agentDir = yield* createAgentDir({
+        cursorUp: ["up", "ctrl+p"],
+        expandTools: "ctrl+x",
+      });
+      yield* migrate(agentDir);
+      expect(yield* migratedBindings(agentDir)).toEqual({
+        "app.tools.expand": "ctrl+x",
+        "tui.editor.cursorUp": ["up", "ctrl+p"],
+      });
+    }),
+  );
+
+const keepsTheNamespacedValueWhenOldAnd = () =>
+  runTest(
+    Effect.gen(function* () {
+      const agentDir = yield* createAgentDir({
+        "app.tools.expand": "ctrl+y",
+        expandTools: "ctrl+x",
+      });
+      yield* migrate(agentDir);
+      expect(yield* migratedBindings(agentDir)).toEqual({
+        "app.tools.expand": "ctrl+y",
+      });
+    }),
+  );
+
+const loadsOldKeyNamesInMemoryBefore = () =>
+  runTest(
+    Effect.gen(function* () {
+      const agentDir = yield* createAgentDir({
+        interrupt: "ctrl+x",
+        selectConfirm: "enter",
+      });
+      const keybindings = yield* Effect.sync(() => KeybindingsManager.create(agentDir));
+      expect(keybindings.getUserBindings()).toEqual({
+        "app.interrupt": "ctrl+x",
+        "tui.select.confirm": "enter",
+      });
+      const effective = keybindings.getEffectiveConfig();
+      expect(effective["tui.select.confirm"]).toBe("enter");
+      expect(effective["app.interrupt"]).toBe("ctrl+x");
+    }),
+  );
+
 describe("keybindings migration", () => {
-  it("rewrites old key names to namespaced ids", () =>
-    runTest(
-      Effect.gen(function* () {
-        const agentDir = yield* createAgentDir({
-          cursorUp: ["up", "ctrl+p"],
-          expandTools: "ctrl+x",
-        });
-        yield* migrate(agentDir);
-        expect(yield* migratedBindings(agentDir)).toEqual({
-          "tui.editor.cursorUp": ["up", "ctrl+p"],
-          "app.tools.expand": "ctrl+x",
-        });
-      }),
-    ));
+  it("rewrites old key names to namespaced ids", rewritesOldKeyNamesToNamespacedIds);
 
-  it("keeps the namespaced value when old and new names both exist", () =>
-    runTest(
-      Effect.gen(function* () {
-        const agentDir = yield* createAgentDir({
-          expandTools: "ctrl+x",
-          "app.tools.expand": "ctrl+y",
-        });
-        yield* migrate(agentDir);
-        expect(yield* migratedBindings(agentDir)).toEqual({
-          "app.tools.expand": "ctrl+y",
-        });
-      }),
-    ));
+  it(
+    "keeps the namespaced value when old and new names both exist",
+    keepsTheNamespacedValueWhenOldAnd,
+  );
 
-  it("loads old key names in memory before the file is rewritten", () =>
-    runTest(
-      Effect.gen(function* () {
-        const agentDir = yield* createAgentDir({
-          selectConfirm: "enter",
-          interrupt: "ctrl+x",
-        });
-        const keybindings = yield* Effect.sync(() => KeybindingsManager.create(agentDir));
-        expect(keybindings.getUserBindings()).toEqual({
-          "tui.select.confirm": "enter",
-          "app.interrupt": "ctrl+x",
-        });
-        const effective = keybindings.getEffectiveConfig();
-        expect(effective["tui.select.confirm"]).toBe("enter");
-        expect(effective["app.interrupt"]).toBe("ctrl+x");
-      }),
-    ));
+  it("loads old key names in memory before the file is rewritten", loadsOldKeyNamesInMemoryBefore);
 });

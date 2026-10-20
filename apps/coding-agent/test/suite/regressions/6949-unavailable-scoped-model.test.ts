@@ -3,12 +3,15 @@ import { setKeybindings } from "@msa/tui";
 import { Effect } from "effect";
 import { afterEach, beforeAll, beforeEach, describe, expect, it, vi } from "vite-plus/test";
 
-import { KeybindingsManager } from "../../../src/core/keybindings.ts";
 import { ScopedModelsSelectorComponent } from "../../../src/modes/interactive/components/scoped-models-selector.ts";
 import { InteractiveMode } from "../../../src/modes/interactive/interactive-mode.ts";
-import { initTheme, theme } from "../../../src/modes/interactive/theme/theme.ts";
-import { stripAnsi } from "../../../src/utils/ansi.ts";
-import { createHarness, type Harness } from "../harness.ts";
+import tuiKit from "../../tui-kit.ts";
+import harnessModule from "../harness.ts";
+import type harnessTypes from "../harness.types.ts";
+
+const { KeybindingsManager, initTheme, stripAnsi, theme } = tuiKit;
+
+const { createHarness } = harnessModule;
 
 function createInteractiveContext(options: {
   allModels: Model<Api>[];
@@ -19,10 +22,17 @@ function createInteractiveContext(options: {
   const setScopedModels = vi.fn();
   const getAvailableSnapshot = vi.fn(() => options.allModels);
   const context = {
+    editorSlot: {
+      showSelector: (
+        factory: (done: () => void) => { component: ScopedModelsSelectorComponent },
+      ) => {
+        selector = factory(() => {}).component;
+      },
+    },
     session: {
       modelRuntime: {
-        refresh: vi.fn().mockResolvedValue({ aborted: false, errors: new Map() }),
         getAvailableSnapshot,
+        refresh: vi.fn().mockResolvedValue({ aborted: false, errors: new Map() }),
       },
       scopedModels: options.scopedModels ?? [],
       setScopedModels,
@@ -32,15 +42,8 @@ function createInteractiveContext(options: {
       setEnabledModels: vi.fn(),
     },
     showStatus: vi.fn(),
-    editorSlot: {
-      showSelector: (
-        factory: (done: () => void) => { component: ScopedModelsSelectorComponent },
-      ) => {
-        selector = factory(() => {}).component;
-      },
-    },
-    updateAvailableProviderCount: vi.fn(),
     ui: { requestRender: vi.fn() },
+    updateAvailableProviderCount: vi.fn(),
   };
   return { context, getAvailableSnapshot, getSelector: () => selector, setScopedModels };
 }
@@ -56,7 +59,7 @@ function showModelsSelector(context: object): Promise<void> {
   );
 }
 
-const harnesses: Harness[] = [];
+const harnesses: harnessTypes.Harness[] = [];
 
 const showsAndRemovesAnEnabledModel = Effect.gen(function* () {
   const harness = yield* Effect.promise(() =>
@@ -73,13 +76,13 @@ const showsAndRemovesAnEnabledModel = Effect.gen(function* () {
       enabledModelIds: [unavailableId, availableId],
     },
     {
+      onCancel: () => {},
       onChange: (enabledIds) => {
         changes.push(enabledIds);
       },
       onPersist: (enabledIds) => {
         persisted.push(enabledIds);
       },
-      onCancel: () => {},
     },
   );
 
@@ -172,6 +175,15 @@ const doesNotClearAPartialScope = Effect.gen(function* () {
   );
 });
 
+const showsAndRemovesAnEnabledModelWithout = () => Effect.runPromise(showsAndRemovesAnEnabledModel);
+
+const passesUnmatchedSettingsPatternsToTheSelector = () =>
+  Effect.runPromise(passesUnmatchedSettingsPatternsToThe);
+
+const opensWhenOnlyASessionScopedModel = () => Effect.runPromise(opensWhenOnlyASessionScoped);
+
+const doesNotClearAPartialScopeWhen = () => Effect.runPromise(doesNotClearAPartialScope);
+
 describe("issue #6949 unavailable scoped models", () => {
   beforeAll(() => {
     initTheme("dark");
@@ -182,12 +194,17 @@ describe("issue #6949 unavailable scoped models", () => {
   afterEach(() => {
     while (harnesses.length > 0) harnesses.pop()?.cleanup();
   });
-  it("shows and removes an enabled model without a catalog entry", () =>
-    Effect.runPromise(showsAndRemovesAnEnabledModel));
-  it("passes unmatched settings patterns to the selector with one combined resolution", () =>
-    Effect.runPromise(passesUnmatchedSettingsPatternsToThe));
-  it("opens when only a session-scoped model is unavailable", () =>
-    Effect.runPromise(opensWhenOnlyASessionScoped));
-  it("does not clear a partial scope when an enabled model is unavailable", () =>
-    Effect.runPromise(doesNotClearAPartialScope));
+  it(
+    "shows and removes an enabled model without a catalog entry",
+    showsAndRemovesAnEnabledModelWithout,
+  );
+  it(
+    "passes unmatched settings patterns to the selector with one combined resolution",
+    passesUnmatchedSettingsPatternsToTheSelector,
+  );
+  it("opens when only a session-scoped model is unavailable", opensWhenOnlyASessionScopedModel);
+  it(
+    "does not clear a partial scope when an enabled model is unavailable",
+    doesNotClearAPartialScopeWhen,
+  );
 });

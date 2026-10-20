@@ -5,26 +5,26 @@ import { type CustomEntry, SessionManager } from "../../src/core/session-manager
 const savesCustomEntriesAndIncludesThem = () => {
   const session = SessionManager.inMemory();
 
-  const msgId = session.appendMessage({ role: "user", content: "hello", timestamp: 1 });
+  const msgId = session.appendMessage({ content: "hello", role: "user", timestamp: 1 });
 
   const customId = session.appendCustomEntry("my_data", { foo: "bar" });
 
   const msg2Id = session.appendMessage({
-    role: "assistant",
-    content: [{ type: "text", text: "hi" }],
     api: "anthropic-messages",
-    provider: "anthropic-api",
+    content: [{ text: "hi", type: "text" }],
     model: "test",
-    usage: {
-      input: 1,
-      output: 1,
-      cacheRead: 0,
-      cacheWrite: 0,
-      totalTokens: 2,
-      cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0, total: 0 },
-    },
+    provider: "anthropic-api",
+    role: "assistant",
     stopReason: "stop",
     timestamp: 2,
+    usage: {
+      cacheRead: 0,
+      cacheWrite: 0,
+      cost: { cacheRead: 0, cacheWrite: 0, input: 0, output: 0, total: 0 },
+      input: 1,
+      output: 1,
+      totalTokens: 2,
+    },
   });
 
   const entries = session.getEntries();

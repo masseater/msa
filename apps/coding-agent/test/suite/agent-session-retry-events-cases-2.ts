@@ -4,17 +4,18 @@ import { Effect } from "effect";
 import { Type } from "typebox";
 import { expect } from "vite-plus/test";
 
-import { harnesses, normalizeEventOrder } from "./agent-session-retry-events-cases-1.ts";
-import { createHarness, type Harness } from "./harness.ts";
+import agentSessionRetryEventsCases1 from "./agent-session-retry-events-cases-1.ts";
+import harnessModule from "./harness.ts";
+import type harnessTypes from "./harness.types.ts";
 
-export const waitsForTheFullLoopWhen = Effect.gen(function* () {
+const { createHarness } = harnessModule;
+const { harnesses, normalizeEventOrder } = agentSessionRetryEventsCases1;
+
+const waitsForTheFullLoopWhen = Effect.gen(function* () {
   const runPromise = Effect.runPromiseWith(yield* Effect.context<never>());
   const toolRuns: string[] = [];
   const echoTool: AgentTool = {
-    name: "echo",
-    label: "Echo",
     description: "Echo text back",
-    parameters: Type.Object({ text: Type.String() }),
     execute: (_toolCallId, params) =>
       runPromise(
         Effect.sync(() => {
@@ -23,19 +24,22 @@ export const waitsForTheFullLoopWhen = Effect.gen(function* () {
               ? String(params.text)
               : "";
           toolRuns.push(text);
-          return { content: [{ type: "text", text: `echo:${text}` }], details: { text } };
+          return { content: [{ text: `echo:${text}`, type: "text" }], details: { text } };
         }),
       ),
+    label: "Echo",
+    name: "echo",
+    parameters: Type.Object({ text: Type.String() }),
   };
   const harness = yield* Effect.promise(() =>
     createHarness({
+      settings: { retry: { baseDelayMs: 1, enabled: true, maxRetries: 3 } },
       tools: [echoTool],
-      settings: { retry: { enabled: true, maxRetries: 3, baseDelayMs: 1 } },
     }),
   );
   harnesses.push(harness);
   harness.setResponses([
-    fauxAssistantMessage("", { stopReason: "error", errorMessage: "overloaded_error" }),
+    fauxAssistantMessage("", { errorMessage: "overloaded_error", stopReason: "error" }),
     fauxAssistantMessage([fauxToolCall("echo", { text: "hello" })], {
       stopReason: "toolUse",
     }),
@@ -50,9 +54,9 @@ export const waitsForTheFullLoopWhen = Effect.gen(function* () {
   yield* Effect.promise(() => harness.session.prompt("follow-up"));
   expect(harness.faux.state.callCount).toBe(4);
 });
-export const emitsExtensionEventsBeforePublicEventPart2 = (entry: {
+const emitsExtensionEventsBeforePublicEventPart2 = (entry: {
   order: string[];
-  harness: Harness;
+  harness: harnessTypes.Harness;
 }): Effect.Effect<void, never, never> => {
   const { order, harness } = entry;
   return Effect.gen(function* () {
@@ -79,7 +83,7 @@ export const emitsExtensionEventsBeforePublicEventPart2 = (entry: {
     ]);
   });
 };
-export const emitsExtensionEventsBeforePublicEvent = Effect.gen(function* () {
+const emitsExtensionEventsBeforePublicEvent = Effect.gen(function* () {
   const runPromise = Effect.runPromiseWith(yield* Effect.context<never>());
   const order: string[] = [];
   const harness = yield* Effect.promise(() =>
@@ -105,9 +109,9 @@ export const emitsExtensionEventsBeforePublicEvent = Effect.gen(function* () {
     }),
   );
   harnesses.push(harness);
-  return yield* emitsExtensionEventsBeforePublicEventPart2({ order: order, harness: harness });
+  return yield* emitsExtensionEventsBeforePublicEventPart2({ harness: harness, order: order });
 });
-export const emitsTheExpectedEventOrderFor = Effect.gen(function* () {
+const emitsTheExpectedEventOrderFor = Effect.gen(function* () {
   const harness = yield* Effect.promise(() => createHarness());
   harnesses.push(harness);
   harness.setResponses([fauxAssistantMessage("hello")]);
@@ -129,9 +133,9 @@ export const emitsTheExpectedEventOrderFor = Effect.gen(function* () {
     "agent_settled",
   ]);
 });
-export const emitsTheExpectedEventOrderFor2Part2 = (entry: {
+const emitsTheExpectedEventOrderFor2Part2 = (entry: {
   toolRuns: string[];
-  harness: Harness;
+  harness: harnessTypes.Harness;
 }): Effect.Effect<void, never, never> => {
   const { toolRuns, harness } = entry;
   return Effect.sync(() => {
@@ -161,14 +165,11 @@ export const emitsTheExpectedEventOrderFor2Part2 = (entry: {
     ]);
   });
 };
-export const emitsTheExpectedEventOrderFor2 = Effect.gen(function* () {
+const emitsTheExpectedEventOrderFor2 = Effect.gen(function* () {
   const runPromise = Effect.runPromiseWith(yield* Effect.context<never>());
   const toolRuns: string[] = [];
   const echoTool: AgentTool = {
-    name: "echo",
-    label: "Echo",
     description: "Echo text back",
-    parameters: Type.Object({ text: Type.String() }),
     execute: (_toolCallId, params) =>
       runPromise(
         Effect.sync(() => {
@@ -177,9 +178,12 @@ export const emitsTheExpectedEventOrderFor2 = Effect.gen(function* () {
               ? String(params.text)
               : "";
           toolRuns.push(text);
-          return { content: [{ type: "text", text: `echo:${text}` }], details: { text } };
+          return { content: [{ text: `echo:${text}`, type: "text" }], details: { text } };
         }),
       ),
+    label: "Echo",
+    name: "echo",
+    parameters: Type.Object({ text: Type.String() }),
   };
   const harness = yield* Effect.promise(() => createHarness({ tools: [echoTool] }));
   harnesses.push(harness);
@@ -190,16 +194,16 @@ export const emitsTheExpectedEventOrderFor2 = Effect.gen(function* () {
     fauxAssistantMessage("done"),
   ]);
   yield* Effect.promise(() => harness.session.prompt("hi"));
-  return yield* emitsTheExpectedEventOrderFor2Part2({ toolRuns: toolRuns, harness: harness });
+  return yield* emitsTheExpectedEventOrderFor2Part2({ harness: harness, toolRuns: toolRuns });
 });
-export const emitsStreamingDeltasForTextThinking = Effect.gen(function* () {
+const emitsStreamingDeltasForTextThinking = Effect.gen(function* () {
   const harness = yield* Effect.promise(() => createHarness());
   harnesses.push(harness);
   harness.setResponses([
     fauxAssistantMessage(
       [
         fauxThinking("plan"),
-        { type: "text", text: "answer" },
+        { text: "answer", type: "text" },
         fauxToolCall("echo", { text: "hello" }),
       ],
       {
@@ -217,13 +221,26 @@ export const emitsStreamingDeltasForTextThinking = Effect.gen(function* () {
   expect(updateTypes).toContain("text_delta");
   expect(updateTypes).toContain("toolcall_delta");
 });
-export const emitsAgentEndForErrorResponses = Effect.gen(function* () {
+const emitsAgentEndForErrorResponses = Effect.gen(function* () {
   const harness = yield* Effect.promise(() => createHarness());
   harnesses.push(harness);
-  harness.setResponses([fauxAssistantMessage("", { stopReason: "error", errorMessage: "broken" })]);
+  harness.setResponses([fauxAssistantMessage("", { errorMessage: "broken", stopReason: "error" })]);
 
   yield* Effect.promise(() => harness.session.prompt("hi"));
 
   expect(harness.eventsOfType("agent_end")).toHaveLength(1);
   expect(harness.events[harness.events.length - 1]?.type).toBe("agent_settled");
 });
+
+const agentSessionRetryEventsCases2 = {
+  emitsAgentEndForErrorResponses,
+  emitsExtensionEventsBeforePublicEvent,
+  emitsExtensionEventsBeforePublicEventPart2,
+  emitsStreamingDeltasForTextThinking,
+  emitsTheExpectedEventOrderFor,
+  emitsTheExpectedEventOrderFor2,
+  emitsTheExpectedEventOrderFor2Part2,
+  waitsForTheFullLoopWhen,
+};
+
+export default agentSessionRetryEventsCases2;

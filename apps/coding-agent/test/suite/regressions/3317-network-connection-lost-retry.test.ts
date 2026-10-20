@@ -2,21 +2,24 @@ import { fauxAssistantMessage } from "@msa/ai";
 import { Effect } from "effect";
 import { afterEach, describe, expect, it } from "vite-plus/test";
 
-import { createHarness, getAssistantTexts, type Harness } from "../harness.ts";
+import harnessModule from "../harness.ts";
+import type harnessTypes from "../harness.types.ts";
 
-const harnesses: Harness[] = [];
+const { createHarness, getAssistantTexts } = harnessModule;
+
+const harnesses: harnessTypes.Harness[] = [];
 
 const retriesTransientNetworkConnectionLostFailures = Effect.gen(function* () {
   const harness = yield* Effect.promise(() =>
     createHarness({
-      settings: { retry: { enabled: true, maxRetries: 3, baseDelayMs: 1 } },
+      settings: { retry: { baseDelayMs: 1, enabled: true, maxRetries: 3 } },
     }),
   );
   harnesses.push(harness);
   harness.setResponses([
     fauxAssistantMessage("", {
-      stopReason: "error",
       errorMessage: "Network connection lost.",
+      stopReason: "error",
     }),
     fauxAssistantMessage("recovered after reconnect"),
   ]);
@@ -31,12 +34,19 @@ const retriesTransientNetworkConnectionLostFailures = Effect.gen(function* () {
   expect(getAssistantTexts(harness)).toContain("recovered after reconnect");
 });
 
+const retriesTransientNetworkConnectionLostFailures2 = () =>
+  Effect.runPromise(retriesTransientNetworkConnectionLostFailures);
+
+const afterEachHook = () => {
+  while (harnesses.length > 0) {
+    harnesses.pop()?.cleanup();
+  }
+};
+
 describe("issue #3317 network connection lost retry", () => {
-  afterEach(() => {
-    while (harnesses.length > 0) {
-      harnesses.pop()?.cleanup();
-    }
-  });
-  it('retries transient "Network connection lost." failures', () =>
-    Effect.runPromise(retriesTransientNetworkConnectionLostFailures));
+  afterEach(afterEachHook);
+  it(
+    'retries transient "Network connection lost." failures',
+    retriesTransientNetworkConnectionLostFailures2,
+  );
 });

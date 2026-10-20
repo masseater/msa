@@ -24,9 +24,9 @@ interface FakeChild {
 
 function createChild(): FakeChild {
   return Object.assign(new EventEmitter(), {
+    stderr: new FakeStdout(),
     stdin: null,
     stdout: new FakeStdout(),
-    stderr: new FakeStdout(),
   });
 }
 
@@ -78,6 +78,11 @@ const resolvesAfterTheGraceWhenA = Effect.gen(function* () {
   expect(yield* Effect.promise(() => waiting)).toBe(0);
 });
 
+const capturesOutputEmittedAfterExitWhileA = () =>
+  Effect.runPromise(capturesOutputEmittedAfterExitWhile);
+
+const resolvesAfterTheGraceWhenADescendant = () => Effect.runPromise(resolvesAfterTheGraceWhenA);
+
 describe("issue #5303 bash output truncation past exit", () => {
   beforeEach(() => {
     vi.useFakeTimers();
@@ -85,8 +90,12 @@ describe("issue #5303 bash output truncation past exit", () => {
   afterEach(() => {
     vi.useRealTimers();
   });
-  it("captures output emitted after exit while a descendant holds stdout open", () =>
-    Effect.runPromise(capturesOutputEmittedAfterExitWhile));
-  it("resolves after the grace when a descendant holds stdout open but stays quiet", () =>
-    Effect.runPromise(resolvesAfterTheGraceWhenA));
+  it(
+    "captures output emitted after exit while a descendant holds stdout open",
+    capturesOutputEmittedAfterExitWhileA,
+  );
+  it(
+    "resolves after the grace when a descendant holds stdout open but stays quiet",
+    resolvesAfterTheGraceWhenADescendant,
+  );
 });

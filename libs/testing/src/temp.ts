@@ -2,29 +2,28 @@ import { tmpdir } from "node:os";
 
 import { Effect, FileSystem, Predicate, Schedule } from "effect";
 
-import { joinPath } from "./paths.ts";
-import { provideNode } from "./runtime.ts";
+import paths from "./paths.ts";
+import runtime from "./runtime.ts";
+import type tempTypes from "./temp.types.ts";
+
+const { provideNode } = runtime;
+const { joinPath } = paths;
 
 const withFileSystem = <A, E>(
   use: (service: FileSystem.FileSystem) => Effect.Effect<A, E, never>,
 ): Effect.Effect<A, E> =>
   provideNode(Effect.flatMap(FileSystem.FileSystem, (service) => use(service)));
 
-export const tempRoot = (): string => tmpdir();
+const tempRoot = (): string => tmpdir();
 
-export const tempPath = (name: string): string => joinPath(tmpdir(), name);
+const tempPath = (name: string): string => joinPath(tmpdir(), name);
 
-export interface TempFile {
-  readonly directory: string;
-  readonly path: string;
-}
-
-export const makeTempDir = (prefix: string): Effect.Effect<string> =>
+const makeTempDir = (prefix: string): Effect.Effect<string> =>
   withFileSystem((service) => service.makeTempDirectory({ prefix })).pipe(Effect.orDie);
 
-export const makeTempFile = Effect.fn("makeTempFile")(function* (prefix: string, name: string) {
+const makeTempFile = Effect.fn("makeTempFile")(function* (prefix: string, name: string) {
   const directory = yield* makeTempDir(prefix);
-  return { directory, path: joinPath(directory, name) } satisfies TempFile;
+  return { directory, path: joinPath(directory, name) } satisfies tempTypes.TempFile;
 });
 
 const retriable = (error: { readonly reason?: unknown }): boolean =>
@@ -33,17 +32,28 @@ const retriable = (error: { readonly reason?: unknown }): boolean =>
   Predicate.isTagged(error.reason, "Unknown");
 
 const remove = (directory: string) =>
-  withFileSystem((service) => service.remove(directory, { recursive: true, force: true }));
+  withFileSystem((service) => service.remove(directory, { force: true, recursive: true }));
 
-export const removeDir = (directory: string): Effect.Effect<void> =>
-  Effect.orDie(remove(directory));
+const removeDir = (directory: string): Effect.Effect<void> => Effect.orDie(remove(directory));
 
-export const removeDirRetrying = (directory: string): Effect.Effect<void> =>
+const removeDirRetrying = (directory: string): Effect.Effect<void> =>
   Effect.orDie(
     remove(directory).pipe(
-      Effect.retry({ times: 80, schedule: Schedule.spaced(100), while: retriable }),
+      Effect.retry({ schedule: Schedule.spaced(100), times: 80, while: retriable }),
     ),
   );
 
-export const removeDirs = (directories: Iterable<string>): Effect.Effect<void> =>
+const removeDirs = (directories: Iterable<string>): Effect.Effect<void> =>
   Effect.forEach(directories, removeDir, { discard: true });
+
+const temp = {
+  makeTempDir,
+  makeTempFile,
+  removeDir,
+  removeDirRetrying,
+  removeDirs,
+  tempPath,
+  tempRoot,
+};
+
+export default temp;

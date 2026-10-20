@@ -1,8 +1,10 @@
-import { awaited, runTest } from "@msa/testing";
+import testing from "@msa/testing";
 import { Effect } from "effect";
 import { describe, expect, it, vi } from "vite-plus/test";
 
 import { RpcClient } from "../src/modes/rpc/rpc-client.ts";
+
+const { awaited, runTest } = testing;
 
 type RpcClientPrivate = {
   send: (command: { type: string }) => Promise<unknown>;
@@ -20,10 +22,10 @@ describe("RpcClient clearQueue", () => {
         const send = vi.fn(() =>
           effectRunPromise(
             awaited({
-              type: "response",
               command: "clear_queue",
+              data: { followUp: ["Summarize when finished"], steering: ["Change direction"] },
               success: true,
-              data: { steering: ["Change direction"], followUp: ["Summarize when finished"] },
+              type: "response",
             }),
           ),
         );
@@ -34,8 +36,8 @@ describe("RpcClient clearQueue", () => {
 
         expect(send).toHaveBeenCalledWith({ type: "clear_queue" });
         expect(result).toEqual({
-          steering: ["Change direction"],
           followUp: ["Summarize when finished"],
+          steering: ["Change direction"],
         });
       }),
     ));

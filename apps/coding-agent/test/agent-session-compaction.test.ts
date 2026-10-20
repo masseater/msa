@@ -1,14 +1,6 @@
 import { Agent } from "@msa/agent-core";
 import { getModel, streamSimple } from "@msa/ai/compat";
-import {
-  awaited,
-  currentTimeMillis,
-  joinPath,
-  makeDirectory,
-  removePath,
-  runTest,
-  tempRoot,
-} from "@msa/testing";
+import testing from "@msa/testing";
 import { Effect } from "effect";
 import { afterEach, beforeEach, describe, expect, it } from "vite-plus/test";
 
@@ -16,83 +8,95 @@ import { AuthStorage } from "../src/core/auth-storage.ts";
 import {
   AgentSession,
   type AgentSessionEvent,
-  createCodingTools,
   SessionManager,
   SettingsManager,
+  createCodingTools,
 } from "../src/index.ts";
-import { createModelRegistry, getModelRuntime } from "./model-runtime-test-utils.ts";
-import { API_KEY, createTestResourceLoader } from "./utilities.ts";
+import modelRuntimeTestUtils from "./model-runtime-test-utils.ts";
+import utilities from "./utilities.ts";
+
+const { API_KEY, createTestResourceLoader } = utilities;
+
+const { createModelRegistry, getModelRuntime } = modelRuntimeTestUtils;
+
+const { awaited, currentTimeMillis, joinPath, makeDirectory, removePath, runTest, tempRoot } =
+  testing;
+
+let session: AgentSession;
+
+let tempDir: string;
+
+let sessionManager: SessionManager;
+
+let events: AgentSessionEvent[];
+
+function createSession(inMemory = false) {
+  return runTest(
+    Effect.gen(function* () {
+      const model = getModel("anthropic-api", "claude-sonnet-4-5")!;
+      const agent = new Agent({
+        getApiKey: () => API_KEY,
+        initialState: {
+          model,
+          systemPrompt: "You are a helpful assistant. Be concise.",
+          tools: createCodingTools(process.cwd()),
+        },
+        streamFn: streamSimple,
+      });
+
+      sessionManager = inMemory ? SessionManager.inMemory() : SessionManager.create(tempDir);
+      const settingsManager = SettingsManager.create(tempDir, tempDir);
+
+      settingsManager.applyOverrides({ compaction: { keepRecentTokens: 1 } });
+      const authStorage = AuthStorage.create(joinPath(tempDir, "auth.json"));
+      const modelRegistry = yield* awaited(createModelRegistry(authStorage));
+
+      session = new AgentSession({
+        agent,
+        cwd: tempDir,
+        modelRuntime: getModelRuntime(modelRegistry),
+        resourceLoader: createTestResourceLoader(),
+        sessionManager,
+        settingsManager,
+      });
+
+      session.subscribe((event) => {
+        events.push(event);
+      });
+
+      return yield* awaited(session);
+    }),
+  );
+}
+
+const beforeEachHook = () =>
+  runTest(
+    Effect.gen(function* () {
+      tempDir = joinPath(tempRoot(), `msa-compaction-test-${currentTimeMillis()}`);
+      yield* makeDirectory(tempDir);
+
+      events = [];
+    }),
+  );
+
+const afterEachHook = () =>
+  runTest(
+    Effect.gen(function* () {
+      if (session !== null && session !== undefined) {
+        session.dispose();
+      }
+      if (tempDir.length > 0) {
+        yield* removePath(tempDir);
+      }
+    }),
+  );
 
 describe.skipIf(!(API_KEY !== undefined && API_KEY.length > 0))(
   "AgentSession compaction e2e",
   () => {
-    let session: AgentSession;
-    let tempDir: string;
-    let sessionManager: SessionManager;
-    let events: AgentSessionEvent[];
+    beforeEach(beforeEachHook);
 
-    beforeEach(() =>
-      runTest(
-        Effect.gen(function* () {
-          tempDir = joinPath(tempRoot(), `msa-compaction-test-${currentTimeMillis()}`);
-          yield* makeDirectory(tempDir);
-
-          events = [];
-        }),
-      ),
-    );
-
-    afterEach(() =>
-      runTest(
-        Effect.gen(function* () {
-          if (session !== null && session !== undefined) {
-            session.dispose();
-          }
-          if (tempDir.length > 0) {
-            yield* removePath(tempDir);
-          }
-        }),
-      ),
-    );
-
-    function createSession(inMemory = false) {
-      return runTest(
-        Effect.gen(function* () {
-          const model = getModel("anthropic-api", "claude-sonnet-4-5")!;
-          const agent = new Agent({
-            getApiKey: () => API_KEY,
-            streamFn: streamSimple,
-            initialState: {
-              model,
-              systemPrompt: "You are a helpful assistant. Be concise.",
-              tools: createCodingTools(process.cwd()),
-            },
-          });
-
-          sessionManager = inMemory ? SessionManager.inMemory() : SessionManager.create(tempDir);
-          const settingsManager = SettingsManager.create(tempDir, tempDir);
-
-          settingsManager.applyOverrides({ compaction: { keepRecentTokens: 1 } });
-          const authStorage = AuthStorage.create(joinPath(tempDir, "auth.json"));
-          const modelRegistry = yield* awaited(createModelRegistry(authStorage));
-
-          session = new AgentSession({
-            agent,
-            sessionManager,
-            settingsManager,
-            cwd: tempDir,
-            modelRuntime: getModelRuntime(modelRegistry),
-            resourceLoader: createTestResourceLoader(),
-          });
-
-          session.subscribe((event) => {
-            events.push(event);
-          });
-
-          return yield* awaited(session);
-        }),
-      );
-    }
+    afterEach(afterEachHook);
 
     it(
       "should trigger manual compaction via compact()",
@@ -122,6 +126,15 @@ describe.skipIf(!(API_KEY !== undefined && API_KEY.length > 0))(
         ),
       120000,
     );
+  },
+);
+
+describe.skipIf(!(API_KEY !== undefined && API_KEY.length > 0))(
+  "AgentSession compaction e2e",
+  () => {
+    beforeEach(beforeEachHook);
+
+    afterEach(afterEachHook);
 
     it(
       "should maintain valid session state after compaction",
@@ -149,6 +162,15 @@ describe.skipIf(!(API_KEY !== undefined && API_KEY.length > 0))(
         ),
       180000,
     );
+  },
+);
+
+describe.skipIf(!(API_KEY !== undefined && API_KEY.length > 0))(
+  "AgentSession compaction e2e",
+  () => {
+    beforeEach(beforeEachHook);
+
+    afterEach(afterEachHook);
 
     it(
       "should persist compaction to session file",
@@ -178,66 +200,6 @@ describe.skipIf(!(API_KEY !== undefined && API_KEY.length > 0))(
               expect(typeof compaction.firstKeptEntryId).toBe("string");
               expect(compaction.tokensBefore).toBeGreaterThan(0);
             }
-          }),
-        ),
-      120000,
-    );
-
-    it(
-      "should work with --no-session mode (in-memory only)",
-      () =>
-        runTest(
-          Effect.gen(function* () {
-            yield* awaited(createSession(true));
-
-            yield* awaited(session.prompt("What is 2+2? Reply with just the number."));
-            yield* awaited(session.agent.waitForIdle());
-
-            yield* awaited(session.prompt("What is 3+3? Reply with just the number."));
-            yield* awaited(session.agent.waitForIdle());
-
-            const result = yield* awaited(session.compact());
-
-            expect(result.summary).toBeDefined();
-            expect(result.summary.length).toBeGreaterThan(0);
-
-            const entries = sessionManager.getEntries();
-            const compactionEntries = entries.filter((e) => e.type === "compaction");
-            expect(compactionEntries.length).toBe(1);
-          }),
-        ),
-      120000,
-    );
-
-    it(
-      "should emit compaction events during manual compaction",
-      () =>
-        runTest(
-          Effect.gen(function* () {
-            yield* awaited(createSession());
-
-            yield* awaited(session.prompt("Say hello"));
-            yield* awaited(session.agent.waitForIdle());
-
-            yield* awaited(session.compact());
-
-            const compactionEvents = events.filter(
-              (e) => e.type === "compaction_start" || e.type === "compaction_end",
-            );
-            expect(compactionEvents).toHaveLength(2);
-            expect(compactionEvents[0]).toEqual({
-              type: "compaction_start" as const,
-              reason: "manual",
-            });
-            expect(compactionEvents[1]).toMatchObject({
-              type: "compaction_end" as const,
-              reason: "manual",
-              aborted: false,
-              willRetry: false,
-            });
-
-            const messageEndEvents = events.filter((e) => e.type === "message_end");
-            expect(messageEndEvents.length).toBeGreaterThan(0);
           }),
         ),
       120000,

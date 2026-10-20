@@ -2,9 +2,12 @@ import { Effect } from "effect";
 import { afterEach, describe, expect, it } from "vite-plus/test";
 
 import type { ExtensionAPI } from "../../../src/index.ts";
-import { createHarness, type Harness } from "../harness.ts";
+import harnessModule from "../harness.ts";
+import type harnessTypes from "../harness.types.ts";
 
-const harnesses: Harness[] = [];
+const { createHarness } = harnessModule;
+
+const harnesses: harnessTypes.Harness[] = [];
 
 const filtersNewlinesWhenAgentsessionSetsessionnameIs = Effect.gen(function* () {
   const harness = yield* Effect.promise(() => createHarness());
@@ -39,14 +42,26 @@ const filtersNewlinesWhenAnExtensionCalls = Effect.gen(function* () {
   ]);
 });
 
+const filtersNewlinesWhenAgentsessionSetsessionnameIsCalled = () =>
+  Effect.runPromise(filtersNewlinesWhenAgentsessionSetsessionnameIs);
+
+const filtersNewlinesWhenAnExtensionCallsMsa = () =>
+  Effect.runPromise(filtersNewlinesWhenAnExtensionCalls);
+
+const afterEachHook = () => {
+  while (harnesses.length > 0) {
+    harnesses.pop()?.cleanup();
+  }
+};
+
 describe("regression #5996: session names do not contain newlines", () => {
-  afterEach(() => {
-    while (harnesses.length > 0) {
-      harnesses.pop()?.cleanup();
-    }
-  });
-  it("filters newlines when AgentSession.setSessionName is called", () =>
-    Effect.runPromise(filtersNewlinesWhenAgentsessionSetsessionnameIs));
-  it("filters newlines when an extension calls msa.setSessionName", () =>
-    Effect.runPromise(filtersNewlinesWhenAnExtensionCalls));
+  afterEach(afterEachHook);
+  it(
+    "filters newlines when AgentSession.setSessionName is called",
+    filtersNewlinesWhenAgentsessionSetsessionnameIsCalled,
+  );
+  it(
+    "filters newlines when an extension calls msa.setSessionName",
+    filtersNewlinesWhenAnExtensionCallsMsa,
+  );
 });

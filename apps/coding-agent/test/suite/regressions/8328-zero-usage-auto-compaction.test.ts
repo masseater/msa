@@ -1,44 +1,49 @@
 import type { AssistantMessage } from "@msa/ai";
-import { currentTimeMillis } from "@msa/testing";
+import testing from "@msa/testing";
 import { Effect } from "effect";
 import { afterEach, describe, expect, it, vi } from "vite-plus/test";
 
-import { createHarness, type Harness } from "../harness.ts";
+import harnessModule from "../harness.ts";
+import type harnessTypes from "../harness.types.ts";
+
+const { createHarness } = harnessModule;
+
+const { currentTimeMillis } = testing;
 
 type SessionWithCompactionInternals = {
   checkCompaction: (assistantMessage: AssistantMessage) => Promise<boolean>;
   runAutoCompaction: (reason: "overflow" | "threshold", willRetry: boolean) => Promise<boolean>;
 };
 
-function createZeroUsageAssistant(harness: Harness): AssistantMessage {
+function createZeroUsageAssistant(harness: harnessTypes.Harness): AssistantMessage {
   const model = harness.getModel();
   return {
-    role: "assistant",
-    content: [{ type: "text", text: "response" }],
     api: model.api,
-    provider: model.provider,
+    content: [{ text: "response", type: "text" }],
     model: model.id,
-    usage: {
-      input: 0,
-      output: 0,
-      cacheRead: 0,
-      cacheWrite: 0,
-      totalTokens: 0,
-      cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0, total: 0 },
-    },
+    provider: model.provider,
+    role: "assistant",
     stopReason: "stop",
     timestamp: currentTimeMillis(),
+    usage: {
+      cacheRead: 0,
+      cacheWrite: 0,
+      cost: { cacheRead: 0, cacheWrite: 0, input: 0, output: 0, total: 0 },
+      input: 0,
+      output: 0,
+      totalTokens: 0,
+    },
   };
 }
 
-const harnesses: Harness[] = [];
+const harnesses: harnessTypes.Harness[] = [];
 
-function createCompactionHarness(): Promise<Harness> {
+function createCompactionHarness(): Promise<harnessTypes.Harness> {
   return Effect.runPromise(
     Effect.gen(function* () {
       const harness = yield* Effect.promise(() =>
         createHarness({
-          models: [{ id: "faux-1", contextWindow: 100, maxTokens: 20 }],
+          models: [{ contextWindow: 100, id: "faux-1", maxTokens: 20 }],
           settings: { compaction: { enabled: true, reserveTokens: 10 } },
         }),
       );
@@ -53,8 +58,8 @@ const usesTheMessageEstimateWhenNo = Effect.gen(function* () {
   const assistant = createZeroUsageAssistant(harness);
   harness.session.agent.state.messages = [
     {
+      content: [{ text: "x".repeat(400), type: "text" }],
       role: "user",
-      content: [{ type: "text", text: "x".repeat(400) }],
       timestamp: currentTimeMillis() - 1,
     },
     assistant,
@@ -75,8 +80,8 @@ const doesNotCompactWhenTheZero = Effect.gen(function* () {
   const assistant = createZeroUsageAssistant(harness);
   harness.session.agent.state.messages = [
     {
+      content: [{ text: "short", type: "text" }],
       role: "user",
-      content: [{ type: "text", text: "short" }],
       timestamp: currentTimeMillis() - 1,
     },
     assistant,
@@ -91,15 +96,25 @@ const doesNotCompactWhenTheZero = Effect.gen(function* () {
   expect(runAutoCompactionSpy).not.toHaveBeenCalled();
 });
 
+const usesTheMessageEstimateWhenNoAssistant = () => Effect.runPromise(usesTheMessageEstimateWhenNo);
+
+const doesNotCompactWhenTheZeroUsage = () => Effect.runPromise(doesNotCompactWhenTheZero);
+
+const afterEachHook = () => {
+  vi.restoreAllMocks();
+  while (harnesses.length > 0) {
+    harnesses.pop()?.cleanup();
+  }
+};
+
 describe("issue #8328 zero-usage auto-compaction", () => {
-  afterEach(() => {
-    vi.restoreAllMocks();
-    while (harnesses.length > 0) {
-      harnesses.pop()?.cleanup();
-    }
-  });
-  it("uses the message estimate when no assistant has reported usage", () =>
-    Effect.runPromise(usesTheMessageEstimateWhenNo));
-  it("does not compact when the zero-usage message estimate is below the threshold", () =>
-    Effect.runPromise(doesNotCompactWhenTheZero));
+  afterEach(afterEachHook);
+  it(
+    "uses the message estimate when no assistant has reported usage",
+    usesTheMessageEstimateWhenNoAssistant,
+  );
+  it(
+    "does not compact when the zero-usage message estimate is below the threshold",
+    doesNotCompactWhenTheZeroUsage,
+  );
 });

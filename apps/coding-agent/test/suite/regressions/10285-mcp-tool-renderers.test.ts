@@ -1,20 +1,25 @@
 import * as NodeServices from "@effect/platform-node/NodeServices";
-import { fromJsonText, joinPath } from "@msa/testing";
+import testing from "@msa/testing";
 import { Effect, FileSystem, ManagedRuntime } from "effect";
 import { describe, expect, it } from "vite-plus/test";
 
 import type { ToolRenderContext } from "../../../src/core/extensions/types.ts";
 import { SessionManager } from "../../../src/core/session-manager.ts";
 import { createMcpExtension } from "../../../src/extensions/mcp/index.ts";
-import { initTheme, theme } from "../../../src/modes/interactive/theme/theme.ts";
-import { stripAnsi } from "../../../src/utils/ansi.ts";
-import { createHarness } from "../harness.ts";
-import type { Harness } from "../harness.ts";
+import tuiKit from "../../tui-kit.ts";
+import harnessModule from "../harness.ts";
+import type harnessTypes from "../harness.types.ts";
+
+const { initTheme, stripAnsi, theme } = tuiKit;
+
+const { createHarness } = harnessModule;
+
+const { fromJsonText, joinPath } = testing;
 
 const runtime = ManagedRuntime.make(NodeServices.layer);
 const fs = runtime.runSync(FileSystem.FileSystem.useSync((service) => service));
 
-const mcpExtension = createMcpExtension({ loadConfig: () => ({ servers: [], errors: [] }) });
+const mcpExtension = createMcpExtension({ loadConfig: () => ({ errors: [], servers: [] }) });
 
 const rendersCallsToMcpToolsThat = Effect.gen(function* () {
   initTheme("dark");
@@ -46,40 +51,40 @@ const rendersThemInHtmlExportsToo = Effect.gen(function* () {
   const harness = yield* Effect.promise(() =>
     createHarness({ extensionFactories: [mcpExtension], sessionManager }),
   );
-  return yield* rendersThemInHtmlExportsTooPart2(dir, sessionManager, harness);
+  return yield* rendersThemInHtmlExportsTooStep1(dir, sessionManager, harness);
 });
 
-const rendersThemInHtmlExportsTooPart2 = (
+const rendersThemInHtmlExportsTooStep1 = (
   dir: string,
   sessionManager: SessionManager,
-  harness: Harness,
+  harness: harnessTypes.Harness,
 ) =>
   Effect.gen(function* () {
     try {
-      sessionManager.appendMessage({ role: "user", content: "search", timestamp: 1 });
+      sessionManager.appendMessage({ content: "search", role: "user", timestamp: 1 });
       sessionManager.appendMessage({
-        role: "assistant",
+        api: "anthropic-messages",
         content: [
           {
-            type: "toolCall",
+            arguments: { query: "msa" },
             id: "call-1",
             name: "mcp__my_docs__search",
-            arguments: { query: "msa" },
+            type: "toolCall",
           },
         ],
-        api: "anthropic-messages",
-        provider: "anthropic-api",
         model: "test",
-        usage: {
-          input: 0,
-          output: 0,
-          cacheRead: 0,
-          cacheWrite: 0,
-          totalTokens: 0,
-          cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0, total: 0 },
-        },
+        provider: "anthropic-api",
+        role: "assistant",
         stopReason: "toolUse",
         timestamp: 2,
+        usage: {
+          cacheRead: 0,
+          cacheWrite: 0,
+          cost: { cacheRead: 0, cacheWrite: 0, input: 0, output: 0, total: 0 },
+          input: 0,
+          output: 0,
+          totalTokens: 0,
+        },
       });
 
       const html = yield* fs.readFileString(
@@ -96,12 +101,15 @@ const rendersThemInHtmlExportsTooPart2 = (
       );
     } finally {
       harness.cleanup();
-      yield* fs.remove(dir, { recursive: true, force: true });
+      yield* fs.remove(dir, { force: true, recursive: true });
     }
   });
 
+const rendersCallsToMcpToolsThatAre = () => Effect.runPromise(rendersCallsToMcpToolsThat);
+
+const rendersThemInHtmlExportsToo2 = () => Effect.runPromise(rendersThemInHtmlExportsToo);
+
 describe("MCP tool renderers", () => {
-  it("renders calls to MCP tools that are not registered", () =>
-    Effect.runPromise(rendersCallsToMcpToolsThat));
-  it("renders them in HTML exports too", () => Effect.runPromise(rendersThemInHtmlExportsToo));
+  it("renders calls to MCP tools that are not registered", rendersCallsToMcpToolsThatAre);
+  it("renders them in HTML exports too", rendersThemInHtmlExportsToo2);
 });

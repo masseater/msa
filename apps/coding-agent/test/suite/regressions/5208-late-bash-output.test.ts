@@ -36,7 +36,12 @@ const ignoresOutputCallbacksAfterBashOperations = Effect.gen(function* () {
   expect(getTextOutput(result).trim()).toBe("before");
 });
 
+const ignoresOutputCallbacksAfterBashOperationsResolve = () =>
+  Effect.runPromise(ignoresOutputCallbacksAfterBashOperations);
+
 describe("regression #5208: late bash output callbacks", () => {
-  it("ignores output callbacks after bash operations resolve", () =>
-    Effect.runPromise(ignoresOutputCallbacksAfterBashOperations));
+  it(
+    "ignores output callbacks after bash operations resolve",
+    ignoresOutputCallbacksAfterBashOperationsResolve,
+  );
 });

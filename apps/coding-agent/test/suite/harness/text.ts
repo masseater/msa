@@ -1,11 +1,11 @@
 import type { ToolResultMessage } from "@msa/ai/compat";
 import { Function } from "effect";
 
-import type { Harness } from "./types.ts";
+import type typesModule from "./types.ts";
 
 type MessageTextPart = { type: "text"; text: string };
 
-export function getMessageText(message: unknown): string {
+function getMessageText(message: unknown): string {
   if (
     message === undefined ||
     message === null ||
@@ -28,22 +28,22 @@ export function getMessageText(message: unknown): string {
     .join("\n");
 }
 
-export function getUserTexts(harness: Harness): string[] {
+function getUserTexts(harness: typesModule.Harness): string[] {
   return harness.session.messages
     .filter((message) => message.role === "user")
     .map((message) => getMessageText(message));
 }
 
-export function getAssistantTexts(harness: Harness): string[] {
+function getAssistantTexts(harness: typesModule.Harness): string[] {
   return harness.session.messages
     .filter((message) => message.role === "assistant")
     .map((message) => getMessageText(message));
 }
 
-export const getToolResult: {
-  (harness: Harness, toolName: string): ToolResultMessage;
-  (toolName: string): (harness: Harness) => ToolResultMessage;
-} = Function.dual(2, (harness: Harness, toolName: string): ToolResultMessage => {
+const getToolResult: {
+  (harness: typesModule.Harness, toolName: string): ToolResultMessage;
+  (toolName: string): (harness: typesModule.Harness) => ToolResultMessage;
+} = Function.dual(2, (harness: typesModule.Harness, toolName: string): ToolResultMessage => {
   const result = harness.session.messages.findLast(
     (message): message is ToolResultMessage =>
       message.role === "toolResult" && message.toolName === toolName,
@@ -51,3 +51,12 @@ export const getToolResult: {
   if (result === undefined) throw new Error(`No ${toolName} tool result`);
   return result;
 });
+
+const text = {
+  getAssistantTexts,
+  getMessageText,
+  getToolResult,
+  getUserTexts,
+};
+
+export default text;

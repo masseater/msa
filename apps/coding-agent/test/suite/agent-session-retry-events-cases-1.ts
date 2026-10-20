@@ -1,11 +1,16 @@
 import { fauxAssistantMessage } from "@msa/ai";
-import { gate } from "@msa/testing";
+import testing from "@msa/testing";
 import { Effect } from "effect";
 import { expect } from "vite-plus/test";
 
-import { createHarness, type Harness } from "./harness.ts";
+import harnessModule from "./harness.ts";
+import type harnessTypes from "./harness.types.ts";
 
-export function normalizeEventOrder(events: Harness["events"]): string[] {
+const { createHarness } = harnessModule;
+
+const { gate } = testing;
+
+function normalizeEventOrder(events: harnessTypes.Harness["events"]): string[] {
   const normalized: string[] = [];
   for (const event of events) {
     const label =
@@ -21,11 +26,11 @@ export function normalizeEventOrder(events: Harness["events"]): string[] {
   }
   return normalized;
 }
-export const harnesses: Harness[] = [];
-export const retriesAfterATransientErrorAnd = Effect.gen(function* () {
+const harnesses: harnessTypes.Harness[] = [];
+const retriesAfterATransientErrorAnd = Effect.gen(function* () {
   const harness = yield* Effect.promise(() =>
     createHarness({
-      settings: { retry: { enabled: true, maxRetries: 3, baseDelayMs: 1 } },
+      settings: { retry: { baseDelayMs: 1, enabled: true, maxRetries: 3 } },
     }),
   );
   harnesses.push(harness);
@@ -36,7 +41,7 @@ export const retriesAfterATransientErrorAnd = Effect.gen(function* () {
   });
 
   harness.setResponses([
-    fauxAssistantMessage("", { stopReason: "error", errorMessage: "overloaded_error" }),
+    fauxAssistantMessage("", { errorMessage: "overloaded_error", stopReason: "error" }),
     fauxAssistantMessage("recovered"),
   ]);
 
@@ -47,10 +52,10 @@ export const retriesAfterATransientErrorAnd = Effect.gen(function* () {
   expect(harness.faux.state.callCount).toBe(2);
   expect(harness.session.isRetrying).toBe(false);
 });
-export const retriesMultipleTransientFailuresAndSucceeds = Effect.gen(function* () {
+const retriesMultipleTransientFailuresAndSucceeds = Effect.gen(function* () {
   const harness = yield* Effect.promise(() =>
     createHarness({
-      settings: { retry: { enabled: true, maxRetries: 3, baseDelayMs: 1 } },
+      settings: { retry: { baseDelayMs: 1, enabled: true, maxRetries: 3 } },
     }),
   );
   harnesses.push(harness);
@@ -61,8 +66,8 @@ export const retriesMultipleTransientFailuresAndSucceeds = Effect.gen(function* 
   });
 
   harness.setResponses([
-    fauxAssistantMessage("", { stopReason: "error", errorMessage: "overloaded_error" }),
-    fauxAssistantMessage("", { stopReason: "error", errorMessage: "overloaded_error" }),
+    fauxAssistantMessage("", { errorMessage: "overloaded_error", stopReason: "error" }),
+    fauxAssistantMessage("", { errorMessage: "overloaded_error", stopReason: "error" }),
     fauxAssistantMessage("success"),
   ]);
 
@@ -71,16 +76,16 @@ export const retriesMultipleTransientFailuresAndSucceeds = Effect.gen(function* 
   expect(retryEvents).toEqual(["start:1", "start:2", "end:true"]);
   expect(harness.faux.state.callCount).toBe(3);
 });
-export const finalizesRetryStateWhenAbortIs = Effect.gen(function* () {
+const finalizesRetryStateWhenAbortIs = Effect.gen(function* () {
   const harness = yield* Effect.promise(() =>
     createHarness({
-      settings: { retry: { enabled: true, maxRetries: 3, baseDelayMs: 0 } },
+      settings: { retry: { baseDelayMs: 0, enabled: true, maxRetries: 3 } },
     }),
   );
   harnesses.push(harness);
   harness.setResponses([
-    fauxAssistantMessage("", { stopReason: "error", errorMessage: "overloaded_error" }),
-    fauxAssistantMessage("", { stopReason: "error", errorMessage: "overloaded_error" }),
+    fauxAssistantMessage("", { errorMessage: "overloaded_error", stopReason: "error" }),
+    fauxAssistantMessage("", { errorMessage: "overloaded_error", stopReason: "error" }),
   ]);
 
   let errorCount = 0;
@@ -94,15 +99,15 @@ export const finalizesRetryStateWhenAbortIs = Effect.gen(function* () {
   expect(harness.session.retryAttempt).toBe(0);
   expect(harness.eventsOfType("agent_end").at(-1)?.willRetry).toBe(false);
   expect(harness.eventsOfType("auto_retry_end").at(-1)).toMatchObject({
-    success: false,
     attempt: 1,
     finalError: "Retry cancelled",
+    success: false,
   });
 });
-export const exhaustsMaxRetriesAndEmitsA = Effect.gen(function* () {
+const exhaustsMaxRetriesAndEmitsA = Effect.gen(function* () {
   const harness = yield* Effect.promise(() =>
     createHarness({
-      settings: { retry: { enabled: true, maxRetries: 2, baseDelayMs: 1 } },
+      settings: { retry: { baseDelayMs: 1, enabled: true, maxRetries: 2 } },
     }),
   );
   harnesses.push(harness);
@@ -113,9 +118,9 @@ export const exhaustsMaxRetriesAndEmitsA = Effect.gen(function* () {
   });
 
   harness.setResponses([
-    fauxAssistantMessage("", { stopReason: "error", errorMessage: "overloaded_error" }),
-    fauxAssistantMessage("", { stopReason: "error", errorMessage: "overloaded_error" }),
-    fauxAssistantMessage("", { stopReason: "error", errorMessage: "overloaded_error" }),
+    fauxAssistantMessage("", { errorMessage: "overloaded_error", stopReason: "error" }),
+    fauxAssistantMessage("", { errorMessage: "overloaded_error", stopReason: "error" }),
+    fauxAssistantMessage("", { errorMessage: "overloaded_error", stopReason: "error" }),
   ]);
 
   yield* Effect.promise(() => harness.session.prompt("test"));
@@ -129,11 +134,10 @@ export const exhaustsMaxRetriesAndEmitsA = Effect.gen(function* () {
   expect(harness.faux.state.callCount).toBe(3);
   expect(harness.session.isRetrying).toBe(false);
 });
-export const promptWaitsForRetryCompletionEven = Effect.gen(function* () {
+const promptWaitsForRetryCompletionEven = Effect.gen(function* () {
   const runPromise = Effect.runPromiseWith(yield* Effect.context<never>());
   const harness = yield* Effect.promise(() =>
     createHarness({
-      settings: { retry: { enabled: true, maxRetries: 3, baseDelayMs: 1 } },
       extensionFactories: [
         (msa) => {
           msa.on("message_end", (event) =>
@@ -147,11 +151,12 @@ export const promptWaitsForRetryCompletionEven = Effect.gen(function* () {
           );
         },
       ],
+      settings: { retry: { baseDelayMs: 1, enabled: true, maxRetries: 3 } },
     }),
   );
   harnesses.push(harness);
   harness.setResponses([
-    fauxAssistantMessage("", { stopReason: "error", errorMessage: "overloaded_error" }),
+    fauxAssistantMessage("", { errorMessage: "overloaded_error", stopReason: "error" }),
     fauxAssistantMessage("recovered"),
   ]);
 
@@ -160,13 +165,13 @@ export const promptWaitsForRetryCompletionEven = Effect.gen(function* () {
   expect(harness.faux.state.callCount).toBe(2);
   expect(harness.session.isRetrying).toBe(false);
 });
-export const doesNotRetryWhenRetryIs = Effect.gen(function* () {
+const doesNotRetryWhenRetryIs = Effect.gen(function* () {
   const harness = yield* Effect.promise(() =>
     createHarness({ settings: { retry: { enabled: false } } }),
   );
   harnesses.push(harness);
   harness.setResponses([
-    fauxAssistantMessage("", { stopReason: "error", errorMessage: "overloaded_error" }),
+    fauxAssistantMessage("", { errorMessage: "overloaded_error", stopReason: "error" }),
   ]);
 
   yield* Effect.promise(() => harness.session.prompt("test"));
@@ -174,15 +179,15 @@ export const doesNotRetryWhenRetryIs = Effect.gen(function* () {
   expect(harness.faux.state.callCount).toBe(1);
   expect(harness.eventsOfType("auto_retry_start")).toEqual([]);
 });
-export const doesNotRetryNonRetryableErrors = Effect.gen(function* () {
+const doesNotRetryNonRetryableErrors = Effect.gen(function* () {
   const harness = yield* Effect.promise(() =>
     createHarness({
-      settings: { retry: { enabled: true, maxRetries: 3, baseDelayMs: 1 } },
+      settings: { retry: { baseDelayMs: 1, enabled: true, maxRetries: 3 } },
     }),
   );
   harnesses.push(harness);
   harness.setResponses([
-    fauxAssistantMessage("", { stopReason: "error", errorMessage: "invalid_api_key" }),
+    fauxAssistantMessage("", { errorMessage: "invalid_api_key", stopReason: "error" }),
   ]);
 
   yield* Effect.promise(() => harness.session.prompt("test"));
@@ -190,15 +195,15 @@ export const doesNotRetryNonRetryableErrors = Effect.gen(function* () {
   expect(harness.faux.state.callCount).toBe(1);
   expect(harness.eventsOfType("auto_retry_start")).toEqual([]);
 });
-export const cancelsRetrySleepWhenAbortretryIs = Effect.gen(function* () {
+const cancelsRetrySleepWhenAbortretryIs = Effect.gen(function* () {
   const harness = yield* Effect.promise(() =>
     createHarness({
-      settings: { retry: { enabled: true, maxRetries: 3, baseDelayMs: 100 } },
+      settings: { retry: { baseDelayMs: 100, enabled: true, maxRetries: 3 } },
     }),
   );
   harnesses.push(harness);
   harness.setResponses([
-    fauxAssistantMessage("", { stopReason: "error", errorMessage: "overloaded_error" }),
+    fauxAssistantMessage("", { errorMessage: "overloaded_error", stopReason: "error" }),
   ]);
 
   const sawRetryStart = gate();
@@ -222,3 +227,18 @@ export const cancelsRetrySleepWhenAbortretryIs = Effect.gen(function* () {
   );
   expect(harness.faux.state.callCount).toBe(1);
 });
+
+const agentSessionRetryEventsCases1 = {
+  cancelsRetrySleepWhenAbortretryIs,
+  doesNotRetryNonRetryableErrors,
+  doesNotRetryWhenRetryIs,
+  exhaustsMaxRetriesAndEmitsA,
+  finalizesRetryStateWhenAbortIs,
+  harnesses,
+  normalizeEventOrder,
+  promptWaitsForRetryCompletionEven,
+  retriesAfterATransientErrorAnd,
+  retriesMultipleTransientFailuresAndSucceeds,
+};
+
+export default agentSessionRetryEventsCases1;

@@ -1,0 +1,154 @@
+import testing from "@msa/testing";
+import { type AutocompleteProvider } from "@msa/tui";
+import { Effect } from "effect";
+import { describe, expect, test } from "vite-plus/test";
+
+import type { AuthSelectorProvider } from "../src/modes/interactive/components/oauth-selector.ts";
+import { InteractiveMode } from "../src/modes/interactive/interactive-mode.ts";
+
+const { abortController, awaited, runTest } = testing;
+
+type TestModel = { id: string; provider: string; name: string };
+
+type FakeInteractiveMode = {
+  session: {
+    scopedModels: Array<{ model: TestModel }>;
+    modelRuntime: { getAvailableSnapshot: () => TestModel[] };
+    promptTemplates: [];
+    extensionRunner: { getRegisteredCommands: () => [] };
+    resourceLoader: { getSkills: () => { skills: [] } };
+    getExternalServices: () => [];
+  };
+  settingsManager: { getEnableSkillCommands: () => boolean };
+  skillCommands: Map<string, string>;
+  sessionManager: { getCwd: () => string };
+  fdPath: null;
+};
+
+const matchesModelCommandArgumentsAcrossProviderModel = Effect.gen(function* () {
+  const createBaseAutocompleteProvider = (
+    InteractiveMode as unknown as {
+      prototype: {
+        createBaseAutocompleteProvider(this: FakeInteractiveMode): AutocompleteProvider;
+      };
+    }
+  ).prototype.createBaseAutocompleteProvider;
+  const models = [
+    { id: "openai/gpt-5.2-codex", name: "GPT-5.2 Codex", provider: "openrouter" },
+    { id: "gpt-5.5", name: "GPT-5.5", provider: "openai-codex" },
+  ];
+  const fakeThis: FakeInteractiveMode = {
+    fdPath: null,
+    session: {
+      extensionRunner: { getRegisteredCommands: () => [] },
+      getExternalServices: () => [],
+      modelRuntime: { getAvailableSnapshot: () => models },
+      promptTemplates: [],
+      resourceLoader: { getSkills: () => ({ skills: [] }) },
+      scopedModels: [],
+    },
+    sessionManager: { getCwd: () => "/tmp" },
+    settingsManager: { getEnableSkillCommands: () => false },
+    skillCommands: new Map(),
+  };
+
+  const provider = createBaseAutocompleteProvider.call(fakeThis);
+  const line = "/model codexgpt";
+  const suggestions = yield* awaited(
+    provider.getSuggestions([line], 0, line.length, {
+      signal: abortController().signal,
+    }),
+  );
+
+  expect(suggestions?.items.map((item) => item.value)).toEqual([
+    "openai-codex/gpt-5.5",
+    "openrouter/openai/gpt-5.2-codex",
+  ]);
+});
+
+const matchesLoginCommandArgumentsByProviderIdStep = () => {
+  type LoginCommandMode = {
+    session: {
+      scopedModels: [];
+      modelRuntime: { getAvailableSnapshot: () => [] };
+      promptTemplates: [];
+      extensionRunner: { getRegisteredCommands: () => [] };
+      resourceLoader: { getSkills: () => { skills: [] } };
+      getExternalServices: () => [];
+    };
+    settingsManager: { getEnableSkillCommands: () => boolean };
+    skillCommands: Map<string, string>;
+    sessionManager: { getCwd: () => string };
+    fdPath: null;
+    loginFlow: { getProviderOptions: () => AuthSelectorProvider[] };
+  };
+  const createBaseAutocompleteProvider = (
+    InteractiveMode as unknown as {
+      prototype: {
+        createBaseAutocompleteProvider(this: LoginCommandMode): AutocompleteProvider;
+      };
+    }
+  ).prototype.createBaseAutocompleteProvider;
+  const fakeThis: LoginCommandMode = {
+    fdPath: null,
+    loginFlow: {
+      getProviderOptions: () => [
+        { authType: "oauth", id: "anthropic", name: "Anthropic", subscription: true },
+        { authType: "api_key", id: "anthropic", name: "Anthropic", subscription: true },
+        { authType: "api_key", id: "openai", name: "OpenAI" },
+        { authType: "oauth", id: "openrouter", name: "OpenRouter", subscription: false },
+      ],
+    },
+    session: {
+      extensionRunner: { getRegisteredCommands: () => [] },
+      getExternalServices: () => [],
+      modelRuntime: { getAvailableSnapshot: () => [] },
+      promptTemplates: [],
+      resourceLoader: { getSkills: () => ({ skills: [] }) },
+      scopedModels: [],
+    },
+    sessionManager: { getCwd: () => "/tmp" },
+    settingsManager: { getEnableSkillCommands: () => false },
+    skillCommands: new Map(),
+  };
+  return { createBaseAutocompleteProvider, fakeThis };
+};
+
+const matchesLoginCommandArgumentsByProviderId = Effect.gen(function* () {
+  const { createBaseAutocompleteProvider, fakeThis } =
+    matchesLoginCommandArgumentsByProviderIdStep();
+
+  const provider = createBaseAutocompleteProvider.call(fakeThis);
+  const line = "/login subscription anthrop";
+  const suggestions = yield* awaited(
+    provider.getSuggestions([line], 0, line.length, {
+      signal: abortController().signal,
+    }),
+  );
+
+  expect(suggestions?.items).toEqual([
+    {
+      description: "Anthropic · subscription/API key",
+      label: "anthropic",
+      value: "anthropic",
+    },
+  ]);
+
+  const openRouterLine = "/login openrouter";
+  const openRouterSuggestions = yield* awaited(
+    provider.getSuggestions([openRouterLine], 0, openRouterLine.length, {
+      signal: abortController().signal,
+    }),
+  );
+  expect(openRouterSuggestions?.items).toEqual([
+    { description: "OpenRouter · account", label: "openrouter", value: "openrouter" },
+  ]);
+});
+
+describe("InteractiveMode.createBaseAutocompleteProvider", () => {
+  test("matches model command arguments across provider/model order", () =>
+    runTest(matchesModelCommandArgumentsAcrossProviderModel));
+
+  test("matches login command arguments by provider id and name", () =>
+    runTest(matchesLoginCommandArgumentsByProviderId));
+});

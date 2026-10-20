@@ -3,10 +3,13 @@ import { Effect } from "effect";
 import { expect } from "vite-plus/test";
 
 import type { BuildSystemPromptOptions, ExtensionAPI } from "../../src/index.ts";
-import { harnesses } from "./agent-session-model-extension-cases-1.ts";
-import { createHarness } from "./harness.ts";
+import agentSessionModelExtensionCases1 from "./agent-session-model-extension-cases-1.ts";
+import harnessModule from "./harness.ts";
 
-export const allowsExtensionInputHandlersToTransform = Effect.gen(function* () {
+const { createHarness } = harnessModule;
+const { harnesses } = agentSessionModelExtensionCases1;
+
+const allowsExtensionInputHandlersToTransform = Effect.gen(function* () {
   const runPromise = Effect.runPromiseWith(yield* Effect.context<never>());
   let extensionApi: ExtensionAPI | undefined;
   const transformedHarness = yield* Effect.promise(() =>
@@ -53,7 +56,7 @@ export const allowsExtensionInputHandlersToTransform = Effect.gen(function* () {
   ).toHaveLength(1);
   expect(extensionApi).toBeDefined();
 });
-export const allowsExtensionCommandsToInspectLive = Effect.gen(function* () {
+const allowsExtensionCommandsToInspectLive = Effect.gen(function* () {
   const runPromise = Effect.runPromiseWith(yield* Effect.context<never>());
   const seenOptions: BuildSystemPromptOptions[] = [];
   const harness = yield* Effect.promise(() =>
@@ -86,7 +89,7 @@ export const allowsExtensionCommandsToInspectLive = Effect.gen(function* () {
   expect(seenOptions[0]?.selectedTools).toContain("read");
   expect(seenOptions[1]?.selectedTools).toContain("mutated_tool");
 });
-export const allowsBeforeAgentStartHandlersTo = Effect.gen(function* () {
+const allowsBeforeAgentStartHandlersTo = Effect.gen(function* () {
   const harness = yield* Effect.promise(() =>
     createHarness({
       extensionFactories: [
@@ -94,10 +97,10 @@ export const allowsBeforeAgentStartHandlersTo = Effect.gen(function* () {
           msa.on("before_agent_start", (event) =>
             Promise.resolve({
               message: {
-                customType: "before-start",
                 content: "injected",
-                display: true,
+                customType: "before-start",
                 details: { injected: true },
+                display: true,
               },
               systemPrompt: `${event.systemPrompt}\n\nextra instructions`,
             }),
@@ -132,7 +135,7 @@ export const allowsBeforeAgentStartHandlersTo = Effect.gen(function* () {
     ),
   ).toBe(true);
 });
-export const bindextensionsEmitsSessionStartAndReload = Effect.gen(function* () {
+const bindextensionsEmitsSessionStartAndReload = Effect.gen(function* () {
   const runPromise = Effect.runPromiseWith(yield* Effect.context<never>());
   const lifecycleEvents: string[] = [];
   const harness = yield* Effect.promise(() =>
@@ -164,3 +167,12 @@ export const bindextensionsEmitsSessionStartAndReload = Effect.gen(function* () 
 
   expect(lifecycleEvents).toEqual(["start:startup", "shutdown:reload", "start:reload"]);
 });
+
+const agentSessionModelExtensionCases3 = {
+  allowsBeforeAgentStartHandlersTo,
+  allowsExtensionCommandsToInspectLive,
+  allowsExtensionInputHandlersToTransform,
+  bindextensionsEmitsSessionStartAndReload,
+};
+
+export default agentSessionModelExtensionCases3;

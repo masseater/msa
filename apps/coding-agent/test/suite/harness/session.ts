@@ -1,119 +1,155 @@
 import { Effect } from "effect";
 
-import { AgentSession } from "../../../src/core/agent-session.ts";
 import type { AgentSessionEvent } from "../../../src/core/agent-session.ts";
+import { AgentSession } from "../../../src/core/agent-session.ts";
 import type { ExtensionRunner } from "../../../src/core/extensions/index.ts";
-import { getModelRuntime } from "../../model-runtime-test-utils.ts";
-import { createTestExtensionsResult, createTestResourceLoader } from "../../utilities.ts";
-import { createFauxAgent } from "./agent.ts";
-import {
+import modelRuntimeTestUtils from "../../model-runtime-test-utils.ts";
+import utilities from "../../utilities.ts";
+import agentModule from "./agent.ts";
+import auth from "./auth.ts";
+import runtime from "./runtime.ts";
+import state from "./state.ts";
+import type typesModule from "./types.ts";
+
+const { createTempDir, removeTempDir } = runtime;
+const {
   createAuthStorage,
   createFauxProvider,
   createRegistry,
   modelsPathFor,
   registerFauxModels,
   writeModelsJson,
-} from "./auth.ts";
-import { createTempDir, removeTempDir } from "./runtime.ts";
-import { createSessionManager, createSettingsManager } from "./state.ts";
-import type { Harness, HarnessOptions } from "./types.ts";
+} = auth;
+const { createSessionManager, createSettingsManager } = state;
+const { createFauxAgent } = agentModule;
+const { createTestExtensionsResult, createTestResourceLoader } = utilities;
+const { getModelRuntime } = modelRuntimeTestUtils;
 
-export function createHarness(options: HarnessOptions = {}): Promise<Harness> {
-  return Effect.runPromise(
+type Faux = ReturnType<typeof createFauxProvider>;
+
+const createModelSetup = Effect.fn("createModelSetup")(function* (
+  options: typesModule.HarnessOptions,
+  tempDir: string,
+  fauxProvider: Faux,
+) {
+  const model = fauxProvider.getModel();
+  const withConfiguredAuth = options.withConfiguredAuth ?? true;
+  const authStorage = yield* Effect.promise(() =>
+    createAuthStorage({ provider: model.provider, withConfiguredAuth }),
+  );
+  const { modelsJson } = options;
+  const modelsPath = modelsPathFor({ modelsJson, tempDir });
+  if (modelsPath !== undefined && modelsPath !== "" && modelsJson !== undefined) {
+    yield* Effect.promise(() => writeModelsJson({ modelsJson, modelsPath }));
+  }
+  const modelRegistry = yield* Effect.promise(() => createRegistry({ authStorage, modelsPath }));
+  if (withConfiguredAuth) registerFauxModels({ fauxProvider, model, modelRegistry });
+  return { authStorage, model, modelRegistry, withConfiguredAuth };
+});
+
+const resolveResourceLoader = Effect.fn("resolveResourceLoader")(function* (
+  options: typesModule.HarnessOptions,
+  tempDir: string,
+) {
+  const { extensionFactories, resourceLoader } = options;
+  if (resourceLoader !== undefined) return resourceLoader;
+  if (extensionFactories === undefined) return createTestResourceLoader();
+  const extensionsResult = yield* Effect.promise(() =>
+    createTestExtensionsResult(extensionFactories, tempDir),
+  );
+  return createTestResourceLoader({ extensionsResult });
+});
+
+const toolSelection = (options: typesModule.HarnessOptions) => ({
+  ...(options.tools === undefined
+    ? {}
+    : { baseToolsOverride: Object.fromEntries(options.tools.map((tool) => [tool.name, tool])) }),
+  ...(options.initialActiveToolNames === undefined
+    ? {}
+    : { initialActiveToolNames: options.initialActiveToolNames }),
+  usesDefaultTools: options.initialActiveToolNames === undefined,
+  ...(options.allowedToolNames === undefined ? {} : { allowedToolNames: options.allowedToolNames }),
+  ...(options.excludedToolNames === undefined
+    ? {}
+    : { excludedToolNames: options.excludedToolNames }),
+});
+
+const harnessFor = (input: {
+  authStorage: typesModule.Harness["authStorage"];
+  fauxProvider: Faux;
+  session: AgentSession;
+  sessionManager: typesModule.Harness["sessionManager"];
+  settingsManager: typesModule.Harness["settingsManager"];
+  tempDir: string;
+}): typesModule.Harness => {
+  const { fauxProvider, session, tempDir } = input;
+  const events: AgentSessionEvent[] = [];
+  session.subscribe((event) => {
+    events.push(event);
+  });
+  return {
+    appendResponses: fauxProvider.appendResponses,
+    authStorage: input.authStorage,
+    cleanup() {
+      session.dispose();
+      fauxProvider.unregister();
+      void removeTempDir(tempDir);
+    },
+    events,
+    eventsOfType<T extends AgentSessionEvent["type"]>(type: T) {
+      return events.filter(
+        (event): event is Extract<AgentSessionEvent, { type: T }> => event.type === type,
+      );
+    },
+    faux: fauxProvider,
+    getModel: fauxProvider.getModel,
+    getPendingResponseCount: fauxProvider.getPendingResponseCount,
+    models: fauxProvider.models,
+    session,
+    sessionManager: input.sessionManager,
+    setResponses: fauxProvider.setResponses,
+    settingsManager: input.settingsManager,
+    tempDir,
+  };
+};
+
+const createHarness = (options: typesModule.HarnessOptions = {}): Promise<typesModule.Harness> =>
+  Effect.runPromise(
     Effect.gen(function* () {
       const tempDir = yield* Effect.promise(() => createTempDir());
       const fauxProvider = createFauxProvider(options.models);
-      const model = fauxProvider.getModel();
-      const toolMap =
-        options.tools === undefined
-          ? undefined
-          : Object.fromEntries(options.tools.map((tool) => [tool.name, tool]));
-      const withConfiguredAuth = options.withConfiguredAuth ?? true;
-      const extensionRunnerRef: { current?: ExtensionRunner } = {};
-
-      const sessionManager = createSessionManager(options.sessionManager);
-      const settingsManager = createSettingsManager({ tempDir, settings: options.settings });
-      const authStorage = yield* Effect.promise(() =>
-        createAuthStorage({ provider: model.provider, withConfiguredAuth }),
-      );
-      const modelsPath = modelsPathFor({ tempDir, modelsJson: options.modelsJson });
-      if (modelsPath !== undefined && modelsPath !== "" && options.modelsJson !== undefined) {
-        yield* Effect.promise(() =>
-          writeModelsJson({ modelsPath, modelsJson: options.modelsJson ?? {} }),
-        );
-      }
-      const modelRegistry = yield* Effect.promise(() =>
-        createRegistry({ authStorage, modelsPath }),
-      );
-      if (withConfiguredAuth) registerFauxModels({ modelRegistry, model, fauxProvider });
-
-      const agent = createFauxAgent({
-        model,
+      const { authStorage, model, modelRegistry, withConfiguredAuth } = yield* createModelSetup(
+        options,
+        tempDir,
         fauxProvider,
-        withConfiguredAuth,
-        extensionRunnerRef,
-      });
-      const extensionsResult =
-        options.extensionFactories === undefined
-          ? undefined
-          : yield* Effect.promise(() =>
-              createTestExtensionsResult(options.extensionFactories ?? [], tempDir),
-            );
-      const resourceLoader =
-        options.resourceLoader ??
-        createTestResourceLoader(extensionsResult === undefined ? undefined : { extensionsResult });
-
+      );
+      const extensionRunnerRef: { current?: ExtensionRunner } = {};
+      const sessionManager = createSessionManager(options.sessionManager);
+      const settingsManager = createSettingsManager({ settings: options.settings, tempDir });
       const session = new AgentSession({
-        agent,
+        agent: createFauxAgent({ extensionRunnerRef, fauxProvider, model, withConfiguredAuth }),
+        cwd: tempDir,
+        extensionRunnerRef,
+        modelRuntime: getModelRuntime(modelRegistry),
+        resourceLoader: yield* resolveResourceLoader(options, tempDir),
         sessionManager,
         settingsManager,
-        cwd: tempDir,
-        modelRuntime: getModelRuntime(modelRegistry),
-        resourceLoader,
-        ...(toolMap === undefined ? {} : { baseToolsOverride: toolMap }),
-        ...(options.initialActiveToolNames === undefined
-          ? {}
-          : { initialActiveToolNames: options.initialActiveToolNames }),
-        usesDefaultTools: options.initialActiveToolNames === undefined,
-        ...(options.allowedToolNames === undefined
-          ? {}
-          : { allowedToolNames: options.allowedToolNames }),
-        ...(options.excludedToolNames === undefined
-          ? {}
-          : { excludedToolNames: options.excludedToolNames }),
-        extensionRunnerRef,
         telemetry: options.telemetry,
+        ...toolSelection(options),
       });
-
-      const events: AgentSessionEvent[] = [];
-      session.subscribe((event) => {
-        events.push(event);
-      });
-
-      return {
+      return harnessFor({
+        authStorage,
+        fauxProvider,
         session,
         sessionManager,
         settingsManager,
-        authStorage,
-        faux: fauxProvider,
-        models: fauxProvider.models,
-        getModel: fauxProvider.getModel,
-        setResponses: fauxProvider.setResponses,
-        appendResponses: fauxProvider.appendResponses,
-        getPendingResponseCount: fauxProvider.getPendingResponseCount,
-        events,
-        eventsOfType<T extends AgentSessionEvent["type"]>(type: T) {
-          return events.filter(
-            (event): event is Extract<AgentSessionEvent, { type: T }> => event.type === type,
-          );
-        },
         tempDir,
-        cleanup() {
-          session.dispose();
-          fauxProvider.unregister();
-          void removeTempDir(tempDir);
-        },
-      };
+      });
     }),
   );
-}
+
+const session = {
+  createHarness,
+};
+
+export default session;

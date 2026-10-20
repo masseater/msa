@@ -2,19 +2,18 @@ import { Effect } from "effect";
 import { afterAll, describe, expect, it, vi } from "vite-plus/test";
 
 const state = vi.hoisted(() => {
-  const originalGetBuiltinModule = Object.getOwnPropertyDescriptor(process, "getBuiltinModule");
-  const getBuiltinModule = process.getBuiltinModule.bind(process);
-  Object.defineProperty(process, "getBuiltinModule", {
-    configurable: true,
-    value: (id: string) => (id === "node:sea" ? { isSea: () => true } : getBuiltinModule(id)),
-  });
+  const builtin = Reflect.get(process, "getBuiltinModule") as (id: string) => unknown;
+  const builtinSpy = vi
+    .spyOn(process, "getBuiltinModule")
+    .mockImplementation(((id: string) =>
+      id === "node:sea" ? { isSea: () => true } : builtin.call(process, id)) as never);
   return {
-    originalGetBuiltinModule,
-    jitiModuleLoads: 0,
-    virtualModulesLoads: 0,
+    builtinSpy,
     createJiti: vi.fn((_id: unknown, _options: unknown) => ({
       import: vi.fn(() => Promise.resolve(() => {})),
     })),
+    jitiModuleLoads: 0,
+    virtualModulesLoads: 0,
   };
 });
 
@@ -27,8 +26,8 @@ vi.mock("../../../src/core/extensions/virtual-modules.ts", () => {
   state.virtualModulesLoads++;
   return {
     VIRTUAL_MODULES: {
-      typebox: {},
       "@msa/coding-agent": {},
+      typebox: {},
     },
   };
 });
@@ -42,9 +41,7 @@ interface JitiOptionsProbe {
 }
 
 afterAll(() => {
-  if (state.originalGetBuiltinModule !== undefined) {
-    Object.defineProperty(process, "getBuiltinModule", state.originalGetBuiltinModule);
-  }
+  state.builtinSpy.mockRestore();
 });
 
 const loadsJitiAndBundledVirtualModules = Effect.gen(function* () {
@@ -69,7 +66,12 @@ const loadsJitiAndBundledVirtualModules = Effect.gen(function* () {
   expect(options.virtualModules?.["@msa/coding-agent"]).toBeDefined();
 });
 
+const loadsJitiAndBundledVirtualModulesOnly = () =>
+  Effect.runPromise(loadsJitiAndBundledVirtualModules);
+
 describe("Node SEA extension loading", () => {
-  it("loads jiti and bundled virtual modules only when importing an extension", () =>
-    Effect.runPromise(loadsJitiAndBundledVirtualModules));
+  it(
+    "loads jiti and bundled virtual modules only when importing an extension",
+    loadsJitiAndBundledVirtualModulesOnly,
+  );
 });

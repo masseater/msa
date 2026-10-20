@@ -7,69 +7,90 @@ import {
   loadExtensionFromFactory,
 } from "../../../src/core/extensions/loader.ts";
 import type { ExtensionAPI, ExtensionFactory, ResourceLoader } from "../../../src/index.ts";
-import { createHarness, type Harness } from "../harness.ts";
+import harnessModule from "../harness.ts";
+import type harnessTypes from "../harness.types.ts";
 
-const harnesses: Harness[] = [];
+const { createHarness } = harnessModule;
 
-const removesExtensionOwnedEventBusListeners = Effect.gen(function* () {
-  const runPromise = Effect.runPromiseWith(yield* Effect.context<never>());
-  const eventBus = createEventBus();
-  let extensionCalls = 0;
-  let hostCalls = 0;
-  let firstApi: ExtensionAPI | undefined;
-  const factory: ExtensionFactory = (msa) => {
-    firstApi ??= msa;
-    msa.events.on("reload:test", () => extensionCalls++);
-  };
-  eventBus.on("reload:test", () => hostCalls++);
+const harnesses: harnessTypes.Harness[] = [];
 
-  const loadExtensions = () =>
-    runPromise(
-      Effect.gen(function* () {
-        const runtime = createExtensionRuntime();
-        const extension = yield* Effect.promise(() =>
-          loadExtensionFromFactory(factory, process.cwd(), eventBus, runtime),
-        );
-        return { extensions: [extension], errors: [], runtime };
-      }),
-    );
-  let extensionsResult = yield* Effect.promise(() => loadExtensions());
-  const resourceLoader: ResourceLoader = {
-    getExtensions: () => extensionsResult,
-    getSkills: () => ({ skills: [], diagnostics: [] }),
-    getPrompts: () => ({ prompts: [], diagnostics: [] }),
-    getThemes: () => ({ themes: [], diagnostics: [] }),
+type ExtensionsResult = ReturnType<ResourceLoader["getExtensions"]>;
+
+const reloadingResourceLoader = (
+  initial: ExtensionsResult,
+  load: () => Promise<ExtensionsResult>,
+): ResourceLoader => {
+  let current = initial;
+  return {
+    extendResources: () => {},
     getAgentsFiles: () => ({ agentsFiles: [] }),
-    getSystemPrompt: () => undefined,
-    getSystemPromptSource: () => undefined,
     getAppendSystemPrompt: () => [],
     getAppendSystemPromptSources: () => [],
-    extendResources: () => {},
+    getExtensions: () => current,
+    getPrompts: () => ({ diagnostics: [], prompts: [] }),
+    getSkills: () => ({ diagnostics: [], skills: [] }),
+    getSystemPrompt: () => undefined,
+    getSystemPromptSource: () => undefined,
+    getThemes: () => ({ diagnostics: [], themes: [] }),
     reload: () =>
-      runPromise(
+      Effect.runPromise(
         Effect.gen(function* () {
-          extensionsResult = yield* Effect.promise(() => loadExtensions());
+          current = yield* Effect.promise(load);
         }),
       ),
   };
-  const harness = yield* Effect.promise(() => createHarness({ resourceLoader }));
-  harnesses.push(harness);
-  yield* Effect.promise(() => harness.session.bindExtensions({ shutdownHandler: () => {} }));
+};
 
-  const emit = () =>
-    runPromise(
-      Effect.gen(function* () {
-        const extensionBefore = extensionCalls;
-        const hostBefore = hostCalls;
-        eventBus.emit("reload:test", undefined);
-        yield* Effect.sleep("0 millis");
-        return { extension: extensionCalls - extensionBefore, host: hostCalls - hostBefore };
-      }),
+const removesExtensionOwnedEventBusListenersStep1 = () =>
+  Effect.gen(function* () {
+    const runPromise = Effect.runPromiseWith(yield* Effect.context<never>());
+    const eventBus = createEventBus();
+    let extensionCalls = 0;
+    let hostCalls = 0;
+    let firstApi: ExtensionAPI | undefined;
+    const factory: ExtensionFactory = (msa) => {
+      firstApi ??= msa;
+      msa.events.on("reload:test", () => extensionCalls++);
+    };
+    eventBus.on("reload:test", () => hostCalls++);
+
+    const loadExtensions = () =>
+      runPromise(
+        Effect.gen(function* () {
+          const runtime = createExtensionRuntime();
+          const extension = yield* Effect.promise(() =>
+            loadExtensionFromFactory(factory, process.cwd(), eventBus, runtime),
+          );
+          return { errors: [], extensions: [extension], runtime };
+        }),
+      );
+    const resourceLoader = reloadingResourceLoader(
+      yield* Effect.promise(() => loadExtensions()),
+      loadExtensions,
     );
+    const harness = yield* Effect.promise(() => createHarness({ resourceLoader }));
+    harnesses.push(harness);
+    yield* Effect.promise(() => harness.session.bindExtensions({ shutdownHandler: () => {} }));
 
-  expect(yield* Effect.promise(() => emit())).toEqual({ extension: 1, host: 1 });
-  yield* Effect.promise(() => harness.session.reload());
-  expect(() => firstApi?.getCommands()).toThrow("stale after session replacement or reload");
+    const emit = () =>
+      runPromise(
+        Effect.gen(function* () {
+          const extensionBefore = extensionCalls;
+          const hostBefore = hostCalls;
+          eventBus.emit("reload:test", undefined);
+          yield* Effect.sleep("0 millis");
+          return { extension: extensionCalls - extensionBefore, host: hostCalls - hostBefore };
+        }),
+      );
+
+    expect(yield* Effect.promise(() => emit())).toEqual({ extension: 1, host: 1 });
+    yield* Effect.promise(() => harness.session.reload());
+    expect(() => firstApi?.getCommands()).toThrow("stale after session replacement or reload");
+    return { emit, harness };
+  });
+
+const removesExtensionOwnedEventBusListeners = Effect.gen(function* () {
+  const { emit, harness } = yield* removesExtensionOwnedEventBusListenersStep1();
   expect(yield* Effect.promise(() => emit())).toEqual({ extension: 1, host: 1 });
   yield* Effect.promise(() => harness.session.reload());
   expect(yield* Effect.promise(() => emit())).toEqual({ extension: 1, host: 1 });
@@ -78,12 +99,19 @@ const removesExtensionOwnedEventBusListeners = Effect.gen(function* () {
   expect(yield* Effect.promise(() => emit())).toEqual({ extension: 0, host: 1 });
 });
 
+const removesExtensionOwnedEventBusListenersOn = () =>
+  Effect.runPromise(removesExtensionOwnedEventBusListeners);
+
+const afterEachHook = () => {
+  while (harnesses.length > 0) {
+    harnesses.pop()?.cleanup();
+  }
+};
+
 describe("issue #7193 extension event-bus lifecycle", () => {
-  afterEach(() => {
-    while (harnesses.length > 0) {
-      harnesses.pop()?.cleanup();
-    }
-  });
-  it("removes extension-owned event-bus listeners on reload and dispose", () =>
-    Effect.runPromise(removesExtensionOwnedEventBusListeners));
+  afterEach(afterEachHook);
+  it(
+    "removes extension-owned event-bus listeners on reload and dispose",
+    removesExtensionOwnedEventBusListenersOn,
+  );
 });

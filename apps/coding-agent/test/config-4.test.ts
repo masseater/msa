@@ -1,16 +1,11 @@
-import {
-  joinPath,
-  makeDirectory,
-  makeTempDir,
-  removePath,
-  runTest,
-  writeJsonFile,
-} from "@msa/testing";
+import testing from "@msa/testing";
 import { Effect } from "effect";
 import { afterEach, describe, expect, test, vi } from "vite-plus/test";
 
 import { detectInstallChange } from "../src/config.ts";
 import { readEnv } from "../src/core/process-env.ts";
+
+const { joinPath, makeDirectory, makeTempDir, removePath, runTest, writeJsonFile } = testing;
 
 const execPathDescriptor = Object.getOwnPropertyDescriptor(process, "execPath");
 const originalPath = readEnv("PATH");
@@ -39,18 +34,23 @@ afterEach(() =>
   ),
 );
 
+const reportsARemovedInstallInsteadOfReading = () =>
+  runTest(
+    Effect.gen(function* () {
+      tempDir = yield* makeTempDir("msa-install-change-");
+      const installDir = joinPath(tempDir, "global", "hash");
+      yield* makeDirectory(installDir);
+      yield* writeJsonFile(joinPath(tempDir, "package.json"), { version: "0.0.1" });
+      yield* removePath(installDir);
+      expect(detectInstallChange(joinPath(installDir, "package.json"))).toEqual({
+        kind: "removed",
+      });
+    }),
+  );
+
 describe("detectInstallChange", () => {
-  test("reports a removed install instead of reading a package.json further up", () =>
-    runTest(
-      Effect.gen(function* () {
-        tempDir = yield* makeTempDir("msa-install-change-");
-        const installDir = joinPath(tempDir, "global", "hash");
-        yield* makeDirectory(installDir);
-        yield* writeJsonFile(joinPath(tempDir, "package.json"), { version: "0.0.1" });
-        yield* removePath(installDir);
-        expect(detectInstallChange(joinPath(installDir, "package.json"))).toEqual({
-          kind: "removed",
-        });
-      }),
-    ));
+  test(
+    "reports a removed install instead of reading a package.json further up",
+    reportsARemovedInstallInsteadOfReading,
+  );
 });

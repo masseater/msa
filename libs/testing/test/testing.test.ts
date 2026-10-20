@@ -1,7 +1,9 @@
 import { Data, Effect, Schema } from "effect";
 import { afterEach, describe, expect, it } from "vite-plus/test";
 
-import {
+import testing from "../src/index.ts";
+
+const {
   appendTextFile,
   changeMode,
   copyFile,
@@ -23,7 +25,7 @@ import {
   toJsonText,
   writeJsonFile,
   writeTextFile,
-} from "../src/index.ts";
+} = testing;
 
 class TestFailure extends Data.TaggedError("TestFailure")<{ readonly message: string }> {}
 

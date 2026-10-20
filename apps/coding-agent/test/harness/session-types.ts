@@ -5,32 +5,36 @@ import type { AgentSession, AgentSessionEvent } from "../../src/core/agent-sessi
 import type { SessionManager } from "../../src/core/session-manager.ts";
 import type { Settings, SettingsManager } from "../../src/core/settings-manager.ts";
 import type { InlineExtension, ResourceLoader } from "../../src/index.ts";
-import type { CreateTestExtensionsResultInput } from "../utilities.ts";
-import type { FauxResponseInput } from "./faux-model.ts";
-import type { FauxStreamFnState } from "./faux-stream.ts";
+import type utilitiesTypes from "../utilities.types.ts";
+import type fauxModelTypes from "./faux-model.types.ts";
+import type fauxStreamTypes from "./faux-stream.types.ts";
 
-export interface HarnessOptions {
-  responses?: FauxResponseInput[];
-  model?: Model<any>;
-  contextWindow?: number;
-  settings?: Partial<Settings>;
-  systemPrompt?: string;
-  tools?: AgentTool[];
-  baseToolsOverride?: Record<string, AgentTool>;
-  resourceLoader?: ResourceLoader;
-  extensionFactories?: Array<InlineExtension | CreateTestExtensionsResultInput>;
+declare namespace sessionTypesModule {
+  interface HarnessOptions {
+    responses?: fauxModelTypes.FauxResponseInput[];
+    model?: Model<any>;
+    contextWindow?: number;
+    settings?: Partial<Settings>;
+    systemPrompt?: string;
+    tools?: AgentTool[];
+    baseToolsOverride?: Record<string, AgentTool>;
+    resourceLoader?: ResourceLoader;
+    extensionFactories?: Array<InlineExtension | utilitiesTypes.CreateTestExtensionsResultInput>;
+  }
+
+  interface Harness {
+    session: AgentSession;
+    agent: Agent;
+    sessionManager: SessionManager;
+    settingsManager: SettingsManager;
+    faux: fauxStreamTypes.FauxStreamFnState;
+    events: AgentSessionEvent[];
+    eventsOfType<T extends AgentSessionEvent["type"]>(
+      type: T,
+    ): Extract<AgentSessionEvent, { type: T }>[];
+    tempDir: string;
+    cleanup: () => void;
+  }
 }
 
-export interface Harness {
-  session: AgentSession;
-  agent: Agent;
-  sessionManager: SessionManager;
-  settingsManager: SettingsManager;
-  faux: FauxStreamFnState;
-  events: AgentSessionEvent[];
-  eventsOfType<T extends AgentSessionEvent["type"]>(
-    type: T,
-  ): Extract<AgentSessionEvent, { type: T }>[];
-  tempDir: string;
-  cleanup: () => void;
-}
+export type { sessionTypesModule as default };

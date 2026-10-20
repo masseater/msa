@@ -1,13 +1,23 @@
 import type { AgentTool } from "@msa/agent-core";
-import { fauxAssistantMessage, fauxToolCall, type JsonObject, type Usage } from "@msa/ai";
+import {
+  type FauxResponseStep,
+  type JsonObject,
+  type Usage,
+  fauxAssistantMessage,
+  fauxToolCall,
+} from "@msa/ai";
 import { Effect } from "effect";
 import { Type } from "typebox";
 import { expect } from "vite-plus/test";
 
-import { harnesses } from "./agent-session-model-extension-cases-1.ts";
-import { createHarness, getAssistantTexts, type Harness } from "./harness.ts";
+import agentSessionModelExtensionCases1 from "./agent-session-model-extension-cases-1.ts";
+import harnessModule from "./harness.ts";
+import type harnessTypes from "./harness.types.ts";
 
-export const allowsExtensionToolCallHandlersToPart2 = (harness: Harness) =>
+const { createHarness, getAssistantTexts } = harnessModule;
+const { harnesses } = agentSessionModelExtensionCases1;
+
+const allowsExtensionToolCallHandlersToPart2 = (harness: harnessTypes.Harness) =>
   Effect.gen(function* () {
     harness.setResponses([
       fauxAssistantMessage([fauxToolCall("echo", { text: "hello" })], {
@@ -31,106 +41,99 @@ export const allowsExtensionToolCallHandlersToPart2 = (harness: Harness) =>
       harness.session.messages.find((message) => message.role === "toolResult" && message.isError),
     ).toBeDefined();
   });
-export const allowsExtensionToolCallHandlersTo = Effect.gen(function* () {
+const allowsExtensionToolCallHandlersTo = Effect.gen(function* () {
   const runPromise = Effect.runPromiseWith(yield* Effect.context<never>());
   const echoTool: AgentTool = {
-    name: "echo",
-    label: "Echo",
     description: "Echo text back",
-    parameters: Type.Object({ text: Type.String() }),
     execute: () =>
       runPromise(
         Effect.sync(() => {
           throw new Error("tool should have been blocked");
         }),
       ),
+    label: "Echo",
+    name: "echo",
+    parameters: Type.Object({ text: Type.String() }),
   };
   const harness = yield* Effect.promise(() =>
     createHarness({
-      tools: [echoTool],
       extensionFactories: [
         (msa) => {
           msa.on("tool_call", () => Promise.resolve({ block: true, reason: "Blocked by test" }));
         },
       ],
+      tools: [echoTool],
     }),
   );
   harnesses.push(harness);
   return yield* allowsExtensionToolCallHandlersToPart2(harness);
 });
-export const allowsExtensionToolResultHandlersTo = Effect.gen(function* () {
-  const runPromise = Effect.runPromiseWith(yield* Effect.context<never>());
-  const toolUsage: Usage = {
-    input: 1,
-    output: 2,
-    cacheRead: 3,
-    cacheWrite: 4,
-    totalTokens: 10,
-    cost: { input: 0.1, output: 0.2, cacheRead: 0.3, cacheWrite: 0.4, total: 1 },
-  };
-  const patchedToolUsage: Usage = {
-    input: 5,
-    output: 6,
-    cacheRead: 7,
-    cacheWrite: 8,
-    totalTokens: 26,
-    cost: { input: 0.5, output: 0.6, cacheRead: 0.7, cacheWrite: 0.8, total: 2.6 },
-  };
+const toolUsage: Usage = {
+  cacheRead: 3,
+  cacheWrite: 4,
+  cost: { cacheRead: 0.3, cacheWrite: 0.4, input: 0.1, output: 0.2, total: 1 },
+  input: 1,
+  output: 2,
+  totalTokens: 10,
+};
+const patchedToolUsage: Usage = {
+  cacheRead: 7,
+  cacheWrite: 8,
+  cost: { cacheRead: 0.7, cacheWrite: 0.8, input: 0.5, output: 0.6, total: 2.6 },
+  input: 5,
+  output: 6,
+  totalTokens: 26,
+};
+const echoToolWithUsage: AgentTool = {
+  description: "Echo text back",
+  execute: (_toolCallId, params) => {
+    const text =
+      typeof params === "object" && params !== null && "text" in params ? String(params.text) : "";
+    return Promise.resolve({
+      content: [{ text, type: "text" }],
+      details: { text },
+      usage: toolUsage,
+    });
+  },
+  label: "Echo",
+  name: "echo",
+  parameters: Type.Object({ text: Type.String() }),
+};
+const echoToolResultResponses: FauxResponseStep[] = [
+  fauxAssistantMessage([fauxToolCall("echo", { text: "hello" })], { stopReason: "toolUse" }),
+  (context) => {
+    const toolResult = context.messages.find((message) => message.role === "toolResult");
+    const text =
+      toolResult?.role === "toolResult"
+        ? toolResult.content
+            .filter((part): part is { type: "text"; text: string } => part.type === "text")
+            .map((part) => part.text)
+            .join("\n")
+        : "";
+    return fauxAssistantMessage(text);
+  },
+];
+const allowsExtensionToolResultHandlersTo = Effect.gen(function* () {
   let observedToolUsage: Usage | undefined;
-  const echoTool: AgentTool = {
-    name: "echo",
-    label: "Echo",
-    description: "Echo text back",
-    parameters: Type.Object({ text: Type.String() }),
-    execute: (_toolCallId, params) =>
-      runPromise(
-        Effect.sync(() => {
-          const text =
-            typeof params === "object" && params !== null && "text" in params
-              ? String(params.text)
-              : "";
-          return { content: [{ type: "text", text }], details: { text }, usage: toolUsage };
-        }),
-      ),
-  };
   const harness = yield* Effect.promise(() =>
     createHarness({
-      tools: [echoTool],
       extensionFactories: [
         (msa) => {
-          msa.on("tool_result", (event) =>
-            runPromise(
-              Effect.sync(() => {
-                observedToolUsage = event.usage;
-                return {
-                  content: [{ type: "text", text: "patched result" }],
-                  details: { patched: true },
-                  usage: patchedToolUsage,
-                };
-              }),
-            ),
-          );
+          msa.on("tool_result", (event) => {
+            observedToolUsage = event.usage;
+            return Promise.resolve({
+              content: [{ text: "patched result", type: "text" }],
+              details: { patched: true },
+              usage: patchedToolUsage,
+            });
+          });
         },
       ],
+      tools: [echoToolWithUsage],
     }),
   );
   harnesses.push(harness);
-  harness.setResponses([
-    fauxAssistantMessage([fauxToolCall("echo", { text: "hello" })], {
-      stopReason: "toolUse",
-    }),
-    (context) => {
-      const toolResult = context.messages.find((message) => message.role === "toolResult");
-      const text =
-        toolResult?.role === "toolResult"
-          ? toolResult.content
-              .filter((part): part is { type: "text"; text: string } => part.type === "text")
-              .map((part) => part.text)
-              .join("\n")
-          : "";
-      return fauxAssistantMessage(text);
-    },
-  ]);
+  harness.setResponses(echoToolResultResponses);
 
   yield* Effect.promise(() => harness.session.prompt("hi"));
 
@@ -149,7 +152,7 @@ export const allowsExtensionToolResultHandlersTo = Effect.gen(function* () {
     patchedToolUsage,
   );
 });
-export const allowsExtensionContextHandlersToModify = Effect.gen(function* () {
+const allowsExtensionContextHandlersToModify = Effect.gen(function* () {
   const harness = yield* Effect.promise(() =>
     createHarness({
       extensionFactories: [
@@ -160,7 +163,7 @@ export const allowsExtensionContextHandlersToModify = Effect.gen(function* () {
                 message.role === "user"
                   ? {
                       ...message,
-                      content: [{ type: "text", text: "rewritten" }],
+                      content: [{ text: "rewritten", type: "text" }],
                       timestamp: message.timestamp,
                     }
                   : message,
@@ -193,6 +196,15 @@ export const allowsExtensionContextHandlersToModify = Effect.gen(function* () {
   const storedUserMessage = harness.session.messages.find((message) => message.role === "user");
   expect(storedUserMessage?.role).toBe("user");
   if (storedUserMessage?.role === "user") {
-    expect(storedUserMessage.content).toEqual([{ type: "text", text: "original" }]);
+    expect(storedUserMessage.content).toEqual([{ text: "original", type: "text" }]);
   }
 });
+
+const agentSessionModelExtensionCases2 = {
+  allowsExtensionContextHandlersToModify,
+  allowsExtensionToolCallHandlersTo,
+  allowsExtensionToolCallHandlersToPart2,
+  allowsExtensionToolResultHandlersTo,
+};
+
+export default agentSessionModelExtensionCases2;

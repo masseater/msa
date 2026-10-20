@@ -1,141 +1,131 @@
-import { mkdtemp, rm, symlink, writeFile } from "node:fs/promises";
-import { tmpdir } from "node:os";
-
-import { awaited, runTest, joinPath } from "@msa/testing";
+import testing from "@msa/testing";
 import { Effect } from "effect";
 import { afterEach, describe, expect, it } from "vite-plus/test";
 
 import { withFileMutationQueue } from "../src/core/tools/file-mutation-queue.ts";
 
-function delay(ms: number): Promise<void> {
-  return new Promise((resolve) => setTimeout(resolve, ms));
-}
+const { awaited, joinPath, makeSymlink, makeTempDir, removeDirs, runTest, sleep, writeTextFile } =
+  testing;
 
 const tempDirs: string[] = [];
 
-function createTempDir(): Promise<string> {
-  return runTest(
+const createTempDir = Effect.fn("createTempDir")(function* () {
+  const dir = yield* makeTempDir("msa-file-mutation-queue-");
+  tempDirs.push(dir);
+  return dir;
+});
+
+afterEach(() => runTest(removeDirs(tempDirs.splice(0))));
+
+const serializesOperationsForTheSameFile = () =>
+  runTest(
     Effect.gen(function* () {
-      const dir = yield* awaited(mkdtemp(joinPath(tmpdir(), "msa-file-mutation-queue-")));
-      tempDirs.push(dir);
-      return yield* awaited(dir);
+      const effectRunPromise = Effect.runPromiseWith(yield* Effect.context<never>());
+
+      const order: string[] = [];
+      const path = "/tmp/file-mutation-queue-same";
+
+      const first = withFileMutationQueue(path, () =>
+        effectRunPromise(
+          Effect.gen(function* () {
+            order.push("first:start");
+            yield* sleep(30);
+            order.push("first:end");
+          }),
+        ),
+      );
+      const second = withFileMutationQueue(path, () =>
+        effectRunPromise(
+          Effect.sync(() => {
+            order.push("second:start");
+            order.push("second:end");
+          }),
+        ),
+      );
+
+      yield* awaited(Promise.all([first, second]));
+      expect(order).toEqual(["first:start", "first:end", "second:start", "second:end"]);
     }),
   );
-}
 
-afterEach(() =>
+const allowsDifferentFilesToProceedInParallel = () =>
   runTest(
-    awaited(
-      Promise.all(
-        tempDirs.splice(0, tempDirs.length).map((dir) => rm(dir, { recursive: true, force: true })),
-      ),
-    ),
-  ),
-);
+    Effect.gen(function* () {
+      const effectRunPromise = Effect.runPromiseWith(yield* Effect.context<never>());
+
+      const order: string[] = [];
+
+      yield* awaited(
+        Promise.all([
+          withFileMutationQueue("/tmp/file-mutation-queue-a", () =>
+            effectRunPromise(
+              Effect.gen(function* () {
+                order.push("a:start");
+                yield* sleep(30);
+                order.push("a:end");
+              }),
+            ),
+          ),
+          withFileMutationQueue("/tmp/file-mutation-queue-b", () =>
+            effectRunPromise(
+              Effect.gen(function* () {
+                order.push("b:start");
+                yield* sleep(30);
+                order.push("b:end");
+              }),
+            ),
+          ),
+        ]),
+      );
+
+      expect(order.indexOf("a:start")).toBeLessThan(order.indexOf("a:end"));
+      expect(order.indexOf("b:start")).toBeLessThan(order.indexOf("b:end"));
+      expect(order.indexOf("b:start")).toBeLessThan(order.indexOf("a:end"));
+    }),
+  );
+
+const usesTheSameQueueForSymlinkAliases = () =>
+  runTest(
+    Effect.gen(function* () {
+      const effectRunPromise = Effect.runPromiseWith(yield* Effect.context<never>());
+
+      const dir = yield* createTempDir();
+      const targetPath = joinPath(dir, "target.txt");
+      const symlinkPath = joinPath(dir, "alias.txt");
+      yield* writeTextFile(targetPath, "hello\n");
+      yield* makeSymlink(targetPath, symlinkPath);
+
+      const order: string[] = [];
+      yield* awaited(
+        Promise.all([
+          withFileMutationQueue(targetPath, () =>
+            effectRunPromise(
+              Effect.gen(function* () {
+                order.push("target:start");
+                yield* sleep(30);
+                order.push("target:end");
+              }),
+            ),
+          ),
+          withFileMutationQueue(symlinkPath, () =>
+            effectRunPromise(
+              Effect.sync(() => {
+                order.push("alias:start");
+                order.push("alias:end");
+              }),
+            ),
+          ),
+        ]),
+      );
+
+      expect(order).toEqual(["target:start", "target:end", "alias:start", "alias:end"]);
+    }),
+  );
 
 describe("withFileMutationQueue", () => {
-  it("serializes operations for the same file", () =>
-    runTest(
-      Effect.gen(function* () {
-        const effectRunPromise = Effect.runPromiseWith(yield* Effect.context<never>());
+  it("serializes operations for the same file", serializesOperationsForTheSameFile);
 
-        const order: string[] = [];
-        const path = "/tmp/file-mutation-queue-same";
+  it("allows different files to proceed in parallel", allowsDifferentFilesToProceedInParallel);
 
-        const first = withFileMutationQueue(path, () =>
-          effectRunPromise(
-            Effect.gen(function* () {
-              order.push("first:start");
-              yield* awaited(delay(30));
-              order.push("first:end");
-            }),
-          ),
-        );
-        const second = withFileMutationQueue(path, () =>
-          effectRunPromise(
-            Effect.sync(() => {
-              order.push("second:start");
-              order.push("second:end");
-            }),
-          ),
-        );
-
-        yield* awaited(Promise.all([first, second]));
-        expect(order).toEqual(["first:start", "first:end", "second:start", "second:end"]);
-      }),
-    ));
-
-  it("allows different files to proceed in parallel", () =>
-    runTest(
-      Effect.gen(function* () {
-        const effectRunPromise = Effect.runPromiseWith(yield* Effect.context<never>());
-
-        const order: string[] = [];
-
-        yield* awaited(
-          Promise.all([
-            withFileMutationQueue("/tmp/file-mutation-queue-a", () =>
-              effectRunPromise(
-                Effect.gen(function* () {
-                  order.push("a:start");
-                  yield* awaited(delay(30));
-                  order.push("a:end");
-                }),
-              ),
-            ),
-            withFileMutationQueue("/tmp/file-mutation-queue-b", () =>
-              effectRunPromise(
-                Effect.gen(function* () {
-                  order.push("b:start");
-                  yield* awaited(delay(30));
-                  order.push("b:end");
-                }),
-              ),
-            ),
-          ]),
-        );
-
-        expect(order.indexOf("a:start")).toBeLessThan(order.indexOf("a:end"));
-        expect(order.indexOf("b:start")).toBeLessThan(order.indexOf("b:end"));
-        expect(order.indexOf("b:start")).toBeLessThan(order.indexOf("a:end"));
-      }),
-    ));
-
-  it("uses the same queue for symlink aliases", () =>
-    runTest(
-      Effect.gen(function* () {
-        const effectRunPromise = Effect.runPromiseWith(yield* Effect.context<never>());
-
-        const dir = yield* awaited(createTempDir());
-        const targetPath = joinPath(dir, "target.txt");
-        const symlinkPath = joinPath(dir, "alias.txt");
-        yield* awaited(writeFile(targetPath, "hello\n", "utf8"));
-        yield* awaited(symlink(targetPath, symlinkPath));
-
-        const order: string[] = [];
-        yield* awaited(
-          Promise.all([
-            withFileMutationQueue(targetPath, () =>
-              effectRunPromise(
-                Effect.gen(function* () {
-                  order.push("target:start");
-                  yield* awaited(delay(30));
-                  order.push("target:end");
-                }),
-              ),
-            ),
-            withFileMutationQueue(symlinkPath, () =>
-              effectRunPromise(
-                Effect.sync(() => {
-                  order.push("alias:start");
-                  order.push("alias:end");
-                }),
-              ),
-            ),
-          ]),
-        );
-
-        expect(order).toEqual(["target:start", "target:end", "alias:start", "alias:end"]);
-      }),
-    ));
+  it("uses the same queue for symlink aliases", usesTheSameQueueForSymlinkAliases);
 });

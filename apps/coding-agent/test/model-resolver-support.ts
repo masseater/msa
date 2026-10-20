@@ -1,77 +1,77 @@
 import type { Api, Model } from "@msa/ai";
 
-export const mockModels: Model<"anthropic-messages">[] = [
+const mockModels: Model<"anthropic-messages">[] = [
   {
-    id: "claude-sonnet-4-5",
-    name: "Claude Sonnet 4.5",
     api: "anthropic-messages" as const,
-    provider: "anthropic-api",
     baseUrl: "https://api.anthropic.com",
-    reasoning: true,
-    input: ["text", "image"],
-    cost: { input: 3, output: 15, cacheRead: 0.3, cacheWrite: 3.75 },
     contextWindow: 200000,
-    maxTokens: 8192,
-  },
-  {
-    id: "gpt-4o",
-    name: "GPT-4o",
-    api: "anthropic-messages" as const,
-    provider: "openai",
-    baseUrl: "https://api.openai.com",
-    reasoning: false,
+    cost: { cacheRead: 0.3, cacheWrite: 3.75, input: 3, output: 15 },
+    id: "claude-sonnet-4-5",
     input: ["text", "image"],
-    cost: { input: 5, output: 15, cacheRead: 0.5, cacheWrite: 5 },
-    contextWindow: 128000,
-    maxTokens: 4096,
-  },
-];
-
-export const mockOpenRouterModels: Model<"anthropic-messages">[] = [
-  {
-    id: "qwen/qwen3-coder:exacto",
-    name: "Qwen3 Coder Exacto",
-    api: "anthropic-messages" as const,
-    provider: "openrouter",
-    baseUrl: "https://openrouter.ai/api/v1",
+    maxTokens: 8192,
+    name: "Claude Sonnet 4.5",
+    provider: "anthropic-api",
     reasoning: true,
-    input: ["text"],
-    cost: { input: 1, output: 2, cacheRead: 0.1, cacheWrite: 1 },
-    contextWindow: 128000,
-    maxTokens: 8192,
   },
   {
-    id: "openai/gpt-4o:extended",
-    name: "GPT-4o Extended",
     api: "anthropic-messages" as const,
-    provider: "openrouter",
-    baseUrl: "https://openrouter.ai/api/v1",
-    reasoning: false,
-    input: ["text", "image"],
-    cost: { input: 5, output: 15, cacheRead: 0.5, cacheWrite: 5 },
+    baseUrl: "https://api.openai.com",
     contextWindow: 128000,
+    cost: { cacheRead: 0.5, cacheWrite: 5, input: 5, output: 15 },
+    id: "gpt-4o",
+    input: ["text", "image"],
     maxTokens: 4096,
+    name: "GPT-4o",
+    provider: "openai",
+    reasoning: false,
   },
 ];
 
-export const allModels = [...mockModels, ...mockOpenRouterModels];
+const mockOpenRouterModels: Model<"anthropic-messages">[] = [
+  {
+    api: "anthropic-messages" as const,
+    baseUrl: "https://openrouter.ai/api/v1",
+    contextWindow: 128000,
+    cost: { cacheRead: 0.1, cacheWrite: 1, input: 1, output: 2 },
+    id: "qwen/qwen3-coder:exacto",
+    input: ["text"],
+    maxTokens: 8192,
+    name: "Qwen3 Coder Exacto",
+    provider: "openrouter",
+    reasoning: true,
+  },
+  {
+    api: "anthropic-messages" as const,
+    baseUrl: "https://openrouter.ai/api/v1",
+    contextWindow: 128000,
+    cost: { cacheRead: 0.5, cacheWrite: 5, input: 5, output: 15 },
+    id: "openai/gpt-4o:extended",
+    input: ["text", "image"],
+    maxTokens: 4096,
+    name: "GPT-4o Extended",
+    provider: "openrouter",
+    reasoning: false,
+  },
+];
+
+const allModels = [...mockModels, ...mockOpenRouterModels];
 
 function referenceModel(provider: string, id: string): Model<Api> {
   return {
-    id,
-    name: id,
     api: "openai-completions" as const,
-    provider,
     baseUrl: "https://example.invalid",
-    reasoning: true,
-    input: ["text"],
-    cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0 },
     contextWindow: 128000,
+    cost: { cacheRead: 0, cacheWrite: 0, input: 0, output: 0 },
+    id,
+    input: ["text"],
     maxTokens: 8192,
+    name: id,
+    provider,
+    reasoning: true,
   };
 }
 
-export const referenceCatalog = [
+const referenceCatalog = [
   referenceModel("anthropic-api", "claude-sonnet-4-5"),
   referenceModel("anthropic-api", "claude-sonnet-4-5-20250929"),
   referenceModel("anthropic-api", "claude-opus-4-8"),
@@ -93,6 +93,16 @@ export const referenceCatalog = [
   referenceModel("gw-b", "zz:free"),
 ];
 
-export function modelRef(m: Model<Api>): string {
+function modelRef(m: Model<Api>): string {
   return `${m.provider}/${m.id}`;
 }
+
+const modelResolverSupport = {
+  allModels,
+  mockModels,
+  mockOpenRouterModels,
+  modelRef,
+  referenceCatalog,
+};
+
+export default modelResolverSupport;

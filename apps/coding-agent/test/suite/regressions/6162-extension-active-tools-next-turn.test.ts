@@ -1,17 +1,19 @@
 import {
+  type TranscriptContext,
   fauxAssistantMessage,
   fauxToolCall,
   getCurrentSystemPrompt,
   getCurrentTools,
-  type TranscriptContext,
 } from "@msa/ai";
 import { Effect } from "effect";
 import { Type } from "typebox";
 import { describe, expect, it } from "vite-plus/test";
 
 import type { ExtensionAPI, ExtensionFactory } from "../../../src/index.ts";
-import { createHarness } from "../harness.ts";
-import type { Harness } from "../harness.ts";
+import harnessModule from "../harness.ts";
+import type harnessTypes from "../harness.types.ts";
+
+const { createHarness } = harnessModule;
 
 function getProviderToolNames(context: TranscriptContext): string[] {
   return getCurrentTools(context.messages)
@@ -21,26 +23,26 @@ function getProviderToolNames(context: TranscriptContext): string[] {
 
 function registerSwitchTools(msa: ExtensionAPI): void {
   msa.registerTool({
-    name: "switch_tools",
-    label: "Switch Tools",
     description: "Switch the active extension tool set",
-    promptSnippet: "Switch to the next extension tool",
-    parameters: Type.Object({}),
     execute: () =>
       Effect.runPromise(
         Effect.sync(() => {
           msa.setActiveTools(["after_switch"]);
-          return { content: [{ type: "text", text: "switched" }], details: {} };
+          return { content: [{ text: "switched", type: "text" }], details: {} };
         }),
       ),
+    label: "Switch Tools",
+    name: "switch_tools",
+    parameters: Type.Object({}),
+    promptSnippet: "Switch to the next extension tool",
   });
   msa.registerTool({
-    name: "after_switch",
-    label: "After Switch",
     description: "Tool that should be available after switching",
-    promptSnippet: "Run after the active tool set changes",
+    execute: () => Promise.resolve({ content: [{ text: "after", type: "text" }], details: {} }),
+    label: "After Switch",
+    name: "after_switch",
     parameters: Type.Object({}),
-    execute: () => Promise.resolve({ content: [{ type: "text", text: "after" }], details: {} }),
+    promptSnippet: "Run after the active tool set changes",
   });
 }
 
@@ -127,10 +129,10 @@ const preservesBeforeAgentStartSystemPrompt = Effect.gen(function* () {
       extensionFactories,
     }),
   );
-  return yield* preservesBeforeAgentStartSystemPromptPart2(harness);
+  return yield* preservesBeforeAgentStartSystemPromptStep1(harness);
 });
 
-const preservesBeforeAgentStartSystemPromptPart2 = (harness: Harness) =>
+const preservesBeforeAgentStartSystemPromptStep1 = (harness: harnessTypes.Harness) =>
   Effect.gen(function* () {
     try {
       harness.session.setActiveToolsByName(["switch_tools"]);
@@ -166,11 +168,26 @@ const preservesBeforeAgentStartSystemPromptPart2 = (harness: Harness) =>
     }
   });
 
+const appliesMsaSetactivetoolsBeforeTheNextProvider = () =>
+  Effect.runPromise(appliesMsaSetactivetoolsBeforeTheNext);
+
+const reportsTheRefreshedSystemPromptDuringThe = () =>
+  Effect.runPromise(reportsTheRefreshedSystemPromptDuring);
+
+const preservesBeforeAgentStartSystemPromptOverrides = () =>
+  Effect.runPromise(preservesBeforeAgentStartSystemPrompt);
+
 describe("extension active tools next-turn refresh", () => {
-  it("applies msa.setActiveTools before the next provider request in the same run", () =>
-    Effect.runPromise(appliesMsaSetactivetoolsBeforeTheNext));
-  it("reports the refreshed system prompt during the run", () =>
-    Effect.runPromise(reportsTheRefreshedSystemPromptDuring));
-  it("preserves before_agent_start system prompt overrides when tools change mid-run", () =>
-    Effect.runPromise(preservesBeforeAgentStartSystemPrompt));
+  it(
+    "applies msa.setActiveTools before the next provider request in the same run",
+    appliesMsaSetactivetoolsBeforeTheNextProvider,
+  );
+  it(
+    "reports the refreshed system prompt during the run",
+    reportsTheRefreshedSystemPromptDuringThe,
+  );
+  it(
+    "preserves before_agent_start system prompt overrides when tools change mid-run",
+    preservesBeforeAgentStartSystemPromptOverrides,
+  );
 });

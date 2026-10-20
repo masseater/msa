@@ -3,9 +3,12 @@ import { Effect } from "effect";
 import { afterEach, describe, expect, it } from "vite-plus/test";
 
 import { parseArgs } from "../../../src/cli/args.ts";
-import { createHarness, getUserTexts, type Harness } from "../harness.ts";
+import harnessModule from "../harness.ts";
+import type harnessTypes from "../harness.types.ts";
 
-let harness!: Harness;
+const { createHarness, getUserTexts } = harnessModule;
+
+let harness!: harnessTypes.Harness;
 
 const stopsParsingOptionsWhileRetainingFile = () => {
   const parsed = parseArgs([

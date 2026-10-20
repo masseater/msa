@@ -1,3 +1,36 @@
-export * from "./tree-traversal-cases-1.ts";
-export * from "./tree-traversal-cases-2.ts";
-export * from "./tree-traversal-cases-3.ts";
+import treeTraversalCases1 from "./tree-traversal-cases-1.ts";
+import treeTraversalCases2 from "./tree-traversal-cases-2.ts";
+import treeTraversalCases3 from "./tree-traversal-cases-3.ts";
+
+const treeTraversalCases = {
+  appendcompactionIntegratesIntoTree: treeTraversalCases1.appendcompactionIntegratesIntoTree,
+  appendcustomentryIntegratesIntoTree: treeTraversalCases1.appendcustomentryIntegratesIntoTree,
+  appendmessageCreatesEntryWithCorrectParentid:
+    treeTraversalCases1.appendmessageCreatesEntryWithCorrectParentid,
+  appendmodelchangeIntegratesIntoTree: treeTraversalCases1.appendmodelchangeIntegratesIntoTree,
+  appendthinkinglevelchangeIntegratesIntoTree:
+    treeTraversalCases1.appendthinkinglevelchangeIntegratesIntoTree,
+  createsNewSessionWithPathTo: treeTraversalCases2.createsNewSessionWithPathTo,
+  doesNotDuplicateEntriesWhenForking: treeTraversalCases2.doesNotDuplicateEntriesWhenForking,
+  extractsCorrectPathFromBranchedTree: treeTraversalCases2.extractsCorrectPathFromBranchedTree,
+  handlesDeepBranching: treeTraversalCases2.handlesDeepBranching,
+  handlesMultipleBranchesAtSamePoint: treeTraversalCases1.handlesMultipleBranchesAtSamePoint,
+  insertsBranchSummaryWithTheSource: treeTraversalCases2.insertsBranchSummaryWithTheSource,
+  leafPointerAdvancesAfterEachAppend: treeTraversalCases1.leafPointerAdvancesAfterEachAppend,
+  movesLeafPointerToSpecifiedEntry: treeTraversalCases2.movesLeafPointerToSpecifiedEntry,
+  newAppendsBecomeChildrenOfBranch: treeTraversalCases2.newAppendsBecomeChildrenOfBranch,
+  preservesToolAndSummaryUsageAcross: treeTraversalCases3.preservesToolAndSummaryUsageAcross,
+  returnsCurrentLeafEntry: treeTraversalCases2.returnsCurrentLeafEntry,
+  returnsEntryById: treeTraversalCases2.returnsEntryById,
+  returnsFullPathFromRootTo: treeTraversalCases1.returnsFullPathFromRootTo,
+  returnsMessagesFromCurrentBranchOnly: treeTraversalCases2.returnsMessagesFromCurrentBranchOnly,
+  returnsPathFromSpecifiedEntryTo: treeTraversalCases1.returnsPathFromSpecifiedEntryTo,
+  returnsSingleEntryPath: treeTraversalCases1.returnsSingleEntryPath,
+  returnsSingleRootForLinearSession: treeTraversalCases1.returnsSingleRootForLinearSession,
+  returnsTreeWithBranchesAfterBranch: treeTraversalCases1.returnsTreeWithBranchesAfterBranch,
+  throwsForNonExistentEntry: treeTraversalCases2.throwsForNonExistentEntry,
+  throwsForNonExistentEntry2: treeTraversalCases2.throwsForNonExistentEntry2,
+  writesFileImmediatelyWhenForkingAt: treeTraversalCases3.writesFileImmediatelyWhenForkingAt,
+};
+
+export default treeTraversalCases;

@@ -2,12 +2,12 @@ import { Effect } from "effect";
 import { describe, expect, it, vi } from "vite-plus/test";
 
 const state = vi.hoisted(() => ({
-  jitiModuleLoads: 0,
-  jitiStaticModuleLoads: 0,
-  virtualModulesLoads: 0,
   createJiti: vi.fn((_id: unknown, _options: unknown) => ({
     import: vi.fn(() => Promise.resolve(() => {})),
   })),
+  jitiModuleLoads: 0,
+  jitiStaticModuleLoads: 0,
+  virtualModulesLoads: 0,
 }));
 
 vi.mock("jiti", () => {
@@ -57,7 +57,12 @@ const defersOrdinaryJitiAndItsVirtual = Effect.gen(function* () {
   expect(options.virtualModules).toBeDefined();
 });
 
+const defersOrdinaryJitiAndItsVirtualModules = () =>
+  Effect.runPromise(defersOrdinaryJitiAndItsVirtual);
+
 describe("extension loader lazy imports", () => {
-  it("defers ordinary jiti and its virtual modules until importing an extension", () =>
-    Effect.runPromise(defersOrdinaryJitiAndItsVirtual));
+  it(
+    "defers ordinary jiti and its virtual modules until importing an extension",
+    defersOrdinaryJitiAndItsVirtualModules,
+  );
 });

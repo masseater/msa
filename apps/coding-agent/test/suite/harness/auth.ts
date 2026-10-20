@@ -1,18 +1,17 @@
 import type { FauxModelDefinition, FauxProviderRegistration, Model } from "@msa/ai/compat";
 import { registerFauxProvider } from "@msa/ai/compat";
-import { joinPath, toJsonText, writeTextFile } from "@msa/testing";
+import testing from "@msa/testing";
 import { Effect } from "effect";
 
 import { AuthStorage } from "../../../src/core/auth-storage.ts";
 import type { ModelRegistry } from "../../../src/core/model-registry.ts";
-import {
-  createInMemoryModelRegistry,
-  createModelRegistry,
-} from "../../model-runtime-test-utils.ts";
+import modelRuntimeTestUtils from "../../model-runtime-test-utils.ts";
 
-export function createFauxProvider(
-  models: FauxModelDefinition[] | undefined,
-): FauxProviderRegistration {
+const { createInMemoryModelRegistry, createModelRegistry } = modelRuntimeTestUtils;
+
+const { joinPath, toJsonText, writeTextFile } = testing;
+
+function createFauxProvider(models: FauxModelDefinition[] | undefined): FauxProviderRegistration {
   const provider: FauxProviderRegistration = registerFauxProvider(
     models === undefined ? {} : { models },
   );
@@ -20,18 +19,18 @@ export function createFauxProvider(
   return provider;
 }
 
-export function createAuthStorage(entry: {
+function createAuthStorage(entry: {
   provider: string;
   withConfiguredAuth: boolean;
 }): Promise<AuthStorage> {
   const authStorage = AuthStorage.inMemory();
   if (!entry.withConfiguredAuth) return Promise.resolve(authStorage);
   return authStorage
-    .modify(entry.provider, () => Promise.resolve({ type: "api_key", key: "faux-key" }))
+    .modify(entry.provider, () => Promise.resolve({ key: "faux-key", type: "api_key" }))
     .then(() => authStorage);
 }
 
-export function writeModelsJson(entry: {
+function writeModelsJson(entry: {
   modelsPath: string;
   modelsJson: Record<string, unknown>;
 }): Promise<void> {
@@ -42,23 +41,23 @@ export function writeModelsJson(entry: {
   );
 }
 
-export function registerFauxModels(entry: {
+function registerFauxModels(entry: {
   modelRegistry: ModelRegistry;
   model: Model<string>;
   fauxProvider: FauxProviderRegistration;
 }): void {
   const { modelRegistry, model, fauxProvider } = entry;
   modelRegistry.registerProvider(model.provider, {
-    baseUrl: model.baseUrl,
-    apiKey: "faux-key",
     api: fauxProvider.api,
+    apiKey: "faux-key",
+    baseUrl: model.baseUrl,
     models: fauxProvider.models.map((registeredModel) =>
       Object.assign({}, registeredModel, { baseUrl: registeredModel.baseUrl }),
     ),
   });
 }
 
-export function createRegistry(entry: {
+function createRegistry(entry: {
   authStorage: AuthStorage;
   modelsPath: string | undefined;
 }): Promise<ModelRegistry> {
@@ -67,9 +66,20 @@ export function createRegistry(entry: {
     : createModelRegistry(entry.authStorage, entry.modelsPath);
 }
 
-export function modelsPathFor(entry: {
+function modelsPathFor(entry: {
   tempDir: string;
   modelsJson: Record<string, unknown> | undefined;
 }): string | undefined {
   return entry.modelsJson === undefined ? undefined : joinPath(entry.tempDir, "models.json");
 }
+
+const auth = {
+  createAuthStorage,
+  createFauxProvider,
+  createRegistry,
+  modelsPathFor,
+  registerFauxModels,
+  writeModelsJson,
+};
+
+export default auth;

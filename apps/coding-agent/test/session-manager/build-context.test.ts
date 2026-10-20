@@ -1,7 +1,9 @@
 import { describe, expect, it } from "vite-plus/test";
 
-import { buildSessionContext, type SessionEntry } from "../../src/core/session-manager.ts";
-import {
+import { type SessionEntry, buildSessionContext } from "../../src/core/session-manager.ts";
+import buildContextCases from "./build-context-cases.ts";
+
+const {
   buildcontextentriesReturnsCompactionAwareEntriesIncluding,
   complexTreeWithMultipleBranchesAnd,
   followsPathToSpecifiedLeaf,
@@ -17,24 +19,26 @@ import {
   tracksModelFromModelChangeEntry,
   tracksThinkingLevelChanges,
   usesLastEntryWhenLeafidNot,
-} from "./build-context-cases.ts";
+} = buildContextCases;
+
+const emptyEntriesReturnsEmptyContext = () => {
+  const ctx = buildSessionContext([]);
+  expect(ctx.messages).toEqual([]);
+  expect(ctx.thinkingLevel).toBe("off");
+  expect(ctx.model).toBeNull();
+};
+
+const singleUserMessage = () => {
+  const entries: SessionEntry[] = [msg({ id: "1", parentId: null, role: "user", text: "hello" })];
+  const ctx = buildSessionContext(entries);
+  expect(ctx.messages).toHaveLength(1);
+  expect(ctx.messages[0]?.role).toBe("user");
+};
 
 describe("buildSessionContext", () => {
   describe("trivial cases", () => {
-    it("empty entries returns empty context", () => {
-      const ctx = buildSessionContext([]);
-      expect(ctx.messages).toEqual([]);
-      expect(ctx.thinkingLevel).toBe("off");
-      expect(ctx.model).toBeNull();
-    });
-    it("single user message", () => {
-      const entries: SessionEntry[] = [
-        msg({ id: "1", parentId: null, role: "user", text: "hello" }),
-      ];
-      const ctx = buildSessionContext(entries);
-      expect(ctx.messages).toHaveLength(1);
-      expect(ctx.messages[0]?.role).toBe("user");
-    });
+    it("empty entries returns empty context", emptyEntriesReturnsEmptyContext);
+    it("single user message", singleUserMessage);
     it("simple conversation", simpleConversation);
     it("tracks thinking level changes", tracksThinkingLevelChanges);
     it("tracks model from assistant message", tracksModelFromAssistantMessage);

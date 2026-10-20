@@ -4,10 +4,13 @@ import { Effect } from "effect";
 import { expect } from "vite-plus/test";
 
 import type { BashOperations } from "../../src/core/tools/bash.ts";
-import { harnesses } from "./agent-session-bash-persistence-cases-1.ts";
-import { createHarness } from "./harness.ts";
+import agentSessionBashPersistenceCases1 from "./agent-session-bash-persistence-cases-1.ts";
+import harnessModule from "./harness.ts";
 
-export const recordsBashOutputThroughCustomOperations = Effect.gen(function* () {
+const { createHarness } = harnessModule;
+const { harnesses } = agentSessionBashPersistenceCases1;
+
+const recordsBashOutputThroughCustomOperations = Effect.gen(function* () {
   const runPromise = Effect.runPromiseWith(yield* Effect.context<never>());
   const harness = yield* Effect.promise(() => createHarness());
   harnesses.push(harness);
@@ -28,7 +31,7 @@ export const recordsBashOutputThroughCustomOperations = Effect.gen(function* () 
   expect(result.output).toContain("hello from custom ops");
   expect(harness.session.messages[harness.session.messages.length - 1]?.role).toBe("bashExecution");
 });
-export const streamsBashOutputToTheCallback = Effect.gen(function* () {
+const streamsBashOutputToTheCallback = Effect.gen(function* () {
   const runPromise = Effect.runPromiseWith(yield* Effect.context<never>());
   const harness = yield* Effect.promise(() => createHarness());
   harnesses.push(harness);
@@ -36,7 +39,7 @@ export const streamsBashOutputToTheCallback = Effect.gen(function* () {
   const eventUpdates: Array<{ id: string | undefined; delta: string }> = [];
   const unsubscribe = harness.session.subscribe((event) => {
     if (event.type === "bash_execution_update") {
-      eventUpdates.push({ id: event.id, delta: event.delta });
+      eventUpdates.push({ delta: event.delta, id: event.id });
     }
   });
   const operations: BashOperations = {
@@ -60,11 +63,11 @@ export const streamsBashOutputToTheCallback = Effect.gen(function* () {
 
   expect(callbackDeltas).toEqual(["hello ", "world"]);
   expect(eventUpdates).toEqual([
-    { id: "bash-1", delta: "hello " },
-    { id: "bash-1", delta: "world" },
+    { delta: "hello ", id: "bash-1" },
+    { delta: "world", id: "bash-1" },
   ]);
 });
-export const runChunks = (entry: {
+const runChunks = (entry: {
   chunks: Array<string | Buffer>;
   beforeExit?: (streamed: string) => void;
 }): Promise<{ output: string; streamed: string; recorded: string | undefined }> => {
@@ -95,13 +98,13 @@ export const runChunks = (entry: {
       const recorded = harness.session.messages[harness.session.messages.length - 1];
       return {
         output: result.output,
-        streamed: deltas.join(""),
         recorded: recorded?.role === "bashExecution" ? recorded.output : undefined,
+        streamed: deltas.join(""),
       };
     }),
   );
 };
-export const stripsAColorResetSplitInside = Effect.gen(function* () {
+const stripsAColorResetSplitInside = Effect.gen(function* () {
   const { output, streamed, recorded } = yield* Effect.promise(() =>
     runChunks({ chunks: ["\x1b[31mERROR: file.py:1\x1b[0", "m\n"] }),
   );
@@ -109,36 +112,49 @@ export const stripsAColorResetSplitInside = Effect.gen(function* () {
   expect(streamed).toBe("ERROR: file.py:1\n");
   expect(recorded).toBe("ERROR: file.py:1\n");
 });
-export const stripsAColorCodeSplitRight = Effect.gen(function* () {
+const stripsAColorCodeSplitRight = Effect.gen(function* () {
   const { output, streamed } = yield* Effect.promise(() =>
     runChunks({ chunks: ["before\x1b", "[32mafter\n"] }),
   );
   expect(output).toBe("beforeafter\n");
   expect(streamed).toBe("beforeafter\n");
 });
-export const stripsAnOscSequenceSplitBefore = Effect.gen(function* () {
+const stripsAnOscSequenceSplitBefore = Effect.gen(function* () {
   const { output } = yield* Effect.promise(() =>
     runChunks({ chunks: ["a\x1b]0;window ", "title\x1b", "\\b\n"] }),
   );
   expect(output).toBe("ab\n");
 });
-export const flushesAnIncompleteMultiByteCharacter = Effect.gen(function* () {
+const flushesAnIncompleteMultiByteCharacter = Effect.gen(function* () {
   const { output, streamed } = yield* Effect.promise(() =>
     runChunks({ chunks: ["ok", Buffer.from("\u00e9").subarray(0, 1)] }),
   );
   expect(output).toBe("ok\uFFFD");
   expect(streamed).toBe("ok\uFFFD");
 });
-export const doesNotHoldBackOutputBehind = Effect.gen(function* () {
+const doesNotHoldBackOutputBehind = Effect.gen(function* () {
   const long = "x".repeat(300);
   let streamedBeforeExit = "";
   yield* Effect.promise(() =>
     runChunks({
-      chunks: [`\x1b]${long}`],
       beforeExit: (streamed) => {
         streamedBeforeExit = streamed;
       },
+      chunks: [`\x1b]${long}`],
     }),
   );
   expect(streamedBeforeExit).toBe(`]${long}`);
 });
+
+const agentSessionBashPersistenceCases6 = {
+  doesNotHoldBackOutputBehind,
+  flushesAnIncompleteMultiByteCharacter,
+  recordsBashOutputThroughCustomOperations,
+  runChunks,
+  streamsBashOutputToTheCallback,
+  stripsAColorCodeSplitRight,
+  stripsAColorResetSplitInside,
+  stripsAnOscSequenceSplitBefore,
+};
+
+export default agentSessionBashPersistenceCases6;

@@ -1,28 +1,30 @@
 import { expect, it } from "vite-plus/test";
 
-import {
+import modelCatalogProtocol from "./model-catalog-protocol.ts";
+import type modelCatalogProtocolTypes from "./model-catalog-protocol.types.ts";
+
+const {
   compareModelCatalogPiVersions,
   getModelCatalogArtifactKey,
   getModelCatalogProviderKey,
-  type ModelCatalogIndex,
   parseModelCatalogIndex,
   parseModelCatalogRepresentation,
   parseModelCatalogRequest,
   selectModelCatalog,
-} from "./model-catalog-protocol.ts";
+} = modelCatalogProtocol;
 
 const legacyRevision = `sha256-${"a".repeat(64)}`;
 const mixedApiRevision = `sha256-${"b".repeat(64)}`;
-const index: ModelCatalogIndex = {
-  schemaVersion: 1,
-  defaultRevision: mixedApiRevision,
+const index: modelCatalogProtocolTypes.ModelCatalogIndex = {
   catalogs: [
     { minimumPiVersion: "0.80.7", revision: legacyRevision },
     { minimumPiVersion: "0.85.0", revision: mixedApiRevision },
   ],
+  defaultRevision: mixedApiRevision,
+  schemaVersion: 1,
 };
 
-it("builds revision scoped storage keys", () => {
+const buildsRevisionScopedStorageKeys = () => {
   expect(getModelCatalogArtifactKey(legacyRevision, "models.json")).toBe(
     `models/v1/revisions/${legacyRevision}/models.json`,
   );
@@ -32,26 +34,32 @@ it("builds revision scoped storage keys", () => {
   expect(getModelCatalogProviderKey(legacyRevision, "openrouter", "typed")).toBe(
     `models/v1/revisions/${legacyRevision}/providers/openrouter.all.json`,
   );
-});
+};
 
-it("orders Pi versions with semver precedence", () => {
+it("builds revision scoped storage keys", buildsRevisionScopedStorageKeys);
+
+const ordersPiVersionsWithSemverPrecedence = () => {
   expect(compareModelCatalogPiVersions("0.85.0", "0.84.4")).toBeGreaterThan(0);
   expect(compareModelCatalogPiVersions("0.85.0-rc.1", "0.85.0")).toBeLessThan(0);
   expect(compareModelCatalogPiVersions("0.85.0-rc.2", "0.85.0-rc.10")).toBeLessThan(0);
   expect(compareModelCatalogPiVersions("v1.0.0", "1.0.0+build")).toBe(0);
   expect(() => compareModelCatalogPiVersions("0.85", "0.85.0")).toThrow(/Invalid Pi version/u);
-});
+};
 
-it("selects the newest catalog a Pi version supports", () => {
+it("orders Pi versions with semver precedence", ordersPiVersionsWithSemverPrecedence);
+
+const selectsTheNewestCatalogAPiVersion = () => {
   expect(selectModelCatalog(index, "0.84.4")?.revision).toBe(legacyRevision);
   expect(selectModelCatalog(index, "0.85.0-rc.1")?.revision).toBe(legacyRevision);
   expect(selectModelCatalog(index, "0.85.0")?.revision).toBe(mixedApiRevision);
   expect(selectModelCatalog(index, "1.0.0")?.revision).toBe(mixedApiRevision);
   expect(selectModelCatalog(index, "0.80.6")).toBeUndefined();
   expect(selectModelCatalog(index, undefined)?.revision).toBe(mixedApiRevision);
-});
+};
 
-it("redirects Pi user agents to an explicit catalog version", () => {
+it("selects the newest catalog a Pi version supports", selectsTheNewestCatalogAPiVersion);
+
+const redirectsPiUserAgentsToAnExplicit = () => {
   expect(
     parseModelCatalogRequest(
       "https://pi.dev/api/models/providers/openrouter?types=chat%2Cimage",
@@ -65,9 +73,11 @@ it("redirects Pi user agents to an explicit catalog version", () => {
     kind: "redirect",
     location: "https://pi.dev/api/models?pi-version=0.84.4",
   });
-});
+};
 
-it("serves explicit and unversioned catalog requests without redirecting", () => {
+it("redirects Pi user agents to an explicit catalog version", redirectsPiUserAgentsToAnExplicit);
+
+const servesExplicitAndUnversionedCatalogRequestsWithout = () => {
   expect(
     parseModelCatalogRequest(
       "https://pi.dev/api/models?pi-version=0.83.0",
@@ -84,31 +94,38 @@ it("serves explicit and unversioned catalog requests without redirecting", () =>
     piVersion: undefined,
     representation: "legacy",
   });
-});
+};
 
-it("rejects invalid catalog request parameters", () => {
+it(
+  "serves explicit and unversioned catalog requests without redirecting",
+  servesExplicitAndUnversionedCatalogRequestsWithout,
+);
+
+const rejectsInvalidCatalogRequestParameters = () => {
   expect(
     parseModelCatalogRequest("https://pi.dev/api/models?pi-version=latest", undefined),
   ).toEqual({
-    kind: "invalid",
     error: "Invalid Pi version.",
+    kind: "invalid",
   });
   expect(parseModelCatalogRequest("https://pi.dev/api/models?types=", "pi/0.84.4")).toEqual({
-    kind: "invalid",
     error: "Invalid model types.",
+    kind: "invalid",
   });
   expect(parseModelCatalogRepresentation("chat,-image")).toBeUndefined();
   expect(parseModelCatalogRepresentation(null)).toBe("legacy");
-});
+};
 
-it("validates stored indexes and drops publication metadata", () => {
+it("rejects invalid catalog request parameters", rejectsInvalidCatalogRequestParameters);
+
+const validatesStoredIndexesAndDropsPublicationMetadata = () => {
   expect(
     parseModelCatalogIndex({
       ...index,
       catalogs: index.catalogs.map((catalog) => ({
         ...catalog,
-        sourceCommit: "abc",
         modelCount: 1,
+        sourceCommit: "abc",
       })),
     }),
   ).toEqual(index);
@@ -122,4 +139,9 @@ it("validates stored indexes and drops publication metadata", () => {
       catalogs: [{ minimumPiVersion: "latest", revision: legacyRevision }],
     }),
   ).toThrow(/invalid/u);
-});
+};
+
+it(
+  "validates stored indexes and drops publication metadata",
+  validatesStoredIndexesAndDropsPublicationMetadata,
+);

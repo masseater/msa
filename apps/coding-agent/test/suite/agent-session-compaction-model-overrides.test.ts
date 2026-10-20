@@ -1,18 +1,23 @@
 import { fauxAssistantMessage } from "@msa/ai";
-import { currentTimeMillis } from "@msa/testing";
+import testing from "@msa/testing";
 import { Effect } from "effect";
 import { afterEach, describe, expect, it, vi } from "vite-plus/test";
 
 import type { SessionBeforeCompactEvent } from "../../src/core/extensions/index.ts";
-import { createHarness, type Harness } from "./harness.ts";
+import harnessModule from "./harness.ts";
+import type harnessTypes from "./harness.types.ts";
 
-function seedHistory(harness: Harness, totalTokens = 650): string {
+const { createHarness } = harnessModule;
+
+const { currentTimeMillis } = testing;
+
+function seedHistory(harness: harnessTypes.Harness, totalTokens = 650): string {
   const model = harness.session.model!;
   let recentUserId = "";
   for (const label of ["old", "recent"]) {
     recentUserId = harness.sessionManager.appendMessage({
+      content: [{ text: label.padEnd(400, "x"), type: "text" }],
       role: "user",
-      content: [{ type: "text", text: label.padEnd(400, "x") }],
       timestamp: currentTimeMillis() - 2000,
     });
     const assistant = fauxAssistantMessage(label.padEnd(400, "y"), {
@@ -21,8 +26,8 @@ function seedHistory(harness: Harness, totalTokens = 650): string {
     harness.sessionManager.appendMessage({
       ...assistant,
       api: model.api,
-      provider: model.provider,
       model: model.id,
+      provider: model.provider,
       usage: { ...assistant.usage, input: totalTokens, totalTokens },
     });
   }
@@ -30,41 +35,41 @@ function seedHistory(harness: Harness, totalTokens = 650): string {
   return recentUserId;
 }
 
-const harnesses: Harness[] = [];
+const harnesses: harnessTypes.Harness[] = [];
 
 const usesTheNewlySelectedModelWithout = Effect.gen(function* () {
   const harness = yield* Effect.promise(() =>
     createHarness({
-      models: [
-        { id: "small", contextWindow: 4000 },
-        { id: "big", contextWindow: 10000 },
-      ],
-      tools: [],
-      settings: {
-        compaction: {
-          reserveTokens: 10,
-          modelOverrides: { "faux/big": { reserveTokens: 8000, keepRecentTokens: 150 } },
-        },
-      },
       extensionFactories: [
         (msa) => {
           msa.on("session_before_compact", (event) => ({
             compaction: {
-              summary: "big model summary",
               firstKeptEntryId: event.preparation.firstKeptEntryId,
+              summary: "big model summary",
               tokensBefore: event.preparation.tokensBefore,
             },
           }));
         },
       ],
+      models: [
+        { contextWindow: 4000, id: "small" },
+        { contextWindow: 10000, id: "big" },
+      ],
+      settings: {
+        compaction: {
+          modelOverrides: { "faux/big": { keepRecentTokens: 150, reserveTokens: 8000 } },
+          reserveTokens: 10,
+        },
+      },
+      tools: [],
     }),
   );
   harnesses.push(harness);
   seedHistory(harness, 2500);
-  return yield* usesTheNewlySelectedModelWithoutPart2(harness);
+  return yield* usesTheNewlySelectedModelWithoutStep1(harness);
 });
 
-const usesTheNewlySelectedModelWithoutPart2 = (harness: Harness) =>
+const usesTheNewlySelectedModelWithoutStep1 = (harness: harnessTypes.Harness) =>
   Effect.gen(function* () {
     harness.setResponses([
       fauxAssistantMessage("small response"),
@@ -90,8 +95,8 @@ const capturesModelIdentityBeforeAwaitingSummarization = Effect.gen(function* ()
       settings: {
         compaction: {
           modelOverrides: {
-            "faux/first": { reserveTokens: 2000, keepRecentTokens: 150 },
-            "faux/second": { reserveTokens: 4000, keepRecentTokens: 20000 },
+            "faux/first": { keepRecentTokens: 150, reserveTokens: 2000 },
+            "faux/second": { keepRecentTokens: 20000, reserveTokens: 4000 },
           },
         },
       },
@@ -119,70 +124,88 @@ const capturesModelIdentityBeforeAwaitingSummarization = Effect.gen(function* ()
   expect(requests).toEqual([{ id: "first", maxTokens: 1600 }]);
 });
 
+const usesTheNewlySelectedModelWithoutChanging = () =>
+  Effect.runPromise(usesTheNewlySelectedModelWithout);
+
+const capturesModelIdentityBeforeAwaitingSummarizationAuth = () =>
+  Effect.runPromise(capturesModelIdentityBeforeAwaitingSummarization);
+
+const partPart1 = (input: { readonly path: "manual" | "pre-prompt" | "post-run" | "overflow" }) =>
+  Effect.gen(function* () {
+    const { path } = input;
+    const preparations: SessionBeforeCompactEvent[] = [];
+    const harness = yield* Effect.promise(() =>
+      createHarness({
+        extensionFactories: [
+          (msa) => {
+            msa.on("session_before_compact", (event) => {
+              preparations.push(event);
+              return {
+                compaction: {
+                  firstKeptEntryId: event.preparation.firstKeptEntryId,
+                  summary: "compacted history",
+                  tokensBefore: event.preparation.tokensBefore,
+                },
+              };
+            });
+          },
+        ],
+        models: [{ contextWindow: 4000, id: "faux-1" }],
+        settings: {
+          compaction: {
+            enabled: path !== "manual",
+            keepRecentTokens: 20000,
+            modelOverrides: { "faux/faux-1": { keepRecentTokens: 150, reserveTokens: 2000 } },
+            reserveTokens: 10,
+          },
+        },
+        tools: [],
+      }),
+    );
+    return { harness, preparations };
+  });
+
+type CompactionPath = "manual" | "pre-prompt" | "post-run" | "overflow";
+
+const triggerCompaction = (harness: harnessTypes.Harness, path: CompactionPath) =>
+  Effect.gen(function* () {
+    if (path === "manual") {
+      yield* Effect.promise(() => harness.session.compact());
+      return;
+    }
+    harness.setResponses(
+      path === "overflow"
+        ? [
+            fauxAssistantMessage("", { errorMessage: "prompt is too long", stopReason: "error" }),
+            fauxAssistantMessage("recovered"),
+          ]
+        : [fauxAssistantMessage(path === "post-run" ? "z".repeat(8000) : "done")],
+    );
+    yield* Effect.promise(() => harness.session.prompt("continue"));
+  });
+
 describe("AgentSession compaction model overrides", () => {
   afterEach(() => {
     vi.restoreAllMocks();
     while (harnesses.length !== 0) harnesses.pop()?.cleanup();
   });
+
   it.each(["manual", "pre-prompt", "post-run", "overflow"] as const)(
     "uses model token settings for %s compaction and extension preparation",
     (path) =>
       Effect.runPromise(
         Effect.gen(function* () {
-          const preparations: SessionBeforeCompactEvent[] = [];
-          const harness = yield* Effect.promise(() =>
-            createHarness({
-              models: [{ id: "faux-1", contextWindow: 4000 }],
-              tools: [],
-              settings: {
-                compaction: {
-                  enabled: path !== "manual",
-                  reserveTokens: 10,
-                  keepRecentTokens: 20000,
-                  modelOverrides: { "faux/faux-1": { reserveTokens: 2000, keepRecentTokens: 150 } },
-                },
-              },
-              extensionFactories: [
-                (msa) => {
-                  msa.on("session_before_compact", (event) => {
-                    preparations.push(event);
-                    return {
-                      compaction: {
-                        summary: "compacted history",
-                        firstKeptEntryId: event.preparation.firstKeptEntryId,
-                        tokensBefore: event.preparation.tokensBefore,
-                      },
-                    };
-                  });
-                },
-              ],
-            }),
-          );
+          const { harness, preparations } = yield* partPart1({ path });
           harnesses.push(harness);
           const recentUserId = seedHistory(harness, path === "pre-prompt" ? 2500 : 650);
 
-          if (path === "manual") {
-            yield* Effect.promise(() => harness.session.compact());
-          } else {
-            harness.setResponses(
-              path === "overflow"
-                ? [
-                    fauxAssistantMessage("", {
-                      stopReason: "error",
-                      errorMessage: "prompt is too long",
-                    }),
-                    fauxAssistantMessage("recovered"),
-                  ]
-                : [fauxAssistantMessage(path === "post-run" ? "z".repeat(8000) : "done")],
-            );
-            yield* Effect.promise(() => harness.session.prompt("continue"));
-          }
+          yield* triggerCompaction(harness, path);
 
           expect(preparations).toHaveLength(1);
           expect(preparations[0]?.preparation.settings).toEqual({
             enabled: path !== "manual",
-            reserveTokens: 2000,
             keepRecentTokens: 150,
+            reserveTokens: 2000,
           });
           expect(preparations[0]?.reason).toBe(
             path === "manual" ? "manual" : path === "overflow" ? "overflow" : "threshold",
@@ -193,13 +216,21 @@ describe("AgentSession compaction model overrides", () => {
           expect(harness.eventsOfType("compaction_end")).toHaveLength(1);
           expect(harness.eventsOfType("compaction_end")[0]).toMatchObject({
             aborted: false,
-            willRetry: path === "overflow",
             result: { summary: "compacted history" },
+            willRetry: path === "overflow",
           });
           expect(harness.getPendingResponseCount()).toBe(0);
         }),
       ),
   );
+});
+
+describe("AgentSession compaction model overrides", () => {
+  afterEach(() => {
+    vi.restoreAllMocks();
+    while (harnesses.length !== 0) harnesses.pop()?.cleanup();
+  });
+
   it.each(["manual", "automatic"] as const)(
     "passes resolved budgets to built-in %s summarization",
     (path) =>
@@ -207,14 +238,14 @@ describe("AgentSession compaction model overrides", () => {
         Effect.gen(function* () {
           const harness = yield* Effect.promise(() =>
             createHarness({
-              models: [{ id: "faux-1", contextWindow: 4000, maxTokens: 3000 }],
-              tools: [],
+              models: [{ contextWindow: 4000, id: "faux-1", maxTokens: 3000 }],
               settings: {
                 compaction: {
+                  modelOverrides: { "faux/faux-1": { keepRecentTokens: 150, reserveTokens: 2000 } },
                   reserveTokens: 10,
-                  modelOverrides: { "faux/faux-1": { reserveTokens: 2000, keepRecentTokens: 150 } },
                 },
               },
+              tools: [],
             }),
           );
           harnesses.push(harness);
@@ -240,8 +271,21 @@ describe("AgentSession compaction model overrides", () => {
         }),
       ),
   );
-  it("uses the newly selected model without changing ordinary settings", () =>
-    Effect.runPromise(usesTheNewlySelectedModelWithout));
-  it("captures model identity before awaiting summarization auth", () =>
-    Effect.runPromise(capturesModelIdentityBeforeAwaitingSummarization));
+});
+
+describe("AgentSession compaction model overrides", () => {
+  afterEach(() => {
+    vi.restoreAllMocks();
+    while (harnesses.length !== 0) harnesses.pop()?.cleanup();
+  });
+
+  it(
+    "uses the newly selected model without changing ordinary settings",
+    usesTheNewlySelectedModelWithoutChanging,
+  );
+
+  it(
+    "captures model identity before awaiting summarization auth",
+    capturesModelIdentityBeforeAwaitingSummarizationAuth,
+  );
 });

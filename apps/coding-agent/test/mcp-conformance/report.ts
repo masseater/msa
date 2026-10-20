@@ -1,38 +1,13 @@
 import * as NodeServices from "@effect/platform-node/NodeServices";
 import { Console, Effect, FileSystem, ManagedRuntime, Schema } from "effect";
 
-export const CONFORMANCE_PACKAGE = "@modelcontextprotocol/conformance@0.2.0-alpha.11";
+import type reportTypes from "./report.types.ts";
 
-export const MODES = ["2025-03-26", "2025-06-18", "2025-11-25"] as const;
+const CONFORMANCE_PACKAGE = "@modelcontextprotocol/conformance@0.2.0-alpha.11";
 
-export const IGNORED_STATUSES = new Set(["INFO", "SKIPPED"]);
+const MODES = ["2025-03-26", "2025-06-18", "2025-11-25"] as const;
 
-export type CheckStatus = "pass" | "fail";
-
-export interface ScenarioResult {
-  mode: string;
-  scenario: string;
-  checks: Map<string, CheckStatus>;
-  messages: Map<string, string>;
-}
-
-export interface BaselineScenario {
-  passing: string[];
-  failing: string[];
-}
-
-export interface Baseline {
-  conformance: string;
-  modes: Record<string, Record<string, BaselineScenario>>;
-}
-
-export interface RawCheck {
-  id?: unknown;
-  name?: unknown;
-  status?: unknown;
-  description?: unknown;
-  errorMessage?: unknown;
-}
+const IGNORED_STATUSES = new Set(["INFO", "SKIPPED"]);
 
 const runtime = ManagedRuntime.make(NodeServices.layer);
 
@@ -41,18 +16,18 @@ const provideNode = <A, E, R>(effect: Effect.Effect<A, E, R>): Effect.Effect<A, 
     Effect.provideContext(effect, context),
   ) as unknown as Effect.Effect<A, E>;
 
-export const log = (message: string): void => {
+const log = (message: string): void => {
   Effect.runSync(Console.log(message));
 };
 
-export const logError = (message: string): void => {
+const logError = (message: string): void => {
   Effect.runSync(Console.error(message));
 };
 
-export const record = (entry: {
-  result: ScenarioResult;
+const record = (entry: {
+  result: reportTypes.ScenarioResult;
   id: string;
-  status: CheckStatus;
+  status: reportTypes.CheckStatus;
   message?: string;
 }): void => {
   const { result, id, status, message } = entry;
@@ -61,22 +36,22 @@ export const record = (entry: {
     result.messages.set(id, message);
 };
 
-export const toBaseline = (results: ReadonlyArray<ScenarioResult>): Baseline => {
-  const baseline: Baseline = { conformance: CONFORMANCE_PACKAGE, modes: {} };
+const toBaseline = (results: ReadonlyArray<reportTypes.ScenarioResult>): reportTypes.Baseline => {
+  const baseline: reportTypes.Baseline = { conformance: CONFORMANCE_PACKAGE, modes: {} };
   for (const result of results) {
     const ids = [...result.checks.keys()].sort();
     const scenarios = (baseline.modes[result.mode] ??= {});
     scenarios[result.scenario] = {
-      passing: ids.filter((id) => result.checks.get(id) === "pass"),
       failing: ids.filter((id) => result.checks.get(id) === "fail"),
+      passing: ids.filter((id) => result.checks.get(id) === "pass"),
     };
   }
   return baseline;
 };
 
-export const evaluate = (entry: {
-  results: ReadonlyArray<ScenarioResult>;
-  baseline: Baseline;
+const evaluate = (entry: {
+  results: ReadonlyArray<reportTypes.ScenarioResult>;
+  baseline: reportTypes.Baseline;
 }): boolean => {
   const { results, baseline } = entry;
   const regressions: string[] = [];
@@ -118,7 +93,7 @@ export const evaluate = (entry: {
   return true;
 };
 
-export const printResults = (results: ReadonlyArray<ScenarioResult>): void => {
+const printResults = (results: ReadonlyArray<reportTypes.ScenarioResult>): void => {
   for (const mode of MODES) {
     const modeResults = results.filter((result) => result.mode === mode);
     if (modeResults.length === 0) continue;
@@ -139,12 +114,12 @@ export const printResults = (results: ReadonlyArray<ScenarioResult>): void => {
   }
 };
 
-export const scopeBaseline = (entry: {
-  baseline: Baseline;
+const scopeBaseline = (entry: {
+  baseline: reportTypes.Baseline;
   modes: ReadonlyArray<string>;
   scenarios: ReadonlyArray<string> | undefined;
   partial: boolean;
-}): Baseline => {
+}): reportTypes.Baseline => {
   const { baseline, modes, scenarios, partial } = entry;
   if (!partial) return baseline;
   return {
@@ -162,8 +137,7 @@ export const scopeBaseline = (entry: {
   };
 };
 
-export const usage =
-  (): string => `Usage: node apps/coding-agent/test/mcp-conformance/run.ts [options]
+const usage = (): string => `Usage: node apps/coding-agent/test/mcp-conformance/run.ts [options]
 
 Options:
   --mode <version>     Only run this protocol version (repeatable): ${MODES.join(", ")}
@@ -172,17 +146,17 @@ Options:
   --keep-results       Keep the upstream checks.json and client output
   --verbose            Print the upstream runner output`;
 
-export const loadBaselineJson = (path: string): Effect.Effect<Baseline | undefined> =>
+const loadBaselineJson = (path: string): Effect.Effect<reportTypes.Baseline | undefined> =>
   Effect.gen(function* () {
     if (!(yield* pathExists(path))) return undefined;
-    return (yield* readJson(path)) as Baseline;
+    return (yield* readJson(path)) as reportTypes.Baseline;
   });
 
 const jsonString = Schema.fromJsonString(Schema.Unknown);
 const decodeJson = Schema.decodeUnknownEffect(jsonString);
 const encodeJson = Schema.encodeUnknownEffect(jsonString);
 
-export const readJson = (path: string): Effect.Effect<unknown> =>
+const readJson = (path: string): Effect.Effect<unknown> =>
   provideNode(
     Effect.gen(function* () {
       const fs = yield* FileSystem.FileSystem;
@@ -190,7 +164,7 @@ export const readJson = (path: string): Effect.Effect<unknown> =>
     }),
   );
 
-export const writeJson = (entry: { path: string; value: unknown }): Effect.Effect<void> =>
+const writeJson = (entry: { path: string; value: unknown }): Effect.Effect<void> =>
   provideNode(
     Effect.gen(function* () {
       const fs = yield* FileSystem.FileSystem;
@@ -200,19 +174,41 @@ export const writeJson = (entry: { path: string; value: unknown }): Effect.Effec
     }),
   );
 
-export const pathExists = (path: string): Effect.Effect<boolean> =>
+const pathExists = (path: string): Effect.Effect<boolean> =>
   provideNode(Effect.flatMap(FileSystem.FileSystem, (fs) => fs.exists(path)).pipe(Effect.orDie));
 
-export const makeTempDir = (prefix: string): Effect.Effect<string> =>
+const makeTempDir = (prefix: string): Effect.Effect<string> =>
   provideNode(
     Effect.flatMap(FileSystem.FileSystem, (fs) => fs.makeTempDirectory({ prefix })).pipe(
       Effect.orDie,
     ),
   );
 
-export const removeDir = (path: string): Effect.Effect<void> =>
+const removeDir = (path: string): Effect.Effect<void> =>
   provideNode(
     Effect.flatMap(FileSystem.FileSystem, (fs) =>
-      fs.remove(path, { recursive: true, force: true }),
+      fs.remove(path, { force: true, recursive: true }),
     ).pipe(Effect.orDie),
   );
+
+const report = {
+  CONFORMANCE_PACKAGE,
+  IGNORED_STATUSES,
+  MODES,
+  evaluate,
+  loadBaselineJson,
+  log,
+  logError,
+  makeTempDir,
+  pathExists,
+  printResults,
+  readJson,
+  record,
+  removeDir,
+  scopeBaseline,
+  toBaseline,
+  usage,
+  writeJson,
+};
+
+export default report;

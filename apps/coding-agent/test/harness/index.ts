@@ -1,15 +1,17 @@
-export {
-  buildAssistantMessage,
-  type FauxResponse,
-  type FauxResponseInput,
-  fauxModel,
-} from "./faux-model.ts";
-export { createFauxStreamFn, type FauxStreamFnState } from "./faux-stream.ts";
-export { buildHarness } from "./session-build.ts";
-export {
-  createHarness,
-  createHarnessEffect,
-  createHarnessWithExtensions,
-  createHarnessWithExtensionsEffect,
-} from "./session.ts";
-export type { Harness, HarnessOptions } from "./session-types.ts";
+import fauxModelModule from "./faux-model.ts";
+import fauxStream from "./faux-stream.ts";
+import sessionBuild from "./session-build.ts";
+import session from "./session.ts";
+
+const harness = {
+  buildAssistantMessage: fauxModelModule.buildAssistantMessage,
+  buildHarness: sessionBuild.buildHarness,
+  createFauxStreamFn: fauxStream.createFauxStreamFn,
+  createHarness: session.createHarness,
+  createHarnessEffect: session.createHarnessEffect,
+  createHarnessWithExtensions: session.createHarnessWithExtensions,
+  createHarnessWithExtensionsEffect: session.createHarnessWithExtensionsEffect,
+  fauxModel: fauxModelModule.fauxModel,
+};
+
+export default harness;

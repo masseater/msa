@@ -1,4 +1,4 @@
-import { setKeybindings, type TUI } from "@msa/tui";
+import { type TUI, setKeybindings } from "@msa/tui";
 import { Effect } from "effect";
 import { afterAll, beforeAll, beforeEach, describe, expect, it, vi } from "vite-plus/test";
 
@@ -6,7 +6,10 @@ import { KeybindingsManager } from "../../../src/core/keybindings.ts";
 import { ModelSelectorComponent } from "../../../src/modes/interactive/components/model-selector.ts";
 import { initTheme } from "../../../src/modes/interactive/theme/theme.ts";
 import { stripAnsi } from "../../../src/utils/ansi.ts";
-import { createHarness, type Harness } from "../harness.ts";
+import harnessModule from "../harness.ts";
+import type harnessTypes from "../harness.types.ts";
+
+const { createHarness } = harnessModule;
 
 function createFakeTui(): TUI {
   return { requestRender: () => {} } as unknown as TUI;
@@ -20,7 +23,7 @@ function selectedModelId(rendered: string): string | undefined {
   return id?.trim() || undefined;
 }
 
-const harnesses: Harness[] = [];
+const harnesses: harnessTypes.Harness[] = [];
 
 const movesSelectionToTheFirstRow = Effect.gen(function* () {
   const harness = yield* Effect.promise(() =>
@@ -51,10 +54,10 @@ const movesSelectionToTheFirstRow = Effect.gen(function* () {
   );
   expect(selectedModelId(stripAnsi(selector.render(120).join("\n")))).toBe("alpha-1");
   selector.handleInput("\x1b[B");
-  return yield* movesSelectionToTheFirstRowPart2(selector);
+  return yield* movesSelectionToTheFirstRowStep1(selector);
 });
 
-const movesSelectionToTheFirstRowPart2 = (selector: ModelSelectorComponent) =>
+const movesSelectionToTheFirstRowStep1 = (selector: ModelSelectorComponent) =>
   Effect.sync(() => {
     selector.handleInput("\x1b[B");
     expect(selectedModelId(stripAnsi(selector.render(120).join("\n")))).toBe("alpha-3");
@@ -107,6 +110,16 @@ const movesSelectionToTheFirstRow2 = Effect.gen(function* () {
   expect(selectedModelId(stripAnsi(selector.render(120).join("\n")))).toBe("alpha-2");
 });
 
+const movesSelectionToTheFirstRowIn = () => Effect.runPromise(movesSelectionToTheFirstRow);
+
+const movesSelectionToTheFirstRowIn2 = () => Effect.runPromise(movesSelectionToTheFirstRow2);
+
+const afterAllHook = () => {
+  while (harnesses.length > 0) {
+    harnesses.pop()?.cleanup();
+  }
+};
+
 describe("model selector filter resets selection to top", () => {
   beforeAll(() => {
     initTheme("dark");
@@ -114,13 +127,13 @@ describe("model selector filter resets selection to top", () => {
   beforeEach(() => {
     setKeybindings(new KeybindingsManager());
   });
-  afterAll(() => {
-    while (harnesses.length > 0) {
-      harnesses.pop()?.cleanup();
-    }
-  });
-  it("moves selection to the first row in the All tab when typing a query", () =>
-    Effect.runPromise(movesSelectionToTheFirstRow));
-  it("moves selection to the first row in the Scoped tab when typing a query", () =>
-    Effect.runPromise(movesSelectionToTheFirstRow2));
+  afterAll(afterAllHook);
+  it(
+    "moves selection to the first row in the All tab when typing a query",
+    movesSelectionToTheFirstRowIn,
+  );
+  it(
+    "moves selection to the first row in the Scoped tab when typing a query",
+    movesSelectionToTheFirstRowIn2,
+  );
 });

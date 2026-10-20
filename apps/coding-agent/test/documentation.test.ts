@@ -1,252 +1,126 @@
-import { existsSync, globSync, readFileSync, statSync } from "node:fs";
-import { dirname, isAbsolute, posix, relative, resolve, sep } from "node:path";
-
-import {} from "@msa/testing";
-import { lexer, type Token, type Tokens, walkTokens } from "marked";
+import testing from "@msa/testing";
+import { Effect } from "effect";
 import { describe, expect, it } from "vite-plus/test";
 
-type NavigationItem =
-  | { title: string; path: string; items?: NavigationItem[] }
-  | { title: string; items: NavigationItem[] };
+import docsCatalog from "./docs-catalog.ts";
 
-interface NavigationGroup {
-  title: string;
-  items: NavigationItem[];
-}
+const {
+  dirnameOf,
+  isAbsolutePath,
+  pathExists,
+  readDirectoryRecursive,
+  readJsonFile,
+  readTextFile,
+  relativePath,
+  resolvePath,
+  runTest,
+} = testing;
 
-const docsRoot = resolve(import.meta.dirname, "../docs");
+const { fragmentOf, markdownAnchors, markdownLinks, navigationPaths, publicSlug, readNavigation } =
+  docsCatalog;
 
-function requireObject(value: unknown, location: string): Record<string, unknown> {
-  if (
-    !(value !== null && value !== undefined) ||
-    typeof value !== "object" ||
-    Array.isArray(value)
-  ) {
-    throw new Error(`${location} must be an object`);
-  }
-  return value as Record<string, unknown>;
-}
+const docsRoot = resolvePath(import.meta.dirname, "../docs");
 
-function requireNonemptyString(value: unknown, location: string): string {
-  if (typeof value !== "string" || value.trim() === "") {
-    throw new Error(`${location} must be a nonempty string`);
-  }
-  return value;
-}
-
-function requireFields(value: Record<string, unknown>, fields: string[], location: string): void {
-  const unsupportedFields = Object.keys(value)
-    .filter((field) => !fields.includes(field))
+const loadPages = Effect.fn("loadPages")(function* () {
+  const paths = (yield* readDirectoryRecursive(docsRoot))
+    .map((path) => path.replaceAll("\\", "/"))
+    .filter((path) => path.endsWith(".md"))
     .sort();
-  if (unsupportedFields.length > 0) {
-    throw new Error(`${location} has unsupported fields: ${unsupportedFields.join(", ")}`);
-  }
-}
-
-function requireDocumentationPath(value: unknown, location: string): string {
-  const path = requireNonemptyString(value, location);
-  const normalizedPath = posix.normalize(path);
-  const escapesDocsRoot = normalizedPath === ".." || normalizedPath.startsWith("../");
-  const hasUrlSyntax = path.includes("?") || path.includes("#");
-  const hasWindowsSyntax = path.includes("\\") || /^[a-z]:/iu.test(path);
-
-  if (
-    path !== path.trim() ||
-    path !== normalizedPath ||
-    posix.isAbsolute(path) ||
-    escapesDocsRoot ||
-    hasUrlSyntax ||
-    hasWindowsSyntax ||
-    !path.endsWith(".md")
-  ) {
-    throw new Error(`${location} must be a relative normalized .md path`);
-  }
-  return path;
-}
-
-function readNavigationItem(rawItem: unknown, location: string): NavigationItem {
-  const item = requireObject(rawItem, location);
-  requireFields(item, ["title", "path", "items"], location);
-  const title = requireNonemptyString(item["title"], `${location}.title`);
-  const path =
-    item["path"] === undefined
-      ? undefined
-      : requireDocumentationPath(item["path"], `${location}.path`);
-
-  let items: NavigationItem[] | undefined;
-  if (item["items"] !== undefined) {
-    if (!Array.isArray(item["items"])) throw new Error(`${location}.items must be an array`);
-    if (item["items"].length === 0)
-      throw new Error(`${location}.items must contain at least one item`);
-    items = item["items"].map((child, index) =>
-      readNavigationItem(child, `${location}.items[${index}]`),
-    );
-  }
-
-  if (path !== undefined)
-    return items !== undefined && items.length > 0 ? { title, path, items } : { title, path };
-  if (items !== undefined) return { title, items };
-  throw new Error(`${location} must have a path or items`);
-}
-
-function readNavigation(): NavigationGroup[] {
-  const catalog = requireObject(
-    JSON.parse(readFileSync(resolve(docsRoot, "docs.json"), "utf8")),
-    "Documentation catalog",
+  const contents = yield* Effect.forEach(paths, (path) =>
+    readTextFile(resolvePath(docsRoot, path)),
   );
-  requireFields(catalog, ["navigation", "redirects"], "Documentation catalog");
-  if (!Array.isArray(catalog["navigation"]))
-    throw new Error("Documentation catalog navigation must be an array");
+  return new Map(paths.map((path, index) => [path, contents[index] ?? ""]));
+});
 
-  return catalog["navigation"].map((rawGroup, groupIndex) => {
-    const location = `Documentation catalog navigation[${groupIndex}]`;
-    const group = requireObject(rawGroup, location);
-    requireFields(group, ["title", "items"], location);
-    const title = requireNonemptyString(group["title"], `${location}.title`);
-    if (!Array.isArray(group["items"])) throw new Error(`${location}.items must be an array`);
-    if (group["items"].length === 0)
-      throw new Error(`${location}.items must contain at least one item`);
-    return {
-      title,
-      items: group["items"].map((item, itemIndex) =>
-        readNavigationItem(item, `${location}.items[${itemIndex}]`),
-      ),
-    };
-  });
-}
-
-function navigationPaths(groups: NavigationGroup[]): string[] {
-  const paths: string[] = [];
-  const visit = (items: NavigationItem[]): void => {
-    for (const item of items) {
-      if ("path" in item) paths.push(item.path);
-      if (item.items !== undefined && item.items.length > 0) visit(item.items);
-    }
-  };
-  for (const group of groups) visit(group.items);
-  return paths;
-}
-
-function markdownLinks(markdown: string): string[] {
-  const links: string[] = [];
-  walkTokens(lexer(markdown), (token: Token) => {
-    if (token.type === "link") links.push((token as Tokens.Link).href);
-  });
-  return links;
-}
-
-function headingSlug(text: string): string {
-  return text
-    .toLowerCase()
-    .replaceAll(/[^\p{Letter}\p{Number}\s_-]/gu, "")
-    .trim()
-    .replaceAll(/\s+/gu, "-");
-}
-
-function markdownAnchors(markdown: string): Set<string> {
-  const anchors = new Set<string>();
-  walkTokens(lexer(markdown), (token: Token) => {
-    if (token.type === "heading") anchors.add(headingSlug((token as Tokens.Heading).text));
-  });
-  for (const match of markdown.matchAll(/<a\s+id="([^"]+)"/gu)) {
-    const id = match[1];
-    if (id !== undefined) anchors.add(id);
+const slugCollisionsOf = (pages: readonly string[]): string[] => {
+  const pathsBySlug = new Map<string, string[]>();
+  for (const path of pages) {
+    const slug = publicSlug(path);
+    pathsBySlug.set(slug, [...(pathsBySlug.get(slug) ?? []), path]);
   }
-  return anchors;
-}
+  return [...pathsBySlug]
+    .filter(([, paths]) => paths.length > 1)
+    .map(([slug, paths]) => `${slug || "/"} (${paths.join(", ")})`)
+    .sort();
+};
 
-function fragmentOf(href: string): string {
-  const hash = href.indexOf("#");
-  return hash === -1 ? "" : decodeURIComponent(href.slice(hash + 1));
-}
+const isExternal = (href: string) =>
+  /^[a-z][a-z\d+.-]*:/iu.test(href) || href.startsWith("//") || href.startsWith("/");
 
-function isFile(path: string): boolean {
-  return existsSync(path) && statSync(path).isFile();
-}
+const insideDocs = (target: string): string | undefined => {
+  const relative = relativePath(docsRoot, target);
+  if (relative === ".." || relative.startsWith("..") || isAbsolutePath(relative)) return undefined;
+  return relative.replaceAll("\\", "/");
+};
 
-function publicSlug(path: string): string {
-  const withoutExtension = path.slice(0, -3);
-  if (withoutExtension === "index") return "";
-  return withoutExtension.endsWith("/index") ? withoutExtension.slice(0, -6) : withoutExtension;
-}
+const checkLink = Effect.fn("checkLink")(function* (
+  pages: ReadonlyMap<string, string>,
+  source: string,
+  href: string,
+) {
+  const linkedPath = href.split(/[?#]/u, 1)[0] ?? "";
+  const fragment = fragmentOf(href);
+  if (linkedPath === "") {
+    const ok = fragment === "" || markdownAnchors(pages.get(source) ?? "").has(fragment);
+    return { broken: !ok, next: undefined };
+  }
+  if (!linkedPath.endsWith(".md")) return { broken: false, next: undefined };
+  const target = resolvePath(docsRoot, dirnameOf(source), linkedPath);
+  const inside = insideDocs(target);
+  const content = inside === undefined ? undefined : pages.get(inside);
+  if (content === undefined) return { broken: !(yield* pathExists(target)), next: undefined };
+  return { broken: fragment !== "" && !markdownAnchors(content).has(fragment), next: inside };
+});
+
+const walkLinks = Effect.fn("walkLinks")(function* (
+  pages: ReadonlyMap<string, string>,
+  roots: readonly string[],
+) {
+  const reachable = new Set<string>();
+  const pending = roots.filter((path) => pages.has(path));
+  const brokenLinks: string[] = [];
+  while (pending.length > 0) {
+    const source = pending.shift();
+    if (source === undefined || reachable.has(source)) continue;
+    reachable.add(source);
+    for (const href of markdownLinks(pages.get(source) ?? "")) {
+      if (isExternal(href)) continue;
+      const { broken, next } = yield* checkLink(pages, source, href);
+      if (broken) brokenLinks.push(`${source} -> ${href}`);
+      if (next !== undefined && !reachable.has(next)) pending.push(next);
+    }
+  }
+  return { brokenLinks, reachable };
+});
+
+const issue = (label: string, items: readonly string[], separator = ", ") =>
+  items.length > 0 ? [`${label}: ${items.join(separator)}`] : [];
+
+const hasValidNavigationAndNoOrphanedMarkdown = Effect.gen(function* () {
+  const pages = yield* loadPages();
+  const allPages = [...pages.keys()];
+  const roots = navigationPaths(
+    readNavigation(yield* readJsonFile(resolvePath(docsRoot, "docs.json"))),
+  );
+  const duplicateRoots = [
+    ...new Set(roots.filter((path, index) => roots.indexOf(path) !== index)),
+  ].sort();
+  const missingRoots = roots.filter((path) => !pages.has(path)).sort();
+  const { brokenLinks, reachable } = yield* walkLinks(pages, roots);
+  const issues = [
+    ...issue("Duplicate navigation paths", duplicateRoots),
+    ...issue("Missing navigation pages", missingRoots),
+    ...issue("Broken local Markdown links", brokenLinks.sort()),
+    ...issue("Duplicate public documentation slugs", slugCollisionsOf(allPages), "; "),
+    ...issue(
+      "Orphaned Markdown pages",
+      allPages.filter((path) => !reachable.has(path)),
+    ),
+  ];
+  expect(issues).toEqual([]);
+});
 
 describe("coding-agent documentation", () => {
-  it("has valid navigation and no orphaned Markdown pages", () => {
-    const allPages = globSync("**/*.md", { cwd: docsRoot })
-      .map((path) => path.replaceAll("\\", "/"))
-      .sort();
-    const roots = navigationPaths(readNavigation());
-    const duplicateRoots = [
-      ...new Set(roots.filter((path, index) => roots.indexOf(path) !== index)),
-    ].sort();
-    const missingRoots = roots.filter((path) => !isFile(resolve(docsRoot, path))).sort();
-
-    const pathsBySlug = new Map<string, string[]>();
-    for (const path of allPages) {
-      const slug = publicSlug(path);
-      pathsBySlug.set(slug, [...(pathsBySlug.get(slug) ?? []), path]);
-    }
-    const slugCollisions = [...pathsBySlug]
-      .filter(([, paths]) => paths.length > 1)
-      .map(([slug, paths]) => `${slug || "/"} (${paths.join(", ")})`)
-      .sort();
-
-    const reachable = new Set<string>();
-    const pending = roots.filter((path) => isFile(resolve(docsRoot, path)));
-    const brokenLinks: string[] = [];
-    while (pending.length > 0) {
-      const source = pending.shift();
-      if (source === undefined || reachable.has(source)) continue;
-      reachable.add(source);
-
-      for (const href of markdownLinks(readFileSync(resolve(docsRoot, source), "utf8"))) {
-        if (/^[a-z][a-z\d+.-]*:/iu.test(href) || href.startsWith("//") || href.startsWith("/"))
-          continue;
-        const linkedPath = href.split(/[?#]/u, 1)[0] ?? "";
-        const fragment = fragmentOf(href);
-        if (linkedPath === "" && fragment !== "") {
-          if (!markdownAnchors(readFileSync(resolve(docsRoot, source), "utf8")).has(fragment))
-            brokenLinks.push(`${source} -> ${href}`);
-          continue;
-        }
-        if (!linkedPath.endsWith(".md")) continue;
-
-        const target = resolve(docsRoot, dirname(source), linkedPath);
-        if (!isFile(target)) {
-          brokenLinks.push(`${source} -> ${href}`);
-          continue;
-        }
-        if (fragment !== "" && !markdownAnchors(readFileSync(target, "utf8")).has(fragment)) {
-          brokenLinks.push(`${source} -> ${href}`);
-        }
-
-        const relativePath = relative(docsRoot, target);
-        if (
-          relativePath === ".." ||
-          relativePath.startsWith(`..${sep}`) ||
-          isAbsolute(relativePath)
-        )
-          continue;
-        const normalizedPath = relativePath.replaceAll("\\", "/");
-        if (!reachable.has(normalizedPath)) pending.push(normalizedPath);
-      }
-    }
-
-    const orphanedPages = allPages.filter((path) => !reachable.has(path));
-    const issues = [
-      ...(duplicateRoots.length > 0
-        ? [`Duplicate navigation paths: ${duplicateRoots.join(", ")}`]
-        : []),
-      ...(missingRoots.length > 0 ? [`Missing navigation pages: ${missingRoots.join(", ")}`] : []),
-      ...(brokenLinks.length > 0
-        ? [`Broken local Markdown links: ${brokenLinks.sort().join(", ")}`]
-        : []),
-      ...(slugCollisions.length > 0
-        ? [`Duplicate public documentation slugs: ${slugCollisions.join("; ")}`]
-        : []),
-      ...(orphanedPages.length > 0 ? [`Orphaned Markdown pages: ${orphanedPages.join(", ")}`] : []),
-    ];
-
-    expect(issues).toEqual([]);
-  });
+  it("has valid navigation and no orphaned Markdown pages", () =>
+    runTest(hasValidNavigationAndNoOrphanedMarkdown));
 });

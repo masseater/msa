@@ -18,7 +18,7 @@ function referenceStripAnsi(value: string): string {
   return value.replace(referenceRegex, "");
 }
 
-function getCompatibilityInputs(): string[] {
+const partPart1 = () => {
   const inputs = [
     "plain",
     "a\x1b[31mred\x1b[0mz",
@@ -38,6 +38,11 @@ function getCompatibilityInputs(): string[] {
     "a\x1bcok",
     "a\x1b\\ok",
   ];
+  return { inputs };
+};
+
+function getCompatibilityInputs(): string[] {
+  const { inputs } = partPart1();
   const chars = [
     "a",
     "f",
@@ -74,38 +79,57 @@ function getCompatibilityInputs(): string[] {
   return inputs;
 }
 
+const matchesChalkStripAnsiForGeneratedCompatibility = () => {
+  for (const input of getCompatibilityInputs()) {
+    expect(stripAnsi(input)).toBe(referenceStripAnsi(input));
+  }
+};
+
+const throwsTheSameTypeerrorAsChalkStrip = () => {
+  const stripAnsiUnknown = stripAnsi as (value: unknown) => string;
+
+  for (const value of [undefined, null, 123, {}, Object("x")]) {
+    const message = `Expected a \`string\`, got \`${typeof value}\``;
+    expect(() => stripAnsiUnknown(value)).toThrow(TypeError);
+    expect(() => stripAnsiUnknown(value)).toThrow(message);
+  }
+};
+
+const stripsRisWithoutLeakingTheFinalByte = () => {
+  expect(stripAnsi("\x1bcdone")).toBe("done");
+};
+
+const stripsSingleByteEscSequencesWithoutLeaking = () => {
+  for (let code = "g".charCodeAt(0); code <= "m".charCodeAt(0); code++) {
+    expect(stripAnsi(`\x1b${String.fromCharCode(code)}ok`)).toBe("ok");
+  }
+  for (let code = "r".charCodeAt(0); code <= "t".charCodeAt(0); code++) {
+    expect(stripAnsi(`\x1b${String.fromCharCode(code)}ok`)).toBe("ok");
+  }
+};
+
+const stripsCommonAnsiSequencesUsedInTool = () => {
+  const input = "a\x1b[31mred\x1b[0m\x1b]8;;https://example.com\x07link\x1b]8;;\x07z";
+  expect(stripAnsi(input)).toBe("aredlinkz");
+};
+
 describe("stripAnsi", () => {
-  it("matches chalk strip-ansi for generated compatibility inputs", () => {
-    for (const input of getCompatibilityInputs()) {
-      expect(stripAnsi(input)).toBe(referenceStripAnsi(input));
-    }
-  });
+  it(
+    "matches chalk strip-ansi for generated compatibility inputs",
+    matchesChalkStripAnsiForGeneratedCompatibility,
+  );
 
-  it("throws the same TypeError as chalk strip-ansi for non-string values", () => {
-    const stripAnsiUnknown = stripAnsi as (value: unknown) => string;
+  it(
+    "throws the same TypeError as chalk strip-ansi for non-string values",
+    throwsTheSameTypeerrorAsChalkStrip,
+  );
 
-    for (const value of [undefined, null, 123, {}, Object("x")]) {
-      const message = `Expected a \`string\`, got \`${typeof value}\``;
-      expect(() => stripAnsiUnknown(value)).toThrow(TypeError);
-      expect(() => stripAnsiUnknown(value)).toThrow(message);
-    }
-  });
+  it("strips RIS without leaking the final byte", stripsRisWithoutLeakingTheFinalByte);
 
-  it("strips RIS without leaking the final byte", () => {
-    expect(stripAnsi("\x1bcdone")).toBe("done");
-  });
+  it(
+    "strips single-byte ESC sequences without leaking final bytes",
+    stripsSingleByteEscSequencesWithoutLeaking,
+  );
 
-  it("strips single-byte ESC sequences without leaking final bytes", () => {
-    for (let code = "g".charCodeAt(0); code <= "m".charCodeAt(0); code++) {
-      expect(stripAnsi(`\x1b${String.fromCharCode(code)}ok`)).toBe("ok");
-    }
-    for (let code = "r".charCodeAt(0); code <= "t".charCodeAt(0); code++) {
-      expect(stripAnsi(`\x1b${String.fromCharCode(code)}ok`)).toBe("ok");
-    }
-  });
-
-  it("strips common ANSI sequences used in tool output", () => {
-    const input = "a\x1b[31mred\x1b[0m\x1b]8;;https://example.com\x07link\x1b]8;;\x07z";
-    expect(stripAnsi(input)).toBe("aredlinkz");
-  });
+  it("strips common ANSI sequences used in tool output", stripsCommonAnsiSequencesUsedInTool);
 });

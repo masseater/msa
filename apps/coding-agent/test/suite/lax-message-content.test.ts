@@ -1,6 +1,6 @@
 import type { AgentMessage, AgentToolResult } from "@msa/agent-core";
 import { fauxAssistantMessage, fauxToolCall } from "@msa/ai";
-import { currentTimeMillis, nowIso } from "@msa/testing";
+import testing from "@msa/testing";
 import { Effect } from "effect";
 import { Type } from "typebox";
 import { describe, expect, it } from "vite-plus/test";
@@ -10,15 +10,19 @@ import {
   sessionEntryToContextMessages,
 } from "../../src/core/session-manager.ts";
 import type { ExtensionFactory } from "../../src/index.ts";
-import { createHarness } from "./harness.ts";
+import harnessModule from "./harness.ts";
+
+const { createHarness } = harnessModule;
+
+const { currentTimeMillis, nowIso } = testing;
 
 function messageEntry(message: Record<string, unknown>): SessionEntry {
   return {
-    type: "message",
     id: "entry-1",
+    message,
     parentId: null,
     timestamp: nowIso(),
-    message,
+    type: "message",
   } as unknown as SessionEntry;
 }
 
@@ -26,12 +30,11 @@ const normalizesToolResultsFromUntypedTools = Effect.gen(function* () {
   const extensionFactories: ExtensionFactory[] = [
     (msa) => {
       msa.registerTool({
-        name: "web_search",
-        label: "Web Search",
         description: "Custom tool that returns a result without content",
-        parameters: Type.Object({}),
-
         execute: () => Promise.resolve({ details: {} } as unknown as AgentToolResult<unknown>),
+        label: "Web Search",
+        name: "web_search",
+        parameters: Type.Object({}),
       });
     },
   ];
@@ -94,10 +97,10 @@ const normalizesNullContentInCustomMessages = Effect.gen(function* () {
   try {
     yield* Effect.promise(() =>
       harness.session.sendCustomMessage({
-        customType: "test",
         content: null as unknown as string,
-        display: false,
+        customType: "test",
         details: undefined,
+        display: false,
       }),
     );
 
@@ -111,62 +114,84 @@ const normalizesNullContentInCustomMessages = Effect.gen(function* () {
 
 const normalizesNullOrMissingContentWhen = () => {
   const badMessages = [
-    { role: "user", content: null, timestamp: currentTimeMillis() },
+    { content: null, role: "user", timestamp: currentTimeMillis() },
     {
-      role: "assistant",
-      content: null,
       api: "openai-completions",
-      provider: "openai",
+      content: null,
       model: "test-model",
-      usage: {
-        input: 0,
-        output: 0,
-        cacheRead: 0,
-        cacheWrite: 0,
-        totalTokens: 0,
-        cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0, total: 0 },
-      },
+      provider: "openai",
+      role: "assistant",
       stopReason: "stop",
       timestamp: currentTimeMillis(),
+      usage: {
+        cacheRead: 0,
+        cacheWrite: 0,
+        cost: { cacheRead: 0, cacheWrite: 0, input: 0, output: 0, total: 0 },
+        input: 0,
+        output: 0,
+        totalTokens: 0,
+      },
     },
     {
+      isError: false,
       role: "toolResult",
+      timestamp: currentTimeMillis(),
       toolCallId: "call_1",
       toolName: "web_search",
-      isError: false,
-      timestamp: currentTimeMillis(),
     },
   ];
 
   for (const badMessage of badMessages) {
     const [message] = sessionEntryToContextMessages(messageEntry(badMessage));
-    expect(message).toMatchObject({ role: badMessage.role, content: [] });
+    expect(message).toMatchObject({ content: [], role: badMessage.role });
   }
 };
 
 const normalizesNullContentWhenLoadingCustom = () => {
   const entry = {
-    type: "custom_message",
+    content: null,
+    customType: "test",
+    details: undefined,
+    display: false,
     id: "entry-1",
     parentId: null,
     timestamp: nowIso(),
-    customType: "test",
-    content: null,
-    display: false,
-    details: undefined,
+    type: "custom_message",
   } as unknown as SessionEntry;
 
   const [message] = sessionEntryToContextMessages(entry);
-  expect(message).toMatchObject({ role: "custom", content: [] });
+  expect(message).toMatchObject({ content: [], role: "custom" });
+};
+
+const normalizesToolResultsFromUntypedToolsThat = () =>
+  Effect.runPromise(normalizesToolResultsFromUntypedTools);
+
+const normalizesNullContentInMessageEndExtension = () =>
+  Effect.runPromise(normalizesNullContentInMessageEnd);
+
+const normalizesNullContentInCustomMessagesFrom = () =>
+  Effect.runPromise(normalizesNullContentInCustomMessages);
+
+const keepsValidMessageContentUntouchedWhenLoading = () => {
+  const [message] = sessionEntryToContextMessages(
+    messageEntry({ content: "hello", role: "user", timestamp: currentTimeMillis() }),
+  );
+  expect(message).toMatchObject({ content: "hello", role: "user" });
 };
 
 describe("lax message content handling", () => {
-  it("normalizes tool results from untyped tools that omit content", () =>
-    Effect.runPromise(normalizesToolResultsFromUntypedTools));
-  it("normalizes null content in message_end extension replacements", () =>
-    Effect.runPromise(normalizesNullContentInMessageEnd));
-  it("normalizes null content in custom messages from extensions", () =>
-    Effect.runPromise(normalizesNullContentInCustomMessages));
+  it(
+    "normalizes tool results from untyped tools that omit content",
+    normalizesToolResultsFromUntypedToolsThat,
+  );
+  it(
+    "normalizes null content in message_end extension replacements",
+    normalizesNullContentInMessageEndExtension,
+  );
+  it(
+    "normalizes null content in custom messages from extensions",
+    normalizesNullContentInCustomMessagesFrom,
+  );
   it(
     "normalizes null or missing content when loading session message entries",
     normalizesNullOrMissingContentWhen,
@@ -175,10 +200,8 @@ describe("lax message content handling", () => {
     "normalizes null content when loading custom message entries",
     normalizesNullContentWhenLoadingCustom,
   );
-  it("keeps valid message content untouched when loading session entries", () => {
-    const [message] = sessionEntryToContextMessages(
-      messageEntry({ role: "user", content: "hello", timestamp: currentTimeMillis() }),
-    );
-    expect(message).toMatchObject({ role: "user", content: "hello" });
-  });
+  it(
+    "keeps valid message content untouched when loading session entries",
+    keepsValidMessageContentUntouchedWhenLoading,
+  );
 });

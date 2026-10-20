@@ -1,9 +1,11 @@
 import * as NodeServices from "@effect/platform-node/NodeServices";
-import { joinPath } from "@msa/testing";
+import testing from "@msa/testing";
 import { Effect, FileSystem, ManagedRuntime } from "effect";
 import { afterEach, beforeEach, describe, expect, it } from "vite-plus/test";
 
 import { createFindToolDefinition } from "../../../src/core/tools/find.ts";
+
+const { joinPath } = testing;
 
 const runtime = ManagedRuntime.make(NodeServices.layer);
 const fs = runtime.runSync(FileSystem.FileSystem.useSync((service) => service));
@@ -54,29 +56,40 @@ const srcSpecTsMatchesNestedSpec = Effect.gen(function* () {
   expect(files).toEqual(["src/foo/bar/example.spec.ts"]);
 });
 
-describe("issue #3302 find returns no results for path-based glob patterns", () => {
-  beforeEach(() =>
-    runtime.runPromise(
-      Effect.gen(function* () {
-        tempRoot = yield* fs.makeTempDirectory({ prefix: "msa-3302-" });
-        yield* fs.makeDirectory(joinPath(tempRoot, "some", "parent", "child"), { recursive: true });
-        yield* fs.makeDirectory(joinPath(tempRoot, "src", "foo", "bar"), { recursive: true });
-        yield* fs.writeFileString(joinPath(tempRoot, "some", "parent", "child", "file.ext"), "");
-        yield* fs.writeFileString(
-          joinPath(tempRoot, "some", "parent", "child", "test.spec.ts"),
-          "",
-        );
-        yield* fs.writeFileString(joinPath(tempRoot, "src", "foo", "bar", "example.spec.ts"), "");
-      }),
-    ),
+const basenamePatternStillMatchesRegressionSafe2 = () =>
+  Effect.runPromise(basenamePatternStillMatchesRegressionSafe);
+
+const directoryPrefixedPatternWithTailMatchesSubtree = () =>
+  Effect.runPromise(directoryPrefixedPatternWithTailMatches);
+
+const leadingWildcardWithPathSegmentsMatches2 = () =>
+  Effect.runPromise(leadingWildcardWithPathSegmentsMatches);
+
+const srcSpecTsMatchesNestedSpecFile = () => Effect.runPromise(srcSpecTsMatchesNestedSpec);
+
+const beforeEachHook = () =>
+  runtime.runPromise(
+    Effect.gen(function* () {
+      tempRoot = yield* fs.makeTempDirectory({ prefix: "msa-3302-" });
+      yield* fs.makeDirectory(joinPath(tempRoot, "some", "parent", "child"), { recursive: true });
+      yield* fs.makeDirectory(joinPath(tempRoot, "src", "foo", "bar"), { recursive: true });
+      yield* fs.writeFileString(joinPath(tempRoot, "some", "parent", "child", "file.ext"), "");
+      yield* fs.writeFileString(joinPath(tempRoot, "some", "parent", "child", "test.spec.ts"), "");
+      yield* fs.writeFileString(joinPath(tempRoot, "src", "foo", "bar", "example.spec.ts"), "");
+    }),
   );
-  afterEach(() => runtime.runPromise(fs.remove(tempRoot, { recursive: true, force: true })));
-  it("basename pattern still matches (regression-safe)", () =>
-    Effect.runPromise(basenamePatternStillMatchesRegressionSafe));
-  it("directory-prefixed pattern with ** tail matches subtree", () =>
-    Effect.runPromise(directoryPrefixedPatternWithTailMatches));
-  it("leading ** wildcard with path segments matches", () =>
-    Effect.runPromise(leadingWildcardWithPathSegmentsMatches));
-  it("src/**/*.spec.ts matches nested spec file", () =>
-    Effect.runPromise(srcSpecTsMatchesNestedSpec));
+
+describe("issue #3302 find returns no results for path-based glob patterns", () => {
+  beforeEach(beforeEachHook);
+  afterEach(() => runtime.runPromise(fs.remove(tempRoot, { force: true, recursive: true })));
+  it(
+    "basename pattern still matches (regression-safe)",
+    basenamePatternStillMatchesRegressionSafe2,
+  );
+  it(
+    "directory-prefixed pattern with ** tail matches subtree",
+    directoryPrefixedPatternWithTailMatchesSubtree,
+  );
+  it("leading ** wildcard with path segments matches", leadingWildcardWithPathSegmentsMatches2);
+  it("src/**/*.spec.ts matches nested spec file", srcSpecTsMatchesNestedSpecFile);
 });

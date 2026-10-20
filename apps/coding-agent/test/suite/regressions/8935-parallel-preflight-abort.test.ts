@@ -4,57 +4,67 @@ import { Effect } from "effect";
 import { Type } from "typebox";
 import { afterEach, describe, expect, it } from "vite-plus/test";
 
-import { createHarness, getMessageText, type Harness } from "../harness.ts";
+import harnessModule from "../harness.ts";
+import type harnessTypes from "../harness.types.ts";
 
-const harnesses: Harness[] = [];
+const { createHarness, getMessageText } = harnessModule;
+
+const harnesses: harnessTypes.Harness[] = [];
+
+const doesNotStartPreparedToolsAfterStep = () =>
+  Effect.gen(function* () {
+    const runPromise = Effect.runPromiseWith(yield* Effect.context<never>());
+    const executions: string[] = [];
+    const preflights: string[] = [];
+    const resultHooks: string[] = [];
+    const externalWrite: AgentTool = {
+      description: "Perform an external write",
+      execute: (_toolCallId, params) =>
+        runPromise(
+          Effect.sync(() => {
+            const value =
+              typeof params === "object" && params !== null && "value" in params
+                ? String(params.value)
+                : "";
+            executions.push(value);
+            return { content: [{ text: value, type: "text" }], details: { value } };
+          }),
+        ),
+      label: "External write",
+      name: "external_write",
+      parameters: Type.Object({ value: Type.String() }),
+    };
+    const harness = yield* Effect.promise(() =>
+      createHarness({
+        extensionFactories: [
+          (msa) => {
+            msa.on("tool_call", (event, ctx) =>
+              runPromise(
+                Effect.sync(() => {
+                  const value = "value" in event.input ? String(event.input["value"]) : "";
+                  preflights.push(value);
+                  if (value === "second") ctx.abort();
+                }),
+              ),
+            );
+            msa.on("tool_result", (event) =>
+              runPromise(
+                Effect.sync(() => {
+                  resultHooks.push(event.toolCallId);
+                }),
+              ),
+            );
+          },
+        ],
+        tools: [externalWrite],
+      }),
+    );
+    return { executions, harness, preflights, resultHooks };
+  });
 
 const doesNotStartPreparedToolsAfter = Effect.gen(function* () {
-  const runPromise = Effect.runPromiseWith(yield* Effect.context<never>());
-  const executions: string[] = [];
-  const preflights: string[] = [];
-  const resultHooks: string[] = [];
-  const externalWrite: AgentTool = {
-    name: "external_write",
-    label: "External write",
-    description: "Perform an external write",
-    parameters: Type.Object({ value: Type.String() }),
-    execute: (_toolCallId, params) =>
-      runPromise(
-        Effect.sync(() => {
-          const value =
-            typeof params === "object" && params !== null && "value" in params
-              ? String(params.value)
-              : "";
-          executions.push(value);
-          return { content: [{ type: "text", text: value }], details: { value } };
-        }),
-      ),
-  };
-  const harness = yield* Effect.promise(() =>
-    createHarness({
-      tools: [externalWrite],
-      extensionFactories: [
-        (msa) => {
-          msa.on("tool_call", (event, ctx) =>
-            runPromise(
-              Effect.sync(() => {
-                const value = "value" in event.input ? String(event.input["value"]) : "";
-                preflights.push(value);
-                if (value === "second") ctx.abort();
-              }),
-            ),
-          );
-          msa.on("tool_result", (event) =>
-            runPromise(
-              Effect.sync(() => {
-                resultHooks.push(event.toolCallId);
-              }),
-            ),
-          );
-        },
-      ],
-    }),
-  );
+  const { executions, harness, preflights, resultHooks } =
+    yield* doesNotStartPreparedToolsAfterStep();
   harnesses.push(harness);
   harness.setResponses([
     fauxAssistantMessage(
@@ -88,12 +98,18 @@ const doesNotStartPreparedToolsAfter = Effect.gen(function* () {
   expect(toolResults.map(getMessageText)).toEqual(["Operation aborted", "Operation aborted"]);
 });
 
+const doesNotStartPreparedToolsAfterA = () => Effect.runPromise(doesNotStartPreparedToolsAfter);
+
+const afterEachHook = () => {
+  while (harnesses.length > 0) {
+    harnesses.pop()?.cleanup();
+  }
+};
+
 describe("#8935 parallel preflight abort", () => {
-  afterEach(() => {
-    while (harnesses.length > 0) {
-      harnesses.pop()?.cleanup();
-    }
-  });
-  it("does not start prepared tools after a later preflight aborts", () =>
-    Effect.runPromise(doesNotStartPreparedToolsAfter));
+  afterEach(afterEachHook);
+  it(
+    "does not start prepared tools after a later preflight aborts",
+    doesNotStartPreparedToolsAfterA,
+  );
 });

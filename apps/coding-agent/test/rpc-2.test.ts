@@ -1,9 +1,13 @@
-import { awaited, runTest } from "@msa/testing";
+import testing from "@msa/testing";
 import { Effect } from "effect";
 import { describe, expect, test } from "vite-plus/test";
 
 import { readEnv } from "../src/core/process-env.ts";
-import { withClient } from "./rpc-support.ts";
+import rpcSupport from "./rpc-support.ts";
+
+const { withClient } = rpcSupport;
+
+const { awaited, runTest } = testing;
 
 describe.skipIf(
   readEnv("ANTHROPIC_API_KEY") === undefined && readEnv("ANTHROPIC_OAUTH_TOKEN") === undefined,
@@ -44,7 +48,11 @@ describe.skipIf(
       ),
     30000,
   );
+});
 
+describe.skipIf(
+  readEnv("ANTHROPIC_API_KEY") === undefined && readEnv("ANTHROPIC_OAUTH_TOKEN") === undefined,
+)("RPC mode", () => {
   test(
     "should get available thinking levels",
     () =>
@@ -71,7 +79,11 @@ describe.skipIf(
       ),
     30000,
   );
+});
 
+describe.skipIf(
+  readEnv("ANTHROPIC_API_KEY") === undefined && readEnv("ANTHROPIC_OAUTH_TOKEN") === undefined,
+)("RPC mode", () => {
   test(
     "should get available models",
     () =>
@@ -111,7 +123,11 @@ describe.skipIf(
       ),
     90000,
   );
+});
 
+describe.skipIf(
+  readEnv("ANTHROPIC_API_KEY") === undefined && readEnv("ANTHROPIC_OAUTH_TOKEN") === undefined,
+)("RPC mode", () => {
   test(
     "should create new session",
     () =>

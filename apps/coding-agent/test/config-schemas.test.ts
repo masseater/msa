@@ -1,22 +1,17 @@
-import { mkdtempSync, readFileSync, writeFileSync } from "node:fs";
-import { tmpdir } from "node:os";
-
-import { awaited, runTest, toJsonText, writeTextFile, joinPath, removePath } from "@msa/testing";
+import testing from "@msa/testing";
 import { Effect } from "effect";
 import { Compile } from "typebox/compile";
-import { afterEach, describe, expect, it } from "vite-plus/test";
+import { afterEach, beforeAll, describe, expect, it } from "vite-plus/test";
 
-import { renderConfigSchemas } from "../scripts/generate-schemas.ts";
-import { KeybindingsManager } from "../src/core/keybindings.ts";
-import { ModelConfig } from "../src/core/model-config.ts";
-import { SettingsManager } from "../src/core/settings-manager.ts";
-import { SettingsSchema } from "../src/core/settings-schema.ts";
-import { validateThemeJson } from "../src/modes/interactive/theme/theme-schema.ts";
+import configSchemasSupport from "./config-schemas-support.ts";
 
-const schemaBaseUrl =
-  "https://raw.githubusercontent.com/masseater/msa/main/apps/coding-agent/schemas";
+const { loadSchemas, renderedSchemas } = configSchemasSupport;
+
+beforeAll(loadSchemas);
+
+const { readTextFile, removePath, resolvePath, runTest } = testing;
+
 const temporaryDirectories: string[] = [];
-const renderedSchemas = await Effect.runPromise(renderConfigSchemas);
 
 afterEach(() =>
   runTest(
@@ -28,349 +23,129 @@ afterEach(() =>
   ),
 );
 
-function createTemporaryDirectory(): string {
-  const directory = mkdtempSync(joinPath(tmpdir(), "msa-config-schema-test-"));
-  temporaryDirectories.push(directory);
-  return directory;
-}
+const matchesTheFourCommittedArtifacts = Effect.gen(function* () {
+  expect([...renderedSchemas.keys()]).toEqual([
+    "schemas/models.schema.json",
+    "schemas/settings.schema.json",
+    "schemas/keybindings.schema.json",
+    "schemas/theme.schema.json",
+  ]);
+  for (const [relativePath, expected] of renderedSchemas) {
+    expect(
+      yield* readTextFile(resolvePath(import.meta.dirname, "..", relativePath)),
+      `${relativePath} is stale; run npm run generate:schemas`,
+    ).toBe(expected);
+  }
+});
 
-function schemaUrl(name: "models" | "settings" | "keybindings" | "theme"): string {
-  return `${schemaBaseUrl}/${name}.schema.json`;
-}
+const preservesEditorGuidanceInTheGeneratedTheme = () => {
+  const schema = JSON.parse(renderedSchemas.get("schemas/theme.schema.json") ?? "");
+  const accent = schema.properties.colors.properties.accent;
+  const colorValue =
+    accent.$ref === null || accent.$ref === undefined ? accent : schema.$defs.ColorValue;
+  expect(schema).toMatchObject({
+    description: "Theme schema for msa coding agent",
+    properties: {
+      colors: {
+        description: expect.stringContaining("use compatible fallbacks"),
+        properties: {
+          accent: { description: "Primary accent color (logo, selected items, cursor)" },
+          scrollbarTrack: { description: expect.stringContaining("falls back to muted") },
+        },
+      },
+      export: { description: expect.stringContaining("defaults derived from userMessageBg") },
+    },
+    title: "msa Coding Agent Theme",
+  });
+  expect(colorValue).toMatchObject({
+    anyOf: [{ description: expect.stringContaining("Hex color") }, expect.any(Object)],
+  });
+};
+
+const preservesMovedModelAndSettingsGuidance = () => {
+  const models = JSON.parse(renderedSchemas.get("schemas/models.schema.json") ?? "");
+  expect(models.$defs.ModelCost.properties).toMatchObject({
+    input: { description: expect.stringContaining("USD per million tokens") },
+    tiers: { description: expect.stringContaining("highest matching input threshold") },
+  });
+  expect(models.$defs.ModelInputLimits.properties).toMatchObject({
+    maxRequestBytes: { description: expect.stringContaining("serialized provider request size") },
+  });
+
+  const settings = JSON.parse(renderedSchemas.get("schemas/settings.schema.json") ?? "");
+  expect(settings.properties).toMatchObject({
+    defaultTools: { description: expect.stringContaining("+name and -name") },
+    fullscreenWheelScrollLines: { description: expect.stringContaining("1 to 100") },
+    quietStartup: { description: expect.stringContaining("hide all startup output") },
+  });
+};
 
 describe("generated configuration schemas", () => {
-  it("matches the four committed artifacts", () => {
-    expect([...renderedSchemas.keys()]).toEqual([
-      "schemas/models.schema.json",
-      "schemas/settings.schema.json",
-      "schemas/keybindings.schema.json",
-      "schemas/theme.schema.json",
-    ]);
-    for (const [relativePath, expected] of renderedSchemas) {
-      expect(
-        readFileSync(new URL(`../${relativePath}`, import.meta.url), "utf-8"),
-        `${relativePath} is stale; run npm run generate:schemas`,
-      ).toBe(expected);
-    }
-  });
+  it("matches the four committed artifacts", () => runTest(matchesTheFourCommittedArtifacts));
 
-  it("preserves editor guidance in the generated theme schema", () => {
-    const schema = JSON.parse(renderedSchemas.get("schemas/theme.schema.json") ?? "");
-    const accent = schema.properties.colors.properties.accent;
-    const colorValue =
-      accent.$ref === null || accent.$ref === undefined ? accent : schema.$defs.ColorValue;
-    expect(schema).toMatchObject({
-      title: "msa Coding Agent Theme",
-      description: "Theme schema for msa coding agent",
-      properties: {
-        colors: {
-          description: expect.stringContaining("use compatible fallbacks"),
-          properties: {
-            scrollbarTrack: { description: expect.stringContaining("falls back to muted") },
-            accent: { description: "Primary accent color (logo, selected items, cursor)" },
+  it(
+    "preserves editor guidance in the generated theme schema",
+    preservesEditorGuidanceInTheGeneratedTheme,
+  );
+
+  it("preserves moved model and settings guidance", preservesMovedModelAndSettingsGuidance);
+});
+
+const SCHEMA_CASES = [
+  {
+    artifact: "schemas/models.schema.json",
+    invalid: { providers: { local: { models: [{ id: "" }] } } },
+    name: "models.json",
+    valid: {
+      providers: {
+        local: {
+          compat: {
+            chatTemplateKwargs: { budget: { $var: "thinking.budget" } },
+            sendSessionAffinityHeaders: true,
+            supportsMidConvoSystemMessages: true,
+            thinkingTokenBudgetField: "thinking_budget",
           },
-        },
-        export: { description: expect.stringContaining("defaults derived from userMessageBg") },
-      },
-    });
-    expect(colorValue).toMatchObject({
-      anyOf: [{ description: expect.stringContaining("Hex color") }, expect.any(Object)],
-    });
-  });
-
-  it("preserves moved model and settings guidance", () => {
-    const models = JSON.parse(renderedSchemas.get("schemas/models.schema.json") ?? "");
-    expect(models.$defs.ModelCost.properties).toMatchObject({
-      input: { description: expect.stringContaining("USD per million tokens") },
-      tiers: { description: expect.stringContaining("highest matching input threshold") },
-    });
-    expect(models.$defs.ModelInputLimits.properties).toMatchObject({
-      maxRequestBytes: { description: expect.stringContaining("serialized provider request size") },
-    });
-
-    const settings = JSON.parse(renderedSchemas.get("schemas/settings.schema.json") ?? "");
-    expect(settings.properties).toMatchObject({
-      quietStartup: { description: expect.stringContaining("hide all startup output") },
-      defaultTools: { description: expect.stringContaining("+name and -name") },
-      fullscreenWheelScrollLines: { description: expect.stringContaining("1 to 100") },
-    });
-  });
-
-  it.each([
-    {
-      name: "models.json",
-      artifact: "schemas/models.schema.json",
-      valid: {
-        providers: {
-          local: {
-            compat: {
-              sendSessionAffinityHeaders: true,
-              thinkingTokenBudgetField: "thinking_budget",
-              chatTemplateKwargs: { budget: { $var: "thinking.budget" } },
-              supportsMidConvoSystemMessages: true,
+          models: [
+            {
+              id: "model",
+              inputLimits: { images: { maxPerRequest: 2 }, maxRequestBytes: 1024 },
+              promptCache: { short: 300 },
             },
-            models: [
-              {
-                id: "model",
-                inputLimits: { maxRequestBytes: 1024, images: { maxPerRequest: 2 } },
-                promptCache: { short: 300 },
-              },
-            ],
-          },
+          ],
         },
       },
-      invalid: { providers: { local: { models: [{ id: "" }] } } },
     },
-    {
-      name: "settings.json",
-      artifact: "schemas/settings.schema.json",
-      valid: {
-        theme: "dark",
-        cacheWarming: "idle",
-        extensionSetting: { enabled: true },
-        queueMode: "all",
-        websockets: true,
-        skills: { enableSkillCommands: true, customDirectories: ["./skills"] },
-        retry: { maxDelayMs: 1000 },
-      },
-      invalid: { cacheWarming: "always" },
-    },
-    {
-      name: "keybindings.json",
-      artifact: "schemas/keybindings.schema.json",
-      valid: { "app.session.new": "ctrl+n", "extension.action": ["alt+x"] },
-      invalid: { "app.session.new": 42 },
-    },
-  ])("validates representative $name documents", ({ artifact, valid, invalid }) => {
-    const schema = JSON.parse(renderedSchemas.get(artifact) ?? "");
-    const validator = Compile(schema);
-    expect(validator.Check(valid)).toBe(true);
-    expect(validator.Check(invalid)).toBe(false);
-  });
-
-  it("rejects non-positive model token limits", () => {
-    const schema = JSON.parse(renderedSchemas.get("schemas/models.schema.json") ?? "");
-    const validator = Compile(schema);
-    for (const field of ["contextWindow", "maxTokens"] as const) {
-      for (const value of [0, -1]) {
-        expect(
-          validator.Check({ providers: { local: { models: [{ id: "model", [field]: value }] } } }),
-          `models[].${field}=${value}`,
-        ).toBe(false);
-        expect(
-          validator.Check({
-            providers: { local: { modelOverrides: { model: { [field]: value } } } },
-          }),
-          `modelOverrides.${field}=${value}`,
-        ).toBe(false);
-      }
-    }
-    expect(
-      validator.Check({
-        providers: {
-          local: {
-            models: [{ id: "model", contextWindow: 1, maxTokens: 1 }],
-            modelOverrides: { model: { contextWindow: 1, maxTokens: 1 } },
-          },
-        },
-      }),
-    ).toBe(true);
-  });
-
-  it("validates keybinding syntax", () => {
-    const schema = JSON.parse(renderedSchemas.get("schemas/keybindings.schema.json") ?? "");
-    const validator = Compile(schema);
-    for (const binding of [
-      "a",
-      "9",
-      "pageUp",
-      "+",
-      "ctrl+shift+x",
-      "alt+ctrl+?",
-      "ctrl+shift+alt+super+f12",
-    ]) {
-      expect(validator.Check({ "extension.action": binding }), binding).toBe(true);
-    }
-    for (const binding of [
-      "",
-      "Ctrl+x",
-      "control+x",
-      "ctrl+not-a-key",
-      "ctrl+ctrl+x",
-      "ctrl+shift+alt+super+ctrl+x",
-    ]) {
-      expect(validator.Check({ "extension.action": binding }), binding).toBe(false);
-    }
-  });
-
-  it("rejects settings values that runtime accessors reject", () => {
-    const validator = Compile(SettingsSchema);
-    for (const invalid of [
-      { compaction: { reserveTokens: -1 } },
-      { compaction: { keepRecentTokens: 1.5 } },
-      {
-        compaction: {
-          modelOverrides: { "provider/model": { reserveTokens: Number.MAX_SAFE_INTEGER + 1 } },
-        },
-      },
-      { httpIdleTimeoutMs: -1 },
-      { websocketConnectTimeoutMs: -1 },
-      { httpIdleTimeoutMs: "bogus" },
-      { websocketConnectTimeoutMs: "30000" },
-      { codemode: { inlineBudget: -1 } },
-    ]) {
-      expect(validator.Check(invalid)).toBe(false);
-    }
-    expect(
-      validator.Check({
-        compaction: {
-          reserveTokens: 0,
-          keepRecentTokens: Number.MAX_SAFE_INTEGER,
-          modelOverrides: { "provider/model": { reserveTokens: 0 } },
-        },
-        httpIdleTimeoutMs: 0,
-        websocketConnectTimeoutMs: "disabled",
-        codemode: { inlineBudget: 0 },
-      }),
-    ).toBe(true);
-  });
-
-  it("describes legacy settings migrations accurately", () => {
-    const schema = JSON.parse(renderedSchemas.get("schemas/settings.schema.json") ?? "") as {
-      properties: {
-        queueMode: { description: string };
-        retry: { properties: { maxDelayMs: { description: string } } };
-      };
-    };
-    expect(schema.properties.retry.properties.maxDelayMs.description).toContain(
-      "provider.maxRetryDelayMs",
-    );
-    expect(schema.properties.queueMode.description).toBe(
-      "Legacy setting migrated to steeringMode.",
-    );
-  });
-
-  it("accepts custom compatibility settings and rejects malformed known fields", () =>
-    runTest(
-      Effect.gen(function* () {
-        const directory = createTemporaryDirectory();
-        const path = joinPath(directory, "models.json");
-        const compat = {
-          customOption: "value",
-          supportsStore: true,
-          supportsAdditionalTools: true,
-        };
-        yield* writeTextFile(
-          path,
-          yield* toJsonText({ providers: { demo: { api: "custom-api" as const, compat } } }),
-        );
-
-        const config = yield* awaited(ModelConfig.load(path));
-        expect(config.getError()).toBeUndefined();
-        expect(config.getProvider("demo")?.compat).toEqual(compat);
-
-        yield* writeTextFile(
-          path,
-          yield* toJsonText({
-            providers: { demo: { compat: { supportsLongCacheRetention: "yes" } } },
-          }),
-        );
-        expect((yield* awaited(ModelConfig.load(path))).getError()).toContain(
-          "Invalid models.json schema",
-        );
-      }),
-    ));
-
-  it("validates $schema in models.json at runtime", () =>
-    runTest(
-      Effect.gen(function* () {
-        const directory = createTemporaryDirectory();
-        const path = joinPath(directory, "models.json");
-        yield* writeTextFile(
-          path,
-          yield* toJsonText({
-            $schema: schemaUrl("models"),
-            providers: { demo: { baseUrl: "http://localhost:8080/v1", models: [{ id: "demo" }] } },
-          }),
-        );
-
-        const config = yield* awaited(ModelConfig.load(path));
-        expect(config.getError()).toBeUndefined();
-        expect(config.getProvider("demo")?.models?.[0]?.id).toBe("demo");
-
-        yield* writeTextFile(
-          path,
-          yield* toJsonText({
-            $schema: schemaUrl("models"),
-            providers: { demo: { models: [{ id: "" }] } },
-          }),
-        );
-        expect((yield* awaited(ModelConfig.load(path))).getError()).toContain(
-          "Invalid models.json schema",
-        );
-
-        yield* writeTextFile(path, yield* toJsonText({ $schema: 42, providers: {} }));
-        expect((yield* awaited(ModelConfig.load(path))).getError()).toContain("$schema");
-      }),
-    ));
-
-  it("accepts $schema in settings.json and preserves unknown settings", () => {
-    const directory = createTemporaryDirectory();
-    writeFileSync(
-      joinPath(directory, "settings.json"),
-      JSON.stringify({
-        $schema: schemaUrl("settings"),
-        theme: "light",
-        extensionSetting: { enabled: true },
-      }),
-    );
-
-    const manager = SettingsManager.create(directory, directory);
-    expect(manager.getTheme()).toBe("light");
-    expect(manager.getGlobalSettings()).toMatchObject({
-      $schema: schemaUrl("settings"),
+  },
+  {
+    artifact: "schemas/settings.schema.json",
+    invalid: { cacheWarming: "always" },
+    name: "settings.json",
+    valid: {
+      cacheWarming: "idle",
       extensionSetting: { enabled: true },
-    });
-  });
+      queueMode: "all",
+      retry: { maxDelayMs: 1000 },
+      skills: { customDirectories: ["./skills"], enableSkillCommands: true },
+      theme: "dark",
+      websockets: true,
+    },
+  },
+  {
+    artifact: "schemas/keybindings.schema.json",
+    invalid: { "app.session.new": 42 },
+    name: "keybindings.json",
+    valid: { "app.session.new": "ctrl+n", "extension.action": ["alt+x"] },
+  },
+];
 
-  it("accepts $schema in keybindings.json without treating it as an action", () => {
-    const directory = createTemporaryDirectory();
-    writeFileSync(
-      joinPath(directory, "keybindings.json"),
-      JSON.stringify({
-        $schema: schemaUrl("keybindings"),
-        "app.session.new": "ctrl+n",
-        "extension.invalid": "ctrl+not-a-key",
-      }),
-    );
-
-    const manager = KeybindingsManager.create(directory);
-    expect(manager.getUserBindings()).toEqual({ "app.session.new": "ctrl+n" });
-    expect(manager.getEffectiveConfig()["app.session.new"]).toBe("ctrl+n");
-  });
-
-  it("accepts $schema in themes and rejects malformed themes", () => {
-    const builtIn = JSON.parse(
-      readFileSync(new URL("../src/modes/interactive/theme/dark.json", import.meta.url), "utf-8"),
-    ) as Record<string, unknown>;
-    expect(
-      validateThemeJson("custom", { ...builtIn, $schema: schemaUrl("theme"), name: "custom" }).name,
-    ).toBe("custom");
-    expect(() => validateThemeJson("invalid", { ...builtIn, name: "invalid/name" })).toThrow(
-      "theme names cannot contain",
-    );
-    expect(() => validateThemeJson("invalid", { ...builtIn, colors: {} })).toThrow(
-      "Missing required color tokens",
-    );
-    for (const invalid of [
-      { ...builtIn, unexpected: true },
-      {
-        ...builtIn,
-        colors: { ...(builtIn["colors"] as Record<string, unknown>), scrollbarThmb: "" },
-      },
-      { ...builtIn, export: { unexpected: "" } },
-    ]) {
-      expect(() => validateThemeJson("invalid", invalid)).toThrow(/additional properties/iu);
-    }
-  });
+describe("generated configuration schemas", () => {
+  it.each(SCHEMA_CASES)(
+    "validates representative $name documents",
+    ({ artifact, valid, invalid }) => {
+      const schema = JSON.parse(renderedSchemas.get(artifact) ?? "");
+      const validator = Compile(schema);
+      expect(validator.Check(valid)).toBe(true);
+      expect(validator.Check(invalid)).toBe(false);
+    },
+  );
 });

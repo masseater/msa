@@ -1,16 +1,19 @@
-import { deferredPromise } from "@msa/testing";
+import testing from "@msa/testing";
 import { Effect } from "effect";
 import { expect } from "vite-plus/test";
 
 import type { BashOperations } from "../../src/core/tools/bash.ts";
-import {
-  type ControlledBashInvocation,
-  createControlledBashOperations,
-  harnesses,
-} from "./agent-session-bash-persistence-cases-1.ts";
-import { createHarness, type Harness } from "./harness.ts";
+import agentSessionBashPersistenceCases1 from "./agent-session-bash-persistence-cases-1.ts";
+import type agentSessionBashPersistenceCases1Types from "./agent-session-bash-persistence-cases-1.types.ts";
+import harnessModule from "./harness.ts";
+import type harnessTypes from "./harness.types.ts";
 
-export const executesBashCommandsAndRecordsThe = Effect.gen(function* () {
+const { createHarness } = harnessModule;
+const { createControlledBashOperations, harnesses } = agentSessionBashPersistenceCases1;
+
+const { deferredPromise } = testing;
+
+const executesBashCommandsAndRecordsThe = Effect.gen(function* () {
   const harness = yield* Effect.promise(() => createHarness());
   harnesses.push(harness);
 
@@ -19,7 +22,7 @@ export const executesBashCommandsAndRecordsThe = Effect.gen(function* () {
   expect(result.output).toContain("hello");
   expect(harness.session.messages[harness.session.messages.length - 1]?.role).toBe("bashExecution");
 });
-export const cancelsRunningBashCommandsWithAbortbash = Effect.gen(function* () {
+const cancelsRunningBashCommandsWithAbortbash = Effect.gen(function* () {
   const harness = yield* Effect.promise(() => createHarness());
   harnesses.push(harness);
   const operations: BashOperations = {
@@ -45,10 +48,10 @@ export const cancelsRunningBashCommandsWithAbortbash = Effect.gen(function* () {
   expect(result.cancelled).toBe(true);
   expect(harness.session.isBashRunning).toBe(false);
 });
-export const keepsNewerBashExecutionTrackedWhen = Effect.gen(function* () {
+const keepsNewerBashExecutionTrackedWhen = Effect.gen(function* () {
   const harness = yield* Effect.promise(() => createHarness());
   harnesses.push(harness);
-  const invocations: ControlledBashInvocation[] = [];
+  const invocations: agentSessionBashPersistenceCases1Types.ControlledBashInvocation[] = [];
   const operations = createControlledBashOperations(invocations);
 
   const firstBash = harness.session.executeBash("first", undefined, { operations });
@@ -73,10 +76,10 @@ export const keepsNewerBashExecutionTrackedWhen = Effect.gen(function* () {
   expect(secondResult.cancelled).toBe(true);
   expect(harness.session.isBashRunning).toBe(false);
 });
-export const abortsAllActiveBashExecutions = Effect.gen(function* () {
+const abortsAllActiveBashExecutions = Effect.gen(function* () {
   const harness = yield* Effect.promise(() => createHarness());
   harnesses.push(harness);
-  const invocations: ControlledBashInvocation[] = [];
+  const invocations: agentSessionBashPersistenceCases1Types.ControlledBashInvocation[] = [];
   const operations = createControlledBashOperations(invocations);
 
   const firstBash = harness.session.executeBash("first", undefined, { operations });
@@ -93,14 +96,14 @@ export const abortsAllActiveBashExecutions = Effect.gen(function* () {
   expect(results.map((result) => result.cancelled)).toEqual([true, true]);
   expect(harness.session.isBashRunning).toBe(false);
 });
-export const persistsUserAssistantToolresultAndCustomPart2 = (harness: Harness) =>
+const persistsUserAssistantToolresultAndCustomPart2 = (harness: harnessTypes.Harness) =>
   Effect.gen(function* () {
     yield* Effect.promise(() =>
       harness.session.sendCustomMessage({
-        customType: "note",
         content: "hello",
-        display: true,
+        customType: "note",
         details: { a: 1 },
+        display: true,
       }),
     );
     yield* Effect.promise(() => harness.session.prompt("start"));
@@ -122,3 +125,13 @@ export const persistsUserAssistantToolresultAndCustomPart2 = (harness: Harness) 
       "assistant",
     ]);
   });
+
+const agentSessionBashPersistenceCases3 = {
+  abortsAllActiveBashExecutions,
+  cancelsRunningBashCommandsWithAbortbash,
+  executesBashCommandsAndRecordsThe,
+  keepsNewerBashExecutionTrackedWhen,
+  persistsUserAssistantToolresultAndCustomPart2,
+};
+
+export default agentSessionBashPersistenceCases3;

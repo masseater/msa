@@ -1,17 +1,19 @@
-import { awaited, runTest } from "@msa/testing";
+import testing from "@msa/testing";
 import type * as Tui from "@msa/tui";
 import { Effect } from "effect";
 import { afterEach, expect, test, vi } from "vite-plus/test";
 
 import { InteractiveMode } from "../src/modes/interactive/interactive-mode.ts";
 
+const { awaited, runTest } = testing;
+
 const readClipboardText = vi.hoisted(() => vi.fn<() => Promise<string | null>>());
 vi.mock("@msa/tui", (importOriginal) =>
-  runTest(
+  testing.runTest(
     Effect.gen(function* () {
       const effectRunPromise = Effect.runPromiseWith(yield* Effect.context<never>());
       return {
-        ...(yield* awaited(importOriginal<typeof Tui>())),
+        ...(yield* testing.awaited(importOriginal<typeof Tui>())),
         getNativeClipboard: () => ({
           getImage() {
             return effectRunPromise(
@@ -27,23 +29,23 @@ vi.mock("@msa/tui", (importOriginal) =>
 );
 vi.mock("../src/utils/clipboard.ts", () => ({
   copyToClipboard: vi.fn(),
-  readClipboardFilePaths: vi.fn(() => runTest(awaited(null))),
+  readClipboardFilePaths: vi.fn(() => testing.runTest(testing.awaited(null))),
   readClipboardText,
 }));
 vi.mock("../src/utils/clipboard-command.ts", () => ({
-  runClipboardCommand: vi.fn(() => runTest(awaited(undefined))),
+  runClipboardCommand: vi.fn(() => testing.runTest(testing.awaited(undefined))),
 }));
 afterEach(() => vi.unstubAllEnvs());
 
-test("native image errors abort paste without reading text or changing the editor", () =>
+const nativeImageErrorsAbortPasteWithoutReading = () =>
   runTest(
     Effect.gen(function* () {
       vi.stubEnv("TERMUX_VERSION", "");
       const context = {
         editor: { insertTextAtCursor: vi.fn() },
+        settingsManager: { getClipboardImageCommand: () => undefined },
         showError: vi.fn(),
         ui: { requestRender: vi.fn() },
-        settingsManager: { getClipboardImageCommand: () => undefined },
       };
       const prototype = InteractiveMode.prototype as unknown as {
         handleClipboardPaste(this: typeof context): Promise<void>;
@@ -56,4 +58,9 @@ test("native image errors abort paste without reading text or changing the edito
         "Failed to paste from clipboard: Native clipboard operation failed",
       );
     }),
-  ));
+  );
+
+test(
+  "native image errors abort paste without reading text or changing the editor",
+  nativeImageErrorsAbortPasteWithoutReading,
+);

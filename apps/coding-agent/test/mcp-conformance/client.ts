@@ -1,4 +1,4 @@
-import { fromJsonText, tempRoot, toJsonText, writeTextFile } from "@msa/testing";
+import testing from "@msa/testing";
 import { Cause, Data, Effect, Exit, ManagedRuntime } from "effect";
 import { FetchHttpClient, HttpClient } from "effect/http";
 
@@ -7,11 +7,13 @@ import { readEnv } from "../../src/core/process-env.ts";
 import type { McpHttpServerConfig, McpServerEntry } from "../../src/extensions/mcp/config.ts";
 import type { McpSignInPrompt } from "../../src/extensions/mcp/oauth.ts";
 import {
-  createDefaultTransport,
   McpOAuthCredentialStore,
   McpServerConnection,
+  createDefaultTransport,
   signInMcpServer,
 } from "../../src/extensions/mcp/runtime.ts";
+
+const { fromJsonText, tempRoot, toJsonText, writeTextFile } = testing;
 
 const MAX_SIGN_INS = 3;
 const REQUEST_TIMEOUT_SECONDS = 20;
@@ -43,22 +45,22 @@ const toolCalls = (
   scenario: string,
   connection: McpServerConnection,
 ): ReadonlyArray<ToolCall> | undefined => {
-  if (scenario.startsWith("auth/")) return [{ name: "test-tool", arguments: {} }];
+  if (scenario.startsWith("auth/")) return [{ arguments: {}, name: "test-tool" }];
   switch (scenario) {
     case "initialize":
       return [];
     case "tools_call":
-      return [{ name: "add_numbers", arguments: { a: 2, b: 3 } }];
+      return [{ arguments: { a: 2, b: 3 }, name: "add_numbers" }];
     case "sse-retry":
-      return [{ name: "test_reconnection", arguments: {} }];
+      return [{ arguments: {}, name: "test_reconnection" }];
     case "elicitation-sep1034-client-defaults":
-      return [{ name: "test_client_elicitation_defaults", arguments: {} }];
+      return [{ arguments: {}, name: "test_client_elicitation_defaults" }];
     case "json-schema-2020-12-preservation": {
       const tool = connection.tools.find(
         (candidate) => candidate.name === "json_schema_2020_12_tool",
       );
       if (tool === undefined) throw conformanceError("json_schema_2020_12_tool was not listed");
-      return [{ name: "json_schema_echo", arguments: { schema: tool.inputSchema } }];
+      return [{ arguments: { schema: tool.inputSchema }, name: "json_schema_echo" }];
     }
     default:
       return undefined;
@@ -99,10 +101,6 @@ const visitAuthorizationUrl = (url: URL) =>
 const simulatedBrowser = (): McpSignInPrompt => {
   let visit: Promise<void> | undefined;
   return {
-    showAuthorizationUrl(url) {
-      log(`authorization URL: ${url.origin}${url.pathname}`);
-      visit = runtime.runPromise(visitAuthorizationUrl(url));
-    },
     promptForRedirectUrl(signal) {
       return runtime.runPromise(
         Effect.gen(function* () {
@@ -129,6 +127,10 @@ const simulatedBrowser = (): McpSignInPrompt => {
         }),
       );
     },
+    showAuthorizationUrl(url) {
+      log(`authorization URL: ${url.origin}${url.pathname}`);
+      visit = runtime.runPromise(visitAuthorizationUrl(url));
+    },
   };
 };
 
@@ -148,8 +150,8 @@ const signIn = (
     yield* Effect.promise(() =>
       signInMcpServer({
         serverUrl: url ?? "",
-        store: credentials.forServer(entry.name, url ?? ""),
         settings: connection.oauthSettings(),
+        store: credentials.forServer(entry.name, url ?? ""),
         ...(connection.challenge === undefined ? {} : { challenge: connection.challenge }),
         prompt: simulatedBrowser(),
       }),
@@ -208,7 +210,7 @@ const callTools = (
 const run = (serverUrl: string, scenario: string) =>
   Effect.gen(function* () {
     const context = yield* readContext();
-    const config: McpHttpServerConfig = { url: serverUrl, timeout: REQUEST_TIMEOUT_SECONDS };
+    const config: McpHttpServerConfig = { timeout: REQUEST_TIMEOUT_SECONDS, url: serverUrl };
     if (typeof context["client_id"] === "string") {
       config.oauth = {
         clientId: context["client_id"],
@@ -217,13 +219,13 @@ const run = (serverUrl: string, scenario: string) =>
           : {}),
       };
     }
-    const entry: McpServerEntry = { name: "conformance", config, source: "conformance" };
+    const entry: McpServerEntry = { config, name: "conformance", source: "conformance" };
     const credentials = new McpOAuthCredentialStore(new InMemoryAuthStorageBackend());
     const connection = new McpServerConnection({
-      entry,
-      cwd: tempRoot(),
       createTransport: createDefaultTransport,
       credentials,
+      cwd: tempRoot(),
+      entry,
       onTools: () => {},
     });
     yield* callTools(connection, entry, credentials, { count: 0 }, scenario).pipe(
@@ -250,14 +252,14 @@ const main = () =>
       process.argv.length < 3
     ) {
       report = {
-        success: false,
         error: "Usage: MCP_CONFORMANCE_SCENARIO=<scenario> client.ts <server-url>",
+        success: false,
       };
     } else {
       const exit = yield* Effect.exit(run(serverUrl, scenario));
       report = Exit.isSuccess(exit)
         ? { success: true }
-        : { success: false, error: errorMessage(Cause.squash(exit.cause)) };
+        : { error: errorMessage(Cause.squash(exit.cause)), success: false };
     }
     if (report.error !== undefined && report.error !== "") log(`error: ${report.error}`);
     if (reportPath !== undefined && reportPath !== "") yield* writeReport(reportPath, report);

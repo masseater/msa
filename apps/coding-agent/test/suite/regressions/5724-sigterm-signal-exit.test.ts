@@ -1,8 +1,10 @@
-import { gate } from "@msa/testing";
+import testing from "@msa/testing";
 import { Cause, Data, Effect, Exit } from "effect";
 import { afterEach, describe, expect, test, vi } from "vite-plus/test";
 
 import { InteractiveMode } from "../../../src/modes/interactive/interactive-mode.ts";
+
+const { gate } = testing;
 
 type ShutdownThis = {
   isShuttingDown: boolean;
@@ -60,15 +62,16 @@ const keepsSignalHandlersRegisteredWhileSignal = Effect.gen(function* () {
   const dispose = deferred();
   const context: ShutdownThis = {
     isShuttingDown: false,
-    unregisterSignalHandlers: vi.fn(() => {
-      order.push("unregister");
-    }),
     runtimeHost: {
       dispose: vi.fn(() => {
         order.push("dispose");
         return dispose.promise;
       }),
     },
+    stop: vi.fn(() => {
+      order.push("stop");
+    }),
+    themeController: { disableAutoSync: vi.fn() },
     ui: {
       terminal: {
         drainInput: vi.fn(() =>
@@ -80,9 +83,8 @@ const keepsSignalHandlersRegisteredWhileSignal = Effect.gen(function* () {
         ),
       },
     },
-    themeController: { disableAutoSync: vi.fn() },
-    stop: vi.fn(() => {
-      order.push("stop");
+    unregisterSignalHandlers: vi.fn(() => {
+      order.push("unregister");
     }),
   };
 
@@ -98,10 +100,15 @@ const keepsSignalHandlersRegisteredWhileSignal = Effect.gen(function* () {
   expect(order).toEqual(["dispose", "drainInput", "stop"]);
 });
 
+const keepsSignalHandlersRegisteredWhileSignalTriggered = () =>
+  Effect.runPromise(keepsSignalHandlersRegisteredWhileSignal);
+
 describe("InteractiveMode SIGTERM shutdown with signal-exit (#5724)", () => {
   afterEach(() => {
     vi.restoreAllMocks();
   });
-  test("keeps signal handlers registered while signal-triggered cleanup is pending", () =>
-    Effect.runPromise(keepsSignalHandlersRegisteredWhileSignal));
+  test(
+    "keeps signal handlers registered while signal-triggered cleanup is pending",
+    keepsSignalHandlersRegisteredWhileSignalTriggered,
+  );
 });

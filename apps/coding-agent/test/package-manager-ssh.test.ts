@@ -1,9 +1,11 @@
-import { joinPath, makeDirectory, makeTempDir, removeDirs, runTest } from "@msa/testing";
+import testing from "@msa/testing";
 import { Effect } from "effect";
 import { afterEach, describe, expect, it } from "vite-plus/test";
 
 import { DefaultPackageManager } from "../src/core/package-manager.ts";
 import { SettingsManager } from "../src/core/settings-manager.ts";
+
+const { joinPath, makeDirectory, makeTempDir, removeDirs, runTest } = testing;
 
 const tempDirs: string[] = [];
 
@@ -18,8 +20,8 @@ const withPackageManager = <A>(
     const agentDir = joinPath(tempDir, "agent");
     yield* makeDirectory(agentDir);
     const packageManager = new DefaultPackageManager({
-      cwd: tempDir,
       agentDir,
+      cwd: tempDir,
       settingsManager: SettingsManager.inMemory(),
     });
     return use(packageManager);
@@ -31,94 +33,116 @@ const parseSource = (packageManager: DefaultPackageManager, source: string): unk
 const identityOf = (packageManager: DefaultPackageManager, source: string): unknown =>
   (packageManager as any).getPackageIdentity(source);
 
+const shouldParseHttpsUrl = () =>
+  runTest(
+    withPackageManager((packageManager) => {
+      const parsed = parseSource(packageManager, "https://github.com/user/repo") as any;
+      expect(parsed.type).toBe("git");
+      expect(parsed.host).toBe("github.com");
+      expect(parsed.path).toBe("user/repo");
+    }),
+  );
+
+const shouldParseSshUrl = () =>
+  runTest(
+    withPackageManager((packageManager) => {
+      const parsed = parseSource(packageManager, "ssh://git@github.com/user/repo") as any;
+      expect(parsed.type).toBe("git");
+      expect(parsed.host).toBe("github.com");
+      expect(parsed.path).toBe("user/repo");
+      expect(parsed.repo).toBe("ssh://git@github.com/user/repo");
+    }),
+  );
+
+const shouldParseGitHostPathFormat = () =>
+  runTest(
+    withPackageManager((packageManager) => {
+      const parsed = parseSource(packageManager, "git:git@github.com:user/repo") as any;
+      expect(parsed.type).toBe("git");
+      expect(parsed.host).toBe("github.com");
+      expect(parsed.path).toBe("user/repo");
+      expect(parsed.repo).toBe("git@github.com:user/repo");
+      expect(parsed.pinned).toBe(false);
+    }),
+  );
+
+const shouldParseHostPathShorthand = () =>
+  runTest(
+    withPackageManager((packageManager) => {
+      const parsed = parseSource(packageManager, "git:github.com/user/repo") as any;
+      expect(parsed.type).toBe("git");
+      expect(parsed.host).toBe("github.com");
+      expect(parsed.path).toBe("user/repo");
+    }),
+  );
+
+const shouldParseShorthandWithRef = () =>
+  runTest(
+    withPackageManager((packageManager) => {
+      const parsed = parseSource(packageManager, "git:git@github.com:user/repo@v1.0.0") as any;
+      expect(parsed.type).toBe("git");
+      expect(parsed.ref).toBe("v1.0.0");
+      expect(parsed.pinned).toBe(true);
+    }),
+  );
+
+const shouldTreatGitHostPathAsLocal = () =>
+  runTest(
+    withPackageManager((packageManager) => {
+      const parsed = parseSource(packageManager, "git@github.com:user/repo") as any;
+      expect(parsed.type).toBe("local");
+    }),
+  );
+
+const shouldTreatHostPathShorthandAsLocal = () =>
+  runTest(
+    withPackageManager((packageManager) => {
+      const parsed = parseSource(packageManager, "github.com/user/repo") as any;
+      expect(parsed.type).toBe("local");
+    }),
+  );
+
+const shouldNormalizeProtocolAndShorthandPrefixedUrls = () =>
+  runTest(
+    withPackageManager((packageManager) => {
+      const prefixed = identityOf(packageManager, "git:git@github.com:user/repo");
+      const https = identityOf(packageManager, "https://github.com/user/repo");
+      const ssh = identityOf(packageManager, "ssh://git@github.com/user/repo");
+
+      expect(prefixed).toBe("git:github.com/user/repo");
+      expect(prefixed).toBe(https);
+      expect(prefixed).toBe(ssh);
+    }),
+  );
+
 describe("Package Manager git source parsing", () => {
   describe("protocol URLs without git: prefix", () => {
-    it("should parse https:// URL", () =>
-      runTest(
-        withPackageManager((packageManager) => {
-          const parsed = parseSource(packageManager, "https://github.com/user/repo") as any;
-          expect(parsed.type).toBe("git");
-          expect(parsed.host).toBe("github.com");
-          expect(parsed.path).toBe("user/repo");
-        }),
-      ));
+    it("should parse https:// URL", shouldParseHttpsUrl);
 
-    it("should parse ssh:// URL", () =>
-      runTest(
-        withPackageManager((packageManager) => {
-          const parsed = parseSource(packageManager, "ssh://git@github.com/user/repo") as any;
-          expect(parsed.type).toBe("git");
-          expect(parsed.host).toBe("github.com");
-          expect(parsed.path).toBe("user/repo");
-          expect(parsed.repo).toBe("ssh://git@github.com/user/repo");
-        }),
-      ));
+    it("should parse ssh:// URL", shouldParseSshUrl);
   });
 
   describe("shorthand URLs with git: prefix", () => {
-    it("should parse git@host:path format", () =>
-      runTest(
-        withPackageManager((packageManager) => {
-          const parsed = parseSource(packageManager, "git:git@github.com:user/repo") as any;
-          expect(parsed.type).toBe("git");
-          expect(parsed.host).toBe("github.com");
-          expect(parsed.path).toBe("user/repo");
-          expect(parsed.repo).toBe("git@github.com:user/repo");
-          expect(parsed.pinned).toBe(false);
-        }),
-      ));
+    it("should parse git@host:path format", shouldParseGitHostPathFormat);
 
-    it("should parse host/path shorthand", () =>
-      runTest(
-        withPackageManager((packageManager) => {
-          const parsed = parseSource(packageManager, "git:github.com/user/repo") as any;
-          expect(parsed.type).toBe("git");
-          expect(parsed.host).toBe("github.com");
-          expect(parsed.path).toBe("user/repo");
-        }),
-      ));
+    it("should parse host/path shorthand", shouldParseHostPathShorthand);
 
-    it("should parse shorthand with ref", () =>
-      runTest(
-        withPackageManager((packageManager) => {
-          const parsed = parseSource(packageManager, "git:git@github.com:user/repo@v1.0.0") as any;
-          expect(parsed.type).toBe("git");
-          expect(parsed.ref).toBe("v1.0.0");
-          expect(parsed.pinned).toBe(true);
-        }),
-      ));
+    it("should parse shorthand with ref", shouldParseShorthandWithRef);
   });
 
   describe("unsupported without git: prefix", () => {
-    it("should treat git@host:path as local without git: prefix", () =>
-      runTest(
-        withPackageManager((packageManager) => {
-          const parsed = parseSource(packageManager, "git@github.com:user/repo") as any;
-          expect(parsed.type).toBe("local");
-        }),
-      ));
+    it("should treat git@host:path as local without git: prefix", shouldTreatGitHostPathAsLocal);
 
-    it("should treat host/path shorthand as local without git: prefix", () =>
-      runTest(
-        withPackageManager((packageManager) => {
-          const parsed = parseSource(packageManager, "github.com/user/repo") as any;
-          expect(parsed.type).toBe("local");
-        }),
-      ));
+    it(
+      "should treat host/path shorthand as local without git: prefix",
+      shouldTreatHostPathShorthandAsLocal,
+    );
   });
 
   describe("identity normalization", () => {
-    it("should normalize protocol and shorthand-prefixed URLs to same identity", () =>
-      runTest(
-        withPackageManager((packageManager) => {
-          const prefixed = identityOf(packageManager, "git:git@github.com:user/repo");
-          const https = identityOf(packageManager, "https://github.com/user/repo");
-          const ssh = identityOf(packageManager, "ssh://git@github.com/user/repo");
-
-          expect(prefixed).toBe("git:github.com/user/repo");
-          expect(prefixed).toBe(https);
-          expect(prefixed).toBe(ssh);
-        }),
-      ));
+    it(
+      "should normalize protocol and shorthand-prefixed URLs to same identity",
+      shouldNormalizeProtocolAndShorthandPrefixedUrls,
+    );
   });
 });

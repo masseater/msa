@@ -1,13 +1,11 @@
-import * as NodeServices from "@effect/platform-node/NodeServices";
-import { FileSystem, ManagedRuntime } from "effect";
 import { expect } from "vite-plus/test";
 
 import { type CustomEntry, SessionManager } from "../../src/core/session-manager.ts";
-import { assistantMsg, userMsg } from "../utilities.ts";
+import utilities from "../utilities.ts";
 
-export const runtime = ManagedRuntime.make(NodeServices.layer);
-export const fs = runtime.runSync(FileSystem.FileSystem.useSync((service) => service));
-export const appendmessageCreatesEntryWithCorrectParentid = () => {
+const { assistantMsg, userMsg } = utilities;
+
+const appendmessageCreatesEntryWithCorrectParentid = () => {
   const session = SessionManager.inMemory();
 
   const id1 = session.appendMessage(userMsg("first"));
@@ -27,7 +25,7 @@ export const appendmessageCreatesEntryWithCorrectParentid = () => {
   expect(entries[2]?.id).toBe(id3);
   expect(entries[2]?.parentId).toBe(id2);
 };
-export const appendthinkinglevelchangeIntegratesIntoTree = () => {
+const appendthinkinglevelchangeIntegratesIntoTree = () => {
   const session = SessionManager.inMemory();
 
   const msgId = session.appendMessage(userMsg("hello"));
@@ -44,7 +42,7 @@ export const appendthinkinglevelchangeIntegratesIntoTree = () => {
 
   expect(entries[2]?.parentId).toBe(thinkingId);
 };
-export const appendmodelchangeIntegratesIntoTree = () => {
+const appendmodelchangeIntegratesIntoTree = () => {
   const session = SessionManager.inMemory();
 
   const msgId = session.appendMessage(userMsg("hello"));
@@ -63,18 +61,18 @@ export const appendmodelchangeIntegratesIntoTree = () => {
 
   expect(entries[2]?.parentId).toBe(modelId);
 };
-export const appendcompactionIntegratesIntoTree = () => {
+const appendcompactionIntegratesIntoTree = () => {
   const session = SessionManager.inMemory();
 
   const id1 = session.appendMessage(userMsg("1"));
   const id2 = session.appendMessage(assistantMsg("2"));
   const usage = {
-    input: 10,
-    output: 20,
     cacheRead: 30,
     cacheWrite: 40,
+    cost: { cacheRead: 0.3, cacheWrite: 0.4, input: 0.1, output: 0.2, total: 1 },
+    input: 10,
+    output: 20,
     totalTokens: 100,
-    cost: { input: 0.1, output: 0.2, cacheRead: 0.3, cacheWrite: 0.4, total: 1 },
   };
   const compactionId = session.appendCompaction("summary", id1, 1000, undefined, false, usage);
   session.appendMessage(userMsg("3"));
@@ -93,7 +91,7 @@ export const appendcompactionIntegratesIntoTree = () => {
 
   expect(entries[3]?.parentId).toBe(compactionId);
 };
-export const appendcustomentryIntegratesIntoTree = () => {
+const appendcustomentryIntegratesIntoTree = () => {
   const session = SessionManager.inMemory();
 
   const msgId = session.appendMessage(userMsg("hello"));
@@ -110,7 +108,7 @@ export const appendcustomentryIntegratesIntoTree = () => {
 
   expect(entries[2]?.parentId).toBe(customId);
 };
-export const leafPointerAdvancesAfterEachAppend = () => {
+const leafPointerAdvancesAfterEachAppend = () => {
   const session = SessionManager.inMemory();
 
   expect(session.getLeafId()).toBeNull();
@@ -124,7 +122,7 @@ export const leafPointerAdvancesAfterEachAppend = () => {
   const id3 = session.appendThinkingLevelChange("high");
   expect(session.getLeafId()).toBe(id3);
 };
-export const returnsSingleEntryPath = () => {
+const returnsSingleEntryPath = () => {
   const session = SessionManager.inMemory();
   const id = session.appendMessage(userMsg("hello"));
 
@@ -132,7 +130,7 @@ export const returnsSingleEntryPath = () => {
   expect(path).toHaveLength(1);
   expect(path[0]?.id).toBe(id);
 };
-export const returnsFullPathFromRootTo = () => {
+const returnsFullPathFromRootTo = () => {
   const session = SessionManager.inMemory();
 
   const id1 = session.appendMessage(userMsg("1"));
@@ -144,7 +142,7 @@ export const returnsFullPathFromRootTo = () => {
   expect(path).toHaveLength(4);
   expect(path.map((e) => e.id)).toEqual([id1, id2, id3, id4]);
 };
-export const returnsPathFromSpecifiedEntryTo = () => {
+const returnsPathFromSpecifiedEntryTo = () => {
   const session = SessionManager.inMemory();
 
   const id1 = session.appendMessage(userMsg("1"));
@@ -156,7 +154,7 @@ export const returnsPathFromSpecifiedEntryTo = () => {
   expect(path).toHaveLength(2);
   expect(path.map((e) => e.id)).toEqual([id1, id2]);
 };
-export const returnsSingleRootForLinearSession = () => {
+const returnsSingleRootForLinearSession = () => {
   const session = SessionManager.inMemory();
 
   const id1 = session.appendMessage(userMsg("1"));
@@ -175,7 +173,7 @@ export const returnsSingleRootForLinearSession = () => {
   expect(root.children[0]?.children[0]?.entry.id).toBe(id3);
   expect(root.children[0]?.children[0]?.children).toHaveLength(0);
 };
-export const returnsTreeWithBranchesAfterBranch = () => {
+const returnsTreeWithBranchesAfterBranch = () => {
   const session = SessionManager.inMemory();
 
   const id1 = session.appendMessage(userMsg("1"));
@@ -201,7 +199,7 @@ export const returnsTreeWithBranchesAfterBranch = () => {
   const childIds = node2.children.map((c) => c.entry.id).sort();
   expect(childIds).toEqual([id3, id4].sort());
 };
-export const handlesMultipleBranchesAtSamePoint = () => {
+const handlesMultipleBranchesAtSamePoint = () => {
   const session = SessionManager.inMemory();
 
   session.appendMessage(userMsg("root"));
@@ -225,3 +223,20 @@ export const handlesMultipleBranchesAtSamePoint = () => {
   const branchIds = node2.children.map((c) => c.entry.id).sort();
   expect(branchIds).toEqual([idA, idB, idC].sort());
 };
+
+const treeTraversalCases1 = {
+  appendcompactionIntegratesIntoTree,
+  appendcustomentryIntegratesIntoTree,
+  appendmessageCreatesEntryWithCorrectParentid,
+  appendmodelchangeIntegratesIntoTree,
+  appendthinkinglevelchangeIntegratesIntoTree,
+  handlesMultipleBranchesAtSamePoint,
+  leafPointerAdvancesAfterEachAppend,
+  returnsFullPathFromRootTo,
+  returnsPathFromSpecifiedEntryTo,
+  returnsSingleEntryPath,
+  returnsSingleRootForLinearSession,
+  returnsTreeWithBranchesAfterBranch,
+};
+
+export default treeTraversalCases1;

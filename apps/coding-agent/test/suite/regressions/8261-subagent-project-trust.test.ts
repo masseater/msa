@@ -1,12 +1,16 @@
 import * as NodeServices from "@effect/platform-node/NodeServices";
 import { fauxAssistantMessage, fauxToolCall } from "@msa/ai";
-import { joinPath } from "@msa/testing";
+import testing from "@msa/testing";
 import { Effect, FileSystem, ManagedRuntime } from "effect";
 import { describe, expect, it, vi } from "vite-plus/test";
 
 import subagentExtension from "../../../examples/extensions/subagent/index.ts";
 import type { ExtensionUIContext } from "../../../src/core/extensions/index.ts";
-import { createHarness, getMessageText } from "../harness.ts";
+import harnessModule from "../harness.ts";
+
+const { createHarness, getMessageText } = harnessModule;
+
+const { joinPath } = testing;
 
 const runtime = ManagedRuntime.make(NodeServices.layer);
 const fs = runtime.runSync(FileSystem.FileSystem.useSync((service) => service));
@@ -16,8 +20,8 @@ vi.mock("@msa/coding-agent", () => ({
   getAgentDir: () => "/missing-user-agent-dir",
   getMarkdownTheme: () => ({}),
   parseFrontmatter: (content: string) => ({
-    frontmatter: { name: "project-agent", description: "Project test agent" },
     body: content,
+    frontmatter: { description: "Project test agent", name: "project-agent" },
   }),
   withFileMutationQueue: (_path: string, fn: () => Promise<unknown>) => Promise.resolve(fn()),
 }));
@@ -26,6 +30,29 @@ interface RunOptions {
   trusted: boolean;
   confirmResult?: boolean;
 }
+
+const writeProjectAgent = (tempDir: string) =>
+  Effect.gen(function* () {
+    const agentsDir = joinPath(tempDir, ".msa", "agents");
+    yield* fs.makeDirectory(agentsDir, { recursive: true });
+    yield* fs.writeFileString(
+      joinPath(agentsDir, "project-agent.md"),
+      "---\nname: project-agent\ndescription: Project test agent\n---\n\nHandle the delegated task.\n",
+    );
+  });
+
+const delegateResponses = (tempDir: string) => [
+  fauxAssistantMessage(
+    fauxToolCall("subagent", {
+      agent: "project-agent",
+      agentScope: "project",
+      cwd: joinPath(tempDir, "missing-cwd"),
+      task: "Test project trust",
+    }),
+    { stopReason: "toolUse" },
+  ),
+  fauxAssistantMessage("done"),
+];
 
 function runProjectAgent(
   options: RunOptions,
@@ -38,33 +65,17 @@ function runProjectAgent(
       const confirm = vi.fn(() => Promise.resolve(options.confirmResult ?? false));
 
       try {
-        const agentsDir = joinPath(harness.tempDir, ".msa", "agents");
-        yield* fs.makeDirectory(agentsDir, { recursive: true });
-        yield* fs.writeFileString(
-          joinPath(agentsDir, "project-agent.md"),
-          "---\nname: project-agent\ndescription: Project test agent\n---\n\nHandle the delegated task.\n",
-        );
+        yield* writeProjectAgent(harness.tempDir);
         harness.settingsManager.setProjectTrusted(options.trusted);
 
         yield* Effect.promise(() =>
           harness.session.bindExtensions({
-            uiContext: { confirm } as unknown as ExtensionUIContext,
             mode: "tui",
+            uiContext: { confirm } as unknown as ExtensionUIContext,
           }),
         );
 
-        harness.setResponses([
-          fauxAssistantMessage(
-            fauxToolCall("subagent", {
-              agent: "project-agent",
-              task: "Test project trust",
-              agentScope: "project",
-              cwd: joinPath(harness.tempDir, "missing-cwd"),
-            }),
-            { stopReason: "toolUse" },
-          ),
-          fauxAssistantMessage("done"),
-        ]);
+        harness.setResponses(delegateResponses(harness.tempDir));
 
         yield* Effect.promise(() => harness.session.prompt("Delegate this task"));
 
@@ -91,16 +102,26 @@ const skipsPerCallConfirmationForTrusted = Effect.gen(function* () {
 
 const keepsConfirmationForUntrustedInteractiveProjects = Effect.gen(function* () {
   const result = yield* Effect.promise(() =>
-    runProjectAgent({ trusted: false, confirmResult: false }),
+    runProjectAgent({ confirmResult: false, trusted: false }),
   );
 
   expect(result.confirmCalls).toBe(1);
   expect(result.toolResult).toContain("Canceled: project-local agents not approved.");
 });
 
+const skipsPerCallConfirmationForTrustedProjects = () =>
+  Effect.runPromise(skipsPerCallConfirmationForTrusted);
+
+const keepsConfirmationForUntrustedInteractiveProjects2 = () =>
+  Effect.runPromise(keepsConfirmationForUntrustedInteractiveProjects);
+
 describe("regression #8261: subagent project trust", () => {
-  it("skips per-call confirmation for trusted projects", () =>
-    Effect.runPromise(skipsPerCallConfirmationForTrusted));
-  it("keeps confirmation for untrusted interactive projects", () =>
-    Effect.runPromise(keepsConfirmationForUntrustedInteractiveProjects));
+  it(
+    "skips per-call confirmation for trusted projects",
+    skipsPerCallConfirmationForTrustedProjects,
+  );
+  it(
+    "keeps confirmation for untrusted interactive projects",
+    keepsConfirmationForUntrustedInteractiveProjects2,
+  );
 });

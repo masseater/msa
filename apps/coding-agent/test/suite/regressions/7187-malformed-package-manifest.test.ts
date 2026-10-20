@@ -1,11 +1,15 @@
 import * as NodeServices from "@effect/platform-node/NodeServices";
-import { joinPath, toJsonText } from "@msa/testing";
+import testing from "@msa/testing";
 import { Effect, FileSystem, ManagedRuntime } from "effect";
 import { describe, expect, it } from "vite-plus/test";
 
 import { DefaultPackageManager } from "../../../src/core/package-manager.ts";
 import { SettingsManager } from "../../../src/core/settings-manager.ts";
-import { createHarness } from "../harness.ts";
+import harnessModule from "../harness.ts";
+
+const { createHarness } = harnessModule;
+
+const { joinPath, toJsonText } = testing;
 
 const runtime = ManagedRuntime.make(NodeServices.layer);
 const fs = runtime.runSync(FileSystem.FileSystem.useSync((service) => service));
@@ -25,17 +29,17 @@ const ignoresInvalidResourceFieldsWithoutDropping = Effect.gen(function* () {
     yield* fs.writeFileString(
       joinPath(packageDir, "package.json"),
       yield* toJsonText({
+        msa: {
+          prompts: ["./prompts"],
+          skills: "./skills",
+        },
         name: "bad-package",
         version: "1.0.0",
-        msa: {
-          skills: "./skills",
-          prompts: ["./prompts"],
-        },
       }),
     );
     const packageManager = new DefaultPackageManager({
-      cwd: tempDir,
       agentDir,
+      cwd: tempDir,
       settingsManager: SettingsManager.inMemory({ packages: ["npm:bad-package"] }),
     });
 
@@ -43,12 +47,17 @@ const ignoresInvalidResourceFieldsWithoutDropping = Effect.gen(function* () {
     expect(resources.skills.map((skill) => skill.path)).not.toContain(skillPath);
     expect(resources.prompts.map((prompt) => prompt.path)).toContain(promptPath);
   } finally {
-    yield* fs.remove(tempDir, { recursive: true, force: true });
+    yield* fs.remove(tempDir, { force: true, recursive: true });
     harness.cleanup();
   }
 });
 
+const ignoresInvalidResourceFieldsWithoutDroppingValid = () =>
+  Effect.runPromise(ignoresInvalidResourceFieldsWithoutDropping);
+
 describe("issue #7187 malformed package manifest", () => {
-  it("ignores invalid resource fields without dropping valid fields", () =>
-    Effect.runPromise(ignoresInvalidResourceFieldsWithoutDropping));
+  it(
+    "ignores invalid resource fields without dropping valid fields",
+    ignoresInvalidResourceFieldsWithoutDroppingValid,
+  );
 });

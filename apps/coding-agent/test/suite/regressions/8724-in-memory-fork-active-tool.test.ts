@@ -1,6 +1,6 @@
 import type { AgentTool, AgentToolResult } from "@msa/agent-core";
 import { fauxAssistantMessage, fauxToolCall } from "@msa/ai";
-import { deferredPromise, gate } from "@msa/testing";
+import testing from "@msa/testing";
 import { Effect } from "effect";
 import { Type } from "typebox";
 import { afterEach, describe, expect, it } from "vite-plus/test";
@@ -11,67 +11,67 @@ import {
   type CreateAgentSessionRuntimeFactory,
   createAgentSessionFromServices,
 } from "../../../src/core/agent-session-runtime.ts";
-import { createHarness } from "../harness.ts";
+import harnessModule from "../harness.ts";
+
+const { createHarness } = harnessModule;
+
+const { deferredPromise, gate, runTest } = testing;
 
 const cleanups: Array<() => Promise<void> | void> = [];
 
-const doesNotAppendTheAbortedTurn = Effect.gen(function* () {
-  const runPromise = Effect.runPromiseWith(yield* Effect.context<never>());
-  const toolStarted = gate();
-  const blockingTool: AgentTool = {
-    name: "block",
-    label: "Block",
-    description: "Wait until aborted",
-    parameters: Type.Object({}),
-    execute: (_toolCallId, _params, signal) => {
-      const aborted = deferredPromise<AgentToolResult<unknown>>();
-      toolStarted.release();
-      signal?.addEventListener(
-        "abort",
-        () => aborted.resolve({ content: [{ type: "text", text: "tool aborted" }], details: {} }),
-        { once: true },
-      );
-      return aborted.promise;
-    },
-  };
-  const harness = yield* Effect.promise(() => createHarness({ tools: [blockingTool] }));
-  const services: AgentSessionServices = {
-    cwd: harness.tempDir,
-    agentDir: harness.tempDir,
-    modelRuntime: harness.session.modelRuntime,
-    settingsManager: harness.settingsManager,
-    resourceLoader: harness.session.resourceLoader,
-    diagnostics: [],
-  };
-  const createRuntime: CreateAgentSessionRuntimeFactory = ({ sessionManager, sessionStartEvent }) =>
-    runPromise(
-      Effect.gen(function* () {
-        return {
-          ...(yield* Effect.promise(() =>
-            createAgentSessionFromServices({
-              services,
-              sessionManager,
-              ...(sessionStartEvent === undefined ? {} : { sessionStartEvent }),
-              model: harness.getModel(),
-              noTools: "all",
-            }),
-          )),
-          services,
-          diagnostics: [],
-        };
-      }),
+const blockingTool = (toolStarted: ReturnType<typeof gate>): AgentTool => ({
+  description: "Wait until aborted",
+  execute: (_toolCallId, _params, signal) => {
+    const aborted = deferredPromise<AgentToolResult<unknown>>();
+    toolStarted.release();
+    signal?.addEventListener(
+      "abort",
+      () => aborted.resolve({ content: [{ text: "tool aborted", type: "text" }], details: {} }),
+      { once: true },
     );
-  const runtime = new AgentSessionRuntime(harness.session, services, createRuntime);
-  cleanups.push(() =>
-    runPromise(
-      Effect.gen(function* () {
-        if (runtime.session !== harness.session) {
-          yield* Effect.promise(() => runtime.dispose());
-        }
-        harness.cleanup();
-      }),
-    ),
-  );
+    return aborted.promise;
+  },
+  label: "Block",
+  name: "block",
+  parameters: Type.Object({}),
+});
+
+const createForkableRuntime = (toolStarted: ReturnType<typeof gate>) =>
+  Effect.gen(function* () {
+    const harness = yield* Effect.promise(() =>
+      createHarness({ tools: [blockingTool(toolStarted)] }),
+    );
+    const services: AgentSessionServices = {
+      agentDir: harness.tempDir,
+      cwd: harness.tempDir,
+      diagnostics: [],
+      modelRuntime: harness.session.modelRuntime,
+      resourceLoader: harness.session.resourceLoader,
+      settingsManager: harness.settingsManager,
+    };
+    const createRuntime: CreateAgentSessionRuntimeFactory = ({
+      sessionManager,
+      sessionStartEvent,
+    }) =>
+      createAgentSessionFromServices({
+        services,
+        sessionManager,
+        ...(sessionStartEvent === undefined ? {} : { sessionStartEvent }),
+        model: harness.getModel(),
+        noTools: "all",
+      }).then((created) => ({ ...created, diagnostics: [], services }));
+    const runtime = new AgentSessionRuntime(harness.session, services, createRuntime);
+    cleanups.push(() =>
+      runtime.session === harness.session
+        ? harness.cleanup()
+        : runtime.dispose().then(() => harness.cleanup()),
+    );
+    return { harness, runtime };
+  });
+
+const doesNotAppendTheAbortedTurn = Effect.gen(function* () {
+  const toolStarted = gate();
+  const { harness, runtime } = yield* createForkableRuntime(toolStarted);
 
   harness.setResponses([
     fauxAssistantMessage("first response"),
@@ -109,16 +109,15 @@ const doesNotAppendTheAbortedTurn = Effect.gen(function* () {
   expect(capturedRoles).toEqual(["system", "system", "user"]);
 });
 
+const doesNotAppendTheAbortedTurnTo = () => Effect.runPromise(doesNotAppendTheAbortedTurn);
+
+const afterEachHook = Effect.gen(function* () {
+  while (cleanups.length > 0) {
+    yield* Effect.promise(() => Promise.resolve(cleanups.pop()?.()));
+  }
+});
+
 describe("regression #8724: in-memory fork during an active tool turn", () => {
-  afterEach(() =>
-    Effect.runPromise(
-      Effect.gen(function* () {
-        while (cleanups.length > 0) {
-          yield* Effect.promise(() => Promise.resolve(cleanups.pop()?.()));
-        }
-      }),
-    ),
-  );
-  it("does not append the aborted turn to the replacement session", () =>
-    Effect.runPromise(doesNotAppendTheAbortedTurn));
+  afterEach(() => runTest(afterEachHook));
+  it("does not append the aborted turn to the replacement session", doesNotAppendTheAbortedTurnTo);
 });

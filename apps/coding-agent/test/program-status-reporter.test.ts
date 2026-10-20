@@ -22,7 +22,7 @@ function setup(sessionName?: string) {
     const { app: _app, ...status } = reports.at(-1)!;
     return Object.fromEntries(Object.entries(status).filter(([, value]) => value !== undefined));
   };
-  return { reporter, reports, session, send, last };
+  return { last, reporter, reports, send, session };
 }
 
 function assistantEnd(
@@ -30,127 +30,151 @@ function assistantEnd(
   errorMessage?: string,
 ): AgentSessionEvent {
   const message = {
-    role: "assistant",
-    content: [{ type: "text", text: "secret assistant output" }],
-    stopReason,
+    content: [{ text: "secret assistant output", type: "text" }],
     errorMessage,
+    role: "assistant",
+    stopReason,
   } as AssistantMessage;
-  return { type: "message_end", message };
+  return { message, type: "message_end" };
 }
 
-const settled: AgentSessionEvent = { type: "agent_settled", aborted: false };
+const settled: AgentSessionEvent = { aborted: false, type: "agent_settled" };
 
 const compactionEnd = (
   reason: "manual" | "threshold" | "overflow",
   options: { aborted?: boolean; errorMessage?: string } = {},
 ): AgentSessionEvent => ({
-  type: "compaction_end",
+  aborted: options.aborted ?? false,
   reason,
   result: undefined,
-  aborted: options.aborted ?? false,
+  type: "compaction_end",
   willRetry: false,
   ...(options.errorMessage === undefined ? {} : { errorMessage: options.errorMessage }),
 });
 
+const reportsIdleWorkingDuringARunAnd = () => {
+  const { reporter, reports, send, last } = setup("Fix login");
+  reporter.report();
+  expect(reports.at(-1)).toEqual({ app: "msa", state: "idle" });
+
+  send({ type: "agent_start" });
+  expect(last()).toEqual({ message: "Fix login", state: "working" });
+
+  send(assistantEnd("toolUse"), assistantEnd("stop"));
+  expect(last()).toEqual({ message: "Fix login", state: "working" });
+
+  send(settled);
+  expect(last()).toEqual({ message: "Fix login", state: "done" });
+  expect(JSON.stringify(reports)).not.toContain("secret assistant output");
+};
+
+const reportsOnlyTheOutcomeOfTheRun = () => {
+  const { send, last } = setup();
+  send({ type: "agent_start" }, assistantEnd("error", "overloaded"), assistantEnd("stop"), settled);
+  expect(last()).toEqual({ state: "done" });
+
+  send({ type: "agent_start" }, assistantEnd("error", "Invalid API key\n{details}"), settled);
+  expect(last()).toEqual({ message: "Invalid API key", state: "error" });
+
+  send({ type: "agent_start" }, assistantEnd("aborted"), {
+    aborted: true,
+    type: "agent_settled",
+  });
+  expect(last()).toEqual({ state: "idle" });
+
+  send({ type: "agent_start" }, assistantEnd("stop"), { aborted: true, type: "agent_settled" });
+  expect(last()).toEqual({ state: "idle" });
+};
+
+const reportsAFailedRecoveryCompactionAsThe = () => {
+  const { send, last } = setup();
+  send(
+    { type: "agent_start" },
+    assistantEnd("length"),
+    { reason: "overflow", type: "compaction_start" },
+    compactionEnd("overflow", { errorMessage: "Compaction failed\nstack" }),
+    settled,
+  );
+  expect(last()).toEqual({ message: "Compaction failed", state: "error" });
+
+  send(
+    { type: "agent_start" },
+    { reason: "threshold", type: "compaction_start" },
+    compactionEnd("threshold", { errorMessage: "Compaction failed" }),
+    assistantEnd("stop"),
+    settled,
+  );
+  expect(last()).toEqual({ state: "done" });
+};
+
+const reportsCompactionInsideARunAndThe = () => {
+  const { send, last } = setup("Session");
+  send({ type: "agent_start" }, { reason: "threshold", type: "compaction_start" });
+  expect(last()).toEqual({ message: "Compacting context", state: "working" });
+  send(compactionEnd("threshold"));
+  expect(last()).toEqual({ message: "Session", state: "working" });
+  send(assistantEnd("stop"), settled);
+
+  send({ reason: "manual", type: "compaction_start" }, compactionEnd("manual"));
+  expect(last()).toEqual({ message: "Session", state: "done" });
+  send(
+    { reason: "manual", type: "compaction_start" },
+    compactionEnd("manual", { errorMessage: "No model" }),
+  );
+  expect(last()).toEqual({ message: "No model", state: "error" });
+  send({ reason: "manual", type: "compaction_start" }, compactionEnd("manual", { aborted: true }));
+  expect(last()).toEqual({ state: "idle" });
+};
+
+const reportsTheMostRecentOpenDialogAnd = () => {
+  const { reporter, send, last } = setup();
+  send({ type: "agent_start" });
+  reporter.setBlocked("extension-selector", { kind: "permission", message: "Allow bash?" });
+  reporter.setBlocked("login", { kind: "auth", message: "Log in to Anthropic" });
+  expect(last()).toEqual({ kind: "auth", message: "Log in to Anthropic", state: "blocked" });
+
+  reporter.setBlocked("login", undefined);
+  send(assistantEnd("stop"), settled);
+  expect(last()).toEqual({ kind: "permission", message: "Allow bash?", state: "blocked" });
+
+  reporter.setBlocked("extension-selector", { kind: "question", message: "Pick one" });
+  expect(last()).toEqual({ kind: "question", message: "Pick one", state: "blocked" });
+  reporter.setBlocked("extension-selector", undefined);
+  expect(last()).toEqual({ state: "done" });
+};
+
+const returnsToIdleWhenTheSessionIs = () => {
+  const { reporter, send, last } = setup();
+  send({ type: "agent_start" }, assistantEnd("stop"), settled);
+  reporter.reset();
+  expect(last()).toEqual({ state: "idle" });
+};
+
 describe("ProgramStatusReporter", () => {
-  it("reports idle, working during a run, and done once it settles", () => {
-    const { reporter, reports, send, last } = setup("Fix login");
-    reporter.report();
-    expect(reports.at(-1)).toEqual({ state: "idle", app: "msa" });
+  it(
+    "reports idle, working during a run, and done once it settles",
+    reportsIdleWorkingDuringARunAnd,
+  );
 
-    send({ type: "agent_start" });
-    expect(last()).toEqual({ state: "working", message: "Fix login" });
+  it(
+    "reports only the outcome of the run: retried errors, final errors, and aborts",
+    reportsOnlyTheOutcomeOfTheRun,
+  );
 
-    send(assistantEnd("toolUse"), assistantEnd("stop"));
-    expect(last()).toEqual({ state: "working", message: "Fix login" });
+  it(
+    "reports a failed recovery compaction as the run's error unless a later response succeeds",
+    reportsAFailedRecoveryCompactionAsThe,
+  );
 
-    send(settled);
-    expect(last()).toEqual({ state: "done", message: "Fix login" });
-    expect(JSON.stringify(reports)).not.toContain("secret assistant output");
-  });
+  it(
+    "reports compaction inside a run and the result of a manual compaction",
+    reportsCompactionInsideARunAndThe,
+  );
 
-  it("reports only the outcome of the run: retried errors, final errors, and aborts", () => {
-    const { send, last } = setup();
-    send(
-      { type: "agent_start" },
-      assistantEnd("error", "overloaded"),
-      assistantEnd("stop"),
-      settled,
-    );
-    expect(last()).toEqual({ state: "done" });
-
-    send({ type: "agent_start" }, assistantEnd("error", "Invalid API key\n{details}"), settled);
-    expect(last()).toEqual({ state: "error", message: "Invalid API key" });
-
-    send({ type: "agent_start" }, assistantEnd("aborted"), {
-      type: "agent_settled",
-      aborted: true,
-    });
-    expect(last()).toEqual({ state: "idle" });
-
-    send({ type: "agent_start" }, assistantEnd("stop"), { type: "agent_settled", aborted: true });
-    expect(last()).toEqual({ state: "idle" });
-  });
-
-  it("reports a failed recovery compaction as the run's error unless a later response succeeds", () => {
-    const { send, last } = setup();
-    send(
-      { type: "agent_start" },
-      assistantEnd("length"),
-      { type: "compaction_start", reason: "overflow" },
-      compactionEnd("overflow", { errorMessage: "Compaction failed\nstack" }),
-      settled,
-    );
-    expect(last()).toEqual({ state: "error", message: "Compaction failed" });
-
-    send(
-      { type: "agent_start" },
-      { type: "compaction_start", reason: "threshold" },
-      compactionEnd("threshold", { errorMessage: "Compaction failed" }),
-      assistantEnd("stop"),
-      settled,
-    );
-    expect(last()).toEqual({ state: "done" });
-  });
-
-  it("reports compaction inside a run and the result of a manual compaction", () => {
-    const { send, last } = setup("Session");
-    send({ type: "agent_start" }, { type: "compaction_start", reason: "threshold" });
-    expect(last()).toEqual({ state: "working", message: "Compacting context" });
-    send(compactionEnd("threshold"));
-    expect(last()).toEqual({ state: "working", message: "Session" });
-    send(assistantEnd("stop"), settled);
-
-    send({ type: "compaction_start", reason: "manual" }, compactionEnd("manual"));
-    expect(last()).toEqual({ state: "done", message: "Session" });
-    send(
-      { type: "compaction_start", reason: "manual" },
-      compactionEnd("manual", { errorMessage: "No model" }),
-    );
-    expect(last()).toEqual({ state: "error", message: "No model" });
-    send(
-      { type: "compaction_start", reason: "manual" },
-      compactionEnd("manual", { aborted: true }),
-    );
-    expect(last()).toEqual({ state: "idle" });
-  });
-
-  it("reports the most recent open dialog and the underlying state once all close", () => {
-    const { reporter, send, last } = setup();
-    send({ type: "agent_start" });
-    reporter.setBlocked("extension-selector", { kind: "permission", message: "Allow bash?" });
-    reporter.setBlocked("login", { kind: "auth", message: "Log in to Anthropic" });
-    expect(last()).toEqual({ state: "blocked", kind: "auth", message: "Log in to Anthropic" });
-
-    reporter.setBlocked("login", undefined);
-    send(assistantEnd("stop"), settled);
-    expect(last()).toEqual({ state: "blocked", kind: "permission", message: "Allow bash?" });
-
-    reporter.setBlocked("extension-selector", { kind: "question", message: "Pick one" });
-    expect(last()).toEqual({ state: "blocked", kind: "question", message: "Pick one" });
-    reporter.setBlocked("extension-selector", undefined);
-    expect(last()).toEqual({ state: "done" });
-  });
+  it(
+    "reports the most recent open dialog and the underlying state once all close",
+    reportsTheMostRecentOpenDialogAnd,
+  );
 
   it("sends each status once and follows session name changes", () => {
     const { reporter, reports, session, send, last } = setup("Old");
@@ -163,14 +187,9 @@ describe("ProgramStatusReporter", () => {
     expect(reports).toHaveLength(1);
 
     session.name = "New";
-    send({ type: "session_info_changed", name: "New" });
-    expect(last()).toEqual({ state: "working", message: "New" });
+    send({ name: "New", type: "session_info_changed" });
+    expect(last()).toEqual({ message: "New", state: "working" });
   });
 
-  it("returns to idle when the session is replaced", () => {
-    const { reporter, send, last } = setup();
-    send({ type: "agent_start" }, assistantEnd("stop"), settled);
-    reporter.reset();
-    expect(last()).toEqual({ state: "idle" });
-  });
+  it("returns to idle when the session is replaced", returnsToIdleWhenTheSessionIs);
 });

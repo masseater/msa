@@ -1,55 +1,67 @@
 import { fauxAssistantMessage } from "@msa/ai";
-import { currentTimeMillis, gate } from "@msa/testing";
+import testing from "@msa/testing";
 import { Cause, Effect, Exit } from "effect";
 import { afterEach, describe, expect, it } from "vite-plus/test";
 
 import type { PromptDisposition } from "../../../src/core/agent-session.ts";
-import { createHarness, getMessageText, getUserTexts, type Harness } from "../harness.ts";
+import harnessModule from "../harness.ts";
+import type harnessTypes from "../harness.types.ts";
 
-const harnesses: Harness[] = [];
+const { createHarness, getMessageText, getUserTexts } = harnessModule;
+
+const { currentTimeMillis, gate } = testing;
+
+const harnesses: harnessTypes.Harness[] = [];
+
+const rejectsAnRpcPromptWhileManualPart1 = () =>
+  Effect.gen(function* () {
+    const runPromise = Effect.runPromiseWith(yield* Effect.context<never>());
+    const compactionStarted = gate();
+    const compactionReleased = gate();
+
+    const harness = yield* Effect.promise(() =>
+      createHarness({
+        extensionFactories: [
+          (msa) => {
+            msa.on("session_before_compact", (event) =>
+              runPromise(
+                Effect.gen(function* () {
+                  compactionStarted.release();
+                  yield* Effect.promise(() => compactionReleased);
+                  return {
+                    compaction: {
+                      details: {},
+                      firstKeptEntryId: event.preparation.firstKeptEntryId,
+                      summary: "manual compacted",
+                      tokensBefore: event.preparation.tokensBefore,
+                    },
+                  };
+                }),
+              ),
+            );
+          },
+        ],
+        settings: { compaction: { keepRecentTokens: 1 } },
+      }),
+    );
+    harnesses.push(harness);
+
+    const timestamp = currentTimeMillis();
+    harness.sessionManager.appendMessage({
+      content: [{ text: "old user message", type: "text" }],
+      role: "user",
+      timestamp: timestamp - 1000,
+    });
+    harness.sessionManager.appendMessage(
+      fauxAssistantMessage("old assistant response", { timestamp: timestamp - 500 }),
+    );
+    harness.session.agent.state.messages = harness.sessionManager.buildSessionContext().messages;
+    return { compactionReleased, compactionStarted, harness };
+  });
 
 const rejectsAnRpcPromptWhileManual = Effect.gen(function* () {
-  const runPromise = Effect.runPromiseWith(yield* Effect.context<never>());
-  const compactionStarted = gate();
-  const compactionReleased = gate();
-
-  const harness = yield* Effect.promise(() =>
-    createHarness({
-      settings: { compaction: { keepRecentTokens: 1 } },
-      extensionFactories: [
-        (msa) => {
-          msa.on("session_before_compact", (event) =>
-            runPromise(
-              Effect.gen(function* () {
-                compactionStarted.release();
-                yield* Effect.promise(() => compactionReleased);
-                return {
-                  compaction: {
-                    summary: "manual compacted",
-                    firstKeptEntryId: event.preparation.firstKeptEntryId,
-                    tokensBefore: event.preparation.tokensBefore,
-                    details: {},
-                  },
-                };
-              }),
-            ),
-          );
-        },
-      ],
-    }),
-  );
-  harnesses.push(harness);
-
-  const timestamp = currentTimeMillis();
-  harness.sessionManager.appendMessage({
-    role: "user",
-    content: [{ type: "text", text: "old user message" }],
-    timestamp: timestamp - 1000,
-  });
-  harness.sessionManager.appendMessage(
-    fauxAssistantMessage("old assistant response", { timestamp: timestamp - 500 }),
-  );
-  harness.session.agent.state.messages = harness.sessionManager.buildSessionContext().messages;
+  const { compactionReleased, compactionStarted, harness } =
+    yield* rejectsAnRpcPromptWhileManualPart1();
   harness.setResponses([fauxAssistantMessage("probe response")]);
 
   const compactPromise = harness.session.compact();
@@ -61,10 +73,10 @@ const rejectsAnRpcPromptWhileManual = Effect.gen(function* () {
     const tryExit6 = yield* Effect.exit(
       Effect.promise(() =>
         harness.session.prompt("PROBE-7150", {
-          source: "rpc",
           preflightResult: (result) => {
             preflightResult = result;
           },
+          source: "rpc",
         }),
       ),
     );
@@ -97,12 +109,19 @@ const rejectsAnRpcPromptWhileManual = Effect.gen(function* () {
   expect(harness.eventsOfType("agent_settled")).toHaveLength(0);
 });
 
+const rejectsAnRpcPromptWhileManualCompaction = () =>
+  Effect.runPromise(rejectsAnRpcPromptWhileManual);
+
+const afterEachHook = () => {
+  while (harnesses.length > 0) {
+    harnesses.pop()?.cleanup();
+  }
+};
+
 describe("issue #7150: RPC prompt during manual compaction", () => {
-  afterEach(() => {
-    while (harnesses.length > 0) {
-      harnesses.pop()?.cleanup();
-    }
-  });
-  it("rejects an RPC prompt while manual compaction is in progress", () =>
-    Effect.runPromise(rejectsAnRpcPromptWhileManual));
+  afterEach(afterEachHook);
+  it(
+    "rejects an RPC prompt while manual compaction is in progress",
+    rejectsAnRpcPromptWhileManualCompaction,
+  );
 });

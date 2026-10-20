@@ -1,14 +1,19 @@
 import * as NodeServices from "@effect/platform-node/NodeServices";
-import { fromJsonText, joinPath, toJsonText } from "@msa/testing";
+import testing from "@msa/testing";
 import { Effect, FileSystem, ManagedRuntime } from "effect";
 import { afterEach, describe, expect, it, vi } from "vite-plus/test";
 
 import { ENV_AGENT_DIR } from "../../../src/config.ts";
 import { AuthStorage } from "../../../src/core/auth-storage.ts";
 import { runMigrations } from "../../../src/migrations.ts";
-import { createModelRegistry } from "../../model-runtime-test-utils.ts";
-import { createHarness } from "../harness.ts";
-import type { Harness } from "../harness.ts";
+import modelRuntimeTestUtils from "../../model-runtime-test-utils.ts";
+import harnessModule from "../harness.ts";
+import type harnessTypes from "../harness.types.ts";
+
+const { createHarness } = harnessModule;
+const { createModelRegistry } = modelRuntimeTestUtils;
+
+const { fromJsonText, joinPath, toJsonText } = testing;
 
 const runtime = ManagedRuntime.make(NodeServices.layer);
 const fs = runtime.runSync(FileSystem.FileSystem.useSync((service) => service));
@@ -38,9 +43,9 @@ const keepsUppercaseHeaderStringsAsLiterals = Effect.gen(function* () {
     `${yield* toJsonText({
       providers: {
         "my-provider": {
-          baseUrl: "https://example.com/v1",
-          apiKey: "CUSTOM_API_KEY",
           api: "openai-completions",
+          apiKey: "CUSTOM_API_KEY",
+          baseUrl: "https://example.com/v1",
           headers: { Authorization: "BEARER" },
           models: [{ id: "my-model" }],
         },
@@ -53,10 +58,13 @@ const keepsUppercaseHeaderStringsAsLiterals = Effect.gen(function* () {
   };
   expect(migrated.providers["my-provider"]?.apiKey).toBe("CUSTOM_API_KEY");
   expect(migrated.providers["my-provider"]?.headers?.["Authorization"]).toBe("BEARER");
-  return yield* keepsUppercaseHeaderStringsAsLiteralsPart2(harness, modelsPath);
+  return yield* keepsUppercaseHeaderStringsAsLiteralsStep1(harness, modelsPath);
 });
 
-const keepsUppercaseHeaderStringsAsLiteralsPart2 = (harness: Harness, modelsPath: string) =>
+const keepsUppercaseHeaderStringsAsLiteralsStep1 = (
+  harness: harnessTypes.Harness,
+  modelsPath: string,
+) =>
   Effect.gen(function* () {
     const registry = yield* Effect.promise(() =>
       createModelRegistry(AuthStorage.create(joinPath(harness.tempDir, "auth.json")), modelsPath),
@@ -64,18 +72,25 @@ const keepsUppercaseHeaderStringsAsLiteralsPart2 = (harness: Harness, modelsPath
     const model = registry.find("my-provider", "my-model");
     expect(model).toBeDefined();
     expect(yield* Effect.promise(() => registry.getApiKeyAndHeaders(model!))).toMatchObject({
-      ok: true,
       apiKey: "CUSTOM_API_KEY",
       headers: { Authorization: "BEARER" },
+      ok: true,
     });
   });
 
+const keepsUppercaseHeaderStringsAsLiteralsDuring = () =>
+  Effect.runPromise(keepsUppercaseHeaderStringsAsLiterals);
+
+const afterEachHook = () => {
+  while (cleanups.length > 0) {
+    cleanups.pop()?.();
+  }
+};
+
 describe("regression #5661: uppercase models.json header values", () => {
-  afterEach(() => {
-    while (cleanups.length > 0) {
-      cleanups.pop()?.();
-    }
-  });
-  it("keeps uppercase header strings as literals during startup migrations", () =>
-    Effect.runPromise(keepsUppercaseHeaderStringsAsLiterals));
+  afterEach(afterEachHook);
+  it(
+    "keeps uppercase header strings as literals during startup migrations",
+    keepsUppercaseHeaderStringsAsLiteralsDuring,
+  );
 });

@@ -1,22 +1,25 @@
 import type { ApiKeyCredential, Model, Provider } from "@msa/ai";
-import { awaited, runTest } from "@msa/testing";
+import testing from "@msa/testing";
 import { Deferred, Effect } from "effect";
 
 import { AuthStorage } from "../src/core/auth-storage.ts";
 import { ModelRuntime } from "../src/core/model-runtime.ts";
+import type modelRuntimeCredentialSyncSupportTypes from "./model-runtime-credential-sync-support.types.ts";
 
-export function model(provider: string): Model<"openai-completions"> {
+const { awaited, runTest } = testing;
+
+function model(provider: string): Model<"openai-completions"> {
   return {
-    id: "dynamic",
-    name: "Dynamic",
     api: "openai-completions" as const,
-    provider,
     baseUrl: "https://example.test/v1",
-    reasoning: false,
-    input: ["text"],
-    cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0 },
     contextWindow: 1000,
+    cost: { cacheRead: 0, cacheWrite: 0, input: 0, output: 0 },
+    id: "dynamic",
+    input: ["text"],
     maxTokens: 100,
+    name: "Dynamic",
+    provider,
+    reasoning: false,
   };
 }
 
@@ -29,19 +32,17 @@ const makeProvider = (
 ): Provider<"openai-completions"> => {
   const providerModel = model(id);
   return {
-    id,
-    name: id,
     auth: {
       apiKey: {
-        name: "API key",
-        login: () =>
-          runTest(awaited(options.login?.() ?? { type: "api_key" as const, key: `${id}-key` })),
         check: ({ credential }) =>
           runTest(
             awaited(
-              credential === undefined ? undefined : { type: "api_key" as const, source: "stored" },
+              credential === undefined ? undefined : { source: "stored", type: "api_key" as const },
             ),
           ),
+        login: () =>
+          runTest(awaited(options.login?.() ?? { key: `${id}-key`, type: "api_key" as const })),
+        name: "API key",
         resolve: ({ credential }) =>
           runTest(
             awaited(
@@ -53,6 +54,8 @@ const makeProvider = (
       },
     },
     getModels: () => [providerModel],
+    id,
+    name: id,
     ...(options.refreshModels === undefined ? {} : { refreshModels: options.refreshModels }),
     stream: () => {
       throw new Error("unused");
@@ -71,9 +74,9 @@ const withProvider = (
     Effect.gen(function* () {
       const runtime = yield* awaited(
         ModelRuntime.create({
+          allowModelNetwork: false,
           credentials,
           modelsPath: null,
-          allowModelNetwork: false,
         }),
       );
       runtime.registerNativeProvider(registered);
@@ -82,21 +85,25 @@ const withProvider = (
     }),
   );
 
-export const providers = { create: makeProvider };
+const providers = { create: makeProvider };
 
-export const runtimes = { withProvider };
+const runtimes = { withProvider };
 
-export interface Gate {
-  readonly promise: Effect.Effect<void>;
-  open(): void;
-}
-
-export const makeGate = (): Gate => {
+const makeGate = (): modelRuntimeCredentialSyncSupportTypes.Gate => {
   const deferred = Deferred.makeUnsafe<void>();
   return {
-    promise: Deferred.await(deferred),
     open: () => {
       Effect.runSync(Deferred.succeed(deferred, undefined));
     },
+    promise: Deferred.await(deferred),
   };
 };
+
+const modelRuntimeCredentialSyncSupport = {
+  makeGate,
+  model,
+  providers,
+  runtimes,
+};
+
+export default modelRuntimeCredentialSyncSupport;

@@ -3,10 +3,13 @@ import type { ExtensionAPI, InputEvent } from "@msa/coding-agent";
 import { Effect } from "effect";
 import { expect } from "vite-plus/test";
 
-import { createWaitingHarness, harnesses } from "./agent-session-queue-cases-1.ts";
-import { createHarness, getAssistantTexts, getMessageText, getUserTexts } from "./harness.ts";
+import agentSessionQueueCases1 from "./agent-session-queue-cases-1.ts";
+import harnessModule from "./harness.ts";
 
-export const dispatchesExtensionCommandsImmediatelyWhenPrompted = Effect.gen(function* () {
+const { createHarness, getAssistantTexts, getMessageText, getUserTexts } = harnessModule;
+const { createWaitingHarness, harnesses } = agentSessionQueueCases1;
+
+const dispatchesExtensionCommandsImmediatelyWhenPrompted = Effect.gen(function* () {
   const runPromise = Effect.runPromiseWith(yield* Effect.context<never>());
   const commandRuns: string[] = [];
   const harness = yield* Effect.promise(() =>
@@ -34,7 +37,7 @@ export const dispatchesExtensionCommandsImmediatelyWhenPrompted = Effect.gen(fun
   expect(harness.getPendingResponseCount()).toBe(0);
   expect(harness.session.messages).toEqual([]);
 });
-export const deliversExtensionOriginSteeringMessagesBefore = Effect.gen(function* () {
+const deliversExtensionOriginSteeringMessagesBefore = Effect.gen(function* () {
   let extensionApi: ExtensionAPI | undefined;
   const waiting = yield* Effect.promise(() =>
     createWaitingHarness({
@@ -68,7 +71,7 @@ export const deliversExtensionOriginSteeringMessagesBefore = Effect.gen(function
   expect(getUserTexts(harness)).toEqual(["start", "steer now"]);
   expect(getAssistantTexts(harness)).toContain("saw steer");
 });
-export const deliversFollowUpMessagesOnlyAfter = Effect.gen(function* () {
+const deliversFollowUpMessagesOnlyAfter = Effect.gen(function* () {
   const waiting = yield* Effect.promise(() => createWaitingHarness());
   const { harness, waitForToolStart, promptPromise, releaseToolExecution } = waiting;
   harnesses.push(harness);
@@ -100,27 +103,33 @@ export const deliversFollowUpMessagesOnlyAfter = Effect.gen(function* () {
   expect(assistantSeenBeforeFollowUp).toContain("");
   expect(getAssistantTexts(harness)).toContain("follow-up response");
 });
-export const runsDirectSteeringAndFollowUp = Effect.gen(function* () {
-  const inputEvents: Array<Pick<InputEvent, "text" | "source" | "streamingBehavior">> = [];
-  const waiting = yield* Effect.promise(() =>
-    createWaitingHarness({
-      extensionFactories: [
-        (msa) => {
-          msa.on("input", (event) => {
-            inputEvents.push({
-              text: event.text,
-              source: event.source,
-              ...(event.streamingBehavior === undefined
-                ? {}
-                : { streamingBehavior: event.streamingBehavior }),
+const runsDirectSteeringAndFollowUpPart1 = () =>
+  Effect.gen(function* () {
+    const inputEvents: Array<Pick<InputEvent, "text" | "source" | "streamingBehavior">> = [];
+    const waiting = yield* Effect.promise(() =>
+      createWaitingHarness({
+        extensionFactories: [
+          (msa) => {
+            msa.on("input", (event) => {
+              inputEvents.push({
+                source: event.source,
+                text: event.text,
+                ...(event.streamingBehavior === undefined
+                  ? {}
+                  : { streamingBehavior: event.streamingBehavior }),
+              });
+              if (event.text.startsWith("handle")) return { action: "handled" };
+              return { action: "transform", text: `transformed: ${event.text}` };
             });
-            if (event.text.startsWith("handle")) return { action: "handled" };
-            return { action: "transform", text: `transformed: ${event.text}` };
-          });
-        },
-      ],
-    }),
-  );
+          },
+        ],
+      }),
+    );
+    return { inputEvents, waiting };
+  });
+
+const runsDirectSteeringAndFollowUp = Effect.gen(function* () {
+  const { inputEvents, waiting } = yield* runsDirectSteeringAndFollowUpPart1();
   const { harness, waitForToolStart, promptPromise, releaseToolExecution } = waiting;
   harnesses.push(harness);
   harness.setResponses([
@@ -144,10 +153,10 @@ export const runsDirectSteeringAndFollowUp = Effect.gen(function* () {
     );
 
     expect(inputEvents).toEqual([
-      { text: "steer me", source: "rpc", streamingBehavior: "steer" },
-      { text: "handle steer", source: "rpc", streamingBehavior: "steer" },
-      { text: "follow me", source: "rpc", streamingBehavior: "followUp" },
-      { text: "handle follow", source: "rpc", streamingBehavior: "followUp" },
+      { source: "rpc", streamingBehavior: "steer", text: "steer me" },
+      { source: "rpc", streamingBehavior: "steer", text: "handle steer" },
+      { source: "rpc", streamingBehavior: "followUp", text: "follow me" },
+      { source: "rpc", streamingBehavior: "followUp", text: "handle follow" },
     ]);
     expect(harness.session.getSteeringMessages()).toEqual(["transformed: steer me"]);
     expect(harness.session.getFollowUpMessages()).toEqual(["transformed: follow me"]);
@@ -156,7 +165,7 @@ export const runsDirectSteeringAndFollowUp = Effect.gen(function* () {
   }
   yield* Effect.promise(() => promptPromise);
 });
-export const deliversMultipleSteeringMessagesInOrder = Effect.gen(function* () {
+const deliversMultipleSteeringMessagesInOrder = Effect.gen(function* () {
   const waiting = yield* Effect.promise(() => createWaitingHarness());
   const { harness, waitForToolStart, promptPromise, releaseToolExecution } = waiting;
   harnesses.push(harness);
@@ -176,7 +185,7 @@ export const deliversMultipleSteeringMessagesInOrder = Effect.gen(function* () {
   expect(getUserTexts(harness)).toEqual(["start", "steer 1", "steer 2"]);
   expect(getAssistantTexts(harness)).toEqual(["", "handled steer 1", "handled steer 2"]);
 });
-export const deliversMultipleFollowUpMessagesIn = Effect.gen(function* () {
+const deliversMultipleFollowUpMessagesIn = Effect.gen(function* () {
   const waiting = yield* Effect.promise(() => createWaitingHarness());
   const { harness, waitForToolStart, promptPromise, releaseToolExecution } = waiting;
   harnesses.push(harness);
@@ -202,7 +211,7 @@ export const deliversMultipleFollowUpMessagesIn = Effect.gen(function* () {
     "handled follow-up 2",
   ]);
 });
-export const deliversAllSteeringMessagesInOne = Effect.gen(function* () {
+const deliversAllSteeringMessagesInOne = Effect.gen(function* () {
   const waiting = yield* Effect.promise(() => createWaitingHarness());
   const { harness, waitForToolStart, promptPromise, releaseToolExecution } = waiting;
   harnesses.push(harness);
@@ -228,3 +237,15 @@ export const deliversAllSteeringMessagesInOne = Effect.gen(function* () {
   expect(batchedUserMessages).toEqual(["start", "steer 1", "steer 2"]);
   expect(getAssistantTexts(harness)).toEqual(["", "batched steer response"]);
 });
+
+const agentSessionQueueCases2 = {
+  deliversAllSteeringMessagesInOne,
+  deliversExtensionOriginSteeringMessagesBefore,
+  deliversFollowUpMessagesOnlyAfter,
+  deliversMultipleFollowUpMessagesIn,
+  deliversMultipleSteeringMessagesInOrder,
+  dispatchesExtensionCommandsImmediatelyWhenPrompted,
+  runsDirectSteeringAndFollowUp,
+};
+
+export default agentSessionQueueCases2;

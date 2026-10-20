@@ -1,32 +1,43 @@
 import type { AgentTool } from "@msa/agent-core";
 import { fauxAssistantMessage, fauxToolCall } from "@msa/ai";
-import { gate } from "@msa/testing";
+import testing from "@msa/testing";
 import { Effect } from "effect";
 import { Type } from "typebox";
 import { expect } from "vite-plus/test";
 
-import { getEntryTypes, harnesses } from "./agent-session-bash-persistence-cases-1.ts";
-import { createHarness } from "./harness.ts";
+import agentSessionBashPersistenceCases1 from "./agent-session-bash-persistence-cases-1.ts";
+import harnessModule from "./harness.ts";
 
-export const defersBashResultsWhileStreamingAnd = Effect.gen(function* () {
-  const runPromise = Effect.runPromiseWith(yield* Effect.context<never>());
-  const toolRelease = gate();
-  const waitTool: AgentTool = {
-    name: "wait",
-    label: "Wait",
-    description: "Wait for release",
-    parameters: Type.Object({}),
-    execute: () =>
-      runPromise(
-        Effect.gen(function* () {
-          yield* Effect.promise(() => toolRelease);
-          return {
-            content: [{ type: "text", text: "released" }],
-            details: {},
-          };
-        }),
-      ),
-  };
+const { createHarness } = harnessModule;
+const { getEntryTypes, harnesses } = agentSessionBashPersistenceCases1;
+
+const { gate } = testing;
+
+const defersBashResultsWhileStreamingAndPart1 = () =>
+  Effect.gen(function* () {
+    const runPromise = Effect.runPromiseWith(yield* Effect.context<never>());
+    const toolRelease = gate();
+    const waitTool: AgentTool = {
+      description: "Wait for release",
+      execute: () =>
+        runPromise(
+          Effect.gen(function* () {
+            yield* Effect.promise(() => toolRelease);
+            return {
+              content: [{ text: "released", type: "text" }],
+              details: {},
+            };
+          }),
+        ),
+      label: "Wait",
+      name: "wait",
+      parameters: Type.Object({}),
+    };
+    return { toolRelease, waitTool };
+  });
+
+const defersBashResultsWhileStreamingAnd = Effect.gen(function* () {
+  const { toolRelease, waitTool } = yield* defersBashResultsWhileStreamingAndPart1();
   const harness = yield* Effect.promise(() => createHarness({ tools: [waitTool] }));
   harnesses.push(harness);
   harness.setResponses([
@@ -48,9 +59,9 @@ export const defersBashResultsWhileStreamingAnd = Effect.gen(function* () {
   const firstPrompt = harness.session.prompt("start");
   yield* Effect.promise(() => sawToolStart);
   harness.session.recordBashResult("echo hi", {
-    output: "hi",
-    exitCode: 0,
     cancelled: false,
+    exitCode: 0,
+    output: "hi",
     truncated: false,
   });
 
@@ -69,3 +80,9 @@ export const defersBashResultsWhileStreamingAnd = Effect.gen(function* () {
   expect(harness.session.messages.some((message) => message.role === "bashExecution")).toBe(true);
   expect(getEntryTypes(harness).filter((type) => type === "message").length).toBeGreaterThan(0);
 });
+
+const agentSessionBashPersistenceCases2 = {
+  defersBashResultsWhileStreamingAnd,
+};
+
+export default agentSessionBashPersistenceCases2;

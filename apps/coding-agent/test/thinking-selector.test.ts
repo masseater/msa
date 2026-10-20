@@ -6,6 +6,45 @@ import { ThinkingSelectorComponent } from "../src/modes/interactive/components/t
 import { initTheme } from "../src/modes/interactive/theme/theme.ts";
 import { stripAnsi } from "../src/utils/ansi.ts";
 
+const keepsTheCurrentThinkingLevelMarkedWhile = () => {
+  const selector = new ThinkingSelectorComponent(
+    "medium",
+    ["medium", "high"],
+    () => {},
+    () => {},
+  );
+  const getLevelRow = (level: string): string | undefined =>
+    selector
+      .getSelectList()
+      .render(80)
+      .map((line) => stripAnsi(line))
+      .find((line) => line.includes(level));
+
+  expect(selector.getSelectList().getSelectedItem()?.label).toBe("✓ medium");
+  expect(getLevelRow("medium")?.startsWith("→ ✓ medium")).toBe(true);
+  selector.handleInput("\x1b[B");
+  expect(getLevelRow("medium")?.startsWith("  ✓ medium")).toBe(true);
+  expect(getLevelRow("high")?.startsWith("→   high")).toBe(true);
+};
+
+const usesTheConfiguredSaveBinding = () => {
+  setKeybindings(new KeybindingsManager({ "app.thinking.save": "ctrl+r" }));
+  const saveDefault = vi.fn();
+  const selector = new ThinkingSelectorComponent(
+    "medium",
+    ["medium", "high"],
+    () => {},
+    () => {},
+    saveDefault,
+  );
+
+  expect(stripAnsi(selector.render(80).join("\n"))).toContain("Ctrl+R to set as default");
+  selector.handleInput("\x13");
+  expect(saveDefault).not.toHaveBeenCalled();
+  selector.handleInput("\x12");
+  expect(saveDefault).toHaveBeenCalledWith("medium");
+};
+
 describe("thinking selector", () => {
   beforeAll(() => {
     initTheme("dark");
@@ -15,42 +54,10 @@ describe("thinking selector", () => {
     setKeybindings(new KeybindingsManager());
   });
 
-  it("keeps the current thinking level marked while browsing", () => {
-    const selector = new ThinkingSelectorComponent(
-      "medium",
-      ["medium", "high"],
-      () => {},
-      () => {},
-    );
-    const getLevelRow = (level: string): string | undefined =>
-      selector
-        .getSelectList()
-        .render(80)
-        .map((line) => stripAnsi(line))
-        .find((line) => line.includes(level));
+  it(
+    "keeps the current thinking level marked while browsing",
+    keepsTheCurrentThinkingLevelMarkedWhile,
+  );
 
-    expect(selector.getSelectList().getSelectedItem()?.label).toBe("✓ medium");
-    expect(getLevelRow("medium")?.startsWith("→ ✓ medium")).toBe(true);
-    selector.handleInput("\x1b[B");
-    expect(getLevelRow("medium")?.startsWith("  ✓ medium")).toBe(true);
-    expect(getLevelRow("high")?.startsWith("→   high")).toBe(true);
-  });
-
-  it("uses the configured save binding", () => {
-    setKeybindings(new KeybindingsManager({ "app.thinking.save": "ctrl+r" }));
-    const saveDefault = vi.fn();
-    const selector = new ThinkingSelectorComponent(
-      "medium",
-      ["medium", "high"],
-      () => {},
-      () => {},
-      saveDefault,
-    );
-
-    expect(stripAnsi(selector.render(80).join("\n"))).toContain("Ctrl+R to set as default");
-    selector.handleInput("\x13");
-    expect(saveDefault).not.toHaveBeenCalled();
-    selector.handleInput("\x12");
-    expect(saveDefault).toHaveBeenCalledWith("medium");
-  });
+  it("uses the configured save binding", usesTheConfiguredSaveBinding);
 });

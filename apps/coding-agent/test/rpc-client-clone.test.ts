@@ -1,8 +1,10 @@
-import { awaited, runTest } from "@msa/testing";
+import testing from "@msa/testing";
 import { Effect } from "effect";
 import { describe, expect, it, vi } from "vite-plus/test";
 
 import { RpcClient } from "../src/modes/rpc/rpc-client.ts";
+
+const { awaited, runTest } = testing;
 
 type RpcClientPrivate = {
   send: (command: { type: string }) => Promise<unknown>;
@@ -20,10 +22,10 @@ describe("RpcClient clone", () => {
         const send = vi.fn(() =>
           effectRunPromise(
             awaited({
-              type: "response",
               command: "clone",
-              success: true,
               data: { cancelled: false },
+              success: true,
+              type: "response",
             }),
           ),
         );

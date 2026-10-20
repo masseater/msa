@@ -1,14 +1,16 @@
-import { joinPath } from "@msa/testing";
+import testing from "@msa/testing";
 
 import { SessionManager } from "../../../src/core/session-manager.ts";
-import { SettingsManager } from "../../../src/core/settings-manager.ts";
 import type { Settings } from "../../../src/core/settings-manager.ts";
+import { SettingsManager } from "../../../src/core/settings-manager.ts";
 
-export function createSessionManager(sessionManager: SessionManager | undefined): SessionManager {
+const { joinPath } = testing;
+
+function createSessionManager(sessionManager: SessionManager | undefined): SessionManager {
   return sessionManager ?? SessionManager.inMemory();
 }
 
-export function createSettingsManager(entry: {
+function createSettingsManager(entry: {
   tempDir: string;
   settings: Partial<Settings> | undefined;
 }): SettingsManager {
@@ -17,3 +19,10 @@ export function createSettingsManager(entry: {
     ...entry.settings,
   });
 }
+
+const state = {
+  createSessionManager,
+  createSettingsManager,
+};
+
+export default state;

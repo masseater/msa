@@ -1,21 +1,16 @@
 import { fileURLToPath } from "node:url";
 
-import {
-  awaited,
-  dirnameOf,
-  joinPath,
-  makeTempDir,
-  readDirectory,
-  readTextFile,
-  removePath,
-} from "@msa/testing";
+import testing from "@msa/testing";
 import { Effect } from "effect";
 
 import { RpcClient } from "../src/modes/rpc/rpc-client.ts";
 
+const { awaited, dirnameOf, joinPath, makeTempDir, readDirectory, readTextFile, removePath } =
+  testing;
+
 const sourceDir = dirnameOf(fileURLToPath(import.meta.url));
 
-export const readSessionEntries = (sessionDir: string): Effect.Effect<any[]> =>
+const readSessionEntries = (sessionDir: string): Effect.Effect<any[]> =>
   Effect.gen(function* () {
     const sessionsPath = joinPath(sessionDir, "sessions");
     const sessionDirs = yield* readDirectory(sessionsPath);
@@ -34,7 +29,7 @@ export const readSessionEntries = (sessionDir: string): Effect.Effect<any[]> =>
       .map((line) => JSON.parse(line));
   });
 
-export const withClient = <A, E>(
+const withClient = <A, E>(
   use: (client: RpcClient, sessionDir: string) => Effect.Effect<A, E>,
 ): Effect.Effect<A, E> =>
   Effect.gen(function* () {
@@ -43,8 +38,8 @@ export const withClient = <A, E>(
       cliPath: joinPath(sourceDir, "..", "dist", "cli.js"),
       cwd: joinPath(sourceDir, ".."),
       env: { MSA_CODING_AGENT_DIR: sessionDir },
-      provider: "anthropic-api",
       model: "claude-sonnet-4-5",
+      provider: "anthropic-api",
     });
     try {
       yield* awaited(client.start());
@@ -54,3 +49,10 @@ export const withClient = <A, E>(
       yield* removePath(sessionDir);
     }
   });
+
+const rpcSupport = {
+  readSessionEntries,
+  withClient,
+};
+
+export default rpcSupport;

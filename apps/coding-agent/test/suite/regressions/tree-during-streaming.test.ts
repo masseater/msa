@@ -2,8 +2,11 @@ import { fauxAssistantMessage } from "@msa/ai";
 import { Effect } from "effect";
 import { describe, expect, it } from "vite-plus/test";
 
-import { userMsg } from "../../utilities.ts";
-import { createHarness } from "../harness.ts";
+import utilities from "../../utilities.ts";
+import harnessModule from "../harness.ts";
+
+const { createHarness } = harnessModule;
+const { userMsg } = utilities;
 
 const rejectsNavigationWithoutChangingTheActive = Effect.gen(function* () {
   const runPromise = Effect.runPromiseWith(yield* Effect.context<never>());
@@ -38,7 +41,12 @@ const rejectsNavigationWithoutChangingTheActive = Effect.gen(function* () {
   }
 });
 
+const rejectsNavigationWithoutChangingTheActiveLeaf = () =>
+  Effect.runPromise(rejectsNavigationWithoutChangingTheActive);
+
 describe("tree navigation during an active response", () => {
-  it("rejects navigation without changing the active leaf", () =>
-    Effect.runPromise(rejectsNavigationWithoutChangingTheActive));
+  it(
+    "rejects navigation without changing the active leaf",
+    rejectsNavigationWithoutChangingTheActiveLeaf,
+  );
 });

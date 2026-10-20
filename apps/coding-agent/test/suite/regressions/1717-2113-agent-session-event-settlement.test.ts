@@ -4,14 +4,14 @@ import { Effect } from "effect";
 import { Type } from "typebox";
 import { afterEach, describe, expect, it } from "vite-plus/test";
 
-import { createHarness, type Harness } from "../harness.ts";
+import harnessModule from "../harness.ts";
+import type harnessTypes from "../harness.types.ts";
+
+const { createHarness } = harnessModule;
 
 function createEchoTool(): AgentTool {
   return {
-    name: "echo",
-    label: "Echo",
     description: "Echo text back",
-    parameters: Type.Object({ text: Type.String() }),
     execute: (_toolCallId, params) =>
       Effect.runPromise(
         Effect.sync(() => {
@@ -19,19 +19,21 @@ function createEchoTool(): AgentTool {
             typeof params === "object" && params !== null && "text" in params
               ? String(params.text)
               : "";
-          return { content: [{ type: "text", text }], details: { text } };
+          return { content: [{ text, type: "text" }], details: { text } };
         }),
       ),
+    label: "Echo",
+    name: "echo",
+    parameters: Type.Object({ text: Type.String() }),
   };
 }
 
-const harnesses: Harness[] = [];
+const harnesses: harnessTypes.Harness[] = [];
 
 const keepsPersistedAssistantToolresultMessageOrder = Effect.gen(function* () {
   const runPromise = Effect.runPromiseWith(yield* Effect.context<never>());
   const harness = yield* Effect.promise(() =>
     createHarness({
-      tools: [createEchoTool()],
       extensionFactories: [
         (msa) => {
           msa.on("message_end", (event) =>
@@ -45,13 +47,14 @@ const keepsPersistedAssistantToolresultMessageOrder = Effect.gen(function* () {
           );
         },
       ],
+      tools: [createEchoTool()],
     }),
   );
   harnesses.push(harness);
-  return yield* keepsPersistedAssistantToolresultMessageOrderPart2(harness);
+  return yield* keepsPersistedAssistantToolresultMessageOrderStep1(harness);
 });
 
-const keepsPersistedAssistantToolresultMessageOrderPart2 = (harness: Harness) =>
+const keepsPersistedAssistantToolresultMessageOrderStep1 = (harness: harnessTypes.Harness) =>
   Effect.gen(function* () {
     harness.setResponses([
       fauxAssistantMessage(
@@ -83,11 +86,10 @@ const keepsPersistedAssistantToolresultMessageOrderPart2 = (harness: Harness) =>
   });
 
 const runsToolCallHandlersAfterThe = Effect.gen(function* () {
-  let harness: Harness;
+  let harness: harnessTypes.Harness;
   const branchRolesAtToolCall: string[][] = [];
   harness = yield* Effect.promise(() =>
     createHarness({
-      tools: [createEchoTool()],
       extensionFactories: [
         (msa) => {
           msa.on("tool_call", () => {
@@ -100,6 +102,7 @@ const runsToolCallHandlersAfterThe = Effect.gen(function* () {
           });
         },
       ],
+      tools: [createEchoTool()],
     }),
   );
   harnesses.push(harness);
@@ -115,14 +118,25 @@ const runsToolCallHandlersAfterThe = Effect.gen(function* () {
   expect(branchRolesAtToolCall).toEqual([["system", "user", "assistant"]]);
 });
 
+const keepsPersistedAssistantToolresultMessageOrderWhen = () =>
+  Effect.runPromise(keepsPersistedAssistantToolresultMessageOrder);
+
+const runsToolCallHandlersAfterTheAssistant = () => Effect.runPromise(runsToolCallHandlersAfterThe);
+
+const afterEachHook = () => {
+  while (harnesses.length > 0) {
+    harnesses.pop()?.cleanup();
+  }
+};
+
 describe("regressions #1717/#2113: agent session event settlement", () => {
-  afterEach(() => {
-    while (harnesses.length > 0) {
-      harnesses.pop()?.cleanup();
-    }
-  });
-  it("keeps persisted assistant/toolResult message order when extension message_end handlers yield", () =>
-    Effect.runPromise(keepsPersistedAssistantToolresultMessageOrder));
-  it("runs tool_call handlers after the assistant tool-use message is settled in the session", () =>
-    Effect.runPromise(runsToolCallHandlersAfterThe));
+  afterEach(afterEachHook);
+  it(
+    "keeps persisted assistant/toolResult message order when extension message_end handlers yield",
+    keepsPersistedAssistantToolresultMessageOrderWhen,
+  );
+  it(
+    "runs tool_call handlers after the assistant tool-use message is settled in the session",
+    runsToolCallHandlersAfterTheAssistant,
+  );
 });

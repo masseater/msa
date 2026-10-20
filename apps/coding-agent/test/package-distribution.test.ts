@@ -1,8 +1,10 @@
 import { fileURLToPath } from "node:url";
 
-import { readJsonFile, runTest } from "@msa/testing";
+import testing from "@msa/testing";
 import { Effect } from "effect";
 import { describe, expect, test } from "vite-plus/test";
+
+const { readJsonFile, runTest } = testing;
 
 interface CodingAgentPackageJson {
   bin: { msa: string };

@@ -1,11 +1,15 @@
+import testing from "@msa/testing";
 import { Effect } from "effect";
 import { expect } from "vite-plus/test";
 
 import { SessionManager } from "../../src/core/session-manager.ts";
-import { assistantMsg, readSessionFileRoles, userMsg } from "../utilities.ts";
-import { fs, runtime } from "./tree-traversal-cases-1.ts";
+import utilities from "../utilities.ts";
 
-export const handlesDeepBranching = () => {
+const { makeDirectory, makeTempDir, pathExists, removePath, runTest } = testing;
+
+const { assistantMsg, readSessionFileRoles, userMsg } = utilities;
+
+const handlesDeepBranching = () => {
   const session = SessionManager.inMemory();
 
   session.appendMessage(userMsg("1"));
@@ -32,7 +36,7 @@ export const handlesDeepBranching = () => {
   const node3 = node2.children.find((c) => c.entry.id === id3)!;
   expect(node3.children).toHaveLength(1);
 };
-export const movesLeafPointerToSpecifiedEntry = () => {
+const movesLeafPointerToSpecifiedEntry = () => {
   const session = SessionManager.inMemory();
 
   const id1 = session.appendMessage(userMsg("1"));
@@ -44,7 +48,7 @@ export const movesLeafPointerToSpecifiedEntry = () => {
   session.branch(id1);
   expect(session.getLeafId()).toBe(id1);
 };
-export const newAppendsBecomeChildrenOfBranch = () => {
+const newAppendsBecomeChildrenOfBranch = () => {
   const session = SessionManager.inMemory();
 
   const id1 = session.appendMessage(userMsg("1"));
@@ -57,7 +61,7 @@ export const newAppendsBecomeChildrenOfBranch = () => {
   const branchedEntry = entries.find((e) => e.id === id3)!;
   expect(branchedEntry.parentId).toBe(id1);
 };
-export const insertsBranchSummaryWithTheSource = () => {
+const insertsBranchSummaryWithTheSource = () => {
   const session = SessionManager.inMemory();
 
   const id1 = session.appendMessage(userMsg("1"));
@@ -65,12 +69,12 @@ export const insertsBranchSummaryWithTheSource = () => {
   const id3 = session.appendMessage(userMsg("3"));
 
   const usage = {
-    input: 10,
-    output: 20,
     cacheRead: 30,
     cacheWrite: 40,
+    cost: { cacheRead: 0.3, cacheWrite: 0.4, input: 0.1, output: 0.2, total: 1 },
+    input: 10,
+    output: 20,
     totalTokens: 100,
-    cost: { input: 0.1, output: 0.2, cacheRead: 0.3, cacheWrite: 0.4, total: 1 },
   };
   const summaryId = session.branchWithSummary(
     id1,
@@ -92,7 +96,7 @@ export const insertsBranchSummaryWithTheSource = () => {
     expect(summaryEntry.usage).toEqual(usage);
   }
 };
-export const throwsForNonExistentEntry = () => {
+const throwsForNonExistentEntry = () => {
   const session = SessionManager.inMemory();
   session.appendMessage(userMsg("hello"));
 
@@ -100,7 +104,7 @@ export const throwsForNonExistentEntry = () => {
     "Entry nonexistent not found",
   );
 };
-export const returnsCurrentLeafEntry = () => {
+const returnsCurrentLeafEntry = () => {
   const session = SessionManager.inMemory();
 
   session.appendMessage(userMsg("1"));
@@ -110,7 +114,7 @@ export const returnsCurrentLeafEntry = () => {
   expect(leaf).toBeDefined();
   expect(leaf!.id).toBe(id2);
 };
-export const returnsEntryById = () => {
+const returnsEntryById = () => {
   const session = SessionManager.inMemory();
 
   const id1 = session.appendMessage(userMsg("first"));
@@ -129,7 +133,7 @@ export const returnsEntryById = () => {
     expect((entry2.message.content as any)[0].text).toBe("second");
   }
 };
-export const returnsMessagesFromCurrentBranchOnly = () => {
+const returnsMessagesFromCurrentBranchOnly = () => {
   const session = SessionManager.inMemory();
 
   session.appendMessage(userMsg("msg1"));
@@ -146,13 +150,13 @@ export const returnsMessagesFromCurrentBranchOnly = () => {
   expect((ctx.messages[1] as any).content[0].text).toBe("msg2");
   expect((ctx.messages[2] as any).content[0].text).toBe("msg4-branch");
 };
-export const throwsForNonExistentEntry2 = () => {
+const throwsForNonExistentEntry2 = () => {
   const session = SessionManager.inMemory();
   session.appendMessage(userMsg("hello"));
 
   expect(() => session.createBranchedSession("nonexistent")).toThrow("Entry nonexistent not found");
 };
-export const createsNewSessionWithPathTo = () => {
+const createsNewSessionWithPathTo = () => {
   const session = SessionManager.inMemory();
 
   const id1 = session.appendMessage(userMsg("1"));
@@ -171,7 +175,7 @@ export const createsNewSessionWithPathTo = () => {
   expect(entries[0]?.id).toBe(id1);
   expect(entries[1]?.id).toBe(id2);
 };
-export const extractsCorrectPathFromBranchedTree = () => {
+const extractsCorrectPathFromBranchedTree = () => {
   const session = SessionManager.inMemory();
 
   const id1 = session.appendMessage(userMsg("1"));
@@ -188,11 +192,11 @@ export const extractsCorrectPathFromBranchedTree = () => {
   expect(entries).toHaveLength(4);
   expect(entries.map((e) => e.id)).toEqual([id1, id2, id4, id5]);
 };
-export const doesNotDuplicateEntriesWhenForking = () =>
-  runtime.runPromise(
+const doesNotDuplicateEntriesWhenForking = () =>
+  runTest(
     Effect.gen(function* () {
-      const tempDir = yield* fs.makeTempDirectory({ prefix: `session-fork-dedup-` });
-      yield* fs.makeDirectory(tempDir, { recursive: true });
+      const tempDir = yield* makeTempDir(`session-fork-dedup-`);
+      yield* makeDirectory(tempDir);
 
       try {
         const session = SessionManager.create(tempDir, tempDir);
@@ -203,10 +207,10 @@ export const doesNotDuplicateEntriesWhenForking = () =>
         const newFile = session.createBranchedSession(modelChangeId);
         expect(newFile).toBeDefined();
 
-        expect(yield* fs.exists(newFile!)).toBe(false);
+        expect(yield* pathExists(newFile!)).toBe(false);
 
         session.appendMessage(userMsg("new question"));
-        expect(yield* fs.exists(newFile!)).toBe(true);
+        expect(yield* pathExists(newFile!)).toBe(true);
 
         session.appendCustomEntry("preset-state", { name: "plan" });
         session.appendMessage(assistantMsg("new answer"));
@@ -219,7 +223,24 @@ export const doesNotDuplicateEntriesWhenForking = () =>
           "assistant",
         ]);
       } finally {
-        yield* fs.remove(tempDir, { recursive: true, force: true });
+        yield* removePath(tempDir);
       }
     }),
   );
+
+const treeTraversalCases2 = {
+  createsNewSessionWithPathTo,
+  doesNotDuplicateEntriesWhenForking,
+  extractsCorrectPathFromBranchedTree,
+  handlesDeepBranching,
+  insertsBranchSummaryWithTheSource,
+  movesLeafPointerToSpecifiedEntry,
+  newAppendsBecomeChildrenOfBranch,
+  returnsCurrentLeafEntry,
+  returnsEntryById,
+  returnsMessagesFromCurrentBranchOnly,
+  throwsForNonExistentEntry,
+  throwsForNonExistentEntry2,
+};
+
+export default treeTraversalCases2;

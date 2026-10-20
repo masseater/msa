@@ -1,4 +1,4 @@
-import { awaited, runTest } from "@msa/testing";
+import testing from "@msa/testing";
 import { resetCapabilitiesCache, setCapabilities } from "@msa/tui";
 import { Effect } from "effect";
 import { afterEach, beforeEach, describe, expect, it } from "vite-plus/test";
@@ -15,6 +15,8 @@ import {
   renderHighlightedHtml,
   supportsLanguage,
 } from "../src/utils/syntax-highlight.ts";
+
+const { awaited, runTest } = testing;
 
 const eagerLanguages = [
   "python",
@@ -41,70 +43,129 @@ const eagerLanguages = [
 const eagerLanguagesLoadedAtStartup = eagerLanguages.every(supportsLanguage);
 const uncommonLanguageLoadedAtStartup = supportsLanguage("ada");
 
-describe("syntax highlight renderer", () => {
-  it("loads the twenty most common languages at startup and defers the rest", () =>
-    runTest(
-      Effect.gen(function* () {
-        expect(eagerLanguagesLoadedAtStartup).toBe(true);
-        expect(uncommonLanguageLoadedAtStartup).toBe(false);
-        yield* awaited(loadAllHighlightLanguages());
-        expect(supportsLanguage("ada")).toBe(true);
-      }),
-    ));
+const loadsTheTwentyMostCommonLanguagesAt = () =>
+  runTest(
+    Effect.gen(function* () {
+      expect(eagerLanguagesLoadedAtStartup).toBe(true);
+      expect(uncommonLanguageLoadedAtStartup).toBe(false);
+      yield* awaited(loadAllHighlightLanguages());
+      expect(supportsLanguage("ada")).toBe(true);
+    }),
+  );
 
-  it("renders highlighted spans with the provided theme", () => {
-    const rendered = renderHighlightedHtml('<span class="hljs-keyword">const</span> value', {
+const rendersHighlightedSpansWithTheProvidedTheme = () => {
+  const rendered = renderHighlightedHtml('<span class="hljs-keyword">const</span> value', {
+    keyword: (text) => `[keyword:${text}]`,
+  });
+  expect(rendered).toBe("[keyword:const] value");
+};
+
+const decodesHtmlEntitiesEmittedByHighlightJs = () => {
+  const rendered = renderHighlightedHtml(
+    "&lt;tag attr=&quot;value&quot;&gt;&amp;#x41;&#65;&lt;/tag&gt;",
+  );
+  expect(rendered).toBe('<tag attr="value">&#x41;A</tag>');
+};
+
+const inheritsParentFormattingForUnmappedNestedScopes = () => {
+  const interpolation = "${x}";
+  const rendered = renderHighlightedHtml(
+    `<span class="hljs-string">a<span class="hljs-subst">${interpolation}</span>b</span>`,
+    {
+      string: (text) => `[string:${text}]`,
+    },
+  );
+  expect(rendered).toBe(`[string:a][string:${interpolation}][string:b]`);
+};
+
+const keepsParentFormattingAcrossUnscopedNestedSpans = () => {
+  const rendered = renderHighlightedHtml(
+    '<span class="hljs-string">a<span class="language-xml">b</span>c</span>',
+    {
+      string: (text) => `[string:${text}]`,
+    },
+  );
+  expect(rendered).toBe("[string:a][string:b][string:c]");
+};
+
+const highlightsCodeThroughHighlightJs = () => {
+  expect(supportsLanguage("typescript")).toBe(true);
+  const rendered = highlight("const value = 1", {
+    ignoreIllegals: true,
+    language: "typescript",
+    theme: {
       keyword: (text) => `[keyword:${text}]`,
-    });
-    expect(rendered).toBe("[keyword:const] value");
+      number: (text) => `[number:${text}]`,
+    },
   });
+  expect(rendered).toContain("[keyword:const]");
+  expect(rendered).toContain("[number:1]");
+};
 
-  it("decodes HTML entities emitted by highlight.js", () => {
-    const rendered = renderHighlightedHtml(
-      "&lt;tag attr=&quot;value&quot;&gt;&amp;#x41;&#65;&lt;/tag&gt;",
-    );
-    expect(rendered).toBe('<tag attr="value">&#x41;A</tag>');
-  });
+describe("syntax highlight renderer", () => {
+  it(
+    "loads the twenty most common languages at startup and defers the rest",
+    loadsTheTwentyMostCommonLanguagesAt,
+  );
 
-  it("inherits parent formatting for unmapped nested scopes", () => {
-    const interpolation = "${x}";
-    const rendered = renderHighlightedHtml(
-      `<span class="hljs-string">a<span class="hljs-subst">${interpolation}</span>b</span>`,
-      {
-        string: (text) => `[string:${text}]`,
-      },
-    );
-    expect(rendered).toBe(`[string:a][string:${interpolation}][string:b]`);
-  });
+  it(
+    "renders highlighted spans with the provided theme",
+    rendersHighlightedSpansWithTheProvidedTheme,
+  );
 
-  it("keeps parent formatting across unscoped nested spans", () => {
-    const rendered = renderHighlightedHtml(
-      '<span class="hljs-string">a<span class="language-xml">b</span>c</span>',
-      {
-        string: (text) => `[string:${text}]`,
-      },
-    );
-    expect(rendered).toBe("[string:a][string:b][string:c]");
-  });
+  it("decodes HTML entities emitted by highlight.js", decodesHtmlEntitiesEmittedByHighlightJs);
 
-  it("highlights code through highlight.js", () => {
-    expect(supportsLanguage("typescript")).toBe(true);
-    const rendered = highlight("const value = 1", {
-      language: "typescript",
-      ignoreIllegals: true,
-      theme: {
-        keyword: (text) => `[keyword:${text}]`,
-        number: (text) => `[number:${text}]`,
-      },
-    });
-    expect(rendered).toContain("[keyword:const]");
-    expect(rendered).toContain("[number:1]");
-  });
+  it(
+    "inherits parent formatting for unmapped nested scopes",
+    inheritsParentFormattingForUnmappedNestedScopes,
+  );
+
+  it(
+    "keeps parent formatting across unscoped nested spans",
+    keepsParentFormattingAcrossUnscopedNestedSpans,
+  );
+
+  it("highlights code through highlight.js", highlightsCodeThroughHighlightJs);
 });
+
+const colorsEachLineOfPythonDocstringsIndependently = () => {
+  const code = '"""\nline one\n\nline two\n"""\nafter';
+  const ansi = theme.getFgAnsi("syntaxString");
+  const expected = [
+    `${ansi}"""\x1b[39m`,
+    `${ansi}line one\x1b[39m`,
+    "",
+    `${ansi}line two\x1b[39m`,
+    `${ansi}"""\x1b[39m`,
+    "after",
+  ];
+
+  expect(highlightCode(code, "python")).toEqual(expected);
+  expect(getMarkdownTheme().highlightCode?.(code, "python")).toEqual(expected);
+};
+
+const colorsDiffAdditionsAndDeletionsInFenced = () => {
+  const lines = highlightCode("-old\n+new\n", "diff");
+
+  expect(lines[0]).toBe(`${theme.getFgAnsi("toolDiffRemoved")}-old\x1b[39m`);
+  expect(lines[1]).toBe(`${theme.getFgAnsi("toolDiffAdded")}+new\x1b[39m`);
+};
+
+const keepsCliHighlightDefaultStyledScopesMapped = () => {
+  expect(highlightCode("const re = /foo+/gi;", "javascript")[0]).toContain(
+    `${theme.getFgAnsi("syntaxString")}/foo+/gi\x1b[39m`,
+  );
+  expect(highlightCode("@decorator", "python")[0]).toBe(
+    `${theme.getFgAnsi("muted")}@decorator\x1b[39m`,
+  );
+  expect(highlightCode("<div></div>", "html")[0]).toContain(
+    `${theme.getFgAnsi("syntaxKeyword")}div\x1b[39m`,
+  );
+};
 
 describe("theme syntax highlighting", () => {
   beforeEach(() => {
-    setCapabilities({ images: null, trueColor: true, hyperlinks: false });
+    setCapabilities({ hyperlinks: false, images: null, trueColor: true });
     initTheme("dark");
   });
 
@@ -112,38 +173,18 @@ describe("theme syntax highlighting", () => {
     resetCapabilitiesCache();
   });
 
-  it("colors each line of Python docstrings independently", () => {
-    const code = '"""\nline one\n\nline two\n"""\nafter';
-    const ansi = theme.getFgAnsi("syntaxString");
-    const expected = [
-      `${ansi}"""\x1b[39m`,
-      `${ansi}line one\x1b[39m`,
-      "",
-      `${ansi}line two\x1b[39m`,
-      `${ansi}"""\x1b[39m`,
-      "after",
-    ];
+  it(
+    "colors each line of Python docstrings independently",
+    colorsEachLineOfPythonDocstringsIndependently,
+  );
 
-    expect(highlightCode(code, "python")).toEqual(expected);
-    expect(getMarkdownTheme().highlightCode?.(code, "python")).toEqual(expected);
-  });
+  it(
+    "colors diff additions and deletions in fenced diff blocks",
+    colorsDiffAdditionsAndDeletionsInFenced,
+  );
 
-  it("colors diff additions and deletions in fenced diff blocks", () => {
-    const lines = highlightCode("-old\n+new\n", "diff");
-
-    expect(lines[0]).toBe(`${theme.getFgAnsi("toolDiffRemoved")}-old\x1b[39m`);
-    expect(lines[1]).toBe(`${theme.getFgAnsi("toolDiffAdded")}+new\x1b[39m`);
-  });
-
-  it("keeps cli-highlight default styled scopes mapped to theme styles", () => {
-    expect(highlightCode("const re = /foo+/gi;", "javascript")[0]).toContain(
-      `${theme.getFgAnsi("syntaxString")}/foo+/gi\x1b[39m`,
-    );
-    expect(highlightCode("@decorator", "python")[0]).toBe(
-      `${theme.getFgAnsi("muted")}@decorator\x1b[39m`,
-    );
-    expect(highlightCode("<div></div>", "html")[0]).toContain(
-      `${theme.getFgAnsi("syntaxKeyword")}div\x1b[39m`,
-    );
-  });
+  it(
+    "keeps cli-highlight default styled scopes mapped to theme styles",
+    keepsCliHighlightDefaultStyledScopesMapped,
+  );
 });

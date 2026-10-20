@@ -1,17 +1,17 @@
-import { colorToOklch, colorToRgb, parseColor, type RgbColor, rgbColor } from "@msa/tui";
+import { type RgbColor, colorToOklch, colorToRgb, parseColor, rgbColor } from "@msa/tui";
 import { afterEach, describe, expect, it } from "vite-plus/test";
 
 import {
-  generateSystemThemeColors,
   type SystemThemeInput,
+  generateSystemThemeColors,
   wcagContrast,
 } from "../src/modes/interactive/theme/system-theme.ts";
 import {
+  type ThemeToken,
   getAvailableThemes,
   getThemeByName,
   getThemeExportColors,
   setTerminalColors,
-  type ThemeToken,
 } from "../src/modes/interactive/theme/theme.ts";
 
 const rgb = (hex: string): RgbColor => colorToRgb(parseColor(hex));
@@ -35,10 +35,10 @@ const DRACULA: SystemThemeInput = {
 };
 
 const TERMINALS = {
-  dracula: DRACULA,
-  solarizedLight: { background: rgb("#fdf6e3"), foreground: rgb("#657b83") },
   backgroundOnly: { background: rgb("#1e1e1e") },
+  dracula: DRACULA,
   midGray: { background: rgb("#808080"), foreground: rgb("#ffffff") },
+  solarizedLight: { background: rgb("#fdf6e3"), foreground: rgb("#657b83") },
 } satisfies Record<string, SystemThemeInput>;
 
 const PANELS: ThemeToken[] = [
@@ -58,6 +58,67 @@ function resolved(input: SystemThemeInput, token: ThemeToken): RgbColor {
 afterEach(() => {
   setTerminalColors({});
 });
+
+const usesTheTerminalForegroundAndPaletteHues = () => {
+  expect(generateSystemThemeColors(DRACULA).colors.text).toBe("");
+
+  expect(generateSystemThemeColors(TERMINALS["solarizedLight"]).colors.text).not.toBe("");
+  const hue = ({ r, g, b }: RgbColor) => colorToOklch(rgbColor(r, g, b)).h;
+  const red = DRACULA.palette?.[1];
+  if (red === undefined) throw new Error("expected Dracula's red palette entry");
+  expect(Math.abs(hue(resolved(DRACULA, "error")) - hue(red))).toBeLessThan(8);
+};
+
+const keepsPastelPaletteColorsPastelAtOther = () => {
+  const frappe: SystemThemeInput = {
+    background: rgb("#303446"),
+    foreground: rgb("#c6d0f5"),
+    palette: [
+      "#51576d",
+      "#e78284",
+      "#a6d189",
+      "#e5c890",
+      "#8caaee",
+      "#f4b8e4",
+      "#81c8be",
+      "#b5bfe2",
+    ]
+      .concat([
+        "#626880",
+        "#e67172",
+        "#8ec772",
+        "#d9ba73",
+        "#7b9ef0",
+        "#f2a4db",
+        "#5abfb5",
+        "#a5adce",
+      ])
+      .map(rgb),
+  };
+  const chroma = ({ r, g, b }: RgbColor) => colorToOklch(rgbColor(r, g, b)).c;
+  const pink = frappe.palette?.[5];
+  if (pink === undefined) throw new Error("expected Frappé's pink palette entry");
+  const accent = resolved(frappe, "accent");
+
+  expect(lightness(accent)).toBeLessThan(lightness(pink) - 0.05);
+  expect(chroma(accent)).toBeLessThanOrEqual(chroma(pink) * 1.03);
+  for (const panel of ["userMessageBg", "customMessageBg"] as const) {
+    expect(chroma(resolved(frappe, panel)), panel).toBeLessThanOrEqual(0.1);
+  }
+};
+
+const rendersGrayscaleAtZeroSaturation = () => {
+  const { colors } = generateSystemThemeColors({ ...DRACULA, saturation: 0 });
+  expect(colorToOklch(parseColor(colors.error as string)).c).toBeLessThan(0.005);
+};
+
+const fallsBackToPaletteIndicesAndFaint = () => {
+  const { colors, dim, appearance } = generateSystemThemeColors({ appearanceHint: "light" });
+  expect(appearance).toBe("light");
+  expect([colors.error, colors.text, colors.userMessageBg]).toEqual([1, "", ""]);
+  expect(dim).toContain("muted");
+  expect(generateSystemThemeColors({ saturation: 0 }).colors.error).toBe("");
+};
 
 describe("generateSystemThemeColors", () => {
   it("keeps body text readable (WCAG 4.5:1) on the background and its panels", () => {
@@ -93,83 +154,43 @@ describe("generateSystemThemeColors", () => {
     }
   });
 
-  it("uses the terminal foreground and palette hues", () => {
-    expect(generateSystemThemeColors(DRACULA).colors.text).toBe("");
+  it("uses the terminal foreground and palette hues", usesTheTerminalForegroundAndPaletteHues);
 
-    expect(generateSystemThemeColors(TERMINALS["solarizedLight"]).colors.text).not.toBe("");
-    const hue = ({ r, g, b }: RgbColor) => colorToOklch(rgbColor(r, g, b)).h;
-    const red = DRACULA.palette?.[1];
-    if (red === undefined) throw new Error("expected Dracula's red palette entry");
-    expect(Math.abs(hue(resolved(DRACULA, "error")) - hue(red))).toBeLessThan(8);
-  });
+  it(
+    "keeps pastel palette colors pastel at other lightnesses",
+    keepsPastelPaletteColorsPastelAtOther,
+  );
 
-  it("keeps pastel palette colors pastel at other lightnesses", () => {
-    const frappe: SystemThemeInput = {
-      background: rgb("#303446"),
-      foreground: rgb("#c6d0f5"),
-      palette: [
-        "#51576d",
-        "#e78284",
-        "#a6d189",
-        "#e5c890",
-        "#8caaee",
-        "#f4b8e4",
-        "#81c8be",
-        "#b5bfe2",
-      ]
-        .concat([
-          "#626880",
-          "#e67172",
-          "#8ec772",
-          "#d9ba73",
-          "#7b9ef0",
-          "#f2a4db",
-          "#5abfb5",
-          "#a5adce",
-        ])
-        .map(rgb),
-    };
-    const chroma = ({ r, g, b }: RgbColor) => colorToOklch(rgbColor(r, g, b)).c;
-    const pink = frappe.palette?.[5];
-    if (pink === undefined) throw new Error("expected Frappé's pink palette entry");
-    const accent = resolved(frappe, "accent");
+  it("renders grayscale at zero saturation", rendersGrayscaleAtZeroSaturation);
 
-    expect(lightness(accent)).toBeLessThan(lightness(pink) - 0.05);
-    expect(chroma(accent)).toBeLessThanOrEqual(chroma(pink) * 1.03);
-    for (const panel of ["userMessageBg", "customMessageBg"] as const) {
-      expect(chroma(resolved(frappe, panel)), panel).toBeLessThanOrEqual(0.1);
-    }
-  });
-
-  it("renders grayscale at zero saturation", () => {
-    const { colors } = generateSystemThemeColors({ ...DRACULA, saturation: 0 });
-    expect(colorToOklch(parseColor(colors.error as string)).c).toBeLessThan(0.005);
-  });
-
-  it("falls back to palette indices and faint text without a background", () => {
-    const { colors, dim, appearance } = generateSystemThemeColors({ appearanceHint: "light" });
-    expect(appearance).toBe("light");
-    expect([colors.error, colors.text, colors.userMessageBg]).toEqual([1, "", ""]);
-    expect(dim).toContain("muted");
-    expect(generateSystemThemeColors({ saturation: 0 }).colors.error).toBe("");
-  });
+  it(
+    "falls back to palette indices and faint text without a background",
+    fallsBackToPaletteIndicesAndFaint,
+  );
 });
 
+const isListedFirstHasNoExportColors = () => {
+  expect(getAvailableThemes()[0]).toBe("system");
+  expect(getThemeExportColors("system")).toEqual({});
+
+  setTerminalColors(DRACULA);
+  const theme = getThemeByName("system")!;
+  expect(theme.appearance).toBe("dark");
+  expect(theme.getFgAnsi("text")).toBe("\x1b[39m");
+  expect(theme.getFgAnsi("error").startsWith("\x1b[38;")).toBe(true);
+};
+
+const rendersFaintTokensWithSgr2And = () => {
+  const theme = getThemeByName("system")!;
+  expect(theme.fg("muted", "x")).toBe("\x1b[39m\x1b[2mx\x1b[22;39m");
+  expect(theme.style("x", { fg: "muted" })).toBe("\x1b[39m\x1b[2mx\x1b[22m\x1b[39m");
+};
+
 describe("system theme", () => {
-  it("is listed first, has no export colors, and is generated from the terminal colors", () => {
-    expect(getAvailableThemes()[0]).toBe("system");
-    expect(getThemeExportColors("system")).toEqual({});
+  it(
+    "is listed first, has no export colors, and is generated from the terminal colors",
+    isListedFirstHasNoExportColors,
+  );
 
-    setTerminalColors(DRACULA);
-    const theme = getThemeByName("system")!;
-    expect(theme.appearance).toBe("dark");
-    expect(theme.getFgAnsi("text")).toBe("\x1b[39m");
-    expect(theme.getFgAnsi("error").startsWith("\x1b[38;")).toBe(true);
-  });
-
-  it("renders faint tokens with SGR 2 and closes it", () => {
-    const theme = getThemeByName("system")!;
-    expect(theme.fg("muted", "x")).toBe("\x1b[39m\x1b[2mx\x1b[22;39m");
-    expect(theme.style("x", { fg: "muted" })).toBe("\x1b[39m\x1b[2mx\x1b[22m\x1b[39m");
-  });
+  it("renders faint tokens with SGR 2 and closes it", rendersFaintTokensWithSgr2And);
 });

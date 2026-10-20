@@ -1,10 +1,12 @@
 import * as NodeServices from "@effect/platform-node/NodeServices";
-import { joinPath, toJsonText } from "@msa/testing";
+import testing from "@msa/testing";
 import { Effect, FileSystem, ManagedRuntime } from "effect";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vite-plus/test";
 
 import { ENV_AGENT_DIR } from "../../../src/config.ts";
 import { SessionManager } from "../../../src/core/session-manager.ts";
+
+const { joinPath, toJsonText } = testing;
 
 const runtime = ManagedRuntime.make(NodeServices.layer);
 const fs = runtime.runSync(FileSystem.FileSystem.useSync((service) => service));
@@ -20,11 +22,11 @@ function writeSession(dir: string, id: string) {
       yield* fs.writeFileString(
         joinPath(dir, `${id}.jsonl`),
         `${yield* toJsonText({
-          type: "session",
-          version: 3,
+          cwd: joinPath(tempDir, "project"),
           id,
           timestamp: "2026-08-03T00:00:00.000Z",
-          cwd: joinPath(tempDir, "project"),
+          type: "session",
+          version: 3,
         })}\n`,
       );
     }),
@@ -66,31 +68,43 @@ const ignoresLinksToFiles = Effect.gen(function* () {
   expect(sessions.map((session) => session.id)).toEqual(["regular"]);
 });
 
+const discoversASessionThroughADirectoryLink = () =>
+  Effect.runPromise(discoversASessionThroughADirectory);
+
+const ignoresABrokenDirectoryLinkWithoutHiding = () =>
+  Effect.runPromise(ignoresABrokenDirectoryLinkWithout);
+
+const ignoresLinksToFiles2 = () => Effect.runPromise(ignoresLinksToFiles);
+
+const beforeEachHook = () =>
+  runtime.runPromise(
+    Effect.gen(function* () {
+      tempDir = yield* fs.makeTempDirectory({ prefix: "msa-session-discovery-" });
+      const agentDir = joinPath(tempDir, "agent");
+      sessionsDir = joinPath(agentDir, "sessions");
+      yield* fs.makeDirectory(sessionsDir, { recursive: true });
+      vi.stubEnv(ENV_AGENT_DIR, agentDir);
+    }),
+  );
+
+const afterEachHook = () =>
+  runtime.runPromise(
+    Effect.gen(function* () {
+      vi.unstubAllEnvs();
+      yield* fs.remove(tempDir, { force: true, recursive: true });
+    }),
+  );
+
 describe("regression #7497: discover sessions through symlinked directories", () => {
-  beforeEach(() =>
-    runtime.runPromise(
-      Effect.gen(function* () {
-        tempDir = yield* fs.makeTempDirectory({ prefix: "msa-session-discovery-" });
-        const agentDir = joinPath(tempDir, "agent");
-        sessionsDir = joinPath(agentDir, "sessions");
-        yield* fs.makeDirectory(sessionsDir, { recursive: true });
-        vi.stubEnv(ENV_AGENT_DIR, agentDir);
-      }),
-    ),
+  beforeEach(beforeEachHook);
+  afterEach(afterEachHook);
+  it(
+    "discovers a session through a directory link and preserves the alias path",
+    discoversASessionThroughADirectoryLink,
   );
-  afterEach(() =>
-    runtime.runPromise(
-      Effect.gen(function* () {
-        vi.unstubAllEnvs();
-        yield* fs.remove(tempDir, { recursive: true, force: true });
-      }),
-    ),
+  it(
+    "ignores a broken directory link without hiding valid sessions",
+    ignoresABrokenDirectoryLinkWithoutHiding,
   );
-  it("discovers a session through a directory link and preserves the alias path", () =>
-    Effect.runPromise(discoversASessionThroughADirectory));
-  it("ignores a broken directory link without hiding valid sessions", () =>
-    Effect.runPromise(ignoresABrokenDirectoryLinkWithout));
-  it.skipIf(process.platform === "win32")("ignores links to files", () =>
-    Effect.runPromise(ignoresLinksToFiles),
-  );
+  it.skipIf(process.platform === "win32")("ignores links to files", ignoresLinksToFiles2);
 });

@@ -1,9 +1,11 @@
-import { runTest } from "@msa/testing";
+import testing from "@msa/testing";
 import { Effect } from "effect";
 import { describe, expect, it } from "vite-plus/test";
 
 import { areExperimentalFeaturesEnabled } from "../src/core/experimental.ts";
 import { withEnv } from "../src/core/process-env.ts";
+
+const { runTest } = testing;
 
 const expectEnabled = (value: string | undefined, expected: boolean) => () =>
   runTest(

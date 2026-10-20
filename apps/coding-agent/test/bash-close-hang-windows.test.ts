@@ -1,22 +1,22 @@
-import { execFileSync } from "node:child_process";
-import { existsSync, readFileSync } from "node:fs";
-import { tmpdir } from "node:os";
-
-import {
-  awaited,
-  runTest,
-  currentTimeMillis,
-  abortController,
-  randomSuffixSync,
-  joinPath,
-  makeDirectory,
-  removePath,
-} from "@msa/testing";
+import testing from "@msa/testing";
 import { Effect } from "effect";
+import { ChildProcess } from "effect/process";
 import { afterEach, beforeEach, describe, expect, it } from "vite-plus/test";
 
 import { executeBashWithOperations } from "../src/core/bash-executor.ts";
 import { createBashTool, createLocalBashOperations } from "../src/core/tools/bash.ts";
+
+const {
+  abortController,
+  awaited,
+  joinPath,
+  makeTempDir,
+  pathExists,
+  provideNode,
+  readTextFile,
+  removePath,
+  runTest,
+} = testing;
 
 function toBashSingleQuotedArg(value: string): string {
   return `'${value.replace(/\\/gu, "/").replace(/'/gu, `'"'"'`)}'`;
@@ -37,42 +37,34 @@ function createInheritedStdioCommand(pidFile: string): string {
   );
 }
 
-function cleanupDetachedChild(pidFile: string): void {
-  if (!existsSync(pidFile)) {
-    return;
-  }
-
-  const pid = Number.parseInt(readFileSync(pidFile, "utf-8").trim(), 10);
-  if (Number.isFinite(pid) && pid > 0) {
-    try {
-      execFileSync("taskkill", ["/F", "/T", "/PID", String(pid)], { stdio: "ignore" });
-    } catch {}
-  }
-}
-
-function withTimeout<T>(promise: Promise<T>, ms: number, onTimeout: () => void): Promise<T> {
-  return runTest(
-    awaited(
-      new Promise<T>((resolve, reject) => {
-        const timeoutId = setTimeout(() => {
-          onTimeout();
-          reject(new Error(`Timed out after ${ms}ms`));
-        }, ms);
-
-        promise.then(
-          (value) => {
-            clearTimeout(timeoutId);
-            resolve(value);
-          },
-          (error: unknown) => {
-            clearTimeout(timeoutId);
-            reject(error);
-          },
-        );
-      }),
+const cleanupDetachedChild = Effect.fn("cleanupDetachedChild")(function* (pidFile: string) {
+  if (!(yield* pathExists(pidFile))) return;
+  const pid = Number.parseInt((yield* readTextFile(pidFile)).trim(), 10);
+  if (!Number.isFinite(pid) || pid <= 0) return;
+  yield* provideNode(
+    Effect.scoped(
+      Effect.flatMap(
+        ChildProcess.make("taskkill", ["/F", "/T", "/PID", String(pid)], {
+          stderr: "ignore",
+          stdin: "ignore",
+          stdout: "ignore",
+        }),
+        (handle) => handle.exitCode,
+      ),
     ),
+  ).pipe(Effect.ignore);
+});
+
+const withTimeout = <T>(promise: Promise<T>, onTimeout: () => void) =>
+  awaited(promise).pipe(
+    Effect.timeoutOrElse({
+      duration: "3 seconds",
+      orElse: () =>
+        Effect.sync(onTimeout).pipe(
+          Effect.andThen(Effect.die(new Error("Timed out after 3000ms"))),
+        ),
+    }),
   );
-}
 
 function getTextOutput(result: { content?: Array<{ type: string; text?: string }> }): string {
   return (
@@ -83,73 +75,74 @@ function getTextOutput(result: { content?: Array<{ type: string; text?: string }
   );
 }
 
-describe.skipIf(process.platform !== "win32")("Windows child-process close handling", () => {
-  let testDir: string;
+let testDir: string;
 
-  beforeEach(() =>
-    runTest(
-      Effect.gen(function* () {
-        testDir = joinPath(
-          tmpdir(),
-          `coding-agent-bash-close-test-${currentTimeMillis()}-${randomSuffixSync()}`,
+const executebashResolvesAfterTheShellExitsEven = () =>
+  runTest(
+    Effect.gen(function* () {
+      const pidFile = joinPath(testDir, "executor-grandchild.pid");
+      const command = createInheritedStdioCommand(pidFile);
+      const controller = abortController();
+
+      try {
+        const result = yield* withTimeout(
+          executeBashWithOperations(command, process.cwd(), createLocalBashOperations(), {
+            signal: controller.signal,
+          }),
+          () => controller.abort(),
         );
-        yield* makeDirectory(testDir);
-      }),
-    ),
+
+        expect(result.output).toContain("child-exiting");
+        expect(result.exitCode).toBe(0);
+        expect(result.cancelled).toBe(false);
+      } finally {
+        controller.abort();
+        yield* cleanupDetachedChild(pidFile);
+      }
+    }),
   );
+
+const bashToolResolvesAfterTheShellExits = () =>
+  runTest(
+    Effect.gen(function* () {
+      const pidFile = joinPath(testDir, "tool-grandchild.pid");
+      const command = createInheritedStdioCommand(pidFile);
+      const controller = abortController();
+      const bashTool = createBashTool(testDir);
+
+      try {
+        const result = yield* withTimeout(
+          bashTool.execute("test-call", { command }, controller.signal),
+          () => controller.abort(),
+        );
+
+        expect(getTextOutput(result)).toContain("child-exiting");
+      } finally {
+        controller.abort();
+        yield* cleanupDetachedChild(pidFile);
+      }
+    }),
+  );
+
+const beforeEachHook = () =>
+  runTest(
+    Effect.gen(function* () {
+      testDir = yield* makeTempDir("coding-agent-bash-close-test-");
+    }),
+  );
+
+describe.skipIf(process.platform !== "win32")("Windows child-process close handling", () => {
+  beforeEach(beforeEachHook);
 
   afterEach(() => runTest(removePath(testDir)));
 
-  it("executeBash resolves after the shell exits even if inherited stdio handles stay open", () =>
-    runTest(
-      Effect.gen(function* () {
-        const pidFile = joinPath(testDir, "executor-grandchild.pid");
-        const command = createInheritedStdioCommand(pidFile);
-        const controller = abortController();
+  it(
+    "executeBash resolves after the shell exits even if inherited stdio handles stay open",
+    executebashResolvesAfterTheShellExitsEven,
+  );
 
-        try {
-          const result = yield* awaited(
-            withTimeout(
-              executeBashWithOperations(command, process.cwd(), createLocalBashOperations(), {
-                signal: controller.signal,
-              }),
-              3000,
-              () => {
-                controller.abort();
-              },
-            ),
-          );
-
-          expect(result.output).toContain("child-exiting");
-          expect(result.exitCode).toBe(0);
-          expect(result.cancelled).toBe(false);
-        } finally {
-          controller.abort();
-          cleanupDetachedChild(pidFile);
-        }
-      }),
-    ));
-
-  it("bash tool resolves after the shell exits even if inherited stdio handles stay open", () =>
-    runTest(
-      Effect.gen(function* () {
-        const pidFile = joinPath(testDir, "tool-grandchild.pid");
-        const command = createInheritedStdioCommand(pidFile);
-        const controller = abortController();
-        const bashTool = createBashTool(testDir);
-
-        try {
-          const result = yield* awaited(
-            withTimeout(bashTool.execute("test-call", { command }, controller.signal), 3000, () => {
-              controller.abort();
-            }),
-          );
-
-          expect(getTextOutput(result)).toContain("child-exiting");
-        } finally {
-          controller.abort();
-          cleanupDetachedChild(pidFile);
-        }
-      }),
-    ));
+  it(
+    "bash tool resolves after the shell exits even if inherited stdio handles stay open",
+    bashToolResolvesAfterTheShellExits,
+  );
 });

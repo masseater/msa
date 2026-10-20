@@ -1,29 +1,30 @@
-import { awaited, fromJsonText } from "@msa/testing";
+import testing from "@msa/testing";
 import { Effect } from "effect";
 import { expect, vi } from "vite-plus/test";
 
 import { runRpcMode } from "../src/modes/rpc/rpc-mode.ts";
-import { createRuntimeHost, type RuntimeHostOptions } from "./rpc-prompt-response-host.ts";
+import rpcPromptResponseHost from "./rpc-prompt-response-host.ts";
+import type rpcPromptResponseHostTypes from "./rpc-prompt-response-host.types.ts";
+import type rpcPromptResponseSupportTypes from "./rpc-prompt-response-support.types.ts";
 
-export interface RpcIo {
-  outputLines: string[];
-  lineHandler: ((line: string) => void) | undefined;
-}
+const { createRuntimeHost } = rpcPromptResponseHost;
 
-export type ParsedOutputLine = Record<string, unknown>;
+const { awaited, fromJsonText } = testing;
 
-const parseLine = (line: string): ParsedOutputLine =>
-  Effect.runSync(fromJsonText(line)) as ParsedOutputLine;
+const parseLine = (line: string): rpcPromptResponseSupportTypes.ParsedOutputLine =>
+  Effect.runSync(fromJsonText(line)) as rpcPromptResponseSupportTypes.ParsedOutputLine;
 
-export function parseOutputLines(outputLines: string[]): ParsedOutputLine[] {
+function parseOutputLines(outputLines: string[]): rpcPromptResponseSupportTypes.ParsedOutputLine[] {
   return outputLines
     .flatMap((line) => line.split("\n"))
     .filter((line) => line.trim().length > 0)
     .map(parseLine);
 }
 
-export const startRpcMode = (
-  options: RuntimeHostOptions & { io: RpcIo },
+const startRpcMode = (
+  options: rpcPromptResponseHostTypes.RuntimeHostOptions & {
+    io: rpcPromptResponseSupportTypes.RpcIo;
+  },
 ): Effect.Effect<{ lineHandler: (line: string) => void; cleanup: Effect.Effect<void> }> =>
   Effect.gen(function* () {
     const { io, ...hostOptions } = options;
@@ -37,5 +38,12 @@ export const startRpcMode = (
     const lineHandler = io.lineHandler;
     if (lineHandler === undefined) throw new Error("RPC line handler was not installed");
 
-    return { lineHandler, cleanup };
+    return { cleanup, lineHandler };
   });
+
+const rpcPromptResponseSupport = {
+  parseOutputLines,
+  startRpcMode,
+};
+
+export default rpcPromptResponseSupport;

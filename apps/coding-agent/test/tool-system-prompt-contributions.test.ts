@@ -30,16 +30,26 @@ import {
   writeToolSystemPromptContribution,
 } from "../src/core/tools/write.ts";
 
-const cases = [
-  ["read", readToolSystemPromptContribution, createReadToolDefinition],
-  ["bash", bashToolSystemPromptContribution, createBashToolDefinition],
-  ["powershell", powershellToolSystemPromptContribution, createPowerShellToolDefinition],
-  ["edit", editToolSystemPromptContribution, createEditToolDefinition],
-  ["write", writeToolSystemPromptContribution, createWriteToolDefinition],
-  ["grep", grepToolSystemPromptContribution, createGrepToolDefinition],
-  ["find", findToolSystemPromptContribution, createFindToolDefinition],
-  ["ls", lsToolSystemPromptContribution, createLsToolDefinition],
-] as const;
+interface ContributionCase {
+  readonly 0: string;
+  readonly 1: { readonly snippet: string; readonly guidelines: readonly string[] };
+  readonly 2: (cwd: string) => {
+    readonly promptGuidelines?: readonly string[] | undefined;
+    readonly promptSnippet?: string | undefined;
+  };
+}
+
+const cases: readonly (readonly [ContributionCase[0], ContributionCase[1], ContributionCase[2]])[] =
+  [
+    ["read", readToolSystemPromptContribution, createReadToolDefinition],
+    ["bash", bashToolSystemPromptContribution, createBashToolDefinition],
+    ["powershell", powershellToolSystemPromptContribution, createPowerShellToolDefinition],
+    ["edit", editToolSystemPromptContribution, createEditToolDefinition],
+    ["write", writeToolSystemPromptContribution, createWriteToolDefinition],
+    ["grep", grepToolSystemPromptContribution, createGrepToolDefinition],
+    ["find", findToolSystemPromptContribution, createFindToolDefinition],
+    ["ls", lsToolSystemPromptContribution, createLsToolDefinition],
+  ];
 
 describe("built-in tool system prompt contributions", () => {
   test.each(cases)(

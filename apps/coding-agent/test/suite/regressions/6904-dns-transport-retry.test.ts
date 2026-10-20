@@ -2,7 +2,9 @@ import { fauxAssistantMessage } from "@msa/ai";
 import { Effect } from "effect";
 import { describe, expect, it } from "vite-plus/test";
 
-import { createHarness } from "../harness.ts";
+import harnessModule from "../harness.ts";
+
+const { createHarness } = harnessModule;
 
 const wrappedDnsLookupError =
   "The pending stream has been canceled (caused by: getaddrinfo ENOTFOUND bedrock-runtime.us-east-1.amazonaws.com)";
@@ -10,12 +12,12 @@ const wrappedDnsLookupError =
 const retriesATransientDnsLookupFailure = Effect.gen(function* () {
   const harness = yield* Effect.promise(() =>
     createHarness({
-      settings: { retry: { enabled: true, maxRetries: 3, baseDelayMs: 1 } },
+      settings: { retry: { baseDelayMs: 1, enabled: true, maxRetries: 3 } },
     }),
   );
   try {
     harness.setResponses([
-      fauxAssistantMessage("", { stopReason: "error", errorMessage: wrappedDnsLookupError }),
+      fauxAssistantMessage("", { errorMessage: wrappedDnsLookupError, stopReason: "error" }),
       fauxAssistantMessage("recovered after DNS retry"),
     ]);
 
@@ -31,7 +33,9 @@ const retriesATransientDnsLookupFailure = Effect.gen(function* () {
   }
 });
 
+const retriesATransientDnsLookupFailure2 = () =>
+  Effect.runPromise(retriesATransientDnsLookupFailure);
+
 describe("issue #6904 DNS transport failure retry", () => {
-  it("retries a transient DNS lookup failure", () =>
-    Effect.runPromise(retriesATransientDnsLookupFailure));
+  it("retries a transient DNS lookup failure", retriesATransientDnsLookupFailure2);
 });

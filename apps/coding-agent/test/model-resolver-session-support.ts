@@ -1,25 +1,28 @@
 import { Agent } from "@msa/agent-core";
 import { getModel, streamSimple } from "@msa/ai/compat";
-import { awaited, joinPath, makeTempDir, randomSuffix, removeDirs } from "@msa/testing";
+import testing from "@msa/testing";
 import { Effect } from "effect";
 
 import { AgentSession } from "../src/core/agent-session.ts";
 import { AuthStorage } from "../src/core/auth-storage.ts";
 import { SessionManager } from "../src/core/session-manager.ts";
 import { SettingsManager } from "../src/core/settings-manager.ts";
-import { createModelRegistry, getModelRuntime } from "./model-runtime-test-utils.ts";
-import { createTestResourceLoader } from "./utilities.ts";
+import modelRuntimeTestUtils from "./model-runtime-test-utils.ts";
+import utilities from "./utilities.ts";
+
+const { createModelRegistry, getModelRuntime } = modelRuntimeTestUtils;
+const { createTestResourceLoader } = utilities;
+
+const { awaited, joinPath, makeTempDir, randomSuffix, removeDirs } = testing;
 
 const tempDirs: string[] = [];
 
-export const removeSessionDirs: Effect.Effect<void> = Effect.suspend(() =>
-  removeDirs(tempDirs.splice(0)),
-);
+const removeSessionDirs: Effect.Effect<void> = Effect.suspend(() => removeDirs(tempDirs.splice(0)));
 
-export const sonnet = getModel("anthropic-api", "claude-sonnet-4-5")!;
-export const opus = getModel("anthropic-api", "claude-opus-4-8")!;
+const sonnet = getModel("anthropic-api", "claude-sonnet-4-5")!;
+const opus = getModel("anthropic-api", "claude-opus-4-8")!;
 
-export const createSession = (options: { scoped: boolean; persistedScope?: string[] }) =>
+const createSession = (options: { scoped: boolean; persistedScope?: string[] }) =>
   Effect.gen(function* () {
     const tempDir = yield* makeTempDir(`msa-default-scope-${yield* randomSuffix}-`);
     tempDirs.push(tempDir);
@@ -30,7 +33,7 @@ export const createSession = (options: { scoped: boolean; persistedScope?: strin
     }
 
     const authStorage = AuthStorage.inMemory({
-      "anthropic-api": { type: "api_key" as const, key: "test-key" },
+      "anthropic-api": { key: "test-key", type: "api_key" as const },
     });
     const modelRuntime = getModelRuntime(
       yield* awaited(createModelRegistry(authStorage, joinPath(tempDir, "models.json"))),
@@ -45,13 +48,22 @@ export const createSession = (options: { scoped: boolean; persistedScope?: strin
     });
     const session = new AgentSession({
       agent,
-      sessionManager: SessionManager.inMemory(tempDir),
-      settingsManager,
       cwd: tempDir,
       modelRuntime,
       resourceLoader: createTestResourceLoader(),
       scopedModels: options.scoped ? [{ model: sonnet }] : [],
+      sessionManager: SessionManager.inMemory(tempDir),
+      settingsManager,
     });
 
     return yield* awaited({ session, settingsManager });
   });
+
+const modelResolverSessionSupport = {
+  createSession,
+  opus,
+  removeSessionDirs,
+  sonnet,
+};
+
+export default modelResolverSessionSupport;

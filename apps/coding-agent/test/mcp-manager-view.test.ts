@@ -1,4 +1,4 @@
-import { setKeybindings, type TUI } from "@msa/tui";
+import { type TUI, setKeybindings } from "@msa/tui";
 import { beforeAll, beforeEach, describe, expect, test, vi } from "vite-plus/test";
 
 import { KeybindingsManager } from "../src/core/keybindings.ts";
@@ -13,6 +13,22 @@ function rendered(view: McpManagerView): string {
   return stripAnsi(view.render(80).join("\n"));
 }
 
+const cancelsTheRunningOperationWithTheCancel = () => {
+  const view = new McpManagerView(tui, theme, new KeybindingsManager());
+  const onCancel = vi.fn();
+  view.status("Sign in to issues", "Contacting the authorization server…", onCancel);
+  expect(rendered(view)).toContain("cancel");
+  view.handleInput(ESCAPE);
+  expect(onCancel).toHaveBeenCalledOnce();
+};
+
+const ignoresTheCancelKeyForOperationsThat = () => {
+  const view = new McpManagerView(tui, theme, new KeybindingsManager());
+  view.status("Sign in to issues", "Connecting…");
+  expect(rendered(view)).not.toContain("cancel");
+  view.handleInput(ESCAPE);
+};
+
 describe("MCP manager status screen", () => {
   beforeAll(() => {
     initTheme("dark");
@@ -22,19 +38,13 @@ describe("MCP manager status screen", () => {
     setKeybindings(new KeybindingsManager());
   });
 
-  test("cancels the running operation with the cancel key", () => {
-    const view = new McpManagerView(tui, theme, new KeybindingsManager());
-    const onCancel = vi.fn();
-    view.status("Sign in to issues", "Contacting the authorization server…", onCancel);
-    expect(rendered(view)).toContain("cancel");
-    view.handleInput(ESCAPE);
-    expect(onCancel).toHaveBeenCalledOnce();
-  });
+  test(
+    "cancels the running operation with the cancel key",
+    cancelsTheRunningOperationWithTheCancel,
+  );
 
-  test("ignores the cancel key for operations that cannot be cancelled", () => {
-    const view = new McpManagerView(tui, theme, new KeybindingsManager());
-    view.status("Sign in to issues", "Connecting…");
-    expect(rendered(view)).not.toContain("cancel");
-    view.handleInput(ESCAPE);
-  });
+  test(
+    "ignores the cancel key for operations that cannot be cancelled",
+    ignoresTheCancelKeyForOperationsThat,
+  );
 });

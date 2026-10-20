@@ -1,15 +1,4 @@
-import {
-  awaited,
-  fromJsonText,
-  joinPath,
-  makeDirectory,
-  makeTempDir,
-  readTextFile,
-  removePath,
-  runTest,
-  toJsonText,
-  writeTextFile,
-} from "@msa/testing";
+import testing from "@msa/testing";
 import { resetCapabilitiesCache, setCapabilityOverrides } from "@msa/tui";
 import { Effect } from "effect";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vite-plus/test";
@@ -20,6 +9,19 @@ import { SettingsManager } from "../src/core/settings-manager.ts";
 import { validateThemeJson } from "../src/modes/interactive/theme/theme-schema.ts";
 import { setThemeJsonValidator } from "../src/modes/interactive/theme/theme.ts";
 
+const {
+  awaited,
+  fromJsonText,
+  joinPath,
+  makeDirectory,
+  makeTempDir,
+  readTextFile,
+  removePath,
+  runTest,
+  toJsonText,
+  writeTextFile,
+} = testing;
+
 setThemeJsonValidator(validateThemeJson);
 
 interface TestThemeJson {
@@ -28,13 +30,97 @@ interface TestThemeJson {
   unsupported?: boolean;
 }
 
-describe("DefaultResourceLoader theme color mode", () => {
-  let tempDir: string;
-  let agentDir: string;
-  let cwd: string;
-  let themePath: string;
-  let themeJson: TestThemeJson;
+let tempDir: string;
 
+let agentDir: string;
+
+let cwd: string;
+
+let themePath: string;
+
+let themeJson: TestThemeJson;
+
+const returnsToAutomaticDetectionAfterAnExplicit = Effect.gen(function* () {
+  vi.stubEnv("MSA_TRUE_COLOR", "1");
+  setCapabilityOverrides({});
+  resetCapabilitiesCache();
+
+  const settingsPath = joinPath(agentDir, "settings.json");
+  yield* writeTextFile(settingsPath, yield* toJsonText({ terminal: { trueColor: false } }));
+  const settingsManager = SettingsManager.create(cwd, agentDir);
+  const loader = new DefaultResourceLoader({
+    additionalThemePaths: [themePath],
+    agentDir,
+    cwd,
+    noContextFiles: true,
+    noExtensions: true,
+    noPromptTemplates: true,
+    noSkills: true,
+    settingsManager,
+  });
+  yield* awaited(loader.reload());
+  setCapabilityOverrides(settingsManager.getTerminalCapabilityOverrides());
+
+  yield* writeTextFile(settingsPath, "{}");
+  yield* awaited(loader.reload());
+
+  const loadedTheme = loader.getThemes().themes.find((theme) => theme.name === "capability-test");
+  expect(loadedTheme?.bg("userMessageBg", "x")).toBe("\x1b[48;2;60;53;68mx\x1b[49m");
+});
+
+const afterEachHook = Effect.gen(function* () {
+  vi.unstubAllEnvs();
+  setCapabilityOverrides({});
+  resetCapabilitiesCache();
+  yield* removePath(tempDir);
+});
+
+const stepStep = () => {
+  afterEach(() => runTest(afterEachHook));
+  it.each([
+    {
+      environment: "256-color",
+      environmentOverride: "0",
+      expected: "\x1b[48;2;60;53;68mx\x1b[49m",
+      setting: true,
+    },
+    {
+      environment: "truecolor",
+      environmentOverride: "1",
+      expected: "\x1b[48;5;59mx\x1b[49m",
+      setting: false,
+    },
+  ])(
+    "uses the $setting setting over a $environment environment",
+    ({ environmentOverride, setting, expected }) =>
+      runTest(
+        Effect.gen(function* () {
+          vi.stubEnv("MSA_TRUE_COLOR", environmentOverride);
+          setCapabilityOverrides({});
+          resetCapabilitiesCache();
+
+          const loader = new DefaultResourceLoader({
+            additionalThemePaths: [themePath],
+            agentDir,
+            cwd,
+            noContextFiles: true,
+            noExtensions: true,
+            noPromptTemplates: true,
+            noSkills: true,
+            settingsManager: SettingsManager.inMemory({ terminal: { trueColor: setting } }),
+          });
+          yield* awaited(loader.reload());
+
+          const loadedTheme = loader
+            .getThemes()
+            .themes.find((theme) => theme.name === "capability-test");
+          expect(loadedTheme?.bg("userMessageBg", "x")).toBe(expected);
+        }),
+      ),
+  );
+};
+
+describe("DefaultResourceLoader theme color mode", () => {
   beforeEach(() =>
     runTest(
       Effect.gen(function* () {
@@ -54,104 +140,49 @@ describe("DefaultResourceLoader theme color mode", () => {
     ),
   );
 
-  afterEach(() =>
+  stepStep();
+});
+
+describe("DefaultResourceLoader theme color mode", () => {
+  beforeEach(() =>
     runTest(
       Effect.gen(function* () {
-        vi.unstubAllEnvs();
-        setCapabilityOverrides({});
-        resetCapabilitiesCache();
-        yield* removePath(tempDir);
+        tempDir = yield* makeTempDir("resource-loader-theme-");
+        agentDir = joinPath(tempDir, "agent");
+        cwd = joinPath(tempDir, "project");
+        yield* makeDirectory(agentDir);
+        yield* makeDirectory(cwd);
+        themeJson = (yield* fromJsonText(
+          yield* readTextFile(joinPath(getThemesDir(), "dark.json")),
+        )) as TestThemeJson;
+        themeJson.name = "capability-test";
+        themeJson.colors["userMessageBg"] = "#3c3544";
+        themePath = joinPath(tempDir, "capability-test.json");
+        yield* writeTextFile(themePath, yield* toJsonText(themeJson));
       }),
     ),
   );
 
-  it.each([
-    {
-      environment: "256-color",
-      environmentOverride: "0",
-      setting: true,
-      expected: "\x1b[48;2;60;53;68mx\x1b[49m",
-    },
-    {
-      environment: "truecolor",
-      environmentOverride: "1",
-      setting: false,
-      expected: "\x1b[48;5;59mx\x1b[49m",
-    },
-  ])(
-    "uses the $setting setting over a $environment environment",
-    ({ environmentOverride, setting, expected }) =>
-      runTest(
-        Effect.gen(function* () {
-          vi.stubEnv("MSA_TRUE_COLOR", environmentOverride);
-          setCapabilityOverrides({});
-          resetCapabilitiesCache();
-
-          const loader = new DefaultResourceLoader({
-            cwd,
-            agentDir,
-            settingsManager: SettingsManager.inMemory({ terminal: { trueColor: setting } }),
-            additionalThemePaths: [themePath],
-            noExtensions: true,
-            noSkills: true,
-            noPromptTemplates: true,
-            noContextFiles: true,
-          });
-          yield* awaited(loader.reload());
-
-          const loadedTheme = loader
-            .getThemes()
-            .themes.find((theme) => theme.name === "capability-test");
-          expect(loadedTheme?.bg("userMessageBg", "x")).toBe(expected);
-        }),
-      ),
-  );
+  afterEach(() => runTest(afterEachHook));
 
   it("returns to automatic detection after an explicit setting is removed", () =>
-    runTest(
-      Effect.gen(function* () {
-        vi.stubEnv("MSA_TRUE_COLOR", "1");
-        setCapabilityOverrides({});
-        resetCapabilitiesCache();
+    runTest(returnsToAutomaticDetectionAfterAnExplicit));
+});
 
-        const settingsPath = joinPath(agentDir, "settings.json");
-        yield* writeTextFile(settingsPath, yield* toJsonText({ terminal: { trueColor: false } }));
-        const settingsManager = SettingsManager.create(cwd, agentDir);
-        const loader = new DefaultResourceLoader({
-          cwd,
-          agentDir,
-          settingsManager,
-          additionalThemePaths: [themePath],
-          noExtensions: true,
-          noSkills: true,
-          noPromptTemplates: true,
-          noContextFiles: true,
-        });
-        yield* awaited(loader.reload());
-        setCapabilityOverrides(settingsManager.getTerminalCapabilityOverrides());
-
-        yield* writeTextFile(settingsPath, "{}");
-        yield* awaited(loader.reload());
-
-        const loadedTheme = loader
-          .getThemes()
-          .themes.find((theme) => theme.name === "capability-test");
-        expect(loadedTheme?.bg("userMessageBg", "x")).toBe("\x1b[48;2;60;53;68mx\x1b[49m");
-      }),
-    ));
-
+const stepStep2 = () => {
+  afterEach(() => runTest(afterEachHook));
   it("applies strict validation on initial load and reload", () =>
     runTest(
       Effect.gen(function* () {
         const loader = new DefaultResourceLoader({
-          cwd,
-          agentDir,
-          settingsManager: SettingsManager.inMemory(),
           additionalThemePaths: [themePath],
-          noExtensions: true,
-          noSkills: true,
-          noPromptTemplates: true,
+          agentDir,
+          cwd,
           noContextFiles: true,
+          noExtensions: true,
+          noPromptTemplates: true,
+          noSkills: true,
+          settingsManager: SettingsManager.inMemory(),
         });
 
         themeJson.unsupported = true;
@@ -159,7 +190,7 @@ describe("DefaultResourceLoader theme color mode", () => {
         yield* awaited(loader.reload());
         const initialDiagnostics = loader.getThemes().diagnostics;
         expect(initialDiagnostics).toHaveLength(1);
-        expect(initialDiagnostics[0]).toMatchObject({ type: "warning" as const, path: themePath });
+        expect(initialDiagnostics[0]).toMatchObject({ path: themePath, type: "warning" as const });
         expect(initialDiagnostics[0]?.message).toContain("/unsupported");
 
         delete themeJson.unsupported;
@@ -174,4 +205,27 @@ describe("DefaultResourceLoader theme color mode", () => {
         expect(loader.getThemes().diagnostics).toEqual(initialDiagnostics);
       }),
     ));
+};
+
+describe("DefaultResourceLoader theme color mode", () => {
+  beforeEach(() =>
+    runTest(
+      Effect.gen(function* () {
+        tempDir = yield* makeTempDir("resource-loader-theme-");
+        agentDir = joinPath(tempDir, "agent");
+        cwd = joinPath(tempDir, "project");
+        yield* makeDirectory(agentDir);
+        yield* makeDirectory(cwd);
+        themeJson = (yield* fromJsonText(
+          yield* readTextFile(joinPath(getThemesDir(), "dark.json")),
+        )) as TestThemeJson;
+        themeJson.name = "capability-test";
+        themeJson.colors["userMessageBg"] = "#3c3544";
+        themePath = joinPath(tempDir, "capability-test.json");
+        yield* writeTextFile(themePath, yield* toJsonText(themeJson));
+      }),
+    ),
+  );
+
+  stepStep2();
 });

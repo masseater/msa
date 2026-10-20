@@ -1,0 +1,81 @@
+import testing from "@msa/testing";
+import { Effect } from "effect";
+import { Type } from "typebox";
+import { afterEach, beforeEach, describe, expect, it } from "vite-plus/test";
+
+import { ORCHESTRATOR_TOOL_NAMES } from "../src/core/orchestrator/tool-names.ts";
+import { type InlineExtension } from "../src/core/sdk.ts";
+import defaultToolsSettingSupport from "./default-tools-setting-support.ts";
+
+const { cleanupDirs, createSession, prepareDirs } = defaultToolsSettingSupport;
+
+const { awaited, runTest } = testing;
+
+const appliesNameAndNameToolOptionsToPart1 = () =>
+  Effect.gen(function* () {
+    const effectRunPromise = Effect.runPromiseWith(yield* Effect.context<never>());
+
+    const inactiveTool: InlineExtension = (msa) => {
+      msa.registerTool({
+        defaultActive: false,
+        description: "Extension tool registered inactive",
+        execute: () =>
+          effectRunPromise(
+            awaited({ content: [{ text: "ok", type: "text" as const }], details: {} }),
+          ),
+        label: "Inactive Tool",
+        name: "inactive_tool",
+        parameters: Type.Object({}),
+      });
+      msa.registerTool({
+        description: "Extension tool registered active",
+        execute: () =>
+          effectRunPromise(
+            awaited({ content: [{ text: "ok", type: "text" as const }], details: {} }),
+          ),
+        label: "Active Tool",
+        name: "active_tool",
+        parameters: Type.Object({}),
+      });
+    };
+    return { inactiveTool };
+  });
+
+const appliesNameAndNameToolOptionsTo = Effect.gen(function* () {
+  const { inactiveTool } = yield* appliesNameAndNameToolOptionsToPart1();
+
+  const session = yield* awaited(
+    createSession(["+grep"], { tools: ["+inactive_tool", "-write"] }, [inactiveTool]),
+  );
+  expect(session.getActiveToolNames().sort()).toEqual(
+    [
+      "active_tool",
+      "bash",
+      "edit",
+      "grep",
+      "inactive_tool",
+      "memory",
+      "model_policy",
+      "model_upgrade",
+      "pr_watch",
+      "read",
+      ...ORCHESTRATOR_TOOL_NAMES,
+    ].sort(),
+  );
+  session.dispose();
+
+  const toolLess = yield* awaited(
+    createSession(["read"], { noTools: "all", tools: ["+inactive_tool"] }, [inactiveTool]),
+  );
+  expect(toolLess.getActiveToolNames()).toEqual(["inactive_tool"]);
+  toolLess.dispose();
+});
+
+describe("defaultTools setting", () => {
+  beforeEach(prepareDirs);
+
+  afterEach(cleanupDirs);
+
+  it("applies +name and -name tool options to the default selection", () =>
+    runTest(appliesNameAndNameToolOptionsTo));
+});

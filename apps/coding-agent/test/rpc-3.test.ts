@@ -1,9 +1,13 @@
-import { awaited, failure, pathExists, runTest } from "@msa/testing";
+import testing from "@msa/testing";
 import { Effect } from "effect";
 import { describe, expect, test } from "vite-plus/test";
 
 import { readEnv } from "../src/core/process-env.ts";
-import { readSessionEntries, withClient } from "./rpc-support.ts";
+import rpcSupport from "./rpc-support.ts";
+
+const { readSessionEntries, withClient } = rpcSupport;
+
+const { awaited, failure, pathExists, runTest } = testing;
 
 describe.skipIf(
   readEnv("ANTHROPIC_API_KEY") === undefined && readEnv("ANTHROPIC_OAUTH_TOKEN") === undefined,
@@ -44,7 +48,11 @@ describe.skipIf(
       ),
     90000,
   );
+});
 
+describe.skipIf(
+  readEnv("ANTHROPIC_API_KEY") === undefined && readEnv("ANTHROPIC_OAUTH_TOKEN") === undefined,
+)("RPC mode", () => {
   test(
     "should get session entries with since cursor",
     () =>
@@ -76,7 +84,11 @@ describe.skipIf(
       ),
     90000,
   );
+});
 
+describe.skipIf(
+  readEnv("ANTHROPIC_API_KEY") === undefined && readEnv("ANTHROPIC_OAUTH_TOKEN") === undefined,
+)("RPC mode", () => {
   test(
     "should get session tree",
     () =>
@@ -105,7 +117,11 @@ describe.skipIf(
       ),
     90000,
   );
+});
 
+describe.skipIf(
+  readEnv("ANTHROPIC_API_KEY") === undefined && readEnv("ANTHROPIC_OAUTH_TOKEN") === undefined,
+)("RPC mode", () => {
   test(
     "should retain pre-compaction entries in get_entries",
     () =>
@@ -128,7 +144,11 @@ describe.skipIf(
       ),
     120000,
   );
+});
 
+describe.skipIf(
+  readEnv("ANTHROPIC_API_KEY") === undefined && readEnv("ANTHROPIC_OAUTH_TOKEN") === undefined,
+)("RPC mode", () => {
   test(
     "should set and get session name",
     () =>

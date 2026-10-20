@@ -1,15 +1,17 @@
-import { awaited, runTest, readBytesFile, removePath } from "@msa/testing";
+import testing from "@msa/testing";
 import { Effect } from "effect";
 import { beforeEach, describe, expect, test, vi } from "vite-plus/test";
 
 import { InteractiveMode } from "../src/modes/interactive/interactive-mode.ts";
 
+const { awaited, readBytesFile, removePath, runTest } = testing;
+
 const mocks = vi.hoisted(() => ({
   readClipboardFilePaths: vi.fn<() => Promise<string[] | null>>(),
   readClipboardImage: vi.fn<() => Promise<{ bytes: Uint8Array; mimeType: string } | null>>(),
-  readClipboardText: vi.fn<() => Promise<string | null>>(),
   readClipboardImageFromCommand:
     vi.fn<() => Promise<{ bytes: Uint8Array; mimeType: string } | null | undefined>>(),
+  readClipboardText: vi.fn<() => Promise<string | null>>(),
 }));
 
 vi.mock("../src/utils/clipboard.ts", () => ({
@@ -25,7 +27,7 @@ vi.mock("../src/utils/clipboard-image.ts", () => ({
 
 beforeEach(() => vi.resetAllMocks());
 
-test("Finder file paths take precedence over their icon image", () =>
+const finderFilePathsTakePrecedenceOverTheir = () =>
   runTest(
     Effect.gen(function* () {
       const filePaths = ["/tmp/screenshot.png", "/tmp/My Photos/photo.png"];
@@ -38,9 +40,9 @@ test("Finder file paths take precedence over their icon image", () =>
       const insertTextAtCursor = vi.fn<(text: string) => void>();
       const context = {
         editor: { insertTextAtCursor },
+        settingsManager: { getClipboardImageCommand: () => undefined },
         showError: vi.fn(),
         ui: { requestRender: vi.fn() },
-        settingsManager: { getClipboardImageCommand: () => undefined },
       };
       const prototype = InteractiveMode.prototype as unknown as {
         handleClipboardPaste(this: typeof context): Promise<void>;
@@ -50,9 +52,14 @@ test("Finder file paths take precedence over their icon image", () =>
       expect(insertTextAtCursor).toHaveBeenCalledExactlyOnceWith(filePaths.join("\n"));
       expect(mocks.readClipboardImage).not.toHaveBeenCalled();
     }),
-  ));
+  );
 
-test("clipboard file paths containing terminal control characters are rejected", () =>
+test(
+  "Finder file paths take precedence over their icon image",
+  finderFilePathsTakePrecedenceOverTheir,
+);
+
+const clipboardFilePathsContainingTerminalControlCharacters = () =>
   runTest(
     Effect.gen(function* () {
       const insertTextAtCursor = vi.fn<(text: string) => void>();
@@ -60,9 +67,9 @@ test("clipboard file paths containing terminal control characters are rejected",
       mocks.readClipboardFilePaths.mockResolvedValue(["/tmp/photo\x1b]0;unsafe\x07.png"]);
       const context = {
         editor: { insertTextAtCursor },
+        settingsManager: { getClipboardImageCommand: () => undefined },
         showError,
         ui: { requestRender: vi.fn() },
-        settingsManager: { getClipboardImageCommand: () => undefined },
       };
       const prototype = InteractiveMode.prototype as unknown as {
         handleClipboardPaste(this: typeof context): Promise<void>;
@@ -76,9 +83,14 @@ test("clipboard file paths containing terminal control characters are rejected",
         "Failed to paste from clipboard: Clipboard file path contains control characters",
       );
     }),
-  ));
+  );
 
-test("native file-path errors are shown without falling through to the icon image", () =>
+test(
+  "clipboard file paths containing terminal control characters are rejected",
+  clipboardFilePathsContainingTerminalControlCharacters,
+);
+
+const nativeFilePathErrorsAreShownWithout = () =>
   runTest(
     Effect.gen(function* () {
       const showError = vi.fn<(message: string) => void>();
@@ -87,9 +99,9 @@ test("native file-path errors are shown without falling through to the icon imag
       );
       const context = {
         editor: { insertTextAtCursor: vi.fn() },
+        settingsManager: { getClipboardImageCommand: () => undefined },
         showError,
         ui: { requestRender: vi.fn() },
-        settingsManager: { getClipboardImageCommand: () => undefined },
       };
       const prototype = InteractiveMode.prototype as unknown as {
         handleClipboardPaste(this: typeof context): Promise<void>;
@@ -103,7 +115,12 @@ test("native file-path errors are shown without falling through to the icon imag
         "Failed to paste from clipboard: Native clipboard file read failed",
       );
     }),
-  ));
+  );
+
+test(
+  "native file-path errors are shown without falling through to the icon image",
+  nativeFilePathErrorsAreShownWithout,
+);
 
 test.each([
   ["punctuation", "Review:", 7],
@@ -115,13 +132,13 @@ test.each([
       mocks.readClipboardFilePaths.mockResolvedValue(["/tmp/photo.png"]);
       const context = {
         editor: {
-          getCursor: () => ({ line: 0, col: cursorCol }),
+          getCursor: () => ({ col: cursorCol, line: 0 }),
           getText: () => editorText,
           insertTextAtCursor,
         },
+        settingsManager: { getClipboardImageCommand: () => undefined },
         showError: vi.fn(),
         ui: { requestRender: vi.fn() },
-        settingsManager: { getClipboardImageCommand: () => undefined },
       };
       const prototype = InteractiveMode.prototype as unknown as {
         handleClipboardPaste(this: typeof context): Promise<void>;
@@ -135,7 +152,7 @@ test.each([
   ),
 );
 
-test("bash mode shell-quotes file paths and inserts them as arguments", () =>
+const bashModeShellQuotesFilePathsAnd = () =>
   runTest(
     Effect.gen(function* () {
       const insertTextAtCursor = vi.fn<(text: string) => void>();
@@ -146,14 +163,14 @@ test("bash mode shell-quotes file paths and inserts them as arguments", () =>
       ]);
       const context = {
         editor: {
-          getCursor: () => ({ line: 0, col: 3 }),
+          getCursor: () => ({ col: 3, line: 0 }),
           getText: () => "catDEST",
           insertTextAtCursor,
         },
         isBashMode: true,
+        settingsManager: { getClipboardImageCommand: () => undefined },
         showError: vi.fn(),
         ui: { requestRender: vi.fn() },
-        settingsManager: { getClipboardImageCommand: () => undefined },
       };
       const prototype = InteractiveMode.prototype as unknown as {
         handleClipboardPaste(this: typeof context): Promise<void>;
@@ -166,28 +183,34 @@ test("bash mode shell-quotes file paths and inserts them as arguments", () =>
       );
       expect(mocks.readClipboardImage).not.toHaveBeenCalled();
     }),
-  ));
+  );
+
+test(
+  "bash mode shell-quotes file paths and inserts them as arguments",
+  bashModeShellQuotesFilePathsAnd,
+);
+
+function pasteContext() {
+  return {
+    editor: { insertTextAtCursor: vi.fn<(text: string) => void>() },
+    insertClipboardImage: (
+      InteractiveMode.prototype as unknown as { insertClipboardImage: unknown }
+    ).insertClipboardImage,
+    settingsManager: { getClipboardImageCommand: () => "remote-clipboard" },
+    showError: vi.fn<(message: string) => void>(),
+    showStatus: vi.fn<(message: string) => void>(),
+    ui: { requestRender: vi.fn() },
+  };
+}
+
+const paste = (context: ReturnType<typeof pasteContext>) =>
+  (
+    InteractiveMode.prototype as unknown as {
+      handleClipboardPaste(this: typeof context): Promise<void>;
+    }
+  ).handleClipboardPaste.call(context);
 
 describe("with clipboardImageCommand", () => {
-  function pasteContext() {
-    return {
-      editor: { insertTextAtCursor: vi.fn<(text: string) => void>() },
-      showError: vi.fn<(message: string) => void>(),
-      showStatus: vi.fn<(message: string) => void>(),
-      ui: { requestRender: vi.fn() },
-      settingsManager: { getClipboardImageCommand: () => "remote-clipboard" },
-      insertClipboardImage: (
-        InteractiveMode.prototype as unknown as { insertClipboardImage: unknown }
-      ).insertClipboardImage,
-    };
-  }
-  const paste = (context: ReturnType<typeof pasteContext>) =>
-    (
-      InteractiveMode.prototype as unknown as {
-        handleClipboardPaste(this: typeof context): Promise<void>;
-      }
-    ).handleClipboardPaste.call(context);
-
   test("inserts the command's image and ignores the local clipboard", () =>
     runTest(
       Effect.gen(function* () {

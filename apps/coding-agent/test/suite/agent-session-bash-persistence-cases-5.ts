@@ -1,12 +1,17 @@
 import { fauxAssistantMessage } from "@msa/ai";
-import { gate } from "@msa/testing";
+import testing from "@msa/testing";
 import { Effect } from "effect";
 import { expect } from "vite-plus/test";
 
-import { harnesses } from "./agent-session-bash-persistence-cases-1.ts";
-import { createHarness } from "./harness.ts";
+import agentSessionBashPersistenceCases1 from "./agent-session-bash-persistence-cases-1.ts";
+import harnessModule from "./harness.ts";
 
-export const persistsAbortedAssistantMessages = Effect.gen(function* () {
+const { createHarness } = harnessModule;
+const { harnesses } = agentSessionBashPersistenceCases1;
+
+const { gate } = testing;
+
+const persistsAbortedAssistantMessages = Effect.gen(function* () {
   const harness = yield* Effect.promise(() => createHarness());
   harnesses.push(harness);
   harness.setResponses([fauxAssistantMessage("x".repeat(20_000))]);
@@ -36,3 +41,9 @@ export const persistsAbortedAssistantMessages = Effect.gen(function* () {
     }
   }
 });
+
+const agentSessionBashPersistenceCases5 = {
+  persistsAbortedAssistantMessages,
+};
+
+export default agentSessionBashPersistenceCases5;

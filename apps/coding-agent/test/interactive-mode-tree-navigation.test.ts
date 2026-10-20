@@ -1,4 +1,4 @@
-import { awaited, runTest } from "@msa/testing";
+import testing from "@msa/testing";
 import { Container } from "@msa/tui";
 import { Effect } from "effect";
 import { beforeEach, describe, expect, it, vi } from "vite-plus/test";
@@ -7,10 +7,43 @@ import { InteractiveMode, SessionManager, SettingsManager } from "../src/index.t
 import type { StatusIndicator } from "../src/modes/interactive/components/status-indicator.ts";
 import type { TreeSelectorComponent } from "../src/modes/interactive/components/tree-selector.ts";
 import { initTheme } from "../src/modes/interactive/theme/theme.ts";
-import { assistantMsg, userMsg } from "./utilities.ts";
+import utilities from "./utilities.ts";
+
+const { assistantMsg, userMsg } = utilities;
+
+const { awaited, runTest } = testing;
 
 const busyMessage =
   "Wait for the current compaction or tree navigation to finish before navigating the session tree.";
+
+const createTreeSession = () => {
+  const session = {
+    abort: vi.fn(() =>
+      runTest(
+        Effect.sync(() => {
+          session.isStreaming = false;
+        }),
+      ),
+    ),
+    abortBranchSummary: vi.fn(),
+    isCompacting: false,
+    isStreaming: false,
+    navigateTree: vi.fn(() =>
+      runTest(
+        Effect.gen(function* () {
+          if (session.isCompacting) throw new Error(busyMessage);
+          return yield* awaited({ cancelled: false });
+        }),
+      ),
+    ),
+  };
+  return session;
+};
+
+type TreeSelectorFactory = (done: () => void) => {
+  component: TreeSelectorComponent;
+  focus: TreeSelectorComponent;
+};
 
 function createTreeUI() {
   const sessionManager = SessionManager.inMemory();
@@ -19,53 +52,28 @@ function createTreeUI() {
   let selector: TreeSelectorComponent | undefined;
   const onEscape = vi.fn();
   const ui = {
-    sessionManager,
-    settingsManager: SettingsManager.inMemory(),
-    session: {
-      isStreaming: false,
-      isCompacting: false,
-      abort: vi.fn(() =>
-        runTest(
-          Effect.sync(() => {
-            ui.session.isStreaming = false;
-          }),
-        ),
-      ),
-      abortBranchSummary: vi.fn(),
-      navigateTree: vi.fn(() =>
-        runTest(
-          Effect.gen(function* () {
-            if (ui.session.isCompacting) throw new Error(busyMessage);
-            return yield* awaited({ cancelled: false });
-          }),
-        ),
-      ),
-    },
+    chatContainer: new Container(),
+    clearStatusIndicator: vi.fn(),
     defaultEditor: { onEscape },
     editor: { getText: () => "", setText: vi.fn() },
-    chatContainer: new Container(),
-    isInitialized: true,
-    footer: { invalidate: vi.fn() },
-    ui: { terminal: { rows: 24, setProgress: vi.fn() }, requestRender: vi.fn() },
     editorSlot: {
-      showSelector: (
-        create: (done: () => void) => {
-          component: TreeSelectorComponent;
-          focus: TreeSelectorComponent;
-        },
-      ) => {
+      showSelector: (create: TreeSelectorFactory) => {
         selector = create(vi.fn()).component;
       },
     },
     extensionDialogs: { select: vi.fn(() => runTest(awaited("No summary"))) },
-
-    showStatusIndicator: vi.fn((indicator: StatusIndicator) => indicator.dispose()),
-    clearStatusIndicator: vi.fn(),
-    restoreQueuedMessagesToEditor: vi.fn(),
-    renderInitialMessages: vi.fn(),
-    showStatus: vi.fn(),
-    showError: vi.fn(),
     flushCompactionQueue: vi.fn(() => runTest(Effect.sync(() => {}))),
+    footer: { invalidate: vi.fn() },
+    isInitialized: true,
+    renderInitialMessages: vi.fn(),
+    restoreQueuedMessagesToEditor: vi.fn(),
+    session: createTreeSession(),
+    sessionManager,
+    settingsManager: SettingsManager.inMemory(),
+    showError: vi.fn(),
+    showStatus: vi.fn(),
+    showStatusIndicator: vi.fn((indicator: StatusIndicator) => indicator.dispose()),
+    ui: { requestRender: vi.fn(), terminal: { rows: 24, setProgress: vi.fn() } },
   };
   const showTreeSelector = Reflect.get(InteractiveMode.prototype, "showTreeSelector") as (
     this: typeof ui,
@@ -73,9 +81,7 @@ function createTreeUI() {
   showTreeSelector.call(ui);
 
   return {
-    ui,
     onEscape,
-    targetId,
     select() {
       return runTest(
         Effect.gen(function* () {
@@ -84,6 +90,8 @@ function createTreeUI() {
         }),
       );
     },
+    targetId,
+    ui,
   };
 }
 
@@ -120,6 +128,10 @@ describe("InteractiveMode tree navigation availability", () => {
         }),
       ),
   );
+});
+
+describe("InteractiveMode tree navigation availability", () => {
+  beforeEach(() => initTheme("dark"));
 
   it("allows navigation when compaction finishes while the dialog is open", () =>
     runTest(
@@ -140,12 +152,16 @@ describe("InteractiveMode tree navigation availability", () => {
         yield* awaited(select());
 
         expect(ui.session.navigateTree).toHaveBeenCalledWith(targetId, {
-          summarize: false,
           customInstructions: undefined,
+          summarize: false,
         });
         expect(ui.showError).not.toHaveBeenCalled();
       }),
     ));
+});
+
+describe("InteractiveMode tree navigation availability", () => {
+  beforeEach(() => initTheme("dark"));
 
   it("still aborts an active response before navigating", () =>
     runTest(
@@ -171,6 +187,10 @@ describe("InteractiveMode tree navigation availability", () => {
         expect(ui.showError).not.toHaveBeenCalled();
       }),
     ));
+});
+
+describe("InteractiveMode tree navigation availability", () => {
+  beforeEach(() => initTheme("dark"));
 
   it("rechecks availability after the response abort settles", () =>
     runTest(

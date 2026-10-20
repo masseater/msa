@@ -1,5 +1,5 @@
 import * as NodeServices from "@effect/platform-node/NodeServices";
-import { joinPath } from "@msa/testing";
+import testing from "@msa/testing";
 import { Effect, FileSystem, ManagedRuntime } from "effect";
 import { afterEach, beforeEach, describe, expect, it } from "vite-plus/test";
 
@@ -9,6 +9,8 @@ import {
   loadExtensionsCached,
 } from "../../../src/core/extensions/loader.ts";
 import { DefaultResourceLoader } from "../../../src/core/resource-loader.ts";
+
+const { joinPath } = testing;
 
 const runtime = ManagedRuntime.make(NodeServices.layer);
 const fs = runtime.runSync(FileSystem.FileSystem.useSync((service) => service));
@@ -58,7 +60,7 @@ function fixture(name: string) {
       yield* fs.makeDirectory(cwd, { recursive: true });
       yield* fs.makeDirectory(agentDir, { recursive: true });
       roots.push(root);
-      return { root, cwd, agentDir };
+      return { agentDir, cwd, root };
     }),
   );
 }
@@ -95,10 +97,10 @@ const clearsTheCacheOnResourceLoader = Effect.gen(function* () {
   yield* fs.makeDirectory(extensionDir, { recursive: true });
   yield* Effect.promise(() => writeCountingExtension(joinPath(extensionDir, "counting.ts")));
   const loader = new DefaultResourceLoader({
-    cwd,
     agentDir,
-    noSkills: true,
+    cwd,
     noPromptTemplates: true,
+    noSkills: true,
     noThemes: true,
   });
 
@@ -126,30 +128,42 @@ const keepsTheCacheScopedToOne = Effect.gen(function* () {
   expect(state().factoryRuns).toBe(3);
 });
 
+const cachesExtensionModulesForCachedSameCwd = () =>
+  Effect.runPromise(cachesExtensionModulesForCachedSame);
+
+const doesNotCacheDirectLoadextensionsCalls2 = () =>
+  Effect.runPromise(doesNotCacheDirectLoadextensionsCalls);
+
+const clearsTheCacheOnResourceLoaderReload = () =>
+  Effect.runPromise(clearsTheCacheOnResourceLoader);
+
+const keepsTheCacheScopedToOneCwd = () => Effect.runPromise(keepsTheCacheScopedToOne);
+
+const afterEachHook = () =>
+  runtime.runPromise(
+    Effect.gen(function* () {
+      while (roots.length > 0) {
+        const root = roots.pop();
+        if (root !== undefined && root !== "" && (yield* fs.exists(root))) {
+          yield* fs.remove(root, { force: true, recursive: true });
+        }
+      }
+      resetState();
+      clearExtensionCache();
+    }),
+  );
+
 describe("extension factory cache", () => {
   beforeEach(() => {
     resetState();
     clearExtensionCache();
   });
-  afterEach(() =>
-    runtime.runPromise(
-      Effect.gen(function* () {
-        while (roots.length > 0) {
-          const root = roots.pop();
-          if (root !== undefined && root !== "" && (yield* fs.exists(root))) {
-            yield* fs.remove(root, { recursive: true, force: true });
-          }
-        }
-        resetState();
-        clearExtensionCache();
-      }),
-    ),
+  afterEach(afterEachHook);
+  it(
+    "caches extension modules for cached same-cwd loads but reruns factories",
+    cachesExtensionModulesForCachedSameCwd,
   );
-  it("caches extension modules for cached same-cwd loads but reruns factories", () =>
-    Effect.runPromise(cachesExtensionModulesForCachedSame));
-  it("does not cache direct loadExtensions calls", () =>
-    Effect.runPromise(doesNotCacheDirectLoadextensionsCalls));
-  it("clears the cache on resource loader reload", () =>
-    Effect.runPromise(clearsTheCacheOnResourceLoader));
-  it("keeps the cache scoped to one cwd", () => Effect.runPromise(keepsTheCacheScopedToOne));
+  it("does not cache direct loadExtensions calls", doesNotCacheDirectLoadextensionsCalls2);
+  it("clears the cache on resource loader reload", clearsTheCacheOnResourceLoaderReload);
+  it("keeps the cache scoped to one cwd", keepsTheCacheScopedToOneCwd);
 });

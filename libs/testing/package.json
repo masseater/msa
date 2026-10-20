@@ -26,6 +26,11 @@
       "source": "./src/index.ts",
       "types": "./dist/index.d.ts",
       "import": "./dist/index.js"
+    },
+    "./index.types": {
+      "source": "./src/index.types.ts",
+      "types": "./dist/index.types.d.ts",
+      "import": "./dist/index.types.js"
     }
   },
   "scripts": {

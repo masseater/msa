@@ -4,32 +4,34 @@ import { Effect } from "effect";
 import { Type } from "typebox";
 import { afterEach, describe, expect, it } from "vite-plus/test";
 
-import { createHarness, getAssistantTexts, type Harness } from "../harness.ts";
+import harnessModule from "../harness.ts";
+import type harnessTypes from "../harness.types.ts";
 
-const harnesses: Harness[] = [];
+const { createHarness, getAssistantTexts } = harnessModule;
+
+const harnesses: harnessTypes.Harness[] = [];
 
 const letsAToolCallHandlerTerminate = Effect.gen(function* () {
   const runPromise = Effect.runPromiseWith(yield* Effect.context<never>());
   const echoTool: AgentTool = {
-    name: "echo",
-    label: "Echo",
     description: "Echo text back",
-    parameters: Type.Object({ text: Type.String() }),
     execute: () =>
       runPromise(
         Effect.sync(() => {
           throw new Error("tool should have been blocked");
         }),
       ),
+    label: "Echo",
+    name: "echo",
+    parameters: Type.Object({ text: Type.String() }),
   };
-  return yield* letsAToolCallHandlerTerminatePart2(echoTool);
+  return yield* letsAToolCallHandlerTerminateStep1(echoTool);
 });
 
-const letsAToolCallHandlerTerminatePart2 = (echoTool: AgentTool<any, any>) =>
+const letsAToolCallHandlerTerminateStep1 = (echoTool: AgentTool<any, any>) =>
   Effect.gen(function* () {
     const harness = yield* Effect.promise(() =>
       createHarness({
-        tools: [echoTool],
         extensionFactories: [
           (msa) => {
             msa.on("tool_call", () =>
@@ -41,6 +43,7 @@ const letsAToolCallHandlerTerminatePart2 = (echoTool: AgentTool<any, any>) =>
             );
           },
         ],
+        tools: [echoTool],
       }),
     );
     harnesses.push(harness);
@@ -54,22 +57,28 @@ const letsAToolCallHandlerTerminatePart2 = (echoTool: AgentTool<any, any>) =>
     expect(harness.getPendingResponseCount()).toBe(1);
     expect(getAssistantTexts(harness)).not.toContain("should not run");
     expect(harness.eventsOfType("tool_execution_end")[0]?.result).toHaveProperty("terminate", true);
-    return yield* letsAToolCallHandlerTerminatePart3(harness);
+    return yield* letsAToolCallHandlerTerminateStep2(harness);
   });
 
-const letsAToolCallHandlerTerminatePart3 = (harness: Harness) =>
+const letsAToolCallHandlerTerminateStep2 = (harness: harnessTypes.Harness) =>
   Effect.sync(() => {
     expect(
       harness.session.messages.find((message) => message.role === "toolResult" && message.isError),
     ).toBeDefined();
   });
 
+const letsAToolCallHandlerTerminateThe = () => Effect.runPromise(letsAToolCallHandlerTerminate);
+
+const afterEachHook = () => {
+  while (harnesses.length > 0) {
+    harnesses.pop()?.cleanup();
+  }
+};
+
 describe("#5998 blocked tool termination", () => {
-  afterEach(() => {
-    while (harnesses.length > 0) {
-      harnesses.pop()?.cleanup();
-    }
-  });
-  it("lets a tool_call handler terminate the run after blocking execution", () =>
-    Effect.runPromise(letsAToolCallHandlerTerminate));
+  afterEach(afterEachHook);
+  it(
+    "lets a tool_call handler terminate the run after blocking execution",
+    letsAToolCallHandlerTerminateThe,
+  );
 });

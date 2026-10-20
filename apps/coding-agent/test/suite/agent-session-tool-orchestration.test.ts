@@ -1,8 +1,8 @@
 import {
+  type TranscriptContext,
   fauxAssistantMessage,
   fauxToolCall,
   getCurrentTools,
-  type TranscriptContext,
 } from "@msa/ai";
 import type { ToolResultMessage } from "@msa/ai/compat";
 import { Effect } from "effect";
@@ -12,41 +12,33 @@ import { afterEach, describe, expect, it } from "vite-plus/test";
 import type { ExtensionAPI } from "../../src/core/extensions/types.ts";
 import { createCodemodeExtension } from "../../src/extensions/codemode/index.ts";
 import { createToolSearchExtension } from "../../src/extensions/tool-search/index.ts";
-import { createHarness, type Harness } from "./harness.ts";
+import harnessModule from "./harness.ts";
+import type harnessTypes from "./harness.types.ts";
+
+const { createHarness } = harnessModule;
 
 function orchestratorExtension(msa: ExtensionAPI): void {
   msa.registerTool({
-    name: "echo",
-    label: "echo",
     description: "Echo text.",
-    parameters: Type.Object({ text: Type.String() }),
     execute: (_id, { text }) =>
       Promise.resolve({
-        content: [{ type: "text", text: `echo: ${text}` }],
+        content: [{ text: `echo: ${text}`, type: "text" }],
         details: {},
       }),
+    label: "echo",
+    name: "echo",
+    parameters: Type.Object({ text: Type.String() }),
   });
   msa.registerTool({
-    name: "helper",
-    label: "helper",
     description: "Only reachable from other tools.",
-    parameters: Type.Object({}),
+    execute: () => Promise.resolve({ content: [{ text: "helped", type: "text" }], details: {} }),
     exposure: "codemode",
-    execute: () => Promise.resolve({ content: [{ type: "text", text: "helped" }], details: {} }),
+    label: "helper",
+    name: "helper",
+    parameters: Type.Object({}),
   });
   msa.registerTool({
-    name: "run_tools",
-    label: "run_tools",
     description: "Runs tools.",
-    parameters: Type.Object({}),
-    exposure: "model-only",
-    prepareLoadout: (loadout) => ({
-      descriptions: {
-        run_tools: `Runs tools: ${loadout.callable.map((tool) => tool.name).join(", ")}`,
-        echo: "Echo text (also callable from run_tools).",
-      },
-      hiddenDeclarations: ["echo"],
-    }),
     execute: (_id, _params, _signal, _onUpdate, ctx) =>
       Effect.runPromise(
         Effect.gen(function* () {
@@ -56,29 +48,46 @@ function orchestratorExtension(msa: ExtensionAPI): void {
           const text = [helper, echo, self]
             .map((outcome) => (outcome.result.content[0] as { text: string }).text)
             .join(" | ");
-          return { content: [{ type: "text", text }], details: {} };
+          return { content: [{ text, type: "text" }], details: {} };
         }),
       ),
+    exposure: "model-only",
+    label: "run_tools",
+    name: "run_tools",
+    parameters: Type.Object({}),
+    prepareLoadout: (loadout) => ({
+      descriptions: {
+        echo: "Echo text (also callable from run_tools).",
+        run_tools: `Runs tools: ${loadout.callable.map((tool) => tool.name).join(", ")}`,
+      },
+      hiddenDeclarations: ["echo"],
+    }),
   });
 }
 
-const harnesses: Harness[] = [];
+const harnesses: harnessTypes.Harness[] = [];
+
+const supportsToolsThatCallOtherToolsPart1 = () =>
+  Effect.gen(function* () {
+    const toolCalls: string[] = [];
+    const harness = yield* Effect.promise(() =>
+      createHarness({
+        extensionFactories: [
+          orchestratorExtension,
+          (msa) => {
+            msa.on("tool_call", (event) => {
+              toolCalls.push(`${event.toolName}:${event.parentToolCallId ?? "top"}`);
+            });
+          },
+        ],
+        initialActiveToolNames: [],
+      }),
+    );
+    return { harness, toolCalls };
+  });
 
 const supportsToolsThatCallOtherTools = Effect.gen(function* () {
-  const toolCalls: string[] = [];
-  const harness = yield* Effect.promise(() =>
-    createHarness({
-      initialActiveToolNames: [],
-      extensionFactories: [
-        orchestratorExtension,
-        (msa) => {
-          msa.on("tool_call", (event) => {
-            toolCalls.push(`${event.toolName}:${event.parentToolCallId ?? "top"}`);
-          });
-        },
-      ],
-    }),
-  );
+  const { harness, toolCalls } = yield* supportsToolsThatCallOtherToolsPart1();
   harnesses.push(harness);
   yield* Effect.promise(() => harness.session.bindExtensions({}));
 
@@ -105,7 +114,7 @@ const supportsToolsThatCallOtherTools = Effect.gen(function* () {
   );
   if (result === undefined) throw new Error("No tool result");
   expect(result.content).toEqual([
-    { type: "text", text: "helped | echo: hi | Tool run_tools not found" },
+    { text: "helped | echo: hi | Tool run_tools not found", type: "text" },
   ]);
   const parent = result.toolCallId;
   expect(toolCalls).toEqual(["run_tools:top", `helper:${parent}`, `echo:${parent}`]);
@@ -151,8 +160,8 @@ const registersCodemodeAndToolSearchInactive = Effect.gen(function* () {
   expect(allowed.session.getActiveToolNames()).toEqual(["read", "codemode"]);
   const initial = yield* Effect.promise(() =>
     createHarness({
-      initialActiveToolNames: ["tool_search"],
       extensionFactories,
+      initialActiveToolNames: ["tool_search"],
     }),
   );
   harnesses.push(initial);
@@ -162,8 +171,8 @@ const registersCodemodeAndToolSearchInactive = Effect.gen(function* () {
 const leavesResultsWithoutNestedCallsUnchanged = Effect.gen(function* () {
   const harness = yield* Effect.promise(() =>
     createHarness({
-      initialActiveToolNames: [],
       extensionFactories: [orchestratorExtension],
+      initialActiveToolNames: [],
     }),
   );
   harnesses.push(harness);
@@ -177,14 +186,26 @@ const leavesResultsWithoutNestedCallsUnchanged = Effect.gen(function* () {
   expect(result && "nestedCalls" in result).toBe(false);
 });
 
+const supportsToolsThatCallOtherToolsUnder = () =>
+  Effect.runPromise(supportsToolsThatCallOtherTools);
+
+const registersCodemodeAndToolSearchInactiveUntil = () =>
+  Effect.runPromise(registersCodemodeAndToolSearchInactive);
+
+const leavesResultsWithoutNestedCallsUnchanged2 = () =>
+  Effect.runPromise(leavesResultsWithoutNestedCallsUnchanged);
+
 describe("AgentSession tool orchestration", () => {
   afterEach(() => {
     while (harnesses.length > 0) harnesses.pop()?.cleanup();
   });
-  it("supports tools that call other tools under any name through the extension API", () =>
-    Effect.runPromise(supportsToolsThatCallOtherTools));
-  it("registers codemode and tool_search inactive until they are named", () =>
-    Effect.runPromise(registersCodemodeAndToolSearchInactive));
-  it("leaves results without nested calls unchanged", () =>
-    Effect.runPromise(leavesResultsWithoutNestedCallsUnchanged));
+  it(
+    "supports tools that call other tools under any name through the extension API",
+    supportsToolsThatCallOtherToolsUnder,
+  );
+  it(
+    "registers codemode and tool_search inactive until they are named",
+    registersCodemodeAndToolSearchInactiveUntil,
+  );
+  it("leaves results without nested calls unchanged", leavesResultsWithoutNestedCallsUnchanged2);
 });

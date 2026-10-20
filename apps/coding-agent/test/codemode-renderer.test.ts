@@ -18,19 +18,19 @@ function render(
 ): string {
   const context = {
     args: { code: "" },
-    toolCallId: "call",
-    invalidate: () => {},
-    lastComponent: undefined,
-    state: {},
-    cwd: "/",
-    executionStarted: true,
     argsComplete: true,
-    isPartial: false,
-    expanded,
-    showImages: false,
-    isError,
+    cwd: "/",
     durationMs: undefined,
+    executionStarted: true,
+    expanded,
+    invalidate: () => {},
+    isError,
+    isPartial: false,
+    lastComponent: undefined,
     outputPad: 1,
+    showImages: false,
+    state: {},
+    toolCallId: "call",
   } satisfies ToolRenderContext;
   const component = codemodeRenderers.renderResult?.(
     result,
@@ -45,116 +45,127 @@ function render(
     .trim();
 }
 
+const hidesTheScriptHeaderAndShowsThe = () => {
+  const text = render({
+    content: [
+      { text: "Script completed\nWall time 0.1 seconds\nOutput:\n", type: "text" },
+      { text: "hello", type: "text" },
+    ],
+    details: {
+      calls: [{ args: '{"path":"a"}', durationMs: 5, id: "call/1", name: "read", status: "ok" }],
+    },
+  });
+  expect(text).toBe('✓ read {"path":"a"} 5ms\n\nhello');
+};
+
+const showsTheCostOfModelCallsAnd = () => {
+  const call = {
+    args: "scorer/judge",
+    durationMs: 5,
+    name: "models.classify",
+    status: "ok" as const,
+  };
+  const text = render({
+    content: [{ text: "Script completed\nWall time 0.1 seconds\nOutput:\n", type: "text" }],
+    details: {
+      calls: [
+        { ...call, cost: 0.000012936, id: "call/models.classify/1" },
+        { ...call, cost: 0.02, id: "call/models.classify/2" },
+        { ...call, id: "call/models.classify/3" },
+      ],
+    },
+  });
+  expect(text).toBe(
+    [
+      "✓ models.classify scorer/judge 5ms $0.000013",
+      "✓ models.classify scorer/judge 5ms $0.02",
+      "✓ models.classify scorer/judge 5ms",
+      "Model calls: $0.02",
+    ].join("\n"),
+  );
+};
+
+const showsResultsWithoutAHeaderSuchAs = () => {
+  const text = render(
+    {
+      content: [{ text: "The @options line must be followed by JavaScript source", type: "text" }],
+      details: undefined,
+    },
+    true,
+  );
+  expect(text).toBe("The @options line must be followed by JavaScript source");
+};
+
+const collapsesToTheLatestCallAndOne = () => {
+  const text = render(
+    {
+      content: [
+        { text: "Script completed\nWall time 0.1 seconds\nOutput:\n", type: "text" },
+        { text: `${"x".repeat(1000)}\nsecond line`, type: "text" },
+      ],
+      details: {
+        calls: [
+          { args: '{"path":"a"}', durationMs: 5, id: "call/1", name: "read", status: "ok" },
+          { args: '{"pattern":"b"}', durationMs: 5, id: "call/2", name: "grep", status: "ok" },
+        ],
+        fullOutputPath: "/tmp/out.txt",
+      },
+    },
+    false,
+    false,
+    80,
+  );
+  const lines = text.split("\n").filter(Boolean);
+  expect(lines).toHaveLength(2);
+  expect(lines[0]).toContain("grep");
+  expect(lines[0]).toContain("+1 earlier calls");
+  expect(lines[0]).not.toContain("read");
+  expect(lines[1]).toMatch(/^2 lines \(.* to expand\) {2}x+/u);
+  expect(lines[1]!.length).toBeLessThanOrEqual(80);
+  expect(text).not.toContain("second line");
+};
+
+const showsTheElapsedTimeWhileTheScript = () => {
+  vi.useFakeTimers();
+  vi.setSystemTime(0);
+  const tui = { requestRender: () => {} } as unknown as TUI;
+  const component = new ToolExecutionComponent(
+    "codemode",
+    "call",
+    { code: "" },
+    {},
+    codemodeRenderers,
+    tui,
+    "/",
+  );
+  const text = () => stripVTControlCharacters(component.render(120).join("\n"));
+  component.markExecutionStarted();
+  component.updateResult({ content: [], details: { calls: [] }, isError: false }, true);
+  vi.advanceTimersByTime(3_000);
+  expect(text()).toContain("Elapsed 3.0s");
+
+  component.updateResult(
+    { content: [], details: { calls: [] }, durationMs: 5_100, isError: false },
+    false,
+  );
+  expect(text()).toContain("Took 5.1s");
+  expect(text()).not.toContain("Elapsed");
+};
+
 describe("codemode renderer", () => {
   beforeAll(() => initTheme("dark"));
   afterEach(() => vi.useRealTimers());
 
-  it("hides the script header and shows the output", () => {
-    const text = render({
-      content: [
-        { type: "text", text: "Script completed\nWall time 0.1 seconds\nOutput:\n" },
-        { type: "text", text: "hello" },
-      ],
-      details: {
-        calls: [{ id: "call/1", name: "read", args: '{"path":"a"}', status: "ok", durationMs: 5 }],
-      },
-    });
-    expect(text).toBe('✓ read {"path":"a"} 5ms\n\nhello');
-  });
+  it("hides the script header and shows the output", hidesTheScriptHeaderAndShowsThe);
 
-  it("shows the cost of model calls and their total", () => {
-    const call = {
-      name: "models.classify",
-      args: "scorer/judge",
-      status: "ok" as const,
-      durationMs: 5,
-    };
-    const text = render({
-      content: [{ type: "text", text: "Script completed\nWall time 0.1 seconds\nOutput:\n" }],
-      details: {
-        calls: [
-          { ...call, id: "call/models.classify/1", cost: 0.000012936 },
-          { ...call, id: "call/models.classify/2", cost: 0.02 },
-          { ...call, id: "call/models.classify/3" },
-        ],
-      },
-    });
-    expect(text).toBe(
-      [
-        "✓ models.classify scorer/judge 5ms $0.000013",
-        "✓ models.classify scorer/judge 5ms $0.02",
-        "✓ models.classify scorer/judge 5ms",
-        "Model calls: $0.02",
-      ].join("\n"),
-    );
-  });
+  it("shows the cost of model calls and their total", showsTheCostOfModelCallsAnd);
 
-  it("shows results without a header, such as rejected options", () => {
-    const text = render(
-      {
-        content: [
-          { type: "text", text: "The @options line must be followed by JavaScript source" },
-        ],
-        details: undefined,
-      },
-      true,
-    );
-    expect(text).toBe("The @options line must be followed by JavaScript source");
-  });
+  it("shows results without a header, such as rejected options", showsResultsWithoutAHeaderSuchAs);
 
-  it("collapses to the latest call and one row of output", () => {
-    const text = render(
-      {
-        content: [
-          { type: "text", text: "Script completed\nWall time 0.1 seconds\nOutput:\n" },
-          { type: "text", text: `${"x".repeat(1000)}\nsecond line` },
-        ],
-        details: {
-          calls: [
-            { id: "call/1", name: "read", args: '{"path":"a"}', status: "ok", durationMs: 5 },
-            { id: "call/2", name: "grep", args: '{"pattern":"b"}', status: "ok", durationMs: 5 },
-          ],
-          fullOutputPath: "/tmp/out.txt",
-        },
-      },
-      false,
-      false,
-      80,
-    );
-    const lines = text.split("\n").filter(Boolean);
-    expect(lines).toHaveLength(2);
-    expect(lines[0]).toContain("grep");
-    expect(lines[0]).toContain("+1 earlier calls");
-    expect(lines[0]).not.toContain("read");
-    expect(lines[1]).toMatch(/^2 lines \(.* to expand\) {2}x+/u);
-    expect(lines[1]!.length).toBeLessThanOrEqual(80);
-    expect(text).not.toContain("second line");
-  });
+  it("collapses to the latest call and one row of output", collapsesToTheLatestCallAndOne);
 
-  it("shows the elapsed time while the script runs and the total once it finished", () => {
-    vi.useFakeTimers();
-    vi.setSystemTime(0);
-    const tui = { requestRender: () => {} } as unknown as TUI;
-    const component = new ToolExecutionComponent(
-      "codemode",
-      "call",
-      { code: "" },
-      {},
-      codemodeRenderers,
-      tui,
-      "/",
-    );
-    const text = () => stripVTControlCharacters(component.render(120).join("\n"));
-    component.markExecutionStarted();
-    component.updateResult({ content: [], details: { calls: [] }, isError: false }, true);
-    vi.advanceTimersByTime(3_000);
-    expect(text()).toContain("Elapsed 3.0s");
-
-    component.updateResult(
-      { content: [], details: { calls: [] }, isError: false, durationMs: 5_100 },
-      false,
-    );
-    expect(text()).toContain("Took 5.1s");
-    expect(text()).not.toContain("Elapsed");
-  });
+  it(
+    "shows the elapsed time while the script runs and the total once it finished",
+    showsTheElapsedTimeWhileTheScript,
+  );
 });

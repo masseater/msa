@@ -1,49 +1,82 @@
-import { spawnSync } from "node:child_process";
-import { randomUUID } from "node:crypto";
-
+import testing from "@msa/testing";
 import { Effect } from "effect";
-import { afterEach, describe, expect, it } from "vite-plus/test";
+import { ChildProcess } from "effect/process";
+import { type TestContext, afterEach, describe, expect, it } from "vite-plus/test";
 
 import { containerState, findPodman, lgtmAction } from "../src/core/observability/lgtm.ts";
+import { readEnv } from "../src/core/process-env.ts";
 
-const podman = findPodman(process.env["PATH"]);
-const podmanRuns = podman !== undefined && spawnSync(podman, ["ps"]).status === 0;
+const { provideNode, randomSuffix, runTest } = testing;
 
-describe.skipIf(!podmanRuns)("msa-grafana-lgtm reuse decision against real podman", () => {
-  const pods: string[] = [];
+const podman = findPodman(readEnv("PATH"));
 
-  afterEach(() => {
-    for (const pod of pods.splice(0)) spawnSync(podman!, ["pod", "rm", "--force", pod]);
-  });
+const pods: string[] = [];
 
-  const state = (name: string) => Effect.runPromise(containerState(podman!, name));
+const runPodman = (args: string[]) =>
+  podman === undefined
+    ? Effect.succeed(-1)
+    : provideNode(
+        Effect.scoped(
+          Effect.flatMap(
+            ChildProcess.make(podman, args, {
+              stderr: "ignore",
+              stdin: "ignore",
+              stdout: "ignore",
+            }),
+            (handle) => handle.exitCode,
+          ),
+        ),
+      ).pipe(
+        Effect.map(Number),
+        Effect.orElseSucceed(() => -1),
+      );
 
-  it("creates a missing container, starts a stopped one, and reuses a running one", async () => {
-    const pod = `msa-test-${randomUUID().slice(0, 8)}`;
-    const container = `${pod}-lgtm`;
+const state = (name: string) => containerState(podman ?? "", name);
 
-    expect(lgtmAction(await state(container))).toBe("run");
+const newPod = Effect.map(randomSuffix, (suffix) => `msa-test-${suffix.slice(0, 8)}`);
 
-    pods.push(pod);
-    expect(
-      spawnSync(podman!, ["pod", "create", "--name", pod, "--infra-name", container]).status,
-    ).toBe(0);
-    expect(await state(container)).toBe("stopped");
-    expect(lgtmAction(await state(container))).toBe("start");
+const withPodman = <E>(context: TestContext, body: Effect.Effect<void, E>) =>
+  runTest(
+    Effect.gen(function* () {
+      if ((yield* runPodman(["ps"])) !== 0) context.skip();
+      yield* body;
+    }),
+  );
 
-    expect(spawnSync(podman!, ["pod", "start", pod]).status).toBe(0);
-    expect(await state(container)).toBe("running");
-    expect(lgtmAction(await state(container))).toBe("reuse");
-  });
+const createsAMissingContainerStartsAStopped = Effect.gen(function* () {
+  const pod = yield* newPod;
+  const container = `${pod}-lgtm`;
+  expect(lgtmAction(yield* state(container))).toBe("run");
+  pods.push(pod);
+  expect(yield* runPodman(["pod", "create", "--name", pod, "--infra-name", container])).toBe(0);
+  expect(yield* state(container)).toBe("stopped");
+  expect(lgtmAction(yield* state(container))).toBe("start");
+  expect(yield* runPodman(["pod", "start", pod])).toBe(0);
+  expect(yield* state(container)).toBe("running");
+  expect(lgtmAction(yield* state(container))).toBe("reuse");
+});
 
-  it("matches the container name exactly, not as a prefix", async () => {
-    const pod = `msa-test-${randomUUID().slice(0, 8)}`;
-    pods.push(pod);
-    expect(
-      spawnSync(podman!, ["pod", "create", "--name", pod, "--infra-name", `${pod}-lgtm-extra`])
-        .status,
-    ).toBe(0);
+const matchesTheContainerNameExactlyNotAs = Effect.gen(function* () {
+  const pod = yield* newPod;
+  pods.push(pod);
+  expect(
+    yield* runPodman(["pod", "create", "--name", pod, "--infra-name", `${pod}-lgtm-extra`]),
+  ).toBe(0);
+  expect(yield* state(`${pod}-lgtm`)).toBe("missing");
+});
 
-    expect(await state(`${pod}-lgtm`)).toBe("missing");
-  });
+describe("msa-grafana-lgtm reuse decision against real podman", () => {
+  afterEach(() =>
+    runTest(
+      Effect.forEach(pods.splice(0), (pod) => runPodman(["pod", "rm", "--force", pod]), {
+        discard: true,
+      }),
+    ),
+  );
+
+  it("creates a missing container, starts a stopped one, and reuses a running one", (context) =>
+    withPodman(context, createsAMissingContainerStartsAStopped));
+
+  it("matches the container name exactly, not as a prefix", (context) =>
+    withPodman(context, matchesTheContainerNameExactlyNotAs));
 });

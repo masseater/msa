@@ -1,9 +1,11 @@
 import * as NodeServices from "@effect/platform-node/NodeServices";
-import { joinPath, toJsonText } from "@msa/testing";
+import testing from "@msa/testing";
 import { Effect, FileSystem, ManagedRuntime } from "effect";
 import { afterEach, beforeEach, describe, expect, it } from "vite-plus/test";
 
 import { DefaultResourceLoader } from "../../../src/core/resource-loader.ts";
+
+const { joinPath, toJsonText } = testing;
 
 const runtime = ManagedRuntime.make(NodeServices.layer);
 const fs = runtime.runSync(FileSystem.FileSystem.useSync((service) => service));
@@ -23,9 +25,9 @@ function createPackageWithSkill(name: string, description: string) {
       yield* fs.writeFileString(
         joinPath(pkgDir, "package.json"),
         yield* toJsonText({
+          msa: { skills: [`skills/${name}`] },
           name: `fake-pkg-${name}`,
           version: "1.0.0",
-          msa: { skills: [`skills/${name}`] },
         }),
       );
       yield* fs.writeFileString(
@@ -89,7 +91,7 @@ const userAutoDiscoveredSkillShouldOverride = Effect.gen(function* () {
   );
   yield* Effect.promise(() => createSettingsWithPackage(pkgDir, "user"));
 
-  const loader = new DefaultResourceLoader({ cwd, agentDir });
+  const loader = new DefaultResourceLoader({ agentDir, cwd });
   yield* Effect.promise(() => loader.reload());
 
   const { skills } = loader.getSkills();
@@ -108,7 +110,7 @@ const projectAutoDiscoveredSkillShouldOverride = Effect.gen(function* () {
   );
   yield* Effect.promise(() => createSettingsWithPackage(pkgDir, "user"));
 
-  const loader = new DefaultResourceLoader({ cwd, agentDir });
+  const loader = new DefaultResourceLoader({ agentDir, cwd });
   yield* Effect.promise(() => loader.reload());
 
   const { skills } = loader.getSkills();
@@ -128,7 +130,7 @@ const projectSkillShouldOverrideUserSkill = Effect.gen(function* () {
   );
   yield* Effect.promise(() => createSettingsWithPackage(pkgDir, "user"));
 
-  const loader = new DefaultResourceLoader({ cwd, agentDir });
+  const loader = new DefaultResourceLoader({ agentDir, cwd });
   yield* Effect.promise(() => loader.reload());
 
   const { skills } = loader.getSkills();
@@ -145,7 +147,7 @@ const collisionDiagnosticsShouldReportPackageSkill = Effect.gen(function* () {
   yield* Effect.promise(() => createUserSkill("web-fetch", "User web-fetch override"));
   yield* Effect.promise(() => createSettingsWithPackage(pkgDir, "user"));
 
-  const loader = new DefaultResourceLoader({ cwd, agentDir });
+  const loader = new DefaultResourceLoader({ agentDir, cwd });
   yield* Effect.promise(() => loader.reload());
 
   const { diagnostics } = loader.getSkills();
@@ -156,25 +158,46 @@ const collisionDiagnosticsShouldReportPackageSkill = Effect.gen(function* () {
   expect(collision!.collision!.loserPath).toContain("fake-package");
 });
 
-describe("issue #2781 skill collision precedence: user skills should override package skills", () => {
-  beforeEach(() =>
-    runtime.runPromise(
-      Effect.gen(function* () {
-        tempDir = yield* fs.makeTempDirectory({ prefix: `msa-2781-` });
-        agentDir = joinPath(tempDir, "agent");
-        cwd = joinPath(tempDir, "project");
-        yield* fs.makeDirectory(agentDir, { recursive: true });
-        yield* fs.makeDirectory(cwd, { recursive: true });
-      }),
-    ),
+const userAutoDiscoveredSkillShouldOverridePackage = () =>
+  Effect.runPromise(userAutoDiscoveredSkillShouldOverride);
+
+const projectAutoDiscoveredSkillShouldOverridePackage = () =>
+  Effect.runPromise(projectAutoDiscoveredSkillShouldOverride);
+
+const projectSkillShouldOverrideUserSkillWhich = () =>
+  Effect.runPromise(projectSkillShouldOverrideUserSkill);
+
+const collisionDiagnosticsShouldReportPackageSkillAs = () =>
+  Effect.runPromise(collisionDiagnosticsShouldReportPackageSkill);
+
+const beforeEachHook = () =>
+  runtime.runPromise(
+    Effect.gen(function* () {
+      tempDir = yield* fs.makeTempDirectory({ prefix: `msa-2781-` });
+      agentDir = joinPath(tempDir, "agent");
+      cwd = joinPath(tempDir, "project");
+      yield* fs.makeDirectory(agentDir, { recursive: true });
+      yield* fs.makeDirectory(cwd, { recursive: true });
+    }),
   );
-  afterEach(() => runtime.runPromise(fs.remove(tempDir, { recursive: true, force: true })));
-  it("user auto-discovered skill should override package skill with same name", () =>
-    Effect.runPromise(userAutoDiscoveredSkillShouldOverride));
-  it("project auto-discovered skill should override package skill with same name", () =>
-    Effect.runPromise(projectAutoDiscoveredSkillShouldOverride));
-  it("project skill should override user skill which should override package skill", () =>
-    Effect.runPromise(projectSkillShouldOverrideUserSkill));
-  it("collision diagnostics should report package skill as loser when user skill wins", () =>
-    Effect.runPromise(collisionDiagnosticsShouldReportPackageSkill));
+
+describe("issue #2781 skill collision precedence: user skills should override package skills", () => {
+  beforeEach(beforeEachHook);
+  afterEach(() => runtime.runPromise(fs.remove(tempDir, { force: true, recursive: true })));
+  it(
+    "user auto-discovered skill should override package skill with same name",
+    userAutoDiscoveredSkillShouldOverridePackage,
+  );
+  it(
+    "project auto-discovered skill should override package skill with same name",
+    projectAutoDiscoveredSkillShouldOverridePackage,
+  );
+  it(
+    "project skill should override user skill which should override package skill",
+    projectSkillShouldOverrideUserSkillWhich,
+  );
+  it(
+    "collision diagnostics should report package skill as loser when user skill wins",
+    collisionDiagnosticsShouldReportPackageSkillAs,
+  );
 });

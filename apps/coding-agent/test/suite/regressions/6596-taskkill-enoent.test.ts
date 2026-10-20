@@ -1,6 +1,5 @@
 import { EventEmitter } from "node:events";
 
-import { joinPath } from "@msa/testing";
 import { Effect } from "effect";
 import { afterEach, describe, expect, it, vi } from "vite-plus/test";
 
@@ -15,7 +14,11 @@ vi.mock("child_process", (importOriginal) =>
   ),
 );
 
+import testing from "@msa/testing";
+
 import { killProcessTree } from "../../../src/utils/shell.ts";
+
+const { joinPath } = testing;
 
 function withWindowsPlatform(test: () => void): void {
   const platformDescriptor = Object.getOwnPropertyDescriptor(process, "platform");

@@ -1,102 +1,49 @@
-import { Agent } from "@msa/agent-core";
-import {
-  type AssistantMessage,
-  createAssistantMessageEventStream,
-  getModel,
-  type Model,
-} from "@msa/ai/compat";
-import {
-  awaited,
-  currentTimeMillis,
-  joinPath,
-  makeTempDir,
-  randomSuffix,
-  removePath,
-  toJsonText,
-  writeTextFile,
-} from "@msa/testing";
+import testing from "@msa/testing";
 import { Effect } from "effect";
 
 import { AgentSession } from "../src/core/agent-session.ts";
 import { AuthStorage } from "../src/core/auth-storage.ts";
 import { SessionManager } from "../src/core/session-manager.ts";
 import { SettingsManager } from "../src/core/settings-manager.ts";
-import { createInMemoryModelRegistry, getModelRuntime } from "./model-runtime-test-utils.ts";
-import { createTestResourceLoader } from "./utilities.ts";
+import modelRuntimeTestUtils from "./model-runtime-test-utils.ts";
+import rpcPromptResponseAgent from "./rpc-prompt-response-agent.ts";
+import type rpcPromptResponseHostTypes from "./rpc-prompt-response-host.types.ts";
+import utilities from "./utilities.ts";
 
-function createAssistantMessage(text: string): AssistantMessage {
-  return {
-    role: "assistant",
-    content: [{ type: "text", text }],
-    api: "anthropic-messages",
-    provider: "anthropic-api",
-    model: "claude-sonnet-4-5",
-    usage: {
-      input: 0,
-      output: 0,
-      cacheRead: 0,
-      cacheWrite: 0,
-      totalTokens: 0,
-      cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0, total: 0 },
-    },
-    stopReason: "stop",
-    timestamp: currentTimeMillis(),
-  };
-}
+const { createTestResourceLoader } = utilities;
+const { createScriptedAgent } = rpcPromptResponseAgent;
+const { createInMemoryModelRegistry, getModelRuntime } = modelRuntimeTestUtils;
 
-const pushAfter = (ms: number, push: () => void): void => {
-  Effect.runFork(Effect.sleep(ms).pipe(Effect.andThen(Effect.sync(push))));
-};
+const { awaited, joinPath, makeTempDir, randomSuffix, removePath, toJsonText, writeTextFile } =
+  testing;
 
-type ResourceLoaderOptions = NonNullable<Parameters<typeof createTestResourceLoader>[0]>;
+const stubRuntimeHost = (session: AgentSession) => ({
+  dispose: () => Promise.resolve(),
+  fork: () => Promise.resolve({ cancelled: true, selectedText: "" }),
+  newSession: () => Promise.resolve({ cancelled: true }),
+  session,
+  setRebindSession: () => {},
+  switchSession: () => Promise.resolve({ cancelled: true }),
+});
 
-export interface RuntimeHostOptions {
-  withAuth: boolean;
-  responseDelayMs: number;
-  model?: Model<any>;
-  extensionsResult?: NonNullable<ResourceLoaderOptions["extensionsResult"]>;
-}
+const prepareTempDir = Effect.fn("prepareTempDir")(function* () {
+  const tempDir = yield* makeTempDir(`msa-rpc-prompt-${yield* randomSuffix}-`);
+  yield* writeTextFile(
+    joinPath(tempDir, "settings.json"),
+    yield* toJsonText({ memory: { enabled: false } }),
+  );
+  return tempDir;
+});
 
-export const createRuntimeHost = (
-  options: RuntimeHostOptions,
+const createRuntimeHost = (
+  options: rpcPromptResponseHostTypes.RuntimeHostOptions,
 ): Effect.Effect<{
   runtimeHost: Record<string, unknown> & { session: AgentSession };
   cleanup: Effect.Effect<void>;
 }> =>
   Effect.gen(function* () {
-    const tempDir = yield* makeTempDir(`msa-rpc-prompt-${yield* randomSuffix}-`);
-    yield* writeTextFile(
-      joinPath(tempDir, "settings.json"),
-      yield* toJsonText({ memory: { enabled: false } }),
-    );
-
-    const model = options.model ?? getModel("anthropic-api", "claude-sonnet-4-5");
-    if (model === undefined) {
-      throw new Error("Test model not found");
-    }
-
-    const agent = new Agent({
-      getApiKey: () => "test-key",
-      initialState: {
-        model,
-        systemPrompt: "Test",
-        tools: [],
-      },
-      streamFn: (_model, _context, _options) => {
-        const stream = createAssistantMessageEventStream();
-        queueMicrotask(() => {
-          stream.push({ type: "start", partial: createAssistantMessage("") });
-          pushAfter(options.responseDelayMs, () => {
-            stream.push({
-              type: "done",
-              reason: "stop",
-              message: createAssistantMessage("done"),
-            });
-          });
-        });
-        return stream;
-      },
-    });
+    const tempDir = yield* prepareTempDir();
+    const agent = createScriptedAgent(options);
 
     const sessionManager = SessionManager.inMemory();
     const settingsManager = SettingsManager.create(tempDir, tempDir);
@@ -105,15 +52,13 @@ export const createRuntimeHost = (
     if (options.withAuth) {
       yield* awaited(
         authStorage.modify("anthropic-api", () =>
-          Promise.resolve({ type: "api_key" as const, key: "test-key" }),
+          Promise.resolve({ key: "test-key", type: "api_key" as const }),
         ),
       );
     }
 
     const session = new AgentSession({
       agent,
-      sessionManager,
-      settingsManager,
       cwd: tempDir,
       modelRuntime: getModelRuntime(modelRegistry),
       resourceLoader: createTestResourceLoader(
@@ -121,16 +66,11 @@ export const createRuntimeHost = (
           ? {}
           : { extensionsResult: options.extensionsResult },
       ),
+      sessionManager,
+      settingsManager,
     });
 
-    const runtimeHost = {
-      session,
-      newSession: () => Promise.resolve({ cancelled: true }),
-      switchSession: () => Promise.resolve({ cancelled: true }),
-      fork: () => Promise.resolve({ cancelled: true, selectedText: "" }),
-      dispose: () => Promise.resolve(),
-      setRebindSession: () => {},
-    };
+    const runtimeHost = stubRuntimeHost(session);
 
     const cleanup = Effect.gen(function* () {
       yield* Effect.ignore(awaited(session.abort()));
@@ -138,5 +78,11 @@ export const createRuntimeHost = (
       yield* removePath(tempDir);
     });
 
-    return { runtimeHost, cleanup };
+    return { cleanup, runtimeHost };
   });
+
+const rpcPromptResponseHost = {
+  createRuntimeHost,
+};
+
+export default rpcPromptResponseHost;

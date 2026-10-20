@@ -1,69 +1,74 @@
 import { type AssistantMessage, fauxAssistantMessage } from "@msa/ai";
-import { deferredPromise, gate } from "@msa/testing";
+import testing from "@msa/testing";
 import { Effect } from "effect";
 import { afterEach, describe, expect, it, vi } from "vite-plus/test";
 
-import { createHarness, type Harness } from "../harness.ts";
+import harnessModule from "../harness.ts";
+import type harnessTypes from "../harness.types.ts";
+
+const { createHarness } = harnessModule;
+
+const { deferredPromise, gate } = testing;
 
 type SessionWithCompactionInternals = {
   runAutoCompaction: (reason: "overflow" | "threshold", willRetry: boolean) => Promise<boolean>;
 };
 
-function seedCompactableSession(harness: Harness): void {
+function seedCompactableSession(harness: harnessTypes.Harness): void {
   const model = harness.getModel();
   harness.sessionManager.appendMessage({
+    content: [{ text: "x".repeat(500), type: "text" }],
     role: "user",
-    content: [{ type: "text", text: "x".repeat(500) }],
     timestamp: 1,
   });
   const assistant: AssistantMessage = {
     ...fauxAssistantMessage("y".repeat(200), { timestamp: 2 }),
     api: model.api,
-    provider: model.provider,
     model: model.id,
+    provider: model.provider,
     usage: {
-      input: 100,
-      output: 0,
       cacheRead: 0,
       cacheWrite: 0,
+      cost: { cacheRead: 0, cacheWrite: 0, input: 0, output: 0, total: 0 },
+      input: 100,
+      output: 0,
       totalTokens: 100,
-      cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0, total: 0 },
     },
   };
   harness.sessionManager.appendMessage(assistant);
   harness.session.agent.state.messages = harness.sessionManager.buildSessionContext().messages;
 }
 
-function runAutoCompaction(harness: Harness): Promise<boolean> {
+function runAutoCompaction(harness: harnessTypes.Harness): Promise<boolean> {
   return (harness.session as unknown as SessionWithCompactionInternals)["runAutoCompaction"](
     "threshold",
     false,
   );
 }
 
-const harnesses: Harness[] = [];
+const harnesses: harnessTypes.Harness[] = [];
 
 const doesNotStartPostRunAuto = Effect.gen(function* () {
   const harness = yield* Effect.promise(() =>
     createHarness({
-      models: [{ id: "faux-1", contextWindow: 200, maxTokens: 50 }],
-      settings: {
-        compaction: { enabled: true, reserveTokens: 50, keepRecentTokens: 1 },
-        retry: { enabled: false },
-      },
       extensionFactories: [
         (msa) => {
           msa.on("session_before_compact", () => ({ cancel: true }));
         },
       ],
+      models: [{ contextWindow: 200, id: "faux-1", maxTokens: 50 }],
+      settings: {
+        compaction: { enabled: true, keepRecentTokens: 1, reserveTokens: 50 },
+        retry: { enabled: false },
+      },
     }),
   );
   harnesses.push(harness);
   seedCompactableSession(harness);
   harness.setResponses([
     fauxAssistantMessage("", {
-      stopReason: "error",
       errorMessage: "Synthetic network failure",
+      stopReason: "error",
     }),
   ]);
   harness.session.subscribe((event) => {
@@ -107,10 +112,10 @@ const cancelsSummarizationAuthentication = Effect.gen(function* () {
   const wasCompacting = harness.session.isCompacting;
   yield* Effect.promise(() => Promise.all([compaction, harness.session.abort()]));
 
-  expect({ started, wasCompacting, authAborted: authSignal?.aborted }).toEqual({
+  expect({ authAborted: authSignal?.aborted, started, wasCompacting }).toEqual({
+    authAborted: true,
     started: 1,
     wasCompacting: true,
-    authAborted: true,
   });
   expect(harness.eventsOfType("compaction_end").at(-1)?.aborted).toBe(true);
 });
@@ -134,12 +139,12 @@ const cancelsSynchronouslyFromCompactionStart = Effect.gen(function* () {
 const reportsExtensionCancellationAsAborted = Effect.gen(function* () {
   const harness = yield* Effect.promise(() =>
     createHarness({
-      settings: { compaction: { keepRecentTokens: 1 } },
       extensionFactories: [
         (msa) => {
           msa.on("session_before_compact", () => ({ cancel: true }));
         },
       ],
+      settings: { compaction: { keepRecentTokens: 1 } },
     }),
   );
   harnesses.push(harness);
@@ -150,17 +155,25 @@ const reportsExtensionCancellationAsAborted = Effect.gen(function* () {
   expect(harness.eventsOfType("compaction_end").at(-1)?.aborted).toBe(true);
 });
 
+const doesNotStartPostRunAutoCompaction = () => Effect.runPromise(doesNotStartPostRunAuto);
+
+const cancelsSummarizationAuthentication2 = () =>
+  Effect.runPromise(cancelsSummarizationAuthentication);
+
+const cancelsSynchronouslyFromCompactionStart2 = () =>
+  Effect.runPromise(cancelsSynchronouslyFromCompactionStart);
+
+const reportsExtensionCancellationAsAborted2 = () =>
+  Effect.runPromise(reportsExtensionCancellationAsAborted);
+
 describe("automatic compaction cancellation regressions", () => {
   afterEach(() => {
     vi.restoreAllMocks();
     while (harnesses.length > 0) harnesses.pop()?.cleanup();
   });
-  it("does not start post-run auto-compaction after abort", () =>
-    Effect.runPromise(doesNotStartPostRunAuto));
-  it("cancels summarization authentication", () =>
-    Effect.runPromise(cancelsSummarizationAuthentication));
-  it("cancels synchronously from compaction_start", () =>
-    Effect.runPromise(cancelsSynchronouslyFromCompactionStart));
+  it("does not start post-run auto-compaction after abort", doesNotStartPostRunAutoCompaction);
+  it("cancels summarization authentication", cancelsSummarizationAuthentication2);
+  it("cancels synchronously from compaction_start", cancelsSynchronouslyFromCompactionStart2);
   it.each([
     ["matching error text", () => new Error("Compaction cancelled")],
     [
@@ -185,6 +198,5 @@ describe("automatic compaction cancellation regressions", () => {
       }),
     ),
   );
-  it("reports extension cancellation as aborted", () =>
-    Effect.runPromise(reportsExtensionCancellationAsAborted));
+  it("reports extension cancellation as aborted", reportsExtensionCancellationAsAborted2);
 });

@@ -4,11 +4,14 @@ import { describe, expect, it } from "vite-plus/test";
 
 import { MEMORY_RECALL_MESSAGE_TYPE } from "../../src/core/memory/memory.ts";
 import { MemoryStore } from "../../src/core/memory/store.ts";
-import { createHarness, getToolResult, type Harness } from "./harness.ts";
+import harnessModule from "./harness.ts";
+import type harnessTypes from "./harness.types.ts";
 
-const harnesses: Harness[] = [];
+const { createHarness, getToolResult } = harnessModule;
 
-function createMemoryHarness(): Promise<Harness> {
+const harnesses: harnessTypes.Harness[] = [];
+
+function createMemoryHarness(): Promise<harnessTypes.Harness> {
   return Effect.runPromise(
     Effect.gen(function* () {
       const harness = yield* Effect.promise(() => createHarness());
@@ -79,8 +82,8 @@ const injectsRecalledMemoriesForTheFirst = Effect.gen(function* () {
   store.save({
     content: "the release goes to the Homebrew tap",
     kind: "fact",
-    scope: "project",
     project: harness.tempDir.split("/").pop() ?? "",
+    scope: "project",
   });
   store.close();
 
@@ -99,11 +102,22 @@ const injectsRecalledMemoriesForTheFirst = Effect.gen(function* () {
   expect(recalls).toHaveLength(1);
 });
 
+const savesThroughTheMemoryToolAndRecalls = () => Effect.runPromise(savesThroughTheMemoryToolAnd);
+
+const answersMemoryWithStatusStatsListAnd = () =>
+  Effect.runPromise(answersMemoryWithStatusStatsList);
+
+const injectsRecalledMemoriesForTheFirstPrompt = () =>
+  Effect.runPromise(injectsRecalledMemoriesForTheFirst);
+
 describe("agent session memory", () => {
-  it("saves through the memory tool and recalls the memory in a later run", () =>
-    Effect.runPromise(savesThroughTheMemoryToolAnd));
-  it("answers /memory with status, stats, list, and search", () =>
-    Effect.runPromise(answersMemoryWithStatusStatsList));
-  it("injects recalled memories for the first prompt of a session", () =>
-    Effect.runPromise(injectsRecalledMemoriesForTheFirst));
+  it(
+    "saves through the memory tool and recalls the memory in a later run",
+    savesThroughTheMemoryToolAndRecalls,
+  );
+  it("answers /memory with status, stats, list, and search", answersMemoryWithStatusStatsListAnd);
+  it(
+    "injects recalled memories for the first prompt of a session",
+    injectsRecalledMemoriesForTheFirstPrompt,
+  );
 });

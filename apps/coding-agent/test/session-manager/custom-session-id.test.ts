@@ -1,9 +1,11 @@
 import * as NodeServices from "@effect/platform-node/NodeServices";
-import { basenameOf, currentTimeMillis, joinPath, nowIso, toJsonText } from "@msa/testing";
+import testing from "@msa/testing";
 import { Effect, FileSystem, ManagedRuntime } from "effect";
 import { describe, expect, it } from "vite-plus/test";
 
 import { SessionManager } from "../../src/core/session-manager.ts";
+
+const { basenameOf, currentTimeMillis, joinPath, nowIso, toJsonText } = testing;
 
 const runtime = ManagedRuntime.make(NodeServices.layer);
 const fs = runtime.runSync(FileSystem.FileSystem.useSync((service) => service));
@@ -79,8 +81,8 @@ const usesTheProvidedIdWhenCreating = () =>
 const generatesAUuidv7IdWhenCreating = () => {
   const session = SessionManager.inMemory();
   const firstId = session.appendMessage({
+    content: [{ text: "hello", type: "text" }],
     role: "user",
-    content: [{ type: "text", text: "hello" }],
     timestamp: currentTimeMillis(),
   });
 
@@ -99,34 +101,34 @@ const generatesAUuidv7IdWhenForking = () =>
         sourcePath,
         `${[
           yield* toJsonText({
-            type: "session",
-            version: 3,
+            cwd: tempDir,
             id: "legacy-session-id",
             timestamp: nowIso(),
-            cwd: tempDir,
+            type: "session",
+            version: 3,
           }),
           yield* toJsonText({
-            type: "message",
             id: "entry-1",
-            parentId: null,
-            timestamp: nowIso(),
             message: {
-              role: "assistant",
-              content: [{ type: "text", text: "hello" }],
               api: "openai-responses",
-              provider: "openai",
+              content: [{ text: "hello", type: "text" }],
               model: "gpt-5.4",
-              usage: {
-                input: 0,
-                output: 0,
-                cacheRead: 0,
-                cacheWrite: 0,
-                totalTokens: 0,
-                cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0, total: 0 },
-              },
+              provider: "openai",
+              role: "assistant",
               stopReason: "stop",
               timestamp: currentTimeMillis(),
+              usage: {
+                cacheRead: 0,
+                cacheWrite: 0,
+                cost: { cacheRead: 0, cacheWrite: 0, input: 0, output: 0, total: 0 },
+                input: 0,
+                output: 0,
+                totalTokens: 0,
+              },
             },
+            parentId: null,
+            timestamp: nowIso(),
+            type: "message",
           }),
         ].join("\n")}
 `,
@@ -148,11 +150,11 @@ const usesTheProvidedIdWhenForking = () =>
       yield* fs.writeFileString(
         sourcePath,
         `${yield* toJsonText({
-          type: "session",
-          version: 3,
+          cwd: tempDir,
           id: "source-session-id",
           timestamp: nowIso(),
-          cwd: tempDir,
+          type: "session",
+          version: 3,
         })}\n`,
       );
 
@@ -171,32 +173,46 @@ const usesTheProvidedIdWhenForking = () =>
     }),
   );
 
+const usesTheProvidedIdInsteadOfGenerating = () => {
+  const session = SessionManager.inMemory();
+  session.newSession({ id: "my-custom-id" });
+  expect(session.getSessionId()).toBe("my-custom-id");
+};
+
+const usesTheProvidedIdWhenCreatingAn = () => {
+  const session = SessionManager.inMemory(process.cwd(), { id: "memory-session-id" });
+  expect(session.getSessionId()).toBe("memory-session-id");
+  expect(session.getHeader()!.id).toBe("memory-session-id");
+  expect(session.getSessionFile()).toBeUndefined();
+};
+
+const allowsAlphanumericSessionIdsWithInteriorPunctuation = () => {
+  const session = SessionManager.inMemory();
+  session.newSession({ id: "abc-123_def.456" });
+  expect(session.getSessionId()).toBe("abc-123_def.456");
+};
+
+const generatesAUuidv7IdWhenConstructedWithout = () => {
+  const session = SessionManager.inMemory();
+  expect(session.getSessionId()).toMatch(UUID_V7_RE);
+  expect(session.getHeader()!.id).toBe(session.getSessionId());
+};
+
 describe("SessionManager.newSession with custom id", () => {
-  it("uses the provided id instead of generating one", () => {
-    const session = SessionManager.inMemory();
-    session.newSession({ id: "my-custom-id" });
-    expect(session.getSessionId()).toBe("my-custom-id");
-  });
-  it("uses the provided id when creating an in-memory session", () => {
-    const session = SessionManager.inMemory(process.cwd(), { id: "memory-session-id" });
-    expect(session.getSessionId()).toBe("memory-session-id");
-    expect(session.getHeader()!.id).toBe("memory-session-id");
-    expect(session.getSessionFile()).toBeUndefined();
-  });
-  it("allows alphanumeric session ids with interior punctuation", () => {
-    const session = SessionManager.inMemory();
-    session.newSession({ id: "abc-123_def.456" });
-    expect(session.getSessionId()).toBe("abc-123_def.456");
-  });
+  it("uses the provided id instead of generating one", usesTheProvidedIdInsteadOfGenerating);
+  it("uses the provided id when creating an in-memory session", usesTheProvidedIdWhenCreatingAn);
+  it(
+    "allows alphanumeric session ids with interior punctuation",
+    allowsAlphanumericSessionIdsWithInteriorPunctuation,
+  );
   it("rejects invalid custom session ids", rejectsInvalidCustomSessionIds);
   it("generates a UUIDv7 id when no id is provided", generatesAUuidv7IdWhenNo);
   it("generates a UUIDv7 id when options is provided without id", generatesAUuidv7IdWhenOptions);
   it("includes the custom id in the session header", includesTheCustomIdInThe);
-  it("generates a UUIDv7 id when constructed without an explicit id", () => {
-    const session = SessionManager.inMemory();
-    expect(session.getSessionId()).toMatch(UUID_V7_RE);
-    expect(session.getHeader()!.id).toBe(session.getSessionId());
-  });
+  it(
+    "generates a UUIDv7 id when constructed without an explicit id",
+    generatesAUuidv7IdWhenConstructedWithout,
+  );
   it("uses the provided id when creating a persisted session", usesTheProvidedIdWhenCreating);
   it("generates a UUIDv7 id when creating a branched session", generatesAUuidv7IdWhenCreating);
   it("generates a UUIDv7 id when forking from another session file", generatesAUuidv7IdWhenForking);

@@ -3,7 +3,9 @@ import { Type } from "typebox";
 import { describe, expect, it } from "vite-plus/test";
 
 import type { ExtensionFactory } from "../../../src/index.ts";
-import { createHarness } from "../harness.ts";
+import harnessModule from "../harness.ts";
+
+const { createHarness } = harnessModule;
 
 function toolNames(tools: Array<{ name: string }>): string[] {
   return tools.map((tool) => tool.name).sort();
@@ -13,28 +15,28 @@ const extensionFactories: ExtensionFactory[] = [
   (msa) => {
     msa.on("session_start", () => {
       msa.registerTool({
-        name: "ask_question",
-        label: "Ask Question",
         description: "Ask a question",
-        promptSnippet: "Ask a question",
-        parameters: Type.Object({}),
         execute: () =>
           Promise.resolve({
-            content: [{ type: "text", text: "ok" }],
+            content: [{ text: "ok", type: "text" }],
             details: {},
           }),
+        label: "Ask Question",
+        name: "ask_question",
+        parameters: Type.Object({}),
+        promptSnippet: "Ask a question",
       });
       msa.registerTool({
-        name: "dynamic_tool",
-        label: "Dynamic Tool",
         description: "Dynamic test tool",
-        promptSnippet: "Run dynamic test behavior",
-        parameters: Type.Object({}),
         execute: () =>
           Promise.resolve({
-            content: [{ type: "text", text: "ok" }],
+            content: [{ text: "ok", type: "text" }],
             details: {},
           }),
+        label: "Dynamic Tool",
+        name: "dynamic_tool",
+        parameters: Type.Object({}),
+        promptSnippet: "Run dynamic test behavior",
       });
     });
   },
@@ -78,8 +80,8 @@ const letsExcludedToolsOverrideTheAllowlist = Effect.gen(function* () {
     createHarness({
       allowedToolNames: ["read", "bash", "ask_question"],
       excludedToolNames: ["read", "ask_question"],
-      initialActiveToolNames: ["read", "bash", "ask_question"],
       extensionFactories,
+      initialActiveToolNames: ["read", "bash", "ask_question"],
     }),
   );
   try {
@@ -100,8 +102,8 @@ const matchesAllowlistAndDenylistPatterns = Effect.gen(function* () {
     createHarness({
       allowedToolNames: ["*_tool", "ask_*", "re*"],
       excludedToolNames: ["ask*"],
-      initialActiveToolNames: ["*_tool", "ask_*", "re*"],
       extensionFactories,
+      initialActiveToolNames: ["*_tool", "ask_*", "re*"],
     }),
   );
   try {
@@ -114,11 +116,20 @@ const matchesAllowlistAndDenylistPatterns = Effect.gen(function* () {
   }
 });
 
+const filtersBuiltInAndExtensionToolsFrom = () =>
+  Effect.runPromise(filtersBuiltInAndExtensionTools);
+
+const letsExcludedToolsOverrideTheAllowlist2 = () =>
+  Effect.runPromise(letsExcludedToolsOverrideTheAllowlist);
+
+const matchesAllowlistAndDenylistPatterns2 = () =>
+  Effect.runPromise(matchesAllowlistAndDenylistPatterns);
+
 describe("regression #5109: exclude tools", () => {
-  it("filters built-in and extension tools from available and active tools", () =>
-    Effect.runPromise(filtersBuiltInAndExtensionTools));
-  it("lets excluded tools override the allowlist", () =>
-    Effect.runPromise(letsExcludedToolsOverrideTheAllowlist));
-  it("matches allowlist and denylist patterns", () =>
-    Effect.runPromise(matchesAllowlistAndDenylistPatterns));
+  it(
+    "filters built-in and extension tools from available and active tools",
+    filtersBuiltInAndExtensionToolsFrom,
+  );
+  it("lets excluded tools override the allowlist", letsExcludedToolsOverrideTheAllowlist2);
+  it("matches allowlist and denylist patterns", matchesAllowlistAndDenylistPatterns2);
 });

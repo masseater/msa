@@ -1,7 +1,9 @@
 import { Effect } from "effect";
 import { afterEach, describe, it } from "vite-plus/test";
 
-import {
+import agentSessionModelExtensionCases from "./agent-session-model-extension-cases.ts";
+
+const {
   allowsBeforeAgentStartHandlersTo,
   allowsExtensionCommandsToInspectLive,
   allowsExtensionContextHandlersToModify,
@@ -21,48 +23,161 @@ import {
   persistsTheRequestedDefaultThinkingLevel,
   setmodelSavesTheModelToThe,
   throwsWhenSetmodelIsCalledWithout,
-} from "./agent-session-model-extension-cases.ts";
+} = agentSessionModelExtensionCases;
+
+const setmodelSavesTheModelToTheSession = () => Effect.runPromise(setmodelSavesTheModelToThe);
+
+const onlyPersistsModelAndThinkingDefaultsWhen = () =>
+  Effect.runPromise(onlyPersistsModelAndThinkingDefaults);
+
+const persistsTheRequestedDefaultThinkingLevelEven = () =>
+  Effect.runPromise(persistsTheRequestedDefaultThinkingLevel);
+
+const cyclemodelAndCyclethinkinglevelAreSessionOnlyBy = () =>
+  Effect.runPromise(cyclemodelAndCyclethinkinglevelAreSessionOnly);
+
+const appliesPerModelThinkingLevelOverrideOn = () =>
+  Effect.runPromise(appliesPerModelThinkingLevelOverride);
+
+const fallsBackToCurrentSessionThinkingLevel = () =>
+  Effect.runPromise(fallsBackToCurrentSessionThinking);
+
+const perModelOverrideTakesPriorityOverGlobal = () =>
+  Effect.runPromise(perModelOverrideTakesPriorityOver);
+
+const cyclesThroughScopedModelsAndPreservesThe = () =>
+  Effect.runPromise(cyclesThroughScopedModelsAndPreserves);
+
+const clampsThinkingLevelsToModelCapabilitiesAnd = () =>
+  Effect.runPromise(clampsThinkingLevelsToModelCapabilities);
+
+const cyclesXhighBeforeMaxWhenBothAre = () => Effect.runPromise(cyclesXhighBeforeMaxWhenBoth);
+
+const throwsWhenSetmodelIsCalledWithoutConfigured = () =>
+  Effect.runPromise(throwsWhenSetmodelIsCalledWithout);
+
+const allowsExtensionToolCallHandlersToBlock = () =>
+  Effect.runPromise(allowsExtensionToolCallHandlersTo);
+
+const allowsExtensionToolResultHandlersToModify = () =>
+  Effect.runPromise(allowsExtensionToolResultHandlersTo);
+
+const allowsExtensionContextHandlersToModifyMessages = () =>
+  Effect.runPromise(allowsExtensionContextHandlersToModify);
+
+const allowsExtensionInputHandlersToTransformOr = () =>
+  Effect.runPromise(allowsExtensionInputHandlersToTransform);
+
+const allowsExtensionCommandsToInspectLiveSystem = () =>
+  Effect.runPromise(allowsExtensionCommandsToInspectLive);
+
+const allowsBeforeAgentStartHandlersToInject = () =>
+  Effect.runPromise(allowsBeforeAgentStartHandlersTo);
+
+const bindextensionsEmitsSessionStartAndReloadEmits = () =>
+  Effect.runPromise(bindextensionsEmitsSessionStartAndReload);
+
+const afterEachHook = () => {
+  while (harnesses.length > 0) {
+    harnesses.pop()?.cleanup();
+  }
+};
 
 describe("AgentSession model and extension characterization", () => {
-  afterEach(() => {
-    while (harnesses.length > 0) {
-      harnesses.pop()?.cleanup();
-    }
-  });
-  it("setModel saves the model to the session and emits model_select", () =>
-    Effect.runPromise(setmodelSavesTheModelToThe));
-  it("only persists model and thinking defaults when requested", () =>
-    Effect.runPromise(onlyPersistsModelAndThinkingDefaults));
-  it("persists the requested default thinking level even when the current model clamps it", () =>
-    Effect.runPromise(persistsTheRequestedDefaultThinkingLevel));
-  it("cycleModel and cycleThinkingLevel are session-only by default", () =>
-    Effect.runPromise(cyclemodelAndCyclethinkinglevelAreSessionOnly));
-  it("applies per-model thinking level override on model switch", () =>
-    Effect.runPromise(appliesPerModelThinkingLevelOverride));
-  it("falls back to current session thinking level when no per-model or global default is configured", () =>
-    Effect.runPromise(fallsBackToCurrentSessionThinking));
-  it("per-model override takes priority over global default during model switch", () =>
-    Effect.runPromise(perModelOverrideTakesPriorityOver));
-  it("cycles through scoped models and preserves the scoped thinking preference", () =>
-    Effect.runPromise(cyclesThroughScopedModelsAndPreserves));
-  it("clamps thinking levels to model capabilities and cycles available levels", () =>
-    Effect.runPromise(clampsThinkingLevelsToModelCapabilities));
-  it("cycles xhigh before max when both are supported", () =>
-    Effect.runPromise(cyclesXhighBeforeMaxWhenBoth));
-  it("throws when setModel is called without configured auth", () =>
-    Effect.runPromise(throwsWhenSetmodelIsCalledWithout));
-  it("allows extension tool_call handlers to block tool execution", () =>
-    Effect.runPromise(allowsExtensionToolCallHandlersTo));
-  it("allows extension tool_result handlers to modify tool results", () =>
-    Effect.runPromise(allowsExtensionToolResultHandlersTo));
-  it("allows extension context handlers to modify messages before the LLM call", () =>
-    Effect.runPromise(allowsExtensionContextHandlersToModify));
-  it("allows extension input handlers to transform or handle input", () =>
-    Effect.runPromise(allowsExtensionInputHandlersToTransform));
-  it("allows extension commands to inspect live system prompt options", () =>
-    Effect.runPromise(allowsExtensionCommandsToInspectLive));
-  it("allows before_agent_start handlers to inject custom messages and modify the system prompt", () =>
-    Effect.runPromise(allowsBeforeAgentStartHandlersTo));
-  it("bindExtensions emits session_start and reload emits session_shutdown then session_start", () =>
-    Effect.runPromise(bindextensionsEmitsSessionStartAndReload));
+  afterEach(afterEachHook);
+
+  it(
+    "setModel saves the model to the session and emits model_select",
+    setmodelSavesTheModelToTheSession,
+  );
+
+  it(
+    "only persists model and thinking defaults when requested",
+    onlyPersistsModelAndThinkingDefaultsWhen,
+  );
+
+  it(
+    "persists the requested default thinking level even when the current model clamps it",
+    persistsTheRequestedDefaultThinkingLevelEven,
+  );
+
+  it(
+    "cycleModel and cycleThinkingLevel are session-only by default",
+    cyclemodelAndCyclethinkinglevelAreSessionOnlyBy,
+  );
+
+  it(
+    "applies per-model thinking level override on model switch",
+    appliesPerModelThinkingLevelOverrideOn,
+  );
+
+  it(
+    "falls back to current session thinking level when no per-model or global default is configured",
+    fallsBackToCurrentSessionThinkingLevel,
+  );
+
+  it(
+    "per-model override takes priority over global default during model switch",
+    perModelOverrideTakesPriorityOverGlobal,
+  );
+});
+
+describe("AgentSession model and extension characterization", () => {
+  afterEach(afterEachHook);
+
+  it(
+    "cycles through scoped models and preserves the scoped thinking preference",
+    cyclesThroughScopedModelsAndPreservesThe,
+  );
+
+  it(
+    "clamps thinking levels to model capabilities and cycles available levels",
+    clampsThinkingLevelsToModelCapabilitiesAnd,
+  );
+
+  it("cycles xhigh before max when both are supported", cyclesXhighBeforeMaxWhenBothAre);
+
+  it(
+    "throws when setModel is called without configured auth",
+    throwsWhenSetmodelIsCalledWithoutConfigured,
+  );
+
+  it(
+    "allows extension tool_call handlers to block tool execution",
+    allowsExtensionToolCallHandlersToBlock,
+  );
+
+  it(
+    "allows extension tool_result handlers to modify tool results",
+    allowsExtensionToolResultHandlersToModify,
+  );
+
+  it(
+    "allows extension context handlers to modify messages before the LLM call",
+    allowsExtensionContextHandlersToModifyMessages,
+  );
+});
+
+describe("AgentSession model and extension characterization", () => {
+  afterEach(afterEachHook);
+
+  it(
+    "allows extension input handlers to transform or handle input",
+    allowsExtensionInputHandlersToTransformOr,
+  );
+
+  it(
+    "allows extension commands to inspect live system prompt options",
+    allowsExtensionCommandsToInspectLiveSystem,
+  );
+
+  it(
+    "allows before_agent_start handlers to inject custom messages and modify the system prompt",
+    allowsBeforeAgentStartHandlersToInject,
+  );
+
+  it(
+    "bindExtensions emits session_start and reload emits session_shutdown then session_start",
+    bindextensionsEmitsSessionStartAndReloadEmits,
+  );
 });

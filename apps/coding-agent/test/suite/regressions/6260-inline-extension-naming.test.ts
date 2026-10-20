@@ -1,10 +1,12 @@
 import * as NodeServices from "@effect/platform-node/NodeServices";
-import { joinPath } from "@msa/testing";
+import testing from "@msa/testing";
 import { Effect, FileSystem, ManagedRuntime } from "effect";
 import { afterEach, beforeEach, describe, expect, it } from "vite-plus/test";
 
 import { DefaultResourceLoader } from "../../../src/core/resource-loader.ts";
 import type { ExtensionAPI } from "../../../src/index.ts";
+
+const { joinPath } = testing;
 
 const runtime = ManagedRuntime.make(NodeServices.layer);
 const fs = runtime.runSync(FileSystem.FileSystem.useSync((service) => service));
@@ -22,7 +24,7 @@ function fixture(name: string) {
       yield* fs.makeDirectory(cwd, { recursive: true });
       yield* fs.makeDirectory(agentDir, { recursive: true });
       roots.push(root);
-      return { root, cwd, agentDir };
+      return { agentDir, cwd, root };
     }),
   );
 }
@@ -30,12 +32,12 @@ function fixture(name: string) {
 const displaysBareFactoriesAsInlineN = Effect.gen(function* () {
   const { cwd, agentDir } = yield* Effect.promise(() => fixture("bare"));
   const loader = new DefaultResourceLoader({
-    cwd,
     agentDir,
-    noSkills: true,
-    noPromptTemplates: true,
-    noThemes: true,
+    cwd,
     extensionFactories: [noop, noop],
+    noPromptTemplates: true,
+    noSkills: true,
+    noThemes: true,
   });
 
   yield* Effect.promise(() => loader.reload());
@@ -50,15 +52,15 @@ const displaysBareFactoriesAsInlineN = Effect.gen(function* () {
 const displaysNamedWrappersAsInlineName = Effect.gen(function* () {
   const { cwd, agentDir } = yield* Effect.promise(() => fixture("named"));
   const loader = new DefaultResourceLoader({
-    cwd,
     agentDir,
-    noSkills: true,
-    noPromptTemplates: true,
-    noThemes: true,
+    cwd,
     extensionFactories: [
-      { name: "my-provider", factory: noop },
-      { name: "my-commands", factory: noop },
+      { factory: noop, name: "my-provider" },
+      { factory: noop, name: "my-commands" },
     ],
+    noPromptTemplates: true,
+    noSkills: true,
+    noThemes: true,
   });
 
   yield* Effect.promise(() => loader.reload());
@@ -73,12 +75,12 @@ const displaysNamedWrappersAsInlineName = Effect.gen(function* () {
 const preservesHiddenStateForNamedFactories = Effect.gen(function* () {
   const { cwd, agentDir } = yield* Effect.promise(() => fixture("hidden"));
   const loader = new DefaultResourceLoader({
-    cwd,
     agentDir,
-    noSkills: true,
+    cwd,
+    extensionFactories: [{ factory: noop, hidden: true, name: "built-in" }],
     noPromptTemplates: true,
+    noSkills: true,
     noThemes: true,
-    extensionFactories: [{ name: "built-in", factory: noop, hidden: true }],
   });
 
   yield* Effect.promise(() => loader.reload());
@@ -93,12 +95,12 @@ const preservesHiddenStateForNamedFactories = Effect.gen(function* () {
 const supportsMixedBareAndNamedFactories = Effect.gen(function* () {
   const { cwd, agentDir } = yield* Effect.promise(() => fixture("mixed"));
   const loader = new DefaultResourceLoader({
-    cwd,
     agentDir,
-    noSkills: true,
+    cwd,
+    extensionFactories: [noop, { factory: noop, name: "named-ext" }, noop],
     noPromptTemplates: true,
+    noSkills: true,
     noThemes: true,
-    extensionFactories: [noop, { name: "named-ext", factory: noop }, noop],
   });
 
   yield* Effect.promise(() => loader.reload());
@@ -111,28 +113,36 @@ const supportsMixedBareAndNamedFactories = Effect.gen(function* () {
   expect(result.extensions[2]?.path).toBe("<inline:3>");
 });
 
+const displaysBareFactoriesAsInlineN2 = () => Effect.runPromise(displaysBareFactoriesAsInlineN);
+
+const displaysNamedWrappersAsInlineName2 = () =>
+  Effect.runPromise(displaysNamedWrappersAsInlineName);
+
+const preservesHiddenStateForNamedFactories2 = () =>
+  Effect.runPromise(preservesHiddenStateForNamedFactories);
+
+const supportsMixedBareAndNamedFactories2 = () =>
+  Effect.runPromise(supportsMixedBareAndNamedFactories);
+
+const afterEachHook = () =>
+  runtime.runPromise(
+    Effect.gen(function* () {
+      while (roots.length > 0) {
+        const root = roots.pop();
+        if (root !== undefined && root !== "" && (yield* fs.exists(root))) {
+          yield* fs.remove(root, { force: true, recursive: true });
+        }
+      }
+    }),
+  );
+
 describe("inline extension naming", () => {
   beforeEach(() => {
     roots.length = 0;
   });
-  afterEach(() =>
-    runtime.runPromise(
-      Effect.gen(function* () {
-        while (roots.length > 0) {
-          const root = roots.pop();
-          if (root !== undefined && root !== "" && (yield* fs.exists(root))) {
-            yield* fs.remove(root, { recursive: true, force: true });
-          }
-        }
-      }),
-    ),
-  );
-  it("displays bare factories as <inline:N>", () =>
-    Effect.runPromise(displaysBareFactoriesAsInlineN));
-  it("displays named wrappers as <inline:name>", () =>
-    Effect.runPromise(displaysNamedWrappersAsInlineName));
-  it("preserves hidden state for named factories", () =>
-    Effect.runPromise(preservesHiddenStateForNamedFactories));
-  it("supports mixed bare and named factories", () =>
-    Effect.runPromise(supportsMixedBareAndNamedFactories));
+  afterEach(afterEachHook);
+  it("displays bare factories as <inline:N>", displaysBareFactoriesAsInlineN2);
+  it("displays named wrappers as <inline:name>", displaysNamedWrappersAsInlineName2);
+  it("preserves hidden state for named factories", preservesHiddenStateForNamedFactories2);
+  it("supports mixed bare and named factories", supportsMixedBareAndNamedFactories2);
 });

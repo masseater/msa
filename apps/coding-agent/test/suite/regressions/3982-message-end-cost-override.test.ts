@@ -3,9 +3,12 @@ import { Effect } from "effect";
 import { afterEach, describe, expect, it } from "vite-plus/test";
 
 import type { AssistantMessage } from "../../../../../libs/ai/src/message-types.ts";
-import { createHarness, type Harness } from "../harness.ts";
+import harnessModule from "../harness.ts";
+import type harnessTypes from "../harness.types.ts";
 
-const harnesses: Harness[] = [];
+const { createHarness } = harnessModule;
+
+const harnesses: harnessTypes.Harness[] = [];
 
 const allowsExtensionsToReplaceFinalizedAssistant = Effect.gen(function* () {
   const harness = yield* Effect.promise(() =>
@@ -36,11 +39,11 @@ const allowsExtensionsToReplaceFinalizedAssistant = Effect.gen(function* () {
   harness.setResponses([fauxAssistantMessage("hello")]);
   yield* Effect.promise(() => harness.session.prompt("hi"));
   const assistantMessage = harness.session.messages.find((message) => message.role === "assistant");
-  return yield* allowsExtensionsToReplaceFinalizedAssistantPart2(harness, assistantMessage);
+  return yield* allowsExtensionsToReplaceFinalizedAssistantStep1(harness, assistantMessage);
 });
 
-const allowsExtensionsToReplaceFinalizedAssistantPart2 = (
-  harness: Harness,
+const allowsExtensionsToReplaceFinalizedAssistantStep1 = (
+  harness: harnessTypes.Harness,
   assistantMessage: AssistantMessage | undefined,
 ) =>
   Effect.sync(() => {
@@ -59,12 +62,19 @@ const allowsExtensionsToReplaceFinalizedAssistantPart2 = (
     expect(messageEnd.message.usage.cost.total).toBe(0.123);
   });
 
+const allowsExtensionsToReplaceFinalizedAssistantUsage = () =>
+  Effect.runPromise(allowsExtensionsToReplaceFinalizedAssistant);
+
+const afterEachHook = () => {
+  while (harnesses.length > 0) {
+    harnesses.pop()?.cleanup();
+  }
+};
+
 describe("regression #3982: message_end cost override", () => {
-  afterEach(() => {
-    while (harnesses.length > 0) {
-      harnesses.pop()?.cleanup();
-    }
-  });
-  it("allows extensions to replace finalized assistant usage cost", () =>
-    Effect.runPromise(allowsExtensionsToReplaceFinalizedAssistant));
+  afterEach(afterEachHook);
+  it(
+    "allows extensions to replace finalized assistant usage cost",
+    allowsExtensionsToReplaceFinalizedAssistantUsage,
+  );
 });

@@ -4,26 +4,19 @@ import {
   type ImageModel,
   InMemoryModelsStore,
 } from "@msa/ai";
-import {
-  awaited,
-  joinPath,
-  makeTempDir,
-  removeDirs,
-  toJsonText,
-  writeTextFile,
-} from "@msa/testing";
+import testing from "@msa/testing";
 import { Effect } from "effect";
 
 import { AuthStorage } from "../src/core/auth-storage.ts";
 import { ModelRuntime } from "../src/core/model-runtime.ts";
 
+const { awaited, joinPath, makeTempDir, removeDirs, toJsonText, writeTextFile } = testing;
+
 const tempDirs: string[] = [];
 
-export const removeRuntimeDirs: Effect.Effect<void> = Effect.suspend(() =>
-  removeDirs(tempDirs.splice(0)),
-);
+const removeRuntimeDirs: Effect.Effect<void> = Effect.suspend(() => removeDirs(tempDirs.splice(0)));
 
-export const createRuntime = (modelsJson?: object): Effect.Effect<ModelRuntime> =>
+const createRuntime = (modelsJson?: object): Effect.Effect<ModelRuntime> =>
   Effect.gen(function* () {
     let modelsPath: string | null = null;
     if (modelsJson !== undefined) {
@@ -34,60 +27,71 @@ export const createRuntime = (modelsJson?: object): Effect.Effect<ModelRuntime> 
     }
     return yield* awaited(
       ModelRuntime.create({
-        credentials: AuthStorage.inMemory(),
-        modelsStore: new InMemoryModelsStore(),
-        modelsPath,
         allowModelNetwork: false,
+        credentials: AuthStorage.inMemory(),
+        modelsPath,
+        modelsStore: new InMemoryModelsStore(),
       }),
     );
   });
 
 const image = (provider: string, id: string): ImageModel<"test-images"> => ({
-  type: "image" as const,
-  id,
-  name: id,
   api: "test-images" as const,
-  provider,
   baseUrl: "https://images.test/v1",
+  cost: { cacheRead: 0, cacheWrite: 0, input: 0, output: 0 },
+  id,
   input: ["text"],
+  name: id,
   output: ["image"],
-  cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0 },
+  provider,
+  type: "image" as const,
 });
 
 const classifier = (provider: string, id: string): ClassifierModel<"test-classifier"> => ({
-  type: "classifier" as const,
-  id,
-  name: id,
   api: "test-classifier" as const,
-  provider,
   baseUrl: "https://classifier.test/v1",
-  input: ["text"],
-  cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0 },
   contextWindow: 1000,
+  cost: { cacheRead: 0, cacheWrite: 0, input: 0, output: 0 },
+  id,
+  input: ["text"],
+  name: id,
+  provider,
+  type: "classifier" as const,
 });
 
-export const models = { image, classifier };
+const models = { classifier, image };
 
-export const context = { input: [{ type: "text" as const, text: "a red circle" }] };
+const context = { input: [{ text: "a red circle", type: "text" as const }] };
 
-export const classifierContext = {
-  state: { text: "Looks good" },
+const classifierContext = {
   questions: {
     approved: {
-      type: "bool" as const,
+      criteria: { false: "No approval", true: "Approval" },
       instructions: "Does this express approval?",
-      criteria: { true: "Approval", false: "No approval" },
+      type: "bool" as const,
     },
   },
+  state: { text: "Looks good" },
 };
 
-export function okImageResult(model: ImageModel<string>): AssistantImages {
+function okImageResult(model: ImageModel<string>): AssistantImages {
   return {
     api: model.api,
-    provider: model.provider,
     model: model.id,
-    output: [{ type: "image" as const, data: "aGk=", mimeType: "image/png" }],
+    output: [{ data: "aGk=", mimeType: "image/png", type: "image" as const }],
+    provider: model.provider,
     stopReason: "stop" as const,
     timestamp: 0,
   };
 }
+
+const modelRuntimeImagesSupport = {
+  classifierContext,
+  context,
+  createRuntime,
+  models,
+  okImageResult,
+  removeRuntimeDirs,
+};
+
+export default modelRuntimeImagesSupport;

@@ -1,427 +1,205 @@
-import {
-  chmodSync,
-  existsSync,
-  mkdirSync,
-  mkdtempSync,
-  readFileSync,
-  rmSync,
-  writeFileSync,
-} from "node:fs";
-import { homedir, tmpdir } from "node:os";
-import { join } from "node:path";
+import { homedir } from "node:os";
 
-import { InMemoryModelsStore } from "@msa/ai";
-import type { AssistantMessageEvent, TranscriptContext } from "@msa/ai/compat";
+import testing from "@msa/testing";
+import { Effect } from "effect";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vite-plus/test";
 
-import { ENV_AGENT_DIR } from "../src/config.ts";
-import { completeAccountsArgument, runAccountsCommand } from "../src/core/accounts.ts";
-import { AuthStorage } from "../src/core/auth-storage.ts";
 import {
   accountEnv,
-  addAccount,
-  authStatus,
   blockIfUnusable,
   blockOf,
   clearBlocks,
   loadAccounts,
-  loginAccount,
-  preferAccount,
-  removeAccount,
-  setAutoRotation,
 } from "../src/core/cli-agents/claude-accounts.ts";
-import { claudeCodeService } from "../src/core/cli-agents/claude-service.ts";
-import { openCodeProvider } from "../src/core/cli-agents/opencode.ts";
 import { evaluateModelPolicy, hiddenModelsByPolicy } from "../src/core/model-policy.ts";
-import { ModelRuntime } from "../src/core/model-runtime.ts";
 import { findModelUpgrades } from "../src/core/model-upgrade.ts";
+import cliAgentsSupport from "./cli-agents-support.ts";
 
-let dir: string;
-const savedEnv = { ...process.env };
+const { awaited, currentTimeMillis, failure, joinPath, runTest } = testing;
+const { cleanAgentDir, createModelRuntime, currentAgentDir, prepareAgentDir, writeAccounts } =
+  cliAgentsSupport;
 
-beforeEach(() => {
-  dir = mkdtempSync(join(tmpdir(), "msa-cli-agents-"));
-  process.env[ENV_AGENT_DIR] = dir;
-});
+beforeEach(() => runTest(prepareAgentDir));
 
-afterEach(() => {
-  for (const key of Object.keys(process.env)) if (!(key in savedEnv)) delete process.env[key];
-  Object.assign(process.env, savedEnv);
-  rmSync(dir, { recursive: true, force: true });
-});
+afterEach(() => runTest(cleanAgentDir));
 
-function writeAccounts(accounts: unknown[]): void {
-  writeFileSync(join(dir, "claude-code-accounts.json"), JSON.stringify({ accounts }));
-}
+const usesMsaSEnvironmentWhenNoAccounts = () => {
+  expect(loadAccounts()).toEqual([{ name: "default" }]);
+};
+
+const expandsInConfigdir = () =>
+  runTest(
+    Effect.gen(function* () {
+      yield* writeAccounts([{ configDir: "~/claude-main", name: "main" }]);
+      expect(loadAccounts()).toEqual([
+        { configDir: joinPath(homedir(), "claude-main"), name: "main" },
+      ]);
+    }),
+  );
+
+const blocksAnAccountThatHitItsUsage = () => {
+  const account = { name: "main" };
+  const resetsAt = currentTimeMillis() + 3_600_000;
+  expect(
+    blockIfUnusable(account, {
+      cause: "usage_limit",
+      error: "You've hit your weekly limit",
+      resetsAt,
+    }),
+  ).toBe(true);
+  expect(blockOf(account, resetsAt - 60_000)?.reason).toContain("weekly limit");
+  expect(blockOf(account, resetsAt + 60_000)).toBeUndefined();
+  clearBlocks();
+  expect(blockOf(account, resetsAt - 60_000)).toBeUndefined();
+};
+
+const blocksAnAccountByTheErrorClaude = () => {
+  const now = currentTimeMillis();
+  const account = { name: "main" };
+  expect(blockIfUnusable(account, { cause: "authentication_failed", error: "401" })).toBe(true);
+  expect(blockOf(account, now + 60_000)).toBeDefined();
+  expect(blockOf(account, now + 11 * 60_000)).toBeUndefined();
+  expect(blockIfUnusable(account, { cause: "account_on_hold", error: "on hold" })).toBe(true);
+  expect(blockOf(account, now + 23 * 60 * 60_000)).toBeDefined();
+};
+
+const doesNotBlockAnAccountForAn = () => {
+  const account = { name: "main" };
+  expect(blockIfUnusable(account, { cause: "overloaded", error: "overloaded" })).toBe(false);
+  expect(blockIfUnusable(account, { cause: "rate_limit", error: "429" })).toBe(false);
+  expect(blockOf(account)).toBeUndefined();
+};
+
+const givesTheTokenPrintedByTokencommandOnly = () =>
+  runTest(
+    Effect.gen(function* () {
+      vi.stubEnv("CLAUDE_CODE_OAUTH_TOKEN", "inherited");
+      vi.stubEnv("SHELL", "/bin/sh");
+      const env = yield* awaited(
+        accountEnv({ name: "token", tokenCommand: "printf 'tok-123\\n'" }),
+      );
+      expect(env["CLAUDE_CODE_OAUTH_TOKEN"]).toBe("tok-123");
+      const configured = yield* awaited(accountEnv({ configDir: "/tmp/claude-dir", name: "dir" }));
+      expect(configured["CLAUDE_CODE_OAUTH_TOKEN"]).toBeUndefined();
+      expect(configured["CLAUDE_CONFIG_DIR"]).toBe("/tmp/claude-dir");
+    }),
+  );
+
+const blocksAnAccountWhoseTokencommandFails = () =>
+  runTest(
+    Effect.gen(function* () {
+      vi.stubEnv("SHELL", "/bin/sh");
+      const account = { name: "broken", tokenCommand: "echo nope >&2; exit 1" };
+      const error = yield* failure(awaited(accountEnv(account)));
+      const message = error instanceof Error ? error.message : String(error);
+      expect(message).toMatch(/^tokenCommand .*: nope$/u);
+      expect(blockIfUnusable(account, { error: message })).toBe(true);
+    }),
+  );
 
 describe("Claude Code accounts", () => {
-  it("uses msa's environment when no accounts are configured", () => {
-    expect(loadAccounts()).toEqual([{ name: "default" }]);
-  });
+  it("uses msa's environment when no accounts are configured", usesMsaSEnvironmentWhenNoAccounts);
 
-  it("expands ~ in configDir", () => {
-    writeAccounts([{ name: "main", configDir: "~/claude-main" }]);
-    expect(loadAccounts()).toEqual([{ name: "main", configDir: join(homedir(), "claude-main") }]);
-  });
+  it("expands ~ in configDir", expandsInConfigdir);
 
-  it("blocks an account that hit its usage limit until the reset", () => {
-    const account = { name: "main" };
-    const resetsAt = new Date(2026, 9, 19, 15, 0).getTime();
-    expect(
-      blockIfUnusable(account, {
-        error: "You've hit your weekly limit",
-        cause: "usage_limit",
-        resetsAt,
-      }),
-    ).toBe(true);
-    expect(blockOf(account, resetsAt - 60_000)?.reason).toContain("weekly limit");
-    expect(blockOf(account, resetsAt + 60_000)).toBeUndefined();
-    clearBlocks();
-    expect(blockOf(account, resetsAt - 60_000)).toBeUndefined();
-  });
+  it("blocks an account that hit its usage limit until the reset", blocksAnAccountThatHitItsUsage);
 
-  it("blocks an account by the error Claude Code classified", () => {
-    const now = Date.now();
-    const account = { name: "main" };
-    expect(blockIfUnusable(account, { error: "401", cause: "authentication_failed" })).toBe(true);
-    expect(blockOf(account, now + 60_000)).toBeDefined();
-    expect(blockOf(account, now + 11 * 60_000)).toBeUndefined();
-    expect(blockIfUnusable(account, { error: "on hold", cause: "account_on_hold" })).toBe(true);
-    expect(blockOf(account, now + 23 * 60 * 60_000)).toBeDefined();
-  });
+  it("blocks an account by the error Claude Code classified", blocksAnAccountByTheErrorClaude);
 
-  it("does not block an account for an ordinary failure", () => {
-    const account = { name: "main" };
-    expect(blockIfUnusable(account, { error: "overloaded", cause: "overloaded" })).toBe(false);
-    expect(blockIfUnusable(account, { error: "429", cause: "rate_limit" })).toBe(false);
-    expect(blockOf(account)).toBeUndefined();
-  });
+  it("does not block an account for an ordinary failure", doesNotBlockAnAccountForAn);
 
-  it("gives the token printed by tokenCommand only to that account", async () => {
-    process.env["CLAUDE_CODE_OAUTH_TOKEN"] = "inherited";
-    process.env["SHELL"] = "/bin/sh";
-    const env = await accountEnv({ name: "token", tokenCommand: "printf 'tok-123\\n'" });
-    expect(env["CLAUDE_CODE_OAUTH_TOKEN"]).toBe("tok-123");
-    const configured = await accountEnv({ name: "dir", configDir: "/tmp/claude-dir" });
-    expect(configured["CLAUDE_CODE_OAUTH_TOKEN"]).toBeUndefined();
-    expect(configured["CLAUDE_CONFIG_DIR"]).toBe("/tmp/claude-dir");
-  });
+  it(
+    "gives the token printed by tokenCommand only to that account",
+    givesTheTokenPrintedByTokencommandOnly,
+  );
 
-  it("blocks an account whose tokenCommand fails", async () => {
-    process.env["SHELL"] = "/bin/sh";
-    const account = { name: "broken", tokenCommand: "echo nope >&2; exit 1" };
-    const error = await accountEnv(account).catch((caught: Error) => caught.message);
-    expect(error).toMatch(/^tokenCommand .*: nope$/);
-    expect(blockIfUnusable(account, { error: String(error) })).toBe(true);
-  });
+  it("blocks an account whose tokenCommand fails", blocksAnAccountWhoseTokencommandFails);
 });
+
+const areAvailableWithoutExtensionsAndFollowThe = () =>
+  runTest(
+    Effect.gen(function* () {
+      vi.stubEnv("CLAUDE_BIN", process.execPath);
+      const runtime = yield* createModelRuntime();
+      const providers = () =>
+        [...new Set(runtime.getAvailableSnapshot().map((model) => model.provider))]
+          .filter((id) => id.startsWith("claude-subs"))
+          .sort();
+      expect(providers()).toEqual(["claude-subs"]);
+      expect(runtime.getModel("claude-subs", "claude-opus-5-5")?.api).toBe("claude-subs");
+
+      yield* writeAccounts([{ name: "main" }, { name: "sub" }]);
+      yield* awaited(runtime.refresh({ allowNetwork: false }));
+      expect(providers()).toEqual(["claude-subs", "claude-subs-main", "claude-subs-sub"]);
+
+      vi.stubEnv("CLAUDE_BIN", joinPath(currentAgentDir(), "missing-claude"));
+      yield* awaited(runtime.refresh({ allowNetwork: false }));
+      expect(providers()).toEqual([]);
+    }),
+  );
 
 describe("Claude subscription providers", () => {
-  it("are available without extensions and follow the account list on refresh", async () => {
-    process.env["CLAUDE_BIN"] = process.execPath;
-    const runtime = await ModelRuntime.create({
-      credentials: AuthStorage.inMemory(),
-      modelsPath: null,
-      modelsStore: new InMemoryModelsStore(),
-      allowModelNetwork: false,
-    });
-    const providers = () =>
-      [...new Set(runtime.getAvailableSnapshot().map((model) => model.provider))]
-        .filter((id) => id.startsWith("claude-subs"))
-        .sort();
-    expect(providers()).toEqual(["claude-subs"]);
-    expect(runtime.getModel("claude-subs", "claude-opus-5-5")?.api).toBe("claude-subs");
-
-    writeAccounts([{ name: "main" }, { name: "sub" }]);
-    await runtime.refresh({ allowNetwork: false });
-    expect(providers()).toEqual(["claude-subs", "claude-subs-main", "claude-subs-sub"]);
-
-    process.env["CLAUDE_BIN"] = join(dir, "missing-claude");
-    await runtime.refresh({ allowNetwork: false });
-    expect(providers()).toEqual([]);
-  });
+  it(
+    "are available without extensions and follow the account list on refresh",
+    areAvailableWithoutExtensionsAndFollowThe,
+  );
 });
+
+const claudeModels = Effect.gen(function* () {
+  vi.stubEnv("CLAUDE_BIN", process.execPath);
+  const runtime = yield* createModelRuntime();
+  return runtime.getAvailableSnapshot().filter((model) => model.provider === "claude-subs");
+});
+
+const listsTheVersionedIdsAndNoAlias = () =>
+  runTest(
+    Effect.gen(function* () {
+      const models = yield* claudeModels;
+      expect(models.map((model) => model.id).sort()).toEqual([
+        "claude-fable-5-1",
+        "claude-haiku-5-5",
+        "claude-opus-5-5",
+        "claude-sonnet-5-5",
+      ]);
+    }),
+  );
+
+const appliesAModelPolicyToAVersioned = () =>
+  runTest(
+    Effect.gen(function* () {
+      const models = yield* claudeModels;
+      const deny = { allow: [], deny: ["claude-subs/claude-opus-5-5"] };
+      const hidden = hiddenModelsByPolicy(deny, models).map((entry) => entry.model.id);
+      expect(hidden).toEqual(["claude-opus-5-5"]);
+      const sonnet = models.find((model) => model.id === "claude-sonnet-5-5")!;
+      expect(evaluateModelPolicy(deny, sonnet).allowed).toBe(true);
+      expect(
+        evaluateModelPolicy({ allow: ["claude-subs/claude-sonnet-5-5"], deny: [] }, sonnet).allowed,
+      ).toBe(true);
+    }),
+  );
+
+const letsModelUpgradesReadAVersionFrom = () =>
+  runTest(
+    Effect.gen(function* () {
+      const models = yield* claudeModels;
+      const older = {
+        ...models.find((model) => model.id === "claude-sonnet-5-5")!,
+        id: "claude-sonnet-5",
+      };
+      const upgrades = findModelUpgrades([older, ...models]).filter(
+        (candidate) => candidate.confident,
+      );
+      expect(upgrades.map((candidate) => [candidate.from.id, candidate.to.id])).toEqual([
+        ["claude-sonnet-5", "claude-sonnet-5-5"],
+      ]);
+    }),
+  );
 
 describe("Claude subscription model ids", () => {
-  async function claudeModels() {
-    process.env["CLAUDE_BIN"] = process.execPath;
-    const runtime = await ModelRuntime.create({
-      credentials: AuthStorage.inMemory(),
-      modelsPath: null,
-      modelsStore: new InMemoryModelsStore(),
-      allowModelNetwork: false,
-    });
-    return runtime.getAvailableSnapshot().filter((model) => model.provider === "claude-subs");
-  }
+  it("lists the versioned ids and no alias", listsTheVersionedIdsAndNoAlias);
 
-  it("lists the versioned ids and no alias", async () => {
-    const models = await claudeModels();
-    expect(models.map((model) => model.id).sort()).toEqual([
-      "claude-fable-5-1",
-      "claude-haiku-5-5",
-      "claude-opus-5-5",
-      "claude-sonnet-5-5",
-    ]);
-  });
+  it("applies a model policy to a versioned id", appliesAModelPolicyToAVersioned);
 
-  it("applies a model policy to a versioned id", async () => {
-    const models = await claudeModels();
-    const deny = { allow: [], deny: ["claude-subs/claude-opus-5-5"] };
-    const hidden = hiddenModelsByPolicy(deny, models).map((entry) => entry.model.id);
-    expect(hidden).toEqual(["claude-opus-5-5"]);
-    const sonnet = models.find((model) => model.id === "claude-sonnet-5-5")!;
-    expect(evaluateModelPolicy(deny, sonnet).allowed).toBe(true);
-    expect(
-      evaluateModelPolicy({ allow: ["claude-subs/claude-sonnet-5-5"], deny: [] }, sonnet).allowed,
-    ).toBe(true);
-  });
-
-  it("lets model upgrades read a version from the full ids", async () => {
-    const models = await claudeModels();
-    const older = {
-      ...models.find((model) => model.id === "claude-sonnet-5-5")!,
-      id: "claude-sonnet-5",
-    };
-    const upgrades = findModelUpgrades([older, ...models]).filter(
-      (candidate) => candidate.confident,
-    );
-    expect(upgrades.map((candidate) => [candidate.from.id, candidate.to.id])).toEqual([
-      ["claude-sonnet-5", "claude-sonnet-5-5"],
-    ]);
-  });
-});
-
-describe("managing Claude Code accounts", () => {
-  const managed = (name: string) => join(dir, "claude-accounts", name);
-
-  it("keeps the implicit default account when the first account is added", () => {
-    addAccount("work");
-    expect(loadAccounts()).toEqual([
-      { name: "default" },
-      { name: "work", configDir: managed("work") },
-    ]);
-  });
-
-  it("adds a tokenCommand account and rejects bad or duplicate names", () => {
-    addAccount("token", "op read op://vault/claude");
-    expect(loadAccounts().at(-1)).toEqual({
-      name: "token",
-      tokenCommand: "op read op://vault/claude",
-    });
-    expect(() => addAccount("token")).toThrow(/already exists/);
-    expect(() => addAccount("Bad Name")).toThrow(/must be lowercase/);
-  });
-
-  it("reorders, toggles rotation and removes accounts, keeping ~ as written", () => {
-    writeAccounts([{ name: "main", configDir: "~/claude-main" }, { name: "sub" }]);
-    preferAccount("sub");
-    setAutoRotation("main", false);
-    const file = JSON.parse(readFileSync(join(dir, "claude-code-accounts.json"), "utf8"));
-    expect(file.accounts).toEqual([
-      { name: "sub" },
-      { name: "main", configDir: "~/claude-main", auto: false },
-    ]);
-    setAutoRotation("main", true);
-    expect(loadAccounts()[1]?.auto).toBeUndefined();
-    removeAccount("sub");
-    expect(loadAccounts().map((account) => account.name)).toEqual(["main"]);
-    expect(() => removeAccount("main")).toThrow(/must remain/);
-    expect(() => preferAccount("nope")).toThrow(/No Claude account/);
-  });
-
-  it("deletes the config dir msa made for a removed account", () => {
-    const account = addAccount("work");
-    mkdirSync(account.configDir!, { recursive: true });
-    blockIfUnusable(account, { error: "You've hit your limit", cause: "usage_limit" });
-    removeAccount("work");
-    expect(existsSync(managed("work"))).toBe(false);
-    expect(blockOf(account)).toBeUndefined();
-  });
-
-  function fakeClaude(script: string): void {
-    const bin = join(dir, "bin");
-    mkdirSync(bin, { recursive: true });
-    writeFileSync(join(bin, "claude"), `#!/bin/sh\n${script}\n`);
-    chmodSync(join(bin, "claude"), 0o755);
-    process.env["CLAUDE_BIN"] = join(bin, "claude");
-  }
-
-  it("signs an account in with the code the user pastes", async () => {
-    fakeClaude(
-      [
-        `if [ "$1 $2" = "auth status" ]; then`,
-        `  if [ -f "$CLAUDE_CONFIG_DIR/token" ]; then echo '{"loggedIn":true,"email":"a@example.com"}'; else echo '{"loggedIn":false}'; exit 1; fi`,
-        `  exit 0`,
-        `fi`,
-        `echo "Opening browser to sign in…"`,
-        `echo "If the browser didn't open, visit: https://claude.com/oauth?x=1"`,
-        `printf "Paste code here if prompted > "`,
-        `read code`,
-        `printf %s "$code" > "$CLAUDE_CONFIG_DIR/token"`,
-      ].join("\n"),
-    );
-    const account = addAccount("work");
-    expect(await authStatus(account)).toEqual({ loggedIn: false });
-    blockIfUnusable(account, { error: "Not logged in · Please run /login" });
-    let shown = "";
-    await loginAccount(account, {
-      askCode: async (url) => {
-        shown = url;
-        return "the-code";
-      },
-    });
-    expect(shown).toBe("https://claude.com/oauth?x=1");
-    expect(readFileSync(join(managed("work"), "token"), "utf8")).toBe("the-code");
-    expect(await authStatus(account)).toEqual({ loggedIn: true, email: "a@example.com" });
-    expect(blockOf(account)).toBeUndefined();
-  });
-
-  it("cancels the login when the user gives no code", async () => {
-    fakeClaude(`echo "visit: https://claude.com/oauth"\nread code\nexit 1`);
-    const account = addAccount("work");
-    await expect(loginAccount(account, { askCode: async () => undefined })).rejects.toThrow(
-      /cancelled/,
-    );
-  });
-  const claudeWithLogin = [
-    `if [ "$1 $2" = "auth status" ]; then`,
-    `  if [ -f "$CLAUDE_CONFIG_DIR/token" ]; then echo '{"loggedIn":true,"email":"a@example.com"}'; else echo '{"loggedIn":false}'; exit 1; fi`,
-    `  exit 0`,
-    `fi`,
-    `if [ "$1 $2" = "auth logout" ]; then rm -f "$CLAUDE_CONFIG_DIR/token"; exit 0; fi`,
-    `echo "If the browser didn't open, visit: https://claude.com/oauth?x=1"`,
-    `read code`,
-    `printf %s "$code" > "$CLAUDE_CONFIG_DIR/token"`,
-  ].join("\n");
-
-  function interaction(answers: { select?: string; prompts: string[] }) {
-    return {
-      showPage: vi.fn(),
-      select: vi.fn(async () => answers.select!),
-      prompt: vi.fn(async () => answers.prompts.shift()!),
-    };
-  }
-
-  it("tells /login how to install Claude Code when it is missing", async () => {
-    process.env["CLAUDE_BIN"] = "";
-    process.env["PATH"] = join(dir, "empty");
-    expect(await claudeCodeService.status()).toEqual({
-      installed: false,
-      install: "curl -fsSL https://claude.ai/install.sh | bash",
-    });
-  });
-
-  it("signs the only account in from /login without asking which", async () => {
-    fakeClaude(claudeWithLogin);
-    writeAccounts([{ name: "work", configDir: managed("work") }]);
-    expect(await claudeCodeService.status()).toEqual({ installed: true, signedIn: false });
-    const ui = interaction({ prompts: ["the-code"] });
-    await claudeCodeService.login(ui, new AbortController().signal);
-    expect(ui.select).not.toHaveBeenCalled();
-    expect(ui.showPage).toHaveBeenCalledWith({ url: "https://claude.com/oauth?x=1" });
-    expect(await claudeCodeService.status()).toEqual({ installed: true, signedIn: true });
-
-    await claudeCodeService.logout(interaction({ prompts: [] }));
-    expect(await claudeCodeService.status()).toEqual({ installed: true, signedIn: false });
-  });
-
-  it("adds a new account from /login when there are several", async () => {
-    fakeClaude(claudeWithLogin);
-    writeAccounts([
-      { name: "main", configDir: managed("main") },
-      { name: "token", tokenCommand: "echo token" },
-      { name: "sub", configDir: managed("sub") },
-    ]);
-    const ui = interaction({ select: "Add a new account", prompts: ["work", "the-code"] });
-    await claudeCodeService.login(ui, new AbortController().signal);
-    expect(ui.select).toHaveBeenCalledWith("Sign in which Claude account?", [
-      "main",
-      "sub",
-      "Add a new account",
-    ]);
-    expect(loadAccounts().at(-1)).toEqual({ name: "work", configDir: managed("work") });
-    expect(readFileSync(join(managed("work"), "token"), "utf8")).toBe("the-code");
-  });
-});
-
-describe("/accounts", () => {
-  function context() {
-    const notes: string[] = [];
-    let refreshes = 0;
-    const ctx = {
-      ui: {
-        notify: (message: string) => notes.push(message),
-        input: async () => undefined,
-        confirm: async () => true,
-      },
-      refreshProviders: async () => {
-        refreshes += 1;
-      },
-    };
-    return { ctx, notes, refreshes: () => refreshes };
-  }
-
-  it("completes kinds, then the kind's actions and account names", async () => {
-    writeAccounts([{ name: "main" }, { name: "sub" }]);
-    const complete = completeAccountsArgument;
-    expect((await complete("cl"))?.map((item) => item.value)).toEqual(["claude "]);
-    expect((await complete("claude lo"))?.map((item) => item.value)).toEqual([
-      "claude login ",
-      "claude logout ",
-    ]);
-    expect((await complete("claude use s"))?.map((item) => item.value)).toEqual(["claude use sub"]);
-  });
-
-  it("routes to the kind and rebuilds the providers when the account list changes", async () => {
-    process.env["CLAUDE_BIN"] = "/bin/false";
-    const { ctx, notes, refreshes } = context();
-    await runAccountsCommand("claude add token printf tok", ctx);
-    expect(loadAccounts().map((account) => account.name)).toEqual(["default", "token"]);
-    expect(refreshes()).toBe(1);
-    await runAccountsCommand("", ctx);
-    expect(notes.at(-1)).toMatch(/^claude:\n1\. default .*\n2\. token /);
-    await runAccountsCommand("nope", ctx);
-    expect(notes.at(-1)).toMatch(/Unknown account kind "nope"/);
-  });
-});
-
-describe("opencode-free provider", () => {
-  async function run(script: string): Promise<AssistantMessageEvent[]> {
-    const bin = join(dir, "opencode");
-    writeFileSync(bin, `#!/bin/sh\ncat > "${dir}/stdin.txt"\n${script}\n`);
-    chmodSync(bin, 0o755);
-    process.env["OPENCODE_BIN"] = bin;
-    const provider = openCodeProvider();
-    const model = provider.getModels()[0]!;
-    const context = {
-      messages: [{ role: "user", content: "hello", timestamp: 0 }],
-    } as unknown as TranscriptContext;
-    const events: AssistantMessageEvent[] = [];
-    const stream = provider.streamSimple(model, context);
-    for await (const event of stream) events.push(event);
-    return events;
-  }
-
-  it("streams the CLI's text and usage as the reply", async () => {
-    const events = await run(
-      [
-        `echo '{"type":"text","part":{"id":"a","type":"text","text":"Hi"}}'`,
-        `echo '{"type":"text","part":{"id":"a","type":"text","text":"Hi there"}}'`,
-        `echo '{"type":"step_finish","part":{"tokens":{"input":5,"output":2,"cache":{"read":1,"write":0}}}}'`,
-      ].join("\n"),
-    );
-    const done = events.at(-1);
-    expect(done?.type).toBe("done");
-    if (done?.type !== "done") return;
-    expect(done.message.content).toEqual([{ type: "text", text: "Hi there" }]);
-    expect(done.message.usage).toMatchObject({ input: 5, output: 2, cacheRead: 1, totalTokens: 8 });
-  });
-
-  it("reports an error event as a failed reply even when the CLI exits 0", async () => {
-    const events = await run(`echo '{"type":"error","error":{"message":"quota exceeded"}}'`);
-    const last = events.at(-1);
-    expect(last?.type).toBe("error");
-    if (last?.type !== "error") return;
-    expect(last.error.errorMessage).toBe("quota exceeded");
-  });
+  it("lets model upgrades read a version from the full ids", letsModelUpgradesReadAVersionFrom);
 });

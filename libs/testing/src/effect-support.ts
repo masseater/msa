@@ -10,26 +10,29 @@ import {
   Exit,
 } from "effect";
 
-import { provideNode, testRuntime } from "./runtime.ts";
+import type effectSupportTypes from "./effect-support.types.ts";
+import runtime from "./runtime.ts";
+
+const { provideNode, runTest, runTestSync } = runtime;
 
 const clock = Context.get(Context.empty(), Clock.Clock);
 
-export const currentTimeMillis = (): number => clock.currentTimeMillisUnsafe();
+const currentTimeMillis = (): number => clock.currentTimeMillisUnsafe();
 
-export const nowIso = (): string => DateTime.formatIso(DateTime.makeUnsafe(currentTimeMillis()));
+const nowIso = (): string => DateTime.formatIso(DateTime.makeUnsafe(currentTimeMillis()));
 
-export const currentDate = (): Date => DateTime.toDate(DateTime.makeUnsafe(currentTimeMillis()));
+const currentDate = (): Date => DateTime.toDate(DateTime.makeUnsafe(currentTimeMillis()));
 
-export const dateFromMillis = (value: string | number | Date): Date =>
+const dateFromMillis = (value: string | number | Date): Date =>
   DateTime.toDate(DateTime.makeUnsafe(value));
 
-export const isoFromMillis = (value: string | number | Date): string =>
+const isoFromMillis = (value: string | number | Date): string =>
   DateTime.formatIso(DateTime.makeUnsafe(value));
 
-export const awaited = <A>(value: A | PromiseLike<A>): Effect.Effect<A> =>
+const awaited = <A>(value: A | PromiseLike<A>): Effect.Effect<A> =>
   Effect.promise(() => Promise.resolve(value));
 
-export const failure = <A, E>(effect: Effect.Effect<A, E>): Effect.Effect<unknown> =>
+const failure = <A, E>(effect: Effect.Effect<A, E>): Effect.Effect<unknown> =>
   Effect.exit(effect).pipe(
     Effect.flatMap((exit) =>
       Exit.isSuccess(exit)
@@ -38,32 +41,26 @@ export const failure = <A, E>(effect: Effect.Effect<A, E>): Effect.Effect<unknow
     ),
   );
 
-export const abortController = (): AbortController => new AbortController();
+const abortController = (): AbortController => new AbortController();
 
-export interface DeferredPromise<A> {
-  readonly promise: Promise<A>;
-  readonly resolve: (value: A) => void;
-  readonly reject: (error: unknown) => void;
-}
-
-export const deferredPromise = <A>(): DeferredPromise<A> => {
+const deferredPromise = <A>(): effectSupportTypes.DeferredPromise<A> => {
   const deferred = Deferred.makeUnsafe<A>();
   return {
     promise: Deferred.await(deferred).pipe(Effect.runPromise),
-    resolve: (value) => {
-      Deferred.doneUnsafe(deferred, Effect.succeed(value));
-    },
     reject: (error) => {
       Deferred.doneUnsafe(deferred, Effect.die(error));
+    },
+    resolve: (value) => {
+      Deferred.doneUnsafe(deferred, Effect.succeed(value));
     },
   };
 };
 
-export const neverPromise = <A = never>(): Promise<A> => Effect.runPromise(Effect.never);
+const neverPromise = <A = never>(): Promise<A> => Effect.runPromise(Effect.never);
 
-export const sleep = (duration: Duration.Input): Effect.Effect<void> => Effect.sleep(duration);
+const sleep = (duration: Duration.Input): Effect.Effect<void> => Effect.sleep(duration);
 
-export const pollUntil = Effect.fn("pollUntil")(function* (
+const pollUntil = Effect.fn("pollUntil")(function* (
   check: Effect.Effect<boolean>,
   attempts: number,
   interval: Duration.Input,
@@ -74,23 +71,39 @@ export const pollUntil = Effect.fn("pollUntil")(function* (
   }
 });
 
-export const randomSuffix: Effect.Effect<string> = provideNode(
+const randomSuffix: Effect.Effect<string> = provideNode(
   Crypto.Crypto.use((crypto) => crypto.randomUUIDv4),
 ).pipe(
   Effect.orDie,
   Effect.map((uuid) => uuid.replaceAll("-", "").slice(0, 12)),
 );
 
-export interface Gate extends Promise<void> {
-  readonly release: () => void;
-}
-
-export const gate = (): Gate => {
+const gate = (): effectSupportTypes.Gate => {
   const deferred = Deferred.makeUnsafe<void>();
-  const promise = testRuntime.runPromise(Deferred.await(deferred));
+  const promise = runTest(Deferred.await(deferred));
   return Object.assign(promise, {
     release: () => Deferred.doneUnsafe(deferred, Effect.void),
   });
 };
 
-export const randomSuffixSync = (): string => testRuntime.runSync(randomSuffix);
+const randomSuffixSync = (): string => runTestSync(randomSuffix);
+
+const effectSupport = {
+  abortController,
+  awaited,
+  currentDate,
+  currentTimeMillis,
+  dateFromMillis,
+  deferredPromise,
+  failure,
+  gate,
+  isoFromMillis,
+  neverPromise,
+  nowIso,
+  pollUntil,
+  randomSuffix,
+  randomSuffixSync,
+  sleep,
+};
+
+export default effectSupport;

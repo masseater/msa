@@ -1,12 +1,17 @@
 import type { Models } from "@msa/ai";
-import { deferredPromise } from "@msa/testing";
+import testing from "@msa/testing";
 import { Effect } from "effect";
 import { afterEach, describe, expect, it, vi } from "vite-plus/test";
 
 import type { Model } from "../../../../../libs/ai/src/model-types.ts";
 import type { Api } from "../../../../../libs/ai/src/types.ts";
 import { ModelRuntime } from "../../../src/core/model-runtime.ts";
-import { createHarness, type Harness } from "../harness.ts";
+import harnessModule from "../harness.ts";
+import type harnessTypes from "../harness.types.ts";
+
+const { createHarness } = harnessModule;
+
+const { deferredPromise } = testing;
 
 interface Deferred {
   promise: Promise<void>;
@@ -25,12 +30,12 @@ function createDeferred(): Deferred {
   const deferred = deferredPromise<void>();
   return {
     promise: deferred.promise,
-    resolve: () => deferred.resolve(undefined),
     reject: (error) => deferred.reject(error),
+    resolve: () => deferred.resolve(undefined),
   };
 }
 
-function stallNextCredentialList(harness: Harness): StalledCredentialList {
+function stallNextCredentialList(harness: harnessTypes.Harness): StalledCredentialList {
   const originalList = harness.authStorage.list.bind(harness.authStorage);
   const started = createDeferred();
   const gate = createDeferred();
@@ -51,16 +56,16 @@ function stallNextCredentialList(harness: Harness): StalledCredentialList {
     );
 
   return {
-    started: started.promise,
-    release: gate.resolve,
     fail: gate.reject,
     getCallCount: () => callCount,
+    release: gate.resolve,
+    started: started.promise,
   };
 }
 
 function waitForRecoveryRefresh(
   stalledList: StalledCredentialList,
-  harness: Harness,
+  harness: harnessTypes.Harness,
 ): Promise<void> {
   return Effect.runPromise(
     Effect.gen(function* () {
@@ -71,7 +76,7 @@ function waitForRecoveryRefresh(
   );
 }
 
-let harness!: Harness;
+let harness!: harnessTypes.Harness;
 
 let stalledList!: StalledCredentialList;
 
@@ -81,8 +86,8 @@ const recoversWithoutLettingTheStalledRefresh = Effect.gen(function* () {
   yield* Effect.promise(() =>
     harness.authStorage.modify("stale-provider", () =>
       Promise.resolve({
-        type: "api_key",
         key: "stale-key",
+        type: "api_key",
       }),
     ),
   );
@@ -98,16 +103,16 @@ const recoversWithoutLettingTheStalledRefresh = Effect.gen(function* () {
   yield* Effect.promise(() =>
     harness.authStorage.modify("current-provider", () =>
       Promise.resolve({
-        type: "api_key",
         key: "current-key",
+        type: "api_key",
       }),
     ),
   );
   yield* Effect.promise(() => waitForRecoveryRefresh(stalledList, harness));
-  return yield* recoversWithoutLettingTheStalledRefreshPart2(runtime, staleRefresh);
+  return yield* recoversWithoutLettingTheStalledRefreshStep1(runtime, staleRefresh);
 });
 
-const recoversWithoutLettingTheStalledRefreshPart2 = (
+const recoversWithoutLettingTheStalledRefreshStep1 = (
   runtime: ModelRuntime,
   staleRefresh: Promise<readonly Model<Api>[]>,
 ) =>
@@ -176,15 +181,28 @@ const doesNotLetAStaleProvider = Effect.gen(function* () {
   expect(runtime.getError()).toBeUndefined();
 });
 
+const recoversWithoutLettingTheStalledRefreshOverwrite = () =>
+  Effect.runPromise(recoversWithoutLettingTheStalledRefresh);
+
+const doesNotLetAStaleFailureOverwrite = () => Effect.runPromise(doesNotLetAStaleFailure);
+
+const doesNotLetAStaleProviderScoped = () => Effect.runPromise(doesNotLetAStaleProvider);
+
 describe("issue #7301 stalled availability refresh", () => {
   afterEach(() => {
     stalledList?.release();
     harness?.cleanup();
   });
-  it("recovers without letting the stalled refresh overwrite the newer snapshot", () =>
-    Effect.runPromise(recoversWithoutLettingTheStalledRefresh));
-  it("does not let a stale failure overwrite newer availability error state", () =>
-    Effect.runPromise(doesNotLetAStaleFailure));
-  it("does not let a stale provider-scoped failure overwrite a newer availability pass", () =>
-    Effect.runPromise(doesNotLetAStaleProvider));
+  it(
+    "recovers without letting the stalled refresh overwrite the newer snapshot",
+    recoversWithoutLettingTheStalledRefreshOverwrite,
+  );
+  it(
+    "does not let a stale failure overwrite newer availability error state",
+    doesNotLetAStaleFailureOverwrite,
+  );
+  it(
+    "does not let a stale provider-scoped failure overwrite a newer availability pass",
+    doesNotLetAStaleProviderScoped,
+  );
 });

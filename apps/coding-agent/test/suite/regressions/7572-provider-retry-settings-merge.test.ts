@@ -8,8 +8,8 @@ const preservesGlobalProviderSettingsNotOverridden = () => {
     JSON.stringify({
       retry: {
         provider: {
-          timeoutMs: 30000,
           maxRetryDelayMs: 45000,
+          timeoutMs: 30000,
         },
       },
     }),
@@ -27,9 +27,9 @@ const preservesGlobalProviderSettingsNotOverridden = () => {
   const settingsManager = SettingsManager.fromStorage(storage);
 
   expect(settingsManager.getProviderRetrySettings()).toEqual({
-    timeoutMs: 30000,
     maxRetries: 2,
     maxRetryDelayMs: 45000,
+    timeoutMs: 30000,
   });
 };
 

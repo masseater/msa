@@ -1,8 +1,10 @@
-import { awaited, runTest } from "@msa/testing";
+import testing from "@msa/testing";
 import { Effect } from "effect";
 import { describe, expect, it, vi } from "vite-plus/test";
 
 import { InteractiveMode } from "../src/modes/interactive/interactive-mode.ts";
+
+const { awaited, runTest } = testing;
 
 type CloneCommandContext = {
   sessionManager: { getLeafId: () => string | null };
@@ -39,12 +41,12 @@ describe("InteractiveMode /clone", () => {
         const requestRender = vi.fn();
 
         const context: CloneCommandContext = {
-          sessionManager: { getLeafId: () => "leaf-123" },
-          runtimeHost: { fork },
-          renderCurrentSessionState,
           editor: { setText },
-          showStatus,
+          renderCurrentSessionState,
+          runtimeHost: { fork },
+          sessionManager: { getLeafId: () => "leaf-123" },
           showError,
+          showStatus,
           ui: { requestRender },
         };
 
@@ -58,7 +60,9 @@ describe("InteractiveMode /clone", () => {
         expect(requestRender).not.toHaveBeenCalled();
       }),
     ));
+});
 
+describe("InteractiveMode /clone", () => {
   it("shows a status message when there is nothing to clone", () =>
     runTest(
       Effect.gen(function* () {
@@ -69,12 +73,12 @@ describe("InteractiveMode /clone", () => {
         const showError = vi.fn();
 
         const context: CloneCommandContext = {
-          sessionManager: { getLeafId: () => null },
-          runtimeHost: { fork },
-          renderCurrentSessionState: vi.fn(),
           editor: { setText: vi.fn() },
-          showStatus,
+          renderCurrentSessionState: vi.fn(),
+          runtimeHost: { fork },
+          sessionManager: { getLeafId: () => null },
           showError,
+          showStatus,
           ui: { requestRender: vi.fn() },
         };
 

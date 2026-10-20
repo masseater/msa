@@ -1,42 +1,37 @@
-import { Deferred, Effect } from "effect";
-export const nodeFs = process.getBuiltinModule("node:fs");
-
 import { normalizeContext } from "@msa/ai";
 import type { Api, Model } from "@msa/ai/compat";
+import { Deferred, Effect } from "effect";
 
-export const openAiModel: Model<Api> = {
-  id: "test-openai-model",
-  name: "Test OpenAI Model",
+import type modelRegistrySupportTypes from "./model-registry-support.types.ts";
+
+const openAiModel: Model<Api> = {
   api: "openai-completions",
-  provider: "openai",
   baseUrl: "https://api.openai.com/v1",
-  reasoning: false,
-  input: ["text"],
-  cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0 },
   contextWindow: 128000,
+  cost: { cacheRead: 0, cacheWrite: 0, input: 0, output: 0 },
+  id: "test-openai-model",
+  input: ["text"],
   maxTokens: 4096,
+  name: "Test OpenAI Model",
+  provider: "openai",
+  reasoning: false,
 };
 
-export const emptyContext = normalizeContext({
+const emptyContext = normalizeContext({
   messages: [],
 });
 
-export interface Gate {
-  readonly promise: Effect.Effect<void>;
-  open(): void;
-}
-
-export const makeGate = (): Gate => {
+const makeGate = (): modelRegistrySupportTypes.Gate => {
   const deferred = Deferred.makeUnsafe<void>();
   return {
-    promise: Deferred.await(deferred),
     open: () => {
       Effect.runSync(Deferred.succeed(deferred, undefined));
     },
+    promise: Deferred.await(deferred),
   };
 };
 
-export const captureThrown = (run: () => void): unknown => {
+const captureThrown = (run: () => void): unknown => {
   try {
     run();
   } catch (error) {
@@ -44,3 +39,12 @@ export const captureThrown = (run: () => void): unknown => {
   }
   return undefined;
 };
+
+const modelRegistrySupport = {
+  captureThrown,
+  emptyContext,
+  makeGate,
+  openAiModel,
+};
+
+export default modelRegistrySupport;

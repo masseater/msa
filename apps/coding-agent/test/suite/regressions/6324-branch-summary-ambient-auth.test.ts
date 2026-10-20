@@ -1,12 +1,18 @@
 import { createAssistantMessageEventStream } from "@msa/ai";
-import { currentTimeMillis } from "@msa/testing";
+import testing from "@msa/testing";
 import { Effect } from "effect";
 import { afterEach, describe, expect, it } from "vite-plus/test";
 
-import { assistantMsg, userMsg } from "../../utilities.ts";
-import { createHarness, type Harness } from "../harness.ts";
+import utilities from "../../utilities.ts";
+import harnessModule from "../harness.ts";
+import type harnessTypes from "../harness.types.ts";
 
-const harnesses: Harness[] = [];
+const { createHarness } = harnessModule;
+const { assistantMsg, userMsg } = utilities;
+
+const { currentTimeMillis } = testing;
+
+const harnesses: harnessTypes.Harness[] = [];
 
 const summarizesTreeBranchesWhenRequestAuth = Effect.gen(function* () {
   const harness = yield* Effect.promise(() => createHarness({ withConfiguredAuth: false }));
@@ -19,25 +25,25 @@ const summarizesTreeBranchesWhenRequestAuth = Effect.gen(function* () {
 
     const stream = createAssistantMessageEventStream();
     stream.push({
-      type: "done",
-      reason: "stop",
       message: {
-        role: "assistant",
-        content: [{ type: "text", text: "branch summary text" }],
         api: model.api,
-        provider: model.provider,
+        content: [{ text: "branch summary text", type: "text" }],
         model: model.id,
-        usage: {
-          input: 1,
-          output: 1,
-          cacheRead: 0,
-          cacheWrite: 0,
-          totalTokens: 2,
-          cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0, total: 0.25 },
-        },
+        provider: model.provider,
+        role: "assistant",
         stopReason: "stop",
         timestamp: currentTimeMillis(),
+        usage: {
+          cacheRead: 0,
+          cacheWrite: 0,
+          cost: { cacheRead: 0, cacheWrite: 0, input: 0, output: 0, total: 0.25 },
+          input: 1,
+          output: 1,
+          totalTokens: 2,
+        },
       },
+      reason: "stop",
+      type: "done",
     });
     return stream;
   };
@@ -58,12 +64,19 @@ const summarizesTreeBranchesWhenRequestAuth = Effect.gen(function* () {
   expect(result.summaryEntry?.usage?.cost.total).toBe(0.25);
 });
 
+const summarizesTreeBranchesWhenRequestAuthHas = () =>
+  Effect.runPromise(summarizesTreeBranchesWhenRequestAuth);
+
+const afterEachHook = () => {
+  while (harnesses.length > 0) {
+    harnesses.pop()?.cleanup();
+  }
+};
+
 describe("issue #6324 branch summary ambient auth", () => {
-  afterEach(() => {
-    while (harnesses.length > 0) {
-      harnesses.pop()?.cleanup();
-    }
-  });
-  it("summarizes tree branches when request auth has no API key", () =>
-    Effect.runPromise(summarizesTreeBranchesWhenRequestAuth));
+  afterEach(afterEachHook);
+  it(
+    "summarizes tree branches when request auth has no API key",
+    summarizesTreeBranchesWhenRequestAuthHas,
+  );
 });

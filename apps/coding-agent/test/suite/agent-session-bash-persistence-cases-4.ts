@@ -4,17 +4,18 @@ import { Effect } from "effect";
 import { Type } from "typebox";
 import { expect } from "vite-plus/test";
 
-import { harnesses } from "./agent-session-bash-persistence-cases-1.ts";
-import { persistsUserAssistantToolresultAndCustomPart2 } from "./agent-session-bash-persistence-cases-3.ts";
-import { createHarness } from "./harness.ts";
+import agentSessionBashPersistenceCases1 from "./agent-session-bash-persistence-cases-1.ts";
+import agentSessionBashPersistenceCases3 from "./agent-session-bash-persistence-cases-3.ts";
+import harnessModule from "./harness.ts";
 
-export const persistsUserAssistantToolresultAndCustom = Effect.gen(function* () {
+const { createHarness } = harnessModule;
+const { harnesses } = agentSessionBashPersistenceCases1;
+const { persistsUserAssistantToolresultAndCustomPart2 } = agentSessionBashPersistenceCases3;
+
+const persistsUserAssistantToolresultAndCustom = Effect.gen(function* () {
   const runPromise = Effect.runPromiseWith(yield* Effect.context<never>());
   const echoTool: AgentTool = {
-    name: "echo",
-    label: "Echo",
     description: "Echo text back",
-    parameters: Type.Object({ text: Type.String() }),
     execute: (_toolCallId, params) =>
       runPromise(
         Effect.sync(() => {
@@ -22,9 +23,12 @@ export const persistsUserAssistantToolresultAndCustom = Effect.gen(function* () 
             typeof params === "object" && params !== null && "text" in params
               ? String(params.text)
               : "";
-          return { content: [{ type: "text", text: `echo:${text}` }], details: { text } };
+          return { content: [{ text: `echo:${text}`, type: "text" }], details: { text } };
         }),
       ),
+    label: "Echo",
+    name: "echo",
+    parameters: Type.Object({ text: Type.String() }),
   };
   const harness = yield* Effect.promise(() => createHarness({ tools: [echoTool] }));
   harnesses.push(harness);
@@ -36,7 +40,7 @@ export const persistsUserAssistantToolresultAndCustom = Effect.gen(function* () 
   ]);
   return yield* persistsUserAssistantToolresultAndCustomPart2(harness);
 });
-export const doesNotEmitMessageEndFor = Effect.gen(function* () {
+const doesNotEmitMessageEndFor = Effect.gen(function* () {
   const harness = yield* Effect.promise(() => createHarness());
   harnesses.push(harness);
   const messageEndRoles: string[] = [];
@@ -47,11 +51,18 @@ export const doesNotEmitMessageEndFor = Effect.gen(function* () {
   });
 
   harness.session.recordBashResult("echo hi", {
-    output: "hi",
-    exitCode: 0,
     cancelled: false,
+    exitCode: 0,
+    output: "hi",
     truncated: false,
   });
 
   expect(messageEndRoles).toEqual([]);
 });
+
+const agentSessionBashPersistenceCases4 = {
+  doesNotEmitMessageEndFor,
+  persistsUserAssistantToolresultAndCustom,
+};
+
+export default agentSessionBashPersistenceCases4;

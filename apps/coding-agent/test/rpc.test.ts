@@ -1,10 +1,14 @@
 import type { AgentEvent } from "@msa/agent-core";
-import { awaited, currentTimeMillis, joinPath, pathExists, runTest } from "@msa/testing";
+import testing from "@msa/testing";
 import { Effect } from "effect";
 import { describe, expect, test } from "vite-plus/test";
 
 import { readEnv } from "../src/core/process-env.ts";
-import { readSessionEntries, withClient } from "./rpc-support.ts";
+import rpcSupport from "./rpc-support.ts";
+
+const { readSessionEntries, withClient } = rpcSupport;
+
+const { awaited, currentTimeMillis, joinPath, pathExists, runTest } = testing;
 
 describe.skipIf(
   readEnv("ANTHROPIC_API_KEY") === undefined && readEnv("ANTHROPIC_OAUTH_TOKEN") === undefined,
@@ -27,7 +31,11 @@ describe.skipIf(
       ),
     30000,
   );
+});
 
+describe.skipIf(
+  readEnv("ANTHROPIC_API_KEY") === undefined && readEnv("ANTHROPIC_OAUTH_TOKEN") === undefined,
+)("RPC mode", () => {
   test(
     "should save messages to session file",
     () =>
@@ -60,7 +68,11 @@ describe.skipIf(
       ),
     90000,
   );
+});
 
+describe.skipIf(
+  readEnv("ANTHROPIC_API_KEY") === undefined && readEnv("ANTHROPIC_OAUTH_TOKEN") === undefined,
+)("RPC mode", () => {
   test(
     "should handle manual compaction",
     () =>
@@ -87,7 +99,11 @@ describe.skipIf(
       ),
     120000,
   );
+});
 
+describe.skipIf(
+  readEnv("ANTHROPIC_API_KEY") === undefined && readEnv("ANTHROPIC_OAUTH_TOKEN") === undefined,
+)("RPC mode", () => {
   test(
     "should execute bash command",
     () =>
@@ -103,7 +119,11 @@ describe.skipIf(
       ),
     30000,
   );
+});
 
+describe.skipIf(
+  readEnv("ANTHROPIC_API_KEY") === undefined && readEnv("ANTHROPIC_OAUTH_TOKEN") === undefined,
+)("RPC mode", () => {
   test(
     "should add bash output to context",
     () =>
@@ -130,7 +150,11 @@ describe.skipIf(
       ),
     90000,
   );
+});
 
+describe.skipIf(
+  readEnv("ANTHROPIC_API_KEY") === undefined && readEnv("ANTHROPIC_OAUTH_TOKEN") === undefined,
+)("RPC mode", () => {
   test(
     "should include bash output in LLM context",
     () =>

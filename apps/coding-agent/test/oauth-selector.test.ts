@@ -1,4 +1,4 @@
-import { awaited, runTest } from "@msa/testing";
+import testing from "@msa/testing";
 import { setKeybindings } from "@msa/tui";
 import { beforeAll, beforeEach, describe, expect, it } from "vite-plus/test";
 
@@ -7,6 +7,142 @@ import { OAuthSelectorComponent } from "../src/modes/interactive/components/oaut
 import { LoginFlow, type LoginFlowHost } from "../src/modes/interactive/login-flow.ts";
 import { initTheme } from "../src/modes/interactive/theme/theme.ts";
 import { stripAnsi } from "../src/utils/ansi.ts";
+
+const { awaited, runTest } = testing;
+
+const projectsProviderOwnedAuthOptionsWithoutProvider = () => {
+  const providers = [
+    {
+      auth: {
+        apiKey: { login: () => runTest(awaited({})), name: "Anthropic API key" },
+        oauth: { login: () => runTest(awaited({})), name: "Anthropic (Claude Pro/Max)" },
+      },
+      id: "anthropic",
+      name: "Anthropic",
+    },
+    {
+      auth: { apiKey: { name: "OpenCode API key" } },
+      id: "opencode",
+      name: "OpenCode Zen",
+    },
+  ];
+  const loginFlow = new LoginFlow({
+    session: {
+      modelRuntime: {
+        getProviderAuthStatus: () => ({ configured: false }),
+        getProviders: () => providers,
+        isUsingOAuth: () => false,
+      },
+    },
+  } as unknown as LoginFlowHost);
+
+  const apiKeyOptions = loginFlow.getProviderOptions("api_key");
+  expect(apiKeyOptions).toMatchObject([
+    {
+      authType: "api_key",
+      id: "anthropic",
+      method: { name: "Anthropic API key" },
+      name: "Anthropic",
+    },
+    {
+      authType: "api_key",
+      id: "opencode",
+      method: { name: "OpenCode API key" },
+      name: "OpenCode Zen",
+    },
+  ]);
+  expect(loginFlow.getProviderOptions("oauth")).toMatchObject([
+    { authType: "oauth", id: "anthropic", name: "Anthropic" },
+  ]);
+};
+
+const rendersAnOptionWithoutCompiledAuthStatus = () => {
+  const selector = new OAuthSelectorComponent(
+    "login",
+    [{ authType: "api_key", id: "opencode", name: "OpenCode Zen" }],
+    () => {},
+    () => {},
+  );
+
+  const output = stripAnsi(selector.render(120).join("\n"));
+  expect(output).toContain("not configured");
+  expect(output).not.toContain("✓ configured");
+};
+
+const showsOauthAuthDistinctlyInTheApi = () => {
+  const selector = new OAuthSelectorComponent(
+    "login",
+    [
+      {
+        authType: "api_key",
+        id: "anthropic",
+        name: "Anthropic",
+        status: { source: "OAuth", type: "oauth" },
+      },
+    ],
+    () => {},
+    () => {},
+  );
+
+  const output = stripAnsi(selector.render(120).join("\n"));
+  expect(output).toContain("subscription configured");
+};
+
+const showsEnvironmentApiKeyAuthAsConfigured = () => {
+  const selector = new OAuthSelectorComponent(
+    "login",
+    [
+      {
+        authType: "api_key",
+        id: "openai",
+        name: "OpenAI",
+        status: { source: "OPENAI_API_KEY", type: "api_key" },
+      },
+    ],
+    () => {},
+    () => {},
+  );
+
+  const output = stripAnsi(selector.render(120).join("\n"));
+  expect(output).toContain("✓ env: OPENAI_API_KEY");
+  expect(output).not.toContain("not configured");
+};
+
+const showsModelsJsonApiKeyAuthAs = () => {
+  const selector = new OAuthSelectorComponent(
+    "login",
+    [
+      {
+        authType: "api_key",
+        id: "local-proxy",
+        name: "local-proxy",
+        status: { source: "key in models.json", type: "api_key" },
+      },
+    ],
+    () => {},
+    () => {},
+  );
+
+  expect(stripAnsi(selector.render(120).join("\n"))).toContain("✓ key in models.json");
+};
+
+const showsModelsJsonCommandAuthAsConfigured = () => {
+  const selector = new OAuthSelectorComponent(
+    "login",
+    [
+      {
+        authType: "api_key",
+        id: "op-proxy",
+        name: "op-proxy",
+        status: { source: "command in models.json", type: "api_key" },
+      },
+    ],
+    () => {},
+    () => {},
+  );
+
+  expect(stripAnsi(selector.render(120).join("\n"))).toContain("✓ command in models.json");
+};
 
 describe("OAuthSelectorComponent", () => {
   beforeAll(() => {
@@ -17,137 +153,21 @@ describe("OAuthSelectorComponent", () => {
     setKeybindings(new KeybindingsManager());
   });
 
-  it("projects provider-owned auth options without provider-specific filtering", () => {
-    const providers = [
-      {
-        id: "anthropic",
-        name: "Anthropic",
-        auth: {
-          oauth: { name: "Anthropic (Claude Pro/Max)", login: () => runTest(awaited({})) },
-          apiKey: { name: "Anthropic API key", login: () => runTest(awaited({})) },
-        },
-      },
-      {
-        id: "opencode",
-        name: "OpenCode Zen",
-        auth: { apiKey: { name: "OpenCode API key" } },
-      },
-    ];
-    const loginFlow = new LoginFlow({
-      session: {
-        modelRuntime: {
-          getProviders: () => providers,
-          getProviderAuthStatus: () => ({ configured: false }),
-          isUsingOAuth: () => false,
-        },
-      },
-    } as unknown as LoginFlowHost);
+  it(
+    "projects provider-owned auth options without provider-specific filtering",
+    projectsProviderOwnedAuthOptionsWithoutProvider,
+  );
 
-    const apiKeyOptions = loginFlow.getProviderOptions("api_key");
-    expect(apiKeyOptions).toMatchObject([
-      {
-        id: "anthropic",
-        name: "Anthropic",
-        authType: "api_key",
-        method: { name: "Anthropic API key" },
-      },
-      {
-        id: "opencode",
-        name: "OpenCode Zen",
-        authType: "api_key",
-        method: { name: "OpenCode API key" },
-      },
-    ]);
-    expect(loginFlow.getProviderOptions("oauth")).toMatchObject([
-      { id: "anthropic", name: "Anthropic", authType: "oauth" },
-    ]);
-  });
+  it(
+    "renders an option without compiled auth status as not configured",
+    rendersAnOptionWithoutCompiledAuthStatus,
+  );
 
-  it("renders an option without compiled auth status as not configured", () => {
-    const selector = new OAuthSelectorComponent(
-      "login",
-      [{ id: "opencode", name: "OpenCode Zen", authType: "api_key" }],
-      () => {},
-      () => {},
-    );
+  it("shows OAuth auth distinctly in the API key selector", showsOauthAuthDistinctlyInTheApi);
 
-    const output = stripAnsi(selector.render(120).join("\n"));
-    expect(output).toContain("not configured");
-    expect(output).not.toContain("✓ configured");
-  });
+  it("shows environment API key auth as configured", showsEnvironmentApiKeyAuthAsConfigured);
 
-  it("shows OAuth auth distinctly in the API key selector", () => {
-    const selector = new OAuthSelectorComponent(
-      "login",
-      [
-        {
-          id: "anthropic",
-          name: "Anthropic",
-          authType: "api_key",
-          status: { type: "oauth", source: "OAuth" },
-        },
-      ],
-      () => {},
-      () => {},
-    );
+  it("shows models.json API key auth as configured", showsModelsJsonApiKeyAuthAs);
 
-    const output = stripAnsi(selector.render(120).join("\n"));
-    expect(output).toContain("subscription configured");
-  });
-
-  it("shows environment API key auth as configured", () => {
-    const selector = new OAuthSelectorComponent(
-      "login",
-      [
-        {
-          id: "openai",
-          name: "OpenAI",
-          authType: "api_key",
-          status: { type: "api_key", source: "OPENAI_API_KEY" },
-        },
-      ],
-      () => {},
-      () => {},
-    );
-
-    const output = stripAnsi(selector.render(120).join("\n"));
-    expect(output).toContain("✓ env: OPENAI_API_KEY");
-    expect(output).not.toContain("not configured");
-  });
-
-  it("shows models.json API key auth as configured", () => {
-    const selector = new OAuthSelectorComponent(
-      "login",
-      [
-        {
-          id: "local-proxy",
-          name: "local-proxy",
-          authType: "api_key",
-          status: { type: "api_key", source: "key in models.json" },
-        },
-      ],
-      () => {},
-      () => {},
-    );
-
-    expect(stripAnsi(selector.render(120).join("\n"))).toContain("✓ key in models.json");
-  });
-
-  it("shows models.json command auth as configured", () => {
-    const selector = new OAuthSelectorComponent(
-      "login",
-      [
-        {
-          id: "op-proxy",
-          name: "op-proxy",
-          authType: "api_key",
-          status: { type: "api_key", source: "command in models.json" },
-        },
-      ],
-      () => {},
-      () => {},
-    );
-
-    expect(stripAnsi(selector.render(120).join("\n"))).toContain("✓ command in models.json");
-  });
+  it("shows models.json command auth as configured", showsModelsJsonCommandAuthAsConfigured);
 });

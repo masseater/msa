@@ -1,17 +1,22 @@
 import type { Api, Model } from "@msa/ai";
-import { neverPromise } from "@msa/testing";
+import testing from "@msa/testing";
 import { Effect } from "effect";
 import { afterEach, describe, expect, it, vi } from "vite-plus/test";
 
 import { InteractiveMode } from "../../../src/modes/interactive/interactive-mode.ts";
-import { createHarness, type Harness } from "../harness.ts";
+import harnessModule from "../harness.ts";
+import type harnessTypes from "../harness.types.ts";
+
+const { createHarness } = harnessModule;
+
+const { neverPromise } = testing;
 
 const findExactModelMatch = Reflect.get(InteractiveMode.prototype, "findExactModelMatch") as (
   this: object,
   searchTerm: string,
 ) => Promise<Model<Api> | undefined>;
 
-let harness!: Harness;
+let harness!: harnessTypes.Harness;
 
 const matchesTheAvailabilitySnapshotWithoutStarting = Effect.gen(function* () {
   harness = yield* Effect.promise(() =>
@@ -50,13 +55,19 @@ const usesACallerOwnedDeadlineOnly = Effect.gen(function* () {
   expect(context.showStatus).toHaveBeenCalledWith("Refreshing model catalogs…");
 });
 
+const matchesTheAvailabilitySnapshotWithoutStartingA = () =>
+  Effect.runPromise(matchesTheAvailabilitySnapshotWithoutStarting);
+
+const usesACallerOwnedDeadlineOnlyAfter = () => Effect.runPromise(usesACallerOwnedDeadlineOnly);
+
 describe("issue #7443 /model cached match", () => {
   afterEach(() => {
     harness?.cleanup();
     vi.restoreAllMocks();
   });
-  it("matches the availability snapshot without starting a catalog refresh", () =>
-    Effect.runPromise(matchesTheAvailabilitySnapshotWithoutStarting));
-  it("uses a caller-owned deadline only after a cache miss", () =>
-    Effect.runPromise(usesACallerOwnedDeadlineOnly));
+  it(
+    "matches the availability snapshot without starting a catalog refresh",
+    matchesTheAvailabilitySnapshotWithoutStartingA,
+  );
+  it("uses a caller-owned deadline only after a cache miss", usesACallerOwnedDeadlineOnlyAfter);
 });

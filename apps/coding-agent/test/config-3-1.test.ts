@@ -1,4 +1,11 @@
-import {
+import testing from "@msa/testing";
+import { Effect } from "effect";
+import { afterEach, describe, expect, test, vi } from "vite-plus/test";
+
+import { detectInstallMethod, getSelfUpdateCommand } from "../src/config.ts";
+import { readEnv } from "../src/core/process-env.ts";
+
+const {
   changeMode,
   joinPath,
   makeDirectory,
@@ -7,12 +14,7 @@ import {
   removePath,
   runTest,
   writeTextFile,
-} from "@msa/testing";
-import { Effect } from "effect";
-import { afterEach, describe, expect, test, vi } from "vite-plus/test";
-
-import { detectInstallMethod, getSelfUpdateCommand } from "../src/config.ts";
-import { readEnv } from "../src/core/process-env.ts";
+} = testing;
 
 const execPathDescriptor = Object.getOwnPropertyDescriptor(process, "execPath");
 const originalPath = readEnv("PATH");
@@ -22,8 +24,8 @@ let tempDir: string | undefined;
 
 function setExecPath(value: string): void {
   Object.defineProperty(process, "execPath", {
-    value,
     configurable: true,
+    value,
   });
 }
 
@@ -73,7 +75,7 @@ const createPnpmGlobalInstall = Effect.fn("createPnpmGlobalInstall")(function* (
       "cli.js",
     ),
   );
-  return { root, packageDir };
+  return { packageDir, root };
 });
 
 const createYarnGlobalInstall = Effect.fn("createYarnGlobalInstall")(function* () {
@@ -109,124 +111,138 @@ function createFakeYarnScript(globalDir: string): string {
   return `#!/bin/sh\nif [ "$1" = "global" ] && [ "$2" = "dir" ]; then\n\tprintf '%s\\n' '${escapedGlobalDir}'\n\texit 0\nfi\nexit 1\n`;
 }
 
+const selfUpdatesRenamedPnpmGlobalInstallsBy = () =>
+  runTest(
+    Effect.gen(function* () {
+      yield* createPnpmGlobalInstall();
+      const command = getSelfUpdateCommand(
+        "@mariozechner/pi-coding-agent",
+        undefined,
+        "@new-scope/msa",
+      );
+      expect(detectInstallMethod()).toBe("pnpm");
+      expect(command).toEqual({
+        args: [
+          "install",
+          "-g",
+          "--ignore-scripts",
+          "--config.minimumReleaseAge=0",
+          "@new-scope/msa",
+        ],
+        command: "pnpm",
+        display:
+          "pnpm remove -g @mariozechner/pi-coding-agent && pnpm install -g --ignore-scripts --config.minimumReleaseAge=0 @new-scope/msa",
+        steps: [
+          {
+            args: ["remove", "-g", "@mariozechner/pi-coding-agent"],
+            command: "pnpm",
+            display: "pnpm remove -g @mariozechner/pi-coding-agent",
+          },
+          {
+            args: [
+              "install",
+              "-g",
+              "--ignore-scripts",
+              "--config.minimumReleaseAge=0",
+              "@new-scope/msa",
+            ],
+            command: "pnpm",
+            display: "pnpm install -g --ignore-scripts --config.minimumReleaseAge=0 @new-scope/msa",
+          },
+        ],
+      });
+    }),
+  );
+
+const selfUpdatesPnpmV11GlobalInstallsResolved = () =>
+  runTest(
+    Effect.gen(function* () {
+      const temp = yield* makeTempDir("msa-pnpm11-");
+      const binDir = joinPath(temp, "bin");
+      const root = joinPath(temp, "Library", "pnpm", "global", "v11");
+      const packageName = "@msa/coding-agent";
+      const globalPackageDir = joinPath(root, "11e9a", "node_modules", "@msa", "coding-agent");
+      const storePackageDir = joinPath(
+        temp,
+        "Library",
+        "pnpm",
+        "store",
+        "v11",
+        "links",
+        "@msa",
+        "coding-agent",
+        "0.75.0",
+        "hash",
+        "node_modules",
+        "@msa",
+        "coding-agent",
+      );
+      yield* makeDirectory(globalPackageDir);
+      yield* makeDirectory(storePackageDir);
+      yield* makeDirectory(binDir);
+      yield* writeTextFile(joinPath(globalPackageDir, "package.json"), "{}");
+      const binPath = joinPath(binDir, process.platform === "win32" ? "pnpm.cmd" : "pnpm");
+      yield* writeTextFile(binPath, createFakePnpmScript(root));
+      yield* changeMode(binPath, 0o755);
+      tempDir = temp;
+      vi.stubEnv("PATH", `${binDir}${pathDelimiter}${originalPath ?? ""}`);
+      vi.stubEnv("MSA_PACKAGE_DIR", storePackageDir);
+      process.argv[1] = joinPath(globalPackageDir, "dist", "cli.js");
+      setExecPath(joinPath(storePackageDir, "dist", "cli.js"));
+
+      const command = getSelfUpdateCommand(packageName);
+
+      expect(detectInstallMethod()).toBe("pnpm");
+      expect(command).toEqual({
+        args: ["install", "-g", "--ignore-scripts", "--config.minimumReleaseAge=0", packageName],
+        command: "pnpm",
+        display: `pnpm install -g --ignore-scripts --config.minimumReleaseAge=0 ${packageName}`,
+      });
+    }),
+  );
+
+const selfUpdatesRenamedYarnGlobalInstallsBy = () =>
+  runTest(
+    Effect.gen(function* () {
+      yield* createYarnGlobalInstall();
+      const command = getSelfUpdateCommand(
+        "@mariozechner/pi-coding-agent",
+        undefined,
+        "@new-scope/msa",
+      );
+      expect(detectInstallMethod()).toBe("yarn");
+      expect(command).toEqual({
+        args: ["global", "add", "--ignore-scripts", "@new-scope/msa"],
+        command: "yarn",
+        display:
+          "yarn global remove @mariozechner/pi-coding-agent && yarn global add --ignore-scripts @new-scope/msa",
+        steps: [
+          {
+            args: ["global", "remove", "@mariozechner/pi-coding-agent"],
+            command: "yarn",
+            display: "yarn global remove @mariozechner/pi-coding-agent",
+          },
+          {
+            args: ["global", "add", "--ignore-scripts", "@new-scope/msa"],
+            command: "yarn",
+            display: "yarn global add --ignore-scripts @new-scope/msa",
+          },
+        ],
+      });
+    }),
+  );
+
 describe("detectInstallMethod 1", () => {
-  test("self-updates renamed pnpm global installs by removing the old package first", () =>
-    runTest(
-      Effect.gen(function* () {
-        yield* createPnpmGlobalInstall();
-        const command = getSelfUpdateCommand(
-          "@mariozechner/pi-coding-agent",
-          undefined,
-          "@new-scope/msa",
-        );
-        expect(detectInstallMethod()).toBe("pnpm");
-        expect(command).toEqual({
-          command: "pnpm",
-          args: [
-            "install",
-            "-g",
-            "--ignore-scripts",
-            "--config.minimumReleaseAge=0",
-            "@new-scope/msa",
-          ],
-          display:
-            "pnpm remove -g @mariozechner/pi-coding-agent && pnpm install -g --ignore-scripts --config.minimumReleaseAge=0 @new-scope/msa",
-          steps: [
-            {
-              command: "pnpm",
-              args: ["remove", "-g", "@mariozechner/pi-coding-agent"],
-              display: "pnpm remove -g @mariozechner/pi-coding-agent",
-            },
-            {
-              command: "pnpm",
-              args: [
-                "install",
-                "-g",
-                "--ignore-scripts",
-                "--config.minimumReleaseAge=0",
-                "@new-scope/msa",
-              ],
-              display:
-                "pnpm install -g --ignore-scripts --config.minimumReleaseAge=0 @new-scope/msa",
-            },
-          ],
-        });
-      }),
-    ));
-  test("self-updates pnpm v11 global installs resolved through the store", () =>
-    runTest(
-      Effect.gen(function* () {
-        const temp = yield* makeTempDir("msa-pnpm11-");
-        const binDir = joinPath(temp, "bin");
-        const root = joinPath(temp, "Library", "pnpm", "global", "v11");
-        const packageName = "@msa/coding-agent";
-        const globalPackageDir = joinPath(root, "11e9a", "node_modules", "@msa", "coding-agent");
-        const storePackageDir = joinPath(
-          temp,
-          "Library",
-          "pnpm",
-          "store",
-          "v11",
-          "links",
-          "@msa",
-          "coding-agent",
-          "0.75.0",
-          "hash",
-          "node_modules",
-          "@msa",
-          "coding-agent",
-        );
-        yield* makeDirectory(globalPackageDir);
-        yield* makeDirectory(storePackageDir);
-        yield* makeDirectory(binDir);
-        yield* writeTextFile(joinPath(globalPackageDir, "package.json"), "{}");
-        const binPath = joinPath(binDir, process.platform === "win32" ? "pnpm.cmd" : "pnpm");
-        yield* writeTextFile(binPath, createFakePnpmScript(root));
-        yield* changeMode(binPath, 0o755);
-        tempDir = temp;
-        vi.stubEnv("PATH", `${binDir}${pathDelimiter}${originalPath ?? ""}`);
-        vi.stubEnv("MSA_PACKAGE_DIR", storePackageDir);
-        process.argv[1] = joinPath(globalPackageDir, "dist", "cli.js");
-        setExecPath(joinPath(storePackageDir, "dist", "cli.js"));
-
-        const command = getSelfUpdateCommand(packageName);
-
-        expect(detectInstallMethod()).toBe("pnpm");
-        expect(command).toEqual({
-          command: "pnpm",
-          args: ["install", "-g", "--ignore-scripts", "--config.minimumReleaseAge=0", packageName],
-          display: `pnpm install -g --ignore-scripts --config.minimumReleaseAge=0 ${packageName}`,
-        });
-      }),
-    ));
-  test("self-updates renamed yarn global installs by removing the old package first", () =>
-    runTest(
-      Effect.gen(function* () {
-        yield* createYarnGlobalInstall();
-        const command = getSelfUpdateCommand(
-          "@mariozechner/pi-coding-agent",
-          undefined,
-          "@new-scope/msa",
-        );
-        expect(detectInstallMethod()).toBe("yarn");
-        expect(command).toEqual({
-          command: "yarn",
-          args: ["global", "add", "--ignore-scripts", "@new-scope/msa"],
-          display:
-            "yarn global remove @mariozechner/pi-coding-agent && yarn global add --ignore-scripts @new-scope/msa",
-          steps: [
-            {
-              command: "yarn",
-              args: ["global", "remove", "@mariozechner/pi-coding-agent"],
-              display: "yarn global remove @mariozechner/pi-coding-agent",
-            },
-            {
-              command: "yarn",
-              args: ["global", "add", "--ignore-scripts", "@new-scope/msa"],
-              display: "yarn global add --ignore-scripts @new-scope/msa",
-            },
-          ],
-        });
-      }),
-    ));
+  test(
+    "self-updates renamed pnpm global installs by removing the old package first",
+    selfUpdatesRenamedPnpmGlobalInstallsBy,
+  );
+  test(
+    "self-updates pnpm v11 global installs resolved through the store",
+    selfUpdatesPnpmV11GlobalInstallsResolved,
+  );
+  test(
+    "self-updates renamed yarn global installs by removing the old package first",
+    selfUpdatesRenamedYarnGlobalInstallsBy,
+  );
 });

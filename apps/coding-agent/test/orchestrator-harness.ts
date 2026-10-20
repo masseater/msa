@@ -1,9 +1,9 @@
 import { tmpdir } from "node:os";
-import { join } from "node:path";
 
 import type { AgentMessage, ThinkingLevel } from "@msa/agent-core";
-import { type Api, fauxAssistantMessage, type Model } from "@msa/ai";
+import { type Api, type Model, fauxAssistantMessage } from "@msa/ai";
 import { InMemoryTelemetryContext } from "@msa/telemetry";
+import testing from "@msa/testing";
 import { Effect } from "effect";
 
 import {
@@ -12,25 +12,28 @@ import {
   type OrchestratorReport,
   type WorkerSession,
 } from "../src/core/orchestrator/orchestrator.ts";
+import type orchestratorHarnessTypes from "./orchestrator-harness.types.ts";
+
+const { joinPath } = testing;
 
 function model(provider: string, id: string): Model<Api> {
   return {
-    id,
-    name: id,
     api: "faux",
-    provider,
     baseUrl: "",
-    input: ["text"],
-    cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0 },
-    reasoning: true,
     contextWindow: 200_000,
+    cost: { cacheRead: 0, cacheWrite: 0, input: 0, output: 0 },
+    id,
+    input: ["text"],
     maxTokens: 8192,
+    name: id,
+    provider,
+    reasoning: true,
   };
 }
 
-export const MODELS = [model("sub", "fable"), model("fast", "flash"), model("fast", "tiny")];
+const MODELS = [model("sub", "fable"), model("fast", "flash"), model("fast", "tiny")];
 
-export class FakeWorker implements WorkerSession {
+class FakeWorker implements WorkerSession {
   isStreaming = false;
   messages: AgentMessage[] = [];
   sessionFile: string;
@@ -58,14 +61,14 @@ export class FakeWorker implements WorkerSession {
     this.isStreaming = true;
     const { promise, resolve, reject } = Promise.withResolvers<void>();
     this.pending.push({
+      reject: (error) => {
+        this.isStreaming = false;
+        reject(error);
+      },
       resolve: (reply) => {
         this.messages = [...this.messages, fauxAssistantMessage(reply)];
         this.isStreaming = false;
         resolve();
-      },
-      reject: (error) => {
-        this.isStreaming = false;
-        reject(error);
       },
     });
     return promise;
@@ -104,33 +107,29 @@ export class FakeWorker implements WorkerSession {
   }
 }
 
-export interface HarnessOptions {
-  maxConcurrent?: number;
-  pollIntervalMs?: number | null;
-  runCondition?: (command: string, cwd: string) => Promise<boolean>;
-  databasePath?: string;
-  handoffDirectory?: string;
-  cwd?: string;
-}
-
-function setup(options: HarnessOptions = {}) {
+function setup(options: orchestratorHarnessTypes.HarnessOptions = {}) {
   const workers: FakeWorker[] = [];
   const reports: Array<{ text: string; details: OrchestratorReport }> = [];
   const telemetry = new InMemoryTelemetryContext();
   const orchestrator = new Orchestrator({
-    telemetry,
-    project: "project",
-    cwd: options.cwd ?? "/repo",
-    databasePath: options.databasePath ?? ":memory:",
-    handoffDirectory: options.handoffDirectory ?? join(tmpdir(), "msa-orchestrator-handoffs"),
-    version: "0.0.0-test",
-    pollIntervalMs: options.pollIntervalMs ?? null,
-    runCondition: options.runCondition ?? (() => Promise.resolve(true)),
     createWorker: (workerOptions) => {
       const worker = new FakeWorker(workerOptions, workers.length);
       workers.push(worker);
       return Promise.resolve(worker);
     },
+    cwd: options.cwd ?? "/repo",
+    databasePath: options.databasePath ?? ":memory:",
+    defaults: () => ({
+      maxConcurrentThreads: options.maxConcurrent ?? 4,
+      reviewModel: "sub/fable",
+      reviewThinkingLevel: "high",
+      workerModel: "fast/flash",
+      workerThinkingLevel: "low",
+    }),
+    handoffDirectory: options.handoffDirectory ?? joinPath(tmpdir(), "msa-orchestrator-handoffs"),
+    pollIntervalMs: options.pollIntervalMs ?? null,
+    project: "project",
+    report: (text, details) => reports.push({ details, text }),
     resolveModel: (reference) => {
       const found = MODELS.find(
         (candidate) => `${candidate.provider}/${candidate.id}` === reference,
@@ -138,16 +137,11 @@ function setup(options: HarnessOptions = {}) {
       if (found === undefined) throw new Error(`"${reference}" is not an available model`);
       return found;
     },
-    defaults: () => ({
-      workerModel: "fast/flash",
-      workerThinkingLevel: "low",
-      reviewModel: "sub/fable",
-      reviewThinkingLevel: "high",
-      maxConcurrentThreads: options.maxConcurrent ?? 4,
-    }),
-    report: (text, details) => reports.push({ text, details }),
+    runCondition: options.runCondition ?? (() => Promise.resolve(true)),
+    telemetry,
+    version: "0.0.0-test",
   });
-  return { orchestrator, workers, reports, telemetry };
+  return { orchestrator, reports, telemetry, workers };
 }
 
 function waitFor(predicate: () => boolean, attempts = 10_000): Effect.Effect<void> {
@@ -168,4 +162,12 @@ function reviews(orchestrator: Orchestrator) {
   return orchestrator.snapshot.tasks.filter((task) => task.kind === "review");
 }
 
-export const harness = { model, setup, waitFor, taskStatus, reviews };
+const harness = { model, reviews, setup, taskStatus, waitFor };
+
+const orchestratorHarness = {
+  FakeWorker,
+  MODELS,
+  harness,
+};
+
+export default orchestratorHarness;

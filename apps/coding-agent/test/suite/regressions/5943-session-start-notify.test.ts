@@ -1,245 +1,43 @@
-import { fauxAssistantMessage } from "@msa/ai";
-import { gate } from "@msa/testing";
 import { Container, Text } from "@msa/tui";
 import { Effect } from "effect";
-import { describe, expect, it, vi } from "vite-plus/test";
+import { describe, expect, it } from "vite-plus/test";
 
-import type { AgentSessionEvent } from "../../../src/core/agent-session.ts";
-import { InteractiveMode } from "../../../src/modes/interactive/interactive-mode.ts";
 import { initTheme } from "../../../src/modes/interactive/theme/theme.ts";
-import { createHarness, createTestUiContext } from "../harness.ts";
+import harnessModule from "../harness.ts";
+import SessionStartNotifySupport from "./5943-session-start-notify-support.ts";
+import type SessionStartNotifySupportTypes from "./5943-session-start-notify-support.types.ts";
 
-type LoadedResourcesResult<T> = { [K in keyof T]: T[K] } & { diagnostics: [] };
+const { getMessageText, interactiveModePrototype } = SessionStartNotifySupport;
 
-type LoadedResourcesContext = {
-  loadedResourcesContainer: Container;
-  chatContainer: Container;
-  options: { verbose?: boolean };
-  settingsManager: { getQuietStartup: () => boolean };
-  sessionManager: { getCwd: () => string };
-  session: {
-    promptTemplates: [];
-    resourceLoader: {
-      getAgentsFiles: () => LoadedResourcesResult<{ agentsFiles: Array<{ path: string }> }>;
-      getSystemPromptSource: () => { path: string } | undefined;
-      getAppendSystemPromptSources: () => Array<{ path: string }>;
-      getSkills: () => LoadedResourcesResult<{ skills: [] }>;
-      getPrompts: () => LoadedResourcesResult<{ prompts: [] }>;
-      getThemes: () => LoadedResourcesResult<{ themes: [] }>;
-      getExtensions: () => { extensions: []; errors: [] };
-    };
-    extensionRunner: {
-      getCommandDiagnostics: () => [];
-      getShortcutDiagnostics: () => [];
-      getRegisteredCommands: () => [];
-    };
-  };
-  isStartupExpanded: () => boolean;
-  getStartupVisibility: () => { header: boolean; details: boolean };
-  getBuiltInCommandConflictDiagnostics: (
-    extensionRunner: LoadedResourcesContext["session"]["extensionRunner"],
-  ) => [];
-};
+const { createHarness, createTestUiContext } = harnessModule;
 
-type RebindContext = {
-  unsubscribe?: () => void;
-  applyRuntimeSettings: () => void;
-  programStatus: { reset(): void };
-  renderCurrentSessionState: () => void;
-  bindCurrentSessionExtensions: () => Promise<void>;
-  subscribeToAgent: () => void;
-  updateAvailableProviderCount: () => Promise<void>;
-  updateEditorBorderColor: () => void;
-  updateTerminalTitle: () => void;
-};
-
-type ReloadCommandContext = {
-  hideThinkingBlock: boolean;
-  session: {
-    isStreaming: boolean;
-    isCompacting: boolean;
-    reload: (options?: { beforeSessionStart?: () => void | Promise<void> }) => Promise<void>;
-    resourceLoader: { getThemes: () => { themes: [] } };
-    extensionRunner: unknown;
-    modelRegistry: { getError: () => string | undefined };
-  };
-  settingsManager: {
-    getHttpIdleTimeoutMs: () => number;
-    getHideThinkingBlock: () => boolean;
-    getOutputPad: () => 0 | 1;
-    getEditorPaddingX: () => number;
-    getAutocompleteMaxVisible: () => number;
-    getShowHardwareCursor: () => boolean;
-    getClearOnShrink: () => boolean;
-  };
-  keybindings: { reload: () => void };
-  customHeader?: unknown;
-  builtInHeader?: unknown;
-  editorSlot: { show: (component: unknown) => void };
-  ui: {
-    setFocus: (component: unknown) => void;
-    requestRender: (force?: boolean) => void;
-    setShowHardwareCursor: (enabled: boolean) => void;
-    setClearOnShrink: (enabled: boolean) => void;
-  };
-  editor: unknown;
-  defaultEditor: {
-    setPaddingX: (padding: number) => void;
-    setAutocompleteMaxVisible: (maxVisible: number) => void;
-  };
-  themeController: { applyFromSettings: () => Promise<void> };
-  resetExtensionUI: () => void;
-  rebuildChatFromMessages: () => void;
-  setupAutocompleteProvider: () => void;
-  setupExtensionShortcuts: (runner: unknown) => void;
-  showLoadedResources: (options: unknown) => void;
-  maybeSaveImplicitProjectTrustAfterReload: () => boolean;
-  showStatus: (message: string) => void;
-  showWarning: (message: string) => void;
-  showError: (message: string) => void;
-};
-
-type InteractiveModePrototype = {
-  showLoadedResources(
-    this: LoadedResourcesContext,
-    options?: {
-      extensions?: Array<{ path: string }>;
-      force?: boolean;
-      showDiagnosticsWhenQuiet?: boolean;
-    },
-  ): void;
-  rebindCurrentSession(
-    this: RebindContext,
-    options?: { renderBeforeBind?: boolean },
-  ): Promise<void>;
-  handleReloadCommand(this: ReloadCommandContext): Promise<void>;
-};
-
-const interactiveModePrototype = InteractiveMode.prototype as unknown as InteractiveModePrototype;
-
-type ReloadCommandContextOverrides = Omit<
-  Partial<ReloadCommandContext>,
-  | "session"
-  | "settingsManager"
-  | "keybindings"
-  | "editorSlot"
-  | "ui"
-  | "defaultEditor"
-  | "themeController"
-> & {
-  session?: Partial<ReloadCommandContext["session"]>;
-  settingsManager?: Partial<ReloadCommandContext["settingsManager"]>;
-  keybindings?: Partial<ReloadCommandContext["keybindings"]>;
-  editorSlot?: Partial<ReloadCommandContext["editorSlot"]>;
-  ui?: Partial<ReloadCommandContext["ui"]>;
-  defaultEditor?: Partial<ReloadCommandContext["defaultEditor"]>;
-  themeController?: Partial<ReloadCommandContext["themeController"]>;
-};
-
-function createReloadCommandContext(
-  overrides: ReloadCommandContextOverrides = {},
-): ReloadCommandContext {
-  const editor = overrides.editor ?? {};
-  const ui = {
-    setFocus: () => {},
-    requestRender: () => {},
-    setShowHardwareCursor: () => {},
-    setClearOnShrink: () => {},
-    ...overrides.ui,
-  };
+function createLoadedResourcesContext(): SessionStartNotifySupportTypes.LoadedResourcesContext {
   return {
-    hideThinkingBlock: overrides.hideThinkingBlock ?? false,
-    session: {
-      isStreaming: false,
-      isCompacting: false,
-      reload: (options) => Promise.resolve(options?.beforeSessionStart?.()).then(() => undefined),
-      resourceLoader: { getThemes: () => ({ themes: [] }) },
-      extensionRunner: {},
-      modelRegistry: { getError: () => undefined },
-      ...overrides.session,
-    },
-    settingsManager: {
-      getHttpIdleTimeoutMs: () => 0,
-      getHideThinkingBlock: () => false,
-      getOutputPad: () => 1,
-      getEditorPaddingX: () => 1,
-      getAutocompleteMaxVisible: () => 10,
-      getShowHardwareCursor: () => false,
-      getClearOnShrink: () => false,
-      ...overrides.settingsManager,
-    },
-    keybindings: { reload: () => {}, ...overrides.keybindings },
-    editorSlot: { show: (component) => ui.setFocus(component), ...overrides.editorSlot },
-    ui,
-    editor,
-    defaultEditor: {
-      setPaddingX: () => {},
-      setAutocompleteMaxVisible: () => {},
-      ...overrides.defaultEditor,
-    },
-    themeController: {
-      applyFromSettings: () => Effect.runPromise(Effect.sync(() => {})),
-      ...overrides.themeController,
-    },
-    customHeader: overrides.customHeader,
-    builtInHeader: overrides.builtInHeader,
-    resetExtensionUI: overrides.resetExtensionUI ?? (() => {}),
-    rebuildChatFromMessages: overrides.rebuildChatFromMessages ?? (() => {}),
-    setupAutocompleteProvider: overrides.setupAutocompleteProvider ?? (() => {}),
-    setupExtensionShortcuts: overrides.setupExtensionShortcuts ?? (() => {}),
-    showLoadedResources: overrides.showLoadedResources ?? (() => {}),
-    maybeSaveImplicitProjectTrustAfterReload:
-      overrides.maybeSaveImplicitProjectTrustAfterReload ?? (() => false),
-    showStatus: overrides.showStatus ?? (() => {}),
-    showWarning: overrides.showWarning ?? (() => {}),
-    showError: overrides.showError ?? (() => {}),
-  };
-}
-
-type MessageEvent = Extract<AgentSessionEvent, { type: "message_start" | "message_end" }>;
-
-function getMessageText(event: MessageEvent): string {
-  const message = event.message;
-  if (!("content" in message)) {
-    return "";
-  }
-  const content = message.content;
-  if (typeof content === "string") {
-    return content;
-  }
-  return content
-    .filter((part): part is { type: "text"; text: string } => part.type === "text")
-    .map((part) => part.text)
-    .join("");
-}
-
-function createLoadedResourcesContext(): LoadedResourcesContext {
-  return {
-    loadedResourcesContainer: new Container(),
     chatContainer: new Container(),
+    getBuiltInCommandConflictDiagnostics: () => [],
+    getStartupVisibility: () => ({ details: true, header: true }),
+    isStartupExpanded: () => false,
+    loadedResourcesContainer: new Container(),
     options: { verbose: true },
-    settingsManager: { getQuietStartup: () => false },
-    sessionManager: { getCwd: () => "/repo" },
     session: {
+      extensionRunner: {
+        getCommandDiagnostics: () => [],
+        getRegisteredCommands: () => [],
+        getShortcutDiagnostics: () => [],
+      },
       promptTemplates: [],
       resourceLoader: {
         getAgentsFiles: () => ({ agentsFiles: [{ path: "/repo/AGENTS.md" }], diagnostics: [] }),
-        getSystemPromptSource: () => undefined,
         getAppendSystemPromptSources: () => [],
-        getSkills: () => ({ skills: [], diagnostics: [] }),
-        getPrompts: () => ({ prompts: [], diagnostics: [] }),
-        getThemes: () => ({ themes: [], diagnostics: [] }),
-        getExtensions: () => ({ extensions: [], errors: [] }),
-      },
-      extensionRunner: {
-        getCommandDiagnostics: () => [],
-        getShortcutDiagnostics: () => [],
-        getRegisteredCommands: () => [],
+        getExtensions: () => ({ errors: [], extensions: [] }),
+        getPrompts: () => ({ diagnostics: [], prompts: [] }),
+        getSkills: () => ({ diagnostics: [], skills: [] }),
+        getSystemPromptSource: () => undefined,
+        getThemes: () => ({ diagnostics: [], themes: [] }),
       },
     },
-    isStartupExpanded: () => false,
-    getStartupVisibility: () => ({ header: true, details: true }),
-    getBuiltInCommandConflictDiagnostics: () => [],
+    sessionManager: { getCwd: () => "/repo" },
+    settingsManager: { getQuietStartup: () => false },
   };
 }
 
@@ -279,24 +77,24 @@ const rendersReplacementSessionStateBeforeSession = Effect.gen(function* () {
   );
 
   try {
-    const context: RebindContext = {
+    const context: SessionStartNotifySupportTypes.RebindContext = {
       applyRuntimeSettings: () => events.push("apply"),
-      programStatus: { reset: () => {} },
-      renderCurrentSessionState: () => events.push("render"),
       bindCurrentSessionExtensions: () =>
         runPromise(
           Effect.gen(function* () {
             events.push("bind");
             yield* Effect.promise(() =>
               harness.session.bindExtensions({
+                mode: "tui",
                 uiContext: createTestUiContext({
                   notify: (message) => events.push(`notify:${message}`),
                 }),
-                mode: "tui",
               }),
             );
           }),
         ),
+      programStatus: { reset: () => {} },
+      renderCurrentSessionState: () => events.push("render"),
       subscribeToAgent: () => events.push("subscribe"),
       updateAvailableProviderCount: () => runPromise(Effect.sync(() => {})),
       updateEditorBorderColor: () => {},
@@ -313,42 +111,49 @@ const rendersReplacementSessionStateBeforeSession = Effect.gen(function* () {
   }
 });
 
-const subscribesBeforeReplacementSessionStartHandlers = Effect.gen(function* () {
-  const runPromise = Effect.runPromiseWith(yield* Effect.context<never>());
-  const events: string[] = [];
-  const harness = yield* Effect.promise(() =>
-    createHarness({
-      extensionFactories: [
-        (msa) => {
-          msa.on("session_start", () => {
-            msa.sendMessage({
-              customType: "session-start",
-              content: "custom from start",
-              display: true,
+const subscribesBeforeReplacementSessionStartHandlersPart1 = () =>
+  Effect.gen(function* () {
+    const runPromise = Effect.runPromiseWith(yield* Effect.context<never>());
+    const events: string[] = [];
+    const harness = yield* Effect.promise(() =>
+      createHarness({
+        extensionFactories: [
+          (msa) => {
+            msa.on("session_start", () => {
+              msa.sendMessage({
+                content: "custom from start",
+                customType: "session-start",
+                display: true,
+              });
             });
-          });
-        },
-      ],
-    }),
-  );
+          },
+        ],
+      }),
+    );
+    return { events, harness, runPromise };
+  });
+
+const subscribesBeforeReplacementSessionStartHandlers = Effect.gen(function* () {
+  const { events, harness, runPromise } =
+    yield* subscribesBeforeReplacementSessionStartHandlersPart1();
 
   try {
-    const context: RebindContext = {
+    const context: SessionStartNotifySupportTypes.RebindContext = {
       applyRuntimeSettings: () => {},
-      programStatus: { reset: () => {} },
-      renderCurrentSessionState: () => events.push("render"),
       bindCurrentSessionExtensions: () =>
         runPromise(
           Effect.gen(function* () {
             events.push("bind");
             yield* Effect.promise(() =>
               harness.session.bindExtensions({
-                uiContext: createTestUiContext(),
                 mode: "tui",
+                uiContext: createTestUiContext(),
               }),
             );
           }),
         ),
+      programStatus: { reset: () => {} },
+      renderCurrentSessionState: () => events.push("render"),
       subscribeToAgent: () => {
         events.push("subscribe");
         harness.session.subscribe((event) => {
@@ -379,190 +184,25 @@ const subscribesBeforeReplacementSessionStartHandlers = Effect.gen(function* () 
   }
 });
 
-const subscribesBeforeReplacementSessionStartHandlers2 = Effect.gen(function* () {
-  const runPromise = Effect.runPromiseWith(yield* Effect.context<never>());
-  const events: string[] = [];
-  const harness = yield* Effect.promise(() =>
-    createHarness({
-      extensionFactories: [
-        (msa) => {
-          msa.on("session_start", () => {
-            msa.sendUserMessage("user from start");
-          });
-        },
-      ],
-    }),
-  );
-  harness.setResponses([fauxAssistantMessage("assistant from start")]);
+const rendersReplacementSessionStateBeforeSessionStart = () =>
+  Effect.runPromise(rendersReplacementSessionStateBeforeSession);
 
-  try {
-    const context: RebindContext = {
-      applyRuntimeSettings: () => {},
-      programStatus: { reset: () => {} },
-      renderCurrentSessionState: () => events.push("render"),
-      bindCurrentSessionExtensions: () =>
-        runPromise(
-          Effect.gen(function* () {
-            events.push("bind");
-            yield* Effect.promise(() =>
-              harness.session.bindExtensions({
-                uiContext: createTestUiContext(),
-                mode: "tui",
-              }),
-            );
-          }),
-        ),
-      subscribeToAgent: () => {
-        events.push("subscribe");
-        harness.session.subscribe((event) => {
-          if (event.type !== "message_start" && event.type !== "message_end") {
-            return;
-          }
-          events.push(`${event.type}:${event.message.role}:${getMessageText(event)}`);
-        });
-      },
-      updateAvailableProviderCount: () => runPromise(Effect.sync(() => {})),
-      updateEditorBorderColor: () => {},
-      updateTerminalTitle: () => {},
-    };
-
-    yield* Effect.promise(() =>
-      interactiveModePrototype.rebindCurrentSession.call(context, { renderBeforeBind: true }),
-    );
-    yield* Effect.promise(() => harness.session.agent.waitForIdle());
-
-    expect(events.slice(0, 3)).toEqual(["render", "subscribe", "bind"]);
-    expect(events).toContain("message_start:user:user from start");
-    expect(events).toContain("message_end:user:user from start");
-    expect(events).toContain("message_end:assistant:assistant from start");
-  } finally {
-    harness.cleanup();
-  }
-});
-
-const runsTheReloadRenderHookBefore = Effect.gen(function* () {
-  const events: string[] = [];
-  const beforeSessionStart = vi.fn(() => {
-    events.push("render");
-  });
-  const harness = yield* Effect.promise(() =>
-    createHarness({
-      extensionFactories: [
-        (msa) => {
-          msa.on("session_start", (event, ctx) => {
-            events.push(`start:${event.reason}`);
-            ctx.ui.notify(`notify:${event.reason}`, "error");
-          });
-        },
-      ],
-    }),
-  );
-
-  try {
-    yield* Effect.promise(() =>
-      harness.session.bindExtensions({
-        uiContext: createTestUiContext({ notify: (message) => events.push(message) }),
-        mode: "tui",
-      }),
-    );
-    expect(events).toEqual(["start:startup", "notify:startup"]);
-
-    events.length = 0;
-    yield* Effect.promise(() => harness.session.reload({ beforeSessionStart }));
-
-    expect(beforeSessionStart).toHaveBeenCalledTimes(1);
-    expect(events).toEqual(["render", "start:reload", "notify:reload"]);
-  } finally {
-    harness.cleanup();
-  }
-});
-
-const refreshesHidethinkingblockBeforeRebuildingChatDuring = Effect.gen(function* () {
-  const runPromise = Effect.runPromiseWith(yield* Effect.context<never>());
-  initTheme("dark", false);
-  const events: string[] = [];
-  let context: ReloadCommandContext;
-  context = createReloadCommandContext({
-    settingsManager: { getHideThinkingBlock: () => true },
-    session: {
-      reload: (options) =>
-        runPromise(
-          Effect.gen(function* () {
-            events.push("reload");
-            yield* Effect.promise(() => Promise.resolve(options?.beforeSessionStart?.()));
-            events.push(`start:${context.hideThinkingBlock}`);
-          }),
-        ),
-    },
-    rebuildChatFromMessages: () => {
-      events.push(`rebuild:${context.hideThinkingBlock}`);
-    },
-  });
-
-  yield* Effect.promise(() => interactiveModePrototype.handleReloadCommand.call(context));
-
-  expect(context.hideThinkingBlock).toBe(true);
-  expect(events).toEqual(["reload", "rebuild:true", "start:true"]);
-});
-
-const keepsTheReloadBlockerFocusedUntil = Effect.gen(function* () {
-  const runPromise = Effect.runPromiseWith(yield* Effect.context<never>());
-  initTheme("dark", false);
-  const editor = {};
-  let focused: unknown;
-  let chatRestored = false;
-  const reloadWaiting = gate();
-  const reloadFinished = gate();
-
-  const context = createReloadCommandContext({
-    editor,
-    session: {
-      reload: (options) =>
-        runPromise(
-          Effect.gen(function* () {
-            yield* Effect.promise(() => Promise.resolve(options?.beforeSessionStart?.()));
-            reloadWaiting.release();
-            yield* Effect.promise(() => reloadFinished);
-          }),
-        ),
-    },
-    ui: {
-      setFocus: (component) => {
-        focused = component;
-      },
-    },
-    rebuildChatFromMessages: () => {
-      chatRestored = true;
-    },
-  });
-
-  const reloadPromise = interactiveModePrototype.handleReloadCommand.call(context);
-  yield* Effect.promise(() => reloadWaiting);
-
-  expect(chatRestored).toBe(true);
-  expect(focused).not.toBe(editor);
-
-  reloadFinished.release();
-  yield* Effect.promise(() => reloadPromise);
-
-  expect(focused).toBe(editor);
-});
+const subscribesBeforeReplacementSessionStartHandlersSend = () =>
+  Effect.runPromise(subscribesBeforeReplacementSessionStartHandlers);
 
 describe("regression #5943: session_start transient UI", () => {
   it(
     "renders loaded resources before restored messages without stale entries",
     rendersLoadedResourcesBeforeRestoredMessages,
   );
-  it("renders replacement session state before session_start handlers can notify", () =>
-    Effect.runPromise(rendersReplacementSessionStateBeforeSession));
-  it("subscribes before replacement session_start handlers send messages", () =>
-    Effect.runPromise(subscribesBeforeReplacementSessionStartHandlers));
-  it("subscribes before replacement session_start handlers send user messages", () =>
-    Effect.runPromise(subscribesBeforeReplacementSessionStartHandlers2));
-  it("runs the reload render hook before reload session_start handlers can notify", () =>
-    Effect.runPromise(runsTheReloadRenderHookBefore));
-  it("refreshes hideThinkingBlock before rebuilding chat during reload", () =>
-    Effect.runPromise(refreshesHidethinkingblockBeforeRebuildingChatDuring));
-  it("keeps the reload blocker focused until async reload completes", () =>
-    Effect.runPromise(keepsTheReloadBlockerFocusedUntil));
+
+  it(
+    "renders replacement session state before session_start handlers can notify",
+    rendersReplacementSessionStateBeforeSessionStart,
+  );
+
+  it(
+    "subscribes before replacement session_start handlers send messages",
+    subscribesBeforeReplacementSessionStartHandlersSend,
+  );
 });

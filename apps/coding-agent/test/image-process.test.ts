@@ -1,9 +1,11 @@
-import { awaited, runTest } from "@msa/testing";
+import testing from "@msa/testing";
 import { Effect } from "effect";
 import { describe, expect, it } from "vite-plus/test";
 
 import { processImage } from "../src/utils/image-process.ts";
 import { detectSupportedImageMimeType } from "../src/utils/mime.ts";
+
+const { awaited, runTest } = testing;
 
 function createTinyBmp1x1Red24bpp(): Buffer {
   const buffer = Buffer.alloc(58);
@@ -29,42 +31,51 @@ function expectPngMagic(base64Data: string): void {
   expect(buffer[3]).toBe(0x47);
 }
 
+const detectsBmpFilesFromMagicBytes = () => {
+  expect(detectSupportedImageMimeType(createTinyBmp1x1Red24bpp())).toBe("image/bmp");
+};
+
+const convertsBmpFilesToPngAttachmentsWhen = () =>
+  runTest(
+    Effect.gen(function* () {
+      const result = yield* awaited(
+        processImage(createTinyBmp1x1Red24bpp(), "image/bmp", {
+          autoResizeImages: false,
+        }),
+      );
+
+      expect(result.ok).toBe(true);
+      if (!result.ok) return;
+      expect(result.mimeType).toBe("image/png");
+      expect(result.hints).toContain("[Image converted from image/bmp to image/png.]");
+      expectPngMagic(result.data);
+    }),
+  );
+
+const convertsBmpFilesBeforeAutoResizing = () =>
+  runTest(
+    Effect.gen(function* () {
+      const result = yield* awaited(processImage(createTinyBmp1x1Red24bpp(), "image/bmp"));
+
+      expect(result.ok).toBe(true);
+      if (!result.ok) return;
+      expect(result.mimeType).toBe("image/png");
+      expect(result.hints).toContain("[Image converted from image/bmp to image/png.]");
+      expectPngMagic(result.data);
+    }),
+  );
+
 describe("image processing pipeline", () => {
   it.each(["GIF87a", "GIF89a"])("detects the complete %s signature", (signature) => {
     expect(detectSupportedImageMimeType(Buffer.from(signature, "ascii"))).toBe("image/gif");
   });
 
-  it("detects BMP files from magic bytes", () => {
-    expect(detectSupportedImageMimeType(createTinyBmp1x1Red24bpp())).toBe("image/bmp");
-  });
+  it("detects BMP files from magic bytes", detectsBmpFilesFromMagicBytes);
 
-  it("converts BMP files to PNG attachments when auto-resize is disabled", () =>
-    runTest(
-      Effect.gen(function* () {
-        const result = yield* awaited(
-          processImage(createTinyBmp1x1Red24bpp(), "image/bmp", {
-            autoResizeImages: false,
-          }),
-        );
+  it(
+    "converts BMP files to PNG attachments when auto-resize is disabled",
+    convertsBmpFilesToPngAttachmentsWhen,
+  );
 
-        expect(result.ok).toBe(true);
-        if (!result.ok) return;
-        expect(result.mimeType).toBe("image/png");
-        expect(result.hints).toContain("[Image converted from image/bmp to image/png.]");
-        expectPngMagic(result.data);
-      }),
-    ));
-
-  it("converts BMP files before auto-resizing", () =>
-    runTest(
-      Effect.gen(function* () {
-        const result = yield* awaited(processImage(createTinyBmp1x1Red24bpp(), "image/bmp"));
-
-        expect(result.ok).toBe(true);
-        if (!result.ok) return;
-        expect(result.mimeType).toBe("image/png");
-        expect(result.hints).toContain("[Image converted from image/bmp to image/png.]");
-        expectPngMagic(result.data);
-      }),
-    ));
+  it("converts BMP files before auto-resizing", convertsBmpFilesBeforeAutoResizing);
 });

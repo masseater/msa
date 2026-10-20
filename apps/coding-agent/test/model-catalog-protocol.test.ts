@@ -1,25 +1,24 @@
-import type { AddressInfo } from "node:net";
-
 import { InMemoryCredentialStore } from "@msa/ai";
-import { awaited, runTest } from "@msa/testing";
+import testing from "@msa/testing";
 import { Effect } from "effect";
 import { afterAll, beforeAll, describe, expect, it, vi } from "vite-plus/test";
 
 import { VERSION } from "../src/config.ts";
 import { ModelRuntime } from "../src/core/model-runtime.ts";
-import {
-  getModelCatalogProviderKey,
+import modelCatalogProtocol from "./model-catalog-protocol.ts";
+import type modelCatalogProtocolTypes from "./model-catalog-protocol.types.ts";
+import testNetworkEnv from "./test-network-env.ts";
+
+const {
   MODEL_CATALOG_INDEX_KEY,
-  type ModelCatalogIndex,
+  getModelCatalogProviderKey,
   parseModelCatalogIndex,
   parseModelCatalogRequest,
   selectModelCatalog,
-} from "./model-catalog-protocol.ts";
-import { allowNetwork } from "./test-network-env.ts";
+} = modelCatalogProtocol;
+const { allowNetwork } = testNetworkEnv;
 
-const nodeHttp = process.getBuiltinModule("node:http");
-
-type CatalogServer = ReturnType<typeof nodeHttp.createServer>;
+const { awaited, closeServers, listen, runTest } = testing;
 
 const legacyRevision = `sha256-${"a".repeat(64)}`;
 const mixedApiRevision = `sha256-${"b".repeat(64)}`;
@@ -27,14 +26,14 @@ const modelId = "anthropic/claude-sonnet-5";
 
 const lastModified = "Thu, 01 Jan 2099 00:00:00 GMT";
 const commonModel = {
+  contextWindow: 200_000,
+  cost: { cacheRead: 0.3, cacheWrite: 3.75, input: 3, output: 15 },
   id: modelId,
+  input: ["text"],
+  maxTokens: 64_000,
   name: "Claude Sonnet 5",
   provider: "openrouter",
   reasoning: true,
-  input: ["text"],
-  cost: { input: 3, output: 15, cacheRead: 0.3, cacheWrite: 3.75 },
-  contextWindow: 200_000,
-  maxTokens: 64_000,
 };
 const legacyModel = {
   ...commonModel,
@@ -47,13 +46,13 @@ const mixedApiModel = {
   baseUrl: "https://openrouter.ai/api",
 };
 
-const index: ModelCatalogIndex = {
-  schemaVersion: 1,
-  defaultRevision: mixedApiRevision,
+const index: modelCatalogProtocolTypes.ModelCatalogIndex = {
   catalogs: [
     { minimumPiVersion: "0.80.7", revision: legacyRevision },
     { minimumPiVersion: "0.85.0", revision: mixedApiRevision },
   ],
+  defaultRevision: mixedApiRevision,
+  schemaVersion: 1,
 };
 
 const objects = new Map<string, unknown>([
@@ -69,129 +68,120 @@ const objects = new Map<string, unknown>([
   ],
 ]);
 
-const startCatalogServer = (requests: string[]): Effect.Effect<CatalogServer, Error> =>
-  Effect.callback((resume) => {
-    const server = nodeHttp.createServer((request, response) => {
-      const url = new URL(request.url ?? "/", `http://${request.headers.host}`);
-      requests.push(`${url.pathname}${url.search}`);
-      const provider = /^\/api\/models\/providers\/([^/]+)$/u.exec(url.pathname)?.[1];
-      const catalogRequest = parseModelCatalogRequest(url, request.headers["user-agent"]);
-      if (provider === undefined) {
-        response.writeHead(404).end();
-      } else if (catalogRequest.kind === "redirect") {
-        response
-          .writeHead(307, { location: catalogRequest.location, "cache-control": "no-store" })
-          .end();
-      } else if (catalogRequest.kind === "invalid") {
-        response.writeHead(400).end(catalogRequest.error);
-      } else {
-        const catalog = selectModelCatalog(
-          parseModelCatalogIndex(objects.get(MODEL_CATALOG_INDEX_KEY)),
-          catalogRequest.piVersion,
-        );
-        const body =
-          catalog === undefined
-            ? undefined
-            : (objects.get(
-                getModelCatalogProviderKey(
-                  catalog.revision,
-                  provider,
-                  catalogRequest.representation,
-                ),
-              ) ?? objects.get(getModelCatalogProviderKey(catalog.revision, provider, "legacy")));
-        if (catalog === undefined || body === undefined) {
-          response.writeHead(404).end();
-        } else {
-          response
-            .writeHead(200, {
-              "content-type": "application/json",
-              "last-modified": lastModified,
-              "x-pi-model-catalog-revision": catalog.revision,
-            })
-            .end(JSON.stringify(body));
-        }
-      }
+const catalogBody = (
+  provider: string,
+  request: {
+    piVersion: string | undefined;
+    representation: modelCatalogProtocolTypes.ModelCatalogRepresentation;
+  },
+) => {
+  const catalog = selectModelCatalog(
+    parseModelCatalogIndex(objects.get(MODEL_CATALOG_INDEX_KEY)),
+    request.piVersion,
+  );
+  if (catalog === undefined) return undefined;
+  const body =
+    objects.get(getModelCatalogProviderKey(catalog.revision, provider, request.representation)) ??
+    objects.get(getModelCatalogProviderKey(catalog.revision, provider, "legacy"));
+  return body === undefined ? undefined : { body, revision: catalog.revision };
+};
+
+const catalogResponse = (request: Request): Response => {
+  const url = new URL(request.url);
+  const provider = /^\/api\/models\/providers\/([^/]+)$/u.exec(url.pathname)?.[1];
+  const catalogRequest = parseModelCatalogRequest(
+    url,
+    request.headers.get("user-agent") ?? undefined,
+  );
+  if (provider === undefined) return new Response(null, { status: 404 });
+  if (catalogRequest.kind === "redirect")
+    return new Response(null, {
+      headers: { "cache-control": "no-store", location: catalogRequest.location },
+      status: 307,
     });
-    server.once("error", (error) => resume(Effect.fail(error)));
-    server.listen(0, "127.0.0.1", () => resume(Effect.succeed(server)));
+  if (catalogRequest.kind === "invalid") return new Response(catalogRequest.error, { status: 400 });
+  const found = catalogBody(provider, catalogRequest);
+  if (found === undefined) return new Response(null, { status: 404 });
+  return Response.json(found.body, {
+    headers: { "last-modified": lastModified, "x-pi-model-catalog-revision": found.revision },
   });
+};
 
-const closeCatalogServer = (server: CatalogServer): Effect.Effect<void, Error> =>
-  Effect.callback((resume) => {
-    server.close((error) => resume(error === undefined ? Effect.void : Effect.fail(error)));
-  });
-
-describe("model catalog protocol with the current client", () => {
-  const requests: string[] = [];
-  let server: CatalogServer;
-  let catalogBaseUrl: string;
-
-  beforeAll(() =>
-    runTest(
-      Effect.gen(function* () {
-        server = yield* startCatalogServer(requests);
-        catalogBaseUrl = `http://127.0.0.1:${(server.address() as AddressInfo).port}`;
-      }),
-    ),
+const startCatalogServer = (requests: string[]) =>
+  listen((request) =>
+    Effect.sync(() => {
+      const url = new URL(request.url);
+      requests.push(`${url.pathname}${url.search}`);
+      return catalogResponse(request);
+    }),
   );
 
-  afterAll(() => runTest(closeCatalogServer(server)));
+const requests2: string[] = [];
+
+let catalogBaseUrl: string;
+
+const partPart1 = () =>
+  Effect.gen(function* () {
+    allowNetwork();
+    const runtime = yield* awaited(
+      ModelRuntime.create({
+        catalogBaseUrl,
+        credentials: new InMemoryCredentialStore(),
+        modelsPath: null,
+        refreshOnCreate: false,
+      }),
+    );
+    return { runtime };
+  });
+
+const beforeAllHook = Effect.gen(function* () {
+  catalogBaseUrl = yield* startCatalogServer(requests2);
+});
+
+const captureProviderUrl = Effect.fn("captureProviderUrl")(function* (
+  runtime: ModelRuntime,
+  model: NonNullable<ReturnType<ModelRuntime["getModel"]>>,
+) {
+  const captured: { url?: URL } = {};
+  vi.stubGlobal("fetch", (input: Parameters<typeof fetch>[0], init?: RequestInit) => {
+    captured.url = new URL(new Request(input, init).url);
+    throw new Error("Provider request captured");
+  });
+  yield* awaited(
+    runtime.completeSimple(
+      model,
+      { messages: [{ content: "Hello", role: "user", timestamp: 0 }] },
+      { apiKey: "test-key", maxRetries: 0 },
+    ),
+  ).pipe(Effect.ensuring(Effect.sync(() => vi.unstubAllGlobals())));
+  return captured.url;
+});
+
+const negotiatesTheCatalogForItsVersion = Effect.gen(function* () {
+  const { runtime } = yield* partPart1();
+  yield* awaited(runtime.setRuntimeApiKey("openrouter", "test-key"));
+  const refresh = yield* awaited(
+    runtime.refresh({ allowNetwork: true, force: true, providers: ["openrouter"] }),
+  );
+  expect([...refresh.errors]).toEqual([]);
+  const catalogUrl = "/api/models/providers/openrouter?types=chat%2Cimage%2Cclassifier";
+  expect(requests2).toEqual([catalogUrl, `${catalogUrl}&pi-version=${VERSION}`]);
+  const expectedModel =
+    selectModelCatalog(index, VERSION)?.revision === legacyRevision ? legacyModel : mixedApiModel;
+  const model = runtime.getModel("openrouter", modelId);
+  expect(model).toMatchObject({ api: expectedModel.api, baseUrl: expectedModel.baseUrl });
+  if (model === undefined) throw new Error(`Missing model: openrouter/${modelId}`);
+  const providerUrl = yield* captureProviderUrl(runtime, model);
+  expect(providerUrl?.pathname).toBe(
+    expectedModel.api === "anthropic-messages" ? "/api/v1/messages" : "/api/v1/chat/completions",
+  );
+});
+
+describe("model catalog protocol with the current client", () => {
+  beforeAll(() => runTest(beforeAllHook));
+
+  afterAll(() => runTest(closeServers));
 
   it("negotiates the catalog for its version and reaches the OpenRouter API", () =>
-    runTest(
-      Effect.gen(function* () {
-        allowNetwork();
-        const runtime = yield* awaited(
-          ModelRuntime.create({
-            credentials: new InMemoryCredentialStore(),
-            modelsPath: null,
-            catalogBaseUrl,
-            refreshOnCreate: false,
-          }),
-        );
-        yield* awaited(runtime.setRuntimeApiKey("openrouter", "test-key"));
-        const refresh = yield* awaited(
-          runtime.refresh({
-            allowNetwork: true,
-            force: true,
-            providers: ["openrouter"],
-          }),
-        );
-        expect([...refresh.errors]).toEqual([]);
-
-        const catalogUrl = "/api/models/providers/openrouter?types=chat%2Cimage%2Cclassifier";
-        expect(requests).toEqual([catalogUrl, `${catalogUrl}&pi-version=${VERSION}`]);
-
-        const expectedModel =
-          selectModelCatalog(index, VERSION)?.revision === legacyRevision
-            ? legacyModel
-            : mixedApiModel;
-        const model = runtime.getModel("openrouter", modelId);
-        expect(model).toMatchObject({ api: expectedModel.api, baseUrl: expectedModel.baseUrl });
-        if (model === undefined) throw new Error(`Missing model: openrouter/${modelId}`);
-
-        let providerUrl: URL | undefined;
-        vi.stubGlobal("fetch", (input: Parameters<typeof fetch>[0], init?: RequestInit) => {
-          const request = new Request(input, init);
-          providerUrl = new URL(request.url);
-          throw new Error("Provider request captured");
-        });
-        try {
-          yield* awaited(
-            runtime.completeSimple(
-              model,
-              { messages: [{ role: "user", content: "Hello", timestamp: 0 }] },
-              { apiKey: "test-key", maxRetries: 0 },
-            ),
-          );
-        } finally {
-          vi.unstubAllGlobals();
-        }
-        expect(providerUrl?.pathname).toBe(
-          expectedModel.api === "anthropic-messages"
-            ? "/api/v1/messages"
-            : "/api/v1/chat/completions",
-        );
-      }),
-    ));
+    runTest(negotiatesTheCatalogForItsVersion));
 });
