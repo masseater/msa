@@ -1,35 +1,15 @@
-import { Cause, Effect, Function } from "effect";
+import { Function } from "effect";
 
-import type {
-  DocumentContent,
-  DocumentId,
-  DocumentRecord,
-  Id,
-  Seq,
-  StorageWrite,
-} from "../../types.ts";
-import {
-  addressParts,
-  type DocumentAction,
-  encodeIndexedString,
-  encodeJson,
-  isCurrentOnly,
-  type RecordIdRow,
-  type TableName,
-} from "./codec.ts";
-import type { SqliteExecutor, SqliteValue } from "./database.ts";
-import { materializeDocument } from "./documents.ts";
-import { recordById } from "./scans.ts";
+import type typesModule from "../../types.types.ts";
+import codec from "./codec.ts";
+import type codecTypes from "./codec.types.ts";
+import type databaseTypes from "./database.ts";
+import documentWrites from "./document-writes.ts";
 
-const run = (executor: SqliteExecutor, sql: string, ...params: SqliteValue[]) =>
-  Effect.promise(() => executor.run(sql, ...params));
+const { CLAIM_ID, applyDocumentActions } = documentWrites;
 
-const CLAIM_ID = "INSERT OR IGNORE INTO record_ids (id, record_type) VALUES (?, ?)";
-
-const claimId = (executor: SqliteExecutor, id: Id<string>, table: TableName) =>
-  run(executor, CLAIM_ID, id, table);
-
-export const sequence: {
+const { encodeIndexedString, encodeJson } = codec;
+const sequence: {
   <T>(step: (item: T) => Promise<void>): (items: Iterable<T>) => Promise<void>;
   <T>(items: Iterable<T>, step: (item: T) => Promise<void>): Promise<void>;
 } = Function.dual(2, <T>(items: Iterable<T>, step: (item: T) => Promise<void>): Promise<void> => {
@@ -39,10 +19,10 @@ export const sequence: {
 });
 
 const checkClaim = (
-  id: Id<string>,
-  table: TableName,
-  existing: TableName | undefined,
-  earlier: TableName | undefined,
+  id: typesModule.Id<string>,
+  table: codecTypes.TableName,
+  existing: codecTypes.TableName | undefined,
+  earlier: codecTypes.TableName | undefined,
 ): void => {
   if (table === "conversation" || table === "entry" || table === "document") {
     if (existing !== undefined) throw new Error(`ID ${id} already belongs to ${existing}`);
@@ -55,27 +35,35 @@ const checkClaim = (
     throw new Error(`ID ${id} is written as two record types`);
 };
 
-export const checkGlobalIds: {
-  (writes: readonly StorageWrite[]): (executor: SqliteExecutor) => Promise<void>;
-  (executor: SqliteExecutor, writes: readonly StorageWrite[]): Promise<void>;
-} = Function.dual(2, (executor: SqliteExecutor, writes: readonly StorageWrite[]) => {
-  const claimed = new Map<Id<string>, TableName>();
-  return sequence(writes, (write) => {
-    if (write.type === "document.change" || write.type === "document.retire") {
-      return Promise.resolve();
-    }
-    const document = write.type === "document.create" || write.type === "document.copy";
-    const table: TableName = document ? "document" : write.type;
-    const id = document ? write.record.id : write.value.id;
-    return executor
-      .get<RecordIdRow>("SELECT record_type FROM record_ids WHERE id = ?", id)
-      .then((row) => {
-        checkClaim(id, table, row?.record_type, claimed.get(id));
-        claimed.set(id, table);
-        return undefined;
-      });
-  });
-});
+const checkGlobalIds: {
+  (
+    writes: readonly typesModule.StorageWrite[],
+  ): (executor: databaseTypes.SqliteExecutor) => Promise<void>;
+  (
+    executor: databaseTypes.SqliteExecutor,
+    writes: readonly typesModule.StorageWrite[],
+  ): Promise<void>;
+} = Function.dual(
+  2,
+  (executor: databaseTypes.SqliteExecutor, writes: readonly typesModule.StorageWrite[]) => {
+    const claimed = new Map<typesModule.Id<string>, codecTypes.TableName>();
+    return sequence(writes, (write) => {
+      if (write.type === "document.change" || write.type === "document.retire") {
+        return Promise.resolve();
+      }
+      const document = write.type === "document.create" || write.type === "document.copy";
+      const table: codecTypes.TableName = document ? "document" : write.type;
+      const id = document ? write.record.id : write.value.id;
+      return executor
+        .get<codecTypes.RecordIdRow>("SELECT record_type FROM record_ids WHERE id = ?", id)
+        .then((row) => {
+          checkClaim(id, table, row?.record_type, claimed.get(id));
+          claimed.set(id, table);
+          return undefined;
+        });
+    });
+  },
+);
 
 const TASK_UPSERT = `INSERT INTO tasks (id, conversation_id, kind, status, abort_requested, background, record)
 						VALUES (?, ?, ?, ?, ?, ?, ?)
@@ -87,7 +75,11 @@ const SUBMISSION_UPSERT = `INSERT INTO submissions (id, conversation_id, request
 						ON CONFLICT(id) DO UPDATE SET conversation_id = excluded.conversation_id,
 						request_id = excluded.request_id, status = excluded.status, record = excluded.record`;
 
-const tableInsert = (executor: SqliteExecutor, write: StorageWrite, seq: Seq) => {
+const tableInsert = (
+  executor: databaseTypes.SqliteExecutor,
+  write: typesModule.StorageWrite,
+  seq: typesModule.Seq,
+) => {
   switch (write.type) {
     case "conversation":
       return executor.run(
@@ -134,165 +126,44 @@ const tableInsert = (executor: SqliteExecutor, write: StorageWrite, seq: Seq) =>
   }
 };
 
-export const applyTableWrite: {
-  (write: StorageWrite, seq: Seq): (executor: SqliteExecutor) => Promise<void>;
-  (executor: SqliteExecutor, write: StorageWrite, seq: Seq): Promise<void>;
-} = Function.dual(3, (executor: SqliteExecutor, write: StorageWrite, seq: Seq) => {
-  switch (write.type) {
-    case "conversation":
-    case "entry":
-    case "task":
-    case "submission":
-      return executor
-        .run(CLAIM_ID, write.value.id, write.type)
-        .then(() => tableInsert(executor, write, seq));
-    case "document.create":
-    case "document.copy":
-    case "document.change":
-    case "document.retire":
-      return Promise.resolve();
-  }
-});
-
-const copiedContent = Effect.fnUntraced(function* (
-  executor: SqliteExecutor,
-  id: DocumentId,
-  action: DocumentAction,
-) {
-  const copy = action.copy;
-  if (copy === undefined) return action.content;
-  return yield* Effect.gen(function* () {
-    const stored = yield* materializeDocument(executor, copy.id, copy.at);
-    if (stored === undefined) throw new Error(`Fork source document ${copy.id} cannot be read`);
-    const create = action.create!;
-    if (
-      stored.record.scope.kind !== "conversation" ||
-      create.scope.kind !== "conversation" ||
-      stored.record.kind !== create.kind ||
-      stored.record.key !== create.key ||
-      stored.record.history !== create.history ||
-      stored.record.fork !== create.fork
-    ) {
-      throw new Error(`Fork source document ${copy.id} does not match the copied record`);
-    }
-    const content: DocumentContent = {
-      kind: "base",
-      version: stored.version,
-      value: stored.value,
-    };
-    return content;
-  }).pipe(
-    Effect.catchCause((cause) =>
-      Effect.die(new Error(`Document copy ${id} was rejected`, { cause: Cause.squash(cause) })),
-    ),
-  );
-});
-
-const insertDocument = Effect.fnUntraced(function* (
-  executor: SqliteExecutor,
-  id: DocumentId,
-  action: DocumentAction & { readonly create: NonNullable<DocumentAction["create"]> },
-  seq: Seq,
-) {
-  const record: DocumentRecord = {
-    ...action.create,
-    createdAt: seq,
-    ...(action.retire ? { retiredAt: seq } : {}),
-  };
-  const parts = addressParts(record);
-  yield* claimId(executor, id, "document");
-  yield* run(
-    executor,
-    `INSERT INTO documents
-						(id, kind, family, key_value, scope_kind, owner_id, created_at, retired_at, record)
-						VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-    id,
-    parts.kind,
-    parts.family,
-    parts.keyValue,
-    parts.scopeKind,
-    parts.ownerId,
-    seq,
-    action.retire ? seq : null,
-    encodeJson(record),
-  );
-  return record;
-});
-
-const writeRevision = Effect.fnUntraced(function* (
-  executor: SqliteExecutor,
-  id: DocumentId,
-  record: DocumentRecord,
-  content: DocumentContent,
-  seq: Seq,
-) {
-  if (content.kind === "base" && isCurrentOnly(record)) {
-    yield* run(executor, "DELETE FROM document_revisions WHERE document_id = ?", id);
-  }
-  yield* run(
-    executor,
-    "INSERT INTO document_revisions (document_id, seq, kind, version, content) VALUES (?, ?, ?, ?, ?)",
-    id,
-    seq,
-    content.kind,
-    content.version,
-    content.kind === "base" ? encodeJson(content.value) : encodeJson(content.ops),
-  );
-});
-
-const retireDocument = Effect.fnUntraced(function* (
-  executor: SqliteExecutor,
-  id: DocumentId,
-  action: DocumentAction,
-  stored: DocumentRecord,
-  seq: Seq,
-) {
-  let record = stored;
-  if (action.create === undefined) {
-    record = { ...record, retiredAt: seq };
-    yield* run(
-      executor,
-      "UPDATE documents SET retired_at = ?, record = ? WHERE id = ?",
-      seq,
-      encodeJson(record),
-      id,
-    );
-  }
-  if (isCurrentOnly(record)) {
-    yield* run(executor, "DELETE FROM document_revisions WHERE document_id = ?", id);
-  }
-});
-
-const applyDocumentAction = Effect.fnUntraced(function* (
-  executor: SqliteExecutor,
-  id: DocumentId,
-  action: DocumentAction,
-  seq: Seq,
-) {
-  const content = yield* copiedContent(executor, id, action);
-  const create = action.create;
-  const record =
-    create === undefined
-      ? (yield* Effect.promise(() => recordById<DocumentRecord>(executor, "documents", id)))!
-      : yield* insertDocument(executor, id, { ...action, create }, seq);
-  if (content !== undefined) yield* writeRevision(executor, id, record, content, seq);
-  if (action.retire) yield* retireDocument(executor, id, action, record, seq);
-});
-
-export const applyDocumentActions: {
+const applyTableWrite: {
   (
-    actions: ReadonlyMap<DocumentId, DocumentAction>,
-    seq: Seq,
-  ): (executor: SqliteExecutor) => Effect.Effect<void>;
+    write: typesModule.StorageWrite,
+    seq: typesModule.Seq,
+  ): (executor: databaseTypes.SqliteExecutor) => Promise<void>;
   (
-    executor: SqliteExecutor,
-    actions: ReadonlyMap<DocumentId, DocumentAction>,
-    seq: Seq,
-  ): Effect.Effect<void>;
+    executor: databaseTypes.SqliteExecutor,
+    write: typesModule.StorageWrite,
+    seq: typesModule.Seq,
+  ): Promise<void>;
 } = Function.dual(
   3,
-  (executor: SqliteExecutor, actions: ReadonlyMap<DocumentId, DocumentAction>, seq: Seq) =>
-    Effect.forEach(actions, ([id, action]) => applyDocumentAction(executor, id, action, seq), {
-      discard: true,
-    }),
+  (
+    executor: databaseTypes.SqliteExecutor,
+    write: typesModule.StorageWrite,
+    seq: typesModule.Seq,
+  ) => {
+    switch (write.type) {
+      case "conversation":
+      case "entry":
+      case "task":
+      case "submission":
+        return executor
+          .run(CLAIM_ID, write.value.id, write.type)
+          .then(() => tableInsert(executor, write, seq));
+      case "document.create":
+      case "document.copy":
+      case "document.change":
+      case "document.retire":
+        return Promise.resolve();
+    }
+  },
 );
+const writesModule = {
+  applyDocumentActions,
+  applyTableWrite,
+  checkGlobalIds,
+  sequence,
+};
+
+export default writesModule;

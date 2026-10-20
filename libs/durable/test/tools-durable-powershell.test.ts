@@ -1,10 +1,12 @@
 import { Effect } from "effect";
 import { afterAll, describe, expect, it } from "vite-plus/test";
 
-import { createPowerShellTool } from "../src/tools/index.ts";
+import toolsModule from "../src/tools/index.ts";
 import effectSupport from "./effect-support.ts";
 import programsEnv from "./tools-programs-env-support.ts";
 import toolsSupport from "./tools-support.ts";
+
+const { createPowerShellTool } = toolsModule;
 
 const { awaited } = effectSupport;
 const { removeTempDirs, run, runFailing } = toolsSupport;

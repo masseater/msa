@@ -1,12 +1,16 @@
-import { ToolResultEntry } from "@msa/durable";
-import { ToolTask } from "@msa/durable/harness";
+import durable from "@msa/durable";
+import harnessModule from "@msa/durable/harness";
 import { Effect } from "effect";
 import { afterEach, describe, expect, it } from "vite-plus/test";
 
-import { CodemodeRunDoc } from "../src/codemode/codemode.ts";
+import codemode from "../src/codemode/codemode.ts";
 import codemodeChatSupport from "./codemode-chat-support.ts";
 import codemodeSupport from "./codemode-support.ts";
 import support from "./support.ts";
+
+const { ToolTask } = harnessModule;
+const { CodemodeRunDoc } = codemode;
+const { ToolResultEntry } = durable;
 
 const { codemodeChat } = codemodeChatSupport;
 const { DONE, openStoredChat, removeDirectories, resultText, script, scriptTask, sqlitePath } =

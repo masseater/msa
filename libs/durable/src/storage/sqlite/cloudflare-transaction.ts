@@ -1,6 +1,6 @@
-import { DurableObjectSqliteExecutor } from "./cloudflare-executor.ts";
+import DurableObjectSqliteExecutor from "./cloudflare-executor.ts";
 
-export class DurableObjectSqliteTransaction extends DurableObjectSqliteExecutor {
+export default class DurableObjectSqliteTransaction extends DurableObjectSqliteExecutor {
   active = true;
 
   protected override check(): void {

@@ -7,23 +7,18 @@ import {
   fauxText,
   fauxToolCall,
 } from "@msa/ai";
-import {
-  type Conversation,
-  type EntryRecord,
-  type Harness,
-  InboxDoc,
-  LiveDoc,
-  defineTool,
-} from "@msa/durable";
+import durable from "@msa/durable";
 import { Effect } from "effect";
 import { dual } from "effect/Function";
 
 import chatSupport from "./chat-support.ts";
-import type chatSupportTypes from "./chat-support.types.ts";
 import effectSupport from "./effect-support.ts";
+import type harnessInputEntriesSupportTypes from "./harness-input-entries-support.types.ts";
 import harnessSupport from "./harness-support.ts";
 import sessionSupport from "./session-support.ts";
 import taskSupport from "./task-support.ts";
+
+const { InboxDoc, LiveDoc, defineTool } = durable;
 
 const { textOf, waitFor } = chatSupport;
 const { awaited } = effectSupport;
@@ -53,7 +48,10 @@ function gated(message: AssistantMessage): {
   return { reached: reached.promise, release: () => gate.resolve(), step };
 }
 
-function holdToolImpl(setup: chatSupportTypes.ChatSetup, gate: PromiseWithResolvers<void>): void {
+function holdToolImpl(
+  setup: harnessInputEntriesSupportTypes.ChatSetup,
+  gate: PromiseWithResolvers<void>,
+): void {
   addTool(
     setup.registry,
     defineTool({
@@ -74,9 +72,9 @@ function holdToolImpl(setup: chatSupportTypes.ChatSetup, gate: PromiseWithResolv
 const holdTool: {
   (
     gate: PromiseWithResolvers<void>,
-  ): (setup: chatSupportTypes.ChatSetup) => ReturnType<typeof holdToolImpl>;
+  ): (setup: harnessInputEntriesSupportTypes.ChatSetup) => ReturnType<typeof holdToolImpl>;
   (
-    setup: chatSupportTypes.ChatSetup,
+    setup: harnessInputEntriesSupportTypes.ChatSetup,
     gate: PromiseWithResolvers<void>,
   ): ReturnType<typeof holdToolImpl>;
 } = dual(2, holdToolImpl);
@@ -97,7 +95,7 @@ const requestLog: {
   (requests: string[][], reply: AssistantMessage): ReturnType<typeof requestLogImpl>;
 } = dual(2, requestLogImpl);
 
-function transcript(entries: readonly EntryRecord[]): unknown[][] {
+function transcript(entries: readonly harnessInputEntriesSupportTypes.EntryRecord[]): unknown[][] {
   return entries
     .filter((entry) => entry.kind !== "msa.system")
     .map((entry) => {
@@ -111,11 +109,17 @@ function transcript(entries: readonly EntryRecord[]): unknown[][] {
     });
 }
 
-const inboxItems = Effect.fn("inboxItems")(function* (harness: Harness, root: Conversation) {
+const inboxItems = Effect.fn("inboxItems")(function* (
+  harness: harnessInputEntriesSupportTypes.Harness,
+  root: harnessInputEntriesSupportTypes.Conversation,
+) {
   return (yield* awaited(harness.snapshot(InboxDoc, root.id, context)))!.items;
 });
 
-const toolRunning = Effect.fn("toolRunning")(function* (harness: Harness, root: Conversation) {
+const toolRunning = Effect.fn("toolRunning")(function* (
+  harness: harnessInputEntriesSupportTypes.Harness,
+  root: harnessInputEntriesSupportTypes.Conversation,
+) {
   yield* waitFor(
     Effect.gen(function* () {
       return (

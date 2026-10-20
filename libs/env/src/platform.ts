@@ -2,7 +2,6 @@ import * as NodePath from "@effect/platform-node/NodePath";
 import * as NodeServices from "@effect/platform-node/NodeServices";
 import {
   Crypto,
-  Data,
   Effect,
   FileSystem,
   type Layer,
@@ -16,6 +15,7 @@ import type { PlatformError } from "effect/PlatformError";
 import { ChildProcess } from "effect/process";
 
 import type platformTypes from "./platform.types.ts";
+import SpawnError from "./spawn-error.ts";
 
 const runtime = ManagedRuntime.make(NodeServices.layer);
 
@@ -72,11 +72,6 @@ const randomUuid: Effect.Effect<string> = withCrypto((crypto) => crypto.randomUU
 
 const sha256Hex = (data: Uint8Array): Effect.Effect<string> =>
   withCrypto((crypto) => Effect.map(crypto.digest("SHA-256", data), Hex.encode));
-
-class SpawnError extends Data.TaggedError("SpawnError")<{
-  readonly message: string;
-  readonly cause: unknown;
-}> {}
 
 const causeMessage = (error: { readonly cause?: unknown; readonly message: string }): string =>
   error.cause instanceof Error ? error.cause.message : error.message;

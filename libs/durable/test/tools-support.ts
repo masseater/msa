@@ -1,19 +1,16 @@
 import type { Context, JsonValue } from "@msa/chord";
 import { BACKGROUND_CONTEXT } from "@msa/chord/context";
-import type {
-  ToolDiagnostic,
-  ToolExecutionApi,
-  ToolExecutionResult,
-  ToolRegistration,
-} from "@msa/durable";
+import type durableTypes from "@msa/durable/index.types";
 import { Cause, Effect, Exit } from "effect";
 import { dual } from "effect/Function";
 
-import { type ExecutionEnv, type FileError, type Result } from "../src/env/index.ts";
-import { NodeExecutionEnv } from "../src/env/node.ts";
+import node from "../src/env/node.ts";
 import effectSupport from "./effect-support.ts";
 import platformSupport from "./platform-support.ts";
+import type toolsSupportTypes from "./tools-support.types.ts";
 import toolsTimeoutEnvSupport from "./tools-timeout-env-support.ts";
+
+const { NodeExecutionEnv } = node;
 
 const { awaited } = effectSupport;
 const { makeTempDir, removeDirs } = platformSupport;
@@ -26,39 +23,41 @@ const createTempDir: Effect.Effect<string> = makeTempDir("msa-durable-tools-").p
 
 const removeTempDirs: Effect.Effect<void> = Effect.suspend(() => removeDirs(tempDirs.splice(0)));
 
-const createEnv: Effect.Effect<NodeExecutionEnv> = Effect.map(
+const createEnv: Effect.Effect<toolsSupportTypes.NodeExecutionEnv> = Effect.map(
   createTempDir,
   (cwd) => new NodeExecutionEnv({ cwd }),
 );
 
-function fakeApi(env: ExecutionEnv | undefined): {
-  api: ToolExecutionApi;
+function fakeApi(env: toolsSupportTypes.ExecutionEnv | undefined): {
+  api: durableTypes.ToolExecutionApi;
   output: string[];
-  diagnostics: ToolDiagnostic[];
+  diagnostics: durableTypes.ToolDiagnostic[];
 } {
   const output: string[] = [];
-  const diagnostics: ToolDiagnostic[] = [];
+  const diagnostics: durableTypes.ToolDiagnostic[] = [];
   const api = {
     agent: () => Promise.resolve({}),
     callId: "call",
     conversationId: 1,
     details: () => Promise.resolve(),
-    diagnostic: (diagnostic: ToolDiagnostic) => diagnostics.push(diagnostic),
+    diagnostic: (diagnostic: durableTypes.ToolDiagnostic) => diagnostics.push(diagnostic),
     env,
     output: (chunk: string | Uint8Array) =>
       output.push(typeof chunk === "string" ? chunk : new TextDecoder().decode(chunk)),
     retainedOutput: () => ({ text: output.join(""), truncated: false }),
     taskId: 1,
-  } as unknown as ToolExecutionApi;
+  } as unknown as durableTypes.ToolExecutionApi;
   return { api, diagnostics, output };
 }
 
 function runImpl(
-  tool: ToolRegistration,
+  tool: durableTypes.ToolRegistration,
   args: JsonValue,
-  env: ExecutionEnv | undefined,
+  env: toolsSupportTypes.ExecutionEnv | undefined,
   context: Context = BACKGROUND_CONTEXT,
-): Promise<ToolExecutionResult & { streamed: string[]; reported: ToolDiagnostic[] }> {
+): Promise<
+  durableTypes.ToolExecutionResult & { streamed: string[]; reported: durableTypes.ToolDiagnostic[] }
+> {
   return Effect.runPromise(
     Effect.gen(function* () {
       const { api, output, diagnostics } = fakeApi(env);
@@ -74,13 +73,13 @@ function runImpl(
 const run: {
   (
     args: JsonValue,
-    env: ExecutionEnv | undefined,
+    env: toolsSupportTypes.ExecutionEnv | undefined,
     context?: Context,
-  ): (tool: ToolRegistration) => ReturnType<typeof runImpl>;
+  ): (tool: durableTypes.ToolRegistration) => ReturnType<typeof runImpl>;
   (
-    tool: ToolRegistration,
+    tool: durableTypes.ToolRegistration,
     args: JsonValue,
-    env: ExecutionEnv | undefined,
+    env: toolsSupportTypes.ExecutionEnv | undefined,
     context?: Context,
   ): ReturnType<typeof runImpl>;
 } = dual(
@@ -89,9 +88,9 @@ const run: {
 );
 
 const runFailing = Effect.fn("runFailing")(function* (
-  tool: ToolRegistration,
+  tool: durableTypes.ToolRegistration,
   args: JsonValue,
-  env: ExecutionEnv,
+  env: toolsSupportTypes.ExecutionEnv,
 ) {
   const { api, output, diagnostics } = fakeApi(env);
   const exit = yield* Effect.exit(awaited(tool.execute(args, api, BACKGROUND_CONTEXT)));
@@ -99,7 +98,7 @@ const runFailing = Effect.fn("runFailing")(function* (
   return { error: Cause.squash(exit.cause) as Error, reported: diagnostics, streamed: output };
 });
 
-function textOutput(result: ToolExecutionResult): string {
+function textOutput(result: durableTypes.ToolExecutionResult): string {
   return (result.output ?? [])
     .flatMap((part) => (part.type === "text" ? [part.text] : []))
     .join("\n");
@@ -121,7 +120,7 @@ class BlockingWriteExecutionEnv extends NodeExecutionEnv {
     path: string,
     content: string | Uint8Array,
     context: Context,
-  ): Promise<Result<void, FileError>> {
+  ): Promise<toolsSupportTypes.Result<void, toolsSupportTypes.FileError>> {
     const superWriteFile = super.writeFile.bind(this);
     return Effect.runPromise(
       Effect.gen({ self: this }, function* () {

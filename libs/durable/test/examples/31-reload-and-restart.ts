@@ -5,10 +5,14 @@ import { fauxAssistantMessage, fauxProvider, fauxToolCall } from "@msa/ai/provid
 import { BACKGROUND_CONTEXT } from "@msa/chord/context";
 import { Console, Effect } from "effect";
 
-import { Harness, createRegistry } from "../../src/harness/index.ts";
-import { ToolResultEntry, defineExtension, defineTool } from "../../src/index.ts";
-import { openNodeSqliteStorage } from "../../src/storage/sqlite/node.ts";
+import harnessModule from "../../src/harness/index.ts";
+import durable from "../../src/index.ts";
+import node from "../../src/storage/sqlite/node.ts";
 import support from "../support.ts";
+
+const { ToolResultEntry, defineExtension, defineTool } = durable;
+const { Harness, createRegistry } = harnessModule;
+const { openNodeSqliteStorage } = node;
 
 const { awaited, joinPath, makeTempDir, removeDir } = support;
 

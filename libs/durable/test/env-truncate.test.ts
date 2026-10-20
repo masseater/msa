@@ -3,9 +3,11 @@ import { fileURLToPath } from "node:url";
 import { Effect } from "effect";
 import { describe, expect, it } from "vite-plus/test";
 
-import { formatSize, truncateHead } from "../src/truncate.ts";
+import truncate from "../src/truncate.ts";
 import effectSupport from "./effect-support.ts";
 import platformSupport from "./platform-support.ts";
+
+const { formatSize, truncateHead } = truncate;
 
 const { fromJsonText, toJsonText } = effectSupport;
 const { runCommandOrFail } = platformSupport;

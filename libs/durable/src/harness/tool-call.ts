@@ -3,15 +3,20 @@ import { validateToolArguments } from "@msa/ai/utils/validation";
 import type { Context, JsonValue } from "@msa/chord";
 import { Cause, Effect, Exit, Function } from "effect";
 
-import { AssistantEntry } from "../entries.ts";
-import { errorMessage } from "../errors.ts";
-import { eachHook, hookResult } from "./bridge.ts";
-import type { ToolRuntime, ToolTaskInput } from "./tool-types.ts";
-import type { Dual2, Dual3, JsonObject, ToolHookCall, ToolRegistration } from "./types.ts";
+import entries from "../entries.ts";
+import errors from "../errors.ts";
+import bridge from "./bridge.ts";
+import type toolCallTypes from "./tool-call.types.ts";
+import type toolTypesModule from "./tool-types.types.ts";
+import type typesModule from "./types.types.ts";
 
-export const resolveTool = Effect.fnUntraced(function* (
-  runtime: ToolRuntime,
-  input: ToolTaskInput,
+const { AssistantEntry } = entries;
+const { errorMessage } = errors;
+const { eachHook, hookResult } = bridge;
+
+const resolveTool = Effect.fnUntraced(function* (
+  runtime: toolTypesModule.ToolRuntime,
+  input: toolTypesModule.ToolTaskInput,
   name: string,
   context: Context,
 ) {
@@ -20,15 +25,15 @@ export const resolveTool = Effect.fnUntraced(function* (
   return tools.find((tool) => tool.name === name);
 });
 
-export const readCall = Effect.fnUntraced(function* (
-  runtime: ToolRuntime,
-  input: ToolTaskInput,
+const readCall = Effect.fnUntraced(function* (
+  runtime: toolTypesModule.ToolRuntime,
+  input: toolTypesModule.ToolTaskInput,
   context: Context,
 ) {
   if (input.kind === "nested")
-    return yield* Effect.succeed<ToolHookCall>({
+    return yield* Effect.succeed<typesModule.ToolHookCall>({
       ...input.call,
-      parent: { taskId: input.parent, callId: input.parentCallId },
+      parent: { callId: input.parentCallId, taskId: input.parent },
     });
   const entry = yield* Effect.promise(() =>
     runtime.entry(AssistantEntry, input.assistant, context),
@@ -45,35 +50,48 @@ export const readCall = Effect.fnUntraced(function* (
     return yield* Effect.die(
       new Error(`Entry ${input.assistant} has no tool call ${input.callId}`),
     );
-  return yield* Effect.succeed<ToolHookCall>(call);
+  return yield* Effect.succeed<typesModule.ToolHookCall>(call);
 });
 
-export type Checked = { readonly args: JsonObject } | { readonly error: string };
-
-export const prepareArguments: Dual2<ToolRegistration, JsonObject, Checked> = Function.dual(
+const prepareArguments: typesModule.Dual2<
+  typesModule.ToolRegistration,
+  typesModule.JsonObject,
+  toolCallTypes.Checked
+> = Function.dual(
   2,
-  (tool: ToolRegistration, args: JsonObject): Checked => {
+  (tool: typesModule.ToolRegistration, args: typesModule.JsonObject): toolCallTypes.Checked => {
     if (tool.prepareArguments === undefined) return { args };
     try {
-      return { args: tool.prepareArguments(args) as JsonObject };
+      return { args: tool.prepareArguments(args) as typesModule.JsonObject };
     } catch (error) {
       return { error: errorMessage(error) };
     }
   },
 );
 
-export const validate: Dual3<ToolRegistration, ToolCall, JsonObject, Checked> = Function.dual(
+const validate: typesModule.Dual3<
+  typesModule.ToolRegistration,
+  ToolCall,
+  typesModule.JsonObject,
+  toolCallTypes.Checked
+> = Function.dual(
   3,
-  (tool: ToolRegistration, call: ToolCall, args: JsonObject): Checked => {
+  (
+    tool: typesModule.ToolRegistration,
+    call: ToolCall,
+    args: typesModule.JsonObject,
+  ): toolCallTypes.Checked => {
     try {
-      return { args: validateToolArguments(tool, { ...call, arguments: args }) as JsonObject };
+      return {
+        args: validateToolArguments(tool, { ...call, arguments: args }) as typesModule.JsonObject,
+      };
     } catch (error) {
       return { error: errorMessage(error) };
     }
   },
 );
 
-export function checkKey(key: string): void {
+function checkKey(key: string): void {
   if (key === "" || key.includes("/") || key === "__proto__" || /^[1-9][0-9]*$/u.test(key)) {
     throw new Error(
       `Nested call key ${JSON.stringify(key)} must be non-empty, without "/", not "__proto__", and not a positive integer`,
@@ -81,7 +99,7 @@ export function checkKey(key: string): void {
   }
 }
 
-export const jsonEqual: Dual2<JsonValue, JsonValue, boolean> = Function.dual(
+const jsonEqual: typesModule.Dual2<JsonValue, JsonValue, boolean> = Function.dual(
   2,
   (a: JsonValue, b: JsonValue): boolean => {
     if (a === b) return true;
@@ -102,10 +120,10 @@ export const jsonEqual: Dual2<JsonValue, JsonValue, boolean> = Function.dual(
   },
 );
 
-export const askHooks = Effect.fnUntraced(function* (
-  runtime: ToolRuntime,
-  call: ToolHookCall,
-  initial: JsonObject,
+const askHooks = Effect.fnUntraced(function* (
+  runtime: toolTypesModule.ToolRuntime,
+  call: typesModule.ToolHookCall,
+  initial: typesModule.JsonObject,
   context: Context,
 ) {
   let args = initial;
@@ -123,7 +141,8 @@ export const askHooks = Effect.fnUntraced(function* (
             }
             const decision = exit.value;
             if (decision?.block !== undefined) block = decision.block;
-            else if (decision?.arguments !== undefined) args = decision.arguments as JsonObject;
+            else if (decision?.arguments !== undefined)
+              args = decision.arguments as typesModule.JsonObject;
             return Effect.void;
           },
         )
@@ -131,3 +150,15 @@ export const askHooks = Effect.fnUntraced(function* (
   );
   return { args, block };
 });
+
+const toolCall = {
+  askHooks,
+  checkKey,
+  jsonEqual,
+  prepareArguments,
+  readCall,
+  resolveTool,
+  validate,
+};
+
+export default toolCall;

@@ -1,5 +1,5 @@
 import type { Context } from "@msa/chord";
-import { type Conversation, type EntryDraft } from "@msa/durable";
+import type durableTypes from "@msa/durable/index.types";
 import { Effect } from "effect";
 import { dual } from "effect/Function";
 
@@ -43,7 +43,7 @@ const count: {
 function randomMessageDraft(
   t: harnessContextConversation3CasesTypes.RandomTranscript,
   pick: number,
-): EntryDraft | undefined {
+): durableTypes.EntryDraft | undefined {
   if (pick < 3) {
     count(t, "user");
     return { kind: "message", model: [user(`u${t.next++}`)] };
@@ -84,7 +84,7 @@ function randomMessageDraft(
 function randomEditDraft(
   t: harnessContextConversation3CasesTypes.RandomTranscript,
   pick: number,
-): EntryDraft {
+): durableTypes.EntryDraft {
   const target = t.written[random(t, t.written.length)];
   if (pick < 12 && target !== undefined) {
     const omit = random(t, 2) === 0;
@@ -102,7 +102,9 @@ function randomEditDraft(
   return { kind: "message", model: [user(`u${t.next++}`)] };
 }
 
-function randomDraft(t: harnessContextConversation3CasesTypes.RandomTranscript): EntryDraft {
+function randomDraft(
+  t: harnessContextConversation3CasesTypes.RandomTranscript,
+): durableTypes.EntryDraft {
   const pick = random(t, 14);
   return randomMessageDraft(t, pick) ?? randomEditDraft(t, pick);
 }
@@ -111,7 +113,7 @@ function appendRandomImpl(
   t: harnessContextConversation3CasesTypes.RandomTranscript,
   runtime: harnessContextSupportTypes.RunRuntime,
   taskContext: Context,
-  conversationId: Conversation["id"],
+  conversationId: durableTypes.Conversation["id"],
 ) {
   return runtime.commit(
     (tx) =>
@@ -132,13 +134,13 @@ const appendRandom: {
   (
     runtime: harnessContextSupportTypes.RunRuntime,
     taskContext: Context,
-    conversationId: Conversation["id"],
+    conversationId: durableTypes.Conversation["id"],
   ): (t: harnessContextConversation3CasesTypes.RandomTranscript) => Promise<void>;
   (
     t: harnessContextConversation3CasesTypes.RandomTranscript,
     runtime: harnessContextSupportTypes.RunRuntime,
     taskContext: Context,
-    conversationId: Conversation["id"],
+    conversationId: durableTypes.Conversation["id"],
   ): Promise<void>;
 } = dual(4, appendRandomImpl);
 

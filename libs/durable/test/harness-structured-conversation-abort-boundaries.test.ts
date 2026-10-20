@@ -1,13 +1,16 @@
-import { type ConversationId, type TaskId } from "@msa/durable";
-import { createSession } from "@msa/durable/session";
-import { MemoryStorage } from "@msa/durable/storage/memory";
+import type durableTypes from "@msa/durable/index.types";
+import sessionModule from "@msa/durable/session";
+import type memoryTypes from "@msa/durable/storage/memory.types";
 import { Effect } from "effect";
 import { afterEach, describe, expect, it } from "vite-plus/test";
 
-import { openNodeSqliteStorage } from "../src/storage/sqlite/node.ts";
+import node from "../src/storage/sqlite/node.ts";
 import harnessStructuredEvents from "./harness-structured-events.ts";
 import harnessStructuredSupport from "./harness-structured-support.ts";
 import support from "./support.ts";
+
+const { createSession } = sessionModule;
+const { openNodeSqliteStorage } = node;
 
 const { spawnAndFinish } = harnessStructuredEvents;
 const {
@@ -42,12 +45,12 @@ afterEach(() =>
 );
 
 const failsHarnessFailed = Effect.gen(function* () {
-  let reject: TaskId | undefined;
+  let reject: durableTypes.TaskId | undefined;
   const failure = new Error("disk gone");
   class Failing extends ControlledStorage {
     override commit(
-      writes: Parameters<MemoryStorage["commit"]>[0],
-      ctx: Parameters<MemoryStorage["commit"]>[1],
+      writes: Parameters<memoryTypes.MemoryStorage["commit"]>[0],
+      ctx: Parameters<memoryTypes.MemoryStorage["commit"]>[1],
     ) {
       const finalizes = writes.some(
         (write) =>
@@ -169,7 +172,7 @@ const keepsRootBusyStep1 = Effect.gen(function* () {
 
 const keepsRootBusy = Effect.gen(function* () {
   const { runPromise, path } = yield* keepsRootBusyStep1;
-  let inner: TaskId | undefined;
+  let inner: durableTypes.TaskId | undefined;
   script("child", {
     run: (runtime, ctx) =>
       runPromise(
@@ -231,7 +234,7 @@ const keepsFinishedBackgroundStep1 = Effect.gen(function* () {
 
 const keepsFinishedBackgroundStep2 = Effect.gen(function* () {
   const { runPromise, path } = yield* keepsFinishedBackgroundStep1;
-  let conversation: ConversationId | undefined;
+  let conversation: durableTypes.ConversationId | undefined;
   script("child", {
     run: (runtime, ctx) =>
       runPromise(

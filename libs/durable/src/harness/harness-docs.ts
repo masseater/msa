@@ -1,16 +1,26 @@
 import { Effect, Function } from "effect";
 
-import type { Transaction } from "../session/transaction.ts";
-import { ROOT_CONVERSATION_ID } from "../types.ts";
-import { configure, createAgent } from "./agent.ts";
-import type { CreateOptions, CreateTarget } from "./harness-host.ts";
-import { InboxDoc } from "./inbox.ts";
-import { LiveDoc } from "./live.ts";
-import { ProviderDoc } from "./provider.ts";
-import type { ConversationId, ConversationRecord } from "./types.ts";
-import { UsageDoc } from "./usage.ts";
+import type transactionTypes from "../session/transaction.types.ts";
+import types from "../types.ts";
+import agentModule from "./agent.ts";
+import type harnessHostTypes from "./harness-host.ts";
+import inboxModule from "./inbox.ts";
+import liveModule from "./live.ts";
+import provider from "./provider.ts";
+import type typesModule from "./types.types.ts";
+import usageModule from "./usage.ts";
 
-const createRecord = (tx: Transaction, target: CreateTarget): Effect.Effect<ConversationRecord> =>
+const { ROOT_CONVERSATION_ID } = types;
+const { configure, createAgent } = agentModule;
+const { LiveDoc } = liveModule;
+const { InboxDoc } = inboxModule;
+const { UsageDoc } = usageModule;
+const { ProviderDoc } = provider;
+
+const createRecord = (
+  tx: transactionTypes.Transaction,
+  target: harnessHostTypes.CreateTarget,
+): Effect.Effect<typesModule.ConversationRecord> =>
   Effect.promise(() => {
     if (target.kind === "root") return tx.createRootConversation();
     if (target.kind === "fork")
@@ -18,15 +28,23 @@ const createRecord = (tx: Transaction, target: CreateTarget): Effect.Effect<Conv
     return tx.createConversation({ ownership: target.ownership });
   });
 
-export const createConversation: {
+const createConversation: {
   (
-    target: CreateTarget,
-    options: CreateOptions,
-  ): (tx: Transaction) => Effect.Effect<ConversationId>;
-  (tx: Transaction, target: CreateTarget, options: CreateOptions): Effect.Effect<ConversationId>;
+    target: harnessHostTypes.CreateTarget,
+    options: harnessHostTypes.CreateOptions,
+  ): (tx: transactionTypes.Transaction) => Effect.Effect<typesModule.ConversationId>;
+  (
+    tx: transactionTypes.Transaction,
+    target: harnessHostTypes.CreateTarget,
+    options: harnessHostTypes.CreateOptions,
+  ): Effect.Effect<typesModule.ConversationId>;
 } = Function.dual(
   3,
-  Effect.fnUntraced(function* (tx: Transaction, target: CreateTarget, options: CreateOptions) {
+  Effect.fnUntraced(function* (
+    tx: transactionTypes.Transaction,
+    target: harnessHostTypes.CreateTarget,
+    options: harnessHostTypes.CreateOptions,
+  ) {
     if (target.kind === "root") {
       const existing = yield* Effect.promise(() => tx.conversation(ROOT_CONVERSATION_ID));
       if (existing !== undefined) return ROOT_CONVERSATION_ID;
@@ -39,22 +57,28 @@ export const createConversation: {
   }),
 );
 
-export const initializeConversation: {
+const initializeConversation: {
   (
-    record: ConversationRecord,
-    hook: ((tx: Transaction, record: ConversationRecord) => unknown) | undefined,
-  ): (tx: Transaction) => Effect.Effect<void>;
+    record: typesModule.ConversationRecord,
+    hook:
+      | ((tx: transactionTypes.Transaction, record: typesModule.ConversationRecord) => unknown)
+      | undefined,
+  ): (tx: transactionTypes.Transaction) => Effect.Effect<void>;
   (
-    tx: Transaction,
-    record: ConversationRecord,
-    hook: ((tx: Transaction, record: ConversationRecord) => unknown) | undefined,
+    tx: transactionTypes.Transaction,
+    record: typesModule.ConversationRecord,
+    hook:
+      | ((tx: transactionTypes.Transaction, record: typesModule.ConversationRecord) => unknown)
+      | undefined,
   ): Effect.Effect<void>;
 } = Function.dual(
   3,
   Effect.fnUntraced(function* (
-    tx: Transaction,
-    record: ConversationRecord,
-    hook: ((tx: Transaction, record: ConversationRecord) => unknown) | undefined,
+    tx: transactionTypes.Transaction,
+    record: typesModule.ConversationRecord,
+    hook:
+      | ((tx: transactionTypes.Transaction, record: typesModule.ConversationRecord) => unknown)
+      | undefined,
   ) {
     yield* Effect.promise(() => tx.doc(LiveDoc, record.id));
     yield* Effect.promise(() => tx.doc(InboxDoc, record.id));
@@ -64,3 +88,10 @@ export const initializeConversation: {
     if (hook !== undefined) yield* Effect.promise(() => Promise.resolve(hook(tx, record)));
   }),
 );
+
+const harnessDocs = {
+  createConversation,
+  initializeConversation,
+};
+
+export default harnessDocs;

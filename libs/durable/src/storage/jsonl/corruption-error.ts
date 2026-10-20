@@ -1,6 +1,6 @@
 import { Data } from "effect";
 
-export class JsonlCorruptionError extends Data.TaggedError("JsonlCorruptionError")<{
+export default class JsonlCorruptionError extends Data.TaggedError("JsonlCorruptionError")<{
   readonly message: string;
   readonly cause?: Error;
 }> {

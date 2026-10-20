@@ -1,4 +1,4 @@
-import type { CompactionResult, TaskId } from "@msa/durable";
+import type durableTypes from "@msa/durable/index.types";
 import { Effect } from "effect";
 import { afterEach, describe, expect, it } from "vite-plus/test";
 
@@ -52,7 +52,9 @@ const winsOverBackground = Effect.gen(function* () {
     "BLOCKING",
   );
   gate.resolve();
-  const outcome = yield* awaited(result(chat, background!.id as TaskId<CompactionResult>));
+  const outcome = yield* awaited(
+    result(chat, background!.id as durableTypes.TaskId<durableTypes.CompactionResult>),
+  );
   const submissionId = outcome.status === "completed" ? outcome.result.submissionId! : undefined;
   expect(
     yield* awaited(

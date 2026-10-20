@@ -1,12 +1,16 @@
 import * as NodeRuntime from "@effect/platform-node/NodeRuntime";
 import { type Message, createModels } from "@msa/ai";
 import { openaiProvider } from "@msa/ai/providers/openai";
-import { AssistantEntry, LiveDoc, defineExtension, section } from "@msa/durable";
-import { Harness, createRegistry } from "@msa/durable/harness";
-import { MemoryStorage } from "@msa/durable/storage/memory";
+import durable from "@msa/durable";
+import harnessModule from "@msa/durable/harness";
+import memory from "@msa/durable/storage/memory";
 import { Console, Effect } from "effect";
 
 import support from "../support.ts";
+
+const { Harness, createRegistry } = harnessModule;
+const { AssistantEntry, LiveDoc, defineExtension, section } = durable;
+const { MemoryStorage } = memory;
 
 const { BACKGROUND_CONTEXT, awaited, environmentVariable } = support;
 

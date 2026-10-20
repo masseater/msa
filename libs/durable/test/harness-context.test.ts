@@ -1,4 +1,4 @@
-import { type EntryId, type EntryRecord } from "@msa/durable";
+import type durableTypes from "@msa/durable/index.types";
 import { Effect } from "effect";
 import { afterEach, describe, expect, it, vi } from "vite-plus/test";
 
@@ -12,7 +12,7 @@ const { setup } = harnessContextSupport;
 const { assistant, describeMessage, system, toolResult, user } = harnessSupport;
 const { context } = sessionSupport;
 
-function ids(entries: readonly EntryRecord[]): EntryId[] {
+function ids(entries: readonly durableTypes.EntryRecord[]): durableTypes.EntryId[] {
   return entries.map((entry) => entry.id);
 }
 

@@ -1,11 +1,16 @@
-import { type ConversationId, defineDoc } from "@msa/durable";
+import durable from "@msa/durable";
+import type durableTypes from "@msa/durable/index.types";
 import { Effect } from "effect";
 
-import { environmentVariable } from "../src/env/node-process.ts";
-import { SessionImpl } from "../src/session/session.ts";
+import nodeProcess from "../src/env/node/node-process.ts";
+import SessionImpl from "../src/session/session.ts";
+import type sessionTypes from "../src/session/session.types.ts";
 import effectSupport from "./effect-support.ts";
 import type sessionDocumentRetentionSupportTypes from "./session-document-retention-support.types.ts";
 import sessionSupport from "./session-support.ts";
+
+const { defineDoc } = durable;
+const { environmentVariable } = nodeProcess;
 
 const { awaited } = effectSupport;
 const { ControlledStorage, context } = sessionSupport;
@@ -35,13 +40,13 @@ function open(retentionMs: number) {
   return { clock, session, sizes, storage };
 }
 
-const settleLine = Effect.fn("settleLine")(function* (session: SessionImpl) {
+const settleLine = Effect.fn("settleLine")(function* (session: sessionTypes.SessionImpl) {
   yield* awaited(session.readOnLine(() => Promise.resolve()));
 });
 
 const bump = Effect.fn("bump")(function* (
-  session: SessionImpl,
-  conversationId: ConversationId,
+  session: sessionTypes.SessionImpl,
+  conversationId: durableTypes.ConversationId,
   by = 1,
 ) {
   const runPromise = Effect.runPromiseWith(yield* Effect.context<never>());

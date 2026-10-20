@@ -1,16 +1,18 @@
 import { createRequire } from "node:module";
 
-import { Effect, FileSystem } from "effect";
+import * as NodeServices from "@effect/platform-node/NodeServices";
+import { Effect, FileSystem, ManagedRuntime } from "effect";
 
-import { nodeRuntime } from "../node-runtime.ts";
-import type { ImageLimits, ImageProcessor } from "../tools/image.ts";
-import { createPhotonImages } from "./index.ts";
-import { type PhotonThread, startPhotonThread, WorkerUnavailable } from "./node-thread.ts";
+import type imageTypes from "../tools/image.types.ts";
+import imagesModule from "./index.ts";
+import nodeThread from "./node-thread.ts";
+import type nodeThreadTypes from "./node-thread.types.ts";
+import type nodeTypes from "./node.types.ts";
 
-export type NodePhotonImagesOptions = {
-  readonly worker?: boolean;
-  readonly idleMs?: number;
-};
+const nodeRuntime = ManagedRuntime.make(NodeServices.layer);
+
+const { createPhotonImages } = imagesModule;
+const { WorkerUnavailable, startPhotonThread } = nodeThread;
 
 const readPhotonWasm = (): Promise<Uint8Array> =>
   nodeRuntime.runPromise(
@@ -21,35 +23,35 @@ const readPhotonWasm = (): Promise<Uint8Array> =>
     ).pipe(Effect.mapError((error) => error.cause ?? error)),
   );
 
-const inProcess = (): Promise<ImageProcessor> =>
+const inProcess = (): Promise<imageTypes.ImageProcessor> =>
   readPhotonWasm().then((wasm) => createPhotonImages(wasm));
 
 const prepareWith = (
-  processor: Promise<ImageProcessor>,
+  processor: Promise<imageTypes.ImageProcessor>,
   bytes: Uint8Array,
   mimeType: string,
-  limits: ImageLimits,
+  limits: imageTypes.ImageLimits,
 ) =>
   Effect.flatMap(
     Effect.promise(() => processor),
     (images) => Effect.promise(() => images.prepare(bytes, mimeType, limits)),
   );
 
-function threaded(options: NodePhotonImagesOptions): ImageProcessor {
+function threaded(options: nodeTypes.NodePhotonImagesOptions): imageTypes.ImageProcessor {
   const idleMs = options.idleMs ?? 30_000;
-  let thread: Promise<PhotonThread> | undefined;
+  let thread: Promise<nodeThreadTypes.PhotonThread> | undefined;
   let wasm: Promise<Uint8Array> | undefined;
-  let fallback: Promise<ImageProcessor> | undefined;
-  const onThread = (bytes: Uint8Array, mimeType: string, limits: ImageLimits) =>
+  let fallback: Promise<imageTypes.ImageProcessor> | undefined;
+  const onThread = (bytes: Uint8Array, mimeType: string, limits: imageTypes.ImageLimits) =>
     Effect.promise(() => {
       wasm ??= readPhotonWasm();
       thread ??= wasm.then((module) =>
         startPhotonThread({
-          wasm: module,
           idleMs,
           onExit: () => {
             thread = undefined;
           },
+          wasm: module,
         }),
       );
       return thread.then((started) => started.prepare(bytes, mimeType, limits));
@@ -70,7 +72,13 @@ function threaded(options: NodePhotonImagesOptions): ImageProcessor {
   };
 }
 
-export const createNodePhotonImages = (
-  options: NodePhotonImagesOptions = {},
-): Promise<ImageProcessor> =>
+const createNodePhotonImages = (
+  options: nodeTypes.NodePhotonImagesOptions = {},
+): Promise<imageTypes.ImageProcessor> =>
   options.worker === false ? inProcess() : Promise.resolve().then(() => threaded(options));
+
+const node = {
+  createNodePhotonImages,
+};
+
+export default node;

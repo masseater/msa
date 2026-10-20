@@ -1,4 +1,5 @@
-import { FileError, type FileInfo, type Result, err, ok } from "@msa/durable/env";
+import env from "@msa/durable/env";
+import type envTypes from "@msa/durable/env.types";
 import { Effect } from "effect";
 import { dual } from "effect/Function";
 
@@ -7,6 +8,8 @@ import platformModule from "./platform.ts";
 import type platformTypes from "./platform.types.ts";
 import remoteInfo from "./remote-info.ts";
 import type remotePathTypes from "./remote-path.types.ts";
+
+const { FileError, err, ok } = env;
 
 const { nodePlatform } = remoteInfo;
 const { posixPath, win32Path } = platformModule;
@@ -20,19 +23,19 @@ const toInfo: {
   (
     remote: remotePathTypes.RemoteFileInfo,
     paths: platformTypes.PathOps,
-  ): (path: string) => Result<FileInfo, FileError>;
+  ): (path: string) => envTypes.Result<envTypes.FileInfo, envTypes.FileError>;
   (
     path: string,
     remote: remotePathTypes.RemoteFileInfo,
     paths: platformTypes.PathOps,
-  ): Result<FileInfo, FileError>;
+  ): envTypes.Result<envTypes.FileInfo, envTypes.FileError>;
 } = dual(
   3,
   (
     path: string,
     remote: remotePathTypes.RemoteFileInfo,
     paths: platformTypes.PathOps,
-  ): Result<FileInfo, FileError> => {
+  ): envTypes.Result<envTypes.FileInfo, envTypes.FileError> => {
     if (remote.kind === "other") {
       return err(new FileError("invalid", "Unsupported file type", path));
     }

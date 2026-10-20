@@ -1,11 +1,15 @@
 import { fauxAssistantMessage, fauxText } from "@msa/ai";
-import { type ConversationId, type EntryId, configure, defineDoc, defineTask } from "@msa/durable";
+import durable from "@msa/durable";
+import type durableTypes from "@msa/durable/index.types";
 import { Effect } from "effect";
 import { afterEach, describe, expect, it } from "vite-plus/test";
 
-import { openNodeSqliteStorage } from "../src/storage/sqlite/node.ts";
+import node from "../src/storage/sqlite/node.ts";
 import harnessOwnershipSupport from "./harness-ownership-support.ts";
 import support from "./support.ts";
+
+const { configure, defineDoc, defineTask } = durable;
+const { openNodeSqliteStorage } = node;
 
 const { directories, gated, gates, runs } = harnessOwnershipSupport;
 const { addTask, awaited, chatSetup, context, joinPath, makeTempDir, openChat, removeDir } =
@@ -28,7 +32,7 @@ const supervisorSetupStep1 = Effect.fn("supervisorSetupStep1")(function* () {
   const directory = yield* makeTempDir("msa-durable-supervisor-");
   directories.add(directory);
   const path = joinPath(directory, "session.sqlite");
-  const Children = defineDoc<{ child?: ConversationId }>({
+  const Children = defineDoc<{ child?: durableTypes.ConversationId }>({
     fork: "initial",
     history: "latest",
     initial: () => ({}),
@@ -41,7 +45,11 @@ const supervisorSetupStep1 = Effect.fn("supervisorSetupStep1")(function* () {
 
 const supervisorSetup = Effect.fn("supervisorSetup")(function* () {
   const { runPromise, path, Children } = yield* supervisorSetupStep1();
-  const Supervisor = defineTask<{ parent: ConversationId }, { phase: "run" }, { answer: EntryId }>({
+  const Supervisor = defineTask<
+    { parent: durableTypes.ConversationId },
+    { phase: "run" },
+    { answer: durableTypes.EntryId }
+  >({
     abort: (_task, runtime, ctx) =>
       runtime.commit(() => ({ outcome: { status: "aborted" }, status: "terminal" }), ctx),
     initial: () => ({ phase: "run" }),

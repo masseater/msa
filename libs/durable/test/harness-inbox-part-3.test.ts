@@ -5,15 +5,22 @@ import {
   fauxAssistantMessage,
 } from "@msa/ai";
 import type { Op } from "@msa/chord/delta";
-import { InboxDoc, type InboxState, LiveDoc, UsageDoc } from "@msa/durable";
-import { ToolTask } from "@msa/durable/harness";
-import { MemoryStorage } from "@msa/durable/storage/memory";
+import type durableTypes from "@msa/durable/index.types";
+import type memoryTypes from "@msa/durable/storage/memory.types";
 import { Effect } from "effect";
 import { describe, expect, it } from "vite-plus/test";
 
-import { recordUsage } from "../src/harness/usage.ts";
+import usageModule from "../src/harness/usage.ts";
+import durableKit from "./durable-kit.ts";
 import harnessInboxSupport from "./harness-inbox-support.ts";
 import support from "./support.ts";
+
+const { durable, harness: harnessModule, memory } = durableKit;
+
+const { MemoryStorage } = memory;
+const { InboxDoc, LiveDoc, UsageDoc } = durable;
+const { ToolTask } = harnessModule;
+const { recordUsage } = usageModule;
 
 const { HOLD, answer, gated, holdTool } = harnessInboxSupport;
 const {
@@ -33,13 +40,14 @@ const storesInboxBase = Effect.gen(function* () {
   let inboxId: number | undefined;
   class RecordingStorage extends MemoryStorage {
     override commit(
-      writes: Parameters<MemoryStorage["commit"]>[0],
-      callContext: Parameters<MemoryStorage["commit"]>[1],
+      writes: Parameters<memoryTypes.MemoryStorage["commit"]>[0],
+      callContext: Parameters<memoryTypes.MemoryStorage["commit"]>[1],
     ) {
       for (const write of writes) {
         if (write.type !== "document.change" || write.id !== inboxId) continue;
         const content = write.content;
-        const empty = content.kind === "base" && (content.value as InboxState).items.length === 0;
+        const empty =
+          content.kind === "base" && (content.value as durableTypes.InboxState).items.length === 0;
         written.push({ empty, kind: content.kind });
       }
       return Promise.resolve(super.commit(writes, callContext));

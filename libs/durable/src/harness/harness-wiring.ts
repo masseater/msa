@@ -1,61 +1,55 @@
-import type { Context } from "@msa/chord";
+import agentModule from "./agent.ts";
+import harnessBound from "./harness-bound.ts";
+import harnessSchedulerWiring from "./harness-scheduler-wiring.ts";
+import type harnessWiringTypes from "./harness-wiring.types.ts";
+import Submissions from "./submissions.ts";
+import type submissionsTypes from "./submissions.types.ts";
+import TaskGraphView from "./task-graph.ts";
+import type typesModule from "./types.types.ts";
+import view from "./view.ts";
 
-import { resolveSettings } from "./agent.ts";
-import { safeNow, safeReport } from "./harness-bound.ts";
-import { createTaskScheduler, type SchedulerHost } from "./harness-scheduler-wiring.ts";
-import type { TaskScheduler } from "./scheduler.ts";
-import { Submissions } from "./submissions.ts";
-import { TaskGraphView } from "./task-graph.ts";
-import type { HarnessOptions, Storage, ToolRegistration } from "./types.ts";
-import { ConversationViews } from "./view.ts";
+const { safeNow, safeReport } = harnessBound;
+const { resolveSettings } = agentModule;
+const { createTaskScheduler } = harnessSchedulerWiring;
 
-export type HarnessClock = {
-  readonly report: (error: unknown) => void;
-  readonly now: () => number;
-};
+const { ConversationViews } = view;
 
-export type Wired = HarnessClock & {
-  readonly tasks: TaskScheduler;
-  readonly submissions: Submissions;
-  readonly taskGraph: TaskGraphView;
-  readonly views: ConversationViews;
-};
-
-export const harnessClock = <Tool extends ToolRegistration>(
-  options: HarnessOptions<Tool>,
-): HarnessClock => {
+const harnessClock = <Tool extends typesModule.ToolRegistration>(
+  options: typesModule.HarnessOptions<Tool>,
+): harnessWiringTypes.HarnessClock => {
   const report = safeReport(options.onReport);
-  return { report, now: safeNow(options.now, report) };
+  return { now: safeNow(options.now, report), report };
 };
 
-export type HarnessParts<Tool extends ToolRegistration> = {
-  readonly host: SchedulerHost<Tool>;
-  readonly storage: Storage;
-  readonly options: HarnessOptions<Tool>;
-  readonly clock: HarnessClock;
-  readonly context: Context;
-};
-
-export const wireHarness = <Tool extends ToolRegistration>(parts: HarnessParts<Tool>): Wired => {
+const wireHarness = <Tool extends typesModule.ToolRegistration>(
+  parts: harnessWiringTypes.HarnessParts<Tool>,
+): harnessWiringTypes.Wired => {
   const { host, storage, options, clock, context } = parts;
   const settings = () => resolveSettings(options.settings);
-  let submissions: Submissions | undefined;
+  let submissions: submissionsTypes.Submissions | undefined;
   const tasks = createTaskScheduler({
-    host,
-    storage,
-    options,
-    settings,
-    now: clock.now,
-    report: clock.report,
-    submissions: () => submissions!,
     context,
+    host,
+    now: clock.now,
+    options,
+    report: clock.report,
+    settings,
+    storage,
+    submissions: () => submissions!,
   });
   submissions = new Submissions(host, storage, clock.now, settings, () => tasks.resume());
   return {
     ...clock,
-    tasks,
     submissions,
     taskGraph: new TaskGraphView(host, storage),
+    tasks,
     views: new ConversationViews(host, storage),
   };
 };
+
+const harnessWiring = {
+  harnessClock,
+  wireHarness,
+};
+
+export default harnessWiring;

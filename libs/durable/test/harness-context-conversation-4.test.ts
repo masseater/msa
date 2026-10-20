@@ -1,22 +1,25 @@
 import { type Message, createModels } from "@msa/ai";
-import { type EntryRecord, type Storage, defineTask } from "@msa/durable";
-import { Harness, createRegistry } from "@msa/durable/harness";
-import { MemoryStorage } from "@msa/durable/storage/memory";
+import durable from "@msa/durable";
+import harnessModule from "@msa/durable/harness";
+import type durableTypes from "@msa/durable/index.types";
+import memoryModule from "@msa/durable/storage/memory";
 import { Effect } from "effect";
 import { afterEach, describe, expect, it, vi } from "vite-plus/test";
 
-import effectSupport from "./effect-support.ts";
 import harnessContextSupport from "./harness-context-support.ts";
-import harnessSupport from "./harness-support.ts";
-import sessionSupport from "./session-support.ts";
+import testSupport from "./support.ts";
 
-const { awaited } = effectSupport;
+const { MemoryStorage } = memoryModule;
+const { Harness, createRegistry } = harnessModule;
+const { defineTask } = durable;
+
+const { awaited } = testSupport;
 const { ABORTED, DONE, countingSetup, probeTask, runInRoot } = harnessContextSupport;
-const { addTask, user } = harnessSupport;
-const { context } = sessionSupport;
+const { addTask, user } = testSupport;
+const { context } = testSupport;
 
 afterEach(() => {
-  vi.useRealTimers();
+  vi.restoreAllMocks();
 });
 
 const keepsReturnedViews = Effect.gen(function* () {
@@ -28,7 +31,7 @@ const keepsReturnedViews = Effect.gen(function* () {
       Effect.gen(function* () {
         const view = yield* awaited(runtime.context(opened.root.id, taskContext));
         (view.messages as Message[]).length = 0;
-        (view.entries as EntryRecord[]).pop();
+        (view.entries as durableTypes.EntryRecord[]).pop();
         expect(() => {
           (view.contributions[0]![0] as { content: unknown }).content = "changed";
         }).toThrow(TypeError);
@@ -47,11 +50,11 @@ describe("conversation context", () => {
 
 const freezesKeptEntries = Effect.gen(function* () {
   const memory = new MemoryStorage();
-  const storage = new Proxy<Storage>(memory, {
+  const storage = new Proxy<durableTypes.Storage>(memory, {
     get(target, key) {
       const value: unknown = Reflect.get(target, key, target);
       if (key === "scanEntries") {
-        return (...args: Parameters<Storage["scanEntries"]>) =>
+        return (...args: Parameters<durableTypes.Storage["scanEntries"]>) =>
           target.scanEntries(...args).then((page) => ({
             ...page,
             items: page.items.map((item) => Object.freeze(structuredClone(item))),
@@ -161,9 +164,8 @@ describe("conversation context", () => {
 const dropsIdleConversation = Effect.gen(function* () {
   const runPromise = Effect.runPromiseWith(yield* Effect.context<never>());
 
-  vi.useFakeTimers({ toFake: ["setTimeout", "clearTimeout", "Date"] });
   const { harness, registry, root, scanned } = yield* countingSetup({
-    settings: { contextRetentionMs: 1_000 },
+    settings: { contextRetentionMs: 50 },
   });
   const rows: Record<string, number> = {};
   const Probe = probeTask((name, load) =>
@@ -190,11 +192,12 @@ const dropsIdleConversation = Effect.gen(function* () {
         yield* awaited(root.waitForIdle(context));
       }),
     );
-  const idle = vi.getTimerCount();
+  const timeouts = vi.spyOn(AbortSignal, "timeout");
   yield* awaited(probe("first"));
-  expect(vi.getTimerCount()).toBe(idle + 1);
-  vi.advanceTimersByTime(1_000);
-  expect(vi.getTimerCount()).toBe(idle);
+  const scheduled = timeouts.mock.results.map((result) => result.value as AbortSignal);
+  expect(scheduled.length).toBeGreaterThan(0);
+  yield* Effect.sleep("100 millis");
+  expect(scheduled.every((signal) => signal.aborted)).toBe(true);
   yield* awaited(probe("second"));
   expect(rows).toEqual({ first: 22, second: 22 });
   yield* awaited(harness.close(context));

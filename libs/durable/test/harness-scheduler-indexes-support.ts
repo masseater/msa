@@ -1,10 +1,13 @@
-import { type Harness, type TaskId, type TaskRuntime, defineTask } from "@msa/durable";
+import durable from "@msa/durable";
+import type durableTypes from "@msa/durable/index.types";
 import { Effect } from "effect";
 
 import effectSupport from "./effect-support.ts";
 import platformSupport from "./platform-support.ts";
 import sessionSupport from "./session-support.ts";
 import taskSupport from "./task-support.ts";
+
+const { defineTask } = durable;
 
 const { awaited } = effectSupport;
 const { joinPath, makeTempDir } = platformSupport;
@@ -49,11 +52,11 @@ const Hold = defineTask<{ name: string }, { phase: "hold" }, null>({
   version: 1,
 });
 
-const owned = new Map<string, TaskId[]>();
+const owned = new Map<string, durableTypes.TaskId[]>();
 
 const runtimes = new Map<
   string,
-  Pick<TaskRuntime<unknown, unknown, unknown, object>, "ownedTasks">
+  Pick<durableTypes.TaskRuntime<unknown, unknown, unknown, object>, "ownedTasks">
 >();
 
 const directories: string[] = [];
@@ -64,7 +67,10 @@ const sqlitePath = Effect.fn("sqlitePath")(function* () {
   return joinPath(directory, "session.sqlite");
 });
 
-const state = Effect.fn("state")(function* (harness: Harness, id: TaskId) {
+const state = Effect.fn("state")(function* (
+  harness: durableTypes.Harness,
+  id: durableTypes.TaskId,
+) {
   return (yield* awaited(harness.getTask(id, context)))!;
 });
 

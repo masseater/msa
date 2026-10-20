@@ -1,38 +1,20 @@
 import type { Context } from "@msa/chord";
 import { Deferred, Effect } from "effect";
 
-import { idFromNumber } from "../../ids.ts";
-import type {
-  ConversationId,
-  ConversationQuery,
-  ConversationRecord,
-  Cursor,
-  DocumentAddress,
-  DocumentId,
-  DocumentPoint,
-  DocumentQuery,
-  DocumentRecord,
-  EntryId,
-  EntryQuery,
-  EntryRecord,
-  Id,
-  Page,
-  Seq,
-  Storage,
-  StorageWrite,
-  StoredDocument,
-  SubmissionId,
-  SubmissionQuery,
-  SubmissionRecord,
-  TaskId,
-  TaskQuery,
-} from "../../types.ts";
-import { candidateNextId, commitIn, readMetadata } from "./commit.ts";
-import type { SqliteDatabase } from "./database.ts";
-import { materializeDocument, prepareDocumentActions } from "./documents.ts";
-import { readEntries, readEntry, readLatestHeadMarker } from "./entries.ts";
-import { applySqliteMigrations } from "./migrations.ts";
-import {
+import ids from "../../ids.ts";
+import type typesModule from "../../types.types.ts";
+import commitModule from "./commit.ts";
+import type databaseTypes from "./database.ts";
+import documents from "./documents.ts";
+import entries from "./entries.ts";
+import migrationsModule from "./migrations.ts";
+import scans from "./scans.ts";
+
+const { applySqliteMigrations } = migrationsModule;
+const { candidateNextId, commitIn, readMetadata } = commitModule;
+const { materializeDocument, prepareDocumentActions } = documents;
+const { idFromNumber } = ids;
+const {
   findDocumentRow,
   recordById,
   scanConversationRows,
@@ -40,25 +22,26 @@ import {
   scanSubmissionRows,
   scanTaskRows,
   submissionByRequestRow,
-} from "./scans.ts";
+} = scans;
+const { readEntries, readEntry, readLatestHeadMarker } = entries;
 
-type StoredTask = NonNullable<Awaited<ReturnType<Storage["task"]>>>;
-type EntryRead = { readonly entry: EntryRecord; readonly commitSeq: Seq };
+type StoredTask = NonNullable<Awaited<ReturnType<typesModule.Storage["task"]>>>;
+type EntryRead = { readonly entry: typesModule.EntryRecord; readonly commitSeq: typesModule.Seq };
 
-export class SqliteStorage implements Storage {
-  private readonly db: SqliteDatabase;
+export default class SqliteStorage implements typesModule.Storage {
+  private readonly db: databaseTypes.SqliteDatabase;
   private nextId: number;
   private closed = false;
   private closing: Promise<void> | undefined;
   private admittedReads = 0;
   private readsDrained: Deferred.Deferred<void> | undefined;
 
-  private constructor(db: SqliteDatabase, nextId: number) {
+  private constructor(db: databaseTypes.SqliteDatabase, nextId: number) {
     this.db = db;
     this.nextId = nextId;
   }
 
-  static open(db: SqliteDatabase): Promise<SqliteStorage> {
+  static open(db: databaseTypes.SqliteDatabase): Promise<SqliteStorage> {
     return Effect.runPromise(
       Effect.gen(function* () {
         yield* Effect.promise(() => applySqliteMigrations(db));
@@ -68,7 +51,7 @@ export class SqliteStorage implements Storage {
     );
   }
 
-  commit(writes: readonly StorageWrite[], _context: Context): Promise<Seq> {
+  commit(writes: readonly typesModule.StorageWrite[], _context: Context): Promise<typesModule.Seq> {
     return this.query(() => {
       const documentActions = prepareDocumentActions(writes);
       const nextId = candidateNextId(this.nextId, writes);
@@ -81,104 +64,112 @@ export class SqliteStorage implements Storage {
     });
   }
 
-  mintId<I extends Id<string>>(): Promise<I> {
+  mintId<I extends typesModule.Id<string>>(): Promise<I> {
     return this.query(() => {
       if (!Number.isSafeInteger(this.nextId)) throw new Error("ID space is exhausted");
       return Promise.resolve(idFromNumber<I>(this.nextId++));
     });
   }
 
-  conversation(id: ConversationId, _context: Context): Promise<ConversationRecord | undefined> {
-    return this.query(() => recordById<ConversationRecord>(this.db, "conversations", id));
+  conversation(
+    id: typesModule.ConversationId,
+    _context: Context,
+  ): Promise<typesModule.ConversationRecord | undefined> {
+    return this.query(() =>
+      recordById<typesModule.ConversationRecord>(this.db, "conversations", id),
+    );
   }
 
   scanConversations(
-    query: ConversationQuery,
+    query: typesModule.ConversationQuery,
     limit: number,
-    cursor: Cursor | undefined,
+    cursor: typesModule.Cursor | undefined,
     _context: Context,
-  ): Promise<Page<ConversationRecord, Cursor>> {
+  ): Promise<typesModule.Page<typesModule.ConversationRecord, typesModule.Cursor>> {
     return this.query(() => scanConversationRows(this.db, query, limit, cursor));
   }
 
-  entry(id: EntryId, context: Context): Promise<EntryRead | undefined>;
+  entry(id: typesModule.EntryId, context: Context): Promise<EntryRead | undefined>;
   entry(
-    conversationId: ConversationId,
-    id: EntryId,
+    conversationId: typesModule.ConversationId,
+    id: typesModule.EntryId,
     context: Context,
   ): Promise<EntryRead | undefined>;
   entry(
-    idOrConversationId: EntryId | ConversationId,
-    idOrContext: EntryId | Context,
+    idOrConversationId: typesModule.EntryId | typesModule.ConversationId,
+    idOrContext: typesModule.EntryId | Context,
     context?: Context,
   ): Promise<EntryRead | undefined> {
     return this.admitRead(readEntry(this.db, idOrConversationId, idOrContext, context));
   }
 
   findLatestHeadMarker(
-    conversationId: ConversationId,
-    atOrBeforeEntryId: EntryId | undefined,
+    conversationId: typesModule.ConversationId,
+    atOrBeforeEntryId: typesModule.EntryId | undefined,
     _context: Context,
-  ): Promise<(EntryRecord & { readonly head: EntryId }) | undefined> {
+  ): Promise<(typesModule.EntryRecord & { readonly head: typesModule.EntryId }) | undefined> {
     return this.admitRead(readLatestHeadMarker(this.db, conversationId, atOrBeforeEntryId));
   }
 
   scanEntries(
-    query: EntryQuery,
+    query: typesModule.EntryQuery,
     limit: number,
-    cursor: Cursor | undefined,
+    cursor: typesModule.Cursor | undefined,
     _context: Context,
-  ): Promise<Page<EntryRecord, Cursor>> {
+  ): Promise<typesModule.Page<typesModule.EntryRecord, typesModule.Cursor>> {
     return this.admitRead(readEntries(this.db, query, limit, cursor));
   }
 
-  task(id: TaskId, _context: Context): Promise<StoredTask | undefined> {
+  task(id: typesModule.TaskId, _context: Context): Promise<StoredTask | undefined> {
     return this.query(() => recordById<StoredTask>(this.db, "tasks", id));
   }
 
   scanTasks(
-    query: TaskQuery,
+    query: typesModule.TaskQuery,
     limit: number,
-    cursor: Cursor | undefined,
+    cursor: typesModule.Cursor | undefined,
     _context: Context,
-  ): Promise<Page<StoredTask, Cursor>> {
+  ): Promise<typesModule.Page<StoredTask, typesModule.Cursor>> {
     return this.query(() => scanTaskRows(this.db, query, limit, cursor));
   }
 
-  submission(id: SubmissionId, _context: Context): Promise<SubmissionRecord | undefined> {
-    return this.query(() => recordById<SubmissionRecord>(this.db, "submissions", id));
+  submission(
+    id: typesModule.SubmissionId,
+    _context: Context,
+  ): Promise<typesModule.SubmissionRecord | undefined> {
+    return this.query(() => recordById<typesModule.SubmissionRecord>(this.db, "submissions", id));
   }
 
   scanSubmissions(
-    query: SubmissionQuery,
+    query: typesModule.SubmissionQuery,
     limit: number,
-    cursor: Cursor | undefined,
+    cursor: typesModule.Cursor | undefined,
     _context: Context,
-  ): Promise<Page<SubmissionRecord, Cursor>> {
+  ): Promise<typesModule.Page<typesModule.SubmissionRecord, typesModule.Cursor>> {
     return this.query(() => scanSubmissionRows(this.db, query, limit, cursor));
   }
 
   submissionByRequest(
-    conversationId: ConversationId,
+    conversationId: typesModule.ConversationId,
     requestId: string,
     _context: Context,
-  ): Promise<SubmissionRecord | undefined> {
+  ): Promise<typesModule.SubmissionRecord | undefined> {
     return this.query(() => submissionByRequestRow(this.db, conversationId, requestId));
   }
 
   findDocument(
-    address: DocumentAddress,
-    at: DocumentPoint,
+    address: typesModule.DocumentAddress,
+    at: typesModule.DocumentPoint,
     _context: Context,
-  ): Promise<DocumentRecord | undefined> {
+  ): Promise<typesModule.DocumentRecord | undefined> {
     return this.query(() => findDocumentRow(this.db, address, at));
   }
 
   document(
-    id: DocumentId,
-    at: DocumentPoint,
+    id: typesModule.DocumentId,
+    at: typesModule.DocumentPoint,
     _context: Context,
-  ): Promise<StoredDocument | undefined> {
+  ): Promise<typesModule.StoredDocument | undefined> {
     return this.run(() =>
       Effect.promise(() =>
         this.db.transaction((transaction) =>
@@ -189,11 +180,11 @@ export class SqliteStorage implements Storage {
   }
 
   scanDocuments(
-    query: DocumentQuery,
+    query: typesModule.DocumentQuery,
     limit: number,
-    cursor: Cursor | undefined,
+    cursor: typesModule.Cursor | undefined,
     _context: Context,
-  ): Promise<Page<DocumentRecord, Cursor>> {
+  ): Promise<typesModule.Page<typesModule.DocumentRecord, typesModule.Cursor>> {
     return this.query(() => scanDocumentRows(this.db, query, limit, cursor));
   }
 

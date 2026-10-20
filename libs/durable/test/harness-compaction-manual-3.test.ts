@@ -1,12 +1,15 @@
 import { type Message } from "@msa/ai";
-import { type EntryRecord } from "@msa/durable";
-import { CompactionTask } from "@msa/durable/harness";
-import { MemoryStorage } from "@msa/durable/storage/memory";
+import harnessModule from "@msa/durable/harness";
+import type durableTypes from "@msa/durable/index.types";
+import memory from "@msa/durable/storage/memory";
 import { Effect } from "effect";
 import { afterEach, describe, expect, it } from "vite-plus/test";
 
 import harnessCompactionSupport from "./harness-compaction-support.ts";
 import support from "./support.ts";
+
+const { MemoryStorage } = memory;
+const { CompactionTask } = harnessModule;
 
 const {
   MANUAL,
@@ -120,7 +123,7 @@ const asksBeforeCompactFirst = Effect.gen(function* () {
   );
   expect(chat.setup.reports).toEqual([expect.objectContaining({ message: "hook broke" })]);
   const compaction = seen[0] as {
-    entries: EntryRecord[];
+    entries: durableTypes.EntryRecord[];
     messages: Message[];
     firstKept: number;
   };

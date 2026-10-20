@@ -1,12 +1,15 @@
 import { type ToolResultMessage } from "@msa/ai";
-import { LiveDoc, ToolResultEntry, defineTool } from "@msa/durable";
-import { MemoryStorage } from "@msa/durable/storage/memory";
+import durable from "@msa/durable";
+import memory from "@msa/durable/storage/memory";
 import { Effect } from "effect";
 import { afterEach, describe, expect, it } from "vite-plus/test";
 
 import harnessStructuredEvents from "./harness-structured-events.ts";
 import harnessStructuredSupport from "./harness-structured-support.ts";
 import support from "./support.ts";
+
+const { LiveDoc, ToolResultEntry, defineTool } = durable;
+const { MemoryStorage } = memory;
 
 const { blockingTool, toolCalls } = harnessStructuredEvents;
 const { behaviors, directories, gates, log } = harnessStructuredSupport;

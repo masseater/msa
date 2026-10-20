@@ -1,88 +1,97 @@
 import type { Context } from "@msa/chord";
 import { Effect, Function } from "effect";
 
-import {
-  type AnyDocToken,
-  checkRecordScope,
-  checkRecordVersion,
-  materializeDocument,
-  type ResolvedAddress,
-  resolveAddress,
-} from "../documents.ts";
-import type { Dual2, Dual3 } from "../dual.ts";
-import { idFromNumber } from "../ids.ts";
-import type { ConversationId, DocumentAddress, EntryId, JsonObject } from "../types.ts";
-import { loadDocument, touchDocument } from "./session-documents.ts";
-import { assertUsable, enqueueHealthy, type SessionState } from "./session-state.ts";
-import type { LoadedDocument } from "./transaction-types.ts";
+import documentsModule from "../documents.ts";
+import type documentsTypes from "../documents.types.ts";
+import type dualTypes from "../dual.ts";
+import ids from "../ids.ts";
+import type typesModule from "../types.types.ts";
+import sessionDocuments from "./session-documents.ts";
+import type sessionReadsTypes from "./session-reads.types.ts";
+import sessionState from "./session-state.ts";
 
-export type Resolved = {
-  readonly definition: AnyDocToken["definition"];
-  readonly resolved: ResolvedAddress;
-  readonly context: Context;
-};
+const { checkRecordScope, checkRecordVersion, materializeDocument, resolveAddress } =
+  documentsModule;
+const { loadDocument, touchDocument } = sessionDocuments;
+const { assertUsable, enqueueHealthy } = sessionState;
+const { idFromNumber } = ids;
 
-export const resolveRead: Dual2<AnyDocToken, readonly unknown[], Resolved> = Function.dual(
+const resolveRead: dualTypes.Dual2<
+  documentsTypes.AnyDocToken,
+  readonly unknown[],
+  sessionReadsTypes.Resolved
+> = Function.dual(
   2,
-  (token: AnyDocToken, args: readonly unknown[]): Resolved => {
+  (token: documentsTypes.AnyDocToken, args: readonly unknown[]): sessionReadsTypes.Resolved => {
     const definition = token.definition;
     const resolved = resolveAddress(definition, args);
-    return { definition, resolved, context: args[resolved.nextArgument] as Context };
+    return { context: args[resolved.nextArgument] as Context, definition, resolved };
   },
 );
 
-export const loadResolved: Dual2<
-  SessionState,
-  Resolved,
-  Effect.Effect<LoadedDocument | undefined>
-> = Function.dual(2, (state: SessionState, read: Resolved) =>
+const loadResolved: dualTypes.Dual2<
+  sessionReadsTypes.SessionState,
+  sessionReadsTypes.Resolved,
+  Effect.Effect<sessionReadsTypes.LoadedDocument | undefined>
+> = Function.dual(2, (state: sessionReadsTypes.SessionState, read: sessionReadsTypes.Resolved) =>
   loadDocument(state, read.definition, read.resolved.id, read.resolved.address, read.context),
 );
 
-export const checked: Dual2<Resolved, LoadedDocument, LoadedDocument> = Function.dual(
+const checked: dualTypes.Dual2<
+  sessionReadsTypes.Resolved,
+  sessionReadsTypes.LoadedDocument,
+  sessionReadsTypes.LoadedDocument
+> = Function.dual(
   2,
-  (read: Resolved, loaded: LoadedDocument): LoadedDocument => {
+  (
+    read: sessionReadsTypes.Resolved,
+    loaded: sessionReadsTypes.LoadedDocument,
+  ): sessionReadsTypes.LoadedDocument => {
     checkRecordScope(read.definition, loaded.record);
     checkRecordVersion(read.definition, loaded.record, loaded.storedVersion);
     return loaded;
   },
 );
 
-export const conversationDocumentOnLine: Dual3<
-  SessionState,
-  AnyDocToken,
-  readonly [ConversationId, Context],
+const conversationDocumentOnLine: dualTypes.Dual3<
+  sessionReadsTypes.SessionState,
+  documentsTypes.AnyDocToken,
+  readonly [typesModule.ConversationId, Context],
   Effect.Effect<
     | {
-        readonly record: LoadedDocument["record"];
+        readonly record: sessionReadsTypes.LoadedDocument["record"];
         readonly version: number;
-        readonly value: JsonObject;
+        readonly value: typesModule.JsonObject;
       }
     | undefined
   >
 > = Function.dual(
   3,
   Effect.fnUntraced(function* (
-    state: SessionState,
-    token: AnyDocToken,
-    args: readonly [ConversationId, Context],
+    state: sessionReadsTypes.SessionState,
+    token: documentsTypes.AnyDocToken,
+    args: readonly [typesModule.ConversationId, Context],
   ) {
     const read = resolveRead(token, args);
     const loaded = yield* loadResolved(state, { ...read, context: args[1] });
     if (loaded === undefined) return undefined;
     checked(read, loaded);
-    return { record: loaded.record, version: loaded.valueVersion, value: loaded.tracker.value };
+    return { record: loaded.record, value: loaded.tracker.value, version: loaded.valueVersion };
   }),
 );
 
-export const snapshotDocument: Dual3<
-  SessionState,
-  AnyDocToken,
+const snapshotDocument: dualTypes.Dual3<
+  sessionReadsTypes.SessionState,
+  documentsTypes.AnyDocToken,
   readonly unknown[],
-  Effect.Effect<JsonObject | undefined>
+  Effect.Effect<typesModule.JsonObject | undefined>
 > = Function.dual(
   3,
-  Effect.fnUntraced(function* (state: SessionState, token: AnyDocToken, args: readonly unknown[]) {
+  Effect.fnUntraced(function* (
+    state: sessionReadsTypes.SessionState,
+    token: documentsTypes.AnyDocToken,
+    args: readonly unknown[],
+  ) {
     assertUsable(state);
     const read = resolveRead(token, args);
     const cached = state.documents.get(read.resolved.id);
@@ -96,10 +105,10 @@ export const snapshotDocument: Dual3<
 );
 
 const historicalDocument = Effect.fnUntraced(function* (
-  state: SessionState,
-  read: Resolved,
-  conversationId: ConversationId,
-  at: EntryId,
+  state: sessionReadsTypes.SessionState,
+  read: sessionReadsTypes.Resolved,
+  conversationId: typesModule.ConversationId,
+  at: typesModule.EntryId,
 ) {
   const { storage } = state;
   const context = read.context;
@@ -107,9 +116,9 @@ const historicalDocument = Effect.fnUntraced(function* (
   if (storedEntry === undefined) {
     throw new Error(`Entry ${at} is not visible from conversation ${conversationId}`);
   }
-  const address: DocumentAddress = {
+  const address: typesModule.DocumentAddress = {
     ...read.resolved.address,
-    scope: { kind: "conversation", conversationId: storedEntry.entry.conversationId },
+    scope: { conversationId: storedEntry.entry.conversationId, kind: "conversation" },
   };
   const seq = storedEntry.commitSeq;
   const record = yield* Effect.promise(() => storage.findDocument(address, seq, context));
@@ -121,30 +130,45 @@ const historicalDocument = Effect.fnUntraced(function* (
   return materializeDocument(read.definition, stored);
 });
 
-export const snapshotAsOf: Dual3<
-  SessionState,
-  AnyDocToken,
+const snapshotAsOf: dualTypes.Dual3<
+  sessionReadsTypes.SessionState,
+  documentsTypes.AnyDocToken,
   readonly unknown[],
-  Effect.Effect<JsonObject | undefined>
-> = Function.dual(3, (state: SessionState, token: AnyDocToken, args: readonly unknown[]) =>
-  Effect.suspend(() => {
-    assertUsable(state);
-    const definition = token.definition;
-    const resolved = resolveAddress(definition, args);
-    if (resolved.address.scope.kind !== "conversation") {
-      throw new TypeError("Session.snapshotAsOf() requires a conversation document");
-    }
-    const conversationId = resolved.address.scope.conversationId;
-    const atValue = args[resolved.nextArgument];
-    if (typeof atValue !== "number" || !Number.isSafeInteger(atValue)) {
-      throw new TypeError("Session.snapshotAsOf() requires an entry ID");
-    }
-    const at = idFromNumber<EntryId>(atValue);
-    const read = { definition, resolved, context: args[resolved.nextArgument + 1] as Context };
-    return Effect.promise(() =>
-      enqueueHealthy(state, historicalDocument(state, read, conversationId, at)),
-    );
-  }),
+  Effect.Effect<typesModule.JsonObject | undefined>
+> = Function.dual(
+  3,
+  (
+    state: sessionReadsTypes.SessionState,
+    token: documentsTypes.AnyDocToken,
+    args: readonly unknown[],
+  ) =>
+    Effect.suspend(() => {
+      assertUsable(state);
+      const definition = token.definition;
+      const resolved = resolveAddress(definition, args);
+      if (resolved.address.scope.kind !== "conversation") {
+        throw new TypeError("Session.snapshotAsOf() requires a conversation document");
+      }
+      const conversationId = resolved.address.scope.conversationId;
+      const atValue = args[resolved.nextArgument];
+      if (typeof atValue !== "number" || !Number.isSafeInteger(atValue)) {
+        throw new TypeError("Session.snapshotAsOf() requires an entry ID");
+      }
+      const at = idFromNumber<typesModule.EntryId>(atValue);
+      const read = { context: args[resolved.nextArgument + 1] as Context, definition, resolved };
+      return Effect.promise(() =>
+        enqueueHealthy(state, historicalDocument(state, read, conversationId, at)),
+      );
+    }),
 );
 
-export type { AnyDocToken };
+const sessionReads = {
+  checked,
+  conversationDocumentOnLine,
+  loadResolved,
+  resolveRead,
+  snapshotAsOf,
+  snapshotDocument,
+};
+
+export default sessionReads;

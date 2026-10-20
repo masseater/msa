@@ -6,35 +6,30 @@ import {
   fauxText,
   fauxToolCall,
 } from "@msa/ai";
-import {
-  type NestedToolExecutionResult,
-  type ToolExecutionResult,
-  type ToolRegistration,
-  ToolResultEntry,
-  defineTool,
-} from "@msa/durable";
-import { MemoryStorage } from "@msa/durable/storage/memory";
+import durable from "@msa/durable";
+import type durableTypes from "@msa/durable/index.types";
+import memory from "@msa/durable/storage/memory";
 import { Effect } from "effect";
 import { dual } from "effect/Function";
 
-import chatSupport from "./chat-support.ts";
 import type chatSupportTypes from "./chat-support.types.ts";
-import effectSupport from "./effect-support.ts";
-import harnessSupport from "./harness-support.ts";
-import sessionSupport from "./session-support.ts";
+import testSupport from "./support.ts";
 
-const { allEntries, openChat } = chatSupport;
-const { awaited } = effectSupport;
-const { addTool } = harnessSupport;
-const { context } = sessionSupport;
+const { ToolResultEntry, defineTool } = durable;
+const { MemoryStorage } = memory;
+
+const { allEntries, openChat } = testSupport;
+const { awaited } = testSupport;
+const { addTool } = testSupport;
+const { context } = testSupport;
 
 const Count = Type.Object({ count: Type.Number() });
 
 function returningImpl(
   name: string,
-  result: ToolExecutionResult,
-  extra: Partial<ToolRegistration> = {},
-): ToolRegistration {
+  result: durableTypes.ToolExecutionResult,
+  extra: Partial<durableTypes.ToolRegistration> = {},
+): durableTypes.ToolRegistration {
   return defineTool({
     description: name,
     execute: () => Promise.resolve(result),
@@ -46,13 +41,13 @@ function returningImpl(
 
 const returning: {
   (
-    result: ToolExecutionResult,
-    extra?: Partial<ToolRegistration>,
+    result: durableTypes.ToolExecutionResult,
+    extra?: Partial<durableTypes.ToolRegistration>,
   ): (name: string) => ReturnType<typeof returningImpl>;
   (
     name: string,
-    result: ToolExecutionResult,
-    extra?: Partial<ToolRegistration>,
+    result: durableTypes.ToolExecutionResult,
+    extra?: Partial<durableTypes.ToolRegistration>,
   ): ReturnType<typeof returningImpl>;
 } = dual((args) => typeof args[0] === "string", returningImpl);
 
@@ -65,7 +60,7 @@ const DONE = fauxAssistantMessage([fauxText("done")]);
 const nested = Effect.fn("nested")(function* (setup: chatSupportTypes.ChatSetup, name: string) {
   const runPromise = Effect.runPromiseWith(yield* Effect.context<never>());
 
-  let received: NestedToolExecutionResult | undefined;
+  let received: durableTypes.NestedToolExecutionResult | undefined;
   addTool(
     setup.registry,
     defineTool({

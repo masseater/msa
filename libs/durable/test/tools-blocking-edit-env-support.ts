@@ -2,10 +2,12 @@ import type { Context } from "@msa/chord";
 import { BACKGROUND_CONTEXT } from "@msa/chord/context";
 import { Effect } from "effect";
 
-import { type FileError, type Result } from "../src/env/index.ts";
-import { NodeExecutionEnv } from "../src/env/node.ts";
+import type envTypes from "../src/env/index.types.ts";
+import node from "../src/env/node.ts";
 import effectSupport from "./effect-support.ts";
 import toolsSupport from "./tools-support.ts";
+
+const { NodeExecutionEnv } = node;
 
 const { awaited } = effectSupport;
 const { deferred } = toolsSupport;
@@ -20,7 +22,7 @@ class BlockingEditExecutionEnv extends NodeExecutionEnv {
     path: string,
     content: string | Uint8Array,
     context: Context,
-  ): Promise<Result<void, FileError>> {
+  ): Promise<envTypes.Result<void, envTypes.FileError>> {
     const superWriteFile = super.writeFile.bind(this);
     return Effect.runPromise(
       Effect.gen({ self: this }, function* () {

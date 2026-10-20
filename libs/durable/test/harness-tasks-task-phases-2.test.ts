@@ -1,23 +1,23 @@
 import type { Context } from "@msa/chord";
 import { withCancel } from "@msa/chord/context";
-import { type TaskRuntime, defineTask } from "@msa/durable";
+import durable from "@msa/durable";
+import type durableTypes from "@msa/durable/index.types";
 import { Effect } from "effect";
 import { describe, expect, it } from "vite-plus/test";
 
-import effectSupport from "./effect-support.ts";
-import harnessSupport from "./harness-support.ts";
 import harnessTasksSupport from "./harness-tasks-support.ts";
-import sessionSupport from "./session-support.ts";
-import taskSupport from "./task-support.ts";
+import testSupport from "./support.ts";
 
-const { awaited } = effectSupport;
-const { addHooks } = harnessSupport;
+const { defineTask } = durable;
+
+const { awaited } = testSupport;
+const { addHooks } = testSupport;
 const { oneStep, openRoot, start } = harnessTasksSupport;
-const { context } = sessionSupport;
-const { completed, deferred } = taskSupport;
+const { context } = testSupport;
+const { completed, deferred } = testSupport;
 
 type PingHooks = { ping(): void };
-type PingRuntime = TaskRuntime<null, { phase: string }, null, PingHooks>;
+type PingRuntime = durableTypes.TaskRuntime<null, { phase: string }, null, PingHooks>;
 type Seen = { phase: string; pings: string[]; thinking: string; same?: boolean };
 
 const observer = (pings: string[], seen: Seen[]) =>

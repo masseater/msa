@@ -1,7 +1,7 @@
 import { Effect } from "effect";
 import { dual } from "effect/Function";
 
-import hostKeyChangedError from "./host-key-changed-error.ts";
+import HostKeyChangedError from "./host-key-changed-error.ts";
 import platform from "./platform.ts";
 import type sshArgsTypes from "./ssh-args.types.ts";
 
@@ -15,7 +15,6 @@ const {
   renamePath,
   writeText,
 } = platform;
-const { HostKeyChangedError } = hostKeyChangedError;
 
 const WHITESPACE_RUN = /\s+/u;
 

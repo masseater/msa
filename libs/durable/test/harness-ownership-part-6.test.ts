@@ -1,12 +1,16 @@
 import { Type, fauxAssistantMessage, fauxText, fauxToolCall } from "@msa/ai";
-import { type ConversationId, LiveDoc, type TaskId, defineTool } from "@msa/durable";
-import { MemoryStorage } from "@msa/durable/storage/memory";
+import durable from "@msa/durable";
+import type durableTypes from "@msa/durable/index.types";
+import memory from "@msa/durable/storage/memory";
 import { Effect } from "effect";
 import { afterEach, describe, expect, it } from "vite-plus/test";
 
 import harnessOwnershipChildren from "./harness-ownership-children.ts";
 import harnessOwnershipSupport from "./harness-ownership-support.ts";
 import support from "./support.ts";
+
+const { LiveDoc, defineTool } = durable;
+const { MemoryStorage } = memory;
 
 const { spawnFauxChild } = harnessOwnershipChildren;
 const { directories, gated, gates, runs } = harnessOwnershipSupport;
@@ -25,7 +29,7 @@ afterEach(() =>
 
 function delegateLate() {
   const setup = chatSetup();
-  const ready = deferred<{ child: ConversationId; taskId: TaskId }>();
+  const ready = deferred<{ child: durableTypes.ConversationId; taskId: durableTypes.TaskId }>();
   const go = deferred();
   const queued = deferred<{ submitting: Promise<unknown> }>();
   addTool(
@@ -74,7 +78,7 @@ function delegateLate() {
 
 function delegateToGatedChild() {
   const setup = chatSetup();
-  const spawned: { child?: ConversationId } = {};
+  const spawned: { child?: durableTypes.ConversationId } = {};
   const toolWait = deferred<string>();
   addTool(
     setup.registry,

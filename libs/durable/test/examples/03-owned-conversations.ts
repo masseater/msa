@@ -2,10 +2,15 @@ import * as NodeRuntime from "@effect/platform-node/NodeRuntime";
 import { BACKGROUND_CONTEXT } from "@msa/chord/context";
 import { Console, Effect } from "effect";
 
-import { type ConversationId, defineDoc, defineTask } from "../../src/index.ts";
-import { createSession } from "../../src/session/index.ts";
-import { MemoryStorage } from "../../src/storage/memory.ts";
+import durable from "../../src/index.ts";
+import type durableTypes from "../../src/index.types.ts";
+import sessionModule from "../../src/session/index.ts";
+import memory from "../../src/storage/memory.ts";
 import effectSupport from "../effect-support.ts";
+
+const { createSession } = sessionModule;
+const { MemoryStorage } = memory;
+const { defineDoc, defineTask } = durable;
 
 const { awaited } = effectSupport;
 
@@ -21,7 +26,7 @@ const Supervisor = defineTask<null, { phase: "ready" }, null>({
 });
 
 const AgentRegistry = defineDoc<{
-  agents: Record<string, { conversationId: ConversationId; requestId: string }>;
+  agents: Record<string, { conversationId: durableTypes.ConversationId; requestId: string }>;
 }>({
   fork: "initial",
   history: "latest",

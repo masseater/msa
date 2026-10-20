@@ -1,5 +1,5 @@
 import type { Context } from "@msa/chord";
-import type { FileError } from "@msa/durable/env";
+import type envTypes from "@msa/durable/env.types";
 import type { Effect } from "effect";
 
 import type connectionTypes from "./connection.types.ts";
@@ -18,7 +18,7 @@ declare namespace fileOpTypes {
   }
 
   interface FileOp<T> extends PathRequest {
-    readonly operation: (resolved: string) => Effect.Effect<T, FileError>;
+    readonly operation: (resolved: string) => Effect.Effect<T, envTypes.FileError>;
     readonly check?: "before" | "both";
   }
 

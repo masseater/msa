@@ -1,12 +1,16 @@
 import { Type, fauxAssistantMessage, fauxToolCall } from "@msa/ai";
-import { LiveDoc, defineTool } from "@msa/durable";
-import { GenerationTask } from "@msa/durable/harness";
-import { MemoryStorage } from "@msa/durable/storage/memory";
+import durable from "@msa/durable";
+import harnessModule from "@msa/durable/harness";
+import memory from "@msa/durable/storage/memory";
 import { Effect } from "effect";
 import { afterEach, describe, expect, it } from "vite-plus/test";
 
 import harnessInboxSupport from "./harness-inbox-support.ts";
 import support from "./support.ts";
+
+const { GenerationTask } = harnessModule;
+const { MemoryStorage } = memory;
+const { LiveDoc, defineTool } = durable;
 
 const { HOLD, answer, directories, gated, holdTool, queuedNote, status, toolRunning, transcript } =
   harnessInboxSupport;

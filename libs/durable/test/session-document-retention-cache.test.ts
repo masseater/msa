@@ -1,12 +1,18 @@
-import { defineDoc } from "@msa/durable";
+import durable from "@msa/durable";
 import { Effect } from "effect";
 import { describe, expect, it, onTestFinished } from "vite-plus/test";
 
-import { currentTimeMillis } from "../src/clock.ts";
-import { SessionImpl, setDefaultDocumentRetention } from "../src/session/session.ts";
+import clockModule from "../src/clock.ts";
+import sessionState from "../src/session/session-state.ts";
+import SessionImpl from "../src/session/session.ts";
 import sessionDocumentRetentionSupport from "./session-document-retention-support.ts";
 import type sessionDocumentRetentionSupportTypes from "./session-document-retention-support.types.ts";
 import support from "./support.ts";
+
+const { defineDoc } = durable;
+
+const { setDefaultDocumentRetention } = sessionState;
+const { currentTimeMillis } = clockModule;
 
 const { CounterDoc, bump, defaultForRun, open, settleLine } = sessionDocumentRetentionSupport;
 const { ControlledStorage, awaited, context, createConversation, eventually } = support;

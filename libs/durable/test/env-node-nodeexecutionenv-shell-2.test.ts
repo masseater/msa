@@ -2,11 +2,15 @@ import { BACKGROUND_CONTEXT } from "@msa/chord/context";
 import { Effect } from "effect";
 import { afterEach, describe, expect, it } from "vite-plus/test";
 
-import { getOrThrow } from "../src/env/index.ts";
-import { NodeExecutionEnv } from "../src/env/node.ts";
+import envModule from "../src/env/index.ts";
+import node from "../src/env/node.ts";
+import type nodeTypes from "../src/env/node.types.ts";
 import effectSupport from "./effect-support.ts";
 import envNodeSupport from "./env-node-support.ts";
 import platformSupport from "./platform-support.ts";
+
+const { NodeExecutionEnv } = node;
+const { getOrThrow } = envModule;
 
 const { awaited, toJsonText } = effectSupport;
 const { cleanUpEnvTests, collectShellOutput, createTempDir, tempDirs } = envNodeSupport;
@@ -14,8 +18,8 @@ const { joinPath } = platformSupport;
 
 class FailingSpillExecutionEnv extends NodeExecutionEnv {
   override createTempFile(
-    options: Parameters<NodeExecutionEnv["createTempFile"]>[0],
-    context: Parameters<NodeExecutionEnv["createTempFile"]>[1],
+    options: Parameters<nodeTypes.NodeExecutionEnv["createTempFile"]>[0],
+    context: Parameters<nodeTypes.NodeExecutionEnv["createTempFile"]>[1],
   ) {
     if (options?.prefix === "msa-output-") {
       return Promise.resolve({

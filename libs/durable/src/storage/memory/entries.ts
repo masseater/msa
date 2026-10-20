@@ -1,20 +1,27 @@
 import { Function } from "effect";
 
-import { StorageRequestError } from "../../errors.ts";
-import type { ConversationId, EntryId, EntryRecord } from "../../types.ts";
-import { clone, lowerBound, type State, upperBound } from "./state.ts";
+import errors from "../../errors.ts";
+import type typesModule from "../../types.types.ts";
+import stateModule from "./state.ts";
+import type stateTypes from "./state.types.ts";
 
-const assertConversation = (state: State, conversationId: ConversationId): void => {
+const { StorageRequestError } = errors;
+const { clone, lowerBound, upperBound } = stateModule;
+
+const assertConversation = (
+  state: stateTypes.State,
+  conversationId: typesModule.ConversationId,
+): void => {
   if (!state.conversations.has(conversationId)) {
     throw new StorageRequestError(`Unknown conversation: ${conversationId}`);
   }
 };
 
-type Segment = { readonly conversationId: ConversationId; readonly upper: number };
+type Segment = { readonly conversationId: typesModule.ConversationId; readonly upper: number };
 
 const segments = (
-  state: State,
-  conversationId: ConversationId,
+  state: stateTypes.State,
+  conversationId: typesModule.ConversationId,
   minEntryId: number,
   maxEntryId: number,
 ): Segment[] => {
@@ -35,28 +42,28 @@ const segments = (
 
 type VisibleEntries = {
   (
-    conversationId: ConversationId,
+    conversationId: typesModule.ConversationId,
     minEntryId?: number,
     maxEntryId?: number,
-  ): (state: State) => Generator<EntryRecord>;
+  ): (state: stateTypes.State) => Generator<typesModule.EntryRecord>;
   (
-    state: State,
-    conversationId: ConversationId,
+    state: stateTypes.State,
+    conversationId: typesModule.ConversationId,
     minEntryId?: number,
     maxEntryId?: number,
-  ): Generator<EntryRecord>;
+  ): Generator<typesModule.EntryRecord>;
 };
 
 const isState = (args: IArguments): boolean => typeof args[0] === "object";
 
-export const visibleEntries: VisibleEntries = Function.dual(
+const visibleEntries: VisibleEntries = Function.dual(
   isState,
   function* (
-    state: State,
-    conversationId: ConversationId,
+    state: stateTypes.State,
+    conversationId: typesModule.ConversationId,
     minEntryId: number = Number.NEGATIVE_INFINITY,
     maxEntryId: number = Number.POSITIVE_INFINITY,
-  ): Generator<EntryRecord> {
+  ): Generator<typesModule.EntryRecord> {
     assertConversation(state, conversationId);
     for (const segment of segments(state, conversationId, minEntryId, maxEntryId)) {
       const ids = state.entryIds.get(segment.conversationId) ?? [];
@@ -69,14 +76,14 @@ export const visibleEntries: VisibleEntries = Function.dual(
   },
 );
 
-export const visibleEntriesAscending: VisibleEntries = Function.dual(
+const visibleEntriesAscending: VisibleEntries = Function.dual(
   isState,
   function* (
-    state: State,
-    conversationId: ConversationId,
+    state: stateTypes.State,
+    conversationId: typesModule.ConversationId,
     minEntryId: number = Number.NEGATIVE_INFINITY,
     maxEntryId: number = Number.POSITIVE_INFINITY,
-  ): Generator<EntryRecord> {
+  ): Generator<typesModule.EntryRecord> {
     for (const segment of segments(state, conversationId, minEntryId, maxEntryId).reverse()) {
       const ids = state.entryIds.get(segment.conversationId) ?? [];
       for (let index = lowerBound(ids, minEntryId); index < ids.length; index++) {
@@ -88,23 +95,25 @@ export const visibleEntriesAscending: VisibleEntries = Function.dual(
   },
 );
 
-export const latestHeadMarker: {
+const latestHeadMarker: {
   (
-    conversationId: ConversationId,
-    atOrBeforeEntryId: EntryId | undefined,
-  ): (state: State) => (EntryRecord & { readonly head: EntryId }) | undefined;
+    conversationId: typesModule.ConversationId,
+    atOrBeforeEntryId: typesModule.EntryId | undefined,
+  ): (
+    state: stateTypes.State,
+  ) => (typesModule.EntryRecord & { readonly head: typesModule.EntryId }) | undefined;
   (
-    state: State,
-    conversationId: ConversationId,
-    atOrBeforeEntryId: EntryId | undefined,
-  ): (EntryRecord & { readonly head: EntryId }) | undefined;
+    state: stateTypes.State,
+    conversationId: typesModule.ConversationId,
+    atOrBeforeEntryId: typesModule.EntryId | undefined,
+  ): (typesModule.EntryRecord & { readonly head: typesModule.EntryId }) | undefined;
 } = Function.dual(
   3,
   (
-    state: State,
-    conversationId: ConversationId,
-    atOrBeforeEntryId: EntryId | undefined,
-  ): (EntryRecord & { readonly head: EntryId }) | undefined => {
+    state: stateTypes.State,
+    conversationId: typesModule.ConversationId,
+    atOrBeforeEntryId: typesModule.EntryId | undefined,
+  ): (typesModule.EntryRecord & { readonly head: typesModule.EntryId }) | undefined => {
     assertConversation(state, conversationId);
     let currentId = conversationId;
     let upperEntryId = atOrBeforeEntryId ?? Number.POSITIVE_INFINITY;
@@ -122,3 +131,11 @@ export const latestHeadMarker: {
     }
   },
 );
+
+const entriesModule = {
+  latestHeadMarker,
+  visibleEntries,
+  visibleEntriesAscending,
+};
+
+export default entriesModule;

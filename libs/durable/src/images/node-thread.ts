@@ -1,25 +1,16 @@
 import { Worker } from "node:worker_threads";
 
-import { Data } from "effect";
+import type imageTypes from "../tools/image.types.ts";
+import unrefTimer from "../unref-timer.ts";
+import type unrefTimerTypes from "../unref-timer.types.ts";
+import type nodeThreadTypes from "./node-thread.types.ts";
+import type nodeWorkerTypes from "./node-worker.types.ts";
+import WorkerUnavailable from "./worker-unavailable.ts";
 
-import type { ImageLimits, PreparedImage } from "../tools/image.ts";
-import type { PrepareReply, PrepareRequest } from "./node-worker.ts";
-
-export class WorkerUnavailable extends Data.TaggedError("WorkerUnavailable")<{
-  readonly message: string;
-  readonly cause: unknown;
-}> {}
-
-export type PhotonThread = {
-  prepare(
-    bytes: Uint8Array,
-    mimeType: string,
-    limits: ImageLimits,
-  ): Promise<PreparedImage | undefined>;
-};
+const { startUnrefTimer } = unrefTimer;
 
 const unavailable = (cause: unknown): WorkerUnavailable =>
-  new WorkerUnavailable({ message: "The Photon image worker cannot start", cause });
+  new WorkerUnavailable({ cause, message: "The Photon image worker cannot start" });
 
 const startWorker = (wasm: Uint8Array): Worker => {
   const file = import.meta.url.endsWith(".ts") ? "./node-worker.ts" : "./node-worker.js";
@@ -34,23 +25,16 @@ type Requests = {
   readonly size: () => number;
   readonly open: () => {
     readonly id: number;
-    readonly promise: Promise<PreparedImage | undefined>;
+    readonly promise: Promise<imageTypes.PreparedImage | undefined>;
   };
-  readonly answer: (reply: PrepareReply) => boolean;
+  readonly answer: (reply: nodeWorkerTypes.PrepareReply) => boolean;
   readonly failAll: (error: unknown) => void;
 };
 
 const requests = (): Requests => {
-  const pending = new Map<number, PromiseWithResolvers<PreparedImage | undefined>>();
+  const pending = new Map<number, PromiseWithResolvers<imageTypes.PreparedImage | undefined>>();
   let nextId = 0;
   return {
-    size: () => pending.size,
-    open: () => {
-      const id = nextId++;
-      const request = Promise.withResolvers<PreparedImage | undefined>();
-      pending.set(id, request);
-      return { id, promise: request.promise };
-    },
     answer: (reply) => {
       const request = pending.get(reply.id);
       if (request === undefined) return false;
@@ -63,22 +47,27 @@ const requests = (): Requests => {
       for (const request of pending.values()) request.reject(error);
       pending.clear();
     },
+    open: () => {
+      const id = nextId++;
+      const request = Promise.withResolvers<imageTypes.PreparedImage | undefined>();
+      pending.set(id, request);
+      return { id, promise: request.promise };
+    },
+    size: () => pending.size,
   };
 };
 
-export type PhotonThreadOptions = {
-  readonly wasm: Uint8Array;
-  readonly idleMs: number;
-  readonly onExit: () => void;
-};
-
-export const startPhotonThread = ({ wasm, idleMs, onExit }: PhotonThreadOptions): PhotonThread => {
+const startPhotonThread = ({
+  wasm,
+  idleMs,
+  onExit,
+}: nodeThreadTypes.PhotonThreadOptions): nodeThreadTypes.PhotonThread => {
   const worker = startWorker(wasm);
   const book = requests();
-  let idle: ReturnType<typeof setTimeout> | undefined;
+  let idle: unrefTimerTypes.UnrefTimer | undefined;
   let started = false;
   const exit = (): void => {
-    if (idle !== undefined) clearTimeout(idle);
+    idle?.cancel();
     idle = undefined;
     onExit();
   };
@@ -87,29 +76,36 @@ export const startPhotonThread = ({ wasm, idleMs, onExit }: PhotonThreadOptions)
     exit();
   };
   worker.unref();
-  worker.on("message", (reply: PrepareReply) => {
+  worker.on("message", (reply: nodeWorkerTypes.PrepareReply) => {
     started = true;
     if (!book.answer(reply) || book.size() > 0) return;
     worker.unref();
-    idle = setTimeout(() => {
+    idle = startUnrefTimer(() => {
       exit();
       void worker.terminate();
     }, idleMs);
-    idle.unref();
   });
   worker.on("error", fail);
   worker.on("exit", (code) => fail(new Error(`The Photon image worker exited with code ${code}`)));
   return {
     prepare(bytes, mimeType, limits) {
       const { id, promise } = book.open();
-      if (idle !== undefined) clearTimeout(idle);
+      idle?.cancel();
       idle = undefined;
       worker.ref();
       const copy = bytes.slice();
-      worker.postMessage({ id, bytes: copy, mimeType, limits } satisfies PrepareRequest, [
-        copy.buffer,
-      ]);
+      worker.postMessage(
+        { bytes: copy, id, limits, mimeType } satisfies nodeWorkerTypes.PrepareRequest,
+        [copy.buffer],
+      );
       return promise;
     },
   };
 };
+
+const nodeThread = {
+  WorkerUnavailable,
+  startPhotonThread,
+};
+
+export default nodeThread;

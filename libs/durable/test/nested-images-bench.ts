@@ -3,23 +3,21 @@ import { createModels } from "@msa/ai/models";
 import { fauxAssistantMessage, fauxProvider, fauxText, fauxToolCall } from "@msa/ai/providers/faux";
 import { Console, Effect, Fiber } from "effect";
 
-import { Harness } from "../src/harness/index.ts";
-import {
-  type Storage,
-  type StorageWrite,
-  ToolResultEntry,
-  type ToolTaskInput,
-} from "../src/index.ts";
+import harnessModule from "../src/harness/index.ts";
+import durable from "../src/index.ts";
 import benchSupport from "./bench-support.ts";
 import registryFor from "./nested-images-bench-tools.ts";
-import type nestedImagesBenchToolsTypes from "./nested-images-bench-tools.types.ts";
+import type nestedImagesBenchTypes from "./nested-images-bench.types.ts";
 import support from "./support.ts";
+
+const { Harness } = harnessModule;
+const { ToolResultEntry } = durable;
 
 const { directorySize, heapAfterGc, meterCommits, noWrites, openBenchStorage, requireGc } =
   benchSupport;
 const { awaited, context, makeTempDir, removeDir, sampleEvery, toJsonText } = support;
 
-type Written = Record<StorageWrite["type"], number>;
+type Written = Record<nestedImagesBenchTypes.StorageWrite["type"], number>;
 
 type Result = {
   commits: number;
@@ -61,7 +59,7 @@ function newMeter(): Meter {
 }
 
 function scenarioModels(
-  scenario: nestedImagesBenchToolsTypes.Scenario,
+  scenario: nestedImagesBenchTypes.Scenario,
   directory: string,
   meter: Meter,
 ) {
@@ -81,7 +79,7 @@ function scenarioModels(
 }
 
 const openMetered = Effect.fn("openMetered")(function* (
-  scenario: nestedImagesBenchToolsTypes.Scenario,
+  scenario: nestedImagesBenchTypes.Scenario,
   directory: string,
   meter: Meter,
   { faux, models, registry }: ReturnType<typeof scenarioModels>,
@@ -117,14 +115,14 @@ const runScript = Effect.fn("runScript")(function* (
 
 function writtenSince(written: Written, before: Written): Written {
   const delta = noWrites();
-  for (const type of Object.keys(delta) as StorageWrite["type"][]) {
+  for (const type of Object.keys(delta) as nestedImagesBenchTypes.StorageWrite["type"][]) {
     delta[type] = written[type] - before[type];
   }
   return delta;
 }
 
 const reopenAndScan = Effect.fn("reopenAndScan")(function* (
-  scenario: nestedImagesBenchToolsTypes.Scenario,
+  scenario: nestedImagesBenchTypes.Scenario,
   directory: string,
   { models, registry }: ReturnType<typeof scenarioModels>,
   baseHeap: number,
@@ -136,14 +134,17 @@ const reopenAndScan = Effect.fn("reopenAndScan")(function* (
   const reopenedHeap = heapAfterGc() - baseHeap;
   const storedReopened = yield* directorySize(directory);
   const tasks = { largestTask: 0, nestedTasks: 0 };
-  const scan = (cursor?: Parameters<Storage["scanTasks"]>[2]): Promise<void> =>
+  const scan = (
+    cursor?: Parameters<nestedImagesBenchTypes.Storage["scanTasks"]>[2],
+  ): Promise<void> =>
     runPromise(
       Effect.gen(function* () {
         const page = yield* awaited(
           reopenedStorage.scanTasks({ kind: "msa.tool" }, 50, cursor, context),
         );
         for (const record of page.items) {
-          if ((record.input as ToolTaskInput).kind === "nested") tasks.nestedTasks++;
+          if ((record.input as nestedImagesBenchTypes.ToolTaskInput).kind === "nested")
+            tasks.nestedTasks++;
           tasks.largestTask = Math.max(tasks.largestTask, (yield* toJsonText(record)).length);
         }
         if (page.next !== undefined) yield* awaited(scan(page.next));
@@ -155,7 +156,7 @@ const reopenAndScan = Effect.fn("reopenAndScan")(function* (
 });
 
 const measureScenario = Effect.fn("measureScenario")(function* (
-  scenario: nestedImagesBenchToolsTypes.Scenario,
+  scenario: nestedImagesBenchTypes.Scenario,
   directory: string,
 ) {
   const meter = newMeter();
@@ -194,9 +195,7 @@ const measureScenario = Effect.fn("measureScenario")(function* (
   return result;
 });
 
-const runScenario = Effect.fn("runScenario")(function* (
-  scenario: nestedImagesBenchToolsTypes.Scenario,
-) {
+const runScenario = Effect.fn("runScenario")(function* (scenario: nestedImagesBenchTypes.Scenario) {
   const directory = yield* makeTempDir("msa-durable-images-bench-");
   return yield* Effect.suspend(() => measureScenario(scenario, directory)).pipe(
     Effect.ensuring(Effect.asVoid(Effect.suspend(() => removeDir(directory)))),

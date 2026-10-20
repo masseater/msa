@@ -2,7 +2,7 @@ import { type Cause, Effect, Exit, Queue, Scope } from "effect";
 
 import type sessionTypes from "./session.types.ts";
 
-class Session {
+export default class Session {
   readonly id: number;
   readonly input: Queue.Queue<Uint8Array, Cause.Done>;
   readonly scope: Scope.Closeable;
@@ -53,9 +53,3 @@ class Session {
     }
   }
 }
-
-const sessionModule = {
-  Session,
-};
-
-export default sessionModule;

@@ -1,5 +1,5 @@
 import { createModels, fauxAssistantMessage } from "@msa/ai";
-import { AssistantEntry, LiveDoc } from "@msa/durable";
+import durable from "@msa/durable";
 import { Effect } from "effect";
 import { afterEach, describe, expect, it } from "vite-plus/test";
 
@@ -9,6 +9,8 @@ import harnessGenerationRecoverySupport from "./harness-generation-recovery-supp
 import harnessSupport from "./harness-support.ts";
 import platformSupport from "./platform-support.ts";
 import sessionSupport from "./session-support.ts";
+
+const { AssistantEntry, LiveDoc } = durable;
 
 const { chatSetup, textOf, unanswered, waitFor } = chatSupport;
 const { awaited } = effectSupport;

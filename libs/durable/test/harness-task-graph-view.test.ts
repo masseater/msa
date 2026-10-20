@@ -1,5 +1,5 @@
-import { defineTask } from "@msa/durable";
-import { MemoryStorage } from "@msa/durable/storage/memory";
+import durable from "@msa/durable";
+import memory from "@msa/durable/storage/memory";
 import { Effect } from "effect";
 import { describe, expect, it } from "vite-plus/test";
 
@@ -7,6 +7,9 @@ import effectSupport from "./effect-support.ts";
 import harnessTaskGraphSupport from "./harness-task-graph-support.ts";
 import sessionSupport from "./session-support.ts";
 import taskSupport from "./task-support.ts";
+
+const { defineTask } = durable;
+const { MemoryStorage } = memory;
 
 const { abortController, awaited } = effectSupport;
 const { family } = harnessTaskGraphSupport;

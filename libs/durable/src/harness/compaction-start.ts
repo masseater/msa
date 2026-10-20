@@ -1,39 +1,36 @@
 import type { Context } from "@msa/chord";
 import { Effect, Function } from "effect";
 
-import { commitTask, eachHook, hookResult } from "./bridge.ts";
-import { complete, failNoModel, place } from "./compaction-place.ts";
-import { selectCut, summarizedMessages } from "./compaction-select.ts";
-import type {
-  CompactionInput,
-  CompactionNext,
-  CompactionRuntime,
-  CompactionTaskId,
-  SummaryRequest,
-} from "./compaction-types.ts";
-import { CompactionTask } from "./compaction.ts";
-import { addCompactionStatus, LiveDoc } from "./live.ts";
-import type { CompactionHooks, ConversationId, Dual3, TaskId, Tx } from "./types.ts";
+import bridge from "./bridge.ts";
+import compactionPlace from "./compaction-place.ts";
+import compactionSelect from "./compaction-select.ts";
+import type compactionTypesModule from "./compaction-types.ts";
+import compactionModule from "./compaction.ts";
+import liveModule from "./live.ts";
+import type typesModule from "./types.types.ts";
+const { LiveDoc, addCompactionStatus } = liveModule;
+const { commitTask, eachHook, hookResult } = bridge;
+const { selectCut, summarizedMessages } = compactionSelect;
 
-export const createCompaction: {
+const createCompaction: {
   (
-    conversationId: ConversationId,
-    input: CompactionInput,
-    owner?: TaskId,
-  ): (tx: Tx) => Effect.Effect<CompactionTaskId>;
+    conversationId: typesModule.ConversationId,
+    input: compactionTypesModule.CompactionInput,
+    owner?: typesModule.TaskId,
+  ): (tx: typesModule.Tx) => Effect.Effect<compactionTypesModule.CompactionTaskId>;
   (
-    tx: Tx,
-    conversationId: ConversationId,
-    input: CompactionInput,
-    owner?: TaskId,
-  ): Effect.Effect<CompactionTaskId>;
+    tx: typesModule.Tx,
+    conversationId: typesModule.ConversationId,
+    input: compactionTypesModule.CompactionInput,
+    owner?: typesModule.TaskId,
+  ): Effect.Effect<compactionTypesModule.CompactionTaskId>;
 } = Function.dual(
   (args: IArguments) => typeof args[0] !== "number",
   Effect.fnUntraced(function* (
-    tx: Tx,
-    conversationId: ConversationId,
-    input: CompactionInput,
-    owner?: TaskId,
+    tx: typesModule.Tx,
+    conversationId: typesModule.ConversationId,
+    input: compactionTypesModule.CompactionInput,
+    owner?: typesModule.TaskId,
   ) {
     const ownership =
       owner === undefined
@@ -41,9 +38,13 @@ export const createCompaction: {
         : { kind: "task" as const, taskId: owner };
     const background = owner === undefined && input.reason !== "manual";
     const taskId = yield* Effect.promise(() =>
-      tx.createTask(CompactionTask, input, { ownership, conversationId, background }),
+      tx.createTask(compactionModule.CompactionTask, input, {
+        background,
+        conversationId,
+        ownership,
+      }),
     );
-    const status = { taskId, reason: input.reason, blocking: owner !== undefined, attempt: 1 };
+    const status = { attempt: 1, blocking: owner !== undefined, reason: input.reason, taskId };
     const live = yield* Effect.promise(() => tx.doc(LiveDoc, conversationId));
     addCompactionStatus(live, status);
     return taskId;
@@ -52,10 +53,10 @@ export const createCompaction: {
 
 type Decision = { readonly decline: true } | { readonly summary: string } | undefined;
 
-type CompactionRequest = Parameters<NonNullable<CompactionHooks["beforeCompact"]>>[0];
+type CompactionRequest = Parameters<NonNullable<typesModule.CompactionHooks["beforeCompact"]>>[0];
 
 const askHooks = Effect.fnUntraced(function* (
-  runtime: CompactionRuntime,
+  runtime: compactionTypesModule.CompactionRuntime,
   compaction: CompactionRequest,
   context: Context,
 ) {
@@ -73,16 +74,28 @@ const askHooks = Effect.fnUntraced(function* (
   return decision;
 });
 
-export const selectPhase: Dual3<
-  CompactionRuntime,
-  CompactionInput,
+const summaryMaxTokens = (reserveTokens: number, modelMaxTokens: number): number =>
+  Math.min(
+    Math.floor(0.8 * reserveTokens),
+    modelMaxTokens > 0 ? modelMaxTokens : Number.POSITIVE_INFINITY,
+  );
+
+const latestEntryId = (
+  entries: readonly { readonly id: typesModule.EntryId }[],
+  floor: typesModule.EntryId,
+): typesModule.EntryId =>
+  entries.reduce((tail, entry) => (entry.id > tail ? entry.id : tail), floor);
+
+const selectPhase: typesModule.Dual3<
+  compactionTypesModule.CompactionRuntime,
+  compactionTypesModule.CompactionInput,
   Context,
   Effect.Effect<void>
 > = Function.dual(
   3,
   Effect.fnUntraced(function* (
-    runtime: CompactionRuntime,
-    input: CompactionInput,
+    runtime: compactionTypesModule.CompactionRuntime,
+    input: compactionTypesModule.CompactionInput,
     context: Context,
   ) {
     const { conversationId } = runtime;
@@ -91,43 +104,50 @@ export const selectPhase: Dual3<
     const ref = agent.model;
     const model =
       ref === undefined ? undefined : runtime.models.getModel(ref.provider, ref.modelId);
-    if (ref === undefined || model === undefined) return yield* failNoModel(runtime, ref, context);
+    if (ref === undefined || model === undefined)
+      return yield* compactionPlace.failNoModel(runtime, ref, context);
     const policy = settings.compaction;
     const view = yield* Effect.promise(() => runtime.context(conversationId, context));
     const cut = selectCut(view, policy.keepRecentTokens);
-    if (cut === undefined) return yield* complete(runtime, context);
+    if (cut === undefined) return yield* compactionPlace.complete(runtime, context);
     const firstKept = view.entries[cut]!.id;
     const { reason, instructions } = input;
     const compaction = {
-      reason,
       entries: view.entries.slice(0, cut),
-      messages: summarizedMessages(view, cut),
       firstKept,
+      messages: summarizedMessages(view, cut),
+      reason,
       ...(instructions === undefined ? {} : { instructions }),
     };
     const decision = yield* askHooks(runtime, compaction, context);
-    if (decision !== undefined && "decline" in decision) return yield* complete(runtime, context);
-    if (decision !== undefined) return yield* place(runtime, firstKept, decision.summary, context);
-    const request: SummaryRequest = {
+    if (decision !== undefined && "decline" in decision)
+      return yield* compactionPlace.complete(runtime, context);
+    if (decision !== undefined)
+      return yield* compactionPlace.place(runtime, firstKept, decision.summary, context);
+    const request: compactionTypesModule.SummaryRequest = {
       attempt: 1,
-      model: ref,
-      thinkingLevel: agent.thinkingLevel,
-      streamOptions: settings.stream,
-      maxTokens: Math.min(
-        Math.floor(0.8 * policy.reserveTokens),
-        model.maxTokens > 0 ? model.maxTokens : Number.POSITIVE_INFINITY,
-      ),
-      tail: view.entries.reduce((tail, entry) => (entry.id > tail ? entry.id : tail), firstKept),
       firstKept,
+      maxTokens: summaryMaxTokens(policy.reserveTokens, model.maxTokens),
+      model: ref,
+      streamOptions: settings.stream,
+      tail: latestEntryId(view.entries, firstKept),
+      thinkingLevel: agent.thinkingLevel,
     };
     yield* commitTask(
       runtime,
-      (): Effect.Effect<CompactionNext> =>
+      (): Effect.Effect<compactionTypesModule.CompactionNext> =>
         Effect.succeed({
-          status: "running",
           checkpoint: { phase: "summarize", ...request },
+          status: "running",
         }),
       context,
     );
   }),
 );
+
+const compactionStart = {
+  createCompaction,
+  selectPhase,
+};
+
+export default compactionStart;

@@ -1,4 +1,4 @@
-import type { ExecutionEnv } from "@msa/durable/env";
+import type envTypes from "@msa/durable/env.types";
 import { Effect } from "effect";
 import { afterAll, describe, expect, it } from "vite-plus/test";
 
@@ -15,7 +15,7 @@ const environments = pairs();
 afterAll(environments.close);
 
 interface Rooted {
-  readonly env: ExecutionEnv;
+  readonly env: envTypes.ExecutionEnv;
   readonly root: differentialSupportTypes.Root;
 }
 

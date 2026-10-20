@@ -1,11 +1,15 @@
-import { configure, defineTask } from "@msa/durable";
-import { MemoryStorage } from "@msa/durable/storage/memory";
+import durable from "@msa/durable";
+import memory from "@msa/durable/storage/memory";
 import { Effect } from "effect";
 import { describe, expect, it } from "vite-plus/test";
 
-import { NodeExecutionEnv } from "../src/env/node.ts";
+import node from "../src/env/node.ts";
 import harnessToolsSupport from "./harness-tools-support.ts";
 import support from "./support.ts";
+
+const { configure, defineTask } = durable;
+const { MemoryStorage } = memory;
+const { NodeExecutionEnv } = node;
 
 const { DONE, calls, resultText, results, run, tool } = harnessToolsSupport;
 const { addTask, addTool, awaited, chatSetup, context, openChat } = support;

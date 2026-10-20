@@ -1,10 +1,14 @@
-import { type AgentEvent, defineTask } from "@msa/durable";
-import { CompactionTask, watchEvents } from "@msa/durable/harness";
+import durable from "@msa/durable";
+import harnessModule from "@msa/durable/harness";
+import type durableTypes from "@msa/durable/index.types";
 import { Effect } from "effect";
 import { afterEach, describe, expect, it } from "vite-plus/test";
 
 import harnessCompactionSupport from "./harness-compaction-support.ts";
 import support from "./support.ts";
+
+const { CompactionTask, watchEvents } = harnessModule;
+const { defineTask } = durable;
 
 const { directories, failure, firstUserText, gated, history, kinds, live, open, result, summary } =
   harnessCompactionSupport;
@@ -207,7 +211,7 @@ const reportsStartEnd = Effect.gen(function* () {
   const chat = yield* open();
   yield* history(chat);
   chat.setup.settings.retry = { baseDelayMs: 60_000, enabled: true, maxRetries: 2 };
-  const events: AgentEvent[] = [];
+  const events: durableTypes.AgentEvent[] = [];
   const stream = yield* awaited(watchEvents(chat.harness, chat.root.id, context));
   stream.start((batch) => {
     events.push(...batch);

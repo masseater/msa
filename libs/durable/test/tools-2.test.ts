@@ -2,10 +2,13 @@ import { applyPatch } from "diff";
 import { Effect } from "effect";
 import { afterAll, describe, expect, it } from "vite-plus/test";
 
-import { getOrThrow } from "../src/env/index.ts";
-import { createEditTool } from "../src/tools/index.ts";
+import envModule from "../src/env/index.ts";
+import toolsModule from "../src/tools/index.ts";
 import support from "./support.ts";
 import toolsSupport from "./tools-support.ts";
+
+const { getOrThrow } = envModule;
+const { createEditTool } = toolsModule;
 
 const { BACKGROUND_CONTEXT, awaited } = support;
 const { createEnv, removeTempDirs, run, textOutput } = toolsSupport;

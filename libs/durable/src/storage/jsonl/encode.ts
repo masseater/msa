@@ -1,41 +1,37 @@
 import { Function } from "effect";
 
-import type { DocumentId, Seq, StorageWrite, TaskId } from "../../types.ts";
-import {
-  type EncodedCommit,
-  FORMAT_VERSION,
-  isCurrentOnly,
-  jsonLine,
-  type MainMarker,
-  type MainOperation,
-  type SidecarPayload,
-  type SidecarRecord,
-  sidecarFileName,
-  type StoredTask,
-} from "./format.ts";
+import type typesModule from "../../types.types.ts";
+import type encodeTypes from "./encode.types.ts";
+import formatModule from "./format.ts";
+import type formatTypes from "./format.types.ts";
+
+const { FORMAT_VERSION, isCurrentOnly, jsonLine, sidecarFileName } = formatModule;
 
 class SidecarBatch {
-  readonly records = new Map<string, SidecarRecord[]>();
-  private readonly seq: Seq;
+  readonly records = new Map<string, formatTypes.SidecarRecord[]>();
+  private readonly seq: typesModule.Seq;
   private nextOrdinal = 0;
 
-  constructor(seq: Seq) {
+  constructor(seq: typesModule.Seq) {
     this.seq = seq;
   }
 
-  add(file: string, payload: SidecarPayload): number {
+  add(file: string, payload: formatTypes.SidecarPayload): number {
     const ordinal = this.nextOrdinal++;
     let fileRecords = this.records.get(file);
     if (fileRecords === undefined) {
       fileRecords = [];
       this.records.set(file, fileRecords);
     }
-    fileRecords.push({ format: FORMAT_VERSION, type: "record", seq: this.seq, ordinal, payload });
+    fileRecords.push({ format: FORMAT_VERSION, ordinal, payload, seq: this.seq, type: "record" });
     return ordinal;
   }
 }
 
-const mainOperation = (batch: SidecarBatch, write: StorageWrite): MainOperation | undefined => {
+const mainOperation = (
+  batch: SidecarBatch,
+  write: typesModule.StorageWrite,
+): formatTypes.MainOperation | undefined => {
   switch (write.type) {
     case "conversation":
     case "entry":
@@ -45,74 +41,82 @@ const mainOperation = (batch: SidecarBatch, write: StorageWrite): MainOperation 
     case "task":
       if (write.value.state.status === "terminal") return write;
       return {
-        type: "task.sidecar",
         id: write.value.id,
         ordinal: batch.add(sidecarFileName("task", write.value.id), {
           type: "task",
           value: write.value,
         }),
+        type: "task.sidecar",
       };
     case "document.create":
       return {
-        type: "document.create",
-        record: write.record,
         ordinal: batch.add(sidecarFileName("doc", write.record.id), {
-          type: "document",
-          id: write.record.id,
           content: write.content,
+          id: write.record.id,
+          type: "document",
         }),
+        record: write.record,
+        type: "document.create",
       };
     case "document.change":
       return {
-        type: "document.change",
         id: write.id,
         ordinal: batch.add(sidecarFileName("doc", write.id), {
-          type: "document",
-          id: write.id,
           content: write.content,
+          id: write.id,
+          type: "document",
         }),
+        type: "document.change",
       };
     case "document.copy":
       return undefined;
   }
 };
 
-export const encodeCommit: {
-  (writes: readonly StorageWrite[]): (seq: Seq) => EncodedCommit;
-  (seq: Seq, writes: readonly StorageWrite[]): EncodedCommit;
-} = Function.dual(2, (seq: Seq, writes: readonly StorageWrite[]): EncodedCommit => {
-  const batch = new SidecarBatch(seq);
-  const mainWrites: MainOperation[] = [];
-  for (const write of writes) {
-    const operation = mainOperation(batch, write);
-    if (operation !== undefined) mainWrites.push(operation);
-  }
-  const sidecars = new Map<string, string>();
-  for (const [file, fileRecords] of batch.records) {
-    sidecars.set(file, fileRecords.map((record) => jsonLine(record)).join(""));
-  }
-  const marker: MainMarker = { format: FORMAT_VERSION, type: "commit", seq, writes: mainWrites };
-  return { marker: jsonLine(marker), sidecars };
-});
-
-export type SidecarState = {
-  readonly currentOnlyDocuments: ReadonlySet<DocumentId>;
-  readonly liveTaskSidecars: ReadonlySet<TaskId>;
-};
+const encodeCommit: {
+  (
+    writes: readonly typesModule.StorageWrite[],
+  ): (seq: typesModule.Seq) => formatTypes.EncodedCommit;
+  (seq: typesModule.Seq, writes: readonly typesModule.StorageWrite[]): formatTypes.EncodedCommit;
+} = Function.dual(
+  2,
+  (
+    seq: typesModule.Seq,
+    writes: readonly typesModule.StorageWrite[],
+  ): formatTypes.EncodedCommit => {
+    const batch = new SidecarBatch(seq);
+    const mainWrites: formatTypes.MainOperation[] = [];
+    for (const write of writes) {
+      const operation = mainOperation(batch, write);
+      if (operation !== undefined) mainWrites.push(operation);
+    }
+    const sidecars = new Map<string, string>();
+    for (const [file, fileRecords] of batch.records) {
+      sidecars.set(file, fileRecords.map((record) => jsonLine(record)).join(""));
+    }
+    const marker: formatTypes.MainMarker = {
+      format: FORMAT_VERSION,
+      seq,
+      type: "commit",
+      writes: mainWrites,
+    };
+    return { marker: jsonLine(marker), sidecars };
+  },
+);
 
 type CommitShape = {
-  readonly createdCurrentOnly: Set<DocumentId>;
-  readonly retired: Set<DocumentId>;
-  readonly bases: Set<DocumentId>;
-  readonly finalTasks: Map<TaskId, StoredTask>;
+  readonly createdCurrentOnly: Set<typesModule.DocumentId>;
+  readonly retired: Set<typesModule.DocumentId>;
+  readonly bases: Set<typesModule.DocumentId>;
+  readonly finalTasks: Map<typesModule.TaskId, formatTypes.StoredTask>;
 };
 
-const commitShape = (writes: readonly StorageWrite[]): CommitShape => {
+const commitShape = (writes: readonly typesModule.StorageWrite[]): CommitShape => {
   const shape: CommitShape = {
-    createdCurrentOnly: new Set(),
-    retired: new Set(),
     bases: new Set(),
+    createdCurrentOnly: new Set(),
     finalTasks: new Map(),
+    retired: new Set(),
   };
   for (const write of writes) {
     if (write.type === "document.create" && isCurrentOnly(write.record))
@@ -125,26 +129,26 @@ const commitShape = (writes: readonly StorageWrite[]): CommitShape => {
   return shape;
 };
 
-export const planReclamations: {
+const planReclamations: {
   (
-    writes: readonly StorageWrite[],
-    encoded: EncodedCommit,
-  ): (state: SidecarState) => ReadonlyMap<string, string>;
+    writes: readonly typesModule.StorageWrite[],
+    encoded: formatTypes.EncodedCommit,
+  ): (state: encodeTypes.SidecarState) => ReadonlyMap<string, string>;
   (
-    state: SidecarState,
-    writes: readonly StorageWrite[],
-    encoded: EncodedCommit,
+    state: encodeTypes.SidecarState,
+    writes: readonly typesModule.StorageWrite[],
+    encoded: formatTypes.EncodedCommit,
   ): ReadonlyMap<string, string>;
 } = Function.dual(
   3,
   (
-    state: SidecarState,
-    writes: readonly StorageWrite[],
-    encoded: EncodedCommit,
+    state: encodeTypes.SidecarState,
+    writes: readonly typesModule.StorageWrite[],
+    encoded: formatTypes.EncodedCommit,
   ): ReadonlyMap<string, string> => {
     const shape = commitShape(writes);
     const replacements = new Map<string, string>();
-    const isCurrentOnlyDocument = (id: DocumentId): boolean =>
+    const isCurrentOnlyDocument = (id: typesModule.DocumentId): boolean =>
       state.currentOnlyDocuments.has(id) || shape.createdCurrentOnly.has(id);
     for (const id of shape.retired) {
       if (isCurrentOnlyDocument(id)) replacements.set(sidecarFileName("doc", id), "");
@@ -167,21 +171,27 @@ export const planReclamations: {
   },
 );
 
-export type MutableSidecarState = {
-  readonly currentOnlyDocuments: Set<DocumentId>;
-  readonly liveTaskSidecars: Set<TaskId>;
+const adoptSidecarState: {
+  (writes: readonly typesModule.StorageWrite[]): (state: encodeTypes.MutableSidecarState) => void;
+  (state: encodeTypes.MutableSidecarState, writes: readonly typesModule.StorageWrite[]): void;
+} = Function.dual(
+  2,
+  (state: encodeTypes.MutableSidecarState, writes: readonly typesModule.StorageWrite[]): void => {
+    for (const write of writes) {
+      if (write.type === "document.create") {
+        if (isCurrentOnly(write.record)) state.currentOnlyDocuments.add(write.record.id);
+      } else if (write.type === "task") {
+        if (write.value.state.status === "terminal") state.liveTaskSidecars.delete(write.value.id);
+        else state.liveTaskSidecars.add(write.value.id);
+      }
+    }
+  },
+);
+
+const encode = {
+  adoptSidecarState,
+  encodeCommit,
+  planReclamations,
 };
 
-export const adoptSidecarState: {
-  (writes: readonly StorageWrite[]): (state: MutableSidecarState) => void;
-  (state: MutableSidecarState, writes: readonly StorageWrite[]): void;
-} = Function.dual(2, (state: MutableSidecarState, writes: readonly StorageWrite[]): void => {
-  for (const write of writes) {
-    if (write.type === "document.create") {
-      if (isCurrentOnly(write.record)) state.currentOnlyDocuments.add(write.record.id);
-    } else if (write.type === "task") {
-      if (write.value.state.status === "terminal") state.liveTaskSidecars.delete(write.value.id);
-      else state.liveTaskSidecars.add(write.value.id);
-    }
-  }
-});
+export default encode;

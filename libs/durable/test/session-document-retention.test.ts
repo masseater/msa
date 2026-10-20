@@ -1,9 +1,9 @@
 import type { Context } from "@msa/chord";
-import { type StorageWrite } from "@msa/durable";
+import type durableTypes from "@msa/durable/index.types";
 import { Effect } from "effect";
 import { describe, expect, it } from "vite-plus/test";
 
-import { SessionImpl } from "../src/session/session.ts";
+import SessionImpl from "../src/session/session.ts";
 import SessionCounterDoc from "./session-document-retention-cases.ts";
 import sessionDocumentRetentionSupport from "./session-document-retention-support.ts";
 import support from "./support.ts";
@@ -165,9 +165,9 @@ describe("document cache retention", () => {
 const writesReloadContinue = Effect.gen(function* () {
   const { session, storage } = open(0);
   const conversationId = yield* awaited(createConversation(session));
-  const writes: StorageWrite[][] = [];
+  const writes: durableTypes.StorageWrite[][] = [];
   const commit = storage.commit.bind(storage);
-  storage.commit = (batch: readonly StorageWrite[], commitContext: Context) => {
+  storage.commit = (batch: readonly durableTypes.StorageWrite[], commitContext: Context) => {
     writes.push([...batch]);
     return commit(batch, commitContext);
   };

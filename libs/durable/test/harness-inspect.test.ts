@@ -1,5 +1,6 @@
-import { type Task, type TaskId, type TaskInspection, defineTask } from "@msa/durable";
-import { MemoryStorage } from "@msa/durable/storage/memory";
+import durable from "@msa/durable";
+import type durableTypes from "@msa/durable/index.types";
+import memory from "@msa/durable/storage/memory";
 import { Effect } from "effect";
 import { describe, expect, it } from "vite-plus/test";
 
@@ -7,6 +8,9 @@ import chatSupport from "./chat-support.ts";
 import effectSupport from "./effect-support.ts";
 import sessionSupport from "./session-support.ts";
 import taskSupport from "./task-support.ts";
+
+const { defineTask } = durable;
+const { MemoryStorage } = memory;
 
 const { chatSetup, openChat, unanswered, waitFor } = chatSupport;
 const { awaited } = effectSupport;
@@ -47,13 +51,13 @@ function task(
 }
 
 function stateOf(
-  tasks: readonly TaskInspection[],
-  id: TaskId,
-): TaskInspection["state"] | undefined {
+  tasks: readonly durableTypes.TaskInspection[],
+  id: durableTypes.TaskId,
+): durableTypes.TaskInspection["state"] | undefined {
   return tasks.find((entry) => entry.record.id === id)?.state;
 }
 
-type Gated = { gateId?: TaskId };
+type Gated = { gateId?: durableTypes.TaskId };
 
 function dependentOn(gated: Gated) {
   return defineTask<null, { phase: "wait" } | { phase: "done" }, null>({
@@ -133,7 +137,7 @@ const openInspected = Effect.fn("openInspected")(function* (gate: PromiseWithRes
         runPromise(
           Effect.gen(function* () {
             const created = <Checkpoint extends { phase: string }, Result>(
-              definition: Task<null, Checkpoint, Result, object>,
+              definition: durableTypes.Task<null, Checkpoint, Result, object>,
             ) => awaited(tx.createTask(definition, null, { ownership: { kind: "conversation" } }));
             const gateId = yield* created(Gate);
             gated.gateId = gateId;

@@ -1,18 +1,13 @@
 import { Effect } from "effect";
 
-import type { WatchChange, WatchTarget } from "../env/index.ts";
-import {
-  context,
-  type EnvCaseSpec,
-  settled,
-  value,
-  watching,
-  watchTimeoutMs,
-} from "./env-conformance-support.ts";
+import type envTypes from "../env/index.types.ts";
+import envConformanceSupport from "./env-conformance-support.ts";
+import type envConformanceSupportTypes from "./env-conformance-support.types.ts";
 
-const missingFile: EnvCaseSpec = {
+const { context, settled, value, watchTimeoutMs, watching } = envConformanceSupport;
+
+const missingFile: envConformanceSupportTypes.EnvCaseSpec = {
   name: "watch reports a missing file's creation, changes, replacement and removal",
-  timeoutMs: watchTimeoutMs,
   test: (env) =>
     watching(env, [{ path: "AGENTS.md" }], ({ expectChange }) =>
       Effect.gen(function* () {
@@ -33,11 +28,11 @@ const missingFile: EnvCaseSpec = {
         );
       }),
     ),
+  timeoutMs: watchTimeoutMs,
 };
 
-const missingAncestors: EnvCaseSpec = {
+const missingAncestors: envConformanceSupportTypes.EnvCaseSpec = {
   name: "watch reports a missing target whose ancestors are created",
-  timeoutMs: watchTimeoutMs,
   test: (env) =>
     watching(env, [{ path: "a/b/c/AGENTS.md" }], ({ expectChange }) =>
       expectChange(
@@ -45,11 +40,11 @@ const missingAncestors: EnvCaseSpec = {
         value(() => env.writeFile("a/b/c/AGENTS.md", "x", context)),
       ),
     ),
+  timeoutMs: watchTimeoutMs,
 };
 
-const createdDirectories: EnvCaseSpec = {
+const createdDirectories: envConformanceSupportTypes.EnvCaseSpec = {
   name: "watch follows directories created together with their contents",
-  timeoutMs: watchTimeoutMs,
   test: (env) =>
     Effect.gen(function* () {
       yield* value(() => env.createDir("skills", undefined, context));
@@ -66,11 +61,11 @@ const createdDirectories: EnvCaseSpec = {
         }),
       );
     }),
+  timeoutMs: watchTimeoutMs,
 };
 
-const renamedParent: EnvCaseSpec = {
+const renamedParent: envConformanceSupportTypes.EnvCaseSpec = {
   name: "watch keeps watching a path whose parent is renamed and recreated",
-  timeoutMs: watchTimeoutMs,
   test: (env) =>
     Effect.gen(function* () {
       yield* value(() => env.writeFile("proj/.msa/skills/x.md", "x", context));
@@ -90,15 +85,15 @@ const renamedParent: EnvCaseSpec = {
         }),
       );
     }),
+  timeoutMs: watchTimeoutMs,
 };
 
-const excludedTargets: WatchTarget[] = [
-  { path: "skills", recursive: true, exclude: { hidden: true, names: ["node_modules"] } },
+const excludedTargets: envTypes.WatchTarget[] = [
+  { exclude: { hidden: true, names: ["node_modules"] }, path: "skills", recursive: true },
 ];
 
-const excludedEntries: EnvCaseSpec = {
+const excludedEntries: envConformanceSupportTypes.EnvCaseSpec = {
   name: "watch skips excluded entries and reports a rename out of them",
-  timeoutMs: watchTimeoutMs,
   test: (env, { assert }) =>
     Effect.gen(function* () {
       yield* value(() => env.createDir("skills", undefined, context));
@@ -126,15 +121,18 @@ const excludedEntries: EnvCaseSpec = {
         }),
       );
     }),
+  timeoutMs: watchTimeoutMs,
 };
 
-const overlappingTargets: EnvCaseSpec = {
+const overlappingTargets: envConformanceSupportTypes.EnvCaseSpec = {
   name: "watch keeps recursive coverage where a non-recursive target overlaps",
-  timeoutMs: watchTimeoutMs,
   test: (env) =>
     Effect.gen(function* () {
       yield* value(() => env.writeFile("skills/a/one.md", "one", context));
-      const targets: WatchTarget[] = [{ path: "skills" }, { path: "skills", recursive: true }];
+      const targets: envTypes.WatchTarget[] = [
+        { path: "skills" },
+        { path: "skills", recursive: true },
+      ];
       yield* watching(env, targets, ({ expectChange }) =>
         expectChange(
           "skills/a/two.md",
@@ -142,11 +140,11 @@ const overlappingTargets: EnvCaseSpec = {
         ),
       );
     }),
+  timeoutMs: watchTimeoutMs,
 };
 
-const replacedDirectory: EnvCaseSpec = {
+const replacedDirectory: envConformanceSupportTypes.EnvCaseSpec = {
   name: "watch follows a directory replaced at the same path",
-  timeoutMs: watchTimeoutMs,
   test: (env) =>
     Effect.gen(function* () {
       yield* value(() => env.writeFile("skills/a/x.md", "x", context));
@@ -169,14 +167,14 @@ const replacedDirectory: EnvCaseSpec = {
         }),
       );
     }),
+  timeoutMs: watchTimeoutMs,
 };
 
-const closedWatcher: EnvCaseSpec = {
+const closedWatcher: envConformanceSupportTypes.EnvCaseSpec = {
   name: "watch stops reporting once closed",
-  timeoutMs: watchTimeoutMs,
   test: (env, { assert }) =>
     Effect.gen(function* () {
-      const changes: WatchChange[] = [];
+      const changes: envTypes.WatchChange[] = [];
       const watcher = yield* value(() =>
         env.watch([{ path: "file.txt" }], (change) => changes.push(change), context),
       );
@@ -190,9 +188,10 @@ const closedWatcher: EnvCaseSpec = {
       yield* Effect.sleep(300);
       assert.deepEqual(changes, []);
     }),
+  timeoutMs: watchTimeoutMs,
 };
 
-export const watchCases: readonly EnvCaseSpec[] = [
+const watchCases: readonly envConformanceSupportTypes.EnvCaseSpec[] = [
   missingFile,
   missingAncestors,
   createdDirectories,
@@ -203,9 +202,8 @@ export const watchCases: readonly EnvCaseSpec[] = [
   closedWatcher,
 ];
 
-export const watchedSymlink: EnvCaseSpec = {
+const watchedSymlink: envConformanceSupportTypes.EnvCaseSpec = {
   name: "watch reports changes to the file a watched symbolic link points to",
-  timeoutMs: watchTimeoutMs,
   test: (env, { assert, shell }) =>
     Effect.gen(function* () {
       yield* value(() => env.writeFile("data/real.md", "one", context));
@@ -221,4 +219,12 @@ export const watchedSymlink: EnvCaseSpec = {
         ),
       );
     }),
+  timeoutMs: watchTimeoutMs,
 };
+
+const envConformanceWatch = {
+  watchCases,
+  watchedSymlink,
+};
+
+export default envConformanceWatch;

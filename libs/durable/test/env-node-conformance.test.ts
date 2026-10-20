@@ -2,16 +2,22 @@ import { BACKGROUND_CONTEXT } from "@msa/chord/context";
 import { Effect } from "effect";
 import { afterEach, describe, expect, it } from "vite-plus/test";
 
-import { currentTimeMillis } from "../src/clock.ts";
-import { type WatchChange, getOrThrow } from "../src/env/index.ts";
-import { environmentVariable } from "../src/env/node-process.ts";
-import { NodeExecutionEnv } from "../src/env/node.ts";
-import { registerEnvConformance } from "../src/testing/index.ts";
-import effectSupport from "./effect-support.ts";
-import platformSupport from "./platform-support.ts";
+import clockModule from "../src/clock.ts";
+import envModule from "../src/env/index.ts";
+import type envTypes from "../src/env/index.types.ts";
+import node from "../src/env/node.ts";
+import nodeProcess from "../src/env/node/node-process.ts";
+import testing from "../src/testing/index.ts";
+import testSupport from "./support.ts";
 
-const { awaited } = effectSupport;
-const { joinPath, makeTempDir, removeDirRetrying, runCommandOrFail, writeBytes } = platformSupport;
+const { environmentVariable } = nodeProcess;
+const { registerEnvConformance } = testing;
+const { NodeExecutionEnv } = node;
+const { getOrThrow } = envModule;
+const { currentTimeMillis } = clockModule;
+
+const { awaited } = testSupport;
+const { joinPath, makeTempDir, removeDirRetrying, runCommandOrFail, writeBytes } = testSupport;
 
 const windows = process.platform === "win32";
 const gitBash = joinPath(
@@ -64,7 +70,7 @@ const refusesTreeOver = withEnvDir("msa-durable-env-watch-", (cwd) =>
     });
 
     getOrThrow(yield* awaited(env.remove("tree/c", { recursive: true }, context)));
-    const changes: WatchChange[] = [];
+    const changes: envTypes.WatchChange[] = [];
     const watcher = getOrThrow(
       yield* awaited(
         env.watch([{ path: "tree", recursive: true }], (change) => changes.push(change), context),

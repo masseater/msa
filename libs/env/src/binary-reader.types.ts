@@ -1,7 +1,7 @@
-import type binaryReader from "./binary-reader.ts";
+import type RemoteBinaryReaderClass from "./binary-reader.ts";
 
 declare namespace binaryReaderTypes {
-  type RemoteBinaryReader = (typeof binaryReader.RemoteBinaryReader)["prototype"];
+  type RemoteBinaryReader = RemoteBinaryReaderClass;
 }
 
 export type { binaryReaderTypes as default };

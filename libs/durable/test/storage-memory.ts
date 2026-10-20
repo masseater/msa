@@ -1,13 +1,15 @@
 import { fileURLToPath } from "node:url";
 
 import * as NodeRuntime from "@effect/platform-node/NodeRuntime";
-import { STORAGE_MEMORY_SCALES } from "@msa/durable/testing";
+import testing from "@msa/durable/testing";
 import { Console, Effect } from "effect";
 
 import effectSupport from "./effect-support.ts";
 import platformSupport from "./platform-support.ts";
 import storageMemoryWorker from "./storage-memory-worker.ts";
 import type storageMemoryWorkerTypes from "./storage-memory-worker.types.ts";
+
+const { STORAGE_MEMORY_SCALES } = testing;
 
 const { fromJsonText } = effectSupport;
 const { runCommandOrFail } = platformSupport;

@@ -1,4 +1,4 @@
-import type watch from "./watch.ts";
+import type RemoteWatcherClass from "./watch.ts";
 
 declare namespace watchTypes {
   interface RemoteWatchOptions {
@@ -7,7 +7,7 @@ declare namespace watchTypes {
     maxDirectories?: number;
   }
 
-  type RemoteWatcher = (typeof watch.RemoteWatcher)["prototype"];
+  type RemoteWatcher = RemoteWatcherClass;
 }
 
 export type { watchTypes as default };

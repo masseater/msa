@@ -1,6 +1,6 @@
 import { Data } from "effect";
 
-class SshError extends Data.TaggedError("SshError")<{
+export default class SshError extends Data.TaggedError("SshError")<{
   readonly message: string;
   readonly exitCode: number | null;
   readonly stderr: string;
@@ -9,9 +9,3 @@ class SshError extends Data.TaggedError("SshError")<{
     super({ exitCode, message, stderr });
   }
 }
-
-const sshError = {
-  SshError,
-};
-
-export default sshError;

@@ -3,12 +3,17 @@ import { createModels } from "@msa/ai/models";
 import { BACKGROUND_CONTEXT } from "@msa/chord/context";
 import { Console, Effect } from "effect";
 
-import { currentTimeMillis } from "../../src/clock.ts";
-import { Harness, createRegistry } from "../../src/harness/index.ts";
-import { defineExtension, defineTask } from "../../src/index.ts";
-import { openNodeSqliteStorage } from "../../src/storage/sqlite/node.ts";
+import clockModule from "../../src/clock.ts";
+import harness from "../../src/harness/index.ts";
+import durable from "../../src/index.ts";
+import node from "../../src/storage/sqlite/node.ts";
 import effectSupport from "../effect-support.ts";
 import platformSupport from "../platform-support.ts";
+
+const { defineExtension, defineTask } = durable;
+const { currentTimeMillis } = clockModule;
+const { Harness, createRegistry } = harness;
+const { openNodeSqliteStorage } = node;
 
 const { awaited } = effectSupport;
 const { joinPath, makeTempDir, removeDir } = platformSupport;

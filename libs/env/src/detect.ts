@@ -1,17 +1,14 @@
 import { Effect } from "effect";
 
 import type detectTypes from "./detect.types.ts";
-import hostKeyChangedError from "./host-key-changed-error.ts";
-import hostKeyUnknownError from "./host-key-unknown-error.ts";
+import HostKeyChangedError from "./host-key-changed-error.ts";
+import HostKeyUnknownError from "./host-key-unknown-error.ts";
 import runSshModule from "./run-ssh.ts";
-import setupError from "./setup-error.ts";
+import SetupError from "./setup-error.ts";
 import type setupErrorTypes from "./setup-error.types.ts";
 import type sshArgsTypes from "./ssh-args.types.ts";
 
 const { powershell, runSsh } = runSshModule;
-const { SetupError } = setupError;
-const { HostKeyUnknownError } = hostKeyUnknownError;
-const { HostKeyChangedError } = hostKeyChangedError;
 
 const POSIX_PROBE = `sh -c 'echo MSA-ENV-PROBE; uname -s; uname -m; uname -o 2>/dev/null || echo -; printf "%s\\n" "$HOME" "\${TMPDIR:--}" "\${LD_PRELOAD:--}"'`;
 
@@ -121,7 +118,7 @@ function detectPlatform(target: sshArgsTypes.SshTarget): Promise<detectTypes.Rem
 }
 
 const detect = {
-  SetupError: setupError.SetupError,
+  SetupError: SetupError,
   detectPlatform,
   detectPlatformEffect,
   normalizeArch,

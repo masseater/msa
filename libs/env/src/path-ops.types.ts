@@ -1,11 +1,11 @@
 import type { Context } from "@msa/chord";
-import type { ListFilesOptions } from "@msa/durable/env";
+import type envTypes from "@msa/durable/env.types";
 
 import type fileOpTypes from "./file-op.types.ts";
 
 declare namespace pathOpsTypes {
   interface ListFilesRequest extends fileOpTypes.PathRequest {
-    readonly options: ListFilesOptions | undefined;
+    readonly options: envTypes.ListFilesOptions | undefined;
   }
 
   interface TempDirRequest {

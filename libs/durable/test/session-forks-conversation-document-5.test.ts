@@ -1,14 +1,17 @@
-import { type EntryId, type StorageWrite, defineDoc } from "@msa/durable";
+import durable from "@msa/durable";
+import type durableTypes from "@msa/durable/index.types";
 import { Effect } from "effect";
 import { describe, expect, it } from "vite-plus/test";
 
 import effectSupport from "./effect-support.ts";
 import sessionSupport from "./session-support.ts";
 
+const { defineDoc } = durable;
+
 const { awaited } = effectSupport;
 const { context, createConversation, documentChanges, flush, openTestSession } = sessionSupport;
 
-function documentCreates(writes: readonly StorageWrite[]) {
+function documentCreates(writes: readonly durableTypes.StorageWrite[]) {
   return writes.filter((write) => write.type === "document.create");
 }
 
@@ -236,7 +239,7 @@ const rejectsInvisibleFork = Effect.gen(function* () {
 
   const { session, storage, publications } = openTestSession();
   const rootId = yield* awaited(createConversation(session));
-  let visible!: EntryId;
+  let visible!: durableTypes.EntryId;
   const hidden = yield* awaited(
     session.commit(
       (tx) =>

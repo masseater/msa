@@ -1,13 +1,15 @@
-import { defineDoc, defineDocFamily } from "@msa/durable";
+import durable from "@msa/durable";
 import { Effect } from "effect";
 import { describe, expect, it } from "vite-plus/test";
 
-import { SessionImpl } from "../src/session/session.ts";
+import SessionImpl from "../src/session/session.ts";
 import effectSupport from "./effect-support.ts";
 import sessionDocumentRetentionSupport from "./session-document-retention-support.ts";
 import type sessionDocumentRetentionSupportTypes from "./session-document-retention-support.types.ts";
 import sessionSupport from "./session-support.ts";
 import taskSupport from "./task-support.ts";
+
+const { defineDoc, defineDocFamily } = durable;
 
 const { awaited } = effectSupport;
 const { CounterDoc, bump, open, settleLine } = sessionDocumentRetentionSupport;

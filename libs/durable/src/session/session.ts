@@ -1,63 +1,43 @@
 import type { Context, JsonValue } from "@msa/chord";
 import { Effect } from "effect";
 
-import type {
-  CommitPublication,
-  ConversationDocFamilyToken,
-  ConversationDocToken,
-  ConversationId,
-  ConversationRecord,
-  DocumentRecord,
-  DocumentState,
-  DocumentWatch,
-  EntryId,
-  JsonObject,
-  RewindableConversationDocFamilyToken,
-  RewindableConversationDocToken,
-  Session,
-  SessionDocFamilyToken,
-  SessionDocToken,
-  SessionEnd,
-  Storage,
-  TaskDocFamilyToken,
-  TaskDocToken,
-  TaskId,
-  Tx,
-} from "../types.ts";
-import { GuardedStorage } from "./guarded-storage.ts";
-import { closeSession, failSession } from "./session-close.ts";
-import { commitOnLine, createTransactionHost } from "./session-commit.ts";
-import { documentStateOf, watchDocument } from "./session-observe.ts";
-import {
-  type AnyDocToken,
-  conversationDocumentOnLine,
-  snapshotAsOf,
-  snapshotDocument,
-} from "./session-reads.ts";
-import {
+import type typesModule from "../types.types.ts";
+import GuardedStorage from "./guarded-storage.ts";
+import sessionClose from "./session-close.ts";
+import sessionCommit from "./session-commit.ts";
+import sessionObserve from "./session-observe.ts";
+import sessionReads from "./session-reads.ts";
+import sessionState from "./session-state.ts";
+import type sessionTypes from "./session.types.ts";
+
+const {
   addListener,
   assertUsable,
   createSessionState,
   currentTimeMillis,
-  type DocumentCacheSizes,
   documentCacheSizes,
   readOnLine,
-  type SessionState,
   unloadDocuments,
-} from "./session-state.ts";
-import type { Transaction, TransactionHost, TransactionScope } from "./transaction-types.ts";
+} = sessionState;
 
-export { contained, documentRetention, setDefaultDocumentRetention } from "./session-state.ts";
+const { commitOnLine, createTransactionHost } = sessionCommit;
+const { closeSession, failSession } = sessionClose;
+const { conversationDocumentOnLine, snapshotAsOf, snapshotDocument } = sessionReads;
+const { documentStateOf, watchDocument } = sessionObserve;
 
 type DocumentOnLine =
-  | { readonly record: DocumentRecord; readonly version: number; readonly value: JsonObject }
+  | {
+      readonly record: typesModule.DocumentRecord;
+      readonly version: number;
+      readonly value: typesModule.JsonObject;
+    }
   | undefined;
 
-export class SessionImpl implements Session {
-  readonly #state: SessionState;
-  readonly #host: TransactionHost;
+export default class SessionImpl implements typesModule.Session {
+  readonly #state: sessionTypes.SessionState;
+  readonly #host: sessionTypes.TransactionHost;
 
-  get closed(): Promise<SessionEnd> {
+  get closed(): Promise<typesModule.SessionEnd> {
     return this.#state.closed.promise;
   }
 
@@ -70,28 +50,28 @@ export class SessionImpl implements Session {
   }
 
   constructor(
-    storage: Storage,
+    storage: typesModule.Storage,
     now: () => number = currentTimeMillis,
     documentRetentionMs: () => number | undefined = () => undefined,
   ) {
     const hooks = {
-      report: (error: unknown) => this.report(error),
-      fail: (error: unknown) => this.fail(error),
-      conversationCreated: (tx: Transaction, record: ConversationRecord) =>
-        this.conversationCreated(tx, record),
       beforeClose: () => this.beforeClose(),
+      conversationCreated: (tx: sessionTypes.Transaction, record: typesModule.ConversationRecord) =>
+        this.conversationCreated(tx, record),
+      fail: (error: unknown) => this.fail(error),
+      report: (error: unknown) => this.report(error),
     };
     const guarded = new GuardedStorage(storage, this);
-    this.#state = createSessionState({ hooks, storage: guarded, now, documentRetentionMs });
+    this.#state = createSessionState({ documentRetentionMs, hooks, now, storage: guarded });
     this.#state.failed.promise.catch(() => {});
     this.#host = createTransactionHost(this.#state);
   }
 
-  protected get storage(): Storage {
+  protected get storage(): typesModule.Storage {
     return this.#state.storage;
   }
 
-  commit<T>(change: (tx: Tx) => T | Promise<T>, context: Context): Promise<T> {
+  commit<T>(change: (tx: typesModule.Tx) => T | Promise<T>, context: Context): Promise<T> {
     return this.commitWith(change, context);
   }
 
@@ -100,9 +80,9 @@ export class SessionImpl implements Session {
   }
 
   commitWith<T>(
-    change: (tx: Transaction) => T | Promise<T>,
+    change: (tx: sessionTypes.Transaction) => T | Promise<T>,
     context: Context,
-    scope?: TransactionScope,
+    scope?: sessionTypes.TransactionScope,
   ): Promise<T> {
     return commitOnLine(this.#state, this.#host, change, context, scope);
   }
@@ -112,139 +92,145 @@ export class SessionImpl implements Session {
   }
 
   conversationDocumentOnLine(
-    token: ConversationDocToken<JsonObject>,
-    conversationId: ConversationId,
+    token: typesModule.ConversationDocToken<typesModule.JsonObject>,
+    conversationId: typesModule.ConversationId,
     context: Context,
   ): Promise<DocumentOnLine> {
     const args = [conversationId, context] as const;
     return Effect.runPromise(conversationDocumentOnLine(this.#state, token, args));
   }
 
-  snapshot<T extends JsonObject>(
-    token: SessionDocToken<T>,
+  snapshot<T extends typesModule.JsonObject>(
+    token: typesModule.SessionDocToken<T>,
     context: Context,
   ): Promise<Readonly<T> | undefined>;
-  snapshot<T extends JsonObject>(
-    token: ConversationDocToken<T>,
-    conversationId: ConversationId,
+  snapshot<T extends typesModule.JsonObject>(
+    token: typesModule.ConversationDocToken<T>,
+    conversationId: typesModule.ConversationId,
     context: Context,
   ): Promise<Readonly<T> | undefined>;
-  snapshot<T extends JsonObject>(
-    token: TaskDocToken<T>,
-    taskId: TaskId,
+  snapshot<T extends typesModule.JsonObject>(
+    token: typesModule.TaskDocToken<T>,
+    taskId: typesModule.TaskId,
     context: Context,
   ): Promise<Readonly<T> | undefined>;
-  snapshot<T extends JsonObject, I extends JsonValue>(
-    token: SessionDocFamilyToken<T, I>,
+  snapshot<T extends typesModule.JsonObject, I extends JsonValue>(
+    token: typesModule.SessionDocFamilyToken<T, I>,
     key: string,
     context: Context,
   ): Promise<Readonly<T> | undefined>;
-  snapshot<T extends JsonObject, I extends JsonValue>(
-    token: ConversationDocFamilyToken<T, I>,
-    conversationId: ConversationId,
+  snapshot<T extends typesModule.JsonObject, I extends JsonValue>(
+    token: typesModule.ConversationDocFamilyToken<T, I>,
+    conversationId: typesModule.ConversationId,
     key: string,
     context: Context,
   ): Promise<Readonly<T> | undefined>;
-  snapshot<T extends JsonObject, I extends JsonValue>(
-    token: TaskDocFamilyToken<T, I>,
-    taskId: TaskId,
+  snapshot<T extends typesModule.JsonObject, I extends JsonValue>(
+    token: typesModule.TaskDocFamilyToken<T, I>,
+    taskId: typesModule.TaskId,
     key: string,
     context: Context,
   ): Promise<Readonly<T> | undefined>;
-  snapshot(token: AnyDocToken, ...args: readonly unknown[]): Promise<JsonObject | undefined> {
+  snapshot(
+    token: sessionTypes.AnyDocToken,
+    ...args: readonly unknown[]
+  ): Promise<typesModule.JsonObject | undefined> {
     return Effect.runPromise(snapshotDocument(this.#state, token, args));
   }
 
-  documentState<T extends JsonObject>(
-    token: SessionDocToken<T>,
+  documentState<T extends typesModule.JsonObject>(
+    token: typesModule.SessionDocToken<T>,
     context: Context,
-  ): Promise<DocumentState<T> | undefined>;
-  documentState<T extends JsonObject>(
-    token: ConversationDocToken<T>,
-    conversationId: ConversationId,
+  ): Promise<typesModule.DocumentState<T> | undefined>;
+  documentState<T extends typesModule.JsonObject>(
+    token: typesModule.ConversationDocToken<T>,
+    conversationId: typesModule.ConversationId,
     context: Context,
-  ): Promise<DocumentState<T> | undefined>;
-  documentState<T extends JsonObject>(
-    token: TaskDocToken<T>,
-    taskId: TaskId,
+  ): Promise<typesModule.DocumentState<T> | undefined>;
+  documentState<T extends typesModule.JsonObject>(
+    token: typesModule.TaskDocToken<T>,
+    taskId: typesModule.TaskId,
     context: Context,
-  ): Promise<DocumentState<T> | undefined>;
-  documentState<T extends JsonObject, I extends JsonValue>(
-    token: SessionDocFamilyToken<T, I>,
+  ): Promise<typesModule.DocumentState<T> | undefined>;
+  documentState<T extends typesModule.JsonObject, I extends JsonValue>(
+    token: typesModule.SessionDocFamilyToken<T, I>,
     key: string,
     context: Context,
-  ): Promise<DocumentState<T> | undefined>;
-  documentState<T extends JsonObject, I extends JsonValue>(
-    token: ConversationDocFamilyToken<T, I>,
-    conversationId: ConversationId,
+  ): Promise<typesModule.DocumentState<T> | undefined>;
+  documentState<T extends typesModule.JsonObject, I extends JsonValue>(
+    token: typesModule.ConversationDocFamilyToken<T, I>,
+    conversationId: typesModule.ConversationId,
     key: string,
     context: Context,
-  ): Promise<DocumentState<T> | undefined>;
-  documentState<T extends JsonObject, I extends JsonValue>(
-    token: TaskDocFamilyToken<T, I>,
-    taskId: TaskId,
+  ): Promise<typesModule.DocumentState<T> | undefined>;
+  documentState<T extends typesModule.JsonObject, I extends JsonValue>(
+    token: typesModule.TaskDocFamilyToken<T, I>,
+    taskId: typesModule.TaskId,
     key: string,
     context: Context,
-  ): Promise<DocumentState<T> | undefined>;
+  ): Promise<typesModule.DocumentState<T> | undefined>;
   documentState(
-    token: AnyDocToken,
+    token: sessionTypes.AnyDocToken,
     ...args: readonly unknown[]
-  ): Promise<DocumentState<JsonObject> | undefined> {
+  ): Promise<typesModule.DocumentState<typesModule.JsonObject> | undefined> {
     return documentStateOf(this.#state, token, args);
   }
 
-  watchDoc<T extends JsonObject>(
-    token: SessionDocToken<T>,
+  watchDoc<T extends typesModule.JsonObject>(
+    token: typesModule.SessionDocToken<T>,
     context: Context,
-  ): Promise<DocumentWatch<T> | undefined>;
-  watchDoc<T extends JsonObject>(
-    token: ConversationDocToken<T>,
-    conversationId: ConversationId,
+  ): Promise<typesModule.DocumentWatch<T> | undefined>;
+  watchDoc<T extends typesModule.JsonObject>(
+    token: typesModule.ConversationDocToken<T>,
+    conversationId: typesModule.ConversationId,
     context: Context,
-  ): Promise<DocumentWatch<T> | undefined>;
-  watchDoc<T extends JsonObject>(
-    token: TaskDocToken<T>,
-    taskId: TaskId,
+  ): Promise<typesModule.DocumentWatch<T> | undefined>;
+  watchDoc<T extends typesModule.JsonObject>(
+    token: typesModule.TaskDocToken<T>,
+    taskId: typesModule.TaskId,
     context: Context,
-  ): Promise<DocumentWatch<T> | undefined>;
-  watchDoc<T extends JsonObject, I extends JsonValue>(
-    token: SessionDocFamilyToken<T, I>,
+  ): Promise<typesModule.DocumentWatch<T> | undefined>;
+  watchDoc<T extends typesModule.JsonObject, I extends JsonValue>(
+    token: typesModule.SessionDocFamilyToken<T, I>,
     key: string,
     context: Context,
-  ): Promise<DocumentWatch<T> | undefined>;
-  watchDoc<T extends JsonObject, I extends JsonValue>(
-    token: ConversationDocFamilyToken<T, I>,
-    conversationId: ConversationId,
+  ): Promise<typesModule.DocumentWatch<T> | undefined>;
+  watchDoc<T extends typesModule.JsonObject, I extends JsonValue>(
+    token: typesModule.ConversationDocFamilyToken<T, I>,
+    conversationId: typesModule.ConversationId,
     key: string,
     context: Context,
-  ): Promise<DocumentWatch<T> | undefined>;
-  watchDoc<T extends JsonObject, I extends JsonValue>(
-    token: TaskDocFamilyToken<T, I>,
-    taskId: TaskId,
+  ): Promise<typesModule.DocumentWatch<T> | undefined>;
+  watchDoc<T extends typesModule.JsonObject, I extends JsonValue>(
+    token: typesModule.TaskDocFamilyToken<T, I>,
+    taskId: typesModule.TaskId,
     key: string,
     context: Context,
-  ): Promise<DocumentWatch<T> | undefined>;
+  ): Promise<typesModule.DocumentWatch<T> | undefined>;
   watchDoc(
-    token: AnyDocToken,
+    token: sessionTypes.AnyDocToken,
     ...args: readonly unknown[]
-  ): Promise<DocumentWatch<JsonObject> | undefined> {
+  ): Promise<typesModule.DocumentWatch<typesModule.JsonObject> | undefined> {
     return Effect.runPromise(watchDocument(this.#state, token, args));
   }
 
-  snapshotAsOf<T extends JsonObject>(
-    token: RewindableConversationDocToken<T>,
-    conversationId: ConversationId,
-    at: EntryId,
+  snapshotAsOf<T extends typesModule.JsonObject>(
+    token: typesModule.RewindableConversationDocToken<T>,
+    conversationId: typesModule.ConversationId,
+    at: typesModule.EntryId,
     context: Context,
   ): Promise<Readonly<T> | undefined>;
-  snapshotAsOf<T extends JsonObject, I extends JsonValue>(
-    token: RewindableConversationDocFamilyToken<T, I>,
-    conversationId: ConversationId,
+  snapshotAsOf<T extends typesModule.JsonObject, I extends JsonValue>(
+    token: typesModule.RewindableConversationDocFamilyToken<T, I>,
+    conversationId: typesModule.ConversationId,
     key: string,
-    at: EntryId,
+    at: typesModule.EntryId,
     context: Context,
   ): Promise<Readonly<T> | undefined>;
-  snapshotAsOf(token: AnyDocToken, ...args: readonly unknown[]): Promise<JsonObject | undefined> {
+  snapshotAsOf(
+    token: sessionTypes.AnyDocToken,
+    ...args: readonly unknown[]
+  ): Promise<typesModule.JsonObject | undefined> {
     return Effect.runPromise(snapshotAsOf(this.#state, token, args));
   }
 
@@ -254,7 +240,10 @@ export class SessionImpl implements Session {
 
   report(_error: unknown): void {}
 
-  protected conversationCreated(_tx: Transaction, _record: ConversationRecord): Promise<void> {
+  protected conversationCreated(
+    _tx: sessionTypes.Transaction,
+    _record: typesModule.ConversationRecord,
+  ): Promise<void> {
     return Promise.resolve();
   }
 
@@ -263,13 +252,15 @@ export class SessionImpl implements Session {
   }
 
   subscribeCommits(
-    listener: (publication: CommitPublication, context: Context) => void,
+    listener: (publication: typesModule.CommitPublication, context: Context) => void,
   ): () => void {
     assertUsable(this.#state);
     return addListener(this.#state.commitListeners, listener);
   }
 
-  observeCommits(listener: (publication: CommitPublication, context: Context) => void): () => void {
+  observeCommits(
+    listener: (publication: typesModule.CommitPublication, context: Context) => void,
+  ): () => void {
     assertUsable(this.#state);
     return addListener(this.#state.internalListeners, listener);
   }
@@ -283,7 +274,7 @@ export class SessionImpl implements Session {
     return unloadDocuments(this.#state);
   }
 
-  get documentCacheSizes(): DocumentCacheSizes {
+  get documentCacheSizes(): sessionTypes.DocumentCacheSizes {
     return documentCacheSizes(this.#state);
   }
 

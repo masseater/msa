@@ -6,15 +6,18 @@ import {
   fauxProvider,
 } from "@msa/ai";
 import type { Context } from "@msa/chord";
-import type { Conversation, HarnessOptions, Storage, ToolRegistration } from "@msa/durable";
-import { Harness, createRegistry } from "@msa/durable/harness";
+import harnessModule from "@msa/durable/harness";
+import type durableTypes from "@msa/durable/index.types";
 import { Effect } from "effect";
 
-import { currentTimeMillis } from "../src/clock.ts";
-import type { ExecutionEnv } from "../src/env/index.ts";
+import clockModule from "../src/clock.ts";
+import type envTypes from "../src/env/index.types.ts";
 import type chatSupportTypes from "./chat-support.types.ts";
 import effectSupport from "./effect-support.ts";
 import sessionSupport from "./session-support.ts";
+
+const { currentTimeMillis } = clockModule;
+const { Harness, createRegistry } = harnessModule;
 
 const { awaited } = effectSupport;
 const { context } = sessionSupport;
@@ -34,9 +37,11 @@ function chatSetup(options: RegisterFauxProviderOptions = {}): chatSupportTypes.
 }
 
 const openChat = Effect.fn("openChat")(function* (
-  storage: Storage,
+  storage: durableTypes.Storage,
   setup: chatSupportTypes.ChatSetup,
-  options: { readonly env?: ExecutionEnv | NonNullable<HarnessOptions["env"]> } = {},
+  options: {
+    readonly env?: envTypes.ExecutionEnv | NonNullable<durableTypes.HarnessOptions["env"]>;
+  } = {},
 ) {
   const harness = yield* awaited(
     Harness.open(
@@ -49,7 +54,9 @@ const openChat = Effect.fn("openChat")(function* (
           ? {}
           : {
               env:
-                typeof options.env === "function" ? options.env : () => options.env as ExecutionEnv,
+                typeof options.env === "function"
+                  ? options.env
+                  : () => options.env as envTypes.ExecutionEnv,
             }),
         now: () => setup.now(),
         onReport: (error) => setup.reports.push(error),
@@ -66,7 +73,7 @@ const openChat = Effect.fn("openChat")(function* (
 });
 
 const allEntries = Effect.fn("allEntries")(function* (
-  conversation: Conversation,
+  conversation: durableTypes.Conversation,
   callContext: Context = context,
 ) {
   const page = yield* awaited(conversation.entries({}, 1000, undefined, callContext));
@@ -102,7 +109,10 @@ function unanswered(): { readonly step: FauxResponseStep; readonly reached: Prom
   return { reached, step };
 }
 
-function toolsNamed(setup: chatSupportTypes.ChatSetup, ...names: string[]): ToolRegistration[] {
+function toolsNamed(
+  setup: chatSupportTypes.ChatSetup,
+  ...names: string[]
+): durableTypes.ToolRegistration[] {
   const installed = setup.registry.snapshot().tools();
   return names.map((name) => {
     const found = installed.find(({ tool }) => tool.name === name);

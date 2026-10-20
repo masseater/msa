@@ -1,4 +1,4 @@
-import type { ExecutionEnv } from "@msa/durable/env";
+import type envTypes from "@msa/durable/env.types";
 import type { Effect } from "effect";
 
 declare namespace differentialSupportTypes {
@@ -8,8 +8,8 @@ declare namespace differentialSupportTypes {
   }
 
   interface Pair {
-    readonly local: ExecutionEnv;
-    readonly remote: ExecutionEnv;
+    readonly local: envTypes.ExecutionEnv;
+    readonly remote: envTypes.ExecutionEnv;
     readonly roots: [Root, Root];
   }
 

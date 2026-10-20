@@ -1,8 +1,8 @@
 import type { DatabaseSync, StatementSync } from "node:sqlite";
 
-import type { SqliteExecutor, SqliteValue } from "./database.ts";
+import type databaseTypes from "./database.ts";
 
-export abstract class NodeSqliteExecutor implements SqliteExecutor {
+export default abstract class NodeSqliteExecutor implements databaseTypes.SqliteExecutor {
   protected readonly database: DatabaseSync;
   protected readonly statements: Map<string, StatementSync>;
 
@@ -17,17 +17,20 @@ export abstract class NodeSqliteExecutor implements SqliteExecutor {
     });
   }
 
-  run(sql: string, ...params: SqliteValue[]): Promise<void> {
+  run(sql: string, ...params: databaseTypes.SqliteValue[]): Promise<void> {
     return this.runOperation(() => {
       this.statement(sql).run(...params);
     });
   }
 
-  get<T extends object>(sql: string, ...params: SqliteValue[]): Promise<T | undefined> {
+  get<T extends object>(
+    sql: string,
+    ...params: databaseTypes.SqliteValue[]
+  ): Promise<T | undefined> {
     return this.runOperation(() => this.statement(sql).get(...params) as T | undefined);
   }
 
-  all<T extends object>(sql: string, ...params: SqliteValue[]): Promise<T[]> {
+  all<T extends object>(sql: string, ...params: databaseTypes.SqliteValue[]): Promise<T[]> {
     return this.runOperation(() => this.statement(sql).all(...params) as T[]);
   }
 

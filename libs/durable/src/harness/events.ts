@@ -1,22 +1,17 @@
 import type { Context } from "@msa/chord";
 import { Effect, Function } from "effect";
 
-import { attachEvents } from "./events-attach.ts";
-import type { AgentEventStream } from "./events-types.ts";
-import type { ConversationId, Dual3, Harness } from "./types.ts";
-import { conversationViews } from "./view.ts";
+import eventsAttach from "./events-attach.ts";
+import type eventsTypesModule from "./events-types.ts";
+import type typesModule from "./types.types.ts";
+import view from "./view.ts";
 
-export type {
-  AgentEvent,
-  AgentEventStream,
-  MessageChange,
-  SnapshotEvent,
-  ToolEventCall,
-} from "./events-types.ts";
+const { conversationViews } = view;
+const { attachEvents } = eventsAttach;
 
 const openStream = Effect.fnUntraced(function* (
-  harness: Harness,
-  conversationId: ConversationId,
+  harness: typesModule.Harness,
+  conversationId: typesModule.ConversationId,
   context: Context,
 ) {
   const views = conversationViews(harness);
@@ -28,19 +23,27 @@ const openStream = Effect.fnUntraced(function* (
   }
   if (signal !== undefined) watch.observeCancellation(signal);
   return {
+    closed: watch.closed,
     snapshot,
-    start: (listener: Parameters<AgentEventStream["start"]>[0]) =>
+    start: (listener: Parameters<eventsTypesModule.AgentEventStream["start"]>[0]) =>
       watch.start((events, _ops, deliveryContext) => listener(events, deliveryContext)),
     stop: () => watch.stop(),
-    closed: watch.closed,
-  } satisfies AgentEventStream;
+  } satisfies eventsTypesModule.AgentEventStream;
 });
 
-export const watchEvents: Dual3<
-  Harness,
-  ConversationId,
+const watchEvents: typesModule.Dual3<
+  typesModule.Harness,
+  typesModule.ConversationId,
   Context,
-  Promise<AgentEventStream>
-> = Function.dual(3, (harness: Harness, conversationId: ConversationId, context: Context) =>
-  Effect.runPromise(openStream(harness, conversationId, context)),
+  Promise<eventsTypesModule.AgentEventStream>
+> = Function.dual(
+  3,
+  (harness: typesModule.Harness, conversationId: typesModule.ConversationId, context: Context) =>
+    Effect.runPromise(openStream(harness, conversationId, context)),
 );
+
+const eventsModule = {
+  watchEvents,
+};
+
+export default eventsModule;

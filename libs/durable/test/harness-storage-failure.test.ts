@@ -1,6 +1,6 @@
 import type { Context } from "@msa/chord";
-import { LiveDoc, defineTask } from "@msa/durable";
-import { watchEvents } from "@msa/durable/harness";
+import durable from "@msa/durable";
+import harnessModule from "@msa/durable/harness";
 import { Effect } from "effect";
 import { describe, expect, it } from "vite-plus/test";
 
@@ -8,6 +8,9 @@ import effectSupport from "./effect-support.ts";
 import harnessStorageFailureSupport from "./harness-storage-failure-support.ts";
 import sessionSupport from "./session-support.ts";
 import taskSupport from "./task-support.ts";
+
+const { LiveDoc, defineTask } = durable;
+const { watchEvents } = harnessModule;
 
 const { awaited } = effectSupport;
 const { FailingCalls, Waiting, running, signals, started } = harnessStorageFailureSupport;

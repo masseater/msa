@@ -1,8 +1,8 @@
 import type { Op } from "@msa/chord/delta";
-import type { ConversationView } from "@msa/durable";
+import type durableTypes from "@msa/durable/index.types";
 
 declare namespace harnessViewSupportTypes {
-  type Frame = { value: ConversationView; ops: readonly Op[] };
+  type Frame = { value: durableTypes.ConversationView; ops: readonly Op[] };
 }
 
 export type { harnessViewSupportTypes as default };

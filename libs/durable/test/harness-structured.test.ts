@@ -1,4 +1,4 @@
-import { type ConversationId, type TaskId, type TaskOptions } from "@msa/durable";
+import type durableTypes from "@msa/durable/index.types";
 import { Effect } from "effect";
 import { afterEach, describe, expect, it } from "vite-plus/test";
 
@@ -50,7 +50,7 @@ const createsChildOwner = Effect.gen(function* () {
   const runPromise = Effect.runPromiseWith(yield* Effect.context<never>());
 
   const { harness, root } = yield* openNodes();
-  let child: TaskId | undefined;
+  let child: durableTypes.TaskId | undefined;
   script("parent", {
     run: (runtime, ctx) =>
       runtime.commit(
@@ -80,10 +80,12 @@ const rejectsNoOwnership = Effect.gen(function* () {
   const other = yield* awaited(
     harness.createConversation({ ownership: { kind: "ownerless" } }, context),
   );
-  const create = (options: TaskOptions) =>
+  const create = (options: durableTypes.TaskOptions) =>
     root.commit((tx) => tx.createTask(Node, { name: "x" }, options), context);
-  yield* awaited(expect(create({} as TaskOptions)).rejects.toThrow());
-  yield* awaited(expect(create(owned(999_999 as TaskId))).rejects.toThrow("does not exist"));
+  yield* awaited(expect(create({} as durableTypes.TaskOptions)).rejects.toThrow());
+  yield* awaited(
+    expect(create(owned(999_999 as durableTypes.TaskId))).rejects.toThrow("does not exist"),
+  );
   yield* awaited(
     expect(create({ ...owned(parent), conversationId: other.id })).rejects.toThrow(
       "owner's conversation",
@@ -219,7 +221,7 @@ const cannotCreateChildStep1 = Effect.gen(function* () {
 
 const cannotCreateChild = Effect.gen(function* () {
   const { runPromise, harness, root } = yield* cannotCreateChildStep1;
-  let child: ConversationId | undefined;
+  let child: durableTypes.ConversationId | undefined;
   script("host", {
     resume: (runtime, ctx) =>
       runtime.commit(

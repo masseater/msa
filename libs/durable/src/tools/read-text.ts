@@ -2,31 +2,26 @@ import type { Context } from "@msa/chord";
 import { characterEnd } from "@msa/chord/output";
 import { Effect, Function } from "effect";
 
-import type { Dual2 } from "../dual.ts";
-import { rangeDecoder, startsWithBom } from "../env/decode.ts";
-import type { BinaryReader, FileInfo, LineScan } from "../env/index.ts";
-import { getOrThrow } from "../env/result.ts";
-import type { ToolDiagnostic, ToolExecutionResult } from "../harness/types.ts";
-import {
-  DEFAULT_MAX_BYTES,
-  DEFAULT_MAX_LINES,
-  formatSize,
-  truncateHeadOf,
-  type TruncationResult,
-  utf8ByteLength,
-} from "../truncate.ts";
+import decodeModule from "../env/decode.ts";
+import type envTypes from "../env/index.types.ts";
+import resultModule from "../env/result.ts";
+import type typesModule from "../harness/types.types.ts";
+import truncate from "../truncate.ts";
+import type truncateTypes from "../truncate.types.ts";
+import type readTextTypes from "./read-text.types.ts";
 
-export type ReadToolDetails = {
-  truncation?: Omit<TruncationResult, "content">;
-};
+const { rangeDecoder, startsWithBom } = decodeModule;
+const { DEFAULT_MAX_BYTES, DEFAULT_MAX_LINES, formatSize, truncateHeadOf, utf8ByteLength } =
+  truncate;
+const { getOrThrow } = resultModule;
 
 const READ_CHUNK = 64 * 1024;
 
 const sliceIndex = (value: number): number => (Number.isNaN(value) ? 0 : Math.trunc(value));
 
 const readHead = Effect.fnUntraced(function* (
-  source: BinarySource,
-  scan: LineScan,
+  source: readTextTypes.BinarySource,
+  scan: envTypes.LineScan,
   skipBom: boolean,
 ) {
   const decoder = rangeDecoder();
@@ -47,7 +42,7 @@ const readHead = Effect.fnUntraced(function* (
 });
 
 type Selection = {
-  readonly scan: LineScan;
+  readonly scan: envTypes.LineScan;
   readonly startLine: number;
   readonly totalFileLines: number;
   readonly selectedLineCount: number;
@@ -55,7 +50,7 @@ type Selection = {
 };
 
 const selectLines = Effect.fnUntraced(function* (
-  source: BinarySource,
+  source: readTextTypes.BinarySource,
   offset: number | undefined,
   limit: number | undefined,
 ) {
@@ -65,7 +60,7 @@ const selectLines = Effect.fnUntraced(function* (
   const scanStart = Number.isSafeInteger(sliceStart) ? sliceStart : 0;
   const requestedEnd =
     limit === undefined ? undefined : Math.max(scanStart + 1, sliceIndex(startLine + limit));
-  const scanOf = (endLine: number | undefined): Effect.Effect<LineScan> =>
+  const scanOf = (endLine: number | undefined): Effect.Effect<envTypes.LineScan> =>
     source.scanLines({ startLine: scanStart, ...(endLine === undefined ? {} : { endLine }) });
   let scan = yield* scanOf(
     requestedEnd !== undefined && Number.isSafeInteger(requestedEnd) ? requestedEnd : undefined,
@@ -77,9 +72,9 @@ const selectLines = Effect.fnUntraced(function* (
   if (limit === undefined) {
     const selection: Selection = {
       scan,
+      selectedLineCount: totalFileLines - sliceStart,
       startLine,
       totalFileLines,
-      selectedLineCount: totalFileLines - sliceStart,
       userLimitedLines: undefined,
     };
     return selection;
@@ -91,22 +86,22 @@ const selectLines = Effect.fnUntraced(function* (
   if (selectedLineCount > 0 && relativeEnd < 0) scan = yield* scanOf(sliceEnd);
   const selection: Selection = {
     scan,
+    selectedLineCount,
     startLine,
     totalFileLines,
-    selectedLineCount,
     userLimitedLines: endLine - startLine,
   };
   return selection;
 });
 
-type Shown = { readonly text: string; readonly details?: ReadToolDetails };
+type Shown = { readonly text: string; readonly details?: readTextTypes.ReadToolDetails };
 
 function oversizedLine(
   head: string,
   selection: Selection,
-  truncation: Omit<TruncationResult, "content">,
+  truncation: Omit<truncateTypes.TruncationResult, "content">,
   path: string,
-  diagnostics: ToolDiagnostic[],
+  diagnostics: typesModule.ToolDiagnostic[],
 ): Shown {
   const { startLine, scan } = selection;
   const display = startLine + 1;
@@ -115,13 +110,13 @@ function oversizedLine(
   const lineSize = integral ? scan.firstLineBytes : 0;
   const end = characterEnd(lineBytes, DEFAULT_MAX_BYTES);
   diagnostics.push({
-    severity: "warn",
     code: "truncated",
     message: `Line ${display} is ${formatSize(lineSize)}, exceeds the ${formatSize(DEFAULT_MAX_BYTES)} limit; showing its first ${formatSize(end)}. Use bash: sed -n '${display}p' ${path} | tail -c +${end + 1}`,
+    severity: "warn",
   });
   return {
-    text: new TextDecoder().decode(lineBytes.subarray(0, end)),
     details: { truncation: { ...truncation, outputBytes: end, outputLines: 1 } },
+    text: new TextDecoder().decode(lineBytes.subarray(0, end)),
   };
 }
 
@@ -129,15 +124,15 @@ function shownText(
   head: string,
   selection: Selection,
   path: string,
-  diagnostics: ToolDiagnostic[],
+  diagnostics: typesModule.ToolDiagnostic[],
 ): Shown {
   const { scan, startLine, totalFileLines, selectedLineCount, userLimitedLines } = selection;
   const empty = selectedLineCount === 0;
   const endsWithNewline =
     !empty && scan.lastLineStart === scan.end && scan.lastLineStart > scan.start;
   const { content, ...truncation } = truncateHeadOf(head, {
-    lines: empty || scan.selectedBytes === 0 ? 0 : selectedLineCount - (endsWithNewline ? 1 : 0),
     bytes: empty ? 0 : scan.selectedBytes,
+    lines: empty || scan.selectedBytes === 0 ? 0 : selectedLineCount - (endsWithNewline ? 1 : 0),
   });
   if (truncation.firstLineExceedsLimit)
     return oversizedLine(head, selection, truncation, path, diagnostics);
@@ -146,23 +141,23 @@ function shownText(
     const limitText =
       truncation.truncatedBy === "lines" ? "" : ` (${formatSize(DEFAULT_MAX_BYTES)} limit)`;
     diagnostics.push({
-      severity: "info",
       code: "truncated",
       message: `Showing lines ${startLine + 1}-${endLineDisplay} of ${totalFileLines}${limitText}. Use offset=${endLineDisplay + 1} to continue.`,
+      severity: "info",
     });
-    return { text: content, details: { truncation } };
+    return { details: { truncation }, text: content };
   }
   if (userLimitedLines !== undefined && startLine + userLimitedLines < totalFileLines) {
     diagnostics.push({
-      severity: "info",
       message: `${totalFileLines - (startLine + userLimitedLines)} more lines in file. Use offset=${startLine + userLimitedLines + 1} to continue.`,
+      severity: "info",
     });
   }
   return { text: content };
 }
 
-export const readText = Effect.fnUntraced(function* (
-  source: BinarySource,
+const readText = Effect.fnUntraced(function* (
+  source: readTextTypes.BinarySource,
   path: string,
   offset: number | undefined,
   limit: number | undefined,
@@ -173,26 +168,24 @@ export const readText = Effect.fnUntraced(function* (
     selection.selectedLineCount === 0
       ? ""
       : yield* readHead(source, selection.scan, startsWithBom(firstBytes));
-  const diagnostics: ToolDiagnostic[] = [];
+  const diagnostics: typesModule.ToolDiagnostic[] = [];
   const { text, details } = shownText(head, selection, path, diagnostics);
-  const result: ToolExecutionResult<ReadToolDetails> = {
-    output: text === "" ? [] : [{ type: "text", text }],
+  const result: typesModule.ToolExecutionResult<readTextTypes.ReadToolDetails> = {
+    output: text === "" ? [] : [{ text, type: "text" }],
     ...(details === undefined ? {} : { details }),
     diagnostics,
   };
   return result;
 });
 
-export type BinarySource = {
-  readonly info: Effect.Effect<FileInfo>;
-  read(position: number, length: number): Effect.Effect<Uint8Array>;
-  scanLines(options: { startLine: number; endLine?: number }): Effect.Effect<LineScan>;
-  readonly close: Effect.Effect<void>;
-};
-
-export const binarySource: Dual2<BinaryReader, Context, BinarySource> = Function.dual(
+const binarySource: readTextTypes.Dual2<
+  envTypes.BinaryReader,
+  Context,
+  readTextTypes.BinarySource
+> = Function.dual(
   2,
-  (reader: BinaryReader, context: Context): BinarySource => ({
+  (reader: envTypes.BinaryReader, context: Context): readTextTypes.BinarySource => ({
+    close: Effect.promise(() => reader.close(context)),
     info: Effect.map(
       Effect.promise(() => reader.info(context)),
       getOrThrow,
@@ -207,6 +200,12 @@ export const binarySource: Dual2<BinaryReader, Context, BinarySource> = Function
         Effect.promise(() => reader.scanLines(options, context)),
         getOrThrow,
       ),
-    close: Effect.promise(() => reader.close(context)),
   }),
 );
+
+const readTextModule = {
+  binarySource,
+  readText,
+};
+
+export default readTextModule;

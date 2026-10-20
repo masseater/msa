@@ -1,10 +1,12 @@
-import { type AgentEvent, type CompactionResult, type TaskId } from "@msa/durable";
-import { watchEvents } from "@msa/durable/harness";
+import harnessModule from "@msa/durable/harness";
+import type durableTypes from "@msa/durable/index.types";
 import { Effect } from "effect";
 import { afterEach, describe, expect, it } from "vite-plus/test";
 
 import harnessCompactionSupport from "./harness-compaction-support.ts";
 import support from "./support.ts";
+
+const { watchEvents } = harnessModule;
 
 const {
   BACKGROUND,
@@ -53,7 +55,9 @@ const startsAboveBackground = Effect.gen(function* () {
   yield* awaited(chat.root.abort(context));
   expect((yield* awaited(chat.harness.getTask(task!.id, context)))?.state.status).toBe("running");
   gate.resolve();
-  const outcome = yield* awaited(result(chat, task!.id as TaskId<CompactionResult>));
+  const outcome = yield* awaited(
+    result(chat, task!.id as durableTypes.TaskId<durableTypes.CompactionResult>),
+  );
   expect(outcome.status).toBe("completed");
   expect((yield* kinds(chat.root)).at(-1)).toBe("msa.compaction");
   expect(firstUserText((yield* awaited(chat.root.context(context))).messages)).toContain("SUMMARY");
@@ -106,7 +110,7 @@ const recordsFailureMsa = Effect.gen(function* () {
   const chat = yield* open({ contextWindow: 2000 });
   yield* history(chat);
   chat.setup.settings.compaction = BACKGROUND;
-  const events: AgentEvent[] = [];
+  const events: durableTypes.AgentEvent[] = [];
   const stream = yield* awaited(watchEvents(chat.harness, chat.root.id, context));
   stream.start((batch) => {
     events.push(...batch);

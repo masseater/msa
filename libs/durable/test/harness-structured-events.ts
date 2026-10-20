@@ -1,24 +1,25 @@
 import { fauxAssistantMessage, fauxToolCall } from "@msa/ai";
-import type { AgentEvent, Conversation, Harness, TaskId, ToolRegistration } from "@msa/durable";
-import { defineTool } from "@msa/durable";
-import { watchEvents } from "@msa/durable/harness";
+import durable from "@msa/durable";
+import harnessModule from "@msa/durable/harness";
+import type durableTypes from "@msa/durable/index.types";
 import { Effect } from "effect";
 import { dual } from "effect/Function";
 import { Type } from "typebox";
 
-import effectSupport from "./effect-support.ts";
 import harnessStructuredSupport from "./harness-structured-support.ts";
-import sessionSupport from "./session-support.ts";
-import taskSupport from "./task-support.ts";
+import testSupport from "./support.ts";
 
-const { awaited } = effectSupport;
+const { defineTool } = durable;
+const { watchEvents } = harnessModule;
+
+const { awaited } = testSupport;
 const { script, spawn } = harnessStructuredSupport;
-const { context } = sessionSupport;
-const { aborted, deferred } = taskSupport;
+const { context } = testSupport;
+const { aborted, deferred } = testSupport;
 
 function blockingTool(name: string): {
   started: Promise<void>;
-  registration: ToolRegistration;
+  registration: durableTypes.ToolRegistration;
 } {
   const started = deferred();
   return {
@@ -44,8 +45,8 @@ function toolCalls(...ids: readonly [string, string][]) {
   );
 }
 
-function spawnAndFinishImpl(name: string, child: string): { id?: TaskId } {
-  const found: { id?: TaskId } = {};
+function spawnAndFinishImpl(name: string, child: string): { id?: durableTypes.TaskId } {
+  const found: { id?: durableTypes.TaskId } = {};
   script(name, {
     run: (runtime, ctx) =>
       Effect.runPromise(
@@ -75,9 +76,12 @@ const spawnAndFinish: {
   (name: string, child: string): ReturnType<typeof spawnAndFinishImpl>;
 } = dual(2, spawnAndFinishImpl);
 
-const listen = Effect.fn("listen")(function* (harness: Harness, conversation: Conversation) {
+const listen = Effect.fn("listen")(function* (
+  harness: durableTypes.Harness,
+  conversation: durableTypes.Conversation,
+) {
   const stream = yield* awaited(watchEvents(harness, conversation.id, context));
-  const events: AgentEvent[] = [];
+  const events: durableTypes.AgentEvent[] = [];
   stream.start((batch) => {
     events.push(...batch);
 
@@ -86,7 +90,7 @@ const listen = Effect.fn("listen")(function* (harness: Harness, conversation: Co
   return { events, stream };
 });
 
-function labels(events: readonly AgentEvent[]): string[] {
+function labels(events: readonly durableTypes.AgentEvent[]): string[] {
   return events.flatMap((event) => {
     if (event.type === "tool_execution_end")
       return [`end:${event.toolCallId}:${event.entry !== undefined}`];

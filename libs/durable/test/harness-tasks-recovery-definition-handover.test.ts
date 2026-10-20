@@ -1,6 +1,7 @@
 import { createModels } from "@msa/ai";
-import { type TaskId, type TaskRuntime, defineTask } from "@msa/durable";
-import { Harness, createRegistry } from "@msa/durable/harness";
+import durable from "@msa/durable";
+import harnessModule from "@msa/durable/harness";
+import type durableTypes from "@msa/durable/index.types";
 import { Effect } from "effect";
 import { afterEach, describe, expect, it } from "vite-plus/test";
 
@@ -8,6 +9,9 @@ import harnessTasksRecoverySupport from "./harness-tasks-recovery-support.ts";
 import type harnessTasksRecoverySupportTypes from "./harness-tasks-recovery-support.types.ts";
 import support from "./support.ts";
 import type supportTypes from "./support.types.ts";
+
+const { defineTask } = durable;
+const { Harness, createRegistry } = harnessModule;
 
 const { createIn, directories, handoverTask, startHandover } = harnessTasksRecoverySupport;
 const {
@@ -62,7 +66,12 @@ describe("definition handover", () => {
 
 type HandoverSeen = {
   held?: ReturnType<supportTypes.ControlledStorage["holdCommits"]>;
-  oldRuntime?: TaskRuntime<null, harnessTasksRecoverySupportTypes.Handover, null, object>;
+  oldRuntime?: durableTypes.TaskRuntime<
+    null,
+    harnessTasksRecoverySupportTypes.Handover,
+    null,
+    object
+  >;
   harness?: harnessTasksRecoverySupportTypes.OpenHarness;
 };
 
@@ -211,7 +220,7 @@ const releasesRegistrySubscription = Effect.gen(function* () {
     ).rejects.toThrow("disk full"),
   );
   expect(reader.subscriptions()).toBe(0);
-  yield* awaited(expect(storage.task(1 as TaskId, context)).rejects.toThrow());
+  yield* awaited(expect(storage.task(1 as durableTypes.TaskId, context)).rejects.toThrow());
 });
 
 describe("Harness open", () => {

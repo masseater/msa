@@ -1,9 +1,11 @@
-import { UsageDoc } from "@msa/durable";
+import durable from "@msa/durable";
 import { Effect } from "effect";
 import { afterEach, describe, expect, it } from "vite-plus/test";
 
 import harnessCompactionSupport from "./harness-compaction-support.ts";
 import support from "./support.ts";
+
+const { UsageDoc } = durable;
 
 const {
   MANUAL,

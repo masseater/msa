@@ -1,7 +1,7 @@
-import type setupError from "./setup-error.ts";
+import type SetupErrorClass from "./setup-error.ts";
 
 declare namespace setupErrorTypes {
-  type SetupError = (typeof setupError.SetupError)["prototype"];
+  type SetupError = SetupErrorClass;
 }
 
 export type { setupErrorTypes as default };

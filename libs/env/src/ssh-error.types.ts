@@ -1,7 +1,7 @@
-import type sshError from "./ssh-error.ts";
+import type SshErrorClass from "./ssh-error.ts";
 
 declare namespace sshErrorTypes {
-  type SshError = (typeof sshError.SshError)["prototype"];
+  type SshError = SshErrorClass;
 }
 
 export type { sshErrorTypes as default };

@@ -1,12 +1,17 @@
-import { type HarnessSettings, type TaskId, type Tx, configure, defineDoc } from "@msa/durable";
-import { Harness, createRegistry } from "@msa/durable/harness";
+import durable from "@msa/durable";
+import harnessModule from "@msa/durable/harness";
+import type durableTypes from "@msa/durable/index.types";
 import { Effect } from "effect";
 import { dual } from "effect/Function";
 
-import { CodingTools } from "../src/tools/index.ts";
+import toolsModule from "../src/tools/index.ts";
 import effectSupport from "./effect-support.ts";
 import type specUsageNamesTypes from "./spec-usage-names.ts";
 import type specUsageSequencesTypes from "./spec-usage-sequences.types.ts";
+
+const { configure, defineDoc } = durable;
+const { Harness, createRegistry } = harnessModule;
+const { CodingTools } = toolsModule;
 
 const { awaited } = effectSupport;
 
@@ -15,7 +20,7 @@ function setupSequencesImpl(
   readTool: specUsageSequencesTypes.SpecTools["readTool"],
 ) {
   return {
-    childInToolCommit: (tx: Tx, api: { readonly taskId: TaskId }) =>
+    childInToolCommit: (tx: durableTypes.Tx, api: { readonly taskId: durableTypes.TaskId }) =>
       Effect.runPromise(
         Effect.gen(function* () {
           const child = yield* awaited(
@@ -30,7 +35,7 @@ function setupSequencesImpl(
       ),
 
     liveSettings: () => {
-      class UserSettings implements HarnessSettings {
+      class UserSettings implements durableTypes.HarnessSettings {
         readonly manager: specUsageNamesTypes.SettingsManager;
         constructor(managerInner: specUsageNamesTypes.SettingsManager) {
           this.manager = managerInner;

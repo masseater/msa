@@ -8,13 +8,18 @@ import {
   fauxToolCall,
 } from "@msa/ai";
 import { openaiProvider } from "@msa/ai/providers/openai";
-import { type AgentEvent, LiveDoc } from "@msa/durable";
-import { Harness, createRegistry, watchEvents } from "@msa/durable/harness";
+import durable from "@msa/durable";
+import harnessModule from "@msa/durable/harness";
+import type durableTypes from "@msa/durable/index.types";
 import { Console, Effect } from "effect";
 
-import { openNodeSqliteStorage } from "../../src/storage/sqlite/node.ts";
+import node from "../../src/storage/sqlite/node.ts";
 import support from "../support.ts";
 import subagentBackgroundTools from "./subagent-background-tools.ts";
+
+const { Harness, createRegistry, watchEvents } = harnessModule;
+const { openNodeSqliteStorage } = node;
+const { LiveDoc } = durable;
 
 const { BACKGROUND_CONTEXT, awaited, environmentVariable, joinPath, makeTempDir, removeDir } =
   support;
@@ -97,7 +102,7 @@ function contentText(content: string | readonly { type: string; text?: string }[
 
 const print = (line: string): void => Effect.runSync(Console.log(line));
 
-function printEvent(event: AgentEvent): void {
+function printEvent(event: durableTypes.AgentEvent): void {
   if (event.type !== "message_end") return;
   const message = event.entry.model?.[0];
   if (message?.role === "user") {
@@ -120,7 +125,7 @@ function printEvent(event: AgentEvent): void {
 
 const follow = Effect.fn("follow")(function* ({ harness, root }: Session) {
   const stream = yield* awaited(watchEvents(harness, root.id, context));
-  stream.start((events: readonly AgentEvent[]) => {
+  stream.start((events: readonly durableTypes.AgentEvent[]) => {
     for (const event of events) printEvent(event);
 
     return Promise.resolve();

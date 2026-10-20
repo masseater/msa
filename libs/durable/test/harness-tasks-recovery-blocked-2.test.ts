@@ -1,11 +1,15 @@
-import { defineTask } from "@msa/durable";
-import { createRegistry } from "@msa/durable/harness";
-import { MemoryStorage } from "@msa/durable/storage/memory";
+import durable from "@msa/durable";
+import harnessModule from "@msa/durable/harness";
+import memory from "@msa/durable/storage/memory";
 import { Effect } from "effect";
 import { afterEach, describe, expect, it } from "vite-plus/test";
 
 import harnessTasksRecoverySupport from "./harness-tasks-recovery-support.ts";
 import support from "./support.ts";
+
+const { defineTask } = durable;
+const { createRegistry } = harnessModule;
+const { MemoryStorage } = memory;
 
 const { createIn, directories, handoverTask, startHandover } = harnessTasksRecoverySupport;
 const { addTask, awaited, completed, context, deferred, eventually, flush, openTasks, removeDir } =

@@ -1,9 +1,12 @@
-import { type CompactionResult, type TaskId, UsageDoc } from "@msa/durable";
+import durable from "@msa/durable";
+import type durableTypes from "@msa/durable/index.types";
 import { Effect } from "effect";
 import { afterEach, describe, expect, it } from "vite-plus/test";
 
 import harnessCompactionSupport from "./harness-compaction-support.ts";
 import support from "./support.ts";
+
+const { UsageDoc } = durable;
 
 const {
   BACKGROUND,
@@ -60,7 +63,9 @@ const keepsBackgroundSummaryStep1 = Effect.gen(function* () {
   );
   const [background] = yield* compactionTasks(chat);
   summaryGate.resolve();
-  const queued = yield* awaited(result(chat, background!.id as TaskId<CompactionResult>));
+  const queued = yield* awaited(
+    result(chat, background!.id as durableTypes.TaskId<durableTypes.CompactionResult>),
+  );
   const submission = (yield* awaited(
     chat.harness.submission(
       (queued.status === "completed" ? queued.result.submissionId : undefined)!,

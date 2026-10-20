@@ -3,8 +3,8 @@ import { Effect } from "effect";
 import { dual } from "effect/Function";
 import { vi } from "vite-plus/test";
 
-import { type ShellExecOptions } from "../src/env/index.ts";
-import { NodeExecutionEnv } from "../src/env/node.ts";
+import type envTypes from "../src/env/index.types.ts";
+import type nodeTypes from "../src/env/node.types.ts";
 import effectSupport from "./effect-support.ts";
 import type envNodeSupportTypes from "./env-node-support.types.ts";
 import nodeFsPromisesCapture from "./node-fs-promises-capture.ts";
@@ -43,11 +43,11 @@ const fileHandlePrototype = Effect.fn("fileHandlePrototype")(function* (path: st
 });
 
 function collectShellOutputImpl(
-  env: NodeExecutionEnv,
+  env: nodeTypes.NodeExecutionEnv,
   command: string,
-  options: ShellExecOptions | undefined,
-  context: Parameters<NodeExecutionEnv["exec"]>[2],
-): Promise<{ result: Awaited<ReturnType<NodeExecutionEnv["exec"]>>; output: string }> {
+  options: envTypes.ShellExecOptions | undefined,
+  context: Parameters<nodeTypes.NodeExecutionEnv["exec"]>[2],
+): Promise<{ result: Awaited<ReturnType<nodeTypes.NodeExecutionEnv["exec"]>>; output: string }> {
   return Effect.runPromise(
     Effect.gen(function* () {
       let output = "";
@@ -71,14 +71,14 @@ function collectShellOutputImpl(
 const collectShellOutput: {
   (
     command: string,
-    options: ShellExecOptions | undefined,
-    context: Parameters<NodeExecutionEnv["exec"]>[2],
-  ): (env: NodeExecutionEnv) => ReturnType<typeof collectShellOutputImpl>;
+    options: envTypes.ShellExecOptions | undefined,
+    context: Parameters<nodeTypes.NodeExecutionEnv["exec"]>[2],
+  ): (env: nodeTypes.NodeExecutionEnv) => ReturnType<typeof collectShellOutputImpl>;
   (
-    env: NodeExecutionEnv,
+    env: nodeTypes.NodeExecutionEnv,
     command: string,
-    options: ShellExecOptions | undefined,
-    context: Parameters<NodeExecutionEnv["exec"]>[2],
+    options: envTypes.ShellExecOptions | undefined,
+    context: Parameters<nodeTypes.NodeExecutionEnv["exec"]>[2],
   ): ReturnType<typeof collectShellOutputImpl>;
 } = dual(4, collectShellOutputImpl);
 

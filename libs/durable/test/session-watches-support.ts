@@ -1,10 +1,12 @@
 import type { Draft } from "@msa/chord";
-import { defineDoc } from "@msa/durable";
+import durable from "@msa/durable";
 import { Effect } from "effect";
 
 import effectSupport from "./effect-support.ts";
 import sessionSupport from "./session-support.ts";
 import type sessionWatchesSupportTypes from "./session-watches-support.types.ts";
+
+const { defineDoc } = durable;
 
 const { awaited } = effectSupport;
 const { context, openTestSession } = sessionSupport;

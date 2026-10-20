@@ -1,9 +1,11 @@
-import { MemoryStorage } from "@msa/durable/storage/memory";
+import memory from "@msa/durable/storage/memory";
 import { Effect } from "effect";
 import { afterEach, describe, expect, it } from "vite-plus/test";
 
 import harnessInboxSupport from "./harness-inbox-support.ts";
 import support from "./support.ts";
+
+const { MemoryStorage } = memory;
 
 const { answer, directories, gated, inbox, status, transcript } = harnessInboxSupport;
 const { allEntries, awaited, chatSetup, context, openChat, removeDir } = support;

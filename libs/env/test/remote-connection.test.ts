@@ -1,18 +1,19 @@
 import { BACKGROUND_CONTEXT } from "@msa/chord/context";
-import { getOrThrow } from "@msa/durable/env";
+import envModule from "@msa/durable/env";
 import { Effect } from "effect";
 import { afterAll, describe, expect, it } from "vite-plus/test";
 
 import connectionModule from "../src/connection.ts";
-import remoteEnv from "../src/remote-env.ts";
+import RemoteExecutionEnv from "../src/remote-env.ts";
 import remoteInfo from "../src/remote-info.ts";
 import daemon from "./daemon.ts";
 import platformModule from "./platform.ts";
 import remoteEnvironments from "./remote-environment.ts";
 
+const { getOrThrow } = envModule;
+
 const { nodePlatform } = remoteInfo;
 const { Connection } = connectionModule;
-const { RemoteExecutionEnv } = remoteEnv;
 
 const { localPath } = platformModule;
 

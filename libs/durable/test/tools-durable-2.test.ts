@@ -1,23 +1,20 @@
 import type { Context } from "@msa/chord";
-import type { ToolExecutionApi } from "@msa/durable";
+import type durableTypes from "@msa/durable/index.types";
 import { Effect } from "effect";
 import { afterAll, describe, expect, it } from "vite-plus/test";
 
-import {
-  type ExecutionEnv,
-  ExecutionError,
-  type Result,
-  type ShellExecOptions,
-  type ShellExecResult,
-  type ShellOutputSkip,
-  type ShellOutputWindow,
-  getOrThrow,
-} from "../src/env/index.ts";
-import { NodeExecutionEnv } from "../src/env/node.ts";
-import { createBashTool, createPowerShellTool } from "../src/tools/index.ts";
-import { DEFAULT_MAX_LINES } from "../src/truncate.ts";
+import envModule from "../src/env/index.ts";
+import type envTypes from "../src/env/index.types.ts";
+import durableKit from "./durable-kit.ts";
 import support from "./support.ts";
 import toolsSupport from "./tools-support.ts";
+
+const { envNode: node, tools: toolsModule, truncate } = durableKit;
+
+const { NodeExecutionEnv } = node;
+const { createBashTool, createPowerShellTool } = toolsModule;
+const { getOrThrow } = envModule;
+const { DEFAULT_MAX_LINES } = truncate;
 
 const { BACKGROUND_CONTEXT, abortController, awaited, withAbortSignal } = support;
 const {
@@ -34,32 +31,32 @@ const {
 afterAll(() => Effect.runPromise(removeTempDirs));
 
 const passesRetainedWindow = Effect.gen(function* () {
-  const window: ShellOutputWindow = {
+  const window: envTypes.ShellOutputWindow = {
     bytesPerSecond: 1024,
     maxBytes: 4,
     maxLines: 1,
     minIntervalMs: 100,
   };
-  const skipped: ShellOutputSkip = { bytes: 6, endsWithNewline: true, newlines: 2 };
-  let received: ShellOutputWindow | undefined;
+  const skipped: envTypes.ShellOutputSkip = { bytes: 6, endsWithNewline: true, newlines: 2 };
+  let received: envTypes.ShellOutputWindow | undefined;
   class SkippingEnv extends NodeExecutionEnv {
     override exec(
       _command: string | readonly string[],
-      options: ShellExecOptions | undefined,
+      options: envTypes.ShellExecOptions | undefined,
       context: Context,
-    ): Promise<Result<ShellExecResult, ExecutionError>> {
+    ): Promise<envTypes.Result<envTypes.ShellExecResult, envTypes.ExecutionError>> {
       received = options?.window;
       options?.onOutput?.("tail\n", context, { skipped, stream: "stdout" });
       return Promise.resolve({ ok: true, value: { exitCode: 0 } });
     }
   }
-  const calls: [string, ShellOutputSkip | undefined][] = [];
+  const calls: [string, envTypes.ShellOutputSkip | undefined][] = [];
   const api = {
     ...fakeApi(new SkippingEnv({ cwd: yield* createTempDir })).api,
-    output: (chunk: string | Uint8Array, skip?: ShellOutputSkip) =>
+    output: (chunk: string | Uint8Array, skip?: envTypes.ShellOutputSkip) =>
       calls.push([String(chunk), skip]),
     outputWindow: window,
-  } as ToolExecutionApi;
+  } as durableTypes.ToolExecutionApi;
   yield* awaited(createBashTool().execute({ command: "anything" }, api, BACKGROUND_CONTEXT));
   expect(received).toEqual(window);
   expect(calls).toEqual([["tail\n", skipped]]);
@@ -155,7 +152,7 @@ const preparesCommandCwd = Effect.gen(function* () {
   getOrThrow(yield* awaited(env.createDir("workspace", undefined, BACKGROUND_CONTEXT)));
   const workspace = `${env.cwd}/workspace`;
   const controller = abortController();
-  let receivedEnv: ExecutionEnv | undefined;
+  let receivedEnv: envTypes.ExecutionEnv | undefined;
   let receivedSignal: AbortSignal | undefined;
   const tool = createBashTool({
     commandPrefix: "prefix=ready",

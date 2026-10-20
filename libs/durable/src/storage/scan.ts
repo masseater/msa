@@ -1,28 +1,37 @@
 import { Function } from "effect";
 
-import { StorageRequestError } from "../errors.ts";
-import type { Id, ScanOrder } from "../types.ts";
+import errors from "../errors.ts";
+import type typesModule from "../types.types.ts";
+import type scanTypes from "./scan.types.ts";
 
-export type ScanStart = {
-  readonly order: ScanOrder;
-  readonly after: number | undefined;
-};
+const { StorageRequestError } = errors;
 
 type StoredCursor = Readonly<Record<string, unknown>> | undefined;
 
-const isScanOrder = (value: unknown): value is ScanOrder =>
+const isScanOrder = (value: unknown): value is typesModule.ScanOrder =>
   value === "ascending" || value === "descending";
 
-export const scanStart: {
-  (cursor: StoredCursor, fallback: ScanOrder): (requested: ScanOrder | undefined) => ScanStart;
-  (requested: ScanOrder | undefined, cursor: StoredCursor, fallback: ScanOrder): ScanStart;
+const scanStart: {
+  (
+    cursor: StoredCursor,
+    fallback: typesModule.ScanOrder,
+  ): (requested: typesModule.ScanOrder | undefined) => scanTypes.ScanStart;
+  (
+    requested: typesModule.ScanOrder | undefined,
+    cursor: StoredCursor,
+    fallback: typesModule.ScanOrder,
+  ): scanTypes.ScanStart;
 } = Function.dual(
   3,
-  (requested: ScanOrder | undefined, cursor: StoredCursor, fallback: ScanOrder): ScanStart => {
+  (
+    requested: typesModule.ScanOrder | undefined,
+    cursor: StoredCursor,
+    fallback: typesModule.ScanOrder,
+  ): scanTypes.ScanStart => {
     if (requested !== undefined && !isScanOrder(requested)) {
       throw new StorageRequestError(`Invalid scan order: ${String(requested)}`);
     }
-    if (cursor === undefined) return { order: requested ?? fallback, after: undefined };
+    if (cursor === undefined) return { after: undefined, order: requested ?? fallback };
     const { after, order: stored } = cursor;
     if (typeof after !== "number" || !Number.isSafeInteger(after))
       throw new StorageRequestError("Invalid storage cursor");
@@ -35,17 +44,33 @@ export const scanStart: {
         `The cursor continues a ${order} scan; the query asks for ${requested}`,
       );
     }
-    return { order, after };
+    return { after, order };
   },
 );
 
-export const nextCursor: {
-  (order: ScanOrder): (id: Id<string>) => { readonly after: number; readonly order: ScanOrder };
-  (id: Id<string>, order: ScanOrder): { readonly after: number; readonly order: ScanOrder };
+const nextCursor: {
+  (order: typesModule.ScanOrder): (id: typesModule.Id<string>) => {
+    readonly after: number;
+    readonly order: typesModule.ScanOrder;
+  };
+  (
+    id: typesModule.Id<string>,
+    order: typesModule.ScanOrder,
+  ): { readonly after: number; readonly order: typesModule.ScanOrder };
 } = Function.dual(
   2,
-  (id: Id<string>, order: ScanOrder): { readonly after: number; readonly order: ScanOrder } => ({
+  (
+    id: typesModule.Id<string>,
+    order: typesModule.ScanOrder,
+  ): { readonly after: number; readonly order: typesModule.ScanOrder } => ({
     after: id,
     order,
   }),
 );
+
+const scan = {
+  nextCursor,
+  scanStart,
+};
+
+export default scan;

@@ -1,30 +1,36 @@
-import { FileError, type Result, err, ok } from "@msa/durable/env";
+import env from "@msa/durable/env";
+import type envTypes from "@msa/durable/env.types";
 import { Cause, Effect } from "effect";
 import { dual } from "effect/Function";
 
 import remoteError from "./remote-error.ts";
 import type remoteErrorTypes from "./remote-error.types.ts";
 
+const { FileError, err, ok } = env;
+
 const { RemoteError } = remoteError;
 
 const abortResult: {
   (
     path: string | undefined,
-  ): <T>(signal: AbortSignal | undefined) => Result<T, FileError> | undefined;
-  <T>(signal: AbortSignal | undefined, path: string | undefined): Result<T, FileError> | undefined;
+  ): <T>(signal: AbortSignal | undefined) => envTypes.Result<T, envTypes.FileError> | undefined;
+  <T>(
+    signal: AbortSignal | undefined,
+    path: string | undefined,
+  ): envTypes.Result<T, envTypes.FileError> | undefined;
 } = dual(
   2,
   <T>(
     signal: AbortSignal | undefined,
     path: string | undefined,
-  ): Result<T, FileError> | undefined =>
+  ): envTypes.Result<T, envTypes.FileError> | undefined =>
     signal?.aborted === true ? err(new FileError("aborted", "aborted", path)) : undefined,
 );
 
 function remoteFileError(
   error: remoteErrorTypes.RemoteError,
   fallbackPath: string | undefined,
-): FileError {
+): envTypes.FileError {
   const path = error.path ?? fallbackPath;
   switch (error.code) {
     case "aborted":
@@ -48,9 +54,9 @@ function remoteFileError(
 }
 
 const toFileError: {
-  (fallbackPath: string | undefined): (error: unknown) => FileError;
-  (error: unknown, fallbackPath: string | undefined): FileError;
-} = dual(2, (error: unknown, fallbackPath: string | undefined): FileError => {
+  (fallbackPath: string | undefined): (error: unknown) => envTypes.FileError;
+  (error: unknown, fallbackPath: string | undefined): envTypes.FileError;
+} = dual(2, (error: unknown, fallbackPath: string | undefined): envTypes.FileError => {
   if (error instanceof FileError) return error;
   if (error instanceof RemoteError) return remoteFileError(error, fallbackPath);
   const cause = error instanceof Error ? error : new Error(String(error));
@@ -61,39 +67,41 @@ const recoverFileError: {
   (
     fallbackPath: string | undefined,
   ): <T>(
-    effect: Effect.Effect<Result<T, FileError>, FileError>,
-  ) => Effect.Effect<Result<T, FileError>>;
+    effect: Effect.Effect<envTypes.Result<T, envTypes.FileError>, envTypes.FileError>,
+  ) => Effect.Effect<envTypes.Result<T, envTypes.FileError>>;
   <T>(
-    effect: Effect.Effect<Result<T, FileError>, FileError>,
+    effect: Effect.Effect<envTypes.Result<T, envTypes.FileError>, envTypes.FileError>,
     fallbackPath: string | undefined,
-  ): Effect.Effect<Result<T, FileError>>;
+  ): Effect.Effect<envTypes.Result<T, envTypes.FileError>>;
 } = dual(
   2,
   <T>(
-    effect: Effect.Effect<Result<T, FileError>, FileError>,
+    effect: Effect.Effect<envTypes.Result<T, envTypes.FileError>, envTypes.FileError>,
     fallbackPath: string | undefined,
-  ): Effect.Effect<Result<T, FileError>> =>
+  ): Effect.Effect<envTypes.Result<T, envTypes.FileError>> =>
     Effect.catchCause(effect, (cause) =>
-      Effect.succeed(err<T, FileError>(toFileError(Cause.squash(cause), fallbackPath))),
+      Effect.succeed(err<T, envTypes.FileError>(toFileError(Cause.squash(cause), fallbackPath))),
     ),
 );
 
 const fileResult: {
   (
     fallbackPath: string | undefined,
-  ): <T>(effect: Effect.Effect<T, FileError>) => Effect.Effect<Result<T, FileError>>;
+  ): <T>(
+    effect: Effect.Effect<T, envTypes.FileError>,
+  ) => Effect.Effect<envTypes.Result<T, envTypes.FileError>>;
   <T>(
-    effect: Effect.Effect<T, FileError>,
+    effect: Effect.Effect<T, envTypes.FileError>,
     fallbackPath: string | undefined,
-  ): Effect.Effect<Result<T, FileError>>;
+  ): Effect.Effect<envTypes.Result<T, envTypes.FileError>>;
 } = dual(
   2,
   <T>(
-    effect: Effect.Effect<T, FileError>,
+    effect: Effect.Effect<T, envTypes.FileError>,
     fallbackPath: string | undefined,
-  ): Effect.Effect<Result<T, FileError>> =>
+  ): Effect.Effect<envTypes.Result<T, envTypes.FileError>> =>
     recoverFileError(
-      Effect.map(effect, (value) => ok<T, FileError>(value)),
+      Effect.map(effect, (value) => ok<T, envTypes.FileError>(value)),
       fallbackPath,
     ),
 );

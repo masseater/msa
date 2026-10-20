@@ -1,11 +1,14 @@
-import { createNodePhotonImages } from "@msa/durable/images/node";
+import node from "@msa/durable/images/node";
 import { Effect } from "effect";
 import { afterAll, beforeAll, describe, expect, it } from "vite-plus/test";
 
-import { DEFAULT_IMAGE_LIMITS } from "../src/tools/image.ts";
+import image from "../src/tools/image.ts";
 import effectSupport from "./effect-support.ts";
 import toolsImagesFixturesSupport from "./tools-images-fixtures-support.ts";
 import toolsImagesSupport from "./tools-images-support.ts";
+
+const { createNodePhotonImages } = node;
+const { DEFAULT_IMAGE_LIMITS } = image;
 
 const { awaited } = effectSupport;
 const { bmp, encode, setUpImages } = toolsImagesFixturesSupport;

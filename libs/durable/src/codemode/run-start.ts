@@ -1,29 +1,37 @@
-import { type Context, copyJson, type JsonValue } from "@msa/chord";
+import { type Context, type JsonValue, copyJson } from "@msa/chord";
 import { toCodemodeIdentifier } from "@msa/codemode/portable";
 import type { CodemodeSourceOptions } from "@msa/codemode/source";
 import { Effect } from "effect";
 
-import { currentTimeMillis } from "../clock.ts";
-import type { Agent, ToolExecutionApi, ToolExecutionResult } from "../harness/types.ts";
-import { namespaceOf, sampleOf } from "./describe.ts";
-import { CATALOG_GLOBALS, CODEMODE_INTERNAL_PREFIX, MODEL_CALLS } from "./models.ts";
-import { DEFAULT_MAX_OUTPUT_TOKENS } from "./output.ts";
-import {
+import clockModule from "../clock.ts";
+import type typesModule from "../harness/types.types.ts";
+import runDocs from "./run-docs.ts";
+import type runDocsTypes from "./run-docs.types.ts";
+import type runStartTypes from "./run-start.types.ts";
+import startKit from "./start-kit.ts";
+
+const { describe, models: modelsModule, output: outputModule } = startKit;
+
+const { CATALOG_GLOBALS, CODEMODE_INTERNAL_PREFIX, MODEL_CALLS } = modelsModule;
+const { namespaceOf, sampleOf } = describe;
+const {
   CODEMODE_MODULE_VERSION,
   CodemodeJournalDoc,
   CodemodeRunDoc,
   CodemodeStoreDoc,
-  type CodemodeToolOptions,
-  commitWith,
   DISCOVERY_GLOBALS,
-  type JournalEntry,
-  type Start,
-} from "./run-docs.ts";
+  commitWith,
+} = runDocs;
+const { currentTimeMillis } = clockModule;
+const { DEFAULT_MAX_OUTPUT_TOKENS } = outputModule;
 
-type Declared = Pick<Start, "tools" | "globals" | "namespaces">;
+type Declared = Pick<runDocsTypes.Start, "tools" | "globals" | "namespaces">;
 
-function namespacesOf(agent: Agent, options: CodemodeToolOptions): Start["namespaces"] {
-  const namespaces: Start["namespaces"] = [];
+function namespacesOf(
+  agent: typesModule.Agent,
+  options: runDocsTypes.CodemodeToolOptions,
+): runDocsTypes.Start["namespaces"] {
+  const namespaces: runDocsTypes.Start["namespaces"] = [];
   for (const tool of agent.callable) {
     if (tool.name.startsWith(CODEMODE_INTERNAL_PREFIX)) continue;
     const namespace = namespaceOf(tool.name, options.namespaces ?? []);
@@ -43,11 +51,14 @@ function namespacesOf(agent: Agent, options: CodemodeToolOptions): Start["namesp
   return namespaces;
 }
 
-function declarationsOf(agent: Agent, options: CodemodeToolOptions): Declared {
+function declarationsOf(
+  agent: typesModule.Agent,
+  options: runDocsTypes.CodemodeToolOptions,
+): Declared {
   const tools = agent.callable.map((tool) => ({
-    name: tool.name,
-    jsName: toCodemodeIdentifier(tool.name),
     description: sampleOf(tool),
+    jsName: toCodemodeIdentifier(tool.name),
+    name: tool.name,
     ...(tool.structuredOutputSchema === undefined ? {} : { structured: true as const }),
     ...(tool.name.startsWith(CODEMODE_INTERNAL_PREFIX) ? { hidden: true as const } : {}),
   }));
@@ -60,22 +71,13 @@ function declarationsOf(agent: Agent, options: CodemodeToolOptions): Declared {
       spread: global.spread === true,
     })),
   ];
-  return { tools, namespaces: namespacesOf(agent, options), globals };
+  return { globals, namespaces: namespacesOf(agent, options), tools };
 }
 
-export type OpenedRun =
-  | { readonly done: ToolExecutionResult }
-  | {
-      readonly start: Start;
-      readonly journal: JournalEntry[];
-      readonly firstIssued: number | undefined;
-      readonly rerun: boolean;
-    };
-
-export const openRun = Effect.fnUntraced(function* (
-  options: CodemodeToolOptions,
+const openRun = Effect.fnUntraced(function* (
+  options: runDocsTypes.CodemodeToolOptions,
   sourceOptions: CodemodeSourceOptions,
-  api: ToolExecutionApi,
+  api: typesModule.ToolExecutionApi,
   context: Context,
 ) {
   const declared = declarationsOf(yield* Effect.promise(() => api.agent(context)), options);
@@ -85,8 +87,8 @@ export const openRun = Effect.fnUntraced(function* (
     Effect.gen(function* () {
       const run = yield* Effect.promise(() => tx.doc(CodemodeRunDoc, api.taskId));
       if (run.result !== undefined) {
-        const done: OpenedRun = {
-          done: copyJson(run.result as JsonValue) as ToolExecutionResult,
+        const done: runStartTypes.OpenedRun = {
+          done: copyJson(run.result as JsonValue) as typesModule.ToolExecutionResult,
         };
         return done;
       }
@@ -95,9 +97,9 @@ export const openRun = Effect.fnUntraced(function* (
         const store = yield* Effect.promise(() => tx.doc(CodemodeStoreDoc, api.conversationId));
         const timeout = sourceOptions.timeoutMs;
         run.start = {
-          version: CODEMODE_MODULE_VERSION,
-          startedAt: now,
           seed,
+          startedAt: now,
+          version: CODEMODE_MODULE_VERSION,
           ...(timeout === undefined ? {} : { deadline: now + timeout }),
           ...declared,
           maxOutputTokens: sourceOptions.maxOutputTokens ?? DEFAULT_MAX_OUTPUT_TOKENS,
@@ -105,16 +107,25 @@ export const openRun = Effect.fnUntraced(function* (
         };
       }
       const journal = yield* Effect.promise(() => tx.doc(CodemodeJournalDoc, api.taskId));
-      const opened: OpenedRun = {
-        start: copyJson(run.start as unknown as JsonValue) as unknown as Start,
-        journal: copyJson(journal.entries as unknown as JsonValue) as unknown as JournalEntry[],
+      const opened: runStartTypes.OpenedRun = {
         firstIssued: journal.firstIssued,
+        journal: copyJson(
+          journal.entries as unknown as JsonValue,
+        ) as unknown as runDocsTypes.JournalEntry[],
         rerun,
+        start: copyJson(run.start as unknown as JsonValue) as unknown as runDocsTypes.Start,
       };
       return opened;
     }),
   );
 });
 
-export const remainingOf = (start: Start): number | undefined =>
+const remainingOf = (start: runDocsTypes.Start): number | undefined =>
   start.deadline === undefined ? undefined : start.deadline - currentTimeMillis();
+
+const runStart = {
+  openRun,
+  remainingOf,
+};
+
+export default runStart;

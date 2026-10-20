@@ -1,18 +1,17 @@
 import { Type, fauxAssistantMessage, fauxText, fauxToolCall } from "@msa/ai";
-import {
-  type ConversationHandle,
-  type ConversationId,
-  type Submission,
-  type TaskId,
-  defineTool,
-} from "@msa/durable";
-import { MemoryStorage } from "@msa/durable/storage/memory";
+import durable from "@msa/durable";
+import type durableTypes from "@msa/durable/index.types";
+import memory from "@msa/durable/storage/memory";
+import type memoryTypes from "@msa/durable/storage/memory.types";
 import { Effect } from "effect";
 import { afterEach, describe, expect, it } from "vite-plus/test";
 
 import harnessOwnershipChildren from "./harness-ownership-children.ts";
 import harnessOwnershipSupport from "./harness-ownership-support.ts";
 import support from "./support.ts";
+
+const { defineTool } = durable;
+const { MemoryStorage } = memory;
 
 const { spawnFauxChild } = harnessOwnershipChildren;
 const { directories, gates, open, openHarness, ownedChild, runs } = harnessOwnershipSupport;
@@ -31,11 +30,11 @@ afterEach(() =>
 
 const failsHarnessFailed = Effect.gen(function* () {
   const failure = new Error("disk gone");
-  let failMark: TaskId | undefined;
+  let failMark: durableTypes.TaskId | undefined;
   class Failing extends ControlledStorage {
     override commit(
-      writes: Parameters<MemoryStorage["commit"]>[0],
-      ctx: Parameters<MemoryStorage["commit"]>[1],
+      writes: Parameters<memoryTypes.MemoryStorage["commit"]>[0],
+      ctx: Parameters<memoryTypes.MemoryStorage["commit"]>[1],
     ) {
       const marks = writes.some(
         (write) =>
@@ -71,10 +70,10 @@ describe("ownership", () => {
 function delegateThroughHandle() {
   const setup = chatSetup();
   const got: {
-    handle?: ConversationHandle;
-    missing: ConversationHandle | undefined;
-    submission?: Submission;
-  } = { missing: {} as ConversationHandle };
+    handle?: durableTypes.ConversationHandle;
+    missing: durableTypes.ConversationHandle | undefined;
+    submission?: durableTypes.Submission;
+  } = { missing: {} as durableTypes.ConversationHandle };
   addTool(
     setup.registry,
     defineTool({
@@ -83,7 +82,9 @@ function delegateThroughHandle() {
         Effect.runPromise(
           Effect.gen(function* () {
             const child = yield* spawnFauxChild(api, callContext);
-            got.missing = yield* awaited(api.conversation(99_999 as ConversationId, callContext));
+            got.missing = yield* awaited(
+              api.conversation(99_999 as durableTypes.ConversationId, callContext),
+            );
             got.handle = (yield* awaited(api.conversation(child, callContext)))!;
             got.submission = yield* awaited(
               got.handle.submit(

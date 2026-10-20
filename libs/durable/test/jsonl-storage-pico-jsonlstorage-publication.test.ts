@@ -2,12 +2,14 @@ import type { JsonValue } from "@msa/chord";
 import { Effect } from "effect";
 import { afterEach, describe, expect, it } from "vite-plus/test";
 
-import type { DocumentId, EntryId, TaskId } from "../src/types.ts";
-import { ROOT_CONVERSATION_ID } from "../src/types.ts";
+import types from "../src/types.ts";
+import type typesModule from "../src/types.types.ts";
 import effectSupport from "./effect-support.ts";
 import jsonlStorageSupport from "./jsonl-storage-support.ts";
 import type jsonlStorageSupportTypes from "./jsonl-storage-support.types.ts";
 import platformSupport from "./platform-support.ts";
+
+const { ROOT_CONVERSATION_ID } = types;
 
 const { awaited } = effectSupport;
 const {
@@ -40,8 +42,8 @@ const expectCreateFlushOrder = Effect.fn("expectCreateFlushOrder")(function* (fs
   const env = new InstrumentedEnv({ cwd: directory });
   const storage = yield* openStorage(directory, env, { fsync });
   yield* createRoot(storage);
-  const firstId = yield* awaited(storage.mintId<DocumentId>());
-  const secondId = yield* awaited(storage.mintId<DocumentId>());
+  const firstId = yield* awaited(storage.mintId<typesModule.DocumentId>());
+  const secondId = yield* awaited(storage.mintId<typesModule.DocumentId>());
   env.clear();
   yield* awaited(
     storage.commit(
@@ -107,7 +109,7 @@ const expectReclaimFlushOrder = Effect.fn("expectReclaimFlushOrder")(function* (
           type: "entry",
           value: {
             conversationId: ROOT_CONVERSATION_ID,
-            id: yield* awaited(storage.mintId<EntryId>()),
+            id: yield* awaited(storage.mintId<typesModule.EntryId>()),
             kind: "main-only",
           },
         },
@@ -122,7 +124,7 @@ const expectTaskSidecarRemoval = Effect.fn("expectTaskSidecarRemoval")(function*
   { env, storage }: FlushOrderStore,
   fsync: boolean,
 ) {
-  const taskId = yield* awaited(storage.mintId<TaskId<JsonValue>>());
+  const taskId = yield* awaited(storage.mintId<typesModule.TaskId<JsonValue>>());
   yield* awaited(storage.commit([{ type: "task", value: pendingTask(taskId) }], context));
   env.clear();
   yield* awaited(storage.commit([{ type: "task", value: terminalTask(taskId) }], context));
@@ -151,8 +153,8 @@ const poisonsFailureAppend = Effect.fn("poisonsFailureAppend")(function* (
   const env = new InstrumentedEnv({ cwd: directory });
   const storage = yield* openStorage(directory, env);
   yield* createRoot(storage);
-  const firstId = yield* awaited(storage.mintId<DocumentId>());
-  const secondId = yield* awaited(storage.mintId<DocumentId>());
+  const firstId = yield* awaited(storage.mintId<typesModule.DocumentId>());
+  const secondId = yield* awaited(storage.mintId<typesModule.DocumentId>());
   env.fail(failure);
   yield* awaited(
     expect(
@@ -214,8 +216,8 @@ const poisonsFailureFlush = Effect.fn("poisonsFailureFlush")(function* (
   const env = new InstrumentedEnv({ cwd: directory });
   const storage = yield* openStorage(directory, env, { fsync: true });
   yield* createRoot(storage);
-  const firstId = yield* awaited(storage.mintId<DocumentId>());
-  const secondId = yield* awaited(storage.mintId<DocumentId>());
+  const firstId = yield* awaited(storage.mintId<typesModule.DocumentId>());
+  const secondId = yield* awaited(storage.mintId<typesModule.DocumentId>());
   env.fail(failure);
   yield* awaited(
     expect(

@@ -1,14 +1,17 @@
 import { type AssistantMessage } from "@msa/ai";
-import { LiveDoc } from "@msa/durable";
+import durable from "@msa/durable";
 import { Effect } from "effect";
 import { afterEach, describe, expect, it } from "vite-plus/test";
 
-import { openNodeSqliteStorage } from "../src/storage/sqlite/node.ts";
+import node from "../src/storage/sqlite/node.ts";
 import chatSupport from "./chat-support.ts";
 import effectSupport from "./effect-support.ts";
 import harnessInboxSupport from "./harness-inbox-support.ts";
 import platformSupport from "./platform-support.ts";
 import sessionSupport from "./session-support.ts";
+
+const { openNodeSqliteStorage } = node;
+const { LiveDoc } = durable;
 
 const { allEntries, chatSetup, openChat, waitFor } = chatSupport;
 const { awaited } = effectSupport;

@@ -1,6 +1,8 @@
-import { defineDoc } from "@msa/durable";
+import durable from "@msa/durable";
 
 import type sessionDocumentRetentionSupportTypes from "./session-document-retention-support.types.ts";
+
+const { defineDoc } = durable;
 
 const SessionCounterDoc = defineDoc<sessionDocumentRetentionSupportTypes.Counter>({
   initial: () => ({ count: 0 }),

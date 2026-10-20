@@ -1,12 +1,14 @@
-import { type TaskId } from "@msa/durable";
+import type durableTypes from "@msa/durable/index.types";
 import { Effect } from "effect";
 import { afterEach, describe, expect, it } from "vite-plus/test";
 
-import { openNodeSqliteStorage } from "../src/storage/sqlite/node.ts";
+import node from "../src/storage/sqlite/node.ts";
 import effectSupport from "./effect-support.ts";
 import harnessOwnershipSupport from "./harness-ownership-support.ts";
 import platformSupport from "./platform-support.ts";
 import sessionSupport from "./session-support.ts";
+
+const { openNodeSqliteStorage } = node;
 
 const { abortController, awaited } = effectSupport;
 const { Hold, Waiter, directories, gates, open, openHarness, ownedChild, runs, status, waitUntil } =
@@ -164,7 +166,7 @@ const appliesMarksFound = Effect.gen(function* () {
   yield* awaited(opened.harness.close(context));
 
   const storage = yield* awaited(openNodeSqliteStorage(path));
-  let rejectMark: TaskId | undefined;
+  let rejectMark: durableTypes.TaskId | undefined;
   const commit = storage.commit.bind(storage);
   storage.commit = (writes, ctx) => {
     if (

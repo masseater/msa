@@ -2,10 +2,13 @@ import { BACKGROUND_CONTEXT } from "@msa/chord/context";
 import { Effect } from "effect";
 import { afterAll, describe, expect, it } from "vite-plus/test";
 
-import { getOrThrow } from "../src/env/index.ts";
-import { createBashTool } from "../src/tools/index.ts";
+import envModule from "../src/env/index.ts";
+import toolsModule from "../src/tools/index.ts";
 import effectSupport from "./effect-support.ts";
 import toolsSupport from "./tools-support.ts";
+
+const { createBashTool } = toolsModule;
+const { getOrThrow } = envModule;
 
 const { awaited } = effectSupport;
 const { createEnv, removeTempDirs, run } = toolsSupport;

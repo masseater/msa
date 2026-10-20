@@ -1,26 +1,21 @@
 import { Type } from "@msa/ai";
 import type { Context } from "@msa/chord";
-import {
-  type EntryId,
-  type Extension,
-  type ToolExecutionApi,
-  configure,
-  defineDoc,
-  defineExtension,
-  defineTask,
-  defineTool,
-  hook,
-  section,
-  wrapTool,
-} from "@msa/durable";
-import { GenerationTask, ToolTask } from "@msa/durable/harness";
+import harness from "@msa/durable/harness";
+import type durableTypes from "@msa/durable/index.types";
 import { Effect } from "effect";
 import { dual } from "effect/Function";
 
-import { currentTimeMillis } from "../src/clock.ts";
-import { createBashTool } from "../src/tools/index.ts";
+import durableKit from "./durable-kit.ts";
 import effectSupport from "./effect-support.ts";
 import type specUsageNamesTypes from "./spec-usage-names.ts";
+
+const { clock: clockModule, durable, tools: toolsModule } = durableKit;
+
+const { configure, defineDoc, defineExtension, defineTask, defineTool, hook, section, wrapTool } =
+  durable;
+const { GenerationTask, ToolTask } = harness;
+const { createBashTool } = toolsModule;
+const { currentTimeMillis } = clockModule;
 
 const { awaited } = effectSupport;
 
@@ -133,9 +128,9 @@ function planMode({ writes }: specUsageNamesTypes.SpecNames) {
 }
 
 const childWithout = Effect.fn("childWithout")(function* (
-  api: ToolExecutionApi,
+  api: durableTypes.ToolExecutionApi,
   context: Context,
-  removed: Extension,
+  removed: durableTypes.Extension,
 ) {
   const runPromise = Effect.runPromiseWith(yield* Effect.context<never>());
   return yield* awaited(
@@ -159,7 +154,7 @@ const childWithout = Effect.fn("childWithout")(function* (
 });
 
 function subagentExtension({ answerText }: specUsageNamesTypes.SpecNames) {
-  const Subagent: Extension = defineExtension({
+  const Subagent: durableTypes.Extension = defineExtension({
     name: "subagent",
     tools: [
       defineTool({
@@ -215,7 +210,7 @@ function chatExtension() {
 type Charge = { phase: "prepare" } | { phase: "charge"; key: string };
 
 function paymentTask({ newKey, payments, receiptEntry }: specUsageNamesTypes.SpecNames) {
-  return defineTask<null, Charge, { entryId: EntryId }>({
+  return defineTask<null, Charge, { entryId: durableTypes.EntryId }>({
     abort: (task, runtime, context) =>
       Effect.runPromise(
         Effect.gen(function* () {

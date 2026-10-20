@@ -1,18 +1,16 @@
-import {
-  type AgentState,
-  defineExtension,
-  defineTask,
-  section,
-  wrapSection,
-  wrapTool,
-} from "@msa/durable";
-import { CompactionTask, GenerationTask, ToolTask, createRegistry } from "@msa/durable/harness";
+import durable from "@msa/durable";
+import harness from "@msa/durable/harness";
+import type durableTypes from "@msa/durable/index.types";
 import { describe, expect, it } from "vite-plus/test";
 
-import { resolveSettings } from "../src/harness/agent.ts";
+import agentModule from "../src/harness/agent.ts";
 import harnessRegistryCases from "./harness-registry-cases.ts";
 import harnessRegistrySupport from "./harness-registry-support.ts";
 import type harnessRegistrySupportTypes from "./harness-registry-support.types.ts";
+
+const { defineExtension, defineTask, section, wrapSection, wrapTool } = durable;
+const { CompactionTask, GenerationTask, ToolTask, createRegistry } = harness;
+const { resolveSettings } = agentModule;
 
 const { names, snapshot } = harnessRegistryCases;
 const { Coding, Skills, bash, edit, read, resolve, tool } = harnessRegistrySupport;
@@ -143,7 +141,7 @@ describe("agent resolution", () => {
   it("skips uninstalled names and resolves them again once they are installed", () => {
     const local = createRegistry<harnessRegistrySupportTypes.AppTool>();
     local.install(Coding);
-    const state: AgentState = { extensions: ["coding", "skills"] };
+    const state: durableTypes.AgentState = { extensions: ["coding", "skills"] };
     expect(names(resolve(state, local.snapshot()).extensions)).toEqual(["coding"]);
     local.install(Skills);
     expect(names(resolve(state, local.snapshot()).extensions)).toEqual(["coding", "skills"]);

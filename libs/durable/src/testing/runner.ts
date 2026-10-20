@@ -1,31 +1,34 @@
 import { Function } from "effect";
 
-import { createExpectAssertions, type ExpectLike } from "./assertions.ts";
-import { createEnvConformance } from "./env-conformance.ts";
-import { createStorageConformance } from "./storage-conformance.ts";
-import type {
-  EnvConformanceOptions,
-  EnvConformanceProvider,
-  StorageConformanceProvider,
-} from "./types.ts";
+import assertionsModule from "./assertions.ts";
+import envConformance from "./env-conformance.ts";
+import type runnerTypes from "./runner.types.ts";
+import storageConformance from "./storage-conformance.ts";
+import type typesModule from "./types.ts";
 
-export interface StorageConformanceRunner {
-  readonly describe: (name: string, suite: () => void) => unknown;
-  readonly expect: ExpectLike;
-  readonly it: (name: string, test: () => Promise<void>, timeoutMs?: number) => unknown;
-}
+const { createStorageConformance } = storageConformance;
+const { createExpectAssertions } = assertionsModule;
+const { createEnvConformance } = envConformance;
 
 const hasRunner = (args: IArguments): boolean => typeof args[0] !== "string";
 
-export const registerStorageConformance: {
+const registerStorageConformance: {
   (
     name: string,
-    withStorage: StorageConformanceProvider,
-  ): (runner: StorageConformanceRunner) => void;
-  (runner: StorageConformanceRunner, name: string, withStorage: StorageConformanceProvider): void;
+    withStorage: typesModule.StorageConformanceProvider,
+  ): (runner: runnerTypes.StorageConformanceRunner) => void;
+  (
+    runner: runnerTypes.StorageConformanceRunner,
+    name: string,
+    withStorage: typesModule.StorageConformanceProvider,
+  ): void;
 } = Function.dual(
   hasRunner,
-  (runner: StorageConformanceRunner, name: string, withStorage: StorageConformanceProvider) => {
+  (
+    runner: runnerTypes.StorageConformanceRunner,
+    name: string,
+    withStorage: typesModule.StorageConformanceProvider,
+  ) => {
     const cases = createStorageConformance({
       assertions: createExpectAssertions(runner.expect),
       withStorage,
@@ -36,26 +39,26 @@ export const registerStorageConformance: {
   },
 );
 
-type EnvRunnerOptions = Pick<EnvConformanceOptions, "shell" | "symlinks" | "listFiles">;
+type EnvRunnerOptions = Pick<typesModule.EnvConformanceOptions, "shell" | "symlinks" | "listFiles">;
 
-export const registerEnvConformance: {
+const registerEnvConformance: {
   (
     name: string,
-    withEnv: EnvConformanceProvider,
+    withEnv: typesModule.EnvConformanceProvider,
     options?: EnvRunnerOptions,
-  ): (runner: StorageConformanceRunner) => void;
+  ): (runner: runnerTypes.StorageConformanceRunner) => void;
   (
-    runner: StorageConformanceRunner,
+    runner: runnerTypes.StorageConformanceRunner,
     name: string,
-    withEnv: EnvConformanceProvider,
+    withEnv: typesModule.EnvConformanceProvider,
     options?: EnvRunnerOptions,
   ): void;
 } = Function.dual(
   hasRunner,
   (
-    runner: StorageConformanceRunner,
+    runner: runnerTypes.StorageConformanceRunner,
     name: string,
-    withEnv: EnvConformanceProvider,
+    withEnv: typesModule.EnvConformanceProvider,
     options: EnvRunnerOptions = {},
   ) => {
     const cases = createEnvConformance({
@@ -68,3 +71,10 @@ export const registerEnvConformance: {
     });
   },
 );
+
+const runnerModule = {
+  registerEnvConformance,
+  registerStorageConformance,
+};
+
+export default runnerModule;

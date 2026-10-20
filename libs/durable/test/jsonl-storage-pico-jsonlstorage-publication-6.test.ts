@@ -2,12 +2,15 @@ import type { JsonValue } from "@msa/chord";
 import { Effect } from "effect";
 import { afterEach, describe, expect, it } from "vite-plus/test";
 
-import { NodeExecutionEnv } from "../src/env/node.ts";
-import { JsonlStorage } from "../src/storage/jsonl/index.ts";
-import type { DocumentId, TaskId } from "../src/types.ts";
+import node from "../src/env/node.ts";
+import jsonl from "../src/storage/jsonl/index.ts";
+import type typesModule from "../src/types.types.ts";
 import effectSupport from "./effect-support.ts";
 import jsonlStorageSupport from "./jsonl-storage-support.ts";
 import platformSupport from "./platform-support.ts";
+
+const { JsonlStorage } = jsonl;
+const { NodeExecutionEnv } = node;
 
 const { awaited, toJsonText } = effectSupport;
 const {
@@ -39,7 +42,7 @@ const removesCompleteUnconfirmed = Effect.gen(function* () {
   const directory = yield* tempDirectory();
   const storage = yield* openStorage(directory);
   yield* createRoot(storage);
-  const taskId = yield* awaited(storage.mintId<TaskId<JsonValue>>());
+  const taskId = yield* awaited(storage.mintId<typesModule.TaskId<JsonValue>>());
   yield* awaited(storage.commit([{ type: "task", value: pendingTask(taskId) }], context));
   yield* awaited(storage.commit([{ type: "task", value: terminalTask(taskId) }], context));
   const sidecarPath = joinPath(directory, `task-${taskId}.jsonl`);
@@ -65,7 +68,7 @@ const failsOpenConfirmed = Effect.gen(function* () {
   const directory = yield* tempDirectory();
   const storage = yield* openStorage(directory);
   yield* createRoot(storage);
-  const documentId = yield* awaited(storage.mintId<DocumentId>());
+  const documentId = yield* awaited(storage.mintId<typesModule.DocumentId>());
   yield* awaited(
     storage.commit(
       [

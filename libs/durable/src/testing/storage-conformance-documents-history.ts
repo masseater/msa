@@ -1,36 +1,34 @@
 import type { Op } from "@msa/chord/delta";
 import { Effect } from "effect";
 
-import type { DocumentCreate, DocumentId, JsonObject, Seq, Storage } from "../types.ts";
-import { range } from "./range.ts";
-import {
-  commit,
-  context,
-  createRoot,
-  documentAt,
-  documentIds,
-  type Expect,
-  io,
-  mint,
-  type StorageCaseSpec,
-} from "./storage-conformance-support.ts";
+import type typesModule from "../types.types.ts";
+import rangeModule from "./range.ts";
+import storageConformanceSupport from "./storage-conformance-support.ts";
+import type storageConformanceSupportTypes from "./storage-conformance-support.types.ts";
 
-const createAndChange = Effect.fnUntraced(function* (storage: Storage, expect: Expect) {
+const { commit, context, createRoot, documentAt, documentIds, io, mint } =
+  storageConformanceSupport;
+const { range } = rangeModule;
+
+const createAndChange = Effect.fnUntraced(function* (
+  storage: typesModule.Storage,
+  expect: storageConformanceSupportTypes.Expect,
+) {
   const rootId = yield* createRoot(storage);
-  const firstId = yield* mint<DocumentId>(storage);
+  const firstId = yield* mint<typesModule.DocumentId>(storage);
   const firstRecord = {
+    fork: "asOf",
+    history: "rewindable",
     id: firstId,
     kind: "conversation.notes",
-    scope: { kind: "conversation", conversationId: rootId },
-    history: "rewindable",
-    fork: "asOf",
-  } satisfies DocumentCreate;
-  const initial: JsonObject = { items: ["a"], nested: { count: 1 } };
+    scope: { conversationId: rootId, kind: "conversation" },
+  } satisfies typesModule.DocumentCreate;
+  const initial: typesModule.JsonObject = { items: ["a"], nested: { count: 1 } };
   const createdAt = yield* commit(storage, [
     {
-      type: "document.create",
+      content: { kind: "base", value: initial, version: 1 },
       record: firstRecord,
-      content: { kind: "base", version: 1, value: initial },
+      type: "document.create",
     },
   ]);
   const appended = ["b"];
@@ -39,14 +37,14 @@ const createAndChange = Effect.fnUntraced(function* (storage: Storage, expect: E
     ["s", ["nested", "count"], 2],
   ];
   const changedAt = yield* commit(storage, [
-    { type: "document.change", id: firstId, content: { kind: "delta", version: 1, ops } },
+    { content: { kind: "delta", ops, version: 1 }, id: firstId, type: "document.change" },
   ]);
   (initial["items"] as string[]).push("caller mutation");
   appended.push("caller mutation");
   expect(yield* documentAt(storage, firstId, createdAt)).toMatchObject({
-    version: 1,
-    value: { items: ["a"], nested: { count: 1 } },
     deltasSinceBase: 0,
+    value: { items: ["a"], nested: { count: 1 } },
+    version: 1,
   });
   const changed = (yield* documentAt(storage, firstId, changedAt))!;
   expect(changed.value).toEqual({ items: ["a", "b"], nested: { count: 2 } });
@@ -56,45 +54,45 @@ const createAndChange = Effect.fnUntraced(function* (storage: Storage, expect: E
     items: ["a", "b"],
     nested: { count: 2 },
   });
-  return { firstRecord, changedAt };
+  return { changedAt, firstRecord };
 });
 
 const checkpointAndReplace = Effect.fnUntraced(function* (
-  storage: Storage,
-  expect: Expect,
-  firstId: DocumentId,
-  changedAt: Seq,
+  storage: typesModule.Storage,
+  expect: storageConformanceSupportTypes.Expect,
+  firstId: typesModule.DocumentId,
+  changedAt: typesModule.Seq,
 ) {
   const checkpointAt = yield* commit(storage, [
     {
-      type: "document.change",
+      content: { kind: "base", value: { items: ["checkpoint"], nested: { count: 3 } }, version: 2 },
       id: firstId,
-      content: { kind: "base", version: 2, value: { items: ["checkpoint"], nested: { count: 3 } } },
+      type: "document.change",
     },
   ]);
   const replacedAt = yield* commit(storage, [
     {
-      type: "document.change",
-      id: firstId,
       content: {
         kind: "delta",
-        version: 2,
         ops: [["r", { items: ["replacement"], nested: { count: 4 } }]],
+        version: 2,
       },
+      id: firstId,
+      type: "document.change",
     },
   ]);
   expect(yield* documentAt(storage, firstId, changedAt)).toMatchObject({
-    version: 1,
     value: { items: ["a", "b"], nested: { count: 2 } },
+    version: 1,
   });
   expect(yield* documentAt(storage, firstId, checkpointAt)).toMatchObject({
-    version: 2,
-    value: { items: ["checkpoint"], nested: { count: 3 } },
     deltasSinceBase: 0,
+    value: { items: ["checkpoint"], nested: { count: 3 } },
+    version: 2,
   });
   expect(yield* documentAt(storage, firstId, replacedAt)).toMatchObject({
-    value: { items: ["replacement"], nested: { count: 4 } },
     deltasSinceBase: 1,
+    value: { items: ["replacement"], nested: { count: 4 } },
   });
   expect((yield* documentAt(storage, firstId, "current"))?.deltasSinceBase).toBe(1);
 });
@@ -102,43 +100,43 @@ const checkpointAndReplace = Effect.fnUntraced(function* (
 type NotesRecord = Effect.Success<ReturnType<typeof createAndChange>>["firstRecord"];
 
 const retireIncarnation = Effect.fnUntraced(function* (
-  storage: Storage,
-  expect: Expect,
+  storage: typesModule.Storage,
+  expect: storageConformanceSupportTypes.Expect,
   firstRecord: NotesRecord,
-  changedAt: Seq,
+  changedAt: typesModule.Seq,
 ) {
   const firstId = firstRecord.id;
-  const secondId = yield* mint<DocumentId>(storage);
+  const secondId = yield* mint<typesModule.DocumentId>(storage);
   const retiredAt = yield* commit(storage, [
     {
-      type: "document.create",
+      content: { kind: "base", value: { items: ["new"] }, version: 1 },
       record: { ...firstRecord, id: secondId },
-      content: { kind: "base", version: 1, value: { items: ["new"] } },
+      type: "document.create",
     },
-    { type: "document.retire", id: firstId },
+    { id: firstId, type: "document.retire" },
     {
-      type: "document.change",
+      content: { kind: "delta", ops: [["s", ["retiring"], true]], version: 2 },
       id: firstId,
-      content: { kind: "delta", version: 2, ops: [["s", ["retiring"], true]] },
+      type: "document.change",
     },
   ]);
   const address = { kind: firstRecord.kind, scope: firstRecord.scope };
   expect((yield* io(() => storage.findDocument(address, changedAt, context)))?.id).toBe(firstId);
   expect(yield* io(() => storage.findDocument(address, retiredAt, context))).toMatchObject({
-    id: secondId,
     createdAt: retiredAt,
+    id: secondId,
   });
-  expect(yield* documentIds(storage, { scope: firstRecord.scope, at: changedAt })).toEqual([
+  expect(yield* documentIds(storage, { at: changedAt, scope: firstRecord.scope })).toEqual([
     firstId,
   ]);
-  expect(yield* documentIds(storage, { scope: firstRecord.scope, at: retiredAt })).toEqual([
+  expect(yield* documentIds(storage, { at: retiredAt, scope: firstRecord.scope })).toEqual([
     secondId,
   ]);
   expect(yield* documentAt(storage, firstId, retiredAt)).toBeUndefined();
   expect((yield* documentAt(storage, secondId, "current"))?.value).toEqual({ items: ["new"] });
 });
 
-const rewindableDocuments: StorageCaseSpec = {
+const rewindableDocuments: storageConformanceSupportTypes.StorageCaseSpec = {
   name: "reconstructs rewindable documents and preserves half-open incarnations",
   test: (storage, expect) =>
     Effect.gen(function* () {
@@ -151,8 +149,8 @@ const rewindableDocuments: StorageCaseSpec = {
 type Rows = { revision: number; rows: { value: number; stable: string }[] };
 
 const changeRow = Effect.fnUntraced(function* (
-  storage: Storage,
-  id: DocumentId,
+  storage: typesModule.Storage,
+  id: typesModule.DocumentId,
   rows: Rows,
   index: number,
   revision: number,
@@ -161,36 +159,36 @@ const changeRow = Effect.fnUntraced(function* (
   rows.revision = revision;
   return yield* commit(storage, [
     {
-      type: "document.change",
-      id,
       content: {
         kind: "delta",
-        version: 1,
         ops: [
           ["s", ["rows", index, "value"], -revision],
           ["s", ["revision"], revision],
         ],
+        version: 1,
       },
+      id,
+      type: "document.change",
     },
   ]);
 });
 
-const seedTail = Effect.fnUntraced(function* (storage: Storage) {
+const seedTail = Effect.fnUntraced(function* (storage: typesModule.Storage) {
   const rootId = yield* createRoot(storage);
-  const id = yield* mint<DocumentId>(storage);
+  const id = yield* mint<typesModule.DocumentId>(storage);
   const record = {
+    fork: "asOf",
+    history: "rewindable",
     id,
     kind: "conversation.long-tail",
-    scope: { kind: "conversation", conversationId: rootId },
-    history: "rewindable",
-    fork: "asOf",
-  } satisfies DocumentCreate;
+    scope: { conversationId: rootId, kind: "conversation" },
+  } satisfies typesModule.DocumentCreate;
   const initial: Rows = {
     revision: 0,
-    rows: Array.from({ length: 512 }, (_, value) => ({ value, stable: `row-${value}` })),
+    rows: Array.from({ length: 512 }, (_, value) => ({ stable: `row-${value}`, value })),
   };
   const createdAt = yield* commit(storage, [
-    { type: "document.create", record, content: { kind: "base", version: 1, value: initial } },
+    { content: { kind: "base", value: initial, version: 1 }, record, type: "document.create" },
   ]);
   const beforeReplacement = structuredClone(initial);
   let beforeReplacementAt = createdAt;
@@ -198,23 +196,26 @@ const seedTail = Effect.fnUntraced(function* (storage: Storage) {
     const index = (revision * 17) % beforeReplacement.rows.length;
     beforeReplacementAt = yield* changeRow(storage, id, beforeReplacement, index, revision);
   }
-  return { id, initial, createdAt, beforeReplacement, beforeReplacementAt };
+  return { beforeReplacement, beforeReplacementAt, createdAt, id, initial };
 });
 
-const replaceTail = Effect.fnUntraced(function* (storage: Storage, id: DocumentId) {
+const replaceTail = Effect.fnUntraced(function* (
+  storage: typesModule.Storage,
+  id: typesModule.DocumentId,
+) {
   const replacement: Rows = {
     revision: 100,
     rows: Array.from({ length: 512 }, (_, value) => ({
-      value: 10_000 + value,
       stable: `new-${value}`,
+      value: 10_000 + value,
     })),
   };
   const replacementSnapshot = structuredClone(replacement);
   const replacementAt = yield* commit(storage, [
     {
-      type: "document.change",
+      content: { kind: "delta", ops: [["r", replacement]], version: 1 },
       id,
-      content: { kind: "delta", version: 1, ops: [["r", replacement]] },
+      type: "document.change",
     },
   ]);
   replacement.rows[0]!.value = -999;
@@ -222,10 +223,10 @@ const replaceTail = Effect.fnUntraced(function* (storage: Storage, id: DocumentI
   for (const revision of range(101, 125)) {
     yield* changeRow(storage, id, current, (revision * 19) % current.rows.length, revision);
   }
-  return { replacementSnapshot, replacementAt, current };
+  return { current, replacementAt, replacementSnapshot };
 });
 
-const longTails: StorageCaseSpec = {
+const longTails: storageConformanceSupportTypes.StorageCaseSpec = {
   name: "streams long document tails across root replacement deltas",
   test: (storage, expect) =>
     Effect.gen(function* () {
@@ -244,4 +245,13 @@ const longTails: StorageCaseSpec = {
     }),
 };
 
-export const documentsHistoryCases: readonly StorageCaseSpec[] = [rewindableDocuments, longTails];
+const documentsHistoryCases: readonly storageConformanceSupportTypes.StorageCaseSpec[] = [
+  rewindableDocuments,
+  longTails,
+];
+
+const storageConformanceDocumentsHistory = {
+  documentsHistoryCases,
+};
+
+export default storageConformanceDocumentsHistory;

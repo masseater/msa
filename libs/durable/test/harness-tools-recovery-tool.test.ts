@@ -1,5 +1,5 @@
 import type { JsonValue } from "@msa/chord";
-import { LiveDoc } from "@msa/durable";
+import durable from "@msa/durable";
 import { Effect } from "effect";
 import { afterEach, describe, expect, it } from "vite-plus/test";
 
@@ -9,6 +9,8 @@ import harnessSupport from "./harness-support.ts";
 import harnessToolsRecoverySupport from "./harness-tools-recovery-support.ts";
 import sessionSupport from "./session-support.ts";
 import taskSupport from "./task-support.ts";
+
+const { LiveDoc } = durable;
 
 const { allEntries, chatSetup } = chatSupport;
 const { awaited } = effectSupport;

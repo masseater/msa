@@ -1,12 +1,16 @@
 import { fauxAssistantMessage, fauxToolCall } from "@msa/ai";
-import { LiveDoc } from "@msa/durable";
+import durable from "@msa/durable";
 import { Effect } from "effect";
 import { afterEach, describe, expect, it } from "vite-plus/test";
 
-import { NodeExecutionEnv } from "../src/env/node.ts";
-import { createBashTool } from "../src/tools/index.ts";
+import node from "../src/env/node.ts";
+import toolsModule from "../src/tools/index.ts";
 import harnessToolsRecoverySupport from "./harness-tools-recovery-support.ts";
 import support from "./support.ts";
+
+const { NodeExecutionEnv } = node;
+const { createBashTool } = toolsModule;
+const { LiveDoc } = durable;
 
 const { DONE, open, removeDirectories, results, sqlitePath, text } = harnessToolsRecoverySupport;
 const { addTool, allEntries, awaited, chatSetup, context, dirnameOf, waitFor } = support;

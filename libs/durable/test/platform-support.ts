@@ -1,12 +1,25 @@
 import { tmpdir } from "node:os";
 
-import { Effect, FileSystem, Path, type PlatformError, Predicate, Schedule, Stream } from "effect";
+import * as NodeServices from "@effect/platform-node/NodeServices";
+import {
+  Effect,
+  FileSystem,
+  ManagedRuntime,
+  Path,
+  type PlatformError,
+  Predicate,
+  Schedule,
+  Stream,
+} from "effect";
 import { dual } from "effect/Function";
 import { ChildProcess } from "effect/process";
 
-import { environmentVariable as environmentVariableModule } from "../src/env/node-process.ts";
-import { nodeRuntime } from "../src/node-runtime.ts";
+import nodeProcess from "../src/env/node/node-process.ts";
 import type platformSupportTypes from "./platform-support.types.ts";
+
+const nodeRuntime = ManagedRuntime.make(NodeServices.layer);
+
+const { environmentVariable: environmentVariableModule } = nodeProcess;
 
 const fileSystem = nodeRuntime.runSync(FileSystem.FileSystem);
 const paths = nodeRuntime.runSync(Path.Path);

@@ -1,16 +1,15 @@
 import { BACKGROUND_CONTEXT } from "@msa/chord/context";
-import { getOrThrow } from "@msa/durable/env";
+import envModule from "@msa/durable/env";
 import { Effect } from "effect";
 import { describe, expect, it } from "vite-plus/test";
 
-import listFilesModule from "../src/list-files.ts";
-import remoteEnv from "../src/remote-env.ts";
+import LocalExecutionEnv from "../src/local-execution-env.ts";
+import RemoteExecutionEnv from "../src/remote-env.ts";
 import listingTree from "./listing-tree.ts";
 import sshdModule from "./sshd.ts";
 import type sshdTypes from "./sshd.types.ts";
 
-const { RemoteExecutionEnv } = remoteEnv;
-const { LocalExecutionEnv } = listFilesModule;
+const { getOrThrow } = envModule;
 
 const { expectedListing, makeTree } = listingTree;
 const { connectTo, localConnection, sshd, useSshd } = sshdModule;

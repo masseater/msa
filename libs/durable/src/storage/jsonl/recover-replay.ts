@@ -1,37 +1,33 @@
 import type { Context } from "@msa/chord";
 import { Effect, Function } from "effect";
 
-import { idFromNumber } from "../../ids.ts";
-import type { DocumentContent, DocumentId, StorageWrite, TaskId } from "../../types.ts";
-import type { MemoryStorage } from "../memory.ts";
-import { JsonlCorruptionError } from "./corruption-error.ts";
-import type { JsonlFiles } from "./files.ts";
-import {
-  errorFromFile,
-  jsonLine,
-  type MainMarker,
-  type MainOperation,
-  type ParsedFile,
-  type ParsedLine,
-  type SidecarRecord,
-  sidecarFileName,
-  sidecarKey,
-} from "./format.ts";
-import { isBeforeLatestBase, type MainAnalysis, type SidecarIndex } from "./recover-scan.ts";
+import ids from "../../ids.ts";
+import type typesModule from "../../types.types.ts";
+import JsonlCorruptionError from "./corruption-error.ts";
+import formatModule from "./format.ts";
+import type formatTypes from "./format.types.ts";
+import type recoverReplayTypes from "./recover-replay.types.ts";
+import recoverScan from "./recover-scan.ts";
+import type recoverScanTypes from "./recover-scan.types.ts";
+
+const { errorFromFile, jsonLine, sidecarFileName, sidecarKey } = formatModule;
+
+const { isBeforeLatestBase } = recoverScan;
+const { idFromNumber } = ids;
 
 type Replay = {
-  readonly analysis: MainAnalysis;
-  readonly index: SidecarIndex;
+  readonly analysis: recoverScanTypes.MainAnalysis;
+  readonly index: recoverScanTypes.SidecarIndex;
   readonly confirmed: Set<string>;
 };
 
 const confirmRecord = (
   replay: Replay,
-  marker: MainMarker,
+  marker: formatTypes.MainMarker,
   ordinal: number,
   file: string,
   optional: boolean,
-): SidecarRecord | undefined => {
+): formatTypes.SidecarRecord | undefined => {
   const key = sidecarKey(file, marker.seq, ordinal);
   if (replay.confirmed.has(key))
     throw new JsonlCorruptionError(`Sidecar record is confirmed more than once`);
@@ -46,14 +42,17 @@ const confirmRecord = (
   return line.value;
 };
 
-type TaskSidecar = Extract<MainOperation, { type: "task.sidecar" }>;
-type DocumentOperation = Extract<MainOperation, { type: "document.create" | "document.change" }>;
+type TaskSidecar = Extract<formatTypes.MainOperation, { type: "task.sidecar" }>;
+type DocumentOperation = Extract<
+  formatTypes.MainOperation,
+  { type: "document.create" | "document.change" }
+>;
 
 const taskWrite = (
   replay: Replay,
-  marker: MainMarker,
+  marker: formatTypes.MainMarker,
   operation: TaskSidecar,
-): StorageWrite | undefined => {
+): typesModule.StorageWrite | undefined => {
   const optional = replay.analysis.terminalTasks.has(operation.id);
   const record = confirmRecord(
     replay,
@@ -72,10 +71,10 @@ const taskWrite = (
 };
 
 const documentContent = (
-  record: SidecarRecord | undefined,
-  id: DocumentId,
-  marker: MainMarker,
-): DocumentContent | undefined => {
+  record: formatTypes.SidecarRecord | undefined,
+  id: typesModule.DocumentId,
+  marker: formatTypes.MainMarker,
+): typesModule.DocumentContent | undefined => {
   if (record === undefined) return undefined;
   if (record.payload.type !== "document" || record.payload.id !== id) {
     throw new JsonlCorruptionError(
@@ -87,9 +86,9 @@ const documentContent = (
 
 const documentWrite = (
   replay: Replay,
-  marker: MainMarker,
+  marker: formatTypes.MainMarker,
   operation: DocumentOperation,
-): StorageWrite | undefined => {
+): typesModule.StorageWrite | undefined => {
   const id = operation.type === "document.create" ? operation.record.id : operation.id;
   const reclaimed =
     replay.analysis.retiredCurrentOnlyDocuments.has(id) ||
@@ -104,7 +103,7 @@ const documentWrite = (
   const content = documentContent(record, id, marker);
   if (operation.type === "document.change") {
     return !reclaimed && content !== undefined
-      ? { type: "document.change", id, content }
+      ? { content, id, type: "document.change" }
       : undefined;
   }
   if (content !== undefined && content.kind !== "base") {
@@ -113,14 +112,17 @@ const documentWrite = (
     );
   }
   return {
-    type: "document.create",
+    content: reclaimed || content === undefined ? { kind: "base", value: {}, version: 1 } : content,
     record: operation.record,
-    content: reclaimed || content === undefined ? { kind: "base", version: 1, value: {} } : content,
+    type: "document.create",
   };
 };
 
-const markerWrites = (replay: Replay, marker: MainMarker): StorageWrite[] => {
-  const writes: StorageWrite[] = [];
+const markerWrites = (
+  replay: Replay,
+  marker: formatTypes.MainMarker,
+): typesModule.StorageWrite[] => {
+  const writes: typesModule.StorageWrite[] = [];
   for (const operation of marker.writes) {
     const write =
       operation.type === "task.sidecar"
@@ -133,27 +135,27 @@ const markerWrites = (replay: Replay, marker: MainMarker): StorageWrite[] => {
   return writes;
 };
 
-export const replayMain: {
+const replayMain: {
   (
-    analysis: MainAnalysis,
-    index: SidecarIndex,
-    memory: MemoryStorage,
-  ): (main: ParsedFile<MainMarker>) => Set<string>;
+    analysis: recoverScanTypes.MainAnalysis,
+    index: recoverScanTypes.SidecarIndex,
+    memory: recoverReplayTypes.MemoryStorage,
+  ): (main: formatTypes.ParsedFile<formatTypes.MainMarker>) => Set<string>;
   (
-    main: ParsedFile<MainMarker>,
-    analysis: MainAnalysis,
-    index: SidecarIndex,
-    memory: MemoryStorage,
+    main: formatTypes.ParsedFile<formatTypes.MainMarker>,
+    analysis: recoverScanTypes.MainAnalysis,
+    index: recoverScanTypes.SidecarIndex,
+    memory: recoverReplayTypes.MemoryStorage,
   ): Set<string>;
 } = Function.dual(
   4,
   (
-    main: ParsedFile<MainMarker>,
-    analysis: MainAnalysis,
-    index: SidecarIndex,
-    memory: MemoryStorage,
+    main: formatTypes.ParsedFile<formatTypes.MainMarker>,
+    analysis: recoverScanTypes.MainAnalysis,
+    index: recoverScanTypes.SidecarIndex,
+    memory: recoverReplayTypes.MemoryStorage,
   ): Set<string> => {
-    const replay: Replay = { analysis, index, confirmed: new Set() };
+    const replay: Replay = { analysis, confirmed: new Set(), index };
     for (const { value: marker } of main.lines) {
       const writes = markerWrites(replay, marker);
       try {
@@ -171,7 +173,7 @@ export const replayMain: {
 
 const unconfirmedStart = (
   file: string,
-  parsed: ParsedFile<SidecarRecord>,
+  parsed: formatTypes.ParsedFile<formatTypes.SidecarRecord>,
   confirmed: ReadonlySet<string>,
 ): number | undefined => {
   let unconfirmedAt: number | undefined;
@@ -189,14 +191,14 @@ const unconfirmedStart = (
 
 const retainedLinesOf = (
   file: string,
-  confirmedLines: readonly ParsedLine<SidecarRecord>[],
-  analysis: MainAnalysis,
-): readonly ParsedLine<SidecarRecord>[] | undefined => {
+  confirmedLines: readonly formatTypes.ParsedLine<formatTypes.SidecarRecord>[],
+  analysis: recoverScanTypes.MainAnalysis,
+): readonly formatTypes.ParsedLine<formatTypes.SidecarRecord>[] | undefined => {
   const numericId = Number(file.slice(file.indexOf("-") + 1, -".jsonl".length));
   if (file.startsWith("task-"))
-    return analysis.terminalTasks.has(idFromNumber<TaskId>(numericId)) ? [] : undefined;
+    return analysis.terminalTasks.has(idFromNumber<typesModule.TaskId>(numericId)) ? [] : undefined;
   if (!file.startsWith("doc-")) return undefined;
-  const documentId = idFromNumber<DocumentId>(numericId);
+  const documentId = idFromNumber<typesModule.DocumentId>(numericId);
   if (analysis.retiredCurrentOnlyDocuments.has(documentId)) return [];
   if (!analysis.latestBases.has(documentId)) return undefined;
   return confirmedLines.filter(
@@ -205,9 +207,9 @@ const retainedLinesOf = (
 };
 
 const settleSidecar = Effect.fnUntraced(function* (
-  files: JsonlFiles,
+  files: recoverReplayTypes.JsonlFiles,
   file: string,
-  parsed: ParsedFile<SidecarRecord>,
+  parsed: formatTypes.ParsedFile<formatTypes.SidecarRecord>,
   confirmed: ReadonlySet<string>,
   context: Context,
 ) {
@@ -223,26 +225,26 @@ const settleSidecar = Effect.fnUntraced(function* (
   );
 });
 
-export const settleSidecars: {
+const settleSidecars: {
   (
-    index: SidecarIndex,
-    analysis: MainAnalysis,
+    index: recoverScanTypes.SidecarIndex,
+    analysis: recoverScanTypes.MainAnalysis,
     confirmed: ReadonlySet<string>,
     context: Context,
-  ): (files: JsonlFiles) => Effect.Effect<ReadonlyMap<string, string>>;
+  ): (files: recoverReplayTypes.JsonlFiles) => Effect.Effect<ReadonlyMap<string, string>>;
   (
-    files: JsonlFiles,
-    index: SidecarIndex,
-    analysis: MainAnalysis,
+    files: recoverReplayTypes.JsonlFiles,
+    index: recoverScanTypes.SidecarIndex,
+    analysis: recoverScanTypes.MainAnalysis,
     confirmed: ReadonlySet<string>,
     context: Context,
   ): Effect.Effect<ReadonlyMap<string, string>>;
 } = Function.dual(
   5,
   Effect.fnUntraced(function* (
-    files: JsonlFiles,
-    index: SidecarIndex,
-    analysis: MainAnalysis,
+    files: recoverReplayTypes.JsonlFiles,
+    index: recoverScanTypes.SidecarIndex,
+    analysis: recoverScanTypes.MainAnalysis,
     confirmed: ReadonlySet<string>,
     context: Context,
   ) {
@@ -260,3 +262,10 @@ export const settleSidecars: {
     return reclamations;
   }),
 );
+
+const recoverReplay = {
+  replayMain,
+  settleSidecars,
+};
+
+export default recoverReplay;

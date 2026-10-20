@@ -1,24 +1,27 @@
 import type { Context } from "@msa/chord";
-import { type StorageWrite, type TaskId, defineTask } from "@msa/durable";
-import { createSession } from "@msa/durable/session";
-import { MemoryStorage } from "@msa/durable/storage/memory";
+import durable from "@msa/durable";
+import type durableTypes from "@msa/durable/index.types";
+import sessionModule from "@msa/durable/session";
+import memory from "@msa/durable/storage/memory";
 import { Effect } from "effect";
 import { describe, expect, it } from "vite-plus/test";
 
-import effectSupport from "./effect-support.ts";
 import Dormant from "./harness-cancellation-barrier-cases.ts";
-import sessionSupport from "./session-support.ts";
-import taskSupport from "./task-support.ts";
+import testSupport from "./support.ts";
 
-const { awaited } = effectSupport;
-const { context, flush } = sessionSupport;
-const { aborted, deferred, eventually, openTasks } = taskSupport;
+const { MemoryStorage } = memory;
+const { defineTask } = durable;
+const { createSession } = sessionModule;
+
+const { awaited } = testSupport;
+const { context, flush } = testSupport;
+const { aborted, deferred, eventually, openTasks } = testSupport;
 
 class HoldMarks extends MemoryStorage {
-  target: TaskId | undefined;
+  target: durableTypes.TaskId | undefined;
   readonly held = deferred();
   readonly release = deferred();
-  override commit(writes: readonly StorageWrite[], commitContext: Context) {
+  override commit(writes: readonly durableTypes.StorageWrite[], commitContext: Context) {
     const superCommit = super.commit.bind(this);
     return Effect.runPromise(
       Effect.gen({ self: this }, function* () {

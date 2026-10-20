@@ -1,12 +1,17 @@
 import type { Context, JsonValue } from "@msa/chord";
-import { type Task, type TaskRuntime, defineTask } from "@msa/durable";
-import { createRegistry } from "@msa/durable/harness";
-import { MemoryStorage } from "@msa/durable/storage/memory";
+import durable from "@msa/durable";
+import harnessModule from "@msa/durable/harness";
+import type durableTypes from "@msa/durable/index.types";
+import memory from "@msa/durable/storage/memory";
 import { Effect } from "effect";
 import { dual } from "effect/Function";
 
 import type harnessTasksRecoverySupportTypes from "./harness-tasks-recovery-support.types.ts";
 import support from "./support.ts";
+
+const { defineTask } = durable;
+const { MemoryStorage } = memory;
+const { createRegistry } = harnessModule;
 
 const {
   abortedWith,
@@ -31,7 +36,7 @@ const sqlitePath = Effect.fn("sqlitePath")(function* () {
 
 const createIn = Effect.fn("createIn")(function* <S extends { phase: string }, R>(
   harness: harnessTasksRecoverySupportTypes.OpenHarness,
-  task: Task<null, S, R, object>,
+  task: durableTypes.Task<null, S, R, object>,
 ) {
   const root = yield* awaited(harness.root(context));
   return yield* awaited(
@@ -91,7 +96,12 @@ const handoverPhase =
   }) =>
   (
     _task: unknown,
-    runtime: TaskRuntime<null, harnessTasksRecoverySupportTypes.Handover, null, object>,
+    runtime: durableTypes.TaskRuntime<
+      null,
+      harnessTasksRecoverySupportTypes.Handover,
+      null,
+      object
+    >,
     ctx: Context,
   ) =>
     Effect.runPromise(

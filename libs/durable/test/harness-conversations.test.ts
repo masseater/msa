@@ -1,20 +1,17 @@
-import {
-  AgentDoc,
-  type Conversation,
-  type ConversationId,
-  LiveDoc,
-  ProviderDoc,
-  ROOT_CONVERSATION_ID,
-} from "@msa/durable";
+import durable from "@msa/durable";
+import type durableTypes from "@msa/durable/index.types";
 import { Effect } from "effect";
 import { afterEach, describe, expect, it } from "vite-plus/test";
 
-import { openNodeSqliteStorage } from "../src/storage/sqlite/node.ts";
+import node from "../src/storage/sqlite/node.ts";
 import effectSupport from "./effect-support.ts";
 import harnessConversationsSupport from "./harness-conversations-support.ts";
 import harnessSupport from "./harness-support.ts";
 import platformSupport from "./platform-support.ts";
 import sessionSupport from "./session-support.ts";
+
+const { openNodeSqliteStorage } = node;
+const { AgentDoc, LiveDoc, ProviderDoc, ROOT_CONVERSATION_ID } = durable;
 
 const { awaited } = effectSupport;
 const { NoteDoc, UUID_V7, allEntries, append, directories } = harnessConversationsSupport;
@@ -170,7 +167,7 @@ const keepsRootConversation = Effect.gen(function* () {
     provider: "anthropic",
   });
   expect(
-    yield* awaited(second.harness.conversation(999 as ConversationId, context)),
+    yield* awaited(second.harness.conversation(999 as durableTypes.ConversationId, context)),
   ).toBeUndefined();
   yield* awaited(second.harness.close(context));
 });
@@ -227,7 +224,7 @@ const createsIndependentConversationsStep1 = Effect.gen(function* () {
 
 const createsIndependentConversations = Effect.gen(function* () {
   const { runPromise, harness, created } = yield* createsIndependentConversationsStep1;
-  const names = (conversation: Conversation) =>
+  const names = (conversation: durableTypes.Conversation) =>
     runPromise(
       Effect.gen(function* () {
         return (yield* awaited(conversation.agent(context))).tools.map((each) => each.name);

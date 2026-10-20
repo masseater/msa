@@ -1,19 +1,24 @@
 import { BACKGROUND_CONTEXT } from "@msa/chord/context";
-import {
+import testing from "@msa/durable/testing";
+import { Effect } from "effect";
+import { type TestContext, afterAll, describe, expect, test } from "vite-plus/test";
+
+import nodeModule from "../src/storage/jsonl/node.ts";
+import memory from "../src/storage/memory.ts";
+import node from "../src/storage/sqlite/node.ts";
+import type typesModule from "../src/types.types.ts";
+import effectSupport from "./effect-support.ts";
+import platformSupport from "./platform-support.ts";
+
+const { openNodeSqliteStorage } = node;
+const { openNodeJsonlStorage } = nodeModule;
+const { MemoryStorage } = memory;
+const {
   STORAGE_READ_BENCHMARKS,
   STORAGE_WRITE_BENCHMARKS,
   seedStorageBenchmark,
   seedStorageWriteBenchmark,
-} from "@msa/durable/testing";
-import { Effect } from "effect";
-import { type TestContext, afterAll, describe, expect, test } from "vite-plus/test";
-
-import { openNodeJsonlStorage } from "../src/storage/jsonl/node.ts";
-import { MemoryStorage } from "../src/storage/memory.ts";
-import { openNodeSqliteStorage } from "../src/storage/sqlite/node.ts";
-import type { EntryId, Storage } from "../src/types.ts";
-import effectSupport from "./effect-support.ts";
-import platformSupport from "./platform-support.ts";
+} = testing;
 
 const { awaited } = effectSupport;
 const { copyFile, copyPath, makeTempFile, removeDirs } = platformSupport;
@@ -28,19 +33,19 @@ const REOPEN_OPTIONS = { iterations: 20, time: 0, warmupIterations: 3, warmupTim
 
 type Fixture = {
   readonly backend: StorageBenchmarkBackend;
-  readonly storage: Storage;
+  readonly storage: typesModule.Storage;
 };
 
 type ReopenFixture = {
   readonly backend: PersistentBackend;
   readonly path: string;
-  readonly firstEntryId: EntryId;
+  readonly firstEntryId: typesModule.EntryId;
   readonly samples: string[];
 };
 
 const fixtures: Fixture[] = [];
 const directories: string[] = [];
-const reopenedStorages: Storage[] = [];
+const reopenedStorages: typesModule.Storage[] = [];
 
 const storagePath = Effect.fn("storagePath")(function* (
   backend: PersistentBackend,
@@ -56,7 +61,7 @@ const openPersistentStorage = Effect.fn("openPersistentStorage")(function* (
   backend: PersistentBackend,
   path: string,
 ) {
-  return yield* awaited<Storage>(
+  return yield* awaited<typesModule.Storage>(
     backend === "sqlite"
       ? openNodeSqliteStorage(path)
       : openNodeJsonlStorage(path, BACKGROUND_CONTEXT),
@@ -95,7 +100,7 @@ const copyPersistentStorage = Effect.fn("copyPersistentStorage")(function* (
 const reopenAndRead = Effect.fn("reopenAndRead")(function* (
   backend: PersistentBackend,
   path: string,
-  firstEntryId: EntryId,
+  firstEntryId: typesModule.EntryId,
 ) {
   const storage = yield* openPersistentStorage(backend, path);
   const id = (yield* awaited(storage.entry(firstEntryId, BACKGROUND_CONTEXT)))?.entry.id ?? -1;

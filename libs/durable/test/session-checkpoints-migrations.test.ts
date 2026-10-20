@@ -1,5 +1,6 @@
 import type { Op } from "@msa/chord/delta";
-import { type JsonObject, type StorageWrite, defineDoc } from "@msa/durable";
+import durable from "@msa/durable";
+import type durableTypes from "@msa/durable/index.types";
 import { Effect } from "effect";
 import { describe, expect, it } from "vite-plus/test";
 
@@ -7,12 +8,14 @@ import effectSupport from "./effect-support.ts";
 import documentWrites from "./session-checkpoints-migrations-support.ts";
 import sessionSupport from "./session-support.ts";
 
+const { defineDoc } = durable;
+
 const { awaited } = effectSupport;
 const { context, documentChanges, flush, openTestSession } = sessionSupport;
 
 function checkpointDocs() {
-  const calls: { value: Readonly<JsonObject>; ops: readonly Op[] }[] = [];
-  const falseCalls: { value: Readonly<JsonObject>; ops: readonly Op[] }[] = [];
+  const calls: { value: Readonly<durableTypes.JsonObject>; ops: readonly Op[] }[] = [];
+  const falseCalls: { value: Readonly<durableTypes.JsonObject>; ops: readonly Op[] }[] = [];
   const BaseDoc = defineDoc<{ items: string[] }>({
     checkpointWhen: (value, ops) => {
       calls.push({ ops, value });
@@ -126,8 +129,9 @@ const selectsBasesOnlyStep1 = Effect.gen(function* () {
   );
   expect(calls).toHaveLength(0);
   expect(falseCalls).toHaveLength(0);
-  expect(documentWrites(storage.commits.at(-1)!)).toSatisfy((writes: readonly StorageWrite[]) =>
-    writes.every((write) => write.type === "document.create" && write.content.kind === "base"),
+  expect(documentWrites(storage.commits.at(-1)!)).toSatisfy(
+    (writes: readonly durableTypes.StorageWrite[]) =>
+      writes.every((write) => write.type === "document.create" && write.content.kind === "base"),
   );
 
   yield* awaited(

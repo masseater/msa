@@ -1,6 +1,6 @@
 import { type AssistantMessage } from "@msa/ai";
-import { ToolResultEntry } from "@msa/durable";
-import { GenerationTask, ToolTask } from "@msa/durable/harness";
+import durable from "@msa/durable";
+import harnessModule from "@msa/durable/harness";
 import { Effect } from "effect";
 import { describe, expect, it } from "vite-plus/test";
 
@@ -9,6 +9,9 @@ import effectSupport from "./effect-support.ts";
 import harnessSupport from "./harness-support.ts";
 import harnessToolsSupport from "./harness-tools-support.ts";
 import sessionSupport from "./session-support.ts";
+
+const { GenerationTask, ToolTask } = harnessModule;
+const { ToolResultEntry } = durable;
 
 const { chatSetup } = chatSupport;
 const { awaited } = effectSupport;

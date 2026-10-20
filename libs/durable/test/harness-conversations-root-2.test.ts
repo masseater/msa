@@ -1,11 +1,15 @@
-import { AgentDoc, LiveDoc, ProviderDoc, configure, defineTask } from "@msa/durable";
-import { createSession } from "@msa/durable/session";
-import { MemoryStorage } from "@msa/durable/storage/memory";
+import durable from "@msa/durable";
+import session from "@msa/durable/session";
+import memory from "@msa/durable/storage/memory";
 import { Effect } from "effect";
 import { afterEach, describe, expect, it } from "vite-plus/test";
 
 import harnessConversationsSupport from "./harness-conversations-support.ts";
 import support from "./support.ts";
+
+const { MemoryStorage } = memory;
+const { AgentDoc, LiveDoc, ProviderDoc, configure, defineTask } = durable;
+const { createSession } = session;
 
 const { NoteDoc, UUID_V7, directories } = harnessConversationsSupport;
 const { ControlledStorage, awaited, context, openHarness, removeDir, user } = support;

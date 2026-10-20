@@ -8,20 +8,9 @@ import type {
   UserMessage,
 } from "@msa/ai";
 import { Type, createModels } from "@msa/ai";
-import {
-  type AnyTask,
-  type Extension,
-  type HooksOf,
-  type PromptSection,
-  type Registry,
-  type Storage,
-  type ToolRegistration,
-  defineExtension,
-  defineTool,
-  hook,
-  section,
-} from "@msa/durable";
-import { Harness, createRegistry } from "@msa/durable/harness";
+import durable from "@msa/durable";
+import harnessModule from "@msa/durable/harness";
+import type durableTypes from "@msa/durable/index.types";
 import { Effect } from "effect";
 import { dual } from "effect/Function";
 
@@ -29,10 +18,13 @@ import effectSupport from "./effect-support.ts";
 import type harnessSupportTypes from "./harness-support.types.ts";
 import sessionSupport from "./session-support.ts";
 
+const { defineExtension, defineTool, hook, section } = durable;
+const { Harness, createRegistry } = harnessModule;
+
 const { awaited } = effectSupport;
 const { context } = sessionSupport;
 
-function tool(name: string): ToolRegistration {
+function tool(name: string): durableTypes.ToolRegistration {
   return defineTool({
     description: `${name} tool`,
     execute: () => Promise.resolve({ output: [] }),
@@ -42,9 +34,12 @@ function tool(name: string): ToolRegistration {
 }
 
 const openHarness = Effect.fn("openHarness")(function* (
-  storage: Storage,
+  storage: durableTypes.Storage,
   toolNames: readonly string[] = [],
-  options: { readonly registry?: Registry; readonly onReport?: (error: unknown) => void } = {},
+  options: {
+    readonly registry?: durableTypes.Registry;
+    readonly onReport?: (error: unknown) => void;
+  } = {},
 ) {
   const registry = options.registry ?? createRegistry();
   if (toolNames.length > 0)
@@ -141,16 +136,16 @@ function describeMessage(message: Message): string {
   }
 }
 
-function installOne<Tool extends ToolRegistration>(
-  registry: Registry<Tool>,
-  extension: Extension<Tool>,
+function installOne<Tool extends durableTypes.ToolRegistration>(
+  registry: durableTypes.Registry<Tool>,
+  extension: durableTypes.Extension<Tool>,
 ): harnessSupportTypes.Installed {
   registry.install(extension);
   return { dispose: () => registry.uninstall(extension) };
 }
 
-function addToolImpl<Tool extends ToolRegistration>(
-  registry: Registry<Tool>,
+function addToolImpl<Tool extends durableTypes.ToolRegistration>(
+  registry: durableTypes.Registry<Tool>,
   toolInner: Tool,
 ): harnessSupportTypes.Installed {
   return installOne(
@@ -160,16 +155,19 @@ function addToolImpl<Tool extends ToolRegistration>(
 }
 
 const addTool: {
-  <Tool extends ToolRegistration>(
+  <Tool extends durableTypes.ToolRegistration>(
     tool: Tool,
-  ): (registry: Registry<Tool>) => harnessSupportTypes.Installed;
-  <Tool extends ToolRegistration>(
-    registry: Registry<Tool>,
+  ): (registry: durableTypes.Registry<Tool>) => harnessSupportTypes.Installed;
+  <Tool extends durableTypes.ToolRegistration>(
+    registry: durableTypes.Registry<Tool>,
     tool: Tool,
   ): harnessSupportTypes.Installed;
 } = dual(2, addToolImpl);
 
-function addTaskImpl(registry: Registry, task: AnyTask): harnessSupportTypes.Installed {
+function addTaskImpl(
+  registry: durableTypes.Registry,
+  task: durableTypes.AnyTask,
+): harnessSupportTypes.Installed {
   return installOne(
     registry,
     defineExtension({ name: `task:${task.definition.name}`, tasks: [task] }),
@@ -177,16 +175,16 @@ function addTaskImpl(registry: Registry, task: AnyTask): harnessSupportTypes.Ins
 }
 
 const addTask: {
-  (task: AnyTask): (registry: Registry) => ReturnType<typeof addTaskImpl>;
-  (registry: Registry, task: AnyTask): ReturnType<typeof addTaskImpl>;
+  (task: durableTypes.AnyTask): (registry: durableTypes.Registry) => ReturnType<typeof addTaskImpl>;
+  (registry: durableTypes.Registry, task: durableTypes.AnyTask): ReturnType<typeof addTaskImpl>;
 } = dual(2, addTaskImpl);
 
 let hookExtensions = 0;
 
-function addHooksImpl<K extends AnyTask>(
-  registry: Registry,
+function addHooksImpl<K extends durableTypes.AnyTask>(
+  registry: durableTypes.Registry,
   task: K,
-  handlers: Partial<HooksOf<K>>,
+  handlers: Partial<durableTypes.HooksOf<K>>,
 ): harnessSupportTypes.Installed {
   return installOne(
     registry,
@@ -195,21 +193,21 @@ function addHooksImpl<K extends AnyTask>(
 }
 
 const addHooks: {
-  <K extends AnyTask>(
+  <K extends durableTypes.AnyTask>(
     task: K,
-    handlers: Partial<HooksOf<K>>,
-  ): (registry: Registry) => harnessSupportTypes.Installed;
-  <K extends AnyTask>(
-    registry: Registry,
+    handlers: Partial<durableTypes.HooksOf<K>>,
+  ): (registry: durableTypes.Registry) => harnessSupportTypes.Installed;
+  <K extends durableTypes.AnyTask>(
+    registry: durableTypes.Registry,
     task: K,
-    handlers: Partial<HooksOf<K>>,
+    handlers: Partial<durableTypes.HooksOf<K>>,
   ): harnessSupportTypes.Installed;
 } = dual(3, addHooksImpl);
 
 function addSectionImpl(
-  registry: Registry,
+  registry: durableTypes.Registry,
   key: string,
-  render: PromptSection["render"],
+  render: durableTypes.PromptSection["render"],
   options?: { readonly tag?: boolean },
 ): harnessSupportTypes.Installed {
   return installOne(
@@ -221,13 +219,13 @@ function addSectionImpl(
 const addSection: {
   (
     key: string,
-    render: PromptSection["render"],
+    render: durableTypes.PromptSection["render"],
     options?: { readonly tag?: boolean },
-  ): (registry: Registry) => harnessSupportTypes.Installed;
+  ): (registry: durableTypes.Registry) => harnessSupportTypes.Installed;
   (
-    registry: Registry,
+    registry: durableTypes.Registry,
     key: string,
-    render: PromptSection["render"],
+    render: durableTypes.PromptSection["render"],
     options?: { readonly tag?: boolean },
   ): harnessSupportTypes.Installed;
 } = dual((args) => typeof args[1] === "string", addSectionImpl);

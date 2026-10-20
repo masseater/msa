@@ -1,23 +1,19 @@
 import { Effect, Function } from "effect";
 
-import type { Dual2 } from "../dual.ts";
+import type dualTypes from "../dual.ts";
+import type imageTypes from "./image.types.ts";
 
 const PNG_SIGNATURE = [0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a];
 const HEADER_BYTES = 32;
 const BLOCK_BYTES = 64 * 1024;
 
-export type ByteSource = {
-  readonly size: number;
-  read(offset: number, length: number): Effect.Effect<Uint8Array>;
-};
-
-export const detectSupportedImageMimeTypeOf = Effect.fnUntraced(function* (source: ByteSource) {
+const detectSupportedImageMimeTypeOf = Effect.fnUntraced(function* (source: imageTypes.ByteSource) {
   const header = yield* source.read(0, HEADER_BYTES);
   if (!startsWith(header, PNG_SIGNATURE)) return detectSupportedImageMimeType(header);
   return isPng(header) && !(yield* isAnimatedPngOf(source)) ? "image/png" : undefined;
 });
 
-const isAnimatedPngOf = Effect.fnUntraced(function* (source: ByteSource) {
+const isAnimatedPngOf = Effect.fnUntraced(function* (source: imageTypes.ByteSource) {
   let block: Uint8Array = new Uint8Array(0);
   let blockStart = 0;
   for (let offset = PNG_SIGNATURE.length; offset + 8 <= source.size;) {
@@ -35,7 +31,7 @@ const isAnimatedPngOf = Effect.fnUntraced(function* (source: ByteSource) {
   return false;
 });
 
-export function detectSupportedImageMimeType(buffer: Uint8Array): string | undefined {
+function detectSupportedImageMimeType(buffer: Uint8Array): string | undefined {
   if (startsWith(buffer, [0xff, 0xd8, 0xff])) return buffer[3] === 0xf7 ? undefined : "image/jpeg";
   if (startsWith(buffer, PNG_SIGNATURE))
     return isPng(buffer) && !isAnimatedPng(buffer) ? "image/png" : undefined;
@@ -73,23 +69,23 @@ type ImageSize = { readonly width: number; readonly height: number };
 const pngSize = (bytes: Uint8Array): ImageSize | undefined =>
   bytes.length < 24
     ? undefined
-    : { width: readUint32BE(bytes, 16), height: readUint32BE(bytes, 20) };
+    : { height: readUint32BE(bytes, 20), width: readUint32BE(bytes, 16) };
 
 const gifSize = (bytes: Uint8Array): ImageSize | undefined =>
-  bytes.length < 10 ? undefined : { width: readUint16LE(bytes, 6), height: readUint16LE(bytes, 8) };
+  bytes.length < 10 ? undefined : { height: readUint16LE(bytes, 8), width: readUint16LE(bytes, 6) };
 
 function webpSize(bytes: Uint8Array): ImageSize | undefined {
   if (bytes.length < 30) return undefined;
   if (startsWithAscii(bytes, 12, "VP8 "))
-    return { width: readUint16LE(bytes, 26) & 0x3fff, height: readUint16LE(bytes, 28) & 0x3fff };
+    return { height: readUint16LE(bytes, 28) & 0x3fff, width: readUint16LE(bytes, 26) & 0x3fff };
   if (startsWithAscii(bytes, 12, "VP8L")) {
     const bits = readUint32LE(bytes, 21);
-    return { width: (bits & 0x3fff) + 1, height: ((bits >>> 14) & 0x3fff) + 1 };
+    return { height: ((bits >>> 14) & 0x3fff) + 1, width: (bits & 0x3fff) + 1 };
   }
   if (startsWithAscii(bytes, 12, "VP8X")) {
     const uint24 = (offset: number): number =>
       readUint16LE(bytes, offset) + ((bytes[offset + 2] ?? 0) << 16);
-    return { width: uint24(24) + 1, height: uint24(27) + 1 };
+    return { height: uint24(27) + 1, width: uint24(24) + 1 };
   }
   return undefined;
 }
@@ -106,7 +102,7 @@ function jpegSize(bytes: Uint8Array): ImageSize | undefined {
       continue;
     }
     if (isFrameMarker(marker))
-      return { width: readUint16BE(bytes, offset + 7), height: readUint16BE(bytes, offset + 5) };
+      return { height: readUint16BE(bytes, offset + 5), width: readUint16BE(bytes, offset + 7) };
     offset += 2 + readUint16BE(bytes, offset + 2);
   }
   return undefined;
@@ -119,7 +115,7 @@ const SIZE_READERS: ReadonlyMap<string, (bytes: Uint8Array) => ImageSize | undef
   ["image/jpeg", jpegSize],
 ]);
 
-export const imageDimensions: Dual2<Uint8Array, string, ImageSize | undefined> = Function.dual(
+const imageDimensions: dualTypes.Dual2<Uint8Array, string, ImageSize | undefined> = Function.dual(
   2,
   (bytes: Uint8Array, mimeType: string): ImageSize | undefined =>
     SIZE_READERS.get(mimeType)?.(bytes),
@@ -188,44 +184,20 @@ function startsWithAscii(buffer: Uint8Array, offset: number, text: string): bool
   return true;
 }
 
-export type ImageLimits = {
-  readonly maxWidth: number;
-  readonly maxHeight: number;
-  readonly maxBytes: number;
-};
-
-export const DEFAULT_IMAGE_LIMITS: ImageLimits = {
-  maxWidth: 2000,
-  maxHeight: 2000,
+const DEFAULT_IMAGE_LIMITS: imageTypes.ImageLimits = {
   maxBytes: 4.5 * 1024 * 1024,
+  maxHeight: 2000,
+  maxWidth: 2000,
 };
 
-export type PreparedImage = {
-  readonly data: string;
-  readonly mimeType: string;
-  readonly resized?: {
-    readonly from: { readonly width: number; readonly height: number };
-    readonly to: { readonly width: number; readonly height: number };
-  };
-  readonly convertedFrom?: string;
-};
-
-export type ImageProcessor = {
-  prepare(
-    bytes: Uint8Array,
-    mimeType: string,
-    limits: ImageLimits,
-  ): Promise<PreparedImage | undefined>;
-};
-
-export const INLINE_IMAGE_TYPES: ReadonlySet<string> = new Set([
+const INLINE_IMAGE_TYPES: ReadonlySet<string> = new Set([
   "image/png",
   "image/jpeg",
   "image/gif",
   "image/webp",
 ]);
 
-export function toBase64(bytes: Uint8Array): string {
+function toBase64(bytes: Uint8Array): string {
   const parts: string[] = [];
   for (let i = 0; i < bytes.length; i += 8192) {
     parts.push(String.fromCharCode.apply(null, bytes.subarray(i, i + 8192) as unknown as number[]));
@@ -233,6 +205,18 @@ export function toBase64(bytes: Uint8Array): string {
   return btoa(parts.join(""));
 }
 
-export function base64Length(byteLength: number): number {
+function base64Length(byteLength: number): number {
   return Math.ceil(byteLength / 3) * 4;
 }
+
+const image = {
+  DEFAULT_IMAGE_LIMITS,
+  INLINE_IMAGE_TYPES,
+  base64Length,
+  detectSupportedImageMimeType,
+  detectSupportedImageMimeTypeOf,
+  imageDimensions,
+  toBase64,
+};
+
+export default image;

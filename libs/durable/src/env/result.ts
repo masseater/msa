@@ -1,25 +1,25 @@
-export type Result<TValue, TError> = { ok: true; value: TValue } | { ok: false; error: TError };
+import type resultTypes from "./result.types.ts";
 
-export function ok<TValue, TError>(value: TValue): Result<TValue, TError> {
+function ok<TValue, TError>(value: TValue): resultTypes.Result<TValue, TError> {
   return { ok: true, value };
 }
 
-export function err<TValue, TError>(error: TError): Result<TValue, TError> {
-  return { ok: false, error };
+function err<TValue, TError>(error: TError): resultTypes.Result<TValue, TError> {
+  return { error, ok: false };
 }
 
-export function getOrThrow<TValue, TError>(result: Result<TValue, TError>): TValue {
+function getOrThrow<TValue, TError>(result: resultTypes.Result<TValue, TError>): TValue {
   if (!result.ok) throw result.error;
   return result.value;
 }
 
-export function getOrUndefined<TValue extends object, TError>(
-  result: Result<TValue, TError>,
+function getOrUndefined<TValue extends object, TError>(
+  result: resultTypes.Result<TValue, TError>,
 ): TValue | undefined {
   return result.ok ? result.value : undefined;
 }
 
-export function toError(error: unknown): Error {
+function toError(error: unknown): Error {
   if (error instanceof Error) return error;
   if (typeof error === "string") return new Error(error);
   try {
@@ -28,3 +28,13 @@ export function toError(error: unknown): Error {
     return new Error(String(error));
   }
 }
+
+const resultModule = {
+  err,
+  getOrThrow,
+  getOrUndefined,
+  ok,
+  toError,
+};
+
+export default resultModule;

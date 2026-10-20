@@ -1,37 +1,35 @@
-import type { AnyModel, Models, ModelType, ModelTypeMap, Usage } from "@msa/ai";
+import type { AnyModel, ModelType, ModelTypeMap, Models, Usage } from "@msa/ai";
 import type { Context, JsonValue } from "@msa/chord";
 import { Effect } from "effect";
 import { Type } from "typebox";
 
-import { defineTool } from "../harness/define.ts";
-import type { ToolRegistration } from "../harness/types.ts";
-import {
-  checkClassifierContext,
-  checkImagesContext,
-  describeValue,
-  isRecord,
-} from "./model-inputs.ts";
+import define from "../harness/define.ts";
+import type typesModule from "../harness/types.types.ts";
+import modelInputs from "./model-inputs.ts";
 
-export const CODEMODE_INTERNAL_PREFIX = "msa.codemode.";
-export const CLASSIFY_TOOL = `${CODEMODE_INTERNAL_PREFIX}models.classify`;
-export const GENERATE_IMAGES_TOOL = `${CODEMODE_INTERNAL_PREFIX}models.generateImages`;
+const { checkClassifierContext, checkImagesContext, describeValue, isRecord } = modelInputs;
+const { defineTool } = define;
 
-export const MODEL_CALLS: Readonly<Record<string, string>> = {
+const CODEMODE_INTERNAL_PREFIX = "msa.codemode.";
+const CLASSIFY_TOOL = `${CODEMODE_INTERNAL_PREFIX}models.classify`;
+const GENERATE_IMAGES_TOOL = `${CODEMODE_INTERNAL_PREFIX}models.generateImages`;
+
+const MODEL_CALLS: Readonly<Record<string, string>> = {
   "models.classify": CLASSIFY_TOOL,
   "models.generateImages": GENERATE_IMAGES_TOOL,
 };
 
-export const CATALOG_GLOBALS = [
+const CATALOG_GLOBALS = [
   "models.getModelsOfType",
   "models.getAvailableOfType",
   "models.getModelOfType",
 ] as const;
 
-export const MAX_CONCURRENT_MODEL_CALLS = 4;
+const MAX_CONCURRENT_MODEL_CALLS = 4;
 
 const MODEL_TYPES: ReadonlySet<string> = new Set<ModelType>(["chat", "image", "classifier"]);
 
-export const MODELS_DESCRIPTION = [
+const MODELS_DESCRIPTION = [
   "`models` (all functions return promises):",
   '- `models.getModelsOfType(type, provider?)`, `models.getAvailableOfType(type, provider?)` (configured auth only), `models.getModelOfType(type, provider, id)`: the catalog; `type` is "chat", "image", or "classifier".',
   '- `models.classify(model, { state: { ... }, images?: [{ type: "image", data, mimeType }], questions: { <id>: { type: "choice", instructions, criteria: { <label>: <meaning> } } | { type: "score", instructions, criteria: [<lowest level>, ..., <highest level>] } | { type: "bool", instructions, criteria: { true: <meaning>, false: <meaning> } } } })` resolves to `{ answers: { <id>: ... }, stopReason, errorMessage?, usage? }`.',
@@ -62,7 +60,7 @@ function toModelInfo(model: AnyModel): JsonValue {
   return JSON.parse(JSON.stringify(info)) as JsonValue;
 }
 
-export const catalogCall = Effect.fnUntraced(function* (
+const catalogCall = Effect.fnUntraced(function* (
   name: string,
   args: unknown,
   models: Models,
@@ -125,7 +123,7 @@ function resolveModel<TType extends "classifier" | "image">(
   );
 }
 
-const ModelCallParameters = Type.Object({ model: Type.Unknown(), context: Type.Unknown() });
+const ModelCallParameters = Type.Object({ context: Type.Unknown(), model: Type.Unknown() });
 
 function modelResult(
   label: string,
@@ -136,8 +134,8 @@ function modelResult(
   return {
     output: [
       {
-        type: "text" as const,
         text: ok ? `${label} done` : `${label} ${result.stopReason}: ${result.errorMessage ?? ""}`,
+        type: "text" as const,
       },
     ],
     structuredOutput: JSON.parse(JSON.stringify(value)) as JsonValue,
@@ -146,13 +144,10 @@ function modelResult(
   };
 }
 
-export function createModelTools(): ToolRegistration[] {
+function createModelTools(): typesModule.ToolRegistration[] {
   const classify = defineTool({
-    name: CLASSIFY_TOOL,
-    description: "models.classify() of code mode scripts.",
-    parameters: ModelCallParameters,
-    structuredOutputSchema: Type.Unknown(),
     callers: ["tools"],
+    description: "models.classify() of code mode scripts.",
     execute: (args, api, context) =>
       Effect.runPromise(
         Effect.gen(function* () {
@@ -166,13 +161,13 @@ export function createModelTools(): ToolRegistration[] {
           return modelResult(`classify ${model.provider}/${model.id}`, result, result);
         }),
       ),
-  });
-  const generateImages = defineTool({
-    name: GENERATE_IMAGES_TOOL,
-    description: "models.generateImages() of code mode scripts.",
+    name: CLASSIFY_TOOL,
     parameters: ModelCallParameters,
     structuredOutputSchema: Type.Unknown(),
+  });
+  const generateImages = defineTool({
     callers: ["tools"],
+    description: "models.generateImages() of code mode scripts.",
     execute: (args, api, context) =>
       Effect.runPromise(
         Effect.gen(function* () {
@@ -186,6 +181,26 @@ export function createModelTools(): ToolRegistration[] {
           return modelResult(`generateImages ${model.provider}/${model.id}`, result, result);
         }),
       ),
+    name: GENERATE_IMAGES_TOOL,
+    parameters: ModelCallParameters,
+    structuredOutputSchema: Type.Unknown(),
   });
-  return [classify as unknown as ToolRegistration, generateImages as unknown as ToolRegistration];
+  return [
+    classify as unknown as typesModule.ToolRegistration,
+    generateImages as unknown as typesModule.ToolRegistration,
+  ];
 }
+
+const modelsModule = {
+  CATALOG_GLOBALS,
+  CLASSIFY_TOOL,
+  CODEMODE_INTERNAL_PREFIX,
+  GENERATE_IMAGES_TOOL,
+  MAX_CONCURRENT_MODEL_CALLS,
+  MODELS_DESCRIPTION,
+  MODEL_CALLS,
+  catalogCall,
+  createModelTools,
+};
+
+export default modelsModule;

@@ -11,30 +11,25 @@ import {
 } from "@msa/ai";
 import { openaiProvider } from "@msa/ai/providers/openai";
 import type { Context } from "@msa/chord";
-import {
-  type AgentEvent,
-  AssistantEntry,
-  type ConversationId,
-  type EntryId,
-  type Extension,
-  type ToolExecutionApi,
-  configure,
-  defineExtension,
-  defineTool,
-} from "@msa/durable";
-import { Harness, createRegistry, watchEvents } from "@msa/durable/harness";
-import { MemoryStorage } from "@msa/durable/storage/memory";
+import durable from "@msa/durable";
+import harnessModule from "@msa/durable/harness";
+import type durableTypes from "@msa/durable/index.types";
+import memory from "@msa/durable/storage/memory";
 import { Console, Effect } from "effect";
 
 import support from "../support.ts";
+
+const { AssistantEntry, configure, defineExtension, defineTool } = durable;
+const { Harness, createRegistry, watchEvents } = harnessModule;
+const { MemoryStorage } = memory;
 
 const { BACKGROUND_CONTEXT, awaited, environmentVariable } = support;
 
 const context = BACKGROUND_CONTEXT;
 
 const answerText = Effect.fn("answerText")(function* (
-  api: ToolExecutionApi,
-  answer: EntryId,
+  api: durableTypes.ToolExecutionApi,
+  answer: durableTypes.EntryId,
   callContext: Context,
 ) {
   const entry = yield* awaited(api.commit((tx) => tx.entry(AssistantEntry, answer), callContext));
@@ -42,7 +37,7 @@ const answerText = Effect.fn("answerText")(function* (
   return message.content.flatMap((c) => (c.type === "text" ? [c.text] : [])).join("");
 });
 
-const Subagent: Extension = defineExtension({
+const Subagent: durableTypes.Extension = defineExtension({
   name: "subagent",
   tools: [
     defineTool({
@@ -131,7 +126,7 @@ const mainStep1 = Effect.gen(function* () {
   const harness = yield* awaited(Harness.open(new MemoryStorage(), { models, registry }, context));
   const root = yield* awaited(harness.root(context, { agent: { model } }));
 
-  const print = (indent: string, event: AgentEvent): void => {
+  const print = (indent: string, event: durableTypes.AgentEvent): void => {
     if (event.type === "message_end" && event.entry.kind === "msa.assistant") {
       const message = event.entry.model?.[0] as AssistantMessage;
       const text = message.content.flatMap((c) => (c.type === "text" ? [c.text] : [])).join("");
@@ -140,8 +135,8 @@ const mainStep1 = Effect.gen(function* () {
       runSync(Console.log(`${indent}tool ${event.toolName}(${JSON.stringify(event.args)})`));
     }
   };
-  const attached = new Set<ConversationId>();
-  const attach = Effect.fn("attach")(function* (id: ConversationId, indent: string) {
+  const attached = new Set<durableTypes.ConversationId>();
+  const attach = Effect.fn("attach")(function* (id: durableTypes.ConversationId, indent: string) {
     const runPromise = Effect.runPromiseWith(yield* Effect.context<never>());
 
     attached.add(id);
@@ -152,8 +147,9 @@ const mainStep1 = Effect.gen(function* () {
           for (const event of events) {
             print(indent, event);
             if (event.type !== "tool_execution_update") continue;
-            const child = (event.details as { conversationId?: ConversationId } | undefined)
-              ?.conversationId;
+            const child = (
+              event.details as { conversationId?: durableTypes.ConversationId } | undefined
+            )?.conversationId;
             if (child !== undefined && !attached.has(child)) yield* attach(child, `${indent}  `);
           }
         }),

@@ -1,5 +1,7 @@
-import { rangeDecoder, startsWithBom } from "./decode.ts";
-import type { LineScan } from "./index.ts";
+import decodeModule from "./decode.ts";
+import type envTypes from "./index.types.ts";
+
+const { rangeDecoder, startsWithBom } = decodeModule;
 
 const NEWLINE = 0x0a;
 const encoder = new TextEncoder();
@@ -8,7 +10,7 @@ function decodedBytes(text: string): number {
   return text === "" ? 0 : encoder.encode(text).length;
 }
 
-export class LineScanner {
+export default class LineScanner {
   readonly #startLine: number;
   readonly #endLine: number;
   #position = 0;
@@ -78,30 +80,30 @@ export class LineScanner {
     this.#position += chunk.length;
   }
 
-  finish(): LineScan {
+  finish(): envTypes.LineScan {
     if (this.#head !== undefined) this.#releaseHead();
     const size = this.#position;
     if (this.#start === undefined) {
       return {
-        newlines: this.#newlines,
-        start: size,
         end: size,
+        firstLineBytes: 0,
         firstLineEnd: size,
         lastLineStart: size,
+        newlines: this.#newlines,
         selectedBytes: 0,
-        firstLineBytes: 0,
+        start: size,
       };
     }
     if (this.#firstLineEnd === undefined) this.#endFirstLine(size);
     if (this.#end === undefined) this.#endSelection(size);
     return {
-      newlines: this.#newlines,
-      start: this.#start,
       end: this.#end ?? size,
+      firstLineBytes: this.#firstLineBytes,
       firstLineEnd: this.#firstLineEnd ?? size,
       lastLineStart: this.#lastLineStart ?? this.#lineStart,
+      newlines: this.#newlines,
       selectedBytes: this.#selectedBytes,
-      firstLineBytes: this.#firstLineBytes,
+      start: this.#start,
     };
   }
 

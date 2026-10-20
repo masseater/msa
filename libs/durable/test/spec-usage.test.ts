@@ -1,10 +1,12 @@
 import { expect, expectTypeOf, it } from "vite-plus/test";
 
-import { createBashTool, createEditTool, createReadTool } from "../src/tools/index.ts";
+import toolsModule from "../src/tools/index.ts";
 import specUsageExtensions from "./spec-usage-extensions.ts";
 import type specUsageNamesTypes from "./spec-usage-names.ts";
 import specUsageSequences from "./spec-usage-sequences.ts";
 import taskSequences from "./spec-usage-task-sequences.ts";
+
+const { createBashTool, createEditTool, createReadTool } = toolsModule;
 
 const {
   bashExtensions,

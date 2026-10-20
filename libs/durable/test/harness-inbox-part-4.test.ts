@@ -1,11 +1,14 @@
 import type { Op } from "@msa/chord/delta";
-import { LiveDoc } from "@msa/durable";
-import { MemoryStorage } from "@msa/durable/storage/memory";
+import durable from "@msa/durable";
+import memory from "@msa/durable/storage/memory";
 import { Effect } from "effect";
 import { afterEach, describe, expect, it } from "vite-plus/test";
 
 import harnessInboxSupport from "./harness-inbox-support.ts";
 import support from "./support.ts";
+
+const { MemoryStorage } = memory;
+const { LiveDoc } = durable;
 
 const { answer, directories, gated, inbox, status } = harnessInboxSupport;
 const { awaited, chatSetup, context, documentChanges, openChat, removeDir } = support;

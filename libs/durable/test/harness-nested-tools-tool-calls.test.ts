@@ -1,18 +1,17 @@
 import { Type, type Usage } from "@msa/ai";
-import {
-  type AgentEvent,
-  LiveDoc,
-  type NestedToolExecutionResult,
-  UsageDoc,
-  defineTool,
-} from "@msa/durable";
-import { watchEvents } from "@msa/durable/harness";
-import { MemoryStorage } from "@msa/durable/storage/memory";
+import durable from "@msa/durable";
+import harnessModule from "@msa/durable/harness";
+import type durableTypes from "@msa/durable/index.types";
+import memory from "@msa/durable/storage/memory";
 import { Effect } from "effect";
 import { afterEach, describe, expect, it } from "vite-plus/test";
 
 import harnessNestedToolsSupport from "./harness-nested-tools-support.ts";
 import support from "./support.ts";
+
+const { LiveDoc, UsageDoc, defineTool } = durable;
+const { MemoryStorage } = memory;
+const { watchEvents } = harnessModule;
 
 const { DONE, call, directories, results, runOnce, text, tool, toolTasks } =
   harnessNestedToolsSupport;
@@ -44,7 +43,7 @@ function batchLeavingCallRunning() {
       ),
     ),
   );
-  const left: { abandoned?: Promise<NestedToolExecutionResult> } = {};
+  const left: { abandoned?: Promise<durableTypes.NestedToolExecutionResult> } = {};
   addTool(
     setup.registry,
     tool("batch", (_args, api, callContext) =>
@@ -79,7 +78,7 @@ const matchesReusedKey = Effect.gen(function* () {
       parameters: Type.Object({ a: Type.String(), b: Type.String() }),
     }),
   );
-  const nested: NestedToolExecutionResult[] = [];
+  const nested: durableTypes.NestedToolExecutionResult[] = [];
   addTool(
     setup.registry,
     tool("batch", (_args, api, callContext) =>
@@ -111,7 +110,7 @@ const abortsNestedCalls = Effect.gen(function* () {
   const { setup } = batchLeavingCallRunning();
   const { harness, root } = yield* openChat(new MemoryStorage(), setup);
   const stream = yield* awaited(watchEvents(harness, root.id, context));
-  const ends: AgentEvent[] = [];
+  const ends: durableTypes.AgentEvent[] = [];
   stream.start((batch) => {
     ends.push(...batch.filter((event) => event.type === "tool_execution_end"));
 
@@ -134,9 +133,9 @@ const abortsNestedCalls = Effect.gen(function* () {
     (event) => event.type === "tool_execution_end" && event.toolCallId === "c1/1",
   );
   expect(childEnd).toMatchObject({ result: { details: { step: 1 }, isError: true } });
-  expect((childEnd as { result?: NestedToolExecutionResult }).result).not.toHaveProperty(
-    "structuredOutput",
-  );
+  expect(
+    (childEnd as { result?: durableTypes.NestedToolExecutionResult }).result,
+  ).not.toHaveProperty("structuredOutput");
   expect(
     ends.map((event) => [
       event.type === "tool_execution_end" && event.toolCallId,

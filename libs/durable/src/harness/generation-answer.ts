@@ -2,20 +2,25 @@ import type { AssistantMessage } from "@msa/ai";
 import type { Context } from "@msa/chord";
 import { Effect } from "effect";
 
-import { UserEntry } from "../entries.ts";
-import { commitTask, eachHook, hookResult } from "./bridge.ts";
-import { appendAssistant, createGeneration, handOver, startRun } from "./generation-run.ts";
-import type { GenerationNext, GenerationRuntime } from "./generation-types.ts";
-import { applyBoundary, prepareBoundary } from "./inbox.ts";
-import { endRun, LiveDoc } from "./live.ts";
-import type { Tx, UserInput } from "./types.ts";
+import entries from "../entries.ts";
+import bridge from "./bridge.ts";
+import generationRun from "./generation-run.ts";
+import type generationTypesModule from "./generation-types.types.ts";
+import inboxModule from "./inbox.ts";
+import liveModule from "./live.ts";
+import type typesModule from "./types.types.ts";
+
+const { commitTask, eachHook, hookResult } = bridge;
+const { applyBoundary, prepareBoundary } = inboxModule;
+const { LiveDoc, endRun } = liveModule;
+const { UserEntry } = entries;
 
 const askContinuation = Effect.fnUntraced(function* (
-  runtime: GenerationRuntime,
+  runtime: generationTypesModule.GenerationRuntime,
   message: AssistantMessage,
   context: Context,
 ) {
-  let continuation: UserInput | undefined;
+  let continuation: typesModule.UserInput | undefined;
   yield* eachHook(runtime.hooks, "onYield", (hook) =>
     continuation === undefined
       ? Effect.map(
@@ -29,8 +34,8 @@ const askContinuation = Effect.fnUntraced(function* (
   return continuation;
 });
 
-export const answer = Effect.fnUntraced(function* (
-  runtime: GenerationRuntime,
+const answer = Effect.fnUntraced(function* (
+  runtime: generationTypesModule.GenerationRuntime,
   message: AssistantMessage,
   context: Context,
 ) {
@@ -38,27 +43,37 @@ export const answer = Effect.fnUntraced(function* (
   const { conversationId } = runtime;
   yield* commitTask(
     runtime,
-    (tx: Tx): Effect.Effect<GenerationNext> =>
+    (tx: typesModule.Tx): Effect.Effect<generationTypesModule.GenerationNext> =>
       Effect.gen(function* () {
         const boundary = yield* prepareBoundary(tx, conversationId, runtime.settings);
         const live = yield* Effect.promise(() => tx.doc(LiveDoc, conversationId));
-        const entry = yield* appendAssistant(tx, conversationId, message);
-        const result: GenerationNext = {
+        const entry = yield* generationRun.appendAssistant(tx, conversationId, message);
+        const result: generationTypesModule.GenerationNext = {
+          outcome: { result: { entryId: entry.id }, status: "completed" },
           status: "terminal",
-          outcome: { status: "completed", result: { entryId: entry.id } },
         };
         const { users, reset } = yield* applyBoundary(tx, boundary, "final", runtime.now());
         if (continuation !== undefined && users.length === 0 && !reset) {
-          const user = { role: "user", content: continuation, timestamp: runtime.now() } as const;
+          const user = { content: continuation, role: "user", timestamp: runtime.now() } as const;
           yield* Effect.promise(() => tx.appendEntry(UserEntry, conversationId, { model: [user] }));
-          handOver(live, runtime.taskId, yield* createGeneration(tx, conversationId));
+          generationRun.handOver(
+            live,
+            runtime.taskId,
+            yield* generationRun.createGeneration(tx, conversationId),
+          );
           delete live.generation;
           return result;
         }
-        endRun(tx, live, runtime.taskId, { status: "done", answer: entry.id });
-        if (users.length > 0) yield* startRun(tx, conversationId, live, users);
+        endRun(tx, live, runtime.taskId, { answer: entry.id, status: "done" });
+        if (users.length > 0) yield* generationRun.startRun(tx, conversationId, live, users);
         return result;
       }),
     context,
   );
 });
+
+const generationAnswer = {
+  answer,
+};
+
+export default generationAnswer;

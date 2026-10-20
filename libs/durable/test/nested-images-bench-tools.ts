@@ -3,17 +3,14 @@ import { Effect } from "effect";
 import { dual } from "effect/Function";
 import { Type } from "typebox";
 
-import { createRegistry } from "../src/harness/index.ts";
-import {
-  type JsonObject,
-  NestedCallDoc,
-  type TaskId,
-  type ToolTaskInput,
-  defineExtension,
-  defineTool,
-} from "../src/index.ts";
+import harness from "../src/harness/index.ts";
+import durable from "../src/index.ts";
+import type durableTypes from "../src/index.types.ts";
 import effectSupport from "./effect-support.ts";
 import type nestedImagesBenchToolsTypes from "./nested-images-bench-tools.types.ts";
+
+const { NestedCallDoc, defineExtension, defineTool } = durable;
+const { createRegistry } = harness;
 
 const { awaited, toJsonText } = effectSupport;
 
@@ -61,13 +58,13 @@ function classifyTool(scenario: nestedImagesBenchToolsTypes.Scenario) {
             let data = image.data;
             if (image.source !== undefined) {
               const input = (yield* awaited(api.getTask(api.taskId, callContext)))?.input as
-                | ToolTaskInput
+                | durableTypes.ToolTaskInput
                 | undefined;
               if (input?.kind !== "nested")
                 throw new Error("classify resolves references only as a nested call");
               const source = (yield* awaited(
-                api.getTask(image.source.taskId as TaskId, callContext),
-              ))?.input as ToolTaskInput;
+                api.getTask(image.source.taskId as durableTypes.TaskId, callContext),
+              ))?.input as durableTypes.ToolTaskInput;
               if (source.kind !== "nested") throw new Error("A reference names a nested call");
               const stored = yield* awaited(
                 api.snapshot(NestedCallDoc, input.parent, source.key, callContext),
@@ -97,7 +94,7 @@ function scriptTool(scenario: nestedImagesBenchToolsTypes.Scenario, probe: Probe
             const key = `read${n}`;
             const read = yield* awaited(api.executeTool("read_image", { n }, callContext, { key }));
             const image = read.structuredOutput as unknown as ImageContent;
-            const argument: JsonObject =
+            const argument: durableTypes.JsonObject =
               scenario.variant === "inline"
                 ? { data: image.data, mimeType: image.mimeType, type: "image" }
                 : { mimeType: image.mimeType, source: { taskId: read.taskId }, type: "image" };

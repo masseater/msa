@@ -1,13 +1,18 @@
-import { LiveDoc } from "@msa/durable";
-import { ToolTask } from "@msa/durable/harness";
+import durable from "@msa/durable";
+import harnessModule from "@msa/durable/harness";
 import { Effect } from "effect";
 import { afterEach, describe, expect, it } from "vite-plus/test";
 
-import { NodeExecutionEnv } from "../src/env/node.ts";
-import { openNodeSqliteStorage } from "../src/storage/sqlite/node.ts";
+import node from "../src/env/node.ts";
+import nodeModule from "../src/storage/sqlite/node.ts";
 import harnessToolsRecoverySupport from "./harness-tools-recovery-support.ts";
 import support from "./support.ts";
 import type supportTypes from "./support.types.ts";
+
+const { NodeExecutionEnv } = node;
+const { openNodeSqliteStorage } = nodeModule;
+const { LiveDoc } = durable;
+const { ToolTask } = harnessModule;
 
 const { DONE, blockingTool, call, directories, open, results, sqlitePath, text, tool, toolTaskId } =
   harnessToolsRecoverySupport;

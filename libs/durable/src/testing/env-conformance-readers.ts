@@ -1,26 +1,20 @@
 import { Effect } from "effect";
 
-import type { FileInfo } from "../env/index.ts";
-import {
-  abortedContext,
-  codeOf,
-  context,
-  decoder,
-  encoder,
-  type EnvCaseSpec,
-  readAll,
-  settled,
-  value,
-} from "./env-conformance-support.ts";
+import type envTypes from "../env/index.types.ts";
+import envConformanceSupport from "./env-conformance-support.ts";
+import type envConformanceSupportTypes from "./env-conformance-support.types.ts";
 
-const byteRanges: EnvCaseSpec = {
+const { abortedContext, codeOf, context, decoder, encoder, readAll, settled, value } =
+  envConformanceSupport;
+
+const byteRanges: envConformanceSupportTypes.EnvCaseSpec = {
   name: "binary reader reads byte ranges of the opened file",
   test: (env, { assert }) =>
     Effect.gen(function* () {
       yield* value(() => env.writeFile("data.txt", "hello world", context));
       const reader = yield* value(() => env.openBinaryReader("data.txt", undefined, context));
       const info = yield* value(() => reader.info(context));
-      assert.partialDeepEqual(info, { name: "data.txt", kind: "file", size: 11 });
+      assert.partialDeepEqual(info, { kind: "file", name: "data.txt", size: 11 });
       const read = (offset: number, length: number) =>
         value(() => reader.read(offset, length, context));
       assert.strictEqual(decoder.decode(yield* read(0, 5)), "hello");
@@ -54,7 +48,7 @@ const lineRanges: readonly (readonly [number, number | undefined])[] = [
 const decodeSpan = (from: number, to: number): string =>
   new TextDecoder("utf-8", { ignoreBOM: from > 0 }).decode(lineBytes.subarray(from, to));
 
-const scanLines: EnvCaseSpec = {
+const scanLines: envConformanceSupportTypes.EnvCaseSpec = {
   name: "binary reader scans lines like decoding the whole file",
   test: (env, { assert }) =>
     Effect.gen(function* () {
@@ -73,12 +67,12 @@ const scanLines: EnvCaseSpec = {
           assert.strictEqual(scan.firstLineBytes, encoder.encode(lines[startLine]).length);
         }
         assert.partialDeepEqual(yield* value(() => reader.scanLines({ startLine: 9 }, context)), {
-          start: lineBytes.length,
           end: lineBytes.length,
           selectedBytes: 0,
+          start: lineBytes.length,
         });
         assert.strictEqual(
-          yield* codeOf(() => reader.scanLines({ startLine: 2, endLine: 2 }, context)),
+          yield* codeOf(() => reader.scanLines({ endLine: 2, startLine: 2 }, context)),
           "invalid",
         );
       });
@@ -89,7 +83,7 @@ const scanLines: EnvCaseSpec = {
     }),
 };
 
-const afterRename: EnvCaseSpec = {
+const afterRename: envConformanceSupportTypes.EnvCaseSpec = {
   name: "binary reader keeps reading the file it opened after a rename",
   test: (env, { assert }) =>
     Effect.gen(function* () {
@@ -109,7 +103,7 @@ const afterRename: EnvCaseSpec = {
     }),
 };
 
-const binaryRefusals: EnvCaseSpec = {
+const binaryRefusals: envConformanceSupportTypes.EnvCaseSpec = {
   name: "binary reader refuses directories, missing files and aborted opens",
   test: (env, { assert }) =>
     Effect.gen(function* () {
@@ -130,7 +124,7 @@ const binaryRefusals: EnvCaseSpec = {
     }),
 };
 
-const directoryPages: EnvCaseSpec = {
+const directoryPages: envConformanceSupportTypes.EnvCaseSpec = {
   name: "directory reader pages every entry exactly once",
   test: (env, { assert }) =>
     Effect.gen(function* () {
@@ -150,14 +144,14 @@ const directoryPages: EnvCaseSpec = {
     }),
 };
 
-const directoryEnd: EnvCaseSpec = {
+const directoryEnd: envConformanceSupportTypes.EnvCaseSpec = {
   name: "directory reader reports the end and refuses use after close",
   test: (env, { assert }) =>
     Effect.gen(function* () {
       yield* value(() => env.createDir("empty", undefined, context));
       const reader = yield* value(() => env.openDirReader("empty", context));
-      assert.deepEqual(yield* value(() => reader.next(10, context)), { entries: [], done: true });
-      assert.deepEqual(yield* value(() => reader.next(10, context)), { entries: [], done: true });
+      assert.deepEqual(yield* value(() => reader.next(10, context)), { done: true, entries: [] });
+      assert.deepEqual(yield* value(() => reader.next(10, context)), { done: true, entries: [] });
       assert.strictEqual(yield* codeOf(() => reader.next(0, context)), "invalid");
       assert.strictEqual(yield* codeOf(() => reader.next(1, abortedContext())), "aborted");
       yield* settled(() => reader.close(context));
@@ -166,7 +160,7 @@ const directoryEnd: EnvCaseSpec = {
     }),
 };
 
-const directoryRefusals: EnvCaseSpec = {
+const directoryRefusals: envConformanceSupportTypes.EnvCaseSpec = {
   name: "directory reader refuses missing paths and files",
   test: (env, { assert }) =>
     Effect.gen(function* () {
@@ -180,7 +174,7 @@ const directoryRefusals: EnvCaseSpec = {
     }),
 };
 
-const removedDuringEnumeration: EnvCaseSpec = {
+const removedDuringEnumeration: envConformanceSupportTypes.EnvCaseSpec = {
   name: "directory reader skips entries removed during enumeration",
   test: (env, { assert }) =>
     Effect.gen(function* () {
@@ -191,7 +185,7 @@ const removedDuringEnumeration: EnvCaseSpec = {
       const enumerated = Effect.gen(function* () {
         for (const name of ["x", "y", "z"])
           yield* value(() => env.remove(`dir/${name}`, undefined, context));
-        const entries: FileInfo[] = [];
+        const entries: envTypes.FileInfo[] = [];
         for (let read = 0; read < 10; read += 1) {
           const next = yield* value(() => reader.next(10, context));
           entries.push(...next.entries);
@@ -206,7 +200,7 @@ const removedDuringEnumeration: EnvCaseSpec = {
     }),
 };
 
-export const readerCases: readonly EnvCaseSpec[] = [
+const readerCases: readonly envConformanceSupportTypes.EnvCaseSpec[] = [
   byteRanges,
   scanLines,
   afterRename,
@@ -217,7 +211,7 @@ export const readerCases: readonly EnvCaseSpec[] = [
   removedDuringEnumeration,
 ];
 
-export const followSymlinks: EnvCaseSpec = {
+const followSymlinks: envConformanceSupportTypes.EnvCaseSpec = {
   name: "binary reader follows symlinks unless noFollow refuses the final one",
   test: (env, { assert, shell }) =>
     Effect.gen(function* () {
@@ -248,3 +242,10 @@ export const followSymlinks: EnvCaseSpec = {
       yield* settled(() => inner.close(context));
     }),
 };
+
+const envConformanceReaders = {
+  followSymlinks,
+  readerCases,
+};
+
+export default envConformanceReaders;

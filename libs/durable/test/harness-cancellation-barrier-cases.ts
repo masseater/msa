@@ -1,8 +1,10 @@
-import { defineTask } from "@msa/durable";
+import durable from "@msa/durable";
 import { Effect } from "effect";
 
 import effectSupport from "./effect-support.ts";
 import taskSupport from "./task-support.ts";
+
+const { defineTask } = durable;
 
 const { awaited } = effectSupport;
 const { aborted } = taskSupport;

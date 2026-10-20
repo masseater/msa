@@ -32,7 +32,13 @@ function assign(target: JsonContainer, key: string | number, value: JsonValue): 
   if (current !== value) slots[key] = value;
 }
 
-export const assignJson: {
+const assignJson: {
   (key: string | number, value: JsonValue): (target: JsonContainer) => void;
   (target: JsonContainer, key: string | number, value: JsonValue): void;
 } = Function.dual(3, assign);
+
+const json = {
+  assignJson,
+};
+
+export default json;

@@ -1,15 +1,29 @@
 import type { Context } from "@msa/chord";
 import { Effect, Function } from "effect";
 
-import { NodeExecutionEnv } from "../../env/node.ts";
-import { JsonlStorage, type JsonlStorageOptions } from "./storage.ts";
+import nodeModule from "../../env/node.ts";
+import JsonlStorage from "./storage.ts";
+import type storageTypes from "./storage.types.ts";
 
-export const openNodeJsonlStorage: {
-  (context: Context, options?: JsonlStorageOptions): (directory: string) => Promise<JsonlStorage>;
-  (directory: string, context: Context, options?: JsonlStorageOptions): Promise<JsonlStorage>;
+const { NodeExecutionEnv } = nodeModule;
+
+const openNodeJsonlStorage: {
+  (
+    context: Context,
+    options?: storageTypes.JsonlStorageOptions,
+  ): (directory: string) => Promise<storageTypes.JsonlStorage>;
+  (
+    directory: string,
+    context: Context,
+    options?: storageTypes.JsonlStorageOptions,
+  ): Promise<storageTypes.JsonlStorage>;
 } = Function.dual(
   (args: IArguments) => typeof args[0] === "string",
-  (directory: string, context: Context, options: JsonlStorageOptions = {}): Promise<JsonlStorage> =>
+  (
+    directory: string,
+    context: Context,
+    options: storageTypes.JsonlStorageOptions = {},
+  ): Promise<storageTypes.JsonlStorage> =>
     Effect.runPromise(
       Effect.promise(() =>
         JsonlStorage.open(
@@ -22,4 +36,9 @@ export const openNodeJsonlStorage: {
     ),
 );
 
-export { JsonlStorage, type JsonlStorageOptions } from "./storage.ts";
+const node = {
+  JsonlStorage: JsonlStorage,
+  openNodeJsonlStorage,
+};
+
+export default node;

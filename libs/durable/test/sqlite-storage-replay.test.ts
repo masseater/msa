@@ -1,6 +1,6 @@
 import { DatabaseSync } from "node:sqlite";
 
-import type { DocumentId } from "@msa/durable";
+import type durableTypes from "@msa/durable/index.types";
 import { Effect } from "effect";
 import { describe, expect, it } from "vite-plus/test";
 
@@ -13,7 +13,7 @@ const { awaited, context } = support;
 const replacedDocumentStep1 = Effect.fn("replacedDocumentStep1")(function* () {
   const { storage, path } = yield* createSqliteStorage();
   yield* awaited(createRoot(storage));
-  const id = yield* awaited(storage.mintId<DocumentId>());
+  const id = yield* awaited(storage.mintId<durableTypes.DocumentId>());
   yield* awaited(
     storage.commit(
       [
@@ -73,7 +73,7 @@ const replacedDocument = Effect.fn("replacedDocument")(function* () {
 const rejectsDocumentRequired = Effect.gen(function* () {
   const { storage, path } = yield* createSqliteStorage();
   yield* awaited(createRoot(storage));
-  const id = yield* awaited(storage.mintId<DocumentId>());
+  const id = yield* awaited(storage.mintId<durableTypes.DocumentId>());
   yield* awaited(
     storage.commit(
       [

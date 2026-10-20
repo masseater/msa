@@ -1,5 +1,5 @@
 import type { Context } from "@msa/chord";
-import { defineDoc } from "@msa/durable";
+import durable from "@msa/durable";
 import { Effect } from "effect";
 import { describe, expect, it } from "vite-plus/test";
 
@@ -9,6 +9,8 @@ import harnessTasksSupport from "./harness-tasks-support.ts";
 import type harnessTasksSupportTypes from "./harness-tasks-support.types.ts";
 import sessionSupport from "./session-support.ts";
 import taskSupport from "./task-support.ts";
+
+const { defineDoc } = durable;
 
 const { awaited } = effectSupport;
 const { user } = harnessSupport;

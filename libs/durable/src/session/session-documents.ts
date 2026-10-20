@@ -2,60 +2,69 @@ import type { Context } from "@msa/chord";
 import { track } from "@msa/chord/delta/tracker";
 import { Effect, Function } from "effect";
 
-import { type AnyDocDefinition, materializeDocument } from "../documents.ts";
-import type { Dual2, Dual3, Dual5 } from "../dual.ts";
-import type { DocumentAddress, DocumentId } from "../types.ts";
-import { type DocumentSweep, enqueue, type SessionState } from "./session-state.ts";
-import type { LoadedDocument } from "./transaction-types.ts";
+import documentsModule from "../documents.ts";
+import type dualTypes from "../dual.ts";
+import type typesModule from "../types.types.ts";
+import unrefTimer from "../unref-timer.ts";
+import type sessionDocumentsTypes from "./session-documents.types.ts";
+import sessionState from "./session-state.ts";
+import type sessionStateTypes from "./session-state.types.ts";
+
+const { startUnrefTimer } = unrefTimer;
+
+const { enqueue } = sessionState;
+const { materializeDocument } = documentsModule;
 
 const MAX_TIMER_DELAY = 2_147_483_647;
 
-export const dropDocument: Dual2<SessionState, string, void> = Function.dual(
+const dropDocument: dualTypes.Dual2<sessionStateTypes.SessionState, string, void> = Function.dual(
   2,
-  (state: SessionState, addressId: string): void => {
+  (state: sessionStateTypes.SessionState, addressId: string): void => {
     state.documents.delete(addressId);
     state.idleDocuments.delete(addressId);
   },
 );
 
-export const clearDocumentSweep = (state: SessionState): void => {
-  if (state.documentSweep?.timer !== undefined) clearTimeout(state.documentSweep.timer);
+const clearDocumentSweep = (state: sessionStateTypes.SessionState): void => {
+  state.documentSweep?.timer?.cancel();
   state.documentSweep = undefined;
 };
 
-const runSweep = (state: SessionState, sweep: DocumentSweep) => (): void => {
-  state.sweepJobs++;
-  enqueue(state, () =>
-    Effect.runPromise(
-      Effect.sync(() => {
-        if (state.documentSweep === sweep) state.documentSweep = undefined;
-        if (state.closing === undefined) sweepDocuments(state);
-      }),
-    ),
-  ).catch(() => {});
-};
+const runSweep =
+  (state: sessionStateTypes.SessionState, sweep: sessionStateTypes.DocumentSweep) => (): void => {
+    state.sweepJobs++;
+    enqueue(state, () =>
+      Effect.runPromise(
+        Effect.sync(() => {
+          if (state.documentSweep === sweep) state.documentSweep = undefined;
+          if (state.closing === undefined) sweepDocuments(state);
+        }),
+      ),
+    ).catch(() => {});
+  };
 
-const startTimer = (state: SessionState, sweep: DocumentSweep, delay: number): void => {
-  const timer = setTimeout(runSweep(state, sweep), Math.min(delay, MAX_TIMER_DELAY));
-  const unref = (timer as { unref?: unknown }).unref;
-  if (typeof unref !== "function") {
-    clearTimeout(timer);
+const startTimer = (
+  state: sessionStateTypes.SessionState,
+  sweep: sessionStateTypes.DocumentSweep,
+  delay: number,
+): void => {
+  const timer = startUnrefTimer(runSweep(state, sweep), Math.min(delay, MAX_TIMER_DELAY));
+  if (timer === undefined) {
     state.documentTimersUnavailable = true;
     state.documentSweep = undefined;
     return;
   }
-  unref.call(timer);
   sweep.timer = timer;
 };
 
-export const scheduleDocumentSweep = (state: SessionState): void => {
+const scheduleDocumentSweep = (state: sessionStateTypes.SessionState): void => {
   if (state.closing !== undefined) return;
   const oldest = state.idleDocuments.values().next();
   if (oldest.done === true) return;
   const at = oldest.value + state.documentRetentionMs();
   if (state.documentSweep !== undefined && state.documentSweep.at <= at) return;
   clearDocumentSweep(state);
-  const sweep: DocumentSweep = { at, timer: undefined };
+  const sweep: sessionStateTypes.DocumentSweep = { at, timer: undefined };
   const delay = at - state.clock();
   state.documentSweep = sweep;
   if (delay <= 0) {
@@ -69,7 +78,7 @@ export const scheduleDocumentSweep = (state: SessionState): void => {
   startTimer(state, sweep, delay);
 };
 
-export const sweepDocuments = (state: SessionState): void => {
+const sweepDocuments = (state: sessionStateTypes.SessionState): void => {
   const expired = state.clock() - state.documentRetentionMs();
   for (const [addressId, since] of state.idleDocuments) {
     if (since > expired) break;
@@ -78,9 +87,9 @@ export const sweepDocuments = (state: SessionState): void => {
   scheduleDocumentSweep(state);
 };
 
-export const touchDocument: Dual2<SessionState, string, void> = Function.dual(
+const touchDocument: dualTypes.Dual2<sessionStateTypes.SessionState, string, void> = Function.dual(
   2,
-  (state: SessionState, addressId: string): void => {
+  (state: sessionStateTypes.SessionState, addressId: string): void => {
     const cached = state.documents.get(addressId);
     if (cached === undefined || state.attachedDocuments.has(cached.record.id)) return;
     const now = state.clock();
@@ -97,9 +106,18 @@ export const touchDocument: Dual2<SessionState, string, void> = Function.dual(
   },
 );
 
-export const pinDocument: Dual3<SessionState, string, DocumentId, () => void> = Function.dual(
+const pinDocument: dualTypes.Dual3<
+  sessionStateTypes.SessionState,
+  string,
+  typesModule.DocumentId,
+  () => void
+> = Function.dual(
   3,
-  (state: SessionState, addressId: string, recordId: DocumentId): (() => void) => {
+  (
+    state: sessionStateTypes.SessionState,
+    addressId: string,
+    recordId: typesModule.DocumentId,
+  ): (() => void) => {
     const attached = state.attachedDocuments;
     attached.set(recordId, (attached.get(recordId) ?? 0) + 1);
     state.idleDocuments.delete(addressId);
@@ -118,20 +136,20 @@ export const pinDocument: Dual3<SessionState, string, DocumentId, () => void> = 
   },
 );
 
-export const loadDocument: Dual5<
-  SessionState,
-  AnyDocDefinition,
+const loadDocument: dualTypes.Dual5<
+  sessionStateTypes.SessionState,
+  sessionDocumentsTypes.AnyDocDefinition,
   string,
-  DocumentAddress,
+  typesModule.DocumentAddress,
   Context,
-  Effect.Effect<LoadedDocument | undefined>
+  Effect.Effect<sessionDocumentsTypes.LoadedDocument | undefined>
 > = Function.dual(
   5,
   Effect.fnUntraced(function* (
-    state: SessionState,
-    definition: AnyDocDefinition,
+    state: sessionStateTypes.SessionState,
+    definition: sessionDocumentsTypes.AnyDocDefinition,
     addressId: string,
-    address: DocumentAddress,
+    address: typesModule.DocumentAddress,
     context: Context,
   ) {
     const cached = state.documents.get(addressId);
@@ -149,16 +167,28 @@ export const loadDocument: Dual5<
     );
     if (stored === undefined)
       throw new Error(`Current document ${record.id} (${record.kind}) cannot be read`);
-    const loaded: LoadedDocument = {
+    const loaded: sessionDocumentsTypes.LoadedDocument = {
       addressId,
+      deltasSinceBase: stored.deltasSinceBase,
       record: stored.record,
       storedVersion: stored.version,
-      valueVersion: definition.version,
-      deltasSinceBase: stored.deltasSinceBase,
       tracker: track(materializeDocument(definition, stored)),
+      valueVersion: definition.version,
     };
     state.documents.set(addressId, loaded);
     touchDocument(state, addressId);
     return loaded;
   }),
 );
+
+const sessionDocuments = {
+  clearDocumentSweep,
+  dropDocument,
+  loadDocument,
+  pinDocument,
+  scheduleDocumentSweep,
+  sweepDocuments,
+  touchDocument,
+};
+
+export default sessionDocuments;

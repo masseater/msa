@@ -5,10 +5,15 @@ import { fauxAssistantMessage, fauxProvider } from "@msa/ai/providers/faux";
 import { BACKGROUND_CONTEXT } from "@msa/chord/context";
 import { Console, Effect } from "effect";
 
-import { Harness, createRegistry } from "../../src/harness/index.ts";
-import { InboxDoc, type Submission } from "../../src/index.ts";
-import { MemoryStorage } from "../../src/storage/memory.ts";
+import type durableTypes from "../../src/index.types.ts";
+import durableKit from "../durable-kit.ts";
 import effectSupport from "../effect-support.ts";
+
+const { durable, harness: harnessModule, memory } = durableKit;
+
+const { Harness, createRegistry } = harnessModule;
+const { MemoryStorage } = memory;
+const { InboxDoc } = durable;
 
 const { awaited } = effectSupport;
 
@@ -74,7 +79,7 @@ const mainStep1 = Effect.gen(function* () {
 
 const main = Effect.gen(function* () {
   const { harness, root, first, followUp, steer, note, withdrawn } = yield* mainStep1;
-  const status = Effect.fn("status")(function* (name: string, submission: Submission) {
+  const status = Effect.fn("status")(function* (name: string, submission: durableTypes.Submission) {
     const record = yield* awaited(submission.wait(context));
     yield* Console.log(
       `${name}:`,

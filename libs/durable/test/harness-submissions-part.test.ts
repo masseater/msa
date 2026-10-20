@@ -1,20 +1,16 @@
-import {
-  AssistantEntry,
-  type EntryId,
-  type SubmissionCreate,
-  type SubmissionId,
-  UserEntry,
-  defineEntry,
-} from "@msa/durable";
+import durable from "@msa/durable";
+import type durableTypes from "@msa/durable/index.types";
 import { Effect } from "effect";
 import { afterEach, describe, expect, it } from "vite-plus/test";
 
-import type { SessionImpl } from "../src/session/session.ts";
+import type sessionTypes from "../src/session/session.types.ts";
 import chatSupport from "./chat-support.ts";
 import effectSupport from "./effect-support.ts";
 import directories from "./harness-submissions-support.ts";
 import platformSupport from "./platform-support.ts";
 import sessionSupport from "./session-support.ts";
+
+const { AssistantEntry, UserEntry, defineEntry } = durable;
 
 const { chatSetup, openChat } = chatSupport;
 const { awaited } = effectSupport;
@@ -34,7 +30,7 @@ const settlesSubmissionsTheirStep1 = Effect.gen(function* () {
   const runPromise = Effect.runPromiseWith(yield* Effect.context<never>());
 
   const { harness, root } = yield* openChat(new ControlledStorage(), chatSetup());
-  const session = harness as unknown as SessionImpl;
+  const session = harness as unknown as sessionTypes.SessionImpl;
   const entry = yield* awaited(
     root.commit(
       (tx) =>
@@ -46,7 +42,7 @@ const settlesSubmissionsTheirStep1 = Effect.gen(function* () {
       context,
     ),
   );
-  const create = (record: SubmissionCreate) =>
+  const create = (record: durableTypes.SubmissionCreate) =>
     session.commitWith(
       (tx) =>
         runPromise(
@@ -81,7 +77,11 @@ const settlesSubmissionsTheir = Effect.gen(function* () {
   yield* awaited(
     expect(
       root.commit(
-        (tx) => tx.settleSubmission(999_999 as SubmissionId, { reason: "x", status: "unanswered" }),
+        (tx) =>
+          tx.settleSubmission(999_999 as durableTypes.SubmissionId, {
+            reason: "x",
+            status: "unanswered",
+          }),
         context,
       ),
     ).rejects.toThrow("does not exist"),
@@ -147,7 +147,9 @@ const appendsReadsTyped = Effect.gen(function* () {
     yield* awaited(root.commit((tx) => tx.entry(Marker, counter.id), context)),
   ).toBeUndefined();
   expect(
-    yield* awaited(root.commit((tx) => tx.entry(Counter, 999_999 as EntryId), context)),
+    yield* awaited(
+      root.commit((tx) => tx.entry(Counter, 999_999 as durableTypes.EntryId), context),
+    ),
   ).toBeUndefined();
   expect(Counter.is(counter)).toBe(true);
   expect(AssistantEntry.is(counter)).toBe(false);

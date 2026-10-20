@@ -1,13 +1,18 @@
 import { Type } from "@msa/ai";
 import type { JsonValue } from "@msa/chord";
-import { type NestedToolExecutionResult, defineTool } from "@msa/durable";
-import { ToolTask } from "@msa/durable/harness";
-import { MemoryStorage } from "@msa/durable/storage/memory";
+import durable from "@msa/durable";
+import harnessModule from "@msa/durable/harness";
+import type durableTypes from "@msa/durable/index.types";
+import memory from "@msa/durable/storage/memory";
 import { Effect } from "effect";
 import { describe, expect, it } from "vite-plus/test";
 
 import harnessStructuredOutputSupport from "./harness-structured-output-support.ts";
 import support from "./support.ts";
+
+const { defineTool } = durable;
+const { ToolTask } = harnessModule;
+const { MemoryStorage } = memory;
 
 const { Count, DONE, call, codes, direct, nested, returning } = harnessStructuredOutputSupport;
 const { addHooks, addTool, awaited, chatSetup, context, openChat } = support;
@@ -167,9 +172,9 @@ const keepsStructuredOutputStep1 = Effect.gen(function* () {
 
 const keepsStructuredOutput = Effect.gen(function* () {
   const { runPromise, setup } = yield* keepsStructuredOutputStep1;
-  let plain: NestedToolExecutionResult | undefined;
-  let counter: NestedToolExecutionResult | undefined;
-  let other: NestedToolExecutionResult | undefined;
+  let plain: durableTypes.NestedToolExecutionResult | undefined;
+  let counter: durableTypes.NestedToolExecutionResult | undefined;
+  let other: durableTypes.NestedToolExecutionResult | undefined;
   addTool(
     setup.registry,
     defineTool({

@@ -1,11 +1,13 @@
-import type { Conversation, EntryId } from "@msa/durable";
-import { MemoryStorage } from "@msa/durable/storage/memory";
+import type durableTypes from "@msa/durable/index.types";
+import memory from "@msa/durable/storage/memory";
 import { Effect } from "effect";
 import { dual } from "effect/Function";
 
 import effectSupport from "./effect-support.ts";
 import harnessSupport from "./harness-support.ts";
 import sessionSupport from "./session-support.ts";
+
+const { MemoryStorage } = memory;
 
 const { awaited } = effectSupport;
 const { openHarness, user } = harnessSupport;
@@ -16,7 +18,10 @@ const root = Effect.fn("root")(function* () {
   return yield* awaited(harness.root(context));
 });
 
-function markerImpl(conversation: Conversation, head: EntryId | "self"): Promise<EntryId> {
+function markerImpl(
+  conversation: durableTypes.Conversation,
+  head: durableTypes.EntryId | "self",
+): Promise<durableTypes.EntryId> {
   return Promise.resolve(
     conversation.commit(
       (tx) =>
@@ -33,8 +38,13 @@ function markerImpl(conversation: Conversation, head: EntryId | "self"): Promise
 }
 
 const marker: {
-  (head: EntryId | "self"): (conversation: Conversation) => ReturnType<typeof markerImpl>;
-  (conversation: Conversation, head: EntryId | "self"): ReturnType<typeof markerImpl>;
+  (
+    head: durableTypes.EntryId | "self",
+  ): (conversation: durableTypes.Conversation) => ReturnType<typeof markerImpl>;
+  (
+    conversation: durableTypes.Conversation,
+    head: durableTypes.EntryId | "self",
+  ): ReturnType<typeof markerImpl>;
 } = dual(2, markerImpl);
 
 const harnessPromptSupport = {

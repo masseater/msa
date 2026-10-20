@@ -1,35 +1,23 @@
 import { Effect, Function } from "effect";
 
-import { addressId } from "../documents.ts";
-import type { Dual2, Dual3, Dual4 } from "../dual.ts";
-import type {
-  ConversationId,
-  ConversationOwnership,
-  ConversationRecord,
-  EntryDraft,
-  EntryId,
-  EntryRecord,
-  SubmissionCreate,
-  SubmissionId,
-  SubmissionRecord,
-  Task,
-  TaskId,
-  TaskOptions,
-} from "../types.ts";
-import { prepareForkDocumentCopies } from "./forks.ts";
-import { assertOpen, currentTask, mintId, requireConversation } from "./transaction-state.ts";
-import {
-  type AnyTaskRecord,
-  copyTableJson,
-  type DocumentEntry,
-  type TxState,
-} from "./transaction-types.ts";
+import documentsModule from "../documents.ts";
+import type dualTypes from "../dual.ts";
+import type typesModule from "../types.types.ts";
+import forks from "./forks.ts";
+import transactionState from "./transaction-state.ts";
+import transactionTypes from "./transaction-types.ts";
+import type transactionTypesModule from "./transaction-types.types.ts";
 
-type ConversationParent = NonNullable<ConversationRecord["parent"]>;
+const { assertOpen, currentTask, mintId, requireConversation } = transactionState;
+const { prepareForkDocumentCopies } = forks;
+const { addressId } = documentsModule;
+const { copyTableJson } = transactionTypes;
+
+type ConversationParent = NonNullable<typesModule.ConversationRecord["parent"]>;
 
 const conversationOwner = Effect.fnUntraced(function* (
-  state: TxState,
-  ownership: ConversationOwnership,
+  state: transactionTypesModule.TxState,
+  ownership: typesModule.ConversationOwnership,
 ) {
   if (ownership.kind !== "task") return undefined;
   const task = yield* currentTask(state, ownership.taskId);
@@ -40,9 +28,9 @@ const conversationOwner = Effect.fnUntraced(function* (
 });
 
 const stageForkCopies = Effect.fnUntraced(function* (
-  state: TxState,
+  state: transactionTypesModule.TxState,
   parent: ConversationParent | undefined,
-  id: ConversationId,
+  id: typesModule.ConversationId,
 ) {
   if (parent === undefined) return;
   const copies = yield* prepareForkDocumentCopies(
@@ -55,11 +43,11 @@ const stageForkCopies = Effect.fnUntraced(function* (
   assertOpen(state);
   for (const copy of copies) {
     state.forkSourceDocumentIds.add(copy.source.id);
-    const entry: DocumentEntry = {
-      addressId: addressId(copy.record),
+    const entry: transactionTypesModule.DocumentEntry = {
       address: copy.record,
-      target: { kind: "fork-copy", ...copy },
+      addressId: addressId(copy.record),
       retireOnCommit: false,
+      target: { kind: "fork-copy", ...copy },
     };
     state.documents.push(entry);
     state.latestDocumentByAddress.set(entry.addressId, entry);
@@ -67,24 +55,24 @@ const stageForkCopies = Effect.fnUntraced(function* (
   state.forkSourceConversationIds.add(parent.conversationId);
 });
 
-export const stageConversation: Dual4<
-  TxState,
+const stageConversation: dualTypes.Dual4<
+  transactionTypesModule.TxState,
   ConversationParent | undefined,
-  ConversationOwnership,
-  ConversationId | undefined,
-  Effect.Effect<ConversationRecord>
+  typesModule.ConversationOwnership,
+  typesModule.ConversationId | undefined,
+  Effect.Effect<typesModule.ConversationRecord>
 > = Function.dual(
   4,
   Effect.fnUntraced(function* (
-    state: TxState,
+    state: transactionTypesModule.TxState,
     parent: ConversationParent | undefined,
-    ownership: ConversationOwnership,
-    reservedId: ConversationId | undefined,
+    ownership: typesModule.ConversationOwnership,
+    reservedId: typesModule.ConversationId | undefined,
   ) {
-    const id = reservedId ?? (yield* mintId<ConversationId>(state));
+    const id = reservedId ?? (yield* mintId<typesModule.ConversationId>(state));
     assertOpen(state);
     const owner = yield* conversationOwner(state, ownership);
-    const record: ConversationRecord = {
+    const record: typesModule.ConversationRecord = {
       id,
       ...(parent === undefined ? {} : { parent }),
       ...(owner === undefined ? {} : { owner }),
@@ -99,32 +87,39 @@ export const stageConversation: Dual4<
   }),
 );
 
-export const appendEntry: Dual3<
-  TxState,
-  ConversationId,
-  EntryDraft,
-  Effect.Effect<EntryRecord>
+const appendEntry: dualTypes.Dual3<
+  transactionTypesModule.TxState,
+  typesModule.ConversationId,
+  typesModule.EntryDraft,
+  Effect.Effect<typesModule.EntryRecord>
 > = Function.dual(
   3,
-  Effect.fnUntraced(function* (state: TxState, conversationId: ConversationId, value: EntryDraft) {
+  Effect.fnUntraced(function* (
+    state: transactionTypesModule.TxState,
+    conversationId: typesModule.ConversationId,
+    value: typesModule.EntryDraft,
+  ) {
     yield* requireConversation(state, conversationId);
     assertOpen(state);
-    const id = yield* mintId<EntryId>(state);
+    const id = yield* mintId<typesModule.EntryId>(state);
     assertOpen(state);
     const { head, ...rest } = value;
-    const record = copyTableJson<EntryRecord>({
+    const record = copyTableJson<typesModule.EntryRecord>({
       ...rest,
-      id,
+      byTaskId: state.scope.taskId,
       conversationId,
       head: head === "self" ? id : head,
-      byTaskId: state.scope.taskId,
+      id,
     });
     state.writes.push({ type: "entry", value: record });
     return record;
   }),
 );
 
-const taskOwner = Effect.fnUntraced(function* (state: TxState, options: TaskOptions) {
+const taskOwner = Effect.fnUntraced(function* (
+  state: transactionTypesModule.TxState,
+  options: typesModule.TaskOptions,
+) {
   const ownership = options.ownership;
   if (ownership.kind !== "task") return undefined;
   const owner = yield* currentTask(state, ownership.taskId);
@@ -138,48 +133,48 @@ const taskOwner = Effect.fnUntraced(function* (state: TxState, options: TaskOpti
 });
 
 const taskRecord = (draft: {
-  readonly id: TaskId;
-  readonly conversationId: ConversationId;
+  readonly id: typesModule.TaskId;
+  readonly conversationId: typesModule.ConversationId;
   readonly definition: { readonly name: string; readonly version: number };
   readonly input: unknown;
   readonly checkpoint: unknown;
-  readonly owner: AnyTaskRecord | undefined;
-  readonly options: TaskOptions;
-}): AnyTaskRecord => {
+  readonly owner: transactionTypesModule.AnyTaskRecord | undefined;
+  readonly options: typesModule.TaskOptions;
+}): transactionTypesModule.AnyTaskRecord => {
   const { id, conversationId, definition, input, checkpoint, owner, options } = draft;
-  return copyTableJson<AnyTaskRecord>({
-    id,
+  return copyTableJson<transactionTypesModule.AnyTaskRecord>({
     conversationId,
+    id,
+    input,
     kind: definition.name,
     version: definition.version,
-    input,
     ...(owner === undefined ? {} : { owner: owner.id }),
-    background: options.background ?? false,
     abortRequested: false,
+    background: options.background ?? false,
     ...(options.abandonOnRestart === true ? { abandonOnRestart: true } : {}),
-    state: { status: "pending", checkpoint },
+    state: { checkpoint, status: "pending" },
   });
 };
 
-export const createTask: {
+const createTask: {
   <I, S extends { phase: string }, R, H extends object>(
-    task: Task<I, S, R, H>,
+    task: typesModule.Task<I, S, R, H>,
     input: I,
-    options: TaskOptions,
-  ): (state: TxState) => Effect.Effect<TaskId<R>>;
+    options: typesModule.TaskOptions,
+  ): (state: transactionTypesModule.TxState) => Effect.Effect<typesModule.TaskId<R>>;
   <I, S extends { phase: string }, R, H extends object>(
-    state: TxState,
-    task: Task<I, S, R, H>,
+    state: transactionTypesModule.TxState,
+    task: typesModule.Task<I, S, R, H>,
     input: I,
-    options: TaskOptions,
-  ): Effect.Effect<TaskId<R>>;
+    options: typesModule.TaskOptions,
+  ): Effect.Effect<typesModule.TaskId<R>>;
 } = Function.dual(
   4,
   Effect.fnUntraced(function* <I, S extends { phase: string }, R, H extends object>(
-    state: TxState,
-    task: Task<I, S, R, H>,
+    state: transactionTypesModule.TxState,
+    task: typesModule.Task<I, S, R, H>,
     input: I,
-    options: TaskOptions,
+    options: typesModule.TaskOptions,
   ) {
     const owner = yield* taskOwner(state, options);
     const conversationId =
@@ -190,35 +185,47 @@ export const createTask: {
     assertOpen(state);
     const definition = task.definition;
     const checkpoint = definition.initial(input);
-    const id = yield* mintId<TaskId<R>>(state);
+    const id = yield* mintId<typesModule.TaskId<R>>(state);
     assertOpen(state);
     const record = taskRecord({
-      id,
+      checkpoint,
       conversationId,
       definition,
+      id,
       input,
-      checkpoint,
-      owner,
       options,
+      owner,
     });
     state.tasksById.set(id, { write: { kind: "create", record } });
     return id;
   }),
 );
 
-export const createSubmission: Dual2<
-  TxState,
-  SubmissionCreate,
-  Effect.Effect<SubmissionRecord>
+const createSubmission: dualTypes.Dual2<
+  transactionTypesModule.TxState,
+  typesModule.SubmissionCreate,
+  Effect.Effect<typesModule.SubmissionRecord>
 > = Function.dual(
   2,
-  Effect.fnUntraced(function* (state: TxState, create: SubmissionCreate) {
+  Effect.fnUntraced(function* (
+    state: transactionTypesModule.TxState,
+    create: typesModule.SubmissionCreate,
+  ) {
     yield* requireConversation(state, create.conversationId);
     assertOpen(state);
-    const id = yield* mintId<SubmissionId>(state);
+    const id = yield* mintId<typesModule.SubmissionId>(state);
     assertOpen(state);
-    const record = copyTableJson<SubmissionRecord>({ ...create, id });
+    const record = copyTableJson<typesModule.SubmissionRecord>({ ...create, id });
     state.submissions.set(id, record);
     return record;
   }),
 );
+
+const transactionWrites = {
+  appendEntry,
+  createSubmission,
+  createTask,
+  stageConversation,
+};
+
+export default transactionWrites;

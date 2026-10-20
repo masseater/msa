@@ -1,19 +1,26 @@
 import { Function } from "effect";
 
-import type { Dual2 } from "../dual.ts";
-import type { DocumentCommitChange, DocumentRecord, Seq } from "../types.ts";
-import { publishes } from "./transaction-plan.ts";
-import { type DocumentPlan, EMPTY_OPERATIONS, type TxState } from "./transaction-types.ts";
+import type dualTypes from "../dual.ts";
+import type typesModule from "../types.types.ts";
+import transactionPlan from "./transaction-plan.ts";
+import transactionTypes from "./transaction-types.ts";
+import type transactionTypesModule from "./transaction-types.types.ts";
 
-type PlanChange = NonNullable<DocumentPlan["change"]>;
+const { EMPTY_OPERATIONS } = transactionTypes;
+const { publishes } = transactionPlan;
 
-const committedRecord = (plan: DocumentPlan, seq: Seq): DocumentRecord => {
-  const record: DocumentRecord =
+type PlanChange = NonNullable<transactionTypesModule.DocumentPlan["change"]>;
+
+const committedRecord = (
+  plan: transactionTypesModule.DocumentPlan,
+  seq: typesModule.Seq,
+): typesModule.DocumentRecord => {
+  const record: typesModule.DocumentRecord =
     "createdAt" in plan.record ? plan.record : { ...plan.record, createdAt: seq };
   return plan.retire ? { ...record, retiredAt: seq } : record;
 };
 
-const adoptLoaded = (plan: DocumentPlan, change: PlanChange): void => {
+const adoptLoaded = (plan: transactionTypesModule.DocumentPlan, change: PlanChange): void => {
   const { loaded, version } = change;
   if (loaded === undefined) return;
   if (loaded.storedVersion < version) loaded.storedVersion = version;
@@ -23,10 +30,10 @@ const adoptLoaded = (plan: DocumentPlan, change: PlanChange): void => {
 };
 
 const adoptChange = (
-  state: TxState,
-  plan: DocumentPlan,
+  state: transactionTypesModule.TxState,
+  plan: transactionTypesModule.DocumentPlan,
   change: PlanChange,
-  record: DocumentRecord,
+  record: typesModule.DocumentRecord,
 ): void => {
   const { tracker, prepared, loaded, version } = change;
   if (loaded === undefined ? !plan.retire : prepared.ops.length > 0) tracker.adopt(prepared);
@@ -38,49 +45,56 @@ const adoptChange = (
   if (plan.retire) return;
   state.host.install({
     addressId: plan.addressId,
+    deltasSinceBase: 0,
     record,
     storedVersion: version,
-    valueVersion: version,
-    deltasSinceBase: 0,
     tracker,
+    valueVersion: version,
   });
 };
 
 const publication = (
-  state: TxState,
-  plan: DocumentPlan,
-  record: DocumentRecord,
-): DocumentCommitChange | undefined => {
+  state: transactionTypesModule.TxState,
+  plan: transactionTypesModule.DocumentPlan,
+  record: typesModule.DocumentRecord,
+): typesModule.DocumentCommitChange | undefined => {
   const conversationId = plan.conversationId;
   const change = plan.change;
   if (plan.retire) {
     if ("createdAt" in plan.record) state.host.evict(plan.addressId, record.id);
-    const retired = { version: undefined, value: null, ops: EMPTY_OPERATIONS };
-    return { type: "document", record, conversationId, ...retired };
+    const retired = { ops: EMPTY_OPERATIONS, value: null, version: undefined };
+    return { conversationId, record, type: "document", ...retired };
   }
   if (plan.content?.type === "document.copy") {
     return {
-      type: "document.copy",
-      record,
       conversationId: conversationId!,
+      record,
       source: plan.content.source,
+      type: "document.copy",
     };
   }
   if (change === undefined || !publishes(plan)) return undefined;
   return {
-    type: "document",
-    record,
     conversationId,
-    version: change.version,
-    value: change.prepared.value,
     ops: change.loaded === undefined ? EMPTY_OPERATIONS : change.prepared.ops,
+    record,
+    type: "document",
+    value: change.prepared.value,
+    version: change.version,
   };
 };
 
-export const adoptPlans: Dual2<TxState, Seq, DocumentCommitChange[]> = Function.dual(
+const adoptPlans: dualTypes.Dual2<
+  transactionTypesModule.TxState,
+  typesModule.Seq,
+  typesModule.DocumentCommitChange[]
+> = Function.dual(
   2,
-  (state: TxState, seq: Seq): DocumentCommitChange[] => {
-    const publications: DocumentCommitChange[] = [];
+  (
+    state: transactionTypesModule.TxState,
+    seq: typesModule.Seq,
+  ): typesModule.DocumentCommitChange[] => {
+    const publications: typesModule.DocumentCommitChange[] = [];
     for (const plan of state.plans) {
       const record = committedRecord(plan, seq);
       if (plan.change !== undefined) adoptChange(state, plan, plan.change, record);
@@ -90,3 +104,9 @@ export const adoptPlans: Dual2<TxState, Seq, DocumentCommitChange[]> = Function.
     return publications;
   },
 );
+
+const transactionAdopt = {
+  adoptPlans,
+};
+
+export default transactionAdopt;

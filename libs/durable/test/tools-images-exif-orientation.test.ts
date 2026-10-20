@@ -1,18 +1,18 @@
-import { createNodePhotonImages } from "@msa/durable/images/node";
+import node from "@msa/durable/images/node";
 import { Effect, Fiber } from "effect";
 import { afterAll, beforeAll, describe, expect, it } from "vite-plus/test";
 
-import { exifOrientation } from "../src/images/exif.ts";
-import {
-  DEFAULT_IMAGE_LIMITS,
-  type ImageProcessor,
-  imageDimensions,
-  toBase64,
-} from "../src/tools/image.ts";
+import exifModule from "../src/images/exif.ts";
+import imageModule from "../src/tools/image.ts";
+import type imageTypes from "../src/tools/image.types.ts";
 import effectSupport from "./effect-support.ts";
 import platformSupport from "./platform-support.ts";
 import toolsImagesFixturesSupport from "./tools-images-fixtures-support.ts";
 import toolsImagesSupport from "./tools-images-support.ts";
+
+const { DEFAULT_IMAGE_LIMITS, imageDimensions, toBase64 } = imageModule;
+const { exifOrientation } = exifModule;
+const { createNodePhotonImages } = node;
 
 const { awaited, sampleEvery, toJsonText } = effectSupport;
 const { runCommand } = platformSupport;
@@ -29,7 +29,7 @@ const {
 } = toolsImagesFixturesSupport;
 const { prepareImageDirectory, removeImageDirectory } = toolsImagesSupport;
 
-let processor: ImageProcessor;
+let processor: imageTypes.ImageProcessor;
 
 beforeAll(() =>
   Effect.runPromise(
@@ -217,7 +217,7 @@ describe("imageDimensions", () => {
 const encodes3MiB = Effect.gen(function* () {
   const source = new URL("../src/tools/image.ts", import.meta.url).href;
   const script = `
-			const { toBase64 } = await import(${yield* toJsonText(source)});
+			const { default: { toBase64 } } = await import(${yield* toJsonText(source)});
 			const bytes = Uint8Array.from({ length: 3147295 }, (_, index) => (index * 37) % 256);
 			if (toBase64(bytes) !== Buffer.from(bytes).toString("base64")) throw new Error("mismatch");
 		`;
@@ -248,7 +248,7 @@ const preparesWorkerThread = Effect.gen(function* () {
   const runPromise = Effect.runPromiseWith(yield* Effect.context<never>());
 
   const photo = noisyPng(3000, 2000);
-  const prepareOn = (images: ImageProcessor): Promise<number> =>
+  const prepareOn = (images: imageTypes.ImageProcessor): Promise<number> =>
     runPromise(
       Effect.gen(function* () {
         let longest = 0;

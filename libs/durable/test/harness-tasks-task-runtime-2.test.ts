@@ -1,4 +1,4 @@
-import { type TaskId } from "@msa/durable";
+import type durableTypes from "@msa/durable/index.types";
 import { Effect } from "effect";
 import { describe, expect, it } from "vite-plus/test";
 
@@ -98,7 +98,7 @@ describe("task scheduling", () => {
 const waitsHarnessConversation = Effect.gen(function* () {
   const runPromise = Effect.runPromiseWith(yield* Effect.context<never>());
 
-  const gates = new Map<TaskId, () => void>();
+  const gates = new Map<durableTypes.TaskId, () => void>();
   const Gated = oneStep("test.gated", (task, runtime, ctx) =>
     runPromise(
       Effect.gen(function* () {

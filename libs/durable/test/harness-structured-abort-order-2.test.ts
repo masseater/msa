@@ -1,4 +1,4 @@
-import { type ConversationId, type TaskId } from "@msa/durable";
+import type durableTypes from "@msa/durable/index.types";
 import { Effect } from "effect";
 import { afterEach, describe, expect, it } from "vite-plus/test";
 
@@ -46,7 +46,7 @@ const cascadesThroughTaskStep1 = Effect.gen(function* () {
   const runPromise = Effect.runPromiseWith(yield* Effect.context<never>());
 
   const { harness, root } = yield* openNodes();
-  let b: TaskId | undefined;
+  let b: durableTypes.TaskId | undefined;
   script("a", {
     run: (runtime, ctx) =>
       runtime.commit(
@@ -65,7 +65,7 @@ const cascadesThroughTaskStep1 = Effect.gen(function* () {
 
 const cascadesThroughTask = Effect.gen(function* () {
   const { runPromise, harness, root } = yield* cascadesThroughTaskStep1;
-  let x: TaskId | undefined;
+  let x: durableTypes.TaskId | undefined;
   script("b", {
     resume: (runtime) => runPromise(Effect.suspend(() => awaited(aborted(runtime.signal)))),
     run: (runtime, ctx) =>
@@ -127,8 +127,8 @@ const keepsBackgroundWorkStep1 = Effect.gen(function* () {
 
 const keepsBackgroundWork = Effect.gen(function* () {
   const { runPromise, harness, root, foreground } = yield* keepsBackgroundWorkStep1;
-  let child: TaskId | undefined;
-  let below: TaskId | undefined;
+  let child: durableTypes.TaskId | undefined;
+  let below: durableTypes.TaskId | undefined;
   script("background", {
     run: (runtime, ctx) =>
       runPromise(
@@ -185,7 +185,7 @@ const neverCascadesTerminal = Effect.gen(function* () {
   const runPromise = Effect.runPromiseWith(yield* Effect.context<never>());
 
   const { harness, root } = yield* openNodes();
-  let conversation: ConversationId | undefined;
+  let conversation: durableTypes.ConversationId | undefined;
   script("agent", {
     resume: (runtime) => runPromise(Effect.suspend(() => awaited(aborted(runtime.signal)))),
     run: (runtime, ctx) =>

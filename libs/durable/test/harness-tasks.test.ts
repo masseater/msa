@@ -1,4 +1,4 @@
-import { defineTask } from "@msa/durable";
+import durable from "@msa/durable";
 import { Effect } from "effect";
 import { describe, expect, it } from "vite-plus/test";
 
@@ -6,6 +6,8 @@ import effectSupport from "./effect-support.ts";
 import harnessTasksSupport from "./harness-tasks-support.ts";
 import sessionSupport from "./session-support.ts";
 import taskSupport from "./task-support.ts";
+
+const { defineTask } = durable;
 
 const { awaited } = effectSupport;
 const { oneStep, openRoot, start } = harnessTasksSupport;

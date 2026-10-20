@@ -1,4 +1,5 @@
-import { type TaskId, defineTask } from "@msa/durable";
+import durable from "@msa/durable";
+import type durableTypes from "@msa/durable/index.types";
 import { Effect } from "effect";
 import { describe, expect, it } from "vite-plus/test";
 
@@ -6,6 +7,8 @@ import effectSupport from "./effect-support.ts";
 import harnessTasksSupport from "./harness-tasks-support.ts";
 import sessionSupport from "./session-support.ts";
 import taskSupport from "./task-support.ts";
+
+const { defineTask } = durable;
 
 const { abortController, awaited } = effectSupport;
 const { gated, markDurably, oneStep, openRoot, start, withSignal } = harnessTasksSupport;
@@ -15,7 +18,7 @@ const { aborted, abortedWith, completed, deferred } = taskSupport;
 const pagesNewestTasks = Effect.gen(function* () {
   const Idle = oneStep("test.idle", () => Promise.resolve());
   const { harness, root } = yield* openRoot([Idle]);
-  const ids: TaskId[] = [];
+  const ids: durableTypes.TaskId[] = [];
   for (const _ of Array.from({ length: 5 })) ids.push(yield* awaited(start(root, Idle)));
   const first = yield* awaited(
     harness.commit((tx) => tx.scanTasks({ order: "descending" }, 2), context),
@@ -35,7 +38,7 @@ const rejectsUnknownTasks = Effect.gen(function* () {
     ),
   );
   const { harness, root } = yield* openRoot([Done]);
-  const unknown = 999_999 as TaskId;
+  const unknown = 999_999 as durableTypes.TaskId;
   expect(yield* awaited(harness.getTask(unknown, context))).toBeUndefined();
   yield* awaited(expect(harness.waitForTask(unknown, context)).rejects.toThrow("does not exist"));
   yield* awaited(expect(harness.abortTask(unknown, context)).rejects.toThrow("does not exist"));

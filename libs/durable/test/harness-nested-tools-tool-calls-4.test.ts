@@ -1,16 +1,16 @@
-import {
-  type AgentEvent,
-  LiveDoc,
-  type NestedToolExecutionResult,
-  type ToolTaskInput,
-} from "@msa/durable";
-import { ToolTask, watchEvents } from "@msa/durable/harness";
-import { MemoryStorage } from "@msa/durable/storage/memory";
+import durable from "@msa/durable";
+import harnessModule from "@msa/durable/harness";
+import type durableTypes from "@msa/durable/index.types";
+import memory from "@msa/durable/storage/memory";
 import { Effect } from "effect";
 import { afterEach, describe, expect, it } from "vite-plus/test";
 
 import harnessNestedToolsSupport from "./harness-nested-tools-support.ts";
 import support from "./support.ts";
+
+const { ToolTask, watchEvents } = harnessModule;
+const { MemoryStorage } = memory;
+const { LiveDoc } = durable;
 
 const { DONE, call, directories, tool, toolTasks } = harnessNestedToolsSupport;
 const { aborted, addHooks, addTool, awaited, chatSetup, context, deferred, openChat, removeDir } =
@@ -96,7 +96,7 @@ const commitsOnlyStatusStep1 = Effect.gen(function* () {
 
 const commitsOnlyStatus = Effect.gen(function* () {
   const { runPromise, setup, running, release } = yield* commitsOnlyStatusStep1;
-  let result: NestedToolExecutionResult | undefined;
+  let result: durableTypes.NestedToolExecutionResult | undefined;
   addTool(
     setup.registry,
     tool("batch", (_args, api, callContext) =>
@@ -171,7 +171,7 @@ const losesRunningOutputStep1 = Effect.gen(function* () {
   setup.faux.setResponses([call("batch"), DONE]);
   const { harness, root } = yield* openChat(new MemoryStorage(), setup);
   const stream = yield* awaited(watchEvents(harness, root.id, context));
-  const ends: AgentEvent[] = [];
+  const ends: durableTypes.AgentEvent[] = [];
   stream.start((batch) => {
     ends.push(...batch.filter((event) => event.type === "tool_execution_end"));
 
@@ -190,7 +190,7 @@ const losesRunningOutput = Effect.gen(function* () {
   const end = ends.find(
     (event) => event.type === "tool_execution_end" && event.toolCallId === "c1/1",
   );
-  const result = (end as { result?: NestedToolExecutionResult }).result!;
+  const result = (end as { result?: durableTypes.NestedToolExecutionResult }).result!;
   expect(result).toMatchObject({ isError: true });
   expect(result).not.toHaveProperty("structuredOutput");
   expect(result).not.toHaveProperty("details");
@@ -209,7 +209,7 @@ const showsNestedCall = Effect.gen(function* () {
   const { setup, hookEntered, hookRelease, running, release, large } = gatedLargeArgumentsBatch();
   const { harness, root } = yield* openChat(new MemoryStorage(), setup);
   const stream = yield* awaited(watchEvents(harness, root.id, context));
-  const starts: AgentEvent[] = [];
+  const starts: durableTypes.AgentEvent[] = [];
   stream.start((batch) => {
     starts.push(...batch.filter((event) => event.type === "tool_execution_start"));
 
@@ -242,9 +242,9 @@ const showsNestedCall = Effect.gen(function* () {
   );
   expect(start).toMatchObject({ args: { text: large } });
   const nested = (yield* toolTasks(harness)).find(
-    (task) => (task.input as ToolTaskInput).kind === "nested",
+    (task) => (task.input as durableTypes.ToolTaskInput).kind === "nested",
   );
-  expect(nested!.input as ToolTaskInput).toMatchObject({
+  expect(nested!.input as durableTypes.ToolTaskInput).toMatchObject({
     call: { arguments: { text: "asked" } },
   });
   yield* awaited(harness.close(context));

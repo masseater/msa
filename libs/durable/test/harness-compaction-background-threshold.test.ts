@@ -1,10 +1,12 @@
-import type { AgentEvent, CompactionResult, TaskId } from "@msa/durable";
-import { CompactionTask, watchEvents } from "@msa/durable/harness";
+import harnessModule from "@msa/durable/harness";
+import type durableTypes from "@msa/durable/index.types";
 import { Effect } from "effect";
 import { afterEach, describe, expect, it } from "vite-plus/test";
 
 import harnessCompactionSupport from "./harness-compaction-support.ts";
 import support from "./support.ts";
+
+const { CompactionTask, watchEvents } = harnessModule;
 
 const {
   BACKGROUND,
@@ -47,9 +49,10 @@ const stopsThroughAbortTask = Effect.gen(function* () {
     const [task] = yield* compactionTasks(chat);
     if (stop === "task") yield* awaited(chat.harness.abortTask(task!.id, context));
     else yield* awaited(chat.root.abort(context, { background: true }));
-    expect((yield* awaited(result(chat, task!.id as TaskId<CompactionResult>))).status).toBe(
-      "aborted",
-    );
+    expect(
+      (yield* awaited(result(chat, task!.id as durableTypes.TaskId<durableTypes.CompactionResult>)))
+        .status,
+    ).toBe("aborted");
     expect((yield* awaited(live(chat))).compactions).toBeUndefined();
     yield* awaited(chat.harness.close(context));
   }
@@ -91,9 +94,10 @@ const waitsCompactionAppends = Effect.gen(function* () {
   expect((yield* kinds(chat.root)).at(-1)).toBe("msa.user");
   gate.resolve();
   expect((yield* awaited(input.wait(context))).status).toBe("done");
-  expect((yield* awaited(result(chat, child!.id as TaskId<CompactionResult>))).status).toBe(
-    "completed",
-  );
+  expect(
+    (yield* awaited(result(chat, child!.id as durableTypes.TaskId<durableTypes.CompactionResult>)))
+      .status,
+  ).toBe("completed");
   expect((yield* kinds(chat.root)).slice(-3)).toEqual([
     "msa.compaction",
     "msa.system",
@@ -208,7 +212,7 @@ const abortedGenerationEsc = Effect.gen(function* () {
   chat.setup.settings.compaction = BLOCKING;
   const reached = deferred();
   chat.faux.summaries.push(gated(deferred(), summary(), reached));
-  const events: AgentEvent[] = [];
+  const events: durableTypes.AgentEvent[] = [];
   const stream = yield* awaited(watchEvents(chat.harness, chat.root.id, context));
   stream.start((batch) => {
     events.push(...batch);

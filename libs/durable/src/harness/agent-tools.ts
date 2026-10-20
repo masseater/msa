@@ -1,19 +1,21 @@
 import { Function } from "effect";
 
-import type {
-  AgentState,
-  Extension,
-  RegistrySnapshot,
-  Settings,
-  ToolRegistration,
-} from "./types.ts";
+import type typesModule from "./types.types.ts";
 
-export const offeredTools: {
-  (filter: AgentState["modelTools"]): <Tool extends ToolRegistration>(tools: Tool[]) => Tool[];
-  <Tool extends ToolRegistration>(tools: Tool[], filter: AgentState["modelTools"]): Tool[];
+const offeredTools: {
+  (
+    filter: typesModule.AgentState["modelTools"],
+  ): <Tool extends typesModule.ToolRegistration>(tools: Tool[]) => Tool[];
+  <Tool extends typesModule.ToolRegistration>(
+    tools: Tool[],
+    filter: typesModule.AgentState["modelTools"],
+  ): Tool[];
 } = Function.dual(
   2,
-  <Tool extends ToolRegistration>(tools: Tool[], filter: AgentState["modelTools"]): Tool[] => {
+  <Tool extends typesModule.ToolRegistration>(
+    tools: Tool[],
+    filter: typesModule.AgentState["modelTools"],
+  ): Tool[] => {
     if (Array.isArray(filter)) return filterTools(tools, filter);
     const removed = new Set(filter?.remove ?? []);
     const kept = tools.filter((tool) => tool.deferred !== true && !removed.has(tool.name));
@@ -26,12 +28,20 @@ export const offeredTools: {
   },
 );
 
-export const filterTools: {
-  (filter: AgentState["tools"]): <Tool extends ToolRegistration>(tools: Tool[]) => Tool[];
-  <Tool extends ToolRegistration>(tools: Tool[], filter: AgentState["tools"]): Tool[];
+const filterTools: {
+  (
+    filter: typesModule.AgentState["tools"],
+  ): <Tool extends typesModule.ToolRegistration>(tools: Tool[]) => Tool[];
+  <Tool extends typesModule.ToolRegistration>(
+    tools: Tool[],
+    filter: typesModule.AgentState["tools"],
+  ): Tool[];
 } = Function.dual(
   2,
-  <Tool extends ToolRegistration>(tools: Tool[], filter: AgentState["tools"]): Tool[] => {
+  <Tool extends typesModule.ToolRegistration>(
+    tools: Tool[],
+    filter: typesModule.AgentState["tools"],
+  ): Tool[] => {
     if (filter === undefined) return tools;
     if (Array.isArray(filter)) {
       const byName = new Map(tools.map((tool) => [tool.name, tool]));
@@ -45,23 +55,23 @@ export const filterTools: {
   },
 );
 
-export const selectExtensions: {
-  <Tool extends ToolRegistration>(
-    snapshot: RegistrySnapshot<Tool>,
-    settings: Settings,
-  ): (stored: AgentState["extensions"]) => Extension<Tool>[];
-  <Tool extends ToolRegistration>(
-    stored: AgentState["extensions"],
-    snapshot: RegistrySnapshot<Tool>,
-    settings: Settings,
-  ): Extension<Tool>[];
+const selectExtensions: {
+  <Tool extends typesModule.ToolRegistration>(
+    snapshot: typesModule.RegistrySnapshot<Tool>,
+    settings: typesModule.Settings,
+  ): (stored: typesModule.AgentState["extensions"]) => typesModule.Extension<Tool>[];
+  <Tool extends typesModule.ToolRegistration>(
+    stored: typesModule.AgentState["extensions"],
+    snapshot: typesModule.RegistrySnapshot<Tool>,
+    settings: typesModule.Settings,
+  ): typesModule.Extension<Tool>[];
 } = Function.dual(
   3,
-  <Tool extends ToolRegistration>(
-    stored: AgentState["extensions"],
-    snapshot: RegistrySnapshot<Tool>,
-    settings: Settings,
-  ): Extension<Tool>[] => {
+  <Tool extends typesModule.ToolRegistration>(
+    stored: typesModule.AgentState["extensions"],
+    snapshot: typesModule.RegistrySnapshot<Tool>,
+    settings: typesModule.Settings,
+  ): typesModule.Extension<Tool>[] => {
     let selected: string[];
     if (Array.isArray(stored)) selected = stored;
     else {
@@ -72,7 +82,7 @@ export const selectExtensions: {
       const removed = new Set(edit?.remove ?? []);
       selected = [...base, ...(edit?.add ?? [])].filter((name) => !removed.has(name));
     }
-    const extensions: Extension<Tool>[] = [];
+    const extensions: typesModule.Extension<Tool>[] = [];
     for (const name of new Set(selected)) {
       const extension = snapshot.extension(name);
       if (extension !== undefined) extensions.push(extension);
@@ -81,7 +91,7 @@ export const selectExtensions: {
   },
 );
 
-export const applyWrap: {
+const applyWrap: {
   <T>(
     target: string,
     wrap: (item: T) => T,
@@ -117,3 +127,12 @@ export const applyWrap: {
     }
   },
 );
+
+const agentTools = {
+  applyWrap,
+  filterTools,
+  offeredTools,
+  selectExtensions,
+};
+
+export default agentTools;

@@ -1,9 +1,12 @@
-import { type EntryId, defineDoc } from "@msa/durable";
+import durable from "@msa/durable";
+import type durableTypes from "@msa/durable/index.types";
 import { Effect } from "effect";
 import { describe, expect, it } from "vite-plus/test";
 
 import effectSupport from "./effect-support.ts";
 import sessionSupport from "./session-support.ts";
+
+const { defineDoc } = durable;
 
 const { awaited } = effectSupport;
 const { context, createConversation, openTestSession } = sessionSupport;
@@ -21,7 +24,7 @@ const usesFinalDocument = Effect.gen(function* () {
   });
   const { session } = openTestSession();
   const parentId = yield* awaited(createConversation(session));
-  let forkAt!: EntryId;
+  let forkAt!: durableTypes.EntryId;
   const excluded = yield* awaited(
     session.commit(
       (tx) =>

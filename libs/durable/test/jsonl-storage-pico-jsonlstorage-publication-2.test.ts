@@ -2,11 +2,13 @@ import type { JsonValue } from "@msa/chord";
 import { Effect } from "effect";
 import { afterEach, describe, expect, it } from "vite-plus/test";
 
-import { NodeExecutionEnv } from "../src/env/node.ts";
-import type { DocumentId, TaskId } from "../src/types.ts";
+import node from "../src/env/node.ts";
+import type typesModule from "../src/types.types.ts";
 import effectSupport from "./effect-support.ts";
 import jsonlStorageSupport from "./jsonl-storage-support.ts";
 import platformSupport from "./platform-support.ts";
+
+const { NodeExecutionEnv } = node;
 
 const { awaited } = effectSupport;
 const {
@@ -41,7 +43,7 @@ const instrumentedDocument = Effect.fn("instrumentedDocument")(function* () {
   const env = new InstrumentedEnv({ cwd: directory });
   const storage = yield* openStorage(directory, env, { fsync: true });
   yield* createRoot(storage);
-  const id = yield* awaited(storage.mintId<DocumentId>());
+  const id = yield* awaited(storage.mintId<typesModule.DocumentId>());
   yield* awaited(
     storage.commit(
       [
@@ -62,7 +64,7 @@ const fsyncedDocument = Effect.fn("fsyncedDocument")(function* () {
   const env = new InstrumentedEnv({ cwd: directory });
   const storage = yield* openStorage(directory, env, { fsync: true });
   yield* createRoot(storage);
-  const id = yield* awaited(storage.mintId<DocumentId>());
+  const id = yield* awaited(storage.mintId<typesModule.DocumentId>());
   yield* awaited(
     storage.commit(
       [
@@ -87,8 +89,8 @@ const recoversDocumentRetirement = Effect.fn("recoversDocumentRetirement")(funct
   const env = new InstrumentedEnv({ cwd: directory });
   const storage = yield* openStorage(directory, env);
   yield* createRoot(storage);
-  const taskId = yield* awaited(storage.mintId<TaskId<JsonValue>>());
-  const id = yield* awaited(storage.mintId<DocumentId>());
+  const taskId = yield* awaited(storage.mintId<typesModule.TaskId<JsonValue>>());
+  const id = yield* awaited(storage.mintId<typesModule.DocumentId>());
   yield* awaited(
     storage.commit(
       [
@@ -243,7 +245,7 @@ const recoversTerminalTask = Effect.fn("recoversTerminalTask")(function* (
   const env = new InstrumentedEnv({ cwd: directory });
   const storage = yield* openStorage(directory, env);
   yield* createRoot(storage);
-  const id = yield* awaited(storage.mintId<TaskId<JsonValue>>());
+  const id = yield* awaited(storage.mintId<typesModule.TaskId<JsonValue>>());
   yield* awaited(storage.commit([{ type: "task", value: pendingTask(id) }], context));
   env.fail({ call: 1, mode, operation: "remove" });
   yield* awaited(

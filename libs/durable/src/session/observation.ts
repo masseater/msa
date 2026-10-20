@@ -1,6 +1,9 @@
-export {
-  CommittedStateSource,
-  type ObservedDocumentValue,
-  RETIREMENT_OPERATIONS,
-} from "./committed-state-source.ts";
-export { CommittedWatch } from "./committed-watch.ts";
+import CommittedStateSource from "./committed-state-source.ts";
+import CommittedWatch from "./committed-watch.ts";
+
+const observation = {
+  CommittedStateSource: CommittedStateSource,
+  CommittedWatch: CommittedWatch,
+};
+
+export default observation;

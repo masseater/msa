@@ -1,16 +1,13 @@
-import {
-  type ConversationId,
-  type TaskId,
-  defineDoc,
-  defineDocFamily,
-  defineTask,
-} from "@msa/durable";
+import durable from "@msa/durable";
+import type durableTypes from "@msa/durable/index.types";
 import { Effect } from "effect";
 import { dual } from "effect/Function";
 
 import effectSupport from "./effect-support.ts";
 import sessionSupport from "./session-support.ts";
 import type sessionTablesSupportTypes from "./session-tables-support.types.ts";
+
+const { defineDoc, defineDocFamily, defineTask } = durable;
 
 const { awaited } = effectSupport;
 const { context, openTestSession } = sessionSupport;
@@ -66,9 +63,9 @@ function terminal(task: sessionTablesSupportTypes.AnyTask): sessionTablesSupport
 
 function createTaskImpl(
   session: ReturnType<typeof openTestSession>["session"],
-  conversationId: ConversationId,
+  conversationId: durableTypes.ConversationId,
   withDocument = false,
-): Promise<TaskId<{ ok: boolean }>> {
+): Promise<durableTypes.TaskId<{ ok: boolean }>> {
   return Promise.resolve(
     session.commit(
       (tx) =>
@@ -92,12 +89,12 @@ function createTaskImpl(
 
 const createTask: {
   (
-    conversationId: ConversationId,
+    conversationId: durableTypes.ConversationId,
     withDocument?: boolean,
   ): (session: ReturnType<typeof openTestSession>["session"]) => ReturnType<typeof createTaskImpl>;
   (
     session: ReturnType<typeof openTestSession>["session"],
-    conversationId: ConversationId,
+    conversationId: durableTypes.ConversationId,
     withDocument?: boolean,
   ): ReturnType<typeof createTaskImpl>;
 } = dual((args) => typeof args[0] === "object" && args[0] !== null, createTaskImpl);

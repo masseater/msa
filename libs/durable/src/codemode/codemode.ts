@@ -1,58 +1,48 @@
 import { CODEMODE_SOURCE_GRAMMAR, parseCodemodeSource } from "@msa/codemode/source";
 import { Effect } from "effect";
-import { type Static, Type } from "typebox";
+import { Type } from "typebox";
 
-import { defineExtension, defineTool, section } from "../harness/define.ts";
-import type { Extension, ToolRegistration } from "../harness/types.ts";
-import {
-  codemodeDescription,
-  codemodeSection,
-  DEFAULT_CODEMODE_INLINE_BUDGET,
-} from "./describe.ts";
-import { CODEMODE_INTERNAL_PREFIX, createModelTools } from "./models.ts";
-import { runCodemode } from "./run-call.ts";
-import { type CodemodeToolOptions, OUTPUT_LIMITS } from "./run-docs.ts";
+import define from "../harness/define.ts";
+import type typesModule from "../harness/types.types.ts";
+import describe from "./describe.ts";
+import modelsModule from "./models.ts";
+import runCall from "./run-call.ts";
+import runDocs from "./run-docs.ts";
+import type runDocsTypes from "./run-docs.types.ts";
 
-export type { CodemodeNestedCall, CodemodeToolDetails } from "./call-rows.ts";
-export {
-  CODEMODE_MODULE_VERSION,
-  type CodemodeGlobal,
-  CodemodeJournalDoc,
-  CodemodeRunDoc,
-  CodemodeStoreDoc,
-  type CodemodeToolOptions,
-} from "./run-docs.ts";
+const { defineExtension, defineTool, section } = define;
+const { DEFAULT_CODEMODE_INLINE_BUDGET, codemodeDescription, codemodeSection } = describe;
+const { runCodemode } = runCall;
+const { OUTPUT_LIMITS } = runDocs;
+const { CODEMODE_INTERNAL_PREFIX, createModelTools } = modelsModule;
 
-export const CODEMODE_TOOL_NAME = "codemode";
+const CODEMODE_TOOL_NAME = "codemode";
 
 const codemodeSchema = Type.Object({
   code: Type.String({ description: "Raw JavaScript source." }),
 });
 
-export type CodemodeToolInput = Static<typeof codemodeSchema>;
-
-export function createCodemodeTool(
-  options: CodemodeToolOptions,
-): ToolRegistration<typeof codemodeSchema> {
+function createCodemodeTool(
+  options: runDocsTypes.CodemodeToolOptions,
+): typesModule.ToolRegistration<typeof codemodeSchema> {
   return defineTool({
-    name: CODEMODE_TOOL_NAME,
-    description: codemodeDescription(options.models !== false),
-    parameters: codemodeSchema,
-    outputLimits: OUTPUT_LIMITS,
-    constrainedSampling: { type: "grammar", variants: { openai_lark: CODEMODE_SOURCE_GRAMMAR } },
     callers: ["model"],
-    replay: "safe",
+    constrainedSampling: { type: "grammar", variants: { openai_lark: CODEMODE_SOURCE_GRAMMAR } },
+    description: codemodeDescription(options.models !== false),
     execute: (args, api, context) =>
       Effect.runPromise(
         Effect.suspend(() => runCodemode(options, api, context, parseCodemodeSource(args.code))),
       ),
+    name: CODEMODE_TOOL_NAME,
+    outputLimits: OUTPUT_LIMITS,
+    parameters: codemodeSchema,
+    replay: "safe",
   });
 }
 
-export function createCodemodeExtension(options: CodemodeToolOptions): Extension {
+function createCodemodeExtension(options: runDocsTypes.CodemodeToolOptions): typesModule.Extension {
   return defineExtension({
     name: "codemode",
-    tools: [createCodemodeTool(options), ...(options.models === false ? [] : createModelTools())],
     sections: [
       section("codemode", (input) =>
         codemodeSection(
@@ -64,5 +54,19 @@ export function createCodemodeExtension(options: CodemodeToolOptions): Extension
         ),
       ),
     ],
+    tools: [createCodemodeTool(options), ...(options.models === false ? [] : createModelTools())],
   });
 }
+
+const codemode = {
+  CODEMODE_MODULE_VERSION: runDocs.CODEMODE_MODULE_VERSION,
+  CODEMODE_TOOL_NAME,
+  CodemodeJournalDoc: runDocs.CodemodeJournalDoc,
+  CodemodeRunDoc: runDocs.CodemodeRunDoc,
+  CodemodeStoreDoc: runDocs.CodemodeStoreDoc,
+  codemodeSchema,
+  createCodemodeExtension,
+  createCodemodeTool,
+};
+
+export default codemode;

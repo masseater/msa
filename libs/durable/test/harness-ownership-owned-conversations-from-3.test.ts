@@ -1,12 +1,16 @@
 import { Type, fauxAssistantMessage, fauxText, fauxToolCall } from "@msa/ai";
-import { type ConversationId, defineTool } from "@msa/durable";
+import durable from "@msa/durable";
+import type durableTypes from "@msa/durable/index.types";
 import { Effect } from "effect";
 import { afterEach, describe, expect, it } from "vite-plus/test";
 
-import { openNodeSqliteStorage } from "../src/storage/sqlite/node.ts";
+import node from "../src/storage/sqlite/node.ts";
 import harnessOwnershipChildren from "./harness-ownership-children.ts";
 import harnessOwnershipSupport from "./harness-ownership-support.ts";
 import support from "./support.ts";
+
+const { defineTool } = durable;
+const { openNodeSqliteStorage } = node;
 
 const { reuseFauxChild } = harnessOwnershipChildren;
 const { directories, gated, gates, runs } = harnessOwnershipSupport;
@@ -28,7 +32,7 @@ const replaySafeSubagent = Effect.fn("replaySafeSubagent")(function* () {
 
   const { directory, path } = yield* makeTempFile("msa-durable-safe-subagent-", "session.sqlite");
   directories.add(directory);
-  const children: ConversationId[] = [];
+  const children: durableTypes.ConversationId[] = [];
   const setup = chatSetup();
   addTool(
     setup.registry,

@@ -4,10 +4,14 @@ import { fauxAssistantMessage, fauxProvider } from "@msa/ai/providers/faux";
 import { BACKGROUND_CONTEXT } from "@msa/chord/context";
 import { Console, Effect } from "effect";
 
-import { Harness, createRegistry } from "../../src/harness/index.ts";
-import { AssistantEntry, defineExtension, section } from "../../src/index.ts";
-import { MemoryStorage } from "../../src/storage/memory.ts";
+import harnessModule from "../../src/harness/index.ts";
+import durable from "../../src/index.ts";
+import memory from "../../src/storage/memory.ts";
 import effectSupport from "../effect-support.ts";
+
+const { Harness, createRegistry } = harnessModule;
+const { AssistantEntry, defineExtension, section } = durable;
+const { MemoryStorage } = memory;
 
 const { awaited } = effectSupport;
 

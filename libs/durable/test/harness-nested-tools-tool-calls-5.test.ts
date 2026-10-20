@@ -1,13 +1,18 @@
 import { type Usage } from "@msa/ai";
 import type { JsonValue } from "@msa/chord";
-import { LiveDoc, type NestedToolExecutionResult } from "@msa/durable";
-import { ToolTask } from "@msa/durable/harness";
-import { MemoryStorage } from "@msa/durable/storage/memory";
+import durable from "@msa/durable";
+import harnessModule from "@msa/durable/harness";
+import type durableTypes from "@msa/durable/index.types";
+import memory from "@msa/durable/storage/memory";
 import { Effect } from "effect";
 import { describe, expect, it } from "vite-plus/test";
 
 import harnessNestedToolsSupport from "./harness-nested-tools-support.ts";
 import support from "./support.ts";
+
+const { MemoryStorage } = memory;
+const { LiveDoc } = durable;
+const { ToolTask } = harnessModule;
 
 const { DONE, call, echoTool, runOnce, tool, toolTasks } = harnessNestedToolsSupport;
 const { addTool, awaited, chatSetup, context, deferred, openChat } = support;
@@ -85,7 +90,7 @@ const givesCallersResult = Effect.gen(function* () {
     setup.registry,
     tool("echo", () => Promise.resolve({ details: { count: 1n } as unknown as JsonValue })),
   );
-  let result: NestedToolExecutionResult | undefined;
+  let result: durableTypes.NestedToolExecutionResult | undefined;
   addTool(
     setup.registry,
     tool("batch", (_args, api, callContext) =>
@@ -134,7 +139,7 @@ const givesCallersWhat = Effect.gen(function* () {
       return Promise.reject(new Error("broke"));
     }),
   );
-  let result: NestedToolExecutionResult | undefined;
+  let result: durableTypes.NestedToolExecutionResult | undefined;
   addTool(
     setup.registry,
     tool("batch", (_args, api, callContext) =>

@@ -1,7 +1,7 @@
-import type { ToolRegistration } from "@msa/durable";
+import type durableTypes from "@msa/durable/index.types";
 
 declare namespace harnessRegistrySupportTypes {
-  type AppTool = ToolRegistration & { readonly snippet?: string };
+  type AppTool = durableTypes.ToolRegistration & { readonly snippet?: string };
 }
 
 export type { harnessRegistrySupportTypes as default };

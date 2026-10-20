@@ -1,11 +1,16 @@
-import { type AgentEvent, LiveDoc } from "@msa/durable";
-import { CompactionTask, watchEvents } from "@msa/durable/harness";
+import durable from "@msa/durable";
+import harnessModule from "@msa/durable/harness";
+import type durableTypes from "@msa/durable/index.types";
 import { Effect } from "effect";
 import { afterEach, describe, expect, it } from "vite-plus/test";
 
-import { openNodeSqliteStorage } from "../src/storage/sqlite/node.ts";
+import node from "../src/storage/sqlite/node.ts";
 import harnessCompactionSupport from "./harness-compaction-support.ts";
 import support from "./support.ts";
+
+const { openNodeSqliteStorage } = node;
+const { CompactionTask, watchEvents } = harnessModule;
+const { LiveDoc } = durable;
 
 const { BLOCKING, directories, history, kinds, live, open, script, sqlitePath, text, turn } =
   harnessCompactionSupport;
@@ -76,7 +81,7 @@ const survivesReopenBlockedStep1 = Effect.gen(function* () {
   ({ harness, root } = yield* openChat(yield* awaited(openNodeSqliteStorage(path)), setup));
   harness.resume();
   const chat = { faux: script(setup), harness, root, setup };
-  const events: AgentEvent[] = [];
+  const events: durableTypes.AgentEvent[] = [];
   const stream = yield* awaited(watchEvents(chat.harness, chat.root.id, context));
   stream.start((batch) => {
     events.push(...batch);

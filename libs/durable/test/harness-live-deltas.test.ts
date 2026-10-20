@@ -1,12 +1,15 @@
 import { Type, fauxAssistantMessage, fauxText, fauxToolCall } from "@msa/ai";
 import type { Op } from "@msa/chord/delta";
-import { defineTool } from "@msa/durable";
-import { MemoryStorage } from "@msa/durable/storage/memory";
+import durable from "@msa/durable";
+import memory from "@msa/durable/storage/memory";
 import { Effect } from "effect";
 import { describe, expect, it } from "vite-plus/test";
 
 import harnessLiveDeltasSupport from "./harness-live-deltas-support.ts";
 import support from "./support.ts";
+
+const { defineTool } = durable;
+const { MemoryStorage } = memory;
 
 const { OUTPUT, drive, live } = harnessLiveDeltasSupport;
 const { addTool, awaited, chatSetup, context, documentChanges, openChat } = support;

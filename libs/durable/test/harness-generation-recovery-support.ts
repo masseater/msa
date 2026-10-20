@@ -1,10 +1,12 @@
 import { Effect } from "effect";
 
-import { openNodeSqliteStorage } from "../src/storage/sqlite/node.ts";
+import node from "../src/storage/sqlite/node.ts";
 import chatSupport from "./chat-support.ts";
 import type chatSupportTypes from "./chat-support.types.ts";
 import effectSupport from "./effect-support.ts";
 import platformSupport from "./platform-support.ts";
+
+const { openNodeSqliteStorage } = node;
 
 const { openChat } = chatSupport;
 const { awaited } = effectSupport;

@@ -1,18 +1,15 @@
 import { withAbortSignal } from "@msa/chord/context";
 import { Effect, Exit, Scope } from "effect";
 
-import { getOrThrow, type ShellOutputInfo } from "../env/index.ts";
-import {
-  codeOf,
-  context,
-  encoder,
-  type EnvCaseSpec,
-  type EnvSuite,
-  execCollect,
-  value,
-} from "./env-conformance-support.ts";
+import envModule from "../env/index.ts";
+import type envTypes from "../env/index.types.ts";
+import envConformanceSupport from "./env-conformance-support.ts";
+import type envConformanceSupportTypes from "./env-conformance-support.types.ts";
 
-const argvWithoutShell: EnvCaseSpec = {
+const { codeOf, context, encoder, execCollect, value } = envConformanceSupport;
+const { getOrThrow } = envModule;
+
+const argvWithoutShell: envConformanceSupportTypes.EnvCaseSpec = {
   name: "argv exec passes arguments to the program without shell parsing",
   test: (env, { assert, shell }) =>
     Effect.gen(function* () {
@@ -30,7 +27,7 @@ const argvWithoutShell: EnvCaseSpec = {
     }),
 };
 
-const streams: EnvCaseSpec = {
+const streams: envConformanceSupportTypes.EnvCaseSpec = {
   name: "exec reports the stream of every chunk in both forms",
   test: (env, { assert, shell }) =>
     Effect.gen(function* () {
@@ -44,7 +41,7 @@ const streams: EnvCaseSpec = {
     }),
 };
 
-const cwdAndExitCode: EnvCaseSpec = {
+const cwdAndExitCode: envConformanceSupportTypes.EnvCaseSpec = {
   name: "argv exec honors cwd and exit codes",
   test: (env, { assert, shell }) =>
     Effect.gen(function* () {
@@ -55,7 +52,7 @@ const cwdAndExitCode: EnvCaseSpec = {
     }),
 };
 
-const spawnErrors: EnvCaseSpec = {
+const spawnErrors: envConformanceSupportTypes.EnvCaseSpec = {
   name: "argv exec reports missing programs and empty argv as spawn errors",
   test: (env, { assert }) =>
     Effect.gen(function* () {
@@ -71,15 +68,15 @@ const spawnErrors: EnvCaseSpec = {
 
 const windowLines = 2000;
 const outputWindow = {
+  bytesPerSecond: 1_000_000_000,
   maxBytes: 200,
   maxLines: 5,
   minIntervalMs: 0,
-  bytesPerSecond: 1_000_000_000,
 };
 
-const windowCounter = ({ assert }: EnvSuite) => {
+const windowCounter = ({ assert }: envConformanceSupportTypes.EnvSuite) => {
   const seen = { bytes: 0, newlines: 0, tail: "" };
-  const onOutput = (text: string, _context: unknown, info: ShellOutputInfo) => {
+  const onOutput = (text: string, _context: unknown, info: envTypes.ShellOutputInfo) => {
     if (info.skipped !== undefined) {
       seen.bytes += info.skipped.bytes;
       seen.newlines += info.skipped.newlines;
@@ -95,10 +92,10 @@ const windowCounter = ({ assert }: EnvSuite) => {
     seen.newlines += text.split("\n").length - 1;
     seen.tail += text;
   };
-  return { seen, onOutput };
+  return { onOutput, seen };
 };
 
-const windowedTail: EnvCaseSpec = {
+const windowedTail: envConformanceSupportTypes.EnvCaseSpec = {
   name: "windowed exec keeps the exact tail and counts what it skips",
   test: (env, suite) =>
     Effect.gen(function* () {
@@ -106,7 +103,7 @@ const windowedTail: EnvCaseSpec = {
       const { seen, onOutput } = windowCounter(suite);
       const script = `i=0; while [ $i -lt ${windowLines} ]; do echo line-$i; i=$((i+1)); done`;
       const result = yield* value(() =>
-        env.exec([...shell, script], { window: outputWindow, onOutput }, context),
+        env.exec([...shell, script], { onOutput, window: outputWindow }, context),
       );
       assert.strictEqual(result.exitCode, 0);
       const expected = Array.from({ length: windowLines }, (_, index) => `line-${index}\n`);
@@ -119,7 +116,7 @@ const windowedTail: EnvCaseSpec = {
     }),
 };
 
-const timeoutAndAbort: EnvCaseSpec = {
+const timeoutAndAbort: envConformanceSupportTypes.EnvCaseSpec = {
   name: "argv exec distinguishes timeout from abort",
   test: (env, { assert, shell }) =>
     Effect.gen(function* () {
@@ -136,7 +133,7 @@ const timeoutAndAbort: EnvCaseSpec = {
     }),
 };
 
-export const execCases: readonly EnvCaseSpec[] = [
+const execCases: readonly envConformanceSupportTypes.EnvCaseSpec[] = [
   argvWithoutShell,
   streams,
   cwdAndExitCode,
@@ -144,3 +141,9 @@ export const execCases: readonly EnvCaseSpec[] = [
   windowedTail,
   timeoutAndAbort,
 ];
+
+const envConformanceExec = {
+  execCases,
+};
+
+export default envConformanceExec;

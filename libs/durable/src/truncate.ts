@@ -1,29 +1,10 @@
 import { utf8ByteLength } from "@msa/chord/output";
 import * as Function from "effect/Function";
 
-export const DEFAULT_MAX_LINES = 2000;
-export const DEFAULT_MAX_BYTES = 50 * 1024;
+import type truncateTypes from "./truncate.types.ts";
 
-export interface TruncationResult {
-  content: string;
-  truncated: boolean;
-  truncatedBy: "lines" | "bytes" | null;
-  totalLines: number;
-  totalBytes: number;
-  outputLines: number;
-  outputBytes: number;
-  lastLinePartial: boolean;
-  firstLineExceedsLimit: boolean;
-  maxLines: number;
-  maxBytes: number;
-}
-
-export interface TruncationOptions {
-  maxLines?: number;
-  maxBytes?: number;
-}
-
-export { utf8ByteLength };
+const DEFAULT_MAX_LINES = 2000;
+const DEFAULT_MAX_BYTES = 50 * 1024;
 
 function splitLinesForCounting(content: string): string[] {
   if (content.length === 0) return [];
@@ -32,7 +13,7 @@ function splitLinesForCounting(content: string): string[] {
   return lines;
 }
 
-export function formatSize(bytes: number): string {
+function formatSize(bytes: number): string {
   if (bytes < 1024) {
     return `${bytes}B`;
   }
@@ -51,17 +32,20 @@ type Limits = {
 };
 
 type Output = Pick<
-  TruncationResult,
+  truncateTypes.TruncationResult,
   "content" | "truncated" | "truncatedBy" | "outputLines" | "outputBytes" | "firstLineExceedsLimit"
 >;
 
-const resultOf = ({ maxLines, maxBytes, totals }: Limits, output: Output): TruncationResult => ({
+const resultOf = (
+  { maxLines, maxBytes, totals }: Limits,
+  output: Output,
+): truncateTypes.TruncationResult => ({
   ...output,
-  totalLines: totals.lines,
-  totalBytes: totals.bytes,
   lastLinePartial: false,
-  maxLines,
   maxBytes,
+  maxLines,
+  totalBytes: totals.bytes,
+  totalLines: totals.lines,
 });
 
 const headLines = (
@@ -73,23 +57,23 @@ const headLines = (
   for (const [index, line] of lines.entries()) {
     if (index >= maxLines) break;
     const lineBytes = utf8ByteLength(line) + (index > 0 ? 1 : 0);
-    if (bytes + lineBytes > maxBytes) return { kept, byBytes: true };
+    if (bytes + lineBytes > maxBytes) return { byBytes: true, kept };
     kept.push(line);
     bytes += lineBytes;
   }
-  return { kept, byBytes: false };
+  return { byBytes: false, kept };
 };
 
-const truncateLines = (prefix: string, limits: Limits): TruncationResult => {
+const truncateLines = (prefix: string, limits: Limits): truncateTypes.TruncationResult => {
   const { totals, maxLines, maxBytes } = limits;
   if (totals.lines <= maxLines && totals.bytes <= maxBytes) {
     return resultOf(limits, {
       content: prefix,
+      firstLineExceedsLimit: false,
+      outputBytes: totals.bytes,
+      outputLines: totals.lines,
       truncated: false,
       truncatedBy: null,
-      outputLines: totals.lines,
-      outputBytes: totals.bytes,
-      firstLineExceedsLimit: false,
     });
   }
   const lines = splitLinesForCounting(prefix);
@@ -100,49 +84,75 @@ const truncateLines = (prefix: string, limits: Limits): TruncationResult => {
   if (utf8ByteLength(firstLine) > maxBytes) {
     return resultOf(limits, {
       content: "",
+      firstLineExceedsLimit: true,
+      outputBytes: 0,
+      outputLines: 0,
       truncated: true,
       truncatedBy: "bytes",
-      outputLines: 0,
-      outputBytes: 0,
-      firstLineExceedsLimit: true,
     });
   }
   const { kept, byBytes } = headLines(lines, limits);
   const content = kept.join("\n");
   return resultOf(limits, {
     content,
+    firstLineExceedsLimit: false,
+    outputBytes: utf8ByteLength(content),
+    outputLines: kept.length,
     truncated: true,
     truncatedBy: byBytes || kept.length >= totals.lines ? "bytes" : "lines",
-    outputLines: kept.length,
-    outputBytes: utf8ByteLength(content),
-    firstLineExceedsLimit: false,
   });
 };
 
-const limitsOf = (totals: Totals, options: TruncationOptions): Limits => ({
-  maxLines: options.maxLines ?? DEFAULT_MAX_LINES,
+const limitsOf = (totals: Totals, options: truncateTypes.TruncationOptions): Limits => ({
   maxBytes: options.maxBytes ?? DEFAULT_MAX_BYTES,
+  maxLines: options.maxLines ?? DEFAULT_MAX_LINES,
   totals,
 });
 
 const isText = (args: IArguments): boolean => typeof args[0] === "string";
 
-export const truncateHeadOf: {
-  (totals: Totals, options?: TruncationOptions): (prefix: string) => TruncationResult;
-  (prefix: string, totals: Totals, options?: TruncationOptions): TruncationResult;
+const truncateHeadOf: {
+  (
+    totals: Totals,
+    options?: truncateTypes.TruncationOptions,
+  ): (prefix: string) => truncateTypes.TruncationResult;
+  (
+    prefix: string,
+    totals: Totals,
+    options?: truncateTypes.TruncationOptions,
+  ): truncateTypes.TruncationResult;
 } = Function.dual(
   isText,
-  (prefix: string, totals: Totals, options: TruncationOptions = {}): TruncationResult =>
-    truncateLines(prefix, limitsOf(totals, options)),
+  (
+    prefix: string,
+    totals: Totals,
+    options: truncateTypes.TruncationOptions = {},
+  ): truncateTypes.TruncationResult => truncateLines(prefix, limitsOf(totals, options)),
 );
 
-export const truncateHead: {
-  (options?: TruncationOptions): (content: string) => TruncationResult;
-  (content: string, options?: TruncationOptions): TruncationResult;
-} = Function.dual(isText, (content: string, options: TruncationOptions = {}): TruncationResult =>
-  truncateHeadOf(
-    content,
-    { lines: splitLinesForCounting(content).length, bytes: utf8ByteLength(content) },
-    options,
-  ),
+const truncateHead: {
+  (options?: truncateTypes.TruncationOptions): (content: string) => truncateTypes.TruncationResult;
+  (content: string, options?: truncateTypes.TruncationOptions): truncateTypes.TruncationResult;
+} = Function.dual(
+  isText,
+  (
+    content: string,
+    options: truncateTypes.TruncationOptions = {},
+  ): truncateTypes.TruncationResult =>
+    truncateHeadOf(
+      content,
+      { bytes: utf8ByteLength(content), lines: splitLinesForCounting(content).length },
+      options,
+    ),
 );
+
+const truncate = {
+  DEFAULT_MAX_BYTES,
+  DEFAULT_MAX_LINES,
+  formatSize,
+  truncateHead,
+  truncateHeadOf,
+  utf8ByteLength,
+};
+
+export default truncate;

@@ -1,12 +1,6 @@
 import type { Context } from "@msa/chord";
-import {
-  type EntryId,
-  type TaskId,
-  type TaskRuntime,
-  defineDoc,
-  defineEntry,
-  defineTask,
-} from "@msa/durable";
+import durable from "@msa/durable";
+import type durableTypes from "@msa/durable/index.types";
 import { Effect } from "effect";
 import { describe, expect, it } from "vite-plus/test";
 
@@ -15,6 +9,8 @@ import harnessSupport from "./harness-support.ts";
 import harnessTasksSupport from "./harness-tasks-support.ts";
 import sessionSupport from "./session-support.ts";
 import taskSupport from "./task-support.ts";
+
+const { defineDoc, defineEntry, defineTask } = durable;
 
 const { awaited } = effectSupport;
 const { user } = harnessSupport;
@@ -46,10 +42,14 @@ const checkMemos = Effect.fn("checkMemos")(function* (runtime: MemoRuntime, ctx:
   expect(yield* awaited(runtime.memo("toString", "own", ctx))).toBe("own");
 });
 
-type MemoRuntime = Pick<TaskRuntime<null, { phase: string }, never, object>, "memo">;
+type MemoRuntime = Pick<durableTypes.TaskRuntime<null, { phase: string }, never, object>, "memo">;
 
-const seen: { childId?: TaskId; progressSeen?: unknown } = {};
-const Writer = defineTask<null, { phase: "write" } | { phase: "answer" }, { entryId: EntryId }>({
+const seen: { childId?: durableTypes.TaskId; progressSeen?: unknown } = {};
+const Writer = defineTask<
+  null,
+  { phase: "write" } | { phase: "answer" },
+  { entryId: durableTypes.EntryId }
+>({
   abort: () => Promise.resolve(),
   initial: () => ({ phase: "write" }),
   name: "test.writer",

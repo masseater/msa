@@ -1,4 +1,4 @@
-import { type JoinPolicy, type TaskId } from "@msa/durable";
+import type durableTypes from "@msa/durable/index.types";
 import { Effect } from "effect";
 import { afterEach, describe, expect, it } from "vite-plus/test";
 
@@ -86,16 +86,16 @@ type Nodes = Effect.Success<ReturnType<typeof openNodes>>;
 
 const expectInvalidWaitsFault = Effect.fn("expectInvalidWaitsFault")(function* (
   { harness, root }: Nodes,
-  other: TaskId,
+  other: durableTypes.TaskId,
 ) {
   const cases: [
     string,
-    (runtime: harnessStructuredSupportTypes.NodeRuntime) => readonly TaskId[],
-    JoinPolicy,
+    (runtime: harnessStructuredSupportTypes.NodeRuntime) => readonly durableTypes.TaskId[],
+    durableTypes.JoinPolicy,
     string,
   ][] = [
     ["self", (runtime) => [runtime.taskId], "allSettled", "is a wait cycle"],
-    ["missing", () => [999_999 as TaskId], "allSettled", "does not exist"],
+    ["missing", () => [999_999 as durableTypes.TaskId], "allSettled", "does not exist"],
     ["foreign", () => [other], "failFast", "only on tasks it owns"],
   ];
   for (const [name, on, policy, message] of cases) {
@@ -115,7 +115,7 @@ const expectOwnerWaitCycle = Effect.fn("expectOwnerWaitCycle")(function* ({
   root,
 }: Nodes) {
   const runPromise = Effect.runPromiseWith(yield* Effect.context<never>());
-  const ids: { child?: TaskId; parent?: TaskId } = {};
+  const ids: { child?: durableTypes.TaskId; parent?: durableTypes.TaskId } = {};
   script("child", {
     run: (runtime, ctx) => runtime.commit(() => waitOn([ids.parent!], "allSettled"), ctx),
   });
@@ -160,8 +160,8 @@ const rejectsWaitCloses = Effect.gen(function* () {
   const runPromise = Effect.runPromiseWith(yield* Effect.context<never>());
 
   const { harness, root } = yield* openNodes();
-  let a: TaskId | undefined;
-  let b: TaskId | undefined;
+  let a: durableTypes.TaskId | undefined;
+  let b: durableTypes.TaskId | undefined;
   script("a", {
     run: (runtime, ctx) => runtime.commit(() => waitOn([b!], "allSettled"), ctx),
   });
@@ -189,8 +189,8 @@ const rejectsWaitClosesCycle = Effect.gen(function* () {
   const runPromise = Effect.runPromiseWith(yield* Effect.context<never>());
 
   const { harness, root } = yield* openNodes();
-  let held: TaskId | undefined;
-  let other: TaskId | undefined;
+  let held: durableTypes.TaskId | undefined;
+  let other: durableTypes.TaskId | undefined;
   const child = spawnAndFinish("held", "child");
   script("child", {
     run: (runtime, ctx) => runtime.commit(() => waitOn([other!], "allSettled"), ctx),
@@ -229,8 +229,8 @@ const rejectsCycleThrough = Effect.gen(function* () {
   const runPromise = Effect.runPromiseWith(yield* Effect.context<never>());
 
   const { harness, root } = yield* openNodes();
-  let held: TaskId | undefined;
-  let other: TaskId | undefined;
+  let held: durableTypes.TaskId | undefined;
+  let other: durableTypes.TaskId | undefined;
   const child = spawnAndFinish("held", "child");
   const grandchild = spawnAndFinish("child", "grandchild");
   script("grandchild", {

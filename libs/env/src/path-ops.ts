@@ -1,4 +1,5 @@
-import { type FileError, type FileListing, type Result, err, ok } from "@msa/durable/env";
+import env from "@msa/durable/env";
+import type envTypes from "@msa/durable/env.types";
 import { Cause, Effect } from "effect";
 
 import errors from "./errors.ts";
@@ -9,6 +10,8 @@ import type pathOpsTypes from "./path-ops.types.ts";
 import platform from "./platform.ts";
 import remotePathModule from "./remote-path.ts";
 
+const { err, ok } = env;
+
 const { remoteRequest, resolveIn, run, runFileOp } = fileOp;
 const { abortResult, fileResult, toFileError } = errors;
 const { remotePath } = remotePathModule;
@@ -18,12 +21,13 @@ const { randomUuid } = platform;
 const absolutePathOf = (request: {
   target: fileOpTypes.RemoteTarget;
   path: string;
-}): Promise<Result<string, FileError>> => run(fileResult(resolveIn(request), request.path));
+}): Promise<envTypes.Result<string, envTypes.FileError>> =>
+  run(fileResult(resolveIn(request), request.path));
 
 const joinPathIn = (request: {
   target: fileOpTypes.RemoteTarget;
   parts: string[];
-}): Promise<Result<string, FileError>> =>
+}): Promise<envTypes.Result<string, envTypes.FileError>> =>
   run(
     fileResult(
       remotePath(request.target.connection).pipe(
@@ -33,7 +37,9 @@ const joinPathIn = (request: {
     ),
   );
 
-const canonicalPathOf = (request: fileOpTypes.PathRequest): Promise<Result<string, FileError>> => {
+const canonicalPathOf = (
+  request: fileOpTypes.PathRequest,
+): Promise<envTypes.Result<string, envTypes.FileError>> => {
   const { connection } = request.target;
   return run(
     runFileOp({
@@ -48,7 +54,7 @@ const canonicalPathOf = (request: fileOpTypes.PathRequest): Promise<Result<strin
 
 const listFilesAt = (
   request: pathOpsTypes.ListFilesRequest,
-): Promise<Result<FileListing, FileError>> =>
+): Promise<envTypes.Result<envTypes.FileListing, envTypes.FileError>> =>
   run(
     Effect.gen(function* () {
       const resolved = yield* fileResult(resolveIn(request), request.path);
@@ -61,7 +67,7 @@ const listFilesAt = (
 
 const createTempDirIn = (
   request: pathOpsTypes.TempDirRequest,
-): Promise<Result<string, FileError>> => {
+): Promise<envTypes.Result<string, envTypes.FileError>> => {
   const aborted = abortResult<string>(request.context.abortSignal, undefined);
   if (aborted !== undefined) return Promise.resolve(aborted);
   const { connection } = request.target;
@@ -84,7 +90,7 @@ const createTempDirIn = (
 
 const createTempFileIn = (
   request: pathOpsTypes.TempFileRequest,
-): Promise<Result<string, FileError>> => {
+): Promise<envTypes.Result<string, envTypes.FileError>> => {
   const { connection } = request.target;
   return run(
     Effect.gen(function* () {
@@ -103,10 +109,12 @@ const createTempFileIn = (
           op: "write",
           payload: new Uint8Array(0),
         });
-        return ok<string, FileError>(filePath);
+        return ok<string, envTypes.FileError>(filePath);
       }).pipe(
         Effect.catchCause((cause) =>
-          Effect.succeed(err<string, FileError>(toFileError(Cause.squash(cause), filePath))),
+          Effect.succeed(
+            err<string, envTypes.FileError>(toFileError(Cause.squash(cause), filePath)),
+          ),
         ),
       );
     }),

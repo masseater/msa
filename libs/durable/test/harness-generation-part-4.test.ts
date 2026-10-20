@@ -1,12 +1,16 @@
-import { LiveDoc, UserEntry } from "@msa/durable";
-import { GenerationTask } from "@msa/durable/harness";
-import { MemoryStorage } from "@msa/durable/storage/memory";
+import durable from "@msa/durable";
+import harnessModule from "@msa/durable/harness";
+import memory from "@msa/durable/storage/memory";
 import { Effect } from "effect";
 import { describe, expect, it } from "vite-plus/test";
 
-import type { SessionImpl } from "../src/session/session.ts";
+import type sessionTypes from "../src/session/session.types.ts";
 import harnessGenerationSupport from "./harness-generation-support.ts";
 import support from "./support.ts";
+
+const { MemoryStorage } = memory;
+const { LiveDoc, UserEntry } = durable;
+const { GenerationTask } = harnessModule;
 
 const { live } = harnessGenerationSupport;
 const { awaited, chatSetup, context, openChat } = support;
@@ -17,7 +21,7 @@ const orphansBlockedRunStep1 = Effect.gen(function* () {
   const setup = chatSetup();
   const { harness, root } = yield* openChat(new MemoryStorage(), setup);
   const { taskId, submissionId } = yield* awaited(
-    (harness as unknown as SessionImpl).commitWith(
+    (harness as unknown as sessionTypes.SessionImpl).commitWith(
       (tx) =>
         runPromise(
           Effect.gen(function* () {

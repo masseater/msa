@@ -1,11 +1,14 @@
-import { UsageDoc } from "@msa/durable";
+import durable from "@msa/durable";
 import { Effect } from "effect";
 import { afterEach, describe, expect, it } from "vite-plus/test";
 
-import { currentTimeMillis } from "../src/clock.ts";
+import clockModule from "../src/clock.ts";
 import harnessCompactionSupport from "./harness-compaction-support.ts";
 import type harnessCompactionSupportTypes from "./harness-compaction-support.types.ts";
 import support from "./support.ts";
+
+const { UsageDoc } = durable;
+const { currentTimeMillis } = clockModule;
 
 const {
   BLOCKING,

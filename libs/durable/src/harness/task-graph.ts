@@ -5,61 +5,33 @@ import { applyImmutable } from "@msa/chord/delta/apply";
 import { replicatedState } from "@msa/chord/state";
 import { Effect } from "effect";
 
-import { CommittedStateSource, CommittedWatch } from "../session/observation.ts";
-import { contained, type SessionImpl } from "../session/session.ts";
-import type {
-  CommitPublication,
-  ConversationId,
-  JoinPolicy,
-  Storage,
-  TaskId,
-  TaskOutcome,
-  TaskRecord,
-  WatchHandle,
-} from "./types.ts";
-import { closedError, scanAll } from "./util.ts";
+import type observationTypes from "../session/observation.types.ts";
+import sessionKit from "./session-kit.ts";
+import type taskGraphTypes from "./task-graph.types.ts";
+import util from "./util.ts";
 
-export type TaskGraphState =
-  | { readonly status: "pending" | "running"; readonly phase: string }
-  | {
-      readonly status: "waiting";
-      readonly phase: string;
-      readonly on: readonly TaskId[];
-      readonly policy: JoinPolicy;
-    }
-  | { readonly status: "completing"; readonly outcome: TaskOutcome<JsonValue>["status"] };
+const { observation, sessionState } = sessionKit;
 
-export type TaskGraphNode = {
-  readonly id: TaskId;
-  readonly kind: string;
-  readonly conversationId: ConversationId;
-  readonly owner?: TaskId;
-  readonly background: boolean;
-  readonly abortRequested: boolean;
-  readonly state: TaskGraphState;
-  readonly conversations: readonly ConversationId[];
-};
+const { contained } = sessionState;
+const { CommittedStateSource, CommittedWatch } = observation;
+const { closedError, scanAll } = util;
 
-export type TaskGraph = {
-  readonly tasks: Readonly<Record<string, TaskGraphNode>>;
-};
-
-export type TaskGraphWatch = WatchHandle<TaskGraph>;
-
-type AnyTaskRecord = TaskRecord<JsonValue, JsonValue, JsonValue>;
-type Observer = CommittedStateSource<TaskGraph> | CommittedWatch<TaskGraph>;
-type Mount = { value: TaskGraph; readonly observers: Set<Observer> };
+type AnyTaskRecord = taskGraphTypes.TaskRecord<JsonValue, JsonValue, JsonValue>;
+type Observer =
+  | observationTypes.CommittedStateSource<taskGraphTypes.TaskGraph>
+  | observationTypes.CommittedWatch<taskGraphTypes.TaskGraph>;
+type Mount = { value: taskGraphTypes.TaskGraph; readonly observers: Set<Observer> };
 
 const LIVE_STATUSES = ["pending", "running", "waiting", "completing"] as const;
 const SCAN_PAGE_SIZE = 256;
 
-export class TaskGraphView {
-  readonly #session: SessionImpl;
-  readonly #storage: Storage;
+export default class TaskGraphView {
+  readonly #session: taskGraphTypes.SessionImpl;
+  readonly #storage: taskGraphTypes.Storage;
   #mount: Mount | undefined;
   #closed = false;
 
-  constructor(session: SessionImpl, storage: Storage) {
+  constructor(session: taskGraphTypes.SessionImpl, storage: taskGraphTypes.Storage) {
     this.#session = session;
     this.#storage = storage;
     session.observeCommits((publication, context) => {
@@ -78,11 +50,11 @@ export class TaskGraphView {
     });
   }
 
-  state(context: Context): Promise<AttachedReplicatedState<TaskGraph>> {
+  state(context: Context): Promise<AttachedReplicatedState<taskGraphTypes.TaskGraph>> {
     return Effect.runPromise(
       Effect.gen({ self: this }, function* () {
         const { observer, detach } = yield* this.#attach(
-          (value, release) => new CommittedStateSource<TaskGraph>(value, release),
+          (value, release) => new CommittedStateSource<taskGraphTypes.TaskGraph>(value, release),
           context,
         );
         return yield* Effect.sync(() =>
@@ -92,12 +64,14 @@ export class TaskGraphView {
     );
   }
 
-  watch(context: Context): Promise<TaskGraphWatch> {
+  watch(context: Context): Promise<taskGraphTypes.TaskGraphWatch> {
     return Effect.runPromise(
       Effect.gen({ self: this }, function* () {
         const { observer } = yield* this.#attach(
           (value, release) =>
-            new CommittedWatch<TaskGraph>(value, release, (error) => this.#session.report(error)),
+            new CommittedWatch<taskGraphTypes.TaskGraph>(value, release, (error) =>
+              this.#session.report(error),
+            ),
           context,
         );
         const signal = context.abortSignal;
@@ -112,7 +86,7 @@ export class TaskGraphView {
   }
 
   #attach<O extends Observer>(
-    create: (value: TaskGraph, release: () => void) => O,
+    create: (value: taskGraphTypes.TaskGraph, release: () => void) => O,
     context: Context,
   ): Effect.Effect<{ observer: O; detach: () => void }> {
     return Effect.promise(() =>
@@ -121,13 +95,13 @@ export class TaskGraphView {
   }
 
   #mountObserver<O extends Observer>(
-    create: (value: TaskGraph, release: () => void) => O,
+    create: (value: taskGraphTypes.TaskGraph, release: () => void) => O,
     context: Context,
   ): Effect.Effect<{ observer: O; detach: () => void }> {
     return Effect.gen({ self: this }, function* () {
       const mount = this.#mount ?? {
-        value: yield* this.#build(context),
         observers: new Set<Observer>(),
+        value: yield* this.#build(context),
       };
       const detach = (): void => {
         mount.observers.delete(observer);
@@ -138,14 +112,14 @@ export class TaskGraphView {
       context.abortSignal?.throwIfAborted();
       this.#mount = mount;
       mount.observers.add(observer);
-      return { observer, detach };
+      return { detach, observer };
     });
   }
 
-  #build(context: Context): Effect.Effect<TaskGraph> {
+  #build(context: Context): Effect.Effect<taskGraphTypes.TaskGraph> {
     const storage = this.#storage;
     return Effect.gen(function* () {
-      const tasks: Record<string, TaskGraphNode> = {};
+      const tasks: Record<string, taskGraphTypes.TaskGraphNode> = {};
       const scans = yield* Effect.forEach(LIVE_STATUSES, (status) =>
         scanAll((cursor) => storage.scanTasks({ status }, SCAN_PAGE_SIZE, cursor, context)),
       );
@@ -179,13 +153,13 @@ export class TaskGraphView {
 
 function advance(
   mount: Mount,
-  publication: CommitPublication,
+  publication: taskGraphTypes.CommitPublication,
   context: Context,
   report: (error: unknown) => void,
 ): void {
   const ops: Op[] = [];
-  const changed = new Map<string, TaskGraphNode | undefined>();
-  const node = (key: string): TaskGraphNode | undefined =>
+  const changed = new Map<string, taskGraphTypes.TaskGraphNode | undefined>();
+  const node = (key: string): taskGraphTypes.TaskGraphNode | undefined =>
     changed.has(key) ? changed.get(key) : mount.value.tasks[key];
   for (const change of publication.changes) {
     if (change.type !== "task") continue;
@@ -203,7 +177,7 @@ function advance(
     ops.push(["s", ["tasks", key], next as unknown as JsonValue]);
     changed.set(key, next);
   }
-  const created = new Map<string, ConversationId[]>();
+  const created = new Map<string, taskGraphTypes.ConversationId[]>();
   for (const change of publication.changes) {
     if (change.type !== "conversation" || change.value.owner === undefined) continue;
     const key = String(change.value.owner.taskId);
@@ -220,35 +194,38 @@ function advance(
     contained(() => observer.advance(mount.value, ops, frameContext), report);
 }
 
-function nodeOf(record: AnyTaskRecord, conversations: readonly ConversationId[]): TaskGraphNode {
+function nodeOf(
+  record: AnyTaskRecord,
+  conversations: readonly taskGraphTypes.ConversationId[],
+): taskGraphTypes.TaskGraphNode {
   return {
+    conversationId: record.conversationId,
     id: record.id,
     kind: record.kind,
-    conversationId: record.conversationId,
     ...(record.owner === undefined ? {} : { owner: record.owner }),
-    background: record.background,
     abortRequested: record.abortRequested,
-    state: stateOf(record),
+    background: record.background,
     conversations,
+    state: stateOf(record),
   };
 }
 
-function stateOf(record: AnyTaskRecord): TaskGraphState {
+function stateOf(record: AnyTaskRecord): taskGraphTypes.TaskGraphState {
   const state = record.state;
   switch (state.status) {
     case "pending":
     case "running":
-      return { status: state.status, phase: phaseOf(state.checkpoint) };
+      return { phase: phaseOf(state.checkpoint), status: state.status };
     case "waiting":
       return {
-        status: "waiting",
-        phase: phaseOf(state.checkpoint),
         on: [...state.on],
+        phase: phaseOf(state.checkpoint),
         policy: state.policy,
+        status: "waiting",
       };
     case "completing":
     case "terminal":
-      return { status: "completing", outcome: state.outcome.status };
+      return { outcome: state.outcome.status, status: "completing" };
   }
 }
 

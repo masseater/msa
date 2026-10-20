@@ -1,15 +1,13 @@
 import type { Context } from "@msa/chord";
 import { Effect } from "effect";
 
-import {
-  ExecutionError,
-  type Result,
-  type ShellExecOptions,
-  type ShellExecResult,
-  err,
-} from "../src/env/index.ts";
-import { NodeExecutionEnv } from "../src/env/node.ts";
+import envModule from "../src/env/index.ts";
+import type envTypes from "../src/env/index.types.ts";
+import node from "../src/env/node.ts";
 import toolsSupport from "./tools-support.ts";
+
+const { NodeExecutionEnv } = node;
+const { ExecutionError, err } = envModule;
 
 const { createTempDir } = toolsSupport;
 
@@ -22,9 +20,9 @@ const programsEnv = Effect.fn("programsEnv")(function* (
   class ProgramsEnv extends NodeExecutionEnv {
     override exec(
       command: string | readonly string[],
-      options: ShellExecOptions | undefined,
+      options: envTypes.ShellExecOptions | undefined,
       context: Context,
-    ): Promise<Result<ShellExecResult, ExecutionError>> {
+    ): Promise<envTypes.Result<envTypes.ShellExecResult, envTypes.ExecutionError>> {
       commands.push(command);
       if (typeof command === "string" || !installed.includes(command[0]!)) {
         return Promise.resolve(

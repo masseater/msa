@@ -1,48 +1,29 @@
 import { Function } from "effect";
 
-import type {
-  ConversationId,
-  ConversationQuery,
-  ConversationRecord,
-  Cursor,
-  DocumentAddress,
-  DocumentPoint,
-  DocumentQuery,
-  DocumentRecord,
-  Id,
-  Page,
-  SubmissionQuery,
-  SubmissionRecord,
-  TaskQuery,
-} from "../../types.ts";
-import { scanStart } from "../scan.ts";
-import {
-  addressParts,
-  cursorId,
-  encodeIndexedString,
-  type JsonRow,
-  page,
-  parseJson,
-  scanSql,
-  scopeColumns,
-  type StoredTask,
-} from "./codec.ts";
-import type { SqliteExecutor, SqliteValue } from "./database.ts";
+import type typesModule from "../../types.types.ts";
+import scanModule from "../scan.ts";
+import codec from "./codec.ts";
+import type codecTypes from "./codec.types.ts";
+import type databaseTypes from "./database.ts";
 
-type Filter = readonly [clause: string, param: SqliteValue] | undefined;
+const { scanStart } = scanModule;
+const { addressParts, cursorId, encodeIndexedString, page, parseJson, scanSql, scopeColumns } =
+  codec;
 
-const scanTable = <T extends { readonly id: Id<string> }>(
-  db: SqliteExecutor,
+type Filter = readonly [clause: string, param: databaseTypes.SqliteValue] | undefined;
+
+const scanTable = <T extends { readonly id: typesModule.Id<string> }>(
+  db: databaseTypes.SqliteExecutor,
   table: string,
-  order: ConversationQuery["order"],
-  cursor: Cursor | undefined,
+  order: typesModule.ConversationQuery["order"],
+  cursor: typesModule.Cursor | undefined,
   limit: number,
   filters: readonly Filter[],
-): Promise<Page<T, Cursor>> => {
+): Promise<typesModule.Page<T, typesModule.Cursor>> => {
   const start = scanStart(order, cursor, "ascending");
   const scan = scanSql(start);
   const clauses = [scan.clause];
-  const params: SqliteValue[] = [scan.param];
+  const params: databaseTypes.SqliteValue[] = [scan.param];
   for (const filter of filters) {
     if (filter === undefined) continue;
     clauses.push(filter[0]);
@@ -50,7 +31,7 @@ const scanTable = <T extends { readonly id: Id<string> }>(
   }
   params.push(limit + 1);
   return db
-    .all<JsonRow>(
+    .all<codecTypes.JsonRow>(
       `SELECT record FROM ${table} WHERE ${clauses.join(" AND ")} ORDER BY id ${scan.direction} LIMIT ?`,
       ...params,
     )
@@ -63,39 +44,53 @@ const scanTable = <T extends { readonly id: Id<string> }>(
     );
 };
 
-const filter = <V>(clause: string, value: V | undefined, encode: (value: V) => SqliteValue) =>
-  value === undefined ? undefined : ([clause, encode(value)] as const);
+const filter = <V>(
+  clause: string,
+  value: V | undefined,
+  encode: (value: V) => databaseTypes.SqliteValue,
+) => (value === undefined ? undefined : ([clause, encode(value)] as const));
 
-const asValue = (value: number | string): SqliteValue => value;
-const asFlag = (value: boolean): SqliteValue => (value ? 1 : 0);
+const asValue = (value: number | string): databaseTypes.SqliteValue => value;
+const asFlag = (value: boolean): databaseTypes.SqliteValue => (value ? 1 : 0);
 
 type Scan<Q, T> = {
   (
     query: Q,
     limit: number,
-    cursor: Cursor | undefined,
-  ): (db: SqliteExecutor) => Promise<Page<T, Cursor>>;
+    cursor: typesModule.Cursor | undefined,
+  ): (db: databaseTypes.SqliteExecutor) => Promise<typesModule.Page<T, typesModule.Cursor>>;
   (
-    db: SqliteExecutor,
+    db: databaseTypes.SqliteExecutor,
     query: Q,
     limit: number,
-    cursor: Cursor | undefined,
-  ): Promise<Page<T, Cursor>>;
+    cursor: typesModule.Cursor | undefined,
+  ): Promise<typesModule.Page<T, typesModule.Cursor>>;
 };
 
-export const scanConversationRows: Scan<ConversationQuery, ConversationRecord> = Function.dual(
-  4,
-  (db: SqliteExecutor, query: ConversationQuery, limit: number, cursor: Cursor | undefined) =>
-    scanTable<ConversationRecord>(db, "conversations", query.order, cursor, limit, [
-      filter("owner_conversation_id = ?", query.ownerConversationId, asValue),
-      filter("owner_task_id = ?", query.ownerTaskId, asValue),
-    ]),
-);
+const scanConversationRows: Scan<typesModule.ConversationQuery, typesModule.ConversationRecord> =
+  Function.dual(
+    4,
+    (
+      db: databaseTypes.SqliteExecutor,
+      query: typesModule.ConversationQuery,
+      limit: number,
+      cursor: typesModule.Cursor | undefined,
+    ) =>
+      scanTable<typesModule.ConversationRecord>(db, "conversations", query.order, cursor, limit, [
+        filter("owner_conversation_id = ?", query.ownerConversationId, asValue),
+        filter("owner_task_id = ?", query.ownerTaskId, asValue),
+      ]),
+  );
 
-export const scanTaskRows: Scan<TaskQuery, StoredTask> = Function.dual(
+const scanTaskRows: Scan<typesModule.TaskQuery, codecTypes.StoredTask> = Function.dual(
   4,
-  (db: SqliteExecutor, query: TaskQuery, limit: number, cursor: Cursor | undefined) =>
-    scanTable<StoredTask>(db, "tasks", query.order, cursor, limit, [
+  (
+    db: databaseTypes.SqliteExecutor,
+    query: typesModule.TaskQuery,
+    limit: number,
+    cursor: typesModule.Cursor | undefined,
+  ) =>
+    scanTable<codecTypes.StoredTask>(db, "tasks", query.order, cursor, limit, [
       filter("conversation_id = ?", query.conversationId, asValue),
       filter("kind = ?", query.kind, encodeIndexedString),
       filter("status = ?", query.status, asValue),
@@ -104,21 +99,36 @@ export const scanTaskRows: Scan<TaskQuery, StoredTask> = Function.dual(
     ]),
 );
 
-export const scanSubmissionRows: Scan<SubmissionQuery, SubmissionRecord> = Function.dual(
-  4,
-  (db: SqliteExecutor, query: SubmissionQuery, limit: number, cursor: Cursor | undefined) =>
-    scanTable<SubmissionRecord>(db, "submissions", query.order, cursor, limit, [
-      filter("conversation_id = ?", query.conversationId, asValue),
-      filter("status = ?", query.status, asValue),
-    ]),
-);
+const scanSubmissionRows: Scan<typesModule.SubmissionQuery, typesModule.SubmissionRecord> =
+  Function.dual(
+    4,
+    (
+      db: databaseTypes.SqliteExecutor,
+      query: typesModule.SubmissionQuery,
+      limit: number,
+      cursor: typesModule.Cursor | undefined,
+    ) =>
+      scanTable<typesModule.SubmissionRecord>(db, "submissions", query.order, cursor, limit, [
+        filter("conversation_id = ?", query.conversationId, asValue),
+        filter("status = ?", query.status, asValue),
+      ]),
+  );
 
-export const scanDocumentRows: Scan<DocumentQuery, DocumentRecord> = Function.dual(
+const scanDocumentRows: Scan<typesModule.DocumentQuery, typesModule.DocumentRecord> = Function.dual(
   4,
-  (db: SqliteExecutor, query: DocumentQuery, limit: number, cursor: Cursor | undefined) => {
+  (
+    db: databaseTypes.SqliteExecutor,
+    query: typesModule.DocumentQuery,
+    limit: number,
+    cursor: typesModule.Cursor | undefined,
+  ) => {
     const scope = scopeColumns(query.scope);
     const clauses = ["scope_kind = ?", "owner_id = ?", "id > ?"];
-    const params: SqliteValue[] = [scope.scopeKind, scope.ownerId, cursorId(cursor) ?? -1];
+    const params: databaseTypes.SqliteValue[] = [
+      scope.scopeKind,
+      scope.ownerId,
+      cursorId(cursor) ?? -1,
+    ];
     if (query.kind !== undefined) {
       clauses.push("kind = ?");
       params.push(encodeIndexedString(query.kind));
@@ -131,13 +141,13 @@ export const scanDocumentRows: Scan<DocumentQuery, DocumentRecord> = Function.du
     }
     params.push(limit + 1);
     return db
-      .all<JsonRow>(
+      .all<codecTypes.JsonRow>(
         `SELECT record FROM documents WHERE ${clauses.join(" AND ")} ORDER BY id LIMIT ?`,
         ...params,
       )
       .then((rows) =>
         page(
-          rows.map((row) => parseJson<DocumentRecord>(row.record)),
+          rows.map((row) => parseJson<typesModule.DocumentRecord>(row.record)),
           limit,
         ),
       );
@@ -153,58 +163,94 @@ const HISTORICAL_DOCUMENT = `SELECT record FROM documents
 					AND created_at <= ? AND (retired_at IS NULL OR retired_at > ?)
 					ORDER BY created_at DESC LIMIT 1`;
 
-export const findDocumentRow: {
+const findDocumentRow: {
   (
-    address: DocumentAddress,
-    at: DocumentPoint,
-  ): (db: SqliteExecutor) => Promise<DocumentRecord | undefined>;
+    address: typesModule.DocumentAddress,
+    at: typesModule.DocumentPoint,
+  ): (db: databaseTypes.SqliteExecutor) => Promise<typesModule.DocumentRecord | undefined>;
   (
-    db: SqliteExecutor,
-    address: DocumentAddress,
-    at: DocumentPoint,
-  ): Promise<DocumentRecord | undefined>;
-} = Function.dual(3, (db: SqliteExecutor, address: DocumentAddress, at: DocumentPoint) => {
-  const parts = addressParts(address);
-  const params: SqliteValue[] = [
-    parts.kind,
-    parts.scopeKind,
-    parts.ownerId,
-    parts.family,
-    parts.keyValue,
-  ];
-  if (at !== "current") params.push(at, at);
-  return db
-    .get<JsonRow>(at === "current" ? CURRENT_DOCUMENT : HISTORICAL_DOCUMENT, ...params)
-    .then((row) => (row === undefined ? undefined : parseJson<DocumentRecord>(row.record)));
-});
-
-export const recordById: {
-  <T>(table: string, id: SqliteValue): (db: SqliteExecutor) => Promise<T | undefined>;
-  <T>(db: SqliteExecutor, table: string, id: SqliteValue): Promise<T | undefined>;
-} = Function.dual(3, <T>(db: SqliteExecutor, table: string, id: SqliteValue) =>
-  db
-    .get<JsonRow>(`SELECT record FROM ${table} WHERE id = ?`, id)
-    .then((row) => (row === undefined ? undefined : parseJson<T>(row.record))),
-);
-
-export const submissionByRequestRow: {
-  (
-    conversationId: ConversationId,
-    requestId: string,
-  ): (executor: SqliteExecutor) => Promise<SubmissionRecord | undefined>;
-  (
-    executor: SqliteExecutor,
-    conversationId: ConversationId,
-    requestId: string,
-  ): Promise<SubmissionRecord | undefined>;
+    db: databaseTypes.SqliteExecutor,
+    address: typesModule.DocumentAddress,
+    at: typesModule.DocumentPoint,
+  ): Promise<typesModule.DocumentRecord | undefined>;
 } = Function.dual(
   3,
-  (executor: SqliteExecutor, conversationId: ConversationId, requestId: string) =>
+  (
+    db: databaseTypes.SqliteExecutor,
+    address: typesModule.DocumentAddress,
+    at: typesModule.DocumentPoint,
+  ) => {
+    const parts = addressParts(address);
+    const params: databaseTypes.SqliteValue[] = [
+      parts.kind,
+      parts.scopeKind,
+      parts.ownerId,
+      parts.family,
+      parts.keyValue,
+    ];
+    if (at !== "current") params.push(at, at);
+    return db
+      .get<codecTypes.JsonRow>(at === "current" ? CURRENT_DOCUMENT : HISTORICAL_DOCUMENT, ...params)
+      .then((row) =>
+        row === undefined ? undefined : parseJson<typesModule.DocumentRecord>(row.record),
+      );
+  },
+);
+
+const recordById: {
+  <T>(
+    table: string,
+    id: databaseTypes.SqliteValue,
+  ): (db: databaseTypes.SqliteExecutor) => Promise<T | undefined>;
+  <T>(
+    db: databaseTypes.SqliteExecutor,
+    table: string,
+    id: databaseTypes.SqliteValue,
+  ): Promise<T | undefined>;
+} = Function.dual(
+  3,
+  <T>(db: databaseTypes.SqliteExecutor, table: string, id: databaseTypes.SqliteValue) =>
+    db
+      .get<codecTypes.JsonRow>(`SELECT record FROM ${table} WHERE id = ?`, id)
+      .then((row) => (row === undefined ? undefined : parseJson<T>(row.record))),
+);
+
+const submissionByRequestRow: {
+  (
+    conversationId: typesModule.ConversationId,
+    requestId: string,
+  ): (executor: databaseTypes.SqliteExecutor) => Promise<typesModule.SubmissionRecord | undefined>;
+  (
+    executor: databaseTypes.SqliteExecutor,
+    conversationId: typesModule.ConversationId,
+    requestId: string,
+  ): Promise<typesModule.SubmissionRecord | undefined>;
+} = Function.dual(
+  3,
+  (
+    executor: databaseTypes.SqliteExecutor,
+    conversationId: typesModule.ConversationId,
+    requestId: string,
+  ) =>
     executor
-      .get<JsonRow>(
+      .get<codecTypes.JsonRow>(
         "SELECT record FROM submissions WHERE conversation_id = ? AND request_id = ?",
         conversationId,
         encodeIndexedString(requestId),
       )
-      .then((row) => (row === undefined ? undefined : parseJson<SubmissionRecord>(row.record))),
+      .then((row) =>
+        row === undefined ? undefined : parseJson<typesModule.SubmissionRecord>(row.record),
+      ),
 );
+
+const scans = {
+  findDocumentRow,
+  recordById,
+  scanConversationRows,
+  scanDocumentRows,
+  scanSubmissionRows,
+  scanTaskRows,
+  submissionByRequestRow,
+};
+
+export default scans;

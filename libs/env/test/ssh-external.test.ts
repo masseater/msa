@@ -1,6 +1,6 @@
 import { BACKGROUND_CONTEXT } from "@msa/chord/context";
-import { getOrThrow } from "@msa/durable/env";
-import { registerEnvConformance } from "@msa/durable/testing";
+import envModule2 from "@msa/durable/env";
+import testing from "@msa/durable/testing";
 import { Effect } from "effect";
 import { afterAll, describe, expect, it } from "vite-plus/test";
 
@@ -9,6 +9,9 @@ import type envTypes from "../src/index.types.ts";
 import environment from "./environment.ts";
 import externalSsh from "./external-ssh.ts";
 import tempDir from "./temp-dir.ts";
+
+const { getOrThrow } = envModule2;
+const { registerEnvConformance } = testing;
 
 const { RemoteExecutionEnv, nodePlatform } = envModule;
 

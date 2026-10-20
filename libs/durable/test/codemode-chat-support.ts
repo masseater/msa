@@ -1,12 +1,17 @@
 import { Type } from "@msa/ai";
 import { type CodemodeRun, CodemodeSandbox } from "@msa/codemode";
-import { type ToolRegistration, defineTool } from "@msa/durable";
+import durable from "@msa/durable";
+import type durableTypes from "@msa/durable/index.types";
 import { Effect } from "effect";
 import { dual } from "effect/Function";
 
-import { type CodemodeGlobal, createCodemodeTool } from "../src/codemode/codemode.ts";
-import type { CodemodeNamespace } from "../src/codemode/describe.ts";
+import codemode from "../src/codemode/codemode.ts";
+import type codemodeTypes from "../src/codemode/codemode.types.ts";
+import type describeTypes from "../src/codemode/describe.types.ts";
 import support from "./support.ts";
+
+const { defineTool } = durable;
+const { createCodemodeTool } = codemode;
 
 const { aborted, addTool, awaited, chatSetup, deferred } = support;
 
@@ -17,7 +22,7 @@ const Parameters = Type.Object({
 
 function toolImpl(
   name: string,
-  execute: ToolRegistration<typeof Parameters>["execute"],
+  execute: durableTypes.ToolRegistration<typeof Parameters>["execute"],
   replay: "safe" | "unsafe" = "unsafe",
 ) {
   return defineTool({ description: name, execute, name, parameters: Parameters, replay });
@@ -25,12 +30,12 @@ function toolImpl(
 
 const tool: {
   (
-    execute: ToolRegistration<typeof Parameters>["execute"],
+    execute: durableTypes.ToolRegistration<typeof Parameters>["execute"],
     replay?: "safe" | "unsafe",
   ): (name: string) => ReturnType<typeof toolImpl>;
   (
     name: string,
-    execute: ToolRegistration<typeof Parameters>["execute"],
+    execute: durableTypes.ToolRegistration<typeof Parameters>["execute"],
     replay?: "safe" | "unsafe",
   ): ReturnType<typeof toolImpl>;
 } = dual((args) => typeof args[0] === "string", toolImpl);
@@ -135,7 +140,10 @@ function addSlowTool(registry: ReturnType<typeof chatSetup>["registry"]) {
 function codemodeChat({
   globals = [],
   namespaces = [],
-}: { readonly globals?: CodemodeGlobal[]; readonly namespaces?: CodemodeNamespace[] } = {}) {
+}: {
+  readonly globals?: codemodeTypes.CodemodeGlobal[];
+  readonly namespaces?: describeTypes.CodemodeNamespace[];
+} = {}) {
   const setup = chatSetup();
   const { sandbox, vm } = countingSandbox();
   addTool(setup.registry, createCodemodeTool({ globals, namespaces, sandbox }));

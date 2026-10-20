@@ -1,5 +1,5 @@
-import { LiveDoc, defineDoc } from "@msa/durable";
-import { MemoryStorage } from "@msa/durable/storage/memory";
+import durable from "@msa/durable";
+import memory from "@msa/durable/storage/memory";
 import { Effect } from "effect";
 import { describe, expect, it } from "vite-plus/test";
 
@@ -8,6 +8,9 @@ import effectSupport from "./effect-support.ts";
 import harnessViewSupport from "./harness-view-support.ts";
 import sessionSupport from "./session-support.ts";
 import taskSupport from "./task-support.ts";
+
+const { MemoryStorage } = memory;
+const { LiveDoc, defineDoc } = durable;
 
 const { chatSetup, openChat } = chatSupport;
 const { abortController, awaited } = effectSupport;

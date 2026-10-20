@@ -1,11 +1,15 @@
-import { type ConversationId, type EntryId, ReadAfterWrite, type TaskId } from "@msa/durable";
+import durable from "@msa/durable";
+import type durableTypes from "@msa/durable/index.types";
 import { Effect } from "effect";
 import { describe, expect, it } from "vite-plus/test";
 
-import { idFromNumber } from "../src/ids.ts";
+import idsModule from "../src/ids.ts";
 import effectSupport from "./effect-support.ts";
 import sessionSupport from "./session-support.ts";
 import sessionTablesSupport from "./session-tables-support.ts";
+
+const { ReadAfterWrite } = durable;
+const { idFromNumber } = idsModule;
 
 const { awaited } = effectSupport;
 
@@ -58,6 +62,28 @@ const distinctMintedRecords = Effect.fn("distinctMintedRecords")(function* () {
   return { created, publications, session, storage };
 });
 
+const expectReadsRejectedAfterWrite = (
+  tx: durableTypes.Tx,
+  conversationId: durableTypes.ConversationId,
+) =>
+  Effect.gen(function* () {
+    yield* awaited(expect(tx.conversation(conversationId)).rejects.toBeInstanceOf(ReadAfterWrite));
+    yield* awaited(
+      expect(tx.task(idFromNumber<durableTypes.TaskId>(1))).rejects.toThrow(
+        "Tx.task() cannot read tables after the first table write",
+      ),
+    );
+    yield* awaited(
+      expect(tx.entry(idFromNumber<durableTypes.EntryId>(1))).rejects.toBeInstanceOf(
+        ReadAfterWrite,
+      ),
+    );
+    yield* awaited(expect(tx.scanConversations({}, 10)).rejects.toBeInstanceOf(ReadAfterWrite));
+    yield* awaited(
+      expect(tx.scanEntries({ conversationId }, 10)).rejects.toBeInstanceOf(ReadAfterWrite),
+    );
+  });
+
 const allowsTableReads = Effect.gen(function* () {
   const runPromise = Effect.runPromiseWith(yield* Effect.context<never>());
 
@@ -81,23 +107,7 @@ const allowsTableReads = Effect.gen(function* () {
               items: [],
             });
             yield* awaited(tx.appendEntry(conversationId, { kind: "note" }));
-            yield* awaited(
-              expect(tx.conversation(conversationId)).rejects.toBeInstanceOf(ReadAfterWrite),
-            );
-            yield* awaited(
-              expect(tx.task(idFromNumber<TaskId>(1))).rejects.toThrow(
-                "Tx.task() cannot read tables after the first table write",
-              ),
-            );
-            yield* awaited(
-              expect(tx.entry(idFromNumber<EntryId>(1))).rejects.toBeInstanceOf(ReadAfterWrite),
-            );
-            yield* awaited(
-              expect(tx.scanConversations({}, 10)).rejects.toBeInstanceOf(ReadAfterWrite),
-            );
-            yield* awaited(
-              expect(tx.scanEntries({ conversationId }, 10)).rejects.toBeInstanceOf(ReadAfterWrite),
-            );
+            yield* expectReadsRejectedAfterWrite(tx, conversationId);
             (yield* awaited(tx.doc(NotesDoc, conversationId))).text = "after write";
           }),
         ),
@@ -209,7 +219,7 @@ const createsConversationsEntries = Effect.gen(function* () {
   yield* awaited(
     expect(
       session.commit(
-        (tx) => tx.appendEntry(idFromNumber<ConversationId>(12345), { kind: "note" }),
+        (tx) => tx.appendEntry(idFromNumber<durableTypes.ConversationId>(12345), { kind: "note" }),
         context,
       ),
     ).rejects.toThrow("Conversation 12345 does not exist"),

@@ -1,54 +1,38 @@
 import type { Context } from "@msa/chord";
 import { Effect } from "effect";
 
-import type { FileSystem } from "../../env/index.ts";
-import type {
-  ConversationId,
-  ConversationQuery,
-  Cursor,
-  DocumentAddress,
-  DocumentId,
-  DocumentPoint,
-  DocumentQuery,
-  EntryId,
-  EntryQuery,
-  Id,
-  Seq,
-  Storage,
-  StorageWrite,
-  SubmissionId,
-  SubmissionQuery,
-  TaskId,
-  TaskQuery,
-} from "../../types.ts";
-import { forwardEntry } from "../entry-args.ts";
-import { MemoryStorage } from "../memory.ts";
-import { adoptSidecarState, encodeCommit, planReclamations } from "./encode.ts";
-import { appendEncoded, type JsonlFiles, reclaimSidecars, resolveLayout } from "./files.ts";
-import { JsonlStoragePoisonedError } from "./poisoned-error.ts";
-import { recoverJsonl } from "./recover.ts";
+import type typesModule from "../../types.types.ts";
+import entryArgs from "../entry-args.ts";
+import memoryModule from "../memory.ts";
+import encode from "./encode.ts";
+import filesModule from "./files.ts";
+import JsonlStoragePoisonedError from "./poisoned-error.ts";
+import recoverModule from "./recover.ts";
+import type storageTypes from "./storage.types.ts";
 
-export type JsonlStorageOptions = {
-  readonly fsync?: boolean;
-};
+const { MemoryStorage } = memoryModule;
+const { appendEncoded, reclaimSidecars, resolveLayout } = filesModule;
+const { forwardEntry } = entryArgs;
+const { adoptSidecarState, encodeCommit, planReclamations } = encode;
+const { recoverJsonl } = recoverModule;
 
-export class JsonlStorage implements Storage {
-  private readonly files: JsonlFiles;
+export default class JsonlStorage implements typesModule.Storage {
+  private readonly files: storageTypes.JsonlFiles;
   private readonly memory = new MemoryStorage();
-  private readonly currentOnlyDocuments = new Set<DocumentId>();
-  private readonly liveTaskSidecars = new Set<TaskId>();
+  private readonly currentOnlyDocuments = new Set<typesModule.DocumentId>();
+  private readonly liveTaskSidecars = new Set<typesModule.TaskId>();
   private closed = false;
-  private poisonError: JsonlStoragePoisonedError | undefined;
+  private poisonError: storageTypes.JsonlStoragePoisonedError | undefined;
 
-  private constructor(files: JsonlFiles) {
+  private constructor(files: storageTypes.JsonlFiles) {
     this.files = files;
   }
 
   static open(
     directory: string,
-    fs: FileSystem,
+    fs: storageTypes.FileSystem,
     context: Context,
-    options: JsonlStorageOptions = {},
+    options: storageTypes.JsonlStorageOptions = {},
   ): Promise<JsonlStorage> {
     return Effect.runPromise(
       Effect.gen(function* () {
@@ -60,7 +44,7 @@ export class JsonlStorage implements Storage {
     );
   }
 
-  commit(writes: readonly StorageWrite[], context: Context): Promise<Seq> {
+  commit(writes: readonly typesModule.StorageWrite[], context: Context): Promise<typesModule.Seq> {
     return Effect.runPromise(
       Effect.suspend(() => {
         this.assertUsable();
@@ -69,40 +53,40 @@ export class JsonlStorage implements Storage {
     );
   }
 
-  mintId<I extends Id<string>>(): Promise<I> {
+  mintId<I extends typesModule.Id<string>>(): Promise<I> {
     return this.delegate(() => this.store.mintId<I>());
   }
 
-  conversation(id: ConversationId, context: Context) {
+  conversation(id: typesModule.ConversationId, context: Context) {
     return this.delegate(() => this.store.conversation(id, context));
   }
 
   scanConversations(
-    query: ConversationQuery,
+    query: typesModule.ConversationQuery,
     limit: number,
-    cursor: Cursor | undefined,
+    cursor: typesModule.Cursor | undefined,
     context: Context,
   ) {
     return this.delegate(() => this.store.scanConversations(query, limit, cursor, context));
   }
 
-  entry(id: EntryId, context: Context): ReturnType<Storage["entry"]>;
+  entry(id: typesModule.EntryId, context: Context): ReturnType<typesModule.Storage["entry"]>;
   entry(
-    conversationId: ConversationId,
-    id: EntryId,
+    conversationId: typesModule.ConversationId,
+    id: typesModule.EntryId,
     context: Context,
-  ): ReturnType<Storage["entry"]>;
+  ): ReturnType<typesModule.Storage["entry"]>;
   entry(
-    idOrConversationId: EntryId | ConversationId,
-    idOrContext: EntryId | Context,
+    idOrConversationId: typesModule.EntryId | typesModule.ConversationId,
+    idOrContext: typesModule.EntryId | Context,
     context?: Context,
   ) {
     return this.delegate(() => forwardEntry(this.store, idOrConversationId, idOrContext, context));
   }
 
   findLatestHeadMarker(
-    conversationId: ConversationId,
-    atOrBeforeEntryId: EntryId | undefined,
+    conversationId: typesModule.ConversationId,
+    atOrBeforeEntryId: typesModule.EntryId | undefined,
     context: Context,
   ) {
     return this.delegate(() =>
@@ -110,44 +94,67 @@ export class JsonlStorage implements Storage {
     );
   }
 
-  scanEntries(query: EntryQuery, limit: number, cursor: Cursor | undefined, context: Context) {
+  scanEntries(
+    query: typesModule.EntryQuery,
+    limit: number,
+    cursor: typesModule.Cursor | undefined,
+    context: Context,
+  ) {
     return this.delegate(() => this.store.scanEntries(query, limit, cursor, context));
   }
 
-  task(id: TaskId, context: Context) {
+  task(id: typesModule.TaskId, context: Context) {
     return this.delegate(() => this.store.task(id, context));
   }
 
-  scanTasks(query: TaskQuery, limit: number, cursor: Cursor | undefined, context: Context) {
+  scanTasks(
+    query: typesModule.TaskQuery,
+    limit: number,
+    cursor: typesModule.Cursor | undefined,
+    context: Context,
+  ) {
     return this.delegate(() => this.store.scanTasks(query, limit, cursor, context));
   }
 
-  submission(id: SubmissionId, context: Context) {
+  submission(id: typesModule.SubmissionId, context: Context) {
     return this.delegate(() => this.store.submission(id, context));
   }
 
   scanSubmissions(
-    query: SubmissionQuery,
+    query: typesModule.SubmissionQuery,
     limit: number,
-    cursor: Cursor | undefined,
+    cursor: typesModule.Cursor | undefined,
     context: Context,
   ) {
     return this.delegate(() => this.store.scanSubmissions(query, limit, cursor, context));
   }
 
-  submissionByRequest(conversationId: ConversationId, requestId: string, context: Context) {
+  submissionByRequest(
+    conversationId: typesModule.ConversationId,
+    requestId: string,
+    context: Context,
+  ) {
     return this.delegate(() => this.store.submissionByRequest(conversationId, requestId, context));
   }
 
-  findDocument(address: DocumentAddress, at: DocumentPoint, context: Context) {
+  findDocument(
+    address: typesModule.DocumentAddress,
+    at: typesModule.DocumentPoint,
+    context: Context,
+  ) {
     return this.delegate(() => this.store.findDocument(address, at, context));
   }
 
-  document(id: DocumentId, at: DocumentPoint, context: Context) {
+  document(id: typesModule.DocumentId, at: typesModule.DocumentPoint, context: Context) {
     return this.delegate(() => this.store.document(id, at, context));
   }
 
-  scanDocuments(query: DocumentQuery, limit: number, cursor: Cursor | undefined, context: Context) {
+  scanDocuments(
+    query: typesModule.DocumentQuery,
+    limit: number,
+    cursor: typesModule.Cursor | undefined,
+    context: Context,
+  ) {
     return this.delegate(() => this.store.scanDocuments(query, limit, cursor, context));
   }
 
@@ -161,7 +168,10 @@ export class JsonlStorage implements Storage {
     );
   }
 
-  private commitEffect(writes: readonly StorageWrite[], context: Context): Effect.Effect<Seq> {
+  private commitEffect(
+    writes: readonly typesModule.StorageWrite[],
+    context: Context,
+  ): Effect.Effect<typesModule.Seq> {
     return Effect.gen({ self: this }, function* () {
       const prepared = this.memory.prepareCommit(writes);
       const encoded = encodeCommit(prepared.seq, prepared.writes);
@@ -202,12 +212,12 @@ export class JsonlStorage implements Storage {
     return Effect.runPromise(Effect.promise(read));
   }
 
-  private get store(): MemoryStorage {
+  private get store(): storageTypes.MemoryStorage {
     this.assertUsable();
     return this.memory;
   }
 
-  private poison(cause: Error): JsonlStoragePoisonedError {
+  private poison(cause: Error): storageTypes.JsonlStoragePoisonedError {
     this.poisonError ??= new JsonlStoragePoisonedError(cause);
     return this.poisonError;
   }

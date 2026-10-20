@@ -1,12 +1,15 @@
 import { type AssistantMessage, type Message, fauxAssistantMessage, fauxToolCall } from "@msa/ai";
-import { type ContextView, type EntryRecord } from "@msa/durable";
+import type durableTypes from "@msa/durable/index.types";
 import { Effect } from "effect";
 import { afterEach, describe, expect, it } from "vite-plus/test";
 
-import { selectCut, serializeConversation } from "../src/harness/compaction.ts";
-import { orderToolResults } from "../src/harness/context.ts";
+import compaction from "../src/harness/compaction.ts";
+import contextModule from "../src/harness/context.ts";
 import harnessCompactionSupport from "./harness-compaction-support.ts";
 import platformSupport from "./platform-support.ts";
+
+const { orderToolResults } = contextModule;
+const { selectCut, serializeConversation } = compaction;
 
 const { directories, text, user } = harnessCompactionSupport;
 const { removeDir } = platformSupport;
@@ -22,14 +25,14 @@ afterEach(() =>
 
 let nextId = 1;
 
-function entry(kind: string, model: Message[], head?: number): EntryRecord {
+function entry(kind: string, model: Message[], head?: number): durableTypes.EntryRecord {
   return {
     conversationId: 1,
     id: nextId++,
     kind,
     model,
     ...(head === undefined ? {} : { head }),
-  } as unknown as EntryRecord;
+  } as unknown as durableTypes.EntryRecord;
 }
 
 const assistant = (
@@ -54,7 +57,10 @@ const toolResult = (callId: string, content: string): Message => ({
   toolName: "read",
 });
 
-function view(entries: EntryRecord[], head?: EntryRecord): ContextView {
+function view(
+  entries: durableTypes.EntryRecord[],
+  head?: durableTypes.EntryRecord,
+): durableTypes.ContextView {
   const all = head === undefined ? entries : [head, ...entries];
   const contributions = all.map((record) =>
     (record.model ?? []).filter(

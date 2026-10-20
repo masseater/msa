@@ -6,15 +6,20 @@ import {
   fauxText,
   fauxToolCall,
 } from "@msa/ai";
-import { type AgentEvent, type LiveState, defineTool } from "@msa/durable";
-import { watchEvents } from "@msa/durable/harness";
-import { MemoryStorage } from "@msa/durable/storage/memory";
+import durable from "@msa/durable";
+import harnessModule from "@msa/durable/harness";
+import type durableTypes from "@msa/durable/index.types";
+import memory from "@msa/durable/storage/memory";
 import { Effect } from "effect";
 import { describe, expect, it } from "vite-plus/test";
 
 import harnessEventsSupport from "./harness-events-support.ts";
 import support from "./support.ts";
 import type supportTypes from "./support.types.ts";
+
+const { MemoryStorage } = memory;
+const { defineTool } = durable;
+const { watchEvents } = harnessModule;
 
 const { drained, listen } = harnessEventsSupport;
 const {
@@ -34,7 +39,7 @@ function slow(): supportTypes.ChatSetup {
   return chatSetup({ tokenSize: { max: 1, min: 1 }, tokensPerSecond: 400 });
 }
 
-function streamedText(events: readonly AgentEvent[]): string {
+function streamedText(events: readonly durableTypes.AgentEvent[]): string {
   let text = "";
   for (const event of events) {
     if (event.type === "message_start" && event.message.role === "assistant") {
@@ -66,7 +71,7 @@ const streamingRun = Effect.fn("streamingRun")(function* () {
   const partials: string[] = [];
   harness.subscribeCommits((publication) => {
     for (const change of documentChanges(publication)) {
-      const message = (change.value as LiveState | null)?.generation?.message as
+      const message = (change.value as durableTypes.LiveState | null)?.generation?.message as
         | AssistantMessage
         | undefined;
       if (change.record.kind === "msa.live" && message !== undefined)
@@ -260,7 +265,7 @@ const replacesUndeliveredBatches = Effect.gen(function* () {
   for (const _ of Array.from({ length: 101 })) {
     yield* awaited(root.commit((tx) => tx.appendEntry(root.id, { kind: "note" }), context));
   }
-  const batches: AgentEvent[][] = [];
+  const batches: durableTypes.AgentEvent[][] = [];
   stream.start((events) => {
     batches.push([...events]);
 
@@ -270,7 +275,9 @@ const replacesUndeliveredBatches = Effect.gen(function* () {
   expect(batches).toHaveLength(1);
   expect(batches[0]).toHaveLength(1);
   expect(batches[0]![0]).toMatchObject({ type: "snapshot" });
-  expect((batches[0]![0] as Extract<AgentEvent, { type: "snapshot" }>).entries).toHaveLength(101);
+  expect(
+    (batches[0]![0] as Extract<durableTypes.AgentEvent, { type: "snapshot" }>).entries,
+  ).toHaveLength(101);
   yield* awaited(stream.stop());
   yield* awaited(harness.close(context));
 });

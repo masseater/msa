@@ -1,14 +1,20 @@
 import { Type, fauxAssistantMessage, fauxText } from "@msa/ai";
-import { type TaskId, defineTool } from "@msa/durable";
-import { MemoryStorage } from "@msa/durable/storage/memory";
+import type durableTypes from "@msa/durable/index.types";
+import memory from "@msa/durable/storage/memory";
 import { Effect } from "effect";
 import { afterEach, describe, expect, it } from "vite-plus/test";
 
-import { openNodeSqliteStorage } from "../src/storage/sqlite/node.ts";
+import durableKit from "./durable-kit.ts";
 import harnessStructuredEvents from "./harness-structured-events.ts";
 import harnessStructuredRecoveryCases from "./harness-structured-recovery-cases.ts";
 import harnessStructuredSupport from "./harness-structured-support.ts";
 import support from "./support.ts";
+
+const { durable, sqliteNode: node } = durableKit;
+
+const { openNodeSqliteStorage } = node;
+const { defineTool } = durable;
+const { MemoryStorage } = memory;
 
 const { toolCalls } = harnessStructuredEvents;
 const { COMPLETED, seed } = harnessStructuredRecoveryCases;
@@ -209,7 +215,8 @@ const reopensCheckoutWaiting = Effect.gen(function* () {
   found.ids.splice(
     0,
     found.ids.length,
-    ...((yield* state(opened.harness, parent)) as unknown as { on: TaskId<string>[] }).on,
+    ...((yield* state(opened.harness, parent)) as unknown as { on: durableTypes.TaskId<string>[] })
+      .on,
   );
   open("p1");
   open("p2");

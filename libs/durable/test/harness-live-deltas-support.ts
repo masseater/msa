@@ -1,30 +1,24 @@
 import { Type, fauxAssistantMessage, fauxText, fauxToolCall } from "@msa/ai";
-import {
-  type Harness,
-  LiveDoc,
-  type LiveState,
-  type ToolExecutionApi,
-  type ToolRegistration,
-  defineTool,
-} from "@msa/durable";
-import { MemoryStorage } from "@msa/durable/storage/memory";
+import durable from "@msa/durable";
+import type durableTypes from "@msa/durable/index.types";
+import memory from "@msa/durable/storage/memory";
 import { Effect } from "effect";
 import { dual } from "effect/Function";
 
-import chatSupport from "./chat-support.ts";
-import effectSupport from "./effect-support.ts";
 import type harnessLiveDeltasSupportTypes from "./harness-live-deltas-support.types.ts";
-import harnessSupport from "./harness-support.ts";
-import sessionSupport from "./session-support.ts";
+import testSupport from "./support.ts";
 
-const { chatSetup, openChat, waitFor } = chatSupport;
-const { awaited } = effectSupport;
-const { addTool } = harnessSupport;
-const { context, documentChanges } = sessionSupport;
+const { LiveDoc, defineTool } = durable;
+const { MemoryStorage } = memory;
+
+const { chatSetup, openChat, waitFor } = testSupport;
+const { awaited } = testSupport;
+const { addTool } = testSupport;
+const { context, documentChanges } = testSupport;
 
 function drivenToolImpl(
-  outputLimits: NonNullable<ToolRegistration["outputLimits"]>,
-  actions: ((api: ToolExecutionApi) => Promise<boolean>)[],
+  outputLimits: NonNullable<durableTypes.ToolRegistration["outputLimits"]>,
+  actions: ((api: durableTypes.ToolExecutionApi) => Promise<boolean>)[],
   waker: { wake?: () => void },
 ) {
   return defineTool({
@@ -56,25 +50,25 @@ function drivenToolImpl(
 
 const drivenTool: {
   (
-    actions: ((api: ToolExecutionApi) => Promise<boolean>)[],
+    actions: ((api: durableTypes.ToolExecutionApi) => Promise<boolean>)[],
     waker: { wake?: () => void },
   ): (
-    outputLimits: NonNullable<ToolRegistration["outputLimits"]>,
+    outputLimits: NonNullable<durableTypes.ToolRegistration["outputLimits"]>,
   ) => ReturnType<typeof drivenToolImpl>;
   (
-    outputLimits: NonNullable<ToolRegistration["outputLimits"]>,
-    actions: ((api: ToolExecutionApi) => Promise<boolean>)[],
+    outputLimits: NonNullable<durableTypes.ToolRegistration["outputLimits"]>,
+    actions: ((api: durableTypes.ToolExecutionApi) => Promise<boolean>)[],
     waker: { wake?: () => void },
   ): ReturnType<typeof drivenToolImpl>;
 } = dual(3, drivenToolImpl);
 
 const driveStep1 = Effect.fn("driveStep1")(function* (
-  outputLimits: NonNullable<ToolRegistration["outputLimits"]> = {},
+  outputLimits: NonNullable<durableTypes.ToolRegistration["outputLimits"]> = {},
 ) {
   const runPromise = Effect.runPromiseWith(yield* Effect.context<never>());
 
   const setup = chatSetup();
-  const actions: ((api: ToolExecutionApi) => Promise<boolean>)[] = [];
+  const actions: ((api: durableTypes.ToolExecutionApi) => Promise<boolean>)[] = [];
   const waker: { wake?: () => void } = {};
   addTool(setup.registry, drivenTool(outputLimits, actions, waker));
   setup.faux.setResponses([
@@ -94,7 +88,7 @@ const driveStep1 = Effect.fn("driveStep1")(function* (
       return (yield* awaited(live(harness)))?.tools?.[0]?.status === "running";
     }),
   );
-  const push = (action: (api: ToolExecutionApi) => Promise<boolean>): void => {
+  const push = (action: (api: durableTypes.ToolExecutionApi) => Promise<boolean>): void => {
     actions.push(action);
     waker.wake?.();
   };
@@ -102,7 +96,7 @@ const driveStep1 = Effect.fn("driveStep1")(function* (
 });
 
 const drive = Effect.fn("drive")(function* (
-  outputLimits: NonNullable<ToolRegistration["outputLimits"]> = {},
+  outputLimits: NonNullable<durableTypes.ToolRegistration["outputLimits"]> = {},
 ) {
   const { runPromise, harness, commits, submission, push } = yield* driveStep1(outputLimits);
   return {
@@ -142,7 +136,9 @@ const drive = Effect.fn("drive")(function* (
   };
 });
 
-function live(harness: Harness): Promise<Readonly<LiveState> | undefined> {
+function live(
+  harness: durableTypes.Harness,
+): Promise<Readonly<durableTypes.LiveState> | undefined> {
   return harness.snapshot(LiveDoc, 1 as never, context);
 }
 

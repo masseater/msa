@@ -1,45 +1,51 @@
 import type { Op } from "@msa/chord/delta";
 import { Function } from "effect";
 
-import type { Changes } from "./events-changes.ts";
-import type { Parts } from "./events-snapshot.ts";
-import { callOf, resultOf, toolUpdate } from "./events-tools.ts";
-import type { AgentEvent } from "./events-types.ts";
-import type { NestedToolSlot, ToolSlot } from "./live.ts";
-import type { Dual2, JsonObject } from "./types.ts";
+import type eventsChangesTypes from "./events-changes.types.ts";
+import type eventsSlotsTypes from "./events-slots.types.ts";
+import type eventsSnapshotTypes from "./events-snapshot.types.ts";
+import eventsTools from "./events-tools.ts";
+import type eventsTypesModule from "./events-types.ts";
+import type liveTypes from "./live.types.ts";
+import type typesModule from "./types.types.ts";
 
-export type Slots = {
-  readonly slotsBefore: Map<string, ToolSlot>;
-  readonly slots: readonly ToolSlot[];
-  readonly nestedBefore: Map<TaskKey, NestedToolSlot>;
-  readonly nested: readonly NestedToolSlot[];
-};
+const { callOf, resultOf, toolUpdate } = eventsTools;
 
-type TaskKey = NestedToolSlot["taskId"];
-
-export type ToolEnd = Extract<AgentEvent, { type: "tool_execution_end" }>;
-
-export const slotsOf: Dual2<Parts, Parts, Slots> = Function.dual(
+const slotsOf: typesModule.Dual2<
+  eventsSnapshotTypes.Parts,
+  eventsSnapshotTypes.Parts,
+  eventsSlotsTypes.Slots
+> = Function.dual(
   2,
-  (was: Parts, now: Parts): Slots => ({
-    slotsBefore: new Map((was.live.tools ?? []).map((slot) => [slot.callId, slot])),
-    slots: now.live.tools ?? [],
-    nestedBefore: new Map((was.live.nestedTools ?? []).map((slot) => [slot.taskId, slot])),
+  (was: eventsSnapshotTypes.Parts, now: eventsSnapshotTypes.Parts): eventsSlotsTypes.Slots => ({
     nested: now.live.nestedTools ?? [],
+    nestedBefore: new Map((was.live.nestedTools ?? []).map((slot) => [slot.taskId, slot])),
+    slots: now.live.tools ?? [],
+    slotsBefore: new Map((was.live.tools ?? []).map((slot) => [slot.callId, slot])),
   }),
 );
 
-const argumentsOf = (slot: ToolSlot | NestedToolSlot, changes: Changes): JsonObject => {
+const argumentsOf = (
+  slot: liveTypes.ToolSlot | liveTypes.NestedToolSlot,
+  changes: eventsChangesTypes.Changes,
+): typesModule.JsonObject => {
   if ("parentCallId" in slot) return slot.arguments;
   const checkpoint =
     slot.taskId === undefined ? undefined : changes.tasks.get(slot.taskId)?.state.checkpoint;
-  return (checkpoint as { arguments?: JsonObject } | undefined)?.arguments ?? {};
+  return (checkpoint as { arguments?: typesModule.JsonObject } | undefined)?.arguments ?? {};
 };
 
-export const startedTools: Dual2<Slots, Changes, AgentEvent[]> = Function.dual(
+const startedTools: typesModule.Dual2<
+  eventsSlotsTypes.Slots,
+  eventsChangesTypes.Changes,
+  eventsTypesModule.AgentEvent[]
+> = Function.dual(
   2,
-  (slots: Slots, changes: Changes): AgentEvent[] => {
-    const events: AgentEvent[] = [];
+  (
+    slots: eventsSlotsTypes.Slots,
+    changes: eventsChangesTypes.Changes,
+  ): eventsTypesModule.AgentEvent[] => {
+    const events: eventsTypesModule.AgentEvent[] = [];
     for (const slot of [...slots.slots, ...slots.nested]) {
       const previous =
         "parentCallId" in slot
@@ -56,10 +62,14 @@ export const startedTools: Dual2<Slots, Changes, AgentEvent[]> = Function.dual(
   },
 );
 
-export const updatedTools: Dual2<Slots, readonly Op[], AgentEvent[]> = Function.dual(
+const updatedTools: typesModule.Dual2<
+  eventsSlotsTypes.Slots,
+  readonly Op[],
+  eventsTypesModule.AgentEvent[]
+> = Function.dual(
   2,
-  (slots: Slots, viewOps: readonly Op[]): AgentEvent[] => {
-    const events: AgentEvent[] = [];
+  (slots: eventsSlotsTypes.Slots, viewOps: readonly Op[]): eventsTypesModule.AgentEvent[] => {
+    const events: eventsTypesModule.AgentEvent[] = [];
     for (const [index, slot] of slots.slots.entries()) {
       const previous = slots.slotsBefore.get(slot.callId);
       if (slot.status !== "running" || previous?.status !== "running") continue;
@@ -78,11 +88,18 @@ export const updatedTools: Dual2<Slots, readonly Op[], AgentEvent[]> = Function.
   },
 );
 
-export const endedTools: Dual2<Slots, Changes, readonly ToolEnd[]> = Function.dual(
+const endedTools: typesModule.Dual2<
+  eventsSlotsTypes.Slots,
+  eventsChangesTypes.Changes,
+  readonly eventsSlotsTypes.ToolEnd[]
+> = Function.dual(
   2,
-  (slots: Slots, changes: Changes): readonly ToolEnd[] => {
-    const ends: ToolEnd[] = [];
-    const endTool = (slot: ToolSlot, entryId: number | undefined): void => {
+  (
+    slots: eventsSlotsTypes.Slots,
+    changes: eventsChangesTypes.Changes,
+  ): readonly eventsSlotsTypes.ToolEnd[] => {
+    const ends: eventsSlotsTypes.ToolEnd[] = [];
+    const endTool = (slot: liveTypes.ToolSlot, entryId: number | undefined): void => {
       const entry = changes.entries.find((candidate) => candidate.id === entryId);
       ends.push({
         type: "tool_execution_end",
@@ -103,11 +120,18 @@ export const endedTools: Dual2<Slots, Changes, readonly ToolEnd[]> = Function.du
   },
 );
 
-export const endedNested: Dual2<Slots, Changes, AgentEvent[]> = Function.dual(
+const endedNested: typesModule.Dual2<
+  eventsSlotsTypes.Slots,
+  eventsChangesTypes.Changes,
+  eventsTypesModule.AgentEvent[]
+> = Function.dual(
   2,
-  (slots: Slots, changes: Changes): AgentEvent[] => {
-    const events: AgentEvent[] = [];
-    const endNested = (slot: NestedToolSlot): void => {
+  (
+    slots: eventsSlotsTypes.Slots,
+    changes: eventsChangesTypes.Changes,
+  ): eventsTypesModule.AgentEvent[] => {
+    const events: eventsTypesModule.AgentEvent[] = [];
+    const endNested = (slot: liveTypes.NestedToolSlot): void => {
       const result = changes.nestedResults.get(slot.taskId);
       events.push({
         type: "tool_execution_end",
@@ -126,3 +150,13 @@ export const endedNested: Dual2<Slots, Changes, AgentEvent[]> = Function.dual(
     return events;
   },
 );
+
+const eventsSlots = {
+  endedNested,
+  endedTools,
+  slotsOf,
+  startedTools,
+  updatedTools,
+};
+
+export default eventsSlots;

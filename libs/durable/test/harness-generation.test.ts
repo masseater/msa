@@ -1,6 +1,6 @@
 import { type AssistantMessage, fauxAssistantMessage } from "@msa/ai";
-import { AssistantEntry } from "@msa/durable";
-import { MemoryStorage } from "@msa/durable/storage/memory";
+import durable from "@msa/durable";
+import memory from "@msa/durable/storage/memory";
 import { Effect } from "effect";
 import { describe, expect, it } from "vite-plus/test";
 
@@ -9,6 +9,9 @@ import effectSupport from "./effect-support.ts";
 import harnessGenerationSupport from "./harness-generation-support.ts";
 import harnessSupport from "./harness-support.ts";
 import sessionSupport from "./session-support.ts";
+
+const { MemoryStorage } = memory;
+const { AssistantEntry } = durable;
 
 const { allEntries, chatSetup, openChat, textOf, unanswered } = chatSupport;
 const { awaited } = effectSupport;

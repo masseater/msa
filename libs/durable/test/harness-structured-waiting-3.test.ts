@@ -1,4 +1,5 @@
-import { type ConversationId, type TaskId, defineDoc } from "@msa/durable";
+import durable from "@msa/durable";
+import type durableTypes from "@msa/durable/index.types";
 import { Effect } from "effect";
 import { afterEach, describe, expect, it } from "vite-plus/test";
 
@@ -7,6 +8,8 @@ import harnessStructuredSupport from "./harness-structured-support.ts";
 import platformSupport from "./platform-support.ts";
 import sessionSupport from "./session-support.ts";
 import taskSupport from "./task-support.ts";
+
+const { defineDoc } = durable;
 
 const { awaited } = effectSupport;
 const {
@@ -51,7 +54,7 @@ afterEach(() =>
 
 const holdsFinishedTask = Effect.gen(function* () {
   const { harness, root } = yield* openNodes();
-  let child: TaskId | undefined;
+  let child: durableTypes.TaskId | undefined;
   script("parent", {
     run: (runtime, ctx) =>
       runtime.commit(
@@ -112,7 +115,7 @@ const keepsHoldingOrdinaryStep1 = Effect.gen(function* () {
 
 const keepsHoldingOrdinaryStep2 = Effect.gen(function* () {
   const { runPromise, harness, root } = yield* keepsHoldingOrdinaryStep1;
-  let conversation: ConversationId | undefined;
+  let conversation: durableTypes.ConversationId | undefined;
   script("parent", {
     run: (runtime, ctx) =>
       runtime
@@ -176,7 +179,7 @@ const abortsWorkBelow = Effect.fn("abortsWorkBelow")(function* (
   const runPromise = Effect.runPromiseWith(yield* Effect.context<never>());
 
   const { harness, root } = yield* openNodes();
-  let child: TaskId | undefined;
+  let child: durableTypes.TaskId | undefined;
   script("parent", {
     resume: (runtime, ctx) =>
       runPromise(
@@ -219,7 +222,7 @@ const onlyMarksCompleting = Effect.gen(function* () {
   const runPromise = Effect.runPromiseWith(yield* Effect.context<never>());
 
   const { harness, root } = yield* openNodes();
-  let child: TaskId | undefined;
+  let child: durableTypes.TaskId | undefined;
   script("parent", {
     run: (runtime, ctx) =>
       runtime

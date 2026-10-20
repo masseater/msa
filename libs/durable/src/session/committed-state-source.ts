@@ -6,15 +6,14 @@ import type {
 } from "@msa/chord";
 import type { Op } from "@msa/chord/delta";
 
-import type { JsonObject } from "../types.ts";
-import { SessionSourceAttachment } from "./source-attachment.ts";
+import type committedStateSourceTypes from "./committed-state-source.types.ts";
+import SessionSourceAttachment from "./source-attachment.ts";
+import type sourceAttachmentTypes from "./source-attachment.types.ts";
 
-export type ObservedDocumentValue = Readonly<JsonObject> | null;
-
-export const RETIREMENT_OPERATIONS: readonly Op[] = [["r", null]];
-
-export class CommittedStateSource<T = ObservedDocumentValue> implements ReplicatedStateSource<T> {
-  readonly #attachments = new Set<SessionSourceAttachment<T>>();
+export default class CommittedStateSource<
+  T = committedStateSourceTypes.ObservedDocumentValue,
+> implements ReplicatedStateSource<T> {
+  readonly #attachments = new Set<sourceAttachmentTypes.SessionSourceAttachment<T>>();
   #release: (() => void) | undefined;
   #value: T | undefined;
   #cursor = 0;
@@ -29,7 +28,7 @@ export class CommittedStateSource<T = ObservedDocumentValue> implements Replicat
   attach(): ReplicatedStateSourceAttachment<T> {
     if (this.#closed) throw new Error("State source is closed");
     const attachment = new SessionSourceAttachment(
-      { value: this.#value as T, cursor: this.#cursor },
+      { cursor: this.#cursor, value: this.#value as T },
       () => {
         this.#attachments.delete(attachment);
         if (this.#attachments.size === 0) this.#finishDisposal();
@@ -45,10 +44,10 @@ export class CommittedStateSource<T = ObservedDocumentValue> implements Replicat
     this.#cursor += 1;
     if (value === null) this.#retired = true;
     const frame: ReplicatedStateSourceFrame<T> = {
-      cursor: this.#cursor,
-      value,
-      ops,
       context,
+      cursor: this.#cursor,
+      ops,
+      value,
     };
     for (const attachment of [...this.#attachments]) attachment.publish(frame);
   }

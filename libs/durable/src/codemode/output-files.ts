@@ -1,17 +1,20 @@
 import type { Context } from "@msa/chord";
 import { Effect, Function } from "effect";
 
-import type { Dual2 } from "../dual.ts";
-import type { ExecutionEnv } from "../env/index.ts";
-import { errorMessage } from "../errors.ts";
-import type { ToolExecutionApi } from "../harness/types.ts";
-import type { OutputFile } from "./output.ts";
-import { CodemodeRunDoc, commitWith } from "./run-docs.ts";
+import type dualTypes from "../dual.ts";
+import type envTypes from "../env/index.types.ts";
+import errors from "../errors.ts";
+import type typesModule from "../harness/types.types.ts";
+import type outputTypes from "./output.types.ts";
+import runDocs from "./run-docs.ts";
+
+const { CodemodeRunDoc, commitWith } = runDocs;
+const { errorMessage } = errors;
 
 const outputDir = Effect.fnUntraced(function* (
-  api: ToolExecutionApi,
+  api: typesModule.ToolExecutionApi,
   context: Context,
-  env: ExecutionEnv,
+  env: envTypes.ExecutionEnv,
 ) {
   const recorded = yield* commitWith(api, context, (tx) =>
     Effect.map(
@@ -33,7 +36,10 @@ const outputDir = Effect.fnUntraced(function* (
   );
 });
 
-const outputFilesOf = (api: ToolExecutionApi, context: Context): OutputFile => {
+const outputFilesOf = (
+  api: typesModule.ToolExecutionApi,
+  context: Context,
+): outputTypes.OutputFile => {
   const env = api.env;
   let directory: Promise<string> | undefined;
   return (name, data) => {
@@ -50,7 +56,11 @@ const outputFilesOf = (api: ToolExecutionApi, context: Context): OutputFile => {
   };
 };
 
-export const outputFiles: Dual2<ToolExecutionApi, Context, OutputFile> = Function.dual(
-  2,
-  outputFilesOf,
-);
+const outputFiles: dualTypes.Dual2<typesModule.ToolExecutionApi, Context, outputTypes.OutputFile> =
+  Function.dual(2, outputFilesOf);
+
+const outputFilesModule = {
+  outputFiles,
+};
+
+export default outputFilesModule;

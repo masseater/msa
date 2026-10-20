@@ -1,23 +1,22 @@
 import { Effect } from "effect";
 
-import type { ExecutionEnv, ListFilesOptions } from "../env/index.ts";
-import {
-  abortedContext,
-  codeOf,
-  context,
-  type EnvCaseSpec,
-  listed,
-  value,
-} from "./env-conformance-support.ts";
+import type envTypes from "../env/index.types.ts";
+import envConformanceSupport from "./env-conformance-support.ts";
+import type envConformanceSupportTypes from "./env-conformance-support.types.ts";
 
-const writeAll = Effect.fnUntraced(function* (env: ExecutionEnv, files: readonly string[]) {
+const { abortedContext, codeOf, context, listed, value } = envConformanceSupport;
+
+const writeAll = Effect.fnUntraced(function* (
+  env: envTypes.ExecutionEnv,
+  files: readonly string[],
+) {
   for (const file of files) yield* value(() => env.writeFile(file, "", context));
 });
 
-const listCode = (env: ExecutionEnv, path: string, options?: ListFilesOptions) =>
+const listCode = (env: envTypes.ExecutionEnv, path: string, options?: envTypes.ListFilesOptions) =>
   codeOf(() => env.listFiles!(path, options, context));
 
-const depthFirst: EnvCaseSpec = {
+const depthFirst: envConformanceSupportTypes.EnvCaseSpec = {
   name: "listFiles lists files and directories depth first in name order",
   test: (env, { assert }) =>
     Effect.gen(function* () {
@@ -37,7 +36,7 @@ const depthFirst: EnvCaseSpec = {
     }),
 };
 
-const ignored: EnvCaseSpec = {
+const ignored: envConformanceSupportTypes.EnvCaseSpec = {
   name: "listFiles skips what git ignores in work trees, .git, and excluded names",
   test: (env, { assert }) =>
     Effect.gen(function* () {
@@ -70,7 +69,7 @@ const ignored: EnvCaseSpec = {
     }),
 };
 
-const bounds: EnvCaseSpec = {
+const bounds: envConformanceSupportTypes.EnvCaseSpec = {
   name: "listFiles stops at its bounds and reports truncated",
   test: (env, { assert }) =>
     Effect.gen(function* () {
@@ -96,7 +95,7 @@ const bounds: EnvCaseSpec = {
     }),
 };
 
-const failures: EnvCaseSpec = {
+const failures: envConformanceSupportTypes.EnvCaseSpec = {
   name: "listFiles fails on missing directories, files, and aborts",
   test: (env, { assert }) =>
     Effect.gen(function* () {
@@ -110,9 +109,14 @@ const failures: EnvCaseSpec = {
     }),
 };
 
-export const listCases: readonly EnvCaseSpec[] = [depthFirst, ignored, bounds, failures];
+const listCases: readonly envConformanceSupportTypes.EnvCaseSpec[] = [
+  depthFirst,
+  ignored,
+  bounds,
+  failures,
+];
 
-export const listedSymlinks: EnvCaseSpec = {
+const listedSymlinks: envConformanceSupportTypes.EnvCaseSpec = {
   name: "listFiles lists symbolic links without following them",
   test: (env, { assert, shell }) =>
     Effect.gen(function* () {
@@ -135,3 +139,10 @@ export const listedSymlinks: EnvCaseSpec = {
       assert.deepEqual((yield* listed(env, "link")).entries, ["f inner.txt", "l loop"]);
     }),
 };
+
+const envConformanceList = {
+  listCases,
+  listedSymlinks,
+};
+
+export default envConformanceList;

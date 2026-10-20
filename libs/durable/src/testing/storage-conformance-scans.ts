@@ -1,42 +1,27 @@
 import type { JsonValue } from "@msa/chord";
 import { Effect } from "effect";
 
-import { idFromNumber } from "../ids.ts";
-import {
-  type ConversationId,
-  type Cursor,
-  type EntryId,
-  type Page,
-  type ScanOrder,
-  type Storage,
-  type SubmissionId,
-  type TaskId,
-} from "../types.ts";
-import {
-  commit,
-  context,
-  createRoot,
-  entry,
-  type Identified,
-  io,
-  mint,
-  pendingTask,
-  roundTripJson,
-  type StorageCaseSpec,
-} from "./storage-conformance-support.ts";
+import idsModule from "../ids.ts";
+import type typesModule from "../types.types.ts";
+import storageConformanceSupport from "./storage-conformance-support.ts";
+import type storageConformanceSupportTypes from "./storage-conformance-support.types.ts";
 
-const outOfOrderEntries: StorageCaseSpec = {
+const { commit, context, createRoot, entry, io, mint, pendingTask, roundTripJson } =
+  storageConformanceSupport;
+const { idFromNumber } = idsModule;
+
+const outOfOrderEntries: storageConformanceSupportTypes.StorageCaseSpec = {
   name: "indexes entries committed out of ID order",
   test: (storage, expect) =>
     Effect.gen(function* () {
       const rootId = yield* createRoot(storage);
       yield* commit(storage, [
-        { type: "entry", value: entry(idFromNumber<EntryId>(30), rootId) },
-        { type: "entry", value: entry(idFromNumber<EntryId>(10), rootId) },
+        { type: "entry", value: entry(idFromNumber<typesModule.EntryId>(30), rootId) },
+        { type: "entry", value: entry(idFromNumber<typesModule.EntryId>(10), rootId) },
         {
           type: "entry",
-          value: entry(idFromNumber<EntryId>(20), rootId, "marker", {
-            head: idFromNumber<EntryId>(10),
+          value: entry(idFromNumber<typesModule.EntryId>(20), rootId, "marker", {
+            head: idFromNumber<typesModule.EntryId>(10),
           }),
         },
       ]);
@@ -52,14 +37,14 @@ const outOfOrderEntries: StorageCaseSpec = {
     }),
 };
 
-const cursorAfterCommit: StorageCaseSpec = {
+const cursorAfterCommit: storageConformanceSupportTypes.StorageCaseSpec = {
   name: "continues an entry cursor below its last item after a newer commit",
   test: (storage, expect) =>
     Effect.gen(function* () {
       const rootId = yield* createRoot(storage);
-      const oldestId = yield* mint<EntryId>(storage);
-      const middleId = yield* mint<EntryId>(storage);
-      const newestId = yield* mint<EntryId>(storage);
+      const oldestId = yield* mint<typesModule.EntryId>(storage);
+      const middleId = yield* mint<typesModule.EntryId>(storage);
+      const newestId = yield* mint<typesModule.EntryId>(storage);
       yield* commit(storage, [
         { type: "entry", value: entry(oldestId, rootId) },
         { type: "entry", value: entry(middleId, rootId) },
@@ -70,7 +55,7 @@ const cursorAfterCommit: StorageCaseSpec = {
         storage.scanEntries({ conversationId: rootId }, 2, undefined, context),
       );
       expect(first.items.map(({ id }) => id)).toEqual([newestId, middleId]);
-      const appendedId = yield* mint<EntryId>(storage);
+      const appendedId = yield* mint<typesModule.EntryId>(storage);
       yield* commit(storage, [{ type: "entry", value: entry(appendedId, rootId) }]);
       const second = yield* io(() =>
         storage.scanEntries({ conversationId: rootId }, 2, first.next, context),
@@ -80,13 +65,13 @@ const cursorAfterCommit: StorageCaseSpec = {
     }),
 };
 
-const conversationPages: StorageCaseSpec = {
+const conversationPages: storageConformanceSupportTypes.StorageCaseSpec = {
   name: "paginates conversations by opaque cursor in ascending ID order",
   test: (storage, expect) =>
     Effect.gen(function* () {
       const rootId = yield* createRoot(storage);
-      const secondId = yield* mint<ConversationId>(storage);
-      const thirdId = yield* mint<ConversationId>(storage);
+      const secondId = yield* mint<typesModule.ConversationId>(storage);
+      const thirdId = yield* mint<typesModule.ConversationId>(storage);
       yield* commit(storage, [
         { type: "conversation", value: { id: thirdId } },
         { type: "conversation", value: { id: secondId } },
@@ -104,26 +89,29 @@ const conversationPages: StorageCaseSpec = {
     }),
 };
 
-const seedOwners = Effect.fnUntraced(function* (storage: Storage) {
+const seedOwners = Effect.fnUntraced(function* (storage: typesModule.Storage) {
   const rootId = yield* createRoot(storage);
-  const otherOwnerId = yield* mint<ConversationId>(storage);
-  const firstTaskId = yield* mint<TaskId<JsonValue>>(storage);
-  const secondTaskId = yield* mint<TaskId<JsonValue>>(storage);
-  const firstId = yield* mint<ConversationId>(storage);
-  const secondId = yield* mint<ConversationId>(storage);
-  const thirdId = yield* mint<ConversationId>(storage);
-  const owned = (id: ConversationId, conversationId: ConversationId, taskId: TaskId<JsonValue>) =>
-    ({ type: "conversation", value: { id, owner: { conversationId, taskId } } }) as const;
+  const otherOwnerId = yield* mint<typesModule.ConversationId>(storage);
+  const firstTaskId = yield* mint<typesModule.TaskId<JsonValue>>(storage);
+  const secondTaskId = yield* mint<typesModule.TaskId<JsonValue>>(storage);
+  const firstId = yield* mint<typesModule.ConversationId>(storage);
+  const secondId = yield* mint<typesModule.ConversationId>(storage);
+  const thirdId = yield* mint<typesModule.ConversationId>(storage);
+  const owned = (
+    id: typesModule.ConversationId,
+    conversationId: typesModule.ConversationId,
+    taskId: typesModule.TaskId<JsonValue>,
+  ) => ({ type: "conversation", value: { id, owner: { conversationId, taskId } } }) as const;
   yield* commit(storage, [
     { type: "conversation", value: { id: otherOwnerId } },
     owned(firstId, rootId, firstTaskId),
     owned(secondId, rootId, secondTaskId),
     owned(thirdId, otherOwnerId, firstTaskId),
   ]);
-  return { rootId, firstTaskId, firstId, secondId, thirdId };
+  return { firstId, firstTaskId, rootId, secondId, thirdId };
 });
 
-const ownerEdges: StorageCaseSpec = {
+const ownerEdges: storageConformanceSupportTypes.StorageCaseSpec = {
   name: "filters and pages conversations by durable owner edges",
   test: (storage, expect) =>
     Effect.gen(function* () {
@@ -156,53 +144,54 @@ const ownerEdges: StorageCaseSpec = {
     }),
 };
 
-const seedTables = Effect.fnUntraced(function* (storage: Storage) {
+const seedTables = Effect.fnUntraced(function* (storage: typesModule.Storage) {
   const rootId = yield* createRoot(storage);
   const conversationIds = [rootId];
-  const taskIds: TaskId<JsonValue>[] = [];
-  const submissionIds: SubmissionId[] = [];
+  const taskIds: typesModule.TaskId<JsonValue>[] = [];
+  const submissionIds: typesModule.SubmissionId[] = [];
   for (let index = 0; index < 3; index += 1) {
-    const conversationId = yield* mint<ConversationId>(storage);
-    const taskId = yield* mint<TaskId<JsonValue>>(storage);
-    const submissionId = yield* mint<SubmissionId>(storage);
+    const conversationId = yield* mint<typesModule.ConversationId>(storage);
+    const taskId = yield* mint<typesModule.TaskId<JsonValue>>(storage);
+    const submissionId = yield* mint<typesModule.SubmissionId>(storage);
     yield* commit(storage, [
       { type: "conversation", value: { id: conversationId } },
       { type: "task", value: pendingTask(taskId, rootId) },
       {
         type: "submission",
-        value: { id: submissionId, conversationId: rootId, type: "input", status: "queued" },
+        value: { conversationId: rootId, id: submissionId, status: "queued", type: "input" },
       },
     ]);
     conversationIds.push(conversationId);
     taskIds.push(taskId);
     submissionIds.push(submissionId);
   }
-  return { conversationIds, taskIds, submissionIds };
+  return { conversationIds, submissionIds, taskIds };
 });
 
 type Scan = (
-  order: ScanOrder | undefined,
-  cursor: Cursor | undefined,
-) => Promise<Page<Identified, Cursor>>;
+  order: typesModule.ScanOrder | undefined,
+  cursor: typesModule.Cursor | undefined,
+) => Promise<typesModule.Page<storageConformanceSupportTypes.Identified, typesModule.Cursor>>;
 
-const scanAll = Effect.fnUntraced(function* (scan: Scan, order: ScanOrder | undefined) {
+const scanAll = Effect.fnUntraced(function* (scan: Scan, order: typesModule.ScanOrder | undefined) {
   const found: number[] = [];
   let page = yield* io(() => scan(order, undefined));
   found.push(...page.items.map(({ id }) => id));
   while (page.next !== undefined) {
-    const cursor = (yield* roundTripJson(page.next)) as Cursor;
+    const cursor = (yield* roundTripJson(page.next)) as typesModule.Cursor;
     page = yield* io(() => scan(undefined, cursor));
     found.push(...page.items.map(({ id }) => id));
   }
   return found;
 });
 
-const tableOrders: StorageCaseSpec = {
+const tableOrders: storageConformanceSupportTypes.StorageCaseSpec = {
   name: "scans tables in either ID order and continues a cursor in its order",
   test: (storage, expect) =>
     Effect.gen(function* () {
       const { conversationIds, taskIds, submissionIds } = yield* seedTables(storage);
-      const orderOf = (order: ScanOrder | undefined) => (order === undefined ? {} : { order });
+      const orderOf = (order: typesModule.ScanOrder | undefined) =>
+        order === undefined ? {} : { order };
       const scans: readonly (readonly [Scan, readonly number[]])[] = [
         [
           (order, cursor) => storage.scanConversations(orderOf(order), 2, cursor, context),
@@ -228,11 +217,18 @@ const tableOrders: StorageCaseSpec = {
     }),
 };
 
-export const scansCases: readonly StorageCaseSpec[] = [
+const scansCases: readonly storageConformanceSupportTypes.StorageCaseSpec[] = [
   outOfOrderEntries,
   cursorAfterCommit,
   conversationPages,
   ownerEdges,
 ];
 
-export const tableOrderCases: readonly StorageCaseSpec[] = [tableOrders];
+const tableOrderCases: readonly storageConformanceSupportTypes.StorageCaseSpec[] = [tableOrders];
+
+const storageConformanceScans = {
+  scansCases,
+  tableOrderCases,
+};
+
+export default storageConformanceScans;

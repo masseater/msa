@@ -1,44 +1,40 @@
 import type { Context } from "@msa/chord";
 import { Effect } from "effect";
 
-import type { SessionImpl } from "../session/session.ts";
-import type { Transaction } from "../session/transaction.ts";
-import { toPromise } from "./bridge.ts";
-import type { QueueModes } from "./inbox.ts";
-import { removeInboxItem } from "./inbox.ts";
-import { SubmissionHandle } from "./submission-handle.ts";
-import { admitSubmission } from "./submissions-admit.ts";
-import type {
-  CommitPublication,
-  ConversationId,
-  SettledSubmissionRecord,
-  Storage,
-  Submission,
-  SubmissionDraft,
-  SubmissionId,
-  SubmissionRecord,
-} from "./types.ts";
-import { closedError, Waiters } from "./util.ts";
+import type transactionTypes from "../session/transaction.types.ts";
+import bridge from "./bridge.ts";
+import inboxModule from "./inbox.ts";
+import SubmissionHandle from "./submission-handle.ts";
+import submissionsAdmit from "./submissions-admit.ts";
+import type submissionsTypes from "./submissions.types.ts";
+import type typesModule from "./types.types.ts";
+import util from "./util.ts";
 
-export type AbortResult = "aborted" | "already_placed" | "settled";
+const { Waiters, closedError } = util;
+const { toPromise } = bridge;
+const { admitSubmission } = submissionsAdmit;
 
-const isSettled = (record: SubmissionRecord): record is SettledSubmissionRecord =>
+const { removeInboxItem } = inboxModule;
+
+const isSettled = (
+  record: typesModule.SubmissionRecord,
+): record is typesModule.SettledSubmissionRecord =>
   record.status === "done" || record.status === "unanswered";
 
-export class Submissions {
-  readonly #session: SessionImpl;
-  readonly #storage: Storage;
+export default class Submissions {
+  readonly #session: submissionsTypes.SessionImpl;
+  readonly #storage: typesModule.Storage;
   readonly #now: () => number;
-  readonly #queueModes: () => QueueModes;
+  readonly #queueModes: () => submissionsTypes.QueueModes;
   readonly #resume: () => void;
-  readonly #waiters = new Waiters<SubmissionId, SettledSubmissionRecord>();
+  readonly #waiters = new Waiters<typesModule.SubmissionId, typesModule.SettledSubmissionRecord>();
   #closed = false;
 
   constructor(
-    session: SessionImpl,
-    storage: Storage,
+    session: submissionsTypes.SessionImpl,
+    storage: typesModule.Storage,
     now: () => number,
-    queueModes: () => QueueModes,
+    queueModes: () => submissionsTypes.QueueModes,
     resume: () => void,
   ) {
     this.#session = session;
@@ -56,14 +52,14 @@ export class Submissions {
   }
 
   submit(
-    conversationId: ConversationId,
-    draft: SubmissionDraft,
+    conversationId: typesModule.ConversationId,
+    draft: typesModule.SubmissionDraft,
     context: Context,
-  ): Promise<Submission> {
+  ): Promise<typesModule.Submission> {
     this.#resume();
     return Effect.runPromise(
       Effect.gen({ self: this }, function* () {
-        const admit = yield* toPromise((tx: Transaction) =>
+        const admit = yield* toPromise((tx: transactionTypes.Transaction) =>
           admitSubmission(tx, conversationId, draft, this.#now(), this.#queueModes()),
         );
         const id = yield* Effect.promise(() => this.#session.commitWith(admit, context));
@@ -72,7 +68,7 @@ export class Submissions {
     );
   }
 
-  get(id: SubmissionId, context: Context): Promise<Submission | undefined> {
+  get(id: typesModule.SubmissionId, context: Context): Promise<typesModule.Submission | undefined> {
     return Effect.runPromise(
       Effect.gen({ self: this }, function* () {
         const record = yield* Effect.promise(() =>
@@ -83,7 +79,7 @@ export class Submissions {
     );
   }
 
-  status(id: SubmissionId, context: Context): Promise<SubmissionRecord> {
+  status(id: typesModule.SubmissionId, context: Context): Promise<typesModule.SubmissionRecord> {
     return Effect.runPromise(
       Effect.gen({ self: this }, function* () {
         const record = yield* Effect.promise(() =>
@@ -96,7 +92,10 @@ export class Submissions {
     );
   }
 
-  wait(id: SubmissionId, context: Context): Promise<SettledSubmissionRecord> {
+  wait(
+    id: typesModule.SubmissionId,
+    context: Context,
+  ): Promise<typesModule.SettledSubmissionRecord> {
     this.#resume();
     return Effect.runPromise(
       Effect.gen({ self: this }, function* () {
@@ -108,17 +107,20 @@ export class Submissions {
   }
 
   abort(
-    id: SubmissionId,
+    id: typesModule.SubmissionId,
     context: Context,
-    conversationId?: ConversationId,
-  ): Promise<AbortResult | "not_found"> {
+    conversationId?: typesModule.ConversationId,
+  ): Promise<submissionsTypes.AbortResult | "not_found"> {
     return this.#session.commitWith(
       (tx) => Effect.runPromise(this.#abort(tx, id, conversationId)),
       context,
     );
   }
 
-  abortHandle(id: SubmissionId, context: Context): Promise<AbortResult> {
+  abortHandle(
+    id: typesModule.SubmissionId,
+    context: Context,
+  ): Promise<submissionsTypes.AbortResult> {
     return Effect.runPromise(
       Effect.gen({ self: this }, function* () {
         const result = yield* Effect.promise(() => this.abort(id, context));
@@ -131,27 +133,31 @@ export class Submissions {
 
   #abort = Effect.fnUntraced(function* (
     this: Submissions,
-    tx: Transaction,
-    id: SubmissionId,
-    conversationId: ConversationId | undefined,
+    tx: transactionTypes.Transaction,
+    id: typesModule.SubmissionId,
+    conversationId: typesModule.ConversationId | undefined,
   ) {
     const record = yield* Effect.promise(() => tx.submission(id));
     if (
       record === undefined ||
       (conversationId !== undefined && record.conversationId !== conversationId)
     )
-      return yield* Effect.succeed<AbortResult | "not_found">("not_found");
+      return yield* Effect.succeed<submissionsTypes.AbortResult | "not_found">("not_found");
     if (record.status === "queued") {
-      tx.settleSubmission(id, { status: "unanswered", reason: "aborted" });
+      tx.settleSubmission(id, { reason: "aborted", status: "unanswered" });
       yield* removeInboxItem(tx, record.conversationId, id);
-      return yield* Effect.succeed<AbortResult | "not_found">("aborted");
+      return yield* Effect.succeed<submissionsTypes.AbortResult | "not_found">("aborted");
     }
-    return yield* Effect.succeed<AbortResult | "not_found">(
+    return yield* Effect.succeed<submissionsTypes.AbortResult | "not_found">(
       record.status === "placed" ? "already_placed" : "settled",
     );
   });
 
-  #pending = Effect.fnUntraced(function* (this: Submissions, id: SubmissionId, context: Context) {
+  #pending = Effect.fnUntraced(function* (
+    this: Submissions,
+    id: typesModule.SubmissionId,
+    context: Context,
+  ) {
     const record = yield* Effect.promise(() => this.#storage.submission(id, context));
     if (record === undefined)
       return yield* Effect.die(new Error(`Submission ${id} does not exist`));
@@ -160,7 +166,7 @@ export class Submissions {
     return { promise: this.#waiters.add(id, context) };
   });
 
-  #observe(publication: CommitPublication): void {
+  #observe(publication: typesModule.CommitPublication): void {
     for (const change of publication.changes) {
       if (change.type !== "submission" || !isSettled(change.value)) continue;
       this.#waiters.resolve(change.value.id, change.value);

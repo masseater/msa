@@ -2,11 +2,13 @@ import type { Context } from "@msa/chord";
 import { Effect } from "effect";
 import { describe, expect, it } from "vite-plus/test";
 
-import { NodeExecutionEnv } from "../src/env/node.ts";
+import node from "../src/env/node.ts";
 import codemodeModelsSupport from "./codemode-models-support.ts";
 import effectSupport from "./effect-support.ts";
 import platformSupport from "./platform-support.ts";
 import taskSupport from "./task-support.ts";
+
+const { NodeExecutionEnv } = node;
 
 const { modelsChat, run } = codemodeModelsSupport;
 const { awaited, fromJsonText } = effectSupport;

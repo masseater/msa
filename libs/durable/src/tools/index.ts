@@ -1,39 +1,35 @@
-import { defineExtension } from "../harness/define.ts";
-import { createBashTool } from "./bash.ts";
-import { createEditTool } from "./edit.ts";
-import { createReadTool, type ReadToolOptions } from "./read.ts";
-import { createWriteTool } from "./write.ts";
+import define from "../harness/define.ts";
+import bash from "./bash.ts";
+import editModule from "./edit.ts";
+import image from "./image.ts";
+import read from "./read.ts";
+import type readTypes from "./read.types.ts";
+import writeModule from "./write.ts";
 
-export {
-  type BashExecution,
-  type BashPrepare,
-  type BashToolInput,
-  type BashToolOptions,
-  createBashTool,
-  createPowerShellTool,
-  type PowerShellToolInput,
-  type PowerShellToolOptions,
-} from "./bash.ts";
-export { createEditTool, type EditToolDetails, type EditToolInput } from "./edit.ts";
-export {
-  DEFAULT_IMAGE_LIMITS,
-  type ImageLimits,
-  type ImageProcessor,
-  type PreparedImage,
-} from "./image.ts";
-export {
-  createReadTool,
-  type ReadToolDetails,
-  type ReadToolInput,
-  type ReadToolOptions,
-} from "./read.ts";
-export { createWriteTool, type WriteToolInput } from "./write.ts";
+const { defineExtension } = define;
+const { createReadTool } = read;
+const { createWriteTool } = writeModule;
+const { createEditTool } = editModule;
+const { createBashTool } = bash;
 
-export function createCodingTools(options: ReadToolOptions = {}) {
+function createCodingTools(options: readTypes.ReadToolOptions = {}) {
   return defineExtension({
     name: "coding-tools",
     tools: [createReadTool(options), createWriteTool(), createEditTool(), createBashTool()],
   });
 }
 
-export const CodingTools = createCodingTools();
+const CodingTools = createCodingTools();
+
+const toolsModule = {
+  CodingTools,
+  DEFAULT_IMAGE_LIMITS: image.DEFAULT_IMAGE_LIMITS,
+  createBashTool: bash.createBashTool,
+  createCodingTools,
+  createEditTool: editModule.createEditTool,
+  createPowerShellTool: bash.createPowerShellTool,
+  createReadTool: read.createReadTool,
+  createWriteTool: writeModule.createWriteTool,
+};
+
+export default toolsModule;

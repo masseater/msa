@@ -1,14 +1,19 @@
 import { createModels, fauxAssistantMessage, fauxProvider, fauxText, fauxToolCall } from "@msa/ai";
-import { type Conversation, LiveDoc, defineTool } from "@msa/durable";
-import { Harness, createRegistry } from "@msa/durable/harness";
+import durable from "@msa/durable";
+import harnessModule from "@msa/durable/harness";
 import { Effect } from "effect";
 import { Type } from "typebox";
 
-import { NodeExecutionEnv } from "../src/env/node.ts";
-import { createBashTool } from "../src/tools/index.ts";
+import node from "../src/env/node.ts";
+import toolsModule from "../src/tools/index.ts";
 import support from "./support.ts";
 import type toolOutputScenarioTypes from "./tool-output-scenario.types.ts";
 import toolOutputStorage from "./tool-output-storage.ts";
+
+const { LiveDoc, defineTool } = durable;
+const { Harness, createRegistry } = harnessModule;
+const { createBashTool } = toolsModule;
+const { NodeExecutionEnv } = node;
 
 const { addTool, awaited, context, makeTempFile, removeDir, tempPath } = support;
 const { footprint, openStorage, timed } = toolOutputStorage;
@@ -115,7 +120,7 @@ function scenarioModels(
 
 function liveObserver() {
   const counts = { liveCommits: 0, liveOpBytes: 0, outputSets: 0 };
-  const observe = (target: Harness): void => {
+  const observe = (target: toolOutputScenarioTypes.Harness): void => {
     target.subscribeCommits((publication) => {
       for (const change of publication.changes) {
         if (change.type !== "document" || change.record.kind !== "msa.live") continue;
@@ -131,8 +136,8 @@ function liveObserver() {
 
 type Opened = {
   readonly path: string;
-  readonly reopen: () => Promise<Harness>;
-  readonly observe: (target: Harness) => void;
+  readonly reopen: () => Promise<toolOutputScenarioTypes.Harness>;
+  readonly observe: (target: toolOutputScenarioTypes.Harness) => void;
 };
 
 const finishRate = Effect.fn("finishRate")(function* (
@@ -144,9 +149,9 @@ const finishRate = Effect.fn("finishRate")(function* (
     root,
     submission,
   }: {
-    harness: Harness;
-    root: Conversation;
-    submission: Awaited<ReturnType<Conversation["submit"]>>;
+    harness: toolOutputScenarioTypes.Harness;
+    root: toolOutputScenarioTypes.Conversation;
+    submission: Awaited<ReturnType<toolOutputScenarioTypes.Conversation["submit"]>>;
   },
   metrics: Partial<Metrics>,
 ) {

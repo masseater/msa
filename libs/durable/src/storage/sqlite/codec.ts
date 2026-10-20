@@ -1,57 +1,27 @@
-import type { JsonValue } from "@msa/chord";
 import { Function } from "effect";
 
-import { StorageRequestError } from "../../errors.ts";
-import { idFromNumber } from "../../ids.ts";
-import type {
-  ConversationId,
-  Cursor,
-  DocumentAddress,
-  DocumentContent,
-  DocumentCreate,
-  DocumentPoint,
-  DocumentRecord,
-  Id,
-  Page,
-  ScanOrder,
-  StorageWrite,
-  TaskRecord,
-} from "../../types.ts";
-import { nextCursor, type ScanStart } from "../scan.ts";
+import errors from "../../errors.ts";
+import ids from "../../ids.ts";
+import type typesModule from "../../types.types.ts";
+import scan from "../scan.ts";
+import type scanTypes from "../scan.types.ts";
 
-export type StoredTask = TaskRecord<JsonValue, JsonValue, JsonValue>;
-export type TableName = "conversation" | "entry" | "task" | "submission" | "document";
-export type RecordIdRow = { readonly record_type: TableName };
-export type JsonRow = { readonly record: string };
-export type EntryJsonRow = { readonly record: string; readonly commit_seq: number };
-export type RevisionRow = {
-  readonly seq: number;
-  readonly kind: DocumentContent["kind"];
-  readonly version: number;
-  readonly content: string;
-};
-export type ForkSegment = {
-  readonly conversationId: ConversationId;
-  readonly upper: number | undefined;
-};
-export type IdRow = { readonly id: number };
-export type MetadataRow = { readonly next_id: string; readonly next_seq: number };
-export type DocumentAction = {
-  create?: DocumentCreate;
-  copy?: Extract<StorageWrite, { readonly type: "document.copy" }>["source"];
-  content?: DocumentContent;
-  retire: boolean;
-};
+const { StorageRequestError } = errors;
+const { idFromNumber } = ids;
+const { nextCursor } = scan;
+
 type ScopeColumns = {
-  readonly scopeKind: DocumentRecord["scope"]["kind"];
+  readonly scopeKind: typesModule.DocumentRecord["scope"]["kind"];
   readonly ownerId: number;
 };
 
-export const parseJson = <T>(value: string): T => JSON.parse(value) as T;
-export const encodeJson = (value: unknown): string => JSON.stringify(value) as string;
-export const encodeIndexedString = (value: string): string => JSON.stringify(value);
+const parseJson = <T>(value: string): T => JSON.parse(value) as T;
+const encodeJson = (value: unknown): string => JSON.stringify(value) as string;
+const encodeIndexedString = (value: string): string => JSON.stringify(value);
 
-export const cursorId = <I extends Id<string>>(cursor: Cursor | undefined): I | undefined => {
+const cursorId = <I extends typesModule.Id<string>>(
+  cursor: typesModule.Cursor | undefined,
+): I | undefined => {
   const after = cursor?.["after"];
   if (after === undefined) return undefined;
   if (typeof after !== "number" || !Number.isSafeInteger(after))
@@ -59,48 +29,52 @@ export const cursorId = <I extends Id<string>>(cursor: Cursor | undefined): I | 
   return idFromNumber<I>(after);
 };
 
-export const page: {
+const page: {
   (
     limit: number,
-    order?: ScanOrder,
-  ): <T extends { readonly id: Id<string> }>(values: readonly T[]) => Page<T, Cursor>;
-  <T extends { readonly id: Id<string> }>(
+    order?: typesModule.ScanOrder,
+  ): <T extends { readonly id: typesModule.Id<string> }>(
+    values: readonly T[],
+  ) => typesModule.Page<T, typesModule.Cursor>;
+  <T extends { readonly id: typesModule.Id<string> }>(
     values: readonly T[],
     limit: number,
-    order?: ScanOrder,
-  ): Page<T, Cursor>;
+    order?: typesModule.ScanOrder,
+  ): typesModule.Page<T, typesModule.Cursor>;
 } = Function.dual(
   (args: IArguments) => Array.isArray(args[0]),
-  <T extends { readonly id: Id<string> }>(
+  <T extends { readonly id: typesModule.Id<string> }>(
     values: readonly T[],
     limit: number,
-    order: ScanOrder = "ascending",
-  ): Page<T, Cursor> => {
+    order: typesModule.ScanOrder = "ascending",
+  ): typesModule.Page<T, typesModule.Cursor> => {
     const items = values.slice(0, limit);
     if (values.length <= limit) return { items };
     return { items, next: nextCursor(items.at(-1)!.id, order) };
   },
 );
 
-export const scanSql = (
-  start: ScanStart,
+const scanSql = (
+  start: scanTypes.ScanStart,
 ): { readonly clause: string; readonly param: number; readonly direction: string } =>
   start.order === "ascending"
-    ? { clause: "id > ?", param: start.after ?? -1, direction: "ASC" }
-    : { clause: "id < ?", param: start.after ?? Number.MAX_SAFE_INTEGER, direction: "DESC" };
+    ? { clause: "id > ?", direction: "ASC", param: start.after ?? -1 }
+    : { clause: "id < ?", direction: "DESC", param: start.after ?? Number.MAX_SAFE_INTEGER };
 
-export const scopeColumns = (scope: DocumentRecord["scope"]): ScopeColumns => {
+const scopeColumns = (scope: typesModule.DocumentRecord["scope"]): ScopeColumns => {
   switch (scope.kind) {
     case "session":
-      return { scopeKind: "session", ownerId: 0 };
+      return { ownerId: 0, scopeKind: "session" };
     case "conversation":
-      return { scopeKind: "conversation", ownerId: scope.conversationId };
+      return { ownerId: scope.conversationId, scopeKind: "conversation" };
     case "task":
-      return { scopeKind: "task", ownerId: scope.taskId };
+      return { ownerId: scope.taskId, scopeKind: "task" };
   }
 };
 
-export const addressParts = (address: DocumentAddress | DocumentCreate | DocumentRecord) => {
+const addressParts = (
+  address: typesModule.DocumentAddress | typesModule.DocumentCreate | typesModule.DocumentRecord,
+) => {
   const scope = scopeColumns(address.scope);
   return {
     kind: encodeIndexedString(address.kind),
@@ -110,23 +84,28 @@ export const addressParts = (address: DocumentAddress | DocumentCreate | Documen
   };
 };
 
-export const addressKey = (address: DocumentAddress | DocumentCreate | DocumentRecord): string => {
+const addressKey = (
+  address: typesModule.DocumentAddress | typesModule.DocumentCreate | typesModule.DocumentRecord,
+): string => {
   const parts = addressParts(address);
   return JSON.stringify([parts.kind, parts.scopeKind, parts.ownerId, parts.family, parts.keyValue]);
 };
 
-export const isAliveAt: {
-  (at: DocumentPoint): (record: DocumentRecord) => boolean;
-  (record: DocumentRecord, at: DocumentPoint): boolean;
-} = Function.dual(2, (record: DocumentRecord, at: DocumentPoint): boolean => {
-  if (at === "current") return record.retiredAt === undefined;
-  return record.createdAt <= at && (record.retiredAt === undefined || at < record.retiredAt);
-});
+const isAliveAt: {
+  (at: typesModule.DocumentPoint): (record: typesModule.DocumentRecord) => boolean;
+  (record: typesModule.DocumentRecord, at: typesModule.DocumentPoint): boolean;
+} = Function.dual(
+  2,
+  (record: typesModule.DocumentRecord, at: typesModule.DocumentPoint): boolean => {
+    if (at === "current") return record.retiredAt === undefined;
+    return record.createdAt <= at && (record.retiredAt === undefined || at < record.retiredAt);
+  },
+);
 
-export const isCurrentOnly = (record: DocumentRecord): boolean =>
+const isCurrentOnly = (record: typesModule.DocumentRecord): boolean =>
   record.scope.kind !== "conversation" || record.history === "latest";
 
-export const writeId = (write: StorageWrite): Id<string> | undefined => {
+const writeId = (write: typesModule.StorageWrite): typesModule.Id<string> | undefined => {
   switch (write.type) {
     case "conversation":
     case "entry":
@@ -141,3 +120,20 @@ export const writeId = (write: StorageWrite): Id<string> | undefined => {
       return undefined;
   }
 };
+
+const codec = {
+  addressKey,
+  addressParts,
+  cursorId,
+  encodeIndexedString,
+  encodeJson,
+  isAliveAt,
+  isCurrentOnly,
+  page,
+  parseJson,
+  scanSql,
+  scopeColumns,
+  writeId,
+};
+
+export default codec;

@@ -1,10 +1,10 @@
-import type { EntryRecord } from "@msa/durable";
+import type durableTypes from "@msa/durable/index.types";
 
 declare namespace harnessContextConversation3CasesTypes {
   type RandomTranscript = {
     seed: number;
     next: number;
-    readonly written: EntryRecord[];
+    readonly written: durableTypes.EntryRecord[];
     readonly calls: string[];
     readonly seen: Map<string, number>;
   };

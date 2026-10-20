@@ -8,15 +8,15 @@ interface EntryBudget {
 }
 
 const WORKSPACE: Readonly<Record<string, string>> = {
-  "@msa/chord": "libs/chord/src",
-  "@msa/ai": "libs/ai/src",
-  "@msa/durable": "libs/durable/src",
   "@msa/agent-core": "libs/agent/src",
+  "@msa/ai": "libs/ai/src",
+  "@msa/chord": "libs/chord/src",
   "@msa/codemode": "libs/codemode/src",
-  "@msa/telemetry": "libs/telemetry/src",
+  "@msa/durable": "libs/durable/src",
   "@msa/mcp": "libs/mcp/src",
-  "@msa/tui": "libs/tui/src",
+  "@msa/telemetry": "libs/telemetry/src",
   "@msa/testing": "libs/testing/src",
+  "@msa/tui": "libs/tui/src",
 };
 
 const codemodeIsolatedEntryForbids: ReadonlyArray<string> = [
@@ -30,7 +30,6 @@ const codemodeIsolatedEntryForbids: ReadonlyArray<string> = [
 const BUDGETS: Readonly<Record<string, Readonly<Record<string, EntryBudget>>>> = {
   "libs/ai": {
     "./models": {
-      maxFiles: 15,
       forbid: [
         "providers/",
         "models.generated.ts",
@@ -38,24 +37,25 @@ const BUDGETS: Readonly<Record<string, Readonly<Record<string, EntryBudget>>>> =
         "utils/validation.ts",
         "utils/typebox-helpers.ts",
       ],
+      maxFiles: 15,
     },
-    "./utils/*": { maxFiles: 3, forbid: ["providers/", "api/", "index.ts"] },
+    "./utils/*": { forbid: ["providers/", "api/", "index.ts"], maxFiles: 3 },
   },
   "libs/codemode": {
-    ".": { maxFiles: 12, forbid: ["codemode/src/cloudflare.ts"] },
-    "./portable": { maxFiles: 8, forbid: codemodeIsolatedEntryForbids },
-    "./cloudflare": { maxFiles: 9, forbid: codemodeIsolatedEntryForbids },
+    ".": { forbid: ["codemode/src/cloudflare.ts"], maxFiles: 12 },
+    "./cloudflare": { forbid: codemodeIsolatedEntryForbids, maxFiles: 9 },
+    "./portable": { forbid: codemodeIsolatedEntryForbids, maxFiles: 8 },
   },
   "libs/durable": {
     ".": {
-      maxFiles: 22,
       forbid: [
         "libs/ai/src/index.ts",
         "libs/ai/src/utils/typebox-helpers.ts",
         "libs/durable/src/images/",
       ],
+      maxFiles: 23,
     },
-    "./tools": { maxFiles: 17, forbid: ["libs/durable/src/images/"] },
+    "./tools": { forbid: ["libs/durable/src/images/"], maxFiles: 17 },
   },
 };
 

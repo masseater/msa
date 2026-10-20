@@ -1,21 +1,23 @@
-import { defineDoc } from "@msa/durable";
-import { Harness } from "@msa/durable/harness";
+import durable from "@msa/durable";
+import type harnessTypes from "@msa/durable/harness.types";
 import { Effect } from "effect";
 import { describe, expect, it } from "vite-plus/test";
 
-import type { SessionImpl } from "../src/session/session.ts";
+import type sessionTypes from "../src/session/session.types.ts";
 import effectSupport from "./effect-support.ts";
 import harnessLifecycleSupport from "./harness-lifecycle-support.ts";
 import sessionSupport from "./session-support.ts";
 import taskSupport from "./task-support.ts";
+
+const { defineDoc } = durable;
 
 const { abortController, awaited } = effectSupport;
 const { oneStep, withSignal } = harnessLifecycleSupport;
 const { ControlledStorage, context, flush } = sessionSupport;
 const { openTasks } = taskSupport;
 
-function unloadDocuments(harness: Harness): Promise<void> {
-  return (harness as unknown as SessionImpl).unloadDocuments();
+function unloadDocuments(harness: harnessTypes.Harness): Promise<void> {
+  return (harness as unknown as sessionTypes.SessionImpl).unloadDocuments();
 }
 
 const observedNotesStep1 = Effect.fn("observedNotesStep1")(function* () {

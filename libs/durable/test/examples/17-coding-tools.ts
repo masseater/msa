@@ -7,14 +7,21 @@ import {
   fauxText,
   fauxToolCall,
 } from "@msa/ai";
-import { AssistantEntry, ToolResultEntry, defineExtension, hook } from "@msa/durable";
-import { Harness, ToolTask, createRegistry } from "@msa/durable/harness";
+import durable from "@msa/durable";
+import harnessModule from "@msa/durable/harness";
 import { Console, Effect } from "effect";
 
-import { NodeExecutionEnv } from "../../src/env/node.ts";
-import { openNodeJsonlStorage } from "../../src/storage/jsonl/node.ts";
-import { type BashToolInput, CodingTools } from "../../src/tools/index.ts";
+import nodeModule from "../../src/env/node.ts";
+import node from "../../src/storage/jsonl/node.ts";
+import toolsModule from "../../src/tools/index.ts";
+import type toolsTypes from "../../src/tools/index.types.ts";
 import support from "../support.ts";
+
+const { AssistantEntry, ToolResultEntry, defineExtension, hook } = durable;
+const { Harness, ToolTask, createRegistry } = harnessModule;
+const { CodingTools } = toolsModule;
+const { openNodeJsonlStorage } = node;
+const { NodeExecutionEnv } = nodeModule;
 
 const {
   BACKGROUND_CONTEXT,
@@ -48,7 +55,8 @@ const mainStep1 = Effect.gen(function* () {
   ]);
 
   const isBigCat = (call: { name: string; arguments: unknown }) =>
-    call.name === "bash" && (call.arguments as BashToolInput).command.includes("1gb.txt");
+    call.name === "bash" &&
+    (call.arguments as toolsTypes.BashToolInput).command.includes("1gb.txt");
   let start = 0;
   const Timing = defineExtension({
     hooks: [

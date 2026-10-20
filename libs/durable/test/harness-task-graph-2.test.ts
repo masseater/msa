@@ -1,9 +1,13 @@
-import { type EntryId, defineTask } from "@msa/durable";
-import { MemoryStorage } from "@msa/durable/storage/memory";
+import durable from "@msa/durable";
+import type durableTypes from "@msa/durable/index.types";
+import memory from "@msa/durable/storage/memory";
 import { Effect } from "effect";
 import { describe, expect, it } from "vite-plus/test";
 
 import support from "./support.ts";
+
+const { defineTask } = durable;
+const { MemoryStorage } = memory;
 
 const { awaited, completed, context, deferred, eventually, openTasks } = support;
 
@@ -12,7 +16,7 @@ const listsOwnedConversationsStep1 = Effect.gen(function* () {
 
   const gate = deferred();
   const created: number[] = [];
-  const Spawner = defineTask<{ at: EntryId }, { phase: "spawn" }, null>({
+  const Spawner = defineTask<{ at: durableTypes.EntryId }, { phase: "spawn" }, null>({
     abort: () => Promise.resolve(),
     initial: () => ({ phase: "spawn" }),
     name: "test.graph-spawner",

@@ -3,12 +3,19 @@ import { characterEnd } from "@msa/chord/output";
 import { Cause, Effect, Exit } from "effect";
 import { afterAll, describe, expect, it } from "vite-plus/test";
 
-import { NodeExecutionEnv } from "../src/env/node.ts";
-import type { ToolDiagnostic, ToolExecutionApi } from "../src/harness/types.ts";
-import { detectSupportedImageMimeType } from "../src/tools/image.ts";
-import { createReadTool } from "../src/tools/read.ts";
-import { DEFAULT_MAX_BYTES, formatSize, truncateHead } from "../src/truncate.ts";
+import type nodeTypes from "../src/env/node.types.ts";
+import type typesModule from "../src/harness/types.types.ts";
+import image from "../src/tools/image.ts";
+import read from "../src/tools/read.ts";
+import durableKit from "./durable-kit.ts";
 import support from "./support.ts";
+
+const { envNode: node, truncate } = durableKit;
+
+const { DEFAULT_MAX_BYTES, formatSize, truncateHead } = truncate;
+const { detectSupportedImageMimeType } = image;
+const { NodeExecutionEnv } = node;
+const { createReadTool } = read;
 
 const { awaited, makeTempDir, removeDirs, writeTempFile } = support;
 
@@ -37,7 +44,7 @@ function truncationNotice(
   }: { allLines: readonly string[]; startLine: number; userLimitedLines: number | undefined },
   path: string,
 ) {
-  const diagnostics: ToolDiagnostic[] = [];
+  const diagnostics: typesModule.ToolDiagnostic[] = [];
   let outputText = headText;
   let details: object | undefined;
   const totalFileLines = allLines.length;
@@ -152,7 +159,7 @@ function randomFile(next: () => number): Uint8Array {
 const OFFSETS = [undefined, 0, 1, 2, 3, 2.5, -4, 50, 2001, 3000, 1e20, Number.NaN];
 const LIMITS = [undefined, 0, 1, 2, -3, -1e20, 1.5, 7, 2000, 2500, 1e20, Number.NaN];
 
-function apiFor(env: NodeExecutionEnv): ToolExecutionApi {
+function apiFor(env: nodeTypes.NodeExecutionEnv): typesModule.ToolExecutionApi {
   return {
     agent: () => Promise.resolve({}),
     details: () => Promise.resolve(),
@@ -160,7 +167,7 @@ function apiFor(env: NodeExecutionEnv): ToolExecutionApi {
     env,
     output: () => {},
     outputWindow: undefined,
-  } as unknown as ToolExecutionApi;
+  } as unknown as typesModule.ToolExecutionApi;
 }
 
 const dirs: string[] = [];

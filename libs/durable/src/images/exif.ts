@@ -1,4 +1,4 @@
-export function exifOrientation(bytes: Uint8Array): number {
+function exifOrientation(bytes: Uint8Array): number {
   const tiff = tiffStart(bytes);
   if (tiff < 0 || tiff + 8 > bytes.length) return 1;
   const little = bytes[tiff] === 0x49 && bytes[tiff + 1] === 0x49;
@@ -63,3 +63,9 @@ function ascii(bytes: Uint8Array, offset: number, text: string): boolean {
   }
   return true;
 }
+
+const exif = {
+  exifOrientation,
+};
+
+export default exif;

@@ -1,14 +1,17 @@
-import type { TaskId } from "@msa/durable";
-import { createSession } from "@msa/durable/session";
+import type durableTypes from "@msa/durable/index.types";
+import sessionModule from "@msa/durable/session";
 import { Effect } from "effect";
 import { afterEach, describe, expect, it } from "vite-plus/test";
 
-import { openNodeSqliteStorage } from "../src/storage/sqlite/node.ts";
+import node from "../src/storage/sqlite/node.ts";
 import effectSupport from "./effect-support.ts";
 import harnessSchedulerIndexesSupport from "./harness-scheduler-indexes-support.ts";
 import platformSupport from "./platform-support.ts";
 import sessionSupport from "./session-support.ts";
 import taskSupport from "./task-support.ts";
+
+const { createSession } = sessionModule;
+const { openNodeSqliteStorage } = node;
 
 const { awaited } = effectSupport;
 const { Hold, directories, gate, gates, owned, runtimes, sqlitePath, state } =
@@ -118,7 +121,7 @@ const finalizesChainHeldStep1 = Effect.gen(function* () {
   const runPromise = Effect.runPromiseWith(yield* Effect.context<never>());
 
   const storage = yield* awaited(openNodeSqliteStorage(yield* sqlitePath()));
-  const endedIn = new Map<TaskId, number>();
+  const endedIn = new Map<durableTypes.TaskId, number>();
   let commits = 0;
   const commit = storage.commit.bind(storage);
   storage.commit = (writes, commitContext) => {

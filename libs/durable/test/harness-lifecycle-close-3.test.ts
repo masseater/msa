@@ -1,4 +1,4 @@
-import { MemoryStorage } from "@msa/durable/storage/memory";
+import memory from "@msa/durable/storage/memory";
 import { Effect } from "effect";
 import { describe, expect, it } from "vite-plus/test";
 
@@ -7,6 +7,8 @@ import harnessLifecycleSupport from "./harness-lifecycle-support.ts";
 import harnessSupport from "./harness-support.ts";
 import sessionSupport from "./session-support.ts";
 import taskSupport from "./task-support.ts";
+
+const { MemoryStorage } = memory;
 
 const { awaited } = effectSupport;
 const { oneStep, start } = harnessLifecycleSupport;

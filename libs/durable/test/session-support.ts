@@ -1,24 +1,19 @@
 import type { Context } from "@msa/chord";
 import { BACKGROUND_CONTEXT, withAbortSignal as withAbortSignalModule } from "@msa/chord/context";
-import type {
-  CommitPublication,
-  ConversationId,
-  DocumentAddress,
-  DocumentCommitChange,
-  DocumentId,
-  DocumentPoint,
-  DocumentRecord,
-  Id,
-  Seq,
-  StorageWrite,
-} from "@msa/durable";
-import { MemoryStorage } from "@msa/durable/storage/memory";
+import type durableTypes from "@msa/durable/index.types";
+import memory from "@msa/durable/storage/memory";
 import { Effect } from "effect";
 
-import { currentTimeMillis } from "../src/clock.ts";
-import { SessionImpl } from "../src/session/session.ts";
+import clockModule from "../src/clock.ts";
+import SessionImpl from "../src/session/session.ts";
+import type sessionTypes from "../src/session/session.types.ts";
 import effectSupport from "./effect-support.ts";
 import type sessionSupportTypes from "./session-support.types.ts";
+
+const { MemoryStorage } = memory;
+
+const { currentTimeMillis } = clockModule;
+
 const { awaited } = effectSupport;
 
 const context: Context = BACKGROUND_CONTEXT;
@@ -28,8 +23,8 @@ type Deferred = PromiseWithResolvers<void>;
 const deferred = (): Deferred => Promise.withResolvers<void>();
 
 class ControlledStorage extends MemoryStorage {
-  readonly admittedCommits: (readonly StorageWrite[])[] = [];
-  readonly commits: (readonly StorageWrite[])[] = [];
+  readonly admittedCommits: (readonly durableTypes.StorageWrite[])[] = [];
+  readonly commits: (readonly durableTypes.StorageWrite[])[] = [];
   mintCount = 0;
   documentReadCount = 0;
   #commitGate: { gate: Deferred; entered: Deferred } | undefined;
@@ -67,7 +62,10 @@ class ControlledStorage extends MemoryStorage {
     held.gate.resolve();
   }
 
-  override commit(writes: readonly StorageWrite[], commitContext: Context): Promise<Seq> {
+  override commit(
+    writes: readonly durableTypes.StorageWrite[],
+    commitContext: Context,
+  ): Promise<durableTypes.Seq> {
     const superCommit = super.commit.bind(this);
     return Effect.runPromise(
       Effect.gen({ self: this }, function* () {
@@ -88,21 +86,25 @@ class ControlledStorage extends MemoryStorage {
     );
   }
 
-  override mintId<I extends Id<string>>(): Promise<I> {
+  override mintId<I extends durableTypes.Id<string>>(): Promise<I> {
     this.mintCount++;
     return super.mintId<I>();
   }
 
-  override document(id: DocumentId, at: DocumentPoint, callContext: Context) {
+  override document(
+    id: durableTypes.DocumentId,
+    at: durableTypes.DocumentPoint,
+    callContext: Context,
+  ) {
     this.documentReadCount++;
     return super.document(id, at, callContext);
   }
 
   override findDocument(
-    address: DocumentAddress,
-    at: DocumentPoint,
+    address: durableTypes.DocumentAddress,
+    at: durableTypes.DocumentPoint,
     callContext: Context,
-  ): Promise<DocumentRecord | undefined> {
+  ): Promise<durableTypes.DocumentRecord | undefined> {
     const superFindDocument = super.findDocument.bind(this);
     return Effect.runPromise(
       Effect.gen({ self: this }, function* () {
@@ -119,12 +121,12 @@ class ControlledStorage extends MemoryStorage {
 
 function openTestSession(): {
   readonly storage: ControlledStorage;
-  readonly session: SessionImpl;
-  readonly publications: CommitPublication[];
+  readonly session: sessionTypes.SessionImpl;
+  readonly publications: durableTypes.CommitPublication[];
 } {
   const storage = new ControlledStorage();
   const session = new SessionImpl(storage, currentTimeMillis, () => 600_000);
-  const publications: CommitPublication[] = [];
+  const publications: durableTypes.CommitPublication[] = [];
   session.subscribeCommits((publication) => {
     publications.push(publication);
   });
@@ -132,24 +134,28 @@ function openTestSession(): {
 }
 
 function documentChanges(
-  publication: CommitPublication,
-): readonly Extract<DocumentCommitChange, { readonly type: "document" }>[] {
+  publication: durableTypes.CommitPublication,
+): readonly Extract<durableTypes.DocumentCommitChange, { readonly type: "document" }>[] {
   return publication.changes.filter(
-    (change): change is Extract<DocumentCommitChange, { readonly type: "document" }> =>
+    (change): change is Extract<durableTypes.DocumentCommitChange, { readonly type: "document" }> =>
       change.type === "document",
   );
 }
 
 function documentCopyChanges(
-  publication: CommitPublication,
-): readonly Extract<DocumentCommitChange, { readonly type: "document.copy" }>[] {
+  publication: durableTypes.CommitPublication,
+): readonly Extract<durableTypes.DocumentCommitChange, { readonly type: "document.copy" }>[] {
   return publication.changes.filter(
-    (change): change is Extract<DocumentCommitChange, { readonly type: "document.copy" }> =>
+    (
+      change,
+    ): change is Extract<durableTypes.DocumentCommitChange, { readonly type: "document.copy" }> =>
       change.type === "document.copy",
   );
 }
 
-function createConversation(session: SessionImpl): Promise<ConversationId> {
+function createConversation(
+  session: sessionTypes.SessionImpl,
+): Promise<durableTypes.ConversationId> {
   return Promise.resolve(
     session.commit(
       (tx) =>

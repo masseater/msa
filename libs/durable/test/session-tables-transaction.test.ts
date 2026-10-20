@@ -1,11 +1,13 @@
-import { type ConversationId, type TaskId } from "@msa/durable";
+import type durableTypes from "@msa/durable/index.types";
 import { Effect } from "effect";
 import { describe, expect, it } from "vite-plus/test";
 
-import { idFromNumber } from "../src/ids.ts";
+import ids from "../src/ids.ts";
 import effectSupport from "./effect-support.ts";
 import sessionSupport from "./session-support.ts";
 import sessionTablesSupport from "./session-tables-support.ts";
+
+const { idFromNumber } = ids;
 
 const { awaited } = effectSupport;
 const { context, createConversation, openTestSession } = sessionSupport;
@@ -14,7 +16,7 @@ const { WorkTask, createTask, terminal } = sessionTablesSupport;
 const expectMissingOwnerRejected = Effect.fn("expectMissingOwnerRejected")(function* (
   session: ReturnType<typeof openTestSession>["session"],
 ) {
-  const missingTaskId = idFromNumber<TaskId>(999);
+  const missingTaskId = idFromNumber<durableTypes.TaskId>(999);
   yield* awaited(
     expect(
       session.commit(
@@ -28,11 +30,11 @@ const expectMissingOwnerRejected = Effect.fn("expectMissingOwnerRejected")(funct
 const expectAbortMarkedOwnerRejected = Effect.fn("expectAbortMarkedOwnerRejected")(function* (
   session: ReturnType<typeof openTestSession>["session"],
   storage: ReturnType<typeof openTestSession>["storage"],
-  parentId: ConversationId,
+  parentId: durableTypes.ConversationId,
 ) {
   const runPromise = Effect.runPromiseWith(yield* Effect.context<never>());
 
-  let rejectedChildId: ConversationId | undefined;
+  let rejectedChildId: durableTypes.ConversationId | undefined;
   yield* awaited(
     expect(
       session.commitWith(
@@ -72,7 +74,7 @@ const expectAbortMarkedOwnerRejected = Effect.fn("expectAbortMarkedOwnerRejected
 
 const expectTerminalOwnerRejected = Effect.fn("expectTerminalOwnerRejected")(function* (
   session: ReturnType<typeof openTestSession>["session"],
-  parentId: ConversationId,
+  parentId: durableTypes.ConversationId,
 ) {
   const runPromise = Effect.runPromiseWith(yield* Effect.context<never>());
 
@@ -114,7 +116,10 @@ const expectTerminalOwnerRejected = Effect.fn("expectTerminalOwnerRejected")(fun
 });
 
 const expectCommittedTerminalOwnerRejected = Effect.fn("expectCommittedTerminalOwnerRejected")(
-  function* (session: ReturnType<typeof openTestSession>["session"], parentId: ConversationId) {
+  function* (
+    session: ReturnType<typeof openTestSession>["session"],
+    parentId: durableTypes.ConversationId,
+  ) {
     const runPromise = Effect.runPromiseWith(yield* Effect.context<never>());
 
     const terminalOwnerId = yield* awaited(createTask(session, parentId));
@@ -145,7 +150,7 @@ const rejectsMissingTerminal = Effect.gen(function* () {
 
   const { session, storage } = openTestSession();
   const parentId = yield* awaited(createConversation(session));
-  let movedStagedTaskId: TaskId<{ ok: boolean }> | undefined;
+  let movedStagedTaskId: durableTypes.TaskId<{ ok: boolean }> | undefined;
   yield* awaited(
     expect(
       session.commitWith(
@@ -163,7 +168,7 @@ const rejectsMissingTerminal = Effect.gen(function* () {
               tx.setTask({
                 abortRequested: false,
                 background: false,
-                conversationId: idFromNumber<ConversationId>(998),
+                conversationId: idFromNumber<durableTypes.ConversationId>(998),
                 id: taskId,
                 input: { path: "move" },
                 kind: WorkTask.definition.name,

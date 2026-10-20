@@ -1,5 +1,5 @@
 import type connectionTypes from "./connection.types.ts";
-import type remoteEnv from "./remote-env.ts";
+import type RemoteExecutionEnvClass from "./remote-env.ts";
 import type watchTypes from "./watch.types.ts";
 
 declare namespace remoteEnvTypes {
@@ -12,7 +12,7 @@ declare namespace remoteEnvTypes {
     watch?: watchTypes.RemoteWatchOptions;
   }
 
-  type RemoteExecutionEnv = (typeof remoteEnv.RemoteExecutionEnv)["prototype"];
+  type RemoteExecutionEnv = RemoteExecutionEnvClass;
 }
 
 export type { remoteEnvTypes as default };

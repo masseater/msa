@@ -1,42 +1,41 @@
 import type { Context } from "@msa/chord";
 import { Effect } from "effect";
 
-import type { FileInfo } from "../env/index.ts";
-import type { ToolDiagnostic, ToolExecutionApi, ToolExecutionResult } from "../harness/types.ts";
-import { formatSize } from "../truncate.ts";
-import {
-  base64Length,
-  DEFAULT_IMAGE_LIMITS,
-  imageDimensions,
-  type ImageLimits,
-  type ImageProcessor,
-  INLINE_IMAGE_TYPES,
-  toBase64,
-} from "./image.ts";
-import type { BinarySource, ReadToolDetails } from "./read-text.ts";
+import type envTypes from "../env/index.types.ts";
+import type typesModule from "../harness/types.types.ts";
+import truncate from "../truncate.ts";
+import imageModule from "./image.ts";
+import type imageTypes from "./image.types.ts";
+import type readTextTypes from "./read-text.types.ts";
+
+const { DEFAULT_IMAGE_LIMITS, INLINE_IMAGE_TYPES, base64Length, imageDimensions, toBase64 } =
+  imageModule;
+const { formatSize } = truncate;
 
 type ImageLoad =
   | {
       readonly image: { readonly data: string; readonly mimeType: string };
       readonly notes: string[];
     }
-  | { readonly error: ToolExecutionResult<ReadToolDetails> };
+  | { readonly error: typesModule.ToolExecutionResult<readTextTypes.ReadToolDetails> };
 
-type ImageModel = { readonly vision: boolean; readonly limits: ImageLimits };
+type ImageModel = { readonly vision: boolean; readonly limits: imageTypes.ImageLimits };
 
-const imageError = (message: string): ToolExecutionResult<ReadToolDetails> => ({
-  output: [],
+const imageError = (
+  message: string,
+): typesModule.ToolExecutionResult<readTextTypes.ReadToolDetails> => ({
+  diagnostics: [{ code: "unsupported_image", message, severity: "error" }],
   isError: true,
-  diagnostics: [{ severity: "error", code: "unsupported_image", message }],
+  output: [],
 });
 
 const preparedImage = Effect.fnUntraced(function* (
-  source: BinarySource,
-  info: FileInfo,
+  source: readTextTypes.BinarySource,
+  info: envTypes.FileInfo,
   path: string,
   mimeType: string,
-  processor: ImageProcessor,
-  limits: ImageLimits,
+  processor: imageTypes.ImageProcessor,
+  limits: imageTypes.ImageLimits,
 ) {
   const bytes = yield* source.read(0, info.size);
   const prepared = yield* Effect.promise(() => processor.prepare(bytes, mimeType, limits));
@@ -61,11 +60,11 @@ const preparedImage = Effect.fnUntraced(function* (
 });
 
 const inlineImage = Effect.fnUntraced(function* (
-  source: BinarySource,
-  info: FileInfo,
+  source: readTextTypes.BinarySource,
+  info: envTypes.FileInfo,
   path: string,
   mimeType: string,
-  limits: ImageLimits,
+  limits: imageTypes.ImageLimits,
 ) {
   const failed = (reason: string): ImageLoad => ({
     error: imageError(`${path} is an image (${mimeType})${reason}`),
@@ -87,27 +86,30 @@ const inlineImage = Effect.fnUntraced(function* (
   return loaded;
 });
 
-export const imageModel = Effect.fnUntraced(function* (api: ToolExecutionApi, context: Context) {
+const imageModel = Effect.fnUntraced(function* (
+  api: typesModule.ToolExecutionApi,
+  context: Context,
+) {
   const ref = (yield* Effect.promise(() => api.agent(context))).model;
   const model = ref === undefined ? undefined : api.models.getModel(ref.provider, ref.modelId);
   const resize = model?.inputLimits?.images?.resize;
   const found: ImageModel = {
-    vision: model?.input.includes("image") ?? true,
     limits: {
-      maxWidth: resize?.maxWidth ?? DEFAULT_IMAGE_LIMITS.maxWidth,
-      maxHeight: resize?.maxHeight ?? DEFAULT_IMAGE_LIMITS.maxHeight,
       maxBytes: resize?.maxBytes ?? DEFAULT_IMAGE_LIMITS.maxBytes,
+      maxHeight: resize?.maxHeight ?? DEFAULT_IMAGE_LIMITS.maxHeight,
+      maxWidth: resize?.maxWidth ?? DEFAULT_IMAGE_LIMITS.maxWidth,
     },
+    vision: model?.input.includes("image") ?? true,
   };
   return found;
 });
 
-export const readImage = Effect.fnUntraced(function* (
-  source: BinarySource,
-  info: FileInfo,
+const readImage = Effect.fnUntraced(function* (
+  source: readTextTypes.BinarySource,
+  info: envTypes.FileInfo,
   path: string,
   mimeType: string,
-  processor: ImageProcessor | undefined,
+  processor: imageTypes.ImageProcessor | undefined,
   { vision, limits }: ImageModel,
 ) {
   const loaded =
@@ -118,16 +120,23 @@ export const readImage = Effect.fnUntraced(function* (
   const { image, notes } = loaded;
   if (!vision)
     notes.push("The current model does not support images; it sees a placeholder instead.");
-  const diagnostics: ToolDiagnostic[] = [
+  const diagnostics: typesModule.ToolDiagnostic[] = [
     {
-      severity: "info",
       code: "image",
       message: [`Read image file [${image.mimeType}].`, ...notes].join(" "),
+      severity: "info",
     },
   ];
-  const result: ToolExecutionResult<ReadToolDetails> = {
-    output: [{ type: "image", data: image.data, mimeType: image.mimeType }],
+  const result: typesModule.ToolExecutionResult<readTextTypes.ReadToolDetails> = {
     diagnostics,
+    output: [{ data: image.data, mimeType: image.mimeType, type: "image" }],
   };
   return result;
 });
+
+const readImageModule = {
+  imageModel,
+  readImage,
+};
+
+export default readImageModule;

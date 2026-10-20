@@ -1,35 +1,42 @@
 import type { Context } from "@msa/chord";
 import { Effect, Function } from "effect";
 
-import { commitTask } from "./bridge.ts";
-import type { GenerationRuntime } from "./generation-types.ts";
-import { endRun, LiveDoc } from "./live.ts";
-import type { Dual3, ModelRef } from "./types.ts";
+import bridge from "./bridge.ts";
+import type generationTypesModule from "./generation-types.types.ts";
+import liveModule from "./live.ts";
+import type typesModule from "./types.types.ts";
 
-export const failModelError: Dual3<
-  GenerationRuntime,
+const { commitTask } = bridge;
+const { LiveDoc, endRun } = liveModule;
+
+const failModelError: typesModule.Dual3<
+  generationTypesModule.GenerationRuntime,
   string,
   Context,
   Effect.Effect<void>
 > = Function.dual(
   3,
-  Effect.fnUntraced(function* (runtime: GenerationRuntime, text: string, context: Context) {
+  Effect.fnUntraced(function* (
+    runtime: generationTypesModule.GenerationRuntime,
+    text: string,
+    context: Context,
+  ) {
     yield* commitTask(
       runtime,
       (tx) =>
         Effect.gen(function* () {
           const live = yield* Effect.promise(() => tx.doc(LiveDoc, runtime.conversationId));
           endRun(tx, live, runtime.taskId, {
-            status: "unanswered",
-            reason: "model_error",
             detail: text,
+            reason: "model_error",
+            status: "unanswered",
           });
           return {
-            status: "terminal",
             outcome: {
+              error: { detail: { reason: "model_error" }, message: text },
               status: "failed",
-              error: { message: text, detail: { reason: "model_error" } },
             },
+            status: "terminal",
           };
         }),
       context,
@@ -37,16 +44,16 @@ export const failModelError: Dual3<
   }),
 );
 
-export const failNoModel: Dual3<
-  GenerationRuntime,
-  ModelRef | undefined,
+const failNoModel: typesModule.Dual3<
+  generationTypesModule.GenerationRuntime,
+  typesModule.ModelRef | undefined,
   Context,
   Effect.Effect<void>
 > = Function.dual(
   3,
   Effect.fnUntraced(function* (
-    runtime: GenerationRuntime,
-    ref: ModelRef | undefined,
+    runtime: generationTypesModule.GenerationRuntime,
+    ref: typesModule.ModelRef | undefined,
     context: Context,
   ) {
     const message =
@@ -58,13 +65,20 @@ export const failNoModel: Dual3<
       (tx) =>
         Effect.gen(function* () {
           const live = yield* Effect.promise(() => tx.doc(LiveDoc, runtime.conversationId));
-          endRun(tx, live, runtime.taskId, { status: "unanswered", reason: "no_model" });
+          endRun(tx, live, runtime.taskId, { reason: "no_model", status: "unanswered" });
           return {
+            outcome: { error: { detail: { reason: "no_model" }, message }, status: "failed" },
             status: "terminal",
-            outcome: { status: "failed", error: { message, detail: { reason: "no_model" } } },
           };
         }),
       context,
     );
   }),
 );
+
+const generationFail = {
+  failModelError,
+  failNoModel,
+};
+
+export default generationFail;

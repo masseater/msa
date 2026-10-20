@@ -1,13 +1,15 @@
 import { defineConfig } from "vite-plus";
 
-import { onGitHubActions } from "../vite.config.ts";
+import vitestShared from "../vitest.shared.ts";
+
+const { onGitHubActions } = vitestShared;
 
 export default defineConfig({
   test: {
-    globals: true,
     environment: "node",
-    testTimeout: 120_000,
+    globals: true,
     reporters: onGitHubActions ? ["dot", "github-actions"] : ["dot"],
     silent: "passed-only",
+    testTimeout: 120_000,
   },
 });

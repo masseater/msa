@@ -8,14 +8,8 @@ import {
   fauxToolCall,
 } from "@msa/ai";
 import type { JsonValue } from "@msa/chord";
-import {
-  type Conversation,
-  type EntryRecord,
-  type Harness,
-  ToolResultEntry,
-  defineTool,
-} from "@msa/durable";
-import { MemoryStorage } from "@msa/durable/storage/memory";
+import durable from "@msa/durable";
+import memory from "@msa/durable/storage/memory";
 import { Effect } from "effect";
 import { dual } from "effect/Function";
 
@@ -23,6 +17,9 @@ import chatSupport from "./chat-support.ts";
 import effectSupport from "./effect-support.ts";
 import type harnessToolsSupportTypes from "./harness-tools-support.types.ts";
 import sessionSupport from "./session-support.ts";
+
+const { ToolResultEntry, defineTool } = durable;
+const { MemoryStorage } = memory;
 
 const { allEntries, openChat } = chatSupport;
 const { awaited } = effectSupport;
@@ -70,7 +67,10 @@ const DONE = fauxAssistantMessage([fauxText("done")]);
 const run = Effect.fn("run")(function* (
   setup: ReturnType<typeof chatSupport.chatSetup>,
   responses: FauxResponseStep[],
-  prepare?: (harness: Harness, root: Conversation) => Promise<void>,
+  prepare?: (
+    harness: harnessToolsSupportTypes.Harness,
+    root: harnessToolsSupportTypes.Conversation,
+  ) => Promise<void>,
   options: Parameters<typeof openChat>[2] = {},
 ) {
   setup.faux.setResponses(responses);
@@ -82,7 +82,7 @@ const run = Effect.fn("run")(function* (
   return { entries: yield* allEntries(root), harness, root, status: settled.status };
 });
 
-function results(entries: readonly EntryRecord[]): ToolResultMessage[] {
+function results(entries: readonly harnessToolsSupportTypes.EntryRecord[]): ToolResultMessage[] {
   return entries
     .filter((entry) => ToolResultEntry.is(entry))
     .map((entry) => entry.model![0] as ToolResultMessage);

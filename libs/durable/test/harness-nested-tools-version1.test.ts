@@ -1,13 +1,18 @@
 import type { JsonValue } from "@msa/chord";
-import { AssistantEntry, type ToolTaskInput } from "@msa/durable";
-import { ToolTask } from "@msa/durable/harness";
+import durable from "@msa/durable";
+import harnessModule from "@msa/durable/harness";
+import type durableTypes from "@msa/durable/index.types";
 import { Effect } from "effect";
 import { afterEach, describe, expect, it } from "vite-plus/test";
 
-import { openNodeSqliteStorage } from "../src/storage/sqlite/node.ts";
+import node from "../src/storage/sqlite/node.ts";
 import harnessNestedToolsSupport from "./harness-nested-tools-support.ts";
 import support from "./support.ts";
 import type supportTypes from "./support.types.ts";
+
+const { openNodeSqliteStorage } = node;
+const { AssistantEntry } = durable;
+const { ToolTask } = harnessModule;
 
 const { call, directories, echoTool, results, text } = harnessNestedToolsSupport;
 const { addTool, allEntries, awaited, chatSetup, context, makeTempFile, openChat, removeDir } =
@@ -56,7 +61,10 @@ const storeVersion1 = Effect.fn("storeVersion1")(function* (
   yield* awaited(harness.close(context));
   const storage = yield* awaited(openNodeSqliteStorage(path));
   const record = (yield* awaited(storage.task(id, context)))!;
-  const { kind: _kind, ...input } = record.input as Extract<ToolTaskInput, { kind: "model" }>;
+  const { kind: _kind, ...input } = record.input as Extract<
+    durableTypes.ToolTaskInput,
+    { kind: "model" }
+  >;
   const state = { ...record.state, checkpoint } as typeof record.state;
   yield* awaited(
     storage.commit(

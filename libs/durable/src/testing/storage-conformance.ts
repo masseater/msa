@@ -1,17 +1,25 @@
 import { Effect } from "effect";
 
-import { documentCases } from "./storage-conformance-documents.ts";
-import { forksCases } from "./storage-conformance-forks.ts";
-import { identityCases } from "./storage-conformance-identities.ts";
-import { namespaceCases, recordsCases } from "./storage-conformance-records.ts";
-import { scansCases, tableOrderCases } from "./storage-conformance-scans.ts";
-import { assertionFacade } from "./storage-conformance-support.ts";
-import { tasksCases } from "./storage-conformance-tasks.ts";
-import type { StorageConformanceCase, StorageConformanceOptions } from "./types.ts";
+import storageConformanceDocuments from "./storage-conformance-documents.ts";
+import storageConformanceForks from "./storage-conformance-forks.ts";
+import storageConformanceIdentities from "./storage-conformance-identities.ts";
+import storageConformanceRecords from "./storage-conformance-records.ts";
+import storageConformanceScans from "./storage-conformance-scans.ts";
+import storageConformanceSupport from "./storage-conformance-support.ts";
+import storageConformanceTasks from "./storage-conformance-tasks.ts";
+import type typesModule from "./types.ts";
 
-export function createStorageConformance(
-  options: StorageConformanceOptions,
-): readonly StorageConformanceCase[] {
+const { assertionFacade } = storageConformanceSupport;
+const { namespaceCases, recordsCases } = storageConformanceRecords;
+const { scansCases, tableOrderCases } = storageConformanceScans;
+const { forksCases } = storageConformanceForks;
+const { tasksCases } = storageConformanceTasks;
+const { documentCases } = storageConformanceDocuments;
+const { identityCases } = storageConformanceIdentities;
+
+function createStorageConformance(
+  options: typesModule.StorageConformanceOptions,
+): readonly typesModule.StorageConformanceCase[] {
   const expect = assertionFacade(options.assertions);
   return [
     ...recordsCases,
@@ -27,3 +35,9 @@ export function createStorageConformance(
     run: () => options.withStorage((storage) => Effect.runPromise(test(storage, expect))),
   }));
 }
+
+const storageConformance = {
+  createStorageConformance,
+};
+
+export default storageConformance;

@@ -3,37 +3,35 @@ import type { Draft, JsonRepresentation } from "@msa/chord";
 import { copyJson } from "@msa/chord/json";
 import { Effect, Function } from "effect";
 
-import { defineDoc } from "../documents.ts";
-import type { ConversationId, Dual2, Dual5, Tx } from "./types.ts";
+import documents from "../documents.ts";
+import type typesModule from "./types.types.ts";
+import type usageTypes from "./usage.types.ts";
 
-export type UsageState = {
-  models: Record<string, JsonRepresentation<Usage>>;
-  tools: Record<string, JsonRepresentation<Usage>>;
-};
+const { defineDoc } = documents;
 
-export const UsageDoc = defineDoc<UsageState>({
-  kind: "msa.usage",
-  version: 1,
-  scope: "conversation",
-  history: "latest",
-  fork: "initial",
-  initial: () => ({ models: {}, tools: {} }),
+const UsageDoc = defineDoc<usageTypes.UsageState>({
   checkpointWhen: () => true,
+  fork: "initial",
+  history: "latest",
+  initial: () => ({ models: {}, tools: {} }),
+  kind: "msa.usage",
+  scope: "conversation",
+  version: 1,
 });
 
-export const recordUsage: Dual5<
-  Tx,
-  ConversationId,
-  keyof UsageState,
+const recordUsage: typesModule.Dual5<
+  typesModule.Tx,
+  typesModule.ConversationId,
+  keyof usageTypes.UsageState,
   string,
   Usage,
   Effect.Effect<void>
 > = Function.dual(
   5,
   Effect.fnUntraced(function* (
-    tx: Tx,
-    conversationId: ConversationId,
-    bucket: keyof UsageState,
+    tx: typesModule.Tx,
+    conversationId: typesModule.ConversationId,
+    bucket: keyof usageTypes.UsageState,
     key: string,
     usage: Usage,
   ) {
@@ -45,7 +43,7 @@ export const recordUsage: Dual5<
   }),
 );
 
-export const addUsage: Dual2<Draft<Usage> | Usage, Usage, void> = Function.dual(
+const addUsage: typesModule.Dual2<Draft<Usage> | Usage, Usage, void> = Function.dual(
   2,
   (total: Draft<Usage> | Usage, usage: Usage): void => {
     total.input += usage.input;
@@ -64,20 +62,30 @@ export const addUsage: Dual2<Draft<Usage> | Usage, Usage, void> = Function.dual(
   },
 );
 
-export const addUsageState: Dual2<UsageState, Readonly<UsageState>, void> = Function.dual(
-  2,
-  (sum: UsageState, state: Readonly<UsageState>): void => {
-    for (const bucket of ["models", "tools"] as const) {
-      for (const [key, usage] of Object.entries(state[bucket])) {
-        const total = Object.hasOwn(sum[bucket], key) ? sum[bucket][key] : undefined;
-        if (total === undefined)
-          Object.defineProperty(sum[bucket], key, {
-            value: structuredClone(usage),
-            enumerable: true,
-            writable: true,
-          });
-        else addUsage(total, usage);
-      }
+const addUsageState: typesModule.Dual2<
+  usageTypes.UsageState,
+  Readonly<usageTypes.UsageState>,
+  void
+> = Function.dual(2, (sum: usageTypes.UsageState, state: Readonly<usageTypes.UsageState>): void => {
+  for (const bucket of ["models", "tools"] as const) {
+    for (const [key, usage] of Object.entries(state[bucket])) {
+      const total = Object.hasOwn(sum[bucket], key) ? sum[bucket][key] : undefined;
+      if (total === undefined)
+        Object.defineProperty(sum[bucket], key, {
+          enumerable: true,
+          value: structuredClone(usage),
+          writable: true,
+        });
+      else addUsage(total, usage);
     }
-  },
-);
+  }
+});
+
+const usageModule = {
+  UsageDoc,
+  addUsage,
+  addUsageState,
+  recordUsage,
+};
+
+export default usageModule;

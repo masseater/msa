@@ -2,18 +2,25 @@ import { BACKGROUND_CONTEXT as context } from "@msa/chord/context";
 import { Effect } from "effect";
 import { dual } from "effect/Function";
 
-import type { Storage } from "../src/index.ts";
-import { openNodeJsonlStorage } from "../src/storage/jsonl/node.ts";
-import { MemoryStorage } from "../src/storage/memory.ts";
-import { openNodeSqliteStorage } from "../src/storage/sqlite/node.ts";
+import type durableTypes from "../src/index.types.ts";
+import nodeModule from "../src/storage/jsonl/node.ts";
+import memory from "../src/storage/memory.ts";
+import node from "../src/storage/sqlite/node.ts";
 import effectSupport from "./effect-support.ts";
 import platformSupport from "./platform-support.ts";
 import type toolOutputStorageTypes from "./tool-output-storage.types.ts";
 
+const { MemoryStorage } = memory;
+const { openNodeSqliteStorage } = node;
+const { openNodeJsonlStorage } = nodeModule;
+
 const { awaited } = effectSupport;
 const { fileSize, joinPath, listDirectory, pathExists } = platformSupport;
 
-function openStorageImpl(backend: toolOutputStorageTypes.Backend, path: string): Promise<Storage> {
+function openStorageImpl(
+  backend: toolOutputStorageTypes.Backend,
+  path: string,
+): Promise<durableTypes.Storage> {
   if (backend === "memory") return Promise.resolve(new MemoryStorage());
   if (backend === "sqlite") return Promise.resolve(openNodeSqliteStorage(path));
   return Promise.resolve(openNodeJsonlStorage(path, context));
@@ -24,7 +31,7 @@ const openStorage: {
   (backend: toolOutputStorageTypes.Backend, path: string): ReturnType<typeof openStorageImpl>;
 } = dual(2, openStorageImpl);
 
-function timedImpl(storage: Storage, latencies: number[]): Storage {
+function timedImpl(storage: durableTypes.Storage, latencies: number[]): durableTypes.Storage {
   return new Proxy(storage, {
     get(target, property) {
       const value = Reflect.get(target, property, target);
@@ -49,8 +56,8 @@ function timedImpl(storage: Storage, latencies: number[]): Storage {
 }
 
 const timed: {
-  (latencies: number[]): (storage: Storage) => ReturnType<typeof timedImpl>;
-  (storage: Storage, latencies: number[]): ReturnType<typeof timedImpl>;
+  (latencies: number[]): (storage: durableTypes.Storage) => ReturnType<typeof timedImpl>;
+  (storage: durableTypes.Storage, latencies: number[]): ReturnType<typeof timedImpl>;
 } = dual(2, timedImpl);
 
 const footprint = Effect.fn("footprint")(function* (

@@ -1,11 +1,14 @@
 import { Effect } from "effect";
 import { afterEach, describe, expect, it } from "vite-plus/test";
 
-import { currentTimeMillis } from "../src/clock.ts";
-import { CodemodeRunDoc } from "../src/codemode/codemode.ts";
+import clockModule from "../src/clock.ts";
+import codemode from "../src/codemode/codemode.ts";
 import codemodeChatSupport from "./codemode-chat-support.ts";
 import codemodeSupport from "./codemode-support.ts";
 import support from "./support.ts";
+
+const { CodemodeRunDoc } = codemode;
+const { currentTimeMillis } = clockModule;
 
 const { codemodeChat } = codemodeChatSupport;
 const { removeDirectories, restart } = codemodeSupport;

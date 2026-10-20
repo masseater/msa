@@ -1,13 +1,17 @@
 import { fauxAssistantMessage } from "@msa/ai";
 import type { Op } from "@msa/chord/delta";
-import { LiveDoc } from "@msa/durable";
-import { GenerationTask } from "@msa/durable/harness";
-import { MemoryStorage } from "@msa/durable/storage/memory";
+import durable from "@msa/durable";
+import harnessModule from "@msa/durable/harness";
+import memory from "@msa/durable/storage/memory";
 import { Effect } from "effect";
 import { describe, expect, it } from "vite-plus/test";
 
 import harnessInboxSupport from "./harness-inbox-support.ts";
 import support from "./support.ts";
+
+const { MemoryStorage } = memory;
+const { LiveDoc } = durable;
+const { GenerationTask } = harnessModule;
 
 const { HOLD, answer, gated, holdTool, inbox, queuedNote, status, transcript } =
   harnessInboxSupport;

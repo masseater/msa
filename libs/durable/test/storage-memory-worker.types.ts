@@ -1,8 +1,10 @@
-import type { Storage as StorageSource } from "../src/types.ts";
+import type testingTypes from "@msa/durable/testing.types";
+
+import type typesModule from "../src/types.types.ts";
 import type storageDiskFootprintTypes from "./storage-disk-footprint.types.ts";
 
 declare namespace storageMemoryWorkerTypes {
-  type Storage = StorageSource;
+  type Storage = typesModule.Storage;
 
   type StorageBenchmarkBackend = "jsonl" | "memory" | "sqlite";
 
@@ -21,6 +23,8 @@ declare namespace storageMemoryWorkerTypes {
     readonly postRead: MemorySnapshot;
     readonly disk?: storageDiskFootprintTypes.DiskFootprint;
   };
+
+  type StorageBenchmarkScale = testingTypes.StorageBenchmarkScale;
 }
 
 export type { storageMemoryWorkerTypes as default };

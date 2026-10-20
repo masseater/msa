@@ -1,24 +1,24 @@
 import { Effect } from "effect";
-import { type Static, Type } from "typebox";
+import { Type } from "typebox";
 
-import { getOrThrow } from "../env/result.ts";
-import { defineTool } from "../harness/define.ts";
-import type { ToolRegistration } from "../harness/types.ts";
-import { fileMutation, requireEnv, resolveToolPath } from "./env.ts";
+import resultModule from "../env/result.ts";
+import define from "../harness/define.ts";
+import type typesModule from "../harness/types.types.ts";
+import envModule from "./env.ts";
+
+const { defineTool } = define;
+const { fileMutation, requireEnv, resolveToolPath } = envModule;
+const { getOrThrow } = resultModule;
 
 const writeSchema = Type.Object({
-  path: Type.String({ description: "Path to the file to write (relative or absolute)" }),
   content: Type.String({ description: "Content to write to the file" }),
+  path: Type.String({ description: "Path to the file to write (relative or absolute)" }),
 });
 
-export type WriteToolInput = Static<typeof writeSchema>;
-
-export function createWriteTool(): ToolRegistration<typeof writeSchema> {
+function createWriteTool(): typesModule.ToolRegistration<typeof writeSchema> {
   return defineTool({
-    name: "write",
     description:
       "Write content to a file. Creates the file if it doesn't exist, overwrites if it does. Automatically creates parent directories.",
-    parameters: writeSchema,
     execute(args, api, context) {
       const { path, content } = args;
       const aborted = (): void => {
@@ -32,11 +32,20 @@ export function createWriteTool(): ToolRegistration<typeof writeSchema> {
             aborted();
             getOrThrow(yield* Effect.promise(() => env.writeFile(absolutePath, content, context)));
             aborted();
-            return { output: [{ type: "text" as const, text: `Successfully wrote to ${path}` }] };
+            return { output: [{ text: `Successfully wrote to ${path}`, type: "text" as const }] };
           });
           return yield* fileMutation(env, absolutePath, write, context);
         }),
       );
     },
+    name: "write",
+    parameters: writeSchema,
   });
 }
+
+const writeModule = {
+  createWriteTool,
+  writeSchema,
+};
+
+export default writeModule;

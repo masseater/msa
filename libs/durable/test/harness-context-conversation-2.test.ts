@@ -1,4 +1,5 @@
-import { type Conversation, defineTask } from "@msa/durable";
+import durable from "@msa/durable";
+import type durableTypes from "@msa/durable/index.types";
 import { Effect } from "effect";
 import { afterEach, describe, expect, it, vi } from "vite-plus/test";
 
@@ -6,6 +7,8 @@ import effectSupport from "./effect-support.ts";
 import harnessContextSupport from "./harness-context-support.ts";
 import harnessSupport from "./harness-support.ts";
 import sessionSupport from "./session-support.ts";
+
+const { defineTask } = durable;
 
 const { awaited } = effectSupport;
 const { ABORTED, DONE, countingSetup, probeTask } = harnessContextSupport;
@@ -18,7 +21,7 @@ afterEach(() => {
 
 type Read = Parameters<typeof probeTask>[0];
 
-function childReadTask(root: Conversation, read: Read) {
+function childReadTask(root: durableTypes.Conversation, read: Read) {
   return defineTask<Record<string, never>, { phase: "run" }, null>({
     abort: (_task, runtime, taskContext) =>
       Effect.runPromise(
@@ -48,12 +51,22 @@ function childReadTask(root: Conversation, read: Read) {
   });
 }
 
-function parentReadTask(root: Conversation, read: Read, Child: ReturnType<typeof childReadTask>) {
+const abortParent: NonNullable<Parameters<typeof defineTask>[0]["abort"]> = (
+  _task,
+  runtime,
+  taskContext,
+) =>
+  Effect.runPromise(
+    Effect.asVoid(Effect.suspend(() => awaited(runtime.commit(() => ABORTED, taskContext)))),
+  );
+
+function parentReadTask(
+  root: durableTypes.Conversation,
+  read: Read,
+  Child: ReturnType<typeof childReadTask>,
+) {
   return defineTask<Record<string, never>, { phase: "start" } | { phase: "after" }, null>({
-    abort: (_task, runtime, taskContext) =>
-      Effect.runPromise(
-        Effect.asVoid(Effect.suspend(() => awaited(runtime.commit(() => ABORTED, taskContext)))),
-      ),
+    abort: abortParent,
     initial: () => ({ phase: "start" }),
     name: "test.context-parent",
     phases: {

@@ -1,27 +1,23 @@
 import type { Context } from "@msa/chord";
 import { Effect } from "effect";
 
-import { commitRequest, waitForBlockingCompaction } from "./generation-commit.ts";
-import { failModelError, failNoModel } from "./generation-fail.ts";
-import { planPrompt } from "./generation-plan.ts";
-import { compactedFailure } from "./generation-threshold.ts";
-import type {
-  GenerationCheckpoint,
-  GenerationInput,
-  GenerationResult,
-  GenerationRuntime,
-} from "./generation-types.ts";
-import type { RunningTask } from "./types.ts";
+import generationCommit from "./generation-commit.ts";
+import generationFail from "./generation-fail.ts";
+import generationPlan from "./generation-plan.ts";
+import generationThreshold from "./generation-threshold.ts";
+import type generationTypesModule from "./generation-types.types.ts";
+import type typesModule from "./types.types.ts";
 
-type PrepareTask = RunningTask<
-  GenerationInput,
-  Extract<GenerationCheckpoint, { phase: "prepare" }>,
-  GenerationResult
+const { failModelError, failNoModel } = generationFail;
+type PrepareTask = typesModule.RunningTask<
+  generationTypesModule.GenerationInput,
+  Extract<generationTypesModule.GenerationCheckpoint, { phase: "prepare" }>,
+  generationTypesModule.GenerationResult
 >;
 
-export const preparePhase = Effect.fnUntraced(function* (
+const preparePhase = Effect.fnUntraced(function* (
   task: PrepareTask,
-  runtime: GenerationRuntime,
+  runtime: generationTypesModule.GenerationRuntime,
   context: Context,
 ) {
   const agent = yield* Effect.promise(() => runtime.agent(context));
@@ -31,10 +27,10 @@ export const preparePhase = Effect.fnUntraced(function* (
   if (model === undefined || resolved === undefined)
     return yield* failNoModel(runtime, model, context);
   const checkpoint = task.state.checkpoint;
-  const failure = yield* compactedFailure(runtime, checkpoint, context);
+  const failure = yield* generationThreshold.compactedFailure(runtime, checkpoint, context);
   if (failure !== undefined) return yield* failModelError(runtime, failure, context);
   const { attempt, compacted } = checkpoint;
-  const plan = yield* planPrompt(
+  const plan = yield* generationPlan.planPrompt(
     runtime,
     agent,
     compacted !== undefined,
@@ -42,13 +38,19 @@ export const preparePhase = Effect.fnUntraced(function* (
     context,
   );
   if (plan.threshold === "blocking")
-    return yield* waitForBlockingCompaction(runtime, attempt, context);
+    return yield* generationCommit.waitForBlockingCompaction(runtime, attempt, context);
   const request = {
     attempt,
     ...(compacted === undefined ? {} : { compacted }),
     model,
-    thinkingLevel,
     streamOptions: runtime.settings.stream,
+    thinkingLevel,
   };
-  yield* commitRequest(runtime, plan.entries, request, plan.threshold, context);
+  yield* generationCommit.commitRequest(runtime, plan.entries, request, plan.threshold, context);
 });
+
+const generationPrepare = {
+  preparePhase,
+};
+
+export default generationPrepare;

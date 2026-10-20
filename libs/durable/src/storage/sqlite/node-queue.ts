@@ -1,6 +1,6 @@
 const ignore = (): void => {};
 
-export class SerialOperationQueue {
+export default class SerialOperationQueue {
   private tail: Promise<void> = Promise.resolve();
   private pending = 0;
 

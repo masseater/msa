@@ -1,13 +1,20 @@
 import { Effect } from "effect";
 
-import { execCases } from "./env-conformance-exec.ts";
-import { listCases, listedSymlinks } from "./env-conformance-list.ts";
-import { followSymlinks, readerCases } from "./env-conformance-readers.ts";
-import type { EnvCaseSpec, EnvSuite } from "./env-conformance-support.ts";
-import { watchCases, watchedSymlink } from "./env-conformance-watch.ts";
-import type { EnvConformanceCase, EnvConformanceOptions } from "./types.ts";
+import envConformanceExec from "./env-conformance-exec.ts";
+import envConformanceList from "./env-conformance-list.ts";
+import envConformanceReaders from "./env-conformance-readers.ts";
+import type envConformanceSupportTypes from "./env-conformance-support.types.ts";
+import envConformanceWatch from "./env-conformance-watch.ts";
+import type typesModule from "./types.ts";
 
-const selectedCases = (options: EnvConformanceOptions): readonly EnvCaseSpec[] => {
+const { followSymlinks, readerCases } = envConformanceReaders;
+const { watchCases, watchedSymlink } = envConformanceWatch;
+const { execCases } = envConformanceExec;
+const { listCases, listedSymlinks } = envConformanceList;
+
+const selectedCases = (
+  options: typesModule.EnvConformanceOptions,
+): readonly envConformanceSupportTypes.EnvCaseSpec[] => {
   const symlinks = options.symlinks ?? true;
   const listFiles = options.listFiles === true;
   return [
@@ -20,12 +27,21 @@ const selectedCases = (options: EnvConformanceOptions): readonly EnvCaseSpec[] =
   ];
 };
 
-export function createEnvConformance(
-  options: EnvConformanceOptions,
-): readonly EnvConformanceCase[] {
-  const suite: EnvSuite = { assert: options.assertions, shell: options.shell ?? ["sh", "-c"] };
-  return selectedCases(options).map(({ name, timeoutMs, test }): EnvConformanceCase => {
+function createEnvConformance(
+  options: typesModule.EnvConformanceOptions,
+): readonly typesModule.EnvConformanceCase[] {
+  const suite: envConformanceSupportTypes.EnvSuite = {
+    assert: options.assertions,
+    shell: options.shell ?? ["sh", "-c"],
+  };
+  return selectedCases(options).map(({ name, timeoutMs, test }): typesModule.EnvConformanceCase => {
     const run = () => options.withEnv((env) => Effect.runPromise(test(env, suite)));
-    return timeoutMs === undefined ? { name, run } : { name, timeoutMs, run };
+    return timeoutMs === undefined ? { name, run } : { name, run, timeoutMs };
   });
 }
+
+const envConformance = {
+  createEnvConformance,
+};
+
+export default envConformance;

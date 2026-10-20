@@ -2,13 +2,17 @@ import { BACKGROUND_CONTEXT, withAbortSignal } from "@msa/chord/context";
 import { Effect } from "effect";
 import { afterAll, describe, expect, it } from "vite-plus/test";
 
-import { getOrThrow } from "../src/env/index.ts";
-import { withFileMutationQueue } from "../src/tools/env.ts";
-import { createEditTool, createWriteTool } from "../src/tools/index.ts";
+import envModule from "../src/env/index.ts";
+import envModuleModule from "../src/tools/env.ts";
+import toolsModule from "../src/tools/index.ts";
 import support from "./support.ts";
 import BlockingEditExecutionEnv from "./tools-blocking-edit-env-support.ts";
 import SlowReadExecutionEnv from "./tools-slow-read-env-support.ts";
 import toolsSupport from "./tools-support.ts";
+
+const { getOrThrow } = envModule;
+const { createEditTool, createWriteTool } = toolsModule;
+const { withFileMutationQueue } = envModuleModule;
 
 const { abortController, awaited, makeDirectory, makeSymlink } = support;
 const {

@@ -1,5 +1,5 @@
-import { AgentDoc, defineEntry } from "@msa/durable";
-import { MemoryStorage } from "@msa/durable/storage/memory";
+import durable from "@msa/durable";
+import memory from "@msa/durable/storage/memory";
 import { Effect } from "effect";
 import { afterEach, describe, expect, it } from "vite-plus/test";
 
@@ -8,6 +8,9 @@ import harnessConversationsSupport from "./harness-conversations-support.ts";
 import harnessSupport from "./harness-support.ts";
 import platformSupport from "./platform-support.ts";
 import sessionSupport from "./session-support.ts";
+
+const { AgentDoc, defineEntry } = durable;
+const { MemoryStorage } = memory;
 
 const { awaited } = effectSupport;
 const { allEntries, append, directories } = harnessConversationsSupport;

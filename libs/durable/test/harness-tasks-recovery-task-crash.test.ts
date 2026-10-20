@@ -1,6 +1,6 @@
-import { defineTask } from "@msa/durable";
-import { createRegistry } from "@msa/durable/harness";
-import { MemoryStorage } from "@msa/durable/storage/memory";
+import durable from "@msa/durable";
+import harnessModule from "@msa/durable/harness";
+import memory from "@msa/durable/storage/memory";
 import { Effect } from "effect";
 import { afterEach, describe, expect, it } from "vite-plus/test";
 
@@ -8,6 +8,10 @@ import harnessTasksRecoverySupport from "./harness-tasks-recovery-support.ts";
 import type harnessTasksRecoverySupportTypes from "./harness-tasks-recovery-support.types.ts";
 import support from "./support.ts";
 import type supportTypes from "./support.types.ts";
+
+const { defineTask } = durable;
+const { MemoryStorage } = memory;
+const { createRegistry } = harnessModule;
 
 const { createIn, directories, versioned } = harnessTasksRecoverySupport;
 const {

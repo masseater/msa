@@ -2,21 +2,19 @@ import type { Context, JsonValue } from "@msa/chord";
 import { Effect } from "effect";
 import { Compile } from "typebox/compile";
 
-import { eachHook, hookResult } from "./bridge.ts";
-import { boundContent, outputValue, toolDiagnostic, truncated } from "./tool-result.ts";
-import type { Content, Reported, ToolRuntime, ToolTaskInput } from "./tool-types.ts";
-import type {
-  ToolDiagnostic,
-  ToolExecutionResult,
-  ToolHookCall,
-  ToolRegistration,
-} from "./types.ts";
+import bridge from "./bridge.ts";
+import toolResult from "./tool-result.ts";
+import type toolTypesModule from "./tool-types.types.ts";
+import type typesModule from "./types.types.ts";
+
+const { boundContent, outputValue, toolDiagnostic, truncated } = toolResult;
+const { eachHook, hookResult } = bridge;
 
 const structuredValidators = new WeakMap<object, ReturnType<typeof Compile>>();
 
 function structuredOutputError(
-  tool: ToolRegistration,
-  result: ToolExecutionResult,
+  tool: typesModule.ToolRegistration,
+  result: typesModule.ToolExecutionResult,
 ): string | undefined {
   const schema = tool.structuredOutputSchema;
   const value = result.structuredOutput;
@@ -40,39 +38,42 @@ function structuredOutputError(
 }
 
 type Merged = {
-  readonly final: ToolExecutionResult;
-  readonly output: Content;
-  readonly retained: ReturnType<Reported["output"]["snapshot"]> | undefined;
+  readonly final: typesModule.ToolExecutionResult;
+  readonly output: toolTypesModule.Content;
+  readonly retained: ReturnType<toolTypesModule.Reported["output"]["snapshot"]> | undefined;
 };
 
-const mergeReported = (result: ToolExecutionResult, reported: Reported): Merged => {
+const mergeReported = (
+  result: typesModule.ToolExecutionResult,
+  reported: toolTypesModule.Reported,
+): Merged => {
   const retained = result.output === undefined ? reported.output.snapshot() : undefined;
-  const output: Content =
+  const output: toolTypesModule.Content =
     retained === undefined
       ? result.output!
       : retained.text === ""
         ? []
-        : [{ type: "text", text: retained.text }];
+        : [{ text: retained.text, type: "text" }];
   const details = result.details === undefined ? reported.details : result.details;
   return {
-    retained,
-    output,
     final: {
       ...result,
       output,
       ...(details === undefined ? {} : { details }),
       diagnostics: [...reported.diagnostics, ...(result.diagnostics ?? [])],
     },
+    output,
+    retained,
   };
 };
 
 const applyStructured = (
-  input: ToolTaskInput,
-  tool: ToolRegistration,
-  final: ToolExecutionResult,
-  harness: ToolDiagnostic[],
+  input: toolTypesModule.ToolTaskInput,
+  tool: typesModule.ToolRegistration,
+  final: typesModule.ToolExecutionResult,
+  harness: typesModule.ToolDiagnostic[],
   report: (error: unknown) => void,
-): ToolExecutionResult => {
+): typesModule.ToolExecutionResult => {
   const broken = structuredOutputError(tool, final);
   let merged = final;
   if (broken !== undefined) {
@@ -89,12 +90,12 @@ const applyStructured = (
 };
 
 const nestedStructured = (
-  input: ToolTaskInput,
-  tool: ToolRegistration,
-  final: ToolExecutionResult,
+  input: toolTypesModule.ToolTaskInput,
+  tool: typesModule.ToolRegistration,
+  final: typesModule.ToolExecutionResult,
   bounded: ReturnType<typeof boundContent>,
-  harness: ToolDiagnostic[],
-): ToolExecutionResult => {
+  harness: typesModule.ToolDiagnostic[],
+): typesModule.ToolExecutionResult => {
   if (input.kind !== "nested") return final;
   if (tool.structuredOutputSchema === undefined)
     return { ...final, structuredOutput: outputValue(bounded.content) as JsonValue };
@@ -113,16 +114,16 @@ const nestedStructured = (
   return final;
 };
 
-export const finalResult = Effect.fnUntraced(function* (
-  runtime: ToolRuntime,
-  input: ToolTaskInput,
-  call: ToolHookCall,
-  tool: ToolRegistration,
-  result: ToolExecutionResult,
-  reported: Reported,
+const finalResult = Effect.fnUntraced(function* (
+  runtime: toolTypesModule.ToolRuntime,
+  input: toolTypesModule.ToolTaskInput,
+  call: typesModule.ToolHookCall,
+  tool: typesModule.ToolRegistration,
+  result: typesModule.ToolExecutionResult,
+  reported: toolTypesModule.Reported,
   context: Context,
 ) {
-  const harness: ToolDiagnostic[] = [];
+  const harness: typesModule.ToolDiagnostic[] = [];
   const merged = mergeReported(result, reported);
   let final = merged.final;
   yield* eachHook(runtime.hooks, "afterTool", (hook) =>
@@ -147,7 +148,13 @@ export const finalResult = Effect.fnUntraced(function* (
   final = nestedStructured(input, tool, final, bounded, harness);
   return {
     ...final,
-    output: bounded.content,
     diagnostics: [...(final.diagnostics ?? []), ...harness],
+    output: bounded.content,
   };
 });
+
+const toolFinal = {
+  finalResult,
+};
+
+export default toolFinal;

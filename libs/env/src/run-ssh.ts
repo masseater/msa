@@ -1,16 +1,13 @@
 import { Effect, Stream } from "effect";
 
-import hostKeyChangedError from "./host-key-changed-error.ts";
-import hostKeyUnknownError from "./host-key-unknown-error.ts";
+import HostKeyChangedError from "./host-key-changed-error.ts";
+import HostKeyUnknownError from "./host-key-unknown-error.ts";
 import platform from "./platform.ts";
 import type runSshTypes from "./run-ssh.types.ts";
 import sshArgs from "./ssh-args.ts";
 import type sshArgsTypes from "./ssh-args.types.ts";
-import sshError from "./ssh-error.ts";
+import SshError from "./ssh-error.ts";
 
-const { HostKeyChangedError } = hostKeyChangedError;
-const { HostKeyUnknownError } = hostKeyUnknownError;
-const { SshError } = sshError;
 const { spawnProcess } = platform;
 const { sshArguments } = sshArgs;
 

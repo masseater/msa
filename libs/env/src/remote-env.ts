@@ -1,23 +1,6 @@
 import type { Context } from "@msa/chord";
-import {
-  type BinaryReader,
-  type DirReader,
-  type ExecutionEnv,
-  type ExecutionError,
-  type FileError,
-  type FileInfo,
-  type FileListing,
-  type FileWatcher,
-  type ListFilesOptions,
-  type Result,
-  type ShellExecOptions,
-  type ShellExecResult,
-  type TextLineReader,
-  type WatchChange,
-  type WatchTarget,
-  err,
-  ok,
-} from "@msa/durable/env";
+import env from "@msa/durable/env";
+import type envTypesModule from "@msa/durable/env.types";
 
 import dirOps from "./dir-ops.ts";
 import execModule from "./exec.ts";
@@ -26,6 +9,8 @@ import mutateOps from "./mutate-ops.ts";
 import pathOps from "./path-ops.ts";
 import readOps from "./read-ops.ts";
 import watchOp from "./watch-op.ts";
+
+const { err, ok } = env;
 
 const {
   absolutePathOf,
@@ -42,9 +27,9 @@ const { fileInfoAt, listDirAt } = dirOps;
 const { watchIn } = watchOp;
 const { execIn } = execModule;
 
-type FileResult<T> = Promise<Result<T, FileError>>;
+type FileResult<T> = Promise<envTypesModule.Result<T, envTypesModule.FileError>>;
 
-class RemoteExecutionEnv implements ExecutionEnv {
+export default class RemoteExecutionEnv implements envTypesModule.ExecutionEnv {
   readonly id: string;
   cwd: string;
   readonly connection: envTypes.Connection;
@@ -82,7 +67,7 @@ class RemoteExecutionEnv implements ExecutionEnv {
     path: string,
     options: { noFollow?: boolean } | undefined,
     context: Context,
-  ): FileResult<BinaryReader> {
+  ): FileResult<envTypesModule.BinaryReader> {
     return openBinaryReaderAt({
       context,
       noFollow: options?.noFollow === true,
@@ -91,7 +76,7 @@ class RemoteExecutionEnv implements ExecutionEnv {
     });
   }
 
-  openTextLineReader(path: string, context: Context): FileResult<TextLineReader> {
+  openTextLineReader(path: string, context: Context): FileResult<envTypesModule.TextLineReader> {
     return openTextLineReaderAt({ context, path, target: this });
   }
 
@@ -124,23 +109,23 @@ class RemoteExecutionEnv implements ExecutionEnv {
     return renameAt({ context, destination: destinationPath, path: sourcePath, target: this });
   }
 
-  fileInfo(path: string, context: Context): FileResult<FileInfo> {
+  fileInfo(path: string, context: Context): FileResult<envTypesModule.FileInfo> {
     return fileInfoAt({ context, path, target: this });
   }
 
-  listDir(path: string, context: Context): FileResult<FileInfo[]> {
+  listDir(path: string, context: Context): FileResult<envTypesModule.FileInfo[]> {
     return listDirAt({ context, path, target: this });
   }
 
   listFiles(
     path: string,
-    options: ListFilesOptions | undefined,
+    options: envTypesModule.ListFilesOptions | undefined,
     context: Context,
-  ): FileResult<FileListing> {
+  ): FileResult<envTypesModule.FileListing> {
     return listFilesAt({ context, options, path, target: this });
   }
 
-  openDirReader(path: string, context: Context): FileResult<DirReader> {
+  openDirReader(path: string, context: Context): FileResult<envTypesModule.DirReader> {
     return openDirReaderAt({ context, path, target: this });
   }
 
@@ -195,18 +180,18 @@ class RemoteExecutionEnv implements ExecutionEnv {
   }
 
   watch(
-    targets: readonly WatchTarget[],
-    onChange: (change: WatchChange) => void,
+    targets: readonly envTypesModule.WatchTarget[],
+    onChange: (change: envTypesModule.WatchChange) => void,
     context: Context,
-  ): FileResult<FileWatcher> {
+  ): FileResult<envTypesModule.FileWatcher> {
     return watchIn({ context, onChange, options: this.#watchOptions, target: this, targets });
   }
 
   exec(
     command: string | readonly string[],
-    options: ShellExecOptions | undefined,
+    options: envTypesModule.ShellExecOptions | undefined,
     context: Context,
-  ): Promise<Result<ShellExecResult, ExecutionError>> {
+  ): Promise<envTypesModule.Result<envTypesModule.ShellExecResult, envTypesModule.ExecutionError>> {
     return execIn({
       command,
       context,
@@ -224,9 +209,3 @@ class RemoteExecutionEnv implements ExecutionEnv {
     return Promise.resolve();
   }
 }
-
-const remoteEnv = {
-  RemoteExecutionEnv,
-};
-
-export default remoteEnv;

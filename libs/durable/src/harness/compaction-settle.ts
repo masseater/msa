@@ -3,29 +3,31 @@ import { isRetryableAssistantError, retryDelayMs } from "@msa/ai/utils/retry";
 import type { Context } from "@msa/chord";
 import { Effect, Function } from "effect";
 
-import { commitTask } from "./bridge.ts";
-import { placeSummary } from "./compaction-place.ts";
-import type {
-  CompactionNext,
-  CompactionRuntime,
-  CompactionTask,
-  SummaryRequest,
-} from "./compaction-types.ts";
-import { compactionStatus, failCompactionStatus, LiveDoc } from "./live.ts";
-import type { Dual3, Tx } from "./types.ts";
-import { recordUsage } from "./usage.ts";
+import bridge from "./bridge.ts";
+import compactionPlace from "./compaction-place.ts";
+import type compactionTypesModule from "./compaction-types.ts";
+import liveModule from "./live.ts";
+import type typesModule from "./types.types.ts";
+import usageModule from "./usage.ts";
+
+const { recordUsage } = usageModule;
+const { LiveDoc, compactionStatus, failCompactionStatus } = liveModule;
+const { commitTask } = bridge;
 
 type SummaryTexts = { readonly summary: string | undefined; readonly failure: string };
 
 const summaryChange =
   (
-    runtime: CompactionRuntime,
-    request: SummaryRequest,
+    runtime: compactionTypesModule.CompactionRuntime,
+    request: compactionTypesModule.SummaryRequest,
     message: AssistantMessage,
     texts: SummaryTexts,
     until: number | undefined,
   ) =>
-  (tx: Tx, current: CompactionTask): Effect.Effect<CompactionNext> =>
+  (
+    tx: typesModule.Tx,
+    current: compactionTypesModule.CompactionTask,
+  ): Effect.Effect<compactionTypesModule.CompactionNext> =>
     Effect.gen(function* () {
       yield* recordUsage(
         tx,
@@ -37,7 +39,7 @@ const summaryChange =
       const live = yield* Effect.promise(() => tx.doc(LiveDoc, runtime.conversationId));
       const { summary } = texts;
       if (summary !== undefined)
-        return yield* placeSummary(
+        return yield* compactionPlace.placeSummary(
           tx,
           runtime,
           { current, live },
@@ -46,21 +48,21 @@ const summaryChange =
       if (until !== undefined) {
         const status = compactionStatus(live, runtime.taskId);
         if (status !== undefined) status.retry = { at: until, error: message.errorMessage ?? "" };
-        return { status: "running", checkpoint: { phase: "retry", ...request, until } };
+        return { checkpoint: { phase: "retry", ...request, until }, status: "running" };
       }
       failCompactionStatus(live, runtime.taskId, texts.failure);
       return {
-        status: "terminal",
         outcome: {
+          error: { detail: { reason: "model_error" }, message: texts.failure },
           status: "failed",
-          error: { message: texts.failure, detail: { reason: "model_error" } },
         },
+        status: "terminal",
       };
     });
 
-export const settleSummary = Effect.fnUntraced(function* (
-  runtime: CompactionRuntime,
-  request: SummaryRequest,
+const settleSummary = Effect.fnUntraced(function* (
+  runtime: compactionTypesModule.CompactionRuntime,
+  request: compactionTypesModule.SummaryRequest,
   message: AssistantMessage,
   texts: SummaryTexts,
   context: Context,
@@ -75,16 +77,16 @@ export const settleSummary = Effect.fnUntraced(function* (
   yield* commitTask(runtime, summaryChange(runtime, request, message, texts, until), context);
 });
 
-export const retryPhase: Dual3<
-  CompactionRuntime,
-  SummaryRequest & { readonly until: number },
+const retryPhase: typesModule.Dual3<
+  compactionTypesModule.CompactionRuntime,
+  compactionTypesModule.SummaryRequest & { readonly until: number },
   Context,
   Effect.Effect<void>
 > = Function.dual(
   3,
   Effect.fnUntraced(function* (
-    runtime: CompactionRuntime,
-    checkpoint: SummaryRequest & { readonly until: number },
+    runtime: compactionTypesModule.CompactionRuntime,
+    checkpoint: compactionTypesModule.SummaryRequest & { readonly until: number },
     context: Context,
   ) {
     const { until, ...request } = checkpoint;
@@ -92,7 +94,7 @@ export const retryPhase: Dual3<
     const attempt = request.attempt + 1;
     yield* commitTask(
       runtime,
-      (tx: Tx): Effect.Effect<CompactionNext> =>
+      (tx: typesModule.Tx): Effect.Effect<compactionTypesModule.CompactionNext> =>
         Effect.gen(function* () {
           const live = yield* Effect.promise(() => tx.doc(LiveDoc, runtime.conversationId));
           const status = compactionStatus(live, runtime.taskId);
@@ -101,11 +103,18 @@ export const retryPhase: Dual3<
             delete status.retry;
           }
           return {
-            status: "running",
             checkpoint: { phase: "summarize", ...request, attempt },
+            status: "running",
           };
         }),
       context,
     );
   }),
 );
+
+const compactionSettle = {
+  retryPhase,
+  settleSummary,
+};
+
+export default compactionSettle;

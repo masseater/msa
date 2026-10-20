@@ -1,17 +1,17 @@
 import { withAbortSignal } from "@msa/chord/context";
-import {
-  LiveDoc,
-  type NestedToolExecutionResult,
-  type ToolTaskInput,
-  type ToolTaskResult,
-} from "@msa/durable";
-import { MemoryStorage } from "@msa/durable/storage/memory";
+import durable from "@msa/durable";
+import type durableTypes from "@msa/durable/index.types";
+import memory from "@msa/durable/storage/memory";
 import { Effect } from "effect";
 import { afterEach, describe, expect, it } from "vite-plus/test";
 
-import { openNodeSqliteStorage } from "../src/storage/sqlite/node.ts";
+import node from "../src/storage/sqlite/node.ts";
 import harnessNestedToolsSupport from "./harness-nested-tools-support.ts";
 import support from "./support.ts";
+
+const { MemoryStorage } = memory;
+const { LiveDoc } = durable;
+const { openNodeSqliteStorage } = node;
 
 const { DONE, call, directories, echoTool, results, runOnce, text, tool, toolTasks } =
   harnessNestedToolsSupport;
@@ -175,9 +175,11 @@ const reattachesReplaySafe = Effect.gen(function* () {
   expect(echo.state.runs).toBe(2);
   expect(text(results(yield* allEntries(opened.root))[0])).toBe("run 2: echo a, echo b");
   const tasks = yield* toolTasks(opened.harness);
-  expect(tasks.filter((task) => (task.input as ToolTaskInput).kind === "nested")).toHaveLength(2);
+  expect(
+    tasks.filter((task) => (task.input as durableTypes.ToolTaskInput).kind === "nested"),
+  ).toHaveLength(2);
   const outcome = tasks[1]!.state.status === "terminal" ? tasks[1]!.state.outcome : undefined;
-  expect((outcome?.result as ToolTaskResult | undefined)?.kind).toBe("nested");
+  expect((outcome?.result as durableTypes.ToolTaskResult | undefined)?.kind).toBe("nested");
   yield* awaited(opened.harness.close(context));
 });
 
@@ -193,7 +195,7 @@ const stopsOnlyWait = Effect.gen(function* () {
   const cancel = abortController();
   const release = deferred();
   const attempts: string[] = [];
-  let retry: NestedToolExecutionResult | undefined;
+  let retry: durableTypes.NestedToolExecutionResult | undefined;
   addTool(
     setup.registry,
     tool("slow", () =>

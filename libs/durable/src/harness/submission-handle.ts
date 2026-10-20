@@ -1,26 +1,26 @@
 import type { Context } from "@msa/chord";
 
-import type { AbortResult, Submissions } from "./submissions.ts";
-import type { SettledSubmissionRecord, Submission, SubmissionRecord } from "./types.ts";
+import type submissionsTypes from "./submissions.types.ts";
+import type typesModule from "./types.types.ts";
 
-export class SubmissionHandle implements Submission {
-  readonly id: SubmissionRecord["id"];
-  readonly #submissions: Submissions;
+export default class SubmissionHandle implements typesModule.Submission {
+  readonly id: typesModule.SubmissionRecord["id"];
+  readonly #submissions: submissionsTypes.Submissions;
 
-  constructor(id: SubmissionRecord["id"], submissions: Submissions) {
+  constructor(id: typesModule.SubmissionRecord["id"], submissions: submissionsTypes.Submissions) {
     this.id = id;
     this.#submissions = submissions;
   }
 
-  status(context: Context): Promise<SubmissionRecord> {
+  status(context: Context): Promise<typesModule.SubmissionRecord> {
     return this.#submissions.status(this.id, context);
   }
 
-  wait(context: Context): Promise<SettledSubmissionRecord> {
+  wait(context: Context): Promise<typesModule.SettledSubmissionRecord> {
     return this.#submissions.wait(this.id, context);
   }
 
-  abort(context: Context): Promise<AbortResult> {
+  abort(context: Context): Promise<submissionsTypes.AbortResult> {
     return this.#submissions.abortHandle(this.id, context);
   }
 }

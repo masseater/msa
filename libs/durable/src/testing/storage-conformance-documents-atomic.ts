@@ -1,49 +1,36 @@
 import type { JsonValue } from "@msa/chord";
 import { Effect } from "effect";
 
-import type {
-  ConversationId,
-  DocumentCreate,
-  DocumentId,
-  EntryId,
-  Storage,
-  SubmissionId,
-  SubmissionRecord,
-  TaskId,
-} from "../types.ts";
-import {
-  commit,
-  context,
-  createRoot,
-  documentAt,
-  entry,
-  type Expect,
-  io,
-  mint,
-  pendingTask,
-  type StorageCaseSpec,
-} from "./storage-conformance-support.ts";
+import type typesModule from "../types.types.ts";
+import storageConformanceSupport from "./storage-conformance-support.ts";
+import type storageConformanceSupportTypes from "./storage-conformance-support.types.ts";
 
-const rejectSecondIncarnation = Effect.fnUntraced(function* (storage: Storage, expect: Expect) {
-  const firstId = yield* mint<DocumentId>(storage);
-  const secondId = yield* mint<DocumentId>(storage);
+const { commit, context, createRoot, documentAt, entry, io, mint, pendingTask } =
+  storageConformanceSupport;
+
+const rejectSecondIncarnation = Effect.fnUntraced(function* (
+  storage: typesModule.Storage,
+  expect: storageConformanceSupportTypes.Expect,
+) {
+  const firstId = yield* mint<typesModule.DocumentId>(storage);
+  const secondId = yield* mint<typesModule.DocumentId>(storage);
   const record = {
     id: firstId,
     kind: "singleton",
     scope: { kind: "session" },
-  } satisfies DocumentCreate;
+  } satisfies typesModule.DocumentCreate;
   yield* commit(storage, [
-    { type: "document.create", record, content: { kind: "base", version: 1, value: { value: 1 } } },
+    { content: { kind: "base", value: { value: 1 }, version: 1 }, record, type: "document.create" },
   ]);
   yield* expect(
     storage.commit(
       [
         {
-          type: "document.create",
+          content: { kind: "base", value: { value: 2 }, version: 1 },
           record: { ...record, id: secondId },
-          content: { kind: "base", version: 1, value: { value: 2 } },
+          type: "document.create",
         },
-        { type: "document.change", id: firstId, content: { kind: "delta", version: 1, ops: [] } },
+        { content: { kind: "delta", ops: [], version: 1 }, id: firstId, type: "document.change" },
       ],
       context,
     ),
@@ -54,29 +41,29 @@ const rejectSecondIncarnation = Effect.fnUntraced(function* (storage: Storage, e
 });
 
 const expectEmptyLifetime = Effect.fnUntraced(function* (
-  storage: Storage,
-  expect: Expect,
-  rootId: ConversationId,
+  storage: typesModule.Storage,
+  expect: storageConformanceSupportTypes.Expect,
+  rootId: typesModule.ConversationId,
   kind: string,
 ) {
-  const emptyId = yield* mint<DocumentId>(storage);
-  const scope = { kind: "conversation", conversationId: rootId } as const;
+  const emptyId = yield* mint<typesModule.DocumentId>(storage);
+  const scope = { conversationId: rootId, kind: "conversation" } as const;
   const emptyAt = yield* commit(storage, [
     {
+      content: { kind: "base", value: {}, version: 1 },
+      record: { fork: "initial", history: "rewindable", id: emptyId, key: "empty", kind, scope },
       type: "document.create",
-      record: { id: emptyId, kind, key: "empty", scope, history: "rewindable", fork: "initial" },
-      content: { kind: "base", version: 1, value: {} },
     },
-    { type: "document.retire", id: emptyId },
+    { id: emptyId, type: "document.retire" },
   ]);
   expect(yield* documentAt(storage, emptyId, "current")).toBeUndefined();
   expect(yield* documentAt(storage, emptyId, emptyAt)).toBeUndefined();
   expect(
-    yield* io(() => storage.findDocument({ kind, scope, key: "empty" }, emptyAt, context)),
+    yield* io(() => storage.findDocument({ key: "empty", kind, scope }, emptyAt, context)),
   ).toBeUndefined();
 });
 
-const lifecycleFailures: StorageCaseSpec = {
+const lifecycleFailures: storageConformanceSupportTypes.StorageCaseSpec = {
   name: "keeps document lifecycle failures atomic and gives create-plus-retire an empty lifetime",
   test: (storage, expect) =>
     Effect.gen(function* () {
@@ -86,40 +73,40 @@ const lifecycleFailures: StorageCaseSpec = {
     }),
 };
 
-const seedAtomic = Effect.fnUntraced(function* (storage: Storage) {
+const seedAtomic = Effect.fnUntraced(function* (storage: typesModule.Storage) {
   const rootId = yield* createRoot(storage);
-  const taskId = yield* mint<TaskId<JsonValue>>(storage);
-  const submissionId = yield* mint<SubmissionId>(storage);
-  const documentId = yield* mint<DocumentId>(storage);
+  const taskId = yield* mint<typesModule.TaskId<JsonValue>>(storage);
+  const submissionId = yield* mint<typesModule.SubmissionId>(storage);
+  const documentId = yield* mint<typesModule.DocumentId>(storage);
   const task = pendingTask(taskId, rootId);
-  const submission: SubmissionRecord = {
-    id: submissionId,
+  const submission: typesModule.SubmissionRecord = {
     conversationId: rootId,
+    id: submissionId,
     requestId: "atomic",
-    type: "input",
     status: "queued",
+    type: "input",
   };
   const record = {
     id: documentId,
     kind: "atomic",
     scope: { kind: "session" },
-  } satisfies DocumentCreate;
+  } satisfies typesModule.DocumentCreate;
   const baselineSeq = yield* commit(storage, [
     { type: "task", value: task },
     { type: "submission", value: submission },
-    { type: "document.create", record, content: { kind: "base", version: 1, value: { count: 1 } } },
+    { content: { kind: "base", value: { count: 1 }, version: 1 }, record, type: "document.create" },
   ]);
-  return { rootId, task, submission, record, baselineSeq };
+  return { baselineSeq, record, rootId, submission, task };
 });
 
 type Atomic = Effect.Success<ReturnType<typeof seedAtomic>>;
 
 const expectRolledBack = Effect.fnUntraced(function* (
-  storage: Storage,
-  expect: Expect,
+  storage: typesModule.Storage,
+  expect: storageConformanceSupportTypes.Expect,
   { rootId, task, submission, record }: Atomic,
-  entryId: EntryId,
-  conflictingDocumentId: DocumentId,
+  entryId: typesModule.EntryId,
+  conflictingDocumentId: typesModule.DocumentId,
 ) {
   expect(yield* io(() => storage.task(task.id, context))).toEqual(task);
   expect(
@@ -137,30 +124,30 @@ const expectRolledBack = Effect.fnUntraced(function* (
   ).toBe(record.id);
 });
 
-const rollbackIndexes: StorageCaseSpec = {
+const rollbackIndexes: storageConformanceSupportTypes.StorageCaseSpec = {
   name: "rolls back record tables and secondary indexes when a document command fails",
   test: (storage, expect) =>
     Effect.gen(function* () {
       const atomic = yield* seedAtomic(storage);
       const { rootId, task, submission, record } = atomic;
-      const entryId = yield* mint<EntryId>(storage);
-      const conflictingDocumentId = yield* mint<DocumentId>(storage);
+      const entryId = yield* mint<typesModule.EntryId>(storage);
+      const conflictingDocumentId = yield* mint<typesModule.DocumentId>(storage);
       yield* expect(
         storage.commit(
           [
             {
               type: "task",
-              value: { ...task, state: { status: "running", checkpoint: { phase: "effect" } } },
+              value: { ...task, state: { checkpoint: { phase: "effect" }, status: "running" } },
             },
             {
               type: "submission",
-              value: { ...submission, status: "unanswered", reason: "failed" },
+              value: { ...submission, reason: "failed", status: "unanswered" },
             },
             { type: "entry", value: entry(entryId, rootId, "transient") },
             {
-              type: "document.create",
+              content: { kind: "base", value: { count: 2 }, version: 1 },
               record: { ...record, id: conflictingDocumentId },
-              content: { kind: "base", version: 1, value: { count: 2 } },
+              type: "document.create",
             },
           ],
           context,
@@ -169,16 +156,22 @@ const rollbackIndexes: StorageCaseSpec = {
       yield* expectRolledBack(storage, expect, atomic, entryId, conflictingDocumentId);
       const afterRollbackSeq = yield* commit(storage, [
         {
-          type: "document.change",
+          content: { kind: "delta", ops: [["s", ["count"], 3]], version: 1 },
           id: record.id,
-          content: { kind: "delta", version: 1, ops: [["s", ["count"], 3]] },
+          type: "document.change",
         },
       ]);
       expect(afterRollbackSeq).toBeGreaterThan(atomic.baselineSeq);
     }),
 };
 
-export const documentsAtomicCases: readonly StorageCaseSpec[] = [
+const documentsAtomicCases: readonly storageConformanceSupportTypes.StorageCaseSpec[] = [
   lifecycleFailures,
   rollbackIndexes,
 ];
+
+const storageConformanceDocumentsAtomic = {
+  documentsAtomicCases,
+};
+
+export default storageConformanceDocumentsAtomic;

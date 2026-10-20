@@ -2,13 +2,12 @@ import { Effect } from "effect";
 
 import connectionModule from "../src/connection.ts";
 import type connectionTypes from "../src/connection.types.ts";
-import remoteEnv from "../src/remote-env.ts";
+import RemoteExecutionEnv from "../src/remote-env.ts";
 import daemon from "./daemon.ts";
 import platform from "./platform.ts";
 import type remoteEnvironmentTypes from "./remote-environment.types.ts";
 
 const { Connection } = connectionModule;
-const { RemoteExecutionEnv } = remoteEnv;
 
 const { makeTempDirectory, removePath } = platform;
 

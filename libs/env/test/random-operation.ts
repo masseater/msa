@@ -1,4 +1,4 @@
-import type { ExecutionEnv } from "@msa/durable/env";
+import type envTypes from "@msa/durable/env.types";
 import { Effect } from "effect";
 
 import differentialSupport from "./differential-support.ts";
@@ -15,7 +15,7 @@ const CONTENTS: (string | Uint8Array)[] = [
   "é".repeat(300_001),
 ];
 
-type Operation = (env: ExecutionEnv) => Promise<unknown>;
+type Operation = (env: envTypes.ExecutionEnv) => Promise<unknown>;
 
 interface Picker {
   readonly name: () => string;

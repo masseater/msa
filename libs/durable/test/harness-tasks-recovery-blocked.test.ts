@@ -1,14 +1,19 @@
 import { Type } from "@msa/ai";
-import { type Registry, defineDoc, defineTask, defineTool } from "@msa/durable";
-import { createRegistry } from "@msa/durable/harness";
-import { MemoryStorage } from "@msa/durable/storage/memory";
+import type durableTypes from "@msa/durable/index.types";
 import { Effect } from "effect";
 import { afterEach, describe, expect, it } from "vite-plus/test";
 
-import { openNodeSqliteStorage } from "../src/storage/sqlite/node.ts";
+import durableKit from "./durable-kit.ts";
 import harnessTasksRecoverySupport from "./harness-tasks-recovery-support.ts";
 import type harnessTasksRecoverySupportTypes from "./harness-tasks-recovery-support.types.ts";
 import support from "./support.ts";
+
+const { durable, harness: harnessModule, memory, sqliteNode: node } = durableKit;
+
+const { openNodeSqliteStorage } = node;
+const { createRegistry } = harnessModule;
+const { defineDoc, defineTask, defineTool } = durable;
+const { MemoryStorage } = memory;
 
 const { createIn, directories, handoverTask, sqlitePath, startHandover, versioned } =
   harnessTasksRecoverySupport;
@@ -40,7 +45,7 @@ const failedMigrationTask = Effect.fn("failedMigrationTask")(function* () {
   const id = yield* createIn(opened.harness, versioned(1, "v1"));
   yield* awaited(opened.harness.close(context));
 
-  const registry: Registry = createRegistry();
+  const registry: durableTypes.Registry = createRegistry();
   const counted: { failures: number } = { failures: 0 };
   addTask(
     registry,

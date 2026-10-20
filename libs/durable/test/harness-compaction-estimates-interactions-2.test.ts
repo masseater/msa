@@ -1,10 +1,13 @@
-import { UsageDoc } from "@msa/durable";
-import { CompactionTask } from "@msa/durable/harness";
+import durable from "@msa/durable";
+import harnessModule from "@msa/durable/harness";
 import { Effect } from "effect";
 import { afterEach, describe, expect, it } from "vite-plus/test";
 
 import harnessCompactionSupport from "./harness-compaction-support.ts";
 import support from "./support.ts";
+
+const { UsageDoc } = durable;
+const { CompactionTask } = harnessModule;
 
 const {
   MANUAL,

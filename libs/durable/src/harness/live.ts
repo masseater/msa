@@ -1,104 +1,39 @@
-import type { AssistantMessage, Usage } from "@msa/ai";
-import type { Draft, JsonRepresentation, JsonValue } from "@msa/chord";
+import type { Draft } from "@msa/chord";
 import { Function } from "effect";
 
-import { defineDoc } from "../documents.ts";
-import type {
-  CompactionReason,
-  CompactionResult,
-  Dual2,
-  Dual3,
-  Dual4,
-  EntryId,
-  JsonObject,
-  SubmissionId,
-  SubmissionSettlement,
-  TaskId,
-  ToolDiagnostic,
-  Tx,
-} from "./types.ts";
+import documents from "../documents.ts";
+import type liveTypes from "./live.types.ts";
+import type typesModule from "./types.types.ts";
 
-type SlotProgress = {
-  callId: string;
-  name: string;
-  status: "pending" | "running" | "done";
-  output?: string;
-  droppedBytes?: number;
-  droppedLines?: number;
-  details?: JsonValue;
-  diagnostics?: ToolDiagnostic[];
-};
+const { defineDoc } = documents;
 
-export type ToolSlot = SlotProgress & {
-  taskId?: TaskId;
-  entry?: EntryId;
-};
-
-export type NestedToolSlot = SlotProgress & {
-  parentCallId: string;
-  parentTaskId: TaskId;
-  taskId: TaskId;
-  arguments: JsonObject;
-  summary?: NestedToolSummary;
-};
-
-export type NestedToolSummary = {
-  isError: boolean;
-  durationMs?: number;
-  usage?: JsonRepresentation<Usage>;
-  error?: string;
-};
-
-export type CompactionStatus = {
-  taskId: TaskId<CompactionResult>;
-  reason: CompactionReason;
-  blocking: boolean;
-  attempt: number;
-  retry?: { at: number; error: string };
-};
-
-export type CompactionFailure = {
-  taskId: TaskId<CompactionResult>;
-  reason: CompactionReason;
-  error: string;
-};
-
-export type LiveState = {
-  run?: { taskId: TaskId; inputs: SubmissionId[] };
-  generation?: {
-    attempt: number;
-    message?: JsonRepresentation<AssistantMessage>;
-    retry?: { at: number; error: string };
-    deferred?: { pollAt: number };
-  };
-  tools?: ToolSlot[];
-  nestedTools?: NestedToolSlot[];
-  compactions?: CompactionStatus[];
-  compactionFailure?: CompactionFailure;
-};
-
-export const LiveDoc = defineDoc<LiveState>({
-  kind: "msa.live",
-  version: 1,
-  scope: "conversation",
-  history: "latest",
-  fork: "initial",
-  initial: () => ({}),
+const LiveDoc = defineDoc<liveTypes.LiveState>({
   checkpointWhen: (value) =>
     value.generation === undefined &&
     !(value.tools ?? []).some((slot) => slot.status === "running") &&
     !(value.nestedTools ?? []).some((slot) => slot.status === "running"),
+  fork: "initial",
+  history: "latest",
+  initial: () => ({}),
+  kind: "msa.live",
+  scope: "conversation",
+  version: 1,
 });
 
-export const endRun: Dual4<
-  Tx,
-  Draft<LiveState>,
-  TaskId,
-  SubmissionSettlement,
+const endRun: typesModule.Dual4<
+  typesModule.Tx,
+  Draft<liveTypes.LiveState>,
+  typesModule.TaskId,
+  typesModule.SubmissionSettlement,
   void
 > = Function.dual(
   4,
-  (tx: Tx, live: Draft<LiveState>, taskId: TaskId, settlement: SubmissionSettlement): void => {
+  (
+    tx: typesModule.Tx,
+    live: Draft<liveTypes.LiveState>,
+    taskId: typesModule.TaskId,
+    settlement: typesModule.SubmissionSettlement,
+  ): void => {
     if (live.run?.taskId === taskId) {
       for (const id of live.run.inputs) tx.settleSubmission(id, settlement);
       delete live.run;
@@ -109,49 +44,62 @@ export const endRun: Dual4<
   },
 );
 
-export const addCompactionStatus: Dual2<Draft<LiveState>, CompactionStatus, void> = Function.dual(
+const addCompactionStatus: typesModule.Dual2<
+  Draft<liveTypes.LiveState>,
+  liveTypes.CompactionStatus,
+  void
+> = Function.dual(
   2,
-  (live: Draft<LiveState>, status: CompactionStatus): void => {
+  (live: Draft<liveTypes.LiveState>, status: liveTypes.CompactionStatus): void => {
     live.compactions ??= [];
     live.compactions.push(status);
   },
 );
 
-export const compactionStatus: Dual2<
-  Draft<LiveState>,
-  TaskId,
-  Draft<CompactionStatus> | undefined
+const compactionStatus: typesModule.Dual2<
+  Draft<liveTypes.LiveState>,
+  typesModule.TaskId,
+  Draft<liveTypes.CompactionStatus> | undefined
 > = Function.dual(
   2,
-  (live: Draft<LiveState>, taskId: TaskId): Draft<CompactionStatus> | undefined =>
+  (
+    live: Draft<liveTypes.LiveState>,
+    taskId: typesModule.TaskId,
+  ): Draft<liveTypes.CompactionStatus> | undefined =>
     live.compactions?.find((status) => status.taskId === taskId),
 );
 
-export const removeCompactionStatus: Dual2<Draft<LiveState>, TaskId, void> = Function.dual(
-  2,
-  (live: Draft<LiveState>, taskId: TaskId): void => {
-    const statuses = live.compactions;
-    if (statuses === undefined) return;
-    const index = statuses.findIndex((status) => status.taskId === taskId);
-    if (index >= 0) statuses.splice(index, 1);
-    if (statuses.length === 0) delete live.compactions;
-  },
-);
+const removeCompactionStatus: typesModule.Dual2<
+  Draft<liveTypes.LiveState>,
+  typesModule.TaskId,
+  void
+> = Function.dual(2, (live: Draft<liveTypes.LiveState>, taskId: typesModule.TaskId): void => {
+  const statuses = live.compactions;
+  if (statuses === undefined) return;
+  const index = statuses.findIndex((status) => status.taskId === taskId);
+  if (index >= 0) statuses.splice(index, 1);
+  if (statuses.length === 0) delete live.compactions;
+});
 
-export const failCompactionStatus: Dual3<Draft<LiveState>, TaskId, string, void> = Function.dual(
+const failCompactionStatus: typesModule.Dual3<
+  Draft<liveTypes.LiveState>,
+  typesModule.TaskId,
+  string,
+  void
+> = Function.dual(
   3,
-  (live: Draft<LiveState>, taskId: TaskId, error: string): void => {
+  (live: Draft<liveTypes.LiveState>, taskId: typesModule.TaskId, error: string): void => {
     const status = compactionStatus(live, taskId);
     if (status !== undefined)
-      live.compactionFailure = { taskId: status.taskId, reason: status.reason, error };
+      live.compactionFailure = { error, reason: status.reason, taskId: status.taskId };
     removeCompactionStatus(live, taskId);
   },
 );
 
 const findNestedSlot = (
-  nested: Draft<NestedToolSlot[]>,
-  taskId: TaskId,
-): Draft<NestedToolSlot> | undefined => {
+  nested: Draft<liveTypes.NestedToolSlot[]>,
+  taskId: typesModule.TaskId,
+): Draft<liveTypes.NestedToolSlot> | undefined => {
   let low = 0;
   let high = nested.length - 1;
   while (low <= high) {
@@ -164,42 +112,61 @@ const findNestedSlot = (
   return undefined;
 };
 
-export const toolSlot: Dual2<
-  Draft<LiveState>,
-  TaskId,
-  Draft<ToolSlot | NestedToolSlot> | undefined
+const toolSlot: typesModule.Dual2<
+  Draft<liveTypes.LiveState>,
+  typesModule.TaskId,
+  Draft<liveTypes.ToolSlot | liveTypes.NestedToolSlot> | undefined
 > = Function.dual(
   2,
-  (live: Draft<LiveState>, taskId: TaskId): Draft<ToolSlot | NestedToolSlot> | undefined => {
+  (
+    live: Draft<liveTypes.LiveState>,
+    taskId: typesModule.TaskId,
+  ): Draft<liveTypes.ToolSlot | liveTypes.NestedToolSlot> | undefined => {
     const slot = live.tools?.find((each) => each.taskId === taskId);
     if (slot !== undefined || live.nestedTools === undefined) return slot;
     return findNestedSlot(live.nestedTools, taskId);
   },
 );
 
-export function finishSlot(slot: Draft<ToolSlot | NestedToolSlot>): void {
+function finishSlot(slot: Draft<liveTypes.ToolSlot | liveTypes.NestedToolSlot>): void {
   slot.status = "done";
   clearProgress(slot);
 }
 
-export const removeNestedSlots: Dual2<Draft<LiveState>, TaskId, void> = Function.dual(
-  2,
-  (live: Draft<LiveState>, taskId: TaskId): void => {
-    const nested = live.nestedTools;
-    if (nested === undefined) return;
-    const removed = new Set<TaskId>([taskId]);
-    for (const slot of nested) if (removed.has(slot.parentTaskId)) removed.add(slot.taskId);
-    for (let index = nested.length - 1; index >= 0; index--) {
-      if (removed.has(nested[index]!.parentTaskId)) nested.splice(index, 1);
-    }
-    if (nested.length === 0) delete live.nestedTools;
-  },
-);
+const removeNestedSlots: typesModule.Dual2<
+  Draft<liveTypes.LiveState>,
+  typesModule.TaskId,
+  void
+> = Function.dual(2, (live: Draft<liveTypes.LiveState>, taskId: typesModule.TaskId): void => {
+  const nested = live.nestedTools;
+  if (nested === undefined) return;
+  const removed = new Set<typesModule.TaskId>([taskId]);
+  for (const slot of nested) if (removed.has(slot.parentTaskId)) removed.add(slot.taskId);
+  for (let index = nested.length - 1; index >= 0; index--) {
+    if (removed.has(nested[index]!.parentTaskId)) nested.splice(index, 1);
+  }
+  if (nested.length === 0) delete live.nestedTools;
+});
 
-export function clearProgress(slot: Draft<SlotProgress>): void {
+function clearProgress(slot: Draft<liveTypes.SlotProgress>): void {
   delete slot.output;
   delete slot.droppedBytes;
   delete slot.droppedLines;
   delete slot.details;
   delete slot.diagnostics;
 }
+
+const liveModule = {
+  LiveDoc,
+  addCompactionStatus,
+  clearProgress,
+  compactionStatus,
+  endRun,
+  failCompactionStatus,
+  finishSlot,
+  removeCompactionStatus,
+  removeNestedSlots,
+  toolSlot,
+};
+
+export default liveModule;

@@ -1,6 +1,8 @@
-import { defineDoc } from "@msa/durable";
+import durable from "@msa/durable";
 
 import type sessionCheckpointsMigrationsHistoricalDocumentSnapshotsCasesTypes from "./session-checkpoints-migrations-historical-document-snapshots-cases.types.ts";
+
+const { defineDoc } = durable;
 
 const V1Doc = defineDoc<sessionCheckpointsMigrationsHistoricalDocumentSnapshotsCasesTypes.V1>({
   initial: () => ({ name: "first" }),

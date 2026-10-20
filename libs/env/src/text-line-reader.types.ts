@@ -1,7 +1,7 @@
-import type textLineReader from "./text-line-reader.ts";
+import type RemoteTextLineReaderClass from "./text-line-reader.ts";
 
 declare namespace textLineReaderTypes {
-  type RemoteTextLineReader = (typeof textLineReader.RemoteTextLineReader)["prototype"];
+  type RemoteTextLineReader = RemoteTextLineReaderClass;
 }
 
 export type { textLineReaderTypes as default };

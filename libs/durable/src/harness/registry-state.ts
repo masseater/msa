@@ -1,25 +1,25 @@
-import { CompactionTask } from "./compaction.ts";
-import { GenerationTask } from "./generation.ts";
-import { ToolTask } from "./tool.ts";
-import type {
-  AnyTask,
-  Extension,
-  PromptSection,
-  RegistrySnapshot,
-  ToolRegistration,
-} from "./types.ts";
+import compaction from "./compaction.ts";
+import generation from "./generation.ts";
+import toolModule from "./tool.ts";
+import type typesModule from "./types.types.ts";
 
-export const BUILTIN_TASKS: readonly AnyTask[] = [GenerationTask, ToolTask, CompactionTask];
+const { GenerationTask } = generation;
+const { ToolTask } = toolModule;
+const { CompactionTask } = compaction;
 
-export class RegistryState<Tool extends ToolRegistration> implements RegistrySnapshot<Tool> {
-  readonly #extensions: readonly Extension<Tool>[];
-  readonly #byName: ReadonlyMap<string, Extension<Tool>>;
-  readonly #tasks: ReadonlyMap<string, AnyTask>;
+const BUILTIN_TASKS: readonly typesModule.AnyTask[] = [GenerationTask, ToolTask, CompactionTask];
 
-  constructor(extensions: readonly Extension<Tool>[]) {
+class RegistryState<
+  Tool extends typesModule.ToolRegistration,
+> implements typesModule.RegistrySnapshot<Tool> {
+  readonly #extensions: readonly typesModule.Extension<Tool>[];
+  readonly #byName: ReadonlyMap<string, typesModule.Extension<Tool>>;
+  readonly #tasks: ReadonlyMap<string, typesModule.AnyTask>;
+
+  constructor(extensions: readonly typesModule.Extension<Tool>[]) {
     this.#extensions = extensions;
     this.#byName = new Map(extensions.map((extension) => [extension.name, extension]));
-    const tasks = new Map<string, AnyTask>();
+    const tasks = new Map<string, typesModule.AnyTask>();
     for (const task of BUILTIN_TASKS) tasks.set(task.definition.name, task);
     for (const extension of extensions) {
       for (const task of extension.tasks ?? []) {
@@ -32,34 +32,41 @@ export class RegistryState<Tool extends ToolRegistration> implements RegistrySna
     this.#tasks = tasks;
   }
 
-  installed(): readonly Extension<Tool>[] {
+  installed(): readonly typesModule.Extension<Tool>[] {
     return this.#extensions;
   }
 
-  extension(name: string): Extension<Tool> | undefined {
+  extension(name: string): typesModule.Extension<Tool> | undefined {
     return this.#byName.get(name);
   }
 
-  tools(): readonly { readonly extension: Extension<Tool>; readonly tool: Tool }[] {
+  tools(): readonly { readonly extension: typesModule.Extension<Tool>; readonly tool: Tool }[] {
     return this.#extensions.flatMap((extension) =>
       (extension.tools ?? []).map((tool) => ({ extension, tool })),
     );
   }
 
   sections(): readonly {
-    readonly extension: Extension<Tool>;
-    readonly section: PromptSection<Tool>;
+    readonly extension: typesModule.Extension<Tool>;
+    readonly section: typesModule.PromptSection<Tool>;
   }[] {
     return this.#extensions.flatMap((extension) =>
       (extension.sections ?? []).map((section) => ({ extension, section })),
     );
   }
 
-  tasks(): readonly AnyTask[] {
+  tasks(): readonly typesModule.AnyTask[] {
     return [...this.#tasks.values()];
   }
 
-  task(name: string): AnyTask | undefined {
+  task(name: string): typesModule.AnyTask | undefined {
     return this.#tasks.get(name);
   }
 }
+
+const registryState = {
+  BUILTIN_TASKS,
+  RegistryState,
+};
+
+export default registryState;

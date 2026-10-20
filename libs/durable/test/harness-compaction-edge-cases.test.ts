@@ -1,11 +1,13 @@
 import { fauxAssistantMessage } from "@msa/ai";
-import { type AgentEvent } from "@msa/durable";
-import { watchEvents } from "@msa/durable/harness";
+import harnessModule from "@msa/durable/harness";
+import type durableTypes from "@msa/durable/index.types";
 import { Effect } from "effect";
 import { afterEach, describe, expect, it } from "vite-plus/test";
 
 import harnessCompactionSupport from "./harness-compaction-support.ts";
 import support from "./support.ts";
+
+const { watchEvents } = harnessModule;
 
 const {
   BACKGROUND,
@@ -176,7 +178,7 @@ const treatsLengthStop = Effect.gen(function* () {
 const ordersEventsSummary = Effect.gen(function* () {
   const chat = yield* open();
   yield* history(chat);
-  const events: AgentEvent[] = [];
+  const events: durableTypes.AgentEvent[] = [];
   const stream = yield* awaited(watchEvents(chat.harness, chat.root.id, context));
   stream.start((batch) => {
     events.push(...batch);
@@ -210,7 +212,7 @@ const putsCompactionStart = Effect.gen(function* () {
   const chat = yield* open({ contextWindow: 2000 });
   yield* history(chat);
   chat.setup.settings.compaction = BACKGROUND;
-  const events: AgentEvent[][] = [];
+  const events: durableTypes.AgentEvent[][] = [];
   const stream = yield* awaited(watchEvents(chat.harness, chat.root.id, context));
   stream.start((batch) => {
     events.push([...batch]);

@@ -1,49 +1,45 @@
 import type { Context, JsonValue } from "@msa/chord";
 import { copyJson } from "@msa/chord/json";
 
-import { promiseTry } from "../promise-try.ts";
-import type { ContextRange } from "./context.ts";
-import { SchedulerGraph } from "./scheduler-graph.ts";
-import { endedError, erased, missingMigration } from "./scheduler-records.ts";
-import {
-  type AnyTaskRecord,
-  type ErasedRunningTask,
-  type Fit,
-  type Invocation,
-  MAX_TIMER_DELAY,
-  type Resolution,
-  type RunnableTaskRecord,
-  type TaskSchedulerOptions,
-  type Transaction,
-  type AnyTask,
-  type ConversationId,
-  type RegistrySnapshot,
-  type SettledTask,
-  type TaskId,
-} from "./scheduler-types.ts";
-import { closedError, Waiters } from "./util.ts";
+import promiseTryModule from "../promise-try.ts";
+import unrefTimer from "../unref-timer.ts";
+import SchedulerGraph from "./scheduler-graph.ts";
+import schedulerRecords from "./scheduler-records.ts";
+import type schedulerStateTypes from "./scheduler-state.types.ts";
+import schedulerTypes from "./scheduler-types.ts";
+import type schedulerTypesModule from "./scheduler-types.types.ts";
+import util from "./util.ts";
 
-export type Wake = {
-  readonly reconcile: () => void;
-  readonly kick: () => void;
-};
+const { startUnrefTimer } = unrefTimer;
 
-export type KeptContext = { range: ContextRange; idleSince: number | undefined };
+const { Waiters, closedError } = util;
 
-export class SchedulerState {
-  readonly options: TaskSchedulerOptions;
-  readonly wake: Wake;
-  readonly graph: SchedulerGraph;
-  readonly contexts = new Map<ConversationId, KeptContext>();
-  readonly invocations = new Map<TaskId, Invocation>();
-  readonly taskWaiters = new Waiters<TaskId, SettledTask<JsonValue>>();
-  readonly idleWaiters = new Waiters<ConversationId | undefined, void>();
-  readonly failedMigrations = new Map<
-    TaskId,
-    { readonly task: AnyTask; readonly error: unknown }
+const { promiseTry } = promiseTryModule;
+const { MAX_TIMER_DELAY } = schedulerTypes;
+const { endedError, erased, missingMigration } = schedulerRecords;
+
+export default class SchedulerState {
+  readonly options: schedulerTypesModule.TaskSchedulerOptions;
+  readonly wake: schedulerStateTypes.Wake;
+  readonly graph: schedulerStateTypes.SchedulerGraph;
+  readonly contexts = new Map<
+    schedulerTypesModule.ConversationId,
+    schedulerStateTypes.KeptContext
   >();
-  readonly abandoned = new Set<TaskId>();
-  expiry: { readonly at: number; readonly timer: ReturnType<typeof setTimeout> } | undefined;
+  readonly invocations = new Map<schedulerTypesModule.TaskId, schedulerTypesModule.Invocation>();
+  readonly taskWaiters = new Waiters<
+    schedulerTypesModule.TaskId,
+    schedulerTypesModule.SettledTask<JsonValue>
+  >();
+  readonly idleWaiters = new Waiters<schedulerTypesModule.ConversationId | undefined, void>();
+  readonly failedMigrations = new Map<
+    schedulerTypesModule.TaskId,
+    { readonly task: schedulerTypesModule.AnyTask; readonly error: unknown }
+  >();
+  readonly abandoned = new Set<schedulerTypesModule.TaskId>();
+  expiry:
+    | { readonly at: number; readonly timer: NonNullable<ReturnType<typeof startUnrefTimer>> }
+    | undefined;
   reconcileScheduled = false;
   sweepScheduled = false;
   cascadePending = false;
@@ -53,7 +49,7 @@ export class SchedulerState {
   dirty = false;
   draining = false;
 
-  constructor(options: TaskSchedulerOptions, wake: Wake) {
+  constructor(options: schedulerTypesModule.TaskSchedulerOptions, wake: schedulerStateTypes.Wake) {
     this.options = options;
     this.wake = wake;
     this.graph = new SchedulerGraph({
@@ -122,22 +118,17 @@ export class SchedulerState {
   scheduleExpiry(): void {
     const at = this.#nextExpiry(this.contextRetentionMs());
     if (this.expiry !== undefined && this.expiry.at === at) return;
-    if (this.expiry !== undefined) clearTimeout(this.expiry.timer);
+    this.expiry?.timer.cancel();
     this.expiry = undefined;
     if (at === undefined || this.closing) return;
-    const timer = setTimeout(
+    const timer = startUnrefTimer(
       () => {
         this.expiry = undefined;
         this.settleIdle();
       },
       Math.min(Math.max(0, at - this.options.now()), MAX_TIMER_DELAY),
     );
-    const unref = (timer as { unref?: unknown }).unref;
-    if (typeof unref !== "function") {
-      clearTimeout(timer);
-      return;
-    }
-    unref.call(timer);
+    if (timer === undefined) return;
     this.expiry = { at, timer };
   }
 
@@ -152,24 +143,30 @@ export class SchedulerState {
     this.taskWaiters.rejectAll(error);
     this.idleWaiters.rejectAll(error);
     this.contexts.clear();
-    if (this.expiry !== undefined) clearTimeout(this.expiry.timer);
+    this.expiry?.timer.cancel();
     this.expiry = undefined;
   }
 
-  fit(record: AnyTaskRecord, task: AnyTask | undefined): Fit {
+  fit(
+    record: schedulerTypesModule.AnyTaskRecord,
+    task: schedulerTypesModule.AnyTask | undefined,
+  ): schedulerTypesModule.Fit {
     if (task === undefined) return { reason: "missing_task" };
     const version = task.definition.version;
-    if (version === record.version) return { task, migrates: false };
+    if (version === record.version) return { migrates: false, task };
     if (version < record.version) return { reason: "task_too_old" };
     const failed = this.failedMigrations.get(record.id);
-    if (failed?.task === task) return { reason: "migration_failed", error: failed.error };
-    return { task, migrates: true };
+    if (failed?.task === task) return { error: failed.error, reason: "migration_failed" };
+    return { migrates: true, task };
   }
 
-  resolve(record: RunnableTaskRecord, snapshot: RegistrySnapshot): Resolution {
+  resolve(
+    record: schedulerTypesModule.RunnableTaskRecord,
+    snapshot: schedulerTypesModule.RegistrySnapshot,
+  ): schedulerTypesModule.Resolution {
     const fit = this.fit(record, snapshot.task(record.kind));
     if ("reason" in fit) return { kind: "blocked", reason: fit.reason };
-    if (!fit.migrates) return { kind: "ready", task: fit.task, record };
+    if (!fit.migrates) return { kind: "ready", record, task: fit.task };
     const definition = erased(fit.task);
     try {
       if (definition.migrate === undefined) throw missingMigration(record, definition);
@@ -177,19 +174,23 @@ export class SchedulerState {
       const state = { ...record.state, checkpoint: copyJson(migrated.checkpoint) };
       const migratedRecord = {
         ...record,
-        version: definition.version,
         input: copyJson(migrated.input),
         state,
+        version: definition.version,
       };
-      return { kind: "ready", task: fit.task, record: migratedRecord as RunnableTaskRecord };
+      return {
+        kind: "ready",
+        record: migratedRecord as schedulerTypesModule.RunnableTaskRecord,
+        task: fit.task,
+      };
     } catch (error) {
-      this.failedMigrations.set(record.id, { task: fit.task, error });
+      this.failedMigrations.set(record.id, { error, task: fit.task });
       this.options.report(error);
       return { kind: "blocked", reason: "migration_failed" };
     }
   }
 
-  end(invocation: Invocation): void {
+  end(invocation: schedulerTypesModule.Invocation): void {
     if (invocation.ended) return;
     invocation.ended = true;
     if (this.invocations.get(invocation.taskId) === invocation) {
@@ -200,7 +201,7 @@ export class SchedulerState {
     invocation.controller.abort(endedError(invocation));
   }
 
-  read<T>(invocation: Invocation, read: () => Promise<T>): Promise<T> {
+  read<T>(invocation: schedulerTypesModule.Invocation, read: () => Promise<T>): Promise<T> {
     return promiseTry(() => {
       if (invocation.ended) throw endedError(invocation);
       return read();
@@ -208,8 +209,11 @@ export class SchedulerState {
   }
 
   gated<T>(
-    invocation: Invocation,
-    change: (tx: Transaction, current: ErasedRunningTask) => T | Promise<T>,
+    invocation: schedulerTypesModule.Invocation,
+    change: (
+      tx: schedulerTypesModule.Transaction,
+      current: schedulerTypesModule.ErasedRunningTask,
+    ) => T | Promise<T>,
     context: Context,
   ): Promise<T> {
     if (invocation.ended) return Promise.reject(endedError(invocation));
@@ -220,21 +224,24 @@ export class SchedulerState {
     );
   }
 
-  #runningFor(invocation: Invocation): ErasedRunningTask {
+  #runningFor(invocation: schedulerTypesModule.Invocation): schedulerTypesModule.ErasedRunningTask {
     if (invocation.ended) throw endedError(invocation);
     if (this.closing) throw closedError(this.options.session);
     const found = this.graph.live.get(invocation.taskId);
     if (found === undefined) throw new Error(`Task ${invocation.taskId} is terminal`);
     if (found.state.status !== "running")
       throw new Error(`Task ${invocation.taskId} is ${found.state.status}`);
-    const current = found as ErasedRunningTask;
+    const current = found as schedulerTypesModule.ErasedRunningTask;
     if (invocation.mode === "run" && current.abortRequested) {
       throw new Error(`Task ${invocation.taskId} has a durable abort mark`);
     }
     return current;
   }
 
-  waitForIdle(conversationId: ConversationId | undefined, context: Context): Promise<void> {
+  waitForIdle(
+    conversationId: schedulerTypesModule.ConversationId | undefined,
+    context: Context,
+  ): Promise<void> {
     if (this.closing) return Promise.reject(closedError(this.options.session));
     if (this.graph.idle(conversationId)) return Promise.resolve();
     this.wake.reconcile();

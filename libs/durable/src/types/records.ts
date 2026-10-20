@@ -1,138 +1,139 @@
 import type { Message } from "@msa/ai";
 import type { JsonValue } from "@msa/chord";
 
-import type { ConversationId, EntryId, SubmissionId, TaskId } from "./ids.ts";
+import type idsTypes from "./ids.types.ts";
 
-export type ConversationOwnership =
-  | { readonly kind: "ownerless" }
-  | { readonly kind: "task"; readonly taskId: TaskId };
+declare namespace recordsTypes {
+  type ConversationOwnership =
+    | { readonly kind: "ownerless" }
+    | { readonly kind: "task"; readonly taskId: idsTypes.TaskId };
 
-export type ConversationRecord = {
-  readonly id: ConversationId;
-  readonly parent?: {
-    readonly conversationId: ConversationId;
-    readonly at: EntryId;
+  type ConversationRecord = {
+    readonly id: idsTypes.ConversationId;
+    readonly parent?: {
+      readonly conversationId: idsTypes.ConversationId;
+      readonly at: idsTypes.EntryId;
+    };
+    readonly owner?: {
+      readonly conversationId: idsTypes.ConversationId;
+      readonly taskId: idsTypes.TaskId;
+    };
   };
-  readonly owner?: {
-    readonly conversationId: ConversationId;
-    readonly taskId: TaskId;
+
+  type ContextEdit = {
+    readonly target: idsTypes.EntryId;
+  } & (
+    | {
+        readonly action: "omit";
+        readonly messages?: never;
+      }
+    | {
+        readonly action: "replace";
+        readonly messages: readonly Message[];
+      }
+  );
+
+  type EntryRecord = {
+    readonly id: idsTypes.EntryId;
+    readonly conversationId: idsTypes.ConversationId;
+    readonly kind: string;
+    readonly model?: readonly Message[];
+    readonly data?: JsonValue;
+    readonly head?: idsTypes.EntryId;
+    readonly edits?: readonly ContextEdit[];
+    readonly byTaskId?: idsTypes.TaskId;
   };
-};
 
-export type ContextEdit = {
-  readonly target: EntryId;
-} & (
-  | {
-      readonly action: "omit";
-      readonly messages?: never;
-    }
-  | {
-      readonly action: "replace";
-      readonly messages: readonly Message[];
-    }
-);
+  type EntryDraft = Omit<EntryRecord, "id" | "conversationId" | "byTaskId" | "head" | "data"> & {
+    readonly data?: JsonValue | undefined;
+    readonly head?: idsTypes.EntryId | "self";
+  };
 
-export type EntryRecord = {
-  readonly id: EntryId;
-  readonly conversationId: ConversationId;
-  readonly kind: string;
-  readonly model?: readonly Message[];
-  readonly data?: JsonValue;
-  readonly head?: EntryId;
-  readonly edits?: readonly ContextEdit[];
-  readonly byTaskId?: TaskId;
-};
+  type TypedEntry<D extends JsonValue> = Omit<EntryRecord, "data"> &
+    ([D] extends [never] ? { readonly data?: never } : { readonly data: D });
 
-export type EntryDraft = Omit<
-  EntryRecord,
-  "id" | "conversationId" | "byTaskId" | "head" | "data"
-> & {
-  readonly data?: JsonValue | undefined;
-  readonly head?: EntryId | "self";
-};
+  type TypedEntryDraft<D extends JsonValue> = Omit<EntryDraft, "kind" | "data"> &
+    ([D] extends [never] ? { readonly data?: never } : { readonly data: D });
 
-export type TypedEntry<D extends JsonValue> = Omit<EntryRecord, "data"> &
-  ([D] extends [never] ? { readonly data?: never } : { readonly data: D });
+  interface Entry<D extends JsonValue = never> {
+    readonly kind: string;
+    is(entry: EntryRecord | undefined): entry is TypedEntry<D>;
+  }
 
-export type TypedEntryDraft<D extends JsonValue> = Omit<EntryDraft, "kind" | "data"> &
-  ([D] extends [never] ? { readonly data?: never } : { readonly data: D });
+  type SubmissionRecordBase = {
+    readonly id: idsTypes.SubmissionId;
+    readonly conversationId: idsTypes.ConversationId;
+    readonly requestId?: string;
+  };
 
-export interface Entry<D extends JsonValue = never> {
-  readonly kind: string;
-  is(entry: EntryRecord | undefined): entry is TypedEntry<D>;
+  type SubmissionRecord =
+    | (SubmissionRecordBase & {
+        readonly type: "input";
+      } & (
+          | {
+              readonly status: "queued";
+              readonly entry?: never;
+              readonly answer?: never;
+              readonly reason?: never;
+              readonly detail?: never;
+            }
+          | {
+              readonly status: "placed";
+              readonly entry: idsTypes.EntryId;
+              readonly answer?: never;
+              readonly reason?: never;
+              readonly detail?: never;
+            }
+          | {
+              readonly status: "done";
+              readonly entry: idsTypes.EntryId;
+              readonly answer: idsTypes.EntryId;
+              readonly reason?: never;
+              readonly detail?: never;
+            }
+          | {
+              readonly status: "unanswered";
+              readonly entry?: idsTypes.EntryId;
+              readonly answer?: never;
+              readonly reason: string;
+              readonly detail?: JsonValue;
+            }
+        ))
+    | (SubmissionRecordBase & {
+        readonly type: "write";
+      } & (
+          | {
+              readonly status: "queued";
+              readonly entry?: never;
+              readonly answer?: never;
+              readonly reason?: never;
+              readonly detail?: never;
+            }
+          | {
+              readonly status: "done";
+              readonly entry: idsTypes.EntryId;
+              readonly answer?: never;
+              readonly reason?: never;
+              readonly detail?: never;
+            }
+          | {
+              readonly status: "unanswered";
+              readonly entry?: never;
+              readonly answer?: never;
+              readonly reason: string;
+              readonly detail?: JsonValue;
+            }
+        ));
+
+  type SubmissionSettlement =
+    | { readonly status: "done"; readonly answer: idsTypes.EntryId }
+    | { readonly status: "unanswered"; readonly reason: string; readonly detail?: JsonValue };
+
+  type SubmissionCreate = SubmissionRecord extends infer Record
+    ? Record extends SubmissionRecord
+      ? Omit<Record, "id">
+      : never
+    : never;
 }
 
-type SubmissionRecordBase = {
-  readonly id: SubmissionId;
-  readonly conversationId: ConversationId;
-  readonly requestId?: string;
-};
-
-export type SubmissionRecord =
-  | (SubmissionRecordBase & {
-      readonly type: "input";
-    } & (
-        | {
-            readonly status: "queued";
-            readonly entry?: never;
-            readonly answer?: never;
-            readonly reason?: never;
-            readonly detail?: never;
-          }
-        | {
-            readonly status: "placed";
-            readonly entry: EntryId;
-            readonly answer?: never;
-            readonly reason?: never;
-            readonly detail?: never;
-          }
-        | {
-            readonly status: "done";
-            readonly entry: EntryId;
-            readonly answer: EntryId;
-            readonly reason?: never;
-            readonly detail?: never;
-          }
-        | {
-            readonly status: "unanswered";
-            readonly entry?: EntryId;
-            readonly answer?: never;
-            readonly reason: string;
-            readonly detail?: JsonValue;
-          }
-      ))
-  | (SubmissionRecordBase & {
-      readonly type: "write";
-    } & (
-        | {
-            readonly status: "queued";
-            readonly entry?: never;
-            readonly answer?: never;
-            readonly reason?: never;
-            readonly detail?: never;
-          }
-        | {
-            readonly status: "done";
-            readonly entry: EntryId;
-            readonly answer?: never;
-            readonly reason?: never;
-            readonly detail?: never;
-          }
-        | {
-            readonly status: "unanswered";
-            readonly entry?: never;
-            readonly answer?: never;
-            readonly reason: string;
-            readonly detail?: JsonValue;
-          }
-      ));
-
-export type SubmissionSettlement =
-  | { readonly status: "done"; readonly answer: EntryId }
-  | { readonly status: "unanswered"; readonly reason: string; readonly detail?: JsonValue };
-
-export type SubmissionCreate = SubmissionRecord extends infer Record
-  ? Record extends SubmissionRecord
-    ? Omit<Record, "id">
-    : never
-  : never;
+export type { recordsTypes as default };

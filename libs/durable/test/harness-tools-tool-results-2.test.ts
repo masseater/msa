@@ -1,5 +1,5 @@
-import { AgentDoc, defineExtension, defineTask, hook } from "@msa/durable";
-import { ToolTask } from "@msa/durable/harness";
+import durable from "@msa/durable";
+import harnessModule from "@msa/durable/harness";
 import { Effect } from "effect";
 import { describe, expect, it } from "vite-plus/test";
 
@@ -8,6 +8,9 @@ import effectSupport from "./effect-support.ts";
 import harnessSupport from "./harness-support.ts";
 import harnessToolsSupport from "./harness-tools-support.ts";
 import sessionSupport from "./session-support.ts";
+
+const { AgentDoc, defineExtension, defineTask, hook } = durable;
+const { ToolTask } = harnessModule;
 
 const { allEntries, chatSetup } = chatSupport;
 const { awaited } = effectSupport;

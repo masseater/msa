@@ -1,23 +1,20 @@
 import { Effect, Function } from "effect";
 
-import { eachStep, thenStep } from "../step.ts";
-import { failedOutcome, nodeOf, parentOf } from "./scheduler-records.ts";
-import type { SchedulerState } from "./scheduler-state.ts";
-import {
-  type Overlay,
-  SCAN_PAGE_SIZE,
-  type TaskNode,
-  type Up,
-  type ConversationId,
-  type TaskId,
-  type Dual2,
-  type Dual3,
-} from "./scheduler-types.ts";
-import { scanAll } from "./util.ts";
+import stepModule from "../step.ts";
+import schedulerRecords from "./scheduler-records.ts";
+import type schedulerStateTypes from "./scheduler-state.types.ts";
+import schedulerTypes from "./scheduler-types.ts";
+import type schedulerTypesModule from "./scheduler-types.types.ts";
+import util from "./util.ts";
+
+const { failedOutcome, nodeOf, parentOf } = schedulerRecords;
+const { eachStep, thenStep } = stepModule;
+const { scanAll } = util;
+const { SCAN_PAGE_SIZE } = schedulerTypes;
 
 const conversationEdge = Effect.fnUntraced(function* (
-  state: SchedulerState,
-  conversation: ConversationId,
+  state: schedulerStateTypes.SchedulerState,
+  conversation: schedulerTypesModule.ConversationId,
 ) {
   const record = yield* Effect.promise(() =>
     state.options.storage.conversation(conversation, state.options.context),
@@ -28,29 +25,36 @@ const conversationEdge = Effect.fnUntraced(function* (
   return edge;
 });
 
-const loadNode = Effect.fnUntraced(function* (state: SchedulerState, id: TaskId) {
+const loadNode = Effect.fnUntraced(function* (
+  state: schedulerStateTypes.SchedulerState,
+  id: schedulerTypesModule.TaskId,
+) {
   const record = yield* Effect.promise(() => state.options.storage.task(id, state.options.context));
   if (record === undefined) return undefined;
-  const node: TaskNode = nodeOf(record);
+  const node: schedulerTypesModule.TaskNode = nodeOf(record);
   if (record.state.status === "terminal") state.graph.settle(id, node);
   state.wake.reconcile();
   return node;
 });
 
 type Walk = {
-  readonly state: SchedulerState;
-  readonly overlay: Overlay | undefined;
-  readonly passed: TaskId[];
+  readonly state: schedulerStateTypes.SchedulerState;
+  readonly overlay: schedulerTypesModule.Overlay | undefined;
+  readonly passed: schedulerTypesModule.TaskId[];
 };
 
-const upOf = (edge: TaskId | null): Up | undefined => (edge === null ? undefined : { task: edge });
+const upOf = (edge: schedulerTypesModule.TaskId | null): schedulerTypesModule.Up | undefined =>
+  edge === null ? undefined : { task: edge };
 
-const resumeAt = (walk: Walk, at: Up | undefined): Effect.Effect<boolean> => {
+const resumeAt = (walk: Walk, at: schedulerTypesModule.Up | undefined): Effect.Effect<boolean> => {
   const result = walkFrom(walk, at);
   return typeof result === "boolean" ? Effect.succeed(result) : result;
 };
 
-const walkFrom = (walk: Walk, start: Up | undefined): boolean | Effect.Effect<boolean> => {
+const walkFrom = (
+  walk: Walk,
+  start: schedulerTypesModule.Up | undefined,
+): boolean | Effect.Effect<boolean> => {
   const { state, overlay, passed } = walk;
   const { graph } = state;
   let at = start;
@@ -65,8 +69,9 @@ const walkFrom = (walk: Walk, start: Up | undefined): boolean | Effect.Effect<bo
       at = upOf(edge);
       continue;
     }
-    const id: TaskId = at.task;
-    const node: TaskNode | undefined = graph.live.get(id) ?? graph.settled.get(id);
+    const id: schedulerTypesModule.TaskId = at.task;
+    const node: schedulerTypesModule.TaskNode | undefined =
+      graph.live.get(id) ?? graph.settled.get(id);
     if (node === undefined && overlay?.tasks.has(id) === true) return true;
     if (node !== undefined && !graph.unloaded.has(id)) return true;
     if (node === undefined) {
@@ -82,27 +87,38 @@ const walkFrom = (walk: Walk, start: Up | undefined): boolean | Effect.Effect<bo
   return true;
 };
 
-const forget = (state: SchedulerState, passed: readonly TaskId[], complete: boolean): void => {
+const forget = (
+  state: schedulerStateTypes.SchedulerState,
+  passed: readonly schedulerTypesModule.TaskId[],
+  complete: boolean,
+): void => {
   if (!complete) return;
   for (const id of passed) state.graph.unloaded.delete(id);
 };
 
-export const loadChain: Dual3<
-  SchedulerState,
-  Up,
-  Overlay | undefined,
+const loadChain: schedulerTypesModule.Dual3<
+  schedulerStateTypes.SchedulerState,
+  schedulerTypesModule.Up,
+  schedulerTypesModule.Overlay | undefined,
   Effect.Effect<void>
-> = Function.dual(3, (state: SchedulerState, start: Up, overlay: Overlay | undefined) => {
-  const passed: TaskId[] = [];
-  const result = walkFrom({ state, overlay, passed }, start);
-  if (typeof result === "boolean") {
-    forget(state, passed, result);
-    return Effect.void;
-  }
-  return Effect.map(result, (complete) => forget(state, passed, complete));
-});
+> = Function.dual(
+  3,
+  (
+    state: schedulerStateTypes.SchedulerState,
+    start: schedulerTypesModule.Up,
+    overlay: schedulerTypesModule.Overlay | undefined,
+  ) => {
+    const passed: schedulerTypesModule.TaskId[] = [];
+    const result = walkFrom({ overlay, passed, state }, start);
+    if (typeof result === "boolean") {
+      forget(state, passed, result);
+      return Effect.void;
+    }
+    return Effect.map(result, (complete) => forget(state, passed, complete));
+  },
+);
 
-export const loadPending = (state: SchedulerState): Effect.Effect<void> => {
+const loadPending = (state: schedulerStateTypes.SchedulerState): Effect.Effect<void> => {
   const { graph } = state;
   if (graph.unloaded.size === 0) return Effect.void;
   return eachStep([...graph.unloaded], (id) =>
@@ -110,9 +126,9 @@ export const loadPending = (state: SchedulerState): Effect.Effect<void> => {
   );
 };
 
-const noScopes: Effect.Effect<readonly ConversationId[]> = Effect.succeed([]);
+const noScopes: Effect.Effect<readonly schedulerTypesModule.ConversationId[]> = Effect.succeed([]);
 
-const loadQueued = Effect.fnUntraced(function* (state: SchedulerState) {
+const loadQueued = Effect.fnUntraced(function* (state: schedulerStateTypes.SchedulerState) {
   const { options } = state;
   const submissions = yield* scanAll((cursor) =>
     options.storage.scanSubmissions({ status: "queued" }, SCAN_PAGE_SIZE, cursor, options.context),
@@ -123,17 +139,17 @@ const loadQueued = Effect.fnUntraced(function* (state: SchedulerState) {
   return conversations;
 });
 
-export const loadScopes: Dual2<
-  SchedulerState,
+const loadScopes: schedulerTypesModule.Dual2<
+  schedulerStateTypes.SchedulerState,
   boolean,
-  Effect.Effect<readonly ConversationId[]>
-> = Function.dual(2, (state: SchedulerState, queued: boolean) =>
+  Effect.Effect<readonly schedulerTypesModule.ConversationId[]>
+> = Function.dual(2, (state: schedulerStateTypes.SchedulerState, queued: boolean) =>
   thenStep(loadPending(state), () => (queued ? loadQueued(state) : noScopes)),
 );
 
 const failedFrom = Effect.fnUntraced(function* (
-  state: SchedulerState,
-  ids: readonly TaskId[],
+  state: schedulerStateTypes.SchedulerState,
+  ids: readonly schedulerTypesModule.TaskId[],
   from: number,
 ) {
   for (const id of ids.slice(from)) {
@@ -145,15 +161,30 @@ const failedFrom = Effect.fnUntraced(function* (
   return false;
 });
 
-export const anyFailed: Dual2<
-  SchedulerState,
-  readonly TaskId[],
+const anyFailed: schedulerTypesModule.Dual2<
+  schedulerStateTypes.SchedulerState,
+  readonly schedulerTypesModule.TaskId[],
   Effect.Effect<boolean>
-> = Function.dual(2, (state: SchedulerState, ids: readonly TaskId[]): Effect.Effect<boolean> => {
-  for (let index = 0; index < ids.length; index++) {
-    const record = state.graph.live.get(ids[index]!);
-    if (record === undefined) return failedFrom(state, ids, index);
-    if (failedOutcome(record)) return Effect.succeed(true);
-  }
-  return Effect.succeed(false);
-});
+> = Function.dual(
+  2,
+  (
+    state: schedulerStateTypes.SchedulerState,
+    ids: readonly schedulerTypesModule.TaskId[],
+  ): Effect.Effect<boolean> => {
+    for (let index = 0; index < ids.length; index++) {
+      const record = state.graph.live.get(ids[index]!);
+      if (record === undefined) return failedFrom(state, ids, index);
+      if (failedOutcome(record)) return Effect.succeed(true);
+    }
+    return Effect.succeed(false);
+  },
+);
+
+const schedulerLoad = {
+  anyFailed,
+  loadChain,
+  loadPending,
+  loadScopes,
+};
+
+export default schedulerLoad;

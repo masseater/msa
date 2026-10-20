@@ -1,11 +1,16 @@
-import { type AgentEvent, LiveDoc } from "@msa/durable";
-import { watchEvents } from "@msa/durable/harness";
-import { MemoryStorage } from "@msa/durable/storage/memory";
+import durable from "@msa/durable";
+import harnessModule from "@msa/durable/harness";
+import type durableTypes from "@msa/durable/index.types";
+import memory from "@msa/durable/storage/memory";
 import { Effect } from "effect";
 import { afterEach, describe, expect, it } from "vite-plus/test";
 
 import harnessNestedToolsSupport from "./harness-nested-tools-support.ts";
 import support from "./support.ts";
+
+const { MemoryStorage } = memory;
+const { watchEvents } = harnessModule;
+const { LiveDoc } = durable;
 
 const { DONE, call, directories, text, tool, toolTasks } = harnessNestedToolsSupport;
 const { addTool, awaited, chatSetup, context, deferred, openChat, removeDir } = support;
@@ -57,7 +62,7 @@ const openSlowNestedBatch = Effect.fn("openSlowNestedBatch")(function* () {
   const { harness, root } = yield* openChat(new MemoryStorage(), setup);
   const stream = yield* awaited(watchEvents(harness, root.id, context));
   expect(stream.snapshot.nestedTools).toEqual([]);
-  const events: AgentEvent[] = [];
+  const events: durableTypes.AgentEvent[] = [];
   stream.start((batch) => {
     events.push(...batch);
 

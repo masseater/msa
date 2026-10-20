@@ -2,10 +2,14 @@ import * as NodeRuntime from "@effect/platform-node/NodeRuntime";
 import { BACKGROUND_CONTEXT as context } from "@msa/chord/context";
 import { Console, Effect } from "effect";
 
-import { defineDoc, defineDocFamily } from "../src/documents.ts";
-import { createSession } from "../src/session/create-session.ts";
-import { MemoryStorage } from "../src/storage/memory.ts";
+import documents from "../src/documents.ts";
+import createSessionModule from "../src/session/create-session.ts";
+import memory from "../src/storage/memory.ts";
 import effectSupport from "./effect-support.ts";
+
+const { defineDoc, defineDocFamily } = documents;
+const { createSession } = createSessionModule;
+const { MemoryStorage } = memory;
 
 const { awaited } = effectSupport;
 

@@ -1,21 +1,20 @@
 import { type AssistantMessage, type SimpleStreamOptions, type TranscriptContext } from "@msa/ai";
-import {
-  type CompactionPolicy,
-  type CompactionResult,
-  type Conversation,
-  LiveDoc,
-  type TaskId,
-  UsageDoc,
-} from "@msa/durable";
-import { MemoryStorage } from "@msa/durable/storage/memory";
+import type durableTypes from "@msa/durable/index.types";
+import type memoryTypes from "@msa/durable/storage/memory.types";
 import { Effect } from "effect";
 import { dual } from "effect/Function";
 import { expect } from "vite-plus/test";
 
-import { openNodeSqliteStorage } from "../src/storage/sqlite/node.ts";
+import durableKit from "./durable-kit.ts";
 import harnessCompactionMessages from "./harness-compaction-messages.ts";
 import type harnessCompactionSupportTypes from "./harness-compaction-support.types.ts";
 import support from "./support.ts";
+
+const { durable, memory, sqliteNode: node } = durableKit;
+
+const { MemoryStorage } = memory;
+const { LiveDoc, UsageDoc } = durable;
+const { openNodeSqliteStorage } = node;
 
 const { BLOCKING, MANUAL, answer, isSummaryRequest, summary, text } = harnessCompactionMessages;
 
@@ -101,9 +100,9 @@ const gated: {
 
 const open = Effect.fn("open")(function* (
   options: {
-    readonly policy?: CompactionPolicy;
+    readonly policy?: durableTypes.CompactionPolicy;
     readonly contextWindow?: number;
-    readonly storage?: MemoryStorage;
+    readonly storage?: memoryTypes.MemoryStorage;
   } = {},
   setup: ReturnType<typeof chatSetup> = chatSetup({
     models: [{ contextWindow: options.contextWindow ?? 100_000, id: "faux-1", maxTokens: 900 }],
@@ -135,7 +134,10 @@ const history = Effect.fn("history")(function* (chat: harnessCompactionSupportTy
   yield* turn(chat, text("u3", 100), text("a3", 100));
 });
 
-function resultImpl(chat: harnessCompactionSupportTypes.Chat, id: TaskId<CompactionResult>) {
+function resultImpl(
+  chat: harnessCompactionSupportTypes.Chat,
+  id: durableTypes.TaskId<durableTypes.CompactionResult>,
+) {
   return Effect.runPromise(
     Effect.gen(function* () {
       const record = yield* awaited(chat.harness.waitForTask(id, context));
@@ -146,15 +148,15 @@ function resultImpl(chat: harnessCompactionSupportTypes.Chat, id: TaskId<Compact
 
 const result: {
   (
-    id: TaskId<CompactionResult>,
+    id: durableTypes.TaskId<durableTypes.CompactionResult>,
   ): (chat: harnessCompactionSupportTypes.Chat) => ReturnType<typeof resultImpl>;
   (
     chat: harnessCompactionSupportTypes.Chat,
-    id: TaskId<CompactionResult>,
+    id: durableTypes.TaskId<durableTypes.CompactionResult>,
   ): ReturnType<typeof resultImpl>;
 } = dual(2, resultImpl);
 
-const kinds = Effect.fn("kinds")(function* (conversation: Conversation) {
+const kinds = Effect.fn("kinds")(function* (conversation: durableTypes.Conversation) {
   return (yield* allEntries(conversation)).map((entry) => entry.kind);
 });
 
@@ -232,7 +234,11 @@ const blockingRun = Effect.fn("blockingRun")(function* (chat: harnessCompactionS
   );
   yield* awaited(reached.promise);
   const [blocking] = yield* compactionTasks(chat);
-  return { blocking: blocking!.id as TaskId<CompactionResult>, gate, input };
+  return {
+    blocking: blocking!.id as durableTypes.TaskId<durableTypes.CompactionResult>,
+    gate,
+    input,
+  };
 });
 
 const harnessCompactionSupport = {

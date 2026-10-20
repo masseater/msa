@@ -1,31 +1,30 @@
 import { Cause, Effect, Exit } from "effect";
 
-import { errorMessage } from "../errors.ts";
-import { settleStep } from "../step.ts";
-import { terminate } from "./scheduler-finalize.ts";
-import { canReserve, erased, jsonEqual, parentOf, withState } from "./scheduler-records.ts";
-import { buildRuntime } from "./scheduler-runtime.ts";
-import type { SchedulerState } from "./scheduler-state.ts";
-import type {
-  AnyTask,
-  Decision,
-  ErasedRunningTask,
-  Invocation,
-  Phase,
-  PhaseResult,
-  RegistrySnapshot,
-  ReportedTask,
-  Reservation,
-  Transaction,
-} from "./scheduler-types.ts";
+import errors from "../errors.ts";
+import stepModule from "../step.ts";
+import schedulerFinalize from "./scheduler-finalize.ts";
+import schedulerRecords from "./scheduler-records.ts";
+import schedulerRuntime from "./scheduler-runtime.ts";
+import type schedulerStateTypes from "./scheduler-state.types.ts";
+import type schedulerTypesModule from "./scheduler-types.types.ts";
 
-type Running = { task: AnyTask; snapshot: RegistrySnapshot; reported: ReportedTask };
+const { canReserve, erased, jsonEqual, parentOf, withState } = schedulerRecords;
+const { errorMessage } = errors;
+const { settleStep } = stepModule;
+const { terminate } = schedulerFinalize;
+const { buildRuntime } = schedulerRuntime;
+
+type Running = {
+  task: schedulerTypesModule.AnyTask;
+  snapshot: schedulerTypesModule.RegistrySnapshot;
+  reported: schedulerTypesModule.ReportedTask;
+};
 
 const reportOldDefinition = (
-  state: SchedulerState,
-  current: ErasedRunningTask,
+  state: schedulerStateTypes.SchedulerState,
+  current: schedulerTypesModule.ErasedRunningTask,
   running: Running,
-  next: AnyTask | undefined,
+  next: schedulerTypesModule.AnyTask | undefined,
 ): void => {
   if (running.reported !== undefined && running.reported.task === next) return;
   running.reported = { task: next };
@@ -38,12 +37,12 @@ const reportOldDefinition = (
 };
 
 const decide = (
-  state: SchedulerState,
-  tx: Transaction,
-  current: ErasedRunningTask,
-  previous: PhaseResult | undefined,
+  state: schedulerStateTypes.SchedulerState,
+  tx: schedulerTypesModule.Transaction,
+  current: schedulerTypesModule.ErasedRunningTask,
+  previous: schedulerTypesModule.PhaseResult | undefined,
   running: Running,
-): Decision => {
+): schedulerTypesModule.Decision => {
   if (current.abortRequested) return false;
   if (!current.background && state.graph.belowCancelled(parentOf(current))) {
     state.cascadePending = true;
@@ -60,7 +59,7 @@ const decide = (
   const next = running.snapshot.task(current.kind);
   if (next === running.task) return true;
   if (next !== undefined && canReserve(next, current)) {
-    tx.setTask(withState(current, { status: "pending", checkpoint: current.state.checkpoint }));
+    tx.setTask(withState(current, { checkpoint: current.state.checkpoint, status: "pending" }));
     return false;
   }
   reportOldDefinition(state, current, running, next);
@@ -68,33 +67,42 @@ const decide = (
 };
 
 const stepIn = (
-  state: SchedulerState,
-  tx: Transaction,
-  invocation: Invocation,
-  choose: (tx: Transaction, current: ErasedRunningTask) => Decision,
-): ErasedRunningTask | undefined | Promise<undefined> => {
+  state: schedulerStateTypes.SchedulerState,
+  tx: schedulerTypesModule.Transaction,
+  invocation: schedulerTypesModule.Invocation,
+  choose: (
+    tx: schedulerTypesModule.Transaction,
+    current: schedulerTypesModule.ErasedRunningTask,
+  ) => schedulerTypesModule.Decision,
+): schedulerTypesModule.ErasedRunningTask | undefined | Promise<undefined> => {
   const found = state.graph.live.get(invocation.taskId);
-  const current = found?.state.status === "running" ? (found as ErasedRunningTask) : undefined;
+  const current =
+    found?.state.status === "running"
+      ? (found as schedulerTypesModule.ErasedRunningTask)
+      : undefined;
   const decision = current !== undefined && !state.closing ? choose(tx, current) : false;
   if (decision === true) return current;
   state.end(invocation);
   if (decision === false) return undefined;
   const message = errorMessage(decision.fault);
   return settleStep(
-    terminate(state, tx, current!, { status: "faulted", error: { message } }),
+    terminate(state, tx, current!, { error: { message }, status: "faulted" }),
     () => undefined,
   );
 };
 
 const step = Effect.fnUntraced(function* (
-  state: SchedulerState,
-  invocation: Invocation,
-  choose: (tx: Transaction, current: ErasedRunningTask) => Decision,
+  state: schedulerStateTypes.SchedulerState,
+  invocation: schedulerTypesModule.Invocation,
+  choose: (
+    tx: schedulerTypesModule.Transaction,
+    current: schedulerTypesModule.ErasedRunningTask,
+  ) => schedulerTypesModule.Decision,
 ) {
   const exit = yield* Effect.exit(
     Effect.promise(() =>
       state.options.session.commitWith(
-        (tx: Transaction) => stepIn(state, tx, invocation, choose),
+        (tx: schedulerTypesModule.Transaction) => stepIn(state, tx, invocation, choose),
         state.options.context,
       ),
     ),
@@ -105,20 +113,23 @@ const step = Effect.fnUntraced(function* (
   return undefined;
 });
 
-const runPhases = Effect.fnUntraced(function* (state: SchedulerState, reservation: Reservation) {
+const runPhases = Effect.fnUntraced(function* (
+  state: schedulerStateTypes.SchedulerState,
+  reservation: schedulerTypesModule.Reservation,
+) {
   const invocation = reservation.invocation;
   const running: Running = {
-    task: reservation.task,
-    snapshot: reservation.snapshot,
     reported: undefined,
+    snapshot: reservation.snapshot,
+    task: reservation.task,
   };
-  const phase: Phase = {
+  const phase: schedulerTypesModule.Phase = {
+    agent: undefined,
     snapshot: () => running.snapshot,
     task: () => running.task,
-    agent: undefined,
   };
-  const runtime = buildRuntime({ state, invocation, phase });
-  let previous: PhaseResult | undefined;
+  const runtime = buildRuntime({ invocation, phase, state });
+  let previous: schedulerTypesModule.PhaseResult | undefined;
   for (;;) {
     const prior = previous;
     const current = yield* step(state, invocation, (tx, found) =>
@@ -138,18 +149,23 @@ const runPhases = Effect.fnUntraced(function* (state: SchedulerState, reservatio
   }
 });
 
-const runAbort = Effect.fnUntraced(function* (state: SchedulerState, reservation: Reservation) {
+const runAbort = Effect.fnUntraced(function* (
+  state: schedulerStateTypes.SchedulerState,
+  reservation: schedulerTypesModule.Reservation,
+) {
   const invocation = reservation.invocation;
-  const current = state.graph.live.get(invocation.taskId) as ErasedRunningTask | undefined;
+  const current = state.graph.live.get(invocation.taskId) as
+    | schedulerTypesModule.ErasedRunningTask
+    | undefined;
   if (current === undefined || state.closing) return;
   const exit = yield* Effect.exit(
     Effect.promise(() => {
-      const phase: Phase = {
+      const phase: schedulerTypesModule.Phase = {
+        agent: undefined,
         snapshot: () => reservation.snapshot,
         task: () => reservation.task,
-        agent: undefined,
       };
-      const runtime = buildRuntime({ state, invocation, phase });
+      const runtime = buildRuntime({ invocation, phase, state });
       return erased(reservation.task).abort(current, runtime, invocation.context);
     }),
   );
@@ -158,9 +174,9 @@ const runAbort = Effect.fnUntraced(function* (state: SchedulerState, reservation
   yield* step(state, invocation, () => ({ fault: failure?.error ?? new Error(message) }));
 });
 
-export const runReservation = Effect.fnUntraced(function* (
-  state: SchedulerState,
-  reservation: Reservation,
+const runReservation = Effect.fnUntraced(function* (
+  state: schedulerStateTypes.SchedulerState,
+  reservation: schedulerTypesModule.Reservation,
 ) {
   const invocation = reservation.invocation;
   const exit = yield* Effect.exit(
@@ -171,3 +187,9 @@ export const runReservation = Effect.fnUntraced(function* (
   invocation.finish();
   state.wake.kick();
 });
+
+const schedulerRun = {
+  runReservation,
+};
+
+export default schedulerRun;

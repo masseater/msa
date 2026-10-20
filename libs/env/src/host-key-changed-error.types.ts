@@ -1,7 +1,7 @@
-import type hostKeyChangedError from "./host-key-changed-error.ts";
+import type HostKeyChangedErrorClass from "./host-key-changed-error.ts";
 
 declare namespace hostKeyChangedErrorTypes {
-  type HostKeyChangedError = (typeof hostKeyChangedError.HostKeyChangedError)["prototype"];
+  type HostKeyChangedError = HostKeyChangedErrorClass;
 }
 
 export type { hostKeyChangedErrorTypes as default };

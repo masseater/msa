@@ -1,44 +1,49 @@
 import type { Context } from "@msa/chord";
 import { Effect } from "effect";
 
-import { CommittedWatch } from "../session/observation.ts";
-import { toPromise } from "./bridge.ts";
-import { snapshotOf } from "./events-snapshot.ts";
-import { translate } from "./events-translate.ts";
-import type { AgentEvent, SnapshotEvent } from "./events-types.ts";
-import type { ConversationId, Storage, TaskId } from "./types.ts";
-import { scanAll } from "./util.ts";
-import type { ConversationView, ConversationViews } from "./view.ts";
+import observation from "../session/observation.ts";
+import bridge from "./bridge.ts";
+import type eventsAttachTypes from "./events-attach.types.ts";
+import eventsSnapshot from "./events-snapshot.ts";
+import eventsTranslate from "./events-translate.ts";
+import type typesModule from "./types.types.ts";
+import util from "./util.ts";
+import type viewTypes from "./view.types.ts";
+
+const { scanAll } = util;
+const { toPromise } = bridge;
+const { CommittedWatch } = observation;
+const { snapshotOf } = eventsSnapshot;
+const { translate } = eventsTranslate;
 
 const COMPLETING_PAGE_SIZE = 100;
 
-export type Attached = {
-  readonly watch: CommittedWatch<readonly AgentEvent[]>;
-  readonly snapshot: SnapshotEvent;
-};
-
 const heldTasks = Effect.fnUntraced(function* (
-  storage: Storage,
-  conversationId: ConversationId,
+  storage: typesModule.Storage,
+  conversationId: typesModule.ConversationId,
   context: Context,
 ) {
   const query = { conversationId, kind: "msa.generation", status: "completing" } as const;
   const completing = yield* scanAll((cursor) =>
     storage.scanTasks(query, COMPLETING_PAGE_SIZE, cursor, context),
   );
-  return new Set<TaskId>(completing.map((record) => record.id));
+  return new Set<typesModule.TaskId>(completing.map((record) => record.id));
 });
 
-export const attachEvents = Effect.fnUntraced(function* (
-  views: ConversationViews,
-  conversationId: ConversationId,
+const attachEvents = Effect.fnUntraced(function* (
+  views: viewTypes.ConversationViews,
+  conversationId: typesModule.ConversationId,
   context: Context,
 ) {
   const readHeld = yield* toPromise(heldTasks);
-  let attached: Attached | undefined;
-  const observe = (initial: ConversationView, release: () => void, held: Set<TaskId>) => {
+  let attached: eventsAttachTypes.Attached | undefined;
+  const observe = (
+    initial: viewTypes.ConversationView,
+    release: () => void,
+    held: Set<typesModule.TaskId>,
+  ) => {
     let current = initial;
-    const watch = new CommittedWatch<readonly AgentEvent[]>(
+    const watch = new CommittedWatch<readonly eventsAttachTypes.AgentEvent[]>(
       [],
       release,
       (error) => {
@@ -46,11 +51,13 @@ export const attachEvents = Effect.fnUntraced(function* (
       },
       () => [snapshotOf(current)],
     );
-    attached = { watch, snapshot: snapshotOf(initial) };
+    attached = { snapshot: snapshotOf(initial), watch };
     return {
+      closeSession: (failure: { readonly error: unknown } | undefined) =>
+        watch.closeSession(failure),
       publication: (
-        before: ConversationView,
-        after: ConversationView,
+        before: viewTypes.ConversationView,
+        after: viewTypes.ConversationView,
         ops: Parameters<typeof translate>[2],
         publication: Parameters<typeof translate>[3],
         commitContext: Context,
@@ -59,8 +66,6 @@ export const attachEvents = Effect.fnUntraced(function* (
         const events = translate(conversationId, { after, before }, ops, publication, held);
         if (events.length > 0) watch.advance(events, [], commitContext);
       },
-      closeSession: (failure: { readonly error: unknown } | undefined) =>
-        watch.closeSession(failure),
     };
   };
   yield* Effect.promise(() =>
@@ -73,3 +78,9 @@ export const attachEvents = Effect.fnUntraced(function* (
   );
   return attached!;
 });
+
+const eventsAttach = {
+  attachEvents,
+};
+
+export default eventsAttach;

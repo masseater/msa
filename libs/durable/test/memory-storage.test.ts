@@ -1,12 +1,18 @@
 import { BACKGROUND_CONTEXT } from "@msa/chord/context";
-import { registerStorageConformance } from "@msa/durable/testing";
+import testing from "@msa/durable/testing";
 import { Effect } from "effect";
 import { describe, expect, it } from "vite-plus/test";
 
-import { idFromNumber, seqFromNumber } from "../src/ids.ts";
-import { MemoryStorage } from "../src/storage/memory.ts";
-import { type EntryId, ROOT_CONVERSATION_ID } from "../src/types.ts";
+import ids from "../src/ids.ts";
+import memory from "../src/storage/memory.ts";
+import types from "../src/types.ts";
+import type typesModule from "../src/types.types.ts";
 import effectSupport from "./effect-support.ts";
+
+const { registerStorageConformance } = testing;
+const { MemoryStorage } = memory;
+const { ROOT_CONVERSATION_ID } = types;
+const { idFromNumber, seqFromNumber } = ids;
 
 const { awaited } = effectSupport;
 
@@ -24,7 +30,7 @@ it("does not expose retained state through a prepared commit", () =>
           BACKGROUND_CONTEXT,
         ),
       );
-      const entryId = idFromNumber<EntryId>(2);
+      const entryId = idFromNumber<typesModule.EntryId>(2);
       const prepared = storage.prepareCommit([
         {
           type: "entry",

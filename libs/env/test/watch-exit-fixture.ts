@@ -2,10 +2,9 @@ import { BACKGROUND_CONTEXT } from "@msa/chord/context";
 import { Effect } from "effect";
 
 import connectionModule from "../src/connection.ts";
-import remoteEnv from "../src/remote-env.ts";
+import RemoteExecutionEnv from "../src/remote-env.ts";
 
 const { Connection } = connectionModule;
-const { RemoteExecutionEnv } = remoteEnv;
 
 const [daemon, cwd] = process.argv.slice(2);
 if (daemon === undefined || cwd === undefined) throw new Error("usage: fixture <daemon> <cwd>");

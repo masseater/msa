@@ -1,11 +1,15 @@
 import type { Context } from "@msa/chord";
-import { type AgentEvent, type Harness, LiveDoc, defineExtension, defineTask } from "@msa/durable";
-import { ToolTask, watchEvents } from "@msa/durable/harness";
+import durable from "@msa/durable";
+import harnessModule from "@msa/durable/harness";
+import type durableTypes from "@msa/durable/index.types";
 import { Effect } from "effect";
 import { afterEach, describe, expect, it } from "vite-plus/test";
 
 import harnessNestedToolsRestartSupport from "./harness-nested-tools-restart-support.ts";
 import support from "./support.ts";
+
+const { ToolTask, watchEvents } = harnessModule;
+const { LiveDoc, defineExtension, defineTask } = durable;
 
 const {
   DONE,
@@ -32,10 +36,10 @@ afterEach(() =>
 );
 
 const collectEnds = Effect.fn("collectEnds")(function* (
-  harness: Harness,
-  conversationId: Parameters<Harness["conversation"]>[0],
+  harness: durableTypes.Harness,
+  conversationId: Parameters<durableTypes.Harness["conversation"]>[0],
 ) {
-  const ends: Extract<AgentEvent, { type: "tool_execution_end" }>[] = [];
+  const ends: Extract<durableTypes.AgentEvent, { type: "tool_execution_end" }>[] = [];
   const stream = yield* awaited(watchEvents(harness, conversationId, context));
   stream.start((batch) => {
     for (const event of batch) if (event.type === "tool_execution_end") ends.push(event);

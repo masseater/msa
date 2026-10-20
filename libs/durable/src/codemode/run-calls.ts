@@ -1,41 +1,41 @@
-import type { Context, JsonValue } from "@msa/chord";
+import type { JsonValue } from "@msa/chord";
 import type { CodemodeHostCall, CodemodeOutcome } from "@msa/codemode/portable";
 import { Cause, Effect, Exit, Semaphore } from "effect";
 
-import { errorMessage } from "../errors.ts";
-import type { ToolExecutionApi } from "../harness/types.ts";
-import type { JsonObject } from "../types.ts";
-import { CallRows, countImages, outcomeOf } from "./call-rows.ts";
-import { discover } from "./discover.ts";
-import {
+import errors from "../errors.ts";
+import type typesModuleModule from "../types.types.ts";
+import callRows from "./call-outcome.ts";
+import discoverModule from "./discover.ts";
+import modelsModule from "./models.ts";
+import type runCallsTypes from "./run-calls.types.ts";
+import runDocs from "./run-docs.ts";
+
+const {
   CATALOG_GLOBALS,
   CODEMODE_INTERNAL_PREFIX,
-  catalogCall,
   GENERATE_IMAGES_TOOL,
   MAX_CONCURRENT_MODEL_CALLS,
-} from "./models.ts";
-import { type CodemodeToolOptions, DISCOVERY_GLOBALS, type Start } from "./run-docs.ts";
+  catalogCall,
+} = modelsModule;
+const { CallRows, countImages, outcomeOf } = callRows;
+const { DISCOVERY_GLOBALS } = runDocs;
+const { discover } = discoverModule;
+const { errorMessage } = errors;
 
-export type CallHost = {
-  readonly options: CodemodeToolOptions;
-  readonly api: ToolExecutionApi;
-  readonly context: Context;
-  readonly start: Start;
-  readonly rows: CallRows;
-  readonly modelSlots: Semaphore.Semaphore;
-  readonly stopped: () => boolean;
-  readonly generated: (images: number) => void;
-};
-
-export const createCallHost = (base: Omit<CallHost, "rows" | "modelSlots">): CallHost => ({
+const createCallHost = (
+  base: Omit<runCallsTypes.CallHost, "rows" | "modelSlots">,
+): runCallsTypes.CallHost => ({
   ...base,
-  rows: new CallRows(),
   modelSlots: Semaphore.makeUnsafe(MAX_CONCURRENT_MODEL_CALLS),
+  rows: new CallRows(),
 });
 
-export const callTool = Effect.fnUntraced(function* (host: CallHost, call: CodemodeHostCall) {
+const callTool = Effect.fnUntraced(function* (
+  host: runCallsTypes.CallHost,
+  call: CodemodeHostCall,
+) {
   const { api, context, start } = host;
-  const args = (call.args ?? {}) as JsonObject;
+  const args = (call.args ?? {}) as typesModuleModule.JsonObject;
   const execute = Effect.promise(() =>
     api.executeTool(call.name, args, context, { key: `c${call.id}` }),
   );
@@ -54,7 +54,7 @@ export const callTool = Effect.fnUntraced(function* (host: CallHost, call: Codem
   return outcome;
 });
 
-const globalValue = (host: CallHost, call: CodemodeHostCall) => {
+const globalValue = (host: runCallsTypes.CallHost, call: CodemodeHostCall) => {
   if ((DISCOVERY_GLOBALS as readonly string[]).includes(call.name))
     return Effect.sync(() => discover(host.start, call));
   if ((CATALOG_GLOBALS as readonly string[]).includes(call.name))
@@ -66,10 +66,13 @@ const globalValue = (host: CallHost, call: CodemodeHostCall) => {
   );
 };
 
-export const callGlobal = Effect.fnUntraced(function* (host: CallHost, call: CodemodeHostCall) {
+const callGlobal = Effect.fnUntraced(function* (
+  host: runCallsTypes.CallHost,
+  call: CodemodeHostCall,
+) {
   const value = globalValue(host, call);
   if (value === undefined) {
-    const unknown: CodemodeOutcome = { ok: false, message: `Unknown global ${call.name}` };
+    const unknown: CodemodeOutcome = { message: `Unknown global ${call.name}`, ok: false };
     return unknown;
   }
   const exit = yield* Effect.exit(value);
@@ -79,6 +82,14 @@ export const callGlobal = Effect.fnUntraced(function* (host: CallHost, call: Cod
   }
   const error = Cause.squash(exit.cause);
   if (host.context.abortSignal?.aborted === true) throw error;
-  const failed: CodemodeOutcome = { ok: false, message: errorMessage(error) };
+  const failed: CodemodeOutcome = { message: errorMessage(error), ok: false };
   return failed;
 });
+
+const runCalls = {
+  callGlobal,
+  callTool,
+  createCallHost,
+};
+
+export default runCalls;

@@ -1,6 +1,6 @@
 import { Type } from "@msa/ai";
-import { AgentDoc, defineTool } from "@msa/durable";
-import { MemoryStorage } from "@msa/durable/storage/memory";
+import durable from "@msa/durable";
+import memory from "@msa/durable/storage/memory";
 import { Effect } from "effect";
 import { describe, expect, it } from "vite-plus/test";
 
@@ -9,6 +9,9 @@ import effectSupport from "./effect-support.ts";
 import harnessSupport from "./harness-support.ts";
 import sessionSupport from "./session-support.ts";
 import toolSearchSupport from "./tool-search-support.ts";
+
+const { MemoryStorage } = memory;
+const { AgentDoc, defineTool } = durable;
 
 const { DONE, call, offered, setup, systemMessages, toolResultTexts } = toolSearchSupport;
 

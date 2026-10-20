@@ -1,44 +1,37 @@
-import { type Context, copyJson, type JsonValue } from "@msa/chord";
+import { type Context, type JsonValue, copyJson } from "@msa/chord";
 import { Effect } from "effect";
 
-import { commitTask } from "./bridge.ts";
-import { clearProgress, LiveDoc, toolSlot } from "./live.ts";
-import {
-  askHooks,
-  jsonEqual,
-  prepareArguments,
-  readCall,
-  resolveTool,
-  validate,
-} from "./tool-call.ts";
-import { fromSlot, harnessError, invalid } from "./tool-result.ts";
-import { run } from "./tool-run.ts";
-import { settle } from "./tool-settle.ts";
-import {
-  COMPLETED,
-  type ToolRuntime,
-  type ToolTaskCheckpoint,
-  type ToolTaskInput,
-  type ToolTaskResult,
-} from "./tool-types.ts";
-import type { JsonObject, RunningTask, ToolRegistration, Tx } from "./types.ts";
+import bridge from "./bridge.ts";
+import liveModule from "./live.ts";
+import toolPhaseKit from "./tool-phase-kit.ts";
+import toolTypes from "./tool-types.ts";
+import type toolTypesModule from "./tool-types.types.ts";
+import type typesModule from "./types.types.ts";
+const { commitTask } = bridge;
+const { LiveDoc, clearProgress, toolSlot } = liveModule;
+const { askHooks, jsonEqual, prepareArguments, readCall, resolveTool, validate } =
+  toolPhaseKit.toolCall;
+const { fromSlot, harnessError, invalid } = toolPhaseKit.toolResult;
+const { settle } = toolPhaseKit.toolSettle;
+const { COMPLETED } = toolTypes;
+const { run } = toolPhaseKit.toolRun;
 
-type PhaseTask<P extends ToolTaskCheckpoint["phase"]> = RunningTask<
-  ToolTaskInput,
-  Extract<ToolTaskCheckpoint, { phase: P }>,
-  ToolTaskResult
+type PhaseTask<P extends toolTypesModule.ToolTaskCheckpoint["phase"]> = typesModule.RunningTask<
+  toolTypesModule.ToolTaskInput,
+  Extract<toolTypesModule.ToolTaskCheckpoint, { phase: P }>,
+  toolTypesModule.ToolTaskResult
 >;
 
 const commitIntent = Effect.fnUntraced(function* (
-  runtime: ToolRuntime,
-  input: ToolTaskInput,
-  tool: ToolRegistration,
-  final: JsonObject,
+  runtime: toolTypesModule.ToolRuntime,
+  input: toolTypesModule.ToolTaskInput,
+  tool: typesModule.ToolRegistration,
+  final: typesModule.JsonObject,
   context: Context,
 ) {
   yield* commitTask(
     runtime,
-    (tx: Tx) =>
+    (tx: typesModule.Tx) =>
       Effect.gen(function* () {
         const live = yield* Effect.promise(() => tx.doc(LiveDoc, runtime.conversationId));
         const slot = toolSlot(live, runtime.taskId);
@@ -47,17 +40,17 @@ const commitIntent = Effect.fnUntraced(function* (
           input.kind === "nested" && !jsonEqual(input.call.arguments as JsonValue, final);
         if (changed && slot !== undefined && "parentTaskId" in slot) slot.arguments = final;
         return {
+          checkpoint: { arguments: final, phase: "execute", replay: tool.replay ?? "unsafe" },
           status: "running",
-          checkpoint: { phase: "execute", arguments: final, replay: tool.replay ?? "unsafe" },
         } as const;
       }),
     context,
   );
 });
 
-export const callPhase = Effect.fnUntraced(function* (
+const callPhase = Effect.fnUntraced(function* (
   task: PhaseTask<"call">,
-  runtime: ToolRuntime,
+  runtime: toolTypesModule.ToolRuntime,
   context: Context,
 ) {
   const call = yield* readCall(runtime, task.input, context);
@@ -66,7 +59,7 @@ export const callPhase = Effect.fnUntraced(function* (
     const error = harnessError("tool_unavailable", `Tool ${call.name} is not available`);
     return yield* settle(runtime, task.input, call, COMPLETED, () => error, context);
   }
-  const prepared = prepareArguments(tool, call.arguments as JsonObject);
+  const prepared = prepareArguments(tool, call.arguments as typesModule.JsonObject);
   const checked = "error" in prepared ? prepared : validate(tool, call, prepared.args);
   if ("error" in checked)
     return yield* settle(
@@ -92,14 +85,16 @@ export const callPhase = Effect.fnUntraced(function* (
       () => invalid(validated.error),
       context,
     );
-  const final = copyJson(validated.args, { omitUndefinedProperties: true }) as JsonObject;
+  const final = copyJson(validated.args, {
+    omitUndefinedProperties: true,
+  }) as typesModule.JsonObject;
   yield* commitIntent(runtime, task.input, tool, final, context);
   yield* run(runtime, task.input, call, tool, final, context);
 });
 
-export const executePhase = Effect.fnUntraced(function* (
+const executePhase = Effect.fnUntraced(function* (
   task: PhaseTask<"execute">,
-  runtime: ToolRuntime,
+  runtime: toolTypesModule.ToolRuntime,
   context: Context,
 ) {
   const { arguments: args, replay } = task.state.checkpoint;
@@ -108,7 +103,7 @@ export const executePhase = Effect.fnUntraced(function* (
   if (replay === "safe" && tool?.replay === "safe") {
     yield* commitTask(
       runtime,
-      (tx: Tx) =>
+      (tx: typesModule.Tx) =>
         Effect.gen(function* () {
           const live = yield* Effect.promise(() => tx.doc(LiveDoc, runtime.conversationId));
           const slot = toolSlot(live, runtime.taskId);
@@ -124,17 +119,21 @@ export const executePhase = Effect.fnUntraced(function* (
     runtime,
     task.input,
     call,
-    { status: "failed", message },
+    { message, status: "failed" },
     (slot) => fromSlot(slot, "interrupted", message),
     context,
   );
 });
 
-export const abortPhase = Effect.fnUntraced(function* (
-  task: RunningTask<ToolTaskInput, ToolTaskCheckpoint, ToolTaskResult> & {
+const abortPhase = Effect.fnUntraced(function* (
+  task: typesModule.RunningTask<
+    toolTypesModule.ToolTaskInput,
+    toolTypesModule.ToolTaskCheckpoint,
+    toolTypesModule.ToolTaskResult
+  > & {
     readonly abortReason?: string;
   },
-  runtime: ToolRuntime,
+  runtime: toolTypesModule.ToolRuntime,
   context: Context,
 ) {
   const call = yield* readCall(runtime, task.input, context);
@@ -150,7 +149,11 @@ export const abortPhase = Effect.fnUntraced(function* (
 });
 
 const abortMessage = (
-  task: RunningTask<ToolTaskInput, ToolTaskCheckpoint, ToolTaskResult> & {
+  task: typesModule.RunningTask<
+    toolTypesModule.ToolTaskInput,
+    toolTypesModule.ToolTaskCheckpoint,
+    toolTypesModule.ToolTaskResult
+  > & {
     readonly abortReason?: string;
   },
   name: string,
@@ -160,3 +163,11 @@ const abortMessage = (
     ? ["interrupted", `Tool ${name} was interrupted by a restart and may have partially run`]
     : ["abandoned", `Tool ${name} was not started: its caller ended with a restart`];
 };
+
+const toolPhases = {
+  abortPhase,
+  callPhase,
+  executePhase,
+};
+
+export default toolPhases;

@@ -1,202 +1,192 @@
 import type { JsonValue } from "@msa/chord";
 import { BACKGROUND_CONTEXT } from "@msa/chord/context";
 
-import type { DocumentId, EntryId, Storage, StorageWrite, SubmissionId, TaskId } from "../types.ts";
-import { ROOT_CONVERSATION_ID } from "../types.ts";
-import {
-  HISTORY_SEGMENT_LENGTH,
-  REPLAY_TAILS,
-  type StorageBenchmarkDataset,
-  task,
-} from "./storage-benchmark.ts";
+import types from "../types.ts";
+import type typesModule from "../types.types.ts";
+import type storageBenchmarkRunsTypes from "./storage-benchmark-runs.types.ts";
+import storageBenchmark from "./storage-benchmark.ts";
+import type storageBenchmarkTypes from "./storage-benchmark.types.ts";
 
-export type StorageReadBenchmark = {
-  readonly name: string;
-  run(storage: Storage, dataset: StorageBenchmarkDataset): Promise<number>;
-  expected(dataset: StorageBenchmarkDataset): number;
-};
+const { ROOT_CONVERSATION_ID } = types;
+const { HISTORY_SEGMENT_LENGTH, REPLAY_TAILS, task } = storageBenchmark;
 
 const documentCount = (
-  storage: Storage,
-  id: DocumentId,
-  at: Parameters<Storage["document"]>[1],
+  storage: typesModule.Storage,
+  id: typesModule.DocumentId,
+  at: Parameters<typesModule.Storage["document"]>[1],
 ): Promise<number> =>
   storage.document(id, at, BACKGROUND_CONTEXT).then((found) => Number(found?.value["count"]));
 
 const entryPage = (
-  storage: Storage,
-  conversationId: StorageBenchmarkDataset["deepestConversationId"],
+  storage: typesModule.Storage,
+  conversationId: storageBenchmarkTypes.StorageBenchmarkDataset["deepestConversationId"],
 ) =>
   storage
     .scanEntries({ conversationId }, 100, undefined, BACKGROUND_CONTEXT)
     .then((page) => page.items.length);
 
-export const STORAGE_READ_BENCHMARKS: readonly StorageReadBenchmark[] = [
+const STORAGE_READ_BENCHMARKS: readonly storageBenchmarkRunsTypes.StorageReadBenchmark[] = [
   {
+    expected: ({ firstEntryId }) => firstEntryId,
     name: "exact entry lookup",
     run: (storage, dataset) =>
       storage
         .entry(dataset.firstEntryId, BACKGROUND_CONTEXT)
         .then((found) => found?.entry.id ?? -1),
-    expected: ({ firstEntryId }) => firstEntryId,
   },
   {
+    expected: () => 100,
     name: "entry page scan (100)",
     run: (storage) => entryPage(storage, ROOT_CONVERSATION_ID),
-    expected: () => 100,
   },
   {
+    expected: ({ filteredTaskCount }) => filteredTaskCount,
     name: "filtered task scan (50)",
     run: (storage) =>
       storage
         .scanTasks(
-          { kind: "benchmark.filtered", status: "pending", background: true },
+          { background: true, kind: "benchmark.filtered", status: "pending" },
           50,
           undefined,
           BACKGROUND_CONTEXT,
         )
         .then((page) => page.items.length),
-    expected: ({ filteredTaskCount }) => filteredTaskCount,
   },
   {
+    expected: ({ exactDocumentId }) => exactDocumentId,
     name: "exact document address among many",
     run: (storage, dataset) =>
       storage
         .findDocument(
-          { kind: "benchmark.family", key: dataset.exactDocumentKey, scope: { kind: "session" } },
+          { key: dataset.exactDocumentKey, kind: "benchmark.family", scope: { kind: "session" } },
           "current",
           BACKGROUND_CONTEXT,
         )
         .then((found) => found?.id ?? -1),
-    expected: ({ exactDocumentId }) => exactDocumentId,
   },
-  ...REPLAY_TAILS.map((tail): StorageReadBenchmark => ({
+  ...REPLAY_TAILS.map((tail): storageBenchmarkRunsTypes.StorageReadBenchmark => ({
+    expected: () => tail,
     name: `document replay tail (${tail})`,
     run: (storage, dataset) => documentCount(storage, dataset.replayDocumentIds[tail], "current"),
-    expected: () => tail,
   })),
   {
+    expected: () => HISTORY_SEGMENT_LENGTH,
     name: "ancient historical read before newer base",
     run: (storage, dataset) =>
       documentCount(storage, dataset.historicalDocumentId, dataset.ancientAt),
-    expected: () => HISTORY_SEGMENT_LENGTH,
   },
   {
+    expected: () => HISTORY_SEGMENT_LENGTH * 2,
     name: "recent historical read after newer base",
     run: (storage, dataset) =>
       documentCount(storage, dataset.historicalDocumentId, dataset.recentAt),
-    expected: () => HISTORY_SEGMENT_LENGTH * 2,
   },
   {
+    expected: () => 100,
     name: "fork-depth history scan (100)",
     run: (storage, dataset) => entryPage(storage, dataset.deepestConversationId),
-    expected: () => 100,
   },
   {
+    expected: ({ ancestorHeadEntryId }) => ancestorHeadEntryId,
     name: "fork-depth head lookup",
     run: (storage, dataset) =>
       storage
         .findLatestHeadMarker(dataset.deepestConversationId, undefined, BACKGROUND_CONTEXT)
         .then((found) => found?.id ?? -1),
-    expected: ({ ancestorHeadEntryId }) => ancestorHeadEntryId,
   },
 ];
 
-export type StorageWriteBenchmark = {
-  readonly name: string;
-  readonly expected: number;
-  run(storage: Storage): Promise<number>;
-};
-
-const commitCount = (storage: Storage, writes: readonly StorageWrite[]): Promise<number> =>
-  storage.commit(writes, BACKGROUND_CONTEXT).then(() => writes.length);
+const commitCount = (
+  storage: typesModule.Storage,
+  writes: readonly typesModule.StorageWrite[],
+): Promise<number> => storage.commit(writes, BACKGROUND_CONTEXT).then(() => writes.length);
 
 const mixedWrites = (
-  entryId: EntryId,
-  taskId: TaskId<JsonValue>,
-  submissionId: SubmissionId,
-  documentId: DocumentId,
-): readonly StorageWrite[] => [
+  entryId: typesModule.EntryId,
+  taskId: typesModule.TaskId<JsonValue>,
+  submissionId: typesModule.SubmissionId,
+  documentId: typesModule.DocumentId,
+): readonly typesModule.StorageWrite[] => [
   {
     type: "entry",
-    value: { id: entryId, conversationId: ROOT_CONVERSATION_ID, kind: "benchmark.mixed" },
+    value: { conversationId: ROOT_CONVERSATION_ID, id: entryId, kind: "benchmark.mixed" },
   },
   { type: "task", value: task(taskId, taskId) },
   {
     type: "submission",
     value: {
-      id: submissionId,
       conversationId: ROOT_CONVERSATION_ID,
-      requestId: `benchmark-${submissionId}`,
-      type: "write",
-      status: "done",
       entry: entryId,
+      id: submissionId,
+      requestId: `benchmark-${submissionId}`,
+      status: "done",
+      type: "write",
     },
   },
   {
-    type: "document.create",
+    content: { kind: "base", value: { entryId, taskId }, version: 1 },
     record: {
       id: documentId,
-      kind: "benchmark.mixed",
       key: String(documentId),
+      kind: "benchmark.mixed",
       scope: { kind: "session" },
     },
-    content: { kind: "base", version: 1, value: { entryId, taskId } },
+    type: "document.create",
   },
 ];
 
-export const STORAGE_WRITE_BENCHMARKS: readonly StorageWriteBenchmark[] = [
+const STORAGE_WRITE_BENCHMARKS: readonly storageBenchmarkRunsTypes.StorageWriteBenchmark[] = [
   {
-    name: "commit one entry",
     expected: 1,
+    name: "commit one entry",
     run: (storage) =>
-      storage.mintId<EntryId>().then((id) =>
+      storage.mintId<typesModule.EntryId>().then((id) =>
         commitCount(storage, [
           {
             type: "entry",
             value: {
-              id,
               conversationId: ROOT_CONVERSATION_ID,
-              kind: "benchmark.write",
               data: { text: "x".repeat(128) },
+              id,
+              kind: "benchmark.write",
             },
           },
         ]),
       ),
   },
   {
-    name: "commit 100 entries",
     expected: 100,
+    name: "commit 100 entries",
     run: (storage) =>
       Promise.all(
         Array.from({ length: 100 }, (_, index) =>
-          storage.mintId<EntryId>().then((id): StorageWrite => ({
+          storage.mintId<typesModule.EntryId>().then((id): typesModule.StorageWrite => ({
             type: "entry",
             value: {
-              id,
               conversationId: ROOT_CONVERSATION_ID,
-              kind: "benchmark.write",
               data: { index, text: "x".repeat(128) },
+              id,
+              kind: "benchmark.write",
             },
           })),
         ),
       ).then((writes) => commitCount(storage, writes)),
   },
   {
-    name: "commit mixed entry/task/submission/document",
     expected: 4,
+    name: "commit mixed entry/task/submission/document",
     run: (storage) =>
       storage
-        .mintId<EntryId>()
+        .mintId<typesModule.EntryId>()
         .then((entryId) =>
           storage
-            .mintId<TaskId<JsonValue>>()
+            .mintId<typesModule.TaskId<JsonValue>>()
             .then((taskId) =>
               storage
-                .mintId<SubmissionId>()
+                .mintId<typesModule.SubmissionId>()
                 .then((submissionId) =>
                   storage
-                    .mintId<DocumentId>()
+                    .mintId<typesModule.DocumentId>()
                     .then((documentId) =>
                       commitCount(storage, mixedWrites(entryId, taskId, submissionId, documentId)),
                     ),
@@ -205,3 +195,10 @@ export const STORAGE_WRITE_BENCHMARKS: readonly StorageWriteBenchmark[] = [
         ),
   },
 ];
+
+const storageBenchmarkRuns = {
+  STORAGE_READ_BENCHMARKS,
+  STORAGE_WRITE_BENCHMARKS,
+};
+
+export default storageBenchmarkRuns;

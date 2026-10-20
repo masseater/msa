@@ -1,13 +1,17 @@
-import { LiveDoc, type Storage } from "@msa/durable";
+import durable from "@msa/durable";
+import type durableTypes from "@msa/durable/index.types";
 import { Effect } from "effect";
 import { afterEach, describe, expect, it } from "vite-plus/test";
 
-import { openNodeSqliteStorage } from "../src/storage/sqlite/node.ts";
+import node from "../src/storage/sqlite/node.ts";
 import effectSupport from "./effect-support.ts";
 import harnessSchedulerRetentionSupport from "./harness-scheduler-retention-support.ts";
 import platformSupport from "./platform-support.ts";
 import sessionSupport from "./session-support.ts";
 import taskSupport from "./task-support.ts";
+
+const { openNodeSqliteStorage } = node;
+const { LiveDoc } = durable;
 
 const { awaited } = effectSupport;
 const {
@@ -39,7 +43,7 @@ afterEach(() =>
   ),
 );
 
-function countReads(storage: Storage): { tasks: number; conversations: number } {
+function countReads(storage: durableTypes.Storage): { tasks: number; conversations: number } {
   const reads = { conversations: 0, tasks: 0 };
   const task = storage.task.bind(storage);
   const conversation = storage.conversation.bind(storage);

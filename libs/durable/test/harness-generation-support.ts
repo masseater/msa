@@ -1,18 +1,15 @@
 import { type Models, fauxAssistantMessage } from "@msa/ai";
-import {
-  type CommitPublication,
-  type Conversation,
-  LiveDoc,
-  type LiveState,
-  type TaskId,
-} from "@msa/durable";
-import { Harness } from "@msa/durable/harness";
+import durable from "@msa/durable";
+import type harnessTypes from "@msa/durable/harness.types";
+import type durableTypes from "@msa/durable/index.types";
 import { Effect, Stream } from "effect";
 import { dual } from "effect/Function";
 
 import chatSupport from "./chat-support.ts";
 import effectSupport from "./effect-support.ts";
 import sessionSupport from "./session-support.ts";
+
+const { LiveDoc } = durable;
 
 const { waitFor } = chatSupport;
 const { awaited } = effectSupport;
@@ -43,19 +40,27 @@ const ERROR_503 = fauxAssistantMessage([], {
 });
 
 function liveImpl(
-  harness: Harness,
-  conversation: Conversation,
-): Promise<Readonly<LiveState> | undefined> {
+  harness: harnessTypes.Harness,
+  conversation: durableTypes.Conversation,
+): Promise<Readonly<durableTypes.LiveState> | undefined> {
   return Promise.resolve(harness.snapshot(LiveDoc, conversation.id, context));
 }
 
 const live: {
-  (conversation: Conversation): (harness: Harness) => ReturnType<typeof liveImpl>;
-  (harness: Harness, conversation: Conversation): ReturnType<typeof liveImpl>;
+  (
+    conversation: durableTypes.Conversation,
+  ): (harness: harnessTypes.Harness) => ReturnType<typeof liveImpl>;
+  (
+    harness: harnessTypes.Harness,
+    conversation: durableTypes.Conversation,
+  ): ReturnType<typeof liveImpl>;
 } = dual(2, liveImpl);
 
-const runTask = Effect.fn("runTask")(function* (harness: Harness, conversation: Conversation) {
-  let taskId: TaskId | undefined;
+const runTask = Effect.fn("runTask")(function* (
+  harness: harnessTypes.Harness,
+  conversation: durableTypes.Conversation,
+) {
+  let taskId: durableTypes.TaskId | undefined;
   yield* waitFor(
     Effect.gen(function* () {
       taskId = (yield* awaited(live(harness, conversation)))?.run?.taskId;
@@ -80,16 +85,16 @@ const withStream: {
   (models: Models, streamSimple: Models["streamSimple"]): ReturnType<typeof withStreamImpl>;
 } = dual(2, withStreamImpl);
 
-function livePublications(harness: Harness): LiveState[] {
-  const values: LiveState[] = [];
-  harness.subscribeCommits((publication: CommitPublication) => {
+function livePublications(harness: harnessTypes.Harness): durableTypes.LiveState[] {
+  const values: durableTypes.LiveState[] = [];
+  harness.subscribeCommits((publication: durableTypes.CommitPublication) => {
     for (const change of publication.changes) {
       if (
         change.type === "document" &&
         change.record.kind === "msa.live" &&
         change.value !== null
       ) {
-        values.push(change.value as LiveState);
+        values.push(change.value as durableTypes.LiveState);
       }
     }
   });

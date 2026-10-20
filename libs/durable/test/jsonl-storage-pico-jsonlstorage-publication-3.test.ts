@@ -2,11 +2,13 @@ import type { JsonValue } from "@msa/chord";
 import { Effect } from "effect";
 import { afterEach, describe, expect, it } from "vite-plus/test";
 
-import type { DocumentId, TaskId } from "../src/types.ts";
-import { ROOT_CONVERSATION_ID } from "../src/types.ts";
+import types from "../src/types.ts";
+import type typesModule from "../src/types.types.ts";
 import effectSupport from "./effect-support.ts";
 import jsonlStorageSupport from "./jsonl-storage-support.ts";
 import platformSupport from "./platform-support.ts";
+
+const { ROOT_CONVERSATION_ID } = types;
 
 const { awaited } = effectSupport;
 const {
@@ -39,7 +41,7 @@ const rewindableHistory = Effect.fn("rewindableHistory")(function* () {
   const directory = yield* tempDirectory();
   const storage = yield* openStorage(directory);
   yield* createRoot(storage);
-  const id = yield* awaited(storage.mintId<DocumentId>());
+  const id = yield* awaited(storage.mintId<typesModule.DocumentId>());
   const record = {
     fork: "asOf" as const,
     history: "rewindable" as const,
@@ -90,10 +92,10 @@ const retiredSidecars = Effect.fn("retiredSidecars")(function* () {
   const directory = yield* tempDirectory();
   const storage = yield* openStorage(directory);
   yield* createRoot(storage);
-  const taskId = yield* awaited(storage.mintId<TaskId<JsonValue>>());
-  const sessionId = yield* awaited(storage.mintId<DocumentId>());
-  const latestId = yield* awaited(storage.mintId<DocumentId>());
-  const taskDocumentId = yield* awaited(storage.mintId<DocumentId>());
+  const taskId = yield* awaited(storage.mintId<typesModule.TaskId<JsonValue>>());
+  const sessionId = yield* awaited(storage.mintId<typesModule.DocumentId>());
+  const latestId = yield* awaited(storage.mintId<typesModule.DocumentId>());
+  const taskDocumentId = yield* awaited(storage.mintId<typesModule.DocumentId>());
   const createdAt = yield* awaited(
     storage.commit(
       [
@@ -194,7 +196,7 @@ const truncatesTornUtf = Effect.gen(function* () {
   const directory = yield* tempDirectory();
   const storage = yield* openStorage(directory);
   yield* createRoot(storage);
-  const documentId = yield* awaited(storage.mintId<DocumentId>());
+  const documentId = yield* awaited(storage.mintId<typesModule.DocumentId>());
   yield* awaited(
     storage.commit(
       [

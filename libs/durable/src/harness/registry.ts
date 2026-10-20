@@ -1,16 +1,19 @@
-import { INSTRUCTIONS_KEY } from "./agent.ts";
-import { RegistryState } from "./registry-state.ts";
-import type { Extension, Registry, RegistrySnapshot, ToolRegistration } from "./types.ts";
+import agentModule from "./agent.ts";
+import registryState from "./registry-state.ts";
+import type typesModule from "./types.types.ts";
 
-export { BUILTIN_TASKS } from "./registry-state.ts";
+const { RegistryState } = registryState;
+const { INSTRUCTIONS_KEY } = agentModule;
 
 const SECTION_KEY = /^[a-z][a-z0-9_-]*$/u;
 
-class RegistryImpl<Tool extends ToolRegistration> implements Registry<Tool> {
+class RegistryImpl<
+  Tool extends typesModule.ToolRegistration,
+> implements typesModule.Registry<Tool> {
   #current = new RegistryState<Tool>([]);
   readonly #listeners = new Set<() => void>();
 
-  snapshot(): RegistrySnapshot<Tool> {
+  snapshot(): typesModule.RegistrySnapshot<Tool> {
     return this.#current;
   }
 
@@ -19,7 +22,7 @@ class RegistryImpl<Tool extends ToolRegistration> implements Registry<Tool> {
     return () => this.#listeners.delete(listener);
   }
 
-  install(extension: Extension<Tool>): void {
+  install(extension: typesModule.Extension<Tool>): void {
     validateExtension(extension);
     const current = this.#current.installed();
     const index = current.findIndex((installed) => installed.name === extension.name);
@@ -30,19 +33,19 @@ class RegistryImpl<Tool extends ToolRegistration> implements Registry<Tool> {
     this.#publish(next);
   }
 
-  uninstall(extension: Extension): void {
+  uninstall(extension: typesModule.Extension): void {
     const current = this.#current.installed();
     if (!current.some((installed) => installed.name === extension.name)) return;
     this.#publish(current.filter((installed) => installed.name !== extension.name));
   }
 
-  #publish(extensions: readonly Extension<Tool>[]): void {
+  #publish(extensions: readonly typesModule.Extension<Tool>[]): void {
     this.#current = new RegistryState(extensions);
     for (const listener of [...this.#listeners]) listener();
   }
 }
 
-function validateExtension(extension: Extension): void {
+function validateExtension(extension: typesModule.Extension): void {
   const tools = new Set<string>();
   for (const tool of extension.tools ?? []) {
     if (tools.has(tool.name))
@@ -61,6 +64,15 @@ function validateExtension(extension: Extension): void {
   }
 }
 
-export function createRegistry<Tool extends ToolRegistration = ToolRegistration>(): Registry<Tool> {
+function createRegistry<
+  Tool extends typesModule.ToolRegistration = typesModule.ToolRegistration,
+>(): typesModule.Registry<Tool> {
   return new RegistryImpl<Tool>();
 }
+
+const registry = {
+  BUILTIN_TASKS: registryState.BUILTIN_TASKS,
+  createRegistry,
+};
+
+export default registry;

@@ -1,27 +1,25 @@
 import { type AssistantMessage, Type, fauxAssistantMessage, fauxText, fauxToolCall } from "@msa/ai";
-import {
-  AgentDoc,
-  type Conversation,
-  type NestedToolExecutionResult,
-  type ToolRegistration,
-  defineTool,
-} from "@msa/durable";
-import { MemoryStorage } from "@msa/durable/storage/memory";
+import durable from "@msa/durable";
+import type durableTypes from "@msa/durable/index.types";
+import memory from "@msa/durable/storage/memory";
 import { Effect } from "effect";
 import { describe, expect, it } from "vite-plus/test";
 
-import chatSupport from "./chat-support.ts";
 import type chatSupportTypes from "./chat-support.types.ts";
-import effectSupport from "./effect-support.ts";
-import harnessSupport from "./harness-support.ts";
-import sessionSupport from "./session-support.ts";
+import testSupport from "./support.ts";
 
-const { chatSetup, openChat } = chatSupport;
-const { awaited, toJsonText } = effectSupport;
-const { addTool } = harnessSupport;
-const { context } = sessionSupport;
+const { AgentDoc, defineTool } = durable;
+const { MemoryStorage } = memory;
 
-function tool(name: string, extra: Partial<ToolRegistration> = {}): ToolRegistration {
+const { chatSetup, openChat } = testSupport;
+const { awaited, toJsonText } = testSupport;
+const { addTool } = testSupport;
+const { context } = testSupport;
+
+function tool(
+  name: string,
+  extra: Partial<durableTypes.ToolRegistration> = {},
+): durableTypes.ToolRegistration {
   return defineTool({
     description: name,
     execute: () => Promise.resolve({ output: [{ text: `${name} ran`, type: "text" }] }),
@@ -38,7 +36,7 @@ function call(name: string, id = "c1"): AssistantMessage {
 }
 
 function prober(names: readonly string[]) {
-  const received = new Map<string, NestedToolExecutionResult>();
+  const received = new Map<string, durableTypes.NestedToolExecutionResult>();
   const registration = defineTool({
     description: "probe",
     execute: (_args, api, callContext) =>
@@ -55,15 +53,17 @@ function prober(names: readonly string[]) {
   return { received, registration };
 }
 
-const offered = Effect.fn("offered")(function* (root: Conversation) {
+const offered = Effect.fn("offered")(function* (root: durableTypes.Conversation) {
   return (yield* awaited(root.agent(context))).tools.map((each) => each.name);
 });
 
-const callable = Effect.fn("callable")(function* (root: Conversation) {
+const callable = Effect.fn("callable")(function* (root: durableTypes.Conversation) {
   return (yield* awaited(root.agent(context))).callable.map((each) => each.name);
 });
 
-function setupWith(tools: readonly ToolRegistration[]): Promise<chatSupportTypes.ChatSetup> {
+function setupWith(
+  tools: readonly durableTypes.ToolRegistration[],
+): Promise<chatSupportTypes.ChatSetup> {
   const setup = chatSetup();
   for (const each of tools) addTool(setup.registry, each);
   return Promise.resolve(setup);

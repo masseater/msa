@@ -2,12 +2,15 @@ import { BACKGROUND_CONTEXT, withAbortSignal } from "@msa/chord/context";
 import { Effect } from "effect";
 import { afterEach, describe, expect, it, vi } from "vite-plus/test";
 
-import { getOrThrow } from "../src/env/index.ts";
-import { NodeExecutionEnv } from "../src/env/node.ts";
+import envModule from "../src/env/index.ts";
+import node from "../src/env/node.ts";
 import effectSupport from "./effect-support.ts";
 import envNodeSupport from "./env-node-support.ts";
 import type envNodeSupportTypes from "./env-node-support.types.ts";
 import platformSupport from "./platform-support.ts";
+
+const { NodeExecutionEnv } = node;
+const { getOrThrow } = envModule;
 
 vi.mock("node:fs/promises", (importOriginal) =>
   Promise.all([

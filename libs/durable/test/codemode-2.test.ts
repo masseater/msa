@@ -1,10 +1,12 @@
 import { Effect } from "effect";
 import { afterEach, describe, expect, it } from "vite-plus/test";
 
-import { CodemodeJournalDoc, CodemodeRunDoc } from "../src/codemode/codemode.ts";
+import codemode from "../src/codemode/codemode.ts";
 import codemodeChatSupport from "./codemode-chat-support.ts";
 import codemodeSupport from "./codemode-support.ts";
 import support from "./support.ts";
+
+const { CodemodeJournalDoc, CodemodeRunDoc } = codemode;
 
 const { codemodeChat } = codemodeChatSupport;
 const { directories, nestedCount, restart } = codemodeSupport;

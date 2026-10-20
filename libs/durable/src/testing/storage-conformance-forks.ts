@@ -1,72 +1,67 @@
 import { Effect } from "effect";
 
-import { idFromNumber } from "../ids.ts";
-import type { ConversationId, EntryId, EntryQuery, Seq, Storage } from "../types.ts";
-import {
-  commit,
-  context,
-  createRoot,
-  entry,
-  type Expect,
-  io,
-  mint,
-  type StorageCaseSpec,
-} from "./storage-conformance-support.ts";
+import idsModule from "../ids.ts";
+import type typesModule from "../types.types.ts";
+import storageConformanceSupport from "./storage-conformance-support.ts";
+import type storageConformanceSupportTypes from "./storage-conformance-support.types.ts";
 
-const seedRootAndChild = Effect.fnUntraced(function* (storage: Storage) {
+const { commit, context, createRoot, entry, io, mint } = storageConformanceSupport;
+const { idFromNumber } = idsModule;
+
+const seedRootAndChild = Effect.fnUntraced(function* (storage: typesModule.Storage) {
   const rootId = yield* createRoot(storage);
-  const rootFirst = yield* mint<EntryId>(storage);
-  const rootForkPoint = yield* mint<EntryId>(storage);
-  const rootExcludedSameCommit = yield* mint<EntryId>(storage);
+  const rootFirst = yield* mint<typesModule.EntryId>(storage);
+  const rootForkPoint = yield* mint<typesModule.EntryId>(storage);
+  const rootExcludedSameCommit = yield* mint<typesModule.EntryId>(storage);
   const rootEntriesSeq = yield* commit(storage, [
     { type: "entry", value: entry(rootFirst, rootId) },
     { type: "entry", value: entry(rootForkPoint, rootId, "marker", { head: rootFirst }) },
     { type: "entry", value: entry(rootExcludedSameCommit, rootId) },
   ]);
-  const childId = yield* mint<ConversationId>(storage);
+  const childId = yield* mint<typesModule.ConversationId>(storage);
   yield* commit(storage, [
     {
       type: "conversation",
-      value: { id: childId, parent: { conversationId: rootId, at: rootForkPoint } },
+      value: { id: childId, parent: { at: rootForkPoint, conversationId: rootId } },
     },
   ]);
-  const childForkPoint = yield* mint<EntryId>(storage);
-  const childExcluded = yield* mint<EntryId>(storage);
+  const childForkPoint = yield* mint<typesModule.EntryId>(storage);
+  const childExcluded = yield* mint<typesModule.EntryId>(storage);
   yield* commit(storage, [
     { type: "entry", value: entry(childForkPoint, childId, "note") },
     { type: "entry", value: entry(childExcluded, childId) },
   ]);
-  const rootExcludedLater = yield* mint<EntryId>(storage);
+  const rootExcludedLater = yield* mint<typesModule.EntryId>(storage);
   yield* commit(storage, [{ type: "entry", value: entry(rootExcludedLater, rootId) }]);
   return {
-    rootId,
+    childExcluded,
+    childForkPoint,
+    childId,
+    rootEntriesSeq,
+    rootExcludedLater,
+    rootExcludedSameCommit,
     rootFirst,
     rootForkPoint,
-    rootExcludedSameCommit,
-    rootEntriesSeq,
-    childId,
-    childForkPoint,
-    childExcluded,
-    rootExcludedLater,
+    rootId,
   };
 });
 
 type RootAndChild = Effect.Success<ReturnType<typeof seedRootAndChild>>;
 
-const seedForkTree = Effect.fnUntraced(function* (storage: Storage) {
+const seedForkTree = Effect.fnUntraced(function* (storage: typesModule.Storage) {
   const tree = yield* seedRootAndChild(storage);
-  const grandchildId = yield* mint<ConversationId>(storage);
+  const grandchildId = yield* mint<typesModule.ConversationId>(storage);
   yield* commit(storage, [
     {
       type: "conversation",
       value: {
         id: grandchildId,
-        parent: { conversationId: tree.childId, at: tree.childForkPoint },
+        parent: { at: tree.childForkPoint, conversationId: tree.childId },
       },
     },
   ]);
-  const grandchildHead = yield* mint<EntryId>(storage);
-  const grandchildTail = yield* mint<EntryId>(storage);
+  const grandchildHead = yield* mint<typesModule.EntryId>(storage);
+  const grandchildTail = yield* mint<typesModule.EntryId>(storage);
   const grandchildEntriesSeq = yield* commit(storage, [
     {
       type: "entry",
@@ -74,31 +69,31 @@ const seedForkTree = Effect.fnUntraced(function* (storage: Storage) {
     },
     { type: "entry", value: entry(grandchildTail, grandchildId) },
   ]);
-  const childExcludedLater = yield* mint<EntryId>(storage);
+  const childExcludedLater = yield* mint<typesModule.EntryId>(storage);
   yield* commit(storage, [{ type: "entry", value: entry(childExcludedLater, tree.childId) }]);
   return {
     ...tree,
-    grandchildId,
-    grandchildHead,
-    grandchildTail,
-    grandchildEntriesSeq,
     childExcludedLater,
+    grandchildEntriesSeq,
+    grandchildHead,
+    grandchildId,
+    grandchildTail,
   };
 });
 
 type ForkTree = RootAndChild & {
-  readonly grandchildId: ConversationId;
-  readonly grandchildHead: EntryId;
-  readonly grandchildTail: EntryId;
-  readonly grandchildEntriesSeq: Seq;
-  readonly childExcludedLater: EntryId;
+  readonly grandchildId: typesModule.ConversationId;
+  readonly grandchildHead: typesModule.EntryId;
+  readonly grandchildTail: typesModule.EntryId;
+  readonly grandchildEntriesSeq: typesModule.Seq;
+  readonly childExcludedLater: typesModule.EntryId;
 };
 
 const scanIds = (
-  storage: Storage,
-  query: EntryQuery,
+  storage: typesModule.Storage,
+  query: typesModule.EntryQuery,
   limit: number,
-  cursor: Parameters<Storage["scanEntries"]>[2],
+  cursor: Parameters<typesModule.Storage["scanEntries"]>[2],
 ) =>
   Effect.map(
     io(() => storage.scanEntries(query, limit, cursor, context)),
@@ -106,8 +101,8 @@ const scanIds = (
   );
 
 const expectDescendingPages = Effect.fnUntraced(function* (
-  storage: Storage,
-  expect: Expect,
+  storage: typesModule.Storage,
+  expect: storageConformanceSupportTypes.Expect,
   tree: ForkTree,
 ) {
   const query = { conversationId: tree.grandchildId };
@@ -121,8 +116,8 @@ const expectDescendingPages = Effect.fnUntraced(function* (
 });
 
 const expectAscendingPages = Effect.fnUntraced(function* (
-  storage: Storage,
-  expect: Expect,
+  storage: typesModule.Storage,
+  expect: storageConformanceSupportTypes.Expect,
   tree: ForkTree,
 ) {
   const ascending = { conversationId: tree.grandchildId, order: "ascending" } as const;
@@ -133,7 +128,7 @@ const expectAscendingPages = Effect.fnUntraced(function* (
   const thirdUp = yield* scanIds(storage, { conversationId: tree.grandchildId }, 2, secondUp.next);
   expect(thirdUp.ids).toEqual([tree.grandchildTail]);
   expect(thirdUp.next).toBeUndefined();
-  const bounded = { ...ascending, minEntryId: tree.rootForkPoint, maxEntryId: tree.childForkPoint };
+  const bounded = { ...ascending, maxEntryId: tree.childForkPoint, minEntryId: tree.rootForkPoint };
   expect((yield* scanIds(storage, bounded, 10, undefined)).ids).toEqual([
     tree.rootForkPoint,
     tree.childForkPoint,
@@ -149,8 +144,8 @@ const expectAscendingPages = Effect.fnUntraced(function* (
 });
 
 const expectHeadMarkers = Effect.fnUntraced(function* (
-  storage: Storage,
-  expect: Expect,
+  storage: typesModule.Storage,
+  expect: storageConformanceSupportTypes.Expect,
   tree: ForkTree,
 ) {
   const currentMarker = yield* io(() =>
@@ -172,8 +167,8 @@ const expectHeadMarkers = Effect.fnUntraced(function* (
 type HeadMarkers = Effect.Success<ReturnType<typeof expectHeadMarkers>>;
 
 const expectMarkerWindows = Effect.fnUntraced(function* (
-  storage: Storage,
-  expect: Expect,
+  storage: typesModule.Storage,
+  expect: storageConformanceSupportTypes.Expect,
   tree: ForkTree,
   { currentMarker, historicalMarker }: HeadMarkers,
 ) {
@@ -200,34 +195,37 @@ const expectMarkerWindows = Effect.fnUntraced(function* (
 });
 
 const expectEntryLookups = Effect.fnUntraced(function* (
-  storage: Storage,
-  expect: Expect,
+  storage: typesModule.Storage,
+  expect: storageConformanceSupportTypes.Expect,
   tree: ForkTree,
 ) {
-  const seqOf = (id: EntryId) =>
+  const seqOf = (id: typesModule.EntryId) =>
     Effect.map(
       io(() => storage.entry(id, context)),
       (found) => found?.commitSeq,
     );
   expect(yield* io(() => storage.entry(tree.rootFirst, context))).toEqual({
-    entry: entry(tree.rootFirst, tree.rootId),
     commitSeq: tree.rootEntriesSeq,
+    entry: entry(tree.rootFirst, tree.rootId),
   });
   expect(yield* seqOf(tree.rootForkPoint)).toBe(tree.rootEntriesSeq);
   expect(yield* seqOf(tree.grandchildHead)).toBe(tree.grandchildEntriesSeq);
   expect(yield* seqOf(tree.grandchildTail)).toBe(tree.grandchildEntriesSeq);
-  expect(yield* io(() => storage.entry(idFromNumber<EntryId>(999_999), context))).toBeUndefined();
+  expect(
+    yield* io(() => storage.entry(idFromNumber<typesModule.EntryId>(999_999), context)),
+  ).toBeUndefined();
 });
 
 const expectForkLookups = Effect.fnUntraced(function* (
-  storage: Storage,
-  expect: Expect,
+  storage: typesModule.Storage,
+  expect: storageConformanceSupportTypes.Expect,
   tree: ForkTree,
 ) {
-  const inGrandchild = (id: EntryId) => io(() => storage.entry(tree.grandchildId, id, context));
+  const inGrandchild = (id: typesModule.EntryId) =>
+    io(() => storage.entry(tree.grandchildId, id, context));
   expect(yield* inGrandchild(tree.rootFirst)).toEqual({
-    entry: entry(tree.rootFirst, tree.rootId),
     commitSeq: tree.rootEntriesSeq,
+    entry: entry(tree.rootFirst, tree.rootId),
   });
   expect((yield* inGrandchild(tree.childForkPoint))?.entry.conversationId).toBe(tree.childId);
   expect((yield* inGrandchild(tree.grandchildTail))?.commitSeq).toBe(tree.grandchildEntriesSeq);
@@ -240,8 +238,8 @@ const expectForkLookups = Effect.fnUntraced(function* (
     expect(yield* inGrandchild(excluded)).toBeUndefined();
   }
   expect(yield* io(() => storage.entry(tree.rootId, tree.grandchildHead, context))).toBeUndefined();
-  expect(yield* inGrandchild(idFromNumber<EntryId>(999_999))).toBeUndefined();
-  const unknown = idFromNumber<ConversationId>(999_999);
+  expect(yield* inGrandchild(idFromNumber<typesModule.EntryId>(999_999))).toBeUndefined();
+  const unknown = idFromNumber<typesModule.ConversationId>(999_999);
   yield* expect(storage.entry(unknown, tree.rootFirst, context)).rejects.toThrow(
     "Unknown conversation",
   );
@@ -250,7 +248,7 @@ const expectForkLookups = Effect.fnUntraced(function* (
   ).rejects.toThrow("Unknown conversation");
 });
 
-const deepForkHistory: StorageCaseSpec = {
+const deepForkHistory: storageConformanceSupportTypes.StorageCaseSpec = {
   name: "scans deep fork history newest-first through every ancestor cap",
   test: (storage, expect) =>
     Effect.gen(function* () {
@@ -264,4 +262,10 @@ const deepForkHistory: StorageCaseSpec = {
     }),
 };
 
-export const forksCases: readonly StorageCaseSpec[] = [deepForkHistory];
+const forksCases: readonly storageConformanceSupportTypes.StorageCaseSpec[] = [deepForkHistory];
+
+const storageConformanceForks = {
+  forksCases,
+};
+
+export default storageConformanceForks;

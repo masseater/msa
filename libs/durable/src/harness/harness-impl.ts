@@ -1,77 +1,66 @@
 import type { Context, JsonValue } from "@msa/chord";
 import { Effect } from "effect";
 
-import { SessionImpl } from "../session/session.ts";
-import type { Transaction } from "../session/transaction.ts";
-import { ConversationImpl } from "./harness-conversation.ts";
-import { createConversation, initializeConversation } from "./harness-docs.ts";
-import {
-  type BuiltEnv,
-  buildEnv,
-  conversationAgent,
-  inspectHarness,
-  totalUsage,
-} from "./harness-queries.ts";
-import { harnessClock, type Wired, wireHarness } from "./harness-wiring.ts";
-import type {
-  Agent,
-  AgentChange,
-  Conversation,
-  ConversationCreateOptions,
-  ConversationId,
-  ConversationInit,
-  ConversationRecord,
-  Harness as HarnessType,
-  HarnessInspection,
-  HarnessOptions,
-  RegistrySnapshot,
-  SettledTask,
-  Storage,
-  Submission,
-  SubmissionId,
-  TaskId,
-  TaskRecord,
-  ToolRegistration,
-} from "./types.ts";
+import SessionImpl from "../session/session.ts";
+import type transactionTypes from "../session/transaction.types.ts";
+import ConversationImpl from "./harness-conversation.ts";
+import harnessDocs from "./harness-docs.ts";
+import type harnessImplTypes from "./harness-impl.types.ts";
+import harnessQueries from "./harness-queries.ts";
+import harnessWiring from "./harness-wiring.ts";
+import type typesModule from "./types.types.ts";
 
-type Host<Tool extends ToolRegistration> = ConstructorParameters<typeof ConversationImpl<Tool>>[1];
-type CreateArgs<Tool extends ToolRegistration> = Parameters<Host<Tool>["create"]>;
+const { harnessClock, wireHarness } = harnessWiring;
+const { buildEnv, conversationAgent, inspectHarness, totalUsage } = harnessQueries;
+const { createConversation, initializeConversation } = harnessDocs;
 
-export const SCHEDULER_INDEX_SIZES = Symbol.for("msa-durable.schedulerIndexSizes");
+type Host<Tool extends typesModule.ToolRegistration> = ConstructorParameters<
+  typeof ConversationImpl<Tool>
+>[1];
+type CreateArgs<Tool extends typesModule.ToolRegistration> = Parameters<Host<Tool>["create"]>;
 
-export class HarnessImpl<Tool extends ToolRegistration> extends SessionImpl implements HarnessType {
-  readonly #options: HarnessOptions<Tool>;
-  readonly #wired: Wired;
+const SCHEDULER_INDEX_SIZES = Symbol.for("msa-durable.schedulerIndexSizes");
+
+class HarnessImpl<Tool extends typesModule.ToolRegistration>
+  extends SessionImpl
+  implements typesModule.Harness
+{
+  readonly #options: typesModule.HarnessOptions<Tool>;
+  readonly #wired: harnessImplTypes.Wired;
   readonly #host: Host<Tool>;
 
-  constructor(rawStorage: Storage, options: HarnessOptions<Tool>, context: Context) {
+  constructor(
+    rawStorage: typesModule.Storage,
+    options: typesModule.HarnessOptions<Tool>,
+    context: Context,
+  ) {
     const clock = harnessClock(options);
     super(rawStorage, clock.now, () => options.settings?.documentRetentionMs);
     const storage = this.storage;
     this.#options = options;
-    this.#wired = wireHarness({ host: this, storage, options, clock, context });
+    this.#wired = wireHarness({ clock, context, host: this, options, storage });
     const { tasks, submissions, views, now } = this.#wired;
     this.#host = {
-      harness: this,
-      storage,
-      tasks,
-      submissions,
-      views,
-      now,
       create: (target, createOptions, ctx) => this.#create(target, createOptions, ctx),
+      harness: this,
+      now,
+      storage,
+      submissions,
+      tasks,
+      views,
     };
   }
 
   resolveAgent(
-    id: ConversationId,
-    snapshot: RegistrySnapshot<Tool> | undefined,
+    id: typesModule.ConversationId,
+    snapshot: typesModule.RegistrySnapshot<Tool> | undefined,
     context: Context,
-  ): Promise<Agent<Tool>> {
-    const query = { session: this, options: this.#options, report: this.#wired.report };
+  ): Promise<typesModule.Agent<Tool>> {
+    const query = { options: this.#options, report: this.#wired.report, session: this };
     return Effect.runPromise(conversationAgent(query, id, snapshot, context));
   }
 
-  buildEnv(id: ConversationId, context: Context): Promise<BuiltEnv> {
+  buildEnv(id: typesModule.ConversationId, context: Context): Promise<harnessImplTypes.BuiltEnv> {
     return Effect.runPromise(buildEnv(this, this.#options, id, context));
   }
 
@@ -85,43 +74,46 @@ export class HarnessImpl<Tool extends ToolRegistration> extends SessionImpl impl
   }
 
   getTask<R>(
-    id: TaskId<R>,
+    id: typesModule.TaskId<R>,
     context: Context,
-  ): Promise<TaskRecord<JsonValue, JsonValue, R> | undefined> {
+  ): Promise<typesModule.TaskRecord<JsonValue, JsonValue, R> | undefined> {
     return this.readOnLine(() => this.storage.task(id, context)) as Promise<
-      TaskRecord<JsonValue, JsonValue, R> | undefined
+      typesModule.TaskRecord<JsonValue, JsonValue, R> | undefined
     >;
   }
 
-  get [SCHEDULER_INDEX_SIZES](): Wired["tasks"]["indexSizes"] {
+  get [SCHEDULER_INDEX_SIZES](): harnessImplTypes.Wired["tasks"]["indexSizes"] {
     return this.#wired.tasks.indexSizes;
   }
 
-  inspect(context: Context): Promise<HarnessInspection> {
+  inspect(context: Context): Promise<typesModule.HarnessInspection> {
     const query = { session: this, storage: this.storage };
     const snapshot = this.#options.registry.snapshot();
     return Effect.runPromise(inspectHarness(query, this.#wired.tasks, snapshot, context));
   }
 
-  submission(id: SubmissionId, context: Context): Promise<Submission | undefined> {
+  submission(
+    id: typesModule.SubmissionId,
+    context: Context,
+  ): Promise<typesModule.Submission | undefined> {
     return this.#wired.submissions.get(id, context);
   }
 
   abortSubmission(
-    id: SubmissionId,
+    id: typesModule.SubmissionId,
     context: Context,
-    conversationId?: ConversationId,
+    conversationId?: typesModule.ConversationId,
   ): Promise<"aborted" | "already_placed" | "settled" | "not_found"> {
     return this.#wired.submissions.abort(id, context, conversationId);
   }
 
-  abortTask(id: TaskId, context: Context): Promise<"marked" | "terminal"> {
+  abortTask(id: typesModule.TaskId, context: Context): Promise<"marked" | "terminal"> {
     return this.#wired.tasks.abort(id, context);
   }
 
-  waitForTask<R>(id: TaskId<R>, context: Context): Promise<SettledTask<R>> {
+  waitForTask<R>(id: typesModule.TaskId<R>, context: Context): Promise<typesModule.SettledTask<R>> {
     this.#wired.tasks.resume();
-    return this.#wired.tasks.waitForTask(id, context) as Promise<SettledTask<R>>;
+    return this.#wired.tasks.waitForTask(id, context) as Promise<typesModule.SettledTask<R>>;
   }
 
   waitForIdle(context: Context): Promise<void> {
@@ -129,26 +121,32 @@ export class HarnessImpl<Tool extends ToolRegistration> extends SessionImpl impl
     return this.#wired.tasks.waitForIdle(undefined, context);
   }
 
-  usage(context: Context): ReturnType<HarnessType["usage"]> {
+  usage(context: Context): ReturnType<typesModule.Harness["usage"]> {
     return Effect.runPromise(totalUsage({ session: this, storage: this.storage }, context));
   }
 
-  taskGraph(context: Context): ReturnType<HarnessType["taskGraph"]> {
+  taskGraph(context: Context): ReturnType<typesModule.Harness["taskGraph"]> {
     return this.#wired.taskGraph.state(context);
   }
 
-  watchTaskGraph(context: Context): ReturnType<HarnessType["watchTaskGraph"]> {
+  watchTaskGraph(context: Context): ReturnType<typesModule.Harness["watchTaskGraph"]> {
     return this.#wired.taskGraph.watch(context);
   }
 
   root(
     context: Context,
-    options?: { readonly agent?: AgentChange; readonly init?: ConversationInit },
-  ): Promise<Conversation> {
+    options?: {
+      readonly agent?: typesModule.AgentChange;
+      readonly init?: typesModule.ConversationInit;
+    },
+  ): Promise<typesModule.Conversation> {
     return this.#create({ kind: "root" }, options ?? {}, context);
   }
 
-  conversation(id: ConversationId, context: Context): Promise<Conversation | undefined> {
+  conversation(
+    id: typesModule.ConversationId,
+    context: Context,
+  ): Promise<typesModule.Conversation | undefined> {
     return Effect.runPromise(
       Effect.map(
         Effect.promise(() => {
@@ -161,7 +159,10 @@ export class HarnessImpl<Tool extends ToolRegistration> extends SessionImpl impl
     );
   }
 
-  createConversation(options: ConversationCreateOptions, context: Context): Promise<Conversation> {
+  createConversation(
+    options: typesModule.ConversationCreateOptions,
+    context: Context,
+  ): Promise<typesModule.Conversation> {
     return this.#create({ kind: "independent", ownership: options.ownership }, options, context);
   }
 
@@ -177,7 +178,7 @@ export class HarnessImpl<Tool extends ToolRegistration> extends SessionImpl impl
     target: CreateArgs<Tool>[0],
     options: CreateArgs<Tool>[1],
     context: Context,
-  ): Promise<Conversation> {
+  ): Promise<typesModule.Conversation> {
     return Effect.runPromise(
       Effect.map(
         Effect.promise(() => {
@@ -193,9 +194,16 @@ export class HarnessImpl<Tool extends ToolRegistration> extends SessionImpl impl
   }
 
   protected override conversationCreated(
-    tx: Transaction,
-    record: ConversationRecord,
+    tx: transactionTypes.Transaction,
+    record: typesModule.ConversationRecord,
   ): Promise<void> {
     return Effect.runPromise(initializeConversation(tx, record, this.#options.conversationCreated));
   }
 }
+
+const harnessImpl = {
+  HarnessImpl,
+  SCHEDULER_INDEX_SIZES,
+};
+
+export default harnessImpl;

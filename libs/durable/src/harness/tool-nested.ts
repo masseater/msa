@@ -3,32 +3,28 @@ import type { Context, Draft, JsonValue } from "@msa/chord";
 import { copyJson } from "@msa/chord/json";
 import { Effect } from "effect";
 
-import { commitTask } from "./bridge.ts";
-import { LiveDoc, type NestedToolSlot } from "./live.ts";
-import { jsonEqual } from "./tool-call.ts";
-import {
-  NestedCallDoc,
-  type ToolRuntime,
-  type ToolTaskInput,
-  type ToolTaskResult,
-} from "./tool-types.ts";
-import { ToolTask } from "./tool.ts";
-import type { JsonObject, TaskId, Tx } from "./types.ts";
+import liveKit from "./live-kit.ts";
+import toolCall from "./tool-call.ts";
+import type toolNestedTypes from "./tool-nested.types.ts";
+import toolTypes from "./tool-types.ts";
+import tool from "./tool.ts";
+import type typesModule from "./types.types.ts";
 
-export type NestedOptions = {
-  readonly key: string;
-  readonly progress: boolean | undefined;
-  readonly abandonOnRestart: boolean;
-};
+const { bridge, live: liveModule } = liveKit;
+
+const { jsonEqual } = toolCall;
+const { LiveDoc } = liveModule;
+const { commitTask } = bridge;
+const { NestedCallDoc } = toolTypes;
 
 const reuseExisting = Effect.fnUntraced(function* (
-  tx: Tx,
-  existing: TaskId<ToolTaskResult>,
+  tx: typesModule.Tx,
+  existing: typesModule.TaskId<toolNestedTypes.ToolTaskResult>,
   call: ToolCall,
   name: string,
 ) {
   const record = yield* Effect.promise(() => tx.task(existing));
-  const input = record?.input as ToolTaskInput | undefined;
+  const input = record?.input as toolNestedTypes.ToolTaskInput | undefined;
   const same =
     input?.kind === "nested" &&
     input.call.name === name &&
@@ -41,59 +37,63 @@ const reuseExisting = Effect.fnUntraced(function* (
 });
 
 const createNested = Effect.fnUntraced(function* (
-  tx: Tx,
-  runtime: ToolRuntime,
+  tx: typesModule.Tx,
+  runtime: toolNestedTypes.ToolRuntime,
   call: ToolCall,
-  input: { readonly parentCallId: string; readonly name: string; readonly options: NestedOptions },
+  input: {
+    readonly parentCallId: string;
+    readonly name: string;
+    readonly options: toolNestedTypes.NestedOptions;
+  },
 ) {
   const { parentCallId, name, options } = input;
-  const taskInput: ToolTaskInput = {
+  const taskInput: toolNestedTypes.ToolTaskInput = {
+    call,
+    key: options.key,
     kind: "nested",
     parent: runtime.taskId,
     parentCallId,
-    key: options.key,
-    call,
     ...(options.progress === false ? { progress: false } : {}),
   };
   const created = yield* Effect.promise(() =>
-    tx.createTask(ToolTask, taskInput, {
-      ownership: { kind: "task", taskId: runtime.taskId },
+    tx.createTask(tool.ToolTask, taskInput, {
       abandonOnRestart: options.abandonOnRestart,
+      ownership: { kind: "task", taskId: runtime.taskId },
     }),
   );
   const live = yield* Effect.promise(() => tx.doc(LiveDoc, runtime.conversationId));
   live.nestedTools ??= [];
-  const slot: NestedToolSlot = {
+  const slot: toolNestedTypes.NestedToolSlot = {
+    arguments: call.arguments as typesModule.JsonObject,
     callId: call.id,
+    name,
     parentCallId,
     parentTaskId: runtime.taskId,
-    name,
-    taskId: created,
-    arguments: call.arguments as JsonObject,
     status: "pending",
+    taskId: created,
   };
-  live.nestedTools.push(slot as Draft<NestedToolSlot>);
+  live.nestedTools.push(slot as Draft<toolNestedTypes.NestedToolSlot>);
   return created;
 });
 
-export const startNestedCall = Effect.fnUntraced(function* (
-  runtime: ToolRuntime,
+const startNestedCall = Effect.fnUntraced(function* (
+  runtime: toolNestedTypes.ToolRuntime,
   parentCallId: string,
   name: string,
-  args: JsonObject,
-  options: NestedOptions,
+  args: typesModule.JsonObject,
+  options: toolNestedTypes.NestedOptions,
   context: Context,
 ) {
   const call: ToolCall = {
-    type: "toolCall",
+    arguments: copyJson(args, { omitUndefinedProperties: true }) as typesModule.JsonObject,
     id: `${parentCallId}/${options.key}`,
     name,
-    arguments: copyJson(args, { omitUndefinedProperties: true }) as JsonObject,
+    type: "toolCall",
   };
-  let id: TaskId<ToolTaskResult> | undefined;
+  let id: typesModule.TaskId<toolNestedTypes.ToolTaskResult> | undefined;
   yield* commitTask(
     runtime,
-    (tx: Tx) =>
+    (tx: typesModule.Tx) =>
       Effect.gen(function* () {
         const state = yield* Effect.promise(() =>
           tx.doc(NestedCallDoc, runtime.taskId, options.key, null),
@@ -103,7 +103,7 @@ export const startNestedCall = Effect.fnUntraced(function* (
           id = yield* reuseExisting(tx, existing, call, name);
           return undefined;
         }
-        const created = yield* createNested(tx, runtime, call, { parentCallId, name, options });
+        const created = yield* createNested(tx, runtime, call, { name, options, parentCallId });
         state.taskId = created;
         id = created;
         return undefined;
@@ -112,3 +112,9 @@ export const startNestedCall = Effect.fnUntraced(function* (
   );
   return id!;
 });
+
+const toolNested = {
+  startNestedCall,
+};
+
+export default toolNested;

@@ -2,11 +2,17 @@ import { BACKGROUND_CONTEXT } from "@msa/chord/context";
 import { Effect } from "effect";
 import { describe, expect, it } from "vite-plus/test";
 
-import { idFromNumber } from "../src/ids.ts";
-import { SqliteStorage } from "../src/storage/sqlite/index.ts";
-import { openNodeSqliteDatabase } from "../src/storage/sqlite/node.ts";
-import { type EntryId, ROOT_CONVERSATION_ID } from "../src/types.ts";
+import ids from "../src/ids.ts";
+import sqlite from "../src/storage/sqlite/index.ts";
+import node from "../src/storage/sqlite/node.ts";
+import types from "../src/types.ts";
+import type typesModule from "../src/types.types.ts";
 import effectSupport from "./effect-support.ts";
+
+const { openNodeSqliteDatabase } = node;
+const { SqliteStorage } = sqlite;
+const { idFromNumber } = ids;
+const { ROOT_CONVERSATION_ID } = types;
 
 const { awaited } = effectSupport;
 
@@ -41,7 +47,7 @@ const letsAdmittedMulti = Effect.gen(function* () {
   const storage = yield* awaited(
     SqliteStorage.open(yield* awaited(openNodeSqliteDatabase(":memory:"))),
   );
-  const entryId = idFromNumber<EntryId>(2);
+  const entryId = idFromNumber<typesModule.EntryId>(2);
   yield* awaited(
     storage.commit(
       [

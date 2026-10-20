@@ -1,14 +1,14 @@
-import type { NodeExecutionEnv } from "@msa/durable/env/node";
+import type node from "@msa/durable/env/node";
 
 import type connectionTypes from "./connection.types.ts";
-import type listFilesModule from "./list-files.ts";
+import type LocalExecutionEnvClass from "./local-execution-env.ts";
 
 declare namespace listFilesTypes {
-  type LocalExecutionEnvOptions = ConstructorParameters<typeof NodeExecutionEnv>[0] & {
+  type LocalExecutionEnvOptions = ConstructorParameters<typeof node.NodeExecutionEnv>[0] & {
     connection: connectionTypes.Connection;
   };
 
-  type LocalExecutionEnv = (typeof listFilesModule.LocalExecutionEnv)["prototype"];
+  type LocalExecutionEnv = LocalExecutionEnvClass;
 }
 
 export type { listFilesTypes as default };

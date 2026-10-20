@@ -2,17 +2,18 @@ import { BACKGROUND_CONTEXT } from "@msa/chord/context";
 import { Effect } from "effect";
 import { afterEach, describe, expect, it } from "vite-plus/test";
 
-import { idFromNumber } from "../src/ids.ts";
-import {
-  CURRENT_SQLITE_SCHEMA_VERSION,
-  SQLITE_MIGRATIONS,
-  type SqliteMigration,
-  applySqliteMigrations,
-} from "../src/storage/sqlite/index.ts";
-import { openNodeSqliteDatabase, openNodeSqliteStorage } from "../src/storage/sqlite/node.ts";
-import { type EntryId, ROOT_CONVERSATION_ID } from "../src/types.ts";
+import ids from "../src/ids.ts";
+import sqlite from "../src/storage/sqlite/index.ts";
+import node from "../src/storage/sqlite/node.ts";
+import types from "../src/types.ts";
 import effectSupport from "./effect-support.ts";
 import platformSupport from "./platform-support.ts";
+import type sqliteMigrationsTestTypes from "./sqlite-migrations.test.types.ts";
+
+const { openNodeSqliteDatabase, openNodeSqliteStorage } = node;
+const { ROOT_CONVERSATION_ID } = types;
+const { idFromNumber } = ids;
+const { CURRENT_SQLITE_SCHEMA_VERSION, SQLITE_MIGRATIONS, applySqliteMigrations } = sqlite;
 
 const { awaited, toJsonText } = effectSupport;
 const { joinPath, makeTempDir, removeDir } = platformSupport;
@@ -46,7 +47,7 @@ const storedBeforeMigration = Effect.fn("storedBeforeMigration")(function* () {
           value: {
             conversationId: ROOT_CONVERSATION_ID,
             data: { retained: true },
-            id: idFromNumber<EntryId>(2),
+            id: idFromNumber<sqliteMigrationsTestTypes.EntryId>(2),
             kind: "retained",
           },
         },
@@ -107,14 +108,14 @@ describe("durable SQLite migrations", () => {
 const rollsInitialBootstrap = Effect.gen(function* () {
   const database = yield* awaited(openNodeSqliteDatabase(yield* databasePath()));
   yield* Effect.gen(function* () {
-    const first: SqliteMigration = {
+    const first: sqliteMigrationsTestTypes.SqliteMigration = {
       statements: [
         "CREATE TABLE migration_first (value TEXT) STRICT",
         "INSERT INTO migration_first (value) VALUES ('retained')",
       ],
       version: 1,
     };
-    const failed: readonly SqliteMigration[] = [
+    const failed: readonly sqliteMigrationsTestTypes.SqliteMigration[] = [
       first,
       {
         statements: ["CREATE TABLE migration_second (value TEXT) STRICT", "THIS IS NOT SQL"],
@@ -157,7 +158,7 @@ const rollsFailedMigrationStep1 = Effect.gen(function* () {
 
   const database = yield* awaited(openNodeSqliteDatabase(path));
   const nextVersion = CURRENT_SQLITE_SCHEMA_VERSION + 1;
-  const failedMigrations: readonly SqliteMigration[] = [
+  const failedMigrations: readonly sqliteMigrationsTestTypes.SqliteMigration[] = [
     ...SQLITE_MIGRATIONS,
     {
       statements: ["CREATE TABLE migration_probe (value TEXT) STRICT", "THIS IS NOT SQL"],
@@ -178,7 +179,7 @@ const rollsFailedMigrationStep1 = Effect.gen(function* () {
     ),
   ).toEqual({ count: 0 });
 
-  const successfulMigrations: readonly SqliteMigration[] = [
+  const successfulMigrations: readonly sqliteMigrationsTestTypes.SqliteMigration[] = [
     ...SQLITE_MIGRATIONS,
     {
       statements: ["CREATE TABLE migration_probe (value TEXT) STRICT"],

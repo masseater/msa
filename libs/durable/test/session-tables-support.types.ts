@@ -1,5 +1,5 @@
 import type { JsonValue } from "@msa/chord";
-import type { TaskRecord } from "@msa/durable";
+import type durableTypes from "@msa/durable/index.types";
 
 declare namespace sessionTablesSupportTypes {
   type Checkpoint = { phase: "start" } | { phase: "next"; step: number };
@@ -8,7 +8,7 @@ declare namespace sessionTablesSupportTypes {
 
   type Notes = { text: string };
 
-  type AnyTask = TaskRecord<JsonValue, JsonValue, JsonValue>;
+  type AnyTask = durableTypes.TaskRecord<JsonValue, JsonValue, JsonValue>;
 }
 
 export type { sessionTablesSupportTypes as default };

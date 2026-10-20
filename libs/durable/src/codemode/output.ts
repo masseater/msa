@@ -2,23 +2,20 @@ import type { ImageContent, TextContent } from "@msa/ai";
 import type { CodemodeOutputItem, CodemodeResult } from "@msa/codemode/portable";
 import { Effect } from "effect";
 
-type Item = TextContent | ImageContent;
+import type outputTypes from "./output.types.ts";
 
-export type OutputFile = (
-  name: string,
-  data: string | Uint8Array,
-) => Promise<{ path: string } | { error: string }>;
+type Item = TextContent | ImageContent;
 
 type Limits = { readonly maxBytes: number; readonly maxLines: number };
 const LINE_MARGIN = 100;
 
-export const DEFAULT_MAX_OUTPUT_TOKENS = 10_000;
+const DEFAULT_MAX_OUTPUT_TOKENS = 10_000;
 const CHARS_PER_TOKEN = 4;
 
 const IMAGE_EXTENSIONS: Record<string, string> = {
-  "image/png": ".png",
-  "image/jpeg": ".jpg",
   "image/gif": ".gif",
+  "image/jpeg": ".jpg",
+  "image/png": ".png",
   "image/webp": ".webp",
 };
 
@@ -38,15 +35,15 @@ function formatItems(output: readonly CodemodeOutputItem[]): Item[] {
     else {
       index++;
       items.push({
-        type: "text",
         text: total > 1 ? `==> text ${index}/${total} <==\n${item.text}` : item.text,
+        type: "text",
       });
     }
   }
   if (consoleLines.length > 0) {
     items.push({
-      type: "text",
       text: `<console_output>\n${consoleLines.join("\n")}\n</console_output>`,
+      type: "text",
     });
   }
   return items;
@@ -57,7 +54,7 @@ function joinAdjacentText(items: readonly Item[]): Item[] {
   let parts: string[] = [];
   let lastPart = "";
   const flush = () => {
-    if (parts.length > 0) joined.push({ type: "text", text: parts.join("") });
+    if (parts.length > 0) joined.push({ text: parts.join(""), type: "text" });
     parts = [];
     lastPart = "";
   };
@@ -84,7 +81,7 @@ const truncate = Effect.fnUntraced(function* (
   items: readonly Item[],
   maxTokens: number,
   limits: Limits,
-  write: OutputFile,
+  write: outputTypes.OutputFile,
 ) {
   const texts = items
     .filter((item): item is TextContent => item.type === "text")
@@ -110,7 +107,7 @@ const truncate = Effect.fnUntraced(function* (
       ? `\n\n[Full output: ${spilled.path} (read with offset/limit)]`
       : `\n\n[Could not save the full output: ${spilled.error}]`;
   const truncated: Truncated = {
-    items: [{ type: "text", text }, ...items.filter((item) => item.type === "image")],
+    items: [{ text, type: "text" }, ...items.filter((item) => item.type === "image")],
     ...("path" in spilled ? { fullOutputPath: spilled.path } : {}),
   };
   return truncated;
@@ -119,7 +116,7 @@ const truncate = Effect.fnUntraced(function* (
 const imageLabel = Effect.fnUntraced(function* (
   { data, mimeType }: ImageContent,
   index: number,
-  write: OutputFile,
+  write: outputTypes.OutputFile,
 ) {
   const bytes = Uint8Array.from(atob(data), (char) => char.charCodeAt(0));
   const kind = `${mimeType}, ${bytes.length} bytes`;
@@ -130,7 +127,10 @@ const imageLabel = Effect.fnUntraced(function* (
     : `[Image (${kind}) could not be saved: ${saved.error}]`;
 });
 
-const saveImages = Effect.fnUntraced(function* (items: readonly Item[], write: OutputFile) {
+const saveImages = Effect.fnUntraced(function* (
+  items: readonly Item[],
+  write: outputTypes.OutputFile,
+) {
   const images = new Map<string, ImageContent>();
   for (const item of items) {
     if (item.type === "image" && !images.has(item.data)) images.set(item.data, item);
@@ -142,7 +142,7 @@ const saveImages = Effect.fnUntraced(function* (items: readonly Item[], write: O
   );
   const labelOf = new Map([...images.keys()].map((data, index) => [data, labels[index]!]));
   return items.flatMap((item): Item[] =>
-    item.type === "image" ? [{ type: "text", text: labelOf.get(item.data)! }, item] : [item],
+    item.type === "image" ? [{ text: labelOf.get(item.data)!, type: "text" }, item] : [item],
   );
 });
 
@@ -166,7 +166,7 @@ function formatError(
   return `${head}\n\n${summary}`;
 }
 
-export const formatResult = Effect.fnUntraced(function* (
+const formatResult = Effect.fnUntraced(function* (
   result: CodemodeResult,
   options: {
     readonly generatedImages: number;
@@ -174,20 +174,20 @@ export const formatResult = Effect.fnUntraced(function* (
     readonly maxOutputTokens: number;
     readonly calls: readonly { name: string; status: string }[];
     readonly limits: Limits;
-    readonly write: OutputFile;
+    readonly write: outputTypes.OutputFile;
   },
 ) {
   const output = [...result.output];
   if (result.ok && result.value !== undefined)
-    output.push({ type: "text", text: valueText(result.value) });
+    output.push({ text: valueText(result.value), type: "text" });
   const items = formatItems(output);
   if (!result.ok)
-    items.push({ type: "text", text: `Script error:\n${formatError(result, options.calls)}` });
+    items.push({ text: `Script error:\n${formatError(result, options.calls)}`, type: "text" });
   const generated = options.generatedImages;
   if (generated > 0 && !items.some((item) => item.type === "image")) {
     items.push({
-      type: "text",
       text: `Note: models.generateImages() returned ${generated} image${generated === 1 ? "" : "s"} that the script did not show. Show each image block of result.output with image(block).`,
+      type: "text",
     });
   }
   const truncated = yield* truncate(
@@ -199,8 +199,15 @@ export const formatResult = Effect.fnUntraced(function* (
   const content = joinAdjacentText(yield* saveImages(truncated.items, options.write));
   const header = `${result.ok ? "Script completed" : "Script failed"}\nWall time ${(options.wallMs / 1000).toFixed(1)} seconds\nOutput:\n`;
   const formatted: { content: Item[]; fullOutputPath?: string } = {
-    content: [{ type: "text", text: header }, ...content],
+    content: [{ text: header, type: "text" }, ...content],
     ...(truncated.fullOutputPath === undefined ? {} : { fullOutputPath: truncated.fullOutputPath }),
   };
   return formatted;
 });
+
+const outputModule = {
+  DEFAULT_MAX_OUTPUT_TOKENS,
+  formatResult,
+};
+
+export default outputModule;

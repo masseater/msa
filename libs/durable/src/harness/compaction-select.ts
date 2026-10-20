@@ -2,33 +2,40 @@ import type { AssistantMessage, Message } from "@msa/ai";
 import { calculateContextTokens, estimateMessageTokens } from "@msa/ai/utils/estimate";
 import { Function } from "effect";
 
-import { orderToolResults } from "./context.ts";
-import type { ContextView, Dual2 } from "./types.ts";
+import contextModule from "./context.ts";
+import type typesModule from "./types.types.ts";
 
-export const selectCut: Dual2<ContextView, number, number | undefined> = Function.dual(
-  2,
-  (view: ContextView, keepRecentTokens: number): number | undefined => {
-    const { contributions } = view;
-    const start = view.head === undefined ? 0 : 1;
-    const candidates: number[] = [];
-    for (let index = start; index < contributions.length; index++) {
-      if (isCandidate(contributions, index)) candidates.push(index);
-    }
-    let kept = 0;
-    let cut: number | undefined;
-    for (let index = contributions.length - 1; index >= start; index--) {
-      for (const message of contributions[index]!) kept += estimateMessageTokens(message);
-      if (kept < keepRecentTokens) continue;
-      cut = candidates.find((candidate) => candidate >= index) ?? candidates.at(-1);
-      break;
-    }
-    if (cut === undefined) return undefined;
-    for (let index = start; index < cut; index++) if (contributions[index]!.length > 0) return cut;
-    return undefined;
-  },
-);
+const { orderToolResults } = contextModule;
 
-function isCandidate(contributions: ContextView["contributions"], index: number): boolean {
+const selectCut: typesModule.Dual2<typesModule.ContextView, number, number | undefined> =
+  Function.dual(
+    2,
+    (view: typesModule.ContextView, keepRecentTokens: number): number | undefined => {
+      const { contributions } = view;
+      const start = view.head === undefined ? 0 : 1;
+      const candidates: number[] = [];
+      for (let index = start; index < contributions.length; index++) {
+        if (isCandidate(contributions, index)) candidates.push(index);
+      }
+      let kept = 0;
+      let cut: number | undefined;
+      for (let index = contributions.length - 1; index >= start; index--) {
+        for (const message of contributions[index]!) kept += estimateMessageTokens(message);
+        if (kept < keepRecentTokens) continue;
+        cut = candidates.find((candidate) => candidate >= index) ?? candidates.at(-1);
+        break;
+      }
+      if (cut === undefined) return undefined;
+      for (let index = start; index < cut; index++)
+        if (contributions[index]!.length > 0) return cut;
+      return undefined;
+    },
+  );
+
+function isCandidate(
+  contributions: typesModule.ContextView["contributions"],
+  index: number,
+): boolean {
   const first = contributions[index]![0];
   if (first?.role === "assistant") return true;
   if (first?.role !== "user") return false;
@@ -51,15 +58,13 @@ function isCandidate(contributions: ContextView["contributions"], index: number)
   return true;
 }
 
-export const summarizedMessages: Dual2<ContextView, number, Message[]> = Function.dual(
-  2,
-  (view: ContextView, cut: number): Message[] =>
+const summarizedMessages: typesModule.Dual2<typesModule.ContextView, number, Message[]> =
+  Function.dual(2, (view: typesModule.ContextView, cut: number): Message[] =>
     orderToolResults(view.contributions.slice(0, cut).flat()),
-);
+  );
 
-export const estimateContext: Dual2<ContextView, readonly Message[], number> = Function.dual(
-  2,
-  (view: ContextView, extra: readonly Message[]): number => {
+const estimateContext: typesModule.Dual2<typesModule.ContextView, readonly Message[], number> =
+  Function.dual(2, (view: typesModule.ContextView, extra: readonly Message[]): number => {
     let measured: AssistantMessage | undefined;
     const after = view.head?.id ?? Number.NEGATIVE_INFINITY;
     for (let index = view.entries.length - 1; index >= 0 && measured === undefined; index--) {
@@ -74,5 +79,12 @@ export const estimateContext: Dual2<ContextView, readonly Message[], number> = F
     for (const message of view.messages.slice(from)) tokens += estimateMessageTokens(message);
     for (const message of extra) tokens += estimateMessageTokens(message);
     return tokens;
-  },
-);
+  });
+
+const compactionSelect = {
+  estimateContext,
+  selectCut,
+  summarizedMessages,
+};
+
+export default compactionSelect;

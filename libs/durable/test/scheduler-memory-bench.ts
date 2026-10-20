@@ -3,18 +3,19 @@ import { createModels } from "@msa/ai/models";
 import { BACKGROUND_CONTEXT as context } from "@msa/chord/context";
 import { Console, Effect } from "effect";
 
-import { SCHEDULER_INDEX_SIZES } from "../src/harness/harness.ts";
-import { Harness, createRegistry } from "../src/harness/index.ts";
-import {
-  type Conversation,
-  type ConversationId,
-  type TaskId,
-  defineExtension,
-  defineTask,
-} from "../src/index.ts";
-import { openNodeSqliteStorage } from "../src/storage/sqlite/node.ts";
+import harnessModuleModule from "../src/harness/harness.ts";
+import type harnessTypes from "../src/harness/index.types.ts";
+import type durableTypes from "../src/index.types.ts";
+import durableKit from "./durable-kit.ts";
 import retainedBytes from "./heap-retained.ts";
 import support from "./support.ts";
+
+const { durable, harness: harnessModule, sqliteNode: node } = durableKit;
+
+const { defineExtension, defineTask } = durable;
+const { openNodeSqliteStorage } = node;
+const { Harness, createRegistry } = harnessModule;
+const { SCHEDULER_INDEX_SIZES } = harnessModuleModule;
 
 const { awaited, joinPath, makeTempDir, removeDir, toJsonText } = support;
 
@@ -77,9 +78,9 @@ const countingStorage = Effect.fn("countingStorage")(function* (directory: strin
 });
 
 const subagentCycle = Effect.fn("subagentCycle")(function* (
-  harness: Harness,
-  root: Conversation,
-  parent: TaskId,
+  harness: harnessTypes.Harness,
+  root: durableTypes.Conversation,
+  parent: durableTypes.TaskId,
   n: number,
 ) {
   const runPromise = Effect.runPromiseWith(yield* Effect.context<never>());
@@ -114,8 +115,8 @@ const subagentCycle = Effect.fn("subagentCycle")(function* (
   );
   yield* release(`inner${n}`);
   yield* release(`tool${n}`);
-  yield* awaited(harness.waitForTask(inner as TaskId, context));
-  yield* awaited(harness.waitForTask(tool as TaskId, context));
+  yield* awaited(harness.waitForTask(inner as durableTypes.TaskId, context));
+  yield* awaited(harness.waitForTask(tool as durableTypes.TaskId, context));
   return child;
 });
 
@@ -137,7 +138,7 @@ const run = Effect.fn("run")(function* (cycles: number) {
       ),
     );
     const heapBefore = yield* retainedBytes();
-    let first: ConversationId | undefined;
+    let first: durableTypes.ConversationId | undefined;
     const started = performance.now();
     for (const n of Array.from({ length: cycles }, (_, i) => i)) {
       const child = yield* subagentCycle(harness, root, parent, n);

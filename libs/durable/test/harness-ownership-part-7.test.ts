@@ -1,4 +1,4 @@
-import { type TaskId } from "@msa/durable";
+import type durableTypes from "@msa/durable/index.types";
 import { Effect } from "effect";
 import { afterEach, describe, expect, it } from "vite-plus/test";
 
@@ -84,7 +84,7 @@ const openHeldSiblings = Effect.fn("openHeldSiblings")(function* () {
             const topInner = yield* awaited(
               tx.createTask(Hold, { name: "top" }, { ownership: { kind: "conversation" } }),
             );
-            const siblings: TaskId[] = [];
+            const siblings: durableTypes.TaskId[] = [];
             for (const n of Array.from({ length: count }, (_, i) => i)) {
               siblings.push(
                 yield* awaited(
@@ -96,7 +96,7 @@ const openHeldSiblings = Effect.fn("openHeldSiblings")(function* () {
                 ),
               );
             }
-            const leavesInner: TaskId[] = [];
+            const leavesInner: durableTypes.TaskId[] = [];
             for (const n of Array.from({ length: count }, (_, i) => count - 1 - i)) {
               const owner = siblings[n]!;
               leavesInner.push(

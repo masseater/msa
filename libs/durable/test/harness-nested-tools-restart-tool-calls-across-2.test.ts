@@ -1,23 +1,21 @@
-import { type TaskId, defineExtension, defineTask } from "@msa/durable";
+import durable from "@msa/durable";
+import type durableTypes from "@msa/durable/index.types";
 import { Effect } from "effect";
 import { afterEach, describe, expect, it } from "vite-plus/test";
 
-import chatSupport from "./chat-support.ts";
-import effectSupport from "./effect-support.ts";
 import harnessNestedToolsRestartSupport from "./harness-nested-tools-restart-support.ts";
-import harnessSupport from "./harness-support.ts";
-import platformSupport from "./platform-support.ts";
-import sessionSupport from "./session-support.ts";
-import taskSupport from "./task-support.ts";
+import testSupport from "./support.ts";
 
-const { allEntries, chatSetup } = chatSupport;
-const { awaited, toJsonText } = effectSupport;
+const { defineExtension, defineTask } = durable;
+
+const { allEntries, chatSetup } = testSupport;
+const { awaited, toJsonText } = testSupport;
 const { DONE, call, directories, nestedTasks, restartDuring, results, sqlitePath, tool } =
   harnessNestedToolsRestartSupport;
-const { addTool } = harnessSupport;
-const { removeDir } = platformSupport;
-const { context } = sessionSupport;
-const { aborted, deferred } = taskSupport;
+const { addTool } = testSupport;
+const { removeDir } = testSupport;
+const { context } = testSupport;
+const { aborted, deferred } = testSupport;
 
 afterEach(() =>
   Effect.runPromise(
@@ -206,7 +204,7 @@ describe("nested tool calls across a restart", () => {
 
 const backgroundSpawnTool = (
   Background: Effect.Success<ReturnType<typeof backgroundWorkSetup>>["Background"],
-  seen: { background?: TaskId },
+  seen: { background?: durableTypes.TaskId },
 ) =>
   tool("spawn", (_args, api, callContext) =>
     Effect.runPromise(
@@ -239,7 +237,7 @@ const backgroundSpawnTool = (
 
 const leavesBackgroundWork = Effect.gen(function* () {
   const { path, setup, started, Background } = yield* backgroundWorkSetup();
-  const seen: { background?: TaskId } = {};
+  const seen: { background?: durableTypes.TaskId } = {};
   addTool(setup.registry, backgroundSpawnTool(Background, seen));
   addTool(
     setup.registry,

@@ -2,32 +2,23 @@ import type { Context } from "@msa/chord";
 import { Effect } from "effect";
 import { expectTypeOf, it } from "vite-plus/test";
 
-import type { TaskId } from "../src/index.ts";
-import {
-  type AnyTask,
-  type CompactionResult,
-  type Conversation,
-  type Extension,
-  type Harness,
-  type HookApi,
-  type HooksOf,
-  type SettledTask,
-  type SubmissionDraft,
-  type TaskDefinition,
-  type TaskRuntime,
-  defineExtension,
-  defineTask,
-  hook,
-} from "../src/index.ts";
+import durable from "../src/index.ts";
+import type durableTypes from "../src/index.types.ts";
 import effectSupport from "./effect-support.ts";
 import type typeSupportTypes from "./type-support.ts";
+
+const { defineExtension, defineTask, hook } = durable;
 
 const { awaited } = effectSupport;
 
 declare const callContext: Context;
 
 type Hooks = {
-  beforeStep(step: number, api: HookApi, context: Context): { readonly skip: boolean } | undefined;
+  beforeStep(
+    step: number,
+    api: durableTypes.HookApi,
+    context: Context,
+  ): { readonly skip: boolean } | undefined;
 };
 type Checkpoint = { phase: "plan"; steps: number } | { phase: "run"; step: number };
 const Stepper = defineTask<{ steps: number }, Checkpoint, { ran: number }, Hooks>({
@@ -70,9 +61,9 @@ const Stepper = defineTask<{ steps: number }, Checkpoint, { ran: number }, Hooks
 });
 
 function typedWaits(
-  harness: Harness,
-  conversation: Conversation,
-  runtime: TaskRuntime<null, Checkpoint, null, Hooks>,
+  harness: durableTypes.Harness,
+  conversation: durableTypes.Conversation,
+  runtime: durableTypes.TaskRuntime<null, Checkpoint, null, Hooks>,
 ) {
   return Effect.runPromise(
     Effect.gen(function* () {
@@ -82,19 +73,19 @@ function typedWaits(
           callContext,
         ),
       );
-      expectTypeOf(id).toEqualTypeOf<TaskId<{ ran: number }>>();
+      expectTypeOf(id).toEqualTypeOf<durableTypes.TaskId<{ ran: number }>>();
       const settled = yield* awaited(harness.waitForTask(id, callContext));
-      expectTypeOf(settled).toEqualTypeOf<SettledTask<{ ran: number }>>();
+      expectTypeOf(settled).toEqualTypeOf<durableTypes.SettledTask<{ ran: number }>>();
       if (settled.state.outcome.status === "completed") {
         expectTypeOf(settled.state.outcome.result).toEqualTypeOf<{ ran: number }>();
       }
       expectTypeOf(yield* awaited(runtime.waitForTask(id, callContext))).toEqualTypeOf<
-        SettledTask<{ ran: number }>
+        durableTypes.SettledTask<{ ran: number }>
       >();
       const compaction = yield* awaited(conversation.compact(undefined, callContext));
-      expectTypeOf(compaction).toEqualTypeOf<TaskId<CompactionResult>>();
+      expectTypeOf(compaction).toEqualTypeOf<durableTypes.TaskId<durableTypes.CompactionResult>>();
       expectTypeOf(yield* awaited(harness.waitForTask(compaction, callContext))).toEqualTypeOf<
-        SettledTask<CompactionResult>
+        durableTypes.SettledTask<durableTypes.CompactionResult>
       >();
     }),
   );
@@ -105,27 +96,36 @@ function submissionDraftFailures() {
   expectTypeOf<
     typeSupportTypes.LiteralFits<
       { type: "input"; content: "hi"; entry: { kind: "note"; model: [] } },
-      SubmissionDraft
+      durableTypes.SubmissionDraft
     >
   >().toEqualTypeOf<false>();
   expectTypeOf<
-    typeSupportTypes.LiteralFits<{ type: "input"; content: "hi"; entry: Note }, SubmissionDraft>
+    typeSupportTypes.LiteralFits<
+      { type: "input"; content: "hi"; entry: Note },
+      durableTypes.SubmissionDraft
+    >
   >().toEqualTypeOf<true>();
   expectTypeOf<
-    typeSupportTypes.LiteralFits<{ type: "write"; entry: Note; content: "hi" }, SubmissionDraft>
+    typeSupportTypes.LiteralFits<
+      { type: "write"; entry: Note; content: "hi" },
+      durableTypes.SubmissionDraft
+    >
   >().toEqualTypeOf<false>();
   expectTypeOf<
-    typeSupportTypes.LiteralFits<{ type: "write"; entry: Note; whenBusy: "steer" }, SubmissionDraft>
+    typeSupportTypes.LiteralFits<
+      { type: "write"; entry: Note; whenBusy: "steer" },
+      durableTypes.SubmissionDraft
+    >
   >().toEqualTypeOf<false>();
   expectTypeOf<
-    typeSupportTypes.LiteralFits<{ type: "write"; entry: Note }, SubmissionDraft>
+    typeSupportTypes.LiteralFits<{ type: "write"; entry: Note }, durableTypes.SubmissionDraft>
   >().toEqualTypeOf<true>();
 }
 
 function taskDefinitionFailures() {
-  type StepperHooks = Partial<HooksOf<typeof Stepper>>;
+  type StepperHooks = Partial<durableTypes.HooksOf<typeof Stepper>>;
   type StepperInput = Parameters<(typeof Stepper)["definition"]["initial"]>[0];
-  type Phases = TaskDefinition<null, Checkpoint, null, object>["phases"];
+  type Phases = durableTypes.TaskDefinition<null, Checkpoint, null, object>["phases"];
   expectTypeOf<{ beforeStep: (step: string) => undefined }>().not.toExtend<StepperHooks>();
   expectTypeOf<{ beforeStep: (step: number) => undefined }>().toExtend<StepperHooks>();
   expectTypeOf<
@@ -142,17 +142,21 @@ function taskDefinitionFailures() {
 }
 
 it("types submissions, task waits, compaction, and tasks erased into extensions", () => {
-  const input = { content: "hi", type: "input", whenBusy: "steer" } satisfies SubmissionDraft;
-  const write = { entry: { kind: "note" }, type: "write" } satisfies SubmissionDraft;
+  const input = {
+    content: "hi",
+    type: "input",
+    whenBusy: "steer",
+  } satisfies durableTypes.SubmissionDraft;
+  const write = { entry: { kind: "note" }, type: "write" } satisfies durableTypes.SubmissionDraft;
   expectTypeOf(input.type).toEqualTypeOf<"input">();
   expectTypeOf(write.type).toEqualTypeOf<"write">();
 
-  expectTypeOf<HooksOf<typeof Stepper>>().toEqualTypeOf<Hooks>();
+  expectTypeOf<durableTypes.HooksOf<typeof Stepper>>().toEqualTypeOf<Hooks>();
   const registration = hook(Stepper, {
     beforeStep: (step) => (step > 1 ? { skip: true } : undefined),
   });
-  const erased: AnyTask = Stepper;
-  const extension: Extension = defineExtension({
+  const erased: durableTypes.AnyTask = Stepper;
+  const extension: durableTypes.Extension = defineExtension({
     hooks: [registration],
     name: "stepper",
     tasks: [Stepper],

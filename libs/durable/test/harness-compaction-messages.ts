@@ -1,5 +1,5 @@
 import { type Message, type UserMessage, fauxAssistantMessage } from "@msa/ai";
-import type { CompactionPolicy } from "@msa/durable";
+import type durableTypes from "@msa/durable/index.types";
 import { dual } from "effect/Function";
 
 import support from "./support.ts";
@@ -31,7 +31,7 @@ const failure = (errorMessage: string) =>
 
 const OVERFLOW = "prompt is too long: 250000 tokens > 200000 maximum";
 
-const MANUAL: CompactionPolicy = {
+const MANUAL: durableTypes.CompactionPolicy = {
   backgroundTokens: 0,
   enabled: false,
   keepRecentTokens: 150,
@@ -48,21 +48,21 @@ function firstUserText(messages: readonly Message[]): string {
 
 const user = (content: string): UserMessage => ({ content, role: "user", timestamp: 0 });
 
-const BACKGROUND: CompactionPolicy = {
+const BACKGROUND: durableTypes.CompactionPolicy = {
   backgroundTokens: 1000,
   enabled: true,
   keepRecentTokens: 150,
   reserveTokens: 500,
 };
 
-const BLOCKING: CompactionPolicy = {
+const BLOCKING: durableTypes.CompactionPolicy = {
   backgroundTokens: 0,
   enabled: true,
   keepRecentTokens: 150,
   reserveTokens: 300,
 };
 
-const ENABLED: CompactionPolicy = { ...MANUAL, enabled: true };
+const ENABLED: durableTypes.CompactionPolicy = { ...MANUAL, enabled: true };
 
 const summary = (content = "SUMMARY") => answer(content);
 

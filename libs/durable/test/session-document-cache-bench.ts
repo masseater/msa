@@ -3,18 +3,16 @@ import { createModels } from "@msa/ai/models";
 import { BACKGROUND_CONTEXT as context } from "@msa/chord/context";
 import { Console, Effect } from "effect";
 
-import { Harness, createRegistry } from "../src/harness/index.ts";
-import {
-  type ConversationId,
-  LiveDoc,
-  UsageDoc,
-  defineExtension,
-  defineTask,
-} from "../src/index.ts";
-import type { SessionImpl } from "../src/session/session.ts";
-import { openNodeSqliteStorage } from "../src/storage/sqlite/node.ts";
+import harnessModule from "../src/harness/index.ts";
+import durable from "../src/index.ts";
+import node from "../src/storage/sqlite/node.ts";
 import retainedBytes from "./heap-retained.ts";
+import type sessionDocumentCacheBenchTypes from "./session-document-cache-bench.types.ts";
 import support from "./support.ts";
+
+const { LiveDoc, UsageDoc, defineExtension, defineTask } = durable;
+const { openNodeSqliteStorage } = node;
+const { Harness, createRegistry } = harnessModule;
 
 const { awaited, joinPath, makeTempDir, removeDir } = support;
 
@@ -63,8 +61,8 @@ const openBenchHarness = Effect.fn("openBenchHarness")(function* (
   return harness;
 });
 
-function cycler(harness: Harness) {
-  const seen: { first?: ConversationId } = {};
+function cycler(harness: sessionDocumentCacheBenchTypes.Harness) {
+  const seen: { first?: sessionDocumentCacheBenchTypes.ConversationId } = {};
   const cycle = (): Promise<void> =>
     Effect.runPromise(
       Effect.gen(function* () {
@@ -92,7 +90,11 @@ const run = Effect.fn("run")(function* (conversations: number, documentRetention
     const harness = yield* openBenchHarness(directory, documentRetentionMs);
     const { seen, cycle } = cycler(harness);
     for (const _ of Array.from({ length: 200 })) yield* awaited(cycle());
-    yield* awaited((harness as unknown as SessionImpl).readOnLine(() => Promise.resolve()));
+    yield* awaited(
+      (harness as unknown as sessionDocumentCacheBenchTypes.SessionImpl).readOnLine(() =>
+        Promise.resolve(),
+      ),
+    );
     const heapBefore = yield* retainedBytes();
     const started = performance.now();
     for (const _ of Array.from({ length: conversations })) yield* awaited(cycle());
@@ -100,9 +102,14 @@ const run = Effect.fn("run")(function* (conversations: number, documentRetention
     if (documentRetentionMs > 0 && documentRetentionMs < 1_000) {
       yield* Effect.sleep(documentRetentionMs * 4);
     }
-    yield* awaited((harness as unknown as SessionImpl).readOnLine(() => Promise.resolve()));
+    yield* awaited(
+      (harness as unknown as sessionDocumentCacheBenchTypes.SessionImpl).readOnLine(() =>
+        Promise.resolve(),
+      ),
+    );
     const heap = (yield* retainedBytes()) - heapBefore;
-    const cached = (harness as unknown as SessionImpl).documentCacheSizes.cached;
+    const cached = (harness as unknown as sessionDocumentCacheBenchTypes.SessionImpl)
+      .documentCacheSizes.cached;
     const readStarted = performance.now();
     for (const _ of Array.from({ length: 100 }))
       yield* awaited(harness.snapshot(LiveDoc, seen.first!, context));

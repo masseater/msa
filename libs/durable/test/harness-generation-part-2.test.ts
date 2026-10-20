@@ -1,13 +1,18 @@
 import { type Message, type Models, type SystemMessage, fauxAssistantMessage } from "@msa/ai";
-import { type Conversation, defineDoc } from "@msa/durable";
-import { MemoryStorage } from "@msa/durable/storage/memory";
+import durable from "@msa/durable";
+import type durableTypes from "@msa/durable/index.types";
+import memory from "@msa/durable/storage/memory";
 import { Effect } from "effect";
 import { describe, expect, it } from "vite-plus/test";
 
-import { resolveSettings } from "../src/harness/agent.ts";
+import agentModule from "../src/harness/agent.ts";
 import harnessGenerationSupport from "./harness-generation-support.ts";
 import support from "./support.ts";
 import type supportTypes from "./support.types.ts";
+
+const { defineDoc } = durable;
+const { MemoryStorage } = memory;
+const { resolveSettings } = agentModule;
 
 const { heldStream, invalidFinalStream, live, livePublications, withStream } =
   harnessGenerationSupport;
@@ -157,7 +162,7 @@ const rendersSectionsReadStep1 = Effect.gen(function* () {
 
 const rendersSectionsRead = Effect.gen(function* () {
   const { runPromise, harness, root, sub } = yield* rendersSectionsReadStep1;
-  const sections = (conversation: Conversation) =>
+  const sections = (conversation: durableTypes.Conversation) =>
     runPromise(
       Effect.gen(function* () {
         return (yield* allEntries(conversation)).find((entry) => entry.kind === "msa.system")

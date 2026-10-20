@@ -1,4 +1,5 @@
-import { LiveDoc, type Tx, configure } from "@msa/durable";
+import durable from "@msa/durable";
+import type durableTypes from "@msa/durable/index.types";
 import { Effect } from "effect";
 import { dual } from "effect/Function";
 
@@ -6,6 +7,8 @@ import effectSupport from "./effect-support.ts";
 import specUsageExtensions from "./spec-usage-extensions.ts";
 import type specUsageNamesTypes from "./spec-usage-names.ts";
 import type specUsageSequencesTypes from "./spec-usage-sequences.types.ts";
+
+const { LiveDoc, configure } = durable;
 
 const { awaited } = effectSupport;
 const { followTask } = specUsageExtensions;
@@ -15,7 +18,7 @@ const spawnSubagent =
     { Anchor, name }: specUsageNamesTypes.SpecNames,
     SubagentTools: specUsageSequencesTypes.SpecExtensions["SubagentTools"],
   ) =>
-  (tx: Tx) =>
+  (tx: durableTypes.Tx) =>
     Effect.runPromise(
       Effect.gen(function* () {
         const anchor = yield* awaited(

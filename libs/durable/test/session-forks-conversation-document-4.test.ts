@@ -1,9 +1,12 @@
-import { type ConversationId, defineDoc } from "@msa/durable";
+import durable from "@msa/durable";
+import type durableTypes from "@msa/durable/index.types";
 import { Effect } from "effect";
 import { describe, expect, it } from "vite-plus/test";
 
 import effectSupport from "./effect-support.ts";
 import sessionSupport from "./session-support.ts";
+
+const { defineDoc } = durable;
 
 const { awaited } = effectSupport;
 const { context, createConversation, flush, openTestSession } = sessionSupport;
@@ -54,7 +57,7 @@ const rollsEveryCopiedStep1 = Effect.gen(function* () {
   yield* flush;
   const commits = storage.commits.length;
   const published = publications.length;
-  let childId!: ConversationId;
+  let childId!: durableTypes.ConversationId;
   yield* awaited(
     expect(
       session.commit(
@@ -134,7 +137,7 @@ const failsSessionRejected = Effect.gen(function* () {
       context,
     ),
   );
-  let rejectedChildId!: ConversationId;
+  let rejectedChildId!: durableTypes.ConversationId;
   const rejection = new Error("copy rejected");
   storage.failNextCommit(rejection);
   yield* awaited(

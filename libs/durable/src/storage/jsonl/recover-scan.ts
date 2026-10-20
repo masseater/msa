@@ -1,40 +1,29 @@
 import type { Context } from "@msa/chord";
 import { Effect, Function } from "effect";
 
-import type { FileInfo } from "../../env/index.ts";
-import type { DocumentId, Seq, TaskId } from "../../types.ts";
-import { JsonlCorruptionError } from "./corruption-error.ts";
-import { type JsonlFiles, readLines } from "./files.ts";
-import {
+import type envTypes from "../../env/index.types.ts";
+import type typesModule from "../../types.types.ts";
+import JsonlCorruptionError from "./corruption-error.ts";
+import filesModule from "./files.ts";
+import type filesTypes from "./files.types.ts";
+import formatModule from "./format.ts";
+import type formatTypes from "./format.types.ts";
+import type recoverScanTypes from "./recover-scan.types.ts";
+
+const { readLines } = filesModule;
+const {
+  MAIN_FILE,
   errorFromFile,
   isCurrentOnly,
   isReclaimFileName,
   isSidecarFileName,
-  MAIN_FILE,
-  type MainMarker,
-  type ParsedFile,
-  type ParsedLine,
   parseMainMarker,
   parseSidecarRecord,
-  type SidecarRecord,
   sidecarFileName,
   sidecarKey,
-} from "./format.ts";
+} = formatModule;
 
-export type SidecarIndex = {
-  readonly parsedFiles: Map<string, ParsedFile<SidecarRecord>>;
-  readonly recordByKey: Map<string, ParsedLine<SidecarRecord>>;
-};
-
-export type MainAnalysis = {
-  readonly currentOnlyDocuments: ReadonlySet<DocumentId>;
-  readonly retiredCurrentOnlyDocuments: ReadonlySet<DocumentId>;
-  readonly finalTaskIsLive: ReadonlyMap<TaskId, boolean>;
-  readonly terminalTasks: ReadonlySet<TaskId>;
-  readonly latestBases: ReadonlyMap<DocumentId, SidecarRecord>;
-};
-
-export const readMain = Effect.fnUntraced(function* (files: JsonlFiles, context: Context) {
+const readMain = Effect.fnUntraced(function* (files: filesTypes.JsonlFiles, context: Context) {
   const main = yield* readLines(files.fs, files.mainPath, MAIN_FILE, context, (text, line) =>
     parseMainMarker(text, line),
   );
@@ -48,15 +37,22 @@ export const readMain = Effect.fnUntraced(function* (files: JsonlFiles, context:
   return main;
 });
 
-const removeReclaimFiles = (files: JsonlFiles, listed: readonly FileInfo[], context: Context) =>
+const removeReclaimFiles = (
+  files: filesTypes.JsonlFiles,
+  listed: readonly envTypes.FileInfo[],
+  context: Context,
+) =>
   Effect.forEach(
     listed.filter((info) => info.kind === "file" && isReclaimFileName(info.name)),
     (info) => Effect.promise(() => files.fs.remove(info.path, { force: true }, context)),
     { discard: true },
   );
 
-const checkOrder = (file: string, lines: readonly ParsedLine<SidecarRecord>[]): void => {
-  let previous: SidecarRecord | undefined;
+const checkOrder = (
+  file: string,
+  lines: readonly formatTypes.ParsedLine<formatTypes.SidecarRecord>[],
+): void => {
+  let previous: formatTypes.SidecarRecord | undefined;
   for (const line of lines) {
     if (
       previous !== undefined &&
@@ -70,7 +66,7 @@ const checkOrder = (file: string, lines: readonly ParsedLine<SidecarRecord>[]): 
 };
 
 const readSidecar = Effect.fnUntraced(function* (
-  files: JsonlFiles,
+  files: filesTypes.JsonlFiles,
   file: string,
   context: Context,
 ) {
@@ -83,7 +79,7 @@ const readSidecar = Effect.fnUntraced(function* (
   );
 });
 
-export const readSidecars = Effect.fnUntraced(function* (files: JsonlFiles, context: Context) {
+const readSidecars = Effect.fnUntraced(function* (files: filesTypes.JsonlFiles, context: Context) {
   const listed = yield* Effect.promise(() => files.fs.listDir(files.directory, context));
   if (!listed.ok) throw errorFromFile("directory listing", listed.error);
   yield* removeReclaimFiles(files, listed.value, context);
@@ -91,7 +87,7 @@ export const readSidecars = Effect.fnUntraced(function* (files: JsonlFiles, cont
     .filter((info) => info.kind === "file" && isSidecarFileName(info.name))
     .map((info) => info.name)
     .sort();
-  const index: SidecarIndex = { parsedFiles: new Map(), recordByKey: new Map() };
+  const index: recoverScanTypes.SidecarIndex = { parsedFiles: new Map(), recordByKey: new Map() };
   yield* Effect.forEach(
     sidecarFiles,
     (file) =>
@@ -107,10 +103,10 @@ export const readSidecars = Effect.fnUntraced(function* (files: JsonlFiles, cont
   return index;
 });
 
-const operationFacts = (main: ParsedFile<MainMarker>) => {
-  const currentOnlyDocuments = new Set<DocumentId>();
-  const retiredDocuments = new Set<DocumentId>();
-  const finalTaskIsLive = new Map<TaskId, boolean>();
+const operationFacts = (main: formatTypes.ParsedFile<formatTypes.MainMarker>) => {
+  const currentOnlyDocuments = new Set<typesModule.DocumentId>();
+  const retiredDocuments = new Set<typesModule.DocumentId>();
+  const finalTaskIsLive = new Map<typesModule.TaskId, boolean>();
   for (const { value: marker } of main.lines) {
     for (const operation of marker.writes) {
       if (operation.type === "document.create") {
@@ -124,20 +120,23 @@ const operationFacts = (main: ParsedFile<MainMarker>) => {
       }
     }
   }
-  return { currentOnlyDocuments, retiredDocuments, finalTaskIsLive };
+  return { currentOnlyDocuments, finalTaskIsLive, retiredDocuments };
 };
 
-const isNewerBase = (record: SidecarRecord, previous: SidecarRecord | undefined): boolean =>
+const isNewerBase = (
+  record: formatTypes.SidecarRecord,
+  previous: formatTypes.SidecarRecord | undefined,
+): boolean =>
   previous === undefined ||
   record.seq > previous.seq ||
   (record.seq === previous.seq && record.ordinal > previous.ordinal);
 
 const baseRecord = (
-  recordByKey: ReadonlyMap<string, ParsedLine<SidecarRecord>>,
-  id: DocumentId,
-  seq: Seq,
+  recordByKey: ReadonlyMap<string, formatTypes.ParsedLine<formatTypes.SidecarRecord>>,
+  id: typesModule.DocumentId,
+  seq: typesModule.Seq,
   ordinal: number,
-): SidecarRecord | undefined => {
+): formatTypes.SidecarRecord | undefined => {
   const record = recordByKey.get(sidecarKey(sidecarFileName("doc", id), seq, ordinal))?.value;
   return record?.payload.type === "document" &&
     record.payload.id === id &&
@@ -147,11 +146,11 @@ const baseRecord = (
 };
 
 const findLatestBases = (
-  main: ParsedFile<MainMarker>,
-  currentOnlyDocuments: ReadonlySet<DocumentId>,
-  recordByKey: ReadonlyMap<string, ParsedLine<SidecarRecord>>,
-): Map<DocumentId, SidecarRecord> => {
-  const latestBases = new Map<DocumentId, SidecarRecord>();
+  main: formatTypes.ParsedFile<formatTypes.MainMarker>,
+  currentOnlyDocuments: ReadonlySet<typesModule.DocumentId>,
+  recordByKey: ReadonlyMap<string, formatTypes.ParsedLine<formatTypes.SidecarRecord>>,
+): Map<typesModule.DocumentId, formatTypes.SidecarRecord> => {
+  const latestBases = new Map<typesModule.DocumentId, formatTypes.SidecarRecord>();
   for (const { value: marker } of main.lines) {
     for (const operation of marker.writes) {
       if (operation.type !== "document.create" && operation.type !== "document.change") continue;
@@ -165,29 +164,63 @@ const findLatestBases = (
   return latestBases;
 };
 
-export const analyzeMain: {
-  (index: SidecarIndex): (main: ParsedFile<MainMarker>) => MainAnalysis;
-  (main: ParsedFile<MainMarker>, index: SidecarIndex): MainAnalysis;
-} = Function.dual(2, (main: ParsedFile<MainMarker>, index: SidecarIndex): MainAnalysis => {
-  const { currentOnlyDocuments, retiredDocuments, finalTaskIsLive } = operationFacts(main);
-  return {
-    currentOnlyDocuments,
-    retiredCurrentOnlyDocuments: new Set(
-      [...retiredDocuments].filter((id) => currentOnlyDocuments.has(id)),
-    ),
-    finalTaskIsLive,
-    terminalTasks: new Set([...finalTaskIsLive].filter(([, live]) => !live).map(([id]) => id)),
-    latestBases: findLatestBases(main, currentOnlyDocuments, index.recordByKey),
-  };
-});
+const analyzeMain: {
+  (
+    index: recoverScanTypes.SidecarIndex,
+  ): (main: formatTypes.ParsedFile<formatTypes.MainMarker>) => recoverScanTypes.MainAnalysis;
+  (
+    main: formatTypes.ParsedFile<formatTypes.MainMarker>,
+    index: recoverScanTypes.SidecarIndex,
+  ): recoverScanTypes.MainAnalysis;
+} = Function.dual(
+  2,
+  (
+    main: formatTypes.ParsedFile<formatTypes.MainMarker>,
+    index: recoverScanTypes.SidecarIndex,
+  ): recoverScanTypes.MainAnalysis => {
+    const { currentOnlyDocuments, retiredDocuments, finalTaskIsLive } = operationFacts(main);
+    return {
+      currentOnlyDocuments,
+      finalTaskIsLive,
+      latestBases: findLatestBases(main, currentOnlyDocuments, index.recordByKey),
+      retiredCurrentOnlyDocuments: new Set(
+        [...retiredDocuments].filter((id) => currentOnlyDocuments.has(id)),
+      ),
+      terminalTasks: new Set([...finalTaskIsLive].filter(([, live]) => !live).map(([id]) => id)),
+    };
+  },
+);
 
-export const isBeforeLatestBase: {
-  (id: DocumentId, seq: Seq, ordinal: number): (analysis: MainAnalysis) => boolean;
-  (analysis: MainAnalysis, id: DocumentId, seq: Seq, ordinal: number): boolean;
+const isBeforeLatestBase: {
+  (
+    id: typesModule.DocumentId,
+    seq: typesModule.Seq,
+    ordinal: number,
+  ): (analysis: recoverScanTypes.MainAnalysis) => boolean;
+  (
+    analysis: recoverScanTypes.MainAnalysis,
+    id: typesModule.DocumentId,
+    seq: typesModule.Seq,
+    ordinal: number,
+  ): boolean;
 } = Function.dual(
   4,
-  (analysis: MainAnalysis, id: DocumentId, seq: Seq, ordinal: number): boolean => {
+  (
+    analysis: recoverScanTypes.MainAnalysis,
+    id: typesModule.DocumentId,
+    seq: typesModule.Seq,
+    ordinal: number,
+  ): boolean => {
     const base = analysis.latestBases.get(id);
     return base !== undefined && (seq < base.seq || (seq === base.seq && ordinal < base.ordinal));
   },
 );
+
+const recoverScan = {
+  analyzeMain,
+  isBeforeLatestBase,
+  readMain,
+  readSidecars,
+};
+
+export default recoverScan;

@@ -1,15 +1,13 @@
 import { Type } from "@msa/ai";
-import {
-  type AgentState,
-  type HarnessSettings,
-  type RegistrySnapshot,
-  defineExtension,
-  section,
-} from "@msa/durable";
+import durable from "@msa/durable";
+import type durableTypes from "@msa/durable/index.types";
 import { dual } from "effect/Function";
 
-import { resolveAgent, resolveSettings } from "../src/harness/agent.ts";
+import agentModule from "../src/harness/agent.ts";
 import type harnessRegistrySupportTypes from "./harness-registry-support.types.ts";
+
+const { resolveAgent, resolveSettings } = agentModule;
+const { defineExtension, section } = durable;
 
 function toolImpl(
   name: string,
@@ -32,9 +30,9 @@ const tool: {
 } = dual((args) => typeof args[0] === "string", toolImpl);
 
 function resolveImpl(
-  state: AgentState | undefined,
-  snapshot: RegistrySnapshot<harnessRegistrySupportTypes.AppTool>,
-  settings: HarnessSettings = {},
+  state: durableTypes.AgentState | undefined,
+  snapshot: durableTypes.RegistrySnapshot<harnessRegistrySupportTypes.AppTool>,
+  settings: durableTypes.HarnessSettings = {},
   reports: unknown[] = [],
 ) {
   return resolveAgent(state, snapshot, resolveSettings(settings), (error) => reports.push(error));
@@ -42,14 +40,14 @@ function resolveImpl(
 
 const resolve: {
   (
-    snapshot: RegistrySnapshot<harnessRegistrySupportTypes.AppTool>,
-    settings?: HarnessSettings,
+    snapshot: durableTypes.RegistrySnapshot<harnessRegistrySupportTypes.AppTool>,
+    settings?: durableTypes.HarnessSettings,
     reports?: unknown[],
-  ): (state: AgentState | undefined) => ReturnType<typeof resolveImpl>;
+  ): (state: durableTypes.AgentState | undefined) => ReturnType<typeof resolveImpl>;
   (
-    state: AgentState | undefined,
-    snapshot: RegistrySnapshot<harnessRegistrySupportTypes.AppTool>,
-    settings?: HarnessSettings,
+    state: durableTypes.AgentState | undefined,
+    snapshot: durableTypes.RegistrySnapshot<harnessRegistrySupportTypes.AppTool>,
+    settings?: durableTypes.HarnessSettings,
     reports?: unknown[],
   ): ReturnType<typeof resolveImpl>;
 } = dual(

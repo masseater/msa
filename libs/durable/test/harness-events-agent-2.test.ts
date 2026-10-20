@@ -1,23 +1,18 @@
 import { Type, fauxAssistantMessage, fauxText, fauxToolCall } from "@msa/ai";
 import type { Draft } from "@msa/chord";
-import {
-  AgentDoc,
-  type AgentEvent,
-  type AgentEventStream,
-  LiveDoc,
-  type LiveState,
-  type SnapshotEvent,
-  UsageDoc,
-  defineTool,
-} from "@msa/durable";
-import { watchEvents } from "@msa/durable/harness";
-import { MemoryStorage } from "@msa/durable/storage/memory";
+import durable from "@msa/durable";
+import harnessModule from "@msa/durable/harness";
+import memory from "@msa/durable/storage/memory";
 import { Effect } from "effect";
 import { describe, expect, it } from "vite-plus/test";
 
-import type harnessEventsAgent2CasesTypes from "./harness-events-agent-2-cases.ts";
+import type harnessEventsAgent2TestTypes from "./harness-events-agent-2.test.types.ts";
 import harnessEventsSupport from "./harness-events-support.ts";
 import support from "./support.ts";
+
+const { MemoryStorage } = memory;
+const { AgentDoc, LiveDoc, UsageDoc, defineTool } = durable;
+const { watchEvents } = harnessModule;
 
 const { applyChanges, drained, listen } = harnessEventsSupport;
 const {
@@ -38,7 +33,7 @@ const liveChangeSequenceStep1 = Effect.fn("liveChangeSequenceStep1")(function* (
 
   const { harness, root } = yield* openChat(new MemoryStorage(), chatSetup());
   const { stream, batches } = yield* listen(harness, root);
-  const change = (edit: (live: Draft<LiveState>) => void) =>
+  const change = (edit: (live: Draft<harnessEventsAgent2TestTypes.LiveState>) => void) =>
     root.commit(
       (tx) =>
         runPromise(
@@ -50,7 +45,7 @@ const liveChangeSequenceStep1 = Effect.fn("liveChangeSequenceStep1")(function* (
     );
   const partial = (yield* fromJsonText(
     yield* toJsonText(fauxAssistantMessage([fauxText("partial")])),
-  )) as harnessEventsAgent2CasesTypes.LiveMessage;
+  )) as harnessEventsAgent2TestTypes.LiveMessage;
   yield* awaited(
     change((live) => {
       live.generation = { attempt: 1, message: partial };
@@ -190,7 +185,7 @@ const appliesDeltasOverflowStep1 = Effect.gen(function* () {
               attempt: 1,
               message: (yield* fromJsonText(
                 yield* toJsonText(partial),
-              )) as harnessEventsAgent2CasesTypes.LiveMessage,
+              )) as harnessEventsAgent2TestTypes.LiveMessage,
             };
           }),
         ),
@@ -200,14 +195,14 @@ const appliesDeltasOverflowStep1 = Effect.gen(function* () {
   for (const _ of Array.from({ length: 101 })) {
     yield* awaited(root.commit((tx) => tx.appendEntry(root.id, { kind: "note" }), context));
   }
-  const batches: AgentEvent[][] = [];
+  const batches: harnessEventsAgent2TestTypes.AgentEvent[][] = [];
   stream.start((events) => {
     batches.push([...events]);
 
     return Promise.resolve();
   });
   yield* drained();
-  const snapshot = batches[0]![0] as SnapshotEvent;
+  const snapshot = batches[0]![0] as harnessEventsAgent2TestTypes.SnapshotEvent;
   expect(snapshot.type).toBe("snapshot");
   return { batches, harness, root, runPromise, snapshot, stream };
 });
@@ -275,7 +270,9 @@ const reportsUsageOnly = Effect.gen(function* () {
 
 const endsStreamHarness = Effect.gen(function* () {
   const { harness, root } = yield* openChat(new MemoryStorage(), chatSetup());
-  const stream: AgentEventStream = yield* awaited(watchEvents(harness, root.id, context));
+  const stream: harnessEventsAgent2TestTypes.AgentEventStream = yield* awaited(
+    watchEvents(harness, root.id, context),
+  );
   yield* awaited(harness.close(context));
   expect(yield* awaited(stream.closed)).toEqual({ reason: "session_closed" });
 });

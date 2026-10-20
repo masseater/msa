@@ -3,14 +3,13 @@ import { Effect, Stream } from "effect";
 import platform from "./platform.ts";
 import runSshModule from "./run-ssh.ts";
 import type runSshTypes from "./run-ssh.types.ts";
-import setupError from "./setup-error.ts";
+import SetupError from "./setup-error.ts";
 import sshArgs from "./ssh-args.ts";
 import type sshArgsTypes from "./ssh-args.types.ts";
 
 const { fileExists, localPath, makeTempDirectory, readText, removePath, spawnProcess } = platform;
 const { runSsh } = runSshModule;
 const { sshArgumentsWith } = sshArgs;
-const { SetupError } = setupError;
 
 const nonEmptyLines = (text: string): string[] =>
   text.split("\n").filter((line) => line.trim() !== "");

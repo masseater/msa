@@ -1,4 +1,4 @@
-import { type TaskId } from "@msa/durable";
+import type durableTypes from "@msa/durable/index.types";
 import { Effect } from "effect";
 import { afterEach, describe, expect, it } from "vite-plus/test";
 
@@ -47,7 +47,7 @@ const heldFailureTreeStep1 = Effect.fn("heldFailureTreeStep1")(function* () {
   const runPromise = Effect.runPromiseWith(yield* Effect.context<never>());
 
   const { harness, root } = yield* openNodes();
-  const found = { ids: [] as TaskId[] };
+  const found = { ids: [] as durableTypes.TaskId[] };
   script("p1", {
     resume: (runtime, ctx) => runtime.commit(() => end("failed", "p1"), ctx),
     run: (runtime, ctx) =>
@@ -81,7 +81,7 @@ const heldFailureTreeStep1 = Effect.fn("heldFailureTreeStep1")(function* () {
         }),
       ),
   });
-  const spawned: { outside?: TaskId } = {};
+  const spawned: { outside?: durableTypes.TaskId } = {};
   return { found, harness, root, runPromise, spawned };
 });
 
@@ -109,7 +109,7 @@ const resumesOnceEveryStep1 = Effect.gen(function* () {
   const runPromise = Effect.runPromiseWith(yield* Effect.context<never>());
 
   const { harness, root } = yield* openNodes();
-  const found = { ids: [] as TaskId[], outcomes: [] as string[] };
+  const found = { ids: [] as durableTypes.TaskId[], outcomes: [] as string[] };
   script("parent", {
     resume: (runtime, ctx) =>
       runPromise(
@@ -213,7 +213,7 @@ const failsFastHeld = Effect.gen(function* () {
   expect((yield* state(harness, parent)).status).toBe("waiting");
   open("abort.grandchild");
   yield* until(() => log.includes("resume:parent"));
-  const marked = (id: TaskId) =>
+  const marked = (id: durableTypes.TaskId) =>
     runPromise(
       Effect.gen(function* () {
         return (yield* awaited(harness.getTask(id, context)))!.abortRequested;

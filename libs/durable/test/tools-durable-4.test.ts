@@ -2,10 +2,13 @@ import { BACKGROUND_CONTEXT } from "@msa/chord/context";
 import { Effect } from "effect";
 import { afterAll, describe, expect, it } from "vite-plus/test";
 
-import { getOrThrow } from "../src/env/index.ts";
-import { createEditTool, createWriteTool } from "../src/tools/index.ts";
+import envModule from "../src/env/index.ts";
+import toolsModule from "../src/tools/index.ts";
 import support from "./support.ts";
 import toolsSupport from "./tools-support.ts";
+
+const { createEditTool, createWriteTool } = toolsModule;
+const { getOrThrow } = envModule;
 
 const { awaited, makeSymlink } = support;
 const { BlockingWriteExecutionEnv, createEnv, createTempDir, removeTempDirs, run } = toolsSupport;

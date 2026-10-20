@@ -3,11 +3,13 @@ import { DatabaseSync } from "node:sqlite";
 import { Effect } from "effect";
 import { afterEach, describe, expect, it } from "vite-plus/test";
 
-import type { DocumentId, EntryId } from "../src/types.ts";
-import { ROOT_CONVERSATION_ID } from "../src/types.ts";
+import types from "../src/types.ts";
+import type typesModule from "../src/types.types.ts";
 import effectSupport from "./effect-support.ts";
 import platformSupport from "./platform-support.ts";
 import sqliteStorageSupport from "./sqlite-storage-support.ts";
+
+const { ROOT_CONVERSATION_ID } = types;
 
 const { awaited } = effectSupport;
 const { fileSize, removeDir } = platformSupport;
@@ -28,7 +30,7 @@ afterEach(() =>
 const largeReplacedDocument = Effect.fn("largeReplacedDocument")(function* () {
   const { storage, path } = yield* createSqliteStorage();
   yield* awaited(createRoot(storage));
-  const id = yield* awaited(storage.mintId<DocumentId>());
+  const id = yield* awaited(storage.mintId<typesModule.DocumentId>());
   const large = "x".repeat(512 * 1024);
   yield* awaited(
     storage.commit(
@@ -66,10 +68,14 @@ const representativeRows = Effect.fn("representativeRows")(function* () {
         [
           {
             type: "entry",
-            value: entry(yield* awaited(storage.mintId<EntryId>()), ROOT_CONVERSATION_ID, {
-              index,
-              text: "x".repeat(1_024),
-            }),
+            value: entry(
+              yield* awaited(storage.mintId<typesModule.EntryId>()),
+              ROOT_CONVERSATION_ID,
+              {
+                index,
+                text: "x".repeat(1_024),
+              },
+            ),
           },
         ],
         context,
@@ -88,10 +94,14 @@ const autoCheckpointsWal = Effect.gen(function* () {
         [
           {
             type: "entry",
-            value: entry(yield* awaited(storage.mintId<EntryId>()), ROOT_CONVERSATION_ID, {
-              index,
-              text: "x".repeat(32 * 1024),
-            }),
+            value: entry(
+              yield* awaited(storage.mintId<typesModule.EntryId>()),
+              ROOT_CONVERSATION_ID,
+              {
+                index,
+                text: "x".repeat(32 * 1024),
+              },
+            ),
           },
         ],
         context,
@@ -168,7 +178,7 @@ describe("Pico SqliteStorage", () => {
 
 const keepsRepresentativeRow = Effect.gen(function* () {
   const { storage, path } = yield* representativeRows();
-  const documentId = yield* awaited(storage.mintId<DocumentId>());
+  const documentId = yield* awaited(storage.mintId<typesModule.DocumentId>());
   yield* awaited(
     storage.commit(
       [

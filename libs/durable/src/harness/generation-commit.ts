@@ -1,65 +1,68 @@
 import type { Context } from "@msa/chord";
 import { Effect } from "effect";
 
-import { SystemEntry } from "../entries.ts";
-import { commitTask } from "./bridge.ts";
-import { createCompaction } from "./compaction.ts";
-import type {
-  GenerationCheckpoint,
-  GenerationNext,
-  GenerationRuntime,
-} from "./generation-types.ts";
-import { LiveDoc } from "./live.ts";
-import type { SystemDraft } from "./prompt.ts";
-import type { Tx } from "./types.ts";
+import entriesModule from "../entries.ts";
+import bridge from "./bridge.ts";
+import compaction from "./compaction.ts";
+import type generationTypesModule from "./generation-types.types.ts";
+import liveModule from "./live.ts";
+import type promptTypes from "./prompt.types.ts";
+import type typesModule from "./types.types.ts";
 
-export const waitForBlockingCompaction = Effect.fnUntraced(function* (
-  runtime: GenerationRuntime,
+const { commitTask } = bridge;
+const { SystemEntry } = entriesModule;
+const { LiveDoc } = liveModule;
+
+const waitForBlockingCompaction = Effect.fnUntraced(function* (
+  runtime: generationTypesModule.GenerationRuntime,
   attempt: number,
   context: Context,
 ) {
   yield* commitTask(
     runtime,
-    (tx: Tx): Effect.Effect<GenerationNext> =>
+    (tx: typesModule.Tx): Effect.Effect<generationTypesModule.GenerationNext> =>
       Effect.gen(function* () {
-        const child = yield* createCompaction(
+        const child = yield* compaction.createCompaction(
           tx,
           runtime.conversationId,
           { reason: "threshold" },
           runtime.taskId,
         );
         const checkpoint = {
-          phase: "prepare",
           attempt,
           compacted: child,
+          phase: "prepare",
           threshold: true,
         } as const;
-        return { status: "waiting", checkpoint, on: [child], policy: "allSettled" };
+        return { checkpoint, on: [child], policy: "allSettled", status: "waiting" };
       }),
     context,
   );
 });
 
 const appendPlanned = (
-  tx: Tx,
-  conversationId: GenerationRuntime["conversationId"],
-  entries: readonly SystemDraft[],
+  tx: typesModule.Tx,
+  conversationId: generationTypesModule.GenerationRuntime["conversationId"],
+  entries: readonly promptTypes.SystemDraft[],
 ) =>
   Effect.forEach(entries, (entry) =>
     Effect.promise(() => tx.appendEntry(SystemEntry, conversationId, entry)),
   );
 
-export const commitRequest = Effect.fnUntraced(function* (
-  runtime: GenerationRuntime,
-  entries: readonly SystemDraft[],
-  request: Omit<Extract<GenerationCheckpoint, { phase: "request" }>, "phase" | "cutoff">,
+const commitRequest = Effect.fnUntraced(function* (
+  runtime: generationTypesModule.GenerationRuntime,
+  entries: readonly promptTypes.SystemDraft[],
+  request: Omit<
+    Extract<generationTypesModule.GenerationCheckpoint, { phase: "request" }>,
+    "phase" | "cutoff"
+  >,
   threshold: "blocking" | "background" | undefined,
   context: Context,
 ) {
   const { conversationId } = runtime;
   yield* commitTask(
     runtime,
-    (tx: Tx): Effect.Effect<GenerationNext> =>
+    (tx: typesModule.Tx): Effect.Effect<generationTypesModule.GenerationNext> =>
       Effect.gen(function* () {
         const first = yield* Effect.promise(() => tx.scanEntries({ conversationId }, 1));
         const appended = yield* appendPlanned(tx, conversationId, entries);
@@ -70,9 +73,16 @@ export const commitRequest = Effect.fnUntraced(function* (
           );
         const live = yield* Effect.promise(() => tx.doc(LiveDoc, conversationId));
         if (threshold === "background" && live.compactions === undefined)
-          yield* createCompaction(tx, conversationId, { reason: "threshold" });
-        return { status: "running", checkpoint: { phase: "request", ...request, cutoff } };
+          yield* compaction.createCompaction(tx, conversationId, { reason: "threshold" });
+        return { checkpoint: { phase: "request", ...request, cutoff }, status: "running" };
       }),
     context,
   );
 });
+
+const generationCommit = {
+  commitRequest,
+  waitForBlockingCompaction,
+};
+
+export default generationCommit;

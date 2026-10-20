@@ -3,30 +3,27 @@ import type { Draft } from "@msa/chord";
 import { copyJson } from "@msa/chord/json";
 import { Effect, Function } from "effect";
 
-import { AssistantEntry } from "../entries.ts";
-import type { GenerationResult } from "./generation-types.ts";
-import { GenerationTask } from "./generation.ts";
-import type { LiveState } from "./live.ts";
-import type {
-  ConversationId,
-  Dual2,
-  Dual3,
-  Dual4,
-  SubmissionId,
-  TaskId,
-  Tx,
-  TypedEntry,
-} from "./types.ts";
-import { recordUsage } from "./usage.ts";
+import entries from "../entries.ts";
+import type generationTypesModule from "./generation-types.types.ts";
+import generationModule from "./generation.ts";
+import type liveTypes from "./live.types.ts";
+import type typesModule from "./types.types.ts";
+import usageModule from "./usage.ts";
 
-export const appendAssistant: Dual3<
-  Tx,
-  ConversationId,
+const { recordUsage } = usageModule;
+const { AssistantEntry } = entries;
+const appendAssistant: typesModule.Dual3<
+  typesModule.Tx,
+  typesModule.ConversationId,
   AssistantMessage,
-  Effect.Effect<TypedEntry<never>>
+  Effect.Effect<typesModule.TypedEntry<never>>
 > = Function.dual(
   3,
-  Effect.fnUntraced(function* (tx: Tx, conversationId: ConversationId, message: AssistantMessage) {
+  Effect.fnUntraced(function* (
+    tx: typesModule.Tx,
+    conversationId: typesModule.ConversationId,
+    message: AssistantMessage,
+  ) {
     yield* recordUsage(
       tx,
       conversationId,
@@ -40,14 +37,18 @@ export const appendAssistant: Dual3<
   }),
 );
 
-export const convertPartial: Dual3<
-  Tx,
-  Draft<LiveState>,
-  ConversationId,
+const convertPartial: typesModule.Dual3<
+  typesModule.Tx,
+  Draft<liveTypes.LiveState>,
+  typesModule.ConversationId,
   Effect.Effect<void>
 > = Function.dual(
   3,
-  Effect.fnUntraced(function* (tx: Tx, live: Draft<LiveState>, conversationId: ConversationId) {
+  Effect.fnUntraced(function* (
+    tx: typesModule.Tx,
+    live: Draft<liveTypes.LiveState>,
+    conversationId: typesModule.ConversationId,
+  ) {
     const partial = live.generation?.message;
     if (partial === undefined) return;
     const message = copyJson(partial) as unknown as AssistantMessage;
@@ -55,37 +56,56 @@ export const convertPartial: Dual3<
   }),
 );
 
-export const createGeneration: Dual2<
-  Tx,
-  ConversationId,
-  Effect.Effect<TaskId<GenerationResult>>
-> = Function.dual(2, (tx: Tx, conversationId: ConversationId) =>
+const createGeneration: typesModule.Dual2<
+  typesModule.Tx,
+  typesModule.ConversationId,
+  Effect.Effect<typesModule.TaskId<generationTypesModule.GenerationResult>>
+> = Function.dual(2, (tx: typesModule.Tx, conversationId: typesModule.ConversationId) =>
   Effect.promise(() =>
-    tx.createTask(GenerationTask, {}, { ownership: { kind: "conversation" }, conversationId }),
+    tx.createTask(
+      generationModule.GenerationTask,
+      {},
+      { conversationId, ownership: { kind: "conversation" } },
+    ),
   ),
 );
 
-export const startRun: Dual4<
-  Tx,
-  ConversationId,
-  Draft<LiveState>,
-  SubmissionId[],
+const startRun: typesModule.Dual4<
+  typesModule.Tx,
+  typesModule.ConversationId,
+  Draft<liveTypes.LiveState>,
+  typesModule.SubmissionId[],
   Effect.Effect<void>
 > = Function.dual(
   4,
   Effect.fnUntraced(function* (
-    tx: Tx,
-    conversationId: ConversationId,
-    live: Draft<LiveState>,
-    inputs: SubmissionId[],
+    tx: typesModule.Tx,
+    conversationId: typesModule.ConversationId,
+    live: Draft<liveTypes.LiveState>,
+    inputs: typesModule.SubmissionId[],
   ) {
-    live.run = { taskId: yield* createGeneration(tx, conversationId), inputs };
+    live.run = { inputs, taskId: yield* createGeneration(tx, conversationId) };
   }),
 );
 
-export const handOver: Dual3<Draft<LiveState>, TaskId, TaskId, void> = Function.dual(
+const handOver: typesModule.Dual3<
+  Draft<liveTypes.LiveState>,
+  typesModule.TaskId,
+  typesModule.TaskId,
+  void
+> = Function.dual(
   3,
-  (live: Draft<LiveState>, from: TaskId, to: TaskId): void => {
+  (live: Draft<liveTypes.LiveState>, from: typesModule.TaskId, to: typesModule.TaskId): void => {
     if (live.run?.taskId === from) live.run.taskId = to;
   },
 );
+
+const generationRun = {
+  appendAssistant,
+  convertPartial,
+  createGeneration,
+  handOver,
+  startRun,
+};
+
+export default generationRun;

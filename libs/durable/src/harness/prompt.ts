@@ -1,20 +1,15 @@
-import type { Message, SystemMessage, Tool as AiTool, ToolReference } from "@msa/ai";
+import type { Tool as AiTool, Message, SystemMessage, ToolReference } from "@msa/ai";
 import { declarationsEqual, getCurrentTools, toToolDeclaration } from "@msa/ai/utils/transcript";
 import type { Context } from "@msa/chord";
 import { Cause, Effect, Exit, Function } from "effect";
 
-import { SystemEntry } from "../entries.ts";
-import type {
-  ContextEdit,
-  ContextView,
-  Dual4,
-  PromptInput,
-  PromptSection,
-  ToolRegistration,
-  TypedEntryDraft,
-} from "./types.ts";
+import entriesModule from "../entries.ts";
+import type promptTypes from "./prompt.types.ts";
+import type typesModule from "./types.types.ts";
 
-export function replaySections(messages: readonly Message[]): Map<string, string> {
+const { SystemEntry } = entriesModule;
+
+function replaySections(messages: readonly Message[]): Map<string, string> {
   const shown = new Map<string, string>();
   for (const message of messages) {
     if (message.role !== "system" || message.sections === undefined) continue;
@@ -26,15 +21,15 @@ export function replaySections(messages: readonly Message[]): Map<string, string
   return shown;
 }
 
-type RenderRequest<Tool extends ToolRegistration> = {
-  readonly input: PromptInput<Tool>;
+type RenderRequest<Tool extends typesModule.ToolRegistration> = {
+  readonly input: typesModule.PromptInput<Tool>;
   readonly shown: ReadonlyMap<string, string>;
   readonly report: (error: unknown) => void;
   readonly context: Context;
 };
 
-const renderSection = <Tool extends ToolRegistration>(
-  section: PromptSection<Tool>,
+const renderSection = <Tool extends typesModule.ToolRegistration>(
+  section: typesModule.PromptSection<Tool>,
   request: RenderRequest<Tool>,
   desired: Map<string, string>,
 ) =>
@@ -58,31 +53,31 @@ const renderSection = <Tool extends ToolRegistration>(
     );
   });
 
-export const renderSections: {
-  <Tool extends ToolRegistration>(
-    input: PromptInput<Tool>,
+const renderSections: {
+  <Tool extends typesModule.ToolRegistration>(
+    input: typesModule.PromptInput<Tool>,
     shown: ReadonlyMap<string, string>,
     report: (error: unknown) => void,
     context: Context,
-  ): (sections: readonly PromptSection<Tool>[]) => Effect.Effect<Map<string, string>>;
-  <Tool extends ToolRegistration>(
-    sections: readonly PromptSection<Tool>[],
-    input: PromptInput<Tool>,
+  ): (sections: readonly typesModule.PromptSection<Tool>[]) => Effect.Effect<Map<string, string>>;
+  <Tool extends typesModule.ToolRegistration>(
+    sections: readonly typesModule.PromptSection<Tool>[],
+    input: typesModule.PromptInput<Tool>,
     shown: ReadonlyMap<string, string>,
     report: (error: unknown) => void,
     context: Context,
   ): Effect.Effect<Map<string, string>>;
 } = Function.dual(
   5,
-  Effect.fnUntraced(function* <Tool extends ToolRegistration>(
-    sections: readonly PromptSection<Tool>[],
-    input: PromptInput<Tool>,
+  Effect.fnUntraced(function* <Tool extends typesModule.ToolRegistration>(
+    sections: readonly typesModule.PromptSection<Tool>[],
+    input: typesModule.PromptInput<Tool>,
     shown: ReadonlyMap<string, string>,
     report: (error: unknown) => void,
     context: Context,
   ) {
     const desired = new Map<string, string>();
-    const request = { input, shown, report, context };
+    const request = { context, input, report, shown };
     yield* Effect.forEach(sections, (section) => renderSection(section, request, desired), {
       discard: true,
     });
@@ -90,35 +85,33 @@ export const renderSections: {
   }),
 );
 
-export type SystemDraft = TypedEntryDraft<never>;
-
 type ToolChanges = { readonly toolsRemoved: ToolReference[]; readonly toolsAdded: AiTool[] };
 
-export const planSystemEntries: Dual4<
-  ContextView,
+const planSystemEntries: typesModule.Dual4<
+  typesModule.ContextView,
   ReadonlyMap<string, string>,
   readonly AiTool[],
   number,
-  SystemDraft[]
+  promptTypes.SystemDraft[]
 > = Function.dual(4, planEntries);
 
 function planEntries(
-  view: ContextView,
+  view: typesModule.ContextView,
   desired: ReadonlyMap<string, string>,
   tools: readonly AiTool[],
   timestamp: number,
-): SystemDraft[] {
+): promptTypes.SystemDraft[] {
   const head = view.head;
   if (
     head !== undefined &&
     !view.entries.some((entry) => SystemEntry.is(entry) && entry.id > head.id)
   ) {
-    const edits: ContextEdit[] = view.entries
+    const edits: typesModule.ContextEdit[] = view.entries
       .filter((entry) => SystemEntry.is(entry))
-      .map((entry) => ({ target: entry.id, action: "omit" }));
+      .map((entry) => ({ action: "omit", target: entry.id }));
     const baseline = systemEntry(
       Object.fromEntries(desired),
-      { toolsRemoved: [], toolsAdded: tools.map(toToolDeclaration) },
+      { toolsAdded: tools.map(toToolDeclaration), toolsRemoved: [] },
       timestamp,
     );
     return [edits.length === 0 ? baseline : { ...baseline, edits }];
@@ -145,15 +138,15 @@ function planTools(offered: readonly AiTool[], desired: readonly AiTool[]): Tool
   const replayed = [...kept, ...added];
   if (replayed.some((tool, index) => tool.name !== desired[index]!.name)) {
     return {
-      toolsRemoved: offered.map((tool) => ({ name: tool.name })),
       toolsAdded: desired.map(toToolDeclaration),
+      toolsRemoved: offered.map((tool) => ({ name: tool.name })),
     };
   }
   return {
+    toolsAdded: added.map(toToolDeclaration),
     toolsRemoved: offered
       .filter((tool) => !keptNames.has(tool.name))
       .map((tool) => ({ name: tool.name })),
-    toolsAdded: added.map(toToolDeclaration),
   };
 }
 
@@ -186,10 +179,10 @@ function systemEntry(
   sections: Record<string, string | null> | undefined,
   tools: ToolChanges | undefined,
   timestamp: number,
-): SystemDraft {
+): promptTypes.SystemDraft {
   const message: SystemMessage = {
-    role: "system",
     content: "",
+    role: "system",
     ...(sections === undefined ? {} : { sections }),
     ...(tools === undefined || tools.toolsRemoved.length === 0
       ? {}
@@ -201,3 +194,11 @@ function systemEntry(
   };
   return { model: [message] };
 }
+
+const prompt = {
+  planSystemEntries,
+  renderSections,
+  replaySections,
+};
+
+export default prompt;

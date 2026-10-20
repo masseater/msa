@@ -3,60 +3,58 @@ import { getCurrentTools } from "@msa/ai/utils/transcript";
 import type { Context } from "@msa/chord";
 import { Effect, Function } from "effect";
 
-import { commitTask } from "./bridge.ts";
-import { appendAssistant } from "./generation-run.ts";
-import type {
-  GenerationCheckpoint,
-  GenerationNext,
-  GenerationRequest,
-  GenerationRuntime,
-} from "./generation-types.ts";
-import { LiveDoc, type ToolSlot } from "./live.ts";
-import { appendToolResult, harnessError, ToolTask, type ToolTaskResult } from "./tool.ts";
-import type { EntryId, TaskId, Tx } from "./types.ts";
+import bridge from "./bridge.ts";
+import generationRun from "./generation-run.ts";
+import type generationToolsTypes from "./generation-tools.types.ts";
+import liveModule from "./live.ts";
+import toolModule from "./tool.ts";
+import type typesModule from "./types.types.ts";
 
-export const createToolTask: {
+const { ToolTask, appendToolResult, harnessError } = toolModule;
+const { commitTask } = bridge;
+const { LiveDoc } = liveModule;
+const createToolTask: {
   (
-    runtime: GenerationRuntime,
-    assistant: EntryId,
+    runtime: generationToolsTypes.GenerationRuntime,
+    assistant: typesModule.EntryId,
     callId: string,
-  ): (tx: Tx) => Effect.Effect<TaskId<ToolTaskResult>>;
+  ): (tx: typesModule.Tx) => Effect.Effect<typesModule.TaskId<generationToolsTypes.ToolTaskResult>>;
   (
-    tx: Tx,
-    runtime: GenerationRuntime,
-    assistant: EntryId,
+    tx: typesModule.Tx,
+    runtime: generationToolsTypes.GenerationRuntime,
+    assistant: typesModule.EntryId,
     callId: string,
-  ): Effect.Effect<TaskId<ToolTaskResult>>;
+  ): Effect.Effect<typesModule.TaskId<generationToolsTypes.ToolTaskResult>>;
 } = Function.dual(
   4,
   (
-    tx: Tx,
-    runtime: GenerationRuntime,
-    assistant: EntryId,
+    tx: typesModule.Tx,
+    runtime: generationToolsTypes.GenerationRuntime,
+    assistant: typesModule.EntryId,
     callId: string,
-  ): Effect.Effect<TaskId<ToolTaskResult>> =>
+  ): Effect.Effect<typesModule.TaskId<generationToolsTypes.ToolTaskResult>> =>
     Effect.promise(() =>
       tx.createTask(
         ToolTask,
-        { kind: "model", assistant, callId },
+        { assistant, callId, kind: "model" },
         { ownership: { kind: "task", taskId: runtime.taskId } },
       ),
     ),
 );
 
 type Round = {
-  readonly slots: ToolSlot[];
-  readonly started: TaskId<ToolTaskResult>[];
+  readonly slots: generationToolsTypes.ToolSlot[];
+  readonly started: typesModule.TaskId<generationToolsTypes.ToolTaskResult>[];
   readonly pending: string[];
 };
 
 const placeCall = Effect.fnUntraced(function* (
-  tx: Tx,
-  runtime: GenerationRuntime,
+  tx: typesModule.Tx,
+  runtime: generationToolsTypes.GenerationRuntime,
   round: Round,
   input: {
     readonly call: ToolCall;
-    readonly assistant: EntryId;
+    readonly assistant: typesModule.EntryId;
     readonly offered: ReadonlySet<string>;
     readonly sequential: boolean;
   },
@@ -67,7 +65,7 @@ const placeCall = Effect.fnUntraced(function* (
     const result = yield* appendToolResult(tx, runtime.conversationId, call, unavailable, {
       timestamp: runtime.now(),
     });
-    round.slots.push({ callId: call.id, name: call.name, status: "done", entry: result.id });
+    round.slots.push({ callId: call.id, entry: result.id, name: call.name, status: "done" });
     return;
   }
   if (sequential && round.started.length > 0) {
@@ -77,11 +75,11 @@ const placeCall = Effect.fnUntraced(function* (
   }
   const taskId = yield* createToolTask(tx, runtime, assistant, call.id);
   round.started.push(taskId);
-  round.slots.push({ callId: call.id, name: call.name, taskId, status: "pending" });
+  round.slots.push({ callId: call.id, name: call.name, status: "pending", taskId });
 });
 
 const isSequential = Effect.fnUntraced(function* (
-  runtime: GenerationRuntime,
+  runtime: generationToolsTypes.GenerationRuntime,
   calls: readonly ToolCall[],
   offered: ReadonlySet<string>,
   context: Context,
@@ -95,9 +93,9 @@ const isSequential = Effect.fnUntraced(function* (
   );
 });
 
-export const startToolRound = Effect.fnUntraced(function* (
-  runtime: GenerationRuntime,
-  request: GenerationRequest,
+const startToolRound = Effect.fnUntraced(function* (
+  runtime: generationToolsTypes.GenerationRuntime,
+  request: generationToolsTypes.GenerationRequest,
   message: AssistantMessage,
   calls: readonly ToolCall[],
   context: Context,
@@ -111,17 +109,17 @@ export const startToolRound = Effect.fnUntraced(function* (
   const sequential = yield* isSequential(runtime, calls, offered, context);
   yield* commitTask(
     runtime,
-    (tx: Tx): Effect.Effect<GenerationNext> =>
+    (tx: typesModule.Tx): Effect.Effect<generationToolsTypes.GenerationNext> =>
       Effect.gen(function* () {
         const live = yield* Effect.promise(() => tx.doc(LiveDoc, conversationId));
-        const entry = yield* appendAssistant(tx, conversationId, message);
-        const round: Round = { slots: [], started: [], pending: [] };
+        const entry = yield* generationRun.appendAssistant(tx, conversationId, message);
+        const round: Round = { pending: [], slots: [], started: [] };
         yield* Effect.forEach(
           calls,
           (call) =>
             placeCall(tx, runtime, round, {
-              call,
               assistant: entry.id,
+              call,
               offered,
               sequential,
             }),
@@ -129,14 +127,21 @@ export const startToolRound = Effect.fnUntraced(function* (
         );
         delete live.generation;
         live.tools = round.slots;
-        const checkpoint: GenerationCheckpoint = {
-          phase: "tools",
+        const checkpoint: generationToolsTypes.GenerationCheckpoint = {
           assistant: entry.id,
-          tools: round.started,
           pending: round.pending,
+          phase: "tools",
+          tools: round.started,
         };
-        return { status: "waiting", checkpoint, on: round.started, policy: "allSettled" };
+        return { checkpoint, on: round.started, policy: "allSettled", status: "waiting" };
       }),
     context,
   );
 });
+
+const generationTools = {
+  createToolTask,
+  startToolRound,
+};
+
+export default generationTools;

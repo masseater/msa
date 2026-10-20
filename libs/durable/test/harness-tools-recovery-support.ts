@@ -6,22 +6,18 @@ import {
   fauxText,
   fauxToolCall,
 } from "@msa/ai";
-import {
-  type EntryRecord,
-  type Harness,
-  LiveDoc,
-  type TaskId,
-  type ToolRegistration,
-  ToolResultEntry,
-  defineTool,
-} from "@msa/durable";
+import durable from "@msa/durable";
+import type durableTypes from "@msa/durable/index.types";
 import { Effect } from "effect";
 import { dual } from "effect/Function";
 
-import type { ExecutionEnv } from "../src/env/index.ts";
-import { openNodeSqliteStorage } from "../src/storage/sqlite/node.ts";
+import type envTypes from "../src/env/index.types.ts";
+import node from "../src/storage/sqlite/node.ts";
 import support from "./support.ts";
 import type supportTypes from "./support.types.ts";
+
+const { openNodeSqliteStorage } = node;
+const { LiveDoc, ToolResultEntry, defineTool } = durable;
 
 const { aborted, awaited, context, deferred, makeTempFile, openChat, removeDir, waitFor } = support;
 
@@ -45,7 +41,7 @@ const sqlitePath = Effect.fn("sqlitePath")(function* () {
 const open = Effect.fn("open")(function* (
   path: string,
   setup: supportTypes.ChatSetup,
-  env?: ExecutionEnv,
+  env?: envTypes.ExecutionEnv,
 ) {
   const opened = yield* openChat(
     yield* awaited(openNodeSqliteStorage(path)),
@@ -58,21 +54,21 @@ const open = Effect.fn("open")(function* (
 
 function toolImpl(
   name: string,
-  execute: ToolRegistration["execute"],
-  extra: Partial<ToolRegistration> = {},
-): ToolRegistration {
+  execute: durableTypes.ToolRegistration["execute"],
+  extra: Partial<durableTypes.ToolRegistration> = {},
+): durableTypes.ToolRegistration {
   return defineTool({ description: name, execute, name, parameters: Type.Object({}), ...extra });
 }
 
 const tool: {
   (
-    execute: ToolRegistration["execute"],
-    extra?: Partial<ToolRegistration>,
+    execute: durableTypes.ToolRegistration["execute"],
+    extra?: Partial<durableTypes.ToolRegistration>,
   ): (name: string) => ReturnType<typeof toolImpl>;
   (
     name: string,
-    execute: ToolRegistration["execute"],
-    extra?: Partial<ToolRegistration>,
+    execute: durableTypes.ToolRegistration["execute"],
+    extra?: Partial<durableTypes.ToolRegistration>,
   ): ReturnType<typeof toolImpl>;
 } = dual((args) => typeof args[0] === "string", toolImpl);
 
@@ -82,7 +78,7 @@ function call(name: string): AssistantMessage {
 
 const DONE = fauxAssistantMessage([fauxText("done")]);
 
-function results(entries: readonly EntryRecord[]): ToolResultMessage[] {
+function results(entries: readonly durableTypes.EntryRecord[]): ToolResultMessage[] {
   return entries
     .filter((entry) => ToolResultEntry.is(entry))
     .map((entry) => entry.model![0] as ToolResultMessage);
@@ -92,8 +88,8 @@ function text(message: ToolResultMessage | undefined): string {
   return (message?.content ?? []).map((item) => (item.type === "text" ? item.text : "")).join("|");
 }
 
-const toolTaskId = Effect.fn("toolTaskId")(function* (harness: Harness) {
-  let id: TaskId | undefined;
+const toolTaskId = Effect.fn("toolTaskId")(function* (harness: durableTypes.Harness) {
+  let id: durableTypes.TaskId | undefined;
   yield* waitFor(
     Effect.gen(function* () {
       id = (yield* awaited(harness.snapshot(LiveDoc, 1 as never, context)))?.tools?.[0]?.taskId;
@@ -103,7 +99,7 @@ const toolTaskId = Effect.fn("toolTaskId")(function* (harness: Harness) {
   return id!;
 });
 
-function blockingToolImpl(name: string, extra: Partial<ToolRegistration> = {}) {
+function blockingToolImpl(name: string, extra: Partial<durableTypes.ToolRegistration> = {}) {
   const started = deferred();
   const state = { blocking: 1, runs: 0 };
   const registration = tool(
@@ -127,8 +123,13 @@ function blockingToolImpl(name: string, extra: Partial<ToolRegistration> = {}) {
 }
 
 const blockingTool: {
-  (extra?: Partial<ToolRegistration>): (name: string) => ReturnType<typeof blockingToolImpl>;
-  (name: string, extra?: Partial<ToolRegistration>): ReturnType<typeof blockingToolImpl>;
+  (
+    extra?: Partial<durableTypes.ToolRegistration>,
+  ): (name: string) => ReturnType<typeof blockingToolImpl>;
+  (
+    name: string,
+    extra?: Partial<durableTypes.ToolRegistration>,
+  ): ReturnType<typeof blockingToolImpl>;
 } = dual((args) => typeof args[0] === "string", blockingToolImpl);
 
 const harnessToolsRecoverySupport = {

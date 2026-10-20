@@ -1,25 +1,20 @@
 import { type AssistantMessage, type FauxResponseStep } from "@msa/ai";
-import {
-  type Conversation,
-  type Harness,
-  LiveDoc,
-  type Storage,
-  type TaskId,
-  defineTask,
-} from "@msa/durable";
-import { MemoryStorage } from "@msa/durable/storage/memory";
+import durable from "@msa/durable";
+import type durableTypes from "@msa/durable/index.types";
+import memory from "@msa/durable/storage/memory";
 import { Effect } from "effect";
 import { dual } from "effect/Function";
 import { vi } from "vite-plus/test";
 
-import effectSupport from "./effect-support.ts";
 import type harnessOwnershipSupportTypes from "./harness-ownership-support.types.ts";
-import sessionSupport from "./session-support.ts";
-import taskSupport from "./task-support.ts";
+import testSupport from "./support.ts";
 
-const { awaited, pollUntil } = effectSupport;
-const { context } = sessionSupport;
-const { aborted, deferred, openTasks } = taskSupport;
+const { LiveDoc, defineTask } = durable;
+const { MemoryStorage } = memory;
+
+const { awaited, pollUntil } = testSupport;
+const { context } = testSupport;
+const { aborted, deferred, openTasks } = testSupport;
 
 const gates = new Map<string, PromiseWithResolvers<harnessOwnershipSupportTypes.Ending>>();
 
@@ -72,7 +67,11 @@ const Hold = defineTask<{ name: string; slowAbort?: boolean }, { phase: "hold" }
   version: 1,
 });
 
-const Waiter = defineTask<{ on: TaskId[] }, { phase: "wait" } | { phase: "done" }, null>({
+const Waiter = defineTask<
+  { on: durableTypes.TaskId[] },
+  { phase: "wait" } | { phase: "done" },
+  null
+>({
   abort: (_task, runtime, ctx) =>
     Promise.resolve(
       runtime.commit(() => ({ outcome: { status: "aborted" }, status: "terminal" }), ctx),
@@ -151,7 +150,7 @@ const open: {
 const directories = new Set<string>();
 
 function ownedChildImpl(
-  parent: Conversation,
+  parent: durableTypes.Conversation,
   name: string,
   options: { background?: boolean; slowInner?: boolean; slowOwner?: boolean } = {},
 ): Promise<harnessOwnershipSupportTypes.Tree> {
@@ -192,9 +191,9 @@ const ownedChild: {
   (
     name: string,
     options?: { background?: boolean; slowInner?: boolean; slowOwner?: boolean },
-  ): (parent: Conversation) => ReturnType<typeof ownedChildImpl>;
+  ): (parent: durableTypes.Conversation) => ReturnType<typeof ownedChildImpl>;
   (
-    parent: Conversation,
+    parent: durableTypes.Conversation,
     name: string,
     options?: { background?: boolean; slowInner?: boolean; slowOwner?: boolean },
   ): ReturnType<typeof ownedChildImpl>;
@@ -220,7 +219,10 @@ function gated(message: AssistantMessage): {
 
 const waitUntil = (check: Effect.Effect<boolean>): Effect.Effect<void> => pollUntil(check, 500, 5);
 
-const busy = Effect.fn("busy")(function* (conversation: Conversation, task: TaskId) {
+const busy = Effect.fn("busy")(function* (
+  conversation: durableTypes.Conversation,
+  task: durableTypes.TaskId,
+) {
   const runPromise = Effect.runPromiseWith(yield* Effect.context<never>());
 
   yield* awaited(
@@ -236,11 +238,16 @@ const busy = Effect.fn("busy")(function* (conversation: Conversation, task: Task
   );
 });
 
-const status = Effect.fn("status")(function* (harness: Harness, id: TaskId) {
+const status = Effect.fn("status")(function* (
+  harness: durableTypes.Harness,
+  id: durableTypes.TaskId,
+) {
   return (yield* awaited(harness.getTask(id, context)))!.state;
 });
 
-const openHarness = Effect.fn("openHarness")(function* (storage: Storage = new MemoryStorage()) {
+const openHarness = Effect.fn("openHarness")(function* (
+  storage: durableTypes.Storage = new MemoryStorage(),
+) {
   const opened = yield* openTasks(storage, [Hold, Waiter, Spawner]);
   const root = yield* awaited(opened.harness.root(context));
   opened.harness.resume();

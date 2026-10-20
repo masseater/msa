@@ -1,18 +1,18 @@
 import { CodemodeSandbox } from "@msa/codemode";
-import { ToolResultEntry, type ToolTaskInput } from "@msa/durable";
-import { ToolTask } from "@msa/durable/harness";
+import durable from "@msa/durable";
+import harnessModule from "@msa/durable/harness";
 import { Effect } from "effect";
 import { afterEach, describe, expect, it } from "vite-plus/test";
 
-import {
-  CodemodeJournalDoc,
-  CodemodeRunDoc,
-  type CodemodeToolDetails,
-  createCodemodeTool,
-} from "../src/codemode/codemode.ts";
+import codemode from "../src/codemode/codemode.ts";
 import codemodeChatSupport from "./codemode-chat-support.ts";
+import type codemodeDurableCodeModeTestTypes from "./codemode-durable-code-mode.test.types.ts";
 import codemodeSupport from "./codemode-support.ts";
 import support from "./support.ts";
+
+const { CodemodeJournalDoc, CodemodeRunDoc, createCodemodeTool } = codemode;
+const { ToolResultEntry } = durable;
+const { ToolTask } = harnessModule;
 
 const { codemodeChat, tool } = codemodeChatSupport;
 const {
@@ -107,7 +107,9 @@ const listsScriptTool = Effect.gen(function* () {
     (yield* awaited(root.submit({ content: "go", type: "input" }, context))).wait(context),
   );
   const entry = (yield* allEntries(root)).find((candidate) => ToolResultEntry.is(candidate))!;
-  const details = (entry.model![0] as { details?: CodemodeToolDetails }).details;
+  const details = (
+    entry.model![0] as { details?: codemodeDurableCodeModeTestTypes.CodemodeToolDetails }
+  ).details;
   expect(details?.calls).toMatchObject([
     { args: '{"text":"a"}', id: 1, name: "echo", status: "ok" },
     { args: "{}", error: "permission denied", id: 2, name: "fails", status: "error" },
@@ -181,7 +183,7 @@ const abortsCallStill = Effect.gen(function* () {
   )).items;
   const hold = tasks.find(
     (task) =>
-      (task.input as ToolTaskInput).kind === "nested" &&
+      (task.input as codemodeDurableCodeModeTestTypes.ToolTaskInput).kind === "nested" &&
       (task.input as { call: { name: string } }).call.name === "hold",
   )!;
   expect(chat.holds.runs).toBe(1);

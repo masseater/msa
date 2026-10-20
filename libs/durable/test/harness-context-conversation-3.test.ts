@@ -1,4 +1,4 @@
-import { type Conversation, type EntryDraft, type EntryRecord } from "@msa/durable";
+import type durableTypes from "@msa/durable/index.types";
 import { Effect } from "effect";
 import { afterEach, describe, expect, it, vi } from "vite-plus/test";
 
@@ -22,7 +22,7 @@ afterEach(() => {
 
 const checkRandomExtendedReads = Effect.fn("checkRandomExtendedReads")(function* (
   t: harnessContextConversation3CasesTypes.RandomTranscript,
-  root: Conversation,
+  root: durableTypes.Conversation,
   runtime: harnessContextSupportTypes.RunRuntime,
   taskContext: harnessContextSupportTypes.Context,
 ) {
@@ -55,7 +55,7 @@ const checkRandomExtendedReads = Effect.fn("checkRandomExtendedReads")(function*
 
 const checkRandomForkReads = Effect.fn("checkRandomForkReads")(function* (
   t: harnessContextConversation3CasesTypes.RandomTranscript,
-  root: Conversation,
+  root: durableTypes.Conversation,
   runtime: harnessContextSupportTypes.RunRuntime,
   taskContext: harnessContextSupportTypes.Context,
 ) {
@@ -79,7 +79,10 @@ function contextProbe(
   runtime: harnessContextSupportTypes.RunRuntime,
   taskContext: harnessContextSupportTypes.Context,
 ) {
-  const append = (conversationId: Conversation["id"], draft: EntryDraft) =>
+  const append = (
+    conversationId: durableTypes.Conversation["id"],
+    draft: durableTypes.EntryDraft,
+  ) =>
     runtime.commit(
       (tx) =>
         Effect.runPromise(
@@ -107,7 +110,7 @@ type ContextProbe = ReturnType<typeof contextProbe>;
 
 const checkBaselineAfterCachedAnswers = Effect.fn("checkBaselineAfterCachedAnswers")(function* (
   { append, read }: ContextProbe,
-  root: Conversation,
+  root: durableTypes.Conversation,
 ) {
   expect((yield* awaited(read(root))).messages[0]).toBe("user:first");
   yield* awaited(append(root.id, { kind: "msa.system", model: [system({ plan: "Plan." })] }));
@@ -154,7 +157,7 @@ const checkOmittedSystemBeforeBaseline = Effect.fn("checkOmittedSystemBeforeBase
     root.fork(first.id, { ownership: { kind: "ownerless" } }, taskContext),
   );
   yield* awaited(append(omitted.id, { kind: "message", model: [assistant("answer")] }));
-  let host: EntryRecord | undefined;
+  let host: durableTypes.EntryRecord | undefined;
   yield* awaited(
     runtime.commit(
       (tx) =>

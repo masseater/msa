@@ -1,20 +1,11 @@
 import { Effect } from "effect";
 
-import type { SqliteExecutor, SqliteValue } from "./database.ts";
+import type cloudflareExecutorTypes from "./cloudflare-executor.types.ts";
+import type databaseTypes from "./database.ts";
 
-type DurableObjectSqlValue = ArrayBuffer | string | number | null;
-
-export type DurableObjectSqliteStorage = {
-  readonly sql: {
-    exec(
-      query: string,
-      ...bindings: DurableObjectSqlValue[]
-    ): { toArray(): Record<string, DurableObjectSqlValue>[] };
-  };
-  transaction<T>(closure: () => Promise<T>): Promise<T>;
-};
-
-function bindValue(value: SqliteValue): DurableObjectSqlValue {
+function bindValue(
+  value: databaseTypes.SqliteValue,
+): cloudflareExecutorTypes.DurableObjectSqlValue {
   if (value instanceof Uint8Array) return value.slice().buffer as ArrayBuffer;
   if (typeof value !== "bigint") return value;
   if (value < BigInt(Number.MIN_SAFE_INTEGER) || value > BigInt(Number.MAX_SAFE_INTEGER)) {
@@ -23,9 +14,11 @@ function bindValue(value: SqliteValue): DurableObjectSqlValue {
   return Number(value);
 }
 
-const bind = (params: readonly SqliteValue[]): DurableObjectSqlValue[] => params.map(bindValue);
+const bind = (
+  params: readonly databaseTypes.SqliteValue[],
+): cloudflareExecutorTypes.DurableObjectSqlValue[] => params.map(bindValue);
 
-function rows<T>(input: Record<string, DurableObjectSqlValue>[]): T[] {
+function rows<T>(input: Record<string, cloudflareExecutorTypes.DurableObjectSqlValue>[]): T[] {
   for (const row of input) {
     for (const key in row) {
       const value = row[key];
@@ -36,10 +29,10 @@ function rows<T>(input: Record<string, DurableObjectSqlValue>[]): T[] {
   return input as T[];
 }
 
-export class DurableObjectSqliteExecutor implements SqliteExecutor {
-  protected readonly storage: DurableObjectSqliteStorage;
+export default class DurableObjectSqliteExecutor implements databaseTypes.SqliteExecutor {
+  protected readonly storage: cloudflareExecutorTypes.DurableObjectSqliteStorage;
 
-  constructor(storage: DurableObjectSqliteStorage) {
+  constructor(storage: cloudflareExecutorTypes.DurableObjectSqliteStorage) {
     this.storage = storage;
   }
 
@@ -49,17 +42,20 @@ export class DurableObjectSqliteExecutor implements SqliteExecutor {
     });
   }
 
-  run(sql: string, ...params: SqliteValue[]): Promise<void> {
+  run(sql: string, ...params: databaseTypes.SqliteValue[]): Promise<void> {
     return this.checked(() => {
       this.storage.sql.exec(sql, ...bind(params));
     });
   }
 
-  get<T extends object>(sql: string, ...params: SqliteValue[]): Promise<T | undefined> {
+  get<T extends object>(
+    sql: string,
+    ...params: databaseTypes.SqliteValue[]
+  ): Promise<T | undefined> {
     return this.checked(() => rows<T>(this.storage.sql.exec(sql, ...bind(params)).toArray())[0]);
   }
 
-  all<T extends object>(sql: string, ...params: SqliteValue[]): Promise<T[]> {
+  all<T extends object>(sql: string, ...params: databaseTypes.SqliteValue[]): Promise<T[]> {
     return this.checked(() => rows<T>(this.storage.sql.exec(sql, ...bind(params)).toArray()));
   }
 

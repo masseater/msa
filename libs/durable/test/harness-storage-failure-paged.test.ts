@@ -1,5 +1,5 @@
 import type { Context } from "@msa/chord";
-import { MemoryStorage } from "@msa/durable/storage/memory";
+import type memoryTypes from "@msa/durable/storage/memory.types";
 import { Effect } from "effect";
 import { describe, expect, it } from "vite-plus/test";
 
@@ -20,7 +20,7 @@ const closesBackendOnly = Effect.gen(function* () {
   const firstPage = deferred();
   const releaseFirst = deferred();
   class Paged extends ControlledStorage {
-    override scanEntries(...args: Parameters<MemoryStorage["scanEntries"]>) {
+    override scanEntries(...args: Parameters<memoryTypes.MemoryStorage["scanEntries"]>) {
       const superScanEntries = super.scanEntries.bind(this);
       return runPromise(
         Effect.gen(function* () {

@@ -1,5 +1,6 @@
 import { Type } from "@msa/ai";
-import { type RegistrySnapshot, type TaskId, defineTask, defineTool } from "@msa/durable";
+import durable from "@msa/durable";
+import type durableTypes from "@msa/durable/index.types";
 import { Effect } from "effect";
 import { describe, expect, it } from "vite-plus/test";
 
@@ -8,6 +9,8 @@ import harnessSupport from "./harness-support.ts";
 import harnessTasksSupport from "./harness-tasks-support.ts";
 import sessionSupport from "./session-support.ts";
 import taskSupport from "./task-support.ts";
+
+const { defineTask, defineTool } = durable;
 
 const { awaited } = effectSupport;
 const { addTool } = harnessSupport;
@@ -18,7 +21,7 @@ const { abortedWith, completed, deferred, eventually } = taskSupport;
 function waiterTasks() {
   const gate = deferred();
   const order: string[] = [];
-  const waiting: { on: TaskId[]; outcomes: string[] } = { on: [], outcomes: [] };
+  const waiting: { on: durableTypes.TaskId[]; outcomes: string[] } = { on: [], outcomes: [] };
   const Waiter = defineTask<null, { phase: "wait" } | { phase: "resume" }, null>({
     abort: (_task, runtime, ctx) => Promise.resolve(runtime.commit(() => abortedWith("test"), ctx)),
     initial: () => ({ phase: "wait" }),
@@ -67,7 +70,7 @@ function waiterTasks() {
 }
 
 function timedWaiter() {
-  const timing: { clock: number; on: TaskId[] } = { clock: 1_000, on: [] };
+  const timing: { clock: number; on: durableTypes.TaskId[] } = { clock: 1_000, on: [] };
   const gate = deferred();
   const Waiter = defineTask<null, { phase: "wait" } | { phase: "resume" }, null>({
     abort: (_task, runtime, ctx) => Promise.resolve(runtime.commit(() => abortedWith("test"), ctx)),
@@ -93,7 +96,8 @@ function snapshotTask() {
   const seen: { phase: string; tools: string[]; same: boolean }[] = [];
   const phaseGate = deferred();
   const entered = deferred();
-  const tools = (snapshot: RegistrySnapshot) => snapshot.tools().map(({ tool }) => tool.name);
+  const tools = (snapshot: durableTypes.RegistrySnapshot) =>
+    snapshot.tools().map(({ tool }) => tool.name);
   const Snapshots = defineTask<null, { phase: "a" } | { phase: "b" }, null>({
     abort: () => Promise.resolve(),
     initial: () => ({ phase: "a" }),

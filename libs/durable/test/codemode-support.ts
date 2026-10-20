@@ -1,14 +1,20 @@
 import { type AssistantMessage, fauxAssistantMessage, fauxText, fauxToolCall } from "@msa/ai";
-import { type Harness, type TaskId, ToolResultEntry, type ToolTaskInput } from "@msa/durable";
-import { ToolTask } from "@msa/durable/harness";
+import harnessModule from "@msa/durable/harness";
+import type durableTypes from "@msa/durable/index.types";
 import { Effect } from "effect";
 import { expect } from "vite-plus/test";
 
-import { type CodemodeToolDetails } from "../src/codemode/codemode.ts";
-import { NodeExecutionEnv } from "../src/env/node.ts";
-import { openNodeSqliteStorage } from "../src/storage/sqlite/node.ts";
+import type codemodeTypes from "../src/codemode/codemode.types.ts";
 import codemodeChatSupport from "./codemode-chat-support.ts";
+import durableKit from "./durable-kit.ts";
 import support from "./support.ts";
+
+const { durable, envNode: nodeModule, sqliteNode: node } = durableKit;
+
+const { openNodeSqliteStorage } = node;
+const { ToolResultEntry } = durable;
+const { ToolTask } = harnessModule;
+const { NodeExecutionEnv } = nodeModule;
 
 const { codemodeChat } = codemodeChatSupport;
 const { allEntries, awaited, context, makeTempDir, makeTempFile, openChat, removeDir } = support;
@@ -56,21 +62,22 @@ const resultDetails = Effect.fn("resultDetails")(function* (
   root: Effect.Success<ReturnType<typeof openChat>>["root"],
 ) {
   const entry = (yield* allEntries(root)).find((candidate) => ToolResultEntry.is(candidate))!;
-  return (entry.model![0] as { details?: CodemodeToolDetails }).details;
+  return (entry.model![0] as { details?: codemodeTypes.CodemodeToolDetails }).details;
 });
 
-const scriptTask = Effect.fn("scriptTask")(function* (harness: Harness) {
+const scriptTask = Effect.fn("scriptTask")(function* (harness: durableTypes.Harness) {
   const tasks = (yield* awaited(
     harness.commit((tx) => tx.scanTasks({ kind: ToolTask.definition.name }, 100), context),
   )).items;
-  return tasks.find((task) => (task.input as ToolTaskInput).kind === "model")!.id;
+  return tasks.find((task) => (task.input as durableTypes.ToolTaskInput).kind === "model")!.id;
 });
 
-const nestedCount = Effect.fn("nestedCount")(function* (harness: Harness) {
+const nestedCount = Effect.fn("nestedCount")(function* (harness: durableTypes.Harness) {
   const tasks = (yield* awaited(
     harness.commit((tx) => tx.scanTasks({ kind: ToolTask.definition.name }, 100), context),
   )).items;
-  return tasks.filter((task) => (task.input as ToolTaskInput).kind === "nested").length;
+  return tasks.filter((task) => (task.input as durableTypes.ToolTaskInput).kind === "nested")
+    .length;
 });
 
 const resultText = Effect.fn("resultText")(function* (
@@ -95,8 +102,12 @@ const resultText = Effect.fn("resultText")(function* (
 const restart = Effect.fn("restart")(function* (
   chat: ReturnType<typeof codemodeChat>,
   code: string,
-  between: (harness: Harness, task: TaskId) => Effect.Effect<void> = () => Effect.void,
-  beforeClose: (harness: Harness, task: TaskId) => Effect.Effect<void> = () => Effect.void,
+  between: (harness: durableTypes.Harness, task: durableTypes.TaskId) => Effect.Effect<void> = () =>
+    Effect.void,
+  beforeClose: (
+    harness: durableTypes.Harness,
+    task: durableTypes.TaskId,
+  ) => Effect.Effect<void> = () => Effect.void,
 ) {
   const path = yield* sqlitePath();
   chat.setup.faux.setResponses([script(code), DONE]);
@@ -130,7 +141,7 @@ const runScript = Effect.fn("runScript")(function* (code: string, chat = codemod
   const model = entry.model![0];
   const message = {
     ...(model as { content: { type: string; text?: string }[]; isError: boolean }),
-    details: (model as { details?: CodemodeToolDetails }).details,
+    details: (model as { details?: codemodeTypes.CodemodeToolDetails }).details,
   };
   yield* awaited(harness.close(context));
   return { message, text: message.content.map((item) => item.text ?? `<${item.type}>`).join("") };

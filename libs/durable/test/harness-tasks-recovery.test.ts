@@ -1,14 +1,17 @@
-import { defineTask } from "@msa/durable";
+import durable from "@msa/durable";
 import { Effect } from "effect";
 import { afterEach, describe, expect, it } from "vite-plus/test";
 
-import { openNodeSqliteStorage } from "../src/storage/sqlite/node.ts";
+import node from "../src/storage/sqlite/node.ts";
 import effectSupport from "./effect-support.ts";
 import harnessTasksRecoverySupport from "./harness-tasks-recovery-support.ts";
 import type harnessTasksRecoverySupportTypes from "./harness-tasks-recovery-support.types.ts";
 import platformSupport from "./platform-support.ts";
 import sessionSupport from "./session-support.ts";
 import taskSupport from "./task-support.ts";
+
+const { defineTask } = durable;
+const { openNodeSqliteStorage } = node;
 
 const { awaited } = effectSupport;
 const { createIn, directories, sqlitePath } = harnessTasksRecoverySupport;

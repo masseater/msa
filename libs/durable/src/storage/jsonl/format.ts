@@ -1,67 +1,15 @@
-import type { JsonValue } from "@msa/chord";
 import { Function } from "effect";
 
-import type { FileError } from "../../env/index.ts";
-import { seqFromNumber } from "../../ids.ts";
-import type {
-  DocumentContent,
-  DocumentCreate,
-  DocumentId,
-  Seq,
-  StorageWrite,
-  TaskId,
-  TaskRecord,
-} from "../../types.ts";
-import { JsonlCorruptionError } from "./corruption-error.ts";
+import type envTypes from "../../env/index.types.ts";
+import ids from "../../ids.ts";
+import type typesModule from "../../types.types.ts";
+import JsonlCorruptionError from "./corruption-error.ts";
+import type formatTypes from "./format.types.ts";
 
-export const FORMAT_VERSION = 1;
-export const MAIN_FILE = "main.jsonl";
+const { seqFromNumber } = ids;
 
-export type StoredTask = TaskRecord<JsonValue, JsonValue, JsonValue>;
-
-export type MainOperation =
-  | Extract<
-      StorageWrite,
-      { readonly type: "conversation" | "entry" | "submission" | "document.retire" }
-    >
-  | { readonly type: "task"; readonly value: StoredTask }
-  | { readonly type: "task.sidecar"; readonly id: TaskId; readonly ordinal: number }
-  | { readonly type: "document.create"; readonly record: DocumentCreate; readonly ordinal: number }
-  | { readonly type: "document.change"; readonly id: DocumentId; readonly ordinal: number };
-
-export type MainMarker = {
-  readonly format: typeof FORMAT_VERSION;
-  readonly type: "commit";
-  readonly seq: Seq;
-  readonly writes: readonly MainOperation[];
-};
-
-export type SidecarPayload =
-  | { readonly type: "task"; readonly value: StoredTask }
-  | { readonly type: "document"; readonly id: DocumentId; readonly content: DocumentContent };
-
-export type SidecarRecord = {
-  readonly format: typeof FORMAT_VERSION;
-  readonly type: "record";
-  readonly seq: Seq;
-  readonly ordinal: number;
-  readonly payload: SidecarPayload;
-};
-
-export type ParsedLine<T> = {
-  readonly value: T;
-  readonly start: number;
-};
-
-export type ParsedFile<T> = {
-  readonly path: string;
-  readonly lines: readonly ParsedLine<T>[];
-};
-
-export type EncodedCommit = {
-  readonly marker: string;
-  readonly sidecars: ReadonlyMap<string, string>;
-};
+const FORMAT_VERSION = 1;
+const MAIN_FILE = "main.jsonl";
 
 const isObject = (value: unknown): value is Record<string, unknown> =>
   value !== null && typeof value === "object" && !Array.isArray(value);
@@ -70,38 +18,40 @@ const isSafeInteger = (value: unknown): value is number => Number.isSafeInteger(
 
 const isOrdinal = (value: unknown): boolean => isSafeInteger(value) && value >= 0;
 
-export const sidecarFileName: {
-  (id: DocumentId | TaskId): (kind: "doc" | "task") => string;
-  (kind: "doc" | "task", id: DocumentId | TaskId): string;
+const sidecarFileName: {
+  (id: typesModule.DocumentId | typesModule.TaskId): (kind: "doc" | "task") => string;
+  (kind: "doc" | "task", id: typesModule.DocumentId | typesModule.TaskId): string;
 } = Function.dual(
   2,
-  (kind: "doc" | "task", id: DocumentId | TaskId): string => `${kind}-${id}.jsonl`,
+  (kind: "doc" | "task", id: typesModule.DocumentId | typesModule.TaskId): string =>
+    `${kind}-${id}.jsonl`,
 );
 
-export const isSidecarFileName = (name: string): boolean =>
+const isSidecarFileName = (name: string): boolean =>
   /^(?:doc|task)-(?:0|[1-9]\d*)\.jsonl$/u.test(name);
 
-export const isReclaimFileName = (name: string): boolean =>
+const isReclaimFileName = (name: string): boolean =>
   /^(?:doc|task)-(?:0|[1-9]\d*)\.jsonl\.reclaim$/u.test(name);
 
-export const isCurrentOnly = (record: DocumentCreate): boolean =>
+const isCurrentOnly = (record: typesModule.DocumentCreate): boolean =>
   record.scope.kind !== "conversation" || record.history === "latest";
 
-export const sidecarKey: {
-  (seq: Seq, ordinal: number): (file: string) => string;
-  (file: string, seq: Seq, ordinal: number): string;
-} = Function.dual(3, (file: string, seq: Seq, ordinal: number): string =>
+const sidecarKey: {
+  (seq: typesModule.Seq, ordinal: number): (file: string) => string;
+  (file: string, seq: typesModule.Seq, ordinal: number): string;
+} = Function.dual(3, (file: string, seq: typesModule.Seq, ordinal: number): string =>
   JSON.stringify([file, seq, ordinal]),
 );
 
-export const jsonLine = (value: MainMarker | SidecarRecord): string => `${JSON.stringify(value)}\n`;
+const jsonLine = (value: formatTypes.MainMarker | formatTypes.SidecarRecord): string =>
+  `${JSON.stringify(value)}\n`;
 
-export const errorFromFile: {
-  (error: FileError): (action: string) => Error;
-  (action: string, error: FileError): Error;
+const errorFromFile: {
+  (error: envTypes.FileError): (action: string) => Error;
+  (action: string, error: envTypes.FileError): Error;
 } = Function.dual(
   2,
-  (action: string, error: FileError): Error =>
+  (action: string, error: envTypes.FileError): Error =>
     new Error(`JSONL ${action} failed: ${error.message}`, { cause: error }),
 );
 
@@ -135,13 +85,9 @@ const operationChecks: Readonly<
   Record<string, readonly [check: (value: Record<string, unknown>) => boolean, label: string]>
 > = {
   conversation: [hasRecordId, "Invalid conversation write"],
-  entry: [hasRecordId, "Invalid entry write"],
-  submission: [hasRecordId, "Invalid submission write"],
-  task: [isTerminalTask, "Invalid terminal task write"],
-  "document.retire": [(value) => isSafeInteger(value["id"]), "Invalid document retirement"],
-  "task.sidecar": [
+  "document.change": [
     (value) => isSafeInteger(value["id"]) && isOrdinal(value["ordinal"]),
-    "Invalid task sidecar write",
+    "Invalid document change",
   ],
   "document.create": [
     (value) =>
@@ -150,13 +96,17 @@ const operationChecks: Readonly<
       isOrdinal(value["ordinal"]),
     "Invalid document creation",
   ],
-  "document.change": [
+  "document.retire": [(value) => isSafeInteger(value["id"]), "Invalid document retirement"],
+  entry: [hasRecordId, "Invalid entry write"],
+  submission: [hasRecordId, "Invalid submission write"],
+  task: [isTerminalTask, "Invalid terminal task write"],
+  "task.sidecar": [
     (value) => isSafeInteger(value["id"]) && isOrdinal(value["ordinal"]),
-    "Invalid document change",
+    "Invalid task sidecar write",
   ],
 };
 
-const validateMainOperation = (value: unknown, description: string): MainOperation => {
+const validateMainOperation = (value: unknown, description: string): formatTypes.MainOperation => {
   if (!isObject(value) || typeof value["type"] !== "string") {
     throw new JsonlCorruptionError(`Invalid write in ${description}`);
   }
@@ -165,13 +115,13 @@ const validateMainOperation = (value: unknown, description: string): MainOperati
     : undefined;
   if (check === undefined) throw new JsonlCorruptionError(`Unknown write type in ${description}`);
   if (!check[0](value)) throw new JsonlCorruptionError(`${check[1]} in ${description}`);
-  return value as MainOperation;
+  return value as formatTypes.MainOperation;
 };
 
-export const parseMainMarker: {
-  (line: number): (text: string) => MainMarker;
-  (text: string, line: number): MainMarker;
-} = Function.dual(2, (text: string, line: number): MainMarker => {
+const parseMainMarker: {
+  (line: number): (text: string) => formatTypes.MainMarker;
+  (text: string, line: number): formatTypes.MainMarker;
+} = Function.dual(2, (text: string, line: number): formatTypes.MainMarker => {
   const description = `${MAIN_FILE} line ${line}`;
   const value = parseJson(text, description);
   if (
@@ -186,18 +136,23 @@ export const parseMainMarker: {
   }
   return {
     format: FORMAT_VERSION,
-    type: "commit",
     seq: seqFromNumber(value["seq"]),
+    type: "commit",
     writes: value["writes"].map((write) => validateMainOperation(write, description)),
   };
 });
 
-const validateDocumentContent = (value: unknown, description: string): DocumentContent => {
+const validateDocumentContent = (
+  value: unknown,
+  description: string,
+): typesModule.DocumentContent => {
   if (!isObject(value) || !isSafeInteger(value["version"]) || value["version"] < 1) {
     throw new JsonlCorruptionError(`Invalid document content in ${description}`);
   }
-  if (value["kind"] === "base" && isObject(value["value"])) return value as DocumentContent;
-  if (value["kind"] === "delta" && Array.isArray(value["ops"])) return value as DocumentContent;
+  if (value["kind"] === "base" && isObject(value["value"]))
+    return value as typesModule.DocumentContent;
+  if (value["kind"] === "delta" && Array.isArray(value["ops"]))
+    return value as typesModule.DocumentContent;
   throw new JsonlCorruptionError(`Invalid document content in ${description}`);
 };
 
@@ -226,15 +181,31 @@ const validatePayload = (payload: Record<string, unknown>, description: string):
   }
 };
 
-export const parseSidecarRecord: {
-  (file: string, line: number): (text: string) => SidecarRecord;
-  (text: string, file: string, line: number): SidecarRecord;
-} = Function.dual(3, (text: string, file: string, line: number): SidecarRecord => {
+const parseSidecarRecord: {
+  (file: string, line: number): (text: string) => formatTypes.SidecarRecord;
+  (text: string, file: string, line: number): formatTypes.SidecarRecord;
+} = Function.dual(3, (text: string, file: string, line: number): formatTypes.SidecarRecord => {
   const description = `${file} line ${line}`;
   const value = parseJson(text, description);
   if (!isRecordShape(value)) {
     throw new JsonlCorruptionError(`Invalid sidecar record in ${description}`);
   }
   validatePayload(value["payload"] as Record<string, unknown>, description);
-  return value as SidecarRecord;
+  return value as formatTypes.SidecarRecord;
 });
+
+const formatModule = {
+  FORMAT_VERSION,
+  MAIN_FILE,
+  errorFromFile,
+  isCurrentOnly,
+  isReclaimFileName,
+  isSidecarFileName,
+  jsonLine,
+  parseMainMarker,
+  parseSidecarRecord,
+  sidecarFileName,
+  sidecarKey,
+};
+
+export default formatModule;

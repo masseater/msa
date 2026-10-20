@@ -1,11 +1,13 @@
 import type { Context } from "@msa/chord";
 import { Deferred, Effect, Function } from "effect";
 
-import type { ExecutionEnv } from "../env/index.ts";
-import { getOrThrow } from "../env/result.ts";
-import type { ToolExecutionApi } from "../harness/types.ts";
+import type envTypesModule from "../env/index.types.ts";
+import resultModule from "../env/result.ts";
+import type typesModule from "../harness/types.types.ts";
 
-export function requireEnv(api: ToolExecutionApi): ExecutionEnv {
+const { getOrThrow } = resultModule;
+
+function requireEnv(api: typesModule.ToolExecutionApi): envTypesModule.ExecutionEnv {
   if (api.env === undefined) throw new Error("No execution environment is configured");
   return api.env;
 }
@@ -27,8 +29,8 @@ const readVariants = (resolved: string): Set<string> =>
     resolved.normalize("NFD").replace(/'/gu, "’"),
   ]);
 
-export const resolveToolPath = Effect.fnUntraced(function* (
-  env: ExecutionEnv,
+const resolveToolPath = Effect.fnUntraced(function* (
+  env: envTypesModule.ExecutionEnv,
   path: string,
   context: Context,
 ) {
@@ -37,8 +39,8 @@ export const resolveToolPath = Effect.fnUntraced(function* (
   );
 });
 
-export const resolveReadToolPath = Effect.fnUntraced(function* (
-  env: ExecutionEnv,
+const resolveReadToolPath = Effect.fnUntraced(function* (
+  env: envTypesModule.ExecutionEnv,
   path: string,
   context: Context,
 ) {
@@ -52,7 +54,7 @@ export const resolveReadToolPath = Effect.fnUntraced(function* (
 const queues = new Map<string, Deferred.Deferred<void>>();
 
 const canonical = (
-  env: ExecutionEnv,
+  env: envTypesModule.ExecutionEnv,
   absolutePath: string,
   context: Context,
 ): Effect.Effect<string> =>
@@ -67,7 +69,7 @@ const canonical = (
   );
 
 const canonicalMissing = Effect.fnUntraced(function* (
-  env: ExecutionEnv,
+  env: envTypesModule.ExecutionEnv,
   absolutePath: string,
   context: Context,
 ) {
@@ -81,7 +83,7 @@ const canonicalMissing = Effect.fnUntraced(function* (
 });
 
 const mutationKey = Effect.fnUntraced(function* (
-  env: ExecutionEnv,
+  env: envTypesModule.ExecutionEnv,
   path: string,
   context: Context,
 ) {
@@ -89,8 +91,8 @@ const mutationKey = Effect.fnUntraced(function* (
   return `${env.id}\0${yield* canonical(env, absolutePath, context)}`;
 });
 
-export const fileMutation = Effect.fnUntraced(function* <T>(
-  env: ExecutionEnv,
+const fileMutation = Effect.fnUntraced(function* <T>(
+  env: envTypesModule.ExecutionEnv,
   path: string,
   run: Effect.Effect<T>,
   context: Context,
@@ -109,11 +111,34 @@ export const fileMutation = Effect.fnUntraced(function* <T>(
   );
 });
 
-export const withFileMutationQueue: {
-  <T>(path: string, fn: () => Promise<T>, context: Context): (env: ExecutionEnv) => Promise<T>;
-  <T>(env: ExecutionEnv, path: string, fn: () => Promise<T>, context: Context): Promise<T>;
+const withFileMutationQueue: {
+  <T>(
+    path: string,
+    fn: () => Promise<T>,
+    context: Context,
+  ): (env: envTypesModule.ExecutionEnv) => Promise<T>;
+  <T>(
+    env: envTypesModule.ExecutionEnv,
+    path: string,
+    fn: () => Promise<T>,
+    context: Context,
+  ): Promise<T>;
 } = Function.dual(
   4,
-  <T>(env: ExecutionEnv, path: string, fn: () => Promise<T>, context: Context): Promise<T> =>
-    Effect.runPromise(fileMutation(env, path, Effect.promise(fn), context)),
+  <T>(
+    env: envTypesModule.ExecutionEnv,
+    path: string,
+    fn: () => Promise<T>,
+    context: Context,
+  ): Promise<T> => Effect.runPromise(fileMutation(env, path, Effect.promise(fn), context)),
 );
+
+const envModule = {
+  fileMutation,
+  requireEnv,
+  resolveReadToolPath,
+  resolveToolPath,
+  withFileMutationQueue,
+};
+
+export default envModule;

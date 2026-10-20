@@ -1,6 +1,6 @@
 import { Data } from "effect";
 
-export class ReadAfterWrite extends Data.TaggedError("ReadAfterWrite")<{
+export default class ReadAfterWrite extends Data.TaggedError("ReadAfterWrite")<{
   readonly message: string;
 }> {
   constructor(method: string) {

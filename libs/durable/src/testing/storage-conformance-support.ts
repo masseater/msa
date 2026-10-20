@@ -2,37 +2,28 @@ import type { JsonValue } from "@msa/chord";
 import { BACKGROUND_CONTEXT } from "@msa/chord/context";
 import { Cause, Effect, Exit, Function, Schema } from "effect";
 
-import {
-  type ConversationId,
-  type DocumentId,
-  type EntryId,
-  type EntryRecord,
-  type Id,
-  ROOT_CONVERSATION_ID,
-  type Storage,
-  type StorageWrite,
-  type TaskId,
-  type TaskRecord,
-} from "../types.ts";
-import type { StorageConformanceAssertions } from "./types.ts";
+import types from "../types.ts";
+import type typesModule from "../types.types.ts";
+import type storageConformanceSupportTypes from "./storage-conformance-support.types.ts";
+import type typesModuleModule from "./types.ts";
 
-export const context = BACKGROUND_CONTEXT;
-export type StoredTask = TaskRecord<JsonValue, JsonValue, JsonValue>;
-export type Identified = { readonly id: number };
+const { ROOT_CONVERSATION_ID } = types;
 
-export const io = <A>(operation: () => Promise<A>): Effect.Effect<A> => Effect.promise(operation);
+const context = BACKGROUND_CONTEXT;
 
-export const mint = <I extends Id<string>>(storage: Storage): Effect.Effect<I> =>
+const io = <A>(operation: () => Promise<A>): Effect.Effect<A> => Effect.promise(operation);
+
+const mint = <I extends typesModule.Id<string>>(storage: typesModule.Storage): Effect.Effect<I> =>
   io(() => storage.mintId<I>());
 
-export const commit = Effect.fnUntraced(function* (
-  storage: Storage,
-  writes: readonly StorageWrite[],
+const commit = Effect.fnUntraced(function* (
+  storage: typesModule.Storage,
+  writes: readonly typesModule.StorageWrite[],
 ) {
   return yield* io(() => storage.commit(writes, context));
 });
 
-export const createRoot = (storage: Storage): Effect.Effect<ConversationId> =>
+const createRoot = (storage: typesModule.Storage): Effect.Effect<typesModule.ConversationId> =>
   Effect.as(
     commit(storage, [{ type: "conversation", value: { id: ROOT_CONVERSATION_ID } }]),
     ROOT_CONVERSATION_ID,
@@ -41,74 +32,74 @@ export const createRoot = (storage: Storage): Effect.Effect<ConversationId> =>
 const isDataFirst = (args: IArguments): boolean => typeof args[1] === "number";
 
 const storedPendingTask = (
-  id: TaskId<JsonValue>,
-  conversationId: ConversationId,
+  id: typesModule.TaskId<JsonValue>,
+  conversationId: typesModule.ConversationId,
   phase = "ready",
 ) =>
   ({
-    id,
-    conversationId,
-    kind: "test.task",
-    version: 1,
-    input: { value: id },
-    state: { status: "pending", checkpoint: { phase } },
-    background: false,
     abortRequested: false,
-  }) satisfies StoredTask;
+    background: false,
+    conversationId,
+    id,
+    input: { value: id },
+    kind: "test.task",
+    state: { checkpoint: { phase }, status: "pending" },
+    version: 1,
+  }) satisfies storageConformanceSupportTypes.StoredTask;
 
 type PendingTask = ReturnType<typeof storedPendingTask>;
 
-export const pendingTask: {
-  (conversationId: ConversationId, phase?: string): (id: TaskId<JsonValue>) => PendingTask;
-  (id: TaskId<JsonValue>, conversationId: ConversationId, phase?: string): PendingTask;
+const pendingTask: {
+  (
+    conversationId: typesModule.ConversationId,
+    phase?: string,
+  ): (id: typesModule.TaskId<JsonValue>) => PendingTask;
+  (
+    id: typesModule.TaskId<JsonValue>,
+    conversationId: typesModule.ConversationId,
+    phase?: string,
+  ): PendingTask;
 } = Function.dual(isDataFirst, storedPendingTask);
 
-export const entry: {
+const entry: {
   (
-    conversationId: ConversationId,
+    conversationId: typesModule.ConversationId,
     kind?: string,
-    extra?: Partial<EntryRecord>,
-  ): (id: EntryId) => EntryRecord;
+    extra?: Partial<typesModule.EntryRecord>,
+  ): (id: typesModule.EntryId) => typesModule.EntryRecord;
   (
-    id: EntryId,
-    conversationId: ConversationId,
+    id: typesModule.EntryId,
+    conversationId: typesModule.ConversationId,
     kind?: string,
-    extra?: Partial<EntryRecord>,
-  ): EntryRecord;
+    extra?: Partial<typesModule.EntryRecord>,
+  ): typesModule.EntryRecord;
 } = Function.dual(
   isDataFirst,
   (
-    id: EntryId,
-    conversationId: ConversationId,
+    id: typesModule.EntryId,
+    conversationId: typesModule.ConversationId,
     kind = "message",
-    extra: Partial<EntryRecord> = {},
-  ): EntryRecord => ({ id, conversationId, kind, ...extra }),
+    extra: Partial<typesModule.EntryRecord> = {},
+  ): typesModule.EntryRecord => ({ conversationId, id, kind, ...extra }),
 );
 
 const jsonString = Schema.fromJsonString(Schema.Unknown);
 
-export const parseJson = (text: string): Effect.Effect<unknown> =>
+const parseJson = (text: string): Effect.Effect<unknown> =>
   Effect.orDie(Schema.decodeEffect(jsonString)(text));
 
-export const roundTripJson = (value: unknown): Effect.Effect<unknown> =>
+const roundTripJson = (value: unknown): Effect.Effect<unknown> =>
   Effect.flatMap(Effect.orDie(Schema.encodeEffect(jsonString)(value)), parseJson);
 
-type AssertionResult = {
-  toBe(expected: unknown): void;
-  toBeDefined(): void;
-  toBeGreaterThan(expected: number): void;
-  toBeUndefined(): void;
-  toEqual(expected: unknown): void;
-  toHaveLength(expected: number): void;
-  toMatchObject(expected: unknown): void;
-  readonly rejects: { toThrow(messageIncludes: string): Effect.Effect<void> };
-};
-
-export type Expect = (actual: unknown) => AssertionResult;
-
-export const assertionFacade =
-  (assertions: StorageConformanceAssertions): Expect =>
+const assertionFacade =
+  (
+    assertions: typesModuleModule.StorageConformanceAssertions,
+  ): storageConformanceSupportTypes.Expect =>
   (actual) => ({
+    rejects: {
+      toThrow: (messageIncludes) =>
+        io(() => assertions.rejects(Promise.resolve(actual), messageIncludes)),
+    },
     toBe: (expected) => assertions.strictEqual(actual, expected),
     toBeDefined: () => assertions.ok(actual !== undefined, "Expected value to be defined"),
     toBeGreaterThan: (expected) => assertions.greaterThan(actual as number, expected),
@@ -117,34 +108,43 @@ export const assertionFacade =
     toHaveLength: (expected) =>
       assertions.strictEqual((actual as { readonly length: unknown }).length, expected),
     toMatchObject: (expected) => assertions.partialDeepEqual(actual, expected),
-    rejects: {
-      toThrow: (messageIncludes) =>
-        io(() => assertions.rejects(Promise.resolve(actual), messageIncludes)),
-    },
   });
 
-export const documentAt = Effect.fnUntraced(function* (
-  storage: Storage,
-  id: DocumentId,
-  at: Parameters<Storage["document"]>[1],
+const documentAt = Effect.fnUntraced(function* (
+  storage: typesModule.Storage,
+  id: typesModule.DocumentId,
+  at: Parameters<typesModule.Storage["document"]>[1],
 ) {
   return yield* io(() => storage.document(id, at, context));
 });
 
-export const documentIds = Effect.fnUntraced(function* (
-  storage: Storage,
-  query: Parameters<Storage["scanDocuments"]>[0],
+const documentIds = Effect.fnUntraced(function* (
+  storage: typesModule.Storage,
+  query: Parameters<typesModule.Storage["scanDocuments"]>[0],
 ) {
   const page = yield* io(() => storage.scanDocuments(query, 10, undefined, context));
   return page.items.map(({ id }) => id);
 });
 
-export const failureOf = <A>(effect: Effect.Effect<A>): Effect.Effect<unknown> =>
+const failureOf = <A>(effect: Effect.Effect<A>): Effect.Effect<unknown> =>
   Effect.map(Effect.exit(effect), (exit) =>
     Exit.isFailure(exit) ? Cause.squash(exit.cause) : undefined,
   );
 
-export interface StorageCaseSpec {
-  readonly name: string;
-  readonly test: (storage: Storage, expect: Expect) => Effect.Effect<void>;
-}
+const storageConformanceSupport = {
+  assertionFacade,
+  commit,
+  context,
+  createRoot,
+  documentAt,
+  documentIds,
+  entry,
+  failureOf,
+  io,
+  mint,
+  parseJson,
+  pendingTask,
+  roundTripJson,
+};
+
+export default storageConformanceSupport;

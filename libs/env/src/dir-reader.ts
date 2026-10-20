@@ -1,5 +1,6 @@
 import type { Context } from "@msa/chord";
-import { type DirReader, FileError, type FileInfo, type Result, err, ok } from "@msa/durable/env";
+import env from "@msa/durable/env";
+import type envTypes from "@msa/durable/env.types";
 import { Effect } from "effect";
 
 import connectionModule from "./connection.ts";
@@ -9,18 +10,20 @@ import type platformTypes from "./platform.types.ts";
 import remotePathModule from "./remote-path.ts";
 import type remotePathTypes from "./remote-path.types.ts";
 
+const { FileError, err, ok } = env;
+
 const { abortResult, recoverFileError, toFileError } = errors;
 const { RemoteError } = connectionModule;
 const { remotePath, toInfo } = remotePathModule;
 
-type Batch = { entries: FileInfo[]; done: boolean };
+type Batch = { entries: envTypes.FileInfo[]; done: boolean };
 
 function collectEntries(
-  entries: FileInfo[],
+  entries: envTypes.FileInfo[],
   batch: readonly remotePathTypes.RemoteDirEntry[],
   path: string,
   paths: platformTypes.PathOps,
-): Result<Batch, FileError> | undefined {
+): envTypes.Result<Batch, envTypes.FileError> | undefined {
   for (const entry of batch) {
     const entryPath = paths.resolve(path, entry.name);
     if (entry.error !== undefined) {
@@ -33,7 +36,7 @@ function collectEntries(
   return undefined;
 }
 
-class RemoteDirReader implements DirReader {
+export default class RemoteDirReader implements envTypes.DirReader {
   readonly #handle: handleTypes.Handle;
   #done = false;
   #closed = false;
@@ -42,7 +45,7 @@ class RemoteDirReader implements DirReader {
     this.#handle = handle;
   }
 
-  next(maxEntries: number, context: Context): Promise<Result<Batch, FileError>> {
+  next(maxEntries: number, context: Context): Promise<envTypes.Result<Batch, envTypes.FileError>> {
     const path = this.#handle.path;
     const aborted = abortResult<Batch>(context.abortSignal, path);
     if (aborted !== undefined) return Promise.resolve(aborted);
@@ -57,10 +60,13 @@ class RemoteDirReader implements DirReader {
     return Effect.runPromise(recoverFileError(this.#read(maxEntries, context), path));
   }
 
-  #read(maxEntries: number, context: Context): Effect.Effect<Result<Batch, FileError>> {
+  #read(
+    maxEntries: number,
+    context: Context,
+  ): Effect.Effect<envTypes.Result<Batch, envTypes.FileError>> {
     return Effect.gen({ self: this }, function* () {
       const handle = this.#handle;
-      const entries: FileInfo[] = [];
+      const entries: envTypes.FileInfo[] = [];
       const paths = yield* remotePath(handle.connection);
       while (!this.#done && entries.length < maxEntries) {
         const { json } = yield* Effect.promise(() =>
@@ -77,7 +83,7 @@ class RemoteDirReader implements DirReader {
         if (failed !== undefined) return failed;
         this.#done = json["done"] === true;
       }
-      return ok<Batch, FileError>({ done: this.#done, entries });
+      return ok<Batch, envTypes.FileError>({ done: this.#done, entries });
     });
   }
 
@@ -87,9 +93,3 @@ class RemoteDirReader implements DirReader {
     return this.#handle.close();
   }
 }
-
-const dirReader = {
-  RemoteDirReader,
-};
-
-export default dirReader;

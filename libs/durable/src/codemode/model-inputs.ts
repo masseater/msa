@@ -1,10 +1,10 @@
 import type { ClassifierContext, ImagesContext } from "@msa/ai";
 
-export function isRecord(value: unknown): value is Record<string, unknown> {
+function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === "object" && value !== null && !Array.isArray(value);
 }
 
-export function describeValue(value: unknown): string {
+function describeValue(value: unknown): string {
   if (value === undefined || value === null) return String(value);
   if (Array.isArray(value)) return value.length === 0 ? "an empty array" : "an array";
   if (typeof value === "object") {
@@ -70,7 +70,7 @@ function checkQuestion(id: string, question: unknown, fail: Fail): void {
   }
 }
 
-export function checkClassifierContext(context: unknown): ClassifierContext {
+function checkClassifierContext(context: unknown): ClassifierContext {
   const fail: Fail = (problem) =>
     new Error(`models.classify() ${problem}. Expected context: ${CLASSIFIER_CONTEXT_SHAPE}.`);
   if (!isRecord(context))
@@ -88,7 +88,7 @@ export function checkClassifierContext(context: unknown): ClassifierContext {
   return context as unknown as ClassifierContext;
 }
 
-export function checkImagesContext(context: unknown): ImagesContext {
+function checkImagesContext(context: unknown): ImagesContext {
   const fail = (problem: string) =>
     new Error(
       `models.generateImages() ${problem}. Expected context: { input: [{ type: "text", text: <prompt> }, ...optional { type: "image", data: <base64>, mimeType } references] }.`,
@@ -114,3 +114,12 @@ export function checkImagesContext(context: unknown): ImagesContext {
   });
   return context as unknown as ImagesContext;
 }
+
+const modelInputs = {
+  checkClassifierContext,
+  checkImagesContext,
+  describeValue,
+  isRecord,
+};
+
+export default modelInputs;

@@ -1,19 +1,17 @@
 import { createModels } from "@msa/ai";
-import {
-  type AnyTask,
-  type HarnessSettings,
-  type Registry,
-  type RegistryReader,
-  type Storage,
-  type TaskId,
-  defineExtension,
-} from "@msa/durable";
-import { Harness, createRegistry } from "@msa/durable/harness";
+import durable from "@msa/durable";
+import harnessModule from "@msa/durable/harness";
+import type harnessTypes from "@msa/durable/harness.types";
+import type durableTypes from "@msa/durable/index.types";
 import { Effect } from "effect";
 
-import { currentTimeMillis } from "../src/clock.ts";
+import clockModule from "../src/clock.ts";
 import effectSupport from "./effect-support.ts";
 import sessionSupport from "./session-support.ts";
+
+const { currentTimeMillis } = clockModule;
+const { Harness, createRegistry } = harnessModule;
+const { defineExtension } = durable;
 
 const { awaited } = effectSupport;
 const { context, flush } = sessionSupport;
@@ -38,7 +36,10 @@ const eventually = Effect.fn("eventually")(function* (
   }
 });
 
-const abortMarked = Effect.fn("abortMarked")(function* (harness: Harness, id: TaskId) {
+const abortMarked = Effect.fn("abortMarked")(function* (
+  harness: harnessTypes.Harness,
+  id: durableTypes.TaskId,
+) {
   while ((yield* awaited(harness.getTask(id, context)))?.abortRequested !== true) yield* flush;
 });
 
@@ -59,12 +60,12 @@ const settled = Effect.fn("settled")(function* (promise: Promise<unknown>) {
 });
 
 const openTasks = Effect.fn("openTasks")(function* (
-  storage: Storage,
-  tasks: readonly AnyTask[],
+  storage: durableTypes.Storage,
+  tasks: readonly durableTypes.AnyTask[],
   options: {
-    readonly registry?: Registry;
+    readonly registry?: durableTypes.Registry;
     readonly now?: () => number;
-    readonly settings?: HarnessSettings;
+    readonly settings?: durableTypes.HarnessSettings;
   } = {},
 ) {
   const registry = options.registry ?? createRegistry();
@@ -94,7 +95,9 @@ function abortedWith(reason: string) {
   return { outcome: { reason, status: "aborted" }, status: "terminal" } as const;
 }
 
-function countingReader(registry: Registry): RegistryReader & { subscriptions(): number } {
+function countingReader(
+  registry: durableTypes.Registry,
+): durableTypes.RegistryReader & { subscriptions(): number } {
   let count = 0;
   return {
     snapshot: () => registry.snapshot(),

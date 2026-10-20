@@ -1,14 +1,19 @@
-import { type Context, copyJson, type JsonValue } from "@msa/chord";
+import { type Context, type JsonValue, copyJson } from "@msa/chord";
 import { overlap } from "@msa/chord/delta/overlap";
 import { Progress } from "@msa/chord/progress";
 import { Effect, Function } from "effect";
 
-import { utf8ByteLength } from "../truncate.ts";
-import { commitTask } from "./bridge.ts";
-import { assignJson } from "./json.ts";
-import { LiveDoc, toolSlot } from "./live.ts";
-import type { Reported, ToolRuntime } from "./tool-types.ts";
-import type { Dual4, ToolDiagnostic, Tx } from "./types.ts";
+import truncate from "../truncate.ts";
+import bridge from "./bridge.ts";
+import json from "./json.ts";
+import liveModule from "./live.ts";
+import type toolTypesModule from "./tool-types.types.ts";
+import type typesModule from "./types.types.ts";
+
+const { utf8ByteLength } = truncate;
+const { LiveDoc, toolSlot } = liveModule;
+const { assignJson } = json;
+const { commitTask } = bridge;
 
 type Written = {
   text: string;
@@ -26,7 +31,7 @@ const countBytes = (
   snapshot: Snapshot,
   written: Written,
   current: Written,
-  added: readonly ToolDiagnostic[],
+  added: readonly typesModule.ToolDiagnostic[],
 ): number => {
   let bytes = 0;
   if (snapshot.text !== written.text) {
@@ -42,11 +47,14 @@ const countBytes = (
 };
 
 const writeSlot = (
-  tx: Tx,
-  runtime: ToolRuntime,
+  tx: typesModule.Tx,
+  runtime: toolTypesModule.ToolRuntime,
   snapshot: Snapshot,
   current: Written,
-  input: { readonly detailsChanged: boolean; readonly added: readonly ToolDiagnostic[] },
+  input: {
+    readonly detailsChanged: boolean;
+    readonly added: readonly typesModule.ToolDiagnostic[];
+  },
 ) =>
   Effect.gen(function* () {
     const live = yield* Effect.promise(() => tx.doc(LiveDoc, runtime.conversationId));
@@ -65,23 +73,23 @@ const writeSlot = (
   });
 
 const publish = Effect.fnUntraced(function* (
-  runtime: ToolRuntime,
-  reported: Reported,
+  runtime: toolTypesModule.ToolRuntime,
+  reported: toolTypesModule.Reported,
   written: Written,
   context: Context,
 ) {
   const snapshot = reported.output.snapshot();
   const current: Written = {
-    text: snapshot.text,
     details: reported.details,
     diagnostics: reported.diagnostics.length,
+    text: snapshot.text,
   };
   const added = reported.diagnostics.slice(written.diagnostics, current.diagnostics);
   const detailsChanged = current.details !== written.details;
   const bytes = countBytes(snapshot, written, current, added);
   yield* commitTask(
     runtime,
-    (tx: Tx) => writeSlot(tx, runtime, snapshot, current, { detailsChanged, added }),
+    (tx: typesModule.Tx) => writeSlot(tx, runtime, snapshot, current, { added, detailsChanged }),
     context,
   );
   written.text = current.text;
@@ -90,23 +98,40 @@ const publish = Effect.fnUntraced(function* (
   return bytes;
 });
 
-export const publishProgress: Dual4<ToolRuntime, Reported, boolean, Context, Progress> =
-  Function.dual(
-    4,
-    (runtime: ToolRuntime, reported: Reported, enabled: boolean, context: Context): Progress => {
-      const written: Written = { text: "", details: undefined, diagnostics: 0 };
-      return new Progress(
-        () =>
-          enabled
-            ? Effect.runPromise(publish(runtime, reported, written, context))
-            : Promise.resolve(0),
-        (error) => {
-          if (!runtime.signal.aborted) runtime.report(error);
-        },
-        runtime.settings.progress.outputIntervalMs,
-      );
-    },
-  );
+const publishProgress: typesModule.Dual4<
+  toolTypesModule.ToolRuntime,
+  toolTypesModule.Reported,
+  boolean,
+  Context,
+  Progress
+> = Function.dual(
+  4,
+  (
+    runtime: toolTypesModule.ToolRuntime,
+    reported: toolTypesModule.Reported,
+    enabled: boolean,
+    context: Context,
+  ): Progress => {
+    const written: Written = { details: undefined, diagnostics: 0, text: "" };
+    return new Progress(
+      () =>
+        enabled
+          ? Effect.runPromise(publish(runtime, reported, written, context))
+          : Promise.resolve(0),
+      (error) => {
+        if (!runtime.signal.aborted) runtime.report(error);
+      },
+      runtime.settings.progress.outputIntervalMs,
+    );
+  },
+);
 
-export const copyDiagnostic = (diagnostic: ToolDiagnostic): ToolDiagnostic =>
-  copyJson(diagnostic, { omitUndefinedProperties: true }) as ToolDiagnostic;
+const copyDiagnostic = (diagnostic: typesModule.ToolDiagnostic): typesModule.ToolDiagnostic =>
+  copyJson(diagnostic, { omitUndefinedProperties: true }) as typesModule.ToolDiagnostic;
+
+const toolProgress = {
+  copyDiagnostic,
+  publishProgress,
+};
+
+export default toolProgress;

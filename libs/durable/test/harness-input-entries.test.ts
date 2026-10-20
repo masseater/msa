@@ -1,5 +1,6 @@
-import { ConversationBusy, LiveDoc, type SubmissionDraft } from "@msa/durable";
-import { MemoryStorage } from "@msa/durable/storage/memory";
+import durable from "@msa/durable";
+import type durableTypes from "@msa/durable/index.types";
+import memory from "@msa/durable/storage/memory";
 import { Effect } from "effect";
 import { describe, expect, it } from "vite-plus/test";
 
@@ -8,6 +9,9 @@ import effectSupport from "./effect-support.ts";
 import harnessInputEntriesSupport from "./harness-input-entries-support.ts";
 import sessionSupport from "./session-support.ts";
 import taskSupport from "./task-support.ts";
+
+const { MemoryStorage } = memory;
+const { ConversationBusy, LiveDoc } = durable;
 
 const { allEntries, chatSetup, openChat, textOf } = chatSupport;
 const { awaited } = effectSupport;
@@ -112,7 +116,7 @@ const rejectsInputEntry = Effect.gen(function* () {
       content: "x",
       entry: { kind },
       type: "input",
-    } as unknown as SubmissionDraft;
+    } as unknown as durableTypes.SubmissionDraft;
     yield* awaited(
       expect(root.submit(draft, context)).rejects.toThrow("An input entry's kind must be"),
     );
@@ -144,7 +148,7 @@ const takesOnlyKind = Effect.gen(function* () {
     model: [{ content: "forged", role: "user", timestamp: 0 }],
   };
   const draft = (content: string) =>
-    ({ content, entry: extra, type: "input" }) as unknown as SubmissionDraft;
+    ({ content, entry: extra, type: "input" }) as unknown as durableTypes.SubmissionDraft;
   yield* awaited((yield* awaited(root.submit(draft("idle"), context))).wait(context));
   yield* awaited(root.submit({ content: "a", type: "input" }, context));
   yield* awaited(first.reached);

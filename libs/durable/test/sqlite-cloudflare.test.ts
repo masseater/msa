@@ -1,21 +1,23 @@
 import { DatabaseSync } from "node:sqlite";
 
-import { registerStorageConformance } from "@msa/durable/testing";
+import testing from "@msa/durable/testing";
 import { Effect } from "effect";
 import { describe, expect, it } from "vite-plus/test";
 
-import {
-  DurableObjectSqliteDatabase,
-  type DurableObjectSqliteStorage,
-  openDurableObjectSqliteStorage,
-} from "../src/storage/sqlite/cloudflare.ts";
+import cloudflare from "../src/storage/sqlite/cloudflare.ts";
+import type cloudflareTypes from "../src/storage/sqlite/cloudflare.types.ts";
 import effectSupport from "./effect-support.ts";
+
+const { registerStorageConformance } = testing;
+const { DurableObjectSqliteDatabase, openDurableObjectSqliteStorage } = cloudflare;
 
 const { awaited } = effectSupport;
 
 type SqlValue = ArrayBuffer | string | number | null;
 
-function durableObjectStorage(database = new DatabaseSync(":memory:")): DurableObjectSqliteStorage {
+function durableObjectStorage(
+  database = new DatabaseSync(":memory:"),
+): cloudflareTypes.DurableObjectSqliteStorage {
   const toNode = (value: SqlValue) =>
     value instanceof ArrayBuffer ? new Uint8Array(value) : value;
   const fromNode = (value: unknown): SqlValue =>
@@ -132,7 +134,9 @@ const rollsBackRejected = Effect.gen(function* () {
 
   const database = new DurableObjectSqliteDatabase(durableObjectStorage());
   yield* awaited(database.exec("CREATE TABLE items (id INTEGER PRIMARY KEY)"));
-  let handle: Parameters<Parameters<DurableObjectSqliteDatabase["transaction"]>[0]>[0] | undefined;
+  let handle:
+    | Parameters<Parameters<cloudflareTypes.DurableObjectSqliteDatabase["transaction"]>[0]>[0]
+    | undefined;
   yield* awaited(
     expect(
       database.transaction((transaction) =>

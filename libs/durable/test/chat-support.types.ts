@@ -1,14 +1,16 @@
 import type { FauxProviderHandle, Models } from "@msa/ai";
-import type { HarnessSettings, Registry } from "@msa/durable";
+import type durableTypes from "@msa/durable/index.types";
 import type { Effect } from "effect";
 
 declare namespace chatSupportTypes {
   type ChatSetup = {
     readonly faux: FauxProviderHandle;
     readonly models: Models;
-    readonly registry: Registry;
+    readonly registry: durableTypes.Registry;
     readonly reports: unknown[];
-    readonly settings: { -readonly [K in keyof HarnessSettings]: HarnessSettings[K] };
+    readonly settings: {
+      -readonly [K in keyof durableTypes.HarnessSettings]: durableTypes.HarnessSettings[K];
+    };
     now: () => number;
   };
 

@@ -1,19 +1,18 @@
-import {
-  type Conversation,
-  type Harness,
-  type Storage,
-  type TaskId,
-  defineTask,
-} from "@msa/durable";
+import durable from "@msa/durable";
+import type durableTypes from "@msa/durable/index.types";
 import { Effect } from "effect";
 
-import { SCHEDULER_INDEX_SIZES } from "../src/harness/harness.ts";
-import { openNodeSqliteStorage } from "../src/storage/sqlite/node.ts";
+import harnessModule from "../src/harness/harness.ts";
+import node from "../src/storage/sqlite/node.ts";
 import effectSupport from "./effect-support.ts";
 import type harnessSchedulerRetentionSupportTypes from "./harness-scheduler-retention-support.types.ts";
 import platformSupport from "./platform-support.ts";
 import sessionSupport from "./session-support.ts";
 import taskSupport from "./task-support.ts";
+
+const { defineTask } = durable;
+const { SCHEDULER_INDEX_SIZES } = harnessModule;
+const { openNodeSqliteStorage } = node;
 
 const { awaited } = effectSupport;
 const { joinPath, makeTempDir } = platformSupport;
@@ -165,7 +164,7 @@ const Rejected = defineTask<{ into: number }, { phase: "hold" }, null>({
   version: 1,
 });
 
-function sizes(harness: Harness): harnessSchedulerRetentionSupportTypes.Sizes {
+function sizes(harness: durableTypes.Harness): harnessSchedulerRetentionSupportTypes.Sizes {
   return (harness as unknown as Record<symbol, harnessSchedulerRetentionSupportTypes.Sizes>)[
     SCHEDULER_INDEX_SIZES
   ]!;
@@ -179,7 +178,7 @@ const sqlitePath = Effect.fn("sqlitePath")(function* () {
   return joinPath(directory, "session.sqlite");
 });
 
-const open = Effect.fn("open")(function* (storage?: Storage) {
+const open = Effect.fn("open")(function* (storage?: durableTypes.Storage) {
   const opened = yield* openTasks(
     storage ?? (yield* awaited(openNodeSqliteStorage(yield* sqlitePath()))),
     [Hold, Spawner, Rejected],
@@ -189,14 +188,17 @@ const open = Effect.fn("open")(function* (storage?: Storage) {
   return { ...opened, root };
 });
 
-const status = Effect.fn("status")(function* (harness: Harness, id: TaskId) {
+const status = Effect.fn("status")(function* (
+  harness: durableTypes.Harness,
+  id: durableTypes.TaskId,
+) {
   return (yield* awaited(harness.getTask(id, context)))!.state;
 });
 
 const subagentCycle = Effect.fn("subagentCycle")(function* (
-  harness: Harness,
-  root: Conversation,
-  parent: TaskId,
+  harness: durableTypes.Harness,
+  root: durableTypes.Conversation,
+  parent: durableTypes.TaskId,
   n: number,
 ) {
   const runPromise = Effect.runPromiseWith(yield* Effect.context<never>());

@@ -1,4 +1,5 @@
-import { type ConversationId, defineDoc, defineDocFamily } from "@msa/durable";
+import durable from "@msa/durable";
+import type durableTypes from "@msa/durable/index.types";
 import { dual } from "effect/Function";
 import { expect } from "vite-plus/test";
 
@@ -6,11 +7,13 @@ import type sessionForksCasesTypes from "./session-forks-cases.types.ts";
 import documentCopies from "./session-forks-support.ts";
 import sessionSupport from "./session-support.ts";
 
+const { defineDoc, defineDocFamily } = durable;
+
 const { documentCopyChanges } = sessionSupport;
 
 function expectCopiesIntoImpl(
   { storage, publications }: Pick<sessionForksCasesTypes.TestSession, "storage" | "publications">,
-  childId: ConversationId,
+  childId: durableTypes.ConversationId,
   count: number,
 ): void {
   const copies = documentCopies(storage.admittedCommits.at(-1)!);
@@ -35,12 +38,12 @@ function expectCopiesIntoImpl(
 
 const expectCopiesInto: {
   (
-    childId: ConversationId,
+    childId: durableTypes.ConversationId,
     count: number,
   ): (session: Pick<sessionForksCasesTypes.TestSession, "storage" | "publications">) => void;
   (
     session: Pick<sessionForksCasesTypes.TestSession, "storage" | "publications">,
-    childId: ConversationId,
+    childId: durableTypes.ConversationId,
     count: number,
   ): void;
 } = dual(3, expectCopiesIntoImpl);

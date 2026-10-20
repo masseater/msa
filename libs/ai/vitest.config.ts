@@ -2,7 +2,9 @@ import { fileURLToPath } from "node:url";
 
 import { defineConfig } from "vite-plus";
 
-import { onGitHubActions } from "../../vite.config.ts";
+import vitestShared from "../../vitest.shared.ts";
+
+const { onGitHubActions } = vitestShared;
 
 const telemetrySrcIndex = fileURLToPath(new URL("../telemetry/src/index.ts", import.meta.url));
 

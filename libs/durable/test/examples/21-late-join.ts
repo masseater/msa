@@ -5,10 +5,15 @@ import { fauxAssistantMessage, fauxProvider, fauxText, fauxToolCall } from "@msa
 import { BACKGROUND_CONTEXT } from "@msa/chord/context";
 import { Console, Effect } from "effect";
 
-import { Harness, createRegistry, watchEvents } from "../../src/harness/index.ts";
-import { type AgentEvent, type LiveState, defineExtension, defineTool } from "../../src/index.ts";
-import { MemoryStorage } from "../../src/storage/memory.ts";
+import type durableTypes from "../../src/index.types.ts";
+import durableKit from "../durable-kit.ts";
 import effectSupport from "../effect-support.ts";
+
+const { durable, harness: harnessModule, memory } = durableKit;
+
+const { Harness, createRegistry, watchEvents } = harnessModule;
+const { defineExtension, defineTool } = durable;
+const { MemoryStorage } = memory;
 
 const { awaited, toJsonText } = effectSupport;
 
@@ -62,7 +67,7 @@ const mainStep1 = Effect.gen(function* () {
   yield* pause(500);
 
   const view = yield* awaited(root.viewState(context));
-  const live = view.value.docs["msa.live"] as LiveState;
+  const live = view.value.docs["msa.live"] as durableTypes.LiveState;
   yield* Console.log(
     "view entries:",
     view.value.entries.map((entry) => entry.kind),
@@ -73,7 +78,7 @@ const mainStep1 = Effect.gen(function* () {
     yield* toJsonText(live.tools?.[0]?.output),
   );
   view.subscribe((value) => {
-    const slot = (value.docs["msa.live"] as LiveState).tools?.[0];
+    const slot = (value.docs["msa.live"] as durableTypes.LiveState).tools?.[0];
     if (slot?.status === "running")
       runSync(Console.log("view output now:", JSON.stringify(slot.output)));
   });
@@ -89,7 +94,7 @@ const mainStep1 = Effect.gen(function* () {
 const main = Effect.gen(function* () {
   const { runSync, harness, submission, view, stream } = yield* mainStep1;
   let output = stream.snapshot.tools[0]?.output ?? "";
-  stream.start((events: readonly AgentEvent[]) => {
+  stream.start((events: readonly durableTypes.AgentEvent[]) => {
     for (const event of events) {
       if (event.type === "tool_execution_update" && event.output !== undefined) {
         output =

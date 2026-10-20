@@ -1,55 +1,73 @@
 import { Function } from "effect";
 
-import { AgentDoc } from "./agent-state.ts";
-import type { Changes } from "./events-changes.ts";
-import type { ToolEnd } from "./events-slots.ts";
-import { type Parts, queued } from "./events-snapshot.ts";
-import type { Generations } from "./events-stream.ts";
-import type { AgentEvent } from "./events-types.ts";
-import type { Dual2, Dual3, TaskId } from "./types.ts";
-import { UsageDoc } from "./usage.ts";
+import agentState from "./agent-state.ts";
+import type eventsSlotsTypes from "./events-slots.types.ts";
+import eventsSnapshot from "./events-snapshot.ts";
+import type eventsSnapshotTypes from "./events-snapshot.types.ts";
+import type eventsStreamTypes from "./events-stream.types.ts";
+import type eventsTailTypes from "./events-tail.types.ts";
+import type eventsTypesModule from "./events-types.ts";
+import type typesModule from "./types.types.ts";
+import usageModule from "./usage.ts";
 
-export type TaskEvents = { readonly events: AgentEvent[]; readonly turnEnded: boolean };
+const { queued } = eventsSnapshot;
+const { AgentDoc } = agentState;
+const { UsageDoc } = usageModule;
 
-export const entryEvents: Dual3<Changes, Generations, readonly ToolEnd[], AgentEvent[]> =
-  Function.dual(
-    3,
-    (changes: Changes, generations: Generations, toolEnds: readonly ToolEnd[]): AgentEvent[] => {
-      const events: AgentEvent[] = [];
-      let assistantAppended = false;
-      for (const entry of changes.entries) {
-        events.push(...toolEnds.filter((end) => end.entry === entry));
-        const message = entry.model?.[0];
-        if (message === undefined) {
-          events.push({ type: "entry_appended", entry });
-          continue;
-        }
-        const streamed =
-          message.role === "assistant" &&
-          generations.partialBefore !== undefined &&
-          !assistantAppended;
-        if (message.role === "assistant") assistantAppended = true;
-        if (!streamed) events.push({ type: "message_start", message });
-        events.push({ type: "message_end", entry });
+const entryEvents: typesModule.Dual3<
+  eventsTailTypes.Changes,
+  eventsStreamTypes.Generations,
+  readonly eventsSlotsTypes.ToolEnd[],
+  eventsTypesModule.AgentEvent[]
+> = Function.dual(
+  3,
+  (
+    changes: eventsTailTypes.Changes,
+    generations: eventsStreamTypes.Generations,
+    toolEnds: readonly eventsSlotsTypes.ToolEnd[],
+  ): eventsTypesModule.AgentEvent[] => {
+    const events: eventsTypesModule.AgentEvent[] = [];
+    let assistantAppended = false;
+    for (const entry of changes.entries) {
+      events.push(...toolEnds.filter((end) => end.entry === entry));
+      const message = entry.model?.[0];
+      if (message === undefined) {
+        events.push({ entry, type: "entry_appended" });
+        continue;
       }
-      events.push(...toolEnds.filter((end) => end.entry === undefined));
-      return events;
-    },
-  );
+      const streamed =
+        message.role === "assistant" &&
+        generations.partialBefore !== undefined &&
+        !assistantAppended;
+      if (message.role === "assistant") assistantAppended = true;
+      if (!streamed) events.push({ message, type: "message_start" });
+      events.push({ entry, type: "message_end" });
+    }
+    events.push(...toolEnds.filter((end) => end.entry === undefined));
+    return events;
+  },
+);
 
-export const compactionEnds: Dual2<Parts, Parts, AgentEvent[]> = Function.dual(
+const compactionEnds: typesModule.Dual2<
+  eventsSnapshotTypes.Parts,
+  eventsSnapshotTypes.Parts,
+  eventsTypesModule.AgentEvent[]
+> = Function.dual(
   2,
-  (was: Parts, now: Parts): AgentEvent[] => {
-    const events: AgentEvent[] = [];
+  (
+    was: eventsSnapshotTypes.Parts,
+    now: eventsSnapshotTypes.Parts,
+  ): eventsTypesModule.AgentEvent[] => {
+    const events: eventsTypesModule.AgentEvent[] = [];
     const compactions = now.live.compactions ?? [];
     const failure = now.live.compactionFailure;
     for (const { taskId, reason } of was.live.compactions ?? []) {
       if (compactions.some((status) => status.taskId === taskId)) continue;
       const error = failure?.taskId === taskId ? failure.error : undefined;
       events.push({
-        type: "compaction_end",
-        taskId,
         reason,
+        taskId,
+        type: "compaction_end",
         ...(error === undefined ? {} : { error }),
       });
     }
@@ -57,10 +75,14 @@ export const compactionEnds: Dual2<Parts, Parts, AgentEvent[]> = Function.dual(
   },
 );
 
-export const taskEvents: Dual2<Changes, Set<TaskId>, TaskEvents> = Function.dual(
+const taskEvents: typesModule.Dual2<
+  eventsTailTypes.Changes,
+  Set<typesModule.TaskId>,
+  eventsTailTypes.TaskEvents
+> = Function.dual(
   2,
-  (changes: Changes, held: Set<TaskId>): TaskEvents => {
-    const events: AgentEvent[] = [];
+  (changes: eventsTailTypes.Changes, held: Set<typesModule.TaskId>): eventsTailTypes.TaskEvents => {
+    const events: eventsTypesModule.AgentEvent[] = [];
     let turnEnded = false;
     for (const task of changes.tasks.values()) {
       const status = task.state.status;
@@ -73,34 +95,43 @@ export const taskEvents: Dual2<Changes, Set<TaskId>, TaskEvents> = Function.dual
       const outcome = task.state.outcome;
       if (outcome.status === "faulted" || outcome.status === "orphaned") {
         const message = outcome.status === "faulted" ? outcome.error.message : outcome.reason;
-        events.push({ type: "task_failed", taskId: task.id, kind: task.kind, message });
+        events.push({ kind: task.kind, message, taskId: task.id, type: "task_failed" });
       }
     }
     return { events, turnEnded };
   },
 );
 
-export const tailEvents: Dual3<Parts, Parts, Changes, AgentEvent[]> = Function.dual(
+const tailEvents: typesModule.Dual3<
+  eventsSnapshotTypes.Parts,
+  eventsSnapshotTypes.Parts,
+  eventsTailTypes.Changes,
+  eventsTypesModule.AgentEvent[]
+> = Function.dual(
   3,
-  (was: Parts, now: Parts, changes: Changes): AgentEvent[] => {
-    const events: AgentEvent[] = [];
+  (
+    was: eventsSnapshotTypes.Parts,
+    now: eventsSnapshotTypes.Parts,
+    changes: eventsTailTypes.Changes,
+  ): eventsTypesModule.AgentEvent[] => {
+    const events: eventsTypesModule.AgentEvent[] = [];
     const run = now.live.run;
     const runBefore = was.live.run;
     const runChanged = run?.inputs[0] !== runBefore?.inputs[0];
     if (runBefore !== undefined && runChanged)
-      events.push({ type: "run_end", inputs: runBefore.inputs });
-    for (const record of changes.submissions) events.push({ type: "submission", record });
-    if (now.inbox !== was.inbox) events.push({ type: "inbox_update", items: queued(now.inbox) });
+      events.push({ inputs: runBefore.inputs, type: "run_end" });
+    for (const record of changes.submissions) events.push({ record, type: "submission" });
+    if (now.inbox !== was.inbox) events.push({ items: queued(now.inbox), type: "inbox_update" });
     if (now.agent !== was.agent)
-      events.push({ type: "agent_changed", agent: now.agent ?? AgentDoc.definition.initial() });
+      events.push({ agent: now.agent ?? AgentDoc.definition.initial(), type: "agent_changed" });
     if (now.usage !== was.usage)
       events.push({ type: "usage_changed", usage: now.usage ?? UsageDoc.definition.initial() });
     const compactionsBefore = was.live.compactions ?? [];
     for (const { taskId, reason, blocking } of now.live.compactions ?? []) {
       if (!compactionsBefore.some((status) => status.taskId === taskId))
-        events.push({ type: "compaction_start", taskId, reason, blocking });
+        events.push({ blocking, reason, taskId, type: "compaction_start" });
     }
-    if (run !== undefined && runChanged) events.push({ type: "run_start", inputs: run.inputs });
+    if (run !== undefined && runChanged) events.push({ inputs: run.inputs, type: "run_start" });
     if (
       run !== undefined &&
       run.taskId !== runBefore?.taskId &&
@@ -110,3 +141,12 @@ export const tailEvents: Dual3<Parts, Parts, Changes, AgentEvent[]> = Function.d
     return events;
   },
 );
+
+const eventsTail = {
+  compactionEnds,
+  entryEvents,
+  tailEvents,
+  taskEvents,
+};
+
+export default eventsTail;

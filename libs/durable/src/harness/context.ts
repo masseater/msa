@@ -1,40 +1,35 @@
 import type { Context } from "@msa/chord";
 import { Effect, Function } from "effect";
 
-import { idFromNumber } from "../ids.ts";
-import type { SessionImpl } from "../session/session.ts";
-import { toPromise } from "./bridge.ts";
-import { freezeJson } from "./context-freeze.ts";
-import {
-  type ContextBounds,
-  type ContextRange,
-  deriveRange,
-  emptyView,
-  extendRange,
-  rangeQuery,
-  scanRange,
-  selectActive,
-} from "./context-range.ts";
-import type { ContextView, ConversationId, Dual4, EntryId, EntryRecord, Storage } from "./types.ts";
+import ids from "../ids.ts";
+import type sessionTypes from "../session/session.types.ts";
+import bridge from "./bridge.ts";
+import contextFreeze from "./context-freeze.ts";
+import contextOrder from "./context-order.ts";
+import contextRange from "./context-range.ts";
+import type contextRangeTypes from "./context-range.types.ts";
+import type typesModule from "./types.types.ts";
 
-export type { ContextBounds, ContextRange } from "./context-range.ts";
-export { orderToolResults } from "./context-order.ts";
+const { deriveRange, emptyView, extendRange, rangeQuery, scanRange, selectActive } = contextRange;
+const { freezeJson } = contextFreeze;
+const { idFromNumber } = ids;
+const { toPromise } = bridge;
 
-export const captureContextBounds: Dual4<
-  Storage,
-  ConversationId,
+const captureContextBounds: typesModule.Dual4<
+  typesModule.Storage,
+  typesModule.ConversationId,
   Context,
-  EntryId | undefined,
-  Effect.Effect<ContextBounds | undefined>
+  typesModule.EntryId | undefined,
+  Effect.Effect<contextRangeTypes.ContextBounds | undefined>
 > = Function.dual(
   4,
   Effect.fnUntraced(function* (
-    storage: Storage,
-    conversationId: ConversationId,
+    storage: typesModule.Storage,
+    conversationId: typesModule.ConversationId,
     context: Context,
-    at: EntryId | undefined,
+    at: typesModule.EntryId | undefined,
   ) {
-    let tail: EntryId;
+    let tail: typesModule.EntryId;
     if (at === undefined) {
       const page = yield* Effect.promise(() =>
         storage.scanEntries({ conversationId }, 1, undefined, context),
@@ -58,10 +53,13 @@ export const captureContextBounds: Dual4<
 );
 
 const rangeFrom = Effect.fnUntraced(function* (
-  storage: Storage,
-  conversationId: ConversationId,
-  bounds: ContextBounds,
-  state: { readonly previous: ContextRange | undefined; readonly context: Context },
+  storage: typesModule.Storage,
+  conversationId: typesModule.ConversationId,
+  bounds: contextRangeTypes.ContextBounds,
+  state: {
+    readonly previous: contextRangeTypes.ContextRange | undefined;
+    readonly context: Context;
+  },
 ) {
   const { previous, context } = state;
   if (previous === undefined || previous.bounds.head?.id !== bounds.head?.id) {
@@ -74,86 +72,90 @@ const rangeFrom = Effect.fnUntraced(function* (
       bounds,
       previous.entries.filter((entry) => entry.id <= bounds.tail),
     );
-  const minEntryId = idFromNumber<EntryId>(previous.bounds.tail + 1);
+  const minEntryId = idFromNumber<typesModule.EntryId>(previous.bounds.tail + 1);
   const added = yield* scanRange(
     storage,
     conversationId,
-    { minEntryId, maxEntryId: bounds.tail },
+    { maxEntryId: bounds.tail, minEntryId },
     context,
   );
   return extendRange(previous, bounds, freezeJson(added));
 });
 
-export const readContextFrom: {
+const readContextFrom: {
   (
-    storage: Storage,
-    conversationId: ConversationId,
+    storage: typesModule.Storage,
+    conversationId: typesModule.ConversationId,
     context: Context,
-    at: EntryId | undefined,
-    previous: ContextRange | undefined,
-  ): (
-    session: SessionImpl,
-  ) => Effect.Effect<{ readonly view: ContextView; readonly range: ContextRange | undefined }>;
+    at: typesModule.EntryId | undefined,
+    previous: contextRangeTypes.ContextRange | undefined,
+  ): (session: sessionTypes.SessionImpl) => Effect.Effect<{
+    readonly view: typesModule.ContextView;
+    readonly range: contextRangeTypes.ContextRange | undefined;
+  }>;
   (
-    session: SessionImpl,
-    storage: Storage,
-    conversationId: ConversationId,
+    session: sessionTypes.SessionImpl,
+    storage: typesModule.Storage,
+    conversationId: typesModule.ConversationId,
     context: Context,
-    at: EntryId | undefined,
-    previous: ContextRange | undefined,
-  ): Effect.Effect<{ readonly view: ContextView; readonly range: ContextRange | undefined }>;
+    at: typesModule.EntryId | undefined,
+    previous: contextRangeTypes.ContextRange | undefined,
+  ): Effect.Effect<{
+    readonly view: typesModule.ContextView;
+    readonly range: contextRangeTypes.ContextRange | undefined;
+  }>;
 } = Function.dual(
   6,
   Effect.fnUntraced(function* (
-    session: SessionImpl,
-    storage: Storage,
-    conversationId: ConversationId,
+    session: sessionTypes.SessionImpl,
+    storage: typesModule.Storage,
+    conversationId: typesModule.ConversationId,
     context: Context,
-    at: EntryId | undefined,
-    previous: ContextRange | undefined,
+    at: typesModule.EntryId | undefined,
+    previous: contextRangeTypes.ContextRange | undefined,
   ) {
     const capture = yield* toPromise(() =>
       captureContextBounds(storage, conversationId, context, at),
     );
     const bounds = yield* Effect.promise(() => session.readOnLine(capture));
-    if (bounds === undefined) return { view: emptyView(), range: undefined };
+    if (bounds === undefined) return { range: undefined, view: emptyView() };
     freezeJson(bounds.head);
-    const range = yield* rangeFrom(storage, conversationId, bounds, { previous, context });
+    const range = yield* rangeFrom(storage, conversationId, bounds, { context, previous });
     const { view } = range;
     return {
+      range,
       view: {
         ...view,
-        entries: [...view.entries],
         contributions: [...view.contributions],
+        entries: [...view.entries],
         messages: [...view.messages],
       },
-      range,
     };
   }),
 );
 
-export const readContext: {
+const readContext: {
   (
-    storage: Storage,
-    conversationId: ConversationId,
+    storage: typesModule.Storage,
+    conversationId: typesModule.ConversationId,
     context: Context,
-    at?: EntryId,
-  ): (session: SessionImpl) => Effect.Effect<ContextView>;
+    at?: typesModule.EntryId,
+  ): (session: sessionTypes.SessionImpl) => Effect.Effect<typesModule.ContextView>;
   (
-    session: SessionImpl,
-    storage: Storage,
-    conversationId: ConversationId,
+    session: sessionTypes.SessionImpl,
+    storage: typesModule.Storage,
+    conversationId: typesModule.ConversationId,
     context: Context,
-    at?: EntryId,
-  ): Effect.Effect<ContextView>;
+    at?: typesModule.EntryId,
+  ): Effect.Effect<typesModule.ContextView>;
 } = Function.dual(
   (args: IArguments) => args.length >= 4 && typeof args[1] !== "number",
   Effect.fnUntraced(function* (
-    session: SessionImpl,
-    storage: Storage,
-    conversationId: ConversationId,
+    session: sessionTypes.SessionImpl,
+    storage: typesModule.Storage,
+    conversationId: typesModule.ConversationId,
     context: Context,
-    at?: EntryId,
+    at?: typesModule.EntryId,
   ) {
     const capture = yield* toPromise(() =>
       captureContextBounds(storage, conversationId, context, at),
@@ -163,18 +165,18 @@ export const readContext: {
   }),
 );
 
-export const deriveContext: Dual4<
-  Storage,
-  ConversationId,
-  ContextBounds | undefined,
+const deriveContext: typesModule.Dual4<
+  typesModule.Storage,
+  typesModule.ConversationId,
+  contextRangeTypes.ContextBounds | undefined,
   Context,
-  Effect.Effect<ContextView>
+  Effect.Effect<typesModule.ContextView>
 > = Function.dual(
   4,
   Effect.fnUntraced(function* (
-    storage: Storage,
-    conversationId: ConversationId,
-    bounds: ContextBounds | undefined,
+    storage: typesModule.Storage,
+    conversationId: typesModule.ConversationId,
+    bounds: contextRangeTypes.ContextBounds | undefined,
     context: Context,
   ) {
     if (bounds === undefined) return emptyView();
@@ -183,18 +185,18 @@ export const deriveContext: Dual4<
   }),
 );
 
-export const activeEntries: Dual4<
-  Storage,
-  ConversationId,
-  ContextBounds | undefined,
+const activeEntries: typesModule.Dual4<
+  typesModule.Storage,
+  typesModule.ConversationId,
+  contextRangeTypes.ContextBounds | undefined,
   Context,
-  Effect.Effect<readonly EntryRecord[]>
+  Effect.Effect<readonly typesModule.EntryRecord[]>
 > = Function.dual(
   4,
   Effect.fnUntraced(function* (
-    storage: Storage,
-    conversationId: ConversationId,
-    bounds: ContextBounds | undefined,
+    storage: typesModule.Storage,
+    conversationId: typesModule.ConversationId,
+    bounds: contextRangeTypes.ContextBounds | undefined,
     context: Context,
   ) {
     if (bounds === undefined) return [];
@@ -202,3 +204,14 @@ export const activeEntries: Dual4<
     return selectActive(bounds.head, entries);
   }),
 );
+
+const contextModule = {
+  activeEntries,
+  captureContextBounds,
+  deriveContext,
+  orderToolResults: contextOrder.orderToolResults,
+  readContext,
+  readContextFrom,
+};
+
+export default contextModule;

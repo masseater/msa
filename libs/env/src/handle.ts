@@ -1,6 +1,6 @@
 import type connectionTypes from "./connection.types.ts";
 
-class Handle {
+export default class Handle {
   readonly connection: connectionTypes.Connection;
   readonly id: number;
   readonly session: number;
@@ -38,9 +38,3 @@ class Handle {
     );
   }
 }
-
-const handleModule = {
-  Handle,
-};
-
-export default handleModule;

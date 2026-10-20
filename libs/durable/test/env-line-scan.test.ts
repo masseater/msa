@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vite-plus/test";
 
-import { StreamDecoder } from "../src/env/decode.ts";
-import { LineScanner } from "../src/env/line-scan.ts";
+import LineScanner from "../src/env/line-scan.ts";
+import StreamDecoder from "../src/env/stream-decoder.ts";
 
 function random(seed: number): () => number {
   let state = seed >>> 0;

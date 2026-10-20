@@ -3,33 +3,27 @@ import { track as trackValue } from "@msa/chord/delta/tracker";
 import { copyJson } from "@msa/chord/json";
 import { Effect, Function } from "effect";
 
-import {
-  type AnyDocDefinition,
-  type AnyDocToken,
+import documentsModule from "../documents.ts";
+import type documentsTypes from "../documents.types.ts";
+import type dualTypes from "../dual.ts";
+import type typesModule from "../types.types.ts";
+import transactionState from "./transaction-state.ts";
+import type transactionTypesModule from "./transaction-types.types.ts";
+
+const { assertOpen, assertTaskDocumentsOpen, currentTask, mintId, requireConversation, track } =
+  transactionState;
+const {
   checkRecordScope,
   checkRecordVersion,
   documentCreate,
   materializeDocumentValue,
   resolveAddress,
-} from "../documents.ts";
-import type { Dual3 } from "../dual.ts";
-import type { DocumentAddress, DocumentId, JsonObject } from "../types.ts";
-import {
-  assertOpen,
-  assertTaskDocumentsOpen,
-  currentTask,
-  mintId,
-  requireConversation,
-  track,
-} from "./transaction-state.ts";
-import type {
-  DocumentEntry,
-  ForkCopyTarget,
-  LoadedDocument,
-  TxState,
-} from "./transaction-types.ts";
+} = documentsModule;
 
-const requireScope = Effect.fnUntraced(function* (state: TxState, scope: DocumentAddress["scope"]) {
+const requireScope = Effect.fnUntraced(function* (
+  state: transactionTypesModule.TxState,
+  scope: typesModule.DocumentAddress["scope"],
+) {
   if (scope.kind === "conversation") yield* requireConversation(state, scope.conversationId);
   if (scope.kind !== "task") return;
   const task = yield* currentTask(state, scope.taskId);
@@ -38,20 +32,20 @@ const requireScope = Effect.fnUntraced(function* (state: TxState, scope: Documen
 });
 
 const adoptLoaded = (
-  entry: DocumentEntry,
-  definition: AnyDocDefinition,
-  loaded: LoadedDocument,
-): Draft<JsonObject> => {
+  entry: transactionTypesModule.DocumentEntry,
+  definition: documentsTypes.AnyDocDefinition,
+  loaded: transactionTypesModule.LoadedDocument,
+): Draft<typesModule.JsonObject> => {
   checkRecordScope(definition, loaded.record);
   checkRecordVersion(definition, loaded.record, loaded.storedVersion);
-  entry.target = { kind: "loaded", document: loaded };
+  entry.target = { document: loaded, kind: "loaded" };
   entry.change = loaded.tracker.beginChange();
   return entry.change.state;
 };
 
 const acquire = Effect.fnUntraced(function* (
-  state: TxState,
-  entry: DocumentEntry,
+  state: transactionTypesModule.TxState,
+  entry: transactionTypesModule.DocumentEntry,
   seed: JsonValue | undefined,
   skipLoad: boolean,
 ) {
@@ -67,25 +61,25 @@ const acquire = Effect.fnUntraced(function* (
   assertOpen(state);
   const value = copyJson(
     definition.family === true ? definition.initial(seed) : definition.initial(),
-  ) as JsonObject;
-  const id = yield* mintId<DocumentId>(state);
+  ) as typesModule.JsonObject;
+  const id = yield* mintId<typesModule.DocumentId>(state);
   assertOpen(state);
   const tracker = trackValue(value);
   entry.target = {
     kind: "created",
     record: documentCreate(definition, entry.address, id),
-    version: definition.version,
     tracker,
+    version: definition.version,
   };
   entry.change = tracker.beginChange();
   return entry.change.state;
 });
 
 const acquireForkCopy = Effect.fnUntraced(function* (
-  state: TxState,
-  entry: DocumentEntry,
-  definition: AnyDocDefinition,
-  target: ForkCopyTarget,
+  state: transactionTypesModule.TxState,
+  entry: transactionTypesModule.DocumentEntry,
+  definition: documentsTypes.AnyDocDefinition,
+  target: transactionTypesModule.ForkCopyTarget,
 ) {
   const stored = yield* Effect.promise(() =>
     state.host.storage.document(target.source.id, target.source.at, state.context),
@@ -106,12 +100,15 @@ const acquireForkCopy = Effect.fnUntraced(function* (
   const value = materializeDocumentValue(definition, target.record, stored.version, stored.value);
   const tracker = trackValue(value);
   entry.definition = definition;
-  entry.target = { kind: "created", record: target.record, version: definition.version, tracker };
+  entry.target = { kind: "created", record: target.record, tracker, version: definition.version };
   entry.change = tracker.beginChange();
   return entry.change.state;
 });
 
-const findRetirement = Effect.fnUntraced(function* (state: TxState, entry: DocumentEntry) {
+const findRetirement = Effect.fnUntraced(function* (
+  state: transactionTypesModule.TxState,
+  entry: transactionTypesModule.DocumentEntry,
+) {
   const record =
     state.host.cached(entry.addressId)?.record ??
     (yield* Effect.promise(() =>
@@ -123,16 +120,19 @@ const findRetirement = Effect.fnUntraced(function* (state: TxState, entry: Docum
   entry.target = { kind: "retire-only", record };
 });
 
-const pushEntry = (state: TxState, entry: DocumentEntry): void => {
+const pushEntry = (
+  state: transactionTypesModule.TxState,
+  entry: transactionTypesModule.DocumentEntry,
+): void => {
   state.documents.push(entry);
   state.latestDocumentByAddress.set(entry.addressId, entry);
 };
 
 const reuseLatest = (
-  state: TxState,
-  latest: DocumentEntry | undefined,
-  definition: AnyDocDefinition,
-): Promise<Draft<JsonObject>> | undefined => {
+  state: transactionTypesModule.TxState,
+  latest: transactionTypesModule.DocumentEntry | undefined,
+  definition: documentsTypes.AnyDocDefinition,
+): Promise<Draft<typesModule.JsonObject>> | undefined => {
   if (latest === undefined || latest.retireOnCommit) return undefined;
   if (latest.draftPromise !== undefined) return latest.draftPromise;
   if (latest.target?.kind !== "fork-copy") return undefined;
@@ -143,14 +143,18 @@ const reuseLatest = (
   return latest.draftPromise;
 };
 
-export const openDoc: Dual3<
-  TxState,
-  AnyDocToken,
+const openDoc: dualTypes.Dual3<
+  transactionTypesModule.TxState,
+  documentsTypes.AnyDocToken,
   readonly unknown[],
-  Promise<Draft<JsonObject>>
+  Promise<Draft<typesModule.JsonObject>>
 > = Function.dual(
   3,
-  (state: TxState, token: AnyDocToken, args: readonly unknown[]): Promise<Draft<JsonObject>> => {
+  (
+    state: transactionTypesModule.TxState,
+    token: documentsTypes.AnyDocToken,
+    args: readonly unknown[],
+  ): Promise<Draft<typesModule.JsonObject>> => {
     try {
       assertOpen(state);
       const definition = token.definition;
@@ -160,9 +164,9 @@ export const openDoc: Dual3<
       const reused = reuseLatest(state, latest, definition);
       if (reused !== undefined) return reused;
       const seed = definition.family === true ? copyJson(args[resolved.nextArgument]) : undefined;
-      const docEntry: DocumentEntry = {
-        addressId: resolved.id,
+      const docEntry: transactionTypesModule.DocumentEntry = {
         address: resolved.address,
+        addressId: resolved.id,
         definition,
         retireOnCommit: false,
       };
@@ -179,9 +183,9 @@ export const openDoc: Dual3<
 );
 
 const retireLatest = (
-  state: TxState,
-  latest: DocumentEntry,
-  definition: AnyDocDefinition,
+  state: transactionTypesModule.TxState,
+  latest: transactionTypesModule.DocumentEntry,
+  definition: documentsTypes.AnyDocDefinition,
 ): Promise<void> | undefined => {
   if (latest.retireOnCommit) return Promise.resolve();
   if (latest.target?.kind === "fork-copy") {
@@ -197,14 +201,18 @@ const retireLatest = (
   );
 };
 
-export const retireDoc: Dual3<
-  TxState,
-  AnyDocToken,
+const retireDoc: dualTypes.Dual3<
+  transactionTypesModule.TxState,
+  documentsTypes.AnyDocToken,
   readonly unknown[],
   Promise<void>
 > = Function.dual(
   3,
-  (state: TxState, token: AnyDocToken, args: readonly unknown[]): Promise<void> => {
+  (
+    state: transactionTypesModule.TxState,
+    token: documentsTypes.AnyDocToken,
+    args: readonly unknown[],
+  ): Promise<void> => {
     try {
       assertOpen(state);
       const definition = token.definition;
@@ -212,9 +220,9 @@ export const retireDoc: Dual3<
       const latest = state.latestDocumentByAddress.get(resolved.id);
       const retired = latest === undefined ? undefined : retireLatest(state, latest, definition);
       if (retired !== undefined) return retired;
-      const entry: DocumentEntry = {
-        addressId: resolved.id,
+      const entry: transactionTypesModule.DocumentEntry = {
         address: resolved.address,
+        addressId: resolved.id,
         definition,
         retireOnCommit: true,
       };
@@ -225,3 +233,10 @@ export const retireDoc: Dual3<
     }
   },
 );
+
+const transactionDocs = {
+  openDoc,
+  retireDoc,
+};
+
+export default transactionDocs;

@@ -1,13 +1,18 @@
 import { Type, fauxAssistantMessage, fauxText } from "@msa/ai";
-import { type AgentEvent, type Harness, LiveDoc, defineTool } from "@msa/durable";
-import { GenerationTask } from "@msa/durable/harness";
-import { MemoryStorage } from "@msa/durable/storage/memory";
+import durable from "@msa/durable";
+import harnessModule from "@msa/durable/harness";
+import type durableTypes from "@msa/durable/index.types";
+import memory from "@msa/durable/storage/memory";
 import { Effect } from "effect";
 import { afterEach, describe, expect, it } from "vite-plus/test";
 
 import harnessStructuredEvents from "./harness-structured-events.ts";
 import harnessStructuredSupport from "./harness-structured-support.ts";
 import support from "./support.ts";
+
+const { LiveDoc, defineTool } = durable;
+const { MemoryStorage } = memory;
+const { GenerationTask } = harnessModule;
 
 const { blockingTool, labels, listen, toolCalls } = harnessStructuredEvents;
 const { Node, behaviors, directories, gates, log, open, owned } = harnessStructuredSupport;
@@ -75,7 +80,7 @@ const emitsOneTurnStep1 = Effect.gen(function* () {
       parameters: Type.Object({}),
     }),
   );
-  let opened: Harness | undefined;
+  let opened: durableTypes.Harness | undefined;
   addHooks(setup.registry, GenerationTask, {
     afterTools: (_assistant, _results, api, callContext) =>
       runPromise(
@@ -111,7 +116,7 @@ const emitsOneTurnStep1 = Effect.gen(function* () {
 const emitsOneTurn = Effect.gen(function* () {
   const { harness, early, late } = yield* emitsOneTurnStep1;
   yield* waitFor(() => late.events.some((event) => event.type === "entry_appended"));
-  const turns = (events: readonly AgentEvent[]) =>
+  const turns = (events: readonly durableTypes.AgentEvent[]) =>
     events.filter((event) => event.type === "turn_end").length;
   expect(turns(early.events)).toBe(2);
   expect(turns(late.events)).toBe(0);

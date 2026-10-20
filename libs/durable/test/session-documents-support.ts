@@ -1,9 +1,11 @@
-import { defineDoc, defineDocFamily } from "@msa/durable";
+import durable from "@msa/durable";
 import { Effect } from "effect";
 
 import effectSupport from "./effect-support.ts";
 import type sessionDocumentsSupportTypes from "./session-documents-support.types.ts";
 import sessionSupport from "./session-support.ts";
+
+const { defineDoc, defineDocFamily } = durable;
 
 const { awaited } = effectSupport;
 const { context, createConversation, openTestSession } = sessionSupport;

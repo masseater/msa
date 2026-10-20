@@ -2,25 +2,24 @@ import { uuidv7 } from "@msa/ai/utils/uuid";
 import type { Context } from "@msa/chord";
 import { Effect, Function } from "effect";
 
-import { defineDoc } from "../documents.ts";
-import type { TaskRuntime } from "./types.ts";
+import documents from "../documents.ts";
+import type providerTypes from "./provider.types.ts";
+import type typesModule from "./types.types.ts";
 
-export type ProviderState = {
-  sessionId: string;
-};
+const { defineDoc } = documents;
 
-export const ProviderDoc = defineDoc<ProviderState>({
-  kind: "msa.provider",
-  version: 1,
-  scope: "conversation",
-  history: "latest",
-  fork: "initial",
-  initial: () => ({ sessionId: uuidv7() }),
+const ProviderDoc = defineDoc<providerTypes.ProviderState>({
   checkpointWhen: () => true,
+  fork: "initial",
+  history: "latest",
+  initial: () => ({ sessionId: uuidv7() }),
+  kind: "msa.provider",
+  scope: "conversation",
+  version: 1,
 });
 
 const createSessionId = <I, S, R, H extends object>(
-  runtime: TaskRuntime<I, S, R, H>,
+  runtime: typesModule.TaskRuntime<I, S, R, H>,
   context: Context,
 ) =>
   Effect.gen(function* () {
@@ -42,18 +41,20 @@ const createSessionId = <I, S, R, H extends object>(
     return created;
   });
 
-export const ensureProviderSessionId: {
+const ensureProviderSessionId: {
   (
     context: Context,
-  ): <I, S, R, H extends object>(runtime: TaskRuntime<I, S, R, H>) => Effect.Effect<string>;
+  ): <I, S, R, H extends object>(
+    runtime: typesModule.TaskRuntime<I, S, R, H>,
+  ) => Effect.Effect<string>;
   <I, S, R, H extends object>(
-    runtime: TaskRuntime<I, S, R, H>,
+    runtime: typesModule.TaskRuntime<I, S, R, H>,
     context: Context,
   ): Effect.Effect<string>;
 } = Function.dual(
   2,
   Effect.fnUntraced(function* <I, S, R, H extends object>(
-    runtime: TaskRuntime<I, S, R, H>,
+    runtime: typesModule.TaskRuntime<I, S, R, H>,
     context: Context,
   ) {
     const existing = yield* Effect.promise(() =>
@@ -66,3 +67,10 @@ export const ensureProviderSessionId: {
     return created;
   }),
 );
+
+const provider = {
+  ProviderDoc,
+  ensureProviderSessionId,
+};
+
+export default provider;

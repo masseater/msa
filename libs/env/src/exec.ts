@@ -1,14 +1,6 @@
 import type { Context } from "@msa/chord";
-import {
-  ExecutionError,
-  type Result,
-  type ShellExecOptions,
-  type ShellExecResult,
-  type ShellOutputInfo,
-  type ShellOutputSkip,
-  err,
-  ok,
-} from "@msa/durable/env";
+import envModule from "@msa/durable/env";
+import type envTypes from "@msa/durable/env.types";
 import { Cause, Effect, Exit } from "effect";
 
 import connectionModule from "./connection.ts";
@@ -17,6 +9,8 @@ import type execTypes from "./exec.types.ts";
 import fileOp from "./file-op.ts";
 import remoteError from "./remote-error.ts";
 
+const { ExecutionError, err, ok } = envModule;
+
 const { RemoteError } = connectionModule;
 const { errorMessage } = remoteError;
 const { resolveIn, run } = fileOp;
@@ -24,12 +18,12 @@ const { resolveIn, run } = fileOp;
 const MAX_TIMEOUT_MS = 2_147_483_647;
 const MAX_TIMEOUT_SECONDS = MAX_TIMEOUT_MS / 1000;
 
-type ExecResult = Result<ShellExecResult, ExecutionError>;
+type ExecResult = envTypes.Result<envTypes.ShellExecResult, envTypes.ExecutionError>;
 
 interface ExecRequest {
   readonly connection: connectionTypes.Connection;
   readonly command: string | readonly string[];
-  readonly options: ShellExecOptions | undefined;
+  readonly options: envTypes.ShellExecOptions | undefined;
   readonly context: Context;
   readonly cwd: string;
   readonly env: Record<string, string>;
@@ -53,7 +47,7 @@ function invalidTimeout(timeout: number | undefined): ExecResult | undefined {
   return undefined;
 }
 
-function failureOf(error: unknown, timeout: number | undefined): ExecutionError {
+function failureOf(error: unknown, timeout: number | undefined): envTypes.ExecutionError {
   if (!(error instanceof RemoteError)) return new ExecutionError("unknown", errorMessage(error));
   const failure =
     error.code === "timeout"
@@ -84,7 +78,7 @@ function execFields(request: ExecRequest): connectionTypes.Json {
 }
 
 interface ExecState {
-  callbackError: ExecutionError | undefined;
+  callbackError: envTypes.ExecutionError | undefined;
   settled: boolean;
   running: number | undefined;
 }
@@ -100,8 +94,10 @@ function deliverOutput(
   const text = Buffer.from(payload.buffer, payload.byteOffset, payload.length).toString("utf8");
   const onOutput = request.options?.onOutput;
   if (text === "" || onOutput === undefined) return;
-  const info: ShellOutputInfo = { stream: event["stream"] === "stderr" ? "stderr" : "stdout" };
-  if (event["skipped"] !== undefined) info.skipped = event["skipped"] as ShellOutputSkip;
+  const info: envTypes.ShellOutputInfo = {
+    stream: event["stream"] === "stderr" ? "stderr" : "stdout",
+  };
+  if (event["skipped"] !== undefined) info.skipped = event["skipped"] as envTypes.ShellOutputSkip;
   try {
     onOutput(text, request.context, info);
   } catch (error) {

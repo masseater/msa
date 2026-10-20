@@ -1,5 +1,6 @@
 import type { Context } from "@msa/chord";
-import { type Conversation, type Storage, type TaskId, defineTask } from "@msa/durable";
+import durable from "@msa/durable";
+import type durableTypes from "@msa/durable/index.types";
 import { Effect } from "effect";
 import { dual } from "effect/Function";
 
@@ -7,6 +8,8 @@ import effectSupport from "./effect-support.ts";
 import type harnessLifecycleSupportTypes from "./harness-lifecycle-support.types.ts";
 import sessionSupport from "./session-support.ts";
 import taskSupport from "./task-support.ts";
+
+const { defineTask } = durable;
 
 const { awaited } = effectSupport;
 const { context } = sessionSupport;
@@ -36,10 +39,10 @@ const oneStep: {
 } = dual((args) => typeof args[0] === "string", oneStepImpl);
 
 function startImpl(
-  conversation: Conversation,
+  conversation: durableTypes.Conversation,
   task: ReturnType<typeof oneStep>,
   background = false,
-): Promise<TaskId> {
+): Promise<durableTypes.TaskId> {
   return conversation.commit(
     (tx) => tx.createTask(task, null, { background, ownership: { kind: "conversation" } }),
     context,
@@ -50,9 +53,9 @@ const start: {
   (
     task: ReturnType<typeof oneStep>,
     background?: boolean,
-  ): (conversation: Conversation) => ReturnType<typeof startImpl>;
+  ): (conversation: durableTypes.Conversation) => ReturnType<typeof startImpl>;
   (
-    conversation: Conversation,
+    conversation: durableTypes.Conversation,
     task: ReturnType<typeof oneStep>,
     background?: boolean,
   ): ReturnType<typeof startImpl>;
@@ -62,9 +65,9 @@ function withSignal(signal: AbortSignal): Context {
   return { ...context, abortSignal: signal };
 }
 
-function storageOpen(storage: Storage): Promise<boolean> {
+function storageOpen(storage: durableTypes.Storage): Promise<boolean> {
   return Promise.resolve(
-    storage.task(1 as TaskId, context).then(
+    storage.task(1 as durableTypes.TaskId, context).then(
       () => true,
       () => false,
     ),

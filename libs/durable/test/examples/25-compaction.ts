@@ -5,10 +5,15 @@ import { fauxAssistantMessage, fauxProvider } from "@msa/ai/providers/faux";
 import { BACKGROUND_CONTEXT } from "@msa/chord/context";
 import { Console, Effect } from "effect";
 
-import { Harness, createRegistry } from "../../src/harness/index.ts";
-import { CompactionEntry, type Conversation, LiveDoc } from "../../src/index.ts";
-import { MemoryStorage } from "../../src/storage/memory.ts";
+import type durableTypes from "../../src/index.types.ts";
+import durableKit from "../durable-kit.ts";
 import effectSupport from "../effect-support.ts";
+
+const { durable, harness: harnessModule, memory } = durableKit;
+
+const { CompactionEntry, LiveDoc } = durable;
+const { Harness, createRegistry } = harnessModule;
+const { MemoryStorage } = memory;
 
 const { awaited } = effectSupport;
 
@@ -58,7 +63,7 @@ const settings = {
   },
 };
 
-const show = Effect.fn("show")(function* (conversation: Conversation, label: string) {
+const show = Effect.fn("show")(function* (conversation: durableTypes.Conversation, label: string) {
   const view = yield* awaited(conversation.context(context));
   const stored = (yield* awaited(conversation.entries({}, 1000, undefined, context))).items.length;
   yield* Console.log(

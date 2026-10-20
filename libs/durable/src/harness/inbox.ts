@@ -2,96 +2,65 @@ import type { Draft, JsonRepresentation } from "@msa/chord";
 import { copyJson } from "@msa/chord/json";
 import { Effect, Function } from "effect";
 
-import { defineDoc } from "../documents.ts";
-import { UserEntry } from "../entries.ts";
-import type {
-  ConversationId,
-  Dual2,
-  Dual3,
-  Dual4,
-  Dual5,
-  EntryDraft,
-  EntryId,
-  EntryRecord,
-  InputEntry,
-  JsonObject,
-  QueueMode,
-  Settings,
-  SubmissionId,
-  Tx,
-  UserInput,
-} from "./types.ts";
+import documents from "../documents.ts";
+import entries from "../entries.ts";
+import type inboxTypes from "./inbox.types.ts";
+import type typesModule from "./types.types.ts";
 
-export type InboxItem =
-  | {
-      id: SubmissionId;
-      mode: "steer" | "followUp";
-      content: JsonRepresentation<UserInput>;
-      entry?: JsonRepresentation<InputEntry>;
-    }
-  | { id: SubmissionId; mode: "write"; entry: JsonObject };
+const { defineDoc } = documents;
+const { UserEntry } = entries;
 
-export type InboxState = { items: InboxItem[] };
-
-export const InboxDoc = defineDoc<InboxState>({
-  kind: "msa.inbox",
-  version: 1,
-  scope: "conversation",
-  history: "latest",
-  fork: "initial",
-  initial: () => ({ items: [] }),
+const InboxDoc = defineDoc<inboxTypes.InboxState>({
   checkpointWhen: (value) => value.items.length === 0,
+  fork: "initial",
+  history: "latest",
+  initial: () => ({ items: [] }),
+  kind: "msa.inbox",
+  scope: "conversation",
+  version: 1,
 });
 
-export type QueueModes = Pick<Settings, "steeringMode" | "followUpMode">;
-
-export type Boundary = {
-  readonly conversationId: ConversationId;
-  readonly inbox: Draft<InboxState>;
-  readonly steeringMode: QueueMode;
-  readonly followUpMode: QueueMode;
-  head: EntryId | undefined;
-};
-
-export type BoundaryResult = { readonly users: SubmissionId[]; readonly reset: boolean };
-
-export const prepareBoundary: Dual3<
-  Tx,
-  ConversationId,
-  QueueModes,
-  Effect.Effect<Boundary>
+const prepareBoundary: typesModule.Dual3<
+  typesModule.Tx,
+  typesModule.ConversationId,
+  inboxTypes.QueueModes,
+  Effect.Effect<inboxTypes.Boundary>
 > = Function.dual(
   3,
-  Effect.fnUntraced(function* (tx: Tx, conversationId: ConversationId, modes: QueueModes) {
+  Effect.fnUntraced(function* (
+    tx: typesModule.Tx,
+    conversationId: typesModule.ConversationId,
+    modes: inboxTypes.QueueModes,
+  ) {
     const marker = yield* Effect.promise(() => tx.latestHeadMarker(conversationId));
     const inbox = yield* Effect.promise(() => tx.doc(InboxDoc, conversationId));
     return {
       conversationId,
-      inbox,
-      steeringMode: modes.steeringMode,
       followUpMode: modes.followUpMode,
       head: marker?.head,
+      inbox,
+      steeringMode: modes.steeringMode,
     };
   }),
 );
 
 const pickIndexes = (
-  items: readonly Draft<InboxItem>[],
+  items: readonly Draft<inboxTypes.InboxItem>[],
   mode: "steer" | "followUp",
-  queueMode: QueueMode,
+  queueMode: typesModule.QueueMode,
 ): number[] => {
   const indexes = items.flatMap((item, index) => (item.mode === mode ? [index] : []));
   return queueMode === "all" ? indexes : indexes.slice(0, 1);
 };
 
 const applyWrite = Effect.fnUntraced(function* (
-  tx: Tx,
-  boundary: Boundary,
-  item: Draft<Extract<InboxItem, { mode: "write" }>>,
+  tx: typesModule.Tx,
+  boundary: inboxTypes.Boundary,
+  item: Draft<Extract<inboxTypes.InboxItem, { mode: "write" }>>,
 ) {
-  const draft = item.entry as Draft<EntryDraft>;
+  const draft = item.entry as Draft<typesModule.EntryDraft>;
   if (isStale(boundary, draft)) {
-    tx.settleSubmission(item.id, { status: "unanswered", reason: "stale" });
+    tx.settleSubmission(item.id, { reason: "stale", status: "unanswered" });
     return;
   }
   const entry = yield* Effect.promise(() => tx.appendEntry(boundary.conversationId, draft));
@@ -100,31 +69,36 @@ const applyWrite = Effect.fnUntraced(function* (
 });
 
 const applyUser = Effect.fnUntraced(function* (
-  tx: Tx,
-  conversationId: ConversationId,
-  item: Draft<Extract<InboxItem, { mode: "steer" | "followUp" }>>,
+  tx: typesModule.Tx,
+  conversationId: typesModule.ConversationId,
+  item: Draft<Extract<inboxTypes.InboxItem, { mode: "steer" | "followUp" }>>,
   now: number,
 ) {
   const entry = yield* appendInput(
     tx,
     conversationId,
-    item.content as UserInput,
-    item.entry as InputEntry,
+    item.content as typesModule.UserInput,
+    item.entry as typesModule.InputEntry,
     now,
   );
   tx.placeSubmission(item.id, entry.id);
   return item.id;
 });
 
-export const applyBoundary: Dual4<
-  Tx,
-  Boundary,
+const applyBoundary: typesModule.Dual4<
+  typesModule.Tx,
+  inboxTypes.Boundary,
   "postTools" | "final",
   number,
-  Effect.Effect<BoundaryResult>
+  Effect.Effect<inboxTypes.BoundaryResult>
 > = Function.dual(
   4,
-  Effect.fnUntraced(function* (tx: Tx, boundary: Boundary, at: "postTools" | "final", now: number) {
+  Effect.fnUntraced(function* (
+    tx: typesModule.Tx,
+    boundary: inboxTypes.Boundary,
+    at: "postTools" | "final",
+    now: number,
+  ) {
     const { conversationId, inbox } = boundary;
     const items = inbox.items;
     const reset = hasQueuedReset(items);
@@ -138,40 +112,44 @@ export const applyBoundary: Dual4<
     yield* Effect.forEach(
       writes,
       (index) =>
-        applyWrite(tx, boundary, items[index] as Draft<Extract<InboxItem, { mode: "write" }>>),
+        applyWrite(
+          tx,
+          boundary,
+          items[index] as Draft<Extract<inboxTypes.InboxItem, { mode: "write" }>>,
+        ),
       { discard: true },
     );
     const placed = yield* Effect.forEach(users, (index) =>
       applyUser(
         tx,
         conversationId,
-        items[index] as Draft<Extract<InboxItem, { mode: "steer" | "followUp" }>>,
+        items[index] as Draft<Extract<inboxTypes.InboxItem, { mode: "steer" | "followUp" }>>,
         now,
       ),
     );
     const removed = [...writes, ...users].sort((a, b) => b - a);
     for (const index of removed) items.splice(index, 1);
-    return { users: placed, reset };
+    return { reset, users: placed };
   }),
 );
 
-export const appendInput: Dual5<
-  Tx,
-  ConversationId,
-  UserInput,
-  InputEntry | undefined,
+const appendInput: typesModule.Dual5<
+  typesModule.Tx,
+  typesModule.ConversationId,
+  typesModule.UserInput,
+  typesModule.InputEntry | undefined,
   number,
-  Effect.Effect<EntryRecord>
+  Effect.Effect<typesModule.EntryRecord>
 > = Function.dual(
   5,
   (
-    tx: Tx,
-    conversationId: ConversationId,
-    content: UserInput,
-    entry: InputEntry | undefined,
+    tx: typesModule.Tx,
+    conversationId: typesModule.ConversationId,
+    content: typesModule.UserInput,
+    entry: typesModule.InputEntry | undefined,
     now: number,
-  ): Effect.Effect<EntryRecord> => {
-    const message = { role: "user", content, timestamp: now } as const;
+  ): Effect.Effect<typesModule.EntryRecord> => {
+    const message = { content, role: "user", timestamp: now } as const;
     return Effect.promise(() =>
       entry === undefined
         ? tx.appendEntry(UserEntry, conversationId, { model: [message] })
@@ -180,48 +158,77 @@ export const appendInput: Dual5<
   },
 );
 
-export function pickInputEntry({ kind, data }: InputEntry): JsonRepresentation<InputEntry> {
-  const picked = data === undefined ? { kind } : { kind, data };
-  return copyJson(picked, { omitUndefinedProperties: true }) as JsonRepresentation<InputEntry>;
+function pickInputEntry({
+  kind,
+  data,
+}: typesModule.InputEntry): JsonRepresentation<typesModule.InputEntry> {
+  const picked = data === undefined ? { kind } : { data, kind };
+  return copyJson(picked, {
+    omitUndefinedProperties: true,
+  }) as JsonRepresentation<typesModule.InputEntry>;
 }
 
-export function isDisplayOnly(entry: EntryDraft): boolean {
+function isDisplayOnly(entry: typesModule.EntryDraft): boolean {
   return entry.model === undefined && entry.head === undefined && entry.edits === undefined;
 }
 
-export function hasQueuedReset(items: readonly InboxItem[]): boolean {
+function hasQueuedReset(items: readonly inboxTypes.InboxItem[]): boolean {
   return items.some((item) => item.mode === "write" && item.entry["head"] === "self");
 }
 
-export const isStale: Dual2<Boundary, EntryDraft, boolean> = Function.dual(
-  2,
-  (boundary: Boundary, entry: EntryDraft): boolean =>
-    typeof entry.head === "number" && boundary.head !== undefined && entry.head < boundary.head,
-);
+const isStale: typesModule.Dual2<inboxTypes.Boundary, typesModule.EntryDraft, boolean> =
+  Function.dual(
+    2,
+    (boundary: inboxTypes.Boundary, entry: typesModule.EntryDraft): boolean =>
+      typeof entry.head === "number" && boundary.head !== undefined && entry.head < boundary.head,
+  );
 
-export const removeInboxItem: Dual3<
-  Tx,
-  ConversationId,
-  SubmissionId,
+const removeInboxItem: typesModule.Dual3<
+  typesModule.Tx,
+  typesModule.ConversationId,
+  typesModule.SubmissionId,
   Effect.Effect<void>
 > = Function.dual(
   3,
-  Effect.fnUntraced(function* (tx: Tx, conversationId: ConversationId, id: SubmissionId) {
+  Effect.fnUntraced(function* (
+    tx: typesModule.Tx,
+    conversationId: typesModule.ConversationId,
+    id: typesModule.SubmissionId,
+  ) {
     const items = (yield* Effect.promise(() => tx.doc(InboxDoc, conversationId))).items;
     const index = items.findIndex((item) => item.id === id);
     if (index >= 0) items.splice(index, 1);
   }),
 );
 
-export const withdrawQueuedInputs: Dual2<Tx, ConversationId, Effect.Effect<void>> = Function.dual(
+const withdrawQueuedInputs: typesModule.Dual2<
+  typesModule.Tx,
+  typesModule.ConversationId,
+  Effect.Effect<void>
+> = Function.dual(
   2,
-  Effect.fnUntraced(function* (tx: Tx, conversationId: ConversationId) {
+  Effect.fnUntraced(function* (tx: typesModule.Tx, conversationId: typesModule.ConversationId) {
     const items = (yield* Effect.promise(() => tx.doc(InboxDoc, conversationId))).items;
     for (let index = items.length - 1; index >= 0; index--) {
       const item = items[index]!;
       if (item.mode === "write") continue;
-      tx.settleSubmission(item.id, { status: "unanswered", reason: "aborted" });
+      tx.settleSubmission(item.id, { reason: "aborted", status: "unanswered" });
       items.splice(index, 1);
     }
   }),
 );
+
+const inboxModule = {
+  InboxDoc,
+  appendInput,
+  applyBoundary,
+  hasQueuedReset,
+  isDisplayOnly,
+  isStale,
+  pickInputEntry,
+  prepareBoundary,
+  removeInboxItem,
+  withdrawQueuedInputs,
+};
+
+export default inboxModule;

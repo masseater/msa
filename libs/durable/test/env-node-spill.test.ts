@@ -2,10 +2,13 @@ import { BACKGROUND_CONTEXT } from "@msa/chord/context";
 import { Effect } from "effect";
 import { afterEach, describe, expect, it, vi } from "vite-plus/test";
 
-import { getOrThrow } from "../src/env/index.ts";
-import { NodeExecutionEnv } from "../src/env/node.ts";
+import envModule from "../src/env/index.ts";
+import node from "../src/env/node.ts";
 import effectSupport from "./effect-support.ts";
 import platformSupport from "./platform-support.ts";
+
+const { NodeExecutionEnv } = node;
+const { getOrThrow } = envModule;
 
 const { awaited } = effectSupport;
 const { joinPath, makeTempDir, removeDirs } = platformSupport;

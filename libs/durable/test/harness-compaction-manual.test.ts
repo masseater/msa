@@ -1,11 +1,13 @@
 import { Type, fauxAssistantMessage, fauxToolCall } from "@msa/ai";
-import { ProviderDoc, UsageDoc, defineTool } from "@msa/durable";
+import durable from "@msa/durable";
 import { Effect } from "effect";
 import { afterEach, describe, expect, it } from "vite-plus/test";
 
 import harnessCompactionSupport from "./harness-compaction-support.ts";
 import type harnessCompactionSupportTypes from "./harness-compaction-support.types.ts";
 import support from "./support.ts";
+
+const { ProviderDoc, UsageDoc, defineTool } = durable;
 
 const { answer, directories, gated, history, kinds, open, result, summary, text, turn, userText } =
   harnessCompactionSupport;

@@ -1,14 +1,7 @@
 import { type Message, createModels } from "@msa/ai";
-import {
-  type ContextView,
-  type EntryDraft,
-  type EntryRecord,
-  type HarnessSettings,
-  type Storage,
-  defineTask,
-} from "@msa/durable";
-import { Harness, createRegistry } from "@msa/durable/harness";
-import { MemoryStorage } from "@msa/durable/storage/memory";
+import durable from "@msa/durable";
+import harnessModule from "@msa/durable/harness";
+import memoryModule from "@msa/durable/storage/memory";
 import { Effect } from "effect";
 import { expect } from "vite-plus/test";
 
@@ -17,6 +10,10 @@ import type harnessContextSupportTypes from "./harness-context-support.types.ts"
 import harnessSupport from "./harness-support.ts";
 import sessionSupport from "./session-support.ts";
 
+const { MemoryStorage } = memoryModule;
+const { Harness, createRegistry } = harnessModule;
+const { defineTask } = durable;
+
 const { awaited } = effectSupport;
 const { addTask, assistant, openHarness, user } = harnessSupport;
 const { context } = sessionSupport;
@@ -24,40 +21,52 @@ const { context } = sessionSupport;
 const setup = Effect.fn("setup")(function* () {
   const { harness } = yield* openHarness(new MemoryStorage());
   const root = yield* awaited(harness.root(context));
-  const append = (draft: EntryDraft): Promise<EntryRecord> =>
+  const append = (
+    draft: harnessContextSupportTypes.EntryDraft,
+  ): Promise<harnessContextSupportTypes.EntryRecord> =>
     root.commit((tx) => tx.appendEntry(root.id, draft), context);
-  const message = (model: Message, kind = "message"): Promise<EntryRecord> =>
-    append({ kind, model: [model] });
+  const message = (
+    model: Message,
+    kind = "message",
+  ): Promise<harnessContextSupportTypes.EntryRecord> => append({ kind, model: [model] });
   return { append, harness, message, root };
 });
 
-const countingSetup = Effect.fn("countingSetup")(function* (
-  options: { readonly settings?: HarnessSettings; readonly now?: () => number } = {},
-) {
-  const runPromise = Effect.runPromiseWith(yield* Effect.context<never>());
-
-  const scanned = { rows: 0 };
-  const hold: { scan?: Promise<void> | undefined } = {};
-  const memory = new MemoryStorage();
-  const storage = new Proxy<Storage>(memory, {
-    get(target, key) {
-      const value: unknown = Reflect.get(target, key, target);
-      if (key === "scanEntries") {
-        return (...args: Parameters<Storage["scanEntries"]>) =>
-          runPromise(
-            Effect.gen(function* () {
-              const held = args[1] > 1 ? hold.scan : undefined;
-              if (held !== undefined) hold.scan = undefined;
-              yield* awaited(held);
-              const page = yield* awaited(target.scanEntries(...args));
-              scanned.rows += page.items.length;
-              return page;
-            }),
-          );
-      }
-      return typeof value === "function" ? value.bind(target) : value;
-    },
+const countingSetupStep = () =>
+  Effect.gen(function* () {
+    const runPromise = Effect.runPromiseWith(yield* Effect.context<never>());
+    const scanned = { rows: 0 };
+    const hold: { scan?: Promise<void> | undefined } = {};
+    const memory = new MemoryStorage();
+    const storage = new Proxy<harnessContextSupportTypes.Storage>(memory, {
+      get(target, key) {
+        const value: unknown = Reflect.get(target, key, target);
+        if (key === "scanEntries") {
+          return (...args: Parameters<harnessContextSupportTypes.Storage["scanEntries"]>) =>
+            runPromise(
+              Effect.gen(function* () {
+                const held = args[1] > 1 ? hold.scan : undefined;
+                if (held !== undefined) hold.scan = undefined;
+                yield* awaited(held);
+                const page = yield* awaited(target.scanEntries(...args));
+                scanned.rows += page.items.length;
+                return page;
+              }),
+            );
+        }
+        return typeof value === "function" ? value.bind(target) : value;
+      },
+    });
+    return { hold, scanned, storage };
   });
+
+const countingSetup = Effect.fn("countingSetup")(function* (
+  options: {
+    readonly settings?: harnessContextSupportTypes.HarnessSettings;
+    readonly now?: () => number;
+  } = {},
+) {
+  const { hold, scanned, storage } = yield* countingSetupStep();
   const registry = createRegistry();
   const harness = yield* awaited(
     Harness.open(storage, { models: createModels(), registry, ...options }, context),
@@ -127,7 +136,7 @@ const ABORTED = { outcome: { status: "aborted" }, status: "terminal" } as const;
 function probeTask(
   read: (
     name: string,
-    load: () => Promise<ContextView>,
+    load: () => Promise<harnessContextSupportTypes.ContextView>,
     taskContext: harnessContextSupportTypes.Context,
   ) => Promise<void>,
 ) {

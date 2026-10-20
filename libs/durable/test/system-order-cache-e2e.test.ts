@@ -8,14 +8,18 @@ import {
   uuidv7,
 } from "@msa/ai";
 import { builtinModels } from "@msa/ai/providers/all";
-import { AssistantEntry, defineExtension, defineTool, hook } from "@msa/durable";
-import { GenerationTask, Harness, createRegistry } from "@msa/durable/harness";
-import { MemoryStorage } from "@msa/durable/storage/memory";
+import durable from "@msa/durable";
+import harnessModule from "@msa/durable/harness";
+import memory from "@msa/durable/storage/memory";
 import { Effect } from "effect";
 import { describe, expect, inject, it } from "vite-plus/test";
 
 import { streamSimple as streamSimpleAnthropic } from "../../ai/src/api/anthropic-messages.ts";
 import support from "./support.ts";
+
+const { AssistantEntry, defineExtension, defineTool, hook } = durable;
+const { GenerationTask, Harness, createRegistry } = harnessModule;
+const { MemoryStorage } = memory;
 
 const { awaited, context } = support;
 

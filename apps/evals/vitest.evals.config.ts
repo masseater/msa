@@ -1,7 +1,9 @@
 import { defineConfig, mergeConfig } from "vite-plus";
 
-import { testBaseConfig, workspaceSourcePaths } from "../../vite.config.ts";
+import vitestShared from "../../vitest.shared.ts";
 import { evalConfig } from "./src/vitest-evals.ts";
+
+const { testBaseConfig, workspaceSourcePaths } = vitestShared;
 
 const localConfig = mergeConfig(
   testBaseConfig,

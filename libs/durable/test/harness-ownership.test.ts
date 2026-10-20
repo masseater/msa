@@ -1,4 +1,4 @@
-import { type TaskId } from "@msa/durable";
+import type durableTypes from "@msa/durable/index.types";
 import { Effect } from "effect";
 import { afterEach, describe, expect, it } from "vite-plus/test";
 
@@ -188,7 +188,7 @@ const keepsOwnershipQueriesStep1 = Effect.gen(function* () {
     ),
   );
   const chains = 50;
-  const tasks: TaskId[] = [];
+  const tasks: durableTypes.TaskId[] = [];
   for (const n of Array.from({ length: chains }, (_, i) => i)) {
     const ids = yield* awaited(
       root.commit(

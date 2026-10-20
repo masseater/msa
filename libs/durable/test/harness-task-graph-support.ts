@@ -1,9 +1,12 @@
-import { type TaskGraph, defineTask } from "@msa/durable";
+import durable from "@msa/durable";
+import type durableTypes from "@msa/durable/index.types";
 import { Effect } from "effect";
 
 import effectSupport from "./effect-support.ts";
 import type harnessTaskGraphSupportTypes from "./harness-task-graph-support.types.ts";
 import taskSupport from "./task-support.ts";
+
+const { defineTask } = durable;
 
 const { awaited } = effectSupport;
 const { completed } = taskSupport;
@@ -82,7 +85,7 @@ function family(gates: { readonly child: Promise<void>; readonly late: Promise<v
   return { Child, Parent: graphParent(Child) };
 }
 
-function statuses(graph: TaskGraph): Record<string, string> {
+function statuses(graph: durableTypes.TaskGraph): Record<string, string> {
   return Object.fromEntries(
     Object.values(graph.tasks).map(
       (node) => [`${node.kind}#${node.id}`, node.state.status] as const,

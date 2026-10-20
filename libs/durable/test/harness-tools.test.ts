@@ -1,22 +1,23 @@
 import { type FauxResponseStep, type SystemMessage } from "@msa/ai";
-import { type Conversation, LiveDoc, ToolResultEntry } from "@msa/durable";
-import { ToolTask } from "@msa/durable/harness";
+import durable from "@msa/durable";
+import harnessModule from "@msa/durable/harness";
+import type durableTypes from "@msa/durable/index.types";
 import { Effect } from "effect";
 import { describe, expect, it } from "vite-plus/test";
 
-import chatSupport from "./chat-support.ts";
-import effectSupport from "./effect-support.ts";
-import harnessSupport from "./harness-support.ts";
 import harnessToolsSupport from "./harness-tools-support.ts";
-import sessionSupport from "./session-support.ts";
+import testSupport from "./support.ts";
 
-const { allEntries, chatSetup } = chatSupport;
+const { LiveDoc, ToolResultEntry } = durable;
+const { ToolTask } = harnessModule;
+
+const { allEntries, chatSetup } = testSupport;
 
 type ToolExecute = Parameters<typeof harnessToolsSupport.tool>[1];
-const { awaited } = effectSupport;
-const { addHooks, addTool } = harnessSupport;
+const { awaited } = testSupport;
+const { addHooks, addTool } = testSupport;
 const { DONE, calls, resultText, results, run, tool } = harnessToolsSupport;
-const { context } = sessionSupport;
+const { context } = testSupport;
 
 const runsInputTool = Effect.gen(function* () {
   const setup = chatSetup();
@@ -133,7 +134,7 @@ const answersCallTool = Effect.gen(function* () {
       return Promise.resolve({ output: [] });
     }),
   );
-  let root!: Conversation;
+  let root!: durableTypes.Conversation;
   const deactivate: FauxResponseStep = () =>
     runPromise(
       Effect.gen(function* () {

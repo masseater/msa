@@ -1,21 +1,18 @@
 import { Function } from "effect";
 
-import type { DocumentId, Seq, StorageWrite } from "../../types.ts";
-import {
-  type DocumentAction,
-  insertMapId,
-  insertSorted,
-  isCurrentOnly,
-  recordAddressKey,
-  removeSorted,
-  scopeKey,
-  type State,
-  type StoredDocumentState,
-} from "./state.ts";
+import type typesModule from "../../types.types.ts";
+import stateModule from "./state.ts";
+import type stateTypes from "./state.types.ts";
 
-type TableWrite<T extends StorageWrite["type"]> = Extract<StorageWrite, { type: T }>;
+const { insertMapId, insertSorted, isCurrentOnly, recordAddressKey, removeSorted, scopeKey } =
+  stateModule;
 
-const applyConversation = (state: State, write: TableWrite<"conversation">): void => {
+type TableWrite<T extends typesModule.StorageWrite["type"]> = Extract<
+  typesModule.StorageWrite,
+  { type: T }
+>;
+
+const applyConversation = (state: stateTypes.State, write: TableWrite<"conversation">): void => {
   state.recordTypes.set(write.value.id, "conversation");
   state.conversations.set(write.value.id, write.value);
   insertSorted(state.conversationIds, write.value.id);
@@ -26,7 +23,11 @@ const applyConversation = (state: State, write: TableWrite<"conversation">): voi
   }
 };
 
-const applyEntry = (state: State, write: TableWrite<"entry">, seq: Seq): void => {
+const applyEntry = (
+  state: stateTypes.State,
+  write: TableWrite<"entry">,
+  seq: typesModule.Seq,
+): void => {
   state.recordTypes.set(write.value.id, "entry");
   state.entries.set(write.value.id, write.value);
   state.entryCommitSeqs.set(write.value.id, seq);
@@ -36,7 +37,7 @@ const applyEntry = (state: State, write: TableWrite<"entry">, seq: Seq): void =>
   }
 };
 
-const applyTask = (state: State, write: TableWrite<"task">): void => {
+const applyTask = (state: stateTypes.State, write: TableWrite<"task">): void => {
   state.recordTypes.set(write.value.id, "task");
   const previous = state.tasks.get(write.value.id);
   if (previous === undefined) {
@@ -49,7 +50,7 @@ const applyTask = (state: State, write: TableWrite<"task">): void => {
   state.tasks.set(write.value.id, write.value);
 };
 
-const forgetRequest = (state: State, write: TableWrite<"submission">): void => {
+const forgetRequest = (state: stateTypes.State, write: TableWrite<"submission">): void => {
   const previous = state.submissions.get(write.value.id);
   if (previous?.requestId === undefined) return;
   const previousRequests = state.submissionIdsByRequest.get(previous.conversationId);
@@ -58,7 +59,7 @@ const forgetRequest = (state: State, write: TableWrite<"submission">): void => {
   if (previousRequests.size === 0) state.submissionIdsByRequest.delete(previous.conversationId);
 };
 
-const rememberRequest = (state: State, write: TableWrite<"submission">): void => {
+const rememberRequest = (state: stateTypes.State, write: TableWrite<"submission">): void => {
   if (write.value.requestId === undefined) return;
   let requests = state.submissionIdsByRequest.get(write.value.conversationId);
   if (requests === undefined) {
@@ -68,7 +69,7 @@ const rememberRequest = (state: State, write: TableWrite<"submission">): void =>
   requests.set(write.value.requestId, write.value.id);
 };
 
-const applySubmission = (state: State, write: TableWrite<"submission">): void => {
+const applySubmission = (state: stateTypes.State, write: TableWrite<"submission">): void => {
   state.recordTypes.set(write.value.id, "submission");
   const previous = state.submissions.get(write.value.id);
   if (previous === undefined) {
@@ -83,44 +84,63 @@ const applySubmission = (state: State, write: TableWrite<"submission">): void =>
   rememberRequest(state, write);
 };
 
-export const applyTableWrite: {
-  (write: StorageWrite, seq: Seq): (state: State) => number | undefined;
-  (state: State, write: StorageWrite, seq: Seq): number | undefined;
-} = Function.dual(3, (state: State, write: StorageWrite, seq: Seq): number | undefined => {
-  switch (write.type) {
-    case "conversation":
-      applyConversation(state, write);
-      return write.value.id;
-    case "entry":
-      applyEntry(state, write, seq);
-      return write.value.id;
-    case "task":
-      applyTask(state, write);
-      return write.value.id;
-    case "submission":
-      applySubmission(state, write);
-      return write.value.id;
-    case "document.copy":
-      throw new Error("Prepared document copy was not resolved");
-    case "document.create":
-    case "document.change":
-    case "document.retire":
-      return undefined;
-  }
-});
+const applyTableWrite: {
+  (
+    write: typesModule.StorageWrite,
+    seq: typesModule.Seq,
+  ): (state: stateTypes.State) => number | undefined;
+  (
+    state: stateTypes.State,
+    write: typesModule.StorageWrite,
+    seq: typesModule.Seq,
+  ): number | undefined;
+} = Function.dual(
+  3,
+  (
+    state: stateTypes.State,
+    write: typesModule.StorageWrite,
+    seq: typesModule.Seq,
+  ): number | undefined => {
+    switch (write.type) {
+      case "conversation":
+        applyConversation(state, write);
+        return write.value.id;
+      case "entry":
+        applyEntry(state, write, seq);
+        return write.value.id;
+      case "task":
+        applyTask(state, write);
+        return write.value.id;
+      case "submission":
+        applySubmission(state, write);
+        return write.value.id;
+      case "document.copy":
+        throw new Error("Prepared document copy was not resolved");
+      case "document.create":
+      case "document.change":
+      case "document.retire":
+        return undefined;
+    }
+  },
+);
 
 const createDocument = (
-  state: State,
-  id: DocumentId,
-  action: DocumentAction & { readonly create: NonNullable<DocumentAction["create"]> },
-  seq: Seq,
-): StoredDocumentState => {
+  state: stateTypes.State,
+  id: typesModule.DocumentId,
+  action: stateTypes.DocumentAction & {
+    readonly create: NonNullable<stateTypes.DocumentAction["create"]>;
+  },
+  seq: typesModule.Seq,
+): stateTypes.StoredDocumentState => {
   const record = {
     ...action.create,
     createdAt: seq,
     ...(action.retire ? { retiredAt: seq } : {}),
   };
-  const stored: StoredDocumentState = { record, revisions: [{ ...action.content!, seq }] };
+  const stored: stateTypes.StoredDocumentState = {
+    record,
+    revisions: [{ ...action.content!, seq }],
+  };
   state.recordTypes.set(id, "document");
   state.documents.set(id, stored);
   const key = recordAddressKey(record);
@@ -134,7 +154,11 @@ const createDocument = (
   return stored;
 };
 
-const changeDocument = (stored: StoredDocumentState, action: DocumentAction, seq: Seq): void => {
+const changeDocument = (
+  stored: stateTypes.StoredDocumentState,
+  action: stateTypes.DocumentAction,
+  seq: typesModule.Seq,
+): void => {
   if (action.content === undefined) return;
   const revision = { ...action.content, seq };
   if (revision.kind === "base" && isCurrentOnly(stored.record)) stored.revisions = [revision];
@@ -142,10 +166,10 @@ const changeDocument = (stored: StoredDocumentState, action: DocumentAction, seq
 };
 
 const applyDocumentAction = (
-  state: State,
-  id: DocumentId,
-  action: DocumentAction,
-  seq: Seq,
+  state: stateTypes.State,
+  id: typesModule.DocumentId,
+  action: stateTypes.DocumentAction,
+  seq: typesModule.Seq,
 ): void => {
   const create = action.create;
   const stored =
@@ -161,12 +185,23 @@ const applyDocumentAction = (
   if (create !== undefined && !action.retire) address.currentId = id;
 };
 
-export const applyDocumentActions: {
-  (actions: ReadonlyMap<DocumentId, DocumentAction>, seq: Seq): (state: State) => number;
-  (state: State, actions: ReadonlyMap<DocumentId, DocumentAction>, seq: Seq): number;
+const applyDocumentActions: {
+  (
+    actions: ReadonlyMap<typesModule.DocumentId, stateTypes.DocumentAction>,
+    seq: typesModule.Seq,
+  ): (state: stateTypes.State) => number;
+  (
+    state: stateTypes.State,
+    actions: ReadonlyMap<typesModule.DocumentId, stateTypes.DocumentAction>,
+    seq: typesModule.Seq,
+  ): number;
 } = Function.dual(
   3,
-  (state: State, actions: ReadonlyMap<DocumentId, DocumentAction>, seq: Seq): number => {
+  (
+    state: stateTypes.State,
+    actions: ReadonlyMap<typesModule.DocumentId, stateTypes.DocumentAction>,
+    seq: typesModule.Seq,
+  ): number => {
     let maxCreated = 0;
     for (const [id, action] of actions) {
       applyDocumentAction(state, id, action, seq);
@@ -175,3 +210,10 @@ export const applyDocumentActions: {
     return maxCreated;
   },
 );
+
+const apply = {
+  applyDocumentActions,
+  applyTableWrite,
+};
+
+export default apply;

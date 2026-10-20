@@ -6,32 +6,21 @@ import {
   fauxText,
   fauxToolCall,
 } from "@msa/ai";
-import {
-  type Conversation,
-  type EntryRecord,
-  type Harness,
-  InboxDoc,
-  LiveDoc,
-  type Submission,
-  type SubmissionRecord,
-  type ToolExecutionResult,
-  defineTool,
-} from "@msa/durable";
+import durable from "@msa/durable";
+import type durableTypes from "@msa/durable/index.types";
 import { Effect } from "effect";
 import { dual } from "effect/Function";
 
-import chatSupport from "./chat-support.ts";
 import type chatSupportTypes from "./chat-support.types.ts";
-import effectSupport from "./effect-support.ts";
-import harnessSupport from "./harness-support.ts";
-import sessionSupport from "./session-support.ts";
-import taskSupport from "./task-support.ts";
+import testSupport from "./support.ts";
 
-const { textOf, waitFor } = chatSupport;
-const { awaited } = effectSupport;
-const { addTool } = harnessSupport;
-const { context } = sessionSupport;
-const { aborted, deferred } = taskSupport;
+const { InboxDoc, LiveDoc, defineTool } = durable;
+
+const { textOf, waitFor } = testSupport;
+const { awaited } = testSupport;
+const { addTool } = testSupport;
+const { context } = testSupport;
+const { aborted, deferred } = testSupport;
 
 const directories = new Set<string>();
 
@@ -60,7 +49,7 @@ function gated(message: AssistantMessage): {
 function holdToolImpl(
   setup: chatSupportTypes.ChatSetup,
   gate: PromiseWithResolvers<void>,
-  result: ToolExecutionResult = { output: [] },
+  result: durableTypes.ToolExecutionResult = { output: [] },
 ): void {
   addTool(
     setup.registry,
@@ -82,12 +71,12 @@ function holdToolImpl(
 const holdTool: {
   (
     gate: PromiseWithResolvers<void>,
-    result?: ToolExecutionResult,
+    result?: durableTypes.ToolExecutionResult,
   ): (setup: chatSupportTypes.ChatSetup) => ReturnType<typeof holdToolImpl>;
   (
     setup: chatSupportTypes.ChatSetup,
     gate: PromiseWithResolvers<void>,
-    result?: ToolExecutionResult,
+    result?: durableTypes.ToolExecutionResult,
   ): ReturnType<typeof holdToolImpl>;
 } = dual((args) => "registry" in args[0], holdToolImpl);
 
@@ -99,11 +88,11 @@ const HOLD = fauxAssistantMessage([fauxToolCall("hold", {}, { id: "c1" })], {
   stopReason: "toolUse",
 });
 
-function status(submission: Submission): Promise<SubmissionRecord> {
+function status(submission: durableTypes.Submission): Promise<durableTypes.SubmissionRecord> {
   return Promise.resolve(submission.status(context));
 }
 
-function transcript(entries: readonly EntryRecord[]): string[] {
+function transcript(entries: readonly durableTypes.EntryRecord[]): string[] {
   return entries
     .filter((entry) => entry.kind !== "msa.system")
     .map((entry) => {
@@ -113,14 +102,20 @@ function transcript(entries: readonly EntryRecord[]): string[] {
     });
 }
 
-const inbox = Effect.fn("inbox")(function* (harness: Harness, root: Conversation) {
+const inbox = Effect.fn("inbox")(function* (
+  harness: durableTypes.Harness,
+  root: durableTypes.Conversation,
+) {
   return (yield* awaited(harness.snapshot(InboxDoc, root.id, context)))!.items.map((item) => [
     item.id,
     item.mode,
   ]);
 });
 
-const toolRunning = Effect.fn("toolRunning")(function* (harness: Harness, root: Conversation) {
+const toolRunning = Effect.fn("toolRunning")(function* (
+  harness: durableTypes.Harness,
+  root: durableTypes.Conversation,
+) {
   yield* waitFor(
     Effect.gen(function* () {
       return (

@@ -4,8 +4,8 @@ import {
   type SimpleStreamOptions,
   fauxAssistantMessage,
 } from "@msa/ai";
-import { AssistantEntry, ProviderDoc } from "@msa/durable";
-import { MemoryStorage } from "@msa/durable/storage/memory";
+import durable from "@msa/durable";
+import memory from "@msa/durable/storage/memory";
 import { Effect } from "effect";
 import { describe, expect, it } from "vite-plus/test";
 
@@ -14,6 +14,9 @@ import type chatSupportTypes from "./chat-support.types.ts";
 import effectSupport from "./effect-support.ts";
 import harnessGenerationSupport from "./harness-generation-support.ts";
 import sessionSupport from "./session-support.ts";
+
+const { MemoryStorage } = memory;
+const { AssistantEntry, ProviderDoc } = durable;
 
 const { allEntries, chatSetup, openChat, textOf, waitFor } = chatSupport;
 const { awaited } = effectSupport;

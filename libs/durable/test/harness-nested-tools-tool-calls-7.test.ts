@@ -1,10 +1,13 @@
-import { watchEvents } from "@msa/durable/harness";
-import { MemoryStorage } from "@msa/durable/storage/memory";
+import harnessModule from "@msa/durable/harness";
+import memory from "@msa/durable/storage/memory";
 import { Effect } from "effect";
 import { afterEach, describe, expect, it } from "vite-plus/test";
 
 import harnessNestedToolsSupport from "./harness-nested-tools-support.ts";
 import support from "./support.ts";
+
+const { MemoryStorage } = memory;
+const { watchEvents } = harnessModule;
 
 const { DONE, call, directories, tool } = harnessNestedToolsSupport;
 const { addTool, awaited, chatSetup, context, deferred, eventually, openChat, removeDir } = support;

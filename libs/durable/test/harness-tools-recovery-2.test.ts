@@ -1,9 +1,11 @@
-import { GenerationTask } from "@msa/durable/harness";
+import harnessModule from "@msa/durable/harness";
 import { Effect } from "effect";
 import { afterEach, describe, expect, it } from "vite-plus/test";
 
 import harnessToolsRecoverySupport from "./harness-tools-recovery-support.ts";
 import support from "./support.ts";
+
+const { GenerationTask } = harnessModule;
 
 const { DONE, blockingTool, call, directories, open, results, sqlitePath, text, tool, toolTaskId } =
   harnessToolsRecoverySupport;

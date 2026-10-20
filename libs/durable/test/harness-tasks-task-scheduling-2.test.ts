@@ -1,5 +1,5 @@
 import type { Context } from "@msa/chord";
-import { type TaskId } from "@msa/durable";
+import type durableTypes from "@msa/durable/index.types";
 import { Effect } from "effect";
 import { describe, expect, it } from "vite-plus/test";
 
@@ -57,7 +57,7 @@ const abortsWaitingWorkStep1 = Effect.gen(function* () {
 
   const gate = deferred();
   const First = gated("test.dependency", gate.promise);
-  let first: TaskId | undefined;
+  let first: durableTypes.TaskId | undefined;
   const wait = (
     _task: unknown,
     runtime: harnessTasksSupportTypes.StepRuntime<null>,

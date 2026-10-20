@@ -1,24 +1,7 @@
-import type { JsonValue } from "@msa/chord";
+import type idsTypes from "./ids.types.ts";
 
-export type JsonObject = { [key: string]: JsonValue };
+const ROOT_CONVERSATION_ID = 1 as idsTypes.ConversationId;
 
-declare const idBrand: unique symbol;
+const ids = { ROOT_CONVERSATION_ID };
 
-export type Id<Kind extends string, Type = unknown> = number & {
-  readonly [idBrand]: {
-    readonly kind: Kind;
-    readonly type: Type;
-  };
-};
-
-export type ConversationId = Id<"conversation">;
-export type EntryId = Id<"entry">;
-export type TaskId<Result = unknown> = Id<"task", Result>;
-export type SubmissionId = Id<"submission">;
-export type DocumentId = Id<"document">;
-
-declare const seqBrand: unique symbol;
-
-export type Seq = number & { readonly [seqBrand]: "sequence" };
-
-export const ROOT_CONVERSATION_ID = 1 as ConversationId;
+export default ids;

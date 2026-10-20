@@ -5,10 +5,14 @@ import { BACKGROUND_CONTEXT as context } from "@msa/chord/context";
 import { Console, Effect } from "effect";
 import { Type } from "typebox";
 
-import { Harness, createRegistry } from "../src/harness/index.ts";
-import { ToolResultEntry, defineExtension, defineTool } from "../src/index.ts";
-import { MemoryStorage } from "../src/storage/memory.ts";
+import harnessModule from "../src/harness/index.ts";
+import durable from "../src/index.ts";
+import memory from "../src/storage/memory.ts";
 import effectSupport from "./effect-support.ts";
+
+const { Harness, createRegistry } = harnessModule;
+const { ToolResultEntry, defineExtension, defineTool } = durable;
+const { MemoryStorage } = memory;
 
 const { awaited } = effectSupport;
 

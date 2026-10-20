@@ -6,23 +6,19 @@ import {
   fauxText,
   fauxToolCall,
 } from "@msa/ai";
-import {
-  type Harness,
-  type NestedToolExecutionResult,
-  type Task,
-  type TaskId,
-  type ToolRegistration,
-  ToolResultEntry,
-  type ToolTaskInput,
-  defineTool,
-} from "@msa/durable";
-import { ToolTask } from "@msa/durable/harness";
+import durable from "@msa/durable";
+import harnessModule from "@msa/durable/harness";
+import type durableTypes from "@msa/durable/index.types";
 import { Effect } from "effect";
 import { dual } from "effect/Function";
 
-import { openNodeSqliteStorage } from "../src/storage/sqlite/node.ts";
+import node from "../src/storage/sqlite/node.ts";
 import support from "./support.ts";
 import type supportTypes from "./support.types.ts";
+
+const { ToolResultEntry, defineTool } = durable;
+const { openNodeSqliteStorage } = node;
+const { ToolTask } = harnessModule;
 
 const { addTool, allEntries, awaited, context, joinPath, makeTempDir, openChat } = support;
 
@@ -30,21 +26,21 @@ const Parameters = Type.Object({ text: Type.Optional(Type.String()) });
 
 function toolImpl(
   name: string,
-  execute: ToolRegistration<typeof Parameters>["execute"],
-  extra: Partial<ToolRegistration<typeof Parameters>> = {},
-): ToolRegistration<typeof Parameters> {
+  execute: durableTypes.ToolRegistration<typeof Parameters>["execute"],
+  extra: Partial<durableTypes.ToolRegistration<typeof Parameters>> = {},
+): durableTypes.ToolRegistration<typeof Parameters> {
   return defineTool({ description: name, execute, name, parameters: Parameters, ...extra });
 }
 
 const tool: {
   (
-    execute: ToolRegistration<typeof Parameters>["execute"],
-    extra?: Partial<ToolRegistration<typeof Parameters>>,
+    execute: durableTypes.ToolRegistration<typeof Parameters>["execute"],
+    extra?: Partial<durableTypes.ToolRegistration<typeof Parameters>>,
   ): (name: string) => ReturnType<typeof toolImpl>;
   (
     name: string,
-    execute: ToolRegistration<typeof Parameters>["execute"],
-    extra?: Partial<ToolRegistration<typeof Parameters>>,
+    execute: durableTypes.ToolRegistration<typeof Parameters>["execute"],
+    extra?: Partial<durableTypes.ToolRegistration<typeof Parameters>>,
   ): ReturnType<typeof toolImpl>;
 } = dual((args) => typeof args[0] === "string", toolImpl);
 
@@ -66,11 +62,11 @@ const open = Effect.fn("open")(function* (path: string, setup: supportTypes.Chat
   return yield* openChat(yield* awaited(openNodeSqliteStorage(path)), setup);
 });
 
-const nestedTasks = Effect.fn("nestedTasks")(function* (harness: Harness) {
+const nestedTasks = Effect.fn("nestedTasks")(function* (harness: durableTypes.Harness) {
   const tasks = (yield* awaited(
     harness.commit((tx) => tx.scanTasks({ kind: ToolTask.definition.name }, 100), context),
   )).items;
-  return tasks.filter((task) => (task.input as ToolTaskInput).kind === "nested");
+  return tasks.filter((task) => (task.input as durableTypes.ToolTaskInput).kind === "nested");
 });
 
 function results(entries: Effect.Success<ReturnType<typeof allEntries>>): ToolResultMessage[] {
@@ -79,7 +75,7 @@ function results(entries: Effect.Success<ReturnType<typeof allEntries>>): ToolRe
     .map((entry) => entry.model![0] as ToolResultMessage);
 }
 
-function codes(result: NestedToolExecutionResult | undefined): string[] {
+function codes(result: durableTypes.NestedToolExecutionResult | undefined): string[] {
   return (result?.diagnostics ?? []).flatMap((diagnostic) =>
     diagnostic.code === undefined ? [] : [diagnostic.code],
   );
@@ -87,9 +83,9 @@ function codes(result: NestedToolExecutionResult | undefined): string[] {
 
 function spawnThroughBatchImpl(
   setup: supportTypes.ChatSetup,
-  Worker: Task<null, { phase: "work" }, null, object>,
+  Worker: durableTypes.Task<null, { phase: "work" }, null, object>,
 ) {
-  const spawned: { worker?: TaskId } = {};
+  const spawned: { worker?: durableTypes.TaskId } = {};
   addTool(
     setup.registry,
     tool("spawn", (_args, api, callContext) =>
@@ -126,11 +122,11 @@ function spawnThroughBatchImpl(
 
 const spawnThroughBatch: {
   (
-    Worker: Task<null, { phase: "work" }, null, object>,
+    Worker: durableTypes.Task<null, { phase: "work" }, null, object>,
   ): (setup: supportTypes.ChatSetup) => ReturnType<typeof spawnThroughBatchImpl>;
   (
     setup: supportTypes.ChatSetup,
-    Worker: Task<null, { phase: "work" }, null, object>,
+    Worker: durableTypes.Task<null, { phase: "work" }, null, object>,
   ): ReturnType<typeof spawnThroughBatchImpl>;
 } = dual(2, spawnThroughBatchImpl);
 

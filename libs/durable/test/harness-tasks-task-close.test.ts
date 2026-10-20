@@ -1,13 +1,18 @@
 import { createModels } from "@msa/ai";
-import { type RegistryReader, defineTask } from "@msa/durable";
-import { Harness, createRegistry } from "@msa/durable/harness";
-import { MemoryStorage } from "@msa/durable/storage/memory";
+import durable from "@msa/durable";
+import harnessModule from "@msa/durable/harness";
+import type durableTypes from "@msa/durable/index.types";
+import memory from "@msa/durable/storage/memory";
 import { Effect } from "effect";
 import { describe, expect, it } from "vite-plus/test";
 
 import harnessTasksSupport from "./harness-tasks-support.ts";
 import support from "./support.ts";
 import type supportTypes from "./support.types.ts";
+
+const { Harness, createRegistry } = harnessModule;
+const { defineTask } = durable;
+const { MemoryStorage } = memory;
 
 const { oneStep, openRoot, start } = harnessTasksSupport;
 const { ControlledStorage, addTask, awaited, completed, context, deferred, eventually, flush } =
@@ -21,7 +26,7 @@ function sealingTask() {
     closing?: Promise<void>;
     closeOnSnapshot: boolean;
   } = { closeOnSnapshot: false };
-  const reader: RegistryReader = {
+  const reader: durableTypes.RegistryReader = {
     snapshot: () => {
       if (state.closeOnSnapshot) {
         state.closeOnSnapshot = false;

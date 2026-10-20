@@ -1,19 +1,18 @@
 import { Type } from "@msa/ai";
 import type { JsonValue } from "@msa/chord";
-import {
-  NestedCallDoc,
-  type NestedCallState,
-  type NestedToolExecutionResult,
-  type ToolExecutionResult,
-  defineTool,
-} from "@msa/durable";
-import { watchEvents } from "@msa/durable/harness";
-import { MemoryStorage } from "@msa/durable/storage/memory";
+import durable from "@msa/durable";
+import harnessModule from "@msa/durable/harness";
+import type durableTypes from "@msa/durable/index.types";
+import memory from "@msa/durable/storage/memory";
 import { Effect } from "effect";
 import { describe, expect, it } from "vite-plus/test";
 
 import harnessStructuredOutputSupport from "./harness-structured-output-support.ts";
 import support from "./support.ts";
+
+const { NestedCallDoc, defineTool } = durable;
+const { MemoryStorage } = memory;
+const { watchEvents } = harnessModule;
 
 const { Count, DONE, call, codes, direct, nested, returning } = harnessStructuredOutputSupport;
 const { addTool, awaited, chatSetup, context, openChat, toJsonText } = support;
@@ -27,7 +26,7 @@ const probingStructuredTools = Effect.fn("probingStructuredTools")(function* () 
     setup.registry,
     returning("nothing", { structuredOutput: null }, { structuredOutputSchema: Type.Null() }),
   );
-  const received: NestedToolExecutionResult[] = [];
+  const received: durableTypes.NestedToolExecutionResult[] = [];
   addTool(
     setup.registry,
     defineTool({
@@ -113,17 +112,17 @@ const storesExactlyWhat = Effect.gen(function* () {
     for (const change of publication.changes) {
       if (change.type !== "document" || change.record.kind !== NestedCallDoc.definition.kind)
         continue;
-      const result = (change.value as NestedCallState | null)?.result;
+      const result = (change.value as durableTypes.NestedCallState | null)?.result;
       if (result !== undefined && change.ops.length > 0)
         stored.push(result as unknown as JsonValue);
     }
   });
   const stream = yield* awaited(watchEvents(harness, root.id, context));
-  const ends: NestedToolExecutionResult[] = [];
+  const ends: durableTypes.NestedToolExecutionResult[] = [];
   stream.start((batch) => {
     for (const event of batch) {
       if (event.type === "tool_execution_end" && event.parentToolCallId !== undefined) {
-        ends.push(event.result as NestedToolExecutionResult);
+        ends.push(event.result as durableTypes.NestedToolExecutionResult);
       }
     }
 
@@ -176,7 +175,12 @@ describe("structured output", () => {
 });
 
 const turnsStructuredOutput = Effect.gen(function* () {
-  const cases: [name: string, result: ToolExecutionResult, schema: boolean, message: string][] = [
+  const cases: [
+    name: string,
+    result: durableTypes.ToolExecutionResult,
+    schema: boolean,
+    message: string,
+  ][] = [
     ["wrong", { structuredOutput: { count: "three" } }, true, "does not match its schema: count:"],
     ["missing", { output: [] }, true, "returned no structuredOutput"],
     ["undeclared", { structuredOutput: { count: 3 } }, false, "declares no structuredOutputSchema"],

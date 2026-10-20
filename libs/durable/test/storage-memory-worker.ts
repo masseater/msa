@@ -1,19 +1,20 @@
 import { BACKGROUND_CONTEXT } from "@msa/chord/context";
-import {
-  STORAGE_READ_BENCHMARKS,
-  type StorageBenchmarkScale,
-  seedStorageBenchmark,
-  storageBenchmarkPrimaryRecordCount,
-} from "@msa/durable/testing";
+import testing from "@msa/durable/testing";
 import { Console, Effect } from "effect";
 
-import { openNodeJsonlStorage } from "../src/storage/jsonl/node.ts";
-import { MemoryStorage } from "../src/storage/memory.ts";
-import { openNodeSqliteStorage } from "../src/storage/sqlite/node.ts";
+import nodeModule from "../src/storage/jsonl/node.ts";
+import memory from "../src/storage/memory.ts";
+import node from "../src/storage/sqlite/node.ts";
 import effectSupport from "./effect-support.ts";
 import platformSupport from "./platform-support.ts";
 import diskFootprint from "./storage-disk-footprint.ts";
 import type storageMemoryWorkerTypes from "./storage-memory-worker.types.ts";
+
+const { MemoryStorage } = memory;
+const { openNodeSqliteStorage } = node;
+const { openNodeJsonlStorage } = nodeModule;
+const { STORAGE_READ_BENCHMARKS, seedStorageBenchmark, storageBenchmarkPrimaryRecordCount } =
+  testing;
 
 const { awaited, toJsonText } = effectSupport;
 const { makeTempFile, removeDir } = platformSupport;
@@ -77,7 +78,7 @@ const readEveryScenario = Effect.fn("readEveryScenario")(function* (
 
 const runWorker = Effect.fn("runWorker")(function* (
   backend: storageMemoryWorkerTypes.StorageBenchmarkBackend,
-  scale: StorageBenchmarkScale,
+  scale: storageMemoryWorkerTypes.StorageBenchmarkScale,
 ) {
   const { storage, directory, path } = yield* openBenchmarkStorage(backend);
 

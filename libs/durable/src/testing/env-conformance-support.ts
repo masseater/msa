@@ -2,80 +2,62 @@ import type { Context } from "@msa/chord";
 import { BACKGROUND_CONTEXT, withAbortSignal } from "@msa/chord/context";
 import { Clock, Effect, Schema } from "effect";
 
-import {
-  type ExecutionEnv,
-  type FileInfo,
-  getOrThrow,
-  type ListFilesOptions,
-  type Result,
-  type ShellOutputInfo,
-  type WatchChange,
-  type WatchTarget,
-} from "../env/index.ts";
-import type { EnvConformanceAssertions } from "./types.ts";
+import envModule from "../env/index.ts";
+import type envTypes from "../env/index.types.ts";
+import type envConformanceSupportTypes from "./env-conformance-support.types.ts";
 
-export const context = BACKGROUND_CONTEXT;
-export const decoder = new TextDecoder();
-export const encoder = new TextEncoder();
+const { getOrThrow } = envModule;
 
-export interface EnvSuite {
-  readonly assert: EnvConformanceAssertions;
-  readonly shell: readonly string[];
-}
+const context = BACKGROUND_CONTEXT;
+const decoder = new TextDecoder();
+const encoder = new TextEncoder();
 
-export interface EnvCaseSpec {
-  readonly name: string;
-  readonly timeoutMs?: number;
-  readonly test: (env: ExecutionEnv, suite: EnvSuite) => Effect.Effect<void>;
-}
+const watchTimeoutMs = 30_000;
 
-export const watchTimeoutMs = 30_000;
-
-export const abortedContext = (): Context => {
+const abortedContext = (): Context => {
   const controller = new AbortController();
   controller.abort();
   return withAbortSignal(controller.signal, BACKGROUND_CONTEXT);
 };
 
-export const errorCode = (result: Result<unknown, { code: string }>): string | undefined =>
+const errorCode = (result: envTypes.Result<unknown, { code: string }>): string | undefined =>
   result.ok ? undefined : result.error.code;
 
-export const value = <A, E>(operation: () => Promise<Result<A, E>>): Effect.Effect<A> =>
+const value = <A, E>(operation: () => Promise<envTypes.Result<A, E>>): Effect.Effect<A> =>
   Effect.map(Effect.promise(operation), getOrThrow);
 
-export const codeOf = (
-  operation: () => Promise<Result<unknown, { code: string }>>,
+const codeOf = (
+  operation: () => Promise<envTypes.Result<unknown, { code: string }>>,
 ): Effect.Effect<string | undefined> => Effect.map(Effect.promise(operation), errorCode);
 
-export const settled = <A>(operation: () => Promise<A>): Effect.Effect<A> =>
-  Effect.promise(operation);
+const settled = <A>(operation: () => Promise<A>): Effect.Effect<A> => Effect.promise(operation);
 
-export const readAll = Effect.fnUntraced(function* (
-  env: ExecutionEnv,
+const readAll = Effect.fnUntraced(function* (
+  env: envTypes.ExecutionEnv,
   path: string,
   maxEntries: number,
 ) {
   const reader = yield* value(() => env.openDirReader(path, context));
-  const pages: FileInfo[][] = [];
+  const pages: envTypes.FileInfo[][] = [];
   return yield* Effect.ensuring(
     Effect.gen(function* () {
       for (let read = 0; read < 1000; read += 1) {
         const next = yield* value(() => reader.next(maxEntries, context));
         pages.push(next.entries);
-        if (next.done) return { pages, done: true };
+        if (next.done) return { done: true, pages };
       }
-      return { pages, done: false };
+      return { done: false, pages };
     }),
     settled(() => reader.close(context)),
   );
 });
 
-const letter = { file: "f", directory: "d", symlink: "l" } as const;
+const letter = { directory: "d", file: "f", symlink: "l" } as const;
 
-export const listed = Effect.fnUntraced(function* (
-  env: ExecutionEnv,
+const listed = Effect.fnUntraced(function* (
+  env: envTypes.ExecutionEnv,
   path: string,
-  options?: ListFilesOptions,
+  options?: envTypes.ListFilesOptions,
 ) {
   const { listFiles } = env;
   if (listFiles === undefined) throw new Error("The environment does not implement listFiles");
@@ -86,12 +68,12 @@ export const listed = Effect.fnUntraced(function* (
   };
 });
 
-export const execCollect = Effect.fnUntraced(function* (
-  env: ExecutionEnv,
+const execCollect = Effect.fnUntraced(function* (
+  env: envTypes.ExecutionEnv,
   command: string | readonly string[],
   cwd?: string,
 ) {
-  const output: Record<ShellOutputInfo["stream"], string> = { stdout: "", stderr: "" };
+  const output: Record<envTypes.ShellOutputInfo["stream"], string> = { stderr: "", stdout: "" };
   const result = yield* settled(() =>
     env.exec(
       command,
@@ -107,7 +89,7 @@ export const execCollect = Effect.fnUntraced(function* (
   return { result, ...output };
 });
 
-const covers = (change: WatchChange, path: string): boolean => {
+const covers = (change: envTypes.WatchChange, path: string): boolean => {
   if ("overflow" in change) return true;
   if (!("paths" in change)) return false;
   return change.paths.some(
@@ -116,16 +98,10 @@ const covers = (change: WatchChange, path: string): boolean => {
   );
 };
 
-export interface Watching {
-  readonly changes: WatchChange[];
-  expectChange(path: string, change: Effect.Effect<void>): Effect.Effect<void>;
-  absolute(path: string): Effect.Effect<string>;
-}
-
 const changesJson = Schema.encodeEffect(Schema.fromJsonString(Schema.Unknown));
 
 const awaitChange = Effect.fnUntraced(function* (
-  changes: readonly WatchChange[],
+  changes: readonly envTypes.WatchChange[],
   from: number,
   target: string,
 ) {
@@ -139,18 +115,18 @@ const awaitChange = Effect.fnUntraced(function* (
   }
 });
 
-export const watching = Effect.fnUntraced(function* (
-  env: ExecutionEnv,
-  targets: readonly WatchTarget[],
-  run: (helpers: Watching) => Effect.Effect<void>,
+const watching = Effect.fnUntraced(function* (
+  env: envTypes.ExecutionEnv,
+  targets: readonly envTypes.WatchTarget[],
+  run: (helpers: envConformanceSupportTypes.Watching) => Effect.Effect<void>,
 ) {
-  const changes: WatchChange[] = [];
+  const changes: envTypes.WatchChange[] = [];
   const watcher = yield* value(() => env.watch(targets, (change) => changes.push(change), context));
   const absolute = (path: string) => value(() => env.absolutePath(path, context));
   yield* Effect.ensuring(
     run({
-      changes,
       absolute,
+      changes,
       expectChange: (path, change) =>
         Effect.gen(function* () {
           const target = yield* absolute(path);
@@ -162,3 +138,21 @@ export const watching = Effect.fnUntraced(function* (
     settled(() => watcher.close(context)),
   );
 });
+
+const envConformanceSupport = {
+  abortedContext,
+  codeOf,
+  context,
+  decoder,
+  encoder,
+  errorCode,
+  execCollect,
+  listed,
+  readAll,
+  settled,
+  value,
+  watchTimeoutMs,
+  watching,
+};
+
+export default envConformanceSupport;

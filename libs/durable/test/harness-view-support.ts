@@ -1,14 +1,6 @@
 import { applyImmutable } from "@msa/chord/delta";
-import {
-  AgentDoc,
-  type Conversation,
-  type ConversationView,
-  type Harness,
-  InboxDoc,
-  LiveDoc,
-  ProviderDoc,
-  UsageDoc,
-} from "@msa/durable";
+import durable from "@msa/durable";
+import type durableTypes from "@msa/durable/index.types";
 import { Effect } from "effect";
 import { dual } from "effect/Function";
 import { expect } from "vite-plus/test";
@@ -17,10 +9,12 @@ import effectSupport from "./effect-support.ts";
 import type harnessViewSupportTypes from "./harness-view-support.types.ts";
 import sessionSupport from "./session-support.ts";
 
+const { AgentDoc, InboxDoc, LiveDoc, ProviderDoc, UsageDoc } = durable;
+
 const { awaited } = effectSupport;
 const { context } = sessionSupport;
 
-function record(conversation: Conversation) {
+function record(conversation: durableTypes.Conversation) {
   return Effect.runPromise(
     Effect.gen(function* () {
       const watch = yield* awaited(conversation.watch(context));
@@ -36,7 +30,7 @@ function record(conversation: Conversation) {
   );
 }
 
-const fresh = Effect.fn("fresh")(function* (conversation: Conversation) {
+const fresh = Effect.fn("fresh")(function* (conversation: durableTypes.Conversation) {
   const state = yield* awaited(conversation.viewState(context));
   const value = state.value;
   state.dispose();
@@ -44,9 +38,9 @@ const fresh = Effect.fn("fresh")(function* (conversation: Conversation) {
 });
 
 const committed = Effect.fn("committed")(function* (
-  harness: Harness,
-  conversation: Conversation,
-  recordInner: ConversationView["conversation"],
+  harness: durableTypes.Harness,
+  conversation: durableTypes.Conversation,
+  recordInner: durableTypes.ConversationView["conversation"],
 ) {
   const docs: Record<string, unknown> = {};
   for (const token of [AgentDoc, LiveDoc, InboxDoc, ProviderDoc, UsageDoc] as const) {
@@ -63,9 +57,9 @@ const committed = Effect.fn("committed")(function* (
 });
 
 function replayImpl(
-  initial: ConversationView,
+  initial: durableTypes.ConversationView,
   frames: readonly harnessViewSupportTypes.Frame[],
-): ConversationView {
+): durableTypes.ConversationView {
   let value = initial;
   for (const frame of frames) {
     value = applyImmutable(value, frame.ops);
@@ -77,9 +71,9 @@ function replayImpl(
 const replay: {
   (
     frames: readonly harnessViewSupportTypes.Frame[],
-  ): (initial: ConversationView) => ReturnType<typeof replayImpl>;
+  ): (initial: durableTypes.ConversationView) => ReturnType<typeof replayImpl>;
   (
-    initial: ConversationView,
+    initial: durableTypes.ConversationView,
     frames: readonly harnessViewSupportTypes.Frame[],
   ): ReturnType<typeof replayImpl>;
 } = dual(2, replayImpl);

@@ -1,6 +1,6 @@
-import { type AgentEvent } from "@msa/durable";
-import { watchEvents } from "@msa/durable/harness";
-import { MemoryStorage } from "@msa/durable/storage/memory";
+import harnessModule from "@msa/durable/harness";
+import type durableTypes from "@msa/durable/index.types";
+import memory from "@msa/durable/storage/memory";
 import { Effect } from "effect";
 import { describe, expect, it } from "vite-plus/test";
 
@@ -9,6 +9,9 @@ import effectSupport from "./effect-support.ts";
 import harnessInputEntriesSupport from "./harness-input-entries-support.ts";
 import sessionSupport from "./session-support.ts";
 import taskSupport from "./task-support.ts";
+
+const { MemoryStorage } = memory;
+const { watchEvents } = harnessModule;
 
 const { allEntries, chatSetup, openChat, waitFor } = chatSupport;
 const { awaited } = effectSupport;
@@ -24,7 +27,7 @@ const watchedHeldChat = Effect.fn("watchedHeldChat")(function* () {
   const requests: string[][] = [];
   setup.faux.setResponses([requestLog(requests, HOLD), requestLog(requests, answer("done"))]);
   const { harness, root } = yield* openChat(new MemoryStorage(), setup);
-  const events: AgentEvent[] = [];
+  const events: durableTypes.AgentEvent[] = [];
   const stream = yield* awaited(watchEvents(harness, root.id, context));
   stream.start((batch) => {
     events.push(...batch);

@@ -1,18 +1,16 @@
 import { type AssistantMessage, Type, fauxAssistantMessage, fauxText, fauxToolCall } from "@msa/ai";
-import {
-  type Conversation,
-  type EntryRecord,
-  type JsonObject,
-  type ToolRegistration,
-  defineTool,
-} from "@msa/durable";
+import durable from "@msa/durable";
+import type durableTypes from "@msa/durable/index.types";
 import { Effect } from "effect";
 
-import { createToolSearchExtension } from "../src/tool-search/index.ts";
+import toolSearch from "../src/tool-search/index.ts";
 import chatSupport from "./chat-support.ts";
 import effectSupport from "./effect-support.ts";
 import harnessSupport from "./harness-support.ts";
 import sessionSupport from "./session-support.ts";
+
+const { defineTool } = durable;
+const { createToolSearchExtension } = toolSearch;
 
 const { chatSetup } = chatSupport;
 
@@ -25,8 +23,8 @@ const { context } = sessionSupport;
 function tool(
   name: string,
   description: string,
-  extra: Partial<ToolRegistration> = {},
-): ToolRegistration {
+  extra: Partial<durableTypes.ToolRegistration> = {},
+): durableTypes.ToolRegistration {
   return defineTool({
     description,
     execute: () => Promise.resolve({ output: [{ text: `${name} ran`, type: "text" }] }),
@@ -40,7 +38,7 @@ function tool(
 
 const DONE = fauxAssistantMessage([fauxText("done")]);
 
-function call(name: string, args: JsonObject = {}, id = "c1"): AssistantMessage {
+function call(name: string, args: durableTypes.JsonObject = {}, id = "c1"): AssistantMessage {
   return fauxAssistantMessage([fauxToolCall(name, args, { id })], { stopReason: "toolUse" });
 }
 
@@ -60,11 +58,11 @@ function setup(): ReturnType<typeof chatSetup> {
   return chat;
 }
 
-const offered = Effect.fn("offered")(function* (root: Conversation) {
+const offered = Effect.fn("offered")(function* (root: durableTypes.Conversation) {
   return (yield* awaited(root.agent(context))).tools.map((each) => each.name);
 });
 
-function systemMessages(entries: readonly EntryRecord[]) {
+function systemMessages(entries: readonly durableTypes.EntryRecord[]) {
   return entries
     .filter((entry) => entry.kind === "msa.system")
     .map(
@@ -73,7 +71,7 @@ function systemMessages(entries: readonly EntryRecord[]) {
     );
 }
 
-function toolResultTexts(entries: readonly EntryRecord[]): string[] {
+function toolResultTexts(entries: readonly durableTypes.EntryRecord[]): string[] {
   return entries
     .filter((entry) => entry.kind === "msa.tool-result")
     .map((entry) =>

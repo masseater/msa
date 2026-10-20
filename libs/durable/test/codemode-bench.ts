@@ -1,14 +1,19 @@
 import * as NodeRuntime from "@effect/platform-node/NodeRuntime";
 import { createModels, fauxAssistantMessage, fauxProvider, fauxText, fauxToolCall } from "@msa/ai";
 import { CodemodeSandbox } from "@msa/codemode";
-import { defineExtension, defineTool } from "@msa/durable";
-import { Harness, createRegistry } from "@msa/durable/harness";
+import durable from "@msa/durable";
+import harnessModule from "@msa/durable/harness";
 import { Console, Effect } from "effect";
 import { Type } from "typebox";
 
-import { createCodemodeTool } from "../src/codemode/codemode.ts";
-import { openNodeSqliteStorage } from "../src/storage/sqlite/node.ts";
+import codemode from "../src/codemode/codemode.ts";
+import node from "../src/storage/sqlite/node.ts";
 import support from "./support.ts";
+
+const { defineExtension, defineTool } = durable;
+const { Harness, createRegistry } = harnessModule;
+const { createCodemodeTool } = codemode;
+const { openNodeSqliteStorage } = node;
 
 const { BACKGROUND_CONTEXT: context, awaited, joinPath, makeTempDir, removeDir } = support;
 

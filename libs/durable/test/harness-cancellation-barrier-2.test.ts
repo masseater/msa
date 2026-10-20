@@ -1,6 +1,6 @@
-import { defineTask } from "@msa/durable";
-import { createSession } from "@msa/durable/session";
-import { MemoryStorage } from "@msa/durable/storage/memory";
+import durable from "@msa/durable";
+import sessionModule from "@msa/durable/session";
+import memory from "@msa/durable/storage/memory";
 import { Effect } from "effect";
 import { describe, expect, it } from "vite-plus/test";
 
@@ -8,6 +8,10 @@ import effectSupport from "./effect-support.ts";
 import Dormant from "./harness-cancellation-barrier-cases.ts";
 import sessionSupport from "./session-support.ts";
 import taskSupport from "./task-support.ts";
+
+const { MemoryStorage } = memory;
+const { createSession } = sessionModule;
+const { defineTask } = durable;
 
 const { awaited } = effectSupport;
 const { context } = sessionSupport;

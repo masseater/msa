@@ -1,13 +1,18 @@
 import { Type, fauxAssistantMessage, fauxText, fauxToolCall } from "@msa/ai";
-import { type AgentEvent, type ConversationId, defineDoc, defineTool } from "@msa/durable";
-import { watchEvents } from "@msa/durable/harness";
-import { MemoryStorage } from "@msa/durable/storage/memory";
+import durable from "@msa/durable";
+import harnessModule from "@msa/durable/harness";
+import type durableTypes from "@msa/durable/index.types";
+import memory from "@msa/durable/storage/memory";
 import { Effect } from "effect";
 import { describe, expect, it } from "vite-plus/test";
 
 import sessionDocumentRetentionSupport from "./session-document-retention-support.ts";
 import type sessionDocumentRetentionSupportTypes from "./session-document-retention-support.types.ts";
 import support from "./support.ts";
+
+const { defineDoc, defineTool } = durable;
+const { MemoryStorage } = memory;
+const { watchEvents } = harnessModule;
 
 const { CounterDoc, bump, open, settleLine } = sessionDocumentRetentionSupport;
 const { addTool, awaited, chatSetup, context, createConversation, eventually, openChat } = support;
@@ -41,7 +46,7 @@ const eventsWithRetention = Effect.fn("eventsWithRetention")(function* (
   ]);
   const { harness, root } = yield* openChat(new MemoryStorage(), setup);
   const stream = yield* awaited(watchEvents(harness, root.id, context));
-  const events: AgentEvent[] = [];
+  const events: durableTypes.AgentEvent[] = [];
   stream.start((batch) => {
     events.push(...batch);
 
@@ -113,7 +118,7 @@ const queuesOneSweep = Effect.gen(function* () {
   const runPromise = Effect.runPromiseWith(yield* Effect.context<never>());
 
   const { session } = open(0);
-  const conversationIds: ConversationId[] = [];
+  const conversationIds: durableTypes.ConversationId[] = [];
   for (const _ of Array.from({ length: 50 })) {
     const id = yield* awaited(createConversation(session));
     yield* bump(session, id);

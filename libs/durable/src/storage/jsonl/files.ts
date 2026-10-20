@@ -1,25 +1,16 @@
 import type { Context } from "@msa/chord";
 import { Effect, Function } from "effect";
 
-import type { FileSystem } from "../../env/index.ts";
-import { JsonlCorruptionError } from "./corruption-error.ts";
-import {
-  type EncodedCommit,
-  errorFromFile,
-  MAIN_FILE,
-  type ParsedFile,
-  type ParsedLine,
-} from "./format.ts";
+import type envTypes from "../../env/index.types.ts";
+import JsonlCorruptionError from "./corruption-error.ts";
+import type filesTypes from "./files.types.ts";
+import formatModule from "./format.ts";
+import type formatTypes from "./format.types.ts";
+
+const { MAIN_FILE, errorFromFile } = formatModule;
 
 const RECLAIM_SUFFIX = ".reclaim";
 const textDecoder = new TextDecoder("utf-8", { fatal: true });
-
-export type JsonlFiles = {
-  readonly fs: FileSystem;
-  readonly directory: string;
-  readonly mainPath: string;
-  readonly fsync: boolean;
-};
 
 const decodeLine = (bytes: Uint8Array, name: string, lineNumber: number): string => {
   try {
@@ -37,38 +28,38 @@ const splitLines = <T>(
   completeSize: number,
   name: string,
   parse: (text: string, line: number) => T,
-): ParsedLine<T>[] => {
-  const lines: ParsedLine<T>[] = [];
+): formatTypes.ParsedLine<T>[] => {
+  const lines: formatTypes.ParsedLine<T>[] = [];
   let start = 0;
   let lineNumber = 1;
   for (let end = 0; end < completeSize; end++) {
     if (bytes[end] !== 0x0a) continue;
     const text = decodeLine(bytes.subarray(start, end), name, lineNumber);
-    lines.push({ value: parse(text, lineNumber), start });
+    lines.push({ start, value: parse(text, lineNumber) });
     start = end + 1;
     lineNumber++;
   }
   return lines;
 };
 
-export const readLines: {
+const readLines: {
   <T>(
     path: string,
     name: string,
     context: Context,
     parse: (text: string, line: number) => T,
-  ): (fs: FileSystem) => Effect.Effect<ParsedFile<T>>;
+  ): (fs: envTypes.FileSystem) => Effect.Effect<formatTypes.ParsedFile<T>>;
   <T>(
-    fs: FileSystem,
+    fs: envTypes.FileSystem,
     path: string,
     name: string,
     context: Context,
     parse: (text: string, line: number) => T,
-  ): Effect.Effect<ParsedFile<T>>;
+  ): Effect.Effect<formatTypes.ParsedFile<T>>;
 } = Function.dual(
   5,
   Effect.fnUntraced(function* <T>(
-    fs: FileSystem,
+    fs: envTypes.FileSystem,
     path: string,
     name: string,
     context: Context,
@@ -76,7 +67,7 @@ export const readLines: {
   ) {
     const read = yield* Effect.promise(() => fs.readBinaryFile(path, context));
     if (!read.ok) {
-      if (read.error.code === "not_found") return { path, lines: [] };
+      if (read.error.code === "not_found") return { lines: [], path };
       throw errorFromFile(`read of ${name}`, read.error);
     }
     const bytes = read.value;
@@ -86,12 +77,12 @@ export const readLines: {
       const truncated = yield* Effect.promise(() => fs.truncateFile(path, completeSize, context));
       if (!truncated.ok) throw errorFromFile(`torn-line truncation of ${name}`, truncated.error);
     }
-    return { path, lines: splitLines(bytes, completeSize, name, parse) };
+    return { lines: splitLines(bytes, completeSize, name, parse), path };
   }),
 );
 
 const replaceWithContent = Effect.fnUntraced(function* (
-  files: JsonlFiles,
+  files: filesTypes.JsonlFiles,
   file: string,
   path: string,
   content: string,
@@ -112,7 +103,7 @@ const replaceWithContent = Effect.fnUntraced(function* (
 });
 
 const replaceSidecar = Effect.fnUntraced(function* (
-  files: JsonlFiles,
+  files: filesTypes.JsonlFiles,
   file: string,
   content: string,
   context: Context,
@@ -126,20 +117,20 @@ const replaceSidecar = Effect.fnUntraced(function* (
   yield* replaceWithContent(files, file, path.value, content, context);
 });
 
-export const reclaimSidecars: {
+const reclaimSidecars: {
   (
     replacements: ReadonlyMap<string, string>,
     context: Context,
-  ): (files: JsonlFiles) => Effect.Effect<void>;
+  ): (files: filesTypes.JsonlFiles) => Effect.Effect<void>;
   (
-    files: JsonlFiles,
+    files: filesTypes.JsonlFiles,
     replacements: ReadonlyMap<string, string>,
     context: Context,
   ): Effect.Effect<void>;
 } = Function.dual(
   3,
   Effect.fnUntraced(function* (
-    files: JsonlFiles,
+    files: filesTypes.JsonlFiles,
     replacements: ReadonlyMap<string, string>,
     context: Context,
   ) {
@@ -156,12 +147,12 @@ export const reclaimSidecars: {
   }),
 );
 
-export const resolveFile: {
-  (file: string, context: Context): (files: JsonlFiles) => Effect.Effect<string>;
-  (files: JsonlFiles, file: string, context: Context): Effect.Effect<string>;
+const resolveFile: {
+  (file: string, context: Context): (files: filesTypes.JsonlFiles) => Effect.Effect<string>;
+  (files: filesTypes.JsonlFiles, file: string, context: Context): Effect.Effect<string>;
 } = Function.dual(
   3,
-  Effect.fnUntraced(function* (files: JsonlFiles, file: string, context: Context) {
+  Effect.fnUntraced(function* (files: filesTypes.JsonlFiles, file: string, context: Context) {
     const path = yield* Effect.promise(() => files.fs.joinPath([files.directory, file], context));
     if (!path.ok) throw errorFromFile("path join", path.error);
     return path.value;
@@ -170,12 +161,12 @@ export const resolveFile: {
 
 type Layout = { readonly directory: string; readonly mainPath: string };
 
-export const resolveLayout: {
-  (fs: FileSystem, context: Context): (directory: string) => Effect.Effect<Layout>;
-  (directory: string, fs: FileSystem, context: Context): Effect.Effect<Layout>;
+const resolveLayout: {
+  (fs: envTypes.FileSystem, context: Context): (directory: string) => Effect.Effect<Layout>;
+  (directory: string, fs: envTypes.FileSystem, context: Context): Effect.Effect<Layout>;
 } = Function.dual(
   3,
-  Effect.fnUntraced(function* (directory: string, fs: FileSystem, context: Context) {
+  Effect.fnUntraced(function* (directory: string, fs: envTypes.FileSystem, context: Context) {
     const absolute = yield* Effect.promise(() => fs.absolutePath(directory, context));
     if (!absolute.ok) throw errorFromFile("path resolution", absolute.error);
     const created = yield* Effect.promise(() =>
@@ -191,7 +182,7 @@ export const resolveLayout: {
 type ResolvedSidecar = { readonly file: string; readonly content: string; readonly path: string };
 
 const appendSidecars = Effect.fnUntraced(function* (
-  files: JsonlFiles,
+  files: filesTypes.JsonlFiles,
   sidecars: readonly ResolvedSidecar[],
   context: Context,
 ) {
@@ -209,19 +200,27 @@ const appendSidecars = Effect.fnUntraced(function* (
   return undefined;
 });
 
-export const appendEncoded: {
+const appendEncoded: {
   (
-    encoded: EncodedCommit,
+    encoded: formatTypes.EncodedCommit,
     context: Context,
-  ): (files: JsonlFiles) => Effect.Effect<Error | undefined>;
-  (files: JsonlFiles, encoded: EncodedCommit, context: Context): Effect.Effect<Error | undefined>;
+  ): (files: filesTypes.JsonlFiles) => Effect.Effect<Error | undefined>;
+  (
+    files: filesTypes.JsonlFiles,
+    encoded: formatTypes.EncodedCommit,
+    context: Context,
+  ): Effect.Effect<Error | undefined>;
 } = Function.dual(
   3,
-  Effect.fnUntraced(function* (files: JsonlFiles, encoded: EncodedCommit, context: Context) {
+  Effect.fnUntraced(function* (
+    files: filesTypes.JsonlFiles,
+    encoded: formatTypes.EncodedCommit,
+    context: Context,
+  ) {
     const sidecars = yield* Effect.forEach(
       [...encoded.sidecars],
       ([file, content]) =>
-        Effect.map(resolveFile(files, file, context), (path) => ({ file, content, path })),
+        Effect.map(resolveFile(files, file, context), (path) => ({ content, file, path })),
       { concurrency: "unbounded" },
     );
     const failure = yield* appendSidecars(files, sidecars, context);
@@ -232,3 +231,13 @@ export const appendEncoded: {
     return marker.ok ? undefined : errorFromFile(`append to ${MAIN_FILE}`, marker.error);
   }),
 );
+
+const filesModule = {
+  appendEncoded,
+  readLines,
+  reclaimSidecars,
+  resolveFile,
+  resolveLayout,
+};
+
+export default filesModule;

@@ -1,25 +1,20 @@
 import type { Context } from "@msa/chord";
-import {
-  FileError,
-  type Result,
-  StreamDecoder,
-  type TextLine,
-  type TextLineReader,
-  err,
-  ok,
-} from "@msa/durable/env";
+import env from "@msa/durable/env";
+import type envTypes from "@msa/durable/env.types";
 import { Effect } from "effect";
 
 import errors from "./errors.ts";
 import type handleTypes from "./handle.types.ts";
 
+const { FileError, StreamDecoder, err, ok } = env;
+
 const { abortResult, recoverFileError } = errors;
 
 const LINE_CHUNK = 64 * 1024;
 
-type LineResult = Result<TextLine | undefined, FileError>;
+type LineResult = envTypes.Result<envTypes.TextLine | undefined, envTypes.FileError>;
 
-class RemoteTextLineReader implements TextLineReader {
+export default class RemoteTextLineReader implements envTypes.TextLineReader {
   readonly #handle: handleTypes.Handle;
   readonly #decoder = new StreamDecoder();
   #offset = 0;
@@ -33,7 +28,7 @@ class RemoteTextLineReader implements TextLineReader {
 
   readLine(context: Context): Promise<LineResult> {
     const path = this.#handle.path;
-    const aborted = abortResult<TextLine | undefined>(context.abortSignal, path);
+    const aborted = abortResult<envTypes.TextLine | undefined>(context.abortSignal, path);
     if (aborted !== undefined) return Promise.resolve(aborted);
     if (this.#closed) {
       return Promise.resolve(err(new FileError("invalid", "Text line reader is closed", path)));
@@ -61,7 +56,7 @@ class RemoteTextLineReader implements TextLineReader {
         const line = this.#take();
         if (line !== undefined) return line;
         const bytes = yield* Effect.promise(() => this.#handle.pread(this.#offset, LINE_CHUNK));
-        const afterReadAbort = abortResult<TextLine | undefined>(
+        const afterReadAbort = abortResult<envTypes.TextLine | undefined>(
           context.abortSignal,
           this.#handle.path,
         );
@@ -84,9 +79,3 @@ class RemoteTextLineReader implements TextLineReader {
     return this.#handle.close();
   }
 }
-
-const textLineReader = {
-  RemoteTextLineReader,
-};
-
-export default textLineReader;

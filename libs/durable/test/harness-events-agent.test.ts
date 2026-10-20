@@ -7,13 +7,17 @@ import {
   fauxThinking,
   fauxToolCall,
 } from "@msa/ai";
-import { type Harness, LiveDoc, type LiveState, defineTool } from "@msa/durable";
-import { MemoryStorage } from "@msa/durable/storage/memory";
+import durable from "@msa/durable";
+import type durableTypes from "@msa/durable/index.types";
+import memory from "@msa/durable/storage/memory";
 import { Effect } from "effect";
 import { describe, expect, it } from "vite-plus/test";
 
 import harnessEventsSupport from "./harness-events-support.ts";
 import support from "./support.ts";
+
+const { LiveDoc, defineTool } = durable;
+const { MemoryStorage } = memory;
 
 const { applyChanges, drained, listen } = harnessEventsSupport;
 const {
@@ -28,11 +32,11 @@ const {
   waitFor,
 } = support;
 
-function partialsOf(harness: Harness): AssistantMessage[] {
+function partialsOf(harness: durableTypes.Harness): AssistantMessage[] {
   const partials: AssistantMessage[] = [];
   harness.subscribeCommits((publication) => {
     for (const change of documentChanges(publication)) {
-      const message = (change.value as LiveState | null)?.generation?.message as
+      const message = (change.value as durableTypes.LiveState | null)?.generation?.message as
         | AssistantMessage
         | undefined;
       if (change.record.kind === "msa.live" && message !== undefined) partials.push(message);
@@ -74,7 +78,7 @@ const trimmingToolRun = Effect.fn("trimmingToolRun")(function* () {
   const outputs: string[] = [];
   harness.subscribeCommits((publication) => {
     for (const change of documentChanges(publication)) {
-      const output = (change.value as LiveState | null)?.tools?.[0]?.output;
+      const output = (change.value as durableTypes.LiveState | null)?.tools?.[0]?.output;
       if (change.record.kind === "msa.live" && output !== undefined && output !== outputs.at(-1)) {
         outputs.push(output);
       }

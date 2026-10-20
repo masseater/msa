@@ -1,31 +1,31 @@
 import { applyImmutableBatches } from "@msa/chord/delta/apply";
 import { Function } from "effect";
 
-import { StorageRequestError } from "../../errors.ts";
-import type {
-  DocumentId,
-  DocumentPoint,
-  Id,
-  JsonObject,
-  StorageWrite,
-  StoredDocument,
-} from "../../types.ts";
-import {
-  type DocumentAction,
-  documentDeltaBatches,
-  isAliveAt,
-  isCurrentOnly,
-  recordAddressKey,
-  type State,
-  type TableName,
-} from "./state.ts";
+import errors from "../../errors.ts";
+import type typesModule from "../../types.types.ts";
+import stateModule from "./state.ts";
+import type stateTypes from "./state.types.ts";
 
-export const materializeDocument: {
-  (id: DocumentId, at: DocumentPoint): (state: State) => StoredDocument | undefined;
-  (state: State, id: DocumentId, at: DocumentPoint): StoredDocument | undefined;
+const { documentDeltaBatches, isAliveAt, isCurrentOnly, recordAddressKey } = stateModule;
+const { StorageRequestError } = errors;
+
+const materializeDocument: {
+  (
+    id: typesModule.DocumentId,
+    at: typesModule.DocumentPoint,
+  ): (state: stateTypes.State) => typesModule.StoredDocument | undefined;
+  (
+    state: stateTypes.State,
+    id: typesModule.DocumentId,
+    at: typesModule.DocumentPoint,
+  ): typesModule.StoredDocument | undefined;
 } = Function.dual(
   3,
-  (state: State, id: DocumentId, at: DocumentPoint): StoredDocument | undefined => {
+  (
+    state: stateTypes.State,
+    id: typesModule.DocumentId,
+    at: typesModule.DocumentPoint,
+  ): typesModule.StoredDocument | undefined => {
     const stored = state.documents.get(id);
     if (stored === undefined) return undefined;
     if (at !== "current" && isCurrentOnly(stored.record)) {
@@ -43,18 +43,20 @@ export const materializeDocument: {
     const value = applyImmutableBatches(
       base.value,
       documentDeltaBatches(id, base.version, revisions, baseIndex + 1),
-    ) as JsonObject;
+    ) as typesModule.JsonObject;
     return {
-      record: stored.record,
-      version: base.version,
-      value,
       deltasSinceBase: revisions.length - baseIndex - 1,
+      record: stored.record,
+      value,
+      version: base.version,
     };
   },
 );
 
-const changedDocumentIds = (writes: readonly StorageWrite[]): ReadonlySet<DocumentId> => {
-  const changed = new Set<DocumentId>();
+const changedDocumentIds = (
+  writes: readonly typesModule.StorageWrite[],
+): ReadonlySet<typesModule.DocumentId> => {
+  const changed = new Set<typesModule.DocumentId>();
   for (const write of writes) {
     if (write.type === "document.create" || write.type === "document.copy") {
       changed.add(write.record.id);
@@ -65,13 +67,13 @@ const changedDocumentIds = (writes: readonly StorageWrite[]): ReadonlySet<Docume
   return changed;
 };
 
-type CopyWrite = Extract<StorageWrite, { type: "document.copy" }>;
+type CopyWrite = Extract<typesModule.StorageWrite, { type: "document.copy" }>;
 
 const resolveCopy = (
-  state: State,
+  state: stateTypes.State,
   write: CopyWrite,
-  changed: ReadonlySet<DocumentId>,
-): StorageWrite => {
+  changed: ReadonlySet<typesModule.DocumentId>,
+): typesModule.StorageWrite => {
   if (changed.has(write.source.id)) {
     throw new Error(`Fork source document ${write.source.id} is changed in the copy batch`);
   }
@@ -89,33 +91,36 @@ const resolveCopy = (
     throw new Error(`Fork source document ${write.source.id} does not match the copied record`);
   }
   return {
-    type: "document.create",
+    content: { kind: "base", value: stored.value, version: stored.version },
     record: write.record,
-    content: { kind: "base", version: stored.version, value: stored.value },
+    type: "document.create",
   };
 };
 
-export const resolveDocumentCopies: {
-  (writes: StorageWrite[]): (state: State) => StorageWrite[];
-  (state: State, writes: StorageWrite[]): StorageWrite[];
-} = Function.dual(2, (state: State, writes: StorageWrite[]): StorageWrite[] => {
-  if (!writes.some((write) => write.type === "document.copy")) return writes;
-  const changed = changedDocumentIds(writes);
-  return writes.map((write) => {
-    if (write.type !== "document.copy") return write;
-    try {
-      return resolveCopy(state, write, changed);
-    } catch (error) {
-      throw new Error(`Document copy ${write.record.id} was rejected`, { cause: error });
-    }
-  });
-});
+const resolveDocumentCopies: {
+  (writes: typesModule.StorageWrite[]): (state: stateTypes.State) => typesModule.StorageWrite[];
+  (state: stateTypes.State, writes: typesModule.StorageWrite[]): typesModule.StorageWrite[];
+} = Function.dual(
+  2,
+  (state: stateTypes.State, writes: typesModule.StorageWrite[]): typesModule.StorageWrite[] => {
+    if (!writes.some((write) => write.type === "document.copy")) return writes;
+    const changed = changedDocumentIds(writes);
+    return writes.map((write) => {
+      if (write.type !== "document.copy") return write;
+      try {
+        return resolveCopy(state, write, changed);
+      } catch (error) {
+        throw new Error(`Document copy ${write.record.id} was rejected`, { cause: error });
+      }
+    });
+  },
+);
 
 const checkClaim = (
-  id: Id<string>,
-  table: TableName,
-  existing: TableName | undefined,
-  earlier: TableName | undefined,
+  id: typesModule.Id<string>,
+  table: stateTypes.TableName,
+  existing: stateTypes.TableName | undefined,
+  earlier: stateTypes.TableName | undefined,
 ): void => {
   if (table === "conversation" || table === "entry" || table === "document") {
     if (existing !== undefined) throw new Error(`ID ${id} already belongs to ${existing}`);
@@ -129,32 +134,39 @@ const checkClaim = (
     throw new Error(`ID ${id} is written as two record types`);
 };
 
-export const checkGlobalIds: {
-  (writes: readonly StorageWrite[]): (state: State) => void;
-  (state: State, writes: readonly StorageWrite[]): void;
-} = Function.dual(2, (state: State, writes: readonly StorageWrite[]): void => {
-  const claimed = new Map<Id<string>, TableName>();
-  for (const write of writes) {
-    if (write.type === "document.change" || write.type === "document.retire") continue;
-    const document = write.type === "document.create" || write.type === "document.copy";
-    const table: TableName = document ? "document" : write.type;
-    const id = document ? write.record.id : write.value.id;
-    checkClaim(id, table, state.recordTypes.get(id), claimed.get(id));
-    claimed.set(id, table);
-  }
-});
+const checkGlobalIds: {
+  (writes: readonly typesModule.StorageWrite[]): (state: stateTypes.State) => void;
+  (state: stateTypes.State, writes: readonly typesModule.StorageWrite[]): void;
+} = Function.dual(
+  2,
+  (state: stateTypes.State, writes: readonly typesModule.StorageWrite[]): void => {
+    const claimed = new Map<typesModule.Id<string>, stateTypes.TableName>();
+    for (const write of writes) {
+      if (write.type === "document.change" || write.type === "document.retire") continue;
+      const document = write.type === "document.create" || write.type === "document.copy";
+      const table: stateTypes.TableName = document ? "document" : write.type;
+      const id = document ? write.record.id : write.value.id;
+      checkClaim(id, table, state.recordTypes.get(id), claimed.get(id));
+      claimed.set(id, table);
+    }
+  },
+);
 
 type DocumentWrite = Extract<
-  StorageWrite,
+  typesModule.StorageWrite,
   { type: "document.create" | "document.change" | "document.retire" }
 >;
 
-const isDocumentWrite = (write: StorageWrite): write is DocumentWrite =>
+const isDocumentWrite = (write: typesModule.StorageWrite): write is DocumentWrite =>
   write.type === "document.create" ||
   write.type === "document.change" ||
   write.type === "document.retire";
 
-const addDocumentWrite = (action: DocumentAction, write: DocumentWrite, id: DocumentId): void => {
+const addDocumentWrite = (
+  action: stateTypes.DocumentAction,
+  write: DocumentWrite,
+  id: typesModule.DocumentId,
+): void => {
   switch (write.type) {
     case "document.create":
       if (action.create !== undefined || action.content !== undefined) {
@@ -175,10 +187,10 @@ const addDocumentWrite = (action: DocumentAction, write: DocumentWrite, id: Docu
   }
 };
 
-export const prepareDocumentActions = (
-  writes: readonly StorageWrite[],
-): Map<DocumentId, DocumentAction> => {
-  const actions = new Map<DocumentId, DocumentAction>();
+const prepareDocumentActions = (
+  writes: readonly typesModule.StorageWrite[],
+): Map<typesModule.DocumentId, stateTypes.DocumentAction> => {
+  const actions = new Map<typesModule.DocumentId, stateTypes.DocumentAction>();
   for (const write of writes) {
     if (!isDocumentWrite(write)) continue;
     const id = write.type === "document.create" ? write.record.id : write.id;
@@ -192,7 +204,11 @@ export const prepareDocumentActions = (
   return actions;
 };
 
-const checkDocumentAction = (state: State, id: DocumentId, action: DocumentAction): string => {
+const checkDocumentAction = (
+  state: stateTypes.State,
+  id: typesModule.DocumentId,
+  action: stateTypes.DocumentAction,
+): string => {
   const existing = state.documents.get(id);
   if (action.create === undefined && existing === undefined)
     throw new Error(`Unknown document: ${id}`);
@@ -211,20 +227,41 @@ const checkDocumentAction = (state: State, id: DocumentId, action: DocumentActio
     : recordAddressKey(action.create);
 };
 
-export const checkDocumentActions: {
-  (actions: ReadonlyMap<DocumentId, DocumentAction>): (state: State) => void;
-  (state: State, actions: ReadonlyMap<DocumentId, DocumentAction>): void;
-} = Function.dual(2, (state: State, actions: ReadonlyMap<DocumentId, DocumentAction>): void => {
-  const liveCounts = new Map<string, number>();
-  for (const [id, action] of actions) {
-    const key = checkDocumentAction(state, id, action);
-    const currentId = state.documentAddresses.get(key)?.currentId;
-    let live = liveCounts.get(key) ?? (currentId === undefined ? 0 : 1);
-    if (action.retire && currentId === id) live--;
-    if (action.create !== undefined && !action.retire) live++;
-    liveCounts.set(key, live);
-  }
-  for (const live of liveCounts.values()) {
-    if (live > 1) throw new Error(`Document address already has a current incarnation`);
-  }
-});
+const checkDocumentActions: {
+  (
+    actions: ReadonlyMap<typesModule.DocumentId, stateTypes.DocumentAction>,
+  ): (state: stateTypes.State) => void;
+  (
+    state: stateTypes.State,
+    actions: ReadonlyMap<typesModule.DocumentId, stateTypes.DocumentAction>,
+  ): void;
+} = Function.dual(
+  2,
+  (
+    state: stateTypes.State,
+    actions: ReadonlyMap<typesModule.DocumentId, stateTypes.DocumentAction>,
+  ): void => {
+    const liveCounts = new Map<string, number>();
+    for (const [id, action] of actions) {
+      const key = checkDocumentAction(state, id, action);
+      const currentId = state.documentAddresses.get(key)?.currentId;
+      let live = liveCounts.get(key) ?? (currentId === undefined ? 0 : 1);
+      if (action.retire && currentId === id) live--;
+      if (action.create !== undefined && !action.retire) live++;
+      liveCounts.set(key, live);
+    }
+    for (const live of liveCounts.values()) {
+      if (live > 1) throw new Error(`Document address already has a current incarnation`);
+    }
+  },
+);
+
+const documentsModule = {
+  checkDocumentActions,
+  checkGlobalIds,
+  materializeDocument,
+  prepareDocumentActions,
+  resolveDocumentCopies,
+};
+
+export default documentsModule;

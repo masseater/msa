@@ -1,10 +1,14 @@
-import { MemoryStorage } from "@msa/durable/storage/memory";
+import memory from "@msa/durable/storage/memory";
 import { Effect } from "effect";
 
-import { openNodeJsonlStorage } from "../../src/storage/jsonl/node.ts";
-import { openNodeSqliteStorage } from "../../src/storage/sqlite/node.ts";
+import nodeModule from "../../src/storage/jsonl/node.ts";
+import node from "../../src/storage/sqlite/node.ts";
 import support from "../support.ts";
 import type jsonStorageTypes from "./json-storage.types.ts";
+
+const { openNodeSqliteStorage } = node;
+const { openNodeJsonlStorage } = nodeModule;
+const { MemoryStorage } = memory;
 
 const { awaited, context, currentTimeMillis, makeTempDir, tempPath } = support;
 

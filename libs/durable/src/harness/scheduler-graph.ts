@@ -1,34 +1,24 @@
-import { SchedulerIndex } from "./scheduler-index.ts";
-import {
-  cancellationIntent,
-  conversationNode,
-  conversationOf,
-  parentNode,
-  parentOf,
-} from "./scheduler-records.ts";
-import { SetMap } from "./scheduler-setmap.ts";
-import type {
-  AnyTaskRecord,
-  ConversationId,
-  Node,
-  Overlay,
-  Scope,
-  Step,
-  TaskId,
-  Up,
-  Walked,
-  WalkOptions,
-} from "./scheduler-types.ts";
+import SchedulerIndex from "./scheduler-index.ts";
+import schedulerRecords from "./scheduler-records.ts";
+import SetMap from "./scheduler-setmap.ts";
+import type schedulerSetmapTypes from "./scheduler-setmap.types.ts";
+import type schedulerTypesModule from "./scheduler-types.types.ts";
+
+const { cancellationIntent, conversationNode, conversationOf, parentNode, parentOf } =
+  schedulerRecords;
 
 type OwnedOptions = {
-  readonly overlay?: Overlay;
+  readonly overlay?: schedulerTypesModule.Overlay;
   readonly first?: boolean;
-  readonly done?: ReadonlySet<TaskId>;
+  readonly done?: ReadonlySet<schedulerTypesModule.TaskId>;
 };
 
-export class SchedulerGraph extends SchedulerIndex {
-  *above(start: Up, overlay?: Overlay): Generator<Step> {
-    let at: Up | undefined = start;
+export default class SchedulerGraph extends SchedulerIndex {
+  *above(
+    start: schedulerTypesModule.Up,
+    overlay?: schedulerTypesModule.Overlay,
+  ): Generator<schedulerTypesModule.Step> {
+    let at: schedulerTypesModule.Up | undefined = start;
     while (at !== undefined) {
       if ("task" in at) {
         const node = this.node(at.task, overlay);
@@ -36,7 +26,7 @@ export class SchedulerGraph extends SchedulerIndex {
           yield { unknown: true };
           return;
         }
-        yield { task: at.task, node };
+        yield { node, task: at.task };
         at = parentOf(node);
       } else {
         yield { conversation: at.conversation };
@@ -50,10 +40,13 @@ export class SchedulerGraph extends SchedulerIndex {
     }
   }
 
-  *walkDown(start: Node, options: WalkOptions = {}): Generator<Walked> {
+  *walkDown(
+    start: schedulerTypesModule.Node,
+    options: schedulerTypesModule.WalkOptions = {},
+  ): Generator<schedulerTypesModule.Walked> {
     const { overlay, crossBackground = false, enter } = options;
     const links = overlay === undefined ? undefined : this.links(overlay);
-    const pending: Node[] = [start];
+    const pending: schedulerTypesModule.Node[] = [start];
     for (let at = pending.pop(); at !== undefined; at = pending.pop()) {
       for (const children of [this.below.get(at), links?.get(at)]) {
         for (const child of children ?? []) {
@@ -71,17 +64,22 @@ export class SchedulerGraph extends SchedulerIndex {
     }
   }
 
-  #walked(child: TaskId, overlay: Overlay | undefined): Walked | undefined {
+  #walked(
+    child: schedulerTypesModule.TaskId,
+    overlay: schedulerTypesModule.Overlay | undefined,
+  ): schedulerTypesModule.Walked | undefined {
     const record = overlay?.tasks.get(child) ?? this.live.get(child);
     const node = record ?? this.settled.get(child);
     if (node === undefined) return undefined;
     const live = record !== undefined && record.state.status !== "terminal" ? record : undefined;
-    return { id: child, node, live };
+    return { id: child, live, node };
   }
 
-  links(overlay: Overlay): ReadonlyMap<Node, ReadonlySet<Node>> {
+  links(
+    overlay: schedulerTypesModule.Overlay,
+  ): ReadonlyMap<schedulerTypesModule.Node, ReadonlySet<schedulerTypesModule.Node>> {
     if (overlay.links !== undefined) return overlay.links;
-    const links = new SetMap<Node, Node>();
+    const links = new SetMap<schedulerTypesModule.Node, schedulerTypesModule.Node>();
     for (const record of overlay.tasks.values()) {
       if (this.live.has(record.id) || this.settled.has(record.id)) continue;
       this.#linkUp(links, record, overlay);
@@ -90,9 +88,13 @@ export class SchedulerGraph extends SchedulerIndex {
     return links;
   }
 
-  #linkUp(links: SetMap<Node, Node>, record: AnyTaskRecord, overlay: Overlay): void {
-    let child: Node = record.id;
-    let parent: Node | null | undefined = parentNode(record);
+  #linkUp(
+    links: schedulerSetmapTypes.SetMap<schedulerTypesModule.Node, schedulerTypesModule.Node>,
+    record: schedulerTypesModule.AnyTaskRecord,
+    overlay: schedulerTypesModule.Overlay,
+  ): void {
+    let child: schedulerTypesModule.Node = record.id;
+    let parent: schedulerTypesModule.Node | null | undefined = parentNode(record);
     while (parent !== undefined && parent !== null && links.get(parent)?.has(child) !== true) {
       links.addTo(parent, child);
       if (typeof parent !== "string" && (this.live.has(parent) || overlay.tasks.has(parent)))
@@ -105,18 +107,24 @@ export class SchedulerGraph extends SchedulerIndex {
     }
   }
 
-  #linkParent(parent: Node, overlay: Overlay): Node | null | undefined {
+  #linkParent(
+    parent: schedulerTypesModule.Node,
+    overlay: schedulerTypesModule.Overlay,
+  ): schedulerTypesModule.Node | null | undefined {
     if (typeof parent === "string") return this.edge(conversationOf(parent), overlay);
     const fields = this.settled.get(parent);
     return fields === undefined ? undefined : parentNode(fields);
   }
 
-  ownedLive(owner: TaskId, options: OwnedOptions = {}): TaskId[] {
+  ownedLive(
+    owner: schedulerTypesModule.TaskId,
+    options: OwnedOptions = {},
+  ): schedulerTypesModule.TaskId[] {
     const { overlay, first = false, done } = options;
-    const found: TaskId[] = [];
+    const found: schedulerTypesModule.TaskId[] = [];
     const walk = this.walkDown(owner, {
       ...(overlay === undefined ? {} : { overlay }),
-      ...(done === undefined ? {} : { enter: (id: TaskId) => !done.has(id) }),
+      ...(done === undefined ? {} : { enter: (id: schedulerTypesModule.TaskId) => !done.has(id) }),
     });
     for (const { id, node, live } of walk) {
       if (live === undefined || node.background) continue;
@@ -126,7 +134,11 @@ export class SchedulerGraph extends SchedulerIndex {
     return found;
   }
 
-  hasOwnedLive(owner: TaskId, overlay?: Overlay, done?: ReadonlySet<TaskId>): boolean {
+  hasOwnedLive(
+    owner: schedulerTypesModule.TaskId,
+    overlay?: schedulerTypesModule.Overlay,
+    done?: ReadonlySet<schedulerTypesModule.TaskId>,
+  ): boolean {
     const options = {
       first: true,
       ...(overlay === undefined ? {} : { overlay }),
@@ -135,7 +147,11 @@ export class SchedulerGraph extends SchedulerIndex {
     return this.ownedLive(owner, options).length > 0;
   }
 
-  inScope(start: Up, scope: Scope, crossBackground = false): boolean | undefined {
+  inScope(
+    start: schedulerTypesModule.Up,
+    scope: schedulerTypesModule.Scope,
+    crossBackground = false,
+  ): boolean | undefined {
     for (const step of this.above(start)) {
       if ("unknown" in step) return undefined;
       if ("conversation" in step) {
@@ -147,11 +163,11 @@ export class SchedulerGraph extends SchedulerIndex {
     return "roots" in scope;
   }
 
-  belowCancelled(start: Up): boolean {
+  belowCancelled(start: schedulerTypesModule.Up): boolean {
     return this.cancellingOwner(start) !== undefined;
   }
 
-  cancellingOwner(start: Up): AnyTaskRecord | undefined {
+  cancellingOwner(start: schedulerTypesModule.Up): schedulerTypesModule.AnyTaskRecord | undefined {
     if (this.intent.size === 0) return undefined;
     for (const step of this.above(start)) {
       if ("unknown" in step) return undefined;
@@ -163,8 +179,8 @@ export class SchedulerGraph extends SchedulerIndex {
     return undefined;
   }
 
-  idle(conversationId: ConversationId | undefined): boolean {
-    const scope: Scope =
+  idle(conversationId: schedulerTypesModule.ConversationId | undefined): boolean {
+    const scope: schedulerTypesModule.Scope =
       conversationId === undefined ? { roots: true } : { conversation: conversationId };
     for (const id of this.unloaded) {
       const record = this.live.get(id);
@@ -184,7 +200,10 @@ export class SchedulerGraph extends SchedulerIndex {
     return true;
   }
 
-  waitingOn(record: AnyTaskRecord, first = false): readonly TaskId[] {
+  waitingOn(
+    record: schedulerTypesModule.AnyTaskRecord,
+    first = false,
+  ): readonly schedulerTypesModule.TaskId[] {
     if (record.abortRequested) return this.ownedLive(record.id, { first });
     if (record.state.status !== "waiting") return [];
     if (!first) return record.state.on.filter((id) => this.live.has(id));

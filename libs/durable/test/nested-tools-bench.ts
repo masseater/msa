@@ -4,26 +4,23 @@ import { fauxAssistantMessage, fauxProvider, fauxText, fauxToolCall } from "@msa
 import { Console, Effect, Fiber } from "effect";
 import { Type } from "typebox";
 
-import { Harness, createRegistry } from "../src/harness/index.ts";
-import {
-  type Conversation,
-  type StorageWrite,
-  ToolResultEntry,
-  defineExtension,
-  defineTool,
-} from "../src/index.ts";
+import harnessModule from "../src/harness/index.ts";
+import durable from "../src/index.ts";
 import benchSupport from "./bench-support.ts";
-import type benchSupportTypes from "./bench-support.types.ts";
+import type nestedToolsBenchTypes from "./nested-tools-bench.types.ts";
 import support from "./support.ts";
+
+const { ToolResultEntry, defineExtension, defineTool } = durable;
+const { Harness, createRegistry } = harnessModule;
 
 const { directorySize, heapAfterGc, meterCommits, noWrites, openBenchStorage, requireGc } =
   benchSupport;
 const { awaited, context, makeTempDir, removeDir, sampleEvery } = support;
 
-type Written = Record<StorageWrite["type"], number>;
+type Written = Record<nestedToolsBenchTypes.StorageWrite["type"], number>;
 
 type Scenario = {
-  backend: benchSupportTypes.Backend;
+  backend: nestedToolsBenchTypes.Backend;
   calls: number;
   depth: 1 | 2;
   bytes: number;
@@ -147,7 +144,7 @@ const measureRun = Effect.fn("measureRun")(function* (
   const ms = Math.round(performance.now() - started);
   yield* Fiber.interrupt(sampler);
   const delta = noWrites();
-  for (const type of Object.keys(delta) as StorageWrite["type"][]) {
+  for (const type of Object.keys(delta) as nestedToolsBenchTypes.StorageWrite["type"][]) {
     delta[type] = meter.written[type] - before.written[type];
   }
   return {
@@ -175,7 +172,7 @@ const runScenario = Effect.fn("runScenario")(function* (scenario: Scenario) {
 });
 
 const assertToolsSucceeded = Effect.fn("assertToolsSucceeded")(function* (
-  root: Conversation,
+  root: nestedToolsBenchTypes.Conversation,
   run: number,
 ) {
   const page = yield* awaited(root.entries({}, 10, undefined, context));

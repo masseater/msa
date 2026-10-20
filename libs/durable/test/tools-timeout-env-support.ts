@@ -1,17 +1,15 @@
 import type { Context } from "@msa/chord";
 import { Effect } from "effect";
 
-import {
-  ExecutionError,
-  type Result,
-  type ShellExecOptions,
-  type ShellExecResult,
-  err,
-  getOrThrow,
-} from "../src/env/index.ts";
-import { NodeExecutionEnv } from "../src/env/node.ts";
-import { DEFAULT_MAX_LINES } from "../src/truncate.ts";
+import env from "../src/env/index.ts";
+import type envTypes from "../src/env/index.types.ts";
+import node from "../src/env/node.ts";
+import truncate from "../src/truncate.ts";
 import effectSupport from "./effect-support.ts";
+
+const { DEFAULT_MAX_LINES } = truncate;
+const { NodeExecutionEnv } = node;
+const { ExecutionError, err, getOrThrow } = env;
 
 const { awaited } = effectSupport;
 
@@ -20,9 +18,9 @@ const TRUNCATED_OUTPUT_LINES = DEFAULT_MAX_LINES + 1;
 class TimeoutOutputExecutionEnv extends NodeExecutionEnv {
   override exec(
     _command: string | readonly string[],
-    options: ShellExecOptions | undefined,
+    options: envTypes.ShellExecOptions | undefined,
     context: Context,
-  ): Promise<Result<ShellExecResult, ExecutionError>> {
+  ): Promise<envTypes.Result<envTypes.ShellExecResult, envTypes.ExecutionError>> {
     return Effect.runPromise(
       Effect.gen({ self: this }, function* () {
         const output = `${Array.from({ length: TRUNCATED_OUTPUT_LINES }, (_, index) => `line-${index + 1}`).join("\n")}\n`;

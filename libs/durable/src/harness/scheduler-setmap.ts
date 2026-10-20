@@ -1,4 +1,4 @@
-export class SetMap<K, V> extends Map<K, Set<V>> {
+export default class SetMap<K, V> extends Map<K, Set<V>> {
   addTo(key: K, value: V): void {
     const values = this.get(key);
     if (values === undefined) this.set(key, new Set([value]));

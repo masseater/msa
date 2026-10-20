@@ -3,9 +3,11 @@ import { withoutAbortSignal } from "@msa/chord/context";
 import type { Op } from "@msa/chord/delta";
 import { Cause, Effect, Exit } from "effect";
 
-import { errorMessage } from "../errors.ts";
-import type { WatchEnd, WatchHandle } from "../types.ts";
-import type { ObservedDocumentValue } from "./committed-state-source.ts";
+import errors from "../errors.ts";
+import type typesModule from "../types.types.ts";
+import type committedStateSourceTypes from "./committed-state-source.types.ts";
+
+const { errorMessage } = errors;
 
 const MAX_PENDING_WATCH_FRAMES = 100;
 
@@ -15,11 +17,13 @@ type WatchFrame<T> = {
   readonly context: Context;
 };
 
-export class CommittedWatch<T = ObservedDocumentValue> implements WatchHandle<T> {
+export default class CommittedWatch<
+  T = committedStateSourceTypes.ObservedDocumentValue,
+> implements typesModule.WatchHandle<T> {
   readonly #detach: () => void;
   readonly #report: (error: unknown) => void;
   readonly #replace: (() => T) | undefined;
-  readonly #closed = Promise.withResolvers<WatchEnd>();
+  readonly #closed = Promise.withResolvers<typesModule.WatchEnd>();
   readonly #pending: WatchFrame<T>[] = [];
   #value: T;
   #listener: ((value: T, ops: readonly Op[], context: Context) => Promise<void>) | undefined;
@@ -27,7 +31,7 @@ export class CommittedWatch<T = ObservedDocumentValue> implements WatchHandle<T>
   #scheduled = false;
   #running = false;
   #retired = false;
-  #end: WatchEnd | undefined;
+  #end: typesModule.WatchEnd | undefined;
   #cancellationSignal: AbortSignal | undefined;
   #cancellationListener: (() => void) | undefined;
 
@@ -42,7 +46,7 @@ export class CommittedWatch<T = ObservedDocumentValue> implements WatchHandle<T>
     return this.#value;
   }
 
-  get closed(): Promise<WatchEnd> {
+  get closed(): Promise<typesModule.WatchEnd> {
     return this.#closed.promise;
   }
 
@@ -54,7 +58,7 @@ export class CommittedWatch<T = ObservedDocumentValue> implements WatchHandle<T>
     if (this.#pending.length > 0) this.#schedule();
   }
 
-  stop(): Promise<WatchEnd> {
+  stop(): Promise<typesModule.WatchEnd> {
     this.#terminate({ reason: "stopped" });
     return this.#closed.promise;
   }
@@ -77,7 +81,7 @@ export class CommittedWatch<T = ObservedDocumentValue> implements WatchHandle<T>
     this.#terminate(
       failure === undefined
         ? { reason: "session_closed" }
-        : { reason: "session_failed", error: failure.error },
+        : { error: failure.error, reason: "session_failed" },
     );
   }
 
@@ -87,9 +91,9 @@ export class CommittedWatch<T = ObservedDocumentValue> implements WatchHandle<T>
     if (this.#pending.length >= MAX_PENDING_WATCH_FRAMES) {
       this.#pending.length = 0;
       const replacement = this.#replace?.() ?? value;
-      this.#pending.push({ value: replacement, ops: [["r", replacement as JsonValue]], context });
+      this.#pending.push({ context, ops: [["r", replacement as JsonValue]], value: replacement });
     } else {
-      this.#pending.push({ value, ops, context });
+      this.#pending.push({ context, ops, value });
     }
     if (this.#started) this.#schedule();
   }
@@ -146,10 +150,10 @@ export class CommittedWatch<T = ObservedDocumentValue> implements WatchHandle<T>
   #listenerFailed(error: unknown): void {
     if (this.#end !== undefined) return;
     this.#report(error);
-    this.#terminate({ reason: "listener_error", error: toError(error) });
+    this.#terminate({ error: toError(error), reason: "listener_error" });
   }
 
-  #terminate(end: WatchEnd): void {
+  #terminate(end: typesModule.WatchEnd): void {
     if (this.#end !== undefined) return;
     this.#end = end;
     this.#detach();

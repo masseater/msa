@@ -1,33 +1,15 @@
 import { Function } from "effect";
 
-import { INSTRUCTIONS_KEY } from "./agent-state.ts";
-import { applyWrap, filterTools, offeredTools, selectExtensions } from "./agent-tools.ts";
-import type {
-  Agent,
-  AgentState,
-  Dual2,
-  Extension,
-  PromptSection,
-  RegistrySnapshot,
-  Settings,
-  ToolRegistration,
-} from "./types.ts";
+import agentState from "./agent-state.ts";
+import agentTools from "./agent-tools.ts";
+import type typesModule from "./types.types.ts";
 
-export {
-  AgentDoc,
-  addTools,
-  configure,
-  createAgent,
-  DEFAULT_COMPACTION_POLICY,
-  DEFAULT_PROGRESS_POLICY,
-  DEFAULT_RETRY_POLICY,
-  INSTRUCTIONS_KEY,
-  resolveSettings,
-} from "./agent-state.ts";
+const { applyWrap, filterTools, offeredTools, selectExtensions } = agentTools;
+const { INSTRUCTIONS_KEY } = agentState;
 
-export const agentHooks: Dual2<Agent, string, object[]> = Function.dual(
+const agentHooks: typesModule.Dual2<typesModule.Agent, string, object[]> = Function.dual(
   2,
-  (agent: Agent, taskName: string): object[] => {
+  (agent: typesModule.Agent, taskName: string): object[] => {
     const handlers: object[] = [];
     for (const extension of agent.extensions) {
       for (const hook of extension.hooks ?? [])
@@ -37,19 +19,19 @@ export const agentHooks: Dual2<Agent, string, object[]> = Function.dual(
   },
 );
 
-type Composed<Tool extends ToolRegistration> = {
+type Composed<Tool extends typesModule.ToolRegistration> = {
   readonly tools: Map<string, Tool>;
-  readonly sections: Map<string, PromptSection<Tool>>;
+  readonly sections: Map<string, typesModule.PromptSection<Tool>>;
 };
 
-const compose = <Tool extends ToolRegistration>(
-  extensions: readonly Extension<Tool>[],
+const compose = <Tool extends typesModule.ToolRegistration>(
+  extensions: readonly typesModule.Extension<Tool>[],
   report: (error: unknown) => void,
 ): Composed<Tool> => {
   const tools = new Map<string, Tool>();
   for (const extension of extensions)
     for (const tool of extension.tools ?? []) tools.set(tool.name, tool);
-  const sections = new Map<string, PromptSection<Tool>>();
+  const sections = new Map<string, typesModule.PromptSection<Tool>>();
   for (const extension of extensions)
     for (const section of extension.sections ?? []) sections.set(section.key, section);
   for (const extension of extensions) {
@@ -72,34 +54,34 @@ const compose = <Tool extends ToolRegistration>(
         );
     }
   }
-  return { tools, sections };
+  return { sections, tools };
 };
 
 const callableBy =
-  <Tool extends ToolRegistration>(caller: "model" | "tools") =>
+  <Tool extends typesModule.ToolRegistration>(caller: "model" | "tools") =>
   (tool: Tool): boolean =>
     tool.callers === undefined || tool.callers.includes(caller);
 
-export const resolveAgent: {
-  <Tool extends ToolRegistration>(
-    snapshot: RegistrySnapshot<Tool>,
-    settings: Settings,
+const resolveAgent: {
+  <Tool extends typesModule.ToolRegistration>(
+    snapshot: typesModule.RegistrySnapshot<Tool>,
+    settings: typesModule.Settings,
     report: (error: unknown) => void,
-  ): (state: Readonly<AgentState> | undefined) => Agent<Tool>;
-  <Tool extends ToolRegistration>(
-    state: Readonly<AgentState> | undefined,
-    snapshot: RegistrySnapshot<Tool>,
-    settings: Settings,
+  ): (state: Readonly<typesModule.AgentState> | undefined) => typesModule.Agent<Tool>;
+  <Tool extends typesModule.ToolRegistration>(
+    state: Readonly<typesModule.AgentState> | undefined,
+    snapshot: typesModule.RegistrySnapshot<Tool>,
+    settings: typesModule.Settings,
     report: (error: unknown) => void,
-  ): Agent<Tool>;
+  ): typesModule.Agent<Tool>;
 } = Function.dual(
   4,
-  <Tool extends ToolRegistration>(
-    state: Readonly<AgentState> | undefined,
-    snapshot: RegistrySnapshot<Tool>,
-    settings: Settings,
+  <Tool extends typesModule.ToolRegistration>(
+    state: Readonly<typesModule.AgentState> | undefined,
+    snapshot: typesModule.RegistrySnapshot<Tool>,
+    settings: typesModule.Settings,
     report: (error: unknown) => void,
-  ): Agent<Tool> => {
+  ): typesModule.Agent<Tool> => {
     const extensions = selectExtensions(state?.extensions, snapshot, settings);
     const composed = compose(extensions, report);
     const enabled = filterEnabled([...composed.tools.values()], state);
@@ -114,19 +96,35 @@ export const resolveAgent: {
       sections.push({ key: INSTRUCTIONS_KEY, render: () => instructions });
     return {
       ...(state?.model === undefined ? {} : { model: state.model }),
-      thinkingLevel: state?.thinkingLevel ?? "off",
-      extensions,
-      tools,
       callable,
       deferred,
+      extensions,
       sections,
+      thinkingLevel: state?.thinkingLevel ?? "off",
+      tools,
       ...(instructions === undefined ? {} : { instructions }),
       ...(state?.cwd === undefined ? {} : { cwd: state.cwd }),
     };
   },
 );
 
-const filterEnabled = <Tool extends ToolRegistration>(
+const filterEnabled = <Tool extends typesModule.ToolRegistration>(
   tools: Tool[],
-  state: Readonly<AgentState> | undefined,
+  state: Readonly<typesModule.AgentState> | undefined,
 ): Tool[] => filterTools(tools, state?.tools);
+
+const agentModule = {
+  AgentDoc: agentState.AgentDoc,
+  DEFAULT_COMPACTION_POLICY: agentState.DEFAULT_COMPACTION_POLICY,
+  DEFAULT_PROGRESS_POLICY: agentState.DEFAULT_PROGRESS_POLICY,
+  DEFAULT_RETRY_POLICY: agentState.DEFAULT_RETRY_POLICY,
+  INSTRUCTIONS_KEY: agentState.INSTRUCTIONS_KEY,
+  addTools: agentState.addTools,
+  agentHooks,
+  configure: agentState.configure,
+  createAgent: agentState.createAgent,
+  resolveAgent,
+  resolveSettings: agentState.resolveSettings,
+};
+
+export default agentModule;

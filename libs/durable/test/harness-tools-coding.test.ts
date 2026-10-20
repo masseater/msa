@@ -1,12 +1,17 @@
-import { ToolResultEntry, defineExtension } from "@msa/durable";
-import { MemoryStorage } from "@msa/durable/storage/memory";
+import durable from "@msa/durable";
+import memory from "@msa/durable/storage/memory";
 import { Effect } from "effect";
 import { describe, expect, it } from "vite-plus/test";
 
-import { NodeExecutionEnv } from "../src/env/node.ts";
-import { createBashTool, createEditTool, createReadTool } from "../src/tools/index.ts";
+import node from "../src/env/node.ts";
+import toolsModule from "../src/tools/index.ts";
 import harnessToolsSupport from "./harness-tools-support.ts";
 import support from "./support.ts";
+
+const { createBashTool, createEditTool, createReadTool } = toolsModule;
+const { NodeExecutionEnv } = node;
+const { MemoryStorage } = memory;
+const { ToolResultEntry, defineExtension } = durable;
 
 const { DONE, calls, resultText, results } = harnessToolsSupport;
 const {

@@ -1,13 +1,16 @@
 import { Type, fauxAssistantMessage, fauxText } from "@msa/ai";
 import type { JsonValue } from "@msa/chord";
-import { LiveDoc, defineTool } from "@msa/durable";
-import { MemoryStorage } from "@msa/durable/storage/memory";
+import durable from "@msa/durable";
+import memory from "@msa/durable/storage/memory";
 import { Effect } from "effect";
 import { afterEach, describe, expect, it } from "vite-plus/test";
 
 import harnessStructuredEvents from "./harness-structured-events.ts";
 import harnessStructuredSupport from "./harness-structured-support.ts";
 import support from "./support.ts";
+
+const { LiveDoc, defineTool } = durable;
+const { MemoryStorage } = memory;
 
 const { labels, listen, toolCalls } = harnessStructuredEvents;
 const {

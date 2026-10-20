@@ -1,17 +1,18 @@
 import type { DatabaseSync, StatementSync } from "node:sqlite";
 
-import { promiseTry } from "../../promise-try.ts";
-import { NodeSqliteExecutor } from "./node-executor.ts";
+import promiseTryModule from "../../promise-try.ts";
+import NodeSqliteExecutor from "./node-executor.ts";
+import type nodeTransactionTypes from "./node-transaction.types.ts";
 
-export type TransactionScope = { active: boolean };
+const { promiseTry } = promiseTryModule;
 
-export class NodeSqliteTransaction extends NodeSqliteExecutor {
-  private readonly scope: TransactionScope;
+export default class NodeSqliteTransaction extends NodeSqliteExecutor {
+  private readonly scope: nodeTransactionTypes.TransactionScope;
 
   constructor(
     database: DatabaseSync,
     statements: Map<string, StatementSync>,
-    scope: TransactionScope,
+    scope: nodeTransactionTypes.TransactionScope,
   ) {
     super(database, statements);
     this.scope = scope;

@@ -1,14 +1,16 @@
-import { FileError, type FileInfo, type Result } from "@msa/durable/env";
+import env from "@msa/durable/env";
+import type envTypes from "@msa/durable/env.types";
 import { Effect } from "effect";
 
 import connectionModule from "./connection.ts";
-import type connectionTypes from "./connection.types.ts";
+import type dirOpsTypes from "./dir-ops.types.ts";
 import errors from "./errors.ts";
 import fileOp from "./file-op.ts";
-import type fileOpTypes from "./file-op.types.ts";
 import platform from "./platform.ts";
 import remotePathModule from "./remote-path.ts";
 import type remotePathTypes from "./remote-path.types.ts";
+
+const { FileError } = env;
 
 const { openDir, remoteRequest, run, runFileOp } = fileOp;
 const { remoteFileInfo, remotePath, toInfo } = remotePathModule;
@@ -16,7 +18,9 @@ const { posixPath } = platform;
 const { toFileError } = errors;
 const { RemoteError } = connectionModule;
 
-const fileInfoAt = (request: fileOpTypes.PathRequest): Promise<Result<FileInfo, FileError>> => {
+const fileInfoAt = (
+  request: dirOpsTypes.PathRequest,
+): Promise<envTypes.Result<envTypes.FileInfo, envTypes.FileError>> => {
   const { connection } = request.target;
   return run(
     runFileOp({
@@ -31,7 +35,7 @@ const fileInfoAt = (request: fileOpTypes.PathRequest): Promise<Result<FileInfo, 
 };
 
 const readAllEntries = (request: {
-  connection: connectionTypes.Connection;
+  connection: dirOpsTypes.Connection;
   resolved: string;
 }): Effect.Effect<remotePathTypes.RemoteDirEntry[]> =>
   openDir(request).pipe(
@@ -54,7 +58,9 @@ const sortRaw = (entries: remotePathTypes.RemoteDirEntry[]): void => {
   entries.sort((a, b) => Buffer.compare(key(a), key(b)));
 };
 
-const listDirAt = (request: fileOpTypes.PathRequest): Promise<Result<FileInfo[], FileError>> => {
+const listDirAt = (
+  request: dirOpsTypes.PathRequest,
+): Promise<envTypes.Result<envTypes.FileInfo[], envTypes.FileError>> => {
   const { connection } = request.target;
   const signal = request.context.abortSignal;
   return run(
@@ -65,7 +71,7 @@ const listDirAt = (request: fileOpTypes.PathRequest): Promise<Result<FileInfo[],
           const entries = yield* readAllEntries({ connection, resolved });
           const paths = yield* remotePath(connection);
           if (paths === posixPath) sortRaw(entries);
-          const infos: FileInfo[] = [];
+          const infos: envTypes.FileInfo[] = [];
           for (const entry of entries) {
             if (signal?.aborted === true) {
               return yield* new FileError("aborted", "aborted", resolved);

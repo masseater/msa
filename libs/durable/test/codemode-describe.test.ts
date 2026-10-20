@@ -1,26 +1,32 @@
 import { type AssistantMessage, Type, fauxAssistantMessage, fauxText } from "@msa/ai";
 import { CodemodeSandbox } from "@msa/codemode";
 import { CODEMODE_SOURCE_GRAMMAR } from "@msa/codemode/source";
-import { type ToolRegistration, defineTool } from "@msa/durable";
-import { MemoryStorage } from "@msa/durable/storage/memory";
+import type durableTypes from "@msa/durable/index.types";
 import { Effect } from "effect";
 import { describe, expect, it } from "vite-plus/test";
 
-import { createCodemodeExtension } from "../src/codemode/codemode.ts";
-import {
-  type CodemodeNamespace,
-  codemodeDescription,
-  codemodeSection,
-} from "../src/codemode/describe.ts";
+import codemode from "../src/codemode/codemode.ts";
+import describeModule from "../src/codemode/describe.ts";
+import durableKit from "./durable-kit.ts";
 import support from "./support.ts";
+
+const { codemodeDescription, codemodeSection } = describeModule;
+const { createCodemodeExtension } = codemode;
+const { durable, memory } = durableKit;
+const { defineTool } = durable;
+
+type CodemodeNamespace = NonNullable<
+  Parameters<typeof createCodemodeExtension>[0]["namespaces"]
+>[number];
+const { MemoryStorage } = memory;
 
 const { allEntries, awaited, chatSetup, context, openChat } = support;
 
 function tool(
   name: string,
   description: string,
-  extra: Partial<ToolRegistration> = {},
-): ToolRegistration {
+  extra: Partial<durableTypes.ToolRegistration> = {},
+): durableTypes.ToolRegistration {
   return defineTool({
     description,
     execute: () => Promise.resolve({ output: [] }),

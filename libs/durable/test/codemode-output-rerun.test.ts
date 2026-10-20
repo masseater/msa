@@ -2,13 +2,15 @@ import type { Context } from "@msa/chord";
 import { Effect } from "effect";
 import { afterEach, describe, expect, it } from "vite-plus/test";
 
-import { NodeExecutionEnv } from "../src/env/node.ts";
+import node from "../src/env/node.ts";
 import codemodeChatSupport from "./codemode-chat-support.ts";
 import codemodeSupport from "./codemode-support.ts";
 import effectSupport from "./effect-support.ts";
 import platformSupport from "./platform-support.ts";
 import sessionSupport from "./session-support.ts";
 import taskSupport from "./task-support.ts";
+
+const { NodeExecutionEnv } = node;
 
 const { codemodeChat } = codemodeChatSupport;
 const {

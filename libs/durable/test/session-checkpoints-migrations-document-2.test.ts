@@ -1,10 +1,13 @@
-import { type JsonObject, defineDoc } from "@msa/durable";
+import durable from "@msa/durable";
+import type durableTypes from "@msa/durable/index.types";
 import { DateTime, Effect } from "effect";
 import { describe, expect, it } from "vite-plus/test";
 
 import effectSupport from "./effect-support.ts";
 import documentWrites from "./session-checkpoints-migrations-support.ts";
 import sessionSupport from "./session-support.ts";
+
+const { defineDoc } = durable;
 
 const { awaited } = effectSupport;
 const { context, documentChanges, flush, openTestSession } = sessionSupport;
@@ -108,10 +111,11 @@ const strictChecksMigration = Effect.gen(function* () {
     scope: "session",
     version: 1,
   });
-  const Invalid = defineDoc<JsonObject>({
+  const Invalid = defineDoc<durableTypes.JsonObject>({
     initial: () => ({}),
     kind: "migration.invalid",
-    migrate: () => ({ invalid: DateTime.toDateUtc(DateTime.nowUnsafe()) }) as unknown as JsonObject,
+    migrate: () =>
+      ({ invalid: DateTime.toDateUtc(DateTime.nowUnsafe()) }) as unknown as durableTypes.JsonObject,
     scope: "session",
     version: 2,
   });

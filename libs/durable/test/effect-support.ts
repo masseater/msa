@@ -1,6 +1,8 @@
 import { Cause, type Duration, Effect, Exit, Schema } from "effect";
 
-import { currentTimeMillis as currentTimeMillisModule } from "../src/clock.ts";
+import clockModule from "../src/clock.ts";
+
+const { currentTimeMillis: currentTimeMillisModule } = clockModule;
 
 const awaited = <A>(value: A | PromiseLike<A>): Effect.Effect<A> =>
   Effect.promise(() => Promise.resolve(value));

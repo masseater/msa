@@ -1,6 +1,6 @@
 import type { Context } from "@msa/chord";
 import { applyImmutable } from "@msa/chord/delta";
-import { defineDoc } from "@msa/durable";
+import durable from "@msa/durable";
 import { Effect } from "effect";
 import { describe, expect, it } from "vite-plus/test";
 
@@ -8,6 +8,8 @@ import effectSupport from "./effect-support.ts";
 import sessionSupport from "./session-support.ts";
 import sessionWatchesSupport from "./session-watches-support.ts";
 import type sessionWatchesSupportTypes from "./session-watches-support.types.ts";
+
+const { defineDoc } = durable;
 
 const { awaited } = effectSupport;
 const { context, flush, openTestSession } = sessionSupport;

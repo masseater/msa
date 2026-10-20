@@ -1,16 +1,13 @@
 import { fauxAssistantMessage } from "@msa/ai";
-import {
-  ConversationBusy,
-  LiveDoc,
-  type SubmissionId,
-  type SubmissionRecord,
-  UserEntry,
-} from "@msa/durable";
+import durable from "@msa/durable";
+import type durableTypes from "@msa/durable/index.types";
 import { Effect } from "effect";
 import { afterEach, describe, expect, it } from "vite-plus/test";
 
 import directories from "./harness-submissions-support.ts";
 import support from "./support.ts";
+
+const { ConversationBusy, LiveDoc, UserEntry } = durable;
 
 const {
   ControlledStorage,
@@ -168,10 +165,12 @@ const reportsAbortResults = Effect.gen(function* () {
   expect(yield* awaited(harness.abortSubmission(submission.id, context, other.id))).toBe(
     "not_found",
   );
-  expect(yield* awaited(harness.abortSubmission(999_999 as SubmissionId, context))).toBe(
-    "not_found",
-  );
-  expect(yield* awaited(harness.submission(999_999 as SubmissionId, context))).toBeUndefined();
+  expect(
+    yield* awaited(harness.abortSubmission(999_999 as durableTypes.SubmissionId, context)),
+  ).toBe("not_found");
+  expect(
+    yield* awaited(harness.submission(999_999 as durableTypes.SubmissionId, context)),
+  ).toBeUndefined();
 
   release.resolve();
   yield* awaited(submission.wait(context));
@@ -211,9 +210,9 @@ const rejectsWaitSubmission = Effect.gen(function* () {
   let hold = false;
   class HeldReads extends ControlledStorage {
     override submission(
-      id: SubmissionId,
+      id: durableTypes.SubmissionId,
       callContext: typeof context,
-    ): Promise<SubmissionRecord | undefined> {
+    ): Promise<durableTypes.SubmissionRecord | undefined> {
       const superSubmission = super.submission.bind(this);
       return runPromise(
         Effect.gen(function* () {

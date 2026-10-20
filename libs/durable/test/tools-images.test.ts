@@ -1,12 +1,17 @@
-import { createCodingTools } from "@msa/durable/tools";
+import toolsModule from "@msa/durable/tools";
 import { Effect } from "effect";
 import { afterAll, beforeAll, describe, expect, it } from "vite-plus/test";
 
-import { DEFAULT_IMAGE_LIMITS, type ImageProcessor, toBase64 } from "../src/tools/image.ts";
-import { createReadTool } from "../src/tools/read.ts";
+import image from "../src/tools/image.ts";
+import type imageTypes from "../src/tools/image.types.ts";
+import readModule from "../src/tools/read.ts";
 import support from "./support.ts";
 import toolsImagesFixturesSupport from "./tools-images-fixtures-support.ts";
 import toolsImagesSupport from "./tools-images-support.ts";
+
+const { DEFAULT_IMAGE_LIMITS, toBase64 } = image;
+const { createReadTool } = readModule;
+const { createCodingTools } = toolsModule;
 
 const { appendBytes, awaited, failure, joinPath } = support;
 const { bmp, decodedImage, encode, gif, noisyPng, setUpImages, withOrientation } =
@@ -21,7 +26,7 @@ const {
   removeImageDirectory,
 } = toolsImagesSupport;
 
-let processor: ImageProcessor;
+let processor: imageTypes.ImageProcessor;
 
 beforeAll(() =>
   Effect.runPromise(

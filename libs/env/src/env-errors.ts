@@ -1,13 +1,13 @@
-import hostKeyChangedError from "./host-key-changed-error.ts";
-import hostKeyUnknownError from "./host-key-unknown-error.ts";
+import HostKeyChangedError from "./host-key-changed-error.ts";
+import HostKeyUnknownError from "./host-key-unknown-error.ts";
 import remoteError from "./remote-error.ts";
-import sshError from "./ssh-error.ts";
+import SshError from "./ssh-error.ts";
 
 const envErrors = {
-  HostKeyChangedError: hostKeyChangedError.HostKeyChangedError,
-  HostKeyUnknownError: hostKeyUnknownError.HostKeyUnknownError,
+  HostKeyChangedError: HostKeyChangedError,
+  HostKeyUnknownError: HostKeyUnknownError,
   RemoteError: remoteError.RemoteError,
-  SshError: sshError.SshError,
+  SshError: SshError,
   isConnectionLost: remoteError.isConnectionLost,
 };
 

@@ -1,15 +1,15 @@
 import type { AssistantMessage, Message } from "@msa/ai";
 import { Function } from "effect";
 
-import type { Dual2 } from "./types.ts";
+import type typesModule from "./types.types.ts";
 
 const TOOL_RESULT_MAX_CHARS = 2000;
 
-export const SUMMARY_PREFIX =
+const SUMMARY_PREFIX =
   "The conversation history before this point was compacted into the following summary:\n\n<summary>\n";
-export const SUMMARY_SUFFIX = "\n</summary>";
+const SUMMARY_SUFFIX = "\n</summary>";
 
-export const SUMMARIZATION_SYSTEM_PROMPT = `You are a context summarization assistant. Your task is to read a conversation between a user and an AI assistant, then produce a structured summary following the exact format specified.
+const SUMMARIZATION_SYSTEM_PROMPT = `You are a context summarization assistant. Your task is to read a conversation between a user and an AI assistant, then produce a structured summary following the exact format specified.
 
 Do NOT continue the conversation. Do NOT respond to any questions in the conversation. ONLY output the structured summary.`;
 
@@ -46,7 +46,7 @@ Use this EXACT format:
 
 Keep each section concise. Preserve exact file paths, function names, and error messages.`;
 
-export function summaryText(message: AssistantMessage): string | undefined {
+function summaryText(message: AssistantMessage): string | undefined {
   if (
     message.stopReason !== "stop" ||
     message.content.some((content) => content.type === "toolCall")
@@ -59,7 +59,7 @@ export function summaryText(message: AssistantMessage): string | undefined {
   return text.length === 0 ? undefined : text;
 }
 
-export function summaryFailure(message: AssistantMessage): string {
+function summaryFailure(message: AssistantMessage): string {
   if (message.stopReason === "error" || message.stopReason === "aborted") {
     return `Summarization failed: ${message.errorMessage ?? message.stopReason}`;
   }
@@ -70,15 +70,13 @@ export function summaryFailure(message: AssistantMessage): string {
   return "Summarization produced no text";
 }
 
-export const summaryPrompt: Dual2<readonly Message[], string | undefined, string> = Function.dual(
-  2,
-  (messages: readonly Message[], instructions: string | undefined): string => {
+const summaryPrompt: typesModule.Dual2<readonly Message[], string | undefined, string> =
+  Function.dual(2, (messages: readonly Message[], instructions: string | undefined): string => {
     const focus = instructions === undefined ? "" : `\n\nAdditional focus: ${instructions}`;
     return `<conversation>\n${serializeConversation(messages)}\n</conversation>\n\n${SUMMARIZATION_PROMPT}${focus}`;
-  },
-);
+  });
 
-export function serializeConversation(messages: readonly Message[]): string {
+function serializeConversation(messages: readonly Message[]): string {
   const parts: string[] = [];
   for (const message of messages) {
     if (message.role === "user") {
@@ -120,3 +118,15 @@ function truncate(text: string, maxChars: number): string {
   if (text.length <= maxChars) return text;
   return `${text.slice(0, maxChars)}\n\n[... ${text.length - maxChars} more characters truncated]`;
 }
+
+const compactionPrompt = {
+  SUMMARIZATION_SYSTEM_PROMPT,
+  SUMMARY_PREFIX,
+  SUMMARY_SUFFIX,
+  serializeConversation,
+  summaryFailure,
+  summaryPrompt,
+  summaryText,
+};
+
+export default compactionPrompt;

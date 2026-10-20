@@ -1,14 +1,20 @@
 import * as NodeRuntime from "@effect/platform-node/NodeRuntime";
 import { createModels, fauxAssistantMessage, fauxProvider, fauxToolCall } from "@msa/ai";
 import { BACKGROUND_CONTEXT } from "@msa/chord/context";
-import { defineDoc } from "@msa/durable";
-import { Harness, createRegistry } from "@msa/durable/harness";
-import { MemoryStorage } from "@msa/durable/storage/memory";
+import durable from "@msa/durable";
+import harnessModule from "@msa/durable/harness";
+import memory from "@msa/durable/storage/memory";
 import { Console, Effect } from "effect";
 
-import { NodeExecutionEnv } from "../../src/env/node.ts";
-import { CodingTools } from "../../src/tools/index.ts";
+import node from "../../src/env/node.ts";
+import toolsModule from "../../src/tools/index.ts";
 import support from "../support.ts";
+
+const { defineDoc } = durable;
+const { Harness, createRegistry } = harnessModule;
+const { CodingTools } = toolsModule;
+const { MemoryStorage } = memory;
+const { NodeExecutionEnv } = node;
 
 const { awaited, joinPath, makeTempDir, readText, removeDir } = support;
 

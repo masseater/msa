@@ -1,27 +1,29 @@
-import { AgentDoc } from "./agent.ts";
-import { InboxDoc } from "./inbox.ts";
-import { LiveDoc } from "./live.ts";
-import { ProviderDoc } from "./provider.ts";
-import type { ConversationDocToken, DocumentId, EntryRecord, JsonObject } from "./types.ts";
-import { UsageDoc } from "./usage.ts";
-import type { ConversationView, ViewObserver } from "./view-types.ts";
+import agentModule from "./agent.ts";
+import inboxModule from "./inbox.ts";
+import liveModule from "./live.ts";
+import provider from "./provider.ts";
+import type typesModule from "./types.types.ts";
+import usageModule from "./usage.ts";
 
-export const MOUNTED = [
+const { AgentDoc } = agentModule;
+const { LiveDoc } = liveModule;
+const { InboxDoc } = inboxModule;
+const { ProviderDoc } = provider;
+const { UsageDoc } = usageModule;
+
+const MOUNTED = [
   AgentDoc,
   LiveDoc,
   InboxDoc,
   ProviderDoc,
   UsageDoc,
-] as unknown as readonly ConversationDocToken<JsonObject>[];
+] as unknown as readonly typesModule.ConversationDocToken<typesModule.JsonObject>[];
 
-export const MOUNTED_KINDS: ReadonlySet<string> = new Set(
-  MOUNTED.map((token) => token.definition.kind),
-);
+const MOUNTED_KINDS: ReadonlySet<string> = new Set(MOUNTED.map((token) => token.definition.kind));
 
-export type Mount = {
-  value: ConversationView;
-  readonly docs: Map<string, { id: DocumentId; version: number }>;
-  readonly observers: Set<ViewObserver>;
+const viewMount = {
+  MOUNTED,
+  MOUNTED_KINDS,
 };
 
-export type MountedEntries = readonly EntryRecord[];
+export default viewMount;

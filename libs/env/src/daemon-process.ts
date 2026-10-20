@@ -4,12 +4,11 @@ import type daemonProcessTypes from "./daemon-process.types.ts";
 import platform from "./platform.ts";
 import remoteError from "./remote-error.ts";
 import type remoteErrorTypes from "./remote-error.types.ts";
-import sessionModule from "./session.ts";
+import Session from "./session.ts";
 import type sessionTypes from "./session.types.ts";
 
 const { RemoteError, lost } = remoteError;
 const { randomHex, spawnProcess } = platform;
-const { Session } = sessionModule;
 
 const PING_INTERVAL_MS = 5000;
 

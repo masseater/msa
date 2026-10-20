@@ -1,5 +1,6 @@
 import type { Context } from "@msa/chord";
-import { FileError, type FileWatcher, type WatchChange, type WatchTarget } from "@msa/durable/env";
+import env from "@msa/durable/env";
+import type envTypes from "@msa/durable/env.types";
 import { Cause, Deferred, Effect, Exit } from "effect";
 
 import connectionModule from "./connection.ts";
@@ -7,6 +8,8 @@ import type connectionTypes from "./connection.types.ts";
 import errors from "./errors.ts";
 import unrefSleepModule from "./unref-sleep.ts";
 import type watchTypes from "./watch.types.ts";
+
+const { FileError } = env;
 
 const { isConnectionLost } = connectionModule;
 const { toFileError } = errors;
@@ -18,10 +21,10 @@ const RECONNECT_MAX_MS = 30_000;
 const asError = (error: unknown): Error =>
   error instanceof Error ? error : new Error(String(error));
 
-class RemoteWatcher implements FileWatcher {
+export default class RemoteWatcher implements envTypes.FileWatcher {
   readonly #connection: connectionTypes.Connection;
-  readonly #targets: readonly WatchTarget[];
-  readonly #onChange: (change: WatchChange) => void;
+  readonly #targets: readonly envTypes.WatchTarget[];
+  readonly #onChange: (change: envTypes.WatchChange) => void;
   readonly #options: watchTypes.RemoteWatchOptions;
   #mode: "native" | "polling" = "native";
   #closed = false;
@@ -31,8 +34,8 @@ class RemoteWatcher implements FileWatcher {
 
   private constructor(
     connection: connectionTypes.Connection,
-    targets: readonly WatchTarget[],
-    onChange: (change: WatchChange) => void,
+    targets: readonly envTypes.WatchTarget[],
+    onChange: (change: envTypes.WatchChange) => void,
     options: watchTypes.RemoteWatchOptions,
   ) {
     this.#connection = connection;
@@ -43,8 +46,8 @@ class RemoteWatcher implements FileWatcher {
 
   static open(
     connection: connectionTypes.Connection,
-    targets: readonly WatchTarget[],
-    onChange: (change: WatchChange) => void,
+    targets: readonly envTypes.WatchTarget[],
+    onChange: (change: envTypes.WatchChange) => void,
     options: watchTypes.RemoteWatchOptions = {},
   ): Promise<RemoteWatcher> {
     const watcher = new RemoteWatcher(connection, targets, onChange, options);
@@ -63,7 +66,7 @@ class RemoteWatcher implements FileWatcher {
     return this.#request ?? Promise.resolve();
   }
 
-  #deliver(change: WatchChange): boolean {
+  #deliver(change: envTypes.WatchChange): boolean {
     if (this.#closed) return false;
     try {
       this.#onChange(change);
@@ -172,9 +175,3 @@ class RemoteWatcher implements FileWatcher {
     });
   }
 }
-
-const watch = {
-  RemoteWatcher,
-};
-
-export default watch;

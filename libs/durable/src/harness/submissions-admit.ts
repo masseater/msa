@@ -2,36 +2,30 @@ import type { Draft, JsonRepresentation } from "@msa/chord";
 import { copyJson } from "@msa/chord/json";
 import { Effect, Function } from "effect";
 
-import { ConversationBusy } from "../errors.ts";
-import { startRun } from "./generation-run.ts";
-import {
+import errors from "../errors.ts";
+import generationRun from "./generation-run.ts";
+import inboxModule from "./inbox.ts";
+import type inboxTypes from "./inbox.types.ts";
+import liveModule from "./live.ts";
+import type liveTypes from "./live.types.ts";
+import type typesModule from "./types.types.ts";
+
+const {
+  InboxDoc,
   appendInput,
   applyBoundary,
-  type Boundary,
   hasQueuedReset,
-  InboxDoc,
   isDisplayOnly,
   isStale,
   pickInputEntry,
   prepareBoundary,
-  type QueueModes,
-} from "./inbox.ts";
-import { LiveDoc, type LiveState } from "./live.ts";
-import type {
-  ConversationId,
-  Dual5,
-  EntryDraft,
-  InputEntry,
-  JsonObject,
-  SubmissionDraft,
-  SubmissionId,
-  Tx,
-  UserInput,
-} from "./types.ts";
+} = inboxModule;
+const { LiveDoc } = liveModule;
+const { ConversationBusy } = errors;
 
 type RequestId = { readonly requestId?: string };
 
-const checkInputEntry = (entry: InputEntry): void => {
+const checkInputEntry = (entry: typesModule.InputEntry): void => {
   const { kind } = entry;
   if (typeof kind !== "string" || kind.length === 0 || kind.startsWith("msa.")) {
     throw new TypeError(
@@ -41,9 +35,9 @@ const checkInputEntry = (entry: InputEntry): void => {
 };
 
 const existingSubmission = Effect.fnUntraced(function* (
-  tx: Tx,
-  conversationId: ConversationId,
-  draft: SubmissionDraft,
+  tx: typesModule.Tx,
+  conversationId: typesModule.ConversationId,
+  draft: typesModule.SubmissionDraft,
 ) {
   if (draft.requestId === undefined) return undefined;
   const existing = yield* Effect.promise(() =>
@@ -60,54 +54,55 @@ const existingSubmission = Effect.fnUntraced(function* (
 });
 
 const writeDirectly = Effect.fnUntraced(function* (
-  tx: Tx,
-  conversationId: ConversationId,
+  tx: typesModule.Tx,
+  conversationId: typesModule.ConversationId,
   requestId: RequestId,
-  entry: EntryDraft,
+  entry: typesModule.EntryDraft,
 ) {
   const appended = yield* Effect.promise(() => tx.appendEntry(conversationId, entry));
   const write = {
     conversationId,
     ...requestId,
-    type: "write",
-    status: "done",
     entry: appended.id,
+    status: "done",
+    type: "write",
   } as const;
   return (yield* Effect.promise(() => tx.createSubmission(write))).id;
 });
 
 const queueDraft = Effect.fnUntraced(function* (
-  tx: Tx,
-  conversationId: ConversationId,
-  state: { readonly draft: SubmissionDraft; readonly requestId: RequestId },
-  boundary: Boundary | undefined,
+  tx: typesModule.Tx,
+  conversationId: typesModule.ConversationId,
+  state: { readonly draft: typesModule.SubmissionDraft; readonly requestId: RequestId },
+  boundary: inboxTypes.Boundary | undefined,
 ) {
   const { draft, requestId } = state;
   const { id } = yield* Effect.promise(() =>
-    tx.createSubmission({ conversationId, ...requestId, type: draft.type, status: "queued" }),
+    tx.createSubmission({ conversationId, ...requestId, status: "queued", type: draft.type }),
   );
   const value = copyJson(draft.type === "write" ? draft.entry : draft.content, {
     omitUndefinedProperties: true,
   });
   const inbox = boundary?.inbox ?? (yield* Effect.promise(() => tx.doc(InboxDoc, conversationId)));
-  if (draft.type === "write") inbox.items.push({ id, mode: "write", entry: value as JsonObject });
+  if (draft.type === "write")
+    inbox.items.push({ entry: value as typesModule.JsonObject, id, mode: "write" });
   else {
     const mode = draft.whenBusy === "steer" ? "steer" : "followUp";
-    const content = value as JsonRepresentation<UserInput>;
+    const content = value as JsonRepresentation<typesModule.UserInput>;
     const entry = draft.entry === undefined ? {} : { entry: pickInputEntry(draft.entry) };
-    inbox.items.push({ id, mode, content, ...entry });
+    inbox.items.push({ content, id, mode, ...entry });
   }
   return id;
 });
 
 const placeInput = Effect.fnUntraced(function* (
-  tx: Tx,
-  conversationId: ConversationId,
+  tx: typesModule.Tx,
+  conversationId: typesModule.ConversationId,
   state: {
-    readonly draft: Extract<SubmissionDraft, { type: "input" }>;
+    readonly draft: Extract<typesModule.SubmissionDraft, { type: "input" }>;
     readonly requestId: RequestId;
     readonly now: number;
-    readonly live: Draft<LiveState>;
+    readonly live: Draft<liveTypes.LiveState>;
   },
 ) {
   const { draft, requestId, now } = state;
@@ -116,27 +111,27 @@ const placeInput = Effect.fnUntraced(function* (
     tx.createSubmission({
       conversationId,
       ...requestId,
-      type: "input",
-      status: "placed",
       entry: entry.id,
+      status: "placed",
+      type: "input",
     }),
   );
-  yield* startRun(tx, conversationId, state.live, [id]);
+  yield* generationRun.startRun(tx, conversationId, state.live, [id]);
   return id;
 });
 
 const placeWrite = Effect.fnUntraced(function* (
-  tx: Tx,
-  conversationId: ConversationId,
+  tx: typesModule.Tx,
+  conversationId: typesModule.ConversationId,
   state: {
-    readonly draft: Extract<SubmissionDraft, { type: "write" }>;
+    readonly draft: Extract<typesModule.SubmissionDraft, { type: "write" }>;
     readonly requestId: RequestId;
-    readonly boundary: Boundary;
+    readonly boundary: inboxTypes.Boundary;
   },
 ) {
   const { draft, requestId, boundary } = state;
   if (isStale(boundary, draft.entry)) {
-    const stale = { status: "unanswered", reason: "stale" } as const;
+    const stale = { reason: "stale", status: "unanswered" } as const;
     const created = yield* Effect.promise(() =>
       tx.createSubmission({ conversationId, ...requestId, type: "write", ...stale }),
     );
@@ -145,21 +140,21 @@ const placeWrite = Effect.fnUntraced(function* (
   return yield* writeDirectly(tx, conversationId, requestId, draft.entry);
 });
 
-export const admitSubmission: Dual5<
-  Tx,
-  ConversationId,
-  SubmissionDraft,
+const admitSubmission: typesModule.Dual5<
+  typesModule.Tx,
+  typesModule.ConversationId,
+  typesModule.SubmissionDraft,
   number,
-  QueueModes,
-  Effect.Effect<SubmissionId>
+  inboxTypes.QueueModes,
+  Effect.Effect<typesModule.SubmissionId>
 > = Function.dual(
   5,
   Effect.fnUntraced(function* (
-    tx: Tx,
-    conversationId: ConversationId,
-    draft: SubmissionDraft,
+    tx: typesModule.Tx,
+    conversationId: typesModule.ConversationId,
+    draft: typesModule.SubmissionDraft,
     now: number,
-    queueModes: QueueModes,
+    queueModes: inboxTypes.QueueModes,
   ) {
     if (draft.type === "input" && draft.entry !== undefined) checkInputEntry(draft.entry);
     const existing = yield* existingSubmission(tx, conversationId, draft);
@@ -180,11 +175,17 @@ export const admitSubmission: Dual5<
       const id = yield* queueDraft(tx, conversationId, { draft, requestId }, boundary);
       if (boundary === undefined) return id;
       const { users } = yield* applyBoundary(tx, boundary, "final", now);
-      if (users.length > 0) yield* startRun(tx, conversationId, live, users);
+      if (users.length > 0) yield* generationRun.startRun(tx, conversationId, live, users);
       return id;
     }
     if (draft.type === "write")
-      return yield* placeWrite(tx, conversationId, { draft, requestId, boundary });
-    return yield* placeInput(tx, conversationId, { draft, requestId, now, live });
+      return yield* placeWrite(tx, conversationId, { boundary, draft, requestId });
+    return yield* placeInput(tx, conversationId, { draft, live, now, requestId });
   }),
 );
+
+const submissionsAdmit = {
+  admitSubmission,
+};
+
+export default submissionsAdmit;

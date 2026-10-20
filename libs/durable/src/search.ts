@@ -1,8 +1,7 @@
 import { Function } from "effect";
 
-import type { Dual3 } from "./dual.ts";
-
-export type SearchDocument = { readonly name: string; readonly text: string };
+import type dualTypes from "./dual.ts";
+import type searchTypes from "./search.types.ts";
 
 const STOP_WORDS: ReadonlySet<string> = new Set([
   "a",
@@ -35,7 +34,7 @@ function stem(term: string): string {
   return term;
 }
 
-export function tokenize(text: string): string[] {
+function tokenize(text: string): string[] {
   return text
     .replace(/([a-z0-9])([A-Z])/gu, "$1 $2")
     .replace(/([A-Z]+)([A-Z][a-z])/gu, "$1 $2")
@@ -45,47 +44,57 @@ export function tokenize(text: string): string[] {
     .map(stem);
 }
 
-export const rankDocuments: Dual3<string, readonly SearchDocument[], number, string[]> =
-  Function.dual(
-    3,
-    (query: string, documents: readonly SearchDocument[], limit: number): string[] => {
-      const k1 = 1.2;
-      const b = 0.75;
-      const queryTerms = [...new Set(tokenize(query))];
-      if (queryTerms.length === 0 || documents.length === 0 || limit <= 0) return [];
-      const termCounts = documents.map((document) => {
-        const counts = new Map<string, number>();
-        for (const term of tokenize(document.text)) counts.set(term, (counts.get(term) ?? 0) + 1);
-        return counts;
-      });
-      const lengths = termCounts.map((counts) =>
-        [...counts.values()].reduce((sum, count) => sum + count, 0),
-      );
-      const averageLength =
-        lengths.reduce((sum, length) => sum + length, 0) / documents.length || 1;
-      const idf = new Map(
-        queryTerms.map((term) => {
-          const frequency = termCounts.filter((counts) => counts.has(term)).length;
-          return [
-            term,
-            Math.log(1 + (documents.length - frequency + 0.5) / (frequency + 0.5)),
-          ] as const;
-        }),
-      );
-      const matches: { name: string; score: number }[] = [];
-      documents.forEach((document, index) => {
-        let score = 0;
-        for (const term of queryTerms) {
-          const count = termCounts[index]!.get(term);
-          if (count === undefined || count === 0) continue;
-          const norm = k1 * (1 - b + (b * lengths[index]!) / averageLength);
-          score += (idf.get(term) ?? 0) * ((count * (k1 + 1)) / (count + norm));
-        }
-        if (score > 0) matches.push({ name: document.name, score });
-      });
-      return matches
-        .sort((left, right) => right.score - left.score)
-        .slice(0, limit)
-        .map((match) => match.name);
-    },
-  );
+const rankDocuments: dualTypes.Dual3<
+  string,
+  readonly searchTypes.SearchDocument[],
+  number,
+  string[]
+> = Function.dual(
+  3,
+  (query: string, documents: readonly searchTypes.SearchDocument[], limit: number): string[] => {
+    const k1 = 1.2;
+    const b = 0.75;
+    const queryTerms = [...new Set(tokenize(query))];
+    if (queryTerms.length === 0 || documents.length === 0 || limit <= 0) return [];
+    const termCounts = documents.map((document) => {
+      const counts = new Map<string, number>();
+      for (const term of tokenize(document.text)) counts.set(term, (counts.get(term) ?? 0) + 1);
+      return counts;
+    });
+    const lengths = termCounts.map((counts) =>
+      [...counts.values()].reduce((sum, count) => sum + count, 0),
+    );
+    const averageLength = lengths.reduce((sum, length) => sum + length, 0) / documents.length || 1;
+    const idf = new Map(
+      queryTerms.map((term) => {
+        const frequency = termCounts.filter((counts) => counts.has(term)).length;
+        return [
+          term,
+          Math.log(1 + (documents.length - frequency + 0.5) / (frequency + 0.5)),
+        ] as const;
+      }),
+    );
+    const matches: { name: string; score: number }[] = [];
+    documents.forEach((document, index) => {
+      let score = 0;
+      for (const term of queryTerms) {
+        const count = termCounts[index]!.get(term);
+        if (count === undefined || count === 0) continue;
+        const norm = k1 * (1 - b + (b * lengths[index]!) / averageLength);
+        score += (idf.get(term) ?? 0) * ((count * (k1 + 1)) / (count + norm));
+      }
+      if (score > 0) matches.push({ name: document.name, score });
+    });
+    return matches
+      .sort((left, right) => right.score - left.score)
+      .slice(0, limit)
+      .map((match) => match.name);
+  },
+);
+
+const search = {
+  rankDocuments,
+  tokenize,
+};
+
+export default search;

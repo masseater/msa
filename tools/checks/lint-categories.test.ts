@@ -1,8 +1,10 @@
 import { Effect, ManagedRuntime, Schema } from "effect";
 import { expect, it } from "vite-plus/test";
 
-import { lintPlugins, strictCategories, strictCategoryRules } from "../../lint.config.ts";
+import lintConfig from "../../lint.config.ts";
 import { captureProcess, processRunnerLayer } from "../capture-process.ts";
+
+const { lintPlugins, strictCategories, strictCategoryRules } = lintConfig;
 
 const RuleList = Schema.fromJsonString(
   Schema.Array(

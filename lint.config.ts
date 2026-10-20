@@ -148,7 +148,7 @@ const strictCategoryRules = [
   "promise/no-return-in-finally",
 ];
 
-export {
+const lintConfig = {
   generated,
   lintPlugins,
   requiredStack,
@@ -156,3 +156,5 @@ export {
   strictCategories,
   strictCategoryRules,
 };
+
+export default lintConfig;

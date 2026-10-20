@@ -2,34 +2,39 @@ import type { AssistantMessage } from "@msa/ai";
 import type { Op, Path } from "@msa/chord/delta";
 import { Function } from "effect";
 
-import type { Block, MessageChange } from "./events-types.ts";
-import type { Dual2 } from "./types.ts";
+import type eventsTypesModule from "./events-types.ts";
+import type typesModule from "./types.types.ts";
 
 const PARTIAL_PATH = ["docs", "msa.live", "generation", "message"];
 
-export const messageChanges: Dual2<readonly Op[], AssistantMessage, MessageChange[]> =
-  Function.dual(2, (viewOps: readonly Op[], message: AssistantMessage): MessageChange[] => {
-    const changes: MessageChange[] = [];
+const messageChanges: typesModule.Dual2<
+  readonly Op[],
+  AssistantMessage,
+  eventsTypesModule.MessageChange[]
+> = Function.dual(
+  2,
+  (viewOps: readonly Op[], message: AssistantMessage): eventsTypesModule.MessageChange[] => {
+    const changes: eventsTypesModule.MessageChange[] = [];
     const whole = new Set<number>();
     for (const op of viewOps) {
       const path = op[1] as Path;
       if (!startsWith(path, PARTIAL_PATH)) {
-        if (startsWith(PARTIAL_PATH, path)) return [{ type: "message", message }];
+        if (startsWith(PARTIAL_PATH, path)) return [{ message, type: "message" }];
         continue;
       }
       const rest = path.slice(PARTIAL_PATH.length);
       if (rest[0] === "usage") continue;
-      if (rest[0] !== "content") return [{ type: "message", message }];
+      if (rest[0] !== "content") return [{ message, type: "message" }];
       if (rest.length === 1) {
-        if (op[0] !== "p" || op[3] !== 0) return [{ type: "message", message }];
-        for (const [offset, block] of (op[4] as unknown as Block[]).entries()) {
+        if (op[0] !== "p" || op[3] !== 0) return [{ message, type: "message" }];
+        for (const [offset, block] of (op[4] as unknown as eventsTypesModule.Block[]).entries()) {
           const type =
             block.type === "text"
               ? "text_start"
               : block.type === "thinking"
                 ? "thinking_start"
                 : "toolcall_start";
-          changes.push({ type, contentIndex: op[2] + offset, block });
+          changes.push({ block, contentIndex: op[2] + offset, type });
         }
         continue;
       }
@@ -38,22 +43,30 @@ export const messageChanges: Dual2<readonly Op[], AssistantMessage, MessageChang
       if (whole.has(contentIndex)) continue;
       if (op[0] === "a" && rest.length === 3 && (field === "text" || field === "thinking")) {
         changes.push({
-          type: field === "text" ? "text_delta" : "thinking_delta",
           contentIndex,
           delta: op[2],
+          type: field === "text" ? "text_delta" : "thinking_delta",
         });
       } else if (op[0] === "a" && field === "arguments") {
-        changes.push({ type: "toolcall_delta", contentIndex, path: rest.slice(3), delta: op[2] });
+        changes.push({ contentIndex, delta: op[2], path: rest.slice(3), type: "toolcall_delta" });
       } else {
         whole.add(contentIndex);
-        changes.push({ type: "block", contentIndex, block: message.content[contentIndex]! });
+        changes.push({ block: message.content[contentIndex]!, contentIndex, type: "block" });
       }
     }
     return changes;
-  });
+  },
+);
 
-export const startsWith: Dual2<Path, readonly (string | number)[], boolean> = Function.dual(
+const startsWith: typesModule.Dual2<Path, readonly (string | number)[], boolean> = Function.dual(
   2,
   (path: Path, prefix: readonly (string | number)[]): boolean =>
     prefix.length <= path.length && prefix.every((segment, index) => path[index] === segment),
 );
+
+const eventsMessages = {
+  messageChanges,
+  startsWith,
+};
+
+export default eventsMessages;

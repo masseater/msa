@@ -1,18 +1,22 @@
-import { type FileError, type FileWatcher, type Result, ok } from "@msa/durable/env";
+import env from "@msa/durable/env";
+import type envTypes from "@msa/durable/env.types";
 import { Effect } from "effect";
 
 import errors from "./errors.ts";
 import fileOp from "./file-op.ts";
 import type watchOpTypes from "./watch-op.types.ts";
-import watch from "./watch.ts";
+import RemoteWatcher from "./watch.ts";
+
+const { ok } = env;
 
 const { abortResult, recoverFileError } = errors;
 const { resolveIn, run } = fileOp;
-const { RemoteWatcher } = watch;
 
-const watchIn = (request: watchOpTypes.WatchRequest): Promise<Result<FileWatcher, FileError>> => {
+const watchIn = (
+  request: watchOpTypes.WatchRequest,
+): Promise<envTypes.Result<envTypes.FileWatcher, envTypes.FileError>> => {
   const { target, context } = request;
-  const aborted = abortResult<FileWatcher>(context.abortSignal, undefined);
+  const aborted = abortResult<envTypes.FileWatcher>(context.abortSignal, undefined);
   if (aborted !== undefined) return Promise.resolve(aborted);
   return run(
     recoverFileError(
@@ -25,17 +29,17 @@ const watchIn = (request: watchOpTypes.WatchRequest): Promise<Result<FileWatcher
             ),
           { concurrency: "unbounded" },
         );
-        const afterResolve = abortResult<FileWatcher>(context.abortSignal, undefined);
+        const afterResolve = abortResult<envTypes.FileWatcher>(context.abortSignal, undefined);
         if (afterResolve !== undefined) return afterResolve;
         const watcher = yield* Effect.promise(() =>
           RemoteWatcher.open(target.connection, resolved, request.onChange, request.options),
         );
-        const afterOpen = abortResult<FileWatcher>(context.abortSignal, undefined);
+        const afterOpen = abortResult<envTypes.FileWatcher>(context.abortSignal, undefined);
         if (afterOpen !== undefined) {
           yield* Effect.promise(() => watcher.close(context));
           return afterOpen;
         }
-        return ok<FileWatcher, FileError>(watcher);
+        return ok<envTypes.FileWatcher, envTypes.FileError>(watcher);
       }),
       undefined,
     ),

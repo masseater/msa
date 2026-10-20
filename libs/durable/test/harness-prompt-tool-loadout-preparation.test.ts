@@ -1,13 +1,17 @@
 import { type SystemMessage, type Tool, Type } from "@msa/ai";
 import { getCurrentTools, toToolDeclaration } from "@msa/ai/utils/transcript";
-import { type Conversation, SystemEntry } from "@msa/durable";
+import durable from "@msa/durable";
+import type durableTypes from "@msa/durable/index.types";
 import { Effect } from "effect";
 import { describe, expect, it } from "vite-plus/test";
 
-import { planSystemEntries } from "../src/harness/prompt.ts";
+import prompt from "../src/harness/prompt.ts";
 import effectSupport from "./effect-support.ts";
 import harnessPromptSupport from "./harness-prompt-support.ts";
 import sessionSupport from "./session-support.ts";
+
+const { planSystemEntries } = prompt;
+const { SystemEntry } = durable;
 
 const { awaited } = effectSupport;
 const { marker, root } = harnessPromptSupport;
@@ -20,7 +24,7 @@ const declaration = (name: string, description = name): Tool => ({
 });
 
 const applyTools = Effect.fn("applyTools")(function* (
-  conversation: Conversation,
+  conversation: durableTypes.Conversation,
   tools: readonly Tool[],
   sections: Record<string, string> = {},
 ) {

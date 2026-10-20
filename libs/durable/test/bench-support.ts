@@ -2,11 +2,14 @@ import { BACKGROUND_CONTEXT as context } from "@msa/chord/context";
 import { Effect } from "effect";
 import { dual } from "effect/Function";
 
-import type { Storage } from "../src/index.ts";
-import { openNodeJsonlStorage } from "../src/storage/jsonl/node.ts";
-import { openNodeSqliteStorage } from "../src/storage/sqlite/node.ts";
+import type durableTypes from "../src/index.types.ts";
+import nodeModule from "../src/storage/jsonl/node.ts";
+import node from "../src/storage/sqlite/node.ts";
 import type benchSupportTypes from "./bench-support.types.ts";
 import platformSupport from "./platform-support.ts";
+
+const { openNodeSqliteStorage } = node;
+const { openNodeJsonlStorage } = nodeModule;
 
 const { fileSize, isDirectory, joinPath, listTree } = platformSupport;
 
@@ -33,7 +36,7 @@ const directorySize = Effect.fn("directorySize")(function* (path: string) {
 function openBenchStorageImpl(
   backend: benchSupportTypes.Backend,
   directory: string,
-): Promise<Storage> {
+): Promise<durableTypes.Storage> {
   return Promise.resolve(
     backend === "sqlite"
       ? openNodeSqliteStorage(joinPath(directory, "session.sqlite"))
@@ -62,7 +65,7 @@ function noWrites(): benchSupportTypes.Written {
 }
 
 function meterCommitsImpl(
-  storage: Storage,
+  storage: durableTypes.Storage,
   meter: { commits: number; readonly written: benchSupportTypes.Written },
   onCommit?: () => void,
 ): void {
@@ -79,9 +82,9 @@ const meterCommits: {
   (
     meter: { commits: number; readonly written: benchSupportTypes.Written },
     onCommit?: () => void,
-  ): (storage: Storage) => ReturnType<typeof meterCommitsImpl>;
+  ): (storage: durableTypes.Storage) => ReturnType<typeof meterCommitsImpl>;
   (
-    storage: Storage,
+    storage: durableTypes.Storage,
     meter: { commits: number; readonly written: benchSupportTypes.Written },
     onCommit?: () => void,
   ): ReturnType<typeof meterCommitsImpl>;

@@ -1,28 +1,22 @@
-import type { CodemodeHostCall, CodemodeOutcome, CodemodeRun } from "@msa/codemode/portable";
+import type { CodemodeHostCall, CodemodeOutcome } from "@msa/codemode/portable";
 import { Cause, Effect, Exit } from "effect";
 
-import type { ToolExecutionResult } from "../harness/types.ts";
-import { asToolCall, describeCall, failedCall, sameJson } from "./call-rows.ts";
-import { priorCall, settleCall } from "./journal-calls.ts";
-import { type CallHost, callTool } from "./run-calls.ts";
-import { errorResult, type JournalEntry, type Settled } from "./run-docs.ts";
-import { appendJournal, recordFingerprint } from "./run-persist.ts";
-import type { OpenedRun } from "./run-start.ts";
+import callRows from "./call-outcome.ts";
+import journalCalls from "./journal-calls.ts";
+import runCalls from "./run-calls.ts";
+import runDocs from "./run-docs.ts";
+import type runDocsTypes from "./run-docs.types.ts";
+import type runJournalTypes from "./run-journal.types.ts";
+import runPersist from "./run-persist.ts";
 
-export type Resumed = Exclude<OpenedRun, { readonly done: ToolExecutionResult }>;
+const { appendJournal, recordFingerprint } = runPersist;
+const { errorResult } = runDocs;
+const { asToolCall, describeCall, failedCall, sameJson } = callRows;
+const { callTool } = runCalls;
+const { priorCall, settleCall } = journalCalls;
 
-export type RunControl = {
-  readonly host: CallHost;
-  readonly opened: Resumed;
-  readonly run: () => CodemodeRun;
-  readonly stopped: () => boolean;
-  readonly diverge: (message: string) => void;
-  readonly fail: (error: unknown) => void;
-  readonly refuse: (result: ToolExecutionResult, reason: Error) => Effect.Effect<void>;
-};
-
-export class RunJournal {
-  private readonly control: RunControl;
+export default class RunJournal {
+  private readonly control: runJournalTypes.RunControl;
   private readonly gate = Promise.withResolvers<void>();
   private readonly ready = new Map<number, CodemodeOutcome>();
   private readonly acks = new Map<number, number>();
@@ -35,10 +29,10 @@ export class RunJournal {
   private issued = 0;
   private waiting: CodemodeHostCall[] = [];
   private held: CodemodeHostCall[] = [];
-  private queue: Settled[] = [];
+  private queue: runDocsTypes.Settled[] = [];
   private committing = false;
 
-  constructor(control: RunControl) {
+  constructor(control: runJournalTypes.RunControl) {
     const { journal, firstIssued } = control.opened;
     this.control = control;
     this.replayIndex = new Map(journal.map((entry, index) => [entry.id, index]));
@@ -50,7 +44,7 @@ export class RunJournal {
     );
   }
 
-  private get replayed(): JournalEntry[] {
+  private get replayed(): runDocsTypes.JournalEntry[] {
     return this.control.opened.journal;
   }
 
@@ -99,7 +93,7 @@ export class RunJournal {
     } else this.held.push(call);
   }
 
-  private replayCall(call: CodemodeHostCall, entry: JournalEntry): void {
+  private replayCall(call: CodemodeHostCall, entry: runDocsTypes.JournalEntry): void {
     const { global } = entry;
     if (global !== undefined) {
       if (
@@ -231,7 +225,7 @@ export class RunJournal {
     );
   }
 
-  private settled(settled: Settled): void {
+  private settled(settled: runDocsTypes.Settled): void {
     this.queue.push(settled);
     Effect.runFork(this.pump());
   }

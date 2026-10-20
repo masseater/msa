@@ -1,32 +1,32 @@
 import type { Context } from "@msa/chord";
 import { Effect } from "effect";
 
-import type { ExecutionEnv } from "../env/index.ts";
-import { getOrThrow } from "../env/result.ts";
-import type { ToolExecutionApi } from "../harness/types.ts";
-import { detectSupportedImageMimeTypeOf, type ImageProcessor } from "./image.ts";
-import { imageModel, readImage } from "./read-image.ts";
-import { type BinarySource, binarySource, readText } from "./read-text.ts";
+import type envTypes from "../env/index.types.ts";
+import resultModule from "../env/result.ts";
+import type typesModule from "../harness/types.types.ts";
+import image from "./image.ts";
+import type readContentTypes from "./read-content.types.ts";
+import readImageModule from "./read-image.ts";
+import readTextModule from "./read-text.ts";
+import type readTextTypes from "./read-text.types.ts";
 
-export type ReadRequest = {
-  readonly path: string;
-  readonly offset: number | undefined;
-  readonly limit: number | undefined;
-  readonly images: ImageProcessor | undefined;
-};
+const { detectSupportedImageMimeTypeOf } = image;
+const { binarySource, readText } = readTextModule;
+const { imageModel, readImage } = readImageModule;
+const { getOrThrow } = resultModule;
 
 const attemptRead = Effect.fnUntraced(function* (
-  source: BinarySource,
-  request: ReadRequest,
-  api: ToolExecutionApi,
+  source: readTextTypes.BinarySource,
+  request: readContentTypes.ReadRequest,
+  api: typesModule.ToolExecutionApi,
   context: Context,
 ) {
   const { path, offset, limit, images } = request;
   for (let attempt = 0; ; attempt++) {
     const before = yield* source.info;
     const mimeType = yield* detectSupportedImageMimeTypeOf({
-      size: before.size,
       read: source.read,
+      size: before.size,
     });
     const result =
       mimeType === undefined
@@ -39,11 +39,11 @@ const attemptRead = Effect.fnUntraced(function* (
   }
 });
 
-export const readContent = Effect.fnUntraced(function* (
-  env: ExecutionEnv,
+const readContent = Effect.fnUntraced(function* (
+  env: envTypes.ExecutionEnv,
   absolutePath: string,
-  request: ReadRequest,
-  api: ToolExecutionApi,
+  request: readContentTypes.ReadRequest,
+  api: typesModule.ToolExecutionApi,
   context: Context,
 ) {
   const reader = getOrThrow(
@@ -54,3 +54,9 @@ export const readContent = Effect.fnUntraced(function* (
   yield* source.close;
   return yield* exit;
 });
+
+const readContentModule = {
+  readContent,
+};
+
+export default readContentModule;

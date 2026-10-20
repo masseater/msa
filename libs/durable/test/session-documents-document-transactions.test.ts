@@ -1,13 +1,17 @@
 import type { JsonValue } from "@msa/chord";
-import { type JsonObject, type TaskId, defineDoc } from "@msa/durable";
+import durable from "@msa/durable";
+import type durableTypes from "@msa/durable/index.types";
 import { DateTime, Effect } from "effect";
 import { describe, expect, it } from "vite-plus/test";
 
-import { idFromNumber } from "../src/ids.ts";
+import ids from "../src/ids.ts";
 import effectSupport from "./effect-support.ts";
 import sessionDocumentsSupport from "./session-documents-support.ts";
 import type sessionDocumentsSupportTypes from "./session-documents-support.types.ts";
 import sessionSupport from "./session-support.ts";
+
+const { defineDoc } = durable;
+const { idFromNumber } = ids;
 
 const { awaited } = effectSupport;
 const { CounterDoc, LiveDoc, setupLive } = sessionDocumentsSupport;
@@ -142,8 +146,9 @@ const rejectsNonJson = Effect.gen(function* () {
 
   const { session, storage } = openTestSession();
   const conversationId = yield* awaited(createConversation(session));
-  const DateDoc = defineDoc<JsonObject>({
-    initial: () => ({ at: DateTime.toDateUtc(DateTime.nowUnsafe()) }) as unknown as JsonObject,
+  const DateDoc = defineDoc<durableTypes.JsonObject>({
+    initial: () =>
+      ({ at: DateTime.toDateUtc(DateTime.nowUnsafe()) }) as unknown as durableTypes.JsonObject,
     kind: "test.date",
     scope: "session",
     version: 1,
@@ -210,7 +215,7 @@ const rollsBackPreparedStep1 = Effect.gen(function* () {
                 abortRequested: false,
                 background: false,
                 conversationId,
-                id: idFromNumber<TaskId<JsonValue>>(999),
+                id: idFromNumber<durableTypes.TaskId<JsonValue>>(999),
                 input: null,
                 kind: "missing",
                 state: { checkpoint: { phase: "start" }, status: "pending" },

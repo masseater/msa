@@ -3,11 +3,16 @@ import type { Context, Draft, JsonValue } from "@msa/chord";
 import { copyJson } from "@msa/chord/json";
 import { Cause, Effect, Fiber } from "effect";
 
-import { commitTask, eachHook, hookResult } from "./bridge.ts";
-import type { GenerationCheckpoint, GenerationRuntime } from "./generation-types.ts";
-import { assignJson } from "./json.ts";
-import { LiveDoc } from "./live.ts";
-import { ensureProviderSessionId } from "./provider.ts";
+import bridge from "./bridge.ts";
+import type generationTypesModule from "./generation-types.types.ts";
+import json from "./json.ts";
+import liveModule from "./live.ts";
+import provider from "./provider.ts";
+
+const { commitTask, eachHook, hookResult } = bridge;
+const { LiveDoc } = liveModule;
+const { assignJson } = json;
+const { ensureProviderSessionId } = provider;
 
 type Partials = {
   pending: AssistantMessage | undefined;
@@ -15,7 +20,7 @@ type Partials = {
 };
 
 const storePartial = Effect.fnUntraced(function* (
-  runtime: GenerationRuntime,
+  runtime: generationTypesModule.GenerationRuntime,
   attempt: number,
   partial: AssistantMessage,
   context: Context,
@@ -35,7 +40,7 @@ const storePartial = Effect.fnUntraced(function* (
 });
 
 const flushPartials = Effect.fnUntraced(function* (
-  runtime: GenerationRuntime,
+  runtime: generationTypesModule.GenerationRuntime,
   partials: Partials,
   attempt: number,
   context: Context,
@@ -58,7 +63,7 @@ const flushPartials = Effect.fnUntraced(function* (
 });
 
 const consumeEvents = Effect.fnUntraced(function* (
-  runtime: GenerationRuntime,
+  runtime: generationTypesModule.GenerationRuntime,
   model: Model<Api>,
   messages: readonly Message[],
   options: SimpleStreamOptions,
@@ -76,8 +81,8 @@ const consumeEvents = Effect.fnUntraced(function* (
   return yield* Effect.promise(() => events.result());
 });
 
-export const streamResponse = Effect.fnUntraced(function* (
-  runtime: GenerationRuntime,
+const streamResponse = Effect.fnUntraced(function* (
+  runtime: generationTypesModule.GenerationRuntime,
   model: Model<Api>,
   messages: readonly Message[],
   options: SimpleStreamOptions,
@@ -95,8 +100,8 @@ export const streamResponse = Effect.fnUntraced(function* (
   );
 });
 
-export const replaceMessages = Effect.fnUntraced(function* (
-  runtime: GenerationRuntime,
+const replaceMessages = Effect.fnUntraced(function* (
+  runtime: generationTypesModule.GenerationRuntime,
   initial: GenerationRuntimeMessages,
   context: Context,
 ) {
@@ -112,18 +117,34 @@ export const replaceMessages = Effect.fnUntraced(function* (
   return messages;
 });
 
-type GenerationRuntimeMessages = Awaited<ReturnType<GenerationRuntime["context"]>>["messages"];
+type GenerationRuntimeMessages = Awaited<
+  ReturnType<generationTypesModule.GenerationRuntime["context"]>
+>["messages"];
 
-export const requestOptions = Effect.fnUntraced(function* (
-  runtime: GenerationRuntime,
-  streamOptions: Extract<GenerationCheckpoint, { phase: "request" }>["streamOptions"],
-  thinkingLevel: Extract<GenerationCheckpoint, { phase: "request" }>["thinkingLevel"],
+const requestOptions = Effect.fnUntraced(function* (
+  runtime: generationTypesModule.GenerationRuntime,
+  streamOptions: Extract<
+    generationTypesModule.GenerationCheckpoint,
+    { phase: "request" }
+  >["streamOptions"],
+  thinkingLevel: Extract<
+    generationTypesModule.GenerationCheckpoint,
+    { phase: "request" }
+  >["thinkingLevel"],
   context: Context,
 ) {
   return {
     ...streamOptions,
-    signal: runtime.signal,
     sessionId: yield* ensureProviderSessionId(runtime, context),
+    signal: runtime.signal,
     ...(thinkingLevel === "off" ? {} : { reasoning: thinkingLevel }),
   };
 });
+
+const generationStream = {
+  replaceMessages,
+  requestOptions,
+  streamResponse,
+};
+
+export default generationStream;

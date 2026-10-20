@@ -2,93 +2,91 @@ import type { Draft } from "@msa/chord";
 import { copyJson } from "@msa/chord/json";
 import { Effect, Function } from "effect";
 
-import { defineDoc } from "../documents.ts";
-import { documentRetention } from "../session/session-state.ts";
-import type {
-  AgentChange,
-  AgentState,
-  CompactionPolicy,
-  ConversationId,
-  ConversationRecord,
-  ConversationRetryPolicy,
-  Dual2,
-  Dual3,
-  HarnessSettings,
-  ProgressPolicy,
-  Settings,
-  Tx,
-} from "./types.ts";
+import documents from "../documents.ts";
+import sessionState from "../session/session-state.ts";
+import type typesModule from "./types.types.ts";
 
-export const DEFAULT_RETRY_POLICY: ConversationRetryPolicy = {
-  enabled: true,
-  maxRetries: 3,
+const { defineDoc } = documents;
+const { documentRetention } = sessionState;
+
+const DEFAULT_RETRY_POLICY: typesModule.ConversationRetryPolicy = {
   baseDelayMs: 2000,
-  maxAgentDelayMs: 60000,
-};
-
-export const DEFAULT_COMPACTION_POLICY: CompactionPolicy = {
   enabled: true,
-  reserveTokens: 16384,
-  keepRecentTokens: 20000,
+  maxAgentDelayMs: 60000,
+  maxRetries: 3,
+};
+
+const DEFAULT_COMPACTION_POLICY: typesModule.CompactionPolicy = {
   backgroundTokens: 32768,
+  enabled: true,
+  keepRecentTokens: 20000,
+  reserveTokens: 16384,
 };
 
-export const DEFAULT_PROGRESS_POLICY: ProgressPolicy = {
-  partialIntervalMs: 100,
+const DEFAULT_PROGRESS_POLICY: typesModule.ProgressPolicy = {
   outputIntervalMs: 100,
+  partialIntervalMs: 100,
 };
 
-export const INSTRUCTIONS_KEY = "instructions";
+const INSTRUCTIONS_KEY = "instructions";
 
-export const AgentDoc = defineDoc<AgentState>({
-  kind: "msa.agent",
-  version: 1,
-  scope: "conversation",
-  history: "rewindable",
-  fork: "asOf",
-  initial: () => ({}),
+const AgentDoc = defineDoc<typesModule.AgentState>({
   checkpointWhen: () => true,
+  fork: "asOf",
+  history: "rewindable",
+  initial: () => ({}),
+  kind: "msa.agent",
+  scope: "conversation",
+  version: 1,
 });
 
 const DEFAULT_CONTEXT_RETENTION_MS = 600_000;
 
-export function resolveSettings(settings: HarnessSettings | undefined): Settings {
+function resolveSettings(settings: typesModule.HarnessSettings | undefined): typesModule.Settings {
   const extensions = settings?.extensions;
   return {
     ...(extensions === undefined ? {} : { extensions }),
-    stream: { ...settings?.stream },
-    retry: { ...DEFAULT_RETRY_POLICY, ...settings?.retry },
     compaction: { ...DEFAULT_COMPACTION_POLICY, ...settings?.compaction },
-    progress: {
-      partialIntervalMs:
-        settings?.progress?.partialIntervalMs ?? DEFAULT_PROGRESS_POLICY.partialIntervalMs,
-      outputIntervalMs:
-        settings?.progress?.outputIntervalMs ?? DEFAULT_PROGRESS_POLICY.outputIntervalMs,
-    },
-    toolExecution: settings?.toolExecution ?? "parallel",
-    steeringMode: settings?.steeringMode ?? "one-at-a-time",
-    followUpMode: settings?.followUpMode ?? "one-at-a-time",
     contextRetentionMs: settings?.contextRetentionMs ?? DEFAULT_CONTEXT_RETENTION_MS,
     documentRetentionMs: documentRetention(settings?.documentRetentionMs),
+    followUpMode: settings?.followUpMode ?? "one-at-a-time",
+    progress: {
+      outputIntervalMs:
+        settings?.progress?.outputIntervalMs ?? DEFAULT_PROGRESS_POLICY.outputIntervalMs,
+      partialIntervalMs:
+        settings?.progress?.partialIntervalMs ?? DEFAULT_PROGRESS_POLICY.partialIntervalMs,
+    },
+    retry: { ...DEFAULT_RETRY_POLICY, ...settings?.retry },
+    steeringMode: settings?.steeringMode ?? "one-at-a-time",
+    stream: { ...settings?.stream },
+    toolExecution: settings?.toolExecution ?? "parallel",
   };
 }
 
 const configureDoc = Effect.fnUntraced(function* (
-  tx: Tx,
-  conversationId: ConversationId,
-  change: AgentChange,
+  tx: typesModule.Tx,
+  conversationId: typesModule.ConversationId,
+  change: typesModule.AgentChange,
 ) {
   const state = yield* Effect.promise(() => tx.doc(AgentDoc, conversationId));
   applyChange(state, change);
 });
 
-export const configure: Dual3<Tx, ConversationId, AgentChange, Promise<void>> = Function.dual(
+const configure: typesModule.Dual3<
+  typesModule.Tx,
+  typesModule.ConversationId,
+  typesModule.AgentChange,
+  Promise<void>
+> = Function.dual(
   3,
-  (tx: Tx, conversationId: ConversationId, change: AgentChange): Promise<void> =>
-    Effect.runPromise(configureDoc(tx, conversationId, change)),
+  (
+    tx: typesModule.Tx,
+    conversationId: typesModule.ConversationId,
+    change: typesModule.AgentChange,
+  ): Promise<void> => Effect.runPromise(configureDoc(tx, conversationId, change)),
 );
 
-const addModelTools = (state: Draft<AgentState>, added: readonly string[]): void => {
+const addModelTools = (state: Draft<typesModule.AgentState>, added: readonly string[]): void => {
   const modelTools = state.modelTools;
   if (Array.isArray(modelTools)) {
     for (const name of added) if (!modelTools.includes(name)) modelTools.push(name);
@@ -100,14 +98,18 @@ const addModelTools = (state: Draft<AgentState>, added: readonly string[]): void
   state.modelTools = { ...(remove.length === 0 ? {} : { remove }), add };
 };
 
-export const addTools: Dual3<
-  Tx,
-  ConversationId,
+const addTools: typesModule.Dual3<
+  typesModule.Tx,
+  typesModule.ConversationId,
   readonly string[],
   Effect.Effect<void>
 > = Function.dual(
   3,
-  Effect.fnUntraced(function* (tx: Tx, conversationId: ConversationId, added: readonly string[]) {
+  Effect.fnUntraced(function* (
+    tx: typesModule.Tx,
+    conversationId: typesModule.ConversationId,
+    added: readonly string[],
+  ) {
     const state = yield* Effect.promise(() => tx.doc(AgentDoc, conversationId));
     const tools = state.tools;
     if (Array.isArray(tools)) {
@@ -119,11 +121,14 @@ export const addTools: Dual3<
   }),
 );
 
-function applyChange(state: Draft<AgentState>, change: AgentChange): void {
-  const set = <K extends keyof AgentState>(key: K, value: AgentState[K] | null | undefined) => {
+function applyChange(state: Draft<typesModule.AgentState>, change: typesModule.AgentChange): void {
+  const set = <K extends keyof typesModule.AgentState>(
+    key: K,
+    value: typesModule.AgentState[K] | null | undefined,
+  ) => {
     if (value === undefined) return;
     if (value === null) delete state[key];
-    else state[key] = value as Draft<AgentState>[K];
+    else state[key] = value as Draft<typesModule.AgentState>[K];
   };
   set(
     "model",
@@ -175,13 +180,31 @@ function names(items: readonly { readonly name: string }[]): string[] {
   return items.map((item) => item.name);
 }
 
-export const createAgent: Dual2<Tx, ConversationRecord, Effect.Effect<void>> = Function.dual(
+const createAgent: typesModule.Dual2<
+  typesModule.Tx,
+  typesModule.ConversationRecord,
+  Effect.Effect<void>
+> = Function.dual(
   2,
-  Effect.fnUntraced(function* (tx: Tx, conversation: ConversationRecord) {
+  Effect.fnUntraced(function* (tx: typesModule.Tx, conversation: typesModule.ConversationRecord) {
     if (conversation.parent !== undefined) return;
     const agent = yield* Effect.promise(() => tx.doc(AgentDoc, conversation.id));
     if (conversation.owner === undefined) return;
     const owner = yield* Effect.promise(() => tx.doc(AgentDoc, conversation.owner!.conversationId));
-    Object.assign(agent, copyJson(owner) as AgentState);
+    Object.assign(agent, copyJson(owner) as typesModule.AgentState);
   }),
 );
+
+const agentState = {
+  AgentDoc,
+  DEFAULT_COMPACTION_POLICY,
+  DEFAULT_PROGRESS_POLICY,
+  DEFAULT_RETRY_POLICY,
+  INSTRUCTIONS_KEY,
+  addTools,
+  configure,
+  createAgent,
+  resolveSettings,
+};
+
+export default agentState;

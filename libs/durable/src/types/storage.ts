@@ -1,198 +1,197 @@
 import type { Context, JsonValue } from "@msa/chord";
 import type { Op } from "@msa/chord/delta";
 
-import type {
-  DocumentAddress,
-  DocumentContent,
-  DocumentCopySource,
-  DocumentCreate,
-  DocumentPoint,
-  DocumentQuery,
-  DocumentRecord,
-  StoredDocument,
-} from "./documents.ts";
-import type {
-  ConversationId,
-  DocumentId,
-  EntryId,
-  Id,
-  JsonObject,
-  Seq,
-  SubmissionId,
-  TaskId,
-} from "./ids.ts";
-import type { ConversationRecord, EntryRecord, SubmissionRecord } from "./records.ts";
-import type { TaskRecord, TaskState } from "./tasks.ts";
+import type documentsTypes from "./documents.types.ts";
+import type idsTypes from "./ids.types.ts";
+import type recordsTypes from "./records.ts";
+import type tasksTypes from "./tasks.ts";
 
-export type Page<T, C> = {
-  readonly items: readonly T[];
-  readonly next?: C;
-};
+declare namespace storageTypes {
+  type Page<T, C> = {
+    readonly items: readonly T[];
+    readonly next?: C;
+  };
 
-export type Cursor = Readonly<Record<string, JsonValue>>;
+  type Cursor = Readonly<Record<string, JsonValue>>;
 
-export type ScanOrder = "ascending" | "descending";
+  type ScanOrder = "ascending" | "descending";
 
-export type ConversationQuery = {
-  readonly ownerConversationId?: ConversationId;
-  readonly ownerTaskId?: TaskId;
-  readonly order?: ScanOrder;
-};
+  type ConversationQuery = {
+    readonly ownerConversationId?: idsTypes.ConversationId;
+    readonly ownerTaskId?: idsTypes.TaskId;
+    readonly order?: ScanOrder;
+  };
 
-export type EntryQuery = {
-  readonly conversationId: ConversationId;
-  readonly minEntryId?: EntryId;
-  readonly maxEntryId?: EntryId;
-  readonly order?: ScanOrder;
-};
+  type EntryQuery = {
+    readonly conversationId: idsTypes.ConversationId;
+    readonly minEntryId?: idsTypes.EntryId;
+    readonly maxEntryId?: idsTypes.EntryId;
+    readonly order?: ScanOrder;
+  };
 
-export type TaskQuery = {
-  readonly conversationId?: ConversationId;
-  readonly kind?: string;
-  readonly status?: TaskState<JsonValue, JsonValue>["status"];
-  readonly abortRequested?: boolean;
-  readonly background?: boolean;
-  readonly order?: ScanOrder;
-};
+  type TaskQuery = {
+    readonly conversationId?: idsTypes.ConversationId;
+    readonly kind?: string;
+    readonly status?: tasksTypes.TaskState<JsonValue, JsonValue>["status"];
+    readonly abortRequested?: boolean;
+    readonly background?: boolean;
+    readonly order?: ScanOrder;
+  };
 
-export type SubmissionQuery = {
-  readonly conversationId?: ConversationId;
-  readonly status?: SubmissionRecord["status"];
-  readonly order?: ScanOrder;
-};
+  type SubmissionQuery = {
+    readonly conversationId?: idsTypes.ConversationId;
+    readonly status?: recordsTypes.SubmissionRecord["status"];
+    readonly order?: ScanOrder;
+  };
 
-export type StorageWrite =
-  | { readonly type: "conversation"; readonly value: ConversationRecord }
-  | { readonly type: "entry"; readonly value: EntryRecord }
-  | { readonly type: "task"; readonly value: TaskRecord<JsonValue, JsonValue, JsonValue> }
-  | { readonly type: "submission"; readonly value: SubmissionRecord }
-  | {
-      readonly type: "document.create";
-      readonly record: DocumentCreate;
-      readonly content: Extract<DocumentContent, { readonly kind: "base" }>;
-    }
-  | {
-      readonly type: "document.copy";
-      readonly record: DocumentCreate;
-      readonly source: DocumentCopySource;
-    }
-  | {
-      readonly type: "document.change";
-      readonly id: DocumentId;
-      readonly content: DocumentContent;
-    }
-  | { readonly type: "document.retire"; readonly id: DocumentId };
+  type StorageWrite =
+    | { readonly type: "conversation"; readonly value: recordsTypes.ConversationRecord }
+    | { readonly type: "entry"; readonly value: recordsTypes.EntryRecord }
+    | {
+        readonly type: "task";
+        readonly value: tasksTypes.TaskRecord<JsonValue, JsonValue, JsonValue>;
+      }
+    | { readonly type: "submission"; readonly value: recordsTypes.SubmissionRecord }
+    | {
+        readonly type: "document.create";
+        readonly record: documentsTypes.DocumentCreate;
+        readonly content: Extract<documentsTypes.DocumentContent, { readonly kind: "base" }>;
+      }
+    | {
+        readonly type: "document.copy";
+        readonly record: documentsTypes.DocumentCreate;
+        readonly source: documentsTypes.DocumentCopySource;
+      }
+    | {
+        readonly type: "document.change";
+        readonly id: idsTypes.DocumentId;
+        readonly content: documentsTypes.DocumentContent;
+      }
+    | { readonly type: "document.retire"; readonly id: idsTypes.DocumentId };
 
-export type DocumentCommitChange =
-  | {
-      readonly type: "document";
-      readonly record: DocumentRecord;
-      readonly conversationId: ConversationId | undefined;
-      readonly version: number | undefined;
-      readonly value: JsonObject | null;
-      readonly ops: readonly Op[];
-    }
-  | {
-      readonly type: "document.copy";
-      readonly record: DocumentRecord;
-      readonly conversationId: ConversationId;
-      readonly source: DocumentCopySource;
-    };
+  type DocumentCommitChange =
+    | {
+        readonly type: "document";
+        readonly record: documentsTypes.DocumentRecord;
+        readonly conversationId: idsTypes.ConversationId | undefined;
+        readonly version: number | undefined;
+        readonly value: idsTypes.JsonObject | null;
+        readonly ops: readonly Op[];
+      }
+    | {
+        readonly type: "document.copy";
+        readonly record: documentsTypes.DocumentRecord;
+        readonly conversationId: idsTypes.ConversationId;
+        readonly source: documentsTypes.DocumentCopySource;
+      };
 
-export type TableCommitChange = Extract<
-  StorageWrite,
-  { readonly type: "conversation" | "entry" | "task" | "submission" }
->;
+  type TableCommitChange = Extract<
+    StorageWrite,
+    { readonly type: "conversation" | "entry" | "task" | "submission" }
+  >;
 
-export type CommitChange = TableCommitChange | DocumentCommitChange;
+  type CommitChange = TableCommitChange | DocumentCommitChange;
 
-export type CommitPublication = {
-  readonly seq: Seq;
-  readonly changes: readonly CommitChange[];
-};
+  type CommitPublication = {
+    readonly seq: idsTypes.Seq;
+    readonly changes: readonly CommitChange[];
+  };
 
-export interface Storage {
-  commit(writes: readonly StorageWrite[], context: Context): Promise<Seq>;
+  interface Storage {
+    commit(writes: readonly StorageWrite[], context: Context): Promise<idsTypes.Seq>;
 
-  mintId<I extends Id<string>>(): Promise<I>;
+    mintId<I extends idsTypes.Id<string>>(): Promise<I>;
 
-  conversation(id: ConversationId, context: Context): Promise<ConversationRecord | undefined>;
+    conversation(
+      id: idsTypes.ConversationId,
+      context: Context,
+    ): Promise<recordsTypes.ConversationRecord | undefined>;
 
-  scanConversations(
-    query: ConversationQuery,
-    limit: number,
-    cursor: Cursor | undefined,
-    context: Context,
-  ): Promise<Page<ConversationRecord, Cursor>>;
+    scanConversations(
+      query: ConversationQuery,
+      limit: number,
+      cursor: Cursor | undefined,
+      context: Context,
+    ): Promise<Page<recordsTypes.ConversationRecord, Cursor>>;
 
-  entry(
-    id: EntryId,
-    context: Context,
-  ): Promise<{ readonly entry: EntryRecord; readonly commitSeq: Seq } | undefined>;
-  entry(
-    conversationId: ConversationId,
-    id: EntryId,
-    context: Context,
-  ): Promise<{ readonly entry: EntryRecord; readonly commitSeq: Seq } | undefined>;
+    entry(
+      id: idsTypes.EntryId,
+      context: Context,
+    ): Promise<
+      { readonly entry: recordsTypes.EntryRecord; readonly commitSeq: idsTypes.Seq } | undefined
+    >;
+    entry(
+      conversationId: idsTypes.ConversationId,
+      id: idsTypes.EntryId,
+      context: Context,
+    ): Promise<
+      { readonly entry: recordsTypes.EntryRecord; readonly commitSeq: idsTypes.Seq } | undefined
+    >;
 
-  findLatestHeadMarker(
-    conversationId: ConversationId,
-    atOrBeforeEntryId: EntryId | undefined,
-    context: Context,
-  ): Promise<(EntryRecord & { readonly head: EntryId }) | undefined>;
+    findLatestHeadMarker(
+      conversationId: idsTypes.ConversationId,
+      atOrBeforeEntryId: idsTypes.EntryId | undefined,
+      context: Context,
+    ): Promise<(recordsTypes.EntryRecord & { readonly head: idsTypes.EntryId }) | undefined>;
 
-  scanEntries(
-    query: EntryQuery,
-    limit: number,
-    cursor: Cursor | undefined,
-    context: Context,
-  ): Promise<Page<EntryRecord, Cursor>>;
+    scanEntries(
+      query: EntryQuery,
+      limit: number,
+      cursor: Cursor | undefined,
+      context: Context,
+    ): Promise<Page<recordsTypes.EntryRecord, Cursor>>;
 
-  task(
-    id: TaskId,
-    context: Context,
-  ): Promise<TaskRecord<JsonValue, JsonValue, JsonValue> | undefined>;
+    task(
+      id: idsTypes.TaskId,
+      context: Context,
+    ): Promise<tasksTypes.TaskRecord<JsonValue, JsonValue, JsonValue> | undefined>;
 
-  scanTasks(
-    query: TaskQuery,
-    limit: number,
-    cursor: Cursor | undefined,
-    context: Context,
-  ): Promise<Page<TaskRecord<JsonValue, JsonValue, JsonValue>, Cursor>>;
+    scanTasks(
+      query: TaskQuery,
+      limit: number,
+      cursor: Cursor | undefined,
+      context: Context,
+    ): Promise<Page<tasksTypes.TaskRecord<JsonValue, JsonValue, JsonValue>, Cursor>>;
 
-  submission(id: SubmissionId, context: Context): Promise<SubmissionRecord | undefined>;
+    submission(
+      id: idsTypes.SubmissionId,
+      context: Context,
+    ): Promise<recordsTypes.SubmissionRecord | undefined>;
 
-  scanSubmissions(
-    query: SubmissionQuery,
-    limit: number,
-    cursor: Cursor | undefined,
-    context: Context,
-  ): Promise<Page<SubmissionRecord, Cursor>>;
+    scanSubmissions(
+      query: SubmissionQuery,
+      limit: number,
+      cursor: Cursor | undefined,
+      context: Context,
+    ): Promise<Page<recordsTypes.SubmissionRecord, Cursor>>;
 
-  submissionByRequest(
-    conversationId: ConversationId,
-    requestId: string,
-    context: Context,
-  ): Promise<SubmissionRecord | undefined>;
+    submissionByRequest(
+      conversationId: idsTypes.ConversationId,
+      requestId: string,
+      context: Context,
+    ): Promise<recordsTypes.SubmissionRecord | undefined>;
 
-  findDocument(
-    address: DocumentAddress,
-    at: DocumentPoint,
-    context: Context,
-  ): Promise<DocumentRecord | undefined>;
+    findDocument(
+      address: documentsTypes.DocumentAddress,
+      at: documentsTypes.DocumentPoint,
+      context: Context,
+    ): Promise<documentsTypes.DocumentRecord | undefined>;
 
-  document(
-    id: DocumentId,
-    at: DocumentPoint,
-    context: Context,
-  ): Promise<StoredDocument | undefined>;
+    document(
+      id: idsTypes.DocumentId,
+      at: documentsTypes.DocumentPoint,
+      context: Context,
+    ): Promise<documentsTypes.StoredDocument | undefined>;
 
-  scanDocuments(
-    query: DocumentQuery,
-    limit: number,
-    cursor: Cursor | undefined,
-    context: Context,
-  ): Promise<Page<DocumentRecord, Cursor>>;
+    scanDocuments(
+      query: documentsTypes.DocumentQuery,
+      limit: number,
+      cursor: Cursor | undefined,
+      context: Context,
+    ): Promise<Page<documentsTypes.DocumentRecord, Cursor>>;
 
-  close(context: Context): Promise<void>;
+    close(context: Context): Promise<void>;
+  }
 }
+
+export type { storageTypes as default };

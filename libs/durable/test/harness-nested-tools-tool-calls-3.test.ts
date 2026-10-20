@@ -1,11 +1,16 @@
-import { LiveDoc, type ToolTaskInput } from "@msa/durable";
-import { watchEvents } from "@msa/durable/harness";
-import { MemoryStorage } from "@msa/durable/storage/memory";
+import durable from "@msa/durable";
+import harnessModule from "@msa/durable/harness";
+import type durableTypes from "@msa/durable/index.types";
+import memory from "@msa/durable/storage/memory";
 import { Effect } from "effect";
 import { afterEach, describe, expect, it } from "vite-plus/test";
 
 import harnessNestedToolsSupport from "./harness-nested-tools-support.ts";
 import support from "./support.ts";
+
+const { LiveDoc } = durable;
+const { MemoryStorage } = memory;
+const { watchEvents } = harnessModule;
 
 const { DONE, call, directories, echoTool, results, runOnce, text, tool, toolTasks } =
   harnessNestedToolsSupport;
@@ -45,7 +50,7 @@ const abortsNestedCall = Effect.gen(function* () {
   const { harness, root, status } = yield* runOnce(setup, [call("batch"), DONE]);
   expect(status).toBe("done");
   const late = (yield* toolTasks(harness)).find((task) => {
-    const input = task.input as ToolTaskInput;
+    const input = task.input as durableTypes.ToolTaskInput;
     return input.kind === "nested" && input.call.name === "hang";
   });
   expect(late!.state).toMatchObject({ outcome: { status: "aborted" }, status: "terminal" });
@@ -110,7 +115,7 @@ const abortsEveryLeft = Effect.gen(function* () {
   const { harness, status } = yield* runOnce(setup, [call("batch"), DONE]);
   expect(status).toBe("done");
   const nested = (yield* toolTasks(harness)).filter(
-    (task) => (task.input as ToolTaskInput).kind === "nested",
+    (task) => (task.input as durableTypes.ToolTaskInput).kind === "nested",
   );
   expect(nested.map((task) => task.state.status)).toEqual(["terminal", "terminal"]);
   yield* awaited(harness.close(context));

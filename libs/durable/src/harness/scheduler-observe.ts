@@ -1,24 +1,18 @@
 import type { JsonValue } from "@msa/chord";
 import { Function } from "effect";
 
-import {
-  cancellationIntent,
-  conversationNode,
-  failedOutcome,
-  parentOf,
-} from "./scheduler-records.ts";
-import type { SchedulerState } from "./scheduler-state.ts";
-import type {
-  AnyTaskRecord,
-  CommitPublication,
-  Dual2,
-  SettledTask,
-  TaskId,
-} from "./scheduler-types.ts";
+import schedulerRecords from "./scheduler-records.ts";
+import type schedulerStateTypes from "./scheduler-state.types.ts";
+import type schedulerTypesModule from "./scheduler-types.types.ts";
 
-type Changes = CommitPublication["changes"];
+const { cancellationIntent, conversationNode, failedOutcome, parentOf } = schedulerRecords;
 
-const observeConversations = (state: SchedulerState, changes: Changes): void => {
+type Changes = schedulerTypesModule.CommitPublication["changes"];
+
+const observeConversations = (
+  state: schedulerStateTypes.SchedulerState,
+  changes: Changes,
+): void => {
   for (const change of changes) {
     if (change.type === "conversation" && !state.graph.edges.has(change.value.id)) {
       state.graph.setEdge(change.value.id, change.value.owner?.taskId ?? null);
@@ -27,9 +21,9 @@ const observeConversations = (state: SchedulerState, changes: Changes): void => 
 };
 
 const observeStatus = (
-  state: SchedulerState,
-  previous: AnyTaskRecord | undefined,
-  record: AnyTaskRecord,
+  state: schedulerStateTypes.SchedulerState,
+  previous: schedulerTypesModule.AnyTaskRecord | undefined,
+  record: schedulerTypesModule.AnyTaskRecord,
 ): void => {
   const status = record.state.status;
   if (status === "completing" && previous?.state.status !== "completing") {
@@ -47,9 +41,12 @@ const observeStatus = (
 };
 
 const observeTask = (
-  state: SchedulerState,
-  record: AnyTaskRecord,
-  found: { readonly updated: AnyTaskRecord[]; readonly failed: TaskId[] },
+  state: schedulerStateTypes.SchedulerState,
+  record: schedulerTypesModule.AnyTaskRecord,
+  found: {
+    readonly updated: schedulerTypesModule.AnyTaskRecord[];
+    readonly failed: schedulerTypesModule.TaskId[];
+  },
 ): void => {
   const { graph } = state;
   const previous = graph.live.get(record.id);
@@ -59,7 +56,7 @@ const observeTask = (
   if (record.state.status === "terminal") {
     state.failedMigrations.delete(record.id);
     graph.failFastChecks.delete(record.id);
-    state.taskWaiters.resolve(record.id, record as SettledTask<JsonValue>);
+    state.taskWaiters.resolve(record.id, record as schedulerTypesModule.SettledTask<JsonValue>);
     state.wake.reconcile();
     return;
   }
@@ -74,7 +71,10 @@ const observeTask = (
   if (previous === undefined) found.updated.push(record);
 };
 
-const observeFailed = (state: SchedulerState, failed: readonly TaskId[]): void => {
+const observeFailed = (
+  state: schedulerStateTypes.SchedulerState,
+  failed: readonly schedulerTypesModule.TaskId[],
+): void => {
   const { graph } = state;
   for (const id of failed) {
     for (const waiter of graph.waiters.get(id) ?? []) {
@@ -87,7 +87,7 @@ const observeFailed = (state: SchedulerState, failed: readonly TaskId[]): void =
   }
 };
 
-const observeSubmissions = (state: SchedulerState, changes: Changes): void => {
+const observeSubmissions = (state: schedulerStateTypes.SchedulerState, changes: Changes): void => {
   const { graph } = state;
   for (const change of changes) {
     if (
@@ -104,7 +104,10 @@ const observeSubmissions = (state: SchedulerState, changes: Changes): void => {
   }
 };
 
-const observeUpdated = (state: SchedulerState, updated: readonly AnyTaskRecord[]): void => {
+const observeUpdated = (
+  state: schedulerStateTypes.SchedulerState,
+  updated: readonly schedulerTypesModule.AnyTaskRecord[],
+): void => {
   const { graph } = state;
   for (const record of updated) {
     if (graph.unloaded.has(record.id)) state.wake.reconcile();
@@ -113,10 +116,20 @@ const observeUpdated = (state: SchedulerState, updated: readonly AnyTaskRecord[]
   }
 };
 
-export const observePublication: Dual2<SchedulerState, CommitPublication, void> = Function.dual(
+const observePublication: schedulerTypesModule.Dual2<
+  schedulerStateTypes.SchedulerState,
+  schedulerTypesModule.CommitPublication,
+  void
+> = Function.dual(
   2,
-  (state: SchedulerState, publication: CommitPublication): void => {
-    const found = { updated: [] as AnyTaskRecord[], failed: [] as TaskId[] };
+  (
+    state: schedulerStateTypes.SchedulerState,
+    publication: schedulerTypesModule.CommitPublication,
+  ): void => {
+    const found = {
+      failed: [] as schedulerTypesModule.TaskId[],
+      updated: [] as schedulerTypesModule.AnyTaskRecord[],
+    };
     let changed = false;
     observeConversations(state, publication.changes);
     for (const change of publication.changes) {
@@ -134,3 +147,9 @@ export const observePublication: Dual2<SchedulerState, CommitPublication, void> 
     state.wake.kick();
   },
 );
+
+const schedulerObserve = {
+  observePublication,
+};
+
+export default schedulerObserve;

@@ -1,4 +1,4 @@
-import { type TaskId } from "@msa/durable";
+import type durableTypes from "@msa/durable/index.types";
 import { Effect } from "effect";
 import { afterEach, describe, expect, it } from "vite-plus/test";
 
@@ -47,7 +47,7 @@ const followsNoWaitStep1 = Effect.gen(function* () {
   const runPromise = Effect.runPromiseWith(yield* Effect.context<never>());
 
   const { harness, root } = yield* openNodes();
-  const ids: Record<string, TaskId> = {};
+  const ids: Record<string, durableTypes.TaskId> = {};
   const cleanup = deferred();
   script("b", {
     run: (runtime, ctx) =>
@@ -132,7 +132,7 @@ const rejectsLongerCycle = Effect.gen(function* () {
   const runPromise = Effect.runPromiseWith(yield* Effect.context<never>());
 
   const { harness, root } = yield* openNodes();
-  const ids: Record<string, TaskId> = {};
+  const ids: Record<string, durableTypes.TaskId> = {};
   const names = ["x", "y", "z"];
   for (const [index, name] of names.entries()) {
     const next = names[(index + 1) % names.length]!;
@@ -180,7 +180,7 @@ const keepsRunningPhasesStep1 = Effect.gen(function* () {
   const runPromise = Effect.runPromiseWith(yield* Effect.context<never>());
 
   const { harness, root } = yield* openNodes();
-  const ids: TaskId[] = [];
+  const ids: durableTypes.TaskId[] = [];
   script("parent", {
     resume: (runtime, ctx, round) =>
       runPromise(

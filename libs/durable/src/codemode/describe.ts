@@ -2,18 +2,14 @@ import type { CodemodeJsonSchema } from "@msa/codemode";
 import { renderToolSample, toCodemodeIdentifier } from "@msa/codemode/declarations";
 import { Function } from "effect";
 
-import type { Dual2, Dual3 } from "../dual.ts";
-import type { ToolRegistration } from "../harness/types.ts";
-import { MODELS_DESCRIPTION } from "./models.ts";
+import type dualTypes from "../dual.ts";
+import type typesModule from "../harness/types.types.ts";
+import type describeTypes from "./describe.types.ts";
+import modelsModule from "./models.ts";
 
-export type CodemodeNamespace = {
-  readonly name: string;
-  readonly description?: string;
-  readonly instructions?: string;
-  readonly prefix: string;
-};
+const { MODELS_DESCRIPTION } = modelsModule;
 
-export const DEFAULT_CODEMODE_INLINE_BUDGET = 3000;
+const DEFAULT_CODEMODE_INLINE_BUDGET = 3000;
 const CHARS_PER_TOKEN = 4;
 
 const TEXT_OUTPUT_SCHEMA: CodemodeJsonSchema = { type: "string" };
@@ -23,7 +19,7 @@ const DESCRIPTION_INTRO = `Run JavaScript that calls other tools. The input is r
 - The script survives a restart: it resumes where it was, without running finished calls again.
 - Optional first line: \`// @options: {"max_output_tokens": 10000, "timeout_ms": 60000}\``;
 
-export function codemodeDescription(models: boolean): string {
+function codemodeDescription(models: boolean): string {
   const globals = [
     "Globals:",
     "- `text(value)`, `image(dataUrlOrImageBlock)`, `console.log(...)`, and top-level `return` add output; `exit()` ends the script. With several text items, each starts with a `==> text N/M <==` line, and `console` lines follow the other output in one `<console_output>` block. `image()` also saves the image to a temp file and the result names its path.",
@@ -38,33 +34,36 @@ export function codemodeDescription(models: boolean): string {
   ].join("\n\n");
 }
 
-export function declarationOf(tool: ToolRegistration): {
+function declarationOf(tool: typesModule.ToolRegistration): {
   name: string;
   description: string;
   inputSchema: CodemodeJsonSchema;
   outputSchema: CodemodeJsonSchema;
 } {
   return {
-    name: tool.name,
     description: tool.description,
     inputSchema: tool.parameters as CodemodeJsonSchema,
+    name: tool.name,
     outputSchema:
       (tool.structuredOutputSchema as CodemodeJsonSchema | undefined) ?? TEXT_OUTPUT_SCHEMA,
   };
 }
 
-export function sampleOf(tool: ToolRegistration): string {
+function sampleOf(tool: typesModule.ToolRegistration): string {
   return renderToolSample(declarationOf(tool));
 }
 
-export const namespaceOf: Dual2<
+const namespaceOf: dualTypes.Dual2<
   string,
-  readonly CodemodeNamespace[],
-  CodemodeNamespace | undefined
+  readonly describeTypes.CodemodeNamespace[],
+  describeTypes.CodemodeNamespace | undefined
 > = Function.dual(
   2,
-  (name: string, namespaces: readonly CodemodeNamespace[]): CodemodeNamespace | undefined => {
-    let found: CodemodeNamespace | undefined;
+  (
+    name: string,
+    namespaces: readonly describeTypes.CodemodeNamespace[],
+  ): describeTypes.CodemodeNamespace | undefined => {
+    let found: describeTypes.CodemodeNamespace | undefined;
     for (const namespace of namespaces) {
       if (
         name.startsWith(namespace.prefix) &&
@@ -77,14 +76,17 @@ export const namespaceOf: Dual2<
   },
 );
 
-function renderToolSection(tool: ToolRegistration): string {
+function renderToolSection(tool: typesModule.ToolRegistration): string {
   const id = toCodemodeIdentifier(tool.name);
   const heading = id === tool.name ? `### \`${id}\`` : `### \`${id}\` (\`${tool.name}\`)`;
   return `${heading}\n${sampleOf(tool).trim()}`;
 }
 
 type CatalogEntry = { name: string; section: string; cost: number };
-type CatalogGroup = { namespace: CodemodeNamespace | undefined; entries: CatalogEntry[] };
+type CatalogGroup = {
+  namespace: describeTypes.CodemodeNamespace | undefined;
+  entries: CatalogEntry[];
+};
 
 function selectCatalog(groups: readonly CatalogGroup[], budget: number): Set<string> {
   const queues = groups.map((group) => [...group.entries].sort((a, b) => a.cost - b.cost));
@@ -112,20 +114,20 @@ function placeRound(
 }
 
 function catalogGroups(
-  tools: readonly ToolRegistration[],
-  namespaces: readonly CodemodeNamespace[],
+  tools: readonly typesModule.ToolRegistration[],
+  namespaces: readonly describeTypes.CodemodeNamespace[],
 ): CatalogGroup[] {
-  const groups = new Map<string, CatalogGroup>([["", { namespace: undefined, entries: [] }]]);
+  const groups = new Map<string, CatalogGroup>([["", { entries: [], namespace: undefined }]]);
   for (const tool of tools) {
     const namespace = namespaceOf(tool.name, namespaces);
     const key = namespace === undefined ? "" : `ns:${namespace.name}`;
-    const group = groups.get(key) ?? { namespace, entries: [] };
+    const group = groups.get(key) ?? { entries: [], namespace };
     groups.set(key, group);
     const section = renderToolSection(tool);
     group.entries.push({
+      cost: Math.ceil(section.length / CHARS_PER_TOKEN),
       name: tool.name,
       section,
-      cost: Math.ceil(section.length / CHARS_PER_TOKEN),
     });
   }
   return [...groups.values()].sort((a, b) =>
@@ -138,8 +140,8 @@ function catalogGroups(
 }
 
 const sectionCode = (
-  tools: readonly ToolRegistration[],
-  namespaces: readonly CodemodeNamespace[],
+  tools: readonly typesModule.ToolRegistration[],
+  namespaces: readonly describeTypes.CodemodeNamespace[],
   budget: number,
 ): string | undefined => {
   if (tools.length === 0) return undefined;
@@ -168,9 +170,20 @@ const sectionCode = (
   return toolSections.join("\n\n");
 };
 
-export const codemodeSection: Dual3<
-  readonly ToolRegistration[],
-  readonly CodemodeNamespace[],
+const codemodeSection: dualTypes.Dual3<
+  readonly typesModule.ToolRegistration[],
+  readonly describeTypes.CodemodeNamespace[],
   number,
   string | undefined
 > = Function.dual(3, sectionCode);
+
+const describe = {
+  DEFAULT_CODEMODE_INLINE_BUDGET,
+  codemodeDescription,
+  codemodeSection,
+  declarationOf,
+  namespaceOf,
+  sampleOf,
+};
+
+export default describe;

@@ -1,10 +1,12 @@
-import { defineDoc } from "@msa/durable";
+import durable from "@msa/durable";
 import { Effect } from "effect";
 import { describe, expect, it } from "vite-plus/test";
 
 import effectSupport from "./effect-support.ts";
 import sessionStatesCases from "./session-states-cases.ts";
 import sessionSupport from "./session-support.ts";
+
+const { defineDoc } = durable;
 
 const { awaited } = effectSupport;
 const { StateDoc, createState } = sessionStatesCases;

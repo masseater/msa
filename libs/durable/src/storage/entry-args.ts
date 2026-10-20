@@ -1,40 +1,52 @@
 import type { Context } from "@msa/chord";
 import { Function } from "effect";
 
-import { StorageRequestError } from "../errors.ts";
-import { idFromNumber } from "../ids.ts";
-import type { ConversationId, EntryId, Storage } from "../types.ts";
+import errors from "../errors.ts";
+import ids from "../ids.ts";
+import type typesModule from "../types.types.ts";
 
-type EntryResult = ReturnType<Storage["entry"]>;
+const { idFromNumber } = ids;
+const { StorageRequestError } = errors;
 
-export const forwardEntry: {
+type EntryResult = ReturnType<typesModule.Storage["entry"]>;
+
+const forwardEntry: {
   (
-    idOrConversationId: EntryId | ConversationId,
-    idOrContext: EntryId | Context,
+    idOrConversationId: typesModule.EntryId | typesModule.ConversationId,
+    idOrContext: typesModule.EntryId | Context,
     context: Context | undefined,
-  ): (store: Storage) => EntryResult;
+  ): (store: typesModule.Storage) => EntryResult;
   (
-    store: Storage,
-    idOrConversationId: EntryId | ConversationId,
-    idOrContext: EntryId | Context,
+    store: typesModule.Storage,
+    idOrConversationId: typesModule.EntryId | typesModule.ConversationId,
+    idOrContext: typesModule.EntryId | Context,
     context: Context | undefined,
   ): EntryResult;
 } = Function.dual(
   4,
   (
-    store: Storage,
-    idOrConversationId: EntryId | ConversationId,
-    idOrContext: EntryId | Context,
+    store: typesModule.Storage,
+    idOrConversationId: typesModule.EntryId | typesModule.ConversationId,
+    idOrContext: typesModule.EntryId | Context,
     context: Context | undefined,
   ): EntryResult => {
     if (context === undefined)
-      return store.entry(idFromNumber<EntryId>(idOrConversationId), idOrContext as Context);
+      return store.entry(
+        idFromNumber<typesModule.EntryId>(idOrConversationId),
+        idOrContext as Context,
+      );
     if (typeof idOrContext !== "number")
       throw new StorageRequestError("Storage.entry() requires an entry ID");
     return store.entry(
-      idFromNumber<ConversationId>(idOrConversationId),
-      idFromNumber<EntryId>(idOrContext),
+      idFromNumber<typesModule.ConversationId>(idOrConversationId),
+      idFromNumber<typesModule.EntryId>(idOrContext),
       context,
     );
   },
 );
+
+const entryArgs = {
+  forwardEntry,
+};
+
+export default entryArgs;

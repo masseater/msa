@@ -1,49 +1,42 @@
 import type { JsonValue } from "@msa/chord";
 import { Effect } from "effect";
 
-import type {
-  DocumentCreate,
-  DocumentId,
-  Storage,
-  StorageWrite,
-  SubmissionId,
-  TaskId,
-} from "../types.ts";
-import {
-  commit,
-  context,
-  createRoot,
-  documentIds,
-  type Expect,
-  io,
-  mint,
-  pendingTask,
-  type StorageCaseSpec,
-} from "./storage-conformance-support.ts";
+import type typesModule from "../types.types.ts";
+import storageConformanceSupport from "./storage-conformance-support.ts";
+import type storageConformanceSupportTypes from "./storage-conformance-support.types.ts";
+
+const { commit, context, createRoot, documentIds, io, mint, pendingTask } =
+  storageConformanceSupport;
 
 const first = "\ud800";
 const second = "\ud801";
 
-const created = (record: DocumentCreate, identity: string): StorageWrite => ({
-  type: "document.create",
+const created = (
+  record: typesModule.DocumentCreate,
+  identity: string,
+): typesModule.StorageWrite => ({
+  content: { kind: "base", value: { identity }, version: 1 },
   record,
-  content: { kind: "base", version: 1, value: { identity } },
+  type: "document.create",
 });
 
-const seedIdentities = Effect.fnUntraced(function* (storage: Storage) {
+const seedIdentities = Effect.fnUntraced(function* (storage: typesModule.Storage) {
   const rootId = yield* createRoot(storage);
-  const firstTaskId = yield* mint<TaskId<JsonValue>>(storage);
-  const secondTaskId = yield* mint<TaskId<JsonValue>>(storage);
-  const firstSubmissionId = yield* mint<SubmissionId>(storage);
-  const secondSubmissionId = yield* mint<SubmissionId>(storage);
-  const firstKindDocumentId = yield* mint<DocumentId>(storage);
-  const secondKindDocumentId = yield* mint<DocumentId>(storage);
-  const firstKeyDocumentId = yield* mint<DocumentId>(storage);
-  const secondKeyDocumentId = yield* mint<DocumentId>(storage);
+  const firstTaskId = yield* mint<typesModule.TaskId<JsonValue>>(storage);
+  const secondTaskId = yield* mint<typesModule.TaskId<JsonValue>>(storage);
+  const firstSubmissionId = yield* mint<typesModule.SubmissionId>(storage);
+  const secondSubmissionId = yield* mint<typesModule.SubmissionId>(storage);
+  const firstKindDocumentId = yield* mint<typesModule.DocumentId>(storage);
+  const secondKindDocumentId = yield* mint<typesModule.DocumentId>(storage);
+  const firstKeyDocumentId = yield* mint<typesModule.DocumentId>(storage);
+  const secondKeyDocumentId = yield* mint<typesModule.DocumentId>(storage);
   const session = { kind: "session" } as const;
-  const submission = (id: SubmissionId, requestId: string): StorageWrite => ({
+  const submission = (
+    id: typesModule.SubmissionId,
+    requestId: string,
+  ): typesModule.StorageWrite => ({
     type: "submission",
-    value: { id, conversationId: rootId, requestId, type: "input", status: "queued" },
+    value: { conversationId: rootId, id, requestId, status: "queued", type: "input" },
   });
   yield* commit(storage, [
     { type: "task", value: { ...pendingTask(firstTaskId, rootId), kind: first } },
@@ -52,27 +45,27 @@ const seedIdentities = Effect.fnUntraced(function* (storage: Storage) {
     submission(secondSubmissionId, second),
     created({ id: firstKindDocumentId, kind: first, scope: session }, "first kind"),
     created({ id: secondKindDocumentId, kind: second, scope: session }, "second kind"),
-    created({ id: firstKeyDocumentId, kind: "family", key: first, scope: session }, "first key"),
-    created({ id: secondKeyDocumentId, kind: "family", key: second, scope: session }, "second key"),
+    created({ id: firstKeyDocumentId, key: first, kind: "family", scope: session }, "first key"),
+    created({ id: secondKeyDocumentId, key: second, kind: "family", scope: session }, "second key"),
   ]);
   return {
-    rootId,
-    firstTaskId,
-    secondTaskId,
-    firstSubmissionId,
-    secondSubmissionId,
-    firstKindDocumentId,
-    secondKindDocumentId,
     firstKeyDocumentId,
+    firstKindDocumentId,
+    firstSubmissionId,
+    firstTaskId,
+    rootId,
     secondKeyDocumentId,
+    secondKindDocumentId,
+    secondSubmissionId,
+    secondTaskId,
   };
 });
 
 type Identities = Effect.Success<ReturnType<typeof seedIdentities>>;
 
 const expectRecordIdentities = Effect.fnUntraced(function* (
-  storage: Storage,
-  expect: Expect,
+  storage: typesModule.Storage,
+  expect: storageConformanceSupportTypes.Expect,
   ids: Identities,
 ) {
   const taskIds = (kind: string) =>
@@ -92,30 +85,30 @@ const expectRecordIdentities = Effect.fnUntraced(function* (
 });
 
 const expectDocumentIdentities = Effect.fnUntraced(function* (
-  storage: Storage,
-  expect: Expect,
+  storage: typesModule.Storage,
+  expect: storageConformanceSupportTypes.Expect,
   ids: Identities,
 ) {
   const session = { kind: "session" } as const;
-  const foundId = (address: Parameters<Storage["findDocument"]>[0]) =>
+  const foundId = (address: Parameters<typesModule.Storage["findDocument"]>[0]) =>
     Effect.map(
       io(() => storage.findDocument(address, "current", context)),
       (found) => found?.id,
     );
   expect(yield* foundId({ kind: first, scope: session })).toBe(ids.firstKindDocumentId);
   expect(yield* foundId({ kind: second, scope: session })).toBe(ids.secondKindDocumentId);
-  expect(yield* foundId({ kind: "family", key: first, scope: session })).toBe(
+  expect(yield* foundId({ key: first, kind: "family", scope: session })).toBe(
     ids.firstKeyDocumentId,
   );
-  expect(yield* foundId({ kind: "family", key: second, scope: session })).toBe(
+  expect(yield* foundId({ key: second, kind: "family", scope: session })).toBe(
     ids.secondKeyDocumentId,
   );
-  expect(yield* documentIds(storage, { scope: session, at: "current", kind: first })).toEqual([
+  expect(yield* documentIds(storage, { at: "current", kind: first, scope: session })).toEqual([
     ids.firstKindDocumentId,
   ]);
 });
 
-const losslessIdentities: StorageCaseSpec = {
+const losslessIdentities: storageConformanceSupportTypes.StorageCaseSpec = {
   name: "keeps indexed string identities lossless",
   test: (storage, expect) =>
     Effect.gen(function* () {
@@ -125,4 +118,12 @@ const losslessIdentities: StorageCaseSpec = {
     }),
 };
 
-export const identityCases: readonly StorageCaseSpec[] = [losslessIdentities];
+const identityCases: readonly storageConformanceSupportTypes.StorageCaseSpec[] = [
+  losslessIdentities,
+];
+
+const storageConformanceIdentities = {
+  identityCases,
+};
+
+export default storageConformanceIdentities;

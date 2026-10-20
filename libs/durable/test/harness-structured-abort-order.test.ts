@@ -1,4 +1,4 @@
-import { type Harness, type TaskId } from "@msa/durable";
+import type durableTypes from "@msa/durable/index.types";
 import { Effect } from "effect";
 import { afterEach, describe, expect, it } from "vite-plus/test";
 
@@ -42,8 +42,12 @@ afterEach(() =>
   ),
 );
 
-function chain(harness: () => Harness, name: string, child: string): { id?: TaskId } {
-  const found: { id?: TaskId } = {};
+function chain(
+  harness: () => durableTypes.Harness,
+  name: string,
+  child: string,
+): { id?: durableTypes.TaskId } {
+  const found: { id?: durableTypes.TaskId } = {};
   script(name, {
     abort: (runtime, ctx) =>
       Effect.runPromise(
@@ -127,7 +131,7 @@ const reportsAbortMarked = Effect.gen(function* () {
   const runPromise = Effect.runPromiseWith(yield* Effect.context<never>());
 
   const { harness, root } = yield* openNodes();
-  let child: TaskId | undefined;
+  let child: durableTypes.TaskId | undefined;
   script("child", {
     abort: (runtime, ctx) =>
       runPromise(

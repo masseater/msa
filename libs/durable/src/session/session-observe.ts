@@ -2,26 +2,22 @@ import { withoutAbortSignal } from "@msa/chord/context";
 import { replicatedState } from "@msa/chord/state";
 import { Effect, Function } from "effect";
 
-import type { Dual3 } from "../dual.ts";
-import type { DocumentCommitChange, DocumentState, DocumentWatch, JsonObject } from "../types.ts";
-import {
-  CommittedStateSource,
-  CommittedWatch,
-  type ObservedDocumentValue,
-  RETIREMENT_OPERATIONS,
-} from "./observation.ts";
-import { pinDocument } from "./session-documents.ts";
-import {
-  type AnyDocToken,
-  checked,
-  loadResolved,
-  type Resolved,
-  resolveRead,
-} from "./session-reads.ts";
-import { addListener, assertUsable, enqueueHealthy, type SessionState } from "./session-state.ts";
-import type { LoadedDocument } from "./transaction-types.ts";
+import type typesModule from "../types.types.ts";
+import observation from "./observation.ts";
+import type observationTypes from "./observation.types.ts";
+import sessionDocuments from "./session-documents.ts";
+import type sessionObserveTypes from "./session-observe.types.ts";
+import sessionReads from "./session-reads.ts";
+import sessionState from "./session-state.ts";
 
-type DocumentChange = Extract<DocumentCommitChange, { readonly type: "document" }>;
+const { CommittedStateSource, CommittedWatch } = observation;
+const { addListener, assertUsable, enqueueHealthy } = sessionState;
+const { checked, loadResolved, resolveRead } = sessionReads;
+const { pinDocument } = sessionDocuments;
+
+type DocumentChange = Extract<typesModule.DocumentCommitChange, { readonly type: "document" }>;
+
+const RETIREMENT_OPERATIONS: DocumentChange["ops"] = [["r", null]];
 
 const observedOperations = (
   observed: { version: number },
@@ -33,16 +29,16 @@ const observedOperations = (
   return [["r", change.value]];
 };
 
-export const cancellationError = (signal: AbortSignal): Error =>
+const cancellationError = (signal: AbortSignal): Error =>
   signal.reason instanceof Error
     ? signal.reason
     : new DOMException("The operation was aborted", "AbortError");
 
-type Observer = CommittedStateSource | CommittedWatch;
+type Observer = observationTypes.CommittedStateSource | observationTypes.CommittedWatch;
 
 const followCommits = (
-  state: SessionState,
-  loaded: LoadedDocument,
+  state: sessionObserveTypes.SessionState,
+  loaded: sessionObserveTypes.LoadedDocument,
   observer: Observer,
   unpin: () => void,
 ): (() => void) => {
@@ -61,7 +57,7 @@ const followCommits = (
   });
 };
 
-const followClose = (state: SessionState, observer: Observer): (() => void) => {
+const followClose = (state: sessionObserveTypes.SessionState, observer: Observer): (() => void) => {
   assertUsable(state);
   const listener = (): void => observer.closeSession(state.failure);
   state.closeListeners.add(listener);
@@ -69,10 +65,10 @@ const followClose = (state: SessionState, observer: Observer): (() => void) => {
 };
 
 const attachDocument = <O extends Observer>(
-  state: SessionState,
-  read: Resolved,
-  loaded: LoadedDocument,
-  create: (value: JsonObject, detach: () => void) => O,
+  state: sessionObserveTypes.SessionState,
+  read: sessionObserveTypes.Resolved,
+  loaded: sessionObserveTypes.LoadedDocument,
+  create: (value: typesModule.JsonObject, detach: () => void) => O,
 ): { observer: O; detach: () => void } => {
   checked(read, loaded);
   let unsubscribeCommit = (): void => {};
@@ -92,21 +88,21 @@ const attachDocument = <O extends Observer>(
   }
   unsubscribeCommit = followCommits(state, loaded, observer, unpin);
   unsubscribeClose = followClose(state, observer);
-  return { observer, detach };
+  return { detach, observer };
 };
 
-export const documentStateOf: Dual3<
-  SessionState,
-  AnyDocToken,
+const documentStateOf: sessionObserveTypes.Dual3<
+  sessionObserveTypes.SessionState,
+  sessionObserveTypes.AnyDocToken,
   readonly unknown[],
-  Promise<DocumentState<JsonObject> | undefined>
+  Promise<typesModule.DocumentState<typesModule.JsonObject> | undefined>
 > = Function.dual(
   3,
   (
-    state: SessionState,
-    token: AnyDocToken,
+    state: sessionObserveTypes.SessionState,
+    token: sessionObserveTypes.AnyDocToken,
     args: readonly unknown[],
-  ): Promise<DocumentState<JsonObject> | undefined> => {
+  ): Promise<typesModule.DocumentState<typesModule.JsonObject> | undefined> => {
     try {
       assertUsable(state);
       const read = resolveRead(token, args);
@@ -117,13 +113,14 @@ export const documentStateOf: Dual3<
           state,
           read,
           loaded,
-          (value, release) => new CommittedStateSource<ObservedDocumentValue>(value, release),
+          (value, release) =>
+            new CommittedStateSource<observationTypes.ObservedDocumentValue>(value, release),
         );
         return yield* Effect.sync(
           () =>
             replicatedState(source, {
               onError: (error) => state.hooks.report(error),
-            }) as DocumentState<JsonObject>,
+            }) as typesModule.DocumentState<typesModule.JsonObject>,
         ).pipe(Effect.onError(() => Effect.sync(detach)));
       });
       return enqueueHealthy(state, attach());
@@ -134,8 +131,8 @@ export const documentStateOf: Dual3<
 );
 
 const attachWatch = (
-  state: SessionState,
-  read: Resolved,
+  state: sessionObserveTypes.SessionState,
+  read: sessionObserveTypes.Resolved,
   cancelled: () => AbortSignal | undefined,
 ) =>
   Effect.gen(function* () {
@@ -150,42 +147,56 @@ const attachWatch = (
       read,
       loaded,
       (value, release) =>
-        new CommittedWatch<ObservedDocumentValue>(value, release, (error) =>
+        new CommittedWatch<observationTypes.ObservedDocumentValue>(value, release, (error) =>
           state.hooks.report(error),
         ),
     ).observer;
   });
 
-export const watchDocument: Dual3<
-  SessionState,
-  AnyDocToken,
+const watchDocument: sessionObserveTypes.Dual3<
+  sessionObserveTypes.SessionState,
+  sessionObserveTypes.AnyDocToken,
   readonly unknown[],
-  Effect.Effect<DocumentWatch<JsonObject> | undefined>
-> = Function.dual(3, (state: SessionState, token: AnyDocToken, args: readonly unknown[]) =>
-  Effect.suspend(() => {
-    assertUsable(state);
-    const read = resolveRead(token, args);
-    const signal = read.context.abortSignal;
-    let aborted = signal?.aborted ?? false;
-    const markCancelled = (): void => {
-      aborted = true;
-    };
-    const cancelled = (): AbortSignal | undefined => (aborted ? signal : undefined);
-    signal?.addEventListener("abort", markCancelled, { once: true });
-    return Effect.gen(function* () {
-      const watch = yield* Effect.promise(() =>
-        enqueueHealthy(state, attachWatch(state, read, cancelled)),
+  Effect.Effect<typesModule.DocumentWatch<typesModule.JsonObject> | undefined>
+> = Function.dual(
+  3,
+  (
+    state: sessionObserveTypes.SessionState,
+    token: sessionObserveTypes.AnyDocToken,
+    args: readonly unknown[],
+  ) =>
+    Effect.suspend(() => {
+      assertUsable(state);
+      const read = resolveRead(token, args);
+      const signal = read.context.abortSignal;
+      let aborted = signal?.aborted ?? false;
+      const markCancelled = (): void => {
+        aborted = true;
+      };
+      const cancelled = (): AbortSignal | undefined => (aborted ? signal : undefined);
+      signal?.addEventListener("abort", markCancelled, { once: true });
+      return Effect.gen(function* () {
+        const watch = yield* Effect.promise(() =>
+          enqueueHealthy(state, attachWatch(state, read, cancelled)),
+        );
+        if (watch === undefined) return undefined;
+        const current = cancelled();
+        if (current !== undefined) {
+          watch.cancel();
+          throw cancellationError(current);
+        }
+        if (signal !== undefined) watch.observeCancellation(signal);
+        return watch as typesModule.DocumentWatch<typesModule.JsonObject>;
+      }).pipe(
+        Effect.ensuring(Effect.sync(() => signal?.removeEventListener("abort", markCancelled))),
       );
-      if (watch === undefined) return undefined;
-      const current = cancelled();
-      if (current !== undefined) {
-        watch.cancel();
-        throw cancellationError(current);
-      }
-      if (signal !== undefined) watch.observeCancellation(signal);
-      return watch as DocumentWatch<JsonObject>;
-    }).pipe(
-      Effect.ensuring(Effect.sync(() => signal?.removeEventListener("abort", markCancelled))),
-    );
-  }),
+    }),
 );
+
+const sessionObserve = {
+  cancellationError,
+  documentStateOf,
+  watchDocument,
+};
+
+export default sessionObserve;

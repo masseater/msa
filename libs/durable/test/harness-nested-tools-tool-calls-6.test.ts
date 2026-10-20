@@ -1,10 +1,14 @@
-import { LiveDoc, type NestedToolExecutionResult } from "@msa/durable";
+import durable from "@msa/durable";
+import type durableTypes from "@msa/durable/index.types";
 import { Effect } from "effect";
 import { afterEach, describe, expect, it } from "vite-plus/test";
 
-import { openNodeSqliteStorage } from "../src/storage/sqlite/node.ts";
+import node from "../src/storage/sqlite/node.ts";
 import harnessNestedToolsSupport from "./harness-nested-tools-support.ts";
 import support from "./support.ts";
+
+const { openNodeSqliteStorage } = node;
+const { LiveDoc } = durable;
 
 const { DONE, call, directories, echoTool, results, runOnce, text, tool, toolTasks } =
   harnessNestedToolsSupport;
@@ -79,7 +83,7 @@ const admitsOneNested = Effect.gen(function* () {
   const setup = chatSetup();
   const echo = echoTool();
   addTool(setup.registry, echo.registration);
-  let both: NestedToolExecutionResult[] = [];
+  let both: durableTypes.NestedToolExecutionResult[] = [];
   addTool(
     setup.registry,
     tool("batch", (_args, api, callContext) =>

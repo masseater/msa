@@ -1,88 +1,61 @@
-import { type Context, copyJson, type Draft, type JsonValue } from "@msa/chord";
+import { type Context, type Draft, type JsonValue, copyJson } from "@msa/chord";
 import { Effect } from "effect";
 
-import type { AnyDocToken } from "../documents.ts";
-import {
-  type ConversationDocFamilyToken,
-  type ConversationDocToken,
-  type ConversationId,
-  type ConversationOwnership,
-  type ConversationQuery,
-  type ConversationRecord,
-  type Cursor,
-  type DocumentCommitChange,
-  type Entry,
-  type EntryDraft,
-  type EntryId,
-  type EntryQuery,
-  type EntryRecord,
-  type JsonObject,
-  ROOT_CONVERSATION_ID,
-  type Seq,
-  type SessionDocFamilyToken,
-  type SessionDocToken,
-  type StorageWrite,
-  type SubmissionCreate,
-  type SubmissionId,
-  type SubmissionRecord,
-  type SubmissionSettlement,
-  type Task,
-  type TaskDocFamilyToken,
-  type TaskDocToken,
-  type TaskId,
-  type TaskOptions,
-  type TaskQuery,
-  type Tx,
-  type TypedEntry,
-  type TypedEntryDraft,
-} from "../types.ts";
-import { adoptPlans } from "./transaction-adopt.ts";
-import { settleFailure, settleSuccess } from "./transaction-assemble.ts";
-import { openDoc, retireDoc } from "./transaction-docs.ts";
-import {
+import types from "../types.ts";
+import type typesModule from "../types.types.ts";
+import transactionAdopt from "./transaction-adopt.ts";
+import transactionAssemble from "./transaction-assemble.ts";
+import transactionDocs from "./transaction-docs.ts";
+import transactionState from "./transaction-state.ts";
+import transactionWrites from "./transaction-writes.ts";
+import type transactionTypes from "./transaction.types.ts";
+
+const {
   abortChanges,
   committedTask,
   createTxState,
   readStorage,
   readTable,
-  stagedConversations,
-  stagedTasks,
   stageTableWrite,
   stageTask,
+  stagedConversations,
+  stagedTasks,
   writeTable,
-} from "./transaction-state.ts";
-import {
-  type AnyTaskRecord,
-  type TransactionHost,
-  type TransactionScope,
-  type TxState,
-} from "./transaction-types.ts";
-import {
-  appendEntry,
-  createSubmission,
-  createTask,
-  stageConversation,
-} from "./transaction-writes.ts";
+} = transactionState;
+const { ROOT_CONVERSATION_ID } = types;
+const { appendEntry, createSubmission, createTask, stageConversation } = transactionWrites;
+const { openDoc, retireDoc } = transactionDocs;
+const { settleFailure, settleSuccess } = transactionAssemble;
+const { adoptPlans } = transactionAdopt;
 
-export class Transaction implements Tx {
-  readonly #state: TxState;
+export default class Transaction implements typesModule.Tx {
+  readonly #state: transactionTypes.TxState;
 
-  constructor(host: TransactionHost, context: Context, scope: TransactionScope = {}) {
-    this.#state = createTxState({ self: this, host, context, scope });
+  constructor(
+    host: transactionTypes.TransactionHost,
+    context: Context,
+    scope: transactionTypes.TransactionScope = {},
+  ) {
+    this.#state = createTxState({ context, host, scope, self: this });
   }
 
-  conversation(id: ConversationId): Promise<ConversationRecord | undefined> {
+  conversation(
+    id: typesModule.ConversationId,
+  ): Promise<typesModule.ConversationRecord | undefined> {
     return readStorage(this.#state, "conversation", (storage, context) =>
       storage.conversation(id, context),
     );
   }
 
-  entry(id: EntryId): Promise<EntryRecord | undefined>;
-  entry<D extends JsonValue>(token: Entry<D>, id: EntryId): Promise<TypedEntry<D> | undefined>;
+  entry(id: typesModule.EntryId): Promise<typesModule.EntryRecord | undefined>;
+  entry<D extends JsonValue>(
+    token: typesModule.Entry<D>,
+    id: typesModule.EntryId,
+  ): Promise<typesModule.TypedEntry<D> | undefined>;
   entry(
-    first: EntryId | { readonly kind: string },
-    second?: EntryId,
-  ): Promise<EntryRecord | undefined> {
+    first: typesModule.EntryId | { readonly kind: string },
+    second?: typesModule.EntryId,
+  ): Promise<typesModule.EntryRecord | undefined> {
     const kind = typeof first === "number" ? undefined : first.kind;
     const id = typeof first === "number" ? first : second!;
     const { host, context } = this.#state;
@@ -94,170 +67,192 @@ export class Transaction implements Tx {
     );
   }
 
-  task(id: TaskId): Promise<AnyTaskRecord | undefined> {
+  task(id: typesModule.TaskId): Promise<transactionTypes.AnyTaskRecord | undefined> {
     const state = this.#state;
     return readTable(state, "task", () => committedTask(state, id));
   }
 
-  scanConversations(query: ConversationQuery, limit: number, cursor?: Cursor) {
+  scanConversations(
+    query: typesModule.ConversationQuery,
+    limit: number,
+    cursor?: typesModule.Cursor,
+  ) {
     return readStorage(this.#state, "scanConversations", (storage, context) =>
       storage.scanConversations(query, limit, cursor, context),
     );
   }
 
-  scanEntries(query: EntryQuery, limit: number, cursor?: Cursor) {
+  scanEntries(query: typesModule.EntryQuery, limit: number, cursor?: typesModule.Cursor) {
     return readStorage(this.#state, "scanEntries", (storage, context) =>
       storage.scanEntries(query, limit, cursor, context),
     );
   }
 
-  latestHeadMarker(conversationId: ConversationId) {
+  latestHeadMarker(conversationId: typesModule.ConversationId) {
     return readStorage(this.#state, "latestHeadMarker", (storage, context) =>
       storage.findLatestHeadMarker(conversationId, undefined, context),
     );
   }
 
-  scanTasks(query: TaskQuery, limit: number, cursor?: Cursor) {
+  scanTasks(query: typesModule.TaskQuery, limit: number, cursor?: typesModule.Cursor) {
     return readStorage(this.#state, "scanTasks", (storage, context) =>
       storage.scanTasks(query, limit, cursor, context),
     );
   }
 
-  submission(id: SubmissionId): Promise<SubmissionRecord | undefined> {
+  submission(id: typesModule.SubmissionId): Promise<typesModule.SubmissionRecord | undefined> {
     return readStorage(this.#state, "submission", (storage, context) =>
       storage.submission(id, context),
     );
   }
 
   submissionByRequest(
-    conversationId: ConversationId,
+    conversationId: typesModule.ConversationId,
     requestId: string,
-  ): Promise<SubmissionRecord | undefined> {
+  ): Promise<typesModule.SubmissionRecord | undefined> {
     return readStorage(this.#state, "submissionByRequest", (storage, context) =>
       storage.submissionByRequest(conversationId, requestId, context),
     );
   }
 
   createConversation(options: {
-    readonly ownership: ConversationOwnership;
-  }): Promise<ConversationRecord> {
+    readonly ownership: typesModule.ConversationOwnership;
+  }): Promise<typesModule.ConversationRecord> {
     return this.#stageConversation(undefined, options.ownership, undefined);
   }
 
-  createRootConversation(): Promise<ConversationRecord> {
+  createRootConversation(): Promise<typesModule.ConversationRecord> {
     return this.#stageConversation(undefined, { kind: "ownerless" }, ROOT_CONVERSATION_ID);
   }
 
   forkConversation(
-    parentConversationId: ConversationId,
-    at: EntryId,
-    options: { readonly ownership: ConversationOwnership },
-  ): Promise<ConversationRecord> {
-    const parent = { conversationId: parentConversationId, at };
+    parentConversationId: typesModule.ConversationId,
+    at: typesModule.EntryId,
+    options: { readonly ownership: typesModule.ConversationOwnership },
+  ): Promise<typesModule.ConversationRecord> {
+    const parent = { at, conversationId: parentConversationId };
     return this.#stageConversation(parent, options.ownership, undefined);
   }
 
-  appendEntry(conversationId: ConversationId, value: EntryDraft): Promise<EntryRecord>;
-  appendEntry<D extends JsonValue>(
-    token: Entry<D>,
-    conversationId: ConversationId,
-    value: TypedEntryDraft<NoInfer<D>>,
-  ): Promise<TypedEntry<D>>;
   appendEntry(
-    first: ConversationId | { readonly kind: string },
-    second: ConversationId | EntryDraft,
+    conversationId: typesModule.ConversationId,
+    value: typesModule.EntryDraft,
+  ): Promise<typesModule.EntryRecord>;
+  appendEntry<D extends JsonValue>(
+    token: typesModule.Entry<D>,
+    conversationId: typesModule.ConversationId,
+    value: typesModule.TypedEntryDraft<NoInfer<D>>,
+  ): Promise<typesModule.TypedEntry<D>>;
+  appendEntry(
+    first: typesModule.ConversationId | { readonly kind: string },
+    second: typesModule.ConversationId | typesModule.EntryDraft,
     third?: object,
-  ): Promise<EntryRecord> {
+  ): Promise<typesModule.EntryRecord> {
     const [conversationId, value] =
       typeof first === "number"
-        ? [first, second as EntryDraft]
-        : [second as ConversationId, { ...third, kind: first.kind } as EntryDraft];
+        ? [first, second as typesModule.EntryDraft]
+        : [
+            second as typesModule.ConversationId,
+            { ...third, kind: first.kind } as typesModule.EntryDraft,
+          ];
     return writeTable(this.#state, appendEntry(this.#state, conversationId, value));
   }
 
   createTask<I, S extends { phase: string }, R, H extends object>(
-    task: Task<I, S, R, H>,
+    task: typesModule.Task<I, S, R, H>,
     input: I,
-    options: TaskOptions,
-  ): Promise<TaskId<R>> {
+    options: typesModule.TaskOptions,
+  ): Promise<typesModule.TaskId<R>> {
     return writeTable(this.#state, createTask(this.#state, task, input, options));
   }
 
-  createSubmission(create: SubmissionCreate): Promise<SubmissionRecord> {
+  createSubmission(create: typesModule.SubmissionCreate): Promise<typesModule.SubmissionRecord> {
     return writeTable(this.#state, createSubmission(this.#state, create));
   }
 
-  settleSubmission(id: SubmissionId, settlement: SubmissionSettlement): void {
+  settleSubmission(
+    id: typesModule.SubmissionId,
+    settlement: typesModule.SubmissionSettlement,
+  ): void {
     stageTableWrite(this.#state);
-    const change = copyJson(settlement) as SubmissionSettlement;
-    this.#state.submissionChanges.push({ id, change });
+    const change = copyJson(settlement) as typesModule.SubmissionSettlement;
+    this.#state.submissionChanges.push({ change, id });
   }
 
-  placeSubmission(id: SubmissionId, entry: EntryId): void {
+  placeSubmission(id: typesModule.SubmissionId, entry: typesModule.EntryId): void {
     stageTableWrite(this.#state);
-    this.#state.submissionChanges.push({ id, change: { status: "placed", entry } });
+    this.#state.submissionChanges.push({ change: { entry, status: "placed" }, id });
   }
 
-  setTask(value: AnyTaskRecord): void {
+  setTask(value: transactionTypes.AnyTaskRecord): void {
     stageTask(this.#state, value);
   }
 
-  stagedTasks(): AnyTaskRecord[] {
+  stagedTasks(): transactionTypes.AnyTaskRecord[] {
     return stagedTasks(this.#state);
   }
 
-  stagedConversations(): ConversationRecord[] {
+  stagedConversations(): typesModule.ConversationRecord[] {
     return stagedConversations(this.#state);
   }
 
-  doc<T extends JsonObject>(token: SessionDocToken<T>): Promise<Draft<T>>;
-  doc<T extends JsonObject>(
-    token: ConversationDocToken<T>,
-    conversationId: ConversationId,
+  doc<T extends typesModule.JsonObject>(token: typesModule.SessionDocToken<T>): Promise<Draft<T>>;
+  doc<T extends typesModule.JsonObject>(
+    token: typesModule.ConversationDocToken<T>,
+    conversationId: typesModule.ConversationId,
   ): Promise<Draft<T>>;
-  doc<T extends JsonObject>(token: TaskDocToken<T>, taskId: TaskId): Promise<Draft<T>>;
-  doc<T extends JsonObject, I extends JsonValue>(
-    token: SessionDocFamilyToken<T, I>,
+  doc<T extends typesModule.JsonObject>(
+    token: typesModule.TaskDocToken<T>,
+    taskId: typesModule.TaskId,
+  ): Promise<Draft<T>>;
+  doc<T extends typesModule.JsonObject, I extends JsonValue>(
+    token: typesModule.SessionDocFamilyToken<T, I>,
     key: string,
     seed: I,
   ): Promise<Draft<T>>;
-  doc<T extends JsonObject, I extends JsonValue>(
-    token: ConversationDocFamilyToken<T, I>,
-    conversationId: ConversationId,
+  doc<T extends typesModule.JsonObject, I extends JsonValue>(
+    token: typesModule.ConversationDocFamilyToken<T, I>,
+    conversationId: typesModule.ConversationId,
     key: string,
     seed: I,
   ): Promise<Draft<T>>;
-  doc<T extends JsonObject, I extends JsonValue>(
-    token: TaskDocFamilyToken<T, I>,
-    taskId: TaskId,
+  doc<T extends typesModule.JsonObject, I extends JsonValue>(
+    token: typesModule.TaskDocFamilyToken<T, I>,
+    taskId: typesModule.TaskId,
     key: string,
     seed: I,
   ): Promise<Draft<T>>;
-  doc(token: AnyDocToken, ...args: readonly unknown[]): Promise<Draft<JsonObject>> {
+  doc(
+    token: transactionTypes.AnyDocToken,
+    ...args: readonly unknown[]
+  ): Promise<Draft<typesModule.JsonObject>> {
     return openDoc(this.#state, token, args);
   }
 
-  retireDoc<T extends JsonObject>(token: SessionDocToken<T>): Promise<void>;
-  retireDoc<T extends JsonObject>(
-    token: ConversationDocToken<T>,
-    conversationId: ConversationId,
+  retireDoc<T extends typesModule.JsonObject>(token: typesModule.SessionDocToken<T>): Promise<void>;
+  retireDoc<T extends typesModule.JsonObject>(
+    token: typesModule.ConversationDocToken<T>,
+    conversationId: typesModule.ConversationId,
   ): Promise<void>;
-  retireDoc<T extends JsonObject>(token: TaskDocToken<T>, taskId: TaskId): Promise<void>;
-  retireDoc<T extends JsonObject, I extends JsonValue>(
-    token: SessionDocFamilyToken<T, I>,
+  retireDoc<T extends typesModule.JsonObject>(
+    token: typesModule.TaskDocToken<T>,
+    taskId: typesModule.TaskId,
+  ): Promise<void>;
+  retireDoc<T extends typesModule.JsonObject, I extends JsonValue>(
+    token: typesModule.SessionDocFamilyToken<T, I>,
     key: string,
   ): Promise<void>;
-  retireDoc<T extends JsonObject, I extends JsonValue>(
-    token: ConversationDocFamilyToken<T, I>,
-    conversationId: ConversationId,
+  retireDoc<T extends typesModule.JsonObject, I extends JsonValue>(
+    token: typesModule.ConversationDocFamilyToken<T, I>,
+    conversationId: typesModule.ConversationId,
     key: string,
   ): Promise<void>;
-  retireDoc<T extends JsonObject, I extends JsonValue>(
-    token: TaskDocFamilyToken<T, I>,
-    taskId: TaskId,
+  retireDoc<T extends typesModule.JsonObject, I extends JsonValue>(
+    token: typesModule.TaskDocFamilyToken<T, I>,
+    taskId: typesModule.TaskId,
     key: string,
   ): Promise<void>;
-  retireDoc(token: AnyDocToken, ...args: readonly unknown[]): Promise<void> {
+  retireDoc(token: transactionTypes.AnyDocToken, ...args: readonly unknown[]): Promise<void> {
     return retireDoc(this.#state, token, args);
   }
 
@@ -265,7 +260,7 @@ export class Transaction implements Tx {
     return settleFailure(this.#state);
   }
 
-  settleSuccess(): Effect.Effect<readonly StorageWrite[]> {
+  settleSuccess(): Effect.Effect<readonly typesModule.StorageWrite[]> {
     return settleSuccess(this.#state);
   }
 
@@ -273,15 +268,15 @@ export class Transaction implements Tx {
     abortChanges(this.#state);
   }
 
-  adopt(seq: Seq): DocumentCommitChange[] {
+  adopt(seq: typesModule.Seq): typesModule.DocumentCommitChange[] {
     return adoptPlans(this.#state, seq);
   }
 
   #stageConversation(
-    parent: ConversationRecord["parent"],
-    ownership: ConversationOwnership,
-    reservedId: ConversationId | undefined,
-  ): Promise<ConversationRecord> {
+    parent: typesModule.ConversationRecord["parent"],
+    ownership: typesModule.ConversationOwnership,
+    reservedId: typesModule.ConversationId | undefined,
+  ): Promise<typesModule.ConversationRecord> {
     const state = this.#state;
     return writeTable(state, stageConversation(state, parent, ownership, reservedId));
   }

@@ -1,21 +1,37 @@
 import type { JsonValue } from "@msa/chord";
 
-import type { CompactionReason, ToolDiagnostic } from "./harness/types.ts";
-import type { Entry, EntryRecord, TypedEntry } from "./types.ts";
+import type typesModuleModule from "./harness/types.types.ts";
+import type typesModule from "./types.types.ts";
 
-export function defineEntry<D extends JsonValue = never>(kind: string): Entry<D> {
+function defineEntry<D extends JsonValue = never>(kind: string): typesModule.Entry<D> {
   if (typeof kind !== "string" || kind.length === 0)
     throw new TypeError("Entry kind must be a non-empty string");
   return {
-    kind,
-    is: (entry: EntryRecord | undefined): entry is TypedEntry<D> =>
+    is: (entry: typesModule.EntryRecord | undefined): entry is typesModule.TypedEntry<D> =>
       entry !== undefined && entry.kind === kind,
+    kind,
   };
 }
 
-export const UserEntry = defineEntry("msa.user");
-export const AssistantEntry = defineEntry("msa.assistant");
-export const SystemEntry = defineEntry("msa.system");
-export const ToolResultEntry = defineEntry<{ diagnostics: ToolDiagnostic[] }>("msa.tool-result");
-export const ResetEntry = defineEntry("msa.reset");
-export const CompactionEntry = defineEntry<{ reason: CompactionReason }>("msa.compaction");
+const UserEntry = defineEntry("msa.user");
+const AssistantEntry = defineEntry("msa.assistant");
+const SystemEntry = defineEntry("msa.system");
+const ToolResultEntry = defineEntry<{ diagnostics: typesModuleModule.ToolDiagnostic[] }>(
+  "msa.tool-result",
+);
+const ResetEntry = defineEntry("msa.reset");
+const CompactionEntry = defineEntry<{ reason: typesModuleModule.CompactionReason }>(
+  "msa.compaction",
+);
+
+const entries = {
+  AssistantEntry,
+  CompactionEntry,
+  ResetEntry,
+  SystemEntry,
+  ToolResultEntry,
+  UserEntry,
+  defineEntry,
+};
+
+export default entries;

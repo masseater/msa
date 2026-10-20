@@ -1,9 +1,11 @@
-import { defineExtension, defineTask } from "@msa/durable";
+import durable from "@msa/durable";
 import { Effect } from "effect";
 import { afterEach, describe, expect, it } from "vite-plus/test";
 
 import harnessNestedToolsRestartSupport from "./harness-nested-tools-restart-support.ts";
 import support from "./support.ts";
+
+const { defineExtension, defineTask } = durable;
 
 const { directories, open, spawnThroughBatch, sqlitePath } = harnessNestedToolsRestartSupport;
 const { aborted, awaited, chatSetup, context, deferred, eventually, removeDir } = support;

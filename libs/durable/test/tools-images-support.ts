@@ -1,14 +1,18 @@
 import type { Model } from "@msa/ai";
 import { BACKGROUND_CONTEXT as context } from "@msa/chord/context";
-import type { ToolDiagnostic, ToolExecutionApi, ToolExecutionResult } from "@msa/durable";
+import type durableTypes from "@msa/durable/index.types";
 import { Effect, Random } from "effect";
 import { expect } from "vite-plus/test";
 
-import { getOrThrow } from "../src/env/index.ts";
-import { NodeExecutionEnv } from "../src/env/node.ts";
-import type { ImageProcessor } from "../src/tools/image.ts";
-import { createReadTool } from "../src/tools/read.ts";
+import envModule from "../src/env/index.ts";
+import node from "../src/env/node.ts";
+import readModule from "../src/tools/read.ts";
 import support from "./support.ts";
+import type toolsImagesSupportTypes from "./tools-images-support.types.ts";
+
+const { createReadTool } = readModule;
+const { NodeExecutionEnv } = node;
+const { getOrThrow } = envModule;
 
 const { awaited, makeDirectory, removeDir, tempPath, writeTempFile } = support;
 
@@ -24,14 +28,14 @@ const read = Effect.fn("read")(function* (
   name: string,
   bytes: Uint8Array,
   options: {
-    readonly images?: ImageProcessor;
+    readonly images?: toolsImagesSupportTypes.ImageProcessor;
     readonly input?: readonly string[];
     readonly resize?: {
       readonly maxWidth?: number;
       readonly maxHeight?: number;
       readonly maxBytes?: number;
     };
-    readonly env?: NodeExecutionEnv;
+    readonly env?: toolsImagesSupportTypes.NodeExecutionEnv;
     readonly tool?: ReturnType<typeof createReadTool>;
   } = {},
 ) {
@@ -49,16 +53,18 @@ const read = Effect.fn("read")(function* (
     env: options.env ?? new NodeExecutionEnv({ cwd: directory }),
     models: { getModel: () => model },
     output: () => {},
-  } as unknown as ToolExecutionApi;
+  } as unknown as durableTypes.ToolExecutionApi;
   const tool = options.tool ?? createReadTool(options);
   return yield* awaited(tool.execute({ path: name }, api, context));
 });
 
-function messages(result: ToolExecutionResult): string[] {
-  return (result.diagnostics ?? []).map((diagnostic: ToolDiagnostic) => diagnostic.message);
+function messages(result: durableTypes.ToolExecutionResult): string[] {
+  return (result.diagnostics ?? []).map(
+    (diagnostic: durableTypes.ToolDiagnostic) => diagnostic.message,
+  );
 }
 
-function onlyImage(result: ToolExecutionResult): { data: string; mimeType: string } {
+function onlyImage(result: durableTypes.ToolExecutionResult): { data: string; mimeType: string } {
   expect(result.output).toHaveLength(1);
   return (result.output as { data: string; mimeType: string }[])[0]!;
 }

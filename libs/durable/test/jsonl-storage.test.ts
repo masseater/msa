@@ -2,12 +2,15 @@ import type { JsonValue } from "@msa/chord";
 import { Effect } from "effect";
 import { afterEach, describe, expect, it } from "vite-plus/test";
 
-import { openNodeJsonlStorage } from "../src/storage/jsonl/node.ts";
-import type { DocumentId, EntryId, TaskId } from "../src/types.ts";
-import { ROOT_CONVERSATION_ID } from "../src/types.ts";
+import node from "../src/storage/jsonl/node.ts";
+import types from "../src/types.ts";
+import type typesModule from "../src/types.types.ts";
 import effectSupport from "./effect-support.ts";
 import jsonlStorageSupport from "./jsonl-storage-support.ts";
 import platformSupport from "./platform-support.ts";
+
+const { openNodeJsonlStorage } = node;
+const { ROOT_CONVERSATION_ID } = types;
 
 const { awaited } = effectSupport;
 const {
@@ -41,8 +44,8 @@ const sidecarsBeforeReclamation = Effect.fn("sidecarsBeforeReclamation")(functio
   const directory = yield* tempDirectory();
   const storage = yield* openStorage(directory);
   yield* createRoot(storage);
-  const taskId = yield* awaited(storage.mintId<TaskId<JsonValue>>());
-  const documentId = yield* awaited(storage.mintId<DocumentId>());
+  const taskId = yield* awaited(storage.mintId<typesModule.TaskId<JsonValue>>());
+  const documentId = yield* awaited(storage.mintId<typesModule.DocumentId>());
   yield* awaited(storage.commit([{ type: "task", value: pendingTask(taskId) }], context));
   yield* awaited(
     storage.commit(
@@ -128,7 +131,7 @@ const ordersMultipleLive = Effect.gen(function* () {
   const directory = yield* tempDirectory();
   const storage = yield* openStorage(directory);
   yield* createRoot(storage);
-  const taskId = yield* awaited(storage.mintId<TaskId<JsonValue>>());
+  const taskId = yield* awaited(storage.mintId<typesModule.TaskId<JsonValue>>());
   yield* awaited(
     storage.commit(
       [
@@ -149,7 +152,7 @@ const removesCompletePlus = Effect.gen(function* () {
   const env = new InstrumentedEnv({ cwd: directory });
   const storage = yield* openStorage(directory, env);
   yield* createRoot(storage);
-  const taskId = yield* awaited(storage.mintId<TaskId<JsonValue>>());
+  const taskId = yield* awaited(storage.mintId<typesModule.TaskId<JsonValue>>());
   env.fail({ call: 1, mode: "short", operation: "append" });
   yield* awaited(
     expect(
@@ -185,7 +188,7 @@ const serializesCompleteCandidate = Effect.gen(function* () {
   const storage = yield* openStorage(directory, env);
   yield* createRoot(storage);
   env.clear();
-  const id = yield* awaited(storage.mintId<EntryId>());
+  const id = yield* awaited(storage.mintId<typesModule.EntryId>());
   yield* awaited(
     expect(
       storage.commit(

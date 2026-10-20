@@ -1,7 +1,7 @@
-import type handleModule from "./handle.ts";
+import type HandleClass from "./handle.ts";
 
 declare namespace handleTypes {
-  type Handle = (typeof handleModule.Handle)["prototype"];
+  type Handle = HandleClass;
 }
 
 export type { handleTypes as default };

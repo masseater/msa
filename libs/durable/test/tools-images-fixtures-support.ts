@@ -1,12 +1,14 @@
 import { createRequire } from "node:module";
 
-import { createNodePhotonImages } from "@msa/durable/images/node";
+import node from "@msa/durable/images/node";
 import { PhotonImage, initSync } from "@silvia-odwyer/photon/photon_rs.js";
 import { Effect } from "effect";
 import { dual } from "effect/Function";
 
 import effectSupport from "./effect-support.ts";
 import platformSupport from "./platform-support.ts";
+
+const { createNodePhotonImages } = node;
 
 const { awaited } = effectSupport;
 const { readBytes } = platformSupport;

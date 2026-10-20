@@ -1,16 +1,11 @@
 import * as Diff from "diff";
 import { Function } from "effect";
 
-import type { Dual2, Dual3, Dual4 } from "../dual.ts";
-import type { ToolExecutionResult } from "../harness/types.ts";
+import type dualTypes from "../dual.ts";
+import type typesModule from "../harness/types.types.ts";
+import type editDisplayTypes from "./edit-display.types.ts";
 
 const CONTEXT_LINES = 4;
-
-export type EditToolDetails = {
-  diff: string;
-  patch: string;
-  firstChangedLine?: number;
-};
 
 const generateUnifiedPatch = (path: string, oldContent: string, newContent: string): string =>
   Diff.createTwoFilesPatch(path, path, oldContent, newContent, undefined, undefined, {
@@ -91,7 +86,7 @@ const partLines = (value: string): string[] => {
 function generateDiffString(oldContent: string, newContent: string): DisplayDiff {
   const parts = Diff.diffLines(oldContent, newContent);
   const lineCount = Math.max(oldContent.split("\n").length, newContent.split("\n").length);
-  const cursor: Cursor = { oldLine: 1, newLine: 1, width: String(lineCount).length, output: [] };
+  const cursor: Cursor = { newLine: 1, oldLine: 1, output: [], width: String(lineCount).length };
   let lastWasChange = false;
   let firstChangedLine: number | undefined;
   for (const [index, part] of parts.entries()) {
@@ -109,12 +104,12 @@ function generateDiffString(oldContent: string, newContent: string): DisplayDiff
   return { diff: cursor.output.join("\n"), firstChangedLine };
 }
 
-export const editedResult: Dual4<
+const editedResult: dualTypes.Dual4<
   string,
   number,
   string,
   string,
-  ToolExecutionResult<EditToolDetails>
+  typesModule.ToolExecutionResult<editDisplayTypes.EditToolDetails>
 > = Function.dual(
   4,
   (
@@ -122,9 +117,9 @@ export const editedResult: Dual4<
     editCount: number,
     base: string,
     next: string,
-  ): ToolExecutionResult<EditToolDetails> => {
+  ): typesModule.ToolExecutionResult<editDisplayTypes.EditToolDetails> => {
     const diffResult = generateDiffString(base, next);
-    const details: EditToolDetails = {
+    const details: editDisplayTypes.EditToolDetails = {
       diff: diffResult.diff,
       patch: generateUnifiedPatch(path, base, next),
       ...(diffResult.firstChangedLine === undefined
@@ -132,13 +127,13 @@ export const editedResult: Dual4<
         : { firstChangedLine: diffResult.firstChangedLine }),
     };
     return {
-      output: [{ type: "text", text: `Successfully replaced ${editCount} block(s) in ${path}.` }],
       details,
+      output: [{ text: `Successfully replaced ${editCount} block(s) in ${path}.`, type: "text" }],
     };
   },
 );
 
-export const notFoundError: Dual3<string, number, number, Error> = Function.dual(
+const notFoundError: dualTypes.Dual3<string, number, number, Error> = Function.dual(
   3,
   (path: string, editIndex: number, totalEdits: number): Error =>
     new Error(
@@ -148,7 +143,7 @@ export const notFoundError: Dual3<string, number, number, Error> = Function.dual
     ),
 );
 
-export const duplicateError: Dual4<string, number, number, number, Error> = Function.dual(
+const duplicateError: dualTypes.Dual4<string, number, number, number, Error> = Function.dual(
   4,
   (path: string, editIndex: number, totalEdits: number, occurrences: number): Error =>
     new Error(
@@ -158,7 +153,7 @@ export const duplicateError: Dual4<string, number, number, number, Error> = Func
     ),
 );
 
-export const emptyOldTextError: Dual3<string, number, number, Error> = Function.dual(
+const emptyOldTextError: dualTypes.Dual3<string, number, number, Error> = Function.dual(
   3,
   (path: string, editIndex: number, totalEdits: number): Error =>
     new Error(
@@ -168,7 +163,7 @@ export const emptyOldTextError: Dual3<string, number, number, Error> = Function.
     ),
 );
 
-export const noChangeError: Dual2<string, number, Error> = Function.dual(
+const noChangeError: dualTypes.Dual2<string, number, Error> = Function.dual(
   2,
   (path: string, totalEdits: number): Error =>
     new Error(
@@ -177,3 +172,13 @@ export const noChangeError: Dual2<string, number, Error> = Function.dual(
         : `No changes made to ${path}. The replacements produced identical content.`,
     ),
 );
+
+const editDisplay = {
+  duplicateError,
+  editedResult,
+  emptyOldTextError,
+  noChangeError,
+  notFoundError,
+};
+
+export default editDisplay;

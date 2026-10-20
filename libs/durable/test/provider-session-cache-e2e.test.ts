@@ -1,19 +1,18 @@
 import { type AssistantMessage, type Model, type Models, normalizeContext, uuidv7 } from "@msa/ai";
 import { builtinModels } from "@msa/ai/providers/all";
-import {
-  AssistantEntry,
-  type Conversation,
-  type ConversationId,
-  type EntryId,
-  ProviderDoc,
-} from "@msa/durable";
-import { Harness, createRegistry } from "@msa/durable/harness";
-import { MemoryStorage } from "@msa/durable/storage/memory";
+import durable from "@msa/durable";
+import harnessModule from "@msa/durable/harness";
+import memory from "@msa/durable/storage/memory";
 import { Effect } from "effect";
 import { describe, expect, inject, it } from "vite-plus/test";
 
 import { streamSimple as streamSimpleOpenAICodexResponses } from "../../ai/src/api/openai-codex-responses.ts";
+import type providerSessionCacheE2eTestTypes from "./provider-session-cache-e2e.test.types.ts";
 import support from "./support.ts";
+
+const { AssistantEntry, ProviderDoc } = durable;
+const { Harness, createRegistry } = harnessModule;
+const { MemoryStorage } = memory;
 
 const { awaited, context } = support;
 
@@ -32,7 +31,11 @@ function cacheProbe(nonce: string): string {
   return lines.join("\n");
 }
 
-function assistant(harness: Harness, conversationId: ConversationId, answer: EntryId) {
+function assistant(
+  harness: providerSessionCacheE2eTestTypes.Harness,
+  conversationId: providerSessionCacheE2eTestTypes.ConversationId,
+  answer: providerSessionCacheE2eTestTypes.EntryId,
+) {
   return harness
     .commit((tx) => tx.entry(AssistantEntry, answer), context)
     .then((record) => {
@@ -43,8 +46,8 @@ function assistant(harness: Harness, conversationId: ConversationId, answer: Ent
 }
 
 const promptUntilCached = Effect.fn("promptUntilCached")(function* (
-  harness: Harness,
-  root: Conversation,
+  harness: providerSessionCacheE2eTestTypes.Harness,
+  root: providerSessionCacheE2eTestTypes.Conversation,
 ) {
   const usages: AssistantMessage["usage"][] = [];
   const hits: { firstHit?: number } = {};

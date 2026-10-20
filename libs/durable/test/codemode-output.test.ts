@@ -1,5 +1,5 @@
 import { Type } from "@msa/ai";
-import { defineTool } from "@msa/durable";
+import durable from "@msa/durable";
 import { Effect } from "effect";
 import { afterEach, describe, expect, it } from "vite-plus/test";
 
@@ -7,6 +7,8 @@ import codemodeChatSupport from "./codemode-chat-support.ts";
 import codemodeSupport from "./codemode-support.ts";
 import harnessSupport from "./harness-support.ts";
 import platformSupport from "./platform-support.ts";
+
+const { defineTool } = durable;
 
 const { codemodeChat } = codemodeChatSupport;
 const { removeDirectories, runScript } = codemodeSupport;

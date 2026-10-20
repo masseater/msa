@@ -2,12 +2,16 @@ import { BACKGROUND_CONTEXT, withAbortSignal } from "@msa/chord/context";
 import { Effect } from "effect";
 import { afterEach, describe, expect, it } from "vite-plus/test";
 
-import { currentTimeMillis } from "../src/clock.ts";
-import { getOrThrow } from "../src/env/index.ts";
-import { NodeExecutionEnv } from "../src/env/node.ts";
+import clockModule from "../src/clock.ts";
+import envModule from "../src/env/index.ts";
+import node from "../src/env/node.ts";
 import effectSupport from "./effect-support.ts";
 import envNodeSupport from "./env-node-support.ts";
 import platformSupport from "./platform-support.ts";
+
+const { currentTimeMillis } = clockModule;
+const { NodeExecutionEnv } = node;
+const { getOrThrow } = envModule;
 
 const { abortController, awaited } = effectSupport;
 const { cleanUpEnvTests, collectShellOutput, createTempDir, toBashSingleQuotedArg } =

@@ -1,6 +1,6 @@
 import { type FauxResponseStep } from "@msa/ai";
-import { type Conversation, type Harness } from "@msa/durable";
-import { MemoryStorage } from "@msa/durable/storage/memory";
+import type durableTypes from "@msa/durable/index.types";
+import memory from "@msa/durable/storage/memory";
 import { Effect } from "effect";
 import { describe, expect, it } from "vite-plus/test";
 
@@ -8,11 +8,16 @@ import harnessViewCases from "./harness-view-cases.ts";
 import harnessViewSupport from "./harness-view-support.ts";
 import support from "./support.ts";
 
+const { MemoryStorage } = memory;
+
 const { MOUNTED, answer } = harnessViewCases;
 const { committed, drained, fresh, record, replay } = harnessViewSupport;
 const { aborted, allEntries, awaited, chatSetup, context, deferred, openChat, waitFor } = support;
 
-function touches(harness: Harness, conversation: Conversation): { count: number } {
+function touches(
+  harness: durableTypes.Harness,
+  conversation: durableTypes.Conversation,
+): { count: number } {
   const counter = { count: 0 };
   harness.subscribeCommits((publication) => {
     const touched = publication.changes.some(

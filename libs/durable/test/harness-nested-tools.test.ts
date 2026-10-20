@@ -1,16 +1,14 @@
-import {
-  LiveDoc,
-  NestedCallDoc,
-  type NestedToolExecutionResult,
-  type TaskId,
-  type ToolTaskInput,
-} from "@msa/durable";
-import { MemoryStorage } from "@msa/durable/storage/memory";
+import durable from "@msa/durable";
+import type durableTypes from "@msa/durable/index.types";
+import memory from "@msa/durable/storage/memory";
 import { Effect } from "effect";
 import { afterEach, describe, expect, it } from "vite-plus/test";
 
 import harnessNestedToolsSupport from "./harness-nested-tools-support.ts";
 import support from "./support.ts";
+
+const { MemoryStorage } = memory;
+const { LiveDoc, NestedCallDoc } = durable;
 
 const { DONE, call, directories, echoTool, results, runOnce, text, tool, toolTasks } =
   harnessNestedToolsSupport;
@@ -89,7 +87,7 @@ const rejectsNestedCallStep1 = Effect.gen(function* () {
 const rejectsNestedCall = Effect.gen(function* () {
   const { runPromise, setup, started, marked } = yield* rejectsNestedCallStep1;
   let rejected: unknown;
-  let caller: TaskId | undefined;
+  let caller: durableTypes.TaskId | undefined;
   addTool(
     setup.registry,
     tool("late", (_args, api) =>
@@ -147,7 +145,7 @@ const runsNestedCall = Effect.gen(function* () {
   const setup = chatSetup();
   const echo = echoTool();
   addTool(setup.registry, echo.registration);
-  let nested: NestedToolExecutionResult | undefined;
+  let nested: durableTypes.NestedToolExecutionResult | undefined;
   addTool(
     setup.registry,
     tool("batch", (_args, api, callContext) =>
@@ -175,7 +173,7 @@ const runsNestedCall = Effect.gen(function* () {
   expect(results(entries)[0]).not.toHaveProperty("nestedCalls");
   expect(parent!.input).toMatchObject({ callId: "c1", kind: "model" });
   expect(child!.owner).toBe(parent!.id);
-  expect(child!.input as ToolTaskInput).toEqual({
+  expect(child!.input as durableTypes.ToolTaskInput).toEqual({
     call: { arguments: { text: "a" }, id: "c1/1", name: "echo", type: "toolCall" },
     key: "1",
     kind: "nested",
@@ -200,7 +198,7 @@ const givesEachNested = Effect.gen(function* () {
   const runPromise = Effect.runPromiseWith(yield* Effect.context<never>());
 
   const setup = chatSetup();
-  const seen: { taskId: TaskId; callId: string }[] = [];
+  const seen: { taskId: durableTypes.TaskId; callId: string }[] = [];
   addTool(
     setup.registry,
     tool("who", (_args, api) => {

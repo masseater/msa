@@ -2,32 +2,23 @@ import { type AssistantMessage, Type } from "@msa/ai";
 import type { Context } from "@msa/chord";
 import { Effect } from "effect";
 
-import {
-  AssistantEntry,
-  type ConversationId,
-  type EntryId,
-  LiveDoc,
-  type TaskId,
-  type ToolExecutionApi,
-  type Tx,
-  configure,
-  defineDoc,
-  defineExtension,
-  defineTask,
-  defineTool,
-} from "../../src/index.ts";
+import durable from "../../src/index.ts";
+import type durableTypes from "../../src/index.types.ts";
 import effectSupport from "../effect-support.ts";
+
+const { AssistantEntry, LiveDoc, configure, defineDoc, defineExtension, defineTask, defineTool } =
+  durable;
 
 const { awaited } = effectSupport;
 
 type Subagent = {
-  conversationId: ConversationId;
-  reported: EntryId[];
+  conversationId: durableTypes.ConversationId;
+  reported: durableTypes.EntryId[];
 };
 
 const Subagents = defineDoc<{
   agents: Record<string, Subagent>;
-  reporters: Record<string, TaskId>;
+  reporters: Record<string, durableTypes.TaskId>;
 }>({
   fork: "initial",
   history: "latest",
@@ -54,7 +45,7 @@ const Anchor = defineTask<null, { phase: "done" }, null>({
 
 type ReporterInput = {
   name: string;
-  conversationId: ConversationId;
+  conversationId: durableTypes.ConversationId;
   message: string;
   followUp: boolean;
 };
@@ -146,7 +137,7 @@ function textOf(message: AssistantMessage | undefined): string {
 }
 
 const statusLines = Effect.fn("statusLines")(function* (
-  api: ToolExecutionApi,
+  api: durableTypes.ToolExecutionApi,
   agents: Readonly<Record<string, Subagent>>,
   name: string | undefined,
   callContext: Context,
@@ -164,8 +155,8 @@ const statusLines = Effect.fn("statusLines")(function* (
 });
 
 function startReporter(
-  tx: Tx,
-  api: ToolExecutionApi,
+  tx: durableTypes.Tx,
+  api: durableTypes.ToolExecutionApi,
   {
     action,
     name,
@@ -213,7 +204,7 @@ const subagentTool = defineTool({
     Effect.runPromise(
       Effect.gen(function* () {
         const { action, name, message, followUp } = args;
-        const reply = (text: string, conversationId?: ConversationId) => ({
+        const reply = (text: string, conversationId?: durableTypes.ConversationId) => ({
           content: [{ text, type: "text" as const }],
           ...(conversationId === undefined || name === undefined
             ? {}

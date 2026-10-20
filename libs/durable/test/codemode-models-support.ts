@@ -9,15 +9,19 @@ import {
   fauxToolCall,
 } from "@msa/ai";
 import { CodemodeSandbox } from "@msa/codemode";
-import { ToolResultEntry, UsageDoc } from "@msa/durable";
-import { MemoryStorage } from "@msa/durable/storage/memory";
+import durable from "@msa/durable";
+import memory from "@msa/durable/storage/memory";
 import { Effect } from "effect";
 import { dual } from "effect/Function";
 
-import { createCodemodeExtension } from "../src/codemode/codemode.ts";
-import type { ExecutionEnv } from "../src/env/index.ts";
+import codemode from "../src/codemode/codemode.ts";
+import type envTypes from "../src/env/index.types.ts";
 import type codemodeModelsSupportTypes from "./codemode-models-support.types.ts";
 import support from "./support.ts";
+
+const { createCodemodeExtension } = codemode;
+const { MemoryStorage } = memory;
+const { ToolResultEntry, UsageDoc } = durable;
 
 const { allEntries, awaited, chatSetup, context, deferred, openChat } = support;
 
@@ -157,7 +161,7 @@ function modelsChat() {
 const run = Effect.fn("run")(function* (
   chat: ReturnType<typeof modelsChat>,
   code: string,
-  env?: ExecutionEnv,
+  env?: envTypes.ExecutionEnv,
 ) {
   chat.setup.faux.setResponses([
     fauxAssistantMessage([fauxToolCall("codemode", { code }, { id: "s1" })], {

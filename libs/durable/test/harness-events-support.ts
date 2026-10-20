@@ -1,6 +1,6 @@
 import { type AssistantMessage } from "@msa/ai";
-import type { AgentEvent, Conversation, Harness, MessageChange } from "@msa/durable";
-import { watchEvents } from "@msa/durable/harness";
+import harnessModule from "@msa/durable/harness";
+import type durableTypes from "@msa/durable/index.types";
 import { Effect } from "effect";
 import { dual } from "effect/Function";
 
@@ -8,12 +8,17 @@ import effectSupport from "./effect-support.ts";
 import type harnessEventsSupportTypes from "./harness-events-support.types.ts";
 import sessionSupport from "./session-support.ts";
 
+const { watchEvents } = harnessModule;
+
 const { awaited } = effectSupport;
 const { context } = sessionSupport;
 
-const listen = Effect.fn("listen")(function* (harness: Harness, conversation: Conversation) {
+const listen = Effect.fn("listen")(function* (
+  harness: durableTypes.Harness,
+  conversation: durableTypes.Conversation,
+) {
   const stream = yield* awaited(watchEvents(harness, conversation.id, context));
-  const batches: AgentEvent[][] = [];
+  const batches: durableTypes.AgentEvent[][] = [];
   stream.start((events) => {
     batches.push([...events]);
 
@@ -28,7 +33,7 @@ const drained = Effect.fn("drained")(function* () {
 
 function applyChangesImpl(
   message: AssistantMessage,
-  changes: readonly MessageChange[],
+  changes: readonly durableTypes.MessageChange[],
 ): AssistantMessage {
   let next = structuredClone(message);
   for (const change of changes) {
@@ -58,11 +63,11 @@ function applyChangesImpl(
 
 const applyChanges: {
   (
-    changes: readonly MessageChange[],
+    changes: readonly durableTypes.MessageChange[],
   ): (message: AssistantMessage) => ReturnType<typeof applyChangesImpl>;
   (
     message: AssistantMessage,
-    changes: readonly MessageChange[],
+    changes: readonly durableTypes.MessageChange[],
   ): ReturnType<typeof applyChangesImpl>;
 } = dual(2, applyChangesImpl);
 

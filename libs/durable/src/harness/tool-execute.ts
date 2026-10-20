@@ -2,19 +2,19 @@ import type { Context } from "@msa/chord";
 import type { OutputLimits } from "@msa/chord/output";
 import { Cause, Effect, Exit } from "effect";
 
-import { errorMessage } from "../errors.ts";
-import { DEFAULT_MAX_BYTES, DEFAULT_MAX_LINES } from "../truncate.ts";
-import { toolDiagnostic } from "./tool-result.ts";
-import { COMPLETED, type Ending, type ToolRuntime } from "./tool-types.ts";
-import type {
-  JsonObject,
-  ToolExecutionApi,
-  ToolExecutionResult,
-  ToolHookCall,
-  ToolRegistration,
-} from "./types.ts";
+import errors from "../errors.ts";
+import truncate from "../truncate.ts";
+import toolResult from "./tool-result.ts";
+import toolTypes from "./tool-types.ts";
+import type toolTypesModule from "./tool-types.types.ts";
+import type typesModule from "./types.types.ts";
 
-export const limitsOf = (tool: ToolRegistration): OutputLimits => ({
+const { DEFAULT_MAX_BYTES, DEFAULT_MAX_LINES } = truncate;
+const { toolDiagnostic } = toolResult;
+const { errorMessage } = errors;
+const { COMPLETED } = toolTypes;
+
+const limitsOf = (tool: typesModule.ToolRegistration): OutputLimits => ({
   maxBytes: tool.outputLimits?.maxBytes ?? DEFAULT_MAX_BYTES,
   maxLines: tool.outputLimits?.maxLines ?? DEFAULT_MAX_LINES,
   retain: tool.outputLimits?.retain ?? "head",
@@ -23,17 +23,17 @@ export const limitsOf = (tool: ToolRegistration): OutputLimits => ({
 type Executed =
   | {
       readonly kind: "settled";
-      readonly result: ToolExecutionResult;
-      readonly ending: Ending;
+      readonly result: typesModule.ToolExecutionResult;
+      readonly ending: toolTypesModule.Ending;
       readonly durationMs: number | undefined;
     }
   | { readonly kind: "aborted"; readonly error: unknown };
 
 const invoke = Effect.fnUntraced(function* (
-  runtime: ToolRuntime,
-  tool: ToolRegistration,
-  args: JsonObject,
-  api: Omit<ToolExecutionApi, "env">,
+  runtime: toolTypesModule.ToolRuntime,
+  tool: typesModule.ToolRegistration,
+  args: typesModule.JsonObject,
+  api: Omit<typesModule.ToolExecutionApi, "env">,
   context: Context,
 ) {
   const env = yield* Effect.promise(() => runtime.env(context));
@@ -41,30 +41,30 @@ const invoke = Effect.fnUntraced(function* (
   const exit = yield* Effect.exit(
     Effect.promise(() => Promise.resolve(tool.execute(args, { ...api, env }, context))),
   );
-  return { exit, durationMs: Math.round(performance.now() - startedAt) };
+  return { durationMs: Math.round(performance.now() - startedAt), exit };
 });
 
 const failed = (
-  runtime: ToolRuntime,
-  call: ToolHookCall,
+  runtime: toolTypesModule.ToolRuntime,
+  call: typesModule.ToolHookCall,
   error: unknown,
   durationMs: number | undefined,
 ): Executed =>
   runtime.signal.aborted
-    ? { kind: "aborted", error }
+    ? { error, kind: "aborted" }
     : {
-        kind: "settled",
-        result: { isError: true, diagnostics: [toolDiagnostic("tool_error", errorMessage(error))] },
-        ending: { status: "failed", message: `Tool ${call.name} threw` },
         durationMs,
+        ending: { message: `Tool ${call.name} threw`, status: "failed" },
+        kind: "settled",
+        result: { diagnostics: [toolDiagnostic("tool_error", errorMessage(error))], isError: true },
       };
 
-export const execute = Effect.fnUntraced(function* (
-  runtime: ToolRuntime,
-  call: ToolHookCall,
-  tool: ToolRegistration,
-  args: JsonObject,
-  api: Omit<ToolExecutionApi, "env">,
+const execute = Effect.fnUntraced(function* (
+  runtime: toolTypesModule.ToolRuntime,
+  call: typesModule.ToolHookCall,
+  tool: typesModule.ToolRegistration,
+  args: typesModule.JsonObject,
+  api: Omit<typesModule.ToolExecutionApi, "env">,
   context: Context,
 ) {
   const invoked = yield* Effect.exit(invoke(runtime, tool, args, api, context));
@@ -72,9 +72,16 @@ export const execute = Effect.fnUntraced(function* (
   const { exit, durationMs } = invoked.value;
   if (Exit.isFailure(exit)) return failed(runtime, call, Cause.squash(exit.cause), durationMs);
   return yield* Effect.succeed<Executed>({
+    durationMs,
+    ending: COMPLETED,
     kind: "settled",
     result: exit.value,
-    ending: COMPLETED,
-    durationMs,
   });
 });
+
+const toolExecute = {
+  execute,
+  limitsOf,
+};
+
+export default toolExecute;

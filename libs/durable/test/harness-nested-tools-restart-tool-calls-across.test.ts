@@ -1,15 +1,14 @@
-import {
-  type Harness,
-  LiveDoc,
-  type NestedToolExecutionResult,
-  type ToolTaskInput,
-} from "@msa/durable";
-import { ToolTask } from "@msa/durable/harness";
+import durable from "@msa/durable";
+import harnessModule from "@msa/durable/harness";
+import type durableTypes from "@msa/durable/index.types";
 import { Effect } from "effect";
 import { afterEach, describe, expect, it } from "vite-plus/test";
 
 import harnessNestedToolsRestartSupport from "./harness-nested-tools-restart-support.ts";
 import support from "./support.ts";
+
+const { ToolTask } = harnessModule;
+const { LiveDoc } = durable;
 
 const { DONE, call, codes, directories, nestedTasks, open, restartDuring, sqlitePath, tool } =
   harnessNestedToolsRestartSupport;
@@ -24,13 +23,13 @@ afterEach(() =>
   ),
 );
 
-function slotsAtCallerEnd(harness: Harness) {
+function slotsAtCallerEnd(harness: durableTypes.Harness) {
   const seen: { slots?: number } = {};
   harness.subscribeCommits((publication) => {
     for (const change of publication.changes) {
       if (change.type !== "task" || change.value.kind !== ToolTask.definition.name) continue;
       if (
-        (change.value.input as ToolTaskInput).kind !== "model" ||
+        (change.value.input as durableTypes.ToolTaskInput).kind !== "model" ||
         change.value.state.status !== "terminal"
       )
         continue;
@@ -132,7 +131,7 @@ const letsReplaySafe = Effect.gen(function* () {
   const runPromise = Effect.runPromiseWith(yield* Effect.context<never>());
 
   const { path, setup, runs, running } = yield* replaySafeBatch();
-  let toolResults: NestedToolExecutionResult[] = [];
+  let toolResults: durableTypes.NestedToolExecutionResult[] = [];
   addTool(
     setup.registry,
     tool(

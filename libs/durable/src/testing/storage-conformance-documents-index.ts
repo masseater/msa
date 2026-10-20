@@ -1,55 +1,44 @@
 import type { JsonValue } from "@msa/chord";
 import { Effect } from "effect";
 
-import type {
-  DocumentCreate,
-  DocumentId,
-  JsonObject,
-  Storage,
-  StorageWrite,
-  TaskId,
-} from "../types.ts";
-import {
-  commit,
-  context,
-  createRoot,
-  documentAt,
-  documentIds,
-  type Expect,
-  io,
-  mint,
-  pendingTask,
-  type StorageCaseSpec,
-} from "./storage-conformance-support.ts";
+import type typesModule from "../types.types.ts";
+import storageConformanceSupport from "./storage-conformance-support.ts";
+import type storageConformanceSupportTypes from "./storage-conformance-support.types.ts";
 
-const created = (record: DocumentCreate, value: JsonObject): StorageWrite => ({
-  type: "document.create",
+const { commit, context, createRoot, documentAt, documentIds, io, mint, pendingTask } =
+  storageConformanceSupport;
+
+const created = (
+  record: typesModule.DocumentCreate,
+  value: typesModule.JsonObject,
+): typesModule.StorageWrite => ({
+  content: { kind: "base", value, version: 1 },
   record,
-  content: { kind: "base", version: 1, value },
+  type: "document.create",
 });
 
-const versionTransitions: StorageCaseSpec = {
+const versionTransitions: storageConformanceSupportTypes.StorageCaseSpec = {
   name: "uses bases for version transitions and rejects historical reads of current-only documents",
   test: (storage, expect) =>
     Effect.gen(function* () {
       yield* createRoot(storage);
-      const id = yield* mint<DocumentId>(storage);
+      const id = yield* mint<typesModule.DocumentId>(storage);
       yield* commit(storage, [
         created({ id, kind: "session.settings", scope: { kind: "session" } }, { count: 1 }),
       ]);
       yield* commit(storage, [
         {
-          type: "document.change",
+          content: { kind: "delta", ops: [["s", ["count"], 2]], version: 1 },
           id,
-          content: { kind: "delta", version: 1, ops: [["s", ["count"], 2]] },
+          type: "document.change",
         },
       ]);
       const migratedAt = yield* commit(storage, [
-        { type: "document.change", id, content: { kind: "base", version: 2, value: { count: 3 } } },
+        { content: { kind: "base", value: { count: 3 }, version: 2 }, id, type: "document.change" },
       ]);
       expect(yield* documentAt(storage, id, "current")).toMatchObject({
-        version: 2,
         value: { count: 3 },
+        version: 2,
       });
       yield* expect(storage.document(id, migratedAt, context)).rejects.toThrow(
         "does not retain historical content",
@@ -58,84 +47,87 @@ const versionTransitions: StorageCaseSpec = {
         storage.commit(
           [
             {
-              type: "document.change",
+              content: { kind: "delta", ops: [["s", ["count"], 4]], version: 1 },
               id,
-              content: { kind: "delta", version: 1, ops: [["s", ["count"], 4]] },
+              type: "document.change",
             },
           ],
           context,
         ),
       ).rejects.toThrow("version transition requires a base");
       expect((yield* documentAt(storage, id, "current"))?.value).toEqual({ count: 3 });
-      yield* commit(storage, [{ type: "document.retire", id }]);
+      yield* commit(storage, [{ id, type: "document.retire" }]);
       expect(yield* documentAt(storage, id, "current")).toBeUndefined();
     }),
 };
 
-const seedAddresses = Effect.fnUntraced(function* (storage: Storage) {
+const seedAddresses = Effect.fnUntraced(function* (storage: typesModule.Storage) {
   const rootId = yield* createRoot(storage);
-  const firstId = yield* mint<DocumentId>(storage);
-  const secondId = yield* mint<DocumentId>(storage);
-  const conversationId = yield* mint<DocumentId>(storage);
-  const taskId = yield* mint<TaskId<JsonValue>>(storage);
-  const taskSingletonId = yield* mint<DocumentId>(storage);
-  const taskFamilyId = yield* mint<DocumentId>(storage);
-  const taskOtherKindId = yield* mint<DocumentId>(storage);
+  const firstId = yield* mint<typesModule.DocumentId>(storage);
+  const secondId = yield* mint<typesModule.DocumentId>(storage);
+  const conversationId = yield* mint<typesModule.DocumentId>(storage);
+  const taskId = yield* mint<typesModule.TaskId<JsonValue>>(storage);
+  const taskSingletonId = yield* mint<typesModule.DocumentId>(storage);
+  const taskFamilyId = yield* mint<typesModule.DocumentId>(storage);
+  const taskOtherKindId = yield* mint<typesModule.DocumentId>(storage);
   const session = { kind: "session" } as const;
   const task = { kind: "task", taskId } as const;
   const createdAt = yield* commit(storage, [
     { type: "task", value: pendingTask(taskId, rootId) },
-    created({ id: firstId, kind: "cache", scope: session, key: "__proto__" }, { owner: "first" }),
+    created({ id: firstId, key: "__proto__", kind: "cache", scope: session }, { owner: "first" }),
     created(
-      { id: secondId, kind: "cache", scope: session, key: "constructor" },
+      { id: secondId, key: "constructor", kind: "cache", scope: session },
       { owner: "second" },
     ),
     created(
       {
-        id: conversationId,
-        kind: "cache",
-        scope: { kind: "conversation", conversationId: rootId },
-        history: "latest",
         fork: "current",
+        history: "latest",
+        id: conversationId,
         key: "__proto__",
+        kind: "cache",
+        scope: { conversationId: rootId, kind: "conversation" },
       },
       { owner: "conversation" },
     ),
     created({ id: taskSingletonId, kind: "task.cache", scope: task }, { owner: "singleton" }),
     created(
-      { id: taskFamilyId, kind: "task.cache", scope: task, key: "member" },
+      { id: taskFamilyId, key: "member", kind: "task.cache", scope: task },
       { owner: "family" },
     ),
     created({ id: taskOtherKindId, kind: "task.other", scope: task }, { owner: "other" }),
   ]);
   return {
-    rootId,
-    firstId,
-    secondId,
     conversationId,
+    createdAt,
+    firstId,
+    rootId,
+    secondId,
+    taskFamilyId,
     taskId,
     taskSingletonId,
-    taskFamilyId,
-    createdAt,
   };
 });
 
 type Addresses = Effect.Success<ReturnType<typeof seedAddresses>>;
 
-const foundId = (storage: Storage, address: Parameters<Storage["findDocument"]>[0]) =>
+const foundId = (
+  storage: typesModule.Storage,
+  address: Parameters<typesModule.Storage["findDocument"]>[0],
+) =>
   Effect.map(
     io(() => storage.findDocument(address, "current", context)),
     (found) => found?.id,
   );
 
 const expectSessionAddresses = Effect.fnUntraced(function* (
-  storage: Storage,
-  expect: Expect,
+  storage: typesModule.Storage,
+  expect: storageConformanceSupportTypes.Expect,
   { rootId, firstId, secondId, conversationId }: Addresses,
 ) {
-  const session = { scope: { kind: "session" }, at: "current" } as const;
+  const session = { at: "current", scope: { kind: "session" } } as const;
   expect(
-    yield* foundId(storage, { kind: "cache", scope: { kind: "session" }, key: "__proto__" }),
+    yield* foundId(storage, { key: "__proto__", kind: "cache", scope: { kind: "session" } }),
   ).toBe(firstId);
   expect(
     (yield* io(() => storage.scanDocuments(session, 1, undefined, context))).items,
@@ -143,21 +135,21 @@ const expectSessionAddresses = Effect.fnUntraced(function* (
   const first = yield* io(() => storage.scanDocuments(session, 1, undefined, context));
   const second = yield* io(() => storage.scanDocuments(session, 1, first.next, context));
   expect([...first.items, ...second.items].map(({ id }) => id)).toEqual([firstId, secondId]);
-  const conversation = { kind: "conversation", conversationId: rootId } as const;
-  expect(yield* documentIds(storage, { scope: conversation, at: "current" })).toEqual([
+  const conversation = { conversationId: rootId, kind: "conversation" } as const;
+  expect(yield* documentIds(storage, { at: "current", scope: conversation })).toEqual([
     conversationId,
   ]);
 });
 
 const expectTaskAddresses = Effect.fnUntraced(function* (
-  storage: Storage,
-  expect: Expect,
+  storage: typesModule.Storage,
+  expect: storageConformanceSupportTypes.Expect,
   { taskId, taskSingletonId, taskFamilyId, createdAt }: Addresses,
 ) {
   const scope = { kind: "task", taskId } as const;
   expect(yield* foundId(storage, { kind: "task.cache", scope })).toBe(taskSingletonId);
-  expect(yield* foundId(storage, { kind: "task.cache", scope, key: "member" })).toBe(taskFamilyId);
-  expect(yield* documentIds(storage, { scope, at: "current", kind: "task.cache" })).toEqual([
+  expect(yield* foundId(storage, { key: "member", kind: "task.cache", scope })).toBe(taskFamilyId);
+  expect(yield* documentIds(storage, { at: "current", kind: "task.cache", scope })).toEqual([
     taskSingletonId,
     taskFamilyId,
   ]);
@@ -166,7 +158,7 @@ const expectTaskAddresses = Effect.fnUntraced(function* (
   );
 });
 
-const logicalAddresses: StorageCaseSpec = {
+const logicalAddresses: storageConformanceSupportTypes.StorageCaseSpec = {
   name: "indexes logical addresses and exact-scope scans independently",
   test: (storage, expect) =>
     Effect.gen(function* () {
@@ -176,7 +168,13 @@ const logicalAddresses: StorageCaseSpec = {
     }),
 };
 
-export const documentsIndexCases: readonly StorageCaseSpec[] = [
+const documentsIndexCases: readonly storageConformanceSupportTypes.StorageCaseSpec[] = [
   versionTransitions,
   logicalAddresses,
 ];
+
+const storageConformanceDocumentsIndex = {
+  documentsIndexCases,
+};
+
+export default storageConformanceDocumentsIndex;

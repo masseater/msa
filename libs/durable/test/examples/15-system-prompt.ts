@@ -4,17 +4,16 @@ import { fauxAssistantMessage, fauxProvider } from "@msa/ai/providers/faux";
 import { BACKGROUND_CONTEXT } from "@msa/chord/context";
 import { Console, Effect } from "effect";
 
-import { NodeExecutionEnv } from "../../src/env/node.ts";
-import { Harness, createRegistry } from "../../src/harness/index.ts";
-import {
-  type Conversation,
-  SystemEntry,
-  defineExtension,
-  section,
-  wrapSection,
-} from "../../src/index.ts";
-import { MemoryStorage } from "../../src/storage/memory.ts";
+import type durableTypes from "../../src/index.types.ts";
+import durableKit from "../durable-kit.ts";
 import effectSupport from "../effect-support.ts";
+
+const { durable, envNode: node, harness: harnessModule, memory } = durableKit;
+
+const { SystemEntry, defineExtension, section, wrapSection } = durable;
+const { Harness, createRegistry } = harnessModule;
+const { NodeExecutionEnv } = node;
+const { MemoryStorage } = memory;
 
 const { awaited } = effectSupport;
 
@@ -82,7 +81,9 @@ const mainStep1 = Effect.gen(function* () {
     ),
   );
 
-  const systemEntries = Effect.fn("systemEntries")(function* (conversation: Conversation) {
+  const systemEntries = Effect.fn("systemEntries")(function* (
+    conversation: durableTypes.Conversation,
+  ) {
     const page = yield* awaited(conversation.entries({}, 20, undefined, context));
     return [...page.items]
       .reverse()

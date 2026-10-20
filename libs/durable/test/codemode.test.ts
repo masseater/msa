@@ -1,11 +1,15 @@
 import { Effect } from "effect";
 import { afterEach, describe, expect, it } from "vite-plus/test";
 
-import { type CodemodeGlobal, CodemodeJournalDoc } from "../src/codemode/codemode.ts";
-import { openNodeSqliteStorage } from "../src/storage/sqlite/node.ts";
+import codemode from "../src/codemode/codemode.ts";
+import type codemodeTypes from "../src/codemode/codemode.types.ts";
+import node from "../src/storage/sqlite/node.ts";
 import codemodeChatSupport from "./codemode-chat-support.ts";
 import codemodeSupport from "./codemode-support.ts";
 import support from "./support.ts";
+
+const { openNodeSqliteStorage } = node;
+const { CodemodeJournalDoc } = codemode;
 
 const { codemodeChat } = codemodeChatSupport;
 const { DONE, directories, nestedCount, restart, resultText, script, sqlitePath } = codemodeSupport;
@@ -89,7 +93,9 @@ const replaysResultsOrder = Effect.gen(function* () {
 
 const journalsGlobalsTheir = Effect.gen(function* () {
   let counter = 0;
-  const globals: CodemodeGlobal[] = [{ execute: () => Promise.resolve(++counter), name: "next" }];
+  const globals: codemodeTypes.CodemodeGlobal[] = [
+    { execute: () => Promise.resolve(++counter), name: "next" },
+  ];
   const chat = codemodeChat({ globals: globals });
   const { harness, result } = yield* restart(
     chat,

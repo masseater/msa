@@ -1,9 +1,12 @@
-import { type EntryId, defineDoc } from "@msa/durable";
+import durable from "@msa/durable";
+import type durableTypes from "@msa/durable/index.types";
 import { Effect } from "effect";
 import { describe, expect, it } from "vite-plus/test";
 
 import effectSupport from "./effect-support.ts";
 import sessionSupport from "./session-support.ts";
+
+const { defineDoc } = durable;
 
 const { awaited } = effectSupport;
 const { context, createConversation, openTestSession } = sessionSupport;
@@ -37,7 +40,7 @@ function storedVersionDocs() {
     scope: "conversation",
     version: 1,
   });
-  const fork: { migrations: number; forkAt?: EntryId } = { migrations: 0 };
+  const fork: { migrations: number; forkAt?: durableTypes.EntryId } = { migrations: 0 };
   const V3 = defineDoc<{ count: number; migrated: boolean }>({
     fork: "asOf",
     history: "rewindable",

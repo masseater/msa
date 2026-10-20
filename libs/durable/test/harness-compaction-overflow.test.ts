@@ -1,12 +1,16 @@
 import { Type, fauxAssistantMessage, fauxToolCall } from "@msa/ai";
-import { type CompactionResult, type TaskId, defineTool } from "@msa/durable";
-import { CompactionTask } from "@msa/durable/harness";
+import durable from "@msa/durable";
+import harnessModule from "@msa/durable/harness";
+import type durableTypes from "@msa/durable/index.types";
 import { Effect } from "effect";
 import { afterEach, describe, expect, it } from "vite-plus/test";
 
 import harnessCompactionSupport from "./harness-compaction-support.ts";
 import type harnessCompactionSupportTypes from "./harness-compaction-support.types.ts";
 import support from "./support.ts";
+
+const { defineTool } = durable;
+const { CompactionTask } = harnessModule;
 
 const {
   BACKGROUND,
@@ -172,6 +176,16 @@ describe("overflow compaction", () => {
   }
 });
 
+const submissionStatus = (
+  chat: { harness: durableTypes.Harness },
+  queued: durableTypes.TaskOutcome<durableTypes.CompactionResult>,
+) =>
+  Effect.gen(function* () {
+    const submissionId = queued.status === "completed" ? queued.result.submissionId! : undefined;
+    const submission = yield* awaited(chat.harness.submission(submissionId!, context));
+    return (yield* awaited(submission!.status(context))).status;
+  });
+
 describe("compaction estimates and interactions", () => {
   for (const clock of ["real", "fixed"] as const) {
     it(`ignores usage measured before a summary placed mid-run (${clock} clock)`, () =>
@@ -203,14 +217,10 @@ describe("compaction estimates and interactions", () => {
           yield* awaited(Promise.all([toolReached.promise, summaryReached.promise]));
           const [background] = yield* compactionTasks(chat);
           summaryGate.resolve();
-          const queued = yield* awaited(result(chat, background!.id as TaskId<CompactionResult>));
-          const submissionId =
-            queued.status === "completed" ? queued.result.submissionId! : undefined;
-          expect(
-            (yield* awaited(
-              (yield* awaited(chat.harness.submission(submissionId!, context)))!.status(context),
-            )).status,
-          ).toBe("queued");
+          const queued = yield* awaited(
+            result(chat, background!.id as durableTypes.TaskId<durableTypes.CompactionResult>),
+          );
+          expect(yield* submissionStatus(chat, queued)).toBe("queued");
           toolGate.resolve();
           expect((yield* awaited(input.wait(context))).status).toBe("done");
           expect(chat.faux.summaryRequests).toHaveLength(1);

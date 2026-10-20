@@ -1,9 +1,12 @@
-import { type EntryId, defineDoc, defineDocFamily } from "@msa/durable";
+import durable from "@msa/durable";
+import type durableTypes from "@msa/durable/index.types";
 import { Effect } from "effect";
 import { describe, expect, it } from "vite-plus/test";
 
 import effectSupport from "./effect-support.ts";
 import sessionSupport from "./session-support.ts";
+
+const { defineDoc, defineDocFamily } = durable;
 
 const { awaited } = effectSupport;
 const { context, createConversation, openTestSession } = sessionSupport;
@@ -48,7 +51,11 @@ const migratedRewindableHistory = Effect.fn("migratedRewindableHistory")(functio
   const { V1, Family, migrations, V3 } = rewindableMigrationDocs();
   const { session, storage } = openTestSession();
   const conversationId = yield* awaited(createConversation(session));
-  const entries: { firstEntry?: EntryId; secondEntry?: EntryId; thirdEntry?: EntryId } = {};
+  const entries: {
+    firstEntry?: durableTypes.EntryId;
+    secondEntry?: durableTypes.EntryId;
+    thirdEntry?: durableTypes.EntryId;
+  } = {};
   yield* awaited(
     session.commit(
       (tx) =>

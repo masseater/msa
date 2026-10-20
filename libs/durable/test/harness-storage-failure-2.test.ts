@@ -1,10 +1,13 @@
-import { StorageRequestError, type TaskId } from "@msa/durable";
+import durable from "@msa/durable";
+import type durableTypes from "@msa/durable/index.types";
 import { Effect } from "effect";
 import { describe, expect, it } from "vite-plus/test";
 
 import effectSupport from "./effect-support.ts";
 import harnessStorageFailureSupport from "./harness-storage-failure-support.ts";
 import sessionSupport from "./session-support.ts";
+
+const { StorageRequestError } = durable;
 
 const { awaited } = effectSupport;
 const { FailingCalls, started } = harnessStorageFailureSupport;
@@ -36,7 +39,7 @@ const doesNotCommit = Effect.gen(function* () {
         (tx) =>
           runPromise(
             Effect.gen(function* () {
-              yield* awaited(tx.task(1 as TaskId).catch(() => {}));
+              yield* awaited(tx.task(1 as durableTypes.TaskId).catch(() => {}));
               yield* awaited(tx.appendEntry(root.id, { kind: "note" }));
             }),
           ),

@@ -1,11 +1,13 @@
-import * as durable from "@msa/durable";
-import * as environment from "@msa/durable/env";
-import * as jsonl from "@msa/durable/storage/jsonl";
-import * as sqlite from "@msa/durable/storage/sqlite";
+import durableModule from "@msa/durable";
+import env from "@msa/durable/env";
+import jsonlModule from "@msa/durable/storage/jsonl";
+import sqliteModule from "@msa/durable/storage/sqlite";
 
-export const liveBindings = [
-  Object.keys(durable),
-  Object.keys(environment),
-  Object.keys(jsonl),
-  Object.keys(sqlite),
+const liveBindings = [
+  Object.keys(durableModule),
+  Object.keys(env),
+  Object.keys(jsonlModule),
+  Object.keys(sqliteModule),
 ];
+
+export default liveBindings;

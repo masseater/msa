@@ -1,12 +1,16 @@
 import { type FauxResponseStep } from "@msa/ai";
-import { LiveDoc, ResetEntry, defineDoc } from "@msa/durable";
-import { GenerationTask } from "@msa/durable/harness";
-import { MemoryStorage } from "@msa/durable/storage/memory";
+import durable from "@msa/durable";
+import harnessModule from "@msa/durable/harness";
+import memory from "@msa/durable/storage/memory";
 import { Effect } from "effect";
 import { afterEach, describe, expect, it } from "vite-plus/test";
 
 import harnessInboxSupport from "./harness-inbox-support.ts";
 import support from "./support.ts";
+
+const { MemoryStorage } = memory;
+const { LiveDoc, ResetEntry, defineDoc } = durable;
+const { GenerationTask } = harnessModule;
 
 const {
   HOLD,

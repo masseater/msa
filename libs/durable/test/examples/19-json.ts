@@ -1,14 +1,19 @@
 import * as NodeRuntime from "@effect/platform-node/NodeRuntime";
 import { createModels, fauxAssistantMessage, fauxProvider, fauxText, fauxToolCall } from "@msa/ai";
 import { openaiProvider } from "@msa/ai/providers/openai";
-import { defineExtension, section } from "@msa/durable";
-import { Harness, createRegistry, watchEvents } from "@msa/durable/harness";
+import durable from "@msa/durable";
+import harnessModule from "@msa/durable/harness";
 import { Console, Effect } from "effect";
 
-import { NodeExecutionEnv } from "../../src/env/node.ts";
-import { createBashTool, createReadTool } from "../../src/tools/index.ts";
+import node from "../../src/env/node.ts";
+import toolsModule from "../../src/tools/index.ts";
 import support from "../support.ts";
 import openJsonExampleStorage from "./json-storage.ts";
+
+const { Harness, createRegistry, watchEvents } = harnessModule;
+const { defineExtension, section } = durable;
+const { createBashTool, createReadTool } = toolsModule;
+const { NodeExecutionEnv } = node;
 
 const { BACKGROUND_CONTEXT, awaited, environmentVariable } = support;
 

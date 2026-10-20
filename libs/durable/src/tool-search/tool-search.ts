@@ -1,25 +1,27 @@
 import { Type } from "@msa/ai";
 import { Effect } from "effect";
 
-import { defineExtension, defineTool } from "../harness/define.ts";
-import type { ToolRegistration } from "../harness/types.ts";
-import { rankDocuments } from "../search.ts";
+import define from "../harness/define.ts";
+import type typesModule from "../harness/types.types.ts";
+import search from "../search.ts";
+import type toolSearchTypes from "./tool-search.types.ts";
 
-export const TOOL_SEARCH_TOOL_NAME = "tool_search";
-export const DEFAULT_TOOL_SEARCH_LIMIT = 8;
+const { defineExtension, defineTool } = define;
+const { rankDocuments } = search;
+
+const TOOL_SEARCH_TOOL_NAME = "tool_search";
+const DEFAULT_TOOL_SEARCH_LIMIT = 8;
 
 const TOOL_SEARCH_DESCRIPTION = `# Tool discovery\n\nSearches over deferred tool metadata with BM25 and exposes matching tools for the next model call.\n\nSome of the tools, such as tools of MCP servers, may not have been provided to you upfront, and you should use this tool (\`${TOOL_SEARCH_TOOL_NAME}\`) to search for the required tools. For MCP tool discovery, always use \`${TOOL_SEARCH_TOOL_NAME}\`.`;
 
 const toolSearchSchema = Type.Object({
-  query: Type.String({ description: "Search query for deferred tools." }),
   limit: Type.Optional(
     Type.Number({
       description: `Maximum number of tools to return. Defaults to ${DEFAULT_TOOL_SEARCH_LIMIT}.`,
     }),
   ),
+  query: Type.String({ description: "Search query for deferred tools." }),
 });
-
-export type ToolSearchToolDetails = { loaded: string[] };
 
 function isObject(value: unknown): value is Record<string, unknown> {
   return typeof value === "object" && value !== null && !Array.isArray(value);
@@ -41,19 +43,16 @@ function schemaText(schema: unknown, parts: string[]): void {
   }
 }
 
-function searchText(tool: ToolRegistration): string {
+function searchText(tool: typesModule.ToolRegistration): string {
   const parts = [tool.name, tool.name.replaceAll("_", " "), tool.description];
   schemaText(tool.parameters, parts);
   return parts.filter((part) => part.trim() !== "").join(" ");
 }
 
-export function createToolSearchTool() {
+function createToolSearchTool() {
   return defineTool({
-    name: TOOL_SEARCH_TOOL_NAME,
-    description: TOOL_SEARCH_DESCRIPTION,
-    parameters: toolSearchSchema,
     callers: ["model"],
-    replay: "safe",
+    description: TOOL_SEARCH_DESCRIPTION,
     execute({ query, limit }, api, context) {
       return Effect.runPromise(
         Effect.gen(function* () {
@@ -74,18 +73,30 @@ export function createToolSearchTool() {
                     return `- ${name}: ${description.trim().split(/\r?\n/u)[0]}`;
                   })
                   .join("\n")}`;
-          const details: ToolSearchToolDetails = { loaded };
+          const details: toolSearchTypes.ToolSearchToolDetails = { loaded };
           return {
-            output: [{ type: "text", text }],
             details,
+            output: [{ text, type: "text" }],
             ...(loaded.length === 0 ? {} : { control: { addTools: loaded } }),
           };
         }),
       );
     },
+    name: TOOL_SEARCH_TOOL_NAME,
+    parameters: toolSearchSchema,
+    replay: "safe",
   });
 }
 
-export function createToolSearchExtension() {
+function createToolSearchExtension() {
   return defineExtension({ name: "tool-search", tools: [createToolSearchTool()] });
 }
+
+const toolSearch = {
+  DEFAULT_TOOL_SEARCH_LIMIT,
+  TOOL_SEARCH_TOOL_NAME,
+  createToolSearchExtension,
+  createToolSearchTool,
+};
+
+export default toolSearch;

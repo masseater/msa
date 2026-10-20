@@ -1,11 +1,13 @@
-import { type ConversationId, type TaskId } from "@msa/durable";
+import type durableTypes from "@msa/durable/index.types";
 import { Effect } from "effect";
 import { describe, expect, it } from "vite-plus/test";
 
-import { idFromNumber } from "../src/ids.ts";
+import ids from "../src/ids.ts";
 import effectSupport from "./effect-support.ts";
 import sessionSupport from "./session-support.ts";
 import sessionTablesSupport from "./session-tables-support.ts";
+
+const { idFromNumber } = ids;
 
 const { awaited } = effectSupport;
 const { context, createConversation, documentChanges, flush, openTestSession } = sessionSupport;
@@ -108,7 +110,7 @@ const validatesDocumentOwners = Effect.gen(function* () {
   yield* awaited(
     expect(
       session.commit(
-        (tx) => tx.doc(ProgressDoc, idFromNumber<TaskId>(4242)).then(() => undefined),
+        (tx) => tx.doc(ProgressDoc, idFromNumber<durableTypes.TaskId>(4242)).then(() => undefined),
         context,
       ),
     ).rejects.toThrow("Task 4242 does not exist"),
@@ -116,7 +118,8 @@ const validatesDocumentOwners = Effect.gen(function* () {
   yield* awaited(
     expect(
       session.commit(
-        (tx) => tx.doc(NotesDoc, idFromNumber<ConversationId>(4242)).then(() => undefined),
+        (tx) =>
+          tx.doc(NotesDoc, idFromNumber<durableTypes.ConversationId>(4242)).then(() => undefined),
         context,
       ),
     ).rejects.toThrow("Conversation 4242 does not exist"),

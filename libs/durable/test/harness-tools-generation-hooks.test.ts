@@ -1,11 +1,15 @@
 import { type FauxResponseStep, fauxAssistantMessage, fauxText } from "@msa/ai";
-import { type Harness, LiveDoc, type SubmissionId } from "@msa/durable";
-import { GenerationTask, ToolTask } from "@msa/durable/harness";
+import durable from "@msa/durable";
+import harnessModule from "@msa/durable/harness";
+import type durableTypes from "@msa/durable/index.types";
 import { Effect } from "effect";
 import { describe, expect, it } from "vite-plus/test";
 
 import harnessToolsSupport from "./harness-tools-support.ts";
 import support from "./support.ts";
+
+const { GenerationTask, ToolTask } = harnessModule;
+const { LiveDoc } = durable;
 
 const { DONE, calls, run, tool } = harnessToolsSupport;
 const { addHooks, addTool, awaited, chatSetup, context, textOf } = support;
@@ -57,8 +61,8 @@ const keepsRunInput = Effect.gen(function* () {
 
   const setup = chatSetup();
   let yields = 0;
-  let harness!: Harness;
-  let input: SubmissionId | undefined;
+  let harness!: durableTypes.Harness;
+  let input: durableTypes.SubmissionId | undefined;
   let statusAtSecondRequest: string | undefined;
   addHooks(setup.registry, GenerationTask, {
     onYield: () => (yields++ === 0 ? { continue: "again" } : undefined),

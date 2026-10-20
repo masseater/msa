@@ -3,12 +3,18 @@ import type { CodemodeResult, CodemodeRun } from "@msa/codemode/portable";
 import type { CodemodeSourceOptions } from "@msa/codemode/source";
 import { Cause, Effect, Exit } from "effect";
 
-import type { ToolExecutionApi, ToolExecutionResult } from "../harness/types.ts";
-import { type CallHost, createCallHost } from "./run-calls.ts";
-import { CODEMODE_MODULE_VERSION, type CodemodeToolOptions, errorResult } from "./run-docs.ts";
-import { type Resumed, RunJournal } from "./run-journal.ts";
-import { completeRun, decideRun } from "./run-persist.ts";
-import { openRun, remainingOf } from "./run-start.ts";
+import type typesModule from "../harness/types.types.ts";
+import type runCallsTypes from "./run-calls.types.ts";
+import type runDocsTypes from "./run-docs.types.ts";
+import type runJournalTypes from "./run-journal.types.ts";
+import runKit from "./run-kit.ts";
+
+const { runCalls, runDocs, RunJournal, runPersist, runStart } = runKit;
+
+const { createCallHost } = runCalls;
+const { CODEMODE_MODULE_VERSION, errorResult } = runDocs;
+const { openRun, remainingOf } = runStart;
+const { completeRun, decideRun } = runPersist;
 
 const abortOf = (signal: AbortSignal | undefined): Effect.Effect<void> =>
   Effect.callback<void>((resume) => {
@@ -22,48 +28,48 @@ const abortOf = (signal: AbortSignal | undefined): Effect.Effect<void> =>
   });
 
 class CodemodeRunner {
-  private readonly options: CodemodeToolOptions;
+  private readonly options: runDocsTypes.CodemodeToolOptions;
   private readonly context: Context;
-  private readonly host: CallHost;
-  private readonly opened: Resumed;
-  private readonly journal: RunJournal;
+  private readonly host: runCallsTypes.CallHost;
+  private readonly opened: runJournalTypes.Resumed;
+  private readonly journal: runJournalTypes.RunJournal;
   private readonly controller = new AbortController();
   private run: CodemodeRun | undefined;
-  private ended: ToolExecutionResult | undefined;
+  private ended: typesModule.ToolExecutionResult | undefined;
   private failure: unknown;
   private generatedImages = 0;
 
   constructor(
-    options: CodemodeToolOptions,
-    api: ToolExecutionApi,
+    options: runDocsTypes.CodemodeToolOptions,
+    api: typesModule.ToolExecutionApi,
     context: Context,
-    opened: Resumed,
+    opened: runJournalTypes.Resumed,
   ) {
     this.options = options;
     this.context = context;
     this.opened = opened;
     this.host = createCallHost({
-      options,
       api,
       context,
-      start: opened.start,
-      stopped: () => this.stopped,
       generated: (images) => {
         this.generatedImages += images;
       },
+      options,
+      start: opened.start,
+      stopped: () => this.stopped,
     });
     this.journal = new RunJournal({
-      host: this.host,
-      opened,
-      run: () => this.run!,
-      stopped: () => this.stopped,
       diverge: (message) => this.diverge(message),
       fail: (error) => this.fail(error),
+      host: this.host,
+      opened,
       refuse: (result, reason) => this.refuse(result, reason),
+      run: () => this.run!,
+      stopped: () => this.stopped,
     });
   }
 
-  execute(code: string): Effect.Effect<ToolExecutionResult> {
+  execute(code: string): Effect.Effect<typesModule.ToolExecutionResult> {
     const { start } = this.opened;
     if (start.version !== CODEMODE_MODULE_VERSION) {
       return this.decide(
@@ -91,16 +97,16 @@ class CodemodeRunner {
     const { start } = this.opened;
     const { journal } = this;
     this.run = this.options.sandbox.start(code, {
-      startedAt: start.startedAt,
-      seed: start.seed,
-      tools: start.tools.filter((tool) => tool.hidden !== true),
       globals: start.globals,
-      store: start.store,
+      seed: start.seed,
       signal: this.controller.signal,
+      startedAt: start.startedAt,
+      store: start.store,
+      tools: start.tools.filter((tool) => tool.hidden !== true),
       ...(remaining === undefined ? {} : { timeoutMs: remaining }),
-      onStarted: (fingerprint) => void Effect.runFork(journal.checkFingerprint(fingerprint)),
       onCall: (call) => journal.onCall(call),
       onIdle: (seq, issued) => journal.onIdle(seq, issued),
+      onStarted: (fingerprint) => void Effect.runFork(journal.checkFingerprint(fingerprint)),
     });
     return this.run;
   }
@@ -122,7 +128,7 @@ class CodemodeRunner {
     });
   }
 
-  private finish(result: CodemodeResult): Effect.Effect<ToolExecutionResult> {
+  private finish(result: CodemodeResult): Effect.Effect<typesModule.ToolExecutionResult> {
     const { during } = result;
     if (during !== undefined && this.wentOnBefore(during)) {
       return this.decide(
@@ -136,7 +142,7 @@ class CodemodeRunner {
         this.host.api,
         this.context,
         this.opened.start,
-        { result, generatedImages: this.generatedImages },
+        { generatedImages: this.generatedImages, result },
         this.host.rows.details(),
       ),
     );
@@ -153,13 +159,15 @@ class CodemodeRunner {
     );
   }
 
-  private decide(decided: ToolExecutionResult): Effect.Effect<ToolExecutionResult> {
+  private decide(
+    decided: typesModule.ToolExecutionResult,
+  ): Effect.Effect<typesModule.ToolExecutionResult> {
     return Effect.suspend(() =>
       decideRun(this.host.api, this.context, decided, this.host.rows.details()),
     );
   }
 
-  private refuse(result: ToolExecutionResult, reason: Error): Effect.Effect<void> {
+  private refuse(result: typesModule.ToolExecutionResult, reason: Error): Effect.Effect<void> {
     return Effect.gen({ self: this }, function* () {
       this.ended = result;
       const decided = yield* Effect.exit(this.decide(result));
@@ -194,9 +202,9 @@ class CodemodeRunner {
   }
 }
 
-export const runCodemode = Effect.fnUntraced(function* (
-  options: CodemodeToolOptions,
-  api: ToolExecutionApi,
+const runCodemode = Effect.fnUntraced(function* (
+  options: runDocsTypes.CodemodeToolOptions,
+  api: typesModule.ToolExecutionApi,
   context: Context,
   source: { readonly code: string; readonly options: CodemodeSourceOptions },
 ) {
@@ -204,3 +212,9 @@ export const runCodemode = Effect.fnUntraced(function* (
   if ("done" in opened) return opened.done;
   return yield* new CodemodeRunner(options, api, context, opened).execute(source.code);
 });
+
+const runCall = {
+  runCodemode,
+};
+
+export default runCall;

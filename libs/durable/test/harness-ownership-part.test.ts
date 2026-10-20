@@ -1,4 +1,4 @@
-import { type TaskId } from "@msa/durable";
+import type durableTypes from "@msa/durable/index.types";
 import { Effect } from "effect";
 import { afterEach, describe, expect, it } from "vite-plus/test";
 
@@ -42,7 +42,7 @@ const endedBridge = Effect.fn("endedBridge")(function* (depth: number) {
                 { ownership: { kind: "conversation" } },
               ),
             );
-            const links: TaskId[] = [];
+            const links: durableTypes.TaskId[] = [];
             let owner = p;
             for (const n of Array.from({ length: depth }, (_, i) => i)) {
               owner = yield* awaited(

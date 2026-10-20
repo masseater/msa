@@ -1,11 +1,13 @@
-import type { ToolExecutionApi } from "@msa/durable";
-import type { ExecutionEnv } from "@msa/durable/env";
-import { createBashTool, createReadTool } from "@msa/durable/tools";
+import type envTypes from "@msa/durable/env.types";
+import type durableTypes from "@msa/durable/index.types";
+import toolsModule from "@msa/durable/tools";
 import { Effect, Schema } from "effect";
 import { afterAll, describe, expect, it } from "vite-plus/test";
 
 import differentialSupport from "./differential-support.ts";
 import randomOperation from "./random-operation.ts";
+
+const { createBashTool, createReadTool } = toolsModule;
 
 const { context, normalize, pairs, random } = differentialSupport;
 
@@ -51,7 +53,7 @@ const toolCases = (): [Tool, object][] => [
   [createBashTool(), { command: "printf 'a\\nb'; ls" }],
 ];
 
-const api = (env: ExecutionEnv, output: string[]): ToolExecutionApi =>
+const api = (env: envTypes.ExecutionEnv, output: string[]): durableTypes.ToolExecutionApi =>
   ({
     details: () => Promise.resolve(),
     diagnostic: () => undefined,
@@ -59,10 +61,10 @@ const api = (env: ExecutionEnv, output: string[]): ToolExecutionApi =>
     output: (chunk: string | Uint8Array) => output.push(String(chunk)),
     outputWindow: undefined,
     retainedOutput: () => ({ text: output.join(""), truncated: false }),
-  }) as unknown as ToolExecutionApi;
+  }) as unknown as durableTypes.ToolExecutionApi;
 
 interface ToolRun {
-  readonly env: ExecutionEnv;
+  readonly env: envTypes.ExecutionEnv;
   readonly tool: Tool;
   readonly args: object;
 }

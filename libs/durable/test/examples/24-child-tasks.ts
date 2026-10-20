@@ -3,22 +3,20 @@ import { createModels } from "@msa/ai/models";
 import { BACKGROUND_CONTEXT } from "@msa/chord/context";
 import { Console, Effect } from "effect";
 
-import { currentTimeMillis } from "../../src/clock.ts";
-import { Harness, createRegistry } from "../../src/harness/index.ts";
-import {
-  type Conversation,
-  type TaskGraph,
-  type TaskGraphNode,
-  type TaskId,
-  defineExtension,
-  defineTask,
-} from "../../src/index.ts";
-import { openNodeSqliteStorage } from "../../src/storage/sqlite/node.ts";
-import effectSupport from "../effect-support.ts";
-import platformSupport from "../platform-support.ts";
+import clockModule from "../../src/clock.ts";
+import harnessModule from "../../src/harness/index.ts";
+import durable from "../../src/index.ts";
+import type durableTypes from "../../src/index.types.ts";
+import nodeModule from "../../src/storage/sqlite/node.ts";
+import testSupport from "../support.ts";
 
-const { awaited } = effectSupport;
-const { joinPath, makeTempDir, removeDir } = platformSupport;
+const { defineExtension, defineTask } = durable;
+const { currentTimeMillis } = clockModule;
+const { Harness, createRegistry } = harnessModule;
+const { openNodeSqliteStorage } = nodeModule;
+
+const { awaited } = testSupport;
+const { joinPath, makeTempDir, removeDir } = testSupport;
 
 const context = BACKGROUND_CONTEXT;
 
@@ -71,7 +69,9 @@ const Payment = defineTask<PaymentInput, { phase: "charge"; at: number }, Paymen
   version: 1,
 });
 
-type CheckoutState = { phase: "pay" } | { phase: "decide"; payments: TaskId<PaymentResult>[] };
+type CheckoutState =
+  | { phase: "pay" }
+  | { phase: "decide"; payments: durableTypes.TaskId<PaymentResult>[] };
 const Checkout = defineTask<{ cards: string[] }, CheckoutState, string>({
   abort: (_task, runtime, taskContext) =>
     Effect.runPromise(
@@ -120,7 +120,7 @@ const Checkout = defineTask<{ cards: string[] }, CheckoutState, string>({
               (tx) =>
                 runPromise(
                   Effect.gen(function* () {
-                    const payments: TaskId<PaymentResult>[] = [];
+                    const payments: durableTypes.TaskId<PaymentResult>[] = [];
                     for (const card of task.input.cards) {
                       payments.push(
                         yield* awaited(
@@ -166,9 +166,9 @@ const mainStep1 = Effect.gen(function* () {
       ),
     );
   });
-  function printGraph(graph: TaskGraph): void {
+  function printGraph(graph: durableTypes.TaskGraph): void {
     const nodes = Object.values(graph.tasks);
-    const print = (node: TaskGraphNode, depth: number): void => {
+    const print = (node: durableTypes.TaskGraphNode, depth: number): void => {
       const state = node.state;
       const status =
         state.status === "waiting" ? `waiting on ${state.on.join(", ")}` : state.status;
@@ -178,7 +178,7 @@ const mainStep1 = Effect.gen(function* () {
     };
     for (const node of nodes.filter((candidate) => candidate.owner === undefined)) print(node, 0);
   }
-  const checkout = (root: Conversation, cards: string[]) =>
+  const checkout = (root: durableTypes.Conversation, cards: string[]) =>
     root.commit(
       (tx) => tx.createTask(Checkout, { cards }, { ownership: { kind: "conversation" } }),
       context,

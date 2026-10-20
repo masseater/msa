@@ -1,27 +1,25 @@
 import {
+  PhotonImage,
+  SamplingFilter,
+  type SyncInitInput,
   fliph,
   flipv,
   initSync,
-  PhotonImage,
   resize,
-  SamplingFilter,
-  type SyncInitInput,
 } from "@silvia-odwyer/photon/photon_rs.js";
 
-import { promiseTry } from "../promise-try.ts";
-import {
-  base64Length,
-  type ImageLimits,
-  type ImageProcessor,
-  INLINE_IMAGE_TYPES,
-  type PreparedImage,
-  toBase64,
-} from "../tools/image.ts";
-import { exifOrientation } from "./exif.ts";
+import promiseTryModule from "../promise-try.ts";
+import imageModule from "../tools/image.ts";
+import type imageTypes from "../tools/image.types.ts";
+import exif from "./exif.ts";
+
+const { promiseTry } = promiseTryModule;
+const { exifOrientation } = exif;
+const { INLINE_IMAGE_TYPES, base64Length, toBase64 } = imageModule;
 
 const JPEG_QUALITIES = [80, 70, 55, 40];
 
-export function createPhotonImages(wasm: SyncInitInput): ImageProcessor {
+function createPhotonImages(wasm: SyncInitInput): imageTypes.ImageProcessor {
   initSync({ module: wasm });
   return {
     prepare: (bytes, mimeType, limits) => promiseTry(() => prepare(bytes, mimeType, limits)),
@@ -37,14 +35,14 @@ function flipped(image: PhotonImage, orientation: number): void {
 function fitWithin(
   image: PhotonImage,
   mimeType: string,
-  limits: ImageLimits,
-): PreparedImage | undefined {
+  limits: imageTypes.ImageLimits,
+): imageTypes.PreparedImage | undefined {
   const width = image.get_width();
   const height = image.get_height();
   const scale = Math.min(1, limits.maxWidth / width, limits.maxHeight / height);
   let target = {
-    width: Math.max(1, Math.round(width * scale)),
     height: Math.max(1, Math.round(height * scale)),
+    width: Math.max(1, Math.round(width * scale)),
   };
   for (;;) {
     const encoded = encodeWithin(image, target, limits.maxBytes, mimeType === "image/jpeg");
@@ -52,14 +50,14 @@ function fitWithin(
       const resized =
         target.width === width && target.height === height
           ? {}
-          : { resized: { from: { width, height }, to: target } };
+          : { resized: { from: { height, width }, to: target } };
       const converted = encoded.mimeType === mimeType ? {} : { convertedFrom: mimeType };
       return { ...encoded, ...converted, ...resized };
     }
     if (target.width === 1 && target.height === 1) return undefined;
     target = {
-      width: Math.max(1, Math.floor(target.width * 0.75)),
       height: Math.max(1, Math.floor(target.height * 0.75)),
+      width: Math.max(1, Math.floor(target.width * 0.75)),
     };
   }
 }
@@ -67,8 +65,8 @@ function fitWithin(
 function prepare(
   bytes: Uint8Array,
   mimeType: string,
-  limits: ImageLimits,
-): PreparedImage | undefined {
+  limits: imageTypes.ImageLimits,
+): imageTypes.PreparedImage | undefined {
   const orientation = exifOrientation(bytes);
   let image: PhotonImage | undefined;
   try {
@@ -107,10 +105,10 @@ function encodeWithin(
   const same = size.width === image.get_width() && size.height === image.get_height();
   const scaled = same ? image : resize(image, size.width, size.height, SamplingFilter.Lanczos3);
   try {
-    const png = { mimeType: "image/png", encode: () => scaled.get_bytes() };
+    const png = { encode: () => scaled.get_bytes(), mimeType: "image/png" };
     const jpegs = JPEG_QUALITIES.map((quality) => ({
-      mimeType: "image/jpeg",
       encode: () => scaled.get_bytes_jpeg(quality),
+      mimeType: "image/jpeg",
     }));
     for (const candidate of jpegFirst ? [...jpegs, png] : [png, ...jpegs]) {
       const bytes = candidate.encode();
@@ -141,5 +139,11 @@ function transposed(
       );
     }
   }
-  return { pixels, width: height, height: width };
+  return { height: width, pixels, width: height };
 }
+
+const images = {
+  createPhotonImages,
+};
+
+export default images;

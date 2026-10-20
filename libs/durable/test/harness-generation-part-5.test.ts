@@ -1,19 +1,22 @@
 import { type Message, type SimpleStreamOptions, fauxAssistantMessage } from "@msa/ai";
-import { type HarnessSettings, ProviderDoc } from "@msa/durable";
-import { Harness } from "@msa/durable/harness";
-import { MemoryStorage } from "@msa/durable/storage/memory";
+import durable from "@msa/durable";
+import harnessModule from "@msa/durable/harness";
+import type durableTypes from "@msa/durable/index.types";
+import memory from "@msa/durable/storage/memory";
 import { Effect } from "effect";
 import { describe, expect, it } from "vite-plus/test";
 
-import chatSupport from "./chat-support.ts";
-import effectSupport from "./effect-support.ts";
 import harnessGenerationSupport from "./harness-generation-support.ts";
-import sessionSupport from "./session-support.ts";
+import testSupport from "./support.ts";
 
-const { chatSetup, openChat } = chatSupport;
-const { awaited } = effectSupport;
+const { MemoryStorage } = memory;
+const { ProviderDoc } = durable;
+const { Harness } = harnessModule;
+
+const { chatSetup, openChat } = testSupport;
+const { awaited } = testSupport;
 const { ERROR_503 } = harnessGenerationSupport;
-const { context } = sessionSupport;
+const { context } = testSupport;
 
 const keepsProviderSessionStep1 = Effect.gen(function* () {
   const runPromise = Effect.runPromiseWith(yield* Effect.context<never>());
@@ -135,7 +138,7 @@ const readsSettingsThrough = Effect.gen(function* () {
       return fauxAssistantMessage("ok");
     },
   ]);
-  const settings: HarnessSettings = {
+  const settings: durableTypes.HarnessSettings = {
     retry: { baseDelayMs: 1 },
     get stream() {
       return { timeoutMs };

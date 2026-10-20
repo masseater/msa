@@ -1,48 +1,48 @@
 import type { Context } from "@msa/chord";
 
-import type { SessionImpl } from "../session/session.ts";
-import type { TaskScheduler } from "./scheduler.ts";
-import type { Submissions } from "./submissions.ts";
-import type {
-  Agent,
-  AgentChange,
-  Conversation,
-  ConversationId,
-  ConversationInit,
-  ConversationOwnership,
-  EntryId,
-  RegistrySnapshot,
-  Storage,
-  ToolRegistration,
-} from "./types.ts";
-import type { ConversationViews } from "./view.ts";
+import type sessionTypes from "../session/session.types.ts";
+import type schedulerTypes from "./scheduler.types.ts";
+import type submissionsTypes from "./submissions.types.ts";
+import type typesModule from "./types.types.ts";
+import type viewTypes from "./view.types.ts";
 
-export type CreateTarget =
-  | { readonly kind: "root" }
-  | { readonly kind: "independent"; readonly ownership: ConversationOwnership }
-  | {
-      readonly kind: "fork";
-      readonly parentId: ConversationId;
-      readonly at: EntryId;
-      readonly ownership: ConversationOwnership;
-    };
+declare namespace harnessHostTypes {
+  type CreateTarget =
+    | { readonly kind: "root" }
+    | { readonly kind: "independent"; readonly ownership: typesModule.ConversationOwnership }
+    | {
+        readonly kind: "fork";
+        readonly parentId: typesModule.ConversationId;
+        readonly at: typesModule.EntryId;
+        readonly ownership: typesModule.ConversationOwnership;
+      };
 
-export type CreateOptions = { readonly agent?: AgentChange; readonly init?: ConversationInit };
+  type CreateOptions = {
+    readonly agent?: typesModule.AgentChange;
+    readonly init?: typesModule.ConversationInit;
+  };
 
-export type HostHarness<Tool extends ToolRegistration> = SessionImpl & {
-  resolveAgent(
-    id: ConversationId,
-    snapshot: RegistrySnapshot<Tool> | undefined,
-    context: Context,
-  ): Promise<Agent<Tool>>;
-};
+  type HostHarness<Tool extends typesModule.ToolRegistration> = sessionTypes.SessionImpl & {
+    resolveAgent(
+      id: typesModule.ConversationId,
+      snapshot: typesModule.RegistrySnapshot<Tool> | undefined,
+      context: Context,
+    ): Promise<typesModule.Agent<Tool>>;
+  };
 
-export type ConversationHost<Tool extends ToolRegistration> = {
-  readonly harness: HostHarness<Tool>;
-  readonly storage: Storage;
-  readonly tasks: TaskScheduler;
-  readonly submissions: Submissions;
-  readonly views: ConversationViews;
-  readonly now: () => number;
-  create(target: CreateTarget, options: CreateOptions, context: Context): Promise<Conversation>;
-};
+  type ConversationHost<Tool extends typesModule.ToolRegistration> = {
+    readonly harness: HostHarness<Tool>;
+    readonly storage: typesModule.Storage;
+    readonly tasks: schedulerTypes.TaskScheduler;
+    readonly submissions: submissionsTypes.Submissions;
+    readonly views: viewTypes.ConversationViews;
+    readonly now: () => number;
+    create(
+      target: CreateTarget,
+      options: CreateOptions,
+      context: Context,
+    ): Promise<typesModule.Conversation>;
+  };
+}
+
+export type { harnessHostTypes as default };

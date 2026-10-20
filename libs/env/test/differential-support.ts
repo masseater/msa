@@ -1,17 +1,18 @@
 import { BACKGROUND_CONTEXT } from "@msa/chord/context";
-import type { FileError } from "@msa/durable/env";
-import { NodeExecutionEnv } from "@msa/durable/env/node";
+import type envTypes from "@msa/durable/env.types";
+import node from "@msa/durable/env/node";
 import { Effect } from "effect";
 import { dual } from "effect/Function";
 
 import connectionModule from "../src/connection.ts";
-import remoteEnv from "../src/remote-env.ts";
+import RemoteExecutionEnv from "../src/remote-env.ts";
 import daemon from "./daemon.ts";
 import type differentialSupportTypes from "./differential-support.types.ts";
 import platform from "./platform.ts";
 
+const { NodeExecutionEnv } = node;
+
 const { Connection } = connectionModule;
-const { RemoteExecutionEnv } = remoteEnv;
 
 const { makeTempDirectory, realPath, removePath } = platform;
 
@@ -62,7 +63,7 @@ function comparable(key: string, field: unknown): unknown {
   if (field instanceof Uint8Array) return { bytes: Buffer.from(field).toString("hex") };
   if (key === "mtimeMs") return "mtime";
   if (typeof field === "object" && field !== null && "ok" in field && field.ok === false) {
-    return { code: (field as { ok: unknown; error: FileError }).error.code, ok: false };
+    return { code: (field as { ok: unknown; error: envTypes.FileError }).error.code, ok: false };
   }
   return field;
 }

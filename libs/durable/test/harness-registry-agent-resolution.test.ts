@@ -1,10 +1,14 @@
-import { defineExtension, hook } from "@msa/durable";
-import { GenerationTask, ToolTask, createRegistry } from "@msa/durable/harness";
+import durable from "@msa/durable";
+import harness from "@msa/durable/harness";
 import { describe, expect, it } from "vite-plus/test";
 
-import { agentHooks } from "../src/harness/agent.ts";
+import agentModule from "../src/harness/agent.ts";
 import harnessRegistrySupport from "./harness-registry-support.ts";
 import type harnessRegistrySupportTypes from "./harness-registry-support.types.ts";
+
+const { GenerationTask, ToolTask, createRegistry } = harness;
+const { defineExtension, hook } = durable;
+const { agentHooks } = agentModule;
 
 const { resolve } = harnessRegistrySupport;
 

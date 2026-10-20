@@ -2,23 +2,29 @@ import { BACKGROUND_CONTEXT } from "@msa/chord/context";
 import { Effect } from "effect";
 import { describe, expect, it } from "vite-plus/test";
 
-import { idFromNumber } from "../src/ids.ts";
-import type { SqliteDatabase, SqliteExecutor, SqliteValue } from "../src/storage/sqlite/index.ts";
-import { SqliteStorage } from "../src/storage/sqlite/index.ts";
-import { NodeSqliteDatabase, openNodeSqliteDatabase } from "../src/storage/sqlite/node.ts";
-import { type DocumentId, type EntryId, ROOT_CONVERSATION_ID } from "../src/types.ts";
+import ids from "../src/ids.ts";
+import sqlite from "../src/storage/sqlite/index.ts";
+import type sqliteTypes from "../src/storage/sqlite/index.types.ts";
+import node from "../src/storage/sqlite/node.ts";
+import types from "../src/types.ts";
 import effectSupport from "./effect-support.ts";
+import type sqliteFacadePortableSettlementTestTypes from "./sqlite-facade-portable-settlement.test.types.ts";
+
+const { ROOT_CONVERSATION_ID } = types;
+const { idFromNumber } = ids;
+const { openNodeSqliteDatabase } = node;
+const { SqliteStorage } = sqlite;
 
 const { awaited } = effectSupport;
 
 type SettlementMode = "immediate" | "delay" | "reject";
 
-class ControlledSettlementDatabase implements SqliteDatabase {
-  private readonly delegate: NodeSqliteDatabase;
+class ControlledSettlementDatabase implements sqliteTypes.SqliteDatabase {
+  private readonly delegate: sqliteFacadePortableSettlementTestTypes.NodeSqliteDatabase;
   private mode: SettlementMode = "immediate";
   private pendingSettlement: (() => void) | undefined;
 
-  constructor(delegate: NodeSqliteDatabase) {
+  constructor(delegate: sqliteFacadePortableSettlementTestTypes.NodeSqliteDatabase) {
     this.delegate = delegate;
   }
 
@@ -26,19 +32,19 @@ class ControlledSettlementDatabase implements SqliteDatabase {
     return this.delegate.exec(sql);
   }
 
-  run(sql: string, ...params: SqliteValue[]): Promise<void> {
+  run(sql: string, ...params: sqliteTypes.SqliteValue[]): Promise<void> {
     return this.delegate.run(sql, ...params);
   }
 
-  get<T extends object>(sql: string, ...params: SqliteValue[]): Promise<T | undefined> {
+  get<T extends object>(sql: string, ...params: sqliteTypes.SqliteValue[]): Promise<T | undefined> {
     return this.delegate.get<T>(sql, ...params);
   }
 
-  all<T extends object>(sql: string, ...params: SqliteValue[]): Promise<T[]> {
+  all<T extends object>(sql: string, ...params: sqliteTypes.SqliteValue[]): Promise<T[]> {
     return this.delegate.all<T>(sql, ...params);
   }
 
-  transaction<T>(callback: (transaction: SqliteExecutor) => Promise<T>): Promise<T> {
+  transaction<T>(callback: (transaction: sqliteTypes.SqliteExecutor) => Promise<T>): Promise<T> {
     const mode = this.mode;
     this.mode = "immediate";
     if (mode === "immediate") return this.delegate.transaction(callback);
@@ -75,7 +81,7 @@ class ControlledSettlementDatabase implements SqliteDatabase {
 
 const expectDelayedCommit = Effect.fn("expectDelayedCommit")(function* (
   database: ControlledSettlementDatabase,
-  storage: SqliteStorage,
+  storage: sqliteTypes.SqliteStorage,
 ) {
   database.controlNextSettlement("delay");
   const committing = storage.commit(
@@ -84,7 +90,7 @@ const expectDelayedCommit = Effect.fn("expectDelayedCommit")(function* (
         type: "entry",
         value: {
           conversationId: ROOT_CONVERSATION_ID,
-          id: idFromNumber<EntryId>(100),
+          id: idFromNumber<sqliteFacadePortableSettlementTestTypes.EntryId>(100),
           kind: "settled",
         },
       },
@@ -98,15 +104,17 @@ const expectDelayedCommit = Effect.fn("expectDelayedCommit")(function* (
   });
   yield* awaited(Promise.resolve());
   expect(committed).toBe(false);
-  expect(yield* awaited(storage.mintId<EntryId>())).toBe(2);
+  expect(yield* awaited(storage.mintId<sqliteFacadePortableSettlementTestTypes.EntryId>())).toBe(2);
   database.settle();
   yield* awaited(expect(committing).resolves.toBe(1));
-  expect(yield* awaited(storage.mintId<EntryId>())).toBe(101);
+  expect(yield* awaited(storage.mintId<sqliteFacadePortableSettlementTestTypes.EntryId>())).toBe(
+    101,
+  );
 });
 
 const expectRejectedCommit = Effect.fn("expectRejectedCommit")(function* (
   database: ControlledSettlementDatabase,
-  storage: SqliteStorage,
+  storage: sqliteTypes.SqliteStorage,
 ) {
   database.controlNextSettlement("reject");
   const rejected = storage.commit(
@@ -115,19 +123,28 @@ const expectRejectedCommit = Effect.fn("expectRejectedCommit")(function* (
         type: "entry",
         value: {
           conversationId: ROOT_CONVERSATION_ID,
-          id: idFromNumber<EntryId>(200),
+          id: idFromNumber<sqliteFacadePortableSettlementTestTypes.EntryId>(200),
           kind: "rejected",
         },
       },
     ],
     BACKGROUND_CONTEXT,
   );
-  expect(yield* awaited(storage.mintId<EntryId>())).toBe(102);
+  expect(yield* awaited(storage.mintId<sqliteFacadePortableSettlementTestTypes.EntryId>())).toBe(
+    102,
+  );
   database.settle();
   yield* awaited(expect(rejected).rejects.toThrow("controlled settlement rejection"));
-  expect(yield* awaited(storage.mintId<EntryId>())).toBe(103);
+  expect(yield* awaited(storage.mintId<sqliteFacadePortableSettlementTestTypes.EntryId>())).toBe(
+    103,
+  );
   expect(
-    yield* awaited(storage.entry(idFromNumber<EntryId>(200), BACKGROUND_CONTEXT)),
+    yield* awaited(
+      storage.entry(
+        idFromNumber<sqliteFacadePortableSettlementTestTypes.EntryId>(200),
+        BACKGROUND_CONTEXT,
+      ),
+    ),
   ).toBeUndefined();
   yield* awaited(storage.close(BACKGROUND_CONTEXT));
 });
@@ -137,7 +154,7 @@ const rejectsTransactionHandle = Effect.gen(function* () {
 
   const database = yield* awaited(openNodeSqliteDatabase(":memory:"));
   yield* awaited(database.exec("CREATE TABLE stale_probe (value INTEGER)"));
-  let handle!: SqliteExecutor;
+  let handle!: sqliteTypes.SqliteExecutor;
   yield* awaited(
     database.transaction((transaction) =>
       runPromise(
@@ -214,7 +231,7 @@ describe("portable SQLite facade settlement", () => {
 });
 
 const readsDocumentOne = Effect.gen(function* () {
-  const id = idFromNumber<DocumentId>(5);
+  const id = idFromNumber<sqliteFacadePortableSettlementTestTypes.DocumentId>(5);
   for (const yields of Array.from({ length: 16 }, (_, i) => i)) {
     const storage = yield* awaited(
       SqliteStorage.open(yield* awaited(openNodeSqliteDatabase(":memory:"))),

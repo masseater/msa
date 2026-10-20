@@ -1,24 +1,20 @@
 import { DatabaseSync } from "node:sqlite";
 
 import type { Context, JsonValue } from "@msa/chord";
-import {
-  type ConversationId,
-  type EntryId,
-  type Id,
-  ROOT_CONVERSATION_ID,
-  type Seq,
-  type Storage,
-  type StorageWrite,
-  type TaskId,
-} from "@msa/durable";
-import { registerStorageConformance } from "@msa/durable/testing";
+import type durableTypes from "@msa/durable/index.types";
 import { Effect } from "effect";
 import { afterEach, describe, expect, it } from "vite-plus/test";
 
-import { idFromNumber } from "../src/ids.ts";
+import durableKit from "./durable-kit.ts";
 import sqliteStorageSupport from "./sqlite-storage-support.ts";
 import type sqliteStorageSupportTypes from "./sqlite-storage-support.types.ts";
 import support from "./support.ts";
+
+const { durable, ids, testing } = durableKit;
+
+const { idFromNumber } = ids;
+const { registerStorageConformance } = testing;
+const { ROOT_CONVERSATION_ID } = durable;
 
 const {
   context,
@@ -43,7 +39,7 @@ afterEach(() =>
   ),
 );
 
-class ReopeningStorage implements Storage {
+class ReopeningStorage implements durableTypes.Storage {
   private current: sqliteStorageSupportTypes.SqliteStorage;
   private readonly path: string;
   private readonly options: sqliteStorageSupportTypes.NodeSqliteStorageOptions;
@@ -60,9 +56,9 @@ class ReopeningStorage implements Storage {
   }
 
   commit(
-    writes: readonly StorageWrite[],
-    commitContext: Parameters<Storage["commit"]>[1],
-  ): Promise<Seq> {
+    writes: readonly durableTypes.StorageWrite[],
+    commitContext: Parameters<durableTypes.Storage["commit"]>[1],
+  ): Promise<durableTypes.Seq> {
     return Effect.runPromise(
       Effect.gen({ self: this }, function* () {
         if (this.closed) return yield* awaited(this.current.commit(writes, commitContext));
@@ -80,55 +76,69 @@ class ReopeningStorage implements Storage {
     );
   }
 
-  mintId<I extends Id<string>>(): Promise<I> {
+  mintId<I extends durableTypes.Id<string>>(): Promise<I> {
     return this.current.mintId<I>();
   }
-  conversation: Storage["conversation"] = (id, readContext) =>
+  conversation: durableTypes.Storage["conversation"] = (id, readContext) =>
     this.current.conversation(id, readContext);
-  scanConversations: Storage["scanConversations"] = (query, limit, cursor, readContext) =>
-    this.current.scanConversations(query, limit, cursor, readContext);
-  entry(id: EntryId, readContext: Context): ReturnType<Storage["entry"]>;
+  scanConversations: durableTypes.Storage["scanConversations"] = (
+    query,
+    limit,
+    cursor,
+    readContext,
+  ) => this.current.scanConversations(query, limit, cursor, readContext);
+  entry(id: durableTypes.EntryId, readContext: Context): ReturnType<durableTypes.Storage["entry"]>;
   entry(
-    conversationId: ConversationId,
-    id: EntryId,
+    conversationId: durableTypes.ConversationId,
+    id: durableTypes.EntryId,
     readContext: Context,
-  ): ReturnType<Storage["entry"]>;
+  ): ReturnType<durableTypes.Storage["entry"]>;
   entry(
-    idOrConversationId: EntryId | ConversationId,
-    idOrContext: EntryId | Context,
+    idOrConversationId: durableTypes.EntryId | durableTypes.ConversationId,
+    idOrContext: durableTypes.EntryId | Context,
     readContext?: Context,
   ) {
     if (readContext === undefined) {
-      return this.current.entry(idFromNumber<EntryId>(idOrConversationId), idOrContext as Context);
+      return this.current.entry(
+        idFromNumber<durableTypes.EntryId>(idOrConversationId),
+        idOrContext as Context,
+      );
     }
     if (typeof idOrContext !== "number")
       throw new TypeError("Storage.entry() requires an entry ID");
     return this.current.entry(
-      idFromNumber<ConversationId>(idOrConversationId),
-      idFromNumber<EntryId>(idOrContext),
+      idFromNumber<durableTypes.ConversationId>(idOrConversationId),
+      idFromNumber<durableTypes.EntryId>(idOrContext),
       readContext,
     );
   }
-  findLatestHeadMarker: Storage["findLatestHeadMarker"] = (conversationId, at, readContext) =>
-    this.current.findLatestHeadMarker(conversationId, at, readContext);
-  scanEntries: Storage["scanEntries"] = (query, limit, cursor, readContext) =>
+  findLatestHeadMarker: durableTypes.Storage["findLatestHeadMarker"] = (
+    conversationId,
+    at,
+    readContext,
+  ) => this.current.findLatestHeadMarker(conversationId, at, readContext);
+  scanEntries: durableTypes.Storage["scanEntries"] = (query, limit, cursor, readContext) =>
     this.current.scanEntries(query, limit, cursor, readContext);
-  task: Storage["task"] = (id, readContext) => this.current.task(id, readContext);
-  scanTasks: Storage["scanTasks"] = (query, limit, cursor, readContext) =>
+  task: durableTypes.Storage["task"] = (id, readContext) => this.current.task(id, readContext);
+  scanTasks: durableTypes.Storage["scanTasks"] = (query, limit, cursor, readContext) =>
     this.current.scanTasks(query, limit, cursor, readContext);
-  submission: Storage["submission"] = (id, readContext) => this.current.submission(id, readContext);
-  scanSubmissions: Storage["scanSubmissions"] = (query, limit, cursor, readContext) =>
+  submission: durableTypes.Storage["submission"] = (id, readContext) =>
+    this.current.submission(id, readContext);
+  scanSubmissions: durableTypes.Storage["scanSubmissions"] = (query, limit, cursor, readContext) =>
     this.current.scanSubmissions(query, limit, cursor, readContext);
-  submissionByRequest: Storage["submissionByRequest"] = (conversationId, requestId, readContext) =>
-    this.current.submissionByRequest(conversationId, requestId, readContext);
-  findDocument: Storage["findDocument"] = (address, at, readContext) =>
+  submissionByRequest: durableTypes.Storage["submissionByRequest"] = (
+    conversationId,
+    requestId,
+    readContext,
+  ) => this.current.submissionByRequest(conversationId, requestId, readContext);
+  findDocument: durableTypes.Storage["findDocument"] = (address, at, readContext) =>
     this.current.findDocument(address, at, readContext);
-  document: Storage["document"] = (id, at, readContext) =>
+  document: durableTypes.Storage["document"] = (id, at, readContext) =>
     this.current.document(id, at, readContext);
-  scanDocuments: Storage["scanDocuments"] = (query, limit, cursor, readContext) =>
+  scanDocuments: durableTypes.Storage["scanDocuments"] = (query, limit, cursor, readContext) =>
     this.current.scanDocuments(query, limit, cursor, readContext);
 
-  close(closeContext: Parameters<Storage["close"]>[0]): Promise<void> {
+  close(closeContext: Parameters<durableTypes.Storage["close"]>[0]): Promise<void> {
     return Effect.runPromise(
       Effect.gen({ self: this }, function* () {
         if (this.closed) return;
@@ -172,7 +182,7 @@ registerStorageConformance({ describe, expect, it }, "SqliteStorage across reope
 const persistsRecordsSequence = Effect.gen(function* () {
   const { storage, path } = yield* createSqliteStorage();
   expect(yield* awaited(createRoot(storage))).toBe(1);
-  const entryId = yield* awaited(storage.mintId<EntryId>());
+  const entryId = yield* awaited(storage.mintId<durableTypes.EntryId>());
   expect(
     yield* awaited(
       storage.commit(
@@ -190,14 +200,14 @@ const persistsRecordsSequence = Effect.gen(function* () {
     commitSeq: 2,
     entry: entry(entryId, ROOT_CONVERSATION_ID, undefined),
   });
-  expect(yield* awaited(reopened.mintId<EntryId>())).toBe(entryId + 1);
+  expect(yield* awaited(reopened.mintId<durableTypes.EntryId>())).toBe(entryId + 1);
   expect(
     yield* awaited(
       reopened.commit(
         [
           {
             type: "task",
-            value: pendingTask(yield* awaited(reopened.mintId<TaskId<JsonValue>>())),
+            value: pendingTask(yield* awaited(reopened.mintId<durableTypes.TaskId<JsonValue>>())),
           },
         ],
         context,

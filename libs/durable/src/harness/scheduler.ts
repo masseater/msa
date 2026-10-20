@@ -1,35 +1,27 @@
 import type { Context, JsonValue } from "@msa/chord";
 import { Effect } from "effect";
 
-import type { IndexSizes } from "./scheduler-index.ts";
-import { joinScheduler, openScheduler } from "./scheduler-open.ts";
-import { abortConversation, abortTask, waitForTask } from "./scheduler-public.ts";
-import { scheduleReconcile } from "./scheduler-reconcile.ts";
-import { inspectScheduler, kick } from "./scheduler-reserve.ts";
-import { SchedulerState } from "./scheduler-state.ts";
-import type {
-  ConversationId,
-  HarnessInspection,
-  RegistrySnapshot,
-  SettledTask,
-  TaskId,
-  TaskInspection,
-  TaskSchedulerOptions,
-} from "./scheduler-types.ts";
+import type schedulerIndexTypes from "./scheduler-index.types.ts";
+import schedulerOpen from "./scheduler-open.ts";
+import schedulerPublic from "./scheduler-public.ts";
+import schedulerReconcile from "./scheduler-reconcile.ts";
+import schedulerReserve from "./scheduler-reserve.ts";
+import SchedulerState from "./scheduler-state.ts";
+import type schedulerStateTypes from "./scheduler-state.types.ts";
+import type schedulerTypesModule from "./scheduler-types.types.ts";
 
-export type {
-  InvocationBinding,
-  SchedulerOutcome,
-  TaskSchedulerOptions,
-} from "./scheduler-types.ts";
+const { inspectScheduler, kick } = schedulerReserve;
+const { scheduleReconcile } = schedulerReconcile;
+const { joinScheduler, openScheduler } = schedulerOpen;
+const { abortConversation, abortTask, waitForTask } = schedulerPublic;
 
-export class TaskScheduler {
-  readonly #state: SchedulerState;
+export default class TaskScheduler {
+  readonly #state: schedulerStateTypes.SchedulerState;
 
-  constructor(options: TaskSchedulerOptions) {
-    const state: SchedulerState = new SchedulerState(options, {
-      reconcile: () => scheduleReconcile(state),
+  constructor(options: schedulerTypesModule.TaskSchedulerOptions) {
+    const state: schedulerStateTypes.SchedulerState = new SchedulerState(options, {
       kick: () => kick(state),
+      reconcile: () => scheduleReconcile(state),
     });
     this.#state = state;
   }
@@ -47,33 +39,44 @@ export class TaskScheduler {
     return Effect.runPromise(joinScheduler(this.#state));
   }
 
-  abort(id: TaskId, context: Context, keepRestart = false): Promise<"marked" | "terminal"> {
+  abort(
+    id: schedulerTypesModule.TaskId,
+    context: Context,
+    keepRestart = false,
+  ): Promise<"marked" | "terminal"> {
     return Effect.runPromise(abortTask(this.#state, id, context, keepRestart));
   }
 
-  waitForTask(id: TaskId, context: Context): Promise<SettledTask<JsonValue>> {
+  waitForTask(
+    id: schedulerTypesModule.TaskId,
+    context: Context,
+  ): Promise<schedulerTypesModule.SettledTask<JsonValue>> {
     return Effect.runPromise(waitForTask(this.#state, id, context));
   }
 
-  waitForIdle(conversationId: ConversationId | undefined, context: Context): Promise<void> {
+  waitForIdle(
+    conversationId: schedulerTypesModule.ConversationId | undefined,
+    context: Context,
+  ): Promise<void> {
     return this.#state.waitForIdle(conversationId, context);
   }
 
   abortConversation(
-    conversationId: ConversationId,
+    conversationId: schedulerTypesModule.ConversationId,
     background: boolean,
     context: Context,
   ): Promise<void> {
     return Effect.runPromise(abortConversation(this.#state, conversationId, background, context));
   }
 
-  get indexSizes(): IndexSizes {
+  get indexSizes(): schedulerIndexTypes.IndexSizes {
     return this.#state.graph.indexSizes;
   }
 
-  inspect(
-    snapshot: RegistrySnapshot,
-  ): Promise<{ scheduling: HarnessInspection["scheduling"]; tasks: TaskInspection[] }> {
+  inspect(snapshot: schedulerTypesModule.RegistrySnapshot): Promise<{
+    scheduling: schedulerTypesModule.HarnessInspection["scheduling"];
+    tasks: schedulerTypesModule.TaskInspection[];
+  }> {
     return Effect.runPromise(inspectScheduler(this.#state, snapshot));
   }
 }

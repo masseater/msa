@@ -1,4 +1,4 @@
-export class SerialQueue {
+export default class SerialQueue {
   private tail: Promise<unknown> = Promise.resolve();
 
   run<T>(operation: () => T | Promise<T>): Promise<T> {

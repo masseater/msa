@@ -1,13 +1,18 @@
 import { createModels } from "@msa/ai";
 import type { Context } from "@msa/chord";
-import { LiveDoc, defineExtension, defineTask } from "@msa/durable";
-import { Harness, createRegistry } from "@msa/durable/harness";
-import { MemoryStorage } from "@msa/durable/storage/memory";
+import durable from "@msa/durable";
+import harnessModule from "@msa/durable/harness";
+import memory from "@msa/durable/storage/memory";
 import { Effect } from "effect";
 import { describe, expect, it } from "vite-plus/test";
 
+import type harnessStorageFailureFailedCallTestTypes from "./harness-storage-failure-failed-call.test.types.ts";
 import harnessStorageFailureSupport from "./harness-storage-failure-support.ts";
 import support from "./support.ts";
+
+const { LiveDoc, defineExtension, defineTask } = durable;
+const { Harness, createRegistry } = harnessModule;
+const { MemoryStorage } = memory;
 
 const { started } = harnessStorageFailureSupport;
 const { ControlledStorage, abortController, awaited, context, deferred } = support;
@@ -36,7 +41,7 @@ const stubbornRunHarness = Effect.fn("stubbornRunHarness")(function* () {
   const registry = createRegistry();
   registry.install(defineExtension({ name: "tasks", tasks: [Stubborn] }));
   const reentry: { reentered?: Promise<unknown> } = {};
-  const harness: Harness = yield* awaited(
+  const harness: harnessStorageFailureFailedCallTestTypes.Harness = yield* awaited(
     Harness.open(
       storage,
       {
@@ -186,7 +191,9 @@ const doesNotFail = Effect.gen(function* () {
   const controller = abortController();
   const cancelled = new Error("caller gave up");
   class CancelledRead extends MemoryStorage {
-    override scanEntries(...args: Parameters<MemoryStorage["scanEntries"]>) {
+    override scanEntries(
+      ...args: Parameters<harnessStorageFailureFailedCallTestTypes.MemoryStorage["scanEntries"]>
+    ) {
       if (args[3].abortSignal === controller.signal) {
         controller.abort(cancelled);
         return Promise.reject(cancelled);

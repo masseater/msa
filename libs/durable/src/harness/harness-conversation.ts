@@ -1,66 +1,59 @@
 import type { AttachedReplicatedState, Context } from "@msa/chord";
 import { Effect } from "effect";
 
-import { ResetEntry } from "../entries.ts";
-import { configure } from "./agent.ts";
-import { createCompaction } from "./compaction.ts";
-import { readContext } from "./context.ts";
-import type { ConversationHost } from "./harness-host.ts";
-import type {
-  Agent,
-  AgentChange,
-  CompactionResult,
-  ContextView,
-  Conversation,
-  ConversationAbortOptions,
-  ConversationCreateOptions,
-  ConversationId,
-  ConversationWatch,
-  Cursor,
-  EntryId,
-  EntryQuery,
-  EntryRecord,
-  Page,
-  Submission,
-  SubmissionDraft,
-  TaskId,
-  ToolRegistration,
-  Tx,
-} from "./types.ts";
-import type { ConversationView } from "./view.ts";
+import entriesModule from "../entries.ts";
+import agentModule from "./agent.ts";
+import compaction from "./compaction.ts";
+import contextModule from "./context.ts";
+import type harnessHostTypes from "./harness-host.ts";
+import type typesModule from "./types.types.ts";
+import type viewTypes from "./view.types.ts";
+
+const { configure } = agentModule;
+const { createCompaction } = compaction;
+const { ResetEntry } = entriesModule;
+const { readContext } = contextModule;
 
 const boundedQuery = (
-  conversationId: ConversationId,
-  query: Omit<EntryQuery, "conversationId">,
-): EntryQuery => ({
+  conversationId: typesModule.ConversationId,
+  query: Omit<typesModule.EntryQuery, "conversationId">,
+): typesModule.EntryQuery => ({
   conversationId,
   ...(query.minEntryId === undefined ? {} : { minEntryId: query.minEntryId }),
   ...(query.maxEntryId === undefined ? {} : { maxEntryId: query.maxEntryId }),
   ...(query.order === undefined ? {} : { order: query.order }),
 });
 
-export class ConversationImpl<Tool extends ToolRegistration> implements Conversation {
-  readonly id: ConversationId;
-  readonly #host: ConversationHost<Tool>;
+export default class ConversationImpl<Tool extends typesModule.ToolRegistration>
+  implements typesModule.Conversation
+{
+  readonly id: typesModule.ConversationId;
+  readonly #host: harnessHostTypes.ConversationHost<Tool>;
 
-  constructor(id: ConversationId, host: ConversationHost<Tool>) {
+  constructor(id: typesModule.ConversationId, host: harnessHostTypes.ConversationHost<Tool>) {
     this.id = id;
     this.#host = host;
   }
 
-  agent(context: Context): Promise<Agent> {
+  agent(context: Context): Promise<typesModule.Agent> {
     return this.#host.harness.resolveAgent(this.id, undefined, context);
   }
 
-  configure(change: AgentChange, context: Context): Promise<void> {
+  configure(change: typesModule.AgentChange, context: Context): Promise<void> {
     return this.#host.harness.commitWith((tx) => configure(tx, this.id, change), context);
   }
 
-  submit(submission: SubmissionDraft, context: Context): Promise<Submission> {
+  submit(
+    submission: typesModule.SubmissionDraft,
+    context: Context,
+  ): Promise<typesModule.Submission> {
     return this.#host.submissions.submit(this.id, submission, context);
   }
 
-  compact(instructions: string | undefined, context: Context): Promise<TaskId<CompactionResult>> {
+  compact(
+    instructions: string | undefined,
+    context: Context,
+  ): Promise<typesModule.TaskId<typesModule.CompactionResult>> {
     this.#host.tasks.resume();
     const input = {
       reason: "manual",
@@ -76,48 +69,55 @@ export class ConversationImpl<Tool extends ToolRegistration> implements Conversa
     const model =
       handoff === undefined
         ? {}
-        : { model: [{ role: "user", content: handoff, timestamp: this.#host.now() } as const] };
-    const entry = { kind: ResetEntry.kind, head: "self", ...model } as const;
+        : { model: [{ content: handoff, role: "user", timestamp: this.#host.now() } as const] };
+    const entry = { head: "self", kind: ResetEntry.kind, ...model } as const;
     return Effect.runPromise(
       Effect.asVoid(
         Effect.promise(() =>
-          this.#host.submissions.submit(this.id, { type: "write", entry }, context),
+          this.#host.submissions.submit(this.id, { entry, type: "write" }, context),
         ),
       ),
     );
   }
 
-  commit<T>(change: (tx: Tx) => T | Promise<T>, context: Context): Promise<T> {
+  commit<T>(change: (tx: typesModule.Tx) => T | Promise<T>, context: Context): Promise<T> {
     return this.#host.harness.commitWith(change, context, { conversationId: this.id });
   }
 
-  context(context: Context, options?: { readonly at?: EntryId }): Promise<ContextView> {
+  context(
+    context: Context,
+    options?: { readonly at?: typesModule.EntryId },
+  ): Promise<typesModule.ContextView> {
     return Effect.runPromise(
       readContext(this.#host.harness, this.#host.storage, this.id, context, options?.at),
     );
   }
 
   entries(
-    query: Omit<EntryQuery, "conversationId">,
+    query: Omit<typesModule.EntryQuery, "conversationId">,
     limit: number,
-    cursor: Cursor | undefined,
+    cursor: typesModule.Cursor | undefined,
     context: Context,
-  ): Promise<Page<EntryRecord, Cursor>> {
+  ): Promise<typesModule.Page<typesModule.EntryRecord, typesModule.Cursor>> {
     const bounded = boundedQuery(this.id, query);
     return this.#host.harness.readOnLine(() =>
       this.#host.storage.scanEntries(bounded, limit, cursor, context),
     );
   }
 
-  fork(at: EntryId, options: ConversationCreateOptions, context: Context): Promise<Conversation> {
+  fork(
+    at: typesModule.EntryId,
+    options: typesModule.ConversationCreateOptions,
+    context: Context,
+  ): Promise<typesModule.Conversation> {
     return this.#host.create(
-      { kind: "fork", parentId: this.id, at, ownership: options.ownership },
+      { at, kind: "fork", ownership: options.ownership, parentId: this.id },
       options,
       context,
     );
   }
 
-  abort(context: Context, options?: ConversationAbortOptions): Promise<void> {
+  abort(context: Context, options?: typesModule.ConversationAbortOptions): Promise<void> {
     this.#host.tasks.resume();
     return this.#host.tasks.abortConversation(this.id, options?.background === true, context);
   }
@@ -127,11 +127,11 @@ export class ConversationImpl<Tool extends ToolRegistration> implements Conversa
     return this.#host.tasks.waitForIdle(this.id, context);
   }
 
-  viewState(context: Context): Promise<AttachedReplicatedState<ConversationView>> {
+  viewState(context: Context): Promise<AttachedReplicatedState<viewTypes.ConversationView>> {
     return this.#host.views.state(this.id, context);
   }
 
-  watch(context: Context): Promise<ConversationWatch> {
+  watch(context: Context): Promise<typesModule.ConversationWatch> {
     return this.#host.views.watch(this.id, context);
   }
 }

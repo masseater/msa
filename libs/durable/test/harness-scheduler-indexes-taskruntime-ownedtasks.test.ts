@@ -1,13 +1,17 @@
-import { type TaskId, type Tx, defineTask } from "@msa/durable";
+import durable from "@msa/durable";
+import type durableTypes from "@msa/durable/index.types";
 import { Effect } from "effect";
 import { afterEach, describe, expect, it } from "vite-plus/test";
 
-import { openNodeSqliteStorage } from "../src/storage/sqlite/node.ts";
+import node from "../src/storage/sqlite/node.ts";
 import effectSupport from "./effect-support.ts";
 import harnessSchedulerIndexesSupport from "./harness-scheduler-indexes-support.ts";
 import platformSupport from "./platform-support.ts";
 import sessionSupport from "./session-support.ts";
 import taskSupport from "./task-support.ts";
+
+const { defineTask } = durable;
+const { openNodeSqliteStorage } = node;
 
 const { awaited } = effectSupport;
 const { Hold, directories, gate, gates, owned, runtimes, sqlitePath, state } =
@@ -59,10 +63,10 @@ afterEach(() =>
   ),
 );
 
-const seedProbeTree = (tx: Tx) =>
+const seedProbeTree = (tx: durableTypes.Tx) =>
   Effect.runPromise(
     Effect.gen(function* () {
-      const hold = (name: string, taskId: TaskId) =>
+      const hold = (name: string, taskId: durableTypes.TaskId) =>
         awaited(tx.createTask(Hold, { name }, { ownership: { kind: "task", taskId } }));
       const probe = yield* awaited(
         tx.createTask(Probe, { name: "probe" }, { ownership: { kind: "conversation" } }),

@@ -6,14 +6,21 @@ import {
   fauxProvider,
   fauxToolCall,
 } from "@msa/ai";
-import { type Conversation, ToolResultEntry, defineExtension, wrapTool } from "@msa/durable";
-import { Harness, createRegistry } from "@msa/durable/harness";
-import { MemoryStorage } from "@msa/durable/storage/memory";
+import durable from "@msa/durable";
+import harnessModule from "@msa/durable/harness";
+import type durableTypes from "@msa/durable/index.types";
+import memory from "@msa/durable/storage/memory";
 import { Console, Effect } from "effect";
 
-import { NodeExecutionEnv } from "../../src/env/node.ts";
-import { CodingTools, createBashTool } from "../../src/tools/index.ts";
+import node from "../../src/env/node.ts";
+import toolsModule from "../../src/tools/index.ts";
 import support from "../support.ts";
+
+const { ToolResultEntry, defineExtension, wrapTool } = durable;
+const { CodingTools, createBashTool } = toolsModule;
+const { Harness, createRegistry } = harnessModule;
+const { MemoryStorage } = memory;
+const { NodeExecutionEnv } = node;
 
 const {
   BACKGROUND_CONTEXT,
@@ -108,7 +115,7 @@ const main = Effect.gen(function* () {
     ),
   );
 
-  const probeBash = Effect.fn("probeBash")(function* (conversation: Conversation) {
+  const probeBash = Effect.fn("probeBash")(function* (conversation: durableTypes.Conversation) {
     yield* awaited(
       (yield* awaited(
         conversation.submit({ content: "Which venv?", type: "input" }, context),

@@ -1,54 +1,62 @@
 import { Effect, Function } from "effect";
 
-import { seqFromNumber } from "../../ids.ts";
-import type { DocumentId, Seq, StorageWrite } from "../../types.ts";
-import { type DocumentAction, type MetadataRow, writeId } from "./codec.ts";
-import type { SqliteExecutor } from "./database.ts";
-import { checkDocumentActions } from "./documents.ts";
-import { applyDocumentActions, applyTableWrite, checkGlobalIds, sequence } from "./writes.ts";
+import ids from "../../ids.ts";
+import type typesModule from "../../types.types.ts";
+import codec from "./codec.ts";
+import type codecTypes from "./codec.types.ts";
+import type databaseTypes from "./database.ts";
+import documents from "./documents.ts";
+import writesModule from "./writes.ts";
+
+const { seqFromNumber } = ids;
+const { applyDocumentActions, applyTableWrite, checkGlobalIds, sequence } = writesModule;
+const { checkDocumentActions } = documents;
+const { writeId } = codec;
 
 const METADATA = "SELECT next_id, next_seq FROM durable_metadata WHERE singleton = 1";
 
-export const readMetadata = (executor: SqliteExecutor): Effect.Effect<MetadataRow> =>
+const readMetadata = (
+  executor: databaseTypes.SqliteExecutor,
+): Effect.Effect<codecTypes.MetadataRow> =>
   Effect.map(
-    Effect.promise(() => executor.get<MetadataRow>(METADATA)),
+    Effect.promise(() => executor.get<codecTypes.MetadataRow>(METADATA)),
     (metadata) => {
       if (metadata === undefined) throw new Error("Durable SQLite metadata is missing");
       return metadata;
     },
   );
 
-const readMetadataRow = (executor: SqliteExecutor): Promise<MetadataRow> =>
-  executor.get<MetadataRow>(METADATA).then((metadata) => {
+const readMetadataRow = (executor: databaseTypes.SqliteExecutor): Promise<codecTypes.MetadataRow> =>
+  executor.get<codecTypes.MetadataRow>(METADATA).then((metadata) => {
     if (metadata === undefined) throw new Error("Durable SQLite metadata is missing");
     return metadata;
   });
 
 const documentStep = (
-  actions: ReadonlyMap<DocumentId, DocumentAction>,
+  actions: ReadonlyMap<typesModule.DocumentId, codecTypes.DocumentAction>,
   step: Effect.Effect<void>,
 ) => (actions.size === 0 ? Promise.resolve() : Effect.runPromise(step));
 
-export const commitIn: {
+const commitIn: {
   (
-    writes: readonly StorageWrite[],
-    documentActions: ReadonlyMap<DocumentId, DocumentAction>,
+    writes: readonly typesModule.StorageWrite[],
+    documentActions: ReadonlyMap<typesModule.DocumentId, codecTypes.DocumentAction>,
     candidateNextId: number,
-  ): (transaction: SqliteExecutor) => Promise<Seq>;
+  ): (transaction: databaseTypes.SqliteExecutor) => Promise<typesModule.Seq>;
   (
-    transaction: SqliteExecutor,
-    writes: readonly StorageWrite[],
-    documentActions: ReadonlyMap<DocumentId, DocumentAction>,
+    transaction: databaseTypes.SqliteExecutor,
+    writes: readonly typesModule.StorageWrite[],
+    documentActions: ReadonlyMap<typesModule.DocumentId, codecTypes.DocumentAction>,
     candidateNextId: number,
-  ): Promise<Seq>;
+  ): Promise<typesModule.Seq>;
 } = Function.dual(
   4,
   (
-    transaction: SqliteExecutor,
-    writes: readonly StorageWrite[],
-    documentActions: ReadonlyMap<DocumentId, DocumentAction>,
+    transaction: databaseTypes.SqliteExecutor,
+    writes: readonly typesModule.StorageWrite[],
+    documentActions: ReadonlyMap<typesModule.DocumentId, codecTypes.DocumentAction>,
     candidateNextId: number,
-  ): Promise<Seq> =>
+  ): Promise<typesModule.Seq> =>
     readMetadataRow(transaction).then((metadata) => {
       const committedSeq = seqFromNumber(metadata.next_seq);
       return checkGlobalIds(transaction, writes)
@@ -73,10 +81,10 @@ export const commitIn: {
     }),
 );
 
-export const candidateNextId: {
-  (writes: readonly StorageWrite[]): (nextId: number) => number;
-  (nextId: number, writes: readonly StorageWrite[]): number;
-} = Function.dual(2, (nextId: number, writes: readonly StorageWrite[]): number => {
+const candidateNextId: {
+  (writes: readonly typesModule.StorageWrite[]): (nextId: number) => number;
+  (nextId: number, writes: readonly typesModule.StorageWrite[]): number;
+} = Function.dual(2, (nextId: number, writes: readonly typesModule.StorageWrite[]): number => {
   let candidate = nextId;
   for (const write of writes) {
     const id = writeId(write);
@@ -84,3 +92,11 @@ export const candidateNextId: {
   }
   return candidate;
 });
+
+const commit = {
+  candidateNextId,
+  commitIn,
+  readMetadata,
+};
+
+export default commit;

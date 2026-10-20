@@ -1,11 +1,13 @@
 import { type AssistantMessage, type Message, fauxAssistantMessage } from "@msa/ai";
-import { LiveDoc } from "@msa/durable";
+import durable from "@msa/durable";
 import { Effect } from "effect";
 import { afterEach, describe, expect, it } from "vite-plus/test";
 
 import harnessGenerationRecoveryCases from "./harness-generation-recovery-cases.ts";
 import harnessGenerationRecoverySupport from "./harness-generation-recovery-support.ts";
 import support from "./support.ts";
+
+const { LiveDoc } = durable;
 
 const { checkpoint, runTaskId } = harnessGenerationRecoveryCases;
 const { directories, open, sqlitePath } = harnessGenerationRecoverySupport;

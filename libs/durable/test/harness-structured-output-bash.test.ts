@@ -1,13 +1,19 @@
 import { Type } from "@msa/ai";
-import { type NestedToolExecutionResult, defineTool } from "@msa/durable";
-import { MemoryStorage } from "@msa/durable/storage/memory";
+import durable from "@msa/durable";
+import type durableTypes from "@msa/durable/index.types";
+import memory from "@msa/durable/storage/memory";
 import { Effect } from "effect";
 import { describe, expect, it } from "vite-plus/test";
 
-import { NodeExecutionEnv } from "../src/env/node.ts";
-import { createBashTool } from "../src/tools/index.ts";
+import node from "../src/env/node.ts";
+import toolsModule from "../src/tools/index.ts";
 import harnessStructuredOutputSupport from "./harness-structured-output-support.ts";
 import support from "./support.ts";
+
+const { createBashTool } = toolsModule;
+const { defineTool } = durable;
+const { NodeExecutionEnv } = node;
+const { MemoryStorage } = memory;
 
 const { DONE, call, codes } = harnessStructuredOutputSupport;
 const { addTool, awaited, chatSetup, context, openChat, withTempDir } = support;
@@ -19,7 +25,7 @@ const givesCallersBash = Effect.gen(function* () {
     Effect.gen(function* () {
       const setup = chatSetup();
       addTool(setup.registry, createBashTool());
-      const received: NestedToolExecutionResult[] = [];
+      const received: durableTypes.NestedToolExecutionResult[] = [];
       addTool(
         setup.registry,
         defineTool({

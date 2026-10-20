@@ -31,11 +31,23 @@
       "import": "./dist/index.js",
       "default": "./dist/index.js"
     },
+    "./index.types": {
+      "source": "./src/index.types.ts",
+      "types": "./dist/index.types.d.ts",
+      "import": "./dist/index.types.js",
+      "default": "./dist/index.types.js"
+    },
     "./harness": {
       "source": "./src/harness/index.ts",
       "types": "./dist/harness/index.d.ts",
       "import": "./dist/harness/index.js",
       "default": "./dist/harness/index.js"
+    },
+    "./harness.types": {
+      "source": "./src/harness/index.types.ts",
+      "types": "./dist/harness/index.types.d.ts",
+      "import": "./dist/harness/index.types.js",
+      "default": "./dist/harness/index.types.js"
     },
     "./session": {
       "source": "./src/session/index.ts",
@@ -49,11 +61,23 @@
       "import": "./dist/env/index.js",
       "default": "./dist/env/index.js"
     },
+    "./env.types": {
+      "source": "./src/env/index.types.ts",
+      "types": "./dist/env/index.types.d.ts",
+      "import": "./dist/env/index.types.js",
+      "default": "./dist/env/index.types.js"
+    },
     "./env/node": {
       "source": "./src/env/node.ts",
       "types": "./dist/env/node.d.ts",
       "import": "./dist/env/node.js",
       "default": "./dist/env/node.js"
+    },
+    "./env/node.types": {
+      "source": "./src/env/node.types.ts",
+      "types": "./dist/env/node.types.d.ts",
+      "import": "./dist/env/node.types.js",
+      "default": "./dist/env/node.types.js"
     },
     "./codemode": {
       "source": "./src/codemode/index.ts",
@@ -61,17 +85,35 @@
       "import": "./dist/codemode/index.js",
       "default": "./dist/codemode/index.js"
     },
+    "./codemode.types": {
+      "source": "./src/codemode/index.types.ts",
+      "types": "./dist/codemode/index.types.d.ts",
+      "import": "./dist/codemode/index.types.js",
+      "default": "./dist/codemode/index.types.js"
+    },
     "./tool-search": {
       "source": "./src/tool-search/index.ts",
       "types": "./dist/tool-search/index.d.ts",
       "import": "./dist/tool-search/index.js",
       "default": "./dist/tool-search/index.js"
     },
+    "./tool-search.types": {
+      "source": "./src/tool-search/index.types.ts",
+      "types": "./dist/tool-search/index.types.d.ts",
+      "import": "./dist/tool-search/index.types.js",
+      "default": "./dist/tool-search/index.types.js"
+    },
     "./tools": {
       "source": "./src/tools/index.ts",
       "types": "./dist/tools/index.d.ts",
       "import": "./dist/tools/index.js",
       "default": "./dist/tools/index.js"
+    },
+    "./tools.types": {
+      "source": "./src/tools/index.types.ts",
+      "types": "./dist/tools/index.types.d.ts",
+      "import": "./dist/tools/index.types.js",
+      "default": "./dist/tools/index.types.js"
     },
     "./images": {
       "source": "./src/images/index.ts",
@@ -85,6 +127,12 @@
       "import": "./dist/images/node.js",
       "default": "./dist/images/node.js"
     },
+    "./images/node.types": {
+      "source": "./src/images/node.types.ts",
+      "types": "./dist/images/node.types.d.ts",
+      "import": "./dist/images/node.types.js",
+      "default": "./dist/images/node.types.js"
+    },
     "./images/cloudflare": {
       "source": "./src/images/cloudflare.ts",
       "types": "./dist/images/cloudflare.d.ts",
@@ -97,11 +145,23 @@
       "import": "./dist/storage/memory.js",
       "default": "./dist/storage/memory.js"
     },
+    "./storage/memory.types": {
+      "source": "./src/storage/memory.types.ts",
+      "types": "./dist/storage/memory.types.d.ts",
+      "import": "./dist/storage/memory.types.js",
+      "default": "./dist/storage/memory.types.js"
+    },
     "./storage/jsonl": {
       "source": "./src/storage/jsonl/index.ts",
       "types": "./dist/storage/jsonl/index.d.ts",
       "import": "./dist/storage/jsonl/index.js",
       "default": "./dist/storage/jsonl/index.js"
+    },
+    "./storage/jsonl.types": {
+      "source": "./src/storage/jsonl/index.types.ts",
+      "types": "./dist/storage/jsonl/index.types.d.ts",
+      "import": "./dist/storage/jsonl/index.types.js",
+      "default": "./dist/storage/jsonl/index.types.js"
     },
     "./storage/jsonl/node": {
       "source": "./src/storage/jsonl/node.ts",
@@ -109,11 +169,23 @@
       "import": "./dist/storage/jsonl/node.js",
       "default": "./dist/storage/jsonl/node.js"
     },
+    "./storage/jsonl/node.types": {
+      "source": "./src/storage/jsonl/node.types.ts",
+      "types": "./dist/storage/jsonl/node.types.d.ts",
+      "import": "./dist/storage/jsonl/node.types.js",
+      "default": "./dist/storage/jsonl/node.types.js"
+    },
     "./storage/sqlite": {
       "source": "./src/storage/sqlite/index.ts",
       "types": "./dist/storage/sqlite/index.d.ts",
       "import": "./dist/storage/sqlite/index.js",
       "default": "./dist/storage/sqlite/index.js"
+    },
+    "./storage/sqlite.types": {
+      "source": "./src/storage/sqlite/index.types.ts",
+      "types": "./dist/storage/sqlite/index.types.d.ts",
+      "import": "./dist/storage/sqlite/index.types.js",
+      "default": "./dist/storage/sqlite/index.types.js"
     },
     "./storage/sqlite/cloudflare": {
       "source": "./src/storage/sqlite/cloudflare.ts",
@@ -121,17 +193,35 @@
       "import": "./dist/storage/sqlite/cloudflare.js",
       "default": "./dist/storage/sqlite/cloudflare.js"
     },
+    "./storage/sqlite/cloudflare.types": {
+      "source": "./src/storage/sqlite/cloudflare.types.ts",
+      "types": "./dist/storage/sqlite/cloudflare.types.d.ts",
+      "import": "./dist/storage/sqlite/cloudflare.types.js",
+      "default": "./dist/storage/sqlite/cloudflare.types.js"
+    },
     "./storage/sqlite/node": {
       "source": "./src/storage/sqlite/node.ts",
       "types": "./dist/storage/sqlite/node.d.ts",
       "import": "./dist/storage/sqlite/node.js",
       "default": "./dist/storage/sqlite/node.js"
     },
+    "./storage/sqlite/node.types": {
+      "source": "./src/storage/sqlite/node.types.ts",
+      "types": "./dist/storage/sqlite/node.types.d.ts",
+      "import": "./dist/storage/sqlite/node.types.js",
+      "default": "./dist/storage/sqlite/node.types.js"
+    },
     "./testing": {
       "source": "./src/testing/index.ts",
       "types": "./dist/testing/index.d.ts",
       "import": "./dist/testing/index.js",
       "default": "./dist/testing/index.js"
+    },
+    "./testing.types": {
+      "source": "./src/testing/index.types.ts",
+      "types": "./dist/testing/index.types.d.ts",
+      "import": "./dist/testing/index.types.js",
+      "default": "./dist/testing/index.types.js"
     },
     "./package.json": "./package.json"
   },

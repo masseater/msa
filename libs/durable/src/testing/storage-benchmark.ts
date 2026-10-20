@@ -1,36 +1,34 @@
 import type { JsonValue } from "@msa/chord";
 import { Function } from "effect";
 
-import type { Dual2 } from "../dual.ts";
-import type { ConversationId, DocumentId, EntryId, Seq, TaskId, TaskRecord } from "../types.ts";
-import { ROOT_CONVERSATION_ID } from "../types.ts";
+import type dualTypes from "../dual.ts";
+import types from "../types.ts";
+import type typesModule from "../types.types.ts";
+import type storageBenchmarkTypes from "./storage-benchmark.types.ts";
 
-export type StorageBenchmarkScale = {
-  readonly name: string;
-  readonly entryCount: number;
-  readonly taskCount: number;
-  readonly documentCount: number;
-};
+const { ROOT_CONVERSATION_ID } = types;
 
-export const STORAGE_MEMORY_SCALES: readonly StorageBenchmarkScale[] = [
-  { name: "1k", entryCount: 1_000, taskCount: 200, documentCount: 200 },
-  { name: "10k", entryCount: 10_000, taskCount: 2_000, documentCount: 2_000 },
+const STORAGE_MEMORY_SCALES: readonly storageBenchmarkTypes.StorageBenchmarkScale[] = [
+  { documentCount: 200, entryCount: 1_000, name: "1k", taskCount: 200 },
+  { documentCount: 2_000, entryCount: 10_000, name: "10k", taskCount: 2_000 },
 ];
 
-export const TIMING_SCALE: StorageBenchmarkScale = {
-  name: "timing",
-  entryCount: 1_000,
-  taskCount: 300,
+const TIMING_SCALE: storageBenchmarkTypes.StorageBenchmarkScale = {
   documentCount: 300,
+  entryCount: 1_000,
+  name: "timing",
+  taskCount: 300,
 };
 
-export const REPLAY_TAILS = [0, 16, 128, 1_024] as const;
-export const HISTORY_SEGMENT_LENGTH = 128;
-export const FORK_DEPTH = 8;
-export const ENTRIES_PER_FORK = 32;
-export const BATCH_SIZE = 100;
+const REPLAY_TAILS = [0, 16, 128, 1_024] as const;
+const HISTORY_SEGMENT_LENGTH = 128;
+const FORK_DEPTH = 8;
+const ENTRIES_PER_FORK = 32;
+const BATCH_SIZE = 100;
 
-export function storageBenchmarkPrimaryRecordCount(scale: StorageBenchmarkScale): number {
+function storageBenchmarkPrimaryRecordCount(
+  scale: storageBenchmarkTypes.StorageBenchmarkScale,
+): number {
   return (
     1 +
     scale.entryCount +
@@ -42,36 +40,42 @@ export function storageBenchmarkPrimaryRecordCount(scale: StorageBenchmarkScale)
   );
 }
 
-export type StoredTask = TaskRecord<JsonValue, JsonValue, JsonValue>;
-
-export type StorageBenchmarkDataset = {
-  readonly firstEntryId: EntryId;
-  readonly filteredTaskCount: number;
-  readonly exactDocumentId: DocumentId;
-  readonly exactDocumentKey: string;
-  readonly replayDocumentIds: Readonly<Record<(typeof REPLAY_TAILS)[number], DocumentId>>;
-  readonly historicalDocumentId: DocumentId;
-  readonly ancientAt: Seq;
-  readonly recentAt: Seq;
-  readonly deepestConversationId: ConversationId;
-  readonly ancestorHeadEntryId: EntryId;
-};
-
-const benchmarkTask = (id: TaskId<JsonValue>, index: number): StoredTask => {
+const benchmarkTask = (
+  id: typesModule.TaskId<JsonValue>,
+  index: number,
+): storageBenchmarkTypes.StoredTask => {
   const status = index % 3 === 0 ? "pending" : index % 3 === 1 ? "running" : "terminal";
   const common = {
-    id,
+    abortRequested: index % 7 === 0,
+    background: index % 5 === 0,
     conversationId: ROOT_CONVERSATION_ID,
+    id,
+    input: { index },
     kind: index % 4 === 0 ? "benchmark.filtered" : "benchmark.other",
     version: 1,
-    input: { index },
-    background: index % 5 === 0,
-    abortRequested: index % 7 === 0,
   };
   if (status === "terminal") {
-    return { ...common, state: { status, outcome: { status: "completed", result: { index } } } };
+    return { ...common, state: { outcome: { result: { index }, status: "completed" }, status } };
   }
-  return { ...common, state: { status, checkpoint: { index, payload: "x".repeat(64) } } };
+  return { ...common, state: { checkpoint: { index, payload: "x".repeat(64) }, status } };
 };
 
-export const task: Dual2<TaskId<JsonValue>, number, StoredTask> = Function.dual(2, benchmarkTask);
+const task: dualTypes.Dual2<
+  typesModule.TaskId<JsonValue>,
+  number,
+  storageBenchmarkTypes.StoredTask
+> = Function.dual(2, benchmarkTask);
+
+const storageBenchmark = {
+  BATCH_SIZE,
+  ENTRIES_PER_FORK,
+  FORK_DEPTH,
+  HISTORY_SEGMENT_LENGTH,
+  REPLAY_TAILS,
+  STORAGE_MEMORY_SCALES,
+  TIMING_SCALE,
+  storageBenchmarkPrimaryRecordCount,
+  task,
+};
+
+export default storageBenchmark;

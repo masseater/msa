@@ -1,10 +1,12 @@
-import { type NestedToolExecutionResult, type ToolHookCall } from "@msa/durable";
-import { ToolTask } from "@msa/durable/harness";
+import harnessModule from "@msa/durable/harness";
+import type durableTypes from "@msa/durable/index.types";
 import { Effect } from "effect";
 import { afterEach, describe, expect, it } from "vite-plus/test";
 
 import harnessNestedToolsSupport from "./harness-nested-tools-support.ts";
 import support from "./support.ts";
+
+const { ToolTask } = harnessModule;
 
 const { DONE, call, directories, echoTool, results, runOnce, text, tool, toolTasks } =
   harnessNestedToolsSupport;
@@ -25,7 +27,7 @@ const runsToolHooks = Effect.gen(function* () {
   const setup = chatSetup();
   const echo = echoTool();
   addTool(setup.registry, echo.registration);
-  const parents: ToolHookCall["parent"][] = [];
+  const parents: durableTypes.ToolHookCall["parent"][] = [];
   addHooks(setup.registry, ToolTask, {
     afterTool: (hookCall, result) =>
       hookCall.parent === undefined
@@ -38,7 +40,7 @@ const runsToolHooks = Effect.gen(function* () {
         : undefined;
     },
   });
-  const nested: NestedToolExecutionResult[] = [];
+  const nested: durableTypes.NestedToolExecutionResult[] = [];
   addTool(
     setup.registry,
     tool("batch", (_args, api, callContext) =>
@@ -77,7 +79,7 @@ const returnsErrorResult = Effect.gen(function* () {
 
   const setup = chatSetup();
   addTool(setup.registry, echoTool().registration);
-  const nested: NestedToolExecutionResult[] = [];
+  const nested: durableTypes.NestedToolExecutionResult[] = [];
   addTool(
     setup.registry,
     tool("batch", (_args, api, callContext) =>
@@ -106,7 +108,7 @@ const returnsCallKey = Effect.gen(function* () {
   const setup = chatSetup();
   const echo = echoTool();
   addTool(setup.registry, echo.registration);
-  let reused: NestedToolExecutionResult | undefined;
+  let reused: durableTypes.NestedToolExecutionResult | undefined;
   addTool(
     setup.registry,
     tool("batch", (_args, api, callContext) =>

@@ -1,49 +1,47 @@
 import type { Context } from "@msa/chord";
 import { Effect } from "effect";
 
-import { commitTask } from "./bridge.ts";
-import { classify } from "./generation-classify.ts";
-import { failNoModel } from "./generation-fail.ts";
-import { finishToolRound } from "./generation-finish.ts";
-import { createToolTask } from "./generation-tools.ts";
-import type {
-  GenerationCheckpoint,
-  GenerationNext,
-  GenerationRuntime,
-  PhaseTask,
-} from "./generation-types.ts";
-import { LiveDoc } from "./live.ts";
-import type { Tx } from "./types.ts";
+import bridge from "./bridge.ts";
+import generationClassify from "./generation-classify.ts";
+import generationFail from "./generation-fail.ts";
+import generationFinish from "./generation-finish.ts";
+import generationTools from "./generation-tools.ts";
+import type generationTypesModule from "./generation-types.types.ts";
+import liveModule from "./live.ts";
+import type typesModule from "./types.types.ts";
 
-export const retryPhase = Effect.fnUntraced(function* (
-  task: PhaseTask<"retry">,
-  runtime: GenerationRuntime,
+const { commitTask } = bridge;
+const { LiveDoc } = liveModule;
+const { failNoModel } = generationFail;
+const retryPhase = Effect.fnUntraced(function* (
+  task: generationTypesModule.PhaseTask<"retry">,
+  runtime: generationTypesModule.GenerationRuntime,
   context: Context,
 ) {
   const { attempt, compacted, until } = task.state.checkpoint;
   yield* Effect.promise(() => runtime.sleep(until, context));
   yield* commitTask(
     runtime,
-    (tx: Tx): Effect.Effect<GenerationNext> =>
+    (tx: typesModule.Tx): Effect.Effect<generationTypesModule.GenerationNext> =>
       Effect.gen(function* () {
         const live = yield* Effect.promise(() => tx.doc(LiveDoc, runtime.conversationId));
         live.generation = { attempt: attempt + 1 };
         return {
-          status: "running",
           checkpoint: {
-            phase: "prepare",
             attempt: attempt + 1,
+            phase: "prepare",
             ...(compacted === undefined ? {} : { compacted }),
           },
+          status: "running",
         };
       }),
     context,
   );
 });
 
-export const pollPhase = Effect.fnUntraced(function* (
-  task: PhaseTask<"poll">,
-  runtime: GenerationRuntime,
+const pollPhase = Effect.fnUntraced(function* (
+  task: generationTypesModule.PhaseTask<"poll">,
+  runtime: generationTypesModule.GenerationRuntime,
   context: Context,
 ) {
   const { attempt, compacted, model: ref, cutoff, handle, pollAt } = task.state.checkpoint;
@@ -53,35 +51,49 @@ export const pollPhase = Effect.fnUntraced(function* (
   const message = yield* Effect.promise(() =>
     runtime.models.fetchDeferred(model, handle, { signal: runtime.signal }),
   );
-  yield* classify(runtime, { attempt, compacted, model: ref, cutoff, pollAt }, message, context);
+  yield* generationClassify.classify(
+    runtime,
+    { attempt, compacted, cutoff, model: ref, pollAt },
+    message,
+    context,
+  );
 });
 
-export const toolsPhase = Effect.fnUntraced(function* (
-  task: PhaseTask<"tools">,
-  runtime: GenerationRuntime,
+const toolsPhase = Effect.fnUntraced(function* (
+  task: generationTypesModule.PhaseTask<"tools">,
+  runtime: generationTypesModule.GenerationRuntime,
   context: Context,
 ) {
   const { assistant, tools, pending } = task.state.checkpoint;
   const [next, ...rest] = pending;
-  if (next === undefined) return yield* finishToolRound(runtime, assistant, tools, context);
+  if (next === undefined)
+    return yield* generationFinish.finishToolRound(runtime, assistant, tools, context);
   yield* commitTask(
     runtime,
-    (tx: Tx): Effect.Effect<GenerationNext> =>
+    (tx: typesModule.Tx): Effect.Effect<generationTypesModule.GenerationNext> =>
       Effect.gen(function* () {
         const live = yield* Effect.promise(() => tx.doc(LiveDoc, runtime.conversationId));
-        const taskId = yield* createToolTask(tx, runtime, assistant, next);
+        const taskId = yield* generationTools.createToolTask(tx, runtime, assistant, next);
         const slot = live.tools?.find(
           (candidate) => candidate.callId === next && candidate.taskId === undefined,
         );
         if (slot !== undefined) slot.taskId = taskId;
-        const checkpoint: GenerationCheckpoint = {
-          phase: "tools",
+        const checkpoint: generationTypesModule.GenerationCheckpoint = {
           assistant,
-          tools: [...tools, taskId],
           pending: rest,
+          phase: "tools",
+          tools: [...tools, taskId],
         };
-        return { status: "waiting", checkpoint, on: [taskId], policy: "allSettled" };
+        return { checkpoint, on: [taskId], policy: "allSettled", status: "waiting" };
       }),
     context,
   );
 });
+
+const generationPhases = {
+  pollPhase,
+  retryPhase,
+  toolsPhase,
+};
+
+export default generationPhases;

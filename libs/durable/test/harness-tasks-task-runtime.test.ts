@@ -1,13 +1,16 @@
-import { defineDoc } from "@msa/durable";
+import durable from "@msa/durable";
 import { Effect } from "effect";
 import { describe, expect, it } from "vite-plus/test";
 
-import { currentTimeMillis } from "../src/clock.ts";
+import clockModule from "../src/clock.ts";
 import effectSupport from "./effect-support.ts";
 import harnessTasksSupport from "./harness-tasks-support.ts";
 import sessionSupport from "./session-support.ts";
 import type sessionSupportTypes from "./session-support.types.ts";
 import taskSupport from "./task-support.ts";
+
+const { defineDoc } = durable;
+const { currentTimeMillis } = clockModule;
 
 const { abortController, awaited } = effectSupport;
 const { oneStep, openRoot, start, withSignal } = harnessTasksSupport;

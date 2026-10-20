@@ -1,62 +1,50 @@
-import {
-  cancellationIntent,
-  conversationNode,
-  conversationOf,
-  nodeOf,
-  parentNode,
-} from "./scheduler-records.ts";
-import { SetMap } from "./scheduler-setmap.ts";
-import type {
-  AnyTaskRecord,
-  ConversationId,
-  Node,
-  Overlay,
-  TaskId,
-  TaskNode,
-} from "./scheduler-types.ts";
+import type schedulerIndexTypes from "./scheduler-index.types.ts";
+import schedulerRecords from "./scheduler-records.ts";
+import SetMap from "./scheduler-setmap.ts";
+import type schedulerTypesModule from "./scheduler-types.types.ts";
 
-export type IndexHooks = {
-  readonly scheduleReconcile: () => void;
-  readonly scheduleSweep: () => void;
-};
+const { cancellationIntent, conversationNode, conversationOf, nodeOf, parentNode } =
+  schedulerRecords;
 
-export type IndexSizes = Readonly<
-  Record<"live" | "settled" | "edges" | "below" | "roots" | "unloaded" | "dropQueue", number>
->;
+export default class SchedulerIndex {
+  readonly live = new Map<schedulerTypesModule.TaskId, schedulerTypesModule.AnyTaskRecord>();
+  readonly edges = new Map<
+    schedulerTypesModule.ConversationId,
+    schedulerTypesModule.TaskId | null
+  >();
+  readonly settled = new Map<schedulerTypesModule.TaskId, schedulerTypesModule.TaskNode>();
+  readonly dropQueue = new Set<schedulerTypesModule.Node>();
+  readonly below = new SetMap<schedulerTypesModule.Node, schedulerTypesModule.Node>();
+  readonly roots = new Set<schedulerTypesModule.ConversationId>();
+  readonly unloaded = new Set<schedulerTypesModule.TaskId>();
+  readonly intent = new Set<schedulerTypesModule.TaskId>();
+  readonly runnable = new Set<schedulerTypesModule.TaskId>();
+  readonly finalizeChecks = new Set<schedulerTypesModule.TaskId>();
+  readonly waiters = new SetMap<schedulerTypesModule.TaskId, schedulerTypesModule.TaskId>();
+  readonly failFastChecks = new Set<schedulerTypesModule.TaskId>();
+  protected readonly hooks: schedulerIndexTypes.IndexHooks;
 
-export class SchedulerIndex {
-  readonly live = new Map<TaskId, AnyTaskRecord>();
-  readonly edges = new Map<ConversationId, TaskId | null>();
-  readonly settled = new Map<TaskId, TaskNode>();
-  readonly dropQueue = new Set<Node>();
-  readonly below = new SetMap<Node, Node>();
-  readonly roots = new Set<ConversationId>();
-  readonly unloaded = new Set<TaskId>();
-  readonly intent = new Set<TaskId>();
-  readonly runnable = new Set<TaskId>();
-  readonly finalizeChecks = new Set<TaskId>();
-  readonly waiters = new SetMap<TaskId, TaskId>();
-  readonly failFastChecks = new Set<TaskId>();
-  protected readonly hooks: IndexHooks;
-
-  constructor(hooks: IndexHooks) {
+  constructor(hooks: schedulerIndexTypes.IndexHooks) {
     this.hooks = hooks;
   }
 
-  setEdge(conversationId: ConversationId, owner: TaskId | null): void {
+  setEdge(
+    conversationId: schedulerTypesModule.ConversationId,
+    owner: schedulerTypesModule.TaskId | null,
+  ): void {
     this.edges.set(conversationId, owner);
     this.relist(conversationNode(conversationId));
     this.dropIfUnneeded(conversationNode(conversationId));
   }
 
-  settle(id: TaskId, node: TaskNode): void {
+  settle(id: schedulerTypesModule.TaskId, node: schedulerTypesModule.TaskNode): void {
     this.settled.set(id, node);
     this.unloaded.add(id);
     this.relist(id);
     this.dropIfUnneeded(id);
   }
 
-  dropIfUnneeded(node: Node): void {
+  dropIfUnneeded(node: schedulerTypesModule.Node): void {
     if (typeof node !== "string" && this.live.has(node)) return;
     if (this.below.has(node)) return;
     this.dropQueue.add(node);
@@ -77,7 +65,10 @@ export class SchedulerIndex {
     this.dropQueue.clear();
   }
 
-  track(previous: AnyTaskRecord | undefined, record: AnyTaskRecord): void {
+  track(
+    previous: schedulerTypesModule.AnyTaskRecord | undefined,
+    record: schedulerTypesModule.AnyTaskRecord,
+  ): void {
     const id = record.id;
     if (previous?.state.status === "waiting")
       for (const on of previous.state.on) this.waiters.deleteFrom(on, id);
@@ -102,7 +93,7 @@ export class SchedulerIndex {
       for (const on of record.state.on) this.waiters.addTo(on, id);
   }
 
-  #trackTerminal(record: AnyTaskRecord): void {
+  #trackTerminal(record: schedulerTypesModule.AnyTaskRecord): void {
     const id = record.id;
     const node = nodeOf(record);
     this.live.delete(id);
@@ -116,21 +107,24 @@ export class SchedulerIndex {
     this.dropIfUnneeded(id);
   }
 
-  release(node: TaskNode, overlay?: Overlay): AnyTaskRecord | undefined {
+  release(
+    node: schedulerTypesModule.TaskNode,
+    overlay?: schedulerTypesModule.Overlay,
+  ): schedulerTypesModule.AnyTaskRecord | undefined {
     const above = this.nearestLiveAbove(node, overlay);
     if (above?.state.status === "completing") this.finalizeChecks.add(above.id);
     else if (above?.abortRequested === true) this.runnable.add(above.id);
     return above;
   }
 
-  #parent(node: Node): Node | null | undefined | false {
+  #parent(node: schedulerTypesModule.Node): schedulerTypesModule.Node | null | undefined | false {
     if (typeof node === "string") return this.edges.get(conversationOf(node));
     const known = this.live.get(node) ?? this.settled.get(node);
     return known === undefined ? false : parentNode(known);
   }
 
-  relist(start: Node): void {
-    let node: Node = start;
+  relist(start: schedulerTypesModule.Node): void {
+    let node: schedulerTypesModule.Node = start;
     for (;;) {
       const needed = (typeof node !== "string" && this.live.has(node)) || this.below.has(node);
       const parent = this.#parent(node);
@@ -147,7 +141,11 @@ export class SchedulerIndex {
     }
   }
 
-  #link(parent: Node, node: Node, needed: boolean): boolean {
+  #link(
+    parent: schedulerTypesModule.Node,
+    node: schedulerTypesModule.Node,
+    needed: boolean,
+  ): boolean {
     if (needed) {
       const first = !this.below.has(parent);
       this.below.addTo(parent, node);
@@ -159,7 +157,10 @@ export class SchedulerIndex {
     return true;
   }
 
-  nearestLiveAbove(node: TaskNode, overlay?: Overlay): AnyTaskRecord | undefined {
+  nearestLiveAbove(
+    node: schedulerTypesModule.TaskNode,
+    overlay?: schedulerTypesModule.Overlay,
+  ): schedulerTypesModule.AnyTaskRecord | undefined {
     for (let current = node; !current.background;) {
       const owner = current.owner ?? this.edge(current.conversationId, overlay);
       if (owner === undefined || owner === null) return undefined;
@@ -172,7 +173,7 @@ export class SchedulerIndex {
     return undefined;
   }
 
-  known(node: Node): boolean {
+  known(node: schedulerTypesModule.Node): boolean {
     if (typeof node !== "string") {
       return (this.live.has(node) || this.settled.has(node)) && !this.unloaded.has(node);
     }
@@ -180,25 +181,31 @@ export class SchedulerIndex {
     return owner === null || (owner !== undefined && this.known(owner));
   }
 
-  edge(id: ConversationId, overlay?: Overlay): TaskId | null | undefined {
+  edge(
+    id: schedulerTypesModule.ConversationId,
+    overlay?: schedulerTypesModule.Overlay,
+  ): schedulerTypesModule.TaskId | null | undefined {
     return overlay?.edges.has(id) === true ? overlay.edges.get(id) : this.edges.get(id);
   }
 
-  node(id: TaskId, overlay?: Overlay): TaskNode | undefined {
+  node(
+    id: schedulerTypesModule.TaskId,
+    overlay?: schedulerTypesModule.Overlay,
+  ): schedulerTypesModule.TaskNode | undefined {
     return overlay?.tasks.get(id) ?? this.live.get(id) ?? this.settled.get(id);
   }
 
-  get indexSizes(): IndexSizes {
+  get indexSizes(): schedulerIndexTypes.IndexSizes {
     let below = 0;
     for (const children of this.below.values()) below += children.size;
     return {
-      live: this.live.size,
-      settled: this.settled.size,
-      edges: this.edges.size,
       below,
-      roots: this.roots.size,
-      unloaded: this.unloaded.size,
       dropQueue: this.dropQueue.size,
+      edges: this.edges.size,
+      live: this.live.size,
+      roots: this.roots.size,
+      settled: this.settled.size,
+      unloaded: this.unloaded.size,
     };
   }
 }

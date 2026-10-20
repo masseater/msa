@@ -2,25 +2,28 @@ import type { ToolCall } from "@msa/ai";
 import type { Context } from "@msa/chord";
 import { Cause, Effect } from "effect";
 
-import { AssistantEntry } from "../entries.ts";
-import { commitTask } from "./bridge.ts";
-import { convertPartial } from "./generation-run.ts";
-import type {
-  GenerationCheckpoint,
-  GenerationInput,
-  GenerationNext,
-  GenerationResult,
-  GenerationRuntime,
-} from "./generation-types.ts";
-import { endRun, LiveDoc } from "./live.ts";
-import { appendToolResult, harnessError } from "./tool.ts";
-import type { EntryId, RunningTask, Tx } from "./types.ts";
+import entries from "../entries.ts";
+import bridge from "./bridge.ts";
+import generationRun from "./generation-run.ts";
+import type generationTypesModule from "./generation-types.types.ts";
+import liveModule from "./live.ts";
+import tool from "./tool.ts";
+import type typesModule from "./types.types.ts";
 
-type AbortTask = RunningTask<GenerationInput, GenerationCheckpoint, GenerationResult>;
+const { AssistantEntry } = entries;
+const { commitTask } = bridge;
+const { LiveDoc, endRun } = liveModule;
+const { appendToolResult, harnessError } = tool;
+
+type AbortTask = typesModule.RunningTask<
+  generationTypesModule.GenerationInput,
+  generationTypesModule.GenerationCheckpoint,
+  generationTypesModule.GenerationResult
+>;
 
 const readCalls = Effect.fnUntraced(function* (
-  runtime: GenerationRuntime,
-  assistant: EntryId,
+  runtime: generationTypesModule.GenerationRuntime,
+  assistant: typesModule.EntryId,
   callIds: readonly string[],
   context: Context,
 ) {
@@ -34,8 +37,8 @@ const readCalls = Effect.fnUntraced(function* (
 });
 
 const cancelDeferred = Effect.fnUntraced(function* (
-  runtime: GenerationRuntime,
-  checkpoint: Extract<GenerationCheckpoint, { phase: "poll" }>,
+  runtime: generationTypesModule.GenerationRuntime,
+  checkpoint: Extract<generationTypesModule.GenerationCheckpoint, { phase: "poll" }>,
 ) {
   const model = runtime.models.getModel(checkpoint.model.provider, checkpoint.model.modelId);
   if (model === undefined) return;
@@ -47,9 +50,9 @@ const cancelDeferred = Effect.fnUntraced(function* (
   );
 });
 
-export const abortGeneration = Effect.fnUntraced(function* (
+const abortGeneration = Effect.fnUntraced(function* (
   task: AbortTask,
-  runtime: GenerationRuntime,
+  runtime: generationTypesModule.GenerationRuntime,
   context: Context,
 ) {
   const checkpoint = task.state.checkpoint;
@@ -61,10 +64,10 @@ export const abortGeneration = Effect.fnUntraced(function* (
       : [];
   yield* commitTask(
     runtime,
-    (tx: Tx): Effect.Effect<GenerationNext> =>
+    (tx: typesModule.Tx): Effect.Effect<generationTypesModule.GenerationNext> =>
       Effect.gen(function* () {
         const live = yield* Effect.promise(() => tx.doc(LiveDoc, conversationId));
-        yield* convertPartial(tx, live, conversationId);
+        yield* generationRun.convertPartial(tx, live, conversationId);
         yield* Effect.forEach(
           unstarted,
           (call) =>
@@ -77,9 +80,15 @@ export const abortGeneration = Effect.fnUntraced(function* (
             ),
           { discard: true },
         );
-        endRun(tx, live, runtime.taskId, { status: "unanswered", reason: "aborted" });
-        return { status: "terminal", outcome: { status: "aborted" } };
+        endRun(tx, live, runtime.taskId, { reason: "aborted", status: "unanswered" });
+        return { outcome: { status: "aborted" }, status: "terminal" };
       }),
     context,
   );
 });
+
+const generationAbort = {
+  abortGeneration,
+};
+
+export default generationAbort;

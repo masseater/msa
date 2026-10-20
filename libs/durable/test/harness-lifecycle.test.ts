@@ -1,13 +1,18 @@
 import { Type, createModels, fauxAssistantMessage, fauxText, fauxToolCall } from "@msa/ai";
 import type { Context, JsonValue } from "@msa/chord";
-import { type ConversationId, type Storage, type TaskId, defineTool } from "@msa/durable";
-import { GenerationTask, Harness, createRegistry } from "@msa/durable/harness";
-import { MemoryStorage } from "@msa/durable/storage/memory";
+import durable from "@msa/durable";
+import harnessModule from "@msa/durable/harness";
+import type durableTypes from "@msa/durable/index.types";
+import memory from "@msa/durable/storage/memory";
 import { Effect } from "effect";
 import { describe, expect, it } from "vite-plus/test";
 
 import harnessLifecycleSupport from "./harness-lifecycle-support.ts";
 import support from "./support.ts";
+
+const { GenerationTask, Harness, createRegistry } = harnessModule;
+const { MemoryStorage } = memory;
+const { defineTool } = durable;
 
 const { oneStep, start, storageOpen, withSignal } = harnessLifecycleSupport;
 const {
@@ -25,9 +30,9 @@ const {
   settled,
 } = support;
 
-const seedRunningTask = Effect.fn("seedRunningTask")(function* (storage: Storage) {
-  const conversationId = yield* awaited(storage.mintId<ConversationId>());
-  const id = yield* awaited(storage.mintId<TaskId<JsonValue>>());
+const seedRunningTask = Effect.fn("seedRunningTask")(function* (storage: durableTypes.Storage) {
+  const conversationId = yield* awaited(storage.mintId<durableTypes.ConversationId>());
+  const id = yield* awaited(storage.mintId<durableTypes.TaskId<JsonValue>>());
   const state = { checkpoint: { phase: "run" }, status: "running" } as const;
   const task = {
     background: false,

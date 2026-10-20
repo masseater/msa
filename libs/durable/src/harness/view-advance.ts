@@ -4,24 +4,27 @@ import type { NonEmptyPath, Op, Path } from "@msa/chord/delta";
 import { applyImmutable } from "@msa/chord/delta/apply";
 import { Function } from "effect";
 
-import { contained } from "../session/session.ts";
-import type { CommitPublication, ConversationId, Dual5, EntryRecord } from "./types.ts";
-import type { Mount } from "./view-mount.ts";
-import { MOUNTED_KINDS } from "./view-mount.ts";
+import sessionState from "../session/session-state.ts";
+import type typesModule from "./types.types.ts";
+import viewMount from "./view-mount.ts";
+import type viewMountTypes from "./view-mount.types.ts";
 
-export const advance: Dual5<
-  ConversationId,
-  Mount,
-  CommitPublication,
+const { contained } = sessionState;
+const { MOUNTED_KINDS } = viewMount;
+
+const advance: typesModule.Dual5<
+  typesModule.ConversationId,
+  viewMountTypes.Mount,
+  typesModule.CommitPublication,
   Context,
   (error: unknown) => void,
   void
 > = Function.dual(
   5,
   (
-    id: ConversationId,
-    mount: Mount,
-    publication: CommitPublication,
+    id: typesModule.ConversationId,
+    mount: viewMountTypes.Mount,
+    publication: typesModule.CommitPublication,
     context: Context,
     report: (error: unknown) => void,
   ): void => {
@@ -55,13 +58,13 @@ export const advance: Dual5<
   },
 );
 
-type EntryList = { entries: readonly EntryRecord[]; owned: boolean };
+type EntryList = { entries: readonly typesModule.EntryRecord[]; owned: boolean };
 
-function addEntry(list: EntryList, entry: EntryRecord, entryOps: Op[]): void {
+function addEntry(list: EntryList, entry: typesModule.EntryRecord, entryOps: Op[]): void {
   const value = entry as unknown as JsonValue;
   if (entry.head === undefined) {
     entryOps.push(["p", ["entries"], list.entries.length, 0, [value]]);
-    const entries = list.owned ? (list.entries as EntryRecord[]) : list.entries.slice();
+    const entries = list.owned ? (list.entries as typesModule.EntryRecord[]) : list.entries.slice();
     entries.push(entry);
     list.entries = entries;
     list.owned = true;
@@ -78,8 +81,8 @@ function addEntry(list: EntryList, entry: EntryRecord, entryOps: Op[]): void {
 }
 
 function applyDocument(
-  mount: Mount,
-  change: Extract<CommitPublication["changes"][number], { type: "document" }>,
+  mount: viewMountTypes.Mount,
+  change: Extract<typesModule.CommitPublication["changes"][number], { type: "document" }>,
   docOps: Op[],
 ): void {
   const kind = change.record.kind;
@@ -117,3 +120,9 @@ function prefixed(op: Op, prefix: NonEmptyPath): Op {
       return ["t", at(op[1]), op[2]];
   }
 }
+
+const viewAdvance = {
+  advance,
+};
+
+export default viewAdvance;

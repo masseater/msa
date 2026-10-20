@@ -1,12 +1,15 @@
 import { createRequire } from "node:module";
 
-import { createPhotonImages } from "@msa/durable/images";
-import { DEFAULT_IMAGE_LIMITS } from "@msa/durable/tools";
+import imagesModule from "@msa/durable/images";
+import toolsModule from "@msa/durable/tools";
 import { Effect } from "effect";
 import { expect, it } from "vite-plus/test";
 
 import effectSupport from "./effect-support.ts";
 import platformSupport from "./platform-support.ts";
+
+const { createPhotonImages } = imagesModule;
+const { DEFAULT_IMAGE_LIMITS } = toolsModule;
 
 const { awaited } = effectSupport;
 const { readBytes } = platformSupport;

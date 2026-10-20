@@ -1,11 +1,14 @@
 import { fauxAssistantMessage, fauxText } from "@msa/ai";
-import { LiveDoc } from "@msa/durable";
-import { MemoryStorage } from "@msa/durable/storage/memory";
+import durable from "@msa/durable";
+import memory from "@msa/durable/storage/memory";
 import { Effect } from "effect";
 import { describe, expect, it } from "vite-plus/test";
 
 import harnessEventsSupport from "./harness-events-support.ts";
 import support from "./support.ts";
+
+const { MemoryStorage } = memory;
+const { LiveDoc } = durable;
 
 const { drained, listen } = harnessEventsSupport;
 const { awaited, chatSetup, context, openChat, waitFor } = support;

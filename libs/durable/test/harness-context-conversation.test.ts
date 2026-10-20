@@ -1,5 +1,5 @@
 import type { Context } from "@msa/chord";
-import { type ContextView, type EntryDraft, type EntryId } from "@msa/durable";
+import type durableTypes from "@msa/durable/index.types";
 import { Effect } from "effect";
 import { afterEach, describe, expect, it, vi } from "vite-plus/test";
 
@@ -27,9 +27,11 @@ function checkExtendedReads(
     Effect.gen(function* () {
       const runPromise = Effect.runPromiseWith(yield* Effect.context<never>());
 
-      const write = (draft: EntryDraft) =>
+      const write = (draft: durableTypes.EntryDraft) =>
         runtime.commit((tx) => tx.appendEntry(root.id, draft).then(() => undefined), taskContext);
-      const read = (at?: EntryId): Promise<{ view: ContextView; rows: number }> =>
+      const read = (
+        at?: durableTypes.EntryId,
+      ): Promise<{ view: durableTypes.ContextView; rows: number }> =>
         runPromise(
           Effect.gen(function* () {
             const before = scanned.rows;

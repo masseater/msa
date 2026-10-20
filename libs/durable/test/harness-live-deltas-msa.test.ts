@@ -1,12 +1,17 @@
 import { Type, fauxAssistantMessage, fauxText, fauxToolCall } from "@msa/ai";
 import type { Op } from "@msa/chord/delta";
-import { type CommitPublication, LiveDoc, type LiveState, defineTool } from "@msa/durable";
-import { MemoryStorage } from "@msa/durable/storage/memory";
+import durable from "@msa/durable";
+import type durableTypes from "@msa/durable/index.types";
+import memory from "@msa/durable/storage/memory";
+import type memoryTypes from "@msa/durable/storage/memory.types";
 import { Effect } from "effect";
 import { describe, expect, it } from "vite-plus/test";
 
 import harnessLiveDeltasSupport from "./harness-live-deltas-support.ts";
 import support from "./support.ts";
+
+const { LiveDoc, defineTool } = durable;
+const { MemoryStorage } = memory;
 
 const { OUTPUT, drive, live } = harnessLiveDeltasSupport;
 const { addTool, awaited, chatSetup, context, documentChanges, openChat, waitFor } = support;
@@ -32,8 +37,8 @@ function recordingChatSetup() {
   const liveInner2: { liveId?: number } = {};
   class RecordingStorage extends MemoryStorage {
     override commit(
-      writes: Parameters<MemoryStorage["commit"]>[0],
-      contextInner: Parameters<MemoryStorage["commit"]>[1],
+      writes: Parameters<memoryTypes.MemoryStorage["commit"]>[0],
+      contextInner: Parameters<memoryTypes.MemoryStorage["commit"]>[1],
     ) {
       const superCommit = super.commit.bind(this);
       return Effect.runPromise(
@@ -92,18 +97,19 @@ const streamsPartialText = Effect.gen(function* () {
 const storesCompleteBase = Effect.gen(function* () {
   const { written, live: liveInner, RecordingStorage, setup } = recordingChatSetup();
   const { harness, root } = yield* openChat(new RecordingStorage(), setup);
-  const values = new Map<number, LiveState>();
+  const values = new Map<number, durableTypes.LiveState>();
   harness.subscribeCommits((publication) => {
     for (const change of documentChanges(publication)) {
       if (change.record.kind !== "msa.live") continue;
       liveInner.liveId = change.record.id;
-      if (change.value !== null) values.set(publication.seq, change.value as LiveState);
+      if (change.value !== null)
+        values.set(publication.seq, change.value as durableTypes.LiveState);
     }
   });
   yield* awaited(
     (yield* awaited(root.submit({ content: "go", type: "input" }, context))).wait(context),
   );
-  const nothingRuns = (value: LiveState) =>
+  const nothingRuns = (value: durableTypes.LiveState) =>
     value.generation === undefined &&
     !(value.tools ?? []).some((slot) => slot.status === "running");
   const kinds = [...written].map(([seq, kind]) => {
@@ -193,12 +199,12 @@ const commitsToolCalling = Effect.gen(function* () {
     fauxAssistantMessage([fauxText("done")]),
   ]);
   const { harness, root } = yield* openChat(new MemoryStorage(), setup);
-  let handover: CommitPublication | undefined;
+  let handover: durableTypes.CommitPublication | undefined;
   harness.subscribeCommits((publication) => {
     for (const change of documentChanges(publication)) {
       if (
         change.record.kind === "msa.live" &&
-        (change.value as LiveState | null)?.tools?.length === 2
+        (change.value as durableTypes.LiveState | null)?.tools?.length === 2
       ) {
         handover ??= publication;
       }
@@ -254,7 +260,7 @@ describe("msa.live deltas", () => {
     Effect.runPromise(writesAbortedTool));
 
   it("keeps a complete base exactly while nothing runs", () => {
-    const base = (value: LiveState) =>
+    const base = (value: durableTypes.LiveState) =>
       LiveDoc.definition.checkpointWhen!(value, [], { deltasSinceBase: 1000 } as never);
     const slot = (status: "pending" | "running" | "done") => ({ callId: "c", name: "n", status });
     const run = { inputs: [], taskId: 1 as never };

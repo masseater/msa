@@ -2,35 +2,32 @@ import type { Context, Draft, JsonRepresentation, JsonValue } from "@msa/chord";
 import { copyJson } from "@msa/chord/json";
 import { Effect } from "effect";
 
-import { commitTask } from "./bridge.ts";
-import { finishSlot, LiveDoc, removeNestedSlots, toolSlot } from "./live.ts";
-import { appendToolResult, nestedResult, summaryOf } from "./tool-result.ts";
-import {
-  MADE_NESTED_CALLS,
-  NestedCallDoc,
-  type Ending,
-  type ToolRuntime,
-  type ToolTaskInput,
-  type ToolTaskResult,
-  TOOL_TASK_NAME,
-} from "./tool-types.ts";
-import type {
-  NestedToolExecutionResult,
-  ToolControl,
-  ToolExecutionResult,
-  ToolHookCall,
-  Tx,
-} from "./types.ts";
-import { recordUsage } from "./usage.ts";
+import bridge from "./bridge.ts";
+import liveModule from "./live.ts";
+import toolResult from "./tool-result.ts";
+import toolTypes from "./tool-types.ts";
+import type toolTypesModule from "./tool-types.types.ts";
+import type typesModule from "./types.types.ts";
+import usageModule from "./usage.ts";
+
+const { LiveDoc, finishSlot, removeNestedSlots, toolSlot } = liveModule;
+const { MADE_NESTED_CALLS, NestedCallDoc, TOOL_TASK_NAME } = toolTypes;
+const { appendToolResult, nestedResult, summaryOf } = toolResult;
+const { recordUsage } = usageModule;
+const { commitTask } = bridge;
 
 type SlotOf = ReturnType<typeof toolSlot>;
 
-const abortNested = Effect.fnUntraced(function* (runtime: ToolRuntime, context: Context) {
+const abortNested = Effect.fnUntraced(function* (
+  runtime: toolTypesModule.ToolRuntime,
+  context: Context,
+) {
   const owned = yield* Effect.promise(() => runtime.ownedTasks(context));
   const nestedIds = owned
     .filter(
       (record) =>
-        record.kind === TOOL_TASK_NAME && (record.input as ToolTaskInput).kind === "nested",
+        record.kind === TOOL_TASK_NAME &&
+        (record.input as toolTypesModule.ToolTaskInput).kind === "nested",
     )
     .map((record) => record.id);
   const madeNested =
@@ -43,12 +40,15 @@ const abortNested = Effect.fnUntraced(function* (runtime: ToolRuntime, context: 
 });
 
 const settleNested = Effect.fnUntraced(function* (
-  tx: Tx,
-  runtime: ToolRuntime,
-  state: { readonly input: Extract<ToolTaskInput, { kind: "nested" }>; readonly slot: SlotOf },
+  tx: typesModule.Tx,
+  runtime: toolTypesModule.ToolRuntime,
+  state: {
+    readonly input: Extract<toolTypesModule.ToolTaskInput, { kind: "nested" }>;
+    readonly slot: SlotOf;
+  },
   outcome: {
-    readonly call: ToolHookCall;
-    readonly result: ToolExecutionResult;
+    readonly call: typesModule.ToolHookCall;
+    readonly result: typesModule.ToolExecutionResult;
     readonly durationMs: number | undefined;
   },
 ) {
@@ -62,29 +62,31 @@ const settleNested = Effect.fnUntraced(function* (
     return yield* Effect.die(
       new Error(`Nested call ${outcome.call.id} is not in its caller's index`),
     );
-  stored.result = nested as unknown as Draft<JsonRepresentation<NestedToolExecutionResult>>;
+  stored.result = nested as unknown as Draft<
+    JsonRepresentation<typesModule.NestedToolExecutionResult>
+  >;
   const slot = state.slot;
   if (slot !== undefined && "parentTaskId" in slot) {
     finishSlot(slot);
     slot.summary = summaryOf(nested, outcome.result.output ?? []);
   }
-  return { kind: "nested" } satisfies ToolTaskResult;
+  return { kind: "nested" } satisfies toolTypesModule.ToolTaskResult;
 });
 
 const settleModelCall = Effect.fnUntraced(function* (
-  tx: Tx,
-  runtime: ToolRuntime,
+  tx: typesModule.Tx,
+  runtime: toolTypesModule.ToolRuntime,
   slot: SlotOf,
   outcome: {
-    readonly call: ToolHookCall;
-    readonly result: ToolExecutionResult;
-    readonly ending: Ending;
+    readonly call: typesModule.ToolHookCall;
+    readonly result: typesModule.ToolExecutionResult;
+    readonly ending: toolTypesModule.Ending;
     readonly durationMs: number | undefined;
   },
 ) {
   const entry = yield* appendToolResult(tx, runtime.conversationId, outcome.call, outcome.result, {
-    timestamp: runtime.now(),
     durationMs: outcome.durationMs,
+    timestamp: runtime.now(),
   });
   if (slot !== undefined && !("parentTaskId" in slot)) {
     finishSlot(slot);
@@ -96,46 +98,52 @@ const settleModelCall = Effect.fnUntraced(function* (
       : {
           control: copyJson(outcome.result.control as JsonValue, {
             omitUndefinedProperties: true,
-          }) as ToolControl,
+          }) as typesModule.ToolControl,
         };
-  return { kind: "model", entryId: entry.id, ...control } satisfies ToolTaskResult;
+  return { entryId: entry.id, kind: "model", ...control } satisfies toolTypesModule.ToolTaskResult;
 });
 
-const terminalOf = (ending: Ending, settled: ToolTaskResult) => {
+const terminalOf = (ending: toolTypesModule.Ending, settled: toolTypesModule.ToolTaskResult) => {
   if (ending.status === "aborted")
-    return { status: "terminal", outcome: { status: "aborted", result: settled } } as const;
+    return { outcome: { result: settled, status: "aborted" }, status: "terminal" } as const;
   if (ending.status === "failed")
     return {
+      outcome: { error: { message: ending.message }, result: settled, status: "failed" },
       status: "terminal",
-      outcome: { status: "failed", error: { message: ending.message }, result: settled },
     } as const;
-  return { status: "terminal", outcome: { status: "completed", result: settled } } as const;
+  return { outcome: { result: settled, status: "completed" }, status: "terminal" } as const;
 };
 
-export const settle = Effect.fnUntraced(function* (
-  runtime: ToolRuntime,
-  input: ToolTaskInput,
-  call: ToolHookCall,
-  ending: Ending,
-  build: (slot: SlotOf) => ToolExecutionResult,
+const settle = Effect.fnUntraced(function* (
+  runtime: toolTypesModule.ToolRuntime,
+  input: toolTypesModule.ToolTaskInput,
+  call: typesModule.ToolHookCall,
+  ending: toolTypesModule.Ending,
+  build: (slot: SlotOf) => typesModule.ToolExecutionResult,
   context: Context,
   durationMs?: number,
 ) {
   const madeNested = yield* abortNested(runtime, context);
   yield* commitTask(
     runtime,
-    (tx: Tx) =>
+    (tx: typesModule.Tx) =>
       Effect.gen(function* () {
         const live = yield* Effect.promise(() => tx.doc(LiveDoc, runtime.conversationId));
         const slot = toolSlot(live, runtime.taskId);
         const result = build(slot);
         const settled =
           input.kind === "nested"
-            ? yield* settleNested(tx, runtime, { input, slot }, { call, result, durationMs })
-            : yield* settleModelCall(tx, runtime, slot, { call, result, ending, durationMs });
+            ? yield* settleNested(tx, runtime, { input, slot }, { call, durationMs, result })
+            : yield* settleModelCall(tx, runtime, slot, { call, durationMs, ending, result });
         if (madeNested) removeNestedSlots(live, runtime.taskId);
         return terminalOf(ending, settled);
       }),
     context,
   );
 });
+
+const toolSettle = {
+  settle,
+};
+
+export default toolSettle;

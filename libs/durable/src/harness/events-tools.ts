@@ -1,32 +1,34 @@
 import type { Op, Path } from "@msa/chord/delta";
 import { Function } from "effect";
 
-import { startsWith } from "./events-messages.ts";
-import type { AgentEvent, ToolEventCall } from "./events-types.ts";
-import type { NestedToolSlot, ToolSlot } from "./live.ts";
-import type { Dual2, Dual4, EntryRecord } from "./types.ts";
+import eventsMessages from "./events-messages.ts";
+import type eventsToolsTypes from "./events-tools.types.ts";
+import type eventsTypesModule from "./events-types.ts";
+import type liveTypes from "./live.types.ts";
+import type typesModule from "./types.types.ts";
 
-export type ToolUpdate =
-  | Omit<Extract<AgentEvent, { type: "tool_execution_update" }>, "type" | keyof ToolEventCall>
-  | undefined;
+const { startsWith } = eventsMessages;
 
-type Slot = ToolSlot | NestedToolSlot;
+type Slot = liveTypes.ToolSlot | liveTypes.NestedToolSlot;
 
-export const resultOf: Dual2<readonly EntryRecord[], string, EntryRecord | undefined> =
-  Function.dual(2, (entries: readonly EntryRecord[], callId: string) =>
-    entries.find((entry) => {
-      const message = entry.model?.[0];
-      return message?.role === "toolResult" && message.toolCallId === callId;
-    }),
-  );
+const resultOf: typesModule.Dual2<
+  readonly typesModule.EntryRecord[],
+  string,
+  typesModule.EntryRecord | undefined
+> = Function.dual(2, (entries: readonly typesModule.EntryRecord[], callId: string) =>
+  entries.find((entry) => {
+    const message = entry.model?.[0];
+    return message?.role === "toolResult" && message.toolCallId === callId;
+  }),
+);
 
-export function callOf(slot: Slot): ToolEventCall {
+function callOf(slot: Slot): eventsTypesModule.ToolEventCall {
   return {
     toolCallId: slot.callId,
     toolName: slot.name,
     ...(slot.taskId === undefined ? {} : { taskId: slot.taskId }),
     ...("parentCallId" in slot
-      ? { parentToolCallId: slot.parentCallId, parentTaskId: slot.parentTaskId }
+      ? { parentTaskId: slot.parentTaskId, parentToolCallId: slot.parentCallId }
       : {}),
   };
 }
@@ -46,7 +48,7 @@ const appendedOutput = (
     else if (op[0] === "a") append += op[2];
     else set = true;
   }
-  return { trimStart, append, set };
+  return { append, set, trimStart };
 };
 
 const outputUpdate = (
@@ -62,12 +64,12 @@ const outputUpdate = (
   return undefined;
 };
 
-export const toolUpdate: Dual4<
+const toolUpdate: typesModule.Dual4<
   readonly Op[],
   readonly ["tools" | "nestedTools", number],
   Slot,
   Slot,
-  ToolUpdate
+  eventsToolsTypes.ToolUpdate
 > = Function.dual(
   4,
   (
@@ -75,7 +77,7 @@ export const toolUpdate: Dual4<
     at: readonly ["tools" | "nestedTools", number],
     slot: Slot,
     previous: Slot,
-  ): ToolUpdate => {
+  ): eventsToolsTypes.ToolUpdate => {
     const outputPath = ["docs", "msa.live", ...at, "output"];
     const output = outputUpdate(appendedOutput(viewOps, outputPath), slot, previous);
     const update = {
@@ -86,3 +88,11 @@ export const toolUpdate: Dual4<
     return Object.keys(update).length === 0 ? undefined : update;
   },
 );
+
+const eventsTools = {
+  callOf,
+  resultOf,
+  toolUpdate,
+};
+
+export default eventsTools;

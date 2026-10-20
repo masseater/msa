@@ -1,10 +1,13 @@
-import { MemoryStorage } from "@msa/durable/storage/memory";
+import memory from "@msa/durable/storage/memory";
 import { Effect } from "effect";
 import { describe, expect, it } from "vite-plus/test";
 
-import { conversationViews } from "../src/harness/view.ts";
+import view from "../src/harness/view.ts";
 import harnessStorageFailureSupport from "./harness-storage-failure-support.ts";
 import support from "./support.ts";
+
+const { MemoryStorage } = memory;
+const { conversationViews } = view;
 
 const { started } = harnessStorageFailureSupport;
 const { awaited, context } = support;

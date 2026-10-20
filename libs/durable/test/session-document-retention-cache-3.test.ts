@@ -1,12 +1,18 @@
-import { type HarnessSettings, defineDoc } from "@msa/durable";
-import { MemoryStorage } from "@msa/durable/storage/memory";
+import durable from "@msa/durable";
+import type durableTypes from "@msa/durable/index.types";
+import memory from "@msa/durable/storage/memory";
 import { Effect } from "effect";
 import { describe, expect, it, onTestFinished, vi } from "vite-plus/test";
 
-import { SessionImpl, setDefaultDocumentRetention } from "../src/session/session.ts";
+import sessionModule from "../src/session/session-state.ts";
+import type sessionTypes from "../src/session/session.types.ts";
 import sessionDocumentRetentionSupport from "./session-document-retention-support.ts";
 import type sessionDocumentRetentionSupportTypes from "./session-document-retention-support.types.ts";
 import support from "./support.ts";
+
+const { defineDoc } = durable;
+const { setDefaultDocumentRetention } = sessionModule;
+const { MemoryStorage } = memory;
 
 const { bump, defaultForRun, open, settleLine } = sessionDocumentRetentionSupport;
 const { awaited, chatSetup, context, createConversation, eventually, openChat } = support;
@@ -50,7 +56,9 @@ const followsHarnessSettings = Effect.gen(function* () {
   setDefaultDocumentRetention(600_000);
   onTestFinished(() => setDefaultDocumentRetention(defaultForRun));
   const setup = chatSetup();
-  const settings: { -readonly [K in keyof HarnessSettings]: HarnessSettings[K] } = setup.settings;
+  const settings: {
+    -readonly [K in keyof durableTypes.HarnessSettings]: durableTypes.HarnessSettings[K];
+  } = setup.settings;
   const { harness, root } = yield* openChat(new MemoryStorage(), setup);
   yield* awaited(
     root.commit(
@@ -63,14 +71,16 @@ const followsHarnessSettings = Effect.gen(function* () {
       context,
     ),
   );
-  const sizesOf = () => (harness as unknown as SessionImpl).documentCacheSizes;
+  const sizesOf = () => (harness as unknown as sessionTypes.SessionImpl).documentCacheSizes;
   expect(sizesOf().cached).toBeGreaterThan(0);
   settings.documentRetentionMs = 0;
   yield* awaited(harness.snapshot(TestDoc, root.id, context));
   yield* eventually(() =>
     runPromise(
       Effect.gen(function* () {
-        yield* awaited((harness as unknown as SessionImpl).readOnLine(() => Promise.resolve()));
+        yield* awaited(
+          (harness as unknown as sessionTypes.SessionImpl).readOnLine(() => Promise.resolve()),
+        );
         return sizesOf().cached === 0;
       }),
     ),

@@ -1,11 +1,11 @@
-import type { FileKind } from "@msa/durable/env";
+import type envTypes from "@msa/durable/env.types";
 
 import type connectionTypes from "./connection.types.ts";
 
 declare namespace remotePathTypes {
   type RemoteFileInfo = {
     name: string;
-    kind: FileKind | "other";
+    kind: envTypes.FileKind | "other";
     size: number;
     mtimeSec: number;
     mtimeNsec: number;

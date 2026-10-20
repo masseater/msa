@@ -1,10 +1,13 @@
-import { type EntryId, type TaskId, defineDoc, defineDocFamily, defineTask } from "@msa/durable";
+import durable from "@msa/durable";
+import type durableTypes from "@msa/durable/index.types";
 import { Effect } from "effect";
 import { describe, expect, it } from "vite-plus/test";
 
 import effectSupport from "./effect-support.ts";
 import documentCopies from "./session-forks-support.ts";
 import sessionSupport from "./session-support.ts";
+
+const { defineDoc, defineDocFamily, defineTask } = durable;
 
 const { awaited } = effectSupport;
 const { context, createConversation, documentCopyChanges, flush, openTestSession } = sessionSupport;
@@ -46,8 +49,8 @@ const copiesOnlyConversation = Effect.gen(function* () {
   const { Copied, SessionOnly, TaskOnly, Work } = scopedDocsAndWork();
   const { session, storage, publications } = openTestSession();
   const parentId = yield* awaited(createConversation(session));
-  let forkAt!: EntryId;
-  let taskId!: TaskId;
+  let forkAt!: durableTypes.EntryId;
+  let taskId!: durableTypes.TaskId;
   yield* awaited(
     session.commit(
       (tx) =>

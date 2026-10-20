@@ -1,13 +1,17 @@
-import { type TaskId, defineTask } from "@msa/durable";
+import durable from "@msa/durable";
+import type durableTypes from "@msa/durable/index.types";
 import { Effect } from "effect";
 import { afterEach, describe, expect, it } from "vite-plus/test";
 
-import { openNodeSqliteStorage } from "../src/storage/sqlite/node.ts";
+import node from "../src/storage/sqlite/node.ts";
 import effectSupport from "./effect-support.ts";
 import harnessSchedulerRetentionSupport from "./harness-scheduler-retention-support.ts";
 import platformSupport from "./platform-support.ts";
 import sessionSupport from "./session-support.ts";
 import taskSupport from "./task-support.ts";
+
+const { openNodeSqliteStorage } = node;
+const { defineTask } = durable;
 
 const { awaited } = effectSupport;
 const { Hold, directories, gate, gates, rejections, runs, sqlitePath } =
@@ -71,7 +75,11 @@ describe("scheduler retention", () => {
   it("lets a task wait on a forgotten ended owner", () => Effect.runPromise(letsTaskWait));
 });
 
-const Waiter = defineTask<{ on: TaskId[] }, { phase: "wait" } | { phase: "done" }, null>({
+const Waiter = defineTask<
+  { on: durableTypes.TaskId[] },
+  { phase: "wait" } | { phase: "done" },
+  null
+>({
   abort: (_task, runtime, ctx) =>
     Promise.resolve(
       runtime.commit(() => ({ outcome: { status: "aborted" }, status: "terminal" }), ctx),

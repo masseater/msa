@@ -3,20 +3,19 @@ import { isRetryableAssistantError, retryDelayMs } from "@msa/ai/utils/retry";
 import type { Context } from "@msa/chord";
 import { Effect } from "effect";
 
-import { commitTask } from "./bridge.ts";
-import { appendAssistant } from "./generation-run.ts";
-import {
-  DEFAULT_POLL_AFTER_MS,
-  type GenerationNext,
-  type GenerationRequest,
-  type GenerationRuntime,
-} from "./generation-types.ts";
-import { endRun, LiveDoc } from "./live.ts";
-import type { Tx } from "./types.ts";
+import bridge from "./bridge.ts";
+import generationRun from "./generation-run.ts";
+import generationTypes from "./generation-types.ts";
+import type generationTypesModule from "./generation-types.types.ts";
+import liveModule from "./live.ts";
+import type typesModule from "./types.types.ts";
 
-export const deferPoll = Effect.fnUntraced(function* (
-  runtime: GenerationRuntime,
-  request: GenerationRequest,
+const { DEFAULT_POLL_AFTER_MS } = generationTypes;
+const { commitTask } = bridge;
+const { LiveDoc, endRun } = liveModule;
+const deferPoll = Effect.fnUntraced(function* (
+  runtime: generationTypesModule.GenerationRuntime,
+  request: generationTypesModule.GenerationRequest,
   message: AssistantMessage & { deferred: NonNullable<AssistantMessage["deferred"]> },
   context: Context,
 ) {
@@ -28,28 +27,28 @@ export const deferPoll = Effect.fnUntraced(function* (
   );
   yield* commitTask(
     runtime,
-    (tx: Tx): Effect.Effect<GenerationNext> =>
+    (tx: typesModule.Tx): Effect.Effect<generationTypesModule.GenerationNext> =>
       Effect.gen(function* () {
         const live = yield* Effect.promise(() => tx.doc(LiveDoc, runtime.conversationId));
         live.generation = { attempt, deferred: { pollAt } };
         const checkpoint = {
-          phase: "poll",
           attempt,
+          phase: "poll",
           ...(compacted === undefined ? {} : { compacted }),
-          model: ref,
           cutoff,
           handle,
+          model: ref,
           pollAt,
         } as const;
-        return { status: "running", checkpoint };
+        return { checkpoint, status: "running" };
       }),
     context,
   );
 });
 
-export const settleModelError = Effect.fnUntraced(function* (
-  runtime: GenerationRuntime,
-  request: GenerationRequest,
+const settleModelError = Effect.fnUntraced(function* (
+  runtime: generationTypesModule.GenerationRuntime,
+  request: generationTypesModule.GenerationRequest,
   message: AssistantMessage,
   overflow: boolean,
   context: Context,
@@ -65,35 +64,42 @@ export const settleModelError = Effect.fnUntraced(function* (
   const until = retry ? runtime.now() + retryDelayMs(policy, attempt) : 0;
   yield* commitTask(
     runtime,
-    (tx: Tx): Effect.Effect<GenerationNext> =>
+    (tx: typesModule.Tx): Effect.Effect<generationTypesModule.GenerationNext> =>
       Effect.gen(function* () {
         const live = yield* Effect.promise(() => tx.doc(LiveDoc, runtime.conversationId));
-        yield* appendAssistant(tx, runtime.conversationId, message);
+        yield* generationRun.appendAssistant(tx, runtime.conversationId, message);
         if (retry) {
           live.generation = { attempt, retry: { at: until, error: message.errorMessage ?? "" } };
           const checkpoint = {
-            phase: "retry",
             attempt,
+            phase: "retry",
             ...(compacted === undefined ? {} : { compacted }),
             until,
           } as const;
-          return { status: "running", checkpoint };
+          return { checkpoint, status: "running" };
         }
         const text =
           message.errorMessage ?? `Model response ended with stop reason ${message.stopReason}`;
         endRun(tx, live, runtime.taskId, {
-          status: "unanswered",
-          reason: "model_error",
           detail: text,
+          reason: "model_error",
+          status: "unanswered",
         });
         return {
-          status: "terminal",
           outcome: {
+            error: { detail: { reason: "model_error" }, message: text },
             status: "failed",
-            error: { message: text, detail: { reason: "model_error" } },
           },
+          status: "terminal",
         };
       }),
     context,
   );
 });
+
+const generationRetry = {
+  deferPoll,
+  settleModelError,
+};
+
+export default generationRetry;

@@ -1,17 +1,34 @@
 import type { Context } from "@msa/chord";
 import { Effect, Function } from "effect";
 
-import type { MemoryStorage } from "../memory.ts";
-import { type JsonlFiles, reclaimSidecars } from "./files.ts";
-import { replayMain, settleSidecars } from "./recover-replay.ts";
-import { analyzeMain, type MainAnalysis, readMain, readSidecars } from "./recover-scan.ts";
+import type memoryTypes from "../memory.types.ts";
+import filesModule from "./files.ts";
+import type filesTypes from "./files.types.ts";
+import recoverReplay from "./recover-replay.ts";
+import recoverScan from "./recover-scan.ts";
+import type recoverScanTypes from "./recover-scan.types.ts";
 
-export const recoverJsonl: {
-  (memory: MemoryStorage, context: Context): (files: JsonlFiles) => Effect.Effect<MainAnalysis>;
-  (files: JsonlFiles, memory: MemoryStorage, context: Context): Effect.Effect<MainAnalysis>;
+const { analyzeMain, readMain, readSidecars } = recoverScan;
+const { replayMain, settleSidecars } = recoverReplay;
+const { reclaimSidecars } = filesModule;
+
+const recoverJsonl: {
+  (
+    memory: memoryTypes.MemoryStorage,
+    context: Context,
+  ): (files: filesTypes.JsonlFiles) => Effect.Effect<recoverScanTypes.MainAnalysis>;
+  (
+    files: filesTypes.JsonlFiles,
+    memory: memoryTypes.MemoryStorage,
+    context: Context,
+  ): Effect.Effect<recoverScanTypes.MainAnalysis>;
 } = Function.dual(
   3,
-  Effect.fnUntraced(function* (files: JsonlFiles, memory: MemoryStorage, context: Context) {
+  Effect.fnUntraced(function* (
+    files: filesTypes.JsonlFiles,
+    memory: memoryTypes.MemoryStorage,
+    context: Context,
+  ) {
     const main = yield* readMain(files, context);
     const index = yield* readSidecars(files, context);
     const analysis = analyzeMain(main, index);
@@ -21,3 +38,9 @@ export const recoverJsonl: {
     return analysis;
   }),
 );
+
+const recover = {
+  recoverJsonl,
+};
+
+export default recover;

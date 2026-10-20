@@ -2,34 +2,26 @@ import type { Message } from "@msa/ai";
 import type { Context } from "@msa/chord";
 import { Effect, Function } from "effect";
 
-import { estimateContext, selectCut } from "./compaction.ts";
-import type { GenerationCheckpoint, GenerationRuntime } from "./generation-types.ts";
-import type {
-  CompactionPolicy,
-  CompactionResult,
-  ContextView,
-  Dual4,
-  TaskOutcome,
-} from "./types.ts";
-
-export type ThresholdOutcome = "blocking" | "background" | undefined;
-
-export const thresholdCompaction: Dual4<
-  ContextView,
+import compaction from "./compaction.ts";
+import type generationThresholdTypes from "./generation-threshold.types.ts";
+import type generationTypesModule from "./generation-types.types.ts";
+import type typesModule from "./types.types.ts";
+const thresholdCompaction: typesModule.Dual4<
+  typesModule.ContextView,
   readonly { readonly model?: readonly Message[] }[],
   number,
-  CompactionPolicy,
-  ThresholdOutcome
+  typesModule.CompactionPolicy,
+  generationThresholdTypes.ThresholdOutcome
 > = Function.dual(
   4,
   (
-    view: ContextView,
+    view: typesModule.ContextView,
     planned: readonly { readonly model?: readonly Message[] }[],
     contextWindow: number,
-    policy: CompactionPolicy,
-  ): ThresholdOutcome => {
+    policy: typesModule.CompactionPolicy,
+  ): generationThresholdTypes.ThresholdOutcome => {
     if (!policy.enabled || contextWindow <= 0) return undefined;
-    const tokens = estimateContext(
+    const tokens = compaction.estimateContext(
       view,
       planned.flatMap((entry) => entry.model ?? []),
     );
@@ -41,14 +33,14 @@ export const thresholdCompaction: Dual4<
         : policy.backgroundTokens > 0 && tokens > background
           ? "background"
           : undefined;
-    if (over === undefined || selectCut(view, policy.keepRecentTokens) === undefined)
+    if (over === undefined || compaction.selectCut(view, policy.keepRecentTokens) === undefined)
       return undefined;
     return over;
   },
 );
 
 const compactionFailure = (
-  outcome: Exclude<TaskOutcome<CompactionResult>, { status: "completed" }>,
+  outcome: Exclude<typesModule.TaskOutcome<typesModule.CompactionResult>, { status: "completed" }>,
 ): string => {
   switch (outcome.status) {
     case "failed":
@@ -61,9 +53,9 @@ const compactionFailure = (
   }
 };
 
-export const compactedFailure = Effect.fnUntraced(function* (
-  runtime: GenerationRuntime,
-  checkpoint: Extract<GenerationCheckpoint, { phase: "prepare" }>,
+const compactedFailure = Effect.fnUntraced(function* (
+  runtime: generationTypesModule.GenerationRuntime,
+  checkpoint: Extract<generationTypesModule.GenerationCheckpoint, { phase: "prepare" }>,
   context: Context,
 ) {
   const { compacted, overflow, threshold } = checkpoint;
@@ -78,3 +70,10 @@ export const compactedFailure = Effect.fnUntraced(function* (
     return compactionFailure(outcome);
   return undefined;
 });
+
+const generationThreshold = {
+  compactedFailure,
+  thresholdCompaction,
+};
+
+export default generationThreshold;

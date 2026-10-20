@@ -1,175 +1,159 @@
 import type { Context, JsonValue } from "@msa/chord";
 import { Deferred, Effect } from "effect";
 
-import { SessionFailed, StorageRequestError } from "../errors.ts";
-import { promiseTry } from "../promise-try.ts";
-import type {
-  ConversationId,
-  ConversationQuery,
-  ConversationRecord,
-  Cursor,
-  DocumentAddress,
-  DocumentId,
-  DocumentPoint,
-  DocumentQuery,
-  DocumentRecord,
-  EntryId,
-  EntryQuery,
-  EntryRecord,
-  Id,
-  Page,
-  Seq,
-  Storage,
-  StorageWrite,
-  StoredDocument,
-  SubmissionId,
-  SubmissionQuery,
-  SubmissionRecord,
-  TaskId,
-  TaskQuery,
-  TaskRecord,
-} from "../types.ts";
+import errors from "../errors.ts";
+import promiseTryModule from "../promise-try.ts";
+import type typesModule from "../types.types.ts";
+import type guardedStorageTypes from "./guarded-storage.types.ts";
 
-export type FailureLatch = {
-  readonly failure: { readonly error: unknown } | undefined;
-  fail(error: unknown): void;
-};
+const { promiseTry } = promiseTryModule;
+const { SessionFailed, StorageRequestError } = errors;
 
-type EntryRead = { readonly entry: EntryRecord; readonly commitSeq: Seq };
-type AnyTaskRecord = TaskRecord<JsonValue, JsonValue, JsonValue>;
+type EntryRead = { readonly entry: typesModule.EntryRecord; readonly commitSeq: typesModule.Seq };
+type AnyTaskRecord = typesModule.TaskRecord<JsonValue, JsonValue, JsonValue>;
 
-export class GuardedStorage implements Storage {
-  readonly #storage: Storage;
-  readonly #latch: FailureLatch;
+export default class GuardedStorage implements typesModule.Storage {
+  readonly #storage: typesModule.Storage;
+  readonly #latch: guardedStorageTypes.FailureLatch;
   #underway = 0;
   #drained: Deferred.Deferred<void> | undefined;
   #closing = false;
 
-  constructor(storage: Storage, latch: FailureLatch) {
+  constructor(storage: typesModule.Storage, latch: guardedStorageTypes.FailureLatch) {
     this.#storage = storage;
     this.#latch = latch;
   }
 
-  commit(writes: readonly StorageWrite[], context: Context): Promise<Seq> {
+  commit(writes: readonly typesModule.StorageWrite[], context: Context): Promise<typesModule.Seq> {
     return this.#call(undefined, () => this.#storage.commit(writes, context));
   }
 
-  mintId<I extends Id<string>>(): Promise<I> {
+  mintId<I extends typesModule.Id<string>>(): Promise<I> {
     return this.#call(undefined, () => this.#storage.mintId<I>());
   }
 
-  conversation(id: ConversationId, context: Context): Promise<ConversationRecord | undefined> {
+  conversation(
+    id: typesModule.ConversationId,
+    context: Context,
+  ): Promise<typesModule.ConversationRecord | undefined> {
     return this.#call(context, () => this.#storage.conversation(id, context));
   }
 
   scanConversations(
-    query: ConversationQuery,
+    query: typesModule.ConversationQuery,
     limit: number,
-    cursor: Cursor | undefined,
+    cursor: typesModule.Cursor | undefined,
     context: Context,
-  ): Promise<Page<ConversationRecord, Cursor>> {
+  ): Promise<typesModule.Page<typesModule.ConversationRecord, typesModule.Cursor>> {
     return this.#call(context, () =>
       this.#storage.scanConversations(query, limit, cursor, context),
     );
   }
 
-  entry(id: EntryId, context: Context): Promise<EntryRead | undefined>;
+  entry(id: typesModule.EntryId, context: Context): Promise<EntryRead | undefined>;
   entry(
-    conversationId: ConversationId,
-    id: EntryId,
+    conversationId: typesModule.ConversationId,
+    id: typesModule.EntryId,
     context: Context,
   ): Promise<EntryRead | undefined>;
   entry(
-    first: EntryId | ConversationId,
-    second: EntryId | Context,
+    first: typesModule.EntryId | typesModule.ConversationId,
+    second: typesModule.EntryId | Context,
     third?: Context,
   ): Promise<EntryRead | undefined> {
     if (third === undefined) {
       const context = second as Context;
-      return this.#call(context, () => this.#storage.entry(first as EntryId, context));
+      return this.#call(context, () => this.#storage.entry(first as typesModule.EntryId, context));
     }
     return this.#call(third, () =>
-      this.#storage.entry(first as ConversationId, second as EntryId, third),
+      this.#storage.entry(
+        first as typesModule.ConversationId,
+        second as typesModule.EntryId,
+        third,
+      ),
     );
   }
 
   findLatestHeadMarker(
-    conversationId: ConversationId,
-    atOrBeforeEntryId: EntryId | undefined,
+    conversationId: typesModule.ConversationId,
+    atOrBeforeEntryId: typesModule.EntryId | undefined,
     context: Context,
-  ): Promise<(EntryRecord & { readonly head: EntryId }) | undefined> {
+  ): Promise<(typesModule.EntryRecord & { readonly head: typesModule.EntryId }) | undefined> {
     return this.#call(context, () =>
       this.#storage.findLatestHeadMarker(conversationId, atOrBeforeEntryId, context),
     );
   }
 
   scanEntries(
-    query: EntryQuery,
+    query: typesModule.EntryQuery,
     limit: number,
-    cursor: Cursor | undefined,
+    cursor: typesModule.Cursor | undefined,
     context: Context,
-  ): Promise<Page<EntryRecord, Cursor>> {
+  ): Promise<typesModule.Page<typesModule.EntryRecord, typesModule.Cursor>> {
     return this.#call(context, () => this.#storage.scanEntries(query, limit, cursor, context));
   }
 
-  task(id: TaskId, context: Context): Promise<AnyTaskRecord | undefined> {
+  task(id: typesModule.TaskId, context: Context): Promise<AnyTaskRecord | undefined> {
     return this.#call(context, () => this.#storage.task(id, context));
   }
 
   scanTasks(
-    query: TaskQuery,
+    query: typesModule.TaskQuery,
     limit: number,
-    cursor: Cursor | undefined,
+    cursor: typesModule.Cursor | undefined,
     context: Context,
-  ): Promise<Page<AnyTaskRecord, Cursor>> {
+  ): Promise<typesModule.Page<AnyTaskRecord, typesModule.Cursor>> {
     return this.#call(context, () => this.#storage.scanTasks(query, limit, cursor, context));
   }
 
-  submission(id: SubmissionId, context: Context): Promise<SubmissionRecord | undefined> {
+  submission(
+    id: typesModule.SubmissionId,
+    context: Context,
+  ): Promise<typesModule.SubmissionRecord | undefined> {
     return this.#call(context, () => this.#storage.submission(id, context));
   }
 
   scanSubmissions(
-    query: SubmissionQuery,
+    query: typesModule.SubmissionQuery,
     limit: number,
-    cursor: Cursor | undefined,
+    cursor: typesModule.Cursor | undefined,
     context: Context,
-  ): Promise<Page<SubmissionRecord, Cursor>> {
+  ): Promise<typesModule.Page<typesModule.SubmissionRecord, typesModule.Cursor>> {
     return this.#call(context, () => this.#storage.scanSubmissions(query, limit, cursor, context));
   }
 
   submissionByRequest(
-    conversationId: ConversationId,
+    conversationId: typesModule.ConversationId,
     requestId: string,
     context: Context,
-  ): Promise<SubmissionRecord | undefined> {
+  ): Promise<typesModule.SubmissionRecord | undefined> {
     return this.#call(context, () =>
       this.#storage.submissionByRequest(conversationId, requestId, context),
     );
   }
 
   findDocument(
-    address: DocumentAddress,
-    at: DocumentPoint,
+    address: typesModule.DocumentAddress,
+    at: typesModule.DocumentPoint,
     context: Context,
-  ): Promise<DocumentRecord | undefined> {
+  ): Promise<typesModule.DocumentRecord | undefined> {
     return this.#call(context, () => this.#storage.findDocument(address, at, context));
   }
 
   document(
-    id: DocumentId,
-    at: DocumentPoint,
+    id: typesModule.DocumentId,
+    at: typesModule.DocumentPoint,
     context: Context,
-  ): Promise<StoredDocument | undefined> {
+  ): Promise<typesModule.StoredDocument | undefined> {
     return this.#call(context, () => this.#storage.document(id, at, context));
   }
 
   scanDocuments(
-    query: DocumentQuery,
+    query: typesModule.DocumentQuery,
     limit: number,
-    cursor: Cursor | undefined,
+    cursor: typesModule.Cursor | undefined,
     context: Context,
-  ): Promise<Page<DocumentRecord, Cursor>> {
+  ): Promise<typesModule.Page<typesModule.DocumentRecord, typesModule.Cursor>> {
     return this.#call(context, () => this.#storage.scanDocuments(query, limit, cursor, context));
   }
 

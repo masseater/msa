@@ -1,4 +1,5 @@
-import { type TaskId, defineTask } from "@msa/durable";
+import durable from "@msa/durable";
+import type durableTypes from "@msa/durable/index.types";
 import { Effect } from "effect";
 import { afterEach, describe, expect, it } from "vite-plus/test";
 
@@ -8,6 +9,8 @@ import harnessStructuredSupport from "./harness-structured-support.ts";
 import harnessSupport from "./harness-support.ts";
 import platformSupport from "./platform-support.ts";
 import sessionSupport from "./session-support.ts";
+
+const { defineTask } = durable;
 
 const { awaited } = effectSupport;
 const { spawnAndFinish } = harnessStructuredEvents;
@@ -45,7 +48,7 @@ afterEach(() =>
 
 function versioned(version: 1 | 2) {
   return defineTask<
-    { on: TaskId[] },
+    { on: durableTypes.TaskId[] },
     { phase: "wait" } | { phase: "resume" } | { phase: "migrated" },
     string
   >({
@@ -80,7 +83,7 @@ function versioned(version: 1 | 2) {
       ? {
           migrate: (input: unknown) => ({
             checkpoint: { phase: "migrated" as const },
-            input: input as { on: TaskId[] },
+            input: input as { on: durableTypes.TaskId[] },
           }),
         }
       : {}),

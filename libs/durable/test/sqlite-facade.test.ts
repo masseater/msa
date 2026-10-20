@@ -4,11 +4,17 @@ import { BACKGROUND_CONTEXT } from "@msa/chord/context";
 import { Effect } from "effect";
 import { describe, expect, it } from "vite-plus/test";
 
-import { idFromNumber } from "../src/ids.ts";
-import { SqliteStorage } from "../src/storage/sqlite/index.ts";
-import { NodeSqliteDatabase, openNodeSqliteDatabase } from "../src/storage/sqlite/node.ts";
-import { type EntryId, ROOT_CONVERSATION_ID } from "../src/types.ts";
+import ids from "../src/ids.ts";
+import sqlite from "../src/storage/sqlite/index.ts";
+import node from "../src/storage/sqlite/node.ts";
+import types from "../src/types.ts";
+import type typesModule from "../src/types.types.ts";
 import effectSupport from "./effect-support.ts";
+
+const { SqliteStorage } = sqlite;
+const { NodeSqliteDatabase, openNodeSqliteDatabase } = node;
+const { ROOT_CONVERSATION_ID } = types;
+const { idFromNumber } = ids;
 
 const { awaited } = effectSupport;
 
@@ -37,52 +43,61 @@ const preparedStatementsStorage = Effect.fn("preparedStatementsStorage")(functio
   return { connection, storage };
 });
 
-const preparesEachStorage = Effect.gen(function* () {
-  const { connection, storage } = yield* preparedStatementsStorage();
-  yield* awaited(
-    storage.commit(
-      Array.from({ length: 100 }, (_, index) => ({
-        type: "entry" as const,
-        value: {
-          conversationId: ROOT_CONVERSATION_ID,
-          id: idFromNumber<EntryId>(index + 2),
-          kind: "cached",
-        },
-      })),
-      BACKGROUND_CONTEXT,
-    ),
-  );
-  yield* awaited(
-    storage.commit(
-      [
-        {
-          type: "entry",
+const preparesEachStorageStep = () =>
+  Effect.gen(function* () {
+    const { connection, storage } = yield* preparedStatementsStorage();
+    yield* awaited(
+      storage.commit(
+        Array.from({ length: 100 }, (_, index) => ({
+          type: "entry" as const,
           value: {
             conversationId: ROOT_CONVERSATION_ID,
-            id: idFromNumber<EntryId>(102),
-            kind: "cached-again",
+            id: idFromNumber<typesModule.EntryId>(index + 2),
+            kind: "cached",
           },
-        },
-      ],
-      BACKGROUND_CONTEXT,
-    ),
-  );
-  expect(
-    (yield* awaited(storage.entry(idFromNumber<EntryId>(2), BACKGROUND_CONTEXT)))?.entry.kind,
-  ).toBe("cached");
-  expect(
-    (yield* awaited(storage.entry(idFromNumber<EntryId>(102), BACKGROUND_CONTEXT)))?.entry.kind,
-  ).toBe("cached-again");
-  yield* awaited(
-    expect(
-      storage.commit(
-        [{ type: "conversation", value: { id: ROOT_CONVERSATION_ID } }],
+        })),
         BACKGROUND_CONTEXT,
       ),
-    ).rejects.toThrow("ID 1 already belongs to conversation"),
-  );
+    );
+    yield* awaited(
+      storage.commit(
+        [
+          {
+            type: "entry",
+            value: {
+              conversationId: ROOT_CONVERSATION_ID,
+              id: idFromNumber<typesModule.EntryId>(102),
+              kind: "cached-again",
+            },
+          },
+        ],
+        BACKGROUND_CONTEXT,
+      ),
+    );
+    expect(
+      (yield* awaited(storage.entry(idFromNumber<typesModule.EntryId>(2), BACKGROUND_CONTEXT)))
+        ?.entry.kind,
+    ).toBe("cached");
+    expect(
+      (yield* awaited(storage.entry(idFromNumber<typesModule.EntryId>(102), BACKGROUND_CONTEXT)))
+        ?.entry.kind,
+    ).toBe("cached-again");
+    yield* awaited(
+      expect(
+        storage.commit(
+          [{ type: "conversation", value: { id: ROOT_CONVERSATION_ID } }],
+          BACKGROUND_CONTEXT,
+        ),
+      ).rejects.toThrow("ID 1 already belongs to conversation"),
+    );
+    return { connection, storage };
+  });
+
+const preparesEachStorage = Effect.gen(function* () {
+  const { connection, storage } = yield* preparesEachStorageStep();
   expect(
-    (yield* awaited(storage.entry(idFromNumber<EntryId>(2), BACKGROUND_CONTEXT)))?.entry.kind,
+    (yield* awaited(storage.entry(idFromNumber<typesModule.EntryId>(2), BACKGROUND_CONTEXT)))?.entry
+      .kind,
   ).toBe("cached");
   expect(connection.repeatedPrepares()).toEqual([]);
   yield* awaited(storage.close(BACKGROUND_CONTEXT));

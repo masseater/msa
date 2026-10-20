@@ -1,14 +1,14 @@
 import type { Context } from "@msa/chord";
-import type { Conversation, Harness, NextTaskState, Registry, TaskRuntime } from "@msa/durable";
+import type durableTypes from "@msa/durable/index.types";
 
 declare namespace harnessStructuredSupportTypes {
   type NodeInput = { name: string };
 
   type NodeCheckpoint = { phase: "run" } | { phase: "resume"; round: number };
 
-  type NodeRuntime = TaskRuntime<NodeInput, NodeCheckpoint, string, object>;
+  type NodeRuntime = durableTypes.TaskRuntime<NodeInput, NodeCheckpoint, string, object>;
 
-  type Next = NextTaskState<NodeCheckpoint, string>;
+  type Next = durableTypes.NextTaskState<NodeCheckpoint, string>;
 
   type Behavior = {
     run?(runtime: NodeRuntime, ctx: Context): Promise<void>;
@@ -19,9 +19,9 @@ declare namespace harnessStructuredSupportTypes {
   type Ending = "completed" | "failed" | "throw";
 
   type Opened = {
-    harness: Harness;
-    root: Conversation;
-    registry: Registry;
+    harness: durableTypes.Harness;
+    root: durableTypes.Conversation;
+    registry: durableTypes.Registry;
     reports: unknown[];
   };
 }

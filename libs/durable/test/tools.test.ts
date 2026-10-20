@@ -1,13 +1,17 @@
 import { Effect } from "effect";
 import { afterAll, describe, expect, it } from "vite-plus/test";
 
-import { getOrThrow } from "../src/env/index.ts";
-import { NodeExecutionEnv } from "../src/env/node.ts";
-import { detectSupportedImageMimeType } from "../src/tools/image.ts";
-import { createReadTool, createWriteTool } from "../src/tools/index.ts";
+import envModule from "../src/env/index.ts";
+import type nodeTypes from "../src/env/node.types.ts";
+import image from "../src/tools/image.ts";
+import toolsModule from "../src/tools/index.ts";
 import support from "./support.ts";
 import diagnosticText from "./tools-cases.ts";
 import toolsSupport from "./tools-support.ts";
+
+const { createReadTool, createWriteTool } = toolsModule;
+const { getOrThrow } = envModule;
+const { detectSupportedImageMimeType } = image;
 
 const { BACKGROUND_CONTEXT, abortController, appendTempFile, awaited, withAbortSignal } = support;
 const {
@@ -158,7 +162,7 @@ const readsLogGrows = Effect.gen(function* () {
 
   const env = yield* createEnv;
   getOrThrow(yield* awaited(env.writeFile("app.log", "one\ntwo\n", BACKGROUND_CONTEXT)));
-  const growing = Object.create(env) as NodeExecutionEnv;
+  const growing = Object.create(env) as nodeTypes.NodeExecutionEnv;
   growing.openBinaryReader = (path, options, context) =>
     runPromise(
       Effect.gen(function* () {

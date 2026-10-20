@@ -1,7 +1,7 @@
 import type { Cause, Queue, Scope } from "effect";
 
 import type remoteErrorTypes from "./remote-error.types.ts";
-import type sessionModule from "./session.ts";
+import type SessionClass from "./session.ts";
 
 declare namespace sessionTypes {
   interface Reply {
@@ -24,7 +24,7 @@ declare namespace sessionTypes {
     readonly now: number;
   }
 
-  type Session = (typeof sessionModule.Session)["prototype"];
+  type Session = SessionClass;
 }
 
 export type { sessionTypes as default };

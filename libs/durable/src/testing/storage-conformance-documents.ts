@@ -1,12 +1,23 @@
-import { documentsAtomicCases } from "./storage-conformance-documents-atomic.ts";
-import { documentsCopyCases } from "./storage-conformance-documents-copy.ts";
-import { documentsHistoryCases } from "./storage-conformance-documents-history.ts";
-import { documentsIndexCases } from "./storage-conformance-documents-index.ts";
-import type { StorageCaseSpec } from "./storage-conformance-support.ts";
+import storageConformanceDocumentsAtomic from "./storage-conformance-documents-atomic.ts";
+import storageConformanceDocumentsCopy from "./storage-conformance-documents-copy.ts";
+import storageConformanceDocumentsHistory from "./storage-conformance-documents-history.ts";
+import storageConformanceDocumentsIndex from "./storage-conformance-documents-index.ts";
+import type storageConformanceSupportTypes from "./storage-conformance-support.types.ts";
 
-export const documentCases: readonly StorageCaseSpec[] = [
+const { documentsHistoryCases } = storageConformanceDocumentsHistory;
+const { documentsCopyCases } = storageConformanceDocumentsCopy;
+const { documentsIndexCases } = storageConformanceDocumentsIndex;
+const { documentsAtomicCases } = storageConformanceDocumentsAtomic;
+
+const documentCases: readonly storageConformanceSupportTypes.StorageCaseSpec[] = [
   ...documentsHistoryCases,
   ...documentsCopyCases,
   ...documentsIndexCases,
   ...documentsAtomicCases,
 ];
+
+const storageConformanceDocuments = {
+  documentCases,
+};
+
+export default storageConformanceDocuments;

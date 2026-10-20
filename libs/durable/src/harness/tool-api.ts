@@ -1,66 +1,48 @@
-import { awaitWithContext, type Context } from "@msa/chord/context";
-import { copyJson, type JsonValue } from "@msa/chord/json";
+import { type Context, awaitWithContext } from "@msa/chord/context";
+import { type JsonValue, copyJson } from "@msa/chord/json";
 import { PROGRESS_BYTES_PER_SECOND, type Progress } from "@msa/chord/progress";
 import { Effect } from "effect";
 
-import { checkKey } from "./tool-call.ts";
-import { startNestedCall } from "./tool-nested.ts";
-import { copyDiagnostic } from "./tool-progress.ts";
-import { fallbackResult } from "./tool-result.ts";
-import {
-  NestedCallDoc,
-  type Reported,
-  type ToolRuntime,
-  type ToolTaskResult,
-} from "./tool-types.ts";
-import type {
-  JsonObject,
-  NestedToolExecutionResult,
-  Task,
-  TaskId,
-  TaskOptions,
-  ToolDiagnostic,
-  ToolExecutionApi,
-  ToolHookCall,
-  Tx,
-} from "./types.ts";
+import toolApiKit from "./tool-api-kit.ts";
+import type toolApiTypes from "./tool-api.types.ts";
+import toolTypes from "./tool-types.ts";
+import type toolTypesModule from "./tool-types.types.ts";
+import type typesModule from "./types.types.ts";
+const { NestedCallDoc } = toolTypes;
+const { fallbackResult } = toolApiKit.toolResult;
+const { checkKey } = toolApiKit.toolCall;
+const { startNestedCall } = toolApiKit.toolNested;
+const { copyDiagnostic } = toolApiKit.toolProgress;
 
-export type ApiState = {
-  readonly admissions: Promise<unknown>[];
-  ended: boolean;
-  sequence: number;
-  madeNestedMemo: Promise<unknown> | undefined;
-};
-
-export const newApiState = (): ApiState => ({
+const newApiState = (): toolApiTypes.ApiState => ({
   admissions: [],
   ended: false,
-  sequence: 0,
   madeNestedMemo: undefined,
+  sequence: 0,
 });
 
 type ApiInput = {
-  readonly runtime: ToolRuntime;
-  readonly call: ToolHookCall;
-  readonly reported: Reported;
+  readonly runtime: toolTypesModule.ToolRuntime;
+  readonly call: typesModule.ToolHookCall;
+  readonly reported: toolTypesModule.Reported;
   readonly progress: Progress;
-  readonly state: ApiState;
+  readonly state: toolApiTypes.ApiState;
   readonly resumes: boolean;
 };
 
-const outputWindowOf = (input: ApiInput): ToolExecutionApi["outputWindow"] =>
+const outputWindowOf = (input: ApiInput): typesModule.ToolExecutionApi["outputWindow"] =>
   input.reported.limits.retain === "tail"
     ? {
+        bytesPerSecond: PROGRESS_BYTES_PER_SECOND,
         maxBytes: input.reported.limits.maxBytes,
         maxLines: input.reported.limits.maxLines,
         minIntervalMs: input.runtime.settings.progress.outputIntervalMs,
-        bytesPerSecond: PROGRESS_BYTES_PER_SECOND,
       }
     : undefined;
 
 const readNested = Effect.fnUntraced(function* (
-  runtime: ToolRuntime,
-  id: TaskId<ToolTaskResult>,
+  runtime: toolTypesModule.ToolRuntime,
+  id: typesModule.TaskId<toolTypesModule.ToolTaskResult>,
   name: string,
   key: string,
   context: Context,
@@ -71,16 +53,18 @@ const readNested = Effect.fnUntraced(function* (
   ))?.result;
   return stored === undefined
     ? fallbackResult(id, name, settled.state.outcome)
-    : (copyJson(stored as unknown as JsonValue) as unknown as NestedToolExecutionResult);
+    : (copyJson(
+        stored as unknown as JsonValue,
+      ) as unknown as typesModule.NestedToolExecutionResult);
 });
 
 const nestedCall = (
   input: ApiInput,
   name: string,
-  args: JsonObject,
+  args: typesModule.JsonObject,
   options: { readonly key?: string; readonly progress?: boolean },
   context: Context,
-): Promise<NestedToolExecutionResult> => {
+): Promise<typesModule.NestedToolExecutionResult> => {
   const { runtime, state, call } = input;
   const key = options.key ?? String(++state.sequence);
   if (options.key !== undefined) checkKey(options.key);
@@ -97,7 +81,7 @@ const nestedCall = (
         call.id,
         name,
         args,
-        { key, progress: options.progress, abandonOnRestart: !input.resumes },
+        { abandonOnRestart: !input.resumes, key, progress: options.progress },
         context,
       ),
     ),
@@ -107,12 +91,12 @@ const nestedCall = (
 };
 
 const commitCapturing = <T>(
-  runtime: ToolRuntime,
-  change: (tx: Tx) => T | Promise<T>,
+  runtime: toolTypesModule.ToolRuntime,
+  change: (tx: typesModule.Tx) => T | Promise<T>,
   context: Context,
 ): Promise<T> => {
   const captured: { value?: T } = {};
-  const run = (tx: Tx): Promise<undefined> =>
+  const run = (tx: typesModule.Tx): Promise<undefined> =>
     Effect.runPromise(
       Effect.map(
         Effect.promise(() => Promise.resolve(change(tx))),
@@ -135,21 +119,6 @@ type Live = () => void;
 const outputApi = (input: ApiInput, assertLive: Live) => {
   const { reported, progress } = input;
   return {
-    output: (chunk: string, skipped?: Parameters<ToolExecutionApi["output"]>[1]) => {
-      assertLive();
-      if (reported.output.push(chunk, skipped)) progress.mark();
-    },
-    outputWindow: outputWindowOf(input),
-    retainedOutput: () => {
-      assertLive();
-      const retained = reported.output.snapshot();
-      return { text: retained.text, truncated: retained.droppedBytes > 0 };
-    },
-    diagnostic: (diagnostic: ToolDiagnostic) => {
-      assertLive();
-      reported.diagnostics.push(copyDiagnostic(diagnostic));
-      progress.mark();
-    },
     details: (value: JsonValue, detailsContext: Context) =>
       Effect.runPromise(
         Effect.flatMap(
@@ -164,21 +133,38 @@ const outputApi = (input: ApiInput, assertLive: Live) => {
           ({ committed }) => Effect.promise(() => awaitWithContext(committed, detailsContext)),
         ),
       ),
-  } satisfies Partial<ToolExecutionApi>;
+    diagnostic: (diagnostic: typesModule.ToolDiagnostic) => {
+      assertLive();
+      reported.diagnostics.push(copyDiagnostic(diagnostic));
+      progress.mark();
+    },
+    output: (chunk: string, skipped?: Parameters<typesModule.ToolExecutionApi["output"]>[1]) => {
+      assertLive();
+      if (reported.output.push(chunk, skipped)) progress.mark();
+    },
+    outputWindow: outputWindowOf(input),
+    retainedOutput: () => {
+      assertLive();
+      const retained = reported.output.snapshot();
+      return { text: retained.text, truncated: retained.droppedBytes > 0 };
+    },
+  } satisfies Partial<typesModule.ToolExecutionApi>;
 };
 
 const taskApi = (input: ApiInput) => {
   const { runtime } = input;
   return {
-    commit: <T>(change: (tx: Tx) => T | Promise<T>, commitContext: Context): Promise<T> =>
-      commitCapturing(runtime, change, commitContext),
-    memo: runtime.memo,
+    commit: <T>(
+      change: (tx: typesModule.Tx) => T | Promise<T>,
+      commitContext: Context,
+    ): Promise<T> => commitCapturing(runtime, change, commitContext),
+    conversation: runtime.conversation,
     createTask: <I, S extends { phase: string }, R, H extends object>(
-      task: Task<I, S, R, H>,
+      task: typesModule.Task<I, S, R, H>,
       taskInput: I,
-      options: Omit<TaskOptions, "conversationId">,
+      options: Omit<typesModule.TaskOptions, "conversationId">,
       taskContext: Context,
-    ): Promise<TaskId<R>> => {
+    ): Promise<typesModule.TaskId<R>> => {
       const child =
         options.ownership.kind === "task" && !input.resumes
           ? { abandonOnRestart: true, ...options }
@@ -186,26 +172,26 @@ const taskApi = (input: ApiInput) => {
       return commitCapturing(runtime, (tx) => tx.createTask(task, taskInput, child), taskContext);
     },
     getTask: runtime.getTask,
-    waitForTask: runtime.waitForTask,
-    conversation: runtime.conversation,
+    memo: runtime.memo,
     snapshot: runtime.snapshot,
     snapshotAsOf: runtime.snapshotAsOf,
+    waitForTask: runtime.waitForTask,
     watchDoc: runtime.watchDoc,
   };
 };
 
-export const buildApi = (input: ApiInput): Omit<ToolExecutionApi, "env"> => {
+const buildApi = (input: ApiInput): Omit<typesModule.ToolExecutionApi, "env"> => {
   const { runtime, call, state } = input;
   const assertLive = (): void => {
     if (state.ended) throw new Error(`Tool call ${call.id} has settled`);
   };
   return {
-    taskId: runtime.taskId,
-    conversationId: runtime.conversationId,
-    callId: call.id,
-    registry: runtime.registry,
     agent: runtime.agent,
+    callId: call.id,
+    conversationId: runtime.conversationId,
     models: runtime.models,
+    registry: runtime.registry,
+    taskId: runtime.taskId,
     ...outputApi(input, assertLive),
     ...taskApi(input),
     executeTool: (name, toolArgs, callContext, options = {}) =>
@@ -217,3 +203,10 @@ export const buildApi = (input: ApiInput): Omit<ToolExecutionApi, "env"> => {
       ),
   };
 };
+
+const toolApi = {
+  buildApi,
+  newApiState,
+};
+
+export default toolApi;

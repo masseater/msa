@@ -1,11 +1,7 @@
 import { Effect, Function } from "effect";
 
-import type { SqliteDatabase, SqliteExecutor } from "./database.ts";
-
-export type SqliteMigration = {
-  readonly version: number;
-  readonly statements: readonly string[];
-};
+import type databaseTypes from "./database.ts";
+import type migrationsTypes from "./migrations.types.ts";
 
 const INITIAL_SCHEMA: readonly string[] = [
   `CREATE TABLE durable_metadata (
@@ -85,11 +81,11 @@ const INITIAL_SCHEMA: readonly string[] = [
   "CREATE INDEX document_revisions_by_kind ON document_revisions (document_id, kind, seq DESC)",
 ];
 
-export const SQLITE_MIGRATIONS: readonly SqliteMigration[] = [
-  { version: 1, statements: INITIAL_SCHEMA },
+const SQLITE_MIGRATIONS: readonly migrationsTypes.SqliteMigration[] = [
+  { statements: INITIAL_SCHEMA, version: 1 },
 ];
 
-export const CURRENT_SQLITE_SCHEMA_VERSION = SQLITE_MIGRATIONS.at(-1)?.version ?? 0;
+const CURRENT_SQLITE_SCHEMA_VERSION = SQLITE_MIGRATIONS.at(-1)?.version ?? 0;
 
 type SchemaRow = { readonly version: number };
 
@@ -98,7 +94,7 @@ const SCHEMA_TABLE = `CREATE TABLE IF NOT EXISTS durable_schema (
 			version INTEGER NOT NULL CHECK (version >= 0)
 		) STRICT`;
 
-const checkContiguous = (migrations: readonly SqliteMigration[]): void => {
+const checkContiguous = (migrations: readonly migrationsTypes.SqliteMigration[]): void => {
   for (let index = 0; index < migrations.length; index++) {
     if (migrations[index]?.version !== index + 1) {
       throw new Error("Durable SQLite migrations must have contiguous versions starting at 1");
@@ -107,8 +103,8 @@ const checkContiguous = (migrations: readonly SqliteMigration[]): void => {
 };
 
 const migrate = Effect.fnUntraced(function* (
-  transaction: SqliteExecutor,
-  migrations: readonly SqliteMigration[],
+  transaction: databaseTypes.SqliteExecutor,
+  migrations: readonly migrationsTypes.SqliteMigration[],
 ) {
   yield* Effect.promise(() => transaction.exec(SCHEMA_TABLE));
   yield* Effect.promise(() =>
@@ -143,14 +139,19 @@ const migrate = Effect.fnUntraced(function* (
 const isDatabase = (value: unknown): boolean =>
   typeof value === "object" && value !== null && !Array.isArray(value);
 
-export const applySqliteMigrations: {
-  (migrations?: readonly SqliteMigration[]): (database: SqliteDatabase) => Promise<void>;
-  (database: SqliteDatabase, migrations?: readonly SqliteMigration[]): Promise<void>;
+const applySqliteMigrations: {
+  (
+    migrations?: readonly migrationsTypes.SqliteMigration[],
+  ): (database: databaseTypes.SqliteDatabase) => Promise<void>;
+  (
+    database: databaseTypes.SqliteDatabase,
+    migrations?: readonly migrationsTypes.SqliteMigration[],
+  ): Promise<void>;
 } = Function.dual(
   (args: IArguments) => isDatabase(args[0]),
   (
-    database: SqliteDatabase,
-    migrations: readonly SqliteMigration[] = SQLITE_MIGRATIONS,
+    database: databaseTypes.SqliteDatabase,
+    migrations: readonly migrationsTypes.SqliteMigration[] = SQLITE_MIGRATIONS,
   ): Promise<void> =>
     Effect.runPromise(
       Effect.gen(function* () {
@@ -164,3 +165,11 @@ export const applySqliteMigrations: {
       }),
     ),
 );
+
+const migrationsModule = {
+  CURRENT_SQLITE_SCHEMA_VERSION,
+  SQLITE_MIGRATIONS,
+  applySqliteMigrations,
+};
+
+export default migrationsModule;

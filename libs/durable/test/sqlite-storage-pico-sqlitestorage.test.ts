@@ -4,12 +4,15 @@ import type { JsonValue } from "@msa/chord";
 import { Effect } from "effect";
 import { afterEach, describe, expect, it } from "vite-plus/test";
 
-import { openNodeSqliteStorage } from "../src/storage/sqlite/node.ts";
-import type { DocumentCreate, DocumentId, EntryId, TaskId } from "../src/types.ts";
-import { ROOT_CONVERSATION_ID } from "../src/types.ts";
+import node from "../src/storage/sqlite/node.ts";
+import types from "../src/types.ts";
+import type typesModule from "../src/types.types.ts";
 import effectSupport from "./effect-support.ts";
 import platformSupport from "./platform-support.ts";
 import sqliteStorageSupport from "./sqlite-storage-support.ts";
+
+const { ROOT_CONVERSATION_ID } = types;
+const { openNodeSqliteStorage } = node;
 
 const { awaited } = effectSupport;
 const { removeDir } = platformSupport;
@@ -82,8 +85,8 @@ function queryPlanDetails(db: DatabaseSync): string[] {
 const rollsSqlRows = Effect.gen(function* () {
   const { storage, path } = yield* createSqliteStorage();
   yield* awaited(createRoot(storage));
-  const transientId = yield* awaited(storage.mintId<EntryId>());
-  const transientTaskId = yield* awaited(storage.mintId<TaskId<JsonValue>>());
+  const transientId = yield* awaited(storage.mintId<typesModule.EntryId>());
+  const transientTaskId = yield* awaited(storage.mintId<typesModule.TaskId<JsonValue>>());
   const circular: { self?: unknown } = {};
   circular.self = circular;
   yield* awaited(
@@ -105,7 +108,7 @@ const rollsSqlRows = Effect.gen(function* () {
   );
   expect(yield* awaited(storage.entry(transientId, context))).toBeUndefined();
   expect(yield* awaited(storage.task(transientTaskId, context))).toBeUndefined();
-  const committedId = yield* awaited(storage.mintId<EntryId>());
+  const committedId = yield* awaited(storage.mintId<typesModule.EntryId>());
   expect(
     yield* awaited(
       storage.commit(
@@ -134,14 +137,14 @@ describe("Pico SqliteStorage", () => {
 const reconstructsRecentAncientStep1 = Effect.gen(function* () {
   const { storage, path } = yield* createSqliteStorage();
   yield* awaited(createRoot(storage));
-  const id = yield* awaited(storage.mintId<DocumentId>());
+  const id = yield* awaited(storage.mintId<typesModule.DocumentId>());
   const record = {
     fork: "asOf",
     history: "rewindable",
     id,
     kind: "history",
     scope: { conversationId: ROOT_CONVERSATION_ID, kind: "conversation" },
-  } satisfies DocumentCreate;
+  } satisfies typesModule.DocumentCreate;
   const createdAt = yield* awaited(
     storage.commit(
       [

@@ -1,44 +1,44 @@
 import type { ModelThinkingLevel } from "@msa/ai";
 
-import type {
-  CompactionHooks,
-  CompactionReason,
-  CompactionResult,
-  ConversationStreamOptions,
-  EntryId,
-  ModelRef,
-  NextTaskState,
-  RunningTask,
-  TaskId,
-  TaskRuntime,
-} from "./types.ts";
+import type typesModule from "./types.types.ts";
 
-export type CompactionInput = { reason: CompactionReason; instructions?: string };
+declare namespace compactionTypesModule {
+  type CompactionInput = { reason: typesModule.CompactionReason; instructions?: string };
 
-export type SummaryRequest = {
-  attempt: number;
-  model: ModelRef;
-  thinkingLevel: ModelThinkingLevel;
-  streamOptions: ConversationStreamOptions;
-  maxTokens: number;
-  tail: EntryId;
-  firstKept: EntryId;
-};
+  type SummaryRequest = {
+    attempt: number;
+    model: typesModule.ModelRef;
+    thinkingLevel: ModelThinkingLevel;
+    streamOptions: typesModule.ConversationStreamOptions;
+    maxTokens: number;
+    tail: typesModule.EntryId;
+    firstKept: typesModule.EntryId;
+  };
 
-export type CompactionCheckpoint =
-  | { phase: "select" }
-  | ({ phase: "summarize" } & SummaryRequest)
-  | ({ phase: "retry"; until: number } & SummaryRequest);
+  type CompactionCheckpoint =
+    | { phase: "select" }
+    | ({ phase: "summarize" } & SummaryRequest)
+    | ({ phase: "retry"; until: number } & SummaryRequest);
 
-export type CompactionRuntime = TaskRuntime<
-  CompactionInput,
-  CompactionCheckpoint,
-  CompactionResult,
-  CompactionHooks
->;
+  type CompactionRuntime = typesModule.TaskRuntime<
+    CompactionInput,
+    CompactionCheckpoint,
+    typesModule.CompactionResult,
+    typesModule.CompactionHooks
+  >;
 
-export type CompactionNext = NextTaskState<CompactionCheckpoint, CompactionResult>;
+  type CompactionNext = typesModule.NextTaskState<
+    CompactionCheckpoint,
+    typesModule.CompactionResult
+  >;
 
-export type CompactionTaskId = TaskId<CompactionResult>;
+  type CompactionTaskId = typesModule.TaskId<typesModule.CompactionResult>;
 
-export type CompactionTask = RunningTask<CompactionInput, CompactionCheckpoint, CompactionResult>;
+  type CompactionTask = typesModule.RunningTask<
+    CompactionInput,
+    CompactionCheckpoint,
+    typesModule.CompactionResult
+  >;
+}
+
+export type { compactionTypesModule as default };

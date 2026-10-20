@@ -1,30 +1,36 @@
 import type { Op } from "@msa/chord/delta";
 import { Function } from "effect";
 
-import { collect, quiet } from "./events-changes.ts";
-import { endedNested, endedTools, slotsOf, startedTools, updatedTools } from "./events-slots.ts";
-import { parts } from "./events-snapshot.ts";
-import { partials, retryEvents, streamEvents } from "./events-stream.ts";
-import { compactionEnds, entryEvents, taskEvents, tailEvents } from "./events-tail.ts";
-import type { AgentEvent, Views } from "./events-types.ts";
-import type { CommitPublication, ConversationId, Dual5, TaskId } from "./types.ts";
+import eventsChanges from "./events-changes.ts";
+import eventsSlots from "./events-slots.ts";
+import eventsSnapshot from "./events-snapshot.ts";
+import eventsStream from "./events-stream.ts";
+import eventsTail from "./events-tail.ts";
+import type eventsTypesModule from "./events-types.ts";
+import type typesModule from "./types.types.ts";
 
-export const translate: Dual5<
-  ConversationId,
-  Views,
+const { collect, quiet } = eventsChanges;
+const { parts } = eventsSnapshot;
+const { endedNested, endedTools, slotsOf, startedTools, updatedTools } = eventsSlots;
+const { partials, retryEvents, streamEvents } = eventsStream;
+const { compactionEnds, entryEvents, tailEvents, taskEvents } = eventsTail;
+
+const translate: typesModule.Dual5<
+  typesModule.ConversationId,
+  eventsTypesModule.Views,
   readonly Op[],
-  CommitPublication,
-  Set<TaskId>,
-  AgentEvent[]
+  typesModule.CommitPublication,
+  Set<typesModule.TaskId>,
+  eventsTypesModule.AgentEvent[]
 > = Function.dual(
   5,
   (
-    conversationId: ConversationId,
-    views: Views,
+    conversationId: typesModule.ConversationId,
+    views: eventsTypesModule.Views,
     viewOps: readonly Op[],
-    publication: CommitPublication,
-    held: Set<TaskId>,
-  ): AgentEvent[] => {
+    publication: typesModule.CommitPublication,
+    held: Set<typesModule.TaskId>,
+  ): eventsTypesModule.AgentEvent[] => {
     const changes = collect(publication, conversationId);
     if (quiet(viewOps, changes)) return [];
     const was = parts(views.before);
@@ -47,3 +53,9 @@ export const translate: Dual5<
     ];
   },
 );
+
+const eventsTranslate = {
+  translate,
+};
+
+export default eventsTranslate;

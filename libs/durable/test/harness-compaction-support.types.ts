@@ -1,5 +1,5 @@
 import type { AssistantMessage, Message, SimpleStreamOptions } from "@msa/ai";
-import type { Conversation, Harness } from "@msa/durable";
+import type durableTypes from "@msa/durable/index.types";
 
 import type supportTypes from "./support.types.ts";
 
@@ -22,8 +22,8 @@ declare namespace harnessCompactionSupportTypes {
   };
 
   type Chat = {
-    readonly harness: Harness;
-    readonly root: Conversation;
+    readonly harness: durableTypes.Harness;
+    readonly root: durableTypes.Conversation;
     readonly setup: supportTypes.ChatSetup;
     readonly faux: Script;
   };

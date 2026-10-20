@@ -1,32 +1,26 @@
 import { DatabaseSync } from "node:sqlite";
 
 import type { JsonValue } from "@msa/chord";
-import { BACKGROUND_CONTEXT } from "@msa/chord/context";
 import { Effect } from "effect";
 import { dual } from "effect/Function";
 
-import type { SqliteStorage } from "../src/storage/sqlite/index.ts";
-import { SqliteStorage as SqliteStorageModule } from "../src/storage/sqlite/index.ts";
-import { openNodeSqliteStorage } from "../src/storage/sqlite/node.ts";
-import type {
-  ConversationId,
-  EntryId,
-  EntryRecord,
-  Seq,
-  Storage,
-  TaskId,
-  TaskRecord,
-} from "../src/types.ts";
-import { ROOT_CONVERSATION_ID } from "../src/types.ts";
-import effectSupport from "./effect-support.ts";
-import platformSupport from "./platform-support.ts";
+import sqlite from "../src/storage/sqlite/index.ts";
+import type sqliteTypes from "../src/storage/sqlite/index.types.ts";
+import node from "../src/storage/sqlite/node.ts";
+import types from "../src/types.ts";
+import type typesModule from "../src/types.types.ts";
+import testSupport from "./support.ts";
 
-const { awaited } = effectSupport;
-const { joinPath, makeTempDir } = platformSupport;
+const { openNodeSqliteStorage } = node;
+const { ROOT_CONVERSATION_ID } = types;
+const { SqliteStorage: SqliteStorageModule } = sqlite;
 
-const context = BACKGROUND_CONTEXT;
+const { awaited } = testSupport;
+const { joinPath, makeTempDir } = testSupport;
 
-const openStorages = new Set<SqliteStorage>();
+const context = testSupport.BACKGROUND_CONTEXT;
+
+const openStorages = new Set<sqliteTypes.SqliteStorage>();
 
 const tempDirectories = new Set<string>();
 
@@ -42,32 +36,34 @@ const createSqliteStorage = Effect.fn("createSqliteStorage")(function* (
 });
 
 function entryImpl(
-  id: EntryId,
-  conversationId: ConversationId,
+  id: typesModule.EntryId,
+  conversationId: typesModule.ConversationId,
   data: JsonValue | undefined,
-): EntryRecord {
+): typesModule.EntryRecord {
   return { conversationId, id, kind: "message", ...(data === undefined ? {} : { data }) };
 }
 
 const entry: {
   (
-    conversationId: ConversationId,
+    conversationId: typesModule.ConversationId,
     data: JsonValue | undefined,
-  ): (id: EntryId) => ReturnType<typeof entryImpl>;
+  ): (id: typesModule.EntryId) => ReturnType<typeof entryImpl>;
   (
-    id: EntryId,
-    conversationId: ConversationId,
+    id: typesModule.EntryId,
+    conversationId: typesModule.ConversationId,
     data: JsonValue | undefined,
   ): ReturnType<typeof entryImpl>;
 } = dual(3, entryImpl);
 
-function createRoot(storage: Storage): Promise<Seq> {
+function createRoot(storage: typesModule.Storage): Promise<typesModule.Seq> {
   return Promise.resolve(
     storage.commit([{ type: "conversation", value: { id: ROOT_CONVERSATION_ID } }], context),
   );
 }
 
-function pendingTask(id: TaskId<JsonValue>): TaskRecord<JsonValue, JsonValue, JsonValue> {
+function pendingTask(
+  id: typesModule.TaskId<JsonValue>,
+): typesModule.TaskRecord<JsonValue, JsonValue, JsonValue> {
   return {
     abortRequested: false,
     background: false,

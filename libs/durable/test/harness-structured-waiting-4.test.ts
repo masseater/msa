@@ -1,4 +1,4 @@
-import { type TaskId } from "@msa/durable";
+import type durableTypes from "@msa/durable/index.types";
 import { Effect } from "effect";
 import { afterEach, describe, expect, it } from "vite-plus/test";
 
@@ -46,7 +46,7 @@ const letsBackgroundTask = Effect.gen(function* () {
   const runPromise = Effect.runPromiseWith(yield* Effect.context<never>());
 
   const { harness, root } = yield* openNodes();
-  let owner: TaskId | undefined;
+  let owner: durableTypes.TaskId | undefined;
   script("background", {
     run: (runtime, ctx) => runtime.commit(() => waitOn([owner!], "allSettled"), ctx),
   });
@@ -91,7 +91,7 @@ const rejectsCycleHoldStep1 = Effect.gen(function* () {
   const runPromise = Effect.runPromiseWith(yield* Effect.context<never>());
 
   const { harness, root } = yield* openNodes();
-  const ids: Record<string, TaskId> = {};
+  const ids: Record<string, durableTypes.TaskId> = {};
   const reviewerWaits = deferred();
   script("orchestrator", {
     run: (runtime, ctx) =>
@@ -158,7 +158,7 @@ const allowsDiamondWaits = Effect.gen(function* () {
   const runPromise = Effect.runPromiseWith(yield* Effect.context<never>());
 
   const { harness, root } = yield* openNodes();
-  const ids: Record<string, TaskId> = {};
+  const ids: Record<string, durableTypes.TaskId> = {};
   script("top", {
     run: (runtime, ctx) =>
       runtime.commit(() => waitOn([ids["left"]!, ids["right"]!], "allSettled"), ctx),

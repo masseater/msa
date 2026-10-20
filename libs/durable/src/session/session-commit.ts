@@ -2,46 +2,46 @@ import type { Context } from "@msa/chord";
 import { withoutAbortSignal } from "@msa/chord/context";
 import { Cause, Effect, Exit, Function } from "effect";
 
-import { addressId as documentAddressId } from "../documents.ts";
-import type {
-  CommitChange,
-  CommitPublication,
-  DocumentCommitChange,
-  Seq,
-  StorageWrite,
-} from "../types.ts";
-import { dropDocument, loadDocument, sweepDocuments, touchDocument } from "./session-documents.ts";
-import {
-  assertHealthy,
-  assertUsable,
-  contained,
-  enqueue,
-  type SessionState,
-} from "./session-state.ts";
-import type { TransactionHost, TransactionScope } from "./transaction-types.ts";
-import { Transaction } from "./transaction.ts";
+import documentsModule from "../documents.ts";
+import type typesModule from "../types.types.ts";
+import type sessionCommitTypes from "./session-commit.types.ts";
+import sessionDocuments from "./session-documents.ts";
+import sessionState from "./session-state.ts";
+import type transactionTypesModule from "./transaction-types.types.ts";
+import Transaction from "./transaction.ts";
 
-export const createTransactionHost = (state: SessionState): TransactionHost => ({
-  storage: state.storage,
-  now: state.now,
+const { dropDocument, loadDocument, sweepDocuments, touchDocument } = sessionDocuments;
+const { assertHealthy, assertUsable, contained, enqueue } = sessionState;
+
+const { addressId: documentAddressId } = documentsModule;
+
+const createTransactionHost = (
+  state: sessionCommitTypes.SessionState,
+): transactionTypesModule.TransactionHost => ({
   cached: (id) => {
     const cached = state.documents.get(id);
     if (cached !== undefined) touchDocument(state, id);
     return cached;
   },
-  load: (definition, addressId, address, context) =>
-    Effect.runPromise(loadDocument(state, definition, addressId, address, context)),
+  conversationCreated: (tx, record) => state.hooks.conversationCreated(tx, record),
+  evict: (id, recordId) => {
+    if (state.documents.get(id)?.record.id === recordId) dropDocument(state, id);
+  },
   install: (document) => {
     state.documents.set(document.addressId, document);
     touchDocument(state, document.addressId);
   },
-  evict: (id, recordId) => {
-    if (state.documents.get(id)?.record.id === recordId) dropDocument(state, id);
-  },
-  conversationCreated: (tx, record) => state.hooks.conversationCreated(tx, record),
+  load: (definition, addressId, address, context) =>
+    Effect.runPromise(loadDocument(state, definition, addressId, address, context)),
+  now: state.now,
+  storage: state.storage,
 });
 
-const publish = (state: SessionState, publication: CommitPublication, context: Context): void => {
+const publish = (
+  state: sessionCommitTypes.SessionState,
+  publication: typesModule.CommitPublication,
+  context: Context,
+): void => {
   for (const listener of [...state.internalListeners]) {
     contained(
       () => listener(publication, context),
@@ -57,16 +57,16 @@ const publish = (state: SessionState, publication: CommitPublication, context: C
 };
 
 const publishCommit = (
-  state: SessionState,
+  state: sessionCommitTypes.SessionState,
   commit: {
-    readonly seq: Seq;
-    readonly writes: readonly StorageWrite[];
-    readonly documents: readonly DocumentCommitChange[];
+    readonly seq: typesModule.Seq;
+    readonly writes: readonly typesModule.StorageWrite[];
+    readonly documents: readonly typesModule.DocumentCommitChange[];
   },
   context: Context,
 ): void => {
   if (state.commitListeners.size === 0 && state.internalListeners.size === 0) return;
-  const changes: CommitChange[] = [];
+  const changes: typesModule.CommitChange[] = [];
   for (const write of commit.writes) {
     switch (write.type) {
       case "conversation":
@@ -77,7 +77,7 @@ const publishCommit = (
     }
   }
   for (const document of commit.documents) changes.push(document);
-  publish(state, { seq: commit.seq, changes }, context);
+  publish(state, { changes, seq: commit.seq }, context);
 };
 
 const failWith = (cause: Cause.Cause<never>, cleanup: () => void): Effect.Effect<never> =>
@@ -87,15 +87,19 @@ const failWith = (cause: Cause.Cause<never>, cleanup: () => void): Effect.Effect
   });
 
 const applyChange = <T>(
-  state: SessionState,
-  tx: Transaction,
-  change: (tx: Transaction) => T | Promise<T>,
+  state: sessionCommitTypes.SessionState,
+  tx: sessionCommitTypes.Transaction,
+  change: (tx: sessionCommitTypes.Transaction) => T | Promise<T>,
 ): Effect.Effect<T> =>
   Effect.promise(() => Promise.resolve(change(tx))).pipe(
     Effect.tap(() => Effect.sync(() => assertHealthy(state))),
   );
 
-const adopt = (state: SessionState, tx: Transaction, seq: Seq): DocumentCommitChange[] => {
+const adopt = (
+  state: sessionCommitTypes.SessionState,
+  tx: sessionCommitTypes.Transaction,
+  seq: typesModule.Seq,
+): typesModule.DocumentCommitChange[] => {
   try {
     return tx.adopt(seq);
   } catch (error) {
@@ -104,12 +108,12 @@ const adopt = (state: SessionState, tx: Transaction, seq: Seq): DocumentCommitCh
   }
 };
 
-export const runCommit = Effect.fnUntraced(function* <T>(
-  state: SessionState,
-  host: TransactionHost,
-  change: (tx: Transaction) => T | Promise<T>,
+const runCommit = Effect.fnUntraced(function* <T>(
+  state: sessionCommitTypes.SessionState,
+  host: transactionTypesModule.TransactionHost,
+  change: (tx: sessionCommitTypes.Transaction) => T | Promise<T>,
   context: Context,
-  scope: TransactionScope | undefined,
+  scope: transactionTypesModule.TransactionScope | undefined,
 ) {
   assertHealthy(state);
   context.abortSignal?.throwIfAborted();
@@ -134,33 +138,33 @@ export const runCommit = Effect.fnUntraced(function* <T>(
   const seq = stored.value;
   const documents = adopt(state, tx, seq);
   for (const document of documents) touchDocument(state, documentAddressId(document.record));
-  publishCommit(state, { seq, writes, documents }, context);
+  publishCommit(state, { documents, seq, writes }, context);
   sweepDocuments(state);
   return changed.value;
 });
 
-export const commitOnLine: {
+const commitOnLine: {
   <T>(
-    host: TransactionHost,
-    change: (tx: Transaction) => T | Promise<T>,
+    host: transactionTypesModule.TransactionHost,
+    change: (tx: sessionCommitTypes.Transaction) => T | Promise<T>,
     context: Context,
-    scope: TransactionScope | undefined,
-  ): (state: SessionState) => Promise<T>;
+    scope: transactionTypesModule.TransactionScope | undefined,
+  ): (state: sessionCommitTypes.SessionState) => Promise<T>;
   <T>(
-    state: SessionState,
-    host: TransactionHost,
-    change: (tx: Transaction) => T | Promise<T>,
+    state: sessionCommitTypes.SessionState,
+    host: transactionTypesModule.TransactionHost,
+    change: (tx: sessionCommitTypes.Transaction) => T | Promise<T>,
     context: Context,
-    scope: TransactionScope | undefined,
+    scope: transactionTypesModule.TransactionScope | undefined,
   ): Promise<T>;
 } = Function.dual(
   5,
   <T>(
-    state: SessionState,
-    host: TransactionHost,
-    change: (tx: Transaction) => T | Promise<T>,
+    state: sessionCommitTypes.SessionState,
+    host: transactionTypesModule.TransactionHost,
+    change: (tx: sessionCommitTypes.Transaction) => T | Promise<T>,
     context: Context,
-    scope: TransactionScope | undefined,
+    scope: transactionTypesModule.TransactionScope | undefined,
   ): Promise<T> => {
     try {
       assertUsable(state);
@@ -170,3 +174,11 @@ export const commitOnLine: {
     return enqueue(state, () => Effect.runPromise(runCommit(state, host, change, context, scope)));
   },
 );
+
+const sessionCommit = {
+  commitOnLine,
+  createTransactionHost,
+  runCommit,
+};
+
+export default sessionCommit;

@@ -3,7 +3,7 @@ import { Effect } from "effect";
 import { describe, expect, it } from "vite-plus/test";
 
 import envModule from "../src/index.ts";
-import remoteEnv from "../src/remote-env.ts";
+import RemoteExecutionEnv from "../src/remote-env.ts";
 import daemon from "./daemon.ts";
 import platform from "./platform.ts";
 import sshdModule from "./sshd.ts";
@@ -17,7 +17,6 @@ const {
   scanHostKey,
   sshConnection,
 } = envModule;
-const { RemoteExecutionEnv } = remoteEnv;
 
 const { localPath, readText, writeText } = platform;
 const { keygen, publicKey, sshd, useSshd } = sshdModule;

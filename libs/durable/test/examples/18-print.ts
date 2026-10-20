@@ -8,14 +8,20 @@ import {
   fauxToolCall,
 } from "@msa/ai";
 import { openaiProvider } from "@msa/ai/providers/openai";
-import { AssistantEntry, defineExtension, section } from "@msa/durable";
-import { Harness, createRegistry } from "@msa/durable/harness";
-import { MemoryStorage } from "@msa/durable/storage/memory";
+import durable from "@msa/durable";
+import harnessModule from "@msa/durable/harness";
+import memory from "@msa/durable/storage/memory";
 import { Console, Effect } from "effect";
 
-import { NodeExecutionEnv } from "../../src/env/node.ts";
-import { createBashTool, createReadTool } from "../../src/tools/index.ts";
+import node from "../../src/env/node.ts";
+import toolsModule from "../../src/tools/index.ts";
 import support from "../support.ts";
+
+const { Harness, createRegistry } = harnessModule;
+const { AssistantEntry, defineExtension, section } = durable;
+const { createBashTool, createReadTool } = toolsModule;
+const { NodeExecutionEnv } = node;
+const { MemoryStorage } = memory;
 
 const { BACKGROUND_CONTEXT, awaited, environmentVariable } = support;
 

@@ -1,29 +1,25 @@
-import { type Context, copyJson, type JsonValue } from "@msa/chord";
+import { type Context, type JsonValue, copyJson } from "@msa/chord";
 import type { CodemodeResult } from "@msa/codemode/portable";
 import { Effect } from "effect";
 
-import { currentTimeMillis } from "../clock.ts";
-import type { ToolExecutionApi, ToolExecutionResult } from "../harness/types.ts";
-import type { JsonObject } from "../types.ts";
-import type { CodemodeToolDetails } from "./call-rows.ts";
-import { outputFiles } from "./output-files.ts";
-import { formatResult } from "./output.ts";
-import {
-  CodemodeJournalDoc,
-  CodemodeRunDoc,
-  CodemodeStoreDoc,
-  commitWith,
-  type JournalEntry,
-  OUTPUT_LIMITS,
-  type Settled,
-  type Start,
-} from "./run-docs.ts";
+import clockModule from "../clock.ts";
+import type typesModule from "../harness/types.types.ts";
+import outputFilesModule from "./output-files.ts";
+import outputModule from "./output.ts";
+import runDocs from "./run-docs.ts";
+import type runDocsTypes from "./run-docs.types.ts";
+import type runPersistTypes from "./run-persist.types.ts";
 
-export const decideRun = Effect.fnUntraced(function* (
-  api: ToolExecutionApi,
+const { CodemodeJournalDoc, CodemodeRunDoc, CodemodeStoreDoc, OUTPUT_LIMITS, commitWith } = runDocs;
+const { formatResult } = outputModule;
+const { currentTimeMillis } = clockModule;
+const { outputFiles } = outputFilesModule;
+
+const decideRun = Effect.fnUntraced(function* (
+  api: typesModule.ToolExecutionApi,
   context: Context,
-  decided: ToolExecutionResult,
-  details: CodemodeToolDetails,
+  decided: typesModule.ToolExecutionResult,
+  details: runPersistTypes.CodemodeToolDetails,
 ) {
   const result = { ...decided, details: details as unknown as JsonValue };
   yield* commitWith(api, context, (tx) =>
@@ -32,7 +28,7 @@ export const decideRun = Effect.fnUntraced(function* (
       (run) => {
         run.result ??= copyJson(result as unknown as JsonValue, {
           omitUndefinedProperties: true,
-        }) as JsonObject;
+        }) as runPersistTypes.JsonObject;
       },
     ),
   );
@@ -46,40 +42,40 @@ const storeWrites = (result: CodemodeResult) => {
     : undefined;
 };
 
-export const completeRun = Effect.fnUntraced(function* (
-  api: ToolExecutionApi,
+const completeRun = Effect.fnUntraced(function* (
+  api: typesModule.ToolExecutionApi,
   context: Context,
-  start: Start,
+  start: runDocsTypes.Start,
   outcome: { readonly result: CodemodeResult; readonly generatedImages: number },
-  details: CodemodeToolDetails,
+  details: runPersistTypes.CodemodeToolDetails,
 ) {
   const { result } = outcome;
   const formatted = yield* formatResult(result, {
-    generatedImages: outcome.generatedImages,
-    wallMs: currentTimeMillis() - start.startedAt,
-    maxOutputTokens: start.maxOutputTokens,
     calls: details.calls,
+    generatedImages: outcome.generatedImages,
     limits: OUTPUT_LIMITS,
+    maxOutputTokens: start.maxOutputTokens,
+    wallMs: currentTimeMillis() - start.startedAt,
     write: outputFiles(api, context),
   });
-  const tool: ToolExecutionResult = {
-    output: formatted.content,
-    isError: !result.ok,
+  const tool: typesModule.ToolExecutionResult = {
     details: {
       ...details,
       ...(formatted.fullOutputPath === undefined
         ? {}
         : { fullOutputPath: formatted.fullOutputPath }),
     } as unknown as JsonValue,
+    isError: !result.ok,
+    output: formatted.content,
   };
   const writes = storeWrites(result);
   return yield* commitWith(api, context, (tx) =>
     Effect.gen(function* () {
       const run = yield* Effect.promise(() => tx.doc(CodemodeRunDoc, api.taskId));
-      if (run.result !== undefined) return run.result as ToolExecutionResult;
+      if (run.result !== undefined) return run.result as typesModule.ToolExecutionResult;
       run.result = copyJson(tool as unknown as JsonValue, {
         omitUndefinedProperties: true,
-      }) as JsonObject;
+      }) as runPersistTypes.JsonObject;
       if (writes !== undefined) {
         const store = yield* Effect.promise(() => tx.doc(CodemodeStoreDoc, api.conversationId));
         for (const key of writes.delete) delete store.values[key];
@@ -91,11 +87,11 @@ export const completeRun = Effect.fnUntraced(function* (
   );
 });
 
-export const appendJournal = Effect.fnUntraced(function* (
-  api: ToolExecutionApi,
+const appendJournal = Effect.fnUntraced(function* (
+  api: typesModule.ToolExecutionApi,
   context: Context,
   acks: readonly (readonly [number, number])[],
-  batch: readonly Settled[],
+  batch: readonly runDocsTypes.Settled[],
 ) {
   yield* commitWith(api, context, (tx) =>
     Effect.map(
@@ -110,14 +106,14 @@ export const appendJournal = Effect.fnUntraced(function* (
         }
         for (const item of batch) {
           const entry = {
-            id: item.id,
             at: item.at,
+            id: item.id,
             ...(item.global === undefined ? {} : { global: item.global }),
           };
           journal.entries.push(
             copyJson(entry as unknown as JsonValue, {
               omitUndefinedProperties: true,
-            }) as unknown as JournalEntry,
+            }) as unknown as runDocsTypes.JournalEntry,
           );
         }
       },
@@ -125,8 +121,8 @@ export const appendJournal = Effect.fnUntraced(function* (
   );
 });
 
-export const recordFingerprint = Effect.fnUntraced(function* (
-  host: { readonly api: ToolExecutionApi; readonly context: Context },
+const recordFingerprint = Effect.fnUntraced(function* (
+  host: { readonly api: typesModule.ToolExecutionApi; readonly context: Context },
   fingerprint: string,
 ) {
   const { api, context } = host;
@@ -139,3 +135,12 @@ export const recordFingerprint = Effect.fnUntraced(function* (
     ),
   );
 });
+
+const runPersist = {
+  appendJournal,
+  completeRun,
+  decideRun,
+  recordFingerprint,
+};
+
+export default runPersist;

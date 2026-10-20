@@ -1,18 +1,22 @@
 import type { Context } from "@msa/chord";
 import { Effect } from "effect";
 
-import { commitTask } from "./bridge.ts";
-import { classify } from "./generation-classify.ts";
-import { failNoModel } from "./generation-fail.ts";
-import { convertPartial } from "./generation-run.ts";
-import { replaceMessages, requestOptions, streamResponse } from "./generation-stream.ts";
-import type { GenerationRuntime, PhaseTask } from "./generation-types.ts";
-import { LiveDoc } from "./live.ts";
-import type { Tx } from "./types.ts";
+import bridge from "./bridge.ts";
+import generationClassify from "./generation-classify.ts";
+import generationFail from "./generation-fail.ts";
+import generationRun from "./generation-run.ts";
+import generationStream from "./generation-stream.ts";
+import type generationTypesModule from "./generation-types.types.ts";
+import liveModule from "./live.ts";
+import type typesModule from "./types.types.ts";
 
-export const requestPhase = Effect.fnUntraced(function* (
-  task: PhaseTask<"request">,
-  runtime: GenerationRuntime,
+const { commitTask } = bridge;
+const { LiveDoc } = liveModule;
+const { failNoModel } = generationFail;
+const { replaceMessages, requestOptions, streamResponse } = generationStream;
+const requestPhase = Effect.fnUntraced(function* (
+  task: generationTypesModule.PhaseTask<"request">,
+  runtime: generationTypesModule.GenerationRuntime,
   context: Context,
 ) {
   const {
@@ -26,10 +30,10 @@ export const requestPhase = Effect.fnUntraced(function* (
   const { conversationId } = runtime;
   yield* commitTask(
     runtime,
-    (tx: Tx) =>
+    (tx: typesModule.Tx) =>
       Effect.gen(function* () {
         const live = yield* Effect.promise(() => tx.doc(LiveDoc, conversationId));
-        yield* convertPartial(tx, live, conversationId);
+        yield* generationRun.convertPartial(tx, live, conversationId);
         live.generation = { attempt };
         return undefined;
       }),
@@ -43,6 +47,12 @@ export const requestPhase = Effect.fnUntraced(function* (
   const messages = yield* replaceMessages(runtime, view.messages, context);
   const options = yield* requestOptions(runtime, streamOptions, thinkingLevel, context);
   const message = yield* streamResponse(runtime, model, messages, options, attempt, context);
-  const request = { attempt, compacted, model: ref, cutoff, messages: view.messages };
-  yield* classify(runtime, request, message, context);
+  const request = { attempt, compacted, cutoff, messages: view.messages, model: ref };
+  yield* generationClassify.classify(runtime, request, message, context);
 });
+
+const generationRequest = {
+  requestPhase,
+};
+
+export default generationRequest;

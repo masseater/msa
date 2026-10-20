@@ -1,10 +1,14 @@
-import { LiveDoc, type NestedToolExecutionResult } from "@msa/durable";
-import { MemoryStorage } from "@msa/durable/storage/memory";
+import durable from "@msa/durable";
+import type durableTypes from "@msa/durable/index.types";
+import memory from "@msa/durable/storage/memory";
 import { Effect } from "effect";
 import { afterEach, describe, expect, it } from "vite-plus/test";
 
 import harnessNestedToolsSupport from "./harness-nested-tools-support.ts";
 import support from "./support.ts";
+
+const { LiveDoc } = durable;
+const { MemoryStorage } = memory;
 
 const { DONE, call, directories, echoTool, runOnce, tool } = harnessNestedToolsSupport;
 const { addTool, awaited, chatSetup, context, deferred, openChat, removeDir } = support;
@@ -39,7 +43,7 @@ const runsNestedCall = Effect.gen(function* () {
       },
     ),
   );
-  let result: NestedToolExecutionResult | undefined;
+  let result: durableTypes.NestedToolExecutionResult | undefined;
   addTool(
     setup.registry,
     tool("batch", (_args, api, callContext) =>

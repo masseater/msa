@@ -1,5 +1,6 @@
-import { type Conversation, ToolResultEntry } from "@msa/durable";
-import { ToolTask } from "@msa/durable/harness";
+import durable from "@msa/durable";
+import harnessModule from "@msa/durable/harness";
+import type durableTypes from "@msa/durable/index.types";
 import { Effect } from "effect";
 import { describe, expect, it } from "vite-plus/test";
 
@@ -8,6 +9,9 @@ import effectSupport from "./effect-support.ts";
 import harnessSupport from "./harness-support.ts";
 import harnessToolsSupport from "./harness-tools-support.ts";
 import sessionSupport from "./session-support.ts";
+
+const { ToolResultEntry } = durable;
+const { ToolTask } = harnessModule;
 
 const { chatSetup } = chatSupport;
 
@@ -19,7 +23,7 @@ const { context } = sessionSupport;
 
 const trace = Effect.fn("trace")(function* (
   setup: ReturnType<typeof chatSetup>,
-  prepare?: (root: Conversation) => Promise<void>,
+  prepare?: (root: durableTypes.Conversation) => Promise<void>,
 ) {
   const runPromise = Effect.runPromiseWith(yield* Effect.context<never>());
 

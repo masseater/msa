@@ -1,17 +1,15 @@
 import type { Draft } from "@msa/chord";
-import {
-  type ConversationId,
-  type TaskId,
-  type Tx,
-  defineDoc,
-  defineDocFamily,
-} from "@msa/durable";
+import durable from "@msa/durable";
+import type durableTypes from "@msa/durable/index.types";
 import { Effect } from "effect";
 import { expectTypeOf } from "vite-plus/test";
 
-import { idFromNumber } from "../src/ids.ts";
+import ids from "../src/ids.ts";
 import effectSupport from "./effect-support.ts";
 import type typeSupportTypes from "./type-support.ts";
+
+const { defineDoc, defineDocFamily } = durable;
+const { idFromNumber } = ids;
 
 const { awaited } = effectSupport;
 
@@ -61,7 +59,11 @@ const TaskFamily = defineDocFamily<State, number>({
   version: 1,
 });
 
-function checkTxOverloads(tx: Tx, conversationId: ConversationId, taskId: TaskId): Promise<void> {
+function checkTxOverloads(
+  tx: durableTypes.Tx,
+  conversationId: durableTypes.ConversationId,
+  taskId: durableTypes.TaskId,
+): Promise<void> {
   return Effect.runPromise(
     Effect.gen(function* () {
       expectTypeOf(yield* awaited(tx.doc(SessionDoc))).toEqualTypeOf<Draft<State>>();
@@ -87,9 +89,9 @@ function checkTxOverloads(tx: Tx, conversationId: ConversationId, taskId: TaskId
   );
 }
 
-function checkRejectedOverloads(tx: Tx): void {
+function checkRejectedOverloads(tx: durableTypes.Tx): void {
   expectTypeOf<
-    typeSupportTypes.CallableWith<typeof tx.doc, [typeof SessionDoc, ConversationId]>
+    typeSupportTypes.CallableWith<typeof tx.doc, [typeof SessionDoc, durableTypes.ConversationId]>
   >().toEqualTypeOf<false>();
   expectTypeOf<
     typeSupportTypes.CallableWith<typeof tx.doc, [typeof LatestDoc]>
@@ -110,11 +112,14 @@ function checkRejectedOverloads(tx: Tx): void {
     >
   >().toEqualTypeOf<true>();
   expectTypeOf<
-    typeSupportTypes.CallableWith<typeof tx.retireDoc, [typeof TaskFamily, TaskId, string, number]>
+    typeSupportTypes.CallableWith<
+      typeof tx.retireDoc,
+      [typeof TaskFamily, durableTypes.TaskId, string, number]
+    >
   >().toEqualTypeOf<false>();
 }
 
-const taskId = idFromNumber<TaskId>(1);
+const taskId = idFromNumber<durableTypes.TaskId>(1);
 
 const sessionDefinitionsSupport = {
   ConversationFamily,

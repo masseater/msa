@@ -1,41 +1,60 @@
 import { Effect } from "effect";
 
-import { defineTask } from "../tasks.ts";
-import { abortCompaction } from "./compaction-place.ts";
-import { retryPhase } from "./compaction-settle.ts";
-import { selectPhase } from "./compaction-start.ts";
-import { summarizePhase } from "./compaction-summarize.ts";
-import type { CompactionCheckpoint, CompactionInput } from "./compaction-types.ts";
-import type { CompactionHooks, CompactionResult } from "./types.ts";
+import tasks from "../tasks.ts";
+import compactionPlace from "./compaction-place.ts";
+import compactionPrompt from "./compaction-prompt.ts";
+import compactionSelect from "./compaction-select.ts";
+import compactionSettle from "./compaction-settle.ts";
+import compactionStart from "./compaction-start.ts";
+import compactionSummarize from "./compaction-summarize.ts";
+import type compactionTypesModule from "./compaction-types.ts";
+import type typesModule from "./types.types.ts";
 
-export type { CompactionCheckpoint, CompactionInput, SummaryRequest } from "./compaction-types.ts";
-export { estimateContext, selectCut, summarizedMessages } from "./compaction-select.ts";
-export { serializeConversation } from "./compaction-prompt.ts";
-export { createCompaction } from "./compaction-start.ts";
-
-export const CompactionTask = defineTask<
-  CompactionInput,
-  CompactionCheckpoint,
-  CompactionResult,
-  CompactionHooks
+const { defineTask } = tasks;
+const CompactionTask = defineTask<
+  compactionTypesModule.CompactionInput,
+  compactionTypesModule.CompactionCheckpoint,
+  typesModule.CompactionResult,
+  typesModule.CompactionHooks
 >({
-  name: "msa.compaction",
-  version: 1,
+  abort: (_task, runtime, context) =>
+    Effect.runPromise(compactionPlace.abortCompaction(runtime, context)),
   initial: () => ({ phase: "select" }),
+  name: "msa.compaction",
   phases: {
+    retry: (task, runtime, context) =>
+      Effect.runPromise(
+        compactionSettle.retryPhase(runtime, withoutPhase(task.state.checkpoint), context),
+      ),
     select: (task, runtime, context) =>
-      Effect.runPromise(selectPhase(runtime, task.input, context)),
+      Effect.runPromise(compactionStart.selectPhase(runtime, task.input, context)),
     summarize: (task, runtime, context) =>
       Effect.runPromise(
-        summarizePhase(runtime, withoutPhase(task.state.checkpoint), task.input, context),
+        compactionSummarize.summarizePhase(
+          runtime,
+          withoutPhase(task.state.checkpoint),
+          task.input,
+          context,
+        ),
       ),
-    retry: (task, runtime, context) =>
-      Effect.runPromise(retryPhase(runtime, withoutPhase(task.state.checkpoint), context)),
   },
-  abort: (_task, runtime, context) => Effect.runPromise(abortCompaction(runtime, context)),
+  version: 1,
 });
 
 const withoutPhase = <T extends { readonly phase: string }>({
   phase: _phase,
   ...rest
 }: T): Omit<T, "phase"> => rest;
+
+const compaction = {
+  CompactionTask,
+  get createCompaction() {
+    return compactionStart.createCompaction;
+  },
+  estimateContext: compactionSelect.estimateContext,
+  selectCut: compactionSelect.selectCut,
+  serializeConversation: compactionPrompt.serializeConversation,
+  summarizedMessages: compactionSelect.summarizedMessages,
+};
+
+export default compaction;

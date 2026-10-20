@@ -1,4 +1,5 @@
-import { type TaskId, defineDoc } from "@msa/durable";
+import durable from "@msa/durable";
+import type durableTypes from "@msa/durable/index.types";
 import { Effect } from "effect";
 import { describe, expect, it } from "vite-plus/test";
 
@@ -7,6 +8,8 @@ import paused from "./harness-lifecycle-close-2-cases.ts";
 import harnessLifecycleSupport from "./harness-lifecycle-support.ts";
 import sessionSupport from "./session-support.ts";
 import taskSupport from "./task-support.ts";
+
+const { defineDoc } = durable;
 
 const { awaited } = effectSupport;
 const { oneStep, start } = harnessLifecycleSupport;
@@ -41,7 +44,7 @@ const closingWithQueuedWork = Effect.fn("closingWithQueuedWork")(function* () {
   const operations: Record<string, () => Promise<unknown>> = {
     abort: () => root.abort(context),
     abortSubmission: () => submission.abort(context),
-    abortTask: () => harness.abortTask(1 as TaskId, context),
+    abortTask: () => harness.abortTask(1 as durableTypes.TaskId, context),
     agent: () => root.agent(context),
     commit: () => root.commit(() => {}, context),
     compact: () => root.compact(undefined, context),
@@ -53,7 +56,7 @@ const closingWithQueuedWork = Effect.fn("closingWithQueuedWork")(function* () {
       harness.createConversation({ ownership: { kind: "ownerless" } }, context),
     entries: () => root.entries({}, 10, undefined, context),
     fork: () => root.fork(entry.id, { ownership: { kind: "ownerless" } }, context),
-    getTask: () => harness.getTask(1 as TaskId, context),
+    getTask: () => harness.getTask(1 as durableTypes.TaskId, context),
     harnessIdle: () => harness.waitForIdle(context),
     inspect: () => harness.inspect(context),
     reset: () => root.reset(undefined, context),
@@ -65,7 +68,7 @@ const closingWithQueuedWork = Effect.fn("closingWithQueuedWork")(function* () {
     usage: () => harness.usage(context),
     viewState: () => root.viewState(context),
     wait: () => submission.wait(context),
-    waitForTask: () => harness.waitForTask(1 as TaskId, context),
+    waitForTask: () => harness.waitForTask(1 as durableTypes.TaskId, context),
     watch: () => root.watch(context),
     watchTaskGraph: () => harness.watchTaskGraph(context),
   };

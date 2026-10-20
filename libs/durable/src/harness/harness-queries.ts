@@ -1,36 +1,31 @@
 import type { Context } from "@msa/chord";
 import { Effect } from "effect";
 
-import type { ExecutionEnv } from "../env/index.ts";
-import type { SessionImpl } from "../session/session.ts";
-import { AgentDoc, resolveAgent, resolveSettings } from "./agent.ts";
-import { toPromise } from "./bridge.ts";
-import type { Wired } from "./harness-wiring.ts";
-import type {
-  Agent,
-  ConversationId,
-  HarnessInspection,
-  HarnessOptions,
-  RegistrySnapshot,
-  Storage,
-  ToolRegistration,
-} from "./types.ts";
-import { addUsageState, UsageDoc, type UsageState } from "./usage.ts";
-import { scanAll } from "./util.ts";
+import type sessionTypes from "../session/session.types.ts";
+import agentModule from "./agent.ts";
+import bridge from "./bridge.ts";
+import type harnessQueriesTypes from "./harness-queries.types.ts";
+import type typesModule from "./types.types.ts";
+import usageModule from "./usage.ts";
+import type usageTypes from "./usage.types.ts";
+import util from "./util.ts";
+
+const { toPromise } = bridge;
+const { scanAll } = util;
+const { UsageDoc, addUsageState } = usageModule;
+const { AgentDoc, resolveAgent, resolveSettings } = agentModule;
 
 const SCAN_PAGE_SIZE = 256;
 
-export type QuerySession = { readonly session: SessionImpl; readonly storage: Storage };
-
-export const totalUsage = Effect.fnUntraced(function* (
-  { session, storage }: QuerySession,
+const totalUsage = Effect.fnUntraced(function* (
+  { session, storage }: harnessQueriesTypes.QuerySession,
   context: Context,
 ) {
   const scan = yield* toPromise(() =>
     scanAll((cursor) => storage.scanConversations({}, SCAN_PAGE_SIZE, cursor, context)),
   );
   const conversations = yield* Effect.promise(() => session.readOnLine(scan));
-  const total: UsageState = UsageDoc.definition.initial();
+  const total: usageTypes.UsageState = UsageDoc.definition.initial();
   yield* Effect.forEach(
     conversations,
     ({ id }) =>
@@ -45,13 +40,16 @@ export const totalUsage = Effect.fnUntraced(function* (
   return total;
 });
 
-const scanSubmissions = (storage: Storage, status: "queued" | "placed", context: Context) =>
-  scanAll((cursor) => storage.scanSubmissions({ status }, SCAN_PAGE_SIZE, cursor, context));
+const scanSubmissions = (
+  storage: typesModule.Storage,
+  status: "queued" | "placed",
+  context: Context,
+) => scanAll((cursor) => storage.scanSubmissions({ status }, SCAN_PAGE_SIZE, cursor, context));
 
-export const inspectHarness = Effect.fnUntraced(function* (
-  { session, storage }: QuerySession,
-  tasks: Wired["tasks"],
-  snapshot: RegistrySnapshot,
+const inspectHarness = Effect.fnUntraced(function* (
+  { session, storage }: harnessQueriesTypes.QuerySession,
+  tasks: harnessQueriesTypes.Wired["tasks"],
+  snapshot: typesModule.RegistrySnapshot,
   context: Context,
 ) {
   const read = yield* toPromise(() =>
@@ -60,45 +58,46 @@ export const inspectHarness = Effect.fnUntraced(function* (
       const queued = yield* scanSubmissions(storage, "queued", context);
       const placed = yield* scanSubmissions(storage, "placed", context);
       const submissions = [...queued, ...placed].sort((a, b) => a.id - b.id);
-      return { scheduling, tasks: inspected, submissions } satisfies HarnessInspection;
+      return { scheduling, submissions, tasks: inspected } satisfies typesModule.HarnessInspection;
     }),
   );
   return yield* Effect.promise(() => session.readOnLine(read));
 });
 
-export const buildEnv = Effect.fnUntraced(function* <Tool extends ToolRegistration>(
-  session: SessionImpl,
-  options: HarnessOptions<Tool>,
-  id: ConversationId,
+const buildEnv = Effect.fnUntraced(function* <Tool extends typesModule.ToolRegistration>(
+  session: sessionTypes.SessionImpl,
+  options: typesModule.HarnessOptions<Tool>,
+  id: typesModule.ConversationId,
   context: Context,
 ) {
   const build = options.env;
   if (build === undefined) return undefined;
   const cwd = (yield* Effect.promise(() => session.snapshot(AgentDoc, id, context)))?.cwd;
   return yield* Effect.promise(() =>
-    Promise.resolve<ExecutionEnv | undefined>(
+    Promise.resolve<harnessQueriesTypes.ExecutionEnv | undefined>(
       build({ conversationId: id, ...(cwd === undefined ? {} : { cwd }), read: session }, context),
     ),
   );
 });
 
-export type BuiltEnv = ExecutionEnv | undefined;
-
-export type AgentQuery<Tool extends ToolRegistration> = {
-  readonly session: SessionImpl;
-  readonly options: HarnessOptions<Tool>;
-  readonly report: (error: unknown) => void;
-};
-
-export const conversationAgent = Effect.fnUntraced(function* <Tool extends ToolRegistration>(
-  query: AgentQuery<Tool>,
-  id: ConversationId,
-  snapshot: RegistrySnapshot<Tool> | undefined,
+const conversationAgent = Effect.fnUntraced(function* <Tool extends typesModule.ToolRegistration>(
+  query: harnessQueriesTypes.AgentQuery<Tool>,
+  id: typesModule.ConversationId,
+  snapshot: typesModule.RegistrySnapshot<Tool> | undefined,
   context: Context,
 ) {
   const registry = snapshot ?? query.options.registry.snapshot();
   const settings = resolveSettings(query.options.settings);
   const state = yield* Effect.promise(() => query.session.snapshot(AgentDoc, id, context));
-  const agent: Agent<Tool> = resolveAgent(state, registry, settings, query.report);
+  const agent: typesModule.Agent<Tool> = resolveAgent(state, registry, settings, query.report);
   return agent;
 });
+
+const harnessQueries = {
+  buildEnv,
+  conversationAgent,
+  inspectHarness,
+  totalUsage,
+};
+
+export default harnessQueries;

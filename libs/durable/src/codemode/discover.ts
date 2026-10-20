@@ -2,13 +2,15 @@ import type { JsonValue } from "@msa/chord";
 import { type CodemodeHostCall, toCodemodeIdentifier } from "@msa/codemode/portable";
 import { Function } from "effect";
 
-import type { Dual2 } from "../dual.ts";
-import { rankDocuments } from "../search.ts";
-import type { DeclaredTool, Start } from "./run-docs.ts";
+import type dualTypes from "../dual.ts";
+import search from "../search.ts";
+import type runDocsTypes from "./run-docs.types.ts";
+
+const { rankDocuments } = search;
 
 const DEFAULT_SEARCH_LIMIT = 8;
 
-type Namespace = Start["namespaces"][number];
+type Namespace = runDocsTypes.Start["namespaces"][number];
 
 const matchesNamespace = (namespace: Namespace, query: string): boolean =>
   namespace.name === query || toCodemodeIdentifier(namespace.name) === toCodemodeIdentifier(query);
@@ -39,7 +41,7 @@ function searchOptions(options: { limit?: unknown; namespace?: unknown } | undef
 
 function searchTools(
   namespaces: readonly Namespace[],
-  tools: readonly DeclaredTool[],
+  tools: readonly runDocsTypes.DeclaredTool[],
   args: readonly unknown[],
 ): JsonValue {
   const [query, options] = args as [unknown, { limit?: unknown; namespace?: unknown } | undefined];
@@ -60,13 +62,12 @@ function searchTools(
   });
   return rankDocuments(query, documents, limit).map((name) => {
     const tool = tools.find((candidate) => candidate.name === name)!;
-    return { name: tool.jsName, description: tool.description };
+    return { description: tool.description, name: tool.jsName };
   });
 }
 
-export const discover: Dual2<Start, CodemodeHostCall, JsonValue | undefined> = Function.dual(
-  2,
-  (start: Start, call: CodemodeHostCall): JsonValue | undefined => {
+const discover: dualTypes.Dual2<runDocsTypes.Start, CodemodeHostCall, JsonValue | undefined> =
+  Function.dual(2, (start: runDocsTypes.Start, call: CodemodeHostCall): JsonValue | undefined => {
     const args = Array.isArray(call.args) ? call.args : [];
     const tools = start.tools.filter((tool) => tool.hidden !== true);
     if (call.name === "describeTool") {
@@ -76,5 +77,10 @@ export const discover: Dual2<Start, CodemodeHostCall, JsonValue | undefined> = F
     }
     if (call.name === "describeNamespace") return describeNamespace(start.namespaces, args[0]);
     return searchTools(start.namespaces, tools, args);
-  },
-);
+  });
+
+const discoverModule = {
+  discover,
+};
+
+export default discoverModule;

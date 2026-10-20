@@ -1,13 +1,18 @@
 import { Type, fauxAssistantMessage, fauxText, fauxToolCall } from "@msa/ai";
-import { type TaskId, defineTool } from "@msa/durable";
-import { MemoryStorage } from "@msa/durable/storage/memory";
+import durable from "@msa/durable";
+import type durableTypes from "@msa/durable/index.types";
+import memory from "@msa/durable/storage/memory";
 import { Effect } from "effect";
 import { afterEach, describe, expect, it } from "vite-plus/test";
 
-import { openNodeSqliteStorage } from "../src/storage/sqlite/node.ts";
+import node from "../src/storage/sqlite/node.ts";
 import harnessOwnershipChildren from "./harness-ownership-children.ts";
 import harnessOwnershipSupport from "./harness-ownership-support.ts";
 import support from "./support.ts";
+
+const { defineTool } = durable;
+const { MemoryStorage } = memory;
+const { openNodeSqliteStorage } = node;
 
 const { spawnFauxChild } = harnessOwnershipChildren;
 const { Hold, directories, gated, gates, runs } = harnessOwnershipSupport;
@@ -40,7 +45,7 @@ const spawningTool = Effect.fn("spawningTool")(function* () {
 
   const { directory, path } = yield* makeTempFile("msa-durable-tool-children-", "session.sqlite");
   directories.add(directory);
-  const children: TaskId[] = [];
+  const children: durableTypes.TaskId[] = [];
   const toolRunning = deferred();
   const setup = chatSetup();
   addTask(setup.registry, Hold);

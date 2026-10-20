@@ -1,60 +1,27 @@
-import type { Context } from "@msa/chord";
 import { withoutAbortSignal } from "@msa/chord/context";
 import { Effect } from "effect";
 
-import { boundConversation } from "./harness-bound.ts";
-import { withdrawQueuedInputs } from "./inbox.ts";
-import { settleSchedulerOutcome } from "./live-settle.ts";
-import { TaskScheduler, type TaskSchedulerOptions } from "./scheduler.ts";
-import type {
-  Agent,
-  ConversationId,
-  HarnessOptions,
-  RegistrySnapshot,
-  Settings,
-  Storage,
-  ToolRegistration,
-} from "./types.ts";
+import harnessBound from "./harness-bound.ts";
+import type harnessSchedulerWiringTypes from "./harness-scheduler-wiring.types.ts";
+import inboxModule from "./inbox.ts";
+import liveSettle from "./live-settle.ts";
+import TaskScheduler from "./scheduler.ts";
+import type schedulerTypes from "./scheduler.types.ts";
+import type typesModule from "./types.types.ts";
 
-export type SchedulerHost<Tool extends ToolRegistration> = TaskSchedulerOptions["session"] & {
-  resolveAgent(
-    id: ConversationId,
-    snapshot: RegistrySnapshot<Tool> | undefined,
-    context: Context,
-  ): Promise<Agent<Tool>>;
-  buildEnv: TaskSchedulerOptions["env"];
-};
+const { boundConversation } = harnessBound;
 
-export type SchedulerWiring<Tool extends ToolRegistration> = {
-  readonly host: SchedulerHost<Tool>;
-  readonly storage: Storage;
-  readonly options: HarnessOptions<Tool>;
-  readonly settings: () => Settings;
-  readonly now: () => number;
-  readonly report: (error: unknown) => void;
-  readonly submissions: () => Parameters<typeof boundConversation>[2];
-  readonly context: Context;
-};
+const { settleSchedulerOutcome } = liveSettle;
+const { withdrawQueuedInputs } = inboxModule;
 
-export const createTaskScheduler = <Tool extends ToolRegistration>(
-  wiring: SchedulerWiring<Tool>,
-): TaskScheduler => {
+const createTaskScheduler = <Tool extends typesModule.ToolRegistration>(
+  wiring: harnessSchedulerWiringTypes.SchedulerWiring<Tool>,
+): schedulerTypes.TaskScheduler => {
   const { host, storage, options } = wiring;
-  const tasks: TaskScheduler = new TaskScheduler({
-    session: host,
-    storage,
-    registry: options.registry,
-    models: options.models,
+  const tasks: schedulerTypes.TaskScheduler = new TaskScheduler({
     agent: (id, snapshot, callContext) =>
-      host.resolveAgent(id, snapshot as RegistrySnapshot<Tool>, callContext),
-    settings: wiring.settings,
-    env: (id, callContext) => host.buildEnv(id, callContext),
-    now: wiring.now,
-    report: wiring.report,
-    settleOutcome: (tx, record, outcome) =>
-      Effect.runPromise(settleSchedulerOutcome(tx, record, outcome)),
-    withdrawInputs: (tx, conversationId) =>
-      Effect.runPromise(withdrawQueuedInputs(tx, conversationId)),
+      host.resolveAgent(id, snapshot as typesModule.RegistrySnapshot<Tool>, callContext),
+    context: withoutAbortSignal(wiring.context),
     conversation: (id, binding, callContext) =>
       Effect.runPromise(
         Effect.map(
@@ -65,7 +32,24 @@ export const createTaskScheduler = <Tool extends ToolRegistration>(
               : boundConversation(id, binding, wiring.submissions(), tasks),
         ),
       ),
-    context: withoutAbortSignal(wiring.context),
+    env: (id, callContext) => host.buildEnv(id, callContext),
+    models: options.models,
+    now: wiring.now,
+    registry: options.registry,
+    report: wiring.report,
+    session: host,
+    settings: wiring.settings,
+    settleOutcome: (tx, record, outcome) =>
+      Effect.runPromise(settleSchedulerOutcome(tx, record, outcome)),
+    storage,
+    withdrawInputs: (tx, conversationId) =>
+      Effect.runPromise(withdrawQueuedInputs(tx, conversationId)),
   });
   return tasks;
 };
+
+const harnessSchedulerWiring = {
+  createTaskScheduler,
+};
+
+export default harnessSchedulerWiring;

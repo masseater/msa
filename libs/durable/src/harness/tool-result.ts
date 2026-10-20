@@ -1,90 +1,83 @@
 import type { ImageContent, TextContent, ToolCall, ToolResultMessage } from "@msa/ai";
 import type { JsonValue } from "@msa/chord";
 import { copyJson } from "@msa/chord/json";
-import { boundOutput, type OutputLimits } from "@msa/chord/output";
+import { type OutputLimits, boundOutput } from "@msa/chord/output";
 import { Effect, Function } from "effect";
 
-import { ToolResultEntry } from "../entries.ts";
-import type { NestedToolSlot, NestedToolSummary, ToolSlot } from "./live.ts";
-import type { Content, ToolTaskResult } from "./tool-types.ts";
-import type {
-  ConversationId,
-  Dual2,
-  Dual3,
-  Dual5,
-  NestedToolExecutionResult,
-  TaskId,
-  TaskOutcome,
-  ToolDiagnostic,
-  ToolExecutionResult,
-  Tx,
-  TypedEntry,
-} from "./types.ts";
-import { recordUsage } from "./usage.ts";
+import entries from "../entries.ts";
+import type liveTypes from "./live.types.ts";
+import type toolTypesModule from "./tool-types.types.ts";
+import type typesModule from "./types.types.ts";
+import usageModule from "./usage.ts";
 
-export const harnessError: Dual2<string, string, ToolExecutionResult> = Function.dual(
-  2,
-  (code: string, message: string): ToolExecutionResult => ({
-    output: [],
-    isError: true,
+const { recordUsage } = usageModule;
+const { ToolResultEntry } = entries;
+
+const harnessError: typesModule.Dual2<string, string, typesModule.ToolExecutionResult> =
+  Function.dual(2, (code: string, message: string): typesModule.ToolExecutionResult => ({
     diagnostics: [toolDiagnostic(code, message)],
+    isError: true,
+    output: [],
+  }));
+
+const toolDiagnostic: typesModule.Dual2<string, string, typesModule.ToolDiagnostic> = Function.dual(
+  2,
+  (code: string, message: string): typesModule.ToolDiagnostic => ({
+    code,
+    message,
+    severity: "error",
   }),
 );
 
-export const toolDiagnostic: Dual2<string, string, ToolDiagnostic> = Function.dual(
-  2,
-  (code: string, message: string): ToolDiagnostic => ({ severity: "error", code, message }),
-);
-
-export function invalid(message: string): ToolExecutionResult {
+function invalid(message: string): typesModule.ToolExecutionResult {
   return harnessError("invalid_arguments", message);
 }
 
-export const truncated: Dual2<
+const truncated: typesModule.Dual2<
   { readonly droppedLines: number; readonly droppedBytes: number },
   "head" | "tail" | undefined,
-  ToolDiagnostic
+  typesModule.ToolDiagnostic
 > = Function.dual(
   2,
   (
     dropped: { readonly droppedLines: number; readonly droppedBytes: number },
     retain: "head" | "tail" | undefined,
-  ): ToolDiagnostic => {
+  ): typesModule.ToolDiagnostic => {
     const kept = retain === undefined ? "" : ` to its ${retain === "head" ? "beginning" : "end"}`;
     return {
-      severity: "warn",
       code: "truncated",
       message: `Output truncated${kept}: ${dropped.droppedLines} lines, ${dropped.droppedBytes} bytes dropped`,
+      severity: "warn",
     };
   },
 );
 
-export const appendToolResult: Dual5<
-  Tx,
-  ConversationId,
+const appendToolResult: typesModule.Dual5<
+  typesModule.Tx,
+  typesModule.ConversationId,
   ToolCall,
-  ToolExecutionResult,
+  typesModule.ToolExecutionResult,
   { readonly timestamp: number; readonly durationMs?: number | undefined },
-  Effect.Effect<TypedEntry<{ diagnostics: ToolDiagnostic[] }>>
+  Effect.Effect<typesModule.TypedEntry<{ diagnostics: typesModule.ToolDiagnostic[] }>>
 > = Function.dual(
   5,
   Effect.fnUntraced(function* (
-    tx: Tx,
-    conversationId: ConversationId,
+    tx: typesModule.Tx,
+    conversationId: typesModule.ConversationId,
     call: ToolCall,
-    result: ToolExecutionResult,
+    result: typesModule.ToolExecutionResult,
     meta: { readonly timestamp: number; readonly durationMs?: number | undefined },
   ) {
     const { timestamp, durationMs } = meta;
     const diagnostics = [...(result.diagnostics ?? [])];
-    const content: Content = [...(result.output ?? [])];
+    const content: toolTypesModule.Content = [...(result.output ?? [])];
     if (diagnostics.length > 0)
-      content.push({ type: "text", text: renderDiagnostics(diagnostics) });
+      content.push({ text: renderDiagnostics(diagnostics), type: "text" });
     const message = {
+      content,
       role: "toolResult",
       toolCallId: call.id,
       toolName: call.name,
-      content,
       ...(result.details === undefined ? {} : { details: result.details }),
       ...(result.usage === undefined ? {} : { usage: result.usage }),
       isError: result.isError ?? false,
@@ -94,30 +87,30 @@ export const appendToolResult: Dual5<
     if (result.usage !== undefined)
       yield* recordUsage(tx, conversationId, "tools", call.name, result.usage);
     return yield* Effect.promise(() =>
-      tx.appendEntry(ToolResultEntry, conversationId, { model: [message], data: { diagnostics } }),
+      tx.appendEntry(ToolResultEntry, conversationId, { data: { diagnostics }, model: [message] }),
     );
   }),
 );
 
-function renderDiagnostics(diagnostics: readonly ToolDiagnostic[]): string {
+function renderDiagnostics(diagnostics: readonly typesModule.ToolDiagnostic[]): string {
   return `<harness>\n${diagnostics.map((diagnostic) => `[${diagnostic.severity}] ${diagnostic.message}`).join("\n")}\n</harness>`;
 }
 
-export const boundContent: Dual2<
-  Content,
+const boundContent: typesModule.Dual2<
+  toolTypesModule.Content,
   OutputLimits,
-  { content: Content; droppedBytes: number; droppedLines: number }
+  { content: toolTypesModule.Content; droppedBytes: number; droppedLines: number }
 > = Function.dual(
   2,
   (
-    content: Content,
+    content: toolTypesModule.Content,
     limits: OutputLimits,
-  ): { content: Content; droppedBytes: number; droppedLines: number } => {
+  ): { content: toolTypesModule.Content; droppedBytes: number; droppedLines: number } => {
     const texts = content.filter((item): item is TextContent => item.type === "text");
     const bounded = boundOutput(texts.map((item) => item.text).join(""), limits);
     if (bounded.droppedBytes === 0) return { content, droppedBytes: 0, droppedLines: 0 };
     const keep = limits.retain === "head" ? texts[0] : texts.at(-1);
-    const result: Content = [];
+    const result: toolTypesModule.Content = [];
     for (const item of content) {
       if (item.type !== "text") result.push(item);
       else if (item === keep) result.push({ ...item, text: bounded.text });
@@ -130,25 +123,27 @@ export const boundContent: Dual2<
   },
 );
 
-export function outputValue(output: Content): string | ImageContent | Content {
+function outputValue(
+  output: toolTypesModule.Content,
+): string | ImageContent | toolTypesModule.Content {
   if (output.length === 0) return "";
   if (output.length > 1) return output;
   const [only] = output;
   return only!.type === "text" ? only!.text : only!;
 }
 
-export const fallbackResult: Dual3<
-  TaskId,
+const fallbackResult: typesModule.Dual3<
+  typesModule.TaskId,
   string,
-  TaskOutcome<ToolTaskResult>,
-  NestedToolExecutionResult
+  typesModule.TaskOutcome<toolTypesModule.ToolTaskResult>,
+  typesModule.NestedToolExecutionResult
 > = Function.dual(
   3,
   (
-    taskId: TaskId,
+    taskId: typesModule.TaskId,
     name: string,
-    outcome: TaskOutcome<ToolTaskResult>,
-  ): NestedToolExecutionResult => {
+    outcome: typesModule.TaskOutcome<toolTypesModule.ToolTaskResult>,
+  ): typesModule.NestedToolExecutionResult => {
     const message =
       outcome.status === "faulted"
         ? `Tool ${name} failed: ${outcome.error.message}`
@@ -156,22 +151,22 @@ export const fallbackResult: Dual3<
           ? `Tool ${name} could not resume: ${outcome.reason}`
           : `Tool ${name} ended without a result`;
     const error = harnessError(outcome.status, message);
-    return { taskId, isError: true, diagnostics: error.diagnostics ?? [] };
+    return { diagnostics: error.diagnostics ?? [], isError: true, taskId };
   },
 );
 
-export const fromSlot: Dual3<
-  Readonly<ToolSlot | NestedToolSlot> | undefined,
+const fromSlot: typesModule.Dual3<
+  Readonly<liveTypes.ToolSlot | liveTypes.NestedToolSlot> | undefined,
   string,
   string,
-  ToolExecutionResult
+  typesModule.ToolExecutionResult
 > = Function.dual(
   3,
   (
-    slot: Readonly<ToolSlot | NestedToolSlot> | undefined,
+    slot: Readonly<liveTypes.ToolSlot | liveTypes.NestedToolSlot> | undefined,
     code: string,
     message: string,
-  ): ToolExecutionResult => {
+  ): typesModule.ToolExecutionResult => {
     const diagnostics = [...(slot?.diagnostics ?? [])];
     const droppedBytes = slot?.droppedBytes ?? 0;
     if (droppedBytes > 0)
@@ -180,48 +175,56 @@ export const fromSlot: Dual3<
       );
     diagnostics.push(toolDiagnostic(code, message));
     return {
+      isError: true,
       output:
         slot?.output === undefined || slot.output === ""
           ? []
-          : [{ type: "text", text: slot.output }],
-      isError: true,
+          : [{ text: slot.output, type: "text" }],
       ...(slot?.details === undefined ? {} : { details: slot.details }),
       diagnostics,
     };
   },
 );
 
-export const nestedResult: Dual3<
-  TaskId,
-  ToolExecutionResult,
+const nestedResult: typesModule.Dual3<
+  typesModule.TaskId,
+  typesModule.ToolExecutionResult,
   number | undefined,
-  NestedToolExecutionResult
+  typesModule.NestedToolExecutionResult
 > = Function.dual(
   3,
   (
-    taskId: TaskId,
-    result: ToolExecutionResult,
+    taskId: typesModule.TaskId,
+    result: typesModule.ToolExecutionResult,
     durationMs: number | undefined,
-  ): NestedToolExecutionResult => {
+  ): typesModule.NestedToolExecutionResult => {
     const nested = {
-      taskId,
-      structuredOutput: result.structuredOutput,
-      isError: result.isError ?? false,
       details: result.details,
       diagnostics: result.diagnostics ?? [],
-      usage: result.usage,
       durationMs,
+      isError: result.isError ?? false,
+      structuredOutput: result.structuredOutput,
+      taskId,
+      usage: result.usage,
     };
     return copyJson(nested as unknown as JsonValue, {
       omitUndefinedProperties: true,
-    }) as unknown as NestedToolExecutionResult;
+    }) as unknown as typesModule.NestedToolExecutionResult;
   },
 );
 
 const MAX_SUMMARY_ERROR_CHARS = 500;
 
-export const summaryOf: Dual2<NestedToolExecutionResult, Content, NestedToolSummary> =
-  Function.dual(2, (result: NestedToolExecutionResult, output: Content): NestedToolSummary => {
+const summaryOf: typesModule.Dual2<
+  typesModule.NestedToolExecutionResult,
+  toolTypesModule.Content,
+  liveTypes.NestedToolSummary
+> = Function.dual(
+  2,
+  (
+    result: typesModule.NestedToolExecutionResult,
+    output: toolTypesModule.Content,
+  ): liveTypes.NestedToolSummary => {
     const error = result.isError
       ? errorTextOf(result, output).slice(0, MAX_SUMMARY_ERROR_CHARS)
       : "";
@@ -232,15 +235,35 @@ export const summaryOf: Dual2<NestedToolExecutionResult, Content, NestedToolSumm
         ? {}
         : {
             usage: copyJson(result.usage, { omitUndefinedProperties: true }) as NonNullable<
-              NestedToolSummary["usage"]
+              liveTypes.NestedToolSummary["usage"]
             >,
           }),
       ...(error === "" ? {} : { error }),
     };
-  });
+  },
+);
 
-function errorTextOf(result: NestedToolExecutionResult, output: Content): string {
+function errorTextOf(
+  result: typesModule.NestedToolExecutionResult,
+  output: toolTypesModule.Content,
+): string {
   const errors = result.diagnostics.filter((diagnostic) => diagnostic.severity === "error");
   if (errors.length > 0) return errors.map((diagnostic) => diagnostic.message).join("\n");
   return output.flatMap((item) => (item.type === "text" ? [item.text] : [])).join("\n");
 }
+
+const toolResult = {
+  appendToolResult,
+  boundContent,
+  fallbackResult,
+  fromSlot,
+  harnessError,
+  invalid,
+  nestedResult,
+  outputValue,
+  summaryOf,
+  toolDiagnostic,
+  truncated,
+};
+
+export default toolResult;

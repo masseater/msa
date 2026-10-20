@@ -1,4 +1,5 @@
-import { FileError, type Result } from "@msa/durable/env";
+import env from "@msa/durable/env";
+import type envTypes from "@msa/durable/env.types";
 import { Effect } from "effect";
 
 import errors from "./errors.ts";
@@ -7,11 +8,15 @@ import type fileOpTypes from "./file-op.types.ts";
 import type mutateOpsTypes from "./mutate-ops.types.ts";
 import writeFile from "./write-file.ts";
 
+const { FileError } = env;
+
 const { remoteRequest, resolveIn, run, runFileOp } = fileOp;
 const { writeContent } = writeFile;
 const { abortResult, fileResult } = errors;
 
-const writeAt = (request: mutateOpsTypes.WriteRequest): Promise<Result<void, FileError>> => {
+const writeAt = (
+  request: mutateOpsTypes.WriteRequest,
+): Promise<envTypes.Result<void, envTypes.FileError>> => {
   const { content, append } = request;
   const { connection } = request.target;
   const bytes = typeof content === "string" ? Buffer.from(content, "utf8") : content;
@@ -25,7 +30,9 @@ const writeAt = (request: mutateOpsTypes.WriteRequest): Promise<Result<void, Fil
   );
 };
 
-const truncateAt = (request: mutateOpsTypes.TruncateRequest): Promise<Result<void, FileError>> => {
+const truncateAt = (
+  request: mutateOpsTypes.TruncateRequest,
+): Promise<envTypes.Result<void, envTypes.FileError>> => {
   const { size } = request;
   const { connection } = request.target;
   return run(
@@ -44,7 +51,9 @@ const truncateAt = (request: mutateOpsTypes.TruncateRequest): Promise<Result<voi
   );
 };
 
-const flushAt = (request: fileOpTypes.PathRequest): Promise<Result<void, FileError>> => {
+const flushAt = (
+  request: fileOpTypes.PathRequest,
+): Promise<envTypes.Result<void, envTypes.FileError>> => {
   const { connection } = request.target;
   return run(
     runFileOp({
@@ -56,7 +65,9 @@ const flushAt = (request: fileOpTypes.PathRequest): Promise<Result<void, FileErr
   );
 };
 
-const renameAt = (request: mutateOpsTypes.RenameRequest): Promise<Result<void, FileError>> => {
+const renameAt = (
+  request: mutateOpsTypes.RenameRequest,
+): Promise<envTypes.Result<void, envTypes.FileError>> => {
   const { target, path, context } = request;
   return run(
     Effect.gen(function* () {
@@ -84,7 +95,7 @@ const renameAt = (request: mutateOpsTypes.RenameRequest): Promise<Result<void, F
 
 const createDirAt = (
   request: mutateOpsTypes.CreateDirRequest,
-): Promise<Result<void, FileError>> => {
+): Promise<envTypes.Result<void, envTypes.FileError>> => {
   const { connection } = request.target;
   return run(
     runFileOp({
@@ -101,7 +112,9 @@ const createDirAt = (
   );
 };
 
-const removeAt = (request: mutateOpsTypes.RemoveRequest): Promise<Result<void, FileError>> => {
+const removeAt = (
+  request: mutateOpsTypes.RemoveRequest,
+): Promise<envTypes.Result<void, envTypes.FileError>> => {
   const { connection } = request.target;
   return run(
     runFileOp({

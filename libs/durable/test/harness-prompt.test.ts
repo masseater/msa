@@ -1,33 +1,30 @@
 import { type SystemMessage } from "@msa/ai";
-import {
-  type Conversation,
-  type EntryId,
-  type PromptInput,
-  type PromptSection,
-  SystemEntry,
-  type ToolRegistration,
-  defineExtension,
-  wrapSection,
-} from "@msa/durable";
-import { createRegistry } from "@msa/durable/harness";
+import durable from "@msa/durable";
+import harness from "@msa/durable/harness";
+import type durableTypes from "@msa/durable/index.types";
 import { Effect } from "effect";
 import { describe, expect, it } from "vite-plus/test";
 
-import { resolveAgent, resolveSettings } from "../src/harness/agent.ts";
-import { planSystemEntries, renderSections, replaySections } from "../src/harness/prompt.ts";
+import agentModule from "../src/harness/agent.ts";
+import prompt from "../src/harness/prompt.ts";
 import harnessPromptSupport from "./harness-prompt-support.ts";
 import support from "./support.ts";
+
+const { planSystemEntries, renderSections, replaySections } = prompt;
+const { SystemEntry, defineExtension, wrapSection } = durable;
+const { createRegistry } = harness;
+const { resolveAgent, resolveSettings } = agentModule;
 
 const { marker, root } = harnessPromptSupport;
 const { abortController, addSection, awaited, context, failure, user } = support;
 
 type Planned = {
   readonly sections: Record<string, string | null>;
-  readonly omit?: readonly EntryId[];
+  readonly omit?: readonly durableTypes.EntryId[];
 };
 
 const apply = Effect.fn("apply")(function* (
-  conversation: Conversation,
+  conversation: durableTypes.Conversation,
   desired: Record<string, string>,
 ) {
   const runPromise = Effect.runPromiseWith(yield* Effect.context<never>());
@@ -65,16 +62,20 @@ const apply = Effect.fn("apply")(function* (
   });
 });
 
-const lastSystemId = Effect.fn("lastSystemId")(function* (conversation: Conversation) {
+const lastSystemId = Effect.fn("lastSystemId")(function* (conversation: durableTypes.Conversation) {
   const page = yield* awaited(conversation.entries({}, 100, undefined, context));
   return page.items.find((entry) => entry.kind === "msa.system")!.id;
 });
 
-function section(key: string, render: PromptSection<ToolRegistration>["render"], tag?: boolean) {
+function section(
+  key: string,
+  render: durableTypes.PromptSection<durableTypes.ToolRegistration>["render"],
+  tag?: boolean,
+) {
   return tag === undefined ? { key, render } : { key, render, tag };
 }
 
-const input: PromptInput<ToolRegistration> = {
+const input: durableTypes.PromptInput<durableTypes.ToolRegistration> = {
   agent: {
     callable: [],
     deferred: [],

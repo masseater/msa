@@ -3,7 +3,7 @@ import { DatabaseSync } from "node:sqlite";
 import { Effect } from "effect";
 import { afterEach, describe, expect, it } from "vite-plus/test";
 
-import type { DocumentId } from "../src/types.ts";
+import type typesModule from "../src/types.types.ts";
 import effectSupport from "./effect-support.ts";
 import platformSupport from "./platform-support.ts";
 import sqliteStorageSupport from "./sqlite-storage-support.ts";
@@ -24,7 +24,7 @@ afterEach(() =>
   ),
 );
 
-function revisionCount(path: string, documentId: DocumentId): number {
+function revisionCount(path: string, documentId: typesModule.DocumentId): number {
   const db = new DatabaseSync(path, { readOnly: true });
   try {
     const row = db
@@ -39,7 +39,7 @@ function revisionCount(path: string, documentId: DocumentId): number {
 const checkpointedRevisions = Effect.fn("checkpointedRevisions")(function* () {
   const { storage, path } = yield* createSqliteStorage();
   yield* awaited(createRoot(storage));
-  const id = yield* awaited(storage.mintId<DocumentId>());
+  const id = yield* awaited(storage.mintId<typesModule.DocumentId>());
   yield* awaited(
     storage.commit(
       [

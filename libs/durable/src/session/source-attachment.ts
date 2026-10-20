@@ -1,6 +1,6 @@
 import type { ReplicatedStateSourceAttachment, ReplicatedStateSourceFrame } from "@msa/chord";
 
-export class SessionSourceAttachment<T> implements ReplicatedStateSourceAttachment<T> {
+export default class SessionSourceAttachment<T> implements ReplicatedStateSourceAttachment<T> {
   readonly snapshot: { readonly value: T; readonly cursor: number };
   #release: (() => void) | undefined;
   readonly #frames: ReplicatedStateSourceFrame<T>[] = [];

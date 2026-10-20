@@ -1,47 +1,49 @@
 import type { JsonValue } from "@msa/chord";
 import { Effect, Function } from "effect";
 
-import { eachStep, thenStep } from "../step.ts";
-import { loadChain, loadPending } from "./scheduler-load.ts";
-import { overlayOf, parentOf, withState } from "./scheduler-records.ts";
-import type { SchedulerState } from "./scheduler-state.ts";
-import type {
-  AnyTaskRecord,
-  Checkpoint,
-  ErasedRunningTask,
-  Invocation,
-  NextTaskState,
-  Overlay,
-  SchedulerOutcome,
-  TaskId,
-  Transaction,
-  Dual2,
-  Dual4,
-  Dual5,
-} from "./scheduler-types.ts";
+import stepModule from "../step.ts";
+import schedulerLoad from "./scheduler-load.ts";
+import schedulerRecords from "./scheduler-records.ts";
+import type schedulerStateTypes from "./scheduler-state.types.ts";
+import type schedulerTypesModule from "./scheduler-types.types.ts";
+
+const { overlayOf, parentOf, withState } = schedulerRecords;
+const { eachStep, thenStep } = stepModule;
+const { loadChain, loadPending } = schedulerLoad;
 
 type Finalizing = {
-  readonly state: SchedulerState;
-  readonly tx: Transaction;
-  readonly done: Set<TaskId>;
-  readonly overlay: Overlay;
+  readonly state: schedulerStateTypes.SchedulerState;
+  readonly tx: schedulerTypesModule.Transaction;
+  readonly done: Set<schedulerTypesModule.TaskId>;
+  readonly overlay: schedulerTypesModule.Overlay;
 };
 
-const climb = ({ state, overlay }: Finalizing, record: AnyTaskRecord, next: Set<TaskId>): void => {
+const climb = (
+  { state, overlay }: Finalizing,
+  record: schedulerTypesModule.AnyTaskRecord,
+  next: Set<schedulerTypesModule.TaskId>,
+): void => {
   const above = state.graph.nearestLiveAbove(record, overlay);
   if (above?.state.status === "completing") next.add(above.id);
 };
 
-const finalizeOne = (run: Finalizing, id: TaskId, next: Set<TaskId>): Effect.Effect<void> => {
+const finalizeOne = (
+  run: Finalizing,
+  id: schedulerTypesModule.TaskId,
+  next: Set<schedulerTypesModule.TaskId>,
+): Effect.Effect<void> => {
   const { state, tx, done, overlay } = run;
   const record = overlay.tasks.get(id) ?? state.graph.live.get(id);
   if (record?.state.status !== "completing" || done.has(id)) return Effect.void;
   if (state.graph.hasOwnedLive(id, overlay, done)) return Effect.void;
   done.add(id);
   const outcome = record.state.outcome;
-  const terminal = withState(record, { status: "terminal", outcome });
+  const terminal = withState(record, { outcome, status: "terminal" });
   tx.setTask(terminal);
-  (overlay.tasks as Map<TaskId, AnyTaskRecord>).set(record.id, terminal);
+  (overlay.tasks as Map<schedulerTypesModule.TaskId, schedulerTypesModule.AnyTaskRecord>).set(
+    record.id,
+    terminal,
+  );
   if (outcome.status !== "faulted" && outcome.status !== "orphaned") {
     climb(run, record, next);
     return Effect.void;
@@ -52,11 +54,16 @@ const finalizeOne = (run: Finalizing, id: TaskId, next: Set<TaskId>): Effect.Eff
   );
 };
 
-const finalizeFrom = (run: Finalizing, first: readonly TaskId[]): Effect.Effect<void> => {
+const finalizeFrom = (
+  run: Finalizing,
+  first: readonly schedulerTypesModule.TaskId[],
+): Effect.Effect<void> => {
   let round = first;
   while (round.length > 0) {
-    const next = new Set<TaskId>();
-    const pending = eachStep(round, (id: TaskId) => finalizeOne(run, id, next));
+    const next = new Set<schedulerTypesModule.TaskId>();
+    const pending = eachStep(round, (id: schedulerTypesModule.TaskId) =>
+      finalizeOne(run, id, next),
+    );
     if (pending !== Effect.void) {
       return Effect.flatMap(pending, () => finalizeFrom(run, [...next]));
     }
@@ -65,54 +72,61 @@ const finalizeFrom = (run: Finalizing, first: readonly TaskId[]): Effect.Effect<
   return Effect.void;
 };
 
-export const finalize: Dual2<SchedulerState, Transaction, Effect.Effect<void>> = Function.dual(
+const finalize: schedulerTypesModule.Dual2<
+  schedulerStateTypes.SchedulerState,
+  schedulerTypesModule.Transaction,
+  Effect.Effect<void>
+> = Function.dual(
   2,
-  (state: SchedulerState, tx: Transaction): Effect.Effect<void> => {
+  (
+    state: schedulerStateTypes.SchedulerState,
+    tx: schedulerTypesModule.Transaction,
+  ): Effect.Effect<void> => {
     const round = [...state.graph.finalizeChecks];
     state.graph.finalizeChecks.clear();
-    return finalizeFrom({ state, tx, done: new Set(), overlay: overlayOf(tx) }, round);
+    return finalizeFrom({ done: new Set(), overlay: overlayOf(tx), state, tx }, round);
   },
 );
 
 const settleTerminal = (
-  state: SchedulerState,
-  tx: Transaction,
-  record: AnyTaskRecord,
-  outcome: SchedulerOutcome,
+  state: schedulerStateTypes.SchedulerState,
+  tx: schedulerTypesModule.Transaction,
+  record: schedulerTypesModule.AnyTaskRecord,
+  outcome: schedulerTypesModule.SchedulerOutcome,
 ): Effect.Effect<void> => {
   if (state.graph.hasOwnedLive(record.id, overlayOf(tx))) {
-    tx.setTask(withState(record, { status: "completing", outcome }));
+    tx.setTask(withState(record, { outcome, status: "completing" }));
     return Effect.void;
   }
-  tx.setTask(withState(record, { status: "terminal", outcome }));
+  tx.setTask(withState(record, { outcome, status: "terminal" }));
   return Effect.promise(() => state.options.settleOutcome(tx, record, outcome));
 };
 
-export const terminate: Dual4<
-  SchedulerState,
-  Transaction,
-  AnyTaskRecord,
-  SchedulerOutcome,
+const terminate: schedulerTypesModule.Dual4<
+  schedulerStateTypes.SchedulerState,
+  schedulerTypesModule.Transaction,
+  schedulerTypesModule.AnyTaskRecord,
+  schedulerTypesModule.SchedulerOutcome,
   Effect.Effect<void>
 > = Function.dual(
   4,
   (
-    state: SchedulerState,
-    tx: Transaction,
-    record: AnyTaskRecord,
-    outcome: SchedulerOutcome,
+    state: schedulerStateTypes.SchedulerState,
+    tx: schedulerTypesModule.Transaction,
+    record: schedulerTypesModule.AnyTaskRecord,
+    outcome: schedulerTypesModule.SchedulerOutcome,
   ): Effect.Effect<void> =>
     thenStep(loadPending(state), () => settleTerminal(state, tx, record, outcome)),
 );
 
 const waitTargets = Effect.fnUntraced(function* (
-  state: SchedulerState,
-  current: ErasedRunningTask,
-  on: readonly TaskId[],
+  state: schedulerStateTypes.SchedulerState,
+  current: schedulerTypesModule.ErasedRunningTask,
+  on: readonly schedulerTypesModule.TaskId[],
   policy: string,
-  overlay: Overlay,
+  overlay: schedulerTypesModule.Overlay,
 ) {
-  const targets: TaskId[] = [];
+  const targets: schedulerTypesModule.TaskId[] = [];
   for (const id of on) {
     const member =
       overlay.tasks.get(id) ??
@@ -130,28 +144,34 @@ const waitTargets = Effect.fnUntraced(function* (
 });
 
 const waitCycle = Effect.fnUntraced(function* (
-  state: SchedulerState,
-  task: TaskId,
-  on: readonly TaskId[],
-  overlay: Overlay,
+  state: schedulerStateTypes.SchedulerState,
+  task: schedulerTypesModule.TaskId,
+  on: readonly schedulerTypesModule.TaskId[],
+  overlay: schedulerTypesModule.Overlay,
 ) {
   yield* loadPending(state);
-  return findCycle(state, { task, on, overlay });
+  return findCycle(state, { on, overlay, task });
 });
 
 type CycleQuery = {
-  readonly task: TaskId;
-  readonly on: readonly TaskId[];
-  readonly overlay: Overlay;
+  readonly task: schedulerTypesModule.TaskId;
+  readonly on: readonly schedulerTypesModule.TaskId[];
+  readonly overlay: schedulerTypesModule.Overlay;
 };
 
-const findCycle = (state: SchedulerState, query: CycleQuery): TaskId[] | undefined => {
+const findCycle = (
+  state: schedulerStateTypes.SchedulerState,
+  query: CycleQuery,
+): schedulerTypesModule.TaskId[] | undefined => {
   const { graph } = state;
   const { task, overlay } = query;
-  const from = new Map<TaskId, TaskId | undefined>();
-  const walked = new Set<TaskId>();
-  const pending: TaskId[] = [];
-  const reach = (id: TaskId, via: TaskId | undefined): void => {
+  const from = new Map<schedulerTypesModule.TaskId, schedulerTypesModule.TaskId | undefined>();
+  const walked = new Set<schedulerTypesModule.TaskId>();
+  const pending: schedulerTypesModule.TaskId[] = [];
+  const reach = (
+    id: schedulerTypesModule.TaskId,
+    via: schedulerTypesModule.TaskId | undefined,
+  ): void => {
     if (from.has(id)) return;
     from.set(id, via);
     pending.push(id);
@@ -166,10 +186,10 @@ const findCycle = (state: SchedulerState, query: CycleQuery): TaskId[] | undefin
     }
     if (walked.has(id)) continue;
     walked.add(id);
-    const found: TaskId[] = [];
+    const found: schedulerTypesModule.TaskId[] = [];
     for (const { id: below, node, live } of graph.walkDown(id, {
-      overlay,
       enter: (next) => !walked.has(next),
+      overlay,
     })) {
       if (live === undefined || node.background) continue;
       found.push(below);
@@ -180,18 +200,25 @@ const findCycle = (state: SchedulerState, query: CycleQuery): TaskId[] | undefin
   return undefined;
 };
 
-const pathTo = (from: ReadonlyMap<TaskId, TaskId | undefined>, end: TaskId): TaskId[] => {
-  const steps: TaskId[] = [];
-  for (let at: TaskId | undefined = end; at !== undefined; at = from.get(at)) steps.unshift(at);
+const pathTo = (
+  from: ReadonlyMap<schedulerTypesModule.TaskId, schedulerTypesModule.TaskId | undefined>,
+  end: schedulerTypesModule.TaskId,
+): schedulerTypesModule.TaskId[] => {
+  const steps: schedulerTypesModule.TaskId[] = [];
+  for (let at: schedulerTypesModule.TaskId | undefined = end; at !== undefined; at = from.get(at))
+    steps.unshift(at);
   return steps;
 };
 
 const validateWait = Effect.fnUntraced(function* (
-  state: SchedulerState,
-  tx: Transaction,
-  invocation: Invocation,
-  current: ErasedRunningTask,
-  next: Extract<NextTaskState<Checkpoint, JsonValue>, { status: "waiting" }>,
+  state: schedulerStateTypes.SchedulerState,
+  tx: schedulerTypesModule.Transaction,
+  invocation: schedulerTypesModule.Invocation,
+  current: schedulerTypesModule.ErasedRunningTask,
+  next: Extract<
+    schedulerTypesModule.NextTaskState<schedulerTypesModule.Checkpoint, JsonValue>,
+    { status: "waiting" }
+  >,
 ) {
   if (invocation.mode === "abort")
     throw new Error(`Abort handler of task ${current.id} cannot wait`);
@@ -207,42 +234,45 @@ const validateWait = Effect.fnUntraced(function* (
 });
 
 const settleState = (
-  state: SchedulerState,
-  tx: Transaction,
-  current: ErasedRunningTask,
-  next: NextTaskState<Checkpoint, JsonValue>,
+  state: schedulerStateTypes.SchedulerState,
+  tx: schedulerTypesModule.Transaction,
+  current: schedulerTypesModule.ErasedRunningTask,
+  next: schedulerTypesModule.NextTaskState<schedulerTypesModule.Checkpoint, JsonValue>,
 ): void => {
   if (next.status === "terminal" && state.graph.hasOwnedLive(current.id, overlayOf(tx))) {
-    tx.setTask(withState(current, { status: "completing", outcome: next.outcome }));
+    tx.setTask(withState(current, { outcome: next.outcome, status: "completing" }));
     return;
   }
   tx.setTask(withState(current, next));
 };
 
-const loadOverlay = (state: SchedulerState, tx: Transaction): Effect.Effect<void> => {
+const loadOverlay = (
+  state: schedulerStateTypes.SchedulerState,
+  tx: schedulerTypesModule.Transaction,
+): Effect.Effect<void> => {
   const overlay = overlayOf(tx);
   return thenStep(loadPending(state), () =>
-    eachStep([...overlay.tasks.values()], (record: AnyTaskRecord) =>
+    eachStep([...overlay.tasks.values()], (record: schedulerTypesModule.AnyTaskRecord) =>
       loadChain(state, parentOf(record), overlay),
     ),
   );
 };
 
-export const commitState: Dual5<
-  SchedulerState,
-  Transaction,
-  Invocation,
-  ErasedRunningTask,
-  NextTaskState<Checkpoint, JsonValue>,
+const commitState: schedulerTypesModule.Dual5<
+  schedulerStateTypes.SchedulerState,
+  schedulerTypesModule.Transaction,
+  schedulerTypesModule.Invocation,
+  schedulerTypesModule.ErasedRunningTask,
+  schedulerTypesModule.NextTaskState<schedulerTypesModule.Checkpoint, JsonValue>,
   Effect.Effect<void>
 > = Function.dual(
   5,
   (
-    state: SchedulerState,
-    tx: Transaction,
-    invocation: Invocation,
-    current: ErasedRunningTask,
-    next: NextTaskState<Checkpoint, JsonValue>,
+    state: schedulerStateTypes.SchedulerState,
+    tx: schedulerTypesModule.Transaction,
+    invocation: schedulerTypesModule.Invocation,
+    current: schedulerTypesModule.ErasedRunningTask,
+    next: schedulerTypesModule.NextTaskState<schedulerTypesModule.Checkpoint, JsonValue>,
   ): Effect.Effect<void> => {
     const ready =
       next.status === "waiting"
@@ -256,3 +286,11 @@ export const commitState: Dual5<
     });
   },
 );
+
+const schedulerFinalize = {
+  commitState,
+  finalize,
+  terminate,
+};
+
+export default schedulerFinalize;

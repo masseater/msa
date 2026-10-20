@@ -1,5 +1,5 @@
-import { defineExtension, section, wrapSection } from "@msa/durable";
-import { createRegistry } from "@msa/durable/harness";
+import durable from "@msa/durable";
+import harness from "@msa/durable/harness";
 import { Effect } from "effect";
 import { describe, expect, it } from "vite-plus/test";
 
@@ -7,6 +7,9 @@ import effectSupport from "./effect-support.ts";
 import harnessRegistrySupport from "./harness-registry-support.ts";
 import type harnessRegistrySupportTypes from "./harness-registry-support.types.ts";
 import sessionSupport from "./session-support.ts";
+
+const { createRegistry } = harness;
+const { defineExtension, section, wrapSection } = durable;
 
 const { awaited } = effectSupport;
 const { Coding, Skills, resolve } = harnessRegistrySupport;

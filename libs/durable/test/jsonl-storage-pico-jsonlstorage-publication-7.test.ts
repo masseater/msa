@@ -1,7 +1,7 @@
 import { Effect } from "effect";
 import { afterEach, describe, expect, it } from "vite-plus/test";
 
-import type { DocumentId } from "../src/types.ts";
+import type typesModule from "../src/types.types.ts";
 import effectSupport from "./effect-support.ts";
 import jsonlStorageSupport from "./jsonl-storage-support.ts";
 import type jsonlStorageSupportTypes from "./jsonl-storage-support.types.ts";
@@ -37,7 +37,7 @@ const documentWithDelta = Effect.fn("documentWithDelta")(function* () {
   const env = new InstrumentedEnv({ cwd: directory });
   const storage = yield* openStorage(directory, env);
   yield* createRoot(storage);
-  const id = yield* awaited(storage.mintId<DocumentId>());
+  const id = yield* awaited(storage.mintId<typesModule.DocumentId>());
   yield* awaited(
     storage.commit(
       [

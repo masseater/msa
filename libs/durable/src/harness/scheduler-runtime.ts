@@ -2,38 +2,36 @@ import type { Context, JsonValue } from "@msa/chord";
 import { awaitWithContext } from "@msa/chord/context";
 import { Cause, Duration, Effect, Exit } from "effect";
 
-import { promiseTry } from "../promise-try.ts";
-import { settleStep } from "../step.ts";
-import { agentHooks } from "./agent.ts";
-import { commitState } from "./scheduler-finalize.ts";
-import { endedError, memoOf, sessionMethod } from "./scheduler-records.ts";
-import { type RuntimeParts, runtimeReads } from "./scheduler-runtime-reads.ts";
-import {
-  type AnyTaskRecord,
-  type Checkpoint,
-  type NextTaskState,
-  type ErasedRunningTask,
-  type ErasedRuntime,
-  MAX_TIMER_DELAY,
-  type Phase,
-  type Transaction,
-  type Agent,
-  type DocumentWatch,
-  type HookRunner,
-  type JsonObject,
-  type TaskId,
-} from "./scheduler-types.ts";
+import promiseTryModule from "../promise-try.ts";
+import stepModule from "../step.ts";
+import agentModule from "./agent.ts";
+import schedulerKit from "./scheduler-kit.ts";
+import type schedulerRuntimeReadsTypes from "./scheduler-runtime-reads.types.ts";
+import schedulerTypes from "./scheduler-types.ts";
+import type schedulerTypesModule from "./scheduler-types.types.ts";
 
-type RuntimeInput = RuntimeParts & { readonly phase: Phase };
+const { schedulerFinalize, schedulerRecords, schedulerRuntimeReads } = schedulerKit;
 
-type NextState = NextTaskState<Checkpoint, JsonValue>;
+const { endedError, memoOf, sessionMethod } = schedulerRecords;
+const { agentHooks } = agentModule;
+const { MAX_TIMER_DELAY } = schedulerTypes;
+const { promiseTry } = promiseTryModule;
+const { settleStep } = stepModule;
+const { commitState } = schedulerFinalize;
+const { runtimeReads } = schedulerRuntimeReads;
+
+type RuntimeInput = schedulerRuntimeReadsTypes.RuntimeParts & {
+  readonly phase: schedulerTypesModule.Phase;
+};
+
+type NextState = schedulerTypesModule.NextTaskState<schedulerTypesModule.Checkpoint, JsonValue>;
 
 const isPromiseLike = <T>(value: T | PromiseLike<T>): value is PromiseLike<T> =>
   typeof (value as { then?: unknown } | undefined)?.then === "function";
 
 const agentOf =
   ({ state, invocation, phase }: RuntimeInput) =>
-  (): Promise<Agent> => {
+  (): Promise<schedulerTypesModule.Agent> => {
     if (invocation.ended) return Promise.reject(endedError(invocation));
     if (phase.agent === undefined) {
       phase.agent = state.options.agent(
@@ -48,7 +46,7 @@ const agentOf =
 
 const eachHandler = Effect.fnUntraced(function* (
   input: RuntimeInput,
-  agent: () => Promise<Agent>,
+  agent: () => Promise<schedulerTypesModule.Agent>,
   name: PropertyKey,
   invoke: (handler: never) => void | Promise<void>,
 ) {
@@ -76,7 +74,7 @@ const aborted = (signal: AbortSignal): Effect.Effect<never> =>
   });
 
 const sleepUntil = Effect.fnUntraced(function* (
-  { state, invocation }: RuntimeParts,
+  { state, invocation }: schedulerRuntimeReadsTypes.RuntimeParts,
   until: number,
   context: Context,
 ) {
@@ -96,13 +94,13 @@ const sleepUntil = Effect.fnUntraced(function* (
 });
 
 const watchDoc = Effect.fnUntraced(function* (
-  { state, invocation }: RuntimeParts,
+  { state, invocation }: schedulerRuntimeReadsTypes.RuntimeParts,
   args: readonly unknown[],
 ) {
   if (invocation.ended) throw endedError(invocation);
   const watch = (yield* Effect.promise(() =>
     sessionMethod(state.options.session, "watchDoc")(...args),
-  )) as DocumentWatch<JsonObject> | undefined;
+  )) as schedulerTypesModule.DocumentWatch<schedulerTypesModule.JsonObject> | undefined;
   if (watch === undefined) return undefined;
   if (invocation.ended) {
     void watch.stop();
@@ -127,20 +125,26 @@ const memo = (input: RuntimeInput) =>
       (tx, current) => {
         const winner = memoOf(current, name);
         if (winner !== undefined) return winner;
-        tx.setTask({ ...current, memos: { ...current.memos, [name]: candidate } } as AnyTaskRecord);
+        tx.setTask({
+          ...current,
+          memos: { ...current.memos, [name]: candidate },
+        } as schedulerTypesModule.AnyTaskRecord);
         return candidate;
       },
       rest[1] as Context,
     );
-  }) as ErasedRuntime["memo"];
+  }) as schedulerTypesModule.ErasedRuntime["memo"];
 
 const runtimeWrites = (input: RuntimeInput) => {
   const { state, invocation } = input;
   return {
-    commit: (change: Parameters<ErasedRuntime["commit"]>[0], context: Context): Promise<void> =>
+    commit: (
+      change: Parameters<schedulerTypesModule.ErasedRuntime["commit"]>[0],
+      context: Context,
+    ): Promise<void> =>
       state.gated(
         invocation,
-        (tx: Transaction, current: ErasedRunningTask) => {
+        (tx: schedulerTypesModule.Transaction, current: schedulerTypesModule.ErasedRunningTask) => {
           const settle = (next: NextState | undefined): void | Promise<void> =>
             next === undefined
               ? undefined
@@ -154,36 +158,36 @@ const runtimeWrites = (input: RuntimeInput) => {
     sleep: (until: number, context: Context) =>
       Effect.runPromise(sleepUntil(input, until, context)),
     watchDoc: ((...args: readonly unknown[]) =>
-      Effect.runPromise(watchDoc(input, args))) as ErasedRuntime["watchDoc"],
+      Effect.runPromise(watchDoc(input, args))) as schedulerTypesModule.ErasedRuntime["watchDoc"],
   };
 };
 
-export const buildRuntime = (input: RuntimeInput): ErasedRuntime => {
+const buildRuntime = (input: RuntimeInput): schedulerTypesModule.ErasedRuntime => {
   const { state, invocation, phase } = input;
   const agent = agentOf(input);
-  const hooks: HookRunner<Record<string, unknown>> = {
+  const hooks: schedulerTypesModule.HookRunner<Record<string, unknown>> = {
     each: (name, invoke) =>
       Effect.runPromise(eachHandler(input, agent, name, invoke as (handler: never) => void)),
   };
   const settings = state.options.settings;
   return {
-    taskId: invocation.taskId as TaskId<JsonValue>,
-    conversationId: invocation.conversationId,
-    signal: invocation.controller.signal,
-    models: state.options.models,
     agent: (context) =>
       invocation.ended
         ? Promise.reject(endedError(invocation))
         : awaitWithContext(agent(), context),
-    get settings() {
-      return settings();
-    },
+    conversationId: invocation.conversationId,
     env: (context) =>
       state.read(invocation, () => state.options.env(invocation.conversationId, context)),
-    hooks: hooks as ErasedRuntime["hooks"],
+    hooks: hooks as schedulerTypesModule.ErasedRuntime["hooks"],
+    models: state.options.models,
     get registry() {
       return phase.snapshot();
     },
+    get settings() {
+      return settings();
+    },
+    signal: invocation.controller.signal,
+    taskId: invocation.taskId as schedulerTypesModule.TaskId<JsonValue>,
     ...runtimeWrites(input),
     ...runtimeReads(input),
     now: () => {
@@ -196,3 +200,9 @@ export const buildRuntime = (input: RuntimeInput): ErasedRuntime => {
     },
   };
 };
+
+const schedulerRuntime = {
+  buildRuntime,
+};
+
+export default schedulerRuntime;

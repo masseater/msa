@@ -1,17 +1,6 @@
 import { expectTypeOf, it } from "vite-plus/test";
 
-import type {
-  ContextEdit,
-  DocumentContent,
-  DocumentCreate,
-  DocumentRecord,
-  StorageWrite,
-  SubmissionCreate,
-  SubmissionRecord,
-  TaskOutcome,
-  TaskRecord,
-  TaskState,
-} from "../src/index.ts";
+import type durableTypes from "../src/index.types.ts";
 import type typeSupportTypes from "./type-support.ts";
 import typesIds from "./types-ids.ts";
 
@@ -22,13 +11,16 @@ type Live = { phase: string };
 
 function contextEditFailures() {
   expectTypeOf<
-    typeSupportTypes.LiteralFits<{ target: Entry; action: "replace" }, ContextEdit>
+    typeSupportTypes.LiteralFits<{ target: Entry; action: "replace" }, durableTypes.ContextEdit>
   >().toEqualTypeOf<false>();
   expectTypeOf<
-    typeSupportTypes.LiteralFits<{ target: Entry; action: "omit"; messages: [] }, ContextEdit>
+    typeSupportTypes.LiteralFits<
+      { target: Entry; action: "omit"; messages: [] },
+      durableTypes.ContextEdit
+    >
   >().toEqualTypeOf<false>();
   expectTypeOf<
-    typeSupportTypes.LiteralFits<{ target: Entry; action: "omit" }, ContextEdit>
+    typeSupportTypes.LiteralFits<{ target: Entry; action: "omit" }, durableTypes.ContextEdit>
   >().toEqualTypeOf<true>();
 }
 
@@ -40,7 +32,7 @@ function taskStateFailures() {
         checkpoint: { phase: "ready" };
         outcome: { status: "completed"; result: 1 };
       },
-      TaskState<Live, number>
+      durableTypes.TaskState<Live, number>
     >
   >().toEqualTypeOf<false>();
   expectTypeOf<
@@ -50,13 +42,13 @@ function taskStateFailures() {
         checkpoint: { phase: "ready" };
         outcome: { status: "completed"; result: 1 };
       },
-      TaskState<Live, number>
+      durableTypes.TaskState<Live, number>
     >
   >().toEqualTypeOf<false>();
   expectTypeOf<
     typeSupportTypes.LiteralFits<
       { status: "terminal"; outcome: { status: "completed"; result: 1 } },
-      TaskState<Live, number>
+      durableTypes.TaskState<Live, number>
     >
   >().toEqualTypeOf<true>();
 }
@@ -75,11 +67,11 @@ function taskRecordFailures() {
   expectTypeOf<
     typeSupportTypes.LiteralFits<
       TerminalRecord & { memos: { retained: true } },
-      TaskRecord<null, Live, number>
+      durableTypes.TaskRecord<null, Live, number>
     >
   >().toEqualTypeOf<false>();
   expectTypeOf<
-    typeSupportTypes.LiteralFits<TerminalRecord, TaskRecord<null, Live, number>>
+    typeSupportTypes.LiteralFits<TerminalRecord, durableTypes.TaskRecord<null, Live, number>>
   >().toEqualTypeOf<true>();
 }
 
@@ -95,13 +87,13 @@ function documentRecordFailures() {
         history: "latest";
         fork: "current";
       },
-      DocumentRecord
+      durableTypes.DocumentRecord
     >
   >().toEqualTypeOf<false>();
   expectTypeOf<
     typeSupportTypes.LiteralFits<
       { id: Document; kind: "test"; createdAt: typeof seq; scope: { kind: "session" } },
-      DocumentRecord
+      durableTypes.DocumentRecord
     >
   >().toEqualTypeOf<true>();
 }
@@ -115,7 +107,7 @@ function documentCreateFailures() {
         kind: "test";
         scope: { kind: "conversation"; conversationId: typeof conversationId };
       },
-      DocumentCreate
+      durableTypes.DocumentCreate
     >
   >().toEqualTypeOf<false>();
   const taskWithPolicy = {
@@ -125,30 +117,39 @@ function documentCreateFailures() {
     kind: "test",
     scope: { kind: "task", taskId },
   } as const;
-  expectTypeOf(taskWithPolicy).not.toExtend<DocumentCreate>();
+  expectTypeOf(taskWithPolicy).not.toExtend<durableTypes.DocumentCreate>();
   expectTypeOf<
     typeSupportTypes.LiteralFits<
       { id: Document; kind: "test"; scope: { kind: "session" }; createdAt: typeof seq },
-      DocumentCreate
+      durableTypes.DocumentCreate
     >
   >().toEqualTypeOf<false>();
   expectTypeOf<
     typeSupportTypes.LiteralFits<
       { id: Document; kind: "test"; scope: { kind: "session" } },
-      DocumentCreate
+      durableTypes.DocumentCreate
     >
   >().toEqualTypeOf<true>();
 }
 
 function documentContentFailures() {
   expectTypeOf<
-    typeSupportTypes.LiteralFits<{ kind: "base"; version: 1; value: {}; ops: [] }, DocumentContent>
+    typeSupportTypes.LiteralFits<
+      { kind: "base"; version: 1; value: {}; ops: [] },
+      durableTypes.DocumentContent
+    >
   >().toEqualTypeOf<false>();
   expectTypeOf<
-    typeSupportTypes.LiteralFits<{ kind: "delta"; version: 1; ops: []; value: {} }, DocumentContent>
+    typeSupportTypes.LiteralFits<
+      { kind: "delta"; version: 1; ops: []; value: {} },
+      durableTypes.DocumentContent
+    >
   >().toEqualTypeOf<false>();
   expectTypeOf<
-    typeSupportTypes.LiteralFits<{ kind: "delta"; version: 1; ops: [] }, DocumentContent>
+    typeSupportTypes.LiteralFits<
+      { kind: "delta"; version: 1; ops: [] },
+      durableTypes.DocumentContent
+    >
   >().toEqualTypeOf<true>();
   type Created<Content> = {
     type: "document.create";
@@ -156,15 +157,21 @@ function documentContentFailures() {
     content: Content;
   };
   expectTypeOf<
-    typeSupportTypes.LiteralFits<Created<{ kind: "delta"; version: 1; ops: [] }>, StorageWrite>
+    typeSupportTypes.LiteralFits<
+      Created<{ kind: "delta"; version: 1; ops: [] }>,
+      durableTypes.StorageWrite
+    >
   >().toEqualTypeOf<false>();
   expectTypeOf<
-    typeSupportTypes.LiteralFits<Created<{ kind: "base"; version: 1; value: {} }>, StorageWrite>
+    typeSupportTypes.LiteralFits<
+      Created<{ kind: "base"; version: 1; value: {} }>,
+      durableTypes.StorageWrite
+    >
   >().toEqualTypeOf<true>();
   expectTypeOf<
     typeSupportTypes.LiteralFits<
       { status: "completed"; result: 1; error: { message: "impossible" } },
-      TaskOutcome<number>
+      durableTypes.TaskOutcome<number>
     >
   >().toEqualTypeOf<false>();
 }
@@ -174,28 +181,31 @@ function submissionRecordFailures() {
   expectTypeOf<
     typeSupportTypes.LiteralFits<
       Base & { type: "input"; status: "queued"; entry: Entry },
-      SubmissionRecord
+      durableTypes.SubmissionRecord
     >
   >().toEqualTypeOf<false>();
   expectTypeOf<
-    typeSupportTypes.LiteralFits<Base & { type: "input"; status: "queued" }, SubmissionRecord>
+    typeSupportTypes.LiteralFits<
+      Base & { type: "input"; status: "queued" },
+      durableTypes.SubmissionRecord
+    >
   >().toEqualTypeOf<true>();
   expectTypeOf<
     typeSupportTypes.LiteralFits<
       Base & { type: "input"; status: "done"; entry: Entry },
-      SubmissionRecord
+      durableTypes.SubmissionRecord
     >
   >().toEqualTypeOf<false>();
   expectTypeOf<
     typeSupportTypes.LiteralFits<
       Base & { type: "input"; status: "done"; entry: Entry; answer: Entry },
-      SubmissionRecord
+      durableTypes.SubmissionRecord
     >
   >().toEqualTypeOf<true>();
   expectTypeOf<
     typeSupportTypes.LiteralFits<
       Base & { type: "write"; status: "done"; entry: Entry; answer: Entry },
-      SubmissionRecord
+      durableTypes.SubmissionRecord
     >
   >().toEqualTypeOf<false>();
   expectTypeOf<
@@ -206,13 +216,13 @@ function submissionRecordFailures() {
         type: "write";
         status: "queued";
       },
-      SubmissionCreate
+      durableTypes.SubmissionCreate
     >
   >().toEqualTypeOf<false>();
   expectTypeOf<
     typeSupportTypes.LiteralFits<
       { conversationId: typeof conversationId; type: "write"; status: "queued" },
-      SubmissionCreate
+      durableTypes.SubmissionCreate
     >
   >().toEqualTypeOf<true>();
 }

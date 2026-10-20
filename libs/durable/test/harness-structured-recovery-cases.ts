@@ -1,11 +1,14 @@
-import { type TaskId } from "@msa/durable";
-import { createSession } from "@msa/durable/session";
+import type durableTypes from "@msa/durable/index.types";
+import sessionModule from "@msa/durable/session";
 import { Effect } from "effect";
 
-import { openNodeSqliteStorage } from "../src/storage/sqlite/node.ts";
+import node from "../src/storage/sqlite/node.ts";
 import type harnessStructuredRecoveryCasesTypes from "./harness-structured-recovery-cases.types.ts";
 import harnessStructuredSupport from "./harness-structured-support.ts";
 import support from "./support.ts";
+
+const { createSession } = sessionModule;
+const { openNodeSqliteStorage } = node;
 
 const { Node, OWN_CONVERSATION, spawn } = harnessStructuredSupport;
 const { awaited, context } = support;
@@ -29,7 +32,7 @@ const seedStep1 = Effect.fn("seedStep1")(function* (path: string, children: read
                 { ...OWN_CONVERSATION, conversationId: root.id },
               ),
             );
-            const ids: TaskId[] = [];
+            const ids: durableTypes.TaskId[] = [];
             for (const name of children) ids.push(yield* awaited(spawn(tx, parent, name)));
             return { children: ids, parent };
           }),
@@ -44,7 +47,7 @@ const seed = Effect.fn("seed")(function* (
   path: string,
   children: readonly string[],
   edit: (
-    set: (id: TaskId, patch: object) => Promise<void>,
+    set: (id: durableTypes.TaskId, patch: object) => Promise<void>,
     seeded: harnessStructuredRecoveryCasesTypes.Seeded,
   ) => Promise<void>,
 ) {

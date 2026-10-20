@@ -1,10 +1,10 @@
-import type { createEditTool, createReadTool } from "../src/tools/index.ts";
+import type toolsModule from "../src/tools/index.ts";
 import type specUsageExtensions from "./spec-usage-extensions.ts";
 
 declare namespace specUsageSequencesTypes {
   type SpecTools = {
-    readonly readTool: ReturnType<typeof createReadTool>;
-    readonly editTool: ReturnType<typeof createEditTool>;
+    readonly readTool: ReturnType<typeof toolsModule.createReadTool>;
+    readonly editTool: ReturnType<typeof toolsModule.createEditTool>;
     readonly bashTool: SpecBashTool;
   };
 

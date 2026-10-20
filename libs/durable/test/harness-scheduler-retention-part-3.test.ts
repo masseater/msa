@@ -1,13 +1,17 @@
-import { LiveDoc, type TaskId } from "@msa/durable";
+import durable from "@msa/durable";
+import type durableTypes from "@msa/durable/index.types";
 import { Effect } from "effect";
 import { afterEach, describe, expect, it } from "vite-plus/test";
 
-import { openNodeSqliteStorage } from "../src/storage/sqlite/node.ts";
+import node from "../src/storage/sqlite/node.ts";
 import effectSupport from "./effect-support.ts";
 import harnessSchedulerRetentionSupport from "./harness-scheduler-retention-support.ts";
 import platformSupport from "./platform-support.ts";
 import sessionSupport from "./session-support.ts";
 import taskSupport from "./task-support.ts";
+
+const { LiveDoc } = durable;
+const { openNodeSqliteStorage } = node;
 
 const { awaited } = effectSupport;
 const { Hold, directories, gate, gates, open, rejections, runs, sizes, sqlitePath, subagentCycle } =
@@ -138,7 +142,7 @@ const forgets20000 = Effect.gen(function* () {
       (tx) =>
         runPromise(
           Effect.gen(function* () {
-            const linksInner: TaskId[] = [];
+            const linksInner: durableTypes.TaskId[] = [];
             let owner = yield* awaited(
               tx.createTask(Hold, { name: "link0" }, { ownership: { kind: "conversation" } }),
             );

@@ -2,38 +2,26 @@ import type { Op } from "@msa/chord/delta";
 import { apply } from "@msa/chord/delta/apply";
 import { Effect, Function } from "effect";
 
-import { StorageRequestError } from "../../errors.ts";
-import { idFromNumber } from "../../ids.ts";
-import type {
-  DocumentAddress,
-  DocumentCreate,
-  DocumentId,
-  DocumentPoint,
-  DocumentRecord,
-  JsonObject,
-  StorageWrite,
-  StoredDocument,
-} from "../../types.ts";
-import {
-  addressKey,
-  addressParts,
-  type DocumentAction,
-  type IdRow,
-  isAliveAt,
-  isCurrentOnly,
-  parseJson,
-  type RevisionRow,
-} from "./codec.ts";
-import type { SqliteExecutor } from "./database.ts";
-import { recordById } from "./scans.ts";
+import errors from "../../errors.ts";
+import ids from "../../ids.ts";
+import type typesModule from "../../types.types.ts";
+import codec from "./codec.ts";
+import type codecTypes from "./codec.types.ts";
+import type databaseTypes from "./database.ts";
+import scans from "./scans.ts";
+
+const { recordById } = scans;
+const { addressKey, addressParts, isAliveAt, isCurrentOnly, parseJson } = codec;
+const { StorageRequestError } = errors;
+const { idFromNumber } = ids;
 
 const readRevisions = Effect.fnUntraced(function* (
-  executor: SqliteExecutor,
-  id: DocumentId,
+  executor: databaseTypes.SqliteExecutor,
+  id: typesModule.DocumentId,
   upper: number,
 ) {
   const base = yield* Effect.promise(() =>
-    executor.get<RevisionRow>(
+    executor.get<codecTypes.RevisionRow>(
       `SELECT seq, kind, version, content FROM document_revisions
 				WHERE document_id = ? AND kind = 'base' AND seq <= ? ORDER BY seq DESC LIMIT 1`,
       id,
@@ -42,7 +30,7 @@ const readRevisions = Effect.fnUntraced(function* (
   );
   if (base === undefined) throw new Error(`Document ${id} is missing a required base`);
   const tail = yield* Effect.promise(() =>
-    executor.all<RevisionRow>(
+    executor.all<codecTypes.RevisionRow>(
       `SELECT seq, kind, version, content FROM document_revisions
 				WHERE document_id = ? AND seq > ? AND seq <= ? ORDER BY seq`,
       id,
@@ -53,21 +41,27 @@ const readRevisions = Effect.fnUntraced(function* (
   return { base, tail };
 });
 
-export const materializeDocument: {
+const materializeDocument: {
   (
-    id: DocumentId,
-    at: DocumentPoint,
-  ): (executor: SqliteExecutor) => Effect.Effect<StoredDocument | undefined>;
+    id: typesModule.DocumentId,
+    at: typesModule.DocumentPoint,
+  ): (
+    executor: databaseTypes.SqliteExecutor,
+  ) => Effect.Effect<typesModule.StoredDocument | undefined>;
   (
-    executor: SqliteExecutor,
-    id: DocumentId,
-    at: DocumentPoint,
-  ): Effect.Effect<StoredDocument | undefined>;
+    executor: databaseTypes.SqliteExecutor,
+    id: typesModule.DocumentId,
+    at: typesModule.DocumentPoint,
+  ): Effect.Effect<typesModule.StoredDocument | undefined>;
 } = Function.dual(
   3,
-  Effect.fnUntraced(function* (executor: SqliteExecutor, id: DocumentId, at: DocumentPoint) {
+  Effect.fnUntraced(function* (
+    executor: databaseTypes.SqliteExecutor,
+    id: typesModule.DocumentId,
+    at: typesModule.DocumentPoint,
+  ) {
     const record = yield* Effect.promise(() =>
-      recordById<DocumentRecord>(executor, "documents", id),
+      recordById<typesModule.DocumentRecord>(executor, "documents", id),
     );
     if (record === undefined) return undefined;
     if (at !== "current" && isCurrentOnly(record)) {
@@ -79,29 +73,33 @@ export const materializeDocument: {
       id,
       at === "current" ? Number.MAX_SAFE_INTEGER : at,
     );
-    let value = parseJson<JsonObject>(base.content);
+    let value = parseJson<typesModule.JsonObject>(base.content);
     for (const revision of tail) {
       if (revision.kind !== "delta" || revision.version !== base.version) {
         throw new Error(`Document ${id} crosses a stored version boundary without a base`);
       }
-      value = apply(value, parseJson<readonly Op[]>(revision.content)) as JsonObject;
+      value = apply(value, parseJson<readonly Op[]>(revision.content)) as typesModule.JsonObject;
     }
-    return { record, version: base.version, value, deltasSinceBase: tail.length };
+    return { deltasSinceBase: tail.length, record, value, version: base.version };
   }),
 );
 
 type DocumentWrite = Extract<
-  StorageWrite,
+  typesModule.StorageWrite,
   { type: "document.create" | "document.copy" | "document.change" | "document.retire" }
 >;
 
-const isDocumentWrite = (write: StorageWrite): write is DocumentWrite =>
+const isDocumentWrite = (write: typesModule.StorageWrite): write is DocumentWrite =>
   write.type === "document.create" ||
   write.type === "document.copy" ||
   write.type === "document.change" ||
   write.type === "document.retire";
 
-const assertOneContent = (action: DocumentAction, id: DocumentId, create: boolean): void => {
+const assertOneContent = (
+  action: codecTypes.DocumentAction,
+  id: typesModule.DocumentId,
+  create: boolean,
+): void => {
   if (
     (create && action.create !== undefined) ||
     action.content !== undefined ||
@@ -111,7 +109,11 @@ const assertOneContent = (action: DocumentAction, id: DocumentId, create: boolea
   }
 };
 
-const addDocumentWrite = (action: DocumentAction, write: DocumentWrite, id: DocumentId): void => {
+const addDocumentWrite = (
+  action: codecTypes.DocumentAction,
+  write: DocumentWrite,
+  id: typesModule.DocumentId,
+): void => {
   switch (write.type) {
     case "document.create":
       assertOneContent(action, id, true);
@@ -134,10 +136,10 @@ const addDocumentWrite = (action: DocumentAction, write: DocumentWrite, id: Docu
   }
 };
 
-export const prepareDocumentActions = (
-  writes: readonly StorageWrite[],
-): Map<DocumentId, DocumentAction> => {
-  const actions = new Map<DocumentId, DocumentAction>();
+const prepareDocumentActions = (
+  writes: readonly typesModule.StorageWrite[],
+): Map<typesModule.DocumentId, codecTypes.DocumentAction> => {
+  const actions = new Map<typesModule.DocumentId, codecTypes.DocumentAction>();
   for (const write of writes) {
     if (!isDocumentWrite(write)) continue;
     const id =
@@ -155,12 +157,12 @@ export const prepareDocumentActions = (
 };
 
 const currentDocumentId = Effect.fnUntraced(function* (
-  executor: SqliteExecutor,
-  address: DocumentAddress | DocumentCreate | DocumentRecord,
+  executor: databaseTypes.SqliteExecutor,
+  address: typesModule.DocumentAddress | typesModule.DocumentCreate | typesModule.DocumentRecord,
 ) {
   const parts = addressParts(address);
   const row = yield* Effect.promise(() =>
-    executor.get<IdRow>(
+    executor.get<codecTypes.IdRow>(
       `SELECT id FROM documents
 				WHERE kind = ? AND scope_kind = ? AND owner_id = ? AND family = ? AND key_value = ? AND retired_at IS NULL
 				LIMIT 1`,
@@ -171,13 +173,13 @@ const currentDocumentId = Effect.fnUntraced(function* (
       parts.keyValue,
     ),
   );
-  return row?.id === undefined ? undefined : idFromNumber<DocumentId>(row.id);
+  return row?.id === undefined ? undefined : idFromNumber<typesModule.DocumentId>(row.id);
 });
 
 const checkDelta = Effect.fnUntraced(function* (
-  executor: SqliteExecutor,
-  id: DocumentId,
-  action: DocumentAction,
+  executor: databaseTypes.SqliteExecutor,
+  id: typesModule.DocumentId,
+  action: codecTypes.DocumentAction,
 ) {
   if (action.content?.kind !== "delta") return;
   const version = action.content.version;
@@ -194,16 +196,16 @@ const checkDelta = Effect.fnUntraced(function* (
 });
 
 const checkDocumentAction = Effect.fnUntraced(function* (
-  executor: SqliteExecutor,
-  actions: ReadonlyMap<DocumentId, DocumentAction>,
-  id: DocumentId,
-  action: DocumentAction,
+  executor: databaseTypes.SqliteExecutor,
+  actions: ReadonlyMap<typesModule.DocumentId, codecTypes.DocumentAction>,
+  id: typesModule.DocumentId,
+  action: codecTypes.DocumentAction,
 ) {
   if (action.copy !== undefined && actions.has(action.copy.id)) {
     throw new Error(`Document copy ${id} source is changed in the copy batch`);
   }
   const existing = yield* Effect.promise(() =>
-    recordById<DocumentRecord>(executor, "documents", id),
+    recordById<typesModule.DocumentRecord>(executor, "documents", id),
   );
   if (action.create === undefined && existing === undefined)
     throw new Error(`Unknown document: ${id}`);
@@ -211,19 +213,22 @@ const checkDocumentAction = Effect.fnUntraced(function* (
     throw new Error(`Document ${id} already exists`);
   if (existing?.retiredAt !== undefined) throw new Error(`Document ${id} is retired`);
   yield* checkDelta(executor, id, action);
-  return { record: action.create ?? existing!, existing };
+  return { existing, record: action.create ?? existing! };
 });
 
-export const checkDocumentActions: {
+const checkDocumentActions: {
   (
-    actions: ReadonlyMap<DocumentId, DocumentAction>,
-  ): (executor: SqliteExecutor) => Effect.Effect<void>;
-  (executor: SqliteExecutor, actions: ReadonlyMap<DocumentId, DocumentAction>): Effect.Effect<void>;
+    actions: ReadonlyMap<typesModule.DocumentId, codecTypes.DocumentAction>,
+  ): (executor: databaseTypes.SqliteExecutor) => Effect.Effect<void>;
+  (
+    executor: databaseTypes.SqliteExecutor,
+    actions: ReadonlyMap<typesModule.DocumentId, codecTypes.DocumentAction>,
+  ): Effect.Effect<void>;
 } = Function.dual(
   2,
   Effect.fnUntraced(function* (
-    executor: SqliteExecutor,
-    actions: ReadonlyMap<DocumentId, DocumentAction>,
+    executor: databaseTypes.SqliteExecutor,
+    actions: ReadonlyMap<typesModule.DocumentId, codecTypes.DocumentAction>,
   ) {
     const liveCounts = new Map<string, number>();
     for (const [id, action] of actions) {
@@ -241,3 +246,11 @@ export const checkDocumentActions: {
     }
   }),
 );
+
+const documents = {
+  checkDocumentActions,
+  materializeDocument,
+  prepareDocumentActions,
+};
+
+export default documents;

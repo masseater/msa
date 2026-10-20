@@ -1,12 +1,16 @@
 import { fauxAssistantMessage } from "@msa/ai";
-import { LiveDoc } from "@msa/durable";
-import { MemoryStorage } from "@msa/durable/storage/memory";
+import durable from "@msa/durable";
+import memory from "@msa/durable/storage/memory";
 import { Effect } from "effect";
 import { describe, expect, it } from "vite-plus/test";
 
-import { openNodeSqliteStorage } from "../src/storage/sqlite/node.ts";
+import node from "../src/storage/sqlite/node.ts";
 import harnessInputEntriesSupport from "./harness-input-entries-support.ts";
 import support from "./support.ts";
+
+const { MemoryStorage } = memory;
+const { LiveDoc } = durable;
+const { openNodeSqliteStorage } = node;
 
 const { answer, gated, inboxItems, mention, requestLog, transcript } = harnessInputEntriesSupport;
 const {

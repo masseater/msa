@@ -7,14 +7,19 @@ import {
   fauxToolCall,
 } from "@msa/ai";
 import { BACKGROUND_CONTEXT } from "@msa/chord/context";
-import { type HarnessSettings, ToolResultEntry, defineExtension, section } from "@msa/durable";
-import { Harness, createRegistry } from "@msa/durable/harness";
-import { MemoryStorage } from "@msa/durable/storage/memory";
+import type durableTypes from "@msa/durable/index.types";
 import { Console, Effect } from "effect";
 
-import { NodeExecutionEnv } from "../../src/env/node.ts";
-import { CodingTools } from "../../src/tools/index.ts";
+import durableKit from "../durable-kit.ts";
 import support from "../support.ts";
+
+const { durable, envNode: node, harness: harnessModule, memory, tools: toolsModule } = durableKit;
+
+const { ToolResultEntry, defineExtension, section } = durable;
+const { Harness, createRegistry } = harnessModule;
+const { CodingTools } = toolsModule;
+const { NodeExecutionEnv } = node;
+const { MemoryStorage } = memory;
 
 const { awaited, joinPath, makeDirectory, makeTempDir, removeDir } = support;
 
@@ -38,7 +43,7 @@ const mainStep1 = Effect.gen(function* () {
   registry.install(Coding);
 
   const userSettings = { maxRetries: 3, parallelTools: true };
-  const settings: HarnessSettings = {
+  const settings: durableTypes.HarnessSettings = {
     get retry() {
       return { maxRetries: userSettings.maxRetries };
     },

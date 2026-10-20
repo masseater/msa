@@ -1,21 +1,20 @@
 import { type ToolResultMessage, Type, fauxAssistantMessage, fauxText } from "@msa/ai";
-import {
-  type AgentEvent,
-  type Harness,
-  LiveDoc,
-  type TaskId,
-  ToolResultEntry,
-  defineTool,
-} from "@msa/durable";
-import { GenerationTask, watchEvents } from "@msa/durable/harness";
-import { MemoryStorage } from "@msa/durable/storage/memory";
+import type durableTypes from "@msa/durable/index.types";
+import type memoryTypes from "@msa/durable/storage/memory.types";
 import { Effect } from "effect";
 import { afterEach, describe, expect, it } from "vite-plus/test";
 
+import durableKit from "./durable-kit.ts";
 import harnessGenerationSupport from "./harness-generation-support.ts";
 import harnessStructuredEvents from "./harness-structured-events.ts";
 import harnessStructuredSupport from "./harness-structured-support.ts";
 import support from "./support.ts";
+
+const { durable, harness: harnessModule, memory } = durableKit;
+
+const { GenerationTask, watchEvents } = harnessModule;
+const { LiveDoc, ToolResultEntry, defineTool } = durable;
+const { MemoryStorage } = memory;
 
 const { invalidFinalStream } = harnessGenerationSupport;
 const { blockingTool, toolCalls } = harnessStructuredEvents;
@@ -61,7 +60,7 @@ const faultedGenerationSetupStep1 = Effect.fn("faultedGenerationSetupStep1")(fun
   });
   const setup = { ...base, models };
   addTask(setup.registry, Node);
-  const faulted: { opened?: Harness; reject?: TaskId } = {};
+  const faulted: { opened?: durableTypes.Harness; reject?: durableTypes.TaskId } = {};
   addHooks(setup.registry, GenerationTask, {
     beforeRequest: (_request, api, callContext) =>
       runPromise(
@@ -95,8 +94,8 @@ const faultedGenerationSetup = Effect.fn("faultedGenerationSetup")(function* () 
   const { setup, faulted, failure } = yield* faultedGenerationSetupStep1();
   class Failing extends ControlledStorage {
     override commit(
-      writes: Parameters<MemoryStorage["commit"]>[0],
-      ctx: Parameters<MemoryStorage["commit"]>[1],
+      writes: Parameters<memoryTypes.MemoryStorage["commit"]>[0],
+      ctx: Parameters<memoryTypes.MemoryStorage["commit"]>[1],
     ) {
       const finalizes = writes.some(
         (write) =>
@@ -173,7 +172,7 @@ const endsTurnGenerationStep1 = Effect.gen(function* () {
       parameters: Type.Object({}),
     }),
   );
-  let opened: Harness | undefined;
+  let opened: durableTypes.Harness | undefined;
   addHooks(setup.registry, GenerationTask, {
     afterTools: (_assistant, _results, api, callContext) =>
       runPromise(
@@ -193,7 +192,7 @@ const endsTurnGenerationStep1 = Effect.gen(function* () {
   const { harness, root } = yield* openChat(new MemoryStorage(), setup);
   opened = harness;
   const stream = yield* awaited(watchEvents(harness, root.id, context));
-  const events: AgentEvent[] = [];
+  const events: durableTypes.AgentEvent[] = [];
   stream.start((batch) => {
     events.push(...batch);
 

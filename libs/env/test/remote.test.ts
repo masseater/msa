@@ -1,10 +1,13 @@
 import { BACKGROUND_CONTEXT, withAbortSignal } from "@msa/chord/context";
-import { type ShellOutputInfo, getOrThrow } from "@msa/durable/env";
+import envModule from "@msa/durable/env";
+import type envTypes from "@msa/durable/env.types";
 import { Clock, Effect, Exit, Scope } from "effect";
 import { afterAll, describe, expect, it } from "vite-plus/test";
 
 import platform from "./platform.ts";
 import remoteEnvironments from "./remote-environment.ts";
+
+const { getOrThrow } = envModule;
 
 const { localPath, makeDirectory, writeText } = platform;
 
@@ -25,7 +28,7 @@ const windowedOutput = Effect.gen(function* () {
     env.exec(
       ["sh", "-c", `yes 0123456789abcdef | head -c ${total}`],
       {
-        onOutput: (text: string, _context, info: ShellOutputInfo) => {
+        onOutput: (text: string, _context, info: envTypes.ShellOutputInfo) => {
           delivered += Buffer.byteLength(text);
           if (info.skipped !== undefined) {
             skipped += info.skipped.bytes;

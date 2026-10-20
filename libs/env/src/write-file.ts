@@ -1,12 +1,13 @@
-import { FileError } from "@msa/durable/env";
+import env from "@msa/durable/env";
+import type envTypes from "@msa/durable/env.types";
 import { Effect } from "effect";
 
 import type connectionTypes from "./connection.types.ts";
-import handleModule from "./handle.ts";
+import Handle from "./handle.ts";
 import type handleTypes from "./handle.types.ts";
 import type writeFileTypes from "./write-file.types.ts";
 
-const { Handle } = handleModule;
+const { FileError } = env;
 
 const WRITE_CHUNK = 512 * 1024;
 const WRITE_DEPTH = 8;
@@ -14,7 +15,7 @@ const WRITE_DEPTH = 8;
 const abortedWrite = (
   write: writeFileTypes.FileWrite,
   inFlight: readonly Promise<connectionTypes.Reply>[],
-): Effect.Effect<never, FileError> =>
+): Effect.Effect<never, envTypes.FileError> =>
   Effect.promise(() => Promise.allSettled(inFlight)).pipe(
     Effect.flatMap((settled) => {
       const failed = settled.find((result) => result.status === "rejected");
@@ -28,7 +29,7 @@ const writeChunks = (
   write: writeFileTypes.FileWrite,
   handle: handleTypes.Handle,
   inFlight: Promise<connectionTypes.Reply>[],
-): Effect.Effect<void, FileError> =>
+): Effect.Effect<void, envTypes.FileError> =>
   Effect.gen(function* () {
     const { bytes } = write;
     for (let offset = WRITE_CHUNK; offset < bytes.length; offset += WRITE_CHUNK) {
@@ -48,7 +49,7 @@ const writeChunks = (
     for (const written of inFlight) yield* Effect.promise(() => written);
   });
 
-const writeContent = (write: writeFileTypes.FileWrite): Effect.Effect<void, FileError> =>
+const writeContent = (write: writeFileTypes.FileWrite): Effect.Effect<void, envTypes.FileError> =>
   Effect.gen(function* () {
     const { bytes, resolved, append } = write;
     const keep = bytes.length > WRITE_CHUNK;

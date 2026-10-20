@@ -1,8 +1,11 @@
-import { defineExtension, section } from "@msa/durable";
-import { createRegistry } from "@msa/durable/harness";
+import durable from "@msa/durable";
+import harness from "@msa/durable/harness";
 
 import harnessRegistrySupport from "./harness-registry-support.ts";
 import type harnessRegistrySupportTypes from "./harness-registry-support.types.ts";
+
+const { defineExtension, section } = durable;
+const { createRegistry } = harness;
 
 const { Coding, Skills } = harnessRegistrySupport;
 

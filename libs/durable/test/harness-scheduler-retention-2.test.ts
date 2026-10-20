@@ -1,12 +1,14 @@
 import { Effect } from "effect";
 import { afterEach, describe, expect, it } from "vite-plus/test";
 
-import { openNodeSqliteStorage } from "../src/storage/sqlite/node.ts";
+import node from "../src/storage/sqlite/node.ts";
 import effectSupport from "./effect-support.ts";
 import harnessSchedulerRetentionSupport from "./harness-scheduler-retention-support.ts";
 import platformSupport from "./platform-support.ts";
 import sessionSupport from "./session-support.ts";
 import taskSupport from "./task-support.ts";
+
+const { openNodeSqliteStorage } = node;
 
 const { awaited } = effectSupport;
 const { Hold, directories, gate, gates, open, rejections, runs, sqlitePath } =

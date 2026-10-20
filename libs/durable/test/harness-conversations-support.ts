@@ -1,10 +1,13 @@
-import { type Conversation, type EntryRecord, type ScanOrder, defineDoc } from "@msa/durable";
+import durable from "@msa/durable";
+import type durableTypes from "@msa/durable/index.types";
 import { Effect } from "effect";
 import { dual } from "effect/Function";
 
 import effectSupport from "./effect-support.ts";
 import harnessSupport from "./harness-support.ts";
 import sessionSupport from "./session-support.ts";
+
+const { defineDoc } = durable;
 
 const { awaited } = effectSupport;
 const { user } = harnessSupport;
@@ -23,7 +26,10 @@ const NoteDoc = defineDoc<{ text: string }>({
   version: 1,
 });
 
-function appendImpl(conversation: Conversation, text: string): Promise<EntryRecord> {
+function appendImpl(
+  conversation: durableTypes.Conversation,
+  text: string,
+): Promise<durableTypes.EntryRecord> {
   return Promise.resolve(
     conversation.commit(
       (tx) => tx.appendEntry(conversation.id, { kind: "message", model: [user(text)] }),
@@ -33,14 +39,14 @@ function appendImpl(conversation: Conversation, text: string): Promise<EntryReco
 }
 
 const append: {
-  (text: string): (conversation: Conversation) => ReturnType<typeof appendImpl>;
-  (conversation: Conversation, text: string): ReturnType<typeof appendImpl>;
+  (text: string): (conversation: durableTypes.Conversation) => ReturnType<typeof appendImpl>;
+  (conversation: durableTypes.Conversation, text: string): ReturnType<typeof appendImpl>;
 } = dual(2, appendImpl);
 
 const allEntries = Effect.fn("allEntries")(function* (
-  conversation: Conversation,
-  order?: ScanOrder,
-  start?: Parameters<Conversation["entries"]>[2],
+  conversation: durableTypes.Conversation,
+  order?: durableTypes.ScanOrder,
+  start?: Parameters<durableTypes.Conversation["entries"]>[2],
 ) {
   const texts: string[] = [];
   let cursor = start;

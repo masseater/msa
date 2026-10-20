@@ -2,63 +2,90 @@ import type { AssistantMessage } from "@msa/ai";
 import type { Op } from "@msa/chord/delta";
 import { Function } from "effect";
 
-import { messageChanges } from "./events-messages.ts";
-import type { Parts } from "./events-snapshot.ts";
-import type { AgentEvent } from "./events-types.ts";
-import type { Dual2 } from "./types.ts";
+import eventsMessages from "./events-messages.ts";
+import type eventsSnapshotTypes from "./events-snapshot.types.ts";
+import type eventsStreamTypes from "./events-stream.types.ts";
+import type eventsTypesModule from "./events-types.ts";
+import type typesModule from "./types.types.ts";
 
-export type Generations = {
-  readonly partialBefore: AssistantMessage | undefined;
-  readonly partial: AssistantMessage | undefined;
-};
+const { messageChanges } = eventsMessages;
 
-export const partials: Dual2<Parts, Parts, Generations> = Function.dual(
+const partials: typesModule.Dual2<
+  eventsSnapshotTypes.Parts,
+  eventsSnapshotTypes.Parts,
+  eventsStreamTypes.Generations
+> = Function.dual(
   2,
-  (was: Parts, now: Parts): Generations => ({
-    partialBefore: was.live.generation?.message as AssistantMessage | undefined,
+  (
+    was: eventsSnapshotTypes.Parts,
+    now: eventsSnapshotTypes.Parts,
+  ): eventsStreamTypes.Generations => ({
     partial: now.live.generation?.message as AssistantMessage | undefined,
+    partialBefore: was.live.generation?.message as AssistantMessage | undefined,
   }),
 );
 
-export const streamEvents: Dual2<Generations, readonly Op[], AgentEvent[]> = Function.dual(
+const streamEvents: typesModule.Dual2<
+  eventsStreamTypes.Generations,
+  readonly Op[],
+  eventsTypesModule.AgentEvent[]
+> = Function.dual(
   2,
-  (generations: Generations, viewOps: readonly Op[]): AgentEvent[] => {
+  (
+    generations: eventsStreamTypes.Generations,
+    viewOps: readonly Op[],
+  ): eventsTypesModule.AgentEvent[] => {
     const { partial, partialBefore } = generations;
     if (partial === undefined) return [];
-    if (partialBefore === undefined) return [{ type: "message_start", message: partial }];
+    if (partialBefore === undefined) return [{ message: partial, type: "message_start" }];
     if (partial === partialBefore) return [];
     return [
       {
+        changes: messageChanges(viewOps, partial),
         type: "message_update",
         usage: partial.usage,
-        changes: messageChanges(viewOps, partial),
       },
     ];
   },
 );
 
-export const retryEvents: Dual2<Parts, Parts, AgentEvent[]> = Function.dual(
+const retryEvents: typesModule.Dual2<
+  eventsSnapshotTypes.Parts,
+  eventsSnapshotTypes.Parts,
+  eventsTypesModule.AgentEvent[]
+> = Function.dual(
   2,
-  (was: Parts, now: Parts): AgentEvent[] => {
-    const events: AgentEvent[] = [];
+  (
+    was: eventsSnapshotTypes.Parts,
+    now: eventsSnapshotTypes.Parts,
+  ): eventsTypesModule.AgentEvent[] => {
+    const events: eventsTypesModule.AgentEvent[] = [];
     const generation = now.live.generation;
     const before = was.live.generation;
     if (generation?.retry !== undefined && before?.retry === undefined) {
       const { at, error } = generation.retry;
       events.push({
-        type: "auto_retry_start",
-        attempt: generation.attempt,
         at,
+        attempt: generation.attempt,
         errorMessage: error,
+        type: "auto_retry_start",
       });
     }
     if (before?.retry !== undefined && generation?.retry === undefined)
-      events.push({ type: "auto_retry_end", attempt: before.attempt });
+      events.push({ attempt: before.attempt, type: "auto_retry_end" });
     if (
       generation?.deferred !== undefined &&
       generation.deferred.pollAt !== before?.deferred?.pollAt
     )
-      events.push({ type: "deferred_poll", pollAt: generation.deferred.pollAt });
+      events.push({ pollAt: generation.deferred.pollAt, type: "deferred_poll" });
     return events;
   },
 );
+
+const eventsStream = {
+  partials,
+  retryEvents,
+  streamEvents,
+};
+
+export default eventsStream;

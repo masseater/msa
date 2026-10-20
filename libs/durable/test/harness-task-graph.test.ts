@@ -1,13 +1,18 @@
 import type { JsonValue } from "@msa/chord";
 import { type Op, applyImmutable } from "@msa/chord/delta";
-import { type ConversationId, type TaskGraph, type TaskId, defineTask } from "@msa/durable";
-import { MemoryStorage } from "@msa/durable/storage/memory";
+import durable from "@msa/durable";
+import type durableTypes from "@msa/durable/index.types";
+import memory from "@msa/durable/storage/memory";
 import { Effect } from "effect";
 import { describe, expect, it } from "vite-plus/test";
 
-import { openNodeSqliteStorage } from "../src/storage/sqlite/node.ts";
+import nodeModule from "../src/storage/sqlite/node.ts";
 import harnessTaskGraphSupport from "./harness-task-graph-support.ts";
 import support from "./support.ts";
+
+const { defineTask } = durable;
+const { openNodeSqliteStorage } = nodeModule;
+const { MemoryStorage } = memory;
 
 const { family, statuses } = harnessTaskGraphSupport;
 const {
@@ -29,7 +34,7 @@ type GraphHarness = Effect.Success<ReturnType<typeof openTasks>>["harness"];
 const observedGraph = Effect.fn("observedGraph")(function* (harness: GraphHarness) {
   const runPromise = Effect.runPromiseWith(yield* Effect.context<never>());
 
-  const seen: TaskGraph[] = [];
+  const seen: durableTypes.TaskGraph[] = [];
   const observe = () =>
     runPromise(
       Effect.gen(function* () {
@@ -58,7 +63,11 @@ const observedGraph = Effect.fn("observedGraph")(function* (harness: GraphHarnes
   return { childId, rebuild, seen, view };
 });
 
-function expectPendingParent(graph: TaskGraph, parent: TaskId, conversationId: ConversationId) {
+function expectPendingParent(
+  graph: durableTypes.TaskGraph,
+  parent: durableTypes.TaskId,
+  conversationId: durableTypes.ConversationId,
+) {
   expect(graph.tasks[String(parent)]).toEqual({
     abortRequested: false,
     background: false,
@@ -71,12 +80,12 @@ function expectPendingParent(graph: TaskGraph, parent: TaskId, conversationId: C
 }
 
 function expectWaitingParent(
-  graph: TaskGraph,
-  parent: TaskId,
-  conversationId: ConversationId,
+  graph: durableTypes.TaskGraph,
+  parent: durableTypes.TaskId,
+  conversationId: durableTypes.ConversationId,
   childId: string,
 ) {
-  const first = Number(childId) as TaskId;
+  const first = Number(childId) as durableTypes.TaskId;
   const parentNode = graph.tasks[String(parent)]!;
   expect(parentNode.state).toEqual({
     on: [first],
@@ -90,7 +99,10 @@ function expectWaitingParent(
   return { first, parentNode };
 }
 
-function expectDistinctRevisions(seen: readonly TaskGraph[], parent: TaskId) {
+function expectDistinctRevisions(
+  seen: readonly durableTypes.TaskGraph[],
+  parent: durableTypes.TaskId,
+) {
   for (let index = 1; index < seen.length; index++)
     expect(seen[index]).not.toEqual(seen[index - 1]);
   expect(seen.some((value) => value.tasks[String(parent)]?.conversations.length === 2)).toBe(true);
@@ -245,7 +257,9 @@ const buildsCommittedTasks = Effect.gen(function* () {
     [`test.graph-work#${foreground}`]: "pending",
     [`test.graph-work#${background}`]: "pending",
   });
-  expect(watch.value.tasks[String(foreground)]!.conversations).toEqual([owned as ConversationId]);
+  expect(watch.value.tasks[String(foreground)]!.conversations).toEqual([
+    owned as durableTypes.ConversationId,
+  ]);
   expect(watch.value.tasks[String(background)]!.background).toBe(true);
 
   const mirror: { replica: JsonValue } = { replica: watch.value as unknown as JsonValue };
@@ -266,7 +280,9 @@ const buildsCommittedTasks = Effect.gen(function* () {
     ["s", ["tasks", String(background)], expect.objectContaining({ abortRequested: true })],
   ]);
   expect(frames.at(-1)).toEqual([["d", ["tasks", String(background)]]]);
-  expect(Object.keys((mirror.replica as unknown as TaskGraph).tasks)).toEqual([String(foreground)]);
+  expect(Object.keys((mirror.replica as unknown as durableTypes.TaskGraph).tasks)).toEqual([
+    String(foreground),
+  ]);
   yield* awaited(watch.stop());
   gate.resolve();
   yield* awaited(harness.waitForTask(foreground, context));

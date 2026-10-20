@@ -1,13 +1,16 @@
 import type { Context } from "@msa/chord";
-import { type ToolExecutionApi, configure } from "@msa/durable";
+import durable from "@msa/durable";
+import type durableTypes from "@msa/durable/index.types";
 import { Effect } from "effect";
 
 import effectSupport from "./effect-support.ts";
 
+const { configure } = durable;
+
 const { awaited } = effectSupport;
 
 const spawnFauxChild = Effect.fn("spawnFauxChild")(function* (
-  api: ToolExecutionApi,
+  api: durableTypes.ToolExecutionApi,
   callContext: Context,
 ) {
   return yield* awaited(
@@ -26,7 +29,7 @@ const spawnFauxChild = Effect.fn("spawnFauxChild")(function* (
 });
 
 const reuseFauxChild = Effect.fn("reuseFauxChild")(function* (
-  api: ToolExecutionApi,
+  api: durableTypes.ToolExecutionApi,
   callContext: Context,
 ) {
   const runPromise = Effect.runPromiseWith(yield* Effect.context<never>());
