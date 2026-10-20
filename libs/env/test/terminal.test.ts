@@ -2,10 +2,13 @@ import { Effect } from "effect";
 import { afterAll, describe, expect, it } from "vite-plus/test";
 
 import { Connection, RemoteError } from "../src/connection.ts";
-import { openTerminal, type TerminalForeground } from "../src/terminal.ts";
-import { daemon } from "./daemon.ts";
-import { windows } from "./environment.ts";
-import { localPath, makeTempDirectory, readText, removePath } from "./platform.ts";
+import { type TerminalForeground, openTerminal } from "../src/terminal.ts";
+import daemon from "./daemon.ts";
+import environment from "./environment.ts";
+import platformModule from "./platform.ts";
+
+const { windows } = environment;
+const { localPath, makeTempDirectory, readText, removePath } = platformModule;
 
 const connections: Connection[] = [];
 const dirs: string[] = [];
@@ -51,10 +54,10 @@ function collector(): {
         ? Effect.void
         : Effect.callback<void>((resume) => {
             waiting.push({
-              text,
               resolve: () => {
                 resume(Effect.void);
               },
+              text,
             });
           }),
   };
@@ -69,12 +72,12 @@ const ttyProgram = Effect.gen(function* () {
   const output = collector();
   const terminal = yield* Effect.promise(() =>
     openTerminal(connection, {
-      cwd,
       argv: ["/bin/sh"],
-      env: { PS1: "$ ", TERM: "xterm-256color" },
       cols: 80,
-      rows: 24,
+      cwd,
+      env: { PS1: "$ ", TERM: "xterm-256color" },
       onData: output.onData,
+      rows: 24,
     }),
   );
   expect(terminal.pid).toBeGreaterThan(0);
@@ -99,12 +102,12 @@ const foregroundJob = Effect.gen(function* () {
   const output = collector();
   const terminal = yield* Effect.promise(() =>
     openTerminal(connection, {
-      cwd,
       argv: ["/bin/sh", "-i"],
-      env: { PS1: "$ ", TERM: "xterm-256color" },
       cols: 80,
-      rows: 24,
+      cwd,
+      env: { PS1: "$ ", TERM: "xterm-256color" },
       onData: output.onData,
+      rows: 24,
     }),
   );
   terminal.write("echo READY\n");
@@ -131,11 +134,11 @@ const rawBytes = Effect.gen(function* () {
   const output = collector();
   const terminal = yield* Effect.promise(() =>
     openTerminal(connection, {
-      cwd,
       argv: ["sh", "-c", "printf 'a\\377b'"],
       cols: 80,
-      rows: 24,
+      cwd,
       onData: output.onData,
+      rows: 24,
     }),
   );
   expect(yield* Effect.promise(() => terminal.exited)).toBe(0);
@@ -146,11 +149,11 @@ const inputOrder = Effect.gen(function* () {
   const { connection, cwd } = yield* connect;
   const terminal = yield* Effect.promise(() =>
     openTerminal(connection, {
-      cwd,
       argv: ["sh", "-c", "head -c 40000 > input.txt"],
       cols: 80,
-      rows: 24,
+      cwd,
       onData: ignoreData,
+      rows: 24,
     }),
   );
   let text = "";
@@ -167,11 +170,11 @@ const killOnClose = Effect.gen(function* () {
   const { connection, cwd } = yield* connect;
   const terminal = yield* Effect.promise(() =>
     openTerminal(connection, {
-      cwd,
       argv: ["sleep", "100"],
       cols: 80,
-      rows: 24,
+      cwd,
       onData: ignoreData,
+      rows: 24,
     }),
   );
   terminal.close();
@@ -182,10 +185,10 @@ const missingDirectory = Effect.flatMap(connect, ({ connection, cwd }) =>
   Effect.promise(() =>
     expect(
       openTerminal(connection, {
-        cwd: localPath.join(cwd, "missing"),
         cols: 80,
-        rows: 24,
+        cwd: localPath.join(cwd, "missing"),
         onData: ignoreData,
+        rows: 24,
       }),
     ).rejects.toBeInstanceOf(RemoteError),
   ),

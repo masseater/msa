@@ -26,16 +26,16 @@ process.stdin.on("data", (chunk: Buffer) => {
     if (type !== 1) continue;
     if (json.op === "hello") {
       send(2, id, {
-        protocol: 1,
-        version: "1.1.0",
-        os: "linux",
         arch: "x86_64",
-        home: "/",
-        separator: "/",
-        tmpdir: "/tmp",
         cwd: "/",
         driveCwds: {},
+        home: "/",
+        os: "linux",
         pid: process.pid,
+        protocol: 1,
+        separator: "/",
+        tmpdir: "/tmp",
+        version: "1.1.0",
       });
     } else {
       send(3, id, { code: "EINVAL", message: `unknown operation ${json.op}` });

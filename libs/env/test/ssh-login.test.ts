@@ -4,17 +4,21 @@ import { Effect } from "effect";
 import { describe, expect, it } from "vite-plus/test";
 
 import { RemoteExecutionEnv } from "../src/remote-env.ts";
-import { localPath, writeText } from "./platform.ts";
-import { connectTo, posixAccountShell, type SshServer, sshd, useSshd } from "./sshd.ts";
+import platform from "./platform.ts";
+import sshdModule from "./sshd.ts";
+import type sshdTypes from "./sshd.types.ts";
+
+const { localPath, writeText } = platform;
+const { connectTo, posixAccountShell, sshd, useSshd } = sshdModule;
 
 const context = BACKGROUND_CONTEXT;
 
-const loginOutput = (server: SshServer, loginShell: boolean): Effect.Effect<string> =>
+const loginOutput = (server: sshdTypes.SshServer, loginShell: boolean): Effect.Effect<string> =>
   Effect.acquireUseRelease(
-    Effect.promise(() => connectTo({ server, loginShell })),
+    Effect.promise(() => connectTo({ loginShell, server })),
     ({ connection }) =>
       Effect.gen(function* () {
-        const env = new RemoteExecutionEnv({ connection, id: "msa-env:test", cwd: server.home });
+        const env = new RemoteExecutionEnv({ connection, cwd: server.home, id: "msa-env:test" });
         const output: string[] = [];
         const onOutput = (text: string): void => {
           output.push(text);
@@ -31,7 +35,7 @@ const loginOutput = (server: SshServer, loginShell: boolean): Effect.Effect<stri
       }),
   );
 
-const loginShellOnlyWhenAsked = (server: SshServer): Effect.Effect<void> =>
+const loginShellOnlyWhenAsked = (server: sshdTypes.SshServer): Effect.Effect<void> =>
   Effect.gen(function* () {
     for (const name of [".profile", ".zprofile"]) {
       yield* writeText({

@@ -1,8 +1,10 @@
 import { Effect, Option } from "effect";
 import { describe, expect, it } from "vite-plus/test";
 
-import { daemon } from "./daemon.ts";
-import { localPath, makeTempDirectory, removePath, runText } from "./platform.ts";
+import daemon from "./daemon.ts";
+import platform from "./platform.ts";
+
+const { localPath, makeTempDirectory, removePath, runText } = platform;
 
 const fixture = localPath.join(import.meta.dirname, "watch-exit-fixture.ts");
 

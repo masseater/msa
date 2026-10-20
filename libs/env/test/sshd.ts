@@ -1,51 +1,41 @@
-import { createServer, Socket } from "node:net";
+import { Socket, createServer } from "node:net";
 import { userInfo } from "node:os";
 
 import { Effect } from "effect";
-import { afterAll, beforeAll } from "vite-plus/test";
+import { afterAll, beforeAll, inject } from "vite-plus/test";
 
-import { acceptHostKey, connectSsh, scanHostKey, type SshTarget } from "../src/ssh.ts";
-import { daemon } from "./daemon.ts";
-import {
-  type Background,
-  fileExists,
+import { Connection } from "../src/connection.ts";
+import { type SshTarget, acceptHostKey, connectSsh, scanHostKey } from "../src/ssh.ts";
+import daemon from "./daemon.ts";
+import platformModule from "./platform.ts";
+import type platformTypes from "./platform.types.ts";
+import type sshdTypes from "./sshd.types.ts";
+
+const {
   localPath,
   makeDirectory,
   makeTempDirectory,
-  readBytes,
   readText,
   removePath,
   runStatus,
   runText,
-  sha256Hex,
   startBackground,
   writeText,
-} from "./platform.ts";
+} = platformModule;
 
-export const deployedName = `msa-env-${(await Effect.runPromise(Effect.flatMap(readBytes(daemon), sha256Hex))).slice(0, 32)}`;
+const deployedName = inject("deployedName");
 
-const which = (program: string): Effect.Effect<string | undefined> =>
-  Effect.map(runText(["sh", "-c", `command -v ${program}`]), (found) =>
-    found.trim() === "" ? undefined : found.trim(),
-  );
+const sshdPath = inject("sshd");
+const sshd = sshdPath === "" ? undefined : sshdPath;
 
-const findSshd = Effect.gen(function* () {
-  if (process.platform === "win32") return undefined;
-  const found = yield* which("sshd");
-  if (found !== undefined) return found;
-  return (yield* fileExists("/usr/sbin/sshd")) ? "/usr/sbin/sshd" : undefined;
-});
+const posixAccountShell = /(?:^|\/)(?:sh|bash|dash|ksh|zsh)$/u.test(userInfo().shell ?? "");
 
-export const sshd = await Effect.runPromise(findSshd);
-
-export const posixAccountShell = /(?:^|\/)(?:sh|bash|dash|ksh|zsh)$/u.test(userInfo().shell ?? "");
-
-export const keygen = (file: string): Effect.Effect<void> =>
+const keygen = (file: string): Effect.Effect<void> =>
   Effect.flatMap(runStatus(["ssh-keygen", "-q", "-t", "ed25519", "-N", "", "-f", file]), (code) =>
     code === 0 ? Effect.void : Effect.die(new Error(`ssh-keygen failed with exit code ${code}`)),
   );
 
-export const publicKey = (file: string): Effect.Effect<string> =>
+const publicKey = (file: string): Effect.Effect<string> =>
   Effect.map(readText(`${file}.pub`), (text) => text.split(" ").slice(0, 2).join(" "));
 
 const freePort = Effect.callback<number>((resume) => {
@@ -79,13 +69,6 @@ const waitForPort = (port: number): Effect.Effect<void> =>
     return yield* Effect.die(new Error("sshd did not start"));
   });
 
-export interface SshServer {
-  readonly root: string;
-  readonly home: string;
-  readonly target: SshTarget;
-  readonly hostFingerprint: string;
-}
-
 const sshdConfig = (root: string, home: string, port: number): string =>
   [
     `Port ${port}`,
@@ -102,8 +85,8 @@ const sshdConfig = (root: string, home: string, port: number): string =>
 
 interface Running {
   root?: string;
-  child?: Background;
-  server?: SshServer;
+  child?: platformTypes.Background;
+  server?: sshdTypes.SshServer;
 }
 
 const startServer = (running: Running): Effect.Effect<void> =>
@@ -138,15 +121,15 @@ const startServer = (running: Running): Effect.Effect<void> =>
       localPath.join(root, "host_key.pub"),
     ])).split(" ")[1]!;
     const target: SshTarget = {
+      configFile: localPath.join(root, "ssh_config"),
       host: "127.0.0.1",
-      port,
-      user: userInfo().username,
+      hostKeyAlias: "msa-env-test",
       identityFile: localPath.join(root, "client_key"),
       knownHostsFile: localPath.join(root, "known_hosts"),
-      hostKeyAlias: "msa-env-test",
-      configFile: localPath.join(root, "ssh_config"),
+      port,
+      user: userInfo().username,
     };
-    running.server = { root, home, target, hostFingerprint };
+    running.server = { home, hostFingerprint, root, target };
   });
 
 const trust = (running: Running): Effect.Effect<void> =>
@@ -156,7 +139,7 @@ const trust = (running: Running): Effect.Effect<void> =>
     yield* Effect.promise(() => acceptHostKey(target, scanned.lines));
   });
 
-export function useSshd(trusted: boolean): () => SshServer {
+function useSshd(trusted: boolean): () => sshdTypes.SshServer {
   const running: Running = {};
   beforeAll(() =>
     Effect.runPromise(
@@ -174,14 +157,24 @@ export function useSshd(trusted: boolean): () => SshServer {
   return () => running.server!;
 }
 
-export interface ConnectTo {
-  readonly server: SshServer;
-  readonly loginShell?: boolean;
-}
-
-export const connectTo = ({ server, loginShell }: ConnectTo): ReturnType<typeof connectSsh> =>
+const connectTo = ({ server, loginShell }: sshdTypes.ConnectTo): ReturnType<typeof connectSsh> =>
   connectSsh({
     ...server.target,
     binary: daemon,
     ...(loginShell === undefined ? {} : { loginShell }),
   });
+
+const localConnection = (): Connection => new Connection({ command: [daemon] });
+
+const sshdModule = {
+  connectTo,
+  deployedName,
+  keygen,
+  localConnection,
+  posixAccountShell,
+  publicKey,
+  sshd,
+  useSshd,
+};
+
+export default sshdModule;

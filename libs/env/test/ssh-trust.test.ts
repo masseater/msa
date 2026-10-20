@@ -4,20 +4,24 @@ import { describe, expect, it } from "vite-plus/test";
 
 import { RemoteExecutionEnv } from "../src/remote-env.ts";
 import {
+  HostKeyChangedError,
   acceptHostKey,
   connectSsh,
   forgetHostKey,
-  HostKeyChangedError,
   scanHostKey,
   sshConnection,
 } from "../src/ssh.ts";
-import { daemon } from "./daemon.ts";
-import { localPath, readText, writeText } from "./platform.ts";
-import { keygen, publicKey, type SshServer, sshd, useSshd } from "./sshd.ts";
+import daemon from "./daemon.ts";
+import platform from "./platform.ts";
+import sshdModule from "./sshd.ts";
+import type sshdTypes from "./sshd.types.ts";
+
+const { localPath, readText, writeText } = platform;
+const { keygen, publicKey, sshd, useSshd } = sshdModule;
 
 const context = BACKGROUND_CONTEXT;
 
-const lazyStart = (server: SshServer): Effect.Effect<void> => {
+const lazyStart = (server: sshdTypes.SshServer): Effect.Effect<void> => {
   const lazyTarget = {
     ...server.target,
     knownHostsFile: localPath.join(server.root, "lazy_known_hosts"),
@@ -25,7 +29,7 @@ const lazyStart = (server: SshServer): Effect.Effect<void> => {
   const { connection, remote } = sshConnection({ ...lazyTarget, binary: daemon });
   return Effect.gen(function* () {
     expect(remote()).toBeUndefined();
-    const env = new RemoteExecutionEnv({ connection, id: "msa-env:test", cwd: server.home });
+    const env = new RemoteExecutionEnv({ connection, cwd: server.home, id: "msa-env:test" });
     const read = yield* Effect.promise(() => env.readTextFile("missing.txt", context));
     expect(read.ok ? "ok" : read.error.message).toMatch(/not trusted/u);
     const command = yield* Effect.promise(() =>
@@ -48,7 +52,7 @@ const lazyStart = (server: SshServer): Effect.Effect<void> => {
   );
 };
 
-const acceptsOnlyAlias = (server: SshServer): Effect.Effect<void> =>
+const acceptsOnlyAlias = (server: sshdTypes.SshServer): Effect.Effect<void> =>
   Effect.gen(function* () {
     const knownHosts = localPath.join(server.root, "accept_known_hosts");
     const scoped = { ...server.target, knownHostsFile: knownHosts };
@@ -81,7 +85,7 @@ const acceptsOnlyAlias = (server: SshServer): Effect.Effect<void> =>
     expect(yield* readText(knownHosts)).toBe(`msa-env-test ${second}\n`);
   });
 
-const refusesChangedKey = (server: SshServer): Effect.Effect<void> =>
+const refusesChangedKey = (server: sshdTypes.SshServer): Effect.Effect<void> =>
   Effect.gen(function* () {
     const other = localPath.join(server.root, "other_key");
     yield* keygen(other);
@@ -89,7 +93,7 @@ const refusesChangedKey = (server: SshServer): Effect.Effect<void> =>
     yield* writeText({ path: knownHosts, text: `msa-env-test ${yield* publicKey(other)}\n` });
     yield* Effect.promise(() =>
       expect(
-        connectSsh({ ...server.target, knownHostsFile: knownHosts, binary: daemon }),
+        connectSsh({ ...server.target, binary: daemon, knownHostsFile: knownHosts }),
       ).rejects.toBeInstanceOf(HostKeyChangedError),
     );
   });

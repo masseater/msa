@@ -4,8 +4,10 @@ import { createBashTool, createReadTool } from "@msa/durable/tools";
 import { Effect, Schema } from "effect";
 import { afterAll, describe, expect, it } from "vite-plus/test";
 
-import { context, normalize, pairs, random } from "./differential-support.ts";
-import { randomOperation } from "./random-operation.ts";
+import differentialSupport from "./differential-support.ts";
+import randomOperation from "./random-operation.ts";
+
+const { context, normalize, pairs, random } = differentialSupport;
 
 const environments = pairs();
 afterAll(environments.close);
@@ -37,7 +39,7 @@ const FILES: [string, string | Uint8Array][] = [
 
 const toolCases = (): [Tool, object][] => [
   [createReadTool(), { path: "text.txt" }],
-  [createReadTool(), { path: "text.txt", offset: 2, limit: 1 }],
+  [createReadTool(), { limit: 1, offset: 2, path: "text.txt" }],
   [createReadTool(), { path: "big.txt" }],
   [createReadTool(), { path: "long.txt" }],
   [createReadTool(), { path: "bom.txt" }],
@@ -51,12 +53,12 @@ const toolCases = (): [Tool, object][] => [
 
 const api = (env: ExecutionEnv, output: string[]): ToolExecutionApi =>
   ({
-    env,
-    outputWindow: undefined,
-    output: (chunk: string | Uint8Array) => output.push(String(chunk)),
-    retainedOutput: () => ({ text: output.join(""), truncated: false }),
-    diagnostic: () => undefined,
     details: () => Promise.resolve(),
+    diagnostic: () => undefined,
+    env,
+    output: (chunk: string | Uint8Array) => output.push(String(chunk)),
+    outputWindow: undefined,
+    retainedOutput: () => ({ text: output.join(""), truncated: false }),
   }) as unknown as ToolExecutionApi;
 
 interface ToolRun {
@@ -68,7 +70,7 @@ interface ToolRun {
 const runTool = ({ env, tool, args }: ToolRun): Effect.Effect<unknown> => {
   const output: string[] = [];
   return Effect.tryPromise(() => tool.execute(args as never, api(env, output), context)).pipe(
-    Effect.map((result) => ({ result, output: output.join("") })),
+    Effect.map((result) => ({ output: output.join(""), result })),
     Effect.catch((failure) =>
       Effect.succeed({ error: (failure.cause as Error).message, output: output.join("") }),
     ),
@@ -82,8 +84,8 @@ const toolResults = Effect.gen(function* () {
     yield* Effect.promise(() => remote.writeFile(path, content, context));
   }
   for (const [tool, args] of toolCases()) {
-    const expected = normalize(yield* runTool({ env: local, tool, args }), roots[0]);
-    const actual = normalize(yield* runTool({ env: remote, tool, args }), roots[1]);
+    const expected = normalize(yield* runTool({ args, env: local, tool }), roots[0]);
+    const actual = normalize(yield* runTool({ args, env: remote, tool }), roots[1]);
     expect(actual, yield* toJson(args)).toEqual(expected);
   }
 });

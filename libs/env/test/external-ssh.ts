@@ -1,38 +1,48 @@
 import { DateTime, Effect, Schema } from "effect";
 
-import type { Connection } from "../src/connection.ts";
 import {
+  type SshTarget,
   acceptHostKey,
   connectSsh,
   deployDaemon,
   detectPlatform,
-  type RemotePlatform,
-  type SshTarget,
   scanHostKey,
 } from "../src/ssh.ts";
-import { daemon } from "./daemon.ts";
-import { optionalEnv } from "./environment.ts";
-import { localPath, makeTempDirectory, removePath } from "./platform.ts";
+import daemon from "./daemon.ts";
+import environment from "./environment.ts";
+import type externalSshTypes from "./external-ssh.types.ts";
+import platform from "./platform.ts";
 
-export type Connected = { connection: Connection; remote: RemotePlatform };
+const { optionalEnv } = environment;
+const { localPath, makeTempDirectory, removePath } = platform;
 
-export const host = optionalEnv("MSA_ENV_SSH_HOST");
-const root = await Effect.runPromise(makeTempDirectory("msa-env-ssh-external-"));
-let connected: Promise<Connected> | undefined;
+const host = optionalEnv("MSA_ENV_SSH_HOST");
+const created: { root?: string } = {};
+let connected: Promise<externalSshTypes.Connected> | undefined;
 
-function externalTarget(): SshTarget {
+const rootDirectory = Effect.suspend(() =>
+  created.root === undefined
+    ? Effect.tap(makeTempDirectory("msa-env-ssh-external-"), (directory) =>
+        Effect.sync(() => {
+          created.root = directory;
+        }),
+      )
+    : Effect.succeed(created.root),
+);
+
+function externalTarget(root: string): SshTarget {
   const user = optionalEnv("MSA_ENV_SSH_USER");
   const port = optionalEnv("MSA_ENV_SSH_PORT");
   const identityFile = optionalEnv("MSA_ENV_SSH_KEY");
   const ssh = optionalEnv("MSA_ENV_SSH_PROGRAM");
   return {
     host: host!,
+    hostKeyAlias: "msa-env-external",
+    knownHostsFile: localPath.join(root, "known_hosts"),
     ...(user === undefined ? {} : { user }),
     ...(port === undefined ? {} : { port: Number(port) }),
     ...(identityFile === undefined ? {} : { identityFile }),
     ...(ssh === undefined ? {} : { ssh }),
-    knownHostsFile: localPath.join(root, "known_hosts"),
-    hostKeyAlias: "msa-env-external",
   };
 }
 
@@ -44,7 +54,7 @@ const log = (text: string): void => {
 };
 
 const establish = Effect.gen(function* () {
-  const target = externalTarget();
+  const target = externalTarget(yield* rootDirectory);
   log("scanning the host key");
   const scanned = yield* Effect.promise(() => scanHostKey(target));
   yield* Effect.promise(() => acceptHostKey(target, scanned.lines));
@@ -67,15 +77,23 @@ const establish = Effect.gen(function* () {
   return result;
 });
 
-export function connectExternal(): Promise<Connected> {
+function connectExternal(): Promise<externalSshTypes.Connected> {
   connected ??= Effect.runPromise(establish);
   return connected;
 }
 
-export const closeExternal = (): Promise<void> =>
+const closeExternal = (): Promise<void> =>
   Effect.runPromise(
     Effect.gen(function* () {
       if (connected !== undefined) (yield* Effect.promise(() => connected!)).connection.close();
-      yield* removePath(root);
+      if (created.root !== undefined) yield* removePath(created.root);
     }),
   );
+
+const externalSsh = {
+  closeExternal,
+  connectExternal,
+  host,
+};
+
+export default externalSsh;

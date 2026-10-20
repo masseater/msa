@@ -15,7 +15,7 @@ const program = Effect.gen(function* () {
       return starts === 1 ? Promise.resolve([daemon]) : Promise.reject(new Error("offline"));
     },
   });
-  const env = new RemoteExecutionEnv({ connection, id: "msa-env:watch-exit", cwd });
+  const env = new RemoteExecutionEnv({ connection, cwd, id: "msa-env:watch-exit" });
   const watched = yield* Effect.promise(() =>
     env.watch([{ path: "." }], () => {}, BACKGROUND_CONTEXT),
   );
@@ -28,4 +28,4 @@ const program = Effect.gen(function* () {
   });
 });
 
-await Effect.runPromise(program);
+void Effect.runPromise(program);

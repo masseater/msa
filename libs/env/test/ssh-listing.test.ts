@@ -3,22 +3,24 @@ import { getOrThrow } from "@msa/durable/env";
 import { Effect } from "effect";
 import { describe, expect, it } from "vite-plus/test";
 
-import { Connection } from "../src/connection.ts";
 import { LocalExecutionEnv } from "../src/list-files.ts";
 import { RemoteExecutionEnv } from "../src/remote-env.ts";
-import { daemon } from "./daemon.ts";
-import { expectedListing, makeTree } from "./listing-tree.ts";
-import { connectTo, type SshServer, sshd, useSshd } from "./sshd.ts";
+import listingTree from "./listing-tree.ts";
+import sshdModule from "./sshd.ts";
+import type sshdTypes from "./sshd.types.ts";
+
+const { expectedListing, makeTree } = listingTree;
+const { connectTo, localConnection, sshd, useSshd } = sshdModule;
 
 const context = BACKGROUND_CONTEXT;
 
-const listsLikeLocal = (server: SshServer): Effect.Effect<void> =>
+const listsLikeLocal = (server: sshdTypes.SshServer): Effect.Effect<void> =>
   Effect.gen(function* () {
     yield* makeTree(server.home);
     const { connection } = yield* Effect.promise(() => connectTo({ server }));
-    const local = new Connection({ command: [daemon] });
+    const local = localConnection();
     yield* Effect.gen(function* () {
-      const remote = new RemoteExecutionEnv({ connection, id: "msa-env:test", cwd: server.home });
+      const remote = new RemoteExecutionEnv({ connection, cwd: server.home, id: "msa-env:test" });
       const listing = getOrThrow(
         yield* Effect.promise(() => remote.listFiles("tree", { exclude: ["skip"] }, context)),
       );

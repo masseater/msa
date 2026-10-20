@@ -2,17 +2,13 @@ import { Effect } from "effect";
 
 import { Connection } from "../src/connection.ts";
 import { RemoteExecutionEnv } from "../src/remote-env.ts";
-import { daemon } from "./daemon.ts";
-import { makeTempDirectory, removePath } from "./platform.ts";
+import daemon from "./daemon.ts";
+import platform from "./platform.ts";
+import type remoteEnvironmentTypes from "./remote-environment.types.ts";
 
-export interface RemoteEnvironments {
-  readonly environment: Effect.Effect<{ env: RemoteExecutionEnv; connection: Connection }>;
-  readonly tempDir: Effect.Effect<string>;
-  readonly track: (connection: Connection) => void;
-  readonly close: () => Promise<void>;
-}
+const { makeTempDirectory, removePath } = platform;
 
-export function remoteEnvironments(): RemoteEnvironments {
+function remoteEnvironments(): remoteEnvironmentTypes.RemoteEnvironments {
   const connections: Connection[] = [];
   const dirs: string[] = [];
   const tempDir = Effect.tap(makeTempDirectory("msa-env-remote-"), (cwd) =>
@@ -21,15 +17,6 @@ export function remoteEnvironments(): RemoteEnvironments {
     }),
   );
   return {
-    environment: Effect.map(tempDir, (cwd) => {
-      const connection = new Connection({ command: [daemon] });
-      connections.push(connection);
-      return { env: new RemoteExecutionEnv({ connection, id: "msa-env:test", cwd }), connection };
-    }),
-    tempDir,
-    track: (connection) => {
-      connections.push(connection);
-    },
     close: () =>
       Effect.runPromise(
         Effect.gen(function* () {
@@ -37,5 +24,16 @@ export function remoteEnvironments(): RemoteEnvironments {
           for (const dir of dirs) yield* removePath(dir);
         }),
       ),
+    environment: Effect.map(tempDir, (cwd) => {
+      const connection = new Connection({ command: [daemon] });
+      connections.push(connection);
+      return { connection, env: new RemoteExecutionEnv({ connection, cwd, id: "msa-env:test" }) };
+    }),
+    tempDir,
+    track: (connection) => {
+      connections.push(connection);
+    },
   };
 }
+
+export default remoteEnvironments;

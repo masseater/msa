@@ -1,13 +1,11 @@
 import { Effect } from "effect";
 
-import { localPath, makeTempDirectory, removePath } from "./platform.ts";
+import platform from "./platform.ts";
+import type tempDirTypes from "./temp-dir.types.ts";
 
-export interface TempDirUse {
-  readonly prefix: string;
-  readonly use: (directory: string) => Promise<void>;
-}
+const { localPath, makeTempDirectory, removePath } = platform;
 
-export const withTempDir = ({ prefix, use }: TempDirUse): Promise<void> =>
+const withTempDir = ({ prefix, use }: tempDirTypes.TempDirUse): Promise<void> =>
   Effect.runPromise(
     Effect.acquireUseRelease(
       makeTempDirectory(prefix),
@@ -16,5 +14,12 @@ export const withTempDir = ({ prefix, use }: TempDirUse): Promise<void> =>
     ),
   );
 
-export const gitBash = (programFiles: string | undefined): string =>
+const gitBash = (programFiles: string | undefined): string =>
   localPath.join(programFiles ?? "C:\\Program Files", "Git", "bin", "bash.exe");
+
+const tempDir = {
+  gitBash,
+  withTempDir,
+};
+
+export default tempDir;

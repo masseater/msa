@@ -2,16 +2,21 @@ import type { ExecutionEnv } from "@msa/durable/env";
 import { Effect } from "effect";
 import { afterAll, describe, expect, it } from "vite-plus/test";
 
-import { context, normalize, pairs, type Root } from "./differential-support.ts";
-import { windows } from "./environment.ts";
-import { localPath, runStatus } from "./platform.ts";
+import differentialSupport from "./differential-support.ts";
+import type differentialSupportTypes from "./differential-support.types.ts";
+import environment from "./environment.ts";
+import platformModule from "./platform.ts";
+
+const { context, normalize, pairs } = differentialSupport;
+const { windows } = environment;
+const { localPath, runStatus } = platformModule;
 
 const environments = pairs();
 afterAll(environments.close);
 
 interface Rooted {
   readonly env: ExecutionEnv;
-  readonly root: Root;
+  readonly root: differentialSupportTypes.Root;
 }
 
 const writeFifo = (fifo: string, text: string): Effect.Effect<void> =>
@@ -31,7 +36,7 @@ const readFifo = ({ env, root }: Rooted): Effect.Effect<Record<string, unknown>>
     const fifoBytes = yield* Effect.promise(() => env.readBinaryFile("fifo", context));
     yield* writeFifo(fifo, "x");
     const fifoLines = yield* Effect.promise(() => env.readTextLines("fifo", undefined, context));
-    return { fifoText, fifoBytes, fifoLines };
+    return { fifoBytes, fifoLines, fifoText };
   });
 
 const readDirectory = ({ env }: Rooted): Effect.Effect<Record<string, unknown>> =>
@@ -41,7 +46,7 @@ const readDirectory = ({ env }: Rooted): Effect.Effect<Record<string, unknown>> 
       ? yield* Effect.promise(() => dirReader.value.readLine(context))
       : undefined;
     if (dirReader.ok) yield* Effect.promise(() => dirReader.value.close(context));
-    return { dirReaderOpened: dirReader.ok, dirLine };
+    return { dirLine, dirReaderOpened: dirReader.ok };
   });
 
 const specialReads = (rooted: Rooted): Effect.Effect<unknown> =>
@@ -51,13 +56,13 @@ const specialReads = (rooted: Rooted): Effect.Effect<unknown> =>
     const dir = yield* readDirectory(rooted);
     return normalize(
       {
-        nullText: yield* Effect.promise(() => env.readTextFile("/dev/null", context)),
         nullBytes: yield* Effect.promise(() => env.readBinaryFile("/dev/null", context)),
         nullLines: yield* Effect.promise(() => env.readTextLines("/dev/null", undefined, context)),
+        nullText: yield* Effect.promise(() => env.readTextFile("/dev/null", context)),
         ...fifo,
         ...dir,
-        dirText: yield* Effect.promise(() => env.readTextFile("dir", context)),
         dirBytes: yield* Effect.promise(() => env.readBinaryFile("dir", context)),
+        dirText: yield* Effect.promise(() => env.readTextFile("dir", context)),
       },
       rooted.root,
     );

@@ -1,10 +1,12 @@
 import { BACKGROUND_CONTEXT, withAbortSignal } from "@msa/chord/context";
-import { getOrThrow, type ShellOutputInfo } from "@msa/durable/env";
+import { type ShellOutputInfo, getOrThrow } from "@msa/durable/env";
 import { Clock, Effect, Exit, Scope } from "effect";
 import { afterAll, describe, expect, it } from "vite-plus/test";
 
-import { localPath, makeDirectory, writeText } from "./platform.ts";
-import { remoteEnvironments } from "./remote-environment.ts";
+import platform from "./platform.ts";
+import remoteEnvironments from "./remote-environment.ts";
+
+const { localPath, makeDirectory, writeText } = platform;
 
 const context = BACKGROUND_CONTEXT;
 const environments = remoteEnvironments();
@@ -23,7 +25,6 @@ const windowedOutput = Effect.gen(function* () {
     env.exec(
       ["sh", "-c", `yes 0123456789abcdef | head -c ${total}`],
       {
-        window: { maxBytes: 1000, maxLines: 20, minIntervalMs: 20, bytesPerSecond: 1_000_000 },
         onOutput: (text: string, _context, info: ShellOutputInfo) => {
           delivered += Buffer.byteLength(text);
           if (info.skipped !== undefined) {
@@ -32,6 +33,7 @@ const windowedOutput = Effect.gen(function* () {
           }
           tail += text;
         },
+        window: { bytesPerSecond: 1_000_000, maxBytes: 1000, maxLines: 20, minIntervalMs: 20 },
       },
       context,
     ),

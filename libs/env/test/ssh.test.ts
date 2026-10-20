@@ -4,31 +4,29 @@ import { Effect } from "effect";
 import { describe, expect, it } from "vite-plus/test";
 
 import { RemoteExecutionEnv } from "../src/remote-env.ts";
-import { acceptHostKey, connectSsh, HostKeyUnknownError, scanHostKey } from "../src/ssh.ts";
-import { daemon } from "./daemon.ts";
-import {
-  localPath,
-  makeDirectory,
-  modifiedAt,
-  readBytes,
-  readNames,
-  writeText,
-} from "./platform.ts";
-import { deployedName, type SshServer, sshd, useSshd } from "./sshd.ts";
+import { HostKeyUnknownError, acceptHostKey, connectSsh, scanHostKey } from "../src/ssh.ts";
+import daemon from "./daemon.ts";
+import platform from "./platform.ts";
+import sshdModule from "./sshd.ts";
+import type sshdTypes from "./sshd.types.ts";
+
+const { localPath, makeDirectory, modifiedAt, readBytes, readNames, writeText } = platform;
+const { deployedName, sshd, useSshd } = sshdModule;
 
 const context = BACKGROUND_CONTEXT;
 
-const tools = (server: SshServer): string => localPath.join(server.home, ".msa/mobile/tools");
+const tools = (server: sshdTypes.SshServer): string =>
+  localPath.join(server.home, ".msa/mobile/tools");
 
 const sameAsDaemon = (file: string): Effect.Effect<boolean> =>
   Effect.map(Effect.all([readBytes(file), readBytes(daemon)]), ([deployed, built]) =>
     Buffer.from(deployed).equals(built),
   );
 
-const connect = (server: SshServer): ReturnType<typeof connectSsh> =>
+const connect = (server: sshdTypes.SshServer): ReturnType<typeof connectSsh> =>
   connectSsh({ ...server.target, binary: daemon });
 
-const runOverSsh = (server: SshServer): Effect.Effect<void> =>
+const runOverSsh = (server: sshdTypes.SshServer): Effect.Effect<void> =>
   Effect.acquireUseRelease(
     Effect.promise(() => connect(server)),
     ({ connection, remote }) =>
@@ -37,7 +35,7 @@ const runOverSsh = (server: SshServer): Effect.Effect<void> =>
         expect(yield* sameAsDaemon(localPath.join(tools(server), deployedName))).toBe(true);
         const names = yield* readNames(tools(server));
         expect(names.filter((name) => name.startsWith("msa-env-"))).toEqual([deployedName]);
-        const env = new RemoteExecutionEnv({ connection, id: "msa-env:test", cwd: server.home });
+        const env = new RemoteExecutionEnv({ connection, cwd: server.home, id: "msa-env:test" });
         getOrThrow(yield* Effect.promise(() => env.writeFile("over-ssh.txt", "hello", context)));
         const read = yield* Effect.promise(() => env.readTextFile("over-ssh.txt", context));
         expect(getOrThrow(read)).toBe("hello");
@@ -57,7 +55,7 @@ const runOverSsh = (server: SshServer): Effect.Effect<void> =>
       }),
   );
 
-const deploysOnceTrusted = (server: SshServer): Effect.Effect<void> =>
+const deploysOnceTrusted = (server: sshdTypes.SshServer): Effect.Effect<void> =>
   Effect.gen(function* () {
     yield* Effect.promise(() =>
       expect(connect(server)).rejects.toBeInstanceOf(HostKeyUnknownError),
@@ -73,7 +71,7 @@ const deploysOnceTrusted = (server: SshServer): Effect.Effect<void> =>
     yield* runOverSsh(server);
   });
 
-const reusesVerified = (server: SshServer): Effect.Effect<void> =>
+const reusesVerified = (server: sshdTypes.SshServer): Effect.Effect<void> =>
   Effect.gen(function* () {
     const file = localPath.join(tools(server), deployedName);
     const before = yield* modifiedAt(file);
@@ -94,7 +92,7 @@ const reusesVerified = (server: SshServer): Effect.Effect<void> =>
     );
   });
 
-const verifiesAfterLoss = (server: SshServer): Effect.Effect<void> =>
+const verifiesAfterLoss = (server: sshdTypes.SshServer): Effect.Effect<void> =>
   Effect.acquireUseRelease(
     Effect.promise(() => connect(server)),
     ({ connection }) =>

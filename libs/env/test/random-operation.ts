@@ -1,7 +1,9 @@
 import type { ExecutionEnv } from "@msa/durable/env";
 import { Effect } from "effect";
 
-import { context } from "./differential-support.ts";
+import differentialSupport from "./differential-support.ts";
+
+const { context } = differentialSupport;
 
 const NAMES = ["a.txt", "b", "dir", "dir/c.txt", "dir/sub", "dir/sub/d.bin", "missing", "a.txt/x"];
 const CONTENTS: (string | Uint8Array)[] = [
@@ -116,7 +118,7 @@ const CHOICES: readonly (readonly [string, (pick: Picker) => Operation])[] = [
       const n = pick.name();
       const r = pick.flag();
       const f = pick.flag();
-      return (env) => env.remove(n, { recursive: r, force: f }, context);
+      return (env) => env.remove(n, { force: f, recursive: r }, context);
     },
   ],
   [
@@ -164,16 +166,18 @@ function picker(next: () => number, args: unknown[]): Picker {
     return value;
   };
   return {
-    name: () => pick(NAMES[Math.floor(next() * NAMES.length)]!),
     content: () => pick(CONTENTS[Math.floor(next() * CONTENTS.length)]!),
     flag: () => pick(next() < 0.5),
+    name: () => pick(NAMES[Math.floor(next() * NAMES.length)]!),
     small: (limit) => pick(Math.floor(next() * limit)),
   };
 }
 
-export function randomOperation(next: () => number): { label: string; run: Operation } {
+function randomOperation(next: () => number): { label: string; run: Operation } {
   const args: unknown[] = [];
   const [label, make] = CHOICES[Math.floor(next() * CHOICES.length)]!;
   const run = make(picker(next, args));
   return { label: `${label}(${args.map((arg) => JSON.stringify(arg)).join(", ")})`, run };
 }
+
+export default randomOperation;

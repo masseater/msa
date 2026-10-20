@@ -6,9 +6,11 @@ import { afterAll, describe, expect, it } from "vite-plus/test";
 import { Connection } from "../src/connection.ts";
 import { RemoteExecutionEnv } from "../src/remote-env.ts";
 import { nodePlatform } from "../src/remote-info.ts";
-import { daemon } from "./daemon.ts";
-import { localPath } from "./platform.ts";
-import { remoteEnvironments } from "./remote-environment.ts";
+import daemon from "./daemon.ts";
+import platformModule from "./platform.ts";
+import remoteEnvironments from "./remote-environment.ts";
+
+const { localPath } = platformModule;
 
 const context = BACKGROUND_CONTEXT;
 const environments = remoteEnvironments();
@@ -23,13 +25,13 @@ const nodeNames = Effect.gen(function* () {
   expect(platform).toBe(process.platform);
   const rosetta = process.platform === "darwin" && process.arch === "arm64" && arch === "x64";
   if (!rosetta) expect(arch).toBe(process.arch);
-  expect(nodePlatform({ os: "windows", arch: "aarch64" })).toEqual({
-    platform: "win32",
+  expect(nodePlatform({ arch: "aarch64", os: "windows" })).toEqual({
     arch: "arm64",
+    platform: "win32",
   });
-  expect(nodePlatform({ os: "macos", arch: "x86_64" })).toEqual({
-    platform: "darwin",
+  expect(nodePlatform({ arch: "x86_64", os: "macos" })).toEqual({
     arch: "x64",
+    platform: "darwin",
   });
 });
 
@@ -40,7 +42,7 @@ const oldDaemonListing = Effect.gen(function* () {
     command: [process.execPath, localPath.join(import.meta.dirname, "old-daemon.ts")],
   });
   environments.track(connection);
-  const old = new RemoteExecutionEnv({ connection, id: "msa-env:old", cwd: env.cwd });
+  const old = new RemoteExecutionEnv({ connection, cwd: env.cwd, id: "msa-env:old" });
   const listed = yield* Effect.promise(() => old.listFiles(".", undefined, context));
   expect(listed.ok ? "ok" : listed.error.code).toBe("not_supported");
 });
@@ -80,7 +82,7 @@ const retriedStart = Effect.gen(function* () {
     },
   });
   environments.track(connection);
-  const env = new RemoteExecutionEnv({ connection, id: "msa-env:test", cwd });
+  const env = new RemoteExecutionEnv({ connection, cwd, id: "msa-env:test" });
   const offline = yield* Effect.promise(() => env.readTextFile("missing.txt", context));
   expect(offline.ok ? "ok" : [offline.error.code, offline.error.message]).toEqual([
     "unknown",
