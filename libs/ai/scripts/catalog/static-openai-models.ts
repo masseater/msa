@@ -1,9 +1,8 @@
 import type { ClassifierModel, Model } from "../../src/types.ts";
-import {
-  OPENAI_LONG_CONTEXT_INPUT_THRESHOLD,
-  OPENAI_STANDARD_COSTS,
-  withOpenAiLongContextPricing,
-} from "./openai-pricing.ts";
+import openaiPricing from "./openai-pricing.ts";
+
+const { OPENAI_LONG_CONTEXT_INPUT_THRESHOLD, OPENAI_STANDARD_COSTS, withOpenAiLongContextPricing } =
+  openaiPricing;
 
 type StandardOpenAiModelId = keyof typeof OPENAI_STANDARD_COSTS;
 
@@ -18,33 +17,33 @@ const STANDARD_OPENAI_MODEL_NAMES: readonly (readonly [StandardOpenAiModelId, st
 ];
 
 const standardOpenAiFields = ([id, name]: readonly [StandardOpenAiModelId, string]) => ({
+  cost: withOpenAiLongContextPricing(OPENAI_STANDARD_COSTS[id]),
   id,
+  input: ["text", "image"] as ("text" | "image")[],
+  maxTokens: 128000,
   name,
   reasoning: true,
-  input: ["text", "image"] as ("text" | "image")[],
-  cost: withOpenAiLongContextPricing(OPENAI_STANDARD_COSTS[id]),
-  maxTokens: 128000,
 });
 
-export const MISSING_OPENAI_MODELS: Model<"openai-responses">[] = [
+const MISSING_OPENAI_MODELS: Model<"openai-responses">[] = [
   ...STANDARD_OPENAI_MODEL_NAMES.map((entry) => ({
     ...standardOpenAiFields(entry),
     api: "openai-responses" as const,
     baseUrl: "https://api.openai.com/v1",
-    provider: "openai",
     contextWindow: OPENAI_LONG_CONTEXT_INPUT_THRESHOLD,
+    provider: "openai",
   })),
   {
-    id: "gpt-5-chat-latest",
-    name: "GPT-5 Chat Latest",
     api: "openai-responses",
     baseUrl: "https://api.openai.com/v1",
+    contextWindow: 128000,
+    cost: { cacheRead: 0.125, cacheWrite: 0, input: 1.25, output: 10 },
+    id: "gpt-5-chat-latest",
+    input: ["text", "image"],
+    maxTokens: 16384,
+    name: "GPT-5 Chat Latest",
     provider: "openai",
     reasoning: false,
-    input: ["text", "image"],
-    cost: { input: 1.25, output: 10, cacheRead: 0.125, cacheWrite: 0 },
-    contextWindow: 128000,
-    maxTokens: 16384,
   },
 ];
 
@@ -58,12 +57,12 @@ const codexModel = (
 ): Model<"openai-codex-responses"> => ({
   ...fields,
   api: "openai-codex-responses",
-  provider: "openai-codex",
   baseUrl: CODEX_BASE_URL,
   maxTokens: CODEX_MAX_TOKENS,
+  provider: "openai-codex",
 });
 
-export const CODEX_MODELS: Model<"openai-codex-responses">[] = [
+const CODEX_MODELS: Model<"openai-codex-responses">[] = [
   ...STANDARD_OPENAI_MODEL_NAMES.map((entry) =>
     codexModel({
       ...standardOpenAiFields(entry),
@@ -71,33 +70,41 @@ export const CODEX_MODELS: Model<"openai-codex-responses">[] = [
     }),
   ),
   codexModel({
+    contextWindow: 128000,
+    cost: { cacheRead: 0.175, cacheWrite: 0, input: 1.75, output: 14 },
     id: "gpt-5.3-codex-spark",
+    input: ["text"],
     name: "GPT-5.3 Codex Spark",
     reasoning: true,
-    input: ["text"],
-    cost: { input: 1.75, output: 14, cacheRead: 0.175, cacheWrite: 0 },
-    contextWindow: 128000,
   }),
   codexModel({
+    contextWindow: CODEX_CONTEXT,
+    cost: withOpenAiLongContextPricing({ cacheRead: 0.5, cacheWrite: 0, input: 5, output: 30 }),
     id: "gpt-5.5",
+    input: ["text", "image"],
     name: "GPT-5.5",
     reasoning: true,
-    input: ["text", "image"],
-    cost: withOpenAiLongContextPricing({ input: 5, output: 30, cacheRead: 0.5, cacheWrite: 0 }),
-    contextWindow: CODEX_CONTEXT,
   }),
 ];
 
-export const OPENAI_CLASSIFIER_MODELS: ClassifierModel<"openai-decisions">[] = [
+const OPENAI_CLASSIFIER_MODELS: ClassifierModel<"openai-decisions">[] = [
   {
-    type: "classifier",
-    id: "gpt-6-luna",
-    name: "GPT-6 Luna",
     api: "openai-decisions",
-    provider: "openai",
     baseUrl: "https://api.openai.com/v1",
-    input: ["text", "image"],
-    cost: withOpenAiLongContextPricing({ input: 0.1, output: 0, cacheRead: 0, cacheWrite: 0 }),
     contextWindow: 922000,
+    cost: withOpenAiLongContextPricing({ cacheRead: 0, cacheWrite: 0, input: 0.1, output: 0 }),
+    id: "gpt-6-luna",
+    input: ["text", "image"],
+    name: "GPT-6 Luna",
+    provider: "openai",
+    type: "classifier",
   },
 ];
+
+const staticOpenaiModels = {
+  CODEX_MODELS,
+  MISSING_OPENAI_MODELS,
+  OPENAI_CLASSIFIER_MODELS,
+};
+
+export default staticOpenaiModels;

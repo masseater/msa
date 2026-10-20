@@ -6,46 +6,46 @@ import { currentTimeMillis } from "../src/utils/clock.ts";
 
 function makeTextOnlyModel(): Model<"openai-completions"> {
   return {
-    id: "test-model",
-    name: "Test Model",
     api: "openai-completions",
-    provider: "openai",
     baseUrl: "https://example.invalid/v1",
-    reasoning: false,
-    input: ["text"],
-    cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0 },
     contextWindow: 128000,
+    cost: { cacheRead: 0, cacheWrite: 0, input: 0, output: 0 },
+    id: "test-model",
+    input: ["text"],
     maxTokens: 16000,
+    name: "Test Model",
+    provider: "openai",
+    reasoning: false,
   };
 }
 
 describe("lax message content handling", () => {
   it("normalizes null/missing content to an empty array instead of crashing", () => {
     const messages = [
-      { role: "user", content: null, timestamp: currentTimeMillis() },
+      { content: null, role: "user", timestamp: currentTimeMillis() },
       {
-        role: "assistant",
-        content: null,
         api: "openai-completions",
-        provider: "openai",
+        content: null,
         model: "test-model",
-        usage: {
-          input: 0,
-          output: 0,
-          cacheRead: 0,
-          cacheWrite: 0,
-          totalTokens: 0,
-          cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0, total: 0 },
-        },
+        provider: "openai",
+        role: "assistant",
         stopReason: "stop",
         timestamp: currentTimeMillis(),
+        usage: {
+          cacheRead: 0,
+          cacheWrite: 0,
+          cost: { cacheRead: 0, cacheWrite: 0, input: 0, output: 0, total: 0 },
+          input: 0,
+          output: 0,
+          totalTokens: 0,
+        },
       },
       {
+        isError: false,
         role: "toolResult",
+        timestamp: currentTimeMillis(),
         toolCallId: "call_1",
         toolName: "web_search",
-        isError: false,
-        timestamp: currentTimeMillis(),
       },
     ] as unknown as Message[];
 

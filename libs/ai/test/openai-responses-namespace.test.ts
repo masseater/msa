@@ -1,4 +1,4 @@
-import { Effect } from "effect";
+import { Effect, Stream } from "effect";
 import type { ResponseStreamEvent } from "openai/resources/responses/responses.js";
 import { describe, expect, it } from "vite-plus/test";
 
@@ -10,102 +10,114 @@ import { AssistantMessageEventStream } from "../src/utils/event-stream.ts";
 import { normalizeContext } from "../src/utils/transcript.ts";
 
 const model: Model<"openai-responses"> = {
-  id: "gpt-5.4",
-  name: "GPT-5.4",
   api: "openai-responses",
-  provider: "openai",
   baseUrl: "https://api.openai.com/v1",
-  reasoning: true,
-  input: ["text"],
-  cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0 },
   contextWindow: 400000,
+  cost: { cacheRead: 0, cacheWrite: 0, input: 0, output: 0 },
+  id: "gpt-5.4",
+  input: ["text"],
   maxTokens: 128000,
+  name: "GPT-5.4",
+  provider: "openai",
+  reasoning: true,
 };
 
 function createOutput(): AssistantMessage {
   return {
-    role: "assistant",
-    content: [],
     api: model.api,
-    provider: model.provider,
+    content: [],
     model: model.id,
-    usage: {
-      input: 0,
-      output: 0,
-      cacheRead: 0,
-      cacheWrite: 0,
-      totalTokens: 0,
-      cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0, total: 0 },
-    },
+    provider: model.provider,
+    role: "assistant",
     stopReason: "pending",
     timestamp: currentTimeMillis(),
+    usage: {
+      cacheRead: 0,
+      cacheWrite: 0,
+      cost: { cacheRead: 0, cacheWrite: 0, input: 0, output: 0, total: 0 },
+      input: 0,
+      output: 0,
+      totalTokens: 0,
+    },
   };
 }
 
-async function* createFunctionCallEvents(): AsyncIterable<ResponseStreamEvent> {
-  yield {
-    type: "response.output_item.added",
-    sequence_number: 0,
-    output_index: 0,
-    item: {
-      type: "function_call",
-      id: "fc_test",
-      call_id: "call_test",
-      name: "lookup",
-      arguments: "",
-    },
-  } as ResponseStreamEvent;
-  yield {
-    type: "response.output_item.done",
-    sequence_number: 1,
-    output_index: 0,
-    item: {
-      type: "function_call",
-      id: "fc_test",
-      call_id: "call_test",
-      name: "lookup",
-      arguments: '{"value":"hello"}',
-      namespace: "dynamic_tools",
-    },
-  } as ResponseStreamEvent;
-  yield {
-    type: "response.completed",
-    sequence_number: 2,
-    response: { id: "resp_test", status: "completed" },
-  } as ResponseStreamEvent;
+function createFunctionCallEvents(): AsyncIterable<ResponseStreamEvent> {
+  return Stream.toAsyncIterable(
+    Stream.fromIterable(
+      (function* () {
+        yield {
+          item: {
+            arguments: "",
+            call_id: "call_test",
+            id: "fc_test",
+            name: "lookup",
+            type: "function_call",
+          },
+          output_index: 0,
+          sequence_number: 0,
+          type: "response.output_item.added",
+        } as ResponseStreamEvent;
+        yield {
+          item: {
+            arguments: '{"value":"hello"}',
+            call_id: "call_test",
+            id: "fc_test",
+            name: "lookup",
+            namespace: "dynamic_tools",
+            type: "function_call",
+          },
+          output_index: 0,
+          sequence_number: 1,
+          type: "response.output_item.done",
+        } as ResponseStreamEvent;
+        yield {
+          response: { id: "resp_test", status: "completed" },
+          sequence_number: 2,
+          type: "response.completed",
+        } as ResponseStreamEvent;
+      })(),
+    ),
+  );
 }
 
-async function* createCustomToolCallEvents(): AsyncIterable<ResponseStreamEvent> {
-  yield {
-    type: "response.output_item.added",
-    sequence_number: 0,
-    output_index: 0,
-    item: {
-      type: "custom_tool_call",
-      id: "ctc_test",
-      call_id: "call_test",
-      name: "query",
-      input: "",
-    },
-  } as ResponseStreamEvent;
-  yield {
-    type: "response.output_item.done",
-    sequence_number: 1,
-    output_index: 0,
-    item: {
-      type: "custom_tool_call",
-      id: "ctc_test",
-      call_id: "call_test",
-      name: "query",
-      input: "hello",
-      namespace: "dynamic_tools",
-    },
-  } as ResponseStreamEvent;
-  yield {
-    type: "response.completed",
-    sequence_number: 2,
-    response: { id: "resp_test", status: "completed" },
-  } as ResponseStreamEvent;
+function createCustomToolCallEvents(): AsyncIterable<ResponseStreamEvent> {
+  return Stream.toAsyncIterable(
+    Stream.fromIterable(
+      (function* () {
+        yield {
+          item: {
+            call_id: "call_test",
+            id: "ctc_test",
+            input: "",
+            name: "query",
+            type: "custom_tool_call",
+          },
+          output_index: 0,
+          sequence_number: 0,
+          type: "response.output_item.added",
+        } as ResponseStreamEvent;
+        yield {
+          item: {
+            call_id: "call_test",
+            id: "ctc_test",
+            input: "hello",
+            name: "query",
+            namespace: "dynamic_tools",
+            type: "custom_tool_call",
+          },
+          output_index: 0,
+          sequence_number: 1,
+          type: "response.output_item.done",
+        } as ResponseStreamEvent;
+        yield {
+          response: { id: "resp_test", status: "completed" },
+          sequence_number: 2,
+          type: "response.completed",
+        } as ResponseStreamEvent;
+      })(),
+    ),
+  );
 }
 
 function getToolCall(output: AssistantMessage): ToolCall {
@@ -132,82 +144,84 @@ describe("OpenAI Responses terminal messages", () => {
 });
 
 describe("OpenAI Responses tool-call namespaces", () => {
-  it("round-trips a function namespace received only on output_item.done", async () => {
-    const output = createOutput();
-    await Effect.runPromise(
-      processResponsesStream(
-        createFunctionCallEvents(),
-        output,
-        new AssistantMessageEventStream(),
-        model,
-      ),
-    );
+  it("round-trips a function namespace received only on output_item.done", () =>
+    Effect.runPromise(
+      Effect.gen(function* () {
+        const output = createOutput();
+        yield* processResponsesStream(
+          createFunctionCallEvents(),
+          output,
+          new AssistantMessageEventStream(),
+          model,
+        );
 
-    const toolCall = getToolCall(output);
-    expect(toolCall).toMatchObject({
-      id: "call_test|fc_test",
-      name: "lookup",
-      arguments: { value: "hello" },
-      namespace: "dynamic_tools",
-    });
+        const toolCall = getToolCall(output);
+        expect(toolCall).toMatchObject({
+          arguments: { value: "hello" },
+          id: "call_test|fc_test",
+          name: "lookup",
+          namespace: "dynamic_tools",
+        });
 
-    const replayed = convertResponsesMessages(
-      model,
-      normalizeContext({ messages: [output] }),
-      new Set(["openai"]),
-    ).find((item) => item.type === "function_call");
-    expect(replayed).toMatchObject({
-      type: "function_call",
-      id: "fc_test",
-      call_id: "call_test",
-      name: "lookup",
-      arguments: '{"value":"hello"}',
-      namespace: "dynamic_tools",
-    });
-  });
+        const replayed = convertResponsesMessages(
+          model,
+          normalizeContext({ messages: [output] }),
+          new Set(["openai"]),
+        ).find((item) => item.type === "function_call");
+        expect(replayed).toMatchObject({
+          arguments: '{"value":"hello"}',
+          call_id: "call_test",
+          id: "fc_test",
+          name: "lookup",
+          namespace: "dynamic_tools",
+          type: "function_call",
+        });
+      }),
+    ));
 });
 
 describe("OpenAI Responses tool-call namespaces", () => {
-  it("round-trips a custom-tool namespace received only on output_item.done", async () => {
-    const output = createOutput();
-    const grammarToolInputProperties = new Map([["query", "input"]]);
-    await Effect.runPromise(
-      processResponsesStream(
-        createCustomToolCallEvents(),
-        output,
-        new AssistantMessageEventStream(),
-        model,
-        {
-          grammarToolInputProperties,
-        },
-      ),
-    );
+  it("round-trips a custom-tool namespace received only on output_item.done", () =>
+    Effect.runPromise(
+      Effect.gen(function* () {
+        const output = createOutput();
+        const grammarToolInputProperties = new Map([["query", "input"]]);
+        yield* processResponsesStream(
+          createCustomToolCallEvents(),
+          output,
+          new AssistantMessageEventStream(),
+          model,
+          {
+            grammarToolInputProperties,
+          },
+        );
 
-    const toolCall = getToolCall(output);
-    expect(toolCall).toMatchObject({
-      id: "call_test|ctc_test",
-      name: "query",
-      arguments: { input: "hello" },
-      namespace: "dynamic_tools",
-    });
+        const toolCall = getToolCall(output);
+        expect(toolCall).toMatchObject({
+          arguments: { input: "hello" },
+          id: "call_test|ctc_test",
+          name: "query",
+          namespace: "dynamic_tools",
+        });
 
-    const replayed = convertResponsesMessages(
-      model,
-      normalizeContext({ messages: [output] }),
-      new Set(["openai"]),
-      {
-        grammarToolInputProperties,
-      },
-    ).find((item) => item.type === "custom_tool_call");
-    expect(replayed).toMatchObject({
-      type: "custom_tool_call",
-      id: "ctc_test",
-      call_id: "call_test",
-      name: "query",
-      input: "hello",
-      namespace: "dynamic_tools",
-    });
-  });
+        const replayed = convertResponsesMessages(
+          model,
+          normalizeContext({ messages: [output] }),
+          new Set(["openai"]),
+          {
+            grammarToolInputProperties,
+          },
+        ).find((item) => item.type === "custom_tool_call");
+        expect(replayed).toMatchObject({
+          call_id: "call_test",
+          id: "ctc_test",
+          input: "hello",
+          name: "query",
+          namespace: "dynamic_tools",
+          type: "custom_tool_call",
+        });
+      }),
+    ));
 });
 
 describe("OpenAI Responses tool-call namespaces", () => {
@@ -215,18 +229,18 @@ describe("OpenAI Responses tool-call namespaces", () => {
     const output = createOutput();
     output.content.push(
       {
-        type: "toolCall",
+        arguments: { value: "hello" },
         id: "call_function|fc_test",
         name: "lookup",
-        arguments: { value: "hello" },
         namespace: "dynamic_tools",
+        type: "toolCall",
       },
       {
-        type: "toolCall",
+        arguments: { input: "hello" },
         id: "call_custom|ctc_test",
         name: "query",
-        arguments: { input: "hello" },
         namespace: "dynamic_tools",
+        type: "toolCall",
       },
     );
     const targetModels: Model<Api>[] = [
@@ -235,9 +249,9 @@ describe("OpenAI Responses tool-call namespaces", () => {
       {
         ...model,
         api: "openai-codex-responses",
-        provider: "openai-codex",
         id: "gpt-5.3-codex-spark",
         name: "GPT-5.3 Codex Spark",
+        provider: "openai-codex",
       },
     ];
 
@@ -264,10 +278,10 @@ describe("OpenAI Responses tool-call namespaces", () => {
   it("does not add a namespace to ordinary function calls", () => {
     const output = createOutput();
     output.content.push({
-      type: "toolCall",
+      arguments: { value: "hello" },
       id: "call_test|fc_test",
       name: "lookup",
-      arguments: { value: "hello" },
+      type: "toolCall",
     });
 
     const replayed = convertResponsesMessages(

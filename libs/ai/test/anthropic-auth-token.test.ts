@@ -20,23 +20,23 @@ vi.mock("@anthropic-ai/sdk", () => {
   function createSseResponse(): Response {
     const body = [
       `event: message_start\ndata: ${JSON.stringify({
-        type: "message_start",
         message: {
           id: "msg_test",
           usage: { input_tokens: 1, output_tokens: 0 },
         },
+        type: "message_start",
       })}\n`,
       `event: message_delta\ndata: ${JSON.stringify({
-        type: "message_delta",
         delta: { stop_reason: "end_turn" },
+        type: "message_delta",
         usage: { output_tokens: 1 },
       })}\n`,
       `event: message_stop\ndata: ${JSON.stringify({ type: "message_stop" })}\n`,
     ].join("\n");
 
     return new Response(body, {
-      status: 200,
       headers: { "content-type": "text/event-stream" },
+      status: 200,
     });
   }
 
@@ -63,29 +63,29 @@ const MSA_USER_AGENT = `pi (${platform()} ${release()}; ${arch()})`;
 const neverAbortedSignal = new AbortController().signal;
 
 const context = normalizeContext({
+  messages: [{ content: "Hello", role: "user", timestamp: currentTimeMillis() }],
   systemPrompt: "System prompt.",
-  messages: [{ role: "user", content: "Hello", timestamp: currentTimeMillis() }],
 });
 
 const anthropicModel: Model<"anthropic-messages"> = {
-  id: "claude-test",
-  name: "Claude Test",
   api: "anthropic-messages",
-  provider: "anthropic-api",
   baseUrl: "https://api.anthropic.com",
-  reasoning: false,
-  input: ["text"],
-  cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0 },
   contextWindow: 100000,
+  cost: { cacheRead: 0, cacheWrite: 0, input: 0, output: 0 },
+  id: "claude-test",
+  input: ["text"],
   maxTokens: 4096,
+  name: "Claude Test",
+  provider: "anthropic-api",
+  reasoning: false,
 };
 
 const compatibleModel: Model<"anthropic-messages"> = {
   ...anthropicModel,
+  baseUrl: "https://example.test/anthropic",
   id: "custom-model",
   name: "Custom Model",
   provider: "custom",
-  baseUrl: "https://example.test/anthropic",
 };
 
 afterEach(() => {
@@ -105,8 +105,8 @@ describe("Anthropic auth token env", () => {
                 env: (name) =>
                   Promise.resolve(
                     {
-                      ANTHROPIC_AUTH_TOKEN: "auth-token",
                       ANTHROPIC_API_KEY: "api-key",
+                      ANTHROPIC_AUTH_TOKEN: "auth-token",
                     }[name],
                   ),
                 fileExists: () => Promise.resolve(false),

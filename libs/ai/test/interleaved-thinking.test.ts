@@ -2,19 +2,17 @@ import { Clock, Effect } from "effect";
 import { Type } from "typebox";
 import { describe, expect, it } from "vite-plus/test";
 
-import { completeSimple, getModel } from "../src/compat.ts";
+import { completeSimple } from "../src/compat.ts";
 import { getEnvApiKey } from "../src/env-api-keys.ts";
-import type {
-  Api,
-  Context,
-  Model,
-  StopReason,
-  Tool,
-  ToolCall,
-  ToolResultMessage,
-} from "../src/types.ts";
+import type { Api, Context, Model, StopReason, Tool, ToolCall } from "../src/types.ts";
 import { StringEnum } from "../src/utils/typebox-helpers.ts";
-import { hasValue } from "./env.ts";
+import env from "./env.ts";
+import modelChoice from "./model-choice.ts";
+
+const { hasValue } = env;
+const { chooseModel, compatValue } = modelChoice;
+
+type Reasoning = "high" | "xhigh";
 
 const calculatorSchema = Type.Object({
   a: Type.Number({ description: "First number" }),
@@ -25,8 +23,8 @@ const calculatorSchema = Type.Object({
 });
 
 const calculatorTool: Tool<typeof calculatorSchema> = {
-  name: "calculator",
   description: "Perform basic arithmetic operations",
+  name: "calculator",
   parameters: calculatorSchema,
 };
 
@@ -73,84 +71,106 @@ function evaluateCalculatorCall(toolCall: ToolCall): number {
   }
 }
 
-const assertSecondToolCallWithInterleavedThinking = Effect.fn(
-  "assertSecondToolCallWithInterleavedThinking",
-)(function* <TApi extends Api>(llm: Model<TApi>, reasoning: "high" | "xhigh") {
-  const context: Context = {
-    systemPrompt: [
-      "You are a helpful assistant that must use tools for arithmetic.",
-      "Always think before every tool call, not just the first one.",
-      "Do not answer with plain text when a tool call is required.",
-    ].join(" "),
-    messages: [
-      {
-        role: "user",
-        content: [
-          "Use calculator to calculate 328 * 29.",
-          "You must call the calculator tool exactly once.",
-          "Provide the final answer based on the best guess given the tool result, even if it seems unreliable.",
-          "Start by thinking about the steps you will take to solve the problem.",
-        ].join(" "),
-        timestamp: yield* Clock.currentTimeMillis,
-      },
-    ],
-    tools: [calculatorTool],
-  };
-
-  const firstResponse = yield* Effect.promise(() => completeSimple(llm, context, { reasoning }));
-
-  expect(firstResponse.stopReason, `Error: ${firstResponse.errorMessage}`).toBe(
-    "toolUse" satisfies StopReason,
-  );
-  expect(firstResponse.content.some((block) => block.type === "thinking")).toBe(true);
-  expect(firstResponse.content.some((block) => block.type === "toolCall")).toBe(true);
-
-  const firstToolCall = firstResponse.content.find((block) => block.type === "toolCall");
-  expect(firstToolCall?.type).toBe("toolCall");
-  if (firstToolCall === undefined || firstToolCall.type !== "toolCall") {
-    throw new Error("Expected first response to include a tool call");
-  }
-
-  context.messages.push(firstResponse);
-
-  const correctAnswer = evaluateCalculatorCall(firstToolCall);
-  const firstToolResult: ToolResultMessage = {
-    role: "toolResult",
-    toolCallId: firstToolCall.id,
-    toolName: firstToolCall.name,
-    content: [{ type: "text", text: `The answer is ${correctAnswer} or ${correctAnswer * 2}.` }],
-    isError: false,
-    timestamp: yield* Clock.currentTimeMillis,
-  };
-  context.messages.push(firstToolResult);
-
-  const secondResponse = yield* Effect.promise(() => completeSimple(llm, context, { reasoning }));
-
-  expect(secondResponse.stopReason, `Error: ${secondResponse.errorMessage}`).toBe(
-    "stop" satisfies StopReason,
-  );
-  expect(secondResponse.content.some((block) => block.type === "thinking")).toBe(true);
-  expect(secondResponse.content.some((block) => block.type === "text")).toBe(true);
+const calculatorContext = (timestamp: number): Context => ({
+  messages: [
+    {
+      content: [
+        "Use calculator to calculate 328 * 29.",
+        "You must call the calculator tool exactly once.",
+        "Provide the final answer based on the best guess given the tool result, even if it seems unreliable.",
+        "Start by thinking about the steps you will take to solve the problem.",
+      ].join(" "),
+      role: "user",
+      timestamp,
+    },
+  ],
+  systemPrompt: [
+    "You are a helpful assistant that must use tools for arithmetic.",
+    "Always think before every tool call, not just the first one.",
+    "Do not answer with plain text when a tool call is required.",
+  ].join(" "),
+  tools: [calculatorTool],
 });
+
+const thinksBeforeTheToolCall = <TApi extends Api>(
+  llm: Model<TApi>,
+  reasoning: Reasoning,
+  context: Context,
+) =>
+  Effect.gen(function* () {
+    const response = yield* Effect.promise(() => completeSimple(llm, context, { reasoning }));
+    expect(response.stopReason, `Error: ${response.errorMessage}`).toBe(
+      "toolUse" satisfies StopReason,
+    );
+    expect(response.content.some((block) => block.type === "thinking")).toBe(true);
+    const toolCall = response.content.find((block) => block.type === "toolCall");
+    expect(toolCall?.type).toBe("toolCall");
+    if (toolCall === undefined || toolCall.type !== "toolCall")
+      return yield* Effect.die(new Error("Expected first response to include a tool call"));
+    context.messages.push(response);
+    return toolCall;
+  });
+
+const thinksAgainAfterTheToolResult = <TApi extends Api>(
+  llm: Model<TApi>,
+  reasoning: Reasoning,
+  context: Context,
+  toolCall: ToolCall,
+) =>
+  Effect.gen(function* () {
+    const correctAnswer = evaluateCalculatorCall(toolCall);
+    context.messages.push({
+      content: [{ text: `The answer is ${correctAnswer} or ${correctAnswer * 2}.`, type: "text" }],
+      isError: false,
+      role: "toolResult",
+      timestamp: yield* Clock.currentTimeMillis,
+      toolCallId: toolCall.id,
+      toolName: toolCall.name,
+    });
+    const response = yield* Effect.promise(() => completeSimple(llm, context, { reasoning }));
+    expect(response.stopReason, `Error: ${response.errorMessage}`).toBe(
+      "stop" satisfies StopReason,
+    );
+    expect(response.content.some((block) => block.type === "thinking")).toBe(true);
+    expect(response.content.some((block) => block.type === "text")).toBe(true);
+  });
+
+const assertSecondToolCallWithInterleavedThinking = <TApi extends Api>(
+  llm: Model<TApi>,
+  reasoning: Reasoning,
+) =>
+  Effect.gen(function* () {
+    const context = calculatorContext(yield* Clock.currentTimeMillis);
+    const toolCall = yield* thinksBeforeTheToolCall(llm, reasoning, context);
+    yield* thinksAgainAfterTheToolResult(llm, reasoning, context, toolCall);
+  });
 
 const hasAnthropicCredentials = hasValue(getEnvApiKey("anthropic-api"));
 
+const budgetThinkingModel = chooseModel(
+  "anthropic-api",
+  "budget thinking",
+  (model) => model.reasoning && compatValue(model, "forceAdaptiveThinking") !== true,
+);
+
+const adaptiveThinkingModel = chooseModel(
+  "anthropic-api",
+  "adaptive thinking",
+  (model) => compatValue(model, "forceAdaptiveThinking") === true,
+);
+
 describe.skipIf(!hasAnthropicCredentials)("Anthropic interleaved thinking", () => {
-  it("should do interleaved thinking on Claude Opus 4.5", { retry: 3 }, () =>
-    Effect.runPromise(
-      Effect.gen(function* () {
-        const llm = getModel("anthropic-api", "claude-opus-4-5");
-        yield* assertSecondToolCallWithInterleavedThinking(llm, "high");
-      }),
-    ),
+  it(
+    `should do interleaved thinking with budget thinking on ${budgetThinkingModel.id}`,
+    { retry: 3 },
+    () =>
+      Effect.runPromise(assertSecondToolCallWithInterleavedThinking(budgetThinkingModel, "high")),
   );
 
-  it("should do interleaved thinking on Claude Opus 4.6", { retry: 3 }, () =>
-    Effect.runPromise(
-      Effect.gen(function* () {
-        const llm = getModel("anthropic-api", "claude-opus-4-6");
-        yield* assertSecondToolCallWithInterleavedThinking(llm, "high");
-      }),
-    ),
+  it(
+    `should do interleaved thinking with adaptive thinking on ${adaptiveThinkingModel.id}`,
+    { retry: 3 },
+    () =>
+      Effect.runPromise(assertSecondToolCallWithInterleavedThinking(adaptiveThinkingModel, "high")),
   );
 });

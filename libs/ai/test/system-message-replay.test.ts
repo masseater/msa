@@ -15,28 +15,28 @@ import {
 } from "../src/utils/transcript.ts";
 
 function tool(name: string, description = `${name} tool`): Tool {
-  return { name, description, parameters: Type.Object({}) };
+  return { description, name, parameters: Type.Object({}) };
 }
 
 const transcript = normalizeContext({
   messages: [
     {
-      role: "system",
       content: "base",
-      sections: { a: "<a>1</a>", b: "<b>1</b>" },
-      toolsAdded: [tool("first")],
-      timestamp: 10,
-    },
-    { role: "user", content: "hello", timestamp: 11 },
-    { role: "system", content: "also do this", timestamp: 12 },
-    { role: "assistant", content: [{ type: "text", text: "ok" }], timestamp: 13 } as never,
-    {
       role: "system",
+      sections: { a: "<a>1</a>", b: "<b>1</b>" },
+      timestamp: 10,
+      toolsAdded: [tool("first")],
+    },
+    { content: "hello", role: "user", timestamp: 11 },
+    { content: "also do this", role: "system", timestamp: 12 },
+    { content: [{ text: "ok", type: "text" }], role: "assistant", timestamp: 13 } as never,
+    {
       content: "",
+      role: "system",
       sections: { a: "<a>2</a>", b: null, c: "<c>1</c>" },
-      toolsRemoved: [{ name: "first" }],
-      toolsAdded: [tool("second")],
       timestamp: 14,
+      toolsAdded: [tool("second")],
+      toolsRemoved: [{ name: "first" }],
     },
   ],
 });
@@ -45,11 +45,11 @@ describe("system message replay", () => {
   test("replays content, sections, and tools into one leading message", () => {
     const current = getCurrentSystemMessage(transcript.messages);
     expect(current).toEqual({
-      role: "system",
       content: "base\n\nalso do this",
+      role: "system",
       sections: { a: "<a>2</a>", c: "<c>1</c>" },
-      toolsAdded: [tool("second")],
       timestamp: 10,
+      toolsAdded: [tool("second")],
     });
     expect(getCurrentSystemPrompt(transcript.messages)).toBe(
       "base\n\nalso do this\n\n<a>2</a>\n\n<c>1</c>",
@@ -67,7 +67,7 @@ describe("system message replay", () => {
   });
 
   test("replay of a transcript without system messages is empty", () => {
-    const context = normalizeContext({ messages: [{ role: "user", content: "hi", timestamp: 1 }] });
+    const context = normalizeContext({ messages: [{ content: "hi", role: "user", timestamp: 1 }] });
     expect(getCurrentSystemMessage(context.messages)).toBeUndefined();
     expect(getCurrentSystemPrompt(context.messages)).toBe("");
     expect(collapseSystemMessages(context).messages).toEqual(context.messages);
@@ -78,13 +78,13 @@ describe("system message replay", () => {
   test("a late full patch on a transcript without a leading message replays as the prompt", () => {
     const context: TranscriptContext = normalizeContext({
       messages: [
-        { role: "user", content: "old session", timestamp: 1 },
+        { content: "old session", role: "user", timestamp: 1 },
         {
-          role: "system",
           content: "",
+          role: "system",
           sections: { preamble: "You are msa." },
-          toolsAdded: [tool("x")],
           timestamp: 2,
+          toolsAdded: [tool("x")],
         },
       ],
     });
@@ -113,13 +113,13 @@ describe("system message replay", () => {
   });
 
   test("normalizes the legacy prompt and tool fields into a leading system message", () => {
-    const messages: Message[] = [{ role: "user", content: "hi", timestamp: 1 }];
+    const messages: Message[] = [{ content: "hi", role: "user", timestamp: 1 }];
     expect(normalizeContext({ messages })).toEqual({ messages });
-    expect(normalizeContext({ systemPrompt: "", tools: [], messages })).toEqual({ messages });
+    expect(normalizeContext({ messages, systemPrompt: "", tools: [] })).toEqual({ messages });
     expect(
-      normalizeContext({ systemPrompt: "be brief", tools: [tool("a")], messages }).messages,
+      normalizeContext({ messages, systemPrompt: "be brief", tools: [tool("a")] }).messages,
     ).toEqual([
-      { role: "system", content: "be brief", toolsAdded: [tool("a")], timestamp: 0 },
+      { content: "be brief", role: "system", timestamp: 0, toolsAdded: [tool("a")] },
       ...messages,
     ]);
   });
@@ -150,15 +150,15 @@ describe("system message replay", () => {
     expect(hasToolRedefinitions(transcript.messages)).toBe(false);
     const additive = normalizeContext({
       messages: [
-        { role: "system", content: "", toolsAdded: [tool("a")], timestamp: 1 },
-        { role: "system", content: "", toolsAdded: [tool("b")], timestamp: 2 },
+        { content: "", role: "system", timestamp: 1, toolsAdded: [tool("a")] },
+        { content: "", role: "system", timestamp: 2, toolsAdded: [tool("b")] },
       ],
     });
     expect(hasNonAdditiveToolChanges(additive.messages)).toBe(false);
     const redeclared = normalizeContext({
       messages: [
-        { role: "system", content: "", toolsAdded: [tool("a")], timestamp: 1 },
-        { role: "system", content: "", toolsAdded: [tool("a", "changed")], timestamp: 2 },
+        { content: "", role: "system", timestamp: 1, toolsAdded: [tool("a")] },
+        { content: "", role: "system", timestamp: 2, toolsAdded: [tool("a", "changed")] },
       ],
     });
     expect(hasNonAdditiveToolChanges(redeclared.messages)).toBe(true);

@@ -7,36 +7,36 @@ import type { AssistantMessage, Usage } from "../src/types.ts";
 import { currentTimeMillis } from "../src/utils/clock.ts";
 
 const usage: Usage = {
-  input: 0,
-  output: 0,
   cacheRead: 0,
   cacheWrite: 0,
+  cost: { cacheRead: 0, cacheWrite: 0, input: 0, output: 0, total: 0 },
+  input: 0,
+  output: 0,
   totalTokens: 0,
-  cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0, total: 0 },
 };
 
 describe("OpenAI Responses message ID conversion", () => {
   it("generates unique fallback message IDs for multiple text blocks in one assistant turn", () => {
     const model = getModel("openai-codex", "gpt-5.5");
     const assistant: AssistantMessage = {
-      role: "assistant",
-      content: [
-        { type: "thinking", thinking: "private reasoning" },
-        { type: "text", text: "visible answer" },
-      ],
       api: "anthropic-messages",
-      provider: "anthropic-api",
+      content: [
+        { thinking: "private reasoning", type: "thinking" },
+        { text: "visible answer", type: "text" },
+      ],
       model: "claude-opus-4-8",
-      usage,
+      provider: "anthropic-api",
+      role: "assistant",
       stopReason: "stop",
       timestamp: currentTimeMillis() - 1000,
+      usage,
     };
     const context = normalizeContext({
-      systemPrompt: "You are concise.",
       messages: [
-        { role: "user", content: "hello", timestamp: currentTimeMillis() - 2000 },
+        { content: "hello", role: "user", timestamp: currentTimeMillis() - 2000 },
         assistant,
       ],
+      systemPrompt: "You are concise.",
     });
 
     const input = convertResponsesMessages(

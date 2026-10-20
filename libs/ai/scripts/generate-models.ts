@@ -1,16 +1,20 @@
 import { Cause, Console, Effect, ManagedRuntime } from "effect";
 
 import type { Model } from "../src/types.ts";
-import { assembleChatModels } from "./catalog/catalog-assembly.ts";
-import { type BuiltCatalog, buildCatalog } from "./catalog/catalog-build.ts";
-import { readGeneratorOptions } from "./catalog/options.ts";
-import { publishCatalog } from "./catalog/publish.ts";
-import { loadUpstreamModels } from "./catalog/upstream-models.ts";
-import { ScriptFiles, scriptFilesLayer } from "./script-files.ts";
+import assembleChatModels from "./catalog/catalog-assembly.ts";
+import buildCatalog from "./catalog/catalog-build.ts";
+import type catalogBuildTypes from "./catalog/catalog-build.types.ts";
+import optionsModule from "./catalog/options.ts";
+import publishCatalog from "./catalog/publish.ts";
+import loadUpstreamModels from "./catalog/upstream-models.ts";
+import scriptFiles from "./script-files.ts";
+
+const { readGeneratorOptions } = optionsModule;
+const { ScriptFiles, scriptFilesLayer } = scriptFiles;
 
 const logStatistics = Effect.fn("logStatistics")(function* (
   chat: readonly Model<any>[],
-  catalog: BuiltCatalog,
+  catalog: catalogBuildTypes.BuiltCatalog,
 ) {
   yield* Console.log(`\nModel Statistics:`);
   yield* Console.log(`  Total tool-capable models: ${chat.length}`);
@@ -28,9 +32,9 @@ const generateModels = Effect.gen(function* () {
   const files = yield* ScriptFiles;
   const options = yield* readGeneratorOptions(process.argv.slice(2));
   const upstream = yield* loadUpstreamModels(options.strict);
-  const chat = assembleChatModels({ upstream: upstream.chat, reasoning: upstream.reasoning });
+  const chat = assembleChatModels({ reasoning: upstream.reasoning, upstream: upstream.chat });
   const catalog = buildCatalog({ ...upstream, chat });
-  yield* publishCatalog({ packageRoot: files.join(import.meta.dirname, ".."), catalog, options });
+  yield* publishCatalog({ catalog, options, packageRoot: files.join(import.meta.dirname, "..") });
   yield* logStatistics(chat, catalog);
 });
 

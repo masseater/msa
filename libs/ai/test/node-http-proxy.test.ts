@@ -1,10 +1,12 @@
 import { afterEach, describe, expect, it, vi } from "vite-plus/test";
 
 import {
-  resolveHttpProxyUrlForTarget,
   UNSUPPORTED_PROXY_PROTOCOL_MESSAGE,
+  resolveHttpProxyUrlForTarget,
 } from "../src/utils/node-http-proxy.ts";
-import { envValue } from "./env.ts";
+import env from "./env.ts";
+
+const { envValue } = env;
 
 const PROXY_ENV_KEYS = [
   "HTTP_PROXY",

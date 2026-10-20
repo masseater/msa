@@ -14,17 +14,17 @@ class PayloadCaptured extends Data.TaggedError("PayloadCaptured")<{ readonly mes
 
 function createModel(): Model<"anthropic-messages"> {
   return {
-    id: "claude-opus-4-8",
-    name: "Claude Opus 4.8",
     api: "anthropic-messages",
-    provider: "test-anthropic",
     baseUrl: "http://127.0.0.1:9",
-    reasoning: true,
-    input: ["text"],
-    cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0 },
-    contextWindow: 200000,
-    maxTokens: 32000,
     compat: { forceAdaptiveThinking: true, supportsStrictTools: true },
+    contextWindow: 200000,
+    cost: { cacheRead: 0, cacheWrite: 0, input: 0, output: 0 },
+    id: "claude-opus-4-8",
+    input: ["text"],
+    maxTokens: 32000,
+    name: "Claude Opus 4.8",
+    provider: "test-anthropic",
+    reasoning: true,
   };
 }
 
@@ -33,8 +33,8 @@ function createTool(
   constrainedSampling?: Tool["constrainedSampling"],
 ): Tool {
   return {
-    name: "lookup",
     description: "Look up a value",
+    name: "lookup",
     parameters,
     ...(constrainedSampling !== undefined && constrainedSampling !== false
       ? { constrainedSampling }
@@ -43,7 +43,7 @@ function createTool(
 }
 
 function createStrictTool(parameters: Tool["parameters"]): Tool {
-  return createTool(parameters, { type: "json_schema", strict: "prefer" });
+  return createTool(parameters, { strict: "prefer", type: "json_schema" });
 }
 
 const captureFirstTool = Effect.fn("captureFirstTool")(function* (tool: Tool) {
@@ -52,7 +52,7 @@ const captureFirstTool = Effect.fn("captureFirstTool")(function* (tool: Tool) {
     createModel(),
     normalizeContext({
       messages: [
-        { role: "user", content: "Use the tool", timestamp: yield* Clock.currentTimeMillis },
+        { content: "Use the tool", role: "user", timestamp: yield* Clock.currentTimeMillis },
       ],
       tools: [tool],
     }),
@@ -85,15 +85,15 @@ describe("Anthropic strict tool schemas", () => {
         const legacyTool = yield* captureFirstTool(createTool(legacyParameters));
         expect(legacyTool.strict).toBeUndefined();
         expect(legacyTool.input_schema).toEqual({
-          type: "object",
           properties: legacyParameters.properties,
           required: legacyParameters.required,
+          type: "object",
         });
 
         const strictTool = yield* captureFirstTool(
           createStrictTool(
             Type.Object(
-              { value: Type.String(), optional: Type.Optional(Type.Number()) },
+              { optional: Type.Optional(Type.Number()), value: Type.String() },
               { title: "StrictLookupInput" },
             ),
           ),
@@ -101,8 +101,8 @@ describe("Anthropic strict tool schemas", () => {
         expect(strictTool.strict).toBe(true);
         expect(strictTool.input_schema).toMatchObject({
           additionalProperties: false,
-          required: ["value", "optional"],
           properties: { optional: { anyOf: [{ type: "number" }, { type: "null" }] } },
+          required: ["optional", "value"],
           title: "StrictLookupInput",
         });
       }),
@@ -114,7 +114,7 @@ describe("Anthropic strict tool schemas", () => {
     Effect.runPromise(
       Effect.gen(function* () {
         const unsupportedParameters: Tool["parameters"][] = [
-          Type.Object({ timeoutMs: Type.Optional(Type.Integer({ minimum: 1, maximum: 300000 })) }),
+          Type.Object({ timeoutMs: Type.Optional(Type.Integer({ maximum: 300000, minimum: 1 })) }),
           Type.Object({
             options: Type.Object({ tags: Type.Array(Type.String(), { minItems: 2 }) }),
           }),
@@ -128,9 +128,9 @@ describe("Anthropic strict tool schemas", () => {
         const supportedTool = yield* captureFirstTool(
           createStrictTool(
             Type.Object({
-              code: Type.String({ minLength: 1, maxLength: 1000, pattern: "^[a-z]+$" }),
-              url: Type.String({ format: "uri" }),
+              code: Type.String({ maxLength: 1000, minLength: 1, pattern: "^[a-z]+$" }),
               tags: Type.Array(Type.String(), { minItems: 1 }),
+              url: Type.String({ format: "uri" }),
             }),
           ),
         );

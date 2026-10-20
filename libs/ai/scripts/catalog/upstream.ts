@@ -1,30 +1,20 @@
 import { Cause, Console, Data, Effect } from "effect";
 
 import { httpRequest } from "../../src/utils/http.ts";
+import type upstreamTypes from "./upstream.types.ts";
 
-export class UpstreamError extends Data.TaggedError("UpstreamError")<{
+class UpstreamError extends Data.TaggedError("UpstreamError")<{
   readonly message: string;
 }> {}
 
-export interface UpstreamRequest {
-  readonly url: string;
-  readonly label: string;
-}
-
-export const fetchJson = Effect.fn("fetchJson")(function* ({ url, label }: UpstreamRequest) {
+const fetchJson = Effect.fn("fetchJson")(function* ({ url, label }: upstreamTypes.UpstreamRequest) {
   const reply = yield* httpRequest({ url });
   if (!reply.ok) return yield* new UpstreamError({ message: `${label} returned ${reply.status}` });
   return yield* reply.json;
 });
 
-export interface UpstreamFallback<A> {
-  readonly label: string;
-  readonly strict: boolean;
-  readonly fallback: () => A;
-}
-
-export const withFallback =
-  <A>({ label, strict, fallback }: UpstreamFallback<A>) =>
+const withFallback =
+  <A>({ label, strict, fallback }: upstreamTypes.UpstreamFallback<A>) =>
   <E, R>(effect: Effect.Effect<A, E, R>): Effect.Effect<A, E, R> =>
     Effect.catchCause(effect, (cause) =>
       Effect.andThen(
@@ -32,3 +22,11 @@ export const withFallback =
         strict ? Effect.failCause(cause) : Effect.sync(fallback),
       ),
     );
+
+const upstream = {
+  UpstreamError,
+  fetchJson,
+  withFallback,
+};
+
+export default upstream;

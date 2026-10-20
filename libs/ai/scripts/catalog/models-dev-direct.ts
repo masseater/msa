@@ -1,5 +1,8 @@
 import type { Api, Model } from "../../src/types.ts";
-import { modelsDevModel, type ModelsDevSource, toolModels } from "./models-dev.ts";
+import modelsDev from "./models-dev.ts";
+import type modelsDevTypes from "./models-dev.types.ts";
+
+const { modelsDevModel, toolModels } = modelsDev;
 
 interface DirectProvider {
   readonly source: string;
@@ -13,22 +16,22 @@ const MODELS_DEV_OPENAI_UNSUPPORTED_MODEL_IDS = new Set(["gpt-5.6"]);
 
 const DIRECT_PROVIDERS: readonly DirectProvider[] = [
   {
-    source: "anthropic",
-    provider: "anthropic-api",
     api: "anthropic-messages",
     baseUrl: "https://api.anthropic.com",
+    provider: "anthropic-api",
+    source: "anthropic",
   },
   {
-    source: "openai",
-    provider: "openai",
     api: "openai-responses",
     baseUrl: "https://api.openai.com/v1",
     excludes: (id) => MODELS_DEV_OPENAI_UNSUPPORTED_MODEL_IDS.has(id),
+    provider: "openai",
+    source: "openai",
   },
 ];
 
 function directProviderModels(
-  { data, remember }: ModelsDevSource,
+  { data, remember }: modelsDevTypes.ModelsDevSource,
   direct: DirectProvider,
 ): Model<Api>[] {
   return toolModels(data[direct.source])
@@ -36,15 +39,17 @@ function directProviderModels(
     .map(([id, source]) => {
       remember(direct.provider, id, source);
       return modelsDevModel({
-        id,
-        source,
         api: direct.api,
-        provider: direct.provider,
         baseUrl: direct.baseUrl,
+        id,
+        provider: direct.provider,
+        source,
       });
     });
 }
 
-export function directModels(source: ModelsDevSource): Model<Api>[] {
+function directModels(source: modelsDevTypes.ModelsDevSource): Model<Api>[] {
   return DIRECT_PROVIDERS.flatMap((direct) => directProviderModels(source, direct));
 }
+
+export default directModels;

@@ -1,8 +1,11 @@
 import { Deferred, Effect, Fiber } from "effect";
 import { expect, it } from "vite-plus/test";
 
-import { defectOf, expectDefect } from "./effect-assert.ts";
-import { callbackUrl, request, send, start } from "./oauth-callback.ts";
+import effectAssert from "./effect-assert.ts";
+import oauthCallback from "./oauth-callback.ts";
+
+const { defectOf, expectDefect } = effectAssert;
+const { callbackUrl, request, send, start } = oauthCallback;
 
 it("ignores stray requests", () =>
   Effect.runPromise(
@@ -14,11 +17,11 @@ it("ignores stray requests", () =>
         const wrongState = yield* request(
           callbackUrl(server.redirectUri, { code: "c", state: "other" }),
         );
-        expect(wrongState).toMatchObject({ status: 400, contentType: "text/html; charset=utf-8" });
+        expect(wrongState).toMatchObject({ contentType: "text/html; charset=utf-8", status: 400 });
         expect(wrongState.body).toContain("State mismatch.");
         const post = yield* send({
-          url: callbackUrl(server.redirectUri, { code: "c", state: "expected-state" }),
           method: "POST",
+          url: callbackUrl(server.redirectUri, { code: "c", state: "expected-state" }),
         });
         expect(post.status).toBe(404);
         const missingCode = yield* request(
@@ -37,7 +40,7 @@ it("resolves with the completed code", () =>
         const success = yield* request(
           callbackUrl(server.redirectUri, { code: "the-code", state: "expected-state" }),
         );
-        expect(success).toMatchObject({ status: 200, contentType: "text/html; charset=utf-8" });
+        expect(success).toMatchObject({ contentType: "text/html; charset=utf-8", status: 200 });
         expect(success.body).toContain("Authentication successful");
         expect(success.body).toContain("Signed in to Example.");
         expect(success.body).toContain('fill="#F09082"');

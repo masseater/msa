@@ -14,7 +14,7 @@ class PayloadCaptured extends Data.TaggedError("PayloadCaptured")<{ readonly mes
 
 function makeContext(): Context {
   return {
-    messages: [{ role: "user", content: "Hello", timestamp: currentTimeMillis() }],
+    messages: [{ content: "Hello", role: "user", timestamp: currentTimeMillis() }],
   };
 }
 
@@ -22,17 +22,17 @@ function makeCustomModel(
   compat?: Model<"anthropic-messages">["compat"],
 ): Model<"anthropic-messages"> {
   return {
-    id: "vendor--claude-opus-latest",
-    name: "Vendor Proxy Opus Latest",
     api: "anthropic-messages",
-    provider: "vendor-proxy",
     baseUrl: "http://127.0.0.1:9",
-    reasoning: true,
-    input: ["text"],
-    cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0 },
-    contextWindow: 200000,
-    maxTokens: 32000,
     compat,
+    contextWindow: 200000,
+    cost: { cacheRead: 0, cacheWrite: 0, input: 0, output: 0 },
+    id: "vendor--claude-opus-latest",
+    input: ["text"],
+    maxTokens: 32000,
+    name: "Vendor Proxy Opus Latest",
+    provider: "vendor-proxy",
+    reasoning: true,
   };
 }
 
@@ -83,7 +83,7 @@ describe("Anthropic forceAdaptiveThinking compat override", () => {
           reasoning: "medium",
         });
 
-        expect(payload.thinking).toEqual({ type: "adaptive", display: "summarized" });
+        expect(payload.thinking).toEqual({ display: "summarized", type: "adaptive" });
         expect(payload.output_config).toEqual({ effort: "medium" });
       }),
     ));
@@ -95,7 +95,7 @@ describe("Anthropic forceAdaptiveThinking compat override", () => {
           reasoning: "xhigh",
         });
 
-        expect(payload.thinking).toEqual({ type: "adaptive", display: "summarized" });
+        expect(payload.thinking).toEqual({ display: "summarized", type: "adaptive" });
         expect(payload.output_config).toEqual({ effort: "xhigh" });
       }),
     ));

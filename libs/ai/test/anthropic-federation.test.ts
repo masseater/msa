@@ -17,17 +17,17 @@ vi.mock("@anthropic-ai/sdk", () => {
   function createSseResponse(): Response {
     const body = [
       `event: message_start\ndata: ${JSON.stringify({
-        type: "message_start",
         message: { id: "msg_test", usage: { input_tokens: 1, output_tokens: 0 } },
+        type: "message_start",
       })}\n`,
       `event: message_delta\ndata: ${JSON.stringify({
-        type: "message_delta",
         delta: { stop_reason: "end_turn" },
+        type: "message_delta",
         usage: { output_tokens: 1 },
       })}\n`,
       `event: message_stop\ndata: ${JSON.stringify({ type: "message_stop" })}\n`,
     ].join("\n");
-    return new Response(body, { status: 200, headers: { "content-type": "text/event-stream" } });
+    return new Response(body, { headers: { "content-type": "text/event-stream" }, status: 200 });
   }
 
   class FakeAnthropic {
@@ -56,38 +56,38 @@ const neverAbortedSignal = new AbortController().signal;
 
 const federationEnv = {
   ANTHROPIC_FEDERATION_RULE_ID: "fdrl_test",
+  ANTHROPIC_IDENTITY_TOKEN_FILE: "/tmp/identity.jwt",
   ANTHROPIC_ORGANIZATION_ID: "org-test",
   ANTHROPIC_SERVICE_ACCOUNT_ID: "svac_test",
-  ANTHROPIC_IDENTITY_TOKEN_FILE: "/tmp/identity.jwt",
 };
 
 const expectedConfig = {
+  authentication: {
+    federation_rule_id: "fdrl_test",
+    identity_token: { path: "/tmp/identity.jwt", source: "file" },
+    service_account_id: "svac_test",
+    type: "oidc_federation",
+  },
   organization_id: "org-test",
   workspace_id: undefined,
-  authentication: {
-    type: "oidc_federation",
-    federation_rule_id: "fdrl_test",
-    service_account_id: "svac_test",
-    identity_token: { source: "file", path: "/tmp/identity.jwt" },
-  },
 };
 
 const context = normalizeContext({
+  messages: [{ content: "Hello", role: "user", timestamp: currentTimeMillis() }],
   systemPrompt: "System prompt.",
-  messages: [{ role: "user", content: "Hello", timestamp: currentTimeMillis() }],
 });
 
 const anthropicModel: Model<"anthropic-messages"> = {
-  id: "claude-test",
-  name: "Claude Test",
   api: "anthropic-messages",
-  provider: "anthropic-api",
   baseUrl: "https://api.anthropic.com",
-  reasoning: false,
-  input: ["text"],
-  cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0 },
   contextWindow: 100000,
+  cost: { cacheRead: 0, cacheWrite: 0, input: 0, output: 0 },
+  id: "claude-test",
+  input: ["text"],
   maxTokens: 4096,
+  name: "Claude Test",
+  provider: "anthropic-api",
+  reasoning: false,
 };
 
 function resolveWithEnv(env: Record<string, string>) {
@@ -247,8 +247,8 @@ describe("Anthropic workload identity federation", () => {
       Effect.gen(function* () {
         const custom: Model<"anthropic-messages"> = {
           ...anthropicModel,
-          provider: "custom",
           baseUrl: "https://example.test/anthropic",
+          provider: "custom",
         };
         const message = yield* Effect.promise(() =>
           streamAnthropic(custom, context, { env: federationEnv }).result(),

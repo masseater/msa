@@ -12,17 +12,17 @@ const DEVICE_ID = "e61bbe28-07ef-466d-8e5d-a344f94ab305";
 
 function jsonResponse(body: unknown, status = 200): Response {
   return new Response(JSON.stringify(body), {
-    status,
     headers: { "content-type": "application/json" },
+    status,
   });
 }
 
 function tokenResponse(scope = REQUIRED_SCOPE) {
   return {
     access_token: "access-token",
-    refresh_token: "refresh-token",
     expires_in: 3600,
     id_token: "id-token",
+    refresh_token: "refresh-token",
     scope,
   };
 }
@@ -43,7 +43,6 @@ function loginInteraction(options?: {
 }): ProviderAuthInteraction {
   let authorizeUrl: URL | undefined;
   return {
-    signal: neverAbortedSignal,
     notify: (event) => {
       if (event.type !== "auth_url") return;
       authorizeUrl = new URL(event.url);
@@ -63,17 +62,18 @@ function loginInteraction(options?: {
         callback.searchParams.set("client_id", options.callbackClientId);
       return Promise.resolve(callback.toString());
     },
+    signal: neverAbortedSignal,
   };
 }
 
 function connectedCredential(): OAuthCredential {
   return {
-    type: "oauth",
     access: "old-access",
-    refresh: "old-refresh",
-    expires: 0,
     clientId: "oaiapp_existing",
+    expires: 0,
+    refresh: "old-refresh",
     scopes: REQUIRED_SCOPE.split(" "),
+    type: "oauth",
   };
 }
 
@@ -116,11 +116,11 @@ describe("OpenAI ChatGPT OAuth", () => {
         expect(exchangeBody?.get("resource")).toBe("https://api.openai.com/v1");
         expect(exchangeBody?.get("code_verifier")).toBeTruthy();
         expect(credential).toMatchObject({
-          type: "oauth",
           access: "access-token",
-          refresh: "refresh-token",
           clientId: "oaiapp_issued",
+          refresh: "refresh-token",
           scopes: REQUIRED_SCOPE.split(" "),
+          type: "oauth",
         });
       }),
     ));
@@ -144,7 +144,7 @@ describe("OpenAI ChatGPT OAuth", () => {
                 authorizeUrl = url;
               },
             }),
-            { getDeviceId: () => DEVICE_ID, agentName: "my-app" },
+            { agentName: "my-app", getDeviceId: () => DEVICE_ID },
           ),
         );
 
@@ -260,8 +260,8 @@ describe("OpenAI ChatGPT OAuth", () => {
         expect(refreshBody?.has("scope")).toBe(false);
         expect(credential).toMatchObject({
           access: "new-access",
-          refresh: "new-refresh",
           clientId: "oaiapp_existing",
+          refresh: "new-refresh",
           scopes: REQUIRED_SCOPE.split(" "),
         });
       }),

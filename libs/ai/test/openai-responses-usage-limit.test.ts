@@ -4,7 +4,9 @@ import { describe, expect, it } from "vite-plus/test";
 import { stream as streamOpenAIResponses } from "../src/api/openai-responses.ts";
 import type { Model } from "../src/types.ts";
 import { normalizeContext } from "../src/utils/transcript.ts";
-import { encodeJson } from "./json-codec.ts";
+import jsonCodec from "./json-codec.ts";
+
+const { encodeJson } = jsonCodec;
 
 const usageLimitError = {
   code: "subscription_sharing_usage_limit_exceeded",
@@ -12,21 +14,21 @@ const usageLimitError = {
 };
 
 const model: Model<"openai-responses"> = {
-  id: "gpt-5-mini",
-  name: "GPT-5 Mini",
   api: "openai-responses",
-  provider: "openai",
   baseUrl: "https://api.openai.com/v1",
-  reasoning: true,
-  input: ["text"],
-  cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0 },
   contextWindow: 400000,
+  cost: { cacheRead: 0, cacheWrite: 0, input: 0, output: 0 },
+  id: "gpt-5-mini",
+  input: ["text"],
   maxTokens: 128000,
+  name: "GPT-5 Mini",
+  provider: "openai",
+  reasoning: true,
 };
 
 const context = normalizeContext({
+  messages: [{ content: [{ text: "hi", type: "text" }], role: "user", timestamp: 0 }],
   systemPrompt: "",
-  messages: [{ role: "user", content: [{ type: "text", text: "hi" }], timestamp: 0 }],
   tools: [],
 });
 
@@ -48,8 +50,8 @@ describe("OpenAI Responses ChatGPT usage limit", () => {
         const response = new Response(
           yield* encodeJson({ error: { ...usageLimitError, type: "rate_limit_error" } }),
           {
-            status: 429,
             headers: { "content-type": "application/json" },
+            status: 429,
           },
         );
 
@@ -66,15 +68,15 @@ describe("OpenAI Responses ChatGPT usage limit", () => {
     Effect.runPromise(
       Effect.gen(function* () {
         const event = {
-          type: "response.failed",
+          response: { error: usageLimitError, id: "resp_failed", status: "failed" },
           sequence_number: 0,
-          response: { id: "resp_failed", status: "failed", error: usageLimitError },
+          type: "response.failed",
         };
         const response = new Response(
           `event: response.failed\ndata: ${yield* encodeJson(event)}\n\n`,
           {
-            status: 200,
             headers: { "content-type": "text/event-stream" },
+            status: 200,
           },
         );
 

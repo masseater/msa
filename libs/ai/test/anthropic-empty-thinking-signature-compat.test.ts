@@ -16,16 +16,16 @@ class PayloadCaptured extends Data.TaggedError("PayloadCaptured")<{ readonly mes
 
 function makeModel(allowEmptySignature?: boolean): Model<"anthropic-messages"> {
   return {
-    id: "mimo-v2.6-pro",
-    name: "MiMo-V2.6-Pro",
     api: "anthropic-messages",
-    provider: "xiaomi-token-plan-ams",
     baseUrl: "http://127.0.0.1:9/anthropic",
-    reasoning: true,
-    input: ["text"],
-    cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0 },
     contextWindow: 1048576,
+    cost: { cacheRead: 0, cacheWrite: 0, input: 0, output: 0 },
+    id: "mimo-v2.6-pro",
+    input: ["text"],
     maxTokens: 1024,
+    name: "MiMo-V2.6-Pro",
+    provider: "xiaomi-token-plan-ams",
+    reasoning: true,
     ...(allowEmptySignature === undefined ? {} : { compat: { allowEmptySignature } }),
   };
 }
@@ -37,27 +37,27 @@ function makeContext(
   model = "mimo-v2.6-pro",
 ): Context {
   const assistant: AssistantMessage = {
-    role: "assistant",
-    content: [{ type: "thinking", thinking, thinkingSignature }],
-    provider,
     api: "anthropic-messages",
+    content: [{ thinking, thinkingSignature, type: "thinking" }],
     model,
+    provider,
+    role: "assistant",
+    stopReason: "stop",
     timestamp: currentTimeMillis(),
     usage: {
-      input: 0,
-      output: 0,
       cacheRead: 0,
       cacheWrite: 0,
+      cost: { cacheRead: 0, cacheWrite: 0, input: 0, output: 0, total: 0 },
+      input: 0,
+      output: 0,
       totalTokens: 0,
-      cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0, total: 0 },
     },
-    stopReason: "stop",
   };
   return {
     messages: [
-      { role: "user", content: "first", timestamp: currentTimeMillis() },
+      { content: "first", role: "user", timestamp: currentTimeMillis() },
       assistant,
-      { role: "user", content: "second", timestamp: currentTimeMillis() },
+      { content: "second", role: "user", timestamp: currentTimeMillis() },
     ],
   };
 }
@@ -85,7 +85,7 @@ describe("Anthropic empty thinking signature compat", () => {
       Effect.gen(function* () {
         const payload = yield* capturePayload(makeModel(), makeContext(""));
         const assistant = payload.messages?.find((message) => message.role === "assistant");
-        expect(assistant?.content).toEqual([{ type: "text", text: "internal reasoning" }]);
+        expect(assistant?.content).toEqual([{ text: "internal reasoning", type: "text" }]);
       }),
     ));
 
@@ -95,7 +95,7 @@ describe("Anthropic empty thinking signature compat", () => {
         const payload = yield* capturePayload(makeModel(), makeContext("signed-thinking", ""));
         const assistant = payload.messages?.find((message) => message.role === "assistant");
         expect(assistant?.content).toEqual([
-          { type: "thinking", thinking: "", signature: "signed-thinking" },
+          { signature: "signed-thinking", thinking: "", type: "thinking" },
         ]);
       }),
     ));
@@ -106,7 +106,7 @@ describe("Anthropic empty thinking signature compat", () => {
         const payload = yield* capturePayload(makeModel(true), makeContext(" "));
         const assistant = payload.messages?.find((message) => message.role === "assistant");
         expect(assistant?.content).toEqual([
-          { type: "thinking", thinking: "internal reasoning", signature: "" },
+          { signature: "", thinking: "internal reasoning", type: "thinking" },
         ]);
       }),
     ));

@@ -1,21 +1,15 @@
 import { Effect } from "effect";
 import { describe, expect, it } from "vite-plus/test";
 
-import { hydrateModelCatalog } from "../scripts/hydrate-model-catalog.ts";
-import {
-  MODEL_DATA_MANIFEST_FILE,
-  readModelDataStructure,
-  validateModelDataDirectory,
-} from "../scripts/model-data.ts";
-import { ScriptFiles } from "../scripts/script-files.ts";
-import {
-  chatModel,
-  createFixture,
-  failureMessage,
-  readFile,
-  runScript,
-  writeJsonFile,
-} from "./model-data-fixture.ts";
+import hydrateModelCatalog from "../scripts/hydrate-model-catalog.ts";
+import modelData from "../scripts/model-data.ts";
+import scriptFiles from "../scripts/script-files.ts";
+import modelDataFixture from "./model-data-fixture.ts";
+
+const { MODEL_DATA_MANIFEST_FILE, readModelDataStructure, validateModelDataDirectory } = modelData;
+const { ScriptFiles } = scriptFiles;
+const { chatModel, createFixture, failureMessage, readFile, runScript, writeJsonFile } =
+  modelDataFixture;
 
 const fixtureWithCatalog = (catalog: (values: Record<string, unknown>) => unknown) =>
   Effect.gen(function* () {
@@ -26,103 +20,114 @@ const fixtureWithCatalog = (catalog: (values: Record<string, unknown>) => unknow
     return { ...fixture, catalogPath, files };
   });
 
+const hydratesACleanCheckoutDeterministicallyWithout = () =>
+  runScript(
+    Effect.gen(function* () {
+      const { dataDir, packageRoot, structure, catalogPath, files } = yield* fixtureWithCatalog(
+        (values) => ({
+          "extra-provider": [chatModel(values)],
+          "test-provider": [chatModel(values)],
+        }),
+      );
+      const aggregatorPath = files.join(packageRoot, "src", "models.generated.ts");
+      const aggregator = yield* readFile(aggregatorPath);
+      yield* files.remove(dataDir);
+
+      yield* hydrateModelCatalog({ catalogPath, packageRoot });
+      yield* validateModelDataDirectory(structure, dataDir);
+      expect(yield* readModelDataStructure(packageRoot)).toEqual(structure);
+      expect(yield* readFile(aggregatorPath)).toBe(aggregator);
+      const manifest = yield* readFile(files.join(dataDir, MODEL_DATA_MANIFEST_FILE));
+      const provider = yield* readFile(files.join(dataDir, "test-provider.json"));
+      yield* hydrateModelCatalog({ catalogPath, packageRoot });
+      expect(yield* readFile(files.join(dataDir, MODEL_DATA_MANIFEST_FILE))).toBe(manifest);
+      expect(yield* readFile(files.join(dataDir, "test-provider.json"))).toBe(provider);
+    }),
+  );
+
+const groupsModelsByAPIAndKeys = () =>
+  runScript(
+    Effect.gen(function* () {
+      const { packageRoot, catalogPath } = yield* fixtureWithCatalog((values) => ({
+        "test-provider": [
+          chatModel(values),
+          { ...chatModel(values), api: "anthropic-messages", id: "model-b" },
+        ],
+      }));
+      yield* hydrateModelCatalog({ catalogPath, packageRoot });
+      expect(yield* readModelDataStructure(packageRoot)).toEqual({
+        "test-provider": {
+          "chat:model-a": "openai-completions",
+          "chat:model-b": "anthropic-messages",
+        },
+      });
+    }),
+  );
+
+const keysChatAndImageModelsWith = () =>
+  runScript(
+    Effect.gen(function* () {
+      const { packageRoot, catalogPath } = yield* fixtureWithCatalog((values) => ({
+        "test-provider": [
+          chatModel(values),
+          {
+            api: "openrouter-images",
+            baseUrl: "https://example.test/v1",
+            cost: { cacheRead: 0, cacheWrite: 0, input: 1, output: 2 },
+            id: "model-a",
+            input: ["text"],
+            name: "Model A Image",
+            output: ["image"],
+            provider: "test-provider",
+            type: "image",
+          },
+        ],
+      }));
+      yield* hydrateModelCatalog({ catalogPath, packageRoot });
+      expect(yield* readModelDataStructure(packageRoot)).toEqual({
+        "test-provider": {
+          "chat:model-a": "openai-completions",
+          "image:model-a": "openrouter-images",
+        },
+      });
+    }),
+  );
+
+const validatesWithoutReplacingExistingData = () =>
+  runScript(
+    Effect.gen(function* () {
+      const { dataDir, packageRoot, catalogPath, values, files } = yield* fixtureWithCatalog(
+        (fixtureValues) => ({
+          "test-provider": [
+            chatModel(fixtureValues),
+            { ...chatModel(fixtureValues), id: "model-b" },
+          ],
+        }),
+      );
+      const providerPath = files.join(dataDir, "test-provider.json");
+      const original = yield* readFile(providerPath);
+      yield* hydrateModelCatalog({ catalogPath, packageRoot, validateOnly: true });
+      expect(yield* readFile(providerPath)).toBe(original);
+      yield* writeJsonFile(catalogPath, { "other-provider": [chatModel(values)] });
+      expect(
+        yield* failureMessage(
+          hydrateModelCatalog({ catalogPath, packageRoot, validateOnly: true }),
+        ),
+      ).toMatch(/missing provider/u);
+    }),
+  );
+
 describe("published model catalog hydration", () => {
-  it("hydrates a clean checkout deterministically without changing generated TypeScript", () =>
-    runScript(
-      Effect.gen(function* () {
-        const { dataDir, packageRoot, structure, catalogPath, files } = yield* fixtureWithCatalog(
-          (values) => ({
-            "test-provider": [chatModel(values)],
-            "extra-provider": [chatModel(values)],
-          }),
-        );
-        const aggregatorPath = files.join(packageRoot, "src", "models.generated.ts");
-        const aggregator = yield* readFile(aggregatorPath);
-        yield* files.remove(dataDir);
+  it(
+    "hydrates a clean checkout deterministically without changing generated TypeScript",
+    hydratesACleanCheckoutDeterministicallyWithout,
+  );
 
-        yield* hydrateModelCatalog({ packageRoot, catalogPath });
-        yield* validateModelDataDirectory(structure, dataDir);
-        expect(yield* readModelDataStructure(packageRoot)).toEqual(structure);
-        expect(yield* readFile(aggregatorPath)).toBe(aggregator);
-        const manifest = yield* readFile(files.join(dataDir, MODEL_DATA_MANIFEST_FILE));
-        const provider = yield* readFile(files.join(dataDir, "test-provider.json"));
-        yield* hydrateModelCatalog({ packageRoot, catalogPath });
-        expect(yield* readFile(files.join(dataDir, MODEL_DATA_MANIFEST_FILE))).toBe(manifest);
-        expect(yield* readFile(files.join(dataDir, "test-provider.json"))).toBe(provider);
-      }),
-    ));
+  it("groups models by API and keys them by type and id", groupsModelsByAPIAndKeys);
 
-  it("groups models by API and keys them by type and id", () =>
-    runScript(
-      Effect.gen(function* () {
-        const { packageRoot, catalogPath } = yield* fixtureWithCatalog((values) => ({
-          "test-provider": [
-            chatModel(values),
-            { ...chatModel(values), id: "model-b", api: "anthropic-messages" },
-          ],
-        }));
-        yield* hydrateModelCatalog({ packageRoot, catalogPath });
-        expect(yield* readModelDataStructure(packageRoot)).toEqual({
-          "test-provider": {
-            "chat:model-a": "openai-completions",
-            "chat:model-b": "anthropic-messages",
-          },
-        });
-      }),
-    ));
+  it("keys chat and image models with the same id separately", keysChatAndImageModelsWith);
 
-  it("keys chat and image models with the same id separately", () =>
-    runScript(
-      Effect.gen(function* () {
-        const { packageRoot, catalogPath } = yield* fixtureWithCatalog((values) => ({
-          "test-provider": [
-            chatModel(values),
-            {
-              type: "image",
-              id: "model-a",
-              name: "Model A Image",
-              api: "openrouter-images",
-              provider: "test-provider",
-              baseUrl: "https://example.test/v1",
-              input: ["text"],
-              output: ["image"],
-              cost: { input: 1, output: 2, cacheRead: 0, cacheWrite: 0 },
-            },
-          ],
-        }));
-        yield* hydrateModelCatalog({ packageRoot, catalogPath });
-        expect(yield* readModelDataStructure(packageRoot)).toEqual({
-          "test-provider": {
-            "chat:model-a": "openai-completions",
-            "image:model-a": "openrouter-images",
-          },
-        });
-      }),
-    ));
-
-  it("validates without replacing existing data", () =>
-    runScript(
-      Effect.gen(function* () {
-        const { dataDir, packageRoot, catalogPath, values, files } = yield* fixtureWithCatalog(
-          (fixtureValues) => ({
-            "test-provider": [
-              chatModel(fixtureValues),
-              { ...chatModel(fixtureValues), id: "model-b" },
-            ],
-          }),
-        );
-        const providerPath = files.join(dataDir, "test-provider.json");
-        const original = yield* readFile(providerPath);
-        yield* hydrateModelCatalog({ packageRoot, catalogPath, validateOnly: true });
-        expect(yield* readFile(providerPath)).toBe(original);
-        yield* writeJsonFile(catalogPath, { "other-provider": [chatModel(values)] });
-        expect(
-          yield* failureMessage(
-            hydrateModelCatalog({ packageRoot, catalogPath, validateOnly: true }),
-          ),
-        ).toMatch(/missing provider/u);
-      }),
-    ));
+  it("validates without replacing existing data", validatesWithoutReplacingExistingData);
 });
 
 describe("rejected model catalogs", () => {
@@ -141,7 +146,7 @@ describe("rejected model catalogs", () => {
         );
         const manifestPath = files.join(dataDir, MODEL_DATA_MANIFEST_FILE);
         const original = yield* readFile(manifestPath);
-        yield* Effect.flip(hydrateModelCatalog({ packageRoot, catalogPath }));
+        yield* Effect.flip(hydrateModelCatalog({ catalogPath, packageRoot }));
         expect(yield* readFile(manifestPath)).toBe(original);
       }),
     ),
@@ -157,7 +162,7 @@ describe("rejected model catalogs", () => {
           );
           const providerPath = files.join(dataDir, "test-provider.json");
           const original = yield* readFile(providerPath);
-          yield* Effect.flip(hydrateModelCatalog({ packageRoot, catalogPath }));
+          yield* Effect.flip(hydrateModelCatalog({ catalogPath, packageRoot }));
           expect(yield* readFile(providerPath)).toBe(original);
         }),
       ),

@@ -6,7 +6,7 @@ import {
 } from "../src/auth/oauth/callback-server.ts";
 import { httpRequest } from "../src/utils/http.ts";
 
-export const callbackUrl: {
+const callbackUrl: {
   (params: Record<string, string>): (redirectUri: string) => string;
   (redirectUri: string, params: Record<string, string>): string;
 } = Function.dual(2, (redirectUri: string, params: Record<string, string>): string => {
@@ -20,28 +20,37 @@ interface CallbackRequest {
   readonly method: "GET" | "POST";
 }
 
-export const send = ({ url, method }: CallbackRequest) =>
+const send = ({ url, method }: CallbackRequest) =>
   Effect.gen(function* () {
-    const reply = yield* httpRequest({ url, method });
+    const reply = yield* httpRequest({ method, url });
     return {
-      status: reply.status,
-      contentType: reply.header("content-type"),
       body: yield* reply.text,
+      contentType: reply.header("content-type"),
+      status: reply.status,
     };
   });
 
-export const request = (url: string | URL) => send({ url, method: "GET" });
+const request = (url: string | URL) => send({ method: "GET", url });
 
-export const start = (overrides: Partial<OAuthCallbackServerOptions<string>> = {}) =>
+const start = (overrides: Partial<OAuthCallbackServerOptions<string>> = {}) =>
   Effect.acquireRelease(
     startOAuthCallbackServer<string>({
-      providerName: "Example",
-      host: "127.0.0.1",
-      port: 0,
-      path: "/callback",
-      state: "expected-state",
       complete: (code) => Effect.succeed(`completed:${code}`),
+      host: "127.0.0.1",
+      path: "/callback",
+      port: 0,
+      providerName: "Example",
+      state: "expected-state",
       ...overrides,
     }),
     (server) => server.close,
   );
+
+const oauthCallback = {
+  callbackUrl,
+  request,
+  send,
+  start,
+};
+
+export default oauthCallback;

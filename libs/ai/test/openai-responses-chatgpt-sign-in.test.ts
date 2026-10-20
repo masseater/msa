@@ -6,21 +6,21 @@ import type { Model } from "../src/types.ts";
 import { normalizeContext } from "../src/utils/transcript.ts";
 
 const model: Model<"openai-responses"> = {
-  id: "gpt-5-mini",
-  name: "GPT-5 Mini",
   api: "openai-responses",
-  provider: "openai",
   baseUrl: "https://api.openai.com/v1",
-  reasoning: true,
-  input: ["text"],
-  cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0 },
   contextWindow: 400000,
+  cost: { cacheRead: 0, cacheWrite: 0, input: 0, output: 0 },
+  id: "gpt-5-mini",
+  input: ["text"],
   maxTokens: 128000,
+  name: "GPT-5 Mini",
+  provider: "openai",
+  reasoning: true,
 };
 
 const context = normalizeContext({
+  messages: [{ content: [{ text: "hi", type: "text" }], role: "user", timestamp: 0 }],
   systemPrompt: "",
-  messages: [{ role: "user", content: [{ type: "text", text: "hi" }], timestamp: 0 }],
   tools: [],
 });
 
@@ -32,13 +32,13 @@ const capturePayload = Effect.fn("capturePayload")(function* (
   yield* Effect.promise(() =>
     streamOpenAIResponses(requestModel, context, {
       apiKey,
-      maxTokens: 1000,
-      temperature: 0.5,
       cacheRetention: "long",
+      fetch: () => Promise.resolve(new Response(null, { status: 500 })),
+      maxTokens: 1000,
       onPayload: (params) => {
         payload = params as Record<string, unknown>;
       },
-      fetch: () => Promise.resolve(new Response(null, { status: 500 })),
+      temperature: 0.5,
     }).result(),
   );
   if (payload === undefined) throw new Error("Request payload was not captured");
@@ -71,10 +71,10 @@ describe("OpenAI Responses with Sign in with ChatGPT", () => {
     ));
 
   it.each([
-    { name: "OpenAI API keys", apiKey: "sk-proj-test", requestModel: model },
+    { apiKey: "sk-proj-test", name: "OpenAI API keys", requestModel: model },
     {
-      name: "other OpenAI-compatible endpoints",
       apiKey: "gateway-key",
+      name: "other OpenAI-compatible endpoints",
       requestModel: { ...model, baseUrl: "https://gateway.example.com/v1" },
     },
   ])("keeps those fields for $name", ({ apiKey, requestModel }) =>

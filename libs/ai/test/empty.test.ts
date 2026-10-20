@@ -1,5 +1,5 @@
 import { Clock, Effect } from "effect";
-import { describe, expect, it } from "vite-plus/test";
+import { describe, expect, inject, it } from "vite-plus/test";
 
 import { complete, getModel } from "../src/compat.ts";
 import type {
@@ -10,21 +10,24 @@ import type {
   StreamOptions,
   UserMessage,
 } from "../src/types.ts";
-import { envValue } from "./env.ts";
+import env from "./env.ts";
+import modelChoice from "./model-choice.ts";
+
+const { chooseModel } = modelChoice;
 
 type StreamOptionsWithExtras = StreamOptions & Record<string, unknown>;
 
-import { resolveApiKey } from "./oauth.ts";
+const { envValue } = env;
 
-const openaiCodexToken = await resolveApiKey("openai-codex");
+const openaiCodexToken = inject("storedApiKeys")["openai-codex"];
 
 const testEmptyMessage = Effect.fn("testEmptyMessage")(function* <TApi extends Api>(
   llm: Model<TApi>,
   options: StreamOptionsWithExtras = {},
 ) {
   const emptyMessage: UserMessage = {
-    role: "user",
     content: [],
+    role: "user",
     timestamp: yield* Clock.currentTimeMillis,
   };
 
@@ -50,8 +53,8 @@ const testEmptyStringMessage = Effect.fn("testEmptyStringMessage")(function* <TA
   const context: Context = {
     messages: [
       {
-        role: "user",
         content: "",
+        role: "user",
         timestamp: yield* Clock.currentTimeMillis,
       },
     ],
@@ -75,8 +78,8 @@ const testWhitespaceOnlyMessage = Effect.fn("testWhitespaceOnlyMessage")(functio
   const context: Context = {
     messages: [
       {
-        role: "user",
         content: "   \n\t  ",
+        role: "user",
         timestamp: yield* Clock.currentTimeMillis,
       },
     ],
@@ -98,34 +101,34 @@ const testEmptyAssistantMessage = Effect.fn("testEmptyAssistantMessage")(functio
   TApi extends Api,
 >(llm: Model<TApi>, options: StreamOptionsWithExtras = {}) {
   const emptyAssistant: AssistantMessage = {
-    role: "assistant",
-    content: [],
     api: llm.api,
-    provider: llm.provider,
+    content: [],
     model: llm.id,
-    usage: {
-      input: 10,
-      output: 0,
-      cacheRead: 0,
-      cacheWrite: 0,
-      totalTokens: 10,
-      cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0, total: 0 },
-    },
+    provider: llm.provider,
+    role: "assistant",
     stopReason: "stop",
     timestamp: yield* Clock.currentTimeMillis,
+    usage: {
+      cacheRead: 0,
+      cacheWrite: 0,
+      cost: { cacheRead: 0, cacheWrite: 0, input: 0, output: 0, total: 0 },
+      input: 10,
+      output: 0,
+      totalTokens: 10,
+    },
   };
 
   const context: Context = {
     messages: [
       {
-        role: "user",
         content: "Hello, how are you?",
+        role: "user",
         timestamp: yield* Clock.currentTimeMillis,
       },
       emptyAssistant,
       {
-        role: "user",
         content: "Please respond this time.",
+        role: "user",
         timestamp: yield* Clock.currentTimeMillis,
       },
     ],
@@ -148,7 +151,7 @@ describe("AI Providers Empty Message Tests", () => {
   describe.skipIf(envValue("OPENAI_API_KEY") === undefined || envValue("OPENAI_API_KEY") === "")(
     "OpenAI Completions Provider Empty Messages",
     () => {
-      const llm = getModel("openai", "gpt-4o-mini");
+      const llm = chooseModel("openai", "direct OpenAI");
 
       it("should handle empty content array", { retry: 3, timeout: 30000 }, () =>
         Effect.runPromise(testEmptyMessage(llm)),
@@ -222,54 +225,62 @@ describe("AI Providers Empty Message Tests", () => {
   });
 });
 
+const gpt55ShouldHandleEmpty = () =>
+  Effect.runPromise(
+    Effect.gen(function* () {
+      const llm = getModel("openai-codex", "gpt-5.5");
+      yield* testEmptyMessage(llm, { apiKey: openaiCodexToken });
+    }),
+  );
+
+const gpt55ShouldHandleEmpty2 = () =>
+  Effect.runPromise(
+    Effect.gen(function* () {
+      const llm = getModel("openai-codex", "gpt-5.5");
+      yield* testEmptyStringMessage(llm, { apiKey: openaiCodexToken });
+    }),
+  );
+
+const gpt55ShouldHandleWhitespace = () =>
+  Effect.runPromise(
+    Effect.gen(function* () {
+      const llm = getModel("openai-codex", "gpt-5.5");
+      yield* testWhitespaceOnlyMessage(llm, { apiKey: openaiCodexToken });
+    }),
+  );
+
+const gpt55ShouldHandleEmpty3 = () =>
+  Effect.runPromise(
+    Effect.gen(function* () {
+      const llm = getModel("openai-codex", "gpt-5.5");
+      yield* testEmptyAssistantMessage(llm, { apiKey: openaiCodexToken });
+    }),
+  );
+
 describe("AI Providers Empty Message Tests", () => {
   describe("OpenAI Codex Provider Empty Messages", () => {
     it.skipIf(openaiCodexToken === undefined || openaiCodexToken === "")(
       "gpt-5.5 - should handle empty content array",
       { retry: 3, timeout: 30000 },
-      () =>
-        Effect.runPromise(
-          Effect.gen(function* () {
-            const llm = getModel("openai-codex", "gpt-5.5");
-            yield* testEmptyMessage(llm, { apiKey: openaiCodexToken });
-          }),
-        ),
+      gpt55ShouldHandleEmpty,
     );
 
     it.skipIf(openaiCodexToken === undefined || openaiCodexToken === "")(
       "gpt-5.5 - should handle empty string content",
       { retry: 3, timeout: 30000 },
-      () =>
-        Effect.runPromise(
-          Effect.gen(function* () {
-            const llm = getModel("openai-codex", "gpt-5.5");
-            yield* testEmptyStringMessage(llm, { apiKey: openaiCodexToken });
-          }),
-        ),
+      gpt55ShouldHandleEmpty2,
     );
 
     it.skipIf(openaiCodexToken === undefined || openaiCodexToken === "")(
       "gpt-5.5 - should handle whitespace-only content",
       { retry: 3, timeout: 30000 },
-      () =>
-        Effect.runPromise(
-          Effect.gen(function* () {
-            const llm = getModel("openai-codex", "gpt-5.5");
-            yield* testWhitespaceOnlyMessage(llm, { apiKey: openaiCodexToken });
-          }),
-        ),
+      gpt55ShouldHandleWhitespace,
     );
 
     it.skipIf(openaiCodexToken === undefined || openaiCodexToken === "")(
       "gpt-5.5 - should handle empty assistant message in conversation",
       { retry: 3, timeout: 30000 },
-      () =>
-        Effect.runPromise(
-          Effect.gen(function* () {
-            const llm = getModel("openai-codex", "gpt-5.5");
-            yield* testEmptyAssistantMessage(llm, { apiKey: openaiCodexToken });
-          }),
-        ),
+      gpt55ShouldHandleEmpty3,
     );
   });
 });

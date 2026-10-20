@@ -1,9 +1,12 @@
-import { Clock, Effect } from "effect";
+import { Clock, Effect, Stream } from "effect";
 import { beforeEach, describe, expect, it, vi } from "vite-plus/test";
 
 import { stream as streamOpenAICompletions } from "../src/api/openai-completions.ts";
-import { getModel, normalizeContext } from "../src/compat.ts";
+import { normalizeContext } from "../src/compat.ts";
 import type { Model } from "../src/types.ts";
+import modelChoice from "./model-choice.ts";
+
+const { chooseModel } = modelChoice;
 
 interface CapturedCompletionsPayload {
   priority?: number;
@@ -21,16 +24,22 @@ vi.mock("openai", () => {
         create: (params: CapturedCompletionsPayload) => {
           mockState.lastParams = params;
           const stream = {
-            async *[Symbol.asyncIterator]() {
-              yield {
-                choices: [{ delta: {}, finish_reason: "stop" }],
-                usage: {
-                  prompt_tokens: 1,
-                  completion_tokens: 1,
-                  prompt_tokens_details: { cached_tokens: 0 },
-                  completion_tokens_details: { reasoning_tokens: 0 },
-                },
-              };
+            [Symbol.asyncIterator]() {
+              return Stream.toAsyncIterable(
+                Stream.fromIterable(
+                  (function* () {
+                    yield {
+                      choices: [{ delta: {}, finish_reason: "stop" }],
+                      usage: {
+                        completion_tokens: 1,
+                        completion_tokens_details: { reasoning_tokens: 0 },
+                        prompt_tokens: 1,
+                        prompt_tokens_details: { cached_tokens: 0 },
+                      },
+                    };
+                  })(),
+                ),
+              )[Symbol.asyncIterator]();
             },
           };
           const promise = Promise.resolve(stream) as Promise<typeof stream> & {
@@ -42,7 +51,7 @@ vi.mock("openai", () => {
           promise.withResponse = () =>
             Promise.resolve({
               data: stream,
-              response: { status: 200, headers: new Headers() },
+              response: { headers: new Headers(), status: 200 },
             });
           return promise;
         },
@@ -56,7 +65,7 @@ vi.mock("openai", () => {
 function createModel(
   overrides: Partial<Model<"openai-completions">> = {},
 ): Model<"openai-completions"> {
-  const { compat: _compat, ...baseModel } = getModel("openai", "gpt-4o-mini");
+  const { compat: _compat, ...baseModel } = chooseModel("openai", "direct OpenAI");
   return {
     ...(baseModel as Omit<Model<"openai-completions">, "api">),
     api: "openai-completions",
@@ -70,8 +79,8 @@ const captureRequest = Effect.fn("captureRequest")(function* (model: Model<"open
     streamOpenAICompletions(
       model,
       normalizeContext({
+        messages: [{ content: "hi", role: "user", timestamp: currentTime }],
         systemPrompt: "sys",
-        messages: [{ role: "user", content: "hi", timestamp: currentTime }],
       }),
       { apiKey: "test-key" },
     ).result(),

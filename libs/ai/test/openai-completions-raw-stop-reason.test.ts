@@ -1,4 +1,4 @@
-import { Effect } from "effect";
+import { Effect, Stream } from "effect";
 import { beforeEach, describe, expect, it, vi } from "vite-plus/test";
 
 import { stream as streamOpenAICompletions } from "../src/api/openai-completions.ts";
@@ -17,8 +17,14 @@ vi.mock("openai", () => {
         create: () => {
           const chunks = mockState.chunks;
           const stream = {
-            async *[Symbol.asyncIterator]() {
-              for (const chunk of chunks) yield chunk;
+            [Symbol.asyncIterator]() {
+              return Stream.toAsyncIterable(
+                Stream.fromIterable(
+                  (function* () {
+                    for (const chunk of chunks) yield chunk;
+                  })(),
+                ),
+              )[Symbol.asyncIterator]();
             },
           };
           const promise = Promise.resolve(stream) as Promise<typeof stream> & {
@@ -30,7 +36,7 @@ vi.mock("openai", () => {
           promise.withResponse = () =>
             Promise.resolve({
               data: stream,
-              response: { status: 200, headers: new Headers() },
+              response: { headers: new Headers(), status: 200 },
             });
           return promise;
         },
@@ -41,20 +47,20 @@ vi.mock("openai", () => {
 });
 
 const model: Model<"openai-completions"> = {
-  id: "test-model",
-  name: "Test Model",
   api: "openai-completions",
-  provider: "openai",
   baseUrl: "https://api.openai.com/v1",
-  reasoning: false,
-  input: ["text"],
-  cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0 },
   contextWindow: 128_000,
+  cost: { cacheRead: 0, cacheWrite: 0, input: 0, output: 0 },
+  id: "test-model",
+  input: ["text"],
   maxTokens: 4096,
+  name: "Test Model",
+  provider: "openai",
+  reasoning: false,
 };
 
 const context = normalizeContext({
-  messages: [{ role: "user", content: "hello", timestamp: currentTimeMillis() }],
+  messages: [{ content: "hello", role: "user", timestamp: currentTimeMillis() }],
 });
 
 describe("OpenAI completions raw stop reasons", () => {
@@ -66,7 +72,7 @@ describe("OpenAI completions raw stop reasons", () => {
     Effect.runPromise(
       Effect.gen(function* () {
         mockState.chunks = [
-          { id: "chatcmpl-1", choices: [{ index: 0, delta: {}, finish_reason: "stop" }] },
+          { choices: [{ delta: {}, finish_reason: "stop", index: 0 }], id: "chatcmpl-1" },
         ];
 
         const message = yield* Effect.promise(() =>
@@ -83,7 +89,7 @@ describe("OpenAI completions raw stop reasons", () => {
     Effect.runPromise(
       Effect.gen(function* () {
         mockState.chunks = [
-          { id: "chatcmpl-2", choices: [{ index: 0, delta: {}, finish_reason: "content_filter" }] },
+          { choices: [{ delta: {}, finish_reason: "content_filter", index: 0 }], id: "chatcmpl-2" },
         ];
 
         const message = yield* Effect.promise(() =>

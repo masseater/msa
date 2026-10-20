@@ -24,12 +24,6 @@ vi.mock("openai", () => {
             };
           }
           const response = {
-            id: "img-1",
-            usage: {
-              prompt_tokens: 12,
-              completion_tokens: 34,
-              prompt_tokens_details: { cached_tokens: 0 },
-            },
             choices: [
               {
                 message: {
@@ -38,6 +32,12 @@ vi.mock("openai", () => {
                 },
               },
             ],
+            id: "img-1",
+            usage: {
+              completion_tokens: 34,
+              prompt_tokens: 12,
+              prompt_tokens_details: { cached_tokens: 0 },
+            },
           };
           const promise = Promise.resolve(response) as Promise<typeof response> & {
             withResponse: () => Promise<{
@@ -48,7 +48,7 @@ vi.mock("openai", () => {
           promise.withResponse = () =>
             Promise.resolve({
               data: response,
-              response: { status: 200, headers: new Headers() },
+              response: { headers: new Headers(), status: 200 },
             });
           return promise;
         },
@@ -68,19 +68,19 @@ describe("openrouter images", () => {
     Effect.runPromise(
       Effect.gen(function* () {
         const model: ImageModel<"openrouter-images"> = {
-          type: "image",
-          id: "google/gemini-3.1-flash-image-preview",
-          name: "Gemini 3.1 Flash Image Preview",
           api: "openrouter-images",
-          provider: "openrouter",
           baseUrl: "https://openrouter.ai/api/v1",
-          input: ["text", "image"],
-          output: ["text", "image"],
-          cost: { input: 0.015, output: 0.03, cacheRead: 0, cacheWrite: 0 },
+          cost: { cacheRead: 0, cacheWrite: 0, input: 0.015, output: 0.03 },
           headers: { "HTTP-Referer": "https://example.com" },
+          id: "google/gemini-3.1-flash-image-preview",
+          input: ["text", "image"],
+          name: "Gemini 3.1 Flash Image Preview",
+          output: ["text", "image"],
+          provider: "openrouter",
+          type: "image",
         };
         const context: ImagesContext = {
-          input: [{ type: "text", text: "Generate a dog" }],
+          input: [{ text: "Generate a dog", type: "text" }],
         };
 
         const output = yield* Effect.promise(() =>
@@ -88,11 +88,11 @@ describe("openrouter images", () => {
         );
         expect(output.stopReason).toBe("stop");
         expect(output.responseId).toBe("img-1");
-        expect(output.output[0]).toMatchObject({ type: "text", text: "Here is your image." });
+        expect(output.output[0]).toMatchObject({ text: "Here is your image.", type: "text" });
         expect(output.output[1]).toMatchObject({
-          type: "image",
-          mimeType: "image/png",
           data: "ZmFrZS1wbmc=",
+          mimeType: "image/png",
+          type: "image",
         });
 
         const params = mockState.lastParams as {
@@ -103,8 +103,8 @@ describe("openrouter images", () => {
         expect(params.stream).toBe(false);
         expect(params.modalities).toEqual(["image", "text"]);
         expect(params.messages?.[0]?.content?.[0]).toMatchObject({
-          type: "text",
           text: "Generate a dog",
+          type: "text",
         });
       }),
     ));
@@ -119,18 +119,18 @@ describe("openrouter images", () => {
     Effect.runPromise(
       Effect.gen(function* () {
         const model: ImageModel<"openrouter-images"> = {
-          type: "image",
-          id: "black-forest-labs/flux.2-pro",
-          name: "FLUX.2 Pro",
           api: "openrouter-images",
-          provider: "openrouter",
           baseUrl: "https://openrouter.ai/api/v1",
+          cost: { cacheRead: 0, cacheWrite: 0, input: 0.015, output: 0.03 },
+          id: "black-forest-labs/flux.2-pro",
           input: ["text", "image"],
+          name: "FLUX.2 Pro",
           output: ["image"],
-          cost: { input: 0.015, output: 0.03, cacheRead: 0, cacheWrite: 0 },
+          provider: "openrouter",
+          type: "image",
         };
         const context: ImagesContext = {
-          input: [{ type: "text", text: "Generate a dog" }],
+          input: [{ text: "Generate a dog", type: "text" }],
         };
         const controllerSignal = AbortSignal.abort();
 
@@ -156,18 +156,18 @@ describe("openrouter images", () => {
     Effect.runPromise(
       Effect.gen(function* () {
         const model: ImageModel<"openrouter-images"> = {
-          type: "image",
-          id: "black-forest-labs/flux.2-pro",
-          name: "FLUX.2 Pro",
           api: "openrouter-images",
-          provider: "openrouter",
           baseUrl: "https://openrouter.ai/api/v1",
+          cost: { cacheRead: 0, cacheWrite: 0, input: 0.015, output: 0.03 },
+          id: "black-forest-labs/flux.2-pro",
           input: ["text", "image"],
+          name: "FLUX.2 Pro",
           output: ["image"],
-          cost: { input: 0.015, output: 0.03, cacheRead: 0, cacheWrite: 0 },
+          provider: "openrouter",
+          type: "image",
         };
         const context: ImagesContext = {
-          input: [{ type: "text", text: "Generate a dog" }],
+          input: [{ text: "Generate a dog", type: "text" }],
         };
 
         const output = yield* Effect.promise(() =>

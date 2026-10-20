@@ -3,12 +3,12 @@ import { describe, expect, expectTypeOf, it } from "vite-plus/test";
 import type { Context, JsonValue, Message, ToolResultMessage } from "../src/types.ts";
 
 const base = {
-  role: "toolResult" as const,
-  toolCallId: "call-1",
-  toolName: "read",
   content: [],
   isError: false,
+  role: "toolResult" as const,
   timestamp: 1,
+  toolCallId: "call-1",
+  toolName: "read",
 };
 
 describe("message JSON types", () => {
@@ -23,7 +23,7 @@ describe("message JSON types", () => {
 
     const objectMessage: ToolResultMessage<Details> = {
       ...base,
-      details: { path: "a.ts", items: ["first"], summary: { lines: 3 } },
+      details: { items: ["first"], path: "a.ts", summary: { lines: 3 } },
     };
     const arrayMessage: ToolResultMessage<string[]> = { ...base, details: ["a", "b"] };
     const readonlyArrayMessage: ToolResultMessage<readonly [string, { readonly count?: number }]> =

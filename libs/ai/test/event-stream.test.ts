@@ -6,204 +6,240 @@ import { EventStream } from "../src/utils/async-event-stream.ts";
 import { currentTimeMillis } from "../src/utils/clock.ts";
 import { AssistantMessageEventStream } from "../src/utils/event-stream.ts";
 
+const drainsBufferedEventsInOrderAnd = () =>
+  Effect.runPromise(
+    Effect.gen(function* () {
+      const stream = new EventStream<number, number>(
+        (event) => event === 3,
+        (event) => event,
+      );
+      stream.push(1);
+      stream.push(2);
+      stream.push(3);
+      stream.push(4);
+
+      expect(yield* Effect.promise(() => stream.result())).toBe(3);
+
+      const events: number[] = [];
+      yield* Stream.fromAsyncIterable(stream, (error) => error).pipe(
+        Stream.orDie,
+        Stream.runForEach((event) =>
+          Effect.sync(() => {
+            events.push(event);
+          }),
+        ),
+      );
+      expect(events).toEqual([1, 2, 3]);
+    }),
+  );
+
+const preservesOrderWhenEventsArriveAfter = () =>
+  Effect.runPromise(
+    Effect.gen(function* () {
+      const stream = new EventStream<number, number>(
+        () => false,
+        (event) => event,
+      );
+      stream.push(1);
+      stream.push(2);
+
+      const iterator = stream[Symbol.asyncIterator]();
+      expect(yield* Effect.promise(() => iterator.next())).toEqual({ done: false, value: 1 });
+
+      stream.push(3);
+      expect(yield* Effect.promise(() => iterator.next())).toEqual({ done: false, value: 2 });
+      expect(yield* Effect.promise(() => iterator.next())).toEqual({ done: false, value: 3 });
+
+      stream.end(3);
+      expect(yield* Effect.promise(() => iterator.next())).toEqual({
+        done: true,
+        value: undefined,
+      });
+    }),
+  );
+
+const deliversEventsToWaitingConsumersIn = () =>
+  Effect.runPromise(
+    Effect.gen(function* () {
+      const stream = new EventStream<number, number>(
+        () => false,
+        (event) => event,
+      );
+      const firstIterator = stream[Symbol.asyncIterator]();
+      const secondIterator = stream[Symbol.asyncIterator]();
+      const firstEvent = firstIterator.next();
+      const secondEvent = secondIterator.next();
+
+      stream.push(1);
+      stream.push(2);
+
+      expect(yield* Effect.promise(() => firstEvent)).toEqual({ done: false, value: 1 });
+      expect(yield* Effect.promise(() => secondEvent)).toEqual({ done: false, value: 2 });
+    }),
+  );
+
+const drainsBufferedEventsAfterEndAnd = () =>
+  Effect.runPromise(
+    Effect.gen(function* () {
+      const stream = new EventStream<number, string>(
+        () => false,
+        (event) => String(event),
+      );
+      stream.push(1);
+      stream.push(2);
+      stream.end("complete");
+
+      expect(yield* Effect.promise(() => stream.result())).toBe("complete");
+
+      const events: number[] = [];
+      yield* Stream.fromAsyncIterable(stream, (error) => error).pipe(
+        Stream.orDie,
+        Stream.runForEach((event) =>
+          Effect.sync(() => {
+            events.push(event);
+          }),
+        ),
+      );
+      expect(events).toEqual([1, 2]);
+    }),
+  );
+
+const wakesAllWaitingConsumersWhenEnded = () =>
+  Effect.runPromise(
+    Effect.gen(function* () {
+      const stream = new EventStream<number, number>(
+        () => false,
+        (event) => event,
+      );
+      const firstIterator = stream[Symbol.asyncIterator]();
+      const secondIterator = stream[Symbol.asyncIterator]();
+      const firstEvent = firstIterator.next();
+      const secondEvent = secondIterator.next();
+
+      stream.end();
+
+      expect(yield* Effect.promise(() => firstEvent)).toEqual({ done: true, value: undefined });
+      expect(yield* Effect.promise(() => secondEvent)).toEqual({ done: true, value: undefined });
+    }),
+  );
+
 describe("EventStream", () => {
-  it("drains buffered events in order and ignores events pushed after completion", () =>
-    Effect.runPromise(
-      Effect.gen(function* () {
-        const stream = new EventStream<number, number>(
-          (event) => event === 3,
-          (event) => event,
-        );
-        stream.push(1);
-        stream.push(2);
-        stream.push(3);
-        stream.push(4);
+  it(
+    "drains buffered events in order and ignores events pushed after completion",
+    drainsBufferedEventsInOrderAnd,
+  );
 
-        expect(yield* Effect.promise(() => stream.result())).toBe(3);
+  it(
+    "preserves order when events arrive after buffered draining starts",
+    preservesOrderWhenEventsArriveAfter,
+  );
 
-        const events: number[] = [];
-        yield* Stream.fromAsyncIterable(stream, (error) => error).pipe(
-          Stream.orDie,
-          Stream.runForEach((event) =>
-            Effect.sync(() => {
-              events.push(event);
-            }),
-          ),
-        );
-        expect(events).toEqual([1, 2, 3]);
-      }),
-    ));
+  it(
+    "delivers events to waiting consumers in registration order",
+    deliversEventsToWaitingConsumersIn,
+  );
 
-  it("preserves order when events arrive after buffered draining starts", () =>
-    Effect.runPromise(
-      Effect.gen(function* () {
-        const stream = new EventStream<number, number>(
-          () => false,
-          (event) => event,
-        );
-        stream.push(1);
-        stream.push(2);
+  it(
+    "drains buffered events after end and resolves the explicit result",
+    drainsBufferedEventsAfterEndAnd,
+  );
 
-        const iterator = stream[Symbol.asyncIterator]();
-        expect(yield* Effect.promise(() => iterator.next())).toEqual({ value: 1, done: false });
-
-        stream.push(3);
-        expect(yield* Effect.promise(() => iterator.next())).toEqual({ value: 2, done: false });
-        expect(yield* Effect.promise(() => iterator.next())).toEqual({ value: 3, done: false });
-
-        stream.end(3);
-        expect(yield* Effect.promise(() => iterator.next())).toEqual({
-          value: undefined,
-          done: true,
-        });
-      }),
-    ));
-
-  it("delivers events to waiting consumers in registration order", () =>
-    Effect.runPromise(
-      Effect.gen(function* () {
-        const stream = new EventStream<number, number>(
-          () => false,
-          (event) => event,
-        );
-        const firstIterator = stream[Symbol.asyncIterator]();
-        const secondIterator = stream[Symbol.asyncIterator]();
-        const firstEvent = firstIterator.next();
-        const secondEvent = secondIterator.next();
-
-        stream.push(1);
-        stream.push(2);
-
-        expect(yield* Effect.promise(() => firstEvent)).toEqual({ value: 1, done: false });
-        expect(yield* Effect.promise(() => secondEvent)).toEqual({ value: 2, done: false });
-      }),
-    ));
-
-  it("drains buffered events after end and resolves the explicit result", () =>
-    Effect.runPromise(
-      Effect.gen(function* () {
-        const stream = new EventStream<number, string>(
-          () => false,
-          (event) => String(event),
-        );
-        stream.push(1);
-        stream.push(2);
-        stream.end("complete");
-
-        expect(yield* Effect.promise(() => stream.result())).toBe("complete");
-
-        const events: number[] = [];
-        yield* Stream.fromAsyncIterable(stream, (error) => error).pipe(
-          Stream.orDie,
-          Stream.runForEach((event) =>
-            Effect.sync(() => {
-              events.push(event);
-            }),
-          ),
-        );
-        expect(events).toEqual([1, 2]);
-      }),
-    ));
-
-  it("wakes all waiting consumers when ended without a result", () =>
-    Effect.runPromise(
-      Effect.gen(function* () {
-        const stream = new EventStream<number, number>(
-          () => false,
-          (event) => event,
-        );
-        const firstIterator = stream[Symbol.asyncIterator]();
-        const secondIterator = stream[Symbol.asyncIterator]();
-        const firstEvent = firstIterator.next();
-        const secondEvent = secondIterator.next();
-
-        stream.end();
-
-        expect(yield* Effect.promise(() => firstEvent)).toEqual({ value: undefined, done: true });
-        expect(yield* Effect.promise(() => secondEvent)).toEqual({ value: undefined, done: true });
-      }),
-    ));
+  it("wakes all waiting consumers when ended without a result", wakesAllWaitingConsumersWhenEnded);
 });
 
 function message(timestamp: number, durationMs?: number): AssistantMessage {
   return {
-    role: "assistant",
-    content: [],
     api: "openai-responses",
-    provider: "openai",
+    content: [],
     model: "m",
-    usage: {
-      input: 0,
-      output: 0,
-      cacheRead: 0,
-      cacheWrite: 0,
-      totalTokens: 0,
-      cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0, total: 0 },
-    },
+    provider: "openai",
+    role: "assistant",
     stopReason: "stop",
     timestamp,
+    usage: {
+      cacheRead: 0,
+      cacheWrite: 0,
+      cost: { cacheRead: 0, cacheWrite: 0, input: 0, output: 0, total: 0 },
+      input: 0,
+      output: 0,
+      totalTokens: 0,
+    },
     ...(durationMs === undefined ? {} : { durationMs }),
   };
 }
 
-const sleep = (ms: number) =>
-  new Promise((resolve) => {
-    setTimeout(resolve, ms);
-  });
+const sleep = (ms: number) => Effect.runPromise(Effect.sleep(ms));
+
+const setsDurationMsOnTheFinalDone = () =>
+  Effect.runPromise(
+    Effect.gen(function* () {
+      const done = new AssistantMessageEventStream();
+      const answer = message(yield* Clock.currentTimeMillis);
+      yield* Effect.promise(() => sleep(20));
+      done.push({ message: answer, reason: "stop", type: "done" });
+      expect(answer.durationMs).toBeGreaterThanOrEqual(15);
+      expect((yield* Effect.promise(() => done.result())).durationMs).toBe(answer.durationMs);
+
+      const failed = new AssistantMessageEventStream();
+      const error = { ...message(yield* Clock.currentTimeMillis), stopReason: "error" as const };
+      failed.push({ error, reason: "error", type: "error" });
+      expect(error.durationMs).toBeGreaterThanOrEqual(0);
+
+      const ended = new AssistantMessageEventStream();
+      const result = message(yield* Clock.currentTimeMillis);
+      ended.end(result);
+      expect(result.durationMs).toBeGreaterThanOrEqual(0);
+    }),
+  );
+
+const keepsAnExistingDurationSoA = () =>
+  Effect.runPromise(
+    Effect.gen(function* () {
+      const outer = new AssistantMessageEventStream();
+      yield* Effect.promise(() => sleep(20));
+      const inner = new AssistantMessageEventStream();
+      const answer = message(yield* Clock.currentTimeMillis);
+      inner.push({ message: answer, reason: "stop", type: "done" });
+      const measured = answer.durationMs;
+      outer.push({ message: answer, reason: "stop", type: "done" });
+      expect(answer.durationMs).toBe(measured);
+      expect(measured).toBeLessThan(20);
+
+      const preset = message(yield* Clock.currentTimeMillis, 1234);
+      new AssistantMessageEventStream().push({ message: preset, reason: "stop", type: "done" });
+      expect(preset.durationMs).toBe(1234);
+    }),
+  );
+
+const leavesAMessageUntimedWhenIt = () => {
+  const fetched = message(currentTimeMillis() - 60_000);
+  new AssistantMessageEventStream().push({ message: fetched, reason: "stop", type: "done" });
+  expect(fetched.durationMs).toBeUndefined();
+};
+
+const doesNotTimeAMessagePushed = () => {
+  const stream = new AssistantMessageEventStream();
+  stream.push({ message: message(currentTimeMillis()), reason: "stop", type: "done" });
+  const late = message(currentTimeMillis());
+  stream.push({ message: late, reason: "stop", type: "done" });
+  expect(late.durationMs).toBeUndefined();
+};
 
 describe("AssistantMessageEventStream timing", () => {
-  it("sets durationMs on the final done or error message of a response it saw start", () =>
-    Effect.runPromise(
-      Effect.gen(function* () {
-        const done = new AssistantMessageEventStream();
-        const answer = message(yield* Clock.currentTimeMillis);
-        yield* Effect.promise(() => sleep(20));
-        done.push({ type: "done", reason: "stop", message: answer });
-        expect(answer.durationMs).toBeGreaterThanOrEqual(15);
-        expect((yield* Effect.promise(() => done.result())).durationMs).toBe(answer.durationMs);
+  it(
+    "sets durationMs on the final done or error message of a response it saw start",
+    setsDurationMsOnTheFinalDone,
+  );
 
-        const failed = new AssistantMessageEventStream();
-        const error = { ...message(yield* Clock.currentTimeMillis), stopReason: "error" as const };
-        failed.push({ type: "error", reason: "error", error });
-        expect(error.durationMs).toBeGreaterThanOrEqual(0);
+  it(
+    "keeps an existing duration, so a forwarding stream keeps the inner measurement",
+    keepsAnExistingDurationSoA,
+  );
 
-        const ended = new AssistantMessageEventStream();
-        const result = message(yield* Clock.currentTimeMillis);
-        ended.end(result);
-        expect(result.durationMs).toBeGreaterThanOrEqual(0);
-      }),
-    ));
+  it(
+    "leaves a message untimed when it started before the stream, such as a fetched deferred result",
+    leavesAMessageUntimedWhenIt,
+  );
 
-  it("keeps an existing duration, so a forwarding stream keeps the inner measurement", () =>
-    Effect.runPromise(
-      Effect.gen(function* () {
-        const outer = new AssistantMessageEventStream();
-        yield* Effect.promise(() => sleep(20));
-        const inner = new AssistantMessageEventStream();
-        const answer = message(yield* Clock.currentTimeMillis);
-        inner.push({ type: "done", reason: "stop", message: answer });
-        const measured = answer.durationMs;
-        outer.push({ type: "done", reason: "stop", message: answer });
-        expect(answer.durationMs).toBe(measured);
-        expect(measured).toBeLessThan(20);
-
-        const preset = message(yield* Clock.currentTimeMillis, 1234);
-        new AssistantMessageEventStream().push({ type: "done", reason: "stop", message: preset });
-        expect(preset.durationMs).toBe(1234);
-      }),
-    ));
-
-  it("leaves a message untimed when it started before the stream, such as a fetched deferred result", () => {
-    const fetched = message(currentTimeMillis() - 60_000);
-    new AssistantMessageEventStream().push({ type: "done", reason: "stop", message: fetched });
-    expect(fetched.durationMs).toBeUndefined();
-  });
-
-  it("does not time a message pushed after the stream completed", () => {
-    const stream = new AssistantMessageEventStream();
-    stream.push({ type: "done", reason: "stop", message: message(currentTimeMillis()) });
-    const late = message(currentTimeMillis());
-    stream.push({ type: "done", reason: "stop", message: late });
-    expect(late.durationMs).toBeUndefined();
-  });
+  it("does not time a message pushed after the stream completed", doesNotTimeAMessagePushed);
 });

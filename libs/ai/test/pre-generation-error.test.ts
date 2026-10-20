@@ -10,16 +10,16 @@ import { normalizeContext } from "../src/utils/transcript.ts";
 
 function model<TApi extends Api>(api: TApi): Model<TApi> {
   return {
-    id: "test-model",
-    name: "Test",
     api,
-    provider: "test-provider",
     baseUrl: "https://example.invalid",
-    reasoning: false,
-    input: ["text"],
-    cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0 },
     contextWindow: 1_000,
+    cost: { cacheRead: 0, cacheWrite: 0, input: 0, output: 0 },
+    id: "test-model",
+    input: ["text"],
     maxTokens: 100,
+    name: "Test",
+    provider: "test-provider",
+    reasoning: false,
   };
 }
 

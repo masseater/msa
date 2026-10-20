@@ -4,13 +4,13 @@ import { describe, expect, it } from "vite-plus/test";
 import { getModel as getCompatModel } from "../src/compat.ts";
 import { InMemoryModelsStore, type ModelsStoreEntry } from "../src/models-store.ts";
 import {
+  type Provider,
   createModels,
   createProvider,
   getModelType,
   hasApi,
   isModelType,
   modelsAreEqual,
-  type Provider,
 } from "../src/models.ts";
 import { getBuiltinModel } from "../src/providers/all.ts";
 import { fauxAssistantMessage, fauxProvider } from "../src/providers/faux.ts";
@@ -19,30 +19,30 @@ import { AssistantMessageEventStream } from "../src/utils/event-stream.ts";
 
 function chatModel(provider: string, id: string): Model<Api> {
   return {
-    id,
-    name: id,
     api: "test-chat",
-    provider,
     baseUrl: "https://example.test/v1",
-    reasoning: false,
-    input: ["text"],
-    cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0 },
     contextWindow: 1000,
+    cost: { cacheRead: 0, cacheWrite: 0, input: 0, output: 0 },
+    id,
+    input: ["text"],
     maxTokens: 100,
+    name: id,
+    provider,
+    reasoning: false,
   };
 }
 
 function imageModel(provider: string, id: string): ImageModel<ImageApi> {
   return {
-    type: "image",
-    id,
-    name: id,
     api: "test-images",
-    provider,
     baseUrl: "https://example.test/v1",
+    cost: { cacheRead: 0, cacheWrite: 0, input: 0, output: 0 },
+    id,
     input: ["text"],
+    name: id,
     output: ["image"],
-    cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0 },
+    provider,
+    type: "image",
   };
 }
 
@@ -58,10 +58,10 @@ describe("chat models without a type", () => {
       Effect.gen(function* () {
         const faux = fauxProvider({ provider: "handwritten" });
         const handwritten: Provider = {
-          id: "handwritten",
-          name: "Handwritten",
           auth: faux.provider.auth,
           getModels: () => faux.models,
+          id: "handwritten",
+          name: "Handwritten",
           stream: faux.provider.stream,
           streamSimple: faux.provider.streamSimple,
         };
@@ -82,7 +82,7 @@ describe("chat models without a type", () => {
         faux.setResponses([fauxAssistantMessage("hi")]);
         const result = yield* Effect.promise(() =>
           models.complete(model!, {
-            messages: [{ role: "user", content: "hi", timestamp: 0 }],
+            messages: [{ content: "hi", role: "user", timestamp: 0 }],
           }),
         );
         expect(result.stopReason).toBe("stop");
@@ -141,16 +141,16 @@ describe("stored and fetched models of unknown types", () => {
         const models = createModels({ modelsStore });
         models.setProvider(
           createProvider({
-            id: "dyn",
-            auth: noAuth,
-            models: [],
-            fetchModels: () => Promise.resolve(fetched as Model<Api>[]),
             api: chatStreams,
+            auth: noAuth,
+            fetchModels: () => Promise.resolve(fetched as Model<Api>[]),
+            id: "dyn",
+            models: [],
           }),
         );
 
         const restored = yield* Effect.promise(() =>
-          models.refresh({ providers: ["dyn"], allowNetwork: false }),
+          models.refresh({ allowNetwork: false, providers: ["dyn"] }),
         );
         expect(restored.errors.size).toBe(0);
         expect(models.getAllModels("dyn").map((model) => model.id)).toEqual([

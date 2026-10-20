@@ -3,99 +3,15 @@ import { arch, platform, release } from "node:os";
 import { Effect } from "effect";
 import { beforeEach, describe, expect, it, vi } from "vite-plus/test";
 
-const googleGenAiMock = vi.hoisted(() => ({
-  constructorCalls: [] as Array<Record<string, unknown>>,
-  finishReason: "MALFORMED_FUNCTION_CALL",
-  includeFunctionCall: false,
-  streamChunks: undefined as Array<Record<string, unknown>> | undefined,
-}));
-
-vi.mock("@google/genai", () => {
-  class GoogleGenAI {
-    constructor(config: Record<string, unknown>) {
-      googleGenAiMock.constructorCalls.push(config);
-    }
-
-    models = {
-      generateContentStream: async function* () {
-        if (googleGenAiMock.streamChunks !== undefined) {
-          yield* googleGenAiMock.streamChunks;
-          return;
-        }
-        yield {
-          responseId: "google-response-id",
-          candidates: [
-            {
-              finishReason: googleGenAiMock.finishReason,
-              ...(googleGenAiMock.includeFunctionCall && {
-                content: {
-                  parts: [
-                    {
-                      functionCall: {
-                        id: "call-1",
-                        name: "echo",
-                        args: { value: "truncated" },
-                      },
-                    },
-                  ],
-                },
-              }),
-            },
-          ],
-          usageMetadata: {
-            promptTokenCount: 1,
-            candidatesTokenCount: 0,
-            totalTokenCount: 1,
-          },
-        };
-      },
-    };
-  }
-
-  return {
-    FinishReason: {
-      STOP: "STOP",
-      MAX_TOKENS: "MAX_TOKENS",
-      BLOCKLIST: "BLOCKLIST",
-      PROHIBITED_CONTENT: "PROHIBITED_CONTENT",
-      SPII: "SPII",
-      SAFETY: "SAFETY",
-      IMAGE_SAFETY: "IMAGE_SAFETY",
-      IMAGE_PROHIBITED_CONTENT: "IMAGE_PROHIBITED_CONTENT",
-      IMAGE_RECITATION: "IMAGE_RECITATION",
-      IMAGE_OTHER: "IMAGE_OTHER",
-      RECITATION: "RECITATION",
-      FINISH_REASON_UNSPECIFIED: "FINISH_REASON_UNSPECIFIED",
-      OTHER: "OTHER",
-      LANGUAGE: "LANGUAGE",
-      MALFORMED_FUNCTION_CALL: "MALFORMED_FUNCTION_CALL",
-      UNEXPECTED_TOOL_CALL: "UNEXPECTED_TOOL_CALL",
-      NO_IMAGE: "NO_IMAGE",
-    },
-    FunctionCallingConfigMode: {
-      AUTO: "AUTO",
-      NONE: "NONE",
-      ANY: "ANY",
-      VALIDATED: "VALIDATED",
-    },
-    GoogleGenAI,
-    ResourceScope: {
-      COLLECTION: "COLLECTION",
-    },
-    ThinkingLevel: {
-      THINKING_LEVEL_UNSPECIFIED: "THINKING_LEVEL_UNSPECIFIED",
-      MINIMAL: "MINIMAL",
-      LOW: "LOW",
-      MEDIUM: "MEDIUM",
-      HIGH: "HIGH",
-    },
-  };
-});
+vi.mock("@google/genai", () => import("./google-genai-mock.ts").then((module) => module.default));
 
 import { stream as streamGoogleGenerativeAi } from "../src/api/google-generative-ai.ts";
 import { getModel, normalizeContext } from "../src/compat.ts";
 import type { Api, Model, StreamOptions } from "../src/types.ts";
 import { currentTimeMillis } from "../src/utils/clock.ts";
+import googleGenAiMockModule from "./google-genai-mock.ts";
+
+const { googleGenAiMock } = googleGenAiMockModule;
 
 beforeEach(() => {
   googleGenAiMock.streamChunks = undefined;
@@ -104,7 +20,7 @@ beforeEach(() => {
 const MSA_USER_AGENT = `pi (${platform()} ${release()}; ${arch()})`;
 
 const context = normalizeContext({
-  messages: [{ role: "user", content: "hello", timestamp: currentTimeMillis() }],
+  messages: [{ content: "hello", role: "user", timestamp: currentTimeMillis() }],
 });
 
 const captureGoogleHeaders = Effect.fn("captureGoogleHeaders")(function* (
@@ -127,34 +43,39 @@ const captureGoogleHeaders = Effect.fn("captureGoogleHeaders")(function* (
   return httpOptions.headers ?? {};
 });
 
+const preservesRawGeminiFinishReasonsFor = () =>
+  Effect.runPromise(
+    Effect.gen(function* () {
+      googleGenAiMock.finishReason = "MALFORMED_FUNCTION_CALL";
+      googleGenAiMock.includeFunctionCall = false;
+
+      const stream = streamGoogleGenerativeAi(getModel("opencode", "gemini-3-flash"), context, {
+        apiKey: "test-api-key",
+      });
+
+      const message = yield* Effect.promise(() => stream.result());
+
+      expect(message.stopReason).toBe("error");
+      expect(message.rawStopReason).toBe("MALFORMED_FUNCTION_CALL");
+      expect(message.errorMessage).toBe("Provider stopped with: MALFORMED_FUNCTION_CALL");
+    }),
+  );
+
 describe("Google raw stop reasons", () => {
-  it("preserves raw Gemini finish reasons for Google Generative AI errors", () =>
-    Effect.runPromise(
-      Effect.gen(function* () {
-        googleGenAiMock.finishReason = "MALFORMED_FUNCTION_CALL";
-        googleGenAiMock.includeFunctionCall = false;
-
-        const stream = streamGoogleGenerativeAi(getModel("opencode", "gemini-3-flash"), context, {
-          apiKey: "test-api-key",
-        });
-
-        const message = yield* Effect.promise(() => stream.result());
-
-        expect(message.stopReason).toBe("error");
-        expect(message.rawStopReason).toBe("MALFORMED_FUNCTION_CALL");
-        expect(message.errorMessage).toBe("Provider stopped with: MALFORMED_FUNCTION_CALL");
-      }),
-    ));
+  it(
+    "preserves raw Gemini finish reasons for Google Generative AI errors",
+    preservesRawGeminiFinishReasonsFor,
+  );
 });
 
 describe("Google raw stop reasons", () => {
   const adapters = [
     {
-      name: "Google Generative AI",
       createStream: () =>
         streamGoogleGenerativeAi(getModel("opencode", "gemini-3-flash"), context, {
           apiKey: "test-api-key",
         }),
+      name: "Google Generative AI",
     },
   ];
   it.each(adapters)(
@@ -191,18 +112,7 @@ describe("Google raw stop reasons", () => {
 });
 
 describe("Google provider stream events", () => {
-  const googleModel = getModel("opencode", "gemini-3-flash");
-  const adapters = [
-    {
-      name: "Google Generative AI",
-      model: googleModel,
-      createStream: (onProviderStreamEvent: StreamOptions["onProviderStreamEvent"]) =>
-        streamGoogleGenerativeAi(googleModel, context, {
-          apiKey: "test-api-key",
-          onProviderStreamEvent,
-        }),
-    },
-  ];
+  const adapters = stepStep22();
 
   it.each(adapters)(
     "forwards each SDK chunk in order before normalizing it for $name",
@@ -212,12 +122,12 @@ describe("Google provider stream events", () => {
           const effectContext = yield* Effect.context();
           googleGenAiMock.streamChunks = [
             {
-              responseId: "resp_google",
               candidates: [{ content: { parts: [{ text: "hello" }] } }],
+              responseId: "resp_google",
             },
             {
               candidates: [{ finishReason: "STOP" }],
-              usageMetadata: { promptTokenCount: 2, candidatesTokenCount: 1, totalTokenCount: 3 },
+              usageMetadata: { candidatesTokenCount: 1, promptTokenCount: 2, totalTokenCount: 3 },
             },
           ];
           const received: unknown[] = [];
@@ -240,26 +150,49 @@ describe("Google provider stream events", () => {
           expect(eventModels).toEqual([model, model]);
           expect(result.stopReason).toBe("stop");
           expect(result.responseId).toBe("resp_google");
-          expect(result.content).toEqual([{ type: "text", text: "hello" }]);
+          expect(result.content).toEqual([{ text: "hello", type: "text" }]);
         }),
       ),
   );
 });
 
-describe("Google Generative AI user agent", () => {
-  it("uses msa's User-Agent by default", () =>
-    Effect.runPromise(
-      Effect.gen(function* () {
-        expect((yield* captureGoogleHeaders())["User-Agent"]).toBe(MSA_USER_AGENT);
-      }),
-    ));
+const usesMsaSUserAgentBy = () =>
+  Effect.runPromise(
+    Effect.gen(function* () {
+      expect((yield* captureGoogleHeaders())["User-Agent"]).toBe(MSA_USER_AGENT);
+    }),
+  );
 
-  it("lets explicit headers override the default User-Agent", () =>
-    Effect.runPromise(
-      Effect.gen(function* () {
-        expect((yield* captureGoogleHeaders({ "User-Agent": "custom-agent" }))["User-Agent"]).toBe(
-          "custom-agent",
-        );
-      }),
-    ));
+const letsExplicitHeadersOverrideTheDefault = () =>
+  Effect.runPromise(
+    Effect.gen(function* () {
+      expect((yield* captureGoogleHeaders({ "User-Agent": "custom-agent" }))["User-Agent"]).toBe(
+        "custom-agent",
+      );
+    }),
+  );
+
+describe("Google Generative AI user agent", () => {
+  it("uses msa's User-Agent by default", usesMsaSUserAgentBy);
+
+  it(
+    "lets explicit headers override the default User-Agent",
+    letsExplicitHeadersOverrideTheDefault,
+  );
 });
+
+function stepStep22() {
+  const googleModel = getModel("opencode", "gemini-3-flash");
+  const adapters = [
+    {
+      createStream: (onProviderStreamEvent: StreamOptions["onProviderStreamEvent"]) =>
+        streamGoogleGenerativeAi(googleModel, context, {
+          apiKey: "test-api-key",
+          onProviderStreamEvent,
+        }),
+      model: googleModel,
+      name: "Google Generative AI",
+    },
+  ];
+  return adapters;
+}

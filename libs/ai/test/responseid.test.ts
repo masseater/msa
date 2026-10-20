@@ -1,28 +1,32 @@
 import { Clock, Effect } from "effect";
-import { describe, expect, it } from "vite-plus/test";
+import { describe, expect, inject, it } from "vite-plus/test";
 
 import { complete, getModel } from "../src/compat.ts";
 import type { Api, Context, Model, StreamOptions } from "../src/types.ts";
-import { envValue } from "./env.ts";
-import { resolveApiKey } from "./oauth.ts";
+import env from "./env.ts";
+import modelChoice from "./model-choice.ts";
+
+const { chooseModel } = modelChoice;
+
+const { envValue } = env;
 
 type StreamOptionsWithExtras = StreamOptions & Record<string, unknown>;
 
-const openaiCodexToken = await resolveApiKey("openai-codex");
+const openaiCodexToken = inject("storedApiKeys")["openai-codex"];
 
 const expectResponseId = Effect.fn("expectResponseId")(function* <TApi extends Api>(
   model: Model<TApi>,
   options: StreamOptionsWithExtras = {},
 ) {
   const context: Context = {
-    systemPrompt: "You are a helpful assistant. Be concise.",
     messages: [
       {
-        role: "user",
         content: "Reply with exactly: response id test",
+        role: "user",
         timestamp: yield* Clock.currentTimeMillis,
       },
     ],
+    systemPrompt: "You are a helpful assistant. Be concise.",
   };
 
   const response = yield* Effect.promise(() => complete(model, context, options));
@@ -36,7 +40,7 @@ describe("responseId E2E Tests", () => {
   describe.skipIf(envValue("OPENAI_API_KEY") === undefined || envValue("OPENAI_API_KEY") === "")(
     "OpenAI Completions Provider",
     () => {
-      const { compat: _compat, ...baseModel } = getModel("openai", "gpt-4o-mini");
+      const { compat: _compat, ...baseModel } = chooseModel("openai", "direct OpenAI");
       void _compat;
       const llm: Model<"openai-completions"> = {
         ...baseModel,

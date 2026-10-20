@@ -3,7 +3,13 @@ import { Hex } from "effect/encoding";
 
 import { digest } from "../src/utils/crypto.ts";
 import { decodeJson, encodeJson } from "../src/utils/json-codec.ts";
-import {
+import modelDataChecks from "./model-data-checks.ts";
+import type modelDataTypes from "./model-data.types.ts";
+import ScriptFileError from "./script-file-error.ts";
+import scriptFiles from "./script-files.ts";
+import type scriptFilesTypes from "./script-files.types.ts";
+
+const {
   apiPlacementErrors,
   groupedModelErrors,
   isRecord,
@@ -11,25 +17,15 @@ import {
   manifestErrors,
   sortedRecord,
   structureFromGroups,
-} from "./model-data-checks.ts";
-import type { ScriptFileError } from "./script-file-error.ts";
-import { ScriptFiles } from "./script-files.ts";
+} = modelDataChecks;
+const { ScriptFiles } = scriptFiles;
 
-export const MODEL_DATA_SCHEMA_VERSION = 6;
-export const MODEL_DATA_MANIFEST_FILE = ".manifest.json";
+const MODEL_DATA_SCHEMA_VERSION = 6;
+const MODEL_DATA_MANIFEST_FILE = ".manifest.json";
 
-export type ModelDataStructure = Record<string, Record<string, string>>;
-
-export class ModelDataError extends Data.TaggedError("ModelDataError")<{
+class ModelDataError extends Data.TaggedError("ModelDataError")<{
   readonly message: string;
 }> {}
-
-export interface ModelDataManifest {
-  schemaVersion: number;
-  generatedAt: string;
-  structureHash: string;
-  files: Record<string, string>;
-}
 
 const MODEL_DATA_IMPORT_PATTERN =
   /^import \{ [A-Z][A-Z0-9_]*_CLASSIFIER_MODELS, [A-Z][A-Z0-9_]*_IMAGE_MODELS, [A-Z][A-Z0-9_]*_MODELS \} from "\.\/providers\/([^"/]+)\.models\.ts";$/gmu;
@@ -67,12 +63,12 @@ const readProviderStructure = Effect.fn("readProviderStructure")(function* (
   providerId: string,
 ) {
   const groups = yield* readJsonObject(path, `${providerId}.json`);
-  const result = structureFromGroups({ path, groups });
+  const result = structureFromGroups({ groups, path });
   if ("error" in result) return yield* fail(result.error);
   return result.structure;
 });
 
-export const readModelDataProviderIds = Effect.fn("readModelDataProviderIds")(function* (
+const readModelDataProviderIds = Effect.fn("readModelDataProviderIds")(function* (
   packageRoot: string,
 ) {
   const files = yield* ScriptFiles;
@@ -91,17 +87,15 @@ export const readModelDataProviderIds = Effect.fn("readModelDataProviderIds")(fu
   return providerIds;
 });
 
-export const readModelDataStructure = Effect.fn("readModelDataStructure")(function* (
-  packageRoot: string,
-) {
+const readModelDataStructure = Effect.fn("readModelDataStructure")(function* (packageRoot: string) {
   const files = yield* ScriptFiles;
   const providersDir = files.join(packageRoot, "src", "providers");
   const providerIds = yield* readModelDataProviderIds(packageRoot);
   const [message] = listMismatch("Generated model aggregator and provider shards do not match")({
-    expected: providerIds.map((providerId) => `${providerId}.models.ts`).sort(),
     actual: (yield* files.list(providersDir))
       .filter((entry) => entry.endsWith(".models.ts"))
       .sort(),
+    expected: providerIds.map((providerId) => `${providerId}.models.ts`).sort(),
   });
   if (message !== undefined) return yield* fail(message);
   const structures = yield* Effect.forEach(providerIds, (providerId) =>
@@ -113,7 +107,9 @@ export const readModelDataStructure = Effect.fn("readModelDataStructure")(functi
   return sortedRecord(structures);
 });
 
-export const modelDataStructureHash = (structure: ModelDataStructure): Effect.Effect<string> =>
+const modelDataStructureHash = (
+  structure: modelDataTypes.ModelDataStructure,
+): Effect.Effect<string> =>
   encodeJson(
     sortedRecord(
       Object.entries(structure).map(
@@ -122,20 +118,22 @@ export const modelDataStructureHash = (structure: ModelDataStructure): Effect.Ef
     ),
   ).pipe(Effect.flatMap(sha256));
 
-export const createModelDataManifest: {
+const createModelDataManifest: {
   (
     fileContents: Readonly<Record<string, string>>,
     generatedAt: string,
-  ): (structure: ModelDataStructure) => Effect.Effect<ModelDataManifest>;
+  ): (
+    structure: modelDataTypes.ModelDataStructure,
+  ) => Effect.Effect<modelDataTypes.ModelDataManifest>;
   (
-    structure: ModelDataStructure,
+    structure: modelDataTypes.ModelDataStructure,
     fileContents: Readonly<Record<string, string>>,
     generatedAt: string,
-  ): Effect.Effect<ModelDataManifest>;
+  ): Effect.Effect<modelDataTypes.ModelDataManifest>;
 } = Function.dual(
   3,
   Effect.fnUntraced(function* (
-    structure: ModelDataStructure,
+    structure: modelDataTypes.ModelDataStructure,
     fileContents: Readonly<Record<string, string>>,
     generatedAt: string,
   ) {
@@ -143,10 +141,10 @@ export const createModelDataManifest: {
       Effect.map(sha256(content), (hash) => [file, hash] as const),
     );
     return {
-      schemaVersion: MODEL_DATA_SCHEMA_VERSION,
-      generatedAt,
-      structureHash: yield* modelDataStructureHash(structure),
       files: sortedRecord(hashes),
+      generatedAt,
+      schemaVersion: MODEL_DATA_SCHEMA_VERSION,
+      structureHash: yield* modelDataStructureHash(structure),
     };
   }),
 );
@@ -166,15 +164,15 @@ const providerFileErrors = Effect.fn("providerFileErrors")(function* (
     errors.push(`${filename} does not match its manifest hash`);
   const groups = yield* collectJsonObject(path, filename, errors);
   if (groups === undefined) return errors;
-  const grouped = groupedModelErrors({ providerId, filename, groups });
+  const grouped = groupedModelErrors({ filename, groups, providerId });
   return [
     ...errors,
     ...grouped.errors,
     ...listMismatch(`${filename} model IDs do not match the generated catalog`)({
-      expected: Object.keys(expectedModels).sort(),
       actual: Array.from(grouped.actualModels.keys()).sort(),
+      expected: Object.keys(expectedModels).sort(),
     }),
-    ...apiPlacementErrors({ providerId, expectedModels, actualModels: grouped.actualModels }),
+    ...apiPlacementErrors({ actualModels: grouped.actualModels, expectedModels, providerId }),
   ];
 });
 
@@ -187,19 +185,19 @@ function validationFailure(errors: readonly string[]): ModelDataError {
   });
 }
 
-export const validateModelDataDirectory: {
+const validateModelDataDirectory: {
   (
     dataDir: string,
   ): (
-    structure: ModelDataStructure,
-  ) => Effect.Effect<void, ModelDataError | ScriptFileError, ScriptFiles>;
+    structure: modelDataTypes.ModelDataStructure,
+  ) => Effect.Effect<void, ModelDataError | ScriptFileError, scriptFilesTypes.ScriptFiles>;
   (
-    structure: ModelDataStructure,
+    structure: modelDataTypes.ModelDataStructure,
     dataDir: string,
-  ): Effect.Effect<void, ModelDataError | ScriptFileError, ScriptFiles>;
+  ): Effect.Effect<void, ModelDataError | ScriptFileError, scriptFilesTypes.ScriptFiles>;
 } = Function.dual(
   2,
-  Effect.fnUntraced(function* (structure: ModelDataStructure, dataDir: string) {
+  Effect.fnUntraced(function* (structure: modelDataTypes.ModelDataStructure, dataDir: string) {
     const files = yield* ScriptFiles;
     if (!(yield* files.isDirectory(dataDir)))
       return yield* fail(`Generated model data directory does not exist: ${dataDir}`);
@@ -207,19 +205,19 @@ export const validateModelDataDirectory: {
       .map((providerId) => `${providerId}.json`)
       .sort();
     const errors = listMismatch("provider data files do not match the generated catalog")({
-      expected: expectedFiles,
       actual: (yield* files.list(dataDir))
         .filter((entry) => entry.endsWith(".json") && entry !== MODEL_DATA_MANIFEST_FILE)
         .sort(),
+      expected: expectedFiles,
     });
     const manifestPath = files.join(dataDir, MODEL_DATA_MANIFEST_FILE);
     const manifest = yield* collectJsonObject(manifestPath, "model data manifest", errors);
     errors.push(
       ...manifestErrors({
+        expectedFiles,
         manifest,
         schemaVersion: MODEL_DATA_SCHEMA_VERSION,
         structureHash: yield* modelDataStructureHash(structure),
-        expectedFiles,
       }),
     );
     const hashes = manifest?.["files"];
@@ -230,7 +228,7 @@ export const validateModelDataDirectory: {
   }),
 );
 
-export const validateGeneratedModelData = Effect.fn("validateGeneratedModelData")(function* (
+const validateGeneratedModelData = Effect.fn("validateGeneratedModelData")(function* (
   packageRoot: string,
 ) {
   const structure = yield* readModelDataStructure(packageRoot);
@@ -238,28 +236,20 @@ export const validateGeneratedModelData = Effect.fn("validateGeneratedModelData"
   yield* validateModelDataDirectory(structure, files.join(packageRoot, "src", "providers", "data"));
 });
 
-export interface ModelCatalogEntry {
-  type: string;
-  id: string;
-  api: string;
-}
-
-export interface ProviderModelData<T extends ModelCatalogEntry> {
-  readonly groups: Record<string, Record<string, T>>;
-  readonly structure: Record<string, string>;
-}
-
-export const groupProviderModelData: {
-  <T extends ModelCatalogEntry>(
+const groupProviderModelData: {
+  <T extends modelDataTypes.ModelCatalogEntry>(
     models: readonly T[],
-  ): (providerId: string) => Effect.Effect<ProviderModelData<T>, ModelDataError>;
-  <T extends ModelCatalogEntry>(
+  ): (providerId: string) => Effect.Effect<modelDataTypes.ProviderModelData<T>, ModelDataError>;
+  <T extends modelDataTypes.ModelCatalogEntry>(
     providerId: string,
     models: readonly T[],
-  ): Effect.Effect<ProviderModelData<T>, ModelDataError>;
+  ): Effect.Effect<modelDataTypes.ProviderModelData<T>, ModelDataError>;
 } = Function.dual(2, function <
-  T extends ModelCatalogEntry,
->(providerId: string, models: readonly T[]): Effect.Effect<ProviderModelData<T>, ModelDataError> {
+  T extends modelDataTypes.ModelCatalogEntry,
+>(providerId: string, models: readonly T[]): Effect.Effect<
+  modelDataTypes.ProviderModelData<T>,
+  ModelDataError
+> {
   const groups: Record<string, Record<string, T>> = {};
   const structure: Record<string, string> = {};
   for (const api of Array.from(new Set(models.map((model) => model.api))).sort()) {
@@ -276,3 +266,18 @@ export const groupProviderModelData: {
   }
   return Effect.succeed({ groups, structure });
 });
+
+const modelData = {
+  MODEL_DATA_MANIFEST_FILE,
+  MODEL_DATA_SCHEMA_VERSION,
+  ModelDataError,
+  createModelDataManifest,
+  groupProviderModelData,
+  modelDataStructureHash,
+  readModelDataProviderIds,
+  readModelDataStructure,
+  validateGeneratedModelData,
+  validateModelDataDirectory,
+};
+
+export default modelData;

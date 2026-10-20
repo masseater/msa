@@ -1,449 +1,64 @@
-import type { ChildProcess } from "child_process";
-import { execSync, spawn } from "child_process";
+import { describe, inject, it } from "vite-plus/test";
 
-import { Clock, Console, Effect } from "effect";
-import { afterAll, beforeAll, describe, expect, it } from "vite-plus/test";
+import type { Model } from "../src/types.ts";
+import contextOverflowSupport from "./context-overflow-support.ts";
+import env from "./env.ts";
+import modelChoice from "./model-choice.ts";
 
-import { complete, getModel } from "../src/compat.ts";
-import type { AssistantMessage, Context, Model, Usage } from "../src/types.ts";
-import { isContextOverflow } from "../src/utils/overflow.ts";
-import { envValue } from "./env.ts";
-import { resolveApiKey } from "./oauth.ts";
+const { expectOverflowDetected } = contextOverflowSupport;
+const { envValue, hasEnv, hasValue } = env;
+const { chooseModel, usesApi } = modelChoice;
 
-const openaiCodexToken = await resolveApiKey("openai-codex");
+const openaiCodexToken = inject("storedApiKeys")["openai-codex"];
+const slow = { timeout: 120000 };
 
-const LOREM_IPSUM = `Lorem ipsum dolor sit amet, consectetur adipiscing elit. Sed do eiusmod tempor incididunt ut labore et dolore magna aliqua. Ut enim ad minim veniam, quis nostrud exercitation ullamco laboris nisi ut aliquip ex ea commodo consequat. Duis aute irure dolor in reprehenderit in voluptate velit esse cillum dolore eu fugiat nulla pariatur. Excepteur sint occaecat cupidatat non proident, sunt in culpa qui officia deserunt mollit anim id est laborum. `;
+const openAICompletionsModel = (): Model<"openai-completions"> => {
+  const { compat: _compat, ...baseModel } = chooseModel("openai", "direct OpenAI");
+  return { ...baseModel, api: "openai-completions" };
+};
 
-function generateOverflowContent(contextWindow: number): string {
-  const targetTokens = contextWindow + 10000;
-  const targetChars = targetTokens * 4 * 1.5;
-  const repetitions = Math.ceil(targetChars / LOREM_IPSUM.length);
-  return LOREM_IPSUM.repeat(repetitions);
-}
-
-interface OverflowResult {
-  provider: string;
-  model: string;
-  contextWindow: number;
-  stopReason: string;
-  errorMessage: string | undefined;
-  usage: Usage;
-  hasUsageData: boolean;
-  response: AssistantMessage;
-}
-
-function testContextOverflow(model: Model<any>, apiKey: string): Promise<OverflowResult> {
-  return Effect.runPromise(
-    Effect.gen(function* () {
-      const overflowContent = generateOverflowContent(model.contextWindow);
-
-      const context: Context = {
-        systemPrompt: "You are a helpful assistant.",
-        messages: [
-          {
-            role: "user",
-            content: overflowContent,
-            timestamp: yield* Clock.currentTimeMillis,
-          },
-        ],
-      };
-
-      const response = yield* Effect.promise(() => complete(model, context, { apiKey }));
-
-      const hasUsageData = response.usage.input > 0 || response.usage.cacheRead > 0;
-
-      return {
-        provider: model.provider,
-        model: model.id,
-        contextWindow: model.contextWindow,
-        stopReason: response.stopReason,
-        errorMessage: response.errorMessage,
-        usage: response.usage,
-        hasUsageData,
-        response,
-      };
-    }),
+const openRouterVendorModel = (vendor: string) =>
+  chooseModel(
+    "openrouter",
+    `${vendor} completions`,
+    (model) => usesApi("openai-completions")(model) && model.id.startsWith(`${vendor}/`),
   );
-}
-
-function logResult(result: OverflowResult) {
-  console.log(`\n${result.provider} / ${result.model}:`);
-  console.log(`  contextWindow: ${result.contextWindow}`);
-  console.log(`  stopReason: ${result.stopReason}`);
-  console.log(`  errorMessage: ${result.errorMessage}`);
-  console.log(`  usage: ${JSON.stringify(result.usage)}`);
-  console.log(`  hasUsageData: ${result.hasUsageData}`);
-}
 
 describe("Context overflow error handling", () => {
-  describe.skipIf(
-    envValue("ANTHROPIC_API_KEY") === undefined || envValue("ANTHROPIC_API_KEY") === "",
-  )("Anthropic (API Key)", () => {
-    it(
-      "claude-haiku-4-5 - should detect overflow via isContextOverflow",
-      () =>
-        Effect.runPromise(
-          Effect.gen(function* () {
-            const model = getModel("anthropic-api", "claude-haiku-4-5");
-            const result = yield* Effect.promise(() =>
-              testContextOverflow(model, envValue("ANTHROPIC_API_KEY")!),
-            );
-            logResult(result);
-
-            expect(result.stopReason).toBe("error");
-            expect(result.errorMessage).toMatch(/prompt is too long/iu);
-            expect(isContextOverflow(result.response, model.contextWindow)).toBe(true);
-          }),
-        ),
-      120000,
-    );
-  });
-
-  describe.skipIf(envValue("OPENAI_API_KEY") === undefined || envValue("OPENAI_API_KEY") === "")(
-    "OpenAI Completions",
-    () => {
-      it(
-        "gpt-4o-mini - should detect overflow via isContextOverflow",
-        () =>
-          Effect.runPromise(
-            Effect.gen(function* () {
-              const model = { ...getModel("openai", "gpt-4o-mini") };
-              model.api = "openai-completions" as any;
-              const result = yield* Effect.promise(() =>
-                testContextOverflow(model, envValue("OPENAI_API_KEY")!),
-              );
-              logResult(result);
-
-              expect(result.stopReason).toBe("error");
-              expect(result.errorMessage).toMatch(/maximum context length/iu);
-              expect(isContextOverflow(result.response, model.contextWindow)).toBe(true);
-            }),
-          ),
-        120000,
-      );
-    },
+  it.skipIf(!hasEnv("ANTHROPIC_API_KEY"))("detects Anthropic overflow", slow, () =>
+    expectOverflowDetected(
+      chooseModel("anthropic-api", "Messages", usesApi("anthropic-messages")),
+      envValue("ANTHROPIC_API_KEY"),
+      /prompt is too long/iu,
+    ),
   );
-
-  describe.skipIf(envValue("OPENAI_API_KEY") === undefined || envValue("OPENAI_API_KEY") === "")(
-    "OpenAI Responses",
-    () => {
-      it(
-        "gpt-4o - should detect overflow via isContextOverflow",
-        () =>
-          Effect.runPromise(
-            Effect.gen(function* () {
-              const model = getModel("openai", "gpt-4o");
-              const result = yield* Effect.promise(() =>
-                testContextOverflow(model, envValue("OPENAI_API_KEY")!),
-              );
-              logResult(result);
-
-              expect(result.stopReason).toBe("error");
-              expect(result.errorMessage).toMatch(/exceeds the context window/iu);
-              expect(isContextOverflow(result.response, model.contextWindow)).toBe(true);
-            }),
-          ),
-        120000,
-      );
-    },
+  it.skipIf(!hasEnv("OPENAI_API_KEY"))("detects OpenAI Completions overflow", slow, () =>
+    expectOverflowDetected(
+      openAICompletionsModel(),
+      envValue("OPENAI_API_KEY"),
+      /maximum context length/iu,
+    ),
   );
-
-  describe("OpenAI Codex (OAuth)", () => {
-    it.skipIf(openaiCodexToken === undefined || openaiCodexToken === "")(
-      "gpt-5.5 - should detect overflow via isContextOverflow",
-      () =>
-        Effect.runPromise(
-          Effect.gen(function* () {
-            const model = getModel("openai-codex", "gpt-5.5");
-            const result = yield* Effect.promise(() =>
-              testContextOverflow(model, openaiCodexToken!),
-            );
-            logResult(result);
-
-            expect(result.stopReason).toBe("error");
-            expect(isContextOverflow(result.response, model.contextWindow)).toBe(true);
-          }),
-        ),
-      120000,
-    );
-  });
-
-  describe.skipIf(
-    envValue("OPENROUTER_API_KEY") === undefined || envValue("OPENROUTER_API_KEY") === "",
-  )("OpenRouter", () => {
-    it(
-      "anthropic/claude-sonnet-4.5 via OpenRouter - should detect overflow via isContextOverflow",
-      () =>
-        Effect.runPromise(
-          Effect.gen(function* () {
-            const model = getModel("openrouter", "anthropic/claude-sonnet-4.5");
-            const result = yield* Effect.promise(() =>
-              testContextOverflow(model, envValue("OPENROUTER_API_KEY")!),
-            );
-            logResult(result);
-
-            expect(result.stopReason).toBe("error");
-            expect(result.errorMessage).toMatch(/maximum context length is \d+ tokens/iu);
-            expect(isContextOverflow(result.response, model.contextWindow)).toBe(true);
-          }),
-        ),
-      120000,
-    );
-
-    it(
-      "deepseek/deepseek-v3.2 via OpenRouter - should detect overflow via isContextOverflow",
-      () =>
-        Effect.runPromise(
-          Effect.gen(function* () {
-            const model = getModel("openrouter", "deepseek/deepseek-v3.2");
-            const result = yield* Effect.promise(() =>
-              testContextOverflow(model, envValue("OPENROUTER_API_KEY")!),
-            );
-            logResult(result);
-
-            expect(result.stopReason).toBe("error");
-            expect(result.errorMessage).toMatch(/maximum context length is \d+ tokens/iu);
-            expect(isContextOverflow(result.response, model.contextWindow)).toBe(true);
-          }),
-        ),
-      120000,
-    );
-
-    it(
-      "mistralai/mistral-large-2512 via OpenRouter - should detect overflow via isContextOverflow",
-      () =>
-        Effect.runPromise(
-          Effect.gen(function* () {
-            const model = getModel("openrouter", "mistralai/mistral-large");
-            const result = yield* Effect.promise(() =>
-              testContextOverflow(model, envValue("OPENROUTER_API_KEY")!),
-            );
-            logResult(result);
-
-            expect(result.stopReason).toBe("error");
-            expect(result.errorMessage).toMatch(/maximum context length is \d+ tokens/iu);
-            expect(isContextOverflow(result.response, model.contextWindow)).toBe(true);
-          }),
-        ),
-      120000,
-    );
-
-    it(
-      "google/gemini-2.5-flash via OpenRouter - should detect overflow via isContextOverflow",
-      () =>
-        Effect.runPromise(
-          Effect.gen(function* () {
-            const model = getModel("openrouter", "google/gemini-2.5-flash");
-            const result = yield* Effect.promise(() =>
-              testContextOverflow(model, envValue("OPENROUTER_API_KEY")!),
-            );
-            logResult(result);
-
-            expect(result.stopReason).toBe("error");
-            expect(result.errorMessage).toMatch(/maximum context length is \d+ tokens/iu);
-            expect(isContextOverflow(result.response, model.contextWindow)).toBe(true);
-          }),
-        ),
-      120000,
-    );
-
-    it(
-      "meta-llama/llama-4-scout via OpenRouter - should detect overflow via isContextOverflow",
-      () =>
-        Effect.runPromise(
-          Effect.gen(function* () {
-            const model = getModel("openrouter", "meta-llama/llama-4-scout");
-            const result = yield* Effect.promise(() =>
-              testContextOverflow(model, envValue("OPENROUTER_API_KEY")!),
-            );
-            logResult(result);
-
-            expect(result.stopReason).toBe("error");
-            expect(result.errorMessage).toMatch(/maximum context length is \d+ tokens/iu);
-            expect(isContextOverflow(result.response, model.contextWindow)).toBe(true);
-          }),
-        ),
-      120000,
-    );
-  });
-
-  let ollamaInstalled = false;
-  if (envValue("MSA_NO_LOCAL_LLM") === undefined || envValue("MSA_NO_LOCAL_LLM") === "") {
-    try {
-      execSync("which ollama", { stdio: "ignore" });
-      ollamaInstalled = true;
-    } catch {
-      ollamaInstalled = false;
-    }
-  }
-
-  describe.skipIf(!ollamaInstalled)("Ollama (local)", () => {
-    let ollamaProcess: ChildProcess | null = null;
-    let model: Model<"openai-completions">;
-
-    beforeAll(async () => {
-      try {
-        execSync("ollama list | grep -q 'gpt-oss:20b'", { stdio: "ignore" });
-      } catch {
-        console.log("Pulling gpt-oss:20b model for Ollama overflow tests...");
-        try {
-          execSync("ollama pull gpt-oss:20b", { stdio: "inherit" });
-        } catch {
-          console.warn("Failed to pull gpt-oss:20b model, tests will be skipped");
-          return;
-        }
-      }
-
-      ollamaProcess = spawn("ollama", ["serve"], {
-        detached: false,
-        stdio: "ignore",
-      });
-
-      await new Promise<void>((resolve) => {
-        const checkServer = async () => {
-          try {
-            const response = await fetch("http://localhost:11434/api/tags");
-            if (response.ok) {
-              resolve();
-            } else {
-              setTimeout(checkServer, 500);
-            }
-          } catch {
-            setTimeout(checkServer, 500);
-          }
-        };
-        setTimeout(checkServer, 1000);
-      });
-
-      model = {
-        id: "gpt-oss:20b",
-        api: "openai-completions",
-        provider: "ollama",
-        baseUrl: "http://localhost:11434/v1",
-        reasoning: true,
-        input: ["text"],
-        contextWindow: 128000,
-        maxTokens: 16000,
-        cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0 },
-        name: "Ollama GPT-OSS 20B",
-      };
-    }, 60000);
-
-    afterAll(() => {
-      if (ollamaProcess !== null) {
-        ollamaProcess.kill("SIGTERM");
-        ollamaProcess = null;
-      }
-    });
-
-    it(
-      "gpt-oss:20b - should detect overflow via isContextOverflow (ollama silently truncates)",
-      () =>
-        Effect.runPromise(
-          Effect.gen(function* () {
-            const result = yield* Effect.promise(() => testContextOverflow(model, "ollama"));
-            logResult(result);
-
-            if (result.stopReason === "stop" && result.hasUsageData) {
-              yield* Console.log(
-                "  Ollama silently truncated input to",
-                result.usage.input,
-                "tokens",
-              );
-            } else if (result.stopReason === "error") {
-              expect(isContextOverflow(result.response, model.contextWindow)).toBe(true);
-            }
-          }),
-        ),
-      300000,
-    );
-  });
-
-  let lmStudioRunning = false;
-  if (envValue("MSA_NO_LOCAL_LLM") === undefined || envValue("MSA_NO_LOCAL_LLM") === "") {
-    try {
-      execSync("curl -s --max-time 1 http://localhost:1234/v1/models > /dev/null", {
-        stdio: "ignore",
-      });
-      lmStudioRunning = true;
-    } catch {
-      lmStudioRunning = false;
-    }
-  }
-
-  describe.skipIf(!lmStudioRunning)("LM Studio (local)", () => {
-    it(
-      "should detect overflow via isContextOverflow",
-      () =>
-        Effect.runPromise(
-          Effect.gen(function* () {
-            const model: Model<"openai-completions"> = {
-              id: "local-model",
-              api: "openai-completions",
-              provider: "lm-studio",
-              baseUrl: "http://localhost:1234/v1",
-              reasoning: false,
-              input: ["text"],
-              contextWindow: 8192,
-              maxTokens: 2048,
-              cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0 },
-              name: "LM Studio Local Model",
-            };
-
-            const result = yield* Effect.promise(() => testContextOverflow(model, "lm-studio"));
-            logResult(result);
-
-            expect(result.stopReason).toBe("error");
-            expect(isContextOverflow(result.response, model.contextWindow)).toBe(true);
-          }),
-        ),
-      120000,
-    );
-  });
-
-  let llamaCppRunning = false;
-  if (envValue("MSA_NO_LOCAL_LLM") === undefined || envValue("MSA_NO_LOCAL_LLM") === "") {
-    try {
-      execSync("curl -s --max-time 1 http://localhost:8081/health > /dev/null", {
-        stdio: "ignore",
-      });
-      const probeStatus = execSync(
-        'curl -s --max-time 1 -o /dev/null -w \'%{http_code}\' -X POST http://localhost:8081/v1/completions -H \'content-type: application/json\' -d \'{"model":"local-model","prompt":"ping","max_tokens":1}\'',
-        { encoding: "utf8" },
-      ).trim();
-      llamaCppRunning = probeStatus !== "404" && probeStatus !== "405" && probeStatus !== "000";
-    } catch {
-      llamaCppRunning = false;
-    }
-  }
-
-  describe.skipIf(!llamaCppRunning)("llama.cpp (local)", () => {
-    it(
-      "should detect overflow via isContextOverflow",
-      () =>
-        Effect.runPromise(
-          Effect.gen(function* () {
-            const model: Model<"openai-completions"> = {
-              id: "local-model",
-              api: "openai-completions",
-              provider: "llama.cpp",
-              baseUrl: "http://localhost:8081/v1",
-              reasoning: false,
-              input: ["text"],
-              contextWindow: 4096,
-              maxTokens: 2048,
-              cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0 },
-              name: "llama.cpp Local Model",
-            };
-
-            const result = yield* Effect.promise(() => testContextOverflow(model, "llama.cpp"));
-            logResult(result);
-
-            expect(result.stopReason).toBe("error");
-            expect(isContextOverflow(result.response, model.contextWindow)).toBe(true);
-          }),
-        ),
-      120000,
-    );
-  });
+  it.skipIf(!hasEnv("OPENAI_API_KEY"))("detects OpenAI Responses overflow", slow, () =>
+    expectOverflowDetected(
+      chooseModel("openai", "Responses", usesApi("openai-responses")),
+      envValue("OPENAI_API_KEY"),
+      /exceeds the context window/iu,
+    ),
+  );
+  it.skipIf(!hasValue(openaiCodexToken))("detects OpenAI Codex overflow", slow, () =>
+    expectOverflowDetected(chooseModel("openai-codex", "Codex"), openaiCodexToken),
+  );
+  it
+    .skipIf(!hasEnv("OPENROUTER_API_KEY"))
+    .for(["anthropic", "deepseek", "mistralai", "google", "meta-llama"])(
+    "detects OpenRouter %s overflow",
+    slow,
+    (vendor) =>
+      expectOverflowDetected(
+        openRouterVendorModel(vendor),
+        envValue("OPENROUTER_API_KEY"),
+        /maximum context length is \d+ tokens/iu,
+      ),
+  );
 });

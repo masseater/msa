@@ -5,14 +5,16 @@ import { getModel, stream } from "../src/compat.ts";
 import type { Context, Model } from "../src/types.ts";
 import { currentTimeMillis } from "../src/utils/clock.ts";
 import { nextRandom } from "../src/utils/random.ts";
-import { envValue } from "./env.ts";
+import env from "./env.ts";
+
+const { envValue } = env;
 
 function makeContext(): Context {
   return {
     messages: [
       {
-        role: "user",
         content: `What is ${(nextRandom() * 100) | 0} + ${(nextRandom() * 100) | 0}? Think step by step.`,
+        role: "user",
         timestamp: currentTimeMillis(),
       },
     ],

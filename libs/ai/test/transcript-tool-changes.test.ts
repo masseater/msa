@@ -1,80 +1,9 @@
-import { Data, Effect } from "effect";
-import { Type } from "typebox";
+import { Effect } from "effect";
 import { describe, expect, test } from "vite-plus/test";
 
-import { getModel, streamSimple } from "../src/compat.ts";
-import type { Api, Context, Model, Tool } from "../src/types.ts";
+import transcriptToolChangesSupport from "./transcript-tool-changes-support.ts";
 
-class PayloadCaptured extends Data.TaggedError("PayloadCaptured") {}
-
-function tool(name: string): Tool {
-  return { name, description: `${name} tool`, parameters: Type.Object({}) };
-}
-
-const capturePayload = Effect.fn("capturePayload")(function* <T>(
-  model: Model<Api>,
-  context: Context,
-) {
-  let captured: T | undefined;
-  const stream = streamSimple(model, context, {
-    apiKey: "test-key",
-    onPayload: (payload) => {
-      captured = payload as T;
-      throw new PayloadCaptured();
-    },
-  });
-  yield* Effect.promise(() => stream.result());
-  if (captured === undefined) throw new Error("Expected payload capture");
-  return captured;
-});
-
-const modelBase = {
-  baseUrl: "http://127.0.0.1:9",
-  reasoning: true,
-  input: ["text"] as ("text" | "image")[],
-  cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0 },
-  contextWindow: 100000,
-  maxTokens: 1000,
-};
-
-const baseTool = tool("base_tool");
-const lateTool = tool("late_tool");
-const context: Context = {
-  messages: [
-    {
-      role: "system",
-      content: "base prompt",
-      sections: { rules: "<rules>\nold rules\n</rules>", docs: "<docs>\nread docs\n</docs>" },
-      toolsAdded: [baseTool],
-      timestamp: 0,
-    },
-    { role: "user", content: "before", timestamp: 1 },
-    {
-      role: "system",
-      content: "updated guidance",
-      sections: { rules: "<rules>\nnew rules\n</rules>", docs: null },
-      toolsRemoved: [{ name: "base_tool" }],
-      toolsAdded: [lateTool],
-      timestamp: 2,
-    },
-  ],
-};
-const additionContext: Context = {
-  messages: [
-    { role: "system", content: "base prompt", toolsAdded: [baseTool], timestamp: 0 },
-    { role: "user", content: "before", timestamp: 1 },
-    { role: "system", content: "updated guidance", toolsAdded: [lateTool], timestamp: 2 },
-  ],
-};
-
-const anthropicNativeModel: Model<"anthropic-messages"> = {
-  ...modelBase,
-  id: "claude-opus-5",
-  name: "Claude Opus 5",
-  api: "anthropic-messages",
-  provider: "anthropic-api",
-  compat: { supportsMidConvoSystemMessages: true, supportsMidConvoToolChanges: true },
-};
+const { anthropicNativeModel, baseTool, capturePayload, context } = transcriptToolChangesSupport;
 
 interface AnthropicToolDefinition {
   name: string;
@@ -98,421 +27,102 @@ interface AnthropicPayload {
   }>;
 }
 
-describe("transcript system messages", () => {
-  test("sends Anthropic updates and tool changes in native system messages", () =>
-    Effect.runPromise(
-      Effect.gen(function* () {
-        const payload = yield* capturePayload<AnthropicPayload>(anthropicNativeModel, context);
+const sendsAnthropicUpdatesAndToolChanges = () =>
+  Effect.runPromise(
+    Effect.gen(function* () {
+      const payload = yield* capturePayload<AnthropicPayload>(anthropicNativeModel, context);
 
-        expect(payload.betas).toContain("inline-tools-2026-09-15");
-        expect(payload.betas).not.toContain("mid-conversation-tool-changes-2026-07-01");
-        expect(payload.system?.map((block) => block.text)).toEqual([
-          "base prompt\n\n<rules>\nold rules\n</rules>\n\n<docs>\nread docs\n</docs>",
-        ]);
-        expect(payload.tools).toMatchObject([
-          { name: "base_tool", cache_control: { type: "ephemeral" } },
-          { name: "__pi_deferred_placeholder__", defer_loading: true },
-        ]);
-        expect(payload.tools).toHaveLength(2);
-        expect(payload.tools?.[0]?.defer_loading).toBeUndefined();
-        expect(payload.tools?.[1]?.cache_control).toBeUndefined();
-        const update = payload.messages.at(-1);
-        expect(update).toMatchObject({
-          role: "system",
-          content: [
-            { type: "text" },
-            { type: "tool_removal", tool: { type: "tool_reference", name: "base_tool" } },
-            {
-              type: "tool_addition",
-              tool: {
-                type: "tool_definition",
-                definition: { name: "late_tool", description: "late_tool tool" },
-              },
-              cache_control: { type: "ephemeral" },
+      expect(payload.betas).toContain("inline-tools-2026-09-15");
+      expect(payload.betas).not.toContain("mid-conversation-tool-changes-2026-07-01");
+      expect(payload.system?.map((block) => block.text)).toEqual([
+        "base prompt\n\n<rules>\nold rules\n</rules>\n\n<docs>\nread docs\n</docs>",
+      ]);
+      expect(payload.tools).toMatchObject([
+        { cache_control: { type: "ephemeral" }, name: "base_tool" },
+        { defer_loading: true, name: "__pi_deferred_placeholder__" },
+      ]);
+      expect(payload.tools).toHaveLength(2);
+      expect(payload.tools?.[0]?.defer_loading).toBeUndefined();
+      expect(payload.tools?.[1]?.cache_control).toBeUndefined();
+      const update = payload.messages.at(-1);
+      expect(update).toMatchObject({
+        content: [
+          { type: "text" },
+          { tool: { name: "base_tool", type: "tool_reference" }, type: "tool_removal" },
+          {
+            cache_control: { type: "ephemeral" },
+            tool: {
+              definition: { description: "late_tool tool", name: "late_tool" },
+              type: "tool_definition",
             },
-          ],
-        });
-        const definition = update?.content[2]?.tool?.definition;
-        expect(definition?.cache_control).toBeUndefined();
-        expect(definition?.defer_loading).toBeUndefined();
-        expect(update?.content[0]?.text).toContain("updated guidance");
-        expect(update?.content[0]?.text).toContain("<rules>\nnew rules\n</rules>");
-        expect(update?.content[0]?.text).toContain('Removed system prompt section "docs"');
-
-        const initial = yield* capturePayload<AnthropicPayload>(anthropicNativeModel, {
-          messages: context.messages.slice(0, 2),
-        });
-        expect(initial.tools?.map((declared) => declared.name)).toEqual([
-          "base_tool",
-          "__pi_deferred_placeholder__",
-        ]);
-      }),
-    ));
-});
-
-describe("transcript system messages", () => {
-  test("redefines an Anthropic tool by value under the same name", () =>
-    Effect.runPromise(
-      Effect.gen(function* () {
-        const redefinedTool = { ...baseTool, description: "changed" };
-        const payload = yield* capturePayload<AnthropicPayload>(anthropicNativeModel, {
-          messages: [
-            { role: "system", content: "base prompt", toolsAdded: [baseTool], timestamp: 0 },
-            { role: "user", content: "before", timestamp: 1 },
-            {
-              role: "system",
-              content: "",
-              toolsRemoved: [{ name: "base_tool" }],
-              toolsAdded: [redefinedTool],
-              timestamp: 2,
-            },
-          ],
-        });
-
-        expect(payload.betas).toContain("inline-tools-2026-09-15");
-        expect(payload.tools).toMatchObject([
-          { name: "base_tool", description: "base_tool tool" },
-          { name: "__pi_deferred_placeholder__" },
-        ]);
-        expect(payload.messages.at(-1)).toMatchObject({
-          role: "system",
-          content: [
-            {
-              type: "tool_addition",
-              tool: {
-                type: "tool_definition",
-                definition: { name: "base_tool", description: "changed" },
-              },
-            },
-          ],
-        });
-        expect(payload.messages.at(-1)?.content).toHaveLength(1);
-      }),
-    ));
-});
-
-describe("transcript system messages", () => {
-  test("sends the current Anthropic tool list without an initial tool", () =>
-    Effect.runPromise(
-      Effect.gen(function* () {
-        const payload = yield* capturePayload<AnthropicPayload>(anthropicNativeModel, {
-          messages: [
-            { role: "system", content: "base prompt", timestamp: 0 },
-            { role: "user", content: "before", timestamp: 1 },
-            { role: "system", content: "updated guidance", toolsAdded: [lateTool], timestamp: 2 },
-          ],
-        });
-        expect(payload.betas ?? []).not.toContain("inline-tools-2026-09-15");
-        expect(payload.tools).toMatchObject([
-          { name: "late_tool", cache_control: { type: "ephemeral" } },
-        ]);
-        expect(payload.tools?.[0]?.defer_loading).toBeUndefined();
-        expect(payload.messages.at(-1)?.content.map((block) => block.type)).toEqual(["text"]);
-      }),
-    ));
-
-  test("folds Anthropic updates into the system prompt without native support", () =>
-    Effect.runPromise(
-      Effect.gen(function* () {
-        const model: Model<"anthropic-messages"> = {
-          ...modelBase,
-          id: "claude-sonnet-4-5",
-          name: "Claude Sonnet 4.5",
-          api: "anthropic-messages",
-          provider: "anthropic-api",
-        };
-        const payload = yield* capturePayload<{
-          betas?: string[];
-          system?: Array<{ text: string }>;
-          tools?: Array<{ name: string }>;
-          messages: Array<{ role: string }>;
-        }>(model, context);
-
-        expect(payload.betas ?? []).not.toContain("inline-tools-2026-09-15");
-        expect(payload.system?.map((block) => block.text)).toEqual([
-          "base prompt\n\nupdated guidance\n\n<rules>\nnew rules\n</rules>",
-        ]);
-        expect(payload.tools?.map((value) => value.name)).toEqual(["late_tool"]);
-        expect(payload.messages.map((message) => message.role)).toEqual(["user"]);
-      }),
-    ));
-});
-
-describe("transcript system messages", () => {
-  test("requires both Anthropic capabilities for native tool changes", () =>
-    Effect.runPromise(
-      Effect.gen(function* () {
-        const model: Model<"anthropic-messages"> = {
-          ...modelBase,
-          id: "claude-opus-5",
-          name: "Claude Opus 5",
-          api: "anthropic-messages",
-          provider: "anthropic-api",
-          compat: { supportsMidConvoToolChanges: true },
-        };
-        const payload = yield* capturePayload<{
-          betas?: string[];
-          tools?: Array<{ name: string }>;
-          messages: Array<{ role: string }>;
-        }>(model, context);
-
-        expect(payload.betas ?? []).not.toContain("inline-tools-2026-09-15");
-        expect(payload.tools?.map((value) => value.name)).toEqual(["late_tool"]);
-        expect(payload.messages.map((message) => message.role)).toEqual(["user"]);
-      }),
-    ));
-});
-
-describe("transcript system messages", () => {
-  test("anchors OpenAI additions at their developer message", () =>
-    Effect.runPromise(
-      Effect.gen(function* () {
-        const model: Model<"openai-responses"> = {
-          ...modelBase,
-          id: "gpt-5.4",
-          name: "GPT-5.4",
-          api: "openai-responses",
-          provider: "openai",
-          compat: { supportsMidConvoSystemMessages: true, supportsAdditionalTools: true },
-        };
-        const payload = yield* capturePayload<{
-          tools?: Array<{ name: string }>;
-          input: Array<{
-            type?: string;
-            role?: string;
-            content?: string;
-            tools?: Array<{ name: string }>;
-          }>;
-        }>(model, additionContext);
-
-        expect(payload.tools?.map((value) => value.name)).toEqual(["base_tool"]);
-        expect(
-          payload.input
-            .find((item) => item.type === "additional_tools")
-            ?.tools?.map((value) => value.name),
-        ).toEqual(["late_tool"]);
-        expect(
-          payload.input
-            .filter((item) => item.role === "developer" && item.type === undefined)
-            .map((item) => item.content),
-        ).toEqual(["base prompt", "updated guidance"]);
-      }),
-    ));
-});
-
-describe("transcript system messages", () => {
-  test("maps system-message additions into synthetic tool search", () =>
-    Effect.runPromise(
-      Effect.gen(function* () {
-        const model: Model<"openai-responses"> = {
-          ...modelBase,
-          id: "gpt-5.4",
-          name: "GPT-5.4",
-          api: "openai-responses",
-          provider: "openai",
-          compat: { supportsMidConvoSystemMessages: true, supportsToolSearch: true },
-        };
-        const payload = yield* capturePayload<{
-          tools?: Array<{ name: string }>;
-          input: Array<{ type?: string; tools?: Array<{ name: string }> }>;
-        }>(model, additionContext);
-
-        expect(payload.tools?.map((value) => value.name)).toEqual(["base_tool"]);
-        expect(payload.input.map((item) => item.type)).toContain("tool_search_call");
-        expect(
-          payload.input
-            .find((item) => item.type === "tool_search_output")
-            ?.tools?.map((value) => value.name),
-        ).toEqual(["late_tool"]);
-      }),
-    ));
-});
-
-describe("transcript system messages", () => {
-  test("folds OpenAI updates into the leading developer message without native support", () =>
-    Effect.runPromise(
-      Effect.gen(function* () {
-        const model: Model<"openai-responses"> = {
-          ...modelBase,
-          id: "gpt-4.1",
-          name: "GPT-4.1",
-          api: "openai-responses",
-          provider: "openai",
-          compat: { supportsAdditionalTools: true },
-        };
-        const payload = yield* capturePayload<{
-          tools?: Array<{ name: string }>;
-          input: Array<{ type?: string; role?: string; content?: string }>;
-        }>(model, context);
-
-        expect(payload.tools?.map((value) => value.name)).toEqual(["late_tool"]);
-        expect(payload.input.map((item) => item.type ?? item.role)).toEqual(["developer", "user"]);
-        expect(payload.input[0]?.content).toBe(
-          "base prompt\n\nupdated guidance\n\n<rules>\nnew rules\n</rules>",
-        );
-      }),
-    ));
-
-  test("falls back to the complete current tool state when removals are unsupported", () =>
-    Effect.runPromise(
-      Effect.gen(function* () {
-        const model: Model<"openai-responses"> = {
-          ...modelBase,
-          id: "gpt-5.4",
-          name: "GPT-5.4",
-          api: "openai-responses",
-          provider: "openai",
-          compat: { supportsMidConvoSystemMessages: true, supportsAdditionalTools: true },
-        };
-        const payload = yield* capturePayload<{
-          tools?: Array<{ name: string }>;
-          input: Array<{ type?: string; role?: string }>;
-        }>(model, context);
-
-        expect(payload.tools?.map((value) => value.name)).toEqual(["late_tool"]);
-        expect(payload.input.some((item) => item.type === "additional_tools")).toBe(false);
-        expect(payload.input.filter((item) => item.role === "developer")).toHaveLength(2);
-      }),
-    ));
-});
-
-describe("transcript system messages", () => {
-  test("anchors Kimi additions in tool-bearing system messages", () =>
-    Effect.runPromise(
-      Effect.gen(function* () {
-        const model: Model<"openai-completions"> = {
-          ...modelBase,
-          id: "kimi-k3",
-          name: "Kimi K3",
-          api: "openai-completions",
-          provider: "custom",
-          compat: {
-            supportsDeveloperRole: false,
-            supportsMidConvoSystemMessages: true,
-            supportsMidConvoToolAdditions: true,
+            type: "tool_addition",
           },
-        };
-        const payload = yield* capturePayload<{
-          tools?: Array<{ function?: { name: string } }>;
-          messages: Array<{
-            role: string;
-            content?: string;
-            tools?: Array<{ function?: { name: string } }>;
-          }>;
-        }>(model, additionContext);
+        ],
+        role: "system",
+      });
+      const definition = update?.content[2]?.tool?.definition;
+      expect(definition?.cache_control).toBeUndefined();
+      expect(definition?.defer_loading).toBeUndefined();
+      expect(update?.content[0]?.text).toContain("updated guidance");
+      expect(update?.content[0]?.text).toContain("<rules>\nnew rules\n</rules>");
+      expect(update?.content[0]?.text).toContain('Removed system prompt section "docs"');
 
-        expect(payload.tools?.map((value) => value.function?.name)).toEqual(["base_tool"]);
-        expect(
-          payload.messages
-            .find((message) => message.tools)
-            ?.tools?.map((value) => value.function?.name),
-        ).toEqual(["late_tool"]);
-        expect(
-          payload.messages
-            .filter((message) => message.role === "system")
-            .map((message) => message.content),
-        ).toEqual(["base prompt", undefined, "updated guidance"]);
-      }),
-    ));
-});
-
-describe("transcript system messages", () => {
-  type KimiPayload = {
-    tools?: Array<{ function?: { name: string } }>;
-    messages: Array<{ role: string; tools?: Array<{ function?: { name: string } }> }>;
-  };
-  test.each(["opencode", "opencode-go"] as const)("anchors additions for %s Kimi K3", (provider) =>
-    Effect.runPromise(
-      Effect.gen(function* () {
-        const payload = yield* capturePayload<KimiPayload>(
-          getModel(provider, "kimi-k3"),
-          additionContext,
-        );
-
-        expect(payload.tools?.map((value) => value.function?.name)).toEqual(["base_tool"]);
-        expect(
-          payload.messages
-            .find((message) => message.tools)
-            ?.tools?.map((value) => value.function?.name),
-        ).toEqual(["late_tool"]);
-      }),
-    ),
+      const initial = yield* capturePayload<AnthropicPayload>(anthropicNativeModel, {
+        messages: context.messages.slice(0, 2),
+      });
+      expect(initial.tools?.map((declared) => declared.name)).toEqual([
+        "base_tool",
+        "__pi_deferred_placeholder__",
+      ]);
+    }),
   );
 
-  test("keeps OpenRouter Kimi K3 additions in top-level tools", () =>
-    Effect.runPromise(
-      Effect.gen(function* () {
-        const payload = yield* capturePayload<KimiPayload>(
-          getModel("openrouter", "moonshotai/kimi-k3"),
-          additionContext,
-        );
+const redefinesAnAnthropicToolByValue = () =>
+  Effect.runPromise(
+    Effect.gen(function* () {
+      const redefinedTool = { ...baseTool, description: "changed" };
+      const payload = yield* capturePayload<AnthropicPayload>(anthropicNativeModel, {
+        messages: [
+          { content: "base prompt", role: "system", timestamp: 0, toolsAdded: [baseTool] },
+          { content: "before", role: "user", timestamp: 1 },
+          {
+            content: "",
+            role: "system",
+            timestamp: 2,
+            toolsAdded: [redefinedTool],
+            toolsRemoved: [{ name: "base_tool" }],
+          },
+        ],
+      });
 
-        expect(payload.tools?.map((value) => value.function?.name)).toEqual([
-          "base_tool",
-          "late_tool",
-        ]);
-        expect(payload.messages.some((message) => message.tools !== undefined)).toBe(false);
-      }),
-    ));
+      expect(payload.betas).toContain("inline-tools-2026-09-15");
+      expect(payload.tools).toMatchObject([
+        { description: "base_tool tool", name: "base_tool" },
+        { name: "__pi_deferred_placeholder__" },
+      ]);
+      expect(payload.messages.at(-1)).toMatchObject({
+        content: [
+          {
+            tool: {
+              definition: { description: "changed", name: "base_tool" },
+              type: "tool_definition",
+            },
+            type: "tool_addition",
+          },
+        ],
+        role: "system",
+      });
+      expect(payload.messages.at(-1)?.content).toHaveLength(1);
+    }),
+  );
+
+describe("transcript system messages", () => {
+  test(
+    "sends Anthropic updates and tool changes in native system messages",
+    sendsAnthropicUpdatesAndToolChanges,
+  );
 });
 
 describe("transcript system messages", () => {
-  test("keeps Kimi K2 system text inline without dynamic tool messages", () =>
-    Effect.runPromise(
-      Effect.gen(function* () {
-        const model: Model<"openai-completions"> = {
-          ...modelBase,
-          id: "kimi-k2.7-code",
-          name: "Kimi K2.7 Code",
-          api: "openai-completions",
-          provider: "custom",
-          compat: { supportsDeveloperRole: false, supportsMidConvoSystemMessages: true },
-        };
-        const payload = yield* capturePayload<{
-          tools?: Array<{ function?: { name: string } }>;
-          messages: Array<{
-            role: string;
-            content?: string;
-            tools?: Array<{ function?: { name: string } }>;
-          }>;
-        }>(model, additionContext);
-
-        expect(payload.tools?.map((value) => value.function?.name)).toEqual([
-          "base_tool",
-          "late_tool",
-        ]);
-        expect(payload.messages.some((message) => message.tools !== undefined)).toBe(false);
-        expect(
-          payload.messages
-            .filter((message) => message.role === "system")
-            .map((message) => message.content),
-        ).toEqual(["base prompt", "updated guidance"]);
-      }),
-    ));
-});
-
-describe("transcript system messages", () => {
-  test("folds OpenAI-compatible updates into the system prompt without native support", () =>
-    Effect.runPromise(
-      Effect.gen(function* () {
-        const model: Model<"openai-completions"> = {
-          ...modelBase,
-          id: "custom-model",
-          name: "Custom model",
-          api: "openai-completions",
-          provider: "custom-provider",
-          reasoning: false,
-        };
-        const payload = yield* capturePayload<{
-          tools?: Array<{ function?: { name: string } }>;
-          messages: Array<{ role: string; content?: string }>;
-        }>(model, context);
-
-        expect(payload.tools?.map((value) => value.function?.name)).toEqual(["late_tool"]);
-        expect(payload.messages.map((message) => message.role)).toEqual(["system", "user"]);
-        expect(payload.messages[0]?.content).toBe(
-          "base prompt\n\nupdated guidance\n\n<rules>\nnew rules\n</rules>",
-        );
-      }),
-    ));
+  test("redefines an Anthropic tool by value under the same name", redefinesAnAnthropicToolByValue);
 });

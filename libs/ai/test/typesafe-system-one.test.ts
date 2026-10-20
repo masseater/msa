@@ -2,52 +2,9 @@ import { Effect } from "effect";
 import { describe, expect, it, vi } from "vite-plus/test";
 
 import { classify } from "../src/api/typesafe-system-one.ts";
-import type { ClassifierContext, ClassifierModel } from "../src/types.ts";
-import { decodeJson, encodeJson } from "./json-codec.ts";
+import typesafeSystemOneSupport from "./typesafe-system-one-support.ts";
 
-const model: ClassifierModel<"typesafe-system-one"> = {
-  type: "classifier",
-  id: "jev-latest",
-  name: "Jev",
-  api: "typesafe-system-one",
-  provider: "typesafe",
-  baseUrl: "https://api.typesafe.ai/v1/",
-  input: ["text"],
-  cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0 },
-  contextWindow: 64000,
-};
-
-const context: ClassifierContext = {
-  state: { text: "The deployment succeeded, thank you." },
-  questions: {
-    category: {
-      type: "choice",
-      instructions: "Classify the message",
-      criteria: { success: "Successful", failure: "Failed" },
-    },
-    satisfaction: {
-      type: "score",
-      instructions: "Score satisfaction",
-      criteria: ["low", "neutral", "high"],
-    },
-    approved: {
-      type: "bool",
-      instructions: "Does the user approve?",
-      criteria: { true: "Approval", false: "No approval" },
-    },
-  },
-};
-
-const wireAnswers = {
-  category: {
-    type: "choice",
-    choice: "success",
-    probabilities: { success: 0.9, failure: 0.1 },
-    confidence: 0.8,
-  },
-  satisfaction: { type: "score", score: 2, confidence: 0.7 },
-  approved: { type: "noul", noul: 0.95 },
-};
+const { context, model, wireAnswers } = typesafeSystemOneSupport;
 
 describe("TypeSafe System One", () => {
   it("maps public bool questions and answers to TypeSafe noul values", () =>
@@ -86,12 +43,12 @@ describe("TypeSafe System One", () => {
         expect(fetch).toHaveBeenCalledOnce();
         expect(String(fetch.mock.calls[0]?.[0])).toBe("https://api.typesafe.ai/v1/systemone");
         expect(result.stopReason).toBe("stop");
-        expect(result.answers["approved"]).toEqual({ type: "bool", probability: 0.95 });
-        expect(result.answers["category"]).toMatchObject({ type: "choice", choice: "success" });
+        expect(result.answers["approved"]).toEqual({ probability: 0.95, type: "bool" });
+        expect(result.answers["category"]).toMatchObject({ choice: "success", type: "choice" });
         expect(result.answers["satisfaction"]).toEqual({
-          type: "score",
-          score: 2,
           confidence: 0.7,
+          score: 2,
+          type: "score",
         });
         expect(result.usage).toBeUndefined();
         expect(pricedResult.usage).toMatchObject({ input: 308, output: 23, totalTokens: 331 });
@@ -111,19 +68,19 @@ describe("TypeSafe System One", () => {
           });
           return Promise.resolve(
             Response.json({
+              answers: wireAnswers,
               id: "gen-dec-1",
               provider: "TypeSafe",
-              answers: wireAnswers,
-              usage: { input_tokens: 308, output_tokens: 23, cost: 0.000012936 },
+              usage: { cost: 0.000012936, input_tokens: 308, output_tokens: 23 },
             }),
           );
         });
         const openRouterModel = {
           ...model,
-          id: "typesafe/jev-1.13",
-          provider: "openrouter",
           baseUrl: "https://openrouter.ai/api/v1",
           cost: { ...model.cost, input: 0.042 },
+          id: "typesafe/jev-1.13",
+          provider: "openrouter",
         };
 
         const result = yield* Effect.promise(() =>
@@ -132,7 +89,7 @@ describe("TypeSafe System One", () => {
 
         expect(String(fetch.mock.calls[0]?.[0])).toBe("https://openrouter.ai/api/v1/systemone");
         expect(result.stopReason).toBe("stop");
-        expect(result.answers["approved"]).toEqual({ type: "bool", probability: 0.95 });
+        expect(result.answers["approved"]).toEqual({ probability: 0.95, type: "bool" });
         expect(result.usage?.cost.total).toBeCloseTo(0.000012936, 12);
       }),
     ));
@@ -163,7 +120,7 @@ describe("TypeSafe System One", () => {
         const result = yield* Effect.promise(() =>
           classify(
             { ...model, input: ["text", "image"] },
-            { ...context, images: [{ type: "image", data: "aW1hZ2U=", mimeType: "image/png" }] },
+            { ...context, images: [{ data: "aW1hZ2U=", mimeType: "image/png", type: "image" }] },
             { apiKey: "secret", fetch },
           ),
         );
@@ -186,7 +143,7 @@ describe("TypeSafe System One", () => {
         });
         const modelWithHeaders = {
           ...model,
-          headers: { authorization: "Bearer model", "X-Source": "model" },
+          headers: { "X-Source": "model", authorization: "Bearer model" },
         };
 
         yield* Effect.promise(() =>
@@ -214,153 +171,6 @@ describe("TypeSafe System One", () => {
           Object.keys(firstRequest).filter((name) => name.toLowerCase() === "authorization"),
         ).toHaveLength(1);
         expect(requests[1]).not.toHaveProperty("authorization");
-      }),
-    ));
-});
-
-describe("TypeSafe System One", () => {
-  it("preserves prototype-sensitive question IDs in answers", () =>
-    Effect.runPromise(
-      Effect.gen(function* () {
-        const prototypeContext: ClassifierContext = {
-          state: {},
-          questions: (yield* decodeJson(
-            '{"__proto__":{"type":"bool","instructions":"Is this true?","criteria":{"true":"Yes","false":"No"}}}',
-          )) as ClassifierContext["questions"],
-        };
-        const result = yield* Effect.promise(() =>
-          classify(model, prototypeContext, {
-            apiKey: "secret",
-            fetch: () =>
-              Promise.resolve(
-                Response.json({ answers: JSON.parse('{"__proto__":{"type":"noul","noul":0.75}}') }),
-              ),
-          }),
-        );
-
-        const serializedAnswers = (yield* decodeJson(yield* encodeJson(result.answers))) as Record<
-          string,
-          unknown
-        >;
-        expect(result.stopReason).toBe("stop");
-        expect(Object.keys(result.answers)).toEqual(["__proto__"]);
-        expect(Object.hasOwn(result.answers, "__proto__")).toBe(true);
-        expect(result.answers["__proto__"]).toEqual({ type: "bool", probability: 0.75 });
-        expect(serializedAnswers["__proto__"]).toEqual({ type: "bool", probability: 0.75 });
-      }),
-    ));
-});
-
-describe("TypeSafe System One", () => {
-  it("reports request timeouts separately from caller cancellation", () =>
-    Effect.runPromise(
-      Effect.gen(function* () {
-        const result = yield* Effect.promise(() =>
-          classify(model, context, {
-            apiKey: "secret",
-            timeoutMs: 5,
-            maxRetries: 0,
-            fetch: (_input, init) => {
-              const signal = init?.signal;
-              if (signal === undefined || signal === null)
-                return Promise.reject(new Error("missing request signal"));
-              return Promise.resolve(
-                new Promise<Response>((_resolve, reject) => {
-                  signal.addEventListener("abort", () => reject(signal.reason), { once: true });
-                }),
-              );
-            },
-          }),
-        );
-
-        expect(result.stopReason).toBe("error");
-        expect(result.errorMessage).toBe("Request timed out after 5ms");
-      }),
-    ));
-});
-
-describe("TypeSafe System One", () => {
-  it("creates a fresh timeout for every retry attempt", () =>
-    Effect.runPromise(
-      Effect.gen(function* () {
-        const signals: AbortSignal[] = [];
-        let attempt = 0;
-        const result = yield* Effect.promise(() =>
-          classify(model, context, {
-            apiKey: "secret",
-            timeoutMs: 1000,
-            maxRetries: 1,
-            fetch: (_input, init) => {
-              if (!(init?.signal instanceof AbortSignal))
-                return Promise.reject(new Error("missing request signal"));
-              signals.push(init.signal);
-              attempt++;
-              return Promise.resolve(
-                attempt === 1
-                  ? new Response("retry", { status: 500, headers: { "retry-after-ms": "0" } })
-                  : Response.json({ answers: wireAnswers }),
-              );
-            },
-          }),
-        );
-
-        expect(result.stopReason).toBe("stop");
-        expect(signals).toHaveLength(2);
-        expect(signals[0]).not.toBe(signals[1]);
-      }),
-    ));
-});
-
-describe("TypeSafe System One", () => {
-  it("returns malformed responses as classifier errors", () =>
-    Effect.runPromise(
-      Effect.gen(function* () {
-        const result = yield* Effect.promise(() =>
-          classify(model, context, {
-            apiKey: "secret",
-            fetch: () =>
-              Promise.resolve(
-                Response.json({ answers: {}, usage: { input_tokens: 10, output_tokens: 2 } }),
-              ),
-          }),
-        );
-
-        expect(result.stopReason).toBe("error");
-        expect(result.answers).toEqual({});
-        expect(result.errorMessage).toContain("did not return an answer for category");
-        expect(result.usage).toMatchObject({ input: 10, output: 2 });
-      }),
-    ));
-});
-
-describe("TypeSafe System One", () => {
-  it("ignores malformed usage", () =>
-    Effect.runPromise(
-      Effect.gen(function* () {
-        const result = yield* Effect.promise(() =>
-          classify(model, context, {
-            apiKey: "secret",
-            fetch: () =>
-              Promise.resolve(
-                Response.json({
-                  answers: wireAnswers,
-                  usage: { input_tokens: "many", output_tokens: 3 },
-                }),
-              ),
-          }),
-        );
-        const withoutTokens = yield* Effect.promise(() =>
-          classify(model, context, {
-            apiKey: "secret",
-            fetch: () =>
-              Promise.resolve(Response.json({ answers: wireAnswers, usage: { cost: 0.1 } })),
-          }),
-        );
-
-        expect(result.stopReason).toBe("stop");
-        expect(result.usage).toMatchObject({ input: 0, output: 3, totalTokens: 3 });
-        expect(withoutTokens.stopReason).toBe("stop");
-        expect(withoutTokens.usage).toBeUndefined();
       }),
     ));
 });

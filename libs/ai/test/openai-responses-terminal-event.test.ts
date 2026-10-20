@@ -1,553 +1,117 @@
 import { Effect, Stream } from "effect";
 import type { ResponseStreamEvent } from "openai/resources/responses/responses.js";
-import { describe, expect, it, vi } from "vite-plus/test";
+import { describe, it, vi } from "vite-plus/test";
 
 import { processResponsesStream } from "../src/api/openai-responses-stream.ts";
-import { stream as streamOpenAIResponses } from "../src/api/openai-responses.ts";
-import type { Api, AssistantMessage, AssistantMessageEvent, Model } from "../src/types.ts";
-import { currentTimeMillis } from "../src/utils/clock.ts";
 import { AssistantMessageEventStream } from "../src/utils/event-stream.ts";
-import { normalizeContext } from "../src/utils/transcript.ts";
-import { expectDefect } from "./effect-assert.ts";
+import effectAssert from "./effect-assert.ts";
+import openaiResponsesTerminalEventSupport from "./openai-responses-terminal-event-support.ts";
 
-vi.mock("openai", () => {
-  async function* createMockResponsesStream(): AsyncIterable<ResponseStreamEvent> {
-    yield {
-      type: "response.created",
-      sequence_number: 0,
-      response: { id: "resp_wrapper_early_eof" },
-    } as ResponseStreamEvent;
-    yield {
-      type: "response.output_item.added",
-      sequence_number: 1,
-      output_index: 0,
-      item: { type: "reasoning", id: "rs_wrapper_early_eof", summary: [] },
-    } as ResponseStreamEvent;
-    yield {
-      type: "response.reasoning_text.delta",
-      sequence_number: 2,
-      output_index: 0,
-      content_index: 0,
-      item_id: "rs_wrapper_early_eof",
-      delta: "partial reasoning before the wrapper stream ends",
-    } as ResponseStreamEvent;
-  }
+const { createModel, createOutput } = openaiResponsesTerminalEventSupport;
 
-  class FakeOpenAI {
-    responses = {
-      create: () => {
-        const responseStream = createMockResponsesStream();
-        const promise = Promise.resolve(responseStream) as Promise<
-          AsyncIterable<ResponseStreamEvent>
-        > & {
-          withResponse: () => Promise<{
-            data: AsyncIterable<ResponseStreamEvent>;
-            response: { status: number; headers: Headers };
-          }>;
-        };
-        promise.withResponse = () =>
-          Promise.resolve({
-            data: responseStream,
-            response: { status: 200, headers: new Headers() },
-          });
-        return promise;
-      },
-    };
-  }
+vi.mock("openai", () =>
+  import("./openai-responses-terminal-event-mock.ts").then((module) => module.default),
+);
 
-  return { default: FakeOpenAI };
-});
+const { expectDefect } = effectAssert;
 
-function createModel(): Model<"openai-responses"> {
-  return {
-    id: "gpt-5-mini",
-    name: "GPT-5 Mini",
-    api: "openai-responses",
-    provider: "openai",
-    baseUrl: "https://api.openai.com/v1",
-    reasoning: true,
-    input: ["text"],
-    cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0 },
-    contextWindow: 400000,
-    maxTokens: 128000,
-  };
-}
-
-function createOutput(model: Model<"openai-responses">): AssistantMessage {
-  return {
-    role: "assistant",
-    content: [],
-    api: model.api,
-    provider: model.provider,
-    model: model.id,
-    usage: {
-      input: 0,
-      output: 0,
-      cacheRead: 0,
-      cacheWrite: 0,
-      totalTokens: 0,
-      cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0, total: 0 },
-    },
-    stopReason: "pending",
-    timestamp: currentTimeMillis(),
-  };
-}
-
-async function* createEarlyEofEvents(): AsyncIterable<ResponseStreamEvent> {
-  yield {
-    type: "response.created",
-    sequence_number: 0,
-    response: { id: "resp_early_eof" },
-  } as ResponseStreamEvent;
-  yield {
-    type: "response.output_item.added",
-    sequence_number: 1,
-    output_index: 0,
-    item: { type: "reasoning", id: "rs_early_eof", summary: [] },
-  } as ResponseStreamEvent;
-  yield {
-    type: "response.reasoning_text.delta",
-    sequence_number: 2,
-    output_index: 0,
-    content_index: 0,
-    item_id: "rs_early_eof",
-    delta: "partial reasoning before the stream ends",
-  } as ResponseStreamEvent;
-}
-
-async function* createCompletedEvents(): AsyncIterable<ResponseStreamEvent> {
-  yield {
-    type: "response.completed",
-    sequence_number: 0,
-    response: {
-      id: "resp_completed",
-      status: "completed",
-      usage: {
-        input_tokens: 20,
-        output_tokens: 7,
-        total_tokens: 27,
-        input_tokens_details: { cached_tokens: 2, cache_write_tokens: 3 },
-      },
-    },
-  } as unknown as ResponseStreamEvent;
-}
-
-async function* createIncompleteEvents(
-  reason = "max_output_tokens",
-): AsyncIterable<ResponseStreamEvent> {
-  yield {
-    type: "response.incomplete",
-    sequence_number: 0,
-    response: {
-      id: "resp_incomplete",
-      status: "incomplete",
-      incomplete_details: { reason },
-      usage: {
-        input_tokens: 30,
-        output_tokens: 12,
-        total_tokens: 42,
-        input_tokens_details: { cached_tokens: 5 },
-      },
-    },
-  } as ResponseStreamEvent;
-}
-
-async function* createFailedEvents(): AsyncIterable<ResponseStreamEvent> {
-  yield {
-    type: "response.failed",
-    sequence_number: 0,
-    response: {
-      id: "resp_failed",
-      status: "failed",
-      error: { code: "server_error", message: "boom" },
-    },
-  } as ResponseStreamEvent;
-}
-
-async function* createPhasedMessageEvents(
-  phases: readonly ["commentary" | "final_answer", "commentary" | "final_answer"],
-  terminalStatus: "completed" | "incomplete" = "completed",
-): AsyncIterable<ResponseStreamEvent> {
-  yield {
-    type: "response.output_item.added",
-    sequence_number: 0,
-    output_index: 0,
-    item: {
-      type: "message",
-      id: "msg_phase",
-      role: "assistant",
-      status: "in_progress",
-      content: [],
-      phase: phases[0],
-    },
-  } as ResponseStreamEvent;
-  yield {
-    type: "response.output_item.done",
-    sequence_number: 1,
-    output_index: 0,
-    item: {
-      type: "message",
-      id: "msg_phase",
-      role: "assistant",
-      status: "completed",
-      content: [{ type: "output_text", text: "answer", annotations: [] }],
-      phase: phases[1],
-    },
-  } as ResponseStreamEvent;
-  if (terminalStatus === "incomplete") {
-    yield {
-      type: "response.incomplete",
-      sequence_number: 2,
-      response: {
-        id: "resp_phase",
-        status: "incomplete",
-        incomplete_details: { reason: "max_output_tokens" },
-      },
-    } as ResponseStreamEvent;
-    return;
-  }
-  yield {
-    type: "response.completed",
-    sequence_number: 2,
-    response: { id: "resp_phase", status: "completed" },
-  } as ResponseStreamEvent;
-}
-
-async function* createUnfinishedToolCallEvents(): AsyncIterable<ResponseStreamEvent> {
-  yield {
-    type: "response.output_item.added",
-    sequence_number: 0,
-    output_index: 0,
-    item: { type: "function_call", id: "fc_1", call_id: "call_1", name: "bash", arguments: "" },
-  } as ResponseStreamEvent;
-  yield {
-    type: "response.function_call_arguments.delta",
-    sequence_number: 1,
-    output_index: 0,
-    item_id: "fc_1",
-    delta: '{"command":"rm -rf /tmp/build',
-  } as ResponseStreamEvent;
-  yield {
-    type: "response.completed",
-    sequence_number: 2,
-    response: { id: "resp_unfinished", status: "completed" },
-  } as ResponseStreamEvent;
-}
-
-async function* createToolCallsWithoutOutputIndexEvents(): AsyncIterable<ResponseStreamEvent> {
-  const call = (n: string) => ({
-    type: "function_call",
-    id: `fc_${n}`,
-    call_id: `call_${n}`,
-    name: "bash",
-  });
-  const events = [
-    { type: "response.output_item.added", item: { ...call("a"), arguments: "" } },
-    {
-      type: "response.function_call_arguments.delta",
-      item_id: "fc_a",
-      delta: '{"command":"echo a"}',
-    },
-    { type: "response.output_item.added", item: { ...call("b"), arguments: "" } },
-    {
-      type: "response.function_call_arguments.delta",
-      item_id: "fc_b",
-      delta: '{"command":"echo b"}',
-    },
-    {
-      type: "response.output_item.done",
-      item: { ...call("a"), arguments: '{"command":"echo a"}' },
-    },
-    {
-      type: "response.output_item.done",
-      item: { ...call("b"), arguments: '{"command":"echo b"}' },
-    },
-    { type: "response.completed", response: { id: "resp_no_output_index", status: "completed" } },
-  ];
-  for (const event of events) yield event as unknown as ResponseStreamEvent;
-}
-
-describe("OpenAI Responses terminal event handling", () => {
-  it("rejects streams that end before a terminal response event", () =>
-    Effect.runPromise(
-      Effect.gen(function* () {
-        const model = createModel();
-        const output = createOutput(model);
-        const stream = new AssistantMessageEventStream();
-
-        yield* expectDefect(
-          processResponsesStream(createEarlyEofEvents(), output, stream, model),
-          "OpenAI Responses stream ended before a terminal response event",
-        );
-      }),
-    ));
-
-  it("rejects completed streams whose tool call never received output_item.done", () =>
-    Effect.runPromise(
-      Effect.gen(function* () {
-        const model = createModel();
-
-        yield* expectDefect(
-          processResponsesStream(
-            createUnfinishedToolCallEvents(),
-            createOutput(model),
-            new AssistantMessageEventStream(),
-            model,
-          ),
-          "OpenAI Responses stream completed with an unfinished tool call: bash (call_1|fc_1)",
-        );
-      }),
-    ));
-});
-
-describe("OpenAI Responses terminal event handling", () => {
-  it("rejects parallel tool calls without output_index instead of running mixed-up calls", () =>
-    Effect.runPromise(
-      Effect.gen(function* () {
-        const model = createModel();
-
-        yield* expectDefect(
-          processResponsesStream(
-            createToolCallsWithoutOutputIndexEvents(),
-            createOutput(model),
-            new AssistantMessageEventStream(),
-            model,
-          ),
-          "OpenAI Responses stream completed with an unfinished tool call: bash (call_a|fc_a)",
-        );
-      }),
-    ));
-});
-
-describe("OpenAI Responses terminal event handling", () => {
-  it("forwards parsed provider stream events in order", () =>
-    Effect.runPromise(
-      Effect.gen(function* () {
-        const effectContext = yield* Effect.context();
-        const model = createModel();
-        const context = normalizeContext({
-          systemPrompt: "",
-          messages: [{ role: "user", content: [{ type: "text", text: "hi" }], timestamp: 0 }],
-          tools: [],
-        });
-        const providerEvents: unknown[] = [];
-        const eventModels: Model<Api>[] = [];
-        const stream = streamOpenAIResponses(model, context, {
-          apiKey: "test",
-          onProviderStreamEvent: (event, eventModel) =>
-            Effect.runPromiseWith(effectContext)(
-              Effect.gen(function* () {
-                yield* Effect.promise(() => Promise.resolve());
-                providerEvents.push(event);
-                eventModels.push(eventModel);
-              }),
-            ),
-        });
-
-        yield* Effect.promise(() => stream.result());
-
-        expect(providerEvents).toHaveLength(3);
-        expect(providerEvents.map((event) => (event as ResponseStreamEvent).type)).toEqual([
-          "response.created",
-          "response.output_item.added",
-          "response.reasoning_text.delta",
-        ]);
-        expect(eventModels).toEqual([model, model, model]);
-      }),
-    ));
-});
-
-describe("OpenAI Responses terminal event handling", () => {
-  it("emits an error final result when the wrapper stream ends before a terminal response event", () =>
-    Effect.runPromise(
-      Effect.gen(function* () {
-        const model = createModel();
-        const context = normalizeContext({
-          systemPrompt: "",
-          messages: [{ role: "user", content: [{ type: "text", text: "hi" }], timestamp: 0 }],
-          tools: [],
-        });
-        const stream = streamOpenAIResponses(model, context, { apiKey: "test" });
-        const events: AssistantMessageEvent[] = [];
-        let initialStopReason: AssistantMessage["stopReason"] | undefined;
-
-        yield* Stream.fromAsyncIterable(stream, (error) => error).pipe(
-          Stream.orDie,
-          Stream.runForEach((event) =>
-            Effect.sync(() => {
-              if (event.type === "start") initialStopReason = event.partial.stopReason;
-              events.push(event);
-            }),
-          ),
-        );
-
-        const result = yield* Effect.promise(() => stream.result());
-        const lastEvent = events.at(-1);
-        expect(initialStopReason).toBe("pending");
-        expect(lastEvent?.type).toBe("error");
-        expect(result.stopReason).toBe("error");
-        expect(result.errorMessage).toBe(
-          "OpenAI Responses stream ended before a terminal response event",
-        );
-      }),
-    ));
-});
-
-describe("OpenAI Responses terminal event handling", () => {
-  it.each([
-    { phases: ["commentary", "commentary"], expected: ["pending", "pending"] },
-    { phases: ["final_answer", "final_answer"], expected: ["stop", "stop"] },
-    { phases: ["commentary", "final_answer"], expected: ["pending", "stop"] },
-  ] as const)("tracks message phases $phases", ({ phases, expected }) =>
-    Effect.runPromise(
-      Effect.gen(function* () {
-        const model = createModel();
-        const output = createOutput(model);
-        const stream = new AssistantMessageEventStream();
-        const observedStopReasons: AssistantMessage["stopReason"][] = [];
-        const push = stream.push.bind(stream);
-        stream.push = (event) => {
-          if ("partial" in event) observedStopReasons.push(event.partial.stopReason);
-          push(event);
-        };
-
-        yield* processResponsesStream(createPhasedMessageEvents(phases), output, stream, model);
-
-        expect(observedStopReasons).toEqual(expected);
-        expect(output.stopReason).toBe("stop");
-      }),
+function createEarlyEofEvents(): AsyncIterable<ResponseStreamEvent> {
+  return Stream.toAsyncIterable(
+    Stream.fromIterable(
+      (function* () {
+        yield {
+          response: { id: "resp_early_eof" },
+          sequence_number: 0,
+          type: "response.created",
+        } as ResponseStreamEvent;
+        yield {
+          item: { id: "rs_early_eof", summary: [], type: "reasoning" },
+          output_index: 0,
+          sequence_number: 1,
+          type: "response.output_item.added",
+        } as ResponseStreamEvent;
+        yield {
+          content_index: 0,
+          delta: "partial reasoning before the stream ends",
+          item_id: "rs_early_eof",
+          output_index: 0,
+          sequence_number: 2,
+          type: "response.reasoning_text.delta",
+        } as ResponseStreamEvent;
+      })(),
     ),
   );
-});
+}
 
-describe("OpenAI Responses terminal event handling", () => {
-  it("replaces a provisional final-answer stop with an incomplete terminal reason", () =>
-    Effect.runPromise(
-      Effect.gen(function* () {
-        const model = createModel();
-        const output = createOutput(model);
-        const stream = new AssistantMessageEventStream();
-        const observedStopReasons: AssistantMessage["stopReason"][] = [];
-        const push = stream.push.bind(stream);
-        stream.push = (event) => {
-          if ("partial" in event) observedStopReasons.push(event.partial.stopReason);
-          push(event);
-        };
+function createUnfinishedToolCallEvents(): AsyncIterable<ResponseStreamEvent> {
+  return Stream.toAsyncIterable(
+    Stream.fromIterable(
+      (function* () {
+        yield {
+          item: {
+            arguments: "",
+            call_id: "call_1",
+            id: "fc_1",
+            name: "bash",
+            type: "function_call",
+          },
+          output_index: 0,
+          sequence_number: 0,
+          type: "response.output_item.added",
+        } as ResponseStreamEvent;
+        yield {
+          delta: '{"command":"rm -rf /tmp/build',
+          item_id: "fc_1",
+          output_index: 0,
+          sequence_number: 1,
+          type: "response.function_call_arguments.delta",
+        } as ResponseStreamEvent;
+        yield {
+          response: { id: "resp_unfinished", status: "completed" },
+          sequence_number: 2,
+          type: "response.completed",
+        } as ResponseStreamEvent;
+      })(),
+    ),
+  );
+}
 
-        yield* processResponsesStream(
-          createPhasedMessageEvents(["final_answer", "final_answer"], "incomplete"),
-          output,
-          stream,
+const rejectsStreamsThatEndBeforeA = () =>
+  Effect.runPromise(
+    Effect.gen(function* () {
+      const model = createModel();
+      const output = createOutput(model);
+      const stream = new AssistantMessageEventStream();
+
+      yield* expectDefect(
+        processResponsesStream(createEarlyEofEvents(), output, stream, model),
+        "OpenAI Responses stream ended before a terminal response event",
+      );
+    }),
+  );
+
+const rejectsCompletedStreamsWhoseToolCall = () =>
+  Effect.runPromise(
+    Effect.gen(function* () {
+      const model = createModel();
+
+      yield* expectDefect(
+        processResponsesStream(
+          createUnfinishedToolCallEvents(),
+          createOutput(model),
+          new AssistantMessageEventStream(),
           model,
-        );
-
-        expect(observedStopReasons).toEqual(["stop", "stop"]);
-        expect(output.stopReason).toBe("length");
-      }),
-    ));
-});
+        ),
+        "OpenAI Responses stream completed with an unfinished tool call: bash (call_1|fc_1)",
+      );
+    }),
+  );
 
 describe("OpenAI Responses terminal event handling", () => {
-  it("finalizes completed terminal events as stop", () =>
-    Effect.runPromise(
-      Effect.gen(function* () {
-        const model = createModel();
-        const output = createOutput(model);
-        const stream = new AssistantMessageEventStream();
+  it("rejects streams that end before a terminal response event", rejectsStreamsThatEndBeforeA);
 
-        yield* processResponsesStream(createCompletedEvents(), output, stream, model);
-
-        expect(output.responseId).toBe("resp_completed");
-        expect(output.stopReason).toBe("stop");
-        expect(output.rawStopReason).toBe("completed");
-        expect(output.usage).toMatchObject({
-          input: 15,
-          output: 7,
-          cacheRead: 2,
-          cacheWrite: 3,
-          totalTokens: 27,
-        });
-      }),
-    ));
-
-  it("finalizes incomplete terminal events as length stops", () =>
-    Effect.runPromise(
-      Effect.gen(function* () {
-        const model = createModel();
-        const output = createOutput(model);
-        const stream = new AssistantMessageEventStream();
-
-        yield* processResponsesStream(createIncompleteEvents(), output, stream, model);
-
-        expect(output.responseId).toBe("resp_incomplete");
-        expect(output.stopReason).toBe("length");
-        expect(output.rawStopReason).toBe("incomplete.max_output_tokens");
-        expect(output.usage).toMatchObject({
-          input: 25,
-          output: 12,
-          cacheRead: 5,
-          cacheWrite: 0,
-          totalTokens: 42,
-        });
-      }),
-    ));
-});
-
-describe("OpenAI Responses terminal event handling", () => {
-  it("finalizes content-filtered incomplete responses as non-retryable errors", () =>
-    Effect.runPromise(
-      Effect.gen(function* () {
-        const model = createModel();
-        const output = createOutput(model);
-        const stream = new AssistantMessageEventStream();
-
-        yield* processResponsesStream(
-          createIncompleteEvents("content_filter"),
-          output,
-          stream,
-          model,
-        );
-
-        expect(output.stopReason).toBe("error");
-        expect(output.rawStopReason).toBe("incomplete.content_filter");
-        expect(output.errorMessage).toBe("Response incomplete: content_filter");
-      }),
-    ));
-
-  it("preserves unknown provider incomplete reasons as non-retryable errors", () =>
-    Effect.runPromise(
-      Effect.gen(function* () {
-        const model = createModel();
-        const output = createOutput(model);
-        const stream = new AssistantMessageEventStream();
-
-        yield* processResponsesStream(
-          createIncompleteEvents("max_time_limit"),
-          output,
-          stream,
-          model,
-        );
-
-        expect(output.stopReason).toBe("error");
-        expect(output.rawStopReason).toBe("incomplete.max_time_limit");
-        expect(output.errorMessage).toBe("Response incomplete: max_time_limit");
-      }),
-    ));
-});
-
-describe("OpenAI Responses terminal event handling", () => {
-  it("rejects failed terminal events with the provider error", () =>
-    Effect.runPromise(
-      Effect.gen(function* () {
-        const model = createModel();
-        const output = createOutput(model);
-        const stream = new AssistantMessageEventStream();
-
-        yield* expectDefect(
-          processResponsesStream(createFailedEvents(), output, stream, model),
-          "server_error: boom",
-        );
-        expect(output.rawStopReason).toBe("failed");
-      }),
-    ));
+  it(
+    "rejects completed streams whose tool call never received output_item.done",
+    rejectsCompletedStreamsWhoseToolCall,
+  );
 });

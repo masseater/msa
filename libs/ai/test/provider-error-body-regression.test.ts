@@ -1,72 +1,48 @@
-import { Data, Effect, Stream } from "effect";
+import { Effect, Stream } from "effect";
 import { beforeEach, describe, expect, it, vi } from "vite-plus/test";
 
 import { stream as streamOpenAICompletions } from "../src/api/openai-completions.ts";
 import { stream as streamOpenAIResponses } from "../src/api/openai-responses.ts";
-import type { Model } from "../src/types.ts";
-
-class FakeAPIError extends Data.TaggedError("PermissionDeniedError")<{
-  readonly message: string;
-  readonly status: number;
-  readonly error: unknown;
-}> {}
-
-const openaiMock = vi.hoisted(() => ({
-  parsedBody: { error: "blocked by gateway WAF" } as unknown,
-}));
-
-vi.mock("openai", () => {
-  function throwingCreate() {
-    const promise = Promise.resolve(undefined) as unknown as { withResponse: () => Promise<never> };
-    promise.withResponse = () =>
-      Promise.reject(
-        new FakeAPIError({
-          message: "403 status code (no body)",
-          status: 403,
-          error: openaiMock.parsedBody,
-        }),
-      );
-    return promise;
-  }
-  class FakeOpenAI {
-    chat = { completions: { create: throwingCreate } };
-    responses = { create: throwingCreate };
-  }
-  return { default: FakeOpenAI };
-});
-
 import { normalizeContext } from "../src/compat.ts";
+import type { Model } from "../src/types.ts";
+import openaiPermissionDeniedMock from "./openai-permission-denied-mock.ts";
+
+vi.mock("openai", () =>
+  import("./openai-permission-denied-mock.ts").then((module) => module.default),
+);
+
+const { mockState: openaiMock } = openaiPermissionDeniedMock;
 
 const context = normalizeContext({
+  messages: [{ content: [{ text: "hi", type: "text" }], role: "user", timestamp: 0 }],
   systemPrompt: "",
-  messages: [{ role: "user", content: [{ type: "text", text: "hi" }], timestamp: 0 }],
   tools: [],
 });
 
 const completionsModel: Model<"openai-completions"> = {
-  id: "test-model",
-  name: "Test Model",
   api: "openai-completions",
-  provider: "openrouter",
   baseUrl: "https://openrouter.ai/api/v1",
-  reasoning: false,
-  input: ["text"],
-  cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0 },
   contextWindow: 1000,
+  cost: { cacheRead: 0, cacheWrite: 0, input: 0, output: 0 },
+  id: "test-model",
+  input: ["text"],
   maxTokens: 100,
+  name: "Test Model",
+  provider: "openrouter",
+  reasoning: false,
 };
 
 const responsesModel: Model<"openai-responses"> = {
-  id: "gpt-test",
-  name: "GPT Test",
   api: "openai-responses",
-  provider: "openai",
   baseUrl: "https://api.openai.com/v1",
-  reasoning: false,
-  input: ["text"],
-  cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0 },
   contextWindow: 1000,
+  cost: { cacheRead: 0, cacheWrite: 0, input: 0, output: 0 },
+  id: "gpt-test",
+  input: ["text"],
   maxTokens: 100,
+  name: "GPT Test",
+  provider: "openai",
+  reasoning: false,
 };
 
 function drainResult(stream: {
@@ -103,8 +79,8 @@ describe("provider error body passthrough (per-tier regression)", () => {
     Effect.runPromise(
       Effect.gen(function* () {
         openaiMock.parsedBody = {
-          message: "Provider returned error",
           code: 403,
+          message: "Provider returned error",
           metadata: { raw: "upstream WAF blocked policy XYZ" },
         };
 

@@ -11,9 +11,9 @@ const imageCatalogConstName = (providerId: string): string =>
 const classifierCatalogConstName = (providerId: string): string =>
   `${constPrefix(providerId)}_CLASSIFIER_MODELS`;
 
-export const providerShardFile = (providerId: string): string => `${providerId}.models.ts`;
+const providerShardFile = (providerId: string): string => `${providerId}.models.ts`;
 
-export function renderProviderShard(providerId: string): string {
+function renderProviderShard(providerId: string): string {
   const quoted = JSON.stringify(providerId);
   return [
     GENERATED_HEADER,
@@ -45,7 +45,7 @@ function renderCatalogRecord(
   return `export const ${name}: {\n${types}} = {\n${values}};\n`;
 }
 
-export function renderAggregator(providerIds: readonly string[]): string {
+function renderAggregator(providerIds: readonly string[]): string {
   const imports = providerIds
     .map(
       (providerId) =>
@@ -63,3 +63,11 @@ export function renderAggregator(providerIds: readonly string[]): string {
     renderCatalogRecord("CLASSIFIER_MODELS", providerIds, classifierCatalogConstName),
   ].join("");
 }
+
+const catalogSources = {
+  providerShardFile,
+  renderAggregator,
+  renderProviderShard,
+};
+
+export default catalogSources;

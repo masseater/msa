@@ -1,63 +1,11 @@
 import type { Api, Model, ModelCost } from "../../src/types.ts";
-import type { ModelsDevReasoningOption } from "../models-dev-reasoning-options.ts";
+import type modelsDevTypes from "./models-dev.types.ts";
 
-export interface ModelsDevModel {
-  id: string;
-  name: string;
-  tool_call?: boolean;
-  structured_output?: boolean;
-  reasoning?: boolean;
-  reasoning_options?: ModelsDevReasoningOption[];
-  status?: string;
-  limit?: {
-    context?: number;
-    output?: number;
-  };
-  cost?: {
-    input?: number;
-    output?: number;
-    cache_read?: number;
-    cache_write?: number;
-    tiers?: {
-      input?: number;
-      output?: number;
-      cache_read?: number;
-      cache_write?: number;
-      tier?: {
-        type?: string;
-        size?: number;
-      };
-    }[];
-  };
-  modalities?: {
-    input?: string[];
-    output?: string[];
-  };
-  provider?: {
-    npm?: string;
-  };
-}
-
-export interface ModelsDevProvider {
-  models?: Record<string, ModelsDevModel>;
-}
-
-export type ModelsDevCatalog = Record<string, ModelsDevProvider>;
-
-export type ThinkingLevelMap = NonNullable<Model<any>["thinkingLevelMap"]>;
-
-export type ReasoningOptionsRegistry = Map<string, ModelsDevReasoningOption[]>;
-
-export interface ModelsDevSource {
-  readonly data: ModelsDevCatalog;
-  readonly remember: (provider: string, id: string, source: ModelsDevModel) => void;
-}
-
-export function createModelsDevSource(data: ModelsDevCatalog): {
-  readonly source: ModelsDevSource;
-  readonly reasoning: ReasoningOptionsRegistry;
+function createModelsDevSource(data: modelsDevTypes.ModelsDevCatalog): {
+  readonly source: modelsDevTypes.ModelsDevSource;
+  readonly reasoning: modelsDevTypes.ReasoningOptionsRegistry;
 } {
-  const reasoning: ReasoningOptionsRegistry = new Map();
+  const reasoning: modelsDevTypes.ReasoningOptionsRegistry = new Map();
   return {
     reasoning,
     source: {
@@ -70,30 +18,30 @@ export function createModelsDevSource(data: ModelsDevCatalog): {
   };
 }
 
-export const orZero = (value: number | undefined): number =>
+const orZero = (value: number | undefined): number =>
   value === undefined || Number.isNaN(value) ? 0 : value;
 
-export function roundCost(value: number): number {
+function roundCost(value: number): number {
   return Number(value.toFixed(6));
 }
 
-export function getModelsDevCost(cost: ModelsDevModel["cost"]): ModelCost {
+function getModelsDevCost(cost: modelsDevTypes.ModelsDevModel["cost"]): ModelCost {
   const base = {
-    input: cost?.input || 0,
-    output: cost?.output || 0,
     cacheRead: orZero(cost?.cache_read),
     cacheWrite: cost?.cache_write || 0,
+    input: cost?.input || 0,
+    output: cost?.output || 0,
   };
   const tiers = cost?.tiers?.flatMap((tier) => {
     const context = tier.tier;
     if (context?.type !== "context" || context.size === undefined) return [];
     return [
       {
-        inputTokensAbove: context.size,
-        input: tier.input ?? base.input,
-        output: tier.output ?? base.output,
         cacheRead: tier.cache_read ?? base.cacheRead,
         cacheWrite: tier.cache_write ?? base.cacheWrite,
+        input: tier.input ?? base.input,
+        inputTokensAbove: context.size,
+        output: tier.output ?? base.output,
       },
     ];
   });
@@ -101,43 +49,31 @@ export function getModelsDevCost(cost: ModelsDevModel["cost"]): ModelCost {
   return tiers !== undefined && tiers.length > 0 ? { ...base, tiers } : base;
 }
 
-export function modelsDevInput(model: Pick<ModelsDevModel, "modalities">): ("text" | "image")[] {
+function modelsDevInput(
+  model: Pick<modelsDevTypes.ModelsDevModel, "modalities">,
+): ("text" | "image")[] {
   return model.modalities?.input?.includes("image") === true ? ["text", "image"] : ["text"];
 }
 
-export function toolModels(
-  provider: ModelsDevProvider | undefined,
-): (readonly [string, ModelsDevModel])[] {
+function toolModels(
+  provider: modelsDevTypes.ModelsDevProvider | undefined,
+): (readonly [string, modelsDevTypes.ModelsDevModel])[] {
   return Object.entries(provider?.models ?? {}).filter(([, model]) => model.tool_call === true);
 }
 
-export interface ModelsDevEntry {
-  readonly id: string;
-  readonly source: ModelsDevModel;
-}
-
-export function modelsDevFields({ id, source }: ModelsDevEntry) {
+function modelsDevFields({ id, source }: modelsDevTypes.ModelsDevEntry) {
   return {
+    contextWindow: source.limit?.context || 4096,
+    cost: getModelsDevCost(source.cost),
     id,
+    input: modelsDevInput(source),
+    maxTokens: source.limit?.output || 4096,
     name: source.name || id,
     reasoning: source.reasoning === true,
-    input: modelsDevInput(source),
-    cost: getModelsDevCost(source.cost),
-    contextWindow: source.limit?.context || 4096,
-    maxTokens: source.limit?.output || 4096,
   };
 }
 
-export interface ModelsDevModelSpec extends ModelsDevEntry {
-  readonly api: Api;
-  readonly provider: string;
-  readonly baseUrl: string;
-  readonly compat?: Model<Api>["compat"];
-  readonly thinkingLevelMap?: ThinkingLevelMap | undefined;
-  readonly overrides?: Partial<Pick<Model<Api>, "input" | "cost" | "reasoning" | "headers">>;
-}
-
-export function modelsDevModel({
+function modelsDevModel({
   id,
   source,
   api,
@@ -146,14 +82,27 @@ export function modelsDevModel({
   compat,
   thinkingLevelMap,
   overrides,
-}: ModelsDevModelSpec): Model<Api> {
+}: modelsDevTypes.ModelsDevModelSpec): Model<Api> {
   return {
     ...modelsDevFields({ id, source }),
     api,
-    provider,
     baseUrl,
+    provider,
     ...(thinkingLevelMap === undefined ? {} : { thinkingLevelMap }),
     ...(compat === undefined ? {} : { compat }),
     ...overrides,
   };
 }
+
+const modelsDev = {
+  createModelsDevSource,
+  getModelsDevCost,
+  modelsDevFields,
+  modelsDevInput,
+  modelsDevModel,
+  orZero,
+  roundCost,
+  toolModels,
+};
+
+export default modelsDev;

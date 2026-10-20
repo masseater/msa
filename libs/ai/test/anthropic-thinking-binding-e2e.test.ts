@@ -4,13 +4,15 @@ import { describe, expect, it } from "vite-plus/test";
 import { stream } from "../src/api/anthropic-messages.ts";
 import { getModel, normalizeContext } from "../src/compat.ts";
 import type { AssistantMessage, Context } from "../src/types.ts";
-import { envValue } from "./env.ts";
+import env from "./env.ts";
+
+const { envValue } = env;
 
 const enabled = Boolean(envValue("ANTHROPIC_API_KEY"));
 const model = getModel("anthropic-api", "claude-fable-5-1");
 const user = (content: string, timestamp: number) => ({
-  role: "user" as const,
   content,
+  role: "user" as const,
   timestamp,
 });
 
@@ -31,11 +33,11 @@ function request(context: Context, effort: "low" | "high"): Promise<AssistantMes
     stream(model, normalizeContext(context), {
       apiKey: envValue("ANTHROPIC_API_KEY"),
       cacheRetention: "none",
-      maxTokens: 1536,
-      thinkingEnabled: true,
-      thinkingDisplay: "summarized",
       effort,
+      maxTokens: 1536,
       onPayload: strictBinding,
+      thinkingDisplay: "summarized",
+      thinkingEnabled: true,
     }).result(),
   );
 }

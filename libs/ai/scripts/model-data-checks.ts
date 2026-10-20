@@ -1,23 +1,22 @@
-export function isRecord(value: unknown): value is Record<string, unknown> {
+import type modelDataChecksTypes from "./model-data-checks.types.ts";
+function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === "object" && value !== null && !Array.isArray(value);
 }
 
-export function sortedRecord<T>(entries: Iterable<readonly [string, T]>): Record<string, T> {
+function sortedRecord<T>(entries: Iterable<readonly [string, T]>): Record<string, T> {
   return Object.fromEntries(Array.from(entries).sort(([a], [b]) => (a < b ? -1 : a > b ? 1 : 0)));
 }
 
-export interface StringListComparison {
-  readonly expected: readonly string[];
-  readonly actual: readonly string[];
-}
-
-export function sameStrings({ expected, actual }: StringListComparison): boolean {
+function sameStrings({ expected, actual }: modelDataChecksTypes.StringListComparison): boolean {
   return (
     expected.length === actual.length && expected.every((value, index) => value === actual[index])
   );
 }
 
-export function describeSetDifference({ expected, actual }: StringListComparison): string {
+function describeSetDifference({
+  expected,
+  actual,
+}: modelDataChecksTypes.StringListComparison): string {
   const expectedSet = new Set(expected);
   const actualSet = new Set(actual);
   const missing = expected.filter((value) => !actualSet.has(value));
@@ -30,16 +29,11 @@ export function describeSetDifference({ expected, actual }: StringListComparison
     .join("; ");
 }
 
-export function listMismatch(label: string): (comparison: StringListComparison) => string[] {
+function listMismatch(
+  label: string,
+): (comparison: modelDataChecksTypes.StringListComparison) => string[] {
   return (comparison) =>
     sameStrings(comparison) ? [] : [`${label} (${describeSetDifference(comparison)})`];
-}
-
-export interface ModelValueExpectation {
-  readonly value: unknown;
-  readonly providerId: string;
-  readonly modelId: string;
-  readonly api: string;
 }
 
 type ModelRecord = Record<string, unknown>;
@@ -62,7 +56,10 @@ function mismatch(label: string, field: string, actual: unknown, expected: strin
     : [`${label} has ${field} ${JSON.stringify(actual)}, expected ${JSON.stringify(expected)}`];
 }
 
-function identityErrors(model: ModelRecord, expectation: ModelValueExpectation): string[] {
+function identityErrors(
+  model: ModelRecord,
+  expectation: modelDataChecksTypes.ModelValueExpectation,
+): string[] {
   const label = `${expectation.providerId}/${expectation.modelId}`;
   return [
     ...mismatch(label, "id", model["id"], expectation.modelId),
@@ -124,7 +121,7 @@ function costErrors(model: ModelRecord, label: string): string[] {
   });
 }
 
-export function modelValueErrors(expectation: ModelValueExpectation): string[] {
+function modelValueErrors(expectation: modelDataChecksTypes.ModelValueExpectation): string[] {
   const label = `${expectation.providerId}/${expectation.modelId}`;
   const model = expectation.value;
   if (!isRecord(model)) return [`${label} must be an object`];
@@ -136,19 +133,12 @@ export function modelValueErrors(expectation: ModelValueExpectation): string[] {
   ];
 }
 
-export interface ManifestExpectation {
-  readonly manifest: Record<string, unknown> | undefined;
-  readonly schemaVersion: number;
-  readonly structureHash: string;
-  readonly expectedFiles: readonly string[];
-}
-
-export function manifestErrors({
+function manifestErrors({
   manifest,
   schemaVersion,
   structureHash,
   expectedFiles,
-}: ManifestExpectation): string[] {
+}: modelDataChecksTypes.ManifestExpectation): string[] {
   const generatedAt = manifest?.["generatedAt"];
   const files = manifest?.["files"];
   return [
@@ -165,22 +155,19 @@ export function manifestErrors({
       : ["model data generation stamp does not match the generated catalog"]),
     ...(isRecord(files)
       ? listMismatch("manifest file hashes do not match provider data files")({
-          expected: expectedFiles,
           actual: Object.keys(files).sort(),
+          expected: expectedFiles,
         })
       : ["model data manifest has no file hashes"]),
   ];
 }
 
-export interface StoredGroups {
-  readonly path: string;
-  readonly groups: Record<string, unknown>;
-}
-
-export function structureFromGroups({
+function structureFromGroups({
   path,
   groups,
-}: StoredGroups): { readonly structure: Record<string, string> } | { readonly error: string } {
+}: modelDataChecksTypes.StoredGroups):
+  | { readonly structure: Record<string, string> }
+  | { readonly error: string } {
   const models = new Map<string, string>();
   for (const [api, value] of Object.entries(groups)) {
     if (!isRecord(value))
@@ -195,13 +182,11 @@ export function structureFromGroups({
   return { structure: sortedRecord(models) };
 }
 
-export interface ProviderGroups {
-  readonly providerId: string;
-  readonly filename: string;
-  readonly groups: Record<string, unknown>;
-}
-
-export function groupedModelErrors({ providerId, filename, groups }: ProviderGroups): {
+function groupedModelErrors({
+  providerId,
+  filename,
+  groups,
+}: modelDataChecksTypes.ProviderGroups): {
   readonly errors: string[];
   readonly actualModels: Map<string, string>;
 } {
@@ -219,25 +204,19 @@ export function groupedModelErrors({ providerId, filename, groups }: ProviderGro
       }
       actualModels.set(modelKey, api);
       const modelId = modelKey.slice(modelKey.indexOf(":") + 1);
-      errors.push(...modelValueErrors({ value: model, providerId, modelId, api }));
+      errors.push(...modelValueErrors({ api, modelId, providerId, value: model }));
       if (isRecord(model) && modelKey !== `${String(model["type"])}:${String(model["id"])}`)
         errors.push(`${providerId}/${modelKey} has mismatched type/id identity`);
     }
   }
-  return { errors, actualModels };
+  return { actualModels, errors };
 }
 
-export interface ApiPlacement {
-  readonly providerId: string;
-  readonly expectedModels: Readonly<Record<string, string>>;
-  readonly actualModels: ReadonlyMap<string, string>;
-}
-
-export function apiPlacementErrors({
+function apiPlacementErrors({
   providerId,
   expectedModels,
   actualModels,
-}: ApiPlacement): string[] {
+}: modelDataChecksTypes.ApiPlacement): string[] {
   return Object.entries(expectedModels).flatMap(([modelId, expectedApi]) => {
     const actualApi = actualModels.get(modelId);
     return actualApi === undefined || actualApi === expectedApi
@@ -247,3 +226,18 @@ export function apiPlacementErrors({
         ];
   });
 }
+
+const modelDataChecks = {
+  apiPlacementErrors,
+  describeSetDifference,
+  groupedModelErrors,
+  isRecord,
+  listMismatch,
+  manifestErrors,
+  modelValueErrors,
+  sameStrings,
+  sortedRecord,
+  structureFromGroups,
+};
+
+export default modelDataChecks;

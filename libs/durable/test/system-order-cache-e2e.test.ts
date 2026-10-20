@@ -3,24 +3,25 @@ import {
   type Message,
   type Model,
   type Models,
-  normalizeContext,
   Type,
+  normalizeContext,
   uuidv7,
 } from "@msa/ai";
 import { builtinModels } from "@msa/ai/providers/all";
 import { AssistantEntry, defineExtension, defineTool, hook } from "@msa/durable";
-import { createRegistry, GenerationTask, Harness } from "@msa/durable/harness";
+import { GenerationTask, Harness, createRegistry } from "@msa/durable/harness";
 import { MemoryStorage } from "@msa/durable/storage/memory";
 import { Effect } from "effect";
-import { describe, expect, it } from "vite-plus/test";
+import { describe, expect, inject, it } from "vite-plus/test";
 
 import { streamSimple as streamSimpleAnthropic } from "../../ai/src/api/anthropic-messages.ts";
-import { resolveApiKey } from "../../ai/test/oauth.ts";
-import { awaited, context } from "./support.ts";
+import support from "./support.ts";
 
-const anthropicToken = await resolveApiKey("anthropic");
+const { awaited, context } = support;
 
-const MODEL = { provider: "anthropic", modelId: "claude-sonnet-5-5" } as const;
+const anthropicToken = inject("storedApiKeys")["anthropic"];
+
+const MODEL = { modelId: "claude-sonnet-5-5", provider: "anthropic" } as const;
 
 function instructions(nonce: string): string {
   const lines = [
@@ -37,16 +38,16 @@ function instructions(nonce: string): string {
 
 const Parameters = Type.Object({ text: Type.String() });
 const first = defineTool({
-  name: "probe_first",
   description: "Unused probe tool.",
-  parameters: Parameters,
   execute: () => Promise.resolve({ output: [] }),
+  name: "probe_first",
+  parameters: Parameters,
 });
 const second = defineTool({
-  name: "probe_second",
   description: "Unused probe tool added on the second turn.",
-  parameters: Parameters,
   execute: () => Promise.resolve({ output: [] }),
+  name: "probe_second",
+  parameters: Parameters,
 });
 
 function committedOrder(messages: readonly Message[]): Message[] {
@@ -82,16 +83,16 @@ function probeRegistry() {
   const registry = createRegistry();
   const probe = defineExtension({ name: "probe", tools: [first, second] });
   const legacy = defineExtension({
-    name: "legacy-order",
     hooks: [
       hook(GenerationTask, {
         beforeRequest: ({ messages }) => ({ messages: committedOrder(messages) }),
       }),
     ],
+    name: "legacy-order",
   });
   registry.install(probe);
   registry.install(legacy);
-  return { registry, probe, legacy };
+  return { legacy, probe, registry };
 }
 
 const cacheReadAfterToolChangeStep1 = Effect.fn("cacheReadAfterToolChangeStep1")(function* (
@@ -108,7 +109,7 @@ const cacheReadAfterToolChangeStep1 = Effect.fn("cacheReadAfterToolChangeStep1")
       context,
     ),
   );
-  return { runPromise, probe, legacy, harness };
+  return { harness, legacy, probe, runPromise };
 });
 
 const cacheReadAfterToolChange = Effect.fn("cacheReadAfterToolChange")(function* (
@@ -120,10 +121,10 @@ const cacheReadAfterToolChange = Effect.fn("cacheReadAfterToolChange")(function*
     const root = yield* awaited(
       harness.root(context, {
         agent: {
+          extensions: legacyOrder ? [probe, legacy] : [probe],
+          instructions: instructions(uuidv7()),
           model: MODEL,
           thinkingLevel: "low",
-          instructions: instructions(uuidv7()),
-          extensions: legacyOrder ? [probe, legacy] : [probe],
           tools: [first],
         },
       }),
@@ -134,7 +135,7 @@ const cacheReadAfterToolChange = Effect.fn("cacheReadAfterToolChange")(function*
         Effect.gen(function* () {
           const settled = yield* awaited(
             (yield* awaited(
-              root.submit({ type: "input", content: `Reply exactly: ${text}` }, context),
+              root.submit({ content: `Reply exactly: ${text}`, type: "input" }, context),
             )).wait(context),
           );
           if (settled.status !== "done" || settled.type !== "input")

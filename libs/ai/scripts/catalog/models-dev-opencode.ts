@@ -4,15 +4,13 @@ import type {
   OpenAICompletionsCompat,
   OpenAIResponsesCompat,
 } from "../../src/types.ts";
-import { getEffortThinkingLevelMap } from "../models-dev-reasoning-options.ts";
-import {
-  type ModelsDevModel,
-  modelsDevModel,
-  type ModelsDevSource,
-  type ThinkingLevelMap,
-  toolModels,
-} from "./models-dev.ts";
-import { getGoogleThinkingLevelMap } from "./thinking-maps.ts";
+import getEffortThinkingLevelMap from "../models-dev-reasoning-options.ts";
+import modelsDev from "./models-dev.ts";
+import type modelsDevTypes from "./models-dev.types.ts";
+import thinkingMaps from "./thinking-maps.ts";
+
+const { modelsDevModel, toolModels } = modelsDev;
+const { getGoogleThinkingLevelMap } = thinkingMaps;
 
 type OpenCodeCompat = OpenAICompletionsCompat | OpenAIResponsesCompat;
 
@@ -29,8 +27,8 @@ interface OpenCodeRoute {
 }
 
 const OPENCODE_VARIANTS: readonly OpenCodeVariant[] = [
-  { key: "opencode", provider: "opencode", basePath: "https://opencode.ai/inference" },
-  { key: "opencode-go", provider: "opencode-go", basePath: "https://opencode.ai/inference/go" },
+  { basePath: "https://opencode.ai/inference", key: "opencode", provider: "opencode" },
+  { basePath: "https://opencode.ai/inference/go", key: "opencode-go", provider: "opencode-go" },
 ];
 
 const OPENCODE_OPENAI_COMPLETIONS_LONG_CACHE_RETENTION_UNSUPPORTED_MODELS = new Set([
@@ -65,13 +63,17 @@ function npmRoute(npm: string | undefined, basePath: string): OpenCodeRoute {
   }
 }
 
-function modelRoute(variant: OpenCodeVariant, id: string, source: ModelsDevModel): OpenCodeRoute {
+function modelRoute(
+  variant: OpenCodeVariant,
+  id: string,
+  source: modelsDevTypes.ModelsDevModel,
+): OpenCodeRoute {
   const route = npmRoute(source.provider?.npm, variant.basePath);
   let { api, baseUrl, compat } = route;
   if (variant.provider === "opencode" && id === "grok-build-0.1")
     compat = { ...compat, supportsReasoningEffort: false };
   if (id === "kimi-k2.6")
-    compat = { ...compat, thinkingFormat: "deepseek", supportsReasoningEffort: false };
+    compat = { ...compat, supportsReasoningEffort: false, thinkingFormat: "deepseek" };
   if (variant.provider === "opencode-go" && (id === "qwen3.5-plus" || id === "qwen3.6-plus")) {
     api = "openai-completions";
     baseUrl = `${variant.basePath}/v1`;
@@ -92,8 +94,8 @@ function modelRoute(variant: OpenCodeVariant, id: string, source: ModelsDevModel
 function openCodeThinkingLevelMap(
   variant: OpenCodeVariant,
   route: OpenCodeRoute,
-  entry: { readonly id: string; readonly source: ModelsDevModel },
-): ThinkingLevelMap | undefined {
+  entry: { readonly id: string; readonly source: modelsDevTypes.ModelsDevModel },
+): modelsDevTypes.ThinkingLevelMap | undefined {
   if (route.api === "google-generative-ai")
     return getGoogleThinkingLevelMap(entry.id, entry.source.reasoning_options ?? []);
   if (variant.provider === "opencode-go" && entry.id === "deepseek-v4.1-flash")
@@ -102,7 +104,7 @@ function openCodeThinkingLevelMap(
 }
 
 function openCodeVariantModels(
-  { data, remember }: ModelsDevSource,
+  { data, remember }: modelsDevTypes.ModelsDevSource,
   variant: OpenCodeVariant,
 ): Model<Api>[] {
   return toolModels(data[variant.key])
@@ -112,17 +114,19 @@ function openCodeVariantModels(
       const thinkingLevelMap = openCodeThinkingLevelMap(variant, route, { id, source });
       remember(variant.provider, id, source);
       return modelsDevModel({
-        id,
-        source,
         api: route.api,
-        provider: variant.provider,
         baseUrl: route.baseUrl,
-        thinkingLevelMap,
         compat: route.compat,
+        id,
+        provider: variant.provider,
+        source,
+        thinkingLevelMap,
       });
     });
 }
 
-export function openCodeModels(source: ModelsDevSource): Model<Api>[] {
+function openCodeModels(source: modelsDevTypes.ModelsDevSource): Model<Api>[] {
   return OPENCODE_VARIANTS.flatMap((variant) => openCodeVariantModels(source, variant));
 }
+
+export default openCodeModels;

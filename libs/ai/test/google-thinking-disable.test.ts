@@ -4,7 +4,9 @@ import { describe, expect, it } from "vite-plus/test";
 import { getModel, streamSimple } from "../src/compat.ts";
 import type { Api, Context, Model, SimpleStreamOptions } from "../src/types.ts";
 import { currentTimeMillis } from "../src/utils/clock.ts";
-import { envValue } from "./env.ts";
+import env from "./env.ts";
+
+const { envValue } = env;
 
 type SimpleOptionsWithExtras = SimpleStreamOptions & Record<string, unknown>;
 
@@ -24,15 +26,15 @@ interface DisableExpectations {
 
 function makeContext(): Context {
   return {
-    systemPrompt: "You are a precise assistant. Follow the requested output format exactly.",
     messages: [
       {
-        role: "user",
         content:
           "Before replying, carefully solve 36863 * 5279 internally. Then reply with the word pong repeated exactly 40 times, separated by single spaces. Do not add any other text.",
+        role: "user",
         timestamp: currentTimeMillis(),
       },
     ],
+    systemPrompt: "You are a precise assistant. Follow the requested output format exactly.",
   };
 }
 
@@ -80,11 +82,11 @@ function runWithoutReasoning<TApi extends Api>(
         .trim();
 
       return {
-        thinkingEventCount,
-        thinkingCharCount,
-        text,
-        outputTokens: response.usage.output,
         contentTypes: response.content.map((block) => block.type),
+        outputTokens: response.usage.output,
+        text,
+        thinkingCharCount,
+        thinkingEventCount,
       };
     }),
   );

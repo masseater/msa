@@ -1,11 +1,10 @@
 import { Clock, Effect } from "effect";
-import { describe, expect, it } from "vite-plus/test";
+import { describe, expect, inject, it } from "vite-plus/test";
 
 import { complete, getModel } from "../src/compat.ts";
 import type { Context } from "../src/types.ts";
-import { resolveApiKey } from "./oauth.ts";
 
-const codexToken = await resolveApiKey("openai-codex");
+const codexToken = inject("storedApiKeys")["openai-codex"];
 
 describe("openai-codex cache affinity e2e", () => {
   it.skipIf(codexToken === undefined || codexToken === "")(
@@ -16,14 +15,14 @@ describe("openai-codex cache affinity e2e", () => {
           const model = getModel("openai-codex", "gpt-5.5");
           const sessionId = "0195d6e4-4cf9-7f44-a2d8-f8f7f49ee9d3";
           const context: Context = {
-            systemPrompt: "You are a helpful assistant. Reply exactly as requested.",
             messages: [
               {
-                role: "user",
                 content: "Reply with exactly: cache affinity e2e success",
+                role: "user",
                 timestamp: yield* Clock.currentTimeMillis,
               },
             ],
+            systemPrompt: "You are a helpful assistant. Reply exactly as requested.",
           };
 
           const response = yield* Effect.promise(() =>

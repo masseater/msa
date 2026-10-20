@@ -1,28 +1,27 @@
 import { Console, Effect } from "effect";
 
-import {
-  buildOpenRouterCatalog,
-  type OpenRouterCatalog,
-  type OpenRouterModelListItem,
-} from "../openrouter-catalog.ts";
-import type { ModelsDevCatalog } from "./models-dev.ts";
-import { fetchJson, UpstreamError, withFallback } from "./upstream.ts";
+import buildOpenRouterCatalog from "../openrouter-catalog.ts";
+import type openrouterCatalogTypes from "../openrouter-catalog.types.ts";
+import type modelsDevTypes from "./models-dev.types.ts";
+import upstream from "./upstream.ts";
 
-export const fetchModelsDevCatalog = Effect.gen(function* () {
+const { UpstreamError, fetchJson, withFallback } = upstream;
+
+const fetchModelsDevCatalog = Effect.gen(function* () {
   yield* Console.log("Fetching models from models.dev API...");
   return (yield* fetchJson({
-    url: "https://models.dev/api.json",
     label: "models.dev API",
-  })) as ModelsDevCatalog;
+    url: "https://models.dev/api.json",
+  })) as modelsDevTypes.ModelsDevCatalog;
 });
 
 const fetchOpenRouterList = (query: string) =>
   Effect.map(
-    fetchJson({ url: `https://openrouter.ai/api/v1/models${query}`, label: "OpenRouter API" }),
-    (data) => (data as { data?: OpenRouterModelListItem[] }).data ?? [],
+    fetchJson({ label: "OpenRouter API", url: `https://openrouter.ai/api/v1/models${query}` }),
+    (data) => (data as { data?: openrouterCatalogTypes.OpenRouterModelListItem[] }).data ?? [],
   );
 
-export const fetchOpenRouterModels = (strict: boolean) =>
+const fetchOpenRouterModels = (strict: boolean) =>
   Effect.gen(function* () {
     yield* Console.log("Fetching models from OpenRouter API...");
     const [listed, imageListed, decisionListed] = yield* Effect.all(
@@ -45,8 +44,19 @@ export const fetchOpenRouterModels = (strict: boolean) =>
     return catalog;
   }).pipe(
     withFallback({
+      fallback: (): openrouterCatalogTypes.OpenRouterCatalog => ({
+        chat: [],
+        classifiers: [],
+        images: [],
+      }),
       label: "fetch OpenRouter models",
       strict,
-      fallback: (): OpenRouterCatalog => ({ chat: [], images: [], classifiers: [] }),
     }),
   );
+
+const remoteCatalogs = {
+  fetchModelsDevCatalog,
+  fetchOpenRouterModels,
+};
+
+export default remoteCatalogs;

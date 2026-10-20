@@ -1,4 +1,4 @@
-import { Clock, Effect } from "effect";
+import { Clock, Effect, Stream } from "effect";
 import { beforeEach, describe, expect, it, vi } from "vite-plus/test";
 
 import { completeSimple } from "../src/compat.ts";
@@ -14,8 +14,14 @@ vi.mock("openai", () => {
       completions: {
         create: () => {
           const stream = {
-            async *[Symbol.asyncIterator]() {
-              for (const chunk of mockState.chunks) yield chunk;
+            [Symbol.asyncIterator]() {
+              return Stream.toAsyncIterable(
+                Stream.fromIterable(
+                  (function* () {
+                    for (const chunk of mockState.chunks) yield chunk;
+                  })(),
+                ),
+              )[Symbol.asyncIterator]();
             },
           };
           const promise = Promise.resolve(stream) as Promise<typeof stream> & {
@@ -27,7 +33,7 @@ vi.mock("openai", () => {
           promise.withResponse = () =>
             Promise.resolve({
               data: stream,
-              response: { status: 200, headers: new Headers({ "x-request-id": "req-1" }) },
+              response: { headers: new Headers({ "x-request-id": "req-1" }), status: 200 },
             });
           return promise;
         },
@@ -39,16 +45,16 @@ vi.mock("openai", () => {
 
 function openRouterModel(): Model<"openai-completions"> {
   return {
-    id: "openrouter/auto",
-    name: "OpenRouter Auto",
     api: "openai-completions",
-    provider: "openrouter",
     baseUrl: "https://openrouter.ai/api/v1",
-    reasoning: false,
-    input: ["text"],
-    cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0 },
     contextWindow: 200_000,
+    cost: { cacheRead: 0, cacheWrite: 0, input: 0, output: 0 },
+    id: "openrouter/auto",
+    input: ["text"],
     maxTokens: 8192,
+    name: "OpenRouter Auto",
+    provider: "openrouter",
+    reasoning: false,
   };
 }
 
@@ -61,22 +67,22 @@ describe("openai-completions provider stream events", () => {
     Effect.runPromise(
       Effect.gen(function* () {
         const firstChunk = {
+          choices: [{ delta: { content: "hello" }, index: 0 }],
           id: "chatcmpl-1",
           model: "anthropic/claude-sonnet-4.6",
-          choices: [{ index: 0, delta: { content: "hello" } }],
         };
         const finalChunk = {
+          choices: [{ delta: {}, finish_reason: "stop", index: 0 }],
           id: "chatcmpl-1",
           model: "anthropic/claude-sonnet-4.6",
-          choices: [{ index: 0, delta: {}, finish_reason: "stop" }],
+          openrouter_metadata: { region: "iad", strategy: "direct" },
           usage: {
-            prompt_tokens: 10,
             completion_tokens: 2,
-            total_tokens: 12,
             cost: 0.0012,
             is_byok: false,
+            prompt_tokens: 10,
+            total_tokens: 12,
           },
-          openrouter_metadata: { strategy: "direct", region: "iad" },
         };
         mockState.chunks = [firstChunk, finalChunk];
         const events: unknown[] = [];
@@ -85,7 +91,7 @@ describe("openai-completions provider stream events", () => {
         const message = yield* Effect.promise(() =>
           completeSimple(
             openRouterModel(),
-            { messages: [{ role: "user", content: "hi", timestamp: currentTime }] },
+            { messages: [{ content: "hi", role: "user", timestamp: currentTime }] },
             {
               apiKey: "test",
               onProviderStreamEvent: (data) => {
@@ -95,7 +101,7 @@ describe("openai-completions provider stream events", () => {
           ),
         );
 
-        expect(message.content).toEqual([{ type: "text", text: "hello" }]);
+        expect(message.content).toEqual([{ text: "hello", type: "text" }]);
         expect(events).toEqual([firstChunk, finalChunk]);
       }),
     ));

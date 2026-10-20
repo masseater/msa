@@ -27,15 +27,15 @@ describe("getSupportedThinkingLevels", () => {
   it("includes Claude Opus 5.5 with its always-on effort levels and official pricing", () => {
     const model = getModel("anthropic-api", "claude-opus-5-5");
     expect(model).toMatchObject({
-      cost: { input: 4, output: 20, cacheRead: 0.2, cacheWrite: 5 },
-      contextWindow: 1_000_000,
-      maxTokens: 128_000,
       compat: {
         forceAdaptiveThinking: true,
         supportsMidConvoEffort: true,
         supportsMidConvoSystemMessages: true,
         supportsMidConvoToolChanges: true,
       },
+      contextWindow: 1_000_000,
+      cost: { cacheRead: 0.2, cacheWrite: 5, input: 4, output: 20 },
+      maxTokens: 128_000,
     });
     expect(getSupportedThinkingLevels(model)).toEqual(["low", "medium", "high", "xhigh", "max"]);
   });
@@ -45,9 +45,6 @@ describe("getSupportedThinkingLevels", () => {
   it("includes Claude Sonnet 5.5 with managed effort levels and official pricing", () => {
     const model = getModel("anthropic-api", "claude-sonnet-5-5");
     expect(model).toMatchObject({
-      cost: { input: 2, output: 10, cacheRead: 0.1, cacheWrite: 2.5 },
-      contextWindow: 1_000_000,
-      maxTokens: 128_000,
       compat: {
         forceAdaptiveThinking: true,
         supportsMidConvoEffort: true,
@@ -55,6 +52,9 @@ describe("getSupportedThinkingLevels", () => {
         supportsMidConvoToolChanges: true,
         supportsTemperature: false,
       },
+      contextWindow: 1_000_000,
+      cost: { cacheRead: 0.1, cacheWrite: 2.5, input: 2, output: 10 },
+      maxTokens: 128_000,
     });
     expect(getSupportedThinkingLevels(model)).toEqual(["low", "medium", "high", "xhigh", "max"]);
   });
@@ -137,36 +137,36 @@ describe("getSupportedThinkingLevels", () => {
 
 describe("getSupportedThinkingLevels", () => {
   it.each([
-    ["gpt-6-sol", { input: 2, output: 10, cacheRead: 0.2, cacheWrite: 2.5 }, 272000],
-    ["gpt-6-luna", { input: 0.1, output: 0.5, cacheRead: 0.01, cacheWrite: 0.125 }, 272000],
-    ["gpt-6.1-sol", { input: 2, output: 10, cacheRead: 0.1, cacheWrite: 2.5 }, 500000],
+    ["gpt-6-sol", { cacheRead: 0.2, cacheWrite: 2.5, input: 2, output: 10 }, 272000],
+    ["gpt-6-luna", { cacheRead: 0.01, cacheWrite: 0.125, input: 0.1, output: 0.5 }, 272000],
+    ["gpt-6.1-sol", { cacheRead: 0.1, cacheWrite: 2.5, input: 2, output: 10 }, 500000],
   ] as const)(
     "includes official metadata for OpenAI and Codex %s",
     (modelId, cost, codexContextWindow) => {
       for (const provider of ["openai", "openai-codex"] as const) {
         const model = getModel(provider, modelId);
         expect(model).toMatchObject({
-          input: ["text", "image"],
-          cost: {
-            ...cost,
-            tiers: [
-              {
-                inputTokensAbove: 272000,
-                input: cost.input * 2,
-                output: cost.output * 1.5,
-                cacheRead: cost.cacheRead * 2,
-                cacheWrite: cost.cacheWrite * 2,
-              },
-            ],
-          },
-          contextWindow: provider === "openai-codex" ? codexContextWindow : 272000,
-          maxTokens: 128000,
           compat: {
             supportsAdditionalTools: true,
             supportsMidConvoSystemMessages: true,
             supportsOpenAIGrammarTools: true,
             supportsToolSearch: true,
           },
+          contextWindow: provider === "openai-codex" ? codexContextWindow : 272000,
+          cost: {
+            ...cost,
+            tiers: [
+              {
+                cacheRead: cost.cacheRead * 2,
+                cacheWrite: cost.cacheWrite * 2,
+                input: cost.input * 2,
+                inputTokensAbove: 272000,
+                output: cost.output * 1.5,
+              },
+            ],
+          },
+          input: ["text", "image"],
+          maxTokens: 128000,
         });
       }
     },

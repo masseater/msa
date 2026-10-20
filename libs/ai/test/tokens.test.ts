@@ -1,15 +1,18 @@
 import { Clock, Effect, Exit, Scope, Stream } from "effect";
-import { describe, expect, it } from "vite-plus/test";
+import { describe, expect, inject, it } from "vite-plus/test";
 
 import { getModel, stream } from "../src/compat.ts";
 import type { Api, Context, Model, StreamOptions } from "../src/types.ts";
-import { envValue } from "./env.ts";
+import env from "./env.ts";
+import modelChoice from "./model-choice.ts";
+
+const { chooseModel } = modelChoice;
 
 type StreamOptionsWithExtras = StreamOptions & Record<string, unknown>;
 
-import { resolveApiKey } from "./oauth.ts";
+const { envValue } = env;
 
-const openaiCodexToken = await resolveApiKey("openai-codex");
+const openaiCodexToken = inject("storedApiKeys")["openai-codex"];
 
 function testTokensOnAbort<TApi extends Api>(
   llm: Model<TApi>,
@@ -17,41 +20,7 @@ function testTokensOnAbort<TApi extends Api>(
 ) {
   return Effect.runPromise(
     Effect.gen(function* () {
-      const context: Context = {
-        messages: [
-          {
-            role: "user",
-            content: "Write a long poem with 20 stanzas about the beauty of nature.",
-            timestamp: yield* Clock.currentTimeMillis,
-          },
-        ],
-        systemPrompt: "You are a helpful assistant.",
-      };
-
-      const abortScope = yield* Scope.make();
-      const signal = yield* Scope.provide(abortScope)(Effect.abortSignal);
-      const response = stream(llm, context, { ...options, signal });
-
-      let abortFired = false;
-      let text = "";
-      yield* Stream.fromAsyncIterable(response, (error) => error).pipe(
-        Stream.orDie,
-        Stream.runForEach((event) =>
-          Effect.gen(function* () {
-            if (!abortFired && (event.type === "text_delta" || event.type === "thinking_delta")) {
-              text += event.delta;
-              if (text.length >= 1000) {
-                abortFired = true;
-                yield* Scope.close(abortScope, Exit.void);
-              }
-            }
-          }),
-        ),
-      );
-
-      const msg = yield* Effect.promise(() => response.result());
-
-      expect(msg.stopReason).toBe("aborted");
+      const msg = yield* testTokensOnAbortStep1<TApi>(llm, options);
 
       if (
         llm.api === "openai-completions" ||
@@ -77,7 +46,7 @@ describe("Token Statistics on Abort", () => {
   describe.skipIf(envValue("OPENAI_API_KEY") === undefined || envValue("OPENAI_API_KEY") === "")(
     "OpenAI Completions Provider",
     () => {
-      const { compat: _compat, ...baseModel } = getModel("openai", "gpt-4o-mini")!;
+      const { compat: _compat, ...baseModel } = chooseModel("openai", "direct OpenAI");
       void _compat;
       const llm: Model<"openai-completions"> = {
         ...baseModel,
@@ -114,18 +83,62 @@ describe("Token Statistics on Abort", () => {
   });
 });
 
+const gpt55ShouldIncludeToken = () =>
+  Effect.runPromise(
+    Effect.gen(function* () {
+      const llm = getModel("openai-codex", "gpt-5.5");
+      yield* Effect.promise(() => testTokensOnAbort(llm, { apiKey: openaiCodexToken }));
+    }),
+  );
+
 describe("Token Statistics on Abort", () => {
   describe("OpenAI Codex Provider", () => {
     it.skipIf(openaiCodexToken === undefined || openaiCodexToken === "")(
       "gpt-5.5 - should include token stats when aborted mid-stream",
       { retry: 3, timeout: 30000 },
-      () =>
-        Effect.runPromise(
-          Effect.gen(function* () {
-            const llm = getModel("openai-codex", "gpt-5.5");
-            yield* Effect.promise(() => testTokensOnAbort(llm, { apiKey: openaiCodexToken }));
-          }),
-        ),
+      gpt55ShouldIncludeToken,
     );
   });
 });
+
+function* testTokensOnAbortStep1<TApi extends Api>(
+  llm: Model<TApi>,
+  options: StreamOptionsWithExtras,
+) {
+  const context: Context = {
+    messages: [
+      {
+        content: "Write a long poem with 20 stanzas about the beauty of nature.",
+        role: "user",
+        timestamp: yield* Clock.currentTimeMillis,
+      },
+    ],
+    systemPrompt: "You are a helpful assistant.",
+  };
+
+  const abortScope = yield* Scope.make();
+  const signal = yield* Scope.provide(abortScope)(Effect.abortSignal);
+  const response = stream(llm, context, { ...options, signal });
+
+  let abortFired = false;
+  let text = "";
+  yield* Stream.fromAsyncIterable(response, (error) => error).pipe(
+    Stream.orDie,
+    Stream.runForEach((event) =>
+      Effect.gen(function* () {
+        if (!abortFired && (event.type === "text_delta" || event.type === "thinking_delta")) {
+          text += event.delta;
+          if (text.length >= 1000) {
+            abortFired = true;
+            yield* Scope.close(abortScope, Exit.void);
+          }
+        }
+      }),
+    ),
+  );
+
+  const msg = yield* Effect.promise(() => response.result());
+
+  expect(msg.stopReason).toBe("aborted");
+  return msg;
+}

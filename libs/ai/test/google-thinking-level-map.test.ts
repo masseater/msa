@@ -8,7 +8,7 @@ import type { Model, ThinkingBudgets, ThinkingLevel, ThinkingLevelMap } from "..
 import { normalizeContext } from "../src/utils/transcript.ts";
 
 const context = normalizeContext({
-  messages: [{ role: "user", content: "Hello", timestamp: 0 }],
+  messages: [{ content: "Hello", role: "user", timestamp: 0 }],
 });
 
 function googleModel(
@@ -16,17 +16,17 @@ function googleModel(
   thinkingLevelMap: ThinkingLevelMap,
 ): Model<"google-generative-ai"> {
   return {
-    id,
-    name: id,
     api: "google-generative-ai",
-    provider: "test-google",
     baseUrl: "https://example.invalid/v1beta",
+    contextWindow: 128000,
+    cost: { cacheRead: 0, cacheWrite: 0, input: 0, output: 0 },
+    id,
+    input: ["text"],
+    maxTokens: 4096,
+    name: id,
+    provider: "test-google",
     reasoning: true,
     thinkingLevelMap,
-    input: ["text"],
-    cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0 },
-    contextWindow: 128000,
-    maxTokens: 4096,
   };
 }
 
@@ -41,12 +41,12 @@ function captureGooglePayload(
       const result = yield* Effect.promise(() =>
         streamSimpleGoogle(model, context, {
           apiKey: "test",
-          reasoning,
-          thinkingBudgets,
           onPayload: (request) => {
             payload = request as GenerateContentParameters;
             throw new Error("payload captured");
           },
+          reasoning,
+          thinkingBudgets,
         }).result(),
       );
 
@@ -59,19 +59,19 @@ function captureGooglePayload(
 
 const googleAdapters = [
   {
-    name: "Google Generative AI",
     capture: (id: string, thinkingLevelMap: ThinkingLevelMap, reasoning?: ThinkingLevel) =>
       captureGooglePayload(googleModel(id, thinkingLevelMap), reasoning),
+    name: "Google Generative AI",
   },
 ] as const;
 
 describe("Google thinking level maps", () => {
   it("exhaustively resolves supported logical levels and mapping values", () => {
     const defaultExpectations = {
-      minimal: "minimal",
+      high: "high",
       low: "low",
       medium: "medium",
-      high: "high",
+      minimal: "minimal",
     } as const satisfies Partial<Record<ThinkingLevel, ThinkingLevel>>;
     for (const [level, expected] of Object.entries(defaultExpectations)) {
       expect(
@@ -80,17 +80,17 @@ describe("Google thinking level maps", () => {
     }
 
     const mappedExpectations = {
-      minimal: "minimal",
-      low: "low",
-      medium: "medium",
-      high: "high",
-      MINIMAL: "minimal",
+      HIGH: "high",
       LOW: "low",
       MEDIUM: "medium",
-      HIGH: "high",
+      MINIMAL: "minimal",
+      high: "high",
+      low: "low",
+      medium: "medium",
+      minimal: "minimal",
     } as const;
     for (const [mapped, expected] of Object.entries(mappedExpectations)) {
-      const model = googleModel("gemini-3.7-flash", { high: mapped, xhigh: mapped, max: mapped });
+      const model = googleModel("gemini-3.7-flash", { high: mapped, max: mapped, xhigh: mapped });
       expect(resolveGoogleThinkingLevel(model, "high")).toBe(expected);
       expect(resolveGoogleThinkingLevel(model, "xhigh")).toBe(expected);
       expect(resolveGoogleThinkingLevel(model, "max")).toBe(expected);
@@ -114,13 +114,13 @@ describe("Google thinking level maps", () => {
         Effect.gen(function* () {
           const payload = yield* Effect.promise(() =>
             capture("gemini-3.8-flash", {
-              off: null,
-              minimal: null,
-              low: "low",
-              medium: "medium",
               high: "high",
-              xhigh: null,
+              low: "low",
               max: null,
+              medium: "medium",
+              minimal: null,
+              off: null,
+              xhigh: null,
             }),
           );
 
@@ -140,13 +140,13 @@ describe("Google thinking level maps", () => {
             capture(
               "gemini-3.1-pro-preview",
               {
-                off: null,
-                minimal: null,
-                low: "low",
-                medium: "medium",
                 high: "high",
-                xhigh: null,
+                low: "low",
                 max: null,
+                medium: "medium",
+                minimal: null,
+                off: null,
+                xhigh: null,
               },
               "medium",
             ),
@@ -194,7 +194,7 @@ describe("Google thinking level maps", () => {
         Effect.gen(function* () {
           const payload = yield* Effect.promise(() =>
             captureGooglePayload(
-              googleModel("gemini-3.7-flash", { xhigh: "high", max: "high" }),
+              googleModel("gemini-3.7-flash", { max: "high", xhigh: "high" }),
               reasoning,
             ),
           );

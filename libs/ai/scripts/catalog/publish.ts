@@ -1,37 +1,32 @@
 import { DateTime, Effect } from "effect";
 
 import { encodeJson, encodeJsonPretty } from "../../src/utils/json-codec.ts";
-import type { BuiltCatalog } from "./catalog-build.ts";
-import { groupCatalogData } from "./catalog-data.ts";
-import { writeJsonCatalog } from "./catalog-json-output.ts";
-import { writeGeneratedCatalog } from "./catalog-write.ts";
-import type { GeneratorOptions } from "./options.ts";
+import groupCatalogData from "./catalog-data.ts";
+import writeJsonCatalog from "./catalog-json-output.ts";
+import writeGeneratedCatalog from "./catalog-write.ts";
+import type publishTypes from "./publish.types.ts";
 
-export interface CatalogPublication {
-  readonly packageRoot: string;
-  readonly catalog: BuiltCatalog;
-  readonly options: GeneratorOptions;
-}
-
-export const publishCatalog = Effect.fn("publishCatalog")(function* ({
+const publishCatalog = Effect.fn("publishCatalog")(function* ({
   packageRoot,
   catalog,
   options,
-}: CatalogPublication) {
+}: publishTypes.CatalogPublication) {
   const encode = options.pretty ? encodeJsonPretty : encodeJson;
   const serialize = (value: unknown) => Effect.map(encode(value), (json) => `${json}\n`);
-  const grouped = yield* groupCatalogData({ packageRoot, catalog, dataOnly: options.dataOnly });
+  const grouped = yield* groupCatalogData({ catalog, dataOnly: options.dataOnly, packageRoot });
   const generatedAt = DateTime.formatIso(yield* DateTime.now);
   if (!options.jsonOnly) {
     yield* writeGeneratedCatalog({
+      dataOnly: options.dataOnly,
+      generatedAt,
+      grouped,
       packageRoot,
       providerIds: catalog.providerIds,
-      grouped,
-      generatedAt,
-      dataOnly: options.dataOnly,
       serialize,
     });
   }
   if (options.jsonOutputDir !== undefined && options.jsonOutputDir !== "")
-    yield* writeJsonCatalog({ outputDir: options.jsonOutputDir, catalog, serialize });
+    yield* writeJsonCatalog({ catalog, outputDir: options.jsonOutputDir, serialize });
 });
+
+export default publishCatalog;

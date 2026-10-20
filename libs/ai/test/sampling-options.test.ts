@@ -29,7 +29,7 @@ class PayloadCaptured extends Data.TaggedError("PayloadCaptured")<{ readonly mes
 
 function makeContext(): Context {
   return {
-    messages: [{ role: "user", content: "Hello", timestamp: currentTimeMillis() }],
+    messages: [{ content: "Hello", role: "user", timestamp: currentTimeMillis() }],
   };
 }
 
@@ -39,16 +39,16 @@ function makeModel(
   overrides: Partial<Model<Api>> = {},
 ): Model<Api> {
   return {
-    id: "custom-model",
-    name: "Custom Model",
     api,
-    provider: "custom-provider",
     baseUrl: "http://127.0.0.1:9/v1",
-    reasoning: false,
-    input: ["text"],
-    cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0 },
     contextWindow: 128000,
+    cost: { cacheRead: 0, cacheWrite: 0, input: 0, output: 0 },
+    id: "custom-model",
+    input: ["text"],
     maxTokens: 16384,
+    name: "Custom Model",
+    provider: "custom-provider",
+    reasoning: false,
     ...(samplingParams === undefined ? {} : { samplingParams }),
     ...overrides,
   };
@@ -113,7 +113,7 @@ describe("sampling params", () => {
     Effect.runPromise(
       Effect.gen(function* () {
         const payload = yield* capturePayload(makeModel("openai-completions"), {
-          samplingParams: { top_p: 0.95, top_k: 0, min_p: 0 },
+          samplingParams: { min_p: 0, top_k: 0, top_p: 0.95 },
         });
 
         expect(payload.top_p).toBe(0.95);
@@ -137,7 +137,7 @@ describe("sampling params", () => {
     (api) =>
       Effect.runPromise(
         Effect.gen(function* () {
-          const payload = yield* capturePayload(makeModel(api, { top_p: 0.95, min_p: 0.05 }), {
+          const payload = yield* capturePayload(makeModel(api, { min_p: 0.05, top_p: 0.95 }), {
             samplingParams: { top_p: 0.5 },
           });
 
@@ -169,8 +169,8 @@ describe("sampling params", () => {
             { temperature: 1, top_p: 0.95 },
             {
               reasoning: true,
-              thinkingLevelMap: { low: null, medium: null },
               samplingParamsByThinkingLevel: { high: { temperature: 0.8, top_k: 64 } },
+              thinkingLevelMap: { low: null, medium: null },
             },
           ),
           { reasoning: "low" },
@@ -248,8 +248,8 @@ describe("sampling params", () => {
             makeModel(api, undefined, {
               reasoning: true,
               samplingParamsByThinkingLevel: {
-                off: { temperature: 0.7 },
                 medium: { temperature: 0.8 },
+                off: { temperature: 0.7 },
               },
             }),
             { reasoningSummary: "auto" },
@@ -267,8 +267,8 @@ describe("sampling params", () => {
     Effect.runPromise(
       Effect.gen(function* () {
         const payload = yield* capturePayload(makeModel("openai-completions"), {
-          temperature: 0,
           samplingParams: { temperature: 1 },
+          temperature: 0,
         });
 
         expect(payload.temperature).toBe(1);
@@ -279,7 +279,7 @@ describe("sampling params", () => {
     Effect.runPromise(
       Effect.gen(function* () {
         const payload = yield* capturePayload(makeModel("anthropic-messages"), {
-          samplingParams: { top_p: 0.9, top_k: 40 },
+          samplingParams: { top_k: 40, top_p: 0.9 },
         });
 
         expect(payload.top_p).toBeUndefined();

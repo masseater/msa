@@ -5,8 +5,8 @@ import { retryProviderRequest } from "../src/utils/provider-retry.ts";
 
 function providerError(status: number | undefined, headers?: Record<string, string>): Error {
   return Object.assign(new Error(`Provider error: ${status}`), {
-    status,
     headers: new Headers(headers),
+    status,
   });
 }
 

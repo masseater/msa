@@ -1,9 +1,11 @@
 import type { Api, Model, ModelCost } from "../../src/types.ts";
-import { roundCost } from "./models-dev.ts";
+import modelsDev from "./models-dev.ts";
 
-export const OPENAI_LONG_CONTEXT_INPUT_THRESHOLD = 272000;
+const { roundCost } = modelsDev;
 
-export const OPENAI_SHORT_CONTEXT_CAPPED_MODEL_IDS = new Set([
+const OPENAI_LONG_CONTEXT_INPUT_THRESHOLD = 272000;
+
+const OPENAI_SHORT_CONTEXT_CAPPED_MODEL_IDS = new Set([
   "gpt-5.4",
   "gpt-5.5",
   "gpt-5.6-sol",
@@ -15,7 +17,7 @@ export const OPENAI_SHORT_CONTEXT_CAPPED_MODEL_IDS = new Set([
   "gpt-6.1-sol",
 ]);
 
-export const OPENAI_LONG_CONTEXT_PRICING_MODEL_IDS = new Set([
+const OPENAI_LONG_CONTEXT_PRICING_MODEL_IDS = new Set([
   "gpt-5.4",
   "gpt-5.4-pro",
   "gpt-5.5",
@@ -29,30 +31,40 @@ export const OPENAI_LONG_CONTEXT_PRICING_MODEL_IDS = new Set([
   "gpt-6.1-sol",
 ]);
 
-export function withOpenAiLongContextPricing(cost: Model<Api>["cost"]): Model<Api>["cost"] {
+function withOpenAiLongContextPricing(cost: Model<Api>["cost"]): Model<Api>["cost"] {
   return {
     ...cost,
     tiers: [
       {
-        inputTokensAbove: OPENAI_LONG_CONTEXT_INPUT_THRESHOLD,
-        input: roundCost(cost.input * 2),
-        output: roundCost(cost.output * 1.5),
         cacheRead: roundCost(cost.cacheRead * 2),
         cacheWrite: roundCost(cost.cacheWrite * 2),
+        input: roundCost(cost.input * 2),
+        inputTokensAbove: OPENAI_LONG_CONTEXT_INPUT_THRESHOLD,
+        output: roundCost(cost.output * 1.5),
       },
     ],
   };
 }
 
-export const OPENAI_STANDARD_COSTS = {
-  "gpt-5.6-luna": { input: 0.2, output: 1.2, cacheRead: 0.02, cacheWrite: 0.25 },
-  "gpt-5.6-sol": { input: 4, output: 20, cacheRead: 0.4, cacheWrite: 5 },
-  "gpt-5.6-terra": { input: 2, output: 12, cacheRead: 0.2, cacheWrite: 2.5 },
-  "gpt-6-astra": { input: 10, output: 50, cacheRead: 1, cacheWrite: 12.5 },
-  "gpt-6-luna": { input: 0.1, output: 0.5, cacheRead: 0.01, cacheWrite: 0.125 },
-  "gpt-6-sol": { input: 2, output: 10, cacheRead: 0.2, cacheWrite: 2.5 },
-  "gpt-6.1-sol": { input: 2, output: 10, cacheRead: 0.1, cacheWrite: 2.5 },
+const OPENAI_STANDARD_COSTS = {
+  "gpt-5.6-luna": { cacheRead: 0.02, cacheWrite: 0.25, input: 0.2, output: 1.2 },
+  "gpt-5.6-sol": { cacheRead: 0.4, cacheWrite: 5, input: 4, output: 20 },
+  "gpt-5.6-terra": { cacheRead: 0.2, cacheWrite: 2.5, input: 2, output: 12 },
+  "gpt-6-astra": { cacheRead: 1, cacheWrite: 12.5, input: 10, output: 50 },
+  "gpt-6-luna": { cacheRead: 0.01, cacheWrite: 0.125, input: 0.1, output: 0.5 },
+  "gpt-6-sol": { cacheRead: 0.2, cacheWrite: 2.5, input: 2, output: 10 },
+  "gpt-6.1-sol": { cacheRead: 0.1, cacheWrite: 2.5, input: 2, output: 10 },
 } satisfies Record<string, ModelCost>;
 
-export const OPENAI_STANDARD_COSTS_BY_ID: Readonly<Record<string, ModelCost>> =
-  OPENAI_STANDARD_COSTS;
+const OPENAI_STANDARD_COSTS_BY_ID: Readonly<Record<string, ModelCost>> = OPENAI_STANDARD_COSTS;
+
+const openaiPricing = {
+  OPENAI_LONG_CONTEXT_INPUT_THRESHOLD,
+  OPENAI_LONG_CONTEXT_PRICING_MODEL_IDS,
+  OPENAI_SHORT_CONTEXT_CAPPED_MODEL_IDS,
+  OPENAI_STANDARD_COSTS,
+  OPENAI_STANDARD_COSTS_BY_ID,
+  withOpenAiLongContextPricing,
+};
+
+export default openaiPricing;

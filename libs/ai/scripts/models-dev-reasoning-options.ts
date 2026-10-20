@@ -1,14 +1,5 @@
 import type { ThinkingLevel, ThinkingLevelMap } from "../src/types.ts";
-
-export type ModelsDevReasoningOption =
-  | { type: "toggle" }
-  | {
-      type: "effort";
-      values: Array<
-        "none" | "minimal" | "low" | "medium" | "high" | "xhigh" | "max" | "default" | null
-      >;
-    }
-  | { type: "budget_tokens"; min?: number; max?: number };
+import type modelsDevReasoningOptionsTypes from "./models-dev-reasoning-options.types.ts";
 
 const THINKING_LEVELS: readonly ThinkingLevel[] = [
   "minimal",
@@ -19,8 +10,8 @@ const THINKING_LEVELS: readonly ThinkingLevel[] = [
   "max",
 ];
 
-export function getEffortThinkingLevelMap(
-  options: readonly ModelsDevReasoningOption[],
+function getEffortThinkingLevelMap(
+  options: readonly modelsDevReasoningOptionsTypes.ModelsDevReasoningOption[],
 ): ThinkingLevelMap | undefined {
   const effortValues = options.flatMap((option) => (option.type === "effort" ? option.values : []));
   if (effortValues.length === 0) return undefined;
@@ -35,3 +26,5 @@ export function getEffortThinkingLevelMap(
   }
   return map;
 }
+
+export default getEffortThinkingLevelMap;

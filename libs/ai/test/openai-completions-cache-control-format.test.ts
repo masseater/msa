@@ -1,11 +1,32 @@
-import { Clock, Effect } from "effect";
+import { Clock, Effect, Stream } from "effect";
 import { Type } from "typebox";
 import { beforeEach, describe, expect, it, vi } from "vite-plus/test";
 
 import { stream as streamOpenAICompletions } from "../src/api/openai-completions.ts";
-import { getModel, normalizeContext } from "../src/compat.ts";
-import type { Message, Model } from "../src/types.ts";
+import { normalizeContext } from "../src/compat.ts";
+import type { Message, Model, Usage } from "../src/types.ts";
 import { currentTimeMillis } from "../src/utils/clock.ts";
+import modelChoice from "./model-choice.ts";
+
+const { chooseModel, compatValue, usesApi } = modelChoice;
+
+const completions = usesApi("openai-completions");
+
+const anthropicCacheModel = chooseModel(
+  "openrouter",
+  "Chat Completions with Anthropic cache markers",
+  (model): model is Model<"openai-completions"> =>
+    completions(model) && compatValue(model, "cacheControlFormat") === "anthropic",
+);
+
+const emptyUsage: Usage = {
+  cacheRead: 0,
+  cacheWrite: 0,
+  cost: { cacheRead: 0, cacheWrite: 0, input: 0, output: 0, total: 0 },
+  input: 0,
+  output: 0,
+  totalTokens: 0,
+};
 
 interface CacheControl {
   type: "ephemeral";
@@ -42,17 +63,23 @@ vi.mock("openai", () => {
         create: (params: CapturedParams) => {
           mockState.lastParams = params;
           const stream = {
-            async *[Symbol.asyncIterator]() {
-              yield {
-                id: "chatcmpl-test",
-                choices: [{ delta: {}, finish_reason: "stop" }],
-                usage: {
-                  prompt_tokens: 1,
-                  completion_tokens: 1,
-                  prompt_tokens_details: { cached_tokens: 0 },
-                  completion_tokens_details: { reasoning_tokens: 0 },
-                },
-              };
+            [Symbol.asyncIterator]() {
+              return Stream.toAsyncIterable(
+                Stream.fromIterable(
+                  (function* () {
+                    yield {
+                      choices: [{ delta: {}, finish_reason: "stop" }],
+                      id: "chatcmpl-test",
+                      usage: {
+                        completion_tokens: 1,
+                        completion_tokens_details: { reasoning_tokens: 0 },
+                        prompt_tokens: 1,
+                        prompt_tokens_details: { cached_tokens: 0 },
+                      },
+                    };
+                  })(),
+                ),
+              )[Symbol.asyncIterator]();
             },
           };
           const promise = Promise.resolve(stream) as Promise<typeof stream> & {
@@ -64,7 +91,7 @@ vi.mock("openai", () => {
           promise.withResponse = () =>
             Promise.resolve({
               data: stream,
-              response: { status: 200, headers: new Headers() },
+              response: { headers: new Headers(), status: 200 },
             });
           return promise;
         },
@@ -88,12 +115,12 @@ function capturePayload(
         streamOpenAICompletions(
           model,
           normalizeContext({
+            messages: messages ?? [{ content: "Hello", role: "user", timestamp }],
             systemPrompt: "System prompt",
-            messages: messages ?? [{ role: "user", content: "Hello", timestamp }],
             tools: [
               {
-                name: "read",
                 description: "Read a file",
+                name: "read",
                 parameters: Type.Object({
                   path: Type.String(),
                 }),
@@ -145,24 +172,24 @@ describe("openai-completions cacheControlFormat", () => {
     Effect.runPromise(
       Effect.gen(function* () {
         const model: Model<"openai-completions"> = {
-          id: "custom-qwen",
-          name: "Custom Qwen",
           api: "openai-completions",
-          provider: "openrouter",
           baseUrl: "https://example.com/v1",
-          reasoning: true,
-          input: ["text"],
-          cost: {
-            input: 0,
-            output: 0,
-            cacheRead: 0,
-            cacheWrite: 0,
-          },
-          contextWindow: 128000,
-          maxTokens: 32000,
           compat: {
             cacheControlFormat: "anthropic",
           },
+          contextWindow: 128000,
+          cost: {
+            cacheRead: 0,
+            cacheWrite: 0,
+            input: 0,
+            output: 0,
+          },
+          id: "custom-qwen",
+          input: ["text"],
+          maxTokens: 32000,
+          name: "Custom Qwen",
+          provider: "openrouter",
+          reasoning: true,
         };
 
         const params = yield* Effect.promise(() => capturePayload(model));
@@ -173,7 +200,7 @@ describe("openai-completions cacheControlFormat", () => {
   it("preserves Anthropic-style cache markers for OpenRouter Anthropic batch aliases", () =>
     Effect.runPromise(
       Effect.gen(function* () {
-        const model = getModel("openrouter", "anthropic/claude-fable-5.1:batch");
+        const model = anthropicCacheModel;
         const params = yield* Effect.promise(() => capturePayload(model));
         expectAnthropicCacheMarkers(params);
       }),
@@ -184,49 +211,49 @@ describe("openai-completions cacheControlFormat", () => {
   beforeEach(() => {
     mockState.lastParams = undefined;
   });
-  it("moves the conversation cache marker to a tool result", async () => {
-    const model = getModel("openrouter", "anthropic/claude-fable-5.1:batch");
-    const timestamp = currentTimeMillis();
-    const params = await capturePayload(model, undefined, [
-      { role: "user", content: "Read the file", timestamp },
-      {
-        role: "assistant",
-        content: [
-          { type: "toolCall", id: "call_1", name: "read", arguments: { path: "README.md" } },
-        ],
-        api: "openai-completions",
-        provider: "openrouter",
-        model: model.id,
-        usage: {
-          input: 0,
-          output: 0,
-          cacheRead: 0,
-          cacheWrite: 0,
-          totalTokens: 0,
-          cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0, total: 0 },
-        },
-        stopReason: "toolUse",
-        timestamp,
-      },
-      {
-        role: "toolResult",
-        toolCallId: "call_1",
-        toolName: "read",
-        content: [{ type: "text", text: "file contents" }],
-        isError: false,
-        timestamp,
-      },
-    ]);
+  it("moves the conversation cache marker to a tool result", () =>
+    Effect.runPromise(
+      Effect.gen(function* () {
+        const model = anthropicCacheModel;
+        const timestamp = currentTimeMillis();
+        const params = yield* Effect.promise(() =>
+          capturePayload(model, undefined, [
+            { content: "Read the file", role: "user", timestamp },
+            {
+              api: "openai-completions",
+              content: [
+                { arguments: { path: "README.md" }, id: "call_1", name: "read", type: "toolCall" },
+              ],
+              model: model.id,
+              provider: "openrouter",
+              role: "assistant",
+              stopReason: "toolUse",
+              timestamp,
+              usage: emptyUsage,
+            },
+            {
+              content: [{ text: "file contents", type: "text" }],
+              isError: false,
+              role: "toolResult",
+              timestamp,
+              toolCallId: "call_1",
+              toolName: "read",
+            },
+          ]),
+        );
 
-    const userMessage = params.messages.find((message) => message.role === "user");
-    expect(userMessage?.content).toBe("Read the file");
+        const userMessage = params.messages.find((message) => message.role === "user");
+        expect(userMessage?.content).toBe("Read the file");
 
-    const toolMessage = params.messages.at(-1);
-    if (toolMessage === undefined) throw new Error("Expected a request message");
-    expect(toolMessage.role).toBe("tool");
-    expect(Array.isArray(toolMessage.content)).toBe(true);
-    expect((toolMessage.content as TextPart[])[0]?.cache_control).toEqual({ type: "ephemeral" });
-  });
+        const toolMessage = params.messages.at(-1);
+        if (toolMessage === undefined) throw new Error("Expected a request message");
+        expect(toolMessage.role).toBe("tool");
+        expect(Array.isArray(toolMessage.content)).toBe(true);
+        expect((toolMessage.content as TextPart[])[0]?.cache_control).toEqual({
+          type: "ephemeral",
+        });
+      }),
+    ));
 });
 
 describe("openai-completions cacheControlFormat", () => {
@@ -237,24 +264,24 @@ describe("openai-completions cacheControlFormat", () => {
     Effect.runPromise(
       Effect.gen(function* () {
         const model: Model<"openai-completions"> = {
-          id: "custom-qwen",
-          name: "Custom Qwen",
           api: "openai-completions",
-          provider: "openrouter",
           baseUrl: "https://example.com/v1",
-          reasoning: true,
-          input: ["text"],
-          cost: {
-            input: 0,
-            output: 0,
-            cacheRead: 0,
-            cacheWrite: 0,
-          },
-          contextWindow: 128000,
-          maxTokens: 32000,
           compat: {
             cacheControlFormat: "anthropic",
           },
+          contextWindow: 128000,
+          cost: {
+            cacheRead: 0,
+            cacheWrite: 0,
+            input: 0,
+            output: 0,
+          },
+          id: "custom-qwen",
+          input: ["text"],
+          maxTokens: 32000,
+          name: "Custom Qwen",
+          provider: "openrouter",
+          reasoning: true,
         };
         const params = yield* Effect.promise(() =>
           capturePayload(model, { cacheRetention: "none" }),

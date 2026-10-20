@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vite-plus/test";
 
 import { convertMessages } from "../src/api/openai-completions.ts";
-import { getModel, normalizeContext } from "../src/compat.ts";
+import { normalizeContext } from "../src/compat.ts";
 import type {
   AssistantMessage,
   Model,
@@ -10,14 +10,17 @@ import type {
   Usage,
 } from "../src/types.ts";
 import { currentTimeMillis } from "../src/utils/clock.ts";
+import modelChoice from "./model-choice.ts";
+
+const { chooseModel } = modelChoice;
 
 const emptyUsage: Usage = {
-  input: 0,
-  output: 0,
   cacheRead: 0,
   cacheWrite: 0,
+  cost: { cacheRead: 0, cacheWrite: 0, input: 0, output: 0, total: 0 },
+  input: 0,
+  output: 0,
   totalTokens: 0,
-  cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0, total: 0 },
 };
 
 const compat: Omit<
@@ -26,59 +29,59 @@ const compat: Omit<
 > & {
   thinkingTokenBudgetField?: OpenAICompletionsCompat["thinkingTokenBudgetField"];
 } = {
-  supportsStore: true,
-  supportsDeveloperRole: true,
-  supportsReasoningEffort: true,
-  supportsUsageInStreaming: true,
-  supportsFinishReason: true,
-  maxTokensField: "max_completion_tokens",
-  requiresToolResultName: false,
-  requiresAssistantAfterToolResult: false,
-  requiresThinkingAsText: false,
-  requiresReasoningContentOnAssistantMessages: false,
-  thinkingFormat: "openai",
-  openRouterRouting: {},
-  chatTemplateKwargs: {},
-  supportsThinkingTokenBudget: false,
-  thinkingTokenBudgetField: undefined,
-  supportsStrictMode: true,
-  supportsOpenAIGrammarTools: false,
-  supportsMidConvoSystemMessages: false,
-  supportsMidConvoToolAdditions: false,
   cacheControlFormat: "anthropic",
+  chatTemplateKwargs: {},
+  maxTokensField: "max_completion_tokens",
+  openRouterRouting: {},
+  requiresAssistantAfterToolResult: false,
+  requiresReasoningContentOnAssistantMessages: false,
+  requiresThinkingAsText: false,
+  requiresToolResultName: false,
   sendSessionAffinityHeaders: false,
   sessionAffinityFormat: "openai",
+  supportsDeveloperRole: true,
+  supportsFinishReason: true,
   supportsLongCacheRetention: true,
+  supportsMidConvoSystemMessages: false,
+  supportsMidConvoToolAdditions: false,
+  supportsOpenAIGrammarTools: false,
+  supportsReasoningEffort: true,
+  supportsStore: true,
+  supportsStrictMode: true,
+  supportsThinkingTokenBudget: false,
+  supportsUsageInStreaming: true,
+  thinkingFormat: "openai",
+  thinkingTokenBudgetField: undefined,
 };
 
 function buildToolResult(toolCallId: string, timestamp: number): ToolResultMessage {
   return {
-    role: "toolResult",
-    toolCallId,
-    toolName: "read",
     content: [
-      { type: "text", text: "Read image file [image/png]" },
-      { type: "image", data: "ZmFrZQ==", mimeType: "image/png" },
+      { text: "Read image file [image/png]", type: "text" },
+      { data: "ZmFrZQ==", mimeType: "image/png", type: "image" },
     ],
     isError: false,
+    role: "toolResult",
     timestamp,
+    toolCallId,
+    toolName: "read",
   };
 }
 
 function buildEmptyToolResult(toolCallId: string, timestamp: number): ToolResultMessage {
   return {
+    content: [{ text: "", type: "text" }],
+    isError: false,
     role: "toolResult",
+    timestamp,
     toolCallId,
     toolName: "bash",
-    content: [{ type: "text", text: "" }],
-    isError: false,
-    timestamp,
   };
 }
 
 describe("openai-completions convertMessages", () => {
   it("omits empty text parts from user messages with images", () => {
-    const { compat: _compat, ...baseModel } = getModel("openai", "gpt-4o-mini");
+    const { compat: _compat, ...baseModel } = chooseModel("openai", "direct OpenAI");
     const model: Model<"openai-completions"> = {
       ...baseModel,
       api: "openai-completions",
@@ -87,11 +90,11 @@ describe("openai-completions convertMessages", () => {
     const context = normalizeContext({
       messages: [
         {
-          role: "user",
           content: [
-            { type: "text", text: "" },
-            { type: "image", data: "ZmFrZQ==", mimeType: "image/png" },
+            { text: "", type: "text" },
+            { data: "ZmFrZQ==", mimeType: "image/png", type: "image" },
           ],
+          role: "user",
           timestamp: currentTimeMillis(),
         },
       ],
@@ -99,8 +102,8 @@ describe("openai-completions convertMessages", () => {
 
     expect(convertMessages(model, context, compat)).toEqual([
       {
+        content: [{ image_url: { url: "data:image/png;base64,ZmFrZQ==" }, type: "image_url" }],
         role: "user",
-        content: [{ type: "image_url", image_url: { url: "data:image/png;base64,ZmFrZQ==" } }],
       },
     ]);
   });
@@ -108,7 +111,7 @@ describe("openai-completions convertMessages", () => {
 
 describe("openai-completions convertMessages", () => {
   it("batches tool-result images after consecutive tool results", () => {
-    const { compat: _compat, ...baseModel } = getModel("openai", "gpt-4o-mini");
+    const { compat: _compat, ...baseModel } = chooseModel("openai", "direct OpenAI");
     const model: Model<"openai-completions"> = {
       ...baseModel,
       api: "openai-completions",
@@ -117,22 +120,22 @@ describe("openai-completions convertMessages", () => {
 
     const now = currentTimeMillis();
     const assistantMessage: AssistantMessage = {
-      role: "assistant",
-      content: [
-        { type: "toolCall", id: "tool-1", name: "read", arguments: { path: "img-1.png" } },
-        { type: "toolCall", id: "tool-2", name: "read", arguments: { path: "img-2.png" } },
-      ],
       api: model.api,
-      provider: model.provider,
+      content: [
+        { arguments: { path: "img-1.png" }, id: "tool-1", name: "read", type: "toolCall" },
+        { arguments: { path: "img-2.png" }, id: "tool-2", name: "read", type: "toolCall" },
+      ],
       model: model.id,
-      usage: emptyUsage,
+      provider: model.provider,
+      role: "assistant",
       stopReason: "toolUse",
       timestamp: now,
+      usage: emptyUsage,
     };
 
     const context = normalizeContext({
       messages: [
-        { role: "user", content: "Read the images", timestamp: now - 2 },
+        { content: "Read the images", role: "user", timestamp: now - 2 },
         assistantMessage,
         buildToolResult("tool-1", now + 1),
         buildToolResult("tool-2", now + 2),
@@ -157,7 +160,7 @@ describe("openai-completions convertMessages", () => {
 
 describe("openai-completions convertMessages", () => {
   it("uses '(no tool output)' placeholder for empty tool results without images", () => {
-    const { compat: _compat, ...baseModel } = getModel("openai", "gpt-4o-mini");
+    const { compat: _compat, ...baseModel } = chooseModel("openai", "direct OpenAI");
     const model: Model<"openai-completions"> = {
       ...baseModel,
       api: "openai-completions",
@@ -166,19 +169,19 @@ describe("openai-completions convertMessages", () => {
 
     const now = currentTimeMillis();
     const assistantMessage: AssistantMessage = {
-      role: "assistant",
-      content: [{ type: "toolCall", id: "tool-1", name: "bash", arguments: { command: "true" } }],
       api: model.api,
-      provider: model.provider,
+      content: [{ arguments: { command: "true" }, id: "tool-1", name: "bash", type: "toolCall" }],
       model: model.id,
-      usage: emptyUsage,
+      provider: model.provider,
+      role: "assistant",
       stopReason: "toolUse",
       timestamp: now,
+      usage: emptyUsage,
     };
 
     const context = normalizeContext({
       messages: [
-        { role: "user", content: "Run the command", timestamp: now - 1 },
+        { content: "Run the command", role: "user", timestamp: now - 1 },
         assistantMessage,
         buildEmptyToolResult("tool-1", now + 1),
       ],

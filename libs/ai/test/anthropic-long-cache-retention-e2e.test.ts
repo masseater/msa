@@ -22,10 +22,10 @@ function getAnthropicMessagesModels(provider: BuiltinProvider): Model<"anthropic
 const anthropicMessagesCases: AnthropicLongCacheRetentionE2ECase[] = getProviders().flatMap(
   (provider) =>
     getAnthropicMessagesModels(provider).map((model) => ({
+      apiKey: getEnvApiKey(provider),
+      model,
       name: `${provider}/${model.id}`,
       provider,
-      model,
-      apiKey: getEnvApiKey(provider),
     })),
 );
 
@@ -93,14 +93,14 @@ const expectLongCacheRetentionAccepted = Effect.fn("expectLongCacheRetentionAcce
     complete(
       model,
       {
-        systemPrompt: "You are a concise assistant.",
         messages: [
           {
-            role: "user",
             content: "Reply with exactly: long cache retention accepted",
+            role: "user",
             timestamp: currentTime,
           },
         ],
+        systemPrompt: "You are a concise assistant.",
       },
       options,
     ),

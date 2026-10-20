@@ -6,8 +6,8 @@ import type { Model } from "../src/types.ts";
 import { normalizeContext } from "../src/utils/transcript.ts";
 
 const mockState = vi.hoisted(() => ({
-  requestOptions: [] as unknown[],
   requestErrors: [] as Error[],
+  requestOptions: [] as unknown[],
 }));
 
 vi.mock("openai", () => {
@@ -17,15 +17,21 @@ vi.mock("openai", () => {
         create: (_params: unknown, options: unknown) => {
           mockState.requestOptions.push(options);
           const stream = {
-            async *[Symbol.asyncIterator]() {
-              yield {
-                id: "chatcmpl-test",
-                choices: [{ index: 0, delta: { content: "ok" } }],
-              };
-              yield {
-                id: "chatcmpl-test",
-                choices: [{ index: 0, delta: {}, finish_reason: "stop" }],
-              };
+            [Symbol.asyncIterator]() {
+              return Stream.toAsyncIterable(
+                Stream.fromIterable(
+                  (function* () {
+                    yield {
+                      choices: [{ delta: { content: "ok" }, index: 0 }],
+                      id: "chatcmpl-test",
+                    };
+                    yield {
+                      choices: [{ delta: {}, finish_reason: "stop", index: 0 }],
+                      id: "chatcmpl-test",
+                    };
+                  })(),
+                ),
+              )[Symbol.asyncIterator]();
             },
           };
           const promise = Promise.resolve(stream) as Promise<typeof stream> & {
@@ -39,7 +45,7 @@ vi.mock("openai", () => {
             if (error !== undefined) return Promise.reject(error);
             return Promise.resolve({
               data: stream,
-              response: { status: 200, headers: new Headers() },
+              response: { headers: new Headers(), status: 200 },
             });
           };
           return promise;
@@ -51,21 +57,21 @@ vi.mock("openai", () => {
 });
 
 const model: Model<"openai-completions"> = {
-  id: "test-model",
-  name: "Test Model",
   api: "openai-completions",
-  provider: "opencode-go",
   baseUrl: "https://opencode.ai/zen/go/v1",
-  reasoning: false,
-  input: ["text"],
-  cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0 },
   contextWindow: 1000,
+  cost: { cacheRead: 0, cacheWrite: 0, input: 0, output: 0 },
+  id: "test-model",
+  input: ["text"],
   maxTokens: 100,
+  name: "Test Model",
+  provider: "opencode-go",
+  reasoning: false,
 };
 
 const context = normalizeContext({
+  messages: [{ content: [{ text: "hi", type: "text" }], role: "user", timestamp: 0 }],
   systemPrompt: "",
-  messages: [{ role: "user", content: [{ type: "text", text: "hi" }], timestamp: 0 }],
   tools: [],
 });
 
@@ -110,12 +116,12 @@ describe("openai-completions provider retries", () => {
         vi.useFakeTimers();
         mockState.requestErrors = [
           Object.assign(new Error("rate limited"), {
-            status: 429,
             headers: new Headers({ "retry-after-ms": "100" }),
+            status: 429,
           }),
           Object.assign(new Error("server error"), {
-            status: 500,
             headers: new Headers({ "retry-after-ms": "100" }),
+            status: 500,
           }),
         ];
 
@@ -153,8 +159,8 @@ describe("openai-completions provider retries", () => {
       Effect.gen(function* () {
         mockState.requestErrors = [
           Object.assign(new Error("rate limited"), {
-            status: 429,
             headers: new Headers({ "retry-after": "277403" }),
+            status: 429,
           }),
         ];
 

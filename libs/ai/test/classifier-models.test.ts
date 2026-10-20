@@ -1,7 +1,6 @@
 import { Effect } from "effect";
 import { describe, expect, it, vi } from "vite-plus/test";
 
-import { InMemoryCredentialStore } from "../src/auth/credential-store.ts";
 import { createModels, createProvider, getModelType } from "../src/models.ts";
 import {
   builtinModels,
@@ -9,56 +8,41 @@ import {
   getBuiltinClassifierModel,
   getBuiltinClassifierModels,
 } from "../src/providers/all.ts";
-import type {
-  Api,
-  ClassifierApi,
-  ClassifierContext,
-  ClassifierModel,
-  ClassifierResult,
-  Model,
-} from "../src/types.ts";
+import type { Api, ClassifierApi, ClassifierModel, ClassifierResult, Model } from "../src/types.ts";
 import { currentTimeMillis } from "../src/utils/clock.ts";
 import { AssistantMessageEventStream } from "../src/utils/event-stream.ts";
+import classifierModelsSupport from "./classifier-models-support.ts";
+
+const { context } = classifierModelsSupport;
 
 function classifierModel(provider: string, id: string): ClassifierModel<ClassifierApi> {
   return {
-    type: "classifier",
-    id,
-    name: id,
     api: "test-classifier",
-    provider,
     baseUrl: "https://example.test/v1",
-    input: ["text"],
-    cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0 },
     contextWindow: 1000,
+    cost: { cacheRead: 0, cacheWrite: 0, input: 0, output: 0 },
+    id,
+    input: ["text"],
+    name: id,
+    provider,
+    type: "classifier",
   };
 }
 
 function chatModel(provider: string, id: string): Model<Api> {
   return {
-    id,
-    name: id,
     api: "test-chat",
-    provider,
     baseUrl: "https://example.test/v1",
-    reasoning: false,
-    input: ["text"],
-    cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0 },
     contextWindow: 1000,
+    cost: { cacheRead: 0, cacheWrite: 0, input: 0, output: 0 },
+    id,
+    input: ["text"],
     maxTokens: 100,
+    name: id,
+    provider,
+    reasoning: false,
   };
 }
-
-const context: ClassifierContext = {
-  state: { text: "yes" },
-  questions: {
-    approved: {
-      type: "bool",
-      instructions: "Does this express approval?",
-      criteria: { true: "Approval", false: "No approval" },
-    },
-  },
-};
 
 describe("Models with classifier models", () => {
   it("keeps chat and classifier entries with the same provider and id separate", () =>
@@ -67,28 +51,28 @@ describe("Models with classifier models", () => {
         const chat = chatModel("test", "shared");
         const classifier = classifierModel("test", "shared");
         const provider = createProvider({
-          id: "test",
-          auth: { apiKey: { name: "Test", resolve: () => Promise.resolve({ auth: {} }) } },
-          models: [chat, classifier],
           api: {
             "test-chat": {
               stream: () => new AssistantMessageEventStream(),
               streamSimple: () => new AssistantMessageEventStream(),
             },
           },
+          auth: { apiKey: { name: "Test", resolve: () => Promise.resolve({ auth: {} }) } },
           classifiers: {
             "test-classifier": {
               classify: (model): Promise<ClassifierResult> =>
                 Promise.resolve({
+                  answers: { approved: { probability: 0.9, type: "bool" } },
                   api: model.api,
-                  provider: model.provider,
                   model: model.id,
-                  answers: { approved: { type: "bool", probability: 0.9 } },
+                  provider: model.provider,
                   stopReason: "stop",
                   timestamp: currentTimeMillis(),
                 }),
             },
           },
+          id: "test",
+          models: [chat, classifier],
         });
         const models = createModels();
         models.setProvider(provider);
@@ -104,8 +88,8 @@ describe("Models with classifier models", () => {
         expect(
           (yield* Effect.promise(() => models.classify(classifier, context))).answers["approved"],
         ).toEqual({
-          type: "bool",
           probability: 0.9,
+          type: "bool",
         });
       }),
     ));
@@ -119,13 +103,13 @@ describe("Models with classifier models", () => {
         const models = createModels();
         models.setProvider(
           createProvider({
-            id: "test",
-            auth: { apiKey: { name: "Test", resolve: () => Promise.resolve({ auth: {} }) } },
-            models: [chat],
             api: {
               stream: () => new AssistantMessageEventStream(),
               streamSimple: () => new AssistantMessageEventStream(),
             },
+            auth: { apiKey: { name: "Test", resolve: () => Promise.resolve({ auth: {} }) } },
+            id: "test",
+            models: [chat],
           }),
         );
 
@@ -140,10 +124,10 @@ describe("Models with classifier models", () => {
   it("exposes Jev only through classifier catalog accessors", () => {
     const jev = getBuiltinClassifierModel("opencode", "jev-1.13");
     expect(jev).toMatchObject({
-      type: "classifier",
       api: "typesafe-system-one",
-      provider: "opencode",
       contextWindow: 32000,
+      provider: "opencode",
+      type: "classifier",
     });
     expect(getBuiltinClassifierModels("opencode")).toContainEqual(jev);
     expect(getAllBuiltinModels("opencode")).toContainEqual(jev);
@@ -177,12 +161,12 @@ describe("Models with classifier models", () => {
             apiKey: "secret",
             fetch: (input, init) => {
               requests.push({
-                url: String(input),
-                body: JSON.parse(String(init?.body)) as Record<string, unknown>,
                 authorization: new Headers(init?.headers).get("authorization"),
+                body: JSON.parse(String(init?.body)) as Record<string, unknown>,
+                url: String(input),
               });
               return Promise.resolve(
-                Response.json({ model: id, answers: { approved: { type: "noul", noul: 0.8 } } }),
+                Response.json({ answers: { approved: { noul: 0.8, type: "noul" } }, model: id }),
               );
             },
           }),
@@ -190,13 +174,13 @@ describe("Models with classifier models", () => {
 
         expect(requests).toEqual([
           {
-            url,
-            body: expect.objectContaining({ model: id, state: context.state }),
             authorization: "Bearer secret",
+            body: expect.objectContaining({ model: id, state: context.state }),
+            url,
           },
         ]);
         expect(result.stopReason).toBe("stop");
-        expect(result.answers["approved"]).toEqual({ type: "bool", probability: 0.8 });
+        expect(result.answers["approved"]).toEqual({ probability: 0.8, type: "bool" });
       }),
     ),
   );
@@ -209,10 +193,10 @@ describe("Models with classifier models", () => {
         const classifier = classifierModel("test", "text-only");
         const classify = vi.fn((): Promise<ClassifierResult> =>
           Promise.resolve({
-            api: classifier.api,
-            provider: classifier.provider,
-            model: classifier.id,
             answers: {},
+            api: classifier.api,
+            model: classifier.id,
+            provider: classifier.provider,
             stopReason: "stop",
             timestamp: currentTimeMillis(),
           }),
@@ -220,17 +204,17 @@ describe("Models with classifier models", () => {
         const models = createModels();
         models.setProvider(
           createProvider({
-            id: "test",
             auth: { apiKey: { name: "Test", resolve: () => Promise.resolve({ auth: {} }) } },
-            models: [classifier],
             classifiers: { "test-classifier": { classify } },
+            id: "test",
+            models: [classifier],
           }),
         );
 
         const result = yield* Effect.promise(() =>
           models.classify(classifier, {
             ...context,
-            images: [{ type: "image", data: "aW1hZ2U=", mimeType: "image/png" }],
+            images: [{ data: "aW1hZ2U=", mimeType: "image/png", type: "image" }],
           }),
         );
         const withoutImages = yield* Effect.promise(() =>
@@ -243,98 +227,4 @@ describe("Models with classifier models", () => {
         expect(classify).toHaveBeenCalledOnce();
       }),
     ));
-});
-
-describe("Models with classifier models", () => {
-  it("routes OpenAI GPT-6 Luna through the Decisions API with images", () =>
-    Effect.runPromise(
-      Effect.gen(function* () {
-        const models = builtinModels();
-        const luna = models.getModelOfType("classifier", "openai", "gpt-6-luna");
-        if (luna === undefined) throw new Error("missing OpenAI Decisions model");
-        expect(luna).toMatchObject({
-          api: "openai-decisions",
-          input: ["text", "image"],
-          contextWindow: 922000,
-        });
-        expect(models.getModel("openai", "gpt-6-luna")?.api).toBe("openai-responses");
-
-        const urls: string[] = [];
-        const result = yield* Effect.promise(() =>
-          models.classify(
-            luna,
-            { ...context, images: [{ type: "image", data: "aW1hZ2U=", mimeType: "image/png" }] },
-            {
-              apiKey: "secret",
-              fetch: (input) => {
-                urls.push(String(input));
-                return Promise.resolve(
-                  Response.json({
-                    answers: [{ type: "predicate", name: "approved", probability: 0.8 }],
-                  }),
-                );
-              },
-            },
-          ),
-        );
-
-        expect(urls).toEqual(["https://api.openai.com/v1/decisions"]);
-        expect(result.stopReason).toBe("stop");
-        expect(result.answers["approved"]).toEqual({ type: "bool", probability: 0.8 });
-      }),
-    ));
-});
-
-describe("Models with classifier models", () => {
-  it("lists OpenAI Decisions models only for API key credentials", () =>
-    Effect.runPromise(
-      Effect.gen(function* () {
-        const apiKeyStore = new InMemoryCredentialStore();
-        yield* Effect.promise(() =>
-          apiKeyStore.modify("openai", () => Promise.resolve({ type: "api_key", key: "secret" })),
-        );
-        const oauthStore = new InMemoryCredentialStore();
-        yield* Effect.promise(() =>
-          oauthStore.modify("openai", () =>
-            Promise.resolve({
-              type: "oauth",
-              access: "access",
-              refresh: "refresh",
-              expires: currentTimeMillis() + 3_600_000,
-            }),
-          ),
-        );
-
-        const withApiKey = builtinModels({ credentials: apiKeyStore });
-        const withOAuth = builtinModels({ credentials: oauthStore });
-
-        expect(
-          (yield* Effect.promise(() => withApiKey.getAvailableOfType("classifier", "openai"))).map(
-            (model) => model.id,
-          ),
-        ).toEqual(["gpt-6-luna"]);
-        expect(
-          yield* Effect.promise(() => withOAuth.getAvailableOfType("classifier", "openai")),
-        ).toEqual([]);
-        expect(
-          (yield* Effect.promise(() => withOAuth.getAvailable("openai"))).some(
-            (model) => model.id === "gpt-6-luna",
-          ),
-        ).toBe(true);
-      }),
-    ));
-});
-
-describe("Models with classifier models", () => {
-  it("routes OpenRouter classifier models through the System One API", () => {
-    const models = builtinModels();
-    for (const model of getBuiltinClassifierModels("openrouter")) {
-      expect(model).toMatchObject({
-        api: "typesafe-system-one",
-        baseUrl: "https://openrouter.ai/api/v1",
-      });
-      expect(models.getModel("openrouter", model.id)).toBeUndefined();
-      expect(models.getModelOfType("classifier", "openrouter", model.id)).toEqual(model);
-    }
-  });
 });

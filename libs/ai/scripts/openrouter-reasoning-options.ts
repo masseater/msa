@@ -1,15 +1,9 @@
-import type { ThinkingLevel, ThinkingLevelMap } from "../src/types.ts";
-import { getEffortThinkingLevelMap } from "./models-dev-reasoning-options.ts";
+import type { ThinkingLevelMap } from "../src/types.ts";
+import getEffortThinkingLevelMap from "./models-dev-reasoning-options.ts";
+import type openrouterReasoningOptionsTypes from "./openrouter-reasoning-options.types.ts";
 
-export interface OpenRouterReasoningMetadata {
-  mandatory?: boolean;
-  default_enabled?: boolean;
-  supported_efforts?: Array<ThinkingLevel | "none">;
-  default_effort?: ThinkingLevel | "none";
-}
-
-export function getOpenRouterThinkingLevelMap(
-  reasoning: OpenRouterReasoningMetadata | undefined,
+function getOpenRouterThinkingLevelMap(
+  reasoning: openrouterReasoningOptionsTypes.OpenRouterReasoningMetadata | undefined,
 ): ThinkingLevelMap | undefined {
   if (reasoning === undefined) return undefined;
   if (
@@ -22,3 +16,5 @@ export function getOpenRouterThinkingLevelMap(
   if (map === undefined) return reasoning.mandatory === true ? { off: null } : undefined;
   return { ...map, off: reasoning.mandatory === true ? null : "none" };
 }
+
+export default getOpenRouterThinkingLevelMap;

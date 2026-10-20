@@ -7,16 +7,16 @@ import { normalizeContext } from "../src/utils/transcript.ts";
 
 function makeModel(id = "gemini-3-pro-preview"): Model<"google-generative-ai"> {
   return {
-    id,
-    name: id,
     api: "google-generative-ai",
-    provider: "google",
     baseUrl: "https://example.com",
-    reasoning: true,
-    input: ["text"],
-    cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0 },
     contextWindow: 128000,
+    cost: { cacheRead: 0, cacheWrite: 0, input: 0, output: 0 },
+    id,
+    input: ["text"],
     maxTokens: 8192,
+    name: id,
+    provider: "google",
+    reasoning: true,
   };
 }
 
@@ -29,23 +29,23 @@ function makeContext(
   const now = currentTimeMillis();
   return {
     messages: [
-      { role: "user", content: "Hi", timestamp: now },
+      { content: "Hi", role: "user", timestamp: now },
       {
-        role: "assistant",
-        content,
         api: model.api as AssistantMessage["api"],
-        provider: model.provider,
+        content,
         model: model.id,
-        usage: {
-          input: 0,
-          output: 0,
-          cacheRead: 0,
-          cacheWrite: 0,
-          totalTokens: 0,
-          cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0, total: 0 },
-        },
+        provider: model.provider,
+        role: "assistant",
         stopReason: "toolUse",
         timestamp: now,
+        usage: {
+          cacheRead: 0,
+          cacheWrite: 0,
+          cost: { cacheRead: 0, cacheWrite: 0, input: 0, output: 0, total: 0 },
+          input: 0,
+          output: 0,
+          totalTokens: 0,
+        },
       },
     ],
   };
@@ -58,8 +58,8 @@ describe("google-shared convertMessages — signed empty blocks", () => {
       model,
       normalizeContext(
         makeContext(model, [
-          { type: "thinking", thinking: "", thinkingSignature: VALID_SIG },
-          { type: "toolCall", id: "call_1", name: "bash", arguments: { command: "ls" } },
+          { thinking: "", thinkingSignature: VALID_SIG, type: "thinking" },
+          { arguments: { command: "ls" }, id: "call_1", name: "bash", type: "toolCall" },
         ]),
       ),
     );
@@ -75,8 +75,8 @@ describe("google-shared convertMessages — signed empty blocks", () => {
       model,
       normalizeContext(
         makeContext(model, [
-          { type: "text", text: "", textSignature: VALID_SIG },
-          { type: "toolCall", id: "call_1", name: "bash", arguments: { command: "ls" } },
+          { text: "", textSignature: VALID_SIG, type: "text" },
+          { arguments: { command: "ls" }, id: "call_1", name: "bash", type: "toolCall" },
         ]),
       ),
     );
@@ -93,9 +93,9 @@ describe("google-shared convertMessages — signed empty blocks", () => {
       model,
       normalizeContext(
         makeContext(model, [
-          { type: "thinking", thinking: "" },
-          { type: "text", text: "   " },
-          { type: "toolCall", id: "call_1", name: "bash", arguments: { command: "ls" } },
+          { thinking: "", type: "thinking" },
+          { text: "   ", type: "text" },
+          { arguments: { command: "ls" }, id: "call_1", name: "bash", type: "toolCall" },
         ]),
       ),
     );
@@ -112,9 +112,9 @@ describe("google-shared convertMessages — signed empty blocks", () => {
       model,
       normalizeContext(
         makeContext({ ...model, id: "other-model" }, [
-          { type: "thinking", thinking: "", thinkingSignature: VALID_SIG },
-          { type: "text", text: "", textSignature: VALID_SIG },
-          { type: "toolCall", id: "call_1", name: "bash", arguments: { command: "ls" } },
+          { thinking: "", thinkingSignature: VALID_SIG, type: "thinking" },
+          { text: "", textSignature: VALID_SIG, type: "text" },
+          { arguments: { command: "ls" }, id: "call_1", name: "bash", type: "toolCall" },
         ]),
       ),
     );

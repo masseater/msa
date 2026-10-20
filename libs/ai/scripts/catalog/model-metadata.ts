@@ -5,17 +5,18 @@ import type {
   Model,
   OpenAICompletionsCompat,
 } from "../../src/types.ts";
-import { getEffortThinkingLevelMap } from "../models-dev-reasoning-options.ts";
-import {
-  applyAnthropicMessagesCompatMetadata,
-  applyPromptCacheMetadata,
-} from "./anthropic-metadata.ts";
-import type { ReasoningOptionsRegistry } from "./models-dev.ts";
-import {
-  applyOpenAICompletionsCompatMetadata,
-  detectOpenAICompletionsCompat,
-} from "./openai-completions-compat.ts";
-import {
+import getEffortThinkingLevelMap from "../models-dev-reasoning-options.ts";
+import anthropicMetadata from "./anthropic-metadata.ts";
+import type modelsDevTypes from "./models-dev.types.ts";
+import openaiCompletionsCompat from "./openai-completions-compat.ts";
+import openaiMetadata from "./openai-metadata.ts";
+import applyThinkingLevelMetadata from "./thinking-levels.ts";
+import thinkingMaps from "./thinking-maps.ts";
+
+const { applyAnthropicMessagesCompatMetadata, applyPromptCacheMetadata } = anthropicMetadata;
+const { applyOpenAICompletionsCompatMetadata, detectOpenAICompletionsCompat } =
+  openaiCompletionsCompat;
+const {
   applyOpenAICompletionsTranscriptMetadata,
   applyOpenAIExplicitPromptCacheMetadata,
   applyOpenAIGrammarToolCompatMetadata,
@@ -23,15 +24,14 @@ import {
   applyOpenAIResponsesTranscriptMetadata,
   applyOpenAIToolSearchMetadata,
   applyStrictToolCompatMetadata,
-} from "./openai-metadata.ts";
-import { applyThinkingLevelMetadata } from "./thinking-levels.ts";
-import { mergeThinkingLevelMap } from "./thinking-maps.ts";
+} = openaiMetadata;
+const { mergeThinkingLevelMap } = thinkingMaps;
 
 const DEFAULT_IMAGE_RESIZE = {
-  maxWidth: 2000,
-  maxHeight: 2000,
-  maxBytes: 4.5 * 1024 * 1024,
   jpegQuality: 80,
+  maxBytes: 4.5 * 1024 * 1024,
+  maxHeight: 2000,
+  maxWidth: 2000,
 } as const;
 
 function supportsDirectReasoningEffort(model: Model<Api>): boolean {
@@ -48,19 +48,19 @@ function supportsDirectReasoningEffort(model: Model<Api>): boolean {
   return compat.thinkingFormat === "openai" && compat.supportsReasoningEffort;
 }
 
-export function applyImageInputMetadata(model: AnyModel): void {
+function applyImageInputMetadata(model: AnyModel): void {
   if (!model.input.includes("image")) return;
 
   const providerLimits: AnyModel["inputLimits"] =
     model.provider === "anthropic-api"
       ? {
-          maxRequestBytes: 32 * 1024 * 1024,
           images: {
             maxPerRequest: model.type !== "image" && model.contextWindow === 200000 ? 100 : 600,
           },
+          maxRequestBytes: 32 * 1024 * 1024,
         }
       : model.provider === "openai"
-        ? { maxRequestBytes: 512 * 1024 * 1024, images: { maxPerRequest: 1500 } }
+        ? { images: { maxPerRequest: 1500 }, maxRequestBytes: 512 * 1024 * 1024 }
         : undefined;
   const configuredImages = model.inputLimits?.images;
   model.inputLimits = {
@@ -74,7 +74,9 @@ export function applyImageInputMetadata(model: AnyModel): void {
   };
 }
 
-function reasoningOptionMetadata(reasoning: ReasoningOptionsRegistry): (model: Model<Api>) => void {
+function reasoningOptionMetadata(
+  reasoning: modelsDevTypes.ReasoningOptionsRegistry,
+): (model: Model<Api>) => void {
   return (model) => {
     const reasoningOptions = reasoning.get(`${model.provider}:${model.id}`);
     if (reasoningOptions === undefined || !supportsDirectReasoningEffort(model)) return;
@@ -83,7 +85,9 @@ function reasoningOptionMetadata(reasoning: ReasoningOptionsRegistry): (model: M
   };
 }
 
-export function modelMetadata(reasoning: ReasoningOptionsRegistry): (model: Model<Api>) => void {
+function modelMetadata(
+  reasoning: modelsDevTypes.ReasoningOptionsRegistry,
+): (model: Model<Api>) => void {
   const steps: readonly ((model: Model<Api>) => void)[] = [
     applyOpenAICompletionsCompatMetadata,
     applyAnthropicMessagesCompatMetadata,
@@ -103,3 +107,10 @@ export function modelMetadata(reasoning: ReasoningOptionsRegistry): (model: Mode
     for (const step of steps) step(model);
   };
 }
+
+const modelMetadataModule = {
+  applyImageInputMetadata,
+  modelMetadata,
+};
+
+export default modelMetadataModule;

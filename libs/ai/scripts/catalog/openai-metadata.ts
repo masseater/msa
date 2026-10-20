@@ -4,7 +4,9 @@ import type {
   OpenAICompletionsCompat,
   OpenAIResponsesCompat,
 } from "../../src/types.ts";
-import { mergeAnthropicMessagesCompat } from "./anthropic-metadata.ts";
+import anthropicMetadata from "./anthropic-metadata.ts";
+
+const { mergeAnthropicMessagesCompat } = anthropicMetadata;
 
 const OPENAI_TOOL_SEARCH_MODEL_IDS = new Set([
   "gpt-5.4",
@@ -41,7 +43,7 @@ const OPENAI_MID_CONVO_EFFORT_MODEL_IDS = new Set([
   "gpt-6.1-sol",
 ]);
 
-export function applyStrictToolCompatMetadata(model: Model<Api>): void {
+function applyStrictToolCompatMetadata(model: Model<Api>): void {
   if (model.provider === "openai" && model.api === "openai-responses") {
     model.compat = {
       ...(model.compat as OpenAIResponsesCompat | undefined),
@@ -56,7 +58,7 @@ const OPENAI_GRAMMAR_TOOL_PROVIDERS = new Set(["openai", "openai-codex", "openco
 
 const OPENAI_GRAMMAR_TOOL_APIS = new Set<Api>(["openai-responses", "openai-codex-responses"]);
 
-export function applyOpenAIGrammarToolCompatMetadata(model: Model<Api>): void {
+function applyOpenAIGrammarToolCompatMetadata(model: Model<Api>): void {
   if (
     !OPENAI_GRAMMAR_TOOL_APIS.has(model.api) ||
     !OPENAI_GRAMMAR_TOOL_PROVIDERS.has(model.provider)
@@ -70,7 +72,7 @@ export function applyOpenAIGrammarToolCompatMetadata(model: Model<Api>): void {
   };
 }
 
-export function applyOpenAIToolSearchMetadata(model: Model<Api>): void {
+function applyOpenAIToolSearchMetadata(model: Model<Api>): void {
   const isOpenAIResponses = model.provider === "openai" && model.api === "openai-responses";
   const isOpenAICodex = model.provider === "openai-codex" && model.api === "openai-codex-responses";
   if (!(isOpenAIResponses || isOpenAICodex) || !OPENAI_TOOL_SEARCH_MODEL_IDS.has(model.id)) return;
@@ -84,7 +86,7 @@ export function applyOpenAIToolSearchMetadata(model: Model<Api>): void {
   };
 }
 
-export function applyOpenAICompletionsTranscriptMetadata(model: Model<Api>): void {
+function applyOpenAICompletionsTranscriptMetadata(model: Model<Api>): void {
   if (model.api !== "openai-completions") return;
   const isKimiK3 =
     (model.provider === "opencode" || model.provider === "opencode-go") && model.id === "kimi-k3";
@@ -102,7 +104,7 @@ export function applyOpenAICompletionsTranscriptMetadata(model: Model<Api>): voi
 
 const OPENAI_RESPONSES_PROXY_PROVIDERS = new Set(["opencode", "opencode-go"]);
 
-export function applyOpenAIResponsesTranscriptMetadata(model: Model<Api>): void {
+function applyOpenAIResponsesTranscriptMetadata(model: Model<Api>): void {
   const isOpenAIResponses = model.provider === "openai" && model.api === "openai-responses";
   const isOpenAICodex = model.provider === "openai-codex" && model.api === "openai-codex-responses";
   const isProxiedResponses =
@@ -120,7 +122,7 @@ export function applyOpenAIResponsesTranscriptMetadata(model: Model<Api>): void 
   };
 }
 
-export function applyOpenAIExplicitPromptCacheMetadata(model: Model<Api>): void {
+function applyOpenAIExplicitPromptCacheMetadata(model: Model<Api>): void {
   if (model.provider !== "openai" || model.api !== "openai-responses") return;
   if (!(model.cost.cacheWrite > 0)) return;
   model.compat = {
@@ -129,7 +131,7 @@ export function applyOpenAIExplicitPromptCacheMetadata(model: Model<Api>): void 
   };
 }
 
-export function applyOpenAIMidConvoEffortMetadata(model: Model<Api>): void {
+function applyOpenAIMidConvoEffortMetadata(model: Model<Api>): void {
   if (model.provider !== "openai" || model.api !== "openai-responses") return;
   if (!OPENAI_MID_CONVO_EFFORT_MODEL_IDS.has(model.id)) return;
   model.compat = {
@@ -137,3 +139,15 @@ export function applyOpenAIMidConvoEffortMetadata(model: Model<Api>): void {
     supportsMidConvoEffort: true,
   };
 }
+
+const openaiMetadata = {
+  applyOpenAICompletionsTranscriptMetadata,
+  applyOpenAIExplicitPromptCacheMetadata,
+  applyOpenAIGrammarToolCompatMetadata,
+  applyOpenAIMidConvoEffortMetadata,
+  applyOpenAIResponsesTranscriptMetadata,
+  applyOpenAIToolSearchMetadata,
+  applyStrictToolCompatMetadata,
+};
+
+export default openaiMetadata;

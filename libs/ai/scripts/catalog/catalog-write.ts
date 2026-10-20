@@ -1,23 +1,19 @@
 import { Console, Effect } from "effect";
 
-import {
-  createModelDataManifest,
+import modelData from "../model-data.ts";
+import scriptFiles from "../script-files.ts";
+import type scriptFilesTypes from "../script-files.types.ts";
+import catalogSources from "./catalog-sources.ts";
+import type catalogWriteTypes from "./catalog-write.types.ts";
+
+const {
   MODEL_DATA_MANIFEST_FILE,
+  createModelDataManifest,
   validateGeneratedModelData,
   validateModelDataDirectory,
-} from "../model-data.ts";
-import { ScriptFiles } from "../script-files.ts";
-import type { GroupedCatalog } from "./catalog-data.ts";
-import { providerShardFile, renderAggregator, renderProviderShard } from "./catalog-sources.ts";
-
-export interface CatalogWrite {
-  readonly packageRoot: string;
-  readonly providerIds: readonly string[];
-  readonly grouped: GroupedCatalog;
-  readonly generatedAt: string;
-  readonly dataOnly: boolean;
-  readonly serialize: (value: unknown) => Effect.Effect<string>;
-}
+} = modelData;
+const { ScriptFiles } = scriptFiles;
+const { providerShardFile, renderAggregator, renderProviderShard } = catalogSources;
 
 interface CatalogPaths {
   readonly providersDir: string;
@@ -28,7 +24,7 @@ interface CatalogPaths {
 }
 
 const stageModelData = Effect.fn("stageModelData")(function* (
-  request: CatalogWrite,
+  request: catalogWriteTypes.CatalogWrite,
   stagedDataDir: string,
 ) {
   const files = yield* ScriptFiles;
@@ -38,18 +34,18 @@ const stageModelData = Effect.fn("stageModelData")(function* (
     const filename = `${providerId}.json`;
     const content = yield* request.serialize(request.grouped.groups[providerId]);
     fileContents[filename] = content;
-    yield* files.writeText({ path: files.join(stagedDataDir, filename), content });
+    yield* files.writeText({ content, path: files.join(stagedDataDir, filename) });
   }
   const { structure } = request.grouped;
   const manifest = yield* createModelDataManifest(structure, fileContents, request.generatedAt);
   yield* files.writeText({
-    path: files.join(stagedDataDir, MODEL_DATA_MANIFEST_FILE),
     content: yield* request.serialize(manifest),
+    path: files.join(stagedDataDir, MODEL_DATA_MANIFEST_FILE),
   });
   yield* validateModelDataDirectory(structure, stagedDataDir);
 });
 
-const shardFiles = (files: ScriptFiles["Service"], providersDir: string) =>
+const shardFiles = (files: scriptFilesTypes.ScriptFiles["Service"], providersDir: string) =>
   Effect.map(files.list(providersDir), (entries) =>
     entries.filter((entry) => entry.endsWith(".models.ts")),
   );
@@ -60,8 +56,8 @@ const snapshotTypeScriptCatalog = Effect.fn("snapshotTypeScriptCatalog")(functio
   const files = yield* ScriptFiles;
   const shards = yield* Effect.forEach(yield* shardFiles(files, paths.providersDir), (entry) =>
     Effect.map(files.readText(files.join(paths.providersDir, entry)), (content) => ({
-      entry,
       content,
+      entry,
     })),
   );
   const aggregator = yield* files.readText(paths.aggregatorPath);
@@ -69,8 +65,8 @@ const snapshotTypeScriptCatalog = Effect.fn("snapshotTypeScriptCatalog")(functio
     for (const entry of yield* shardFiles(files, paths.providersDir))
       yield* files.remove(files.join(paths.providersDir, entry));
     for (const { entry, content } of shards)
-      yield* files.writeText({ path: files.join(paths.providersDir, entry), content });
-    yield* files.writeText({ path: paths.aggregatorPath, content: aggregator });
+      yield* files.writeText({ content, path: files.join(paths.providersDir, entry) });
+    yield* files.writeText({ content: aggregator, path: paths.aggregatorPath });
   }).pipe(Effect.ignore);
   return { restore };
 });
@@ -83,14 +79,14 @@ const writeTypeScriptCatalog = Effect.fn("writeTypeScriptCatalog")(function* (
   const generated = new Set(providerIds.map(providerShardFile));
   for (const providerId of providerIds) {
     yield* files.writeText({
-      path: files.join(paths.providersDir, providerShardFile(providerId)),
       content: renderProviderShard(providerId),
+      path: files.join(paths.providersDir, providerShardFile(providerId)),
     });
   }
   for (const entry of yield* shardFiles(files, paths.providersDir)) {
     if (!generated.has(entry)) yield* files.remove(files.join(paths.providersDir, entry));
   }
-  yield* files.writeText({ path: paths.aggregatorPath, content: renderAggregator(providerIds) });
+  yield* files.writeText({ content: renderAggregator(providerIds), path: paths.aggregatorPath });
   yield* Console.log("Generated provider catalogs and src/models.generated.ts");
 });
 
@@ -116,7 +112,7 @@ const swapModelData = Effect.fn("swapModelData")(function* (
 });
 
 const replaceCatalog = Effect.fn("replaceCatalog")(function* (
-  request: CatalogWrite,
+  request: catalogWriteTypes.CatalogWrite,
   paths: CatalogPaths,
 ) {
   yield* stageModelData(request, paths.stagedDataDir);
@@ -137,8 +133,8 @@ const replaceCatalog = Effect.fn("replaceCatalog")(function* (
   );
 });
 
-export const writeGeneratedCatalog = Effect.fn("writeGeneratedCatalog")(function* (
-  request: CatalogWrite,
+const writeGeneratedCatalog = Effect.fn("writeGeneratedCatalog")(function* (
+  request: catalogWriteTypes.CatalogWrite,
 ) {
   const files = yield* ScriptFiles;
   const providersDir = files.join(request.packageRoot, "src", "providers");
@@ -147,11 +143,13 @@ export const writeGeneratedCatalog = Effect.fn("writeGeneratedCatalog")(function
     prefix: ".model-generation-",
   });
   const paths: CatalogPaths = {
-    providersDir,
     aggregatorPath: files.join(request.packageRoot, "src", "models.generated.ts"),
     dataDir: files.join(providersDir, "data"),
-    stagedDataDir: files.join(stagingRoot, "data"),
     previousDataDir: files.join(stagingRoot, "previous-data"),
+    providersDir,
+    stagedDataDir: files.join(stagingRoot, "data"),
   };
   yield* Effect.ensuring(replaceCatalog(request, paths), Effect.ignore(files.remove(stagingRoot)));
 });
+
+export default writeGeneratedCatalog;

@@ -1,12 +1,15 @@
 import type { Model } from "../../src/types.ts";
-import {
+import openaiPricing from "./openai-pricing.ts";
+import thinkingMaps from "./thinking-maps.ts";
+
+const {
   OPENAI_LONG_CONTEXT_INPUT_THRESHOLD,
   OPENAI_LONG_CONTEXT_PRICING_MODEL_IDS,
   OPENAI_SHORT_CONTEXT_CAPPED_MODEL_IDS,
   OPENAI_STANDARD_COSTS_BY_ID,
   withOpenAiLongContextPricing,
-} from "./openai-pricing.ts";
-import { mergeThinkingLevelMap } from "./thinking-maps.ts";
+} = openaiPricing;
+const { mergeThinkingLevelMap } = thinkingMaps;
 
 const KIMI_K3_MAX_TOKENS = 131072;
 const OPENROUTER_KIMI_K3_MODEL_IDS = new Set(["moonshotai/kimi-k3", "~moonshotai/kimi-latest"]);
@@ -24,12 +27,12 @@ function overrideAnthropicLimits(candidate: Model<any>): void {
   if (candidate.provider === "anthropic-api" && CLAUDE_5_5_MODEL_IDS.has(candidate.id)) {
     mergeThinkingLevelMap(candidate, {
       ...(candidate.id === "claude-haiku-5-5" ? {} : { off: null }),
-      minimal: null,
-      low: "low",
-      medium: "medium",
       high: "high",
-      xhigh: "xhigh",
+      low: "low",
       max: "max",
+      medium: "medium",
+      minimal: null,
+      xhigh: "xhigh",
     });
   }
   if (ANTHROPIC_HOSTS.has(candidate.provider) && CLAUDE_4_6_MODEL_IDS.has(candidate.id)) {
@@ -73,8 +76,8 @@ function overrideGatewayModels(candidate: Model<any>): void {
   if (candidate.id.startsWith("moonshotai/kimi-k2.6")) {
     candidate.compat = {
       ...candidate.compat,
-      supportsDeveloperRole: false,
       requiresReasoningContentOnAssistantMessages: true,
+      supportsDeveloperRole: false,
     };
   }
   if (candidate.id === "z-ai/glm-5") {
@@ -84,8 +87,10 @@ function overrideGatewayModels(candidate: Model<any>): void {
   }
 }
 
-export function applyCatalogOverrides(candidate: Model<any>): void {
+function applyCatalogOverrides(candidate: Model<any>): void {
   overrideAnthropicLimits(candidate);
   overrideOpenAiLimits(candidate);
   overrideGatewayModels(candidate);
 }
+
+export default applyCatalogOverrides;

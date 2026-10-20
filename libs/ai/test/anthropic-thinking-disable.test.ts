@@ -4,7 +4,9 @@ import { describe, expect, it } from "vite-plus/test";
 import { getModel, streamSimple } from "../src/compat.ts";
 import type { Context, Model, SimpleStreamOptions } from "../src/types.ts";
 import { currentTimeMillis } from "../src/utils/clock.ts";
-import { envValue } from "./env.ts";
+import env from "./env.ts";
+
+const { envValue } = env;
 
 interface AnthropicThinkingPayload {
   thinking?: { type: string; budget_tokens?: number; display?: string };
@@ -15,7 +17,7 @@ class PayloadCaptured extends Data.TaggedError("PayloadCaptured")<{ readonly mes
 
 function makePayloadCaptureContext(): Context {
   return {
-    messages: [{ role: "user", content: "Hello", timestamp: currentTimeMillis() }],
+    messages: [{ content: "Hello", role: "user", timestamp: currentTimeMillis() }],
   };
 }
 
@@ -56,15 +58,15 @@ interface RunResult {
 
 function makeE2EContext(): Context {
   return {
-    systemPrompt: "You are a precise assistant. Follow the requested output format exactly.",
     messages: [
       {
-        role: "user",
         content:
           "Before replying, carefully solve 36863 * 5279 internally. Then reply with the word pong repeated exactly 40 times, separated by single spaces. Do not add any other text.",
+        role: "user",
         timestamp: currentTimeMillis(),
       },
     ],
+    systemPrompt: "You are a precise assistant. Follow the requested output format exactly.",
   };
 }
 
@@ -76,8 +78,8 @@ function runWithoutReasoning(model: Model<"anthropic-messages">): Promise<RunRes
   return Effect.runPromise(
     Effect.gen(function* () {
       const s = streamSimple(model, makeE2EContext(), {
-        temperature: 0,
         maxTokens: 160,
+        temperature: 0,
       });
 
       let thinkingEventCount = 0;
@@ -108,10 +110,10 @@ function runWithoutReasoning(model: Model<"anthropic-messages">): Promise<RunRes
         .trim();
 
       return {
-        thinkingEventCount,
-        thinkingCharCount,
-        text,
         contentTypes: response.content.map((block) => block.type),
+        text,
+        thinkingCharCount,
+        thinkingEventCount,
       };
     }),
   );
@@ -167,7 +169,7 @@ describe("Anthropic thinking disable payload", () => {
           reasoning: "high",
         });
 
-        expect(payload.thinking).toEqual({ type: "adaptive", display: "summarized" });
+        expect(payload.thinking).toEqual({ display: "summarized", type: "adaptive" });
         expect(payload.output_config).toEqual({ effort: "high" });
       }),
     ));
@@ -181,7 +183,7 @@ describe("Anthropic thinking disable payload", () => {
           reasoning: "high",
         });
 
-        expect(payload.thinking).toEqual({ type: "adaptive", display: "summarized" });
+        expect(payload.thinking).toEqual({ display: "summarized", type: "adaptive" });
         expect(payload.output_config).toEqual({ effort: "high" });
       }),
     ));
@@ -193,7 +195,7 @@ describe("Anthropic thinking disable payload", () => {
           reasoning: "xhigh",
         });
 
-        expect(payload.thinking).toEqual({ type: "adaptive", display: "summarized" });
+        expect(payload.thinking).toEqual({ display: "summarized", type: "adaptive" });
         expect(payload.output_config).toEqual({ effort: "xhigh" });
       }),
     ));

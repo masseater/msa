@@ -1,447 +1,92 @@
 import { Effect } from "effect";
-import { afterEach, describe, expect, it, vi } from "vite-plus/test";
+import { Base64Url } from "effect/encoding";
+import { describe, expect, it } from "vite-plus/test";
 
 import { InMemoryCredentialStore } from "../src/auth/credential-store.ts";
-import { openRouterOAuth } from "../src/auth/oauth/openrouter.ts";
 import { createModels } from "../src/models.ts";
 import { openrouterProvider } from "../src/providers/openrouter.ts";
+import openrouterOauthSupport from "./openrouter-oauth-support.ts";
 
-const TOKEN_URL = "https://openrouter.ai/api/v1/auth/keys";
-const nativeFetch = globalThis.fetch;
-const requestCallback = (input: string | URL, init?: RequestInit) => nativeFetch(input, init);
-const neverAbortedSignal = new AbortController().signal;
+const {
+  callbackUrlOf,
+  jsonResponse,
+  loginThroughCallback,
+  permanentKey,
+  restoreStubsAfterEach,
+  stubTokenExchange,
+} = openrouterOauthSupport;
 
-function jsonResponse(body: unknown, status = 200): Response {
-  return new Response(JSON.stringify(body), {
-    status,
-    headers: { "content-type": "application/json" },
-  });
-}
+const isExposedWithApiKeyAuth = () => {
+  const provider = openrouterProvider();
+  expect(provider.auth.apiKey).toBeDefined();
+  expect(provider.auth.oauth?.loginLabel).toBe("Sign in with OpenRouter");
+};
 
-function base64url(bytes: Uint8Array): string {
-  let binary = "";
-  for (const byte of bytes) binary += String.fromCharCode(byte);
-  return btoa(binary).replaceAll("+", "-").replaceAll("/", "_").replaceAll("=", "");
-}
+const resolvesStoredKeyForEveryModelType = () =>
+  Effect.runPromise(
+    Effect.gen(function* () {
+      const credentials = new InMemoryCredentialStore();
+      yield* Effect.promise(() =>
+        credentials.modify("openrouter", () => Promise.resolve(permanentKey("sk-or-stored"))),
+      );
+      const models = createModels({ credentials });
+      models.setProvider(openrouterProvider());
+      const chatModel = models.getModels("openrouter")[0];
+      const imageModel = models.getModelsOfType("image", "openrouter")[0];
+      if (chatModel === undefined || imageModel === undefined) {
+        throw new Error("Expected OpenRouter chat and image models");
+      }
+      const chatAuth = yield* Effect.promise(() => models.getAuth(chatModel));
+      const imageAuth = yield* Effect.promise(() => models.getAuth(imageModel));
+      expect([chatAuth?.auth.apiKey, imageAuth?.auth.apiKey]).toEqual([
+        "sk-or-stored",
+        "sk-or-stored",
+      ]);
+    }),
+  );
 
-describe("OpenRouter OAuth", () => {
-  afterEach(() => {
-    vi.unstubAllGlobals();
-    vi.unstubAllEnvs();
-  });
-  it("is exposed alongside API-key auth", () => {
-    const provider = openrouterProvider();
-    expect(provider.auth.apiKey).toBeDefined();
-    expect(provider.auth.oauth).toBeDefined();
-    expect(provider.auth.oauth?.loginLabel).toBe("Sign in with OpenRouter");
-  });
+const sha256Base64Url = (text: string) =>
+  Effect.promise(() => crypto.subtle.digest("SHA-256", new TextEncoder().encode(text))).pipe(
+    Effect.map((digest) => Base64Url.encode(new Uint8Array(digest))),
+  );
 
-  it("resolves the same stored OAuth key for chat and image models", () =>
-    Effect.runPromise(
-      Effect.gen(function* () {
-        const credentials = new InMemoryCredentialStore();
-        yield* Effect.promise(() =>
-          credentials.modify("openrouter", () =>
-            Promise.resolve({
-              type: "oauth",
-              access: "sk-or-stored",
-              refresh: "",
-              expires: Number.MAX_SAFE_INTEGER,
-            }),
-          ),
-        );
+const exchangesLoopbackCodeForKey = () =>
+  Effect.runPromise(
+    Effect.gen(function* () {
+      const { exchanges, fetchMock } = stubTokenExchange(() => jsonResponse({ key: "sk-or-test" }));
+      const run = loginThroughCallback("authorization-code");
 
-        const models = createModels({ credentials });
-        models.setProvider(openrouterProvider());
-        const chatModel = models.getModels("openrouter")[0];
-        const imageModel = models.getModelsOfType("image", "openrouter")[0];
-        expect(chatModel).toBeDefined();
-        expect(imageModel).toBeDefined();
-        if (chatModel === undefined || imageModel === undefined)
-          throw new Error("Expected OpenRouter chat and image models");
-
-        expect((yield* Effect.promise(() => models.getAuth(chatModel)))?.auth.apiKey).toBe(
-          "sk-or-stored",
-        );
-        expect((yield* Effect.promise(() => models.getAuth(imageModel)))?.auth.apiKey).toBe(
-          "sk-or-stored",
-        );
-      }),
-    ));
-});
-
-describe("OpenRouter OAuth", () => {
-  afterEach(() => {
-    vi.unstubAllGlobals();
-    vi.unstubAllEnvs();
-  });
-  it("runs PKCE on a one-shot loopback callback and exchanges the code for a permanent API key", () =>
-    Effect.runPromise(
-      Effect.gen(function* () {
-        let exchangeBody: Record<string, unknown> | undefined;
-        const fetchMock = vi.fn((input: string | URL | Request, init?: RequestInit) => {
-          const url = input instanceof Request ? input.url : String(input);
-          if (url !== TOKEN_URL) return Promise.resolve(nativeFetch(input, init));
-          exchangeBody = JSON.parse(String(init?.body)) as Record<string, unknown>;
-          return Promise.resolve(jsonResponse({ key: "sk-or-test" }));
-        });
-        vi.stubGlobal("fetch", fetchMock);
-
-        let authorizeUrl: URL | undefined;
-        let callbackResponse: Promise<Response> | undefined;
-        let manualSignal: AbortSignal | undefined;
-        const credential = yield* Effect.promise(() =>
-          openRouterOAuth.login({
-            signal: neverAbortedSignal,
-            prompt: (prompt) => {
-              manualSignal = prompt.signal;
-              return new Promise<string>(() => {});
-            },
-            notify: (event) => {
-              if (event.type !== "auth_url") return;
-              authorizeUrl = new URL(event.url);
-              const callbackUrl = new URL(authorizeUrl.searchParams.get("callback_url") ?? "");
-              callbackUrl.searchParams.set("code", "authorization-code");
-              callbackResponse = requestCallback(callbackUrl);
-            },
-          }),
-        );
-
-        expect(credential).toEqual({
-          type: "oauth",
-          access: "sk-or-test",
-          refresh: "",
-          expires: Number.MAX_SAFE_INTEGER,
-        });
-        expect((yield* Effect.promise(() => Promise.resolve(callbackResponse)))?.status).toBe(200);
-        expect(manualSignal?.aborted).toBe(true);
-        expect(authorizeUrl?.origin).toBe("https://openrouter.ai");
-        expect(authorizeUrl?.pathname).toBe("/auth");
-        expect(authorizeUrl?.searchParams.get("code_challenge_method")).toBe("S256");
-
-        const callbackUrl = new URL(authorizeUrl?.searchParams.get("callback_url") ?? "");
-        expect(callbackUrl.hostname).toBe("127.0.0.1");
-        expect(callbackUrl.pathname).toMatch(/^\/oauth\/callback\/[0-9a-f-]+$/u);
-
-        expect(exchangeBody).toMatchObject({
-          code: "authorization-code",
-          code_challenge_method: "S256",
-        });
-        const verifier = exchangeBody?.["code_verifier"];
-        expect(typeof verifier).toBe("string");
-        const digest = yield* Effect.promise(() =>
-          crypto.subtle.digest("SHA-256", new TextEncoder().encode(String(verifier))),
-        );
-        expect(authorizeUrl?.searchParams.get("code_challenge")).toBe(
-          base64url(new Uint8Array(digest)),
-        );
-        expect(fetchMock).toHaveBeenCalledTimes(1);
-      }),
-    ));
-});
+      expect(yield* Effect.promise(() => run.login)).toEqual(permanentKey("sk-or-test"));
+      expect((yield* Effect.promise(() => run.callbackResponse)).status).toBe(200);
+      expect((yield* Effect.promise(() => run.promptSignal))?.aborted).toBe(true);
+      const authorizeUrl = yield* Effect.promise(() => run.authorizeUrl);
+      expect(`${authorizeUrl.origin}${authorizeUrl.pathname}`).toBe("https://openrouter.ai/auth");
+      expect(authorizeUrl.searchParams.get("code_challenge_method")).toBe("S256");
+      const callbackUrl = callbackUrlOf(authorizeUrl);
+      expect(callbackUrl.hostname).toBe("127.0.0.1");
+      expect(callbackUrl.pathname).toMatch(/^\/oauth\/callback\/[0-9a-f-]+$/u);
+      expect(yield* exchanges).toEqual([
+        expect.objectContaining({ code: "authorization-code", code_challenge_method: "S256" }),
+      ]);
+      const [exchange] = (yield* exchanges) as Record<string, unknown>[];
+      const verifier = String(exchange?.["code_verifier"]);
+      expect(authorizeUrl.searchParams.get("code_challenge")).toBe(
+        yield* sha256Base64Url(verifier),
+      );
+      expect(fetchMock).toHaveBeenCalledTimes(1);
+    }),
+  );
 
 describe("OpenRouter OAuth", () => {
-  afterEach(() => {
-    vi.unstubAllGlobals();
-    vi.unstubAllEnvs();
-  });
-  it("reports token exchange failures through both the callback page and login", () =>
-    Effect.runPromise(
-      Effect.gen(function* () {
-        vi.stubGlobal(
-          "fetch",
-          vi.fn(() => Promise.resolve(jsonResponse({ error: { message: "invalid code" } }, 403))),
-        );
+  restoreStubsAfterEach();
 
-        let callbackResponse: Promise<Response> | undefined;
-        const login = openRouterOAuth.login({
-          signal: neverAbortedSignal,
-          prompt: () => new Promise<string>(() => {}),
-          notify: (event) => {
-            if (event.type !== "auth_url") return;
-            const callbackUrl = new URL(new URL(event.url).searchParams.get("callback_url") ?? "");
-            callbackUrl.searchParams.set("code", "bad-code");
-            callbackResponse = requestCallback(callbackUrl);
-          },
-        });
-
-        yield* Effect.promise(() =>
-          expect(login).rejects.toThrow(
-            "OpenRouter OAuth key exchange failed (HTTP 403): invalid code",
-          ),
-        );
-        expect((yield* Effect.promise(() => Promise.resolve(callbackResponse)))?.status).toBe(502);
-      }),
-    ));
-});
-
-describe("OpenRouter OAuth", () => {
-  afterEach(() => {
-    vi.unstubAllGlobals();
-    vi.unstubAllEnvs();
-  });
-  it("allows only one token exchange for a callback", () =>
-    Effect.runPromise(
-      Effect.gen(function* () {
-        let completeExchange = (_response: Response): void => {
-          throw new Error("Token exchange did not start");
-        };
-        const fetchMock = vi.fn(() =>
-          Promise.resolve(
-            new Promise<Response>((resolve) => {
-              completeExchange = resolve;
-            }),
-          ),
-        );
-        vi.stubGlobal("fetch", fetchMock);
-
-        let callbackUrl: URL | undefined;
-        let firstCallback: Promise<Response> | undefined;
-        const login = openRouterOAuth.login({
-          signal: neverAbortedSignal,
-          prompt: () => new Promise<string>(() => {}),
-          notify: (event) => {
-            if (event.type !== "auth_url") return;
-            callbackUrl = new URL(new URL(event.url).searchParams.get("callback_url") ?? "");
-            callbackUrl.searchParams.set("code", "authorization-code");
-            firstCallback = requestCallback(callbackUrl);
-          },
-        });
-
-        yield* Effect.promise(() => vi.waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(1)));
-        const receivedCallbackUrl = callbackUrl;
-        if (receivedCallbackUrl === undefined)
-          throw new Error("OpenRouter did not provide a callback URL");
-        expect((yield* Effect.promise(() => requestCallback(receivedCallbackUrl))).status).toBe(
-          409,
-        );
-        expect(fetchMock).toHaveBeenCalledTimes(1);
-        completeExchange(jsonResponse({ key: "sk-or-test" }));
-
-        yield* Effect.promise(() => expect(login).resolves.toMatchObject({ access: "sk-or-test" }));
-        expect((yield* Effect.promise(() => Promise.resolve(firstCallback)))?.status).toBe(200);
-      }),
-    ));
-});
-
-describe("OpenRouter OAuth", () => {
-  afterEach(() => {
-    vi.unstubAllGlobals();
-    vi.unstubAllEnvs();
-  });
-  it("rejects a successful response that does not contain a key", () =>
-    Effect.runPromise(
-      Effect.gen(function* () {
-        vi.stubGlobal(
-          "fetch",
-          vi.fn(() => Promise.resolve(jsonResponse({ user_id: "user-1" }))),
-        );
-
-        let callbackResponse: Promise<Response> | undefined;
-        const login = openRouterOAuth.login({
-          signal: neverAbortedSignal,
-          prompt: () => new Promise<string>(() => {}),
-          notify: (event) => {
-            if (event.type !== "auth_url") return;
-            const callbackUrl = new URL(new URL(event.url).searchParams.get("callback_url") ?? "");
-            callbackUrl.searchParams.set("code", "code-without-key");
-            callbackResponse = requestCallback(callbackUrl);
-          },
-        });
-
-        yield* Effect.promise(() =>
-          expect(login).rejects.toThrow('OpenRouter OAuth response carries no "key"'),
-        );
-        expect((yield* Effect.promise(() => Promise.resolve(callbackResponse)))?.status).toBe(502);
-      }),
-    ));
-});
-
-describe("OpenRouter OAuth", () => {
-  afterEach(() => {
-    vi.unstubAllGlobals();
-    vi.unstubAllEnvs();
-  });
-  it("mints a key from a pasted redirect URL when the loopback callback never arrives", () =>
-    Effect.runPromise(
-      Effect.gen(function* () {
-        let exchangeBody: Record<string, unknown> | undefined;
-        const fetchMock = vi.fn((input: string | URL | Request, init?: RequestInit) => {
-          const url = input instanceof Request ? input.url : String(input);
-          if (url !== TOKEN_URL) return Promise.resolve(nativeFetch(input, init));
-          exchangeBody = JSON.parse(String(init?.body)) as Record<string, unknown>;
-          return Promise.resolve(jsonResponse({ key: "sk-or-manual" }));
-        });
-        vi.stubGlobal("fetch", fetchMock);
-
-        let callbackUrl: string | undefined;
-        const credential = yield* Effect.promise(() =>
-          openRouterOAuth.login({
-            signal: neverAbortedSignal,
-            prompt: (prompt) => {
-              if (prompt.type !== "manual_code")
-                return Promise.reject(new Error(`Unexpected prompt: ${prompt.type}`));
-              return Promise.resolve(`${callbackUrl}?code=manual-code`);
-            },
-            notify: (event) => {
-              if (event.type !== "auth_url") return;
-              callbackUrl = new URL(event.url).searchParams.get("callback_url") ?? undefined;
-            },
-          }),
-        );
-
-        expect(credential).toEqual({
-          type: "oauth",
-          access: "sk-or-manual",
-          refresh: "",
-          expires: Number.MAX_SAFE_INTEGER,
-        });
-        expect(exchangeBody).toMatchObject({ code: "manual-code", code_challenge_method: "S256" });
-        expect(fetchMock).toHaveBeenCalledTimes(1);
-      }),
-    ));
-});
-
-describe("OpenRouter OAuth", () => {
-  afterEach(() => {
-    vi.unstubAllGlobals();
-    vi.unstubAllEnvs();
-  });
-  it("accepts a bare authorization code from the manual prompt", () =>
-    Effect.runPromise(
-      Effect.gen(function* () {
-        let exchangeBody: Record<string, unknown> | undefined;
-        const fetchMock = vi.fn((input: string | URL | Request, init?: RequestInit) => {
-          const url = input instanceof Request ? input.url : String(input);
-          if (url !== TOKEN_URL) return Promise.resolve(nativeFetch(input, init));
-          exchangeBody = JSON.parse(String(init?.body)) as Record<string, unknown>;
-          return Promise.resolve(jsonResponse({ key: "sk-or-manual" }));
-        });
-        vi.stubGlobal("fetch", fetchMock);
-
-        const credential = yield* Effect.promise(() =>
-          openRouterOAuth.login({
-            signal: neverAbortedSignal,
-            prompt: () => Promise.resolve("  manual-code  "),
-            notify: () => {},
-          }),
-        );
-
-        expect(credential).toMatchObject({ access: "sk-or-manual" });
-        expect(exchangeBody).toMatchObject({ code: "manual-code" });
-      }),
-    ));
-
-  it("fails login when the manual prompt is cancelled", () =>
-    Effect.runPromise(
-      Effect.gen(function* () {
-        const fetchMock = vi.fn(() => Promise.resolve(jsonResponse({ key: "sk-or-unexpected" })));
-        vi.stubGlobal("fetch", fetchMock);
-
-        yield* Effect.promise(() =>
-          expect(
-            openRouterOAuth.login({
-              signal: neverAbortedSignal,
-              prompt: () => Promise.reject(new Error("Login cancelled")),
-              notify: () => {},
-            }),
-          ).rejects.toThrow("Login cancelled"),
-        );
-        expect(fetchMock).not.toHaveBeenCalled();
-      }),
-    ));
-});
-
-describe("OpenRouter OAuth", () => {
-  afterEach(() => {
-    vi.unstubAllGlobals();
-    vi.unstubAllEnvs();
-  });
-  it("rejects empty manual input without exchanging a code", () =>
-    Effect.runPromise(
-      Effect.gen(function* () {
-        const fetchMock = vi.fn(() => Promise.resolve(jsonResponse({ key: "sk-or-unexpected" })));
-        vi.stubGlobal("fetch", fetchMock);
-
-        yield* Effect.promise(() =>
-          expect(
-            openRouterOAuth.login({
-              signal: neverAbortedSignal,
-              prompt: () => Promise.resolve("   "),
-              notify: () => {},
-            }),
-          ).rejects.toThrow("Missing authorization code"),
-        );
-        expect(fetchMock).not.toHaveBeenCalled();
-      }),
-    ));
-
-  it("closes the pending callback when login is cancelled", () => {
-    const controller = new AbortController();
-    return Effect.runPromise(
-      Effect.gen(function* () {
-        let callbackUrl: URL | undefined;
-        const login = openRouterOAuth.login({
-          signal: controller.signal,
-          prompt: () => new Promise<string>(() => {}),
-          notify: (event) => {
-            if (event.type !== "auth_url") return;
-            callbackUrl = new URL(new URL(event.url).searchParams.get("callback_url") ?? "");
-            controller.abort();
-          },
-        });
-
-        yield* Effect.promise(() => expect(login).rejects.toThrow("Login cancelled"));
-        expect(callbackUrl).toBeDefined();
-        yield* Effect.promise(() => expect(requestCallback(callbackUrl!)).rejects.toThrow());
-      }),
-    );
-  });
-});
-
-describe("OpenRouter OAuth", () => {
-  afterEach(() => {
-    vi.unstubAllGlobals();
-    vi.unstubAllEnvs();
-  });
-  it("rejects before opening a callback server when login is already cancelled", () =>
-    Effect.runPromise(
-      Effect.gen(function* () {
-        const controllerSignal = AbortSignal.abort();
-
-        yield* Effect.promise(() =>
-          expect(
-            openRouterOAuth.login({
-              signal: controllerSignal,
-              prompt: () => Promise.resolve(""),
-              notify: () => {
-                throw new Error("Cancelled login must not emit events");
-              },
-            }),
-          ).rejects.toThrow("Login cancelled"),
-        );
-      }),
-    ));
-
-  it("uses the configured OAuth callback host", () => {
-    const controller = new AbortController();
-    return Effect.runPromise(
-      Effect.gen(function* () {
-        vi.stubEnv("MSA_OAUTH_CALLBACK_HOST", "localhost");
-        let callbackUrl: URL | undefined;
-        const login = openRouterOAuth.login({
-          signal: controller.signal,
-          prompt: () => new Promise<string>(() => {}),
-          notify: (event) => {
-            if (event.type !== "auth_url") return;
-            callbackUrl = new URL(new URL(event.url).searchParams.get("callback_url") ?? "");
-            controller.abort();
-          },
-        });
-
-        yield* Effect.promise(() => expect(login).rejects.toThrow("Login cancelled"));
-        expect(callbackUrl?.hostname).toBe("localhost");
-      }),
-    );
-  });
+  it("is exposed alongside API-key auth", isExposedWithApiKeyAuth);
+  it(
+    "resolves the same stored OAuth key for chat and image models",
+    resolvesStoredKeyForEveryModelType,
+  );
+  it(
+    "runs PKCE on a one-shot loopback callback and exchanges the code for a permanent API key",
+    exchangesLoopbackCodeForKey,
+  );
 });

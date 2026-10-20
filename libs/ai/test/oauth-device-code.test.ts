@@ -27,8 +27,8 @@ describe("OAuth device-code polling", () => {
         });
 
         const resultPromise = pollOAuthDeviceCodeFlow({
-          intervalSeconds: 2,
           expiresInSeconds: 30,
+          intervalSeconds: 2,
           poll,
           signal: neverAbortedSignal,
         });
@@ -65,14 +65,14 @@ describe("OAuth device-code polling", () => {
 
         const pollTimes: number[] = [];
         const resultPromise = pollOAuthDeviceCodeFlow({
-          intervalSeconds: 2,
           expiresInSeconds: 30,
-          waitBeforeFirstPoll: true,
+          intervalSeconds: 2,
           poll: () => {
             pollTimes.push(currentTimeMillis());
             return Promise.resolve({ status: "complete" as const, value: "token" });
           },
           signal: neverAbortedSignal,
+          waitBeforeFirstPoll: true,
         });
 
         yield* Effect.promise(() => vi.advanceTimersByTimeAsync(1999));
@@ -104,8 +104,8 @@ describe("OAuth device-code polling", () => {
           { status: "complete" as const, value: "token" },
         ];
         const resultPromise = pollOAuthDeviceCodeFlow({
-          intervalSeconds: 2,
           expiresInSeconds: 900,
+          intervalSeconds: 2,
           poll: () => {
             pollTimes.push(currentTimeMillis());
             const result = results.shift();
@@ -141,12 +141,12 @@ describe("OAuth device-code polling", () => {
 
         const pollTimes: number[] = [];
         const results = [
-          { status: "slow_down" as const, intervalSeconds: 30 },
+          { intervalSeconds: 30, status: "slow_down" as const },
           { status: "complete" as const, value: "token" },
         ];
         const resultPromise = pollOAuthDeviceCodeFlow({
-          intervalSeconds: 2,
           expiresInSeconds: 900,
+          intervalSeconds: 2,
           poll: () => {
             pollTimes.push(currentTimeMillis());
             const result = results.shift();
@@ -179,8 +179,8 @@ describe("OAuth device-code polling", () => {
       Effect.gen(function* () {
         vi.useFakeTimers();
         const resultPromise = pollOAuthDeviceCodeFlow({
-          intervalSeconds: 5,
           expiresInSeconds: 30,
+          intervalSeconds: 5,
           poll: () => Promise.resolve({ status: "pending" }),
           signal: controller.signal,
         });

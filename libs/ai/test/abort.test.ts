@@ -1,15 +1,24 @@
 import { Clock, Effect, Exit, Scope, Stream } from "effect";
-import { describe, expect, it } from "vite-plus/test";
+import { describe, expect, inject, it } from "vite-plus/test";
 
 import { complete, getModel, stream } from "../src/compat.ts";
-import type { Api, Context, Model, StreamOptions } from "../src/types.ts";
-import { envValue } from "./env.ts";
+import type {
+  Api,
+  AssistantMessageEventStream,
+  Context,
+  Model,
+  StreamOptions,
+} from "../src/types.ts";
+import env from "./env.ts";
+import modelChoice from "./model-choice.ts";
+
+const { chooseModel } = modelChoice;
 
 type StreamOptionsWithExtras = StreamOptions & Record<string, unknown>;
 
-import { resolveApiKey } from "./oauth.ts";
+const { envValue } = env;
 
-const [openaiCodexToken] = await Promise.all([resolveApiKey("openai-codex")]);
+const openaiCodexToken = inject("storedApiKeys")["openai-codex"];
 
 const testAbortSignal = Effect.fn("testAbortSignal")(function* <TApi extends Api>(
   llm: Model<TApi>,
@@ -18,8 +27,8 @@ const testAbortSignal = Effect.fn("testAbortSignal")(function* <TApi extends Api
   const context: Context = {
     messages: [
       {
-        role: "user",
         content: "What is 15 + 27? Think step by step. Then list 50 first names.",
+        role: "user",
         timestamp: yield* Clock.currentTimeMillis,
       },
     ],
@@ -52,20 +61,7 @@ const testAbortSignal = Effect.fn("testAbortSignal")(function* <TApi extends Api
     ),
   );
   if (eventAfterAbort) return;
-  const msg = yield* Effect.promise(() => response.result());
-
-  expect(msg.stopReason).toBe("aborted");
-  expect(msg.content.length).toBeGreaterThan(0);
-
-  context.messages.push(msg, {
-    role: "user",
-    content: "Please continue, but only generate 5 names.",
-    timestamp: yield* Clock.currentTimeMillis,
-  });
-
-  const followUp = yield* Effect.promise(() => complete(llm, context, options));
-  expect(followUp.stopReason).toBe("stop");
-  expect(followUp.content.length).toBeGreaterThan(0);
+  yield* testAbortSignalStep1<TApi>(response, context, llm, options);
 });
 
 const testImmediateAbort = Effect.fn("testImmediateAbort")(function* <TApi extends Api>(
@@ -75,7 +71,7 @@ const testImmediateAbort = Effect.fn("testImmediateAbort")(function* <TApi exten
   const signal = AbortSignal.abort();
 
   const context: Context = {
-    messages: [{ role: "user", content: "Hello", timestamp: yield* Clock.currentTimeMillis }],
+    messages: [{ content: "Hello", role: "user", timestamp: yield* Clock.currentTimeMillis }],
   };
 
   const response = yield* Effect.promise(() => complete(llm, context, { ...options, signal }));
@@ -86,7 +82,7 @@ describe("AI Providers Abort Tests", () => {
   describe.skipIf(envValue("OPENAI_API_KEY") === undefined || envValue("OPENAI_API_KEY") === "")(
     "OpenAI Completions Provider Abort",
     () => {
-      const { compat: _compat, ...baseModel } = getModel("openai", "gpt-4o-mini")!;
+      const { compat: _compat, ...baseModel } = chooseModel("openai", "direct OpenAI");
       void _compat;
       const llm: Model<"openai-completions"> = {
         ...baseModel,
@@ -115,30 +111,56 @@ describe("AI Providers Abort Tests", () => {
   );
 });
 
+const shouldAbortMidStream = () =>
+  Effect.runPromise(
+    Effect.gen(function* () {
+      const llm = getModel("openai-codex", "gpt-5.5");
+      yield* testAbortSignal(llm, { apiKey: openaiCodexToken });
+    }),
+  );
+
+const shouldHandleImmediateAbort = () =>
+  Effect.runPromise(
+    Effect.gen(function* () {
+      const llm = getModel("openai-codex", "gpt-5.5");
+      yield* testImmediateAbort(llm, { apiKey: openaiCodexToken });
+    }),
+  );
+
 describe("AI Providers Abort Tests", () => {
   describe("OpenAI Codex Provider Abort", () => {
     it.skipIf(openaiCodexToken === undefined || openaiCodexToken === "")(
       "should abort mid-stream",
       { retry: 3 },
-      () =>
-        Effect.runPromise(
-          Effect.gen(function* () {
-            const llm = getModel("openai-codex", "gpt-5.5");
-            yield* testAbortSignal(llm, { apiKey: openaiCodexToken });
-          }),
-        ),
+      shouldAbortMidStream,
     );
 
     it.skipIf(openaiCodexToken === undefined || openaiCodexToken === "")(
       "should handle immediate abort",
       { retry: 3 },
-      () =>
-        Effect.runPromise(
-          Effect.gen(function* () {
-            const llm = getModel("openai-codex", "gpt-5.5");
-            yield* testImmediateAbort(llm, { apiKey: openaiCodexToken });
-          }),
-        ),
+      shouldHandleImmediateAbort,
     );
   });
 });
+
+function* testAbortSignalStep1<TApi extends Api>(
+  response: AssistantMessageEventStream,
+  context: Context,
+  llm: Model<TApi>,
+  options: StreamOptionsWithExtras,
+) {
+  const msg = yield* Effect.promise(() => response.result());
+
+  expect(msg.stopReason).toBe("aborted");
+  expect(msg.content.length).toBeGreaterThan(0);
+
+  context.messages.push(msg, {
+    content: "Please continue, but only generate 5 names.",
+    role: "user",
+    timestamp: yield* Clock.currentTimeMillis,
+  });
+
+  const followUp = yield* Effect.promise(() => complete(llm, context, options));
+  expect(followUp.stopReason).toBe("stop");
+  expect(followUp.content.length).toBeGreaterThan(0);
+}

@@ -1,6 +1,3 @@
-import { readFileSync } from "node:fs";
-import { join } from "node:path";
-
 import { Console, Effect } from "effect";
 import { describe, expect, it } from "vite-plus/test";
 
@@ -12,7 +9,10 @@ import type {
   ImagesContext,
   ProviderImagesOptions,
 } from "../src/types.ts";
-import { envValue } from "./env.ts";
+import env from "./env.ts";
+import redCircle from "./red-circle.ts";
+
+const { envValue } = env;
 
 type ImagesOptionsWithExtras = ProviderImagesOptions & Record<string, unknown>;
 
@@ -22,7 +22,7 @@ const basicImageGeneration = Effect.fn("basicImageGeneration")(function* <TApi e
 ) {
   const context: ImagesContext = {
     input: [
-      { type: "text", text: "Generate a simple red circle on a plain white background. No text." },
+      { text: "Generate a simple red circle on a plain white background. No text.", type: "text" },
     ],
   };
 
@@ -43,17 +43,15 @@ const handleImageInput = Effect.fn("handleImageInput")(function* <TApi extends s
     return;
   }
 
-  const imagePath = join(import.meta.dirname, "data", "red-circle.png");
-  const imageBuffer = readFileSync(imagePath);
   const imageContent: ImageContent = {
-    type: "image",
-    data: imageBuffer.toString("base64"),
+    data: redCircle.data,
     mimeType: "image/png",
+    type: "image",
   };
 
   const context: ImagesContext = {
     input: [
-      { type: "text", text: "Create a variation of this image with a blue background." },
+      { text: "Create a variation of this image with a blue background.", type: "text" },
       imageContent,
     ],
   };

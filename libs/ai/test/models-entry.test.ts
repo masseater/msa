@@ -1,7 +1,11 @@
-import { spawnSync } from "node:child_process";
 import { fileURLToPath } from "node:url";
 
+import { Effect } from "effect";
 import { describe, expect, it } from "vite-plus/test";
+
+import nodeProcess from "./node-process.ts";
+
+const { runNode } = nodeProcess;
 
 const packageRoot = fileURLToPath(new URL("..", import.meta.url));
 const sourceEntry = new URL("../src/models.ts", import.meta.url).href;
@@ -26,36 +30,41 @@ const preload = `data:text/javascript,${encodeURIComponent(`
 	});
 `)}`;
 
+const fauxCompletionScript = (entry: string) => `
+	import assert from "node:assert/strict";
+	import { createModels, createProvider } from "${entry}";
+	import { fauxAssistantMessage, fauxProvider } from "@msa/ai/providers/faux";
+	assert.equal(typeof createProvider, "function");
+	const models = createModels();
+	assert.deepEqual(models.getModels(), []);
+	assert.deepEqual(models.getProviders(), []);
+	const faux = fauxProvider();
+	models.setProvider(faux.provider);
+	faux.setResponses([fauxAssistantMessage("OK")]);
+	const response = await models.completeSimple(faux.getModel(), { messages: [] });
+	assert.equal(response.stopReason, "stop");
+	assert.deepEqual(response.content, [{ type: "text", text: "OK" }]);
+`;
+
+const runsFauxCompletion = (entry: string) =>
+  Effect.runPromise(
+    Effect.gen(function* () {
+      const result = yield* Effect.promise(() =>
+        runNode(
+          ["--import", preload, "--input-type=module", "--eval", fauxCompletionScript(entry)],
+          {
+            cwd: packageRoot,
+            timeout: "10 seconds",
+          },
+        ),
+      );
+      expect(result.exitCode, result.stderr).toBe(0);
+    }),
+  );
+
 describe("lightweight models entry", () => {
   it.each([sourceEntry, "@msa/ai/models"])(
     "runs a faux completion without TypeBox, catalogs, or SDKs through %s",
-    (entry) => {
-      const script = `
-				import assert from "node:assert/strict";
-				import { createModels, createProvider } from ${JSON.stringify(entry)};
-				import { fauxAssistantMessage, fauxProvider } from "@msa/ai/providers/faux";
-				assert.equal(typeof createProvider, "function");
-				const models = createModels();
-				assert.deepEqual(models.getModels(), []);
-				assert.deepEqual(models.getProviders(), []);
-				const faux = fauxProvider();
-				models.setProvider(faux.provider);
-				faux.setResponses([fauxAssistantMessage("OK")]);
-				const response = await models.completeSimple(faux.getModel(), { messages: [] });
-				assert.equal(response.stopReason, "stop");
-				assert.deepEqual(response.content, [{ type: "text", text: "OK" }]);
-			`;
-      const result = spawnSync(
-        process.execPath,
-        ["--import", preload, "--input-type=module", "--eval", script],
-        {
-          cwd: packageRoot,
-          encoding: "utf8",
-          timeout: 10_000,
-        },
-      );
-      expect(result.error).toBeUndefined();
-      expect(result.status, result.stderr).toBe(0);
-    },
+    runsFauxCompletion,
   );
 });

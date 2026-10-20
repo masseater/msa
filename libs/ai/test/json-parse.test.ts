@@ -8,9 +8,9 @@ describe("parseStreamingJson", () => {
     expect(
       parseStreamingJson(String.raw`{"path":"a.tex","content":"\usepackage{x}","mode":"w"}`),
     ).toEqual({
-      path: "a.tex",
       content: "\\usepackage{x}",
       mode: "w",
+      path: "a.tex",
     });
   });
 

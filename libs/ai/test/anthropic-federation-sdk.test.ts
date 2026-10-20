@@ -1,134 +1,131 @@
-import { mkdtempSync, rmSync, writeFileSync } from "node:fs";
-import { tmpdir } from "node:os";
-import { join } from "node:path";
-
-import { Effect } from "effect";
-import { afterAll, afterEach, beforeAll, describe, expect, it, vi } from "vite-plus/test";
+import * as NodeServices from "@effect/platform-node/NodeServices";
+import { Effect, FileSystem, ManagedRuntime, Path } from "effect";
+import { afterEach, describe, expect, it, vi } from "vite-plus/test";
 
 import { stream as streamAnthropic } from "../src/api/anthropic-messages.ts";
 import type { Model } from "../src/types.ts";
 import { currentTimeMillis } from "../src/utils/clock.ts";
 import { normalizeContext } from "../src/utils/transcript.ts";
+import anthropicSseParsingSupport from "./anthropic-sse-parsing-support.ts";
 
-function sseResponse(): Response {
-  const body = [
-    `event: message_start\ndata: ${JSON.stringify({
-      type: "message_start",
-      message: { id: "msg_test", usage: { input_tokens: 1, output_tokens: 0 } },
-    })}\n`,
-    `event: message_delta\ndata: ${JSON.stringify({
-      type: "message_delta",
-      delta: { stop_reason: "end_turn" },
-      usage: { output_tokens: 1 },
-    })}\n`,
-    `event: message_stop\ndata: ${JSON.stringify({ type: "message_stop" })}\n`,
-  ].join("\n");
-  return new Response(body, { status: 200, headers: { "content-type": "text/event-stream" } });
-}
+const { createSseResponse } = anthropicSseParsingSupport;
+
+const runtime = ManagedRuntime.make(NodeServices.layer);
 
 interface RecordedRequest {
   path: string;
   authorization: string | null;
 }
 
-function createFetch(requests: RecordedRequest[]): typeof globalThis.fetch {
-  return (input, init) => {
+const endTurnResponse = () =>
+  createSseResponse([
+    {
+      data: {
+        message: { id: "msg_test", usage: { input_tokens: 1, output_tokens: 0 } },
+        type: "message_start",
+      },
+      event: "message_start",
+    },
+    {
+      data: {
+        delta: { stop_reason: "end_turn" },
+        type: "message_delta",
+        usage: { output_tokens: 1 },
+      },
+      event: "message_delta",
+    },
+    { data: { type: "message_stop" }, event: "message_stop" },
+  ]);
+
+const recordingFetch =
+  (requests: RecordedRequest[]): typeof globalThis.fetch =>
+  (input, init) => {
     const request = new Request(input, init);
     const path = new URL(request.url).pathname;
-    requests.push({ path, authorization: request.headers.get("authorization") });
-    if (path === "/v1/oauth/token") {
-      return Promise.resolve(
-        new Response(JSON.stringify({ access_token: "federated-token", expires_in: 3600 }), {
-          status: 200,
-          headers: { "content-type": "application/json" },
-        }),
-      );
-    }
-    return Promise.resolve(sseResponse());
+    requests.push({ authorization: request.headers.get("authorization"), path });
+    return Promise.resolve(
+      path === "/v1/oauth/token"
+        ? Response.json({ access_token: "federated-token", expires_in: 3600 })
+        : endTurnResponse(),
+    );
   };
-}
 
 const context = normalizeContext({
+  messages: [{ content: "Hello", role: "user", timestamp: currentTimeMillis() }],
   systemPrompt: "System prompt.",
-  messages: [{ role: "user", content: "Hello", timestamp: currentTimeMillis() }],
 });
 
 const anthropicModel: Model<"anthropic-messages"> = {
-  id: "claude-test",
-  name: "Claude Test",
   api: "anthropic-messages",
-  provider: "anthropic-api",
   baseUrl: "https://api.anthropic.com",
-  reasoning: false,
-  input: ["text"],
-  cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0 },
   contextWindow: 100000,
+  cost: { cacheRead: 0, cacheWrite: 0, input: 0, output: 0 },
+  id: "claude-test",
+  input: ["text"],
   maxTokens: 4096,
+  name: "Claude Test",
+  provider: "anthropic-api",
+  reasoning: false,
 };
 
-let tempDir: string;
-let federationEnv: Record<string, string>;
-
-beforeAll(() => {
-  tempDir = mkdtempSync(join(tmpdir(), "msa-anthropic-federation-"));
-  const identityTokenFile = join(tempDir, "identity.jwt");
-  writeFileSync(identityTokenFile, "header.payload.signature");
-  federationEnv = {
+const federationEnv = Effect.gen(function* () {
+  const fs = yield* FileSystem.FileSystem;
+  const path = yield* Path.Path;
+  const directory = yield* fs.makeTempDirectoryScoped({ prefix: "msa-anthropic-federation-" });
+  const identityTokenFile = path.join(directory, "identity.jwt");
+  yield* fs.writeFileString(identityTokenFile, "header.payload.signature");
+  return {
     ANTHROPIC_FEDERATION_RULE_ID: "fdrl_test",
-    ANTHROPIC_ORGANIZATION_ID: "org-test",
     ANTHROPIC_IDENTITY_TOKEN_FILE: identityTokenFile,
+    ANTHROPIC_ORGANIZATION_ID: "org-test",
   };
 });
 
-afterAll(() => {
-  rmSync(tempDir, { recursive: true, force: true });
-});
-
-afterEach(() => {
-  vi.unstubAllEnvs();
-});
-
-describe("Anthropic workload identity federation with the SDK", () => {
-  it("exchanges the identity token once across requests", () =>
-    Effect.runPromise(
+const exchangesIdentityTokenOnce = () =>
+  runtime.runPromise(
+    Effect.scoped(
       Effect.gen(function* () {
+        const env = yield* federationEnv;
         const requests: RecordedRequest[] = [];
-        const fetch = createFetch(requests);
-
-        for (let i = 0; i < 3; i++) {
-          const message = yield* Effect.promise(() =>
-            streamAnthropic(anthropicModel, context, {
-              env: federationEnv,
-              fetch,
-            }).result(),
-          );
-          expect(message.stopReason).toBe("stop");
-        }
-
+        const fetch = recordingFetch(requests);
+        const messages = yield* Effect.forEach([1, 2, 3], () =>
+          Effect.promise(() => streamAnthropic(anthropicModel, context, { env, fetch }).result()),
+        );
+        expect(messages.map((message) => message.stopReason)).toEqual(["stop", "stop", "stop"]);
         expect(requests.filter((request) => request.path === "/v1/oauth/token")).toHaveLength(1);
-        const messageRequests = requests.filter((request) => request.path === "/v1/messages");
-        expect(messageRequests).toHaveLength(3);
-        for (const request of messageRequests) {
-          expect(request.authorization).toBe("Bearer federated-token");
-        }
+        expect(
+          requests.filter((request) => request.path === "/v1/messages").map((r) => r.authorization),
+        ).toEqual(Array.from({ length: 3 }, () => "Bearer federated-token"));
       }),
-    ));
+    ),
+  );
 
-  it("does not run the SDK credential chain for header-owned auth", () =>
-    Effect.runPromise(
+const skipsCredentialChainForHeaderAuth = () =>
+  runtime.runPromise(
+    Effect.scoped(
       Effect.gen(function* () {
-        for (const [name, value] of Object.entries(federationEnv)) vi.stubEnv(name, value);
+        for (const [name, value] of Object.entries(yield* federationEnv)) vi.stubEnv(name, value);
         const requests: RecordedRequest[] = [];
-
         const message = yield* Effect.promise(() =>
           streamAnthropic(anthropicModel, context, {
+            fetch: recordingFetch(requests),
             headers: { Authorization: "Bearer auth-token" },
-            fetch: createFetch(requests),
           }).result(),
         );
-
         expect(message.stopReason).toBe("stop");
-        expect(requests).toEqual([{ path: "/v1/messages", authorization: "Bearer auth-token" }]);
+        expect(requests).toEqual([{ authorization: "Bearer auth-token", path: "/v1/messages" }]);
       }),
-    ));
+    ),
+  );
+
+describe("Anthropic workload identity federation with the SDK", () => {
+  afterEach(() => {
+    vi.unstubAllEnvs();
+  });
+
+  it("exchanges the identity token once across requests", exchangesIdentityTokenOnce);
+  it(
+    "does not run the SDK credential chain for header-owned auth",
+    skipsCredentialChainForHeaderAuth,
+  );
 });

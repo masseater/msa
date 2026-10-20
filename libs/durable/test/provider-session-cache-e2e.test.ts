@@ -7,16 +7,17 @@ import {
   type EntryId,
   ProviderDoc,
 } from "@msa/durable";
-import { createRegistry, Harness } from "@msa/durable/harness";
+import { Harness, createRegistry } from "@msa/durable/harness";
 import { MemoryStorage } from "@msa/durable/storage/memory";
 import { Effect } from "effect";
-import { describe, expect, it } from "vite-plus/test";
+import { describe, expect, inject, it } from "vite-plus/test";
 
 import { streamSimple as streamSimpleOpenAICodexResponses } from "../../ai/src/api/openai-codex-responses.ts";
-import { resolveApiKey } from "../../ai/test/oauth.ts";
-import { awaited, context } from "./support.ts";
+import support from "./support.ts";
 
-const codexToken = await resolveApiKey("openai-codex");
+const { awaited, context } = support;
+
+const codexToken = inject("storedApiKeys")["openai-codex"];
 
 function cacheProbe(nonce: string): string {
   const lines = [
@@ -51,7 +52,7 @@ const promptUntilCached = Effect.fn("promptUntilCached")(function* (
     const content =
       turn === 0 ? cacheProbe(uuidv7()) : `Reply exactly: CACHE PROBE FOLLOW-UP ${turn}`;
     const settled = yield* awaited(
-      (yield* awaited(root.submit({ type: "input", content }, context))).wait(context),
+      (yield* awaited(root.submit({ content, type: "input" }, context))).wait(context),
     );
     if (settled.status !== "done" || settled.type !== "input") {
       throw new Error(`Unexpected submission status: ${settled.status}`);
@@ -63,7 +64,7 @@ const promptUntilCached = Effect.fn("promptUntilCached")(function* (
       hits.firstHit = usages.length - 1;
     if (hits.firstHit !== undefined && usages.length - hits.firstHit >= 3) break;
   }
-  return { usages, firstHit: hits.firstHit };
+  return { firstHit: hits.firstHit, usages };
 });
 
 function cacheHitRate(usage: AssistantMessage["usage"]): number {
@@ -116,8 +117,8 @@ describe("Durable provider session cache e2e", () => {
                 models,
                 registry: createRegistry(),
                 settings: {
-                  stream: { transport: "sse" },
                   compaction: { enabled: false },
+                  stream: { transport: "sse" },
                 },
               },
               context,
@@ -126,7 +127,7 @@ describe("Durable provider session cache e2e", () => {
           yield* Effect.gen(function* () {
             const root = yield* awaited(
               harness.root(context, {
-                agent: { model: { provider: "openai-codex", modelId: "gpt-5.5" } },
+                agent: { model: { modelId: "gpt-5.5", provider: "openai-codex" } },
               }),
             );
             harness.resume();

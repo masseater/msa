@@ -11,8 +11,8 @@ const echoToolSchema = Type.Object({
 });
 
 const echoTool: Tool<typeof echoToolSchema> = {
-  name: "echo_value",
   description: "Echo a string value",
+  name: "echo_value",
   parameters: echoToolSchema,
 };
 
@@ -32,10 +32,10 @@ function getAnthropicMessagesModels(provider: BuiltinProvider): Model<"anthropic
 
 const anthropicMessagesCases: AnthropicEagerE2ECase[] = getProviders().flatMap((provider) =>
   getAnthropicMessagesModels(provider).map((model) => ({
+    apiKey: getEnvApiKey(provider),
+    model,
     name: `${provider}/${model.id}`,
     provider,
-    model,
-    apiKey: getEnvApiKey(provider),
   })),
 );
 
@@ -107,14 +107,14 @@ const expectToolEnabledRequestAccepted = Effect.fn("expectToolEnabledRequestAcce
     complete(
       model,
       {
-        systemPrompt: "You are a concise assistant. Use tools when useful.",
         messages: [
           {
-            role: "user",
             content: "Call echo_value with value set to eager-input-streaming-compat.",
+            role: "user",
             timestamp: currentTime,
           },
         ],
+        systemPrompt: "You are a concise assistant. Use tools when useful.",
         tools: [echoTool],
       },
       options,

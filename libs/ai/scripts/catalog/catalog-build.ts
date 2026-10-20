@@ -1,5 +1,4 @@
 import type {
-  AnyModel,
   Api,
   ClassifierApi,
   ClassifierModel,
@@ -7,8 +6,10 @@ import type {
   ImageModel,
   Model,
 } from "../../src/types.ts";
-import type { ModelCatalogEntry } from "../model-data.ts";
-import { applyImageInputMetadata } from "./model-metadata.ts";
+import type catalogBuildTypes from "./catalog-build.types.ts";
+import modelMetadata from "./model-metadata.ts";
+
+const { applyImageInputMetadata } = modelMetadata;
 
 interface ProviderCatalog {
   chat: Record<string, Model<Api>>;
@@ -16,32 +17,10 @@ interface ProviderCatalog {
   classifier: Record<string, ClassifierModel<ClassifierApi>>;
 }
 
-export type CatalogEntry = AnyModel & ModelCatalogEntry;
-
-export interface CatalogSources {
-  readonly chat: readonly Model<any>[];
-  readonly images: readonly ImageModel<ImageApi>[];
-  readonly classifiers: readonly ClassifierModel<ClassifierApi>[];
-}
-
-export interface ProviderCounts {
-  readonly provider: string;
-  readonly chat: number;
-  readonly image: number;
-  readonly classifier: number;
-}
-
-export interface BuiltCatalog {
-  readonly providerIds: readonly string[];
-  readonly chatProviders: Readonly<Record<string, Record<string, Model<Api>>>>;
-  readonly allProviders: Readonly<Record<string, CatalogEntry[]>>;
-  readonly counts: readonly ProviderCounts[];
-}
-
-function collectProviders({ chat, images, classifiers }: CatalogSources) {
+function collectProviders({ chat, images, classifiers }: catalogBuildTypes.CatalogSources) {
   const providers: Record<string, ProviderCatalog> = {};
   const providerCatalog = (provider: string): ProviderCatalog =>
-    (providers[provider] ??= { chat: {}, image: {}, classifier: {} });
+    (providers[provider] ??= { chat: {}, classifier: {}, image: {} });
   for (const model of chat) {
     providerCatalog(model.provider).chat[model.id] ??= { ...model, type: "chat" };
   }
@@ -61,13 +40,13 @@ function sortedById<T>(record: Record<string, T>): Record<string, T> {
   );
 }
 
-export function buildCatalog(sources: CatalogSources): BuiltCatalog {
+function buildCatalog(sources: catalogBuildTypes.CatalogSources): catalogBuildTypes.BuiltCatalog {
   const providers = collectProviders(sources);
   const sortedProviders = Object.entries(providers).sort(([left], [right]) =>
     left < right ? -1 : left > right ? 1 : 0,
   );
   const chatProviders: Record<string, Record<string, Model<Api>>> = {};
-  const allProviders: Record<string, CatalogEntry[]> = {};
+  const allProviders: Record<string, catalogBuildTypes.CatalogEntry[]> = {};
   for (const [providerId, catalog] of sortedProviders) {
     const chat = sortedById(catalog.chat);
     chatProviders[providerId] = chat;
@@ -75,17 +54,19 @@ export function buildCatalog(sources: CatalogSources): BuiltCatalog {
       ...Object.values(chat),
       ...Object.values(sortedById(catalog.image)),
       ...Object.values(sortedById(catalog.classifier)),
-    ] as CatalogEntry[];
+    ] as catalogBuildTypes.CatalogEntry[];
   }
   return {
-    providerIds: sortedProviders.map(([providerId]) => providerId),
-    chatProviders,
     allProviders,
+    chatProviders,
     counts: Object.entries(providers).map(([provider, models]) => ({
-      provider,
       chat: Object.keys(models.chat).length,
-      image: Object.keys(models.image).length,
       classifier: Object.keys(models.classifier).length,
+      image: Object.keys(models.image).length,
+      provider,
     })),
+    providerIds: sortedProviders.map(([providerId]) => providerId),
   };
 }
+
+export default buildCatalog;

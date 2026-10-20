@@ -4,7 +4,9 @@ import { describe, expect, it } from "vite-plus/test";
 import { complete } from "../src/compat.ts";
 import { MODELS } from "../src/models.generated.ts";
 import type { Model } from "../src/types.ts";
-import { envValue } from "./env.ts";
+import env from "./env.ts";
+
+const { envValue } = env;
 
 describe.skipIf(envValue("OPENCODE_API_KEY") === undefined || envValue("OPENCODE_API_KEY") === "")(
   "OpenCode Models Smoke Test",
@@ -25,7 +27,7 @@ describe.skipIf(envValue("OPENCODE_API_KEY") === undefined || envValue("OPENCODE
                 const currentTime = yield* Clock.currentTimeMillis;
                 const response = yield* Effect.promise(() =>
                   complete(model as Model<any>, {
-                    messages: [{ role: "user", content: "Say hello.", timestamp: currentTime }],
+                    messages: [{ content: "Say hello.", role: "user", timestamp: currentTime }],
                   }),
                 );
 

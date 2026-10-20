@@ -1,22 +1,18 @@
 import { Console, Effect } from "effect";
 
-import { ScriptFiles } from "../script-files.ts";
-import type { BuiltCatalog } from "./catalog-build.ts";
+import scriptFiles from "../script-files.ts";
+import type catalogJsonOutputTypes from "./catalog-json-output.types.ts";
 
-export interface JsonCatalogOutput {
-  readonly outputDir: string;
-  readonly catalog: BuiltCatalog;
-  readonly serialize: (value: unknown) => Effect.Effect<string>;
-}
+const { ScriptFiles } = scriptFiles;
 
-export const writeJsonCatalog = Effect.fn("writeJsonCatalog")(function* ({
+const writeJsonCatalog = Effect.fn("writeJsonCatalog")(function* ({
   outputDir,
   catalog,
   serialize,
-}: JsonCatalogOutput) {
+}: catalogJsonOutputTypes.JsonCatalogOutput) {
   const files = yield* ScriptFiles;
   const writeJson = (path: string, value: unknown) =>
-    Effect.flatMap(serialize(value), (content) => files.writeText({ path, content }));
+    Effect.flatMap(serialize(value), (content) => files.writeText({ content, path }));
   const providerOutputDir = files.join(outputDir, "providers");
   yield* files.remove(outputDir);
   yield* files.makeDirectory(providerOutputDir);
@@ -35,3 +31,5 @@ export const writeJsonCatalog = Effect.fn("writeJsonCatalog")(function* ({
   }
   yield* Console.log(`Generated JSON model catalog under ${outputDir}`);
 });
+
+export default writeJsonCatalog;

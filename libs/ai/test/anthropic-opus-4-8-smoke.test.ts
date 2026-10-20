@@ -4,7 +4,9 @@ import { describe, expect, it } from "vite-plus/test";
 import { getModel, streamSimple } from "../src/compat.ts";
 import type { Context } from "../src/types.ts";
 import { currentTimeMillis } from "../src/utils/clock.ts";
-import { envValue } from "./env.ts";
+import env from "./env.ts";
+
+const { envValue } = env;
 
 interface AnthropicThinkingPayload {
   thinking?: { type: string };
@@ -13,15 +15,15 @@ interface AnthropicThinkingPayload {
 
 function makeContext(): Context {
   return {
-    systemPrompt: "You are a precise assistant. Follow the user's instructions exactly.",
     messages: [
       {
-        role: "user",
         content:
           "Compute 48291 * 7317 and 90844 - 17729, add the results, and determine whether the sum is divisible by 11. Reply with exactly this format and nothing else: sum=<sum>; divisibleBy11=<yes|no>",
+        role: "user",
         timestamp: currentTimeMillis(),
       },
     ],
+    systemPrompt: "You are a precise assistant. Follow the user's instructions exactly.",
   };
 }
 
@@ -31,48 +33,7 @@ describe.skipIf(
   it("streams Claude Opus 4.8 with reasoning enabled", { retry: 2, timeout: 30000 }, () =>
     Effect.runPromise(
       Effect.gen(function* () {
-        const model = getModel("anthropic-api", "claude-opus-4-8");
-        let capturedPayload: AnthropicThinkingPayload | undefined;
-        const s = streamSimple(model, makeContext(), {
-          reasoning: "high",
-          maxTokens: 1024,
-          onPayload: (payload) => {
-            capturedPayload = payload as AnthropicThinkingPayload;
-            return payload;
-          },
-        });
-
-        let sawThinking = false;
-
-        yield* Stream.fromAsyncIterable(s, (error) => error).pipe(
-          Stream.orDie,
-          Stream.runForEach((event) =>
-            Effect.sync(() => {
-              if (
-                event.type === "thinking_start" ||
-                event.type === "thinking_delta" ||
-                event.type === "thinking_end"
-              ) {
-                sawThinking = true;
-              }
-            }),
-          ),
-        );
-
-        const response = yield* Effect.promise(() => s.result());
-        expect(response.stopReason, response.errorMessage).toBe("stop");
-        expect(response.errorMessage).toBeFalsy();
-        expect(capturedPayload?.thinking).toEqual({ type: "adaptive" });
-        expect(capturedPayload?.output_config).toEqual({ effort: "high" });
-        expect(sawThinking).toBe(true);
-
-        const thinkingBlock = response.content.find((block) => block.type === "thinking");
-        expect(thinkingBlock?.type).toBe("thinking");
-        if (thinkingBlock === undefined || thinkingBlock.type !== "thinking") {
-          throw new Error("Expected thinking block from Claude Opus 4.8");
-        }
-        expect(typeof thinkingBlock.thinkingSignature).toBe("string");
-        const thinkingSignature = thinkingBlock.thinkingSignature;
+        const { thinkingSignature, response } = yield* streamsClaudeOpus4Step1();
         if (thinkingSignature === undefined || thinkingSignature === "") {
           throw new Error("Expected thinking signature from Claude Opus 4.8");
         }
@@ -88,3 +49,50 @@ describe.skipIf(
     ),
   );
 });
+
+const streamsClaudeOpus4Step1 = () =>
+  Effect.gen(function* () {
+    const model = getModel("anthropic-api", "claude-opus-4-8");
+    let capturedPayload: AnthropicThinkingPayload | undefined;
+    const s = streamSimple(model, makeContext(), {
+      maxTokens: 1024,
+      onPayload: (payload) => {
+        capturedPayload = payload as AnthropicThinkingPayload;
+        return payload;
+      },
+      reasoning: "high",
+    });
+
+    let sawThinking = false;
+
+    yield* Stream.fromAsyncIterable(s, (error) => error).pipe(
+      Stream.orDie,
+      Stream.runForEach((event) =>
+        Effect.sync(() => {
+          if (
+            event.type === "thinking_start" ||
+            event.type === "thinking_delta" ||
+            event.type === "thinking_end"
+          ) {
+            sawThinking = true;
+          }
+        }),
+      ),
+    );
+
+    const response = yield* Effect.promise(() => s.result());
+    expect(response.stopReason, response.errorMessage).toBe("stop");
+    expect(response.errorMessage).toBeFalsy();
+    expect(capturedPayload?.thinking).toEqual({ type: "adaptive" });
+    expect(capturedPayload?.output_config).toEqual({ effort: "high" });
+    expect(sawThinking).toBe(true);
+
+    const thinkingBlock = response.content.find((block) => block.type === "thinking");
+    expect(thinkingBlock?.type).toBe("thinking");
+    if (thinkingBlock === undefined || thinkingBlock.type !== "thinking") {
+      throw new Error("Expected thinking block from Claude Opus 4.8");
+    }
+    expect(typeof thinkingBlock.thinkingSignature).toBe("string");
+    const thinkingSignature = thinkingBlock.thinkingSignature;
+    return { response, thinkingSignature };
+  });

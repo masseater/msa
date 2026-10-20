@@ -1,13 +1,16 @@
 import type { Model, OpenAICompletionsCompat } from "../../src/types.ts";
-import {
-  applyAnthropicAllowedFallbackModelMetadata,
-  isAnthropicFallbackMetadataModel,
-} from "./anthropic-metadata.ts";
-import { applyCatalogOverrides } from "./catalog-overrides.ts";
-import { modelMetadata } from "./model-metadata.ts";
-import type { ReasoningOptionsRegistry } from "./models-dev.ts";
-import { FALLBACK_MODELS } from "./static-models.ts";
-import { CODEX_MODELS, MISSING_OPENAI_MODELS } from "./static-openai-models.ts";
+import anthropicMetadata from "./anthropic-metadata.ts";
+import type catalogAssemblyTypes from "./catalog-assembly.types.ts";
+import applyCatalogOverrides from "./catalog-overrides.ts";
+import modelMetadataModule from "./model-metadata.ts";
+import staticModels from "./static-models.ts";
+import staticOpenaiModels from "./static-openai-models.ts";
+
+const { applyAnthropicAllowedFallbackModelMetadata, isAnthropicFallbackMetadataModel } =
+  anthropicMetadata;
+const { modelMetadata } = modelMetadataModule;
+const { FALLBACK_MODELS } = staticModels;
+const { CODEX_MODELS, MISSING_OPENAI_MODELS } = staticOpenaiModels;
 
 const DEEPSEEK_COMPAT = {
   requiresReasoningContentOnAssistantMessages: true,
@@ -42,12 +45,10 @@ function applyDeepSeekCompat(candidate: Model<any>): void {
   };
 }
 
-export interface CatalogAssembly {
-  readonly upstream: readonly Model<any>[];
-  readonly reasoning: ReasoningOptionsRegistry;
-}
-
-export function assembleChatModels({ upstream, reasoning }: CatalogAssembly): Model<any>[] {
+function assembleChatModels({
+  upstream,
+  reasoning,
+}: catalogAssemblyTypes.CatalogAssembly): Model<any>[] {
   const models = upstream.filter(isCatalogedModel);
   for (const candidate of models) applyCatalogOverrides(candidate);
   addMissing(models, MISSING_OPENAI_MODELS);
@@ -59,3 +60,5 @@ export function assembleChatModels({ upstream, reasoning }: CatalogAssembly): Mo
   applyAnthropicAllowedFallbackModelMetadata(models.filter(isAnthropicFallbackMetadataModel));
   return models;
 }
+
+export default assembleChatModels;

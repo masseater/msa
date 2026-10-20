@@ -1,4 +1,4 @@
-import { Clock, Effect } from "effect";
+import { Clock, Effect, Stream } from "effect";
 import { beforeEach, describe, expect, it, vi } from "vite-plus/test";
 
 import { streamSimple } from "../src/compat.ts";
@@ -15,16 +15,22 @@ vi.mock("openai", () => {
         create: (params: unknown) => {
           mockState.lastParams = params;
           const stream = {
-            async *[Symbol.asyncIterator]() {
-              yield {
-                choices: [{ delta: {}, finish_reason: "stop" }],
-                usage: {
-                  prompt_tokens: 1,
-                  completion_tokens: 1,
-                  prompt_tokens_details: { cached_tokens: 0 },
-                  completion_tokens_details: { reasoning_tokens: 0 },
-                },
-              };
+            [Symbol.asyncIterator]() {
+              return Stream.toAsyncIterable(
+                Stream.fromIterable(
+                  (function* () {
+                    yield {
+                      choices: [{ delta: {}, finish_reason: "stop" }],
+                      usage: {
+                        completion_tokens: 1,
+                        completion_tokens_details: { reasoning_tokens: 0 },
+                        prompt_tokens: 1,
+                        prompt_tokens_details: { cached_tokens: 0 },
+                      },
+                    };
+                  })(),
+                ),
+              )[Symbol.asyncIterator]();
             },
           };
           const promise = Promise.resolve(stream) as Promise<typeof stream> & {
@@ -36,7 +42,7 @@ vi.mock("openai", () => {
           promise.withResponse = () =>
             Promise.resolve({
               data: stream,
-              response: { status: 200, headers: new Headers() },
+              response: { headers: new Headers(), status: 200 },
             });
           return promise;
         },
@@ -57,22 +63,22 @@ type CapturedParams = {
 
 function vllmModel(
   compat: Model<"openai-completions">["compat"] = {
-    thinkingFormat: "qwen",
     supportsThinkingTokenBudget: true,
+    thinkingFormat: "qwen",
   },
 ): Model<"openai-completions"> {
   return {
-    id: "Qwen/Qwen3.6-27B",
-    name: "Qwen 3.6 27B (local vLLM)",
     api: "openai-completions",
-    provider: "local-vllm",
     baseUrl: "http://localhost:8000/v1",
-    reasoning: true,
-    input: ["text"],
-    cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0 },
-    contextWindow: 262144,
-    maxTokens: 16384,
     compat,
+    contextWindow: 262144,
+    cost: { cacheRead: 0, cacheWrite: 0, input: 0, output: 0 },
+    id: "Qwen/Qwen3.6-27B",
+    input: ["text"],
+    maxTokens: 16384,
+    name: "Qwen 3.6 27B (local vLLM)",
+    provider: "local-vllm",
+    reasoning: true,
   };
 }
 
@@ -90,15 +96,15 @@ const capture = Effect.fn("capture")(function* (
   yield* Effect.promise(() =>
     streamSimple(
       model,
-      { messages: [{ role: "user", content: "Hi", timestamp: currentTime }] },
+      { messages: [{ content: "Hi", role: "user", timestamp: currentTime }] },
       {
         apiKey: "test",
-        reasoning: options?.reasoning,
-        thinkingBudgets: options?.thinkingBudgets,
         maxTokens: options?.maxTokens,
         onPayload: (params: unknown) => {
           payload = params;
         },
+        reasoning: options?.reasoning,
+        thinkingBudgets: options?.thinkingBudgets,
       },
     ).result(),
   );
@@ -178,9 +184,9 @@ describe("openai-completions thinking token budget", () => {
     Effect.runPromise(
       Effect.gen(function* () {
         const params = yield* capture(vllmModel(), {
+          maxTokens: 4096,
           reasoning: "high",
           thinkingBudgets: { high: 8192 },
-          maxTokens: 4096,
         });
         expect(params.thinking_token_budget).toBe(4096 - 1024);
       }),
@@ -214,8 +220,8 @@ describe("openai-completions thinking token budget", () => {
       Effect.gen(function* () {
         const params = yield* capture(
           vllmModel({
-            thinkingFormat: "qwen",
             supportsThinkingTokenBudget: true,
+            thinkingFormat: "qwen",
             thinkingTokenBudgetField: "thinking_budget",
           }),
           { reasoning: "medium", thinkingBudgets: { medium: 4096 } },
@@ -235,11 +241,11 @@ describe("openai-completions thinking token budget", () => {
       Effect.gen(function* () {
         const params = yield* capture(
           vllmModel({
-            thinkingFormat: "chat-template",
             chatTemplateKwargs: {
               enable_thinking: { $var: "thinking.enabled" },
               thinking_budget: { $var: "thinking.budget" },
             },
+            thinkingFormat: "chat-template",
           }),
           { reasoning: "high" },
         );
@@ -256,11 +262,11 @@ describe("openai-completions thinking token budget", () => {
       Effect.gen(function* () {
         const params = yield* capture(
           vllmModel({
-            thinkingFormat: "chat-template",
             chatTemplateKwargs: {
               enable_thinking: { $var: "thinking.enabled" },
               thinking_budget: { $var: "thinking.budget" },
             },
+            thinkingFormat: "chat-template",
           }),
           { reasoning: undefined },
         );

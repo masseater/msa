@@ -3,13 +3,16 @@ import { expect, it } from "vite-plus/test";
 
 import { waitForCallbackOrManualInput } from "../src/auth/oauth/callback-server.ts";
 import type { AuthPrompt, ProviderAuthInteraction } from "../src/auth/types.ts";
-import { expectDefect } from "./effect-assert.ts";
-import { callbackUrl, request, start } from "./oauth-callback.ts";
+import effectAssert from "./effect-assert.ts";
+import oauthCallback from "./oauth-callback.ts";
+
+const { expectDefect } = effectAssert;
+const { callbackUrl, request, start } = oauthCallback;
 
 const interaction = (prompt: (prompt: AuthPrompt) => Promise<string>): ProviderAuthInteraction => ({
-  signal: new AbortController().signal,
   notify: () => {},
   prompt,
+  signal: new AbortController().signal,
 });
 
 const pendingPrompt =
@@ -27,7 +30,7 @@ const pendingPrompt =
     );
   };
 
-const startPlain = () => start({ state: undefined, complete: (code) => Effect.succeed(code) });
+const startPlain = () => start({ complete: (code) => Effect.succeed(code), state: undefined });
 
 it("returns the browser callback and aborts the manual prompt", () =>
   Effect.runPromise(
@@ -37,12 +40,12 @@ it("returns the browser callback and aborts the manual prompt", () =>
         const server = yield* startPlain();
         const result = yield* Effect.forkChild(
           waitForCallbackOrManualInput({
+            callback: server,
             interaction: interaction(
               pendingPrompt((prompt) => {
                 Deferred.doneUnsafe(prompted, Effect.succeed(prompt.signal));
               }),
             ),
-            callback: server,
             message: "paste",
             placeholder: server.redirectUri,
           }),
@@ -61,12 +64,12 @@ it("returns pasted input and stops waiting for the browser", () =>
       Effect.gen(function* () {
         const server = yield* startPlain();
         const result = yield* waitForCallbackOrManualInput({
-          interaction: interaction(() => Promise.resolve("pasted")),
           callback: server,
+          interaction: interaction(() => Promise.resolve("pasted")),
           message: "paste",
           placeholder: server.redirectUri,
         });
-        expect(result).toEqual({ type: "manual", input: "pasted" });
+        expect(result).toEqual({ input: "pasted", type: "manual" });
       }),
     ),
   ));
@@ -75,12 +78,12 @@ it("uses only the manual prompt without a callback server", () =>
   Effect.runPromise(
     Effect.gen(function* () {
       const result = yield* waitForCallbackOrManualInput({
-        interaction: interaction(() => Promise.resolve("pasted")),
         callback: undefined,
+        interaction: interaction(() => Promise.resolve("pasted")),
         message: "paste",
         placeholder: "http://localhost/callback",
       });
-      expect(result).toEqual({ type: "manual", input: "pasted" });
+      expect(result).toEqual({ input: "pasted", type: "manual" });
     }),
   ));
 
@@ -91,8 +94,8 @@ it("propagates manual prompt failures", () =>
         const server = yield* startPlain();
         yield* expectDefect(
           waitForCallbackOrManualInput({
-            interaction: interaction(() => Promise.reject(new Error("prompt cancelled"))),
             callback: server,
+            interaction: interaction(() => Promise.reject(new Error("prompt cancelled"))),
             message: "paste",
             placeholder: server.redirectUri,
           }),

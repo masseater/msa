@@ -1,30 +1,28 @@
 import { Effect, ManagedRuntime } from "effect";
 
 import { decodeJson, encodeJson } from "../src/utils/json-codec.ts";
-import { isRecord } from "./model-data-checks.ts";
-import {
+import type hydrateModelCatalogTypes from "./hydrate-model-catalog.types.ts";
+import modelDataChecks from "./model-data-checks.ts";
+import modelData from "./model-data.ts";
+import type modelDataTypes from "./model-data.types.ts";
+import scriptFiles from "./script-files.ts";
+
+const { isRecord } = modelDataChecks;
+const {
+  MODEL_DATA_MANIFEST_FILE,
+  ModelDataError,
   createModelDataManifest,
   groupProviderModelData,
-  ModelDataError,
-  MODEL_DATA_MANIFEST_FILE,
-  type ModelCatalogEntry,
-  type ModelDataStructure,
   readModelDataProviderIds,
   validateModelDataDirectory,
-} from "./model-data.ts";
-import { ScriptFiles, scriptFilesLayer } from "./script-files.ts";
+} = modelData;
+const { ScriptFiles, scriptFilesLayer } = scriptFiles;
 
-type CatalogEntry = ModelCatalogEntry & Record<string, unknown>;
-
-export interface HydrateModelCatalogRequest {
-  readonly packageRoot: string;
-  readonly catalogPath: string;
-  readonly validateOnly?: boolean | undefined;
-}
+type CatalogEntry = modelDataTypes.ModelCatalogEntry & Record<string, unknown>;
 
 interface HydratedCatalog {
   readonly files: Readonly<Record<string, string>>;
-  readonly structure: ModelDataStructure;
+  readonly structure: modelDataTypes.ModelDataStructure;
 }
 
 const fail = (message: string) => Effect.fail(new ModelDataError({ message }));
@@ -67,7 +65,7 @@ const groupCatalog = Effect.fn("groupCatalog")(function* (
   catalog: Record<string, unknown>,
 ) {
   const files: Record<string, string> = {};
-  const structure: ModelDataStructure = {};
+  const structure: modelDataTypes.ModelDataStructure = {};
   for (const provider of yield* readModelDataProviderIds(packageRoot)) {
     const grouped = yield* groupProviderModelData(
       provider,
@@ -86,20 +84,20 @@ const stageCatalog = Effect.fn("stageCatalog")(function* (
   const files = yield* ScriptFiles;
   yield* files.makeDirectory(stagedData);
   for (const [name, content] of Object.entries(contents))
-    yield* files.writeText({ path: files.join(stagedData, name), content });
+    yield* files.writeText({ content, path: files.join(stagedData, name) });
   const manifest = yield* createModelDataManifest(structure, contents, "1970-01-01T00:00:00.000Z");
   yield* files.writeText({
-    path: files.join(stagedData, MODEL_DATA_MANIFEST_FILE),
     content: `${yield* encodeJson(manifest)}\n`,
+    path: files.join(stagedData, MODEL_DATA_MANIFEST_FILE),
   });
   yield* validateModelDataDirectory(structure, stagedData);
 });
 
-export const hydrateModelCatalog = Effect.fn("hydrateModelCatalog")(function* ({
+const hydrateModelCatalog = Effect.fn("hydrateModelCatalog")(function* ({
   packageRoot,
   catalogPath,
   validateOnly = false,
-}: HydrateModelCatalogRequest) {
+}: hydrateModelCatalogTypes.HydrateModelCatalogRequest) {
   const files = yield* ScriptFiles;
   const hydrated = yield* groupCatalog(packageRoot, yield* readCatalog(catalogPath));
   const providersDir = files.join(packageRoot, "src", "providers");
@@ -128,9 +126,11 @@ if (import.meta.main) {
     Effect.gen(function* () {
       const files = yield* ScriptFiles;
       yield* hydrateModelCatalog({
-        packageRoot: files.join(import.meta.dirname, ".."),
         catalogPath: files.resolve(catalogPath),
+        packageRoot: files.join(import.meta.dirname, ".."),
       });
     }),
   );
 }
+
+export default hydrateModelCatalog;

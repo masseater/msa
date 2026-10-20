@@ -1,59 +1,45 @@
 import { Effect, ManagedRuntime, type Scope } from "effect";
 
-import {
-  createModelDataManifest,
-  MODEL_DATA_MANIFEST_FILE,
-  MODEL_DATA_SCHEMA_VERSION,
-  type ModelDataStructure,
-} from "../scripts/model-data.ts";
-import { ScriptFiles, scriptFilesLayer } from "../scripts/script-files.ts";
+import modelData from "../scripts/model-data.ts";
+import type modelDataTypes from "../scripts/model-data.types.ts";
+import scriptFiles from "../scripts/script-files.ts";
+import type scriptFilesTypes from "../scripts/script-files.types.ts";
 import { encodeJson } from "../src/utils/json-codec.ts";
+import type modelDataFixtureTypes from "./model-data-fixture.types.ts";
 
-export const GENERATED_AT = "2026-07-23T10:00:00.000Z";
+const { MODEL_DATA_MANIFEST_FILE, MODEL_DATA_SCHEMA_VERSION, createModelDataManifest } = modelData;
+const { ScriptFiles, scriptFilesLayer } = scriptFiles;
+
+const GENERATED_AT = "2026-07-23T10:00:00.000Z";
 
 const runtime = ManagedRuntime.make(scriptFilesLayer);
 
-export const runScript = <A, E>(
-  effect: Effect.Effect<A, E, ScriptFiles | Scope.Scope>,
+const runScript = <A, E>(
+  effect: Effect.Effect<A, E, scriptFilesTypes.ScriptFiles | Scope.Scope>,
 ): Promise<A> => runtime.runPromise(Effect.scoped(effect));
 
-export const failureMessage = <A, E extends { readonly message: string }, R>(
+const failureMessage = <A, E extends { readonly message: string }, R>(
   effect: Effect.Effect<A, E, R>,
 ): Effect.Effect<string, A, R> => Effect.map(Effect.flip(effect), (error) => error.message);
 
-export interface ModelDataFixture {
-  readonly dataDir: string;
-  readonly packageRoot: string;
-  readonly structure: ModelDataStructure;
-  readonly values: Record<string, unknown>;
-}
-
-export interface FixtureData {
-  readonly dataDir: string;
-  readonly structure: ModelDataStructure;
-  readonly values: Record<string, unknown>;
-  readonly schemaVersion?: number | undefined;
-  readonly apiGroup?: string | undefined;
-}
-
-export const AGGREGATOR_SOURCE =
+const AGGREGATOR_SOURCE =
   'import { TEST_PROVIDER_CLASSIFIER_MODELS, TEST_PROVIDER_IMAGE_MODELS, TEST_PROVIDER_MODELS } from "./providers/test-provider.models.ts";\n';
 
-export const writeFile = (path: string, content: string) =>
-  ScriptFiles.use((files) => files.writeText({ path, content }));
+const writeFile = (path: string, content: string) =>
+  ScriptFiles.use((files) => files.writeText({ content, path }));
 
-export const readFile = (path: string) => ScriptFiles.use((files) => files.readText(path));
+const readFile = (path: string) => ScriptFiles.use((files) => files.readText(path));
 
-export const writeJsonFile = (path: string, value: unknown) =>
+const writeJsonFile = (path: string, value: unknown) =>
   Effect.flatMap(encodeJson(value), (content) => writeFile(path, content));
 
-export const writeFixtureData = Effect.fn("writeFixtureData")(function* ({
+const writeFixtureData = Effect.fn("writeFixtureData")(function* ({
   dataDir,
   structure,
   values,
   schemaVersion = MODEL_DATA_SCHEMA_VERSION,
   apiGroup = "openai-completions",
-}: FixtureData) {
+}: modelDataFixtureTypes.FixtureData) {
   const files = yield* ScriptFiles;
   const filename = "test-provider.json";
   const content = `${yield* encodeJson({ [apiGroup]: values })}\n`;
@@ -67,20 +53,20 @@ export const writeFixtureData = Effect.fn("writeFixtureData")(function* ({
 });
 
 const chatModelA = (): Record<string, unknown> => ({
-  type: "chat",
-  id: "model-a",
-  name: "Model A",
   api: "openai-completions",
-  provider: "test-provider",
   baseUrl: "https://example.test/v1",
-  reasoning: false,
-  input: ["text"],
-  cost: { input: 1, output: 2, cacheRead: 0, cacheWrite: 0 },
   contextWindow: 1000,
+  cost: { cacheRead: 0, cacheWrite: 0, input: 1, output: 2 },
+  id: "model-a",
+  input: ["text"],
   maxTokens: 100,
+  name: "Model A",
+  provider: "test-provider",
+  reasoning: false,
+  type: "chat",
 });
 
-export const createFixture = Effect.gen(function* () {
+const createFixture = Effect.gen(function* () {
   const files = yield* ScriptFiles;
   const packageRoot = yield* Effect.acquireRelease(
     files.makeTempDirectory({ prefix: "msa-model-data-" }),
@@ -94,16 +80,36 @@ export const createFixture = Effect.gen(function* () {
     files.join(providersDir, "test-provider.models.ts"),
     'import values from "./data/test-provider.json" with { type: "json" };\n',
   );
-  const structure: ModelDataStructure = {
+  const structure: modelDataTypes.ModelDataStructure = {
     "test-provider": { "chat:model-a": "openai-completions" },
   };
   const values: Record<string, unknown> = { "chat:model-a": chatModelA() };
   yield* writeFixtureData({ dataDir, structure, values });
-  return { dataDir, packageRoot, structure, values } satisfies ModelDataFixture;
+  return {
+    dataDir,
+    packageRoot,
+    structure,
+    values,
+  } satisfies modelDataFixtureTypes.ModelDataFixture;
 });
 
-export function chatModel(values: Record<string, unknown>): Record<string, unknown> {
+function chatModel(values: Record<string, unknown>): Record<string, unknown> {
   const model = values["chat:model-a"];
   if (typeof model !== "object" || model === null) throw new Error("fixture has no chat model");
   return model as Record<string, unknown>;
 }
+
+const modelDataFixture = {
+  AGGREGATOR_SOURCE,
+  GENERATED_AT,
+  chatModel,
+  createFixture,
+  failureMessage,
+  readFile,
+  runScript,
+  writeFile,
+  writeFixtureData,
+  writeJsonFile,
+};
+
+export default modelDataFixture;

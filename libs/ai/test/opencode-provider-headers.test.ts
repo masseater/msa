@@ -7,24 +7,24 @@ import { AssistantMessageEventStream } from "../src/utils/event-stream.ts";
 import { normalizeContext } from "../src/utils/transcript.ts";
 
 const model: Model<Api> = {
-  id: "test-model",
-  name: "Test model",
   api: "test-api",
-  provider: "opencode",
   baseUrl: "https://opencode.ai/zen/v1",
-  reasoning: false,
-  input: ["text"],
-  cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0 },
   contextWindow: 1000,
+  cost: { cacheRead: 0, cacheWrite: 0, input: 0, output: 0 },
+  id: "test-model",
+  input: ["text"],
   maxTokens: 100,
+  name: "Test model",
+  provider: "opencode",
+  reasoning: false,
 };
-const context = normalizeContext({ messages: [{ role: "user", content: "hi", timestamp: 0 }] });
+const context = normalizeContext({ messages: [{ content: "hi", role: "user", timestamp: 0 }] });
 
 function completedStream(): AssistantMessageEventStream {
   const stream = new AssistantMessageEventStream();
   const message = fauxAssistantMessage("ok");
-  stream.push({ type: "start", partial: message });
-  stream.push({ type: "done", reason: "stop", message });
+  stream.push({ partial: message, type: "start" });
+  stream.push({ message, reason: "stop", type: "done" });
   stream.end(message);
   return stream;
 }
@@ -53,7 +53,7 @@ describe("OpenCode provider headers", () => {
         }),
       );
 
-      streams[method](model, context, { sessionId: "conversation-1", cacheRetention: "none" });
+      streams[method](model, context, { cacheRetention: "none", sessionId: "conversation-1" });
 
       expect(captured?.headers).toEqual({ "x-opencode-session": "conversation-1" });
     },
@@ -61,10 +61,10 @@ describe("OpenCode provider headers", () => {
 
   it.each([
     {
-      headers: { "X-OpenCode-Session": "caller-value" },
       expected: { "X-OpenCode-Session": "caller-value" },
+      headers: { "X-OpenCode-Session": "caller-value" },
     },
-    { headers: { "X-OpenCode-Session": null }, expected: { "X-OpenCode-Session": null } },
+    { expected: { "X-OpenCode-Session": null }, headers: { "X-OpenCode-Session": null } },
   ] as const)("preserves a case-insensitive caller override", ({ headers, expected }) => {
     let captured: StreamOptions | undefined;
     const streams = withOpenCodeSessionHeader(
@@ -73,7 +73,7 @@ describe("OpenCode provider headers", () => {
       }),
     );
 
-    streams.streamSimple(model, context, { sessionId: "generated-value", headers });
+    streams.streamSimple(model, context, { headers, sessionId: "generated-value" });
 
     expect(captured?.headers).toEqual(expected);
   });

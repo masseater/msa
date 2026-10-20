@@ -31,9 +31,9 @@ describe("OAuthAuth adapters", () => {
     const provider = openaiProvider();
     expect(provider.auth.apiKey).toBeDefined();
     expect(provider.auth.oauth).toMatchObject({
-      name: "OpenAI (ChatGPT subscription)",
       isSubscription: true,
       loginLabel: "Sign in with ChatGPT",
+      name: "OpenAI (ChatGPT subscription)",
     });
   });
 });
@@ -47,10 +47,10 @@ describe("OAuthAuth adapters", () => {
       Effect.gen(function* () {
         const auth = yield* Effect.promise(() =>
           openaiCodexOAuth.toAuth({
-            type: "oauth",
             access: "token",
-            refresh: "r",
             expires: 0,
+            refresh: "r",
+            type: "oauth",
           }),
         );
         expect(auth).toEqual({ apiKey: "token" });
@@ -61,10 +61,10 @@ describe("OAuthAuth adapters", () => {
     Effect.runPromise(
       Effect.gen(function* () {
         const credential = {
-          type: "oauth" as const,
           access: "token",
-          refresh: "",
           expires: Number.MAX_SAFE_INTEGER,
+          refresh: "",
+          type: "oauth" as const,
         };
         expect(yield* Effect.promise(() => openRouterOAuth.toAuth(credential))).toEqual({
           apiKey: "token",
@@ -84,10 +84,10 @@ describe("OAuth through Models.getAuth (lazy load chain)", () => {
         yield* Effect.promise(() =>
           credentials.modify("openai", () =>
             Promise.resolve({
-              type: "oauth",
               access: "oauth-access-token",
-              refresh: "r",
               expires: currentTimeMillis() + 10 * 60_000,
+              refresh: "r",
+              type: "oauth",
             }),
           ),
         );

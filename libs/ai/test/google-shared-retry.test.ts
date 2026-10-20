@@ -2,7 +2,9 @@ import { Effect, Fiber } from "effect";
 import { afterEach, describe, expect, it, vi } from "vite-plus/test";
 
 import { retryGoogleRequest } from "../src/api/google-shared.ts";
-import { defectOf } from "./effect-assert.ts";
+import effectAssert from "./effect-assert.ts";
+
+const { defectOf } = effectAssert;
 
 function googleApiError(status: number): Error {
   return Object.assign(new Error(`got status: ${status}`), { status });

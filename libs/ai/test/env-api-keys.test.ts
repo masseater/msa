@@ -1,7 +1,9 @@
 import { afterEach, describe, expect, it, vi } from "vite-plus/test";
 
 import { findEnvKeys, getEnvApiKey } from "../src/env-api-keys.ts";
-import { envValue } from "./env.ts";
+import env from "./env.ts";
+
+const { envValue } = env;
 
 const originalAnthropicAuthToken = envValue("ANTHROPIC_AUTH_TOKEN");
 const originalAnthropicApiKey = envValue("ANTHROPIC_API_KEY");

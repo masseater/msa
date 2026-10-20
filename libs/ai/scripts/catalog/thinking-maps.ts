@@ -1,29 +1,27 @@
 import { Function } from "effect";
 
 import type { Model } from "../../src/types.ts";
-import {
-  getEffortThinkingLevelMap,
-  type ModelsDevReasoningOption,
-} from "../models-dev-reasoning-options.ts";
-import type { ThinkingLevelMap } from "./models-dev.ts";
+import getEffortThinkingLevelMap from "../models-dev-reasoning-options.ts";
+import type modelsDevReasoningOptionsTypes from "../models-dev-reasoning-options.types.ts";
+import type modelsDevTypes from "./models-dev.types.ts";
 
-export const DEEPSEEK_V4_THINKING_LEVEL_MAP = {
-  minimal: null,
-  low: null,
-  medium: null,
+const DEEPSEEK_V4_THINKING_LEVEL_MAP = {
   high: "high",
+  low: null,
   max: "max",
+  medium: null,
+  minimal: null,
 } as const;
 
-export const DEEPSEEK_V4_FLASH_THINKING_LEVEL_MAP = {
+const DEEPSEEK_V4_FLASH_THINKING_LEVEL_MAP = {
   ...DEEPSEEK_V4_THINKING_LEVEL_MAP,
   low: "low",
 } as const;
 
-export const mergeThinkingLevelMap: {
-  (map: ThinkingLevelMap): (model: Model<any>) => void;
-  (model: Model<any>, map: ThinkingLevelMap): void;
-} = Function.dual(2, (model: Model<any>, map: ThinkingLevelMap): void => {
+const mergeThinkingLevelMap: {
+  (map: modelsDevTypes.ThinkingLevelMap): (model: Model<any>) => void;
+  (model: Model<any>, map: modelsDevTypes.ThinkingLevelMap): void;
+} = Function.dual(2, (model: Model<any>, map: modelsDevTypes.ThinkingLevelMap): void => {
   model.thinkingLevelMap = { ...model.thinkingLevelMap, ...map };
 });
 
@@ -31,25 +29,34 @@ function isGemma4Model(modelId: string): boolean {
   return /gemma-?4/u.test(modelId.toLowerCase());
 }
 
-export const getGoogleThinkingLevelMap: {
+const getGoogleThinkingLevelMap: {
   (
-    reasoningOptions: readonly ModelsDevReasoningOption[],
-  ): (modelId: string) => ThinkingLevelMap | undefined;
+    reasoningOptions: readonly modelsDevReasoningOptionsTypes.ModelsDevReasoningOption[],
+  ): (modelId: string) => modelsDevTypes.ThinkingLevelMap | undefined;
   (
     modelId: string,
-    reasoningOptions: readonly ModelsDevReasoningOption[],
-  ): ThinkingLevelMap | undefined;
+    reasoningOptions: readonly modelsDevReasoningOptionsTypes.ModelsDevReasoningOption[],
+  ): modelsDevTypes.ThinkingLevelMap | undefined;
 } = Function.dual(
   2,
   (
     modelId: string,
-    reasoningOptions: readonly ModelsDevReasoningOption[],
-  ): ThinkingLevelMap | undefined => {
+    reasoningOptions: readonly modelsDevReasoningOptionsTypes.ModelsDevReasoningOption[],
+  ): modelsDevTypes.ThinkingLevelMap | undefined => {
     const effortMap = getEffortThinkingLevelMap(reasoningOptions);
     if (effortMap !== undefined) return effortMap;
     if (isGemma4Model(modelId)) {
-      return { off: null, minimal: "MINIMAL", low: null, medium: null, high: "HIGH" };
+      return { high: "HIGH", low: null, medium: null, minimal: "MINIMAL", off: null };
     }
     return undefined;
   },
 );
+
+const thinkingMaps = {
+  DEEPSEEK_V4_FLASH_THINKING_LEVEL_MAP,
+  DEEPSEEK_V4_THINKING_LEVEL_MAP,
+  getGoogleThinkingLevelMap,
+  mergeThinkingLevelMap,
+};
+
+export default thinkingMaps;

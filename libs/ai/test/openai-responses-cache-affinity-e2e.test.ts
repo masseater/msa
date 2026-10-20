@@ -3,7 +3,9 @@ import { describe, expect, it } from "vite-plus/test";
 
 import { complete, getModel } from "../src/compat.ts";
 import type { Context } from "../src/types.ts";
-import { envValue } from "./env.ts";
+import env from "./env.ts";
+
+const { envValue } = env;
 
 describe.skipIf(envValue("OPENAI_API_KEY") === undefined || envValue("OPENAI_API_KEY") === "")(
   "openai responses cache affinity e2e",
@@ -17,14 +19,14 @@ describe.skipIf(envValue("OPENAI_API_KEY") === undefined || envValue("OPENAI_API
             const model = getModel("openai", "gpt-5.4");
             const sessionId = "0195d6e4-4cf9-7f44-a2d8-f8f7f49ee9d3";
             const context: Context = {
-              systemPrompt: "You are a helpful assistant. Reply exactly as requested.",
               messages: [
                 {
-                  role: "user",
                   content: "Reply with exactly: openai cache affinity e2e success",
+                  role: "user",
                   timestamp: yield* Clock.currentTimeMillis,
                 },
               ],
+              systemPrompt: "You are a helpful assistant. Reply exactly as requested.",
             };
 
             const response = yield* Effect.promise(() =>

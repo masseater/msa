@@ -1,43 +1,32 @@
 import type { Api, Model, OpenAICompletionsCompat } from "../../src/types.ts";
+import type openaiCompletionsCompatTypes from "./openai-completions-compat.types.ts";
 
-export type OpenAICompletionsResolvedCompat = Required<
-  Omit<
-    OpenAICompletionsCompat,
-    | "cacheControlFormat"
-    | "sessionAffinityFormat"
-    | "supportsThinkingTokenBudget"
-    | "thinkingTokenBudgetField"
-    | "vllmPriority"
-  >
-> & {
-  cacheControlFormat?: OpenAICompletionsCompat["cacheControlFormat"];
-};
+const OPENAI_COMPLETIONS_DEFAULT_COMPAT: openaiCompletionsCompatTypes.OpenAICompletionsResolvedCompat =
+  {
+    chatTemplateKwargs: {},
+    maxTokensField: "max_completion_tokens",
+    openRouterRouting: {},
+    requiresAssistantAfterToolResult: false,
+    requiresReasoningContentOnAssistantMessages: false,
+    requiresThinkingAsText: false,
+    requiresToolResultName: false,
+    sendSessionAffinityHeaders: false,
+    supportsDeveloperRole: true,
+    supportsFinishReason: true,
+    supportsLongCacheRetention: true,
+    supportsMidConvoSystemMessages: false,
+    supportsMidConvoToolAdditions: false,
+    supportsOpenAIGrammarTools: false,
+    supportsReasoningEffort: true,
+    supportsStore: true,
+    supportsStrictMode: false,
+    supportsUsageInStreaming: true,
+    thinkingFormat: "openai",
+  };
 
-const OPENAI_COMPLETIONS_DEFAULT_COMPAT: OpenAICompletionsResolvedCompat = {
-  supportsStore: true,
-  supportsDeveloperRole: true,
-  supportsReasoningEffort: true,
-  supportsUsageInStreaming: true,
-  supportsFinishReason: true,
-  maxTokensField: "max_completion_tokens",
-  requiresToolResultName: false,
-  requiresAssistantAfterToolResult: false,
-  requiresThinkingAsText: false,
-  requiresReasoningContentOnAssistantMessages: false,
-  thinkingFormat: "openai",
-  openRouterRouting: {},
-  chatTemplateKwargs: {},
-  supportsStrictMode: false,
-  supportsOpenAIGrammarTools: false,
-  supportsMidConvoSystemMessages: false,
-  supportsMidConvoToolAdditions: false,
-  sendSessionAffinityHeaders: false,
-  supportsLongCacheRetention: true,
-};
-
-export function detectOpenAICompletionsCompat(
+function detectOpenAICompletionsCompat(
   model: Model<"openai-completions">,
-): OpenAICompletionsResolvedCompat {
+): openaiCompletionsCompatTypes.OpenAICompletionsResolvedCompat {
   const { provider, baseUrl } = model;
   const isOpenRouter = provider === "openrouter" || baseUrl.includes("openrouter.ai");
   const isChutes = baseUrl.includes("chutes.ai");
@@ -48,11 +37,11 @@ export function detectOpenAICompletionsCompat(
     provider === "openrouter" && /^~?anthropic\//u.test(model.id) ? "anthropic" : undefined;
   return {
     ...OPENAI_COMPLETIONS_DEFAULT_COMPAT,
-    supportsStore: !isNonStandard,
-    supportsDeveloperRole: isOpenRouterDeveloperRoleModel || (!isNonStandard && !isOpenRouter),
     maxTokensField: isChutes ? "max_tokens" : "max_completion_tokens",
-    thinkingFormat: isOpenRouter ? "openrouter" : "openai",
+    supportsDeveloperRole: isOpenRouterDeveloperRoleModel || (!isNonStandard && !isOpenRouter),
+    supportsStore: !isNonStandard,
     supportsStrictMode: true,
+    thinkingFormat: isOpenRouter ? "openrouter" : "openai",
     ...(cacheControlFormat === undefined ? {} : { cacheControlFormat }),
     sendSessionAffinityHeaders: isOpenRouter,
   };
@@ -68,7 +57,7 @@ function isPlainEmptyObject(value: unknown): boolean {
 }
 
 function openAICompletionsCompatDelta(
-  compat: OpenAICompletionsResolvedCompat,
+  compat: openaiCompletionsCompatTypes.OpenAICompletionsResolvedCompat,
 ): OpenAICompletionsCompat {
   const delta: OpenAICompletionsCompat = {};
   for (const [key, value] of Object.entries(compat)) {
@@ -82,7 +71,7 @@ function openAICompletionsCompatDelta(
   return delta;
 }
 
-export function applyOpenAICompletionsCompatMetadata(model: Model<Api>): void {
+function applyOpenAICompletionsCompatMetadata(model: Model<Api>): void {
   if (model.api !== "openai-completions") return;
   const detected = openAICompletionsCompatDelta(
     detectOpenAICompletionsCompat(model as Model<"openai-completions">),
@@ -92,3 +81,10 @@ export function applyOpenAICompletionsCompatMetadata(model: Model<Api>): void {
     delete model.compat;
   }
 }
+
+const openaiCompletionsCompat = {
+  applyOpenAICompletionsCompatMetadata,
+  detectOpenAICompletionsCompat,
+};
+
+export default openaiCompletionsCompat;

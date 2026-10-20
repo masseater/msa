@@ -7,39 +7,39 @@ import { currentTimeMillis } from "../src/utils/clock.ts";
 import { AssistantMessageEventStream } from "../src/utils/event-stream.ts";
 
 const context: Context = {
-  messages: [{ role: "user", content: "hi", timestamp: currentTimeMillis() }],
+  messages: [{ content: "hi", role: "user", timestamp: currentTimeMillis() }],
 };
 
 const model: Model<"openai-responses"> = {
-  id: "test-model",
-  name: "Test Model",
   api: "openai-responses",
-  provider: "custom-openai",
   baseUrl: "https://example.test/v1",
-  reasoning: false,
-  input: ["text"],
-  cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0 },
   contextWindow: 128000,
+  cost: { cacheRead: 0, cacheWrite: 0, input: 0, output: 0 },
+  id: "test-model",
+  input: ["text"],
   maxTokens: 4096,
+  name: "Test Model",
+  provider: "custom-openai",
+  reasoning: false,
 };
 
 function message(): AssistantMessage {
   return {
-    role: "assistant",
-    content: [{ type: "text", text: "ok" }],
     api: model.api,
-    provider: model.provider,
+    content: [{ text: "ok", type: "text" }],
     model: model.id,
-    usage: {
-      input: 0,
-      output: 0,
-      cacheRead: 0,
-      cacheWrite: 0,
-      totalTokens: 0,
-      cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0, total: 0 },
-    },
+    provider: model.provider,
+    role: "assistant",
     stopReason: "stop",
     timestamp: currentTimeMillis(),
+    usage: {
+      cacheRead: 0,
+      cacheWrite: 0,
+      cost: { cacheRead: 0, cacheWrite: 0, input: 0, output: 0, total: 0 },
+      input: 0,
+      output: 0,
+      totalTokens: 0,
+    },
   };
 }
 
@@ -58,8 +58,8 @@ describe("compat legacy API fallback", () => {
             capturedApiKey = options?.apiKey;
             const stream = new AssistantMessageEventStream();
             const output = message();
-            stream.push({ type: "start", partial: output });
-            stream.push({ type: "done", reason: "stop", message: output });
+            stream.push({ partial: output, type: "start" });
+            stream.push({ message: output, reason: "stop", type: "done" });
             stream.end(output);
             return stream;
           },
@@ -67,8 +67,8 @@ describe("compat legacy API fallback", () => {
             capturedApiKey = options?.apiKey;
             const stream = new AssistantMessageEventStream();
             const output = message();
-            stream.push({ type: "start", partial: output });
-            stream.push({ type: "done", reason: "stop", message: output });
+            stream.push({ partial: output, type: "start" });
+            stream.push({ message: output, reason: "stop", type: "done" });
             stream.end(output);
             return stream;
           },

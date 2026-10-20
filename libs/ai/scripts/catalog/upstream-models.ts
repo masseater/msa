@@ -1,36 +1,28 @@
 import { Effect } from "effect";
 
-import type {
-  ClassifierApi,
-  ClassifierModel,
-  ImageApi,
-  ImageModel,
-  Model,
-} from "../../src/types.ts";
-import { loadModelsDevModels } from "./models-dev-catalog.ts";
-import type { ReasoningOptionsRegistry } from "./models-dev.ts";
-import { fetchOpenRouterModels } from "./remote-catalogs.ts";
-import { OPENCODE_CLASSIFIER_MODELS } from "./static-models.ts";
-import { OPENAI_CLASSIFIER_MODELS } from "./static-openai-models.ts";
+import loadModelsDevModels from "./models-dev-catalog.ts";
+import remoteCatalogs from "./remote-catalogs.ts";
+import staticModels from "./static-models.ts";
+import staticOpenaiModels from "./static-openai-models.ts";
+import type upstreamModelsTypes from "./upstream-models.types.ts";
 
-export interface UpstreamModels {
-  readonly chat: readonly Model<any>[];
-  readonly images: readonly ImageModel<ImageApi>[];
-  readonly classifiers: readonly ClassifierModel<ClassifierApi>[];
-  readonly reasoning: ReasoningOptionsRegistry;
-}
+const { fetchOpenRouterModels } = remoteCatalogs;
+const { OPENCODE_CLASSIFIER_MODELS } = staticModels;
+const { OPENAI_CLASSIFIER_MODELS } = staticOpenaiModels;
 
-export const loadUpstreamModels = Effect.fn("loadUpstreamModels")(function* (strict: boolean) {
+const loadUpstreamModels = Effect.fn("loadUpstreamModels")(function* (strict: boolean) {
   const modelsDev = yield* loadModelsDevModels(strict);
   const openRouter = yield* fetchOpenRouterModels(strict);
   return {
     chat: [...modelsDev.models, ...openRouter.chat],
-    images: openRouter.images,
     classifiers: [
       ...openRouter.classifiers,
       ...OPENCODE_CLASSIFIER_MODELS,
       ...OPENAI_CLASSIFIER_MODELS,
     ],
+    images: openRouter.images,
     reasoning: modelsDev.reasoning,
-  } satisfies UpstreamModels;
+  } satisfies upstreamModelsTypes.UpstreamModels;
 });
+
+export default loadUpstreamModels;

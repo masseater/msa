@@ -1,31 +1,27 @@
 import { Data, Effect } from "effect";
 
-import { ScriptFiles } from "../script-files.ts";
+import scriptFiles from "../script-files.ts";
+import type optionsTypes from "./options.types.ts";
 
-export interface GeneratorOptions {
-  readonly strict: boolean;
-  readonly dataOnly: boolean;
-  readonly jsonOnly: boolean;
-  readonly jsonOutputDir: string | undefined;
-  readonly pretty: boolean;
-}
+const { ScriptFiles } = scriptFiles;
 
-export class GeneratorUsageError extends Data.TaggedError("GeneratorUsageError")<{
+class GeneratorUsageError extends Data.TaggedError("GeneratorUsageError")<{
   readonly message: string;
 }> {}
 
-const FLAGS: Readonly<Record<string, keyof Omit<GeneratorOptions, "jsonOutputDir">>> = {
-  "--strict": "strict",
-  "--data-only": "dataOnly",
-  "--json-only": "jsonOnly",
-  "--pretty": "pretty",
-};
+const FLAGS: Readonly<Record<string, keyof Omit<optionsTypes.GeneratorOptions, "jsonOutputDir">>> =
+  {
+    "--data-only": "dataOnly",
+    "--json-only": "jsonOnly",
+    "--pretty": "pretty",
+    "--strict": "strict",
+  };
 
 const usage = (message: string) => Effect.fail(new GeneratorUsageError({ message }));
 
 const collectArgs = Effect.fn("collectArgs")(function* (args: readonly string[]) {
   const files = yield* ScriptFiles;
-  const flags = { strict: false, dataOnly: false, jsonOnly: false, pretty: false };
+  const flags = { dataOnly: false, jsonOnly: false, pretty: false, strict: false };
   let jsonOutputDir: string | undefined;
   for (let index = 0; index < args.length; index++) {
     const arg = args[index] ?? "";
@@ -44,13 +40,18 @@ const collectArgs = Effect.fn("collectArgs")(function* (args: readonly string[])
   return { ...flags, jsonOutputDir };
 });
 
-export const readGeneratorOptions = Effect.fn("readGeneratorOptions")(function* (
-  args: readonly string[],
-) {
-  const options: GeneratorOptions = yield* collectArgs(args);
+const readGeneratorOptions = Effect.fn("readGeneratorOptions")(function* (args: readonly string[]) {
+  const options: optionsTypes.GeneratorOptions = yield* collectArgs(args);
   const hasJsonOutput = options.jsonOutputDir !== undefined && options.jsonOutputDir !== "";
   if (options.jsonOnly && !hasJsonOutput) return yield* usage("--json-only requires --json-output");
   if (options.dataOnly && (options.jsonOnly || hasJsonOutput))
     return yield* usage("--data-only cannot be combined with JSON catalog output");
   return options;
 });
+
+const optionsModule = {
+  GeneratorUsageError,
+  readGeneratorOptions,
+};
+
+export default optionsModule;

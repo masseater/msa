@@ -1,7 +1,9 @@
 import { createCanvas } from "canvas";
 import { Console, Effect, ManagedRuntime } from "effect";
 
-import { ScriptFiles, scriptFilesLayer } from "./script-files.ts";
+import scriptFiles from "./script-files.ts";
+
+const { ScriptFiles, scriptFilesLayer } = scriptFiles;
 
 const renderRedCircle = (): Uint8Array => {
   const canvas = createCanvas(200, 200);
@@ -21,7 +23,7 @@ ManagedRuntime.make(scriptFilesLayer).runFork(
     const dataDir = files.join(import.meta.dirname, "..", "test", "data");
     const outputPath = files.join(dataDir, "red-circle.png");
     yield* files.makeDirectory(dataDir);
-    yield* files.writeBytes({ path: outputPath, content: renderRedCircle() });
+    yield* files.writeBytes({ content: renderRedCircle(), path: outputPath });
     yield* Console.log(`Generated test image at: ${outputPath}`);
   }),
 );

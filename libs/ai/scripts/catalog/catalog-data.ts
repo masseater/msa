@@ -1,24 +1,11 @@
 import { Effect } from "effect";
 
-import {
-  groupProviderModelData,
-  ModelDataError,
-  type ModelDataStructure,
-  readModelDataProviderIds,
-} from "../model-data.ts";
-import type { BuiltCatalog, CatalogEntry } from "./catalog-build.ts";
+import modelData from "../model-data.ts";
+import type modelDataTypes from "../model-data.types.ts";
+import type catalogBuildTypes from "./catalog-build.types.ts";
+import type catalogDataTypes from "./catalog-data.types.ts";
 
-export interface GroupedCatalog {
-  readonly providerIds: readonly string[];
-  readonly groups: Readonly<Record<string, Record<string, Record<string, CatalogEntry>>>>;
-  readonly structure: ModelDataStructure;
-}
-
-export interface CatalogGrouping {
-  readonly packageRoot: string;
-  readonly catalog: BuiltCatalog;
-  readonly dataOnly: boolean;
-}
+const { ModelDataError, groupProviderModelData, readModelDataProviderIds } = modelData;
 
 const missingProviders = (providerIds: readonly string[]) =>
   Effect.fail(
@@ -27,18 +14,18 @@ const missingProviders = (providerIds: readonly string[]) =>
     }),
   );
 
-export const groupCatalogData = Effect.fn("groupCatalogData")(function* ({
+const groupCatalogData = Effect.fn("groupCatalogData")(function* ({
   packageRoot,
   catalog,
   dataOnly,
-}: CatalogGrouping) {
+}: catalogDataTypes.CatalogGrouping) {
   const providerIds = dataOnly ? yield* readModelDataProviderIds(packageRoot) : catalog.providerIds;
   const missing = providerIds.filter(
     (providerId) => catalog.allProviders[providerId] === undefined,
   );
   if (missing.length > 0) return yield* missingProviders(missing);
-  const groups: Record<string, Record<string, Record<string, CatalogEntry>>> = {};
-  const structure: ModelDataStructure = {};
+  const groups: Record<string, Record<string, Record<string, catalogBuildTypes.CatalogEntry>>> = {};
+  const structure: modelDataTypes.ModelDataStructure = {};
   for (const providerId of providerIds) {
     const grouped = yield* groupProviderModelData(
       providerId,
@@ -47,5 +34,7 @@ export const groupCatalogData = Effect.fn("groupCatalogData")(function* ({
     groups[providerId] = grouped.groups;
     structure[providerId] = grouped.structure;
   }
-  return { providerIds, groups, structure } satisfies GroupedCatalog;
+  return { groups, providerIds, structure } satisfies catalogDataTypes.GroupedCatalog;
 });
+
+export default groupCatalogData;

@@ -21,16 +21,16 @@ function mockToken(): string {
 describe("max thinking level", () => {
   it("is opt-in for ordinary reasoning models", () => {
     const model: Model<"openai-completions"> = {
-      id: "ordinary-reasoning",
-      name: "Ordinary Reasoning",
       api: "openai-completions",
-      provider: "test",
       baseUrl: "https://example.com/v1",
-      reasoning: true,
-      input: ["text"],
-      cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0 },
       contextWindow: 128000,
+      cost: { cacheRead: 0, cacheWrite: 0, input: 0, output: 0 },
+      id: "ordinary-reasoning",
+      input: ["text"],
       maxTokens: 4096,
+      name: "Ordinary Reasoning",
+      provider: "test",
+      reasoning: true,
     };
 
     expect(getSupportedThinkingLevels(model)).toEqual(["off", "minimal", "low", "medium", "high"]);
@@ -42,7 +42,7 @@ describe("max thinking level", () => {
     (modelId) => {
       const model = getModel("openai-codex", modelId);
       expect(model).toBeDefined();
-      expect(model?.thinkingLevelMap).toMatchObject({ xhigh: "xhigh", max: "max" });
+      expect(model?.thinkingLevelMap).toMatchObject({ max: "max", xhigh: "xhigh" });
       expect(getSupportedThinkingLevels(model!)).toEqual([
         "off",
         "minimal",
@@ -59,17 +59,17 @@ describe("max thinking level", () => {
 describe("max thinking level", () => {
   it("supports a hole between high and max", () => {
     const model: Model<"openai-completions"> = {
-      id: "high-and-max",
-      name: "High and Max",
       api: "openai-completions",
-      provider: "test",
       baseUrl: "https://example.com/v1",
-      reasoning: true,
-      thinkingLevelMap: { xhigh: null, max: "max" },
-      input: ["text"],
-      cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0 },
       contextWindow: 128000,
+      cost: { cacheRead: 0, cacheWrite: 0, input: 0, output: 0 },
+      id: "high-and-max",
+      input: ["text"],
       maxTokens: 4096,
+      name: "High and Max",
+      provider: "test",
+      reasoning: true,
+      thinkingLevelMap: { max: "max", xhigh: null },
     };
 
     expect(getSupportedThinkingLevels(model)).toEqual([
@@ -92,21 +92,21 @@ describe("max thinking level", () => {
         Effect.gen(function* () {
           const model = getModel("openai-codex", modelId)!;
           const context = normalizeContext({
-            systemPrompt: "You are a helpful assistant.",
             messages: [
-              { role: "user", content: "Hello", timestamp: yield* Clock.currentTimeMillis },
+              { content: "Hello", role: "user", timestamp: yield* Clock.currentTimeMillis },
             ],
+            systemPrompt: "You are a helpful assistant.",
           });
           let payload: unknown;
 
           yield* Effect.promise(() =>
             streamSimpleOpenAICodexResponses(model, context, {
               apiKey: mockToken(),
-              reasoning: "max",
               onPayload: (request) => {
                 payload = request;
                 throw new Error("payload captured");
               },
+              reasoning: "max",
             }).result(),
           );
 

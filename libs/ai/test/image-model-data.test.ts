@@ -1,53 +1,51 @@
 import { describe, expect, it } from "vite-plus/test";
 
-import {
-  buildOpenRouterCatalog,
-  type OpenRouterModelListItem,
-} from "../scripts/openrouter-catalog.ts";
+import buildOpenRouterCatalog from "../scripts/openrouter-catalog.ts";
+import type openrouterCatalogTypes from "../scripts/openrouter-catalog.types.ts";
 
-const imageOnly: OpenRouterModelListItem = {
-  id: "example/image-model",
-  name: "Example Image Model",
+const imageOnly: openrouterCatalogTypes.OpenRouterModelListItem = {
   architecture: {
     input_modalities: ["text", "image"],
     output_modalities: ["image"],
   },
+  id: "example/image-model",
+  name: "Example Image Model",
   pricing: {
-    prompt: "0.000001",
     completion: "0.000002",
+    prompt: "0.000001",
   },
 };
 
-const chatWithImages: OpenRouterModelListItem = {
-  id: "example/multimodal",
-  name: "Example Multimodal",
-  supported_parameters: ["tools"],
+const chatWithImages: openrouterCatalogTypes.OpenRouterModelListItem = {
   architecture: {
-    modality: "text+image->text+image",
     input_modalities: ["text", "image"],
+    modality: "text+image->text+image",
     output_modalities: ["text", "image"],
   },
   context_length: 32000,
+  id: "example/multimodal",
+  name: "Example Multimodal",
+  supported_parameters: ["tools"],
 };
 
-const chatOnly: OpenRouterModelListItem = {
+const chatOnly: openrouterCatalogTypes.OpenRouterModelListItem = {
+  architecture: { modality: "text->text", output_modalities: ["text"] },
   id: "example/chat",
   name: "Example Chat",
   supported_parameters: ["tools"],
-  architecture: { modality: "text->text", output_modalities: ["text"] },
 };
 
-const decisionModel: OpenRouterModelListItem = {
-  id: "typesafe/jev-1.13",
-  name: "TypeSafe: Jev 1.13",
-  supported_parameters: [],
+const decisionModel: openrouterCatalogTypes.OpenRouterModelListItem = {
   architecture: {
-    modality: "text->decisions",
     input_modalities: ["text"],
+    modality: "text->decisions",
     output_modalities: ["decisions"],
   },
-  pricing: { prompt: "0.000000042", completion: "0" },
   context_length: 32000,
+  id: "typesafe/jev-1.13",
+  name: "TypeSafe: Jev 1.13",
+  pricing: { completion: "0", prompt: "0.000000042" },
+  supported_parameters: [],
   top_provider: { context_length: 32000, max_completion_tokens: 28800 },
 };
 
@@ -57,12 +55,12 @@ describe("OpenRouter catalog parsing", () => {
     expect(catalog.chat).toEqual([]);
     expect(catalog.images).toEqual([
       expect.objectContaining({
-        type: "image",
-        id: "example/image-model",
         api: "openrouter-images",
+        cost: expect.objectContaining({ input: 1, output: 2 }),
+        id: "example/image-model",
         input: ["text", "image"],
         output: ["image"],
-        cost: expect.objectContaining({ input: 1, output: 2 }),
+        type: "image",
       }),
     ]);
   });
@@ -101,15 +99,15 @@ describe("OpenRouter catalog parsing", () => {
     expect(catalog.chat).toEqual([]);
     expect(catalog.classifiers).toEqual([
       {
-        type: "classifier",
-        id: "typesafe/jev-1.13",
-        name: "TypeSafe: Jev 1.13",
         api: "typesafe-system-one",
-        provider: "openrouter",
         baseUrl: "https://openrouter.ai/api/v1",
-        input: ["text"],
-        cost: { input: 0.042, output: 0, cacheRead: 0, cacheWrite: 0 },
         contextWindow: 32000,
+        cost: { cacheRead: 0, cacheWrite: 0, input: 0.042, output: 0 },
+        id: "typesafe/jev-1.13",
+        input: ["text"],
+        name: "TypeSafe: Jev 1.13",
+        provider: "openrouter",
+        type: "classifier",
       },
     ]);
   });

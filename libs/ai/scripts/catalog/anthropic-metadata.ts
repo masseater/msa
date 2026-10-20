@@ -1,7 +1,9 @@
 import { Function } from "effect";
 
 import type { AnthropicMessagesCompat, Api, Model, ModelPromptCache } from "../../src/types.ts";
-import { mergeThinkingLevelMap } from "./thinking-maps.ts";
+import thinkingMaps from "./thinking-maps.ts";
+
+const { mergeThinkingLevelMap } = thinkingMaps;
 
 const ANTHROPIC_ALLOWED_FALLBACK_MODELS = {
   "claude-fable-5": ["claude-opus-4-8", "claude-opus-5"],
@@ -45,7 +47,7 @@ function supportsAnthropicMidConvoSystemMessages(modelId: string): boolean {
   );
 }
 
-export function isAnthropicAdaptiveThinkingModel(modelId: string): boolean {
+function isAnthropicAdaptiveThinkingModel(modelId: string): boolean {
   return (
     modelId.includes("opus-4-6") ||
     modelId.includes("opus-4.6") ||
@@ -66,7 +68,7 @@ export function isAnthropicAdaptiveThinkingModel(modelId: string): boolean {
   );
 }
 
-export function isAnthropicTemperatureUnsupportedModel(modelId: string): boolean {
+function isAnthropicTemperatureUnsupportedModel(modelId: string): boolean {
   const id = modelId.toLowerCase();
   return (
     id.includes("opus-4-7") ||
@@ -82,14 +84,14 @@ export function isAnthropicTemperatureUnsupportedModel(modelId: string): boolean
   );
 }
 
-export const mergeAnthropicMessagesCompat: {
+const mergeAnthropicMessagesCompat: {
   (compat: AnthropicMessagesCompat): (model: Model<Api>) => void;
   (model: Model<Api>, compat: AnthropicMessagesCompat): void;
 } = Function.dual(2, (model: Model<Api>, compat: AnthropicMessagesCompat): void => {
   model.compat = { ...(model.compat as AnthropicMessagesCompat | undefined), ...compat };
 });
 
-export function applyAnthropicMessagesCompatMetadata(model: Model<Api>): void {
+function applyAnthropicMessagesCompatMetadata(model: Model<Api>): void {
   if (model.api !== "anthropic-messages") return;
   const compat = getAnthropicMessagesCompat(model.provider, model.id);
   if (compat !== undefined) {
@@ -103,9 +105,7 @@ export function applyAnthropicMessagesCompatMetadata(model: Model<Api>): void {
   }
 }
 
-export function isAnthropicFallbackMetadataModel(
-  model: Model<Api>,
-): model is Model<"anthropic-messages"> {
+function isAnthropicFallbackMetadataModel(model: Model<Api>): model is Model<"anthropic-messages"> {
   if (model.provider !== "anthropic-api" || model.api !== "anthropic-messages") return false;
   return (
     model.id in ANTHROPIC_ALLOWED_FALLBACK_MODELS ||
@@ -115,7 +115,7 @@ export function isAnthropicFallbackMetadataModel(
   );
 }
 
-export function applyAnthropicAllowedFallbackModelMetadata(
+function applyAnthropicAllowedFallbackModelMetadata(
   models: readonly Model<"anthropic-messages">[],
 ): void {
   const modelsById = new Map(models.map((model) => [model.id, model]));
@@ -131,7 +131,7 @@ export function applyAnthropicAllowedFallbackModelMetadata(
       const fallbackModel = modelsById.get(fallbackModelId);
       return fallbackModel === undefined
         ? []
-        : [{ provider: fallbackModel.provider, model: fallbackModel.id, cost: fallbackModel.cost }];
+        : [{ cost: fallbackModel.cost, model: fallbackModel.id, provider: fallbackModel.provider }];
     });
     if (allowedFallbackModels.length > 0) {
       mergeAnthropicMessagesCompat(model, { allowedFallbackModels });
@@ -139,9 +139,9 @@ export function applyAnthropicAllowedFallbackModelMetadata(
   }
 }
 
-const ANTHROPIC_PROMPT_CACHE: ModelPromptCache = { short: 300, long: 3600 };
+const ANTHROPIC_PROMPT_CACHE: ModelPromptCache = { long: 3600, short: 300 };
 
-export function applyPromptCacheMetadata(model: Model<Api>): void {
+function applyPromptCacheMetadata(model: Model<Api>): void {
   if (model.provider === "anthropic-api" && model.api === "anthropic-messages") {
     model.promptCache = ANTHROPIC_PROMPT_CACHE;
   }
@@ -171,3 +171,15 @@ function getAnthropicMessagesCompat(
   }
   return Object.keys(compat).length > 0 ? compat : undefined;
 }
+
+const anthropicMetadata = {
+  applyAnthropicAllowedFallbackModelMetadata,
+  applyAnthropicMessagesCompatMetadata,
+  applyPromptCacheMetadata,
+  isAnthropicAdaptiveThinkingModel,
+  isAnthropicFallbackMetadataModel,
+  isAnthropicTemperatureUnsupportedModel,
+  mergeAnthropicMessagesCompat,
+};
+
+export default anthropicMetadata;

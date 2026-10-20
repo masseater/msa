@@ -1,29 +1,29 @@
 import { Effect } from "effect";
 import { describe, expect, it } from "vite-plus/test";
 
-import { getOpenRouterThinkingLevelMap } from "../scripts/openrouter-reasoning-options.ts";
+import getOpenRouterThinkingLevelMap from "../scripts/openrouter-reasoning-options.ts";
 import { streamSimple } from "../src/api/openai-completions.ts";
 import type { Model, ThinkingLevelMap } from "../src/types.ts";
 import { normalizeContext } from "../src/utils/transcript.ts";
 
 const context = normalizeContext({
-  messages: [{ role: "user", content: "Hello", timestamp: 0 }],
+  messages: [{ content: "Hello", role: "user", timestamp: 0 }],
 });
 
 function openRouterModel(thinkingLevelMap?: ThinkingLevelMap): Model<"openai-completions"> {
   return {
-    id: "stealth/ox-alpha",
-    name: "Ox Alpha",
     api: "openai-completions",
-    provider: "openrouter",
     baseUrl: "https://example.invalid/v1",
+    compat: { thinkingFormat: "openrouter" },
+    contextWindow: 128000,
+    cost: { cacheRead: 0, cacheWrite: 0, input: 0, output: 0 },
+    id: "stealth/ox-alpha",
+    input: ["text"],
+    maxTokens: 4096,
+    name: "Ox Alpha",
+    provider: "openrouter",
     reasoning: true,
     ...(thinkingLevelMap === undefined ? {} : { thinkingLevelMap }),
-    input: ["text"],
-    cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0 },
-    contextWindow: 128000,
-    maxTokens: 4096,
-    compat: { thinkingFormat: "openrouter" },
   };
 }
 
@@ -35,11 +35,11 @@ const capturePayload = Effect.fn("capturePayload")(function* (
   yield* Effect.promise(() =>
     streamSimple(model, context, {
       apiKey: "test",
-      reasoning,
       onPayload: (request) => {
         payload = request as { reasoning?: { effort?: string } };
         throw new Error("payload captured");
       },
+      reasoning,
     }).result(),
   );
   if (payload === undefined) throw new Error("OpenRouter payload was not captured");
@@ -50,19 +50,19 @@ describe("getOpenRouterThinkingLevelMap", () => {
   it("marks mandatory reasoning and unsupported efforts unavailable", () => {
     expect(
       getOpenRouterThinkingLevelMap({
-        mandatory: true,
-        default_enabled: true,
-        supported_efforts: ["max", "high", "low"],
         default_effort: "max",
+        default_enabled: true,
+        mandatory: true,
+        supported_efforts: ["max", "high", "low"],
       }),
     ).toEqual({
-      off: null,
-      minimal: null,
-      low: "low",
-      medium: null,
       high: "high",
-      xhigh: null,
+      low: "low",
       max: "max",
+      medium: null,
+      minimal: null,
+      off: null,
+      xhigh: null,
     });
   });
 
@@ -73,18 +73,18 @@ describe("getOpenRouterThinkingLevelMap", () => {
   it("keeps off available while restricting optional models to supported efforts", () => {
     expect(
       getOpenRouterThinkingLevelMap({
-        mandatory: false,
         default_enabled: true,
+        mandatory: false,
         supported_efforts: ["high", "low"],
       }),
     ).toEqual({
-      off: "none",
-      minimal: null,
-      low: "low",
-      medium: null,
       high: "high",
-      xhigh: null,
+      low: "low",
       max: null,
+      medium: null,
+      minimal: null,
+      off: "none",
+      xhigh: null,
     });
   });
 

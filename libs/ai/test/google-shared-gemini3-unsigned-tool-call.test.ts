@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vite-plus/test";
 
 import { convertMessages, requiresToolCallId } from "../src/api/google-messages.ts";
-import type { Context, Model } from "../src/types.ts";
+import type { Context, Model, ToolResultMessage, Usage } from "../src/types.ts";
 import { currentTimeMillis } from "../src/utils/clock.ts";
 import { normalizeContext } from "../src/utils/transcript.ts";
 
@@ -11,18 +11,41 @@ function makeGemini3Model<TApi extends "google-generative-ai">(
   id = "gemini-3-pro-preview",
 ): Model<TApi> {
   return {
-    id,
-    name: "Gemini 3 Pro Preview",
     api,
-    provider,
     baseUrl: "https://example.com",
-    reasoning: true,
-    input: ["text"],
-    cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0 },
     contextWindow: 128000,
+    cost: { cacheRead: 0, cacheWrite: 0, input: 0, output: 0 },
+    id,
+    input: ["text"],
     maxTokens: 8192,
+    name: "Gemini 3 Pro Preview",
+    provider,
+    reasoning: true,
   };
 }
+
+const emptyUsage: Usage = {
+  cacheRead: 0,
+  cacheWrite: 0,
+  cost: { cacheRead: 0, cacheWrite: 0, input: 0, output: 0, total: 0 },
+  input: 0,
+  output: 0,
+  totalTokens: 0,
+};
+
+const toolResult = (
+  toolName: string,
+  toolCallId: string,
+  content: ToolResultMessage["content"],
+  timestamp: number,
+): ToolResultMessage => ({
+  content,
+  isError: false,
+  role: "toolResult",
+  timestamp,
+  toolCallId,
+  toolName,
+});
 
 function makeContext(
   model: { api: string; provider: string; id: string },
@@ -31,57 +54,57 @@ function makeContext(
   const now = currentTimeMillis();
   return {
     messages: [
-      { role: "user", content: "Hi", timestamp: now },
+      { content: "Hi", role: "user", timestamp: now },
       {
-        role: "assistant",
+        api: model.api,
         content: [
           {
-            type: "toolCall",
+            arguments: { command: "echo hi" },
             id: "call_1",
             name: "bash",
-            arguments: { command: "echo hi" },
+            type: "toolCall",
             ...(thoughtSignature && { thoughtSignature }),
           },
           {
-            type: "toolCall",
+            arguments: { command: "ls -la" },
             id: "call_2",
             name: "bash",
-            arguments: { command: "ls -la" },
+            type: "toolCall",
           },
         ],
-        api: model.api,
-        provider: model.provider,
         model: model.id,
-        usage: {
-          input: 0,
-          output: 0,
-          cacheRead: 0,
-          cacheWrite: 0,
-          totalTokens: 0,
-          cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0, total: 0 },
-        },
+        provider: model.provider,
+        role: "assistant",
         stopReason: "toolUse",
         timestamp: now,
+        usage: emptyUsage,
       },
-      {
-        role: "toolResult",
-        toolCallId: "call_1",
-        toolName: "bash",
-        content: [{ type: "text", text: "hi" }],
-        isError: false,
-        timestamp: now,
-      },
-      {
-        role: "toolResult",
-        toolCallId: "call_2",
-        toolName: "bash",
-        content: [{ type: "text", text: "files" }],
-        isError: false,
-        timestamp: now,
-      },
+      toolResult("bash", "call_1", [{ text: "hi", type: "text" }], now),
+      toolResult("bash", "call_2", [{ text: "files", type: "text" }], now),
     ],
   };
 }
+
+const doesNotAddSkipThoughtSignature = () => {
+  const model = makeGemini3Model("google-generative-ai", "opencode");
+  const contents = convertMessages(
+    model,
+    normalizeContext(makeContext({ ...model, id: "other-model" })),
+  );
+
+  const modelTurn = contents.find((c) => c.role === "model");
+  expect(modelTurn).toBeTruthy();
+
+  const functionCallParts = modelTurn?.parts?.filter((p) => p.functionCall !== undefined) ?? [];
+  expect(functionCallParts).toHaveLength(2);
+  expect(functionCallParts[0]?.thoughtSignature).toBeUndefined();
+  expect(functionCallParts[1]?.thoughtSignature).toBeUndefined();
+  expect(JSON.stringify(modelTurn)).not.toContain("skip_thought_signature_validator");
+
+  const textParts = modelTurn?.parts?.filter((p) => p.text !== undefined) ?? [];
+  const historicalText = textParts.filter((p) => p.text?.includes("Historical context"));
+  expect(historicalText).toHaveLength(0);
+};
 
 describe("google-shared convertMessages — Gemini 3 unsigned tool calls", () => {
   it.each([
@@ -109,62 +132,51 @@ describe("google-shared convertMessages — Gemini 3 unsigned tool calls", () =>
     expect(functionResponseIds).toEqual(["call_1", "call_2"]);
   });
 
-  it("does not add skip_thought_signature_validator for unsigned Google Gen AI tool calls", () => {
-    const model = makeGemini3Model("google-generative-ai", "opencode");
-    const contents = convertMessages(
-      model,
-      normalizeContext(makeContext({ ...model, id: "other-model" })),
-    );
-
-    const modelTurn = contents.find((c) => c.role === "model");
-    expect(modelTurn).toBeTruthy();
-
-    const functionCallParts = modelTurn?.parts?.filter((p) => p.functionCall !== undefined) ?? [];
-    expect(functionCallParts).toHaveLength(2);
-    expect(functionCallParts[0]?.thoughtSignature).toBeUndefined();
-    expect(functionCallParts[1]?.thoughtSignature).toBeUndefined();
-    expect(JSON.stringify(modelTurn)).not.toContain("skip_thought_signature_validator");
-
-    const textParts = modelTurn?.parts?.filter((p) => p.text !== undefined) ?? [];
-    const historicalText = textParts.filter((p) => p.text?.includes("Historical context"));
-    expect(historicalText).toHaveLength(0);
-  });
+  it(
+    "does not add skip_thought_signature_validator for unsigned Google Gen AI tool calls",
+    doesNotAddSkipThoughtSignature,
+  );
 });
 
+const preservesValidThoughtSignatureWhenPresentFor = () => {
+  const model = makeGemini3Model("google-generative-ai", "opencode");
+  const validSig = "AAAAAAAAAAAAAAAAAAAAAA==";
+  const contents = convertMessages(model, normalizeContext(makeContext(model, validSig)));
+  const modelTurn = contents.find((c) => c.role === "model");
+  const functionCallParts = modelTurn?.parts?.filter((p) => p.functionCall !== undefined) ?? [];
+
+  expect(functionCallParts).toHaveLength(2);
+  expect(functionCallParts[0]?.thoughtSignature).toBe(validSig);
+  expect(functionCallParts[1]?.thoughtSignature).toBeUndefined();
+};
+
+const doesNotAddAThoughtSignatureFor = () => {
+  const model = makeGemini3Model("google-generative-ai", "opencode", "gemini-2.5-flash");
+  const contents = convertMessages(
+    model,
+    normalizeContext(makeContext({ ...model, id: "other-model" })),
+  );
+  const modelTurn = contents.find((c) => c.role === "model");
+  const functionCallParts =
+    modelTurn?.parts?.filter((part) => part.functionCall !== undefined) ?? [];
+  const functionResponseParts = contents
+    .flatMap((content) => content.parts ?? [])
+    .filter((part) => part.functionResponse !== undefined);
+
+  expect(functionCallParts).toHaveLength(2);
+  expect(functionCallParts.every((part) => part.functionCall?.id === undefined)).toBe(true);
+  expect(functionCallParts.every((part) => part.thoughtSignature === undefined)).toBe(true);
+  expect(functionResponseParts).toHaveLength(2);
+  expect(functionResponseParts.every((part) => part.functionResponse?.id === undefined)).toBe(true);
+};
+
 describe("google-shared convertMessages — Gemini 3 unsigned tool calls", () => {
-  it("preserves valid thoughtSignature when present for the same provider and model", () => {
-    const model = makeGemini3Model("google-generative-ai", "opencode");
-    const validSig = "AAAAAAAAAAAAAAAAAAAAAA==";
-    const contents = convertMessages(model, normalizeContext(makeContext(model, validSig)));
-    const modelTurn = contents.find((c) => c.role === "model");
-    const functionCallParts = modelTurn?.parts?.filter((p) => p.functionCall !== undefined) ?? [];
+  it(
+    "preserves valid thoughtSignature when present for the same provider and model",
+    preservesValidThoughtSignatureWhenPresentFor,
+  );
 
-    expect(functionCallParts).toHaveLength(2);
-    expect(functionCallParts[0]?.thoughtSignature).toBe(validSig);
-    expect(functionCallParts[1]?.thoughtSignature).toBeUndefined();
-  });
-
-  it("does not add a thoughtSignature for non-Gemini-3 models", () => {
-    const model = makeGemini3Model("google-generative-ai", "opencode", "gemini-2.5-flash");
-    const contents = convertMessages(
-      model,
-      normalizeContext(makeContext({ ...model, id: "other-model" })),
-    );
-    const modelTurn = contents.find((c) => c.role === "model");
-    const functionCallParts =
-      modelTurn?.parts?.filter((part) => part.functionCall !== undefined) ?? [];
-    const functionResponseParts = contents
-      .flatMap((content) => content.parts ?? [])
-      .filter((part) => part.functionResponse !== undefined);
-
-    expect(functionCallParts).toHaveLength(2);
-    expect(functionCallParts.every((part) => part.functionCall?.id === undefined)).toBe(true);
-    expect(functionCallParts.every((part) => part.thoughtSignature === undefined)).toBe(true);
-    expect(functionResponseParts).toHaveLength(2);
-    expect(functionResponseParts.every((part) => part.functionResponse?.id === undefined)).toBe(
-      true,
-    );
-  });
+  it("does not add a thoughtSignature for non-Gemini-3 models", doesNotAddAThoughtSignatureFor);
 });
 
 describe("requiresToolCallId", () => {
