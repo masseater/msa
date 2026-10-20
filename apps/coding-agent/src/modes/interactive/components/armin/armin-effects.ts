@@ -1,51 +1,25 @@
-import platform from "../../../core/platform.ts";
-import intervalModule from "../../interval.ts";
-import themeModule from "../theme/theme.ts";
-import arminHelpers from "./armin-helpers.ts";
-import ArminComponentLayer0 from "./armin-layer-0.ts";
-import arminSupport from "./armin-support.ts";
+import platform from "../../../../core/platform.ts";
+import arminHelpers from "../armin-helpers.ts";
+import arminSupport from "../armin-support.ts";
+import type ArminComponent from "../armin.ts";
 
-const { theme } = themeModule;
 const { WIDTH } = arminSupport;
 const { randomUnit } = platform;
-const { every } = intervalModule;
-const { DISPLAY_HEIGHT } = arminHelpers;
+const { DISPLAY_HEIGHT, shuffle } = arminHelpers;
 
-export default abstract class ArminComponentLayer1 extends ArminComponentLayer0 {
-  invalidate(): void {
-    this.cachedWidth = 0;
+export default class ArminEffects {
+  private readonly armin: ArminComponent;
+
+  constructor(armin: ArminComponent) {
+    this.armin = armin;
   }
 
-  render(width: number): string[] {
-    if (width === this.cachedWidth && this.cachedVersion === this.gridVersion) {
-      return this.cachedLines;
-    }
-
-    const padding = 1;
-    const availableWidth = width - padding;
-
-    this.cachedLines = this.currentGrid.map((row) => {
-      const clipped = row.slice(0, availableWidth).join("");
-      const padRight = Math.max(0, width - padding - clipped.length);
-      return ` ${theme.fg("accent", clipped)}${" ".repeat(padRight)}`;
-    });
-
-    const message = "ARMIN SAYS HI";
-    const msgPadRight = Math.max(0, width - padding - message.length);
-    this.cachedLines.push(` ${theme.fg("accent", message)}${" ".repeat(msgPadRight)}`);
-
-    this.cachedWidth = width;
-    this.cachedVersion = this.gridVersion;
-
-    return this.cachedLines;
-  }
-
-  protected createEmptyGrid(): string[][] {
+  createEmptyGrid(): string[][] {
     return Array.from({ length: DISPLAY_HEIGHT }, () => Array(WIDTH).fill(" "));
   }
 
-  protected initEffectPart1() {
-    this.effectState = {
+  private initRainDrops() {
+    this.armin.effectState = {
       drops: Array.from({ length: WIDTH }, () => ({
         settled: 0,
         y: -Math.floor(randomUnit() * DISPLAY_HEIGHT * 2),
@@ -53,27 +27,8 @@ export default abstract class ArminComponentLayer1 extends ArminComponentLayer0 
     };
   }
 
-  protected startAnimation(): void {
-    const fps = this.effect === "glitch" ? 60 : 30;
-    this.interval = every(() => {
-      const done = this.tickEffect();
-      this.updateDisplay();
-      this.ui.requestRender();
-      if (done) {
-        this.stopAnimation();
-      }
-    }, 1000 / fps);
-  }
-
-  protected stopAnimation(): void {
-    if (this.interval !== null) {
-      this.interval.cancel();
-      this.interval = null;
-    }
-  }
-
-  protected tickEffect(): boolean {
-    switch (this.effect) {
+  tickEffect(): boolean {
+    switch (this.armin.effect) {
       case "typewriter":
         return this.tickTypewriter();
       case "scanline":
@@ -93,8 +48,8 @@ export default abstract class ArminComponentLayer1 extends ArminComponentLayer0 
     }
   }
 
-  protected tickTypewriter(): boolean {
-    const state = this.effectState as { pos: number };
+  private tickTypewriter(): boolean {
+    const state = this.armin.effectState as { pos: number };
     const pixelsPerFrame = 3;
 
     for (let i = 0; i < pixelsPerFrame; i++) {
@@ -107,8 +62,8 @@ export default abstract class ArminComponentLayer1 extends ArminComponentLayer0 
     return false;
   }
 
-  protected tickScanline(): boolean {
-    const state = this.effectState as { row: number };
+  private tickScanline(): boolean {
+    const state = this.armin.effectState as { row: number };
     if (state.row >= DISPLAY_HEIGHT) return true;
 
     for (let x = 0; x < WIDTH; x++) {
@@ -118,13 +73,13 @@ export default abstract class ArminComponentLayer1 extends ArminComponentLayer0 
     return false;
   }
 
-  protected tickRain(): boolean {
-    const state = this.effectState as {
+  private tickRain(): boolean {
+    const state = this.armin.effectState as {
       drops: { y: number; settled: number }[];
     };
 
     let allSettled = true;
-    this.currentGrid = this.createEmptyGrid();
+    this.armin.currentGrid = this.createEmptyGrid();
 
     for (const [x, drop] of state.drops.entries()) {
       for (let row = DISPLAY_HEIGHT - 1; row >= DISPLAY_HEIGHT - drop.settled; row--) {
@@ -139,7 +94,7 @@ export default abstract class ArminComponentLayer1 extends ArminComponentLayer0 
 
       let targetRow = -1;
       for (let row = DISPLAY_HEIGHT - 1 - drop.settled; row >= 0; row--) {
-        if (this.finalGrid[row]?.[x] !== " ") {
+        if (this.armin.finalGrid[row]?.[x] !== " ") {
           targetRow = row;
           break;
         }
@@ -160,8 +115,8 @@ export default abstract class ArminComponentLayer1 extends ArminComponentLayer0 
     return allSettled;
   }
 
-  protected tickFade(): boolean {
-    const state = this.effectState as { positions: [number, number][]; idx: number };
+  private tickFade(): boolean {
+    const state = this.armin.effectState as { positions: [number, number][]; idx: number };
     const pixelsPerFrame = 15;
 
     for (let i = 0; i < pixelsPerFrame; i++) {
@@ -174,11 +129,11 @@ export default abstract class ArminComponentLayer1 extends ArminComponentLayer0 
     return false;
   }
 
-  protected tickCrt(): boolean {
-    const state = this.effectState as { expansion: number };
+  private tickCrt(): boolean {
+    const state = this.armin.effectState as { expansion: number };
     const midRow = Math.floor(DISPLAY_HEIGHT / 2);
 
-    this.currentGrid = this.createEmptyGrid();
+    this.armin.currentGrid = this.createEmptyGrid();
 
     const top = midRow - state.expansion;
     const bottom = midRow + state.expansion;
@@ -193,11 +148,11 @@ export default abstract class ArminComponentLayer1 extends ArminComponentLayer0 
     return state.expansion > DISPLAY_HEIGHT;
   }
 
-  protected tickGlitch(): boolean {
-    const state = this.effectState as { phase: number; glitchFrames: number };
+  private tickGlitch(): boolean {
+    const state = this.armin.effectState as { phase: number; glitchFrames: number };
 
     if (state.phase < state.glitchFrames) {
-      this.currentGrid = this.finalGrid.map((row) => {
+      this.armin.currentGrid = this.armin.finalGrid.map((row) => {
         const offset = Math.floor(randomUnit() * 7) - 3;
         const glitchRow = [...row];
 
@@ -208,7 +163,7 @@ export default abstract class ArminComponentLayer1 extends ArminComponentLayer0 
 
         if (randomUnit() < 0.2) {
           const swapRow = Math.floor(randomUnit() * DISPLAY_HEIGHT);
-          return [...(this.finalGrid[swapRow] ?? row)];
+          return [...(this.armin.finalGrid[swapRow] ?? row)];
         }
 
         return glitchRow;
@@ -217,12 +172,12 @@ export default abstract class ArminComponentLayer1 extends ArminComponentLayer0 
       return false;
     }
 
-    this.currentGrid = this.finalGrid.map((row) => [...row]);
+    this.armin.currentGrid = this.armin.finalGrid.map((row) => [...row]);
     return true;
   }
 
-  protected tickDissolve(): boolean {
-    const state = this.effectState as { positions: [number, number][]; idx: number };
+  private tickDissolve(): boolean {
+    const state = this.armin.effectState as { positions: [number, number][]; idx: number };
     const pixelsPerFrame = 20;
 
     for (let i = 0; i < pixelsPerFrame; i++) {
@@ -235,21 +190,61 @@ export default abstract class ArminComponentLayer1 extends ArminComponentLayer0 
     return false;
   }
 
-  protected copyCell(row: number, x: number): void {
-    const cell = this.finalGrid[row]?.[x];
+  private copyCell(row: number, x: number): void {
+    const cell = this.armin.finalGrid[row]?.[x];
     if (cell !== undefined) this.setCell(row, x, cell);
   }
 
-  protected setCell(row: number, x: number, cell: string): void {
-    const line = this.currentGrid[row];
+  private setCell(row: number, x: number, cell: string): void {
+    const line = this.armin.currentGrid[row];
     if (line !== undefined) line[x] = cell;
   }
 
-  protected updateDisplay(): void {
-    this.gridVersion++;
-  }
-
-  dispose(): void {
-    this.stopAnimation();
+  initEffect(): void {
+    switch (this.armin.effect) {
+      case "typewriter":
+        this.armin.effectState = { pos: 0 };
+        break;
+      case "scanline":
+        this.armin.effectState = { row: 0 };
+        break;
+      case "rain":
+        this.initRainDrops();
+        break;
+      case "fade": {
+        const positions: [number, number][] = [];
+        for (let row = 0; row < DISPLAY_HEIGHT; row++) {
+          for (let x = 0; x < WIDTH; x++) {
+            positions.push([row, x]);
+          }
+        }
+        shuffle(positions);
+        this.armin.effectState = { idx: 0, positions };
+        break;
+      }
+      case "crt":
+        this.armin.effectState = { expansion: 0 };
+        break;
+      case "glitch":
+        this.armin.effectState = { glitchFrames: 8, phase: 0 };
+        break;
+      case "dissolve": {
+        this.armin.currentGrid = Array.from({ length: DISPLAY_HEIGHT }, () =>
+          Array.from({ length: WIDTH }, () => {
+            const chars = [" ", "░", "▒", "▓", "█", "▀", "▄"];
+            return chars[Math.floor(randomUnit() * chars.length)] ?? " ";
+          }),
+        );
+        const dissolvePositions: [number, number][] = [];
+        for (let row = 0; row < DISPLAY_HEIGHT; row++) {
+          for (let x = 0; x < WIDTH; x++) {
+            dissolvePositions.push([row, x]);
+          }
+        }
+        shuffle(dissolvePositions);
+        this.armin.effectState = { idx: 0, positions: dissolvePositions };
+        break;
+      }
+    }
   }
 }
