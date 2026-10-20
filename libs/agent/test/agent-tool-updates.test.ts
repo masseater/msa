@@ -8,30 +8,33 @@ import {
   type AgentTool,
   type AgentToolUpdateCallback,
 } from "../src/index.ts";
-import { awaitDeferred, release } from "./support/agent.ts";
-import { scripted, toolCallMessage } from "./support/fixtures.ts";
+import agentModule from "./support/agent.ts";
+import fixtures from "./support/fixtures.ts";
+
+const { awaitDeferred, release } = agentModule;
+const { scripted, toolCallMessage } = fixtures;
 
 const schema = Type.Object({});
 
 type Status = { status: string };
 
-const done = { content: [{ type: "text" as const, text: "done" }], details: { status: "done" } };
+const done = { content: [{ text: "done", type: "text" as const }], details: { status: "done" } };
 
 const capturing = (
   name: string,
   capture: (update: AgentToolUpdateCallback<Status> | undefined) => void,
 ): AgentTool<typeof schema, Status> => ({
-  name,
-  label: name,
   description: "Captures progress callbacks",
-  parameters: schema,
   execute: (_id, _params, _signal, onUpdate) => {
     capture(onUpdate);
     return Promise.resolve({ ...done, terminate: true });
   },
+  label: name,
+  name,
+  parameters: schema,
 });
 
-const late = { content: [{ type: "text" as const, text: "late" }], details: { status: "late" } };
+const late = { content: [{ text: "late", type: "text" as const }], details: { status: "late" } };
 
 const ignoresLateUpdate = Effect.gen(function* () {
   let delayedUpdate: AgentToolUpdateCallback<Status> | undefined;
@@ -42,7 +45,7 @@ const ignoresLateUpdate = Effect.gen(function* () {
   };
   const delayedTool = capturing("delayed_tool", (onUpdate) => {
     delayedUpdate = onUpdate;
-    onUpdate?.({ content: [{ type: "text", text: "running" }], details: { status: "running" } });
+    onUpdate?.({ content: [{ text: "running", type: "text" }], details: { status: "running" } });
   });
   const agent = new Agent({
     initialState: { tools: [delayedTool] },

@@ -39,16 +39,16 @@ const callMcpTool =
       Effect.gen(function* () {
         const result = yield* Effect.promise(() =>
           client.callTool(tool.name, params as Record<string, unknown>, {
-            signal,
             onProgress: (progress) => {
               const text = progress.message ?? `Progress ${progress.progress}`;
-              onUpdate?.({ content: [{ type: "text", text }], details: undefined });
+              onUpdate?.({ content: [{ text, type: "text" }], details: undefined });
             },
+            signal,
           }),
         );
         const content = toLlmContent(result);
         if (result.isError === true && content.length === 0) {
-          content.push({ type: "text", text: `MCP tool ${tool.name} failed` });
+          content.push({ text: `MCP tool ${tool.name} failed`, type: "text" });
         }
         return {
           content,
@@ -62,29 +62,29 @@ const callMcpTool =
     );
 
 const toAgentTool = (client: McpClient, prefix: string, tool: Tool): AgentTool => ({
-  name: toToolName(prefix, tool.name),
-  label: tool.title ?? tool.name,
   description: tool.description ?? tool.title ?? `MCP tool ${tool.name}`,
+  execute: callMcpTool(client, tool),
+  label: tool.title ?? tool.name,
+  name: toToolName(prefix, tool.name),
   parameters: Type.Unsafe(
     Object.assign({}, tool.inputSchema, {
-      type: "object",
       properties: tool.inputSchema["properties"] ?? {},
+      type: "object",
     }),
   ),
   ...(tool.outputSchema === undefined
     ? {}
     : { outputSchema: Type.Unsafe<Record<string, unknown>>(tool.outputSchema) }),
-  execute: callMcpTool(client, tool),
 });
 
-export const createMcpTools: {
+const createMcpTools: {
   (prefix: string): (client: McpClient) => Promise<AgentTool[]>;
   (client: McpClient, prefix: string): Promise<AgentTool[]>;
 } = Function.dual(2, (client: McpClient, prefix: string): Promise<AgentTool[]> =>
   client.listTools().then((tools) => tools.map((tool) => toAgentTool(client, prefix, tool))),
 );
 
-export function createNestedToolRunner(agent: Agent): RunTool {
+function createNestedToolRunner(agent: Agent): RunTool {
   let nextId = 1;
   return (name, args, signal) => {
     const assistantMessage = agent.state.messages.findLast(
@@ -94,30 +94,27 @@ export function createNestedToolRunner(agent: Agent): RunTool {
       throw new Error("Nested tool calls need an assistant message");
     const tools = agent.state.tools;
     return runToolCall(
-      { type: "toolCall", id: `nested-${nextId++}`, name, arguments: (args ?? {}) as JsonObject },
+      { arguments: (args ?? {}) as JsonObject, id: `nested-${nextId++}`, name, type: "toolCall" },
       {
-        tools,
-        assistantMessage,
-        context: { messages: agent.state.messages, tools },
-        beforeToolCall: agent.beforeToolCall,
         afterToolCall: agent.afterToolCall,
+        assistantMessage,
+        beforeToolCall: agent.beforeToolCall,
+        context: { messages: agent.state.messages, tools },
         signal,
+        tools,
       },
     );
   };
 }
 
-export const CODEMODE_TOOL_NAME = "codemode";
+const CODEMODE_TOOL_NAME = "codemode";
 
 const codemodeParameters = Type.Object({
   code: Type.String({ description: "JavaScript source. Top-level await and return work." }),
 });
 
 const toSandboxTool = (tool: AgentTool, runTool: RunTool): CodemodeTool => ({
-  name: tool.name,
   description: tool.description,
-  inputSchema: tool.parameters as CodemodeJsonSchema,
-  outputSchema: (tool.outputSchema as CodemodeJsonSchema | undefined) ?? { type: "string" },
   execute: (args, { signal }) =>
     runTool(tool.name, args, signal).then((outcome) => {
       if (tool.outputSchema !== undefined && outcome.result.structuredContent !== undefined) {
@@ -127,6 +124,9 @@ const toSandboxTool = (tool: AgentTool, runTool: RunTool): CodemodeTool => ({
       if (outcome.isError) throw new Error(text === "" ? `Tool ${tool.name} failed` : text);
       return text;
     }),
+  inputSchema: tool.parameters as CodemodeJsonSchema,
+  name: tool.name,
+  outputSchema: (tool.outputSchema as CodemodeJsonSchema | undefined) ?? { type: "string" },
 });
 
 const resultContent = (result: CodemodeResult): Effect.Effect<(TextContent | ImageContent)[]> =>
@@ -137,12 +137,12 @@ const resultContent = (result: CodemodeResult): Effect.Effect<(TextContent | Ima
         typeof result.value === "string"
           ? result.value
           : yield* Effect.orDie(encodeJson(result.value));
-      content.push({ type: "text", text: value });
+      content.push({ text: value, type: "text" });
     }
     if (!result.ok) {
       content.push({
-        type: "text",
         text: `Script failed: ${result.error.stack ?? result.error.message}`,
+        type: "text",
       });
     }
     return content;
@@ -153,7 +153,7 @@ const runScript =
   (_toolCallId, params, signal) =>
     Effect.runPromise(
       Effect.acquireUseRelease(
-        Effect.sync(() => new CodemodeSandbox({ tools: sandboxTools, timeoutMs: 120_000 })),
+        Effect.sync(() => new CodemodeSandbox({ timeoutMs: 120_000, tools: sandboxTools })),
         (sandbox) =>
           Effect.flatMap(
             Effect.promise(() => sandbox.execute(params.code, { signal })),
@@ -180,7 +180,7 @@ const describeCodemode = (sandboxTools: CodemodeTool[]): string =>
     "```",
   ].join("\n");
 
-export const createCodemodeTool: {
+const createCodemodeTool: {
   (runTool: RunTool): (tools: readonly AgentTool[]) => AgentTool<typeof codemodeParameters>;
   (tools: readonly AgentTool[], runTool: RunTool): AgentTool<typeof codemodeParameters>;
 } = Function.dual(
@@ -190,11 +190,20 @@ export const createCodemodeTool: {
       .filter((tool) => tool.name !== CODEMODE_TOOL_NAME)
       .map((tool) => toSandboxTool(tool, runTool));
     return {
-      name: CODEMODE_TOOL_NAME,
-      label: "Codemode",
       description: describeCodemode(sandboxTools),
-      parameters: codemodeParameters,
       execute: runScript(sandboxTools),
+      label: "Codemode",
+      name: CODEMODE_TOOL_NAME,
+      parameters: codemodeParameters,
     };
   },
 );
+
+const toolsModule = {
+  CODEMODE_TOOL_NAME,
+  createCodemodeTool,
+  createMcpTools,
+  createNestedToolRunner,
+};
+
+export default toolsModule;

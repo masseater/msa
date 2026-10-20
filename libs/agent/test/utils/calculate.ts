@@ -1,18 +1,14 @@
 import { Effect } from "effect";
 import { type Static, Type } from "typebox";
 
-import type { AgentTool, AgentToolResult } from "../../src/types.ts";
+import type { AgentTool } from "../../src/types.ts";
+import type calculateTypes from "./calculate.types.ts";
 
-export interface CalculateResult extends AgentToolResult<undefined> {
-  content: Array<{ type: "text"; text: string }>;
-  details: undefined;
-}
-
-export function calculate(expression: string): CalculateResult {
+function calculate(expression: string): calculateTypes.CalculateResult {
   try {
     const result: unknown = new Function(`return ${expression}`)();
     return {
-      content: [{ type: "text", text: `${expression} = ${String(result)}` }],
+      content: [{ text: `${expression} = ${String(result)}`, type: "text" }],
       details: undefined,
     };
   } catch (error) {
@@ -27,11 +23,18 @@ const calculateSchema = Type.Object({
 
 type CalculateParams = Static<typeof calculateSchema>;
 
-export const calculateTool: AgentTool<typeof calculateSchema, undefined> = {
-  label: "Calculator",
-  name: "calculate",
+const calculateTool: AgentTool<typeof calculateSchema, undefined> = {
   description: "Evaluate mathematical expressions",
-  parameters: calculateSchema,
   execute: (_toolCallId: string, args: CalculateParams) =>
     Effect.runPromise(Effect.sync(() => calculate(args.expression))),
+  label: "Calculator",
+  name: "calculate",
+  parameters: calculateSchema,
 };
+
+const calculateModule = {
+  calculate,
+  calculateTool,
+};
+
+export default calculateModule;

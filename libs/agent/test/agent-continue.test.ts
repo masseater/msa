@@ -2,14 +2,11 @@ import { Effect } from "effect";
 import { describe, expect, it } from "vite-plus/test";
 
 import { Agent, type AgentMessage, type QueueMode } from "../src/index.ts";
-import { unusedStreamFunction, userTexts } from "./support/agent.ts";
-import {
-  createUserMessage,
-  now,
-  respond,
-  textMessage,
-  toolCallMessage,
-} from "./support/fixtures.ts";
+import agentModule from "./support/agent.ts";
+import fixtures from "./support/fixtures.ts";
+
+const { unusedStreamFunction, userTexts } = agentModule;
+const { createUserMessage, now, respond, textMessage, toolCallMessage } = fixtures;
 
 const recordingAgent = (options: { messages?: AgentMessage[]; steeringMode?: QueueMode }) => {
   const requests: string[][] = [];
@@ -33,12 +30,12 @@ const hasText = (message: AgentMessage, text: string): boolean => {
 const processesFollowUp = Effect.gen(function* () {
   const { agent } = recordingAgent({});
   agent.state.messages = [
-    { role: "user", content: [{ type: "text", text: "Initial" }], timestamp: now() - 10 },
+    { content: [{ text: "Initial", type: "text" }], role: "user", timestamp: now() - 10 },
     textMessage("Initial response"),
   ];
   agent.followUp({
+    content: [{ text: "Queued follow-up", type: "text" }],
     role: "user",
-    content: [{ type: "text", text: "Queued follow-up" }],
     timestamp: now(),
   });
   yield* Effect.promise(() => expect(agent.continue()).resolves.toBeUndefined());
@@ -63,8 +60,8 @@ const expectSteering = (
 const assistantTailSteering = (mode: QueueMode, expectedRequests: number) =>
   Effect.gen(function* () {
     const { agent, requests } = recordingAgent({
-      steeringMode: mode,
       messages: [createUserMessage("Initial"), textMessage("Initial response")],
+      steeringMode: mode,
     });
     agent.steer(createUserMessage("Steering 1"));
     agent.steer(createUserMessage("Steering 2"));
@@ -92,12 +89,12 @@ const toolResultTail: AgentMessage[] = [
   createUserMessage("existing user"),
   toolCallMessage([{ id: "call-1", name: "noop" }]),
   {
+    content: [{ text: "done", type: "text" }],
+    isError: false,
     role: "toolResult",
+    timestamp: 1,
     toolCallId: "call-1",
     toolName: "noop",
-    content: [{ type: "text", text: "done" }],
-    isError: false,
-    timestamp: 1,
   },
 ];
 
@@ -136,8 +133,8 @@ const steeringBeforeFollowUp = Effect.gen(function* () {
 });
 
 const modes = [
-  { mode: "one-at-a-time" as const, expectedRequests: 2 },
-  { mode: "all" as const, expectedRequests: 1 },
+  { expectedRequests: 2, mode: "one-at-a-time" as const },
+  { expectedRequests: 1, mode: "all" as const },
 ];
 
 describe("Agent continue", () => {
@@ -149,17 +146,17 @@ describe("Agent continue", () => {
       Effect.runPromise(assistantTailSteering(mode, expectedRequests)),
   );
   it.each([
-    { name: "empty", messages: [] },
+    { messages: [], name: "empty" },
     {
+      messages: [{ content: "system only", role: "system" as const, timestamp: 1 }],
       name: "system-only",
-      messages: [{ role: "system" as const, content: "system only", timestamp: 1 }],
     },
   ])("rejects a queued continuation from $name context without draining queues", ({ messages }) =>
     Effect.runPromise(rejectsWithoutMessages(messages)),
   );
   it.each([
-    { name: "user", messages: [createUserMessage("existing user")] },
-    { name: "toolResult", messages: toolResultTail },
+    { messages: [createUserMessage("existing user")], name: "user" },
+    { messages: toolResultTail, name: "toolResult" },
   ])("defers follow-up input on the first continuation request from a $name tail", ({ messages }) =>
     Effect.runPromise(defersFollowUp(messages)),
   );

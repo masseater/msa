@@ -5,7 +5,9 @@ import { describe, expect, it } from "vite-plus/test";
 
 import { agentLoop } from "../src/agent-loop.ts";
 import type { AgentLoopConfig, AgentTool } from "../src/types.ts";
-import {
+import fixtures from "./support/fixtures.ts";
+
+const {
   collect,
   createModel,
   createUserMessage,
@@ -17,21 +19,21 @@ import {
   textMessage,
   tool,
   toolCallMessage,
-} from "./support/fixtures.ts";
+} = fixtures;
 
 const usage = (base: number, total: number) => ({
-  input: base,
-  output: base + 1,
   cacheRead: base + 2,
   cacheWrite: base + 3,
-  totalTokens: total,
   cost: {
-    input: base / 10,
-    output: (base + 1) / 10,
     cacheRead: (base + 2) / 10,
     cacheWrite: (base + 3) / 10,
+    input: base / 10,
+    output: (base + 1) / 10,
     total: total / 10,
   },
+  input: base,
+  output: base + 1,
+  totalTokens: total,
 });
 
 const toolUsage = usage(1, 10);
@@ -47,15 +49,15 @@ const handlesToolCalls = Effect.gen(function* () {
     },
   });
   const config: AgentLoopConfig = {
-    model: createModel(),
-    convertToLlm: identityConverter,
     afterToolCall: ({ result }) => {
       observedToolUsage = result.usage;
       return Promise.resolve({ usage: patchedToolUsage });
     },
+    convertToLlm: identityConverter,
+    model: createModel(),
   };
   const { streamFn } = scripted(
-    toolCallMessage([{ id: "tool-1", args: { value: "hello" } }]),
+    toolCallMessage([{ args: { value: "hello" }, id: "tool-1" }]),
     textMessage("done"),
   );
   const { events, messages } = yield* collect(
@@ -83,15 +85,15 @@ const recordsDuration = Effect.gen(function* () {
     run: (_id, params) => delayed(30)(echoResult(params.value)),
   });
   const config: AgentLoopConfig = {
-    model: createModel(),
-    convertToLlm: identityConverter,
     beforeToolCall: ({ toolCall }) =>
       delayed(100)(toolCall.id === "blocked" ? { block: true, reason: "no" } : undefined),
+    convertToLlm: identityConverter,
+    model: createModel(),
   };
   const { streamFn } = scripted(
     toolCallMessage([
-      { id: "ran", args: { value: "a" } },
-      { id: "blocked", args: { value: "b" } },
+      { args: { value: "a" }, id: "ran" },
+      { args: { value: "b" }, id: "blocked" },
     ]),
     textMessage("done"),
   );
@@ -122,14 +124,14 @@ const skipsTruncatedToolCalls = Effect.gen(function* () {
     },
   });
   const script = scripted(
-    stoppedWith("length")(toolCallMessage([{ id: "tool-1", args: { value: "hel" } }])),
+    stoppedWith("length")(toolCallMessage([{ args: { value: "hel" }, id: "tool-1" }])),
     textMessage("done"),
   );
   const { events, messages } = yield* collect(
     agentLoop(
       [createUserMessage("echo something")],
       { messages: [], tools: [echo] },
-      { model: createModel(), convertToLlm: identityConverter },
+      { convertToLlm: identityConverter, model: createModel() },
       undefined,
       script.streamFn,
     ),
@@ -152,15 +154,15 @@ const runsMutatedArgs = Effect.gen(function* () {
     },
   });
   const config: AgentLoopConfig = {
-    model: createModel(),
-    convertToLlm: identityConverter,
     beforeToolCall: ({ args }) => {
       (args as { value: string | number }).value = 123;
       return Promise.resolve(undefined);
     },
+    convertToLlm: identityConverter,
+    model: createModel(),
   };
   const { streamFn } = scripted(
-    toolCallMessage([{ id: "tool-1", args: { value: "hello" } }]),
+    toolCallMessage([{ args: { value: "hello" }, id: "tool-1" }]),
     textMessage("done"),
   );
   yield* collect(
@@ -175,7 +177,7 @@ const runsMutatedArgs = Effect.gen(function* () {
   expect(executed).toEqual([123]);
 });
 
-const replaceSchema = Type.Object({ oldText: Type.String(), newText: Type.String() });
+const replaceSchema = Type.Object({ newText: Type.String(), oldText: Type.String() });
 const editSchema = Type.Object({ edits: Type.Array(replaceSchema) });
 type Edit = { oldText: string; newText: string };
 
@@ -185,7 +187,7 @@ const prepareEditArguments = (args: unknown): { edits: Edit[] } => {
   if (typeof input.oldText !== "string" || typeof input.newText !== "string") {
     return args as { edits: Edit[] };
   }
-  return { edits: [...(input.edits ?? []), { oldText: input.oldText, newText: input.newText }] };
+  return { edits: [...(input.edits ?? []), { newText: input.newText, oldText: input.oldText }] };
 };
 
 const preparesArguments = Effect.gen(function* () {
@@ -196,18 +198,18 @@ const preparesArguments = Effect.gen(function* () {
       parameters: editSchema,
       run: () => Promise.reject(new Error("unused")),
     }),
-    prepareArguments: prepareEditArguments,
     execute: (_id, params) => {
       executed.push(params.edits);
       return Promise.resolve({
-        content: [{ type: "text", text: `edited ${params.edits.length}` }],
+        content: [{ text: `edited ${params.edits.length}`, type: "text" }],
         details: { count: params.edits.length },
       });
     },
+    prepareArguments: prepareEditArguments,
   };
   const { streamFn } = scripted(
     toolCallMessage([
-      { id: "tool-1", name: "edit", args: { oldText: "before", newText: "after" } },
+      { args: { newText: "after", oldText: "before" }, id: "tool-1", name: "edit" },
     ]),
     textMessage("done"),
   );
@@ -215,12 +217,12 @@ const preparesArguments = Effect.gen(function* () {
     agentLoop(
       [createUserMessage("edit something")],
       { messages: [], tools: [edit] },
-      { model: createModel(), convertToLlm: identityConverter },
+      { convertToLlm: identityConverter, model: createModel() },
       undefined,
       streamFn,
     ),
   );
-  expect(executed).toEqual([[{ oldText: "before", newText: "after" }]]);
+  expect(executed).toEqual([[{ newText: "after", oldText: "before" }]]);
 });
 
 describe("agentLoop tool calls", () => {

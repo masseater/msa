@@ -1,16 +1,20 @@
 import {
+  type Model,
   fauxAssistantMessage,
   fauxText,
   fauxThinking,
   fauxToolCall,
-  type Model,
 } from "@msa/ai/compat";
 import { Effect } from "effect";
 import { describe, expect, it } from "vite-plus/test";
 
 import type { AgentEvent } from "../src/index.ts";
-import { expectAssistant, fauxAgent, type FauxOptions, textOf, useFaux } from "./support/faux.ts";
-import { calculateTool } from "./utils/calculate.ts";
+import fauxModule from "./support/faux.ts";
+import type fauxTypes from "./support/faux.types.ts";
+import calculate from "./utils/calculate.ts";
+
+const { expectAssistant, fauxAgent, textOf, useFaux } = fauxModule;
+const { calculateTool } = calculate;
 
 const createFaux = useFaux();
 
@@ -40,7 +44,7 @@ const toolExecution = (model: Model<string>) =>
     const pending: Array<{ type: AgentEvent["type"]; ids: string[] }> = [];
     agent.subscribe((event) => {
       if (event.type === "tool_execution_start" || event.type === "tool_execution_end") {
-        pending.push({ type: event.type, ids: [...agent.state.pendingToolCalls] });
+        pending.push({ ids: [...agent.state.pendingToolCalls], type: event.type });
       }
     });
     yield* Effect.promise(() => agent.prompt("Calculate 123 * 456 using the calculator tool."));
@@ -52,8 +56,8 @@ const toolExecution = (model: Model<string>) =>
     expect(textOf(expectAssistant(agent.state.messages.at(-1)))).toContain("56088");
     expect(agent.state.pendingToolCalls.size).toBe(0);
     expect(pending).toEqual([
-      { type: "tool_execution_start", ids: ["calc-1"] },
-      { type: "tool_execution_end", ids: [] },
+      { ids: ["calc-1"], type: "tool_execution_start" },
+      { ids: [], type: "tool_execution_end" },
     ]);
   });
 
@@ -121,8 +125,8 @@ const preservesThinking = Effect.gen(function* () {
   const agent = fauxAgent({ model: faux.getModel(), thinkingLevel: "low" });
   yield* Effect.promise(() => agent.prompt("What is 2+2?"));
   expect(expectAssistant(agent.state.messages[2]).content).toEqual([
-    { type: "thinking", thinking: "step by step" },
-    { type: "text", text: "4" },
+    { thinking: "step by step", type: "thinking" },
+    { text: "4", type: "text" },
   ]);
 });
 
@@ -132,7 +136,7 @@ const withFaux =
   (
     responses: FauxResponses,
     run: (model: Model<string>) => Effect.Effect<void>,
-    options: FauxOptions = {},
+    options: fauxTypes.FauxOptions = {},
   ) =>
   () => {
     const faux = createFaux(options);
@@ -172,11 +176,11 @@ describe("Agent integration with faux provider", () => {
   it("executes tools and tracks pending tool calls", withFaux(calculation, toolExecution));
   it(
     "handles abort during streaming",
-    withFaux(counting, abortExecution, { tokensPerSecond: 20, tokenSize: { min: 2, max: 2 } }),
+    withFaux(counting, abortExecution, { tokenSize: { max: 2, min: 2 }, tokensPerSecond: 20 }),
   );
   it(
     "emits lifecycle updates while streaming",
-    withFaux([fauxAssistantMessage("1 2 3 4 5")], stateUpdates, { tokenSize: { min: 1, max: 1 } }),
+    withFaux([fauxAssistantMessage("1 2 3 4 5")], stateUpdates, { tokenSize: { max: 1, min: 1 } }),
   );
   it("maintains context across multiple turns", withFaux(rememberAlice, multiTurnConversation));
   it("preserves thinking content blocks", () => Effect.runPromise(preservesThinking));

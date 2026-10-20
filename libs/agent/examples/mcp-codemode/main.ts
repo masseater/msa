@@ -1,10 +1,13 @@
+import * as NodeRuntime from "@effect/platform-node/NodeRuntime";
 import { Agent } from "@msa/agent-core";
 import { createModels } from "@msa/ai";
 import { anthropicProvider } from "@msa/ai/providers/anthropic";
 import { McpClient, StdioTransport } from "@msa/mcp";
 import { Console, Effect } from "effect";
 
-import { createCodemodeTool, createMcpTools, createNestedToolRunner } from "./tools.ts";
+import toolsModule from "./tools.ts";
+
+const { createCodemodeTool, createMcpTools, createNestedToolRunner } = toolsModule;
 
 const usage = Effect.gen(function* () {
   yield* Console.error("Usage: main.ts <mcp server command> [args...]");
@@ -35,15 +38,18 @@ const main = Effect.gen(function* () {
   if (command === undefined || command === "") return yield* usage;
   const models = createModels();
   models.setProvider(anthropicProvider());
-  const model = models.getModel("anthropic-api", "claude-sonnet-4-6");
-  if (model === undefined) return yield* Effect.die(new Error("Model not found"));
+  const model = models
+    .getModels("anthropic-api")
+    .find((candidate) => candidate.reasoning && candidate.input.includes("image"));
+  if (model === undefined)
+    return yield* Effect.die(new Error("No Anthropic reasoning model accepts images"));
   const client = new McpClient({ name: "msa-agent-example", version: "1.0.0" });
-  yield* Effect.promise(() => client.connect(new StdioTransport({ command, args })));
+  yield* Effect.promise(() => client.connect(new StdioTransport({ args, command })));
   const agent = new Agent({
-    initialState: { systemPrompt: "You are a helpful assistant.", model },
+    initialState: { model, systemPrompt: "You are a helpful assistant." },
     streamFn: models.streamSimple.bind(models),
   });
   yield* run(agent, client).pipe(Effect.ensuring(Effect.promise(() => client.close())));
 });
 
-await Effect.runPromise(main);
+NodeRuntime.runMain(main);

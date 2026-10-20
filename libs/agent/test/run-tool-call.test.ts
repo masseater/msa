@@ -4,46 +4,51 @@ import { describe, expect, it } from "vite-plus/test";
 
 import { type RunToolCallOptions, runToolCall } from "../src/agent-loop.ts";
 import type { AfterToolCallResult, AgentTool } from "../src/types.ts";
-import { createAssistantMessage, echoSchema, type CallSpec, toolCall } from "./support/fixtures.ts";
+import fixtures from "./support/fixtures.ts";
+import type fixturesTypes from "./support/fixtures.types.ts";
+
+const { createAssistantMessage, echoSchema, toolCall } = fixtures;
 
 const echo: AgentTool<typeof echoSchema> = {
-  name: "echo",
-  label: "Echo",
   description: "Echo tool",
-  parameters: echoSchema,
-  outputSchema: Type.Object({ value: Type.String() }),
   execute: (_toolCallId, params, _signal, onUpdate) => {
-    onUpdate?.({ content: [{ type: "text", text: "partial" }], details: {} });
+    onUpdate?.({ content: [{ text: "partial", type: "text" }], details: {} });
     return Promise.resolve({
-      content: [{ type: "text", text: params.value }],
+      content: [{ text: params.value, type: "text" }],
       details: {},
       structuredContent: { value: params.value },
     });
   },
+  label: "Echo",
+  name: "echo",
+  outputSchema: Type.Object({ value: Type.String() }),
+  parameters: echoSchema,
 };
 
 const failing: AgentTool = {
-  name: "failing",
-  label: "Failing",
   description: "Returns an error result",
-  parameters: Type.Object({}),
   execute: () =>
     Promise.resolve({
-      content: [{ type: "text", text: "bad" }],
+      content: [{ text: "bad", type: "text" }],
       details: { partial: true },
       isError: true,
     }),
+  label: "Failing",
+  name: "failing",
+  parameters: Type.Object({}),
 };
 
 const assistantMessage = createAssistantMessage([]);
 
-const run = (spec: CallSpec, options: RunToolCallOptions) =>
+const run = (spec: fixturesTypes.CallSpec, options: RunToolCallOptions) =>
   Effect.promise(() => runToolCall(toolCall(spec), options));
 
 const hookedOptions = (hookCalls: string[], updates: unknown[]): RunToolCallOptions => ({
-  tools: [echo, failing],
+  afterToolCall: ({ toolCall: call }) => {
+    hookCalls.push(`after ${call.id}`);
+    return Promise.resolve(undefined);
+  },
   assistantMessage,
-  context: { messages: [] },
   beforeToolCall: ({ toolCall: call, args }) => {
     hookCalls.push(`before ${call.id}`);
     return Promise.resolve(
@@ -52,44 +57,42 @@ const hookedOptions = (hookCalls: string[], updates: unknown[]): RunToolCallOpti
         : undefined,
     );
   },
-  afterToolCall: ({ toolCall: call }) => {
-    hookCalls.push(`after ${call.id}`);
-    return Promise.resolve(undefined);
-  },
+  context: { messages: [] },
   onUpdate: (partial) => {
     updates.push(partial);
   },
+  tools: [echo, failing],
 });
 
 const validatesAndHooks = Effect.gen(function* () {
   const hookCalls: string[] = [];
   const updates: unknown[] = [];
   const options = hookedOptions(hookCalls, updates);
-  expect(yield* run({ id: "a", args: { value: "a" } }, options)).toMatchObject({
-    toolCall: { id: "a" },
-    result: { structuredContent: { value: "a" } },
+  expect(yield* run({ args: { value: "a" }, id: "a" }, options)).toMatchObject({
     isError: false,
+    result: { structuredContent: { value: "a" } },
+    toolCall: { id: "a" },
   });
-  expect(yield* run({ id: "b", args: { value: { nested: true } } }, options)).toMatchObject({
+  expect(yield* run({ args: { value: { nested: true } }, id: "b" }, options)).toMatchObject({
     isError: true,
   });
-  expect(yield* run({ id: "c", args: { value: "blocked" } }, options)).toMatchObject({
-    result: { content: [{ type: "text", text: "nope" }] },
+  expect(yield* run({ args: { value: "blocked" }, id: "c" }, options)).toMatchObject({
     isError: true,
+    result: { content: [{ text: "nope", type: "text" }] },
   });
   expect(yield* run({ id: "d", name: "missing" }, options)).toMatchObject({
-    result: { content: [{ type: "text", text: "Tool missing not found" }] },
     isError: true,
+    result: { content: [{ text: "Tool missing not found", type: "text" }] },
   });
   expect(yield* run({ id: "e", name: "failing" }, options)).toMatchObject({
-    result: { details: { partial: true } },
     isError: true,
+    result: { details: { partial: true } },
   });
-  expect(updates).toEqual([{ content: [{ type: "text", text: "partial" }], details: {} }]);
+  expect(updates).toEqual([{ content: [{ text: "partial", type: "text" }], details: {} }]);
   expect(hookCalls).toEqual(["before a", "after a", "before c", "before e", "after e"]);
 });
 
-const redacted = [{ type: "text" as const, text: "redacted" }];
+const redacted = [{ text: "redacted", type: "text" as const }];
 
 const afterResults: AfterToolCallResult[] = [
   { content: redacted },
@@ -102,12 +105,12 @@ const replacesStructuredContent = Effect.gen(function* () {
   const seen = yield* Effect.forEach(afterResults, (afterResult) =>
     Effect.map(
       run(
-        { id: "x", args: { value: "original" } },
+        { args: { value: "original" }, id: "x" },
         {
-          tools: [echo],
+          afterToolCall: () => Promise.resolve(afterResult),
           assistantMessage,
           context: { messages: [] },
-          afterToolCall: () => Promise.resolve(afterResult),
+          tools: [echo],
         },
       ),
       (outcome) => outcome.result.structuredContent,

@@ -5,25 +5,25 @@ import { afterEach, describe, expect, it, vi } from "vite-plus/test";
 import { type ProxyAssistantMessageEvent, streamProxy } from "../src/proxy.ts";
 
 const model: Model<"openai-responses"> = {
-  id: "gpt-5.4",
-  name: "GPT-5.4",
   api: "openai-responses",
-  provider: "openai",
   baseUrl: "https://api.openai.com/v1",
-  reasoning: true,
-  input: ["text"],
-  cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0 },
   contextWindow: 400000,
+  cost: { cacheRead: 0, cacheWrite: 0, input: 0, output: 0 },
+  id: "gpt-5.4",
+  input: ["text"],
   maxTokens: 128000,
+  name: "GPT-5.4",
+  provider: "openai",
+  reasoning: true,
 };
 
 const usage: AssistantMessage["usage"] = {
-  input: 0,
-  output: 0,
   cacheRead: 0,
   cacheWrite: 0,
+  cost: { cacheRead: 0, cacheWrite: 0, input: 0, output: 0, total: 0 },
+  input: 0,
+  output: 0,
   totalTokens: 0,
-  cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0, total: 0 },
 };
 
 afterEach(() => {
@@ -38,7 +38,7 @@ const respondWith = (body: string): void => {
 };
 
 const streamFromProxy = Effect.gen(function* () {
-  const stream = streamProxy(model, normalizeContext({ systemPrompt: "", messages: [] }), {
+  const stream = streamProxy(model, normalizeContext({ messages: [], systemPrompt: "" }), {
     authToken: "test-token",
     proxyUrl: "https://proxy.example.com",
   });
@@ -51,20 +51,20 @@ const streamFromProxy = Effect.gen(function* () {
 
 const toolCallEvents: ProxyAssistantMessageEvent[] = [
   { type: "start" },
-  { type: "toolcall_start", contentIndex: 0, id: "call_test|fc_test", toolName: "lookup" },
-  { type: "toolcall_delta", contentIndex: 0, delta: '{"value":"hello"}' },
+  { contentIndex: 0, id: "call_test|fc_test", toolName: "lookup", type: "toolcall_start" },
+  { contentIndex: 0, delta: '{"value":"hello"}', type: "toolcall_delta" },
   {
-    type: "toolcall_end",
     contentIndex: 0,
     toolCall: {
-      type: "toolCall",
+      arguments: { value: "hello" },
       id: "call_test|fc_test",
       name: "lookup",
-      arguments: { value: "hello" },
       namespace: "dynamic_tools",
+      type: "toolCall",
     },
+    type: "toolcall_end",
   },
-  { type: "done", reason: "toolUse", usage },
+  { reason: "toolUse", type: "done", usage },
 ];
 
 const sse = (event: object): string => `data: ${JSON.stringify(event)}`;
@@ -73,19 +73,19 @@ const keepsToolCallMetadata = Effect.gen(function* () {
   respondWith(toolCallEvents.map((event) => `${sse(event)}\n\n`).join(""));
   const { events, result } = yield* streamFromProxy;
   expect(events.find((event) => event.type === "toolcall_end")).toMatchObject({
-    type: "toolcall_end",
     toolCall: { namespace: "dynamic_tools" },
+    type: "toolcall_end",
   });
   expect(result.content[0]).toMatchObject({
-    type: "toolCall",
     arguments: { value: "hello" },
     namespace: "dynamic_tools",
+    type: "toolCall",
   });
 });
 
 const readsUnterminatedEvent = Effect.gen(function* () {
   respondWith(
-    `${sse({ type: "start" })}\n\n${sse({ type: "done", reason: "stop", usage, providerThinkingLevel: "high" })}`,
+    `${sse({ type: "start" })}\n\n${sse({ providerThinkingLevel: "high", reason: "stop", type: "done", usage })}`,
   );
   const { events, result } = yield* streamFromProxy;
   expect(events.map((event) => event.type)).toEqual(["start", "done"]);

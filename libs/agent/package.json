@@ -41,6 +41,7 @@
     "typebox": "catalog:"
   },
   "devDependencies": {
+    "@effect/platform-node": "catalog:",
     "@effect/vitest": "catalog:stack",
     "@types/node": "catalog:",
     "vitest": "catalog:"

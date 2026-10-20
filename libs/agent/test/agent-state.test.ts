@@ -1,18 +1,21 @@
-import { getModel } from "@msa/ai/compat";
+import { getModels } from "@msa/ai/compat";
 import { Effect } from "effect";
 import { Type } from "typebox";
 import { describe, expect, it } from "vite-plus/test";
 
 import { Agent, type AgentMessage, type AgentTool, setDefaultStreamFn } from "../src/index.ts";
-import { unusedStreamFunction } from "./support/agent.ts";
-import { createUserMessage, now, scripted, textMessage } from "./support/fixtures.ts";
+import agentModule from "./support/agent.ts";
+import fixtures from "./support/fixtures.ts";
+
+const { unusedStreamFunction } = agentModule;
+const { createUserMessage, now, scripted, textMessage } = fixtures;
 
 const echoTool: AgentTool = {
-  name: "echo",
-  label: "Echo",
   description: "Echo input",
+  execute: () => Promise.resolve({ content: [{ text: "echo", type: "text" }], details: {} }),
+  label: "Echo",
+  name: "echo",
   parameters: Type.Object({}),
-  execute: () => Promise.resolve({ content: [{ type: "text", text: "echo" }], details: {} }),
 };
 
 const usesConfiguredDefault = Effect.gen(function* () {
@@ -37,17 +40,18 @@ const defaultState = () => {
 };
 
 const customInitialState = () => {
-  const customModel = getModel("openai", "gpt-4o-mini");
+  const customModel = getModels("openai").find((model) => model.reasoning);
+  if (customModel === undefined) throw new Error("the openai catalog has no reasoning model");
   const agent = new Agent({
-    streamFn: unusedStreamFunction(),
     initialState: {
-      systemPrompt: "You are a helpful assistant.",
       model: customModel,
+      systemPrompt: "You are a helpful assistant.",
       thinkingLevel: "low",
     },
+    streamFn: unusedStreamFunction(),
   });
   expect(agent.state.messages).toEqual([
-    { role: "system", content: "You are a helpful assistant.", timestamp: 0 },
+    { content: "You are a helpful assistant.", role: "system", timestamp: 0 },
   ]);
   expect(agent.state.model).toBe(customModel);
   expect(agent.state.thinkingLevel).toBe("low");
@@ -71,9 +75,9 @@ const initialTranscript = () => {
 const resetsToBaseline = () => {
   const agent = new Agent({
     initialState: {
+      messages: [{ content: "old", role: "user", timestamp: 1 }],
       systemPrompt: "You are helpful.",
       tools: [echoTool],
-      messages: [{ role: "user", content: "old", timestamp: 1 }],
     },
     streamFn: unusedStreamFunction(),
   });
@@ -99,20 +103,21 @@ const subscribes = () => {
 
 const mutatesState = () => {
   const agent = new Agent({ streamFn: unusedStreamFunction() });
-  const newModel = getModel("opencode", "gemini-3-flash");
+  const newModel = getModels("opencode").find((model) => model.id !== agent.state.model.id);
+  if (newModel === undefined) throw new Error("the opencode catalog has no other model");
   agent.state.model = newModel;
   expect(agent.state.model).toBe(newModel);
   agent.state.thinkingLevel = "high";
   expect(agent.state.thinkingLevel).toBe("high");
-  const tools = [{ name: "test", description: "test tool" } as AgentTool];
+  const tools = [{ description: "test tool", name: "test" } as AgentTool];
   agent.state.tools = tools;
   expect(agent.state.tools).toEqual(tools);
   expect(agent.state.tools).not.toBe(tools);
-  const messages = [{ role: "user" as const, content: "Hello", timestamp: now() }];
+  const messages = [{ content: "Hello", role: "user" as const, timestamp: now() }];
   agent.state.messages = messages;
   expect(agent.state.messages).toEqual(messages);
   expect(agent.state.messages).not.toBe(messages);
-  const newMessage = { role: "assistant", content: [{ type: "text", text: "Hi" }] };
+  const newMessage = { content: [{ text: "Hi", type: "text" }], role: "assistant" };
   agent.state.messages.push(newMessage as AgentMessage);
   expect(agent.state.messages).toHaveLength(2);
   expect(agent.state.messages[1]).toBe(newMessage);
@@ -122,14 +127,14 @@ const mutatesState = () => {
 
 const queuesSteering = () => {
   const agent = new Agent({ streamFn: unusedStreamFunction() });
-  const message = { role: "user" as const, content: "Steering message", timestamp: now() };
+  const message = { content: "Steering message", role: "user" as const, timestamp: now() };
   agent.steer(message);
   expect(agent.state.messages).not.toContainEqual(message);
 };
 
 const queuesFollowUp = () => {
   const agent = new Agent({ streamFn: unusedStreamFunction() });
-  const message = { role: "user" as const, content: "Follow-up message", timestamp: now() };
+  const message = { content: "Follow-up message", role: "user" as const, timestamp: now() };
   agent.followUp(message);
   expect(agent.state.messages).not.toContainEqual(message);
 };
@@ -141,8 +146,8 @@ const abortsIdle = () => {
 
 const previewsQueues = () => {
   const agent = new Agent({
-    steeringMode: "one-at-a-time",
     followUpMode: "all",
+    steeringMode: "one-at-a-time",
     streamFn: unusedStreamFunction(),
   });
   const first = createUserMessage("first steering");

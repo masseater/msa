@@ -5,7 +5,9 @@ import { describe, expect, it } from "vite-plus/test";
 import { agentLoop } from "../src/agent-loop.ts";
 import { setDefaultStreamFn } from "../src/index.ts";
 import type { AgentContext, AgentLoopConfig, AgentMessage } from "../src/types.ts";
-import {
+import fixtures from "./support/fixtures.ts";
+
+const {
   collect,
   createAssistantMessage,
   createModel,
@@ -14,13 +16,13 @@ import {
   now,
   scripted,
   textMessage,
-} from "./support/fixtures.ts";
+} = fixtures;
 
 const usesConfiguredDefault = Effect.gen(function* () {
   const script = scripted(textMessage("fallback"));
   setDefaultStreamFn(script.streamFn);
   const context: AgentContext = { messages: [], tools: [] };
-  const config: AgentLoopConfig = { model: createModel(), convertToLlm: identityConverter };
+  const config: AgentLoopConfig = { convertToLlm: identityConverter, model: createModel() };
   const stream = Reflect.apply(agentLoop, undefined, [
     [createUserMessage("Hello")],
     context,
@@ -37,7 +39,7 @@ const emitsAgentMessageEvents = Effect.gen(function* () {
     agentLoop(
       [createUserMessage("Hello")],
       { messages: [], tools: [] },
-      { model: createModel(), convertToLlm: identityConverter },
+      { convertToLlm: identityConverter, model: createModel() },
       undefined,
       streamFn,
     ),
@@ -60,16 +62,16 @@ const emitsAgentMessageEvents = Effect.gen(function* () {
 
 const transcriptOnlyContext = Effect.gen(function* () {
   const initialSystem: AgentMessage = {
-    role: "system",
     content: "Transcript prompt",
-    toolsAdded: [],
+    role: "system",
     timestamp: 1,
+    toolsAdded: [],
   };
   const script = scripted(textMessage("done"));
   const stream = agentLoop(
     [initialSystem, createUserMessage("Hello")],
     { messages: [], tools: [] },
-    { model: createModel(), convertToLlm: identityConverter },
+    { convertToLlm: identityConverter, model: createModel() },
     undefined,
     script.streamFn,
   );
@@ -82,7 +84,6 @@ const customMessagesThroughConverter = Effect.gen(function* () {
   const notification = { role: "notification", text: "This is a notification", timestamp: now() };
   let convertedMessages: Message[] = [];
   const config: AgentLoopConfig = {
-    model: createModel(),
     convertToLlm: (messages) => {
       convertedMessages = messages
         .filter((message) => (message as { role: string }).role !== "notification")
@@ -94,6 +95,7 @@ const customMessagesThroughConverter = Effect.gen(function* () {
         ) as Message[];
       return convertedMessages;
     },
+    model: createModel(),
   };
   const context: AgentContext = {
     messages: [notification as unknown as AgentMessage],
@@ -109,11 +111,6 @@ const transformsBeforeConverting = Effect.gen(function* () {
   let transformedMessages: AgentMessage[] = [];
   let convertedMessages: Message[] = [];
   const config: AgentLoopConfig = {
-    model: createModel(),
-    transformContext: (messages) => {
-      transformedMessages = messages.slice(-2);
-      return Promise.resolve(transformedMessages);
-    },
     convertToLlm: (messages) => {
       convertedMessages = messages.filter(
         (message) =>
@@ -121,13 +118,18 @@ const transformsBeforeConverting = Effect.gen(function* () {
       ) as Message[];
       return convertedMessages;
     },
+    model: createModel(),
+    transformContext: (messages) => {
+      transformedMessages = messages.slice(-2);
+      return Promise.resolve(transformedMessages);
+    },
   };
   const context: AgentContext = {
     messages: [
       createUserMessage("old message 1"),
-      createAssistantMessage([{ type: "text", text: "old response 1" }]),
+      createAssistantMessage([{ text: "old response 1", type: "text" }]),
       createUserMessage("old message 2"),
-      createAssistantMessage([{ type: "text", text: "old response 2" }]),
+      createAssistantMessage([{ text: "old response 2", type: "text" }]),
     ],
     tools: [],
   };

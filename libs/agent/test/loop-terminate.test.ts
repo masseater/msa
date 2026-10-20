@@ -3,32 +3,38 @@ import { describe, expect, it } from "vite-plus/test";
 
 import { agentLoop } from "../src/agent-loop.ts";
 import type { AgentLoopConfig, AgentTool } from "../src/types.ts";
-import {
+import fixtures from "./support/fixtures.ts";
+import type fixturesTypes from "./support/fixtures.types.ts";
+
+const {
   collect,
   createModel,
   createUserMessage,
   echoResult,
   identityConverter,
-  type Script,
   scripted,
   textMessage,
   tool,
   toolCallMessage,
-} from "./support/fixtures.ts";
+} = fixtures;
 
-const helloCall = toolCallMessage([{ id: "tool-1", args: { value: "hello" } }]);
+const helloCall = toolCallMessage([{ args: { value: "hello" }, id: "tool-1" }]);
 
 const bothCalls = toolCallMessage([
-  { id: "tool-1", args: { value: "first" } },
-  { id: "tool-2", args: { value: "second" } },
+  { args: { value: "first" }, id: "tool-1" },
+  { args: { value: "second" }, id: "tool-2" },
 ]);
 
-const run = (echo: AgentTool<any>, script: Script, config: Partial<AgentLoopConfig> = {}) =>
+const run = (
+  echo: AgentTool<any>,
+  script: fixturesTypes.Script,
+  config: Partial<AgentLoopConfig> = {},
+) =>
   collect(
     agentLoop(
       [createUserMessage("echo something")],
       { messages: [], tools: [echo] },
-      { model: createModel(), convertToLlm: identityConverter, ...config },
+      { convertToLlm: identityConverter, model: createModel(), ...config },
       undefined,
       script.streamFn,
     ),
@@ -65,8 +71,8 @@ const blockedTerminates = Effect.gen(function* () {
   expect(script.calls()).toBe(1);
   expect(toolResult?.role === "toolResult" ? toolResult.isError : false).toBe(true);
   expect(toolResult?.role === "toolResult" ? toolResult.content : []).toContainEqual({
-    type: "text",
     text: "Blocked by policy",
+    type: "text",
   });
 });
 
@@ -80,13 +86,13 @@ const mixedBatchContinues = Effect.gen(function* () {
   });
   const script = scripted(bothCalls, textMessage("done"));
   yield* run(echo, script, {
-    toolExecution: "parallel",
     beforeToolCall: ({ args }) =>
       Promise.resolve(
         (args as { value: string }).value === "first"
           ? { block: true, reason: "Blocked first", terminate: true }
           : undefined,
       ),
+    toolExecution: "parallel",
   });
   expect(executed).toEqual(["second"]);
   expect(script.calls()).toBe(2);

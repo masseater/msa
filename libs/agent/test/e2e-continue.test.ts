@@ -1,16 +1,20 @@
 import {
   type AssistantMessage,
-  fauxAssistantMessage,
   type Model,
   type ToolResultMessage,
   type UserMessage,
+  fauxAssistantMessage,
 } from "@msa/ai/compat";
 import { Effect } from "effect";
 import { describe, expect, it } from "vite-plus/test";
 
-import { expectAssistant, fauxAgent, textOf, useFaux } from "./support/faux.ts";
-import { createUsage, now } from "./support/fixtures.ts";
-import { calculateTool } from "./utils/calculate.ts";
+import fauxModule from "./support/faux.ts";
+import fixtures from "./support/fixtures.ts";
+import calculate from "./utils/calculate.ts";
+
+const { expectAssistant, fauxAgent, textOf, useFaux } = fauxModule;
+const { createUsage, now } = fixtures;
+const { calculateTool } = calculate;
 
 const createFaux = useFaux();
 
@@ -18,24 +22,24 @@ const assistantFrom = (
   model: Model<string>,
   content: AssistantMessage["content"],
 ): AssistantMessage => ({
-  role: "assistant",
-  content,
   api: model.api,
-  provider: model.provider,
+  content,
   model: model.id,
-  usage: createUsage(),
+  provider: model.provider,
+  role: "assistant",
   stopReason: "stop",
   timestamp: now(),
+  usage: createUsage(),
 });
 
 const userText = (text: string): UserMessage => ({
+  content: [{ text, type: "text" }],
   role: "user",
-  content: [{ type: "text", text }],
   timestamp: now(),
 });
 
 const throwsWithoutMessages = Effect.gen(function* () {
-  const agent = fauxAgent({ systemPrompt: "Test", model: createFaux().getModel() });
+  const agent = fauxAgent({ model: createFaux().getModel(), systemPrompt: "Test" });
   yield* Effect.promise(() =>
     expect(agent.continue()).rejects.toThrow("No messages to continue from"),
   );
@@ -43,8 +47,8 @@ const throwsWithoutMessages = Effect.gen(function* () {
 
 const throwsFromAssistantTail = Effect.gen(function* () {
   const model = createFaux().getModel();
-  const agent = fauxAgent({ systemPrompt: "Test", model });
-  agent.state.messages = [assistantFrom(model, [{ type: "text", text: "Hello" }])];
+  const agent = fauxAgent({ model, systemPrompt: "Test" });
+  agent.state.messages = [assistantFrom(model, [{ text: "Hello", type: "text" }])];
   yield* Effect.promise(() =>
     expect(agent.continue()).rejects.toThrow("Cannot continue from message role: assistant"),
   );
@@ -54,8 +58,8 @@ const continuesFromUser = Effect.gen(function* () {
   const faux = createFaux();
   faux.setResponses([fauxAssistantMessage("HELLO WORLD")]);
   const agent = fauxAgent({
-    systemPrompt: "You are a helpful assistant. Follow instructions exactly.",
     model: faux.getModel(),
+    systemPrompt: "You are a helpful assistant. Follow instructions exactly.",
   });
   agent.state.messages = [userText("Say exactly: HELLO WORLD")];
   yield* Effect.promise(() => agent.continue());
@@ -65,12 +69,12 @@ const continuesFromUser = Effect.gen(function* () {
 });
 
 const toolResult: ToolResultMessage = {
+  content: [{ text: "5 + 3 = 8", type: "text" }],
+  isError: false,
   role: "toolResult",
+  timestamp: now(),
   toolCallId: "calc-1",
   toolName: "calculate",
-  content: [{ type: "text", text: "5 + 3 = 8" }],
-  isError: false,
-  timestamp: now(),
 };
 
 const continuesFromToolResult = Effect.gen(function* () {
@@ -78,15 +82,15 @@ const continuesFromToolResult = Effect.gen(function* () {
   const model = faux.getModel();
   faux.setResponses([fauxAssistantMessage("The answer is 8.")]);
   const agent = fauxAgent({
+    model,
     systemPrompt:
       "You are a helpful assistant. After getting a calculation result, state the answer clearly.",
-    model,
     tools: [calculateTool],
   });
   const toolUse: AssistantMessage = {
     ...assistantFrom(model, [
-      { type: "text", text: "Let me calculate that." },
-      { type: "toolCall", id: "calc-1", name: "calculate", arguments: { expression: "5 + 3" } },
+      { text: "Let me calculate that.", type: "text" },
+      { arguments: { expression: "5 + 3" }, id: "calc-1", name: "calculate", type: "toolCall" },
     ]),
     stopReason: "toolUse",
   };

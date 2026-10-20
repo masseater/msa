@@ -1,17 +1,19 @@
-import { getCurrentSystemMessage, toToolDeclaration, type TranscriptContext } from "@msa/ai";
+import { type TranscriptContext, getCurrentSystemMessage, toToolDeclaration } from "@msa/ai";
 import { Effect } from "effect";
 import { Type } from "typebox";
 import { describe, expect, it } from "vite-plus/test";
 
 import { Agent, type AgentTool } from "../src/index.ts";
-import { respond, textMessage } from "./support/fixtures.ts";
+import fixtures from "./support/fixtures.ts";
+
+const { respond, textMessage } = fixtures;
 
 const createTool = (name: string): AgentTool => ({
-  name,
-  label: name,
   description: `${name} tool`,
+  execute: () => Promise.resolve({ content: [{ text: name, type: "text" }], details: {} }),
+  label: name,
+  name,
   parameters: Type.Object({}),
-  execute: () => Promise.resolve({ content: [{ type: "text", text: name }], details: {} }),
 });
 
 const declarations = (context: TranscriptContext): string[] =>
@@ -46,11 +48,11 @@ const declaresChanges = Effect.gen(function* () {
     (message) => message.role === "system" && message.toolsRemoved !== undefined,
   );
   expect(update).toEqual({
-    role: "system",
     content: "",
-    toolsAdded: [{ name: "second", description: "second tool", parameters: Type.Object({}) }],
-    toolsRemoved: [{ name: "first" }],
+    role: "system",
     timestamp: expect.any(Number),
+    toolsAdded: [{ description: "second tool", name: "second", parameters: Type.Object({}) }],
+    toolsRemoved: [{ name: "first" }],
   });
   const initial = agent.state.messages[0];
   if (initial?.role !== "system") throw new Error("expected initial system message");
@@ -58,7 +60,7 @@ const declaresChanges = Effect.gen(function* () {
 });
 
 const mergesIntoPending = Effect.gen(function* () {
-  const echo: AgentTool = { ...createTool("echo"), label: "Echo", description: "Echo input" };
+  const echo: AgentTool = { ...createTool("echo"), description: "Echo input", label: "Echo" };
   const agent = new Agent({
     initialState: { systemPrompt: "You are helpful." },
     streamFn: (_model, context) => {
@@ -69,16 +71,16 @@ const mergesIntoPending = Effect.gen(function* () {
   agent.state.tools = [echo];
   yield* Effect.promise(() =>
     agent.prompt([
-      { role: "system", content: "", sections: { skills: "<skills>x</skills>" }, timestamp: 1 },
-      { role: "user", content: "hi", timestamp: 2 },
+      { content: "", role: "system", sections: { skills: "<skills>x</skills>" }, timestamp: 1 },
+      { content: "hi", role: "user", timestamp: 2 },
     ]),
   );
   expect(agent.state.messages[1]).toEqual({
-    role: "system",
     content: "",
+    role: "system",
     sections: { skills: "<skills>x</skills>" },
-    toolsAdded: [{ name: "echo", description: "Echo input", parameters: Type.Object({}) }],
     timestamp: 1,
+    toolsAdded: [{ description: "Echo input", name: "echo", parameters: Type.Object({}) }],
   });
 });
 
@@ -90,19 +92,19 @@ const rewritesPending = Effect.gen(function* () {
   yield* Effect.promise(() =>
     agent.prompt([
       {
-        role: "system",
         content: "",
+        role: "system",
         sections: { note: "<note>x</note>" },
+        timestamp: 1,
         toolsAdded: [toToolDeclaration(createTool("second"))],
         toolsRemoved: [{ name: "first" }],
-        timestamp: 1,
       },
-      { role: "user", content: "hi", timestamp: 2 },
+      { content: "hi", role: "user", timestamp: 2 },
     ]),
   );
   expect(agent.state.messages[1]).toEqual({
-    role: "system",
     content: "",
+    role: "system",
     sections: { note: "<note>x</note>" },
     timestamp: 1,
   });

@@ -3,8 +3,11 @@ import { Deferred, Effect, Exit } from "effect";
 import { describe, expect, it } from "vite-plus/test";
 
 import { Agent } from "../src/index.ts";
-import { abortableStream, awaitDeferred, release } from "./support/agent.ts";
-import { scripted, textMessage } from "./support/fixtures.ts";
+import agentModule from "./support/agent.ts";
+import fixtures from "./support/fixtures.ts";
+
+const { abortableStream, awaitDeferred, release } = agentModule;
+const { scripted, textMessage } = fixtures;
 
 const failureEvents = [
   "agent_start",
@@ -105,13 +108,13 @@ const passesAbortSignal = Effect.gen(function* () {
 const heldStream = (started: Deferred.Deferred<void>, held: Deferred.Deferred<void>) => () => {
   const stream = createAssistantMessageEventStream();
   queueMicrotask(() => {
-    stream.push({ type: "start", partial: textMessage("") });
+    stream.push({ partial: textMessage(""), type: "start" });
     release(started);
     Effect.runFork(
       Effect.andThen(
         Deferred.await(held),
         Effect.sync(() => {
-          stream.push({ type: "done", reason: "stop", message: textMessage("Done") });
+          stream.push({ message: textMessage("Done"), reason: "stop", type: "done" });
         }),
       ),
     );

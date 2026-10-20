@@ -1,12 +1,12 @@
 import {
   type AssistantMessage,
   type AssistantMessageEventStream,
-  createAssistantMessageEventStream,
   type EventStream,
   type Message,
   type Model,
   type TranscriptContext,
   type UserMessage,
+  createAssistantMessageEventStream,
 } from "@msa/ai";
 import { Effect, Stream } from "effect";
 import { type TSchema, Type } from "typebox";
@@ -17,56 +17,55 @@ import type {
   AgentTool,
   AgentToolCall,
   AgentToolResult,
-  StreamFn,
 } from "../../src/types.ts";
+import type fixturesTypes from "./fixtures.types.ts";
 
-export const createUsage = () => ({
-  input: 0,
-  output: 0,
+const createUsage = () => ({
   cacheRead: 0,
   cacheWrite: 0,
+  cost: { cacheRead: 0, cacheWrite: 0, input: 0, output: 0, total: 0 },
+  input: 0,
+  output: 0,
   totalTokens: 0,
-  cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0, total: 0 },
 });
 
-export const createModel = (): Model<"openai-responses"> => ({
-  id: "mock",
-  name: "mock",
+const createModel = (): Model<"openai-responses"> => ({
   api: "openai-responses",
-  provider: "openai",
   baseUrl: "https://example.invalid",
-  reasoning: false,
-  input: ["text"],
-  cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0 },
   contextWindow: 8192,
+  cost: { cacheRead: 0, cacheWrite: 0, input: 0, output: 0 },
+  id: "mock",
+  input: ["text"],
   maxTokens: 2048,
+  name: "mock",
+  provider: "openai",
+  reasoning: false,
 });
 
-export const now = (): number =>
-  Effect.runSync(Effect.clockWith((clock) => clock.currentTimeMillis));
+const now = (): number => Effect.runSync(Effect.clockWith((clock) => clock.currentTimeMillis));
 
-export const createAssistantMessage = (content: AssistantMessage["content"]): AssistantMessage => ({
-  role: "assistant",
-  content,
+const createAssistantMessage = (content: AssistantMessage["content"]): AssistantMessage => ({
   api: "openai-responses",
-  provider: "openai",
+  content,
   model: "mock",
-  usage: createUsage(),
+  provider: "openai",
+  role: "assistant",
   stopReason: "stop",
   timestamp: now(),
+  usage: createUsage(),
 });
 
-export const stoppedWith =
+const stoppedWith =
   (stopReason: AssistantMessage["stopReason"]) =>
   (message: AssistantMessage): AssistantMessage => ({ ...message, stopReason });
 
-export const createUserMessage = (text: string): UserMessage => ({
-  role: "user",
+const createUserMessage = (text: string): UserMessage => ({
   content: text,
+  role: "user",
   timestamp: now(),
 });
 
-export const identityConverter = (messages: AgentMessage[]): Message[] =>
+const identityConverter = (messages: AgentMessage[]): Message[] =>
   messages.filter(
     (message) =>
       message.role === "system" ||
@@ -75,95 +74,71 @@ export const identityConverter = (messages: AgentMessage[]): Message[] =>
       message.role === "toolResult",
   ) as Message[];
 
-export const textMessage = (text: string): AssistantMessage =>
-  createAssistantMessage([{ type: "text", text }]);
+const textMessage = (text: string): AssistantMessage =>
+  createAssistantMessage([{ text, type: "text" }]);
 
-export interface CallSpec {
-  readonly id: string;
-  readonly name?: string;
-  readonly args?: AgentToolCall["arguments"];
-}
-
-export const toolCall = ({ id, name = "echo", args = {} }: CallSpec): AgentToolCall => ({
-  type: "toolCall",
+const toolCall = ({ id, name = "echo", args = {} }: fixturesTypes.CallSpec): AgentToolCall => ({
+  arguments: args,
   id,
   name,
-  arguments: args,
+  type: "toolCall",
 });
 
-export const toolCallMessage = (calls: readonly CallSpec[]): AssistantMessage =>
+const toolCallMessage = (calls: readonly fixturesTypes.CallSpec[]): AssistantMessage =>
   stoppedWith("toolUse")(createAssistantMessage(calls.map(toolCall)));
 
-export const respond = (message: AssistantMessage): AssistantMessageEventStream => {
+const respond = (message: AssistantMessage): AssistantMessageEventStream => {
   const stream = createAssistantMessageEventStream();
   queueMicrotask(() => {
     if (message.stopReason === "error" || message.stopReason === "aborted") {
-      stream.push({ type: "error", reason: message.stopReason, error: message });
+      stream.push({ error: message, reason: message.stopReason, type: "error" });
     } else {
       stream.push({
-        type: "done",
-        reason: message.stopReason as "stop" | "length" | "toolUse",
         message,
+        reason: message.stopReason as "stop" | "length" | "toolUse",
+        type: "done",
       });
     }
   });
   return stream;
 };
 
-export interface Script {
-  readonly streamFn: StreamFn;
-  readonly calls: () => number;
-  readonly contexts: TranscriptContext[];
-}
-
-export const scripted = (...messages: AssistantMessage[]): Script => {
+const scripted = (...messages: AssistantMessage[]): fixturesTypes.Script => {
   let calls = 0;
   const contexts: TranscriptContext[] = [];
   return {
+    calls: () => calls,
+    contexts,
     streamFn: (_model, context) => {
       contexts.push(context);
       const message = messages[Math.min(calls, messages.length - 1)] ?? textMessage("done");
       calls++;
       return respond(message);
     },
-    calls: () => calls,
-    contexts,
   };
 };
 
-export const echoSchema = Type.Object({ value: Type.String() });
+const echoSchema = Type.Object({ value: Type.String() });
 
-export interface EchoOptions<T extends TSchema> {
-  readonly name?: string;
-  readonly parameters?: T;
-  readonly executionMode?: AgentTool["executionMode"];
-  readonly run: AgentTool<T, any>["execute"];
-}
-
-export const tool = <T extends TSchema = typeof echoSchema>(
-  options: EchoOptions<T>,
+const tool = <T extends TSchema = typeof echoSchema>(
+  options: fixturesTypes.EchoOptions<T>,
 ): AgentTool<T, any> => ({
-  name: options.name ?? "echo",
-  label: options.name ?? "Echo",
   description: `${options.name ?? "Echo"} tool`,
+  execute: options.run,
+  label: options.name ?? "Echo",
+  name: options.name ?? "echo",
   parameters: options.parameters ?? (echoSchema as unknown as T),
   ...(options.executionMode === undefined ? {} : { executionMode: options.executionMode }),
-  execute: options.run,
 });
 
-export const echoResult = (value: string): AgentToolResult<{ value: string }> => ({
-  content: [{ type: "text", text: `echoed: ${value}` }],
+const echoResult = (value: string): AgentToolResult<{ value: string }> => ({
+  content: [{ text: `echoed: ${value}`, type: "text" }],
   details: { value },
 });
 
-export interface Collected {
-  readonly events: AgentEvent[];
-  readonly messages: AgentMessage[];
-}
-
-export const collect = (
+const collect = (
   stream: EventStream<AgentEvent, AgentMessage[]>,
-): Effect.Effect<Collected> =>
+): Effect.Effect<fixturesTypes.Collected> =>
   Effect.gen(function* () {
     const events = yield* Stream.runCollect(
       Stream.fromAsyncIterable(stream, (error) => error as Error),
@@ -172,14 +147,37 @@ export const collect = (
     return { events: [...events], messages };
   });
 
-export const toolResultIds = (events: readonly AgentEvent[]): string[] =>
+const toolResultIds = (events: readonly AgentEvent[]): string[] =>
   events.flatMap((event) =>
     event.type === "message_end" && event.message.role === "toolResult"
       ? [event.message.toolCallId]
       : [],
   );
 
-export const delayed =
+const delayed =
   (millis: number) =>
   <A>(value: A): Promise<A> =>
     Effect.runPromise(Effect.as(Effect.sleep(millis), value));
+
+const fixtures = {
+  collect,
+  createAssistantMessage,
+  createModel,
+  createUsage,
+  createUserMessage,
+  delayed,
+  echoResult,
+  echoSchema,
+  identityConverter,
+  now,
+  respond,
+  scripted,
+  stoppedWith,
+  textMessage,
+  tool,
+  toolCall,
+  toolCallMessage,
+  toolResultIds,
+};
+
+export default fixtures;

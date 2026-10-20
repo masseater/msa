@@ -4,7 +4,9 @@ import { describe, expect, it } from "vite-plus/test";
 
 import { agentLoop, runAgentLoop } from "../src/agent-loop.ts";
 import type { AgentLoopConfig } from "../src/types.ts";
-import {
+import fixtures from "./support/fixtures.ts";
+
+const {
   createAssistantMessage,
   createModel,
   createUserMessage,
@@ -15,12 +17,12 @@ import {
   textMessage,
   tool,
   toolCallMessage,
-} from "./support/fixtures.ts";
+} = fixtures;
 
 const noop = tool({
   name: "noop",
   parameters: Type.Object({}),
-  run: () => Promise.resolve({ content: [{ type: "text", text: "done" }], details: undefined }),
+  run: () => Promise.resolve({ content: [{ text: "done", type: "text" }], details: undefined }),
 });
 
 const finishesBeforeTurnEnd = Effect.gen(function* () {
@@ -29,13 +31,13 @@ const finishesBeforeTurnEnd = Effect.gen(function* () {
   });
   const ordering: string[] = [];
   const config: AgentLoopConfig = {
-    model: createModel(),
     convertToLlm: identityConverter,
     finishTurn: ({ context, toolResults }) => {
       ordering.push("finishTurn");
       expect(toolResults).toHaveLength(1);
       expect(context.messages.at(-1)?.role).toBe("toolResult");
     },
+    model: createModel(),
   };
   yield* Effect.promise(() =>
     runAgentLoop(
@@ -47,13 +49,13 @@ const finishesBeforeTurnEnd = Effect.gen(function* () {
         if (event.type === "turn_end") ordering.push("turn_end");
       },
       undefined,
-      scripted(toolCallMessage([{ id: "tool-1", args: { value: "hello" } }])).streamFn,
+      scripted(toolCallMessage([{ args: { value: "hello" }, id: "tool-1" }])).streamFn,
     ),
   );
   expect(ordering.slice(-3)).toEqual(["message_end:toolResult", "finishTurn", "turn_end"]);
 });
 
-const counters = () => ({ steering: 0, followUps: 0, prepared: 0 });
+const counters = () => ({ followUps: 0, prepared: 0, steering: 0 });
 
 const hardExit = (reason: "error" | "aborted") =>
   Effect.gen(function* () {
@@ -64,16 +66,16 @@ const hardExit = (reason: "error" | "aborted") =>
       errorMessage: reason,
     });
     const config: AgentLoopConfig = {
-      model: createModel(),
       convertToLlm: identityConverter,
       finishTurn: ({ message }) => {
         expect(message.stopReason).toBe(reason);
         ordering.push("finishTurn");
         return { action: "continue" };
       },
-      getSteeringMessages: () => Promise.resolve((polls.steering++, [])),
       getFollowUpMessages: () =>
         Promise.resolve((polls.followUps++, [createUserMessage("queued")])),
+      getSteeringMessages: () => Promise.resolve((polls.steering++, [])),
+      model: createModel(),
     };
     const sink = (event: { type: string }) => {
       if (event.type === "turn_end") ordering.push("turn_end");
@@ -90,21 +92,21 @@ const hardExit = (reason: "error" | "aborted") =>
     );
     expect(ordering).toEqual(["finishTurn", "turn_end"]);
     expect(script.calls()).toBe(1);
-    expect(polls).toMatchObject({ steering: 1, followUps: 0 });
+    expect(polls).toMatchObject({ followUps: 0, steering: 1 });
   });
 
 const endSkipsPolling = Effect.gen(function* () {
   const polls = counters();
   const config: AgentLoopConfig = {
-    model: createModel(),
     convertToLlm: identityConverter,
     finishTurn: () => ({ action: "end" }),
+    getFollowUpMessages: () => Promise.resolve((polls.followUps++, [createUserMessage("queued")])),
+    getSteeringMessages: () => Promise.resolve((polls.steering++, [])),
+    model: createModel(),
     prepareNextTurn: () => {
       polls.prepared++;
       return undefined;
     },
-    getSteeringMessages: () => Promise.resolve((polls.steering++, [])),
-    getFollowUpMessages: () => Promise.resolve((polls.followUps++, [createUserMessage("queued")])),
   };
   const script = scripted(toolCallMessage([{ id: "tool-1", name: "noop" }]));
   const stream = agentLoop(
@@ -116,17 +118,17 @@ const endSkipsPolling = Effect.gen(function* () {
   );
   yield* Effect.promise(() => stream.result());
   expect(script.calls()).toBe(1);
-  expect(polls).toEqual({ steering: 1, followUps: 0, prepared: 0 });
+  expect(polls).toEqual({ followUps: 0, prepared: 0, steering: 1 });
 });
 
 const continueOnce = () => {
   let finishCalls = 0;
   return {
+    finishCalls: () => finishCalls,
     finishTurn: () => {
       finishCalls++;
       return finishCalls === 1 ? ({ action: "continue" } as const) : undefined;
     },
-    finishCalls: () => finishCalls,
   };
 };
 
@@ -136,7 +138,7 @@ const contextOnlyRequest = Effect.gen(function* () {
   const stream = agentLoop(
     [createUserMessage("run")],
     { messages: [], tools: [] },
-    { model: createModel(), convertToLlm: identityConverter, finishTurn: finish.finishTurn },
+    { convertToLlm: identityConverter, finishTurn: finish.finishTurn, model: createModel() },
     undefined,
     script.streamFn,
   );
@@ -151,7 +153,7 @@ const toolResultSatisfies = Effect.gen(function* () {
   const stream = agentLoop(
     [createUserMessage("run")],
     { messages: [], tools: [noop] },
-    { model: createModel(), convertToLlm: identityConverter, finishTurn: finish.finishTurn },
+    { convertToLlm: identityConverter, finishTurn: finish.finishTurn, model: createModel() },
     undefined,
     script.streamFn,
   );
@@ -167,20 +169,20 @@ const queueSatisfies = (queueKind: "steering" | "follow-up") =>
     let steeringPolls = 0;
     let followUpDelivered = false;
     const config: AgentLoopConfig = {
-      model: createModel(),
       convertToLlm: identityConverter,
       finishTurn: finish.finishTurn,
+      getFollowUpMessages: () => {
+        if (queueKind !== "follow-up" || followUpDelivered) return Promise.resolve([]);
+        followUpDelivered = true;
+        return Promise.resolve([queuedMessage]);
+      },
       getSteeringMessages: () => {
         steeringPolls++;
         return Promise.resolve(
           queueKind === "steering" && steeringPolls === 2 ? [queuedMessage] : [],
         );
       },
-      getFollowUpMessages: () => {
-        if (queueKind !== "follow-up" || followUpDelivered) return Promise.resolve([]);
-        followUpDelivered = true;
-        return Promise.resolve([queuedMessage]);
-      },
+      model: createModel(),
     };
     const script = scripted(textMessage("done"));
     const stream = agentLoop(

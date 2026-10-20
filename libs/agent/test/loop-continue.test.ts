@@ -4,17 +4,12 @@ import { describe, expect, it } from "vite-plus/test";
 
 import { agentLoopContinue } from "../src/agent-loop.ts";
 import type { AgentContext, AgentLoopConfig, AgentMessage } from "../src/types.ts";
-import {
-  collect,
-  createModel,
-  createUserMessage,
-  identityConverter,
-  now,
-  scripted,
-  textMessage,
-} from "./support/fixtures.ts";
+import fixtures from "./support/fixtures.ts";
 
-const config: AgentLoopConfig = { model: createModel(), convertToLlm: identityConverter };
+const { collect, createModel, createUserMessage, identityConverter, now, scripted, textMessage } =
+  fixtures;
+
+const config: AgentLoopConfig = { convertToLlm: identityConverter, model: createModel() };
 
 const throwsWithoutMessages = () => {
   expect(() =>
@@ -46,7 +41,7 @@ const customToUser = (messages: AgentMessage[]): Message[] =>
     .map((message) => {
       const custom = message as unknown as CustomMessage;
       return custom.role === "custom"
-        ? { role: "user" as const, content: custom.text, timestamp: custom.timestamp }
+        ? { content: custom.text, role: "user" as const, timestamp: custom.timestamp }
         : message;
     })
     .filter(
@@ -64,7 +59,7 @@ const continuesFromCustomMessage = Effect.gen(function* () {
   const { messages } = yield* collect(
     agentLoopContinue(
       context,
-      { model: createModel(), convertToLlm: customToUser },
+      { convertToLlm: customToUser, model: createModel() },
       undefined,
       streamFn,
     ),

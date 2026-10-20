@@ -4,21 +4,17 @@ import { Type } from "typebox";
 import { describe, expect, it } from "vite-plus/test";
 
 import { Agent, type AgentOptions, type AgentTool, type StreamFn } from "../src/index.ts";
-import {
-  createUserMessage,
-  respond,
-  scripted,
-  stoppedWith,
-  textMessage,
-  toolCallMessage,
-} from "./support/fixtures.ts";
+import fixtures from "./support/fixtures.ts";
+
+const { createUserMessage, respond, scripted, stoppedWith, textMessage, toolCallMessage } =
+  fixtures;
 
 const noop = (text: string): AgentTool => ({
-  name: "noop",
-  label: "Noop",
   description: "Noop tool",
+  execute: () => Promise.resolve({ content: [{ text, type: "text" }], details: {} }),
+  label: "Noop",
+  name: "noop",
   parameters: Type.Object({}),
-  execute: () => Promise.resolve({ content: [{ type: "text", text }], details: {} }),
 });
 
 const legacyPrepareNextTurn = Effect.gen(function* () {
@@ -45,12 +41,12 @@ const forwardsFinishTurn = Effect.gen(function* () {
     textMessage("should not run"),
   );
   const agent = new Agent({
-    initialState: { tools: [noop("tool complete")] },
     finishTurn: (turn, signal) => {
       sawAbortSignal = signal instanceof AbortSignal;
       roles = turn.context.messages.map((message) => message.role);
       return { action: "end" };
     },
+    initialState: { tools: [noop("tool complete")] },
     streamFn: script.streamFn,
   });
   yield* Effect.promise(() => agent.prompt("start"));
@@ -90,7 +86,7 @@ const providerEventStream: StreamFn = (model, _context, options) => {
           Promise.resolve(options?.onProviderStreamEvent?.({ request_cost: 0.01 }, model)),
         ),
         Effect.sync(() => {
-          stream.push({ type: "done", reason: "stop", message: textMessage("ok") });
+          stream.push({ message: textMessage("ok"), reason: "stop", type: "done" });
         }),
       ),
     );

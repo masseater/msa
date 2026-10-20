@@ -3,7 +3,9 @@ import { describe, expect, it } from "vite-plus/test";
 
 import { agentLoop } from "../src/agent-loop.ts";
 import type { AgentEvent, AgentLoopConfig, AgentTool } from "../src/types.ts";
-import {
+import fixtures from "./support/fixtures.ts";
+
+const {
   collect,
   createModel,
   createUserMessage,
@@ -15,7 +17,7 @@ import {
   tool,
   toolCallMessage,
   toolResultIds,
-} from "./support/fixtures.ts";
+} = fixtures;
 
 interface Race {
   firstResolved: boolean;
@@ -41,8 +43,8 @@ const racingTool = (race: Race, mode?: AgentTool["executionMode"]) =>
   });
 
 const firstAndSecond = toolCallMessage([
-  { id: "tool-1", args: { value: "first" } },
-  { id: "tool-2", args: { value: "second" } },
+  { args: { value: "first" }, id: "tool-1" },
+  { args: { value: "second" }, id: "tool-2" },
 ]);
 
 const runRacing = (echo: AgentTool<any>, config: Partial<AgentLoopConfig> = {}) =>
@@ -50,7 +52,7 @@ const runRacing = (echo: AgentTool<any>, config: Partial<AgentLoopConfig> = {}) 
     agentLoop(
       [createUserMessage("echo both")],
       { messages: [], tools: [echo] },
-      { model: createModel(), convertToLlm: identityConverter, ...config },
+      { convertToLlm: identityConverter, model: createModel(), ...config },
       undefined,
       scripted(firstAndSecond, textMessage("done")).streamFn,
     ),
@@ -101,10 +103,10 @@ const steeringAfterTools = Effect.gen(function* () {
       [createUserMessage("start")],
       { messages: [], tools: [echo] },
       {
-        model: createModel(),
         convertToLlm: identityConverter,
-        toolExecution: "sequential",
         getSteeringMessages,
+        model: createModel(),
+        toolExecution: "sequential",
       },
       undefined,
       script.streamFn,
@@ -137,8 +139,8 @@ const oneSequentialTool = Effect.gen(function* () {
   const executionOrder: string[] = [];
   const ordered = (name: string, mode: AgentTool["executionMode"]) =>
     tool({
-      name,
       executionMode: mode,
+      name,
       run: (_id, params) => {
         executionOrder.push(`${name}:${params.value}`);
         return params.value === "a"
@@ -148,8 +150,8 @@ const oneSequentialTool = Effect.gen(function* () {
     });
   const script = scripted(
     toolCallMessage([
-      { id: "tool-1", name: "slow", args: { value: "a" } },
-      { id: "tool-2", name: "fast", args: { value: "b" } },
+      { args: { value: "a" }, id: "tool-1", name: "slow" },
+      { args: { value: "b" }, id: "tool-2", name: "fast" },
     ]),
     textMessage("done"),
   );
@@ -157,7 +159,7 @@ const oneSequentialTool = Effect.gen(function* () {
     agentLoop(
       [createUserMessage("run both")],
       { messages: [], tools: [ordered("slow", "sequential"), ordered("fast", "parallel")] },
-      { model: createModel(), convertToLlm: identityConverter },
+      { convertToLlm: identityConverter, model: createModel() },
       undefined,
       script.streamFn,
     ),
