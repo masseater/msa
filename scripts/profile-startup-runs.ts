@@ -184,52 +184,62 @@ const exitFailure = (stderr: string, exitCode: number) =>
 const profileNameOf = (params: profileStartupRunsTypes.RunParams) =>
   `${params.options.label}-${String(params.runIndex + 1).padStart(3, "0")}.cpuprofile`;
 
-const runTui = (params: profileStartupRunsTypes.RunParams) =>
+const withBenchmarkChild = <A, E, R>(
+  params: profileStartupRunsTypes.RunParams,
+  mode: profileStartupArgsTypes.Mode,
+  use: (
+    child: Effect.Success<ReturnType<typeof spawnBenchmark>>,
+    profileName: string,
+  ) => Effect.Effect<A, E, R>,
+) =>
   withAgentDir(params, (isolatedAgentDir) =>
     Effect.scoped(
       Effect.gen(function* () {
         const profileName = profileNameOf(params);
-        const child = yield* spawnBenchmark({ isolatedAgentDir, mode: "tui", params, profileName });
-        const startedAt = yield* nowMs;
-        const [stderr, exitCode] = yield* Effect.all([child.stderrText, child.exitCode], {
-          concurrency: "unbounded",
-        });
-        const elapsedMs = (yield* nowMs) - startedAt;
-        if (exitCode !== 0) return yield* exitFailure(stderr, exitCode);
-        return yield* finishRun(params, profileName, { elapsedMs, stderr });
+        const child = yield* spawnBenchmark({ isolatedAgentDir, mode, params, profileName });
+        return yield* use(child, profileName);
       }),
     ),
   );
 
+const runTui = (params: profileStartupRunsTypes.RunParams) =>
+  withBenchmarkChild(params, "tui", (child, profileName) =>
+    Effect.gen(function* () {
+      const startedAt = yield* nowMs;
+      const [stderr, exitCode] = yield* Effect.all([child.stderrText, child.exitCode], {
+        concurrency: "unbounded",
+      });
+      const elapsedMs = (yield* nowMs) - startedAt;
+      if (exitCode !== 0) return yield* exitFailure(stderr, exitCode);
+      return yield* finishRun(params, profileName, { elapsedMs, stderr });
+    }),
+  );
+
 const runRpc = (params: profileStartupRunsTypes.RunParams) =>
-  withAgentDir(params, (isolatedAgentDir) =>
-    Effect.scoped(
-      Effect.gen(function* () {
-        const profileName = profileNameOf(params);
-        const child = yield* spawnBenchmark({ isolatedAgentDir, mode: "rpc", params, profileName });
-        const requestId = `startup-benchmark-${params.runIndex + 1}`;
-        const state = yield* Ref.make<profileStartupRpcTypes.RpcState>({
-          readyElapsedMs: undefined,
-          responseError: undefined,
-        });
-        const startedAt = yield* nowMs;
-        const context: profileStartupRpcTypes.LineContext = {
-          onReady: child.endInput,
-          requestId,
-          startedAt,
-          state,
-        };
-        const consumeStdout = Stream.runForEach(child.stdoutLines, handleLine(context));
-        yield* child.write(yield* getStateRequest(requestId));
-        const [, stderr, exitCode] = yield* Effect.all(
-          [consumeStdout, child.stderrText, child.exitCode],
-          { concurrency: "unbounded" },
-        );
-        const elapsedMs = yield* rpcElapsed({ state: yield* Ref.get(state), stderr });
-        if (exitCode !== 0) return yield* exitFailure(stderr, exitCode);
-        return yield* finishRun(params, profileName, { elapsedMs, stderr });
-      }),
-    ),
+  withBenchmarkChild(params, "rpc", (child, profileName) =>
+    Effect.gen(function* () {
+      const requestId = `startup-benchmark-${params.runIndex + 1}`;
+      const state = yield* Ref.make<profileStartupRpcTypes.RpcState>({
+        readyElapsedMs: undefined,
+        responseError: undefined,
+      });
+      const startedAt = yield* nowMs;
+      const context: profileStartupRpcTypes.LineContext = {
+        onReady: child.endInput,
+        requestId,
+        startedAt,
+        state,
+      };
+      const consumeStdout = Stream.runForEach(child.stdoutLines, handleLine(context));
+      yield* child.write(yield* getStateRequest(requestId));
+      const [, stderr, exitCode] = yield* Effect.all(
+        [consumeStdout, child.stderrText, child.exitCode],
+        { concurrency: "unbounded" },
+      );
+      const elapsedMs = yield* rpcElapsed({ state: yield* Ref.get(state), stderr });
+      if (exitCode !== 0) return yield* exitFailure(stderr, exitCode);
+      return yield* finishRun(params, profileName, { elapsedMs, stderr });
+    }),
   );
 
 const profileStartupRuns = {

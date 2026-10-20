@@ -1,8 +1,8 @@
 import { Effect, Predicate, Schema } from "effect";
 
-import type autoSinceTypes from "./auto-since.types.ts";
 import type hostTypes from "./host.types.ts";
 import type readToolScanTypes from "./read-tool-scan.types.ts";
+import type scanOptionsTypes from "./scan-options.types.ts";
 import sessions from "./sessions.ts";
 import toolCalls from "./tool-calls.ts";
 import type toolCallsTypes from "./tool-calls.types.ts";
@@ -97,11 +97,7 @@ const scanFile = (options: {
     return records;
   });
 
-const scanReadCalls = (options: {
-  readonly host: hostTypes.HostShape;
-  readonly sessionsDir: string;
-  readonly since: autoSinceTypes.SinceFilter | null;
-}) =>
+const scanReadCalls = (options: scanOptionsTypes.SessionScanRequest) =>
   Effect.gen(function* () {
     const { host } = options;
     const meta: readToolScanTypes.ReadScanMeta = {

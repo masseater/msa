@@ -1,3 +1,6 @@
+import type autoSinceTypes from "./auto-since.types.ts";
+import type hostTypes from "./host.types.ts";
+
 declare namespace scanOptionsTypes {
   interface ScanArgs {
     allSessions: boolean;
@@ -8,6 +11,12 @@ declare namespace scanOptionsTypes {
     sessionsDir: string;
     since: string | undefined;
     top: number;
+  }
+
+  interface SessionScanRequest {
+    readonly host: hostTypes.HostShape;
+    readonly sessionsDir: string;
+    readonly since: autoSinceTypes.SinceFilter | null;
   }
 }
 
