@@ -4,12 +4,14 @@ import { userInfo } from "node:os";
 import { Effect } from "effect";
 import { afterAll, beforeAll, inject } from "vite-plus/test";
 
-import { Connection } from "../src/connection.ts";
-import { type SshTarget, acceptHostKey, connectSsh, scanHostKey } from "../src/ssh.ts";
+import envModule from "../src/index.ts";
+import type envTypes from "../src/index.types.ts";
 import daemon from "./daemon.ts";
 import platformModule from "./platform.ts";
 import type platformTypes from "./platform.types.ts";
 import type sshdTypes from "./sshd.types.ts";
+
+const { Connection, acceptHostKey, connectSsh, scanHostKey } = envModule;
 
 const {
   localPath,
@@ -120,7 +122,7 @@ const startServer = (running: Running): Effect.Effect<void> =>
       "-lf",
       localPath.join(root, "host_key.pub"),
     ])).split(" ")[1]!;
-    const target: SshTarget = {
+    const target: envTypes.SshTarget = {
       configFile: localPath.join(root, "ssh_config"),
       host: "127.0.0.1",
       hostKeyAlias: "msa-env-test",
@@ -164,7 +166,7 @@ const connectTo = ({ server, loginShell }: sshdTypes.ConnectTo): ReturnType<type
     ...(loginShell === undefined ? {} : { loginShell }),
   });
 
-const localConnection = (): Connection => new Connection({ command: [daemon] });
+const localConnection = (): envTypes.Connection => new Connection({ command: [daemon] });
 
 const sshdModule = {
   connectTo,

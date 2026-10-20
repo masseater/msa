@@ -1,40 +1,58 @@
-import { err, FileError, type FileInfo, type FileKind, ok, type Result } from "@msa/durable/env";
+import { FileError, type FileInfo, type Result, err, ok } from "@msa/durable/env";
 import { Effect } from "effect";
 import { dual } from "effect/Function";
 
-import type { Connection, Json } from "./connection.ts";
-import { type PathOps, posixPath, win32Path } from "./platform.ts";
-import { nodePlatform } from "./remote-info.ts";
+import type connectionTypes from "./connection.types.ts";
+import platformModule from "./platform.ts";
+import type platformTypes from "./platform.types.ts";
+import remoteInfo from "./remote-info.ts";
+import type remotePathTypes from "./remote-path.types.ts";
 
-export type RemoteFileInfo = {
-  name: string;
-  kind: FileKind | "other";
-  size: number;
-  mtimeSec: number;
-  mtimeNsec: number;
-};
+const { nodePlatform } = remoteInfo;
+const { posixPath, win32Path } = platformModule;
 
-export type RemoteDirEntry = { name: string; raw?: number[]; info?: RemoteFileInfo; error?: Json };
-
-export const remotePath = (connection: Connection): Effect.Effect<PathOps> =>
+const remotePath = (connection: connectionTypes.Connection): Effect.Effect<platformTypes.PathOps> =>
   Effect.promise(() => connection.info()).pipe(
     Effect.map((info) => (nodePlatform(info).platform === "win32" ? win32Path : posixPath)),
   );
 
-export const toInfo: {
-  (remote: RemoteFileInfo, paths: PathOps): (path: string) => Result<FileInfo, FileError>;
-  (path: string, remote: RemoteFileInfo, paths: PathOps): Result<FileInfo, FileError>;
-} = dual(3, (path: string, remote: RemoteFileInfo, paths: PathOps): Result<FileInfo, FileError> => {
-  if (remote.kind === "other") {
-    return err(new FileError("invalid", "Unsupported file type", path));
-  }
-  return ok({
-    name: paths.basename(path),
-    path,
-    kind: remote.kind,
-    size: remote.size,
-    mtimeMs: remote.mtimeSec * 1000 + remote.mtimeNsec / 1e6,
-  });
-});
+const toInfo: {
+  (
+    remote: remotePathTypes.RemoteFileInfo,
+    paths: platformTypes.PathOps,
+  ): (path: string) => Result<FileInfo, FileError>;
+  (
+    path: string,
+    remote: remotePathTypes.RemoteFileInfo,
+    paths: platformTypes.PathOps,
+  ): Result<FileInfo, FileError>;
+} = dual(
+  3,
+  (
+    path: string,
+    remote: remotePathTypes.RemoteFileInfo,
+    paths: platformTypes.PathOps,
+  ): Result<FileInfo, FileError> => {
+    if (remote.kind === "other") {
+      return err(new FileError("invalid", "Unsupported file type", path));
+    }
+    return ok({
+      kind: remote.kind,
+      mtimeMs: remote.mtimeSec * 1000 + remote.mtimeNsec / 1e6,
+      name: paths.basename(path),
+      path,
+      size: remote.size,
+    });
+  },
+);
 
-export const remoteFileInfo = (json: Json): RemoteFileInfo => json as RemoteFileInfo;
+const remoteFileInfo = (json: connectionTypes.Json): remotePathTypes.RemoteFileInfo =>
+  json as remotePathTypes.RemoteFileInfo;
+
+const remotePathModule = {
+  remoteFileInfo,
+  remotePath,
+  toInfo,
+};
+
+export default remotePathModule;

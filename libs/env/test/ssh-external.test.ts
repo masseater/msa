@@ -4,11 +4,13 @@ import { registerEnvConformance } from "@msa/durable/testing";
 import { Effect } from "effect";
 import { afterAll, describe, expect, it } from "vite-plus/test";
 
-import { RemoteExecutionEnv } from "../src/remote-env.ts";
-import { nodePlatform } from "../src/remote-info.ts";
+import envModule from "../src/index.ts";
+import type envTypes from "../src/index.types.ts";
 import environment from "./environment.ts";
 import externalSsh from "./external-ssh.ts";
 import tempDir from "./temp-dir.ts";
+
+const { RemoteExecutionEnv, nodePlatform } = envModule;
 
 const { optionalEnv, windows } = environment;
 const { closeExternal, connectExternal, host } = externalSsh;
@@ -31,7 +33,7 @@ describe.skipIf(host === undefined)("SSH to this machine's server", () => {
   );
 });
 
-const withExternalEnv = (use: (env: RemoteExecutionEnv) => Promise<void>): Promise<void> =>
+const withExternalEnv = (use: (env: envTypes.RemoteExecutionEnv) => Promise<void>): Promise<void> =>
   Effect.runPromise(
     Effect.gen(function* () {
       const { connection } = yield* Effect.promise(connectExternal);

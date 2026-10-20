@@ -1,10 +1,10 @@
-import type { SshTarget } from "../src/ssh.ts";
+import type sshTypes from "../src/ssh.types.ts";
 
 declare namespace sshdTypes {
   interface SshServer {
     readonly root: string;
     readonly home: string;
-    readonly target: SshTarget;
+    readonly target: sshTypes.SshTarget;
     readonly hostFingerprint: string;
   }
 

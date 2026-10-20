@@ -1,28 +1,30 @@
 import { Effect, Stream } from "effect";
 
-import { HostKeyChangedError } from "./host-key-changed-error.ts";
-import { HostKeyUnknownError } from "./host-key-unknown-error.ts";
-import { spawnProcess } from "./platform.ts";
-import { sshArguments, type SshTarget } from "./ssh-args.ts";
-import { SshError } from "./ssh-error.ts";
+import hostKeyChangedError from "./host-key-changed-error.ts";
+import hostKeyUnknownError from "./host-key-unknown-error.ts";
+import platform from "./platform.ts";
+import type runSshTypes from "./run-ssh.types.ts";
+import sshArgs from "./ssh-args.ts";
+import type sshArgsTypes from "./ssh-args.types.ts";
+import sshError from "./ssh-error.ts";
+
+const { HostKeyChangedError } = hostKeyChangedError;
+const { HostKeyUnknownError } = hostKeyUnknownError;
+const { SshError } = sshError;
+const { spawnProcess } = platform;
+const { sshArguments } = sshArgs;
 
 const SSH_TIMEOUT_MS = 60_000;
 
-export type SshFailure = SshError | HostKeyChangedError | HostKeyUnknownError;
-
-export interface SshRun {
-  readonly target: SshTarget;
-  readonly command: string;
-  readonly stdin?: Uint8Array;
-  readonly args?: string[];
-  readonly timeoutMs?: number;
-}
-
-export function powershell(script: string): string {
+function powershell(script: string): string {
   return `powershell -NoProfile -NonInteractive -EncodedCommand ${Buffer.from(script, "utf16le").toString("base64")}`;
 }
 
-function exitFailure(target: SshTarget, code: number | null, diagnostics: string): SshFailure {
+function exitFailure(
+  target: sshArgsTypes.SshTarget,
+  code: number | null,
+  diagnostics: string,
+): runSshTypes.SshFailure {
   if (/REMOTE HOST IDENTIFICATION HAS CHANGED/u.test(diagnostics)) {
     return new HostKeyChangedError(
       `The host key of ${target.host} changed; remove the old key to continue`,
@@ -38,12 +40,12 @@ function exitFailure(target: SshTarget, code: number | null, diagnostics: string
   );
 }
 
-const collect = (target: SshTarget, run: SshRun, stderr: Uint8Array[]) =>
+const collect = (target: sshArgsTypes.SshTarget, run: runSshTypes.SshRun, stderr: Uint8Array[]) =>
   Effect.scoped(
     Effect.gen(function* () {
       const child = yield* spawnProcess({
-        command: target.ssh ?? "ssh",
         args: [...(run.args ?? sshArguments(target)), run.command],
+        command: target.ssh ?? "ssh",
         stdin: Stream.make(run.stdin ?? new Uint8Array(0)),
       }).pipe(Effect.mapError((error) => new SshError(error.message, null, "")));
       const [stdout, , code] = yield* Effect.all(
@@ -63,7 +65,7 @@ const collect = (target: SshTarget, run: SshRun, stderr: Uint8Array[]) =>
     }),
   );
 
-export function runSsh(run: SshRun): Effect.Effect<string, SshFailure> {
+function runSsh(run: runSshTypes.SshRun): Effect.Effect<string, runSshTypes.SshFailure> {
   return Effect.suspend(() => {
     const { target } = run;
     const stderr: Uint8Array[] = [];
@@ -83,3 +85,10 @@ export function runSsh(run: SshRun): Effect.Effect<string, SshFailure> {
     });
   });
 }
+
+const runSshModule = {
+  powershell,
+  runSsh,
+};
+
+export default runSshModule;

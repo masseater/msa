@@ -1,16 +1,21 @@
 import { Effect } from "effect";
 import { afterAll, describe, expect, it } from "vite-plus/test";
 
-import { Connection, RemoteError } from "../src/connection.ts";
-import { type TerminalForeground, openTerminal } from "../src/terminal.ts";
+import connectionModule from "../src/connection.ts";
+import type connectionTypes from "../src/connection.types.ts";
+import terminalModule from "../src/terminal.ts";
+import type terminalTypes from "../src/terminal.types.ts";
 import daemon from "./daemon.ts";
 import environment from "./environment.ts";
 import platformModule from "./platform.ts";
 
+const { Connection, RemoteError } = connectionModule;
+const { openTerminal } = terminalModule;
+
 const { windows } = environment;
 const { localPath, makeTempDirectory, readText, removePath } = platformModule;
 
-const connections: Connection[] = [];
+const connections: connectionTypes.Connection[] = [];
 const dirs: string[] = [];
 afterAll(() =>
   Effect.runPromise(
@@ -21,7 +26,7 @@ afterAll(() =>
   ),
 );
 
-const connect: Effect.Effect<{ connection: Connection; cwd: string }> = Effect.map(
+const connect: Effect.Effect<{ connection: connectionTypes.Connection; cwd: string }> = Effect.map(
   makeTempDirectory("msa-env-terminal-"),
   (cwd) => {
     dirs.push(cwd);
@@ -94,7 +99,7 @@ const ttyProgram = Effect.gen(function* () {
 
 const named = process.platform === "darwin" || process.platform === "linux";
 
-const isCommand = (foreground: TerminalForeground | undefined): boolean =>
+const isCommand = (foreground: terminalTypes.TerminalForeground | undefined): boolean =>
   foreground !== undefined && (!named || foreground.name === "sleep");
 
 const foregroundJob = Effect.gen(function* () {

@@ -1,31 +1,35 @@
 import type { Context } from "@msa/chord";
 import {
   type BinaryReader,
-  err,
   FileError,
   type FileInfo,
   type LineScan,
-  ok,
   type Result,
+  err,
+  ok,
 } from "@msa/durable/env";
 import { Effect } from "effect";
 
-import { abortResult, fileResult, recoverFileError } from "./errors.ts";
-import type { Handle } from "./handle.ts";
-import { concat, readRange } from "./read-range.ts";
-import type { Wire } from "./remote-error.ts";
-import { remoteFileInfo, remotePath, toInfo } from "./remote-path.ts";
+import errors from "./errors.ts";
+import type handleTypes from "./handle.types.ts";
+import readRangeModule from "./read-range.ts";
+import type remoteErrorTypes from "./remote-error.types.ts";
+import remotePathModule from "./remote-path.ts";
+
+const { abortResult, fileResult, recoverFileError } = errors;
+const { remoteFileInfo, remotePath, toInfo } = remotePathModule;
+const { concat, readRange } = readRangeModule;
 
 const READ_CHUNK = 256 * 1024;
 
 const isNonNegativeSafeInteger = (value: number): boolean =>
   Number.isSafeInteger(value) && value >= 0;
 
-export class RemoteBinaryReader implements BinaryReader {
-  readonly #handle: Handle;
+class RemoteBinaryReader implements BinaryReader {
+  readonly #handle: handleTypes.Handle;
   #closed = false;
 
-  constructor(handle: Handle) {
+  constructor(handle: handleTypes.Handle) {
     this.#handle = handle;
   }
 
@@ -75,11 +79,11 @@ export class RemoteBinaryReader implements BinaryReader {
     return Effect.runPromise(
       recoverFileError(
         readRange({
-          read: (at, size) => handle.pread(at, size),
-          offset,
-          length,
-          chunk: READ_CHUNK,
           aborted: () => context.abortSignal?.aborted === true,
+          chunk: READ_CHUNK,
+          length,
+          offset,
+          read: (at, size) => handle.pread(at, size),
         }).pipe(
           Effect.map((read) =>
             read === undefined
@@ -114,7 +118,7 @@ export class RemoteBinaryReader implements BinaryReader {
             { startLine, ...(endLine === undefined ? {} : { endLine }) },
             context.abortSignal === undefined ? {} : { signal: context.abortSignal },
           ),
-        ).pipe(Effect.map(({ json }) => json as Wire<LineScan>)),
+        ).pipe(Effect.map(({ json }) => json as remoteErrorTypes.Wire<LineScan>)),
         this.#path,
       ),
     );
@@ -126,3 +130,9 @@ export class RemoteBinaryReader implements BinaryReader {
     return this.#handle.close();
   }
 }
+
+const binaryReader = {
+  RemoteBinaryReader,
+};
+
+export default binaryReader;

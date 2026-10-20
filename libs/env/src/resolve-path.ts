@@ -2,8 +2,12 @@ import { fileURLToPath } from "node:url";
 
 import { dual } from "effect/Function";
 
-import { posixPath, win32Path } from "./platform.ts";
-import { nodePlatform, type RemoteInfo } from "./remote-info.ts";
+import platformModule from "./platform.ts";
+import remoteInfo from "./remote-info.ts";
+import type remoteInfoTypes from "./remote-info.types.ts";
+
+const { posixPath, win32Path } = platformModule;
+const { nodePlatform } = remoteInfo;
 
 const DRIVE_RELATIVE = /^([a-zA-Z]:)(?![\\/])/u;
 
@@ -15,7 +19,7 @@ function fromFileUrl(path: string, windows: boolean): string {
   }
 }
 
-function expandHome(path: string, info: RemoteInfo, windows: boolean): string {
+function expandHome(path: string, info: remoteInfoTypes.RemoteInfo, windows: boolean): string {
   const paths = windows ? win32Path : posixPath;
   if (path === "~") return info.home;
   if (path.startsWith("~/") || (windows && path.startsWith("~\\"))) {
@@ -25,7 +29,11 @@ function expandHome(path: string, info: RemoteInfo, windows: boolean): string {
   return path;
 }
 
-function resolveOtherDrive(normalized: string, cwd: string, info: RemoteInfo): string | undefined {
+function resolveOtherDrive(
+  normalized: string,
+  cwd: string,
+  info: remoteInfoTypes.RemoteInfo,
+): string | undefined {
   const drive = DRIVE_RELATIVE.exec(normalized)?.[1];
   if (drive === undefined || drive.toLowerCase() === cwd.slice(0, 2).toLowerCase()) {
     return undefined;
@@ -37,10 +45,10 @@ function resolveOtherDrive(normalized: string, cwd: string, info: RemoteInfo): s
   return win32Path.resolve(base, normalized);
 }
 
-export const resolveRemotePath: {
-  (info: RemoteInfo, cwd: string): (path: string) => string;
-  (path: string, info: RemoteInfo, cwd: string): string;
-} = dual(3, (path: string, info: RemoteInfo, cwd: string): string => {
+const resolveRemotePath: {
+  (info: remoteInfoTypes.RemoteInfo, cwd: string): (path: string) => string;
+  (path: string, info: remoteInfoTypes.RemoteInfo, cwd: string): string;
+} = dual(3, (path: string, info: remoteInfoTypes.RemoteInfo, cwd: string): string => {
   const windows = nodePlatform(info).platform === "win32";
   const paths = windows ? win32Path : posixPath;
   const normalized = expandHome(path, info, windows);
@@ -51,3 +59,9 @@ export const resolveRemotePath: {
   }
   return paths.resolve(cwd, normalized);
 });
+
+const resolvePath = {
+  resolveRemotePath,
+};
+
+export default resolvePath;

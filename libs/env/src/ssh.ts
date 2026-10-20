@@ -1,27 +1,23 @@
 import { Effect } from "effect";
 
-import { Connection } from "./connection.ts";
-import { deployDaemonEffect, packagedDaemon, quotePosix, quotePowerShell } from "./deploy.ts";
-import { type DetectFailure, detectPlatformEffect, type RemotePlatform } from "./detect.ts";
-import type { ConnectionOptions } from "./remote-info.ts";
-import { sshArguments, type SshTarget } from "./ssh-args.ts";
+import connectionModule from "./connection.ts";
+import type connectionTypes from "./connection.types.ts";
+import deploy from "./deploy.ts";
+import detect from "./detect.ts";
+import type detectTypes from "./detect.types.ts";
+import sshArgs from "./ssh-args.ts";
+import type sshTypes from "./ssh.types.ts";
 
-export { scanHostKey } from "./host-key-scan.ts";
-export { acceptHostKey, forgetHostKey } from "./known-hosts.ts";
-export { HostKeyChangedError } from "./host-key-changed-error.ts";
-export { HostKeyUnknownError } from "./host-key-unknown-error.ts";
-export { deployDaemon, localDaemon, packagedDaemon } from "./deploy.ts";
-export { detectPlatform, type RemotePlatform } from "./detect.ts";
-export { sshArguments, type SshTarget } from "./ssh-args.ts";
-export { SshError } from "./ssh-error.ts";
+const { deployDaemonEffect, packagedDaemon, quotePosix, quotePowerShell } = deploy;
+const { detectPlatformEffect } = detect;
+const { sshArguments } = sshArgs;
+const { Connection } = connectionModule;
 
-export interface SshConnectOptions extends SshTarget {
-  binary?: string;
-  loginShell?: boolean;
-  onLog?: ConnectionOptions["onLog"];
-}
-
-function launchCommand(remote: RemotePlatform, file: string, loginShell: boolean): string {
+function launchCommand(
+  remote: detectTypes.RemotePlatform,
+  file: string,
+  loginShell: boolean,
+): string {
   if (remote.platform === "windows") {
     if (remote.shell === "powershell") return `& ${quotePowerShell(file)}`;
     return file.includes(" ") ? `"${file}"` : file;
@@ -30,16 +26,19 @@ function launchCommand(remote: RemotePlatform, file: string, loginShell: boolean
   return quotePosix(file);
 }
 
-type SshState = { remote?: RemotePlatform; verified?: string | undefined };
+type SshState = { remote?: detectTypes.RemotePlatform; verified?: string | undefined };
 
-const logWarnings = (options: SshConnectOptions, remote: RemotePlatform): void => {
+const logWarnings = (
+  options: sshTypes.SshConnectOptions,
+  remote: detectTypes.RemotePlatform,
+): void => {
   for (const warning of remote.warnings) options.onLog?.(`${warning}\n`);
 };
 
 const startCommand = (
-  options: SshConnectOptions,
+  options: sshTypes.SshConnectOptions,
   state: SshState,
-): Effect.Effect<readonly string[], DetectFailure> =>
+): Effect.Effect<readonly string[], detectTypes.DetectFailure> =>
   Effect.gen(function* () {
     if (state.remote === undefined) {
       const detected = yield* detectPlatformEffect(options);
@@ -50,9 +49,9 @@ const startCommand = (
     const file =
       state.verified ??
       (yield* deployDaemonEffect({
-        target: options,
-        remote,
         binary: options.binary ?? packagedDaemon(remote),
+        remote,
+        target: options,
       }));
     state.verified = undefined;
     return [
@@ -62,34 +61,44 @@ const startCommand = (
     ];
   });
 
-function sshConnectionFor(options: SshConnectOptions, state: SshState): Connection {
+function sshConnectionFor(
+  options: sshTypes.SshConnectOptions,
+  state: SshState,
+): connectionTypes.Connection {
   return new Connection({
     command: () => Effect.runPromise(startCommand(options, state)),
     ...(options.onLog === undefined ? {} : { onLog: options.onLog }),
   });
 }
 
-export function sshConnection(options: SshConnectOptions): {
-  connection: Connection;
-  remote(): RemotePlatform | undefined;
+function sshConnection(options: sshTypes.SshConnectOptions): {
+  connection: connectionTypes.Connection;
+  remote(): detectTypes.RemotePlatform | undefined;
 } {
   const state: SshState = {};
   return { connection: sshConnectionFor(options, state), remote: () => state.remote };
 }
 
-export function connectSsh(
-  options: SshConnectOptions,
-): Promise<{ connection: Connection; remote: RemotePlatform }> {
+function connectSsh(
+  options: sshTypes.SshConnectOptions,
+): Promise<{ connection: connectionTypes.Connection; remote: detectTypes.RemotePlatform }> {
   return Effect.runPromise(
     Effect.gen(function* () {
       const remote = yield* detectPlatformEffect(options);
       const verified = yield* deployDaemonEffect({
-        target: options,
-        remote,
         binary: options.binary ?? packagedDaemon(remote),
+        remote,
+        target: options,
       });
       logWarnings(options, remote);
       return { connection: sshConnectionFor(options, { remote, verified }), remote };
     }),
   );
 }
+
+const sshModule = {
+  connectSsh,
+  sshConnection,
+};
+
+export default sshModule;

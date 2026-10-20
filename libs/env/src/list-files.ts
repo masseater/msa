@@ -1,23 +1,26 @@
 import type { Context } from "@msa/chord";
 import {
   type ExecutionEnv,
-  err,
   FileError,
   type FileKind,
   type FileListEntry,
   type FileListing,
   type ListFilesOptions,
-  ok,
   type Result,
+  err,
+  ok,
 } from "@msa/durable/env";
 import { NodeExecutionEnv } from "@msa/durable/env/node";
 import { Effect } from "effect";
 import { dual } from "effect/Function";
 
-import type { Connection } from "./connection.ts";
-import { abortResult, recoverFileError } from "./errors.ts";
+import type connectionTypes from "./connection.types.ts";
+import errors from "./errors.ts";
+import type listFilesTypes from "./list-files.types.ts";
 
-const KINDS: Record<number, FileKind> = { 102: "file", 100: "directory", 108: "symlink" };
+const { abortResult, recoverFileError } = errors;
+
+const KINDS: Record<number, FileKind> = { 100: "directory", 102: "file", 108: "symlink" };
 
 function invalidLimit(
   options: ListFilesOptions | undefined,
@@ -39,14 +42,14 @@ function parseListing(payload: Uint8Array): FileListEntry[] {
     const end = bytes.indexOf(0, start);
     if (end === -1) break;
     const kind = KINDS[bytes[start]!];
-    if (kind !== undefined) entries.push({ path: bytes.toString("utf8", start + 1, end), kind });
+    if (kind !== undefined) entries.push({ kind, path: bytes.toString("utf8", start + 1, end) });
     start = end + 1;
   }
   return entries;
 }
 
 function requestListing(
-  connection: Connection,
+  connection: connectionTypes.Connection,
   path: string,
   options: ListFilesOptions | undefined,
   context: Context,
@@ -62,12 +65,12 @@ function requestListing(
       connection.request(
         "listFiles",
         {
-          path,
-          hidden: options?.hidden,
-          gitignore: options?.gitignore,
           exclude: options?.exclude,
-          maxEntries: options?.maxEntries,
+          gitignore: options?.gitignore,
+          hidden: options?.hidden,
           maxBytes: options?.maxBytes,
+          maxEntries: options?.maxEntries,
+          path,
           timeoutMs: options?.timeoutMs,
         },
         context.abortSignal === undefined ? {} : { signal: context.abortSignal },
@@ -83,7 +86,7 @@ function requestListing(
 }
 
 const listFilesEffect = (
-  connection: Connection,
+  connection: connectionTypes.Connection,
   path: string,
   options: ListFilesOptions | undefined,
   context: Context,
@@ -95,14 +98,14 @@ const listFilesEffect = (
   return recoverFileError(requestListing(connection, path, options, context), path);
 };
 
-export const listFilesOver: {
+const listFilesOver: {
   (
     path: string,
     options: ListFilesOptions | undefined,
     context: Context,
-  ): (connection: Connection) => Promise<Result<FileListing, FileError>>;
+  ): (connection: connectionTypes.Connection) => Promise<Result<FileListing, FileError>>;
   (
-    connection: Connection,
+    connection: connectionTypes.Connection,
     path: string,
     options: ListFilesOptions | undefined,
     context: Context,
@@ -110,7 +113,7 @@ export const listFilesOver: {
 } = dual(
   4,
   (
-    connection: Connection,
+    connection: connectionTypes.Connection,
     path: string,
     options: ListFilesOptions | undefined,
     context: Context,
@@ -118,14 +121,10 @@ export const listFilesOver: {
     Effect.runPromise(listFilesEffect(connection, path, options, context)),
 );
 
-export type LocalExecutionEnvOptions = ConstructorParameters<typeof NodeExecutionEnv>[0] & {
-  connection: Connection;
-};
+class LocalExecutionEnv extends NodeExecutionEnv implements ExecutionEnv {
+  readonly #connection: connectionTypes.Connection;
 
-export class LocalExecutionEnv extends NodeExecutionEnv implements ExecutionEnv {
-  readonly #connection: Connection;
-
-  constructor(options: LocalExecutionEnvOptions) {
+  constructor(options: listFilesTypes.LocalExecutionEnvOptions) {
     const { connection, ...node } = options;
     super(node);
     this.#connection = connection;
@@ -145,3 +144,10 @@ export class LocalExecutionEnv extends NodeExecutionEnv implements ExecutionEnv 
     );
   }
 }
+
+const listFilesModule = {
+  LocalExecutionEnv,
+  listFilesOver,
+};
+
+export default listFilesModule;

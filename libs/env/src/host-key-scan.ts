@@ -1,16 +1,16 @@
 import { Effect, Stream } from "effect";
 
-import {
-  fileExists,
-  localPath,
-  makeTempDirectory,
-  readText,
-  removePath,
-  spawnProcess,
-} from "./platform.ts";
-import { runSsh, type SshFailure } from "./run-ssh.ts";
-import { SetupError } from "./setup-error.ts";
-import { sshArgumentsWith, type SshTarget } from "./ssh-args.ts";
+import platform from "./platform.ts";
+import runSshModule from "./run-ssh.ts";
+import type runSshTypes from "./run-ssh.types.ts";
+import setupError from "./setup-error.ts";
+import sshArgs from "./ssh-args.ts";
+import type sshArgsTypes from "./ssh-args.types.ts";
+
+const { fileExists, localPath, makeTempDirectory, readText, removePath, spawnProcess } = platform;
+const { runSsh } = runSshModule;
+const { sshArgumentsWith } = sshArgs;
+const { SetupError } = setupError;
 
 const nonEmptyLines = (text: string): string[] =>
   text.split("\n").filter((line) => line.trim() !== "");
@@ -19,8 +19,8 @@ const fingerprintsOf = (file: string): Effect.Effect<string[], Error> =>
   Effect.scoped(
     Effect.gen(function* () {
       const child = yield* spawnProcess({
-        command: "ssh-keygen",
         args: ["-lf", file],
+        command: "ssh-keygen",
         stdin: "ignore",
       });
       const [output] = yield* Effect.all(
@@ -36,27 +36,27 @@ const fingerprintsOf = (file: string): Effect.Effect<string[], Error> =>
   );
 
 const scanInto = (
-  target: SshTarget,
+  target: sshArgsTypes.SshTarget,
   directory: string,
-): Effect.Effect<{ lines: string[]; fingerprints: string[] }, Error | SshFailure> =>
+): Effect.Effect<{ lines: string[]; fingerprints: string[] }, Error | runSshTypes.SshFailure> =>
   Effect.gen(function* () {
     const scanned = localPath.join(directory, "known_hosts");
     yield* runSsh({
-      target,
+      args: sshArgumentsWith(target, { knownHostsFile: scanned, strictHostKeys: false }),
       command: "exit 0",
-      args: sshArgumentsWith(target, { strictHostKeys: false, knownHostsFile: scanned }),
+      target,
     }).pipe(
-      Effect.catchTags({ SshError: () => Effect.void, HostKeyUnknownError: () => Effect.void }),
+      Effect.catchTags({ HostKeyUnknownError: () => Effect.void, SshError: () => Effect.void }),
     );
     const lines = (yield* fileExists(scanned)) ? nonEmptyLines(yield* readText(scanned)) : [];
     if (lines.length === 0) {
       return yield* new SetupError(`No host key received from ${target.host}`);
     }
-    return { lines, fingerprints: yield* fingerprintsOf(scanned) };
+    return { fingerprints: yield* fingerprintsOf(scanned), lines };
   });
 
-export function scanHostKey(
-  target: SshTarget,
+function scanHostKey(
+  target: sshArgsTypes.SshTarget,
 ): Promise<{ lines: string[]; fingerprints: string[] }> {
   return Effect.runPromise(
     Effect.acquireUseRelease(
@@ -66,3 +66,9 @@ export function scanHostKey(
     ),
   );
 }
+
+const hostKeyScan = {
+  scanHostKey,
+};
+
+export default hostKeyScan;

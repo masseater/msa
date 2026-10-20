@@ -1,31 +1,33 @@
 import type { Context } from "@msa/chord";
 import {
-  err,
   FileError,
-  ok,
   type Result,
   StreamDecoder,
   type TextLine,
   type TextLineReader,
+  err,
+  ok,
 } from "@msa/durable/env";
 import { Effect } from "effect";
 
-import { abortResult, recoverFileError } from "./errors.ts";
-import type { Handle } from "./handle.ts";
+import errors from "./errors.ts";
+import type handleTypes from "./handle.types.ts";
+
+const { abortResult, recoverFileError } = errors;
 
 const LINE_CHUNK = 64 * 1024;
 
 type LineResult = Result<TextLine | undefined, FileError>;
 
-export class RemoteTextLineReader implements TextLineReader {
-  readonly #handle: Handle;
+class RemoteTextLineReader implements TextLineReader {
+  readonly #handle: handleTypes.Handle;
   readonly #decoder = new StreamDecoder();
   #offset = 0;
   #buffered = "";
   #ended = false;
   #closed = false;
 
-  constructor(handle: Handle) {
+  constructor(handle: handleTypes.Handle) {
     this.#handle = handle;
   }
 
@@ -44,13 +46,13 @@ export class RemoteTextLineReader implements TextLineReader {
     if (newline !== -1) {
       const text = this.#buffered.slice(0, newline);
       this.#buffered = this.#buffered.slice(newline + 1);
-      return ok({ text, terminated: true });
+      return ok({ terminated: true, text });
     }
     if (!this.#ended) return undefined;
     if (this.#buffered.length === 0) return ok(undefined);
     const text = this.#buffered;
     this.#buffered = "";
-    return ok({ text, terminated: false });
+    return ok({ terminated: false, text });
   }
 
   #next(context: Context): Effect.Effect<LineResult> {
@@ -82,3 +84,9 @@ export class RemoteTextLineReader implements TextLineReader {
     return this.#handle.close();
   }
 }
+
+const textLineReader = {
+  RemoteTextLineReader,
+};
+
+export default textLineReader;

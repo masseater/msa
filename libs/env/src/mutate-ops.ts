@@ -1,33 +1,17 @@
 import { FileError, type Result } from "@msa/durable/env";
 import { Effect } from "effect";
 
-import { abortResult, fileResult } from "./errors.ts";
-import { type PathRequest, remoteRequest, resolveIn, run, runFileOp } from "./file-op.ts";
-import { writeContent } from "./write-file.ts";
+import errors from "./errors.ts";
+import fileOp from "./file-op.ts";
+import type fileOpTypes from "./file-op.types.ts";
+import type mutateOpsTypes from "./mutate-ops.types.ts";
+import writeFile from "./write-file.ts";
 
-export interface WriteRequest extends PathRequest {
-  readonly content: string | Uint8Array;
-  readonly append: boolean;
-}
+const { remoteRequest, resolveIn, run, runFileOp } = fileOp;
+const { writeContent } = writeFile;
+const { abortResult, fileResult } = errors;
 
-export interface TruncateRequest extends PathRequest {
-  readonly size: number;
-}
-
-export interface RenameRequest extends PathRequest {
-  readonly destination: string;
-}
-
-export interface CreateDirRequest extends PathRequest {
-  readonly recursive: boolean;
-}
-
-export interface RemoveRequest extends PathRequest {
-  readonly recursive: boolean;
-  readonly force: boolean;
-}
-
-export const writeAt = (request: WriteRequest): Promise<Result<void, FileError>> => {
+const writeAt = (request: mutateOpsTypes.WriteRequest): Promise<Result<void, FileError>> => {
   const { content, append } = request;
   const { connection } = request.target;
   const bytes = typeof content === "string" ? Buffer.from(content, "utf8") : content;
@@ -35,49 +19,49 @@ export const writeAt = (request: WriteRequest): Promise<Result<void, FileError>>
   return run(
     runFileOp({
       ...request,
-      operation: (resolved) => writeContent({ connection, resolved, bytes, append, signal }),
       check: append ? "both" : "before",
+      operation: (resolved) => writeContent({ append, bytes, connection, resolved, signal }),
     }),
   );
 };
 
-export const truncateAt = (request: TruncateRequest): Promise<Result<void, FileError>> => {
+const truncateAt = (request: mutateOpsTypes.TruncateRequest): Promise<Result<void, FileError>> => {
   const { size } = request;
   const { connection } = request.target;
   return run(
     runFileOp({
       ...request,
+      check: "both",
       operation: (resolved) =>
         !Number.isSafeInteger(size) || size < 0
           ? Effect.fail(
               new FileError("invalid", "File size must be a non-negative safe integer", resolved),
             )
           : Effect.asVoid(
-              remoteRequest({ connection, op: "truncate", json: { path: resolved, size } }),
+              remoteRequest({ connection, json: { path: resolved, size }, op: "truncate" }),
             ),
-      check: "both",
     }),
   );
 };
 
-export const flushAt = (request: PathRequest): Promise<Result<void, FileError>> => {
+const flushAt = (request: fileOpTypes.PathRequest): Promise<Result<void, FileError>> => {
   const { connection } = request.target;
   return run(
     runFileOp({
       ...request,
-      operation: (resolved) =>
-        Effect.asVoid(remoteRequest({ connection, op: "fsync", json: { path: resolved } })),
       check: "both",
+      operation: (resolved) =>
+        Effect.asVoid(remoteRequest({ connection, json: { path: resolved }, op: "fsync" })),
     }),
   );
 };
 
-export const renameAt = (request: RenameRequest): Promise<Result<void, FileError>> => {
+const renameAt = (request: mutateOpsTypes.RenameRequest): Promise<Result<void, FileError>> => {
   const { target, path, context } = request;
   return run(
     Effect.gen(function* () {
       const resolved = yield* fileResult(
-        Effect.all([resolveIn({ target, path }), resolveIn({ target, path: request.destination })]),
+        Effect.all([resolveIn({ path, target }), resolveIn({ path: request.destination, target })]),
         path,
       );
       if (!resolved.ok) return resolved;
@@ -88,8 +72,8 @@ export const renameAt = (request: RenameRequest): Promise<Result<void, FileError
         Effect.asVoid(
           remoteRequest({
             connection: target.connection,
-            op: "rename",
             json: { path: source, to: destination },
+            op: "rename",
           }),
         ),
         source,
@@ -98,7 +82,9 @@ export const renameAt = (request: RenameRequest): Promise<Result<void, FileError
   );
 };
 
-export const createDirAt = (request: CreateDirRequest): Promise<Result<void, FileError>> => {
+const createDirAt = (
+  request: mutateOpsTypes.CreateDirRequest,
+): Promise<Result<void, FileError>> => {
   const { connection } = request.target;
   return run(
     runFileOp({
@@ -107,15 +93,15 @@ export const createDirAt = (request: CreateDirRequest): Promise<Result<void, Fil
         Effect.asVoid(
           remoteRequest({
             connection,
-            op: "mkdir",
             json: { path: resolved, recursive: request.recursive },
+            op: "mkdir",
           }),
         ),
     }),
   );
 };
 
-export const removeAt = (request: RemoveRequest): Promise<Result<void, FileError>> => {
+const removeAt = (request: mutateOpsTypes.RemoveRequest): Promise<Result<void, FileError>> => {
   const { connection } = request.target;
   return run(
     runFileOp({
@@ -124,10 +110,21 @@ export const removeAt = (request: RemoveRequest): Promise<Result<void, FileError
         Effect.asVoid(
           remoteRequest({
             connection,
+            json: { force: request.force, path: resolved, recursive: request.recursive },
             op: "rm",
-            json: { path: resolved, recursive: request.recursive, force: request.force },
           }),
         ),
     }),
   );
 };
+
+const mutateOps = {
+  createDirAt,
+  flushAt,
+  removeAt,
+  renameAt,
+  truncateAt,
+  writeAt,
+};
+
+export default mutateOps;

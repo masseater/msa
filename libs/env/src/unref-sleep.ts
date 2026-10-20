@@ -1,6 +1,6 @@
 import { Effect } from "effect";
 
-export const unrefSleep = (millis: number): Effect.Effect<void> =>
+const unrefSleep = (millis: number): Effect.Effect<void> =>
   Effect.callback<void>((resume) => {
     const signal = AbortSignal.timeout(millis);
     const onAbort = (): void => {
@@ -11,3 +11,9 @@ export const unrefSleep = (millis: number): Effect.Effect<void> =>
       signal.removeEventListener("abort", onAbort);
     });
   });
+
+const unrefSleepModule = {
+  unrefSleep,
+};
+
+export default unrefSleepModule;

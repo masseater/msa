@@ -1,12 +1,12 @@
-import type { Connection, Json, Reply } from "./connection.ts";
+import type connectionTypes from "./connection.types.ts";
 
-export class Handle {
-  readonly connection: Connection;
+class Handle {
+  readonly connection: connectionTypes.Connection;
   readonly id: number;
   readonly session: number;
   readonly path: string;
 
-  constructor(connection: Connection, reply: Reply, path: string) {
+  constructor(connection: connectionTypes.Connection, reply: connectionTypes.Reply, path: string) {
     this.connection = connection;
     this.id = reply.json["handle"] as number;
     this.session = reply.session;
@@ -15,9 +15,9 @@ export class Handle {
 
   request(
     op: string,
-    json: Json = {},
+    json: connectionTypes.Json = {},
     options: { signal?: AbortSignal; payload?: Uint8Array } = {},
-  ): Promise<Reply> {
+  ): Promise<connectionTypes.Reply> {
     return this.connection.request(
       op,
       { ...json, handle: this.id },
@@ -38,3 +38,9 @@ export class Handle {
     );
   }
 }
+
+const handleModule = {
+  Handle,
+};
+
+export default handleModule;

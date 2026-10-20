@@ -1,17 +1,13 @@
 import { DateTime, Effect, Schema } from "effect";
 
-import {
-  type SshTarget,
-  acceptHostKey,
-  connectSsh,
-  deployDaemon,
-  detectPlatform,
-  scanHostKey,
-} from "../src/ssh.ts";
+import envModule from "../src/index.ts";
+import type sshTypes from "../src/ssh.types.ts";
 import daemon from "./daemon.ts";
 import environment from "./environment.ts";
 import type externalSshTypes from "./external-ssh.types.ts";
 import platform from "./platform.ts";
+
+const { acceptHostKey, connectSsh, deployDaemon, detectPlatform, scanHostKey } = envModule;
 
 const { optionalEnv } = environment;
 const { localPath, makeTempDirectory, removePath } = platform;
@@ -30,7 +26,7 @@ const rootDirectory = Effect.suspend(() =>
     : Effect.succeed(created.root),
 );
 
-function externalTarget(root: string): SshTarget {
+function externalTarget(root: string): sshTypes.SshTarget {
   const user = optionalEnv("MSA_ENV_SSH_USER");
   const port = optionalEnv("MSA_ENV_SSH_PORT");
   const identityFile = optionalEnv("MSA_ENV_SSH_KEY");

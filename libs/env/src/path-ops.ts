@@ -1,51 +1,27 @@
-import type { Context } from "@msa/chord";
-import {
-  type FileError,
-  type FileListing,
-  type ListFilesOptions,
-  err,
-  ok,
-  type Result,
-} from "@msa/durable/env";
+import { type FileError, type FileListing, type Result, err, ok } from "@msa/durable/env";
 import { Cause, Effect } from "effect";
 
-import { abortResult, fileResult, toFileError } from "./errors.ts";
-import {
-  type PathRequest,
-  type RemoteTarget,
-  remoteRequest,
-  resolveIn,
-  run,
-  runFileOp,
-} from "./file-op.ts";
-import { listFilesOver } from "./list-files.ts";
-import { randomUuid } from "./platform.ts";
-import { remotePath } from "./remote-path.ts";
+import errors from "./errors.ts";
+import fileOp from "./file-op.ts";
+import type fileOpTypes from "./file-op.types.ts";
+import listFilesModule from "./list-files.ts";
+import type pathOpsTypes from "./path-ops.types.ts";
+import platform from "./platform.ts";
+import remotePathModule from "./remote-path.ts";
 
-export interface ListFilesRequest extends PathRequest {
-  readonly options: ListFilesOptions | undefined;
-}
+const { remoteRequest, resolveIn, run, runFileOp } = fileOp;
+const { abortResult, fileResult, toFileError } = errors;
+const { remotePath } = remotePathModule;
+const { listFilesOver } = listFilesModule;
+const { randomUuid } = platform;
 
-export interface TempDirRequest {
-  readonly target: RemoteTarget;
-  readonly prefix: string | undefined;
-  readonly context: Context;
-}
-
-export interface TempFileRequest {
-  readonly target: RemoteTarget;
-  readonly prefix: string | undefined;
-  readonly suffix: string | undefined;
-  readonly context: Context;
-}
-
-export const absolutePathOf = (request: {
-  target: RemoteTarget;
+const absolutePathOf = (request: {
+  target: fileOpTypes.RemoteTarget;
   path: string;
 }): Promise<Result<string, FileError>> => run(fileResult(resolveIn(request), request.path));
 
-export const joinPathIn = (request: {
-  target: RemoteTarget;
+const joinPathIn = (request: {
+  target: fileOpTypes.RemoteTarget;
   parts: string[];
 }): Promise<Result<string, FileError>> =>
   run(
@@ -57,20 +33,22 @@ export const joinPathIn = (request: {
     ),
   );
 
-export const canonicalPathOf = (request: PathRequest): Promise<Result<string, FileError>> => {
+const canonicalPathOf = (request: fileOpTypes.PathRequest): Promise<Result<string, FileError>> => {
   const { connection } = request.target;
   return run(
     runFileOp({
       ...request,
       operation: (resolved) =>
-        remoteRequest({ connection, op: "realpath", json: { path: resolved } }).pipe(
+        remoteRequest({ connection, json: { path: resolved }, op: "realpath" }).pipe(
           Effect.map((json) => json["path"] as string),
         ),
     }),
   );
 };
 
-export const listFilesAt = (request: ListFilesRequest): Promise<Result<FileListing, FileError>> =>
+const listFilesAt = (
+  request: pathOpsTypes.ListFilesRequest,
+): Promise<Result<FileListing, FileError>> =>
   run(
     Effect.gen(function* () {
       const resolved = yield* fileResult(resolveIn(request), request.path);
@@ -81,7 +59,9 @@ export const listFilesAt = (request: ListFilesRequest): Promise<Result<FileListi
     }),
   );
 
-export const createTempDirIn = (request: TempDirRequest): Promise<Result<string, FileError>> => {
+const createTempDirIn = (
+  request: pathOpsTypes.TempDirRequest,
+): Promise<Result<string, FileError>> => {
   const aborted = abortResult<string>(request.context.abortSignal, undefined);
   if (aborted !== undefined) return Promise.resolve(aborted);
   const { connection } = request.target;
@@ -92,8 +72,8 @@ export const createTempDirIn = (request: TempDirRequest): Promise<Result<string,
         const paths = yield* remotePath(connection);
         const json = yield* remoteRequest({
           connection,
-          op: "mkdtemp",
           json: { path: paths.join(tmpdir, request.prefix ?? "tmp-") },
+          op: "mkdtemp",
         });
         return json["path"] as string;
       }),
@@ -102,7 +82,9 @@ export const createTempDirIn = (request: TempDirRequest): Promise<Result<string,
   );
 };
 
-export const createTempFileIn = (request: TempFileRequest): Promise<Result<string, FileError>> => {
+const createTempFileIn = (
+  request: pathOpsTypes.TempFileRequest,
+): Promise<Result<string, FileError>> => {
   const { connection } = request.target;
   return run(
     Effect.gen(function* () {
@@ -117,8 +99,8 @@ export const createTempFileIn = (request: TempFileRequest): Promise<Result<strin
         );
         yield* remoteRequest({
           connection,
+          json: { append: false, parents: false, path: filePath },
           op: "write",
-          json: { path: filePath, append: false, parents: false },
           payload: new Uint8Array(0),
         });
         return ok<string, FileError>(filePath);
@@ -130,3 +112,14 @@ export const createTempFileIn = (request: TempFileRequest): Promise<Result<strin
     }),
   );
 };
+
+const pathOps = {
+  absolutePathOf,
+  canonicalPathOf,
+  createTempDirIn,
+  createTempFileIn,
+  joinPathIn,
+  listFilesAt,
+};
+
+export default pathOps;

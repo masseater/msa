@@ -2,19 +2,22 @@ import { BACKGROUND_CONTEXT } from "@msa/chord/context";
 import { Effect } from "effect";
 import { describe, expect, it } from "vite-plus/test";
 
-import { RemoteExecutionEnv } from "../src/remote-env.ts";
-import {
+import envModule from "../src/index.ts";
+import remoteEnv from "../src/remote-env.ts";
+import daemon from "./daemon.ts";
+import platform from "./platform.ts";
+import sshdModule from "./sshd.ts";
+import type sshdTypes from "./sshd.types.ts";
+
+const {
   HostKeyChangedError,
   acceptHostKey,
   connectSsh,
   forgetHostKey,
   scanHostKey,
   sshConnection,
-} from "../src/ssh.ts";
-import daemon from "./daemon.ts";
-import platform from "./platform.ts";
-import sshdModule from "./sshd.ts";
-import type sshdTypes from "./sshd.types.ts";
+} = envModule;
+const { RemoteExecutionEnv } = remoteEnv;
 
 const { localPath, readText, writeText } = platform;
 const { keygen, publicKey, sshd, useSshd } = sshdModule;

@@ -1,20 +1,6 @@
 import { dual } from "effect/Function";
 
-export interface SshTarget {
-  host: string;
-  user?: string;
-  port?: number;
-  identityFile?: string;
-  knownHostsFile: string;
-  hostKeyAlias: string;
-  ssh?: string;
-  configFile?: string;
-}
-
-export interface SshArgumentOptions {
-  readonly strictHostKeys: boolean;
-  readonly knownHostsFile: string;
-}
+import type sshArgsTypes from "./ssh-args.types.ts";
 
 const WHITESPACE = /\s/u;
 
@@ -40,7 +26,7 @@ function configPath(name: string, path: string): string {
   return `"${path.replaceAll("%", "%%")}"`;
 }
 
-function checkTarget(target: SshTarget): void {
+function checkTarget(target: sshArgsTypes.SshTarget): void {
   checkField("host", target.host);
   checkField("host key alias", target.hostKeyAlias);
   if (target.user !== undefined) checkField("user", target.user);
@@ -54,47 +40,57 @@ function checkTarget(target: SshTarget): void {
 
 const option = (setting: string): string[] => ["-o", setting];
 
-export const sshArgumentsWith: {
-  (options: SshArgumentOptions): (target: SshTarget) => string[];
-  (target: SshTarget, options: SshArgumentOptions): string[];
-} = dual(2, (target: SshTarget, options: SshArgumentOptions): string[] => {
-  checkTarget(target);
-  return [
-    ...(target.configFile === undefined ? [] : ["-F", target.configFile]),
-    "-T",
-    "-a",
-    "-x",
-    ...option("BatchMode=yes"),
-    ...option("ClearAllForwardings=yes"),
-    ...option("ForwardAgent=no"),
-    ...option("ForwardX11=no"),
-    ...option("ControlMaster=no"),
-    ...option("ControlPath=none"),
-    ...option("RemoteCommand=none"),
-    ...option("PermitLocalCommand=no"),
-    ...option("SendEnv=-*"),
-    ...option("ServerAliveInterval=15"),
-    ...option(`StrictHostKeyChecking=${options.strictHostKeys ? "yes" : "accept-new"}`),
-    ...option(`UserKnownHostsFile=${configPath("known hosts file", options.knownHostsFile)}`),
-    ...option("GlobalKnownHostsFile=none"),
-    ...option("HashKnownHosts=no"),
-    ...option(`HostKeyAlias=${target.hostKeyAlias}`),
-    ...(target.user === undefined ? [] : ["-l", target.user]),
-    ...(target.port === undefined ? [] : ["-p", String(target.port)]),
-    ...(target.identityFile === undefined
-      ? []
-      : [
-          ...option(`IdentityFile=${configPath("identity file", target.identityFile)}`),
-          ...option("IdentitiesOnly=yes"),
-        ]),
-    "--",
-    target.host,
-  ];
-});
+const sshArgumentsWith: {
+  (options: sshArgsTypes.SshArgumentOptions): (target: sshArgsTypes.SshTarget) => string[];
+  (target: sshArgsTypes.SshTarget, options: sshArgsTypes.SshArgumentOptions): string[];
+} = dual(
+  2,
+  (target: sshArgsTypes.SshTarget, options: sshArgsTypes.SshArgumentOptions): string[] => {
+    checkTarget(target);
+    return [
+      ...(target.configFile === undefined ? [] : ["-F", target.configFile]),
+      "-T",
+      "-a",
+      "-x",
+      ...option("BatchMode=yes"),
+      ...option("ClearAllForwardings=yes"),
+      ...option("ForwardAgent=no"),
+      ...option("ForwardX11=no"),
+      ...option("ControlMaster=no"),
+      ...option("ControlPath=none"),
+      ...option("RemoteCommand=none"),
+      ...option("PermitLocalCommand=no"),
+      ...option("SendEnv=-*"),
+      ...option("ServerAliveInterval=15"),
+      ...option(`StrictHostKeyChecking=${options.strictHostKeys ? "yes" : "accept-new"}`),
+      ...option(`UserKnownHostsFile=${configPath("known hosts file", options.knownHostsFile)}`),
+      ...option("GlobalKnownHostsFile=none"),
+      ...option("HashKnownHosts=no"),
+      ...option(`HostKeyAlias=${target.hostKeyAlias}`),
+      ...(target.user === undefined ? [] : ["-l", target.user]),
+      ...(target.port === undefined ? [] : ["-p", String(target.port)]),
+      ...(target.identityFile === undefined
+        ? []
+        : [
+            ...option(`IdentityFile=${configPath("identity file", target.identityFile)}`),
+            ...option("IdentitiesOnly=yes"),
+          ]),
+      "--",
+      target.host,
+    ];
+  },
+);
 
-export function sshArguments(target: SshTarget): string[] {
+function sshArguments(target: sshArgsTypes.SshTarget): string[] {
   return sshArgumentsWith(target, {
-    strictHostKeys: true,
     knownHostsFile: target.knownHostsFile,
+    strictHostKeys: true,
   });
 }
+
+const sshArgs = {
+  sshArguments,
+  sshArgumentsWith,
+};
+
+export default sshArgs;

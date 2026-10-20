@@ -3,28 +3,28 @@ import { StringDecoder } from "node:string_decoder";
 import { FileError } from "@msa/durable/env";
 import { Effect } from "effect";
 
-import { type Json, RemoteError } from "./connection.ts";
-import type { Handle } from "./handle.ts";
-import { READ_DEPTH, readRange } from "./read-range.ts";
-import { remoteFileInfo } from "./remote-path.ts";
+import connection from "./connection.ts";
+import type connectionTypes from "./connection.types.ts";
+import type readFileTypes from "./read-file.types.ts";
+import readRangeModule from "./read-range.ts";
+import remotePathModule from "./remote-path.ts";
+
+const { READ_DEPTH, readRange } = readRangeModule;
+const { RemoteError } = connection;
+const { remoteFileInfo } = remotePathModule;
 
 const READ_FILE_CHUNK = 512 * 1024;
 const READ_FILE_UNKNOWN_CHUNK = 64 * 1024;
 const READ_FILE_MAX = 2 ** 31 - 1;
 
-export interface FileRead {
-  readonly handle: Handle;
-  readonly opened: Json;
-  readonly encoding: boolean;
-  readonly signal: AbortSignal | undefined;
-}
+const abortedRead = (read: readFileTypes.FileRead): boolean => read.signal?.aborted === true;
 
-const abortedRead = (read: FileRead): boolean => read.signal?.aborted === true;
-
-const abortError = (read: FileRead): FileError =>
+const abortError = (read: readFileTypes.FileRead): FileError =>
   new FileError("aborted", "The operation was aborted", read.handle.path);
 
-const readUnknownSize = (read: FileRead): Effect.Effect<Uint8Array | string, FileError> =>
+const readUnknownSize = (
+  read: readFileTypes.FileRead,
+): Effect.Effect<Uint8Array | string, FileError> =>
   Effect.gen(function* () {
     const decoder = new StringDecoder("utf8");
     const chunks: Uint8Array[] = [];
@@ -44,18 +44,21 @@ const readUnknownSize = (read: FileRead): Effect.Effect<Uint8Array | string, Fil
     return total === 0 ? "" : text + decoder.end();
   });
 
-const readBinary = (read: FileRead, size: number): Effect.Effect<Uint8Array, FileError> => {
+const readBinary = (
+  read: readFileTypes.FileRead,
+  size: number,
+): Effect.Effect<Uint8Array, FileError> => {
   if (size <= READ_FILE_CHUNK) {
     return Effect.promise(() => read.handle.pread(0, size)).pipe(
       Effect.map((bytes) => Buffer.from(bytes)),
     );
   }
   return readRange({
-    read: (at, length) => read.handle.pread(at, length),
-    offset: 0,
-    length: size,
-    chunk: READ_FILE_CHUNK,
     aborted: () => abortedRead(read),
+    chunk: READ_FILE_CHUNK,
+    length: size,
+    offset: 0,
+    read: (at, length) => read.handle.pread(at, length),
   }).pipe(
     Effect.flatMap((range) =>
       range === undefined
@@ -65,7 +68,10 @@ const readBinary = (read: FileRead, size: number): Effect.Effect<Uint8Array, Fil
   );
 };
 
-const readDecoded = (read: FileRead, size: number): Effect.Effect<string, FileError> =>
+const readDecoded = (
+  read: readFileTypes.FileRead,
+  size: number,
+): Effect.Effect<string, FileError> =>
   Effect.gen(function* () {
     const length = Math.min(size, READ_FILE_CHUNK);
     const decoder = new StringDecoder("utf8");
@@ -93,12 +99,15 @@ const readDecoded = (read: FileRead, size: number): Effect.Effect<string, FileEr
     }
   });
 
-const readContents = (read: FileRead): Effect.Effect<Uint8Array | string, FileError> =>
+const readContents = (
+  read: readFileTypes.FileRead,
+): Effect.Effect<Uint8Array | string, FileError> =>
   Effect.gen(function* () {
     const statError = read.opened["statError"];
-    if (statError !== undefined) return yield* Effect.die(new RemoteError(statError as Json));
+    if (statError !== undefined)
+      return yield* Effect.die(new RemoteError(statError as connectionTypes.Json));
     if (abortedRead(read)) return yield* abortError(read);
-    const stat = remoteFileInfo(read.opened["stat"] as Json);
+    const stat = remoteFileInfo(read.opened["stat"] as connectionTypes.Json);
     const size = stat.kind === "file" ? stat.size : 0;
     if (size > READ_FILE_MAX) {
       return yield* new FileError(
@@ -112,5 +121,13 @@ const readContents = (read: FileRead): Effect.Effect<Uint8Array | string, FileEr
     return yield* readDecoded(read, size);
   });
 
-export const readOpenedFile = (read: FileRead): Effect.Effect<Uint8Array | string, FileError> =>
+const readOpenedFile = (
+  read: readFileTypes.FileRead,
+): Effect.Effect<Uint8Array | string, FileError> =>
   readContents(read).pipe(Effect.ensuring(Effect.promise(() => read.handle.close())));
+
+const readFile = {
+  readOpenedFile,
+};
+
+export default readFile;

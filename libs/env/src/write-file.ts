@@ -1,23 +1,19 @@
 import { FileError } from "@msa/durable/env";
 import { Effect } from "effect";
 
-import type { Connection, Reply } from "./connection.ts";
-import { Handle } from "./handle.ts";
+import type connectionTypes from "./connection.types.ts";
+import handleModule from "./handle.ts";
+import type handleTypes from "./handle.types.ts";
+import type writeFileTypes from "./write-file.types.ts";
+
+const { Handle } = handleModule;
 
 const WRITE_CHUNK = 512 * 1024;
 const WRITE_DEPTH = 8;
 
-export interface FileWrite {
-  readonly connection: Connection;
-  readonly resolved: string;
-  readonly bytes: Uint8Array;
-  readonly append: boolean;
-  readonly signal: AbortSignal | undefined;
-}
-
 const abortedWrite = (
-  write: FileWrite,
-  inFlight: readonly Promise<Reply>[],
+  write: writeFileTypes.FileWrite,
+  inFlight: readonly Promise<connectionTypes.Reply>[],
 ): Effect.Effect<never, FileError> =>
   Effect.promise(() => Promise.allSettled(inFlight)).pipe(
     Effect.flatMap((settled) => {
@@ -29,9 +25,9 @@ const abortedWrite = (
   );
 
 const writeChunks = (
-  write: FileWrite,
-  handle: Handle,
-  inFlight: Promise<Reply>[],
+  write: writeFileTypes.FileWrite,
+  handle: handleTypes.Handle,
+  inFlight: Promise<connectionTypes.Reply>[],
 ): Effect.Effect<void, FileError> =>
   Effect.gen(function* () {
     const { bytes } = write;
@@ -52,20 +48,20 @@ const writeChunks = (
     for (const written of inFlight) yield* Effect.promise(() => written);
   });
 
-export const writeContent = (write: FileWrite): Effect.Effect<void, FileError> =>
+const writeContent = (write: writeFileTypes.FileWrite): Effect.Effect<void, FileError> =>
   Effect.gen(function* () {
     const { bytes, resolved, append } = write;
     const keep = bytes.length > WRITE_CHUNK;
     const reply = yield* Effect.promise(() =>
       write.connection.request(
         "write",
-        { path: resolved, append, keep },
+        { append, keep, path: resolved },
         { payload: bytes.subarray(0, WRITE_CHUNK) },
       ),
     );
     if (!keep) return;
     const handle = new Handle(write.connection, reply, resolved);
-    const inFlight: Promise<Reply>[] = [];
+    const inFlight: Promise<connectionTypes.Reply>[] = [];
     yield* writeChunks(write, handle, inFlight).pipe(
       Effect.ensuring(
         Effect.promise(() => Promise.allSettled(inFlight)).pipe(
@@ -74,3 +70,9 @@ export const writeContent = (write: FileWrite): Effect.Effect<void, FileError> =
       ),
     );
   });
+
+const writeFile = {
+  writeContent,
+};
+
+export default writeFile;

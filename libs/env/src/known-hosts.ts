@@ -1,8 +1,11 @@
 import { Effect } from "effect";
 import { dual } from "effect/Function";
 
-import { HostKeyChangedError } from "./host-key-changed-error.ts";
-import {
+import hostKeyChangedError from "./host-key-changed-error.ts";
+import platform from "./platform.ts";
+import type sshArgsTypes from "./ssh-args.types.ts";
+
+const {
   fileExists,
   localPath,
   makeDirectories,
@@ -11,8 +14,8 @@ import {
   removePath,
   renamePath,
   writeText,
-} from "./platform.ts";
-import type { SshTarget } from "./ssh-args.ts";
+} = platform;
+const { HostKeyChangedError } = hostKeyChangedError;
 
 const WHITESPACE_RUN = /\s+/u;
 
@@ -27,7 +30,7 @@ function parseHostKeyLine(alias: string, line: string): { type: string; key: str
   ) {
     throw new Error(`Not a host key line for ${alias}: ${JSON.stringify(line)}`);
   }
-  return { type, key };
+  return { key, type };
 }
 
 const knownHostsChanges = new Map<string, Promise<unknown>>();
@@ -37,17 +40,17 @@ const rewriteKnownHosts = (
   change: (lines: string[]) => string[],
 ): Effect.Effect<void> =>
   Effect.gen(function* () {
-    yield* makeDirectories({ path: localPath.dirname(file), mode: 0o700 });
+    yield* makeDirectories({ mode: 0o700, path: localPath.dirname(file) });
     const existing = (yield* fileExists(file))
       ? (yield* readText(file)).split("\n").filter((line) => line !== "")
       : [];
     const lines = change(existing);
     const temporary = `${file}.${yield* randomHex(6)}.tmp`;
     yield* writeText({
+      exclusive: true,
+      mode: 0o600,
       path: temporary,
       text: lines.length === 0 ? "" : `${lines.join("\n")}\n`,
-      mode: 0o600,
-      exclusive: true,
     });
     yield* renamePath({ from: temporary, to: file }).pipe(
       Effect.onError(() => removePath(temporary)),
@@ -66,7 +69,7 @@ function changeKnownHosts(file: string, change: (lines: string[]) => string[]): 
 }
 
 function addAccepted(
-  target: SshTarget,
+  target: sshArgsTypes.SshTarget,
   accepted: readonly { line: string; type: string; key: string }[],
   existing: string[],
 ): string[] {
@@ -91,10 +94,10 @@ function addAccepted(
   return [...existing, ...added];
 }
 
-export const acceptHostKey: {
-  (lines: readonly string[]): (target: SshTarget) => Promise<void>;
-  (target: SshTarget, lines: readonly string[]): Promise<void>;
-} = dual(2, (target: SshTarget, lines: readonly string[]): Promise<void> =>
+const acceptHostKey: {
+  (lines: readonly string[]): (target: sshArgsTypes.SshTarget) => Promise<void>;
+  (target: sshArgsTypes.SshTarget, lines: readonly string[]): Promise<void>;
+} = dual(2, (target: sshArgsTypes.SshTarget, lines: readonly string[]): Promise<void> =>
   Effect.runPromise(
     Effect.gen(function* () {
       const accepted = lines.map((line) => ({
@@ -110,8 +113,15 @@ export const acceptHostKey: {
   ),
 );
 
-export function forgetHostKey(target: SshTarget): Promise<void> {
+function forgetHostKey(target: sshArgsTypes.SshTarget): Promise<void> {
   return changeKnownHosts(target.knownHostsFile, (existing) =>
     existing.filter((line) => line.trim().split(WHITESPACE_RUN)[0] !== target.hostKeyAlias),
   );
 }
+
+const knownHosts = {
+  acceptHostKey,
+  forgetHostKey,
+};
+
+export default knownHosts;

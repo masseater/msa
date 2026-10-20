@@ -1,34 +1,20 @@
 import { dual } from "effect/Function";
 
-import type { Connection, Json } from "./connection.ts";
+import type connectionTypes from "./connection.types.ts";
+import type terminalTypes from "./terminal.types.ts";
 
 const WRITE_CHUNK = 1024 * 1024;
 
-export interface TerminalOptions {
-  cwd: string;
-  argv?: readonly string[];
-  env?: Record<string, string>;
-  inheritEnv?: boolean;
-  cols: number;
-  rows: number;
-  onData: (bytes: Uint8Array) => void;
-}
-
-export interface TerminalForeground {
-  pid: number;
-  name?: string;
-}
-
-export class RemoteTerminal {
+class RemoteTerminal {
   readonly pid: number;
   readonly exited: Promise<number>;
-  readonly #connection: Connection;
+  readonly #connection: connectionTypes.Connection;
   readonly #id: number;
   readonly #session: number;
   readonly #abort: AbortController;
 
   constructor(
-    connection: Connection,
+    connection: connectionTypes.Connection,
     id: number,
     session: number,
     pid: number,
@@ -58,7 +44,7 @@ export class RemoteTerminal {
     this.#abort.abort();
   }
 
-  foreground(): Promise<TerminalForeground | undefined> {
+  foreground(): Promise<terminalTypes.TerminalForeground | undefined> {
     return this.#connection
       .request("ptyForeground", { target: this.#id }, { session: this.#session })
       .then((reply) => {
@@ -74,7 +60,7 @@ export class RemoteTerminal {
       });
   }
 
-  #request(op: string, json: Json, payload?: Uint8Array): void {
+  #request(op: string, json: connectionTypes.Json, payload?: Uint8Array): void {
     this.#connection
       .request(
         op,
@@ -85,7 +71,10 @@ export class RemoteTerminal {
   }
 }
 
-function startTerminal(connection: Connection, options: TerminalOptions): Promise<RemoteTerminal> {
+function startTerminal(
+  connection: connectionTypes.Connection,
+  options: terminalTypes.TerminalOptions,
+): Promise<RemoteTerminal> {
   const abort = new AbortController();
   const started = Promise.withResolvers<RemoteTerminal>();
   let request: { id: number; session: number } | undefined;
@@ -101,10 +90,6 @@ function startTerminal(connection: Connection, options: TerminalOptions): Promis
         rows: options.rows,
       },
       {
-        signal: abort.signal,
-        onStart: (id, session) => {
-          request = { id, session };
-        },
         onEvent: (json, payload) => {
           if (json["kind"] === "output") options.onData(payload);
           else if (json["kind"] === "started" && request !== undefined) {
@@ -120,6 +105,10 @@ function startTerminal(connection: Connection, options: TerminalOptions): Promis
             );
           }
         },
+        onStart: (id, session) => {
+          request = { id, session };
+        },
+        signal: abort.signal,
       },
     )
     .then((reply) => Number(reply.json["exitCode"]));
@@ -127,7 +116,19 @@ function startTerminal(connection: Connection, options: TerminalOptions): Promis
   return started.promise;
 }
 
-export const openTerminal: {
-  (options: TerminalOptions): (connection: Connection) => Promise<RemoteTerminal>;
-  (connection: Connection, options: TerminalOptions): Promise<RemoteTerminal>;
+const openTerminal: {
+  (
+    options: terminalTypes.TerminalOptions,
+  ): (connection: connectionTypes.Connection) => Promise<RemoteTerminal>;
+  (
+    connection: connectionTypes.Connection,
+    options: terminalTypes.TerminalOptions,
+  ): Promise<RemoteTerminal>;
 } = dual(2, startTerminal);
+
+const terminal = {
+  RemoteTerminal,
+  openTerminal,
+};
+
+export default terminal;

@@ -1,20 +1,25 @@
 import type { Context } from "@msa/chord";
-import { type DirReader, err, FileError, type FileInfo, ok, type Result } from "@msa/durable/env";
+import { type DirReader, FileError, type FileInfo, type Result, err, ok } from "@msa/durable/env";
 import { Effect } from "effect";
 
-import { RemoteError } from "./connection.ts";
-import { abortResult, recoverFileError, toFileError } from "./errors.ts";
-import type { Handle } from "./handle.ts";
-import type { PathOps } from "./platform.ts";
-import { type RemoteDirEntry, remotePath, toInfo } from "./remote-path.ts";
+import connectionModule from "./connection.ts";
+import errors from "./errors.ts";
+import type handleTypes from "./handle.types.ts";
+import type platformTypes from "./platform.types.ts";
+import remotePathModule from "./remote-path.ts";
+import type remotePathTypes from "./remote-path.types.ts";
+
+const { abortResult, recoverFileError, toFileError } = errors;
+const { RemoteError } = connectionModule;
+const { remotePath, toInfo } = remotePathModule;
 
 type Batch = { entries: FileInfo[]; done: boolean };
 
 function collectEntries(
   entries: FileInfo[],
-  batch: readonly RemoteDirEntry[],
+  batch: readonly remotePathTypes.RemoteDirEntry[],
   path: string,
-  paths: PathOps,
+  paths: platformTypes.PathOps,
 ): Result<Batch, FileError> | undefined {
   for (const entry of batch) {
     const entryPath = paths.resolve(path, entry.name);
@@ -28,12 +33,12 @@ function collectEntries(
   return undefined;
 }
 
-export class RemoteDirReader implements DirReader {
-  readonly #handle: Handle;
+class RemoteDirReader implements DirReader {
+  readonly #handle: handleTypes.Handle;
   #done = false;
   #closed = false;
 
-  constructor(handle: Handle) {
+  constructor(handle: handleTypes.Handle) {
     this.#handle = handle;
   }
 
@@ -65,14 +70,14 @@ export class RemoteDirReader implements DirReader {
         if (loopAbort !== undefined) return loopAbort;
         const failed = collectEntries(
           entries,
-          json["entries"] as RemoteDirEntry[],
+          json["entries"] as remotePathTypes.RemoteDirEntry[],
           handle.path,
           paths,
         );
         if (failed !== undefined) return failed;
         this.#done = json["done"] === true;
       }
-      return ok<Batch, FileError>({ entries, done: this.#done });
+      return ok<Batch, FileError>({ done: this.#done, entries });
     });
   }
 
@@ -82,3 +87,9 @@ export class RemoteDirReader implements DirReader {
     return this.#handle.close();
   }
 }
+
+const dirReader = {
+  RemoteDirReader,
+};
+
+export default dirReader;

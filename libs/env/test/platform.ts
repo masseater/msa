@@ -3,17 +3,20 @@ import { Effect, Exit, FileSystem, ManagedRuntime, Option, Scope } from "effect"
 import type { PlatformError } from "effect/PlatformError";
 import { ChildProcess, ChildProcessSpawner } from "effect/process";
 
-import {
-  fileExists as fileExistsModule,
-  localPath as localPathModule,
-  makeTempDirectory as makeTempDirectoryModule,
-  readBytes as readBytesModule,
-  readText as readTextModule,
-  removePath as removePathModule,
-  sha256Hex as sha256HexModule,
-  writeText as writeTextModule,
-} from "../src/platform.ts";
+import platformModule from "../src/platform.ts";
 import type platformTypes from "./platform.types.ts";
+
+const {
+  fileExists: fileExistsModule,
+  localPath: localPathModule,
+  makeTempDirectory: makeTempDirectoryModule,
+  readBytes: readBytesModule,
+  readText: readTextModule,
+  removePath: removePathModule,
+  sha256Hex: sha256HexModule,
+  writeText: writeTextModule,
+} = platformModule;
+
 const runtime = ManagedRuntime.make(NodeServices.layer);
 
 const onNode = <A, E, R>(

@@ -1,12 +1,16 @@
 import { registerEnvConformance } from "@msa/durable/testing";
 import { afterAll, describe, expect, it } from "vite-plus/test";
 
-import { Connection } from "../src/connection.ts";
-import { LocalExecutionEnv } from "../src/list-files.ts";
-import { RemoteExecutionEnv } from "../src/remote-env.ts";
+import connectionModule from "../src/connection.ts";
+import listFilesModule from "../src/list-files.ts";
+import remoteEnv from "../src/remote-env.ts";
 import daemon from "./daemon.ts";
 import environment from "./environment.ts";
 import tempDir from "./temp-dir.ts";
+
+const { Connection } = connectionModule;
+const { RemoteExecutionEnv } = remoteEnv;
+const { LocalExecutionEnv } = listFilesModule;
 
 const { optionalEnv, windows } = environment;
 const { gitBash, withTempDir } = tempDir;

@@ -3,12 +3,15 @@ import { getOrThrow } from "@msa/durable/env";
 import { Effect } from "effect";
 import { describe, expect, it } from "vite-plus/test";
 
-import { RemoteExecutionEnv } from "../src/remote-env.ts";
-import { HostKeyUnknownError, acceptHostKey, connectSsh, scanHostKey } from "../src/ssh.ts";
+import envModule from "../src/index.ts";
+import remoteEnv from "../src/remote-env.ts";
 import daemon from "./daemon.ts";
 import platform from "./platform.ts";
 import sshdModule from "./sshd.ts";
 import type sshdTypes from "./sshd.types.ts";
+
+const { HostKeyUnknownError, acceptHostKey, connectSsh, scanHostKey } = envModule;
+const { RemoteExecutionEnv } = remoteEnv;
 
 const { localPath, makeDirectory, modifiedAt, readBytes, readNames, writeText } = platform;
 const { deployedName, sshd, useSshd } = sshdModule;

@@ -1,45 +1,40 @@
 import { Clock, Deferred, Effect, Exit } from "effect";
 
-import { type Launched, launchDaemon } from "./daemon-process.ts";
-import {
-  CANCEL,
-  ERROR,
-  EVENT,
-  frame,
-  MAX_FRAME,
-  parseFrameJson,
-  PING,
-  REQUEST,
-  RESULT,
-} from "./frame.ts";
-import { closed, errorMessage, type Json, lost, RemoteError, type Wire } from "./remote-error.ts";
-import type { ConnectionOptions, RemoteInfo, RequestOptions } from "./remote-info.ts";
-import type { Reply, Session } from "./session.ts";
+import daemonProcess from "./daemon-process.ts";
+import type daemonProcessTypes from "./daemon-process.types.ts";
+import frameModule from "./frame.ts";
+import remoteError from "./remote-error.ts";
+import type remoteErrorTypes from "./remote-error.types.ts";
+import type remoteInfoTypes from "./remote-info.types.ts";
+import sessionSync from "./session-sync.ts";
+import type sessionTypes from "./session.types.ts";
 
-export { isConnectionLost, type Json, RemoteError } from "./remote-error.ts";
-export type { Reply } from "./session.ts";
+const { RemoteError, closed, errorMessage, lost } = remoteError;
+const { CANCEL, ERROR, EVENT, MAX_FRAME, PING, REQUEST, RESULT, frame, parseFrameJson } =
+  frameModule;
+const { launchDaemon } = daemonProcess;
+const { syncSession } = sessionSync;
 
 const SILENCE_LIMIT_MS = 30_000;
 const START_TIMEOUT_MS = 60_000;
-const SYNC_NOISE_LIMIT = 1024 * 1024;
 
-type Started = { info: RemoteInfo; session: Session };
+type Started = { info: remoteInfoTypes.RemoteInfo; session: sessionTypes.Session };
 
 const currentTime = (): number => Effect.runSync(Clock.currentTimeMillis);
 
-export class Connection {
-  readonly #options: ConnectionOptions;
-  #session: Session | undefined;
+class Connection {
+  readonly #options: remoteInfoTypes.ConnectionOptions;
+  #session: sessionTypes.Session | undefined;
   #ready: Promise<Started> | undefined;
   #sessions = 0;
   #nextId = 1;
   #closed = false;
 
-  constructor(options: ConnectionOptions) {
+  constructor(options: remoteInfoTypes.ConnectionOptions) {
     this.#options = options;
   }
 
-  info(): Promise<RemoteInfo> {
+  info(): Promise<remoteInfoTypes.RemoteInfo> {
     return this.#connect().then((ready) => ready.info);
   }
 
@@ -47,7 +42,11 @@ export class Connection {
     return this.#connect().then((ready) => ready.session.id);
   }
 
-  request(op: string, json: Json, options: RequestOptions = {}): Promise<Reply> {
+  request(
+    op: string,
+    json: remoteErrorTypes.Json,
+    options: remoteInfoTypes.RequestOptions = {},
+  ): Promise<sessionTypes.Reply> {
     if (options.session !== undefined) {
       const current = this.#session;
       if (current === undefined || current.id !== options.session || !current.live) {
@@ -66,7 +65,7 @@ export class Connection {
   kill(id: number, session: number): void {
     const current = this.#session;
     if (current?.id === session && current.live) {
-      this.#write(current, frame({ type: CANCEL, id, json: { mode: "kill" } }));
+      this.#write(current, frame({ id, json: { mode: "kill" }, type: CANCEL }));
     }
   }
 
@@ -82,33 +81,38 @@ export class Connection {
     return this.#ready;
   }
 
-  #send(session: Session, op: string, json: Json, options: RequestOptions): Promise<Reply> {
+  #send(
+    session: sessionTypes.Session,
+    op: string,
+    json: remoteErrorTypes.Json,
+    options: remoteInfoTypes.RequestOptions,
+  ): Promise<sessionTypes.Reply> {
     return Effect.runPromise(this.#exchange(session, op, json, options));
   }
 
   #exchange(
-    session: Session,
+    session: sessionTypes.Session,
     op: string,
-    json: Json,
-    options: RequestOptions,
-  ): Effect.Effect<Reply, Error> {
+    json: remoteErrorTypes.Json,
+    options: remoteInfoTypes.RequestOptions,
+  ): Effect.Effect<sessionTypes.Reply, Error> {
     if (!session.live) return Effect.fail(lost("msa-env connection lost"));
     const id = this.#nextId++;
-    const reply = Deferred.makeUnsafe<Reply, Error>();
+    const reply = Deferred.makeUnsafe<sessionTypes.Reply, Error>();
     const onAbort = (): void => {
-      this.#write(session, frame({ type: CANCEL, id, json: {} }));
+      this.#write(session, frame({ id, json: {}, type: CANCEL }));
     };
     const done = (): void => {
       options.signal?.removeEventListener("abort", onAbort);
     };
     session.pending.set(id, {
-      resolve: (value) => {
-        done();
-        Deferred.doneUnsafe(reply, Exit.succeed(value));
-      },
       reject: (error) => {
         done();
         Deferred.doneUnsafe(reply, Exit.fail(error));
+      },
+      resolve: (value) => {
+        done();
+        Deferred.doneUnsafe(reply, Exit.succeed(value));
       },
       ...(options.onEvent === undefined ? {} : { onEvent: options.onEvent }),
     });
@@ -116,13 +120,13 @@ export class Connection {
     options.onStart?.(id, session.id);
     this.#write(
       session,
-      frame({ type: REQUEST, id, json: { ...json, op }, payload: options.payload }),
+      frame({ id, json: { ...json, op }, payload: options.payload, type: REQUEST }),
     );
     if (options.signal?.aborted === true) onAbort();
     return Deferred.await(reply);
   }
 
-  #write(session: Session, data: Buffer): void {
+  #write(session: sessionTypes.Session, data: Buffer): void {
     if (session.live) session.write(data);
   }
 
@@ -139,13 +143,13 @@ export class Connection {
     });
   }
 
-  #command(): Effect.Effect<readonly string[], RemoteError> {
+  #command(): Effect.Effect<readonly string[], remoteErrorTypes.RemoteError> {
     const option = this.#options.command;
     if (typeof option !== "function") return Effect.succeed(option);
     return Effect.tryPromise({
-      try: () => option(),
       catch: (error) =>
-        new RemoteError({ code: "spawn_error", message: errorMessage(error), lost: true }),
+        new RemoteError({ code: "spawn_error", lost: true, message: errorMessage(error) }),
+      try: () => option(),
     });
   }
 
@@ -153,22 +157,22 @@ export class Connection {
     program: string,
     args: readonly string[],
     startedAt: number,
-  ): Effect.Effect<Launched, RemoteError> {
+  ): Effect.Effect<daemonProcessTypes.Launched, remoteErrorTypes.RemoteError> {
     return launchDaemon({
-      program,
       args,
       id: ++this.#sessions,
-      startedAt,
       onData: (session, chunk) => {
         this.#onData(session, chunk);
       },
       onLog: (text) => this.#options.onLog?.(text),
-      onTick: (session) => {
-        this.#tick(session);
-      },
       onLost: (session) => {
         this.#teardown(session, lost("msa-env connection lost"));
       },
+      onTick: (session) => {
+        this.#tick(session);
+      },
+      program,
+      startedAt,
     }).pipe(
       Effect.tap(({ session }) =>
         Effect.sync(() => {
@@ -178,7 +182,7 @@ export class Connection {
     );
   }
 
-  #hello({ session, failed }: Launched): Effect.Effect<Started, Error> {
+  #hello({ session, failed }: daemonProcessTypes.Launched): Effect.Effect<Started, Error> {
     return this.#exchange(session, "hello", { protocol: 1 }, {}).pipe(
       Effect.raceFirst(Deferred.await(failed)),
       Effect.timeoutOrElse({
@@ -188,7 +192,10 @@ export class Connection {
       }),
       Effect.flatMap(({ json }) =>
         json["protocol"] === 1
-          ? Effect.succeed({ info: json as Wire<RemoteInfo>, session })
+          ? Effect.succeed({
+              info: json as remoteErrorTypes.Wire<remoteInfoTypes.RemoteInfo>,
+              session,
+            })
           : Effect.fail(lost(`Unsupported protocol ${String(json["protocol"])}`)),
       ),
       Effect.tapError((error) =>
@@ -199,14 +206,14 @@ export class Connection {
     );
   }
 
-  #tick(session: Session): void {
-    this.#write(session, frame({ type: PING, id: 0, json: {} }));
+  #tick(session: sessionTypes.Session): void {
+    this.#write(session, frame({ id: 0, json: {}, type: PING }));
     if (currentTime() - session.lastSeen > SILENCE_LIMIT_MS) {
       this.#teardown(session, lost("msa-env connection timed out"));
     }
   }
 
-  #teardown(session: Session, error: Error): void {
+  #teardown(session: sessionTypes.Session, error: Error): void {
     if (!session.live) return;
     session.live = false;
     if (this.#session === session) {
@@ -219,33 +226,16 @@ export class Connection {
     for (const request of pending) request.reject(error);
   }
 
-  #onData(session: Session, chunk: Buffer): void {
+  #onData(session: sessionTypes.Session, chunk: Buffer): void {
     if (!session.live) return;
     session.lastSeen = currentTime();
     session.chunks.push(chunk);
     session.buffered += chunk.length;
-    if (!session.synced && !this.#sync(session)) return;
+    if (!session.synced && !syncSession(session, (text) => this.#options.onLog?.(text))) return;
     this.#readFrames(session);
   }
 
-  #sync(session: Session): boolean {
-    const marker = Buffer.from(`MSA-ENV ${session.token}\n`, "utf8");
-    const all = session.peek(session.buffered);
-    const index = all.indexOf(marker);
-    if (index === -1) {
-      if (session.buffered > SYNC_NOISE_LIMIT) {
-        session.consume(session.buffered - marker.length);
-      }
-      return false;
-    }
-    const noise = all.subarray(0, index).toString("utf8").trim();
-    if (noise !== "") this.#options.onLog?.(noise);
-    session.consume(index + marker.length);
-    session.synced = true;
-    return true;
-  }
-
-  #readFrames(session: Session): void {
+  #readFrames(session: sessionTypes.Session): void {
     while (session.live && session.buffered >= 4) {
       const length = session.peek(4).readUInt32BE(0);
       if (length < 9 || length > MAX_FRAME) {
@@ -268,7 +258,13 @@ export class Connection {
     }
   }
 
-  #dispatch(session: Session, type: number, id: number, json: Json, payload: Uint8Array): void {
+  #dispatch(
+    session: sessionTypes.Session,
+    type: number,
+    id: number,
+    json: remoteErrorTypes.Json,
+    payload: Uint8Array,
+  ): void {
     const pending = session.pending.get(id);
     if (type === EVENT) {
       pending?.onEvent?.(json, payload);
@@ -281,3 +277,11 @@ export class Connection {
     else pending.reject(new RemoteError(json));
   }
 }
+
+const connection = {
+  Connection,
+  RemoteError: remoteError.RemoteError,
+  isConnectionLost: remoteError.isConnectionLost,
+};
+
+export default connection;

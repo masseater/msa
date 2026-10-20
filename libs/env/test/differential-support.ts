@@ -4,11 +4,14 @@ import { NodeExecutionEnv } from "@msa/durable/env/node";
 import { Effect } from "effect";
 import { dual } from "effect/Function";
 
-import { Connection } from "../src/connection.ts";
-import { RemoteExecutionEnv } from "../src/remote-env.ts";
+import connectionModule from "../src/connection.ts";
+import remoteEnv from "../src/remote-env.ts";
 import daemon from "./daemon.ts";
 import type differentialSupportTypes from "./differential-support.types.ts";
 import platform from "./platform.ts";
+
+const { Connection } = connectionModule;
+const { RemoteExecutionEnv } = remoteEnv;
 
 const { makeTempDirectory, realPath, removePath } = platform;
 

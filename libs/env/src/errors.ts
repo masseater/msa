@@ -1,10 +1,13 @@
-import { err, FileError, ok, type Result } from "@msa/durable/env";
+import { FileError, type Result, err, ok } from "@msa/durable/env";
 import { Cause, Effect } from "effect";
 import { dual } from "effect/Function";
 
-import { RemoteError } from "./remote-error.ts";
+import remoteError from "./remote-error.ts";
+import type remoteErrorTypes from "./remote-error.types.ts";
 
-export const abortResult: {
+const { RemoteError } = remoteError;
+
+const abortResult: {
   (
     path: string | undefined,
   ): <T>(signal: AbortSignal | undefined) => Result<T, FileError> | undefined;
@@ -18,7 +21,10 @@ export const abortResult: {
     signal?.aborted === true ? err(new FileError("aborted", "aborted", path)) : undefined,
 );
 
-function remoteFileError(error: RemoteError, fallbackPath: string | undefined): FileError {
+function remoteFileError(
+  error: remoteErrorTypes.RemoteError,
+  fallbackPath: string | undefined,
+): FileError {
   const path = error.path ?? fallbackPath;
   switch (error.code) {
     case "aborted":
@@ -41,7 +47,7 @@ function remoteFileError(error: RemoteError, fallbackPath: string | undefined): 
   }
 }
 
-export const toFileError: {
+const toFileError: {
   (fallbackPath: string | undefined): (error: unknown) => FileError;
   (error: unknown, fallbackPath: string | undefined): FileError;
 } = dual(2, (error: unknown, fallbackPath: string | undefined): FileError => {
@@ -51,7 +57,7 @@ export const toFileError: {
   return new FileError("unknown", cause.message, fallbackPath, cause);
 });
 
-export const recoverFileError: {
+const recoverFileError: {
   (
     fallbackPath: string | undefined,
   ): <T>(
@@ -72,7 +78,7 @@ export const recoverFileError: {
     ),
 );
 
-export const fileResult: {
+const fileResult: {
   (
     fallbackPath: string | undefined,
   ): <T>(effect: Effect.Effect<T, FileError>) => Effect.Effect<Result<T, FileError>>;
@@ -91,3 +97,12 @@ export const fileResult: {
       fallbackPath,
     ),
 );
+
+const errors = {
+  abortResult,
+  fileResult,
+  recoverFileError,
+  toFileError,
+};
+
+export default errors;

@@ -1,15 +1,19 @@
 import { Effect } from "effect";
 
-import { Connection } from "../src/connection.ts";
-import { RemoteExecutionEnv } from "../src/remote-env.ts";
+import connectionModule from "../src/connection.ts";
+import type connectionTypes from "../src/connection.types.ts";
+import remoteEnv from "../src/remote-env.ts";
 import daemon from "./daemon.ts";
 import platform from "./platform.ts";
 import type remoteEnvironmentTypes from "./remote-environment.types.ts";
 
+const { Connection } = connectionModule;
+const { RemoteExecutionEnv } = remoteEnv;
+
 const { makeTempDirectory, removePath } = platform;
 
 function remoteEnvironments(): remoteEnvironmentTypes.RemoteEnvironments {
-  const connections: Connection[] = [];
+  const connections: connectionTypes.Connection[] = [];
   const dirs: string[] = [];
   const tempDir = Effect.tap(makeTempDirectory("msa-env-remote-"), (cwd) =>
     Effect.sync(() => {

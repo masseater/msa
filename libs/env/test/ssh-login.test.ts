@@ -3,10 +3,12 @@ import { getOrThrow } from "@msa/durable/env";
 import { Effect } from "effect";
 import { describe, expect, it } from "vite-plus/test";
 
-import { RemoteExecutionEnv } from "../src/remote-env.ts";
+import remoteEnv from "../src/remote-env.ts";
 import platform from "./platform.ts";
 import sshdModule from "./sshd.ts";
 import type sshdTypes from "./sshd.types.ts";
+
+const { RemoteExecutionEnv } = remoteEnv;
 
 const { localPath, writeText } = platform;
 const { connectTo, posixAccountShell, sshd, useSshd } = sshdModule;

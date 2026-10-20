@@ -1,40 +1,20 @@
 import { type Cause, Effect, Exit, Queue, Scope } from "effect";
 
-import type { Json } from "./remote-error.ts";
+import type sessionTypes from "./session.types.ts";
 
-export interface Reply {
-  json: Json;
-  payload: Uint8Array;
-  session: number;
-}
-
-export type Pending = {
-  resolve: (value: Reply) => void;
-  reject: (error: Error) => void;
-  onEvent?: (json: Json, payload: Uint8Array) => void;
-};
-
-export interface SessionStart {
+class Session {
   readonly id: number;
   readonly input: Queue.Queue<Uint8Array, Cause.Done>;
   readonly scope: Scope.Closeable;
   readonly token: string;
-  readonly now: number;
-}
-
-export class Session {
-  readonly id: number;
-  readonly input: Queue.Queue<Uint8Array, Cause.Done>;
-  readonly scope: Scope.Closeable;
-  readonly token: string;
-  readonly pending = new Map<number, Pending>();
+  readonly pending = new Map<number, sessionTypes.Pending>();
   chunks: Buffer[] = [];
   buffered = 0;
   synced = false;
   lastSeen: number;
   live = true;
 
-  constructor(start: SessionStart) {
+  constructor(start: sessionTypes.SessionStart) {
     this.id = start.id;
     this.input = start.input;
     this.scope = start.scope;
@@ -73,3 +53,9 @@ export class Session {
     }
   }
 }
+
+const sessionModule = {
+  Session,
+};
+
+export default sessionModule;
